@@ -19,6 +19,7 @@
 import { GameState } from '@core/GameState'
 import { Card, CardType } from '@entities/Card'
 import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
+import type { EnemyHit, TreasureChange } from '@core/TurnManager'
 
 export interface CardActionDetail {
   laneIndex: number
@@ -30,6 +31,9 @@ export class GameBoardRenderer {
   private boardElement: HTMLElement
   private selected: { laneIndex: number; distance: number } | null = null
   private currentGameState: GameState | null = null
+  private hasRendered = false
+  private previousCardIds = new Set<string>()
+  private previousGroupSpans = new Map<string, number>()
 
   constructor(containerId: string = 'game-board') {
     const container = document.getElementById(containerId)
@@ -40,6 +44,7 @@ export class GameBoardRenderer {
   }
 
   render(gameState: GameState): void {
+    const previousRects = this.captureCardRects()
     this.currentGameState = gameState
     const character = gameState.getCharacter()
     const lanes = gameState.getLanes()
@@ -73,6 +78,8 @@ export class GameBoardRenderer {
 
     this.injectStyles()
     this.attachListeners()
+    this.animateMovedCards(previousRects)
+    this.rememberRenderedCards()
   }
 
   clearSelection(): void {
@@ -139,6 +146,8 @@ export class GameBoardRenderer {
       isActive ? 'is-active' : 'is-preview',
       isSelected ? 'is-selected' : '',
       span > 1 ? 'is-grouped' : '',
+      this.hasRendered && !this.previousCardIds.has(card.id) ? 'is-entering' : '',
+      this.shouldAnimateGroup(card.id, span) ? 'is-newly-grouped' : '',
     ]
       .filter(Boolean)
       .join(' ')
@@ -152,6 +161,7 @@ export class GameBoardRenderer {
            data-lane="${laneIndex}"
            data-distance="${distance}"
            data-span="${span}"
+           data-card-id="${card.id}"
            role="button"
            tabindex="${tabIndex}">
         ${this.renderCardFace(card, span)}
@@ -294,6 +304,142 @@ export class GameBoardRenderer {
     })
     document.dispatchEvent(event)
   }
+
+
+  /**
+   * Play the upward pop used when the player actively attacks an enemy card.
+   * The model is mutated after this promise resolves so the clicked card stays
+   * visible for the full hit reaction.
+   */
+  animatePlayerAttack(card: Card): Promise<void> {
+    return this.animateCardElements(card, 'is-player-striking', 280)
+  }
+
+  /**
+   * Play the downward slam used during the enemy phase. Enemy hits are grouped
+   * by Card instance in TurnManager, so each visual card should only slam once.
+   */
+  animateEnemyAttacks(hits: EnemyHit[]): Promise<void> {
+    const elements = new Set<HTMLElement>()
+    for (const hit of hits) {
+      const selector = `.cell.card.is-active[data-lane="${hit.laneIndex}"]`
+      const element = this.boardElement.querySelector<HTMLElement>(selector)
+      if (element) elements.add(element)
+    }
+    return this.animateElements([...elements], 'is-enemy-slamming', 340)
+  }
+
+  /**
+   * Treasure volatility mutates the model before the next render, but the old
+   * DOM is still present. Use that old DOM to show dust and fading first.
+   */
+  animateTreasureChanges(changes: TreasureChange[]): Promise<void> {
+    const elements = new Set<HTMLElement>()
+    for (const change of changes) {
+      if (change.outcome !== 'disappeared') continue
+      const selector =
+        `.cell.card.type-treasure[data-lane="${change.laneIndex}"]` +
+        `[data-distance="${change.distance}"]`
+      const element = this.boardElement.querySelector<HTMLElement>(selector)
+      if (element) elements.add(element)
+    }
+    return this.animateElements([...elements], 'is-treasure-vanishing', 520)
+  }
+
+  /** Capture current card positions so the next render can FLIP-move survivors. */
+  private captureCardRects(): Map<string, DOMRect> {
+    const rects = new Map<string, DOMRect>()
+    this.boardElement
+      .querySelectorAll<HTMLElement>('.cell.card[data-card-id]')
+      .forEach((el) => {
+        const id = el.dataset.cardId
+        if (id) rects.set(id, el.getBoundingClientRect())
+      })
+    return rects
+  }
+
+  /**
+   * Smooth cards from their previous screen position to their new grid slot.
+   * This avoids the previous full rerender flicker when lanes compact downward.
+   */
+  private animateMovedCards(previousRects: Map<string, DOMRect>): void {
+    this.boardElement
+      .querySelectorAll<HTMLElement>('.cell.card[data-card-id]')
+      .forEach((el) => {
+        const id = el.dataset.cardId
+        if (!id) return
+        const previousRect = previousRects.get(id)
+        if (!previousRect) return
+        const nextRect = el.getBoundingClientRect()
+        const deltaX = previousRect.left - nextRect.left
+        const deltaY = previousRect.top - nextRect.top
+        if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) return
+
+        el.animate(
+          [
+            { transform: `translate(${deltaX}px, ${deltaY}px)`, opacity: 0.94 },
+            { transform: 'translate(0, 0)', opacity: 1 },
+          ],
+          { duration: 360, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)' }
+        )
+      })
+  }
+
+  /** Remember ids and spans after each render for enter/merge animations. */
+  private rememberRenderedCards(): void {
+    const ids = new Set<string>()
+    const spans = new Map<string, number>()
+    this.boardElement
+      .querySelectorAll<HTMLElement>('.cell.card[data-card-id]')
+      .forEach((el) => {
+        const id = el.dataset.cardId
+        if (!id) return
+        ids.add(id)
+        spans.set(id, parseInt(el.dataset.span || '1', 10))
+      })
+    this.previousCardIds = ids
+    this.previousGroupSpans = spans
+    this.hasRendered = true
+  }
+
+  /** Newly larger spans get a short sticky merge pulse after movement settles. */
+  private shouldAnimateGroup(cardId: string, span: number): boolean {
+    if (!this.hasRendered || span <= 1) return false
+    const previousSpan = this.previousGroupSpans.get(cardId) || 1
+    return span > previousSpan
+  }
+
+  /** Add a temporary animation class to all rendered elements for one card. */
+  private animateCardElements(
+    card: Card,
+    className: string,
+    duration: number
+  ): Promise<void> {
+    const elements = [...this.boardElement.querySelectorAll<HTMLElement>('.cell.card')]
+      .filter((el) => el.dataset.cardId === card.id)
+    return this.animateElements(elements, className, duration)
+  }
+
+  /** Shared class-based animation helper with cleanup after the CSS finishes. */
+  private animateElements(
+    elements: HTMLElement[],
+    className: string,
+    duration: number
+  ): Promise<void> {
+    if (elements.length === 0) return Promise.resolve()
+    elements.forEach((el) => {
+      el.classList.remove(className)
+      void el.offsetWidth
+      el.classList.add(className)
+    })
+    return new Promise((resolve) => {
+      window.setTimeout(() => {
+        elements.forEach((el) => el.classList.remove(className))
+        resolve()
+      }, duration)
+    })
+  }
+
 
   private injectStyles(): void {
     if (document.getElementById('game-board-styles')) return
@@ -739,44 +885,131 @@ const STYLES = `
 }
 
 /* ---------- Animation Effects ---------- */
-@keyframes card-drop {
+@keyframes card-enter-soft {
   from {
     opacity: 0;
-    transform: translateY(-100%);
+    transform: translateY(-18px) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
-@keyframes card-collapse {
-  from {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-  to {
-    opacity: 0;
-    transform: scale(0.95) translateY(20px);
-  }
-}
-
-@keyframes enemy-attack {
+@keyframes player-strike-pop {
   0%, 100% {
-    transform: translateX(0);
+    transform: translateY(0) scale(1);
     filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
   }
-  50% {
-    transform: translateX(4px);
-    filter: drop-shadow(0 4px 14px rgba(168, 58, 58, 0.6));
+  38% {
+    transform: translateY(-18px) scale(1.05);
+    filter: drop-shadow(0 12px 18px rgba(255, 215, 120, 0.45));
+  }
+  68% {
+    transform: translateY(4px) scale(0.98);
   }
 }
 
-.cell.card.type-enemy.is-active {
-  animation: card-drop 0.3s ease-out;
+@keyframes enemy-down-slam {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
+  }
+  42% {
+    transform: translateY(24px) scale(1.04, 0.96);
+    filter: drop-shadow(0 14px 18px rgba(168, 58, 58, 0.65));
+  }
+  66% {
+    transform: translateY(-3px) scale(0.99, 1.02);
+  }
 }
 
-.cell.card.type-enemy.is-attacking {
-  animation: enemy-attack 0.4s ease-in-out;
+@keyframes treasure-dust-fade {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    filter: blur(0) saturate(1);
+  }
+  24% {
+    opacity: 0.92;
+    transform: translate(-2px, 1px) rotate(-0.8deg) scale(1.01);
+  }
+  46% {
+    opacity: 0.72;
+    transform: translate(2px, -1px) rotate(0.8deg) scale(0.99);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(0, 10px) rotate(0deg) scale(0.92);
+    filter: blur(1px) saturate(0.75);
+  }
+}
+
+@keyframes treasure-dust-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+    box-shadow: 0 0 0 rgba(201, 161, 58, 0);
+  }
+  35% {
+    opacity: 0.9;
+    transform: scale(1.05);
+    box-shadow:
+      -18px -8px 0 rgba(201, 161, 58, 0.22),
+      14px -12px 0 rgba(255, 228, 154, 0.2),
+      -8px 14px 0 rgba(182, 128, 42, 0.2),
+      18px 10px 0 rgba(255, 228, 154, 0.16);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.45);
+    box-shadow:
+      -28px -18px 0 rgba(201, 161, 58, 0),
+      24px -24px 0 rgba(255, 228, 154, 0),
+      -18px 24px 0 rgba(182, 128, 42, 0),
+      30px 18px 0 rgba(255, 228, 154, 0);
+  }
+}
+
+@keyframes group-squish {
+  0%, 100% { transform: scale(1); }
+  35% { transform: scale(1.06, 0.94); }
+  62% { transform: scale(0.98, 1.05); }
+}
+
+.cell.card.is-entering {
+  animation: card-enter-soft 0.34s cubic-bezier(0.2, 0.86, 0.28, 1);
+}
+
+.cell.card.is-player-striking {
+  animation: player-strike-pop 0.28s cubic-bezier(0.2, 0.9, 0.25, 1);
+  z-index: 5;
+}
+
+.cell.card.is-enemy-slamming {
+  animation: enemy-down-slam 0.34s cubic-bezier(0.24, 0.92, 0.28, 1);
+  z-index: 5;
+}
+
+.cell.card.is-treasure-vanishing {
+  pointer-events: none;
+  animation: treasure-dust-fade 0.52s ease-out forwards;
+  z-index: 6;
+}
+
+.cell.card.is-treasure-vanishing::after {
+  content: '';
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 232, 168, 0.8);
+  animation: treasure-dust-burst 0.52s ease-out forwards;
+}
+
+.cell.card.is-newly-grouped {
+  animation: group-squish 0.3s cubic-bezier(0.18, 0.9, 0.18, 1);
+  z-index: 4;
 }
 `
