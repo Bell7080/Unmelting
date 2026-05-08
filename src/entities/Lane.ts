@@ -1,9 +1,10 @@
 /**
  * Lane Entity - Represents a single lane with advancing cards
  * MVP: 4 distance slots (0-3, where 0 is closest to player)
+ * Cards can merge when same type/name at same position
  */
 
-import { Card } from './Card'
+import { Card, CardType } from './Card'
 
 export const LANE_DISTANCE_COUNT = 4
 
@@ -18,9 +19,6 @@ export class Lane {
     this.cards = new Array(LANE_DISTANCE_COUNT).fill(null)
   }
 
-  /**
-   * Place a card at a specific distance
-   */
   setCardAtDistance(distance: number, card: Card | null): boolean {
     if (distance < 0 || distance >= LANE_DISTANCE_COUNT) {
       return false
@@ -29,9 +27,6 @@ export class Lane {
     return true
   }
 
-  /**
-   * Get card at specific distance
-   */
   getCardAtDistance(distance: number): Card | null {
     if (distance < 0 || distance >= LANE_DISTANCE_COUNT) {
       return null
@@ -39,9 +34,6 @@ export class Lane {
     return this.cards[distance]
   }
 
-  /**
-   * Get card closest to player (distance 0)
-   */
   getClosestCard(): Card | null {
     return this.cards[0]
   }
@@ -49,6 +41,7 @@ export class Lane {
   /**
    * Advance all cards one step closer to player
    * Cards at distance 0 are removed (collision)
+   * Returns: card that collided (if any)
    */
   advanceCards(): Card | null {
     const collidingCard = this.cards[0]
@@ -63,33 +56,27 @@ export class Lane {
   }
 
   /**
-   * Move a card by a relative distance
-   * Positive = away from player, Negative = toward player
+   * Add card to a specific distance
+   * If same type/name exists, merge instead
    */
-  moveCard(card: Card, relativeDistance: number): boolean {
-    const currentDistance = this.cards.indexOf(card)
-    if (currentDistance === -1) return false
+  addCardAtDistance(distance: number, newCard: Card): boolean {
+    if (distance < 0 || distance >= LANE_DISTANCE_COUNT) {
+      return false
+    }
 
-    const newDistance = currentDistance + relativeDistance
-    if (newDistance < 0 || newDistance >= LANE_DISTANCE_COUNT) return false
+    const existingCard = this.cards[distance]
+    if (existingCard && existingCard.type === newCard.type && existingCard.name === newCard.name) {
+      // Merge!
+      existingCard.merge(newCard)
+      return true
+    }
 
-    this.cards[currentDistance] = null
-    this.cards[newDistance] = card
-    return true
-  }
+    if (existingCard) {
+      // Can't add - space occupied
+      return false
+    }
 
-  /**
-   * Swap two cards
-   */
-  swapCards(card1: Card, card2: Card): boolean {
-    const index1 = this.cards.indexOf(card1)
-    const index2 = this.cards.indexOf(card2)
-
-    if (index1 === -1 || index2 === -1) return false
-
-    const temp = this.cards[index1]
-    this.cards[index1] = this.cards[index2]
-    this.cards[index2] = temp
+    this.cards[distance] = newCard
     return true
   }
 
@@ -103,23 +90,21 @@ export class Lane {
     return true
   }
 
-  /**
-   * Check if lane has any cards
-   */
+  removeCardAtDistance(distance: number): Card | null {
+    if (distance < 0 || distance >= LANE_DISTANCE_COUNT) return null
+    const card = this.cards[distance]
+    this.cards[distance] = null
+    return card
+  }
+
   hasCards(): boolean {
     return this.cards.some((card) => card !== null)
   }
 
-  /**
-   * Get all non-null cards
-   */
   getAllCards(): Card[] {
     return this.cards.filter((card): card is Card => card !== null)
   }
 
-  /**
-   * Clear all cards
-   */
   clear(): void {
     this.cards.fill(null)
   }
