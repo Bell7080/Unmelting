@@ -221,38 +221,61 @@ npm run type-check # TypeScript type checking
 - **Curses** (저주): Risk mechanic with ability changes
 - Current implementation: ✅ All stats tracked in Character.stats
 
-### Turn Order (from concept: Section 6)
-1. ✅ Player uses 2 action points per turn
-2. ✅ All cards advance 1 space toward player
-3. ✅ Cards reaching Distance[0] trigger collision
-4. ❓ New card spawning (not yet implemented)
-5. ⏳ Turn advances, action points restore
+### Turn Order (UPDATED: MVP Simplified)
+1. ✅ **Player Selection**: Choose 1 of 3 lanes (enemy/trap/treasure)
+2. ✅ **Player Action**: Execute chosen action on selected lane
+3. ✅ **Card Advance**: All cards move 1 space toward player
+4. ✅ **Collision Processing**: Handle cards reaching Distance[0]
+5. ✅ **Drop System**: Enemy defeat → reward card drops
+6. ⏳ **Turn End**: Next turn begins
 
-### Card Positioning Actions (from concept: Section 7.4)
-Must implement these tactical card manipulations:
-- **밀치기 (Push)**: Move enemy card away (increase distance)
-- **끌어오기 (Pull)**: Move reward card closer (decrease distance)
-- **봉인하기 (Seal)**: Stop card advancement (card.isSealed = true)
-- **자리바꾸기 (Swap)**: Exchange positions of two cards
-- **태우기 (Burn)**: Remove all cards in a lane
+### Card Types (CRITICAL CHANGE: MVP = 3 types only)
+**NOT 6 types. MVP focuses on:**
+- **Enemy** (적): Attacks player each turn, drops loot on defeat
+- **Trap** (함정): Blocks lane, 3 consecutive traps = instant death
+- **Treasure** (보물상자): Provides rewards, 50% disappears/10% becomes mimic per turn
+
+### Card Grouping Mechanic (NEW)
+Same card type stacking in same position:
+- **Enemy Stack**:
+  - 2x: Health +50%, Damage +1
+  - 3x: Health +100%, Damage +2
+- **Trap Stack**:
+  - 2x: Damage taken +1
+  - 3x on all lanes: Instant death (cannot evade)
+- **Treasure Stack**:
+  - 2x: Reward 2x
+  - 3x: Reward 4x (extremely rare)
+
+### Drop System (NEW)
+Enemy defeat → 1 of 4 reward cards drops:
+- **Wax Scrap**: +1 Health (40%)
+- **Small Candle**: +2 Health (30%)
+- **Gold Stamp**: +1 Attack next turn (20%)
+- **Warm Soup**: -1 Incoming damage (10%)
+
+### Player Action Model (SIMPLIFIED)
+**Each turn: Select 1 lane, perform 1 action:**
+- **Attack Enemy**: Player strikes first → Enemy counterattack
+- **Evade Trap**: Trap is cleared, next card advances
+- **Take Treasure**: Reward added to hand
 
 ### Game Feel Requirements (from concept)
 - **Core emotion**: "저 보상 먹고 싶은데, 지금 먹으면 위험하다"
-  - UI must show card threat levels visually
-  - Risk/reward decision-making is central
+  - UI must show threat level per lane
+  - Choice pressure drives decision-making
 - **Visual tone**: "몽글몽글 다크판타지"
   - Cute but eerie aesthetic
-  - Minimal animations (performance-conscious)
+  - Minimal animations
   - Warm candlelight + cold darkness contrast
 
-### MVP Card Pool (from concept: Section 15)
-**Must implement exactly these counts:**
-- Enemy cards: 6 types
-- Reward cards: 6 types
-- Obstacle cards: 5 types
-- Event cards: 3 types
-- Boss cards: 1 type
-- Stages: 1 (initial stage)
+### MVP Scope (UPDATED: Drastically Simplified)
+- **Card Types**: 3 (Enemy, Trap, Treasure)
+- **Lanes**: 3 lanes × 4 distance slots
+- **Reward Cards**: 4 types (drops only)
+- **Game Duration**: Survive X turns or die
+- **Player**: 1 character (녹지 않는 소녀)
+- **No bosses, events, or complex stages in MVP**
 
 ### Status & Tracking
 - ✅ = Implemented
