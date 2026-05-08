@@ -8,9 +8,11 @@ export enum CardType {
   TREASURE = 'treasure',
 }
 
-export interface CardStats {
-  baseHealth?: number
-  baseDamage?: number
+export interface CardOptions {
+  /** Special enemies stay as standalone threats and never merge with other cards. */
+  isSpecialEnemy?: boolean
+  /** Number of items awarded when this enemy is defeated. */
+  defeatDropCount?: number
 }
 
 export class Card {
@@ -22,6 +24,8 @@ export class Card {
   baseDamage: number
   groupCount: number // How many identical cards are stacked
   health: number // Current effective enemy HP after group bonuses are applied
+  isSpecialEnemy: boolean // Special enemies, such as mimics, never merge into wider groups
+  defeatDropCount: number // Number of item drops awarded when this enemy is defeated
 
   constructor(
     id: string,
@@ -29,7 +33,8 @@ export class Card {
     name: string,
     description: string,
     baseHealth: number = 0,
-    baseDamage: number = 0
+    baseDamage: number = 0,
+    options: CardOptions = {}
   ) {
     this.id = id
     this.type = type
@@ -39,6 +44,8 @@ export class Card {
     this.baseDamage = baseDamage
     this.groupCount = 1
     this.health = type === CardType.ENEMY ? baseHealth : 0
+    this.isSpecialEnemy = options.isSpecialEnemy ?? false
+    this.defeatDropCount = options.defeatDropCount ?? 1
   }
 
   /**
@@ -86,13 +93,24 @@ export class Card {
   }
 
   /**
+   * Decide whether two cards can share a single multi-lane group. Mimics and
+   * other special enemies are intentionally kept separate so a treasure-turned
+   * threat cannot be absorbed into an ordinary enemy cell.
+   */
+  canMergeWith(other: Card): boolean {
+    if (this.type !== other.type) return false
+    if (this.isSpecialEnemy || other.isSpecialEnemy) return false
+    return true
+  }
+
+  /**
    * Merge another card into this one. Same type required.
    * For enemies: keep baseHealth as the ungrouped HP pool, then calculate the
    * grouped max HP exactly once while preserving damage already dealt to either
    * enemy. groupCount tracks how many lane cells the card occupies.
    */
   merge(other: Card): void {
-    if (this.type !== other.type) return
+    if (!this.canMergeWith(other)) return
 
     if (this.type === CardType.ENEMY) {
       const thisMaxHealth = Card.calculateGroupedHealth(this.baseHealth, this.groupCount)
@@ -119,7 +137,11 @@ export class Card {
       this.name,
       this.description,
       this.baseHealth,
-      this.baseDamage
+      this.baseDamage,
+      {
+        isSpecialEnemy: this.isSpecialEnemy,
+        defeatDropCount: this.defeatDropCount,
+      }
     )
     cloned.groupCount = this.groupCount
     cloned.health = this.health

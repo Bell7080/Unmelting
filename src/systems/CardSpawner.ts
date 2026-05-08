@@ -86,7 +86,11 @@ export class CardSpawner {
       '미믹',
       'Was a treasure once',
       1,
-      1
+      1,
+      {
+        isSpecialEnemy: true,
+        defeatDropCount: 3,
+      }
     )
   }
 }

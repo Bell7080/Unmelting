@@ -93,8 +93,9 @@ export class GameState {
 
   /**
    * Walk a row left-to-right; whenever two adjacent slots hold cards of the
-   * same type, fold the right card into the left and replace the right slot
-   * with the (now bigger) left Card. Result: a contiguous run of same-type
+   * same merge-compatible type, fold the right card into the left and
+   * replace the right slot with the (now bigger) left Card. Result: a
+   * contiguous run of same-type
    * cards becomes a single Card occupying multiple lane slots.
    * Only groups the active row (distance 0); preview rows stay ungrouped.
    */
@@ -112,7 +113,7 @@ export class GameState {
         i++
         continue
       }
-      if (left.type === right.type) {
+      if (left.canMergeWith(right)) {
         left.merge(right)
         this.lanes[i + 1].setCardAtDistance(distance, left)
       }

@@ -68,13 +68,20 @@ export class ActionSystem {
     const newHealth = card.takeDamage(playerDamage)
 
     if (newHealth <= 0) {
-      const drop = DropSystem.generateDrop()
-      character.addItem(drop.name)
+      const dropNames: string[] = []
+      for (let i = 0; i < card.defeatDropCount; i++) {
+        // Special enemies can override their reward count; normal enemies still drop one item.
+        const drop = DropSystem.generateDrop()
+        character.addItem(drop.name)
+        dropNames.push(drop.name)
+      }
+      const summary =
+        dropNames.length === 1 ? dropNames[0] : `${dropNames.length}개 (${dropNames.join(', ')})`
       return {
         success: true,
-        message: `${card.name} 처치! ${drop.name} 획득`,
+        message: `${card.name} 처치! ${summary} 획득`,
         damageDealt: playerDamage,
-        itemGained: drop.name,
+        itemGained: summary,
         cardRemoved: true,
       }
     }
