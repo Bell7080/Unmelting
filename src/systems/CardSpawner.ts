@@ -78,17 +78,15 @@ export class CardSpawner {
     )
   }
 
-  /** Mimic: a treasure that turned hostile. Slightly weaker than a fresh enemy. */
+  /** Mimic: treasure event enemy with fixed 1 HP and 1 attack. */
   spawnMimic(): Card {
-    const baseHealth = 2 + Math.floor(Math.random() * 2)
-    const baseDamage = 1 + Math.floor(Math.random() * 2)
     return new Card(
       `mimic-${this.turnCount}-${Math.random()}`,
       CardType.ENEMY,
       '미믹',
       'Was a treasure once',
-      baseHealth,
-      baseDamage
+      1,
+      1
     )
   }
 }

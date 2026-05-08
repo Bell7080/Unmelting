@@ -26,6 +26,7 @@ export class Character {
   }
 
   takeDamage(amount: number): number {
+    // Damage is clamped so healing/negative damage can never occur by mistake.
     const actualDamage = Math.max(0, amount)
     this.health = Math.max(0, this.health - actualDamage)
     return actualDamage
@@ -52,12 +53,9 @@ export class Character {
     return [...this.items]
   }
 
+  /** Permanently raise the player's attack stat. */
   applyDamageBoost(): void {
     this.damage += 1
-  }
-
-  resetDamageBoost(): void {
-    this.damage = 1
   }
 
   isAlive(): boolean {
@@ -65,8 +63,8 @@ export class Character {
   }
 
   nextTurn(): void {
+    // Attack boosts are permanent, so only the turn counter advances here.
     this.turn++
-    this.resetDamageBoost()
   }
 
   reset(): void {

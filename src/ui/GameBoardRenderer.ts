@@ -27,6 +27,10 @@ export interface CardActionDetail {
   card: Card
 }
 
+export interface ItemActionDetail {
+  itemIndex: number
+}
+
 export class GameBoardRenderer {
   private boardElement: HTMLElement
   private selected: { laneIndex: number; distance: number } | null = null
@@ -34,6 +38,7 @@ export class GameBoardRenderer {
   private hasRendered = false
   private previousCardIds = new Set<string>()
   private previousGroupSpans = new Map<string, number>()
+  private trapDisarmItemIndex: number | null = null
 
   constructor(containerId: string = 'game-board') {
     const container = document.getElementById(containerId)
@@ -84,6 +89,12 @@ export class GameBoardRenderer {
 
   clearSelection(): void {
     this.selected = null
+  }
+
+  /** Toggle the UI overlay used while the wax shield is waiting for a trap. */
+  setTrapDisarmMode(itemIndex: number | null): void {
+    this.trapDisarmItemIndex = itemIndex
+    this.clearSelection()
   }
 
   private renderRail(lanes: Lane[]): string {
@@ -139,12 +150,19 @@ export class GameBoardRenderer {
       this.selected.laneIndex >= laneIndex &&
       this.selected.laneIndex < laneIndex + span
 
+    const isTrapDisarmBlocked =
+      isActive && this.trapDisarmItemIndex !== null && card.type !== CardType.TRAP
+    const isTrapDisarmTarget =
+      isActive && this.trapDisarmItemIndex !== null && card.type === CardType.TRAP
+
     const classes = [
       'cell',
       'card',
       `type-${card.type}`,
       isActive ? 'is-active' : 'is-preview',
       isSelected ? 'is-selected' : '',
+      isTrapDisarmBlocked ? 'is-trap-disarm-blocked' : '',
+      isTrapDisarmTarget ? 'is-trap-disarm-target' : '',
       span > 1 ? 'is-grouped' : '',
       this.hasRendered && !this.previousCardIds.has(card.id) ? 'is-entering' : '',
       this.shouldAnimateGroup(card.id, span) ? 'is-newly-grouped' : '',
@@ -165,6 +183,7 @@ export class GameBoardRenderer {
            role="button"
            tabindex="${tabIndex}">
         ${this.renderCardFace(card, span)}
+        ${isTrapDisarmBlocked ? '<div class="trap-block-mark" aria-hidden="true">×</div>' : ''}
       </div>
     `
   }
@@ -252,11 +271,17 @@ export class GameBoardRenderer {
       `
     }
     const badges = character.items
-      .map((item: string) => `<div class="item-pill">${item}</div>`)
+      .map((item: string, index: number) =>
+        `<button class="item-pill ${this.trapDisarmItemIndex === index ? 'is-arming-trap-disarm' : ''}" data-item-index="${index}" type="button">${item}</button>`
+      )
       .join('')
+    const helper = this.trapDisarmItemIndex !== null
+      ? '<div class="items-helper danger">밀랍 방패: 파괴할 함정을 선택하거나 방패를 다시 눌러 취소</div>'
+      : ''
     return `
       <div class="items-row">
         <div class="items-label">📦 손패 (${character.items.length})</div>
+        ${helper}
         <div class="items-list">${badges}</div>
       </div>
     `
@@ -272,6 +297,17 @@ export class GameBoardRenderer {
         const laneIndex = parseInt(el.dataset.lane || '0', 10)
         const distance = parseInt(el.dataset.distance || '0', 10)
         this.handleCardClick(el, laneIndex, distance)
+      })
+    })
+
+    // Hand items are buttons so they can be used without selecting a rail card.
+    this.boardElement.querySelectorAll<HTMLElement>('.item-pill').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation()
+        const itemIndex = parseInt(el.dataset.itemIndex || '-1', 10)
+        document.dispatchEvent(new CustomEvent<ItemActionDetail>('itemAction', {
+          detail: { itemIndex },
+        }))
       })
     })
   }
@@ -327,6 +363,11 @@ export class GameBoardRenderer {
       if (element) elements.add(element)
     }
     return this.animateElements([...elements], 'is-enemy-slamming', 340)
+  }
+
+  /** Flash the stage red when the player takes damage. */
+  animateDamageFlash(): Promise<void> {
+    return this.animateElements([this.boardElement], 'is-damage-flashing', 260)
   }
 
   /**
@@ -600,7 +641,6 @@ const STYLES = `
     inset 0 0 0 2px rgba(255, 215, 120, 0.6),
     0 0 22px rgba(255, 215, 120, 0.55),
     0 4px 14px rgba(0, 0, 0, 0.55);
-  transform: translateY(-2px);
   animation: candle-glow 1.6s ease-in-out infinite alternate;
 }
 
@@ -736,6 +776,35 @@ const STYLES = `
   z-index: 2;
 }
 
+
+.cell.card.is-trap-disarm-target {
+  border-color: var(--color-flame);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 215, 120, 0.7),
+    0 0 20px rgba(255, 215, 120, 0.5);
+}
+
+.cell.card.is-trap-disarm-blocked {
+  cursor: not-allowed;
+  filter: grayscale(0.45) brightness(0.7);
+}
+
+.trap-block-mark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 70, 70, 0.88);
+  font-size: clamp(48px, 12vw, 96px);
+  font-weight: 900;
+  text-shadow:
+    0 0 8px rgba(0, 0, 0, 0.9),
+    0 0 18px rgba(168, 58, 58, 0.8);
+  pointer-events: none;
+  z-index: 8;
+}
+
 /* ---------- Player Card ---------- */
 .player-row {
   display: flex;
@@ -861,6 +930,9 @@ const STYLES = `
 }
 
 .item-pill {
+  appearance: none;
+  cursor: pointer;
+  font-family: inherit;
   font-size: 12px;
   padding: 4px 10px;
   background: rgba(244, 164, 96, 0.1);
@@ -868,6 +940,22 @@ const STYLES = `
   color: var(--color-text-primary);
   border-radius: 999px;
   white-space: nowrap;
+}
+.item-pill:hover {
+  border-color: var(--color-flame);
+  box-shadow: 0 0 10px rgba(244, 164, 96, 0.25);
+}
+.item-pill.is-arming-trap-disarm {
+  border-color: var(--color-enemy);
+  color: #ffd5d5;
+  box-shadow: 0 0 14px rgba(168, 58, 58, 0.45);
+}
+.items-helper {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.items-helper.danger {
+  color: #ffd5d5;
 }
 
 @media (max-width: 480px) {
@@ -885,6 +973,11 @@ const STYLES = `
 }
 
 /* ---------- Animation Effects ---------- */
+@keyframes damage-screen-flash {
+  0%, 100% { box-shadow: none; }
+  35% { box-shadow: inset 0 0 0 9999px rgba(168, 58, 58, 0.22); }
+}
+
 @keyframes card-enter-soft {
   from {
     opacity: 0;
@@ -975,6 +1068,11 @@ const STYLES = `
   0%, 100% { transform: scale(1); }
   35% { transform: scale(1.06, 0.94); }
   62% { transform: scale(0.98, 1.05); }
+}
+
+.stage.is-damage-flashing,
+.is-damage-flashing .stage {
+  animation: damage-screen-flash 0.26s ease-out;
 }
 
 .cell.card.is-entering {
