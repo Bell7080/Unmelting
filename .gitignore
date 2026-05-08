@@ -7,8 +7,9 @@ pnpm-lock.yaml
 # Build outputs
 dist/
 build/
+docs/
 *.tsbuildinfo
-# docs/ is intentionally committed (GitHub Pages deploy from branch)
+# index.html and assets/ at root are intentionally committed (GitHub Pages / root)
 
 # IDE
 .vscode/

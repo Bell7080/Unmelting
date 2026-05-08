@@ -5,8 +5,8 @@ export default defineConfig({
   root: 'src',
   base: '/Unmelting/',
   build: {
-    outDir: '../docs', // GitHub Pages: Deploy from branch → main → /docs
-    emptyOutDir: true,
+    outDir: '../',
+    emptyOutDir: false,
     minify: 'esbuild',
     sourcemap: false,
   },
