@@ -14,7 +14,7 @@ export class Character {
 
   constructor(
     id: string = 'unmelting-girl',
-    name: string = 'The Unmelting Girl'
+    name: string = '녹지 않는 소녀'
   ) {
     this.id = id
     this.name = name

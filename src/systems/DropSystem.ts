@@ -12,23 +12,23 @@ export interface ItemDrop {
 export class DropSystem {
   private static readonly ITEM_POOL: ItemDrop[] = [
     {
-      name: 'Health Potion',
-      description: '+1 Health',
+      name: '🧪 작은 양초',
+      description: '체력 +1',
       effect: 'heal-small',
     },
     {
-      name: 'Large Potion',
-      description: '+2 Health',
+      name: '🕯 큰 양초',
+      description: '체력 +2',
       effect: 'heal-large',
     },
     {
-      name: 'Attack Boost',
-      description: '+1 Attack (1 turn)',
+      name: '🔥 불꽃 부적',
+      description: '다음 공격 +1',
       effect: 'damage-boost',
     },
     {
-      name: 'Defense Boost',
-      description: '-1 Damage (1 turn)',
+      name: '🛡 밀랍 방패',
+      description: '다음 피해 -1',
       effect: 'defense-boost',
     },
   ]
