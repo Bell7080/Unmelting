@@ -3,7 +3,7 @@ import { resolve } from 'path'
 
 export default defineConfig({
   root: 'src',
-  base: '/',
+  base: '/Unmelting/',
   build: {
     outDir: '../docs', // GitHub Pages: Deploy from branch → main → /docs
     emptyOutDir: true,
