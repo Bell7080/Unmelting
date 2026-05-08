@@ -248,11 +248,17 @@ Same card type stacking in same position:
   - 3x: Reward 4x (extremely rare)
 
 ### Drop System (NEW)
-Enemy defeat → 1 of 4 reward cards drops:
-- **Wax Scrap**: +1 Health (40%)
-- **Small Candle**: +2 Health (30%)
-- **Gold Stamp**: +1 Attack next turn (20%)
-- **Warm Soup**: -1 Incoming damage (10%)
+Enemy defeat → 1 of 4 basic items drops:
+- **Health Potion**: +1 Health (40%)
+- **Large Potion**: +2 Health (30%)
+- **Attack Boost**: +1 Attack next turn (20%)
+- **Defense Boost**: -1 Incoming damage (10%)
+
+**Hand/Inventory System:**
+- Not deck-building (no shuffling or card mechanics)
+- Resource/item management (consumable feel)
+- Used with action or passively applied
+- Future items: Trap kits, Keys, Freeze crystals, Skip tokens, etc.
 
 ### Player Action Model (SIMPLIFIED)
 **Each turn: Select 1 lane, perform 1 action:**
@@ -272,10 +278,20 @@ Enemy defeat → 1 of 4 reward cards drops:
 ### MVP Scope (UPDATED: Drastically Simplified)
 - **Card Types**: 3 (Enemy, Trap, Treasure)
 - **Lanes**: 3 lanes × 4 distance slots
-- **Reward Cards**: 4 types (drops only)
+- **Item System**: 4 basic consumables (drops only)
 - **Game Duration**: Survive X turns or die
 - **Player**: 1 character (녹지 않는 소녀)
-- **No bosses, events, or complex stages in MVP**
+- **No**: bosses, story, difficulty selection, character variety, Electron packaging
+
+### Post-MVP Features (Planning Only, NOT in current implementation)
+- Multiple playable characters with unique abilities
+- Difficulty modes (Easy/Normal/Hard/Nightmare)
+- Game modes (Story/Infinite)
+- Advanced items (trap kits, keys, freeze, skip, etc.)
+- Electron packaging for Steam release
+- Platform expansion (mobile, etc.)
+
+**CRITICAL**: Focus entirely on making core game loop fun first. All other features depend on this working.
 
 ### Status & Tracking
 - ✅ = Implemented
