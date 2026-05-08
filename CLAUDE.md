@@ -200,3 +200,63 @@ npm run type-check # TypeScript type checking
 - **TypeScript-only**: Ensures type safety from game start
 - **Minimum 12px font**: Accessibility and readability on all screen sizes
 
+---
+
+## ⚠️ Implementation Notes & Requirements Tracking
+
+### Distance/Position Indexing
+- **Code representation**: Distance is 0-indexed `[0, 1, 2, 3]` where:
+  - Distance[0] = Closest to player (collision zone)
+  - Distance[3] = Farthest from player
+- **Concept document**: Uses 1-indexed `[1칸, 2칸, 3칸, 4칸]`
+  - 1칸 = 근접 거리 (closest)
+  - 4칸 = 먼 거리 (farthest)
+- **Resolution**: Both representations refer to the same 4-slot structure. Maintain 0-indexed internally, convert to 1-indexed in UI/documentation.
+
+### Character Stats (from concept: "양초, 우표, 밀랍, 기억, 저주")
+- **Candles** (양초): Recovery/survival resource
+- **Stamps** (우표): Passive enhancement
+- **Wax** (밀랍): Risky power enhancement
+- **Memory** (기억): Unlocks stage reward abilities
+- **Curses** (저주): Risk mechanic with ability changes
+- Current implementation: ✅ All stats tracked in Character.stats
+
+### Turn Order (from concept: Section 6)
+1. ✅ Player uses 2 action points per turn
+2. ✅ All cards advance 1 space toward player
+3. ✅ Cards reaching Distance[0] trigger collision
+4. ❓ New card spawning (not yet implemented)
+5. ⏳ Turn advances, action points restore
+
+### Card Positioning Actions (from concept: Section 7.4)
+Must implement these tactical card manipulations:
+- **밀치기 (Push)**: Move enemy card away (increase distance)
+- **끌어오기 (Pull)**: Move reward card closer (decrease distance)
+- **봉인하기 (Seal)**: Stop card advancement (card.isSealed = true)
+- **자리바꾸기 (Swap)**: Exchange positions of two cards
+- **태우기 (Burn)**: Remove all cards in a lane
+
+### Game Feel Requirements (from concept)
+- **Core emotion**: "저 보상 먹고 싶은데, 지금 먹으면 위험하다"
+  - UI must show card threat levels visually
+  - Risk/reward decision-making is central
+- **Visual tone**: "몽글몽글 다크판타지"
+  - Cute but eerie aesthetic
+  - Minimal animations (performance-conscious)
+  - Warm candlelight + cold darkness contrast
+
+### MVP Card Pool (from concept: Section 15)
+**Must implement exactly these counts:**
+- Enemy cards: 6 types
+- Reward cards: 6 types
+- Obstacle cards: 5 types
+- Event cards: 3 types
+- Boss cards: 1 type
+- Stages: 1 (initial stage)
+
+### Status & Tracking
+- ✅ = Implemented
+- ⏳ = In progress
+- ❓ = Needs clarification
+- ❌ = Not started
+
