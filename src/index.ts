@@ -1,12 +1,18 @@
 /**
  * Unmelting - Main game loop
  *
- * UX:
- *   - Vertical 3-lane × 3-row rail.
- *   - Only the active (bottom) row is interactive.
- *   - 1st click highlights, 2nd click executes the action implied by the
- *     card's type (Enemy = attack, Trap = evade, Treasure = take).
- *   - Cards descend each turn; new cards spawn at the top.
+ * Per-turn flow:
+ *   1. Player phase  → player picks a card (1st click highlights, 2nd executes)
+ *      • Enemy = player strikes first
+ *      • Trap  = player steps on it (takes penalty)
+ *      • Treasure = player banks the rewards
+ *   2. Refill        → only the lane(s) the player resolved collapse + spawn
+ *      a fresh card at the top. Other lanes stay put.
+ *   3. Enemy phase   → bottom-row enemies still alive strike the player
+ *   4. Treasure roll → 50% disappear / 10% mimic conversion per treasure
+ *   5. Hazard check  → all-trap active row = instant death
+ *   6. Re-group rows → adjacent same-type cards merge into one
+ *   7. nextTurn
  */
 
 import { GameState } from '@core/GameState'
@@ -28,9 +34,6 @@ app.innerHTML = `
 `
 
 FontManager.initializeDefaults()
-
-// Register custom display font and make it the primary face for the game.
-// Single bold cut covers every weight request so headings + body share the face.
 FontManager.loadCustomFont({
   family: 'OkDanDan',
   url: okDanDanBoldUrl,
@@ -55,31 +58,29 @@ function actionTypeFor(cardType: CardType): ActionType | null {
   }
 }
 
-function spawnRow(): void {
-  const cards = cardSpawner.spawnCardsForTurn()
+function fillEmptyTopSlots(): void {
   const topDistance = LANE_DISTANCE_COUNT - 1
-  for (let i = 0; i < 3; i++) {
-    const lane = gameState.getLane(i)
-    const card = cards[i]
-    if (lane && card) {
-      lane.addCardAtDistance(topDistance, card)
+  for (let i = 0; i < gameState.lanes.length; i++) {
+    const lane = gameState.lanes[i]
+    if (!lane.getCardAtDistance(topDistance)) {
+      const fresh = cardSpawner.spawnCardsForTurn()
+      lane.setCardAtDistance(topDistance, fresh[0])
     }
   }
 }
 
 function fillBoardAtStart(): void {
-  // Pre-populate every row so the player sees the active bottom row plus
-  // two upcoming rows from turn 1.
   for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
     const cards = cardSpawner.spawnCardsForTurn()
-    for (let i = 0; i < 3; i++) {
-      const lane = gameState.getLane(i)
+    for (let i = 0; i < gameState.lanes.length; i++) {
+      const lane = gameState.lanes[i]
       const card = cards[i]
       if (lane && card) {
-        lane.addCardAtDistance(distance, card)
+        lane.setCardAtDistance(distance, card)
       }
     }
   }
+  gameState.regroupAllRows()
 }
 
 function startGame(): void {
@@ -95,7 +96,10 @@ function render(): void {
   boardRenderer.render(gameState)
 }
 
-function showToast(message: string, kind: 'info' | 'win' | 'hurt' = 'info'): void {
+function showToast(
+  message: string,
+  kind: 'info' | 'win' | 'hurt' = 'info'
+): void {
   const host = document.getElementById('toast-host')
   if (!host) return
   const toast = document.createElement('div')
@@ -106,13 +110,16 @@ function showToast(message: string, kind: 'info' | 'win' | 'hurt' = 'info'): voi
   setTimeout(() => {
     toast.classList.remove('show')
     setTimeout(() => toast.remove(), 250)
-  }, 1400)
+  }, 1600)
 }
 
 document.addEventListener('cardAction', (e: Event) => {
   if (!gameActive || inputLocked) return
   const detail = (e as CustomEvent<CardActionDetail>).detail
-  const { laneIndex, card } = detail
+  const { laneIndex, distance, card } = detail
+
+  // Only the active row is interactive.
+  if (distance !== 0) return
 
   const lane = gameState.getLane(laneIndex)
   if (!lane) return
@@ -121,40 +128,79 @@ document.addEventListener('cardAction', (e: Event) => {
   if (!actionType) return
 
   inputLocked = true
-  const result = ActionSystem.executeAction(gameState.getCharacter(), lane, card, actionType)
+
+  // 1. Player phase
+  const result = ActionSystem.executeAction(
+    gameState.getCharacter(),
+    lane,
+    card,
+    actionType
+  )
   showToast(result.message, result.damageTaken ? 'hurt' : 'info')
 
-  // Brief delay so the player can register the action before the world advances
-  setTimeout(() => {
-    endTurn()
-    inputLocked = false
-  }, 220)
-})
+  // 2. Refill: every lane the resolved card occupied collapses + gets a fresh top card
+  if (result.cardRemoved) {
+    const cleared = gameState.removeCardFromRow(card, distance)
+    for (const li of cleared) {
+      gameState.collapseLane(li)
+    }
+    fillEmptyTopSlots()
+  }
 
-function endTurn(): void {
-  if (!gameActive) return
-
-  turnManager.endPlayerTurn()
-
-  if (gameState.isGameOver) {
-    gameActive = false
-    boardRenderer.render(gameState)
-    showGameOver()
+  // Player's strike already might have killed them through enemy counter-attack
+  if (!gameState.character.isAlive()) {
+    gameState.endGame('character_defeated')
+    finishTurn()
     return
   }
 
-  spawnRow()
+  // 3. Enemy phase
+  const hits = turnManager.runEnemyPhase()
+  if (hits.length > 0) {
+    const total = hits.reduce((acc, h) => acc + h.damage, 0)
+    showToast(`적 공격! -${total}`, 'hurt')
+  }
+  if (gameState.isGameOver) {
+    finishTurn()
+    return
+  }
+
+  // 4. Treasure volatility
+  turnManager.applyTreasureVolatility(cardSpawner)
+
+  // 5. Hazard check
+  if (turnManager.checkHazardLoss()) {
+    finishTurn()
+    return
+  }
+
+  // 6. Regroup
+  gameState.regroupAllRows()
+
+  // 7. nextTurn
+  gameState.nextTurn()
   boardRenderer.clearSelection()
   render()
+
+  setTimeout(() => {
+    inputLocked = false
+  }, 200)
+})
+
+function finishTurn(): void {
+  gameActive = false
+  render()
+  setTimeout(showGameOver, 300)
 }
 
 function showGameOver(): void {
-  const overlay = document.createElement('div')
-  overlay.className = 'game-over-overlay'
   const reason =
     gameState.gameOverReason === 'character_defeated' ? '소녀의 심지가 꺼졌어요…' :
-    gameState.gameOverReason === 'instant_death_trap' ? '함정에 모두 막혀 빛이 사라졌어요.' :
+    gameState.gameOverReason === 'instant_death_trap' ? '모든 길이 함정으로 막혔어요.' :
     '게임 종료'
+
+  const overlay = document.createElement('div')
+  overlay.className = 'game-over-overlay'
   overlay.innerHTML = `
     <div class="game-over-card">
       <div class="game-over-icon">🕯</div>
@@ -170,7 +216,6 @@ function showGameOver(): void {
   })
 }
 
-// Inject global UI styles (toast + game over)
 const globalStyle = document.createElement('style')
 globalStyle.textContent = `
   #toast-host {
@@ -183,6 +228,7 @@ globalStyle.textContent = `
     gap: 6px;
     z-index: 50;
     pointer-events: none;
+    max-width: calc(100vw - 24px);
   }
   .toast {
     background: rgba(31, 24, 48, 0.92);
@@ -195,6 +241,11 @@ globalStyle.textContent = `
     opacity: 0;
     transform: translateY(-8px);
     transition: opacity 0.2s ease, transform 0.2s ease;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
   }
   .toast.show { opacity: 1; transform: translateY(0); }
   .toast-hurt { border-color: var(--color-enemy); color: #ffd5c5; }
@@ -210,6 +261,7 @@ globalStyle.textContent = `
     justify-content: center;
     z-index: 100;
     animation: fade-in 0.3s ease;
+    padding: 16px;
   }
   @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
   .game-over-card {
@@ -220,6 +272,7 @@ globalStyle.textContent = `
     border-radius: 16px;
     box-shadow: 0 0 40px rgba(244, 164, 96, 0.2);
     max-width: 360px;
+    width: 100%;
   }
   .game-over-icon {
     font-size: 48px;
@@ -247,6 +300,7 @@ globalStyle.textContent = `
     border-radius: 999px;
     cursor: pointer;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
+    font-family: inherit;
   }
   .primary-btn:hover {
     transform: translateY(-1px);

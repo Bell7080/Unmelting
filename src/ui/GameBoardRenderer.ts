@@ -1,15 +1,19 @@
 /**
- * GameBoardRenderer - Vertical 3x3 lane grid + player card below
+ * GameBoardRenderer - 3-lane × 3-row vertical rail.
  *
  * Layout (top → bottom):
- *   row distance 2  (farthest, faintest)   [□] [□] [□]
- *   row distance 1  (mid, dimmed)          [□] [□] [□]
- *   row distance 0  (active, full opacity) [○] [○] [○]
+ *   distance 2  faintest preview
+ *   distance 1  dimmer preview
+ *   distance 0  full-opacity active row (the only interactive row)
  *                          🕯  Player Card
+ *                          📦  Items
+ *
+ * Grouping: when a Card instance is referenced by adjacent lane slots in the
+ * same row, that Card is rendered ONCE as a cell that spans those columns.
  *
  * Interaction:
- *   1st click  → card glows (selected)
- *   2nd click  → action executes (no popup)
+ *   1st click   → card glows (selected)
+ *   2nd click   → fires `cardAction` event (action runs in main loop)
  */
 
 import { GameState } from '@core/GameState'
@@ -41,7 +45,6 @@ export class GameBoardRenderer {
     const lanes = gameState.getLanes()
     const turn = gameState.getCurrentTurn()
 
-    // Clear selection if the selected card is gone
     if (this.selected) {
       const lane = lanes[this.selected.laneIndex]
       if (!lane || !lane.getCardAtDistance(this.selected.distance)) {
@@ -57,9 +60,9 @@ export class GameBoardRenderer {
         </header>
 
         <main class="stage-main">
-          <div class="rail">
+          <section class="rail" aria-label="Card rail">
             ${this.renderRail(lanes)}
-          </div>
+          </section>
 
           ${this.renderPlayer(character)}
 
@@ -72,8 +75,11 @@ export class GameBoardRenderer {
     this.attachListeners()
   }
 
+  clearSelection(): void {
+    this.selected = null
+  }
+
   private renderRail(lanes: Lane[]): string {
-    // Render rows from farthest (top) to closest (bottom)
     const rows: string[] = []
     for (let distance = LANE_DISTANCE_COUNT - 1; distance >= 0; distance--) {
       rows.push(this.renderRow(lanes, distance))
@@ -82,24 +88,46 @@ export class GameBoardRenderer {
   }
 
   private renderRow(lanes: Lane[], distance: number): string {
-    const rowClass = `rail-row dist-${distance}` + (distance === 0 ? ' active' : ' upcoming')
-    const cells = lanes
-      .map((lane, laneIndex) => this.renderCell(lane, laneIndex, distance))
-      .join('')
-    return `<div class="${rowClass}">${cells}</div>`
-  }
+    const isActive = distance === 0
+    const rowClass = `rail-row dist-${distance} ${isActive ? 'active' : 'upcoming'}`
 
-  private renderCell(lane: Lane, laneIndex: number, distance: number): string {
-    const card = lane.getCardAtDistance(distance)
-    if (!card) {
-      return `<div class="cell empty" aria-hidden="true"></div>`
+    const cells: string[] = []
+    let i = 0
+    while (i < lanes.length) {
+      const card = lanes[i].getCardAtDistance(distance)
+      if (!card) {
+        cells.push(`<div class="cell empty" aria-hidden="true"></div>`)
+        i++
+        continue
+      }
+
+      // Detect span across consecutive same Card instances.
+      let span = 1
+      while (
+        i + span < lanes.length &&
+        lanes[i + span].getCardAtDistance(distance) === card
+      ) {
+        span++
+      }
+      cells.push(this.renderCardCell(card, i, distance, span, isActive))
+      i += span
     }
 
-    const isActive = distance === 0
+    return `<div class="${rowClass}">${cells.join('')}</div>`
+  }
+
+  private renderCardCell(
+    card: Card,
+    laneIndex: number,
+    distance: number,
+    span: number,
+    isActive: boolean
+  ): string {
     const isSelected =
       !!this.selected &&
-      this.selected.laneIndex === laneIndex &&
-      this.selected.distance === distance
+      this.selected.distance === distance &&
+      this.selected.laneIndex >= laneIndex &&
+      this.selected.laneIndex < laneIndex + span
 
     const classes = [
       'cell',
@@ -107,42 +135,66 @@ export class GameBoardRenderer {
       `type-${card.type}`,
       isActive ? 'is-active' : 'is-preview',
       isSelected ? 'is-selected' : '',
+      span > 1 ? 'is-grouped' : '',
     ]
       .filter(Boolean)
       .join(' ')
 
+    const styleSpan = span > 1 ? `style="grid-column: span ${span};"` : ''
+    const tabIndex = isActive ? '0' : '-1'
+
     return `
       <div class="${classes}"
+           ${styleSpan}
            data-lane="${laneIndex}"
            data-distance="${distance}"
+           data-span="${span}"
            role="button"
-           tabindex="${isActive ? '0' : '-1'}">
-        ${this.renderCardFace(card)}
+           tabindex="${tabIndex}">
+        ${this.renderCardFace(card, span)}
       </div>
     `
   }
 
-  private renderCardFace(card: Card): string {
+  private renderCardFace(card: Card, span: number): string {
     const icon = this.iconFor(card.type)
-    const stats = card.type === CardType.ENEMY
-      ? `<div class="card-stats">
-           <span class="stat hp">❤ ${card.getHealth()}</span>
-           <span class="stat atk">⚔ ${card.getDamage()}</span>
-         </div>`
-      : ''
 
-    const groupBadge = card.groupCount > 1
-      ? `<div class="group-badge">×${card.groupCount}</div>`
-      : ''
+    let stats = ''
+    if (card.type === CardType.ENEMY) {
+      stats = `
+        <div class="card-stats">
+          <span class="stat hp">❤ ${card.getHealth()}</span>
+          <span class="stat atk">⚔ ${card.getDamage()}</span>
+        </div>
+      `
+    } else if (card.type === CardType.TRAP && card.groupCount >= 3) {
+      stats = `<div class="card-stats danger">즉사</div>`
+    } else if (card.type === CardType.TREASURE && card.groupCount > 1) {
+      const mult = card.groupCount === 2 ? 'x2' : 'x4'
+      stats = `<div class="card-stats good">보상 ${mult}</div>`
+    }
+
+    const groupBadge =
+      span > 1 ? `<div class="group-badge">×${span}</div>` : ''
+
+    const groupName = span > 1 ? this.groupName(card.type, span) : card.name
 
     return `
       <div class="card-face">
         ${groupBadge}
         <div class="card-icon">${icon}</div>
-        <div class="card-name">${card.name}</div>
+        <div class="card-name">${groupName}</div>
         ${stats}
       </div>
     `
+  }
+
+  private groupName(type: CardType, span: number): string {
+    if (span <= 1) return ''
+    if (type === CardType.ENEMY) return span === 2 ? '적 무리' : '적 군단'
+    if (type === CardType.TRAP) return span === 2 ? '큰 함정' : '함정 지대'
+    if (type === CardType.TREASURE) return span === 2 ? '보물 더미' : '대보물'
+    return ''
   }
 
   private iconFor(type: CardType): string {
@@ -155,7 +207,10 @@ export class GameBoardRenderer {
   }
 
   private renderPlayer(character: any): string {
-    const hpPct = Math.max(0, Math.min(100, (character.health / character.maxHealth) * 100))
+    const hpPct = Math.max(
+      0,
+      Math.min(100, (character.health / character.maxHealth) * 100)
+    )
     return `
       <div class="player-row">
         <div class="player-card">
@@ -195,8 +250,9 @@ export class GameBoardRenderer {
   }
 
   private attachListeners(): void {
-    // Only the active row (distance 0) is interactive
-    const activeCards = this.boardElement.querySelectorAll<HTMLElement>('.cell.card.is-active')
+    const activeCards = this.boardElement.querySelectorAll<HTMLElement>(
+      '.cell.card.is-active'
+    )
     activeCards.forEach((el) => {
       el.addEventListener('click', (e) => {
         e.stopPropagation()
@@ -214,15 +270,13 @@ export class GameBoardRenderer {
       this.selected.distance === distance
 
     if (isAlreadySelected) {
-      // Second click → execute action
       this.dispatchAction(laneIndex, distance)
       return
     }
 
-    // First click → highlight
-    this.boardElement.querySelectorAll('.cell.card.is-selected').forEach((c) => {
-      c.classList.remove('is-selected')
-    })
+    this.boardElement
+      .querySelectorAll('.cell.card.is-selected')
+      .forEach((c) => c.classList.remove('is-selected'))
     el.classList.add('is-selected')
     this.selected = { laneIndex, distance }
   }
@@ -238,13 +292,8 @@ export class GameBoardRenderer {
     document.dispatchEvent(event)
   }
 
-  clearSelection(): void {
-    this.selected = null
-  }
-
   private injectStyles(): void {
     if (document.getElementById('game-board-styles')) return
-
     const style = document.createElement('style')
     style.id = 'game-board-styles'
     style.textContent = STYLES
@@ -255,20 +304,23 @@ export class GameBoardRenderer {
 const STYLES = `
 .stage {
   width: 100%;
-  height: 100%;
+  height: 100vh;
+  max-height: 100vh;
   display: grid;
   grid-template-rows: auto 1fr;
-  padding: 16px clamp(16px, 4vw, 48px) 24px;
-  gap: 12px;
+  padding: clamp(8px, 1.5vh, 16px) clamp(12px, 4vw, 36px);
+  gap: clamp(6px, 1vh, 12px);
   max-width: 720px;
   margin: 0 auto;
+  overflow: hidden;
+  font-family: inherit;
 }
 
 .stage-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 4px 12px;
+  padding: 4px 0 8px;
   border-bottom: 1px solid var(--color-border-soft);
 }
 
@@ -292,26 +344,26 @@ const STYLES = `
 .stage-main {
   display: grid;
   grid-template-rows: 1fr auto auto;
-  gap: 16px;
-  align-content: stretch;
+  gap: clamp(8px, 1.5vh, 14px);
+  min-height: 0;
 }
 
-/* ----- Rail (3x3 grid) ----- */
+/* ---------- Rail (3x3) ---------- */
 .rail {
   display: grid;
-  grid-template-rows: repeat(3, 1fr);
-  gap: 10px;
-  padding: 12px;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: clamp(6px, 1vh, 10px);
+  padding: clamp(8px, 1.5vh, 12px);
   background:
     linear-gradient(180deg, rgba(31, 24, 48, 0.4) 0%, rgba(31, 24, 48, 0.7) 100%);
   border: 1px solid var(--color-border-soft);
   border-radius: 12px;
   position: relative;
   overflow: hidden;
+  min-height: 0;
 }
 
 .rail::before {
-  /* candlelight wash from the bottom */
   content: '';
   position: absolute;
   inset: 0;
@@ -325,28 +377,39 @@ const STYLES = `
 
 .rail-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(6px, 1vw, 10px);
   position: relative;
   z-index: 1;
+  min-height: 0;
 }
 
-.rail-row.dist-2 { opacity: 0.35; transform: scale(0.9); transform-origin: center; }
-.rail-row.dist-1 { opacity: 0.65; transform: scale(0.95); transform-origin: center; }
-.rail-row.dist-0 { opacity: 1; }
+.rail-row.dist-2 {
+  opacity: 0.42;
+  transform: scale(0.92);
+  transform-origin: center bottom;
+}
+.rail-row.dist-1 {
+  opacity: 0.7;
+  transform: scale(0.96);
+  transform-origin: center bottom;
+}
+.rail-row.dist-0 {
+  opacity: 1;
+}
 
-/* ----- Cell / Card ----- */
+/* ---------- Cell / Card ---------- */
 .cell {
-  aspect-ratio: 3 / 4;
   border-radius: 10px;
   border: 1px dashed var(--color-border-soft);
   background: rgba(255, 255, 255, 0.015);
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: stretch;
   position: relative;
-  transition: all 0.25s ease;
+  transition: transform 0.18s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   min-height: 0;
+  min-width: 0;
 }
 
 .cell.empty {
@@ -368,12 +431,12 @@ const STYLES = `
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.4),
     0 2px 8px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
 }
 
 .cell.is-active {
   cursor: pointer;
 }
-
 .cell.is-active:hover {
   transform: translateY(-2px);
   box-shadow:
@@ -407,7 +470,12 @@ const STYLES = `
   }
 }
 
-/* Card type accents (left wax-seal stripe) */
+.cell.card.is-grouped {
+  background:
+    linear-gradient(135deg, var(--color-parchment) 0%, var(--color-parchment-shadow) 60%, #b9986a 100%);
+  border-width: 2px;
+}
+
 .cell.card.type-enemy { border-color: var(--color-enemy); }
 .cell.card.type-enemy::before {
   content: '';
@@ -439,6 +507,14 @@ const STYLES = `
   border-bottom-left-radius: 9px;
 }
 
+.cell.card.type-trap.is-grouped[data-span="3"] {
+  animation: trap-danger 1.2s ease-in-out infinite;
+}
+@keyframes trap-danger {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 0 12px rgba(168,58,58,0.4); }
+  50%      { box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 0 22px rgba(168,58,58,0.85); }
+}
+
 .card-face {
   width: 100%;
   height: 100%;
@@ -446,13 +522,14 @@ const STYLES = `
   grid-template-rows: 1fr auto auto;
   align-items: center;
   justify-items: center;
-  padding: 8px 6px 10px;
+  padding: clamp(4px, 1vh, 8px) clamp(4px, 1vw, 8px);
   text-align: center;
   position: relative;
+  min-height: 0;
 }
 
 .card-icon {
-  font-size: clamp(24px, 4vw, 36px);
+  font-size: clamp(20px, 4.5vw, 36px);
   line-height: 1;
   filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.2));
 }
@@ -461,7 +538,7 @@ const STYLES = `
   font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--color-text-dark);
-  line-height: 1.2;
+  line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -476,15 +553,29 @@ const STYLES = `
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text-dark);
+  flex-wrap: wrap;
+  justify-content: center;
 }
-
+.card-stats.danger {
+  color: #fff;
+  background: var(--color-enemy);
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.05em;
+}
+.card-stats.good {
+  color: #2a1f14;
+  background: var(--color-treasure);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
 .card-stats .stat.hp { color: #8b1f1f; }
 .card-stats .stat.atk { color: #5a3a14; }
 
 .group-badge {
   position: absolute;
-  top: -6px;
-  right: -6px;
+  top: -4px;
+  right: -2px;
   background: var(--color-flame-deep);
   color: #fff8e0;
   border: 1px solid var(--color-flame);
@@ -496,11 +587,10 @@ const STYLES = `
   z-index: 2;
 }
 
-/* ----- Player Card ----- */
+/* ---------- Player Card ---------- */
 .player-row {
   display: flex;
   justify-content: center;
-  padding: 4px 0;
 }
 
 .player-card {
@@ -508,7 +598,7 @@ const STYLES = `
   grid-template-columns: auto 1fr;
   gap: 14px;
   align-items: center;
-  padding: 12px 18px;
+  padding: clamp(8px, 1.5vh, 12px) clamp(12px, 3vw, 18px);
   width: 100%;
   max-width: 420px;
   background:
@@ -521,14 +611,14 @@ const STYLES = `
 }
 
 .player-icon {
-  font-size: clamp(28px, 4vw, 40px);
+  font-size: clamp(24px, 4vw, 40px);
   filter: drop-shadow(0 0 8px rgba(255, 215, 120, 0.6));
   line-height: 1;
 }
 
 .player-info {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -536,7 +626,10 @@ const STYLES = `
   font-size: var(--font-size-base);
   font-weight: 600;
   color: var(--color-flame);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .player-stats {
@@ -554,14 +647,12 @@ const STYLES = `
   border-radius: 999px;
   overflow: hidden;
 }
-
 .hp-fill {
   position: absolute;
   inset: 0;
   background: linear-gradient(90deg, var(--color-enemy), #d97a2c);
   transition: width 0.3s ease;
 }
-
 .hp-text {
   position: relative;
   display: flex;
@@ -582,20 +673,24 @@ const STYLES = `
   border: 1px solid var(--color-border-soft);
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
 }
 
-/* ----- Items / Inventory ----- */
+/* ---------- Items / Inventory ---------- */
 .items-row {
-  padding: 10px 14px;
+  padding: clamp(8px, 1.5vh, 10px) 14px;
   background: rgba(31, 24, 48, 0.5);
   border: 1px solid var(--color-border-soft);
   border-radius: 10px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  max-height: 22vh;
+  overflow-y: auto;
 }
 
 .items-row.empty {
   text-align: center;
+  max-height: none;
 }
 
 .items-empty {
@@ -623,12 +718,20 @@ const STYLES = `
   border: 1px solid var(--color-border-warm);
   color: var(--color-text-primary);
   border-radius: 999px;
+  white-space: nowrap;
 }
 
 @media (max-width: 480px) {
-  .stage { padding: 12px 12px 18px; }
-  .rail { padding: 8px; gap: 8px; }
-  .rail-row { gap: 8px; }
+  .stage { padding: 8px 10px; }
+  .stage-title { letter-spacing: 0.04em; }
+  .player-card { gap: 10px; }
   .card-icon { font-size: 22px; }
+  .card-name { font-size: 12px; }
+}
+
+@media (max-height: 600px) {
+  .rail-row.dist-2 { opacity: 0.3; transform: scale(0.86); }
+  .rail-row.dist-1 { opacity: 0.6; transform: scale(0.92); }
+  .player-card { padding: 6px 12px; }
 }
 `
