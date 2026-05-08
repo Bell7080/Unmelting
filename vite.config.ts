@@ -5,8 +5,8 @@ export default defineConfig({
   root: 'src',
   base: '/Unmelting/',
   build: {
-    outDir: '../',
-    emptyOutDir: false,
+    outDir: '../dist',
+    emptyOutDir: true,
     minify: 'esbuild',
     sourcemap: false,
   },

@@ -9,7 +9,6 @@ dist/
 build/
 docs/
 *.tsbuildinfo
-# index.html and assets/ at root are intentionally committed (GitHub Pages / root)
 
 # IDE
 .vscode/
