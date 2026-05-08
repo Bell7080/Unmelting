@@ -4,7 +4,7 @@
  * Cards can merge when same type/name at same position
  */
 
-import { Card, CardType } from './Card'
+import { Card } from './Card'
 
 export const LANE_DISTANCE_COUNT = 4
 

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Unmelting - Card Rain Roguelike</title>
+    <style>
+      :root {
+        /* Typography: Minimum 12px enforced */
+        --font-size-base: clamp(12px, 2vw, 16px);
+        --font-size-sm: clamp(12px, 1.5vw, 14px);
+        --font-size-lg: clamp(12px, 2.5vw, 20px);
+        --font-size-xl: clamp(12px, 3vw, 24px);
+
+        /* Color palette */
+        --color-bg-primary: #0f1419;
+        --color-bg-secondary: #1a2332;
+        --color-text-primary: #e8e8e8;
+        --color-accent-warm: #f4a460;
+        --color-accent-orange: #ff8c42;
+        --color-danger: #8b3a3a;
+        --color-danger-dark: #6b2e2e;
+
+        /* UI Elements */
+        --color-card-bg: #2a3d5a;
+        --color-card-border: #1a2332;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Courier New', monospace;
+        font-size: var(--font-size-base);
+        color: var(--color-text-primary);
+        background-color: var(--color-bg-primary);
+        line-height: 1.6;
+        overflow: hidden;
+      }
+
+      #app {
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+    <script type="module" crossorigin src="/assets/index-BYZBOFxI.js"></script>
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>

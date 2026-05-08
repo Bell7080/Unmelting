@@ -5,19 +5,10 @@ export default defineConfig({
   root: 'src',
   base: '/',
   build: {
-    outDir: '../dist',
+    outDir: '../docs', // GitHub Pages: Deploy from branch → main → /docs
     emptyOutDir: true,
-    minify: 'terser',
+    minify: 'esbuild',
     sourcemap: false,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          core: ['./core'],
-          systems: ['./systems'],
-          ui: ['./ui'],
-        },
-      },
-    },
   },
   resolve: {
     alias: {
