@@ -17,6 +17,7 @@ import { ActionSystem, ActionType } from '@systems/ActionSystem'
 import { CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { FontManager } from '@ui/FontManager'
+import okDanDanBoldUrl from './assets/fonts/OkDanDanBold.woff2'
 
 console.log('🕯 Unmelting starting...')
 
@@ -27,6 +28,15 @@ app.innerHTML = `
 `
 
 FontManager.initializeDefaults()
+
+// Register custom display font and make it the primary face for the game.
+// Single bold cut covers every weight request so headings + body share the face.
+FontManager.loadCustomFont({
+  family: 'OkDanDan',
+  url: okDanDanBoldUrl,
+  weight: '100 900',
+})
+FontManager.setPrimaryFamily(`'OkDanDan', 'Georgia', 'Times New Roman', serif`)
 
 const gameState = new GameState()
 const turnManager = new TurnManager(gameState)

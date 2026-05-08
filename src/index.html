@@ -38,6 +38,9 @@
         /* Borders */
         --color-border-soft: #4a3a2a;    /* burnt umber */
         --color-border-warm: #8b6f47;    /* aged brass */
+
+        /* Typography family (FontManager overrides this once OkDanDan loads) */
+        --font-family-primary: 'OkDanDan', 'Georgia', 'Times New Roman', serif;
       }
 
       * {
@@ -47,7 +50,7 @@
       }
 
       body {
-        font-family: 'Georgia', 'Times New Roman', serif;
+        font-family: var(--font-family-primary);
         font-size: var(--font-size-base);
         color: var(--color-text-primary);
         background:
