@@ -96,9 +96,12 @@ export class GameState {
    * same type, fold the right card into the left and replace the right slot
    * with the (now bigger) left Card. Result: a contiguous run of same-type
    * cards becomes a single Card occupying multiple lane slots.
+   * Only groups the active row (distance 0); preview rows stay ungrouped.
    */
   regroupRow(distance: number): void {
     if (distance < 0 || distance >= LANE_DISTANCE_COUNT) return
+    // Only regroup the active row (distance 0)
+    if (distance !== 0) return
 
     let i = 0
     while (i < this.lanes.length - 1) {
@@ -118,9 +121,8 @@ export class GameState {
   }
 
   regroupAllRows(): void {
-    for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
-      this.regroupRow(d)
-    }
+    // Only regroup the active row (distance 0)
+    this.regroupRow(0)
   }
 
   /**
