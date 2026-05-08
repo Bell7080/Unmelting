@@ -45,8 +45,8 @@ export class CardSpawner {
 
   private generateEnemy(): Card {
     const name = ENEMY_NAMES[Math.floor(Math.random() * ENEMY_NAMES.length)]
-    const baseHealth = 3 + Math.floor(Math.random() * 3) // 3-5 health
-    const baseDamage = 1 + Math.floor(Math.random() * 2) // 1-2 damage
+    const baseHealth = 1 + Math.floor(Math.random() * 3) // 1-3 health
+    const baseDamage = 1 // Fixed damage of 1
 
     return new Card(
       `enemy-${this.turnCount}-${Math.random()}`,

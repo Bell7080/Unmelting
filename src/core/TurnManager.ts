@@ -69,39 +69,38 @@ export class TurnManager {
 
   /**
    * Per-treasure roll: 50% it vanishes, 10% it morphs into a mimic enemy.
-   * Runs against every treasure on the board.
+   * Only runs on treasures in the active row (distance 0).
    */
   applyTreasureVolatility(spawner: CardSpawner): TreasureChange[] {
     const changes: TreasureChange[] = []
     const visited = new Set<Card>()
+    const d = 0 // Only check active row
 
-    for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
-      for (let i = 0; i < this.gameState.lanes.length; i++) {
-        const card = this.gameState.lanes[i].getCardAtDistance(d)
-        if (!card || card.type !== CardType.TREASURE) continue
-        if (visited.has(card)) continue
-        visited.add(card)
+    for (let i = 0; i < this.gameState.lanes.length; i++) {
+      const card = this.gameState.lanes[i].getCardAtDistance(d)
+      if (!card || card.type !== CardType.TREASURE) continue
+      if (visited.has(card)) continue
+      visited.add(card)
 
-        const roll = Math.random()
-        if (roll < 0.5) {
-          this.gameState.removeCardFromRow(card, d)
-          changes.push({
-            laneIndex: i,
-            distance: d,
-            outcome: 'disappeared',
-            cardName: card.name,
-          })
-        } else if (roll < 0.6) {
-          const mimic = spawner.spawnMimic()
-          this.gameState.removeCardFromRow(card, d)
-          this.gameState.lanes[i].setCardAtDistance(d, mimic)
-          changes.push({
-            laneIndex: i,
-            distance: d,
-            outcome: 'mimic',
-            cardName: card.name,
-          })
-        }
+      const roll = Math.random()
+      if (roll < 0.5) {
+        this.gameState.removeCardFromRow(card, d)
+        changes.push({
+          laneIndex: i,
+          distance: d,
+          outcome: 'disappeared',
+          cardName: card.name,
+        })
+      } else if (roll < 0.6) {
+        const mimic = spawner.spawnMimic()
+        this.gameState.removeCardFromRow(card, d)
+        this.gameState.lanes[i].setCardAtDistance(d, mimic)
+        changes.push({
+          laneIndex: i,
+          distance: d,
+          outcome: 'mimic',
+          cardName: card.name,
+        })
       }
     }
 

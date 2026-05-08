@@ -102,12 +102,15 @@ export class GameBoardRenderer {
       }
 
       // Detect span across consecutive same Card instances.
+      // Only apply grouping to active row (distance 0); preview rows always render individually.
       let span = 1
-      while (
-        i + span < lanes.length &&
-        lanes[i + span].getCardAtDistance(distance) === card
-      ) {
-        span++
+      if (isActive) {
+        while (
+          i + span < lanes.length &&
+          lanes[i + span].getCardAtDistance(distance) === card
+        ) {
+          span++
+        }
       }
       cells.push(this.renderCardCell(card, i, distance, span, isActive))
       i += span
@@ -733,5 +736,47 @@ const STYLES = `
   .rail-row.dist-2 { opacity: 0.3; transform: scale(0.86); }
   .rail-row.dist-1 { opacity: 0.6; transform: scale(0.92); }
   .player-card { padding: 6px 12px; }
+}
+
+/* ---------- Animation Effects ---------- */
+@keyframes card-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes card-collapse {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+  }
+}
+
+@keyframes enemy-attack {
+  0%, 100% {
+    transform: translateX(0);
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
+  }
+  50% {
+    transform: translateX(4px);
+    filter: drop-shadow(0 4px 14px rgba(168, 58, 58, 0.6));
+  }
+}
+
+.cell.card.type-enemy.is-active {
+  animation: card-drop 0.3s ease-out;
+}
+
+.cell.card.type-enemy.is-attacking {
+  animation: enemy-attack 0.4s ease-in-out;
 }
 `
