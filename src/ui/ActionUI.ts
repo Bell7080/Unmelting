@@ -83,7 +83,7 @@ export class ActionUI {
     this.attachEventListeners(actions)
   }
 
-  private getActionButton(action: ActionType, card: Card): string {
+  private getActionButton(action: ActionType, _card: Card): string {
     const labels: Record<ActionType, string> = {
       [ActionType.ATTACK_ENEMY]: `⚔️ Attack`,
       [ActionType.EVADE_TRAP]: `🏃 Evade`,
