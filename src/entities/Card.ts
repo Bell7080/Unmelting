@@ -1,21 +1,16 @@
 /**
- * Card Entity - Represents a card on the board
+ * Card Entity - MVP: 3 card types only (Enemy, Trap, Treasure)
  */
 
 export enum CardType {
   ENEMY = 'enemy',
-  REWARD = 'reward',
-  OBSTACLE = 'obstacle',
-  CURSE = 'curse',
-  EVENT = 'event',
-  SHOP = 'shop',
-  EMPTY = 'empty',
+  TRAP = 'trap',
+  TREASURE = 'treasure',
 }
 
-export interface CardEffect {
-  type: string
-  value?: number
-  description?: string
+export interface CardStats {
+  baseHealth?: number
+  baseDamage?: number
 }
 
 export class Card {
@@ -23,45 +18,64 @@ export class Card {
   type: CardType
   name: string
   description: string
-  effects: CardEffect[]
-  power?: number
-  health?: number
-  isSealed: boolean
+  baseHealth: number
+  baseDamage: number
+  groupCount: number // How many identical cards are stacked
 
   constructor(
     id: string,
     type: CardType,
     name: string,
     description: string,
-    effects: CardEffect[] = []
+    baseHealth: number = 0,
+    baseDamage: number = 0
   ) {
     this.id = id
     this.type = type
     this.name = name
     this.description = description
-    this.effects = effects
-    this.isSealed = false
+    this.baseHealth = baseHealth
+    this.baseDamage = baseDamage
+    this.groupCount = 1
   }
 
-  seal(): void {
-    this.isSealed = true
+  // Get actual stats with grouping multiplier applied
+  getHealth(): number {
+    if (this.type !== CardType.ENEMY) return 0
+    if (this.groupCount === 1) return this.baseHealth
+    if (this.groupCount === 2) return Math.floor(this.baseHealth * 1.5)
+    return Math.floor(this.baseHealth * 2)
   }
 
-  unseal(): void {
-    this.isSealed = false
+  getDamage(): number {
+    if (this.type !== CardType.ENEMY) return 0
+    if (this.groupCount === 1) return this.baseDamage
+    return this.baseDamage + (this.groupCount - 1)
   }
 
-  canAdvance(): boolean {
-    return !this.isSealed
+  // For traps: damage taken increases with group
+  getTrapDamagePenalty(): number {
+    if (this.type !== CardType.TRAP) return 0
+    if (this.groupCount === 1) return 1
+    if (this.groupCount === 2) return 2
+    return 999 // 3칸 트랩 = 즉사
+  }
+
+  merge(other: Card): void {
+    if (this.type !== other.type || this.name !== other.name) return
+    this.groupCount += other.groupCount
   }
 
   clone(): Card {
-    const cloned = new Card(this.id, this.type, this.name, this.description, [
-      ...this.effects,
-    ])
-    cloned.power = this.power
-    cloned.health = this.health
-    cloned.isSealed = this.isSealed
+    const cloned = new Card(
+      this.id,
+      this.type,
+      this.name,
+      this.description,
+      this.baseHealth,
+      this.baseDamage
+    )
+    cloned.groupCount = this.groupCount
     return cloned
   }
 }

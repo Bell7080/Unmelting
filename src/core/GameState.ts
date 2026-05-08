@@ -1,6 +1,6 @@
 /**
- * GameState - Central state manager for the game
- * Holds all game data and provides state manipulation methods
+ * GameState - MVP: Central state manager
+ * Holds character, lanes, and turn progression
  */
 
 import { Character } from '@entities/Character'
@@ -8,11 +8,11 @@ import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { Card } from '@entities/Card'
 
 export class GameState {
-  private character: Character
-  private lanes: Lane[]
-  private currentTurn: number
-  private isGameOver: boolean
-  private gameOverReason: string
+  character: Character
+  lanes: Lane[]
+  currentTurn: number
+  isGameOver: boolean
+  gameOverReason: string
 
   constructor() {
     this.character = new Character()
@@ -26,12 +26,10 @@ export class GameState {
     this.gameOverReason = ''
   }
 
-  // Character accessors
   getCharacter(): Character {
     return this.character
   }
 
-  // Lane accessors
   getLanes(): Lane[] {
     return this.lanes
   }
@@ -41,34 +39,16 @@ export class GameState {
     return this.lanes[index]
   }
 
-  getLaneCount(): number {
-    return this.lanes.length
-  }
-
-  // Turn management
   getCurrentTurn(): number {
     return this.currentTurn
   }
 
   nextTurn(): void {
     this.currentTurn++
+    this.character.nextTurn()
   }
 
-  // Game state
-  isGameComplete(): boolean {
-    return this.isGameOver
-  }
-
-  endGame(reason: string): void {
-    this.isGameOver = true
-    this.gameOverReason = reason
-  }
-
-  getGameOverReason(): string {
-    return this.gameOverReason
-  }
-
-  // Game logic: Advance cards across all lanes
+  // Advance cards across all lanes
   advanceAllCards(): Card[] {
     const collidingCards: Card[] = []
 
@@ -82,21 +62,7 @@ export class GameState {
     return collidingCards
   }
 
-  // Utility: Get all cards currently on board
-  getAllCards(): Map<string, Card> {
-    const cardMap = new Map<string, Card>()
-
-    for (const lane of this.lanes) {
-      const cards = lane.getAllCards()
-      for (const card of cards) {
-        cardMap.set(card.id, card)
-      }
-    }
-
-    return cardMap
-  }
-
-  // Utility: Find a card by ID and return its location
+  // Find a card's location
   findCard(cardId: string): { lane: Lane; distance: number } | null {
     for (const lane of this.lanes) {
       for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
@@ -109,21 +75,16 @@ export class GameState {
     return null
   }
 
+  endGame(reason: string): void {
+    this.isGameOver = true
+    this.gameOverReason = reason
+  }
+
   reset(): void {
     this.character.reset()
     this.lanes.forEach((lane) => lane.clear())
     this.currentTurn = 0
     this.isGameOver = false
     this.gameOverReason = ''
-  }
-
-  clone(): GameState {
-    const cloned = new GameState()
-    cloned.character = this.character.clone()
-    cloned.lanes = this.lanes.map((lane) => lane.clone())
-    cloned.currentTurn = this.currentTurn
-    cloned.isGameOver = this.isGameOver
-    cloned.gameOverReason = this.gameOverReason
-    return cloned
   }
 }
