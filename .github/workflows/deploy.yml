@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - claude/game-complete
   workflow_dispatch:
 
 permissions:
