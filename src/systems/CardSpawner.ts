@@ -5,11 +5,11 @@
 
 import { Card, CardType } from '@entities/Card'
 
-const ENEMY_NAMES = ['Ink Wolf', 'Candle Rabbit', 'Raven', 'Wax Deer', 'Lost Child', 'Shadow']
+const ENEMY_NAMES = ['잉크 늑대', '양초 토끼', '검은 까마귀', '밀랍 사슴', '길 잃은 아이', '그림자']
 
-const TRAP_NAMES = ['Black Rain', 'Dark Lantern', 'Muddy Path', 'Torn Road', 'Dying Flame']
+const TRAP_NAMES = ['검은 비', '꺼진 등불', '진흙길', '찢긴 길', '꺼져가는 불꽃']
 
-const TREASURE_NAMES = ['Treasure Box', 'Glowing Chest', 'Golden Coffer', 'Shiny Box']
+const TREASURE_NAMES = ['보물상자', '빛나는 상자', '황금 함', '낡은 보석함']
 
 export class CardSpawner {
   private turnCount: number = 0

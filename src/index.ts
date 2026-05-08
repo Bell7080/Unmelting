@@ -1,242 +1,249 @@
 /**
- * Unmelting Game - MVP: Main Game Loop
+ * Unmelting - Main game loop
+ *
+ * UX:
+ *   - Vertical 3-lane × 3-row rail.
+ *   - Only the active (bottom) row is interactive.
+ *   - 1st click highlights, 2nd click executes the action implied by the
+ *     card's type (Enemy = attack, Trap = evade, Treasure = take).
+ *   - Cards descend each turn; new cards spawn at the top.
  */
 
 import { GameState } from '@core/GameState'
 import { TurnManager } from '@core/TurnManager'
-import { GameBoardRenderer } from '@ui/GameBoardRenderer'
-import { ActionUI } from '@ui/ActionUI'
+import { GameBoardRenderer, CardActionDetail } from '@ui/GameBoardRenderer'
 import { CardSpawner } from '@systems/CardSpawner'
-import { ActionSystem } from '@systems/ActionSystem'
+import { ActionSystem, ActionType } from '@systems/ActionSystem'
+import { CardType } from '@entities/Card'
+import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { FontManager } from '@ui/FontManager'
 
-console.log('🕯️ Unmelting Game Starting...')
+console.log('🕯 Unmelting starting...')
 
-// Initialize game
+const app = document.getElementById('app')!
+app.innerHTML = `
+  <div id="game-board"></div>
+  <div id="toast-host"></div>
+`
+
+FontManager.initializeDefaults()
+
 const gameState = new GameState()
 const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
-const boardRenderer = new GameBoardRenderer('app')
-const actionUI = new ActionUI('app')
+const boardRenderer = new GameBoardRenderer('game-board')
+
 let gameActive = true
+let inputLocked = false
 
-// Create app container with two sections
-const app = document.getElementById('app')!
-app.innerHTML = `
-  <div id="game-board" style="flex: 1;"></div>
-  <div id="action-ui" style="position: fixed; bottom: 0; left: 0; right: 0; background: var(--color-bg-primary);"></div>
-  <div id="turn-button-panel" style="position: fixed; bottom: 100px; right: 24px; z-index: 100;"></div>
-`
+function actionTypeFor(cardType: CardType): ActionType | null {
+  switch (cardType) {
+    case CardType.ENEMY: return ActionType.ATTACK_ENEMY
+    case CardType.TRAP: return ActionType.EVADE_TRAP
+    case CardType.TREASURE: return ActionType.TAKE_TREASURE
+    default: return null
+  }
+}
 
-// Initialize fonts
-FontManager.initializeDefaults()
+function spawnRow(): void {
+  const cards = cardSpawner.spawnCardsForTurn()
+  const topDistance = LANE_DISTANCE_COUNT - 1
+  for (let i = 0; i < 3; i++) {
+    const lane = gameState.getLane(i)
+    const card = cards[i]
+    if (lane && card) {
+      lane.addCardAtDistance(topDistance, card)
+    }
+  }
+}
 
-/**
- * Start a new game
- */
+function fillBoardAtStart(): void {
+  // Pre-populate every row so the player sees the active bottom row plus
+  // two upcoming rows from turn 1.
+  for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
+    const cards = cardSpawner.spawnCardsForTurn()
+    for (let i = 0; i < 3; i++) {
+      const lane = gameState.getLane(i)
+      const card = cards[i]
+      if (lane && card) {
+        lane.addCardAtDistance(distance, card)
+      }
+    }
+  }
+}
+
 function startGame(): void {
   gameActive = true
+  inputLocked = false
   gameState.reset()
-  spawnInitialCards()
+  fillBoardAtStart()
+  boardRenderer.clearSelection()
   render()
 }
 
-/**
- * Spawn cards at the farthest distance (distance 3) for first turn
- */
-function spawnInitialCards(): void {
-  const cards = cardSpawner.spawnCardsForTurn()
-  for (let i = 0; i < 3; i++) {
-    const lane = gameState.getLane(i)!
-    const card = cards[i]
-    if (card && !lane.addCardAtDistance(3, card)) {
-      console.warn(`Could not add card to lane ${i}`)
-    }
-  }
-}
-
-/**
- * Add new cards at distance 3 each turn
- */
-function spawnNewCards(): void {
-  const cards = cardSpawner.spawnCardsForTurn()
-  for (let i = 0; i < 3; i++) {
-    const lane = gameState.getLane(i)!
-    const card = cards[i]
-    if (card && !lane.addCardAtDistance(3, card)) {
-      console.warn(`Could not add card to lane ${i}`)
-    }
-  }
-}
-
-/**
- * Render game state
- */
 function render(): void {
   boardRenderer.render(gameState)
-  attachCardClickListeners()
-  updateTurnButton()
 }
 
-/**
- * Attach click listeners to cards
- */
-function attachCardClickListeners(): void {
-  const cardElements = document.querySelectorAll('.card-slot.card')
-  cardElements.forEach((element) => {
-    element.addEventListener('click', (e) => {
-      e.preventDefault()
-      const laneIndex = parseInt((element as HTMLElement).dataset.lane || '0')
-      const distance = parseInt((element as HTMLElement).dataset.distance || '0')
-      const lane = gameState.getLane(laneIndex)!
-      const card = lane.getCardAtDistance(distance)
-
-      if (card && gameActive) {
-        actionUI.showActions(laneIndex, card)
-      }
-    })
-  })
+function showToast(message: string, kind: 'info' | 'win' | 'hurt' = 'info'): void {
+  const host = document.getElementById('toast-host')
+  if (!host) return
+  const toast = document.createElement('div')
+  toast.className = `toast toast-${kind}`
+  toast.textContent = message
+  host.appendChild(toast)
+  setTimeout(() => toast.classList.add('show'), 10)
+  setTimeout(() => {
+    toast.classList.remove('show')
+    setTimeout(() => toast.remove(), 250)
+  }, 1400)
 }
 
-/**
- * Handle player action
- */
-actionUI.onAction((laneIndex, card, actionType) => {
-  if (!gameActive) return
+document.addEventListener('cardAction', (e: Event) => {
+  if (!gameActive || inputLocked) return
+  const detail = (e as CustomEvent<CardActionDetail>).detail
+  const { laneIndex, card } = detail
 
-  const lane = gameState.getLane(laneIndex)!
-  const result = ActionSystem.executeAction(gameState.character, lane, card, actionType)
+  const lane = gameState.getLane(laneIndex)
+  if (!lane) return
 
-  console.log(`${result.message}`)
+  const actionType = actionTypeFor(card.type)
+  if (!actionType) return
 
-  // Small delay for visual feedback
+  inputLocked = true
+  const result = ActionSystem.executeAction(gameState.getCharacter(), lane, card, actionType)
+  showToast(result.message, result.damageTaken ? 'hurt' : 'info')
+
+  // Brief delay so the player can register the action before the world advances
   setTimeout(() => {
     endTurn()
-  }, 300)
+    inputLocked = false
+  }, 220)
 })
 
-/**
- * End player's turn: advance cards, process collisions, spawn new cards
- */
 function endTurn(): void {
   if (!gameActive) return
 
-  // Advance cards and process collisions
   turnManager.endPlayerTurn()
 
-  // Check if game over
   if (gameState.isGameOver) {
     gameActive = false
-    console.log(`Game Over: ${gameState.gameOverReason}`)
-    showGameOverScreen()
+    boardRenderer.render(gameState)
+    showGameOver()
     return
   }
 
-  // Spawn new cards for this lane
-  spawnNewCards()
-
-  // Re-render
+  spawnRow()
+  boardRenderer.clearSelection()
   render()
 }
 
-/**
- * Update turn button
- */
-function updateTurnButton(): void {
-  const panel = document.getElementById('turn-button-panel')!
-  if (!gameActive) {
-    panel.innerHTML = `
-      <button id="restart-btn" class="turn-btn">Start New Game</button>
-    `
-    const restartBtn = document.getElementById('restart-btn')
-    if (restartBtn) {
-      restartBtn.addEventListener('click', startGame)
-    }
-  } else {
-    panel.innerHTML = `
-      <div style="text-align: right; color: #f4a460; font-size: var(--font-size-base); margin-bottom: 8px;">
-        Click a card to act
-      </div>
-    `
-  }
-}
-
-/**
- * Show game over screen
- */
-function showGameOverScreen(): void {
+function showGameOver(): void {
   const overlay = document.createElement('div')
-  overlay.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.8);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
+  overlay.className = 'game-over-overlay'
+  const reason =
+    gameState.gameOverReason === 'character_defeated' ? '소녀의 심지가 꺼졌어요…' :
+    gameState.gameOverReason === 'instant_death_trap' ? '함정에 모두 막혀 빛이 사라졌어요.' :
+    '게임 종료'
+  overlay.innerHTML = `
+    <div class="game-over-card">
+      <div class="game-over-icon">🕯</div>
+      <h1>${reason}</h1>
+      <p>버틴 턴: <strong>${gameState.getCurrentTurn()}</strong></p>
+      <button class="primary-btn" id="restart-btn">다시 시작</button>
+    </div>
   `
-
-  const content = document.createElement('div')
-  content.style.cssText = `
-    background: var(--color-bg-secondary);
-    padding: 32px;
-    border-radius: 8px;
-    text-align: center;
-    border: 2px solid #f4a460;
-  `
-
-  const reason = gameState.gameOverReason === 'character_defeated' ? 'You were defeated!' : 'Game Over!'
-  const turns = gameState.currentTurn
-
-  content.innerHTML = `
-    <h1 style="font-size: 32px; color: #f4a460; margin-bottom: 16px;">💀 ${reason}</h1>
-    <p style="font-size: 18px; margin-bottom: 24px;">Survived ${turns} turns</p>
-    <button id="game-over-restart" class="turn-btn" style="padding: 12px 24px; font-size: 16px;">Play Again</button>
-  `
-
-  overlay.appendChild(content)
   document.body.appendChild(overlay)
-
-  const restartBtn = document.getElementById('game-over-restart')
-  if (restartBtn) {
-    restartBtn.addEventListener('click', () => {
-      overlay.remove()
-      startGame()
-    })
-  }
+  document.getElementById('restart-btn')?.addEventListener('click', () => {
+    overlay.remove()
+    startGame()
+  })
 }
 
-/**
- * Add turn button styles
- */
-const turnBtnStyle = document.createElement('style')
-turnBtnStyle.textContent = `
-  .turn-btn {
-    padding: 12px 24px;
-    background-color: #2a3d5a;
-    border: 2px solid #f4a460;
+// Inject global UI styles (toast + game over)
+const globalStyle = document.createElement('style')
+globalStyle.textContent = `
+  #toast-host {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 50;
+    pointer-events: none;
+  }
+  .toast {
+    background: rgba(31, 24, 48, 0.92);
+    border: 1px solid var(--color-border-warm);
     color: var(--color-text-primary);
-    border-radius: 4px;
-    cursor: pointer;
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-size: var(--font-size-sm);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast-hurt { border-color: var(--color-enemy); color: #ffd5c5; }
+  .toast-win  { border-color: var(--color-treasure); color: #fff5d0; }
+
+  .game-over-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 5, 14, 0.82);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    animation: fade-in 0.3s ease;
+  }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  .game-over-card {
+    text-align: center;
+    background: linear-gradient(160deg, rgba(31, 24, 48, 0.95), rgba(20, 16, 28, 0.95));
+    padding: 28px 36px;
+    border: 1px solid var(--color-flame-warm);
+    border-radius: 16px;
+    box-shadow: 0 0 40px rgba(244, 164, 96, 0.2);
+    max-width: 360px;
+  }
+  .game-over-icon {
+    font-size: 48px;
+    filter: drop-shadow(0 0 12px rgba(255, 215, 120, 0.5));
+    margin-bottom: 8px;
+  }
+  .game-over-card h1 {
+    font-size: var(--font-size-lg);
+    color: var(--color-flame);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .game-over-card p {
+    color: var(--color-text-muted);
     font-size: var(--font-size-base);
-    font-weight: bold;
-    transition: all 0.2s;
+    margin-bottom: 20px;
   }
-
-  .turn-btn:hover {
-    background-color: #3a5d7a;
-    border-color: #ff8c42;
-    transform: scale(1.05);
+  .primary-btn {
+    padding: 10px 22px;
+    background: linear-gradient(180deg, var(--color-flame-warm), var(--color-flame-deep));
+    border: 1px solid var(--color-flame);
+    color: var(--color-text-dark);
+    font-weight: 700;
+    font-size: var(--font-size-base);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
-
-  .turn-btn:active {
-    transform: scale(0.98);
+  .primary-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(244, 164, 96, 0.4);
   }
+  .primary-btn:active { transform: translateY(0); }
 `
-document.head.appendChild(turnBtnStyle)
+document.head.appendChild(globalStyle)
 
-// Start the game!
 startGame()

@@ -1,12 +1,12 @@
 /**
  * Lane Entity - Represents a single lane with advancing cards
- * MVP: 4 distance slots (0-3, where 0 is closest to player)
+ * MVP: 3 distance slots (0-2, where 0 is closest to player)
  * Cards can merge when same type/name at same position
  */
 
 import { Card } from './Card'
 
-export const LANE_DISTANCE_COUNT = 4
+export const LANE_DISTANCE_COUNT = 3
 
 export class Lane {
   id: string
