@@ -69,6 +69,31 @@ function fillEmptyTopSlots(): void {
   }
 }
 
+/**
+ * Drop every card down to fill any holes within a lane, then top-up the rail.
+ * Used after treasure volatility (or any board mutation) so a vanished card
+ * does not leave a gap in the active row.
+ */
+function compactAndRefillAllLanes(): void {
+  for (let i = 0; i < gameState.lanes.length; i++) {
+    const lane = gameState.lanes[i]
+    // Repeatedly shift down until no holes remain below a card.
+    let safety = LANE_DISTANCE_COUNT
+    while (safety-- > 0) {
+      let didShift = false
+      for (let d = 0; d < LANE_DISTANCE_COUNT - 1; d++) {
+        if (!lane.getCardAtDistance(d) && lane.getCardAtDistance(d + 1)) {
+          lane.setCardAtDistance(d, lane.getCardAtDistance(d + 1))
+          lane.setCardAtDistance(d + 1, null)
+          didShift = true
+        }
+      }
+      if (!didShift) break
+    }
+  }
+  fillEmptyTopSlots()
+}
+
 function fillBoardAtStart(): void {
   for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
     const cards = cardSpawner.spawnCardsForTurn()
@@ -140,11 +165,8 @@ document.addEventListener('cardAction', (e: Event) => {
 
   // 2. Refill: every lane the resolved card occupied collapses + gets a fresh top card
   if (result.cardRemoved) {
-    const cleared = gameState.removeCardFromRow(card, distance)
-    for (const li of cleared) {
-      gameState.collapseLane(li)
-    }
-    fillEmptyTopSlots()
+    gameState.removeCardFromRow(card, distance)
+    compactAndRefillAllLanes()
   }
 
   // Player's strike already might have killed them through enemy counter-attack
@@ -165,8 +187,9 @@ document.addEventListener('cardAction', (e: Event) => {
     return
   }
 
-  // 4. Treasure volatility
+  // 4. Treasure volatility — vanished treasures leave holes; drop everything down + refill top
   turnManager.applyTreasureVolatility(cardSpawner)
+  compactAndRefillAllLanes()
 
   // 5. Hazard check
   if (turnManager.checkHazardLoss()) {
