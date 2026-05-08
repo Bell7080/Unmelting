@@ -1,14 +1,15 @@
 /**
- * GameBoardRenderer - MVP: Renders 3 lanes with cards
- * Simple HTML/CSS based renderer
+ * GameBoardRenderer - 3분할 레이아웃
+ * 좌우는 비우고 중앙에 게임보드
+ * 1클릭: 선택 (하이라이트), 더블클릭: 액션
  */
 
 import { GameState } from '@core/GameState'
-import { Card, CardType } from '@entities/Card'
-import { Lane } from '@entities/Lane'
+import { CardType } from '@entities/Card'
 
 export class GameBoardRenderer {
   private boardElement: HTMLElement
+  private selectedCard: { laneIndex: number; distance: number } | null = null
 
   constructor(containerId: string = 'game-board') {
     const container = document.getElementById(containerId)
@@ -19,266 +20,350 @@ export class GameBoardRenderer {
   }
 
   render(gameState: GameState): void {
+    const character = gameState.getCharacter()
+    const lanes = gameState.getLanes()
+    const turn = gameState.getCurrentTurn()
+
     this.boardElement.innerHTML = `
-      <div class="game-container">
-        <div class="game-info">
-          <div class="turn-counter">Turn: ${gameState.currentTurn}</div>
-          <div class="player-health">
-            <span class="health-label">Health:</span>
-            <span class="health-value">${gameState.character.health}/${gameState.character.maxHealth}</span>
+      <div class="three-column-layout">
+        <!-- 좌측: 비움 -->
+        <div class="column left"></div>
+
+        <!-- 중앙: 게임보드 -->
+        <div class="column center">
+          <div class="game-center">
+            <!-- 플레이어 정보 (상단) -->
+            <div class="player-info-box">
+              <div class="player-name">🕯️ ${character.name}</div>
+              <div class="player-stats">
+                <div class="stat">❤️ ${character.health}/${character.maxHealth}</div>
+                <div class="stat">⚔️ ${character.damage}</div>
+              </div>
+              <div class="turn-info">Turn: ${turn}</div>
+            </div>
+
+            <!-- 게임 보드 (3 레인) -->
+            <div class="game-board">
+              ${lanes.map((lane, i) => this.renderLane(lane, i, gameState)).join('')}
+            </div>
+
+            <!-- 손패 -->
+            <div class="inventory-box">
+              <div class="inventory-label">📦 Items (${character.items.length})</div>
+              <div class="item-list">
+                ${character.items.map((item: string) => `<div class="item-badge">${item}</div>`).join('')}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="game-board">
-          ${gameState.lanes.map((lane, i) => this.renderLane(lane, i)).join('')}
-          <div class="player-area">
-            <div class="player-card">⚔️</div>
-          </div>
-        </div>
-
-        <div class="inventory">
-          <div class="inventory-label">Items (${gameState.character.items.length})</div>
-          <div class="item-list">
-            ${gameState.character.items.map((item, i) => `<div class="item" data-index="${i}">${item}</div>`).join('')}
-          </div>
-        </div>
+        <!-- 우측: 비움 -->
+        <div class="column right"></div>
       </div>
     `
+
     this.addStyles()
+    this.attachEventListeners(gameState)
   }
 
-  private renderLane(lane: Lane, laneIndex: number): string {
-    const cards = lane.cards
-    const cardElements = cards
-      .map((card, distance) => {
-        if (!card) return `<div class="card-slot empty"></div>`
-        return this.renderCard(card, laneIndex, distance)
-      })
-      .join('')
+  private renderLane(lane: any, laneIndex: number, _gameState: GameState): string {
+    const slots = []
+    for (let distance = 0; distance < 4; distance++) {
+      const card = lane.getCardAtDistance(distance)
+      const isSelected =
+        !!this.selectedCard &&
+        this.selectedCard.laneIndex === laneIndex &&
+        this.selectedCard.distance === distance
 
-    return `
-      <div class="lane" data-lane-index="${laneIndex}">
-        <div class="cards-container">
-          ${cardElements}
-        </div>
-      </div>
-    `
-  }
-
-  private renderCard(card: Card, laneIndex: number, distance: number): string {
-    const typeClass = card.type
-    const color = this.getCardColor(card.type)
-    const stats = this.getCardStats(card)
-
-    return `
-      <div
-        class="card-slot card ${typeClass}"
-        data-lane="${laneIndex}"
-        data-distance="${distance}"
-        data-card-id="${card.id}"
-        style="background-color: ${color};"
-      >
-        <div class="card-name">${card.name}</div>
-        ${stats}
-        ${card.groupCount > 1 ? `<div class="card-group">x${card.groupCount}</div>` : ''}
-      </div>
-    `
-  }
-
-  private getCardColor(type: CardType): string {
-    switch (type) {
-      case CardType.ENEMY:
-        return '#8b3a3a'
-      case CardType.TRAP:
-        return '#4a3a2a'
-      case CardType.TREASURE:
-        return '#6b5a2a'
-      default:
-        return '#3a4a5a'
+      if (card) {
+        const cardHtml = this.renderCard(card, laneIndex, distance, isSelected as boolean)
+        slots.push(cardHtml)
+      } else {
+        slots.push(`<div class="card-slot empty"></div>`)
+      }
     }
+
+    return `
+      <div class="lane" data-lane="${laneIndex}">
+        ${slots.join('')}
+      </div>
+    `
   }
 
-  private getCardStats(card: Card): string {
+  private renderCard(card: any, laneIndex: number, distance: number, isSelected: boolean): string {
+    const classList = ['card-slot', 'card', `type-${card.type}`, isSelected ? 'selected' : '']
+      .filter(Boolean)
+      .join(' ')
+
+    let content = ''
     if (card.type === CardType.ENEMY) {
-      return `
-        <div class="card-stats">
-          <span class="stat health">❤️ ${card.getHealth()}</span>
-          <span class="stat damage">⚔️ ${card.getDamage()}</span>
+      content = `
+        <div class="card-content">
+          <div class="card-name">${card.name}</div>
+          <div class="card-stats">
+            <div class="stat">❤️ ${card.getHealth()}</div>
+            <div class="stat">⚔️ ${card.getDamage()}</div>
+          </div>
+          ${card.groupCount > 1 ? `<div class="group-badge">×${card.groupCount}</div>` : ''}
+        </div>
+      `
+    } else if (card.type === CardType.TRAP) {
+      content = `
+        <div class="card-content">
+          <div class="card-name">🔓 ${card.name}</div>
+          ${card.groupCount > 1 ? `<div class="group-badge">×${card.groupCount}</div>` : ''}
+        </div>
+      `
+    } else {
+      content = `
+        <div class="card-content">
+          <div class="card-name">💰 ${card.name}</div>
+          ${card.groupCount > 1 ? `<div class="group-badge">×${card.groupCount}</div>` : ''}
         </div>
       `
     }
-    return ''
+
+    return `<div class="${classList}" data-lane="${laneIndex}" data-distance="${distance}">${content}</div>`
+  }
+
+  private attachEventListeners(gameState: GameState): void {
+    const cardElements = this.boardElement.querySelectorAll('.card')
+
+    cardElements.forEach((el) => {
+      // 1클릭: 선택
+      el.addEventListener('click', (e) => {
+        e.stopPropagation()
+        const laneIndex = parseInt((el as HTMLElement).dataset.lane || '0')
+        const distance = parseInt((el as HTMLElement).dataset.distance || '0')
+
+        // 이전 선택 해제
+        this.boardElement.querySelectorAll('.card.selected').forEach((c) => {
+          c.classList.remove('selected')
+        })
+
+        // 새로 선택
+        this.selectedCard = { laneIndex, distance }
+        ;(el as HTMLElement).classList.add('selected')
+      })
+
+      // 더블클릭: 액션 실행
+      el.addEventListener('dblclick', (e) => {
+        e.stopPropagation()
+        const laneIndex = parseInt((el as HTMLElement).dataset.lane || '0')
+        const distance = parseInt((el as HTMLElement).dataset.distance || '0')
+        const lane = gameState.getLane(laneIndex)
+        const card = lane?.getCardAtDistance(distance)
+
+        if (card) {
+          // ActionUI와 동일하게 액션 실행 트리거
+          const event = new CustomEvent('cardAction', {
+            detail: { laneIndex, distance, card },
+          })
+          document.dispatchEvent(event)
+        }
+      })
+    })
   }
 
   private addStyles(): void {
-    // Check if styles already added
     if (document.getElementById('game-board-styles')) return
 
     const style = document.createElement('style')
     style.id = 'game-board-styles'
     style.textContent = `
-      .game-container {
-        display: flex;
-        flex-direction: column;
+      .three-column-layout {
+        display: grid;
+        grid-template-columns: 1fr 2fr 1fr;
         width: 100%;
         height: 100vh;
-        background-color: var(--color-bg-primary);
-        color: var(--color-text-primary);
-        font-family: 'Courier New', monospace;
+        gap: 16px;
+        padding: 16px;
       }
 
-      .game-info {
-        padding: 16px 24px;
-        border-bottom: 1px solid var(--color-card-border);
+      .column {
         display: flex;
-        gap: 32px;
-        font-size: var(--font-size-base);
+        flex-direction: column;
       }
 
-      .turn-counter, .player-health {
+      .column.left, .column.right {
+        background: transparent;
+      }
+
+      .column.center {
+        background: var(--color-bg-secondary);
+        border: 2px solid #f4a460;
+        border-radius: 8px;
+        padding: 16px;
+        overflow-y: auto;
+      }
+
+      .game-center {
         display: flex;
-        gap: 8px;
-        align-items: center;
+        flex-direction: column;
+        gap: 16px;
+        height: 100%;
       }
 
-      .health-value {
+      .player-info-box {
+        background: var(--color-bg-primary);
+        border: 2px solid #f4a460;
+        border-radius: 8px;
+        padding: 12px;
+        text-align: center;
+      }
+
+      .player-name {
+        font-size: var(--font-size-lg);
         font-weight: bold;
-        color: #ff8c42;
+        color: #f4a460;
+        margin-bottom: 8px;
+      }
+
+      .player-stats {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        margin-bottom: 8px;
+      }
+
+      .stat {
+        font-size: var(--font-size-base);
+        color: #e8e8e8;
+      }
+
+      .turn-info {
+        font-size: var(--font-size-sm);
+        color: #aaa;
       }
 
       .game-board {
         flex: 1;
-        display: grid;
-        grid-template-columns: 1fr 80px;
-        gap: 24px;
-        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
         overflow-y: auto;
       }
 
-      .game-board > div:not(.player-area) {
-        display: flex;
-      }
-
       .lane {
-        flex: 1;
-        border: 1px solid var(--color-card-border);
-        border-radius: 8px;
-        padding: 12px;
-        background-color: var(--color-bg-secondary);
-      }
-
-      .cards-container {
         display: grid;
-        grid-template-rows: repeat(4, 1fr);
-        gap: 8px;
-        height: 100%;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+        height: 90px;
       }
 
       .card-slot {
-        padding: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 4px;
-        background-color: var(--color-card-bg);
-        min-height: 80px;
+        background: var(--color-card-bg);
+        border: 2px solid var(--color-card-border);
+        border-radius: 6px;
+        padding: 8px;
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        text-align: center;
-        position: relative;
-        font-size: var(--font-size-sm);
+        cursor: pointer;
+        transition: all 0.2s;
+        min-height: 80px;
       }
 
       .card-slot.empty {
-        background-color: transparent;
-        border: 1px dashed rgba(255, 255, 255, 0.1);
+        background: transparent;
+        border: 1px dashed #666;
+        cursor: default;
+      }
+
+      .card-slot.card {
+        background: linear-gradient(135deg, #2a3d5a 0%, #1a2332 100%);
+        border: 2px solid #f4a460;
+        cursor: pointer;
+      }
+
+      .card-slot.card:hover {
+        border-color: #ff8c42;
+        box-shadow: 0 0 8px rgba(244, 164, 96, 0.3);
+        transform: translateY(-2px);
+      }
+
+      .card-slot.selected {
+        border-color: #ff8c42;
+        box-shadow: 0 0 12px rgba(255, 140, 66, 0.6);
+        background: linear-gradient(135deg, #3a5d7a 0%, #2a3d5a 100%);
+      }
+
+      .card-slot.type-enemy {
+        border-color: #c73e3e;
+      }
+
+      .card-slot.type-trap {
+        border-color: #8b7e3e;
+      }
+
+      .card-slot.type-treasure {
+        border-color: #3e8b6f;
+      }
+
+      .card-content {
+        width: 100%;
+        text-align: center;
+        position: relative;
       }
 
       .card-name {
+        font-size: var(--font-size-sm);
         font-weight: bold;
-        margin-bottom: 4px;
-        font-size: var(--font-size-base);
+        color: #f4a460;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       .card-stats {
         display: flex;
-        gap: 8px;
+        gap: 4px;
+        justify-content: center;
         font-size: var(--font-size-sm);
+        color: #ccc;
+        margin-top: 2px;
       }
 
-      .stat {
-        display: flex;
-        align-items: center;
-        gap: 2px;
-      }
-
-      .card-group {
+      .group-badge {
         position: absolute;
-        top: 4px;
+        top: 2px;
         right: 4px;
-        background-color: rgba(0, 0, 0, 0.5);
+        background: #ff8c42;
+        color: #000;
         padding: 2px 6px;
         border-radius: 3px;
         font-size: 10px;
         font-weight: bold;
       }
 
-      .player-area {
-        display: flex;
-        align-items: center;
-        justify-content: center;
+      .inventory-box {
+        background: var(--color-bg-primary);
         border: 2px solid #f4a460;
         border-radius: 8px;
-        background-color: var(--color-bg-secondary);
         padding: 12px;
-      }
-
-      .player-card {
-        font-size: 48px;
-      }
-
-      .inventory {
-        border-top: 1px solid var(--color-card-border);
-        padding: 16px 24px;
-        background-color: var(--color-bg-secondary);
       }
 
       .inventory-label {
         font-size: var(--font-size-base);
         font-weight: bold;
+        color: #f4a460;
         margin-bottom: 8px;
       }
 
       .item-list {
         display: flex;
+        gap: 6px;
         flex-wrap: wrap;
-        gap: 8px;
       }
 
-      .item {
-        background-color: var(--color-card-bg);
-        padding: 6px 12px;
+      .item-badge {
+        background: #2a3d5a;
+        border: 1px solid #f4a460;
+        padding: 6px 10px;
         border-radius: 4px;
-        border: 1px solid var(--color-card-border);
         font-size: var(--font-size-sm);
-        cursor: pointer;
-        transition: all 0.2s;
-      }
-
-      .item:hover {
-        background-color: #3a5a7a;
-      }
-
-      .card.enemy {
-        border: 2px solid #ff8c42;
-      }
-
-      .card.trap {
-        border: 2px solid #ff6b6b;
-      }
-
-      .card.treasure {
-        border: 2px solid #ffd700;
+        color: #f4a460;
       }
     `
     document.head.appendChild(style)
