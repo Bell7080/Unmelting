@@ -121,6 +121,11 @@ function render(): void {
   boardRenderer.render(gameState)
 }
 
+/** Pause turn resolution so CSS/Web Animations can read as intentional beats. */
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
 function showToast(
   message: string,
   kind: 'info' | 'win' | 'hurt' = 'info'
@@ -139,6 +144,14 @@ function showToast(
 }
 
 document.addEventListener('cardAction', (e: Event) => {
+  void handleCardAction(e)
+})
+
+/**
+ * Resolve one player click as a small animation timeline: player hit, enemy
+ * response, treasure fade, lane slide, then the sticky merge pulse.
+ */
+async function handleCardAction(e: Event): Promise<void> {
   if (!gameActive || inputLocked) return
   const detail = (e as CustomEvent<CardActionDetail>).detail
   const { laneIndex, distance, card } = detail
@@ -154,7 +167,10 @@ document.addEventListener('cardAction', (e: Event) => {
 
   inputLocked = true
 
-  // 1. Player phase
+  // 1. Player phase — enemy cards pop upward only when the player strikes.
+  if (card.type === CardType.ENEMY) {
+    await boardRenderer.animatePlayerAttack(card)
+  }
   const result = ActionSystem.executeAction(
     gameState.getCharacter(),
     lane,
@@ -163,22 +179,28 @@ document.addEventListener('cardAction', (e: Event) => {
   )
   showToast(result.message, result.damageTaken ? 'hurt' : 'info')
 
-  // 2. Refill: every lane the resolved card occupied collapses + gets a fresh top card
+  // 2. Refill after resolved cards; FLIP rendering slides upper cards down.
   if (result.cardRemoved) {
     gameState.removeCardFromRow(card, distance)
     compactAndRefillAllLanes()
+    boardRenderer.clearSelection()
+    render()
+    await wait(380)
+  } else {
+    render()
   }
 
-  // Player's strike already might have killed them through enemy counter-attack
+  // Player's strike already might have killed them through trap damage.
   if (!gameState.character.isAlive()) {
     gameState.endGame('character_defeated')
     finishTurn()
     return
   }
 
-  // 3. Enemy phase
+  // 3. Enemy phase — surviving active enemies slam downward toward the player.
   const hits = turnManager.runEnemyPhase()
   if (hits.length > 0) {
+    await boardRenderer.animateEnemyAttacks(hits)
     const total = hits.reduce((acc, h) => acc + h.damage, 0)
     showToast(`적 공격! -${total}`, 'hurt')
   }
@@ -187,9 +209,14 @@ document.addEventListener('cardAction', (e: Event) => {
     return
   }
 
-  // 4. Treasure volatility — vanished treasures leave holes; drop everything down + refill top
-  turnManager.applyTreasureVolatility(cardSpawner)
+  // 4. Treasure volatility — vanished treasures dust out before lane refill.
+  const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
+  if (treasureChanges.length > 0) {
+    await boardRenderer.animateTreasureChanges(treasureChanges)
+  }
   compactAndRefillAllLanes()
+  render()
+  await wait(380)
 
   // 5. Hazard check
   if (turnManager.checkHazardLoss()) {
@@ -197,7 +224,7 @@ document.addEventListener('cardAction', (e: Event) => {
     return
   }
 
-  // 6. Regroup
+  // 6. Regroup after movement has settled so the merge reads as a second beat.
   gameState.regroupAllRows()
 
   // 7. nextTurn
@@ -207,8 +234,8 @@ document.addEventListener('cardAction', (e: Event) => {
 
   setTimeout(() => {
     inputLocked = false
-  }, 200)
-})
+  }, 220)
+}
 
 function finishTurn(): void {
   gameActive = false

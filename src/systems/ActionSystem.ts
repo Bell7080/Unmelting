@@ -65,7 +65,7 @@ export class ActionSystem {
     }
 
     const playerDamage = character.damage
-    const newHealth = card.getHealth() - playerDamage
+    const newHealth = card.takeDamage(playerDamage)
 
     if (newHealth <= 0) {
       const drop = DropSystem.generateDrop()
@@ -81,7 +81,6 @@ export class ActionSystem {
 
     // Enemy survived the strike. It will counterattack during the enemy phase
     // along with every other live enemy in the active row.
-    card.baseHealth = newHealth
     return {
       success: true,
       message: `${card.name}에게 ${playerDamage} 피해`,
