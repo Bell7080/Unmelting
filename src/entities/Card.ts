@@ -61,9 +61,19 @@ export class Card {
     return 999 // 3칸 트랩 = 즉사
   }
 
+  /**
+   * Merge another card into this one. Same type required.
+   * For enemies: pool the base stats (HP/damage) so the merged group is
+   * meaningfully bigger than either individual.
+   * groupCount tracks how many lane cells the card occupies.
+   */
   merge(other: Card): void {
-    if (this.type !== other.type || this.name !== other.name) return
+    if (this.type !== other.type) return
     this.groupCount += other.groupCount
+    if (this.type === CardType.ENEMY) {
+      this.baseHealth += other.baseHealth
+      this.baseDamage = Math.max(this.baseDamage, other.baseDamage)
+    }
   }
 
   clone(): Card {

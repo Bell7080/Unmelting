@@ -75,6 +75,82 @@ export class GameState {
     return null
   }
 
+  /**
+   * Lanes whose slot at the given row holds the same Card instance.
+   * (Adjacent same-type cards merge by sharing one Card object.)
+   */
+  getGroupLanes(laneIndex: number, distance: number): number[] {
+    const card = this.lanes[laneIndex]?.getCardAtDistance(distance)
+    if (!card) return []
+    const lanes: number[] = []
+    for (let i = 0; i < this.lanes.length; i++) {
+      if (this.lanes[i].getCardAtDistance(distance) === card) {
+        lanes.push(i)
+      }
+    }
+    return lanes
+  }
+
+  /**
+   * Walk a row left-to-right; whenever two adjacent slots hold cards of the
+   * same type, fold the right card into the left and replace the right slot
+   * with the (now bigger) left Card. Result: a contiguous run of same-type
+   * cards becomes a single Card occupying multiple lane slots.
+   */
+  regroupRow(distance: number): void {
+    if (distance < 0 || distance >= LANE_DISTANCE_COUNT) return
+
+    let i = 0
+    while (i < this.lanes.length - 1) {
+      const left = this.lanes[i].getCardAtDistance(distance)
+      const right = this.lanes[i + 1].getCardAtDistance(distance)
+
+      if (!left || !right || left === right) {
+        i++
+        continue
+      }
+      if (left.type === right.type) {
+        left.merge(right)
+        this.lanes[i + 1].setCardAtDistance(distance, left)
+      }
+      i++
+    }
+  }
+
+  regroupAllRows(): void {
+    for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+      this.regroupRow(d)
+    }
+  }
+
+  /**
+   * Remove every slot reference of a given Card from a row, returning the
+   * lane indices that were cleared.
+   */
+  removeCardFromRow(card: Card, distance: number): number[] {
+    const cleared: number[] = []
+    for (let i = 0; i < this.lanes.length; i++) {
+      if (this.lanes[i].getCardAtDistance(distance) === card) {
+        this.lanes[i].setCardAtDistance(distance, null)
+        cleared.push(i)
+      }
+    }
+    return cleared
+  }
+
+  /**
+   * Within one lane, drop the bottom slot and shift everything down one step.
+   * The top slot becomes empty for the caller to fill.
+   */
+  collapseLane(laneIndex: number): void {
+    const lane = this.lanes[laneIndex]
+    if (!lane) return
+    for (let d = 0; d < LANE_DISTANCE_COUNT - 1; d++) {
+      lane.setCardAtDistance(d, lane.getCardAtDistance(d + 1))
+    }
+    lane.setCardAtDistance(LANE_DISTANCE_COUNT - 1, null)
+  }
+
   endGame(reason: string): void {
     this.isGameOver = true
     this.gameOverReason = reason

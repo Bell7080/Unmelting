@@ -41,7 +41,7 @@ export class ActionSystem {
       case ActionType.ATTACK_ENEMY:
         return this.attackEnemy(character, lane, card)
       case ActionType.EVADE_TRAP:
-        return this.evadeTrap(lane, card)
+        return this.evadeTrap(character, lane, card)
       case ActionType.TAKE_TREASURE:
         return this.takeTreasure(character, lane, card)
       default:
@@ -50,101 +50,92 @@ export class ActionSystem {
   }
 
   /**
-   * Attack an enemy
-   * Player attacks first, then enemy counterattacks
+   * Attack an enemy. Player strikes first; if the enemy survives the blow,
+   * it counter-attacks (the broader enemy phase still runs separately for
+   * other lanes). Card removal is left to the caller because a merged
+   * enemy may occupy several lane slots.
    */
   private static attackEnemy(
     character: Character,
-    lane: Lane,
+    _lane: Lane,
     card: Card
   ): ActionResult {
     if (card.type !== CardType.ENEMY) {
-      return {
-        success: false,
-        message: 'Not an enemy',
-        cardRemoved: false,
-      }
+      return { success: false, message: 'Not an enemy', cardRemoved: false }
     }
 
-    // Player attacks first
     const playerDamage = character.damage
-    const enemyHealth = card.getHealth() - playerDamage
+    const newHealth = card.getHealth() - playerDamage
 
-    if (enemyHealth <= 0) {
-      // Enemy defeated!
-      lane.removeCard(card)
+    if (newHealth <= 0) {
       const drop = DropSystem.generateDrop()
       character.addItem(drop.name)
-
       return {
         success: true,
-        message: `Defeated ${card.name}! Got ${drop.name}`,
+        message: `${card.name} 처치! ${drop.name} 획득`,
         damageDealt: playerDamage,
         itemGained: drop.name,
         cardRemoved: true,
       }
     }
 
-    // Enemy counterattacks
-    card.baseHealth = enemyHealth
-    const enemyDamage = card.getDamage()
-    const actualDamage = character.takeDamage(enemyDamage)
-
+    // Enemy survived the strike. It will counterattack during the enemy phase
+    // along with every other live enemy in the active row.
+    card.baseHealth = newHealth
     return {
       success: true,
-      message: `Hit ${card.name} for ${playerDamage}. Took ${actualDamage} damage`,
+      message: `${card.name}에게 ${playerDamage} 피해`,
       damageDealt: playerDamage,
-      damageTaken: actualDamage,
       cardRemoved: false,
     }
   }
 
   /**
-   * Evade a trap
-   * Removes the trap and allows other cards to advance
+   * Step on a trap deliberately. Player takes the trap's penalty and the
+   * trap is consumed. Caller removes the card from any lane slots it holds.
    */
-  private static evadeTrap(lane: Lane, card: Card): ActionResult {
+  private static evadeTrap(
+    character: Character,
+    _lane: Lane,
+    card: Card
+  ): ActionResult {
     if (card.type !== CardType.TRAP) {
-      return {
-        success: false,
-        message: 'Not a trap',
-        cardRemoved: false,
-      }
+      return { success: false, message: 'Not a trap', cardRemoved: false }
     }
-
-    lane.removeCard(card)
+    const penalty = card.getTrapDamagePenalty()
+    const actualDamage = character.takeDamage(penalty)
     return {
       success: true,
-      message: `Evaded trap: ${card.name}`,
+      message: `${card.name}을(를) 밟았다 (-${actualDamage})`,
+      damageTaken: actualDamage,
       cardRemoved: true,
     }
   }
 
   /**
-   * Take treasure
-   * Adds reward to inventory
+   * Open a treasure. Caller removes the card from any lane slots it holds.
+   * A merged treasure (groupCount > 1) yields more drops.
    */
   private static takeTreasure(
     character: Character,
-    lane: Lane,
+    _lane: Lane,
     card: Card
   ): ActionResult {
     if (card.type !== CardType.TREASURE) {
-      return {
-        success: false,
-        message: 'Not a treasure',
-        cardRemoved: false,
-      }
+      return { success: false, message: 'Not a treasure', cardRemoved: false }
     }
-
-    const itemName = `${card.name} (Treasure)`
-    character.addItem(itemName)
-    lane.removeCard(card)
-
+    const drops = card.groupCount === 1 ? 1 : card.groupCount === 2 ? 2 : 4
+    const dropNames: string[] = []
+    for (let i = 0; i < drops; i++) {
+      const drop = DropSystem.generateDrop()
+      character.addItem(drop.name)
+      dropNames.push(drop.name)
+    }
+    const summary = drops === 1 ? dropNames[0] : `${drops}개 (${dropNames.join(', ')})`
     return {
       success: true,
-      message: `Got treasure: ${itemName}`,
-      itemGained: itemName,
+      message: `${card.name} 획득: ${summary}`,
+      itemGained: summary,
       cardRemoved: true,
     }
   }

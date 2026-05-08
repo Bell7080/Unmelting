@@ -55,18 +55,20 @@
         color: var(--color-text-primary);
         background:
           radial-gradient(ellipse at top, #1f1830 0%, #14101c 55%, #0a0712 100%);
+        background-attachment: fixed;
         line-height: 1.5;
-        overflow: hidden;
         min-height: 100vh;
       }
 
       #app {
-        width: 100vw;
-        height: 100vh;
+        width: 100%;
+        min-height: 100vh;
         display: flex;
         flex-direction: column;
         position: relative;
       }
+
+      #game-board { width: 100%; }
 
       canvas {
         display: block;
