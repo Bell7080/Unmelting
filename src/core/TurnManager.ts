@@ -16,7 +16,6 @@
 
 import { GameState } from './GameState'
 import { Card, CardType } from '@entities/Card'
-import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { CardSpawner } from '@systems/CardSpawner'
 
 export interface EnemyHit {
