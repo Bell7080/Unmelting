@@ -52,6 +52,8 @@ describe('TurnManager treasure volatility', () => {
     expect(mimic?.type).toBe(CardType.ENEMY)
     expect(mimic?.getHealth()).toBe(1)
     expect(mimic?.getDamage()).toBe(1)
+    expect(mimic?.isSpecialEnemy).toBe(true)
+    expect(mimic?.defeatDropCount).toBe(3)
   })
 
   it('does not end the game just because three traps occupy the active row', () => {

@@ -57,7 +57,7 @@ export class Lane {
 
   /**
    * Add card to a specific distance
-   * If same type/name exists, merge instead
+   * If the same merge-compatible card exists, merge instead
    */
   addCardAtDistance(distance: number, newCard: Card): boolean {
     if (distance < 0 || distance >= LANE_DISTANCE_COUNT) {
@@ -65,8 +65,8 @@ export class Lane {
     }
 
     const existingCard = this.cards[distance]
-    if (existingCard && existingCard.type === newCard.type && existingCard.name === newCard.name) {
-      // Merge!
+    if (existingCard && existingCard.name === newCard.name && existingCard.canMergeWith(newCard)) {
+      // Merge only cards that explicitly allow grouping; special enemies stay standalone.
       existingCard.merge(newCard)
       return true
     }

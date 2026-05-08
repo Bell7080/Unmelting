@@ -44,4 +44,17 @@ describe('Card enemy grouping health', () => {
     expect(wounded.groupCount).toBe(2)
     expect(wounded.getHealth()).toBe(10)
   })
+
+  it('keeps special mimic enemies from merging with normal enemies', () => {
+    const enemy = new Card('enemy', CardType.ENEMY, '잉크 늑대', 'Attacks the player', 2, 1)
+    const mimic = new Card('mimic', CardType.ENEMY, '미믹', 'Was a treasure once', 1, 1, {
+      isSpecialEnemy: true,
+      defeatDropCount: 3,
+    })
+
+    enemy.merge(mimic)
+
+    expect(enemy.groupCount).toBe(1)
+    expect(enemy.getHealth()).toBe(2)
+  })
 })
