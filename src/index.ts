@@ -2,25 +2,20 @@
  * Unmelting - Main game loop
  *
  * Per-turn flow:
- *   1. Player phase  → player picks a card (1st click highlights, 2nd executes)
- *      • Enemy = player strikes first
- *      • Trap  = player steps on it (takes penalty)
- *      • Treasure = player banks the rewards
- *   2. Refill        → only the lane(s) the player resolved collapse + spawn
- *      a fresh card at the top. Other lanes stay put.
- *   3. Enemy phase   → bottom-row enemies still alive strike the player
- *   4. Treasure roll → 50% disappear / 10% mimic conversion per treasure
- *   5. Hazard check  → all-trap active row = instant death
- *   6. Re-group rows → adjacent same-type cards merge into one
- *   7. nextTurn
+ *   1. Empty-rail analysis/refill → cards fall into holes before control returns
+ *   2. Active-row regroup → adjacent same-type cards merge before turn start
+ *   3. Player phase → player picks a card (1st click highlights, 2nd executes)
+ *   4. Event phase → enemy attacks and treasure volatility resolve together
+ *   5. Turn end → board prepares the next turn-start cleanup page
  */
 
 import { GameState } from '@core/GameState'
 import { TurnManager } from '@core/TurnManager'
-import { GameBoardRenderer, CardActionDetail } from '@ui/GameBoardRenderer'
+import { GameBoardRenderer, CardActionDetail, ItemActionDetail } from '@ui/GameBoardRenderer'
 import { CardSpawner } from '@systems/CardSpawner'
 import { ActionSystem, ActionType } from '@systems/ActionSystem'
-import { CardType } from '@entities/Card'
+import { DropSystem } from '@systems/DropSystem'
+import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { FontManager } from '@ui/FontManager'
 import okDanDanBoldUrl from './assets/fonts/OkDanDanBold.woff2'
@@ -48,6 +43,7 @@ const boardRenderer = new GameBoardRenderer('game-board')
 
 let gameActive = true
 let inputLocked = false
+let pendingTrapDisarmItemIndex: number | null = null
 
 function actionTypeFor(cardType: CardType): ActionType | null {
   switch (cardType) {
@@ -74,24 +70,10 @@ function fillEmptyTopSlots(): void {
  * Used after treasure volatility (or any board mutation) so a vanished card
  * does not leave a gap in the active row.
  */
-function compactAndRefillAllLanes(): void {
-  for (let i = 0; i < gameState.lanes.length; i++) {
-    const lane = gameState.lanes[i]
-    // Repeatedly shift down until no holes remain below a card.
-    let safety = LANE_DISTANCE_COUNT
-    while (safety-- > 0) {
-      let didShift = false
-      for (let d = 0; d < LANE_DISTANCE_COUNT - 1; d++) {
-        if (!lane.getCardAtDistance(d) && lane.getCardAtDistance(d + 1)) {
-          lane.setCardAtDistance(d, lane.getCardAtDistance(d + 1))
-          lane.setCardAtDistance(d + 1, null)
-          didShift = true
-        }
-      }
-      if (!didShift) break
-    }
-  }
+function compactAndRefillAllLanes(): boolean {
+  const moved = gameState.compactLanes()
   fillEmptyTopSlots()
+  return moved
 }
 
 function fillBoardAtStart(): void {
@@ -108,11 +90,21 @@ function fillBoardAtStart(): void {
   gameState.regroupAllRows()
 }
 
+function grantStarterItems(): void {
+  // Give one of each current item so every item mechanic is testable from turn 1.
+  for (const item of DropSystem.getItemPool()) {
+    gameState.character.addItem(item.name)
+  }
+}
+
 function startGame(): void {
   gameActive = true
   inputLocked = false
   gameState.reset()
+  grantStarterItems()
   fillBoardAtStart()
+  pendingTrapDisarmItemIndex = null
+  boardRenderer.setTrapDisarmMode(null)
   boardRenderer.clearSelection()
   render()
 }
@@ -147,9 +139,119 @@ document.addEventListener('cardAction', (e: Event) => {
   void handleCardAction(e)
 })
 
+document.addEventListener('itemAction', (e: Event) => {
+  handleItemAction((e as CustomEvent<ItemActionDetail>).detail.itemIndex)
+})
+
+/** Apply a hand item or arm a targeted item mode without spending a turn. */
+function handleItemAction(itemIndex: number): void {
+  if (!gameActive || inputLocked) return
+  const itemName = gameState.character.items[itemIndex]
+  if (!itemName) return
+
+  const item = DropSystem.getItemByName(itemName)
+  if (!item) {
+    showToast(`${itemName}은(는) 아직 효과가 없어`, 'info')
+    render()
+    return
+  }
+
+  // Wax shield is a targeting mode: click again to cancel, or pick a trap to destroy.
+  if (item.effect === 'trap-disarm') {
+    pendingTrapDisarmItemIndex = pendingTrapDisarmItemIndex === itemIndex ? null : itemIndex
+    boardRenderer.setTrapDisarmMode(pendingTrapDisarmItemIndex)
+    showToast(
+      pendingTrapDisarmItemIndex === null ? '밀랍 방패 선택 취소' : '밀랍 방패: 파괴할 함정을 선택',
+      pendingTrapDisarmItemIndex === null ? 'info' : 'hurt'
+    )
+    render()
+    return
+  }
+
+  // Using a different item cancels any armed shield so item indices stay valid.
+  pendingTrapDisarmItemIndex = null
+  boardRenderer.setTrapDisarmMode(null)
+
+  const removedItemName = gameState.character.removeItem(itemIndex)
+  if (!removedItemName) return
+  DropSystem.applyItem(item, (effect, value = 0) => {
+    if (effect === 'heal') gameState.character.heal(value)
+    if (effect === 'damage-boost') gameState.character.applyDamageBoost()
+  })
+  showToast(`${item.name} 사용: ${item.description}`, 'win')
+  render()
+}
+
+/** Run the cleanup page: compact gaps, refill top slots, then merge active cards. */
+async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
+  // Normal card actions consume the playing turn; free item cleanup does not.
+  if (advanceTurn) gameState.nextTurn()
+
+  const moved = compactAndRefillAllLanes()
+  render()
+  if (moved) await wait(380)
+
+  // Regroup after movement has settled so 3-card trap merges can animate too.
+  gameState.regroupAllRows()
+  boardRenderer.clearSelection()
+  render()
+}
+
+/** Destroy a trap with a selected wax shield, then run cleanup without play events. */
+async function handleTrapDisarm(distance: number, card: Card): Promise<void> {
+  inputLocked = true
+  const itemName = gameState.character.removeItem(pendingTrapDisarmItemIndex ?? -1)
+  pendingTrapDisarmItemIndex = null
+  boardRenderer.setTrapDisarmMode(null)
+  if (!itemName) {
+    inputLocked = false
+    render()
+    return
+  }
+
+  gameState.removeCardFromRow(card, distance)
+  boardRenderer.clearSelection()
+  showToast(`${itemName}: ${card.name} 파괴`, 'win')
+  await runCleanupPhase(false)
+
+  setTimeout(() => {
+    inputLocked = false
+  }, 220)
+}
+
+/** Resolve enemy/treasure events and then run the next turn-start cleanup page. */
+async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
+  // Event phase — enemy attacks and treasure volatility are processed together.
+  const hits = turnManager.runEnemyPhase()
+  const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
+  const eventAnimations: Promise<void>[] = []
+  if (hits.length > 0) eventAnimations.push(boardRenderer.animateEnemyAttacks(hits))
+  if (treasureChanges.length > 0) {
+    eventAnimations.push(boardRenderer.animateTreasureChanges(treasureChanges))
+  }
+  if (eventAnimations.length > 0) await Promise.all(eventAnimations)
+
+  const totalDamage = hits.reduce((acc, h) => acc + h.damage, 0)
+  if (totalDamage > 0) {
+    showToast(`적 공격! -${totalDamage}`, 'hurt')
+    await boardRenderer.animateDamageFlash()
+  }
+  if (gameState.isGameOver) {
+    finishTurn()
+    return
+  }
+
+  // Playing-card actions consume the turn, then run the cleanup page.
+  await runCleanupPhase(true)
+
+  setTimeout(() => {
+    inputLocked = false
+  }, 220)
+}
+
 /**
- * Resolve one player click as a small animation timeline: player hit, enemy
- * response, treasure fade, lane slide, then the sticky merge pulse.
+ * Resolve one player click as a deliberate turn timeline: player action first,
+ * then enemy/treasure events, then the rail falls and merges for next turn.
  */
 async function handleCardAction(e: Event): Promise<void> {
   if (!gameActive || inputLocked) return
@@ -162,12 +264,22 @@ async function handleCardAction(e: Event): Promise<void> {
   const lane = gameState.getLane(laneIndex)
   if (!lane) return
 
+  // Wax shield mode can only target traps; other cards are visually blocked.
+  if (pendingTrapDisarmItemIndex !== null) {
+    if (card.type !== CardType.TRAP) {
+      showToast('밀랍 방패는 함정만 파괴할 수 있어', 'hurt')
+      return
+    }
+    await handleTrapDisarm(distance, card)
+    return
+  }
+
   const actionType = actionTypeFor(card.type)
   if (!actionType) return
 
   inputLocked = true
 
-  // 1. Player phase — enemy cards pop upward only when the player strikes.
+  // Player phase — enemy cards pop upward only when the player strikes.
   if (card.type === CardType.ENEMY) {
     await boardRenderer.animatePlayerAttack(card)
   }
@@ -178,63 +290,25 @@ async function handleCardAction(e: Event): Promise<void> {
     actionType
   )
   showToast(result.message, result.damageTaken ? 'hurt' : 'info')
-
-  // 2. Refill after resolved cards; FLIP rendering slides upper cards down.
-  if (result.cardRemoved) {
-    gameState.removeCardFromRow(card, distance)
-    compactAndRefillAllLanes()
-    boardRenderer.clearSelection()
-    render()
-    await wait(380)
-  } else {
-    render()
+  if (result.damageTaken && result.damageTaken > 0) {
+    await boardRenderer.animateDamageFlash()
   }
 
-  // Player's strike already might have killed them through trap damage.
+  // Resolved cards are removed now, but the rail does not fall until turn end.
+  if (result.cardRemoved) {
+    gameState.removeCardFromRow(card, distance)
+    boardRenderer.clearSelection()
+  }
+  render()
+
+  // Trap damage can still defeat the character immediately after its animation.
   if (!gameState.character.isAlive()) {
     gameState.endGame('character_defeated')
     finishTurn()
     return
   }
 
-  // 3. Enemy phase — surviving active enemies slam downward toward the player.
-  const hits = turnManager.runEnemyPhase()
-  if (hits.length > 0) {
-    await boardRenderer.animateEnemyAttacks(hits)
-    const total = hits.reduce((acc, h) => acc + h.damage, 0)
-    showToast(`적 공격! -${total}`, 'hurt')
-  }
-  if (gameState.isGameOver) {
-    finishTurn()
-    return
-  }
-
-  // 4. Treasure volatility — vanished treasures dust out before lane refill.
-  const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
-  if (treasureChanges.length > 0) {
-    await boardRenderer.animateTreasureChanges(treasureChanges)
-  }
-  compactAndRefillAllLanes()
-  render()
-  await wait(380)
-
-  // 5. Hazard check
-  if (turnManager.checkHazardLoss()) {
-    finishTurn()
-    return
-  }
-
-  // 6. Regroup after movement has settled so the merge reads as a second beat.
-  gameState.regroupAllRows()
-
-  // 7. nextTurn
-  gameState.nextTurn()
-  boardRenderer.clearSelection()
-  render()
-
-  setTimeout(() => {
-    inputLocked = false
-  }, 220)
+  await resolveEventPhaseAndPrepareNextTurn()
 }
 
 function finishTurn(): void {

@@ -121,8 +121,33 @@ export class GameState {
   }
 
   regroupAllRows(): void {
-    // Only regroup the active row (distance 0)
+    // Only regroup the active row (distance 0).
     this.regroupRow(0)
+  }
+
+  /**
+   * Drop cards down to fill holes and refill empty top slots with the caller.
+   * Returns true when at least one card changed row, which the UI can animate.
+   */
+  compactLanes(): boolean {
+    let changed = false
+    for (const lane of this.lanes) {
+      // Repeatedly shift down until no holes remain below a card.
+      let safety = LANE_DISTANCE_COUNT
+      while (safety-- > 0) {
+        let didShift = false
+        for (let d = 0; d < LANE_DISTANCE_COUNT - 1; d++) {
+          if (!lane.getCardAtDistance(d) && lane.getCardAtDistance(d + 1)) {
+            lane.setCardAtDistance(d, lane.getCardAtDistance(d + 1))
+            lane.setCardAtDistance(d + 1, null)
+            didShift = true
+            changed = true
+          }
+        }
+        if (!didShift) break
+      }
+    }
+    return changed
   }
 
   /**

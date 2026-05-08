@@ -2,16 +2,13 @@
  * TurnManager - Orchestrates a turn after the player picks a card.
  *
  * Turn order:
- *   1. Player phase  (handled in index.ts via cardAction event)
- *   2. Enemy phase   (active-row enemies still alive strike the player)
- *   3. Treasure volatility (50% disappear, 10% become a mimic enemy)
- *   4. Hazard check  (a full row of traps = instant death)
- *   5. Lane refill   (only lanes the player resolved get their stack pulled
- *      down + a fresh top card)  — handled in index.ts
- *   6. Re-group rows + nextTurn
+ *   1. Pre-turn refill/drop + active-row regroup (handled in index.ts)
+ *   2. Player phase  (handled in index.ts via cardAction event)
+ *   3. Enemy phase and treasure volatility resolve as the end-turn event beat
+ *   4. Turn end prepares the next row for the next turn-start cleanup page
  *
- * Cards do NOT auto-advance globally any more; an unselected card stays where
- * it is across turns.
+ * Cards do NOT auto-advance globally any more; only holes created by resolved
+ * cards are compacted so upper cards fall into empty rail cells.
  */
 
 import { GameState } from './GameState'
@@ -53,8 +50,8 @@ export class TurnManager {
       if (seen.has(card)) continue
       seen.add(card)
 
-      const damage = card.getDamage()
-      character.takeDamage(damage)
+      // Record actual damage so the UI and death check match state.
+      const damage = character.takeDamage(card.getDamage())
       hits.push({ laneIndex: i, cardName: card.name, damage })
 
       if (!character.isAlive()) {
@@ -67,8 +64,8 @@ export class TurnManager {
   }
 
   /**
-   * Per-treasure roll: 50% it vanishes, 10% it morphs into a mimic enemy.
-   * Only runs on treasures in the active row (distance 0).
+   * Per-treasure roll: 30% it vanishes, 10% it morphs into a mimic enemy,
+   * and the remaining 60% keeps the treasure in place.
    */
   applyTreasureVolatility(spawner: CardSpawner): TreasureChange[] {
     const changes: TreasureChange[] = []
@@ -82,7 +79,7 @@ export class TurnManager {
       visited.add(card)
 
       const roll = Math.random()
-      if (roll < 0.5) {
+      if (roll < 0.3) {
         this.gameState.removeCardFromRow(card, d)
         changes.push({
           laneIndex: i,
@@ -90,7 +87,7 @@ export class TurnManager {
           outcome: 'disappeared',
           cardName: card.name,
         })
-      } else if (roll < 0.6) {
+      } else if (roll < 0.4) {
         const mimic = spawner.spawnMimic()
         this.gameState.removeCardFromRow(card, d)
         this.gameState.lanes[i].setCardAtDistance(d, mimic)
@@ -107,25 +104,10 @@ export class TurnManager {
   }
 
   /**
-   * If the active row is fully traps (and they form one merged group),
-   * the player can no longer pick anything safely → instant death.
+   * Three merged traps are no longer an automatic game-over condition. The
+   * lethal-level damage is applied only when the player actually chooses them.
    */
   checkHazardLoss(): boolean {
-    const lanes = this.gameState.lanes
-    if (lanes.length === 0) return false
-
-    let allTrap = true
-    for (const lane of lanes) {
-      const card = lane.getCardAtDistance(0)
-      if (!card || card.type !== CardType.TRAP) {
-        allTrap = false
-        break
-      }
-    }
-    if (allTrap && lanes.every((l) => l.getCardAtDistance(0))) {
-      this.gameState.endGame('instant_death_trap')
-      return true
-    }
     return false
   }
 
