@@ -10,9 +10,20 @@ export interface FontConfig {
   lineHeight?: number
 }
 
+export interface CustomFontFace {
+  family: string
+  url: string
+  weight?: number | string
+  style?: string
+  format?: string
+}
+
 export class FontManager {
   private static readonly MIN_FONT_SIZE = 12
+  private static readonly STYLE_ELEMENT_ID = 'font-manager-faces'
   private static fonts: Map<string, FontConfig> = new Map()
+  private static loadedFaces: Set<string> = new Set()
+  private static primaryFamily: string = `'Georgia', 'Times New Roman', serif`
 
   /**
    * Register a named font configuration
@@ -128,6 +139,64 @@ export class FontManager {
    */
   static listFonts(): string[] {
     return Array.from(this.fonts.keys())
+  }
+
+  /**
+   * Register a custom @font-face by URL (e.g. a Vite-imported asset URL).
+   * Idempotent: calling twice with the same family/url is a no-op.
+   */
+  static loadCustomFont(face: CustomFontFace): void {
+    const key = `${face.family}|${face.url}|${face.weight ?? ''}|${face.style ?? ''}`
+    if (this.loadedFaces.has(key)) return
+    this.loadedFaces.add(key)
+
+    const styleEl = this.ensureStyleElement()
+    const format = face.format ?? this.guessFormat(face.url)
+    const rule = `
+@font-face {
+  font-family: '${face.family}';
+  src: url('${face.url}') format('${format}');
+  font-weight: ${face.weight ?? 'normal'};
+  font-style: ${face.style ?? 'normal'};
+  font-display: swap;
+}`
+    styleEl.appendChild(document.createTextNode(rule))
+  }
+
+  /**
+   * Set the application-wide primary font family.
+   * Updates the --font-family-primary CSS variable on :root and
+   * applies it to <body> directly so existing styles inherit.
+   */
+  static setPrimaryFamily(family: string): void {
+    this.primaryFamily = family
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.setProperty('--font-family-primary', family)
+      if (document.body) document.body.style.fontFamily = family
+    }
+  }
+
+  static getPrimaryFamily(): string {
+    return this.primaryFamily
+  }
+
+  private static ensureStyleElement(): HTMLStyleElement {
+    let el = document.getElementById(this.STYLE_ELEMENT_ID) as HTMLStyleElement | null
+    if (!el) {
+      el = document.createElement('style')
+      el.id = this.STYLE_ELEMENT_ID
+      document.head.appendChild(el)
+    }
+    return el
+  }
+
+  private static guessFormat(url: string): string {
+    const lower = url.toLowerCase()
+    if (lower.includes('.woff2')) return 'woff2'
+    if (lower.includes('.woff')) return 'woff'
+    if (lower.includes('.otf')) return 'opentype'
+    if (lower.includes('.ttf')) return 'truetype'
+    return 'woff2'
   }
 }
 
