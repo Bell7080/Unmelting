@@ -57,37 +57,37 @@ The game is organized around these key systems:
 - Card type → effect resolution (damage, reward gain, status, etc.)
 - Triggers UI updates and game state changes
 
-### Folder Structure (to be created)
+### Folder Structure (current)
 
 ```
 /src
-  /core           # Core game engine
-    GameState.ts  # Central state manager
-    TurnManager.ts
-  /systems        # Major gameplay systems
-    LaneSystem.ts
-    CardSystem.ts
-    CharacterSystem.ts
-    ActionSystem.ts
-    CollisionSystem.ts
-  /entities       # Data models
-    Card.ts
-    Character.ts
-    Lane.ts
-  /ui             # UI rendering & interaction
-    GameRenderer.ts
-    LaneRenderer.ts
-    CardRenderer.ts
-    UIManager.ts
-    FontManager.ts
-  /data           # Game constants & configurations
-    CardDefinitions.ts
-    StageDefinitions.ts
-    GameConfig.ts
-  /utils          # Helpers
-    Logger.ts
-    RandomUtils.ts
+  index.ts                # Main game loop, event wiring, global styles
+  index.html              # Page shell + base CSS variables
+  /core                   # Core game engine
+    GameState.ts          # Central state manager
+    TurnManager.ts        # Turn phase orchestration
+  /systems                # Major gameplay systems
+    ActionSystem.ts       # Player actions on selected card
+    CardSpawner.ts        # Random card generation per turn
+    DropSystem.ts         # Item drops + item application
+  /entities               # Data models
+    Card.ts               # Card model (enemy/trap/treasure + grouping)
+    Character.ts          # Player character (HP, damage, items)
+    Lane.ts               # Single lane with distance slots
+  /ui                     # UI rendering & interaction
+    GameBoardRenderer.ts  # 3×3 rail, player block, items, animations
+    ActionUI.ts           # Action helpers
+    FontManager.ts        # Font loading + 12px minimum enforcement
+    Sprites.ts            # webp sprite registry + per-card mapping
+    Icons.ts              # Inline-SVG flat icons (sword, heart, candle…)
+  /assets
+    /fonts                # OkDanDan custom font (woff2)
+    /fonts/sprites        # Card / player / background webp art
 ```
+
+> Older drafts referenced `/data` and `/utils` directories. Current MVP keeps
+> card definitions inline in `CardSpawner` and item logic in `DropSystem`;
+> there is no separate config or utility layer yet.
 
 ---
 
@@ -166,6 +166,26 @@ npm run type-check # TypeScript type checking
 - Hand-drawn/illustrated aesthetic
 - Cute but eerie (not scary)
 - Minimal animations (performance-conscious)
+
+### Sprite & Icon System (implemented)
+- Hand-drawn card art lives under `src/assets/fonts/sprites/*.webp`. The
+  registry/mapping is centralized in `src/ui/Sprites.ts`:
+  - **Player**: `player_001` (used as the framed portrait on the player card).
+  - **Background**: `background_001` is the global page backdrop. The rail
+    itself stays a translucent dark slab on top of it for separation.
+  - **Normal enemies (1-cell)**: name-matched — 양초 생쥐 → `enemy_001`,
+    양초 개구리 → `enemy_002`.
+  - **Merged enemies (2/3-cell)**: stable random pick of `enemy_001` /
+    `enemy_002` based on a hash of the card id.
+  - **Mimic (special enemy)**: `enemy_003`.
+  - **Treasure**: `chest_001` / `chest_002` / `chest_003` by group width.
+  - **Trap**: `trap_001` for every trap width.
+- UI iconography uses inline-SVG flat icons in `src/ui/Icons.ts` (`sword`,
+  `heart`, `candle`, `pouch`, `coin`). Emojis must not be used for stat
+  representation — they break the warm illustrated tone.
+- Each card face layers `card-art` (sprite) → `card-overlay` (bottom-anchored
+  dark gradient) → `card-content` (name + stats), so text remains legible over
+  any artwork.
 
 ---
 
