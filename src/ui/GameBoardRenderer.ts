@@ -20,6 +20,14 @@ import { GameState } from '@core/GameState'
 import { Card, CardType } from '@entities/Card'
 import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
 import type { EnemyHit, TreasureChange } from '@core/TurnManager'
+import { spriteForCard, SpriteUrls } from '@ui/Sprites'
+import {
+  candleIcon,
+  coinIcon,
+  heartIcon,
+  pouchIcon,
+  swordIcon,
+} from '@ui/Icons'
 
 export interface CardActionDetail {
   laneIndex: number
@@ -82,7 +90,10 @@ export class GameBoardRenderer {
         ${this.renderScorePanel(scorePanel)}
         <div class="stage">
           <header class="stage-header">
-            <div class="stage-title">🕯 Unmelting</div>
+            <div class="stage-title">
+              <span class="stage-title-icon">${candleIcon()}</span>
+              Unmelting
+            </div>
             <div class="turn-pill">Turn ${turn}</div>
           </header>
 
@@ -249,14 +260,12 @@ export class GameBoardRenderer {
   }
 
   private renderCardFace(card: Card, span: number): string {
-    const icon = this.iconFor(card.type)
-
     let stats = ''
     if (card.type === CardType.ENEMY) {
       stats = `
         <div class="card-stats">
-          <span class="stat hp">❤ ${card.getHealth()}</span>
-          <span class="stat atk">⚔ ${card.getDamage()}</span>
+          <span class="stat hp">${heartIcon()}<span class="stat-value">${card.getHealth()}</span></span>
+          <span class="stat atk">${swordIcon()}<span class="stat-value">${card.getDamage()}</span></span>
         </div>
       `
     } else if (card.type === CardType.TRAP && card.groupCount >= 3) {
@@ -273,12 +282,18 @@ export class GameBoardRenderer {
         ? this.groupName(card.type, span)
         : card.name
 
+    const sprite = spriteForCard(card)
+    const artStyle = sprite ? `style="background-image: url('${sprite}')"` : ''
+
     return `
       ${groupBadge}
       <div class="card-face">
-        <div class="card-icon">${icon}</div>
-        <div class="card-name">${groupName}</div>
-        ${stats}
+        <div class="card-art" ${artStyle} aria-hidden="true"></div>
+        <div class="card-overlay" aria-hidden="true"></div>
+        <div class="card-content">
+          <div class="card-name">${groupName}</div>
+          ${stats}
+        </div>
       </div>
     `
   }
@@ -293,19 +308,6 @@ export class GameBoardRenderer {
     return ''
   }
 
-  private iconFor(type: CardType): string {
-    switch (type) {
-      case CardType.ENEMY:
-        return '🐺'
-      case CardType.TRAP:
-        return '🕸'
-      case CardType.TREASURE:
-        return '🎁'
-      default:
-        return '?'
-    }
-  }
-
   private renderPlayer(character: any): string {
     const hpPct = Math.max(
       0,
@@ -314,15 +316,24 @@ export class GameBoardRenderer {
     return `
       <div class="player-row">
         <div class="player-card">
-          <div class="player-icon">🕯</div>
+          <div class="player-portrait" aria-hidden="true">
+            <div class="player-portrait-art" style="background-image: url('${SpriteUrls.player}')"></div>
+            <div class="player-portrait-frame"></div>
+          </div>
           <div class="player-info">
             <div class="player-name">${character.name}</div>
             <div class="player-stats">
               <div class="hp-bar">
                 <div class="hp-fill" style="width: ${hpPct}%"></div>
-                <span class="hp-text">❤ ${character.health}/${character.maxHealth}</span>
+                <span class="hp-text">
+                  <span class="hp-text-icon">${heartIcon()}</span>
+                  ${character.health}/${character.maxHealth}
+                </span>
               </div>
-              <div class="atk-stat">⚔ ${character.damage}</div>
+              <div class="atk-stat">
+                <span class="atk-stat-icon">${swordIcon()}</span>
+                ${character.damage}
+              </div>
             </div>
           </div>
         </div>
@@ -334,7 +345,10 @@ export class GameBoardRenderer {
     if (!character.items || character.items.length === 0) {
       return `
         <div class="items-row empty">
-          <span class="items-empty">📦 손패가 비어 있어</span>
+          <span class="items-empty">
+            <span class="items-empty-icon">${pouchIcon()}</span>
+            손패가 비어 있어
+          </span>
         </div>
       `
     }
@@ -350,7 +364,10 @@ export class GameBoardRenderer {
         : ''
     return `
       <div class="items-row">
-        <div class="items-label">📦 손패 (${character.items.length})</div>
+        <div class="items-label">
+          <span class="items-label-icon">${pouchIcon()}</span>
+          손패 (${character.items.length})
+        </div>
         ${helper}
         <div class="items-list">${badges}</div>
       </div>
@@ -577,6 +594,15 @@ export class GameBoardRenderer {
 }
 
 const STYLES = `
+.icon {
+  width: 1em;
+  height: 1em;
+  display: inline-block;
+  vertical-align: -0.14em;
+  flex-shrink: 0;
+  color: currentColor;
+}
+
 .game-shell {
   width: 100%;
   height: 100vh;
@@ -741,11 +767,21 @@ const STYLES = `
 }
 
 .stage-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: var(--font-size-lg);
   font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--color-flame);
   text-shadow: 0 0 12px rgba(255, 215, 120, 0.25);
+}
+
+.stage-title-icon {
+  display: inline-flex;
+  align-items: center;
+  font-size: 1.1em;
+  filter: drop-shadow(0 0 6px rgba(255, 215, 120, 0.55));
 }
 
 .turn-pill {
@@ -771,9 +807,15 @@ const STYLES = `
   gap: clamp(6px, 1vh, 10px);
   padding: clamp(8px, 1.5vh, 12px);
   background:
-    linear-gradient(180deg, rgba(31, 24, 48, 0.4) 0%, rgba(31, 24, 48, 0.7) 100%);
-  border: 1px solid var(--color-border-soft);
-  border-radius: 12px;
+    linear-gradient(180deg, rgba(20, 16, 28, 0.55) 0%, rgba(20, 16, 28, 0.78) 100%),
+    url('${SpriteUrls.background}') center / cover no-repeat,
+    linear-gradient(180deg, #1f1830 0%, #14101c 100%);
+  border: 1px solid var(--color-border-warm);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 215, 120, 0.06),
+    inset 0 0 60px rgba(0, 0, 0, 0.55),
+    0 8px 28px rgba(0, 0, 0, 0.45);
   position: relative;
   overflow: hidden;
   min-height: 0;
@@ -785,7 +827,7 @@ const STYLES = `
   inset: 0;
   background: radial-gradient(
     ellipse 80% 60% at 50% 100%,
-    rgba(244, 164, 96, 0.16),
+    rgba(244, 164, 96, 0.22),
     transparent 70%
   );
   pointer-events: none;
@@ -841,13 +883,15 @@ const STYLES = `
 .cell.card {
   cursor: default;
   border: 1px solid var(--color-border-warm);
-  background:
-    linear-gradient(160deg, var(--color-parchment) 0%, var(--color-parchment-shadow) 100%);
-  color: var(--color-text-dark);
+  background: #1c1424;
+  color: #fff5dc;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    0 2px 8px rgba(0, 0, 0, 0.5);
-  overflow: visible;
+    inset 0 1px 0 rgba(255, 232, 168, 0.18),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.45),
+    0 4px 10px rgba(0, 0, 0, 0.55),
+    0 14px 24px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  isolation: isolate;
 }
 
 .cell.is-active {
@@ -857,9 +901,10 @@ const STYLES = `
 .cell.is-active:hover {
   border-color: var(--color-flame-warm);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.48),
-    0 2px 8px rgba(0, 0, 0, 0.5),
-    0 0 16px rgba(244, 164, 96, 0.32);
+    inset 0 1px 0 rgba(255, 232, 168, 0.28),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.45),
+    0 4px 10px rgba(0, 0, 0, 0.55),
+    0 0 18px rgba(244, 164, 96, 0.36);
 }
 
 .cell.is-selected {
@@ -887,9 +932,12 @@ const STYLES = `
 }
 
 .cell.card.is-grouped {
-  background:
-    linear-gradient(135deg, var(--color-parchment) 0%, var(--color-parchment-shadow) 60%, #b9986a 100%);
   border-width: 2px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.28),
+    inset 0 -12px 22px rgba(0, 0, 0, 0.55),
+    0 4px 12px rgba(0, 0, 0, 0.6),
+    0 0 18px rgba(244, 164, 96, 0.18);
 }
 
 .cell.card.type-enemy { border-color: var(--color-enemy); }
@@ -897,30 +945,33 @@ const STYLES = `
   content: '';
   position: absolute;
   left: 0; top: 0; bottom: 0;
-  width: 4px;
-  background: var(--color-enemy);
-  border-top-left-radius: 9px;
-  border-bottom-left-radius: 9px;
+  width: 3px;
+  background: linear-gradient(180deg, var(--color-enemy), #5a1818);
+  z-index: 3;
+  pointer-events: none;
+  box-shadow: 0 0 8px rgba(168, 58, 58, 0.6);
 }
 .cell.card.type-trap { border-color: var(--color-trap); }
 .cell.card.type-trap::before {
   content: '';
   position: absolute;
   left: 0; top: 0; bottom: 0;
-  width: 4px;
-  background: var(--color-trap);
-  border-top-left-radius: 9px;
-  border-bottom-left-radius: 9px;
+  width: 3px;
+  background: linear-gradient(180deg, var(--color-trap), #2c1d44);
+  z-index: 3;
+  pointer-events: none;
+  box-shadow: 0 0 8px rgba(112, 76, 150, 0.55);
 }
 .cell.card.type-treasure { border-color: var(--color-treasure); }
 .cell.card.type-treasure::before {
   content: '';
   position: absolute;
   left: 0; top: 0; bottom: 0;
-  width: 4px;
-  background: var(--color-treasure);
-  border-top-left-radius: 9px;
-  border-bottom-left-radius: 9px;
+  width: 3px;
+  background: linear-gradient(180deg, var(--color-flame), var(--color-treasure));
+  z-index: 3;
+  pointer-events: none;
+  box-shadow: 0 0 8px rgba(255, 215, 120, 0.55);
 }
 
 .cell.card.type-trap.is-grouped[data-span="3"] {
@@ -932,61 +983,111 @@ const STYLES = `
 }
 
 .card-face {
+  position: relative;
   width: 100%;
   height: 100%;
-  display: grid;
-  grid-template-rows: 1fr auto auto;
-  align-items: center;
-  justify-items: center;
-  padding: clamp(4px, 1vh, 8px) clamp(4px, 1vw, 8px);
-  text-align: center;
-  position: relative;
   min-height: 0;
+  overflow: hidden;
+  border-radius: inherit;
 }
 
-.card-icon {
-  font-size: clamp(20px, 4.5vw, 36px);
-  line-height: 1;
-  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.2));
+.card-art {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 32%;
+  background-repeat: no-repeat;
+  z-index: 0;
+  /* Slight desaturation so warm rail tone tints the art uniformly. */
+  filter: saturate(1.05) contrast(1.02);
+}
+
+/* Bottom-anchored dark gradient so card-name + stats stay legible over art. */
+.card-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(20, 16, 28, 0.0) 38%,
+      rgba(20, 16, 28, 0.55) 70%,
+      rgba(10, 7, 18, 0.92) 100%
+    ),
+    radial-gradient(
+      120% 60% at 50% 0%,
+      rgba(244, 164, 96, 0.06),
+      transparent 70%
+    );
+}
+
+.card-content {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  text-align: center;
+  padding: clamp(4px, 1vh, 8px) clamp(4px, 1vw, 8px);
+  gap: 4px;
 }
 
 .card-name {
   font-size: var(--font-size-sm);
-  font-weight: 600;
-  color: var(--color-text-dark);
+  font-weight: 700;
+  color: #fff5dc;
   line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   width: 100%;
   padding: 0 2px;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.85),
+    0 0 6px rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.02em;
 }
 
 .card-stats {
   display: flex;
-  gap: 8px;
-  margin-top: 2px;
+  gap: 10px;
   font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-dark);
+  font-weight: 700;
+  color: #fff5dc;
   flex-wrap: wrap;
   justify-content: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
 }
+.card-stats .stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  line-height: 1;
+}
+.card-stats .stat .icon { font-size: 13px; }
+.card-stats .stat-value { font-variant-numeric: tabular-nums; }
+.card-stats .stat.hp { color: #ffb3a1; }
+.card-stats .stat.atk { color: #ffd58a; }
 .card-stats.danger {
   color: #fff;
   background: var(--color-enemy);
-  padding: 2px 8px;
+  padding: 2px 10px;
   border-radius: 999px;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
+  border: 1px solid rgba(255, 200, 200, 0.45);
+  text-shadow: none;
 }
 .card-stats.good {
   color: #2a1f14;
   background: var(--color-treasure);
-  padding: 2px 8px;
+  padding: 2px 10px;
   border-radius: 999px;
+  border: 1px solid rgba(255, 232, 168, 0.7);
+  text-shadow: none;
 }
-.card-stats .stat.hp { color: #8b1f1f; }
-.card-stats .stat.atk { color: #5a3a14; }
 
 .group-badge {
   position: absolute;
@@ -1046,40 +1147,69 @@ const STYLES = `
 .player-card {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 14px;
+  gap: clamp(10px, 1.5vw, 16px);
   align-items: center;
   padding: clamp(8px, 1.5vh, 12px) clamp(12px, 3vw, 18px);
   width: 100%;
-  max-width: 420px;
+  max-width: 440px;
   background:
-    linear-gradient(135deg, rgba(244, 164, 96, 0.12) 0%, rgba(31, 24, 48, 0.6) 100%);
+    linear-gradient(135deg, rgba(244, 164, 96, 0.14) 0%, rgba(31, 24, 48, 0.7) 100%);
   border: 1px solid var(--color-flame-warm);
-  border-radius: 12px;
+  border-radius: 14px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 215, 120, 0.2),
-    0 0 24px rgba(244, 164, 96, 0.18);
+    inset 0 1px 0 rgba(255, 215, 120, 0.22),
+    0 0 28px rgba(244, 164, 96, 0.2),
+    0 8px 18px rgba(0, 0, 0, 0.45);
 }
 
-.player-icon {
-  font-size: clamp(24px, 4vw, 40px);
-  filter: drop-shadow(0 0 8px rgba(255, 215, 120, 0.6));
-  line-height: 1;
+.player-portrait {
+  position: relative;
+  width: clamp(48px, 9vw, 72px);
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #14101c;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 215, 120, 0.32),
+    0 4px 12px rgba(0, 0, 0, 0.55),
+    0 0 18px rgba(255, 215, 120, 0.25);
+}
+
+.player-portrait-art {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 20%;
+  background-repeat: no-repeat;
+  filter: saturate(1.05) contrast(1.04);
+}
+
+.player-portrait-frame {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 232, 168, 0.55);
+  box-shadow:
+    inset 0 -10px 18px rgba(0, 0, 0, 0.55),
+    inset 0 8px 14px rgba(255, 215, 120, 0.12);
 }
 
 .player-info {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
 }
 
 .player-name {
   font-size: var(--font-size-base);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-flame);
   letter-spacing: 0.03em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-shadow: 0 0 8px rgba(255, 215, 120, 0.25);
 }
 
 .player-stats {
@@ -1091,39 +1221,59 @@ const STYLES = `
 
 .hp-bar {
   position: relative;
-  height: 14px;
-  background: rgba(0, 0, 0, 0.4);
+  height: 16px;
+  background: rgba(0, 0, 0, 0.5);
   border: 1px solid var(--color-border-soft);
   border-radius: 999px;
   overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 .hp-fill {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, var(--color-enemy), #d97a2c);
+  background: linear-gradient(90deg, #c9472a, #f4a460);
   transition: width 0.3s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 215, 120, 0.4);
 }
 .hp-text {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 5px;
   height: 100%;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   color: #fff5dc;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  font-variant-numeric: tabular-nums;
+}
+.hp-text-icon {
+  display: inline-flex;
+  align-items: center;
+  color: #ffd5c5;
+  font-size: 12px;
 }
 
 .atk-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: var(--font-size-sm);
-  font-weight: 600;
-  color: var(--color-flame-warm);
-  padding: 2px 10px;
-  border: 1px solid var(--color-border-soft);
+  font-weight: 700;
+  color: var(--color-flame);
+  padding: 3px 12px;
+  border: 1px solid rgba(255, 215, 120, 0.35);
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.32);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.atk-stat-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-flame);
+  font-size: 13px;
 }
 
 /* ---------- Items / Inventory ---------- */
@@ -1144,15 +1294,34 @@ const STYLES = `
 }
 
 .items-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
   font-style: italic;
 }
+.items-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-flame-warm);
+  font-size: 14px;
+}
 
 .items-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--font-size-sm);
   color: var(--color-flame-warm);
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.items-label-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-flame);
+  font-size: 14px;
 }
 
 .items-list {

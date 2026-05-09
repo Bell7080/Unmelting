@@ -23,6 +23,7 @@ import { DropSystem } from '@systems/DropSystem'
 import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { FontManager } from '@ui/FontManager'
+import { candleIcon } from '@ui/Icons'
 import okDanDanBoldUrl from './assets/fonts/OkDanDanBold.woff2'
 
 console.log('🕯 Unmelting starting...')
@@ -464,7 +465,7 @@ function showGameOver(): void {
   overlay.className = 'game-over-overlay'
   overlay.innerHTML = `
     <div class="game-over-card">
-      <div class="game-over-icon">🕯</div>
+      <div class="game-over-icon">${candleIcon()}</div>
       <h1>${reason}</h1>
       <p>버틴 턴: <strong>${gameState.getCurrentTurn()}</strong></p>
       <button class="primary-btn" id="restart-btn">다시 시작</button>
@@ -536,10 +537,16 @@ globalStyle.textContent = `
     width: 100%;
   }
   .game-over-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-flame);
     font-size: 48px;
+    line-height: 1;
     filter: drop-shadow(0 0 12px rgba(255, 215, 120, 0.5));
     margin-bottom: 8px;
   }
+  .game-over-icon .icon { width: 1em; height: 1em; }
   .game-over-card h1 {
     font-size: var(--font-size-lg);
     color: var(--color-flame);
