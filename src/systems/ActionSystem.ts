@@ -14,6 +14,13 @@ export enum ActionType {
   TAKE_TREASURE = 'take',
 }
 
+const TREASURE_DROPS_BY_SPAN: Record<number, number> = {
+  // Chest reward counts intentionally scale 1/3/5 instead of one item per lane.
+  1: 1,
+  2: 3,
+  3: 5,
+}
+
 export interface ActionResult {
   success: boolean
   message: string
@@ -120,7 +127,7 @@ export class ActionSystem {
 
   /**
    * Open a treasure. Caller removes the card from any lane slots it holds.
-   * A merged treasure yields one item per occupied lane, up to the 3-lane chest.
+   * A merged treasure yields the design reward table: 1/3/5 items for 1/2/3 lanes.
    */
   private static takeTreasure(
     character: Character,
@@ -130,7 +137,9 @@ export class ActionSystem {
     if (card.type !== CardType.TREASURE) {
       return { success: false, message: 'Not a treasure', cardRemoved: false }
     }
-    const drops = Math.max(1, Math.min(3, card.groupCount))
+    const safeSpan = Math.max(1, Math.min(3, card.groupCount))
+    // Clamp unusual group counts before looking up the reward table.
+    const drops = TREASURE_DROPS_BY_SPAN[safeSpan]
     const dropNames: string[] = []
     for (let i = 0; i < drops; i++) {
       const drop = DropSystem.generateDrop()

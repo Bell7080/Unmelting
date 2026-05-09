@@ -29,8 +29,9 @@ const TREASURE_DEFINITIONS: CardDefinition[] = [
 ]
 
 const MIMIC_BY_SPAN: Record<number, { health: number; attack: number; drops: number }> = {
-  1: { health: 1, attack: 1, drops: 1 },
-  2: { health: 5, attack: 3, drops: 3 },
+  // Mimics are riskier than their source chests and pay the requested bonus loot on defeat.
+  1: { health: 4, attack: 2, drops: 2 },
+  2: { health: 10, attack: 5, drops: 5 },
   3: { health: 20, attack: 10, drops: 10 },
 }
 

@@ -138,7 +138,9 @@ export class Card {
 
     if (this.type === CardType.TREASURE) {
       this.name = this.groupCount === 2 ? '적당한 상자' : '큰 상자'
-      this.description = `${Math.min(this.groupCount, 3)} item reward chest`
+      const chestDrops = this.groupCount === 2 ? 3 : 5
+      // Keep grouped chest text aligned with the 1/3/5 reward table.
+      this.description = `${chestDrops} item reward chest`
     }
   }
 
