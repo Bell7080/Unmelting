@@ -12,22 +12,22 @@ export interface ItemDrop {
 export class DropSystem {
   private static readonly ITEM_POOL: ItemDrop[] = [
     {
-      name: '🧪 작은 양초',
+      name: '작은 양초',
       description: '최대 체력 +1 (동시에 1 회복)',
       effect: 'max-health-small',
     },
     {
-      name: '🕯 큰 양초',
+      name: '큰 양초',
       description: '최대 체력 +2 (동시에 2 회복)',
       effect: 'max-health-large',
     },
     {
-      name: '🔥 불꽃 부적',
+      name: '불꽃 부적',
       description: '공격력 영구 +1',
       effect: 'damage-boost',
     },
     {
-      name: '🛡 밀랍 방패',
+      name: '밀랍 방패',
       description: '선택한 함정 파괴',
       effect: 'trap-disarm',
     },
