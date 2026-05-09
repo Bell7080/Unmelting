@@ -1153,29 +1153,26 @@ const STYLES = `
   50%      { box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 0 22px rgba(168,58,58,0.85); }
 }
 
-/* Grouped cards have their own static glow that visually clobbers the
-   default .cell.is-active:hover rule (same specificity, defined later).
-   These hover rules are written with higher specificity so multi-cell
-   cards still light up on hover, matching single-cell card feedback. */
+/* Grouped cards should react exactly like single-cell cards: only the
+   candlelight strength changes on hover, while the type-colored border stays
+   intact because the later type rules keep ownership of border-color. */
 .cell.card.is-active.is-grouped:hover {
-  border-color: var(--color-flame-warm);
   box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.34),
+    inset 0 1px 0 rgba(255, 232, 168, 0.28),
     inset 0 -12px 22px rgba(0, 0, 0, 0.55),
     0 4px 12px rgba(0, 0, 0, 0.6),
-    0 0 26px rgba(244, 164, 96, 0.55);
+    0 0 18px rgba(244, 164, 96, 0.36);
 }
 
-/* The 3-cell trap's danger pulse is a keyframe animation, so a plain
-   hover rule never wins against it. Pause the animation on hover and
-   apply a warm-flame glow that still reads "deadly but selectable". */
-.cell.card.type-trap.is-grouped[data-span="3"]:hover {
+/* The 3-cell trap's danger pulse is a keyframe animation, so hover must pause
+   it before applying the same border-preserving candlelight used elsewhere. */
+.cell.card.type-trap.is-active.is-grouped[data-span="3"]:hover {
   animation: none;
-  border-color: var(--color-flame-warm);
   box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.36),
-    0 0 26px rgba(244, 164, 96, 0.55),
-    0 0 18px rgba(168, 58, 58, 0.55);
+    inset 0 1px 0 rgba(255, 232, 168, 0.28),
+    inset 0 -12px 22px rgba(0, 0, 0, 0.55),
+    0 4px 12px rgba(0, 0, 0, 0.6),
+    0 0 18px rgba(244, 164, 96, 0.36);
 }
 
 .card-face {
