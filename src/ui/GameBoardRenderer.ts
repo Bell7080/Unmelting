@@ -147,7 +147,10 @@ export class GameBoardRenderer {
     return `
       <aside class="score-panel" aria-label="Action score panel">
         <section class="score-panel-total">
-          <div class="score-kicker">종합 점수</div>
+          <div class="score-kicker">
+            <span class="score-kicker-icon">${coinIcon()}</span>
+            종합 점수
+          </div>
           <div class="score-number ${scorePulseClass}" data-score-pulse="${scorePanel.scorePulseKey}">
             ${scorePanel.score.toLocaleString()}
           </div>
@@ -652,9 +655,18 @@ const STYLES = `
 }
 
 .score-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: var(--color-text-muted);
   letter-spacing: 0.1em;
+}
+.score-kicker-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-flame);
+  font-size: 13px;
 }
 
 .score-number {
