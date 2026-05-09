@@ -10,37 +10,37 @@ describe('ActionSystem rewards', () => {
     vi.restoreAllMocks()
   })
 
-  it('drops three items when a two-lane mimic is defeated', () => {
+  it('drops five items when a two-lane mimic is defeated', () => {
     const character = new Character()
     const lane = new Lane('lane-0', 0)
-    const mimic = new Card('mimic-test', CardType.ENEMY, '미믹', 'Was a 2-lane treasure once', 5, 3, {
+    const mimic = new Card('mimic-test', CardType.ENEMY, '미믹', 'Was a 2-lane treasure once', 10, 5, {
       isSpecialEnemy: true,
-      defeatDropCount: 3,
+      defeatDropCount: 5,
     })
     // Give enough damage to defeat the wider mimic in one deterministic strike.
-    character.damage = 5
+    character.damage = 10
     mimic.groupCount = 2
     vi.spyOn(Math, 'random').mockReturnValue(0)
 
     const result = ActionSystem.executeAction(character, lane, mimic, ActionType.ATTACK_ENEMY)
 
     expect(result.cardRemoved).toBe(true)
-    expect(result.itemGained).toContain('3개')
-    expect(character.getItems()).toHaveLength(3)
+    expect(result.itemGained).toContain('5개')
+    expect(character.getItems()).toHaveLength(5)
   })
 
-  it('drops three items from a three-lane treasure chest', () => {
+  it('drops five items from a three-lane treasure chest', () => {
     const character = new Character()
     const lane = new Lane('lane-0', 0)
     const treasure = new Card('treasure-test', CardType.TREASURE, '큰 상자', '3 item reward chest')
-    // Treasure rewards are based on the occupied lane count and capped at three.
+    // Treasure rewards follow the configured 1/3/5 reward table.
     treasure.groupCount = 3
     vi.spyOn(Math, 'random').mockReturnValue(0)
 
     const result = ActionSystem.executeAction(character, lane, treasure, ActionType.TAKE_TREASURE)
 
     expect(result.cardRemoved).toBe(true)
-    expect(result.itemGained).toContain('3개')
-    expect(character.getItems()).toHaveLength(3)
+    expect(result.itemGained).toContain('5개')
+    expect(character.getItems()).toHaveLength(5)
   })
 })

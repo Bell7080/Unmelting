@@ -1054,11 +1054,15 @@ const STYLES = `
   border: 1px solid var(--color-border-warm);
   background: #1c1424;
   color: #fff5dc;
+  /* Shared depth tokens keep the soft rear shadow identical for 1/2/3-cell cards. */
+  --card-depth-shadow: 0 14px 24px rgba(0, 0, 0, 0.45);
+  --card-lift-shadow: 0 4px 10px rgba(0, 0, 0, 0.55);
+  --card-lift-shadow-grouped: var(--card-lift-shadow);
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.18),
     inset 0 -10px 18px rgba(0, 0, 0, 0.45),
-    0 4px 10px rgba(0, 0, 0, 0.55),
-    0 14px 24px rgba(0, 0, 0, 0.45);
+    var(--card-lift-shadow),
+    var(--card-depth-shadow);
   /* Sprite art is clipped by .card-face below — keep cell visible so the
      ×N group badge can poke out of the canvas edge. */
   overflow: visible;
@@ -1074,7 +1078,8 @@ const STYLES = `
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.28),
     inset 0 -10px 18px rgba(0, 0, 0, 0.45),
-    0 4px 10px rgba(0, 0, 0, 0.55),
+    var(--card-lift-shadow),
+    var(--card-depth-shadow),
     0 0 18px rgba(244, 164, 96, 0.36);
 }
 
@@ -1107,7 +1112,8 @@ const STYLES = `
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.28),
     inset 0 -12px 22px rgba(0, 0, 0, 0.55),
-    0 4px 12px rgba(0, 0, 0, 0.6),
+    var(--card-lift-shadow-grouped),
+    var(--card-depth-shadow),
     0 0 18px rgba(244, 164, 96, 0.18);
 }
 
@@ -1149,8 +1155,8 @@ const STYLES = `
   animation: trap-danger 1.2s ease-in-out infinite;
 }
 @keyframes trap-danger {
-  0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 0 12px rgba(168,58,58,0.4); }
-  50%      { box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 0 22px rgba(168,58,58,0.85); }
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), var(--card-lift-shadow-grouped), var(--card-depth-shadow), 0 0 12px rgba(168,58,58,0.4); }
+  50%      { box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), var(--card-lift-shadow-grouped), var(--card-depth-shadow), 0 0 22px rgba(168,58,58,0.85); }
 }
 
 /* Grouped cards should react exactly like single-cell cards: only the
@@ -1160,7 +1166,8 @@ const STYLES = `
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.28),
     inset 0 -12px 22px rgba(0, 0, 0, 0.55),
-    0 4px 12px rgba(0, 0, 0, 0.6),
+    var(--card-lift-shadow-grouped),
+    var(--card-depth-shadow),
     0 0 18px rgba(244, 164, 96, 0.36);
 }
 
@@ -1171,8 +1178,37 @@ const STYLES = `
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.28),
     inset 0 -12px 22px rgba(0, 0, 0, 0.55),
-    0 4px 12px rgba(0, 0, 0, 0.6),
+    var(--card-lift-shadow-grouped),
+    var(--card-depth-shadow),
     0 0 18px rgba(244, 164, 96, 0.36);
+}
+
+/* Grouped selected cards previously lost the single-cell selection glow because
+   the grouped shadow rule had higher specificity; this restores parity while
+   retaining the shared rear depth shadow. */
+.cell.card.is-grouped.is-selected {
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 215, 120, 0.6),
+    0 0 22px rgba(255, 215, 120, 0.55),
+    var(--card-lift-shadow-grouped),
+    var(--card-depth-shadow);
+  animation: grouped-candle-glow 1.6s ease-in-out infinite alternate;
+}
+@keyframes grouped-candle-glow {
+  from {
+    box-shadow:
+      inset 0 0 0 2px rgba(255, 215, 120, 0.55),
+      0 0 18px rgba(255, 215, 120, 0.5),
+      var(--card-lift-shadow-grouped),
+      var(--card-depth-shadow);
+  }
+  to {
+    box-shadow:
+      inset 0 0 0 2px rgba(255, 215, 120, 0.85),
+      0 0 28px rgba(255, 215, 120, 0.75),
+      var(--card-lift-shadow-grouped),
+      var(--card-depth-shadow);
+  }
 }
 
 .card-face {
