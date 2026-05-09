@@ -23,6 +23,8 @@ import { DropSystem } from '@systems/DropSystem'
 import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { FontManager } from '@ui/FontManager'
+import { candleIcon } from '@ui/Icons'
+import { SpriteUrls } from '@ui/Sprites'
 import okDanDanBoldUrl from './assets/fonts/OkDanDanBold.woff2'
 
 console.log('🕯 Unmelting starting...')
@@ -40,6 +42,17 @@ FontManager.loadCustomFont({
   weight: '100 900',
 })
 FontManager.setPrimaryFamily(`'OkDanDan', 'Georgia', 'Times New Roman', serif`)
+
+// Use the illustrated stage as the global page backdrop, with a warm vignette
+// on top so the rail (translucent dark slab) still has separation from it.
+document.body.style.backgroundImage =
+  `linear-gradient(180deg, rgba(20, 16, 28, 0.55), rgba(8, 5, 14, 0.86)),` +
+  `radial-gradient(ellipse at top, rgba(244, 164, 96, 0.18), transparent 65%),` +
+  `url('${SpriteUrls.background}')`
+document.body.style.backgroundSize = 'cover, cover, cover'
+document.body.style.backgroundPosition = 'center, center top, center'
+document.body.style.backgroundRepeat = 'no-repeat'
+document.body.style.backgroundAttachment = 'fixed'
 
 const gameState = new GameState()
 const turnManager = new TurnManager(gameState)
@@ -270,13 +283,12 @@ function handleItemAction(itemIndex: number): void {
   }
 
   // Wax shield is a targeting mode: click again to cancel, or pick a trap to destroy.
+  // Selecting/cancelling does not award score — points only land on actual disarm,
+  // otherwise toggling on/off would farm score infinitely.
   if (item.effect === 'trap-disarm') {
     pendingTrapDisarmItemIndex =
       pendingTrapDisarmItemIndex === itemIndex ? null : itemIndex
     boardRenderer.setTrapDisarmMode(pendingTrapDisarmItemIndex)
-    if (pendingTrapDisarmItemIndex !== null) {
-      recordScore('밀랍 방패 준비', 8, 'item')
-    }
     showToast(
       pendingTrapDisarmItemIndex === null
         ? '밀랍 방패 선택 취소'
@@ -464,7 +476,7 @@ function showGameOver(): void {
   overlay.className = 'game-over-overlay'
   overlay.innerHTML = `
     <div class="game-over-card">
-      <div class="game-over-icon">🕯</div>
+      <div class="game-over-icon">${candleIcon()}</div>
       <h1>${reason}</h1>
       <p>버틴 턴: <strong>${gameState.getCurrentTurn()}</strong></p>
       <button class="primary-btn" id="restart-btn">다시 시작</button>
@@ -536,10 +548,16 @@ globalStyle.textContent = `
     width: 100%;
   }
   .game-over-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-flame);
     font-size: 48px;
+    line-height: 1;
     filter: drop-shadow(0 0 12px rgba(255, 215, 120, 0.5));
     margin-bottom: 8px;
   }
+  .game-over-icon .icon { width: 1em; height: 1em; }
   .game-over-card h1 {
     font-size: var(--font-size-lg);
     color: var(--color-flame);
