@@ -11,7 +11,12 @@
 
 import { GameState } from '@core/GameState'
 import { TurnManager } from '@core/TurnManager'
-import { GameBoardRenderer, CardActionDetail, ItemActionDetail } from '@ui/GameBoardRenderer'
+import {
+  GameBoardRenderer,
+  CardActionDetail,
+  ItemActionDetail,
+  ActivityLogEntry,
+} from '@ui/GameBoardRenderer'
 import { CardSpawner } from '@systems/CardSpawner'
 import { ActionSystem, ActionType } from '@systems/ActionSystem'
 import { DropSystem } from '@systems/DropSystem'
@@ -45,12 +50,85 @@ let gameActive = true
 let inputLocked = false
 let pendingTrapDisarmItemIndex: number | null = null
 
+const SCORE_SPEND_COST = 250
+const MAX_ACTIVITY_LOGS = 18
+let score = 0
+let scorePulseKey = 0
+let nextActivityLogId = 1
+let activityLogs: ActivityLogEntry[] = []
+
+function getTurnScoreMultiplier(): number {
+  // Later turns are riskier, so the same action becomes more valuable over time.
+  return 1 + gameState.getCurrentTurn() * 0.08
+}
+
+function scoreForCardAction(
+  card: Card,
+  result: { cardRemoved: boolean },
+): number {
+  if (!result.cardRemoved) return 12
+  if (card.type === CardType.ENEMY) {
+    if (card.isSpecialEnemy)
+      return 100 + card.groupCount * 80 + card.defeatDropCount * 25
+    if (card.groupCount >= 3) return 450
+    if (card.groupCount === 2) return 220
+    return 80
+  }
+  if (card.type === CardType.TRAP) {
+    if (card.groupCount >= 3) return 420
+    if (card.groupCount === 2) return 140
+    return 55
+  }
+  if (card.type === CardType.TREASURE)
+    return 55 * Math.max(1, Math.min(3, card.groupCount))
+  return 10
+}
+
+function activityKindForCard(card: Card): ActivityLogEntry['kind'] {
+  if (card.type === CardType.ENEMY) return 'enemy'
+  if (card.type === CardType.TRAP) return 'trap'
+  return 'treasure'
+}
+
+function recordScore(
+  label: string,
+  baseValue: number,
+  kind: ActivityLogEntry['kind'],
+): number {
+  const amount = Math.max(1, Math.round(baseValue * getTurnScoreMultiplier()))
+  score += amount
+  scorePulseKey++
+  activityLogs = [
+    { id: nextActivityLogId++, label, scoreDelta: amount, kind },
+    ...activityLogs,
+  ].slice(0, MAX_ACTIVITY_LOGS)
+  return amount
+}
+
+function recordScoreSpend(label: string, spent: number): void {
+  score = Math.max(0, score - spent)
+  scorePulseKey++
+  activityLogs = [
+    {
+      id: nextActivityLogId++,
+      label,
+      scoreDelta: -spent,
+      kind: 'score' as const,
+    },
+    ...activityLogs,
+  ].slice(0, MAX_ACTIVITY_LOGS)
+}
+
 function actionTypeFor(cardType: CardType): ActionType | null {
   switch (cardType) {
-    case CardType.ENEMY: return ActionType.ATTACK_ENEMY
-    case CardType.TRAP: return ActionType.EVADE_TRAP
-    case CardType.TREASURE: return ActionType.TAKE_TREASURE
-    default: return null
+    case CardType.ENEMY:
+      return ActionType.ATTACK_ENEMY
+    case CardType.TRAP:
+      return ActionType.EVADE_TRAP
+    case CardType.TREASURE:
+      return ActionType.TAKE_TREASURE
+    default:
+      return null
   }
 }
 
@@ -101,6 +179,10 @@ function startGame(): void {
   gameActive = true
   inputLocked = false
   gameState.reset()
+  score = 0
+  scorePulseKey = 0
+  nextActivityLogId = 1
+  activityLogs = []
   grantStarterItems()
   fillBoardAtStart()
   pendingTrapDisarmItemIndex = null
@@ -110,7 +192,13 @@ function startGame(): void {
 }
 
 function render(): void {
-  boardRenderer.render(gameState)
+  boardRenderer.render(gameState, {
+    score,
+    logs: activityLogs,
+    canSpend: score >= SCORE_SPEND_COST,
+    spendCost: SCORE_SPEND_COST,
+    scorePulseKey,
+  })
 }
 
 /** Pause turn resolution so CSS/Web Animations can read as intentional beats. */
@@ -120,7 +208,7 @@ function wait(ms: number): Promise<void> {
 
 function showToast(
   message: string,
-  kind: 'info' | 'win' | 'hurt' = 'info'
+  kind: 'info' | 'win' | 'hurt' = 'info',
 ): void {
   const host = document.getElementById('toast-host')
   if (!host) return
@@ -143,6 +231,31 @@ document.addEventListener('itemAction', (e: Event) => {
   handleItemAction((e as CustomEvent<ItemActionDetail>).detail.itemIndex)
 })
 
+document.addEventListener('scoreSpend', () => {
+  handleScoreSpend()
+})
+
+/** Convert banked score into random item drops without spending the current turn. */
+function handleScoreSpend(): void {
+  if (!gameActive || inputLocked || score < SCORE_SPEND_COST) return
+
+  const itemCount = Math.max(
+    1,
+    Math.min(5, Math.floor(score / SCORE_SPEND_COST)),
+  )
+  const spent = itemCount * SCORE_SPEND_COST
+  const gainedItems: string[] = []
+  for (let i = 0; i < itemCount; i++) {
+    const drop = DropSystem.generateDrop()
+    gameState.character.addItem(drop.name)
+    gainedItems.push(drop.name)
+  }
+
+  recordScoreSpend(`점수 변환: 아이템 ${itemCount}개`, spent)
+  showToast(`점수 ${spent} 사용: ${gainedItems.join(', ')}`, 'win')
+  render()
+}
+
 /** Apply a hand item or arm a targeted item mode without spending a turn. */
 function handleItemAction(itemIndex: number): void {
   if (!gameActive || inputLocked) return
@@ -158,11 +271,17 @@ function handleItemAction(itemIndex: number): void {
 
   // Wax shield is a targeting mode: click again to cancel, or pick a trap to destroy.
   if (item.effect === 'trap-disarm') {
-    pendingTrapDisarmItemIndex = pendingTrapDisarmItemIndex === itemIndex ? null : itemIndex
+    pendingTrapDisarmItemIndex =
+      pendingTrapDisarmItemIndex === itemIndex ? null : itemIndex
     boardRenderer.setTrapDisarmMode(pendingTrapDisarmItemIndex)
+    if (pendingTrapDisarmItemIndex !== null) {
+      recordScore('밀랍 방패 준비', 8, 'item')
+    }
     showToast(
-      pendingTrapDisarmItemIndex === null ? '밀랍 방패 선택 취소' : '밀랍 방패: 파괴할 함정을 선택',
-      pendingTrapDisarmItemIndex === null ? 'info' : 'hurt'
+      pendingTrapDisarmItemIndex === null
+        ? '밀랍 방패 선택 취소'
+        : '밀랍 방패: 파괴할 함정을 선택',
+      pendingTrapDisarmItemIndex === null ? 'info' : 'hurt',
     )
     render()
     return
@@ -175,9 +294,10 @@ function handleItemAction(itemIndex: number): void {
   const removedItemName = gameState.character.removeItem(itemIndex)
   if (!removedItemName) return
   DropSystem.applyItem(item, (effect, value = 0) => {
-    if (effect === 'heal') gameState.character.heal(value)
+    if (effect === 'max-health') gameState.character.increaseMaxHealth(value)
     if (effect === 'damage-boost') gameState.character.applyDamageBoost()
   })
+  recordScore(`아이템 사용: ${item.name}`, 35, 'item')
   showToast(`${item.name} 사용: ${item.description}`, 'win')
   render()
 }
@@ -200,7 +320,9 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
 /** Destroy a trap with a selected wax shield, then run cleanup without play events. */
 async function handleTrapDisarm(distance: number, card: Card): Promise<void> {
   inputLocked = true
-  const itemName = gameState.character.removeItem(pendingTrapDisarmItemIndex ?? -1)
+  const itemName = gameState.character.removeItem(
+    pendingTrapDisarmItemIndex ?? -1,
+  )
   pendingTrapDisarmItemIndex = null
   boardRenderer.setTrapDisarmMode(null)
   if (!itemName) {
@@ -211,6 +333,11 @@ async function handleTrapDisarm(distance: number, card: Card): Promise<void> {
 
   gameState.removeCardFromRow(card, distance)
   boardRenderer.clearSelection()
+  recordScore(
+    `함정 제거: ${card.name}`,
+    120 * Math.max(1, card.groupCount),
+    'trap',
+  )
   showToast(`${itemName}: ${card.name} 파괴`, 'win')
   await runCleanupPhase(false)
 
@@ -225,7 +352,8 @@ async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
   const hits = turnManager.runEnemyPhase()
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
   const eventAnimations: Promise<void>[] = []
-  if (hits.length > 0) eventAnimations.push(boardRenderer.animateEnemyAttacks(hits))
+  if (hits.length > 0)
+    eventAnimations.push(boardRenderer.animateEnemyAttacks(hits))
   if (treasureChanges.length > 0) {
     eventAnimations.push(boardRenderer.animateTreasureChanges(treasureChanges))
   }
@@ -287,8 +415,15 @@ async function handleCardAction(e: Event): Promise<void> {
     gameState.getCharacter(),
     lane,
     card,
-    actionType
+    actionType,
   )
+  if (result.success) {
+    recordScore(
+      `${card.name} 선택`,
+      scoreForCardAction(card, result),
+      activityKindForCard(card),
+    )
+  }
   showToast(result.message, result.damageTaken ? 'hurt' : 'info')
   if (result.damageTaken && result.damageTaken > 0) {
     await boardRenderer.animateDamageFlash()
@@ -319,9 +454,11 @@ function finishTurn(): void {
 
 function showGameOver(): void {
   const reason =
-    gameState.gameOverReason === 'character_defeated' ? '소녀의 심지가 꺼졌어요…' :
-    gameState.gameOverReason === 'instant_death_trap' ? '모든 길이 함정으로 막혔어요.' :
-    '게임 종료'
+    gameState.gameOverReason === 'character_defeated'
+      ? '소녀의 심지가 꺼졌어요…'
+      : gameState.gameOverReason === 'instant_death_trap'
+        ? '모든 길이 함정으로 막혔어요.'
+        : '게임 종료'
 
   const overlay = document.createElement('div')
   overlay.className = 'game-over-overlay'

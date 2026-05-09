@@ -48,33 +48,6 @@ export class GameState {
     this.character.nextTurn()
   }
 
-  // Advance cards across all lanes
-  advanceAllCards(): Card[] {
-    const collidingCards: Card[] = []
-
-    for (const lane of this.lanes) {
-      const collidingCard = lane.advanceCards()
-      if (collidingCard) {
-        collidingCards.push(collidingCard)
-      }
-    }
-
-    return collidingCards
-  }
-
-  // Find a card's location
-  findCard(cardId: string): { lane: Lane; distance: number } | null {
-    for (const lane of this.lanes) {
-      for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
-        const card = lane.getCardAtDistance(distance)
-        if (card?.id === cardId) {
-          return { lane, distance }
-        }
-      }
-    }
-    return null
-  }
-
   /**
    * Lanes whose slot at the given row holds the same Card instance.
    * (Adjacent same-type cards merge by sharing one Card object.)

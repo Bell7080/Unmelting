@@ -120,7 +120,7 @@ export class ActionSystem {
 
   /**
    * Open a treasure. Caller removes the card from any lane slots it holds.
-   * A merged treasure (groupCount > 1) yields more drops.
+   * A merged treasure yields one item per occupied lane, up to the 3-lane chest.
    */
   private static takeTreasure(
     character: Character,
@@ -130,7 +130,7 @@ export class ActionSystem {
     if (card.type !== CardType.TREASURE) {
       return { success: false, message: 'Not a treasure', cardRemoved: false }
     }
-    const drops = card.groupCount === 1 ? 1 : card.groupCount === 2 ? 2 : 4
+    const drops = Math.max(1, Math.min(3, card.groupCount))
     const dropNames: string[] = []
     for (let i = 0; i < drops; i++) {
       const drop = DropSystem.generateDrop()

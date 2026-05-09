@@ -1,22 +1,43 @@
 /**
- * CardSpawner - Generates random cards for each turn
- * MVP: 3 card types with simple naming
+ * CardSpawner - Generates random cards from the current base card set.
  */
 
 import { Card, CardType } from '@entities/Card'
 
-const ENEMY_NAMES = ['잉크 늑대', '양초 토끼', '검은 까마귀', '밀랍 사슴', '길 잃은 아이', '그림자']
+interface CardDefinition {
+  /** Korean display name shown on the card face. */
+  name: string
+  /** Short English description used internally and in debug-friendly text. */
+  description: string
+  /** Enemy HP or trap damage, depending on card type. */
+  healthOrDamage?: number
+  /** Enemy attack value. */
+  attack?: number
+}
 
-const TRAP_NAMES = ['검은 비', '꺼진 등불', '진흙길', '찢긴 길', '꺼져가는 불꽃']
+const ENEMY_DEFINITIONS: CardDefinition[] = [
+  { name: '양초 생쥐', description: 'Small candle mouse', healthOrDamage: 2, attack: 1 },
+  { name: '양초 개구리', description: 'Leaping candle frog', healthOrDamage: 1, attack: 2 },
+]
 
-const TREASURE_NAMES = ['보물상자', '빛나는 상자', '황금 함', '낡은 보석함']
+const TRAP_DEFINITIONS: CardDefinition[] = [
+  { name: '양초 거미줄', description: 'Deals 2 damage', healthOrDamage: 2 },
+]
+
+const TREASURE_DEFINITIONS: CardDefinition[] = [
+  { name: '작은 상자', description: '1 item reward chest' },
+]
+
+const MIMIC_BY_SPAN: Record<number, { health: number; attack: number; drops: number }> = {
+  1: { health: 1, attack: 1, drops: 1 },
+  2: { health: 5, attack: 3, drops: 3 },
+  3: { health: 20, attack: 10, drops: 10 },
+}
 
 export class CardSpawner {
   private turnCount: number = 0
 
-  /**
-   * Spawn cards for this turn (one per lane)
-   */
+  /** Spawn one random card per lane for the current turn refill. */
   spawnCardsForTurn(): Card[] {
     this.turnCount++
     const cards: Card[] = []
@@ -28,9 +49,7 @@ export class CardSpawner {
     return cards
   }
 
-  /**
-   * Generate a single random card
-   */
+  /** Generate a random enemy, trap, or treasure using the current spawn weights. */
   private generateRandomCard(): Card {
     const cardTypeRoll = Math.random()
 
@@ -43,54 +62,65 @@ export class CardSpawner {
     }
   }
 
+  /** Pick one of the current one-lane enemies. */
   private generateEnemy(): Card {
-    const name = ENEMY_NAMES[Math.floor(Math.random() * ENEMY_NAMES.length)]
-    const baseHealth = 1 + Math.floor(Math.random() * 3) // 1-3 health
-    const baseDamage = 1 // Fixed damage of 1
-
+    const definition = ENEMY_DEFINITIONS[Math.floor(Math.random() * ENEMY_DEFINITIONS.length)]
     return new Card(
       `enemy-${this.turnCount}-${Math.random()}`,
       CardType.ENEMY,
-      name,
-      'Attacks the player',
-      baseHealth,
-      baseDamage
+      definition.name,
+      definition.description,
+      definition.healthOrDamage ?? 1,
+      definition.attack ?? 1
     )
   }
 
+  /** Spawn the current one-lane trap; wider traps are produced by row grouping. */
   private generateTrap(): Card {
-    const name = TRAP_NAMES[Math.floor(Math.random() * TRAP_NAMES.length)]
+    const definition = TRAP_DEFINITIONS[Math.floor(Math.random() * TRAP_DEFINITIONS.length)]
     return new Card(
       `trap-${this.turnCount}-${Math.random()}`,
       CardType.TRAP,
-      name,
-      'Blocks the lane'
+      definition.name,
+      definition.description,
+      0,
+      definition.healthOrDamage ?? 2
     )
   }
 
+  /** Spawn the current one-lane chest; wider chests are produced by row grouping. */
   private generateTreasure(): Card {
-    const name = TREASURE_NAMES[Math.floor(Math.random() * TREASURE_NAMES.length)]
+    const definition = TREASURE_DEFINITIONS[Math.floor(Math.random() * TREASURE_DEFINITIONS.length)]
     return new Card(
       `treasure-${this.turnCount}-${Math.random()}`,
       CardType.TREASURE,
-      name,
-      'Provides rewards'
+      definition.name,
+      definition.description
     )
   }
 
-  /** Mimic: treasure event enemy with fixed 1 HP and 1 attack. */
-  spawnMimic(): Card {
-    return new Card(
+  /**
+   * Mimic: treasure event enemy whose stats and rewards mirror the chest width.
+   * The 3-lane case is implemented even though normal play almost never creates it.
+   */
+  spawnMimic(span: number = 1): Card {
+    const safeSpan = Math.max(1, Math.min(3, span))
+    const stats = MIMIC_BY_SPAN[safeSpan]
+    const mimic = new Card(
       `mimic-${this.turnCount}-${Math.random()}`,
       CardType.ENEMY,
       '미믹',
-      'Was a treasure once',
-      1,
-      1,
+      `Was a ${safeSpan}-lane treasure once`,
+      stats.health,
+      stats.attack,
       {
         isSpecialEnemy: true,
-        defeatDropCount: 3,
+        defeatDropCount: stats.drops,
       }
     )
+
+    // Special mimics do not merge, so their width is assigned directly from the source chest.
+    mimic.groupCount = safeSpan
+    return mimic
   }
 }

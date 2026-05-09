@@ -53,6 +53,26 @@ describe('TurnManager treasure volatility', () => {
     expect(mimic?.getHealth()).toBe(1)
     expect(mimic?.getDamage()).toBe(1)
     expect(mimic?.isSpecialEnemy).toBe(true)
+    expect(mimic?.defeatDropCount).toBe(1)
+  })
+
+  it('preserves a two-lane chest width when it turns into a mimic', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const left = new Card('treasure-left', CardType.TREASURE, '작은 상자', 'test')
+    const right = new Card('treasure-right', CardType.TREASURE, '작은 상자', 'test')
+    gameState.lanes[0].setCardAtDistance(0, left)
+    gameState.lanes[1].setCardAtDistance(0, right)
+    gameState.regroupAllRows()
+    vi.spyOn(Math, 'random').mockReturnValue(0.35)
+
+    turnManager.applyTreasureVolatility(new CardSpawner())
+    const mimic = gameState.lanes[0].getCardAtDistance(0)
+
+    expect(mimic).toBe(gameState.lanes[1].getCardAtDistance(0))
+    expect(mimic?.groupCount).toBe(2)
+    expect(mimic?.getHealth()).toBe(5)
+    expect(mimic?.getDamage()).toBe(3)
     expect(mimic?.defeatDropCount).toBe(3)
   })
 
