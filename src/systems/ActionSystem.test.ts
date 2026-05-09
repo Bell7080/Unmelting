@@ -26,6 +26,7 @@ describe('ActionSystem rewards', () => {
 
     expect(result.cardRemoved).toBe(true)
     expect(result.itemGained).toContain('5개')
+    expect(result.itemGainedNames).toHaveLength(5)
     expect(character.getItems()).toHaveLength(5)
   })
 
@@ -41,6 +42,7 @@ describe('ActionSystem rewards', () => {
 
     expect(result.cardRemoved).toBe(true)
     expect(result.itemGained).toContain('5개')
+    expect(result.itemGainedNames).toHaveLength(5)
     expect(character.getItems()).toHaveLength(5)
   })
 })

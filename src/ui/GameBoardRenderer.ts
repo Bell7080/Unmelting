@@ -47,8 +47,19 @@ export interface ItemActionDetail {
 export interface ActivityLogEntry {
   id: number
   label: string
-  scoreDelta: number
-  kind: 'enemy' | 'treasure' | 'trap' | 'item' | 'score'
+  scoreDelta?: number
+  itemCount?: number
+  badge?: string
+  kind:
+    | 'enemy'
+    | 'treasure'
+    | 'trap'
+    | 'item'
+    | 'item-gain'
+    | 'score'
+    | 'notice'
+    | 'win'
+    | 'hurt'
 }
 
 export interface ScorePanelState {
@@ -137,14 +148,24 @@ export class GameBoardRenderer {
     const logs =
       scorePanel.logs.length > 0
         ? scorePanel.logs
-            .map(
-              (log) => `
+            .map((log) => {
+              // Score rows keep the old +/- number, while item rows use a
+              // compact acquisition count in the same right-side badge slot.
+              const deltaText =
+                typeof log.scoreDelta === 'number'
+                  ? `${log.scoreDelta >= 0 ? '+' : ''}${log.scoreDelta}`
+                  : log.itemCount && log.itemCount > 1
+                    ? `${log.itemCount}개`
+                    : log.badge
+                      ? log.badge
+                      : '획득'
+              return `
           <div class="score-log score-log-${log.kind}">
             <span class="score-log-label">${log.label}</span>
-            <span class="score-log-delta">${log.scoreDelta >= 0 ? '+' : ''}${log.scoreDelta}</span>
+            <span class="score-log-delta">${deltaText}</span>
           </div>
-        `,
-            )
+        `
+            })
             .join('')
         : '<div class="score-log-empty">아직 기록된 행동이 없어</div>'
     const spendDisabled = scorePanel.canSpend ? '' : 'disabled'
@@ -349,18 +370,6 @@ export class GameBoardRenderer {
     `
   }
 
-  /**
-   * Item display order — small candle → large candle → flame → wax shield.
-   * The wax shield is intentionally pinned last so a player who collected many
-   * boosts can mash the row left-to-right without their disarm slot moving.
-   */
-  private static readonly HAND_ORDER: Record<string, number> = {
-    'max-health-small': 0,
-    'max-health-large': 1,
-    'damage-boost': 2,
-    'trap-disarm': 3,
-  }
-
   private iconForItemEffect(effect: string): string {
     switch (effect) {
       case 'max-health-small':
@@ -404,10 +413,9 @@ export class GameBoardRenderer {
     const indexed = items
       .map((name, index) => ({ name, index }))
       .sort((a, b) => {
-        const ea = DropSystem.getItemByName(a.name)?.effect ?? ''
-        const eb = DropSystem.getItemByName(b.name)?.effect ?? ''
-        const oa = GameBoardRenderer.HAND_ORDER[ea] ?? 99
-        const ob = GameBoardRenderer.HAND_ORDER[eb] ?? 99
+        // Use DropSystem's shared rank so hand order and item log order cannot drift.
+        const oa = DropSystem.getHandSortRank(a.name)
+        const ob = DropSystem.getHandSortRank(b.name)
         if (oa !== ob) return oa - ob
         return a.index - b.index
       })
@@ -933,7 +941,15 @@ const STYLES = `
 .score-log-treasure { box-shadow: inset 3px 0 0 rgba(201, 161, 58, 0.8); }
 .score-log-trap { box-shadow: inset 3px 0 0 rgba(112, 76, 150, 0.8); }
 .score-log-item { box-shadow: inset 3px 0 0 rgba(244, 164, 96, 0.72); }
+.score-log-item-gain { box-shadow: inset 3px 0 0 rgba(103, 196, 152, 0.82); }
+.score-log-item-gain .score-log-delta { color: #bff6d9; }
 .score-log-score { box-shadow: inset 3px 0 0 rgba(255, 215, 120, 0.8); }
+.score-log-notice { box-shadow: inset 3px 0 0 rgba(145, 174, 210, 0.75); }
+.score-log-win { box-shadow: inset 3px 0 0 rgba(103, 196, 152, 0.82); }
+.score-log-hurt { box-shadow: inset 3px 0 0 rgba(168, 58, 58, 0.82); }
+.score-log-notice .score-log-delta { color: #cbdaf0; }
+.score-log-win .score-log-delta { color: #bff6d9; }
+.score-log-hurt .score-log-delta { color: #ffd5c5; }
 
 .score-log-empty {
   padding: 14px 10px;

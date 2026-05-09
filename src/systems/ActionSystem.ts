@@ -27,6 +27,7 @@ export interface ActionResult {
   damageDealt?: number
   damageTaken?: number
   itemGained?: string
+  itemGainedNames?: string[]
   cardRemoved: boolean
 }
 
@@ -89,6 +90,7 @@ export class ActionSystem {
         message: `${card.name} 처치! ${summary} 획득`,
         damageDealt: playerDamage,
         itemGained: summary,
+        itemGainedNames: dropNames,
         cardRemoved: true,
       }
     }
@@ -151,6 +153,7 @@ export class ActionSystem {
       success: true,
       message: `${card.name} 획득: ${summary}`,
       itemGained: summary,
+      itemGainedNames: dropNames,
       cardRemoved: true,
     }
   }
