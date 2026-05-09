@@ -32,7 +32,6 @@ console.log('🕯 Unmelting starting...')
 const app = document.getElementById('app')!
 app.innerHTML = `
   <div id="game-board"></div>
-  <div id="toast-host"></div>
 `
 
 FontManager.initializeDefaults()
@@ -70,6 +69,43 @@ let scorePulseKey = 0
 let nextActivityLogId = 1
 let activityLogs: ActivityLogEntry[] = []
 
+type ActivityLogDraft = Omit<ActivityLogEntry, 'id'>
+
+/**
+ * Add one or more log rows exactly in the order they should be read from the
+ * top of the left log panel, then trim old history to the retained cap.
+ */
+function pushActivityLogsInDisplayOrder(logs: ActivityLogDraft[]): void {
+  if (logs.length === 0) return
+  const stampedLogs = logs.map((log) => ({
+    id: nextActivityLogId++,
+    ...log,
+  }))
+  activityLogs = [...stampedLogs, ...activityLogs].slice(0, MAX_ACTIVITY_LOGS)
+}
+
+/** Sort newly earned item names to match the hand's left-to-right order. */
+function sortItemNamesForLog(itemNames: string[]): string[] {
+  return itemNames
+    .map((name, index) => ({ name, index }))
+    .sort((a, b) => {
+      const rankDelta =
+        DropSystem.getHandSortRank(a.name) - DropSystem.getHandSortRank(b.name)
+      if (rankDelta !== 0) return rankDelta
+      return a.index - b.index
+    })
+    .map(({ name }) => name)
+}
+
+/** Build item acquisition rows using the score log shape with item copy/counts. */
+function createItemGainLogs(itemNames: string[]): ActivityLogDraft[] {
+  return sortItemNamesForLog(itemNames).map((name) => ({
+    label: `아이템 획득: ${name}`,
+    itemCount: 1,
+    kind: 'item-gain',
+  }))
+}
+
 function getTurnScoreMultiplier(): number {
   // Later turns are riskier, so the same action becomes more valuable over time.
   return 1 + gameState.getCurrentTurn() * 0.08
@@ -103,33 +139,35 @@ function activityKindForCard(card: Card): ActivityLogEntry['kind'] {
   return 'treasure'
 }
 
+function createScoreLog(
+  label: string,
+  baseValue: number,
+  kind: ActivityLogEntry['kind'],
+): ActivityLogDraft {
+  const amount = Math.max(1, Math.round(baseValue * getTurnScoreMultiplier()))
+  score += amount
+  scorePulseKey++
+  return { label, scoreDelta: amount, kind }
+}
+
 function recordScore(
   label: string,
   baseValue: number,
   kind: ActivityLogEntry['kind'],
 ): number {
-  const amount = Math.max(1, Math.round(baseValue * getTurnScoreMultiplier()))
-  score += amount
-  scorePulseKey++
-  activityLogs = [
-    { id: nextActivityLogId++, label, scoreDelta: amount, kind },
-    ...activityLogs,
-  ].slice(0, MAX_ACTIVITY_LOGS)
-  return amount
+  const log = createScoreLog(label, baseValue, kind)
+  pushActivityLogsInDisplayOrder([log])
+  return log.scoreDelta ?? 0
 }
 
-function recordScoreSpend(label: string, spent: number): void {
+function recordScoreSpend(label: string, spent: number): ActivityLogDraft {
   score = Math.max(0, score - spent)
   scorePulseKey++
-  activityLogs = [
-    {
-      id: nextActivityLogId++,
-      label,
-      scoreDelta: -spent,
-      kind: 'score' as const,
-    },
-    ...activityLogs,
-  ].slice(0, MAX_ACTIVITY_LOGS)
+  return {
+    label,
+    scoreDelta: -spent,
+    kind: 'score' as const,
+  }
 }
 
 function actionTypeFor(cardType: CardType): ActionType | null {
@@ -219,21 +257,25 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
-function showToast(
+type NoticeLogKind = 'info' | 'win' | 'hurt'
+
+/** Convert former center-toast messages into persistent left-panel log rows. */
+function createNoticeLog(
   message: string,
-  kind: 'info' | 'win' | 'hurt' = 'info',
-): void {
-  const host = document.getElementById('toast-host')
-  if (!host) return
-  const toast = document.createElement('div')
-  toast.className = `toast toast-${kind}`
-  toast.textContent = message
-  host.appendChild(toast)
-  setTimeout(() => toast.classList.add('show'), 10)
-  setTimeout(() => {
-    toast.classList.remove('show')
-    setTimeout(() => toast.remove(), 250)
-  }, 1600)
+  kind: NoticeLogKind = 'info',
+): ActivityLogDraft {
+  const badgeByKind: Record<NoticeLogKind, string> = {
+    info: '알림',
+    win: '완료',
+    hurt: '위험',
+  }
+  const logKind = kind === 'info' ? 'notice' : kind
+  return { label: message, badge: badgeByKind[kind], kind: logKind }
+}
+
+/** Record a single non-score event that used to be shown as a center toast. */
+function recordNotice(message: string, kind: NoticeLogKind = 'info'): void {
+  pushActivityLogsInDisplayOrder([createNoticeLog(message, kind)])
 }
 
 document.addEventListener('cardAction', (e: Event) => {
@@ -264,8 +306,12 @@ function handleScoreSpend(): void {
     gainedItems.push(drop.name)
   }
 
-  recordScoreSpend(`점수 변환: 아이템 ${itemCount}개`, spent)
-  showToast(`점수 ${spent} 사용: ${gainedItems.join(', ')}`, 'win')
+  // Item conversion logs item gains before the point spend so mixed rewards
+  // read in the same order as card rewards: item rows first, score row second.
+  pushActivityLogsInDisplayOrder([
+    ...createItemGainLogs(gainedItems),
+    recordScoreSpend(`점수 변환: 아이템 ${itemCount}개`, spent),
+  ])
   render()
 }
 
@@ -277,7 +323,7 @@ function handleItemAction(itemIndex: number): void {
 
   const item = DropSystem.getItemByName(itemName)
   if (!item) {
-    showToast(`${itemName}은(는) 아직 효과가 없어`, 'info')
+    recordNotice(`${itemName}은(는) 아직 효과가 없어`, 'info')
     render()
     return
   }
@@ -289,7 +335,7 @@ function handleItemAction(itemIndex: number): void {
     pendingTrapDisarmItemIndex =
       pendingTrapDisarmItemIndex === itemIndex ? null : itemIndex
     boardRenderer.setTrapDisarmMode(pendingTrapDisarmItemIndex)
-    showToast(
+    recordNotice(
       pendingTrapDisarmItemIndex === null
         ? '밀랍 방패 선택 취소'
         : '밀랍 방패: 파괴할 함정을 선택',
@@ -310,7 +356,7 @@ function handleItemAction(itemIndex: number): void {
     if (effect === 'damage-boost') gameState.character.applyDamageBoost()
   })
   recordScore(`아이템 사용: ${item.name}`, 35, 'item')
-  showToast(`${item.name} 사용: ${item.description}`, 'win')
+  recordNotice(`${item.name} 사용: ${item.description}`, 'win')
   render()
 }
 
@@ -350,7 +396,7 @@ async function handleTrapDisarm(distance: number, card: Card): Promise<void> {
     120 * Math.max(1, card.groupCount),
     'trap',
   )
-  showToast(`${itemName}: ${card.name} 파괴`, 'win')
+  recordNotice(`${itemName}: ${card.name} 파괴`, 'win')
   await runCleanupPhase(false)
 
   setTimeout(() => {
@@ -373,7 +419,8 @@ async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
 
   const totalDamage = hits.reduce((acc, h) => acc + h.damage, 0)
   if (totalDamage > 0) {
-    showToast(`적 공격! -${totalDamage}`, 'hurt')
+    recordNotice(`적 공격! -${totalDamage}`, 'hurt')
+    render()
     await boardRenderer.animateDamageFlash()
   }
   if (gameState.isGameOver) {
@@ -407,7 +454,8 @@ async function handleCardAction(e: Event): Promise<void> {
   // Wax shield mode can only target traps; other cards are visually blocked.
   if (pendingTrapDisarmItemIndex !== null) {
     if (card.type !== CardType.TRAP) {
-      showToast('밀랍 방패는 함정만 파괴할 수 있어', 'hurt')
+      recordNotice('밀랍 방패는 함정만 파괴할 수 있어', 'hurt')
+      render()
       return
     }
     await handleTrapDisarm(distance, card)
@@ -430,13 +478,28 @@ async function handleCardAction(e: Event): Promise<void> {
     actionType,
   )
   if (result.success) {
-    recordScore(
-      `${card.name} 선택`,
-      scoreForCardAction(card, result),
-      activityKindForCard(card),
+    const gainedItems = result.itemGainedNames ?? []
+    const actionLogs: ActivityLogDraft[] = [
+      ...createItemGainLogs(gainedItems),
+    ]
+    // Non-acquisition result copy is also kept in the left log now that the
+    // center toast layer has been removed.
+    if (gainedItems.length === 0) {
+      actionLogs.push(
+        createNoticeLog(result.message, result.damageTaken ? 'hurt' : 'info'),
+      )
+    }
+    // When an action grants items and score together, surface the item rows
+    // first in the left log, followed immediately by the earned score row.
+    actionLogs.push(
+      createScoreLog(
+        `${card.name} 선택`,
+        scoreForCardAction(card, result),
+        activityKindForCard(card),
+      ),
     )
+    pushActivityLogsInDisplayOrder(actionLogs)
   }
-  showToast(result.message, result.damageTaken ? 'hurt' : 'info')
   if (result.damageTaken && result.damageTaken > 0) {
     await boardRenderer.animateDamageFlash()
   }
@@ -491,39 +554,6 @@ function showGameOver(): void {
 
 const globalStyle = document.createElement('style')
 globalStyle.textContent = `
-  #toast-host {
-    position: fixed;
-    top: 16px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    z-index: 50;
-    pointer-events: none;
-    max-width: calc(100vw - 24px);
-  }
-  .toast {
-    background: rgba(31, 24, 48, 0.92);
-    border: 1px solid var(--color-border-warm);
-    color: var(--color-text-primary);
-    padding: 8px 16px;
-    border-radius: 999px;
-    font-size: var(--font-size-sm);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
-    opacity: 0;
-    transform: translateY(-8px);
-    transition: opacity 0.2s ease, transform 0.2s ease;
-    text-align: center;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-  }
-  .toast.show { opacity: 1; transform: translateY(0); }
-  .toast-hurt { border-color: var(--color-enemy); color: #ffd5c5; }
-  .toast-win  { border-color: var(--color-treasure); color: #fff5d0; }
-
   .game-over-overlay {
     position: fixed;
     inset: 0;

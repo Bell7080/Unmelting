@@ -10,6 +10,17 @@ export interface ItemDrop {
 }
 
 export class DropSystem {
+  /**
+   * Shared hand/log order for items so every UI surface lists rewards the
+   * same way the player's hand visually sorts them.
+   */
+  private static readonly ITEM_HAND_ORDER: Record<ItemDrop['effect'], number> = {
+    'max-health-small': 0,
+    'max-health-large': 1,
+    'damage-boost': 2,
+    'trap-disarm': 3,
+  }
+
   private static readonly ITEM_POOL: ItemDrop[] = [
     {
       name: '작은 양초',
@@ -41,6 +52,13 @@ export class DropSystem {
   /** Expose current item definitions for UI/help text without allowing mutation. */
   static getItemPool(): ItemDrop[] {
     return [...this.ITEM_POOL]
+  }
+
+  /** Return the stable hand/log rank used for item sorting across the UI. */
+  static getHandSortRank(name: string): number {
+    const item = this.getItemByName(name)
+    if (!item) return Number.MAX_SAFE_INTEGER
+    return this.ITEM_HAND_ORDER[item.effect] ?? Number.MAX_SAFE_INTEGER
   }
 
   static generateDrop(): ItemDrop {
