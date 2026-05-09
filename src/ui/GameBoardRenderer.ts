@@ -23,7 +23,6 @@ import type { EnemyHit, TreasureChange } from '@core/TurnManager'
 import { spriteForCard, SpriteUrls } from '@ui/Sprites'
 import {
   candleIcon,
-  coinIcon,
   heartIcon,
   pouchIcon,
   swordIcon,
