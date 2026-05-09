@@ -64,7 +64,7 @@ let inputLocked = false
 let pendingTrapDisarmItemIndex: number | null = null
 
 const SCORE_SPEND_COST = 250
-const MAX_ACTIVITY_LOGS = 18
+const MAX_ACTIVITY_LOGS = 80
 let score = 0
 let scorePulseKey = 0
 let nextActivityLogId = 1

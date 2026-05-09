@@ -1500,8 +1500,33 @@ const STYLES = `
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 4px 0 4px 4px;
-  overflow: visible;
+  /* Right padding leaves room for the scrollbar; left padding keeps the
+     hover-lift translation from being clipped against the panel wall. */
+  padding: 4px 4px 4px 18px;
+  min-height: 0;
+  /* Vertical scroll once the hand exceeds the column height — scrollbar
+     stays on the RIGHT (default direction) so it hugs the screen wall,
+     mirroring the score log scroll on the left wall. */
+  overflow-y: auto;
+  overflow-x: visible;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 164, 96, 0.7) rgba(20, 16, 28, 0.45);
+}
+.hand-cards::-webkit-scrollbar {
+  width: 4px;
+}
+.hand-cards::-webkit-scrollbar-track {
+  background: rgba(20, 16, 28, 0.4);
+  border-radius: 999px;
+}
+.hand-cards::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--color-flame), var(--color-flame-deep));
+  border-radius: 999px;
+  box-shadow: 0 0 6px rgba(244, 164, 96, 0.4);
+}
+.hand-cards::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--color-flame), var(--color-flame-warm));
 }
 
 .hand-card {
@@ -1566,11 +1591,12 @@ const STYLES = `
   transition: max-height 0.22s ease, opacity 0.22s ease;
 }
 
-/* Hover — the card lifts and slides toward the play area, like drawing
-   a card in a deckbuilder. Description fades in within the same body. */
+/* Hover — the card lifts toward the play area, like drawing a card in a
+   deckbuilder. The horizontal slide is small (must fit inside the scroll
+   container's left padding), but the lift+scale still reads as a draw. */
 .hand-card:hover,
 .hand-card:focus-visible {
-  transform: translate(-22px, -10px) scale(1.06);
+  transform: translate(-12px, -8px) scale(1.07);
   border-color: var(--color-flame);
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.32),
