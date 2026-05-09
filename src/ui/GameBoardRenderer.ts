@@ -806,19 +806,19 @@ const STYLES = `
   grid-template-rows: repeat(3, minmax(0, 1fr));
   gap: clamp(6px, 1vh, 10px);
   padding: clamp(8px, 1.5vh, 12px);
-  background:
-    linear-gradient(180deg, rgba(20, 16, 28, 0.55) 0%, rgba(20, 16, 28, 0.78) 100%),
-    url('${SpriteUrls.background}') center / cover no-repeat,
-    linear-gradient(180deg, #1f1830 0%, #14101c 100%);
-  border: 1px solid var(--color-border-warm);
+  /* Stays simple — a translucent dark slab so the page-level art reads
+     through, with just enough shadow to separate the rail from the room. */
+  background: rgba(14, 10, 22, 0.62);
+  border: 1px solid rgba(139, 111, 71, 0.55);
   border-radius: 14px;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 215, 120, 0.06),
-    inset 0 0 60px rgba(0, 0, 0, 0.55),
-    0 8px 28px rgba(0, 0, 0, 0.45);
+    inset 0 0 0 1px rgba(255, 215, 120, 0.05),
+    inset 0 0 60px rgba(0, 0, 0, 0.45),
+    0 8px 28px rgba(0, 0, 0, 0.55);
   position: relative;
   overflow: hidden;
   min-height: 0;
+  backdrop-filter: blur(2px);
 }
 
 .rail::before {
@@ -827,7 +827,7 @@ const STYLES = `
   inset: 0;
   background: radial-gradient(
     ellipse 80% 60% at 50% 100%,
-    rgba(244, 164, 96, 0.22),
+    rgba(244, 164, 96, 0.18),
     transparent 70%
   );
   pointer-events: none;

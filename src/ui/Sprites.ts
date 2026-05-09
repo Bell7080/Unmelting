@@ -47,10 +47,23 @@ function hashId(id: string): number {
   return Math.abs(hash)
 }
 
+/**
+ * 1-cell enemies should match their illustration to their displayed name
+ * (양초 생쥐 → enemy_001 mouse, 양초 개구리 → enemy_002 frog). Only merged
+ * 2/3-cell formations fall back to a stable random pick of either sprite.
+ */
+function spriteForNormalEnemy(card: Card): string {
+  if (card.groupCount === 1) {
+    if (card.name.includes('생쥐')) return SpriteUrls.enemyMouse
+    if (card.name.includes('개구리')) return SpriteUrls.enemyFrog
+  }
+  return NORMAL_ENEMY_VARIANTS[hashId(card.id) % NORMAL_ENEMY_VARIANTS.length]
+}
+
 export function spriteForCard(card: Card): string {
   if (card.type === CardType.ENEMY) {
     if (card.isSpecialEnemy) return SpriteUrls.mimic
-    return NORMAL_ENEMY_VARIANTS[hashId(card.id) % NORMAL_ENEMY_VARIANTS.length]
+    return spriteForNormalEnemy(card)
   }
   if (card.type === CardType.TRAP) {
     return SpriteUrls.trap
