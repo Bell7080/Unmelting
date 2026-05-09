@@ -31,6 +31,21 @@ export interface ItemActionDetail {
   itemIndex: number
 }
 
+export interface ActivityLogEntry {
+  id: number
+  label: string
+  scoreDelta: number
+  kind: 'enemy' | 'treasure' | 'trap' | 'item' | 'score'
+}
+
+export interface ScorePanelState {
+  score: number
+  logs: ActivityLogEntry[]
+  canSpend: boolean
+  spendCost: number
+  scorePulseKey: number
+}
+
 export class GameBoardRenderer {
   private boardElement: HTMLElement
   private selected: { laneIndex: number; distance: number } | null = null
@@ -48,7 +63,7 @@ export class GameBoardRenderer {
     this.boardElement = container
   }
 
-  render(gameState: GameState): void {
+  render(gameState: GameState, scorePanel: ScorePanelState): void {
     const previousRects = this.captureCardRects()
     this.currentGameState = gameState
     const character = gameState.getCharacter()
@@ -63,21 +78,24 @@ export class GameBoardRenderer {
     }
 
     this.boardElement.innerHTML = `
-      <div class="stage">
-        <header class="stage-header">
-          <div class="stage-title">🕯 Unmelting</div>
-          <div class="turn-pill">Turn ${turn}</div>
-        </header>
+      <div class="game-shell">
+        ${this.renderScorePanel(scorePanel)}
+        <div class="stage">
+          <header class="stage-header">
+            <div class="stage-title">🕯 Unmelting</div>
+            <div class="turn-pill">Turn ${turn}</div>
+          </header>
 
-        <main class="stage-main">
-          <section class="rail" aria-label="Card rail">
-            ${this.renderRail(lanes)}
-          </section>
+          <main class="stage-main">
+            <section class="rail" aria-label="Card rail">
+              ${this.renderRail(lanes)}
+            </section>
 
-          ${this.renderPlayer(character)}
+            ${this.renderPlayer(character)}
 
-          ${this.renderItems(character)}
-        </main>
+            ${this.renderItems(character)}
+          </main>
+        </div>
       </div>
     `
 
@@ -95,6 +113,42 @@ export class GameBoardRenderer {
   setTrapDisarmMode(itemIndex: number | null): void {
     this.trapDisarmItemIndex = itemIndex
     this.clearSelection()
+  }
+
+  private renderScorePanel(scorePanel: ScorePanelState): string {
+    const logs =
+      scorePanel.logs.length > 0
+        ? scorePanel.logs
+            .map(
+              (log) => `
+          <div class="score-log score-log-${log.kind}">
+            <span class="score-log-label">${log.label}</span>
+            <span class="score-log-delta">${log.scoreDelta >= 0 ? '+' : ''}${log.scoreDelta}</span>
+          </div>
+        `,
+            )
+            .join('')
+        : '<div class="score-log-empty">아직 기록된 행동이 없어</div>'
+    const spendDisabled = scorePanel.canSpend ? '' : 'disabled'
+    const scorePulseClass =
+      scorePanel.scorePulseKey > 0 ? 'is-score-popping' : ''
+
+    return `
+      <aside class="score-panel" aria-label="Action score panel">
+        <section class="score-panel-total">
+          <div class="score-kicker">종합 점수</div>
+          <div class="score-number ${scorePulseClass}" data-score-pulse="${scorePanel.scorePulseKey}">
+            ${scorePanel.score.toLocaleString()}
+          </div>
+        </section>
+        <section class="score-log-list" aria-label="Action history">
+          ${logs}
+        </section>
+        <button class="score-spend-btn" type="button" ${spendDisabled}>
+          점수 ${scorePanel.spendCost}로 아이템 변환
+        </button>
+      </aside>
+    `
   }
 
   private renderRail(lanes: Lane[]): string {
@@ -142,7 +196,7 @@ export class GameBoardRenderer {
     laneIndex: number,
     distance: number,
     span: number,
-    isActive: boolean
+    isActive: boolean,
   ): string {
     const isSelected =
       !!this.selected &&
@@ -151,9 +205,13 @@ export class GameBoardRenderer {
       this.selected.laneIndex < laneIndex + span
 
     const isTrapDisarmBlocked =
-      isActive && this.trapDisarmItemIndex !== null && card.type !== CardType.TRAP
+      isActive &&
+      this.trapDisarmItemIndex !== null &&
+      card.type !== CardType.TRAP
     const isTrapDisarmTarget =
-      isActive && this.trapDisarmItemIndex !== null && card.type === CardType.TRAP
+      isActive &&
+      this.trapDisarmItemIndex !== null &&
+      card.type === CardType.TRAP
 
     const classes = [
       'cell',
@@ -164,7 +222,9 @@ export class GameBoardRenderer {
       isTrapDisarmBlocked ? 'is-trap-disarm-blocked' : '',
       isTrapDisarmTarget ? 'is-trap-disarm-target' : '',
       span > 1 ? 'is-grouped' : '',
-      this.hasRendered && !this.previousCardIds.has(card.id) ? 'is-entering' : '',
+      this.hasRendered && !this.previousCardIds.has(card.id)
+        ? 'is-entering'
+        : '',
       this.shouldAnimateGroup(card.id, span) ? 'is-newly-grouped' : '',
     ]
       .filter(Boolean)
@@ -202,18 +262,20 @@ export class GameBoardRenderer {
     } else if (card.type === CardType.TRAP && card.groupCount >= 3) {
       stats = `<div class="card-stats danger">즉사</div>`
     } else if (card.type === CardType.TREASURE && card.groupCount > 1) {
-      const mult = card.groupCount === 2 ? 'x2' : 'x4'
+      const mult = card.groupCount === 2 ? 'x2' : 'x3'
       stats = `<div class="card-stats good">보상 ${mult}</div>`
     }
 
-    const groupBadge =
-      span > 1 ? `<div class="group-badge">×${span}</div>` : ''
+    const groupBadge = span > 1 ? `<div class="group-badge">×${span}</div>` : ''
 
-    const groupName = span > 1 ? this.groupName(card.type, span) : card.name
+    const groupName =
+      span > 1 && !card.isSpecialEnemy
+        ? this.groupName(card.type, span)
+        : card.name
 
     return `
+      ${groupBadge}
       <div class="card-face">
-        ${groupBadge}
         <div class="card-icon">${icon}</div>
         <div class="card-name">${groupName}</div>
         ${stats}
@@ -223,25 +285,31 @@ export class GameBoardRenderer {
 
   private groupName(type: CardType, span: number): string {
     if (span <= 1) return ''
-    if (type === CardType.ENEMY) return span === 2 ? '적 무리' : '적 군단'
-    if (type === CardType.TRAP) return span === 2 ? '큰 함정' : '함정 지대'
-    if (type === CardType.TREASURE) return span === 2 ? '보물 더미' : '대보물'
+    if (type === CardType.ENEMY) return span === 2 ? '성냥 무리' : '밀랍 군단'
+    if (type === CardType.TRAP)
+      return span === 2 ? '촛농 거미집' : '밀랍 거미굴'
+    if (type === CardType.TREASURE)
+      return span === 2 ? '적당한 상자' : '큰 상자'
     return ''
   }
 
   private iconFor(type: CardType): string {
     switch (type) {
-      case CardType.ENEMY: return '🐺'
-      case CardType.TRAP: return '🕸'
-      case CardType.TREASURE: return '🎁'
-      default: return '?'
+      case CardType.ENEMY:
+        return '🐺'
+      case CardType.TRAP:
+        return '🕸'
+      case CardType.TREASURE:
+        return '🎁'
+      default:
+        return '?'
     }
   }
 
   private renderPlayer(character: any): string {
     const hpPct = Math.max(
       0,
-      Math.min(100, (character.health / character.maxHealth) * 100)
+      Math.min(100, (character.health / character.maxHealth) * 100),
     )
     return `
       <div class="player-row">
@@ -271,13 +339,15 @@ export class GameBoardRenderer {
       `
     }
     const badges = character.items
-      .map((item: string, index: number) =>
-        `<button class="item-pill ${this.trapDisarmItemIndex === index ? 'is-arming-trap-disarm' : ''}" data-item-index="${index}" type="button">${item}</button>`
+      .map(
+        (item: string, index: number) =>
+          `<button class="item-pill ${this.trapDisarmItemIndex === index ? 'is-arming-trap-disarm' : ''}" data-item-index="${index}" type="button">${item}</button>`,
       )
       .join('')
-    const helper = this.trapDisarmItemIndex !== null
-      ? '<div class="items-helper danger">밀랍 방패: 파괴할 함정을 선택하거나 방패를 다시 눌러 취소</div>'
-      : ''
+    const helper =
+      this.trapDisarmItemIndex !== null
+        ? '<div class="items-helper danger">밀랍 방패: 파괴할 함정을 선택하거나 방패를 다시 눌러 취소</div>'
+        : ''
     return `
       <div class="items-row">
         <div class="items-label">📦 손패 (${character.items.length})</div>
@@ -289,7 +359,7 @@ export class GameBoardRenderer {
 
   private attachListeners(): void {
     const activeCards = this.boardElement.querySelectorAll<HTMLElement>(
-      '.cell.card.is-active'
+      '.cell.card.is-active',
     )
     activeCards.forEach((el) => {
       el.addEventListener('click', (e) => {
@@ -301,18 +371,34 @@ export class GameBoardRenderer {
     })
 
     // Hand items are buttons so they can be used without selecting a rail card.
-    this.boardElement.querySelectorAll<HTMLElement>('.item-pill').forEach((el) => {
-      el.addEventListener('click', (e) => {
-        e.stopPropagation()
-        const itemIndex = parseInt(el.dataset.itemIndex || '-1', 10)
-        document.dispatchEvent(new CustomEvent<ItemActionDetail>('itemAction', {
-          detail: { itemIndex },
-        }))
+    this.boardElement
+      .querySelectorAll<HTMLElement>('.item-pill')
+      .forEach((el) => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation()
+          const itemIndex = parseInt(el.dataset.itemIndex || '-1', 10)
+          document.dispatchEvent(
+            new CustomEvent<ItemActionDetail>('itemAction', {
+              detail: { itemIndex },
+            }),
+          )
+        })
       })
-    })
+
+    // Score conversion is panel-level UI and does not spend a turn.
+    this.boardElement
+      .querySelector<HTMLElement>('.score-spend-btn')
+      ?.addEventListener('click', (e) => {
+        e.stopPropagation()
+        document.dispatchEvent(new CustomEvent('scoreSpend'))
+      })
   }
 
-  private handleCardClick(el: HTMLElement, laneIndex: number, distance: number): void {
+  private handleCardClick(
+    el: HTMLElement,
+    laneIndex: number,
+    distance: number,
+  ): void {
     const isAlreadySelected =
       !!this.selected &&
       this.selected.laneIndex === laneIndex &&
@@ -340,7 +426,6 @@ export class GameBoardRenderer {
     })
     document.dispatchEvent(event)
   }
-
 
   /**
    * Play the upward pop used when the player actively attacks an enemy card.
@@ -421,7 +506,7 @@ export class GameBoardRenderer {
             { transform: `translate(${deltaX}px, ${deltaY}px)`, opacity: 0.94 },
             { transform: 'translate(0, 0)', opacity: 1 },
           ],
-          { duration: 360, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)' }
+          { duration: 360, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)' },
         )
       })
   }
@@ -454,10 +539,11 @@ export class GameBoardRenderer {
   private animateCardElements(
     card: Card,
     className: string,
-    duration: number
+    duration: number,
   ): Promise<void> {
-    const elements = [...this.boardElement.querySelectorAll<HTMLElement>('.cell.card')]
-      .filter((el) => el.dataset.cardId === card.id)
+    const elements = [
+      ...this.boardElement.querySelectorAll<HTMLElement>('.cell.card'),
+    ].filter((el) => el.dataset.cardId === card.id)
     return this.animateElements(elements, className, duration)
   }
 
@@ -465,7 +551,7 @@ export class GameBoardRenderer {
   private animateElements(
     elements: HTMLElement[],
     className: string,
-    duration: number
+    duration: number,
   ): Promise<void> {
     if (elements.length === 0) return Promise.resolve()
     elements.forEach((el) => {
@@ -481,7 +567,6 @@ export class GameBoardRenderer {
     })
   }
 
-
   private injectStyles(): void {
     if (document.getElementById('game-board-styles')) return
     const style = document.createElement('style')
@@ -492,18 +577,159 @@ export class GameBoardRenderer {
 }
 
 const STYLES = `
-.stage {
+.game-shell {
   width: 100%;
   height: 100vh;
   max-height: 100vh;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 720px);
+  justify-content: center;
+  gap: clamp(10px, 2vw, 22px);
   padding: clamp(8px, 1.5vh, 16px) clamp(12px, 4vw, 36px);
-  gap: clamp(6px, 1vh, 12px);
-  max-width: 720px;
-  margin: 0 auto;
   overflow: hidden;
   font-family: inherit;
+}
+
+.stage {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: clamp(6px, 1vh, 12px);
+  overflow: hidden;
+}
+
+/* ---------- Score / Activity Panel ---------- */
+.score-panel {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 10px;
+  min-height: 0;
+  padding: 12px;
+  align-self: stretch;
+  background:
+    linear-gradient(180deg, rgba(31, 24, 48, 0.86), rgba(18, 14, 28, 0.94));
+  border: 1px solid var(--color-border-soft);
+  border-radius: 16px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 28px rgba(0, 0, 0, 0.28);
+}
+
+.score-panel-total {
+  position: relative;
+  padding: 12px;
+  border: 1px solid rgba(244, 164, 96, 0.28);
+  border-radius: 14px;
+  background: radial-gradient(circle at 50% 0%, rgba(255, 215, 120, 0.18), transparent 70%);
+  overflow: hidden;
+}
+
+.score-kicker {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  letter-spacing: 0.1em;
+}
+
+.score-number {
+  position: relative;
+  margin-top: 4px;
+  color: var(--color-flame);
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 900;
+  line-height: 1;
+  text-shadow:
+    0 0 8px rgba(255, 215, 120, 0.55),
+    0 0 18px rgba(244, 164, 96, 0.3);
+  font-variant-numeric: tabular-nums;
+}
+
+.score-number.is-score-popping {
+  animation: score-slot-pop 0.62s cubic-bezier(0.16, 0.9, 0.22, 1);
+}
+
+.score-number.is-score-popping::after {
+  content: '✦ ✧ ✦';
+  position: absolute;
+  right: 4px;
+  top: -12px;
+  color: rgba(255, 232, 168, 0.95);
+  font-size: 13px;
+  letter-spacing: 4px;
+  animation: score-sparks 0.62s ease-out forwards;
+}
+
+.score-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.score-log {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 3px 0 0 rgba(244, 164, 96, 0.36);
+}
+
+.score-log-label {
+  min-width: 0;
+  color: var(--color-text-primary);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.score-log-delta {
+  color: var(--color-flame);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.score-log-enemy { box-shadow: inset 3px 0 0 rgba(168, 58, 58, 0.72); }
+.score-log-treasure { box-shadow: inset 3px 0 0 rgba(201, 161, 58, 0.8); }
+.score-log-trap { box-shadow: inset 3px 0 0 rgba(112, 76, 150, 0.8); }
+.score-log-item { box-shadow: inset 3px 0 0 rgba(244, 164, 96, 0.72); }
+.score-log-score { box-shadow: inset 3px 0 0 rgba(255, 215, 120, 0.8); }
+
+.score-log-empty {
+  padding: 14px 10px;
+  color: var(--color-text-muted);
+  border: 1px dashed var(--color-border-soft);
+  border-radius: 10px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.score-spend-btn {
+  appearance: none;
+  cursor: pointer;
+  padding: 10px 12px;
+  border: 1px solid var(--color-flame-warm);
+  border-radius: 12px;
+  color: #2a1f14;
+  background: linear-gradient(135deg, var(--color-flame), var(--color-flame-warm));
+  font-family: inherit;
+  font-weight: 800;
+  box-shadow: 0 0 18px rgba(244, 164, 96, 0.28);
+}
+
+.score-spend-btn:disabled {
+  cursor: not-allowed;
+  color: var(--color-text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--color-border-soft);
+  box-shadow: none;
 }
 
 .stage-header {
@@ -621,18 +847,19 @@ const STYLES = `
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.4),
     0 2px 8px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .cell.is-active {
   cursor: pointer;
 }
+/* Hover only adds a subtle glow so it never fights hit/attack movement animations. */
 .cell.is-active:hover {
-  transform: translateY(-2px);
+  border-color: var(--color-flame-warm);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    0 4px 14px rgba(0, 0, 0, 0.55),
-    0 0 14px rgba(244, 164, 96, 0.25);
+    inset 0 1px 0 rgba(255, 255, 255, 0.48),
+    0 2px 8px rgba(0, 0, 0, 0.5),
+    0 0 16px rgba(244, 164, 96, 0.32);
 }
 
 .cell.is-selected {
@@ -763,17 +990,22 @@ const STYLES = `
 
 .group-badge {
   position: absolute;
-  top: -4px;
-  right: -2px;
-  background: var(--color-flame-deep);
+  top: -10px;
+  right: -8px;
+  background: linear-gradient(135deg, var(--color-flame), var(--color-flame-deep));
   color: #fff8e0;
-  border: 1px solid var(--color-flame);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 7px;
+  border: 1px solid rgba(255, 232, 168, 0.95);
+  font-size: 12px;
+  font-weight: 900;
+  padding: 3px 9px;
   border-radius: 999px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
-  z-index: 2;
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.5),
+    0 0 12px rgba(255, 215, 120, 0.38);
+  transform: rotate(11deg);
+  transform-origin: center;
+  z-index: 12;
+  pointer-events: none;
 }
 
 
@@ -958,8 +1190,16 @@ const STYLES = `
   color: #ffd5d5;
 }
 
+@media (max-width: 760px) {
+  .game-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(160px, 24vh) 1fr;
+  }
+  .score-panel { min-height: 0; }
+}
+
 @media (max-width: 480px) {
-  .stage { padding: 8px 10px; }
+  .game-shell { padding: 8px 10px; }
   .stage-title { letter-spacing: 0.04em; }
   .player-card { gap: 10px; }
   .card-icon { font-size: 22px; }
@@ -973,6 +1213,20 @@ const STYLES = `
 }
 
 /* ---------- Animation Effects ---------- */
+@keyframes score-slot-pop {
+  0% { transform: translateY(0) scale(1); filter: brightness(1); }
+  24% { transform: translateY(-3px) scale(1.12, 0.92); filter: brightness(1.35); }
+  48% { transform: translateY(2px) scale(0.96, 1.08); }
+  72% { transform: translateY(-1px) scale(1.04); }
+  100% { transform: translateY(0) scale(1); filter: brightness(1); }
+}
+
+@keyframes score-sparks {
+  0% { opacity: 0; transform: translate(0, 6px) scale(0.6); }
+  35% { opacity: 1; transform: translate(8px, -4px) scale(1); }
+  100% { opacity: 0; transform: translate(18px, -18px) scale(1.25); }
+}
+
 @keyframes damage-screen-flash {
   0%, 100% { box-shadow: none; }
   35% { box-shadow: inset 0 0 0 9999px rgba(168, 58, 58, 0.22); }

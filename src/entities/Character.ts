@@ -4,6 +4,8 @@
  */
 
 export class Character {
+  private static readonly STARTING_MAX_HEALTH = 20
+
   id: string
   name: string
   health: number
@@ -18,8 +20,8 @@ export class Character {
   ) {
     this.id = id
     this.name = name
-    this.health = 20
-    this.maxHealth = 20
+    this.health = Character.STARTING_MAX_HEALTH
+    this.maxHealth = Character.STARTING_MAX_HEALTH
     this.damage = 1
     this.items = []
     this.turn = 0
@@ -32,10 +34,12 @@ export class Character {
     return actualDamage
   }
 
-  heal(amount: number): number {
-    const actualHeal = Math.min(amount, this.maxHealth - this.health)
-    this.health = Math.min(this.maxHealth, this.health + actualHeal)
-    return actualHeal
+  /** Permanently raise max HP and heal by the same amount for this run. */
+  increaseMaxHealth(amount: number): number {
+    const actualIncrease = Math.max(0, amount)
+    this.maxHealth += actualIncrease
+    this.health += actualIncrease
+    return actualIncrease
   }
 
   addItem(itemName: string): void {
@@ -68,6 +72,7 @@ export class Character {
   }
 
   reset(): void {
+    this.maxHealth = Character.STARTING_MAX_HEALTH
     this.health = this.maxHealth
     this.damage = 1
     this.items = []

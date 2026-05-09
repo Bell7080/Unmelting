@@ -88,9 +88,13 @@ export class TurnManager {
           cardName: card.name,
         })
       } else if (roll < 0.4) {
-        const mimic = spawner.spawnMimic()
+        const occupiedLanes = this.gameState.getGroupLanes(i, d)
+        const mimic = spawner.spawnMimic(card.groupCount)
         this.gameState.removeCardFromRow(card, d)
-        this.gameState.lanes[i].setCardAtDistance(d, mimic)
+        // Preserve the original chest width so 2/3-lane chests become matching mimics.
+        for (const laneIndex of occupiedLanes) {
+          this.gameState.lanes[laneIndex].setCardAtDistance(d, mimic)
+        }
         changes.push({
           laneIndex: i,
           distance: d,

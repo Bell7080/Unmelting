@@ -6,20 +6,20 @@
 export interface ItemDrop {
   name: string
   description: string
-  effect: 'heal-small' | 'heal-large' | 'damage-boost' | 'trap-disarm'
+  effect: 'max-health-small' | 'max-health-large' | 'damage-boost' | 'trap-disarm'
 }
 
 export class DropSystem {
   private static readonly ITEM_POOL: ItemDrop[] = [
     {
       name: '🧪 작은 양초',
-      description: '체력 +1',
-      effect: 'heal-small',
+      description: '최대 체력 +1 (동시에 1 회복)',
+      effect: 'max-health-small',
     },
     {
       name: '🕯 큰 양초',
-      description: '체력 +2',
-      effect: 'heal-large',
+      description: '최대 체력 +2 (동시에 2 회복)',
+      effect: 'max-health-large',
     },
     {
       name: '🔥 불꽃 부적',
@@ -45,19 +45,19 @@ export class DropSystem {
 
   static generateDrop(): ItemDrop {
     const roll = Math.random() * 100
-    if (roll < 40) return this.ITEM_POOL[0] // 40% Health Potion
-    if (roll < 70) return this.ITEM_POOL[1] // 30% Large Potion
+    if (roll < 40) return this.ITEM_POOL[0] // 40% Small max-health boost
+    if (roll < 70) return this.ITEM_POOL[1] // 30% Large max-health boost
     if (roll < 90) return this.ITEM_POOL[2] // 20% Attack Boost
     return this.ITEM_POOL[3] // 10% Defense Boost
   }
 
   static applyItem(item: ItemDrop, onApply: (effect: string, value?: number) => void): void {
     switch (item.effect) {
-      case 'heal-small':
-        onApply('heal', 1)
+      case 'max-health-small':
+        onApply('max-health', 1)
         break
-      case 'heal-large':
-        onApply('heal', 2)
+      case 'max-health-large':
+        onApply('max-health', 2)
         break
       case 'damage-boost':
         onApply('damage-boost', 1)
