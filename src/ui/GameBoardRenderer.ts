@@ -21,11 +21,16 @@ import { Card, CardType } from '@entities/Card'
 import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
 import type { EnemyHit, TreasureChange } from '@core/TurnManager'
 import { spriteForCard, SpriteUrls } from '@ui/Sprites'
+import { DropSystem } from '@systems/DropSystem'
 import {
+  bigCandleIcon,
   candleIcon,
   coinIcon,
+  flameIcon,
   heartIcon,
   pouchIcon,
+  shieldIcon,
+  smallCandleIcon,
   swordIcon,
 } from '@ui/Icons'
 
@@ -86,27 +91,29 @@ export class GameBoardRenderer {
     }
 
     this.boardElement.innerHTML = `
-      <div class="game-shell">
-        ${this.renderScorePanel(scorePanel)}
-        <div class="stage">
-          <header class="stage-header">
-            <div class="stage-title">
-              <span class="stage-title-icon">${candleIcon()}</span>
-              Unmelting
-            </div>
-            <div class="turn-pill">Turn ${turn}</div>
-          </header>
-
-          <main class="stage-main">
-            <section class="rail" aria-label="Card rail">
-              ${this.renderRail(lanes)}
-            </section>
-
-            ${this.renderPlayer(character)}
-
-            ${this.renderItems(character)}
-          </main>
+      <div class="turn-overlay" aria-hidden="true">
+        <div class="turn-overlay-inner">
+          <span class="turn-overlay-kicker">Turn</span>
+          <span class="turn-overlay-number">${turn}</span>
         </div>
+      </div>
+      <div class="game-shell">
+        <aside class="left-panel" aria-label="Brand and score">
+          <header class="brand">
+            <span class="brand-icon">${candleIcon()}</span>
+            <span class="brand-text">Unmelting</span>
+          </header>
+          ${this.renderScorePanel(scorePanel)}
+        </aside>
+        <main class="stage">
+          <section class="rail" aria-label="Card rail">
+            ${this.renderRail(lanes)}
+          </section>
+
+          ${this.renderPlayer(character)}
+        </main>
+
+        ${this.renderHand(character)}
       </div>
     `
 
@@ -319,11 +326,9 @@ export class GameBoardRenderer {
     return `
       <div class="player-row">
         <div class="player-card">
-          <div class="player-portrait" aria-hidden="true">
-            <div class="player-portrait-art" style="background-image: url('${SpriteUrls.player}')"></div>
-            <div class="player-portrait-frame"></div>
-          </div>
-          <div class="player-info">
+          <div class="player-art" style="background-image: url('${SpriteUrls.player}')" aria-hidden="true"></div>
+          <div class="player-overlay" aria-hidden="true"></div>
+          <div class="player-content">
             <div class="player-name">${character.name}</div>
             <div class="player-stats">
               <div class="hp-bar">
@@ -344,36 +349,100 @@ export class GameBoardRenderer {
     `
   }
 
-  private renderItems(character: any): string {
-    if (!character.items || character.items.length === 0) {
-      return `
-        <div class="items-row empty">
-          <span class="items-empty">
-            <span class="items-empty-icon">${pouchIcon()}</span>
-            손패가 비어 있어
-          </span>
-        </div>
-      `
+  /**
+   * Item display order — small candle → large candle → flame → wax shield.
+   * The wax shield is intentionally pinned last so a player who collected many
+   * boosts can mash the row left-to-right without their disarm slot moving.
+   */
+  private static readonly HAND_ORDER: Record<string, number> = {
+    'max-health-small': 0,
+    'max-health-large': 1,
+    'damage-boost': 2,
+    'trap-disarm': 3,
+  }
+
+  private iconForItemEffect(effect: string): string {
+    switch (effect) {
+      case 'max-health-small':
+        return smallCandleIcon()
+      case 'max-health-large':
+        return bigCandleIcon()
+      case 'damage-boost':
+        return flameIcon()
+      case 'trap-disarm':
+        return shieldIcon()
+      default:
+        return pouchIcon()
     }
-    const badges = character.items
-      .map(
-        (item: string, index: number) =>
-          `<button class="item-pill ${this.trapDisarmItemIndex === index ? 'is-arming-trap-disarm' : ''}" data-item-index="${index}" type="button">${item}</button>`,
-      )
-      .join('')
+  }
+
+  private renderHand(character: any): string {
+    const items: string[] = character.items ?? []
     const helper =
       this.trapDisarmItemIndex !== null
-        ? '<div class="items-helper danger">밀랍 방패: 파괴할 함정을 선택하거나 방패를 다시 눌러 취소</div>'
+        ? '<div class="hand-helper danger">밀랍 방패: 파괴할 함정을 선택하거나 방패를 다시 눌러 취소</div>'
         : ''
+
+    if (items.length === 0) {
+      return `
+        <aside class="hand-panel" aria-label="Hand">
+          <header class="hand-header">
+            <span class="hand-header-icon">${pouchIcon()}</span>
+            손패
+          </header>
+          ${helper}
+          <div class="hand-empty">
+            <span class="hand-empty-icon">${pouchIcon()}</span>
+            손패가 비어 있어
+          </div>
+        </aside>
+      `
+    }
+
+    // Pair each item with its original inventory index, sort by effect order
+    // so the displayed row is a fixed layout while the model stays untouched.
+    const indexed = items
+      .map((name, index) => ({ name, index }))
+      .sort((a, b) => {
+        const ea = DropSystem.getItemByName(a.name)?.effect ?? ''
+        const eb = DropSystem.getItemByName(b.name)?.effect ?? ''
+        const oa = GameBoardRenderer.HAND_ORDER[ea] ?? 99
+        const ob = GameBoardRenderer.HAND_ORDER[eb] ?? 99
+        if (oa !== ob) return oa - ob
+        return a.index - b.index
+      })
+
+    const cards = indexed
+      .map(({ name, index }) => {
+        const def = DropSystem.getItemByName(name)
+        const effect = def?.effect ?? ''
+        const icon = this.iconForItemEffect(effect)
+        const description = def?.description ?? ''
+        const isArming =
+          effect === 'trap-disarm' && this.trapDisarmItemIndex === index
+        return `
+          <button
+            type="button"
+            class="hand-card hand-card-${effect.replace(/-/g, '_') || 'unknown'} ${isArming ? 'is-arming-trap-disarm' : ''}"
+            data-item-index="${index}"
+            aria-label="${name}: ${description}">
+            <span class="hand-card-icon">${icon}</span>
+            <span class="hand-card-name">${name}</span>
+            <span class="hand-card-effect">${description}</span>
+          </button>
+        `
+      })
+      .join('')
+
     return `
-      <div class="items-row">
-        <div class="items-label">
-          <span class="items-label-icon">${pouchIcon()}</span>
-          손패 (${character.items.length})
-        </div>
+      <aside class="hand-panel" aria-label="Hand">
+        <header class="hand-header">
+          <span class="hand-header-icon">${pouchIcon()}</span>
+          손패 (${items.length})
+        </header>
         ${helper}
-        <div class="items-list">${badges}</div>
-      </div>
+        <div class="hand-cards">${cards}</div>
+      </aside>
     `
   }
 
@@ -392,7 +461,7 @@ export class GameBoardRenderer {
 
     // Hand items are buttons so they can be used without selecting a rail card.
     this.boardElement
-      .querySelectorAll<HTMLElement>('.item-pill')
+      .querySelectorAll<HTMLElement>('.hand-card')
       .forEach((el) => {
         el.addEventListener('click', (e) => {
           e.stopPropagation()
@@ -611,21 +680,104 @@ const STYLES = `
   height: 100vh;
   max-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 720px);
-  justify-content: center;
-  gap: clamp(10px, 2vw, 22px);
-  padding: clamp(8px, 1.5vh, 16px) clamp(12px, 4vw, 36px);
+  grid-template-columns:
+    minmax(240px, 300px)
+    minmax(0, 1fr)
+    minmax(160px, 220px);
+  gap: clamp(10px, 1.6vw, 20px);
+  padding: clamp(58px, 7vh, 88px) clamp(8px, 1.4vw, 18px) clamp(8px, 1.5vh, 16px);
   overflow: hidden;
   font-family: inherit;
+  align-items: stretch;
 }
 
 .stage {
   width: 100%;
   min-width: 0;
   display: grid;
-  grid-template-rows: auto 1fr;
-  gap: clamp(6px, 1vh, 12px);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: clamp(8px, 1.4vh, 14px);
   overflow: hidden;
+}
+
+/* ---------- Top-center Turn overlay ---------- */
+.turn-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+  padding: 14px 0 36px;
+  background: linear-gradient(
+    180deg,
+    rgba(8, 5, 14, 0.88) 0%,
+    rgba(8, 5, 14, 0.55) 50%,
+    rgba(8, 5, 14, 0.0) 100%
+  );
+}
+
+.turn-overlay-inner {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.turn-overlay-kicker {
+  font-size: clamp(14px, 1.6vw, 20px);
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  color: rgba(255, 215, 120, 0.85);
+  text-transform: uppercase;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+
+.turn-overlay-number {
+  font-size: clamp(34px, 4.6vw, 56px);
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: var(--color-flame);
+  line-height: 1;
+  text-shadow:
+    0 0 20px rgba(255, 215, 120, 0.55),
+    0 0 36px rgba(244, 164, 96, 0.32),
+    0 2px 6px rgba(0, 0, 0, 0.85);
+}
+
+/* ---------- Left panel (brand + score) ---------- */
+.left-panel {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  min-height: 0;
+  align-self: stretch;
+  justify-self: start;
+  width: 100%;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px 8px;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+.brand-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-flame);
+  font-size: clamp(20px, 2.4vw, 26px);
+  filter: drop-shadow(0 0 8px rgba(255, 215, 120, 0.5));
+}
+.brand-text {
+  font-size: clamp(17px, 1.9vw, 22px);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--color-flame);
+  text-shadow: 0 0 12px rgba(255, 215, 120, 0.25);
 }
 
 /* ---------- Score / Activity Panel ---------- */
@@ -703,7 +855,30 @@ const STYLES = `
   gap: 7px;
   min-height: 0;
   overflow-y: auto;
-  padding-right: 2px;
+  /* Move scrollbar to the LEFT side via direction trick. */
+  direction: rtl;
+  padding-left: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 164, 96, 0.7) rgba(20, 16, 28, 0.45);
+}
+.score-log-list > * {
+  /* Reset content direction so log rows still flow left-to-right. */
+  direction: ltr;
+}
+.score-log-list::-webkit-scrollbar {
+  width: 4px;
+}
+.score-log-list::-webkit-scrollbar-track {
+  background: rgba(20, 16, 28, 0.4);
+  border-radius: 999px;
+}
+.score-log-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--color-flame), var(--color-flame-deep));
+  border-radius: 999px;
+  box-shadow: 0 0 6px rgba(244, 164, 96, 0.4);
+}
+.score-log-list::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--color-flame), var(--color-flame-warm));
 }
 
 .score-log {
@@ -770,54 +945,15 @@ const STYLES = `
   box-shadow: none;
 }
 
-.stage-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 0 8px;
-  border-bottom: 1px solid var(--color-border-soft);
-}
-
-.stage-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--font-size-lg);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--color-flame);
-  text-shadow: 0 0 12px rgba(255, 215, 120, 0.25);
-}
-
-.stage-title-icon {
-  display: inline-flex;
-  align-items: center;
-  font-size: 1.1em;
-  filter: drop-shadow(0 0 6px rgba(255, 215, 120, 0.55));
-}
-
-.turn-pill {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  padding: 4px 12px;
-  border: 1px solid var(--color-border-soft);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.stage-main {
-  display: grid;
-  grid-template-rows: 1fr auto auto;
-  gap: clamp(8px, 1.5vh, 14px);
-  min-height: 0;
-}
+/* (legacy stage-header / stage-main rules removed — title now lives in
+   .brand inside .left-panel and Turn is rendered as a fixed top overlay) */
 
 /* ---------- Rail (3x3) ---------- */
 .rail {
   display: grid;
   grid-template-rows: repeat(3, minmax(0, 1fr));
   gap: clamp(6px, 1vh, 10px);
-  padding: clamp(8px, 1.5vh, 12px);
+  padding: clamp(10px, 1.6vh, 14px);
   /* Stays simple — a translucent dark slab so the page-level art reads
      through, with just enough shadow to separate the rail from the room. */
   background: rgba(14, 10, 22, 0.62);
@@ -828,7 +964,8 @@ const STYLES = `
     inset 0 0 60px rgba(0, 0, 0, 0.45),
     0 8px 28px rgba(0, 0, 0, 0.55);
   position: relative;
-  overflow: hidden;
+  /* Visible so the ×N group badge can poke out of cell edges. */
+  overflow: visible;
   min-height: 0;
   backdrop-filter: blur(2px);
 }
@@ -902,7 +1039,9 @@ const STYLES = `
     inset 0 -10px 18px rgba(0, 0, 0, 0.45),
     0 4px 10px rgba(0, 0, 0, 0.55),
     0 14px 24px rgba(0, 0, 0, 0.45);
-  overflow: hidden;
+  /* Sprite art is clipped by .card-face below — keep cell visible so the
+     ×N group badge can poke out of the canvas edge. */
+  overflow: visible;
   isolation: isolate;
 }
 
@@ -1103,21 +1242,23 @@ const STYLES = `
 
 .group-badge {
   position: absolute;
-  top: -10px;
-  right: -8px;
+  /* Pulled outside the cell edge — cell + rail are now overflow:visible so
+     the badge can sit on the canvas margin, like a wax seal stamped over it. */
+  top: -16px;
+  right: -16px;
   background: linear-gradient(135deg, var(--color-flame), var(--color-flame-deep));
   color: #fff8e0;
   border: 1px solid rgba(255, 232, 168, 0.95);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 900;
-  padding: 3px 9px;
+  padding: 4px 11px;
   border-radius: 999px;
   box-shadow:
-    0 3px 8px rgba(0, 0, 0, 0.5),
-    0 0 12px rgba(255, 215, 120, 0.38);
+    0 4px 10px rgba(0, 0, 0, 0.6),
+    0 0 16px rgba(255, 215, 120, 0.45);
   transform: rotate(11deg);
   transform-origin: center;
-  z-index: 12;
+  z-index: 30;
   pointer-events: none;
 }
 
@@ -1154,80 +1295,86 @@ const STYLES = `
 .player-row {
   display: flex;
   justify-content: center;
+  align-items: end;
 }
 
+/* Player card mirrors the rail-card structure (sprite art → bottom dark
+   gradient → content) so the player reads as the largest "card" on board. */
 .player-card {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: clamp(10px, 1.5vw, 16px);
-  align-items: center;
-  padding: clamp(8px, 1.5vh, 12px) clamp(12px, 3vw, 18px);
-  width: 100%;
-  max-width: 440px;
-  background:
-    linear-gradient(135deg, rgba(244, 164, 96, 0.14) 0%, rgba(31, 24, 48, 0.7) 100%);
-  border: 1px solid var(--color-flame-warm);
-  border-radius: 14px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 215, 120, 0.22),
-    0 0 28px rgba(244, 164, 96, 0.2),
-    0 8px 18px rgba(0, 0, 0, 0.45);
-}
-
-.player-portrait {
   position: relative;
-  width: clamp(48px, 9vw, 72px);
-  aspect-ratio: 1 / 1;
-  border-radius: 12px;
+  width: clamp(150px, 17vw, 200px);
+  aspect-ratio: 3 / 4;
+  border-radius: 14px;
   overflow: hidden;
+  isolation: isolate;
   background: #14101c;
+  border: 1px solid var(--color-flame-warm);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 215, 120, 0.32),
-    0 4px 12px rgba(0, 0, 0, 0.55),
-    0 0 18px rgba(255, 215, 120, 0.25);
+    inset 0 1px 0 rgba(255, 232, 168, 0.32),
+    inset 0 -10px 22px rgba(0, 0, 0, 0.55),
+    0 6px 14px rgba(0, 0, 0, 0.55),
+    0 0 26px rgba(244, 164, 96, 0.28);
 }
 
-.player-portrait-art {
+.player-art {
   position: absolute;
   inset: 0;
   background-size: cover;
-  background-position: center 20%;
+  background-position: center 22%;
   background-repeat: no-repeat;
-  filter: saturate(1.05) contrast(1.04);
+  filter: saturate(1.06) contrast(1.04);
+  z-index: 0;
 }
 
-.player-portrait-frame {
+.player-overlay {
   position: absolute;
   inset: 0;
+  z-index: 1;
   pointer-events: none;
-  border-radius: inherit;
-  border: 1px solid rgba(255, 232, 168, 0.55);
-  box-shadow:
-    inset 0 -10px 18px rgba(0, 0, 0, 0.55),
-    inset 0 8px 14px rgba(255, 215, 120, 0.12);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(20, 16, 28, 0.0) 32%,
+      rgba(20, 16, 28, 0.55) 65%,
+      rgba(8, 5, 14, 0.94) 100%
+    ),
+    radial-gradient(
+      120% 60% at 50% 0%,
+      rgba(244, 164, 96, 0.1),
+      transparent 70%
+    );
 }
 
-.player-info {
-  display: grid;
+.player-content {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  text-align: center;
+  padding: 8px 10px 10px;
   gap: 6px;
-  min-width: 0;
 }
 
 .player-name {
-  font-size: var(--font-size-base);
-  font-weight: 700;
+  font-size: var(--font-size-sm);
+  font-weight: 800;
   color: var(--color-flame);
-  letter-spacing: 0.03em;
+  letter-spacing: 0.06em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow: 0 0 8px rgba(255, 215, 120, 0.25);
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.9),
+    0 0 8px rgba(255, 215, 120, 0.35);
 }
 
 .player-stats {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
 }
 
@@ -1288,109 +1435,201 @@ const STYLES = `
   font-size: 13px;
 }
 
-/* ---------- Items / Inventory ---------- */
-.items-row {
-  padding: clamp(8px, 1.5vh, 10px) 14px;
-  background: rgba(31, 24, 48, 0.5);
-  border: 1px solid var(--color-border-soft);
-  border-radius: 10px;
+/* ---------- Hand panel (right column, deckbuilder-style cards) ---------- */
+.hand-panel {
   display: grid;
-  gap: 6px;
-  max-height: 22vh;
-  overflow-y: auto;
+  grid-template-rows: auto auto 1fr;
+  gap: 10px;
+  min-height: 0;
+  align-self: stretch;
+  /* The lifted cards translate to the LEFT into stage area, so reserve a
+     bit of overflow space without forcing the column wider. */
+  overflow: visible;
+  position: relative;
+  z-index: 5;
 }
 
-.items-row.empty {
-  text-align: center;
-  max-height: none;
-}
-
-.items-empty {
+.hand-header {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  font-style: italic;
-}
-.items-empty-icon {
-  display: inline-flex;
-  align-items: center;
-  color: var(--color-flame-warm);
-  font-size: 14px;
-}
-
-.items-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  padding: 4px 8px;
   font-size: var(--font-size-sm);
   color: var(--color-flame-warm);
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--color-border-soft);
 }
-.items-label-icon {
+.hand-header-icon {
   display: inline-flex;
   align-items: center;
   color: var(--color-flame);
   font-size: 14px;
 }
 
-.items-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.hand-helper {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(168, 58, 58, 0.18);
+  border: 1px solid rgba(168, 58, 58, 0.5);
+  color: #ffd5d5;
+  line-height: 1.35;
 }
 
-.item-pill {
+.hand-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 8px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-style: italic;
+  border: 1px dashed var(--color-border-soft);
+  border-radius: 12px;
+}
+.hand-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-flame-warm);
+  font-size: 14px;
+}
+
+.hand-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 4px 4px;
+  overflow: visible;
+}
+
+.hand-card {
   appearance: none;
   cursor: pointer;
   font-family: inherit;
-  font-size: 12px;
-  padding: 4px 10px;
-  background: rgba(244, 164, 96, 0.1);
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  gap: 4px;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  min-height: 96px;
+  padding: 10px 8px 10px;
   border: 1px solid var(--color-border-warm);
-  color: var(--color-text-primary);
-  border-radius: 999px;
-  white-space: nowrap;
+  border-radius: 12px;
+  color: #fff5dc;
+  background:
+    linear-gradient(160deg, rgba(60, 44, 90, 0.78) 0%, rgba(20, 16, 28, 0.92) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.18),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.5),
+    0 6px 12px rgba(0, 0, 0, 0.55);
+  transition:
+    transform 0.22s cubic-bezier(0.22, 0.92, 0.28, 1),
+    box-shadow 0.22s ease,
+    border-color 0.22s ease,
+    min-height 0.22s ease;
+  transform-origin: right center;
 }
-.item-pill:hover {
-  border-color: var(--color-flame);
-  box-shadow: 0 0 10px rgba(244, 164, 96, 0.25);
+
+.hand-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-flame);
+  font-size: clamp(22px, 2.5vw, 30px);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65));
+  line-height: 1;
 }
-.item-pill.is-arming-trap-disarm {
-  border-color: var(--color-enemy);
-  color: #ffd5d5;
-  box-shadow: 0 0 14px rgba(168, 58, 58, 0.45);
-}
-.items-helper {
+
+.hand-card-name {
   font-size: 12px;
-  color: var(--color-text-muted);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fff5dc;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.items-helper.danger {
-  color: #ffd5d5;
+
+.hand-card-effect {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  line-height: 1.25;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.22s ease, opacity 0.22s ease;
+}
+
+/* Hover — the card lifts and slides toward the play area, like drawing
+   a card in a deckbuilder. Description fades in within the same body. */
+.hand-card:hover,
+.hand-card:focus-visible {
+  transform: translate(-22px, -10px) scale(1.06);
+  border-color: var(--color-flame);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.32),
+    inset 0 -12px 20px rgba(0, 0, 0, 0.6),
+    0 14px 26px rgba(0, 0, 0, 0.65),
+    0 0 26px rgba(244, 164, 96, 0.45);
+  z-index: 50;
+  outline: none;
+}
+.hand-card:hover .hand-card-effect,
+.hand-card:focus-visible .hand-card-effect {
+  max-height: 56px;
+  opacity: 1;
+}
+
+/* Effect-tinted edge so each item type reads at a glance even compact. */
+.hand-card-max_health_small { box-shadow: inset 3px 0 0 rgba(255, 215, 120, 0.65), inset 0 1px 0 rgba(255, 232, 168, 0.18), inset 0 -10px 18px rgba(0, 0, 0, 0.5), 0 6px 12px rgba(0, 0, 0, 0.55); }
+.hand-card-max_health_large { box-shadow: inset 3px 0 0 rgba(244, 164, 96, 0.85), inset 0 1px 0 rgba(255, 232, 168, 0.18), inset 0 -10px 18px rgba(0, 0, 0, 0.5), 0 6px 12px rgba(0, 0, 0, 0.55); }
+.hand-card-damage_boost { box-shadow: inset 3px 0 0 rgba(217, 122, 44, 0.9), inset 0 1px 0 rgba(255, 232, 168, 0.18), inset 0 -10px 18px rgba(0, 0, 0, 0.5), 0 6px 12px rgba(0, 0, 0, 0.55); }
+.hand-card-trap_disarm { box-shadow: inset 3px 0 0 rgba(112, 76, 150, 0.9), inset 0 1px 0 rgba(255, 232, 168, 0.18), inset 0 -10px 18px rgba(0, 0, 0, 0.5), 0 6px 12px rgba(0, 0, 0, 0.55); }
+.hand-card-damage_boost .hand-card-icon { color: var(--color-flame-deep); }
+.hand-card-trap_disarm .hand-card-icon { color: #c8b1ff; }
+
+.hand-card.is-arming-trap-disarm {
+  border-color: var(--color-enemy);
+  background:
+    linear-gradient(160deg, rgba(168, 58, 58, 0.42) 0%, rgba(20, 16, 28, 0.92) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.22),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.5),
+    0 0 22px rgba(168, 58, 58, 0.55);
+}
+
+@media (max-width: 960px) {
+  .game-shell {
+    grid-template-columns: minmax(200px, 240px) minmax(0, 1fr) minmax(140px, 180px);
+  }
 }
 
 @media (max-width: 760px) {
   .game-shell {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(160px, 24vh) 1fr;
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
-  .score-panel { min-height: 0; }
+  .left-panel { min-height: 0; }
+  .hand-panel { grid-row: 3; }
+  .hand-cards { flex-direction: row; flex-wrap: wrap; }
+  .hand-card:hover, .hand-card:focus-visible { transform: translateY(-10px) scale(1.04); }
 }
 
 @media (max-width: 480px) {
-  .game-shell { padding: 8px 10px; }
-  .stage-title { letter-spacing: 0.04em; }
-  .player-card { gap: 10px; }
-  .card-icon { font-size: 22px; }
+  .game-shell { padding-left: 6px; padding-right: 6px; }
   .card-name { font-size: 12px; }
 }
 
 @media (max-height: 600px) {
   .rail-row.dist-2 { opacity: 0.3; transform: scale(0.86); }
   .rail-row.dist-1 { opacity: 0.6; transform: scale(0.92); }
-  .player-card { padding: 6px 12px; }
+  .player-card { width: clamp(120px, 14vw, 160px); }
 }
 
 /* ---------- Animation Effects ---------- */

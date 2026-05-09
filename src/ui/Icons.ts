@@ -76,3 +76,63 @@ export function coinIcon(): string {
     ].join(''),
   )
 }
+
+/** Single small candle (양초 small) — max-health small item. */
+export function smallCandleIcon(): string {
+  return svg(
+    [
+      // flame
+      fill(
+        'M12 3.2c-.6 1.4-1.6 2.2-1.6 3.6a1.6 1.6 0 0 0 3.2 0c0-1.4-1-2.2-1.6-3.6Z',
+      ),
+      // candle body
+      fill('M10 9.5h4v8h-4z'),
+      // base ring
+      stroke('M9.4 17.5h5.2', 1.4),
+    ].join(''),
+  )
+}
+
+/** Tall thick candle — max-health large item. */
+export function bigCandleIcon(): string {
+  return svg(
+    [
+      // bigger flame
+      fill(
+        'M12 2.2c-1 1.8-2.4 2.8-2.4 5a2.4 2.4 0 0 0 4.8 0c0-2.2-1.4-3.2-2.4-5Z',
+      ),
+      // wider candle body
+      fill('M8.5 9.6h7v9.4h-7z'),
+      // wax drip
+      fill('M9 11.4c.6 1.5 1 1.5 1 2.6.4-.6.6-.8.6-1.6'),
+      // base ring
+      stroke('M7.6 19h8.8', 1.5),
+    ].join(''),
+  )
+}
+
+/** Flame charm — damage boost item. */
+export function flameIcon(): string {
+  return svg(
+    [
+      fill(
+        'M12 2.5c.4 2.6-2.6 3.7-2.6 6.7 0 1.4.7 2.4 1.7 2.7-.5-.7-.6-1.5-.2-2.5.5 1.6 2.1 2.2 2.1 4 0 1.1-.7 2-1.7 2.2 3.6.2 6.2-2.4 6.2-5.7 0-3.9-3.7-4.4-5.5-7.4Z',
+      ),
+      fill(
+        'M9.4 13.4c-1.7 1-2.6 2.6-2.6 4.4 0 2.5 2 4.2 5 4.2 2.6 0 4.8-1.4 4.8-3.7 0-1.7-1-2.7-2.4-3.4.5 1 .4 2-.4 2.7-1 1-2.6.6-2.8-.6-.2-1.2.7-1.7-.6-2.7-.4-.3-.7-.6-1-.9Z',
+      ),
+    ].join(''),
+  )
+}
+
+/** Wax shield — trap disarm item. */
+export function shieldIcon(): string {
+  return svg(
+    [
+      fill(
+        'M12 2.6 4.5 5.2v6c0 4.5 3.1 8.6 7.5 10.2 4.4-1.6 7.5-5.7 7.5-10.2v-6L12 2.6Z',
+      ),
+      stroke('M9 11.6l2.2 2.4L15.4 9.6', 1.6),
+    ].join(''),
+  )
+}
