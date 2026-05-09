@@ -539,9 +539,29 @@ export class GameBoardRenderer {
     return this.animateElements([...elements], 'is-enemy-slamming', 340)
   }
 
-  /** Flash the stage red when the player takes damage. */
+  /**
+   * Whole-screen damage vignette. We mount a body-level overlay once and
+   * just restart its animation on each hit so the effect can render on top
+   * of every other layer (rail, hand panel, turn overlay).
+   */
+  private getOrCreateDamageOverlay(): HTMLElement {
+    const existing = document.getElementById('damage-flash-overlay')
+    if (existing) return existing
+    const el = document.createElement('div')
+    el.id = 'damage-flash-overlay'
+    el.className = 'damage-flash'
+    el.setAttribute('aria-hidden', 'true')
+    document.body.appendChild(el)
+    return el
+  }
+
+  /** Pulse a deep oxblood vignette across the entire viewport on damage. */
   animateDamageFlash(): Promise<void> {
-    return this.animateElements([this.boardElement], 'is-damage-flashing', 260)
+    return this.animateElements(
+      [this.getOrCreateDamageOverlay()],
+      'is-flashing',
+      540,
+    )
   }
 
   /**
@@ -1673,9 +1693,43 @@ const STYLES = `
   100% { opacity: 0; transform: translate(18px, -18px) scale(1.25); }
 }
 
-@keyframes damage-screen-flash {
-  0%, 100% { box-shadow: none; }
-  35% { box-shadow: inset 0 0 0 9999px rgba(168, 58, 58, 0.22); }
+/* ---------- Damage vignette (full-screen, classical oxblood) ---------- */
+.damage-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none;
+  opacity: 0;
+  /* Layered radials read like an old painted-stage vignette: deep oxblood
+     edge collapsing toward a translucent garnet wash, with a faint scarlet
+     ember at the center for a beat of dramatic life. */
+  background:
+    radial-gradient(
+      circle at 50% 50%,
+      rgba(255, 90, 70, 0.16) 0%,
+      rgba(180, 40, 50, 0.08) 18%,
+      transparent 38%
+    ),
+    radial-gradient(
+      ellipse 92% 80% at 50% 50%,
+      transparent 28%,
+      rgba(120, 22, 30, 0.32) 58%,
+      rgba(70, 10, 18, 0.78) 82%,
+      rgba(38, 6, 12, 0.95) 100%
+    );
+  mix-blend-mode: normal;
+  will-change: opacity, transform, filter;
+}
+
+.damage-flash.is-flashing {
+  animation: damage-vignette 0.54s cubic-bezier(0.18, 0.9, 0.28, 1);
+}
+
+@keyframes damage-vignette {
+  0%   { opacity: 0;    transform: scale(1.05); filter: saturate(1) brightness(1); }
+  16%  { opacity: 1;    transform: scale(1.0);  filter: saturate(1.45) brightness(1.05); }
+  42%  { opacity: 0.78; transform: scale(1.02); }
+  100% { opacity: 0;    transform: scale(1.1);  filter: saturate(1) brightness(1); }
 }
 
 @keyframes card-enter-soft {
@@ -1768,11 +1822,6 @@ const STYLES = `
   0%, 100% { transform: scale(1); }
   35% { transform: scale(1.06, 0.94); }
   62% { transform: scale(0.98, 1.05); }
-}
-
-.stage.is-damage-flashing,
-.is-damage-flashing .stage {
-  animation: damage-screen-flash 0.26s ease-out;
 }
 
 .cell.card.is-entering {
