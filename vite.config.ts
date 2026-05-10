@@ -17,6 +17,7 @@ export default defineConfig({
       '@systems': resolve(__dirname, './src/systems'),
       '@entities': resolve(__dirname, './src/entities'),
       '@ui': resolve(__dirname, './src/ui'),
+      '@data': resolve(__dirname, './src/data'),
     },
   },
   server: {

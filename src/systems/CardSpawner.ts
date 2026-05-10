@@ -1,8 +1,12 @@
 /**
  * CardSpawner - Generates random cards from the current base card set.
+ *
+ * Spawn weights and enemy stat bonuses are driven by the EmberSystem tier so
+ * the field gets harder as the player's ember runs low.
  */
 
 import { Card, CardType } from '@entities/Card'
+import { EmberSystem, EmberTier, SpawnWeights } from './EmberSystem'
 
 interface CardDefinition {
   /** Korean display name shown on the card face. */
@@ -37,6 +41,12 @@ const MIMIC_BY_SPAN: Record<number, { health: number; attack: number; drops: num
 
 export class CardSpawner {
   private turnCount: number = 0
+  private currentTier: EmberTier = 'bright'
+
+  /** Update the active ember tier so the next spawn run uses the matching weights. */
+  setTier(tier: EmberTier): void {
+    this.currentTier = tier
+  }
 
   /** Spawn one random card per lane for the current turn refill. */
   spawnCardsForTurn(): Card[] {
@@ -50,29 +60,28 @@ export class CardSpawner {
     return cards
   }
 
-  /** Generate a random enemy, trap, or treasure using the current spawn weights. */
+  /** Pick a card type using the active spawn weights, then build the card. */
   private generateRandomCard(): Card {
-    const cardTypeRoll = Math.random()
+    const weights = EmberSystem.getSpawnWeights(this.currentTier)
+    const total = weights.enemy + weights.trap + weights.treasure
+    const roll = Math.random() * total
 
-    if (cardTypeRoll < 0.5) {
-      return this.generateEnemy()
-    } else if (cardTypeRoll < 0.75) {
-      return this.generateTrap()
-    } else {
-      return this.generateTreasure()
-    }
+    if (roll < weights.enemy) return this.generateEnemy()
+    if (roll < weights.enemy + weights.trap) return this.generateTrap()
+    return this.generateTreasure()
   }
 
-  /** Pick one of the current one-lane enemies. */
+  /** Pick one of the current one-lane enemies, applying tier bonus if any. */
   private generateEnemy(): Card {
     const definition = ENEMY_DEFINITIONS[Math.floor(Math.random() * ENEMY_DEFINITIONS.length)]
+    const bonus = EmberSystem.getEnemyStatBonus(this.currentTier)
     return new Card(
       `enemy-${this.turnCount}-${Math.random()}`,
       CardType.ENEMY,
       definition.name,
       definition.description,
-      definition.healthOrDamage ?? 1,
-      definition.attack ?? 1
+      (definition.healthOrDamage ?? 1) + bonus.hp,
+      (definition.attack ?? 1) + bonus.atk,
     )
   }
 
@@ -85,7 +94,7 @@ export class CardSpawner {
       definition.name,
       definition.description,
       0,
-      definition.healthOrDamage ?? 2
+      definition.healthOrDamage ?? 2,
     )
   }
 
@@ -96,8 +105,13 @@ export class CardSpawner {
       `treasure-${this.turnCount}-${Math.random()}`,
       CardType.TREASURE,
       definition.name,
-      definition.description
+      definition.description,
     )
+  }
+
+  /** Read the active spawn weights so the UI can show the tier visually. */
+  getActiveWeights(): SpawnWeights {
+    return EmberSystem.getSpawnWeights(this.currentTier)
   }
 
   /**
@@ -117,7 +131,7 @@ export class CardSpawner {
       {
         isSpecialEnemy: true,
         defeatDropCount: stats.drops,
-      }
+      },
     )
 
     // Special mimics do not merge, so their width is assigned directly from the source chest.

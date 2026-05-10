@@ -1,11 +1,13 @@
 /**
  * TurnManager - Orchestrates a turn after the player picks a card.
  *
- * Turn order:
+ * Turn order (bright/dim ember tier):
  *   1. Pre-turn refill/drop + active-row regroup (handled in index.ts)
  *   2. Player phase  (handled in index.ts via cardAction event)
  *   3. Enemy phase and treasure volatility resolve as the end-turn event beat
- *   4. Turn end prepares the next row for the next turn-start cleanup page
+ *   4. Ember wanes by 1, turn end prepares the next row for cleanup
+ *
+ * In flickering ember tier the enemy phase fires BEFORE the player phase.
  *
  * Cards do NOT auto-advance globally any more; only holes created by resolved
  * cards are compacted so upper cards fall into empty rail cells.
@@ -14,6 +16,7 @@
 import { GameState } from './GameState'
 import { Card, CardType } from '@entities/Card'
 import { CardSpawner } from '@systems/CardSpawner'
+import { EmberSystem } from '@systems/EmberSystem'
 
 export interface EnemyHit {
   laneIndex: number
@@ -113,6 +116,29 @@ export class TurnManager {
    */
   checkHazardLoss(): boolean {
     return false
+  }
+
+  /**
+   * Tick the per-turn ember decay countdown. The ember loses 1 only when the
+   * countdown expires (every Character.EMBER_DECAY_TURNS turns). Returns
+   * `true` when the ember actually decreased on this turn so the caller can
+   * surface the change in the activity log.
+   *
+   * Ember 0 does NOT end the game; the EmberSystem tier handles the
+   * "extinguished" world instead.
+   */
+  tickEmberDecay(): boolean {
+    return EmberSystem.tickDecayCountdown(this.gameState.character)
+  }
+
+  /** Read the active ember tier so the spawner / UI can sync. */
+  getEmberTier() {
+    return EmberSystem.getCharacterTier(this.gameState.character)
+  }
+
+  /** Whether the current tier should run enemy phase before the player phase. */
+  isEnemyFirstStrike(): boolean {
+    return EmberSystem.isEnemyFirstStrike(this.getEmberTier())
   }
 
   reset(): void {

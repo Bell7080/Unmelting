@@ -1,88 +1,59 @@
 /**
- * DropSystem - Generates item drops when enemies are defeated
- * MVP: 4 basic items
+ * DropSystem - Generates hand card drops when enemies are defeated or
+ * treasures are opened. Hand cards are the player's consumable resources
+ * that fuel single use, triple synthesis, and combo patterns.
  */
 
-export interface ItemDrop {
-  name: string
-  description: string
-  effect: 'max-health-small' | 'max-health-large' | 'damage-boost' | 'trap-disarm'
+import { HandCard, HandCardId } from '@entities/HandCard'
+import { HAND_CARD_DEFINITIONS, getHandCardDef } from '@data/HandCards'
+
+let nextDropUid = 1
+
+function generateUid(defId: HandCardId): string {
+  return `${defId}-${nextDropUid++}`
 }
 
 export class DropSystem {
-  /**
-   * Shared hand/log order for items so every UI surface lists rewards the
-   * same way the player's hand visually sorts them.
-   */
-  private static readonly ITEM_HAND_ORDER: Record<ItemDrop['effect'], number> = {
-    'max-health-small': 0,
-    'max-health-large': 1,
-    'damage-boost': 2,
-    'trap-disarm': 3,
-  }
-
-  private static readonly ITEM_POOL: ItemDrop[] = [
-    {
-      name: '작은 양초',
-      description: '최대 체력 +1 (동시에 1 회복)',
-      effect: 'max-health-small',
-    },
-    {
-      name: '큰 양초',
-      description: '최대 체력 +2 (동시에 2 회복)',
-      effect: 'max-health-large',
-    },
-    {
-      name: '불꽃 부적',
-      description: '공격력 영구 +1',
-      effect: 'damage-boost',
-    },
-    {
-      name: '밀랍 방패',
-      description: '선택한 함정 파괴',
-      effect: 'trap-disarm',
-    },
-  ]
-
-  /** Find an item definition by its displayed hand name. */
-  static getItemByName(name: string): ItemDrop | null {
-    return this.ITEM_POOL.find((item) => item.name === name) ?? null
-  }
-
-  /** Expose current item definitions for UI/help text without allowing mutation. */
-  static getItemPool(): ItemDrop[] {
-    return [...this.ITEM_POOL]
-  }
-
-  /** Return the stable hand/log rank used for item sorting across the UI. */
-  static getHandSortRank(name: string): number {
-    const item = this.getItemByName(name)
-    if (!item) return Number.MAX_SAFE_INTEGER
-    return this.ITEM_HAND_ORDER[item.effect] ?? Number.MAX_SAFE_INTEGER
-  }
-
-  static generateDrop(): ItemDrop {
-    const roll = Math.random() * 100
-    if (roll < 40) return this.ITEM_POOL[0] // 40% Small max-health boost
-    if (roll < 70) return this.ITEM_POOL[1] // 30% Large max-health boost
-    if (roll < 90) return this.ITEM_POOL[2] // 20% Attack Boost
-    return this.ITEM_POOL[3] // 10% Defense Boost
-  }
-
-  static applyItem(item: ItemDrop, onApply: (effect: string, value?: number) => void): void {
-    switch (item.effect) {
-      case 'max-health-small':
-        onApply('max-health', 1)
-        break
-      case 'max-health-large':
-        onApply('max-health', 2)
-        break
-      case 'damage-boost':
-        onApply('damage-boost', 1)
-        break
-      case 'trap-disarm':
-        onApply('trap-disarm')
-        break
+  /** Build a single random hand card weighted by each definition's dropWeight. */
+  static generateDrop(): HandCard {
+    const defs = Object.values(HAND_CARD_DEFINITIONS)
+    const total = defs.reduce((sum, d) => sum + (d.dropWeight ?? 1), 0)
+    let roll = Math.random() * total
+    for (const def of defs) {
+      roll -= def.dropWeight ?? 1
+      if (roll <= 0) return DropSystem.makeCard(def.id)
     }
+    return DropSystem.makeCard(defs[0].id)
+  }
+
+  /** Build a fresh hand card instance for a known definition id. */
+  static makeCard(defId: HandCardId): HandCard {
+    return { uid: generateUid(defId), defId }
+  }
+
+  /** Convenience: generate `count` random drops. */
+  static generateDrops(count: number): HandCard[] {
+    const out: HandCard[] = []
+    for (let i = 0; i < count; i++) out.push(DropSystem.generateDrop())
+    return out
+  }
+
+  /** Lookup helper kept here so other systems do not import the data module directly. */
+  static getDefinition(id: HandCardId) {
+    return getHandCardDef(id)
+  }
+
+  /** Stable hand-display sort by category then definition id. */
+  static getHandSortRank(defId: HandCardId): number {
+    const def = HAND_CARD_DEFINITIONS[defId]
+    if (!def) return Number.MAX_SAFE_INTEGER
+    const categoryOrder: Record<string, number> = {
+      recovery: 0,
+      tool: 1,
+      control: 2,
+      attack: 3,
+    }
+    const categoryRank = categoryOrder[def.category] ?? 99
+    return categoryRank * 1000 + Object.keys(HAND_CARD_DEFINITIONS).indexOf(defId)
   }
 }

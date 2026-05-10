@@ -1,12 +1,17 @@
 /**
- * ActionSystem - Handles player actions and card interactions
- * MVP: Attack, Evade, Take
+ * ActionSystem - Handles player actions and card interactions.
+ *
+ * Resolves Attack/Evade/Take against active-row cards, awarding hand-card
+ * drops on enemy defeat or treasure open. The hand cards land directly in
+ * the character's hand; non-fitting drops are reported back to the caller.
  */
 
 import { Character } from '@entities/Character'
 import { Card, CardType } from '@entities/Card'
 import { Lane } from '@entities/Lane'
+import { HandCard } from '@entities/HandCard'
 import { DropSystem } from './DropSystem'
+import { getHandCardDef } from '@data/HandCards'
 
 export enum ActionType {
   ATTACK_ENEMY = 'attack',
@@ -26,8 +31,10 @@ export interface ActionResult {
   message: string
   damageDealt?: number
   damageTaken?: number
-  itemGained?: string
+  /** Names of hand cards picked up by the action (for log copy). */
   itemGainedNames?: string[]
+  /** Hand cards that did not fit because the hand was full (for overflow UI). */
+  overflow?: HandCard[]
   cardRemoved: boolean
 }
 
@@ -39,7 +46,7 @@ export class ActionSystem {
     character: Character,
     lane: Lane,
     card: Card,
-    actionType: ActionType
+    actionType: ActionType,
   ): ActionResult {
     if (!card) {
       return { success: false, message: 'No card selected', cardRemoved: false }
@@ -57,6 +64,25 @@ export class ActionSystem {
     }
   }
 
+  /** Award `count` random hand cards into the character; report overflow. */
+  private static awardDrops(
+    character: Character,
+    count: number,
+  ): { gainedNames: string[]; overflow: HandCard[] } {
+    const gainedNames: string[] = []
+    const overflow: HandCard[] = []
+    for (let i = 0; i < count; i++) {
+      const drop = DropSystem.generateDrop()
+      const def = getHandCardDef(drop.defId)
+      if (character.addHandCard(drop)) {
+        gainedNames.push(def.name)
+      } else {
+        overflow.push(drop)
+      }
+    }
+    return { gainedNames, overflow }
+  }
+
   /**
    * Attack an enemy. Player strikes first; if the enemy survives the blow,
    * it counter-attacks (the broader enemy phase still runs separately for
@@ -66,7 +92,7 @@ export class ActionSystem {
   private static attackEnemy(
     character: Character,
     _lane: Lane,
-    card: Card
+    card: Card,
   ): ActionResult {
     if (card.type !== CardType.ENEMY) {
       return { success: false, message: 'Not an enemy', cardRemoved: false }
@@ -76,21 +102,23 @@ export class ActionSystem {
     const newHealth = card.takeDamage(playerDamage)
 
     if (newHealth <= 0) {
-      const dropNames: string[] = []
-      for (let i = 0; i < card.defeatDropCount; i++) {
-        // Special enemies can override their reward count; normal enemies still drop one item.
-        const drop = DropSystem.generateDrop()
-        character.addItem(drop.name)
-        dropNames.push(drop.name)
-      }
+      const dropCount = card.defeatDropCount
+      const { gainedNames, overflow } = ActionSystem.awardDrops(
+        character,
+        dropCount,
+      )
       const summary =
-        dropNames.length === 1 ? dropNames[0] : `${dropNames.length}개 (${dropNames.join(', ')})`
+        gainedNames.length === 0
+          ? '손패가 가득 차 잃음'
+          : gainedNames.length === 1
+            ? gainedNames[0]
+            : `${gainedNames.length}개 (${gainedNames.join(', ')})`
       return {
         success: true,
-        message: `${card.name} 처치! ${summary} 획득`,
+        message: `${card.name} 처치! ${summary}`,
         damageDealt: playerDamage,
-        itemGained: summary,
-        itemGainedNames: dropNames,
+        itemGainedNames: gainedNames,
+        overflow,
         cardRemoved: true,
       }
     }
@@ -107,12 +135,12 @@ export class ActionSystem {
 
   /**
    * Step on a trap deliberately. Player takes the trap's penalty and the
-   * trap is consumed. Caller removes the card from any lane slots it holds.
+   * trap is consumed.
    */
   private static evadeTrap(
     character: Character,
     _lane: Lane,
-    card: Card
+    card: Card,
   ): ActionResult {
     if (card.type !== CardType.TRAP) {
       return { success: false, message: 'Not a trap', cardRemoved: false }
@@ -127,33 +155,29 @@ export class ActionSystem {
     }
   }
 
-  /**
-   * Open a treasure. Caller removes the card from any lane slots it holds.
-   * A merged treasure yields the design reward table: 1/3/5 items for 1/2/3 lanes.
-   */
+  /** Open a treasure. Reward count scales 1/3/5 by group width. */
   private static takeTreasure(
     character: Character,
     _lane: Lane,
-    card: Card
+    card: Card,
   ): ActionResult {
     if (card.type !== CardType.TREASURE) {
       return { success: false, message: 'Not a treasure', cardRemoved: false }
     }
     const safeSpan = Math.max(1, Math.min(3, card.groupCount))
-    // Clamp unusual group counts before looking up the reward table.
     const drops = TREASURE_DROPS_BY_SPAN[safeSpan]
-    const dropNames: string[] = []
-    for (let i = 0; i < drops; i++) {
-      const drop = DropSystem.generateDrop()
-      character.addItem(drop.name)
-      dropNames.push(drop.name)
-    }
-    const summary = drops === 1 ? dropNames[0] : `${drops}개 (${dropNames.join(', ')})`
+    const { gainedNames, overflow } = ActionSystem.awardDrops(character, drops)
+    const summary =
+      gainedNames.length === 0
+        ? '손패가 가득 차 잃음'
+        : drops === 1
+          ? gainedNames[0]
+          : `${gainedNames.length}개 (${gainedNames.join(', ')})`
     return {
       success: true,
       message: `${card.name} 획득: ${summary}`,
-      itemGained: summary,
-      itemGainedNames: dropNames,
+      itemGainedNames: gainedNames,
+      overflow,
       cardRemoved: true,
     }
   }
