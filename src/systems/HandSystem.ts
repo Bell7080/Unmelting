@@ -17,6 +17,7 @@
 import { GameState } from '@core/GameState'
 import { Card, CardType } from '@entities/Card'
 import { Character } from '@entities/Character'
+import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import {
   HandCard,
   HandCardId,
@@ -38,6 +39,13 @@ export interface FiredRecipe {
   message: string
 }
 
+/** Tracks a single card removed from the board so the UI can play its
+ *  consume animation BEFORE the next render erases it. */
+export interface RemovedFieldCard {
+  cardId: string
+  type: CardType
+}
+
 export interface HandUseResult {
   success: boolean
   /** Single-card effect message. */
@@ -46,6 +54,9 @@ export interface HandUseResult {
   mergeMessages: string[]
   /** Recipes that fired as a result of extending the chain. */
   firedRecipes: FiredRecipe[]
+  /** Field cards removed during this hand use (single effect + recipes).
+   *  Order is not guaranteed; the renderer animates all of them together. */
+  removedFieldCards: RemovedFieldCard[]
 }
 
 /**
@@ -78,6 +89,20 @@ export class HandSystem {
     return ok
   }
 
+  /** Snapshot every Card present on the field, keyed by id → type. Used to
+   *  diff what got removed across an effect application so the UI can play
+   *  consume animations on the right cells. */
+  private static snapshotFieldCards(gs: GameState): Map<string, CardType> {
+    const m = new Map<string, CardType>()
+    for (const lane of gs.lanes) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const c = lane.getCardAtDistance(d)
+        if (c) m.set(c.id, c.type)
+      }
+    }
+    return m
+  }
+
   /** Run a single use on slot `slotIndex`. Extends chain and fires recipes. */
   static useSingle(
     gs: GameState,
@@ -93,6 +118,7 @@ export class HandSystem {
         message: '비어 있는 슬롯',
         mergeMessages: [],
         firedRecipes: [],
+        removedFieldCards: [],
       }
     }
     const def = getHandCardDef(card.defId)
@@ -102,8 +128,12 @@ export class HandSystem {
         message: `${def.name}은(는) 대상을 골라야 해`,
         mergeMessages: [],
         firedRecipes: [],
+        removedFieldCards: [],
       }
     }
+
+    // Snapshot the field BEFORE any mutation so we can diff removals after.
+    const beforeField = HandSystem.snapshotFieldCards(gs)
 
     // Apply the card effect (merged cards use the enhanced version).
     const message = card.merged
@@ -126,11 +156,19 @@ export class HandSystem {
     // Each card use also charges the candle gauge a small amount.
     character.gainCandle(def.candleGain)
 
+    // Diff the field snapshot to record removed cards for animation.
+    const afterField = HandSystem.snapshotFieldCards(gs)
+    const removedFieldCards: RemovedFieldCard[] = []
+    for (const [id, type] of beforeField.entries()) {
+      if (!afterField.has(id)) removedFieldCards.push({ cardId: id, type })
+    }
+
     return {
       success: true,
       message,
       mergeMessages,
       firedRecipes,
+      removedFieldCards,
     }
   }
 

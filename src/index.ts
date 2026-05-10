@@ -420,10 +420,20 @@ async function applyHandSingle(
   }
   pendingHandTarget = null
   boardRenderer.setHandTargetingMode(null)
-  // Refill after recipes that may have removed cards from the field.
-  compactAndRefillAllLanes()
+  // Animate the "eaten" pop on every card removed by this hand use BEFORE
+  // re-rendering. The DOM still shows the pre-mutation state at this point,
+  // so the renderer can find the cells by data-card-id and play the consume
+  // keyframe + themed SquareBurst on each.
+  if (result.removedFieldCards.length > 0) {
+    await boardRenderer.animateCardConsumeByIds(result.removedFieldCards)
+  }
+  // Refill after recipes that may have removed cards from the field. Wait
+  // for the FLIP fall animation when something actually moved so the cards
+  // visibly slide down into the gap (otherwise the rail "punches a hole").
+  const moved = compactAndRefillAllLanes()
   gameState.regroupAllRows()
   render()
+  if (moved) await wait(380)
   setTimeout(() => {
     inputLocked = false
   }, 200)
@@ -527,10 +537,6 @@ async function handleCardAction(e: Event): Promise<void> {
   if (card.type === CardType.ENEMY) {
     await boardRenderer.animatePlayerAttack(card)
   }
-  // Capture the card's DOM element BEFORE the action mutates the lane —
-  // treasure/trap removal happens synchronously inside ActionSystem so the
-  // node may be gone by the time we want to anchor a burst.
-  const cardEl = boardRenderer.findCardElement(card.id)
   const result = ActionSystem.executeAction(
     gameState.getCharacter(),
     lane,
@@ -538,10 +544,6 @@ async function handleCardAction(e: Event): Promise<void> {
     actionType,
   )
   if (result.success) {
-    // Treasure picked up → 'treasure-gain' burst on the chest cell.
-    if (card.type === CardType.TREASURE && cardEl) {
-      boardRenderer.burstAtElement(cardEl, 'treasure-gain', { count: 20, spread: 130 })
-    }
     const gainedItems = result.itemGainedNames ?? []
     const actionLogs: ActivityLogDraft[] = [
       ...createItemGainLogs(gainedItems),
@@ -573,6 +575,13 @@ async function handleCardAction(e: Event): Promise<void> {
   }
 
   if (result.cardRemoved) {
+    // Trap/treasure: play the "eaten" pop on every cell of this Card (the
+    // merge-aware animator handles 2/3-cell groups too). The themed
+    // SquareBurst fires from the visual center. THEN we mutate the model
+    // and re-render so the card vanishes cleanly.
+    if (card.type === CardType.TRAP || card.type === CardType.TREASURE) {
+      await boardRenderer.animateCardConsume(card)
+    }
     gameState.removeCardFromRow(card, distance)
     boardRenderer.clearSelection()
   }
