@@ -4,9 +4,14 @@
  * Per-turn flow:
  *   1. Empty-rail analysis/refill → cards fall into holes before control returns
  *   2. Active-row regroup → adjacent same-type cards merge before turn start
- *   3. Player phase → player picks a card (1st click highlights, 2nd executes)
+ *   3. Player phase → player picks a card. In flickering / extinguished
+ *      ember tiers the enemy phase fires BEFORE the player phase.
  *   4. Event phase → enemy attacks and treasure volatility resolve together
- *   5. Turn end → board prepares the next turn-start cleanup page
+ *   5. Ember decay countdown ticks; chain resets; cleanup runs
+ *
+ * Chain combos: every hand card the player USES extends an active chain.
+ * Whenever the chain's multiset contains a recipe, that recipe fires as an
+ * additional bonus effect. The chain resets on a board action or turn end.
  */
 
 import { GameState } from '@core/GameState'
@@ -20,8 +25,13 @@ import {
 import { CardSpawner } from '@systems/CardSpawner'
 import { ActionSystem, ActionType } from '@systems/ActionSystem'
 import { DropSystem } from '@systems/DropSystem'
+import { HandSystem, ChainState } from '@systems/HandSystem'
+import { EmberSystem } from '@systems/EmberSystem'
 import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
+import { HandCardId, HandCategory } from '@entities/HandCard'
+import { getHandCardDef } from '@data/HandCards'
+import type { BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
 import { SpriteUrls } from '@ui/Sprites'
@@ -42,8 +52,6 @@ FontManager.loadCustomFont({
 })
 FontManager.setPrimaryFamily(`'OkDanDan', 'Georgia', 'Times New Roman', serif`)
 
-// Use the illustrated stage as the global page backdrop, with a warm vignette
-// on top so the rail (translucent dark slab) still has separation from it.
 document.body.style.backgroundImage =
   `linear-gradient(180deg, rgba(20, 16, 28, 0.55), rgba(8, 5, 14, 0.86)),` +
   `radial-gradient(ellipse at top, rgba(244, 164, 96, 0.18), transparent 65%),` +
@@ -60,7 +68,9 @@ const boardRenderer = new GameBoardRenderer('game-board')
 
 let gameActive = true
 let inputLocked = false
-let pendingTrapDisarmItemIndex: number | null = null
+let chain: ChainState = HandSystem.newChain()
+/** Currently armed targeted hand card: waits for a board click to consume. */
+let pendingHandTarget: { slotIndex: number; defId: HandCardId } | null = null
 
 const SCORE_SPEND_COST = 250
 const MAX_ACTIVITY_LOGS = 80
@@ -71,10 +81,6 @@ let activityLogs: ActivityLogEntry[] = []
 
 type ActivityLogDraft = Omit<ActivityLogEntry, 'id'>
 
-/**
- * Add one or more log rows exactly in the order they should be read from the
- * top of the left log panel, then trim old history to the retained cap.
- */
 function pushActivityLogsInDisplayOrder(logs: ActivityLogDraft[]): void {
   if (logs.length === 0) return
   const stampedLogs = logs.map((log) => ({
@@ -84,30 +90,35 @@ function pushActivityLogsInDisplayOrder(logs: ActivityLogDraft[]): void {
   activityLogs = [...stampedLogs, ...activityLogs].slice(0, MAX_ACTIVITY_LOGS)
 }
 
-/** Sort newly earned item names to match the hand's left-to-right order. */
-function sortItemNamesForLog(itemNames: string[]): string[] {
-  return itemNames
-    .map((name, index) => ({ name, index }))
-    .sort((a, b) => {
-      const rankDelta =
-        DropSystem.getHandSortRank(a.name) - DropSystem.getHandSortRank(b.name)
-      if (rankDelta !== 0) return rankDelta
-      return a.index - b.index
-    })
-    .map(({ name }) => name)
+/** Map a hand-card category to its SquareBurst palette. */
+function burstThemeForCategory(cat: HandCategory): BurstTheme {
+  switch (cat) {
+    case 'recovery':
+      return 'hand-recovery'
+    case 'tool':
+      return 'hand-tool'
+    case 'control':
+      return 'hand-control'
+    case 'attack':
+      return 'hand-attack'
+  }
 }
 
-/** Build item acquisition rows using the score log shape with item copy/counts. */
+/** Score gain pulse — burst over the score number panel. */
+function burstScoreGain(): void {
+  const anchor = boardRenderer.findScorePulseAnchor()
+  if (anchor) boardRenderer.burstAtElement(anchor, 'score', { count: 16, spread: 90 })
+}
+
 function createItemGainLogs(itemNames: string[]): ActivityLogDraft[] {
-  return sortItemNamesForLog(itemNames).map((name) => ({
-    label: `아이템 획득: ${name}`,
+  return itemNames.map((name) => ({
+    label: `손패 획득: ${name}`,
     itemCount: 1,
     kind: 'item-gain',
   }))
 }
 
 function getTurnScoreMultiplier(): number {
-  // Later turns are riskier, so the same action becomes more valuable over time.
   return 1 + gameState.getCurrentTurn() * 0.08
 }
 
@@ -150,16 +161,6 @@ function createScoreLog(
   return { label, scoreDelta: amount, kind }
 }
 
-function recordScore(
-  label: string,
-  baseValue: number,
-  kind: ActivityLogEntry['kind'],
-): number {
-  const log = createScoreLog(label, baseValue, kind)
-  pushActivityLogsInDisplayOrder([log])
-  return log.scoreDelta ?? 0
-}
-
 function recordScoreSpend(label: string, spent: number): ActivityLogDraft {
   score = Math.max(0, score - spent)
   scorePulseKey++
@@ -183,6 +184,10 @@ function actionTypeFor(cardType: CardType): ActionType | null {
   }
 }
 
+function syncSpawnerTier(): void {
+  cardSpawner.setTier(turnManager.getEmberTier())
+}
+
 function fillEmptyTopSlots(): void {
   const topDistance = LANE_DISTANCE_COUNT - 1
   for (let i = 0; i < gameState.lanes.length; i++) {
@@ -194,11 +199,6 @@ function fillEmptyTopSlots(): void {
   }
 }
 
-/**
- * Drop every card down to fill any holes within a lane, then top-up the rail.
- * Used after treasure volatility (or any board mutation) so a vanished card
- * does not leave a gap in the active row.
- */
 function compactAndRefillAllLanes(): boolean {
   const moved = gameState.compactLanes()
   fillEmptyTopSlots()
@@ -206,6 +206,7 @@ function compactAndRefillAllLanes(): boolean {
 }
 
 function fillBoardAtStart(): void {
+  syncSpawnerTier()
   for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
     const cards = cardSpawner.spawnCardsForTurn()
     for (let i = 0; i < gameState.lanes.length; i++) {
@@ -219,47 +220,70 @@ function fillBoardAtStart(): void {
   gameState.regroupAllRows()
 }
 
-function grantStarterItems(): void {
-  // Give one of each current item so every item mechanic is testable from turn 1.
-  for (const item of DropSystem.getItemPool()) {
-    gameState.character.addItem(item.name)
+function grantStarterHand(): void {
+  // Seed the hand with a small variety so all four categories are reachable
+  // immediately. Player can begin experimenting with combos from turn 1.
+  const seed: HandCardId[] = [
+    'small-candle',
+    'wax-shield',
+    'matchstick',
+    'cooled-candle',
+    'match-bundle',
+  ]
+  for (const id of seed) {
+    if (!gameState.character.hasHandRoom()) break
+    HandSystem.enqueueDrop(gameState.character, DropSystem.makeCard(id))
   }
 }
 
 function startGame(): void {
   gameActive = true
   inputLocked = false
+  chain = HandSystem.newChain()
+  pendingHandTarget = null
   gameState.reset()
   score = 0
   scorePulseKey = 0
   nextActivityLogId = 1
   activityLogs = []
-  grantStarterItems()
+  syncSpawnerTier()
+  grantStarterHand()
   fillBoardAtStart()
-  pendingTrapDisarmItemIndex = null
-  boardRenderer.setTrapDisarmMode(null)
+  boardRenderer.setHandTargetingMode(null)
   boardRenderer.clearSelection()
   render()
 }
 
+function buildChainHints() {
+  return {
+    sequence: chain.sequence.map((id) => getHandCardDef(id).name),
+    firedRecipeIds: Array.from(chain.firedRecipeIds),
+  }
+}
+
 function render(): void {
+  const tier = turnManager.getEmberTier()
   boardRenderer.render(gameState, {
     score,
     logs: activityLogs,
     canSpend: score >= SCORE_SPEND_COST,
     spendCost: SCORE_SPEND_COST,
     scorePulseKey,
+    emberTier: tier,
+    spawnWeights: cardSpawner.getActiveWeights(),
+    emberDecayCountdown: gameState.character.emberDecayCountdown,
+    vignetteIntensity: EmberSystem.getVignetteIntensity(tier),
+    chainHints: buildChainHints(),
+    pendingHandTarget,
   })
 }
 
-/** Pause turn resolution so CSS/Web Animations can read as intentional beats. */
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
-type NoticeLogKind = 'info' | 'win' | 'hurt'
+type NoticeLogKind = 'info' | 'win' | 'hurt' | 'melt' | 'recipe'
 
-/** Convert former center-toast messages into persistent left-panel log rows. */
 function createNoticeLog(
   message: string,
   kind: NoticeLogKind = 'info',
@@ -268,12 +292,20 @@ function createNoticeLog(
     info: '알림',
     win: '완료',
     hurt: '위험',
+    melt: '녹임',
+    recipe: '조합',
   }
-  const logKind = kind === 'info' ? 'notice' : kind
+  const logKind: ActivityLogEntry['kind'] =
+    kind === 'info'
+      ? 'notice'
+      : kind === 'recipe'
+        ? 'melt'
+        : kind === 'melt'
+          ? 'melt'
+          : kind
   return { label: message, badge: badgeByKind[kind], kind: logKind }
 }
 
-/** Record a single non-score event that used to be shown as a center toast. */
 function recordNotice(message: string, kind: NoticeLogKind = 'info'): void {
   pushActivityLogsInDisplayOrder([createNoticeLog(message, kind)])
 }
@@ -283,14 +315,21 @@ document.addEventListener('cardAction', (e: Event) => {
 })
 
 document.addEventListener('itemAction', (e: Event) => {
-  handleItemAction((e as CustomEvent<ItemActionDetail>).detail.itemIndex)
+  const detail = (e as CustomEvent<ItemActionDetail>).detail
+  void handleHandSlotClick(detail.itemIndex)
+})
+
+document.addEventListener('chainReset', () => {
+  if (chain.sequence.length === 0) return
+  HandSystem.resetChain(chain)
+  recordNotice('체인 초기화', 'info')
+  render()
 })
 
 document.addEventListener('scoreSpend', () => {
   handleScoreSpend()
 })
 
-/** Convert banked score into random item drops without spending the current turn. */
 function handleScoreSpend(): void {
   if (!gameActive || inputLocked || score < SCORE_SPEND_COST) return
 
@@ -300,113 +339,121 @@ function handleScoreSpend(): void {
   )
   const spent = itemCount * SCORE_SPEND_COST
   const gainedItems: string[] = []
+  let dropped = 0
   for (let i = 0; i < itemCount; i++) {
     const drop = DropSystem.generateDrop()
-    gameState.character.addItem(drop.name)
-    gainedItems.push(drop.name)
+    if (HandSystem.enqueueDrop(gameState.character, drop)) {
+      gainedItems.push(getHandCardDef(drop.defId).name)
+    } else {
+      dropped++
+    }
   }
 
-  // Item conversion logs item gains before the point spend so mixed rewards
-  // read in the same order as card rewards: item rows first, score row second.
   pushActivityLogsInDisplayOrder([
     ...createItemGainLogs(gainedItems),
-    recordScoreSpend(`점수 변환: 아이템 ${itemCount}개`, spent),
+    recordScoreSpend(`점수 변환: 손패 ${itemCount}개`, spent),
   ])
+  if (dropped > 0) recordNotice(`손패 ${dropped}장 못 받음 (가득 참)`, 'hurt')
   render()
 }
 
-/** Apply a hand item or arm a targeted item mode without spending a turn. */
-function handleItemAction(itemIndex: number): void {
+/** Click on a hand slot. Plain click = use single (or arm targeting). */
+async function handleHandSlotClick(slotIndex: number): Promise<void> {
   if (!gameActive || inputLocked) return
-  const itemName = gameState.character.items[itemIndex]
-  if (!itemName) return
+  const character = gameState.character
+  const card = character.hand[slotIndex]
+  if (!card) return
+  const def = getHandCardDef(card.defId)
 
-  const item = DropSystem.getItemByName(itemName)
-  if (!item) {
-    recordNotice(`${itemName}은(는) 아직 효과가 없어`, 'info')
+  // Plain click on a targeted card arms it; second click cancels.
+  if (def.needsTarget) {
+    if (pendingHandTarget && pendingHandTarget.slotIndex === slotIndex) {
+      pendingHandTarget = null
+      boardRenderer.setHandTargetingMode(null)
+      recordNotice(`${def.name} 사용 취소`, 'info')
+      render()
+      return
+    }
+    pendingHandTarget = { slotIndex, defId: def.id }
+    boardRenderer.setHandTargetingMode({ slotIndex, defId: def.id })
+    recordNotice(`${def.name}: 대상 카드를 선택해`, 'info')
     render()
     return
   }
 
-  // Wax shield is a targeting mode: click again to cancel, or pick a trap to destroy.
-  // Selecting/cancelling does not award score — points only land on actual disarm,
-  // otherwise toggling on/off would farm score infinitely.
-  if (item.effect === 'trap-disarm') {
-    pendingTrapDisarmItemIndex =
-      pendingTrapDisarmItemIndex === itemIndex ? null : itemIndex
-    boardRenderer.setTrapDisarmMode(pendingTrapDisarmItemIndex)
-    recordNotice(
-      pendingTrapDisarmItemIndex === null
-        ? '밀랍 방패 선택 취소'
-        : '밀랍 방패: 파괴할 함정을 선택',
-      pendingTrapDisarmItemIndex === null ? 'info' : 'hurt',
-    )
-    render()
-    return
-  }
-
-  // Using a different item cancels any armed shield so item indices stay valid.
-  pendingTrapDisarmItemIndex = null
-  boardRenderer.setTrapDisarmMode(null)
-
-  const removedItemName = gameState.character.removeItem(itemIndex)
-  if (!removedItemName) return
-  DropSystem.applyItem(item, (effect, value = 0) => {
-    if (effect === 'max-health') gameState.character.increaseMaxHealth(value)
-    if (effect === 'damage-boost') gameState.character.applyDamageBoost()
-  })
-  recordScore(`아이템 사용: ${item.name}`, 35, 'item')
-  recordNotice(`${item.name} 사용: ${item.description}`, 'win')
-  render()
+  await applyHandSingle(slotIndex)
 }
 
-/** Run the cleanup page: compact gaps, refill top slots, then merge active cards. */
+/** Apply a single-use hand card (with optional target). */
+async function applyHandSingle(
+  slotIndex: number,
+  target?: { laneIndex: number; distance: number; card: Card },
+): Promise<void> {
+  inputLocked = true
+  // Capture the card def BEFORE useSingle mutates the slot — we need the
+  // category to pick a burst theme, and the slot is empty after consumption.
+  const usedCard = gameState.character.hand[slotIndex]
+  const usedDef = usedCard ? getHandCardDef(usedCard.defId) : null
+  const result = HandSystem.useSingle(gameState, chain, slotIndex, target)
+  if (!result.success) {
+    recordNotice(result.message, 'hurt')
+    inputLocked = false
+    render()
+    return
+  }
+  // Fire the per-category burst at the slot the card was consumed from.
+  if (usedDef) {
+    const slotEl = boardRenderer.findHandSlotElement(slotIndex)
+    if (slotEl) {
+      boardRenderer.burstAtElement(slotEl, burstThemeForCategory(usedDef.category), {
+        count: 18,
+        spread: 110,
+      })
+    }
+  }
+  recordNotice(result.message, 'win')
+  for (const merge of result.mergeMessages) {
+    recordNotice(merge, 'melt')
+  }
+  for (const fired of result.firedRecipes) {
+    recordNotice(`✦ ${fired.recipe.name}: ${fired.message}`, 'recipe')
+  }
+  pendingHandTarget = null
+  boardRenderer.setHandTargetingMode(null)
+  // Refill after recipes that may have removed cards from the field.
+  compactAndRefillAllLanes()
+  gameState.regroupAllRows()
+  render()
+  setTimeout(() => {
+    inputLocked = false
+  }, 200)
+}
+
 async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
-  // Normal card actions consume the playing turn; free item cleanup does not.
-  if (advanceTurn) gameState.nextTurn()
+  if (advanceTurn) {
+    gameState.nextTurn()
+    // Reset chain on every turn boundary — the player should not be able to
+    // hold an unbounded chain across many turns.
+    HandSystem.resetChain(chain)
+    // Tick the ember decay countdown; ember decreases every 10th turn.
+    const tickedDown = turnManager.tickEmberDecay()
+    syncSpawnerTier()
+    if (tickedDown) {
+      const ember = gameState.character.ember
+      recordNotice(`불씨가 사그라들었다 (${ember}/${gameState.character.emberMax})`, 'hurt')
+    }
+  }
 
   const moved = compactAndRefillAllLanes()
   render()
   if (moved) await wait(380)
 
-  // Regroup after movement has settled so 3-card trap merges can animate too.
   gameState.regroupAllRows()
   boardRenderer.clearSelection()
   render()
 }
 
-/** Destroy a trap with a selected wax shield, then run cleanup without play events. */
-async function handleTrapDisarm(distance: number, card: Card): Promise<void> {
-  inputLocked = true
-  const itemName = gameState.character.removeItem(
-    pendingTrapDisarmItemIndex ?? -1,
-  )
-  pendingTrapDisarmItemIndex = null
-  boardRenderer.setTrapDisarmMode(null)
-  if (!itemName) {
-    inputLocked = false
-    render()
-    return
-  }
-
-  gameState.removeCardFromRow(card, distance)
-  boardRenderer.clearSelection()
-  recordScore(
-    `함정 제거: ${card.name}`,
-    120 * Math.max(1, card.groupCount),
-    'trap',
-  )
-  recordNotice(`${itemName}: ${card.name} 파괴`, 'win')
-  await runCleanupPhase(false)
-
-  setTimeout(() => {
-    inputLocked = false
-  }, 220)
-}
-
-/** Resolve enemy/treasure events and then run the next turn-start cleanup page. */
 async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
-  // Event phase — enemy attacks and treasure volatility are processed together.
   const hits = turnManager.runEnemyPhase()
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
   const eventAnimations: Promise<void>[] = []
@@ -428,7 +475,6 @@ async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
     return
   }
 
-  // Playing-card actions consume the turn, then run the cleanup page.
   await runCleanupPhase(true)
 
   setTimeout(() => {
@@ -437,28 +483,25 @@ async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
 }
 
 /**
- * Resolve one player click as a deliberate turn timeline: player action first,
- * then enemy/treasure events, then the rail falls and merges for next turn.
+ * Resolve one player click as a deliberate turn timeline. In flickering and
+ * extinguished tiers the enemy phase fires before the player phase.
  */
 async function handleCardAction(e: Event): Promise<void> {
   if (!gameActive || inputLocked) return
   const detail = (e as CustomEvent<CardActionDetail>).detail
   const { laneIndex, distance, card } = detail
 
-  // Only the active row is interactive.
   if (distance !== 0) return
 
   const lane = gameState.getLane(laneIndex)
   if (!lane) return
 
-  // Wax shield mode can only target traps; other cards are visually blocked.
-  if (pendingTrapDisarmItemIndex !== null) {
-    if (card.type !== CardType.TRAP) {
-      recordNotice('밀랍 방패는 함정만 파괴할 수 있어', 'hurt')
-      render()
-      return
-    }
-    await handleTrapDisarm(distance, card)
+  // Targeted hand card armed → board click feeds its target.
+  if (pendingHandTarget !== null) {
+    const armed = pendingHandTarget
+    pendingHandTarget = null
+    boardRenderer.setHandTargetingMode(null)
+    await applyHandSingle(armed.slotIndex, { laneIndex, distance, card })
     return
   }
 
@@ -467,10 +510,27 @@ async function handleCardAction(e: Event): Promise<void> {
 
   inputLocked = true
 
-  // Player phase — enemy cards pop upward only when the player strikes.
+  if (turnManager.isEnemyFirstStrike()) {
+    const hits = turnManager.runEnemyPhase()
+    if (hits.length > 0) {
+      await boardRenderer.animateEnemyAttacks(hits)
+      const dmg = hits.reduce((acc, h) => acc + h.damage, 0)
+      recordNotice(`불씨가 흔들려 적이 먼저 공격! -${dmg}`, 'hurt')
+      render()
+      if (!gameState.character.isAlive() || gameState.isGameOver) {
+        finishTurn()
+        return
+      }
+    }
+  }
+
   if (card.type === CardType.ENEMY) {
     await boardRenderer.animatePlayerAttack(card)
   }
+  // Capture the card's DOM element BEFORE the action mutates the lane —
+  // treasure/trap removal happens synchronously inside ActionSystem so the
+  // node may be gone by the time we want to anchor a burst.
+  const cardEl = boardRenderer.findCardElement(card.id)
   const result = ActionSystem.executeAction(
     gameState.getCharacter(),
     lane,
@@ -478,47 +538,68 @@ async function handleCardAction(e: Event): Promise<void> {
     actionType,
   )
   if (result.success) {
+    // Treasure picked up → 'treasure-gain' burst on the chest cell.
+    if (card.type === CardType.TREASURE && cardEl) {
+      boardRenderer.burstAtElement(cardEl, 'treasure-gain', { count: 20, spread: 130 })
+    }
     const gainedItems = result.itemGainedNames ?? []
     const actionLogs: ActivityLogDraft[] = [
       ...createItemGainLogs(gainedItems),
     ]
-    // Non-acquisition result copy is also kept in the left log now that the
-    // center toast layer has been removed.
     if (gainedItems.length === 0) {
       actionLogs.push(
         createNoticeLog(result.message, result.damageTaken ? 'hurt' : 'info'),
       )
     }
-    // When an action grants items and score together, surface the item rows
-    // first in the left log, followed immediately by the earned score row.
+    const scoreDelta = scoreForCardAction(card, result)
     actionLogs.push(
       createScoreLog(
         `${card.name} 선택`,
-        scoreForCardAction(card, result),
+        scoreDelta,
         activityKindForCard(card),
       ),
     )
     pushActivityLogsInDisplayOrder(actionLogs)
+    if (scoreDelta > 0) burstScoreGain()
+    if (result.overflow && result.overflow.length > 0) {
+      recordNotice(`손패가 가득 차 ${result.overflow.length}장 잃음`, 'hurt')
+    }
+    // Run auto-merges in case a drop produced a triple.
+    const merges = HandSystem.runAutoMerges(gameState.character)
+    for (const m of merges) recordNotice(m, 'melt')
   }
   if (result.damageTaken && result.damageTaken > 0) {
     await boardRenderer.animateDamageFlash()
   }
 
-  // Resolved cards are removed now, but the rail does not fall until turn end.
   if (result.cardRemoved) {
     gameState.removeCardFromRow(card, distance)
     boardRenderer.clearSelection()
   }
+
+  // Board action resets the chain so combos do not bleed across turns.
+  HandSystem.resetChain(chain)
+
   render()
 
-  // Trap damage can still defeat the character immediately after its animation.
   if (!gameState.character.isAlive()) {
     gameState.endGame('character_defeated')
     finishTurn()
     return
   }
 
-  await resolveEventPhaseAndPrepareNextTurn()
+  if (turnManager.isEnemyFirstStrike()) {
+    const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
+    if (treasureChanges.length > 0) {
+      await boardRenderer.animateTreasureChanges(treasureChanges)
+    }
+    await runCleanupPhase(true)
+    setTimeout(() => {
+      inputLocked = false
+    }, 220)
+  } else {
+    await resolveEventPhaseAndPrepareNextTurn()
+  }
 }
 
 function finishTurn(): void {

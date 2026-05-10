@@ -4,13 +4,17 @@ import { Card, CardType } from '@entities/Card'
 import { Lane } from '@entities/Lane'
 import { ActionSystem, ActionType } from './ActionSystem'
 
-/** Tests for item reward counts produced by defeated enemies and opened chests. */
+/**
+ * Tests for hand-card reward counts produced by defeated enemies and opened
+ * chests after the hand-system redesign. Drops now land directly in the
+ * character's bottom-up hand instead of as named string items.
+ */
 describe('ActionSystem rewards', () => {
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
-  it('drops five items when a two-lane mimic is defeated', () => {
+  it('drops five hand cards when a two-lane mimic is defeated', () => {
     const character = new Character()
     const lane = new Lane('lane-0', 0)
     const mimic = new Card('mimic-test', CardType.ENEMY, '미믹', 'Was a 2-lane treasure once', 10, 5, {
@@ -25,12 +29,11 @@ describe('ActionSystem rewards', () => {
     const result = ActionSystem.executeAction(character, lane, mimic, ActionType.ATTACK_ENEMY)
 
     expect(result.cardRemoved).toBe(true)
-    expect(result.itemGained).toContain('5개')
     expect(result.itemGainedNames).toHaveLength(5)
-    expect(character.getItems()).toHaveLength(5)
+    expect(character.hand).toHaveLength(5)
   })
 
-  it('drops five items from a three-lane treasure chest', () => {
+  it('drops five hand cards from a three-lane treasure chest', () => {
     const character = new Character()
     const lane = new Lane('lane-0', 0)
     const treasure = new Card('treasure-test', CardType.TREASURE, '큰 상자', '3 item reward chest')
@@ -41,8 +44,25 @@ describe('ActionSystem rewards', () => {
     const result = ActionSystem.executeAction(character, lane, treasure, ActionType.TAKE_TREASURE)
 
     expect(result.cardRemoved).toBe(true)
-    expect(result.itemGained).toContain('5개')
     expect(result.itemGainedNames).toHaveLength(5)
-    expect(character.getItems()).toHaveLength(5)
+    expect(character.hand).toHaveLength(5)
+  })
+
+  it('reports overflow when the hand is already full', () => {
+    const character = new Character()
+    while (character.hasHandRoom()) {
+      character.addHandCard({ uid: `seed-${character.hand.length}`, defId: 'small-candle' })
+    }
+    const lane = new Lane('lane-0', 0)
+    const enemy = new Card('enemy-test', CardType.ENEMY, '양초 생쥐', 'mouse', 1, 1)
+    character.damage = 10
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+
+    const result = ActionSystem.executeAction(character, lane, enemy, ActionType.ATTACK_ENEMY)
+
+    expect(result.cardRemoved).toBe(true)
+    expect(result.itemGainedNames).toHaveLength(0)
+    expect(result.overflow).toBeDefined()
+    expect(result.overflow!.length).toBeGreaterThan(0)
   })
 })
