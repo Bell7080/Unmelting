@@ -100,6 +100,10 @@ export class GameBoardRenderer {
   private hasRendered = false
   private previousCardIds = new Set<string>()
   private previousGroupSpans = new Map<string, number>()
+  /** Hand-card UIDs from the previous render — used to mark only NEW cards
+   *  with `is-entering` so the drop animation does not re-fire on every full
+   *  re-render of the hand panel. */
+  private previousHandUids = new Set<string>()
   private handTargetingMode: HandTargetingMode | null = null
 
   constructor(containerId: string = 'game-board') {
@@ -439,18 +443,23 @@ export class GameBoardRenderer {
       const def = getHandCardDef(card.defId)
       const isArming = targeting && targeting.slotIndex === i
       const merged = card.merged ? 'is-merged' : ''
+      // Only mark a hand card as `is-entering` when its uid wasn't present
+      // in the previous render. This keeps the drop animation a *real* entry
+      // beat instead of re-firing on every panel re-render.
+      const isNew = !this.previousHandUids.has(card.uid)
       const classes = [
         'hand-slot',
         'hand-card',
         this.categoryClass(def.category),
         merged,
         isArming ? 'is-arming-target' : '',
+        isNew ? 'is-entering' : '',
       ]
         .filter(Boolean)
         .join(' ')
       const description = card.merged ? def.tripleDescription : def.description
       slots.push(`
-        <li class="${classes}" data-slot-index="${i}">
+        <li class="${classes}" data-slot-index="${i}" data-hand-uid="${card.uid}">
           <button type="button" data-item-index="${i}"
                   aria-label="${def.name}: ${description}">
             ${card.merged ? '<span class="merged-mark" aria-hidden="true">✦</span>' : ''}
@@ -464,9 +473,13 @@ export class GameBoardRenderer {
 
     // Reverse so slot 0 sits at the bottom of the visual stack.
     const reversed = slots.slice().reverse().join('')
-    const targetingHelper = targeting
-      ? `<div class="hand-helper">${getHandCardDef(targeting.defId).name}: 대상 카드를 선택해 (다시 눌러 취소)</div>`
+    // Helper text is ALWAYS rendered to reserve its height — toggling
+    // visibility keeps the hand from shifting up/down when the player arms
+    // or cancels a targeted card.
+    const helperText = targeting
+      ? `${getHandCardDef(targeting.defId).name}: 대상 카드를 선택해 (다시 눌러 취소)`
       : ''
+    const helperHiddenClass = targeting ? '' : 'is-hidden'
 
     const candle = character.candle ?? 0
     const candleMax = character.candleMax ?? 10
@@ -482,8 +495,8 @@ export class GameBoardRenderer {
           <div class="candle-gauge-fill" style="height: ${candlePct}%"></div>
           <div class="candle-gauge-label">🕯 ${candle}/${candleMax}</div>
         </div>
-        ${targetingHelper}
         <ul class="hand-stack">${reversed}</ul>
+        <div class="hand-helper ${helperHiddenClass}" aria-live="polite">${helperText}</div>
       </aside>
     `
   }
@@ -793,6 +806,15 @@ export class GameBoardRenderer {
       })
     this.previousCardIds = ids
     this.previousGroupSpans = spans
+    // Mirror the same snapshot pattern for hand cards.
+    const handUids = new Set<string>()
+    this.boardElement
+      .querySelectorAll<HTMLElement>('.hand-slot[data-hand-uid]')
+      .forEach((el) => {
+        const uid = el.dataset.handUid
+        if (uid) handUids.add(uid)
+      })
+    this.previousHandUids = handUids
     this.hasRendered = true
   }
 
@@ -1680,200 +1702,10 @@ const STYLES = `
   font-size: 13px;
 }
 
-/* ---------- Hand panel (right column, deckbuilder-style cards) ---------- */
-.hand-panel {
-  display: grid;
-  grid-template-rows: auto auto 1fr;
-  gap: 10px;
-  min-height: 0;
-  align-self: stretch;
-  /* The lifted cards translate to the LEFT into stage area, so reserve a
-     bit of overflow space without forcing the column wider. */
-  overflow: visible;
-  position: relative;
-  z-index: 5;
-}
-
-.hand-header {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  font-size: var(--font-size-sm);
-  color: var(--color-flame-warm);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--color-border-soft);
-}
-.hand-header-icon {
-  display: inline-flex;
-  align-items: center;
-  color: var(--color-flame);
-  font-size: 14px;
-}
-
-.hand-helper {
-  font-size: 12px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: rgba(168, 58, 58, 0.18);
-  border: 1px solid rgba(168, 58, 58, 0.5);
-  color: #ffd5d5;
-  line-height: 1.35;
-}
-
-.hand-empty {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 14px 8px;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  font-style: italic;
-  border: 1px dashed var(--color-border-soft);
-  border-radius: 12px;
-}
-.hand-empty-icon {
-  display: inline-flex;
-  align-items: center;
-  color: var(--color-flame-warm);
-  font-size: 14px;
-}
-
-.hand-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  /* Right padding leaves room for the scrollbar; left padding keeps the
-     hover-lift translation from being clipped against the panel wall. */
-  padding: 4px 4px 4px 18px;
-  min-height: 0;
-  /* Vertical scroll once the hand exceeds the column height — scrollbar
-     stays on the RIGHT (default direction) so it hugs the screen wall,
-     mirroring the score log scroll on the left wall. */
-  overflow-y: auto;
-  overflow-x: visible;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(244, 164, 96, 0.7) rgba(20, 16, 28, 0.45);
-}
-.hand-cards::-webkit-scrollbar {
-  width: 4px;
-}
-.hand-cards::-webkit-scrollbar-track {
-  background: rgba(20, 16, 28, 0.4);
-  border-radius: 999px;
-}
-.hand-cards::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--color-flame), var(--color-flame-deep));
-  border-radius: 999px;
-  box-shadow: 0 0 6px rgba(244, 164, 96, 0.4);
-}
-.hand-cards::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, var(--color-flame), var(--color-flame-warm));
-}
-
-.hand-card {
-  appearance: none;
-  cursor: pointer;
-  font-family: inherit;
-  position: relative;
-  display: grid;
-  grid-template-rows: 1fr auto auto;
-  gap: 4px;
-  align-items: center;
-  text-align: center;
-  width: 100%;
-  min-height: 96px;
-  padding: 10px 8px 10px;
-  border: 1px solid var(--color-border-warm);
-  border-radius: 12px;
-  color: #fff5dc;
-  background:
-    linear-gradient(160deg, rgba(60, 44, 90, 0.78) 0%, rgba(20, 16, 28, 0.92) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.18),
-    inset 0 -10px 18px rgba(0, 0, 0, 0.5),
-    0 6px 12px rgba(0, 0, 0, 0.55);
-  transition:
-    transform 0.22s cubic-bezier(0.22, 0.92, 0.28, 1),
-    box-shadow 0.22s ease,
-    border-color 0.22s ease,
-    min-height 0.22s ease;
-  transform-origin: right center;
-}
-
-.hand-card-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-flame);
-  font-size: clamp(22px, 2.5vw, 30px);
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65));
-  line-height: 1;
-}
-
-.hand-card-name {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: #fff5dc;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.hand-card-effect {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  line-height: 1.25;
-  max-height: 0;
-  opacity: 0;
-  overflow: hidden;
-  transition: max-height 0.22s ease, opacity 0.22s ease;
-}
-
-/* Hover — the card lifts toward the play area, like drawing a card in a
-   deckbuilder. The horizontal slide is small (must fit inside the scroll
-   container's left padding), but the lift+scale still reads as a draw. */
-.hand-card:hover,
-.hand-card:focus-visible {
-  transform: translate(-12px, -8px) scale(1.07);
-  border-color: var(--color-flame);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.32),
-    inset 0 -12px 20px rgba(0, 0, 0, 0.6),
-    0 14px 26px rgba(0, 0, 0, 0.65),
-    0 0 26px rgba(244, 164, 96, 0.45);
-  z-index: 50;
-  outline: none;
-}
-.hand-card:hover .hand-card-effect,
-.hand-card:focus-visible .hand-card-effect {
-  max-height: 56px;
-  opacity: 1;
-}
-
-/* Effect-tinted edge so each item type reads at a glance even compact. */
-.hand-card-max_health_small { box-shadow: inset 3px 0 0 rgba(255, 215, 120, 0.65), inset 0 1px 0 rgba(255, 232, 168, 0.18), inset 0 -10px 18px rgba(0, 0, 0, 0.5), 0 6px 12px rgba(0, 0, 0, 0.55); }
-.hand-card-max_health_large { box-shadow: inset 3px 0 0 rgba(244, 164, 96, 0.85), inset 0 1px 0 rgba(255, 232, 168, 0.18), inset 0 -10px 18px rgba(0, 0, 0, 0.5), 0 6px 12px rgba(0, 0, 0, 0.55); }
-.hand-card-damage_boost { box-shadow: inset 3px 0 0 rgba(217, 122, 44, 0.9), inset 0 1px 0 rgba(255, 232, 168, 0.18), inset 0 -10px 18px rgba(0, 0, 0, 0.5), 0 6px 12px rgba(0, 0, 0, 0.55); }
-.hand-card-trap_disarm { box-shadow: inset 3px 0 0 rgba(112, 76, 150, 0.9), inset 0 1px 0 rgba(255, 232, 168, 0.18), inset 0 -10px 18px rgba(0, 0, 0, 0.5), 0 6px 12px rgba(0, 0, 0, 0.55); }
-.hand-card-damage_boost .hand-card-icon { color: var(--color-flame-deep); }
-.hand-card-trap_disarm .hand-card-icon { color: #c8b1ff; }
-
-.hand-card.is-arming-trap-disarm {
-  border-color: var(--color-enemy);
-  background:
-    linear-gradient(160deg, rgba(168, 58, 58, 0.42) 0%, rgba(20, 16, 28, 0.92) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.22),
-    inset 0 -10px 18px rgba(0, 0, 0, 0.5),
-    0 0 22px rgba(168, 58, 58, 0.55);
-}
+/* ---------- Hand panel — see the bottom of the file for the active
+   10-slot stack styles. The old deckbuilder layout (.hand-cards, the
+   transform-lift hover, etc.) was removed because it both duplicated and
+   clipped the new layout's animations. */
 
 @media (max-width: 960px) {
   .game-shell {
@@ -1888,8 +1720,6 @@ const STYLES = `
   }
   .left-panel { min-height: 0; }
   .hand-panel { grid-row: 3; }
-  .hand-cards { flex-direction: row; flex-wrap: wrap; }
-  .hand-card:hover, .hand-card:focus-visible { transform: translateY(-10px) scale(1.04); }
 }
 
 @media (max-width: 480px) {
@@ -2158,10 +1988,22 @@ const STYLES = `
   transition: background 0.4s ease;
 }
 
-/* ---------- Hand stack (bottom-up, 10 slots) ---------- */
+/* ---------- Hand stack (bottom-up, 10 fixed slots) ----------
+   Layout rationale:
+   - grid rows: [header, candle-gauge, stack (1fr), helper (reserved)]
+   - The helper row is rendered with a fixed min-height even when empty so
+     that arming a targeted card never shifts the stack up or down. This
+     fixes the "선택하면 UI가 밀려나는" feel.
+   - The stack uses justify-content:flex-end so filled slots dock to the
+     BOTTOM of the column, matching the Tetris-stacking model. Empty slots
+     are flattened (no height) so the bottom row of cards sits flush with
+     the helper border, not floating at the column center.
+   - overflow:visible on the stack so hover-pop/animation/burst don't get
+     clipped against the panel wall when a card is selected.
+*/
 .hand-panel {
   display: grid;
-  grid-template-rows: auto auto auto 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 8px;
   min-height: 0;
   padding: 10px;
@@ -2172,6 +2014,7 @@ const STYLES = `
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
     0 0 28px rgba(0, 0, 0, 0.28);
   align-self: stretch;
+  overflow: visible;
 }
 .hand-header {
   display: flex;
@@ -2227,54 +2070,88 @@ const STYLES = `
   border: 1px dashed rgba(244, 164, 96, 0.5);
   border-radius: 6px;
   background: rgba(244, 164, 96, 0.06);
+  /* Reserve height even when text is empty so arming/disarming does not
+     shift the stack vertically. */
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.18s ease;
+}
+.hand-helper.is-hidden {
+  opacity: 0;
+  border-color: transparent;
+  background: transparent;
+  color: transparent;
+  pointer-events: none;
 }
 .hand-stack {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 4px 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  justify-content: flex-end; /* Dock filled cards to the bottom. */
+  gap: 6px;
   min-height: 0;
-  overflow-y: auto;
+  overflow: visible;
 }
 .hand-slot {
-  height: 38px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px dashed rgba(255, 255, 255, 0.06);
   flex-shrink: 0;
+  position: relative;
 }
+/* Empty slots collapse so the visual stack reads bottom-up without
+   floating filled cards in the column middle. */
 .hand-slot.is-empty {
-  opacity: 0.45;
+  height: 0;
+  border: none;
+  background: transparent;
+  opacity: 0;
+  margin: 0;
+  padding: 0;
 }
 .hand-slot.hand-card {
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-style: solid;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.045);
-  height: auto;
-  min-height: 38px;
+  min-height: 56px;
+  transition: transform 0.18s cubic-bezier(0.2, 0.86, 0.28, 1), box-shadow 0.18s ease;
+}
+/* Drop animation runs ONLY on the first render where this uid appears.
+   Without this gate, every full re-render of the hand panel would replay
+   the drop on every card, which made the whole stack twitch. */
+.hand-slot.hand-card.is-entering {
   animation: hand-card-drop 0.32s cubic-bezier(0.18, 0.88, 0.22, 1);
 }
 @keyframes hand-card-drop {
   from { transform: translateY(-12px); opacity: 0.4; }
   to { transform: translateY(0); opacity: 1; }
 }
+.hand-slot.hand-card:hover,
+.hand-slot.hand-card:focus-within {
+  transform: translateY(-2px);
+  z-index: 2;
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.55),
+    0 0 14px rgba(255, 215, 120, 0.35);
+}
 .hand-slot.hand-card button {
   width: 100%;
+  height: 100%;
   display: grid;
-  grid-template-columns: 22px 1fr auto;
+  grid-template-columns: 30px 1fr auto;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: 10px;
+  padding: 8px 10px;
   background: transparent;
   border: none;
   font-family: inherit;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--color-text-primary);
   cursor: pointer;
   position: relative;
+  min-height: 56px;
 }
 .hand-slot.hand-card button:hover {
   background: rgba(255, 215, 120, 0.06);
@@ -2284,21 +2161,22 @@ const STYLES = `
   align-items: center;
   justify-content: center;
   color: var(--color-flame);
-  font-size: 16px;
+  font-size: 22px;
 }
 .hand-card .hand-card-name {
   font-weight: 700;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .hand-card .hand-card-effect {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--color-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 90px;
+  max-width: 120px;
 }
 .hand-cat-recovery { box-shadow: inset 4px 0 0 rgba(103, 196, 152, 0.85); }
 .hand-cat-tool { box-shadow: inset 4px 0 0 rgba(255, 215, 120, 0.9); }
@@ -2313,9 +2191,9 @@ const STYLES = `
 }
 .hand-slot.is-merged .merged-mark {
   position: absolute;
-  top: 2px;
-  right: 4px;
-  font-size: 11px;
+  top: 4px;
+  right: 6px;
+  font-size: 12px;
   color: rgba(255, 232, 168, 0.95);
   text-shadow: 0 0 4px rgba(255, 215, 120, 0.85);
 }
