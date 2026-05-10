@@ -19,20 +19,20 @@ interface CardDefinition {
   attack?: number
 }
 
-const ENEMY_DEFINITIONS: CardDefinition[] = [
+export const ENEMY_DEFINITIONS: CardDefinition[] = [
   { name: '양초 생쥐', description: 'Small candle mouse', healthOrDamage: 2, attack: 1 },
   { name: '양초 개구리', description: 'Leaping candle frog', healthOrDamage: 1, attack: 2 },
 ]
 
-const TRAP_DEFINITIONS: CardDefinition[] = [
+export const TRAP_DEFINITIONS: CardDefinition[] = [
   { name: '양초 거미줄', description: 'Deals 2 damage', healthOrDamage: 2 },
 ]
 
-const TREASURE_DEFINITIONS: CardDefinition[] = [
+export const TREASURE_DEFINITIONS: CardDefinition[] = [
   { name: '작은 상자', description: '1 item reward chest' },
 ]
 
-const MIMIC_BY_SPAN: Record<number, { health: number; attack: number; drops: number }> = {
+export const MIMIC_BY_SPAN: Record<number, { health: number; attack: number; drops: number }> = {
   // Mimics are riskier than their source chests and pay the requested bonus loot on defeat.
   1: { health: 4, attack: 2, drops: 2 },
   2: { health: 10, attack: 5, drops: 5 },

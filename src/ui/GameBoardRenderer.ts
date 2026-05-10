@@ -26,6 +26,12 @@ import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
 import type { EmberTier, SpawnWeights } from '@systems/EmberSystem'
 import { EmberSystem } from '@systems/EmberSystem'
+import {
+  ENEMY_DEFINITIONS,
+  TRAP_DEFINITIONS,
+  MIMIC_BY_SPAN,
+} from '@systems/CardSpawner'
+import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import {
   bigCandleIcon,
@@ -216,9 +222,14 @@ export class GameBoardRenderer {
         <section class="score-log-list" aria-label="Action history">
           ${logs}
         </section>
-        <button class="score-spend-btn" type="button" ${spendDisabled}>
-          점수 ${scorePanel.spendCost}로 아이템 변환
-        </button>
+        <div class="panel-actions">
+          <button class="score-spend-btn" type="button" ${spendDisabled}>
+            점수 ${scorePanel.spendCost}로 아이템 변환
+          </button>
+          <button class="compendium-btn" type="button" data-open-compendium>
+            📖 도감
+          </button>
+        </div>
       </aside>
     `
   }
@@ -473,13 +484,12 @@ export class GameBoardRenderer {
 
     // Reverse so slot 0 sits at the bottom of the visual stack.
     const reversed = slots.slice().reverse().join('')
-    // Helper text is ALWAYS rendered to reserve its height — toggling
-    // visibility keeps the hand from shifting up/down when the player arms
-    // or cancels a targeted card.
-    const helperText = targeting
-      ? `${getHandCardDef(targeting.defId).name}: 대상 카드를 선택해 (다시 눌러 취소)`
-      : ''
-    const helperHiddenClass = targeting ? '' : 'is-hidden'
+
+    // Targeting helper used to live as a row inside the hand panel, but with
+    // a partially filled hand that pushed the UI around as it appeared and
+    // disappeared. Now the prompt floats at the *top center of the viewport*
+    // (see updateTargetBanner / .target-banner) so it never shifts layout.
+    this.updateTargetBanner(targeting)
 
     const candle = character.candle ?? 0
     const candleMax = character.candleMax ?? 10
@@ -496,9 +506,241 @@ export class GameBoardRenderer {
           <div class="candle-gauge-label">🕯 ${candle}/${candleMax}</div>
         </div>
         <ul class="hand-stack">${reversed}</ul>
-        <div class="hand-helper ${helperHiddenClass}" aria-live="polite">${helperText}</div>
       </aside>
     `
+  }
+
+  /** Open the compendium overlay listing every field-card + hand-card def
+   *  with stats and descriptions. Pure read-only browser; pressing the
+   *  close button or ESC dismisses. */
+  openCompendium(): void {
+    let host = document.getElementById('compendium-overlay') as HTMLElement | null
+    if (!host) {
+      host = document.createElement('div')
+      host.id = 'compendium-overlay'
+      host.className = 'compendium-overlay'
+      document.body.appendChild(host)
+      host.addEventListener('click', (e) => {
+        const t = e.target as HTMLElement
+        if (t.dataset.compendiumClose !== undefined || t === host) {
+          this.closeCompendium()
+        }
+        if (t.dataset.compendiumTab) {
+          this.switchCompendiumTab(t.dataset.compendiumTab)
+        }
+      })
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && host?.classList.contains('is-open')) {
+          this.closeCompendium()
+        }
+      })
+    }
+    host.innerHTML = this.renderCompendium('enemies')
+    host.classList.add('is-open')
+  }
+
+  private closeCompendium(): void {
+    document.getElementById('compendium-overlay')?.classList.remove('is-open')
+  }
+
+  private switchCompendiumTab(tab: string): void {
+    const host = document.getElementById('compendium-overlay')
+    if (!host) return
+    host.innerHTML = this.renderCompendium(tab)
+  }
+
+  private renderCompendium(activeTab: string): string {
+    const tabs: { id: string; label: string }[] = [
+      { id: 'enemies', label: '적' },
+      { id: 'traps', label: '함정' },
+      { id: 'treasures', label: '보물' },
+      { id: 'hand', label: '손패' },
+    ]
+    const tabBar = tabs
+      .map(
+        (t) =>
+          `<button class="compendium-tab ${t.id === activeTab ? 'is-active' : ''}" data-compendium-tab="${t.id}">${t.label}</button>`,
+      )
+      .join('')
+    let body = ''
+    if (activeTab === 'enemies') body = this.renderCompendiumEnemies()
+    else if (activeTab === 'traps') body = this.renderCompendiumTraps()
+    else if (activeTab === 'treasures') body = this.renderCompendiumTreasures()
+    else body = this.renderCompendiumHand()
+    return `
+      <div class="compendium-modal" role="dialog" aria-label="도감">
+        <header class="compendium-header">
+          <h2 class="compendium-title">📖 도감</h2>
+          <button class="compendium-close" data-compendium-close type="button" aria-label="닫기">✕</button>
+        </header>
+        <nav class="compendium-tabs" role="tablist">${tabBar}</nav>
+        <section class="compendium-body" role="tabpanel">${body}</section>
+        <footer class="compendium-footer">ESC 또는 바깥 클릭으로 닫기</footer>
+      </div>
+    `
+  }
+
+  private renderCompendiumEnemies(): string {
+    const normal = ENEMY_DEFINITIONS.map((def) => {
+      const sprite = def.name.includes('생쥐')
+        ? SpriteUrls.enemyMouse
+        : SpriteUrls.enemyFrog
+      return this.compendiumCard(sprite, def.name, [
+        ['HP', String(def.healthOrDamage ?? '?')],
+        ['ATK', String(def.attack ?? '?')],
+      ], def.description)
+    }).join('')
+    const mimics = Object.entries(MIMIC_BY_SPAN)
+      .map(([span, stats]) => {
+        const widthLabel = `${span}칸 미믹`
+        return this.compendiumCard(SpriteUrls.mimic, widthLabel, [
+          ['HP', String(stats.health)],
+          ['ATK', String(stats.attack)],
+          ['Drops', String(stats.drops)],
+        ], '보물 카드가 변이된 함정형 적')
+      })
+      .join('')
+    return `
+      <h3 class="compendium-section">일반 적</h3>
+      <div class="compendium-grid">${normal}</div>
+      <h3 class="compendium-section">미믹 (특수 적)</h3>
+      <div class="compendium-grid">${mimics}</div>
+    `
+  }
+
+  private renderCompendiumTraps(): string {
+    const oneCell = TRAP_DEFINITIONS.map((def) =>
+      this.compendiumCard(SpriteUrls.trap, def.name, [
+        ['Damage', String(def.healthOrDamage ?? '?')],
+      ], def.description),
+    ).join('')
+    const merged = [2, 3].map((span) =>
+      this.compendiumCard(SpriteUrls.trap, `${span}칸 거미줄`, [
+        ['Damage', String((TRAP_DEFINITIONS[0].healthOrDamage ?? 2) + (span - 1))],
+      ], `${span}칸이 머지된 더 위험한 함정`),
+    ).join('')
+    return `
+      <h3 class="compendium-section">기본</h3>
+      <div class="compendium-grid">${oneCell}</div>
+      <h3 class="compendium-section">머지 변형</h3>
+      <div class="compendium-grid">${merged}</div>
+    `
+  }
+
+  private renderCompendiumTreasures(): string {
+    const sprites: Record<number, string> = {
+      1: SpriteUrls.chestSmall,
+      2: SpriteUrls.chestMedium,
+      3: SpriteUrls.chestLarge,
+    }
+    const labels: Record<number, string> = {
+      1: '작은 상자',
+      2: '큰 상자',
+      3: '거대한 상자',
+    }
+    const items = [1, 2, 3]
+      .map((span) =>
+        this.compendiumCard(sprites[span], labels[span], [
+          ['Drops', `손패 ${span}장`],
+        ], `${span}칸 보물 — 처리 시 손패 ${span}장 드롭, 50% 확률로 사라지고 10% 확률로 미믹으로 변이`),
+      )
+      .join('')
+    return `<div class="compendium-grid">${items}</div>`
+  }
+
+  private renderCompendiumHand(): string {
+    const groups: Record<string, string[]> = {
+      recovery: [],
+      tool: [],
+      control: [],
+      attack: [],
+    }
+    const groupLabels: Record<string, string> = {
+      recovery: '회복',
+      tool: '도구',
+      control: '컨트롤',
+      attack: '공격',
+    }
+    for (const id of HAND_CARD_IDS) {
+      const def = HAND_CARD_DEFINITIONS[id]
+      const card = `
+        <article class="compendium-card compendium-card-hand hand-cat-${def.category}">
+          <header class="compendium-card-head">
+            <span class="compendium-card-name">${def.name}</span>
+            <span class="compendium-card-cat">${groupLabels[def.category]}</span>
+          </header>
+          <div class="compendium-card-row">
+            <span class="compendium-card-label">단일</span>
+            <span class="compendium-card-value">${def.description}</span>
+          </div>
+          <div class="compendium-card-row">
+            <span class="compendium-card-label">★ 합성(트리플)</span>
+            <span class="compendium-card-value">${def.tripleDescription}</span>
+          </div>
+          <div class="compendium-card-row compendium-card-meta">
+            <span>🕯 +${def.candleGain}</span>
+            ${def.needsTarget ? '<span>🎯 대상 필요</span>' : ''}
+          </div>
+        </article>
+      `
+      groups[def.category].push(card)
+    }
+    return Object.entries(groups)
+      .map(
+        ([cat, cards]) => `
+          <h3 class="compendium-section">${groupLabels[cat]}</h3>
+          <div class="compendium-grid">${cards.join('')}</div>
+        `,
+      )
+      .join('')
+  }
+
+  private compendiumCard(
+    spriteUrl: string,
+    name: string,
+    stats: [string, string][],
+    description: string,
+  ): string {
+    const statRows = stats
+      .map(
+        ([k, v]) =>
+          `<div class="compendium-card-row"><span class="compendium-card-label">${k}</span><span class="compendium-card-value">${v}</span></div>`,
+      )
+      .join('')
+    return `
+      <article class="compendium-card">
+        <div class="compendium-card-art" style="background-image: url('${spriteUrl}');"></div>
+        <header class="compendium-card-head">
+          <span class="compendium-card-name">${name}</span>
+        </header>
+        ${statRows}
+        <p class="compendium-card-desc">${description}</p>
+      </article>
+    `
+  }
+
+  /** Body-mounted center banner showing "대상 카드를 선택해" while a
+   *  targeted hand card is armed. Pulses softly. */
+  private updateTargetBanner(targeting: HandTargetingMode | null): void {
+    let banner = document.getElementById('target-banner') as HTMLElement | null
+    if (!banner) {
+      banner = document.createElement('div')
+      banner.id = 'target-banner'
+      banner.className = 'target-banner'
+      banner.setAttribute('aria-live', 'polite')
+      banner.setAttribute('aria-hidden', 'true')
+      document.body.appendChild(banner)
+    }
+    if (targeting) {
+      const def = getHandCardDef(targeting.defId)
+      banner.innerHTML = `
+        <span class="target-banner-title">${def.name}</span>
+        <span class="target-banner-sub">대상 카드를 선택해 · 다시 눌러 취소</span>
+      `
+      banner.classList.add('is-on')
+    } else {
+      banner.classList.remove('is-on')
+    }
   }
 
   /** Top HUD: ember bar + decay timer + tier label + spawn weights chip. */
@@ -605,6 +847,15 @@ export class GameBoardRenderer {
       ?.addEventListener('click', (e) => {
         e.stopPropagation()
         document.dispatchEvent(new CustomEvent('scoreSpend'))
+      })
+
+    // Compendium opens an overlay browser of every spawning card + every hand
+    // card. It is purely informational (does not pause/advance a turn).
+    this.boardElement
+      .querySelector<HTMLElement>('[data-open-compendium]')
+      ?.addEventListener('click', (e) => {
+        e.stopPropagation()
+        this.openCompendium()
       })
   }
 
@@ -726,6 +977,77 @@ export class GameBoardRenderer {
   findScorePulseAnchor(): HTMLElement | null {
     return this.boardElement.querySelector<HTMLElement>('.score-number') ??
       this.boardElement.querySelector<HTMLElement>('.score-panel')
+  }
+
+  /**
+   * "Eaten" animation for trap/treasure (and any other consumed card):
+   * the card scales up + brightens + fades out while a themed SquareBurst
+   * fires from its center. All DOM cells belonging to this Card instance
+   * play in lockstep so 2/3-cell merges read as a single consumption.
+   *
+   * Theme defaults by card type. Falls back to vanish-smoke.
+   */
+  animateCardConsume(card: Card): Promise<void> {
+    const elements = [
+      ...this.boardElement.querySelectorAll<HTMLElement>(
+        `.cell.card[data-card-id="${card.id}"]`,
+      ),
+    ]
+    if (elements.length === 0) return Promise.resolve()
+    const theme: BurstTheme =
+      card.type === CardType.TREASURE
+        ? 'treasure-gain'
+        : card.type === CardType.ENEMY
+          ? 'damage'
+          : 'vanish-smoke'
+    // Burst from the visual center of the (possibly wide) group.
+    const first = elements[0]
+    const last = elements[elements.length - 1]
+    const r1 = first.getBoundingClientRect()
+    const r2 = last.getBoundingClientRect()
+    const x = (r1.left + r2.right) / 2
+    const y = (r1.top + r2.bottom) / 2
+    SquareBurst.playAt(x, y, theme, {
+      count: 20,
+      spread: 130 + (elements.length - 1) * 30,
+    })
+    return this.animateElements(elements, 'is-consuming', 360)
+  }
+
+  /**
+   * Consume a list of cards by id+type — used by hand-ability paths where
+   * HandSystem mutates the model BEFORE we can capture the Card object.
+   * The DOM is still showing the pre-mutation state when this is invoked.
+   */
+  animateCardConsumeByIds(
+    payload: { cardId: string; type: CardType }[],
+  ): Promise<void> {
+    if (payload.length === 0) return Promise.resolve()
+    const animations: Promise<void>[] = []
+    for (const { cardId, type } of payload) {
+      const elements = [
+        ...this.boardElement.querySelectorAll<HTMLElement>(
+          `.cell.card[data-card-id="${cardId}"]`,
+        ),
+      ]
+      if (elements.length === 0) continue
+      const theme: BurstTheme =
+        type === CardType.TREASURE
+          ? 'treasure-gain'
+          : type === CardType.ENEMY
+            ? 'damage'
+            : 'vanish-smoke'
+      const r1 = elements[0].getBoundingClientRect()
+      const r2 = elements[elements.length - 1].getBoundingClientRect()
+      SquareBurst.playAt(
+        (r1.left + r2.right) / 2,
+        (r1.top + r2.bottom) / 2,
+        theme,
+        { count: 20, spread: 130 + (elements.length - 1) * 30 },
+      )
+      animations.push(this.animateElements(elements, 'is-consuming', 360))
+    }
+    return Promise.all(animations).then(() => undefined)
   }
 
   /**
@@ -1881,6 +2203,32 @@ const STYLES = `
   z-index: 4;
 }
 
+/* Eaten / consumed card — used when a trap/treasure (or any hand-ability
+   removal) leaves the board. The card briefly puffs outward and fades so
+   the moment of "먹는" reads, instead of the card just disappearing. */
+.cell.card.is-consuming {
+  pointer-events: none;
+  animation: card-consume 0.36s cubic-bezier(0.2, 0.78, 0.32, 1) forwards;
+  z-index: 7;
+}
+@keyframes card-consume {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    filter: brightness(1) saturate(1);
+  }
+  35% {
+    transform: scale(1.18);
+    opacity: 0.95;
+    filter: brightness(1.35) saturate(1.15);
+  }
+  100% {
+    transform: scale(1.42);
+    opacity: 0;
+    filter: brightness(1.1) saturate(1);
+  }
+}
+
 /* ---------- Ember HUD (top center) ---------- */
 .ember-hud {
   position: fixed;
@@ -1991,20 +2339,20 @@ const STYLES = `
 
 /* ---------- Hand stack (bottom-up, 10 fixed slots) ----------
    Layout rationale:
-   - grid rows: [header, candle-gauge, stack (1fr), helper (reserved)]
-   - The helper row is rendered with a fixed min-height even when empty so
-     that arming a targeted card never shifts the stack up or down. This
-     fixes the "선택하면 UI가 밀려나는" feel.
+   - grid rows: [header, candle-gauge, stack (1fr)]
+   - Targeting prompt lives on a separate body-mounted .target-banner, NOT
+     in the panel — keeping it in the panel pushed the UI around when arming
+     a card.
    - The stack uses justify-content:flex-end so filled slots dock to the
      BOTTOM of the column, matching the Tetris-stacking model. Empty slots
      are flattened (no height) so the bottom row of cards sits flush with
-     the helper border, not floating at the column center.
+     the panel border, not floating at the column center.
    - overflow:visible on the stack so hover-pop/animation/burst don't get
      clipped against the panel wall when a card is selected.
 */
 .hand-panel {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 8px;
   min-height: 0;
   padding: 10px;
@@ -2063,28 +2411,236 @@ const STYLES = `
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
   letter-spacing: 0.04em;
 }
-.hand-helper {
-  font-size: 11px;
-  color: var(--color-flame);
-  text-align: center;
-  padding: 4px 6px;
-  border: 1px dashed rgba(244, 164, 96, 0.5);
-  border-radius: 6px;
-  background: rgba(244, 164, 96, 0.06);
-  /* Reserve height even when text is empty so arming/disarming does not
-     shift the stack vertically. */
-  min-height: 26px;
-  display: flex;
+/* ---------- Compendium (도감) overlay ---------- */
+.compendium-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.18s ease;
+  background: rgba(8, 5, 14, 0.78);
+  backdrop-filter: blur(2px);
+  z-index: 240;
+  padding: 24px;
 }
-.hand-helper.is-hidden {
-  opacity: 0;
-  border-color: transparent;
+.compendium-overlay.is-open { display: flex; }
+.compendium-modal {
+  width: min(880px, 96vw);
+  max-height: 86vh;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  background: linear-gradient(180deg, rgba(34, 26, 50, 0.96), rgba(18, 14, 28, 0.98));
+  border: 1px solid var(--color-border-warm);
+  border-radius: 18px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.65);
+  overflow: hidden;
+  color: #fff5dc;
+}
+.compendium-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+.compendium-title {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  margin: 0;
+  color: var(--color-flame-warm);
+}
+.compendium-close {
   background: transparent;
-  color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: var(--color-flame-warm);
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.compendium-close:hover { background: rgba(244, 164, 96, 0.18); }
+.compendium-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px 0;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+.compendium-tab {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  padding: 8px 16px;
+  border-radius: 8px 8px 0 0;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+.compendium-tab.is-active {
+  color: var(--color-flame-warm);
+  background: rgba(244, 164, 96, 0.1);
+  border-color: rgba(244, 164, 96, 0.4);
+}
+.compendium-body {
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.compendium-section {
+  margin: 8px 0 4px;
+  font-size: 12px;
+  color: var(--color-flame);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.compendium-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+.compendium-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.compendium-card-art {
+  height: 80px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  border-radius: 6px;
+  background-color: rgba(0, 0, 0, 0.25);
+}
+.compendium-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+.compendium-card-name {
+  font-weight: 800;
+  color: #fff5dc;
+  font-size: 13px;
+}
+.compendium-card-cat {
+  font-size: 10px;
+  color: var(--color-flame);
+  padding: 2px 6px;
+  border: 1px solid rgba(244, 164, 96, 0.45);
+  border-radius: 999px;
+}
+.compendium-card-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+.compendium-card-label { font-weight: 600; }
+.compendium-card-value { color: #fff5dc; }
+.compendium-card-meta {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;
+  font-size: 11px;
+  color: var(--color-flame);
+}
+.compendium-card-desc {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+.compendium-footer {
+  padding: 8px 20px 12px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-align: center;
+  border-top: 1px solid var(--color-border-soft);
+}
+
+/* panel-actions row on the score panel (groups spend + compendium buttons) */
+.panel-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.panel-actions .score-spend-btn { flex: 1; }
+.compendium-btn {
+  appearance: none;
+  background: rgba(244, 164, 96, 0.12);
+  border: 1px solid rgba(244, 164, 96, 0.45);
+  color: var(--color-flame-warm);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.compendium-btn:hover {
+  background: rgba(244, 164, 96, 0.2);
+}
+
+/* Body-mounted target banner — appears at top-center of the viewport when
+   a targeted hand card is armed. Subtle pulse so it stays readable without
+   demanding attention. Positioned slightly below the ember HUD strip. */
+.target-banner {
+  position: fixed;
+  top: 8vh;
+  left: 50%;
+  transform: translateX(-50%) translateY(-12px);
   pointer-events: none;
+  z-index: 210;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 22px;
+  text-align: center;
+  color: rgba(255, 232, 168, 0.96);
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.85),
+    0 0 18px rgba(244, 164, 96, 0.4);
+  opacity: 0;
+  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.18, 0.88, 0.22, 1);
+  will-change: opacity, transform;
+}
+.target-banner.is-on {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  animation: target-banner-pulse 1.8s ease-in-out infinite;
+}
+.target-banner-title {
+  font-size: clamp(20px, 2.6vw, 28px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.target-banner-sub {
+  font-size: clamp(12px, 1.2vw, 14px);
+  color: rgba(255, 232, 168, 0.78);
+  letter-spacing: 0.04em;
+}
+@keyframes target-banner-pulse {
+  0%, 100% {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 14px rgba(244, 164, 96, 0.35);
+    filter: brightness(1);
+  }
+  50% {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 22px rgba(244, 164, 96, 0.7);
+    filter: brightness(1.08);
+  }
 }
 .hand-stack {
   list-style: none;
