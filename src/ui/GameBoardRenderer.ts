@@ -658,17 +658,18 @@ export class GameBoardRenderer {
   /**
    * Play the downward slam used during the enemy phase. Enemy hits are grouped
    * by Card instance in TurnManager, so each visual card should only slam once.
-   * Each slammed card emits a 'damage'-themed burst.
+   *
+   * Important: the SquareBurst for an enemy-phase hit belongs on the *victim*
+   * (the player), not on the attacker. The slam class alone communicates the
+   * attacker's motion; `animateDamageFlash` follows up with the burst anchored
+   * to the player card.
    */
   animateEnemyAttacks(hits: EnemyHit[]): Promise<void> {
     const elements = new Set<HTMLElement>()
     for (const hit of hits) {
       const selector = `.cell.card.is-active[data-lane="${hit.laneIndex}"]`
       const element = this.boardElement.querySelector<HTMLElement>(selector)
-      if (element) {
-        elements.add(element)
-        SquareBurst.playOn(element, 'damage', { count: 16, spread: 90 })
-      }
+      if (element) elements.add(element)
     }
     return this.animateElements([...elements], 'is-enemy-slamming', 340)
   }
