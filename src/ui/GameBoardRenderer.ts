@@ -21,7 +21,12 @@ import { Card, CardType } from '@entities/Card'
 import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
 import type { EnemyHit, TreasureChange } from '@core/TurnManager'
 import { spriteForCard, SpriteUrls } from '@ui/Sprites'
-import { DropSystem } from '@systems/DropSystem'
+import { Character } from '@entities/Character'
+import { HandCardId, HandCategory } from '@entities/HandCard'
+import { getHandCardDef } from '@data/HandCards'
+import type { EmberTier, SpawnWeights } from '@systems/EmberSystem'
+import { EmberSystem } from '@systems/EmberSystem'
+import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import {
   bigCandleIcon,
   candleIcon,
@@ -42,6 +47,7 @@ export interface CardActionDetail {
 
 export interface ItemActionDetail {
   itemIndex: number
+  shiftKey?: boolean
 }
 
 export interface ActivityLogEntry {
@@ -60,6 +66,17 @@ export interface ActivityLogEntry {
     | 'notice'
     | 'win'
     | 'hurt'
+    | 'melt'
+}
+
+export interface HandTargetingMode {
+  slotIndex: number
+  defId: HandCardId
+}
+
+export interface ChainHints {
+  sequence: string[]
+  firedRecipeIds: string[]
 }
 
 export interface ScorePanelState {
@@ -68,6 +85,12 @@ export interface ScorePanelState {
   canSpend: boolean
   spendCost: number
   scorePulseKey: number
+  emberTier?: EmberTier
+  spawnWeights?: SpawnWeights
+  emberDecayCountdown?: number
+  vignetteIntensity?: number
+  chainHints?: ChainHints
+  pendingHandTarget?: HandTargetingMode | null
 }
 
 export class GameBoardRenderer {
@@ -77,7 +100,7 @@ export class GameBoardRenderer {
   private hasRendered = false
   private previousCardIds = new Set<string>()
   private previousGroupSpans = new Map<string, number>()
-  private trapDisarmItemIndex: number | null = null
+  private handTargetingMode: HandTargetingMode | null = null
 
   constructor(containerId: string = 'game-board') {
     const container = document.getElementById(containerId)
@@ -85,6 +108,12 @@ export class GameBoardRenderer {
       throw new Error(`Container ${containerId} not found`)
     }
     this.boardElement = container
+  }
+
+  /** Toggle the UI overlay used while a targeted hand card is awaiting a board click. */
+  setHandTargetingMode(mode: HandTargetingMode | null): void {
+    this.handTargetingMode = mode
+    this.clearSelection()
   }
 
   render(gameState: GameState, scorePanel: ScorePanelState): void {
@@ -108,6 +137,7 @@ export class GameBoardRenderer {
           <span class="turn-overlay-number">${turn}</span>
         </div>
       </div>
+      ${this.renderEmberHud(scorePanel)}
       <div class="game-shell">
         <aside class="left-panel" aria-label="Brand and score">
           <header class="brand">
@@ -122,10 +152,12 @@ export class GameBoardRenderer {
           </section>
 
           ${this.renderPlayer(character)}
+          ${this.renderChainStrip(scorePanel)}
         </main>
 
-        ${this.renderHand(character)}
+        ${this.renderHand(character, scorePanel)}
       </div>
+      ${this.renderVignette(scorePanel)}
     `
 
     this.injectStyles()
@@ -136,12 +168,6 @@ export class GameBoardRenderer {
 
   clearSelection(): void {
     this.selected = null
-  }
-
-  /** Toggle the UI overlay used while the wax shield is waiting for a trap. */
-  setTrapDisarmMode(itemIndex: number | null): void {
-    this.trapDisarmItemIndex = itemIndex
-    this.clearSelection()
   }
 
   private renderScorePanel(scorePanel: ScorePanelState): string {
@@ -246,14 +272,10 @@ export class GameBoardRenderer {
       this.selected.laneIndex >= laneIndex &&
       this.selected.laneIndex < laneIndex + span
 
-    const isTrapDisarmBlocked =
-      isActive &&
-      this.trapDisarmItemIndex !== null &&
-      card.type !== CardType.TRAP
-    const isTrapDisarmTarget =
-      isActive &&
-      this.trapDisarmItemIndex !== null &&
-      card.type === CardType.TRAP
+    // When a targeted hand card is armed every active-row card is a viable
+    // target, but only certain card types make sense for some hand cards. For
+    // MVP every active-row card is highlighted as targetable.
+    const isTargetingActive = isActive && this.handTargetingMode !== null
 
     const classes = [
       'cell',
@@ -261,8 +283,7 @@ export class GameBoardRenderer {
       `type-${card.type}`,
       isActive ? 'is-active' : 'is-preview',
       isSelected ? 'is-selected' : '',
-      isTrapDisarmBlocked ? 'is-trap-disarm-blocked' : '',
-      isTrapDisarmTarget ? 'is-trap-disarm-target' : '',
+      isTargetingActive ? 'is-hand-target' : '',
       span > 1 ? 'is-grouped' : '',
       this.hasRendered && !this.previousCardIds.has(card.id)
         ? 'is-entering'
@@ -285,7 +306,6 @@ export class GameBoardRenderer {
            role="button"
            tabindex="${tabIndex}">
         ${this.renderCardFace(card, span)}
-        ${isTrapDisarmBlocked ? '<div class="trap-block-mark" aria-hidden="true">×</div>' : ''}
       </div>
     `
   }
@@ -370,87 +390,163 @@ export class GameBoardRenderer {
     `
   }
 
-  private iconForItemEffect(effect: string): string {
-    switch (effect) {
-      case 'max-health-small':
+  private iconForHandCard(defId: HandCardId): string {
+    switch (defId) {
+      case 'small-candle':
         return smallCandleIcon()
-      case 'max-health-large':
+      case 'large-candle':
         return bigCandleIcon()
-      case 'damage-boost':
-        return flameIcon()
-      case 'trap-disarm':
+      case 'wax-shield':
         return shieldIcon()
+      case 'matchstick':
+      case 'match-bundle':
+        return flameIcon()
+      case 'brass-key':
+        return pouchIcon()
+      case 'cooled-candle':
+        return candleIcon()
+      case 'cleansing-ember':
+        return flameIcon()
       default:
         return pouchIcon()
     }
   }
 
-  private renderHand(character: any): string {
-    const items: string[] = character.items ?? []
-    const helper =
-      this.trapDisarmItemIndex !== null
-        ? '<div class="hand-helper danger">밀랍 방패: 파괴할 함정을 선택하거나 방패를 다시 눌러 취소</div>'
-        : ''
+  private categoryClass(cat: HandCategory): string {
+    return `hand-cat-${cat}`
+  }
 
-    if (items.length === 0) {
-      return `
-        <aside class="hand-panel" aria-label="Hand">
-          <header class="hand-header">
-            <span class="hand-header-icon">${pouchIcon()}</span>
-            손패
-          </header>
-          ${helper}
-          <div class="hand-empty">
-            <span class="hand-empty-icon">${pouchIcon()}</span>
-            손패가 비어 있어
-          </div>
-        </aside>
-      `
-    }
+  /**
+   * Render the 10-slot bottom-up hand stack. Slot 0 (model) is the bottom of
+   * the stack; slot HAND_MAX-1 is the top. Empty slots above the hand are
+   * still rendered as outlines so falling animations have a target column.
+   */
+  private renderHand(character: Character, scorePanel: ScorePanelState): string {
+    const slots: string[] = []
+    const handMax = character.handMax || 10
+    const targeting = scorePanel.pendingHandTarget ?? this.handTargetingMode
 
-    // Pair each item with its original inventory index, sort by effect order
-    // so the displayed row is a fixed layout while the model stays untouched.
-    const indexed = items
-      .map((name, index) => ({ name, index }))
-      .sort((a, b) => {
-        // Use DropSystem's shared rank so hand order and item log order cannot drift.
-        const oa = DropSystem.getHandSortRank(a.name)
-        const ob = DropSystem.getHandSortRank(b.name)
-        if (oa !== ob) return oa - ob
-        return a.index - b.index
-      })
-
-    const cards = indexed
-      .map(({ name, index }) => {
-        const def = DropSystem.getItemByName(name)
-        const effect = def?.effect ?? ''
-        const icon = this.iconForItemEffect(effect)
-        const description = def?.description ?? ''
-        const isArming =
-          effect === 'trap-disarm' && this.trapDisarmItemIndex === index
-        return `
-          <button
-            type="button"
-            class="hand-card hand-card-${effect.replace(/-/g, '_') || 'unknown'} ${isArming ? 'is-arming-trap-disarm' : ''}"
-            data-item-index="${index}"
-            aria-label="${name}: ${description}">
-            <span class="hand-card-icon">${icon}</span>
-            <span class="hand-card-name">${name}</span>
+    // Build each slot bottom-up in MODEL order (slot 0 first), then we render
+    // the column reversed so slot 0 displays at the bottom.
+    for (let i = 0; i < handMax; i++) {
+      const card = character.hand[i]
+      if (!card) {
+        slots.push(
+          `<li class="hand-slot is-empty" data-slot-index="${i}" aria-hidden="true"></li>`,
+        )
+        continue
+      }
+      const def = getHandCardDef(card.defId)
+      const isArming = targeting && targeting.slotIndex === i
+      const merged = card.merged ? 'is-merged' : ''
+      const classes = [
+        'hand-slot',
+        'hand-card',
+        this.categoryClass(def.category),
+        merged,
+        isArming ? 'is-arming-target' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+      const description = card.merged ? def.tripleDescription : def.description
+      slots.push(`
+        <li class="${classes}" data-slot-index="${i}">
+          <button type="button" data-item-index="${i}"
+                  aria-label="${def.name}: ${description}">
+            ${card.merged ? '<span class="merged-mark" aria-hidden="true">✦</span>' : ''}
+            <span class="hand-card-icon">${this.iconForHandCard(card.defId)}</span>
+            <span class="hand-card-name">${def.name}${card.merged ? ' ★' : ''}</span>
             <span class="hand-card-effect">${description}</span>
           </button>
-        `
-      })
-      .join('')
+        </li>
+      `)
+    }
+
+    // Reverse so slot 0 sits at the bottom of the visual stack.
+    const reversed = slots.slice().reverse().join('')
+    const targetingHelper = targeting
+      ? `<div class="hand-helper">${getHandCardDef(targeting.defId).name}: 대상 카드를 선택해 (다시 눌러 취소)</div>`
+      : ''
+
+    const candle = character.candle ?? 0
+    const candleMax = character.candleMax ?? 10
+    const candlePct = Math.max(0, Math.min(100, (candle / candleMax) * 100))
 
     return `
       <aside class="hand-panel" aria-label="Hand">
         <header class="hand-header">
           <span class="hand-header-icon">${pouchIcon()}</span>
-          손패 (${items.length})
+          손패 (${character.hand.length}/${handMax})
         </header>
-        ${helper}
-        <div class="hand-cards">${cards}</div>
+        <div class="candle-gauge" aria-label="Candle gauge">
+          <div class="candle-gauge-fill" style="height: ${candlePct}%"></div>
+          <div class="candle-gauge-label">🕯 ${candle}/${candleMax}</div>
+        </div>
+        ${targetingHelper}
+        <ul class="hand-stack">${reversed}</ul>
       </aside>
+    `
+  }
+
+  /** Top HUD: ember bar + decay timer + tier label + spawn weights chip. */
+  private renderEmberHud(scorePanel: ScorePanelState): string {
+    if (!scorePanel.emberTier) return ''
+    const tier = scorePanel.emberTier
+    const character = this.currentGameState?.getCharacter()
+    if (!character) return ''
+    const ember = character.ember
+    const emberMax = character.emberMax
+    const pct = Math.max(0, Math.min(100, (ember / emberMax) * 100))
+    const countdown = scorePanel.emberDecayCountdown ?? 10
+    const weights = scorePanel.spawnWeights
+    const weightsText = weights
+      ? `적 ${weights.enemy}% · 함정 ${weights.trap}% · 보물 ${weights.treasure}%`
+      : ''
+    return `
+      <div class="ember-hud" aria-label="Ember status">
+        <div class="ember-hud-inner">
+          <div class="ember-line">
+            <span class="ember-icon">${flameIcon()}</span>
+            <div class="ember-bar">
+              <div class="ember-bar-fill ember-tier-${tier}" style="width: ${pct}%"></div>
+              <span class="ember-bar-label">불씨 ${ember}/${emberMax} · ${EmberSystem.tierLabel(tier)}</span>
+            </div>
+            <span class="ember-countdown" title="다음 불씨 감소까지 남은 턴">
+              ${countdown}턴 뒤 -1
+            </span>
+          </div>
+          <div class="ember-weights">${weightsText}</div>
+        </div>
+      </div>
+    `
+  }
+
+  /** Vignette overlay whose intensity follows the ember tier. */
+  private renderVignette(scorePanel: ScorePanelState): string {
+    const intensity = Math.max(0, Math.min(1, scorePanel.vignetteIntensity ?? 0))
+    if (intensity <= 0) return ''
+    const opacity = intensity.toFixed(2)
+    return `<div class="ember-vignette" style="--vignette-opacity: ${opacity};" aria-hidden="true"></div>`
+  }
+
+  /** Stretched chain strip below the player card showing recently played cards. */
+  private renderChainStrip(scorePanel: ScorePanelState): string {
+    const hints = scorePanel.chainHints
+    if (!hints || hints.sequence.length === 0) return ''
+    const items = hints.sequence
+      .map(
+        (name) => `<span class="chain-card">${name}</span>`,
+      )
+      .join('<span class="chain-arrow">→</span>')
+    const fired = hints.firedRecipeIds.length
+    const firedText = fired > 0 ? `<span class="chain-fired">조합 ${fired}회</span>` : ''
+    return `
+      <div class="chain-strip" aria-label="Active chain">
+        <span class="chain-label">체인</span>
+        <div class="chain-cards">${items}</div>
+        ${firedText}
+        <button class="chain-reset-btn" type="button" title="체인 초기화">×</button>
+      </div>
     `
   }
 
@@ -467,19 +563,27 @@ export class GameBoardRenderer {
       })
     })
 
-    // Hand items are buttons so they can be used without selecting a rail card.
+    // Hand cards: clicking dispatches itemAction which the main loop turns
+    // into a single-use (or arms targeting) on that slot.
     this.boardElement
-      .querySelectorAll<HTMLElement>('.hand-card')
+      .querySelectorAll<HTMLElement>('.hand-card button[data-item-index]')
       .forEach((el) => {
         el.addEventListener('click', (e) => {
           e.stopPropagation()
           const itemIndex = parseInt(el.dataset.itemIndex || '-1', 10)
           document.dispatchEvent(
             new CustomEvent<ItemActionDetail>('itemAction', {
-              detail: { itemIndex },
+              detail: { itemIndex, shiftKey: (e as MouseEvent).shiftKey },
             }),
           )
         })
+      })
+
+    this.boardElement
+      .querySelector<HTMLElement>('.chain-reset-btn')
+      ?.addEventListener('click', (e) => {
+        e.stopPropagation()
+        document.dispatchEvent(new CustomEvent('chainReset'))
       })
 
     // Score conversion is panel-level UI and does not spend a turn.
@@ -527,64 +631,111 @@ export class GameBoardRenderer {
   /**
    * Play the upward pop used when the player actively attacks an enemy card.
    * The model is mutated after this promise resolves so the clicked card stays
-   * visible for the full hit reaction.
+   * visible for the full hit reaction. A 'damage'-themed burst is layered on
+   * the attacked card so the impact reads even on quick chains.
    */
   animatePlayerAttack(card: Card): Promise<void> {
+    const target = this.findCardElement(card.id)
+    if (target) {
+      SquareBurst.playOn(target, 'damage', { count: 18, spread: 100 })
+    }
     return this.animateCardElements(card, 'is-player-striking', 280)
   }
 
   /**
    * Play the downward slam used during the enemy phase. Enemy hits are grouped
    * by Card instance in TurnManager, so each visual card should only slam once.
+   * Each slammed card emits a 'damage'-themed burst.
    */
   animateEnemyAttacks(hits: EnemyHit[]): Promise<void> {
     const elements = new Set<HTMLElement>()
     for (const hit of hits) {
       const selector = `.cell.card.is-active[data-lane="${hit.laneIndex}"]`
       const element = this.boardElement.querySelector<HTMLElement>(selector)
-      if (element) elements.add(element)
+      if (element) {
+        elements.add(element)
+        SquareBurst.playOn(element, 'damage', { count: 16, spread: 90 })
+      }
     }
     return this.animateElements([...elements], 'is-enemy-slamming', 340)
   }
 
   /**
-   * Whole-screen damage vignette. We mount a body-level overlay once and
-   * just restart its animation on each hit so the effect can render on top
-   * of every other layer (rail, hand panel, turn overlay).
+   * Player-hit feedback. Replaces the previous oxblood vignette with a
+   * SquareBurst centered on the player card so the burst reads as a focused
+   * impact rather than a screen-wide tint (which clashed with the ember
+   * brightness pass). If the player card is offscreen for any reason we fall
+   * back to a viewport-center burst.
    */
-  private getOrCreateDamageOverlay(): HTMLElement {
-    const existing = document.getElementById('damage-flash-overlay')
-    if (existing) return existing
-    const el = document.createElement('div')
-    el.id = 'damage-flash-overlay'
-    el.className = 'damage-flash'
-    el.setAttribute('aria-hidden', 'true')
-    document.body.appendChild(el)
-    return el
+  animateDamageFlash(): Promise<void> {
+    const playerCard = this.boardElement.querySelector<HTMLElement>(
+      '.player-card, .player-row',
+    )
+    if (playerCard) {
+      SquareBurst.playOn(playerCard, 'damage', { count: 20, spread: 150 })
+    } else {
+      SquareBurst.playAt(
+        window.innerWidth / 2,
+        window.innerHeight * 0.6,
+        'damage',
+        { count: 20, spread: 150 },
+      )
+    }
+    return new Promise((resolve) => window.setTimeout(resolve, 420))
   }
 
-  /** Pulse a deep oxblood vignette across the entire viewport on damage. */
-  animateDamageFlash(): Promise<void> {
-    return this.animateElements(
-      [this.getOrCreateDamageOverlay()],
-      'is-flashing',
-      540,
+  /** Generic effect dispatch — used by index.ts to fire bursts on events. */
+  burstAtElement(target: HTMLElement | null, theme: BurstTheme, opts?: Parameters<typeof SquareBurst.playOn>[2]): void {
+    if (!target) return
+    SquareBurst.playOn(target, theme, opts)
+  }
+
+  burstAtPoint(x: number, y: number, theme: BurstTheme, opts?: Parameters<typeof SquareBurst.playAt>[3]): void {
+    SquareBurst.playAt(x, y, theme, opts)
+  }
+
+  /** Find the rendered DOM element for a card (by id) for burst placement. */
+  findCardElement(cardId: string): HTMLElement | null {
+    return this.boardElement.querySelector<HTMLElement>(
+      `.cell.card[data-card-id="${cardId}"]`,
     )
+  }
+
+  /** Find a hand slot element by index for burst placement. */
+  findHandSlotElement(slotIndex: number): HTMLElement | null {
+    return this.boardElement.querySelector<HTMLElement>(
+      `.hand-slot[data-slot-index="${slotIndex}"]`,
+    )
+  }
+
+  /** Find the score/log panel for score-pulse bursts. */
+  findScorePulseAnchor(): HTMLElement | null {
+    return this.boardElement.querySelector<HTMLElement>('.score-number') ??
+      this.boardElement.querySelector<HTMLElement>('.score-panel')
   }
 
   /**
    * Treasure volatility mutates the model before the next render, but the old
    * DOM is still present. Use that old DOM to show dust and fading first.
+   *
+   * Both 'disappeared' and 'mimic' outcomes also fire a SquareBurst on the
+   * affected cell — smoke for vanish, oxblood→moss for mimic — so the unified
+   * effect language reads at every state change.
    */
   animateTreasureChanges(changes: TreasureChange[]): Promise<void> {
     const elements = new Set<HTMLElement>()
     for (const change of changes) {
-      if (change.outcome !== 'disappeared') continue
       const selector =
         `.cell.card.type-treasure[data-lane="${change.laneIndex}"]` +
         `[data-distance="${change.distance}"]`
       const element = this.boardElement.querySelector<HTMLElement>(selector)
-      if (element) elements.add(element)
+      if (!element) continue
+      if (change.outcome === 'disappeared') {
+        elements.add(element)
+        SquareBurst.playOn(element, 'vanish-smoke', { count: 18, spread: 110 })
+      } else if (change.outcome === 'mimic') {
+        SquareBurst.playOn(element, 'mimic-shift', { count: 20, spread: 130 })
+      }
     }
     return this.animateElements([...elements], 'is-treasure-vanishing', 520)
   }
@@ -1767,44 +1918,9 @@ const STYLES = `
   100% { opacity: 0; transform: translate(18px, -18px) scale(1.25); }
 }
 
-/* ---------- Damage vignette (full-screen, classical oxblood) ---------- */
-.damage-flash {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  pointer-events: none;
-  opacity: 0;
-  /* Layered radials read like an old painted-stage vignette: deep oxblood
-     edge collapsing toward a translucent garnet wash, with a faint scarlet
-     ember at the center for a beat of dramatic life. */
-  background:
-    radial-gradient(
-      circle at 50% 50%,
-      rgba(255, 90, 70, 0.16) 0%,
-      rgba(180, 40, 50, 0.08) 18%,
-      transparent 38%
-    ),
-    radial-gradient(
-      ellipse 92% 80% at 50% 50%,
-      transparent 28%,
-      rgba(120, 22, 30, 0.32) 58%,
-      rgba(70, 10, 18, 0.78) 82%,
-      rgba(38, 6, 12, 0.95) 100%
-    );
-  mix-blend-mode: normal;
-  will-change: opacity, transform, filter;
-}
-
-.damage-flash.is-flashing {
-  animation: damage-vignette 0.54s cubic-bezier(0.18, 0.9, 0.28, 1);
-}
-
-@keyframes damage-vignette {
-  0%   { opacity: 0;    transform: scale(1.05); filter: saturate(1) brightness(1); }
-  16%  { opacity: 1;    transform: scale(1.0);  filter: saturate(1.45) brightness(1.05); }
-  42%  { opacity: 0.78; transform: scale(1.02); }
-  100% { opacity: 0;    transform: scale(1.1);  filter: saturate(1) brightness(1); }
-}
+/* Damage vignette intentionally removed — see SquareBurst.ts for the
+   replacement. The unified effect system uses scattering solid squares so
+   the visual stays compatible with the ember-driven brightness pass. */
 
 @keyframes card-enter-soft {
   from {
@@ -1933,4 +2049,356 @@ const STYLES = `
   animation: group-squish 0.3s cubic-bezier(0.18, 0.9, 0.18, 1);
   z-index: 4;
 }
+
+/* ---------- Ember HUD (top center) ---------- */
+.ember-hud {
+  position: fixed;
+  top: clamp(56px, 7vh, 84px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 35;
+  width: min(640px, 92vw);
+  pointer-events: none;
+}
+.ember-hud-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, rgba(20, 16, 28, 0.78), rgba(8, 5, 14, 0.55));
+  border: 1px solid rgba(255, 215, 120, 0.22);
+  border-radius: 12px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+.ember-line {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+.ember-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-flame);
+  font-size: 16px;
+  filter: drop-shadow(0 0 6px rgba(255, 215, 120, 0.5));
+}
+.ember-bar {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.ember-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  transition: width 0.35s ease;
+}
+.ember-bar-fill.ember-tier-bright {
+  background: linear-gradient(90deg, #ffe89a, #f4a460);
+  box-shadow: 0 0 12px rgba(255, 215, 120, 0.55);
+}
+.ember-bar-fill.ember-tier-dim {
+  background: linear-gradient(90deg, #f4a460, #c97640);
+  box-shadow: 0 0 8px rgba(244, 164, 96, 0.4);
+}
+.ember-bar-fill.ember-tier-flickering {
+  background: linear-gradient(90deg, #c97640, #8b3a2d);
+  box-shadow: 0 0 8px rgba(168, 58, 58, 0.45);
+  animation: ember-flicker 1.6s ease-in-out infinite;
+}
+.ember-bar-fill.ember-tier-extinguished {
+  background: linear-gradient(90deg, #5a2828, #2d1818);
+  animation: ember-flicker 0.8s ease-in-out infinite;
+}
+@keyframes ember-flicker {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(0.65); }
+}
+.ember-bar-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 245, 220, 0.95);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  letter-spacing: 0.04em;
+}
+.ember-countdown {
+  font-size: 11px;
+  color: rgba(255, 215, 120, 0.85);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.ember-weights {
+  font-size: 10px;
+  color: rgba(255, 245, 220, 0.55);
+  text-align: right;
+  letter-spacing: 0.04em;
+}
+
+/* ---------- Vignette overlay (Darkest Dungeon torch feel) ---------- */
+.ember-vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 38;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0) 25%,
+    rgba(0, 0, 0, calc(0.55 * var(--vignette-opacity, 0))) 65%,
+    rgba(0, 0, 0, calc(0.85 * var(--vignette-opacity, 0))) 100%
+  );
+  transition: background 0.4s ease;
+}
+
+/* ---------- Hand stack (bottom-up, 10 slots) ---------- */
+.hand-panel {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
+  gap: 8px;
+  min-height: 0;
+  padding: 10px;
+  background: linear-gradient(180deg, rgba(31, 24, 48, 0.86), rgba(18, 14, 28, 0.94));
+  border: 1px solid var(--color-border-soft);
+  border-radius: 16px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 28px rgba(0, 0, 0, 0.28);
+  align-self: stretch;
+}
+.hand-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-flame);
+  letter-spacing: 0.08em;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+.hand-header-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-flame);
+  font-size: 14px;
+}
+.candle-gauge {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.candle-gauge-fill {
+  position: absolute;
+  inset: auto 0 0 0;
+  width: 100%;
+  height: 0;
+  background: linear-gradient(180deg, #ffe89a, #f4a460);
+  box-shadow: 0 0 10px rgba(255, 215, 120, 0.65);
+  transition: height 0.3s ease;
+}
+.candle-gauge-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 245, 220, 0.95);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  letter-spacing: 0.04em;
+}
+.hand-helper {
+  font-size: 11px;
+  color: var(--color-flame);
+  text-align: center;
+  padding: 4px 6px;
+  border: 1px dashed rgba(244, 164, 96, 0.5);
+  border-radius: 6px;
+  background: rgba(244, 164, 96, 0.06);
+}
+.hand-stack {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.hand-slot {
+  height: 38px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px dashed rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+.hand-slot.is-empty {
+  opacity: 0.45;
+}
+.hand-slot.hand-card {
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-style: solid;
+  background: rgba(255, 255, 255, 0.045);
+  height: auto;
+  min-height: 38px;
+  animation: hand-card-drop 0.32s cubic-bezier(0.18, 0.88, 0.22, 1);
+}
+@keyframes hand-card-drop {
+  from { transform: translateY(-12px); opacity: 0.4; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.hand-slot.hand-card button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  position: relative;
+}
+.hand-slot.hand-card button:hover {
+  background: rgba(255, 215, 120, 0.06);
+}
+.hand-card .hand-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-flame);
+  font-size: 16px;
+}
+.hand-card .hand-card-name {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hand-card .hand-card-effect {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 90px;
+}
+.hand-cat-recovery { box-shadow: inset 4px 0 0 rgba(103, 196, 152, 0.85); }
+.hand-cat-tool { box-shadow: inset 4px 0 0 rgba(255, 215, 120, 0.9); }
+.hand-cat-control { box-shadow: inset 4px 0 0 rgba(145, 174, 210, 0.9); }
+.hand-cat-attack { box-shadow: inset 4px 0 0 rgba(168, 58, 58, 0.9); }
+.hand-slot.is-merged {
+  background: rgba(255, 215, 120, 0.13);
+  border-color: rgba(255, 215, 120, 0.55);
+  box-shadow:
+    0 0 12px rgba(255, 215, 120, 0.35),
+    inset 4px 0 0 rgba(255, 215, 120, 1);
+}
+.hand-slot.is-merged .merged-mark {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 11px;
+  color: rgba(255, 232, 168, 0.95);
+  text-shadow: 0 0 4px rgba(255, 215, 120, 0.85);
+}
+.hand-slot.is-arming-target {
+  outline: 2px solid var(--color-flame);
+  outline-offset: -2px;
+  animation: hand-arm-pulse 1.1s ease-in-out infinite;
+}
+@keyframes hand-arm-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 215, 120, 0); }
+  50% { box-shadow: 0 0 14px rgba(255, 215, 120, 0.55); }
+}
+
+/* ---------- Hand-target highlighting on the rail ---------- */
+.cell.card.is-hand-target {
+  outline: 2px dashed rgba(255, 215, 120, 0.7);
+  outline-offset: -3px;
+  animation: hand-target-pulse 1.1s ease-in-out infinite;
+}
+@keyframes hand-target-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 215, 120, 0); }
+  50% { box-shadow: 0 0 16px rgba(255, 215, 120, 0.45); }
+}
+
+/* ---------- Chain strip below player card ---------- */
+.chain-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(20, 16, 28, 0.6);
+  border: 1px solid rgba(255, 215, 120, 0.18);
+  font-size: 11px;
+}
+.chain-label {
+  font-weight: 700;
+  color: var(--color-flame);
+  letter-spacing: 0.06em;
+}
+.chain-cards {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.chain-card {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 215, 120, 0.12);
+  border: 1px solid rgba(255, 215, 120, 0.4);
+  color: rgba(255, 245, 220, 0.95);
+  font-weight: 600;
+}
+.chain-arrow {
+  color: rgba(255, 215, 120, 0.5);
+  font-weight: 600;
+}
+.chain-fired {
+  font-size: 10px;
+  color: rgba(255, 232, 168, 0.95);
+  font-weight: 700;
+}
+.chain-reset-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-flame);
+  cursor: pointer;
+  font-weight: 800;
+  font-family: inherit;
+}
+.chain-reset-btn:hover {
+  background: rgba(244, 164, 96, 0.15);
+}
+
+/* Melt/recipe highlight in the activity log. */
+.score-log-melt {
+  box-shadow: inset 3px 0 0 rgba(255, 215, 120, 1);
+  background: rgba(255, 215, 120, 0.08);
+}
+.score-log-melt .score-log-delta { color: rgba(255, 232, 168, 1); }
 `

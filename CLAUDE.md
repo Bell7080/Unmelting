@@ -187,6 +187,53 @@ npm run type-check # TypeScript type checking
   dark gradient) → `card-content` (name + stats), so text remains legible over
   any artwork.
 
+### Visual Effect System — SquareBurst (unified)
+
+All transient visual feedback uses the **SquareBurst** module
+(`src/ui/SquareBurst.ts`). Per-event ad-hoc effects (red vignettes, custom
+particle systems, etc.) are forbidden — every flash, pop, smoke, or pickup
+must go through SquareBurst so the visual language stays consistent and
+never competes with the ember-driven brightness pass.
+
+**Format spec (mandatory for every burst)**:
+- A burst is **16~20 solid-color squares** that scatter outward from an
+  origin point and fade.
+- Each burst draws from a **4-shade palette interpolated between two anchor
+  colors** (e.g. red → yellow, black → white, black → yellow). The two
+  anchors define the theme; the 4 shades are sampled to give visual depth
+  without breaking the palette.
+- Squares are 10~22 px solid fills, randomized rotation, scattered radially
+  in a 35–100% of the spread radius.
+- Animation is ~520–650 ms total: appear → scatter → fade. Origin can be a
+  DOM element (anchored to its center) or a viewport pixel.
+- Bursts are pointer-event-transparent and live on a single body-mounted
+  overlay (`#square-burst-overlay`, `z-index: 220`).
+
+**Theme registry** (extend `BurstTheme` in `SquareBurst.ts` for new themes —
+each theme MUST define a 4-shade palette between two anchor colors):
+
+| Theme | Anchors | Used for |
+|---|---|---|
+| `damage` | oxblood → ember yellow | Player hit, enemy slam, player attack impact |
+| `score` | wax brown → candle yellow | Score gain pulse |
+| `treasure-gain` | brass → bright gold | Treasure chest opened |
+| `vanish-smoke` | char black → ash white | Card disappears (smoke feel) |
+| `mimic-shift` | bruised violet → moss | Treasure morphs into mimic |
+| `hand-recovery` | deep green → pale green | Recovery hand cards |
+| `hand-tool` | dark amber → pale amber | Tool hand cards (성냥, 열쇠) |
+| `hand-control` | navy → pale blue | Control hand cards (식은 양초, 정화) |
+| `hand-attack` | oxblood → ember | Attack hand cards (성냥다발) |
+
+**Adding a new event**: pick the right theme (or add a new one with a
+2-anchor / 4-shade palette), then call from the renderer or `index.ts`:
+```ts
+boardRenderer.burstAtElement(element, 'theme-id')
+boardRenderer.burstAtPoint(x, y, 'theme-id', { count, spread, duration })
+SquareBurst.playOn(element, 'theme-id')
+```
+Helpers `findCardElement(cardId)`, `findHandSlotElement(slot)`, and
+`findScorePulseAnchor()` on `GameBoardRenderer` resolve common anchors.
+
 ---
 
 ## Key Implementation Notes
