@@ -350,6 +350,12 @@ Enemy defeat → 1 of 4 basic items drops:
 - **Player**: 1 character (녹지 않는 소녀)
 - **No**: bosses, story, difficulty selection, character variety, Electron packaging
 
+
+### Chain Combo Timing/UI (UPDATED)
+- Hand-card use now resolves in two visible beats: first the individual hand-card effect, then any newly satisfied recipe after a short UI delay (`COMBO_TRIGGER_DELAY_MS` in `src/index.ts`). This keeps combinations such as `밀랍 방패 → 밀랍 돌진` from feeling simultaneous on laggy machines.
+- `HandSystem.useSingle` only applies the single-card effect and extends the chain. Delayed combo resolution is triggered by `HandSystem.firePendingRecipes` from the UI flow so removed-field-card animations can be separated by beat.
+- The floating chain banner uses top-center, text-only glow styling aligned with the target-selection banner/turn overlay. Avoid restoring pill/circular backgrounds unless the whole top HUD language changes together.
+
 ### Post-MVP Features (Planning Only, NOT in current implementation)
 - Multiple playable characters with unique abilities
 - Difficulty modes (Easy/Normal/Hard/Nightmare)

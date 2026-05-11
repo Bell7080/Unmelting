@@ -907,6 +907,14 @@ export class GameBoardRenderer {
    * Newness is detected by comparing event uids against the previous render
    * snapshot (`previousChainUids`) so already-shown items do not re-animate.
    */
+  /** Refresh only the body-mounted chain banner without rebuilding the board.
+   *  The hand flow uses this between delayed combo beats so text feedback can
+   *  appear immediately while the old board DOM remains available for removal
+   *  animations. */
+  refreshChainBanner(hints?: ChainHints): void {
+    this.updateChainBanner(hints)
+  }
+
   private updateChainBanner(hints?: ChainHints): void {
     let banner = document.getElementById('chain-banner') as HTMLElement | null
     if (!banner) {
@@ -3035,28 +3043,33 @@ const STYLES = `
   50% { box-shadow: 0 0 16px rgba(255, 215, 120, 0.45); }
 }
 
-/* ---------- Floating chain banner (above player profile) ----------
+/* ---------- Floating chain banner (top-center text glow) ----------
    The chain banner lives on the body, not inside the stage layout, so it
    never shifts other UI as the player extends the chain. Position is fixed
-   relative to the viewport — tuned to sit just above the player profile.
-   Card pills carry the category color band; recipe pills get a brighter
-   glow and a bigger font so the "조합 발동" beat reads. */
+   near the top-center target banner language for HUD consistency. Card events
+   use category-colored text; recipe events scale up with a brighter glow so
+   the "조합 발동" beat reads without a circular/pill backing. */
 .chain-banner {
   position: fixed;
   left: 50%;
-  bottom: 28vh;
-  transform: translateX(-50%) translateY(8px);
+  top: 14vh;
+  transform: translateX(-50%) translateY(-10px);
   display: flex;
-  align-items: center;
+  align-items: baseline;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 6px;
-  max-width: min(72vw, 760px);
-  padding: 10px 14px;
+  gap: 8px;
+  max-width: min(78vw, 840px);
+  padding: 4px 12px;
   z-index: 205;
   pointer-events: none;
   opacity: 0;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  text-align: center;
+  /* Text-only glow matches the target banner/turn overlay and removes the old
+     pill-like circular backing that made combo feedback feel off-tone. */
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.92),
+    0 0 18px rgba(244, 164, 96, 0.36);
   transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.18, 0.88, 0.22, 1);
 }
 .chain-banner.is-on {
@@ -3065,46 +3078,49 @@ const STYLES = `
   pointer-events: auto;
 }
 .chain-banner-label {
-  font-size: 12px;
+  font-size: clamp(12px, 1.1vw, 14px);
   font-weight: 800;
-  letter-spacing: 0.1em;
-  color: var(--color-flame);
-  margin-right: 4px;
+  letter-spacing: 0.22em;
+  color: rgba(255, 215, 120, 0.78);
+  margin-right: 2px;
+  text-transform: uppercase;
 }
 .chain-banner-arrow {
-  color: rgba(255, 232, 168, 0.65);
-  font-weight: 700;
-  font-size: 16px;
+  color: rgba(255, 232, 168, 0.68);
+  font-weight: 900;
+  font-size: clamp(15px, 1.6vw, 20px);
+  filter: drop-shadow(0 0 8px rgba(255, 215, 120, 0.35));
 }
 .chain-event {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-weight: 700;
-  font-size: 14px;
+  padding: 0 2px;
+  border-radius: 0;
+  font-weight: 800;
+  font-size: clamp(14px, 1.45vw, 18px);
   color: #fff5dc;
-  background: rgba(20, 16, 28, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   white-space: nowrap;
-  will-change: transform, filter;
+  will-change: transform, filter, text-shadow;
 }
-.chain-event-card.hand-cat-recovery { box-shadow: inset 3px 0 0 rgba(103, 196, 152, 0.95), 0 2px 6px rgba(0, 0, 0, 0.45); }
-.chain-event-card.hand-cat-tool     { box-shadow: inset 3px 0 0 rgba(255, 215, 120, 0.95), 0 2px 6px rgba(0, 0, 0, 0.45); }
-.chain-event-card.hand-cat-control  { box-shadow: inset 3px 0 0 rgba(145, 174, 210, 0.95), 0 2px 6px rgba(0, 0, 0, 0.45); }
-.chain-event-card.hand-cat-attack   { box-shadow: inset 3px 0 0 rgba(168, 58, 58, 0.95), 0 2px 6px rgba(0, 0, 0, 0.45); }
+.chain-event-card.hand-cat-recovery { color: rgba(196, 255, 225, 0.96); }
+.chain-event-card.hand-cat-tool     { color: rgba(255, 232, 168, 0.98); }
+.chain-event-card.hand-cat-control  { color: rgba(199, 220, 255, 0.96); }
+.chain-event-card.hand-cat-attack   { color: rgba(255, 180, 156, 0.98); }
 .chain-event-recipe {
-  font-size: 16px;
-  letter-spacing: 0.04em;
-  color: rgba(255, 232, 168, 0.98);
-  background: linear-gradient(120deg, rgba(76, 36, 16, 0.85), rgba(140, 70, 24, 0.85));
-  border-color: rgba(255, 215, 120, 0.85);
-  box-shadow:
-    0 0 16px rgba(255, 215, 120, 0.55),
-    0 4px 10px rgba(0, 0, 0, 0.55);
-  animation: chain-recipe-glow 1.4s ease-in-out infinite;
+  font-size: clamp(20px, 2.6vw, 32px);
+  letter-spacing: 0.06em;
+  color: rgba(255, 232, 168, 1);
+  background: transparent;
+  border-color: transparent;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.92),
+    0 0 18px rgba(255, 215, 120, 0.78),
+    0 0 36px rgba(244, 164, 96, 0.42);
+  animation: chain-recipe-glow 1.35s ease-in-out infinite;
 }
 .chain-event-mark {
   color: rgba(255, 232, 168, 1);
@@ -3125,18 +3141,21 @@ const STYLES = `
 }
 
 @keyframes chain-card-pop {
-  0%   { transform: scale(0.5) translateX(0);  opacity: 0; }
-  40%  { transform: scale(1.18) translateX(-3px); opacity: 1; }
+  0%   { transform: scale(0.55) translateX(0);  opacity: 0; filter: brightness(1.8); }
+  40%  { transform: scale(1.22) translateX(-3px); opacity: 1; filter: brightness(1.28); }
   55%  { transform: scale(1.05) translateX(4px); }
-  70%  { transform: scale(1.08) translateX(-2px); }
-  100% { transform: scale(1) translateX(0); }
+  70%  { transform: scale(1.1) translateX(-2px); }
+  100% { transform: scale(1) translateX(0); filter: brightness(1); }
 }
 @keyframes chain-recipe-burst {
   0%   {
     transform: scale(0.6);
     opacity: 0;
     filter: brightness(2.4) saturate(1.6);
-    box-shadow: 0 0 32px rgba(255, 215, 120, 1), 0 0 64px rgba(255, 215, 120, 0.85);
+    text-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.92),
+      0 0 34px rgba(255, 215, 120, 1),
+      0 0 68px rgba(244, 164, 96, 0.9);
   }
   45%  {
     transform: scale(1.22);
@@ -3148,14 +3167,18 @@ const STYLES = `
 }
 @keyframes chain-recipe-glow {
   0%, 100% {
-    box-shadow:
-      0 0 12px rgba(255, 215, 120, 0.45),
-      0 4px 10px rgba(0, 0, 0, 0.55);
+    filter: brightness(1);
+    text-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.92),
+      0 0 16px rgba(255, 215, 120, 0.58),
+      0 0 30px rgba(244, 164, 96, 0.34);
   }
   50% {
-    box-shadow:
-      0 0 22px rgba(255, 215, 120, 0.85),
-      0 4px 14px rgba(0, 0, 0, 0.65);
+    filter: brightness(1.14);
+    text-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.92),
+      0 0 24px rgba(255, 215, 120, 0.92),
+      0 0 46px rgba(244, 164, 96, 0.58);
   }
 }
 
