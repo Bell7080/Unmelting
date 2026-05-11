@@ -21,16 +21,12 @@ import { Card, CardType } from '@entities/Card'
 import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
 import type { EnemyHit, TreasureChange } from '@core/TurnManager'
 import { spriteForCard, SpriteUrls } from '@ui/Sprites'
-import { Character } from '@entities/Character'
+import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
 import type { EmberTier, SpawnWeights } from '@systems/EmberSystem'
 import { EmberSystem } from '@systems/EmberSystem'
-import {
-  ENEMY_DEFINITIONS,
-  TRAP_DEFINITIONS,
-  MIMIC_BY_SPAN,
-} from '@systems/CardSpawner'
+import { ENEMY_DEFINITIONS, TRAP_DEFINITIONS, MIMIC_BY_SPAN } from '@systems/CardSpawner'
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { RECIPES } from '@data/Recipes'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
@@ -75,6 +71,7 @@ export interface ActivityLogEntry {
     | 'win'
     | 'hurt'
     | 'melt'
+    | 'gauge'
 }
 
 export interface HandTargetingMode {
@@ -99,7 +96,13 @@ export interface ChainEventRecipe extends ChainEventBase {
   name: string
   flavor: string
 }
-export type ChainEvent = ChainEventCard | ChainEventRecipe
+export interface ChainEventGauge extends ChainEventBase {
+  kind: 'gauge'
+  mode: CandleMode
+  name: string
+  flavor: string
+}
+export type ChainEvent = ChainEventCard | ChainEventRecipe | ChainEventGauge
 
 export interface ChainHints {
   events: ChainEvent[]
@@ -184,7 +187,7 @@ export class GameBoardRenderer {
             ${this.renderRail(lanes)}
           </section>
 
-          ${this.renderPlayer(character)}
+          ${this.renderPlayerZone(character)}
         </main>
 
         ${this.renderHand(character, scorePanel)}
@@ -229,8 +232,7 @@ export class GameBoardRenderer {
             .join('')
         : '<div class="score-log-empty">아직 기록된 행동이 없어</div>'
     const spendDisabled = scorePanel.canSpend ? '' : 'disabled'
-    const scorePulseClass =
-      scorePanel.scorePulseKey > 0 ? 'is-score-popping' : ''
+    const scorePulseClass = scorePanel.scorePulseKey > 0 ? 'is-score-popping' : ''
 
     return `
       <aside class="score-panel" aria-label="Action score panel">
@@ -249,10 +251,6 @@ export class GameBoardRenderer {
         <div class="panel-actions">
           <button class="score-spend-btn" type="button" ${spendDisabled}>
             점수 ${scorePanel.spendCost}로 아이템 변환
-          </button>
-          <button class="compendium-btn" type="button" data-open-compendium>
-            <span class="compendium-btn-icon">${bookIcon()}</span>
-            도감
           </button>
         </div>
       </aside>
@@ -285,10 +283,7 @@ export class GameBoardRenderer {
       // Only apply grouping to active row (distance 0); preview rows always render individually.
       let span = 1
       if (isActive) {
-        while (
-          i + span < lanes.length &&
-          lanes[i + span].getCardAtDistance(distance) === card
-        ) {
+        while (i + span < lanes.length && lanes[i + span].getCardAtDistance(distance) === card) {
           span++
         }
       }
@@ -304,7 +299,7 @@ export class GameBoardRenderer {
     laneIndex: number,
     distance: number,
     span: number,
-    isActive: boolean,
+    isActive: boolean
   ): string {
     const isSelected =
       !!this.selected &&
@@ -325,9 +320,7 @@ export class GameBoardRenderer {
       isSelected ? 'is-selected' : '',
       isTargetingActive ? 'is-hand-target' : '',
       span > 1 ? 'is-grouped' : '',
-      this.hasRendered && !this.previousCardIds.has(card.id)
-        ? 'is-entering'
-        : '',
+      this.hasRendered && !this.previousCardIds.has(card.id) ? 'is-entering' : '',
       this.shouldAnimateGroup(card.id, span) ? 'is-newly-grouped' : '',
     ]
       .filter(Boolean)
@@ -368,10 +361,7 @@ export class GameBoardRenderer {
 
     const groupBadge = span > 1 ? `<div class="group-badge">×${span}</div>` : ''
 
-    const groupName =
-      span > 1 && !card.isSpecialEnemy
-        ? this.groupName(card.type, span)
-        : card.name
+    const groupName = span > 1 && !card.isSpecialEnemy ? this.groupName(card.type, span) : card.name
 
     const sprite = spriteForCard(card)
     const artStyle = sprite ? `style="background-image: url('${sprite}')"` : ''
@@ -392,18 +382,30 @@ export class GameBoardRenderer {
   private groupName(type: CardType, span: number): string {
     if (span <= 1) return ''
     if (type === CardType.ENEMY) return span === 2 ? '성냥 무리' : '밀랍 군단'
-    if (type === CardType.TRAP)
-      return span === 2 ? '촛농 거미집' : '밀랍 거미굴'
-    if (type === CardType.TREASURE)
-      return span === 2 ? '적당한 상자' : '큰 상자'
+    if (type === CardType.TRAP) return span === 2 ? '촛농 거미집' : '밀랍 거미굴'
+    if (type === CardType.TREASURE) return span === 2 ? '적당한 상자' : '큰 상자'
     return ''
   }
 
-  private renderPlayer(character: any): string {
-    const hpPct = Math.max(
-      0,
-      Math.min(100, (character.health / character.maxHealth) * 100),
-    )
+  private renderPlayerZone(character: Character): string {
+    return `
+      <div class="player-zone" aria-label="Player controls and relic plan">
+        <div class="utility-layer utility-layer-left" aria-label="Utility buttons">
+          <button class="compendium-btn compendium-btn-floating" type="button" data-open-compendium>
+            <span class="compendium-btn-icon">${bookIcon()}</span>
+            도감
+          </button>
+        </div>
+        ${this.renderPlayer(character)}
+        <div class="utility-layer relic-layer" aria-label="Relic layer planned">
+          <span class="relic-plan-label">유물 레이어 예정</span>
+        </div>
+      </div>
+    `
+  }
+
+  private renderPlayer(character: Character): string {
+    const hpPct = Math.max(0, Math.min(100, (character.health / character.maxHealth) * 100))
     return `
       <div class="player-row">
         <div class="player-card">
@@ -456,6 +458,19 @@ export class GameBoardRenderer {
     return `hand-cat-${cat}`
   }
 
+  private candleModeMeta(mode: CandleMode): { label: string; effect: string; icon: string } {
+    switch (mode) {
+      case 'max-health':
+        return { label: '체력', effect: '최대 체력 +5', icon: heartIcon() }
+      case 'attack':
+        return { label: '공격', effect: '공격력 +1', icon: swordIcon() }
+      case 'ember':
+        return { label: '불씨', effect: '불씨 +3', icon: flameIcon() }
+      case 'draw':
+        return { label: '손패', effect: '랜덤 3장', icon: pouchIcon() }
+    }
+  }
+
   /**
    * Render the 10-slot bottom-up hand stack. Slot 0 (model) is the bottom of
    * the stack; slot HAND_MAX-1 is the top. Empty slots above the hand are
@@ -471,9 +486,7 @@ export class GameBoardRenderer {
     for (let i = 0; i < handMax; i++) {
       const card = character.hand[i]
       if (!card) {
-        slots.push(
-          `<li class="hand-slot is-empty" data-slot-index="${i}" aria-hidden="true"></li>`,
-        )
+        slots.push(`<li class="hand-slot is-empty" data-slot-index="${i}" aria-hidden="true"></li>`)
         continue
       }
       const def = getHandCardDef(card.defId)
@@ -519,6 +532,11 @@ export class GameBoardRenderer {
     const candle = character.candle ?? 0
     const candleMax = character.candleMax ?? 10
     const candlePct = Math.max(0, Math.min(100, (candle / candleMax) * 100))
+    const mode = this.candleModeMeta(character.candleMode ?? 'max-health')
+    const ticks = Array.from({ length: candleMax }, (_, idx) => {
+      const filled = idx < candle ? 'is-filled' : ''
+      return `<span class="candle-gauge-tick ${filled}" aria-hidden="true"></span>`
+    }).join('')
 
     return `
       <aside class="hand-panel" aria-label="Hand">
@@ -526,9 +544,17 @@ export class GameBoardRenderer {
           <span class="hand-header-icon">${pouchIcon()}</span>
           손패 (${character.hand.length}/${handMax})
         </header>
-        <div class="candle-gauge" aria-label="Candle gauge">
-          <div class="candle-gauge-fill" style="height: ${candlePct}%"></div>
-          <div class="candle-gauge-label">🕯 ${candle}/${candleMax}</div>
+        <div class="candle-gauge" aria-label="10칸 손패 게이지">
+          <button class="candle-mode-btn" type="button" data-cycle-candle-mode title="모드 변경: ${mode.effect}">
+            <span class="candle-mode-icon">${mode.icon}</span>
+            <span class="candle-mode-label">${mode.label}</span>
+          </button>
+          <div class="candle-gauge-body">
+            <div class="candle-gauge-meter" style="--candle-fill: ${candlePct}%">
+              ${ticks}
+            </div>
+            <div class="candle-gauge-label">${candle}/${candleMax} · ${mode.effect}</div>
+          </div>
         </div>
         <ul class="hand-stack">${reversed}</ul>
       </aside>
@@ -585,7 +611,7 @@ export class GameBoardRenderer {
     const tabBar = tabs
       .map(
         (t) =>
-          `<button class="compendium-tab ${t.id === activeTab ? 'is-active' : ''}" data-compendium-tab="${t.id}">${t.label}</button>`,
+          `<button class="compendium-tab ${t.id === activeTab ? 'is-active' : ''}" data-compendium-tab="${t.id}">${t.label}</button>`
       )
       .join('')
     let body = ''
@@ -611,60 +637,79 @@ export class GameBoardRenderer {
   }
 
   private renderCompendiumEnemies(): string {
-    const normal = ENEMY_DEFINITIONS.map((def) => {
-      const spriteUrl = def.name.includes('생쥐')
-        ? SpriteUrls.enemyMouse
-        : SpriteUrls.enemyFrog
-      return this.compendiumCard({
-        art: { kind: 'sprite', url: spriteUrl },
-        name: def.name,
-        badge: '일반',
-        stats: [
-          ['HP', String(def.healthOrDamage ?? '?')],
-          ['ATK', String(def.attack ?? '?')],
-        ],
-        description: def.description,
-      })
-    }).join('')
-    const mimics = Object.entries(MIMIC_BY_SPAN)
-      .map(([span, stats]) =>
+    const stackStats = (hp: number, atk: number, span: number): [string, string][] => {
+      // Enemy grouping follows the field rule: 2칸 = HP +50%/ATK +1,
+      // 3칸 = HP +100%/ATK +2. The compendium uses the same helper for every
+      // enemy so 1/2/3칸 variants read as a single standardized family.
+      const hpMultiplier = span === 1 ? 1 : span === 2 ? 1.5 : 2
+      const attackBonus = span === 1 ? 0 : span === 2 ? 1 : 2
+      return [
+        ['칸', `${span}칸`],
+        ['HP', String(Math.ceil(hp * hpMultiplier))],
+        ['ATK', String(atk + attackBonus)],
+      ]
+    }
+    const normal = ENEMY_DEFINITIONS.flatMap((def) => {
+      const baseHp = def.healthOrDamage ?? 1
+      const baseAtk = def.attack ?? 1
+      const spriteUrl = def.name.includes('생쥐') ? SpriteUrls.enemyMouse : SpriteUrls.enemyFrog
+      return [1, 2, 3].map((span) =>
         this.compendiumCard({
+          art: { kind: 'sprite', url: spriteUrl },
+          name: `${def.name} · ${span}칸`,
+          badge: span === 1 ? '일반' : '무리',
+          stats: stackStats(baseHp, baseAtk, span),
+          description:
+            span === 1
+              ? def.description
+              : `${span}칸으로 합쳐진 ${def.name}. 같은 적 무리는 체력과 공격력이 함께 상승한다.`,
+        })
+      )
+    }).join('')
+    const mimics = [1, 2, 3]
+      .map((span) => {
+        const stats = MIMIC_BY_SPAN[span]
+        return this.compendiumCard({
           art: { kind: 'sprite', url: SpriteUrls.mimic },
-          name: `${span}칸 미믹`,
+          name: `미믹 · ${span}칸`,
           badge: '특수',
           stats: [
+            ['칸', `${span}칸`],
             ['HP', String(stats.health)],
             ['ATK', String(stats.attack)],
             ['드롭', `${stats.drops}장`],
           ],
-          description: '보물 카드가 변이된 함정형 적. 일반 보물보다 위험하지만 더 많은 손패를 떨어뜨린다.',
-        }),
-      )
+          description:
+            '보물 카드가 변이된 특수 적. 같은 미믹으로 보고 칸 수에 따라 능력치와 드롭량을 나눠 표기한다.',
+        })
+      })
       .join('')
     return `
-      <h3 class="compendium-section">일반 적</h3>
+      <h3 class="compendium-section">일반 적 · 1/2/3칸 양식</h3>
       <div class="compendium-grid">${normal}</div>
-      <h3 class="compendium-section">미믹 (특수 적)</h3>
+      <h3 class="compendium-section">미믹 · 칸별 강화</h3>
       <div class="compendium-grid">${mimics}</div>
     `
   }
 
   private renderCompendiumTraps(): string {
     const baseDamage = TRAP_DEFINITIONS[0].healthOrDamage ?? 2
-    const widths: { span: number; badge: string; description: string }[] = [
-      { span: 1, badge: '1칸', description: TRAP_DEFINITIONS[0].description },
-      { span: 2, badge: '2칸 머지', description: '두 칸이 합쳐진 더 위험한 함정' },
-      { span: 3, badge: '3칸 머지', description: '레인 전체를 덮는 최대 위협' },
-    ]
-    const cards = widths
-      .map((w) =>
+    const cards = [1, 2, 3]
+      .map((span) =>
         this.compendiumCard({
           art: { kind: 'sprite', url: SpriteUrls.trap },
-          name: w.span === 1 ? TRAP_DEFINITIONS[0].name : `${w.span}칸 거미줄`,
-          badge: w.badge,
-          stats: [['피해', String(baseDamage + (w.span - 1))]],
-          description: w.description,
-        }),
+          name: `${TRAP_DEFINITIONS[0].name} · ${span}칸`,
+          badge: `${span}칸`,
+          stats: [
+            ['칸', `${span}칸`],
+            ['피해', String(baseDamage + (span - 1))],
+            ['위협', span === 3 ? '즉사 조건' : '충돌 피해'],
+          ],
+          description:
+            span === 1
+              ? TRAP_DEFINITIONS[0].description
+              : `${span}칸으로 합쳐진 함정. 같은 함정으로 보고 칸 수에 따라 피해와 위협도를 나눈다.`,
+        })
       )
       .join('')
     return `<div class="compendium-grid">${cards}</div>`
@@ -685,15 +730,16 @@ export class GameBoardRenderer {
       .map((span) =>
         this.compendiumCard({
           art: { kind: 'sprite', url: sprites[span] },
-          name: labels[span],
+          name: `${labels[span]} · ${span}칸`,
           badge: `${span}칸`,
           stats: [
+            ['칸', `${span}칸`],
             ['드롭', `손패 ${span}장`],
             ['사라짐', '50%/턴'],
             ['미믹화', '10%/턴'],
           ],
-          description: `${span}칸 보물 — 처리 시 손패 ${span}장 드롭. 매 턴 50% 확률로 사라지고 10% 확률로 미믹으로 변이한다.`,
-        }),
+          description: `같은 보물상자로 보고 칸 수에 따라 보상량을 나눈다. 처리 시 손패 ${span}장 드롭, 매 턴 50% 확률로 사라지고 10% 확률로 미믹으로 변이한다.`,
+        })
       )
       .join('')
     return `<div class="compendium-grid">${items}</div>`
@@ -727,7 +773,7 @@ export class GameBoardRenderer {
           badge: groupLabels[def.category],
           categoryClass: this.categoryClass(def.category),
           stats,
-        }),
+        })
       )
     }
     return Object.entries(groups)
@@ -735,7 +781,7 @@ export class GameBoardRenderer {
         ([cat, cards]) => `
           <h3 class="compendium-section">${groupLabels[cat]}</h3>
           <div class="compendium-grid">${cards.join('')}</div>
-        `,
+        `
       )
       .join('')
   }
@@ -805,21 +851,17 @@ export class GameBoardRenderer {
         : opts.art.kind === 'icon'
           ? `<div class="compendium-card-art compendium-card-art--icon">${opts.art.svg}</div>`
           : `<div class="compendium-card-art compendium-card-art--recipe">${opts.art.html}</div>`
-    const badgeHtml = opts.badge
-      ? `<span class="compendium-card-badge">${opts.badge}</span>`
-      : ''
+    const badgeHtml = opts.badge ? `<span class="compendium-card-badge">${opts.badge}</span>` : ''
     const statRows = (opts.stats ?? [])
       .map(
         ([k, v]) =>
-          `<div class="compendium-card-row"><span class="compendium-card-label">${k}</span><span class="compendium-card-value">${v}</span></div>`,
+          `<div class="compendium-card-row"><span class="compendium-card-label">${k}</span><span class="compendium-card-value">${v}</span></div>`
       )
       .join('')
     const descHtml = opts.description
       ? `<p class="compendium-card-desc">${opts.description}</p>`
       : ''
-    const classes = ['compendium-card', opts.categoryClass ?? '']
-      .filter(Boolean)
-      .join(' ')
+    const classes = ['compendium-card', opts.categoryClass ?? ''].filter(Boolean).join(' ')
     return `
       <article class="${classes}">
         ${artHtml}
@@ -948,10 +990,17 @@ export class GameBoardRenderer {
             ${ev.name}
           </span>
         `)
-      } else {
+      } else if (ev.kind === 'recipe') {
         parts.push(`
           <span class="chain-event chain-event-recipe ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
             <span class="chain-event-mark">✦</span>
+            <span class="chain-event-name">${ev.name}</span>
+          </span>
+        `)
+      } else {
+        parts.push(`
+          <span class="chain-event chain-event-gauge ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
+            <span class="chain-event-mark">◆</span>
             <span class="chain-event-name">${ev.name}</span>
           </span>
         `)
@@ -961,7 +1010,7 @@ export class GameBoardRenderer {
       }
     }
     parts.push(
-      '<button class="chain-banner-reset" type="button" data-chain-reset title="체인 초기화">×</button>',
+      '<button class="chain-banner-reset" type="button" data-chain-reset title="체인 초기화">×</button>'
     )
     banner.innerHTML = parts.join('')
     banner.classList.add('is-on')
@@ -970,9 +1019,7 @@ export class GameBoardRenderer {
   }
 
   private attachListeners(): void {
-    const activeCards = this.boardElement.querySelectorAll<HTMLElement>(
-      '.cell.card.is-active',
-    )
+    const activeCards = this.boardElement.querySelectorAll<HTMLElement>('.cell.card.is-active')
     activeCards.forEach((el) => {
       el.addEventListener('click', (e) => {
         e.stopPropagation()
@@ -993,13 +1040,21 @@ export class GameBoardRenderer {
           document.dispatchEvent(
             new CustomEvent<ItemActionDetail>('itemAction', {
               detail: { itemIndex, shiftKey: (e as MouseEvent).shiftKey },
-            }),
+            })
           )
         })
       })
 
     // Chain reset is bound on the body-mounted chain banner (updateChainBanner)
     // since the old in-stage strip is gone.
+
+    // Candle mode button cycles the payoff for the 10-slot hand gauge.
+    this.boardElement
+      .querySelector<HTMLElement>('[data-cycle-candle-mode]')
+      ?.addEventListener('click', (e) => {
+        e.stopPropagation()
+        document.dispatchEvent(new CustomEvent('candleModeCycle'))
+      })
 
     // Score conversion is panel-level UI and does not spend a turn.
     this.boardElement
@@ -1019,11 +1074,7 @@ export class GameBoardRenderer {
       })
   }
 
-  private handleCardClick(
-    el: HTMLElement,
-    laneIndex: number,
-    distance: number,
-  ): void {
+  private handleCardClick(el: HTMLElement, laneIndex: number, distance: number): void {
     const isAlreadySelected =
       !!this.selected &&
       this.selected.laneIndex === laneIndex &&
@@ -1093,50 +1144,55 @@ export class GameBoardRenderer {
    * back to a viewport-center burst.
    */
   animateDamageFlash(): Promise<void> {
-    const playerCard = this.boardElement.querySelector<HTMLElement>(
-      '.player-card, .player-row',
-    )
+    const playerCard = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
     if (playerCard) {
       SquareBurst.playOn(playerCard, 'damage', { count: 20, spread: 150 })
     } else {
-      SquareBurst.playAt(
-        window.innerWidth / 2,
-        window.innerHeight * 0.6,
-        'damage',
-        { count: 20, spread: 150 },
-      )
+      SquareBurst.playAt(window.innerWidth / 2, window.innerHeight * 0.6, 'damage', {
+        count: 20,
+        spread: 150,
+      })
     }
     return new Promise((resolve) => window.setTimeout(resolve, 420))
   }
 
   /** Generic effect dispatch — used by index.ts to fire bursts on events. */
-  burstAtElement(target: HTMLElement | null, theme: BurstTheme, opts?: Parameters<typeof SquareBurst.playOn>[2]): void {
+  burstAtElement(
+    target: HTMLElement | null,
+    theme: BurstTheme,
+    opts?: Parameters<typeof SquareBurst.playOn>[2]
+  ): void {
     if (!target) return
     SquareBurst.playOn(target, theme, opts)
   }
 
-  burstAtPoint(x: number, y: number, theme: BurstTheme, opts?: Parameters<typeof SquareBurst.playAt>[3]): void {
+  burstAtPoint(
+    x: number,
+    y: number,
+    theme: BurstTheme,
+    opts?: Parameters<typeof SquareBurst.playAt>[3]
+  ): void {
     SquareBurst.playAt(x, y, theme, opts)
   }
 
   /** Find the rendered DOM element for a card (by id) for burst placement. */
   findCardElement(cardId: string): HTMLElement | null {
-    return this.boardElement.querySelector<HTMLElement>(
-      `.cell.card[data-card-id="${cardId}"]`,
-    )
+    return this.boardElement.querySelector<HTMLElement>(`.cell.card[data-card-id="${cardId}"]`)
   }
 
   /** Find a hand slot element by index for burst placement. */
   findHandSlotElement(slotIndex: number): HTMLElement | null {
     return this.boardElement.querySelector<HTMLElement>(
-      `.hand-slot[data-slot-index="${slotIndex}"]`,
+      `.hand-slot[data-slot-index="${slotIndex}"]`
     )
   }
 
   /** Find the score/log panel for score-pulse bursts. */
   findScorePulseAnchor(): HTMLElement | null {
-    return this.boardElement.querySelector<HTMLElement>('.score-number') ??
+    return (
+      this.boardElement.querySelector<HTMLElement>('.score-number') ??
       this.boardElement.querySelector<HTMLElement>('.score-panel')
+    )
   }
 
   /**
@@ -1149,9 +1205,7 @@ export class GameBoardRenderer {
    */
   animateCardConsume(card: Card): Promise<void> {
     const elements = [
-      ...this.boardElement.querySelectorAll<HTMLElement>(
-        `.cell.card[data-card-id="${card.id}"]`,
-      ),
+      ...this.boardElement.querySelectorAll<HTMLElement>(`.cell.card[data-card-id="${card.id}"]`),
     ]
     if (elements.length === 0) return Promise.resolve()
     const theme: BurstTheme =
@@ -1179,16 +1233,12 @@ export class GameBoardRenderer {
    * HandSystem mutates the model BEFORE we can capture the Card object.
    * The DOM is still showing the pre-mutation state when this is invoked.
    */
-  animateCardConsumeByIds(
-    payload: { cardId: string; type: CardType }[],
-  ): Promise<void> {
+  animateCardConsumeByIds(payload: { cardId: string; type: CardType }[]): Promise<void> {
     if (payload.length === 0) return Promise.resolve()
     const animations: Promise<void>[] = []
     for (const { cardId, type } of payload) {
       const elements = [
-        ...this.boardElement.querySelectorAll<HTMLElement>(
-          `.cell.card[data-card-id="${cardId}"]`,
-        ),
+        ...this.boardElement.querySelectorAll<HTMLElement>(`.cell.card[data-card-id="${cardId}"]`),
       ]
       if (elements.length === 0) continue
       const theme: BurstTheme =
@@ -1199,12 +1249,10 @@ export class GameBoardRenderer {
             : 'vanish-smoke'
       const r1 = elements[0].getBoundingClientRect()
       const r2 = elements[elements.length - 1].getBoundingClientRect()
-      SquareBurst.playAt(
-        (r1.left + r2.right) / 2,
-        (r1.top + r2.bottom) / 2,
-        theme,
-        { count: 20, spread: 130 + (elements.length - 1) * 30 },
-      )
+      SquareBurst.playAt((r1.left + r2.right) / 2, (r1.top + r2.bottom) / 2, theme, {
+        count: 20,
+        spread: 130 + (elements.length - 1) * 30,
+      })
       animations.push(this.animateElements(elements, 'is-consuming', 360))
     }
     return Promise.all(animations).then(() => undefined)
@@ -1239,12 +1287,10 @@ export class GameBoardRenderer {
   /** Capture current card positions so the next render can FLIP-move survivors. */
   private captureCardRects(): Map<string, DOMRect> {
     const rects = new Map<string, DOMRect>()
-    this.boardElement
-      .querySelectorAll<HTMLElement>('.cell.card[data-card-id]')
-      .forEach((el) => {
-        const id = el.dataset.cardId
-        if (id) rects.set(id, el.getBoundingClientRect())
-      })
+    this.boardElement.querySelectorAll<HTMLElement>('.cell.card[data-card-id]').forEach((el) => {
+      const id = el.dataset.cardId
+      if (id) rects.set(id, el.getBoundingClientRect())
+    })
     return rects
   }
 
@@ -1253,50 +1299,44 @@ export class GameBoardRenderer {
    * This avoids the previous full rerender flicker when lanes compact downward.
    */
   private animateMovedCards(previousRects: Map<string, DOMRect>): void {
-    this.boardElement
-      .querySelectorAll<HTMLElement>('.cell.card[data-card-id]')
-      .forEach((el) => {
-        const id = el.dataset.cardId
-        if (!id) return
-        const previousRect = previousRects.get(id)
-        if (!previousRect) return
-        const nextRect = el.getBoundingClientRect()
-        const deltaX = previousRect.left - nextRect.left
-        const deltaY = previousRect.top - nextRect.top
-        if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) return
+    this.boardElement.querySelectorAll<HTMLElement>('.cell.card[data-card-id]').forEach((el) => {
+      const id = el.dataset.cardId
+      if (!id) return
+      const previousRect = previousRects.get(id)
+      if (!previousRect) return
+      const nextRect = el.getBoundingClientRect()
+      const deltaX = previousRect.left - nextRect.left
+      const deltaY = previousRect.top - nextRect.top
+      if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) return
 
-        el.animate(
-          [
-            { transform: `translate(${deltaX}px, ${deltaY}px)`, opacity: 0.94 },
-            { transform: 'translate(0, 0)', opacity: 1 },
-          ],
-          { duration: 360, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)' },
-        )
-      })
+      el.animate(
+        [
+          { transform: `translate(${deltaX}px, ${deltaY}px)`, opacity: 0.94 },
+          { transform: 'translate(0, 0)', opacity: 1 },
+        ],
+        { duration: 360, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)' }
+      )
+    })
   }
 
   /** Remember ids and spans after each render for enter/merge animations. */
   private rememberRenderedCards(): void {
     const ids = new Set<string>()
     const spans = new Map<string, number>()
-    this.boardElement
-      .querySelectorAll<HTMLElement>('.cell.card[data-card-id]')
-      .forEach((el) => {
-        const id = el.dataset.cardId
-        if (!id) return
-        ids.add(id)
-        spans.set(id, parseInt(el.dataset.span || '1', 10))
-      })
+    this.boardElement.querySelectorAll<HTMLElement>('.cell.card[data-card-id]').forEach((el) => {
+      const id = el.dataset.cardId
+      if (!id) return
+      ids.add(id)
+      spans.set(id, parseInt(el.dataset.span || '1', 10))
+    })
     this.previousCardIds = ids
     this.previousGroupSpans = spans
     // Mirror the same snapshot pattern for hand cards.
     const handUids = new Set<string>()
-    this.boardElement
-      .querySelectorAll<HTMLElement>('.hand-slot[data-hand-uid]')
-      .forEach((el) => {
-        const uid = el.dataset.handUid
-        if (uid) handUids.add(uid)
-      })
+    this.boardElement.querySelectorAll<HTMLElement>('.hand-slot[data-hand-uid]').forEach((el) => {
+      const uid = el.dataset.handUid
+      if (uid) handUids.add(uid)
+    })
     this.previousHandUids = handUids
     this.hasRendered = true
   }
@@ -1309,14 +1349,10 @@ export class GameBoardRenderer {
   }
 
   /** Add a temporary animation class to all rendered elements for one card. */
-  private animateCardElements(
-    card: Card,
-    className: string,
-    duration: number,
-  ): Promise<void> {
-    const elements = [
-      ...this.boardElement.querySelectorAll<HTMLElement>('.cell.card'),
-    ].filter((el) => el.dataset.cardId === card.id)
+  private animateCardElements(card: Card, className: string, duration: number): Promise<void> {
+    const elements = [...this.boardElement.querySelectorAll<HTMLElement>('.cell.card')].filter(
+      (el) => el.dataset.cardId === card.id
+    )
     return this.animateElements(elements, className, duration)
   }
 
@@ -1324,7 +1360,7 @@ export class GameBoardRenderer {
   private animateElements(
     elements: HTMLElement[],
     className: string,
-    duration: number,
+    duration: number
   ): Promise<void> {
     if (elements.length === 0) return Promise.resolve()
     elements.forEach((el) => {
@@ -2041,7 +2077,45 @@ const STYLES = `
   z-index: 8;
 }
 
-/* ---------- Player Card ---------- */
+/* ---------- Player Card + transparent utility layers ---------- */
+.player-zone {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.7fr) auto minmax(88px, 0.7fr);
+  align-items: end;
+  justify-items: center;
+  gap: clamp(8px, 1.4vw, 18px);
+  min-height: 0;
+}
+.utility-layer {
+  width: 100%;
+  min-height: clamp(92px, 14vh, 140px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  background: rgba(8, 5, 14, 0.12);
+  backdrop-filter: blur(1px);
+}
+.utility-layer-left {
+  justify-content: flex-end;
+  padding-right: clamp(4px, 0.8vw, 10px);
+}
+.relic-layer {
+  justify-content: flex-start;
+  padding-left: clamp(4px, 0.8vw, 10px);
+  opacity: 0.58;
+}
+.relic-plan-label {
+  max-width: 96px;
+  color: rgba(255, 232, 168, 0.42);
+  border: 1px dashed rgba(255, 232, 168, 0.16);
+  border-radius: 999px;
+  padding: 6px 9px;
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.2;
+}
 .player-row {
   display: flex;
   justify-content: center;
@@ -2544,32 +2618,108 @@ const STYLES = `
 }
 .candle-gauge {
   position: relative;
-  height: 10px;
-  border-radius: 999px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: grid;
+  grid-template-columns: 46px 1fr;
+  gap: 8px;
+  align-items: stretch;
+  min-height: 48px;
+  padding: 6px;
+  border-radius: 12px;
+  overflow: visible;
+  background:
+    linear-gradient(180deg, rgba(255, 215, 120, 0.1), rgba(255, 255, 255, 0.035)),
+    rgba(20, 16, 28, 0.78);
+  border: 1px solid rgba(244, 164, 96, 0.32);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.12),
+    0 0 16px rgba(0, 0, 0, 0.2);
 }
-.candle-gauge-fill {
-  position: absolute;
-  inset: auto 0 0 0;
-  width: 100%;
-  height: 0;
-  background: linear-gradient(180deg, #ffe89a, #f4a460);
-  box-shadow: 0 0 10px rgba(255, 215, 120, 0.65);
-  transition: height 0.3s ease;
+.candle-mode-btn {
+  appearance: none;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  align-items: center;
+  justify-items: center;
+  gap: 2px;
+  min-width: 40px;
+  border: 1px solid rgba(255, 215, 120, 0.42);
+  border-radius: 10px;
+  color: var(--color-flame);
+  background: radial-gradient(circle at 50% 0%, rgba(255, 215, 120, 0.18), rgba(0, 0, 0, 0.18));
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 0 12px rgba(255, 215, 120, 0.12);
 }
-.candle-gauge-label {
-  position: absolute;
-  inset: 0;
-  display: flex;
+.candle-mode-btn:hover {
+  border-color: rgba(255, 215, 120, 0.72);
+  background: rgba(244, 164, 96, 0.16);
+}
+.candle-mode-icon {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
-  color: rgba(255, 245, 220, 0.95);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  font-size: 20px;
+}
+.candle-mode-label {
+  color: rgba(255, 232, 168, 0.86);
+  font-size: 11px;
+  font-weight: 800;
   letter-spacing: 0.04em;
+}
+.candle-gauge-body {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 4px;
+  min-width: 0;
+}
+.candle-gauge-meter {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.candle-gauge-meter::before {
+  content: '';
+  position: absolute;
+  inset: 3px auto 3px 3px;
+  width: calc(var(--candle-fill, 0%) - 6px);
+  max-width: calc(100% - 6px);
+  min-width: 0;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(244, 164, 96, 0.42), rgba(255, 215, 120, 0.7));
+  box-shadow: 0 0 12px rgba(255, 215, 120, 0.34);
+  transition: width 0.3s ease;
+}
+.candle-gauge-tick {
+  position: relative;
+  z-index: 1;
+  min-height: 18px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 232, 168, 0.18);
+  background: rgba(255, 255, 255, 0.045);
+}
+.candle-gauge-tick.is-filled {
+  border-color: rgba(255, 232, 168, 0.56);
+  background: linear-gradient(180deg, rgba(255, 232, 168, 0.75), rgba(244, 164, 96, 0.58));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+.candle-gauge-label {
+  position: static;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(255, 232, 168, 0.86);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  letter-spacing: 0.02em;
 }
 /* ---------- Compendium (도감) overlay ---------- */
 .compendium-overlay {
@@ -3047,12 +3197,12 @@ const STYLES = `
    The chain banner lives on the body, not inside the stage layout, so it
    never shifts other UI as the player extends the chain. Position is fixed
    near the top-center target banner language for HUD consistency. Card events
-   use category-colored text; recipe events scale up with a brighter glow so
-   the "조합 발동" beat reads without a circular/pill backing. */
+   use a restrained shared warm tone; recipe/gauge events scale up with a
+   brighter glow so their trigger beats read without a circular/pill backing. */
 .chain-banner {
   position: fixed;
   left: 50%;
-  top: 14vh;
+  top: 20vh;
   transform: translateX(-50%) translateY(-10px);
   display: flex;
   align-items: baseline;
@@ -3106,11 +3256,14 @@ const STYLES = `
   white-space: nowrap;
   will-change: transform, filter, text-shadow;
 }
-.chain-event-card.hand-cat-recovery { color: rgba(196, 255, 225, 0.96); }
-.chain-event-card.hand-cat-tool     { color: rgba(255, 232, 168, 0.98); }
-.chain-event-card.hand-cat-control  { color: rgba(199, 220, 255, 0.96); }
-.chain-event-card.hand-cat-attack   { color: rgba(255, 180, 156, 0.98); }
-.chain-event-recipe {
+.chain-event-card.hand-cat-recovery,
+.chain-event-card.hand-cat-tool,
+.chain-event-card.hand-cat-control,
+.chain-event-card.hand-cat-attack {
+  color: rgba(255, 232, 168, 0.9);
+}
+.chain-event-recipe,
+.chain-event-gauge {
   font-size: clamp(20px, 2.6vw, 32px);
   letter-spacing: 0.06em;
   color: rgba(255, 232, 168, 1);
@@ -3121,6 +3274,13 @@ const STYLES = `
     0 0 18px rgba(255, 215, 120, 0.78),
     0 0 36px rgba(244, 164, 96, 0.42);
   animation: chain-recipe-glow 1.35s ease-in-out infinite;
+}
+.chain-event-gauge {
+  color: rgba(213, 230, 255, 1);
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.92),
+    0 0 18px rgba(145, 174, 210, 0.82),
+    0 0 36px rgba(255, 215, 120, 0.22);
 }
 .chain-event-mark {
   color: rgba(255, 232, 168, 1);
@@ -3134,7 +3294,8 @@ const STYLES = `
   animation: chain-card-pop 0.42s cubic-bezier(0.2, 1.4, 0.32, 1) 1;
 }
 /* Recipe events flash brighter on entry, layered on top of the steady glow. */
-.chain-event-recipe.is-new {
+.chain-event-recipe.is-new,
+.chain-event-gauge.is-new {
   animation:
     chain-recipe-burst 0.6s cubic-bezier(0.16, 0.88, 0.3, 1) 1,
     chain-recipe-glow 1.4s ease-in-out infinite 0.6s;
@@ -3201,6 +3362,11 @@ const STYLES = `
 .chain-banner-reset:hover { background: rgba(244, 164, 96, 0.18); }
 
 /* Melt/recipe highlight in the activity log. */
+.score-log-gauge {
+  box-shadow: inset 3px 0 0 rgba(145, 174, 210, 1);
+  background: rgba(145, 174, 210, 0.1);
+}
+.score-log-gauge .score-log-delta { color: rgba(213, 230, 255, 1); }
 .score-log-melt {
   box-shadow: inset 3px 0 0 rgba(255, 215, 120, 1);
   background: rgba(255, 215, 120, 0.08);

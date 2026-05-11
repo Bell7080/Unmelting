@@ -9,6 +9,9 @@
 
 import { HandCard } from './HandCard'
 
+/** Full hand-gauge payoff selected by the player from the hand UI. */
+export type CandleMode = 'max-health' | 'attack' | 'ember' | 'draw'
+
 export class Character {
   private static readonly STARTING_MAX_HEALTH = 20
   static readonly STARTING_EMBER = 10
@@ -34,14 +37,13 @@ export class Character {
   candleMax: number
   hand: HandCard[]
   handMax: number
+  /** Selected payoff that fires when the 10-step candle gauge fills. */
+  candleMode: CandleMode
   /** Damage shield charges from wax-shield style effects. */
   damageShieldTurns: number = 0
   damageShieldReduction: number = 0
 
-  constructor(
-    id: string = 'unmelting-girl',
-    name: string = '녹지 않는 소녀',
-  ) {
+  constructor(id: string = 'unmelting-girl', name: string = '녹지 않는 소녀') {
     this.id = id
     this.name = name
     this.health = Character.STARTING_MAX_HEALTH
@@ -54,6 +56,7 @@ export class Character {
     this.emberDecayCountdown = Character.EMBER_DECAY_TURNS
     this.candle = 0
     this.candleMax = Character.CANDLE_MAX
+    this.candleMode = 'max-health'
     this.hand = []
     this.handMax = Character.HAND_MAX
   }
@@ -120,7 +123,15 @@ export class Character {
     return this.candle
   }
 
-  /** Reset the candle gauge after a Melt fires. */
+  /** Cycle the 10-slot gauge's payoff mode from the UI icon button. */
+  cycleCandleMode(): CandleMode {
+    const modes: CandleMode[] = ['max-health', 'attack', 'ember', 'draw']
+    const current = modes.indexOf(this.candleMode)
+    this.candleMode = modes[(current + 1) % modes.length]
+    return this.candleMode
+  }
+
+  /** Reset the candle gauge after a payoff fires. */
   resetCandle(): void {
     this.candle = 0
   }
@@ -168,6 +179,7 @@ export class Character {
     this.emberDecayCountdown = Character.EMBER_DECAY_TURNS
     this.candle = 0
     this.candleMax = Character.CANDLE_MAX
+    this.candleMode = 'max-health'
     this.hand = []
     this.handMax = Character.HAND_MAX
     this.damageShieldTurns = 0
