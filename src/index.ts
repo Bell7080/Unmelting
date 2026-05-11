@@ -69,6 +69,25 @@ const boardRenderer = new GameBoardRenderer('game-board')
 let gameActive = true
 let inputLocked = false
 let chain: ChainState = HandSystem.newChain()
+/**
+ * UI-side timeline of chain events. Mirrors `chain.sequence` for the cards
+ * but also interleaves fired recipes in the exact order they happened so the
+ * banner can read like "small candle → wax shield → ✦ Wax Rush → ...".
+ * The renderer keys animations on each event's uid so a new addition pops in
+ * without re-animating already-shown items.
+ */
+type ChainTimelineEvent =
+  | { kind: 'card'; defId: HandCardId; name: string; category: HandCategory; uid: string }
+  | { kind: 'recipe'; recipeId: string; name: string; flavor: string; uid: string }
+let chainTimeline: ChainTimelineEvent[] = []
+let chainEventCounter = 0
+function nextChainUid(): string {
+  chainEventCounter += 1
+  return `c${chainEventCounter}`
+}
+function clearChainTimeline(): void {
+  chainTimeline = []
+}
 /** Currently armed targeted hand card: waits for a board click to consume. */
 let pendingHandTarget: { slotIndex: number; defId: HandCardId } | null = null
 
@@ -255,10 +274,7 @@ function startGame(): void {
 }
 
 function buildChainHints() {
-  return {
-    sequence: chain.sequence.map((id) => getHandCardDef(id).name),
-    firedRecipeIds: Array.from(chain.firedRecipeIds),
-  }
+  return { events: chainTimeline }
 }
 
 function render(): void {
@@ -320,8 +336,9 @@ document.addEventListener('itemAction', (e: Event) => {
 })
 
 document.addEventListener('chainReset', () => {
-  if (chain.sequence.length === 0) return
+  if (chain.sequence.length === 0 && chainTimeline.length === 0) return
   HandSystem.resetChain(chain)
+  clearChainTimeline()
   recordNotice('체인 초기화', 'info')
   render()
 })
@@ -411,12 +428,31 @@ async function applyHandSingle(
       })
     }
   }
+  // Append the just-used card to the on-screen chain timeline, then any
+  // recipes that fired as a result. Order matches `chain.sequence`; recipes
+  // are interleaved immediately after the card whose use satisfied them.
+  if (usedDef) {
+    chainTimeline.push({
+      kind: 'card',
+      defId: usedDef.id,
+      name: usedDef.name,
+      category: usedDef.category,
+      uid: nextChainUid(),
+    })
+  }
   recordNotice(result.message, 'win')
   for (const merge of result.mergeMessages) {
     recordNotice(merge, 'melt')
   }
   for (const fired of result.firedRecipes) {
     recordNotice(`✦ ${fired.recipe.name}: ${fired.message}`, 'recipe')
+    chainTimeline.push({
+      kind: 'recipe',
+      recipeId: fired.recipe.id,
+      name: fired.recipe.name,
+      flavor: fired.recipe.flavor,
+      uid: nextChainUid(),
+    })
   }
   pendingHandTarget = null
   boardRenderer.setHandTargetingMode(null)
@@ -443,8 +479,10 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
   if (advanceTurn) {
     gameState.nextTurn()
     // Reset chain on every turn boundary — the player should not be able to
-    // hold an unbounded chain across many turns.
+    // hold an unbounded chain across many turns. Also clear the UI timeline
+    // so the chain banner fades out at the same beat.
     HandSystem.resetChain(chain)
+    clearChainTimeline()
     // Tick the ember decay countdown; ember decreases every 10th turn.
     const tickedDown = turnManager.tickEmberDecay()
     syncSpawnerTier()
@@ -588,6 +626,7 @@ async function handleCardAction(e: Event): Promise<void> {
 
   // Board action resets the chain so combos do not bleed across turns.
   HandSystem.resetChain(chain)
+  clearChainTimeline()
 
   render()
 
