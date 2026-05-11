@@ -29,6 +29,7 @@ import { HandSystem, ChainState } from '@systems/HandSystem'
 import { EmberSystem } from '@systems/EmberSystem'
 import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
+import { CandleMode } from '@entities/Character'
 import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
 import type { BurstTheme } from '@ui/SquareBurst'
@@ -79,6 +80,7 @@ let chain: ChainState = HandSystem.newChain()
 type ChainTimelineEvent =
   | { kind: 'card'; defId: HandCardId; name: string; category: HandCategory; uid: string }
   | { kind: 'recipe'; recipeId: string; name: string; flavor: string; uid: string }
+  | { kind: 'gauge'; mode: CandleMode; name: string; flavor: string; uid: string }
 let chainTimeline: ChainTimelineEvent[] = []
 let chainEventCounter = 0
 function nextChainUid(): string {
@@ -141,14 +143,10 @@ function getTurnScoreMultiplier(): number {
   return 1 + gameState.getCurrentTurn() * 0.08
 }
 
-function scoreForCardAction(
-  card: Card,
-  result: { cardRemoved: boolean },
-): number {
+function scoreForCardAction(card: Card, result: { cardRemoved: boolean }): number {
   if (!result.cardRemoved) return 12
   if (card.type === CardType.ENEMY) {
-    if (card.isSpecialEnemy)
-      return 100 + card.groupCount * 80 + card.defeatDropCount * 25
+    if (card.isSpecialEnemy) return 100 + card.groupCount * 80 + card.defeatDropCount * 25
     if (card.groupCount >= 3) return 450
     if (card.groupCount === 2) return 220
     return 80
@@ -158,8 +156,7 @@ function scoreForCardAction(
     if (card.groupCount === 2) return 140
     return 55
   }
-  if (card.type === CardType.TREASURE)
-    return 55 * Math.max(1, Math.min(3, card.groupCount))
+  if (card.type === CardType.TREASURE) return 55 * Math.max(1, Math.min(3, card.groupCount))
   return 10
 }
 
@@ -172,7 +169,7 @@ function activityKindForCard(card: Card): ActivityLogEntry['kind'] {
 function createScoreLog(
   label: string,
   baseValue: number,
-  kind: ActivityLogEntry['kind'],
+  kind: ActivityLogEntry['kind']
 ): ActivityLogDraft {
   const amount = Math.max(1, Math.round(baseValue * getTurnScoreMultiplier()))
   score += amount
@@ -302,33 +299,85 @@ function wait(ms: number): Promise<void> {
 // This makes "밀랍 방패 → 밀랍 돌진" read as two impacts instead of one
 // simultaneous burst, even on slower machines.
 const COMBO_TRIGGER_DELAY_MS = 320
+// The hand gauge fires after card and recipe beats so it never feels simultaneous.
+const GAUGE_TRIGGER_DELAY_MS = 300
 
-type NoticeLogKind = 'info' | 'win' | 'hurt' | 'melt' | 'recipe'
+type NoticeLogKind = 'info' | 'win' | 'hurt' | 'melt' | 'recipe' | 'gauge'
 
-function createNoticeLog(
-  message: string,
-  kind: NoticeLogKind = 'info',
-): ActivityLogDraft {
+function createNoticeLog(message: string, kind: NoticeLogKind = 'info'): ActivityLogDraft {
   const badgeByKind: Record<NoticeLogKind, string> = {
     info: '알림',
     win: '완료',
     hurt: '위험',
     melt: '녹임',
     recipe: '조합',
+    gauge: '게이지',
   }
   const logKind: ActivityLogEntry['kind'] =
     kind === 'info'
       ? 'notice'
       : kind === 'recipe'
         ? 'melt'
-        : kind === 'melt'
-          ? 'melt'
-          : kind
+        : kind === 'gauge'
+          ? 'gauge'
+          : kind === 'melt'
+            ? 'melt'
+            : kind
   return { label: message, badge: badgeByKind[kind], kind: logKind }
 }
 
 function recordNotice(message: string, kind: NoticeLogKind = 'info'): void {
   pushActivityLogsInDisplayOrder([createNoticeLog(message, kind)])
+}
+
+function candleModeLabel(mode: CandleMode): string {
+  switch (mode) {
+    case 'max-health':
+      return '최대 체력'
+    case 'attack':
+      return '공격력'
+    case 'ember':
+      return '불씨 회복'
+    case 'draw':
+      return '손패 획득'
+  }
+}
+
+/** Apply the selected full-gauge payoff and reset the 10-slot gauge. */
+function fireCandleGaugeEffect(): { name: string; message: string; mode: CandleMode } | null {
+  const character = gameState.character
+  if (!character.isCandleFull()) return null
+  const mode = character.candleMode
+  let message = ''
+  switch (mode) {
+    case 'max-health': {
+      const amount = character.increaseMaxHealth(5)
+      message = `최대 체력 +${amount}`
+      break
+    }
+    case 'attack':
+      character.applyDamageBoost()
+      message = '공격력 +1'
+      break
+    case 'ember': {
+      const restored = character.gainEmber(3)
+      message = `불씨 +${restored}`
+      break
+    }
+    case 'draw': {
+      let gained = 0
+      let overflow = 0
+      for (let i = 0; i < 3; i++) {
+        const drop = DropSystem.generateDrop()
+        if (HandSystem.enqueueDrop(character, drop)) gained++
+        else overflow++
+      }
+      message = overflow > 0 ? `손패 +${gained}, ${overflow}장 넘침` : `손패 +${gained}`
+      break
+    }
+  }
+  character.resetCandle()
+  return { name: `게이지: ${candleModeLabel(mode)}`, message, mode }
 }
 
 document.addEventListener('cardAction', (e: Event) => {
@@ -352,13 +401,17 @@ document.addEventListener('scoreSpend', () => {
   handleScoreSpend()
 })
 
+document.addEventListener('candleModeCycle', () => {
+  if (!gameActive || inputLocked) return
+  const mode = gameState.character.cycleCandleMode()
+  recordNotice(`게이지 모드 변경: ${candleModeLabel(mode)}`, 'info')
+  render()
+})
+
 function handleScoreSpend(): void {
   if (!gameActive || inputLocked || score < SCORE_SPEND_COST) return
 
-  const itemCount = Math.max(
-    1,
-    Math.min(5, Math.floor(score / SCORE_SPEND_COST)),
-  )
+  const itemCount = Math.max(1, Math.min(5, Math.floor(score / SCORE_SPEND_COST)))
   const spent = itemCount * SCORE_SPEND_COST
   const gainedItems: string[] = []
   let dropped = 0
@@ -409,7 +462,7 @@ async function handleHandSlotClick(slotIndex: number): Promise<void> {
 /** Apply a single-use hand card (with optional target). */
 async function applyHandSingle(
   slotIndex: number,
-  target?: { laneIndex: number; distance: number; card: Card },
+  target?: { laneIndex: number; distance: number; card: Card }
 ): Promise<void> {
   inputLocked = true
   // Capture the card def BEFORE useSingle mutates the slot — we need the
@@ -485,6 +538,26 @@ async function applyHandSingle(
     await boardRenderer.animateCardConsumeByIds(recipeResult.removedFieldCards)
   }
 
+  // Full gauge fires last: card effect -> recipe effect -> gauge effect.
+  // The short delay makes the payoff read as a chain continuation, not an
+  // instantaneous side effect of the card click.
+  if (gameState.character.isCandleFull()) {
+    await wait(GAUGE_TRIGGER_DELAY_MS)
+    const gauge = fireCandleGaugeEffect()
+    if (gauge) {
+      recordNotice(`${gauge.name}: ${gauge.message}`, 'gauge')
+      chainTimeline.push({
+        kind: 'gauge',
+        mode: gauge.mode,
+        name: gauge.name,
+        flavor: gauge.message,
+        uid: nextChainUid(),
+      })
+      boardRenderer.refreshChainBanner(buildChainHints())
+      render()
+    }
+  }
+
   // Refill after all delayed recipe effects have resolved. Wait for the FLIP
   // fall animation when something actually moved so the cards visibly slide
   // down into the gap (otherwise the rail "punches a hole").
@@ -527,8 +600,7 @@ async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
   const hits = turnManager.runEnemyPhase()
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
   const eventAnimations: Promise<void>[] = []
-  if (hits.length > 0)
-    eventAnimations.push(boardRenderer.animateEnemyAttacks(hits))
+  if (hits.length > 0) eventAnimations.push(boardRenderer.animateEnemyAttacks(hits))
   if (treasureChanges.length > 0) {
     eventAnimations.push(boardRenderer.animateTreasureChanges(treasureChanges))
   }
@@ -597,30 +669,15 @@ async function handleCardAction(e: Event): Promise<void> {
   if (card.type === CardType.ENEMY) {
     await boardRenderer.animatePlayerAttack(card)
   }
-  const result = ActionSystem.executeAction(
-    gameState.getCharacter(),
-    lane,
-    card,
-    actionType,
-  )
+  const result = ActionSystem.executeAction(gameState.getCharacter(), lane, card, actionType)
   if (result.success) {
     const gainedItems = result.itemGainedNames ?? []
-    const actionLogs: ActivityLogDraft[] = [
-      ...createItemGainLogs(gainedItems),
-    ]
+    const actionLogs: ActivityLogDraft[] = [...createItemGainLogs(gainedItems)]
     if (gainedItems.length === 0) {
-      actionLogs.push(
-        createNoticeLog(result.message, result.damageTaken ? 'hurt' : 'info'),
-      )
+      actionLogs.push(createNoticeLog(result.message, result.damageTaken ? 'hurt' : 'info'))
     }
     const scoreDelta = scoreForCardAction(card, result)
-    actionLogs.push(
-      createScoreLog(
-        `${card.name} 선택`,
-        scoreDelta,
-        activityKindForCard(card),
-      ),
-    )
+    actionLogs.push(createScoreLog(`${card.name} 선택`, scoreDelta, activityKindForCard(card)))
     pushActivityLogsInDisplayOrder(actionLogs)
     if (scoreDelta > 0) burstScoreGain()
     if (result.overflow && result.overflow.length > 0) {
