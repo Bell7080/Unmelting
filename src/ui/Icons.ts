@@ -136,3 +136,22 @@ export function shieldIcon(): string {
     ].join(''),
   )
 }
+
+/** Open book — used for the compendium button so the chrome stays
+ *  flat-iconic instead of relying on an emoji. */
+export function bookIcon(): string {
+  return svg(
+    [
+      // Two pages, V-spread at the spine.
+      fill(
+        'M3.4 5.4c2.8-.4 5.6-.2 7.6 1.2v12c-2-1.4-4.8-1.6-7.6-1.2V5.4Z',
+      ),
+      fill(
+        'M20.6 5.4c-2.8-.4-5.6-.2-7.6 1.2v12c2-1.4 4.8-1.6 7.6-1.2V5.4Z',
+      ),
+      // Faint line work for page texture.
+      stroke('M5.6 8.4c1.6-.2 3.2-.1 4.4.6M5.6 11c1.6-.2 3.2-.1 4.4.6', 1),
+      stroke('M14 9c1.2-.7 2.8-.8 4.4-.6M14 11.6c1.2-.7 2.8-.8 4.4-.6', 1),
+    ].join(''),
+  )
+}

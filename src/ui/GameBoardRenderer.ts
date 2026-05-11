@@ -32,9 +32,11 @@ import {
   MIMIC_BY_SPAN,
 } from '@systems/CardSpawner'
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
+import { RECIPES } from '@data/Recipes'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import {
   bigCandleIcon,
+  bookIcon,
   candleIcon,
   coinIcon,
   flameIcon,
@@ -227,7 +229,8 @@ export class GameBoardRenderer {
             점수 ${scorePanel.spendCost}로 아이템 변환
           </button>
           <button class="compendium-btn" type="button" data-open-compendium>
-            📖 도감
+            <span class="compendium-btn-icon">${bookIcon()}</span>
+            도감
           </button>
         </div>
       </aside>
@@ -555,6 +558,7 @@ export class GameBoardRenderer {
       { id: 'traps', label: '함정' },
       { id: 'treasures', label: '보물' },
       { id: 'hand', label: '손패' },
+      { id: 'combo', label: '조합' },
     ]
     const tabBar = tabs
       .map(
@@ -566,11 +570,15 @@ export class GameBoardRenderer {
     if (activeTab === 'enemies') body = this.renderCompendiumEnemies()
     else if (activeTab === 'traps') body = this.renderCompendiumTraps()
     else if (activeTab === 'treasures') body = this.renderCompendiumTreasures()
-    else body = this.renderCompendiumHand()
+    else if (activeTab === 'hand') body = this.renderCompendiumHand()
+    else body = this.renderCompendiumCombo()
     return `
       <div class="compendium-modal" role="dialog" aria-label="도감">
         <header class="compendium-header">
-          <h2 class="compendium-title">📖 도감</h2>
+          <h2 class="compendium-title">
+            <span class="compendium-title-icon">${bookIcon()}</span>
+            도감
+          </h2>
           <button class="compendium-close" data-compendium-close type="button" aria-label="닫기">✕</button>
         </header>
         <nav class="compendium-tabs" role="tablist">${tabBar}</nav>
@@ -582,23 +590,34 @@ export class GameBoardRenderer {
 
   private renderCompendiumEnemies(): string {
     const normal = ENEMY_DEFINITIONS.map((def) => {
-      const sprite = def.name.includes('생쥐')
+      const spriteUrl = def.name.includes('생쥐')
         ? SpriteUrls.enemyMouse
         : SpriteUrls.enemyFrog
-      return this.compendiumCard(sprite, def.name, [
-        ['HP', String(def.healthOrDamage ?? '?')],
-        ['ATK', String(def.attack ?? '?')],
-      ], def.description)
+      return this.compendiumCard({
+        art: { kind: 'sprite', url: spriteUrl },
+        name: def.name,
+        badge: '일반',
+        stats: [
+          ['HP', String(def.healthOrDamage ?? '?')],
+          ['ATK', String(def.attack ?? '?')],
+        ],
+        description: def.description,
+      })
     }).join('')
     const mimics = Object.entries(MIMIC_BY_SPAN)
-      .map(([span, stats]) => {
-        const widthLabel = `${span}칸 미믹`
-        return this.compendiumCard(SpriteUrls.mimic, widthLabel, [
-          ['HP', String(stats.health)],
-          ['ATK', String(stats.attack)],
-          ['Drops', String(stats.drops)],
-        ], '보물 카드가 변이된 함정형 적')
-      })
+      .map(([span, stats]) =>
+        this.compendiumCard({
+          art: { kind: 'sprite', url: SpriteUrls.mimic },
+          name: `${span}칸 미믹`,
+          badge: '특수',
+          stats: [
+            ['HP', String(stats.health)],
+            ['ATK', String(stats.attack)],
+            ['드롭', `${stats.drops}장`],
+          ],
+          description: '보물 카드가 변이된 함정형 적. 일반 보물보다 위험하지만 더 많은 손패를 떨어뜨린다.',
+        }),
+      )
       .join('')
     return `
       <h3 class="compendium-section">일반 적</h3>
@@ -609,22 +628,24 @@ export class GameBoardRenderer {
   }
 
   private renderCompendiumTraps(): string {
-    const oneCell = TRAP_DEFINITIONS.map((def) =>
-      this.compendiumCard(SpriteUrls.trap, def.name, [
-        ['Damage', String(def.healthOrDamage ?? '?')],
-      ], def.description),
-    ).join('')
-    const merged = [2, 3].map((span) =>
-      this.compendiumCard(SpriteUrls.trap, `${span}칸 거미줄`, [
-        ['Damage', String((TRAP_DEFINITIONS[0].healthOrDamage ?? 2) + (span - 1))],
-      ], `${span}칸이 머지된 더 위험한 함정`),
-    ).join('')
-    return `
-      <h3 class="compendium-section">기본</h3>
-      <div class="compendium-grid">${oneCell}</div>
-      <h3 class="compendium-section">머지 변형</h3>
-      <div class="compendium-grid">${merged}</div>
-    `
+    const baseDamage = TRAP_DEFINITIONS[0].healthOrDamage ?? 2
+    const widths: { span: number; badge: string; description: string }[] = [
+      { span: 1, badge: '1칸', description: TRAP_DEFINITIONS[0].description },
+      { span: 2, badge: '2칸 머지', description: '두 칸이 합쳐진 더 위험한 함정' },
+      { span: 3, badge: '3칸 머지', description: '레인 전체를 덮는 최대 위협' },
+    ]
+    const cards = widths
+      .map((w) =>
+        this.compendiumCard({
+          art: { kind: 'sprite', url: SpriteUrls.trap },
+          name: w.span === 1 ? TRAP_DEFINITIONS[0].name : `${w.span}칸 거미줄`,
+          badge: w.badge,
+          stats: [['피해', String(baseDamage + (w.span - 1))]],
+          description: w.description,
+        }),
+      )
+      .join('')
+    return `<div class="compendium-grid">${cards}</div>`
   }
 
   private renderCompendiumTreasures(): string {
@@ -640,9 +661,17 @@ export class GameBoardRenderer {
     }
     const items = [1, 2, 3]
       .map((span) =>
-        this.compendiumCard(sprites[span], labels[span], [
-          ['Drops', `손패 ${span}장`],
-        ], `${span}칸 보물 — 처리 시 손패 ${span}장 드롭, 50% 확률로 사라지고 10% 확률로 미믹으로 변이`),
+        this.compendiumCard({
+          art: { kind: 'sprite', url: sprites[span] },
+          name: labels[span],
+          badge: `${span}칸`,
+          stats: [
+            ['드롭', `손패 ${span}장`],
+            ['사라짐', '50%/턴'],
+            ['미믹화', '10%/턴'],
+          ],
+          description: `${span}칸 보물 — 처리 시 손패 ${span}장 드롭. 매 턴 50% 확률로 사라지고 10% 확률로 미믹으로 변이한다.`,
+        }),
       )
       .join('')
     return `<div class="compendium-grid">${items}</div>`
@@ -663,27 +692,21 @@ export class GameBoardRenderer {
     }
     for (const id of HAND_CARD_IDS) {
       const def = HAND_CARD_DEFINITIONS[id]
-      const card = `
-        <article class="compendium-card compendium-card-hand hand-cat-${def.category}">
-          <header class="compendium-card-head">
-            <span class="compendium-card-name">${def.name}</span>
-            <span class="compendium-card-cat">${groupLabels[def.category]}</span>
-          </header>
-          <div class="compendium-card-row">
-            <span class="compendium-card-label">단일</span>
-            <span class="compendium-card-value">${def.description}</span>
-          </div>
-          <div class="compendium-card-row">
-            <span class="compendium-card-label">★ 합성(트리플)</span>
-            <span class="compendium-card-value">${def.tripleDescription}</span>
-          </div>
-          <div class="compendium-card-row compendium-card-meta">
-            <span>🕯 +${def.candleGain}</span>
-            ${def.needsTarget ? '<span>🎯 대상 필요</span>' : ''}
-          </div>
-        </article>
-      `
-      groups[def.category].push(card)
+      const stats: [string, string][] = [
+        ['단일', def.description],
+        ['★ 트리플', def.tripleDescription],
+        ['양초 게인', `+${def.candleGain}`],
+      ]
+      if (def.needsTarget) stats.push(['타게팅', '대상 필요'])
+      groups[def.category].push(
+        this.compendiumCard({
+          art: { kind: 'icon', svg: this.iconForHandCard(def.id) },
+          name: def.name,
+          badge: groupLabels[def.category],
+          categoryClass: this.categoryClass(def.category),
+          stats,
+        }),
+      )
     }
     return Object.entries(groups)
       .map(
@@ -695,26 +718,95 @@ export class GameBoardRenderer {
       .join('')
   }
 
-  private compendiumCard(
-    spriteUrl: string,
-    name: string,
-    stats: [string, string][],
-    description: string,
-  ): string {
-    const statRows = stats
+  private renderCompendiumCombo(): string {
+    const synthesisIntro = `
+      <article class="compendium-card compendium-card-wide">
+        <div class="compendium-card-art compendium-card-art--icon">${flameIcon()}</div>
+        <header class="compendium-card-head">
+          <span class="compendium-card-name">자동 합성 (트리플)</span>
+          <span class="compendium-card-badge">합성</span>
+        </header>
+        <div class="compendium-card-row"><span class="compendium-card-label">조건</span><span class="compendium-card-value">손패에 같은 카드 3장이 연속</span></div>
+        <div class="compendium-card-row"><span class="compendium-card-label">결과</span><span class="compendium-card-value">즉시 1장의 ★ 강화 카드로 합쳐짐. 사용 시 트리플 효과 발동.</span></div>
+        <p class="compendium-card-desc">손패 슬롯 0~9 중 인접한 3칸이 같은 종류면 자동 합성. 별도 조작 없이 발동되며, 합성된 카드는 단일 슬롯을 차지한다.</p>
+      </article>
+    `
+    const recipeCards = RECIPES.map((r) => {
+      const ingredients = Object.entries(r.ingredients)
+        .map(([id, n]) => {
+          const def = HAND_CARD_DEFINITIONS[id as HandCardId]
+          if (!def) return ''
+          const icon = this.iconForHandCard(def.id)
+          return `<span class="compendium-recipe-ing hand-cat-${def.category}" title="${def.name}">
+            <span class="compendium-recipe-ing-icon">${icon}</span>
+            <span class="compendium-recipe-ing-name">${def.name}</span>
+            ${(n ?? 1) > 1 ? `<span class="compendium-recipe-ing-count">×${n}</span>` : ''}
+          </span>`
+        })
+        .join('')
+      return this.compendiumCard({
+        art: { kind: 'recipe', html: ingredients },
+        name: r.name,
+        badge: `${r.totalCount}장`,
+        stats: [['효과', r.flavor]],
+        description: '체인에 위 재료가 모두 사용되면 발동',
+      })
+    }).join('')
+    return `
+      <h3 class="compendium-section">합성 (Synthesis)</h3>
+      <div class="compendium-grid">${synthesisIntro}</div>
+      <h3 class="compendium-section">조합 레시피 (Recipes)</h3>
+      <p class="compendium-section-blurb">손패를 사용할 때마다 해당 카드가 활성 체인에 추가된다. 체인의 multiset이 아래 재료를 모두 포함하면 그 레시피가 보너스로 발동한다.</p>
+      <div class="compendium-grid">${recipeCards}</div>
+    `
+  }
+
+  /**
+   * Unified compendium card template — every section uses this so the visual
+   * grammar (art slot → name + badge → stat rows → description) reads as one
+   * design language.
+   */
+  private compendiumCard(opts: {
+    art:
+      | { kind: 'sprite'; url: string }
+      | { kind: 'icon'; svg: string }
+      | { kind: 'recipe'; html: string }
+    name: string
+    badge?: string
+    categoryClass?: string
+    stats?: [string, string][]
+    description?: string
+  }): string {
+    const artHtml =
+      opts.art.kind === 'sprite'
+        ? `<div class="compendium-card-art compendium-card-art--sprite" style="background-image: url('${opts.art.url}');"></div>`
+        : opts.art.kind === 'icon'
+          ? `<div class="compendium-card-art compendium-card-art--icon">${opts.art.svg}</div>`
+          : `<div class="compendium-card-art compendium-card-art--recipe">${opts.art.html}</div>`
+    const badgeHtml = opts.badge
+      ? `<span class="compendium-card-badge">${opts.badge}</span>`
+      : ''
+    const statRows = (opts.stats ?? [])
       .map(
         ([k, v]) =>
           `<div class="compendium-card-row"><span class="compendium-card-label">${k}</span><span class="compendium-card-value">${v}</span></div>`,
       )
       .join('')
+    const descHtml = opts.description
+      ? `<p class="compendium-card-desc">${opts.description}</p>`
+      : ''
+    const classes = ['compendium-card', opts.categoryClass ?? '']
+      .filter(Boolean)
+      .join(' ')
     return `
-      <article class="compendium-card">
-        <div class="compendium-card-art" style="background-image: url('${spriteUrl}');"></div>
+      <article class="${classes}">
+        ${artHtml}
         <header class="compendium-card-head">
-          <span class="compendium-card-name">${name}</span>
+          <span class="compendium-card-name">${opts.name}</span>
+          ${badgeHtml}
         </header>
         ${statRows}
-        <p class="compendium-card-desc">${description}</p>
+        ${descHtml}
       </article>
     `
   }
@@ -2505,6 +2597,11 @@ const STYLES = `
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 12px;
 }
+/* Unified compendium card. Every tab uses the same skeleton:
+   art slot → head (name + badge) → stat rows → optional description.
+   The art slot has three variants (sprite / icon / recipe ingredients) but
+   shares the same height + framed background so the grid reads as one
+   design language. */
 .compendium-card {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -2512,15 +2609,43 @@ const STYLES = `
   padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  min-height: 200px;
+}
+.compendium-card-wide {
+  grid-column: 1 / -1;
 }
 .compendium-card-art {
-  height: 80px;
+  height: 88px;
+  border-radius: 8px;
+  background-color: rgba(0, 0, 0, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.compendium-card-art--sprite {
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  border-radius: 6px;
-  background-color: rgba(0, 0, 0, 0.25);
+}
+.compendium-card-art--icon {
+  color: var(--color-flame);
+}
+.compendium-card-art--icon .icon {
+  width: 56px;
+  height: 56px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
+}
+.compendium-card-art--recipe {
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  height: auto;
+  min-height: 88px;
+  align-content: center;
+  background-color: rgba(0, 0, 0, 0.2);
 }
 .compendium-card-head {
   display: flex;
@@ -2533,33 +2658,108 @@ const STYLES = `
   color: #fff5dc;
   font-size: 13px;
 }
-.compendium-card-cat {
+.compendium-card-badge {
   font-size: 10px;
   color: var(--color-flame);
-  padding: 2px 6px;
+  padding: 2px 8px;
   border: 1px solid rgba(244, 164, 96, 0.45);
   border-radius: 999px;
+  white-space: nowrap;
+  letter-spacing: 0.04em;
 }
 .compendium-card-row {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
   font-size: 11px;
   color: var(--color-text-muted);
 }
-.compendium-card-label { font-weight: 600; }
-.compendium-card-value { color: #fff5dc; }
-.compendium-card-meta {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-start;
-  font-size: 11px;
-  color: var(--color-flame);
+.compendium-card-label {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.compendium-card-value {
+  color: #fff5dc;
+  text-align: right;
 }
 .compendium-card-desc {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   font-size: 11px;
   color: var(--color-text-muted);
-  line-height: 1.4;
+  line-height: 1.45;
+}
+
+/* Recipe ingredient pills shown in the combo tab's art slot. */
+.compendium-recipe-ing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 11px;
+  color: #fff5dc;
+}
+.compendium-recipe-ing-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  color: var(--color-flame);
+}
+.compendium-recipe-ing-icon .icon {
+  width: 16px;
+  height: 16px;
+}
+.compendium-recipe-ing-name {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.compendium-recipe-ing-count {
+  color: var(--color-flame);
+  font-weight: 700;
+}
+/* Reuse the hand-cat-* tint for the pill left edge so categories read
+   instantly inside a recipe. */
+.compendium-recipe-ing.hand-cat-recovery { box-shadow: inset 3px 0 0 rgba(103, 196, 152, 0.85); }
+.compendium-recipe-ing.hand-cat-tool     { box-shadow: inset 3px 0 0 rgba(255, 215, 120, 0.9); }
+.compendium-recipe-ing.hand-cat-control  { box-shadow: inset 3px 0 0 rgba(145, 174, 210, 0.9); }
+.compendium-recipe-ing.hand-cat-attack   { box-shadow: inset 3px 0 0 rgba(168, 58, 58, 0.9); }
+
+.compendium-section-blurb {
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.compendium-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.compendium-title-icon {
+  display: inline-flex;
+  color: var(--color-flame-warm);
+  width: 20px;
+  height: 20px;
+}
+.compendium-title-icon .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.compendium-btn-icon {
+  display: inline-flex;
+  margin-right: 4px;
+  width: 14px;
+  height: 14px;
+  vertical-align: -0.18em;
+}
+.compendium-btn-icon .icon {
+  width: 14px;
+  height: 14px;
 }
 .compendium-footer {
   padding: 8px 20px 12px;
