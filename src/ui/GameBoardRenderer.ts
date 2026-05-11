@@ -82,9 +82,27 @@ export interface HandTargetingMode {
   defId: HandCardId
 }
 
+export interface ChainEventBase {
+  /** Stable per-event id so the renderer can detect new entries and pop-in
+   *  the right one without re-firing the animation on every render. */
+  uid: string
+}
+export interface ChainEventCard extends ChainEventBase {
+  kind: 'card'
+  defId: HandCardId
+  name: string
+  category: HandCategory
+}
+export interface ChainEventRecipe extends ChainEventBase {
+  kind: 'recipe'
+  recipeId: string
+  name: string
+  flavor: string
+}
+export type ChainEvent = ChainEventCard | ChainEventRecipe
+
 export interface ChainHints {
-  sequence: string[]
-  firedRecipeIds: string[]
+  events: ChainEvent[]
 }
 
 export interface ScorePanelState {
@@ -112,6 +130,9 @@ export class GameBoardRenderer {
    *  with `is-entering` so the drop animation does not re-fire on every full
    *  re-render of the hand panel. */
   private previousHandUids = new Set<string>()
+  /** Same idea for the chain banner — track per-event uids so only newly
+   *  appended chain entries play their pop-in animation. */
+  private previousChainUids = new Set<string>()
   private handTargetingMode: HandTargetingMode | null = null
 
   constructor(containerId: string = 'game-board') {
@@ -164,7 +185,6 @@ export class GameBoardRenderer {
           </section>
 
           ${this.renderPlayer(character)}
-          ${this.renderChainStrip(scorePanel)}
         </main>
 
         ${this.renderHand(character, scorePanel)}
@@ -176,6 +196,8 @@ export class GameBoardRenderer {
     this.attachListeners()
     this.animateMovedCards(previousRects)
     this.rememberRenderedCards()
+    // Floating chain banner (body-mounted, above the player profile).
+    this.updateChainBanner(scorePanel.chainHints)
   }
 
   clearSelection(): void {
@@ -876,25 +898,67 @@ export class GameBoardRenderer {
     return `<div class="ember-vignette" style="--vignette-opacity: ${opacity};" aria-hidden="true"></div>`
   }
 
-  /** Stretched chain strip below the player card showing recently played cards. */
-  private renderChainStrip(scorePanel: ScorePanelState): string {
-    const hints = scorePanel.chainHints
-    if (!hints || hints.sequence.length === 0) return ''
-    const items = hints.sequence
-      .map(
-        (name) => `<span class="chain-card">${name}</span>`,
-      )
-      .join('<span class="chain-arrow">→</span>')
-    const fired = hints.firedRecipeIds.length
-    const firedText = fired > 0 ? `<span class="chain-fired">조합 ${fired}회</span>` : ''
-    return `
-      <div class="chain-strip" aria-label="Active chain">
-        <span class="chain-label">체인</span>
-        <div class="chain-cards">${items}</div>
-        ${firedText}
-        <button class="chain-reset-btn" type="button" title="체인 초기화">×</button>
-      </div>
-    `
+  /**
+   * Body-mounted floating chain banner. Sits above the player profile
+   * (mirrors the target banner's positioning style) so the player can read
+   * the chain without it cluttering the board. Each new event pops in with
+   * a short shake; fired recipes get a brighter pulse glow + bigger font.
+   *
+   * Newness is detected by comparing event uids against the previous render
+   * snapshot (`previousChainUids`) so already-shown items do not re-animate.
+   */
+  private updateChainBanner(hints?: ChainHints): void {
+    let banner = document.getElementById('chain-banner') as HTMLElement | null
+    if (!banner) {
+      banner = document.createElement('div')
+      banner.id = 'chain-banner'
+      banner.className = 'chain-banner'
+      banner.setAttribute('aria-label', 'Active chain')
+      banner.setAttribute('aria-live', 'polite')
+      document.body.appendChild(banner)
+      // Reset button is delegated to the same custom event the old strip used.
+      banner.addEventListener('click', (e) => {
+        const t = e.target as HTMLElement
+        if (t.dataset.chainReset !== undefined) {
+          document.dispatchEvent(new CustomEvent('chainReset'))
+        }
+      })
+    }
+    const events = hints?.events ?? []
+    if (events.length === 0) {
+      banner.classList.remove('is-on')
+      this.previousChainUids = new Set()
+      return
+    }
+    const parts: string[] = ['<span class="chain-banner-label">체인</span>']
+    for (let i = 0; i < events.length; i++) {
+      const ev = events[i]
+      const isNew = !this.previousChainUids.has(ev.uid) ? 'is-new' : ''
+      if (ev.kind === 'card') {
+        parts.push(`
+          <span class="chain-event chain-event-card hand-cat-${ev.category} ${isNew}" data-chain-uid="${ev.uid}">
+            ${ev.name}
+          </span>
+        `)
+      } else {
+        parts.push(`
+          <span class="chain-event chain-event-recipe ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
+            <span class="chain-event-mark">✦</span>
+            <span class="chain-event-name">${ev.name}</span>
+          </span>
+        `)
+      }
+      if (i < events.length - 1) {
+        parts.push('<span class="chain-banner-arrow">→</span>')
+      }
+    }
+    parts.push(
+      '<button class="chain-banner-reset" type="button" data-chain-reset title="체인 초기화">×</button>',
+    )
+    banner.innerHTML = parts.join('')
+    banner.classList.add('is-on')
+    // Snapshot uids so the next render won't re-animate existing events.
+    this.previousChainUids = new Set(events.map((e) => e.uid))
   }
 
   private attachListeners(): void {
@@ -926,12 +990,8 @@ export class GameBoardRenderer {
         })
       })
 
-    this.boardElement
-      .querySelector<HTMLElement>('.chain-reset-btn')
-      ?.addEventListener('click', (e) => {
-        e.stopPropagation()
-        document.dispatchEvent(new CustomEvent('chainReset'))
-      })
+    // Chain reset is bound on the body-mounted chain banner (updateChainBanner)
+    // since the old in-stage strip is gone.
 
     // Score conversion is panel-level UI and does not spend a turn.
     this.boardElement
@@ -2975,60 +3035,147 @@ const STYLES = `
   50% { box-shadow: 0 0 16px rgba(255, 215, 120, 0.45); }
 }
 
-/* ---------- Chain strip below player card ---------- */
-.chain-strip {
+/* ---------- Floating chain banner (above player profile) ----------
+   The chain banner lives on the body, not inside the stage layout, so it
+   never shifts other UI as the player extends the chain. Position is fixed
+   relative to the viewport — tuned to sit just above the player profile.
+   Card pills carry the category color band; recipe pills get a brighter
+   glow and a bigger font so the "조합 발동" beat reads. */
+.chain-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 28vh;
+  transform: translateX(-50%) translateY(8px);
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 6px;
-  padding: 6px 10px;
-  border-radius: 10px;
-  background: rgba(20, 16, 28, 0.6);
-  border: 1px solid rgba(255, 215, 120, 0.18);
-  font-size: 11px;
+  max-width: min(72vw, 760px);
+  padding: 10px 14px;
+  z-index: 205;
+  pointer-events: none;
+  opacity: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.18, 0.88, 0.22, 1);
 }
-.chain-label {
-  font-weight: 700;
+.chain-banner.is-on {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+.chain-banner-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
   color: var(--color-flame);
-  letter-spacing: 0.06em;
+  margin-right: 4px;
 }
-.chain-cards {
-  flex: 1;
-  display: flex;
+.chain-banner-arrow {
+  color: rgba(255, 232, 168, 0.65);
+  font-weight: 700;
+  font-size: 16px;
+}
+.chain-event {
+  display: inline-flex;
   align-items: center;
   gap: 4px;
-  flex-wrap: wrap;
-}
-.chain-card {
-  padding: 2px 8px;
+  padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(255, 215, 120, 0.12);
-  border: 1px solid rgba(255, 215, 120, 0.4);
-  color: rgba(255, 245, 220, 0.95);
-  font-weight: 600;
-}
-.chain-arrow {
-  color: rgba(255, 215, 120, 0.5);
-  font-weight: 600;
-}
-.chain-fired {
-  font-size: 10px;
-  color: rgba(255, 232, 168, 0.95);
   font-weight: 700;
+  font-size: 14px;
+  color: #fff5dc;
+  background: rgba(20, 16, 28, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  will-change: transform, filter;
 }
-.chain-reset-btn {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.05);
+.chain-event-card.hand-cat-recovery { box-shadow: inset 3px 0 0 rgba(103, 196, 152, 0.95), 0 2px 6px rgba(0, 0, 0, 0.45); }
+.chain-event-card.hand-cat-tool     { box-shadow: inset 3px 0 0 rgba(255, 215, 120, 0.95), 0 2px 6px rgba(0, 0, 0, 0.45); }
+.chain-event-card.hand-cat-control  { box-shadow: inset 3px 0 0 rgba(145, 174, 210, 0.95), 0 2px 6px rgba(0, 0, 0, 0.45); }
+.chain-event-card.hand-cat-attack   { box-shadow: inset 3px 0 0 rgba(168, 58, 58, 0.95), 0 2px 6px rgba(0, 0, 0, 0.45); }
+.chain-event-recipe {
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  color: rgba(255, 232, 168, 0.98);
+  background: linear-gradient(120deg, rgba(76, 36, 16, 0.85), rgba(140, 70, 24, 0.85));
+  border-color: rgba(255, 215, 120, 0.85);
+  box-shadow:
+    0 0 16px rgba(255, 215, 120, 0.55),
+    0 4px 10px rgba(0, 0, 0, 0.55);
+  animation: chain-recipe-glow 1.4s ease-in-out infinite;
+}
+.chain-event-mark {
+  color: rgba(255, 232, 168, 1);
+  filter: drop-shadow(0 0 6px rgba(255, 215, 120, 0.9));
+  font-weight: 900;
+}
+.chain-event-name { font-weight: 800; }
+
+/* Pop-in for newly added card events: scale + slight horizontal shake. */
+.chain-event-card.is-new {
+  animation: chain-card-pop 0.42s cubic-bezier(0.2, 1.4, 0.32, 1) 1;
+}
+/* Recipe events flash brighter on entry, layered on top of the steady glow. */
+.chain-event-recipe.is-new {
+  animation:
+    chain-recipe-burst 0.6s cubic-bezier(0.16, 0.88, 0.3, 1) 1,
+    chain-recipe-glow 1.4s ease-in-out infinite 0.6s;
+}
+
+@keyframes chain-card-pop {
+  0%   { transform: scale(0.5) translateX(0);  opacity: 0; }
+  40%  { transform: scale(1.18) translateX(-3px); opacity: 1; }
+  55%  { transform: scale(1.05) translateX(4px); }
+  70%  { transform: scale(1.08) translateX(-2px); }
+  100% { transform: scale(1) translateX(0); }
+}
+@keyframes chain-recipe-burst {
+  0%   {
+    transform: scale(0.6);
+    opacity: 0;
+    filter: brightness(2.4) saturate(1.6);
+    box-shadow: 0 0 32px rgba(255, 215, 120, 1), 0 0 64px rgba(255, 215, 120, 0.85);
+  }
+  45%  {
+    transform: scale(1.22);
+    opacity: 1;
+    filter: brightness(1.6) saturate(1.3);
+  }
+  72%  { transform: scale(0.98); }
+  100% { transform: scale(1); filter: brightness(1) saturate(1); }
+}
+@keyframes chain-recipe-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 12px rgba(255, 215, 120, 0.45),
+      0 4px 10px rgba(0, 0, 0, 0.55);
+  }
+  50% {
+    box-shadow:
+      0 0 22px rgba(255, 215, 120, 0.85),
+      0 4px 14px rgba(0, 0, 0, 0.65);
+  }
+}
+
+.chain-banner-reset {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(20, 16, 28, 0.7);
   color: var(--color-flame);
   cursor: pointer;
   font-weight: 800;
   font-family: inherit;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
 }
-.chain-reset-btn:hover {
-  background: rgba(244, 164, 96, 0.15);
-}
+.chain-banner-reset:hover { background: rgba(244, 164, 96, 0.18); }
 
 /* Melt/recipe highlight in the activity log. */
 .score-log-melt {
