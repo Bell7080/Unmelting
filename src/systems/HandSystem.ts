@@ -52,10 +52,15 @@ export interface HandUseResult {
   message: string
   /** Cards that auto-merged or were absorbed by a merge after this use. */
   mergeMessages: string[]
-  /** Recipes that fired as a result of extending the chain. */
+  /** Field cards removed by the single hand-card effect only. Recipe removals
+   *  are reported by firePendingRecipes after the UI delay. */
+  removedFieldCards: RemovedFieldCard[]
+}
+
+export interface RecipeFireResult {
+  /** Recipes that fired after the chain-delay beat. */
   firedRecipes: FiredRecipe[]
-  /** Field cards removed during this hand use (single effect + recipes).
-   *  Order is not guaranteed; the renderer animates all of them together. */
+  /** Field cards removed by those delayed recipe effects. */
   removedFieldCards: RemovedFieldCard[]
 }
 
@@ -103,7 +108,7 @@ export class HandSystem {
     return m
   }
 
-  /** Run a single use on slot `slotIndex`. Extends chain and fires recipes. */
+  /** Run a single use on slot `slotIndex`; recipe firing is delayed by index.ts. */
   static useSingle(
     gs: GameState,
     chain: ChainState,
@@ -117,7 +122,6 @@ export class HandSystem {
         success: false,
         message: '비어 있는 슬롯',
         mergeMessages: [],
-        firedRecipes: [],
         removedFieldCards: [],
       }
     }
@@ -127,7 +131,6 @@ export class HandSystem {
         success: false,
         message: `${def.name}은(는) 대상을 골라야 해`,
         mergeMessages: [],
-        firedRecipes: [],
         removedFieldCards: [],
       }
     }
@@ -146,8 +149,8 @@ export class HandSystem {
     // matching but tend to satisfy several sub-recipes through their effect.
     chain.sequence.push(card.defId)
 
-    // Fire any recipes newly satisfied by this chain.
-    const firedRecipes = HandSystem.fireMatchedRecipes(gs, chain)
+    // Recipes are deliberately resolved later by firePendingRecipes(), which
+    // gives the UI a readable beat between the card effect and combo explosion.
 
     // Auto-merge passes after an effect can free up structure (e.g., card
     // moved between slots due to splice; rare but covered).
@@ -167,7 +170,6 @@ export class HandSystem {
       success: true,
       message,
       mergeMessages,
-      firedRecipes,
       removedFieldCards,
     }
   }
@@ -186,6 +188,35 @@ export class HandSystem {
       if (HandSystem.countInChain(chain, id as HandCardId) < needed) return false
     }
     return true
+  }
+
+  /**
+   * Check whether the current chain has at least one newly satisfied recipe.
+   * index.ts uses this to avoid adding combo-delay latency to ordinary
+   * non-combo hand-card uses.
+   */
+  static hasPendingRecipe(chain: ChainState): boolean {
+    for (const recipe of RECIPES) {
+      if (chain.firedRecipeIds.has(recipe.id)) continue
+      if (HandSystem.recipeMatches(recipe, chain)) return true
+    }
+    return false
+  }
+
+  /**
+   * Fire recipes that became available after the most recent hand-card use.
+   * This public wrapper snapshots the field around recipe resolution so the UI
+   * can animate only the cards removed by the delayed combo beat.
+   */
+  static firePendingRecipes(gs: GameState, chain: ChainState): RecipeFireResult {
+    const beforeField = HandSystem.snapshotFieldCards(gs)
+    const firedRecipes = HandSystem.fireMatchedRecipes(gs, chain)
+    const afterField = HandSystem.snapshotFieldCards(gs)
+    const removedFieldCards: RemovedFieldCard[] = []
+    for (const [id, type] of beforeField.entries()) {
+      if (!afterField.has(id)) removedFieldCards.push({ cardId: id, type })
+    }
+    return { firedRecipes, removedFieldCards }
   }
 
   private static fireMatchedRecipes(

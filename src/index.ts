@@ -298,6 +298,11 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
+// Combo effects resolve after the hand-card beat, not inside HandSystem.useSingle.
+// This makes "밀랍 방패 → 밀랍 돌진" read as two impacts instead of one
+// simultaneous burst, even on slower machines.
+const COMBO_TRIGGER_DELAY_MS = 320
+
 type NoticeLogKind = 'info' | 'win' | 'hurt' | 'melt' | 'recipe'
 
 function createNoticeLog(
@@ -428,9 +433,8 @@ async function applyHandSingle(
       })
     }
   }
-  // Append the just-used card to the on-screen chain timeline, then any
-  // recipes that fired as a result. Order matches `chain.sequence`; recipes
-  // are interleaved immediately after the card whose use satisfied them.
+  // Append only the just-used card first. Recipes are resolved below after
+  // a small delay so the previous card's effect visibly lands before the combo.
   if (usedDef) {
     chainTimeline.push({
       kind: 'card',
@@ -439,12 +443,29 @@ async function applyHandSingle(
       category: usedDef.category,
       uid: nextChainUid(),
     })
+    boardRenderer.refreshChainBanner(buildChainHints())
   }
   recordNotice(result.message, 'win')
   for (const merge of result.mergeMessages) {
     recordNotice(merge, 'melt')
   }
-  for (const fired of result.firedRecipes) {
+  pendingHandTarget = null
+  boardRenderer.setHandTargetingMode(null)
+
+  // Animate removals caused by the single hand card while the old board DOM is
+  // still present. This is the "previous effect" beat the combo waits for.
+  if (result.removedFieldCards.length > 0) {
+    await boardRenderer.animateCardConsumeByIds(result.removedFieldCards)
+  }
+
+  // Resolve recipe combos after a deliberate gap only when a new recipe is
+  // actually waiting; normal hand-card use should not feel artificially laggy.
+  const hasPendingRecipe = HandSystem.hasPendingRecipe(chain)
+  if (hasPendingRecipe) await wait(COMBO_TRIGGER_DELAY_MS)
+  const recipeResult = hasPendingRecipe
+    ? HandSystem.firePendingRecipes(gameState, chain)
+    : { firedRecipes: [], removedFieldCards: [] }
+  for (const fired of recipeResult.firedRecipes) {
     recordNotice(`✦ ${fired.recipe.name}: ${fired.message}`, 'recipe')
     chainTimeline.push({
       kind: 'recipe',
@@ -454,18 +475,19 @@ async function applyHandSingle(
       uid: nextChainUid(),
     })
   }
-  pendingHandTarget = null
-  boardRenderer.setHandTargetingMode(null)
-  // Animate the "eaten" pop on every card removed by this hand use BEFORE
-  // re-rendering. The DOM still shows the pre-mutation state at this point,
-  // so the renderer can find the cells by data-card-id and play the consume
-  // keyframe + themed SquareBurst on each.
-  if (result.removedFieldCards.length > 0) {
-    await boardRenderer.animateCardConsumeByIds(result.removedFieldCards)
+  if (recipeResult.firedRecipes.length > 0) {
+    boardRenderer.refreshChainBanner(buildChainHints())
   }
-  // Refill after recipes that may have removed cards from the field. Wait
-  // for the FLIP fall animation when something actually moved so the cards
-  // visibly slide down into the gap (otherwise the rail "punches a hole").
+
+  // Animate cards removed by delayed recipes separately so combo impact reads
+  // as its own hit instead of merging with the hand-card effect animation.
+  if (recipeResult.removedFieldCards.length > 0) {
+    await boardRenderer.animateCardConsumeByIds(recipeResult.removedFieldCards)
+  }
+
+  // Refill after all delayed recipe effects have resolved. Wait for the FLIP
+  // fall animation when something actually moved so the cards visibly slide
+  // down into the gap (otherwise the rail "punches a hole").
   const moved = compactAndRefillAllLanes()
   gameState.regroupAllRows()
   render()
