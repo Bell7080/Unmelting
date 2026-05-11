@@ -391,9 +391,9 @@ export class GameBoardRenderer {
     return `
       <div class="player-zone" aria-label="Player controls and relic plan">
         <div class="utility-layer utility-layer-left" aria-label="Utility buttons">
-          <button class="compendium-btn compendium-btn-floating" type="button" data-open-compendium>
-            <span class="compendium-btn-icon">${bookIcon()}</span>
-            도감
+          <button class="compendium-btn compendium-btn-floating" type="button" data-open-compendium aria-label="도감 열기">
+            <span class="compendium-btn-icon" aria-hidden="true">${bookIcon()}</span>
+            <span class="compendium-btn-label">도감</span>
           </button>
         </div>
         ${this.renderPlayer(character)}
@@ -639,110 +639,114 @@ export class GameBoardRenderer {
   private renderCompendiumEnemies(): string {
     const stackStats = (hp: number, atk: number, span: number): [string, string][] => {
       // Enemy grouping follows the field rule: 2칸 = HP +50%/ATK +1,
-      // 3칸 = HP +100%/ATK +2. The compendium uses the same helper for every
-      // enemy so 1/2/3칸 variants read as a single standardized family.
+      // 3칸 = HP +100%/ATK +2. These rows now live inside one group card so
+      // the compendium does not create separate UI cards for every span.
       const hpMultiplier = span === 1 ? 1 : span === 2 ? 1.5 : 2
       const attackBonus = span === 1 ? 0 : span === 2 ? 1 : 2
       return [
-        ['칸', `${span}칸`],
-        ['HP', String(Math.ceil(hp * hpMultiplier))],
-        ['ATK', String(atk + attackBonus)],
+        [`${span}칸 HP`, String(Math.ceil(hp * hpMultiplier))],
+        [`${span}칸 ATK`, String(atk + attackBonus)],
       ]
     }
-    const normal = ENEMY_DEFINITIONS.flatMap((def) => {
+    const normal = ENEMY_DEFINITIONS.map((def) => {
       const baseHp = def.healthOrDamage ?? 1
       const baseAtk = def.attack ?? 1
       const spriteUrl = def.name.includes('생쥐') ? SpriteUrls.enemyMouse : SpriteUrls.enemyFrog
-      return [1, 2, 3].map((span) =>
-        this.compendiumCard({
-          art: { kind: 'sprite', url: spriteUrl },
-          name: `${def.name} · ${span}칸`,
-          badge: span === 1 ? '일반' : '무리',
-          stats: stackStats(baseHp, baseAtk, span),
-          description:
-            span === 1
-              ? def.description
-              : `${span}칸으로 합쳐진 ${def.name}. 같은 적 무리는 체력과 공격력이 함께 상승한다.`,
-        })
-      )
-    }).join('')
-    const mimics = [1, 2, 3]
-      .map((span) => {
-        const stats = MIMIC_BY_SPAN[span]
-        return this.compendiumCard({
-          art: { kind: 'sprite', url: SpriteUrls.mimic },
-          name: `미믹 · ${span}칸`,
-          badge: '특수',
-          stats: [
-            ['칸', `${span}칸`],
-            ['HP', String(stats.health)],
-            ['ATK', String(stats.attack)],
-            ['드롭', `${stats.drops}장`],
-          ],
-          description:
-            '보물 카드가 변이된 특수 적. 같은 미믹으로 보고 칸 수에 따라 능력치와 드롭량을 나눠 표기한다.',
-        })
+      return this.compendiumCard({
+        art: { kind: 'sprite', url: spriteUrl },
+        name: def.name,
+        badge: '기본 적',
+        stats: [
+          ['HP', String(baseHp)],
+          ['ATK', String(baseAtk)],
+        ],
+        description: def.description,
       })
-      .join('')
+    }).join('')
+    const groupRows: [string, string][] = ENEMY_DEFINITIONS.flatMap((def) => {
+      const baseHp = def.healthOrDamage ?? 1
+      const baseAtk = def.attack ?? 1
+      const spanTwo = stackStats(baseHp, baseAtk, 2)
+      const spanThree = stackStats(baseHp, baseAtk, 3)
+      // Each enemy keeps one readable line for 2칸/3칸 group effects instead
+      // of spawning six separate variant cards in the tab.
+      return [
+        [`${def.name} 2칸`, `HP ${spanTwo[0][1]} / ATK ${spanTwo[1][1]}`],
+        [`${def.name} 3칸`, `HP ${spanThree[0][1]} / ATK ${spanThree[1][1]}`],
+      ]
+    })
+    const groupCard = this.compendiumCard({
+      art: { kind: 'icon', svg: swordIcon() },
+      name: '적 무리',
+      badge: '추가 개체',
+      stats: groupRows,
+      description:
+        '양초 생쥐/양초 개구리와 별도의 무리 개체로 취급한다. 2칸은 HP +50%와 ATK +1, 3칸은 HP +100%와 ATK +2 규칙을 따른다.',
+    })
+    const mimicRows: [string, string][] = [1, 2, 3].flatMap((span) => {
+      const stats = MIMIC_BY_SPAN[span]
+      // Mimic span variants are summarized in one Mimic entry so changing
+      // lane width reads as the same creature gaining stronger effects.
+      return [
+        [`${span}칸 HP/ATK`, `${stats.health} / ${stats.attack}`],
+        [`${span}칸 드롭`, `${stats.drops}장`],
+      ]
+    })
+    const mimicCard = this.compendiumCard({
+      art: { kind: 'sprite', url: SpriteUrls.mimic },
+      name: '미믹',
+      badge: '특수',
+      stats: mimicRows,
+      description:
+        '보물 카드가 변이된 특수 적. 한 도감 칸 안에서 1/2/3칸별 능력치와 드롭량을 한 번에 비교한다.',
+    })
     return `
-      <h3 class="compendium-section">일반 적 · 1/2/3칸 양식</h3>
-      <div class="compendium-grid">${normal}</div>
-      <h3 class="compendium-section">미믹 · 칸별 강화</h3>
-      <div class="compendium-grid">${mimics}</div>
+      <h3 class="compendium-section">일반 적</h3>
+      <div class="compendium-grid">${normal}${groupCard}</div>
+      <h3 class="compendium-section">특수 적</h3>
+      <div class="compendium-grid">${mimicCard}</div>
     `
   }
 
   private renderCompendiumTraps(): string {
     const baseDamage = TRAP_DEFINITIONS[0].healthOrDamage ?? 2
-    const cards = [1, 2, 3]
-      .map((span) =>
-        this.compendiumCard({
-          art: { kind: 'sprite', url: SpriteUrls.trap },
-          name: `${TRAP_DEFINITIONS[0].name} · ${span}칸`,
-          badge: `${span}칸`,
-          stats: [
-            ['칸', `${span}칸`],
-            ['피해', String(baseDamage + (span - 1))],
-            ['위협', span === 3 ? '즉사 조건' : '충돌 피해'],
-          ],
-          description:
-            span === 1
-              ? TRAP_DEFINITIONS[0].description
-              : `${span}칸으로 합쳐진 함정. 같은 함정으로 보고 칸 수에 따라 피해와 위협도를 나눈다.`,
-        })
-      )
-      .join('')
-    return `<div class="compendium-grid">${cards}</div>`
+    const spanRows: [string, string][] = [1, 2, 3].flatMap((span) => {
+      // Trap widths are written as effect rows inside one card, matching the
+      // unified compendium format requested for width-based variants.
+      return [
+        [`${span}칸 피해`, String(baseDamage + (span - 1))],
+        [`${span}칸 위협`, span === 3 ? '즉사 조건' : '충돌 피해'],
+      ]
+    })
+    const card = this.compendiumCard({
+      art: { kind: 'sprite', url: SpriteUrls.trap },
+      name: TRAP_DEFINITIONS[0].name,
+      badge: '함정',
+      stats: spanRows,
+      description:
+        '같은 함정 한 칸 안에서 1/2/3칸 폭에 따른 피해와 위협도만 행으로 나누어 표시한다.',
+    })
+    return `<div class="compendium-grid">${card}</div>`
   }
 
   private renderCompendiumTreasures(): string {
-    const sprites: Record<number, string> = {
-      1: SpriteUrls.chestSmall,
-      2: SpriteUrls.chestMedium,
-      3: SpriteUrls.chestLarge,
-    }
-    const labels: Record<number, string> = {
-      1: '작은 상자',
-      2: '큰 상자',
-      3: '거대한 상자',
-    }
-    const items = [1, 2, 3]
-      .map((span) =>
-        this.compendiumCard({
-          art: { kind: 'sprite', url: sprites[span] },
-          name: `${labels[span]} · ${span}칸`,
-          badge: `${span}칸`,
-          stats: [
-            ['칸', `${span}칸`],
-            ['드롭', `손패 ${span}장`],
-            ['사라짐', '50%/턴'],
-            ['미믹화', '10%/턴'],
-          ],
-          description: `같은 보물상자로 보고 칸 수에 따라 보상량을 나눈다. 처리 시 손패 ${span}장 드롭, 매 턴 50% 확률로 사라지고 10% 확률로 미믹으로 변이한다.`,
-        })
-      )
-      .join('')
-    return `<div class="compendium-grid">${items}</div>`
+    const spanRows: [string, string][] = [1, 2, 3].flatMap((span) => {
+      // Treasure rows keep the shared vanish/mimic chances visible while only
+      // the drop amount changes per width.
+      return [
+        [`${span}칸 드롭`, `손패 ${span}장`],
+        [`${span}칸 변화`, '사라짐 50%/턴 · 미믹화 10%/턴'],
+      ]
+    })
+    const card = this.compendiumCard({
+      art: { kind: 'sprite', url: SpriteUrls.chestLarge },
+      name: '보물상자',
+      badge: '보물',
+      stats: spanRows,
+      description:
+        '작은/큰/거대한 상자를 별도 카드로 나누지 않고, 보물상자 한 항목에서 칸 수별 보상과 변이 확률을 비교한다.',
+    })
+    return `<div class="compendium-grid">${card}</div>`
   }
 
   private renderCompendiumHand(): string {
@@ -2802,6 +2806,25 @@ const STYLES = `
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* Match the score-log scrollbar style so every scrollable UI uses the
+     same warm candle thumb and dark recessed track. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 164, 96, 0.7) rgba(20, 16, 28, 0.45);
+}
+.compendium-body::-webkit-scrollbar {
+  width: 4px;
+}
+.compendium-body::-webkit-scrollbar-track {
+  background: rgba(20, 16, 28, 0.4);
+  border-radius: 999px;
+}
+.compendium-body::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--color-flame), var(--color-flame-deep));
+  border-radius: 999px;
+  box-shadow: 0 0 6px rgba(244, 164, 96, 0.4);
+}
+.compendium-body::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--color-flame), var(--color-flame-warm));
 }
 .compendium-section {
   margin: 8px 0 4px;
@@ -2968,17 +2991,6 @@ const STYLES = `
   height: 20px;
 }
 
-.compendium-btn-icon {
-  display: inline-flex;
-  margin-right: 4px;
-  width: 14px;
-  height: 14px;
-  vertical-align: -0.18em;
-}
-.compendium-btn-icon .icon {
-  width: 14px;
-  height: 14px;
-}
 .compendium-footer {
   padding: 8px 20px 12px;
   font-size: 11px;
@@ -2987,28 +2999,90 @@ const STYLES = `
   border-top: 1px solid var(--color-border-soft);
 }
 
-/* panel-actions row on the score panel (groups spend + compendium buttons) */
+/* panel-actions row on the score panel groups score spend controls while the
+   compendium launcher itself now lives in the transparent utility layer. */
 .panel-actions {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
 }
 .panel-actions .score-spend-btn { flex: 1; }
+
+/* Floating compendium launcher: the button keeps semantic click behavior,
+   but visually reads as only a flat icon with a pre-reserved label below it. */
 .compendium-btn {
   appearance: none;
-  background: rgba(244, 164, 96, 0.12);
-  border: 1px solid rgba(244, 164, 96, 0.45);
+  background: transparent;
+  border: none;
   color: var(--color-flame-warm);
-  border-radius: 8px;
-  padding: 8px 12px;
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
   white-space: nowrap;
 }
-.compendium-btn:hover {
-  background: rgba(244, 164, 96, 0.2);
+.compendium-btn-floating {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 74px;
+  min-height: 82px;
+  padding: 4px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+.compendium-btn-icon {
+  display: inline-flex;
+  width: 46px;
+  height: 46px;
+  color: rgba(255, 232, 168, 0.88);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.65));
+  transition: transform 0.18s cubic-bezier(0.2, 0.86, 0.28, 1), filter 0.18s ease, color 0.18s ease;
+}
+.compendium-btn-icon .icon {
+  width: 46px;
+  height: 46px;
+}
+.compendium-btn-label {
+  min-height: 14px;
+  color: rgba(255, 232, 168, 0.92);
+  letter-spacing: 0.08em;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+.compendium-btn-floating:hover .compendium-btn-icon,
+.compendium-btn-floating:focus-visible .compendium-btn-icon {
+  color: #fff3c8;
+  transform: translateY(-2px) scale(1.08);
+  filter:
+    drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7))
+    drop-shadow(0 0 10px rgba(255, 215, 120, 0.62));
+  animation: compendium-icon-sparkle 0.82s ease-in-out infinite;
+}
+.compendium-btn-floating:hover .compendium-btn-label,
+.compendium-btn-floating:focus-visible .compendium-btn-label {
+  opacity: 1;
+  transform: translateY(0);
+}
+.compendium-btn-floating:focus-visible {
+  outline: 1px solid rgba(255, 215, 120, 0.55);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+@keyframes compendium-icon-sparkle {
+  0%, 100% {
+    filter:
+      drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7))
+      drop-shadow(0 0 8px rgba(255, 215, 120, 0.48));
+  }
+  50% {
+    filter:
+      drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7))
+      drop-shadow(0 0 16px rgba(255, 232, 168, 0.82));
+  }
 }
 
 /* Body-mounted target banner — appears at top-center of the viewport when
