@@ -1281,6 +1281,96 @@ export class GameBoardRenderer {
   }
 
   /**
+   * Animate a used hand card as a physical card being drawn from the hand
+   * stack toward the player-card area, then dissolve it with the same
+   * SquareBurst theme used by its category. The model is already mutated by
+   * the time this runs, so we clone the still-mounted pre-render DOM node.
+   */
+  animateHandCardUse(slotIndex: number, theme: BurstTheme): Promise<void> {
+    const source = this.findHandSlotElement(slotIndex)
+    const playerCard = this.boardElement.querySelector<HTMLElement>('.player-card')
+    if (!source || !playerCard) return Promise.resolve()
+
+    const sourceRect = source.getBoundingClientRect()
+    const targetRect = playerCard.getBoundingClientRect()
+    const targetX = targetRect.left + targetRect.width / 2
+    // Aim a little below the viewport center by landing on the upper-middle of
+    // the player card, matching the existing bottom-stage card layout.
+    const targetY = targetRect.top + targetRect.height * 0.42
+    const ghost = source.cloneNode(true) as HTMLElement
+
+    ghost.classList.add('hand-use-ghost')
+    ghost.style.left = `${sourceRect.left}px`
+    ghost.style.top = `${sourceRect.top}px`
+    ghost.style.width = `${sourceRect.width}px`
+    ghost.style.height = `${sourceRect.height}px`
+    ghost.setAttribute('aria-hidden', 'true')
+    document.body.appendChild(ghost)
+    source.classList.add('is-hand-use-source')
+
+    const deltaX = targetX - (sourceRect.left + sourceRect.width / 2)
+    const deltaY = targetY - (sourceRect.top + sourceRect.height / 2)
+    const anim = ghost.animate(
+      [
+        { transform: 'translate(0, 0) scale(1)', opacity: 1, filter: 'brightness(1)' },
+        {
+          transform: `translate(${deltaX * 0.62}px, ${deltaY * 0.62}px) scale(1.08)`,
+          opacity: 0.95,
+          filter: 'brightness(1.24)',
+          offset: 0.62,
+        },
+        {
+          transform: `translate(${deltaX}px, ${deltaY}px) scale(0.58) rotate(-5deg)`,
+          opacity: 0,
+          filter: 'brightness(1.38)',
+        },
+      ],
+      { duration: 460, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)', fill: 'forwards' }
+    )
+
+    return new Promise((resolve) => {
+      window.setTimeout(() => {
+        SquareBurst.playAt(targetX, targetY, theme, { count: 18, spread: 105 })
+      }, 330)
+      anim.onfinish = () => {
+        ghost.remove()
+        source.classList.remove('is-hand-use-source')
+        resolve()
+      }
+      window.setTimeout(() => {
+        ghost.remove()
+        source.classList.remove('is-hand-use-source')
+        resolve()
+      }, 620)
+    })
+  }
+
+  /**
+   * Burst on cards that just received the wax-freeze status. This is separate
+   * from the persistent CSS shell so the exact trigger moment has the same
+   * SquareBurst language as damage, treasure, and vanish effects.
+   */
+  animateWaxFreezeByIds(cardIds: string[]): Promise<void> {
+    if (cardIds.length === 0) return Promise.resolve()
+    const animations: Promise<void>[] = []
+    for (const cardId of cardIds) {
+      const elements = [
+        ...this.boardElement.querySelectorAll<HTMLElement>(`.cell.card[data-card-id="${cardId}"]`),
+      ]
+      if (elements.length === 0) continue
+      const r1 = elements[0].getBoundingClientRect()
+      const r2 = elements[elements.length - 1].getBoundingClientRect()
+      SquareBurst.playAt((r1.left + r2.right) / 2, (r1.top + r2.bottom) / 2, 'wax-freeze', {
+        count: 20,
+        spread: 120 + (elements.length - 1) * 24,
+        duration: 620,
+      })
+      animations.push(this.animateElements(elements, 'is-freeze-triggering', 420))
+    }
+    return Promise.all(animations).then(() => undefined)
+  }
+
+  /**
    * "Eaten" animation for trap/treasure (and any other consumed card):
    * the card scales up + brightens + fades out while a themed SquareBurst
    * fires from its center. All DOM cells belonging to this Card instance
@@ -3262,6 +3352,25 @@ const STYLES = `
   from { transform: translateY(-12px); opacity: 0.4; }
   to { transform: translateY(0); opacity: 1; }
 }
+/* Used hand-card ghost: cloned into body by animateHandCardUse so the card
+   visibly travels from the hand stack toward the player-card area before it
+   dissolves. It reuses the original hand-card styling for theme continuity. */
+.hand-use-ghost {
+  position: fixed;
+  z-index: 225;
+  margin: 0;
+  pointer-events: none;
+  list-style: none;
+  transform-origin: center;
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.64),
+    0 0 18px rgba(255, 215, 120, 0.28);
+}
+.hand-use-ghost button { cursor: default; }
+.hand-slot.is-hand-use-source {
+  opacity: 0.36;
+  filter: saturate(0.8) brightness(0.9);
+}
 .hand-slot.hand-card:hover,
 .hand-slot.hand-card:focus-within {
   transform: translateY(-2px);
@@ -3532,6 +3641,24 @@ const STYLES = `
 }
 .score-log-melt .score-log-delta { color: rgba(255, 232, 168, 1); }
 /* Wax hardening: a white shell overlay plus a small turn badge. */
+.cell.card.is-freeze-triggering {
+  animation: wax-freeze-impact 0.42s cubic-bezier(0.16, 0.9, 0.18, 1);
+  z-index: 8;
+}
+.cell.card.is-freeze-triggering .card-face::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 2px solid rgba(246, 250, 255, 0.9);
+  box-shadow: 0 0 22px rgba(214, 228, 238, 0.62);
+  pointer-events: none;
+}
+@keyframes wax-freeze-impact {
+  0% { transform: scale(1); filter: brightness(1) saturate(1); }
+  45% { transform: scale(1.08); filter: brightness(1.42) saturate(0.72); }
+  100% { transform: scale(1); filter: brightness(1.08) saturate(0.86); }
+}
 .cell.card.is-frozen .card-face::after {
   content: '';
   position: absolute;

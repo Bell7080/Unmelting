@@ -21,6 +21,7 @@ export type BurstTheme =
   | 'treasure-gain'
   | 'vanish-smoke'
   | 'mimic-shift'
+  | 'wax-freeze'
   | 'hand-recovery'
   | 'hand-tool'
   | 'hand-control'
@@ -41,6 +42,8 @@ const PALETTES: Record<BurstTheme, Palette> = {
   'vanish-smoke': { shades: ['#0e0e10', '#3a3a3e', '#9a9a9e', '#e8e8ec'] },
   // Mimic transformation — bruised violet → murky moss.
   'mimic-shift': { shades: ['#0c0a14', '#3b1e44', '#6a3a2c', '#a8c25c'] },
+  // Wax hardening — cold slate → milky candle wax for freeze impacts.
+  'wax-freeze': { shades: ['#172033', '#5f7898', '#d6e4ee', '#fff8df'] },
   // Hand-use, per category — each is a two-tone interpolation.
   'hand-recovery': { shades: ['#0e1f12', '#2c5e34', '#7ed091', '#e2f7c8'] },
   'hand-tool': { shades: ['#1c1304', '#6b4910', '#dca233', '#ffe9a4'] },

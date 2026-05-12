@@ -133,6 +133,47 @@ function burstScoreGain(): void {
   if (anchor) boardRenderer.burstAtElement(anchor, 'score', { count: 16, spread: 90 })
 }
 
+interface FieldFreezeSnapshotEntry {
+  card: Card
+  frozenTurns: number
+}
+
+/** Snapshot unique field cards so freeze effects can be diffed after a hand
+ *  card or recipe mutates the model. The UI uses this to play the one-shot
+ *  wax-freeze SquareBurst exactly on cards whose status just hardened. */
+function snapshotFieldFreezeState(): Map<string, FieldFreezeSnapshotEntry> {
+  const snapshot = new Map<string, FieldFreezeSnapshotEntry>()
+  for (const lane of gameState.lanes) {
+    for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
+      const card = lane.getCardAtDistance(distance)
+      if (!card || snapshot.has(card.id)) continue
+      snapshot.set(card.id, { card, frozenTurns: card.frozenTurns })
+    }
+  }
+  return snapshot
+}
+
+/** Return cards whose wax-freeze counter increased compared with a snapshot. */
+function diffNewlyFrozenCards(before: Map<string, FieldFreezeSnapshotEntry>): string[] {
+  const ids: string[] = []
+  for (const { card, frozenTurns } of before.values()) {
+    if (card.frozenTurns > frozenTurns) ids.push(card.id)
+  }
+  return ids
+}
+
+/**
+ * Preparation refresh used after hand/combo field removals. It compacts lanes,
+ * refills the top row, regroups the active row, and renders once so removed
+ * cards never leave visible holes before player control returns.
+ */
+async function runPreparationRefreshAfterFieldEffects(): Promise<void> {
+  const moved = compactAndRefillAllLanes()
+  gameState.regroupAllRows()
+  render()
+  if (moved) await wait(380)
+}
+
 function createItemGainLogs(itemNames: string[]): ActivityLogDraft[] {
   return itemNames.map((name) => ({
     label: `손패 획득: ${name}`,
@@ -469,6 +510,7 @@ async function applyHandSingle(
   // category to pick a burst theme, and the slot is empty after consumption.
   const usedCard = gameState.character.hand[slotIndex]
   const usedDef = usedCard ? getHandCardDef(usedCard.defId) : null
+  const beforeSingleFreeze = snapshotFieldFreezeState()
   const result = HandSystem.useSingle(gameState, chain, slotIndex, target)
   if (!result.success) {
     recordNotice(result.message, 'hurt')
@@ -476,16 +518,15 @@ async function applyHandSingle(
     render()
     return
   }
-  // Fire the per-category burst at the slot the card was consumed from.
-  if (usedDef) {
-    const slotEl = boardRenderer.findHandSlotElement(slotIndex)
-    if (slotEl) {
-      boardRenderer.burstAtElement(slotEl, burstThemeForCategory(usedDef.category), {
-        count: 18,
-        spread: 110,
-      })
-    }
-  }
+  // Move the used hand card toward the player-card area, then dissolve it
+  // with its category burst. This makes the hand action read like a drawn card
+  // instead of a slot-local pop.
+  const handUseTheme = usedDef ? burstThemeForCategory(usedDef.category) : null
+  if (handUseTheme) await boardRenderer.animateHandCardUse(slotIndex, handUseTheme)
+
+  // If this card hardened wax on a target, add the one-shot freeze shards
+  // before the persistent frozen shell appears on the next render.
+  await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeSingleFreeze))
   // Append only the just-used card first. Recipes are resolved below after
   // a small delay so the previous card's effect visibly lands before the combo.
   if (usedDef) {
@@ -519,6 +560,7 @@ async function applyHandSingle(
   // actually waiting; normal hand-card use should not feel artificially laggy.
   const hasPendingRecipe = HandSystem.hasPendingRecipe(chain)
   if (hasPendingRecipe) await wait(COMBO_TRIGGER_DELAY_MS)
+  const beforeRecipeFreeze = snapshotFieldFreezeState()
   const recipeResult = hasPendingRecipe
     ? HandSystem.firePendingRecipes(gameState, chain)
     : { firedRecipes: [], removedFieldCards: [] }
@@ -535,6 +577,7 @@ async function applyHandSingle(
   if (recipeResult.firedRecipes.length > 0) {
     boardRenderer.refreshChainBanner(buildChainHints())
   }
+  await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeRecipeFreeze))
 
   // Animate cards removed by delayed recipes separately so combo impact reads
   // as its own hit instead of merging with the hand-card effect animation.
@@ -558,17 +601,13 @@ async function applyHandSingle(
         uid: nextChainUid(),
       })
       boardRenderer.refreshChainBanner(buildChainHints())
-      render()
     }
   }
 
-  // Refill after all delayed recipe effects have resolved. Wait for the FLIP
-  // fall animation when something actually moved so the cards visibly slide
-  // down into the gap (otherwise the rail "punches a hole").
-  const moved = compactAndRefillAllLanes()
-  gameState.regroupAllRows()
-  render()
-  if (moved) await wait(380)
+  // Refill after all delayed recipe/gauge effects have resolved. This is the
+  // UI-facing preparation refresh: removed cards are compacted and replaced in
+  // one beat so the rail never displays holes before input unlocks.
+  await runPreparationRefreshAfterFieldEffects()
   setTimeout(() => {
     inputLocked = false
   }, 200)
