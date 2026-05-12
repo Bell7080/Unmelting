@@ -22,7 +22,7 @@ import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
 import type { EnemyHit, TreasureChange } from '@core/TurnManager'
 import { spriteForCard, SpriteUrls } from '@ui/Sprites'
 import { CandleMode, Character } from '@entities/Character'
-import { HandCardId, HandCategory } from '@entities/HandCard'
+import { HandCardId, HandCategory, HandTargetRule } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
 import type { EmberTier, SpawnWeights } from '@systems/EmberSystem'
 import { EmberSystem } from '@systems/EmberSystem'
@@ -286,7 +286,7 @@ export class GameBoardRenderer {
     while (i < lanes.length) {
       const card = lanes[i].getCardAtDistance(distance)
       if (!card) {
-        cells.push(`<div class="cell empty" aria-hidden="true"></div>`)
+        cells.push(this.renderEmptyCell(i, distance))
         i++
         continue
       }
@@ -319,10 +319,12 @@ export class GameBoardRenderer {
       this.selected.laneIndex >= laneIndex &&
       this.selected.laneIndex < laneIndex + span
 
-    // When a targeted hand card is armed every active-row card is a viable
-    // target, but only certain card types make sense for some hand cards. For
-    // MVP every active-row card is highlighted as targetable.
-    const isTargetingActive = this.handTargetingMode !== null
+    // While a targeted hand card is armed, distinguish valid targets from
+    // blocked cells. The blocked state renders the shared red X overlay so
+    // enemies-only cards visibly reject chests/traps, and front-only cards
+    // visibly reject the waiting rows.
+    const isValidHandTarget = this.isValidHandTarget(card, distance)
+    const isBlockedHandTarget = this.handTargetingMode !== null && !isValidHandTarget
 
     const classes = [
       'cell',
@@ -330,7 +332,8 @@ export class GameBoardRenderer {
       `type-${card.type}`,
       isActive ? 'is-active' : 'is-preview',
       isSelected ? 'is-selected' : '',
-      isTargetingActive ? 'is-hand-target' : '',
+      isValidHandTarget ? 'is-hand-target' : '',
+      isBlockedHandTarget ? 'is-hand-target-blocked' : '',
       span > 1 ? 'is-grouped' : '',
       this.hasRendered && !this.previousCardIds.has(card.id) ? 'is-entering' : '',
       this.shouldAnimateGroup(card.id, span) ? 'is-newly-grouped' : '',
@@ -352,8 +355,49 @@ export class GameBoardRenderer {
            role="button"
            tabindex="${tabIndex}">
         ${this.renderCardFace(card, span)}
+        ${isBlockedHandTarget ? this.renderBlockedTargetMark() : ''}
       </div>
     `
+  }
+
+
+  /** Render an empty rail cell, including target-block feedback during hand targeting. */
+  private renderEmptyCell(laneIndex: number, distance: number): string {
+    const isBlockedHandTarget = this.handTargetingMode !== null
+    const classes = ['cell', 'empty', isBlockedHandTarget ? 'is-hand-target-blocked' : '']
+      .filter(Boolean)
+      .join(' ')
+    return `
+      <div class="${classes}"
+           data-lane="${laneIndex}"
+           data-distance="${distance}"
+           aria-hidden="true">
+        ${isBlockedHandTarget ? this.renderBlockedTargetMark() : ''}
+      </div>
+    `
+  }
+
+  /** Shared target validation mirror for preview/UI hints. HandSystem remains authoritative. */
+  private isValidHandTarget(card: Card, distance: number): boolean {
+    if (!this.handTargetingMode) return false
+    const def = getHandCardDef(this.handTargetingMode.defId)
+    return this.isValidTargetRule(def.targetRule, card, distance)
+  }
+
+  /** Check a hand target rule without mutating game state. */
+  private isValidTargetRule(rule: HandTargetRule | undefined, card: Card, distance: number): boolean {
+    if (!rule) return false
+    if (rule === 'field-enemy') return card.type === CardType.ENEMY
+    if (rule === 'front-card-or-treasure') {
+      return distance === 0 && (card.type === CardType.ENEMY || card.type === CardType.TREASURE)
+    }
+    if (rule === 'front-trap') return distance === 0 && card.type === CardType.TRAP
+    return false
+  }
+
+  /** Existing red X language, extracted so 1/2/3-slot cards and empty cells share it. */
+  private renderBlockedTargetMark(): string {
+    return `<div class="trap-block-mark target-block-mark" aria-hidden="true">×</div>`
   }
 
   private renderCardFace(card: Card, span: number): string {
@@ -426,13 +470,13 @@ export class GameBoardRenderer {
     return `
       <div class="player-row">
         <div class="player-card">
+          ${character.shield > 0 ? `<span class="shield-badge" aria-label="방패 ${character.shield}"><span class="shield-badge-icon">${shieldIcon()}</span><span class="shield-badge-value">${character.shield}</span></span>` : ''}
           <div class="player-art" style="background-image: url('${SpriteUrls.player}')" aria-hidden="true"></div>
           <div class="player-overlay" aria-hidden="true"></div>
           <div class="player-content">
             <div class="player-name">${character.name}</div>
             <div class="player-stats">
               <div class="hp-bar">
-                ${character.shield > 0 ? `<span class="shield-badge">${shieldIcon()} ${character.shield}</span>` : ''}
                 <div class="hp-fill" style="width: ${hpPct}%"></div>
                 <span class="hp-text">
                   <span class="hp-text-icon">${heartIcon()}</span>
@@ -1103,7 +1147,7 @@ export class GameBoardRenderer {
 
   private attachListeners(): void {
     const activeCards = this.boardElement.querySelectorAll<HTMLElement>(
-      this.handTargetingMode ? '.cell.card' : '.cell.card.is-active'
+      this.handTargetingMode ? '.cell.card.is-hand-target' : '.cell.card.is-active'
     )
     activeCards.forEach((el) => {
       el.addEventListener('click', (e) => {
@@ -1241,6 +1285,66 @@ export class GameBoardRenderer {
     return new Promise((resolve) => window.setTimeout(resolve, 420))
   }
 
+
+  /** Float a glowing damage number above a specific element. */
+  animateDamageNumberOnElement(target: HTMLElement | null, amount: number): Promise<void> {
+    if (!target || amount <= 0) return Promise.resolve()
+    const rect = target.getBoundingClientRect()
+    return this.animateDamageNumberAt(rect.left + rect.width / 2, rect.top + rect.height * 0.34, amount)
+  }
+
+  /** Float damage numbers for card-id keyed model diffs. */
+  animateDamageNumbersById(damages: { cardId: string; amount: number }[]): Promise<void> {
+    return Promise.all(
+      damages.map(({ cardId, amount }) => {
+        const target = this.findCardElement(cardId)
+        if (target && amount > 0) SquareBurst.playOn(target, 'damage', { count: 14, spread: 110 })
+        return this.animateDamageNumberOnElement(target, amount)
+      })
+    ).then(() => undefined)
+  }
+
+  /** Create the red ember-glow numeric hit text at viewport coordinates. */
+  private animateDamageNumberAt(x: number, y: number, amount: number): Promise<void> {
+    const el = document.createElement('div')
+    el.className = 'damage-float'
+    el.textContent = `-${amount}`
+    el.style.left = `${x}px`
+    el.style.top = `${y}px`
+    document.body.appendChild(el)
+    const anim = el.animate(
+      [
+        { transform: 'translate(-50%, -20%) scale(0.78)', opacity: 0, filter: 'brightness(1.2)' },
+        { transform: 'translate(-50%, -72%) scale(1.18)', opacity: 1, filter: 'brightness(1.65)', offset: 0.22 },
+        { transform: 'translate(-50%, -150%) scale(1)', opacity: 0, filter: 'brightness(1)' },
+      ],
+      { duration: 760, easing: 'cubic-bezier(0.16, 0.86, 0.28, 1)', fill: 'forwards' }
+    )
+    return new Promise((resolve) => {
+      anim.onfinish = () => {
+        el.remove()
+        resolve()
+      }
+      window.setTimeout(() => {
+        el.remove()
+        resolve()
+      }, 900)
+    })
+  }
+
+  /** Wax release effect: wider, softer shards as hardened wax cracks open. */
+  animateWaxThawByIds(cardIds: string[]): Promise<void> {
+    if (cardIds.length === 0) return Promise.resolve()
+    for (const cardId of cardIds) {
+      const target = this.findCardElement(cardId)
+      if (!target) continue
+      SquareBurst.playOn(target, 'wax-freeze', { count: 14, spread: 180, duration: 760 })
+      target.classList.add('is-wax-thawing')
+      window.setTimeout(() => target.classList.remove('is-wax-thawing'), 620)
+    }
+    return new Promise((resolve) => window.setTimeout(resolve, 620))
+  }
+
   /** Generic effect dispatch — used by index.ts to fire bursts on events. */
   burstAtElement(
     target: HTMLElement | null,
@@ -1281,25 +1385,20 @@ export class GameBoardRenderer {
   }
 
   /**
-   * Animate a used hand card as a physical card being drawn from the hand
-   * stack toward the player-card area, then dissolve it with the same
-   * SquareBurst theme used by its category. The model is already mutated by
-   * the time this runs, so we clone the still-mounted pre-render DOM node.
+   * Animate a used hand card as a face-up card reveal near screen center.
+   * The clone flips into a complete rectangular card, hangs for a readable
+   * beat, then dissolves with a restrained burst around the card edge.
    */
   animateHandCardUse(slotIndex: number, theme: BurstTheme): Promise<void> {
     const source = this.findHandSlotElement(slotIndex)
-    const playerCard = this.boardElement.querySelector<HTMLElement>('.player-card')
-    if (!source || !playerCard) return Promise.resolve()
+    if (!source) return Promise.resolve()
 
     const sourceRect = source.getBoundingClientRect()
-    const targetRect = playerCard.getBoundingClientRect()
-    const targetX = targetRect.left + targetRect.width / 2
-    // Aim a little below the viewport center by landing on the upper-middle of
-    // the player card, matching the existing bottom-stage card layout.
-    const targetY = targetRect.top + targetRect.height * 0.42
+    const targetX = window.innerWidth / 2
+    const targetY = window.innerHeight * 0.46
     const ghost = source.cloneNode(true) as HTMLElement
 
-    ghost.classList.add('hand-use-ghost')
+    ghost.classList.add('hand-use-ghost', 'is-card-reveal')
     ghost.style.left = `${sourceRect.left}px`
     ghost.style.top = `${sourceRect.top}px`
     ghost.style.width = `${sourceRect.width}px`
@@ -1308,30 +1407,50 @@ export class GameBoardRenderer {
     document.body.appendChild(ghost)
     source.classList.add('is-hand-use-source')
 
+    const revealWidth = Math.min(190, Math.max(136, sourceRect.width * 1.55))
+    const revealHeight = revealWidth * 1.32
     const deltaX = targetX - (sourceRect.left + sourceRect.width / 2)
     const deltaY = targetY - (sourceRect.top + sourceRect.height / 2)
+    const scaleX = revealWidth / sourceRect.width
+    const scaleY = revealHeight / sourceRect.height
     const anim = ghost.animate(
       [
-        { transform: 'translate(0, 0) scale(1)', opacity: 1, filter: 'brightness(1)' },
         {
-          transform: `translate(${deltaX * 0.62}px, ${deltaY * 0.62}px) scale(1.08)`,
-          opacity: 0.95,
-          filter: 'brightness(1.24)',
-          offset: 0.62,
+          transform: 'translate(0, 0) rotateY(0deg) scale(1)',
+          opacity: 1,
+          filter: 'brightness(1)',
         },
         {
-          transform: `translate(${deltaX}px, ${deltaY}px) scale(0.58) rotate(-5deg)`,
+          transform: `translate(${deltaX * 0.72}px, ${deltaY * 0.72}px) rotateY(82deg) scale(1.04)`,
+          opacity: 0.96,
+          filter: 'brightness(1.28)',
+          offset: 0.48,
+        },
+        {
+          transform: `translate(${deltaX}px, ${deltaY}px) rotateY(0deg) scale(${scaleX}, ${scaleY})`,
+          opacity: 1,
+          filter: 'brightness(1.18)',
+          offset: 0.72,
+        },
+        {
+          transform: `translate(${deltaX}px, ${deltaY}px) rotateY(0deg) scale(${scaleX}, ${scaleY})`,
+          opacity: 1,
+          filter: 'brightness(1.1)',
+          offset: 0.9,
+        },
+        {
+          transform: `translate(${deltaX}px, ${deltaY}px) rotateY(-12deg) scale(${scaleX * 0.96}, ${scaleY * 0.96})`,
           opacity: 0,
-          filter: 'brightness(1.38)',
+          filter: 'brightness(1.36)',
         },
       ],
-      { duration: 460, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)', fill: 'forwards' }
+      { duration: 760, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)', fill: 'forwards' }
     )
 
     return new Promise((resolve) => {
       window.setTimeout(() => {
-        SquareBurst.playAt(targetX, targetY, theme, { count: 18, spread: 105 })
-      }, 330)
+        SquareBurst.playAt(targetX, targetY, theme, { count: 12, spread: 145, duration: 520 })
+      }, 610)
       anim.onfinish = () => {
         ghost.remove()
         source.classList.remove('is-hand-use-source')
@@ -1341,7 +1460,7 @@ export class GameBoardRenderer {
         ghost.remove()
         source.classList.remove('is-hand-use-source')
         resolve()
-      }, 620)
+      }, 920)
     })
   }
 
@@ -2228,17 +2347,6 @@ const STYLES = `
 }
 
 
-.cell.card.is-trap-disarm-target {
-  border-color: var(--color-flame);
-  box-shadow:
-    inset 0 0 0 2px rgba(255, 215, 120, 0.7),
-    0 0 20px rgba(255, 215, 120, 0.5);
-}
-
-.cell.card.is-trap-disarm-blocked {
-  cursor: not-allowed;
-  filter: grayscale(0.45) brightness(0.7);
-}
 
 .trap-block-mark {
   position: absolute;
@@ -3362,10 +3470,27 @@ const STYLES = `
   pointer-events: none;
   list-style: none;
   transform-origin: center;
+  transform-style: preserve-3d;
   box-shadow:
     0 10px 28px rgba(0, 0, 0, 0.64),
     0 0 18px rgba(255, 215, 120, 0.28);
 }
+.hand-use-ghost.is-card-reveal {
+  border-radius: 12px;
+  overflow: hidden;
+  transform-origin: center;
+}
+.hand-use-ghost.is-card-reveal button {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr auto auto;
+  justify-items: center;
+  align-content: end;
+  padding: 14px 12px;
+  text-align: center;
+}
+.hand-use-ghost.is-card-reveal .hand-card-icon { font-size: 34px; }
+.hand-use-ghost.is-card-reveal .hand-card-name { font-size: 16px; }
+.hand-use-ghost.is-card-reveal .hand-card-effect { font-size: 12px; opacity: 0.95; }
 .hand-use-ghost button { cursor: default; }
 .hand-slot.is-hand-use-source {
   opacity: 0.36;
@@ -3455,6 +3580,29 @@ const STYLES = `
   outline: 2px dashed rgba(255, 215, 120, 0.7);
   outline-offset: -3px;
   animation: hand-target-pulse 1.1s ease-in-out infinite;
+}
+.cell.is-hand-target-blocked {
+  cursor: not-allowed;
+  filter: grayscale(0.42) brightness(0.68) saturate(0.82);
+}
+.cell.is-hand-target-blocked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(12, 6, 12, 0.34);
+  pointer-events: none;
+  z-index: 7;
+}
+.cell.empty.is-hand-target-blocked {
+  border-color: rgba(168, 58, 58, 0.68);
+  background:
+    repeating-linear-gradient(45deg, rgba(168, 58, 58, 0.08) 0 6px, transparent 6px 12px),
+    rgba(16, 8, 16, 0.28);
+}
+.target-block-mark {
+  font-size: clamp(44px, 8vw, 104px);
+  z-index: 32;
 }
 @keyframes hand-target-pulse {
   0%, 100% { box-shadow: 0 0 0 rgba(255, 215, 120, 0); }
@@ -3659,6 +3807,15 @@ const STYLES = `
   45% { transform: scale(1.08); filter: brightness(1.42) saturate(0.72); }
   100% { transform: scale(1); filter: brightness(1.08) saturate(0.86); }
 }
+.cell.card.is-wax-thawing {
+  animation: wax-thaw-crack 0.62s cubic-bezier(0.16, 0.9, 0.18, 1);
+  z-index: 9;
+}
+@keyframes wax-thaw-crack {
+  0% { transform: scale(1); filter: brightness(1.02) saturate(0.88); }
+  42% { transform: scale(1.045); filter: brightness(1.36) saturate(0.72); }
+  100% { transform: scale(1); filter: brightness(1) saturate(1); }
+}
 .cell.card.is-frozen .card-face::after {
   content: '';
   position: absolute;
@@ -3692,20 +3849,60 @@ const STYLES = `
 .shield-badge {
   position: absolute;
   right: 8px;
-  top: -12px;
-  z-index: 3;
+  top: 8px;
+  z-index: 5;
+  min-width: 34px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  color: #fff7d8;
-  background: linear-gradient(180deg, rgba(72, 104, 150, 0.96), rgba(33, 48, 78, 0.96));
-  border: 1px solid rgba(202, 224, 255, 0.7);
-  font-size: 12px;
-  font-weight: 900;
-  box-shadow: 0 0 12px rgba(126, 169, 230, 0.45);
+  justify-content: center;
+  color: #fff9dd;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.62));
 }
-.shield-badge .icon { width: 1em; height: 1em; }
+.shield-badge-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(93, 126, 174, 0.96);
+}
+.shield-badge-icon .icon {
+  width: 100%;
+  height: 100%;
+  stroke: rgba(218, 235, 255, 0.95);
+  stroke-width: 2.4;
+}
+.shield-badge-value {
+  position: relative;
+  z-index: 1;
+  margin-top: 1px;
+  color: #fff7d8;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.95),
+    0 0 7px rgba(255, 232, 168, 0.7);
+}
+
+.damage-float {
+  position: fixed;
+  z-index: 240;
+  pointer-events: none;
+  color: #ffdfc8;
+  font-size: clamp(30px, 4.2vw, 58px);
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-family: var(--font-family-display);
+  text-shadow:
+    0 2px 2px rgba(0, 0, 0, 0.96),
+    0 0 10px rgba(214, 73, 47, 0.95),
+    0 0 22px rgba(168, 58, 58, 0.88),
+    0 0 38px rgba(244, 164, 96, 0.42);
+  -webkit-text-stroke: 1px rgba(96, 18, 22, 0.72);
+}
 
 `
