@@ -573,8 +573,12 @@ async function applyHandSingle(
   }
 
   // If this card damaged or hardened/thawed a target, add the one-shot
-  // feedback before the next render changes the persistent field state.
-  await boardRenderer.animateDamageNumbersById(diffFieldHealthLosses(beforeSingleHealth))
+  // feedback before the next render changes the persistent field state. The
+  // damaged id set is reused below so a lethal hit does not also fire a second
+  // consume burst at the same location.
+  const singleDamageLosses = diffFieldHealthLosses(beforeSingleHealth)
+  const singleDamagedIds = new Set(singleDamageLosses.map((loss) => loss.cardId))
+  await boardRenderer.animateDamageNumbersById(singleDamageLosses)
   await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeSingleFreeze))
   await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeSingleFreeze))
   // Append only the just-used card first. Recipes are resolved below after
@@ -603,7 +607,9 @@ async function applyHandSingle(
   // Animate removals caused by the single hand card while the old board DOM is
   // still present. This is the "previous effect" beat the combo waits for.
   if (result.removedFieldCards.length > 0) {
-    await boardRenderer.animateCardConsumeByIds(result.removedFieldCards)
+    await boardRenderer.animateCardConsumeByIds(result.removedFieldCards, {
+      suppressBurstIds: singleDamagedIds,
+    })
   }
 
   // Resolve recipe combos after a deliberate gap only when a new recipe is
@@ -628,14 +634,21 @@ async function applyHandSingle(
   if (recipeResult.firedRecipes.length > 0) {
     boardRenderer.refreshChainBanner(buildChainHints())
   }
-  await boardRenderer.animateDamageNumbersById(diffFieldHealthLosses(beforeRecipeHealth))
+  // Recipe effects get their own damage diff after the combo delay. As above,
+  // cards killed by that damage keep their damage burst and only suppress the
+  // later removal burst.
+  const recipeDamageLosses = diffFieldHealthLosses(beforeRecipeHealth)
+  const recipeDamagedIds = new Set(recipeDamageLosses.map((loss) => loss.cardId))
+  await boardRenderer.animateDamageNumbersById(recipeDamageLosses)
   await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeRecipeFreeze))
   await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeRecipeFreeze))
 
   // Animate cards removed by delayed recipes separately so combo impact reads
   // as its own hit instead of merging with the hand-card effect animation.
   if (recipeResult.removedFieldCards.length > 0) {
-    await boardRenderer.animateCardConsumeByIds(recipeResult.removedFieldCards)
+    await boardRenderer.animateCardConsumeByIds(recipeResult.removedFieldCards, {
+      suppressBurstIds: recipeDamagedIds,
+    })
   }
 
   // Full gauge fires last: card effect -> recipe effect -> gauge effect.
