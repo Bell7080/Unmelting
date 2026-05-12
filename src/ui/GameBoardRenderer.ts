@@ -1233,16 +1233,12 @@ export class GameBoardRenderer {
   }
 
   /**
-   * Play the upward pop used when the player actively attacks an enemy card.
-   * The model is mutated after this promise resolves so the clicked card stays
-   * visible for the full hit reaction. A 'damage'-themed burst is layered on
-   * the attacked card so the impact reads even on quick chains.
+   * Play only the attack motion used when the player actively swings at an
+   * enemy card. Impact feedback is intentionally NOT fired here: the real
+   * damage result is rendered by `animateDamageNumbersById` after the model
+   * resolves, which prevents one click from producing duplicate hit bursts.
    */
   animatePlayerAttack(card: Card): Promise<void> {
-    const target = this.findCardElement(card.id)
-    if (target) {
-      SquareBurst.playOn(target, 'damage', { count: 18, spread: 100 })
-    }
     return this.animateCardElements(card, 'is-player-striking', 280)
   }
 
@@ -1526,8 +1522,13 @@ export class GameBoardRenderer {
    * Consume a list of cards by id+type — used by hand-ability paths where
    * HandSystem mutates the model BEFORE we can capture the Card object.
    * The DOM is still showing the pre-mutation state when this is invoked.
+   * `suppressBurstIds` is for cards that already received a same-beat impact
+   * burst (usually lethal damage), so removal can fade without double popping.
    */
-  animateCardConsumeByIds(payload: { cardId: string; type: CardType }[]): Promise<void> {
+  animateCardConsumeByIds(
+    payload: { cardId: string; type: CardType }[],
+    options: { suppressBurstIds?: Set<string> } = {}
+  ): Promise<void> {
     if (payload.length === 0) return Promise.resolve()
     const animations: Promise<void>[] = []
     for (const { cardId, type } of payload) {
@@ -1543,10 +1544,15 @@ export class GameBoardRenderer {
             : 'vanish-smoke'
       const r1 = elements[0].getBoundingClientRect()
       const r2 = elements[elements.length - 1].getBoundingClientRect()
-      SquareBurst.playAt((r1.left + r2.right) / 2, (r1.top + r2.bottom) / 2, theme, {
-        count: 20,
-        spread: 130 + (elements.length - 1) * 30,
-      })
+      // Damage numbers already play the exact hit burst for cards that lost
+      // HP this beat. Suppressing only the consume burst keeps the fade-out
+      // readable without making a killed enemy explode twice.
+      if (!options.suppressBurstIds?.has(cardId)) {
+        SquareBurst.playAt((r1.left + r2.right) / 2, (r1.top + r2.bottom) / 2, theme, {
+          count: 20,
+          spread: 130 + (elements.length - 1) * 30,
+        })
+      }
       animations.push(this.animateElements(elements, 'is-consuming', 360))
     }
     return Promise.all(animations).then(() => undefined)
@@ -2656,32 +2662,6 @@ const STYLES = `
   }
 }
 
-@keyframes treasure-dust-burst {
-  0% {
-    opacity: 0;
-    transform: scale(0.5);
-    box-shadow: 0 0 0 rgba(201, 161, 58, 0);
-  }
-  35% {
-    opacity: 0.9;
-    transform: scale(1.05);
-    box-shadow:
-      -18px -8px 0 rgba(201, 161, 58, 0.22),
-      14px -12px 0 rgba(255, 228, 154, 0.2),
-      -8px 14px 0 rgba(182, 128, 42, 0.2),
-      18px 10px 0 rgba(255, 228, 154, 0.16);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.45);
-    box-shadow:
-      -28px -18px 0 rgba(201, 161, 58, 0),
-      24px -24px 0 rgba(255, 228, 154, 0),
-      -18px 24px 0 rgba(182, 128, 42, 0),
-      30px 18px 0 rgba(255, 228, 154, 0);
-  }
-}
-
 @keyframes group-squish {
   0%, 100% { transform: scale(1); }
   35% { transform: scale(1.06, 0.94); }
@@ -2708,17 +2688,8 @@ const STYLES = `
   z-index: 6;
 }
 
-.cell.card.is-treasure-vanishing::after {
-  content: '';
-  position: absolute;
-  inset: 50% auto auto 50%;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(255, 232, 168, 0.8);
-  animation: treasure-dust-burst 0.52s ease-out forwards;
-}
-
+/* Treasure vanish keeps only the card fade here; the actual particulate
+   state-change feedback is supplied by SquareBurst in animateTreasureChanges. */
 .cell.card.is-newly-grouped {
   animation: group-squish 0.3s cubic-bezier(0.18, 0.9, 0.18, 1);
   z-index: 4;
@@ -3891,7 +3862,10 @@ const STYLES = `
   position: fixed;
   z-index: 240;
   pointer-events: none;
-  color: #ffdfc8;
+  /* Damage numbers use the same oxblood/ember family as SquareBurst damage,
+     but bias the fill toward readable crimson so floating hits feel dangerous
+     instead of looking like pale healing or treasure feedback. */
+  color: #ff3f32;
   font-size: clamp(30px, 4.2vw, 58px);
   font-weight: 950;
   line-height: 1;
@@ -3899,10 +3873,10 @@ const STYLES = `
   font-family: var(--font-family-display);
   text-shadow:
     0 2px 2px rgba(0, 0, 0, 0.96),
-    0 0 10px rgba(214, 73, 47, 0.95),
-    0 0 22px rgba(168, 58, 58, 0.88),
-    0 0 38px rgba(244, 164, 96, 0.42);
-  -webkit-text-stroke: 1px rgba(96, 18, 22, 0.72);
+    0 0 8px rgba(255, 63, 50, 0.96),
+    0 0 20px rgba(176, 28, 34, 0.9),
+    0 0 34px rgba(244, 83, 49, 0.5);
+  -webkit-text-stroke: 1px rgba(74, 8, 13, 0.86);
 }
 
 `
