@@ -35,6 +35,8 @@ export class Card {
   health: number // Current effective enemy HP after any group/special rules are applied.
   isSpecialEnemy: boolean // Special enemies, such as mimics, never merge into wider normal groups.
   defeatDropCount: number // Number of item drops awarded when this enemy is defeated.
+  /** Wax status: turns remaining while this field card is '굳음' and cannot act. */
+  frozenTurns: number
 
   constructor(
     id: string,
@@ -43,7 +45,7 @@ export class Card {
     description: string,
     baseHealth: number = 0,
     baseDamage: number = 0,
-    options: CardOptions = {},
+    options: CardOptions = {}
   ) {
     this.id = id
     this.type = type
@@ -55,12 +57,11 @@ export class Card {
     this.health = type === CardType.ENEMY ? baseHealth : 0
     this.isSpecialEnemy = options.isSpecialEnemy ?? false
     this.defeatDropCount = options.defeatDropCount ?? 1
+    this.frozenTurns = 0
   }
 
   /** Return the fixed normal-enemy stats requested for merged 2/3-lane cards. */
-  private static getNormalEnemyGroupStats(
-    groupCount: number,
-  ): EnemyGroupStats | null {
+  private static getNormalEnemyGroupStats(groupCount: number): EnemyGroupStats | null {
     if (groupCount === 2) return { name: '성냥 무리', health: 5, damage: 3 }
     if (groupCount >= 3) return { name: '밀랍 군단', health: 10, damage: 5 }
     return null
@@ -69,9 +70,7 @@ export class Card {
   /** Read the max HP that corresponds to this card's current grouping state. */
   private getCurrentMaxHealth(): number {
     if (this.type !== CardType.ENEMY) return 0
-    const groupedStats = this.isSpecialEnemy
-      ? null
-      : Card.getNormalEnemyGroupStats(this.groupCount)
+    const groupedStats = this.isSpecialEnemy ? null : Card.getNormalEnemyGroupStats(this.groupCount)
     return groupedStats?.health ?? this.baseHealth
   }
 
@@ -95,6 +94,23 @@ export class Card {
     const actualDamage = Math.max(0, amount)
     this.health = Math.max(0, this.health - actualDamage)
     return this.health
+  }
+
+  /** Apply the wax '굳음' status, keeping the longest remaining duration. */
+  freeze(turns: number): void {
+    this.frozenTurns = Math.max(this.frozenTurns, Math.max(0, turns))
+  }
+
+  /** Tick one turn of wax '굳음'. Returns true when the status remains active. */
+  tickFrozen(): boolean {
+    if (this.frozenTurns <= 0) return false
+    this.frozenTurns = Math.max(0, this.frozenTurns - 1)
+    return this.frozenTurns > 0
+  }
+
+  /** Whether this card is currently stopped by wax. */
+  isFrozen(): boolean {
+    return this.frozenTurns > 0
   }
 
   /** Return trap damage for the current trap width: 2, 5, or lethal 999. */
@@ -131,8 +147,7 @@ export class Card {
 
     if (this.type === CardType.TRAP) {
       this.name = this.groupCount === 2 ? '촛농 거미집' : '밀랍 거미굴'
-      this.description =
-        this.groupCount === 2 ? 'Deals 5 damage' : 'Deals lethal damage'
+      this.description = this.groupCount === 2 ? 'Deals 5 damage' : 'Deals lethal damage'
       return
     }
 
@@ -153,14 +168,8 @@ export class Card {
     if (!this.canMergeWith(other)) return
 
     if (this.type === CardType.ENEMY) {
-      const existingDamage = Math.max(
-        0,
-        this.getCurrentMaxHealth() - this.health,
-      )
-      const otherDamage = Math.max(
-        0,
-        other.getCurrentMaxHealth() - other.health,
-      )
+      const existingDamage = Math.max(0, this.getCurrentMaxHealth() - this.health)
+      const otherDamage = Math.max(0, other.getCurrentMaxHealth() - other.health)
       this.groupCount += other.groupCount
       this.applyNormalGroupPresentation(existingDamage + otherDamage)
       return

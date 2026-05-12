@@ -1,22 +1,26 @@
 /**
- * HandCard - Player's hand of consumable items used to fight, recover, and combo.
+ * HandCard - Player's consumable item cards.
  *
- * Each card belongs to a category (recovery/tool/control/attack). The category
- * drives Melt resolution and combo pattern detection. Concrete card definitions
- * live in src/data/HandCards.ts.
+ * Cards auto-synthesize when three identical cards sit consecutively in hand.
+ * The merged card keeps the existing "★ 트리플" UI, while design shorthand
+ * such as "3-" remains documentation-only notation outside the code.
  */
 
 export type HandCategory = 'recovery' | 'tool' | 'control' | 'attack'
 
 export type HandCardId =
-  | 'small-candle'
-  | 'large-candle'
-  | 'wax-shield'
-  | 'matchstick'
-  | 'brass-key'
-  | 'cooled-candle'
-  | 'cleansing-ember'
-  | 'match-bundle'
+  | 'wax-drop'
+  | 'candle'
+  | 'ember'
+  | 'key'
+  | 'wax'
+  | 'match'
+  | 'holy-water'
+  | 'chitin'
+  | 'card'
+  | 'coin'
+
+export type HandTargetRule = 'field-enemy' | 'front-card-or-treasure' | 'front-trap'
 
 export interface HandCardDefinition {
   id: HandCardId
@@ -27,8 +31,8 @@ export interface HandCardDefinition {
   tripleDescription: string
   /** Candle gained from a single use. */
   candleGain: number
-  /** Whether single use requires a target card on the active row. */
-  needsTarget?: boolean
+  /** Optional targeting rule used by the renderer and HandSystem validation. */
+  targetRule?: HandTargetRule
   /** Optional weight that biases drop selection (defaults to 1). */
   dropWeight?: number
 }

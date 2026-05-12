@@ -114,6 +114,8 @@ export interface ScorePanelState {
   canSpend: boolean
   spendCost: number
   scorePulseKey: number
+  coins: number
+  coinPulseKey: number
   emberTier?: EmberTier
   spawnWeights?: SpawnWeights
   emberDecayCountdown?: number
@@ -233,6 +235,7 @@ export class GameBoardRenderer {
         : '<div class="score-log-empty">아직 기록된 행동이 없어</div>'
     const spendDisabled = scorePanel.canSpend ? '' : 'disabled'
     const scorePulseClass = scorePanel.scorePulseKey > 0 ? 'is-score-popping' : ''
+    const coinPulseClass = scorePanel.coinPulseKey > 0 ? 'is-score-popping' : ''
 
     return `
       <aside class="score-panel" aria-label="Action score panel">
@@ -243,6 +246,15 @@ export class GameBoardRenderer {
           </div>
           <div class="score-number ${scorePulseClass}" data-score-pulse="${scorePanel.scorePulseKey}">
             ${scorePanel.score.toLocaleString()}
+          </div>
+        </section>
+        <section class="coin-panel-total" aria-label="Shop currency">
+          <div class="score-kicker">
+            <span class="score-kicker-icon">${coinIcon()}</span>
+            상점 화폐
+          </div>
+          <div class="coin-number ${coinPulseClass}" data-coin-pulse="${scorePanel.coinPulseKey}">
+            ${scorePanel.coins.toLocaleString()} $
           </div>
         </section>
         <section class="score-log-list" aria-label="Action history">
@@ -310,7 +322,7 @@ export class GameBoardRenderer {
     // When a targeted hand card is armed every active-row card is a viable
     // target, but only certain card types make sense for some hand cards. For
     // MVP every active-row card is highlighted as targetable.
-    const isTargetingActive = isActive && this.handTargetingMode !== null
+    const isTargetingActive = this.handTargetingMode !== null
 
     const classes = [
       'cell',
@@ -322,6 +334,7 @@ export class GameBoardRenderer {
       span > 1 ? 'is-grouped' : '',
       this.hasRendered && !this.previousCardIds.has(card.id) ? 'is-entering' : '',
       this.shouldAnimateGroup(card.id, span) ? 'is-newly-grouped' : '',
+      card.isFrozen() ? 'is-frozen' : '',
     ]
       .filter(Boolean)
       .join(' ')
@@ -360,6 +373,9 @@ export class GameBoardRenderer {
     }
 
     const groupBadge = span > 1 ? `<div class="group-badge">×${span}</div>` : ''
+    const frozenBadge = card.isFrozen()
+      ? `<div class="frozen-badge">굳음 ${card.frozenTurns}</div>`
+      : ''
 
     const groupName = span > 1 && !card.isSpecialEnemy ? this.groupName(card.type, span) : card.name
 
@@ -368,6 +384,7 @@ export class GameBoardRenderer {
 
     return `
       ${groupBadge}
+      ${frozenBadge}
       <div class="card-face">
         <div class="card-art" ${artStyle} aria-hidden="true"></div>
         <div class="card-overlay" aria-hidden="true"></div>
@@ -415,6 +432,7 @@ export class GameBoardRenderer {
             <div class="player-name">${character.name}</div>
             <div class="player-stats">
               <div class="hp-bar">
+                ${character.shield > 0 ? `<span class="shield-badge">${shieldIcon()} ${character.shield}</span>` : ''}
                 <div class="hp-fill" style="width: ${hpPct}%"></div>
                 <span class="hp-text">
                   <span class="hp-text-icon">${heartIcon()}</span>
@@ -434,23 +452,25 @@ export class GameBoardRenderer {
 
   private iconForHandCard(defId: HandCardId): string {
     switch (defId) {
-      case 'small-candle':
+      case 'wax-drop':
         return smallCandleIcon()
-      case 'large-candle':
-        return bigCandleIcon()
-      case 'wax-shield':
+      case 'candle':
         return shieldIcon()
-      case 'matchstick':
-      case 'match-bundle':
+      case 'ember':
+      case 'match':
         return flameIcon()
-      case 'brass-key':
+      case 'key':
         return pouchIcon()
-      case 'cooled-candle':
+      case 'wax':
         return candleIcon()
-      case 'cleansing-ember':
-        return flameIcon()
-      default:
-        return pouchIcon()
+      case 'holy-water':
+        return bigCandleIcon()
+      case 'chitin':
+        return shieldIcon()
+      case 'card':
+        return bookIcon()
+      case 'coin':
+        return coinIcon()
     }
   }
 
@@ -607,6 +627,7 @@ export class GameBoardRenderer {
       { id: 'treasures', label: '보물' },
       { id: 'hand', label: '손패' },
       { id: 'combo', label: '조합' },
+      { id: 'terms', label: '용어' },
     ]
     const tabBar = tabs
       .map(
@@ -619,7 +640,8 @@ export class GameBoardRenderer {
     else if (activeTab === 'traps') body = this.renderCompendiumTraps()
     else if (activeTab === 'treasures') body = this.renderCompendiumTreasures()
     else if (activeTab === 'hand') body = this.renderCompendiumHand()
-    else body = this.renderCompendiumCombo()
+    else if (activeTab === 'combo') body = this.renderCompendiumCombo()
+    else body = this.renderCompendiumTerms()
     return `
       <div class="compendium-modal" role="dialog" aria-label="도감">
         <header class="compendium-header">
@@ -769,7 +791,7 @@ export class GameBoardRenderer {
         ['★ 트리플', def.tripleDescription],
         ['양초 게인', `+${def.candleGain}`],
       ]
-      if (def.needsTarget) stats.push(['타게팅', '대상 필요'])
+      if (def.targetRule) stats.push(['타게팅', this.targetRuleLabel(def.targetRule)])
       groups[def.category].push(
         this.compendiumCard({
           art: { kind: 'icon', svg: this.iconForHandCard(def.id) },
@@ -788,6 +810,63 @@ export class GameBoardRenderer {
         `
       )
       .join('')
+  }
+
+  /** Human-readable targeting descriptions for the current hand card rules. */
+  private targetRuleLabel(
+    rule: NonNullable<ReturnType<typeof getHandCardDef>['targetRule']>
+  ): string {
+    if (rule === 'field-enemy') return '필드(3×3) 적 선택'
+    if (rule === 'front-card-or-treasure') return '전방 적/보물 선택'
+    return '전방 함정 선택'
+  }
+
+  /** Terms tab summarizing current field, resource, and status vocabulary. */
+  private renderCompendiumTerms(): string {
+    const terms: [string, string][] = [
+      ['필드', '플레이어 앞 3×3 그리드 레일 전체. 전방 3칸과 대기 6칸을 모두 포함한다.'],
+      [
+        '전방',
+        '플레이어 카드와 직접 대면 중인 최전방 라인(distance 0). 일반 보드 행동은 전방만 선택한다.',
+      ],
+      [
+        '대기',
+        '전방이 아닌 준비 중인 후방 2줄(distance 1~2), 총 6칸. 필드 지정 효과는 대기 칸도 대상으로 삼을 수 있다.',
+      ],
+      [
+        '트리플',
+        '같은 손패 카드 3장이 연속으로 쌓이면 기존 ★ 강화 카드 양식으로 자동 합성되는 효과. 기획서의 3- 표기는 이 효과 설명용이다.',
+      ],
+      ['방패', '체력 위에 표시되는 임시 체력. 피해를 먼저 흡수하고 소모된다.'],
+      [
+        '굳음',
+        '밀랍으로 하얗게 굳은 정지 상태. 남은 턴 동안 적 공격/보물 변동 같은 전방 이벤트가 멈춘다.',
+      ],
+      [
+        '불씨 카운트',
+        '우측 상단 불씨 자원. 성냥이 회복하며, 낮아질수록 전투/스폰 위험도가 오른다.',
+      ],
+      [
+        '손패 콤보 카운트',
+        '손패 사용으로 쌓이는 체인 수. 카드 아이템은 추가 카운트를 더해 조합 판정에 활용된다.',
+      ],
+      [
+        '동전($)',
+        '상점용 화폐. 현재는 점수 집계 아래 별도 지갑으로 표시되며, 추후 상점에서 사용한다.',
+      ],
+      ['정화', '현재 MVP에서는 저주/곰팡이 역할을 하는 함정 제거와 굳음 해제를 함께 처리한다.'],
+    ]
+    const cards = terms
+      .map(([name, description]) =>
+        this.compendiumCard({
+          art: { kind: 'icon', svg: bookIcon() },
+          name,
+          badge: '용어',
+          stats: [['정의', description]],
+        })
+      )
+      .join('')
+    return `<div class="compendium-grid">${cards}</div>`
   }
 
   private renderCompendiumCombo(): string {
@@ -1023,7 +1102,9 @@ export class GameBoardRenderer {
   }
 
   private attachListeners(): void {
-    const activeCards = this.boardElement.querySelectorAll<HTMLElement>('.cell.card.is-active')
+    const activeCards = this.boardElement.querySelectorAll<HTMLElement>(
+      this.handTargetingMode ? '.cell.card' : '.cell.card.is-active'
+    )
     activeCards.forEach((el) => {
       el.addEventListener('click', (e) => {
         e.stopPropagation()
@@ -1507,7 +1588,7 @@ const STYLES = `
 /* ---------- Score / Activity Panel ---------- */
 .score-panel {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto 1fr auto;
   gap: 10px;
   min-height: 0;
   padding: 12px;
@@ -1521,6 +1602,7 @@ const STYLES = `
     0 0 28px rgba(0, 0, 0, 0.28);
 }
 
+.coin-panel-total,
 .score-panel-total {
   position: relative;
   padding: 12px;
@@ -1545,6 +1627,7 @@ const STYLES = `
   font-size: 13px;
 }
 
+.coin-number,
 .score-number {
   position: relative;
   margin-top: 4px;
@@ -1558,10 +1641,12 @@ const STYLES = `
   font-variant-numeric: tabular-nums;
 }
 
+.coin-number.is-score-popping,
 .score-number.is-score-popping {
   animation: score-slot-pop 0.62s cubic-bezier(0.16, 0.9, 0.22, 1);
 }
 
+.coin-number.is-score-popping::after,
 .score-number.is-score-popping::after {
   content: '✦ ✧ ✦';
   position: absolute;
@@ -3446,4 +3531,54 @@ const STYLES = `
   background: rgba(255, 215, 120, 0.08);
 }
 .score-log-melt .score-log-delta { color: rgba(255, 232, 168, 1); }
+/* Wax hardening: a white shell overlay plus a small turn badge. */
+.cell.card.is-frozen .card-face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.34), rgba(232, 238, 246, 0.08)),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.22) 0 4px, transparent 4px 12px);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: wax-harden-shimmer 1.6s ease-in-out infinite alternate;
+}
+.frozen-badge {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  z-index: 6;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: #1c1424;
+  background: rgba(241, 245, 249, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.36);
+}
+@keyframes wax-harden-shimmer {
+  from { opacity: 0.72; filter: brightness(1); }
+  to { opacity: 0.95; filter: brightness(1.18); }
+}
+.shield-badge {
+  position: absolute;
+  right: 8px;
+  top: -12px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: #fff7d8;
+  background: linear-gradient(180deg, rgba(72, 104, 150, 0.96), rgba(33, 48, 78, 0.96));
+  border: 1px solid rgba(202, 224, 255, 0.7);
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 0 0 12px rgba(126, 169, 230, 0.45);
+}
+.shield-badge .icon { width: 1em; height: 1em; }
+
 `

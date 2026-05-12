@@ -49,7 +49,7 @@ export class TurnManager {
 
     for (let i = 0; i < this.gameState.lanes.length; i++) {
       const card = this.gameState.lanes[i].getCardAtDistance(0)
-      if (!card || card.type !== CardType.ENEMY) continue
+      if (!card || card.type !== CardType.ENEMY || card.isFrozen()) continue
       if (seen.has(card)) continue
       seen.add(card)
 
@@ -77,7 +77,7 @@ export class TurnManager {
 
     for (let i = 0; i < this.gameState.lanes.length; i++) {
       const card = this.gameState.lanes[i].getCardAtDistance(d)
-      if (!card || card.type !== CardType.TREASURE) continue
+      if (!card || card.type !== CardType.TREASURE || card.isFrozen()) continue
       if (visited.has(card)) continue
       visited.add(card)
 
