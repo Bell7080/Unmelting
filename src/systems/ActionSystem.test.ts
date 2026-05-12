@@ -17,10 +17,18 @@ describe('ActionSystem rewards', () => {
   it('drops five hand cards when a two-lane mimic is defeated', () => {
     const character = new Character()
     const lane = new Lane('lane-0', 0)
-    const mimic = new Card('mimic-test', CardType.ENEMY, '미믹', 'Was a 2-lane treasure once', 10, 5, {
-      isSpecialEnemy: true,
-      defeatDropCount: 5,
-    })
+    const mimic = new Card(
+      'mimic-test',
+      CardType.ENEMY,
+      '미믹',
+      'Was a 2-lane treasure once',
+      10,
+      5,
+      {
+        isSpecialEnemy: true,
+        defeatDropCount: 5,
+      }
+    )
     // Give enough damage to defeat the wider mimic in one deterministic strike.
     character.damage = 10
     mimic.groupCount = 2
@@ -51,7 +59,7 @@ describe('ActionSystem rewards', () => {
   it('reports overflow when the hand is already full', () => {
     const character = new Character()
     while (character.hasHandRoom()) {
-      character.addHandCard({ uid: `seed-${character.hand.length}`, defId: 'small-candle' })
+      character.addHandCard({ uid: `seed-${character.hand.length}`, defId: 'wax-drop' })
     }
     const lane = new Lane('lane-0', 0)
     const enemy = new Card('enemy-test', CardType.ENEMY, '양초 생쥐', 'mouse', 1, 1)

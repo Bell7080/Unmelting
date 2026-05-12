@@ -22,6 +22,17 @@ describe('Character item effects', () => {
     expect(character.health).toBe(17)
   })
 
+  it('spends temporary shield before health damage', () => {
+    const character = new Character()
+
+    character.addShield(3)
+    const damageToHealth = character.takeDamage(5)
+
+    expect(damageToHealth).toBe(2)
+    expect(character.shield).toBe(0)
+    expect(character.health).toBe(18)
+  })
+
   it('resets max health back to the starting value for a new run', () => {
     const character = new Character()
     character.increaseMaxHealth(2)

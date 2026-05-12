@@ -1,93 +1,110 @@
 /**
- * HandCards - MVP definitions for the 8 hand cards.
+ * HandCards - Current hand item list from the design sheet.
  *
- * Each definition carries metadata only (name, category, descriptions, gain).
- * The actual effect application happens in HandSystem so card data stays pure.
+ * Data stays declarative here: names, categories, UI text, targeting rules, and
+ * drop weights. HandSystem owns the actual gameplay mutations so item behavior
+ * remains centralized and testable.
  */
 
 import { HandCardDefinition, HandCardId } from '@entities/HandCard'
 
 export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
-  'small-candle': {
-    id: 'small-candle',
-    name: '작은 양초',
+  'wax-drop': {
+    id: 'wax-drop',
+    name: '촛농',
     category: 'recovery',
-    description: '체력 +2',
-    tripleDescription: '체력 +6, 다음 턴 받는 피해 -1',
+    description: '체력 +1',
+    tripleDescription: '체력 +5',
     candleGain: 1,
-    dropWeight: 18,
-  },
-  'large-candle': {
-    id: 'large-candle',
-    name: '큰 양초',
-    category: 'recovery',
-    description: '체력 +5',
-    tripleDescription: '체력 풀 회복',
-    candleGain: 2,
-    dropWeight: 10,
-  },
-  'wax-shield': {
-    id: 'wax-shield',
-    name: '밀랍 방패',
-    category: 'recovery',
-    description: '다음 턴 받는 피해 -2',
-    tripleDescription: '다음 2턴 동안 모든 피해 무효',
-    candleGain: 1,
-    dropWeight: 12,
-  },
-  matchstick: {
-    id: 'matchstick',
-    name: '성냥 한 개비',
-    category: 'tool',
-    description: '대기 카드 1장 즉시 발화 (제거)',
-    tripleDescription: '임의 카드 3장 즉시 발화',
-    candleGain: 2,
-    needsTarget: true,
     dropWeight: 14,
   },
-  'brass-key': {
-    id: 'brass-key',
-    name: '황동 열쇠',
-    category: 'tool',
-    description: '잠긴 보물 해제, 없으면 불씨 +2',
-    tripleDescription: '모든 보물 즉시 획득 + 불씨 +3',
+  candle: {
+    id: 'candle',
+    name: '양초',
+    category: 'recovery',
+    description: '방패 +1',
+    tripleDescription: '방패 +5',
     candleGain: 1,
-    dropWeight: 8,
+    dropWeight: 14,
   },
-  'cooled-candle': {
-    id: 'cooled-candle',
-    name: '식은 양초',
-    category: 'control',
-    description: '한 라인 카드 1턴 정지',
-    tripleDescription: '모든 카드 2턴 정지',
-    candleGain: 2,
-    needsTarget: true,
-    dropWeight: 12,
-  },
-  'cleansing-ember': {
-    id: 'cleansing-ember',
-    name: '정화의 불씨',
-    category: 'control',
-    description: '저주/곰팡이 제거, 없으면 양초 +2',
-    tripleDescription: '필드 전체 정화 + 양초 +5',
-    candleGain: 1,
-    dropWeight: 8,
-  },
-  'match-bundle': {
-    id: 'match-bundle',
-    name: '성냥다발',
+  ember: {
+    id: 'ember',
+    name: '불씨',
     category: 'attack',
-    description: '한 라인 0~1칸 광역 피해 3',
-    tripleDescription: '모든 라인 0~1칸 광역 피해 5',
-    candleGain: 2,
-    needsTarget: true,
-    dropWeight: 12,
+    description: '필드 선택 적 1장 피해 2',
+    tripleDescription: '필드 선택 적 1장 피해 10',
+    candleGain: 1,
+    targetRule: 'field-enemy',
+    dropWeight: 13,
+  },
+  key: {
+    id: 'key',
+    name: '열쇠',
+    category: 'tool',
+    description: '필드 랜덤 보물상자 1장 획득',
+    tripleDescription: '필드 모든 보물상자 획득',
+    candleGain: 1,
+    dropWeight: 9,
+  },
+  wax: {
+    id: 'wax',
+    name: '밀랍',
+    category: 'control',
+    description: '전방 선택 적/보물상자 1장 1턴 굳음',
+    tripleDescription: '전방 모든 적/보물상자 3턴 굳음',
+    candleGain: 1,
+    targetRule: 'front-card-or-treasure',
+    dropWeight: 11,
+  },
+  match: {
+    id: 'match',
+    name: '성냥',
+    category: 'tool',
+    description: '불씨 카운트 +1',
+    tripleDescription: '불씨 카운트 +5',
+    candleGain: 1,
+    dropWeight: 11,
+  },
+  'holy-water': {
+    id: 'holy-water',
+    name: '성수',
+    category: 'control',
+    description: '필드 랜덤 저주/곰팡이 2장 정화',
+    tripleDescription: '필드 전체 정화',
+    candleGain: 1,
+    dropWeight: 8,
+  },
+  chitin: {
+    id: 'chitin',
+    name: '키틴',
+    category: 'control',
+    description: '전방 선택 함정 1장 제거',
+    tripleDescription: '필드 모든 함정 제거',
+    candleGain: 1,
+    targetRule: 'front-trap',
+    dropWeight: 8,
+  },
+  card: {
+    id: 'card',
+    name: '카드',
+    category: 'tool',
+    description: '손패 콤보 카운트 +1',
+    tripleDescription: '손패 콤보 카운트 +5',
+    candleGain: 1,
+    dropWeight: 8,
+  },
+  coin: {
+    id: 'coin',
+    name: '동전',
+    category: 'tool',
+    description: '+1$',
+    tripleDescription: '+5$',
+    candleGain: 1,
+    dropWeight: 10,
   },
 }
 
-export const HAND_CARD_IDS: HandCardId[] = Object.keys(
-  HAND_CARD_DEFINITIONS,
-) as HandCardId[]
+export const HAND_CARD_IDS: HandCardId[] = Object.keys(HAND_CARD_DEFINITIONS) as HandCardId[]
 
 export function getHandCardDef(id: HandCardId): HandCardDefinition {
   return HAND_CARD_DEFINITIONS[id]

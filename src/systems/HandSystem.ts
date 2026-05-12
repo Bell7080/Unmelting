@@ -18,11 +18,7 @@ import { GameState } from '@core/GameState'
 import { Card, CardType } from '@entities/Card'
 import { Character } from '@entities/Character'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
-import {
-  HandCard,
-  HandCardId,
-  HandCardDefinition,
-} from '@entities/HandCard'
+import { HandCard, HandCardId, HandCardDefinition } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
 import { Recipe, RECIPES } from '@data/Recipes'
 import { DropSystem } from './DropSystem'
@@ -55,6 +51,8 @@ export interface HandUseResult {
   /** Field cards removed by the single hand-card effect only. Recipe removals
    *  are reported by firePendingRecipes after the UI delay. */
   removedFieldCards: RemovedFieldCard[]
+  /** Currency gained by a coin hand card; UI applies it to the shop wallet. */
+  coinsGained?: number
 }
 
 export interface RecipeFireResult {
@@ -113,23 +111,18 @@ export class HandSystem {
     gs: GameState,
     chain: ChainState,
     slotIndex: number,
-    target?: HandTarget,
+    target?: HandTarget
   ): HandUseResult {
     const character = gs.character
     const card = character.hand[slotIndex]
     if (!card) {
-      return {
-        success: false,
-        message: '비어 있는 슬롯',
-        mergeMessages: [],
-        removedFieldCards: [],
-      }
+      return { success: false, message: '비어 있는 슬롯', mergeMessages: [], removedFieldCards: [] }
     }
     const def = getHandCardDef(card.defId)
-    if (def.needsTarget && !target) {
+    if (!HandSystem.isValidTarget(def, target, card.merged === true)) {
       return {
         success: false,
-        message: `${def.name}은(는) 대상을 골라야 해`,
+        message: `${def.name}은(는) 조건에 맞는 대상을 골라야 해`,
         mergeMessages: [],
         removedFieldCards: [],
       }
@@ -140,20 +133,21 @@ export class HandSystem {
 
     // Apply the card effect (merged cards use the enhanced version).
     const message = card.merged
-      ? HandSystem.applyTripleEffect(gs, def)
+      ? HandSystem.applyTripleEffect(gs, def, target)
       : HandSystem.applySingleEffect(gs, def, target)
 
     character.removeHandCardAt(slotIndex)
 
-    // Extend the chain. Merged cards count as a single instance for recipe
-    // matching but tend to satisfy several sub-recipes through their effect.
+    // Extend the chain. Merged cards count as one played card, while the new
+    // '카드' item appends extra virtual uses to raise the hand-combo count.
     chain.sequence.push(card.defId)
+    if (card.defId === 'card') {
+      const bonusComboCount = card.merged ? 5 : 1
+      for (let i = 0; i < bonusComboCount; i++) chain.sequence.push(card.defId)
+    }
 
     // Recipes are deliberately resolved later by firePendingRecipes(), which
     // gives the UI a readable beat between the card effect and combo explosion.
-
-    // Auto-merge passes after an effect can free up structure (e.g., card
-    // moved between slots due to splice; rare but covered).
     const mergeMessages = HandSystem.runAutoMerges(character)
 
     // Each card use also charges the candle gauge a small amount.
@@ -171,6 +165,7 @@ export class HandSystem {
       message,
       mergeMessages,
       removedFieldCards,
+      coinsGained: card.defId === 'coin' ? (card.merged ? 5 : 1) : 0,
     }
   }
 
@@ -190,11 +185,7 @@ export class HandSystem {
     return true
   }
 
-  /**
-   * Check whether the current chain has at least one newly satisfied recipe.
-   * index.ts uses this to avoid adding combo-delay latency to ordinary
-   * non-combo hand-card uses.
-   */
+  /** Check whether the current chain has at least one newly satisfied recipe. */
   static hasPendingRecipe(chain: ChainState): boolean {
     for (const recipe of RECIPES) {
       if (chain.firedRecipeIds.has(recipe.id)) continue
@@ -203,11 +194,7 @@ export class HandSystem {
     return false
   }
 
-  /**
-   * Fire recipes that became available after the most recent hand-card use.
-   * This public wrapper snapshots the field around recipe resolution so the UI
-   * can animate only the cards removed by the delayed combo beat.
-   */
+  /** Fire recipes that became available after the most recent hand-card use. */
   static firePendingRecipes(gs: GameState, chain: ChainState): RecipeFireResult {
     const beforeField = HandSystem.snapshotFieldCards(gs)
     const firedRecipes = HandSystem.fireMatchedRecipes(gs, chain)
@@ -219,13 +206,9 @@ export class HandSystem {
     return { firedRecipes, removedFieldCards }
   }
 
-  private static fireMatchedRecipes(
-    gs: GameState,
-    chain: ChainState,
-  ): FiredRecipe[] {
+  private static fireMatchedRecipes(gs: GameState, chain: ChainState): FiredRecipe[] {
     const fired: FiredRecipe[] = []
-    // Sort by ingredient size ascending so smaller recipes resolve first; that
-    // mirrors the player's intuition that "밀랍 돌진" fires before "밀랍 타격".
+    // Sort by ingredient size ascending so smaller recipes resolve first.
     const sorted = [...RECIPES].sort((a, b) => a.totalCount - b.totalCount)
     for (const recipe of sorted) {
       if (chain.firedRecipeIds.has(recipe.id)) continue
@@ -256,9 +239,7 @@ export class HandSystem {
           if (card.type !== CardType.ENEMY) continue
           seen.add(card)
           card.takeDamage(5)
-          if (card.getHealth() <= 0) {
-            gs.removeCardFromRow(card, 0)
-          }
+          if (card.getHealth() <= 0) gs.removeCardFromRow(card, 0)
           count++
         }
         return `활성 적 ${count}체에 5 피해`
@@ -280,37 +261,19 @@ export class HandSystem {
         }
         return removed.length > 0 ? `${removed.join(', ')} 점화` : '도화선 점화 (대상 없음)'
       }
-      case 'freeze-all': {
-        const cleared = HandSystem.clearAllOfTypes(gs, [
-          CardType.ENEMY,
-          CardType.TRAP,
-        ])
-        return `${cleared}개 카드 시간 정지`
-      }
+      case 'freeze-all':
+        return HandSystem.freezeFrontCards(gs, 1)
       case 'cleanse-and-restore':
         c.gainCandle(5)
-        return '필드 정화 + 양초 +5'
-      case 'open-all-treasures': {
-        const treasures = HandSystem.collectAllOfType(gs, CardType.TREASURE)
-        treasures.forEach((card) => {
-          for (let d = 0; d < 4; d++) gs.removeCardFromRow(card, d)
-        })
-        for (let i = 0; i < treasures.length * 2; i++) {
-          if (!c.hasHandRoom()) break
-          c.addHandCard(DropSystem.generateDrop())
-        }
-        HandSystem.runAutoMerges(c)
-        return `보물 ${treasures.length}개 획득`
-      }
+        return HandSystem.cleanseAllField(gs)
+      case 'open-all-treasures':
+        return HandSystem.collectAllTreasures(gs, c)
       case 'multi-burn': {
         let cleared = 0
         for (let lane = 0; lane < gs.lanes.length; lane++) {
           for (let d = 0; d < 2; d++) {
             const card = gs.lanes[lane].getCardAtDistance(d)
-            if (
-              card &&
-              (card.type === CardType.ENEMY || card.type === CardType.TRAP)
-            ) {
+            if (card && (card.type === CardType.ENEMY || card.type === CardType.TRAP)) {
               gs.removeCardFromRow(card, d)
               cleared++
             }
@@ -335,139 +298,85 @@ export class HandSystem {
         return `소녀의 녹임 — 카드 ${cleared}장 제거, HP 풀, 불씨 +5, 손패 +${cards}`
       }
     }
-    return ''
   }
 
   /** Apply a hand card's single-use effect. Returns a short message. */
   private static applySingleEffect(
     gs: GameState,
     def: HandCardDefinition,
-    target?: HandTarget,
+    target?: HandTarget
   ): string {
     const c = gs.character
     switch (def.id) {
-      case 'small-candle': {
-        const healed = c.heal(2)
+      case 'wax-drop': {
+        const healed = c.heal(1)
         return `체력 +${healed}`
       }
-      case 'large-candle': {
-        const healed = c.heal(5)
-        return `체력 +${healed}`
+      case 'candle': {
+        const shielded = c.addShield(1)
+        return `방패 +${shielded}`
       }
-      case 'wax-shield':
-        c.addDamageShield(1, 2)
-        return '다음 턴 받는 피해 -2'
-      case 'matchstick': {
-        if (target) {
-          gs.removeCardFromRow(target.card, target.distance)
-          return `${target.card.name} 발화`
-        }
-        return '대기 카드를 골라야 해'
+      case 'ember':
+        return HandSystem.damageTargetEnemy(gs, target, 2)
+      case 'key':
+        return HandSystem.collectRandomTreasure(gs, c)
+      case 'wax':
+        return HandSystem.freezeTarget(target, 1)
+      case 'match': {
+        const gained = c.gainEmber(1)
+        return `불씨 카운트 +${gained}`
       }
-      case 'brass-key':
-        c.gainEmber(2)
-        return '잠긴 보물 없어 불씨 +2'
-      case 'cooled-candle': {
-        if (target) {
-          gs.removeCardFromRow(target.card, target.distance)
-          return `${target.card.name} 시간 정지`
-        }
-        return '대상 없음'
-      }
-      case 'cleansing-ember':
-        c.gainCandle(2)
-        return '정화할 대상 없어 양초 +2'
-      case 'match-bundle': {
-        if (target) {
-          const removed = HandSystem.burnLane(gs, target.laneIndex)
-          return removed.length > 0
-            ? `${removed.join(', ')} 발화`
-            : `${target.card.name} 점화`
-        }
-        return '대상 라인을 골라야 해'
-      }
+      case 'holy-water':
+        return HandSystem.cleanseRandomField(gs, 2)
+      case 'chitin':
+        return HandSystem.removeTargetTrap(gs, target)
+      case 'card':
+        return '손패 콤보 카운트 +1 (총 2회 기록)'
+      case 'coin':
+        return '+1$'
     }
-    return ''
   }
 
   /** Apply the enhanced merged-card effect. */
   private static applyTripleEffect(
     gs: GameState,
     def: HandCardDefinition,
+    target?: HandTarget
   ): string {
     const c = gs.character
     switch (def.id) {
-      case 'small-candle': {
-        const healed = c.heal(6)
-        c.addDamageShield(1, 1)
-        return `합성 체력 +${healed}, 다음 턴 피해 -1`
+      case 'wax-drop': {
+        const healed = c.heal(5)
+        return `트리플 체력 +${healed}`
       }
-      case 'large-candle': {
-        const healed = c.fullHeal()
-        return `합성 체력 풀 회복 (+${healed})`
+      case 'candle': {
+        const shielded = c.addShield(5)
+        return `트리플 방패 +${shielded}`
       }
-      case 'wax-shield':
-        c.addDamageShield(2, 99)
-        return '합성 피해 무효 2턴'
-      case 'matchstick': {
-        const names: string[] = []
-        for (let i = 0; i < 3; i++) {
-          const removed = HandSystem.removeRandomCard(gs, [
-            CardType.ENEMY,
-            CardType.TRAP,
-          ])
-          if (removed) names.push(removed.name)
-        }
-        return names.length > 0 ? `합성 발화 ${names.join(', ')}` : '대상 없음'
+      case 'ember':
+        return HandSystem.damageTargetEnemy(gs, target, 10)
+      case 'key':
+        return HandSystem.collectAllTreasures(gs, c)
+      case 'wax':
+        return HandSystem.freezeFrontCards(gs, 3)
+      case 'match': {
+        const gained = c.gainEmber(5)
+        return `트리플 불씨 카운트 +${gained}`
       }
-      case 'brass-key': {
-        const treasures = HandSystem.collectAllOfType(gs, CardType.TREASURE)
-        treasures.forEach((card) => {
-          for (let d = 0; d < 4; d++) gs.removeCardFromRow(card, d)
-        })
-        c.gainEmber(3)
-        for (let i = 0; i < treasures.length * 2; i++) {
-          if (!c.hasHandRoom()) break
-          c.addHandCard(DropSystem.generateDrop())
-        }
-        HandSystem.runAutoMerges(c)
-        return `합성 보물 ${treasures.length}개 + 불씨 +3`
+      case 'holy-water':
+        return HandSystem.cleanseAllField(gs)
+      case 'chitin': {
+        const cleared = HandSystem.clearAllOfTypes(gs, [CardType.TRAP])
+        return `트리플 함정 ${cleared}장 제거`
       }
-      case 'cooled-candle': {
-        const cleared = HandSystem.clearAllOfTypes(gs, [
-          CardType.ENEMY,
-          CardType.TRAP,
-        ])
-        return `합성 시간 정지 (${cleared}개)`
-      }
-      case 'cleansing-ember':
-        c.gainCandle(5)
-        return '합성 정화 + 양초 +5'
-      case 'match-bundle': {
-        let cleared = 0
-        for (let lane = 0; lane < gs.lanes.length; lane++) {
-          for (let d = 0; d < 2; d++) {
-            const card = gs.lanes[lane].getCardAtDistance(d)
-            if (
-              card &&
-              (card.type === CardType.ENEMY || card.type === CardType.TRAP)
-            ) {
-              gs.removeCardFromRow(card, d)
-              cleared++
-            }
-          }
-        }
-        return `합성 광역 점화 (${cleared}개)`
-      }
+      case 'card':
+        return '트리플 손패 콤보 카운트 +5 (총 6회 기록)'
+      case 'coin':
+        return '+5$'
     }
-    return ''
   }
 
-  /**
-   * Scan the hand for runs of three consecutive same-defId cards. Each run
-   * collapses into a single merged card at the lowest slot of the run.
-   * Returns a list of human-readable merge messages for logging.
-   */
+  /** Scan the hand for runs of three consecutive same-defId cards. */
   static runAutoMerges(character: Character): string[] {
     const messages: string[] = []
     let didChange = true
@@ -503,62 +412,184 @@ export class HandSystem {
   /** Find the first active-row card of any of the listed types. */
   private static findFirstActive(
     gs: GameState,
-    types: CardType[],
+    types: CardType[]
   ): { card: Card; laneIndex: number; distance: number } | null {
     for (let lane = 0; lane < gs.lanes.length; lane++) {
       const card = gs.lanes[lane].getCardAtDistance(0)
-      if (card && types.includes(card.type)) {
-        return { card, laneIndex: lane, distance: 0 }
+      if (card && types.includes(card.type)) return { card, laneIndex: lane, distance: 0 }
+    }
+    return null
+  }
+
+  /** Validate per-card targeting rules before consuming the hand card. */
+  private static isValidTarget(
+    def: HandCardDefinition,
+    target: HandTarget | undefined,
+    isMerged: boolean
+  ): boolean {
+    // Some triple effects become broad field effects and no longer need the
+    // single-card target used by the base effect.
+    if (isMerged && (def.id === 'wax' || def.id === 'chitin')) return true
+    if (!def.targetRule) return true
+    if (!target) return false
+    if (def.targetRule === 'field-enemy') return target.card.type === CardType.ENEMY
+    if (def.targetRule === 'front-card-or-treasure') {
+      return (
+        target.distance === 0 &&
+        (target.card.type === CardType.ENEMY || target.card.type === CardType.TREASURE)
+      )
+    }
+    if (def.targetRule === 'front-trap')
+      return target.distance === 0 && target.card.type === CardType.TRAP
+    return false
+  }
+
+  /** Deal damage to a chosen field enemy, or to the first enemy for merged auto-use. */
+  private static damageTargetEnemy(
+    gs: GameState,
+    target: HandTarget | undefined,
+    amount: number
+  ): string {
+    const actualTarget = target ?? HandSystem.findFirstOnField(gs, [CardType.ENEMY])
+    if (!actualTarget || actualTarget.card.type !== CardType.ENEMY) return '대상 적 없음'
+    actualTarget.card.takeDamage(amount)
+    if (actualTarget.card.getHealth() <= 0) {
+      gs.removeCardFromRow(actualTarget.card, actualTarget.distance)
+      return `${actualTarget.card.name} 피해 ${amount}로 처치`
+    }
+    return `${actualTarget.card.name} 피해 ${amount}`
+  }
+
+  /** Open one random treasure chest and convert its width into item drops. */
+  private static collectRandomTreasure(gs: GameState, character: Character): string {
+    const treasures = HandSystem.collectAllOfType(gs, CardType.TREASURE)
+    if (treasures.length === 0) return '보물상자 없음'
+    const pick = treasures[Math.floor(Math.random() * treasures.length)]
+    const gained = HandSystem.awardTreasureDrops(character, pick)
+    for (let d = 0; d < LANE_DISTANCE_COUNT; d++) gs.removeCardFromRow(pick, d)
+    return `${pick.name} 획득: 손패 ${gained}장`
+  }
+
+  /** Open every treasure currently on the 3×3 field. */
+  private static collectAllTreasures(gs: GameState, character: Character): string {
+    const treasures = HandSystem.collectAllOfType(gs, CardType.TREASURE)
+    let gained = 0
+    for (const treasure of treasures) {
+      gained += HandSystem.awardTreasureDrops(character, treasure)
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) gs.removeCardFromRow(treasure, d)
+    }
+    HandSystem.runAutoMerges(character)
+    return `트리플 보물 ${treasures.length}개 획득: 손패 ${gained}장`
+  }
+
+  /** Award item drops based on chest width: 1/3/5, matching ActionSystem. */
+  private static awardTreasureDrops(character: Character, treasure: Card): number {
+    const safeSpan = Math.max(1, Math.min(3, treasure.groupCount))
+    const dropCount = safeSpan === 1 ? 1 : safeSpan === 2 ? 3 : 5
+    let gained = 0
+    for (let i = 0; i < dropCount; i++) {
+      if (!character.hasHandRoom()) break
+      character.addHandCard(DropSystem.generateDrop())
+      gained++
+    }
+    HandSystem.runAutoMerges(character)
+    return gained
+  }
+
+  /** Apply wax hardening to a selected front card. */
+  private static freezeTarget(target: HandTarget | undefined, turns: number): string {
+    if (!target) return '굳힐 대상 없음'
+    target.card.freeze(turns)
+    return `${target.card.name} ${turns}턴 굳음`
+  }
+
+  /** Apply wax hardening to every front enemy/treasure. */
+  private static freezeFrontCards(gs: GameState, turns: number): string {
+    const seen = new Set<Card>()
+    let count = 0
+    for (const lane of gs.lanes) {
+      const card = lane.getCardAtDistance(0)
+      if (!card || seen.has(card)) continue
+      if (card.type !== CardType.ENEMY && card.type !== CardType.TREASURE) continue
+      seen.add(card)
+      card.freeze(turns)
+      count++
+    }
+    return `전방 ${count}장 ${turns}턴 굳음`
+  }
+
+  /** Cleanse random field debuffs. MVP maps curse/mold cleanup to trap removal and wax removal. */
+  private static cleanseRandomField(gs: GameState, count: number): string {
+    const candidates = HandSystem.collectAllOfType(gs, CardType.TRAP).map((card) => ({ card }))
+    const frozenCards = HandSystem.collectAllFieldCards(gs).filter((card) => card.isFrozen())
+    frozenCards.forEach((card) => candidates.push({ card }))
+    let cleansed = 0
+    while (candidates.length > 0 && cleansed < count) {
+      const pickIndex = Math.floor(Math.random() * candidates.length)
+      const [{ card }] = candidates.splice(pickIndex, 1)
+      if (card.type === CardType.TRAP) {
+        for (let d = 0; d < LANE_DISTANCE_COUNT; d++) gs.removeCardFromRow(card, d)
+      } else {
+        card.frozenTurns = 0
+      }
+      cleansed++
+    }
+    return `정화 ${cleansed}장`
+  }
+
+  /** Cleanse every MVP debuff/trap from the field. */
+  private static cleanseAllField(gs: GameState): string {
+    const traps = HandSystem.clearAllOfTypes(gs, [CardType.TRAP])
+    let thawed = 0
+    for (const card of HandSystem.collectAllFieldCards(gs)) {
+      if (!card.isFrozen()) continue
+      card.frozenTurns = 0
+      thawed++
+    }
+    return `트리플 전체 정화: 함정 ${traps}장, 굳음 ${thawed}장 해제`
+  }
+
+  /** Remove the selected front trap. */
+  private static removeTargetTrap(gs: GameState, target: HandTarget | undefined): string {
+    if (!target || target.card.type !== CardType.TRAP) return '제거할 전방 함정 없음'
+    gs.removeCardFromRow(target.card, target.distance)
+    return `${target.card.name} 제거`
+  }
+
+  /** Find the first matching card anywhere on the 3×3 field. */
+  private static findFirstOnField(
+    gs: GameState,
+    types: CardType[]
+  ): { card: Card; laneIndex: number; distance: number } | null {
+    for (let laneIndex = 0; laneIndex < gs.lanes.length; laneIndex++) {
+      for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
+        const card = gs.lanes[laneIndex].getCardAtDistance(distance)
+        if (card && types.includes(card.type)) return { card, laneIndex, distance }
       }
     }
     return null
   }
 
-  /** Pick a random card on the rail of one of the given types and remove it. */
-  private static removeRandomCard(
-    gs: GameState,
-    types: CardType[],
-  ): Card | null {
-    const candidates: Array<{ card: Card; distance: number }> = []
+  /** Collect unique Card instances from the whole field. */
+  private static collectAllFieldCards(gs: GameState): Card[] {
+    const out: Card[] = []
     const seen = new Set<Card>()
     for (const lane of gs.lanes) {
-      for (let d = 0; d < 4; d++) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
         const card = lane.getCardAtDistance(d)
         if (!card || seen.has(card)) continue
-        if (types.includes(card.type)) {
-          seen.add(card)
-          candidates.push({ card, distance: d })
-        }
-      }
-    }
-    if (candidates.length === 0) return null
-    const pick = candidates[Math.floor(Math.random() * candidates.length)]
-    gs.removeCardFromRow(pick.card, pick.distance)
-    return pick.card
-  }
-
-  private static burnLane(gs: GameState, laneIndex: number): string[] {
-    const lane = gs.lanes[laneIndex]
-    if (!lane) return []
-    const removed: string[] = []
-    const seen = new Set<Card>()
-    for (let d = 0; d < 2; d++) {
-      const card = lane.getCardAtDistance(d)
-      if (!card || seen.has(card)) continue
-      if (card.type === CardType.ENEMY || card.type === CardType.TRAP) {
         seen.add(card)
-        gs.removeCardFromRow(card, d)
-        removed.push(card.name)
+        out.push(card)
       }
     }
-    return removed
+    return out
   }
 
   private static collectAllOfType(gs: GameState, type: CardType): Card[] {
     const out: Card[] = []
     const seen = new Set<Card>()
     for (const lane of gs.lanes) {
-      for (let d = 0; d < 4; d++) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
         const card = lane.getCardAtDistance(d)
         if (!card || seen.has(card)) continue
         if (card.type === type) {
@@ -574,7 +605,7 @@ export class HandSystem {
     const seen = new Set<Card>()
     let count = 0
     for (const lane of gs.lanes) {
-      for (let d = 0; d < 4; d++) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
         const card = lane.getCardAtDistance(d)
         if (!card || seen.has(card)) continue
         if (types.includes(card.type)) {

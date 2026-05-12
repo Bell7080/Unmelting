@@ -16,11 +16,7 @@ export class GameState {
 
   constructor() {
     this.character = new Character()
-    this.lanes = [
-      new Lane('lane-0', 0),
-      new Lane('lane-1', 1),
-      new Lane('lane-2', 2),
-    ]
+    this.lanes = [new Lane('lane-0', 0), new Lane('lane-1', 1), new Lane('lane-2', 2)]
     this.currentTurn = 0
     this.isGameOver = false
     this.gameOverReason = ''
@@ -46,6 +42,20 @@ export class GameState {
   nextTurn(): void {
     this.currentTurn++
     this.character.nextTurn()
+    this.tickFieldStatuses()
+  }
+
+  /** Tick per-card field statuses once at the turn boundary. */
+  private tickFieldStatuses(): void {
+    const seen = new Set<Card>()
+    for (const lane of this.lanes) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = lane.getCardAtDistance(d)
+        if (!card || seen.has(card)) continue
+        seen.add(card)
+        card.tickFrozen()
+      }
+    }
   }
 
   /**

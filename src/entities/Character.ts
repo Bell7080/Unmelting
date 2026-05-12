@@ -39,9 +39,8 @@ export class Character {
   handMax: number
   /** Selected payoff that fires when the 10-step candle gauge fills. */
   candleMode: CandleMode
-  /** Damage shield charges from wax-shield style effects. */
-  damageShieldTurns: number = 0
-  damageShieldReduction: number = 0
+  /** Temporary shield HP shown above the health bar and consumed before HP. */
+  shield: number = 0
 
   constructor(id: string = 'unmelting-girl', name: string = '녹지 않는 소녀') {
     this.id = id
@@ -63,9 +62,9 @@ export class Character {
 
   takeDamage(amount: number): number {
     let actualDamage = Math.max(0, amount)
-    if (this.damageShieldTurns > 0 && actualDamage > 0) {
-      actualDamage = Math.max(0, actualDamage - this.damageShieldReduction)
-    }
+    const blocked = Math.min(this.shield, actualDamage)
+    this.shield -= blocked
+    actualDamage -= blocked
     this.health = Math.max(0, this.health - actualDamage)
     return actualDamage
   }
@@ -94,10 +93,11 @@ export class Character {
     this.damage += 1
   }
 
-  /** Add a damage shield for `turns` turns reducing incoming damage by `reduction`. */
-  addDamageShield(turns: number, reduction: number): void {
-    this.damageShieldTurns = Math.max(this.damageShieldTurns, turns)
-    this.damageShieldReduction = Math.max(this.damageShieldReduction, reduction)
+  /** Add temporary shield HP. It lasts until consumed or the run resets. */
+  addShield(amount: number): number {
+    const actualShield = Math.max(0, amount)
+    this.shield += actualShield
+    return actualShield
   }
 
   isAlive(): boolean {
@@ -160,13 +160,6 @@ export class Character {
 
   nextTurn(): void {
     this.turn++
-    if (this.damageShieldTurns > 0) {
-      this.damageShieldTurns -= 1
-      if (this.damageShieldTurns <= 0) {
-        this.damageShieldTurns = 0
-        this.damageShieldReduction = 0
-      }
-    }
   }
 
   reset(): void {
@@ -182,7 +175,6 @@ export class Character {
     this.candleMode = 'max-health'
     this.hand = []
     this.handMax = Character.HAND_MAX
-    this.damageShieldTurns = 0
-    this.damageShieldReduction = 0
+    this.shield = 0
   }
 }

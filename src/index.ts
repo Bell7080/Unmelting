@@ -73,7 +73,7 @@ let chain: ChainState = HandSystem.newChain()
 /**
  * UI-side timeline of chain events. Mirrors `chain.sequence` for the cards
  * but also interleaves fired recipes in the exact order they happened so the
- * banner can read like "small candle → wax shield → ✦ Wax Rush → ...".
+ * banner can read like "촛농 → 양초 → ✦ 밀랍 돌진 → ...".
  * The renderer keys animations on each event's uid so a new addition pops in
  * without re-animating already-shown items.
  */
@@ -96,7 +96,9 @@ let pendingHandTarget: { slotIndex: number; defId: HandCardId } | null = null
 const SCORE_SPEND_COST = 250
 const MAX_ACTIVITY_LOGS = 80
 let score = 0
+let coins = 0
 let scorePulseKey = 0
+let coinPulseKey = 0
 let nextActivityLogId = 1
 let activityLogs: ActivityLogEntry[] = []
 
@@ -239,13 +241,7 @@ function fillBoardAtStart(): void {
 function grantStarterHand(): void {
   // Seed the hand with a small variety so all four categories are reachable
   // immediately. Player can begin experimenting with combos from turn 1.
-  const seed: HandCardId[] = [
-    'small-candle',
-    'wax-shield',
-    'matchstick',
-    'cooled-candle',
-    'match-bundle',
-  ]
+  const seed: HandCardId[] = ['wax-drop', 'candle', 'ember', 'wax', 'coin']
   for (const id of seed) {
     if (!gameState.character.hasHandRoom()) break
     HandSystem.enqueueDrop(gameState.character, DropSystem.makeCard(id))
@@ -260,6 +256,8 @@ function startGame(): void {
   gameState.reset()
   score = 0
   scorePulseKey = 0
+  coins = 0
+  coinPulseKey = 0
   nextActivityLogId = 1
   activityLogs = []
   syncSpawnerTier()
@@ -282,6 +280,8 @@ function render(): void {
     canSpend: score >= SCORE_SPEND_COST,
     spendCost: SCORE_SPEND_COST,
     scorePulseKey,
+    coins,
+    coinPulseKey,
     emberTier: tier,
     spawnWeights: cardSpawner.getActiveWeights(),
     emberDecayCountdown: gameState.character.emberDecayCountdown,
@@ -441,7 +441,7 @@ async function handleHandSlotClick(slotIndex: number): Promise<void> {
   const def = getHandCardDef(card.defId)
 
   // Plain click on a targeted card arms it; second click cancels.
-  if (def.needsTarget) {
+  if (def.targetRule) {
     if (pendingHandTarget && pendingHandTarget.slotIndex === slotIndex) {
       pendingHandTarget = null
       boardRenderer.setHandTargetingMode(null)
@@ -497,6 +497,10 @@ async function applyHandSingle(
       uid: nextChainUid(),
     })
     boardRenderer.refreshChainBanner(buildChainHints())
+  }
+  if (result.coinsGained && result.coinsGained > 0) {
+    coins += result.coinsGained
+    coinPulseKey++
   }
   recordNotice(result.message, 'win')
   for (const merge of result.mergeMessages) {
@@ -633,12 +637,10 @@ async function handleCardAction(e: Event): Promise<void> {
   const detail = (e as CustomEvent<CardActionDetail>).detail
   const { laneIndex, distance, card } = detail
 
-  if (distance !== 0) return
-
   const lane = gameState.getLane(laneIndex)
   if (!lane) return
 
-  // Targeted hand card armed → board click feeds its target.
+  // Targeted hand card armed → any valid 3×3 field click can feed its target.
   if (pendingHandTarget !== null) {
     const armed = pendingHandTarget
     pendingHandTarget = null
@@ -646,6 +648,8 @@ async function handleCardAction(e: Event): Promise<void> {
     await applyHandSingle(armed.slotIndex, { laneIndex, distance, card })
     return
   }
+
+  if (distance !== 0) return
 
   const actionType = actionTypeFor(card.type)
   if (!actionType) return
