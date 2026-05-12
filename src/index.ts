@@ -133,6 +133,38 @@ function burstScoreGain(): void {
   if (anchor) boardRenderer.burstAtElement(anchor, 'score', { count: 16, spread: 90 })
 }
 
+
+interface FieldHealthSnapshotEntry {
+  card: Card
+  health: number
+}
+
+/** Snapshot enemy HP before an effect so damage numbers can be derived after mutation. */
+function snapshotFieldHealthState(): Map<string, FieldHealthSnapshotEntry> {
+  const snapshot = new Map<string, FieldHealthSnapshotEntry>()
+  for (const lane of gameState.lanes) {
+    for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
+      const card = lane.getCardAtDistance(distance)
+      if (!card || snapshot.has(card.id) || card.type !== CardType.ENEMY) continue
+      snapshot.set(card.id, { card, health: card.getHealth() })
+    }
+  }
+  return snapshot
+}
+
+/** Return enemy HP losses since a snapshot for floating damage-number UI. */
+function diffFieldHealthLosses(
+  before: Map<string, FieldHealthSnapshotEntry>
+): { cardId: string; amount: number }[] {
+  const losses: { cardId: string; amount: number }[] = []
+  for (const [cardId, { card, health }] of before.entries()) {
+    const current = Math.max(0, card.getHealth())
+    const amount = Math.max(0, health - current)
+    if (amount > 0) losses.push({ cardId, amount })
+  }
+  return losses
+}
+
 interface FieldFreezeSnapshotEntry {
   card: Card
   frozenTurns: number
@@ -158,6 +190,15 @@ function diffNewlyFrozenCards(before: Map<string, FieldFreezeSnapshotEntry>): st
   const ids: string[] = []
   for (const { card, frozenTurns } of before.values()) {
     if (card.frozenTurns > frozenTurns) ids.push(card.id)
+  }
+  return ids
+}
+
+/** Return cards whose wax-freeze counter dropped to zero so thaw shards can play. */
+function diffThawedCards(before: Map<string, FieldFreezeSnapshotEntry>): string[] {
+  const ids: string[] = []
+  for (const { card, frozenTurns } of before.values()) {
+    if (frozenTurns > 0 && card.frozenTurns === 0) ids.push(card.id)
   }
   return ids
 }
@@ -511,6 +552,7 @@ async function applyHandSingle(
   const usedCard = gameState.character.hand[slotIndex]
   const usedDef = usedCard ? getHandCardDef(usedCard.defId) : null
   const beforeSingleFreeze = snapshotFieldFreezeState()
+  const beforeSingleHealth = snapshotFieldHealthState()
   const result = HandSystem.useSingle(gameState, chain, slotIndex, target)
   if (!result.success) {
     recordNotice(result.message, 'hurt')
@@ -518,15 +560,23 @@ async function applyHandSingle(
     render()
     return
   }
-  // Move the used hand card toward the player-card area, then dissolve it
-  // with its category burst. This makes the hand action read like a drawn card
+  // Reveal the used hand card near screen center, then dissolve it with its
+  // category burst. This makes the hand action read like a card being played
   // instead of a slot-local pop.
   const handUseTheme = usedDef ? burstThemeForCategory(usedDef.category) : null
   if (handUseTheme) await boardRenderer.animateHandCardUse(slotIndex, handUseTheme)
+  if (usedDef && (usedDef.id === 'wax-drop' || usedDef.id === 'candle')) {
+    boardRenderer.burstAtElement(document.querySelector<HTMLElement>('.player-card'), handUseTheme ?? 'hand-recovery', {
+      count: 16,
+      spread: 125,
+    })
+  }
 
-  // If this card hardened wax on a target, add the one-shot freeze shards
-  // before the persistent frozen shell appears on the next render.
+  // If this card damaged or hardened/thawed a target, add the one-shot
+  // feedback before the next render changes the persistent field state.
+  await boardRenderer.animateDamageNumbersById(diffFieldHealthLosses(beforeSingleHealth))
   await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeSingleFreeze))
+  await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeSingleFreeze))
   // Append only the just-used card first. Recipes are resolved below after
   // a small delay so the previous card's effect visibly lands before the combo.
   if (usedDef) {
@@ -561,6 +611,7 @@ async function applyHandSingle(
   const hasPendingRecipe = HandSystem.hasPendingRecipe(chain)
   if (hasPendingRecipe) await wait(COMBO_TRIGGER_DELAY_MS)
   const beforeRecipeFreeze = snapshotFieldFreezeState()
+  const beforeRecipeHealth = snapshotFieldHealthState()
   const recipeResult = hasPendingRecipe
     ? HandSystem.firePendingRecipes(gameState, chain)
     : { firedRecipes: [], removedFieldCards: [] }
@@ -577,7 +628,9 @@ async function applyHandSingle(
   if (recipeResult.firedRecipes.length > 0) {
     boardRenderer.refreshChainBanner(buildChainHints())
   }
+  await boardRenderer.animateDamageNumbersById(diffFieldHealthLosses(beforeRecipeHealth))
   await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeRecipeFreeze))
+  await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeRecipeFreeze))
 
   // Animate cards removed by delayed recipes separately so combo impact reads
   // as its own hit instead of merging with the hand-card effect animation.
@@ -615,7 +668,9 @@ async function applyHandSingle(
 
 async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
   if (advanceTurn) {
+    const beforeTurnFreeze = snapshotFieldFreezeState()
     gameState.nextTurn()
+    await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeTurnFreeze))
     // Reset chain on every turn boundary — the player should not be able to
     // hold an unbounded chain across many turns. Also clear the UI timeline
     // so the chain banner fades out at the same beat.
@@ -653,6 +708,10 @@ async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
   if (totalDamage > 0) {
     recordNotice(`적 공격! -${totalDamage}`, 'hurt')
     render()
+    await boardRenderer.animateDamageNumberOnElement(
+      boardRenderer.findCardElement('__player__') ?? document.querySelector<HTMLElement>('.player-card'),
+      totalDamage
+    )
     await boardRenderer.animateDamageFlash()
   }
   if (gameState.isGameOver) {
@@ -702,6 +761,7 @@ async function handleCardAction(e: Event): Promise<void> {
       const dmg = hits.reduce((acc, h) => acc + h.damage, 0)
       recordNotice(`불씨가 흔들려 적이 먼저 공격! -${dmg}`, 'hurt')
       render()
+      await boardRenderer.animateDamageNumberOnElement(document.querySelector<HTMLElement>('.player-card'), dmg)
       if (!gameState.character.isAlive() || gameState.isGameOver) {
         finishTurn()
         return
@@ -712,6 +772,7 @@ async function handleCardAction(e: Event): Promise<void> {
   if (card.type === CardType.ENEMY) {
     await boardRenderer.animatePlayerAttack(card)
   }
+  const beforeActionHealth = snapshotFieldHealthState()
   const result = ActionSystem.executeAction(gameState.getCharacter(), lane, card, actionType)
   if (result.success) {
     const gainedItems = result.itemGainedNames ?? []
@@ -730,7 +791,11 @@ async function handleCardAction(e: Event): Promise<void> {
     const merges = HandSystem.runAutoMerges(gameState.character)
     for (const m of merges) recordNotice(m, 'melt')
   }
+  if (result.damageDealt && result.damageDealt > 0) {
+    await boardRenderer.animateDamageNumbersById(diffFieldHealthLosses(beforeActionHealth))
+  }
   if (result.damageTaken && result.damageTaken > 0) {
+    await boardRenderer.animateDamageNumberOnElement(document.querySelector<HTMLElement>('.player-card'), result.damageTaken)
     await boardRenderer.animateDamageFlash()
   }
 
