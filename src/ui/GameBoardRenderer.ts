@@ -22,7 +22,7 @@ import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
 import type { EnemyHit, TreasureChange } from '@core/TurnManager'
 import { spriteForCard, spriteForHandCard, SpriteUrls } from '@ui/Sprites'
 import { CandleMode, Character } from '@entities/Character'
-import { HandCardId, HandCategory, HandTargetRule } from '@entities/HandCard'
+import { HandCardId, HandCategory, HandEffectTargeting } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
 import type { EmberTier, SpawnWeights } from '@systems/EmberSystem'
 import { EmberSystem } from '@systems/EmberSystem'
@@ -40,20 +40,6 @@ import {
   shieldIcon,
   swordIcon,
 } from '@ui/Icons'
-
-/** UI-only summary of how a hand-card effect chooses affected objects. */
-type HandEffectSelection = 'target' | 'random' | 'all' | 'none'
-
-/** UI-only summary of the board/resource zone touched by a hand-card effect. */
-type HandEffectZone = 'front' | 'waiting' | 'field' | 'self' | 'hand' | 'none'
-
-/** Compact scope metadata used by the compendium so effect text and targeting rules stay readable. */
-interface HandEffectScope {
-  selection: HandEffectSelection
-  zone: HandEffectZone
-  /** Null means every valid object in the zone can be affected. */
-  countLimit: number | null
-}
 
 export interface CardActionDetail {
   laneIndex: number
@@ -394,21 +380,23 @@ export class GameBoardRenderer {
   private isValidHandTarget(card: Card, distance: number): boolean {
     if (!this.handTargetingMode) return false
     const def = getHandCardDef(this.handTargetingMode.defId)
-    return this.isValidTargetRule(def.targetRule, card, distance)
+    return this.isValidTargetRule(def.targeting.base, card, distance)
   }
 
   /** Check a hand target rule without mutating game state. */
-  private isValidTargetRule(
-    rule: HandTargetRule | undefined,
-    card: Card,
-    distance: number
-  ): boolean {
-    if (!rule) return false
-    if (rule === 'field-enemy') return card.type === CardType.ENEMY
-    if (rule === 'front-card-or-treasure') {
-      return distance === 0 && (card.type === CardType.ENEMY || card.type === CardType.TREASURE)
+  private isValidTargetRule(rule: HandEffectTargeting, card: Card, distance: number): boolean {
+    if (rule.selection !== 'target') return false
+    if (rule.zone === 'front' && distance !== 0) return false
+    if (rule.zone === 'waiting' && distance === 0) return false
+    if (rule.zone !== 'front' && rule.zone !== 'waiting' && rule.zone !== 'field') return false
+    if (rule.filter === 'enemy') return card.type === CardType.ENEMY
+    if (rule.filter === 'trap') return card.type === CardType.TRAP
+    if (rule.filter === 'treasure') return card.type === CardType.TREASURE
+    if (rule.filter === 'enemy-or-treasure') {
+      return card.type === CardType.ENEMY || card.type === CardType.TREASURE
     }
-    if (rule === 'front-trap') return distance === 0 && card.type === CardType.TRAP
+    if (rule.filter === 'hazard') return card.type === CardType.TRAP || card.isFrozen()
+    if (rule.filter === 'any') return true
     return false
   }
 
@@ -582,39 +570,10 @@ export class GameBoardRenderer {
     })
   }
 
-  /**
-   * UI mirror of HandSystem's hand-card effect reach. Keeping this local avoids
-   * coupling the renderer to private gameplay helpers while still documenting
-   * target/random/all behavior in the compendium.
-   */
-  private handEffectScope(defId: HandCardId, merged = false): HandEffectScope {
-    switch (defId) {
-      case 'ember':
-        return { selection: 'target', zone: 'field', countLimit: 1 }
-      case 'key':
-        return merged
-          ? { selection: 'all', zone: 'field', countLimit: null }
-          : { selection: 'random', zone: 'field', countLimit: 1 }
-      case 'wax':
-        return merged
-          ? { selection: 'all', zone: 'front', countLimit: null }
-          : { selection: 'target', zone: 'front', countLimit: 1 }
-      case 'holy-water':
-        return merged
-          ? { selection: 'all', zone: 'field', countLimit: null }
-          : { selection: 'random', zone: 'field', countLimit: 2 }
-      case 'chitin':
-        return merged
-          ? { selection: 'all', zone: 'field', countLimit: null }
-          : { selection: 'target', zone: 'front', countLimit: 1 }
-      case 'card':
-        return { selection: 'none', zone: 'hand', countLimit: merged ? 5 : 1 }
-      case 'wax-drop':
-      case 'candle':
-      case 'match':
-      case 'coin':
-        return { selection: 'none', zone: 'self', countLimit: 1 }
-    }
+  /** Read hand-effect reach from the shared gameplay table for codex rows. */
+  private handEffectScope(defId: HandCardId, merged = false): HandEffectTargeting {
+    const def = getHandCardDef(defId)
+    return merged ? def.targeting.triple : def.targeting.base
   }
 
   /** Korean labels for the shared hand-effect scope table shown in the compendium. */
@@ -763,7 +722,7 @@ export class GameBoardRenderer {
             <div class="candle-gauge-label">${candle}/${candleMax} · ${mode.effect}</div>
           </div>
         </div>
-        <ul class="hand-stack">${reversed}</ul>
+        <ul class="hand-stack ${character.hand.length >= 8 ? 'is-crowded' : ''}" style="--hand-count: ${character.hand.length}">${reversed}</ul>
       </aside>
     `
   }
@@ -1251,7 +1210,7 @@ export class GameBoardRenderer {
         parts.push(`
           <span class="chain-event chain-event-recipe ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
             <span class="chain-event-mark">✦</span>
-            <span class="chain-event-name">${ev.name}</span>
+            <span class="chain-event-copy"><span class="chain-event-name">${ev.name}</span><span class="chain-event-flavor">${ev.flavor}</span></span>
           </span>
         `)
       } else {
@@ -3244,7 +3203,7 @@ const STYLES = `
 .common-card-face {
   position: relative;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(142px, auto) auto;
   gap: 10px;
   width: 100%;
   height: 100%;
@@ -3353,7 +3312,10 @@ const STYLES = `
   color: rgba(255, 245, 220, 0.72);
 }
 .compendium-hand-card {
-  aspect-ratio: 0.72;
+  /* Codex-only hand cards may grow vertically with long effect text instead of
+     squeezing the title upward into the illustration. */
+  aspect-ratio: auto;
+  height: auto;
   min-height: 270px;
 }
 .compendium-field-card {
@@ -3677,6 +3639,16 @@ const STYLES = `
   min-height: 0;
   overflow: visible;
 }
+
+.hand-stack.is-crowded {
+  /* When future relics raise the hand cap, keep the stack inside the left panel
+     by letting cards overlap from the bottom upward instead of overflowing. */
+  gap: 2px;
+}
+.hand-stack.is-crowded .hand-slot.hand-card {
+  min-height: 70px;
+  margin-top: clamp(-18px, calc(58px - var(--hand-count, 8) * 10px), 0px);
+}
 .hand-slot {
   border-radius: 8px;
   flex-shrink: 0;
@@ -3694,9 +3666,12 @@ const STYLES = `
 }
 .hand-slot.hand-card {
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 2px solid rgba(255, 232, 168, 0.3);
   background: rgba(255, 255, 255, 0.045);
   min-height: 78px;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(244, 164, 96, 0.12);
   transition: transform 0.18s cubic-bezier(0.2, 0.86, 0.28, 1), box-shadow 0.18s ease;
   isolation: isolate;
 }
@@ -3744,7 +3719,7 @@ const STYLES = `
 .hand-slot.is-hand-use-source {
   /* The clicked compact card should disappear quietly while the preview
      carries the actual use animation to the center. */
-  opacity: 0.16;
+  opacity: 0;
   transform: translateY(2px) scale(0.985);
   filter: saturate(0.72) brightness(0.82);
 }
@@ -4065,7 +4040,7 @@ const STYLES = `
 .common-card-name { font-size: 18px; }
 .common-card-badge { font-size: 12px; }
 .common-card-desc { font-size: 16px; }
-.compendium-hand-card { min-height: 316px; }
+.compendium-hand-card { min-height: 316px; height: auto; }
 
 /* Combo tab recipe cards: mini hand cards overlap by default and fan out on
    hover/focus, matching the requested hand-card stack interaction. */
@@ -4251,7 +4226,9 @@ const STYLES = `
   filter: drop-shadow(0 0 6px rgba(255, 215, 120, 0.9));
   font-weight: 900;
 }
+.chain-event-copy { display: inline-grid; gap: 2px; justify-items: center; }
 .chain-event-name { font-weight: 800; }
+.chain-event-flavor { font-size: clamp(12px, 1.05vw, 14px); color: rgba(255, 245, 220, 0.78); letter-spacing: 0.02em; }
 
 /* Pop-in for newly added card events: scale + slight horizontal shake. */
 .chain-event-card.is-new {
@@ -4274,7 +4251,7 @@ const STYLES = `
 }
 @keyframes chain-recipe-burst {
   0%   {
-    transform: scale(0.6);
+    transform: scale(0.6) rotate(0deg);
     opacity: 0;
     filter: brightness(2.4) saturate(1.6);
     text-shadow:
@@ -4282,13 +4259,15 @@ const STYLES = `
       0 0 34px rgba(255, 215, 120, 1),
       0 0 68px rgba(244, 164, 96, 0.9);
   }
+  22%  { transform: scale(1.18) rotate(-2.8deg); }
+  34%  { transform: scale(1.08) rotate(2.4deg); }
   45%  {
-    transform: scale(1.22);
+    transform: scale(1.16) rotate(-1.2deg);
     opacity: 1;
     filter: brightness(1.6) saturate(1.3);
   }
-  72%  { transform: scale(0.98); }
-  100% { transform: scale(1); filter: brightness(1) saturate(1); }
+  72%  { transform: scale(0.98) rotate(0.8deg); }
+  100% { transform: scale(1) rotate(0deg); filter: brightness(1) saturate(1); }
 }
 @keyframes chain-recipe-glow {
   0%, 100% {
