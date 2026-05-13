@@ -357,19 +357,20 @@ Enemy defeat → 1 of 4 basic items drops:
 ### Chain Combo Timing/UI (UPDATED)
 - Hand-card use begins with a physical draw/dissolve beat: the used hand card clones from its hand slot toward the player-card area and dissolves with the category SquareBurst before field/removal/combo effects continue.
 - Hand-card use now resolves in two visible beats: first the individual hand-card effect, then any newly satisfied recipe after a short UI delay (`COMBO_TRIGGER_DELAY_MS` in `src/index.ts`). This keeps combinations such as `밀랍 방패 → 밀랍 돌진` from feeling simultaneous on laggy machines.
-- `HandSystem.useSingle` only applies the single-card effect and extends the chain. Delayed combo resolution is triggered by `HandSystem.firePendingRecipes` from the UI flow so removed-field-card animations can be separated by beat.
+- `HandSystem.useSingle` only applies the single-card effect and extends the chain. Delayed combo resolution is triggered by `HandSystem.fireNextPendingRecipe` from the UI flow so every fired recipe can animate and run a preparation refresh before the next recipe beat.
 - The floating chain banner uses top-center, text-only glow styling aligned with the target-selection banner/turn overlay. Avoid restoring pill/circular backgrounds unless the whole top HUD language changes together.
 - Recipes are now the structured table in `src/data/Recipes.ts` (따뜻함, 점화, 배당금, 셔플, 양초 스매쉬, 지뢰제거반, 열쇠공, 탐욕, 한 걸음씩, 도화선, 성화, 밀매, 뜨거움). Add/remove combos through this declarative recipe book first, then map any new effect kind in `HandSystem`.
 - If a visible hand card would immediately trigger an unfired recipe for the current chain, `buildChainHints()` marks that slot and the hand UI shows a soft left-spreading candle glow as the combo hint.
 
 
 ### Hand Gauge Mode + UI Layer Notes (UPDATED)
-- The 10-slot hand gauge is now a player-selectable payoff system rather than a passive "Melt" placeholder. Clicking the gauge's left icon cycles modes in order: 최대 체력 +5 → 공격력 +1 → 불씨 +3 → 손패 랜덤 3장.
+- The 10-slot hand gauge is now a player-selectable payoff system rather than a passive "Melt" placeholder. Every played hand card advances it by 1 in code (no redundant per-card candleGain data). Clicking the gauge's left icon cycles modes in order: 최대 체력 +5 → 공격력 +1 → 불씨 +3 → 손패 랜덤 3장.
 - Full-gauge resolution is intentionally sequenced after the hand-card beat and delayed recipe beat: `카드 효과 → 조합 효과 → 게이지 효과`. Keep this delay readable; do not fold the gauge payoff back into `HandSystem.useSingle`.
-- After hand/combo effects remove field cards, the UI runs a preparation refresh (`runPreparationRefreshAfterFieldEffects` in `src/index.ts`) that compacts, refills, regroups, and renders once so emptied field slots do not remain visible as holes.
+- After each hand-card field effect and after each individual combo recipe, the UI runs a preparation refresh (`runPreparationRefreshAfterFieldEffects` in `src/index.ts`) that compacts, refills, regroups, and renders once so emptied field slots do not remain visible as holes.
 - The compendium button is no longer part of the left score panel. It lives in a transparent utility layer to the left of the player card. The symmetric right-side transparent layer is reserved for future relic UI and should remain layout-stable.
 - Chain banner card entries use one restrained warm tone instead of per-category colors. Recipe and gauge events are the emphasized entries; gauge events use a distinct cool-warm highlight so they differ from recipe triggers.
 - Compendium field-card entries should use the unified 1/2/3칸 family format for enemies, mimics, traps, and treasures so width-based strengthening is documented consistently.
+- Ember decay is intentionally faster than older drafts: `Character.EMBER_DECAY_TURNS` is 3, so the ember counter wanes by 1 every 3 completed turns.
 
 ### Post-MVP Features (Planning Only, NOT in current implementation)
 - Multiple playable characters with unique abilities

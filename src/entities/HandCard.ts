@@ -29,8 +29,6 @@ export interface HandCardDefinition {
   description: string
   /** Description shown for the triple-synthesis enhanced effect. */
   tripleDescription: string
-  /** Candle gained from a single use. */
-  candleGain: number
   /** Optional targeting rule used by the renderer and HandSystem validation. */
   targetRule?: HandTargetRule
   /** Optional weight that biases drop selection (defaults to 1). */

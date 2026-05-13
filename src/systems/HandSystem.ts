@@ -51,10 +51,12 @@ export interface HandUseResult {
   /** Cards that auto-merged or were absorbed by a merge after this use. */
   mergeMessages: string[]
   /** Field cards removed by the single hand-card effect only. Recipe removals
-   *  are reported by firePendingRecipes after the UI delay. */
+   *  are reported by fireNextPendingRecipe after the UI delay. */
   removedFieldCards: RemovedFieldCard[]
   /** Currency gained by a coin hand card; UI applies it to the shop wallet. */
   coinsGained?: number
+  /** Extra virtual chain entries added by the played card beyond its normal 1 count. */
+  comboCopiesAdded?: number
 }
 
 export interface RecipeFireResult {
@@ -149,20 +151,21 @@ export class HandSystem {
 
     character.removeHandCardAt(slotIndex)
 
-    // Extend the chain. Merged cards count as one played card, while the new
-    // '카드' item appends extra virtual uses to raise the hand-combo count.
+    // Extend the chain. Every hand card contributes its natural 1 count;
+    // '카드' then appends explicit virtual copies so its +1/+5 combo text really
+    // means a normal card records 2 total and a triple records 6 total.
     chain.sequence.push(card.defId)
-    if (card.defId === 'card') {
-      const bonusComboCount = card.merged ? 5 : 1
-      for (let i = 0; i < bonusComboCount; i++) chain.sequence.push(card.defId)
-    }
+    const comboCopiesAdded = HandSystem.extraComboCopiesFor(card.defId, card.merged === true)
+    for (let i = 0; i < comboCopiesAdded; i++) chain.sequence.push(card.defId)
 
-    // Recipes are deliberately resolved later by firePendingRecipes(), which
+    // Recipes are deliberately resolved later by fireNextPendingRecipe(), which
     // gives the UI a readable beat between the card effect and combo explosion.
     const mergeMessages = HandSystem.runAutoMerges(character)
 
-    // Each card use also charges the candle gauge a small amount.
-    character.gainCandle(def.candleGain)
+    // The 10-slot gauge always advances once per played hand card. This is
+    // gameplay flow, not per-card rules data, so the card definitions no longer
+    // repeat a redundant candleGain value on every entry.
+    character.gainCandle(1)
 
     // Diff the field snapshot to record removed cards for animation.
     const afterField = HandSystem.snapshotFieldCards(gs)
@@ -177,7 +180,14 @@ export class HandSystem {
       mergeMessages,
       removedFieldCards,
       coinsGained: card.defId === 'coin' ? (card.merged ? 5 : 1) : 0,
+      comboCopiesAdded,
     }
+  }
+
+  /** Extra virtual chain entries contributed by cards with combo-count effects. */
+  private static extraComboCopiesFor(defId: HandCardId, isMerged: boolean): number {
+    if (defId !== 'card') return 0
+    return isMerged ? 5 : 1
   }
 
   /** Multiset count of `id` in the chain sequence. */
@@ -212,10 +222,8 @@ export class HandSystem {
     }
     // The 카드 item records extra virtual uses in the real chain, so the
     // preview mirrors that behavior for accurate 셔플/future card-count hints.
-    if (defId === 'card') {
-      const bonusComboCount = isMerged ? 5 : 1
-      for (let i = 0; i < bonusComboCount; i++) preview.sequence.push(defId)
-    }
+    const comboCopiesAdded = HandSystem.extraComboCopiesFor(defId, isMerged)
+    for (let i = 0; i < comboCopiesAdded; i++) preview.sequence.push(defId)
     return RECIPES.filter((recipe) => {
       if (preview.firedRecipeIds.has(recipe.id)) return false
       return HandSystem.recipeMatches(recipe, preview)
@@ -231,21 +239,20 @@ export class HandSystem {
     return false
   }
 
-  /** Fire recipes that became available after the most recent hand-card use. */
-  static firePendingRecipes(gs: GameState, chain: ChainState): RecipeFireResult {
+  /** Fire exactly one pending recipe so the UI can compact/refill between combo beats. */
+  static fireNextPendingRecipe(gs: GameState, chain: ChainState): RecipeFireResult {
     const beforeField = HandSystem.snapshotFieldCards(gs)
-    const firedRecipes = HandSystem.fireMatchedRecipes(gs, chain)
+    const firedRecipe = HandSystem.fireNextMatchedRecipe(gs, chain)
     const afterField = HandSystem.snapshotFieldCards(gs)
     const removedFieldCards: RemovedFieldCard[] = []
     for (const [id, type] of beforeField.entries()) {
       if (!afterField.has(id)) removedFieldCards.push({ cardId: id, type })
     }
-    const coinsGained = firedRecipes.reduce((sum, fired) => sum + (fired.coinsGained ?? 0), 0)
-    return { firedRecipes, removedFieldCards, coinsGained }
+    const firedRecipes = firedRecipe ? [firedRecipe] : []
+    return { firedRecipes, removedFieldCards, coinsGained: firedRecipe?.coinsGained ?? 0 }
   }
 
-  private static fireMatchedRecipes(gs: GameState, chain: ChainState): FiredRecipe[] {
-    const fired: FiredRecipe[] = []
+  private static fireNextMatchedRecipe(gs: GameState, chain: ChainState): FiredRecipe | null {
     // Sort by ingredient size ascending so smaller recipes resolve first.
     const sorted = [...RECIPES].sort((a, b) => a.totalCount - b.totalCount)
     for (const recipe of sorted) {
@@ -253,9 +260,9 @@ export class HandSystem {
       if (!HandSystem.recipeMatches(recipe, chain)) continue
       const effect = HandSystem.applyRecipeEffect(gs, recipe)
       chain.firedRecipeIds.add(recipe.id)
-      fired.push({ recipe, message: effect.message, coinsGained: effect.coinsGained })
+      return { recipe, message: effect.message, coinsGained: effect.coinsGained }
     }
-    return fired
+    return null
   }
 
   /** Apply a recipe's effect against the GameState. */

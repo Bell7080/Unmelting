@@ -603,6 +603,17 @@ async function applyHandSingle(
       category: usedDef.category,
       uid: nextChainUid(),
     })
+    // Show 카드's virtual combo-count copies in the chain banner so the +1/+5
+    // effect is visible and recipe hints match the actual multiset matcher.
+    for (let i = 0; i < (result.comboCopiesAdded ?? 0); i++) {
+      chainTimeline.push({
+        kind: 'card',
+        defId: usedDef.id,
+        name: `${usedDef.name}+`,
+        category: usedDef.category,
+        uid: nextChainUid(),
+      })
+    }
     boardRenderer.refreshChainBanner(buildChainHints())
   }
   if (result.coinsGained && result.coinsGained > 0) {
@@ -624,48 +635,55 @@ async function applyHandSingle(
     })
   }
 
-  // Resolve recipe combos after a deliberate gap only when a new recipe is
-  // actually waiting; normal hand-card use should not feel artificially laggy.
-  const hasPendingRecipe = HandSystem.hasPendingRecipe(chain)
-  if (hasPendingRecipe) await wait(COMBO_TRIGGER_DELAY_MS)
-  const beforeRecipeFreeze = snapshotFieldFreezeState()
-  const beforeRecipeHealth = snapshotFieldHealthState()
-  const recipeResult = hasPendingRecipe
-    ? HandSystem.firePendingRecipes(gameState, chain)
-    : { firedRecipes: [], removedFieldCards: [] }
-  if ((recipeResult.coinsGained ?? 0) > 0) {
-    // Recipe currency uses the same wallet/pulse language as single coin cards.
-    coins += recipeResult.coinsGained ?? 0
-    coinPulseKey++
-  }
-  for (const fired of recipeResult.firedRecipes) {
-    recordNotice(`✦ ${fired.recipe.name}: ${fired.message}`, 'recipe')
-    chainTimeline.push({
-      kind: 'recipe',
-      recipeId: fired.recipe.id,
-      name: fired.recipe.name,
-      flavor: fired.recipe.flavor,
-      uid: nextChainUid(),
-    })
-  }
-  if (recipeResult.firedRecipes.length > 0) {
-    boardRenderer.refreshChainBanner(buildChainHints())
-  }
-  // Recipe effects get their own damage diff after the combo delay. As above,
-  // cards killed by that damage keep their damage burst and only suppress the
-  // later removal burst.
-  const recipeDamageLosses = diffFieldHealthLosses(beforeRecipeHealth)
-  const recipeDamagedIds = new Set(recipeDamageLosses.map((loss) => loss.cardId))
-  await boardRenderer.animateDamageNumbersById(recipeDamageLosses)
-  await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeRecipeFreeze))
-  await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeRecipeFreeze))
+  // Prepare the rail immediately after the single card effect. Recipes should
+  // resolve against a compacted/refilled/front-regrouped board, preventing holes
+  // after effects such as 한 걸음씩 or 밀매 remove cards from the field.
+  await runPreparationRefreshAfterFieldEffects()
 
-  // Animate cards removed by delayed recipes separately so combo impact reads
-  // as its own hit instead of merging with the hand-card effect animation.
-  if (recipeResult.removedFieldCards.length > 0) {
-    await boardRenderer.animateCardConsumeByIds(recipeResult.removedFieldCards, {
-      suppressBurstIds: recipeDamagedIds,
-    })
+  // Resolve combo recipes one at a time. Each recipe gets its own delay,
+  // animations, and preparation refresh so chained removals cannot leave rail
+  // gaps and active-row cards can merge before the next recipe checks the board.
+  let recipeSafety = 32
+  while (HandSystem.hasPendingRecipe(chain) && recipeSafety-- > 0) {
+    await wait(COMBO_TRIGGER_DELAY_MS)
+    const beforeRecipeFreeze = snapshotFieldFreezeState()
+    const beforeRecipeHealth = snapshotFieldHealthState()
+    const recipeResult = HandSystem.fireNextPendingRecipe(gameState, chain)
+    if (recipeResult.firedRecipes.length === 0) break
+    if ((recipeResult.coinsGained ?? 0) > 0) {
+      // Recipe currency uses the same wallet/pulse language as single coin cards.
+      coins += recipeResult.coinsGained ?? 0
+      coinPulseKey++
+    }
+    for (const fired of recipeResult.firedRecipes) {
+      recordNotice(`✦ ${fired.recipe.name}: ${fired.message}`, 'recipe')
+      chainTimeline.push({
+        kind: 'recipe',
+        recipeId: fired.recipe.id,
+        name: fired.recipe.name,
+        flavor: fired.recipe.flavor,
+        uid: nextChainUid(),
+      })
+    }
+    boardRenderer.refreshChainBanner(buildChainHints())
+
+    // Recipe effects get their own damage diff after the combo delay. As above,
+    // cards killed by that damage keep their damage burst and only suppress the
+    // later removal burst.
+    const recipeDamageLosses = diffFieldHealthLosses(beforeRecipeHealth)
+    const recipeDamagedIds = new Set(recipeDamageLosses.map((loss) => loss.cardId))
+    await boardRenderer.animateDamageNumbersById(recipeDamageLosses)
+    await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeRecipeFreeze))
+    await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeRecipeFreeze))
+
+    // Animate cards removed by delayed recipes separately so combo impact reads
+    // as its own hit instead of merging with the hand-card effect animation.
+    if (recipeResult.removedFieldCards.length > 0) {
+      await boardRenderer.animateCardConsumeByIds(recipeResult.removedFieldCards, {
+        suppressBurstIds: recipeDamagedIds,
+      })
+    }
+    await runPreparationRefreshAfterFieldEffects()
   }
 
   // Full gauge fires last: card effect -> recipe effect -> gauge effect.
@@ -706,7 +724,7 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
     // so the chain banner fades out at the same beat.
     HandSystem.resetChain(chain)
     clearChainTimeline()
-    // Tick the ember decay countdown; ember decreases every 10th turn.
+    // Tick the ember decay countdown; ember decreases every 3rd turn.
     const tickedDown = turnManager.tickEmberDecay()
     syncSpawnerTier()
     if (tickedDown) {
