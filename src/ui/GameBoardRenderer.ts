@@ -41,6 +41,20 @@ import {
   swordIcon,
 } from '@ui/Icons'
 
+/** UI-only summary of how a hand-card effect chooses affected objects. */
+type HandEffectSelection = 'target' | 'random' | 'all' | 'none'
+
+/** UI-only summary of the board/resource zone touched by a hand-card effect. */
+type HandEffectZone = 'front' | 'waiting' | 'field' | 'self' | 'hand' | 'none'
+
+/** Compact scope metadata used by the compendium so effect text and targeting rules stay readable. */
+interface HandEffectScope {
+  selection: HandEffectSelection
+  zone: HandEffectZone
+  /** Null means every valid object in the zone can be affected. */
+  countLimit: number | null
+}
+
 export interface CardActionDetail {
   laneIndex: number
   distance: number
@@ -568,9 +582,44 @@ export class GameBoardRenderer {
     })
   }
 
+  /**
+   * UI mirror of HandSystem's hand-card effect reach. Keeping this local avoids
+   * coupling the renderer to private gameplay helpers while still documenting
+   * target/random/all behavior in the compendium.
+   */
+  private handEffectScope(defId: HandCardId, merged = false): HandEffectScope {
+    switch (defId) {
+      case 'ember':
+        return { selection: 'target', zone: 'field', countLimit: 1 }
+      case 'key':
+        return merged
+          ? { selection: 'all', zone: 'field', countLimit: null }
+          : { selection: 'random', zone: 'field', countLimit: 1 }
+      case 'wax':
+        return merged
+          ? { selection: 'all', zone: 'front', countLimit: null }
+          : { selection: 'target', zone: 'front', countLimit: 1 }
+      case 'holy-water':
+        return merged
+          ? { selection: 'all', zone: 'field', countLimit: null }
+          : { selection: 'random', zone: 'field', countLimit: 2 }
+      case 'chitin':
+        return merged
+          ? { selection: 'all', zone: 'field', countLimit: null }
+          : { selection: 'target', zone: 'front', countLimit: 1 }
+      case 'card':
+        return { selection: 'none', zone: 'hand', countLimit: merged ? 5 : 1 }
+      case 'wax-drop':
+      case 'candle':
+      case 'match':
+      case 'coin':
+        return { selection: 'none', zone: 'self', countLimit: 1 }
+    }
+  }
+
   /** Korean labels for the shared hand-effect scope table shown in the compendium. */
   private handScopeLabel(defId: HandCardId, merged = false): string {
-    const scope = getHandEffectScope(getHandCardDef(defId), merged)
+    const scope = this.handEffectScope(defId, merged)
     const selectionLabel =
       scope.selection === 'target'
         ? '대상'
@@ -592,7 +641,7 @@ export class GameBoardRenderer {
                 ? '손패'
                 : '없음'
     const countLabel = scope.countLimit === null ? '제한 없음' : `${scope.countLimit}개`
-    return `대상 ${selectionLabel} · 범위 ${zoneLabel} · 개수 ${countLabel}`
+    return `선택 ${selectionLabel} · 범위 ${zoneLabel} · 개수 ${countLabel}`
   }
 
   /** Compact two-line scope summary so balance changes remain visible in the codex. */
@@ -924,7 +973,7 @@ export class GameBoardRenderer {
       groups[def.category].push(
         this.handCardFace(
           def.id,
-          `${def.description}<br><span class="common-card-subdesc">★ ${def.tripleDescription}</span>`,
+          `${def.description}<br>${this.handScopeDescription(def.id)}<br><span class="common-card-subdesc">★ 효과: ${def.tripleDescription}</span>`,
           false,
           `compendium-hand-card ${this.categoryClass(def.category)}`,
           groupLabels[def.category]
