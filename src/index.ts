@@ -370,11 +370,15 @@ function buildChainHints() {
   // Precompute which visible hand slots would complete at least one recipe if
   // clicked now. Keeping this in index.ts lets the renderer stay presentation-only
   // while the recipe rules remain centralized in HandSystem/Recipes.ts.
-  const recipeReadyBySlot: Record<number, { id: string; name: string }[]> = {}
+  const recipeReadyBySlot: Record<number, { id: string; name: string; flavor: string }[]> = {}
   gameState.character.hand.forEach((card, slotIndex) => {
     const recipes = HandSystem.previewTriggeredRecipes(chain, card.defId, card.merged === true)
     if (recipes.length === 0) return
-    recipeReadyBySlot[slotIndex] = recipes.map((recipe) => ({ id: recipe.id, name: recipe.name }))
+    recipeReadyBySlot[slotIndex] = recipes.map((recipe) => ({
+      id: recipe.id,
+      name: recipe.name,
+      flavor: recipe.flavor,
+    }))
   })
   return { events: chainTimeline, recipeReadyBySlot }
 }

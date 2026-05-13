@@ -10,7 +10,7 @@ function countChainEntries(chain: ReturnType<typeof HandSystem.newChain>, defId:
 }
 
 describe('HandSystem combo-count cards', () => {
-  it('records a normal 카드 as one played card with an abstract combo bonus', () => {
+  it('records a normal 카드 as one played card plus one abstract combo count', () => {
     const gameState = new GameState()
     const chain = HandSystem.newChain()
     gameState.character.addHandCard(DropSystem.makeCard('card'))
@@ -20,11 +20,12 @@ describe('HandSystem combo-count cards', () => {
     expect(result.success).toBe(true)
     expect(result.comboCountBonus).toBe(1)
     expect(countChainEntries(chain, 'card')).toBe(1)
+    expect(chain.comboCountBonuses.card).toBe(1)
     expect(HandSystem.hasPendingRecipe(chain)).toBe(false)
     expect(HandSystem.fireNextPendingRecipe(gameState, chain).firedRecipes).toHaveLength(0)
   })
 
-  it('records a triple 카드 as one played card with a larger abstract combo bonus', () => {
+  it('records a triple 카드 as one played card with a larger abstract combo count', () => {
     const gameState = new GameState()
     const chain = HandSystem.newChain()
     gameState.character.addHandCard({ ...DropSystem.makeCard('card'), merged: true })
@@ -34,7 +35,24 @@ describe('HandSystem combo-count cards', () => {
     expect(result.success).toBe(true)
     expect(result.comboCountBonus).toBe(5)
     expect(countChainEntries(chain, 'card')).toBe(1)
+    expect(chain.comboCountBonuses.card).toBe(5)
     expect(HandSystem.previewTriggeredRecipes(HandSystem.newChain(), 'card', true)).toHaveLength(0)
+  })
+
+  it('fires 셔플 only after two physical 카드 uses, regardless of combo-count bonuses', () => {
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+    gameState.character.addHandCard(DropSystem.makeCard('card'))
+    gameState.character.addHandCard(DropSystem.makeCard('card'))
+
+    HandSystem.useSingle(gameState, chain, 0)
+    expect(HandSystem.hasPendingRecipe(chain)).toBe(false)
+
+    HandSystem.useSingle(gameState, chain, 0)
+    const fired = HandSystem.fireNextPendingRecipe(gameState, chain).firedRecipes
+
+    expect(fired).toHaveLength(1)
+    expect(fired[0]?.recipe.id).toBe('shuffle')
   })
 
   it('still advances the hand gauge once without per-card candleGain data', () => {

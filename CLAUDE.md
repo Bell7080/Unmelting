@@ -372,7 +372,7 @@ Enemy defeat → 1 of 4 basic items drops:
 - Chain banner card entries use one restrained warm tone instead of per-category colors. Recipe and gauge events are the emphasized entries; gauge events use a distinct cool-warm highlight so they differ from recipe triggers.
 - Compendium field-card entries should use the unified 1/2/3칸 family format for enemies, mimics, traps, and treasures so width-based strengthening is documented consistently.
 - Hand-card target documentation and real target validation share `targeting.base/triple` scope rows in `src/data/HandCards.ts` (`대상/랜덤/전체/없음`, `전방/대기/필드/자신/손패`, `개수 제한`). Do not reintroduce separate prose-only targeting rules.
-- The `카드` hand item grants an abstract combo-count bonus only. Do not add duplicate `card` entries to `chain.sequence` or the chain banner; recipe ingredients should still represent actual played cards.
+- The `카드` hand item grants an abstract combo-count flow bonus while still adding only one physical `card` entry to `chain.sequence` and the chain banner. Recipe matching must use physical recipe ingredients only: `셔플` requires two actually used `카드` hand items, not one `카드` plus its combo-count bonus.
 - Ember decay is intentionally faster than older drafts: `Character.EMBER_DECAY_TURNS` is 3, so the ember counter wanes by 1 every 3 completed turns.
 
 ### Post-MVP Features (Planning Only, NOT in current implementation)
@@ -391,3 +391,8 @@ Enemy defeat → 1 of 4 basic items drops:
 - ❓ = Needs clarification
 - ❌ = Not started
 
+
+### UI/Visual Notes (UPDATED)
+- Low-ember darkness should be side-weighted: deepen the left/right screen edges first while keeping the central rail, score panel, and hand readable.
+- Compendium combo recipe mini-cards are allowed to fan outside the codex panel on hover; card readability has priority over panel clipping.
+- Hand recipe-ready previews should show both the triggered recipe name and its effect next to the hand-card preview, using the existing warm candle/waxed-panel visual language.
