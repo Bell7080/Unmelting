@@ -22,6 +22,27 @@ export type HandCardId =
 
 export type HandTargetRule = 'field-enemy' | 'front-card-or-treasure' | 'front-trap'
 
+export type HandEffectSelection = 'target' | 'random' | 'all' | 'none'
+export type HandEffectZone = 'front' | 'waiting' | 'field' | 'self' | 'hand' | 'none'
+
+export interface HandEffectScope {
+  /** Whether this effect is player-targeted, random, global, or targetless. */
+  selection: HandEffectSelection
+  /** Board/resource area affected by the effect. */
+  zone: HandEffectZone
+  /** Maximum affected cards/counts; null means no upper limit for this scope. */
+  countLimit: number | null
+  /** Optional validator used when selection === 'target'. */
+  targetRule?: HandTargetRule
+}
+
+export interface HandEffectTargeting {
+  /** Normal single-card use scope. */
+  base: HandEffectScope
+  /** Triple-merged use scope, which can broaden or remove targeting. */
+  triple: HandEffectScope
+}
+
 export interface HandCardDefinition {
   id: HandCardId
   name: string
@@ -29,8 +50,8 @@ export interface HandCardDefinition {
   description: string
   /** Description shown for the triple-synthesis enhanced effect. */
   tripleDescription: string
-  /** Optional targeting rule used by the renderer and HandSystem validation. */
-  targetRule?: HandTargetRule
+  /** Declarative scope data shared by compendium text and real target validation. */
+  targeting: HandEffectTargeting
   /** Optional weight that biases drop selection (defaults to 1). */
   dropWeight?: number
 }
