@@ -1,5 +1,5 @@
 /**
- * Sprite registry — maps cards/players to webp art under /assets/fonts/sprites.
+ * Sprite registry — maps cards/players to webp art under /assets/sprites.
  *
  * Selection rules (per request):
  *   - Player: player_001
@@ -13,16 +13,29 @@
  */
 
 import { Card, CardType } from '@entities/Card'
+import type { HandCardId } from '@entities/HandCard'
 
-import backgroundUrl from '../assets/fonts/sprites/background_001.webp'
-import playerUrl from '../assets/fonts/sprites/player_001.webp'
-import enemy001Url from '../assets/fonts/sprites/enemy_001.webp'
-import enemy002Url from '../assets/fonts/sprites/enemy_002.webp'
-import enemy003Url from '../assets/fonts/sprites/enemy_003.webp'
-import trap001Url from '../assets/fonts/sprites/trap_001.webp'
-import chest001Url from '../assets/fonts/sprites/chest_001.webp'
-import chest002Url from '../assets/fonts/sprites/chest_002.webp'
-import chest003Url from '../assets/fonts/sprites/chest_003.webp'
+import backgroundUrl from '../assets/sprites/background_001.webp'
+import playerUrl from '../assets/sprites/player_001.webp'
+import enemy001Url from '../assets/sprites/enemy_001.webp'
+import enemy002Url from '../assets/sprites/enemy_002.webp'
+import enemy003Url from '../assets/sprites/enemy_003.webp'
+import trap001Url from '../assets/sprites/trap_001.webp'
+import chest001Url from '../assets/sprites/chest_001.webp'
+import chest002Url from '../assets/sprites/chest_002.webp'
+import chest003Url from '../assets/sprites/chest_003.webp'
+
+import cardBackUrl from '../assets/sprites/cardbackground_001.webp'
+import handCard001Url from '../assets/sprites/handcard_001.webp'
+import handCard002Url from '../assets/sprites/handcard_002.webp'
+import handCard003Url from '../assets/sprites/handcard_003.webp'
+import handCard004Url from '../assets/sprites/handcard_004.webp'
+import handCard005Url from '../assets/sprites/handcard_005.webp'
+import handCard006Url from '../assets/sprites/handcard_006.webp'
+import handCard007Url from '../assets/sprites/handcard_007.webp'
+import handCard008Url from '../assets/sprites/handcard_008.webp'
+import handCard009Url from '../assets/sprites/handcard_009.webp'
+import handCard010Url from '../assets/sprites/handcard_010.webp'
 
 export const SpriteUrls = {
   background: backgroundUrl,
@@ -34,6 +47,19 @@ export const SpriteUrls = {
   chestSmall: chest001Url,
   chestMedium: chest002Url,
   chestLarge: chest003Url,
+  cardBack: cardBackUrl,
+  handCards: {
+    'wax-drop': handCard001Url,
+    candle: handCard002Url,
+    ember: handCard003Url,
+    key: handCard004Url,
+    wax: handCard005Url,
+    match: handCard006Url,
+    'holy-water': handCard007Url,
+    chitin: handCard008Url,
+    card: handCard009Url,
+    coin: handCard010Url,
+  } satisfies Record<HandCardId, string>,
 }
 
 const NORMAL_ENEMY_VARIANTS = [SpriteUrls.enemyMouse, SpriteUrls.enemyFrog]
@@ -74,4 +100,9 @@ export function spriteForCard(card: Card): string {
     return SpriteUrls.chestSmall
   }
   return ''
+}
+
+/** Hand card art follows HAND_CARD_IDS order: handcard_001.webp through handcard_010.webp. */
+export function spriteForHandCard(defId: HandCardId): string {
+  return SpriteUrls.handCards[defId]
 }

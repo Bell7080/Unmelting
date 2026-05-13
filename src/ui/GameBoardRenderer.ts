@@ -20,7 +20,7 @@ import { GameState } from '@core/GameState'
 import { Card, CardType } from '@entities/Card'
 import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
 import type { EnemyHit, TreasureChange } from '@core/TurnManager'
-import { spriteForCard, SpriteUrls } from '@ui/Sprites'
+import { spriteForCard, spriteForHandCard, SpriteUrls } from '@ui/Sprites'
 import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandCategory, HandTargetRule } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
@@ -527,6 +527,34 @@ export class GameBoardRenderer {
     return `hand-cat-${cat}`
   }
 
+
+  /** Shared hand-card face used by hover previews and the compendium so any
+   *  future codex/shop view can reuse the same card-like composition. */
+  private handCardFace(
+    defId: HandCardId,
+    description: string,
+    merged = false,
+    extraClass = '',
+    badge?: string
+  ): string {
+    const def = getHandCardDef(defId)
+    const badgeHtml = badge ? `<span class="common-card-badge">${badge}</span>` : ''
+    return `
+      <article class="common-card-face ${extraClass}" style="--hand-card-art: url('${spriteForHandCard(defId)}'); --hand-card-back: url('${SpriteUrls.cardBack}');">
+        <div class="common-card-art" aria-hidden="true">
+          <img src="${spriteForHandCard(defId)}" alt="" loading="lazy" />
+        </div>
+        <div class="common-card-body">
+          <header class="common-card-title-row">
+            <span class="common-card-name">${def.name}${merged ? ' ★' : ''}</span>
+            ${badgeHtml}
+          </header>
+          <p class="common-card-desc">${description}</p>
+        </div>
+      </article>
+    `
+  }
+
   private candleModeMeta(mode: CandleMode): { label: string; effect: string; icon: string } {
     switch (mode) {
       case 'max-health':
@@ -582,6 +610,7 @@ export class GameBoardRenderer {
         .filter(Boolean)
         .join(' ')
       const description = card.merged ? def.tripleDescription : def.description
+      const handArt = spriteForHandCard(card.defId)
       slots.push(`
         <li class="${classes}" data-slot-index="${i}" data-hand-uid="${card.uid}"
             ${recipeReadyTitle ? `title="${recipeReadyTitle}"` : ''}>
@@ -589,10 +618,14 @@ export class GameBoardRenderer {
                   aria-label="${def.name}: ${description}${recipeReadyTitle ? ` · ${recipeReadyTitle}` : ''}">
             ${recipeReady ? '<span class="recipe-ready-mark" aria-hidden="true">✦</span>' : ''}
             ${card.merged ? '<span class="merged-mark" aria-hidden="true">✦</span>' : ''}
-            <span class="hand-card-icon">${this.iconForHandCard(card.defId)}</span>
+            <span class="hand-card-thumb" aria-hidden="true">
+              <img src="${handArt}" alt="" loading="lazy" />
+            </span>
             <span class="hand-card-name">${def.name}${card.merged ? ' ★' : ''}</span>
-            <span class="hand-card-effect">${description}</span>
           </button>
+          <div class="hand-card-preview" style="--hand-card-back: url('${SpriteUrls.cardBack}');" aria-hidden="true">
+            ${this.handCardFace(card.defId, description, card.merged)}
+          </div>
         </li>
       `)
     }
@@ -843,20 +876,14 @@ export class GameBoardRenderer {
     }
     for (const id of HAND_CARD_IDS) {
       const def = HAND_CARD_DEFINITIONS[id]
-      const stats: [string, string][] = [
-        ['단일', def.description],
-        ['★ 트리플', def.tripleDescription],
-        ['양초 게인', `+${def.candleGain}`],
-      ]
-      if (def.targetRule) stats.push(['타게팅', this.targetRuleLabel(def.targetRule)])
       groups[def.category].push(
-        this.compendiumCard({
-          art: { kind: 'icon', svg: this.iconForHandCard(def.id) },
-          name: def.name,
-          badge: groupLabels[def.category],
-          categoryClass: this.categoryClass(def.category),
-          stats,
-        })
+        this.handCardFace(
+          def.id,
+          `${def.description}<br><span class="common-card-subdesc">★ ${def.tripleDescription}</span>`,
+          false,
+          `compendium-hand-card ${this.categoryClass(def.category)}`,
+          groupLabels[def.category]
+        )
       )
     }
     return Object.entries(groups)
@@ -867,15 +894,6 @@ export class GameBoardRenderer {
         `
       )
       .join('')
-  }
-
-  /** Human-readable targeting descriptions for the current hand card rules. */
-  private targetRuleLabel(
-    rule: NonNullable<ReturnType<typeof getHandCardDef>['targetRule']>
-  ): string {
-    if (rule === 'field-enemy') return '필드(3×3) 적 선택'
-    if (rule === 'front-card-or-treasure') return '전방 적/보물 선택'
-    return '전방 함정 선택'
   }
 
   /** Terms tab summarizing current field, resource, and status vocabulary. */
@@ -3113,6 +3131,108 @@ const STYLES = `
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 12px;
 }
+/* Shared card-shaped face for hand hover previews and hand-card compendium
+   entries. The art is clipped through a rounded mask and object-fit preserves
+   the source image ratio while filling the top frame. */
+.common-card-face {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  min-height: 260px;
+  padding: 12px;
+  border-radius: 14px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(47, 35, 58, 0.98), rgba(18, 13, 26, 0.98)),
+    radial-gradient(circle at 50% 0%, rgba(255, 215, 120, 0.16), transparent 64%);
+  border: 1px solid rgba(255, 215, 120, 0.46);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 2px rgba(0, 0, 0, 0.24),
+    0 0 22px rgba(244, 164, 96, 0.18);
+  color: #fff5dc;
+}
+.common-card-face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255, 232, 168, 0.08), transparent 34%, rgba(0, 0, 0, 0.22)),
+    radial-gradient(120% 95% at 50% 6%, transparent 54%, rgba(7, 5, 12, 0.5) 100%);
+}
+.common-card-art {
+  position: relative;
+  z-index: 1;
+  min-height: 142px;
+  border-radius: 10px;
+  overflow: hidden;
+  clip-path: inset(0 round 10px);
+  background: rgba(0, 0, 0, 0.34);
+  border: 1px solid rgba(255, 232, 168, 0.2);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.38);
+}
+.common-card-art img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+}
+.common-card-body {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 8px;
+  min-height: 82px;
+  text-align: center;
+}
+.common-card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+}
+.common-card-name {
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.86);
+}
+.common-card-badge {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 164, 96, 0.48);
+  color: var(--color-flame);
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 10px;
+  font-weight: 800;
+}
+.common-card-desc {
+  margin: 0;
+  align-self: end;
+  color: rgba(255, 232, 168, 0.82);
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+.common-card-subdesc {
+  color: rgba(255, 245, 220, 0.72);
+}
+.compendium-hand-card {
+  aspect-ratio: 0.72;
+  min-height: 270px;
+}
+.compendium-grid .common-card-face {
+  height: auto;
+}
+
 /* Unified compendium card. Every tab uses the same skeleton:
    art slot → head (name + badge) → stat rows → optional description.
    The art slot has three variants (sprite / icon / recipe ingredients) but
@@ -3439,8 +3559,9 @@ const STYLES = `
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.045);
-  min-height: 56px;
+  min-height: 64px;
   transition: transform 0.18s cubic-bezier(0.2, 0.86, 0.28, 1), box-shadow 0.18s ease;
+  isolation: isolate;
 }
 /* Drop animation runs ONLY on the first render where this uid appears.
    Without this gate, every full re-render of the hand panel would replay
@@ -3468,21 +3589,25 @@ const STYLES = `
     0 0 18px rgba(255, 215, 120, 0.28);
 }
 .hand-use-ghost.is-card-reveal {
-  border-radius: 12px;
+  border-radius: 13px;
   overflow: hidden;
   transform-origin: center;
 }
-.hand-use-ghost.is-card-reveal button {
-  grid-template-columns: 1fr;
-  grid-template-rows: 1fr auto auto;
-  justify-items: center;
-  align-content: end;
-  padding: 14px 12px;
-  text-align: center;
+.hand-use-ghost.is-card-reveal > button {
+  opacity: 0;
 }
-.hand-use-ghost.is-card-reveal .hand-card-icon { font-size: 34px; }
-.hand-use-ghost.is-card-reveal .hand-card-name { font-size: 16px; }
-.hand-use-ghost.is-card-reveal .hand-card-effect { font-size: 12px; opacity: 0.95; }
+.hand-use-ghost.is-card-reveal .hand-card-preview {
+  display: block;
+  opacity: 1;
+  inset: 0;
+  width: 100%;
+  pointer-events: none;
+  transform: none;
+  animation: none;
+}
+.hand-use-ghost.is-card-reveal .hand-card-preview::before {
+  display: none;
+}
 .hand-use-ghost button { cursor: default; }
 .hand-slot.is-hand-use-source {
   opacity: 0.36;
@@ -3491,7 +3616,7 @@ const STYLES = `
 .hand-slot.hand-card:hover,
 .hand-slot.hand-card:focus-within {
   transform: translateY(-2px);
-  z-index: 2;
+  z-index: 32;
   box-shadow:
     0 6px 18px rgba(0, 0, 0, 0.55),
     0 0 14px rgba(255, 215, 120, 0.35);
@@ -3500,10 +3625,10 @@ const STYLES = `
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-columns: 30px 1fr auto;
+  grid-template-columns: 48px 1fr;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 6px 9px;
   background: transparent;
   border: none;
   font-family: inherit;
@@ -3511,32 +3636,92 @@ const STYLES = `
   color: var(--color-text-primary);
   cursor: pointer;
   position: relative;
-  min-height: 56px;
+  min-height: 64px;
+  overflow: hidden;
 }
 .hand-slot.hand-card button:hover {
   background: rgba(255, 215, 120, 0.06);
 }
-.hand-card .hand-card-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-flame);
-  font-size: 22px;
+.hand-card-thumb {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 56px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 232, 168, 0.18),
+    0 2px 8px rgba(0, 0, 0, 0.45);
+  clip-path: inset(0 round 7px);
+}
+.hand-card-thumb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255, 232, 168, 0.08), rgba(0, 0, 0, 0.08)),
+    radial-gradient(120% 95% at 50% 10%, transparent 46%, rgba(10, 7, 18, 0.38) 100%);
+}
+.hand-card-thumb img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center;
 }
 .hand-card .hand-card-name {
-  font-weight: 700;
+  font-weight: 800;
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
-.hand-card .hand-card-effect {
-  font-size: 11px;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 120px;
+.hand-card-preview {
+  display: none;
+  position: absolute;
+  right: calc(100% + 16px);
+  top: 50%;
+  width: 188px;
+  aspect-ratio: 0.72;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) translateX(8px) rotateY(86deg);
+  transform-origin: right center;
+  transform-style: preserve-3d;
+  z-index: 70;
+  filter: drop-shadow(0 16px 28px rgba(0, 0, 0, 0.72));
+}
+.hand-card-preview::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: var(--hand-card-back) center / cover no-repeat;
+  backface-visibility: hidden;
+  transform: rotateY(0deg);
+  z-index: 2;
+}
+.hand-slot.hand-card:hover .hand-card-preview,
+.hand-slot.hand-card:focus-within .hand-card-preview {
+  display: block;
+  animation: hand-preview-flip 0.34s cubic-bezier(0.18, 0.88, 0.22, 1) forwards;
+}
+@keyframes hand-preview-flip {
+  0% { opacity: 0; transform: translateY(-50%) translateX(12px) rotateY(88deg); }
+  42% { opacity: 1; transform: translateY(-50%) translateX(4px) rotateY(14deg); }
+  100% { opacity: 1; transform: translateY(-50%) translateX(0) rotateY(0deg); }
+}
+.hand-slot.hand-card:hover .hand-card-preview::before,
+.hand-slot.hand-card:focus-within .hand-card-preview::before {
+  animation: hand-preview-back-flip 0.34s cubic-bezier(0.18, 0.88, 0.22, 1) forwards;
+}
+@keyframes hand-preview-back-flip {
+  0%, 38% { opacity: 1; transform: rotateY(0deg); }
+  68%, 100% { opacity: 0; transform: rotateY(-92deg); }
 }
 .hand-cat-recovery { box-shadow: inset 4px 0 0 rgba(103, 196, 152, 0.85); }
 .hand-cat-tool { box-shadow: inset 4px 0 0 rgba(255, 215, 120, 0.9); }
