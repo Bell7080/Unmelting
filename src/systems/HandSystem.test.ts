@@ -10,7 +10,7 @@ function countChainEntries(chain: ReturnType<typeof HandSystem.newChain>, defId:
 }
 
 describe('HandSystem combo-count cards', () => {
-  it('records a normal 카드 as two combo counts and immediately satisfies 셔플', () => {
+  it('records a normal 카드 as one played card with an abstract combo bonus', () => {
     const gameState = new GameState()
     const chain = HandSystem.newChain()
     gameState.character.addHandCard(DropSystem.makeCard('card'))
@@ -18,15 +18,13 @@ describe('HandSystem combo-count cards', () => {
     const result = HandSystem.useSingle(gameState, chain, 0)
 
     expect(result.success).toBe(true)
-    expect(result.comboCopiesAdded).toBe(1)
-    expect(countChainEntries(chain, 'card')).toBe(2)
-    expect(HandSystem.hasPendingRecipe(chain)).toBe(true)
-    expect(HandSystem.fireNextPendingRecipe(gameState, chain).firedRecipes[0]?.recipe.id).toBe(
-      'shuffle'
-    )
+    expect(result.comboCountBonus).toBe(1)
+    expect(countChainEntries(chain, 'card')).toBe(1)
+    expect(HandSystem.hasPendingRecipe(chain)).toBe(false)
+    expect(HandSystem.fireNextPendingRecipe(gameState, chain).firedRecipes).toHaveLength(0)
   })
 
-  it('records a triple 카드 as six combo counts for current and future recipes', () => {
+  it('records a triple 카드 as one played card with a larger abstract combo bonus', () => {
     const gameState = new GameState()
     const chain = HandSystem.newChain()
     gameState.character.addHandCard({ ...DropSystem.makeCard('card'), merged: true })
@@ -34,11 +32,9 @@ describe('HandSystem combo-count cards', () => {
     const result = HandSystem.useSingle(gameState, chain, 0)
 
     expect(result.success).toBe(true)
-    expect(result.comboCopiesAdded).toBe(5)
-    expect(countChainEntries(chain, 'card')).toBe(6)
-    expect(HandSystem.previewTriggeredRecipes(HandSystem.newChain(), 'card', true)[0]?.id).toBe(
-      'shuffle'
-    )
+    expect(result.comboCountBonus).toBe(5)
+    expect(countChainEntries(chain, 'card')).toBe(1)
+    expect(HandSystem.previewTriggeredRecipes(HandSystem.newChain(), 'card', true)).toHaveLength(0)
   })
 
   it('still advances the hand gauge once without per-card candleGain data', () => {

@@ -611,17 +611,8 @@ async function applyHandSingle(
       category: usedDef.category,
       uid: nextChainUid(),
     })
-    // Show virtual combo-count copies in the chain banner without modifying
-    // the card name; the underlying matcher still receives the extra counts.
-    for (let i = 0; i < (result.comboCopiesAdded ?? 0); i++) {
-      chainTimeline.push({
-        kind: 'card',
-        defId: usedDef.id,
-        name: usedDef.name,
-        category: usedDef.category,
-        uid: nextChainUid(),
-      })
-    }
+    // Combo-count bonuses stay in the use result/log message only; adding
+    // duplicate banner entries would read as extra physical cards consumed.
     boardRenderer.refreshChainBanner(buildChainHints())
   }
   if (result.coinsGained && result.coinsGained > 0) {
