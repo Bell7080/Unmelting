@@ -603,13 +603,13 @@ async function applyHandSingle(
       category: usedDef.category,
       uid: nextChainUid(),
     })
-    // Show 카드's virtual combo-count copies in the chain banner so the +1/+5
-    // effect is visible and recipe hints match the actual multiset matcher.
+    // Show virtual combo-count copies in the chain banner without modifying
+    // the card name; the underlying matcher still receives the extra counts.
     for (let i = 0; i < (result.comboCopiesAdded ?? 0); i++) {
       chainTimeline.push({
         kind: 'card',
         defId: usedDef.id,
-        name: `${usedDef.name}+`,
+        name: usedDef.name,
         category: usedDef.category,
         uid: nextChainUid(),
       })

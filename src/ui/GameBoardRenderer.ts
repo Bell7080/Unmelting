@@ -605,6 +605,9 @@ export class GameBoardRenderer {
         merged,
         isArming ? 'is-arming-target' : '',
         recipeReady ? 'is-recipe-ready' : '',
+        // Lower hand slots sit close to the viewport bottom, so their hover
+        // previews are anchored upward to keep the full card readable.
+        i <= 2 ? 'is-low-preview' : '',
         isNew ? 'is-entering' : '',
       ]
         .filter(Boolean)
@@ -615,6 +618,7 @@ export class GameBoardRenderer {
         <li class="${classes}" data-slot-index="${i}" data-hand-uid="${card.uid}"
             ${recipeReadyTitle ? `title="${recipeReadyTitle}"` : ''}>
           <button type="button" data-item-index="${i}"
+                  style="--hand-card-art: url('${handArt}');"
                   aria-label="${def.name}: ${description}${recipeReadyTitle ? ` · ${recipeReadyTitle}` : ''}">
             ${recipeReady ? '<span class="recipe-ready-mark" aria-hidden="true">✦</span>' : ''}
             ${card.merged ? '<span class="merged-mark" aria-hidden="true">✦</span>' : ''}
@@ -1420,72 +1424,73 @@ export class GameBoardRenderer {
   }
 
   /**
-   * Animate a used hand card as a face-up card reveal near screen center.
-   * The clone flips into a complete rectangular card, hangs for a readable
-   * beat, then dissolves with a restrained burst around the card edge.
+   * Animate the already-open hover preview, not the compact hand slot. The
+   * source hand card quietly fades while the preview keeps its original size,
+   * shoots to screen center, pauses briefly, then blooms and dissolves.
    */
   animateHandCardUse(slotIndex: number, theme: BurstTheme): Promise<void> {
     const source = this.findHandSlotElement(slotIndex)
     if (!source) return Promise.resolve()
 
     const sourceRect = source.getBoundingClientRect()
+    const preview = source.querySelector<HTMLElement>('.hand-card-preview')
+    const previewRect = preview?.getBoundingClientRect()
+    const hasVisiblePreview = !!previewRect && previewRect.width > 0 && previewRect.height > 0
+    const ghostWidth = hasVisiblePreview ? previewRect.width : 188
+    const ghostHeight = hasVisiblePreview ? previewRect.height : ghostWidth / 0.72
+    const startLeft = hasVisiblePreview ? previewRect.left : sourceRect.left - ghostWidth - 16
+    const startTop = hasVisiblePreview ? previewRect.top : sourceRect.top + sourceRect.height / 2 - ghostHeight / 2
     const targetX = window.innerWidth / 2
     const targetY = window.innerHeight * 0.46
-    const ghost = source.cloneNode(true) as HTMLElement
+    const deltaX = targetX - (startLeft + ghostWidth / 2)
+    const deltaY = targetY - (startTop + ghostHeight / 2)
+    const ghost = (preview ?? source).cloneNode(true) as HTMLElement
 
-    ghost.classList.add('hand-use-ghost', 'is-card-reveal')
-    ghost.style.left = `${sourceRect.left}px`
-    ghost.style.top = `${sourceRect.top}px`
-    ghost.style.width = `${sourceRect.width}px`
-    ghost.style.height = `${sourceRect.height}px`
+    // The ghost is fixed-size from start to finish so the preview art does not
+    // stretch; only the final center bloom scales up slightly for impact.
+    ghost.classList.add('hand-use-ghost', 'is-preview-flight')
+    ghost.style.left = `${startLeft}px`
+    ghost.style.top = `${startTop}px`
+    ghost.style.width = `${ghostWidth}px`
+    ghost.style.height = `${ghostHeight}px`
     ghost.setAttribute('aria-hidden', 'true')
     document.body.appendChild(ghost)
     source.classList.add('is-hand-use-source')
 
-    const revealWidth = Math.min(190, Math.max(136, sourceRect.width * 1.55))
-    const revealHeight = revealWidth * 1.32
-    const deltaX = targetX - (sourceRect.left + sourceRect.width / 2)
-    const deltaY = targetY - (sourceRect.top + sourceRect.height / 2)
-    const scaleX = revealWidth / sourceRect.width
-    const scaleY = revealHeight / sourceRect.height
     const anim = ghost.animate(
       [
+        { transform: 'translate(0, 0) scale(1)', opacity: 1, filter: 'brightness(1)' },
         {
-          transform: 'translate(0, 0) rotateY(0deg) scale(1)',
+          transform: `translate(${deltaX * 0.78}px, ${deltaY * 0.78}px) scale(1)`,
           opacity: 1,
-          filter: 'brightness(1)',
+          filter: 'brightness(1.16)',
+          offset: 0.58,
         },
         {
-          transform: `translate(${deltaX * 0.72}px, ${deltaY * 0.72}px) rotateY(82deg) scale(1.04)`,
-          opacity: 0.96,
-          filter: 'brightness(1.28)',
-          offset: 0.48,
-        },
-        {
-          transform: `translate(${deltaX}px, ${deltaY}px) rotateY(0deg) scale(${scaleX}, ${scaleY})`,
+          transform: `translate(${deltaX}px, ${deltaY}px) scale(1)`,
           opacity: 1,
-          filter: 'brightness(1.18)',
-          offset: 0.72,
+          filter: 'brightness(1.2)',
+          offset: 0.76,
         },
         {
-          transform: `translate(${deltaX}px, ${deltaY}px) rotateY(0deg) scale(${scaleX}, ${scaleY})`,
+          transform: `translate(${deltaX}px, ${deltaY}px) scale(1.03)`,
           opacity: 1,
-          filter: 'brightness(1.1)',
-          offset: 0.9,
+          filter: 'brightness(1.14)',
+          offset: 0.88,
         },
         {
-          transform: `translate(${deltaX}px, ${deltaY}px) rotateY(-12deg) scale(${scaleX * 0.96}, ${scaleY * 0.96})`,
+          transform: `translate(${deltaX}px, ${deltaY}px) scale(1.12)`,
           opacity: 0,
-          filter: 'brightness(1.36)',
+          filter: 'brightness(1.46)',
         },
       ],
-      { duration: 760, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)', fill: 'forwards' }
+      { duration: 900, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)', fill: 'forwards' }
     )
 
     return new Promise((resolve) => {
       window.setTimeout(() => {
-        SquareBurst.playAt(targetX, targetY, theme, { count: 12, spread: 145, duration: 520 })
-      }, 610)
+        SquareBurst.playAt(targetX, targetY, theme, { count: 14, spread: 150, duration: 560 })
+      }, 760)
       anim.onfinish = () => {
         ghost.remove()
         source.classList.remove('is-hand-use-source')
@@ -1495,7 +1500,7 @@ export class GameBoardRenderer {
         ghost.remove()
         source.classList.remove('is-hand-use-source')
         resolve()
-      }, 920)
+      }, 1080)
     })
   }
 
@@ -2887,7 +2892,9 @@ const STYLES = `
   gap: 8px;
   min-height: 0;
   padding: 10px;
-  background: linear-gradient(180deg, rgba(31, 24, 48, 0.86), rgba(18, 14, 28, 0.94));
+  background:
+    linear-gradient(180deg, rgba(31, 24, 48, 0.82), rgba(18, 14, 28, 0.94)),
+    radial-gradient(circle at 50% 0%, rgba(255, 215, 120, 0.09), transparent 58%);
   border: 1px solid var(--color-border-soft);
   border-radius: 16px;
   box-shadow:
@@ -3155,6 +3162,20 @@ const STYLES = `
     0 0 22px rgba(244, 164, 96, 0.18);
   color: #fff5dc;
 }
+
+.common-card-face::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Reuse the current card-back art as a softened front-face pattern so the
+     playable card face has ornament without competing with the illustration. */
+  background: var(--hand-card-back) center / cover no-repeat;
+  opacity: 0.18;
+  filter: saturate(0.72) brightness(1.28) sepia(0.2);
+  mix-blend-mode: screen;
+}
+
 .common-card-face::after {
   content: '';
   position: absolute;
@@ -3216,11 +3237,14 @@ const STYLES = `
 }
 .common-card-desc {
   margin: 0;
-  align-self: end;
-  color: rgba(255, 232, 168, 0.82);
-  font-size: 12px;
-  line-height: 1.45;
+  /* Center the effect copy within the lower text area rather than letting it
+     sit on the card bottom edge. */
+  align-self: center;
+  color: rgba(255, 232, 168, 0.9);
+  font-size: 15px;
+  line-height: 1.42;
   word-break: keep-all;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.72);
 }
 .common-card-subdesc {
   color: rgba(255, 245, 220, 0.72);
@@ -3559,7 +3583,7 @@ const STYLES = `
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.045);
-  min-height: 64px;
+  min-height: 78px;
   transition: transform 0.18s cubic-bezier(0.2, 0.86, 0.28, 1), box-shadow 0.18s ease;
   isolation: isolate;
 }
@@ -3588,30 +3612,28 @@ const STYLES = `
     0 10px 28px rgba(0, 0, 0, 0.64),
     0 0 18px rgba(255, 215, 120, 0.28);
 }
-.hand-use-ghost.is-card-reveal {
-  border-radius: 13px;
-  overflow: hidden;
-  transform-origin: center;
-}
-.hand-use-ghost.is-card-reveal > button {
-  opacity: 0;
-}
-.hand-use-ghost.is-card-reveal .hand-card-preview {
+.hand-use-ghost.is-preview-flight {
+  /* This element can also carry .hand-card-preview, so pin the flight ghost
+     back to fixed positioning after the preview rules are applied. */
+  position: fixed !important;
+  right: auto !important;
   display: block;
   opacity: 1;
-  inset: 0;
-  width: 100%;
-  pointer-events: none;
+  border-radius: 14px;
+  overflow: visible;
   transform: none;
   animation: none;
 }
-.hand-use-ghost.is-card-reveal .hand-card-preview::before {
+.hand-use-ghost.is-preview-flight::before {
   display: none;
 }
 .hand-use-ghost button { cursor: default; }
 .hand-slot.is-hand-use-source {
-  opacity: 0.36;
-  filter: saturate(0.8) brightness(0.9);
+  /* The clicked compact card should disappear quietly while the preview
+     carries the actual use animation to the center. */
+  opacity: 0.16;
+  transform: translateY(2px) scale(0.985);
+  filter: saturate(0.72) brightness(0.82);
 }
 .hand-slot.hand-card:hover,
 .hand-slot.hand-card:focus-within {
@@ -3625,26 +3647,35 @@ const STYLES = `
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-columns: 48px 1fr;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 9px;
-  background: transparent;
+  grid-template-columns: 1fr;
+  align-items: end;
+  gap: 0;
+  padding: 8px 10px;
+  /* Compact hand entries use the card illustration as their full background
+     instead of confining it to the old left thumbnail box. */
+  background:
+    linear-gradient(90deg, rgba(12, 8, 18, 0.7), rgba(12, 8, 18, 0.2) 58%, rgba(12, 8, 18, 0.62)),
+    linear-gradient(180deg, rgba(255, 232, 168, 0.06), rgba(0, 0, 0, 0.34)),
+    var(--hand-card-art) center / cover no-repeat;
   border: none;
   font-family: inherit;
   font-size: 13px;
   color: var(--color-text-primary);
   cursor: pointer;
   position: relative;
-  min-height: 64px;
+  min-height: 78px;
   overflow: hidden;
 }
 .hand-slot.hand-card button:hover {
-  background: rgba(255, 215, 120, 0.06);
+  background:
+    linear-gradient(90deg, rgba(12, 8, 18, 0.62), rgba(255, 215, 120, 0.08) 58%, rgba(12, 8, 18, 0.56)),
+    linear-gradient(180deg, rgba(255, 232, 168, 0.1), rgba(0, 0, 0, 0.28)),
+    var(--hand-card-art) center / cover no-repeat;
 }
+
 .hand-card-thumb {
   position: relative;
-  display: block;
+  display: none;
   width: 44px;
   height: 56px;
   border-radius: 7px;
@@ -3672,8 +3703,16 @@ const STYLES = `
   object-position: center;
 }
 .hand-card .hand-card-name {
-  font-weight: 800;
-  font-size: 13px;
+  position: relative;
+  z-index: 1;
+  justify-self: start;
+  max-width: 100%;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(10, 7, 16, 0.48);
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.34);
+  font-weight: 900;
+  font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3695,6 +3734,14 @@ const STYLES = `
   z-index: 70;
   filter: drop-shadow(0 16px 28px rgba(0, 0, 0, 0.72));
 }
+.hand-slot.is-low-preview .hand-card-preview {
+  /* Bottom hand slots otherwise clip against the viewport; anchor their
+     preview by the lower edge and nudge it upward. */
+  top: auto;
+  bottom: -10px;
+  transform: translateY(-8px) translateX(8px) rotateY(86deg);
+}
+
 .hand-card-preview::before {
   content: '';
   position: absolute;
@@ -3708,20 +3755,29 @@ const STYLES = `
 .hand-slot.hand-card:hover .hand-card-preview,
 .hand-slot.hand-card:focus-within .hand-card-preview {
   display: block;
-  animation: hand-preview-flip 0.34s cubic-bezier(0.18, 0.88, 0.22, 1) forwards;
+  animation: hand-preview-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
 }
 @keyframes hand-preview-flip {
-  0% { opacity: 0; transform: translateY(-50%) translateX(12px) rotateY(88deg); }
-  42% { opacity: 1; transform: translateY(-50%) translateX(4px) rotateY(14deg); }
+  0% { opacity: 0; transform: translateY(-50%) translateX(14px) rotateY(92deg); }
+  48% { opacity: 1; transform: translateY(-50%) translateX(5px) rotateY(28deg); }
   100% { opacity: 1; transform: translateY(-50%) translateX(0) rotateY(0deg); }
+}
+.hand-slot.is-low-preview:hover .hand-card-preview,
+.hand-slot.is-low-preview:focus-within .hand-card-preview {
+  animation-name: hand-preview-low-flip;
+}
+@keyframes hand-preview-low-flip {
+  0% { opacity: 0; transform: translateY(-8px) translateX(14px) rotateY(92deg); }
+  48% { opacity: 1; transform: translateY(-8px) translateX(5px) rotateY(28deg); }
+  100% { opacity: 1; transform: translateY(-8px) translateX(0) rotateY(0deg); }
 }
 .hand-slot.hand-card:hover .hand-card-preview::before,
 .hand-slot.hand-card:focus-within .hand-card-preview::before {
-  animation: hand-preview-back-flip 0.34s cubic-bezier(0.18, 0.88, 0.22, 1) forwards;
+  animation: hand-preview-back-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
 }
 @keyframes hand-preview-back-flip {
-  0%, 38% { opacity: 1; transform: rotateY(0deg); }
-  68%, 100% { opacity: 0; transform: rotateY(-92deg); }
+  0%, 42% { opacity: 1; transform: rotateY(0deg); }
+  76%, 100% { opacity: 0; transform: rotateY(-102deg); }
 }
 .hand-cat-recovery { box-shadow: inset 4px 0 0 rgba(103, 196, 152, 0.85); }
 .hand-cat-tool { box-shadow: inset 4px 0 0 rgba(255, 215, 120, 0.9); }
