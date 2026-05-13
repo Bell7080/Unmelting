@@ -364,7 +364,7 @@ Enemy defeat → 1 of 4 basic items drops:
 
 
 ### Hand Gauge Mode + UI Layer Notes (UPDATED)
-- The 10-slot hand gauge is now a player-selectable payoff system rather than a passive "Melt" placeholder. Every played hand card advances it by 1 in code (no redundant per-card candleGain data). Clicking the gauge's left icon cycles modes in order: 최대 체력 +5 → 공격력 +1 → 불씨 +3 → 손패 랜덤 3장.
+- The 10-slot hand gauge is now a player-selectable payoff system rather than a passive "Melt" placeholder. Every played hand card advances it by 1 in code (no redundant per-card candleGain data). The `카드` hand item explicitly adds extra gauge progress (+1 base, +7 triple) because its "손패 콤보 카운트" means this 10-use bonus counter. Clicking the gauge's left icon cycles modes in order: 최대 체력 +5 → 공격력 +1 → 불씨 +3 → 손패 랜덤 3장.
 - Full-gauge resolution is intentionally sequenced after the hand-card beat and delayed recipe beat: `카드 효과 → 조합 효과 → 게이지 효과`. Keep this delay readable; do not fold the gauge payoff back into `HandSystem.useSingle`.
 - After each hand-card field effect and after each individual combo recipe, the UI runs a preparation refresh (`runPreparationRefreshAfterFieldEffects` in `src/index.ts`) that compacts, refills, regroups, and renders once so emptied field slots do not remain visible as holes.
 - Rail preparation now delegates to `GameState.compactAndRefillRails()`: large clears such as `한 걸음씩` repeatedly compact gravity and draw one fresh top card at a time until all lanes are continuous/full. Do not pre-roll a batch of random cards for these clears; let each refill draw happen only when a top slot is actually empty.
@@ -372,7 +372,7 @@ Enemy defeat → 1 of 4 basic items drops:
 - Chain banner card entries use one restrained warm tone instead of per-category colors. Recipe and gauge events are the emphasized entries; gauge events use a distinct cool-warm highlight so they differ from recipe triggers.
 - Compendium field-card entries should use the unified 1/2/3칸 family format for enemies, mimics, traps, and treasures so width-based strengthening is documented consistently.
 - Hand-card target documentation and real target validation share `targeting.base/triple` scope rows in `src/data/HandCards.ts` (`대상/랜덤/전체/없음`, `전방/대기/필드/자신/손패`, `개수 제한`). Do not reintroduce separate prose-only targeting rules.
-- The `카드` hand item grants an abstract combo-count flow bonus while still adding only one physical `card` entry to `chain.sequence` and the chain banner. Recipe matching must use physical recipe ingredients only: `셔플` requires two actually used `카드` hand items, not one `카드` plus its combo-count bonus.
+- Gauge overflow is intentional: when card use plus `카드` item progress exceeds 10 slots, resolving a full gauge consumes only 10 and leaves the remainder in the next gauge. Recipe matching still uses physical recipe ingredients only: `셔플` requires two actually used `카드` hand items, not one `카드` plus gauge progress.
 - Ember decay is intentionally faster than older drafts: `Character.EMBER_DECAY_TURNS` is 3, so the ember counter wanes by 1 every 3 completed turns.
 
 ### Post-MVP Features (Planning Only, NOT in current implementation)

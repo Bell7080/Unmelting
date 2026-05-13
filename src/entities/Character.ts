@@ -117,10 +117,11 @@ export class Character {
     return this.ember - before
   }
 
-  /** Add candle gauge progress, clamped at candleMax. Returns the new value. */
+  /** Add gauge progress without clamping so overflow can carry into the next gauge. */
   gainCandle(amount: number): number {
-    this.candle = Math.min(this.candleMax, this.candle + Math.max(0, amount))
-    return this.candle
+    const gained = Math.max(0, amount)
+    this.candle += gained
+    return gained
   }
 
   /** Cycle the 10-slot gauge's payoff mode from the UI icon button. */
@@ -131,9 +132,9 @@ export class Character {
     return this.candleMode
   }
 
-  /** Reset the candle gauge after a payoff fires. */
-  resetCandle(): void {
-    this.candle = 0
+  /** Consume exactly one full 10-slot gauge, preserving overflow for the next gauge. */
+  consumeFullCandleGauge(): void {
+    this.candle = Math.max(0, this.candle - this.candleMax)
   }
 
   isCandleFull(): boolean {

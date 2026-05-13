@@ -55,8 +55,8 @@ export interface HandUseResult {
   removedFieldCards: RemovedFieldCard[]
   /** Currency gained by a coin hand card; UI applies it to the shop wallet. */
   coinsGained?: number
-  /** Extra abstract combo-count bonus; this is not another card entry. */
-  comboCountBonus?: number
+  /** Extra hand-gauge progress granted by the card's explicit effect. */
+  gaugeCountBonus?: number
 }
 
 export interface RecipeFireResult {
@@ -72,12 +72,10 @@ export interface RecipeFireResult {
  * The active chain. Lives on the GameState to survive hand re-renders. We
  * track:
  *   - sequence: defIds in the order they were physically used
- *   - comboCountBonuses: abstract flow bonuses such as the `카드` item effect
  *   - firedRecipeIds: recipe ids already triggered for this chain
  */
 export interface ChainState {
   sequence: HandCardId[]
-  comboCountBonuses: Partial<Record<HandCardId, number>>
   firedRecipeIds: Set<string>
 }
 
@@ -91,13 +89,12 @@ interface RecipeEffectResult {
 export class HandSystem {
   /** Build a fresh empty chain. */
   static newChain(): ChainState {
-    return { sequence: [], comboCountBonuses: {}, firedRecipeIds: new Set() }
+    return { sequence: [], firedRecipeIds: new Set() }
   }
 
   /** Reset the chain in-place (board action / turn end). */
   static resetChain(chain: ChainState): void {
     chain.sequence = []
-    chain.comboCountBonuses = {}
     chain.firedRecipeIds = new Set()
   }
 
@@ -154,16 +151,12 @@ export class HandSystem {
 
     character.removeHandCardAt(slotIndex)
 
-    // Extend the visible recipe chain with exactly one real card entry, then
-    // store any abstract combo-count flow bonus separately. Recipes such as
-    // `셔플` still require their listed physical ingredients (`카드` + `카드`),
-    // so this bonus must never be counted as an extra recipe ingredient.
+    // Extend the visible recipe chain with exactly one real card entry. The
+    // `카드` item's combo-count text now means hand-gauge progress, not hidden
+    // recipe ingredients, so recipes still read only this physical sequence.
     chain.sequence.push(card.defId)
-    const comboCountBonus = HandSystem.comboCountBonusFor(card.defId, card.merged === true)
-    if (comboCountBonus > 0) {
-      chain.comboCountBonuses[card.defId] =
-        (chain.comboCountBonuses[card.defId] ?? 0) + comboCountBonus
-    }
+    const gaugeCountBonus = HandSystem.gaugeCountBonusFor(card.defId, card.merged === true)
+    if (gaugeCountBonus > 0) character.gainCandle(gaugeCountBonus)
 
     // Recipes are deliberately resolved later by fireNextPendingRecipe(), which
     // gives the UI a readable beat between the card effect and combo explosion.
@@ -187,14 +180,14 @@ export class HandSystem {
       mergeMessages,
       removedFieldCards,
       coinsGained: card.defId === 'coin' ? (card.merged ? 5 : 1) : 0,
-      comboCountBonus,
+      gaugeCountBonus,
     }
   }
 
-  /** Abstract combo-count bonus contributed by cards with combo-count effects. */
-  private static comboCountBonusFor(defId: HandCardId, isMerged: boolean): number {
+  /** Extra hand-gauge progress contributed by cards with combo-count effects. */
+  private static gaugeCountBonusFor(defId: HandCardId, isMerged: boolean): number {
     if (defId !== 'card') return 0
-    return isMerged ? 5 : 1
+    return isMerged ? 7 : 1
   }
 
   /** Recipe ingredient count of `id`; only physically played cards qualify. */
@@ -225,11 +218,10 @@ export class HandSystem {
   ): Recipe[] {
     const preview: ChainState = {
       sequence: [...chain.sequence, defId],
-      comboCountBonuses: { ...chain.comboCountBonuses },
       firedRecipeIds: new Set(chain.firedRecipeIds),
     }
-    // Recipe hints intentionally mirror recipe ingredient rules, not abstract
-    // combo-count flow bonuses: one `카드` preview must not promise `셔플`.
+    // Recipe hints intentionally mirror physical ingredient rules, not gauge
+    // progress: one `카드` preview must not promise `셔플`.
     return RECIPES.filter((recipe) => {
       if (preview.firedRecipeIds.has(recipe.id)) return false
       return HandSystem.recipeMatches(recipe, preview)
@@ -386,7 +378,7 @@ export class HandSystem {
         return `트리플 함정 ${cleared}장 제거`
       }
       case 'card':
-        return '트리플 손패 콤보 카운트 +5'
+        return '트리플 손패 콤보 카운트 +7'
       case 'coin':
         return '+5$'
     }
