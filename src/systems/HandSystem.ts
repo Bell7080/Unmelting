@@ -71,11 +71,13 @@ export interface RecipeFireResult {
 /**
  * The active chain. Lives on the GameState to survive hand re-renders. We
  * track:
- *   - sequence: defIds in the order they were used
+ *   - sequence: defIds in the order they were physically used
+ *   - comboCountBonuses: abstract flow bonuses such as the `카드` item effect
  *   - firedRecipeIds: recipe ids already triggered for this chain
  */
 export interface ChainState {
   sequence: HandCardId[]
+  comboCountBonuses: Partial<Record<HandCardId, number>>
   firedRecipeIds: Set<string>
 }
 
@@ -89,12 +91,13 @@ interface RecipeEffectResult {
 export class HandSystem {
   /** Build a fresh empty chain. */
   static newChain(): ChainState {
-    return { sequence: [], firedRecipeIds: new Set() }
+    return { sequence: [], comboCountBonuses: {}, firedRecipeIds: new Set() }
   }
 
   /** Reset the chain in-place (board action / turn end). */
   static resetChain(chain: ChainState): void {
     chain.sequence = []
+    chain.comboCountBonuses = {}
     chain.firedRecipeIds = new Set()
   }
 
@@ -151,11 +154,16 @@ export class HandSystem {
 
     character.removeHandCardAt(slotIndex)
 
-    // Extend the chain with exactly one real card entry. The '카드' item adds
-    // only an abstract combo-count bonus, so recipe ingredient matching and the
-    // chain banner never pretend that multiple card copies were played.
+    // Extend the visible recipe chain with exactly one real card entry, then
+    // store any abstract combo-count flow bonus separately. Recipes such as
+    // `셔플` still require their listed physical ingredients (`카드` + `카드`),
+    // so this bonus must never be counted as an extra recipe ingredient.
     chain.sequence.push(card.defId)
     const comboCountBonus = HandSystem.comboCountBonusFor(card.defId, card.merged === true)
+    if (comboCountBonus > 0) {
+      chain.comboCountBonuses[card.defId] =
+        (chain.comboCountBonuses[card.defId] ?? 0) + comboCountBonus
+    }
 
     // Recipes are deliberately resolved later by fireNextPendingRecipe(), which
     // gives the UI a readable beat between the card effect and combo explosion.
@@ -189,7 +197,7 @@ export class HandSystem {
     return isMerged ? 5 : 1
   }
 
-  /** Multiset count of `id` in the chain sequence. */
+  /** Recipe ingredient count of `id`; only physically played cards qualify. */
   private static countInChain(chain: ChainState, id: HandCardId): number {
     let n = 0
     for (const d of chain.sequence) if (d === id) n++
@@ -217,10 +225,11 @@ export class HandSystem {
   ): Recipe[] {
     const preview: ChainState = {
       sequence: [...chain.sequence, defId],
+      comboCountBonuses: { ...chain.comboCountBonuses },
       firedRecipeIds: new Set(chain.firedRecipeIds),
     }
-    // Combo-count bonuses are abstract momentum, not ingredient copies, so the
-    // preview keeps recipe hints aligned with the single real card entry.
+    // Recipe hints intentionally mirror recipe ingredient rules, not abstract
+    // combo-count flow bonuses: one `카드` preview must not promise `셔플`.
     return RECIPES.filter((recipe) => {
       if (preview.firedRecipeIds.has(recipe.id)) return false
       return HandSystem.recipeMatches(recipe, preview)
@@ -442,7 +451,8 @@ export class HandSystem {
     if (rule.filter === 'enemy-or-treasure') {
       return target.card.type === CardType.ENEMY || target.card.type === CardType.TREASURE
     }
-    if (rule.filter === 'hazard') return target.card.type === CardType.TRAP || target.card.isFrozen()
+    if (rule.filter === 'hazard')
+      return target.card.type === CardType.TRAP || target.card.isFrozen()
     if (rule.filter === 'any') return true
     return false
   }

@@ -105,7 +105,7 @@ export type ChainEvent = ChainEventCard | ChainEventRecipe | ChainEventGauge
 export interface ChainHints {
   events: ChainEvent[]
   /** Slots whose next click would immediately satisfy at least one recipe. */
-  recipeReadyBySlot?: Record<number, { id: string; name: string }[]>
+  recipeReadyBySlot?: Record<number, { id: string; name: string; flavor: string }[]>
 }
 
 export interface ScorePanelState {
@@ -645,6 +645,23 @@ export class GameBoardRenderer {
       const recipeReadyTitle = recipeReady
         ? `즉시 조합: ${readyRecipes.map((r) => r.name).join(', ')}`
         : ''
+      // Recipe previews sit left of the normal card hover preview, giving the
+      // player the recipe name/effect before they commit to the glowing slot.
+      const recipePreviewHtml = recipeReady
+        ? `<aside class="hand-recipe-preview" aria-hidden="true">
+            <span class="hand-recipe-preview-kicker">발동 조합</span>
+            ${readyRecipes
+              .map(
+                (recipe) => `
+                  <span class="hand-recipe-preview-row">
+                    <strong>${recipe.name}</strong>
+                    <em>${recipe.flavor}</em>
+                  </span>
+                `
+              )
+              .join('')}
+          </aside>`
+        : ''
       const merged = card.merged ? 'is-merged' : ''
       // Only mark a hand card as `is-entering` when its uid wasn't present
       // in the previous render. This keeps the drop animation a *real* entry
@@ -682,6 +699,7 @@ export class GameBoardRenderer {
           <div class="hand-card-preview" style="--hand-card-back: url('${SpriteUrls.cardBack}');" aria-hidden="true">
             ${this.handCardFace(card.defId, description, card.merged)}
           </div>
+          ${recipePreviewHtml}
         </li>
       `)
     }
@@ -2920,12 +2938,21 @@ const STYLES = `
   inset: 0;
   pointer-events: none;
   z-index: 38;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(0, 0, 0, 0) 25%,
-    rgba(0, 0, 0, calc(0.55 * var(--vignette-opacity, 0))) 65%,
-    rgba(0, 0, 0, calc(0.85 * var(--vignette-opacity, 0))) 100%
-  );
+  /* Side-weighted darkness preserves readability around the rail, hand, and
+     score zones while still making low ember feel oppressive at the edges. */
+  background:
+    linear-gradient(90deg,
+      rgba(0, 0, 0, calc(0.88 * var(--vignette-opacity, 0))) 0%,
+      rgba(0, 0, 0, calc(0.5 * var(--vignette-opacity, 0))) 13%,
+      rgba(0, 0, 0, calc(0.12 * var(--vignette-opacity, 0))) 29%,
+      rgba(0, 0, 0, calc(0.04 * var(--vignette-opacity, 0))) 50%,
+      rgba(0, 0, 0, calc(0.12 * var(--vignette-opacity, 0))) 71%,
+      rgba(0, 0, 0, calc(0.5 * var(--vignette-opacity, 0))) 87%,
+      rgba(0, 0, 0, calc(0.88 * var(--vignette-opacity, 0))) 100%),
+    radial-gradient(ellipse at center,
+      rgba(0, 0, 0, 0) 26%,
+      rgba(0, 0, 0, calc(0.18 * var(--vignette-opacity, 0))) 68%,
+      rgba(0, 0, 0, calc(0.48 * var(--vignette-opacity, 0))) 100%);
   transition: background 0.4s ease;
 }
 
@@ -3103,7 +3130,8 @@ const STYLES = `
   border: 1px solid var(--color-border-warm);
   border-radius: 18px;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.65);
-  overflow: hidden;
+  /* Keep recipe cards visible even when their hover fan extends past the codex panel. */
+  overflow: visible;
   color: #fff5dc;
 }
 .compendium-header {
@@ -3157,10 +3185,9 @@ const STYLES = `
   border-color: rgba(244, 164, 96, 0.4);
 }
 .compendium-body {
-  /* Horizontal overflow remains visible so expanded recipe cards can fan past
-     their own grid cell instead of being cut off by the codex panel. */
-  overflow-y: auto;
-  overflow-x: visible;
+  /* Overflow is visible by design: recipe mini-cards may fan outside the panel
+     because readability is more important than clipping to the codex bounds. */
+  overflow: visible;
   padding: 16px 20px;
   display: flex;
   flex-direction: column;
@@ -3884,6 +3911,76 @@ const STYLES = `
   0%, 42% { opacity: 1; transform: rotateY(0deg); }
   76%, 100% { opacity: 0; transform: rotateY(-102deg); }
 }
+
+/* Recipe hover preview: appears to the left of the hand-card preview so the
+   glowing recipe-ready state names the exact combo and its payoff. */
+.hand-recipe-preview {
+  display: none;
+  position: absolute;
+  right: calc(100% + 222px);
+  top: 50%;
+  width: 214px;
+  padding: 10px 12px;
+  border-radius: 13px;
+  border: 1px solid rgba(255, 215, 120, 0.44);
+  background:
+    linear-gradient(180deg, rgba(48, 33, 55, 0.96), rgba(15, 10, 22, 0.98)),
+    radial-gradient(circle at 20% 10%, rgba(255, 215, 120, 0.18), transparent 56%);
+  box-shadow:
+    0 16px 30px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 245, 220, 0.1),
+    0 0 22px rgba(244, 164, 96, 0.16);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) translateX(10px);
+  z-index: 72;
+}
+.hand-slot.is-low-preview .hand-recipe-preview {
+  top: auto;
+  bottom: 8px;
+  transform: translateY(0) translateX(10px);
+}
+.hand-slot.hand-card.is-recipe-ready:hover .hand-recipe-preview,
+.hand-slot.hand-card.is-recipe-ready:focus-within .hand-recipe-preview {
+  display: grid;
+  gap: 7px;
+  animation: recipe-preview-slide 0.28s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
+}
+.hand-recipe-preview-kicker {
+  font-size: 12px;
+  color: rgba(255, 215, 120, 0.78);
+  letter-spacing: 0.12em;
+}
+.hand-recipe-preview-row {
+  display: grid;
+  gap: 2px;
+  padding-left: 8px;
+  border-left: 3px solid rgba(255, 215, 120, 0.72);
+}
+.hand-recipe-preview-row strong {
+  color: #fff5dc;
+  font-size: 15px;
+  line-height: 1.2;
+}
+.hand-recipe-preview-row em {
+  color: rgba(255, 245, 220, 0.78);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.35;
+}
+@keyframes recipe-preview-slide {
+  from { opacity: 0; transform: translateY(-50%) translateX(16px); }
+  to { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+.hand-slot.is-low-preview:hover .hand-recipe-preview,
+.hand-slot.is-low-preview:focus-within .hand-recipe-preview {
+  animation-name: recipe-preview-low-slide;
+}
+@keyframes recipe-preview-low-slide {
+  from { opacity: 0; transform: translateY(0) translateX(16px); }
+  to { opacity: 1; transform: translateY(0) translateX(0); }
+}
+
 .hand-cat-recovery { box-shadow: inset 4px 0 0 rgba(103, 196, 152, 0.85); }
 .hand-cat-tool { box-shadow: inset 4px 0 0 rgba(255, 215, 120, 0.9); }
 .hand-cat-control { box-shadow: inset 4px 0 0 rgba(145, 174, 210, 0.9); }
@@ -4045,7 +4142,7 @@ const STYLES = `
 /* Combo tab recipe cards: mini hand cards overlap by default and fan out on
    hover/focus, matching the requested hand-card stack interaction. */
 .compendium-card-art--recipe {
-  min-height: 190px;
+  min-height: 156px;
   overflow: visible;
   background:
     radial-gradient(circle at 50% 8%, rgba(255, 215, 120, 0.12), transparent 58%),
@@ -4054,16 +4151,16 @@ const STYLES = `
 .compendium-recipe-stack {
   position: relative;
   width: min(100%, 270px);
-  height: 174px;
+  height: 142px;
   margin: 0 auto;
 }
 .compendium-recipe-mini {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 104px;
-  min-height: 146px;
-  height: 146px;
+  width: 96px;
+  min-height: 126px;
+  height: 126px;
   padding: 6px;
   gap: 5px;
   transform: translate(-50%, -50%) translateX(calc((var(--i, 0) - var(--recipe-center, 0)) * 18px)) rotate(calc((var(--i, 0) - var(--recipe-center, 0)) * 4deg));
@@ -4085,8 +4182,8 @@ const STYLES = `
   transform: translate(-50%, -50%) translateX(calc((var(--i, 0) - var(--recipe-center, 0)) * 74px)) rotate(calc((var(--i, 0) - var(--recipe-center, 0)) * 9deg));
   filter: brightness(1.08);
 }
-.compendium-recipe-mini .common-card-art { height: 72px; min-height: 72px; }
-.compendium-recipe-mini .common-card-body { min-height: 48px; gap: 3px; }
+.compendium-recipe-mini .common-card-art { height: 58px; min-height: 58px; }
+.compendium-recipe-mini .common-card-body { min-height: 34px; gap: 2px; }
 .compendium-recipe-mini .common-card-name { font-size: 12px; }
 .compendium-recipe-mini .common-card-desc { display: none; }
 
