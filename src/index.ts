@@ -454,7 +454,7 @@ function candleModeLabel(mode: CandleMode): string {
   }
 }
 
-/** Apply the selected full-gauge payoff and reset the 10-slot gauge. */
+/** Apply the selected full-gauge payoff and preserve overflow for the next gauge. */
 function fireCandleGaugeEffect(): { name: string; message: string; mode: CandleMode } | null {
   const character = gameState.character
   if (!character.isCandleFull()) return null
@@ -487,7 +487,8 @@ function fireCandleGaugeEffect(): { name: string; message: string; mode: CandleM
       break
     }
   }
-  character.resetCandle()
+  // Spend only one full gauge so combo-count overflow starts filling the next one.
+  character.consumeFullCandleGauge()
   return { name: `게이지: ${candleModeLabel(mode)}`, message, mode }
 }
 
@@ -706,22 +707,22 @@ async function applyHandSingle(
   }
 
   // Full gauge fires last: card effect -> recipe effect -> gauge effect.
-  // The short delay makes the payoff read as a chain continuation, not an
-  // instantaneous side effect of the card click.
-  if (gameState.character.isCandleFull()) {
+  // Overflow is consumed one 10-slot gauge at a time so a large `카드` bonus can
+  // roll remaining progress into the next gauge, and future larger bonuses can
+  // safely trigger multiple payoffs in sequence.
+  while (gameState.character.isCandleFull()) {
     await wait(GAUGE_TRIGGER_DELAY_MS)
     const gauge = fireCandleGaugeEffect()
-    if (gauge) {
-      recordNotice(`${gauge.name}: ${gauge.message}`, 'gauge')
-      chainTimeline.push({
-        kind: 'gauge',
-        mode: gauge.mode,
-        name: gauge.name,
-        flavor: gauge.message,
-        uid: nextChainUid(),
-      })
-      boardRenderer.refreshChainBanner(buildChainHints())
-    }
+    if (!gauge) break
+    recordNotice(`${gauge.name}: ${gauge.message}`, 'gauge')
+    chainTimeline.push({
+      kind: 'gauge',
+      mode: gauge.mode,
+      name: gauge.name,
+      flavor: gauge.message,
+      uid: nextChainUid(),
+    })
+    boardRenderer.refreshChainBanner(buildChainHints())
   }
 
   // Refill after all delayed recipe/gauge effects have resolved. This is the

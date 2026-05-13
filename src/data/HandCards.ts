@@ -8,9 +8,24 @@
 
 import { HandCardDefinition, HandCardId, HandEffectTargeting } from '@entities/HandCard'
 
-const selfOne: HandEffectTargeting = { selection: 'none', zone: 'self', filter: 'none', countLimit: 1 }
-const handOne: HandEffectTargeting = { selection: 'none', zone: 'hand', filter: 'none', countLimit: 1 }
-const handFive: HandEffectTargeting = { selection: 'none', zone: 'hand', filter: 'none', countLimit: 5 }
+const selfOne: HandEffectTargeting = {
+  selection: 'none',
+  zone: 'self',
+  filter: 'none',
+  countLimit: 1,
+}
+const handOne: HandEffectTargeting = {
+  selection: 'none',
+  zone: 'hand',
+  filter: 'none',
+  countLimit: 1,
+}
+const handSeven: HandEffectTargeting = {
+  selection: 'none',
+  zone: 'hand',
+  filter: 'none',
+  countLimit: 7,
+}
 
 export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   'wax-drop': {
@@ -105,8 +120,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     name: '카드',
     category: 'tool',
     description: '손패 콤보 카운트 +1',
-    tripleDescription: '손패 콤보 카운트 +5',
-    targeting: { base: handOne, triple: handFive },
+    tripleDescription: '손패 콤보 카운트 +7',
+    targeting: { base: handOne, triple: handSeven },
     dropWeight: 8,
   },
   coin: {

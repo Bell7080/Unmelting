@@ -33,6 +33,15 @@ describe('Character item effects', () => {
     expect(character.health).toBe(18)
   })
 
+  it('carries hand gauge overflow into the next gauge', () => {
+    const character = new Character()
+
+    character.gainCandle(17)
+    character.consumeFullCandleGauge()
+
+    expect(character.candle).toBe(7)
+  })
+
   it('resets max health back to the starting value for a new run', () => {
     const character = new Character()
     character.increaseMaxHealth(2)
