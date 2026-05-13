@@ -20,7 +20,29 @@ export type HandCardId =
   | 'card'
   | 'coin'
 
-export type HandTargetRule = 'field-enemy' | 'front-card-or-treasure' | 'front-trap'
+export type HandEffectSelection = 'target' | 'random' | 'all' | 'none'
+
+export type HandEffectZone = 'front' | 'waiting' | 'field' | 'self' | 'hand' | 'none'
+
+export type HandEffectFilter = 'enemy' | 'trap' | 'treasure' | 'enemy-or-treasure' | 'hazard' | 'any' | 'none'
+
+export interface HandEffectTargeting {
+  /** How the affected object is chosen: 대상/랜덤/전체/없음. */
+  selection: HandEffectSelection
+  /** Where the effect can look: 전방/대기/필드/자신/손패/없음. */
+  zone: HandEffectZone
+  /** Which object family is valid inside the zone. */
+  filter: HandEffectFilter
+  /** Null means every valid object in the zone can be affected. */
+  countLimit: number | null
+}
+
+export interface HandCardTargetingTable {
+  /** Normal single-card behavior. */
+  base: HandEffectTargeting
+  /** Three-card merged behavior. */
+  triple: HandEffectTargeting
+}
 
 export interface HandCardDefinition {
   id: HandCardId
@@ -29,8 +51,8 @@ export interface HandCardDefinition {
   description: string
   /** Description shown for the triple-synthesis enhanced effect. */
   tripleDescription: string
-  /** Optional targeting rule used by the renderer and HandSystem validation. */
-  targetRule?: HandTargetRule
+  /** Shared targeting/scope data used by the renderer and HandSystem validation. */
+  targeting: HandCardTargetingTable
   /** Optional weight that biases drop selection (defaults to 1). */
   dropWeight?: number
 }

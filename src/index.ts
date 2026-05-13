@@ -208,10 +208,38 @@ function diffThawedCards(before: Map<string, FieldFreezeSnapshotEntry>): string[
  * cards never leave visible holes before player control returns.
  */
 async function runPreparationRefreshAfterFieldEffects(): Promise<void> {
-  const moved = compactAndRefillAllLanes()
+  // Mirror compactAndRefillRails() as visible beats: cards fall first, then new
+  // top cards appear, and the loop repeats until every rail is continuous/full.
+  let movedAny = false
+  let safety = LANE_DISTANCE_COUNT * 3 + 3
+  while (safety-- > 0) {
+    const moved = gameState.compactLanes()
+    if (moved) {
+      movedAny = true
+      gameState.regroupAllRows()
+      render()
+      await wait(150)
+    }
+
+    let filled = false
+    const topDistance = LANE_DISTANCE_COUNT - 1
+    for (let laneIndex = 0; laneIndex < gameState.lanes.length; laneIndex++) {
+      const lane = gameState.lanes[laneIndex]
+      if (lane.getCardAtDistance(topDistance)) continue
+      lane.setCardAtDistance(topDistance, cardSpawner.spawnCardForRefill())
+      filled = true
+    }
+    if (filled) {
+      movedAny = true
+      gameState.regroupAllRows()
+      render()
+      await wait(150)
+    }
+    if (!moved && !filled) break
+  }
   gameState.regroupAllRows()
   render()
-  if (moved) await wait(380)
+  if (movedAny) await wait(80)
 }
 
 function createItemGainLogs(itemNames: string[]): ActivityLogDraft[] {
@@ -521,8 +549,8 @@ async function handleHandSlotClick(slotIndex: number): Promise<void> {
 
   // Plain click on a targeted card arms it; merged 키틴/밀랍 switch
   // to broad field/front effects, so those enhanced cards should fire directly.
-  const mergedSkipsTarget = card.merged === true && (def.id === 'wax' || def.id === 'chitin')
-  if (def.targetRule && !mergedSkipsTarget) {
+  const activeTargeting = card.merged === true ? def.targeting.triple : def.targeting.base
+  if (activeTargeting.selection === 'target') {
     if (pendingHandTarget && pendingHandTarget.slotIndex === slotIndex) {
       pendingHandTarget = null
       boardRenderer.setHandTargetingMode(null)
@@ -563,7 +591,12 @@ async function applyHandSingle(
   // category burst. This makes the hand action read like a card being played
   // instead of a slot-local pop.
   const handUseTheme = usedDef ? burstThemeForCategory(usedDef.category) : null
-  if (handUseTheme) await boardRenderer.animateHandCardUse(slotIndex, handUseTheme)
+  if (handUseTheme) {
+    // Start the flight clone, then continue immediately. The model hand card is
+    // already consumed, so the compact slot can disappear on the next render
+    // while the larger played-card ghost lingers over the field.
+    void boardRenderer.animateHandCardUse(slotIndex, handUseTheme)
+  }
   if (usedDef && (usedDef.id === 'wax-drop' || usedDef.id === 'candle')) {
     boardRenderer.burstAtElement(
       document.querySelector<HTMLElement>('.player-card'),

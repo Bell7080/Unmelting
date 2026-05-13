@@ -18,7 +18,7 @@ import { GameState } from '@core/GameState'
 import { Card, CardType } from '@entities/Card'
 import { Character } from '@entities/Character'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
-import { HandCard, HandCardId, HandCardDefinition } from '@entities/HandCard'
+import { HandCard, HandCardId, HandCardDefinition, HandEffectTargeting } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
 import { Recipe, RECIPES } from '@data/Recipes'
 import { DropSystem } from './DropSystem'
@@ -424,18 +424,26 @@ export class HandSystem {
   ): boolean {
     // Some triple effects become broad field effects and no longer need the
     // single-card target used by the base effect.
-    if (isMerged && (def.id === 'wax' || def.id === 'chitin')) return true
-    if (!def.targetRule) return true
+    const rule = isMerged ? def.targeting.triple : def.targeting.base
+    if (rule.selection !== 'target') return true
     if (!target) return false
-    if (def.targetRule === 'field-enemy') return target.card.type === CardType.ENEMY
-    if (def.targetRule === 'front-card-or-treasure') {
-      return (
-        target.distance === 0 &&
-        (target.card.type === CardType.ENEMY || target.card.type === CardType.TREASURE)
-      )
+    return HandSystem.targetMatchesRule(rule, target)
+  }
+
+  /** Check a selected board card against the shared hand-card targeting table. */
+  private static targetMatchesRule(rule: HandEffectTargeting, target: HandTarget): boolean {
+    if (rule.zone === 'front' && target.distance !== 0) return false
+    if (rule.zone === 'waiting' && target.distance === 0) return false
+    if (rule.zone !== 'front' && rule.zone !== 'waiting' && rule.zone !== 'field') return false
+
+    if (rule.filter === 'enemy') return target.card.type === CardType.ENEMY
+    if (rule.filter === 'trap') return target.card.type === CardType.TRAP
+    if (rule.filter === 'treasure') return target.card.type === CardType.TREASURE
+    if (rule.filter === 'enemy-or-treasure') {
+      return target.card.type === CardType.ENEMY || target.card.type === CardType.TREASURE
     }
-    if (def.targetRule === 'front-trap')
-      return target.distance === 0 && target.card.type === CardType.TRAP
+    if (rule.filter === 'hazard') return target.card.type === CardType.TRAP || target.card.isFrozen()
+    if (rule.filter === 'any') return true
     return false
   }
 
