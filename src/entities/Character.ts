@@ -20,7 +20,7 @@ export class Character {
   /** Hand stacks bottom-up (slot 0 = bottommost). 10 slots total. */
   static readonly HAND_MAX = 10
   /** Ember wanes by 1 every EMBER_DECAY_TURNS turns. */
-  static readonly EMBER_DECAY_TURNS = 10
+  static readonly EMBER_DECAY_TURNS = 3
 
   id: string
   name: string
