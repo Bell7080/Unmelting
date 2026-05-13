@@ -55,8 +55,8 @@ export interface HandUseResult {
   removedFieldCards: RemovedFieldCard[]
   /** Currency gained by a coin hand card; UI applies it to the shop wallet. */
   coinsGained?: number
-  /** Extra virtual chain entries added by the played card beyond its normal 1 count. */
-  comboCopiesAdded?: number
+  /** Extra abstract combo-count bonus; this is not another card entry. */
+  comboCountBonus?: number
 }
 
 export interface RecipeFireResult {
@@ -151,12 +151,11 @@ export class HandSystem {
 
     character.removeHandCardAt(slotIndex)
 
-    // Extend the chain. Every hand card contributes its natural 1 count;
-    // '카드' then appends explicit virtual copies so its +1/+5 combo text really
-    // means a normal card records 2 total and a triple records 6 total.
+    // Extend the chain with exactly one real card entry. The '카드' item adds
+    // only an abstract combo-count bonus, so recipe ingredient matching and the
+    // chain banner never pretend that multiple card copies were played.
     chain.sequence.push(card.defId)
-    const comboCopiesAdded = HandSystem.extraComboCopiesFor(card.defId, card.merged === true)
-    for (let i = 0; i < comboCopiesAdded; i++) chain.sequence.push(card.defId)
+    const comboCountBonus = HandSystem.comboCountBonusFor(card.defId, card.merged === true)
 
     // Recipes are deliberately resolved later by fireNextPendingRecipe(), which
     // gives the UI a readable beat between the card effect and combo explosion.
@@ -180,12 +179,12 @@ export class HandSystem {
       mergeMessages,
       removedFieldCards,
       coinsGained: card.defId === 'coin' ? (card.merged ? 5 : 1) : 0,
-      comboCopiesAdded,
+      comboCountBonus,
     }
   }
 
-  /** Extra virtual chain entries contributed by cards with combo-count effects. */
-  private static extraComboCopiesFor(defId: HandCardId, isMerged: boolean): number {
+  /** Abstract combo-count bonus contributed by cards with combo-count effects. */
+  private static comboCountBonusFor(defId: HandCardId, isMerged: boolean): number {
     if (defId !== 'card') return 0
     return isMerged ? 5 : 1
   }
@@ -214,16 +213,14 @@ export class HandSystem {
   static previewTriggeredRecipes(
     chain: ChainState,
     defId: HandCardId,
-    isMerged: boolean = false
+    _isMerged: boolean = false
   ): Recipe[] {
     const preview: ChainState = {
       sequence: [...chain.sequence, defId],
       firedRecipeIds: new Set(chain.firedRecipeIds),
     }
-    // The 카드 item records extra virtual uses in the real chain, so the
-    // preview mirrors that behavior for accurate 셔플/future card-count hints.
-    const comboCopiesAdded = HandSystem.extraComboCopiesFor(defId, isMerged)
-    for (let i = 0; i < comboCopiesAdded; i++) preview.sequence.push(defId)
+    // Combo-count bonuses are abstract momentum, not ingredient copies, so the
+    // preview keeps recipe hints aligned with the single real card entry.
     return RECIPES.filter((recipe) => {
       if (preview.firedRecipeIds.has(recipe.id)) return false
       return HandSystem.recipeMatches(recipe, preview)
@@ -341,7 +338,7 @@ export class HandSystem {
       case 'chitin':
         return HandSystem.removeTargetTrap(gs, target)
       case 'card':
-        return '손패 콤보 카운트 +1 (총 2회 기록)'
+        return '손패 콤보 카운트 +1'
       case 'coin':
         return '+1$'
     }
@@ -380,7 +377,7 @@ export class HandSystem {
         return `트리플 함정 ${cleared}장 제거`
       }
       case 'card':
-        return '트리플 손패 콤보 카운트 +5 (총 6회 기록)'
+        return '트리플 손패 콤보 카운트 +5'
       case 'coin':
         return '+5$'
     }

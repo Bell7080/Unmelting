@@ -501,8 +501,34 @@ export class GameBoardRenderer {
     return `hand-cat-${cat}`
   }
 
-  /** Shared hand-card face used by hover previews and the compendium so any
-   *  future codex/shop view can reuse the same card-like composition. */
+  /** Shared card face used by hover previews and the compendium. It accepts
+   *  arbitrary art so field-card codex entries can follow the exact hand-card
+   *  frame without scaling the original sprite data. */
+  private commonCardFace(opts: {
+    artUrl: string
+    name: string
+    description: string
+    extraClass?: string
+    badge?: string
+  }): string {
+    const badgeHtml = opts.badge ? `<span class="common-card-badge">${opts.badge}</span>` : ''
+    return `
+      <article class="common-card-face ${opts.extraClass ?? ''}" style="--hand-card-art: url('${opts.artUrl}'); --hand-card-back: url('${SpriteUrls.cardBack}');">
+        <div class="common-card-art" aria-hidden="true">
+          <img src="${opts.artUrl}" alt="" loading="lazy" />
+        </div>
+        <div class="common-card-body">
+          <header class="common-card-title-row">
+            <span class="common-card-name">${opts.name}</span>
+            ${badgeHtml}
+          </header>
+          <p class="common-card-desc">${opts.description}</p>
+        </div>
+      </article>
+    `
+  }
+  /** Hand-card convenience wrapper keeps merged-star naming in one place while
+   *  still delegating the actual visual frame to commonCardFace(). */
   private handCardFace(
     defId: HandCardId,
     description: string,
@@ -511,23 +537,68 @@ export class GameBoardRenderer {
     badge?: string
   ): string {
     const def = getHandCardDef(defId)
-    const badgeHtml = badge ? `<span class="common-card-badge">${badge}</span>` : ''
-    return `
-      <article class="common-card-face ${extraClass}" style="--hand-card-art: url('${spriteForHandCard(defId)}'); --hand-card-back: url('${SpriteUrls.cardBack}');">
-        <div class="common-card-art" aria-hidden="true">
-          <img src="${spriteForHandCard(defId)}" alt="" loading="lazy" />
-        </div>
-        <div class="common-card-body">
-          <header class="common-card-title-row">
-            <span class="common-card-name">${def.name}${merged ? ' ★' : ''}</span>
-            ${badgeHtml}
-          </header>
-          <p class="common-card-desc">${description}</p>
-        </div>
-      </article>
-    `
+    return this.commonCardFace({
+      artUrl: spriteForHandCard(defId),
+      name: `${def.name}${merged ? ' ★' : ''}`,
+      description,
+      extraClass,
+      badge,
+    })
   }
 
+  /** Field-card compendium wrapper converts stat rows into compact effect text
+   *  so enemies, traps, and treasures use the same large-name card template as
+   *  playable hand cards. */
+  private fieldCardFace(opts: {
+    artUrl: string
+    name: string
+    badge: string
+    stats: [string, string][]
+    description: string
+  }): string {
+    const statText = opts.stats
+      .map(([label, value]) => `<span class="common-card-subdesc">${label}</span> ${value}`)
+      .join('<br>')
+    return this.commonCardFace({
+      artUrl: opts.artUrl,
+      name: opts.name,
+      badge: opts.badge,
+      description: `${statText}<br>${opts.description}`,
+      extraClass: 'compendium-field-card',
+    })
+  }
+
+  /** Korean labels for the shared hand-effect scope table shown in the compendium. */
+  private handScopeLabel(defId: HandCardId, merged = false): string {
+    const scope = getHandEffectScope(getHandCardDef(defId), merged)
+    const selectionLabel =
+      scope.selection === 'target'
+        ? '대상'
+        : scope.selection === 'random'
+          ? '랜덤'
+          : scope.selection === 'all'
+            ? '전체'
+            : '없음'
+    const zoneLabel =
+      scope.zone === 'front'
+        ? '전방'
+        : scope.zone === 'waiting'
+          ? '대기'
+          : scope.zone === 'field'
+            ? '필드'
+            : scope.zone === 'self'
+              ? '자신'
+              : scope.zone === 'hand'
+                ? '손패'
+                : '없음'
+    const countLabel = scope.countLimit === null ? '제한 없음' : `${scope.countLimit}개`
+    return `대상 ${selectionLabel} · 범위 ${zoneLabel} · 개수 ${countLabel}`
+  }
+
+  /** Compact two-line scope summary so balance changes remain visible in the codex. */
+  private handScopeDescription(defId: HandCardId): string {
+    return `<span class="common-card-subdesc">기본: ${this.handScopeLabel(defId)}</span><br><span class="common-card-subdesc">★: ${this.handScopeLabel(defId, true)}</span>`
+  }
   private candleModeMeta(mode: CandleMode): { label: string; effect: string; icon: string } {
     switch (mode) {
       case 'max-health':
@@ -741,8 +812,8 @@ export class GameBoardRenderer {
       const baseHp = def.healthOrDamage ?? 1
       const baseAtk = def.attack ?? 1
       const spriteUrl = def.name.includes('생쥐') ? SpriteUrls.enemyMouse : SpriteUrls.enemyFrog
-      return this.compendiumCard({
-        art: { kind: 'sprite', url: spriteUrl },
+      return this.fieldCardFace({
+        artUrl: spriteUrl,
         name: def.name,
         badge: '기본 적',
         stats: [
@@ -764,8 +835,8 @@ export class GameBoardRenderer {
         [`${def.name} 3칸`, `HP ${spanThree[0][1]} / ATK ${spanThree[1][1]}`],
       ]
     })
-    const groupCard = this.compendiumCard({
-      art: { kind: 'icon', svg: swordIcon() },
+    const groupCard = this.fieldCardFace({
+      artUrl: SpriteUrls.enemyFrog,
       name: '적 무리',
       badge: '추가 개체',
       stats: groupRows,
@@ -781,8 +852,8 @@ export class GameBoardRenderer {
         [`${span}칸 드롭`, `${stats.drops}장`],
       ]
     })
-    const mimicCard = this.compendiumCard({
-      art: { kind: 'sprite', url: SpriteUrls.mimic },
+    const mimicCard = this.fieldCardFace({
+      artUrl: SpriteUrls.mimic,
       name: '미믹',
       badge: '특수',
       stats: mimicRows,
@@ -805,8 +876,8 @@ export class GameBoardRenderer {
       const damage = span >= 3 ? 999 : span === 2 ? 5 : baseDamage
       return [`${span}칸`, `${swordIcon()} ${damage}`]
     })
-    const card = this.compendiumCard({
-      art: { kind: 'sprite', url: SpriteUrls.trap },
+    const card = this.fieldCardFace({
+      artUrl: SpriteUrls.trap,
       name: TRAP_DEFINITIONS[0].name,
       badge: '함정',
       stats: spanRows,
@@ -824,8 +895,8 @@ export class GameBoardRenderer {
         [`${span}칸 변화`, '사라짐 50%/턴 · 미믹화 10%/턴'],
       ]
     })
-    const card = this.compendiumCard({
-      art: { kind: 'sprite', url: SpriteUrls.chestLarge },
+    const card = this.fieldCardFace({
+      artUrl: SpriteUrls.chestLarge,
       name: '보물상자',
       badge: '보물',
       stats: spanRows,
@@ -897,7 +968,7 @@ export class GameBoardRenderer {
       ],
       [
         '손패 콤보 카운트',
-        '손패 사용으로 쌓이는 체인 수. 카드 아이템은 추가 카운트를 더해 조합 판정에 활용된다.',
+        '손패 사용으로 쌓이는 체인 수. 카드 아이템의 추가 카운트는 흐름 보너스이며, 레시피 재료 카드가 추가로 사용된 것으로 세지 않는다.',
       ],
       [
         '동전($)',
@@ -3078,7 +3149,10 @@ const STYLES = `
   border-color: rgba(244, 164, 96, 0.4);
 }
 .compendium-body {
+  /* Horizontal overflow remains visible so expanded recipe cards can fan past
+     their own grid cell instead of being cut off by the codex panel. */
   overflow-y: auto;
+  overflow-x: visible;
   padding: 16px 20px;
   display: flex;
   flex-direction: column;
@@ -3165,6 +3239,7 @@ const STYLES = `
 .common-card-art {
   position: relative;
   z-index: 1;
+  height: 142px;
   min-height: 142px;
   border-radius: 10px;
   overflow: hidden;
@@ -3177,6 +3252,8 @@ const STYLES = `
   width: 100%;
   height: 100%;
   display: block;
+  /* Cover plus the rounded overflow mask gives every thumbnail the same
+     visible frame while preserving the original image asset unchanged. */
   object-fit: cover;
   object-position: center;
 }
@@ -3229,6 +3306,16 @@ const STYLES = `
 .compendium-hand-card {
   aspect-ratio: 0.72;
   min-height: 270px;
+}
+.compendium-field-card {
+  min-height: 330px;
+  height: auto;
+}
+.compendium-field-card .common-card-body {
+  min-height: 124px;
+}
+.compendium-field-card .common-card-desc {
+  align-self: start;
 }
 .compendium-grid .common-card-face {
   height: auto;
@@ -3734,6 +3821,14 @@ const STYLES = `
   display: block;
   animation: hand-preview-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
 }
+.hand-slot.hand-card.is-arming-target .hand-card-preview {
+  /* Targeted cards stay previewed after click so the cursor can leave the hand
+     and pick a rail target without replaying the back-to-front flip. */
+  display: block;
+  opacity: 1;
+  transform: translateY(-50%) translateX(0) rotateY(0deg);
+  animation: none;
+}
 @keyframes hand-preview-flip {
   0% { opacity: 0; transform: translateY(-50%) translateX(14px) rotateY(92deg); }
   48% { opacity: 1; transform: translateY(-50%) translateX(5px) rotateY(28deg); }
@@ -3743,6 +3838,10 @@ const STYLES = `
 .hand-slot.is-low-preview:focus-within .hand-card-preview {
   animation-name: hand-preview-low-flip;
 }
+.hand-slot.is-low-preview.is-arming-target .hand-card-preview {
+  transform: translateY(-8px) translateX(0) rotateY(0deg);
+  animation: none;
+}
 @keyframes hand-preview-low-flip {
   0% { opacity: 0; transform: translateY(-8px) translateX(14px) rotateY(92deg); }
   48% { opacity: 1; transform: translateY(-8px) translateX(5px) rotateY(28deg); }
@@ -3751,6 +3850,11 @@ const STYLES = `
 .hand-slot.hand-card:hover .hand-card-preview::before,
 .hand-slot.hand-card:focus-within .hand-card-preview::before {
   animation: hand-preview-back-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
+}
+.hand-slot.hand-card.is-arming-target .hand-card-preview::before {
+  opacity: 0;
+  transform: rotateY(-102deg);
+  animation: none;
 }
 @keyframes hand-preview-back-flip {
   0%, 42% { opacity: 1; transform: rotateY(0deg); }
@@ -3948,12 +4052,16 @@ const STYLES = `
 .compendium-recipe-stack .compendium-recipe-mini:nth-child(3) { --i: 2; z-index: 3; }
 .compendium-recipe-stack .compendium-recipe-mini:nth-child(4) { --i: 3; z-index: 4; }
 .compendium-recipe-stack .compendium-recipe-mini:nth-child(5) { --i: 4; z-index: 5; }
+.compendium-card:hover,
+.compendium-card:focus-within {
+  z-index: 6;
+}
 .compendium-card:hover .compendium-recipe-mini,
 .compendium-card:focus-within .compendium-recipe-mini {
   transform: translate(-50%, -50%) translateX(calc((var(--i, 0) - var(--recipe-center, 0)) * 74px)) rotate(calc((var(--i, 0) - var(--recipe-center, 0)) * 9deg));
   filter: brightness(1.08);
 }
-.compendium-recipe-mini .common-card-art { min-height: 72px; }
+.compendium-recipe-mini .common-card-art { height: 72px; min-height: 72px; }
 .compendium-recipe-mini .common-card-body { min-height: 48px; gap: 3px; }
 .compendium-recipe-mini .common-card-name { font-size: 12px; }
 .compendium-recipe-mini .common-card-desc { display: none; }

@@ -371,6 +371,8 @@ Enemy defeat → 1 of 4 basic items drops:
 - The compendium button is no longer part of the left score panel. It lives in a transparent utility layer to the left of the player card. The symmetric right-side transparent layer is reserved for future relic UI and should remain layout-stable.
 - Chain banner card entries use one restrained warm tone instead of per-category colors. Recipe and gauge events are the emphasized entries; gauge events use a distinct cool-warm highlight so they differ from recipe triggers.
 - Compendium field-card entries should use the unified 1/2/3칸 family format for enemies, mimics, traps, and treasures so width-based strengthening is documented consistently.
+- Hand-card target documentation and real target validation share `targeting.base/triple` scope rows in `src/data/HandCards.ts` (`대상/랜덤/전체/없음`, `전방/대기/필드/자신/손패`, `개수 제한`). Do not reintroduce separate prose-only targeting rules.
+- The `카드` hand item grants an abstract combo-count bonus only. Do not add duplicate `card` entries to `chain.sequence` or the chain banner; recipe ingredients should still represent actual played cards.
 - Ember decay is intentionally faster than older drafts: `Character.EMBER_DECAY_TURNS` is 3, so the ember counter wanes by 1 every 3 completed turns.
 
 ### Post-MVP Features (Planning Only, NOT in current implementation)
