@@ -23,7 +23,7 @@ import type { EnemyHit, TreasureChange } from '@core/TurnManager'
 import { spriteForCard, spriteForHandCard, SpriteUrls } from '@ui/Sprites'
 import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandCategory, HandTargetRule } from '@entities/HandCard'
-import { getHandCardDef } from '@data/HandCards'
+import { getHandCardDef, getHandEffectScope, getHandTargetRule } from '@data/HandCards'
 import type { EmberTier, SpawnWeights } from '@systems/EmberSystem'
 import { EmberSystem } from '@systems/EmberSystem'
 import { ENEMY_DEFINITIONS, TRAP_DEFINITIONS, MIMIC_BY_SPAN } from '@systems/CardSpawner'
@@ -380,7 +380,7 @@ export class GameBoardRenderer {
   private isValidHandTarget(card: Card, distance: number): boolean {
     if (!this.handTargetingMode) return false
     const def = getHandCardDef(this.handTargetingMode.defId)
-    return this.isValidTargetRule(def.targetRule, card, distance)
+    return this.isValidTargetRule(getHandTargetRule(def), card, distance)
   }
 
   /** Check a hand target rule without mutating game state. */
@@ -526,6 +526,39 @@ export class GameBoardRenderer {
         </div>
       </article>
     `
+  }
+
+
+  /** Korean labels for the shared hand-effect scope table shown in the compendium. */
+  private handScopeLabel(defId: HandCardId, merged = false): string {
+    const scope = getHandEffectScope(getHandCardDef(defId), merged)
+    const selectionLabel =
+      scope.selection === 'target'
+        ? '대상'
+        : scope.selection === 'random'
+          ? '랜덤'
+          : scope.selection === 'all'
+            ? '전체'
+            : '없음'
+    const zoneLabel =
+      scope.zone === 'front'
+        ? '전방'
+        : scope.zone === 'waiting'
+          ? '대기'
+          : scope.zone === 'field'
+            ? '필드'
+            : scope.zone === 'self'
+              ? '자신'
+              : scope.zone === 'hand'
+                ? '손패'
+                : '없음'
+    const countLabel = scope.countLimit === null ? '제한 없음' : `${scope.countLimit}개`
+    return `대상 ${selectionLabel} · 범위 ${zoneLabel} · 개수 ${countLabel}`
+  }
+
+  /** Compact two-line scope summary so balance changes remain visible in the codex. */
+  private handScopeDescription(defId: HandCardId): string {
+    return `<span class="common-card-subdesc">기본: ${this.handScopeLabel(defId)}</span><br><span class="common-card-subdesc">★: ${this.handScopeLabel(defId, true)}</span>`
   }
 
   private candleModeMeta(mode: CandleMode): { label: string; effect: string; icon: string } {
@@ -853,7 +886,7 @@ export class GameBoardRenderer {
       groups[def.category].push(
         this.handCardFace(
           def.id,
-          `${def.description}<br><span class="common-card-subdesc">★ ${def.tripleDescription}</span>`,
+          `${def.description}<br><span class="common-card-subdesc">★ ${def.tripleDescription}</span><br>${this.handScopeDescription(def.id)}`,
           false,
           `compendium-hand-card ${this.categoryClass(def.category)}`,
           groupLabels[def.category]
@@ -1153,6 +1186,33 @@ export class GameBoardRenderer {
     banner.classList.add('is-on')
     // Snapshot uids so the next render won't re-animate existing events.
     this.previousChainUids = new Set(events.map((e) => e.uid))
+  }
+
+
+  /** Show one readable recipe effect subtitle beneath the chain banner. */
+  showRecipeToast(name: string, flavor: string): void {
+    let toast = document.getElementById('recipe-toast') as HTMLElement | null
+    if (!toast) {
+      toast = document.createElement('div')
+      toast.id = 'recipe-toast'
+      toast.className = 'recipe-toast'
+      toast.setAttribute('aria-live', 'polite')
+      document.body.appendChild(toast)
+    }
+    // A new recipe replaces the previous explanation immediately, matching the
+    // one-at-a-time combo resolution without stacking noisy text blocks.
+    toast.classList.remove('is-on', 'is-soft-dismiss')
+    toast.innerHTML = `<span class="recipe-toast-name">${name}</span><span class="recipe-toast-flavor">${flavor}</span>`
+    void toast.offsetWidth
+    toast.classList.add('is-on')
+  }
+
+  /** Fade the current recipe explanation when the player moves to the next card. */
+  dismissRecipeToast(soft = true): void {
+    const toast = document.getElementById('recipe-toast') as HTMLElement | null
+    if (!toast || !toast.classList.contains('is-on')) return
+    if (soft) toast.classList.add('is-soft-dismiss')
+    else toast.classList.remove('is-on')
   }
 
   private attachListeners(): void {
@@ -4297,6 +4357,93 @@ const STYLES = `
     0 0 20px rgba(176, 28, 34, 0.9),
     0 0 34px rgba(244, 83, 49, 0.5);
   -webkit-text-stroke: 1px rgba(74, 8, 13, 0.86);
+}
+
+
+/* Recipe effect subtitle: a quiet text-only explanation under the chain line.
+   It pops in with a small seesaw wobble, breathes for ~3s, then fades; when the
+   next hand card is played the JS adds is-soft-dismiss for a slower readable exit. */
+.recipe-toast {
+  position: fixed;
+  left: 50%;
+  top: calc(20vh + 48px);
+  transform: translateX(-50%) translateY(-8px) scale(0.96) rotate(0deg);
+  z-index: 204;
+  display: grid;
+  gap: 3px;
+  max-width: min(72vw, 620px);
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  color: rgba(255, 245, 220, 0.96);
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.9),
+    0 0 14px rgba(255, 215, 120, 0.36);
+}
+.recipe-toast.is-on {
+  animation:
+    recipe-toast-seesaw 0.58s cubic-bezier(0.18, 0.9, 0.24, 1) 1,
+    recipe-toast-breathe 3s ease-in-out 0.58s 1 forwards;
+}
+.recipe-toast.is-soft-dismiss {
+  animation: recipe-toast-soft-dismiss 1.2s ease forwards;
+}
+.recipe-toast-name {
+  font-size: clamp(18px, 2vw, 26px);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: rgba(255, 232, 168, 1);
+}
+.recipe-toast-flavor {
+  font-size: clamp(13px, 1.2vw, 16px);
+  font-weight: 700;
+  color: rgba(255, 245, 220, 0.86);
+}
+@keyframes recipe-toast-seesaw {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(0.72) rotate(0deg); }
+  36% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.12) rotate(-3deg); }
+  58% { transform: translateX(-50%) translateY(0) scale(1.04) rotate(2.4deg); }
+  78% { transform: translateX(-50%) translateY(0) scale(1.02) rotate(-1.2deg); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1) rotate(0deg); }
+}
+@keyframes recipe-toast-breathe {
+  0%, 74% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  28% { transform: translateX(-50%) translateY(0) scale(1.035); }
+  54% { transform: translateX(-50%) translateY(0) scale(0.988); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-4px) scale(0.98); }
+}
+@keyframes recipe-toast-soft-dismiss {
+  from { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  to { opacity: 0; transform: translateX(-50%) translateY(-6px) scale(0.985); }
+}
+
+/* Hand-card full-art readability pass: restore a stronger wax-paper edge so
+   the compact illustrated cards do not blend into the dark hand panel. */
+.hand-slot.hand-card {
+  border: 1px solid rgba(255, 215, 120, 0.42);
+  box-shadow:
+    inset 0 0 0 1px rgba(20, 10, 18, 0.72),
+    0 0 0 1px rgba(91, 47, 36, 0.55),
+    0 4px 12px rgba(0, 0, 0, 0.36);
+}
+.hand-slot.hand-card button {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 232, 168, 0.24),
+    inset 0 0 0 3px rgba(36, 18, 24, 0.42);
+}
+.common-card-face {
+  border: 2px solid rgba(255, 215, 120, 0.54);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 2px rgba(38, 18, 25, 0.68),
+    0 0 0 1px rgba(91, 47, 36, 0.62),
+    0 0 22px rgba(244, 164, 96, 0.2);
+}
+.common-card-art {
+  border: 1px solid rgba(255, 232, 168, 0.36);
+  box-shadow:
+    inset 0 0 0 1px rgba(35, 16, 24, 0.72),
+    inset 0 0 20px rgba(0, 0, 0, 0.38);
 }
 
 `
