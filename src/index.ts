@@ -287,21 +287,10 @@ function syncSpawnerTier(): void {
   cardSpawner.setTier(turnManager.getEmberTier())
 }
 
-function fillEmptyTopSlots(): void {
-  const topDistance = LANE_DISTANCE_COUNT - 1
-  for (let i = 0; i < gameState.lanes.length; i++) {
-    const lane = gameState.lanes[i]
-    if (!lane.getCardAtDistance(topDistance)) {
-      const fresh = cardSpawner.spawnCardsForTurn()
-      lane.setCardAtDistance(topDistance, fresh[0])
-    }
-  }
-}
-
 function compactAndRefillAllLanes(): boolean {
-  const moved = gameState.compactLanes()
-  fillEmptyTopSlots()
-  return moved
+  // Delegate gravity + top-refill rules to GameState so row-clearing combo
+  // effects cannot leave half-empty rails after a single maintenance pass.
+  return gameState.compactAndRefillRails(() => cardSpawner.spawnCardForRefill())
 }
 
 function fillBoardAtStart(): void {
@@ -530,8 +519,10 @@ async function handleHandSlotClick(slotIndex: number): Promise<void> {
   if (!card) return
   const def = getHandCardDef(card.defId)
 
-  // Plain click on a targeted card arms it; second click cancels.
-  if (def.targetRule) {
+  // Plain click on a targeted card arms it; merged 키틴/밀랍 switch
+  // to broad field/front effects, so those enhanced cards should fire directly.
+  const mergedSkipsTarget = card.merged === true && (def.id === 'wax' || def.id === 'chitin')
+  if (def.targetRule && !mergedSkipsTarget) {
     if (pendingHandTarget && pendingHandTarget.slotIndex === slotIndex) {
       pendingHandTarget = null
       boardRenderer.setHandTargetingMode(null)

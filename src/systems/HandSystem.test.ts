@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { GameState } from '@core/GameState'
 import { HandSystem } from './HandSystem'
 import { DropSystem } from './DropSystem'
+import { Card, CardType } from '@entities/Card'
 
 /** Count a specific hand-card id inside the active chain for behavior tests. */
 function countChainEntries(chain: ReturnType<typeof HandSystem.newChain>, defId: string): number {
@@ -48,5 +49,28 @@ describe('HandSystem combo-count cards', () => {
     HandSystem.useSingle(gameState, chain, 0)
 
     expect(gameState.character.candle).toBe(1)
+  })
+})
+
+describe('HandSystem broad hand effects', () => {
+  it('lets merged 키틴 remove every trap on the field without a selected target', () => {
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+    gameState.character.addHandCard({ ...DropSystem.makeCard('chitin'), merged: true })
+
+    const trapA = new Card('trap-a', CardType.TRAP, '함정 A', 'test', 0, 2)
+    const trapB = new Card('trap-b', CardType.TRAP, '함정 B', 'test', 0, 2)
+    const enemy = new Card('enemy-a', CardType.ENEMY, '적', 'test', 3, 1)
+    gameState.lanes[0].setCardAtDistance(0, trapA)
+    gameState.lanes[1].setCardAtDistance(1, trapB)
+    gameState.lanes[2].setCardAtDistance(2, enemy)
+
+    const result = HandSystem.useSingle(gameState, chain, 0)
+
+    expect(result.success).toBe(true)
+    expect(result.message).toContain('트리플 함정 2장 제거')
+    expect(gameState.lanes[0].getCardAtDistance(0)).toBeNull()
+    expect(gameState.lanes[1].getCardAtDistance(1)).toBeNull()
+    expect(gameState.lanes[2].getCardAtDistance(2)).toBe(enemy)
   })
 })

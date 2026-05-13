@@ -135,6 +135,38 @@ export class GameState {
   }
 
   /**
+   * Compact and refill the full rail until every lane has a continuous stack.
+   *
+   * Large hand/combo effects can remove an entire row or even the whole field.
+   * A single "compact once, refill top once" pass leaves those lanes half-empty
+   * because the newly spawned top card still needs to fall again. This rail
+   * maintenance rule intentionally keeps drawing one fresh card at a time and
+   * lets gravity settle after each draw so no random values need to be pre-picked.
+   */
+  compactAndRefillRails(spawnCard: (laneIndex: number) => Card): boolean {
+    let changed = false
+    let safety = LANE_DISTANCE_COUNT * 3 + 3
+
+    while (safety-- > 0) {
+      const moved = this.compactLanes()
+      let filled = false
+      const topDistance = LANE_DISTANCE_COUNT - 1
+
+      for (let laneIndex = 0; laneIndex < this.lanes.length; laneIndex++) {
+        const lane = this.lanes[laneIndex]
+        if (lane.getCardAtDistance(topDistance)) continue
+        lane.setCardAtDistance(topDistance, spawnCard(laneIndex))
+        filled = true
+      }
+
+      changed = changed || moved || filled
+      if (!moved && !filled) break
+    }
+
+    return changed
+  }
+
+  /**
    * Remove every slot reference of a given Card from a row, returning the
    * lane indices that were cleared.
    */

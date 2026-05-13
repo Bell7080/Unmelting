@@ -60,6 +60,12 @@ export class CardSpawner {
     return cards
   }
 
+  /** Spawn a single fresh card for rail-maintenance refills. */
+  spawnCardForRefill(): Card {
+    this.turnCount++
+    return this.generateRandomCard()
+  }
+
   /** Pick a card type using the active spawn weights, then build the card. */
   private generateRandomCard(): Card {
     const weights = EmberSystem.getSpawnWeights(this.currentTier)
@@ -81,7 +87,7 @@ export class CardSpawner {
       definition.name,
       definition.description,
       (definition.healthOrDamage ?? 1) + bonus.hp,
-      (definition.attack ?? 1) + bonus.atk,
+      (definition.attack ?? 1) + bonus.atk
     )
   }
 
@@ -94,7 +100,7 @@ export class CardSpawner {
       definition.name,
       definition.description,
       0,
-      definition.healthOrDamage ?? 2,
+      definition.healthOrDamage ?? 2
     )
   }
 
@@ -105,7 +111,7 @@ export class CardSpawner {
       `treasure-${this.turnCount}-${Math.random()}`,
       CardType.TREASURE,
       definition.name,
-      definition.description,
+      definition.description
     )
   }
 
@@ -131,7 +137,7 @@ export class CardSpawner {
       {
         isSpecialEnemy: true,
         defeatDropCount: stats.drops,
-      },
+      }
     )
 
     // Special mimics do not merge, so their width is assigned directly from the source chest.

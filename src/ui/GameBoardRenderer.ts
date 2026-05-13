@@ -31,7 +31,6 @@ import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { RECIPES } from '@data/Recipes'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import {
-  bigCandleIcon,
   bookIcon,
   candleIcon,
   coinIcon,
@@ -39,7 +38,6 @@ import {
   heartIcon,
   pouchIcon,
   shieldIcon,
-  smallCandleIcon,
   swordIcon,
 } from '@ui/Icons'
 
@@ -499,34 +497,9 @@ export class GameBoardRenderer {
     `
   }
 
-  private iconForHandCard(defId: HandCardId): string {
-    switch (defId) {
-      case 'wax-drop':
-        return smallCandleIcon()
-      case 'candle':
-        return shieldIcon()
-      case 'ember':
-      case 'match':
-        return flameIcon()
-      case 'key':
-        return pouchIcon()
-      case 'wax':
-        return candleIcon()
-      case 'holy-water':
-        return bigCandleIcon()
-      case 'chitin':
-        return shieldIcon()
-      case 'card':
-        return bookIcon()
-      case 'coin':
-        return coinIcon()
-    }
-  }
-
   private categoryClass(cat: HandCategory): string {
     return `hand-cat-${cat}`
   }
-
 
   /** Shared hand-card face used by hover previews and the compendium so any
    *  future codex/shop view can reuse the same card-like composition. */
@@ -826,21 +799,18 @@ export class GameBoardRenderer {
 
   private renderCompendiumTraps(): string {
     const baseDamage = TRAP_DEFINITIONS[0].healthOrDamage ?? 2
-    const spanRows: [string, string][] = [1, 2, 3].flatMap((span) => {
-      // Trap widths are written as effect rows inside one card, matching the
-      // unified compendium format requested for width-based variants.
-      return [
-        [`${span}칸 피해`, String(baseDamage + (span - 1))],
-        [`${span}칸 위협`, span === 3 ? '즉사 조건' : '충돌 피해'],
-      ]
+    const spanRows: [string, string][] = [1, 2, 3].map((span) => {
+      // Trap rows intentionally mirror enemy stat rows: the name/width is on
+      // the left and only sword damage is shown on the right for quick reading.
+      const damage = span >= 3 ? 999 : span === 2 ? 5 : baseDamage
+      return [`${span}칸`, `${swordIcon()} ${damage}`]
     })
     const card = this.compendiumCard({
       art: { kind: 'sprite', url: SpriteUrls.trap },
       name: TRAP_DEFINITIONS[0].name,
       badge: '함정',
       stats: spanRows,
-      description:
-        '같은 함정 한 칸 안에서 1/2/3칸 폭에 따른 피해와 위협도만 행으로 나누어 표시한다.',
+      description: '같은 함정 한 칸 안에서 1/2/3칸 폭에 따른 충돌 피해만 표시한다.',
     })
     return `<div class="compendium-grid">${card}</div>`
   }
@@ -962,24 +932,29 @@ export class GameBoardRenderer {
       </article>
     `
     const recipeCards = RECIPES.map((r) => {
-      const ingredients = Object.entries(r.ingredients)
-        .map(([id, n]) => {
-          const def = HAND_CARD_DEFINITIONS[id as HandCardId]
-          if (!def) return ''
-          const icon = this.iconForHandCard(def.id)
-          return `<span class="compendium-recipe-ing hand-cat-${def.category}" title="${def.name}">
-            <span class="compendium-recipe-ing-icon">${icon}</span>
-            <span class="compendium-recipe-ing-name">${def.name}</span>
-            ${(n ?? 1) > 1 ? `<span class="compendium-recipe-ing-count">×${n}</span>` : ''}
-          </span>`
-        })
-        .join('')
+      const ingredientCards = Object.entries(r.ingredients).flatMap(([id, n]) => {
+        const def = HAND_CARD_DEFINITIONS[id as HandCardId]
+        if (!def) return []
+        // Repeated ingredients are represented as overlapping mini hand cards
+        // so combo recipes use the same visual language as the hand tab.
+        return Array.from({ length: n ?? 1 }, () =>
+          this.handCardFace(
+            def.id,
+            def.description,
+            false,
+            `compendium-recipe-mini ${this.categoryClass(def.category)}`
+          )
+        )
+      })
       return this.compendiumCard({
-        art: { kind: 'recipe', html: ingredients },
+        art: {
+          kind: 'recipe',
+          html: `<div class="compendium-recipe-stack" style="--recipe-count: ${ingredientCards.length}; --recipe-center: ${(ingredientCards.length - 1) / 2}">${ingredientCards.join('')}</div>`,
+        },
         name: r.name,
         badge: `${r.totalCount}장`,
         stats: [['효과', r.flavor]],
-        description: '체인에 위 재료가 모두 사용되면 발동',
+        description: '마우스를 올리면 재료 카드가 펼쳐진다. 체인에 위 재료가 모두 사용되면 발동.',
       })
     }).join('')
     return `
@@ -1439,7 +1414,9 @@ export class GameBoardRenderer {
     const ghostWidth = hasVisiblePreview ? previewRect.width : 188
     const ghostHeight = hasVisiblePreview ? previewRect.height : ghostWidth / 0.72
     const startLeft = hasVisiblePreview ? previewRect.left : sourceRect.left - ghostWidth - 16
-    const startTop = hasVisiblePreview ? previewRect.top : sourceRect.top + sourceRect.height / 2 - ghostHeight / 2
+    const startTop = hasVisiblePreview
+      ? previewRect.top
+      : sourceRect.top + sourceRect.height / 2 - ghostHeight / 2
     const targetX = window.innerWidth / 2
     const targetY = window.innerHeight * 0.46
     const deltaX = targetX - (startLeft + ghostWidth / 2)
@@ -3854,6 +3831,139 @@ const STYLES = `
 @keyframes hand-arm-pulse {
   0%, 100% { box-shadow: 0 0 0 rgba(255, 215, 120, 0); }
   50% { box-shadow: 0 0 14px rgba(255, 215, 120, 0.55); }
+}
+
+/* Larger, warmer compendium panel pass: closer to the hand-card theme with
+   waxed-paper panels, candle borders, and readable description sizes. */
+.compendium-overlay {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(244, 164, 96, 0.16), transparent 42%),
+    rgba(8, 5, 14, 0.82);
+  backdrop-filter: blur(4px) saturate(1.08);
+}
+.compendium-modal {
+  width: min(1040px, 96vw);
+  background:
+    linear-gradient(180deg, rgba(53, 39, 63, 0.97), rgba(18, 14, 28, 0.99)),
+    radial-gradient(circle at 50% 0%, rgba(255, 215, 120, 0.12), transparent 52%);
+  border-color: rgba(244, 164, 96, 0.58);
+  box-shadow:
+    0 28px 64px rgba(0, 0, 0, 0.72),
+    inset 0 0 0 1px rgba(255, 232, 168, 0.08),
+    0 0 36px rgba(244, 164, 96, 0.14);
+}
+.compendium-header {
+  background: linear-gradient(90deg, rgba(244, 164, 96, 0.12), rgba(255, 215, 120, 0.04), rgba(145, 174, 210, 0.08));
+}
+.compendium-title { font-size: 22px; }
+.compendium-tabs {
+  gap: 6px;
+  padding: 10px 18px 0;
+  background: rgba(0, 0, 0, 0.14);
+}
+.compendium-tab {
+  min-width: 74px;
+  padding: 10px 16px;
+  border-color: rgba(255, 232, 168, 0.08);
+  color: rgba(255, 232, 168, 0.72);
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 15px;
+}
+.compendium-tab:hover {
+  color: #fff5dc;
+  background: rgba(244, 164, 96, 0.1);
+}
+.compendium-tab.is-active {
+  color: #fff5dc;
+  background:
+    linear-gradient(180deg, rgba(244, 164, 96, 0.24), rgba(244, 164, 96, 0.09));
+  box-shadow: inset 0 3px 0 rgba(255, 215, 120, 0.42);
+}
+.compendium-body { padding: 20px 24px; gap: 16px; }
+.compendium-section { font-size: 16px; color: var(--color-flame-warm); }
+.compendium-section-blurb,
+.compendium-footer { font-size: 14px; }
+.compendium-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+.compendium-card {
+  min-height: 248px;
+  padding: 14px;
+  border-radius: 14px;
+  gap: 10px;
+  background:
+    linear-gradient(180deg, rgba(255, 245, 220, 0.07), rgba(255, 255, 255, 0.028)),
+    rgba(12, 8, 18, 0.62);
+  border-color: rgba(255, 232, 168, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 24px rgba(0, 0, 0, 0.28);
+}
+.compendium-card-art { height: 112px; border-radius: 11px; border: 1px solid rgba(255, 232, 168, 0.12); }
+.compendium-card-name { font-size: 17px; }
+.compendium-card-badge { font-size: 12px; }
+.compendium-card-row { font-size: 14px; line-height: 1.35; }
+.compendium-card-value .icon {
+  width: 15px;
+  height: 15px;
+  vertical-align: -2px;
+  color: var(--color-flame);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
+}
+.compendium-card-desc { font-size: 14px; line-height: 1.55; }
+.common-card-name { font-size: 18px; }
+.common-card-badge { font-size: 12px; }
+.common-card-desc { font-size: 16px; }
+.compendium-hand-card { min-height: 316px; }
+
+/* Combo tab recipe cards: mini hand cards overlap by default and fan out on
+   hover/focus, matching the requested hand-card stack interaction. */
+.compendium-card-art--recipe {
+  min-height: 190px;
+  overflow: visible;
+  background:
+    radial-gradient(circle at 50% 8%, rgba(255, 215, 120, 0.12), transparent 58%),
+    rgba(0, 0, 0, 0.26);
+}
+.compendium-recipe-stack {
+  position: relative;
+  width: min(100%, 270px);
+  height: 174px;
+  margin: 0 auto;
+}
+.compendium-recipe-mini {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 104px;
+  min-height: 146px;
+  height: 146px;
+  padding: 6px;
+  gap: 5px;
+  transform: translate(-50%, -50%) translateX(calc((var(--i, 0) - var(--recipe-center, 0)) * 18px)) rotate(calc((var(--i, 0) - var(--recipe-center, 0)) * 4deg));
+  transform-origin: 50% 96%;
+  transition: transform 0.28s cubic-bezier(0.16, 0.86, 0.26, 1), filter 0.28s ease;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.42);
+}
+.compendium-recipe-stack .compendium-recipe-mini:nth-child(1) { --i: 0; z-index: 1; }
+.compendium-recipe-stack .compendium-recipe-mini:nth-child(2) { --i: 1; z-index: 2; }
+.compendium-recipe-stack .compendium-recipe-mini:nth-child(3) { --i: 2; z-index: 3; }
+.compendium-recipe-stack .compendium-recipe-mini:nth-child(4) { --i: 3; z-index: 4; }
+.compendium-recipe-stack .compendium-recipe-mini:nth-child(5) { --i: 4; z-index: 5; }
+.compendium-card:hover .compendium-recipe-mini,
+.compendium-card:focus-within .compendium-recipe-mini {
+  transform: translate(-50%, -50%) translateX(calc((var(--i, 0) - var(--recipe-center, 0)) * 74px)) rotate(calc((var(--i, 0) - var(--recipe-center, 0)) * 9deg));
+  filter: brightness(1.08);
+}
+.compendium-recipe-mini .common-card-art { min-height: 72px; }
+.compendium-recipe-mini .common-card-body { min-height: 48px; gap: 3px; }
+.compendium-recipe-mini .common-card-name { font-size: 12px; }
+.compendium-recipe-mini .common-card-desc { display: none; }
+
+/* Hide the hover preview immediately once a card has been accepted for use;
+   only the dedicated flight ghost remains until the use animation completes. */
+.hand-slot.is-hand-use-source .hand-card-preview {
+  display: none !important;
+  opacity: 0 !important;
+  animation: none !important;
 }
 
 /* ---------- Hand-target highlighting on the rail ---------- */
