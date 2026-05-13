@@ -82,7 +82,7 @@ The game is organized around these key systems:
     Icons.ts              # Inline-SVG flat icons (sword, heart, candle…)
   /assets
     /fonts                # OkDanDan custom font (woff2)
-    /fonts/sprites        # Card / player / background webp art
+    /sprites              # Card / player / background / hand-card webp art
 ```
 
 > Older drafts referenced `/data` and `/utils` directories. Current MVP keeps
@@ -168,7 +168,7 @@ npm run type-check # TypeScript type checking
 - Minimal animations (performance-conscious)
 
 ### Sprite & Icon System (implemented)
-- Hand-drawn card art lives under `src/assets/fonts/sprites/*.webp`. The
+- Hand-drawn card art lives under `src/assets/sprites/*.webp`. The
   registry/mapping is centralized in `src/ui/Sprites.ts`:
   - **Player**: `player_001` (used as the framed portrait on the player card).
   - **Background**: `background_001` is the global page backdrop. The rail
@@ -180,6 +180,8 @@ npm run type-check # TypeScript type checking
   - **Mimic (special enemy)**: `enemy_003`.
   - **Treasure**: `chest_001` / `chest_002` / `chest_003` by group width.
   - **Trap**: `trap_001` for every trap width.
+  - **Hand cards**: current `HAND_CARD_IDS` order maps to `handcard_001` ~
+    `handcard_010`; `cardbackground_001` is the shared hand-card preview back.
 - UI iconography uses inline-SVG flat icons in `src/ui/Icons.ts` (`sword`,
   `heart`, `candle`, `pouch`, `coin`). Emojis must not be used for stat
   representation — they break the warm illustrated tone.
