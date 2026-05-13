@@ -31,7 +31,7 @@ import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { CandleMode } from '@entities/Character'
 import { HandCardId, HandCategory } from '@entities/HandCard'
-import { getHandCardDef, getHandTargetRule } from '@data/HandCards'
+import { getHandCardDef } from '@data/HandCards'
 import type { BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
@@ -208,10 +208,10 @@ function diffThawedCards(before: Map<string, FieldFreezeSnapshotEntry>): string[
  * cards never leave visible holes before player control returns.
  */
 async function runPreparationRefreshAfterFieldEffects(): Promise<void> {
-  const moved = await compactAndRefillAllLanes()
+  const moved = compactAndRefillAllLanes()
   gameState.regroupAllRows()
   render()
-  if (moved) await wait(120)
+  if (moved) await wait(380)
 }
 
 function createItemGainLogs(itemNames: string[]): ActivityLogDraft[] {
@@ -287,26 +287,10 @@ function syncSpawnerTier(): void {
   cardSpawner.setTier(turnManager.getEmberTier())
 }
 
-async function compactAndRefillAllLanes(): Promise<boolean> {
-  // Delegate each gravity + top-refill beat to GameState so row-clearing combo
-  // effects animate in the same repeated order as compactAndRefillRails().
-  let changed = false
-  let iteration = 1
-  let safety = LANE_DISTANCE_COUNT * 3 + 3
-  while (safety-- > 0) {
-    const step = gameState.compactAndRefillRailsStep(
-      () => cardSpawner.spawnCardForRefill(),
-      iteration++
-    )
-    if (!step) break
-    changed = true
-    gameState.regroupAllRows()
-    render()
-    // Filled top cards then drop on the next iteration; this short beat makes
-    // large clears read as sequential falling/refill instead of one hard snap.
-    await wait(step.filledLaneIndices.length > 0 ? 190 : 145)
-  }
-  return changed
+function compactAndRefillAllLanes(): boolean {
+  // Delegate gravity + top-refill rules to GameState so row-clearing combo
+  // effects cannot leave half-empty rails after a single maintenance pass.
+  return gameState.compactAndRefillRails(() => cardSpawner.spawnCardForRefill())
 }
 
 function fillBoardAtStart(): void {
@@ -537,8 +521,8 @@ async function handleHandSlotClick(slotIndex: number): Promise<void> {
 
   // Plain click on a targeted card arms it; merged 키틴/밀랍 switch
   // to broad field/front effects, so those enhanced cards should fire directly.
-  const targetRule = getHandTargetRule(def, card.merged === true)
-  if (targetRule) {
+  const mergedSkipsTarget = card.merged === true && (def.id === 'wax' || def.id === 'chitin')
+  if (def.targetRule && !mergedSkipsTarget) {
     if (pendingHandTarget && pendingHandTarget.slotIndex === slotIndex) {
       pendingHandTarget = null
       boardRenderer.setHandTargetingMode(null)
@@ -562,7 +546,6 @@ async function applyHandSingle(
   target?: { laneIndex: number; distance: number; card: Card }
 ): Promise<void> {
   inputLocked = true
-  boardRenderer.dismissRecipeToast(true)
   // Capture the card def BEFORE useSingle mutates the slot — we need the
   // category to pick a burst theme, and the slot is empty after consumption.
   const usedCard = gameState.character.hand[slotIndex]
@@ -656,7 +639,6 @@ async function applyHandSingle(
     }
     for (const fired of recipeResult.firedRecipes) {
       recordNotice(`✦ ${fired.recipe.name}: ${fired.message}`, 'recipe')
-      boardRenderer.showRecipeToast(fired.recipe.name, fired.recipe.flavor)
       chainTimeline.push({
         kind: 'recipe',
         recipeId: fired.recipe.id,
@@ -733,9 +715,9 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
     }
   }
 
-  const moved = await compactAndRefillAllLanes()
+  const moved = compactAndRefillAllLanes()
   render()
-  if (moved) await wait(120)
+  if (moved) await wait(380)
 
   gameState.regroupAllRows()
   boardRenderer.clearSelection()

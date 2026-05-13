@@ -19,7 +19,7 @@ import { Card, CardType } from '@entities/Card'
 import { Character } from '@entities/Character'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { HandCard, HandCardId, HandCardDefinition } from '@entities/HandCard'
-import { getHandCardDef, getHandTargetRule } from '@data/HandCards'
+import { getHandCardDef } from '@data/HandCards'
 import { Recipe, RECIPES } from '@data/Recipes'
 import { DropSystem } from './DropSystem'
 
@@ -422,17 +422,19 @@ export class HandSystem {
     target: HandTarget | undefined,
     isMerged: boolean
   ): boolean {
-    const targetRule = getHandTargetRule(def, isMerged)
-    if (!targetRule) return true
+    // Some triple effects become broad field effects and no longer need the
+    // single-card target used by the base effect.
+    if (isMerged && (def.id === 'wax' || def.id === 'chitin')) return true
+    if (!def.targetRule) return true
     if (!target) return false
-    if (targetRule === 'field-enemy') return target.card.type === CardType.ENEMY
-    if (targetRule === 'front-card-or-treasure') {
+    if (def.targetRule === 'field-enemy') return target.card.type === CardType.ENEMY
+    if (def.targetRule === 'front-card-or-treasure') {
       return (
         target.distance === 0 &&
         (target.card.type === CardType.ENEMY || target.card.type === CardType.TREASURE)
       )
     }
-    if (targetRule === 'front-trap')
+    if (def.targetRule === 'front-trap')
       return target.distance === 0 && target.card.type === CardType.TRAP
     return false
   }
