@@ -357,6 +357,8 @@ Enemy defeat → 1 of 4 basic items drops:
 - Hand-card use now resolves in two visible beats: first the individual hand-card effect, then any newly satisfied recipe after a short UI delay (`COMBO_TRIGGER_DELAY_MS` in `src/index.ts`). This keeps combinations such as `밀랍 방패 → 밀랍 돌진` from feeling simultaneous on laggy machines.
 - `HandSystem.useSingle` only applies the single-card effect and extends the chain. Delayed combo resolution is triggered by `HandSystem.firePendingRecipes` from the UI flow so removed-field-card animations can be separated by beat.
 - The floating chain banner uses top-center, text-only glow styling aligned with the target-selection banner/turn overlay. Avoid restoring pill/circular backgrounds unless the whole top HUD language changes together.
+- Recipes are now the structured table in `src/data/Recipes.ts` (따뜻함, 점화, 배당금, 셔플, 양초 스매쉬, 지뢰제거반, 열쇠공, 탐욕, 한 걸음씩, 도화선, 성화, 밀매, 뜨거움). Add/remove combos through this declarative recipe book first, then map any new effect kind in `HandSystem`.
+- If a visible hand card would immediately trigger an unfired recipe for the current chain, `buildChainHints()` marks that slot and the hand UI shows a soft left-spreading candle glow as the combo hint.
 
 
 ### Hand Gauge Mode + UI Layer Notes (UPDATED)
