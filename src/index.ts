@@ -133,7 +133,6 @@ function burstScoreGain(): void {
   if (anchor) boardRenderer.burstAtElement(anchor, 'score', { count: 16, spread: 90 })
 }
 
-
 interface FieldHealthSnapshotEntry {
   card: Card
   health: number
@@ -351,7 +350,16 @@ function startGame(): void {
 }
 
 function buildChainHints() {
-  return { events: chainTimeline }
+  // Precompute which visible hand slots would complete at least one recipe if
+  // clicked now. Keeping this in index.ts lets the renderer stay presentation-only
+  // while the recipe rules remain centralized in HandSystem/Recipes.ts.
+  const recipeReadyBySlot: Record<number, { id: string; name: string }[]> = {}
+  gameState.character.hand.forEach((card, slotIndex) => {
+    const recipes = HandSystem.previewTriggeredRecipes(chain, card.defId, card.merged === true)
+    if (recipes.length === 0) return
+    recipeReadyBySlot[slotIndex] = recipes.map((recipe) => ({ id: recipe.id, name: recipe.name }))
+  })
+  return { events: chainTimeline, recipeReadyBySlot }
 }
 
 function render(): void {
@@ -566,10 +574,14 @@ async function applyHandSingle(
   const handUseTheme = usedDef ? burstThemeForCategory(usedDef.category) : null
   if (handUseTheme) await boardRenderer.animateHandCardUse(slotIndex, handUseTheme)
   if (usedDef && (usedDef.id === 'wax-drop' || usedDef.id === 'candle')) {
-    boardRenderer.burstAtElement(document.querySelector<HTMLElement>('.player-card'), handUseTheme ?? 'hand-recovery', {
-      count: 16,
-      spread: 125,
-    })
+    boardRenderer.burstAtElement(
+      document.querySelector<HTMLElement>('.player-card'),
+      handUseTheme ?? 'hand-recovery',
+      {
+        count: 16,
+        spread: 125,
+      }
+    )
   }
 
   // If this card damaged or hardened/thawed a target, add the one-shot
@@ -621,6 +633,11 @@ async function applyHandSingle(
   const recipeResult = hasPendingRecipe
     ? HandSystem.firePendingRecipes(gameState, chain)
     : { firedRecipes: [], removedFieldCards: [] }
+  if ((recipeResult.coinsGained ?? 0) > 0) {
+    // Recipe currency uses the same wallet/pulse language as single coin cards.
+    coins += recipeResult.coinsGained ?? 0
+    coinPulseKey++
+  }
   for (const fired of recipeResult.firedRecipes) {
     recordNotice(`✦ ${fired.recipe.name}: ${fired.message}`, 'recipe')
     chainTimeline.push({
@@ -722,7 +739,8 @@ async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
     recordNotice(`적 공격! -${totalDamage}`, 'hurt')
     render()
     await boardRenderer.animateDamageNumberOnElement(
-      boardRenderer.findCardElement('__player__') ?? document.querySelector<HTMLElement>('.player-card'),
+      boardRenderer.findCardElement('__player__') ??
+        document.querySelector<HTMLElement>('.player-card'),
       totalDamage
     )
     await boardRenderer.animateDamageFlash()
@@ -774,7 +792,10 @@ async function handleCardAction(e: Event): Promise<void> {
       const dmg = hits.reduce((acc, h) => acc + h.damage, 0)
       recordNotice(`불씨가 흔들려 적이 먼저 공격! -${dmg}`, 'hurt')
       render()
-      await boardRenderer.animateDamageNumberOnElement(document.querySelector<HTMLElement>('.player-card'), dmg)
+      await boardRenderer.animateDamageNumberOnElement(
+        document.querySelector<HTMLElement>('.player-card'),
+        dmg
+      )
       if (!gameState.character.isAlive() || gameState.isGameOver) {
         finishTurn()
         return
@@ -808,7 +829,10 @@ async function handleCardAction(e: Event): Promise<void> {
     await boardRenderer.animateDamageNumbersById(diffFieldHealthLosses(beforeActionHealth))
   }
   if (result.damageTaken && result.damageTaken > 0) {
-    await boardRenderer.animateDamageNumberOnElement(document.querySelector<HTMLElement>('.player-card'), result.damageTaken)
+    await boardRenderer.animateDamageNumberOnElement(
+      document.querySelector<HTMLElement>('.player-card'),
+      result.damageTaken
+    )
     await boardRenderer.animateDamageFlash()
   }
 

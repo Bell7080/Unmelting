@@ -106,6 +106,8 @@ export type ChainEvent = ChainEventCard | ChainEventRecipe | ChainEventGauge
 
 export interface ChainHints {
   events: ChainEvent[]
+  /** Slots whose next click would immediately satisfy at least one recipe. */
+  recipeReadyBySlot?: Record<number, { id: string; name: string }[]>
 }
 
 export interface ScorePanelState {
@@ -360,7 +362,6 @@ export class GameBoardRenderer {
     `
   }
 
-
   /** Render an empty rail cell, including target-block feedback during hand targeting. */
   private renderEmptyCell(laneIndex: number, distance: number): string {
     const isBlockedHandTarget = this.handTargetingMode !== null
@@ -385,7 +386,11 @@ export class GameBoardRenderer {
   }
 
   /** Check a hand target rule without mutating game state. */
-  private isValidTargetRule(rule: HandTargetRule | undefined, card: Card, distance: number): boolean {
+  private isValidTargetRule(
+    rule: HandTargetRule | undefined,
+    card: Card,
+    distance: number
+  ): boolean {
     if (!rule) return false
     if (rule === 'field-enemy') return card.type === CardType.ENEMY
     if (rule === 'front-card-or-treasure') {
@@ -555,6 +560,11 @@ export class GameBoardRenderer {
       }
       const def = getHandCardDef(card.defId)
       const isArming = targeting && targeting.slotIndex === i
+      const readyRecipes = scorePanel.chainHints?.recipeReadyBySlot?.[i] ?? []
+      const recipeReady = readyRecipes.length > 0
+      const recipeReadyTitle = recipeReady
+        ? `즉시 조합: ${readyRecipes.map((r) => r.name).join(', ')}`
+        : ''
       const merged = card.merged ? 'is-merged' : ''
       // Only mark a hand card as `is-entering` when its uid wasn't present
       // in the previous render. This keeps the drop animation a *real* entry
@@ -566,15 +576,18 @@ export class GameBoardRenderer {
         this.categoryClass(def.category),
         merged,
         isArming ? 'is-arming-target' : '',
+        recipeReady ? 'is-recipe-ready' : '',
         isNew ? 'is-entering' : '',
       ]
         .filter(Boolean)
         .join(' ')
       const description = card.merged ? def.tripleDescription : def.description
       slots.push(`
-        <li class="${classes}" data-slot-index="${i}" data-hand-uid="${card.uid}">
+        <li class="${classes}" data-slot-index="${i}" data-hand-uid="${card.uid}"
+            ${recipeReadyTitle ? `title="${recipeReadyTitle}"` : ''}>
           <button type="button" data-item-index="${i}"
-                  aria-label="${def.name}: ${description}">
+                  aria-label="${def.name}: ${description}${recipeReadyTitle ? ` · ${recipeReadyTitle}` : ''}">
+            ${recipeReady ? '<span class="recipe-ready-mark" aria-hidden="true">✦</span>' : ''}
             ${card.merged ? '<span class="merged-mark" aria-hidden="true">✦</span>' : ''}
             <span class="hand-card-icon">${this.iconForHandCard(card.defId)}</span>
             <span class="hand-card-name">${def.name}${card.merged ? ' ★' : ''}</span>
@@ -1281,12 +1294,15 @@ export class GameBoardRenderer {
     return new Promise((resolve) => window.setTimeout(resolve, 420))
   }
 
-
   /** Float a glowing damage number above a specific element. */
   animateDamageNumberOnElement(target: HTMLElement | null, amount: number): Promise<void> {
     if (!target || amount <= 0) return Promise.resolve()
     const rect = target.getBoundingClientRect()
-    return this.animateDamageNumberAt(rect.left + rect.width / 2, rect.top + rect.height * 0.34, amount)
+    return this.animateDamageNumberAt(
+      rect.left + rect.width / 2,
+      rect.top + rect.height * 0.34,
+      amount
+    )
   }
 
   /** Float damage numbers for card-id keyed model diffs. */
@@ -1311,7 +1327,12 @@ export class GameBoardRenderer {
     const anim = el.animate(
       [
         { transform: 'translate(-50%, -20%) scale(0.78)', opacity: 0, filter: 'brightness(1.2)' },
-        { transform: 'translate(-50%, -72%) scale(1.18)', opacity: 1, filter: 'brightness(1.65)', offset: 0.22 },
+        {
+          transform: 'translate(-50%, -72%) scale(1.18)',
+          opacity: 1,
+          filter: 'brightness(1.65)',
+          offset: 0.22,
+        },
         { transform: 'translate(-50%, -150%) scale(1)', opacity: 0, filter: 'brightness(1)' },
       ],
       { duration: 760, easing: 'cubic-bezier(0.16, 0.86, 0.28, 1)', fill: 'forwards' }
@@ -3535,6 +3556,54 @@ const STYLES = `
   font-size: 12px;
   color: rgba(255, 232, 168, 0.95);
   text-shadow: 0 0 4px rgba(255, 215, 120, 0.85);
+}
+
+/* Recipe-ready hand cards glow from the left edge toward the adjacent plus/chain
+   direction. The effect is intentionally soft and candle-colored so it reads as
+   a hint, not as the stronger recipe-fire banner. */
+.hand-slot.is-recipe-ready {
+  border-color: rgba(255, 215, 120, 0.46);
+  box-shadow:
+    -10px 0 24px rgba(255, 182, 85, 0.22),
+    -2px 0 13px rgba(255, 215, 120, 0.26),
+    inset 4px 0 0 rgba(255, 215, 120, 0.95);
+  animation: recipe-ready-side-glow 1.8s ease-in-out infinite;
+}
+.hand-slot.is-recipe-ready::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: -18px;
+  width: 24px;
+  border-radius: 999px;
+  background: radial-gradient(ellipse at right, rgba(255, 218, 138, 0.34), rgba(255, 172, 74, 0.12) 48%, transparent 72%);
+  filter: blur(1px);
+  opacity: 0.8;
+  pointer-events: none;
+}
+.hand-slot.is-recipe-ready .recipe-ready-mark {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  z-index: 1;
+  font-size: 12px;
+  color: rgba(255, 237, 184, 0.96);
+  text-shadow: 0 0 8px rgba(255, 201, 104, 0.9);
+}
+@keyframes recipe-ready-side-glow {
+  0%, 100% {
+    box-shadow:
+      -8px 0 20px rgba(255, 182, 85, 0.18),
+      -2px 0 10px rgba(255, 215, 120, 0.22),
+      inset 4px 0 0 rgba(255, 215, 120, 0.82);
+  }
+  50% {
+    box-shadow:
+      -15px 0 30px rgba(255, 182, 85, 0.32),
+      -3px 0 16px rgba(255, 226, 154, 0.36),
+      inset 4px 0 0 rgba(255, 232, 168, 1);
+  }
 }
 .hand-slot.is-arming-target {
   outline: 2px solid var(--color-flame);
