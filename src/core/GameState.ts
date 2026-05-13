@@ -7,15 +7,6 @@ import { Character } from '@entities/Character'
 import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { Card } from '@entities/Card'
 
-export interface RailMaintenanceStep {
-  /** 1-based iteration number inside one compact/refill pass. */
-  iteration: number
-  /** True when existing cards dropped into lower empty slots. */
-  moved: boolean
-  /** Lanes that received a freshly spawned top card during this step. */
-  filledLaneIndices: number[]
-}
-
 export class GameState {
   character: Character
   lanes: Lane[]
@@ -144,30 +135,6 @@ export class GameState {
   }
 
   /**
-   * Run one visible rail-maintenance beat: gravity first, then one top refill.
-   * The UI calls this repeatedly so compact/refill can be animated in the same
-   * order as the simulation instead of jumping straight to the final board.
-   */
-  compactAndRefillRailsStep(
-    spawnCard: (laneIndex: number) => Card,
-    iteration: number = 1
-  ): RailMaintenanceStep | null {
-    const moved = this.compactLanes()
-    const filledLaneIndices: number[] = []
-    const topDistance = LANE_DISTANCE_COUNT - 1
-
-    for (let laneIndex = 0; laneIndex < this.lanes.length; laneIndex++) {
-      const lane = this.lanes[laneIndex]
-      if (lane.getCardAtDistance(topDistance)) continue
-      lane.setCardAtDistance(topDistance, spawnCard(laneIndex))
-      filledLaneIndices.push(laneIndex)
-    }
-
-    if (!moved && filledLaneIndices.length === 0) return null
-    return { iteration, moved, filledLaneIndices }
-  }
-
-  /**
    * Compact and refill the full rail until every lane has a continuous stack.
    *
    * Large hand/combo effects can remove an entire row or even the whole field.
@@ -179,12 +146,21 @@ export class GameState {
   compactAndRefillRails(spawnCard: (laneIndex: number) => Card): boolean {
     let changed = false
     let safety = LANE_DISTANCE_COUNT * 3 + 3
-    let iteration = 1
 
     while (safety-- > 0) {
-      const step = this.compactAndRefillRailsStep(spawnCard, iteration++)
-      if (!step) break
-      changed = true
+      const moved = this.compactLanes()
+      let filled = false
+      const topDistance = LANE_DISTANCE_COUNT - 1
+
+      for (let laneIndex = 0; laneIndex < this.lanes.length; laneIndex++) {
+        const lane = this.lanes[laneIndex]
+        if (lane.getCardAtDistance(topDistance)) continue
+        lane.setCardAtDistance(topDistance, spawnCard(laneIndex))
+        filled = true
+      }
+
+      changed = changed || moved || filled
+      if (!moved && !filled) break
     }
 
     return changed

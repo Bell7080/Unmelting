@@ -6,7 +6,7 @@
  * remains centralized and testable.
  */
 
-import { HandCardDefinition, HandCardId, HandEffectScope, HandTargetRule } from '@entities/HandCard'
+import { HandCardDefinition, HandCardId } from '@entities/HandCard'
 
 export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   'wax-drop': {
@@ -15,10 +15,6 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     category: 'recovery',
     description: '체력 +1',
     tripleDescription: '체력 +5',
-    targeting: {
-      base: { selection: 'none', zone: 'self', countLimit: 1 },
-      triple: { selection: 'none', zone: 'self', countLimit: 5 },
-    },
     dropWeight: 14,
   },
   candle: {
@@ -27,10 +23,6 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     category: 'recovery',
     description: '방패 +1',
     tripleDescription: '방패 +5',
-    targeting: {
-      base: { selection: 'none', zone: 'self', countLimit: 1 },
-      triple: { selection: 'none', zone: 'self', countLimit: 5 },
-    },
     dropWeight: 14,
   },
   ember: {
@@ -39,10 +31,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     category: 'attack',
     description: '필드 선택 적 1장 피해 2',
     tripleDescription: '필드 선택 적 1장 피해 10',
-    targeting: {
-      base: { selection: 'target', zone: 'field', countLimit: 1, targetRule: 'field-enemy' },
-      triple: { selection: 'target', zone: 'field', countLimit: 1, targetRule: 'field-enemy' },
-    },
+    targetRule: 'field-enemy',
     dropWeight: 13,
   },
   key: {
@@ -51,10 +40,6 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     category: 'tool',
     description: '필드 랜덤 보물상자 1장 획득',
     tripleDescription: '필드 모든 보물상자 획득',
-    targeting: {
-      base: { selection: 'random', zone: 'field', countLimit: 1 },
-      triple: { selection: 'all', zone: 'field', countLimit: null },
-    },
     dropWeight: 9,
   },
   wax: {
@@ -63,10 +48,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     category: 'control',
     description: '전방 선택 적/보물상자 1장 1턴 굳음',
     tripleDescription: '전방 모든 적/보물상자 3턴 굳음',
-    targeting: {
-      base: { selection: 'target', zone: 'front', countLimit: 1, targetRule: 'front-card-or-treasure' },
-      triple: { selection: 'all', zone: 'front', countLimit: null },
-    },
+    targetRule: 'front-card-or-treasure',
     dropWeight: 11,
   },
   match: {
@@ -75,10 +57,6 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     category: 'tool',
     description: '불씨 카운트 +1',
     tripleDescription: '불씨 카운트 +5',
-    targeting: {
-      base: { selection: 'none', zone: 'self', countLimit: 1 },
-      triple: { selection: 'none', zone: 'self', countLimit: 5 },
-    },
     dropWeight: 11,
   },
   'holy-water': {
@@ -87,10 +65,6 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     category: 'control',
     description: '필드 랜덤 저주/곰팡이 2장 정화',
     tripleDescription: '필드 전체 정화',
-    targeting: {
-      base: { selection: 'random', zone: 'field', countLimit: 2 },
-      triple: { selection: 'all', zone: 'field', countLimit: null },
-    },
     dropWeight: 8,
   },
   chitin: {
@@ -99,10 +73,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     category: 'control',
     description: '전방 선택 함정 1장 제거',
     tripleDescription: '필드 모든 함정 제거',
-    targeting: {
-      base: { selection: 'target', zone: 'front', countLimit: 1, targetRule: 'front-trap' },
-      triple: { selection: 'all', zone: 'field', countLimit: null },
-    },
+    targetRule: 'front-trap',
     dropWeight: 8,
   },
   card: {
@@ -111,10 +82,6 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     category: 'tool',
     description: '손패 콤보 카운트 +1',
     tripleDescription: '손패 콤보 카운트 +5',
-    targeting: {
-      base: { selection: 'none', zone: 'hand', countLimit: 1 },
-      triple: { selection: 'none', zone: 'hand', countLimit: 5 },
-    },
     dropWeight: 8,
   },
   coin: {
@@ -123,10 +90,6 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     category: 'tool',
     description: '+1$',
     tripleDescription: '+5$',
-    targeting: {
-      base: { selection: 'none', zone: 'self', countLimit: 1 },
-      triple: { selection: 'none', zone: 'self', countLimit: 5 },
-    },
     dropWeight: 10,
   },
 }
@@ -135,15 +98,4 @@ export const HAND_CARD_IDS: HandCardId[] = Object.keys(HAND_CARD_DEFINITIONS) as
 
 export function getHandCardDef(id: HandCardId): HandCardDefinition {
   return HAND_CARD_DEFINITIONS[id]
-}
-
-/** Return the normal or triple scope that both UI documentation and target validation use. */
-export function getHandEffectScope(def: HandCardDefinition, isMerged = false): HandEffectScope {
-  return isMerged ? def.targeting.triple : def.targeting.base
-}
-
-/** Targeted cards expose their validator through the same declarative scope row. */
-export function getHandTargetRule(def: HandCardDefinition, isMerged = false): HandTargetRule | undefined {
-  const scope = getHandEffectScope(def, isMerged)
-  return scope.selection === 'target' ? scope.targetRule : undefined
 }
