@@ -81,6 +81,7 @@ export interface ActivityLogEntry {
     | 'hurt'
     | 'melt'
     | 'gauge'
+    | 'relic'
 }
 
 export interface HandTargetingMode {
@@ -111,7 +112,13 @@ export interface ChainEventGauge extends ChainEventBase {
   name: string
   flavor: string
 }
-export type ChainEvent = ChainEventCard | ChainEventRecipe | ChainEventGauge
+export interface ChainEventRelic extends ChainEventBase {
+  kind: 'relic'
+  relicId: RelicId
+  name: string
+  flavor: string
+}
+export type ChainEvent = ChainEventCard | ChainEventRecipe | ChainEventGauge | ChainEventRelic
 
 export interface ChainHints {
   events: ChainEvent[]
@@ -921,17 +928,21 @@ export class GameBoardRenderer {
       })
     }
     host.innerHTML = this.renderCompendium('enemies')
+    this.attachCompendiumRecipeFloat(host)
     host.classList.add('is-open')
   }
 
   private closeCompendium(): void {
+    document.querySelectorAll('.compendium-recipe-float').forEach((el) => el.remove())
     document.getElementById('compendium-overlay')?.classList.remove('is-open')
   }
 
   private switchCompendiumTab(tab: string): void {
     const host = document.getElementById('compendium-overlay')
     if (!host) return
+    document.querySelectorAll('.compendium-recipe-float').forEach((el) => el.remove())
     host.innerHTML = this.renderCompendium(tab)
+    this.attachCompendiumRecipeFloat(host)
   }
 
   private renderCompendium(activeTab: string): string {
@@ -941,6 +952,7 @@ export class GameBoardRenderer {
       { id: 'treasures', label: '보물' },
       { id: 'hand', label: '손패' },
       { id: 'combo', label: '조합' },
+      { id: 'relics', label: '유물' },
       { id: 'terms', label: '용어' },
     ]
     const tabBar = tabs
@@ -955,6 +967,7 @@ export class GameBoardRenderer {
     else if (activeTab === 'treasures') body = this.renderCompendiumTreasures()
     else if (activeTab === 'hand') body = this.renderCompendiumHand()
     else if (activeTab === 'combo') body = this.renderCompendiumCombo()
+    else if (activeTab === 'relics') body = this.renderCompendiumRelics()
     else body = this.renderCompendiumTerms()
     return `
       <div class="compendium-modal" role="dialog" aria-label="도감">
@@ -1115,6 +1128,66 @@ export class GameBoardRenderer {
         `
       )
       .join('')
+  }
+
+
+  /** Relic tab documents shop relics and which ones the current run owns. */
+  private renderCompendiumRelics(): string {
+    const owned = new Set(this.currentGameState?.getCharacter().relics ?? [])
+    const cards = Object.values(RELIC_DEFINITIONS)
+      .map((def) =>
+        this.compendiumCard({
+          art: { kind: 'sprite', url: SpriteUrls.enemyMouse },
+          name: def.name,
+          badge: owned.has(def.id) ? '보유 중' : '상점 유물',
+          categoryClass: owned.has(def.id) ? 'compendium-relic-owned' : 'compendium-relic-card',
+          stats: [
+            ['효과', def.effect],
+            ['비용', def.costOptions.map((cost) => this.relicCostLabel(cost)).join(' / ')],
+          ],
+          description: def.flavor,
+        })
+      )
+      .join('')
+    return `
+      <h3 class="compendium-section">유물 (Relics)</h3>
+      <p class="compendium-section-blurb">10턴마다 열리는 생쥐 상점에서 구매하는 지속 효과야. 발동한 유물은 활동 로그와 체인 배너 아래의 작은 토스트로 함께 표시된다.</p>
+      <div class="compendium-grid compendium-relic-grid">${cards}</div>
+    `
+  }
+
+  /**
+   * Recipe mini-cards need the compendium body to scroll, but scroll containers
+   * clip overflowing children. Clone the hovered stack into a fixed body-layer
+   * so only that preview escapes the panel while the codex keeps its scrollbar.
+   */
+  private attachCompendiumRecipeFloat(host: HTMLElement): void {
+    document.querySelectorAll('.compendium-recipe-float').forEach((el) => el.remove())
+    let floating: HTMLElement | null = null
+    const removeFloating = () => {
+      floating?.remove()
+      floating = null
+    }
+    host.querySelectorAll<HTMLElement>('.compendium-card-art--recipe').forEach((art) => {
+      const showFloating = () => {
+        const stack = art.querySelector<HTMLElement>('.compendium-recipe-stack')
+        if (!stack) return
+        removeFloating()
+        const rect = stack.getBoundingClientRect()
+        floating = stack.cloneNode(true) as HTMLElement
+        floating.classList.add('compendium-recipe-float')
+        floating.style.left = `${rect.left}px`
+        floating.style.top = `${rect.top}px`
+        floating.style.width = `${rect.width}px`
+        floating.style.height = `${rect.height}px`
+        floating.setAttribute('aria-hidden', 'true')
+        document.body.appendChild(floating)
+      }
+      art.addEventListener('mouseenter', showFloating)
+      art.addEventListener('focusin', showFloating)
+      art.addEventListener('mouseleave', removeFloating)
+      art.addEventListener('focusout', removeFloating)
+    })
   }
 
   /** Terms tab summarizing current field, resource, and status vocabulary. */
@@ -1381,11 +1454,18 @@ export class GameBoardRenderer {
             <span class="chain-event-copy"><span class="chain-event-name">${ev.name}</span><span class="chain-event-flavor">${ev.flavor}</span></span>
           </span>
         `)
-      } else {
+      } else if (ev.kind === 'gauge') {
         parts.push(`
           <span class="chain-event chain-event-gauge ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
             <span class="chain-event-mark">◆</span>
             <span class="chain-event-name">${ev.name}</span>
+          </span>
+        `)
+      } else {
+        parts.push(`
+          <span class="chain-event chain-event-relic ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
+            <span class="chain-event-mark">✧</span>
+            <span class="chain-event-copy"><span class="chain-event-name">${ev.name}</span><span class="chain-event-flavor">${ev.flavor}</span></span>
           </span>
         `)
       }
@@ -4945,5 +5025,133 @@ const STYLES = `
     0 0 34px rgba(244, 83, 49, 0.5);
   -webkit-text-stroke: 1px rgba(74, 8, 13, 0.86);
 }
+
+
+/* Restored codex scrolling while hovered recipe previews escape via the
+   body-mounted .compendium-recipe-float clone rather than by disabling scroll. */
+.compendium-modal {
+  overflow: visible;
+}
+.compendium-body {
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+.compendium-recipe-float {
+  position: fixed;
+  z-index: 270;
+  pointer-events: none;
+  margin: 0;
+  transform: translateZ(0);
+}
+.compendium-recipe-float .compendium-recipe-mini {
+  transform: translate(-50%, -50%) translateX(calc((var(--i, 0) - var(--recipe-center, 0)) * 74px)) rotate(calc((var(--i, 0) - var(--recipe-center, 0)) * 9deg));
+  filter: brightness(1.08);
+}
+.compendium-relic-owned {
+  border-color: rgba(255, 215, 120, 0.48);
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.12), 0 0 22px rgba(244, 164, 96, 0.18);
+}
+.compendium-relic-card .compendium-card-art--sprite,
+.compendium-relic-owned .compendium-card-art--sprite {
+  background-size: cover;
+  background-position: center 20%;
+  box-shadow: inset 0 -44px 54px rgba(13, 9, 19, 0.76);
+}
+
+/* Owned relics now match the player-card height and wrap vertically inside a
+   warm themed scroll well instead of drifting sideways in a horizontal strip. */
+.relic-layer {
+  align-self: stretch;
+  height: 100%;
+  max-height: clamp(150px, 17vw, 200px);
+  align-items: stretch;
+  padding: 6px;
+  overflow: hidden;
+}
+.relic-stack {
+  width: 100%;
+  max-width: clamp(150px, 17vw, 200px);
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  grid-auto-rows: minmax(76px, 1fr);
+  align-content: start;
+  gap: 7px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 3px 5px 4px 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 164, 96, 0.72) rgba(20, 16, 28, 0.5);
+}
+.relic-stack::-webkit-scrollbar { width: 5px; }
+.relic-stack::-webkit-scrollbar-track {
+  background: rgba(20, 16, 28, 0.48);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(255, 232, 168, 0.08);
+}
+.relic-stack::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--color-flame), var(--color-flame-deep));
+  box-shadow: 0 0 8px rgba(244, 164, 96, 0.36);
+}
+.relic-mini-card {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Shop polish: waxed-card frames, candlelit price buttons, and the same
+   recessed scrollbar treatment used by the codex/relic layer. */
+.shop-modal {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 164, 96, 0.72) rgba(20, 16, 28, 0.5);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(255, 215, 120, 0.2), transparent 33%),
+    radial-gradient(circle at 86% 8%, rgba(145, 174, 210, 0.08), transparent 30%),
+    linear-gradient(160deg, rgba(48, 34, 43, 0.99), rgba(13, 9, 19, 0.99));
+}
+.shop-modal::-webkit-scrollbar { width: 6px; }
+.shop-modal::-webkit-scrollbar-track { background: rgba(20, 16, 28, 0.48); border-radius: 999px; }
+.shop-modal::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--color-flame), var(--color-flame-deep)); border-radius: 999px; }
+.shop-relic-card {
+  border-color: rgba(255, 232, 168, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 245, 220, 0.06), rgba(255, 255, 255, 0.018)),
+    linear-gradient(180deg, rgba(45, 30, 39, 0.98), rgba(18, 12, 24, 0.98));
+}
+.shop-relic-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 215, 120, 0.48);
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.2), 0 18px 30px rgba(0, 0, 0, 0.54), 0 0 22px rgba(244, 164, 96, 0.14);
+}
+.shop-buy-btn:not(:disabled):hover,
+.shop-close-btn:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.34), 0 0 16px rgba(255, 215, 120, 0.24);
+}
+
+/* Relic activations appear as a small toast-like line under the active chain. */
+.chain-event-relic {
+  flex-basis: 100%;
+  justify-content: center;
+  margin-top: -2px;
+  font-size: clamp(13px, 1.3vw, 16px);
+  color: rgba(255, 232, 168, 0.92);
+  letter-spacing: 0.03em;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.94),
+    0 0 14px rgba(244, 164, 96, 0.52);
+}
+.chain-event-relic .chain-event-mark {
+  color: rgba(255, 215, 120, 0.96);
+}
+.chain-event-relic.is-new {
+  animation: chain-card-pop 0.42s cubic-bezier(0.2, 1.4, 0.32, 1) 1;
+}
+.score-log-relic {
+  box-shadow: inset 3px 0 0 rgba(255, 215, 120, 0.9);
+  background: rgba(244, 164, 96, 0.09);
+}
+.score-log-relic .score-log-delta { color: rgba(255, 232, 168, 1); }
 
 `
