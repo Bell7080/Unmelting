@@ -3,16 +3,15 @@
  *
  * Selection rules (per request):
  *   - Player: player_001
- *   - Normal enemy 1-cell: random pick of enemy_001 (candle mouse) or
- *     enemy_002 (candle frog), stable per card via id hash.
- *   - Normal enemy 2/3-cell merged: random pick of enemy_001 / enemy_002.
+ *   - Normal enemy 1-cell: follows the spawned enemy definition.
+ *   - Normal enemy 2/3-cell merged: follows the strongest member's art.
  *   - Mimic (special enemy): enemy_003.
  *   - Treasure: chest_001 / chest_002 / chest_003 by groupCount (1/2/3).
- *   - Trap: trap_001 for every group width (the art fills the full card).
+ *   - Trap: trap_001 web, trap_004 bomb, trap_007 spore.
  *   - Rail / stage backdrop: background_001.
  */
 
-import { Card, CardType } from '@entities/Card'
+import { Card, CardType, type EnemySpriteId, type TrapKind } from '@entities/Card'
 import type { HandCardId } from '@entities/HandCard'
 
 import backgroundUrl from '../assets/sprites/background_001.webp'
@@ -20,7 +19,13 @@ import playerUrl from '../assets/sprites/player_001.webp'
 import enemy001Url from '../assets/sprites/enemy_001.webp'
 import enemy002Url from '../assets/sprites/enemy_002.webp'
 import enemy003Url from '../assets/sprites/enemy_003.webp'
+import enemy004Url from '../assets/sprites/enemy_004.webp'
+import enemy005Url from '../assets/sprites/enemy_005.webp'
+import enemy006Url from '../assets/sprites/enemy_006.webp'
+import enemy007Url from '../assets/sprites/enemy_007.webp'
 import trap001Url from '../assets/sprites/trap_001.webp'
+import trap004Url from '../assets/sprites/trap_004.webp'
+import trap007Url from '../assets/sprites/trap_007.webp'
 import chest001Url from '../assets/sprites/chest_001.webp'
 import chest002Url from '../assets/sprites/chest_002.webp'
 import chest003Url from '../assets/sprites/chest_003.webp'
@@ -36,6 +41,14 @@ import handCard007Url from '../assets/sprites/handcard_007.webp'
 import handCard008Url from '../assets/sprites/handcard_008.webp'
 import handCard009Url from '../assets/sprites/handcard_009.webp'
 import handCard010Url from '../assets/sprites/handcard_010.webp'
+import relic001Url from '../assets/sprites/relics_001.webp'
+import relic002Url from '../assets/sprites/relics_002.webp'
+import relic003Url from '../assets/sprites/relics_003.webp'
+import relic004Url from '../assets/sprites/relics_004.webp'
+import relic005Url from '../assets/sprites/relics_005.webp'
+import relic006Url from '../assets/sprites/relics_006.webp'
+import relic007Url from '../assets/sprites/relics_007.webp'
+import type { RelicId } from '@data/Relics'
 
 export const SpriteUrls = {
   background: backgroundUrl,
@@ -43,11 +56,28 @@ export const SpriteUrls = {
   enemyMouse: enemy001Url,
   enemyFrog: enemy002Url,
   mimic: enemy003Url,
-  trap: trap001Url,
+  enemyMoth: enemy004Url,
+  enemyChitin: enemy005Url,
+  enemyBird: enemy006Url,
+  enemyMole: enemy007Url,
+  traps: {
+    web: trap001Url,
+    bomb: trap004Url,
+    spore: trap007Url,
+  } satisfies Record<TrapKind, string>,
   chestSmall: chest001Url,
   chestMedium: chest002Url,
   chestLarge: chest003Url,
   cardBack: cardBackUrl,
+  relics: {
+    'red-potion': relic001Url,
+    'golden-squirrel': relic002Url,
+    'wax-crow': relic003Url,
+    'carving-knife': relic004Url,
+    lifeline: relic005Url,
+    'blood-pack': relic006Url,
+    hope: relic007Url,
+  } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,
     candle: handCard002Url,
@@ -64,6 +94,15 @@ export const SpriteUrls = {
 
 const NORMAL_ENEMY_VARIANTS = [SpriteUrls.enemyMouse, SpriteUrls.enemyFrog]
 
+const ENEMY_SPRITES: Record<EnemySpriteId, string> = {
+  enemyMouse: SpriteUrls.enemyMouse,
+  enemyFrog: SpriteUrls.enemyFrog,
+  enemyMoth: SpriteUrls.enemyMoth,
+  enemyChitin: SpriteUrls.enemyChitin,
+  enemyBird: SpriteUrls.enemyBird,
+  enemyMole: SpriteUrls.enemyMole,
+}
+
 /** Stable cheap hash so a given card always maps to the same sprite variant. */
 function hashId(id: string): number {
   let hash = 0
@@ -74,14 +113,20 @@ function hashId(id: string): number {
 }
 
 /**
- * 1-cell enemies should match their illustration to their displayed name
- * (양초 생쥐 → enemy_001 mouse, 양초 개구리 → enemy_002 frog). Only merged
- * 2/3-cell formations fall back to a stable random pick of either sprite.
+ * 1-cell enemies and merged groups prefer explicit definition sprite ids;
+ * legacy name matching remains for tests or old save/runtime cards.
  */
 function spriteForNormalEnemy(card: Card): string {
+  // Spawned enemies carry a stable sprite id, and merged groups keep the
+  // strongest member's id, so art now communicates threat strength directly.
+  if (card.enemySpriteId) return ENEMY_SPRITES[card.enemySpriteId]
   if (card.groupCount === 1) {
     if (card.name.includes('생쥐')) return SpriteUrls.enemyMouse
     if (card.name.includes('개구리')) return SpriteUrls.enemyFrog
+    if (card.name.includes('거미')) return SpriteUrls.enemyMoth
+    if (card.name.includes('키틴')) return SpriteUrls.enemyChitin
+    if (card.name.includes('새')) return SpriteUrls.enemyBird
+    if (card.name.includes('두더지')) return SpriteUrls.enemyMole
   }
   return NORMAL_ENEMY_VARIANTS[hashId(card.id) % NORMAL_ENEMY_VARIANTS.length]
 }
@@ -92,7 +137,7 @@ export function spriteForCard(card: Card): string {
     return spriteForNormalEnemy(card)
   }
   if (card.type === CardType.TRAP) {
-    return SpriteUrls.trap
+    return SpriteUrls.traps[card.trapKind]
   }
   if (card.type === CardType.TREASURE) {
     if (card.groupCount >= 3) return SpriteUrls.chestLarge
@@ -105,4 +150,9 @@ export function spriteForCard(card: Card): string {
 /** Hand card art follows HAND_CARD_IDS order: handcard_001.webp through handcard_010.webp. */
 export function spriteForHandCard(defId: HandCardId): string {
   return SpriteUrls.handCards[defId]
+}
+
+/** Dedicated relic art follows RELIC_IDS order: relics_001.webp through relics_007.webp. */
+export function spriteForRelic(id: RelicId): string {
+  return SpriteUrls.relics[id]
 }

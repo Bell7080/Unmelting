@@ -46,7 +46,7 @@ export class ActionSystem {
     character: Character,
     lane: Lane,
     card: Card,
-    actionType: ActionType,
+    actionType: ActionType
   ): ActionResult {
     if (!card) {
       return { success: false, message: 'No card selected', cardRemoved: false }
@@ -67,7 +67,7 @@ export class ActionSystem {
   /** Award `count` random hand cards into the character; report overflow. */
   private static awardDrops(
     character: Character,
-    count: number,
+    count: number
   ): { gainedNames: string[]; overflow: HandCard[] } {
     const gainedNames: string[] = []
     const overflow: HandCard[] = []
@@ -89,11 +89,7 @@ export class ActionSystem {
    * other lanes). Card removal is left to the caller because a merged
    * enemy may occupy several lane slots.
    */
-  private static attackEnemy(
-    character: Character,
-    _lane: Lane,
-    card: Card,
-  ): ActionResult {
+  private static attackEnemy(character: Character, _lane: Lane, card: Card): ActionResult {
     if (card.type !== CardType.ENEMY) {
       return { success: false, message: 'Not an enemy', cardRemoved: false }
     }
@@ -103,10 +99,7 @@ export class ActionSystem {
 
     if (newHealth <= 0) {
       const dropCount = card.defeatDropCount
-      const { gainedNames, overflow } = ActionSystem.awardDrops(
-        character,
-        dropCount,
-      )
+      const { gainedNames, overflow } = ActionSystem.awardDrops(character, dropCount)
       const summary =
         gainedNames.length === 0
           ? '손패가 가득 차 잃음'
@@ -137,30 +130,26 @@ export class ActionSystem {
    * Step on a trap deliberately. Player takes the trap's penalty and the
    * trap is consumed.
    */
-  private static evadeTrap(
-    character: Character,
-    _lane: Lane,
-    card: Card,
-  ): ActionResult {
+  private static evadeTrap(character: Character, _lane: Lane, card: Card): ActionResult {
     if (card.type !== CardType.TRAP) {
       return { success: false, message: 'Not a trap', cardRemoved: false }
     }
     const penalty = card.getTrapDamagePenalty()
     const actualDamage = character.takeDamage(penalty)
+    const message =
+      card.trapKind === 'bomb'
+        ? `${card.name} 해체`
+        : `${card.name}을(를) 밟았다 (-${actualDamage})`
     return {
       success: true,
-      message: `${card.name}을(를) 밟았다 (-${actualDamage})`,
+      message,
       damageTaken: actualDamage,
       cardRemoved: true,
     }
   }
 
   /** Open a treasure. Reward count scales 1/3/5 by group width. */
-  private static takeTreasure(
-    character: Character,
-    _lane: Lane,
-    card: Card,
-  ): ActionResult {
+  private static takeTreasure(character: Character, _lane: Lane, card: Card): ActionResult {
     if (card.type !== CardType.TREASURE) {
       return { success: false, message: 'Not a treasure', cardRemoved: false }
     }
