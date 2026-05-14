@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Unmelting** is a card rain roguelike game where players control a single character card ("The Unmelting Girl") and navigate advancing cards (rewards, enemies, obstacles) on a 3-lane stage. The core gameplay loop involves making tactical decisions under time pressure—choosing what to prioritize, when to act, and when to endure risk.
 
 ### Key Characteristics
+
 - **100% TypeScript** implementation (compiles to bytecode/JavaScript)
 - **Single character card growth** (not deck building)
 - **Lane-based card progression** (cards advance 1 space per turn)
@@ -32,27 +33,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 The game is organized around these key systems:
 
 #### 1. **Game Loop & Turn System**
+
 - Central game state manager handling turn progression
 - Turn phases: Player Actions → Card Advance → Collision Processing → New Card Spawn
 - Player gets 2 actions per turn (configurable for MVP)
 
 #### 2. **Lane & Card System**
+
 - **3 Lanes** with **4 distance slots** each (MVP scope)
 - Cards stored in a grid structure: `Lane[0-2] x Distance[1-4]`
 - Player position: `Distance[0]` (right edge of each lane)
 - Card types: Enemy, Reward, Obstacle, Curse, Event, Shop
 
 #### 3. **Character Card & Growth**
+
 - Single playable card with mutable stats
 - Growth metrics: Candles (health), Stamps (passive), Wax (power), Memory (unlocks), Curses (risk)
 - All progression tied to character properties, not deck size
 
 #### 4. **Action System**
+
 - Attack, Targeted Attack, Dodge, Collect, Seal, Wait
 - Each action consumes action points
 - Actions interact with card positions and lanes
 
 #### 5. **Collision & Effect System**
+
 - Handles what happens when cards reach Distance[0]
 - Card type → effect resolution (damage, reward gain, status, etc.)
 - Triggers UI updates and game state changes
@@ -94,15 +100,17 @@ The game is organized around these key systems:
 ## Font Management System
 
 ### Requirements
+
 - **Minimum font size**: 12px (enforced across all UI elements)
 - **Font manager**: Custom system to control font properties globally
 - **Target usage**: Card text, UI labels, stage information
 
 ### FontManager Class (to implement)
+
 ```typescript
 class FontManager {
-  private minSize = 12;
-  
+  private minSize = 12
+
   // Methods:
   // setFontSize(size: number): Ensures minimum 12px
   // applyFontStyle(element, style): Applies font config to DOM
@@ -116,6 +124,7 @@ class FontManager {
 ## Development Workflow
 
 ### Initial Setup
+
 ```bash
 npm install
 npm run dev        # Start dev server (Vite)
@@ -125,11 +134,13 @@ npm run type-check # TypeScript type checking
 ```
 
 ### Git Branch Strategy
+
 - Develop on `claude/setup-game-project-0IYa0` (or assigned feature branch)
 - Push to origin with: `git push -u origin <branch>`
 - Main branch (`main`) is for GitHub Pages deployment
 
 ### Deployment
+
 - GitHub Pages serves `/dist` directory on `main` branch
 - Build artifacts must be committed or auto-deployed via CI/CD
 - Entry point: `index.html` (root of site)
@@ -138,23 +149,24 @@ npm run type-check # TypeScript type checking
 
 ## MVP Scope & Deliverables
 
-| System | Implementation |
-|--------|---|
-| Player character | 1 (The Unmelting Girl) |
-| Enemy cards | 6 types |
-| Reward cards | 6 types |
-| Obstacle cards | 5 types |
-| Event cards | 3 types |
-| Boss card | 1 type |
-| Stages | 1 initial stage |
+| System             | Implementation             |
+| ------------------ | -------------------------- |
+| Player character   | 1 (The Unmelting Girl)     |
+| Enemy cards        | 6 types                    |
+| Reward cards       | 6 types                    |
+| Obstacle cards     | 5 types                    |
+| Event cards        | 3 types                    |
+| Boss card          | 1 type                     |
+| Stages             | 1 initial stage            |
 | Lane configuration | 3 lanes × 4 distance slots |
-| Turn actions | 2 per turn |
+| Turn actions       | 2 per turn                 |
 
 ---
 
 ## Visual & Tone Guidelines
 
 ### Color Palette
+
 - **Background**: Dark navy, charcoal, dark purple
 - **Highlights**: Warm yellow, candlelight orange
 - **Danger**: Deep red, murky purple
@@ -162,12 +174,14 @@ npm run type-check # TypeScript type checking
 - **Borders**: Burnt paper, wax seals, candle wax drips
 
 ### Art Direction
+
 - Small card-like characters
 - Hand-drawn/illustrated aesthetic
 - Cute but eerie (not scary)
 - Minimal animations (performance-conscious)
 
 ### Sprite & Icon System (implemented)
+
 - Hand-drawn card art lives under `src/assets/sprites/*.webp`. The
   registry/mapping is centralized in `src/ui/Sprites.ts`:
   - **Player**: `player_001` (used as the framed portrait on the player card).
@@ -198,6 +212,7 @@ must go through SquareBurst so the visual language stays consistent and
 never competes with the ember-driven brightness pass.
 
 **Format spec (mandatory for every burst)**:
+
 - A burst is **16~20 solid-color squares** that scatter outward from an
   origin point and fade.
 - Each burst draws from a **4-shade palette interpolated between two anchor
@@ -214,26 +229,28 @@ never competes with the ember-driven brightness pass.
 **Theme registry** (extend `BurstTheme` in `SquareBurst.ts` for new themes —
 each theme MUST define a 4-shade palette between two anchor colors):
 
-| Theme | Anchors | Used for |
-|---|---|---|
-| `damage` | oxblood → ember yellow | Player hit, enemy slam, player attack impact |
-| `score` | wax brown → candle yellow | Score gain pulse |
-| `treasure-gain` | brass → bright gold | Treasure chest opened |
-| `vanish-smoke` | char black → ash white | Card disappears (smoke feel) |
-| `mimic-shift` | bruised violet → moss | Treasure morphs into mimic |
-| `wax-freeze` | cold slate → milky candle wax | Wax hardening / 굳음 trigger shards |
-| `hand-recovery` | deep green → pale green | Recovery hand cards |
-| `hand-tool` | dark amber → pale amber | Tool hand cards (성냥, 열쇠) |
-| `hand-control` | navy → pale blue | Control hand cards (식은 양초, 정화) |
-| `hand-attack` | oxblood → ember | Attack hand cards (성냥다발) |
+| Theme           | Anchors                       | Used for                                     |
+| --------------- | ----------------------------- | -------------------------------------------- |
+| `damage`        | oxblood → ember yellow        | Player hit, enemy slam, player attack impact |
+| `score`         | wax brown → candle yellow     | Score gain pulse                             |
+| `treasure-gain` | brass → bright gold           | Treasure chest opened                        |
+| `vanish-smoke`  | char black → ash white        | Card disappears (smoke feel)                 |
+| `mimic-shift`   | bruised violet → moss         | Treasure morphs into mimic                   |
+| `wax-freeze`    | cold slate → milky candle wax | Wax hardening / 굳음 trigger shards          |
+| `hand-recovery` | deep green → pale green       | Recovery hand cards                          |
+| `hand-tool`     | dark amber → pale amber       | Tool hand cards (성냥, 열쇠)                 |
+| `hand-control`  | navy → pale blue              | Control hand cards (식은 양초, 정화)         |
+| `hand-attack`   | oxblood → ember               | Attack hand cards (성냥다발)                 |
 
 **Adding a new event**: pick the right theme (or add a new one with a
 2-anchor / 4-shade palette), then call from the renderer or `index.ts`:
+
 ```ts
 boardRenderer.burstAtElement(element, 'theme-id')
 boardRenderer.burstAtPoint(x, y, 'theme-id', { count, spread, duration })
 SquareBurst.playOn(element, 'theme-id')
 ```
+
 Helpers `findCardElement(cardId)`, `findHandSlotElement(slot)`, and
 `findScorePulseAnchor()` on `GameBoardRenderer` resolve common anchors.
 
@@ -275,6 +292,7 @@ Helpers `findCardElement(cardId)`, `findHandSlotElement(slot)`, and
 ## ⚠️ Implementation Notes & Requirements Tracking
 
 ### Distance/Position Indexing
+
 - **Code representation**: Distance is 0-indexed `[0, 1, 2, 3]` where:
   - Distance[0] = Closest to player (collision zone)
   - Distance[3] = Farthest from player
@@ -284,6 +302,7 @@ Helpers `findCardElement(cardId)`, `findHandSlotElement(slot)`, and
 - **Resolution**: Both representations refer to the same 4-slot structure. Maintain 0-indexed internally, convert to 1-indexed in UI/documentation.
 
 ### Character Stats (from concept: "양초, 우표, 밀랍, 기억, 저주")
+
 - **Candles** (양초): Recovery/survival resource
 - **Stamps** (우표): Passive enhancement
 - **Wax** (밀랍): Risky power enhancement
@@ -292,6 +311,7 @@ Helpers `findCardElement(cardId)`, `findHandSlotElement(slot)`, and
 - Current implementation: ✅ All stats tracked in Character.stats
 
 ### Turn Order (UPDATED: MVP Simplified)
+
 1. ✅ **Player Selection**: Choose 1 of 3 lanes (enemy/trap/treasure)
 2. ✅ **Player Action**: Execute chosen action on selected lane
 3. ✅ **Card Advance**: All cards move 1 space toward player
@@ -300,13 +320,17 @@ Helpers `findCardElement(cardId)`, `findHandSlotElement(slot)`, and
 6. ⏳ **Turn End**: Next turn begins
 
 ### Card Types (CRITICAL CHANGE: MVP = 3 types only)
+
 **NOT 6 types. MVP focuses on:**
+
 - **Enemy** (적): Attacks player each turn, drops loot on defeat
 - **Trap** (함정): Blocks lane, 3 consecutive traps = instant death
 - **Treasure** (보물상자): Provides rewards, 50% disappears/10% becomes mimic per turn
 
 ### Card Grouping Mechanic (NEW)
+
 Same card type stacking in same position:
+
 - **Enemy Stack**:
   - 2x: Health +50%, Damage +1
   - 3x: Health +100%, Damage +2
@@ -318,25 +342,31 @@ Same card type stacking in same position:
   - 3x: Reward 4x (extremely rare)
 
 ### Drop System (NEW)
+
 Enemy defeat → 1 of 4 basic items drops:
+
 - **Health Potion**: +1 Health (40%)
 - **Large Potion**: +2 Health (30%)
 - **Attack Boost**: +1 Attack next turn (20%)
 - **Defense Boost**: -1 Incoming damage (10%)
 
 **Hand/Inventory System:**
+
 - Not deck-building (no shuffling or card mechanics)
 - Resource/item management (consumable feel)
 - Used with action or passively applied
 - Future items: Trap kits, Keys, Freeze crystals, Skip tokens, etc.
 
 ### Player Action Model (SIMPLIFIED)
+
 **Each turn: Select 1 lane, perform 1 action:**
+
 - **Attack Enemy**: Player strikes first → Enemy counterattack
 - **Evade Trap**: Trap is cleared, next card advances
 - **Take Treasure**: Reward added to hand
 
 ### Game Feel Requirements (from concept)
+
 - **Core emotion**: "저 보상 먹고 싶은데, 지금 먹으면 위험하다"
   - UI must show threat level per lane
   - Choice pressure drives decision-making
@@ -346,6 +376,7 @@ Enemy defeat → 1 of 4 basic items drops:
   - Warm candlelight + cold darkness contrast
 
 ### MVP Scope (UPDATED: Drastically Simplified)
+
 - **Card Types**: 3 (Enemy, Trap, Treasure)
 - **Lanes**: 3 lanes × 4 distance slots
 - **Item System**: 4 basic consumables (drops only)
@@ -353,8 +384,8 @@ Enemy defeat → 1 of 4 basic items drops:
 - **Player**: 1 character (녹지 않는 소녀)
 - **No**: bosses, story, difficulty selection, character variety, Electron packaging
 
-
 ### Chain Combo Timing/UI (UPDATED)
+
 - Hand-card use begins with a physical draw/dissolve beat: the used hand card clones from its hand slot toward the player-card area and dissolves with the category SquareBurst before field/removal/combo effects continue.
 - Hand-card use now resolves in two visible beats: first the individual hand-card effect, then any newly satisfied recipe after a short UI delay (`COMBO_TRIGGER_DELAY_MS` in `src/index.ts`). This keeps combinations such as `밀랍 방패 → 밀랍 돌진` from feeling simultaneous on laggy machines.
 - `HandSystem.useSingle` only applies the single-card effect and extends the chain. Delayed combo resolution is triggered by `HandSystem.fireNextPendingRecipe` from the UI flow so every fired recipe can animate and run a preparation refresh before the next recipe beat.
@@ -362,8 +393,8 @@ Enemy defeat → 1 of 4 basic items drops:
 - Recipes are now the structured table in `src/data/Recipes.ts` (따뜻함, 점화, 배당금, 셔플, 양초 스매쉬, 지뢰제거반, 열쇠공, 탐욕, 한 걸음씩, 도화선, 성화, 밀매, 뜨거움). Add/remove combos through this declarative recipe book first, then map any new effect kind in `HandSystem`.
 - If a visible hand card would immediately trigger an unfired recipe for the current chain, `buildChainHints()` marks that slot and the hand UI shows a soft left-spreading candle glow as the combo hint.
 
-
 ### Hand Gauge Mode + UI Layer Notes (UPDATED)
+
 - The 10-slot hand gauge is now a player-selectable payoff system rather than a passive "Melt" placeholder. Every played hand card advances it by 1 in code (no redundant per-card candleGain data). The `카드` hand item explicitly adds extra gauge progress (+1 base, +7 triple) because its "손패 콤보 카운트" means this 10-use bonus counter. Clicking the gauge's left icon cycles modes in order: 최대 체력 +5 → 공격력 +1 → 불씨 +3 → 손패 랜덤 3장.
 - Full-gauge resolution is intentionally sequenced after the hand-card beat and delayed recipe beat: `카드 효과 → 조합 효과 → 게이지 효과`. Keep this delay readable; do not fold the gauge payoff back into `HandSystem.useSingle`.
 - After each hand-card field effect and after each individual combo recipe, the UI runs a preparation refresh (`runPreparationRefreshAfterFieldEffects` in `src/index.ts`) that compacts, refills, regroups, and renders once so emptied field slots do not remain visible as holes.
@@ -376,6 +407,7 @@ Enemy defeat → 1 of 4 basic items drops:
 - Ember decay is intentionally faster than older drafts: `Character.EMBER_DECAY_TURNS` is 3, so the ember counter wanes by 1 every 3 completed turns.
 
 ### Post-MVP Features (Planning Only, NOT in current implementation)
+
 - Multiple playable characters with unique abilities
 - Difficulty modes (Easy/Normal/Hard/Nightmare)
 - Game modes (Story/Infinite)
@@ -386,13 +418,22 @@ Enemy defeat → 1 of 4 basic items drops:
 **CRITICAL**: Focus entirely on making core game loop fun first. All other features depend on this working.
 
 ### Status & Tracking
+
 - ✅ = Implemented
 - ⏳ = In progress
 - ❓ = Needs clarification
 - ❌ = Not started
 
-
 ### UI/Visual Notes (UPDATED)
+
 - Low-ember darkness should be side-weighted: deepen the left/right screen edges first while keeping the central rail, score panel, and hand readable.
 - Compendium combo recipe mini-cards are allowed to fan outside the codex panel on hover; card readability has priority over panel clipping.
 - Hand recipe-ready previews should show both the triggered recipe name and its effect next to the hand-card preview, using the existing warm candle/waxed-panel visual language.
+
+### Shop + Relic System Notes (UPDATED 2026-05-13)
+
+- Every 10 completed turns, the rail plays a quake plus 3×3 shutter transition before opening the temporary relic shop overlay. Keep this transition rail-local so it does not obscure the hand/score panels longer than necessary.
+- Relic definitions live in `src/data/Relics.ts`. Add new relics there first, with one or more `costOptions` using `coin`, `maxHealth`, or `attack`.
+- The right-side player utility layer now renders owned relic mini-cards. Relic art intentionally reuses the candle mouse sprite as a placeholder until dedicated relic webp assets are added.
+- One-shot Hope uses `Character.bannedRelics` after it revives the player, so it must not be offered again in the same run.
+- Trap click feedback should remain a single impact beat: trap consume and player damage number/burst start together rather than in two delayed bursts.

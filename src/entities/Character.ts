@@ -8,6 +8,7 @@
  */
 
 import { HandCard } from './HandCard'
+import type { RelicId } from '@data/Relics'
 
 /** Full hand-gauge payoff selected by the player from the hand UI. */
 export type CandleMode = 'max-health' | 'attack' | 'ember' | 'draw'
@@ -41,6 +42,10 @@ export class Character {
   candleMode: CandleMode
   /** Temporary shield HP shown above the health bar and consumed before HP. */
   shield: number = 0
+  /** Relics owned during this run, shown in the right-side relic layer. */
+  relics: RelicId[]
+  /** One-shot relics that should never reappear after being consumed. */
+  bannedRelics: RelicId[]
 
   constructor(id: string = 'unmelting-girl', name: string = '녹지 않는 소녀') {
     this.id = id
@@ -58,6 +63,8 @@ export class Character {
     this.candleMode = 'max-health'
     this.hand = []
     this.handMax = Character.HAND_MAX
+    this.relics = []
+    this.bannedRelics = []
   }
 
   takeDamage(amount: number): number {
@@ -89,8 +96,26 @@ export class Character {
   }
 
   /** Permanently raise the player's attack stat. */
-  applyDamageBoost(): void {
-    this.damage += 1
+  applyDamageBoost(amount: number = 1): void {
+    this.damage += Math.max(0, amount)
+  }
+
+  /** Spend max HP as a shop currency while keeping the run alive. */
+  spendMaxHealth(amount: number): boolean {
+    const cost = Math.max(0, amount)
+    if (this.maxHealth - cost < 1) return false
+    this.maxHealth -= cost
+    this.health = Math.min(this.health, this.maxHealth)
+    this.health = Math.max(1, this.health)
+    return true
+  }
+
+  /** Spend attack as a shop currency without letting attack drop below 1. */
+  spendAttack(amount: number): boolean {
+    const cost = Math.max(0, amount)
+    if (this.damage - cost < 1) return false
+    this.damage -= cost
+    return true
   }
 
   /** Add temporary shield HP. It lasts until consumed or the run resets. */
@@ -159,6 +184,25 @@ export class Character {
     return this.hand.length < this.handMax
   }
 
+  /** Add a relic if it is not already owned or permanently removed. */
+  addRelic(id: RelicId): boolean {
+    if (this.relics.includes(id) || this.bannedRelics.includes(id)) return false
+    this.relics.push(id)
+    return true
+  }
+
+  hasRelic(id: RelicId): boolean {
+    return this.relics.includes(id)
+  }
+
+  /** Remove a relic; optionally ban it from future random shop offers. */
+  removeRelic(id: RelicId, ban: boolean = false): boolean {
+    const before = this.relics.length
+    this.relics = this.relics.filter((relicId) => relicId !== id)
+    if (ban && !this.bannedRelics.includes(id)) this.bannedRelics.push(id)
+    return this.relics.length !== before
+  }
+
   nextTurn(): void {
     this.turn++
   }
@@ -176,6 +220,8 @@ export class Character {
     this.candleMode = 'max-health'
     this.hand = []
     this.handMax = Character.HAND_MAX
+    this.relics = []
+    this.bannedRelics = []
     this.shield = 0
   }
 }

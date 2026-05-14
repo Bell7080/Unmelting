@@ -5,7 +5,7 @@
 
 import { Character } from '@entities/Character'
 import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
-import { Card } from '@entities/Card'
+import { Card, CardType } from '@entities/Card'
 
 export class GameState {
   character: Character
@@ -164,6 +164,32 @@ export class GameState {
     }
 
     return changed
+  }
+
+  /** Remove every card reference from the full field. One-shot relics use
+   *  this after revival so the next turn starts from a clean rail. */
+  clearField(): void {
+    for (const lane of this.lanes) lane.clear()
+  }
+
+  /** Deal damage to one random active-row enemy. Returns the hit summary for UI. */
+  damageRandomFrontEnemy(
+    amount: number
+  ): { cardId: string; amount: number; defeated: boolean } | null {
+    const candidates: { card: Card; distance: number }[] = []
+    const seen = new Set<Card>()
+    for (const lane of this.lanes) {
+      const card = lane.getCardAtDistance(0)
+      if (!card || card.type !== CardType.ENEMY || seen.has(card)) continue
+      seen.add(card)
+      candidates.push({ card, distance: 0 })
+    }
+    if (candidates.length === 0) return null
+    const pick = candidates[Math.floor(Math.random() * candidates.length)]
+    pick.card.takeDamage(amount)
+    const defeated = pick.card.getHealth() <= 0
+    if (defeated) this.removeCardFromRow(pick.card, pick.distance)
+    return { cardId: pick.card.id, amount, defeated }
   }
 
   /**
