@@ -84,6 +84,7 @@ type ChainTimelineEvent =
   | { kind: 'card'; defId: HandCardId; name: string; category: HandCategory; uid: string }
   | { kind: 'recipe'; recipeId: string; name: string; flavor: string; uid: string }
   | { kind: 'gauge'; mode: CandleMode; name: string; flavor: string; uid: string }
+  | { kind: 'relic'; relicId: RelicId; name: string; flavor: string; uid: string }
 let chainTimeline: ChainTimelineEvent[] = []
 let chainEventCounter = 0
 function nextChainUid(): string {
@@ -226,7 +227,7 @@ async function applyRedPotionEnemyDefeats(count: number, allowBloodPack = true):
   const before = snapshotPlayerRecovery()
   const healed = gameState.character.heal(count)
   if (healed <= 0) return
-  recordNotice(`붉은 포션: 체력 +${healed}`, 'win')
+  recordRelicActivation('red-potion', `체력 +${healed}`)
   if (allowBloodPack) await applyBloodPackRecoveryTrigger(before)
 }
 
@@ -234,7 +235,7 @@ async function applyRedPotionEnemyDefeats(count: number, allowBloodPack = true):
 function applyWaxCrowTreasureGains(count: number): void {
   if (count <= 0 || !gameState.character.hasRelic('wax-crow')) return
   const shielded = gameState.character.addShield(count)
-  if (shielded > 0) recordNotice(`밀랍 까마귀: 방패 +${shielded}`, 'win')
+  if (shielded > 0) recordRelicActivation('wax-crow', `방패 +${shielded}`)
 }
 
 /** Blood Pack converts healing/max-HP gains into one random front enemy hit. */
@@ -244,10 +245,10 @@ async function applyBloodPackRecoveryTrigger(before: PlayerRecoverySnapshot): Pr
   if (!recovered || !character.hasRelic('blood-pack')) return
   const hit = gameState.damageRandomFrontEnemy(1)
   if (!hit) {
-    recordNotice('헌혈팩: 전방 적 없음', 'info')
+    recordRelicActivation('blood-pack', '전방 적 없음')
     return
   }
-  recordNotice('헌혈팩: 전방 랜덤 적 피해 1', 'hurt')
+  recordRelicActivation('blood-pack', '전방 랜덤 적 피해 1')
   await boardRenderer.animateDamageNumbersById([{ cardId: hit.cardId, amount: hit.amount }])
   if (hit.defeated) {
     await boardRenderer.animateCardConsumeByIds([{ cardId: hit.cardId, type: CardType.ENEMY }], {
@@ -267,7 +268,7 @@ async function tryResolveHopeRevive(): Promise<boolean> {
   gameState.clearField()
   gameState.isGameOver = false
   gameState.gameOverReason = ''
-  recordNotice('희망: 체력 10으로 부활, 필드 제거', 'gauge')
+  recordRelicActivation('hope', '체력 10으로 부활, 필드 제거')
   render()
   await runPreparationRefreshAfterFieldEffects()
   return true
@@ -279,7 +280,7 @@ function applyTurnStartRelics(): void {
   if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 5 !== 0) return
   coins += 1
   coinPulseKey++
-  recordNotice('황금 다람쥐: +1$', 'win')
+  recordRelicActivation('golden-squirrel', '+1$')
 }
 
 /** Generate up to three unowned, unbanned relics for the next shop visit. */
@@ -316,13 +317,13 @@ function payRelicCost(cost: RelicCostOption): boolean {
 async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
   if (id === 'carving-knife') {
     gameState.character.applyDamageBoost(1)
-    recordNotice('조각칼: 공격력 +1', 'win')
+    recordRelicActivation('carving-knife', '공격력 +1')
     return
   }
   if (id === 'lifeline') {
     const before = snapshotPlayerRecovery()
     const amount = gameState.character.increaseMaxHealth(5)
-    recordNotice(`생명선: 최대 체력 +${amount}`, 'win')
+    recordRelicActivation('lifeline', `최대 체력 +${amount}`)
     await applyBloodPackRecoveryTrigger(before)
   }
 }
@@ -586,7 +587,7 @@ const COMBO_TRIGGER_DELAY_MS = 320
 // The hand gauge fires after card and recipe beats so it never feels simultaneous.
 const GAUGE_TRIGGER_DELAY_MS = 300
 
-type NoticeLogKind = 'info' | 'win' | 'hurt' | 'melt' | 'recipe' | 'gauge'
+type NoticeLogKind = 'info' | 'win' | 'hurt' | 'melt' | 'recipe' | 'gauge' | 'relic'
 
 function createNoticeLog(message: string, kind: NoticeLogKind = 'info'): ActivityLogDraft {
   const badgeByKind: Record<NoticeLogKind, string> = {
@@ -596,6 +597,7 @@ function createNoticeLog(message: string, kind: NoticeLogKind = 'info'): Activit
     melt: '녹임',
     recipe: '조합',
     gauge: '게이지',
+    relic: '유물',
   }
   const logKind: ActivityLogEntry['kind'] =
     kind === 'info'
@@ -604,6 +606,8 @@ function createNoticeLog(message: string, kind: NoticeLogKind = 'info'): Activit
         ? 'melt'
         : kind === 'gauge'
           ? 'gauge'
+          : kind === 'relic'
+            ? 'relic'
           : kind === 'melt'
             ? 'melt'
             : kind
@@ -612,6 +616,21 @@ function createNoticeLog(message: string, kind: NoticeLogKind = 'info'): Activit
 
 function recordNotice(message: string, kind: NoticeLogKind = 'info'): void {
   pushActivityLogsInDisplayOrder([createNoticeLog(message, kind)])
+}
+
+
+/** Record relic activation in both the activity log and the chain-area toast. */
+function recordRelicActivation(relicId: RelicId, message: string): void {
+  const relic = getRelicDef(relicId)
+  recordNotice(`${relic.name}: ${message}`, 'relic')
+  chainTimeline.push({
+    kind: 'relic',
+    relicId,
+    name: relic.name,
+    flavor: message,
+    uid: nextChainUid(),
+  })
+  boardRenderer.refreshChainBanner(buildChainHints())
 }
 
 function candleModeLabel(mode: CandleMode): string {

@@ -437,3 +437,10 @@ Enemy defeat → 1 of 4 basic items drops:
 - The right-side player utility layer now renders owned relic mini-cards. Relic art intentionally reuses the candle mouse sprite as a placeholder until dedicated relic webp assets are added.
 - One-shot Hope uses `Character.bannedRelics` after it revives the player, so it must not be offered again in the same run.
 - Trap click feedback should remain a single impact beat: trap consume and player damage number/burst start together rather than in two delayed bursts.
+
+### 유물 도감/로그/보관 UI 보강 (2026-05-14)
+
+- 도감에는 `유물` 탭이 추가되어 현재 상점 유물의 효과, 비용, 보유 여부를 한 곳에서 확인한다.
+- 도감 조합 레시피 미니카드는 도감 본문 스크롤을 유지하기 위해 실제 카드 영역은 스크롤 컨테이너 안에 두고, 호버 중인 재료 스택만 body 고정 레이어로 복제해 패널 밖에서도 보이게 한다.
+- 유물 발동은 활동 로그에서 `유물` 배지로 분리하고, 체인 배너 아래 작은 토스트형 텍스트로 함께 표시한다.
+- 플레이어 카드 오른쪽 유물 보관 레이어는 플레이어 카드 높이에 맞춰 세로 스크롤/줄바꿈 그리드로 표시하며, 슬라이더는 도감/로그와 같은 촛불색 스크롤바를 사용한다.
