@@ -20,16 +20,26 @@ export interface SpawnWeights {
   treasure: number
 }
 
+export interface SpawnBuckets {
+  enemy: number
+  webTrap: number
+  bombTrap: number
+  sporeTrap: number
+  treasure: number
+}
+
 export interface EnemyStatBonus {
   hp: number
   atk: number
 }
 
-const SPAWN_WEIGHTS: Record<EmberTier, SpawnWeights> = {
-  bright: { enemy: 63, trap: 12, treasure: 25 },
-  dim: { enemy: 73, trap: 12, treasure: 15 },
-  flickering: { enemy: 86, trap: 11, treasure: 3 },
-  extinguished: { enemy: 90, trap: 10, treasure: 0 },
+const SPAWN_BUCKETS: Record<EmberTier, SpawnBuckets> = {
+  // Bomb and spore buckets preserve the former absolute odds, while extra
+  // ordinary web traps come out of the enemy bucket to soften early clumping.
+  bright: { enemy: 55, webTrap: 12, bombTrap: 4, sporeTrap: 4, treasure: 25 },
+  dim: { enemy: 65, webTrap: 12, bombTrap: 4, sporeTrap: 4, treasure: 15 },
+  flickering: { enemy: 78, webTrap: 35 / 3, bombTrap: 11 / 3, sporeTrap: 11 / 3, treasure: 3 },
+  extinguished: { enemy: 82, webTrap: 34 / 3, bombTrap: 10 / 3, sporeTrap: 10 / 3, treasure: 0 },
 }
 
 const ENEMY_BONUS: Record<EmberTier, EnemyStatBonus> = {
@@ -76,7 +86,18 @@ export class EmberSystem {
   }
 
   static getSpawnWeights(tier: EmberTier): SpawnWeights {
-    return { ...SPAWN_WEIGHTS[tier] }
+    const buckets = SPAWN_BUCKETS[tier]
+    // The HUD still displays traps as one aggregate while the spawner keeps
+    // individual trap-kind odds stable for bombs and spores.
+    return {
+      enemy: buckets.enemy,
+      trap: buckets.webTrap + buckets.bombTrap + buckets.sporeTrap,
+      treasure: buckets.treasure,
+    }
+  }
+
+  static getSpawnBuckets(tier: EmberTier): SpawnBuckets {
+    return { ...SPAWN_BUCKETS[tier] }
   }
 
   static getEnemyStatBonus(tier: EmberTier): EnemyStatBonus {

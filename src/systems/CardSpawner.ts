@@ -140,19 +140,56 @@ export class CardSpawner {
     return this.generateRandomCard({ openingBoard: true })
   }
 
+  /**
+   * Build one opening-board row with adjacent merge families separated. This
+   * keeps the first few front rows from immediately becoming 2/3-lane enemies
+   * while still using normal opening-safe card odds as the first choice.
+   */
+  spawnCardsForOpeningRow(laneCount: number = 3): Card[] {
+    const cards: Card[] = []
+
+    for (let laneIndex = 0; laneIndex < laneCount; laneIndex++) {
+      const previous = cards[laneIndex - 1] ?? null
+      let chosen: Card | null = null
+
+      // Reroll a few times before falling back so randomness remains visible
+      // but adjacent opening cells rarely share a merge-compatible family.
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const candidate = this.spawnCardForOpeningBoard()
+        if (!previous || !previous.canMergeWith(candidate)) {
+          chosen = candidate
+          break
+        }
+      }
+
+      cards.push(chosen ?? this.generateOpeningFallback(previous))
+    }
+
+    return cards
+  }
+
   /** Spawn a single fresh card for rail-maintenance refills. */
   spawnCardForRefill(): Card {
     return this.generateRandomCard()
   }
 
-  /** Pick a card type using the active spawn weights, then build the card. */
+  /** Pick a card type using per-kind buckets, then build the card. */
   private generateRandomCard(options: { openingBoard?: boolean } = {}): Card {
-    const weights = EmberSystem.getSpawnWeights(this.currentTier)
-    const total = weights.enemy + weights.trap + weights.treasure
+    const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
+    const webTrap = options.openingBoard
+      ? buckets.webTrap + buckets.bombTrap + buckets.sporeTrap
+      : buckets.webTrap
+    const bombTrap = options.openingBoard ? 0 : buckets.bombTrap
+    const sporeTrap = options.openingBoard ? 0 : buckets.sporeTrap
+    const total = buckets.enemy + webTrap + bombTrap + sporeTrap + buckets.treasure
     const roll = Math.random() * total
 
-    if (roll < weights.enemy) return this.generateEnemy()
-    if (roll < weights.enemy + weights.trap) return this.generateTrap(options)
+    if (roll < buckets.enemy) return this.generateEnemy()
+    if (roll < buckets.enemy + webTrap) return this.generateTrap({ trapKind: 'web' })
+    if (roll < buckets.enemy + webTrap + bombTrap) return this.generateTrap({ trapKind: 'bomb' })
+    if (roll < buckets.enemy + webTrap + bombTrap + sporeTrap) {
+      return this.generateTrap({ trapKind: 'spore' })
+    }
     return this.generateTreasure()
   }
 
@@ -184,11 +221,11 @@ export class CardSpawner {
   }
 
   /** Spawn the current one-lane trap; wider traps are produced by row grouping. */
-  private generateTrap(options: { openingBoard?: boolean } = {}): Card {
-    // The opening board excludes bombs/spores so players do not face fuse or
-    // infection timers before they have made their first decision.
-    const trapPool = options.openingBoard
-      ? TRAP_DEFINITIONS.filter((definition) => definition.trapKind === 'web')
+  private generateTrap(options: { trapKind?: TrapKind } = {}): Card {
+    // Trap kind is usually selected by weighted buckets; the random fallback is
+    // kept for targeted debug calls and future systems that request any trap.
+    const trapPool = options.trapKind
+      ? TRAP_DEFINITIONS.filter((definition) => definition.trapKind === options.trapKind)
       : TRAP_DEFINITIONS
     const definition = trapPool[Math.floor(Math.random() * trapPool.length)]
     this.spawnSerial++
@@ -201,6 +238,17 @@ export class CardSpawner {
       definition.healthOrDamage ?? 2,
       { trapKind: definition.trapKind }
     )
+  }
+
+  /** Pick a non-merging opening fallback when rerolls keep matching neighbors. */
+  private generateOpeningFallback(previous: Card | null): Card {
+    if (!previous) return this.spawnCardForOpeningBoard()
+
+    // Use treasure as the neutral separator for enemy/trap streaks and choose
+    // between enemy/web trap after a chest so the row does not become uniform.
+    if (previous.type === CardType.ENEMY || previous.type === CardType.TRAP)
+      return this.generateTreasure()
+    return Math.random() < 0.5 ? this.generateEnemy() : this.generateTrap({ trapKind: 'web' })
   }
 
   /** Spawn the current one-lane chest; wider chests are produced by row grouping. */

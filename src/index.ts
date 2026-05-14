@@ -508,9 +508,7 @@ function compactAndRefillAllLanes(): boolean {
 function fillBoardAtStart(): void {
   syncSpawnerTier()
   for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
-    const cards = Array.from({ length: gameState.lanes.length }, () =>
-      cardSpawner.spawnCardForOpeningBoard()
-    )
+    const cards = cardSpawner.spawnCardsForOpeningRow(gameState.lanes.length)
     for (let i = 0; i < gameState.lanes.length; i++) {
       const lane = gameState.lanes[i]
       const card = cards[i]
