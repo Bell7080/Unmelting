@@ -1286,8 +1286,10 @@ export class GameBoardRenderer {
         },
         name: r.name,
         badge: `${r.totalCount}장`,
+        // Recipe cards use a denser codex variant because their visual payload
+        // is already communicated by the stacked ingredient cards.
+        categoryClass: 'compendium-recipe-card',
         stats: [['효과', r.flavor]],
-        description: '마우스를 올리면 재료 카드가 펼쳐진다. 체인에 위 재료가 모두 사용되면 발동.',
       })
     }).join('')
     return `
@@ -2811,7 +2813,9 @@ const STYLES = `
   aspect-ratio: 1;
   position: relative;
   overflow: visible;
-  border-radius: 999px;
+  /* Square chip frame: compact like a small relic case, but still softened to
+     match the candlelit card UI instead of reading as a sharp debug tile. */
+  border-radius: 12px;
   border: 1px solid rgba(255, 215, 120, 0.46);
   background:
     radial-gradient(circle at 50% 22%, rgba(255, 232, 168, 0.2), transparent 44%),
@@ -2824,7 +2828,7 @@ const STYLES = `
 .relic-mini-art {
   position: absolute;
   inset: 5px;
-  border-radius: inherit;
+  border-radius: 8px;
   background-size: cover;
   background-position: center 20%;
   filter: sepia(0.16) saturate(0.9) brightness(0.92);
@@ -4683,7 +4687,8 @@ const STYLES = `
 /* Combo tab recipe cards: mini hand cards overlap by default and fan out on
    hover/focus, matching the requested hand-card stack interaction. */
 .compendium-card-art--recipe {
-  min-height: 156px;
+  min-height: 116px;
+  height: 116px;
   overflow: hidden;
   background:
     radial-gradient(circle at 50% 8%, rgba(255, 215, 120, 0.12), transparent 58%),
@@ -4691,19 +4696,19 @@ const STYLES = `
 }
 .compendium-recipe-stack {
   position: relative;
-  width: min(100%, 270px);
-  height: 142px;
+  width: min(100%, 240px);
+  height: 102px;
   margin: 0 auto;
 }
 .compendium-recipe-mini {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 96px;
-  min-height: 126px;
-  height: 126px;
-  padding: 6px;
-  gap: 5px;
+  width: 82px;
+  min-height: 98px;
+  height: 98px;
+  padding: 5px;
+  gap: 4px;
   transform: translate(-50%, -50%) translateX(calc((var(--i, 0) - var(--recipe-center, 0)) * 18px)) rotate(calc((var(--i, 0) - var(--recipe-center, 0)) * 4deg));
   transform-origin: 50% 96%;
   transition: transform 0.28s cubic-bezier(0.16, 0.86, 0.26, 1), filter 0.28s ease;
@@ -4725,10 +4730,27 @@ const STYLES = `
 .compendium-card:focus-within .compendium-card-art--recipe .compendium-recipe-mini {
   filter: brightness(1.04);
 }
-.compendium-recipe-mini .common-card-art { height: 58px; min-height: 58px; }
-.compendium-recipe-mini .common-card-body { min-height: 34px; gap: 2px; }
-.compendium-recipe-mini .common-card-name { font-size: 12px; }
+.compendium-recipe-mini .common-card-art { height: 44px; min-height: 44px; border-radius: 8px; }
+.compendium-recipe-mini .common-card-body { min-height: 26px; gap: 1px; }
+.compendium-recipe-mini .common-card-title-row { gap: 3px; }
+.compendium-recipe-mini .common-card-name { font-size: 12px; line-height: 1.05; }
+.compendium-recipe-mini .common-card-badge { display: none; }
 .compendium-recipe-mini .common-card-desc { display: none; }
+/* Recipe entries intentionally break from the larger default codex card height:
+   the compact card keeps the ingredients and one effect line without the large
+   blank lower area visible in the combo tab. */
+.compendium-recipe-card {
+  min-height: 0;
+  padding: 10px;
+  gap: 7px;
+}
+.compendium-recipe-card .compendium-card-head {
+  min-height: 22px;
+}
+.compendium-recipe-card .compendium-card-row {
+  align-items: start;
+  line-height: 1.28;
+}
 
 /* Hide the hover preview immediately once a card has been accepted for use;
    only the dedicated flight ghost remains until the use animation completes. */
@@ -5094,7 +5116,7 @@ const STYLES = `
   transform: translateZ(0);
 }
 .compendium-recipe-float .compendium-recipe-mini {
-  transform: translate(-50%, -50%) translateX(calc((var(--i, 0) - var(--recipe-center, 0)) * 74px)) rotate(calc((var(--i, 0) - var(--recipe-center, 0)) * 9deg));
+  transform: translate(-50%, -50%) translateX(calc((var(--i, 0) - var(--recipe-center, 0)) * 66px)) rotate(calc((var(--i, 0) - var(--recipe-center, 0)) * 9deg));
   filter: brightness(1.08);
 }
 .compendium-relic-owned {
