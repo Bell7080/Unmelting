@@ -449,6 +449,8 @@ Enemy defeat → 1 of 4 basic items drops:
 
 - Relic art now uses dedicated `src/assets/sprites/relics_001.webp` through `relics_007.webp` in `RELIC_IDS` order; do not fall back to the candle mouse placeholder for shop cards, owned relic chips, hover previews, or the relic compendium.
 - Enemy spawning is turn-banded: turns 1-10 use 양초 거미/양초 키틴벌레, turns 11-20 add 양초 생쥐/양초 개구리, and turns 21+ add 양초 새/양초 두더지.
+- Ordinary web-trap odds are intentionally raised by moving weight out of the enemy bucket; bomb and spore absolute buckets should remain at their former odds when tuning spawn tables.
+- Opening 3×3 rows should be generated with adjacent merge families separated where possible so turn 1 and the first few falling rows do not immediately create 2/3-lane enemy formations.
 - Merged normal enemy groups sum the member HP/ATK and then add width bonuses (`2칸 = +2 HP/+2 ATK`, `3칸 = +3 HP/+3 ATK`). Group art/name follows the strongest merged member.
 - Trap subtypes are explicit: 거미줄 uses `trap_001`, 폭탄 uses `trap_004`, 포자 uses `trap_007`. Bombs never merge. Spores merge only with spores and keep the shorter spread countdown.
 - Armed bombs are lit as soon as they are on the active front rail; if not selected before the event beat, they deal 5 player damage, splash 5 damage to adjacent enemies without deleting non-enemy neighboring cells, then disappear.
