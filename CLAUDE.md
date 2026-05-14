@@ -453,3 +453,4 @@ Enemy defeat → 1 of 4 basic items drops:
 - Trap subtypes are explicit: 거미줄 uses `trap_001`, 폭탄 uses `trap_004`, 포자 uses `trap_007`. Bombs never merge. Spores merge only with spores and keep the shorter spread countdown.
 - Armed bombs are lit as soon as they are on the active front rail; if not selected before the event beat, they deal 5 player damage, splash 5 damage to adjacent enemies without deleting non-enemy neighboring cells, then disappear.
 - Spores tick every turn and infect orthogonal neighboring single cells every second tick. A 2/3-lane spore colony infects 2/3 adjacent cells per spread pulse and stops when there are no adjacent targets.
+- Opening 3×3 boards must not spawn volatile traps (`bomb`/`spore`); use the safe opening-board spawner so turn 1 starts without fuse or infection timers. Spore countdown state belongs to the `Card` instance and must survive rail compaction/push movement, including waiting-line movement.

@@ -131,19 +131,28 @@ export class CardSpawner {
     return cards
   }
 
+  /**
+   * Spawn a safe card for the opening 3×3 setup. The first board may still
+   * include web traps, but delayed hazards (bomb/spore) are held back until
+   * normal refills so turn 1 starts readable and non-volatile.
+   */
+  spawnCardForOpeningBoard(): Card {
+    return this.generateRandomCard({ openingBoard: true })
+  }
+
   /** Spawn a single fresh card for rail-maintenance refills. */
   spawnCardForRefill(): Card {
     return this.generateRandomCard()
   }
 
   /** Pick a card type using the active spawn weights, then build the card. */
-  private generateRandomCard(): Card {
+  private generateRandomCard(options: { openingBoard?: boolean } = {}): Card {
     const weights = EmberSystem.getSpawnWeights(this.currentTier)
     const total = weights.enemy + weights.trap + weights.treasure
     const roll = Math.random() * total
 
     if (roll < weights.enemy) return this.generateEnemy()
-    if (roll < weights.enemy + weights.trap) return this.generateTrap()
+    if (roll < weights.enemy + weights.trap) return this.generateTrap(options)
     return this.generateTreasure()
   }
 
@@ -175,8 +184,13 @@ export class CardSpawner {
   }
 
   /** Spawn the current one-lane trap; wider traps are produced by row grouping. */
-  private generateTrap(): Card {
-    const definition = TRAP_DEFINITIONS[Math.floor(Math.random() * TRAP_DEFINITIONS.length)]
+  private generateTrap(options: { openingBoard?: boolean } = {}): Card {
+    // The opening board excludes bombs/spores so players do not face fuse or
+    // infection timers before they have made their first decision.
+    const trapPool = options.openingBoard
+      ? TRAP_DEFINITIONS.filter((definition) => definition.trapKind === 'web')
+      : TRAP_DEFINITIONS
+    const definition = trapPool[Math.floor(Math.random() * trapPool.length)]
     this.spawnSerial++
     return new Card(
       `trap-${this.spawnSerial}-${Math.random()}`,

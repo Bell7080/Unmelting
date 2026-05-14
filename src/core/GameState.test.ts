@@ -39,4 +39,20 @@ describe('GameState rail maintenance', () => {
       expect(gameState.lanes[0].getCardAtDistance(distance)).not.toBeNull()
     }
   })
+
+  it('preserves a waiting spore countdown when rail gravity moves it forward', () => {
+    const gameState = new GameState()
+    const spore = new Card('spore-waiting', CardType.TRAP, '감염 포자', 'test', 0, 1, {
+      trapKind: 'spore',
+    })
+    spore.sporeTurnsUntilSpread = 1
+    gameState.lanes[1].setCardAtDistance(2, spore)
+
+    gameState.compactAndRefillRails((laneIndex) => makeTreasure(`new-lane-${laneIndex}`))
+
+    // Gravity moves the same Card instance, so partially elapsed infection
+    // timers survive rail pushes instead of returning to the default 2 turns.
+    expect(gameState.lanes[1].getCardAtDistance(0)).toBe(spore)
+    expect(spore.sporeTurnsUntilSpread).toBe(1)
+  })
 })
