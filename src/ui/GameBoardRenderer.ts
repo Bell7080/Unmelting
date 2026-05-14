@@ -499,18 +499,31 @@ export class GameBoardRenderer {
     return `<div class="relic-stack" aria-label="보유 유물">${relics}</div>`
   }
 
-  /** Small owned-relic card; the full shop card reuses the same data. */
+  /** Small owned-relic chip: the rail shows only the illustration while the
+   *  hidden hover card carries all readable relic details. */
   private renderRelicMiniCard(id: RelicId): string {
     const def = getRelicDef(id)
     return `
-      <article class="relic-mini-card" title="${def.effect}">
+      <article class="relic-mini-card" aria-label="${def.name}: ${def.effect}">
         <div class="relic-mini-art" style="background-image: url('${SpriteUrls.enemyMouse}')" aria-hidden="true"></div>
-        <div class="relic-mini-copy">
-          <strong>${def.name}</strong>
-          <span>${def.effect}</span>
+        <div class="relic-hover-preview" style="--hand-card-back: url('${SpriteUrls.cardBack}');" aria-hidden="true">
+          ${this.relicPreviewFace(def.id)}
         </div>
       </article>
     `
+  }
+
+  /** Full relic hover face, intentionally separate from hand cards so the
+   *  preview reads as a wax-sealed artifact card rather than a playable card. */
+  private relicPreviewFace(id: RelicId): string {
+    const def = getRelicDef(id)
+    return this.commonCardFace({
+      artUrl: SpriteUrls.enemyMouse,
+      name: def.name,
+      description: `${def.effect}<br><span class="common-card-subdesc">${def.flavor}</span>`,
+      extraClass: 'relic-preview-card',
+      badge: '유물',
+    })
   }
 
   private renderPlayer(character: Character): string {
@@ -856,19 +869,19 @@ export class GameBoardRenderer {
         ? offers.map((offer) => this.renderShopRelicCard(offer, coins, character)).join('')
         : '<div class="shop-empty">오늘의 잡화는 모두 팔렸어.</div>'
     this.shopOverlayElement.innerHTML = `
-      <div class="shop-modal" role="dialog" aria-label="모험 잡화 생쥐 상점">
-        <header class="shop-header">
-          <div>
-            <span class="shop-kicker">쿠궁! 레일 정차</span>
-            <h2>모험 잡화 생쥐</h2>
-          </div>
-          <div class="shop-wallet">${coinIcon()} ${coins}$</div>
-        </header>
-        <p class="shop-intro">랜덤 유물 3개가 진열됐어. 돈 대신 최대체력이나 공격력을 내는 물건도 있어.</p>
-        <section class="shop-grid" aria-label="상점 유물 목록">${cards}</section>
-        <footer class="shop-footer">
-          <button class="shop-close-btn" type="button" data-shop-close>모험 계속하기</button>
-        </footer>
+      <div class="shop-shell" role="dialog" aria-label="모험 잡화 생쥐 상점">
+        <button class="shop-close-btn shop-close-tab" type="button" data-shop-close aria-label="상점 나가기">Exit</button>
+        <div class="shop-modal">
+          <header class="shop-header">
+            <div>
+              <span class="shop-kicker">쿠궁! 레일 정차</span>
+              <h2>모험 잡화 생쥐</h2>
+            </div>
+            <div class="shop-wallet">${coinIcon()} ${coins}$</div>
+          </header>
+          <p class="shop-intro">랜덤 유물 3개가 진열됐어. 돈 대신 최대체력이나 공격력을 내는 물건도 있어.</p>
+          <section class="shop-grid" aria-label="상점 유물 목록">${cards}</section>
+        </div>
       </div>
     `
     this.shopOverlayElement.classList.add('is-open')
@@ -1273,8 +1286,10 @@ export class GameBoardRenderer {
         },
         name: r.name,
         badge: `${r.totalCount}장`,
+        // Recipe cards use a denser codex variant because their visual payload
+        // is already communicated by the stacked ingredient cards.
+        categoryClass: 'compendium-recipe-card',
         stats: [['효과', r.flavor]],
-        description: '마우스를 올리면 재료 카드가 펼쳐진다. 체인에 위 재료가 모두 사용되면 발동.',
       })
     }).join('')
     return `
@@ -1530,6 +1545,15 @@ export class GameBoardRenderer {
         document.dispatchEvent(new CustomEvent('scoreSpend'))
       })
 
+    // Relic chips live inside a scroll well, so their fixed hover cards receive
+    // viewport coordinates at hover-time to avoid clipping against that well.
+    this.boardElement.querySelectorAll<HTMLElement>('.relic-mini-card').forEach((chip) => {
+      const preview = chip.querySelector<HTMLElement>('.relic-hover-preview')
+      if (!preview) return
+      chip.addEventListener('mouseenter', () => this.positionRelicPreview(chip, preview))
+      chip.addEventListener('focusin', () => this.positionRelicPreview(chip, preview))
+    })
+
     // Compendium opens an overlay browser of every spawning card + every hand
     // card. It is purely informational (does not pause/advance a turn).
     this.boardElement
@@ -1538,6 +1562,18 @@ export class GameBoardRenderer {
         e.stopPropagation()
         this.openCompendium()
       })
+  }
+
+  /** Position the relic hover preview as a fixed card near its chip so the
+   *  relic stack can keep its compact scroll layout without clipping previews. */
+  private positionRelicPreview(chip: HTMLElement, preview: HTMLElement): void {
+    const rect = chip.getBoundingClientRect()
+    const previewWidth = 190
+    const gap = 16
+    const rightSideLeft = rect.right + gap
+    const hasRightRoom = rightSideLeft + previewWidth < window.innerWidth - 12
+    preview.style.left = `${hasRightRoom ? rightSideLeft : rect.left - previewWidth - gap}px`
+    preview.style.top = `${rect.top + rect.height / 2}px`
   }
 
   private handleCardClick(el: HTMLElement, laneIndex: number, distance: number): void {
@@ -2774,17 +2810,25 @@ const STYLES = `
 }
 .relic-mini-card {
   flex: 0 0 clamp(58px, 5.4vw, 72px);
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 1;
   position: relative;
-  overflow: hidden;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 215, 120, 0.38);
-  background: linear-gradient(160deg, rgba(38, 27, 35, 0.94), rgba(13, 9, 19, 0.95));
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.2), 0 8px 18px rgba(0, 0, 0, 0.45);
+  overflow: visible;
+  /* Square chip frame: compact like a small relic case, but still softened to
+     match the candlelit card UI instead of reading as a sharp debug tile. */
+  border-radius: 12px;
+  border: 1px solid rgba(255, 215, 120, 0.46);
+  background:
+    radial-gradient(circle at 50% 22%, rgba(255, 232, 168, 0.2), transparent 44%),
+    linear-gradient(160deg, rgba(38, 27, 35, 0.94), rgba(13, 9, 19, 0.95));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.24),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.34),
+    0 8px 18px rgba(0, 0, 0, 0.45);
 }
 .relic-mini-art {
   position: absolute;
-  inset: 0 0 42%;
+  inset: 5px;
+  border-radius: 8px;
   background-size: cover;
   background-position: center 20%;
   filter: sepia(0.16) saturate(0.9) brightness(0.92);
@@ -2792,32 +2836,12 @@ const STYLES = `
 .relic-mini-card::after {
   content: '';
   position: absolute;
-  inset: 38% 0 0;
-  background: linear-gradient(180deg, rgba(13, 9, 19, 0), rgba(13, 9, 19, 0.94) 34%);
-}
-.relic-mini-copy {
-  position: absolute;
-  inset: auto 5px 5px;
-  z-index: 1;
-  display: grid;
-  gap: 2px;
-}
-.relic-mini-copy strong {
-  color: rgba(255, 232, 168, 0.96);
-  font-size: 12px;
-  line-height: 1.05;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.relic-mini-copy span {
-  color: rgba(232, 214, 180, 0.72);
-  font-size: 12px;
-  line-height: 1.05;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(255, 232, 168, 0.18), transparent 34%, rgba(13, 9, 19, 0.38)),
+    radial-gradient(circle at 50% 50%, transparent 58%, rgba(0, 0, 0, 0.36) 100%);
 }
 .player-row {
   display: flex;
@@ -2871,8 +2895,12 @@ const STYLES = `
   display: flex;
   animation: shop-overlay-in 0.24s ease-out;
 }
-.shop-modal {
+.shop-shell {
+  position: relative;
   width: min(1040px, 96vw);
+}
+.shop-modal {
+  width: 100%;
   max-height: min(760px, 92vh);
   overflow: auto;
   border-radius: 22px;
@@ -2883,8 +2911,7 @@ const STYLES = `
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 232, 168, 0.22);
   padding: clamp(18px, 2.4vw, 28px);
 }
-.shop-header,
-.shop-footer {
+.shop-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2989,8 +3016,32 @@ const STYLES = `
   filter: grayscale(0.4);
 }
 .shop-close-btn {
-  margin-left: auto;
   padding-inline: 18px;
+}
+.shop-close-tab {
+  position: absolute;
+  right: clamp(18px, 3vw, 34px);
+  top: 0;
+  z-index: 2;
+  transform: translateY(calc(-100% - 9px));
+  min-width: 82px;
+  border-radius: 999px 999px 10px 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow:
+    0 10px 20px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 244, 210, 0.38);
+}
+.shop-close-tab::after {
+  content: '';
+  position: absolute;
+  left: 13px;
+  right: 13px;
+  bottom: -10px;
+  height: 10px;
+  border-left: 1px solid rgba(255, 215, 120, 0.34);
+  border-right: 1px solid rgba(255, 215, 120, 0.34);
+  background: linear-gradient(180deg, rgba(184, 111, 43, 0.64), rgba(80, 44, 24, 0.2));
 }
 .shop-empty {
   grid-column: 1 / -1;
@@ -4636,27 +4687,28 @@ const STYLES = `
 /* Combo tab recipe cards: mini hand cards overlap by default and fan out on
    hover/focus, matching the requested hand-card stack interaction. */
 .compendium-card-art--recipe {
-  min-height: 156px;
-  overflow: visible;
+  min-height: 116px;
+  height: 116px;
+  overflow: hidden;
   background:
     radial-gradient(circle at 50% 8%, rgba(255, 215, 120, 0.12), transparent 58%),
     rgba(0, 0, 0, 0.26);
 }
 .compendium-recipe-stack {
   position: relative;
-  width: min(100%, 270px);
-  height: 142px;
+  width: min(100%, 240px);
+  height: 102px;
   margin: 0 auto;
 }
 .compendium-recipe-mini {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 96px;
-  min-height: 126px;
-  height: 126px;
-  padding: 6px;
-  gap: 5px;
+  width: 82px;
+  min-height: 98px;
+  height: 98px;
+  padding: 5px;
+  gap: 4px;
   transform: translate(-50%, -50%) translateX(calc((var(--i, 0) - var(--recipe-center, 0)) * 18px)) rotate(calc((var(--i, 0) - var(--recipe-center, 0)) * 4deg));
   transform-origin: 50% 96%;
   transition: transform 0.28s cubic-bezier(0.16, 0.86, 0.26, 1), filter 0.28s ease;
@@ -4671,15 +4723,34 @@ const STYLES = `
 .compendium-card:focus-within {
   z-index: 6;
 }
-.compendium-card:hover .compendium-recipe-mini,
-.compendium-card:focus-within .compendium-recipe-mini {
-  transform: translate(-50%, -50%) translateX(calc((var(--i, 0) - var(--recipe-center, 0)) * 74px)) rotate(calc((var(--i, 0) - var(--recipe-center, 0)) * 9deg));
-  filter: brightness(1.08);
+/* The actual fan-out is rendered by a body-mounted floating clone; keeping
+   the in-card stack compact prevents a second expanded stack from stretching
+   the recipe card's lower area under the clone. */
+.compendium-card:hover .compendium-card-art--recipe .compendium-recipe-mini,
+.compendium-card:focus-within .compendium-card-art--recipe .compendium-recipe-mini {
+  filter: brightness(1.04);
 }
-.compendium-recipe-mini .common-card-art { height: 58px; min-height: 58px; }
-.compendium-recipe-mini .common-card-body { min-height: 34px; gap: 2px; }
-.compendium-recipe-mini .common-card-name { font-size: 12px; }
+.compendium-recipe-mini .common-card-art { height: 44px; min-height: 44px; border-radius: 8px; }
+.compendium-recipe-mini .common-card-body { min-height: 26px; gap: 1px; }
+.compendium-recipe-mini .common-card-title-row { gap: 3px; }
+.compendium-recipe-mini .common-card-name { font-size: 12px; line-height: 1.05; }
+.compendium-recipe-mini .common-card-badge { display: none; }
 .compendium-recipe-mini .common-card-desc { display: none; }
+/* Recipe entries intentionally break from the larger default codex card height:
+   the compact card keeps the ingredients and one effect line without the large
+   blank lower area visible in the combo tab. */
+.compendium-recipe-card {
+  min-height: 0;
+  padding: 10px;
+  gap: 7px;
+}
+.compendium-recipe-card .compendium-card-head {
+  min-height: 22px;
+}
+.compendium-recipe-card .compendium-card-row {
+  align-items: start;
+  line-height: 1.28;
+}
 
 /* Hide the hover preview immediately once a card has been accepted for use;
    only the dedicated flight ghost remains until the use animation completes. */
@@ -5045,7 +5116,7 @@ const STYLES = `
   transform: translateZ(0);
 }
 .compendium-recipe-float .compendium-recipe-mini {
-  transform: translate(-50%, -50%) translateX(calc((var(--i, 0) - var(--recipe-center, 0)) * 74px)) rotate(calc((var(--i, 0) - var(--recipe-center, 0)) * 9deg));
+  transform: translate(-50%, -50%) translateX(calc((var(--i, 0) - var(--recipe-center, 0)) * 66px)) rotate(calc((var(--i, 0) - var(--recipe-center, 0)) * 9deg));
   filter: brightness(1.08);
 }
 .compendium-relic-owned {
@@ -5098,6 +5169,67 @@ const STYLES = `
 .relic-mini-card {
   width: 100%;
   min-width: 0;
+}
+.relic-hover-preview {
+  display: none;
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 190px;
+  aspect-ratio: 0.72;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) translateX(-10px) rotateY(-88deg);
+  transform-origin: left center;
+  transform-style: preserve-3d;
+  z-index: 120;
+  filter: drop-shadow(0 16px 28px rgba(0, 0, 0, 0.72));
+}
+.relic-hover-preview::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: 14px;
+  background: var(--hand-card-back) center / cover no-repeat;
+  backface-visibility: hidden;
+  transform: rotateY(0deg);
+}
+.relic-mini-card:hover .relic-hover-preview,
+.relic-mini-card:focus-within .relic-hover-preview {
+  display: block;
+  animation: relic-preview-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
+}
+.relic-mini-card:hover .relic-hover-preview::before,
+.relic-mini-card:focus-within .relic-hover-preview::before {
+  animation: relic-preview-back-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
+}
+.relic-preview-card {
+  min-height: 264px;
+  border-color: rgba(255, 215, 120, 0.58);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 215, 120, 0.18), transparent 56%),
+    linear-gradient(180deg, rgba(48, 34, 43, 0.99), rgba(13, 9, 19, 0.99));
+}
+.relic-preview-card .common-card-art {
+  border-radius: 999px 999px 12px 12px;
+  box-shadow:
+    inset 0 -34px 46px rgba(13, 9, 19, 0.7),
+    0 0 18px rgba(255, 215, 120, 0.16);
+}
+.relic-preview-card .common-card-badge {
+  color: rgba(255, 232, 168, 0.96);
+  border-color: rgba(255, 215, 120, 0.56);
+  background: rgba(128, 77, 33, 0.28);
+}
+@keyframes relic-preview-flip {
+  0% { opacity: 0; transform: translateY(-50%) translateX(-14px) rotateY(-92deg); }
+  48% { opacity: 1; transform: translateY(-50%) translateX(-5px) rotateY(-28deg); }
+  100% { opacity: 1; transform: translateY(-50%) translateX(0) rotateY(0deg); }
+}
+@keyframes relic-preview-back-flip {
+  0%, 42% { opacity: 1; transform: rotateY(0deg); }
+  76%, 100% { opacity: 0; transform: rotateY(102deg); }
 }
 
 /* Shop polish: waxed-card frames, candlelit price buttons, and the same
