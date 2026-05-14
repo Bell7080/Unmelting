@@ -20,7 +20,7 @@ import { GameState } from '@core/GameState'
 import { Card, CardType } from '@entities/Card'
 import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
 import type { EnemyHit, TreasureChange } from '@core/TurnManager'
-import { spriteForCard, spriteForHandCard, SpriteUrls } from '@ui/Sprites'
+import { spriteForCard, spriteForHandCard, spriteForRelic, SpriteUrls } from '@ui/Sprites'
 import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandCategory, HandEffectTargeting } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
@@ -350,6 +350,8 @@ export class GameBoardRenderer {
       'cell',
       'card',
       `type-${card.type}`,
+      card.type === CardType.TRAP ? `trap-${card.trapKind}` : '',
+      card.type === CardType.TRAP && card.isBombArmed ? 'is-bomb-armed' : '',
       isActive ? 'is-active' : 'is-preview',
       isSelected ? 'is-selected' : '',
       isValidHandTarget ? 'is-hand-target' : '',
@@ -434,8 +436,14 @@ export class GameBoardRenderer {
           <span class="stat atk">${swordIcon()}<span class="stat-value">${card.getDamage()}</span></span>
         </div>
       `
-    } else if (card.type === CardType.TRAP && card.groupCount >= 3) {
-      stats = `<div class="card-stats danger">즉사</div>`
+    } else if (card.type === CardType.TRAP) {
+      if (card.trapKind === 'bomb') {
+        stats = `<div class="card-stats danger">${card.isBombArmed ? '점화' : '폭발'}</div>`
+      } else if (card.groupCount >= 3 && card.trapKind !== 'spore') {
+        stats = `<div class="card-stats danger">즉사</div>`
+      } else {
+        stats = `<div class="card-stats danger">피해 ${card.getTrapDamagePenalty()}</div>`
+      }
     } else if (card.type === CardType.TREASURE && card.groupCount > 1) {
       const mult = card.groupCount === 2 ? 'x2' : 'x3'
       stats = `<div class="card-stats good">보상 ${mult}</div>`
@@ -445,6 +453,12 @@ export class GameBoardRenderer {
     const frozenBadge = card.isFrozen()
       ? `<div class="frozen-badge">굳음 ${card.frozenTurns}</div>`
       : ''
+    const trapBadge =
+      card.type === CardType.TRAP && card.trapKind === 'bomb' && card.isBombArmed
+        ? `<div class="frozen-badge bomb-badge">점화</div>`
+        : card.type === CardType.TRAP && card.trapKind === 'spore'
+          ? `<div class="frozen-badge spore-badge">번식 ${card.sporeTurnsUntilSpread}</div>`
+          : ''
 
     const groupName = span > 1 && !card.isSpecialEnemy ? this.groupName(card.type, span) : card.name
 
@@ -454,6 +468,7 @@ export class GameBoardRenderer {
     return `
       ${groupBadge}
       ${frozenBadge}
+      ${trapBadge}
       <div class="card-face">
         <div class="card-art" ${artStyle} aria-hidden="true"></div>
         <div class="card-overlay" aria-hidden="true"></div>
@@ -467,8 +482,8 @@ export class GameBoardRenderer {
 
   private groupName(type: CardType, span: number): string {
     if (span <= 1) return ''
-    if (type === CardType.ENEMY) return span === 2 ? '성냥 무리' : '밀랍 군단'
-    if (type === CardType.TRAP) return span === 2 ? '촛농 거미집' : '밀랍 거미굴'
+    if (type === CardType.ENEMY) return span === 2 ? '적 무리' : '거대 적 무리'
+    if (type === CardType.TRAP) return span === 2 ? '함정 무리' : '거대 함정'
     if (type === CardType.TREASURE) return span === 2 ? '적당한 상자' : '큰 상자'
     return ''
   }
@@ -505,7 +520,7 @@ export class GameBoardRenderer {
     const def = getRelicDef(id)
     return `
       <article class="relic-mini-card" aria-label="${def.name}: ${def.effect}">
-        <div class="relic-mini-art" style="background-image: url('${SpriteUrls.enemyMouse}')" aria-hidden="true"></div>
+        <div class="relic-mini-art" style="background-image: url('${spriteForRelic(id)}')" aria-hidden="true"></div>
         <div class="relic-hover-preview" style="--hand-card-back: url('${SpriteUrls.cardBack}');" aria-hidden="true">
           ${this.relicPreviewFace(def.id)}
         </div>
@@ -518,7 +533,7 @@ export class GameBoardRenderer {
   private relicPreviewFace(id: RelicId): string {
     const def = getRelicDef(id)
     return this.commonCardFace({
-      artUrl: SpriteUrls.enemyMouse,
+      artUrl: spriteForRelic(id),
       name: def.name,
       description: `${def.effect}<br><span class="common-card-subdesc">${def.flavor}</span>`,
       extraClass: 'relic-preview-card',
@@ -831,7 +846,7 @@ export class GameBoardRenderer {
       .join('')
     return `
       <article class="shop-relic-card ${offer.purchased ? 'is-purchased' : ''}">
-        <div class="shop-relic-art" style="background-image: url('${SpriteUrls.enemyMouse}')" aria-hidden="true"></div>
+        <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
         <div class="shop-relic-body">
           <h3 class="shop-relic-title">${def.name}</h3>
           <p class="shop-relic-effect">${def.effect}</p>
@@ -1000,20 +1015,18 @@ export class GameBoardRenderer {
 
   private renderCompendiumEnemies(): string {
     const stackStats = (hp: number, atk: number, span: number): [string, string][] => {
-      // Enemy grouping follows the field rule: 2칸 = HP +50%/ATK +1,
-      // 3칸 = HP +100%/ATK +2. These rows now live inside one group card so
-      // the compendium does not create separate UI cards for every span.
-      const hpMultiplier = span === 1 ? 1 : span === 2 ? 1.5 : 2
-      const attackBonus = span === 1 ? 0 : span === 2 ? 1 : 2
+      // Compendium rows show a same-enemy example of the real field rule:
+      // sum each member, then add +2/+2 for 2칸 or +3/+3 for 3칸.
+      const widthBonus = span === 2 ? 2 : span >= 3 ? 3 : 0
       return [
-        [`${span}칸 HP`, String(Math.ceil(hp * hpMultiplier))],
-        [`${span}칸 ATK`, String(atk + attackBonus)],
+        [`${span}칸 HP`, String(hp * span + widthBonus)],
+        [`${span}칸 ATK`, String(atk * span + widthBonus)],
       ]
     }
     const normal = ENEMY_DEFINITIONS.map((def) => {
       const baseHp = def.healthOrDamage ?? 1
       const baseAtk = def.attack ?? 1
-      const spriteUrl = def.name.includes('생쥐') ? SpriteUrls.enemyMouse : SpriteUrls.enemyFrog
+      const spriteUrl = def.enemySpriteId ? SpriteUrls[def.enemySpriteId] : SpriteUrls.enemyMouse
       return this.fieldCardFace({
         artUrl: spriteUrl,
         name: def.name,
@@ -1038,12 +1051,12 @@ export class GameBoardRenderer {
       ]
     })
     const groupCard = this.fieldCardFace({
-      artUrl: SpriteUrls.enemyFrog,
+      artUrl: SpriteUrls.enemyMole,
       name: '적 무리',
       badge: '추가 개체',
       stats: groupRows,
       description:
-        '양초 생쥐/양초 개구리와 별도의 무리 개체로 취급한다. 2칸은 HP +50%와 ATK +1, 3칸은 HP +100%와 ATK +2 규칙을 따른다.',
+        '같은 전방 라인에서 합쳐진 적 무리는 실제 구성원의 HP/ATK를 합산한 뒤 2칸은 HP/ATK +2, 3칸은 +3을 더한다. 일러스트는 가장 강한 구성원을 따라간다.',
     })
     const mimicRows: [string, string][] = [1, 2, 3].flatMap((span) => {
       const stats = MIMIC_BY_SPAN[span]
@@ -1079,7 +1092,7 @@ export class GameBoardRenderer {
       return [`${span}칸`, `${swordIcon()} ${damage}`]
     })
     const card = this.fieldCardFace({
-      artUrl: SpriteUrls.trap,
+      artUrl: SpriteUrls.traps.web,
       name: TRAP_DEFINITIONS[0].name,
       badge: '함정',
       stats: spanRows,
@@ -1143,14 +1156,13 @@ export class GameBoardRenderer {
       .join('')
   }
 
-
   /** Relic tab documents shop relics and which ones the current run owns. */
   private renderCompendiumRelics(): string {
     const owned = new Set(this.currentGameState?.getCharacter().relics ?? [])
     const cards = Object.values(RELIC_DEFINITIONS)
       .map((def) =>
         this.compendiumCard({
-          art: { kind: 'sprite', url: SpriteUrls.enemyMouse },
+          art: { kind: 'sprite', url: spriteForRelic(def.id) },
           name: def.name,
           badge: owned.has(def.id) ? '보유 중' : '상점 유물',
           categoryClass: owned.has(def.id) ? 'compendium-relic-owned' : 'compendium-relic-card',
@@ -5285,5 +5297,20 @@ const STYLES = `
   background: rgba(244, 164, 96, 0.09);
 }
 .score-log-relic .score-log-delta { color: rgba(255, 232, 168, 1); }
+
+/* Lit bombs borrow the existing danger pulse but shift to a red-hot fuse flicker. */
+.cell.card.type-trap.trap-bomb.is-bomb-armed {
+  animation: bomb-fuse-flicker 0.45s steps(2, end) infinite;
+  border-color: rgba(255, 92, 72, 0.95);
+}
+.cell.card.type-trap.trap-bomb.is-bomb-armed .card-overlay {
+  background: radial-gradient(circle at 50% 40%, rgba(255, 84, 42, 0.35), rgba(72, 9, 9, 0.45) 72%);
+}
+@keyframes bomb-fuse-flicker {
+  0%, 100% { filter: saturate(1.1); box-shadow: var(--card-depth-shadow), 0 0 14px rgba(255, 76, 48, 0.42); }
+  50% { filter: saturate(1.8) brightness(1.12); box-shadow: var(--card-depth-shadow), 0 0 26px rgba(255, 42, 28, 0.88); }
+}
+.spore-badge { border-color: rgba(147, 209, 118, 0.7); color: rgba(220, 255, 190, 0.95); }
+.bomb-badge { border-color: rgba(255, 92, 72, 0.72); color: rgba(255, 214, 190, 0.98); }
 
 `

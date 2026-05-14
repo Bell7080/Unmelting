@@ -484,6 +484,8 @@ function actionTypeFor(cardType: CardType): ActionType | null {
 
 function syncSpawnerTier(): void {
   cardSpawner.setTier(turnManager.getEmberTier())
+  // Spawn progression is based on the upcoming playable turn: 1-10, 11-20, 21+.
+  cardSpawner.setProgressionTurn(gameState.getCurrentTurn() + 1)
 }
 
 function compactAndRefillAllLanes(): boolean {
@@ -535,6 +537,7 @@ function startGame(): void {
   syncSpawnerTier()
   grantStarterHand()
   fillBoardAtStart()
+  turnManager.armFrontBombs()
   boardRenderer.setHandTargetingMode(null)
   boardRenderer.clearSelection()
   render()
@@ -608,16 +611,15 @@ function createNoticeLog(message: string, kind: NoticeLogKind = 'info'): Activit
           ? 'gauge'
           : kind === 'relic'
             ? 'relic'
-          : kind === 'melt'
-            ? 'melt'
-            : kind
+            : kind === 'melt'
+              ? 'melt'
+              : kind
   return { label: message, badge: badgeByKind[kind], kind: logKind }
 }
 
 function recordNotice(message: string, kind: NoticeLogKind = 'info'): void {
   pushActivityLogsInDisplayOrder([createNoticeLog(message, kind)])
 }
-
 
 /** Record relic activation in both the activity log and the chain-area toast. */
 function recordRelicActivation(relicId: RelicId, message: string): void {
@@ -978,17 +980,40 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
   if (moved) await wait(380)
 
   gameState.regroupAllRows()
+  turnManager.armFrontBombs()
   boardRenderer.clearSelection()
   render()
 }
 
 async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
+  const beforeTrapHealth = snapshotFieldHealthState()
   const hits = turnManager.runEnemyPhase()
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
+  const bombExplosions = turnManager.applyBombExplosions()
+  const sporeSpreads = turnManager.applySporeSpread()
   const eventAnimations: Promise<void>[] = []
   if (hits.length > 0) eventAnimations.push(boardRenderer.animateEnemyAttacks(hits))
   if (treasureChanges.length > 0) {
     eventAnimations.push(boardRenderer.animateTreasureChanges(treasureChanges))
+  }
+  if (bombExplosions.length > 0) {
+    for (const explosion of bombExplosions) {
+      recordNotice(`${explosion.cardName} 폭발! -${explosion.playerDamage}`, 'hurt')
+    }
+    eventAnimations.push(
+      boardRenderer.animateDamageNumbersById(diffFieldHealthLosses(beforeTrapHealth))
+    )
+    eventAnimations.push(
+      boardRenderer.animateDamageImpactOnElement(
+        boardRenderer.findCardElement('__player__') ??
+          document.querySelector<HTMLElement>('.player-card'),
+        bombExplosions.reduce((sum, explosion) => sum + explosion.playerDamage, 0)
+      )
+    )
+  }
+  if (sporeSpreads.length > 0) {
+    const spreadCount = sporeSpreads.reduce((sum, spread) => sum + spread.infected.length, 0)
+    recordNotice(`포자 번식: ${spreadCount}칸 감염`, 'hurt')
   }
   if (eventAnimations.length > 0) await Promise.all(eventAnimations)
 
@@ -1134,9 +1159,35 @@ async function handleCardAction(e: Event): Promise<void> {
   }
 
   if (turnManager.isEnemyFirstStrike()) {
+    const beforeTrapHealth = snapshotFieldHealthState()
     const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
-    if (treasureChanges.length > 0) {
-      await boardRenderer.animateTreasureChanges(treasureChanges)
+    const bombExplosions = turnManager.applyBombExplosions()
+    const sporeSpreads = turnManager.applySporeSpread()
+    const eventAnimations: Promise<void>[] = []
+    if (treasureChanges.length > 0)
+      eventAnimations.push(boardRenderer.animateTreasureChanges(treasureChanges))
+    if (bombExplosions.length > 0) {
+      for (const explosion of bombExplosions)
+        recordNotice(`${explosion.cardName} 폭발! -${explosion.playerDamage}`, 'hurt')
+      eventAnimations.push(
+        boardRenderer.animateDamageNumbersById(diffFieldHealthLosses(beforeTrapHealth))
+      )
+      eventAnimations.push(
+        boardRenderer.animateDamageImpactOnElement(
+          boardRenderer.findCardElement('__player__') ??
+            document.querySelector<HTMLElement>('.player-card'),
+          bombExplosions.reduce((sum, explosion) => sum + explosion.playerDamage, 0)
+        )
+      )
+    }
+    if (sporeSpreads.length > 0) {
+      const spreadCount = sporeSpreads.reduce((sum, spread) => sum + spread.infected.length, 0)
+      recordNotice(`포자 번식: ${spreadCount}칸 감염`, 'hurt')
+    }
+    if (eventAnimations.length > 0) await Promise.all(eventAnimations)
+    if (gameState.isGameOver && !(await tryResolveHopeRevive())) {
+      finishTurn()
+      return
     }
     await runCleanupPhase(true)
     if (await maybeOpenShopAfterTurn()) return

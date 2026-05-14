@@ -116,6 +116,48 @@ describe('TurnManager treasure volatility', () => {
     expect(gameState.lanes[1].getCardAtDistance(0)).toBeNull()
   })
 
+  it('arms front bombs, then explodes them for player and adjacent enemy damage', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const bomb = new Card('bomb', CardType.TRAP, '양초 폭탄', 'test', 0, 0, { trapKind: 'bomb' })
+    const enemy = new Card('enemy', CardType.ENEMY, '양초 두더지', 'test', 8, 2)
+    gameState.lanes[1].setCardAtDistance(0, bomb)
+    gameState.lanes[0].setCardAtDistance(0, enemy)
+
+    expect(turnManager.armFrontBombs()).toBe(1)
+    expect(bomb.isBombArmed).toBe(true)
+
+    const explosions = turnManager.applyBombExplosions()
+
+    expect(explosions).toHaveLength(1)
+    expect(explosions[0]?.playerDamage).toBe(5)
+    expect(gameState.character.health).toBe(gameState.character.maxHealth - 5)
+    expect(enemy.getHealth()).toBe(3)
+    expect(gameState.lanes[1].getCardAtDistance(0)).toBeNull()
+  })
+
+  it('spreads a ready spore into one orthogonal neighboring cell', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const spore = new Card('spore', CardType.TRAP, '감염 포자', 'test', 0, 1, { trapKind: 'spore' })
+    const victim = new Card('victim', CardType.TREASURE, '작은 상자', 'test')
+    spore.sporeTurnsUntilSpread = 1
+    gameState.lanes[1].setCardAtDistance(1, spore)
+    gameState.lanes[1].setCardAtDistance(0, victim)
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+
+    const spreads = turnManager.applySporeSpread()
+    const infected = spreads[0]?.infected[0]
+    const infectedCard = infected
+      ? gameState.lanes[infected.laneIndex].getCardAtDistance(infected.distance)
+      : null
+
+    expect(spreads).toHaveLength(1)
+    expect(infectedCard?.type).toBe(CardType.TRAP)
+    expect(infectedCard?.trapKind).toBe('spore')
+    expect(spore.sporeTurnsUntilSpread).toBe(2)
+  })
+
   it('does not end the game just because three traps occupy the active row', () => {
     const gameState = new GameState()
     const turnManager = new TurnManager(gameState)

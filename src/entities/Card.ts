@@ -8,11 +8,27 @@ export enum CardType {
   TREASURE = 'treasure',
 }
 
+export type TrapKind = 'web' | 'bomb' | 'spore'
+
+export type EnemySpriteId =
+  | 'enemyMouse'
+  | 'enemyFrog'
+  | 'enemyMoth'
+  | 'enemyChitin'
+  | 'enemyBird'
+  | 'enemyMole'
+
 export interface CardOptions {
   /** Special enemies stay as standalone threats and never merge with other cards. */
   isSpecialEnemy?: boolean
   /** Number of items awarded when this enemy is defeated. */
   defeatDropCount?: number
+  /** Enemy illustration id used to keep merged groups on the strongest art. */
+  enemySpriteId?: EnemySpriteId
+  /** Relative enemy strength; higher values supply merged group name/art. */
+  enemyPower?: number
+  /** Trap subtype with distinct art and behavior. */
+  trapKind?: TrapKind
 }
 
 interface EnemyGroupStats {
@@ -22,6 +38,13 @@ interface EnemyGroupStats {
   health: number
   /** Exact attack damage for this group width. */
   damage: number
+}
+
+/** Extra stats added to a same-row enemy formation after member stats are summed. */
+function enemyGroupBonus(groupCount: number): { hp: number; damage: number } {
+  if (groupCount >= 3) return { hp: 3, damage: 3 }
+  if (groupCount === 2) return { hp: 2, damage: 2 }
+  return { hp: 0, damage: 0 }
 }
 
 export class Card {
@@ -37,6 +60,15 @@ export class Card {
   defeatDropCount: number // Number of item drops awarded when this enemy is defeated.
   /** Wax status: turns remaining while this field card is '굳음' and cannot act. */
   frozenTurns: number
+  /** Enemy group internals keep merged stats proportional to the actual members. */
+  enemyHealthTotal: number
+  enemyDamageTotal: number
+  enemySpriteId: EnemySpriteId | null
+  enemyPower: number
+  /** Trap subtype and behavior state for web/bomb/spore rules. */
+  trapKind: TrapKind
+  isBombArmed: boolean
+  sporeTurnsUntilSpread: number
 
   constructor(
     id: string,
@@ -58,19 +90,31 @@ export class Card {
     this.isSpecialEnemy = options.isSpecialEnemy ?? false
     this.defeatDropCount = options.defeatDropCount ?? 1
     this.frozenTurns = 0
+    this.enemyHealthTotal = type === CardType.ENEMY ? baseHealth : 0
+    this.enemyDamageTotal = type === CardType.ENEMY ? baseDamage : 0
+    this.enemySpriteId = options.enemySpriteId ?? null
+    this.enemyPower = options.enemyPower ?? 0
+    this.trapKind = options.trapKind ?? 'web'
+    this.isBombArmed = false
+    this.sporeTurnsUntilSpread = this.trapKind === 'spore' ? 2 : 0
   }
 
-  /** Return the fixed normal-enemy stats requested for merged 2/3-lane cards. */
-  private static getNormalEnemyGroupStats(groupCount: number): EnemyGroupStats | null {
-    if (groupCount === 2) return { name: '성냥 무리', health: 5, damage: 3 }
-    if (groupCount >= 3) return { name: '밀랍 군단', health: 10, damage: 5 }
-    return null
+  /** Return proportional stats for a merged enemy group based on real members. */
+  private getNormalEnemyGroupStats(groupCount: number): EnemyGroupStats | null {
+    if (groupCount <= 1) return null
+    const bonus = enemyGroupBonus(groupCount)
+    const strongestName = this.name.replace(/ 무리$/, '')
+    return {
+      name: `${strongestName} 무리`,
+      health: this.enemyHealthTotal + bonus.hp,
+      damage: this.enemyDamageTotal + bonus.damage,
+    }
   }
 
   /** Read the max HP that corresponds to this card's current grouping state. */
   private getCurrentMaxHealth(): number {
     if (this.type !== CardType.ENEMY) return 0
-    const groupedStats = this.isSpecialEnemy ? null : Card.getNormalEnemyGroupStats(this.groupCount)
+    const groupedStats = this.isSpecialEnemy ? null : this.getNormalEnemyGroupStats(this.groupCount)
     return groupedStats?.health ?? this.baseHealth
   }
 
@@ -84,7 +128,7 @@ export class Card {
   getDamage(): number {
     if (this.type !== CardType.ENEMY) return 0
     if (this.isSpecialEnemy) return this.baseDamage
-    const groupedStats = Card.getNormalEnemyGroupStats(this.groupCount)
+    const groupedStats = this.getNormalEnemyGroupStats(this.groupCount)
     return groupedStats?.damage ?? this.baseDamage
   }
 
@@ -113,9 +157,15 @@ export class Card {
     return this.frozenTurns > 0
   }
 
-  /** Return trap damage for the current trap width: 2, 5, or lethal 999. */
+  /** Return trap damage for the current trap width and subtype. */
   getTrapDamagePenalty(): number {
     if (this.type !== CardType.TRAP) return 0
+    if (this.trapKind === 'bomb') return 0
+    if (this.trapKind === 'spore') {
+      if (this.groupCount >= 3) return 5
+      if (this.groupCount === 2) return 3
+      return 1
+    }
     if (this.groupCount >= 3) return 999
     if (this.groupCount === 2) return 5
     return this.baseDamage || 2
@@ -129,13 +179,19 @@ export class Card {
   canMergeWith(other: Card): boolean {
     if (this.type !== other.type) return false
     if (this.isSpecialEnemy || other.isSpecialEnemy) return false
+    if (this.type === CardType.TRAP) {
+      // Bomb timing should never be reset by lane grouping, and unlike trap
+      // subtypes should not merge into one ambiguous hazard.
+      if (this.trapKind === 'bomb' || other.trapKind === 'bomb') return false
+      return this.trapKind === other.trapKind
+    }
     return true
   }
 
   /** Update a merged card's name/stat shell to the fixed requested 2/3-lane card. */
   private applyNormalGroupPresentation(existingDamage: number): void {
     if (this.type === CardType.ENEMY) {
-      const groupedStats = Card.getNormalEnemyGroupStats(this.groupCount)
+      const groupedStats = this.getNormalEnemyGroupStats(this.groupCount)
       if (!groupedStats) return
       this.name = groupedStats.name
       this.description = 'Merged enemy formation'
@@ -146,8 +202,17 @@ export class Card {
     }
 
     if (this.type === CardType.TRAP) {
-      this.name = this.groupCount === 2 ? '촛농 거미집' : '밀랍 거미굴'
-      this.description = this.groupCount === 2 ? 'Deals 5 damage' : 'Deals lethal damage'
+      if (this.trapKind === 'bomb') return
+      if (this.trapKind === 'spore') {
+        this.name = this.groupCount === 2 ? '번식 포자군' : '포자 군락'
+        this.description =
+          this.groupCount === 2
+            ? 'Deals 3 damage and spreads twice'
+            : 'Deals 5 damage and spreads three times'
+      } else {
+        this.name = this.groupCount === 2 ? '촛농 거미집' : '밀랍 거미굴'
+        this.description = this.groupCount === 2 ? 'Deals 5 damage' : 'Deals lethal damage'
+      }
       return
     }
 
@@ -170,11 +235,23 @@ export class Card {
     if (this.type === CardType.ENEMY) {
       const existingDamage = Math.max(0, this.getCurrentMaxHealth() - this.health)
       const otherDamage = Math.max(0, other.getCurrentMaxHealth() - other.health)
+      this.enemyHealthTotal += other.enemyHealthTotal
+      this.enemyDamageTotal += other.enemyDamageTotal
+      if (other.enemyPower > this.enemyPower) {
+        this.enemyPower = other.enemyPower
+        this.enemySpriteId = other.enemySpriteId
+        this.name = other.name
+      }
       this.groupCount += other.groupCount
       this.applyNormalGroupPresentation(existingDamage + otherDamage)
       return
     }
 
+    if (this.type === CardType.TRAP && this.trapKind === 'spore') {
+      // The merged spore colony keeps the shorter countdown so a nearly-ready
+      // spore does not get delayed by joining a fresh colony.
+      this.sporeTurnsUntilSpread = Math.min(this.sporeTurnsUntilSpread, other.sporeTurnsUntilSpread)
+    }
     this.groupCount += other.groupCount
     this.applyNormalGroupPresentation(0)
   }

@@ -434,7 +434,7 @@ Enemy defeat → 1 of 4 basic items drops:
 
 - Every 10 completed turns, the rail plays a quake plus 3×3 shutter transition before opening the temporary relic shop overlay. Keep this transition rail-local so it does not obscure the hand/score panels longer than necessary.
 - Relic definitions live in `src/data/Relics.ts`. Add new relics there first, with one or more `costOptions` using `coin`, `maxHealth`, or `attack`.
-- The right-side player utility layer now renders owned relic mini-cards. Relic art intentionally reuses the candle mouse sprite as a placeholder until dedicated relic webp assets are added.
+- The right-side player utility layer now renders owned relic mini-cards using dedicated relic webp assets in `RELIC_IDS` order.
 - One-shot Hope uses `Character.bannedRelics` after it revives the player, so it must not be offered again in the same run.
 - Trap click feedback should remain a single impact beat: trap consume and player damage number/burst start together rather than in two delayed bursts.
 
@@ -444,3 +444,12 @@ Enemy defeat → 1 of 4 basic items drops:
 - 도감 조합 레시피 미니카드는 도감 본문 스크롤을 유지하기 위해 실제 카드 영역은 스크롤 컨테이너 안에 두고, 호버 중인 재료 스택만 body 고정 레이어로 복제해 패널 밖에서도 보이게 한다.
 - 유물 발동은 활동 로그에서 `유물` 배지로 분리하고, 체인 배너 아래 작은 토스트형 텍스트로 함께 표시한다.
 - 플레이어 카드 오른쪽 유물 보관 레이어는 플레이어 카드 높이에 맞춰 세로 스크롤/줄바꿈 그리드로 표시하며, 슬라이더는 도감/로그와 같은 촛불색 스크롤바를 사용한다.
+
+### Enemy / Trap Asset + Behavior Notes (UPDATED 2026-05-14)
+
+- Relic art now uses dedicated `src/assets/sprites/relics_001.webp` through `relics_007.webp` in `RELIC_IDS` order; do not fall back to the candle mouse placeholder for shop cards, owned relic chips, hover previews, or the relic compendium.
+- Enemy spawning is turn-banded: turns 1-10 use 양초 거미/양초 키틴벌레, turns 11-20 add 양초 생쥐/양초 개구리, and turns 21+ add 양초 새/양초 두더지.
+- Merged normal enemy groups sum the member HP/ATK and then add width bonuses (`2칸 = +2 HP/+2 ATK`, `3칸 = +3 HP/+3 ATK`). Group art/name follows the strongest merged member.
+- Trap subtypes are explicit: 거미줄 uses `trap_001`, 폭탄 uses `trap_004`, 포자 uses `trap_007`. Bombs never merge. Spores merge only with spores and keep the shorter spread countdown.
+- Armed bombs are lit as soon as they are on the active front rail; if not selected before the event beat, they deal 5 player damage, splash 5 damage to adjacent enemies without deleting non-enemy neighboring cells, then disappear.
+- Spores tick every turn and infect orthogonal neighboring single cells every second tick. A 2/3-lane spore colony infects 2/3 adjacent cells per spread pulse and stops when there are no adjacent targets.

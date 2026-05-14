@@ -2,40 +2,40 @@ import { describe, expect, it } from 'vitest'
 import { Card, CardType } from './Card'
 
 /**
- * Regression tests for merged enemies, which now use exact requested 2/3-lane
- * stats while still preserving damage already dealt before later merges.
+ * Regression tests for merged enemies, which now sum member strength plus
+ * lane-width bonuses while preserving damage already dealt before later merges.
  */
 describe('Card enemy grouping health', () => {
-  it('turns two normal enemies into 성냥 무리 with fixed 3 attack and 5 HP', () => {
+  it('turns two normal enemies into a member-scaled 2-lane group', () => {
     const left = new Card('left', CardType.ENEMY, '양초 생쥐', 'Small candle mouse', 2, 1)
     const right = new Card('right', CardType.ENEMY, '양초 개구리', 'Leaping candle frog', 1, 2)
 
     left.merge(right)
-    expect(left.name).toBe('성냥 무리')
+    expect(left.name).toBe('양초 생쥐 무리')
     expect(left.groupCount).toBe(2)
     expect(left.getHealth()).toBe(5)
-    expect(left.getDamage()).toBe(3)
+    expect(left.getDamage()).toBe(5)
 
     left.takeDamage(1)
     expect(left.getHealth()).toBe(4)
     expect(left.getHealth()).toBe(4)
   })
 
-  it('turns three normal enemies into 밀랍 군단 with fixed 5 attack and 10 HP', () => {
+  it('turns three normal enemies into a member-scaled 3-lane group', () => {
     const first = new Card('first', CardType.ENEMY, '양초 생쥐', 'Small candle mouse', 2, 1)
     const second = new Card('second', CardType.ENEMY, '양초 개구리', 'Leaping candle frog', 1, 2)
     const third = new Card('third', CardType.ENEMY, '양초 생쥐', 'Small candle mouse', 2, 1)
 
     first.merge(second)
     first.merge(third)
-    expect(first.name).toBe('밀랍 군단')
+    expect(first.name).toBe('양초 생쥐 무리')
     expect(first.groupCount).toBe(3)
-    expect(first.getHealth()).toBe(10)
-    expect(first.getDamage()).toBe(5)
+    expect(first.getHealth()).toBe(8)
+    expect(first.getDamage()).toBe(7)
 
     first.takeDamage(1)
-    expect(first.getHealth()).toBe(9)
-    expect(first.getHealth()).toBe(9)
+    expect(first.getHealth()).toBe(7)
+    expect(first.getHealth()).toBe(7)
   })
 
   it('preserves damage already dealt when enemies merge later', () => {
@@ -76,5 +76,24 @@ describe('Card grouped traps and treasures', () => {
     first.merge(third)
     expect(first.name).toBe('밀랍 거미굴')
     expect(first.getTrapDamagePenalty()).toBe(999)
+  })
+
+  it('keeps bombs unmerged and spores on 1/3/5 damage', () => {
+    const bomb = new Card('bomb', CardType.TRAP, '양초 폭탄', 'test', 0, 0, { trapKind: 'bomb' })
+    const web = new Card('web', CardType.TRAP, '양초 거미줄', 'test', 0, 2)
+    const sporeA = new Card('spore-a', CardType.TRAP, '감염 포자', 'test', 0, 1, {
+      trapKind: 'spore',
+    })
+    const sporeB = new Card('spore-b', CardType.TRAP, '감염 포자', 'test', 0, 1, {
+      trapKind: 'spore',
+    })
+
+    bomb.merge(web)
+    expect(bomb.groupCount).toBe(1)
+    expect(bomb.getTrapDamagePenalty()).toBe(0)
+
+    sporeA.merge(sporeB)
+    expect(sporeA.groupCount).toBe(2)
+    expect(sporeA.getTrapDamagePenalty()).toBe(3)
   })
 })

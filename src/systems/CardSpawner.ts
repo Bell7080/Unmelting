@@ -2,10 +2,12 @@
  * CardSpawner - Generates random cards from the current base card set.
  *
  * Spawn weights and enemy stat bonuses are driven by the EmberSystem tier so
- * the field gets harder as the player's ember runs low.
+ * the field gets harder as the player's ember runs low. Enemy availability is
+ * additionally gated by completed-turn bands so early runs introduce the new
+ * candle creatures gradually between shops.
  */
 
-import { Card, CardType } from '@entities/Card'
+import { Card, CardType, type EnemySpriteId, type TrapKind } from '@entities/Card'
 import { EmberSystem, EmberTier, SpawnWeights } from './EmberSystem'
 
 interface CardDefinition {
@@ -17,15 +19,79 @@ interface CardDefinition {
   healthOrDamage?: number
   /** Enemy attack value. */
   attack?: number
+  /** Stable sprite id so grouped enemies can inherit the strongest artwork. */
+  enemySpriteId?: EnemySpriteId
+  /** Relative strength used to choose merged-group art/name. */
+  enemyPower?: number
+  /** Trap behavior bucket. */
+  trapKind?: TrapKind
 }
 
 export const ENEMY_DEFINITIONS: CardDefinition[] = [
-  { name: '양초 생쥐', description: 'Small candle mouse', healthOrDamage: 2, attack: 1 },
-  { name: '양초 개구리', description: 'Leaping candle frog', healthOrDamage: 1, attack: 2 },
+  {
+    name: '양초 거미',
+    description: 'Tiny candle spider',
+    healthOrDamage: 1,
+    attack: 1,
+    enemySpriteId: 'enemyMoth',
+    enemyPower: 1,
+  },
+  {
+    name: '양초 키틴벌레',
+    description: 'Wax-chitin crawler',
+    healthOrDamage: 1,
+    attack: 1,
+    enemySpriteId: 'enemyChitin',
+    enemyPower: 2,
+  },
+  {
+    name: '양초 생쥐',
+    description: 'Small candle mouse',
+    healthOrDamage: 2,
+    attack: 1,
+    enemySpriteId: 'enemyMouse',
+    enemyPower: 3,
+  },
+  {
+    name: '양초 개구리',
+    description: 'Leaping candle frog',
+    healthOrDamage: 1,
+    attack: 2,
+    enemySpriteId: 'enemyFrog',
+    enemyPower: 4,
+  },
+  {
+    name: '양초 새',
+    description: 'Candlelit bird',
+    healthOrDamage: 3,
+    attack: 3,
+    enemySpriteId: 'enemyBird',
+    enemyPower: 5,
+  },
+  {
+    name: '양초 두더지',
+    description: 'Burrowing candle mole',
+    healthOrDamage: 5,
+    attack: 2,
+    enemySpriteId: 'enemyMole',
+    enemyPower: 6,
+  },
 ]
 
 export const TRAP_DEFINITIONS: CardDefinition[] = [
-  { name: '양초 거미줄', description: 'Deals 2 damage', healthOrDamage: 2 },
+  { name: '양초 거미줄', description: 'Deals 2 damage', healthOrDamage: 2, trapKind: 'web' },
+  {
+    name: '양초 폭탄',
+    description: 'Arms on the front rail, then explodes for 5 damage',
+    healthOrDamage: 0,
+    trapKind: 'bomb',
+  },
+  {
+    name: '감염 포자',
+    description: 'Deals 1/3/5 damage and spreads every 2 turns',
+    healthOrDamage: 1,
+    trapKind: 'spore',
+  },
 ]
 
 export const TREASURE_DEFINITIONS: CardDefinition[] = [
@@ -40,17 +106,22 @@ export const MIMIC_BY_SPAN: Record<number, { health: number; attack: number; dro
 }
 
 export class CardSpawner {
-  private turnCount: number = 0
+  private spawnSerial: number = 0
   private currentTier: EmberTier = 'bright'
+  private progressionTurn: number = 1
 
   /** Update the active ember tier so the next spawn run uses the matching weights. */
   setTier(tier: EmberTier): void {
     this.currentTier = tier
   }
 
+  /** Sync the completed game turn so enemy pools unlock at 1/11/21. */
+  setProgressionTurn(turn: number): void {
+    this.progressionTurn = Math.max(1, turn)
+  }
+
   /** Spawn one random card per lane for the current turn refill. */
   spawnCardsForTurn(): Card[] {
-    this.turnCount++
     const cards: Card[] = []
 
     for (let i = 0; i < 3; i++) {
@@ -62,7 +133,6 @@ export class CardSpawner {
 
   /** Spawn a single fresh card for rail-maintenance refills. */
   spawnCardForRefill(): Card {
-    this.turnCount++
     return this.generateRandomCard()
   }
 
@@ -77,38 +147,54 @@ export class CardSpawner {
     return this.generateTreasure()
   }
 
+  /** Enemy availability follows shop breakpoints: 1-10, 11-20, then 21+. */
+  private getActiveEnemyDefinitions(): CardDefinition[] {
+    if (this.progressionTurn >= 21) return ENEMY_DEFINITIONS
+    if (this.progressionTurn >= 11) return ENEMY_DEFINITIONS.slice(0, 4)
+    return ENEMY_DEFINITIONS.slice(0, 2)
+  }
+
   /** Pick one of the current one-lane enemies, applying tier bonus if any. */
   private generateEnemy(): Card {
-    const definition = ENEMY_DEFINITIONS[Math.floor(Math.random() * ENEMY_DEFINITIONS.length)]
+    const pool = this.getActiveEnemyDefinitions()
+    const definition = pool[Math.floor(Math.random() * pool.length)]
     const bonus = EmberSystem.getEnemyStatBonus(this.currentTier)
+    this.spawnSerial++
     return new Card(
-      `enemy-${this.turnCount}-${Math.random()}`,
+      `enemy-${this.spawnSerial}-${Math.random()}`,
       CardType.ENEMY,
       definition.name,
       definition.description,
       (definition.healthOrDamage ?? 1) + bonus.hp,
-      (definition.attack ?? 1) + bonus.atk
+      (definition.attack ?? 1) + bonus.atk,
+      {
+        enemySpriteId: definition.enemySpriteId,
+        enemyPower: definition.enemyPower,
+      }
     )
   }
 
   /** Spawn the current one-lane trap; wider traps are produced by row grouping. */
   private generateTrap(): Card {
     const definition = TRAP_DEFINITIONS[Math.floor(Math.random() * TRAP_DEFINITIONS.length)]
+    this.spawnSerial++
     return new Card(
-      `trap-${this.turnCount}-${Math.random()}`,
+      `trap-${this.spawnSerial}-${Math.random()}`,
       CardType.TRAP,
       definition.name,
       definition.description,
       0,
-      definition.healthOrDamage ?? 2
+      definition.healthOrDamage ?? 2,
+      { trapKind: definition.trapKind }
     )
   }
 
   /** Spawn the current one-lane chest; wider chests are produced by row grouping. */
   private generateTreasure(): Card {
     const definition = TREASURE_DEFINITIONS[Math.floor(Math.random() * TREASURE_DEFINITIONS.length)]
+    this.spawnSerial++
     return new Card(
-      `treasure-${this.turnCount}-${Math.random()}`,
+      `treasure-${this.spawnSerial}-${Math.random()}`,
       CardType.TREASURE,
       definition.name,
       definition.description
@@ -127,8 +213,9 @@ export class CardSpawner {
   spawnMimic(span: number = 1): Card {
     const safeSpan = Math.max(1, Math.min(3, span))
     const stats = MIMIC_BY_SPAN[safeSpan]
+    this.spawnSerial++
     const mimic = new Card(
-      `mimic-${this.turnCount}-${Math.random()}`,
+      `mimic-${this.spawnSerial}-${Math.random()}`,
       CardType.ENEMY,
       '미믹',
       `Was a ${safeSpan}-lane treasure once`,
