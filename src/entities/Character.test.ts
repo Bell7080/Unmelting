@@ -42,6 +42,31 @@ describe('Character item effects', () => {
     expect(character.candle).toBe(7)
   })
 
+  it('spends stat currencies without dropping below one', () => {
+    const character = new Character()
+
+    expect(character.spendMaxHealth(19)).toBe(true)
+    expect(character.maxHealth).toBe(1)
+    expect(character.health).toBe(1)
+    expect(character.spendMaxHealth(1)).toBe(false)
+    expect(character.spendAttack(1)).toBe(false)
+
+    character.applyDamageBoost(2)
+    expect(character.spendAttack(1)).toBe(true)
+    expect(character.damage).toBe(2)
+  })
+
+  it('tracks owned and permanently banned relics for shop offers', () => {
+    const character = new Character()
+
+    expect(character.addRelic('hope')).toBe(true)
+    expect(character.hasRelic('hope')).toBe(true)
+    expect(character.removeRelic('hope', true)).toBe(true)
+    expect(character.hasRelic('hope')).toBe(false)
+    expect(character.addRelic('hope')).toBe(false)
+    expect(character.bannedRelics).toContain('hope')
+  })
+
   it('resets max health back to the starting value for a new run', () => {
     const character = new Character()
     character.increaseMaxHealth(2)

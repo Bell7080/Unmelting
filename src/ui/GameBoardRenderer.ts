@@ -28,6 +28,7 @@ import type { EmberTier, SpawnWeights } from '@systems/EmberSystem'
 import { EmberSystem } from '@systems/EmberSystem'
 import { ENEMY_DEFINITIONS, TRAP_DEFINITIONS, MIMIC_BY_SPAN } from '@systems/CardSpawner'
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
+import { getRelicDef, RELIC_DEFINITIONS, type RelicCostOption, type RelicId } from '@data/Relics'
 import { RECIPES } from '@data/Recipes'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import {
@@ -50,6 +51,16 @@ export interface CardActionDetail {
 export interface ItemActionDetail {
   itemIndex: number
   shiftKey?: boolean
+}
+
+export interface ShopBuyDetail {
+  relicId: RelicId
+  costIndex: number
+}
+
+export interface ShopOfferView {
+  relicId: RelicId
+  purchased?: boolean
 }
 
 export interface ActivityLogEntry {
@@ -139,6 +150,8 @@ export class GameBoardRenderer {
    *  appended chain entries play their pop-in animation. */
   private previousChainUids = new Set<string>()
   private handTargetingMode: HandTargetingMode | null = null
+  /** Body-level shop overlay is kept outside board re-renders. */
+  private shopOverlayElement: HTMLElement | null = null
 
   constructor(containerId: string = 'game-board') {
     const container = document.getElementById(containerId)
@@ -463,10 +476,33 @@ export class GameBoardRenderer {
           </button>
         </div>
         ${this.renderPlayer(character)}
-        <div class="utility-layer relic-layer" aria-label="Relic layer planned">
-          <span class="relic-plan-label">유물 레이어 예정</span>
+        <div class="utility-layer relic-layer" aria-label="Owned relics">
+          ${this.renderRelicLayer(character)}
         </div>
       </div>
+    `
+  }
+
+  /** Render owned relics as compact card previews beside the player. */
+  private renderRelicLayer(character: Character): string {
+    if (character.relics.length === 0) {
+      return `<span class="relic-plan-label">유물 없음<br>상점 대기</span>`
+    }
+    const relics = character.relics.map((id) => this.renderRelicMiniCard(id)).join('')
+    return `<div class="relic-stack" aria-label="보유 유물">${relics}</div>`
+  }
+
+  /** Small owned-relic card; the full shop card reuses the same data. */
+  private renderRelicMiniCard(id: RelicId): string {
+    const def = getRelicDef(id)
+    return `
+      <article class="relic-mini-card" title="${def.effect}">
+        <div class="relic-mini-art" style="background-image: url('${SpriteUrls.enemyMouse}')" aria-hidden="true"></div>
+        <div class="relic-mini-copy">
+          <strong>${def.name}</strong>
+          <span>${def.effect}</span>
+        </div>
+      </article>
     `
   }
 
@@ -743,6 +779,120 @@ export class GameBoardRenderer {
         <ul class="hand-stack ${character.hand.length >= 8 ? 'is-crowded' : ''}" style="--hand-count: ${character.hand.length}">${reversed}</ul>
       </aside>
     `
+  }
+
+  /** Human-readable resource labels for shop cost buttons. */
+  private relicCostLabel(cost: RelicCostOption): string {
+    if (cost.resource === 'coin') return `${cost.amount}$`
+    if (cost.resource === 'maxHealth') return `최대체력 -${cost.amount}`
+    return `공격력 -${cost.amount}`
+  }
+
+  /** Whether the current character/wallet can pay a given shop cost. */
+  private canPayRelicCost(cost: RelicCostOption, coins: number, character: Character): boolean {
+    if (cost.resource === 'coin') return coins >= cost.amount
+    if (cost.resource === 'maxHealth') return character.maxHealth - cost.amount >= 1
+    return character.damage - cost.amount >= 1
+  }
+
+  /** Shop card layout: illustration, title, effect, then one button per cost option. */
+  private renderShopRelicCard(offer: ShopOfferView, coins: number, character: Character): string {
+    const def = RELIC_DEFINITIONS[offer.relicId]
+    const costButtons = def.costOptions
+      .map((cost, index) => {
+        const disabled = offer.purchased || !this.canPayRelicCost(cost, coins, character)
+        const label = offer.purchased ? '구매 완료' : this.relicCostLabel(cost)
+        return `
+          <button class="shop-buy-btn" type="button" data-shop-buy="${def.id}" data-cost-index="${index}" ${disabled ? 'disabled' : ''}>
+            ${label}
+          </button>
+        `
+      })
+      .join('')
+    return `
+      <article class="shop-relic-card ${offer.purchased ? 'is-purchased' : ''}">
+        <div class="shop-relic-art" style="background-image: url('${SpriteUrls.enemyMouse}')" aria-hidden="true"></div>
+        <div class="shop-relic-body">
+          <h3 class="shop-relic-title">${def.name}</h3>
+          <p class="shop-relic-effect">${def.effect}</p>
+          <p class="shop-relic-flavor">${def.flavor}</p>
+        </div>
+        <div class="shop-cost-row">${costButtons}</div>
+      </article>
+    `
+  }
+
+  /** Build or refresh the modal shop after the 10-turn rail shutter. */
+  openShop(offers: ShopOfferView[], coins: number, character: Character): void {
+    if (!this.shopOverlayElement) {
+      this.shopOverlayElement = document.createElement('div')
+      this.shopOverlayElement.id = 'shop-overlay'
+      this.shopOverlayElement.className = 'shop-overlay'
+      this.shopOverlayElement.addEventListener('click', (e) => {
+        const t = e.target as HTMLElement
+        if (t.dataset.shopClose !== undefined || t === this.shopOverlayElement) {
+          document.dispatchEvent(new CustomEvent('shopClose'))
+          return
+        }
+        const relicId = t.dataset.shopBuy as RelicId | undefined
+        if (!relicId) return
+        const costIndex = parseInt(t.dataset.costIndex || '0', 10)
+        document.dispatchEvent(
+          new CustomEvent<ShopBuyDetail>('shopBuy', { detail: { relicId, costIndex } })
+        )
+      })
+      document.body.appendChild(this.shopOverlayElement)
+    }
+
+    const cards =
+      offers.length > 0
+        ? offers.map((offer) => this.renderShopRelicCard(offer, coins, character)).join('')
+        : '<div class="shop-empty">오늘의 잡화는 모두 팔렸어.</div>'
+    this.shopOverlayElement.innerHTML = `
+      <div class="shop-modal" role="dialog" aria-label="모험 잡화 생쥐 상점">
+        <header class="shop-header">
+          <div>
+            <span class="shop-kicker">쿠궁! 레일 정차</span>
+            <h2>모험 잡화 생쥐</h2>
+          </div>
+          <div class="shop-wallet">${coinIcon()} ${coins}$</div>
+        </header>
+        <p class="shop-intro">랜덤 유물 3개가 진열됐어. 돈 대신 최대체력이나 공격력을 내는 물건도 있어.</p>
+        <section class="shop-grid" aria-label="상점 유물 목록">${cards}</section>
+        <footer class="shop-footer">
+          <button class="shop-close-btn" type="button" data-shop-close>모험 계속하기</button>
+        </footer>
+      </div>
+    `
+    this.shopOverlayElement.classList.add('is-open')
+  }
+
+  /** Hide the modal shop without destroying purchased state in index.ts. */
+  closeShop(): void {
+    this.shopOverlayElement?.classList.remove('is-open')
+  }
+
+  /** 10-turn shop transition: rail quake, 3×3 shutter closes, then opens. */
+  playShopTransition(): Promise<void> {
+    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
+    if (!rail) return Promise.resolve()
+    const shutter = document.createElement('div')
+    shutter.className = 'rail-shutter'
+    shutter.setAttribute('aria-hidden', 'true')
+    shutter.innerHTML = Array.from(
+      { length: 9 },
+      (_, i) => `<span style="--shutter-i:${i}"></span>`
+    ).join('')
+    rail.appendChild(shutter)
+    rail.classList.add('is-shop-quaking')
+    return new Promise((resolve) => {
+      window.setTimeout(() => rail.classList.remove('is-shop-quaking'), 520)
+      window.setTimeout(() => shutter.classList.add('is-opening'), 900)
+      window.setTimeout(() => {
+        shutter.remove()
+        resolve()
+      }, 1450)
+    })
   }
 
   /** Open the compendium overlay listing every field-card + hand-card def
@@ -1397,6 +1547,13 @@ export class GameBoardRenderer {
       rect.top + rect.height * 0.34,
       amount
     )
+  }
+
+  /** Player damage feedback in one beat: number and burst start together. */
+  animateDamageImpactOnElement(target: HTMLElement | null, amount: number): Promise<void> {
+    if (!target || amount <= 0) return Promise.resolve()
+    SquareBurst.playOn(target, 'damage', { count: 20, spread: 150 })
+    return this.animateDamageNumberOnElement(target, amount)
   }
 
   /** Float damage numbers for card-id keyed model diffs. */
@@ -2515,22 +2672,279 @@ const STYLES = `
 .relic-layer {
   justify-content: flex-start;
   padding-left: clamp(4px, 0.8vw, 10px);
-  opacity: 0.58;
+  overflow: visible;
 }
 .relic-plan-label {
-  max-width: 96px;
-  color: rgba(255, 232, 168, 0.42);
-  border: 1px dashed rgba(255, 232, 168, 0.16);
+  max-width: 104px;
+  color: rgba(255, 232, 168, 0.46);
+  border: 1px dashed rgba(255, 232, 168, 0.18);
   border-radius: 999px;
   padding: 6px 9px;
   font-size: 12px;
   text-align: center;
   line-height: 1.2;
 }
+.relic-stack {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: clamp(120px, 16vw, 190px);
+  overflow-x: auto;
+  padding: 4px 2px 6px;
+}
+.relic-mini-card {
+  flex: 0 0 clamp(58px, 5.4vw, 72px);
+  aspect-ratio: 3 / 4;
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 215, 120, 0.38);
+  background: linear-gradient(160deg, rgba(38, 27, 35, 0.94), rgba(13, 9, 19, 0.95));
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.2), 0 8px 18px rgba(0, 0, 0, 0.45);
+}
+.relic-mini-art {
+  position: absolute;
+  inset: 0 0 42%;
+  background-size: cover;
+  background-position: center 20%;
+  filter: sepia(0.16) saturate(0.9) brightness(0.92);
+}
+.relic-mini-card::after {
+  content: '';
+  position: absolute;
+  inset: 38% 0 0;
+  background: linear-gradient(180deg, rgba(13, 9, 19, 0), rgba(13, 9, 19, 0.94) 34%);
+}
+.relic-mini-copy {
+  position: absolute;
+  inset: auto 5px 5px;
+  z-index: 1;
+  display: grid;
+  gap: 2px;
+}
+.relic-mini-copy strong {
+  color: rgba(255, 232, 168, 0.96);
+  font-size: 12px;
+  line-height: 1.05;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.relic-mini-copy span {
+  color: rgba(232, 214, 180, 0.72);
+  font-size: 12px;
+  line-height: 1.05;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .player-row {
   display: flex;
   justify-content: center;
   align-items: end;
+}
+
+/* ---------- Shop shutter + modal ---------- */
+.rail.is-shop-quaking {
+  animation: shop-rail-quake 0.52s cubic-bezier(0.18, 0.9, 0.24, 1);
+}
+.rail-shutter {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: clamp(7px, 1vw, 12px);
+  padding: clamp(7px, 1vw, 12px);
+  pointer-events: none;
+}
+.rail-shutter span {
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 232, 168, 0.24), rgba(125, 74, 33, 0.18) 16%, rgba(14, 9, 18, 0.98) 58%),
+    repeating-linear-gradient(90deg, rgba(255, 232, 168, 0.06) 0 2px, rgba(0, 0, 0, 0.18) 2px 7px);
+  border: 1px solid rgba(255, 215, 120, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.22), 0 12px 24px rgba(0, 0, 0, 0.56);
+  transform: translateY(-120%) scaleY(0.82);
+  transform-origin: top;
+  animation: shop-shutter-drop 0.48s cubic-bezier(0.18, 0.86, 0.22, 1) forwards;
+  animation-delay: calc(var(--shutter-i) * 28ms);
+}
+.rail-shutter.is-opening span {
+  animation: shop-shutter-open 0.42s cubic-bezier(0.42, 0, 0.24, 1) forwards;
+  animation-delay: calc(var(--shutter-i) * 18ms);
+}
+.shop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 3vw, 36px);
+  background: radial-gradient(circle at 50% 35%, rgba(91, 48, 34, 0.34), rgba(8, 5, 14, 0.86) 62%);
+  backdrop-filter: blur(5px);
+}
+.shop-overlay.is-open {
+  display: flex;
+  animation: shop-overlay-in 0.24s ease-out;
+}
+.shop-modal {
+  width: min(1040px, 96vw);
+  max-height: min(760px, 92vh);
+  overflow: auto;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 215, 120, 0.42);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(244, 164, 96, 0.18), transparent 34%),
+    linear-gradient(160deg, rgba(36, 25, 36, 0.98), rgba(13, 9, 19, 0.98));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 232, 168, 0.22);
+  padding: clamp(18px, 2.4vw, 28px);
+}
+.shop-header,
+.shop-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.shop-kicker {
+  color: rgba(255, 215, 120, 0.78);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.shop-header h2 {
+  margin: 2px 0 0;
+  color: rgba(255, 232, 168, 0.98);
+  font-size: clamp(22px, 3vw, 34px);
+}
+.shop-wallet {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: rgba(255, 240, 189, 0.98);
+  border: 1px solid rgba(255, 215, 120, 0.34);
+  border-radius: 999px;
+  padding: 8px 13px;
+  background: rgba(0, 0, 0, 0.24);
+  font-weight: 800;
+}
+.shop-wallet .icon { width: 1em; height: 1em; }
+.shop-intro {
+  margin: 12px 0 18px;
+  color: rgba(232, 214, 180, 0.78);
+  font-size: var(--font-size-sm);
+}
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(12px, 1.8vw, 20px);
+}
+.shop-relic-card {
+  min-height: 410px;
+  display: grid;
+  grid-template-rows: 48% 1fr auto;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 215, 120, 0.3);
+  background: linear-gradient(180deg, rgba(45, 30, 39, 0.98), rgba(18, 12, 24, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.16), 0 14px 26px rgba(0, 0, 0, 0.48);
+}
+.shop-relic-card.is-purchased {
+  filter: saturate(0.65) brightness(0.78);
+}
+.shop-relic-art {
+  min-height: 180px;
+  background-size: cover;
+  background-position: center 18%;
+  border-bottom: 1px solid rgba(255, 215, 120, 0.18);
+  box-shadow: inset 0 -38px 48px rgba(13, 9, 19, 0.74);
+}
+.shop-relic-body {
+  padding: 14px 15px 8px;
+}
+.shop-relic-title {
+  margin: 0 0 7px;
+  color: rgba(255, 232, 168, 0.98);
+  font-size: var(--font-size-lg);
+}
+.shop-relic-effect {
+  min-height: 56px;
+  margin: 0 0 8px;
+  color: rgba(255, 244, 210, 0.92);
+  line-height: 1.35;
+  font-size: var(--font-size-base);
+}
+.shop-relic-flavor {
+  margin: 0;
+  color: rgba(232, 214, 180, 0.58);
+  font-size: var(--font-size-sm);
+  line-height: 1.35;
+}
+.shop-cost-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 15px 15px;
+}
+.shop-buy-btn,
+.shop-close-btn {
+  border: 1px solid rgba(255, 215, 120, 0.42);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 215, 120, 0.95), rgba(184, 111, 43, 0.94));
+  color: rgba(28, 16, 9, 0.96);
+  font-family: inherit;
+  font-weight: 900;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  padding: 8px 12px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+}
+.shop-buy-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  filter: grayscale(0.4);
+}
+.shop-close-btn {
+  margin-left: auto;
+  padding-inline: 18px;
+}
+.shop-empty {
+  grid-column: 1 / -1;
+  min-height: 160px;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 232, 168, 0.72);
+  border: 1px dashed rgba(255, 232, 168, 0.22);
+  border-radius: 16px;
+}
+@keyframes shop-rail-quake {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  16% { transform: translate(-8px, 3px) rotate(-0.55deg); }
+  32% { transform: translate(7px, -4px) rotate(0.5deg); }
+  48% { transform: translate(-5px, 4px) rotate(-0.35deg); }
+  64% { transform: translate(4px, -2px) rotate(0.25deg); }
+  80% { transform: translate(-2px, 1px) rotate(-0.12deg); }
+}
+@keyframes shop-shutter-drop {
+  0% { transform: translateY(-120%) scaleY(0.82); opacity: 0.2; }
+  82% { transform: translateY(5%) scaleY(1.04); opacity: 1; }
+  100% { transform: translateY(0) scaleY(1); opacity: 1; }
+}
+@keyframes shop-shutter-open {
+  0% { transform: translateY(0) scaleY(1); opacity: 1; }
+  100% { transform: translateY(-120%) scaleY(0.78); opacity: 0; }
+}
+@keyframes shop-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (max-width: 820px) {
+  .shop-grid { grid-template-columns: 1fr; }
+  .shop-relic-card { min-height: 360px; }
 }
 
 /* Player card mirrors the rail-card structure (sprite art → bottom dark

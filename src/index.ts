@@ -21,6 +21,8 @@ import {
   CardActionDetail,
   ItemActionDetail,
   ActivityLogEntry,
+  ShopBuyDetail,
+  ShopOfferView,
 } from '@ui/GameBoardRenderer'
 import { CardSpawner } from '@systems/CardSpawner'
 import { ActionSystem, ActionType } from '@systems/ActionSystem'
@@ -32,6 +34,7 @@ import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { CandleMode } from '@entities/Character'
 import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
+import { getRelicDef, RELIC_IDS, type RelicCostOption, type RelicId } from '@data/Relics'
 import type { BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
@@ -101,6 +104,8 @@ let scorePulseKey = 0
 let coinPulseKey = 0
 let nextActivityLogId = 1
 let activityLogs: ActivityLogEntry[] = []
+let shopOpen = false
+let currentShopOffers: ShopOfferView[] = []
 
 type ActivityLogDraft = Omit<ActivityLogEntry, 'id'>
 
@@ -200,6 +205,171 @@ function diffThawedCards(before: Map<string, FieldFreezeSnapshotEntry>): string[
     if (frozenTurns > 0 && card.frozenTurns === 0) ids.push(card.id)
   }
   return ids
+}
+
+interface PlayerRecoverySnapshot {
+  health: number
+  maxHealth: number
+}
+
+/** Snapshot player recovery stats so relics can react after a mutation. */
+function snapshotPlayerRecovery(): PlayerRecoverySnapshot {
+  return {
+    health: gameState.character.health,
+    maxHealth: gameState.character.maxHealth,
+  }
+}
+
+/** Heal from Red Potion after enemy defeats, then allow Blood Pack to react once. */
+async function applyRedPotionEnemyDefeats(count: number, allowBloodPack = true): Promise<void> {
+  if (count <= 0 || !gameState.character.hasRelic('red-potion')) return
+  const before = snapshotPlayerRecovery()
+  const healed = gameState.character.heal(count)
+  if (healed <= 0) return
+  recordNotice(`붉은 포션: 체력 +${healed}`, 'win')
+  if (allowBloodPack) await applyBloodPackRecoveryTrigger(before)
+}
+
+/** Shield from Wax Crow when treasure cards are actually acquired. */
+function applyWaxCrowTreasureGains(count: number): void {
+  if (count <= 0 || !gameState.character.hasRelic('wax-crow')) return
+  const shielded = gameState.character.addShield(count)
+  if (shielded > 0) recordNotice(`밀랍 까마귀: 방패 +${shielded}`, 'win')
+}
+
+/** Blood Pack converts healing/max-HP gains into one random front enemy hit. */
+async function applyBloodPackRecoveryTrigger(before: PlayerRecoverySnapshot): Promise<void> {
+  const character = gameState.character
+  const recovered = character.health > before.health || character.maxHealth > before.maxHealth
+  if (!recovered || !character.hasRelic('blood-pack')) return
+  const hit = gameState.damageRandomFrontEnemy(1)
+  if (!hit) {
+    recordNotice('헌혈팩: 전방 적 없음', 'info')
+    return
+  }
+  recordNotice('헌혈팩: 전방 랜덤 적 피해 1', 'hurt')
+  await boardRenderer.animateDamageNumbersById([{ cardId: hit.cardId, amount: hit.amount }])
+  if (hit.defeated) {
+    await boardRenderer.animateCardConsumeByIds([{ cardId: hit.cardId, type: CardType.ENEMY }], {
+      suppressBurstIds: new Set([hit.cardId]),
+    })
+    await applyRedPotionEnemyDefeats(1, false)
+  }
+}
+
+/** Hope is a one-shot revive: remove itself, ban future offers, clear field. */
+async function tryResolveHopeRevive(): Promise<boolean> {
+  const character = gameState.character
+  if (character.isAlive() || !character.hasRelic('hope')) return false
+  character.removeRelic('hope', true)
+  character.maxHealth = Math.max(character.maxHealth, 10)
+  character.health = 10
+  gameState.clearField()
+  gameState.isGameOver = false
+  gameState.gameOverReason = ''
+  recordNotice('희망: 체력 10으로 부활, 필드 제거', 'gauge')
+  render()
+  await runPreparationRefreshAfterFieldEffects()
+  return true
+}
+
+/** Golden Squirrel pays a small shop coin every five completed turns. */
+function applyTurnStartRelics(): void {
+  if (!gameState.character.hasRelic('golden-squirrel')) return
+  if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 5 !== 0) return
+  coins += 1
+  coinPulseKey++
+  recordNotice('황금 다람쥐: +1$', 'win')
+}
+
+/** Generate up to three unowned, unbanned relics for the next shop visit. */
+function rollShopOffers(): ShopOfferView[] {
+  const character = gameState.character
+  const pool = RELIC_IDS.filter(
+    (id) => !character.hasRelic(id) && !character.bannedRelics.includes(id)
+  )
+  return pool
+    .map((relicId) => ({ relicId, sort: Math.random() }))
+    .sort((a, b) => a.sort - b.sort)
+    .slice(0, 3)
+    .map(({ relicId }) => ({ relicId }))
+}
+
+function canPayRelicCost(cost: RelicCostOption): boolean {
+  if (cost.resource === 'coin') return coins >= cost.amount
+  if (cost.resource === 'maxHealth') return gameState.character.maxHealth - cost.amount >= 1
+  return gameState.character.damage - cost.amount >= 1
+}
+
+function payRelicCost(cost: RelicCostOption): boolean {
+  if (!canPayRelicCost(cost)) return false
+  if (cost.resource === 'coin') {
+    coins -= cost.amount
+    coinPulseKey++
+    return true
+  }
+  if (cost.resource === 'maxHealth') return gameState.character.spendMaxHealth(cost.amount)
+  return gameState.character.spendAttack(cost.amount)
+}
+
+/** Immediate stat effects for relics whose benefit is granted on purchase. */
+async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
+  if (id === 'carving-knife') {
+    gameState.character.applyDamageBoost(1)
+    recordNotice('조각칼: 공격력 +1', 'win')
+    return
+  }
+  if (id === 'lifeline') {
+    const before = snapshotPlayerRecovery()
+    const amount = gameState.character.increaseMaxHealth(5)
+    recordNotice(`생명선: 최대 체력 +${amount}`, 'win')
+    await applyBloodPackRecoveryTrigger(before)
+  }
+}
+
+async function maybeOpenShopAfterTurn(): Promise<boolean> {
+  if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 10 !== 0) return false
+  shopOpen = true
+  inputLocked = true
+  currentShopOffers = rollShopOffers()
+  recordNotice('레일이 멈추고 상점이 열렸다', 'info')
+  render()
+  await boardRenderer.playShopTransition()
+  boardRenderer.openShop(currentShopOffers, coins, gameState.character)
+  return true
+}
+
+async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
+  if (!shopOpen) return
+  const offer = currentShopOffers.find((entry) => entry.relicId === detail.relicId)
+  if (!offer || offer.purchased) return
+  const def = getRelicDef(detail.relicId)
+  const cost = def.costOptions[detail.costIndex]
+  if (!cost || !payRelicCost(cost)) {
+    recordNotice(`${def.name}: 비용 부족`, 'hurt')
+    render()
+    boardRenderer.openShop(currentShopOffers, coins, gameState.character)
+    return
+  }
+  if (!gameState.character.addRelic(detail.relicId)) {
+    recordNotice(`${def.name}: 이미 보유 중`, 'info')
+    render()
+    return
+  }
+  offer.purchased = true
+  recordNotice(`유물 획득: ${def.name}`, 'win')
+  await applyRelicPurchaseEffect(detail.relicId)
+  render()
+  boardRenderer.openShop(currentShopOffers, coins, gameState.character)
+}
+
+function closeShopAndResume(): void {
+  if (!shopOpen) return
+  shopOpen = false
+  currentShopOffers = []
+  boardRenderer.closeShop()
+  inputLocked = false
+  render()
 }
 
 /**
@@ -358,6 +528,9 @@ function startGame(): void {
   coinPulseKey = 0
   nextActivityLogId = 1
   activityLogs = []
+  shopOpen = false
+  currentShopOffers = []
+  boardRenderer.closeShop()
   syncSpawnerTier()
   grantStarterHand()
   fillBoardAtStart()
@@ -520,6 +693,14 @@ document.addEventListener('candleModeCycle', () => {
   render()
 })
 
+document.addEventListener('shopBuy', (e: Event) => {
+  void handleShopBuy((e as CustomEvent<ShopBuyDetail>).detail)
+})
+
+document.addEventListener('shopClose', () => {
+  closeShopAndResume()
+})
+
 function handleScoreSpend(): void {
   if (!gameActive || inputLocked || score < SCORE_SPEND_COST) return
 
@@ -585,6 +766,7 @@ async function applyHandSingle(
   const usedDef = usedCard ? getHandCardDef(usedCard.defId) : null
   const beforeSingleFreeze = snapshotFieldFreezeState()
   const beforeSingleHealth = snapshotFieldHealthState()
+  const beforeSingleRecovery = snapshotPlayerRecovery()
   const result = HandSystem.useSingle(gameState, chain, slotIndex, target)
   if (!result.success) {
     recordNotice(result.message, 'hurt')
@@ -620,6 +802,7 @@ async function applyHandSingle(
   const singleDamageLosses = diffFieldHealthLosses(beforeSingleHealth)
   const singleDamagedIds = new Set(singleDamageLosses.map((loss) => loss.cardId))
   await boardRenderer.animateDamageNumbersById(singleDamageLosses)
+  await applyBloodPackRecoveryTrigger(beforeSingleRecovery)
   await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeSingleFreeze))
   await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeSingleFreeze))
   // Append only the just-used card first. Recipes are resolved below after
@@ -653,6 +836,12 @@ async function applyHandSingle(
     await boardRenderer.animateCardConsumeByIds(result.removedFieldCards, {
       suppressBurstIds: singleDamagedIds,
     })
+    await applyRedPotionEnemyDefeats(
+      result.removedFieldCards.filter((removed) => removed.type === CardType.ENEMY).length
+    )
+    applyWaxCrowTreasureGains(
+      result.removedFieldCards.filter((removed) => removed.type === CardType.TREASURE).length
+    )
   }
 
   // Prepare the rail immediately after the single card effect. Recipes should
@@ -668,6 +857,7 @@ async function applyHandSingle(
     await wait(COMBO_TRIGGER_DELAY_MS)
     const beforeRecipeFreeze = snapshotFieldFreezeState()
     const beforeRecipeHealth = snapshotFieldHealthState()
+    const beforeRecipeRecovery = snapshotPlayerRecovery()
     const recipeResult = HandSystem.fireNextPendingRecipe(gameState, chain)
     if (recipeResult.firedRecipes.length === 0) break
     if ((recipeResult.coinsGained ?? 0) > 0) {
@@ -693,6 +883,7 @@ async function applyHandSingle(
     const recipeDamageLosses = diffFieldHealthLosses(beforeRecipeHealth)
     const recipeDamagedIds = new Set(recipeDamageLosses.map((loss) => loss.cardId))
     await boardRenderer.animateDamageNumbersById(recipeDamageLosses)
+    await applyBloodPackRecoveryTrigger(beforeRecipeRecovery)
     await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeRecipeFreeze))
     await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeRecipeFreeze))
 
@@ -702,6 +893,13 @@ async function applyHandSingle(
       await boardRenderer.animateCardConsumeByIds(recipeResult.removedFieldCards, {
         suppressBurstIds: recipeDamagedIds,
       })
+      await applyRedPotionEnemyDefeats(
+        recipeResult.removedFieldCards.filter((removed) => removed.type === CardType.ENEMY).length
+      )
+      applyWaxCrowTreasureGains(
+        recipeResult.removedFieldCards.filter((removed) => removed.type === CardType.TREASURE)
+          .length
+      )
     }
     await runPreparationRefreshAfterFieldEffects()
   }
@@ -712,6 +910,7 @@ async function applyHandSingle(
   // safely trigger multiple payoffs in sequence.
   while (gameState.character.isCandleFull()) {
     await wait(GAUGE_TRIGGER_DELAY_MS)
+    const beforeGaugeRecovery = snapshotPlayerRecovery()
     const gauge = fireCandleGaugeEffect()
     if (!gauge) break
     recordNotice(`${gauge.name}: ${gauge.message}`, 'gauge')
@@ -723,6 +922,7 @@ async function applyHandSingle(
       uid: nextChainUid(),
     })
     boardRenderer.refreshChainBanner(buildChainHints())
+    await applyBloodPackRecoveryTrigger(beforeGaugeRecovery)
   }
 
   // Refill after all delayed recipe/gauge effects have resolved. This is the
@@ -751,6 +951,7 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
       const ember = gameState.character.ember
       recordNotice(`불씨가 사그라들었다 (${ember}/${gameState.character.emberMax})`, 'hurt')
     }
+    applyTurnStartRelics()
   }
 
   const moved = compactAndRefillAllLanes()
@@ -776,19 +977,20 @@ async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
   if (totalDamage > 0) {
     recordNotice(`적 공격! -${totalDamage}`, 'hurt')
     render()
-    await boardRenderer.animateDamageNumberOnElement(
+    await boardRenderer.animateDamageImpactOnElement(
       boardRenderer.findCardElement('__player__') ??
         document.querySelector<HTMLElement>('.player-card'),
       totalDamage
     )
-    await boardRenderer.animateDamageFlash()
   }
-  if (gameState.isGameOver) {
+  if (gameState.isGameOver && !(await tryResolveHopeRevive())) {
     finishTurn()
     return
   }
 
   await runCleanupPhase(true)
+
+  if (await maybeOpenShopAfterTurn()) return
 
   setTimeout(() => {
     inputLocked = false
@@ -830,11 +1032,14 @@ async function handleCardAction(e: Event): Promise<void> {
       const dmg = hits.reduce((acc, h) => acc + h.damage, 0)
       recordNotice(`불씨가 흔들려 적이 먼저 공격! -${dmg}`, 'hurt')
       render()
-      await boardRenderer.animateDamageNumberOnElement(
+      await boardRenderer.animateDamageImpactOnElement(
         document.querySelector<HTMLElement>('.player-card'),
         dmg
       )
-      if (!gameState.character.isAlive() || gameState.isGameOver) {
+      if (
+        (!gameState.character.isAlive() || gameState.isGameOver) &&
+        !(await tryResolveHopeRevive())
+      ) {
         finishTurn()
         return
       }
@@ -862,28 +1067,37 @@ async function handleCardAction(e: Event): Promise<void> {
     // Run auto-merges in case a drop produced a triple.
     const merges = HandSystem.runAutoMerges(gameState.character)
     for (const m of merges) recordNotice(m, 'melt')
+    if (result.cardRemoved && card.type === CardType.TREASURE) applyWaxCrowTreasureGains(1)
   }
+  const sameBeatAnimations: Promise<void>[] = []
   if (result.damageDealt && result.damageDealt > 0) {
-    await boardRenderer.animateDamageNumbersById(diffFieldHealthLosses(beforeActionHealth))
+    sameBeatAnimations.push(
+      boardRenderer.animateDamageNumbersById(diffFieldHealthLosses(beforeActionHealth))
+    )
   }
   if (result.damageTaken && result.damageTaken > 0) {
-    await boardRenderer.animateDamageNumberOnElement(
-      document.querySelector<HTMLElement>('.player-card'),
-      result.damageTaken
+    sameBeatAnimations.push(
+      boardRenderer.animateDamageImpactOnElement(
+        document.querySelector<HTMLElement>('.player-card'),
+        result.damageTaken
+      )
     )
-    await boardRenderer.animateDamageFlash()
   }
 
+  if (result.cardRemoved && (card.type === CardType.TRAP || card.type === CardType.TREASURE)) {
+    // Trap damage + trap consume now start in the same beat, removing the
+    // previous 타/닥 delay between click feedback and hurt feedback.
+    sameBeatAnimations.push(boardRenderer.animateCardConsume(card))
+  }
+  if (sameBeatAnimations.length > 0) await Promise.all(sameBeatAnimations)
+
   if (result.cardRemoved) {
-    // Trap/treasure: play the "eaten" pop on every cell of this Card (the
-    // merge-aware animator handles 2/3-cell groups too). The themed
-    // SquareBurst fires from the visual center. THEN we mutate the model
-    // and re-render so the card vanishes cleanly.
-    if (card.type === CardType.TRAP || card.type === CardType.TREASURE) {
-      await boardRenderer.animateCardConsume(card)
-    }
     gameState.removeCardFromRow(card, distance)
     boardRenderer.clearSelection()
+  }
+
+  if (result.cardRemoved && card.type === CardType.ENEMY) {
+    await applyRedPotionEnemyDefeats(1)
   }
 
   // Board action resets the chain so combos do not bleed across turns.
@@ -894,8 +1108,10 @@ async function handleCardAction(e: Event): Promise<void> {
 
   if (!gameState.character.isAlive()) {
     gameState.endGame('character_defeated')
-    finishTurn()
-    return
+    if (!(await tryResolveHopeRevive())) {
+      finishTurn()
+      return
+    }
   }
 
   if (turnManager.isEnemyFirstStrike()) {
@@ -904,6 +1120,7 @@ async function handleCardAction(e: Event): Promise<void> {
       await boardRenderer.animateTreasureChanges(treasureChanges)
     }
     await runCleanupPhase(true)
+    if (await maybeOpenShopAfterTurn()) return
     setTimeout(() => {
       inputLocked = false
     }, 220)
