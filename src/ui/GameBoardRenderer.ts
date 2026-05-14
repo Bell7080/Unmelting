@@ -175,6 +175,9 @@ export class GameBoardRenderer {
   }
 
   render(gameState: GameState, scorePanel: ScorePanelState): void {
+    // Detached relic previews are body-mounted during hover; remove stale ones
+    // before replacing the board DOM so old hover cards never linger onscreen.
+    document.querySelectorAll('.relic-hover-preview.is-floating').forEach((el) => el.remove())
     const previousRects = this.captureCardRects()
     this.currentGameState = gameState
     const character = gameState.getCharacter()
@@ -907,10 +910,8 @@ export class GameBoardRenderer {
     this.shopOverlayElement?.classList.remove('is-open')
   }
 
-  /** 10-turn shop transition: rail quake, 3×3 shutter closes, then opens. */
-  playShopTransition(): Promise<void> {
-    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
-    if (!rail) return Promise.resolve()
+  /** Create the 3×3 wax shutter grid used by shop stop/resume transitions. */
+  private createShopShutter(): HTMLElement {
     const shutter = document.createElement('div')
     shutter.className = 'rail-shutter'
     shutter.setAttribute('aria-hidden', 'true')
@@ -918,15 +919,40 @@ export class GameBoardRenderer {
       { length: 9 },
       (_, i) => `<span style="--shutter-i:${i}"></span>`
     ).join('')
+    return shutter
+  }
+
+  /** 10-turn shop transition: rail quake, then the 3×3 shutter closes and stays closed. */
+  playShopTransition(): Promise<void> {
+    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
+    if (!rail) return Promise.resolve()
+    const oldShutter = rail.querySelector<HTMLElement>('.rail-shutter')
+    oldShutter?.remove()
+    const shutter = this.createShopShutter()
     rail.appendChild(shutter)
     rail.classList.add('is-shop-quaking')
     return new Promise((resolve) => {
       window.setTimeout(() => rail.classList.remove('is-shop-quaking'), 520)
-      window.setTimeout(() => shutter.classList.add('is-opening'), 900)
+      window.setTimeout(() => shutter.classList.add('is-closed'), 760)
+      window.setTimeout(resolve, 860)
+    })
+  }
+
+  /** Lift the shop shutter only after the player exits the shop. */
+  playShopResumeTransition(): Promise<void> {
+    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
+    if (!rail) return Promise.resolve()
+    const shutter = rail.querySelector<HTMLElement>('.rail-shutter') ?? this.createShopShutter()
+    if (!shutter.isConnected) {
+      shutter.classList.add('is-closed')
+      rail.appendChild(shutter)
+    }
+    return new Promise((resolve) => {
+      window.setTimeout(() => shutter.classList.add('is-opening'), 20)
       window.setTimeout(() => {
         shutter.remove()
         resolve()
-      }, 1450)
+      }, 520)
     })
   }
 
@@ -1570,8 +1596,10 @@ export class GameBoardRenderer {
     this.boardElement.querySelectorAll<HTMLElement>('.relic-mini-card').forEach((chip) => {
       const preview = chip.querySelector<HTMLElement>('.relic-hover-preview')
       if (!preview) return
-      chip.addEventListener('mouseenter', () => this.positionRelicPreview(chip, preview))
-      chip.addEventListener('focusin', () => this.positionRelicPreview(chip, preview))
+      chip.addEventListener('mouseenter', () => this.showRelicPreview(chip, preview))
+      chip.addEventListener('mouseleave', () => this.hideRelicPreview(chip, preview))
+      chip.addEventListener('focusin', () => this.showRelicPreview(chip, preview))
+      chip.addEventListener('focusout', () => this.hideRelicPreview(chip, preview))
     })
 
     // Compendium opens an overlay browser of every spawning card + every hand
@@ -1582,6 +1610,19 @@ export class GameBoardRenderer {
         e.stopPropagation()
         this.openCompendium()
       })
+  }
+
+  /** Move relic previews to <body> while visible so scroll wells cannot clip them. */
+  private showRelicPreview(chip: HTMLElement, preview: HTMLElement): void {
+    this.positionRelicPreview(chip, preview)
+    preview.classList.add('is-floating')
+    document.body.appendChild(preview)
+  }
+
+  /** Return a hidden relic preview to its chip after hover/focus ends. */
+  private hideRelicPreview(chip: HTMLElement, preview: HTMLElement): void {
+    preview.classList.remove('is-floating')
+    chip.appendChild(preview)
   }
 
   /** Position the relic hover preview as a fixed card near its chip so the
@@ -2142,12 +2183,6 @@ const STYLES = `
   display: flex;
   justify-content: center;
   padding: 14px 0 36px;
-  background: linear-gradient(
-    180deg,
-    rgba(8, 5, 14, 0.88) 0%,
-    rgba(8, 5, 14, 0.55) 50%,
-    rgba(8, 5, 14, 0.0) 100%
-  );
 }
 
 .turn-overlay-inner {
@@ -2176,6 +2211,12 @@ const STYLES = `
     0 0 20px rgba(255, 215, 120, 0.55),
     0 0 36px rgba(244, 164, 96, 0.32),
     0 2px 6px rgba(0, 0, 0, 0.85);
+  animation: turn-label-glimmer 2.6s ease-in-out infinite;
+}
+@keyframes turn-label-glimmer {
+  0%, 100% { filter: brightness(1); opacity: 0.88; }
+  48% { filter: brightness(1.22); opacity: 1; }
+  58% { filter: brightness(1.06); opacity: 0.94; }
 }
 
 /* ---------- Left panel (brand + score) ---------- */
@@ -2895,6 +2936,9 @@ const STYLES = `
   transform-origin: top;
   animation: shop-shutter-drop 0.48s cubic-bezier(0.18, 0.86, 0.22, 1) forwards;
   animation-delay: calc(var(--shutter-i) * 28ms);
+}
+.rail-shutter.is-closed span {
+  transform: translateY(0) scaleY(1);
 }
 .rail-shutter.is-opening span {
   animation: shop-shutter-open 0.42s cubic-bezier(0.42, 0, 0.24, 1) forwards;
@@ -5057,6 +5101,23 @@ const STYLES = `
   font-weight: 900;
   box-shadow: 0 0 12px rgba(255, 255, 255, 0.36);
 }
+.bomb-badge,
+.spore-badge {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  letter-spacing: 0.04em;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.92),
+    0 0 9px currentColor;
+  animation: trap-turn-label-glimmer 1.9s ease-in-out infinite;
+}
+@keyframes trap-turn-label-glimmer {
+  0%, 100% { opacity: 0.78; filter: brightness(1); }
+  45% { opacity: 1; filter: brightness(1.26); }
+}
 @keyframes wax-harden-shimmer {
   from { opacity: 0.72; filter: brightness(1); }
   to { opacity: 0.95; filter: brightness(1.18); }
@@ -5159,12 +5220,12 @@ const STYLES = `
 /* Owned relics now match the player-card height and wrap vertically inside a
    warm themed scroll well instead of drifting sideways in a horizontal strip. */
 .relic-layer {
-  align-self: stretch;
-  height: 100%;
-  max-height: clamp(150px, 17vw, 200px);
-  align-items: stretch;
+  align-self: center;
+  height: clamp(92px, 14vh, 140px);
+  max-height: clamp(92px, 14vh, 140px);
+  align-items: center;
   padding: 6px;
-  overflow: hidden;
+  overflow: visible;
 }
 .relic-stack {
   width: 100%;
@@ -5211,6 +5272,10 @@ const STYLES = `
   z-index: 120;
   filter: drop-shadow(0 16px 28px rgba(0, 0, 0, 0.72));
 }
+.relic-hover-preview.is-floating {
+  display: block;
+  animation: relic-preview-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
+}
 .relic-hover-preview::before {
   content: '';
   position: absolute;
@@ -5226,6 +5291,7 @@ const STYLES = `
   display: block;
   animation: relic-preview-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
 }
+.relic-hover-preview.is-floating::before,
 .relic-mini-card:hover .relic-hover-preview::before,
 .relic-mini-card:focus-within .relic-hover-preview::before {
   animation: relic-preview-back-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;

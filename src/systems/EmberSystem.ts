@@ -26,10 +26,10 @@ export interface EnemyStatBonus {
 }
 
 const SPAWN_WEIGHTS: Record<EmberTier, SpawnWeights> = {
-  bright: { enemy: 50, trap: 25, treasure: 25 },
-  dim: { enemy: 60, trap: 25, treasure: 15 },
-  flickering: { enemy: 75, trap: 22, treasure: 3 },
-  extinguished: { enemy: 80, trap: 20, treasure: 0 },
+  bright: { enemy: 63, trap: 12, treasure: 25 },
+  dim: { enemy: 73, trap: 12, treasure: 15 },
+  flickering: { enemy: 86, trap: 11, treasure: 3 },
+  extinguished: { enemy: 90, trap: 10, treasure: 0 },
 }
 
 const ENEMY_BONUS: Record<EmberTier, EnemyStatBonus> = {

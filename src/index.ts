@@ -364,11 +364,14 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   boardRenderer.openShop(currentShopOffers, coins, gameState.character)
 }
 
-function closeShopAndResume(): void {
+async function closeShopAndResume(): Promise<void> {
   if (!shopOpen) return
   shopOpen = false
   currentShopOffers = []
   boardRenderer.closeShop()
+  // The shop shutter now stays down while the modal is open, so only lift it
+  // after the player leaves the shop and the next playable turn resumes.
+  await boardRenderer.playShopResumeTransition()
   inputLocked = false
   render()
 }
@@ -388,6 +391,10 @@ async function runPreparationRefreshAfterFieldEffects(): Promise<void> {
     if (moved) {
       movedAny = true
       gameState.regroupAllRows()
+      // If a hand/combo effect makes a bomb fall into the front row, arm it in
+      // the same preparation beat so every front-row bomb advertises the same
+      // one-action fuse instead of waiting for a later cleanup path.
+      turnManager.armFrontBombs()
       render()
       await wait(150)
     }
@@ -403,6 +410,10 @@ async function runPreparationRefreshAfterFieldEffects(): Promise<void> {
     if (filled) {
       movedAny = true
       gameState.regroupAllRows()
+      // If a hand/combo effect makes a bomb fall into the front row, arm it in
+      // the same preparation beat so every front-row bomb advertises the same
+      // one-action fuse instead of waiting for a later cleanup path.
+      turnManager.armFrontBombs()
       render()
       await wait(150)
     }
@@ -527,6 +538,9 @@ function startGame(): void {
   chain = HandSystem.newChain()
   pendingHandTarget = null
   gameState.reset()
+  // Temporary test seed: start with the luck-themed squirrel relic so relic UI
+  // and passive-trigger flows can be verified without waiting for a shop roll.
+  gameState.character.addRelic('golden-squirrel')
   score = 0
   scorePulseKey = 0
   coins = 0
@@ -721,7 +735,7 @@ document.addEventListener('shopBuy', (e: Event) => {
 })
 
 document.addEventListener('shopClose', () => {
-  closeShopAndResume()
+  void closeShopAndResume()
 })
 
 function handleScoreSpend(): void {
