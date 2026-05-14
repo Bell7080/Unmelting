@@ -1190,6 +1190,11 @@ export class GameBoardRenderer {
     document.querySelectorAll('.compendium-recipe-float').forEach((el) => el.remove())
     let floating: HTMLElement | null = null
     const removeFloating = () => {
+      // Restore the compact in-panel stack only after the detached fan preview
+      // has folded away, preventing the two stacks from visually colliding.
+      host
+        .querySelectorAll<HTMLElement>('.compendium-card-art--recipe.is-floating')
+        .forEach((el) => el.classList.remove('is-floating'))
       floating?.remove()
       floating = null
     }
@@ -1199,6 +1204,9 @@ export class GameBoardRenderer {
         if (!stack) return
         removeFloating()
         const rect = stack.getBoundingClientRect()
+        // While the body clone is expanded, fade the original mini-cards in the
+        // card art slot so the readable floating cards are not backed by ghosts.
+        art.classList.add('is-floating')
         floating = stack.cloneNode(true) as HTMLElement
         floating.classList.add('compendium-recipe-float')
         floating.style.left = `${rect.left}px`
@@ -4714,6 +4722,7 @@ const STYLES = `
 }
 .compendium-recipe-mini {
   position: absolute;
+  grid-template-rows: 44px auto;
   left: 50%;
   top: 50%;
   width: 82px;
@@ -4723,7 +4732,7 @@ const STYLES = `
   gap: 4px;
   transform: translate(-50%, -50%) translateX(calc((var(--i, 0) - var(--recipe-center, 0)) * 18px)) rotate(calc((var(--i, 0) - var(--recipe-center, 0)) * 4deg));
   transform-origin: 50% 96%;
-  transition: transform 0.28s cubic-bezier(0.16, 0.86, 0.26, 1), filter 0.28s ease;
+  transition: transform 0.28s cubic-bezier(0.16, 0.86, 0.26, 1), filter 0.28s ease, opacity 0.18s ease;
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.42);
 }
 .compendium-recipe-stack .compendium-recipe-mini:nth-child(1) { --i: 0; z-index: 1; }
@@ -4742,8 +4751,13 @@ const STYLES = `
 .compendium-card:focus-within .compendium-card-art--recipe .compendium-recipe-mini {
   filter: brightness(1.04);
 }
+/* When the detached hover fan is visible, hide the compact source stack so
+   background mini-cards do not overlap with and distract from the preview. */
+.compendium-card-art--recipe.is-floating .compendium-recipe-mini {
+  opacity: 0;
+}
 .compendium-recipe-mini .common-card-art { height: 44px; min-height: 44px; border-radius: 8px; }
-.compendium-recipe-mini .common-card-body { min-height: 26px; gap: 1px; }
+.compendium-recipe-mini .common-card-body { grid-template-rows: auto; min-height: 18px; gap: 1px; }
 .compendium-recipe-mini .common-card-title-row { gap: 3px; }
 .compendium-recipe-mini .common-card-name { font-size: 12px; line-height: 1.05; }
 .compendium-recipe-mini .common-card-badge { display: none; }
