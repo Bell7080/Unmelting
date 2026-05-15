@@ -852,7 +852,10 @@ export class GameBoardRenderer {
     const targeting = scorePanel.pendingHandTarget ?? this.handTargetingMode
 
     // Build each slot bottom-up in MODEL order (slot 0 first), then we render
-    // the column reversed so slot 0 displays at the bottom.
+    // the column reversed so slot 0 displays at the bottom. New cards receive
+    // a compact acquisition ordinal so multi-card rewards fall one-by-one
+    // starting from the first newly stacked card, not from their absolute slot.
+    let enteringOrdinal = 0
     for (let i = 0; i < handMax; i++) {
       const card = character.hand[i]
       if (!card) {
@@ -888,6 +891,7 @@ export class GameBoardRenderer {
       // in the previous render. This keeps the drop animation a *real* entry
       // beat instead of re-firing on every panel re-render.
       const isNew = !this.previousHandUids.has(card.uid)
+      const enterOrder = isNew ? enteringOrdinal++ : 0
       const classes = [
         'hand-slot',
         'hand-card',
@@ -906,7 +910,7 @@ export class GameBoardRenderer {
       const handArt = spriteForHandCard(card.defId)
       slots.push(`
         <li class="${classes}" data-slot-index="${i}" data-hand-uid="${card.uid}"
-            style="--slot-index: ${i}; --hand-enter-order: ${i};"
+            style="--slot-index: ${i}; --hand-enter-order: ${enterOrder};"
             ${recipeReadyTitle ? `title="${recipeReadyTitle}"` : ''}>
           <button type="button" data-item-index="${i}"
                   style="--hand-card-art: url('${handArt}');"
@@ -2598,14 +2602,16 @@ export class GameBoardRenderer {
       .forEach((el) => {
         const uid = el.dataset.handUid
         if (!uid || this.previousHandUids.has(uid)) return
-        // Match the CSS delay: first the falling card lands, then the merge
-        // visibly compresses and bursts instead of appearing already finished.
+        // Match the CSS delay: first the falling card and its two UI-only
+        // copies land, then the merged card compresses and bursts.
+        const enterOrder = Number.parseFloat(el.style.getPropertyValue('--hand-enter-order') || '0')
+        const burstDelay = 900 + Math.max(0, enterOrder) * 135
         window.setTimeout(() => {
           if (!el.isConnected) return
           el.classList.add('is-merge-bursting')
           SquareBurst.playOn(el, 'score', { count: 22, spread: 92, duration: 660, size: [7, 16] })
           window.setTimeout(() => el.classList.remove('is-merge-bursting'), 760)
-        }, 560)
+        }, burstDelay)
       })
   }
 
@@ -5315,18 +5321,19 @@ const STYLES = `
   display: flex;
   flex-direction: column;
   justify-content: flex-end; /* Dock filled cards to the bottom. */
-  /* Every additional card tightens the gap a little, keeping a full hand tucked
-     under the combo gauge instead of pushing up over it. */
-  gap: clamp(1px, calc(9px - var(--hand-count, 0) * 0.8px), 6px);
+  /* Let the full 10-card hand use the whole space below the combo gauge before
+     allowing overlap. The row is height-limited by the panel, so a full hand
+     gently compresses card height instead of suddenly stacking on card 8. */
+  gap: clamp(1px, calc(8px - max(0, var(--hand-count, 0) - 6) * 1.2px), 6px);
   min-height: 0;
   overflow: visible;
 }
 
 .hand-stack.is-crowded .hand-slot.hand-card {
-  /* Crowded hands overlap upward while the lower/earlier card keeps the higher
-     z-index, so the bottom card reads as the front card in the stack. */
-  min-height: clamp(62px, calc(94px - var(--hand-count, 8) * 3px), 70px);
-  margin-top: clamp(-24px, calc(56px - var(--hand-count, 8) * 10px), 0px);
+  /* Crowded hands should still read as separate cards. Prefer shorter cards
+     over negative margins; only very small viewports will visually touch. */
+  min-height: clamp(58px, calc((100vh - 210px) / var(--hand-count, 10)), 78px);
+  margin-top: 0;
 }
 .hand-slot {
   border-radius: 8px;
@@ -5362,22 +5369,48 @@ const STYLES = `
 .hand-slot.hand-card.is-entering {
   /* New cards fall one-by-one from just below the combo gauge, overshoot like
      soft jelly, then settle into the stack. */
-  animation: hand-card-drop 0.58s cubic-bezier(0.17, 0.88, 0.18, 1.08) both;
-  animation-delay: calc(var(--hand-enter-order, 0) * 92ms);
+  animation: hand-card-drop 0.72s cubic-bezier(0.16, 0.92, 0.14, 1.08) both;
+  animation-delay: calc(var(--hand-enter-order, 0) * 135ms);
 }
 @keyframes hand-card-drop {
-  0%   { transform: translateY(-240px) scale(0.96, 1.04); opacity: 0; filter: brightness(1.28); }
-  64%  { transform: translateY(18px) scale(1.02, 0.94); opacity: 1; filter: brightness(1.1); }
-  80%  { transform: translateY(-7px) scale(0.985, 1.035); }
-  92%  { transform: translateY(3px) scale(1.006, 0.988); }
+  0%   { transform: translateY(-255px) scale(0.94, 1.08); opacity: 0; filter: brightness(1.32); }
+  58%  { transform: translateY(22px) scale(1.035, 0.9); opacity: 1; filter: brightness(1.14); }
+  74%  { transform: translateY(-10px) scale(0.975, 1.055); }
+  88%  { transform: translateY(4px) scale(1.012, 0.982); }
   100% { transform: translateY(0) scale(1); opacity: 1; filter: brightness(1); }
 }
 .hand-slot.hand-card.is-merged.is-entering {
   /* A freshly synthesized triple waits until the falling beat lands, then
      performs the merge snap instead of disappearing instantly. */
   animation:
-    hand-card-drop 0.58s cubic-bezier(0.17, 0.88, 0.18, 1.08) both,
-    hand-merge-jelly 0.76s cubic-bezier(0.16, 0.9, 0.18, 1) 0.54s both;
+    hand-card-drop 0.72s cubic-bezier(0.16, 0.92, 0.14, 1.08) both,
+    hand-merge-jelly 0.82s cubic-bezier(0.16, 0.9, 0.18, 1) 0.72s both;
+  animation-delay: calc(var(--hand-enter-order, 0) * 135ms), calc(var(--hand-enter-order, 0) * 135ms + 720ms);
+}
+.hand-slot.hand-card.is-merged.is-entering button::before,
+.hand-slot.hand-card.is-merged.is-entering button::after {
+  /* UI-only pending-merge layers: the model is already a merged card, but two
+     short-lived copies make the three acquired cards visibly meet before fusing. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(12, 8, 18, 0.7), rgba(12, 8, 18, 0.2) 58%, rgba(12, 8, 18, 0.62)),
+    linear-gradient(180deg, rgba(255, 232, 168, 0.06), rgba(0, 0, 0, 0.34)),
+    var(--hand-card-art) center / cover no-repeat;
+  box-shadow: inset 0 0 0 2px rgba(255, 232, 168, 0.3);
+  opacity: 0;
+  z-index: 0;
+}
+.hand-slot.hand-card.is-merged.is-entering button::before {
+  animation: hand-merge-copy-left 1.28s cubic-bezier(0.16, 0.92, 0.18, 1) both;
+  animation-delay: calc(var(--hand-enter-order, 0) * 135ms + 120ms);
+}
+.hand-slot.hand-card.is-merged.is-entering button::after {
+  animation: hand-merge-copy-right 1.28s cubic-bezier(0.16, 0.92, 0.18, 1) both;
+  animation-delay: calc(var(--hand-enter-order, 0) * 135ms + 260ms);
 }
 .hand-slot.hand-card.is-merge-bursting::after {
   content: '✦ ✧ ✦';
@@ -5401,6 +5434,20 @@ const STYLES = `
   64% { transform: translateY(3px) scale(1.04, 0.96); }
   82% { transform: translateY(-2px) scale(0.99, 1.02); }
   100% { transform: translateY(0) scale(1); filter: brightness(1); }
+}
+@keyframes hand-merge-copy-left {
+  0% { opacity: 0; transform: translate(-18px, -92px) scale(0.96, 1.06); }
+  38% { opacity: 0.88; transform: translate(-14px, 10px) scale(1.02, 0.94); }
+  62% { opacity: 0.82; transform: translate(-9px, -3px) scale(0.99, 1.02); }
+  82% { opacity: 0.78; transform: translate(-2px, 0) scale(1); }
+  100% { opacity: 0; transform: translate(0, 0) scale(0.9); }
+}
+@keyframes hand-merge-copy-right {
+  0% { opacity: 0; transform: translate(18px, -108px) scale(0.96, 1.06); }
+  38% { opacity: 0.88; transform: translate(14px, 12px) scale(1.02, 0.94); }
+  62% { opacity: 0.82; transform: translate(9px, -4px) scale(0.99, 1.02); }
+  82% { opacity: 0.78; transform: translate(2px, 0) scale(1); }
+  100% { opacity: 0; transform: translate(0, 0) scale(0.9); }
 }
 @keyframes hand-merge-sparkle {
   0% { opacity: 0; transform: scale(0.62) rotate(-4deg); }
@@ -5473,7 +5520,7 @@ const STYLES = `
   color: var(--color-text-primary);
   cursor: pointer;
   position: relative;
-  min-height: 78px;
+  min-height: 0;
   overflow: hidden;
 }
 .hand-slot.hand-card button:hover {
