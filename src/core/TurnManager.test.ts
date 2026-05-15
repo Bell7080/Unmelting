@@ -155,7 +155,27 @@ describe('TurnManager treasure volatility', () => {
     expect(spreads).toHaveLength(1)
     expect(infectedCard?.type).toBe(CardType.TRAP)
     expect(infectedCard?.trapKind).toBe('spore')
+    expect(infectedCard?.sporeTurnsUntilSpread).toBe(2)
     expect(spore.sporeTurnsUntilSpread).toBe(2)
+  })
+
+  it('does not tick newly infected spores again during the same spread pass', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const spore = new Card('spore', CardType.TRAP, '감염 포자', 'test', 0, 1, { trapKind: 'spore' })
+    spore.sporeTurnsUntilSpread = 1
+    gameState.lanes[0].setCardAtDistance(0, spore)
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+
+    const spreads = turnManager.applySporeSpread()
+    const infected = spreads[0]?.infected[0]
+    const infectedCard = infected
+      ? gameState.lanes[infected.laneIndex].getCardAtDistance(infected.distance)
+      : null
+
+    expect(infected).toEqual({ laneIndex: 1, distance: 0 })
+    expect(infectedCard?.trapKind).toBe('spore')
+    expect(infectedCard?.sporeTurnsUntilSpread).toBe(2)
   })
 
   it('does not end the game just because three traps occupy the active row', () => {
