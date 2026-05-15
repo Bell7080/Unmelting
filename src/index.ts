@@ -132,10 +132,24 @@ function burstThemeForCategory(cat: HandCategory): BurstTheme {
   }
 }
 
-/** Score gain pulse — burst over the score number panel. */
+/** Score gain pulse — burst over the score number panel AND fire the
+ *  CSS sparkle pop simultaneously so the player gets both impacts in the
+ *  same beat (square radiating outward + sparkle text flickering). */
 function burstScoreGain(): void {
   const anchor = boardRenderer.findScorePulseAnchor()
-  if (anchor) boardRenderer.burstAtElement(anchor, 'score', { count: 16, spread: 90 })
+  if (!anchor) return
+  boardRenderer.triggerScorePop()
+  boardRenderer.burstAtElement(anchor, 'score', { count: 22, spread: 170, duration: 640 })
+}
+
+/** Coin gain pulse — same shape as burstScoreGain, anchored on the coin
+ *  number so the player sees a clearly attributed burst when the wallet
+ *  rises (hand card, recipe, golden squirrel). */
+function burstCoinGain(): void {
+  const anchor = boardRenderer.findCoinPulseAnchor()
+  if (!anchor) return
+  boardRenderer.triggerCoinPop()
+  boardRenderer.burstAtElement(anchor, 'score', { count: 22, spread: 170, duration: 640 })
 }
 
 interface FieldHealthSnapshotEntry {
@@ -279,6 +293,7 @@ function applyTurnStartRelics(): void {
   if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 5 !== 0) return
   coins += 1
   coinPulseKey++
+  burstCoinGain()
   recordRelicActivation('golden-squirrel', '+1$')
 }
 
@@ -829,6 +844,7 @@ async function applyHandSingle(
   if (result.coinsGained && result.coinsGained > 0) {
     coins += result.coinsGained
     coinPulseKey++
+    burstCoinGain()
   }
   recordNotice(result.message, 'win')
   for (const merge of result.mergeMessages) {
@@ -871,6 +887,7 @@ async function applyHandSingle(
       // Recipe currency uses the same wallet/pulse language as single coin cards.
       coins += recipeResult.coinsGained ?? 0
       coinPulseKey++
+      burstCoinGain()
     }
     for (const fired of recipeResult.firedRecipes) {
       recordNotice(`✦ ${fired.recipe.name}: ${fired.message}`, 'recipe')

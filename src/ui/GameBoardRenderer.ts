@@ -38,6 +38,7 @@ import {
   flameIcon,
   heartIcon,
   pouchIcon,
+  shieldIcon,
   swordIcon,
 } from '@ui/Icons'
 
@@ -645,53 +646,31 @@ export class GameBoardRenderer {
     })
   }
 
-  /** Wax-paper shield label that sits directly on the player card art — no
-   *  extra container layer. The shield silhouette borrows the codex/도감
-   *  warm parchment palette so it reads as part of the same "labels & seals"
-   *  family. The number lives inside the shield silhouette and shrinks as
-   *  the value grows so even 3-digit shields stay fully contained. */
-  private renderShieldLabel(amount: number): string {
-    const digits = amount >= 100 ? 'three' : amount >= 10 ? 'two' : 'one'
-    return `
-      <span class="shield-label" data-digits="${digits}" aria-label="방패 ${amount}">
-        <svg class="shield-label-shape" viewBox="0 0 32 36" aria-hidden="true">
-          <defs>
-            <linearGradient id="shield-label-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#f7d791" />
-              <stop offset="58%" stop-color="#d99745" />
-              <stop offset="100%" stop-color="#8a4a1c" />
-            </linearGradient>
-          </defs>
-          <path class="shield-label-body"
-                d="M16 1.4 L29 4.6 L29 18.4 C29 26.4 23.6 31.4 16 34.6 C8.4 31.4 3 26.4 3 18.4 L3 4.6 Z"
-                fill="url(#shield-label-fill)" />
-          <path class="shield-label-rim"
-                d="M16 1.4 L29 4.6 L29 18.4 C29 26.4 23.6 31.4 16 34.6 C8.4 31.4 3 26.4 3 18.4 L3 4.6 Z" />
-          <path class="shield-label-inner-line"
-                d="M16 5.4 L25.4 8.0 L25.4 18.2 C25.4 24.4 21.4 28.6 16 31.2 C10.6 28.6 6.6 24.4 6.6 18.2 L6.6 8.0 Z" />
-        </svg>
-        <span class="shield-label-value">${amount}</span>
-      </span>
-    `
-  }
-
   private renderPlayer(character: Character): string {
     const hpPct = Math.max(0, Math.min(100, (character.health / character.maxHealth) * 100))
+    const shieldChip =
+      character.shield > 0
+        ? `<span class="player-shield-chip" aria-label="방패 ${character.shield}">
+             <span class="player-shield-chip-icon" aria-hidden="true">${shieldIcon()}</span>
+             <span class="player-shield-chip-value">${character.shield}</span>
+           </span>`
+        : ''
     return `
       <div class="player-row">
         <div class="player-card">
-          ${character.shield > 0 ? this.renderShieldLabel(character.shield) : ''}
           <div class="player-art" style="background-image: url('${SpriteUrls.player}')" aria-hidden="true"></div>
           <div class="player-overlay" aria-hidden="true"></div>
           <div class="player-content">
-            <div class="player-name">${character.name}</div>
             <div class="player-stats">
-              <div class="hp-bar">
-                <div class="hp-fill" style="width: ${hpPct}%"></div>
-                <span class="hp-text">
-                  <span class="hp-text-icon">${heartIcon()}</span>
-                  ${character.health}/${character.maxHealth}
-                </span>
+              <div class="hp-column">
+                ${shieldChip}
+                <div class="hp-bar">
+                  <div class="hp-fill" style="width: ${hpPct}%"></div>
+                  <span class="hp-text">
+                    <span class="hp-text-icon">${heartIcon()}</span>
+                    ${character.health}/${character.maxHealth}
+                  </span>
+                </div>
               </div>
               <div class="atk-stat">
                 <span class="atk-stat-icon">${swordIcon()}</span>
@@ -2003,6 +1982,38 @@ export class GameBoardRenderer {
     )
   }
 
+  /** Find the coin number element for coin-pulse bursts. */
+  findCoinPulseAnchor(): HTMLElement | null {
+    return (
+      this.boardElement.querySelector<HTMLElement>('.coin-number') ??
+      this.boardElement.querySelector<HTMLElement>('.coin-panel-total') ??
+      this.boardElement.querySelector<HTMLElement>('.score-panel')
+    )
+  }
+
+  /** Force-trigger the score/coin sparkle CSS pop on the existing DOM right
+   *  now. Used so the pop animation visibly fires SIMULTANEOUSLY with the
+   *  SquareBurst, instead of waiting for the next render() to attach the
+   *  is-score-popping class. The class is removed after the animation
+   *  duration so a follow-up render can re-attach cleanly via the
+   *  pulse-key gate without colliding with this manual trigger. */
+  triggerScorePop(): void {
+    const el = this.boardElement.querySelector<HTMLElement>('.score-number')
+    if (!el) return
+    el.classList.remove('is-score-popping')
+    void el.offsetWidth
+    el.classList.add('is-score-popping')
+    window.setTimeout(() => el.classList.remove('is-score-popping'), 760)
+  }
+  triggerCoinPop(): void {
+    const el = this.boardElement.querySelector<HTMLElement>('.coin-number')
+    if (!el) return
+    el.classList.remove('is-score-popping')
+    void el.offsetWidth
+    el.classList.add('is-score-popping')
+    window.setTimeout(() => el.classList.remove('is-score-popping'), 760)
+  }
+
   /**
    * Animate the already-open hover preview, not the compact hand slot. The
    * source hand card quietly fades while the preview keeps its original size,
@@ -2070,9 +2081,29 @@ export class GameBoardRenderer {
     )
 
     return new Promise((resolve) => {
+      // Fire the burst while the ghost is fading (the 0.88 → 1.0 phase of
+      // the WebAnimation above starts around ~720ms in). Three concentric
+      // bursts at slightly offset points across the ghost card cover the
+      // full card area instead of pinpointing the centre — radiates outward
+      // evenly so the dissolve and burst read as one beat.
       window.setTimeout(() => {
-        SquareBurst.playAt(targetX, targetY, theme, { count: 14, spread: 150, duration: 560 })
-      }, 760)
+        const radius = Math.min(ghostWidth, ghostHeight) * 0.22
+        SquareBurst.playAt(targetX, targetY, theme, {
+          count: 22,
+          spread: 220,
+          duration: 620,
+        })
+        SquareBurst.playAt(targetX - radius, targetY - radius * 0.4, theme, {
+          count: 10,
+          spread: 130,
+          duration: 560,
+        })
+        SquareBurst.playAt(targetX + radius, targetY + radius * 0.4, theme, {
+          count: 10,
+          spread: 130,
+          duration: 560,
+        })
+      }, 700)
       // Intentionally do NOT remove `is-hand-use-source` when the ghost is
       // done. The hand is already mutated; the slot DOM is stale and will
       // be rebuilt on the next render(). If we restored the slot's opacity
@@ -2632,7 +2663,7 @@ const STYLES = `
 
 .coin-number.is-score-popping::after,
 .score-number.is-score-popping::after {
-  content: '✦ ✧ ✦ ✧ ✦';
+  content: '✦ ✧ ✦';
   position: absolute;
   right: 4px;
   top: -14px;
@@ -3726,19 +3757,6 @@ const STYLES = `
   gap: 6px;
 }
 
-.player-name {
-  font-size: var(--font-size-sm);
-  font-weight: 800;
-  color: var(--color-flame);
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.9),
-    0 0 8px rgba(255, 215, 120, 0.35);
-}
-
 .player-stats {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -4323,21 +4341,27 @@ const STYLES = `
 
 .candle-mode-list-item {
   appearance: none;
-  display: inline-flex;
+  /* Match the currently-selected mode button (.candle-mode-btn) shape —
+     small square with icon stacked above label, rather than a wide
+     horizontal pill. */
+  width: 40px;
+  height: 44px;
+  display: grid;
+  grid-template-rows: 1fr auto;
   align-items: center;
-  gap: 6px;
-  min-width: 96px;
-  padding: 5px 8px;
+  justify-items: center;
+  gap: 2px;
+  padding: 4px 2px;
   border: 1px solid rgba(255, 215, 120, 0.42);
-  border-radius: 7px;
-  background: linear-gradient(180deg, rgba(31, 24, 48, 0.96), rgba(18, 14, 28, 0.98));
-  color: rgba(255, 232, 168, 0.95);
+  border-radius: 10px;
+  background: radial-gradient(circle at 50% 0%, rgba(255, 215, 120, 0.18), rgba(0, 0, 0, 0.18));
+  color: var(--color-flame);
   cursor: pointer;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.02em;
-  text-align: left;
+  text-align: center;
   white-space: nowrap;
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5);
   /* Closed: each button sits ON TOP of the wheel and is invisible. The
@@ -4366,7 +4390,7 @@ const STYLES = `
 }
 
 .candle-mode-list-item:hover {
-  background: linear-gradient(180deg, rgba(244, 164, 96, 0.32), rgba(18, 14, 28, 0.98));
+  background: radial-gradient(circle at 50% 0%, rgba(255, 215, 120, 0.36), rgba(0, 0, 0, 0.2));
   border-color: rgba(255, 232, 168, 0.86);
 }
 .candle-mode-list-item.is-current {
@@ -4380,9 +4404,7 @@ const STYLES = `
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
-  font-size: 14px;
+  font-size: 18px;
   color: var(--color-flame);
 }
 .candle-mode-list-item.is-current .candle-mode-list-icon {
@@ -4390,6 +4412,13 @@ const STYLES = `
 }
 .candle-mode-list-label {
   font-family: inherit;
+  color: rgba(255, 232, 168, 0.86);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.candle-mode-list-item.is-current .candle-mode-list-label {
+  color: rgba(255, 232, 168, 0.42);
 }
 .candle-gauge-body {
   display: grid;
@@ -5843,60 +5872,45 @@ const STYLES = `
   from { opacity: 0.72; filter: brightness(1); }
   to { opacity: 0.95; filter: brightness(1.18); }
 }
-/* Codex-inspired wax-paper shield label. The shield silhouette is the only
-   visual chrome — no extra plate/badge layer — so it reads as a parchment
-   tag stamped directly onto the player card. The number lives inside the
-   shield silhouette with adaptive sizing for 1/2/3-digit values. */
-.shield-label {
-  position: absolute;
-  right: 4px;
-  top: 4px;
-  z-index: 5;
-  width: clamp(34px, 4.4vw, 44px);
-  height: clamp(38px, 5vw, 50px);
-  display: inline-block;
-  pointer-events: none;
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
+/* Flat shield chip — sits just above the HP bar on the LEFT, sharing the
+   same iconography family as the heart/sword/book/coin flat icons. The
+   shield SVG itself comes from Icons.shieldIcon() so it stays consistent
+   with the codex/도감 visual language; we only style the chip wrapper. */
+.player-shield-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  align-self: flex-start;
+  padding: 1px 5px 1px 2px;
+  color: #fff5dc;
+  font-weight: 900;
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
-.shield-label-shape {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-.shield-label-rim {
-  fill: none;
-  stroke: rgba(80, 36, 14, 0.92);
-  stroke-width: 1.4;
-  stroke-linejoin: round;
-}
-.shield-label-inner-line {
-  fill: none;
-  stroke: rgba(255, 232, 168, 0.42);
-  stroke-width: 0.7;
-  stroke-dasharray: 0.6 1.8;
-}
-.shield-label-value {
-  position: absolute;
-  inset: 0;
-  display: flex;
+.player-shield-chip-icon {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  /* Pull the number up slightly so it sits at the visual center of the
-     shield silhouette rather than the bounding box center. */
-  padding-bottom: 14%;
-  font-weight: 950;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  color: #2a1408;
-  text-shadow:
-    0 1px 0 rgba(255, 232, 168, 0.78),
-    0 0 4px rgba(255, 215, 120, 0.5);
+  width: 14px;
+  height: 14px;
+  color: rgba(220, 232, 248, 0.96);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65));
 }
-.shield-label[data-digits="one"] .shield-label-value { font-size: clamp(18px, 2vw, 22px); }
-.shield-label[data-digits="two"] .shield-label-value { font-size: clamp(14px, 1.6vw, 17px); }
-.shield-label[data-digits="three"] .shield-label-value { font-size: clamp(10px, 1.2vw, 13px); letter-spacing: -0.02em; }
+.player-shield-chip-icon .icon { width: 100%; height: 100%; }
+.player-shield-chip-value {
+  font-variant-numeric: tabular-nums;
+  color: #fff7d8;
+}
+
+.hp-column {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
 
 .damage-float {
   position: fixed;
