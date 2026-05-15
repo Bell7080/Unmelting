@@ -39,6 +39,7 @@ import {
   heartIcon,
   pouchIcon,
   shieldIcon,
+  sparkleIcon,
   swordIcon,
 } from '@ui/Icons'
 
@@ -511,8 +512,9 @@ export class GameBoardRenderer {
         `
       }
     } else if (card.type === CardType.TREASURE && card.groupCount > 1) {
-      const mult = card.groupCount === 2 ? 'x2' : 'x3'
-      stats = `<div class="card-stats good">보상 ${mult}</div>`
+      // Treasure groups describe their extra pickup as text-only metadata under
+      // the name, matching the flat no-plate language requested for web labels.
+      stats = `<div class="card-stats group-note treasure-group-note">${sparkleIcon()}<span>카드 ${card.groupCount}장</span></div>`
     }
 
     const groupBadge = span > 1 ? `<div class="group-badge">×${span}</div>` : ''
@@ -928,6 +930,41 @@ export class GameBoardRenderer {
     `
   }
 
+
+  /** Single source of truth for shop-card affordance classes. Keeping this
+   *  separate lets purchase refreshes update existing DOM nodes without
+   *  rebuilding images, which removes the small flash/reload feeling. */
+  private shopRelicAffordabilityClass(offer: ShopOfferView, score: number): string {
+    if (offer.purchased) return 'is-purchased'
+    return score >= offer.price ? 'is-affordable' : 'is-unaffordable'
+  }
+
+  /** Refresh an already-open shop in place. We only change classes, labels,
+   *  and ARIA text so card art does not blink as if the shop reloaded. */
+  private refreshOpenShopCards(offers: ShopOfferView[], score: number): boolean {
+    const shell = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-shell')
+    const grid = shell?.querySelector<HTMLElement>('.shop-grid')
+    if (!shell || !grid || !this.shopOverlayElement?.classList.contains('is-open')) return false
+    const cards = Array.from(grid.querySelectorAll<HTMLElement>('.shop-relic-card'))
+    if (cards.length !== offers.length) return false
+
+    for (const offer of offers) {
+      const def = RELIC_DEFINITIONS[offer.relicId]
+      const card = grid.querySelector<HTMLElement>(`.shop-relic-card[data-shop-buy="${def.id}"]`)
+      if (!card) return false
+      card.classList.remove('is-affordable', 'is-unaffordable', 'is-purchased')
+      card.classList.add(this.shopRelicAffordabilityClass(offer, score))
+      card.setAttribute(
+        'aria-label',
+        `${def.name} — ${offer.purchased ? '구매 완료' : `점수 ${offer.price}점`}`
+      )
+      const tape = card.querySelector<HTMLElement>('.shop-price-tape')
+      if (tape) tape.textContent = offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
+    }
+    shell.classList.add('has-entered')
+    return true
+  }
+
   /** Shop relic card. Click on the card itself buys the relic (the
    *  separate price button is gone). Price is shown as a tilted tape
    *  label glued onto the bottom of the card.
@@ -936,13 +973,7 @@ export class GameBoardRenderer {
    *  taps "the bigger card" instead of hunting for a small button. */
   private renderShopRelicCard(offer: ShopOfferView, score: number, _character: Character): string {
     const def = RELIC_DEFINITIONS[offer.relicId]
-    // Affordability is expressed on the whole card so the card copy and the
-    // taped-on price can share the same positive/negative shop mood.
-    const affordabilityClass = offer.purchased
-      ? 'is-purchased'
-      : score >= offer.price
-        ? 'is-affordable'
-        : 'is-unaffordable'
+    const affordabilityClass = this.shopRelicAffordabilityClass(offer, score)
     const cardLeaveDelay = Math.floor(Math.random() * 240)
     return `
       <article class="shop-relic-card ${affordabilityClass}"
@@ -995,6 +1026,11 @@ export class GameBoardRenderer {
         )
       })
       document.body.appendChild(this.shopOverlayElement)
+    }
+
+    if (this.refreshOpenShopCards(offers, score)) {
+      this.positionShopShellOverRail()
+      return
     }
 
     const cards =
@@ -2105,9 +2141,10 @@ export class GameBoardRenderer {
 
   /** Play shop-currency gain feedback with the exact same sparkle language as
    *  score, but keep the wallet's trailing dollar marker. */
-  playCoinGainFeedback(targetCoins: number, pulseKey: number): void {
-    this.previousCoinPulseKey = pulseKey
-    this.displayedCoinValue = targetCoins
+  playCoinGainFeedback(targetCoins: number, _pulseKey: number): void {
+    // Do not mark the coin pulse as consumed here: coin hand cards often cause
+    // a full render right after this immediate beat, and the render must still
+    // carry the ✦ ✧ ✦ pseudo-elements instead of replacing them mid-sparkle.
     this.animateResourceCounter('.coin-number', targetCoins, ' $')
     const anchor = this.findCoinPulseAnchor()
     if (anchor) this.burstAtElement(anchor, 'score', { count: 22, spread: 170, duration: 640 })
@@ -3264,24 +3301,48 @@ const STYLES = `
   border: 1px solid rgba(255, 232, 168, 0.7);
   text-shadow: none;
 }
+.card-stats.group-note {
+  gap: 4px;
+  padding: 0;
+  color: rgba(255, 232, 168, 0.96);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.92),
+    0 0 10px rgba(255, 215, 120, 0.58);
+}
+.card-stats.group-note .icon {
+  width: 13px;
+  height: 13px;
+  color: currentColor;
+  filter: drop-shadow(0 0 7px rgba(255, 215, 120, 0.45));
+}
 
 .group-badge {
   position: absolute;
-  /* Pulled outside the cell edge — cell + rail are now overflow:visible so
-     the badge can sit on the canvas margin, like a wax seal stamped over it. */
-  top: -16px;
-  right: -16px;
-  background: linear-gradient(135deg, var(--color-flame), var(--color-flame-deep));
-  color: #fff8e0;
-  border: 1px solid rgba(255, 232, 168, 0.95);
-  font-size: 13px;
-  font-weight: 900;
-  padding: 4px 11px;
-  border-radius: 999px;
-  box-shadow:
-    0 4px 10px rgba(0, 0, 0, 0.6),
-    0 0 16px rgba(255, 215, 120, 0.45);
-  transform: rotate(11deg);
+  /* Text-only group count: keep it stamped over the corner, but remove the
+     wax-plate backing so 2/3-wide cards read like inked web labels. */
+  top: -14px;
+  right: -12px;
+  padding: 0;
+  color: rgba(255, 248, 224, 0.98);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  font-size: 16px;
+  font-weight: 1000;
+  letter-spacing: 0.02em;
+  text-shadow:
+    0 2px 2px rgba(0, 0, 0, 0.96),
+    0 0 7px rgba(255, 232, 168, 0.94),
+    0 0 18px rgba(244, 164, 96, 0.72);
+  -webkit-text-stroke: 0.45px rgba(48, 26, 14, 0.86);
+  transform: rotate(10deg);
   transform-origin: center;
   z-index: 30;
   pointer-events: none;
@@ -6070,9 +6131,10 @@ const STYLES = `
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
-  color: rgba(220, 232, 248, 0.96);
+  width: 20px;
+  height: 20px;
+  /* Single-color currentColor matches the codex/book icon family. */
+  color: rgba(220, 232, 248, 0.98);
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65));
 }
 .player-shield-chip-icon .icon { width: 100%; height: 100%; }
