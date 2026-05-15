@@ -34,7 +34,7 @@ import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { CandleMode } from '@entities/Character'
 import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
-import { getRelicDef, RELIC_IDS, type RelicCostOption, type RelicId } from '@data/Relics'
+import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
 import type { BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
@@ -297,7 +297,29 @@ function applyTurnStartRelics(): void {
   recordRelicActivation('golden-squirrel', '+1$')
 }
 
-/** Generate up to three unowned, unbanned relics for the next shop visit. */
+/**
+ * Per-relic base score price. Tuned so an average run reaching turn 10 has
+ * enough score (~800) to buy one mid-tier relic. Stronger relics cost more.
+ * Each shop spawn also adds a small ±jitter so prices read as 872 / 1183
+ * rather than round numbers (inflation feel).
+ */
+const RELIC_BASE_PRICES: Record<RelicId, number> = {
+  'golden-squirrel': 540,
+  'wax-crow': 720,
+  'carving-knife': 800,
+  'red-potion': 870,
+  lifeline: 880,
+  'blood-pack': 1020,
+  hope: 1240,
+}
+function priceForRelic(id: RelicId): number {
+  const base = RELIC_BASE_PRICES[id] ?? 800
+  // ±90 jitter, weighted off-center so prices land on non-round values.
+  const jitter = Math.floor((Math.random() - 0.42) * 180)
+  return Math.max(120, base + jitter)
+}
+
+/** Generate up to three unowned, unbanned relics + per-spawn score price. */
 function rollShopOffers(): ShopOfferView[] {
   const character = gameState.character
   const pool = RELIC_IDS.filter(
@@ -307,24 +329,7 @@ function rollShopOffers(): ShopOfferView[] {
     .map((relicId) => ({ relicId, sort: Math.random() }))
     .sort((a, b) => a.sort - b.sort)
     .slice(0, 3)
-    .map(({ relicId }) => ({ relicId }))
-}
-
-function canPayRelicCost(cost: RelicCostOption): boolean {
-  if (cost.resource === 'coin') return coins >= cost.amount
-  if (cost.resource === 'maxHealth') return gameState.character.maxHealth - cost.amount >= 1
-  return gameState.character.damage - cost.amount >= 1
-}
-
-function payRelicCost(cost: RelicCostOption): boolean {
-  if (!canPayRelicCost(cost)) return false
-  if (cost.resource === 'coin') {
-    coins -= cost.amount
-    coinPulseKey++
-    return true
-  }
-  if (cost.resource === 'maxHealth') return gameState.character.spendMaxHealth(cost.amount)
-  return gameState.character.spendAttack(cost.amount)
+    .map(({ relicId }) => ({ relicId, price: priceForRelic(relicId) }))
 }
 
 /** Immediate stat effects for relics whose benefit is granted on purchase. */
@@ -350,7 +355,7 @@ async function maybeOpenShopAfterTurn(): Promise<boolean> {
   recordNotice('레일이 멈추고 상점이 열렸다', 'info')
   render()
   await boardRenderer.playShopTransition()
-  boardRenderer.openShop(currentShopOffers, coins, gameState.character)
+  boardRenderer.openShop(currentShopOffers, score, gameState.character)
   return true
 }
 
@@ -359,11 +364,9 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   const offer = currentShopOffers.find((entry) => entry.relicId === detail.relicId)
   if (!offer || offer.purchased) return
   const def = getRelicDef(detail.relicId)
-  const cost = def.costOptions[detail.costIndex]
-  if (!cost || !payRelicCost(cost)) {
-    recordNotice(`${def.name}: 비용 부족`, 'hurt')
-    render()
-    boardRenderer.openShop(currentShopOffers, coins, gameState.character)
+  if (score < offer.price) {
+    recordNotice(`${def.name}: 점수 부족 (${offer.price.toLocaleString()}점)`, 'hurt')
+    boardRenderer.openShop(currentShopOffers, score, gameState.character)
     return
   }
   if (!gameState.character.addRelic(detail.relicId)) {
@@ -371,20 +374,34 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     render()
     return
   }
+  // Pay the score price. Score tracks a "currency-like" pulse but we don't
+  // re-fire the gain-burst — the shop UI is the visual confirmation.
+  score = Math.max(0, score - offer.price)
+  scorePulseKey++
+  pushActivityLogsInDisplayOrder([
+    {
+      label: `유물 구매: ${def.name}`,
+      scoreDelta: -offer.price,
+      kind: 'score' as const,
+    },
+  ])
   offer.purchased = true
   recordNotice(`유물 획득: ${def.name}`, 'win')
   await applyRelicPurchaseEffect(detail.relicId)
   render()
-  boardRenderer.openShop(currentShopOffers, coins, gameState.character)
+  boardRenderer.openShop(currentShopOffers, score, gameState.character)
 }
 
 async function closeShopAndResume(): Promise<void> {
   if (!shopOpen) return
   shopOpen = false
   currentShopOffers = []
+  // Exit beat: cards bounce down then swoosh upward in random staggered
+  // order WITHOUT covering the candle gauge (clipped by the shell). Only
+  // after the cards have fully left do we tear down the overlay and
+  // raise the shutter so the player can resume the turn.
+  await boardRenderer.playShopExitAnimation()
   boardRenderer.closeShop()
-  // The shop shutter now stays down while the modal is open, so only lift it
-  // after the player leaves the shop and the next playable turn resumes.
   await boardRenderer.playShopResumeTransition()
   inputLocked = false
   render()

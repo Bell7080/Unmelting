@@ -28,7 +28,7 @@ import type { EmberTier, SpawnWeights } from '@systems/EmberSystem'
 import { EmberSystem } from '@systems/EmberSystem'
 import { ENEMY_DEFINITIONS, TRAP_DEFINITIONS, MIMIC_BY_SPAN } from '@systems/CardSpawner'
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
-import { getRelicDef, RELIC_DEFINITIONS, type RelicCostOption, type RelicId } from '@data/Relics'
+import { getRelicDef, RELIC_DEFINITIONS, type RelicId } from '@data/Relics'
 import { RECIPES } from '@data/Recipes'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import {
@@ -55,11 +55,14 @@ export interface ItemActionDetail {
 
 export interface ShopBuyDetail {
   relicId: RelicId
-  costIndex: number
 }
 
 export interface ShopOfferView {
   relicId: RelicId
+  /** Per-spawn score price (mid-3-digit, with small jitter "inflation"
+   *  so the displayed cost reads as 872 / 1183 / 491 etc rather than
+   *  round numbers). Computed once when the shop is rolled. */
+  price: number
   purchased?: boolean
 }
 
@@ -150,6 +153,9 @@ export class GameBoardRenderer {
    *  when the value actually changes, not on every render. */
   private previousScorePulseKey = 0
   private previousCoinPulseKey = 0
+  /** Track the displayed turn so the turn-brand only shimmers when the
+   *  number actually advances (not on every intra-turn render). */
+  private previousTurn = -1
   private previousGroupSpans = new Map<string, number>()
   /** Hand-card UIDs from the previous render — used to mark only NEW cards
    *  with `is-entering` so the drop animation does not re-fire on every full
@@ -189,6 +195,12 @@ export class GameBoardRenderer {
     const character = gameState.getCharacter()
     const lanes = gameState.getLanes()
     const turn = gameState.getCurrentTurn()
+    // Trigger the small turn-tick pop animation only when the displayed
+    // turn actually changes — re-renders within the same turn must not
+    // re-fire the shimmer.
+    const turnChanged = turn !== this.previousTurn && this.hasRendered
+    const turnPopClass = turnChanged ? 'is-tick-popping' : ''
+    this.previousTurn = turn
 
     if (this.selected) {
       const lane = lanes[this.selected.laneIndex]
@@ -198,18 +210,13 @@ export class GameBoardRenderer {
     }
 
     this.boardElement.innerHTML = `
-      <div class="turn-overlay" aria-hidden="true">
-        <div class="turn-overlay-inner">
-          <span class="turn-overlay-kicker">Turn</span>
-          <span class="turn-overlay-number">${turn}</span>
-        </div>
-      </div>
       ${this.renderEmberHud(scorePanel)}
       <div class="game-shell">
-        <aside class="left-panel" aria-label="Brand and score">
-          <header class="brand">
-            <span class="brand-icon">${candleIcon()}</span>
-            <span class="brand-text">Unmelting</span>
+        <aside class="left-panel" aria-label="Turn and score">
+          <header class="turn-brand ${turnPopClass}" data-turn="${turn}">
+            <span class="turn-brand-icon">${candleIcon()}</span>
+            <span class="turn-brand-kicker">TURN</span>
+            <span class="turn-brand-number">${turn}</span>
           </header>
           ${this.renderScorePanel(scorePanel)}
         </aside>
@@ -909,52 +916,32 @@ export class GameBoardRenderer {
     `
   }
 
-  /** Human-readable resource labels for shop cost buttons. */
-  private relicCostLabel(cost: RelicCostOption): string {
-    if (cost.resource === 'coin') return `${cost.amount}$`
-    if (cost.resource === 'maxHealth') return `최대체력 -${cost.amount}`
-    return `공격력 -${cost.amount}`
-  }
-
-  /** Whether the current character/wallet can pay a given shop cost. */
-  private canPayRelicCost(cost: RelicCostOption, coins: number, character: Character): boolean {
-    if (cost.resource === 'coin') return coins >= cost.amount
-    if (cost.resource === 'maxHealth') return character.maxHealth - cost.amount >= 1
-    return character.damage - cost.amount >= 1
-  }
-
-  /** Shop card layout: illustration, title, effect, then one button per cost option. */
-  /** Each shop entry is a vertical "stall": a relic card on top (with
-   *  effect text always visible at a glance) plus a separate row of cost
-   *  buttons below it. The card and the buttons are siblings rather than
-   *  parent/child, so the card's hover-scale doesn't drag the buttons
-   *  along — the buttons keep their own position when the player reaches
-   *  for them. */
-  private renderShopRelicCard(offer: ShopOfferView, coins: number, character: Character): string {
+  /** Shop relic card. Click on the card itself buys the relic (the
+   *  separate price button is gone). Price is shown as a tilted tape
+   *  label glued onto the bottom of the card.
+   *
+   *  The hover-grown card is the click target so the player naturally
+   *  taps "the bigger card" instead of hunting for a small button. */
+  private renderShopRelicCard(offer: ShopOfferView, _score: number, _character: Character): string {
     const def = RELIC_DEFINITIONS[offer.relicId]
-    const costButtons = def.costOptions
-      .map((cost, index) => {
-        const disabled = offer.purchased || !this.canPayRelicCost(cost, coins, character)
-        const label = offer.purchased ? '구매 완료' : this.relicCostLabel(cost)
-        return `
-          <button class="shop-buy-btn" type="button" data-shop-buy="${def.id}" data-cost-index="${index}" ${disabled ? 'disabled' : ''}>
-            ${label}
-          </button>
-        `
-      })
-      .join('')
+    const purchasedClass = offer.purchased ? 'is-purchased' : ''
+    const cardLeaveDelay = Math.floor(Math.random() * 240)
     return `
-      <div class="shop-stall ${offer.purchased ? 'is-purchased' : ''}">
-        <article class="shop-relic-card" tabindex="0">
-          <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
-          <div class="shop-relic-body">
-            <h3 class="shop-relic-title">${def.name}</h3>
-            <p class="shop-relic-effect">${def.effect}</p>
-            <p class="shop-relic-flavor">${def.flavor}</p>
-          </div>
-        </article>
-        <div class="shop-cost-row">${costButtons}</div>
-      </div>
+      <article class="shop-relic-card ${purchasedClass}"
+               data-shop-buy="${def.id}"
+               style="--card-leave-delay:${cardLeaveDelay}ms;"
+               tabindex="0"
+               aria-label="${def.name} — ${offer.purchased ? '구매 완료' : `점수 ${offer.price}점`}">
+        <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
+        <div class="shop-relic-body">
+          <h3 class="shop-relic-title">${def.name}</h3>
+          <p class="shop-relic-effect">${def.effect}</p>
+          <p class="shop-relic-flavor">${def.flavor}</p>
+        </div>
+        <span class="shop-price-tape" aria-hidden="true">${
+          offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
+        }</span>
+      </article>
     `
   }
 
@@ -967,7 +954,7 @@ export class GameBoardRenderer {
    *  shopping. Outside the shell, pointer events pass through, but
    *  `inputLocked` blocks any actual game actions on those panels.
    */
-  openShop(offers: ShopOfferView[], coins: number, character: Character): void {
+  openShop(offers: ShopOfferView[], score: number, character: Character): void {
     if (!this.shopOverlayElement) {
       this.shopOverlayElement = document.createElement('div')
       this.shopOverlayElement.id = 'shop-overlay'
@@ -979,13 +966,14 @@ export class GameBoardRenderer {
           document.dispatchEvent(new CustomEvent('shopClose'))
           return
         }
-        const buyBtn = t.closest<HTMLElement>('[data-shop-buy]')
-        if (!buyBtn) return
-        const relicId = buyBtn.dataset.shopBuy as RelicId | undefined
+        // The whole relic card is the buy target now (no separate buy
+        // button) — click the hover-grown card to purchase.
+        const buyTarget = t.closest<HTMLElement>('[data-shop-buy]')
+        if (!buyTarget || buyTarget.classList.contains('is-purchased')) return
+        const relicId = buyTarget.dataset.shopBuy as RelicId | undefined
         if (!relicId) return
-        const costIndex = parseInt(buyBtn.dataset.costIndex || '0', 10)
         document.dispatchEvent(
-          new CustomEvent<ShopBuyDetail>('shopBuy', { detail: { relicId, costIndex } })
+          new CustomEvent<ShopBuyDetail>('shopBuy', { detail: { relicId } })
         )
       })
       document.body.appendChild(this.shopOverlayElement)
@@ -993,17 +981,13 @@ export class GameBoardRenderer {
 
     const cards =
       offers.length > 0
-        ? offers.map((offer) => this.renderShopRelicCard(offer, coins, character)).join('')
+        ? offers.map((offer) => this.renderShopRelicCard(offer, score, character)).join('')
         : '<div class="shop-empty">오늘의 잡화는 모두 팔렸어.</div>'
-    // Compact in-rail panel. The SHOP label is body-flanked with two small
-    // spade gems and perched slightly outside the panel edge. The exit
-    // label sits just below the rail, partially covering the top of the
-    // player card.
+    // Plain shell — no SHOP label, no separate header. Each card is its
+    // own clickable buy target with the price taped at the bottom; the
+    // EXIT button hangs off the bottom-right.
     this.shopOverlayElement.innerHTML = `
       <div class="shop-shell" role="dialog" aria-label="상점">
-        <span class="shop-stamp" aria-hidden="true">
-          <span class="shop-stamp-text" data-text="SHOP">SHOP</span>
-        </span>
         <section class="shop-grid" aria-label="상점 유물 목록">${cards}</section>
         <button class="shop-close-btn" type="button" data-shop-close aria-label="상점 나가기">EXIT</button>
       </div>
@@ -1030,9 +1014,25 @@ export class GameBoardRenderer {
     shell.style.height = `${rect.height}px`
   }
 
+  /** Play the cards-leaving animation: every relic card bounces down a
+   *  little and then swooshes upward in random staggered order. The EXIT
+   *  button is hidden during this beat so it doesn't linger on the way
+   *  out. Resolves once all cards have left, so the caller can then
+   *  hide the overlay and raise the shutter. */
+  playShopExitAnimation(): Promise<void> {
+    const shell = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-shell')
+    if (!shell) return Promise.resolve()
+    shell.classList.add('is-closing')
+    // Total = bounce(220ms) + swooshDelayMax(240ms) + swoosh(500ms) + buffer.
+    return new Promise((resolve) => window.setTimeout(resolve, 220 + 240 + 540))
+  }
+
   /** Hide the modal shop without destroying purchased state in index.ts. */
   closeShop(): void {
     this.shopOverlayElement?.classList.remove('is-open')
+    this.shopOverlayElement
+      ?.querySelector<HTMLElement>('.shop-shell')
+      ?.classList.remove('is-closing')
     if (this.shopResizeListener) {
       window.removeEventListener('resize', this.shopResizeListener)
       window.removeEventListener('scroll', this.shopResizeListener)
@@ -1324,7 +1324,7 @@ export class GameBoardRenderer {
           categoryClass: owned.has(def.id) ? 'compendium-relic-owned' : 'compendium-relic-card',
           stats: [
             ['효과', def.effect],
-            ['비용', def.costOptions.map((cost) => this.relicCostLabel(cost)).join(' / ')],
+            ['비용', '점수 (상점에서 매번 가격 변동)'],
           ],
           description: def.flavor,
         })
@@ -2496,7 +2496,10 @@ const STYLES = `
     minmax(0, 1fr)
     minmax(160px, 220px);
   gap: clamp(10px, 1.6vw, 20px);
-  padding: clamp(58px, 7vh, 88px) clamp(8px, 1.4vw, 18px) clamp(8px, 1.5vh, 16px);
+  /* Ember HUD now sits at top:14-22px so the shell only needs ~40px to
+     clear it. The TURN counter moved into the left-panel header so the
+     old ~88px reservation for the centered turn overlay is gone. */
+  padding: clamp(38px, 4.8vh, 56px) clamp(8px, 1.4vw, 18px) clamp(8px, 1.5vh, 16px);
   overflow: hidden;
   font-family: inherit;
   align-items: stretch;
@@ -2512,53 +2515,9 @@ const STYLES = `
 }
 
 /* ---------- Top-center Turn overlay ---------- */
-.turn-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 40;
-  pointer-events: none;
-  display: flex;
-  justify-content: center;
-  padding: 14px 0 36px;
-}
-
-.turn-overlay-inner {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.turn-overlay-kicker {
-  font-size: clamp(14px, 1.6vw, 20px);
-  font-weight: 700;
-  letter-spacing: 0.32em;
-  color: rgba(255, 215, 120, 0.85);
-  text-transform: uppercase;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
-}
-
-.turn-overlay-number {
-  font-size: clamp(34px, 4.6vw, 56px);
-  font-weight: 900;
-  letter-spacing: 0.05em;
-  color: var(--color-flame);
-  line-height: 1;
-  text-shadow:
-    0 0 20px rgba(255, 215, 120, 0.55),
-    0 0 36px rgba(244, 164, 96, 0.32),
-    0 2px 6px rgba(0, 0, 0, 0.85);
-  animation: turn-label-glimmer 2.6s ease-in-out infinite;
-}
-@keyframes turn-label-glimmer {
-  0%, 100% { filter: brightness(1); opacity: 0.88; }
-  48% { filter: brightness(1.22); opacity: 1; }
-  58% { filter: brightness(1.06); opacity: 0.94; }
-}
-
-/* ---------- Left panel (brand + score) ---------- */
+/* The "Unmelting" brand was removed in favor of the in-place TURN counter
+   — one less HUD element competing for the player's eye. The TURN number
+   itself takes the spot and shimmers softly each time it advances. */
 .left-panel {
   display: grid;
   grid-template-rows: auto 1fr;
@@ -2569,26 +2528,66 @@ const STYLES = `
   width: 100%;
 }
 
-.brand {
+.turn-brand {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 10px;
   padding: 4px 10px 8px;
   border-bottom: 1px solid var(--color-border-soft);
+  font-variant-numeric: tabular-nums;
 }
-.brand-icon {
+.turn-brand-icon {
   display: inline-flex;
   align-items: center;
   color: var(--color-flame);
-  font-size: clamp(20px, 2.4vw, 26px);
+  font-size: clamp(18px, 2vw, 22px);
+  align-self: center;
   filter: drop-shadow(0 0 8px rgba(255, 215, 120, 0.5));
 }
-.brand-text {
-  font-size: clamp(17px, 1.9vw, 22px);
-  font-weight: 700;
-  letter-spacing: 0.16em;
+.turn-brand-kicker {
+  font-size: clamp(11px, 1.1vw, 13px);
+  font-weight: 800;
+  letter-spacing: 0.32em;
+  color: rgba(255, 215, 120, 0.78);
+  text-transform: uppercase;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+.turn-brand-number {
+  font-size: clamp(22px, 2.4vw, 28px);
+  font-weight: 900;
+  letter-spacing: 0.04em;
   color: var(--color-flame);
-  text-shadow: 0 0 12px rgba(255, 215, 120, 0.25);
+  line-height: 1;
+  text-shadow:
+    0 0 12px rgba(255, 215, 120, 0.55),
+    0 0 26px rgba(244, 164, 96, 0.32),
+    0 2px 4px rgba(0, 0, 0, 0.85);
+  animation: turn-label-glimmer 2.6s ease-in-out infinite;
+}
+/* On turn advance, the number quickly bumps up with a brighter glow then
+   settles. The class is added by render() only when the value actually
+   changes; subsequent re-renders within the same turn don't re-trigger. */
+.turn-brand.is-tick-popping .turn-brand-number {
+  animation: turn-tick-pop 0.62s cubic-bezier(0.16, 0.9, 0.22, 1);
+}
+.turn-brand.is-tick-popping .turn-brand-kicker {
+  animation: turn-tick-shimmer 0.62s ease-out;
+}
+@keyframes turn-label-glimmer {
+  0%, 100% { filter: brightness(1); opacity: 0.92; }
+  48% { filter: brightness(1.18); opacity: 1; }
+  58% { filter: brightness(1.06); opacity: 0.96; }
+}
+@keyframes turn-tick-pop {
+  0%   { transform: translateY(0) scale(1); filter: brightness(1.1); }
+  28%  { transform: translateY(-3px) scale(1.16); filter: brightness(1.55) saturate(1.3); }
+  62%  { transform: translateY(2px) scale(0.98); filter: brightness(1.22); }
+  100% { transform: translateY(0) scale(1); filter: brightness(1); }
+}
+@keyframes turn-tick-shimmer {
+  0%   { color: rgba(255, 215, 120, 0.78); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85); }
+  35%  { color: rgba(255, 248, 210, 1); text-shadow: 0 0 12px rgba(255, 232, 168, 0.95), 0 1px 3px rgba(0, 0, 0, 0.85); }
+  100% { color: rgba(255, 215, 120, 0.78); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85); }
 }
 
 /* ---------- Score / Activity Panel ---------- */
@@ -3423,108 +3422,38 @@ const STYLES = `
   background: transparent;
   border: 0;
   box-shadow: none;
-  padding: clamp(34px, 4vh, 48px) clamp(12px, 1.4vw, 18px) clamp(12px, 1.4vh, 16px);
+  /* No SHOP label any more, so the top padding shrinks to just enough
+     room for the card drop-in arc + the price tape that hangs off the
+     bottom. */
+  padding: clamp(14px, 1.6vh, 22px) clamp(12px, 1.4vw, 18px) clamp(18px, 2.2vh, 26px);
   display: grid;
-  grid-template-rows: 1fr auto;
-  align-items: center;
+  grid-template-rows: 1fr;
+  align-items: stretch;
   overflow: visible;
   animation: shop-overlay-in 0.32s cubic-bezier(0.18, 0.86, 0.22, 1);
 }
 
-/* SHOP label perched on the top edge of the panel, slightly tilted. No
-   side icons — just the LED-board letters. The text snaps between an
-   "off" (dim, near-black) state and an "on" (bright candle yellow) state
-   with short electric stutters in between, like a tube sign about to
-   die. Allowed to extend past the panel's top edge — the rail's
-   overflow:visible keeps it visible. */
-.shop-stamp {
-  position: absolute;
-  top: -22px;
-  left: 50%;
-  transform: translateX(-50%) rotate(-3.5deg);
-  display: inline-flex;
-  align-items: center;
-  padding: 0;
-  font-size: clamp(28px, 4vw, 40px);
-  font-weight: 900;
-  letter-spacing: 0.32em;
-  pointer-events: none;
-  z-index: 4;
-}
-.shop-stamp-text {
-  position: relative;
-  font-family: inherit;
-  /* "Off" state is the base — near-black with just a hint of warm
-     filament. The keyframe animation snaps to the "on" colour and back. */
-  color: rgba(40, 18, 8, 0.92);
-  text-shadow: none;
-  animation: shop-led-flicker 4.2s steps(1, end) infinite;
-}
-.shop-stamp-text::after {
-  /* Ghost copy of the text that holds the bright "on" glow. The keyframe
-     toggles its opacity in hard step()s so it reads as an LED tube going
-     dark → on → flicker → on. */
-  content: attr(data-text);
-  position: absolute;
-  inset: 0;
-  color: var(--color-flame);
-  text-shadow:
-    0 0 4px #fff5dc,
-    0 0 10px var(--color-flame),
-    0 0 22px rgba(244, 164, 96, 0.85),
-    0 0 42px rgba(244, 164, 96, 0.55),
-    0 2px 4px rgba(0, 0, 0, 0.85);
-  animation: shop-led-on 4.2s steps(1, end) infinite;
-  pointer-events: none;
-}
-@keyframes shop-led-flicker {
-  /* Body color in the dark steps stays as the dim filament so when the
-     overlay glow turns off the letters read as near-black. The overlay
-     glow handles the "on" state via shop-led-on. */
-  0%, 100% { color: rgba(40, 18, 8, 0.92); }
-}
-@keyframes shop-led-on {
-  /* Hard step toggling — like a faulty LED billboard. Mostly ON with a
-     few short OFF stutters per cycle. */
-  0%, 28%   { opacity: 1; }
-  29%, 31%  { opacity: 0; }       /* tiny dropout */
-  32%, 58%  { opacity: 1; }
-  59%, 60%  { opacity: 0.18; }    /* brown-out flicker */
-  61%, 74%  { opacity: 1; }
-  75%, 78%  { opacity: 0; }       /* longer dropout */
-  79%, 86%  { opacity: 1; }
-  87%, 88%  { opacity: 0; }       /* quick zap */
-  89%, 100% { opacity: 1; }
-}
+/* SHOP stamp removed by player request — shop now identifies itself
+   purely by the relic stalls + EXIT label. */
 
-/* 3 vertical stalls across the rail. Each stall = card on top + cost
-   buttons below; siblings, not parent/child, so card hover scale doesn't
-   move the buttons. */
+/* 3 relic cards across the rail, one card per lane. Cards drop in from
+   above and on close bounce-down then swoosh-up in random order. */
 .shop-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: clamp(8px, 1.4vw, 18px);
-  align-items: end;
+  align-items: stretch;
   height: 100%;
   width: 100%;
   padding: 0 6px;
   overflow: visible;
 }
-.shop-stall {
-  display: grid;
-  grid-template-rows: 1fr auto;
-  gap: 8px;
-  height: 100%;
-  min-height: 0;
-}
-.shop-stall.is-purchased .shop-relic-card { filter: saturate(0.55) brightness(0.72); }
-.shop-stall.is-purchased .shop-buy-btn { pointer-events: none; }
 
 .shop-relic-card {
   position: relative;
   display: grid;
   grid-template-rows: 50% 1fr;
-  overflow: hidden;
+  overflow: visible; /* let the tilted price tape poke past the bottom */
   border-radius: 14px;
   border: 1px solid rgba(255, 215, 120, 0.42);
   background: linear-gradient(180deg, rgba(45, 30, 39, 0.96), rgba(18, 12, 24, 0.96));
@@ -3535,9 +3464,20 @@ const STYLES = `
   transform-origin: center bottom;
   transition: transform 0.22s cubic-bezier(0.18, 0.86, 0.22, 1),
               box-shadow 0.22s ease;
+  /* Drop-in entrance animation when the shop opens. Each card uses a
+     per-card stagger via --card-i. */
+  animation: shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) backwards;
 }
-/* Hover scale only on the card; the buy-row stays still because it is a
-   sibling in the stall, not a child of the card. */
+.shop-grid > .shop-relic-card:nth-child(1) { animation-delay: 60ms; }
+.shop-grid > .shop-relic-card:nth-child(2) { animation-delay: 160ms; }
+.shop-grid > .shop-relic-card:nth-child(3) { animation-delay: 260ms; }
+@keyframes shop-card-enter {
+  0%   { transform: translateY(-130%) scale(0.9); opacity: 0; }
+  72%  { transform: translateY(8px) scale(1.02); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* Hover scale — clicking the grown card buys it. */
 .shop-relic-card:hover,
 .shop-relic-card:focus-visible {
   transform: scale(1.06) translateY(-2px);
@@ -3546,12 +3486,17 @@ const STYLES = `
               0 0 30px rgba(244, 164, 96, 0.4);
   z-index: 6;
 }
+.shop-relic-card.is-purchased {
+  filter: saturate(0.55) brightness(0.72);
+  pointer-events: none;
+}
 .shop-relic-art {
   min-height: 0;
   background-size: cover;
   background-position: center 18%;
   border-bottom: 1px solid rgba(255, 215, 120, 0.18);
   box-shadow: inset 0 -36px 46px rgba(13, 9, 19, 0.74);
+  border-radius: 14px 14px 0 0;
 }
 .shop-relic-body {
   padding: 10px 12px 12px;
@@ -3581,15 +3526,58 @@ const STYLES = `
   line-height: 1.3;
 }
 
-/* Cost row: separated from the card so it stays anchored at the bottom of
-   the stall even when the card scales up on hover. */
-.shop-cost-row {
-  display: flex;
-  gap: 6px;
-  justify-content: stretch;
-  align-items: stretch;
+/* Tape-strip price tag — ivory paper with two warm stripes for the
+   "tape" feel, glued onto the bottom of the card at a slight angle. */
+.shop-price-tape {
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-3.4deg);
+  padding: 4px 16px;
+  background: linear-gradient(180deg, rgba(245, 232, 196, 0.96), rgba(214, 188, 142, 0.96));
+  color: #2a1408;
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  border-radius: 2px;
+  box-shadow:
+    0 6px 14px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  text-shadow: 0 1px 0 rgba(255, 232, 168, 0.6);
+  z-index: 7;
+  pointer-events: none;
+  /* Two faint translucent edges hint at "two strips of tape" wrap-around. */
+  border-left: 1px dashed rgba(120, 80, 40, 0.42);
+  border-right: 1px dashed rgba(120, 80, 40, 0.42);
 }
-.shop-cost-row .shop-buy-btn { flex: 1; }
+
+/* Closing — bounce down then swoosh up in random per-card order. The
+   per-card random delay is set inline as --card-leave-delay (0~240ms).
+   EXIT button hides during the close so it doesn't linger over the
+   leaving cards. */
+.shop-shell.is-closing {
+  overflow: hidden; /* clip the swoosh so cards don't pass over the candle gauge */
+}
+.shop-shell.is-closing .shop-close-btn { opacity: 0; pointer-events: none; transition: opacity 0.18s ease; }
+.shop-shell.is-closing .shop-relic-card {
+  pointer-events: none;
+  animation:
+    shop-card-bounce 0.22s cubic-bezier(0.2, 0.86, 0.22, 1) forwards,
+    shop-card-swoosh 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) forwards;
+  animation-delay:
+    0s,
+    calc(220ms + var(--card-leave-delay, 0ms));
+}
+@keyframes shop-card-bounce {
+  0%   { transform: translateY(0) scale(1); }
+  60%  { transform: translateY(14px) scale(0.99); }
+  100% { transform: translateY(8px) scale(1); }
+}
+@keyframes shop-card-swoosh {
+  0%   { transform: translateY(8px) scale(1); opacity: 1; }
+  100% { transform: translateY(-260%) scale(0.92); opacity: 0; }
+}
 /* Rugged carved-wood buy buttons: deep umber base, dark inset rim, warm
    ember type. Replaces the flat candle-pill button so the prices feel
    like they're stamped onto thick wood. */
@@ -3998,11 +3986,12 @@ const STYLES = `
 
 /* ---------- Ember HUD (center, below the turn label) ----------
    Visual stays the new "brightness lantern" design (no boxed panel, just
-   a glowing horizontal light pipe). Only the vertical position is
-   restored to the original spot below the centered turn overlay. */
+   a glowing horizontal light pipe). The TURN counter moved into the
+   left-panel header so the ember pipe can sit higher / closer to the
+   top edge for clear separation. */
 .ember-hud {
   position: fixed;
-  top: clamp(56px, 7vh, 84px);
+  top: clamp(14px, 1.6vh, 22px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 35;
