@@ -4296,33 +4296,31 @@ const STYLES = `
   font-weight: 800;
   letter-spacing: 0.04em;
 }
-/* Simple vertical mode list anchored to the LEFT of the mode wheel.
-   Hidden until the wheel is toggled; each item is one row with icon +
-   label, and the currently active mode reads as sunken so the player can
-   see which mode they'd move away from. */
+/* Mode picker is a sleeve of standalone buttons that unfurl one-by-one
+   to the LEFT of the wheel — no back panel/box, just the floating
+   buttons themselves with their own pill chrome. Each item starts
+   stacked behind the wheel (hidden, slid right) and "촤라락" pops out
+   with a per-item delay when the wheel is toggled. */
 .candle-mode-list {
   position: absolute;
   top: 50%;
   right: calc(100% + 6px);
-  transform: translateY(-50%) translateX(-4px);
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 6px;
-  background: linear-gradient(180deg, rgba(31, 24, 48, 0.96), rgba(18, 14, 28, 0.98));
-  border: 1px solid rgba(255, 215, 120, 0.42);
-  border-radius: 10px;
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.55);
-  opacity: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   pointer-events: none;
-  transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.18, 0.86, 0.22, 1);
   z-index: 50;
 }
 .candle-mode-wheel.is-fan-open .candle-mode-list {
-  opacity: 1;
   pointer-events: auto;
-  transform: translateY(-50%) translateX(0);
 }
+
 .candle-mode-list-item {
   appearance: none;
   display: inline-flex;
@@ -4330,9 +4328,9 @@ const STYLES = `
   gap: 6px;
   min-width: 96px;
   padding: 5px 8px;
-  border: 1px solid rgba(255, 215, 120, 0.34);
+  border: 1px solid rgba(255, 215, 120, 0.42);
   border-radius: 7px;
-  background: rgba(20, 16, 28, 0.62);
+  background: linear-gradient(180deg, rgba(31, 24, 48, 0.96), rgba(18, 14, 28, 0.98));
   color: rgba(255, 232, 168, 0.95);
   cursor: pointer;
   font-family: inherit;
@@ -4341,11 +4339,35 @@ const STYLES = `
   letter-spacing: 0.02em;
   text-align: left;
   white-space: nowrap;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5);
+  /* Closed: each button sits ON TOP of the wheel and is invisible. The
+     "is-fan-open" state animates them out leftward via the keyframe
+     below, staggered per-item with nth-child(). */
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(36px) scale(0.7);
   transition: background 0.16s ease, border-color 0.16s ease, filter 0.16s ease;
 }
+.candle-mode-wheel.is-fan-open .candle-mode-list-item {
+  pointer-events: auto;
+  animation: candle-mode-unfurl 0.32s cubic-bezier(0.18, 0.86, 0.22, 1) forwards;
+}
+/* Staggered timing — first item snaps out fast, the rest follow in a
+   quick chain so the open feels like cards being dealt to the left. */
+.candle-mode-wheel.is-fan-open .candle-mode-list-item:nth-child(1) { animation-delay: 0ms; }
+.candle-mode-wheel.is-fan-open .candle-mode-list-item:nth-child(2) { animation-delay: 55ms; }
+.candle-mode-wheel.is-fan-open .candle-mode-list-item:nth-child(3) { animation-delay: 110ms; }
+.candle-mode-wheel.is-fan-open .candle-mode-list-item:nth-child(4) { animation-delay: 165ms; }
+
+@keyframes candle-mode-unfurl {
+  0%   { opacity: 0; transform: translateX(36px) scale(0.7); }
+  60%  { opacity: 1; transform: translateX(-3px) scale(1.04); }
+  100% { opacity: 1; transform: translateX(0)    scale(1); }
+}
+
 .candle-mode-list-item:hover {
-  background: rgba(244, 164, 96, 0.18);
-  border-color: rgba(255, 232, 168, 0.78);
+  background: linear-gradient(180deg, rgba(244, 164, 96, 0.32), rgba(18, 14, 28, 0.98));
+  border-color: rgba(255, 232, 168, 0.86);
 }
 .candle-mode-list-item.is-current {
   border-color: rgba(120, 90, 60, 0.6);
