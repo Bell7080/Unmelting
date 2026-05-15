@@ -137,19 +137,15 @@ export function shieldIcon(): string {
   )
 }
 
-/** Spade-shaped jewel — used as a watermark gem behind the run-score
- *  number so the score reads as a collected currency in its own right. */
+/** Small spade-shaped jewel — flanks the SHOP label on the shop panel. */
 export function spadeGemIcon(): string {
   return svg(
     [
-      // Outer spade silhouette as a dark amethyst gem.
       fill(
         'M12 2.6 C 16.4 7.2 20 11.1 20 14.6 C 20 17.6 17.6 19.6 14.8 19.6 C 13.6 19.6 12.6 19 12 18 C 11.4 19 10.4 19.6 9.2 19.6 C 6.4 19.6 4 17.6 4 14.6 C 4 11.1 7.6 7.2 12 2.6 Z',
       ),
-      // Inner facet highlights to suggest gem cut.
       stroke('M12 4.4 L 9.6 7.6 M12 4.4 L 14.4 7.6', 1.1),
       stroke('M9.6 7.6 L 7.4 12.4 M14.4 7.6 L 16.6 12.4', 1),
-      // Spade stem.
       fill('M11 19.4 L 13 19.4 L 13 22 C 13 22.6 12.6 23 12 23 C 11.4 23 11 22.6 11 22 Z'),
     ].join(''),
   )

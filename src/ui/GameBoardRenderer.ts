@@ -161,6 +161,9 @@ export class GameBoardRenderer {
   private handTargetingMode: HandTargetingMode | null = null
   /** Body-level shop overlay is kept outside board re-renders. */
   private shopOverlayElement: HTMLElement | null = null
+  /** Resize/scroll listener that keeps the shop shell anchored over the
+   *  rail. Stored so we can remove it cleanly on shop close. */
+  private shopResizeListener: (() => void) | null = null
 
   constructor(containerId: string = 'game-board') {
     const container = document.getElementById(containerId)
@@ -266,35 +269,38 @@ export class GameBoardRenderer {
     // full re-render of the panel would replay the pop animation on every
     // action, even on actions that did not change the resource — which is
     // exactly what the player was seeing as "effects firing on plain actions".
+    // Only attach the pulse animation class when the key actually changed
+    // since the last render. This keeps the pop from re-firing on every
+    // render of an unrelated action. Both score and coin use the same
+    // unified `is-score-popping` class so the panel animation language
+    // stays consistent (per request to roll back task 7).
     const scoreChanged =
       scorePanel.scorePulseKey !== this.previousScorePulseKey && scorePanel.scorePulseKey > 0
     const coinChanged =
       scorePanel.coinPulseKey !== this.previousCoinPulseKey && scorePanel.coinPulseKey > 0
     const scorePulseClass = scoreChanged ? 'is-score-popping' : ''
-    const coinPulseClass = coinChanged ? 'is-coin-popping' : ''
+    const coinPulseClass = coinChanged ? 'is-score-popping' : ''
     this.previousScorePulseKey = scorePanel.scorePulseKey
     this.previousCoinPulseKey = scorePanel.coinPulseKey
 
     return `
       <aside class="score-panel" aria-label="Action score panel">
-        <section class="score-panel-total" aria-label="혼불 총량">
-          <div class="score-kicker">
-            <span class="score-kicker-icon">${spadeGemIcon()}</span>
-            혼불
-          </div>
-          <div class="score-number ${scorePulseClass}" data-score-pulse="${scorePanel.scorePulseKey}">
-            <span class="score-number-gem" aria-hidden="true">${spadeGemIcon()}</span>
-            <span class="score-number-value">${scorePanel.score.toLocaleString()}</span>
-          </div>
-        </section>
-        <section class="coin-panel-total" aria-label="화폐">
+        <section class="score-panel-total">
           <div class="score-kicker">
             <span class="score-kicker-icon">${coinIcon()}</span>
-            화폐
+            종합 점수
+          </div>
+          <div class="score-number ${scorePulseClass}" data-score-pulse="${scorePanel.scorePulseKey}">
+            ${scorePanel.score.toLocaleString()}
+          </div>
+        </section>
+        <section class="coin-panel-total" aria-label="Shop currency">
+          <div class="score-kicker">
+            <span class="score-kicker-icon">${coinIcon()}</span>
+            상점 화폐
           </div>
           <div class="coin-number ${coinPulseClass}" data-coin-pulse="${scorePanel.coinPulseKey}">
-            <span class="coin-number-value">${scorePanel.coins.toLocaleString()}</span>
-            <span class="coin-number-suffix">$</span>
+            ${scorePanel.coins.toLocaleString()} $
           </div>
         </section>
         <section class="score-log-list" aria-label="Action history">
@@ -532,11 +538,74 @@ export class GameBoardRenderer {
             <span class="compendium-btn-icon" aria-hidden="true">${bookIcon()}</span>
             <span class="compendium-btn-label">도감</span>
           </button>
+          ${this.renderCandleGauge(character)}
         </div>
         ${this.renderPlayer(character)}
         <div class="utility-layer relic-layer" aria-label="Owned relics">
           ${this.renderRelicLayer(character)}
         </div>
+      </div>
+    `
+  }
+
+  /** Curved "발자국" combo gauge on the main left: 10 candle ticks arranged
+   *  in a soft zigzag going up the left side, plus the mode picker centre
+   *  + 4-direction left fan. The wheel keeps the same data-candle-wheel /
+   *  data-candle-mode hooks so the existing listeners just work. */
+  private renderCandleGauge(character: Character): string {
+    const candle = character.candle ?? 0
+    const candleMax = character.candleMax ?? 10
+    const currentMode = character.candleMode ?? 'max-health'
+    const mode = this.candleModeMeta(currentMode)
+    // Ticks are rendered top→bottom in the DOM but visually they fill from
+    // the BOTTOM up (the bottom-most tick is index 0). Each tick gets a
+    // `--curve-i` index for the per-row zigzag offset in CSS.
+    const ticks: string[] = []
+    for (let i = candleMax - 1; i >= 0; i--) {
+      const filled = i < candle ? 'is-filled' : ''
+      ticks.push(
+        `<span class="candle-trail-tick ${filled}" style="--curve-i:${i};" aria-hidden="true"></span>`
+      )
+    }
+    const fanModes: {
+      mode: CandleMode
+      dir: 'up-left' | 'left' | 'down-left' | 'far-left'
+    }[] = [
+      { mode: 'max-health', dir: 'up-left' },
+      { mode: 'attack', dir: 'left' },
+      { mode: 'ember', dir: 'down-left' },
+      { mode: 'draw', dir: 'far-left' },
+    ]
+    const fanPetals = fanModes
+      .map((entry) => {
+        const meta = this.candleModeMeta(entry.mode)
+        const isCurrent = entry.mode === currentMode ? 'is-current' : ''
+        return `
+          <button class="candle-mode-petal petal-${entry.dir} ${isCurrent}"
+                  type="button"
+                  data-candle-mode="${entry.mode}"
+                  title="${meta.label}: ${meta.effect}"
+                  aria-label="${meta.label}: ${meta.effect}">
+            <span class="candle-mode-petal-icon">${meta.icon}</span>
+            <span class="candle-mode-petal-label">${meta.label}</span>
+          </button>
+        `
+      })
+      .join('')
+
+    return `
+      <div class="candle-trail" aria-label="콤보 게이지 (${candle}/${candleMax}, ${mode.label})">
+        <div class="candle-trail-ticks">${ticks.join('')}</div>
+        <div class="candle-mode-wheel candle-mode-wheel-trail" data-candle-wheel>
+          <button class="candle-mode-btn" type="button" data-toggle-candle-fan
+                  aria-label="게이지 모드: ${mode.label}. ${mode.effect}"
+                  title="${mode.label}: ${mode.effect}">
+            <span class="candle-mode-icon">${mode.icon}</span>
+            <span class="candle-mode-label">${mode.label}</span>
+          </button>
+          <div class="candle-mode-fan" aria-hidden="true">${fanPetals}</div>
+        </div>
+        <div class="candle-trail-label">${candle}/${candleMax} · ${mode.effect}</div>
       </div>
     `
   }
@@ -850,70 +919,14 @@ export class GameBoardRenderer {
     // (see updateTargetBanner / .target-banner) so it never shifts layout.
     this.updateTargetBanner(targeting)
 
-    const candle = character.candle ?? 0
-    const candleMax = character.candleMax ?? 10
-    const candlePct = Math.max(0, Math.min(100, (candle / candleMax) * 100))
-    const currentMode = character.candleMode ?? 'max-health'
-    const mode = this.candleModeMeta(currentMode)
-    const ticks = Array.from({ length: candleMax }, (_, idx) => {
-      const filled = idx < candle ? 'is-filled' : ''
-      return `<span class="candle-gauge-tick ${filled}" aria-hidden="true"></span>`
-    }).join('')
-
-    // "고양이 발바닥" fan biased to the LEFT — the petals cluster outward in
-    // a 3-finger spread (up-left / left / down-left) plus a centred left
-    // anchor so the picker reads like a paw print pad rather than a four-way
-    // compass. The order stays stable so a given mode always lives in the
-    // same petal.
-    const fanModes: {
-      mode: CandleMode
-      dir: 'up-left' | 'left' | 'down-left' | 'far-left'
-    }[] = [
-      { mode: 'max-health', dir: 'up-left' },
-      { mode: 'attack', dir: 'left' },
-      { mode: 'ember', dir: 'down-left' },
-      { mode: 'draw', dir: 'far-left' },
-    ]
-    const fanPetals = fanModes
-      .map((entry) => {
-        const meta = this.candleModeMeta(entry.mode)
-        const isCurrent = entry.mode === currentMode ? 'is-current' : ''
-        return `
-          <button class="candle-mode-petal petal-${entry.dir} ${isCurrent}"
-                  type="button"
-                  data-candle-mode="${entry.mode}"
-                  title="${meta.label}: ${meta.effect}"
-                  aria-label="${meta.label}: ${meta.effect}">
-            <span class="candle-mode-petal-icon">${meta.icon}</span>
-            <span class="candle-mode-petal-label">${meta.label}</span>
-          </button>
-        `
-      })
-      .join('')
-
+    // Candle gauge / mode picker live in the player-zone left utility column
+    // now (see renderCandleGauge). Hand panel only carries the slots itself.
     return `
       <aside class="hand-panel" aria-label="Hand">
         <header class="hand-header">
           <span class="hand-header-icon">${pouchIcon()}</span>
           손패 (${character.hand.length}/${handMax})
         </header>
-        <div class="candle-gauge" aria-label="10칸 손패 게이지">
-          <div class="candle-mode-wheel" data-candle-wheel>
-            <button class="candle-mode-btn" type="button" data-toggle-candle-fan
-                    aria-label="게이지 모드: ${mode.label}. ${mode.effect}"
-                    title="${mode.label}: ${mode.effect}">
-              <span class="candle-mode-icon">${mode.icon}</span>
-              <span class="candle-mode-label">${mode.label}</span>
-            </button>
-            <div class="candle-mode-fan" aria-hidden="true">${fanPetals}</div>
-          </div>
-          <div class="candle-gauge-body">
-            <div class="candle-gauge-meter" style="--candle-fill: ${candlePct}%">
-              ${ticks}
-            </div>
-            <div class="candle-gauge-label">${candle}/${candleMax} · ${mode.effect}</div>
-          </div>
-        </div>
         <ul class="hand-stack ${character.hand.length >= 8 ? 'is-crowded' : ''}" style="--hand-count: ${character.hand.length}">${reversed}</ul>
       </aside>
     `
@@ -942,16 +955,17 @@ export class GameBoardRenderer {
         const label = offer.purchased ? '구매 완료' : this.relicCostLabel(cost)
         return `
           <button class="shop-buy-btn" type="button" data-shop-buy="${def.id}" data-cost-index="${index}" ${disabled ? 'disabled' : ''}>
-            ${label}
+            <span class="shop-buy-btn-label">${label}</span>
           </button>
         `
       })
       .join('')
+    // Compact stack: art square at top, body collapses unless hovered.
     return `
-      <article class="shop-relic-card ${offer.purchased ? 'is-purchased' : ''}">
+      <article class="shop-relic-card ${offer.purchased ? 'is-purchased' : ''}" tabindex="0">
         <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
-        <div class="shop-relic-body">
-          <h3 class="shop-relic-title">${def.name}</h3>
+        <div class="shop-relic-name">${def.name}</div>
+        <div class="shop-relic-detail">
           <p class="shop-relic-effect">${def.effect}</p>
           <p class="shop-relic-flavor">${def.flavor}</p>
         </div>
@@ -960,7 +974,15 @@ export class GameBoardRenderer {
     `
   }
 
-  /** Build or refresh the modal shop after the 10-turn rail shutter. */
+  /** Build or refresh the in-rail shop after the 10-turn shutter drop.
+   *
+   *  The shop overlay no longer covers the full screen — it floats only
+   *  over the rail area, with its `.shop-shell` positioned to match the
+   *  rail's bounding rect. The score panel, hand panel, and player card
+   *  stay fully visible so coins/HP/ATK/relics are readable while
+   *  shopping. Outside the shell, pointer events pass through, but
+   *  `inputLocked` blocks any actual game actions on those panels.
+   */
   openShop(offers: ShopOfferView[], coins: number, character: Character): void {
     if (!this.shopOverlayElement) {
       this.shopOverlayElement = document.createElement('div')
@@ -968,13 +990,16 @@ export class GameBoardRenderer {
       this.shopOverlayElement.className = 'shop-overlay'
       this.shopOverlayElement.addEventListener('click', (e) => {
         const t = e.target as HTMLElement
-        if (t.dataset.shopClose !== undefined || t === this.shopOverlayElement) {
+        const closeBtn = t.closest<HTMLElement>('[data-shop-close]')
+        if (closeBtn) {
           document.dispatchEvent(new CustomEvent('shopClose'))
           return
         }
-        const relicId = t.dataset.shopBuy as RelicId | undefined
+        const buyBtn = t.closest<HTMLElement>('[data-shop-buy]')
+        if (!buyBtn) return
+        const relicId = buyBtn.dataset.shopBuy as RelicId | undefined
         if (!relicId) return
-        const costIndex = parseInt(t.dataset.costIndex || '0', 10)
+        const costIndex = parseInt(buyBtn.dataset.costIndex || '0', 10)
         document.dispatchEvent(
           new CustomEvent<ShopBuyDetail>('shopBuy', { detail: { relicId, costIndex } })
         )
@@ -986,26 +1011,51 @@ export class GameBoardRenderer {
       offers.length > 0
         ? offers.map((offer) => this.renderShopRelicCard(offer, coins, character)).join('')
         : '<div class="shop-empty">오늘의 잡화는 모두 팔렸어.</div>'
-    // Simplified shop chrome: only the angled "상점" tag perched on the panel
-    // edge and the coin wallet remain. The previous kicker, h2, and intro
-    // paragraph competed with the relic grid and have been removed so the
-    // panel reads as "상점 + 진열" without extra prose.
+    // Compact in-rail panel. The SHOP label is body-flanked with two small
+    // spade gems and perched slightly outside the panel edge. The exit
+    // label sits just below the rail, partially covering the top of the
+    // player card.
     this.shopOverlayElement.innerHTML = `
       <div class="shop-shell" role="dialog" aria-label="상점">
-        <button class="shop-close-btn shop-close-tab" type="button" data-shop-close aria-label="상점 나가기">Exit</button>
-        <div class="shop-modal">
-          <span class="shop-stamp" aria-hidden="true">상점</span>
-          <div class="shop-wallet">${coinIcon()} ${coins}$</div>
-          <section class="shop-grid" aria-label="상점 유물 목록">${cards}</section>
-        </div>
+        <span class="shop-stamp" aria-hidden="true">
+          <span class="shop-stamp-gem">${spadeGemIcon()}</span>
+          <span class="shop-stamp-text">SHOP</span>
+          <span class="shop-stamp-gem">${spadeGemIcon()}</span>
+        </span>
+        <section class="shop-grid" aria-label="상점 유물 목록">${cards}</section>
+        <button class="shop-close-btn" type="button" data-shop-close aria-label="상점 나가기">EXIT</button>
       </div>
     `
     this.shopOverlayElement.classList.add('is-open')
+    this.positionShopShellOverRail()
+    if (!this.shopResizeListener) {
+      this.shopResizeListener = () => this.positionShopShellOverRail()
+      window.addEventListener('resize', this.shopResizeListener)
+      window.addEventListener('scroll', this.shopResizeListener, { passive: true })
+    }
+  }
+
+  /** Re-anchor the shop shell so it always sits exactly over the rail. */
+  private positionShopShellOverRail(): void {
+    if (!this.shopOverlayElement?.classList.contains('is-open')) return
+    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
+    const shell = this.shopOverlayElement.querySelector<HTMLElement>('.shop-shell')
+    if (!rail || !shell) return
+    const rect = rail.getBoundingClientRect()
+    shell.style.top = `${rect.top}px`
+    shell.style.left = `${rect.left}px`
+    shell.style.width = `${rect.width}px`
+    shell.style.height = `${rect.height}px`
   }
 
   /** Hide the modal shop without destroying purchased state in index.ts. */
   closeShop(): void {
     this.shopOverlayElement?.classList.remove('is-open')
+    if (this.shopResizeListener) {
+      window.removeEventListener('resize', this.shopResizeListener)
+      window.removeEventListener('scroll', this.shopResizeListener)
+      this.shopResizeListener = null
+    }
   }
 
   /** Create the 3×3 wax shutter grid used by shop stop/resume transitions. */
@@ -2020,14 +2070,19 @@ export class GameBoardRenderer {
       window.setTimeout(() => {
         SquareBurst.playAt(targetX, targetY, theme, { count: 14, spread: 150, duration: 560 })
       }, 760)
+      // Intentionally do NOT remove `is-hand-use-source` when the ghost is
+      // done. The hand is already mutated; the slot DOM is stale and will
+      // be rebuilt on the next render(). If we restored the slot's opacity
+      // here, the player would briefly see the used card reappear (which
+      // looks exactly like the "card slides away → reappears → slides away
+      // again" flicker reported on slow machines). Leaving the class in
+      // place keeps the slot invisible until render() drops the node.
       anim.onfinish = () => {
         ghost.remove()
-        source.classList.remove('is-hand-use-source')
         resolve()
       }
       window.setTimeout(() => {
         ghost.remove()
-        source.classList.remove('is-hand-use-source')
         resolve()
       }, 1080)
     })
@@ -2422,10 +2477,7 @@ const STYLES = `
   overflow: hidden;
 }
 
-/* ---------- Top Turn overlay ----------
-   Pulled to the top-LEFT so it no longer overlaps with the centered ember
-   HUD. Both pieces of information stay clearly readable at a glance, and
-   the bigger number gets its own visual breathing room. */
+/* ---------- Top-center Turn overlay ---------- */
 .turn-overlay {
   position: fixed;
   top: 0;
@@ -2434,41 +2486,36 @@ const STYLES = `
   z-index: 40;
   pointer-events: none;
   display: flex;
-  justify-content: flex-start;
-  padding: 12px clamp(16px, 2vw, 28px) 0;
+  justify-content: center;
+  padding: 14px 0 36px;
 }
 
 .turn-overlay-inner {
   display: inline-flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 12px;
   font-variant-numeric: tabular-nums;
-  padding: 4px 14px;
-  background: linear-gradient(180deg, rgba(20, 16, 28, 0.55), rgba(8, 5, 14, 0.32));
-  border-radius: 999px;
-  border: 1px solid rgba(255, 215, 120, 0.18);
-  backdrop-filter: blur(2px);
 }
 
 .turn-overlay-kicker {
-  font-size: clamp(11px, 1.1vw, 13px);
-  font-weight: 800;
+  font-size: clamp(14px, 1.6vw, 20px);
+  font-weight: 700;
   letter-spacing: 0.32em;
-  color: rgba(255, 215, 120, 0.78);
+  color: rgba(255, 215, 120, 0.85);
   text-transform: uppercase;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
 }
 
 .turn-overlay-number {
-  font-size: clamp(22px, 2.6vw, 30px);
+  font-size: clamp(34px, 4.6vw, 56px);
   font-weight: 900;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: var(--color-flame);
   line-height: 1;
   text-shadow:
-    0 0 12px rgba(255, 215, 120, 0.45),
-    0 0 24px rgba(244, 164, 96, 0.25),
-    0 2px 4px rgba(0, 0, 0, 0.85);
+    0 0 20px rgba(255, 215, 120, 0.55),
+    0 0 36px rgba(244, 164, 96, 0.32),
+    0 2px 6px rgba(0, 0, 0, 0.85);
   animation: turn-label-glimmer 2.6s ease-in-out infinite;
 }
 @keyframes turn-label-glimmer {
@@ -2565,53 +2612,14 @@ const STYLES = `
     0 0 8px rgba(255, 215, 120, 0.55),
     0 0 18px rgba(244, 164, 96, 0.3);
   font-variant-numeric: tabular-nums;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
 }
 
-/* "혼불" — score reads as a collected gemstone currency. A spade-shaped
-   amethyst gem sits faintly behind the number like a $ sigil; the number
-   itself stays as the bright candlelit value. */
-.score-number {
-  position: relative;
-}
-.score-number-gem {
-  position: absolute;
-  left: -6px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: clamp(36px, 4.2vw, 52px);
-  height: clamp(40px, 4.6vw, 58px);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(122, 76, 152, 0.62);
-  filter: drop-shadow(0 0 8px rgba(124, 72, 168, 0.45));
-  pointer-events: none;
-  z-index: 0;
-}
-.score-number-gem .icon { width: 100%; height: 100%; }
-.score-number-value {
-  position: relative;
-  z-index: 1;
-  padding-left: clamp(28px, 3.4vw, 42px);
-}
-
-.coin-number-suffix {
-  color: rgba(255, 232, 168, 0.78);
-  font-size: 0.7em;
-  margin-left: 2px;
-}
-
-/* Score uses a candle-glimmer pop: the gem and number swell briefly with a
-   soft warm sparkle, distinct from the coin's paper-money flutter. */
+.coin-number.is-score-popping,
 .score-number.is-score-popping {
   animation: score-slot-pop 0.62s cubic-bezier(0.16, 0.9, 0.22, 1);
 }
-.score-number.is-score-popping .score-number-gem {
-  animation: score-gem-flash 0.72s cubic-bezier(0.16, 0.9, 0.22, 1);
-}
+
+.coin-number.is-score-popping::after,
 .score-number.is-score-popping::after {
   content: '✦ ✧ ✦';
   position: absolute;
@@ -2621,62 +2629,6 @@ const STYLES = `
   font-size: 13px;
   letter-spacing: 4px;
   animation: score-sparks 0.62s ease-out forwards;
-  z-index: 2;
-}
-
-/* Coin "화폐" uses a paper-money flutter: the number tilts and small
-   parchment notes drift up from the right edge like a tip just settled
-   on the counter. */
-.coin-number.is-coin-popping {
-  animation: coin-paper-pop 0.72s cubic-bezier(0.16, 0.9, 0.22, 1);
-}
-.coin-number.is-coin-popping::before,
-.coin-number.is-coin-popping::after {
-  position: absolute;
-  pointer-events: none;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  color: rgba(255, 232, 168, 0.95);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-  z-index: 2;
-}
-.coin-number.is-coin-popping::before {
-  content: '＄';
-  right: 6px;
-  top: -14px;
-  color: rgba(255, 215, 120, 0.95);
-  font-size: 18px;
-  animation: coin-paper-flutter-a 0.72s cubic-bezier(0.16, 0.9, 0.22, 1) forwards;
-}
-.coin-number.is-coin-popping::after {
-  content: '＄ ＄';
-  right: 22px;
-  top: -10px;
-  letter-spacing: 6px;
-  color: rgba(255, 232, 168, 0.86);
-  animation: coin-paper-flutter-b 0.78s cubic-bezier(0.16, 0.9, 0.22, 1) forwards;
-}
-@keyframes coin-paper-pop {
-  0% { transform: rotate(0deg) translateY(0); }
-  25% { transform: rotate(-1.4deg) translateY(-2px); }
-  55% { transform: rotate(1.2deg) translateY(1px); }
-  100% { transform: rotate(0deg) translateY(0); }
-}
-@keyframes coin-paper-flutter-a {
-  0%   { transform: translate(0, 4px) rotate(0deg); opacity: 0; }
-  18%  { opacity: 1; }
-  100% { transform: translate(18px, -22px) rotate(28deg); opacity: 0; }
-}
-@keyframes coin-paper-flutter-b {
-  0%   { transform: translate(0, 6px) rotate(0deg); opacity: 0; }
-  22%  { opacity: 0.9; }
-  100% { transform: translate(-14px, -26px) rotate(-22deg); opacity: 0; }
-}
-@keyframes score-gem-flash {
-  0%   { filter: drop-shadow(0 0 8px rgba(124, 72, 168, 0.45)) brightness(1); }
-  35%  { filter: drop-shadow(0 0 18px rgba(196, 142, 248, 0.95)) brightness(1.32) saturate(1.3); }
-  100% { filter: drop-shadow(0 0 8px rgba(124, 72, 168, 0.45)) brightness(1); }
 }
 
 .score-log-list {
@@ -3233,8 +3185,19 @@ const STYLES = `
   backdrop-filter: blur(1px);
 }
 .utility-layer-left {
-  justify-content: flex-end;
-  padding-right: clamp(4px, 0.8vw, 10px);
+  /* Now hosts compendium button + curved candle trail stacked vertically,
+     so the layer behaves as a column that aligns to the player card's
+     right edge with comfortable spacing for the trail glow. */
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: clamp(6px, 1vh, 10px) clamp(4px, 0.8vw, 10px);
+  gap: 8px;
+  min-height: clamp(180px, 26vh, 280px);
+  border: 0;
+  background: transparent;
+  backdrop-filter: none;
+  overflow: visible;
 }
 .relic-layer {
   justify-content: flex-start;
@@ -3388,177 +3351,249 @@ const STYLES = `
   animation: shop-shutter-open 0.42s cubic-bezier(0.42, 0, 0.24, 1) forwards;
   animation-delay: calc(var(--shutter-i) * 18ms);
 }
+/* In-rail shop overlay. Body-mounted but pointer-transparent, so the score
+   panel, hand panel and player card stay readable AND interactive for
+   non-game actions (hover previews, compendium). The actual shop shell is
+   re-anchored over the rail's bounding rect in JS. */
 .shop-overlay {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: 60;
   display: none;
-  align-items: center;
-  justify-content: center;
-  padding: clamp(16px, 3vw, 36px);
-  background: radial-gradient(circle at 50% 35%, rgba(91, 48, 34, 0.34), rgba(8, 5, 14, 0.86) 62%);
-  backdrop-filter: blur(5px);
+  pointer-events: none;
+  background: transparent;
 }
 .shop-overlay.is-open {
-  display: flex;
-  animation: shop-overlay-in 0.24s ease-out;
+  display: block;
 }
 .shop-shell {
-  position: relative;
-  width: min(1040px, 96vw);
+  position: fixed;
+  pointer-events: auto;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: clamp(34px, 4vh, 48px) clamp(12px, 1.4vw, 18px) clamp(12px, 1.4vh, 16px);
+  display: grid;
+  grid-template-rows: 1fr auto;
+  align-items: center;
+  overflow: visible;
+  animation: shop-overlay-in 0.32s cubic-bezier(0.18, 0.86, 0.22, 1);
 }
-.shop-modal {
-  position: relative;
-  width: 100%;
-  max-height: min(760px, 92vh);
-  overflow: auto;
-  border-radius: 22px;
-  border: 1px solid rgba(255, 215, 120, 0.42);
-  background:
-    radial-gradient(circle at 18% 0%, rgba(244, 164, 96, 0.18), transparent 34%),
-    linear-gradient(160deg, rgba(36, 25, 36, 0.98), rgba(13, 9, 19, 0.98));
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 232, 168, 0.22);
-  padding: clamp(28px, 3vw, 40px) clamp(18px, 2.4vw, 28px) clamp(18px, 2.4vw, 28px);
-}
-/* Angled "상점" tag pinned to the top-left edge of the modal — reads like a
-   wax-paper sign nailed onto the panel rather than a chrome header. */
+
+/* SHOP label perched on the top edge of the panel, slightly tilted, with
+   spade-gem flanks and a soft neon-sign flicker. Allowed to extend past
+   the panel's top edge — the rail's overflow:visible keeps it visible. */
 .shop-stamp {
   position: absolute;
-  top: -14px;
-  left: 28px;
-  transform: rotate(-6deg);
-  padding: 6px 18px;
-  font-size: clamp(18px, 2vw, 24px);
-  font-weight: 900;
-  letter-spacing: 0.22em;
-  color: #2a1f14;
-  background: linear-gradient(160deg, var(--color-flame), var(--color-flame-warm));
-  border: 1px solid rgba(255, 232, 168, 0.78);
-  border-radius: 6px;
-  box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.36);
-  z-index: 2;
-  pointer-events: none;
-  text-shadow: 0 1px 0 rgba(255, 232, 168, 0.7);
-}
-.shop-wallet {
-  position: absolute;
-  top: 12px;
-  right: 16px;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-3.5deg);
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  color: rgba(255, 240, 189, 0.98);
-  border: 1px solid rgba(255, 215, 120, 0.34);
-  border-radius: 999px;
-  padding: 6px 12px;
-  background: rgba(0, 0, 0, 0.34);
-  font-weight: 800;
-  z-index: 2;
+  gap: 14px;
+  padding: 0;
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 900;
+  letter-spacing: 0.32em;
+  color: var(--color-flame);
+  text-shadow:
+    0 0 6px var(--color-flame),
+    0 0 18px rgba(244, 164, 96, 0.78),
+    0 0 36px rgba(244, 164, 96, 0.45),
+    0 2px 4px rgba(0, 0, 0, 0.85);
+  pointer-events: none;
+  z-index: 4;
+  animation: shop-neon-flicker 3.4s ease-in-out infinite;
 }
-.shop-wallet .icon { width: 1em; height: 1em; }
+.shop-stamp-gem {
+  display: inline-flex;
+  width: clamp(20px, 2.2vw, 28px);
+  height: clamp(22px, 2.4vw, 30px);
+  color: rgba(196, 142, 248, 0.92);
+  filter: drop-shadow(0 0 6px rgba(196, 142, 248, 0.6));
+}
+.shop-stamp-gem .icon { width: 100%; height: 100%; }
+.shop-stamp-text { font-family: inherit; }
+@keyframes shop-neon-flicker {
+  0%, 100% { opacity: 1; filter: brightness(1); }
+  6%, 14%  { opacity: 0.65; filter: brightness(0.78); }
+  18%, 22% { opacity: 1; filter: brightness(1.12); }
+  44%      { opacity: 0.8; filter: brightness(0.92); }
+  82%, 86% { opacity: 0.45; filter: brightness(0.6); }
+  90%      { opacity: 1; filter: brightness(1.08); }
+}
+
+/* 3 relic cards arranged in one row to match the 3 lanes of the rail. Each
+   card is roughly one grid cell, and grows on hover so the body text is
+   easy to read without needing a separate tab. */
 .shop-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(12px, 1.8vw, 20px);
+  gap: clamp(8px, 1vw, 14px);
+  align-items: center;
+  height: 100%;
+  width: 100%;
+  padding: 0 4px;
+  overflow: visible;
 }
 .shop-relic-card {
-  min-height: 410px;
+  position: relative;
   display: grid;
-  grid-template-rows: 48% 1fr auto;
-  overflow: hidden;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 215, 120, 0.3);
-  background: linear-gradient(180deg, rgba(45, 30, 39, 0.98), rgba(18, 12, 24, 0.98));
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.16), 0 14px 26px rgba(0, 0, 0, 0.48);
+  grid-template-rows: 1fr auto auto;
+  gap: 4px;
+  overflow: visible;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 215, 120, 0.42);
+  background: linear-gradient(180deg, rgba(45, 30, 39, 0.96), rgba(18, 12, 24, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.16), 0 10px 22px rgba(0, 0, 0, 0.52);
+  padding: 6px 6px 8px;
+  height: 100%;
+  cursor: pointer;
+  transition: transform 0.24s cubic-bezier(0.18, 0.86, 0.22, 1),
+              box-shadow 0.24s ease, z-index 0s;
+}
+.shop-relic-card:hover,
+.shop-relic-card:focus-visible {
+  transform: scale(1.18);
+  z-index: 6;
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.3),
+              0 16px 32px rgba(0, 0, 0, 0.65),
+              0 0 28px rgba(244, 164, 96, 0.42);
 }
 .shop-relic-card.is-purchased {
-  filter: saturate(0.65) brightness(0.78);
+  filter: saturate(0.55) brightness(0.72);
+  pointer-events: none;
 }
 .shop-relic-art {
-  min-height: 180px;
+  min-height: 0;
+  height: 100%;
+  border-radius: 8px;
   background-size: cover;
   background-position: center 18%;
-  border-bottom: 1px solid rgba(255, 215, 120, 0.18);
-  box-shadow: inset 0 -38px 48px rgba(13, 9, 19, 0.74);
+  box-shadow: inset 0 -28px 38px rgba(13, 9, 19, 0.72);
 }
-.shop-relic-body {
-  padding: 14px 15px 8px;
-}
-.shop-relic-title {
-  margin: 0 0 7px;
+.shop-relic-name {
+  font-size: 12px;
+  font-weight: 900;
   color: rgba(255, 232, 168, 0.98);
-  font-size: var(--font-size-lg);
+  letter-spacing: 0.04em;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+.shop-relic-detail {
+  /* Hidden by default; revealed on hover so the compact card stays clean. */
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 215, 120, 0.42);
+  background: linear-gradient(180deg, rgba(45, 30, 39, 0.98), rgba(18, 12, 24, 0.98));
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.6);
+  z-index: 7;
+}
+.shop-relic-card:hover .shop-relic-detail,
+.shop-relic-card:focus-visible .shop-relic-detail {
+  display: block;
 }
 .shop-relic-effect {
-  min-height: 56px;
-  margin: 0 0 8px;
-  color: rgba(255, 244, 210, 0.92);
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 244, 210, 0.96);
   line-height: 1.35;
-  font-size: var(--font-size-base);
 }
 .shop-relic-flavor {
   margin: 0;
-  color: rgba(232, 214, 180, 0.58);
-  font-size: var(--font-size-sm);
-  line-height: 1.35;
+  font-size: 10px;
+  color: rgba(232, 214, 180, 0.7);
+  line-height: 1.3;
 }
 .shop-cost-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 12px 15px 15px;
+  gap: 4px;
+  justify-content: center;
 }
-.shop-buy-btn,
-.shop-close-btn {
-  border: 1px solid rgba(255, 215, 120, 0.42);
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255, 215, 120, 0.95), rgba(184, 111, 43, 0.94));
-  color: rgba(28, 16, 9, 0.96);
+/* Rugged carved-wood buy buttons: deep umber base, dark inset rim, warm
+   ember type. Replaces the flat candle-pill button so the prices feel
+   like they're stamped onto thick wood. */
+.shop-buy-btn {
+  appearance: none;
+  border: 2px solid rgba(28, 14, 6, 0.92);
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(120, 76, 36, 0.96), rgba(58, 30, 14, 0.96)),
+    repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.06) 0 2px, rgba(255, 232, 168, 0.04) 2px 5px);
+  color: rgba(255, 232, 168, 0.96);
   font-family: inherit;
   font-weight: 900;
-  font-size: var(--font-size-sm);
+  font-size: 11px;
   cursor: pointer;
-  padding: 8px 12px;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+  padding: 4px 6px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.32),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.6),
+    0 3px 8px rgba(0, 0, 0, 0.55);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.85);
+  letter-spacing: 0.02em;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+}
+.shop-buy-btn:not(:disabled):hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.5),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.6),
+    0 5px 12px rgba(0, 0, 0, 0.65),
+    0 0 14px rgba(244, 164, 96, 0.32);
 }
 .shop-buy-btn:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
-  filter: grayscale(0.4);
+  opacity: 0.4;
+  filter: grayscale(0.5);
 }
+
+/* EXIT label: rugged red wax tag perched on the bottom edge of the shop
+   shell, drooping slightly into the player-card area so it reads as a
+   "leave" sign nailed to the doorway. */
 .shop-close-btn {
-  padding-inline: 18px;
-}
-.shop-close-tab {
   position: absolute;
-  right: clamp(18px, 3vw, 34px);
-  top: 0;
-  z-index: 2;
-  transform: translateY(calc(-100% - 9px));
-  min-width: 82px;
-  border-radius: 999px 999px 10px 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  bottom: -18px;
+  right: clamp(10px, 1.8vw, 24px);
+  z-index: 8;
+  transform: rotate(-3deg);
+  padding: 6px 18px;
+  font-family: inherit;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  font-size: 13px;
+  color: #fff5dc;
+  cursor: pointer;
+  border-radius: 4px;
+  border: 2px solid #220707;
+  background:
+    linear-gradient(180deg, rgba(180, 48, 36, 0.98), rgba(96, 16, 16, 0.98)),
+    repeating-linear-gradient(125deg, rgba(0, 0, 0, 0.1) 0 2px, rgba(255, 80, 80, 0.05) 2px 6px);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
   box-shadow:
-    0 10px 20px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 244, 210, 0.38);
+    inset 0 1px 0 rgba(255, 200, 200, 0.32),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.55),
+    0 8px 18px rgba(0, 0, 0, 0.55),
+    0 0 24px rgba(176, 28, 28, 0.42);
+  transition: transform 0.16s ease, filter 0.16s ease;
 }
-.shop-close-tab::after {
-  content: '';
-  position: absolute;
-  left: 13px;
-  right: 13px;
-  bottom: -10px;
-  height: 10px;
-  border-left: 1px solid rgba(255, 215, 120, 0.34);
-  border-right: 1px solid rgba(255, 215, 120, 0.34);
-  background: linear-gradient(180deg, rgba(184, 111, 43, 0.64), rgba(80, 44, 24, 0.2));
+.shop-close-btn:hover {
+  transform: rotate(-3deg) translateY(-1px);
+  filter: brightness(1.08);
 }
 .shop-empty {
   grid-column: 1 / -1;
-  min-height: 160px;
+  min-height: 120px;
   display: grid;
   place-items: center;
   color: rgba(255, 232, 168, 0.72);
@@ -3897,13 +3932,13 @@ const STYLES = `
   }
 }
 
-/* ---------- Ember HUD (top center) ----------
-   Reworked into a "brightness lantern" gauge: no boxed inner panel behind
-   it, just a glowing horizontal light pipe with a soft outer halo. The
-   warmer the ember, the brighter and broader the halo. */
+/* ---------- Ember HUD (center, below the turn label) ----------
+   Visual stays the new "brightness lantern" design (no boxed panel, just
+   a glowing horizontal light pipe). Only the vertical position is
+   restored to the original spot below the centered turn overlay. */
 .ember-hud {
   position: fixed;
-  top: clamp(14px, 1.4vh, 22px);
+  top: clamp(56px, 7vh, 84px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 35;
@@ -4087,24 +4122,74 @@ const STYLES = `
   color: var(--color-flame);
   font-size: 14px;
 }
-.candle-gauge {
-  position: relative;
-  display: grid;
-  grid-template-columns: 46px 1fr;
-  gap: 8px;
-  align-items: stretch;
-  min-height: 48px;
-  padding: 6px;
-  border-radius: 12px;
-  overflow: visible;
-  /* Softer, almost frameless: the wheel button and ticks stay readable but
-     the panel itself doesn't draw its own box around them. */
-  background:
-    linear-gradient(180deg, rgba(255, 215, 120, 0.06), rgba(255, 255, 255, 0.02)),
-    rgba(20, 16, 28, 0.32);
-  border: 0;
-  box-shadow: none;
+/* "발자국" combo gauge — 10 candle ticks arranged in a soft zigzag trail
+   going up the LEFT utility column of the player zone. Each tick uses a
+   --curve-i CSS var so we can shift its horizontal offset per-row without
+   needing JS to position it. The mode wheel and trail label sit below the
+   trail so the column reads top-to-bottom as: ticks → mode → status. */
+.candle-trail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  max-width: 88px;
+  margin-top: 6px;
+  pointer-events: auto;
 }
+.candle-trail-ticks {
+  position: relative;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 4px;
+  align-items: center;
+  width: 100%;
+}
+.candle-trail-tick {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 232, 168, 0.18);
+  /* Zigzag offset per row gives the curve. DOM is rendered top-down with
+     curve-i descending (top tick has highest index), so the offset table
+     starts from the bottom of the trail visually. */
+  transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+}
+.candle-trail-tick[style*="--curve-i:0"]  { transform: translateX(-14px); }
+.candle-trail-tick[style*="--curve-i:1"]  { transform: translateX(-7px); }
+.candle-trail-tick[style*="--curve-i:2"]  { transform: translateX(0px); }
+.candle-trail-tick[style*="--curve-i:3"]  { transform: translateX(8px); }
+.candle-trail-tick[style*="--curve-i:4"]  { transform: translateX(14px); }
+.candle-trail-tick[style*="--curve-i:5"]  { transform: translateX(8px); }
+.candle-trail-tick[style*="--curve-i:6"]  { transform: translateX(-1px); }
+.candle-trail-tick[style*="--curve-i:7"]  { transform: translateX(-9px); }
+.candle-trail-tick[style*="--curve-i:8"]  { transform: translateX(-14px); }
+.candle-trail-tick[style*="--curve-i:9"]  { transform: translateX(-7px); }
+.candle-trail-tick.is-filled {
+  border-color: rgba(255, 232, 168, 0.65);
+  background: linear-gradient(180deg, rgba(255, 232, 168, 0.85), rgba(244, 164, 96, 0.62));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 0 10px rgba(244, 164, 96, 0.45);
+}
+.candle-trail-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(255, 232, 168, 0.84);
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.candle-mode-wheel-trail {
+  width: 44px;
+  height: 44px;
+}
+
 /* Candle mode wheel: the centre button shows the active mode; on click,
    four petals (max-health/attack/ember/draw) fan out radially like a cat
    paw and snap back when one is chosen. */
@@ -5912,35 +5997,9 @@ const STYLES = `
   76%, 100% { opacity: 0; transform: rotateY(102deg); }
 }
 
-/* Shop polish: waxed-card frames, candlelit price buttons, and the same
-   recessed scrollbar treatment used by the codex/relic layer. */
-.shop-modal {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(244, 164, 96, 0.72) rgba(20, 16, 28, 0.5);
-  background:
-    radial-gradient(circle at 18% 0%, rgba(255, 215, 120, 0.2), transparent 33%),
-    radial-gradient(circle at 86% 8%, rgba(145, 174, 210, 0.08), transparent 30%),
-    linear-gradient(160deg, rgba(48, 34, 43, 0.99), rgba(13, 9, 19, 0.99));
-}
-.shop-modal::-webkit-scrollbar { width: 6px; }
-.shop-modal::-webkit-scrollbar-track { background: rgba(20, 16, 28, 0.48); border-radius: 999px; }
-.shop-modal::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--color-flame), var(--color-flame-deep)); border-radius: 999px; }
-.shop-relic-card {
-  border-color: rgba(255, 232, 168, 0.2);
-  background:
-    linear-gradient(180deg, rgba(255, 245, 220, 0.06), rgba(255, 255, 255, 0.018)),
-    linear-gradient(180deg, rgba(45, 30, 39, 0.98), rgba(18, 12, 24, 0.98));
-}
-.shop-relic-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 215, 120, 0.48);
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.2), 0 18px 30px rgba(0, 0, 0, 0.54), 0 0 22px rgba(244, 164, 96, 0.14);
-}
-.shop-buy-btn:not(:disabled):hover,
-.shop-close-btn:hover {
-  filter: brightness(1.08);
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.34), 0 0 16px rgba(255, 215, 120, 0.24);
-}
+/* Legacy .shop-modal/.shop-relic-card overrides removed — the in-rail shop
+   shell handles its own background and the new compact card carries its
+   own hover transform. */
 
 /* Relic activations appear as a small toast-like line under the active chain. */
 .chain-event-relic {
