@@ -344,6 +344,10 @@ async function maybeOpenShopAfterTurn(): Promise<boolean> {
   shopOpen = true
   inputLocked = true
   currentShopOffers = rollShopOffers()
+  // The shutter is a hard turn break: cut the chain before the shop overlay
+  // appears so the floating chain text never hangs above the shop tab.
+  HandSystem.resetChain(chain)
+  clearChainTimeline()
   recordNotice('레일이 멈추고 상점이 열렸다', 'info')
   render()
   await boardRenderer.playShopTransition()

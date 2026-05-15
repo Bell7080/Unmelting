@@ -137,6 +137,16 @@ export function shieldIcon(): string {
   )
 }
 
+
+/** Four-point sparkle — tiny flat metadata marker for treasure/card-count labels. */
+export function sparkleIcon(): string {
+  return svg(
+    fill(
+      'M12 2.8 14.1 9.9 21.2 12 14.1 14.1 12 21.2 9.9 14.1 2.8 12 9.9 9.9 12 2.8Z',
+    ),
+  )
+}
+
 /** Small spade-shaped jewel — flanks the SHOP label on the shop panel. */
 export function spadeGemIcon(): string {
   return svg(
