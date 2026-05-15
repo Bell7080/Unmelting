@@ -1,458 +1,57 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Unmelting 작업용 최소 컨텍스트. 오래된 아이디어보다 **현재 구현**을 우선한다.
 
-## Project Overview
+## 프로젝트 한 줄
+- 3레인 × 3행 필드에서 카드가 매 턴 전진하고, 플레이어는 `녹지 않는 소녀` 한 장과 손패/조합/유물로 위험과 보상을 처리하는 카드 레인 로그라이트.
+- 톤: 따뜻한 촛불 + 낡은 종이 + 어두운 남보라/먹색의 몽글몽글 다크판타지.
 
-**Unmelting** is a card rain roguelike game where players control a single character card ("The Unmelting Girl") and navigate advancing cards (rewards, enemies, obstacles) on a 3-lane stage. The core gameplay loop involves making tactical decisions under time pressure—choosing what to prioritize, when to act, and when to endure risk.
-
-### Key Characteristics
-
-- **100% TypeScript** implementation (compiles to bytecode/JavaScript)
-- **Single character card growth** (not deck building)
-- **Lane-based card progression** (cards advance 1 space per turn)
-- **Tactical positioning system** (push, pull, seal, swap, burn)
-- **Dark fantasy atmosphere** with "warm candlelight" visual tone
-
----
-
-## Tech Stack
-
-- **Language**: TypeScript
-- **Runtime**: Node.js / Browser (Vite/Webpack for bundling)
-- **Build Target**: GitHub Pages deployment
-- **Styling**: CSS with custom font manager
-- **Version Control**: Git/GitHub
-
----
-
-## Architecture Overview
-
-### Game Core Structure
-
-The game is organized around these key systems:
-
-#### 1. **Game Loop & Turn System**
-
-- Central game state manager handling turn progression
-- Turn phases: Player Actions → Card Advance → Collision Processing → New Card Spawn
-- Player gets 2 actions per turn (configurable for MVP)
-
-#### 2. **Lane & Card System**
-
-- **3 Lanes** with **4 distance slots** each (MVP scope)
-- Cards stored in a grid structure: `Lane[0-2] x Distance[1-4]`
-- Player position: `Distance[0]` (right edge of each lane)
-- Card types: Enemy, Reward, Obstacle, Curse, Event, Shop
-
-#### 3. **Character Card & Growth**
-
-- Single playable card with mutable stats
-- Growth metrics: Candles (health), Stamps (passive), Wax (power), Memory (unlocks), Curses (risk)
-- All progression tied to character properties, not deck size
-
-#### 4. **Action System**
-
-- Attack, Targeted Attack, Dodge, Collect, Seal, Wait
-- Each action consumes action points
-- Actions interact with card positions and lanes
-
-#### 5. **Collision & Effect System**
-
-- Handles what happens when cards reach Distance[0]
-- Card type → effect resolution (damage, reward gain, status, etc.)
-- Triggers UI updates and game state changes
-
-### Folder Structure (current)
-
-```
-/src
-  index.ts                # Main game loop, event wiring, global styles
-  index.html              # Page shell + base CSS variables
-  /core                   # Core game engine
-    GameState.ts          # Central state manager
-    TurnManager.ts        # Turn phase orchestration
-  /systems                # Major gameplay systems
-    ActionSystem.ts       # Player actions on selected card
-    CardSpawner.ts        # Random card generation per turn
-    DropSystem.ts         # Item drops + item application
-  /entities               # Data models
-    Card.ts               # Card model (enemy/trap/treasure + grouping)
-    Character.ts          # Player character (HP, damage, items)
-    Lane.ts               # Single lane with distance slots
-  /ui                     # UI rendering & interaction
-    GameBoardRenderer.ts  # 3×3 rail, player block, items, animations
-    ActionUI.ts           # Action helpers
-    FontManager.ts        # Font loading + 12px minimum enforcement
-    Sprites.ts            # webp sprite registry + per-card mapping
-    Icons.ts              # Inline-SVG flat icons (sword, heart, candle…)
-  /assets
-    /fonts                # OkDanDan custom font (woff2)
-    /sprites              # Card / player / background / hand-card webp art
-```
-
-> Older drafts referenced `/data` and `/utils` directories. Current MVP keeps
-> card definitions inline in `CardSpawner` and item logic in `DropSystem`;
-> there is no separate config or utility layer yet.
-
----
-
-## Font Management System
-
-### Requirements
-
-- **Minimum font size**: 12px (enforced across all UI elements)
-- **Font manager**: Custom system to control font properties globally
-- **Target usage**: Card text, UI labels, stage information
-
-### FontManager Class (to implement)
-
-```typescript
-class FontManager {
-  private minSize = 12
-
-  // Methods:
-  // setFontSize(size: number): Ensures minimum 12px
-  // applyFontStyle(element, style): Applies font config to DOM
-  // defineFont(name, config): Register custom font
-  // getGlobalStyles(): Returns CSS variables for font settings
-}
-```
-
----
-
-## Development Workflow
-
-### Initial Setup
-
+## 실행/검증
 ```bash
 npm install
-npm run dev        # Start dev server (Vite)
-npm run build      # Build for production/GitHub Pages
-npm run test       # Run test suite (when added)
-npm run type-check # TypeScript type checking
+npm run dev
+npm run type-check
+npm run test
+npm run build
+```
+- 배포 타깃은 Vite `dist`.
+- 시각 변경이 크면 브라우저 확인/스크린샷을 남긴다.
+
+## 현재 구조
+```text
+src/index.ts                 # 런타임 조립, 턴 흐름, 점수/화폐/상점, 이벤트 핸들링
+src/core/GameState.ts         # 중앙 상태, 레인 압축/리필, 턴 카운트
+src/core/TurnManager.ts       # 적/폭탄/보물 변이/불씨 턴 처리
+src/entities/                # Card, Character, Lane, HandCard 모델
+src/systems/                 # Action, CardSpawner, Drop, Ember, Hand 시스템
+src/data/                    # 손패/유물/조합 정의
+src/ui/GameBoardRenderer.ts  # DOM 렌더링, CSS, 상호작용, 대부분의 UI 애니메이션
+src/ui/SquareBurst.ts        # 사각 파티클 버스트
+src/ui/Icons.ts              # 플랫 inline-SVG 아이콘
+src/ui/Sprites.ts            # webp 스프라이트 매핑
+src/assets/                  # 폰트/스프라이트
 ```
 
-### Git Branch Strategy
-
-- Develop on `claude/setup-game-project-0IYa0` (or assigned feature branch)
-- Push to origin with: `git push -u origin <branch>`
-- Main branch (`main`) is for GitHub Pages deployment
-
-### Deployment
-
-- GitHub Pages serves `/dist` directory on `main` branch
-- Build artifacts must be committed or auto-deployed via CI/CD
-- Entry point: `index.html` (root of site)
-
----
-
-## MVP Scope & Deliverables
-
-| System             | Implementation             |
-| ------------------ | -------------------------- |
-| Player character   | 1 (The Unmelting Girl)     |
-| Enemy cards        | 6 types                    |
-| Reward cards       | 6 types                    |
-| Obstacle cards     | 5 types                    |
-| Event cards        | 3 types                    |
-| Boss card          | 1 type                     |
-| Stages             | 1 initial stage            |
-| Lane configuration | 3 lanes × 4 distance slots |
-| Turn actions       | 2 per turn                 |
-
----
-
-## Visual & Tone Guidelines
-
-### Color Palette
-
-- **Background**: Dark navy, charcoal, dark purple
-- **Highlights**: Warm yellow, candlelight orange
-- **Danger**: Deep red, murky purple
-- **UI**: Aged paper, wax, black ink
-- **Borders**: Burnt paper, wax seals, candle wax drips
-
-### Art Direction
-
-- Small card-like characters
-- Hand-drawn/illustrated aesthetic
-- Cute but eerie (not scary)
-- Minimal animations (performance-conscious)
-
-### Sprite & Icon System (implemented)
-
-- Hand-drawn card art lives under `src/assets/sprites/*.webp`. The
-  registry/mapping is centralized in `src/ui/Sprites.ts`:
-  - **Player**: `player_001` (used as the framed portrait on the player card).
-  - **Background**: `background_001` is the global page backdrop. The rail
-    itself stays a translucent dark slab on top of it for separation.
-  - **Normal enemies (1-cell)**: name-matched — 양초 생쥐 → `enemy_001`,
-    양초 개구리 → `enemy_002`.
-  - **Merged enemies (2/3-cell)**: stable random pick of `enemy_001` /
-    `enemy_002` based on a hash of the card id.
-  - **Mimic (special enemy)**: `enemy_003`.
-  - **Treasure**: `chest_001` / `chest_002` / `chest_003` by group width.
-  - **Trap**: `trap_001` for every trap width.
-  - **Hand cards**: current `HAND_CARD_IDS` order maps to `handcard_001` ~
-    `handcard_010`; `cardbackground_001` is the shared hand-card preview back.
-- UI iconography uses inline-SVG flat icons in `src/ui/Icons.ts` (`sword`,
-  `heart`, `candle`, `pouch`, `coin`). Emojis must not be used for stat
-  representation — they break the warm illustrated tone.
-- Each card face layers `card-art` (sprite) → `card-overlay` (bottom-anchored
-  dark gradient) → `card-content` (name + stats), so text remains legible over
-  any artwork.
-
-### Visual Effect System — SquareBurst (unified)
-
-All transient visual feedback uses the **SquareBurst** module
-(`src/ui/SquareBurst.ts`). Per-event ad-hoc effects (red vignettes, custom
-particle systems, etc.) are forbidden — every flash, pop, smoke, or pickup
-must go through SquareBurst so the visual language stays consistent and
-never competes with the ember-driven brightness pass.
-
-**Format spec (mandatory for every burst)**:
-
-- A burst is **16~20 solid-color squares** that scatter outward from an
-  origin point and fade.
-- Each burst draws from a **4-shade palette interpolated between two anchor
-  colors** (e.g. red → yellow, black → white, black → yellow). The two
-  anchors define the theme; the 4 shades are sampled to give visual depth
-  without breaking the palette.
-- Squares are 10~22 px solid fills, randomized rotation, scattered radially
-  in a 35–100% of the spread radius.
-- Animation is ~520–650 ms total: appear → scatter → fade. Origin can be a
-  DOM element (anchored to its center) or a viewport pixel.
-- Bursts are pointer-event-transparent and live on a single body-mounted
-  overlay (`#square-burst-overlay`, `z-index: 220`).
-
-**Theme registry** (extend `BurstTheme` in `SquareBurst.ts` for new themes —
-each theme MUST define a 4-shade palette between two anchor colors):
-
-| Theme           | Anchors                       | Used for                                     |
-| --------------- | ----------------------------- | -------------------------------------------- |
-| `damage`        | oxblood → ember yellow        | Player hit, enemy slam, player attack impact |
-| `score`         | wax brown → candle yellow     | Score gain pulse                             |
-| `treasure-gain` | brass → bright gold           | Treasure chest opened                        |
-| `vanish-smoke`  | char black → ash white        | Card disappears (smoke feel)                 |
-| `mimic-shift`   | bruised violet → moss         | Treasure morphs into mimic                   |
-| `wax-freeze`    | cold slate → milky candle wax | Wax hardening / 굳음 trigger shards          |
-| `hand-recovery` | deep green → pale green       | Recovery hand cards                          |
-| `hand-tool`     | dark amber → pale amber       | Tool hand cards (성냥, 열쇠)                 |
-| `hand-control`  | navy → pale blue              | Control hand cards (식은 양초, 정화)         |
-| `hand-attack`   | oxblood → ember               | Attack hand cards (성냥다발)                 |
-
-**Adding a new event**: pick the right theme (or add a new one with a
-2-anchor / 4-shade palette), then call from the renderer or `index.ts`:
-
-```ts
-boardRenderer.burstAtElement(element, 'theme-id')
-boardRenderer.burstAtPoint(x, y, 'theme-id', { count, spread, duration })
-SquareBurst.playOn(element, 'theme-id')
-```
-
-Helpers `findCardElement(cardId)`, `findHandSlotElement(slot)`, and
-`findScorePulseAnchor()` on `GameBoardRenderer` resolve common anchors.
-
----
-
-## Key Implementation Notes
-
-1. **Card Advancement**: Cards move at fixed rate (1 space/turn). This is the heartbeat of the game.
-
-2. **State Management**: Use immutable state patterns when possible to track turn history and enable undo/replay.
-
-3. **Collision Order**: When multiple cards reach Distance[0], resolve in priority order (Curse → Enemy → Obstacle → Reward → Event → Shop).
-
-4. **UI Rendering**: Separate game logic from rendering; use a renderer that can swap between Canvas/DOM based on performance needs.
-
-5. **Font Scaling**: Always validate font sizes against the 12px minimum in FontManager before rendering.
-
----
-
-## Testing Strategy (for later phases)
-
-- Unit tests for game logic (CardSystem, TurnManager, etc.)
-- Integration tests for turn flow
-- Visual regression tests for card/UI rendering
-- Performance benchmarks for lane rendering (3 lanes × 4 cards × N turns)
-
----
-
-## Known Constraints & Design Decisions
-
-- **Single character**: Simplifies state, amplifies growth mechanics
-- **Fixed lane count**: 3 lanes chosen for visual balance and tactical depth
-- **No persistent deck**: All progression is character-stat based
-- **TypeScript-only**: Ensures type safety from game start
-- **Minimum 12px font**: Accessibility and readability on all screen sizes
-
----
-
-## ⚠️ Implementation Notes & Requirements Tracking
-
-### Distance/Position Indexing
-
-- **Code representation**: Distance is 0-indexed `[0, 1, 2, 3]` where:
-  - Distance[0] = Closest to player (collision zone)
-  - Distance[3] = Farthest from player
-- **Concept document**: Uses 1-indexed `[1칸, 2칸, 3칸, 4칸]`
-  - 1칸 = 근접 거리 (closest)
-  - 4칸 = 먼 거리 (farthest)
-- **Resolution**: Both representations refer to the same 4-slot structure. Maintain 0-indexed internally, convert to 1-indexed in UI/documentation.
-
-### Character Stats (from concept: "양초, 우표, 밀랍, 기억, 저주")
-
-- **Candles** (양초): Recovery/survival resource
-- **Stamps** (우표): Passive enhancement
-- **Wax** (밀랍): Risky power enhancement
-- **Memory** (기억): Unlocks stage reward abilities
-- **Curses** (저주): Risk mechanic with ability changes
-- Current implementation: ✅ All stats tracked in Character.stats
-
-### Turn Order (UPDATED: MVP Simplified)
-
-1. ✅ **Player Selection**: Choose 1 of 3 lanes (enemy/trap/treasure)
-2. ✅ **Player Action**: Execute chosen action on selected lane
-3. ✅ **Card Advance**: All cards move 1 space toward player
-4. ✅ **Collision Processing**: Handle cards reaching Distance[0]
-5. ✅ **Drop System**: Enemy defeat → reward card drops
-6. ⏳ **Turn End**: Next turn begins
-
-### Card Types (CRITICAL CHANGE: MVP = 3 types only)
-
-**NOT 6 types. MVP focuses on:**
-
-- **Enemy** (적): Attacks player each turn, drops loot on defeat
-- **Trap** (함정): Blocks lane, 3 consecutive traps = instant death
-- **Treasure** (보물상자): Provides rewards, 50% disappears/10% becomes mimic per turn
-
-### Card Grouping Mechanic (NEW)
-
-Same card type stacking in same position:
-
-- **Enemy Stack**:
-  - 2x: Health +50%, Damage +1
-  - 3x: Health +100%, Damage +2
-- **Trap Stack**:
-  - 2x: Damage taken +1
-  - 3x on all lanes: Instant death (cannot evade)
-- **Treasure Stack**:
-  - 2x: Reward 2x
-  - 3x: Reward 4x (extremely rare)
-
-### Drop System (NEW)
-
-Enemy defeat → 1 of 4 basic items drops:
-
-- **Health Potion**: +1 Health (40%)
-- **Large Potion**: +2 Health (30%)
-- **Attack Boost**: +1 Attack next turn (20%)
-- **Defense Boost**: -1 Incoming damage (10%)
-
-**Hand/Inventory System:**
-
-- Not deck-building (no shuffling or card mechanics)
-- Resource/item management (consumable feel)
-- Used with action or passively applied
-- Future items: Trap kits, Keys, Freeze crystals, Skip tokens, etc.
-
-### Player Action Model (SIMPLIFIED)
-
-**Each turn: Select 1 lane, perform 1 action:**
-
-- **Attack Enemy**: Player strikes first → Enemy counterattack
-- **Evade Trap**: Trap is cleared, next card advances
-- **Take Treasure**: Reward added to hand
-
-### Game Feel Requirements (from concept)
-
-- **Core emotion**: "저 보상 먹고 싶은데, 지금 먹으면 위험하다"
-  - UI must show threat level per lane
-  - Choice pressure drives decision-making
-- **Visual tone**: "몽글몽글 다크판타지"
-  - Cute but eerie aesthetic
-  - Minimal animations
-  - Warm candlelight + cold darkness contrast
-
-### MVP Scope (UPDATED: Drastically Simplified)
-
-- **Card Types**: 3 (Enemy, Trap, Treasure)
-- **Lanes**: 3 lanes × 4 distance slots
-- **Item System**: 4 basic consumables (drops only)
-- **Game Duration**: Survive X turns or die
-- **Player**: 1 character (녹지 않는 소녀)
-- **No**: bosses, story, difficulty selection, character variety, Electron packaging
-
-### Chain Combo Timing/UI (UPDATED)
-
-- Hand-card use begins with a physical draw/dissolve beat: the used hand card clones from its hand slot toward the player-card area and dissolves with the category SquareBurst before field/removal/combo effects continue.
-- Hand-card use now resolves in two visible beats: first the individual hand-card effect, then any newly satisfied recipe after a short UI delay (`COMBO_TRIGGER_DELAY_MS` in `src/index.ts`). This keeps combinations such as `밀랍 방패 → 밀랍 돌진` from feeling simultaneous on laggy machines.
-- `HandSystem.useSingle` only applies the single-card effect and extends the chain. Delayed combo resolution is triggered by `HandSystem.fireNextPendingRecipe` from the UI flow so every fired recipe can animate and run a preparation refresh before the next recipe beat.
-- The floating chain banner uses top-center, text-only glow styling aligned with the target-selection banner/turn overlay. Avoid restoring pill/circular backgrounds unless the whole top HUD language changes together.
-- Recipes are now the structured table in `src/data/Recipes.ts` (따뜻함, 점화, 배당금, 셔플, 양초 스매쉬, 지뢰제거반, 열쇠공, 탐욕, 한 걸음씩, 도화선, 성화, 밀매, 뜨거움). Add/remove combos through this declarative recipe book first, then map any new effect kind in `HandSystem`.
-- If a visible hand card would immediately trigger an unfired recipe for the current chain, `buildChainHints()` marks that slot and the hand UI shows a soft left-spreading candle glow as the combo hint.
-
-### Hand Gauge Mode + UI Layer Notes (UPDATED)
-
-- The 10-slot hand gauge is now a player-selectable payoff system rather than a passive "Melt" placeholder. Every played hand card advances it by 1 in code (no redundant per-card candleGain data). The `카드` hand item explicitly adds extra gauge progress (+1 base, +7 triple) because its "손패 콤보 카운트" means this 10-use bonus counter. Clicking the gauge's left icon cycles modes in order: 최대 체력 +5 → 공격력 +1 → 불씨 +3 → 손패 랜덤 3장.
-- Full-gauge resolution is intentionally sequenced after the hand-card beat and delayed recipe beat: `카드 효과 → 조합 효과 → 게이지 효과`. Keep this delay readable; do not fold the gauge payoff back into `HandSystem.useSingle`.
-- After each hand-card field effect and after each individual combo recipe, the UI runs a preparation refresh (`runPreparationRefreshAfterFieldEffects` in `src/index.ts`) that compacts, refills, regroups, and renders once so emptied field slots do not remain visible as holes.
-- Rail preparation now delegates to `GameState.compactAndRefillRails()`: large clears such as `한 걸음씩` repeatedly compact gravity and draw one fresh top card at a time until all lanes are continuous/full. Do not pre-roll a batch of random cards for these clears; let each refill draw happen only when a top slot is actually empty.
-- The compendium button is no longer part of the left score panel. It lives in a transparent utility layer to the left of the player card. The symmetric right-side transparent layer is reserved for future relic UI and should remain layout-stable.
-- Chain banner card entries use one restrained warm tone instead of per-category colors. Recipe and gauge events are the emphasized entries; gauge events use a distinct cool-warm highlight so they differ from recipe triggers.
-- Compendium field-card entries should use the unified 1/2/3칸 family format for enemies, mimics, traps, and treasures so width-based strengthening is documented consistently.
-- Hand-card target documentation and real target validation share `targeting.base/triple` scope rows in `src/data/HandCards.ts` (`대상/랜덤/전체/없음`, `전방/대기/필드/자신/손패`, `개수 제한`). Do not reintroduce separate prose-only targeting rules.
-- Gauge overflow is intentional: when card use plus `카드` item progress exceeds 10 slots, resolving a full gauge consumes only 10 and leaves the remainder in the next gauge. Recipe matching still uses physical recipe ingredients only: `셔플` requires two actually used `카드` hand items, not one `카드` plus gauge progress.
-- Ember decay is intentionally faster than older drafts: `Character.EMBER_DECAY_TURNS` is 3, so the ember counter wanes by 1 every 3 completed turns.
-
-### Post-MVP Features (Planning Only, NOT in current implementation)
-
-- Multiple playable characters with unique abilities
-- Difficulty modes (Easy/Normal/Hard/Nightmare)
-- Game modes (Story/Infinite)
-- Advanced items (trap kits, keys, freeze, skip, etc.)
-- Electron packaging for Steam release
-- Platform expansion (mobile, etc.)
-
-**CRITICAL**: Focus entirely on making core game loop fun first. All other features depend on this working.
-
-### Status & Tracking
-
-- ✅ = Implemented
-- ⏳ = In progress
-- ❓ = Needs clarification
-- ❌ = Not started
-
-### UI/Visual Notes (UPDATED)
-
-- Low-ember darkness should be side-weighted: deepen the left/right screen edges first while keeping the central rail, score panel, and hand readable.
-- Compendium combo recipe mini-cards are allowed to fan outside the codex panel on hover; card readability has priority over panel clipping.
-- Hand recipe-ready previews should show both the triggered recipe name and its effect next to the hand-card preview, using the existing warm candle/waxed-panel visual language.
-
-### Shop + Relic System Notes (UPDATED 2026-05-13)
-
-- Every 10 completed turns, the rail plays a quake plus 3×3 shutter transition before opening the temporary relic shop overlay. Keep this transition rail-local so it does not obscure the hand/score panels longer than necessary.
-- Relic definitions live in `src/data/Relics.ts`. Add new relics there first, with one or more `costOptions` using `coin`, `maxHealth`, or `attack`.
-- The right-side player utility layer now renders owned relic mini-cards using dedicated relic webp assets in `RELIC_IDS` order.
-- One-shot Hope uses `Character.bannedRelics` after it revives the player, so it must not be offered again in the same run.
-- Trap click feedback should remain a single impact beat: trap consume and player damage number/burst start together rather than in two delayed bursts.
-
-### 유물 도감/로그/보관 UI 보강 (2026-05-14)
-
-- 도감에는 `유물` 탭이 추가되어 현재 상점 유물의 효과, 비용, 보유 여부를 한 곳에서 확인한다.
-- 도감 조합 레시피 미니카드는 도감 본문 스크롤을 유지하기 위해 실제 카드 영역은 스크롤 컨테이너 안에 두고, 호버 중인 재료 스택만 body 고정 레이어로 복제해 패널 밖에서도 보이게 한다.
-- 유물 발동은 활동 로그에서 `유물` 배지로 분리하고, 체인 배너 아래 작은 토스트형 텍스트로 함께 표시한다.
-- 플레이어 카드 오른쪽 유물 보관 레이어는 플레이어 카드 높이에 맞춰 세로 스크롤/줄바꿈 그리드로 표시하며, 슬라이더는 도감/로그와 같은 촛불색 스크롤바를 사용한다.
-
-### Enemy / Trap Asset + Behavior Notes (UPDATED 2026-05-14)
-
-- Relic art now uses dedicated `src/assets/sprites/relics_001.webp` through `relics_007.webp` in `RELIC_IDS` order; do not fall back to the candle mouse placeholder for shop cards, owned relic chips, hover previews, or the relic compendium.
-- Enemy spawning is turn-banded: turns 1-10 use 양초 거미/양초 키틴벌레, turns 11-20 add 양초 생쥐/양초 개구리, and turns 21+ add 양초 새/양초 두더지.
-- Ordinary web-trap odds are intentionally raised by moving weight out of the enemy bucket; bomb and spore absolute buckets should remain at their former odds when tuning spawn tables.
-- Opening 3×3 rows should be generated with adjacent merge families separated where possible so turn 1 and the first few falling rows do not immediately create 2/3-lane enemy formations.
-- Merged normal enemy groups sum the member HP/ATK and then add width bonuses (`2칸 = +2 HP/+2 ATK`, `3칸 = +3 HP/+3 ATK`). Group art/name follows the strongest merged member.
-- Trap subtypes are explicit: 거미줄 uses `trap_001`, 폭탄 uses `trap_004`, 포자 uses `trap_007`. Bombs never merge. Spores merge only with spores and keep the shorter spread countdown.
-- Armed bombs are lit as soon as they are on the active front rail; if not selected before the event beat, they deal 5 player damage, splash 5 damage to adjacent enemies without deleting non-enemy neighboring cells, then disappear.
-- Spores tick every turn and infect orthogonal neighboring single cells every second tick. A 2/3-lane spore colony infects 2/3 adjacent cells per spread pulse and stops when there are no adjacent targets.
-- Opening 3×3 boards must not spawn volatile traps (`bomb`/`spore`); use the safe opening-board spawner so turn 1 starts without fuse or infection timers. Spore countdown state belongs to the `Card` instance and must survive rail compaction/push movement, including waiting-line movement.
+## 구현된 핵심 시스템
+- 필드: 3레인 × 3행. 전방 행만 직접 클릭 처리, 같은 전방 카드 그룹화.
+- 턴: 플레이어 행동 → 이벤트/적/폭탄/보물 변이 → 불씨 감소/리필/그룹화. 낮은 불씨 단계에서는 적 선공.
+- 손패: 드롭, 자동 3장 병합, 타깃형/즉발형 효과, 체인 타임라인, 조합 발동, 촛불 게이지.
+- 점수/화폐: 좌측 패널에 종합 점수와 상점 화폐 표시. 증가 시 숫자 카운트업 + `✦ ✧ ✦` 반짝임 + SquareBurst가 같은 타이밍에 재생되어야 한다.
+- 상점/유물: 10턴마다 레일 셔터 후 유물 상점. 구매 비용은 종합 점수, 일부 유물은 즉시 능력치/부활/패시브 효과.
+- 도감: 적/함정/보물/손패/조합/유물/용어 탭. 실제 데이터 정의를 요약 표시한다.
+
+## UI/UX 규칙
+- 기존 촛불/밀랍/낡은 카드 테마를 유지한다. 새 UI는 `GameBoardRenderer.ts`의 색/테두리/그림자/스크롤바 양식을 먼저 참고한다.
+- 폰트는 `FontManager`와 OkDanDan을 사용하고 최소 12px 원칙을 깨지 않는다.
+- 이모지 아이콘을 새로 넣지 않는다. 도감/검/하트/코인/상점 보석처럼 **`src/ui/Icons.ts`의 플랫 inline-SVG path 아이콘**을 사용하거나 같은 방식(`currentColor`, 단색 fill/stroke, 작은 크기 가독성)으로 추가한다.
+- 점수/화폐/피해/회복 등 즉각 피드백은 효과와 수치 변화가 분리되어 보이지 않게 같은 beat 안에서 처리한다.
+
+## 코드 작성 규칙
+- TypeScript만 사용한다. import 주위에 try/catch를 두지 않는다.
+- 새 코드에는 다음 작업자가 의도를 알 수 있는 짧은 주석을 남긴다. 단, 자명한 문법 설명은 피한다.
+- 상태 변경은 가능한 한 시스템/엔티티에 두고, 렌더러는 표시/애니메이션 책임을 유지한다.
+- 테스트용 시드, 더미 UI, 완료된 과거 실험 코드는 남기지 않는다. 발견 시 제거하거나 최종 보고에 명시한다.
+
+## 기획 기준
+- `Unmelting_Game_Concept.md`는 원형 기획서다. 구현 판단은 이 파일의 현재 구조/규칙과 실제 코드가 우선한다.
+- 문서 갱신 시 긴 일자별 패치노트보다 “현재 사실/규칙/주의점”만 남긴다.

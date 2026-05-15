@@ -132,24 +132,16 @@ function burstThemeForCategory(cat: HandCategory): BurstTheme {
   }
 }
 
-/** Score gain pulse — burst over the score number panel AND fire the
- *  CSS sparkle pop simultaneously so the player gets both impacts in the
- *  same beat (square radiating outward + sparkle text flickering). */
+/** Score gain pulse — number tick, sparkle, and square burst all start on the
+ *  currently visible panel so the reward value rises during the impact beat. */
 function burstScoreGain(): void {
-  const anchor = boardRenderer.findScorePulseAnchor()
-  if (!anchor) return
-  boardRenderer.triggerScorePop()
-  boardRenderer.burstAtElement(anchor, 'score', { count: 22, spread: 170, duration: 640 })
+  boardRenderer.playScoreGainFeedback(score, scorePulseKey)
 }
 
-/** Coin gain pulse — same shape as burstScoreGain, anchored on the coin
- *  number so the player sees a clearly attributed burst when the wallet
- *  rises (hand card, recipe, golden squirrel). */
+/** Coin gain pulse — mirrors score feedback, including ✦ ✧ ✦ sparkles and
+ *  integer ticking, so shop currency no longer feels visually downgraded. */
 function burstCoinGain(): void {
-  const anchor = boardRenderer.findCoinPulseAnchor()
-  if (!anchor) return
-  boardRenderer.triggerCoinPop()
-  boardRenderer.burstAtElement(anchor, 'score', { count: 22, spread: 170, duration: 640 })
+  boardRenderer.playCoinGainFeedback(coins, coinPulseKey)
 }
 
 interface FieldHealthSnapshotEntry {
@@ -565,9 +557,6 @@ function startGame(): void {
   chain = HandSystem.newChain()
   pendingHandTarget = null
   gameState.reset()
-  // Temporary test seed: start with the luck-themed squirrel relic so relic UI
-  // and passive-trigger flows can be verified without waiting for a shop roll.
-  gameState.character.addRelic('golden-squirrel')
   score = 0
   scorePulseKey = 0
   coins = 0

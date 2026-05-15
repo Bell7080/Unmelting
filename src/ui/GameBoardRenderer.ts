@@ -153,6 +153,11 @@ export class GameBoardRenderer {
    *  when the value actually changes, not on every render. */
   private previousScorePulseKey = 0
   private previousCoinPulseKey = 0
+  /** Last resource values rendered or animated in the left panel. These let
+   *  score/coin increases start from the old number and tick up in-place
+   *  while the sparkle/burst effect is playing. */
+  private displayedScoreValue = 0
+  private displayedCoinValue = 0
   /** Track the displayed turn so the turn-brand only shimmers when the
    *  number actually advances (not on every intra-turn render). */
   private previousTurn = -1
@@ -235,6 +240,7 @@ export class GameBoardRenderer {
 
     this.injectStyles()
     this.attachListeners()
+    this.animateRenderedResourceCounters()
     this.animateMovedCards(previousRects)
     this.animateMovedHandSlots(previousHandRects)
     this.rememberRenderedCards()
@@ -285,10 +291,16 @@ export class GameBoardRenderer {
       scorePanel.scorePulseKey !== this.previousScorePulseKey && scorePanel.scorePulseKey > 0
     const coinChanged =
       scorePanel.coinPulseKey !== this.previousCoinPulseKey && scorePanel.coinPulseKey > 0
-    const scorePulseClass = scoreChanged ? 'is-score-popping' : ''
-    const coinPulseClass = coinChanged ? 'is-score-popping' : ''
+    const scoreIncreasing = scoreChanged && scorePanel.score > this.displayedScoreValue
+    const coinIncreasing = coinChanged && scorePanel.coins > this.displayedCoinValue
+    const scorePulseClass = scoreIncreasing ? 'is-score-popping' : ''
+    const coinPulseClass = coinIncreasing ? 'is-score-popping' : ''
+    const renderedScore = scoreIncreasing ? this.displayedScoreValue : scorePanel.score
+    const renderedCoins = coinIncreasing ? this.displayedCoinValue : scorePanel.coins
     this.previousScorePulseKey = scorePanel.scorePulseKey
     this.previousCoinPulseKey = scorePanel.coinPulseKey
+    this.displayedScoreValue = scorePanel.score
+    this.displayedCoinValue = scorePanel.coins
 
     return `
       <aside class="score-panel" aria-label="Action score panel">
@@ -297,8 +309,8 @@ export class GameBoardRenderer {
             <span class="score-kicker-icon">${coinIcon()}</span>
             종합 점수
           </div>
-          <div class="score-number ${scorePulseClass}" data-score-pulse="${scorePanel.scorePulseKey}">
-            ${scorePanel.score.toLocaleString()}
+          <div class="score-number ${scorePulseClass}" data-score-pulse="${scorePanel.scorePulseKey}" data-count-start="${renderedScore}" data-count-end="${scorePanel.score}">
+            ${renderedScore.toLocaleString()}
           </div>
         </section>
         <section class="coin-panel-total" aria-label="Shop currency">
@@ -306,8 +318,8 @@ export class GameBoardRenderer {
             <span class="score-kicker-icon">${coinIcon()}</span>
             상점 화폐
           </div>
-          <div class="coin-number ${coinPulseClass}" data-coin-pulse="${scorePanel.coinPulseKey}">
-            ${scorePanel.coins.toLocaleString()} $
+          <div class="coin-number ${coinPulseClass}" data-coin-pulse="${scorePanel.coinPulseKey}" data-count-start="${renderedCoins}" data-count-end="${scorePanel.coins}">
+            ${renderedCoins.toLocaleString()} $
           </div>
         </section>
         <section class="score-log-list" aria-label="Action history">
@@ -1974,6 +1986,90 @@ export class GameBoardRenderer {
     )
   }
 
+  /** Start count-up animations that were requested by renderScorePanel().
+   *  This covers resource changes that happen immediately before a render,
+   *  while playScoreGainFeedback/playCoinGainFeedback covers changes that can
+   *  safely animate on the already-mounted DOM. */
+  private animateRenderedResourceCounters(): void {
+    const scoreEl = this.boardElement.querySelector<HTMLElement>('.score-number[data-count-start]')
+    const coinEl = this.boardElement.querySelector<HTMLElement>('.coin-number[data-count-start]')
+    const run = (el: HTMLElement | null, suffix: string) => {
+      if (!el) return
+      const start = Number.parseInt(el.dataset.countStart ?? '', 10)
+      const end = Number.parseInt(el.dataset.countEnd ?? '', 10)
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return
+      this.animateResourceCounterElement(el, start, end, suffix)
+    }
+    run(scoreEl, '')
+    run(coinEl, ' $')
+  }
+
+  /** Animate a resource number on the current DOM, then remember that the
+   *  matching pulse key has already been handled so a later full render does
+   *  not replay the same sparkle. The visible text changes in integer ticks,
+   *  giving score and wallet gains a small "띠리리릭" counter feel. */
+  private animateResourceCounter(
+    selector: '.score-number' | '.coin-number',
+    targetValue: number,
+    suffix: string,
+    duration = 640
+  ): void {
+    const el = this.boardElement.querySelector<HTMLElement>(selector)
+    if (!el) return
+    const numericText = el.textContent?.replace(/[^0-9-]/g, '') ?? ''
+    const startValue = Number.parseInt(numericText, 10) || 0
+    this.animateResourceCounterElement(el, startValue, targetValue, suffix, duration)
+  }
+
+  private animateResourceCounterElement(
+    el: HTMLElement,
+    startValue: number,
+    targetValue: number,
+    suffix: string,
+    duration = 640
+  ): void {
+    const delta = targetValue - startValue
+    const startedAt = performance.now()
+    el.classList.remove('is-score-popping')
+    void el.offsetWidth
+    if (delta > 0) el.classList.add('is-score-popping')
+
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - startedAt) / duration)
+      // Ease out quickly at the end so the last few +1 ticks remain readable.
+      const eased = 1 - Math.pow(1 - t, 3)
+      const value = Math.round(startValue + delta * eased)
+      el.textContent = `${value.toLocaleString()}${suffix}`
+      if (t < 1) {
+        requestAnimationFrame(tick)
+      } else {
+        el.textContent = `${targetValue.toLocaleString()}${suffix}`
+        window.setTimeout(() => el.classList.remove('is-score-popping'), 120)
+      }
+    }
+    requestAnimationFrame(tick)
+  }
+
+  /** Play score gain feedback immediately on the existing panel so the number
+   *  rises during the same beat as the square burst and ✦ sparkle. */
+  playScoreGainFeedback(targetScore: number, pulseKey: number): void {
+    this.previousScorePulseKey = pulseKey
+    this.displayedScoreValue = targetScore
+    this.animateResourceCounter('.score-number', targetScore, '')
+    const anchor = this.findScorePulseAnchor()
+    if (anchor) this.burstAtElement(anchor, 'score', { count: 22, spread: 170, duration: 640 })
+  }
+
+  /** Play shop-currency gain feedback with the exact same sparkle language as
+   *  score, but keep the wallet's trailing dollar marker. */
+  playCoinGainFeedback(targetCoins: number, pulseKey: number): void {
+    this.previousCoinPulseKey = pulseKey
+    this.displayedCoinValue = targetCoins
+    this.animateResourceCounter('.coin-number', targetCoins, ' $')
+    const anchor = this.findCoinPulseAnchor()
+    if (anchor) this.burstAtElement(anchor, 'score', { count: 22, spread: 170, duration: 640 })
+  }
+
   /** Find the score/log panel for score-pulse bursts. */
   findScorePulseAnchor(): HTMLElement | null {
     return (
@@ -1991,28 +2087,7 @@ export class GameBoardRenderer {
     )
   }
 
-  /** Force-trigger the score/coin sparkle CSS pop on the existing DOM right
-   *  now. Used so the pop animation visibly fires SIMULTANEOUSLY with the
-   *  SquareBurst, instead of waiting for the next render() to attach the
-   *  is-score-popping class. The class is removed after the animation
-   *  duration so a follow-up render can re-attach cleanly via the
-   *  pulse-key gate without colliding with this manual trigger. */
-  triggerScorePop(): void {
-    const el = this.boardElement.querySelector<HTMLElement>('.score-number')
-    if (!el) return
-    el.classList.remove('is-score-popping')
-    void el.offsetWidth
-    el.classList.add('is-score-popping')
-    window.setTimeout(() => el.classList.remove('is-score-popping'), 760)
-  }
-  triggerCoinPop(): void {
-    const el = this.boardElement.querySelector<HTMLElement>('.coin-number')
-    if (!el) return
-    el.classList.remove('is-score-popping')
-    void el.offsetWidth
-    el.classList.add('is-score-popping')
-    window.setTimeout(() => el.classList.remove('is-score-popping'), 760)
-  }
+
 
   /**
    * Animate the already-open hover preview, not the compact hand slot. The
@@ -2532,7 +2607,7 @@ const STYLES = `
   display: inline-flex;
   align-items: baseline;
   gap: 10px;
-  padding: 4px 10px 8px;
+  padding: 6px 10px 9px;
   border-bottom: 1px solid var(--color-border-soft);
   font-variant-numeric: tabular-nums;
 }
@@ -2545,15 +2620,15 @@ const STYLES = `
   filter: drop-shadow(0 0 8px rgba(255, 215, 120, 0.5));
 }
 .turn-brand-kicker {
-  font-size: clamp(11px, 1.1vw, 13px);
-  font-weight: 800;
-  letter-spacing: 0.32em;
+  font-size: clamp(18px, 1.9vw, 23px);
+  font-weight: 900;
+  letter-spacing: 0.12em;
   color: rgba(255, 215, 120, 0.78);
   text-transform: uppercase;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
 }
 .turn-brand-number {
-  font-size: clamp(22px, 2.4vw, 28px);
+  font-size: clamp(24px, 2.55vw, 31px);
   font-weight: 900;
   letter-spacing: 0.04em;
   color: var(--color-flame);
