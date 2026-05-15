@@ -38,7 +38,7 @@ import {
   flameIcon,
   heartIcon,
   pouchIcon,
-  shieldIcon,
+  spadeGemIcon,
   swordIcon,
 } from '@ui/Icons'
 
@@ -129,8 +129,6 @@ export interface ChainHints {
 export interface ScorePanelState {
   score: number
   logs: ActivityLogEntry[]
-  canSpend: boolean
-  spendCost: number
   scorePulseKey: number
   coins: number
   coinPulseKey: number
@@ -148,6 +146,10 @@ export class GameBoardRenderer {
   private currentGameState: GameState | null = null
   private hasRendered = false
   private previousCardIds = new Set<string>()
+  /** Track the last score/coin pulse keys so the pop animation only re-fires
+   *  when the value actually changes, not on every render. */
+  private previousScorePulseKey = 0
+  private previousCoinPulseKey = 0
   private previousGroupSpans = new Map<string, number>()
   /** Hand-card UIDs from the previous render — used to mark only NEW cards
    *  with `is-entering` so the drop animation does not re-fire on every full
@@ -179,6 +181,7 @@ export class GameBoardRenderer {
     // before replacing the board DOM so old hover cards never linger onscreen.
     document.querySelectorAll('.relic-hover-preview.is-floating').forEach((el) => el.remove())
     const previousRects = this.captureCardRects()
+    const previousHandRects = this.captureHandRects()
     this.currentGameState = gameState
     const character = gameState.getCharacter()
     const lanes = gameState.getLanes()
@@ -223,6 +226,7 @@ export class GameBoardRenderer {
     this.injectStyles()
     this.attachListeners()
     this.animateMovedCards(previousRects)
+    this.animateMovedHandSlots(previousHandRects)
     this.rememberRenderedCards()
     // Floating chain banner (body-mounted, above the player profile).
     this.updateChainBanner(scorePanel.chainHints)
@@ -256,38 +260,46 @@ export class GameBoardRenderer {
             })
             .join('')
         : '<div class="score-log-empty">아직 기록된 행동이 없어</div>'
-    const spendDisabled = scorePanel.canSpend ? '' : 'disabled'
-    const scorePulseClass = scorePanel.scorePulseKey > 0 ? 'is-score-popping' : ''
-    const coinPulseClass = scorePanel.coinPulseKey > 0 ? 'is-score-popping' : ''
+    // Only attach the pulse animation class when the key actually changed
+    // since the last render, and only when the new key is positive (so a
+    // reset back to 0 does not fire a phantom pop). Without this gate every
+    // full re-render of the panel would replay the pop animation on every
+    // action, even on actions that did not change the resource — which is
+    // exactly what the player was seeing as "effects firing on plain actions".
+    const scoreChanged =
+      scorePanel.scorePulseKey !== this.previousScorePulseKey && scorePanel.scorePulseKey > 0
+    const coinChanged =
+      scorePanel.coinPulseKey !== this.previousCoinPulseKey && scorePanel.coinPulseKey > 0
+    const scorePulseClass = scoreChanged ? 'is-score-popping' : ''
+    const coinPulseClass = coinChanged ? 'is-coin-popping' : ''
+    this.previousScorePulseKey = scorePanel.scorePulseKey
+    this.previousCoinPulseKey = scorePanel.coinPulseKey
 
     return `
       <aside class="score-panel" aria-label="Action score panel">
-        <section class="score-panel-total">
+        <section class="score-panel-total" aria-label="혼불 총량">
           <div class="score-kicker">
-            <span class="score-kicker-icon">${coinIcon()}</span>
-            종합 점수
+            <span class="score-kicker-icon">${spadeGemIcon()}</span>
+            혼불
           </div>
           <div class="score-number ${scorePulseClass}" data-score-pulse="${scorePanel.scorePulseKey}">
-            ${scorePanel.score.toLocaleString()}
+            <span class="score-number-gem" aria-hidden="true">${spadeGemIcon()}</span>
+            <span class="score-number-value">${scorePanel.score.toLocaleString()}</span>
           </div>
         </section>
-        <section class="coin-panel-total" aria-label="Shop currency">
+        <section class="coin-panel-total" aria-label="화폐">
           <div class="score-kicker">
             <span class="score-kicker-icon">${coinIcon()}</span>
-            상점 화폐
+            화폐
           </div>
           <div class="coin-number ${coinPulseClass}" data-coin-pulse="${scorePanel.coinPulseKey}">
-            ${scorePanel.coins.toLocaleString()} $
+            <span class="coin-number-value">${scorePanel.coins.toLocaleString()}</span>
+            <span class="coin-number-suffix">$</span>
           </div>
         </section>
         <section class="score-log-list" aria-label="Action history">
           ${logs}
         </section>
-        <div class="panel-actions">
-          <button class="score-spend-btn" type="button" ${spendDisabled}>
-            점수 ${scorePanel.spendCost}로 아이템 변환
-          </button>
-        </div>
       </aside>
     `
   }
@@ -425,9 +437,21 @@ export class GameBoardRenderer {
     return false
   }
 
-  /** Existing red X language, extracted so 1/2/3-slot cards and empty cells share it. */
+  /** Hand-drawn X used when a card/cell cannot accept the armed hand effect.
+   *  Two slightly mis-aligned ink strokes give it a sketched feel, with a
+   *  subtle idle wobble + soft ember pulse so the block stays "alive" while
+   *  the player decides which lane to use instead. */
   private renderBlockedTargetMark(): string {
-    return `<div class="trap-block-mark target-block-mark" aria-hidden="true">×</div>`
+    return `
+      <div class="trap-block-mark target-block-mark" aria-hidden="true">
+        <svg viewBox="0 0 64 64" class="trap-block-mark-svg" aria-hidden="true">
+          <path class="trap-block-mark-stroke trap-block-mark-stroke-a"
+                d="M12 14 Q 18 24 26 31 T 50 50" />
+          <path class="trap-block-mark-stroke trap-block-mark-stroke-b"
+                d="M52 14 Q 46 24 38 30 T 14 50" />
+        </svg>
+      </div>
+    `
   }
 
   private renderCardFace(card: Card, span: number): string {
@@ -553,12 +577,42 @@ export class GameBoardRenderer {
     })
   }
 
+  /** Wax-paper shield label that sits directly on the player card art — no
+   *  extra container layer. The shield silhouette borrows the codex/도감
+   *  warm parchment palette so it reads as part of the same "labels & seals"
+   *  family. The number lives inside the shield silhouette and shrinks as
+   *  the value grows so even 3-digit shields stay fully contained. */
+  private renderShieldLabel(amount: number): string {
+    const digits = amount >= 100 ? 'three' : amount >= 10 ? 'two' : 'one'
+    return `
+      <span class="shield-label" data-digits="${digits}" aria-label="방패 ${amount}">
+        <svg class="shield-label-shape" viewBox="0 0 32 36" aria-hidden="true">
+          <defs>
+            <linearGradient id="shield-label-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#f7d791" />
+              <stop offset="58%" stop-color="#d99745" />
+              <stop offset="100%" stop-color="#8a4a1c" />
+            </linearGradient>
+          </defs>
+          <path class="shield-label-body"
+                d="M16 1.4 L29 4.6 L29 18.4 C29 26.4 23.6 31.4 16 34.6 C8.4 31.4 3 26.4 3 18.4 L3 4.6 Z"
+                fill="url(#shield-label-fill)" />
+          <path class="shield-label-rim"
+                d="M16 1.4 L29 4.6 L29 18.4 C29 26.4 23.6 31.4 16 34.6 C8.4 31.4 3 26.4 3 18.4 L3 4.6 Z" />
+          <path class="shield-label-inner-line"
+                d="M16 5.4 L25.4 8.0 L25.4 18.2 C25.4 24.4 21.4 28.6 16 31.2 C10.6 28.6 6.6 24.4 6.6 18.2 L6.6 8.0 Z" />
+        </svg>
+        <span class="shield-label-value">${amount}</span>
+      </span>
+    `
+  }
+
   private renderPlayer(character: Character): string {
     const hpPct = Math.max(0, Math.min(100, (character.health / character.maxHealth) * 100))
     return `
       <div class="player-row">
         <div class="player-card">
-          ${character.shield > 0 ? `<span class="shield-badge" aria-label="방패 ${character.shield}"><span class="shield-badge-icon" aria-hidden="true">${shieldIcon()}</span><span class="shield-badge-value">${character.shield}</span></span>` : ''}
+          ${character.shield > 0 ? this.renderShieldLabel(character.shield) : ''}
           <div class="player-art" style="background-image: url('${SpriteUrls.player}')" aria-hidden="true"></div>
           <div class="player-overlay" aria-hidden="true"></div>
           <div class="player-content">
@@ -806,15 +860,19 @@ export class GameBoardRenderer {
       return `<span class="candle-gauge-tick ${filled}" aria-hidden="true"></span>`
     }).join('')
 
-    // Four-direction "고양이 발바닥" fan: clicking the centre toggles the
-    // petals out radially; selecting one sends `candleModeSelect` and the
-    // petals retract back into the centre. The order (up/right/down/left)
-    // is stable so each mode always lives in the same direction.
-    const fanModes: { mode: CandleMode; dir: 'up' | 'right' | 'down' | 'left' }[] = [
-      { mode: 'max-health', dir: 'up' },
-      { mode: 'attack', dir: 'right' },
-      { mode: 'ember', dir: 'down' },
-      { mode: 'draw', dir: 'left' },
+    // "고양이 발바닥" fan biased to the LEFT — the petals cluster outward in
+    // a 3-finger spread (up-left / left / down-left) plus a centred left
+    // anchor so the picker reads like a paw print pad rather than a four-way
+    // compass. The order stays stable so a given mode always lives in the
+    // same petal.
+    const fanModes: {
+      mode: CandleMode
+      dir: 'up-left' | 'left' | 'down-left' | 'far-left'
+    }[] = [
+      { mode: 'max-health', dir: 'up-left' },
+      { mode: 'attack', dir: 'left' },
+      { mode: 'ember', dir: 'down-left' },
+      { mode: 'draw', dir: 'far-left' },
     ]
     const fanPetals = fanModes
       .map((entry) => {
@@ -1646,14 +1704,6 @@ export class GameBoardRenderer {
       )
     }
 
-    // Score conversion is panel-level UI and does not spend a turn.
-    this.boardElement
-      .querySelector<HTMLElement>('.score-spend-btn')
-      ?.addEventListener('click', (e) => {
-        e.stopPropagation()
-        document.dispatchEvent(new CustomEvent('scoreSpend'))
-      })
-
     // Relic chips live inside a scroll well, so their fixed hover cards receive
     // viewport coordinates at hover-time to avoid clipping against that well.
     this.boardElement.querySelectorAll<HTMLElement>('.relic-mini-card').forEach((chip) => {
@@ -2039,7 +2089,11 @@ export class GameBoardRenderer {
       spread: 130 + (elements.length - 1) * 30,
       duration: 640,
     })
-    return this.animateElements(elements, 'is-consuming', 480)
+    // Persist `is-consuming` so the fade-out final frame (opacity:0) holds
+    // until the next render() actually drops the card. Otherwise the class
+    // is removed mid-await and the card visibly snaps back to full opacity
+    // for a frame — that's the "blink" the player sees on slow machines.
+    return this.animateElements(elements, 'is-consuming', 480, { persist: true })
   }
 
   /**
@@ -2078,7 +2132,7 @@ export class GameBoardRenderer {
           duration: 640,
         })
       }
-      animations.push(this.animateElements(elements, 'is-consuming', 480))
+      animations.push(this.animateElements(elements, 'is-consuming', 480, { persist: true }))
     }
     return Promise.all(animations).then(() => undefined)
   }
@@ -2182,7 +2236,7 @@ export class GameBoardRenderer {
         SquareBurst.playOn(element, 'mimic-shift', { count: 20, spread: 130 })
       }
     }
-    return this.animateElements([...elements], 'is-treasure-vanishing', 520)
+    return this.animateElements([...elements], 'is-treasure-vanishing', 520, { persist: true })
   }
 
   /** Capture current card positions so the next render can FLIP-move survivors. */
@@ -2193,6 +2247,40 @@ export class GameBoardRenderer {
       if (id) rects.set(id, el.getBoundingClientRect())
     })
     return rects
+  }
+
+  /** Capture hand-card slot positions keyed by hand-uid for FLIP movement. */
+  private captureHandRects(): Map<string, DOMRect> {
+    const rects = new Map<string, DOMRect>()
+    this.boardElement.querySelectorAll<HTMLElement>('.hand-slot[data-hand-uid]').forEach((el) => {
+      const uid = el.dataset.handUid
+      if (uid) rects.set(uid, el.getBoundingClientRect())
+    })
+    return rects
+  }
+
+  /** Smooth hand-card slots from their previous position when the hand is
+   *  spliced (a used card creates a hole and the cards above compact down).
+   *  Without this the entire hand visibly snapped one slot down whenever a
+   *  card was used, which read as a flicker. */
+  private animateMovedHandSlots(previousRects: Map<string, DOMRect>): void {
+    this.boardElement.querySelectorAll<HTMLElement>('.hand-slot[data-hand-uid]').forEach((el) => {
+      const uid = el.dataset.handUid
+      if (!uid) return
+      const previousRect = previousRects.get(uid)
+      if (!previousRect) return
+      const nextRect = el.getBoundingClientRect()
+      const deltaX = previousRect.left - nextRect.left
+      const deltaY = previousRect.top - nextRect.top
+      if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) return
+      el.animate(
+        [
+          { transform: `translate(${deltaX}px, ${deltaY}px)`, opacity: 0.92 },
+          { transform: 'translate(0, 0)', opacity: 1 },
+        ],
+        { duration: 320, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)' }
+      )
+    })
   }
 
   /**
@@ -2258,10 +2346,21 @@ export class GameBoardRenderer {
   }
 
   /** Shared class-based animation helper with cleanup after the CSS finishes. */
+  /**
+   * Add an animation class to a set of elements and resolve after `duration`.
+   *
+   * `persist: true` keeps the class applied after the timeout. This matters
+   * for "fade-out" classes (`is-consuming`, `is-treasure-vanishing`,
+   * `is-bomb-detonating`) — the cards they target are about to be dropped
+   * by the next render(), and if we remove the class before that render
+   * runs, the card would snap back to full opacity for a frame, which the
+   * player reads as a flicker.
+   */
   private animateElements(
     elements: HTMLElement[],
     className: string,
-    duration: number
+    duration: number,
+    options: { persist?: boolean } = {}
   ): Promise<void> {
     if (elements.length === 0) return Promise.resolve()
     elements.forEach((el) => {
@@ -2271,7 +2370,9 @@ export class GameBoardRenderer {
     })
     return new Promise((resolve) => {
       window.setTimeout(() => {
-        elements.forEach((el) => el.classList.remove(className))
+        if (!options.persist) {
+          elements.forEach((el) => el.classList.remove(className))
+        }
         resolve()
       }, duration)
     })
@@ -2321,7 +2422,10 @@ const STYLES = `
   overflow: hidden;
 }
 
-/* ---------- Top-center Turn overlay ---------- */
+/* ---------- Top Turn overlay ----------
+   Pulled to the top-LEFT so it no longer overlaps with the centered ember
+   HUD. Both pieces of information stay clearly readable at a glance, and
+   the bigger number gets its own visual breathing room. */
 .turn-overlay {
   position: fixed;
   top: 0;
@@ -2330,36 +2434,41 @@ const STYLES = `
   z-index: 40;
   pointer-events: none;
   display: flex;
-  justify-content: center;
-  padding: 14px 0 36px;
+  justify-content: flex-start;
+  padding: 12px clamp(16px, 2vw, 28px) 0;
 }
 
 .turn-overlay-inner {
   display: inline-flex;
   align-items: baseline;
-  gap: 12px;
+  gap: 10px;
   font-variant-numeric: tabular-nums;
+  padding: 4px 14px;
+  background: linear-gradient(180deg, rgba(20, 16, 28, 0.55), rgba(8, 5, 14, 0.32));
+  border-radius: 999px;
+  border: 1px solid rgba(255, 215, 120, 0.18);
+  backdrop-filter: blur(2px);
 }
 
 .turn-overlay-kicker {
-  font-size: clamp(14px, 1.6vw, 20px);
-  font-weight: 700;
+  font-size: clamp(11px, 1.1vw, 13px);
+  font-weight: 800;
   letter-spacing: 0.32em;
-  color: rgba(255, 215, 120, 0.85);
+  color: rgba(255, 215, 120, 0.78);
   text-transform: uppercase;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
 }
 
 .turn-overlay-number {
-  font-size: clamp(34px, 4.6vw, 56px);
+  font-size: clamp(22px, 2.6vw, 30px);
   font-weight: 900;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   color: var(--color-flame);
   line-height: 1;
   text-shadow:
-    0 0 20px rgba(255, 215, 120, 0.55),
-    0 0 36px rgba(244, 164, 96, 0.32),
-    0 2px 6px rgba(0, 0, 0, 0.85);
+    0 0 12px rgba(255, 215, 120, 0.45),
+    0 0 24px rgba(244, 164, 96, 0.25),
+    0 2px 4px rgba(0, 0, 0, 0.85);
   animation: turn-label-glimmer 2.6s ease-in-out infinite;
 }
 @keyframes turn-label-glimmer {
@@ -2456,14 +2565,53 @@ const STYLES = `
     0 0 8px rgba(255, 215, 120, 0.55),
     0 0 18px rgba(244, 164, 96, 0.3);
   font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.coin-number.is-score-popping,
+/* "혼불" — score reads as a collected gemstone currency. A spade-shaped
+   amethyst gem sits faintly behind the number like a $ sigil; the number
+   itself stays as the bright candlelit value. */
+.score-number {
+  position: relative;
+}
+.score-number-gem {
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: clamp(36px, 4.2vw, 52px);
+  height: clamp(40px, 4.6vw, 58px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(122, 76, 152, 0.62);
+  filter: drop-shadow(0 0 8px rgba(124, 72, 168, 0.45));
+  pointer-events: none;
+  z-index: 0;
+}
+.score-number-gem .icon { width: 100%; height: 100%; }
+.score-number-value {
+  position: relative;
+  z-index: 1;
+  padding-left: clamp(28px, 3.4vw, 42px);
+}
+
+.coin-number-suffix {
+  color: rgba(255, 232, 168, 0.78);
+  font-size: 0.7em;
+  margin-left: 2px;
+}
+
+/* Score uses a candle-glimmer pop: the gem and number swell briefly with a
+   soft warm sparkle, distinct from the coin's paper-money flutter. */
 .score-number.is-score-popping {
   animation: score-slot-pop 0.62s cubic-bezier(0.16, 0.9, 0.22, 1);
 }
-
-.coin-number.is-score-popping::after,
+.score-number.is-score-popping .score-number-gem {
+  animation: score-gem-flash 0.72s cubic-bezier(0.16, 0.9, 0.22, 1);
+}
 .score-number.is-score-popping::after {
   content: '✦ ✧ ✦';
   position: absolute;
@@ -2473,6 +2621,62 @@ const STYLES = `
   font-size: 13px;
   letter-spacing: 4px;
   animation: score-sparks 0.62s ease-out forwards;
+  z-index: 2;
+}
+
+/* Coin "화폐" uses a paper-money flutter: the number tilts and small
+   parchment notes drift up from the right edge like a tip just settled
+   on the counter. */
+.coin-number.is-coin-popping {
+  animation: coin-paper-pop 0.72s cubic-bezier(0.16, 0.9, 0.22, 1);
+}
+.coin-number.is-coin-popping::before,
+.coin-number.is-coin-popping::after {
+  position: absolute;
+  pointer-events: none;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: rgba(255, 232, 168, 0.95);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  z-index: 2;
+}
+.coin-number.is-coin-popping::before {
+  content: '＄';
+  right: 6px;
+  top: -14px;
+  color: rgba(255, 215, 120, 0.95);
+  font-size: 18px;
+  animation: coin-paper-flutter-a 0.72s cubic-bezier(0.16, 0.9, 0.22, 1) forwards;
+}
+.coin-number.is-coin-popping::after {
+  content: '＄ ＄';
+  right: 22px;
+  top: -10px;
+  letter-spacing: 6px;
+  color: rgba(255, 232, 168, 0.86);
+  animation: coin-paper-flutter-b 0.78s cubic-bezier(0.16, 0.9, 0.22, 1) forwards;
+}
+@keyframes coin-paper-pop {
+  0% { transform: rotate(0deg) translateY(0); }
+  25% { transform: rotate(-1.4deg) translateY(-2px); }
+  55% { transform: rotate(1.2deg) translateY(1px); }
+  100% { transform: rotate(0deg) translateY(0); }
+}
+@keyframes coin-paper-flutter-a {
+  0%   { transform: translate(0, 4px) rotate(0deg); opacity: 0; }
+  18%  { opacity: 1; }
+  100% { transform: translate(18px, -22px) rotate(28deg); opacity: 0; }
+}
+@keyframes coin-paper-flutter-b {
+  0%   { transform: translate(0, 6px) rotate(0deg); opacity: 0; }
+  22%  { opacity: 0.9; }
+  100% { transform: translate(-14px, -26px) rotate(-22deg); opacity: 0; }
+}
+@keyframes score-gem-flash {
+  0%   { filter: drop-shadow(0 0 8px rgba(124, 72, 168, 0.45)) brightness(1); }
+  35%  { filter: drop-shadow(0 0 18px rgba(196, 142, 248, 0.95)) brightness(1.32) saturate(1.3); }
+  100% { filter: drop-shadow(0 0 8px rgba(124, 72, 168, 0.45)) brightness(1); }
 }
 
 .score-log-list {
@@ -2556,27 +2760,6 @@ const STYLES = `
   border-radius: 10px;
   text-align: center;
   font-size: 12px;
-}
-
-.score-spend-btn {
-  appearance: none;
-  cursor: pointer;
-  padding: 10px 12px;
-  border: 1px solid var(--color-flame-warm);
-  border-radius: 12px;
-  color: #2a1f14;
-  background: linear-gradient(135deg, var(--color-flame), var(--color-flame-warm));
-  font-family: inherit;
-  font-weight: 800;
-  box-shadow: 0 0 18px rgba(244, 164, 96, 0.28);
-}
-
-.score-spend-btn:disabled {
-  cursor: not-allowed;
-  color: var(--color-text-muted);
-  background: rgba(255, 255, 255, 0.04);
-  border-color: var(--color-border-soft);
-  box-shadow: none;
 }
 
 /* (legacy stage-header / stage-main rules removed — title now lives in
@@ -2975,20 +3158,58 @@ const STYLES = `
 
 
 
+/* Hand-drawn block X: two thick ink-brush strokes, each with its own slight
+   wobble so the mark feels sketched rather than a hard character glyph. The
+   idle animation keeps the X alive without yanking the player's eye. */
 .trap-block-mark {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 70, 70, 0.88);
-  font-size: clamp(48px, 12vw, 96px);
-  font-weight: 900;
-  text-shadow:
-    0 0 8px rgba(0, 0, 0, 0.9),
-    0 0 18px rgba(168, 58, 58, 0.8);
   pointer-events: none;
   z-index: 8;
+  filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.8));
+}
+.trap-block-mark-svg {
+  width: 78%;
+  height: 78%;
+  overflow: visible;
+  animation: trap-block-breathe 1.8s ease-in-out infinite;
+}
+.trap-block-mark-stroke {
+  fill: none;
+  stroke: rgba(255, 110, 92, 0.94);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* Inner highlight via a paired stroke would double the markup — instead we
+     stack a slight stroke filter so the line reads as inky and a little
+     uneven, like brush work. */
+  filter: drop-shadow(0 1px 0 rgba(20, 12, 14, 0.6));
+}
+.trap-block-mark-stroke-a {
+  animation: trap-block-wobble-a 2.4s ease-in-out infinite;
+  transform-origin: 32px 32px;
+}
+.trap-block-mark-stroke-b {
+  stroke: rgba(255, 92, 80, 0.96);
+  animation: trap-block-wobble-b 2.4s ease-in-out infinite;
+  transform-origin: 32px 32px;
+}
+@keyframes trap-block-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.95; }
+  50%      { transform: scale(1.04); opacity: 1; }
+}
+@keyframes trap-block-wobble-a {
+  0%, 100% { transform: rotate(-1.2deg) translate(0, 0); }
+  30%      { transform: rotate(1.4deg) translate(0.4px, -0.6px); }
+  60%      { transform: rotate(-0.6deg) translate(-0.4px, 0.4px); }
+}
+@keyframes trap-block-wobble-b {
+  0%, 100% { transform: rotate(0.8deg) translate(0, 0); }
+  35%      { transform: rotate(-1.6deg) translate(-0.5px, 0.4px); }
+  65%      { transform: rotate(0.4deg) translate(0.5px, -0.5px); }
 }
 
 /* ---------- Player Card + transparent utility layers ---------- */
@@ -3107,17 +3328,58 @@ const STYLES = `
   padding: clamp(7px, 1vw, 12px);
   pointer-events: none;
 }
+/* Shutter panels read as candle-stained parchment drapes hanging from the
+   rail header: warm wax flecks running diagonally, a slightly torn lower
+   edge implied by a soft ember glow, and the upper hem caught in shadow.
+   Each panel still slides in with its own short delay so the closure has
+   the feel of paper drapes dropping one by one. */
 .rail-shutter span {
-  border-radius: 12px;
+  position: relative;
+  border-radius: 8px 8px 14px 14px;
   background:
-    linear-gradient(180deg, rgba(255, 232, 168, 0.24), rgba(125, 74, 33, 0.18) 16%, rgba(14, 9, 18, 0.98) 58%),
-    repeating-linear-gradient(90deg, rgba(255, 232, 168, 0.06) 0 2px, rgba(0, 0, 0, 0.18) 2px 7px);
-  border: 1px solid rgba(255, 215, 120, 0.28);
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.22), 0 12px 24px rgba(0, 0, 0, 0.56);
+    radial-gradient(ellipse 80% 35% at 50% 100%, rgba(244, 164, 96, 0.32), transparent 70%),
+    radial-gradient(circle at 18% 18%, rgba(0, 0, 0, 0.45), transparent 38%),
+    repeating-linear-gradient(
+      125deg,
+      rgba(255, 232, 168, 0.08) 0 3px,
+      rgba(0, 0, 0, 0.25) 3px 9px
+    ),
+    linear-gradient(180deg, rgba(120, 64, 28, 0.72) 0%, rgba(48, 24, 14, 0.92) 35%, rgba(20, 10, 14, 0.98) 100%);
+  border: 1px solid rgba(180, 110, 52, 0.46);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.18),
+    inset 0 -10px 16px rgba(0, 0, 0, 0.55),
+    0 10px 22px rgba(0, 0, 0, 0.6);
   transform: translateY(-120%) scaleY(0.82);
   transform-origin: top;
-  animation: shop-shutter-drop 0.48s cubic-bezier(0.18, 0.86, 0.22, 1) forwards;
-  animation-delay: calc(var(--shutter-i) * 28ms);
+  animation: shop-shutter-drop 0.52s cubic-bezier(0.18, 0.86, 0.22, 1) forwards;
+  animation-delay: calc(var(--shutter-i) * 36ms);
+  overflow: hidden;
+}
+.rail-shutter span::before {
+  /* Wax seal dot near the top centre of each drape — small candlelit accent
+     that ties the shutter back to the rest of the wax/seal/parchment UI. */
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffd778, #c44a1c 70%, #58140c 100%);
+  box-shadow: 0 0 6px rgba(255, 188, 96, 0.55);
+}
+.rail-shutter span::after {
+  /* Torn bottom hem hinted by a soft warm gradient bleeding off the panel. */
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 8px;
+  background: radial-gradient(ellipse 70% 90% at 50% 0%, rgba(244, 164, 96, 0.38), transparent 72%);
+  pointer-events: none;
 }
 .rail-shutter.is-closed span {
   transform: translateY(0) scaleY(1);
@@ -3635,25 +3897,27 @@ const STYLES = `
   }
 }
 
-/* ---------- Ember HUD (top center) ---------- */
+/* ---------- Ember HUD (top center) ----------
+   Reworked into a "brightness lantern" gauge: no boxed inner panel behind
+   it, just a glowing horizontal light pipe with a soft outer halo. The
+   warmer the ember, the brighter and broader the halo. */
 .ember-hud {
   position: fixed;
-  top: clamp(56px, 7vh, 84px);
+  top: clamp(14px, 1.4vh, 22px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 35;
-  width: min(640px, 92vw);
+  width: min(560px, 80vw);
   pointer-events: none;
 }
 .ember-hud-inner {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px 12px;
-  background: linear-gradient(180deg, rgba(20, 16, 28, 0.78), rgba(8, 5, 14, 0.55));
-  border: 1px solid rgba(255, 215, 120, 0.22);
-  border-radius: 12px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  gap: 4px;
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
 }
 .ember-line {
   display: grid;
@@ -3665,38 +3929,58 @@ const STYLES = `
   display: inline-flex;
   align-items: center;
   color: var(--color-flame);
-  font-size: 16px;
-  filter: drop-shadow(0 0 6px rgba(255, 215, 120, 0.5));
+  font-size: 18px;
+  filter: drop-shadow(0 0 8px rgba(255, 215, 120, 0.7));
 }
 .ember-bar {
   position: relative;
-  height: 14px;
+  height: 10px;
   border-radius: 999px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: visible;
+  background: rgba(20, 16, 28, 0.42);
+  border: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.32);
+}
+.ember-bar::after {
+  /* Subtle inner highlight so the rail reads as a tube of light without a
+     hard outline. */
+  content: '';
+  position: absolute;
+  inset: 1px 1px auto 1px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255, 232, 168, 0.18), transparent);
+  pointer-events: none;
 }
 .ember-bar-fill {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: 999px;
-  transition: width 0.35s ease;
+  transition: width 0.4s ease, box-shadow 0.4s ease;
 }
 .ember-bar-fill.ember-tier-bright {
-  background: linear-gradient(90deg, #ffe89a, #f4a460);
-  box-shadow: 0 0 12px rgba(255, 215, 120, 0.55);
+  background: linear-gradient(90deg, #fff3c2, #ffd778 35%, #f4a460);
+  box-shadow:
+    0 0 14px rgba(255, 232, 168, 0.85),
+    0 0 28px rgba(244, 164, 96, 0.55),
+    0 0 52px rgba(244, 164, 96, 0.32);
 }
 .ember-bar-fill.ember-tier-dim {
-  background: linear-gradient(90deg, #f4a460, #c97640);
-  box-shadow: 0 0 8px rgba(244, 164, 96, 0.4);
+  background: linear-gradient(90deg, #ffd778, #f4a460 50%, #c97640);
+  box-shadow:
+    0 0 10px rgba(244, 164, 96, 0.6),
+    0 0 22px rgba(244, 164, 96, 0.32);
 }
 .ember-bar-fill.ember-tier-flickering {
-  background: linear-gradient(90deg, #c97640, #8b3a2d);
-  box-shadow: 0 0 8px rgba(168, 58, 58, 0.45);
+  background: linear-gradient(90deg, #f4a460, #c97640 55%, #7a2a22);
+  box-shadow:
+    0 0 8px rgba(168, 58, 58, 0.55),
+    0 0 18px rgba(168, 58, 58, 0.3);
   animation: ember-flicker 1.6s ease-in-out infinite;
 }
 .ember-bar-fill.ember-tier-extinguished {
   background: linear-gradient(90deg, #5a2828, #2d1818);
+  box-shadow: 0 0 6px rgba(72, 22, 22, 0.6);
   animation: ember-flicker 0.8s ease-in-out infinite;
 }
 @keyframes ember-flicker {
@@ -3710,22 +3994,24 @@ const STYLES = `
   align-items: center;
   justify-content: center;
   font-size: 11px;
-  font-weight: 700;
-  color: rgba(255, 245, 220, 0.95);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
-  letter-spacing: 0.04em;
+  font-weight: 800;
+  color: rgba(255, 245, 220, 0.96);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.06em;
 }
 .ember-countdown {
   font-size: 11px;
-  color: rgba(255, 215, 120, 0.85);
-  font-weight: 700;
+  color: rgba(255, 215, 120, 0.86);
+  font-weight: 800;
   letter-spacing: 0.04em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
 }
 .ember-weights {
   font-size: 10px;
-  color: rgba(255, 245, 220, 0.55);
+  color: rgba(255, 245, 220, 0.6);
   text-align: right;
   letter-spacing: 0.04em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
 }
 
 /* ---------- Vignette overlay (Darkest Dungeon torch feel) ---------- */
@@ -3876,7 +4162,9 @@ const STYLES = `
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 3;
+  /* Fan opens leftward over the rail/score area, so it must layer above
+     them while the player is choosing a mode. */
+  z-index: 50;
 }
 .candle-mode-petal {
   appearance: none;
@@ -3918,27 +4206,41 @@ const STYLES = `
   font-weight: 800;
   letter-spacing: 0.04em;
 }
+/* The currently selected mode reads as "sunken / already chosen": dimmer
+   background, muted icon, no glow. This way the open fan visually
+   communicates which mode you'd be moving FROM. */
 .candle-mode-petal.is-current {
-  border-color: rgba(255, 232, 168, 0.95);
-  box-shadow: 0 0 14px rgba(255, 215, 120, 0.4), 0 4px 12px rgba(0, 0, 0, 0.5);
+  border-color: rgba(120, 90, 60, 0.7);
+  background:
+    radial-gradient(circle at 50% 28%, rgba(0, 0, 0, 0.42), rgba(10, 8, 14, 0.96) 70%);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
+  filter: brightness(0.62) saturate(0.7);
+}
+.candle-mode-petal.is-current .candle-mode-petal-icon,
+.candle-mode-petal.is-current .candle-mode-petal-label {
+  color: rgba(255, 232, 168, 0.42);
 }
 .candle-mode-wheel.is-fan-open .candle-mode-petal {
   opacity: 1;
   pointer-events: auto;
 }
-.candle-mode-wheel.is-fan-open .candle-mode-petal.petal-up {
-  transform: translate(0, -54px) scale(1);
-}
-.candle-mode-wheel.is-fan-open .candle-mode-petal.petal-right {
-  transform: translate(54px, 0) scale(1);
-}
-.candle-mode-wheel.is-fan-open .candle-mode-petal.petal-down {
-  transform: translate(0, 54px) scale(1);
+/* Three-finger cat paw spread biased to the left of the centre button.
+   The petals cluster close to each other (38~46px) rather than fanning
+   the full 4-direction compass — the goal is "paw print on the left",
+   not "directional pad". */
+.candle-mode-wheel.is-fan-open .candle-mode-petal.petal-up-left {
+  transform: translate(-46px, -38px) scale(1);
 }
 .candle-mode-wheel.is-fan-open .candle-mode-petal.petal-left {
-  transform: translate(-54px, 0) scale(1);
+  transform: translate(-60px, 0) scale(1);
 }
-.candle-mode-petal:hover {
+.candle-mode-wheel.is-fan-open .candle-mode-petal.petal-down-left {
+  transform: translate(-46px, 38px) scale(1);
+}
+.candle-mode-wheel.is-fan-open .candle-mode-petal.petal-far-left {
+  transform: translate(-104px, 0) scale(1);
+}
+.candle-mode-petal:hover:not(.is-current) {
   border-color: rgba(255, 232, 168, 0.96);
   background: radial-gradient(circle at 50% 28%, rgba(255, 215, 120, 0.4), rgba(36, 24, 42, 0.96) 70%);
 }
@@ -4408,15 +4710,6 @@ const STYLES = `
   text-align: center;
   border-top: 1px solid var(--color-border-soft);
 }
-
-/* panel-actions row on the score panel groups score spend controls while the
-   compendium launcher itself now lives in the transparent utility layer. */
-.panel-actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.panel-actions .score-spend-btn { flex: 1; }
 
 /* Floating compendium launcher: the button keeps semantic click behavior,
    but visually reads as only a flat icon with a pre-reserved label below it. */
@@ -5403,42 +5696,60 @@ const STYLES = `
   from { opacity: 0.72; filter: brightness(1); }
   to { opacity: 0.95; filter: brightness(1.18); }
 }
-/* Flat plaque shield badge: an inline shield glyph + the number sit on a
-   single warm wax-trimmed strip, matching the rest of the flat icon UI
-   (compendium stats, hand-card stat rows) instead of the old glowy blue
-   plate with a stroked silhouette. */
-.shield-badge {
+/* Codex-inspired wax-paper shield label. The shield silhouette is the only
+   visual chrome — no extra plate/badge layer — so it reads as a parchment
+   tag stamped directly onto the player card. The number lives inside the
+   shield silhouette with adaptive sizing for 1/2/3-digit values. */
+.shield-label {
   position: absolute;
-  right: 8px;
-  top: 8px;
+  right: 4px;
+  top: 4px;
   z-index: 5;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 7px 2px 5px;
-  color: #fff5dc;
-  background: rgba(20, 16, 28, 0.7);
-  border: 1px solid rgba(255, 215, 120, 0.4);
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: 0.02em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  width: clamp(34px, 4.4vw, 44px);
+  height: clamp(38px, 5vw, 50px);
+  display: inline-block;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
 }
-.shield-badge-icon {
-  display: inline-flex;
+.shield-label-shape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.shield-label-rim {
+  fill: none;
+  stroke: rgba(80, 36, 14, 0.92);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+.shield-label-inner-line {
+  fill: none;
+  stroke: rgba(255, 232, 168, 0.42);
+  stroke-width: 0.7;
+  stroke-dasharray: 0.6 1.8;
+}
+.shield-label-value {
+  position: absolute;
+  inset: 0;
+  display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(220, 232, 248, 0.96);
-}
-.shield-badge-icon .icon {
-  width: 13px;
-  height: 13px;
-}
-.shield-badge-value {
+  /* Pull the number up slightly so it sits at the visual center of the
+     shield silhouette rather than the bounding box center. */
+  padding-bottom: 14%;
+  font-weight: 950;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
+  color: #2a1408;
+  text-shadow:
+    0 1px 0 rgba(255, 232, 168, 0.78),
+    0 0 4px rgba(255, 215, 120, 0.5);
 }
+.shield-label[data-digits="one"] .shield-label-value { font-size: clamp(18px, 2vw, 22px); }
+.shield-label[data-digits="two"] .shield-label-value { font-size: clamp(14px, 1.6vw, 17px); }
+.shield-label[data-digits="three"] .shield-label-value { font-size: clamp(10px, 1.2vw, 13px); letter-spacing: -0.02em; }
 
 .damage-float {
   position: fixed;

@@ -97,7 +97,6 @@ function clearChainTimeline(): void {
 /** Currently armed targeted hand card: waits for a board click to consume. */
 let pendingHandTarget: { slotIndex: number; defId: HandCardId } | null = null
 
-const SCORE_SPEND_COST = 250
 const MAX_ACTIVITY_LOGS = 80
 let score = 0
 let coins = 0
@@ -478,16 +477,6 @@ function createScoreLog(
   return { label, scoreDelta: amount, kind }
 }
 
-function recordScoreSpend(label: string, spent: number): ActivityLogDraft {
-  score = Math.max(0, score - spent)
-  scorePulseKey++
-  return {
-    label,
-    scoreDelta: -spent,
-    kind: 'score' as const,
-  }
-}
-
 function actionTypeFor(cardType: CardType): ActionType | null {
   switch (cardType) {
     case CardType.ENEMY:
@@ -587,8 +576,6 @@ function render(): void {
   boardRenderer.render(gameState, {
     score,
     logs: activityLogs,
-    canSpend: score >= SCORE_SPEND_COST,
-    spendCost: SCORE_SPEND_COST,
     scorePulseKey,
     coins,
     coinPulseKey,
@@ -725,10 +712,6 @@ document.addEventListener('chainReset', () => {
   render()
 })
 
-document.addEventListener('scoreSpend', () => {
-  handleScoreSpend()
-})
-
 document.addEventListener('candleModeCycle', () => {
   if (!gameActive || inputLocked) return
   gameState.character.cycleCandleMode()
@@ -750,30 +733,6 @@ document.addEventListener('shopBuy', (e: Event) => {
 document.addEventListener('shopClose', () => {
   void closeShopAndResume()
 })
-
-function handleScoreSpend(): void {
-  if (!gameActive || inputLocked || score < SCORE_SPEND_COST) return
-
-  const itemCount = Math.max(1, Math.min(5, Math.floor(score / SCORE_SPEND_COST)))
-  const spent = itemCount * SCORE_SPEND_COST
-  const gainedItems: string[] = []
-  let dropped = 0
-  for (let i = 0; i < itemCount; i++) {
-    const drop = DropSystem.generateDrop()
-    if (HandSystem.enqueueDrop(gameState.character, drop)) {
-      gainedItems.push(getHandCardDef(drop.defId).name)
-    } else {
-      dropped++
-    }
-  }
-
-  pushActivityLogsInDisplayOrder([
-    ...createItemGainLogs(gainedItems),
-    recordScoreSpend(`점수 변환: 손패 ${itemCount}개`, spent),
-  ])
-  if (dropped > 0) recordNotice(`손패 ${dropped}장 못 받음 (가득 참)`, 'hurt')
-  render()
-}
 
 /** Click on a hand slot. Plain click = use single (or arm targeting). */
 async function handleHandSlotClick(slotIndex: number): Promise<void> {
