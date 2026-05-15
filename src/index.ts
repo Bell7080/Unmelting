@@ -396,7 +396,7 @@ async function runPreparationRefreshAfterFieldEffects(): Promise<void> {
       // one-action fuse instead of waiting for a later cleanup path.
       turnManager.armFrontBombs()
       render()
-      await wait(150)
+      await wait(200)
     }
 
     let filled = false
@@ -415,13 +415,13 @@ async function runPreparationRefreshAfterFieldEffects(): Promise<void> {
       // one-action fuse instead of waiting for a later cleanup path.
       turnManager.armFrontBombs()
       render()
-      await wait(150)
+      await wait(200)
     }
     if (!moved && !filled) break
   }
   gameState.regroupAllRows()
   render()
-  if (movedAny) await wait(80)
+  if (movedAny) await wait(120)
 }
 
 function createItemGainLogs(itemNames: string[]): ActivityLogDraft[] {
@@ -607,10 +607,11 @@ function wait(ms: number): Promise<void> {
 
 // Combo effects resolve after the hand-card beat, not inside HandSystem.useSingle.
 // This makes "밀랍 방패 → 밀랍 돌진" read as two impacts instead of one
-// simultaneous burst, even on slower machines.
-const COMBO_TRIGGER_DELAY_MS = 320
+// simultaneous burst, even on slower machines. The longer delay also gives
+// the previous beat's bursts/damage numbers room to breathe.
+const COMBO_TRIGGER_DELAY_MS = 440
 // The hand gauge fires after card and recipe beats so it never feels simultaneous.
-const GAUGE_TRIGGER_DELAY_MS = 300
+const GAUGE_TRIGGER_DELAY_MS = 440
 
 type NoticeLogKind = 'info' | 'win' | 'hurt' | 'melt' | 'recipe' | 'gauge' | 'relic'
 
@@ -978,7 +979,7 @@ async function applyHandSingle(
   await runPreparationRefreshAfterFieldEffects()
   setTimeout(() => {
     inputLocked = false
-  }, 200)
+  }, 320)
 }
 
 async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
@@ -1003,7 +1004,7 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
 
   const moved = compactAndRefillAllLanes()
   render()
-  if (moved) await wait(380)
+  if (moved) await wait(460)
 
   gameState.regroupAllRows()
   turnManager.armFrontBombs()
@@ -1026,15 +1027,25 @@ async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
     for (const explosion of bombExplosions) {
       recordNotice(`${explosion.cardName} 폭발! -${explosion.playerDamage}`, 'hurt')
     }
-    eventAnimations.push(
-      boardRenderer.animateDamageNumbersById(diffFieldHealthLosses(beforeTrapHealth))
+    // Sequenced beat so the shake + bomb-blast burst is fully visible before
+    // the floating damage numbers and player impact land on top of it.
+    const playerDamageTotal = bombExplosions.reduce(
+      (sum, explosion) => sum + explosion.playerDamage,
+      0
     )
+    const damageLosses = diffFieldHealthLosses(beforeTrapHealth)
     eventAnimations.push(
-      boardRenderer.animateDamageImpactOnElement(
-        boardRenderer.findCardElement('__player__') ??
-          document.querySelector<HTMLElement>('.player-card'),
-        bombExplosions.reduce((sum, explosion) => sum + explosion.playerDamage, 0)
-      )
+      (async () => {
+        await boardRenderer.animateBombExplosion(bombExplosions)
+        await Promise.all([
+          boardRenderer.animateDamageNumbersById(damageLosses),
+          boardRenderer.animateDamageImpactOnElement(
+            boardRenderer.findCardElement('__player__') ??
+              document.querySelector<HTMLElement>('.player-card'),
+            playerDamageTotal
+          ),
+        ])
+      })()
     )
   }
   if (sporeSpreads.length > 0) {
@@ -1198,15 +1209,23 @@ async function handleCardAction(e: Event): Promise<void> {
     if (bombExplosions.length > 0) {
       for (const explosion of bombExplosions)
         recordNotice(`${explosion.cardName} 폭발! -${explosion.playerDamage}`, 'hurt')
-      eventAnimations.push(
-        boardRenderer.animateDamageNumbersById(diffFieldHealthLosses(beforeTrapHealth))
+      const playerDamageTotal = bombExplosions.reduce(
+        (sum, explosion) => sum + explosion.playerDamage,
+        0
       )
+      const damageLosses = diffFieldHealthLosses(beforeTrapHealth)
       eventAnimations.push(
-        boardRenderer.animateDamageImpactOnElement(
-          boardRenderer.findCardElement('__player__') ??
-            document.querySelector<HTMLElement>('.player-card'),
-          bombExplosions.reduce((sum, explosion) => sum + explosion.playerDamage, 0)
-        )
+        (async () => {
+          await boardRenderer.animateBombExplosion(bombExplosions)
+          await Promise.all([
+            boardRenderer.animateDamageNumbersById(damageLosses),
+            boardRenderer.animateDamageImpactOnElement(
+              boardRenderer.findCardElement('__player__') ??
+                document.querySelector<HTMLElement>('.player-card'),
+              playerDamageTotal
+            ),
+          ])
+        })()
       )
     }
     if (sporeSpreads.length > 0) {
@@ -1222,7 +1241,7 @@ async function handleCardAction(e: Event): Promise<void> {
     if (await maybeOpenShopAfterTurn()) return
     setTimeout(() => {
       inputLocked = false
-    }, 220)
+    }, 340)
   } else {
     await resolveEventPhaseAndPrepareNextTurn()
   }

@@ -36,6 +36,11 @@ export interface BombExplosion {
   laneIndex: number
   cardName: string
   playerDamage: number
+  /** DOM key for the bomb card itself — the renderer animates the still-rendered
+   *  bomb cell before the next render() drops it from the rail. */
+  bombCardId: string
+  /** Enemy cards that took splash damage (still in the lane until next render). */
+  adjacentCardIds: string[]
 }
 
 export interface SporeSpread {
@@ -152,13 +157,24 @@ export class TurnManager {
       if (!card.isBombArmed || card.isFrozen()) continue
 
       // Bomb splash hurts neighboring enemies but does not delete non-enemy cells.
+      const adjacentCardIds: string[] = []
       for (const neighborLane of [i - 1, i + 1]) {
         const neighbor = this.gameState.lanes[neighborLane]?.getCardAtDistance(0)
-        if (neighbor?.type === CardType.ENEMY) neighbor.takeDamage(5)
+        if (neighbor?.type === CardType.ENEMY) {
+          neighbor.takeDamage(5)
+          adjacentCardIds.push(neighbor.id)
+        }
       }
       const playerDamage = this.gameState.character.takeDamage(5)
+      const bombCardId = card.id
       this.gameState.removeCardFromRow(card, 0)
-      explosions.push({ laneIndex: i, cardName: card.name, playerDamage })
+      explosions.push({
+        laneIndex: i,
+        cardName: card.name,
+        playerDamage,
+        bombCardId,
+        adjacentCardIds,
+      })
       if (!this.gameState.character.isAlive()) {
         this.gameState.endGame('character_defeated')
         break

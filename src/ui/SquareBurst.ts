@@ -22,6 +22,7 @@ export type BurstTheme =
   | 'vanish-smoke'
   | 'mimic-shift'
   | 'wax-freeze'
+  | 'bomb-blast'
   | 'hand-recovery'
   | 'hand-tool'
   | 'hand-control'
@@ -44,6 +45,10 @@ const PALETTES: Record<BurstTheme, Palette> = {
   'mimic-shift': { shades: ['#0c0a14', '#3b1e44', '#6a3a2c', '#a8c25c'] },
   // Wax hardening — cold slate → milky candle wax for freeze impacts.
   'wax-freeze': { shades: ['#172033', '#5f7898', '#d6e4ee', '#fff8df'] },
+  // Bomb detonation — char black → white-hot fire, hotter than the regular
+  // damage burst so the explosion reads as a focal event without breaking
+  // the warm ember palette that the rest of the UI lives in.
+  'bomb-blast': { shades: ['#0a0508', '#5c1410', '#ff5a1c', '#fff3a0'] },
   // Hand-use, per category — each is a two-tone interpolation.
   'hand-recovery': { shades: ['#0e1f12', '#2c5e34', '#7ed091', '#e2f7c8'] },
   'hand-tool': { shades: ['#1c1304', '#6b4910', '#dca233', '#ffe9a4'] },

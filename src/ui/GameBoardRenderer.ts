@@ -19,7 +19,7 @@
 import { GameState } from '@core/GameState'
 import { Card, CardType } from '@entities/Card'
 import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
-import type { EnemyHit, TreasureChange } from '@core/TurnManager'
+import type { BombExplosion, EnemyHit, TreasureChange } from '@core/TurnManager'
 import { spriteForCard, spriteForHandCard, spriteForRelic, SpriteUrls } from '@ui/Sprites'
 import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandCategory, HandEffectTargeting } from '@entities/HandCard'
@@ -928,18 +928,16 @@ export class GameBoardRenderer {
       offers.length > 0
         ? offers.map((offer) => this.renderShopRelicCard(offer, coins, character)).join('')
         : '<div class="shop-empty">오늘의 잡화는 모두 팔렸어.</div>'
+    // Simplified shop chrome: only the angled "상점" tag perched on the panel
+    // edge and the coin wallet remain. The previous kicker, h2, and intro
+    // paragraph competed with the relic grid and have been removed so the
+    // panel reads as "상점 + 진열" without extra prose.
     this.shopOverlayElement.innerHTML = `
-      <div class="shop-shell" role="dialog" aria-label="모험 잡화 생쥐 상점">
+      <div class="shop-shell" role="dialog" aria-label="상점">
         <button class="shop-close-btn shop-close-tab" type="button" data-shop-close aria-label="상점 나가기">Exit</button>
         <div class="shop-modal">
-          <header class="shop-header">
-            <div>
-              <span class="shop-kicker">쿠궁! 레일 정차</span>
-              <h2>모험 잡화 생쥐</h2>
-            </div>
-            <div class="shop-wallet">${coinIcon()} ${coins}$</div>
-          </header>
-          <p class="shop-intro">랜덤 유물 3개가 진열됐어. 돈 대신 최대체력이나 공격력을 내는 물건도 있어.</p>
+          <span class="shop-stamp" aria-hidden="true">상점</span>
+          <div class="shop-wallet">${coinIcon()} ${coins}$</div>
           <section class="shop-grid" aria-label="상점 유물 목록">${cards}</section>
         </div>
       </div>
@@ -1738,7 +1736,7 @@ export class GameBoardRenderer {
    * resolves, which prevents one click from producing duplicate hit bursts.
    */
   animatePlayerAttack(card: Card): Promise<void> {
-    return this.animateCardElements(card, 'is-player-striking', 280)
+    return this.animateCardElements(card, 'is-player-striking', 360)
   }
 
   /**
@@ -1757,7 +1755,7 @@ export class GameBoardRenderer {
       const element = this.boardElement.querySelector<HTMLElement>(selector)
       if (element) elements.add(element)
     }
-    return this.animateElements([...elements], 'is-enemy-slamming', 340)
+    return this.animateElements([...elements], 'is-enemy-slamming', 420)
   }
 
   /**
@@ -1770,14 +1768,15 @@ export class GameBoardRenderer {
   animateDamageFlash(): Promise<void> {
     const playerCard = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
     if (playerCard) {
-      SquareBurst.playOn(playerCard, 'damage', { count: 20, spread: 150 })
+      SquareBurst.playOn(playerCard, 'damage', { count: 20, spread: 150, duration: 640 })
     } else {
       SquareBurst.playAt(window.innerWidth / 2, window.innerHeight * 0.6, 'damage', {
         count: 20,
         spread: 150,
+        duration: 640,
       })
     }
-    return new Promise((resolve) => window.setTimeout(resolve, 420))
+    return new Promise((resolve) => window.setTimeout(resolve, 520))
   }
 
   /** Float a glowing damage number above a specific element. */
@@ -1794,7 +1793,7 @@ export class GameBoardRenderer {
   /** Player damage feedback in one beat: number and burst start together. */
   animateDamageImpactOnElement(target: HTMLElement | null, amount: number): Promise<void> {
     if (!target || amount <= 0) return Promise.resolve()
-    SquareBurst.playOn(target, 'damage', { count: 20, spread: 150 })
+    SquareBurst.playOn(target, 'damage', { count: 20, spread: 150, duration: 660 })
     return this.animateDamageNumberOnElement(target, amount)
   }
 
@@ -1803,7 +1802,8 @@ export class GameBoardRenderer {
     return Promise.all(
       damages.map(({ cardId, amount }) => {
         const target = this.findCardElement(cardId)
-        if (target && amount > 0) SquareBurst.playOn(target, 'damage', { count: 14, spread: 110 })
+        if (target && amount > 0)
+          SquareBurst.playOn(target, 'damage', { count: 14, spread: 110, duration: 620 })
         return this.animateDamageNumberOnElement(target, amount)
       })
     ).then(() => undefined)
@@ -1821,14 +1821,20 @@ export class GameBoardRenderer {
       [
         { transform: 'translate(-50%, -20%) scale(0.78)', opacity: 0, filter: 'brightness(1.2)' },
         {
-          transform: 'translate(-50%, -72%) scale(1.18)',
+          transform: 'translate(-50%, -68%) scale(1.2)',
           opacity: 1,
           filter: 'brightness(1.65)',
           offset: 0.22,
         },
-        { transform: 'translate(-50%, -150%) scale(1)', opacity: 0, filter: 'brightness(1)' },
+        {
+          transform: 'translate(-50%, -110%) scale(1.08)',
+          opacity: 1,
+          filter: 'brightness(1.32)',
+          offset: 0.65,
+        },
+        { transform: 'translate(-50%, -160%) scale(1)', opacity: 0, filter: 'brightness(1)' },
       ],
-      { duration: 760, easing: 'cubic-bezier(0.16, 0.86, 0.28, 1)', fill: 'forwards' }
+      { duration: 980, easing: 'cubic-bezier(0.16, 0.86, 0.28, 1)', fill: 'forwards' }
     )
     return new Promise((resolve) => {
       anim.onfinish = () => {
@@ -1838,7 +1844,7 @@ export class GameBoardRenderer {
       window.setTimeout(() => {
         el.remove()
         resolve()
-      }, 900)
+      }, 1120)
     })
   }
 
@@ -2031,8 +2037,9 @@ export class GameBoardRenderer {
     SquareBurst.playAt(x, y, theme, {
       count: 20,
       spread: 130 + (elements.length - 1) * 30,
+      duration: 640,
     })
-    return this.animateElements(elements, 'is-consuming', 360)
+    return this.animateElements(elements, 'is-consuming', 480)
   }
 
   /**
@@ -2068,11 +2075,88 @@ export class GameBoardRenderer {
         SquareBurst.playAt((r1.left + r2.right) / 2, (r1.top + r2.bottom) / 2, theme, {
           count: 20,
           spread: 130 + (elements.length - 1) * 30,
+          duration: 640,
         })
       }
-      animations.push(this.animateElements(elements, 'is-consuming', 360))
+      animations.push(this.animateElements(elements, 'is-consuming', 480))
     }
     return Promise.all(animations).then(() => undefined)
+  }
+
+  /**
+   * Bomb detonation beat. TurnManager removed the bomb from the model already,
+   * but the DOM still shows it (next render is later in the turn). So we can
+   * still find the bomb element, shake it with the adjacent cells, fire a
+   * bomb-blast SquareBurst on the fuse origin, and only then let the rail
+   * regroup. Adjacent enemies that took splash damage shake along with the
+   * bomb so the blast wave reads visibly through the rail instead of feeling
+   * like cards simply popping off.
+   */
+  animateBombExplosion(explosions: BombExplosion[]): Promise<void> {
+    if (explosions.length === 0) return Promise.resolve()
+    const promises: Promise<void>[] = []
+    for (const explosion of explosions) {
+      const bombEl = this.findCardElement(explosion.bombCardId)
+      // Surrounding cells (whether they got splash damage or not) rattle along
+      // with the bomb so the blast feels physical — but the bomb itself is the
+      // only cell that actually fades out from this animation. Damage numbers
+      // and consume bursts are still played by the caller.
+      const adjacentRattle = new Set<HTMLElement>()
+      for (const id of explosion.adjacentCardIds) {
+        const el = this.findCardElement(id)
+        if (el) adjacentRattle.add(el)
+      }
+      // Also include lane-only neighbors that weren't enemies — traps/treasures
+      // visibly tremble in the blast even though the bomb doesn't delete them.
+      for (const lane of [explosion.laneIndex - 1, explosion.laneIndex + 1]) {
+        const neighborEl = this.boardElement.querySelector<HTMLElement>(
+          `.cell.card.is-active[data-lane="${lane}"]`
+        )
+        if (neighborEl) adjacentRattle.add(neighborEl)
+      }
+
+      for (const el of adjacentRattle) {
+        el.classList.add('is-bomb-rattled')
+        window.setTimeout(() => el.classList.remove('is-bomb-rattled'), 520)
+      }
+
+      if (bombEl) {
+        // Bigger spread + the bomb-blast palette so the focal hit reads as the
+        // "boom" while neighbour bursts (damage theme) read as the wave.
+        SquareBurst.playOn(bombEl, 'bomb-blast', {
+          count: 24,
+          spread: 200,
+          duration: 720,
+        })
+        bombEl.classList.add('is-bomb-detonating')
+        const fade = new Promise<void>((resolve) => {
+          window.setTimeout(() => {
+            bombEl.classList.remove('is-bomb-detonating')
+            // After the initial rattle, fade the bomb cell out so the next
+            // render doesn't snap it away — `is-consuming` reuses the unified
+            // card-consume fade.
+            bombEl.classList.add('is-consuming')
+            resolve()
+          }, 360)
+        })
+        promises.push(fade)
+      }
+
+      // Tiny secondary bursts on damaged neighbours so the blast wave is
+      // visible across the lane group, slightly delayed so it reads as a
+      // ripple coming from the fuse origin.
+      window.setTimeout(() => {
+        for (const id of explosion.adjacentCardIds) {
+          const el = this.findCardElement(id)
+          if (!el) continue
+          SquareBurst.playOn(el, 'damage', { count: 12, spread: 100, duration: 540 })
+        }
+      }, 140)
+    }
+    // Resolve once the bomb fade beat has played; total ~520ms.
+    return Promise.all(promises).then(
+      () => new Promise<void>((resolve) => window.setTimeout(resolve, 160))
+    )
   }
 
   /**
@@ -2318,6 +2402,10 @@ const STYLES = `
 }
 
 /* ---------- Score / Activity Panel ---------- */
+/* Translucent panel — the score numbers, coin and activity log are the
+   actors here, so the back plate is intentionally close to invisible:
+   no hard border, only a whisper of dark wash so the area still reads as
+   a region without separating it from the rest of the candlelit room. */
 .score-panel {
   display: grid;
   grid-template-rows: auto auto 1fr auto;
@@ -2325,22 +2413,19 @@ const STYLES = `
   min-height: 0;
   padding: 12px;
   align-self: stretch;
-  background:
-    linear-gradient(180deg, rgba(31, 24, 48, 0.86), rgba(18, 14, 28, 0.94));
-  border: 1px solid var(--color-border-soft);
+  background: linear-gradient(180deg, rgba(20, 16, 28, 0.22), rgba(8, 5, 14, 0.32));
+  border: 0;
   border-radius: 16px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 0 28px rgba(0, 0, 0, 0.28);
+  box-shadow: none;
 }
 
 .coin-panel-total,
 .score-panel-total {
   position: relative;
   padding: 12px;
-  border: 1px solid rgba(244, 164, 96, 0.28);
+  border: 0;
   border-radius: 14px;
-  background: radial-gradient(circle at 50% 0%, rgba(255, 215, 120, 0.18), transparent 70%);
+  background: radial-gradient(circle at 50% 0%, rgba(255, 215, 120, 0.14), transparent 70%);
   overflow: hidden;
 }
 
@@ -3061,6 +3146,7 @@ const STYLES = `
   width: min(1040px, 96vw);
 }
 .shop-modal {
+  position: relative;
   width: 100%;
   max-height: min(760px, 92vh);
   overflow: auto;
@@ -3070,42 +3156,46 @@ const STYLES = `
     radial-gradient(circle at 18% 0%, rgba(244, 164, 96, 0.18), transparent 34%),
     linear-gradient(160deg, rgba(36, 25, 36, 0.98), rgba(13, 9, 19, 0.98));
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 232, 168, 0.22);
-  padding: clamp(18px, 2.4vw, 28px);
+  padding: clamp(28px, 3vw, 40px) clamp(18px, 2.4vw, 28px) clamp(18px, 2.4vw, 28px);
 }
-.shop-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-}
-.shop-kicker {
-  color: rgba(255, 215, 120, 0.78);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.shop-header h2 {
-  margin: 2px 0 0;
-  color: rgba(255, 232, 168, 0.98);
-  font-size: clamp(22px, 3vw, 34px);
+/* Angled "상점" tag pinned to the top-left edge of the modal — reads like a
+   wax-paper sign nailed onto the panel rather than a chrome header. */
+.shop-stamp {
+  position: absolute;
+  top: -14px;
+  left: 28px;
+  transform: rotate(-6deg);
+  padding: 6px 18px;
+  font-size: clamp(18px, 2vw, 24px);
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  color: #2a1f14;
+  background: linear-gradient(160deg, var(--color-flame), var(--color-flame-warm));
+  border: 1px solid rgba(255, 232, 168, 0.78);
+  border-radius: 6px;
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36);
+  z-index: 2;
+  pointer-events: none;
+  text-shadow: 0 1px 0 rgba(255, 232, 168, 0.7);
 }
 .shop-wallet {
+  position: absolute;
+  top: 12px;
+  right: 16px;
   display: inline-flex;
   align-items: center;
   gap: 7px;
   color: rgba(255, 240, 189, 0.98);
   border: 1px solid rgba(255, 215, 120, 0.34);
   border-radius: 999px;
-  padding: 8px 13px;
-  background: rgba(0, 0, 0, 0.24);
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.34);
   font-weight: 800;
+  z-index: 2;
 }
 .shop-wallet .icon { width: 1em; height: 1em; }
-.shop-intro {
-  margin: 12px 0 18px;
-  color: rgba(232, 214, 180, 0.78);
-  font-size: var(--font-size-sm);
-}
 .shop-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3497,12 +3587,12 @@ const STYLES = `
 }
 
 .cell.card.is-player-striking {
-  animation: player-strike-pop 0.28s cubic-bezier(0.2, 0.9, 0.25, 1);
+  animation: player-strike-pop 0.36s cubic-bezier(0.2, 0.9, 0.25, 1);
   z-index: 5;
 }
 
 .cell.card.is-enemy-slamming {
-  animation: enemy-down-slam 0.34s cubic-bezier(0.24, 0.92, 0.28, 1);
+  animation: enemy-down-slam 0.42s cubic-bezier(0.24, 0.92, 0.28, 1);
   z-index: 5;
 }
 
@@ -3524,7 +3614,7 @@ const STYLES = `
    the moment of "먹는" reads, instead of the card just disappearing. */
 .cell.card.is-consuming {
   pointer-events: none;
-  animation: card-consume 0.36s cubic-bezier(0.2, 0.78, 0.32, 1) forwards;
+  animation: card-consume 0.48s cubic-bezier(0.2, 0.78, 0.32, 1) forwards;
   z-index: 7;
 }
 @keyframes card-consume {
@@ -3675,6 +3765,10 @@ const STYLES = `
    - overflow:visible on the stack so hover-pop/animation/burst don't get
      clipped against the panel wall when a card is selected.
 */
+/* Hand panel mirrors the score panel — almost-invisible back plate so the
+   hand cards themselves (and the candle gauge) carry the visual weight.
+   A barely-there dark wash still marks the region for the player without
+   building another framed box around the cards. */
 .hand-panel {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
@@ -3682,13 +3776,11 @@ const STYLES = `
   min-height: 0;
   padding: 10px;
   background:
-    linear-gradient(180deg, rgba(31, 24, 48, 0.82), rgba(18, 14, 28, 0.94)),
-    radial-gradient(circle at 50% 0%, rgba(255, 215, 120, 0.09), transparent 58%);
-  border: 1px solid var(--color-border-soft);
+    linear-gradient(180deg, rgba(20, 16, 28, 0.22), rgba(8, 5, 14, 0.34)),
+    radial-gradient(circle at 50% 0%, rgba(255, 215, 120, 0.06), transparent 58%);
+  border: 0;
   border-radius: 16px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 0 28px rgba(0, 0, 0, 0.28);
+  box-shadow: none;
   align-self: stretch;
   overflow: visible;
 }
@@ -3719,13 +3811,13 @@ const STYLES = `
   padding: 6px;
   border-radius: 12px;
   overflow: visible;
+  /* Softer, almost frameless: the wheel button and ticks stay readable but
+     the panel itself doesn't draw its own box around them. */
   background:
-    linear-gradient(180deg, rgba(255, 215, 120, 0.1), rgba(255, 255, 255, 0.035)),
-    rgba(20, 16, 28, 0.78);
-  border: 1px solid rgba(244, 164, 96, 0.32);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.12),
-    0 0 16px rgba(0, 0, 0, 0.2);
+    linear-gradient(180deg, rgba(255, 215, 120, 0.06), rgba(255, 255, 255, 0.02)),
+    rgba(20, 16, 28, 0.32);
+  border: 0;
+  box-shadow: none;
 }
 /* Candle mode wheel: the centre button shows the active mode; on click,
    four petals (max-health/attack/ember/draw) fan out radially like a cat
@@ -5079,7 +5171,7 @@ const STYLES = `
   text-shadow:
     0 1px 2px rgba(0, 0, 0, 0.92),
     0 0 18px rgba(244, 164, 96, 0.36);
-  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.18, 0.88, 0.22, 1);
+  transition: opacity 0.32s ease, transform 0.32s cubic-bezier(0.18, 0.88, 0.22, 1);
 }
 .chain-banner.is-on {
   opacity: 1;
@@ -5562,6 +5654,35 @@ const STYLES = `
   background: rgba(244, 164, 96, 0.09);
 }
 .score-log-relic .score-log-delta { color: rgba(255, 232, 168, 1); }
+
+/* Bomb detonation: focal cell snaps outward as the fuse pops, while
+   neighbouring cells rattle to sell the blast wave. Both animations stop
+   short of yanking the cards off in one frame — the lingering rattle/fade
+   gives the eye time to register what just happened. */
+.cell.card.is-bomb-detonating {
+  animation: bomb-detonate-pop 0.42s cubic-bezier(0.22, 0.84, 0.26, 1);
+  z-index: 9;
+}
+@keyframes bomb-detonate-pop {
+  0%   { transform: scale(1) rotate(0deg); filter: brightness(1) saturate(1); }
+  18%  { transform: scale(1.16) rotate(-2deg); filter: brightness(1.6) saturate(1.4); }
+  42%  { transform: scale(1.04) rotate(2.4deg); filter: brightness(1.32) saturate(1.2); }
+  72%  { transform: scale(1.1) rotate(-1.2deg); filter: brightness(1.18) saturate(1.1); }
+  100% { transform: scale(1) rotate(0deg); filter: brightness(1) saturate(1); }
+}
+.cell.card.is-bomb-rattled {
+  animation: bomb-rattle 0.5s cubic-bezier(0.18, 0.86, 0.24, 1);
+  z-index: 6;
+}
+@keyframes bomb-rattle {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  14%  { transform: translate(-3px, 2px) rotate(-1.4deg); }
+  28%  { transform: translate(4px, -2px) rotate(1.2deg); }
+  42%  { transform: translate(-3px, 3px) rotate(-0.9deg); }
+  58%  { transform: translate(3px, -2px) rotate(0.8deg); }
+  72%  { transform: translate(-2px, 1px) rotate(-0.5deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
 
 /* Lit bombs read as an ember fuse rather than an alarm light — the warmth
    stays on-theme while still feeling clearly dangerous. */
