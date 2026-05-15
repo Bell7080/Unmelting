@@ -459,6 +459,14 @@ function activityKindForCard(card: Card): ActivityLogEntry['kind'] {
   return 'treasure'
 }
 
+/** Concrete verb so the log reads as a result, not a UI selection echo. */
+function scoreLabelForCard(card: Card, result: { cardRemoved: boolean }): string {
+  if (!result.cardRemoved) return card.name
+  if (card.type === CardType.ENEMY) return `${card.name} 처치`
+  if (card.type === CardType.TRAP) return `${card.name} 회피`
+  return `${card.name} 획득`
+}
+
 function createScoreLog(
   label: string,
   baseValue: number,
@@ -713,7 +721,6 @@ document.addEventListener('chainReset', () => {
   if (chain.sequence.length === 0 && chainTimeline.length === 0) return
   HandSystem.resetChain(chain)
   clearChainTimeline()
-  recordNotice('체인 초기화', 'info')
   render()
 })
 
@@ -723,8 +730,15 @@ document.addEventListener('scoreSpend', () => {
 
 document.addEventListener('candleModeCycle', () => {
   if (!gameActive || inputLocked) return
-  const mode = gameState.character.cycleCandleMode()
-  recordNotice(`게이지 모드 변경: ${candleModeLabel(mode)}`, 'info')
+  gameState.character.cycleCandleMode()
+  render()
+})
+
+document.addEventListener('candleModeSelect', (e: Event) => {
+  if (!gameActive || inputLocked) return
+  const detail = (e as CustomEvent<{ mode: CandleMode }>).detail
+  if (!detail?.mode) return
+  gameState.character.setCandleMode(detail.mode)
   render()
 })
 
@@ -775,13 +789,11 @@ async function handleHandSlotClick(slotIndex: number): Promise<void> {
     if (pendingHandTarget && pendingHandTarget.slotIndex === slotIndex) {
       pendingHandTarget = null
       boardRenderer.setHandTargetingMode(null)
-      recordNotice(`${def.name} 사용 취소`, 'info')
       render()
       return
     }
     pendingHandTarget = { slotIndex, defId: def.id }
     boardRenderer.setHandTargetingMode({ slotIndex, defId: def.id })
-    recordNotice(`${def.name}: 대상 카드를 선택해`, 'info')
     render()
     return
   }
@@ -1112,11 +1124,14 @@ async function handleCardAction(e: Event): Promise<void> {
   if (result.success) {
     const gainedItems = result.itemGainedNames ?? []
     const actionLogs: ActivityLogDraft[] = [...createItemGainLogs(gainedItems)]
-    if (gainedItems.length === 0) {
-      actionLogs.push(createNoticeLog(result.message, result.damageTaken ? 'hurt' : 'info'))
+    // Drop the textual selection echo — concrete results (damage taken, item
+    // gained, score) speak for themselves; only surface the textual result when
+    // it carries new numeric weight that the score log doesn't already imply.
+    if (gainedItems.length === 0 && result.damageTaken) {
+      actionLogs.push(createNoticeLog(result.message, 'hurt'))
     }
     const scoreDelta = scoreForCardAction(card, result)
-    actionLogs.push(createScoreLog(`${card.name} 선택`, scoreDelta, activityKindForCard(card)))
+    actionLogs.push(createScoreLog(scoreLabelForCard(card, result), scoreDelta, activityKindForCard(card)))
     pushActivityLogsInDisplayOrder(actionLogs)
     if (scoreDelta > 0) burstScoreGain()
     if (result.overflow && result.overflow.length > 0) {

@@ -157,6 +157,12 @@ export class Character {
     return this.candleMode
   }
 
+  /** Pick a specific gauge mode (used by the radial fan picker). */
+  setCandleMode(mode: CandleMode): CandleMode {
+    this.candleMode = mode
+    return this.candleMode
+  }
+
   /** Consume exactly one full 10-slot gauge, preserving overflow for the next gauge. */
   consumeFullCandleGauge(): void {
     this.candle = Math.max(0, this.candle - this.candleMax)

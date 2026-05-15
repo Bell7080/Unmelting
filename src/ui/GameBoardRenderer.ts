@@ -440,12 +440,21 @@ export class GameBoardRenderer {
         </div>
       `
     } else if (card.type === CardType.TRAP) {
+      // Trap stats use the same flat sword + number layout as enemies so
+      // every "이 카드가 주는 피해" reads identically across the rail. The
+      // only exceptions are the bomb's countdown state and the 3-trap death
+      // gate, which are status words rather than numeric damage.
       if (card.trapKind === 'bomb') {
-        stats = `<div class="card-stats danger">${card.isBombArmed ? '점화' : '폭발'}</div>`
+        const bombText = card.isBombArmed ? '점화' : '폭발'
+        stats = `<div class="card-stats"><span class="stat trap-state">${bombText}</span></div>`
       } else if (card.groupCount >= 3 && card.trapKind !== 'spore') {
-        stats = `<div class="card-stats danger">즉사</div>`
+        stats = `<div class="card-stats"><span class="stat trap-state">즉사</span></div>`
       } else {
-        stats = `<div class="card-stats danger">피해 ${card.getTrapDamagePenalty()}</div>`
+        stats = `
+          <div class="card-stats">
+            <span class="stat atk">${swordIcon()}<span class="stat-value">${card.getTrapDamagePenalty()}</span></span>
+          </div>
+        `
       }
     } else if (card.type === CardType.TREASURE && card.groupCount > 1) {
       const mult = card.groupCount === 2 ? 'x2' : 'x3'
@@ -549,7 +558,7 @@ export class GameBoardRenderer {
     return `
       <div class="player-row">
         <div class="player-card">
-          ${character.shield > 0 ? `<span class="shield-badge" aria-label="방패 ${character.shield}"><span class="shield-badge-icon">${shieldIcon()}</span><span class="shield-badge-value">${character.shield}</span></span>` : ''}
+          ${character.shield > 0 ? `<span class="shield-badge" aria-label="방패 ${character.shield}"><span class="shield-badge-icon" aria-hidden="true">${shieldIcon()}</span><span class="shield-badge-value">${character.shield}</span></span>` : ''}
           <div class="player-art" style="background-image: url('${SpriteUrls.player}')" aria-hidden="true"></div>
           <div class="player-overlay" aria-hidden="true"></div>
           <div class="player-content">
@@ -790,11 +799,39 @@ export class GameBoardRenderer {
     const candle = character.candle ?? 0
     const candleMax = character.candleMax ?? 10
     const candlePct = Math.max(0, Math.min(100, (candle / candleMax) * 100))
-    const mode = this.candleModeMeta(character.candleMode ?? 'max-health')
+    const currentMode = character.candleMode ?? 'max-health'
+    const mode = this.candleModeMeta(currentMode)
     const ticks = Array.from({ length: candleMax }, (_, idx) => {
       const filled = idx < candle ? 'is-filled' : ''
       return `<span class="candle-gauge-tick ${filled}" aria-hidden="true"></span>`
     }).join('')
+
+    // Four-direction "고양이 발바닥" fan: clicking the centre toggles the
+    // petals out radially; selecting one sends `candleModeSelect` and the
+    // petals retract back into the centre. The order (up/right/down/left)
+    // is stable so each mode always lives in the same direction.
+    const fanModes: { mode: CandleMode; dir: 'up' | 'right' | 'down' | 'left' }[] = [
+      { mode: 'max-health', dir: 'up' },
+      { mode: 'attack', dir: 'right' },
+      { mode: 'ember', dir: 'down' },
+      { mode: 'draw', dir: 'left' },
+    ]
+    const fanPetals = fanModes
+      .map((entry) => {
+        const meta = this.candleModeMeta(entry.mode)
+        const isCurrent = entry.mode === currentMode ? 'is-current' : ''
+        return `
+          <button class="candle-mode-petal petal-${entry.dir} ${isCurrent}"
+                  type="button"
+                  data-candle-mode="${entry.mode}"
+                  title="${meta.label}: ${meta.effect}"
+                  aria-label="${meta.label}: ${meta.effect}">
+            <span class="candle-mode-petal-icon">${meta.icon}</span>
+            <span class="candle-mode-petal-label">${meta.label}</span>
+          </button>
+        `
+      })
+      .join('')
 
     return `
       <aside class="hand-panel" aria-label="Hand">
@@ -803,10 +840,15 @@ export class GameBoardRenderer {
           손패 (${character.hand.length}/${handMax})
         </header>
         <div class="candle-gauge" aria-label="10칸 손패 게이지">
-          <button class="candle-mode-btn" type="button" data-cycle-candle-mode title="모드 변경: ${mode.effect}">
-            <span class="candle-mode-icon">${mode.icon}</span>
-            <span class="candle-mode-label">${mode.label}</span>
-          </button>
+          <div class="candle-mode-wheel" data-candle-wheel>
+            <button class="candle-mode-btn" type="button" data-toggle-candle-fan
+                    aria-label="게이지 모드: ${mode.label}. ${mode.effect}"
+                    title="${mode.label}: ${mode.effect}">
+              <span class="candle-mode-icon">${mode.icon}</span>
+              <span class="candle-mode-label">${mode.label}</span>
+            </button>
+            <div class="candle-mode-fan" aria-hidden="true">${fanPetals}</div>
+          </div>
           <div class="candle-gauge-body">
             <div class="candle-gauge-meter" style="--candle-fill: ${candlePct}%">
               ${ticks}
@@ -1575,13 +1617,36 @@ export class GameBoardRenderer {
     // Chain reset is bound on the body-mounted chain banner (updateChainBanner)
     // since the old in-stage strip is gone.
 
-    // Candle mode button cycles the payoff for the 10-slot hand gauge.
-    this.boardElement
-      .querySelector<HTMLElement>('[data-cycle-candle-mode]')
-      ?.addEventListener('click', (e) => {
+    // Candle mode picker: clicking the centre toggles the 4-direction fan;
+    // clicking a petal commits that mode and snaps the fan back closed.
+    const wheel = this.boardElement.querySelector<HTMLElement>('[data-candle-wheel]')
+    if (wheel) {
+      const toggleBtn = wheel.querySelector<HTMLElement>('[data-toggle-candle-fan]')
+      toggleBtn?.addEventListener('click', (e) => {
         e.stopPropagation()
-        document.dispatchEvent(new CustomEvent('candleModeCycle'))
+        wheel.classList.toggle('is-fan-open')
       })
+      wheel.querySelectorAll<HTMLElement>('[data-candle-mode]').forEach((petal) => {
+        petal.addEventListener('click', (e) => {
+          e.stopPropagation()
+          const mode = petal.dataset.candleMode as CandleMode | undefined
+          wheel.classList.remove('is-fan-open')
+          if (!mode) return
+          document.dispatchEvent(new CustomEvent('candleModeSelect', { detail: { mode } }))
+        })
+      })
+      // Click anywhere else closes the fan so it never lingers open while
+      // the player is interacting with the field.
+      document.addEventListener(
+        'click',
+        (e) => {
+          if (!wheel.classList.contains('is-fan-open')) return
+          if (e.target instanceof Node && wheel.contains(e.target)) return
+          wheel.classList.remove('is-fan-open')
+        },
+        { capture: true }
+      )
+    }
 
     // Score conversion is panel-level UI and does not spend a turn.
     this.boardElement
@@ -2581,38 +2646,45 @@ const STYLES = `
     0 0 18px rgba(244, 164, 96, 0.18);
 }
 
-.cell.card.type-enemy { border-color: var(--color-enemy); }
+/* Type accent is now a soft wax band along the bottom edge of the card,
+   echoing the candle-wax/sealing-wax tone from the rest of the UI instead of
+   the harder neon-coloured side strip. The base border stays warm aged brass
+   so every card reads as part of the same parchment family. */
+.cell.card.type-enemy { border-color: rgba(168, 58, 58, 0.78); }
 .cell.card.type-enemy::before {
   content: '';
   position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 3px;
-  background: linear-gradient(180deg, var(--color-enemy), #5a1818);
+  left: 6px; right: 6px; top: 2px;
+  height: 3px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, transparent, var(--color-enemy) 26%, #5a1818 74%, transparent);
   z-index: 3;
   pointer-events: none;
-  box-shadow: 0 0 8px rgba(168, 58, 58, 0.6);
+  opacity: 0.78;
 }
-.cell.card.type-trap { border-color: var(--color-trap); }
+.cell.card.type-trap { border-color: rgba(112, 76, 150, 0.78); }
 .cell.card.type-trap::before {
   content: '';
   position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 3px;
-  background: linear-gradient(180deg, var(--color-trap), #2c1d44);
+  left: 6px; right: 6px; top: 2px;
+  height: 3px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, transparent, var(--color-trap) 26%, #2c1d44 74%, transparent);
   z-index: 3;
   pointer-events: none;
-  box-shadow: 0 0 8px rgba(112, 76, 150, 0.55);
+  opacity: 0.78;
 }
-.cell.card.type-treasure { border-color: var(--color-treasure); }
+.cell.card.type-treasure { border-color: rgba(201, 161, 58, 0.86); }
 .cell.card.type-treasure::before {
   content: '';
   position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 3px;
-  background: linear-gradient(180deg, var(--color-flame), var(--color-treasure));
+  left: 6px; right: 6px; top: 2px;
+  height: 3px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, transparent, var(--color-flame) 26%, var(--color-treasure) 74%, transparent);
   z-index: 3;
   pointer-events: none;
-  box-shadow: 0 0 8px rgba(255, 215, 120, 0.55);
+  opacity: 0.86;
 }
 
 .cell.card.type-trap.is-grouped[data-span="3"] {
@@ -2764,6 +2836,18 @@ const STYLES = `
 .card-stats .stat-value { font-variant-numeric: tabular-nums; }
 .card-stats .stat.hp { color: #ffb3a1; }
 .card-stats .stat.atk { color: #ffd58a; }
+/* Trap "점화 / 폭발 / 즉사" status word: flat warm-ink chip, matched to
+   the bomb/spore badges instead of a bright red pill. */
+.card-stats .stat.trap-state {
+  color: #ffd9c3;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 150, 120, 0.42);
+  background: rgba(76, 22, 18, 0.62);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
 .card-stats.danger {
   color: #fff;
   background: var(--color-enemy);
@@ -2874,17 +2958,30 @@ const STYLES = `
   aspect-ratio: 1;
   position: relative;
   overflow: visible;
-  /* Square chip frame: compact like a small relic case, but still softened to
-     match the candlelit card UI instead of reading as a sharp debug tile. */
+  /* Wax-sealed pocket case: brass-rimmed parchment back with a subtle inner
+     ring so each owned relic reads as a small artifact card rather than a
+     screenshot thumbnail. */
   border-radius: 12px;
-  border: 1px solid rgba(255, 215, 120, 0.46);
+  border: 1px solid rgba(255, 215, 120, 0.5);
   background:
-    radial-gradient(circle at 50% 22%, rgba(255, 232, 168, 0.2), transparent 44%),
-    linear-gradient(160deg, rgba(38, 27, 35, 0.94), rgba(13, 9, 19, 0.95));
+    radial-gradient(circle at 50% 18%, rgba(255, 232, 168, 0.26), transparent 50%),
+    linear-gradient(160deg, rgba(44, 32, 40, 0.96), rgba(13, 9, 19, 0.96));
   box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.24),
-    inset 0 -10px 18px rgba(0, 0, 0, 0.34),
-    0 8px 18px rgba(0, 0, 0, 0.45);
+    inset 0 1px 0 rgba(255, 232, 168, 0.28),
+    inset 0 0 0 1px rgba(74, 58, 42, 0.5),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.36),
+    0 8px 18px rgba(0, 0, 0, 0.5);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.relic-mini-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 232, 168, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.42),
+    inset 0 0 0 1px rgba(120, 90, 60, 0.6),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.42),
+    0 10px 22px rgba(0, 0, 0, 0.55),
+    0 0 18px rgba(244, 164, 96, 0.28);
 }
 .relic-mini-art {
   position: absolute;
@@ -2892,7 +2989,7 @@ const STYLES = `
   border-radius: 8px;
   background-size: cover;
   background-position: center 20%;
-  filter: sepia(0.16) saturate(0.9) brightness(0.92);
+  filter: sepia(0.18) saturate(0.92) brightness(0.94);
 }
 .relic-mini-card::after {
   content: '';
@@ -2901,8 +2998,8 @@ const STYLES = `
   pointer-events: none;
   border-radius: inherit;
   background:
-    linear-gradient(180deg, rgba(255, 232, 168, 0.18), transparent 34%, rgba(13, 9, 19, 0.38)),
-    radial-gradient(circle at 50% 50%, transparent 58%, rgba(0, 0, 0, 0.36) 100%);
+    linear-gradient(180deg, rgba(255, 232, 168, 0.22), transparent 36%, rgba(13, 9, 19, 0.42)),
+    radial-gradient(circle at 50% 50%, transparent 56%, rgba(0, 0, 0, 0.42) 100%);
 }
 .player-row {
   display: flex;
@@ -3630,6 +3727,19 @@ const STYLES = `
     inset 0 1px 0 rgba(255, 232, 168, 0.12),
     0 0 16px rgba(0, 0, 0, 0.2);
 }
+/* Candle mode wheel: the centre button shows the active mode; on click,
+   four petals (max-health/attack/ember/draw) fan out radially like a cat
+   paw and snap back when one is chosen. */
+.candle-mode-wheel {
+  position: relative;
+  width: 40px;
+  min-width: 40px;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+}
 .candle-mode-btn {
   appearance: none;
   display: grid;
@@ -3637,7 +3747,8 @@ const STYLES = `
   align-items: center;
   justify-items: center;
   gap: 2px;
-  min-width: 40px;
+  width: 100%;
+  height: 100%;
   border: 1px solid rgba(255, 215, 120, 0.42);
   border-radius: 10px;
   color: var(--color-flame);
@@ -3645,10 +3756,17 @@ const STYLES = `
   cursor: pointer;
   font-family: inherit;
   box-shadow: 0 0 12px rgba(255, 215, 120, 0.12);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  z-index: 2;
 }
 .candle-mode-btn:hover {
   border-color: rgba(255, 215, 120, 0.72);
   background: rgba(244, 164, 96, 0.16);
+}
+.candle-mode-wheel.is-fan-open .candle-mode-btn {
+  border-color: rgba(255, 215, 120, 0.9);
+  box-shadow: 0 0 18px rgba(255, 215, 120, 0.4);
+  transform: scale(1.04);
 }
 .candle-mode-icon {
   display: inline-flex;
@@ -3661,6 +3779,76 @@ const STYLES = `
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.04em;
+}
+.candle-mode-fan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.candle-mode-petal {
+  appearance: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  align-items: center;
+  justify-items: center;
+  gap: 1px;
+  padding: 4px 2px;
+  border: 1px solid rgba(255, 215, 120, 0.5);
+  border-radius: 12px;
+  color: var(--color-flame);
+  background:
+    radial-gradient(circle at 50% 28%, rgba(255, 215, 120, 0.26), rgba(20, 16, 28, 0.94) 70%);
+  cursor: pointer;
+  font-family: inherit;
+  opacity: 0;
+  transform: translate(0, 0) scale(0.4);
+  transition: transform 0.28s cubic-bezier(0.18, 0.86, 0.22, 1),
+              opacity 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  pointer-events: none;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5);
+}
+.candle-mode-petal-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+.candle-mode-petal-label {
+  color: rgba(255, 232, 168, 0.92);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.candle-mode-petal.is-current {
+  border-color: rgba(255, 232, 168, 0.95);
+  box-shadow: 0 0 14px rgba(255, 215, 120, 0.4), 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+.candle-mode-wheel.is-fan-open .candle-mode-petal {
+  opacity: 1;
+  pointer-events: auto;
+}
+.candle-mode-wheel.is-fan-open .candle-mode-petal.petal-up {
+  transform: translate(0, -54px) scale(1);
+}
+.candle-mode-wheel.is-fan-open .candle-mode-petal.petal-right {
+  transform: translate(54px, 0) scale(1);
+}
+.candle-mode-wheel.is-fan-open .candle-mode-petal.petal-down {
+  transform: translate(0, 54px) scale(1);
+}
+.candle-mode-wheel.is-fan-open .candle-mode-petal.petal-left {
+  transform: translate(-54px, 0) scale(1);
+}
+.candle-mode-petal:hover {
+  border-color: rgba(255, 232, 168, 0.96);
+  background: radial-gradient(circle at 50% 28%, rgba(255, 215, 120, 0.4), rgba(36, 24, 42, 0.96) 70%);
 }
 .candle-gauge-body {
   display: grid;
@@ -5095,11 +5283,12 @@ const STYLES = `
   padding: 2px 7px;
   border-radius: 999px;
   color: #1c1424;
-  background: rgba(241, 245, 249, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  font-size: 12px;
+  background: rgba(228, 234, 244, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  font-size: 11px;
   font-weight: 900;
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.36);
+  letter-spacing: 0.04em;
+  box-shadow: 0 0 6px rgba(216, 232, 248, 0.22);
 }
 .bomb-badge,
 .spore-badge {
@@ -5122,45 +5311,41 @@ const STYLES = `
   from { opacity: 0.72; filter: brightness(1); }
   to { opacity: 0.95; filter: brightness(1.18); }
 }
+/* Flat plaque shield badge: an inline shield glyph + the number sit on a
+   single warm wax-trimmed strip, matching the rest of the flat icon UI
+   (compendium stats, hand-card stat rows) instead of the old glowy blue
+   plate with a stroked silhouette. */
 .shield-badge {
   position: absolute;
   right: 8px;
   top: 8px;
   z-index: 5;
-  min-width: 34px;
-  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px 2px 5px;
+  color: #fff5dc;
+  background: rgba(20, 16, 28, 0.7);
+  border: 1px solid rgba(255, 215, 120, 0.4);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+.shield-badge-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #fff9dd;
-  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.62));
-}
-.shield-badge-icon {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(93, 126, 174, 0.96);
+  color: rgba(220, 232, 248, 0.96);
 }
 .shield-badge-icon .icon {
-  width: 100%;
-  height: 100%;
-  stroke: rgba(218, 235, 255, 0.95);
-  stroke-width: 2.4;
+  width: 13px;
+  height: 13px;
 }
 .shield-badge-value {
-  position: relative;
-  z-index: 1;
-  margin-top: 1px;
-  color: #fff7d8;
-  font-size: 14px;
-  font-weight: 950;
-  line-height: 1;
   font-variant-numeric: tabular-nums;
-  text-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.95),
-    0 0 7px rgba(255, 232, 168, 0.7);
 }
 
 .damage-float {
@@ -5378,19 +5563,34 @@ const STYLES = `
 }
 .score-log-relic .score-log-delta { color: rgba(255, 232, 168, 1); }
 
-/* Lit bombs borrow the existing danger pulse but shift to a red-hot fuse flicker. */
+/* Lit bombs read as an ember fuse rather than an alarm light — the warmth
+   stays on-theme while still feeling clearly dangerous. */
 .cell.card.type-trap.trap-bomb.is-bomb-armed {
-  animation: bomb-fuse-flicker 0.45s steps(2, end) infinite;
-  border-color: rgba(255, 92, 72, 0.95);
+  animation: bomb-fuse-flicker 0.52s steps(2, end) infinite;
+  border-color: rgba(244, 164, 96, 0.92);
 }
 .cell.card.type-trap.trap-bomb.is-bomb-armed .card-overlay {
-  background: radial-gradient(circle at 50% 40%, rgba(255, 84, 42, 0.35), rgba(72, 9, 9, 0.45) 72%);
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 158, 64, 0.36), rgba(74, 22, 12, 0.5) 72%),
+    linear-gradient(180deg, rgba(20, 16, 28, 0.0) 38%, rgba(20, 16, 28, 0.55) 70%, rgba(10, 7, 18, 0.92) 100%);
 }
 @keyframes bomb-fuse-flicker {
-  0%, 100% { filter: saturate(1.1); box-shadow: var(--card-depth-shadow), 0 0 14px rgba(255, 76, 48, 0.42); }
-  50% { filter: saturate(1.8) brightness(1.12); box-shadow: var(--card-depth-shadow), 0 0 26px rgba(255, 42, 28, 0.88); }
+  0%, 100% { filter: saturate(1.08); box-shadow: var(--card-depth-shadow), 0 0 14px rgba(244, 164, 96, 0.42); }
+  50% { filter: saturate(1.5) brightness(1.12); box-shadow: var(--card-depth-shadow), 0 0 26px rgba(255, 170, 80, 0.82); }
 }
 .spore-badge { border-color: rgba(147, 209, 118, 0.7); color: rgba(220, 255, 190, 0.95); }
 .bomb-badge { border-color: rgba(255, 92, 72, 0.72); color: rgba(255, 214, 190, 0.98); }
+
+/* Spore traps get a quiet moss-tinted overlay so their breeding state reads
+   at a glance, similar to how 굳음 marks waxed cards but without competing
+   with the bomb's red-orange fuse. */
+.cell.card.type-trap.trap-spore .card-overlay {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(135, 188, 96, 0.22), rgba(28, 36, 22, 0.42) 70%),
+    linear-gradient(180deg, rgba(20, 16, 28, 0.0) 38%, rgba(20, 16, 28, 0.55) 70%, rgba(10, 7, 18, 0.92) 100%);
+}
+.cell.card.type-trap.trap-spore {
+  border-color: rgba(147, 209, 118, 0.78);
+}
 
 `
