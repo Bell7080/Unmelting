@@ -934,12 +934,18 @@ export class GameBoardRenderer {
    *
    *  The hover-grown card is the click target so the player naturally
    *  taps "the bigger card" instead of hunting for a small button. */
-  private renderShopRelicCard(offer: ShopOfferView, _score: number, _character: Character): string {
+  private renderShopRelicCard(offer: ShopOfferView, score: number, _character: Character): string {
     const def = RELIC_DEFINITIONS[offer.relicId]
-    const purchasedClass = offer.purchased ? 'is-purchased' : ''
+    // Affordability is expressed on the whole card so the card copy and the
+    // taped-on price can share the same positive/negative shop mood.
+    const affordabilityClass = offer.purchased
+      ? 'is-purchased'
+      : score >= offer.price
+        ? 'is-affordable'
+        : 'is-unaffordable'
     const cardLeaveDelay = Math.floor(Math.random() * 240)
     return `
-      <article class="shop-relic-card ${purchasedClass}"
+      <article class="shop-relic-card ${affordabilityClass}"
                data-shop-buy="${def.id}"
                style="--card-leave-delay:${cardLeaveDelay}ms;"
                tabindex="0"
@@ -995,11 +1001,17 @@ export class GameBoardRenderer {
       offers.length > 0
         ? offers.map((offer) => this.renderShopRelicCard(offer, score, character)).join('')
         : '<div class="shop-empty">오늘의 잡화는 모두 팔렸어.</div>'
+    // A purchase refresh rebuilds the cards while the overlay is already
+    // visible. Mark that shell so the entrance drop animation does not replay
+    // after a click; only the first shop open should drop cards from above.
+    const suppressEnterAnimation = this.shopOverlayElement.classList.contains('is-open')
+      ? 'has-entered'
+      : ''
     // Plain shell — no SHOP label, no separate header. Each card is its
     // own clickable buy target with the price taped at the bottom; the
     // EXIT button hangs off the bottom-right.
     this.shopOverlayElement.innerHTML = `
-      <div class="shop-shell" role="dialog" aria-label="상점">
+      <div class="shop-shell ${suppressEnterAnimation}" role="dialog" aria-label="상점">
         <section class="shop-grid" aria-label="상점 유물 목록">${cards}</section>
         <button class="shop-close-btn" type="button" data-shop-close aria-label="상점 나가기">EXIT</button>
       </div>
@@ -1034,9 +1046,34 @@ export class GameBoardRenderer {
   playShopExitAnimation(): Promise<void> {
     const shell = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-shell')
     if (!shell) return Promise.resolve()
+    const cards = Array.from(shell.querySelectorAll<HTMLElement>('.shop-relic-card'))
     shell.classList.add('is-closing')
-    // Total = bounce(220ms) + swooshDelayMax(240ms) + swoosh(500ms) + buffer.
-    return new Promise((resolve) => window.setTimeout(resolve, 220 + 240 + 540))
+    if (cards.length === 0) return Promise.resolve()
+
+    // Wait for every upward swoosh animation instead of racing a fixed timer;
+    // the shutter resume must not begin until the last relic has actually left.
+    let finished = 0
+    return new Promise((resolve) => {
+      let resolved = false
+      let fallback = 0
+      const finishAll = (): void => {
+        if (resolved) return
+        resolved = true
+        window.clearTimeout(fallback)
+        resolve()
+      }
+      const finishOne = (): void => {
+        finished += 1
+        if (finished >= cards.length) finishAll()
+      }
+      fallback = window.setTimeout(finishAll, 220 + 240 + 700)
+      cards.forEach((card) => {
+        card.addEventListener('animationend', (event) => {
+          if (event.animationName !== 'shop-card-swoosh') return
+          finishOne()
+        })
+      })
+    })
   }
 
   /** Hide the modal shop without destroying purchased state in index.ts. */
@@ -1089,12 +1126,18 @@ export class GameBoardRenderer {
       shutter.classList.add('is-closed')
       rail.appendChild(shutter)
     }
+
+    // Resume mirrors the entry beat: first the rail clatters, then the closed
+    // shutter reverses upward. This keeps the shutter from looking like it
+    // escaped by itself while shop cards are still leaving.
     return new Promise((resolve) => {
-      window.setTimeout(() => shutter.classList.add('is-opening'), 20)
+      rail.classList.add('is-shop-quaking')
+      window.setTimeout(() => rail.classList.remove('is-shop-quaking'), 520)
+      window.setTimeout(() => shutter.classList.add('is-opening'), 560)
       window.setTimeout(() => {
         shutter.remove()
         resolve()
-      }, 520)
+      }, 560 + 760)
     })
   }
 
@@ -3546,6 +3589,11 @@ const STYLES = `
 .shop-grid > .shop-relic-card:nth-child(1) { animation-delay: 60ms; }
 .shop-grid > .shop-relic-card:nth-child(2) { animation-delay: 160ms; }
 .shop-grid > .shop-relic-card:nth-child(3) { animation-delay: 260ms; }
+.shop-shell.has-entered .shop-relic-card {
+  /* Buying a card rebuilds the shop contents; this guard prevents that
+     refresh from replaying the first-open drop animation. */
+  animation: none;
+}
 @keyframes shop-card-enter {
   0%   { transform: translateY(-130%) scale(0.9); opacity: 0; }
   72%  { transform: translateY(8px) scale(1.02); opacity: 1; }
@@ -3560,6 +3608,21 @@ const STYLES = `
               0 18px 36px rgba(0, 0, 0, 0.65),
               0 0 30px rgba(244, 164, 96, 0.4);
   z-index: 6;
+}
+.shop-relic-card.is-affordable {
+  border-color: rgba(122, 202, 113, 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(223, 255, 183, 0.22),
+    0 12px 24px rgba(0, 0, 0, 0.55),
+    0 0 20px rgba(78, 168, 82, 0.16);
+}
+.shop-relic-card.is-unaffordable {
+  border-color: rgba(166, 62, 58, 0.58);
+  filter: saturate(0.82) brightness(0.86);
+}
+.shop-relic-card.is-unaffordable .shop-relic-title,
+.shop-relic-card.is-unaffordable .shop-relic-effect {
+  color: rgba(202, 174, 158, 0.76);
 }
 .shop-relic-card.is-purchased {
   filter: saturate(0.55) brightness(0.72);
@@ -3601,30 +3664,80 @@ const STYLES = `
   line-height: 1.3;
 }
 
-/* Tape-strip price tag — ivory paper with two warm stripes for the
-   "tape" feel, glued onto the bottom of the card at a slight angle. */
+/* Makeshift price tape: torn parchment, uneven shadow, and small
+   translucent cross-strips make the label feel hurriedly stuck onto the card. */
 .shop-price-tape {
   position: absolute;
   bottom: -10px;
   left: 50%;
   transform: translateX(-50%) rotate(-3.4deg);
-  padding: 4px 16px;
-  background: linear-gradient(180deg, rgba(245, 232, 196, 0.96), rgba(214, 188, 142, 0.96));
+  padding: 5px 18px 4px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 18%, transparent 82%, rgba(86, 48, 20, 0.16)),
+    repeating-linear-gradient(
+      -10deg,
+      rgba(85, 55, 30, 0.08) 0 2px,
+      rgba(255, 255, 255, 0.08) 2px 5px
+    ),
+    linear-gradient(180deg, rgba(243, 229, 190, 0.97), rgba(199, 169, 121, 0.97));
   color: #2a1408;
   font-weight: 900;
   font-size: 13px;
   letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
-  border-radius: 2px;
+  border-radius: 3px 1px 4px 2px;
   box-shadow:
-    0 6px 14px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    0 7px 16px rgba(0, 0, 0, 0.58),
+    2px 1px 0 rgba(83, 45, 20, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 0 rgba(85, 55, 30, 0.18);
   text-shadow: 0 1px 0 rgba(255, 232, 168, 0.6);
   z-index: 7;
   pointer-events: none;
-  /* Two faint translucent edges hint at "two strips of tape" wrap-around. */
-  border-left: 1px dashed rgba(120, 80, 40, 0.42);
-  border-right: 1px dashed rgba(120, 80, 40, 0.42);
+  /* Uneven corner radii and dashed edges imply torn paper while leaving the
+     extra cross-strips visible outside the label bounds. */
+  border-left: 1px dashed rgba(96, 62, 34, 0.46);
+  border-right: 1px dashed rgba(96, 62, 34, 0.46);
+}
+.shop-price-tape::before,
+.shop-price-tape::after {
+  /* Short extra strips sell the "grabbed whatever tape was nearby" look
+     without adding new DOM nodes to the shop card template. */
+  content: '';
+  position: absolute;
+  top: -7px;
+  width: 20px;
+  height: 12px;
+  background:
+    repeating-linear-gradient(
+      105deg,
+      rgba(255, 244, 210, 0.32) 0 3px,
+      rgba(95, 58, 30, 0.13) 3px 6px
+    );
+  border: 1px dashed rgba(90, 58, 32, 0.28);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.24);
+}
+.shop-price-tape::before { left: -8px; transform: rotate(9deg); }
+.shop-price-tape::after { right: -8px; transform: rotate(-11deg); }
+.shop-relic-card.is-affordable .shop-price-tape {
+  background:
+    linear-gradient(90deg, rgba(232, 255, 206, 0.22), transparent 18%, transparent 82%, rgba(35, 82, 32, 0.18)),
+    repeating-linear-gradient(-10deg, rgba(41, 92, 38, 0.1) 0 2px, rgba(255, 255, 255, 0.08) 2px 5px),
+    linear-gradient(180deg, rgba(218, 239, 177, 0.98), rgba(124, 170, 91, 0.98));
+  color: #10280e;
+  text-shadow: 0 1px 0 rgba(239, 255, 196, 0.7);
+}
+.shop-relic-card.is-unaffordable .shop-price-tape {
+  background:
+    linear-gradient(90deg, rgba(255, 206, 206, 0.12), transparent 18%, transparent 82%, rgba(70, 18, 18, 0.22)),
+    repeating-linear-gradient(-10deg, rgba(82, 28, 25, 0.13) 0 2px, rgba(0, 0, 0, 0.06) 2px 5px),
+    linear-gradient(180deg, rgba(165, 82, 72, 0.92), rgba(90, 38, 38, 0.96));
+  color: rgba(42, 11, 10, 0.9);
+  text-shadow: 0 1px 0 rgba(255, 190, 170, 0.28);
+}
+.shop-relic-card.is-purchased .shop-price-tape {
+  background: linear-gradient(180deg, rgba(183, 204, 164, 0.9), rgba(98, 120, 82, 0.92));
+  color: rgba(20, 38, 18, 0.88);
 }
 
 /* Closing — bounce down then swoosh up in random per-card order. The
