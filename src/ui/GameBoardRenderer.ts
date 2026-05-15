@@ -251,6 +251,7 @@ export class GameBoardRenderer {
     this.animateRenderedResourceCounters()
     this.animateMovedCards(previousRects)
     this.animateMovedHandSlots(previousHandRects)
+    this.playNewHandMergeEffects()
     this.rememberRenderedCards()
     // Floating chain banner (body-mounted, above the player profile).
     this.updateChainBanner(scorePanel.chainHints)
@@ -905,6 +906,7 @@ export class GameBoardRenderer {
       const handArt = spriteForHandCard(card.defId)
       slots.push(`
         <li class="${classes}" data-slot-index="${i}" data-hand-uid="${card.uid}"
+            style="--slot-index: ${i}; --hand-enter-order: ${i};"
             ${recipeReadyTitle ? `title="${recipeReadyTitle}"` : ''}>
           <button type="button" data-item-index="${i}"
                   style="--hand-card-art: url('${handArt}');"
@@ -1160,7 +1162,9 @@ export class GameBoardRenderer {
     oldShutter?.remove()
     const shutter = this.createShopShutter()
     rail.appendChild(shutter)
-    rail.classList.add('is-shop-quaking')
+    // While the shutter is down, pause only distracting in-rail loop effects
+    // (not gameplay timers), so armed bombs do not sparkle behind the paper.
+    rail.classList.add('is-shop-quaking', 'is-shop-shuttered')
     return new Promise((resolve) => {
       window.setTimeout(() => rail.classList.remove('is-shop-quaking'), 520)
       window.setTimeout(() => shutter.classList.add('is-closed'), 760)
@@ -1187,6 +1191,7 @@ export class GameBoardRenderer {
       window.setTimeout(() => shutter.classList.add('is-opening'), 560)
       window.setTimeout(() => {
         shutter.remove()
+        rail.classList.remove('is-shop-shuttered')
         resolve()
       }, 560 + 760)
     })
@@ -2583,6 +2588,25 @@ export class GameBoardRenderer {
         { duration: 360, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)' }
       )
     })
+  }
+
+  /** New merged hand cards get a delayed jelly snap plus the same square/sparkle
+   *  language as score gains, so triples are readable before settling into one card. */
+  private playNewHandMergeEffects(): void {
+    this.boardElement
+      .querySelectorAll<HTMLElement>('.hand-slot.hand-card.is-merged.is-entering')
+      .forEach((el) => {
+        const uid = el.dataset.handUid
+        if (!uid || this.previousHandUids.has(uid)) return
+        // Match the CSS delay: first the falling card lands, then the merge
+        // visibly compresses and bursts instead of appearing already finished.
+        window.setTimeout(() => {
+          if (!el.isConnected) return
+          el.classList.add('is-merge-bursting')
+          SquareBurst.playOn(el, 'score', { count: 22, spread: 92, duration: 660, size: [7, 16] })
+          window.setTimeout(() => el.classList.remove('is-merge-bursting'), 760)
+        }, 560)
+      })
   }
 
   /** Remember ids and spans after each render for enter/merge animations. */
@@ -5291,19 +5315,18 @@ const STYLES = `
   display: flex;
   flex-direction: column;
   justify-content: flex-end; /* Dock filled cards to the bottom. */
-  gap: 6px;
+  /* Every additional card tightens the gap a little, keeping a full hand tucked
+     under the combo gauge instead of pushing up over it. */
+  gap: clamp(1px, calc(9px - var(--hand-count, 0) * 0.8px), 6px);
   min-height: 0;
   overflow: visible;
 }
 
-.hand-stack.is-crowded {
-  /* When future relics raise the hand cap, keep the stack inside the left panel
-     by letting cards overlap from the bottom upward instead of overflowing. */
-  gap: 2px;
-}
 .hand-stack.is-crowded .hand-slot.hand-card {
-  min-height: 70px;
-  margin-top: clamp(-18px, calc(58px - var(--hand-count, 8) * 10px), 0px);
+  /* Crowded hands overlap upward while the lower/earlier card keeps the higher
+     z-index, so the bottom card reads as the front card in the stack. */
+  min-height: clamp(62px, calc(94px - var(--hand-count, 8) * 3px), 70px);
+  margin-top: clamp(-24px, calc(56px - var(--hand-count, 8) * 10px), 0px);
 }
 .hand-slot {
   border-radius: 8px;
@@ -5330,16 +5353,59 @@ const STYLES = `
     0 0 0 1px rgba(244, 164, 96, 0.12);
   transition: transform 0.18s cubic-bezier(0.2, 0.86, 0.28, 1), box-shadow 0.18s ease;
   isolation: isolate;
+  /* Lower model slots are visually in front of later/upper cards. */
+  z-index: calc(120 - var(--slot-index, 0));
 }
 /* Drop animation runs ONLY on the first render where this uid appears.
    Without this gate, every full re-render of the hand panel would replay
    the drop on every card, which made the whole stack twitch. */
 .hand-slot.hand-card.is-entering {
-  animation: hand-card-drop 0.32s cubic-bezier(0.18, 0.88, 0.22, 1);
+  /* New cards fall one-by-one from just below the combo gauge, overshoot like
+     soft jelly, then settle into the stack. */
+  animation: hand-card-drop 0.58s cubic-bezier(0.17, 0.88, 0.18, 1.08) both;
+  animation-delay: calc(var(--hand-enter-order, 0) * 92ms);
 }
 @keyframes hand-card-drop {
-  from { transform: translateY(-12px); opacity: 0.4; }
-  to { transform: translateY(0); opacity: 1; }
+  0%   { transform: translateY(-240px) scale(0.96, 1.04); opacity: 0; filter: brightness(1.28); }
+  64%  { transform: translateY(18px) scale(1.02, 0.94); opacity: 1; filter: brightness(1.1); }
+  80%  { transform: translateY(-7px) scale(0.985, 1.035); }
+  92%  { transform: translateY(3px) scale(1.006, 0.988); }
+  100% { transform: translateY(0) scale(1); opacity: 1; filter: brightness(1); }
+}
+.hand-slot.hand-card.is-merged.is-entering {
+  /* A freshly synthesized triple waits until the falling beat lands, then
+     performs the merge snap instead of disappearing instantly. */
+  animation:
+    hand-card-drop 0.58s cubic-bezier(0.17, 0.88, 0.18, 1.08) both,
+    hand-merge-jelly 0.76s cubic-bezier(0.16, 0.9, 0.18, 1) 0.54s both;
+}
+.hand-slot.hand-card.is-merge-bursting::after {
+  content: '✦ ✧ ✦';
+  position: absolute;
+  inset: -12px;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 244, 190, 0.98);
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  text-shadow: 0 0 14px rgba(255, 215, 120, 0.92), 0 0 28px rgba(244, 164, 96, 0.62);
+  pointer-events: none;
+  animation: hand-merge-sparkle 0.72s ease-out both;
+}
+@keyframes hand-merge-jelly {
+  0%, 18% { transform: translateY(0) scale(1); filter: brightness(1); }
+  34% { transform: translateY(10px) scale(1.12, 0.82); filter: brightness(1.7) saturate(1.28); }
+  48% { transform: translateY(-8px) scale(0.9, 1.16); }
+  64% { transform: translateY(3px) scale(1.04, 0.96); }
+  82% { transform: translateY(-2px) scale(0.99, 1.02); }
+  100% { transform: translateY(0) scale(1); filter: brightness(1); }
+}
+@keyframes hand-merge-sparkle {
+  0% { opacity: 0; transform: scale(0.62) rotate(-4deg); }
+  34% { opacity: 1; transform: scale(1.18) rotate(3deg); }
+  100% { opacity: 0; transform: scale(1.55) rotate(0deg); }
 }
 /* Used hand-card ghost: cloned into body by animateHandCardUse so the card
    visibly travels from the hand stack toward the player-card area before it
@@ -6407,6 +6473,17 @@ const STYLES = `
 .cell.card.type-trap.trap-bomb.is-bomb-armed {
   animation: bomb-fuse-flicker 0.52s steps(2, end) infinite;
   border-color: rgba(244, 164, 96, 0.92);
+}
+.rail.is-shop-shuttered .cell.card.type-trap.trap-bomb.is-bomb-armed,
+.rail.is-shop-shuttered .bomb-badge {
+  /* Shutter pause is visual-only: no turn state resets, just no glow behind paper. */
+  animation-play-state: paused;
+  filter: none;
+  box-shadow: var(--card-depth-shadow);
+}
+.rail.is-shop-shuttered .cell.card.type-trap.trap-bomb.is-bomb-armed .card-overlay {
+  background:
+    linear-gradient(180deg, rgba(20, 16, 28, 0.0) 38%, rgba(20, 16, 28, 0.55) 70%, rgba(10, 7, 18, 0.92) 100%);
 }
 .cell.card.type-trap.trap-bomb.is-bomb-armed .card-overlay {
   background:

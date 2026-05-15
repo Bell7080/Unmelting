@@ -186,40 +186,52 @@ export class TurnManager {
   /** Tick infectious spores and convert up to groupCount adjacent cells every second tick. */
   applySporeSpread(): SporeSpread[] {
     const spreads: SporeSpread[] = []
+    const sporesAtTurnStart: { card: Card; laneIndex: number; distance: number }[] = []
     const seen = new Set<Card>()
+
+    // Snapshot the spores before mutating the board. Newly infected spores can
+    // be placed in cells the nested scan has not reached yet, so a live scan
+    // would incorrectly tick them from 2 → 1 on their birth turn.
     for (let laneIndex = 0; laneIndex < this.gameState.lanes.length; laneIndex++) {
       for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
         const card = this.gameState.lanes[laneIndex].getCardAtDistance(distance)
-        if (!card || seen.has(card) || card.type !== CardType.TRAP || card.trapKind !== 'spore')
+        if (!card || seen.has(card) || card.type !== CardType.TRAP || card.trapKind !== 'spore') {
           continue
-        seen.add(card)
-        if (card.isFrozen()) continue
-        card.sporeTurnsUntilSpread = Math.max(0, card.sporeTurnsUntilSpread - 1)
-        if (card.sporeTurnsUntilSpread > 0) continue
-
-        const candidates = this.collectSporeTargets(laneIndex, distance, card)
-        const infected: { laneIndex: number; distance: number }[] = []
-        const infectCount = Math.min(card.groupCount, candidates.length)
-        for (let n = 0; n < infectCount; n++) {
-          const pickIndex = Math.floor(Math.random() * candidates.length)
-          const [target] = candidates.splice(pickIndex, 1)
-          const spore = new Card(
-            `spore-${Date.now()}-${Math.random()}`,
-            CardType.TRAP,
-            '감염 포자',
-            'Deals 1/3/5 damage and spreads every 2 turns',
-            0,
-            1,
-            { trapKind: 'spore' }
-          )
-          // Newly infected spores use a fresh two-turn clock; merged colonies
-          // will later keep the shortest clock through Card.merge().
-          this.gameState.lanes[target.laneIndex].setCardAtDistance(target.distance, spore)
-          infected.push(target)
         }
-        card.sporeTurnsUntilSpread = 2
-        if (infected.length > 0)
-          spreads.push({ sourceLane: laneIndex, sourceDistance: distance, infected })
+        seen.add(card)
+        sporesAtTurnStart.push({ card, laneIndex, distance })
+      }
+    }
+
+    for (const { card, laneIndex, distance } of sporesAtTurnStart) {
+      if (card.isFrozen()) continue
+      card.sporeTurnsUntilSpread = Math.max(0, card.sporeTurnsUntilSpread - 1)
+      if (card.sporeTurnsUntilSpread > 0) continue
+
+      const candidates = this.collectSporeTargets(laneIndex, distance, card)
+      const infected: { laneIndex: number; distance: number }[] = []
+      const infectCount = Math.min(card.groupCount, candidates.length)
+      for (let n = 0; n < infectCount; n++) {
+        const pickIndex = Math.floor(Math.random() * candidates.length)
+        const [target] = candidates.splice(pickIndex, 1)
+        const spore = new Card(
+          `spore-${Date.now()}-${Math.random()}`,
+          CardType.TRAP,
+          '감염 포자',
+          'Deals 1/3/5 damage and spreads every 2 turns',
+          0,
+          1,
+          { trapKind: 'spore' }
+        )
+        // Infected spores always start a full fresh clock; they are deliberately
+        // not part of sporesAtTurnStart, so they cannot act until a later turn.
+        spore.sporeTurnsUntilSpread = 2
+        this.gameState.lanes[target.laneIndex].setCardAtDistance(target.distance, spore)
+        infected.push(target)
+      }
+      card.sporeTurnsUntilSpread = 2
+      if (infected.length > 0) {
+        spreads.push({ sourceLane: laneIndex, sourceDistance: distance, infected })
       }
     }
     return spreads
