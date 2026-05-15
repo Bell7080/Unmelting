@@ -159,6 +159,13 @@ export class GameBoardRenderer {
    *  while the sparkle/burst effect is playing. */
   private displayedScoreValue = 0
   private displayedCoinValue = 0
+  /** Immediate gain feedback can be followed by a full board re-render. Keep
+   *  that pulse key alive for one CSS beat so the newly-rendered number still
+   *  receives the ✦ sparkle class instead of only leaving the body SquareBurst. */
+  private activeScorePulseKey = 0
+  private activeCoinPulseKey = 0
+  private activeScorePulseUntil = 0
+  private activeCoinPulseUntil = 0
   /** Track the displayed turn so the turn-brand only shimmers when the
    *  number actually advances (not on every intra-turn render). */
   private previousTurn = -1
@@ -294,8 +301,16 @@ export class GameBoardRenderer {
       scorePanel.coinPulseKey !== this.previousCoinPulseKey && scorePanel.coinPulseKey > 0
     const scoreIncreasing = scoreChanged && scorePanel.score > this.displayedScoreValue
     const coinIncreasing = coinChanged && scorePanel.coins > this.displayedCoinValue
-    const scorePulseClass = scoreIncreasing ? 'is-score-popping' : ''
-    const coinPulseClass = coinIncreasing ? 'is-score-popping' : ''
+    // Immediate feedback is played on the mounted DOM before some flows trigger
+    // a full render. If that render lands inside the same pulse beat, re-apply
+    // the sparkle class to the replacement DOM so score and wallet behave alike.
+    const now = performance.now()
+    const scorePulseStillActive =
+      scorePanel.scorePulseKey === this.activeScorePulseKey && now < this.activeScorePulseUntil
+    const coinPulseStillActive =
+      scorePanel.coinPulseKey === this.activeCoinPulseKey && now < this.activeCoinPulseUntil
+    const scorePulseClass = scoreIncreasing || scorePulseStillActive ? 'is-score-popping' : ''
+    const coinPulseClass = coinIncreasing || coinPulseStillActive ? 'is-score-popping' : ''
     const renderedScore = scoreIncreasing ? this.displayedScoreValue : scorePanel.score
     const renderedCoins = coinIncreasing ? this.displayedCoinValue : scorePanel.coins
     this.previousScorePulseKey = scorePanel.scorePulseKey
@@ -2132,8 +2147,7 @@ export class GameBoardRenderer {
   /** Play score gain feedback immediately on the existing panel so the number
    *  rises during the same beat as the square burst and ✦ sparkle. */
   playScoreGainFeedback(targetScore: number, pulseKey: number): void {
-    this.previousScorePulseKey = pulseKey
-    this.displayedScoreValue = targetScore
+    this.rememberImmediateResourcePulse('score', targetScore, pulseKey)
     this.animateResourceCounter('.score-number', targetScore, '')
     const anchor = this.findScorePulseAnchor()
     if (anchor) this.burstAtElement(anchor, 'score', { count: 22, spread: 170, duration: 640 })
@@ -2141,13 +2155,32 @@ export class GameBoardRenderer {
 
   /** Play shop-currency gain feedback with the exact same sparkle language as
    *  score, but keep the wallet's trailing dollar marker. */
-  playCoinGainFeedback(targetCoins: number, _pulseKey: number): void {
-    // Do not mark the coin pulse as consumed here: coin hand cards often cause
-    // a full render right after this immediate beat, and the render must still
-    // carry the ✦ ✧ ✦ pseudo-elements instead of replacing them mid-sparkle.
+  playCoinGainFeedback(targetCoins: number, pulseKey: number): void {
+    this.rememberImmediateResourcePulse('coin', targetCoins, pulseKey)
     this.animateResourceCounter('.coin-number', targetCoins, ' $')
     const anchor = this.findCoinPulseAnchor()
     if (anchor) this.burstAtElement(anchor, 'score', { count: 22, spread: 170, duration: 640 })
+  }
+
+  /** Store the currently-playing direct resource pulse so a near-immediate
+   *  board re-render cannot sever the CSS sparkle from the persistent burst. */
+  private rememberImmediateResourcePulse(
+    resource: 'score' | 'coin',
+    targetValue: number,
+    pulseKey: number
+  ): void {
+    const pulseUntil = performance.now() + 760
+    if (resource === 'score') {
+      this.previousScorePulseKey = pulseKey
+      this.displayedScoreValue = targetValue
+      this.activeScorePulseKey = pulseKey
+      this.activeScorePulseUntil = pulseUntil
+      return
+    }
+    this.previousCoinPulseKey = pulseKey
+    this.displayedCoinValue = targetValue
+    this.activeCoinPulseKey = pulseKey
+    this.activeCoinPulseUntil = pulseUntil
   }
 
   /** Find the score/log panel for score-pulse bursts. */
