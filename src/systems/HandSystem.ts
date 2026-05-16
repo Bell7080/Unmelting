@@ -359,7 +359,7 @@ export class HandSystem {
         return `불씨 카운트 +${gained}`
       }
       case 'holy-water':
-        return HandSystem.cleanseRandomField(gs, 2)
+        return HandSystem.cleanseRandomSpores(gs, 2)
       case 'chitin':
         return HandSystem.removeTargetTrap(gs, target)
       case 'card':
@@ -396,7 +396,7 @@ export class HandSystem {
         return `트리플 불씨 카운트 +${gained}`
       }
       case 'holy-water':
-        return HandSystem.cleanseAllField(gs)
+        return HandSystem.cleanseAllSpores(gs)
       case 'chitin': {
         const cleared = HandSystem.clearAllOfTypes(gs, [CardType.TRAP])
         return `트리플 함정 ${cleared}장 제거`
@@ -467,6 +467,10 @@ export class HandSystem {
 
     if (rule.filter === 'enemy') return target.card.type === CardType.ENEMY
     if (rule.filter === 'trap') return target.card.type === CardType.TRAP
+    if (rule.filter === 'spore') {
+      // 성수 전용 필터: 일반 함정/폭탄은 두고 번식 포자만 대상으로 삼는다.
+      return target.card.type === CardType.TRAP && target.card.trapKind === 'spore'
+    }
     if (rule.filter === 'treasure') return target.card.type === CardType.TREASURE
     if (rule.filter === 'enemy-or-treasure') {
       return target.card.type === CardType.ENEMY || target.card.type === CardType.TREASURE
@@ -682,35 +686,34 @@ export class HandSystem {
     return `전방 ${count}장 ${turns}턴 굳음`
   }
 
-  /** Cleanse random field debuffs. MVP maps curse/mold cleanup to trap removal and wax removal. */
-  private static cleanseRandomField(gs: GameState, count: number): string {
-    const candidates = HandSystem.collectAllOfType(gs, CardType.TRAP).map((card) => ({ card }))
-    const frozenCards = HandSystem.collectAllFieldCards(gs).filter((card) => card.isFrozen())
-    frozenCards.forEach((card) => candidates.push({ card }))
+  /** Remove up to `count` random spore traps; 성수 no longer cleanses other hazards. */
+  private static cleanseRandomSpores(gs: GameState, count: number, prefix = ''): string {
+    const candidates = HandSystem.collectAllOfType(gs, CardType.TRAP).filter(
+      (card) => card.trapKind === 'spore'
+    )
     let cleansed = 0
     while (candidates.length > 0 && cleansed < count) {
       const pickIndex = Math.floor(Math.random() * candidates.length)
-      const [{ card }] = candidates.splice(pickIndex, 1)
-      if (card.type === CardType.TRAP) {
-        for (let d = 0; d < LANE_DISTANCE_COUNT; d++) gs.removeCardFromRow(card, d)
-      } else {
-        card.frozenTurns = 0
-      }
+      const [card] = candidates.splice(pickIndex, 1)
+      // removeCardFromRow clears every lane that references the same grouped
+      // spore, so a 2/3칸 포자군 still disappears as one selected card.
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) gs.removeCardFromRow(card, d)
       cleansed++
     }
-    return `정화 ${cleansed}장`
+    return `${prefix}포자 ${cleansed}장 제거`
   }
 
-  /** Cleanse every MVP debuff/trap from the field. */
-  private static cleanseAllField(gs: GameState): string {
-    const traps = HandSystem.clearAllOfTypes(gs, [CardType.TRAP])
-    let thawed = 0
-    for (const card of HandSystem.collectAllFieldCards(gs)) {
-      if (!card.isFrozen()) continue
-      card.frozenTurns = 0
-      thawed++
+
+  /** Triple 성수 removes every spore while preserving webs, bombs, and frozen cards. */
+  private static cleanseAllSpores(gs: GameState): string {
+    const spores = HandSystem.collectAllOfType(gs, CardType.TRAP).filter(
+      (card) => card.trapKind === 'spore'
+    )
+    for (const card of spores) {
+      // Grouped spores share one Card instance, so this clears the whole group.
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) gs.removeCardFromRow(card, d)
     }
-    return `트리플 전체 정화: 함정 ${traps}장, 굳음 ${thawed}장 해제`
+    return `트리플 전체 포자 ${spores.length}장 제거`
   }
 
   /** Remove the selected front trap. */
@@ -732,21 +735,6 @@ export class HandSystem {
       }
     }
     return null
-  }
-
-  /** Collect unique Card instances from the whole field. */
-  private static collectAllFieldCards(gs: GameState): Card[] {
-    const out: Card[] = []
-    const seen = new Set<Card>()
-    for (const lane of gs.lanes) {
-      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
-        const card = lane.getCardAtDistance(d)
-        if (!card || seen.has(card)) continue
-        seen.add(card)
-        out.push(card)
-      }
-    }
-    return out
   }
 
   private static collectAllOfType(gs: GameState, type: CardType): Card[] {

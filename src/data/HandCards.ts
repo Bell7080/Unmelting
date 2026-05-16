@@ -95,11 +95,12 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'holy-water',
     name: '성수',
     category: 'control',
-    description: '필드 랜덤 저주/곰팡이 2장 정화',
-    tripleDescription: '필드 전체 정화',
+    description: '필드 랜덤 포자 2장 제거',
+    tripleDescription: '필드 전체 포자 제거',
     targeting: {
-      base: { selection: 'random', zone: 'field', filter: 'hazard', countLimit: 2 },
-      triple: { selection: 'all', zone: 'field', filter: 'hazard', countLimit: null },
+      // 성수는 이제 저주/곰팡이 대체 규칙이 아니라 포자 함정만 정화한다.
+      base: { selection: 'random', zone: 'field', filter: 'spore', countLimit: 2 },
+      triple: { selection: 'all', zone: 'field', filter: 'spore', countLimit: null },
     },
     dropWeight: 8,
   },

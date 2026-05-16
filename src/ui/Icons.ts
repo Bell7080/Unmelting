@@ -161,6 +161,19 @@ export function spadeGemIcon(): string {
   )
 }
 
+
+/** Price tag — flat label icon for shop costs, matching the currentColor icon set. */
+export function tagIcon(): string {
+  return svg(
+    [
+      // Rounded hanging label body with a small punched hole.
+      fill('M4.2 6.2c0-1.1.9-2 2-2h6.2c.6 0 1.1.2 1.5.6l5.3 5.3c.8.8.8 2 0 2.8l-6.3 6.3c-.8.8-2 .8-2.8 0L4.8 13.9c-.4-.4-.6-.9-.6-1.5V6.2Z'),
+      stroke('M8.2 8.1h.1', 2.2),
+      stroke('M11 8.2h2.8M8.5 12h6.8', 1.25),
+    ].join(''),
+  )
+}
+
 /** Open book — used for the compendium button so the chrome stays
  *  flat-iconic instead of relying on an emoji. */
 export function bookIcon(): string {

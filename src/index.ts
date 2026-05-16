@@ -645,16 +645,7 @@ function fillBoardAtStart(): void {
   gameState.regroupAllRows()
 }
 
-function grantStarterHand(): void {
-  // Seed the hand with a small variety so all four categories are reachable
-  // immediately. Player can begin experimenting with combos from turn 1.
-  const seed: HandCardId[] = ['wax-drop', 'candle', 'ember', 'wax', 'coin']
-  for (const id of seed) {
-    if (!gameState.character.hasHandRoom()) break
-    HandSystem.enqueueDrop(gameState.character, DropSystem.makeCard(id))
-  }
-}
-
+/** Runs now begin with an empty hand; first cards must come from play rewards. */
 function startGame(): void {
   gameActive = true
   inputLocked = false
@@ -671,7 +662,6 @@ function startGame(): void {
   currentShopOffers = []
   boardRenderer.closeShop()
   syncSpawnerTier()
-  grantStarterHand()
   fillBoardAtStart()
   turnManager.armFrontBombs()
   boardRenderer.setHandTargetingMode(null)
