@@ -1118,8 +1118,13 @@ async function handleCardAction(e: Event): Promise<void> {
   }
   const beforeActionHealth = snapshotFieldHealthState()
   const result = ActionSystem.executeAction(gameState.getCharacter(), lane, card, actionType)
+  // Hand-card rewards are staged visually: first the freshly gained cards
+  // drop into the hand, then any resulting triple synthesis resolves after
+  // that landing beat instead of appearing as an already-merged card.
+  let gainedHandCardCount = 0
   if (result.success) {
     const gainedItems = result.itemGainedNames ?? []
+    gainedHandCardCount = gainedItems.length
     const actionLogs: ActivityLogDraft[] = [...createItemGainLogs(gainedItems)]
     // Drop the textual selection echo — concrete results (damage taken, item
     // gained, score) speak for themselves; only surface the textual result when
@@ -1134,9 +1139,6 @@ async function handleCardAction(e: Event): Promise<void> {
     if (result.overflow && result.overflow.length > 0) {
       recordNotice(`손패가 가득 차 ${result.overflow.length}장 잃음`, 'hurt')
     }
-    // Run auto-merges in case a drop produced a triple.
-    const merges = HandSystem.runAutoMerges(gameState.character)
-    for (const m of merges) recordNotice(m, 'melt')
     if (result.cardRemoved && card.type === CardType.TREASURE) applyWaxCrowTreasureGains(1)
   }
   const sameBeatAnimations: Promise<void>[] = []
@@ -1175,6 +1177,19 @@ async function handleCardAction(e: Event): Promise<void> {
   clearChainTimeline()
 
   render()
+
+  if (gainedHandCardCount > 0) {
+    // Let the acquisition drop finish before scanning triples. The delay scales
+    // with reward count so a 5-card chest still lands in a steady top-to-bottom
+    // rhythm without being interrupted by immediate synthesis.
+    await wait(Math.min(1180, 740 + (gainedHandCardCount - 1) * 135))
+    const merges = HandSystem.runAutoMerges(gameState.character)
+    if (merges.length > 0) {
+      for (const m of merges) recordNotice(m, 'melt')
+      render()
+      await wait(980)
+    }
+  }
 
   if (!gameState.character.isAlive()) {
     gameState.endGame('character_defeated')

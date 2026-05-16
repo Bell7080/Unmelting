@@ -63,4 +63,8 @@ export interface HandCard {
   defId: HandCardId
   /** Set when this card is the result of a 3-consecutive auto-merge in hand. */
   merged?: boolean
+  /** Source instance ids consumed by the merge. The renderer uses these ids to
+   *  animate the two upper cards from their real previous slots into the lower
+   *  merged slot instead of faking a generic top-down convergence. */
+  mergeSourceUids?: string[]
 }

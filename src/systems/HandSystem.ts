@@ -407,6 +407,10 @@ export class HandSystem {
             uid: `${a.defId}-merged-${a.uid}`,
             defId: a.defId,
             merged: true,
+            // Keep the exact consumed instance ids on the merged card.
+            // The UI uses them while the card is newly rendered to pull
+            // previous DOM rects and move upper cards into the lower slot.
+            mergeSourceUids: [a.uid, b.uid, c.uid],
           })
           messages.push(`${def.name} ×3 자동 합성`)
           didChange = true
