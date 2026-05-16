@@ -460,8 +460,27 @@ function createItemGainLogs(itemNames: string[]): ActivityLogDraft[] {
   }))
 }
 
+/**
+ * Turn-scaled score multiplier with a slight quadratic kicker so the late
+ * game ("turn 25+") feels noticeably inflated rather than purely linear.
+ *  - turn  1  : ×1.08
+ *  - turn 10  : ×1.90  (1 + 0.8 + 0.10)
+ *  - turn 20  : ×3.00  (1 + 1.6 + 0.40)
+ *  - turn 30  : ×4.30  (1 + 2.4 + 0.90)
+ */
 function getTurnScoreMultiplier(): number {
-  return 1 + gameState.getCurrentTurn() * 0.08
+  const turn = gameState.getCurrentTurn()
+  return 1 + turn * 0.08 + turn * turn * 0.001
+}
+
+/**
+ * Per-removal random jitter on the score reward. Keeps the displayed numbers
+ * from looking "ruled" — same enemy kill on the same turn shouldn't always
+ * land on exactly the same value. ±12% is enough to make the log read as
+ * inflation/situation-driven without making payouts unpredictable.
+ */
+function scoreInflationJitter(): number {
+  return 0.88 + Math.random() * 0.24 // 0.88 ~ 1.12
 }
 
 /**
@@ -520,7 +539,10 @@ function createScoreLog(
   baseValue: number,
   kind: ActivityLogEntry['kind']
 ): ActivityLogDraft {
-  const amount = Math.max(1, Math.round(baseValue * getTurnScoreMultiplier()))
+  const amount = Math.max(
+    1,
+    Math.round(baseValue * getTurnScoreMultiplier() * scoreInflationJitter())
+  )
   score += amount
   scorePulseKey++
   return { label, scoreDelta: amount, kind }
@@ -991,6 +1013,13 @@ async function applyHandSingle(
       })
     }
     boardRenderer.refreshChainBanner(buildChainHints())
+    // Recipe-drawn hand cards (셔플 / 따뜻함 등) log one acquisition row each
+    // so "손패를 뽑는 행위" 가 어디서 발생했든 일관되게 활동 로그에 표기된다.
+    if (recipeResult.drawnHandCardDefIds && recipeResult.drawnHandCardDefIds.length > 0) {
+      pushActivityLogsInDisplayOrder(
+        createItemGainLogs(recipeResult.drawnHandCardDefIds.map((id) => getHandCardDef(id).name))
+      )
+    }
 
     // Recipe effects get their own damage diff after the combo delay. As above,
     // cards killed by that damage keep their damage burst and only suppress the
