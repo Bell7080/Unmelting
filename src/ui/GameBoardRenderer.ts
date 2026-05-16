@@ -41,6 +41,7 @@ import {
   shieldIcon,
   sparkleIcon,
   swordIcon,
+  tagIcon,
 } from '@ui/Icons'
 
 export interface CardActionDetail {
@@ -240,7 +241,7 @@ export class GameBoardRenderer {
         <main class="stage">
           <section class="rail ${this.shopShutterLocked ? 'is-shop-shuttered' : ''}" aria-label="Card rail">
             ${this.renderRail(lanes)}
-            ${this.shopShutterLocked ? this.renderShopShutter(true) : ''}
+            ${this.shopShutterLocked ? this.renderShopShutter(true, lanes) : ''}
           </section>
 
           ${this.renderPlayerZone(character)}
@@ -475,6 +476,10 @@ export class GameBoardRenderer {
     if (rule.zone !== 'front' && rule.zone !== 'waiting' && rule.zone !== 'field') return false
     if (rule.filter === 'enemy') return card.type === CardType.ENEMY
     if (rule.filter === 'trap') return card.type === CardType.TRAP
+    if (rule.filter === 'spore') {
+      // Mirrors HandSystem's 성수-only 포자 targeting rule for hover hints.
+      return card.type === CardType.TRAP && card.trapKind === 'spore'
+    }
     if (rule.filter === 'treasure') return card.type === CardType.TREASURE
     if (rule.filter === 'enemy-or-treasure') {
       return card.type === CardType.ENEMY || card.type === CardType.TREASURE
@@ -690,11 +695,16 @@ export class GameBoardRenderer {
 
   private renderPlayer(character: Character): string {
     const hpPct = Math.max(0, Math.min(100, (character.health / character.maxHealth) * 100))
+    // Keep the exact shield amount in aria-label while capping the tiny in-icon
+    // text at 99+ so large shield stacks do not spill outside the silhouette.
+    const shieldDisplay = character.shield > 99 ? '99+' : String(character.shield)
     const shieldChip =
       character.shield > 0
         ? `<span class="player-shield-chip" aria-label="방패 ${character.shield}">
-             <span class="player-shield-chip-icon" aria-hidden="true">${shieldIcon()}</span>
-             <span class="player-shield-chip-value">${character.shield}</span>
+             <span class="player-shield-chip-icon" aria-hidden="true">
+               ${shieldIcon()}
+               <span class="player-shield-chip-value ${character.shield > 99 ? 'is-capped' : ''}">${shieldDisplay}</span>
+             </span>
            </span>`
         : ''
     return `
@@ -996,16 +1006,16 @@ export class GameBoardRenderer {
         'aria-label',
         `${def.name} — ${offer.purchased ? '구매 완료' : `점수 ${offer.price}점`}`
       )
-      const tape = card.querySelector<HTMLElement>('.shop-price-tape')
-      if (tape) tape.textContent = offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
+      const label = card.querySelector<HTMLElement>('.shop-price-label-text')
+      if (label) label.textContent = offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
     }
     shell.classList.add('has-entered')
     return true
   }
 
   /** Shop relic card. Click on the card itself buys the relic (the
-   *  separate price button is gone). Price is shown as a tilted tape
-   *  label glued onto the bottom of the card.
+   *  separate price button is gone). Price uses the flat tag icon from
+   *  the shared SVG icon family instead of the old taped label.
    *
    *  The hover-grown card is the click target so the player naturally
    *  taps "the bigger card" instead of hunting for a small button. */
@@ -1025,9 +1035,12 @@ export class GameBoardRenderer {
           <p class="shop-relic-effect">${def.effect}</p>
           <p class="shop-relic-flavor">${def.flavor}</p>
         </div>
-        <span class="shop-price-tape" aria-hidden="true">${
-          offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
-        }</span>
+        <span class="shop-price-label" aria-hidden="true">
+          <span class="shop-price-label-icon">${tagIcon()}</span>
+          <span class="shop-price-label-text">${
+            offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
+          }</span>
+        </span>
       </article>
     `
   }
@@ -1082,7 +1095,7 @@ export class GameBoardRenderer {
       ? 'has-entered'
       : ''
     // Plain shell — no SHOP label, no separate header. Each card is its
-    // own clickable buy target with the price taped at the bottom; the
+    // own clickable buy target with a flat price tag at the bottom; the
     // EXIT button hangs off the bottom-right.
     this.shopOverlayElement.innerHTML = `
       <div class="shop-shell ${suppressEnterAnimation}" role="dialog" aria-label="상점">
@@ -1163,23 +1176,68 @@ export class GameBoardRenderer {
     }
   }
 
-  /** Shared 3×3 wax shutter markup used by both live transitions and
-   *  render-restored shop state. `persistent` means the shutter is already
-   *  closed and should not replay the drop animation after a purchase render. */
-  private renderShopShutter(persistent = false): string {
+  /** Build shutter spans from the current rail. Grouped front cards (2/3칸)
+   *  become one wide panel so no card art peeks through inner column gaps. */
+  private shopShutterPanelsFromLanes(lanes?: Lane[]): string {
+    let panelIndex = 0
+    if (!lanes) {
+      return Array.from({ length: 9 }, () => `<span style="--shutter-i:${panelIndex++}"></span>`).join('')
+    }
+
+    const rows: string[] = []
+    for (let distance = LANE_DISTANCE_COUNT - 1; distance >= 0; distance--) {
+      let laneIndex = 0
+      while (laneIndex < lanes.length) {
+        const card = lanes[laneIndex].getCardAtDistance(distance)
+        let span = 1
+        // Match renderRow's active-row grouping rule: only the front row can
+        // merge adjacent same Card instances into a 2/3칸 object.
+        if (distance === 0 && card) {
+          while (
+            laneIndex + span < lanes.length &&
+            lanes[laneIndex + span].getCardAtDistance(distance) === card
+          ) {
+            span++
+          }
+        }
+        rows.push(
+          `<span style="--shutter-i:${panelIndex++};${span > 1 ? `grid-column: span ${span};` : ''}"></span>`
+        )
+        laneIndex += span
+      }
+    }
+    return rows.join('')
+  }
+
+  /** Read the already-rendered rail when a live shutter transition starts. */
+  private shopShutterPanelsFromRail(rail: HTMLElement): string {
+    let panelIndex = 0
+    const panels: string[] = []
+    rail.querySelectorAll<HTMLElement>('.rail-row').forEach((row) => {
+      row.querySelectorAll<HTMLElement>('.cell').forEach((cell) => {
+        const span = Number(cell.dataset.span || '1')
+        panels.push(
+          `<span style="--shutter-i:${panelIndex++};${span > 1 ? `grid-column: span ${span};` : ''}"></span>`
+        )
+      })
+    })
+    return panels.length > 0 ? panels.join('') : this.shopShutterPanelsFromLanes()
+  }
+
+  /** Shared wax shutter markup used by both live transitions and render-restored
+   *  shop state. `persistent` keeps a purchase refresh from replaying the drop. */
+  private renderShopShutter(persistent = false, lanes?: Lane[]): string {
     const classes = ['rail-shutter', persistent ? 'is-closed is-persistent' : '']
       .filter(Boolean)
       .join(' ')
-    return `<div class="${classes}" aria-hidden="true">${Array.from(
-      { length: 9 },
-      (_, i) => `<span style="--shutter-i:${i}"></span>`
-    ).join('')}</div>`
+    return `<div class="${classes}" aria-hidden="true">${this.shopShutterPanelsFromLanes(lanes)}</div>`
   }
 
-  /** Create the 3×3 wax shutter grid used by shop stop/resume transitions. */
-  private createShopShutter(): HTMLElement {
+  /** Create the wax shutter grid used by shop stop/resume transitions. */
+  private createShopShutter(rail?: HTMLElement): HTMLElement {
     const host = document.createElement('template')
-    host.innerHTML = this.renderShopShutter(false).trim()
+    const panels = rail ? this.shopShutterPanelsFromRail(rail) : this.shopShutterPanelsFromLanes()
+    host.innerHTML = `<div class="rail-shutter" aria-hidden="true">${panels}</div>`
     return host.content.firstElementChild as HTMLElement
   }
 
@@ -1190,7 +1248,7 @@ export class GameBoardRenderer {
     this.shopShutterLocked = true
     const oldShutter = rail.querySelector<HTMLElement>('.rail-shutter')
     oldShutter?.remove()
-    const shutter = this.createShopShutter()
+    const shutter = this.createShopShutter(rail)
     rail.appendChild(shutter)
     // While the shutter is down, pause only distracting in-rail loop effects
     // (not gameplay timers), so armed bombs do not sparkle behind the paper.
@@ -1554,7 +1612,7 @@ export class GameBoardRenderer {
         '동전($)',
         '상점용 화폐. 현재는 점수 집계 아래 별도 지갑으로 표시되며, 추후 상점에서 사용한다.',
       ],
-      ['정화', '현재 MVP에서는 저주/곰팡이 역할을 하는 함정 제거와 굳음 해제를 함께 처리한다.'],
+      ['정화', '성수는 기본 사용 시 랜덤 포자 2장, 트리플 사용 시 필드 전체 포자를 제거한다.'],
     ]
     const cards = terms
       .map(([name, description]) =>
@@ -3718,8 +3776,8 @@ const STYLES = `
   border: 0;
   box-shadow: none;
   /* No SHOP label any more, so the top padding shrinks to just enough
-     room for the card drop-in arc + the price tape that hangs off the
-     bottom. */
+     room for the card drop-in arc + the flat price tag that hangs off
+     the bottom. */
   padding: clamp(14px, 1.6vh, 22px) clamp(12px, 1.4vw, 18px) clamp(18px, 2.2vh, 26px);
   display: grid;
   grid-template-rows: 1fr;
@@ -3748,7 +3806,7 @@ const STYLES = `
   position: relative;
   display: grid;
   grid-template-rows: 50% 1fr;
-  overflow: visible; /* let the tilted price tape poke past the bottom */
+  overflow: visible; /* let the flat price tag poke past the bottom */
   border-radius: 14px;
   border: 1px solid rgba(255, 215, 120, 0.42);
   background: linear-gradient(180deg, rgba(45, 30, 39, 0.96), rgba(18, 12, 24, 0.96));
@@ -3841,81 +3899,58 @@ const STYLES = `
   line-height: 1.3;
 }
 
-/* Makeshift price tape: torn parchment, uneven shadow, and small
-   translucent cross-strips make the label feel hurriedly stuck onto the card. */
-.shop-price-tape {
+/* Flat shop price label: replaces the taped parchment with the shared tag
+   icon language used by the rest of the UI chrome. */
+.shop-price-label {
   position: absolute;
-  bottom: -10px;
+  bottom: -8px;
   left: 50%;
-  transform: translateX(-50%) rotate(-3.4deg);
-  padding: 5px 18px 4px;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 18%, transparent 82%, rgba(86, 48, 20, 0.16)),
-    repeating-linear-gradient(
-      -10deg,
-      rgba(85, 55, 30, 0.08) 0 2px,
-      rgba(255, 255, 255, 0.08) 2px 5px
-    ),
-    linear-gradient(180deg, rgba(243, 229, 190, 0.97), rgba(199, 169, 121, 0.97));
-  color: #2a1408;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 92px;
+  justify-content: center;
+  padding: 5px 12px 5px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 215, 120, 0.38);
+  background: linear-gradient(180deg, rgba(42, 31, 46, 0.96), rgba(20, 14, 28, 0.98));
+  color: rgba(255, 232, 168, 0.96);
   font-weight: 900;
   font-size: 13px;
   letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
-  border-radius: 3px 1px 4px 2px;
   box-shadow:
-    0 7px 16px rgba(0, 0, 0, 0.58),
-    2px 1px 0 rgba(83, 45, 20, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -2px 0 rgba(85, 55, 30, 0.18);
-  text-shadow: 0 1px 0 rgba(255, 232, 168, 0.6);
+    inset 0 1px 0 rgba(255, 232, 168, 0.14),
+    0 8px 18px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.88);
   z-index: 7;
   pointer-events: none;
-  /* Uneven corner radii and dashed edges imply torn paper while leaving the
-     extra cross-strips visible outside the label bounds. */
-  border-left: 1px dashed rgba(96, 62, 34, 0.46);
-  border-right: 1px dashed rgba(96, 62, 34, 0.46);
 }
-.shop-price-tape::before,
-.shop-price-tape::after {
-  /* Short extra strips sell the "grabbed whatever tape was nearby" look
-     without adding new DOM nodes to the shop card template. */
-  content: '';
-  position: absolute;
-  top: -7px;
-  width: 20px;
-  height: 12px;
-  background:
-    repeating-linear-gradient(
-      105deg,
-      rgba(255, 244, 210, 0.32) 0 3px,
-      rgba(95, 58, 30, 0.13) 3px 6px
-    );
-  border: 1px dashed rgba(90, 58, 32, 0.28);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.24);
+.shop-price-label-icon {
+  display: inline-flex;
+  width: 15px;
+  height: 15px;
+  color: currentColor;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.55));
 }
-.shop-price-tape::before { left: -8px; transform: rotate(9deg); }
-.shop-price-tape::after { right: -8px; transform: rotate(-11deg); }
-.shop-relic-card.is-affordable .shop-price-tape {
-  background:
-    linear-gradient(90deg, rgba(232, 255, 206, 0.22), transparent 18%, transparent 82%, rgba(35, 82, 32, 0.18)),
-    repeating-linear-gradient(-10deg, rgba(41, 92, 38, 0.1) 0 2px, rgba(255, 255, 255, 0.08) 2px 5px),
-    linear-gradient(180deg, rgba(218, 239, 177, 0.98), rgba(124, 170, 91, 0.98));
-  color: #10280e;
-  text-shadow: 0 1px 0 rgba(239, 255, 196, 0.7);
+.shop-price-label-icon .icon { width: 100%; height: 100%; }
+.shop-relic-card.is-affordable .shop-price-label {
+  border-color: rgba(132, 215, 112, 0.58);
+  background: linear-gradient(180deg, rgba(35, 70, 38, 0.96), rgba(18, 38, 23, 0.98));
+  color: rgba(224, 255, 190, 0.96);
 }
-.shop-relic-card.is-unaffordable .shop-price-tape {
-  background:
-    linear-gradient(90deg, rgba(255, 206, 206, 0.12), transparent 18%, transparent 82%, rgba(70, 18, 18, 0.22)),
-    repeating-linear-gradient(-10deg, rgba(82, 28, 25, 0.13) 0 2px, rgba(0, 0, 0, 0.06) 2px 5px),
-    linear-gradient(180deg, rgba(165, 82, 72, 0.92), rgba(90, 38, 38, 0.96));
-  color: rgba(42, 11, 10, 0.9);
-  text-shadow: 0 1px 0 rgba(255, 190, 170, 0.28);
+.shop-relic-card.is-unaffordable .shop-price-label {
+  border-color: rgba(166, 62, 58, 0.5);
+  background: linear-gradient(180deg, rgba(88, 42, 42, 0.92), rgba(42, 20, 26, 0.96));
+  color: rgba(255, 197, 181, 0.82);
 }
-.shop-relic-card.is-purchased .shop-price-tape {
-  background: linear-gradient(180deg, rgba(183, 204, 164, 0.9), rgba(98, 120, 82, 0.92));
-  color: rgba(20, 38, 18, 0.88);
+.shop-relic-card.is-purchased .shop-price-label {
+  border-color: rgba(154, 188, 132, 0.46);
+  background: linear-gradient(180deg, rgba(53, 74, 48, 0.9), rgba(28, 42, 30, 0.94));
+  color: rgba(216, 240, 198, 0.86);
 }
+
 
 /* Closing — bounce down then swoosh up in random per-card order. The
    per-card random delay is set inline as --card-leave-delay (0~240ms).
@@ -6311,38 +6346,57 @@ const STYLES = `
   from { opacity: 0.72; filter: brightness(1); }
   to { opacity: 0.95; filter: brightness(1.18); }
 }
-/* Flat shield chip — sits just above the HP bar on the LEFT, sharing the
-   same iconography family as the heart/sword/book/coin flat icons. The
-   shield SVG itself comes from Icons.shieldIcon() so it stays consistent
-   with the codex/도감 visual language; we only style the chip wrapper. */
+/* Flat shield chip — larger standalone shield sitting above the HP bar.
+   The value is centered inside the SVG so shield amount and icon read as one
+   badge, using the same cool blue tone as the codex shield icon family. */
 .player-shield-chip {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
   align-self: flex-start;
-  padding: 1px 5px 1px 2px;
-  color: #fff5dc;
-  font-weight: 900;
-  font-size: 12px;
   line-height: 1;
-  letter-spacing: 0.02em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 .player-shield-chip-icon {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  /* Single-color currentColor matches the codex/book icon family. */
-  color: rgba(220, 232, 248, 0.98);
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65));
+  width: 34px;
+  height: 34px;
+  color: rgba(168, 205, 238, 0.98);
+  filter:
+    drop-shadow(0 2px 3px rgba(0, 0, 0, 0.72))
+    drop-shadow(0 0 7px rgba(120, 178, 220, 0.24));
 }
 .player-shield-chip-icon .icon { width: 100%; height: 100%; }
-.player-shield-chip-value {
-  font-variant-numeric: tabular-nums;
-  color: #fff7d8;
+.player-shield-chip-icon .icon path:first-child {
+  /* Slightly richer fill than plain currentColor, closer to the compendium's
+     cool parchment-blue item accents while keeping the flat SVG silhouette. */
+  fill: rgba(132, 180, 220, 0.98);
 }
+.player-shield-chip-icon .icon path:not(:first-child) {
+  color: rgba(236, 249, 255, 0.9);
+}
+.player-shield-chip-value {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  transform: translate(-50%, -50%);
+  min-width: 1.2em;
+  color: #172232;
+  font-size: 13px;
+  font-weight: 1000;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.62),
+    0 0 4px rgba(236, 249, 255, 0.7);
+}
+.player-shield-chip-value.is-capped {
+  /* 99+ is intentionally smaller so the plus sign stays inside the shield. */
+  font-size: 11px;
+  letter-spacing: -0.04em;
+}
+
 
 .hp-column {
   display: flex;

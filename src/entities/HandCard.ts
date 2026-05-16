@@ -24,7 +24,15 @@ export type HandEffectSelection = 'target' | 'random' | 'all' | 'none'
 
 export type HandEffectZone = 'front' | 'waiting' | 'field' | 'self' | 'hand' | 'none'
 
-export type HandEffectFilter = 'enemy' | 'trap' | 'treasure' | 'enemy-or-treasure' | 'hazard' | 'any' | 'none'
+export type HandEffectFilter =
+  | 'enemy'
+  | 'trap'
+  | 'spore'
+  | 'treasure'
+  | 'enemy-or-treasure'
+  | 'hazard'
+  | 'any'
+  | 'none'
 
 export interface HandEffectTargeting {
   /** How the affected object is chosen: 대상/랜덤/전체/없음. */

@@ -67,6 +67,48 @@ describe('HandSystem combo-count cards', () => {
 })
 
 describe('HandSystem broad hand effects', () => {
+  /** Count visible spore references after a Holy Water cleanup. */
+  const countSpores = (gameState: GameState): number =>
+    gameState.lanes
+      .flatMap((lane) => [0, 1, 2].map((distance) => lane.getCardAtDistance(distance)))
+      .filter((card) => card?.type === CardType.TRAP && card.trapKind === 'spore').length
+
+  it('makes normal 성수 remove only two random spores', () => {
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+    const web = new Card('web-a', CardType.TRAP, '거미줄', 'test', 0, 2, { trapKind: 'web' })
+    gameState.lanes[0].setCardAtDistance(0, new Card('spore-a', CardType.TRAP, '포자 A', 'test', 0, 1, { trapKind: 'spore' }))
+    gameState.lanes[1].setCardAtDistance(0, new Card('spore-b', CardType.TRAP, '포자 B', 'test', 0, 1, { trapKind: 'spore' }))
+    gameState.lanes[2].setCardAtDistance(0, new Card('spore-c', CardType.TRAP, '포자 C', 'test', 0, 1, { trapKind: 'spore' }))
+    gameState.lanes[0].setCardAtDistance(1, web)
+    gameState.character.addHandCard(DropSystem.makeCard('holy-water'))
+
+    const result = HandSystem.useSingle(gameState, chain, 0)
+
+    expect(result.success).toBe(true)
+    expect(result.message).toContain('포자 2장 제거')
+    expect(countSpores(gameState)).toBe(1)
+    expect(gameState.lanes[0].getCardAtDistance(1)).toBe(web)
+  })
+
+  it('makes triple 성수 remove every spore while preserving other traps', () => {
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+    const web = new Card('web-a', CardType.TRAP, '거미줄', 'test', 0, 2, { trapKind: 'web' })
+    gameState.lanes[0].setCardAtDistance(0, new Card('spore-a', CardType.TRAP, '포자 A', 'test', 0, 1, { trapKind: 'spore' }))
+    gameState.lanes[1].setCardAtDistance(0, new Card('spore-b', CardType.TRAP, '포자 B', 'test', 0, 1, { trapKind: 'spore' }))
+    gameState.lanes[2].setCardAtDistance(0, new Card('spore-c', CardType.TRAP, '포자 C', 'test', 0, 1, { trapKind: 'spore' }))
+    gameState.lanes[0].setCardAtDistance(1, web)
+    gameState.character.addHandCard({ ...DropSystem.makeCard('holy-water'), merged: true })
+
+    const result = HandSystem.useSingle(gameState, chain, 0)
+
+    expect(result.success).toBe(true)
+    expect(result.message).toContain('트리플 전체 포자 3장 제거')
+    expect(countSpores(gameState)).toBe(0)
+    expect(gameState.lanes[0].getCardAtDistance(1)).toBe(web)
+  })
+
   it('lets merged 키틴 remove every trap on the field without a selected target', () => {
     const gameState = new GameState()
     const chain = HandSystem.newChain()
