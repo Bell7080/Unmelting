@@ -180,6 +180,10 @@ export class GameBoardRenderer {
   private handTargetingMode: HandTargetingMode | null = null
   /** Body-level shop overlay is kept outside board re-renders. */
   private shopOverlayElement: HTMLElement | null = null
+  /** True while the shop shutter must survive full board re-renders. Purchase
+   *  refreshes rebuild the rail DOM, so the shutter state lives in the renderer
+   *  instead of only in the transient `.rail-shutter` element. */
+  private shopShutterLocked = false
   /** Resize/scroll listener that keeps the shop shell anchored over the
    *  rail. Stored so we can remove it cleanly on shop close. */
   private shopResizeListener: (() => void) | null = null
@@ -234,8 +238,9 @@ export class GameBoardRenderer {
           ${this.renderScorePanel(scorePanel)}
         </aside>
         <main class="stage">
-          <section class="rail" aria-label="Card rail">
+          <section class="rail ${this.shopShutterLocked ? 'is-shop-shuttered' : ''}" aria-label="Card rail">
             ${this.renderRail(lanes)}
+            ${this.shopShutterLocked ? this.renderShopShutter(true) : ''}
           </section>
 
           ${this.renderPlayerZone(character)}
@@ -251,7 +256,7 @@ export class GameBoardRenderer {
     this.animateRenderedResourceCounters()
     this.animateMovedCards(previousRects)
     this.animateMovedHandSlots(previousHandRects)
-    this.playNewHandMergeEffects()
+    this.playNewHandMergeEffects(previousHandRects)
     this.rememberRenderedCards()
     // Floating chain banner (body-mounted, above the player profile).
     this.updateChainBanner(scorePanel.chainHints)
@@ -908,13 +913,25 @@ export class GameBoardRenderer {
         .join(' ')
       const description = card.merged ? def.tripleDescription : def.description
       const handArt = spriteForHandCard(card.defId)
+      // Triple cards keep two lightweight visual copies in the DOM. CSS only
+      // reveals them during the first merged-card entry so players see three
+      // cards converge before the final starred card settles.
+      const tripleMergeCopies = card.merged
+        ? '<span class="triple-merge-copy copy-a" aria-hidden="true"></span><span class="triple-merge-copy copy-b" aria-hidden="true"></span>'
+        : ''
+      // Persist source ids into data attributes for exactly the render where a
+      // merge appears; playNewHandMergeEffects reads the previous rects and
+      // converts them into CSS offsets for the copy layers.
+      const mergeSourceUids = card.mergeSourceUids?.join('|') ?? ''
       slots.push(`
         <li class="${classes}" data-slot-index="${i}" data-hand-uid="${card.uid}"
+            ${mergeSourceUids ? `data-merge-source-uids="${mergeSourceUids}"` : ''}
             style="--slot-index: ${i}; --hand-enter-order: ${enterOrder};"
             ${recipeReadyTitle ? `title="${recipeReadyTitle}"` : ''}>
           <button type="button" data-item-index="${i}"
                   style="--hand-card-art: url('${handArt}');"
                   aria-label="${def.name}: ${description}${recipeReadyTitle ? ` · ${recipeReadyTitle}` : ''}">
+            ${tripleMergeCopies}
             ${recipeReady ? '<span class="recipe-ready-mark" aria-hidden="true">✦</span>' : ''}
             ${card.merged ? '<span class="merged-mark" aria-hidden="true">✦</span>' : ''}
             <span class="hand-card-thumb" aria-hidden="true">
@@ -1146,22 +1163,31 @@ export class GameBoardRenderer {
     }
   }
 
-  /** Create the 3×3 wax shutter grid used by shop stop/resume transitions. */
-  private createShopShutter(): HTMLElement {
-    const shutter = document.createElement('div')
-    shutter.className = 'rail-shutter'
-    shutter.setAttribute('aria-hidden', 'true')
-    shutter.innerHTML = Array.from(
+  /** Shared 3×3 wax shutter markup used by both live transitions and
+   *  render-restored shop state. `persistent` means the shutter is already
+   *  closed and should not replay the drop animation after a purchase render. */
+  private renderShopShutter(persistent = false): string {
+    const classes = ['rail-shutter', persistent ? 'is-closed is-persistent' : '']
+      .filter(Boolean)
+      .join(' ')
+    return `<div class="${classes}" aria-hidden="true">${Array.from(
       { length: 9 },
       (_, i) => `<span style="--shutter-i:${i}"></span>`
-    ).join('')
-    return shutter
+    ).join('')}</div>`
+  }
+
+  /** Create the 3×3 wax shutter grid used by shop stop/resume transitions. */
+  private createShopShutter(): HTMLElement {
+    const host = document.createElement('template')
+    host.innerHTML = this.renderShopShutter(false).trim()
+    return host.content.firstElementChild as HTMLElement
   }
 
   /** 10-turn shop transition: rail quake, then the 3×3 shutter closes and stays closed. */
   playShopTransition(): Promise<void> {
     const rail = this.boardElement.querySelector<HTMLElement>('.rail')
     if (!rail) return Promise.resolve()
+    this.shopShutterLocked = true
     const oldShutter = rail.querySelector<HTMLElement>('.rail-shutter')
     oldShutter?.remove()
     const shutter = this.createShopShutter()
@@ -1194,6 +1220,7 @@ export class GameBoardRenderer {
       window.setTimeout(() => rail.classList.remove('is-shop-quaking'), 520)
       window.setTimeout(() => shutter.classList.add('is-opening'), 560)
       window.setTimeout(() => {
+        this.shopShutterLocked = false
         shutter.remove()
         rail.classList.remove('is-shop-shuttered')
         resolve()
@@ -2561,10 +2588,11 @@ export class GameBoardRenderer {
       if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) return
       el.animate(
         [
-          { transform: `translate(${deltaX}px, ${deltaY}px)`, opacity: 0.92 },
-          { transform: 'translate(0, 0)', opacity: 1 },
+          { transform: `translate3d(${deltaX}px, ${deltaY}px, 0) scale(1, 1)`, opacity: 0.96 },
+          { transform: 'translate3d(0, 4px, 0) scale(1.01, 0.982)', opacity: 1, offset: 0.72 },
+          { transform: 'translate3d(0, 0, 0) scale(1)', opacity: 1 },
         ],
-        { duration: 320, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)' }
+        { duration: 460, easing: 'cubic-bezier(0.16, 0.92, 0.18, 1)' }
       )
     })
   }
@@ -2596,16 +2624,34 @@ export class GameBoardRenderer {
 
   /** New merged hand cards get a delayed jelly snap plus the same square/sparkle
    *  language as score gains, so triples are readable before settling into one card. */
-  private playNewHandMergeEffects(): void {
+  private playNewHandMergeEffects(previousRects: Map<string, DOMRect>): void {
     this.boardElement
       .querySelectorAll<HTMLElement>('.hand-slot.hand-card.is-merged.is-entering')
       .forEach((el) => {
         const uid = el.dataset.handUid
         if (!uid || this.previousHandUids.has(uid)) return
-        // Match the CSS delay: first the falling card and its two UI-only
-        // copies land, then the merged card compresses and bursts.
+
+        // Source-aware triple merge: use the exact card rects from the previous
+        // render, so the consumed upper cards fly into the lower merged slot.
+        // If an old rect is missing (e.g. first render/debug state), CSS vars
+        // fall back to a short top-down convergence instead of breaking.
+        const sourceUids = (el.dataset.mergeSourceUids ?? '').split('|').filter(Boolean)
+        const targetRect = el.getBoundingClientRect()
+        const copySources = [sourceUids[1], sourceUids[2]]
+        copySources.forEach((sourceUid, copyIndex) => {
+          const sourceRect = sourceUid ? previousRects.get(sourceUid) : null
+          if (!sourceRect) return
+          const dx = sourceRect.left + sourceRect.width / 2 - (targetRect.left + targetRect.width / 2)
+          const dy = sourceRect.top + sourceRect.height / 2 - (targetRect.top + targetRect.height / 2)
+          const prefix = copyIndex === 0 ? 'a' : 'b'
+          el.style.setProperty(`--merge-copy-${prefix}-dx`, `${dx}px`)
+          el.style.setProperty(`--merge-copy-${prefix}-dy`, `${dy}px`)
+        })
+
+        // Match the CSS delay: once acquisition has landed, exact-source
+        // copies converge immediately, then the merged card compresses and bursts.
         const enterOrder = Number.parseFloat(el.style.getPropertyValue('--hand-enter-order') || '0')
-        const burstDelay = 900 + Math.max(0, enterOrder) * 135
+        const burstDelay = 860 + Math.max(0, enterOrder) * 135
         window.setTimeout(() => {
           if (!el.isConnected) return
           el.classList.add('is-merge-bursting')
@@ -3637,6 +3683,13 @@ const STYLES = `
   pointer-events: none;
 }
 .rail-shutter.is-closed span {
+  transform: translateY(0) scaleY(1);
+}
+.rail-shutter.is-persistent span {
+  /* Purchase renders recreate the rail while the shop is open. Keep the
+     already-closed shutter visually locked instead of replaying its drop. */
+  animation: none;
+  opacity: 1;
   transform: translateY(0) scaleY(1);
 }
 .rail-shutter.is-opening span {
@@ -5359,6 +5412,11 @@ const STYLES = `
     inset 0 0 0 1px rgba(0, 0, 0, 0.55),
     0 0 0 1px rgba(244, 164, 96, 0.12);
   transition: transform 0.18s cubic-bezier(0.2, 0.86, 0.28, 1), box-shadow 0.18s ease;
+  /* Keep hand-card motion on the compositor; this prevents crowded hands from
+     looking like cards vanish while several entries/drop-shifts overlap. */
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  will-change: transform, opacity, filter;
   isolation: isolate;
   /* Lower model slots are visually in front of later/upper cards. */
   z-index: calc(120 - var(--slot-index, 0));
@@ -5369,48 +5427,45 @@ const STYLES = `
 .hand-slot.hand-card.is-entering {
   /* New cards fall one-by-one from just below the combo gauge, overshoot like
      soft jelly, then settle into the stack. */
-  animation: hand-card-drop 0.72s cubic-bezier(0.16, 0.92, 0.14, 1.08) both;
+  animation: hand-card-drop 0.74s cubic-bezier(0.16, 0.92, 0.14, 1.04) both;
   animation-delay: calc(var(--hand-enter-order, 0) * 135ms);
 }
 @keyframes hand-card-drop {
-  0%   { transform: translateY(-255px) scale(0.94, 1.08); opacity: 0; filter: brightness(1.32); }
-  58%  { transform: translateY(22px) scale(1.035, 0.9); opacity: 1; filter: brightness(1.14); }
-  74%  { transform: translateY(-10px) scale(0.975, 1.055); }
-  88%  { transform: translateY(4px) scale(1.012, 0.982); }
-  100% { transform: translateY(0) scale(1); opacity: 1; filter: brightness(1); }
+  0%   { transform: translate3d(0, -255px, 0) scale(0.95, 1.07); opacity: 0.01; filter: brightness(1.32); }
+  52%  { transform: translate3d(0, 6px, 0) scale(1.018, 0.952); opacity: 1; filter: brightness(1.12); }
+  69%  { transform: translate3d(0, -4px, 0) scale(0.99, 1.026); }
+  84%  { transform: translate3d(0, 1.5px, 0) scale(1.004, 0.994); }
+  100% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; filter: brightness(1); }
 }
 .hand-slot.hand-card.is-merged.is-entering {
   /* A freshly synthesized triple waits until the falling beat lands, then
      performs the merge snap instead of disappearing instantly. */
-  animation:
-    hand-card-drop 0.72s cubic-bezier(0.16, 0.92, 0.14, 1.08) both,
-    hand-merge-jelly 0.82s cubic-bezier(0.16, 0.9, 0.18, 1) 0.72s both;
-  animation-delay: calc(var(--hand-enter-order, 0) * 135ms), calc(var(--hand-enter-order, 0) * 135ms + 720ms);
+  animation: hand-merge-jelly 0.78s cubic-bezier(0.16, 0.9, 0.18, 1) both;
+  animation-delay: calc(var(--hand-enter-order, 0) * 135ms + 620ms);
 }
-.hand-slot.hand-card.is-merged.is-entering button::before,
-.hand-slot.hand-card.is-merged.is-entering button::after {
-  /* UI-only pending-merge layers: the model is already a merged card, but two
-     short-lived copies make the three acquired cards visibly meet before fusing. */
-  content: '';
+.triple-merge-copy {
+  /* Hidden by default; newly merged entries reveal these two real DOM layers so
+     the synthesis remains visible even if pseudo-element painting is throttled. */
   position: absolute;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
   background:
     linear-gradient(90deg, rgba(12, 8, 18, 0.7), rgba(12, 8, 18, 0.2) 58%, rgba(12, 8, 18, 0.62)),
-    linear-gradient(180deg, rgba(255, 232, 168, 0.06), rgba(0, 0, 0, 0.34)),
+    linear-gradient(180deg, rgba(255, 232, 168, 0.08), rgba(0, 0, 0, 0.32)),
     var(--hand-card-art) center / cover no-repeat;
-  box-shadow: inset 0 0 0 2px rgba(255, 232, 168, 0.3);
+  box-shadow: inset 0 0 0 2px rgba(255, 232, 168, 0.32), 0 8px 16px rgba(0, 0, 0, 0.34);
   opacity: 0;
-  z-index: 0;
+  z-index: 2;
+  will-change: transform, opacity, filter;
 }
-.hand-slot.hand-card.is-merged.is-entering button::before {
-  animation: hand-merge-copy-left 1.28s cubic-bezier(0.16, 0.92, 0.18, 1) both;
-  animation-delay: calc(var(--hand-enter-order, 0) * 135ms + 120ms);
+.hand-slot.hand-card.is-merged.is-entering .triple-merge-copy.copy-a {
+  animation: hand-merge-copy-left 0.82s cubic-bezier(0.16, 0.92, 0.18, 1) both;
+  animation-delay: calc(var(--hand-enter-order, 0) * 135ms + 80ms);
 }
-.hand-slot.hand-card.is-merged.is-entering button::after {
-  animation: hand-merge-copy-right 1.28s cubic-bezier(0.16, 0.92, 0.18, 1) both;
-  animation-delay: calc(var(--hand-enter-order, 0) * 135ms + 260ms);
+.hand-slot.hand-card.is-merged.is-entering .triple-merge-copy.copy-b {
+  animation: hand-merge-copy-right 0.82s cubic-bezier(0.16, 0.92, 0.18, 1) both;
+  animation-delay: calc(var(--hand-enter-order, 0) * 135ms + 140ms);
 }
 .hand-slot.hand-card.is-merge-bursting::after {
   content: '✦ ✧ ✦';
@@ -5429,25 +5484,25 @@ const STYLES = `
 }
 @keyframes hand-merge-jelly {
   0%, 18% { transform: translateY(0) scale(1); filter: brightness(1); }
-  34% { transform: translateY(10px) scale(1.12, 0.82); filter: brightness(1.7) saturate(1.28); }
-  48% { transform: translateY(-8px) scale(0.9, 1.16); }
-  64% { transform: translateY(3px) scale(1.04, 0.96); }
-  82% { transform: translateY(-2px) scale(0.99, 1.02); }
+  34% { transform: translateY(5px) scale(1.08, 0.88); filter: brightness(1.55) saturate(1.18); }
+  48% { transform: translateY(-4px) scale(0.94, 1.1); }
+  64% { transform: translateY(2px) scale(1.025, 0.98); }
+  82% { transform: translateY(-1px) scale(0.995, 1.01); }
   100% { transform: translateY(0) scale(1); filter: brightness(1); }
 }
 @keyframes hand-merge-copy-left {
-  0% { opacity: 0; transform: translate(-18px, -92px) scale(0.96, 1.06); }
-  38% { opacity: 0.88; transform: translate(-14px, 10px) scale(1.02, 0.94); }
-  62% { opacity: 0.82; transform: translate(-9px, -3px) scale(0.99, 1.02); }
-  82% { opacity: 0.78; transform: translate(-2px, 0) scale(1); }
-  100% { opacity: 0; transform: translate(0, 0) scale(0.9); }
+  0% { opacity: 0; transform: translate3d(var(--merge-copy-a-dx, -18px), var(--merge-copy-a-dy, -64px), 0) scale(0.98, 1.02); filter: brightness(1.12); }
+  54% { opacity: 0.9; transform: translate3d(-6px, -3px, 0) scale(1.012, 0.972); }
+  70% { opacity: 0.86; transform: translate3d(3px, 2px, 0) scale(0.998, 1.01); }
+  82% { opacity: 0.82; transform: translate3d(-2px, -1px, 0) scale(1); filter: brightness(1.28); }
+  100% { opacity: 0; transform: translate3d(0, 0, 0) scale(0.9); filter: brightness(1.7); }
 }
 @keyframes hand-merge-copy-right {
-  0% { opacity: 0; transform: translate(18px, -108px) scale(0.96, 1.06); }
-  38% { opacity: 0.88; transform: translate(14px, 12px) scale(1.02, 0.94); }
-  62% { opacity: 0.82; transform: translate(9px, -4px) scale(0.99, 1.02); }
-  82% { opacity: 0.78; transform: translate(2px, 0) scale(1); }
-  100% { opacity: 0; transform: translate(0, 0) scale(0.9); }
+  0% { opacity: 0; transform: translate3d(var(--merge-copy-b-dx, 18px), var(--merge-copy-b-dy, -82px), 0) scale(0.98, 1.02); filter: brightness(1.12); }
+  54% { opacity: 0.9; transform: translate3d(6px, -3px, 0) scale(1.012, 0.972); }
+  70% { opacity: 0.86; transform: translate3d(-3px, 2px, 0) scale(0.998, 1.01); }
+  82% { opacity: 0.82; transform: translate3d(2px, -1px, 0) scale(1); filter: brightness(1.28); }
+  100% { opacity: 0; transform: translate3d(0, 0, 0) scale(0.9); filter: brightness(1.7); }
 }
 @keyframes hand-merge-sparkle {
   0% { opacity: 0; transform: scale(0.62) rotate(-4deg); }
