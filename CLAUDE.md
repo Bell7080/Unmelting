@@ -25,7 +25,8 @@ src/core/TurnManager.ts       # 적/폭탄/보물 변이/불씨 턴 처리
 src/entities/                # Card, Character, Lane, HandCard 모델
 src/systems/                 # Action, CardSpawner, Drop, Ember, Hand 시스템
 src/data/                    # 손패/유물/조합 정의
-src/ui/GameBoardRenderer.ts  # DOM 렌더링, CSS, 상호작용, 대부분의 UI 애니메이션
+src/ui/GameBoardRenderer.ts  # DOM 렌더링, 상호작용, 대부분의 UI 애니메이션
+src/ui/styles/              # GameBoardRenderer 주입 CSS를 역할별 TS 문자열로 분리
 src/ui/SquareBurst.ts        # 사각 파티클 버스트
 src/ui/Icons.ts              # 플랫 inline-SVG 아이콘
 src/ui/Sprites.ts            # webp 스프라이트 매핑
@@ -43,7 +44,7 @@ src/assets/                  # 폰트/스프라이트
 ## UI/UX 규칙
 - 기존 촛불/밀랍/낡은 카드 테마를 유지한다. 새 UI는 `GameBoardRenderer.ts`의 색/테두리/그림자/스크롤바 양식을 먼저 참고한다.
 - 폰트는 `FontManager`와 OkDanDan을 사용하고 최소 12px 원칙을 깨지 않는다.
-- 이모지 아이콘을 새로 넣지 않는다. 도감/검/하트/코인/방패/상점 보석처럼 **`src/ui/Icons.ts`의 플랫 inline-SVG path 아이콘**을 사용하거나 같은 방식(`currentColor`, 단색 fill/stroke, 작은 크기 가독성)으로 추가한다.
+- 이모지 아이콘을 새로 넣지 않는다. 도감/검/하트/코인/방패/상점 보석처럼 **`src/ui/Icons.ts`의 플랫 inline-SVG path 아이콘**을 사용하거나 같은 방식(`currentColor`, 단색 fill/stroke, 작은 크기 가독성)으로 추가한다. 플레이어 카드의 방패 칩은 도감 런처와 같은 따뜻한 금색 계열을 따른다.
 - 점수/화폐/피해/회복 등 즉각 피드백은 효과와 수치 변화가 분리되어 보이지 않게 같은 beat 안에서 처리한다.
 
 ## 코드 작성 규칙
