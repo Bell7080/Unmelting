@@ -286,6 +286,7 @@ function applyTurnStartRelics(): void {
   coins += 1
   coinPulseKey++
   burstCoinGain()
+  recordCoinGain('황금 다람쥐', 1)
   recordRelicActivation('golden-squirrel', '+1$')
 }
 
@@ -359,19 +360,20 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   if (!shopOpen) return
   const offer = currentShopOffers.find((entry) => entry.relicId === detail.relicId)
   if (!offer || offer.purchased) return
-  const def = getRelicDef(detail.relicId)
   if (score < offer.price) {
-    recordNotice(`${def.name}: 점수 부족 (${offer.price.toLocaleString()}점)`, 'hurt')
+    // Insufficient — re-render the shop with no log entry. The card's
+    // disabled / dimmed state is the visual cue.
     boardRenderer.openShop(currentShopOffers, score, gameState.character)
     return
   }
   if (!gameState.character.addRelic(detail.relicId)) {
-    recordNotice(`${def.name}: 이미 보유 중`, 'info')
     render()
     return
   }
-  // Pay the score price. Score tracks a "currency-like" pulse but we don't
-  // re-fire the gain-burst — the shop UI is the visual confirmation.
+  // Pay the score price. We DO log the deduction — pure number-pulse on the
+  // score panel is too easy to miss, so the activity log row makes "you
+  // just spent 872점" concrete.
+  const def = getRelicDef(detail.relicId)
   score = Math.max(0, score - offer.price)
   scorePulseKey++
   pushActivityLogsInDisplayOrder([
@@ -382,7 +384,6 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     },
   ])
   offer.purchased = true
-  recordNotice(`유물 획득: ${def.name}`, 'win')
   await applyRelicPurchaseEffect(detail.relicId)
   render()
   boardRenderer.openShop(currentShopOffers, score, gameState.character)
@@ -463,21 +464,41 @@ function getTurnScoreMultiplier(): number {
   return 1 + gameState.getCurrentTurn() * 0.08
 }
 
-function scoreForCardAction(card: Card, result: { cardRemoved: boolean }): number {
-  if (!result.cardRemoved) return 12
+/**
+ * Base score for processing one rail card (kill / evade / take / hand-card
+ * destroy). Per the design rule: only "you actually dealt with this card"
+ * pays out. Trap > Treasure for the same width because stepping on / clearing
+ * a trap involves real risk; treasure pickup is a quiet gain.
+ *
+ *  - Enemy: strength-based — `HP * 12 + ATK * 20`. baseHealth / getDamage()
+ *    already include the 2-/3-cell width bonus (Card.getNormalEnemyGroupStats),
+ *    so we don't double-count width.
+ *  - Mimic (isSpecialEnemy): flat strength + drop-count bonus so a wide / fat
+ *    mimic still pays clearly more than a regular enemy of the same span.
+ *  - Trap: small flat per width (1/2/3 = 30 / 65 / 110).
+ *  - Treasure: smaller flat per width (1/2/3 = 18 / 40 / 75).
+ *
+ * Caller multiplies the result by `getTurnScoreMultiplier()` via createScoreLog.
+ */
+function scoreForCardRemoval(card: Card): number {
   if (card.type === CardType.ENEMY) {
-    if (card.isSpecialEnemy) return 100 + card.groupCount * 80 + card.defeatDropCount * 25
-    if (card.groupCount >= 3) return 450
-    if (card.groupCount === 2) return 220
-    return 80
+    const hp = Math.max(0, card.baseHealth)
+    const atk = Math.max(0, card.getDamage())
+    const strength = hp * 12 + atk * 20
+    const specialBonus = card.isSpecialEnemy ? 60 + card.defeatDropCount * 20 : 0
+    return strength + specialBonus
   }
   if (card.type === CardType.TRAP) {
-    if (card.groupCount >= 3) return 420
-    if (card.groupCount === 2) return 140
-    return 55
+    if (card.groupCount >= 3) return 110
+    if (card.groupCount === 2) return 65
+    return 30
   }
-  if (card.type === CardType.TREASURE) return 55 * Math.max(1, Math.min(3, card.groupCount))
-  return 10
+  if (card.type === CardType.TREASURE) {
+    if (card.groupCount >= 3) return 75
+    if (card.groupCount === 2) return 40
+    return 18
+  }
+  return 0
 }
 
 function activityKindForCard(card: Card): ActivityLogEntry['kind'] {
@@ -486,9 +507,9 @@ function activityKindForCard(card: Card): ActivityLogEntry['kind'] {
   return 'treasure'
 }
 
-/** Concrete verb so the log reads as a result, not a UI selection echo. */
-function scoreLabelForCard(card: Card, result: { cardRemoved: boolean }): string {
-  if (!result.cardRemoved) return card.name
+/** Label shown on the left side of the score log row. Caller guarantees the
+ *  card is actually removed by this beat. */
+function scoreLabelForCard(card: Card): string {
   if (card.type === CardType.ENEMY) return `${card.name} 처치`
   if (card.type === CardType.TRAP) return `${card.name} 회피`
   return `${card.name} 획득`
@@ -503,6 +524,63 @@ function createScoreLog(
   score += amount
   scorePulseKey++
   return { label, scoreDelta: amount, kind }
+}
+
+/**
+ * Capture every Card currently on the rail keyed by id, so a hand-card or
+ * recipe effect that immediately mutates the model still leaves the score
+ * helper a reference to the original Card object (with original baseHealth /
+ * getDamage / groupCount intact for the strength formula).
+ */
+function snapshotFieldCardsById(): Map<string, Card> {
+  const map = new Map<string, Card>()
+  for (const lane of gameState.lanes) {
+    for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+      const card = lane.getCardAtDistance(d)
+      if (card && !map.has(card.id)) map.set(card.id, card)
+    }
+  }
+  return map
+}
+
+/**
+ * Push one score-gain log per removed rail card and fire ONE score-burst at
+ * the end. Used by both the hand-card single-effect beat and the recipe beat.
+ *
+ * Cards that the snapshot can't resolve (e.g. spore offsprings spawned during
+ * the same beat) are silently skipped — they were not "처리" by the player,
+ * they appeared from another mechanic.
+ */
+function awardScoreForRemovedCards(
+  removed: { cardId: string; type: CardType }[],
+  snapshot: Map<string, Card>
+): void {
+  if (removed.length === 0) return
+  const logs: ActivityLogDraft[] = []
+  for (const r of removed) {
+    const card = snapshot.get(r.cardId)
+    if (!card) continue
+    const base = scoreForCardRemoval(card)
+    if (base <= 0) continue
+    logs.push(createScoreLog(scoreLabelForCard(card), base, activityKindForCard(card)))
+  }
+  if (logs.length === 0) return
+  pushActivityLogsInDisplayOrder(logs)
+  burstScoreGain()
+}
+
+/** Coin gain log row — kind: 'score' for consistent warm color, but the
+ *  delta is rendered as "+N$" via the badge slot so the wallet event reads
+ *  differently from a score row. */
+function recordCoinGain(label: string, amount: number): void {
+  if (amount <= 0) return
+  pushActivityLogsInDisplayOrder([
+    {
+      label,
+      badge: `+${amount}$`,
+      kind: 'score',
+    },
+  ])
 }
 
 function actionTypeFor(cardType: CardType): ActionType | null {
@@ -627,39 +705,22 @@ const GAUGE_TRIGGER_DELAY_MS = 440
 
 type NoticeLogKind = 'info' | 'win' | 'hurt' | 'melt' | 'recipe' | 'gauge' | 'relic'
 
-function createNoticeLog(message: string, kind: NoticeLogKind = 'info'): ActivityLogDraft {
-  const badgeByKind: Record<NoticeLogKind, string> = {
-    info: '알림',
-    win: '완료',
-    hurt: '위험',
-    melt: '녹임',
-    recipe: '조합',
-    gauge: '게이지',
-    relic: '유물',
-  }
-  const logKind: ActivityLogEntry['kind'] =
-    kind === 'info'
-      ? 'notice'
-      : kind === 'recipe'
-        ? 'melt'
-        : kind === 'gauge'
-          ? 'gauge'
-          : kind === 'relic'
-            ? 'relic'
-            : kind === 'melt'
-              ? 'melt'
-              : kind
-  return { label: message, badge: badgeByKind[kind], kind: logKind }
+/**
+ * The activity log on the left panel is now strictly "resource acquired /
+ * resource spent" — score / coin / hand card gain rows + the relic-purchase
+ * deduction row. All other textual notices (damage taken, relic activation,
+ * gauge / recipe text, ember decay, shop status) are communicated via the
+ * chain banner, damage-float numbers, relic chip appearance, or the pulse
+ * animations on the resource numbers. So recordNotice is kept as a no-op
+ * stub (callers still compile) for any future opt-in channels.
+ */
+function recordNotice(_message: string, _kind: NoticeLogKind = 'info'): void {
+  // Intentionally empty — see comment above. Do not push to activityLogs.
 }
 
-function recordNotice(message: string, kind: NoticeLogKind = 'info'): void {
-  pushActivityLogsInDisplayOrder([createNoticeLog(message, kind)])
-}
-
-/** Record relic activation in both the activity log and the chain-area toast. */
+/** Record relic activation in the floating chain-area toast only. */
 function recordRelicActivation(relicId: RelicId, message: string): void {
   const relic = getRelicDef(relicId)
-  recordNotice(`${relic.name}: ${message}`, 'relic')
   chainTimeline.push({
     kind: 'relic',
     relicId,
@@ -705,14 +766,24 @@ function fireCandleGaugeEffect(): { name: string; message: string; mode: CandleM
       break
     }
     case 'draw': {
-      let gained = 0
+      const drawnNames: string[] = []
       let overflow = 0
       for (let i = 0; i < 3; i++) {
         const drop = DropSystem.generateDrop()
-        if (HandSystem.enqueueDrop(character, drop)) gained++
-        else overflow++
+        if (HandSystem.enqueueDrop(character, drop)) {
+          drawnNames.push(getHandCardDef(drop.defId).name)
+        } else {
+          overflow++
+        }
       }
-      message = overflow > 0 ? `손패 +${gained}, ${overflow}장 넘침` : `손패 +${gained}`
+      // Each drawn hand card gets its own acquisition row (consistent with
+      // drops from rail actions). Overflow lost cards are silent — the
+      // wallet/score/hand UI is the visual cue, not the activity log.
+      if (drawnNames.length > 0) {
+        pushActivityLogsInDisplayOrder(createItemGainLogs(drawnNames))
+      }
+      message =
+        overflow > 0 ? `손패 +${drawnNames.length}, ${overflow}장 넘침` : `손패 +${drawnNames.length}`
       break
     }
   }
@@ -799,9 +870,12 @@ async function applyHandSingle(
   const beforeSingleFreeze = snapshotFieldFreezeState()
   const beforeSingleHealth = snapshotFieldHealthState()
   const beforeSingleRecovery = snapshotPlayerRecovery()
+  // Snapshot rail cards by id BEFORE useSingle mutates the model, so we can
+  // still resolve baseHealth/getDamage on the removed cards for the score
+  // strength formula.
+  const beforeSingleCards = snapshotFieldCardsById()
   const result = HandSystem.useSingle(gameState, chain, slotIndex, target)
   if (!result.success) {
-    recordNotice(result.message, 'hurt')
     inputLocked = false
     render()
     return
@@ -855,13 +929,15 @@ async function applyHandSingle(
     coins += result.coinsGained
     coinPulseKey++
     burstCoinGain()
-  }
-  recordNotice(result.message, 'win')
-  for (const merge of result.mergeMessages) {
-    recordNotice(merge, 'melt')
+    if (usedDef) recordCoinGain(usedDef.name, result.coinsGained)
   }
   pendingHandTarget = null
   boardRenderer.setHandTargetingMode(null)
+
+  // Score for any field cards the hand-card effect just removed (kill / clear
+  // / grab). Same strength formula as direct clicks, so 손패 사용 도 "직접
+  // 타격" 과 동일한 점수 룰을 따른다.
+  awardScoreForRemovedCards(result.removedFieldCards, beforeSingleCards)
 
   // Animate removals caused by the single hand card while the old board DOM is
   // still present. This is the "previous effect" beat the combo waits for.
@@ -891,16 +967,21 @@ async function applyHandSingle(
     const beforeRecipeFreeze = snapshotFieldFreezeState()
     const beforeRecipeHealth = snapshotFieldHealthState()
     const beforeRecipeRecovery = snapshotPlayerRecovery()
+    // Capture pre-recipe field so we can score whatever the recipe removes.
+    const beforeRecipeCards = snapshotFieldCardsById()
     const recipeResult = HandSystem.fireNextPendingRecipe(gameState, chain)
     if (recipeResult.firedRecipes.length === 0) break
     if ((recipeResult.coinsGained ?? 0) > 0) {
       // Recipe currency uses the same wallet/pulse language as single coin cards.
-      coins += recipeResult.coinsGained ?? 0
+      const gainedCoins = recipeResult.coinsGained ?? 0
+      coins += gainedCoins
       coinPulseKey++
       burstCoinGain()
+      // Attribute the coin log row to the first fired recipe that produced it.
+      const coinRecipe = recipeResult.firedRecipes[0]?.recipe
+      if (coinRecipe) recordCoinGain(coinRecipe.name, gainedCoins)
     }
     for (const fired of recipeResult.firedRecipes) {
-      recordNotice(`✦ ${fired.recipe.name}: ${fired.message}`, 'recipe')
       chainTimeline.push({
         kind: 'recipe',
         recipeId: fired.recipe.id,
@@ -920,6 +1001,9 @@ async function applyHandSingle(
     await applyBloodPackRecoveryTrigger(beforeRecipeRecovery)
     await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeRecipeFreeze))
     await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeRecipeFreeze))
+
+    // Score for recipe-driven removals.
+    awardScoreForRemovedCards(recipeResult.removedFieldCards, beforeRecipeCards)
 
     // Animate cards removed by delayed recipes separately so combo impact reads
     // as its own hit instead of merging with the hand-card effect animation.
@@ -1125,19 +1209,20 @@ async function handleCardAction(e: Event): Promise<void> {
   if (result.success) {
     const gainedItems = result.itemGainedNames ?? []
     gainedHandCardCount = gainedItems.length
-    const actionLogs: ActivityLogDraft[] = [...createItemGainLogs(gainedItems)]
-    // Drop the textual selection echo — concrete results (damage taken, item
-    // gained, score) speak for themselves; only surface the textual result when
-    // it carries new numeric weight that the score log doesn't already imply.
-    if (gainedItems.length === 0 && result.damageTaken) {
-      actionLogs.push(createNoticeLog(result.message, 'hurt'))
+    // Only acquisitions produce log rows now: hand-card drops + score gain.
+    // Damage / overflow / textual results live on damage-floats, the score
+    // pulse, and the chain banner.
+    if (gainedItems.length > 0) {
+      pushActivityLogsInDisplayOrder(createItemGainLogs(gainedItems))
     }
-    const scoreDelta = scoreForCardAction(card, result)
-    actionLogs.push(createScoreLog(scoreLabelForCard(card, result), scoreDelta, activityKindForCard(card)))
-    pushActivityLogsInDisplayOrder(actionLogs)
-    if (scoreDelta > 0) burstScoreGain()
-    if (result.overflow && result.overflow.length > 0) {
-      recordNotice(`손패가 가득 차 ${result.overflow.length}장 잃음`, 'hurt')
+    if (result.cardRemoved) {
+      const base = scoreForCardRemoval(card)
+      if (base > 0) {
+        pushActivityLogsInDisplayOrder([
+          createScoreLog(scoreLabelForCard(card), base, activityKindForCard(card)),
+        ])
+        burstScoreGain()
+      }
     }
     if (result.cardRemoved && card.type === CardType.TREASURE) applyWaxCrowTreasureGains(1)
   }
