@@ -6,8 +6,10 @@
  *   2. Active-row regroup → adjacent same-type cards merge before turn start
  *   3. Player phase → player picks a card. In flickering / extinguished
  *      ember tiers the enemy phase fires BEFORE the player phase.
- *   4. Event phase → enemy attacks and treasure volatility resolve together
+ *   4. Event phase → enemy attacks plus treasure/bomb/flower timers resolve
+ *      against the pre-drop board
  *   5. Ember decay countdown ticks; chain resets; cleanup runs
+ *   6. Post-drop spore spread infects cards that actually fell into neighbors
  *
  * Chain combos: every hand card the player USES extends an active chain.
  * Whenever the chain's multiset contains a recipe, that recipe fires as an
@@ -1281,12 +1283,24 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
   if (blooms.length > 0) await boardRenderer.animateFlowerBlooms(blooms)
 }
 
+async function resolvePostDropSporeSpread(): Promise<void> {
+  // Spores are the only turn-timer event that intentionally waits for rail
+  // gravity. This keeps enemy/chest/bomb/flower beats on the pre-drop board,
+  // while still letting spores infect a real card that fell into a formerly
+  // empty neighboring cell after the rail descended.
+  const sporeSpreads = turnManager.applySporeSpread()
+  if (sporeSpreads.length === 0) return
+
+  const spreadCount = sporeSpreads.reduce((sum, spread) => sum + spread.infected.length, 0)
+  recordNotice(`포자 번식: ${spreadCount}칸 감염`, 'hurt')
+  render()
+}
+
 async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
   const beforeTrapHealth = snapshotFieldHealthState()
   const hits = turnManager.runEnemyPhase()
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
   const bombExplosions = turnManager.applyBombExplosions()
-  const sporeSpreads = turnManager.applySporeSpread()
   const flowerChanges = turnManager.applyFlowerGrowthAndWilt(cardSpawner)
   const eventAnimations: Promise<void>[] = []
   if (hits.length > 0) eventAnimations.push(boardRenderer.animateEnemyAttacks(hits))
@@ -1318,10 +1332,6 @@ async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
       })()
     )
   }
-  if (sporeSpreads.length > 0) {
-    const spreadCount = sporeSpreads.reduce((sum, spread) => sum + spread.infected.length, 0)
-    recordNotice(`포자 번식: ${spreadCount}칸 감염`, 'hurt')
-  }
   if (flowerChanges.growths.length > 0) {
     eventAnimations.push(boardRenderer.animateFlowerGrowth(flowerChanges.growths))
   }
@@ -1348,6 +1358,7 @@ async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
   }
 
   await runCleanupPhase(true)
+  await resolvePostDropSporeSpread()
 
   if (await maybeOpenShopAfterTurn()) return
 
@@ -1521,10 +1532,12 @@ async function handleCardAction(e: Event): Promise<void> {
   clearChainTimeline()
 
   if (result.cardRemoved) {
-    // Fill the action-created rail gap before turn-timer events. In particular,
-    // spores should infect the card that drops into an adjacent empty front slot,
-    // not the transient hole left by the player's click.
-    await runPreparationRefreshAfterFieldEffects()
+    // Keep the clicked rail hole open through the enemy/event beat. Rails are
+    // supposed to drop only after the enemy turn, so the next waiting enemy or
+    // chest timer must not act on the same turn just because the player cleared
+    // the front cell. Spores get their special post-drop infection window in
+    // resolveEventPhaseAndPrepareNextTurn().
+    render()
   } else {
     render()
   }
@@ -1554,7 +1567,6 @@ async function handleCardAction(e: Event): Promise<void> {
     const beforeTrapHealth = snapshotFieldHealthState()
     const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
     const bombExplosions = turnManager.applyBombExplosions()
-    const sporeSpreads = turnManager.applySporeSpread()
     const flowerChanges = turnManager.applyFlowerGrowthAndWilt(cardSpawner)
     const eventAnimations: Promise<void>[] = []
     if (treasureChanges.length > 0)
@@ -1581,10 +1593,6 @@ async function handleCardAction(e: Event): Promise<void> {
         })()
       )
     }
-    if (sporeSpreads.length > 0) {
-      const spreadCount = sporeSpreads.reduce((sum, spread) => sum + spread.infected.length, 0)
-      recordNotice(`포자 번식: ${spreadCount}칸 감염`, 'hurt')
-    }
     if (flowerChanges.growths.length > 0) {
       eventAnimations.push(boardRenderer.animateFlowerGrowth(flowerChanges.growths))
     }
@@ -1599,6 +1607,7 @@ async function handleCardAction(e: Event): Promise<void> {
       return
     }
     await runCleanupPhase(true)
+    await resolvePostDropSporeSpread()
     if (await maybeOpenShopAfterTurn()) return
     setTimeout(() => {
       inputLocked = false
