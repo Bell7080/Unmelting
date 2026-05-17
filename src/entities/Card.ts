@@ -156,9 +156,8 @@ export class Card {
   private getNormalEnemyGroupStats(groupCount: number): EnemyGroupStats | null {
     if (groupCount <= 1) return null
     const bonus = enemyGroupBonus(groupCount)
-    const strongestName = this.name.replace(/ 무리$/, '')
     return {
-      name: `${strongestName} 무리`,
+      name: groupCount >= 3 ? '양초 군단' : '양초 무리',
       health: this.enemyHealthTotal + bonus.hp,
       damage: this.enemyDamageTotal + bonus.damage,
     }

@@ -32,8 +32,14 @@ import flower003Url from '../assets/sprites/flower_003.webp'
 import flower004Url from '../assets/sprites/flower_004.webp'
 import flower005Url from '../assets/sprites/flower_005.webp'
 import trap001Url from '../assets/sprites/trap_001.webp'
+import trap002Url from '../assets/sprites/trap_002.webp'
+import trap003Url from '../assets/sprites/trap_003.webp'
 import trap004Url from '../assets/sprites/trap_004.webp'
 import trap007Url from '../assets/sprites/trap_007.webp'
+import trap008Url from '../assets/sprites/trap_008.webp'
+import trap009Url from '../assets/sprites/trap_009.webp'
+import enemyWave001Url from '../assets/sprites/enemywave_001.webp'
+import enemyWave002Url from '../assets/sprites/enemywave_002.webp'
 import chest001Url from '../assets/sprites/chest_001.webp'
 import chest002Url from '../assets/sprites/chest_002.webp'
 import chest003Url from '../assets/sprites/chest_003.webp'
@@ -74,6 +80,14 @@ export const SpriteUrls = {
     bomb: trap004Url,
     spore: trap007Url,
   } satisfies Record<TrapKind, string>,
+  trapGroups: {
+    web: { 1: trap001Url, 2: trap002Url, 3: trap003Url },
+    spore: { 1: trap007Url, 2: trap008Url, 3: trap009Url },
+  } satisfies Record<Extract<TrapKind, 'web' | 'spore'>, Record<1 | 2 | 3, string>>,
+  enemyWaves: {
+    2: enemyWave001Url,
+    3: enemyWave002Url,
+  } satisfies Record<2 | 3, string>,
   chestSmall: chest001Url,
   chestMedium: chest002Url,
   chestLarge: chest003Url,
@@ -152,9 +166,16 @@ export function spriteForCard(card: Card): string {
   if (card.type === CardType.ENEMY) {
     if (card.specialEnemyKind === 'monsterFlower') return SpriteUrls.monsterFlower
     if (card.isSpecialEnemy) return SpriteUrls.mimic
+    if (card.groupCount >= 3) return SpriteUrls.enemyWaves[3]
+    if (card.groupCount === 2) return SpriteUrls.enemyWaves[2]
     return spriteForNormalEnemy(card)
   }
   if (card.type === CardType.TRAP) {
+    // Webs and spores have dedicated 1/2/3-cell illustrations; bombs stay single-cell.
+    if (card.trapKind === 'web' || card.trapKind === 'spore') {
+      const span = Math.max(1, Math.min(3, card.groupCount)) as 1 | 2 | 3
+      return SpriteUrls.trapGroups[card.trapKind][span]
+    }
     return SpriteUrls.traps[card.trapKind]
   }
   if (card.type === CardType.TREASURE) {

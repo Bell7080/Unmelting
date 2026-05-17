@@ -14,7 +14,7 @@
  */
 
 import { GameState } from './GameState'
-import { Card, CardType } from '@entities/Card'
+import { Card, CardType, type FlowerKind } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { CardSpawner } from '@systems/CardSpawner'
 import { EmberSystem } from '@systems/EmberSystem'
@@ -54,6 +54,7 @@ export interface FlowerBloom {
   distance: number
   cardId: string
   flowerName: string
+  flowerKind: FlowerKind
 }
 
 export interface FlowerGrowth {
@@ -61,6 +62,7 @@ export interface FlowerGrowth {
   distance: number
   cardId: string
   flowerName: string
+  flowerKind: FlowerKind
   value: number
 }
 
@@ -70,6 +72,7 @@ export interface FlowerWilt {
   cardId: string
   monsterCardId: string
   flowerName: string
+  flowerKind: FlowerKind
 }
 
 export class TurnManager {
@@ -299,6 +302,7 @@ export class TurnManager {
         distance: 0,
         cardId: card.id,
         flowerName: card.name,
+        flowerKind: card.flowerKind,
       })
     }
     return blooms
@@ -338,6 +342,7 @@ export class TurnManager {
           distance,
           cardId: card.id,
           flowerName: card.name,
+          flowerKind: card.flowerKind,
           value: card.flowerValue,
         })
       }
@@ -351,6 +356,7 @@ export class TurnManager {
         cardId: card.id,
         monsterCardId: monster.id,
         flowerName: card.name,
+        flowerKind: card.flowerKind,
       })
     }
 

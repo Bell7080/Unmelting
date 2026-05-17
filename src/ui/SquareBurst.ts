@@ -24,7 +24,17 @@ export type BurstTheme =
   | 'wax-freeze'
   | 'bomb-blast'
   | 'flower-bloom'
+  | 'flower-chamomile'
+  | 'flower-red-rose'
+  | 'flower-marigold'
+  | 'flower-oleander'
+  | 'flower-lavender'
   | 'flower-wilt'
+  | 'health-gain'
+  | 'shield-gain'
+  | 'ember-gain'
+  | 'gauge-gain'
+  | 'attack-gain'
   | 'hand-recovery'
   | 'hand-tool'
   | 'hand-control'
@@ -51,8 +61,20 @@ const PALETTES: Record<BurstTheme, Palette> = {
   // damage burst so the explosion reads as a focal event without breaking
   // the warm ember palette that the rest of the UI lives in.
   'bomb-blast': { shades: ['#0a0508', '#5c1410', '#ff5a1c', '#fff3a0'] },
-  // Flower bloom/growth — soft green stems through warm petal light.
+  // Flower bloom/growth — seed fallback uses soft green stems through warm petal light.
   'flower-bloom': { shades: ['#14301d', '#4f8f45', '#e6b34d', '#fff0c5'] },
+  // Flower-specific bursts keep harvest/reward feedback readable by species.
+  'flower-chamomile': { shades: ['#203519', '#7ea64b', '#f1d46a', '#fff7cf'] },
+  'flower-red-rose': { shades: ['#350913', '#9f2734', '#f06a72', '#ffd8c9'] },
+  'flower-marigold': { shades: ['#3a1a04', '#b65f12', '#f3a72b', '#fff0a6'] },
+  'flower-oleander': { shades: ['#25173a', '#88458e', '#e18ab5', '#ffe2ef'] },
+  'flower-lavender': { shades: ['#17143a', '#5f4aa8', '#a996ee', '#eee6ff'] },
+  // Player resource gains use distinct endpoints for the shared trail system.
+  'health-gain': { shades: ['#24070b', '#9f2734', '#f06a72', '#ffe0d2'] },
+  'shield-gain': { shades: ['#1b1405', '#8c6720', '#e3b84e', '#fff1b8'] },
+  'ember-gain': { shades: ['#2d0905', '#b63818', '#ff7a2c', '#fff0a4'] },
+  'gauge-gain': { shades: ['#201137', '#7542a0', '#d196ff', '#fff0d8'] },
+  'attack-gain': { shades: ['#17070a', '#7c1f25', '#e04c31', '#ffd078'] },
   // Flower wilt — muddy grey-green into ash, distinct from treasure vanish.
   'flower-wilt': { shades: ['#10130f', '#3f4a37', '#7f806f', '#c8c0aa'] },
   // Hand-use, per category — each is a two-tone interpolation.

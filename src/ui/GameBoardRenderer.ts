@@ -145,6 +145,16 @@ export interface ChainHints {
   recipeReadyBySlot?: Record<number, { id: string; name: string; flavor: string }[]>
 }
 
+export type ResourceTrailTarget =
+  | 'hand'
+  | 'score'
+  | 'coin'
+  | 'health'
+  | 'shield'
+  | 'ember'
+  | 'gauge'
+  | 'attack'
+
 export interface ScorePanelState {
   score: number
   logs: ActivityLogEntry[]
@@ -344,7 +354,7 @@ export class GameBoardRenderer {
         <section class="score-panel-total">
           <div class="score-kicker">
             <span class="score-kicker-icon">${coinIcon()}</span>
-            종합 점수
+            불빛
           </div>
           <div class="score-number ${scorePulseClass}" data-score-pulse="${scorePanel.scorePulseKey}" data-count-start="${renderedScore}" data-count-end="${scorePanel.score}">
             ${renderedScore.toLocaleString()}
@@ -353,7 +363,7 @@ export class GameBoardRenderer {
         <section class="coin-panel-total" aria-label="Shop currency">
           <div class="score-kicker">
             <span class="score-kicker-icon">${coinIcon()}</span>
-            상점 화폐
+            화폐
           </div>
           <div class="coin-number ${coinPulseClass}" data-coin-pulse="${scorePanel.coinPulseKey}" data-count-start="${renderedCoins}" data-count-end="${scorePanel.coins}">
             ${renderedCoins.toLocaleString()} $
@@ -1524,7 +1534,7 @@ export class GameBoardRenderer {
         ['성장', '1부터 턴마다 +1'],
       ],
       marigold: [
-        ['수확', '상점 화폐 획득'],
+        ['수확', '화폐 획득'],
         ['성장', '1부터 2턴마다 +1'],
       ],
       oleander: [
@@ -2261,6 +2271,263 @@ export class GameBoardRenderer {
     )
   }
 
+  /** Flower-specific SquareBurst palettes keep red rose, marigold, lavender,
+   *  oleander, and chamomile rewards visually distinct while still using the
+   *  same square language as the rest of the board. */
+  private flowerBurstTheme(kind: FlowerKind): BurstTheme {
+    switch (kind) {
+      case 'chamomile':
+        return 'flower-chamomile'
+      case 'redRose':
+        return 'flower-red-rose'
+      case 'marigold':
+        return 'flower-marigold'
+      case 'oleander':
+        return 'flower-oleander'
+      case 'lavender':
+        return 'flower-lavender'
+      case 'seed':
+        return 'flower-bloom'
+    }
+  }
+
+  /**
+   * Resource rewards are introduced by a short square-card trail from the
+   * concrete source (rail card / combo banner / played-card center) into the
+   * destination HUD. The trail lands before the normal counter/drop animation,
+   * so all reward types share one source-aware acquisition rule.
+   */
+  animateResourceTrailFromCard(
+    cardId: string,
+    target: ResourceTrailTarget,
+    count: number,
+    theme: BurstTheme
+  ): Promise<void> {
+    const source = this.findCardElement(cardId)
+    return this.animateResourceTrail(source, this.findResourceTrailTarget(target), count, theme)
+  }
+
+  /** Fly a resource trail from the center-screen played-card impact point. */
+  animateResourceTrailFromCenter(
+    target: ResourceTrailTarget,
+    count: number,
+    theme: BurstTheme
+  ): Promise<void> {
+    const center = new DOMRect(window.innerWidth / 2 - 8, window.innerHeight * 0.46 - 8, 16, 16)
+    return this.animateResourceTrail(center, this.findResourceTrailTarget(target), count, theme)
+  }
+
+  /** Fly a resource trail from the currently visible chain/combo banner. */
+  animateResourceTrailFromChain(
+    target: ResourceTrailTarget,
+    count: number,
+    theme: BurstTheme
+  ): Promise<void> {
+    const chainSource =
+      document.querySelector<HTMLElement>('#chain-banner .chain-event:last-child') ??
+      document.querySelector<HTMLElement>('#chain-banner')
+    return this.animateResourceTrail(
+      chainSource,
+      this.findResourceTrailTarget(target),
+      count,
+      theme
+    )
+  }
+
+  /** Spend-light purchase trail: the blast starts on the 불빛 counter and
+   *  lands on the clicked relic card before the shop refreshes its state. */
+  animateShopPurchaseTrailToRelic(relicId: RelicId, count: number): Promise<void> {
+    const target = document.querySelector<HTMLElement>(
+      `#shop-overlay .shop-relic-card[data-shop-buy="${relicId}"]`
+    )
+    return this.animateResourceTrail(this.findScorePulseAnchor(), target, count, 'score')
+  }
+
+  /** Count down spent light immediately so purchases share the same numeric
+   *  beat as gains instead of silently jumping after the shop re-render. */
+  playScoreSpendFeedback(targetScore: number, pulseKey: number): void {
+    this.rememberImmediateResourcePulse('score', targetScore, pulseKey)
+    this.animateResourceCounter('.score-number', targetScore, '')
+  }
+
+  private findResourceTrailTarget(target: ResourceTrailTarget): HTMLElement | DOMRect | null {
+    if (target === 'score') return this.findScorePulseAnchor()
+    if (target === 'coin') return this.findCoinPulseAnchor()
+    if (target === 'health') {
+      return (
+        this.boardElement.querySelector<HTMLElement>('.hp-bar') ??
+        this.boardElement.querySelector<HTMLElement>('.player-card')
+      )
+    }
+    if (target === 'shield') {
+      return (
+        this.boardElement.querySelector<HTMLElement>('.player-shield-chip') ??
+        this.boardElement.querySelector<HTMLElement>('.hp-column') ??
+        this.boardElement.querySelector<HTMLElement>('.player-card')
+      )
+    }
+    if (target === 'ember') {
+      return (
+        this.boardElement.querySelector<HTMLElement>('.ember-bar') ??
+        this.boardElement.querySelector<HTMLElement>('.ember-hud')
+      )
+    }
+    if (target === 'gauge') return this.boardElement.querySelector<HTMLElement>('.candle-gauge')
+    if (target === 'attack') return this.boardElement.querySelector<HTMLElement>('.atk-stat')
+    return (
+      this.boardElement.querySelector<HTMLElement>('.hand-stack') ??
+      this.boardElement.querySelector<HTMLElement>('.hand-panel')
+    )
+  }
+
+  private ensureResourceTrailStyles(): void {
+    if (document.getElementById('resource-trail-styles')) return
+    const style = document.createElement('style')
+    style.id = 'resource-trail-styles'
+    style.textContent = `
+.resource-trail-piece {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 230;
+  border-radius: 4px;
+  pointer-events: none;
+  background: var(--trail-color, rgba(255, 232, 168, 0.82));
+  box-shadow: 0 0 14px var(--trail-glow, rgba(255, 218, 132, 0.28));
+  will-change: transform, opacity, filter;
+}
+`
+    document.head.appendChild(style)
+  }
+
+  private trailColors(theme: BurstTheme): { color: string; glow: string } {
+    switch (theme) {
+      case 'score':
+      case 'treasure-gain':
+      case 'flower-chamomile':
+      case 'flower-marigold':
+        return { color: 'rgba(255, 224, 126, 0.86)', glow: 'rgba(255, 211, 92, 0.34)' }
+      case 'health-gain':
+      case 'flower-red-rose':
+        return { color: 'rgba(240, 106, 114, 0.8)', glow: 'rgba(255, 216, 201, 0.3)' }
+      case 'shield-gain':
+      case 'flower-oleander':
+        return { color: 'rgba(227, 184, 78, 0.78)', glow: 'rgba(255, 241, 184, 0.3)' }
+      case 'ember-gain':
+        return { color: 'rgba(255, 122, 44, 0.78)', glow: 'rgba(255, 240, 164, 0.3)' }
+      case 'gauge-gain':
+      case 'flower-lavender':
+        return { color: 'rgba(169, 150, 238, 0.76)', glow: 'rgba(238, 230, 255, 0.28)' }
+      case 'attack-gain':
+      case 'hand-attack':
+        return { color: 'rgba(214, 73, 47, 0.78)', glow: 'rgba(244, 195, 74, 0.28)' }
+      case 'hand-control':
+        return { color: 'rgba(95, 166, 216, 0.74)', glow: 'rgba(220, 238, 252, 0.26)' }
+      case 'hand-recovery':
+        return { color: 'rgba(126, 208, 145, 0.76)', glow: 'rgba(226, 247, 200, 0.24)' }
+      default:
+        return { color: 'rgba(220, 162, 51, 0.78)', glow: 'rgba(255, 233, 164, 0.26)' }
+    }
+  }
+
+  private rectCenter(target: HTMLElement | DOMRect): { x: number; y: number } {
+    const rect = target instanceof HTMLElement ? target.getBoundingClientRect() : target
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  }
+
+  private animateResourceTrail(
+    source: HTMLElement | DOMRect | null,
+    target: HTMLElement | DOMRect | null,
+    count: number,
+    theme: BurstTheme
+  ): Promise<void> {
+    if (!source || !target || count <= 0) return Promise.resolve()
+    this.ensureResourceTrailStyles()
+    const from = this.rectCenter(source)
+    const to = this.rectCenter(target)
+    const colors = this.trailColors(theme)
+    const launches: Promise<void>[] = []
+    for (let i = 0; i < count; i += 1) {
+      launches.push(
+        new Promise((resolve) => {
+          window.setTimeout(() => {
+            const finished: Promise<void>[] = []
+            const specs = [
+              { size: 24, lag: 0, alpha: 0.72 },
+              { size: 17, lag: 42, alpha: 0.52 },
+              { size: 11, lag: 82, alpha: 0.36 },
+            ]
+            for (const spec of specs) {
+              finished.push(this.spawnResourceTrailPiece(from, to, colors, spec))
+            }
+            window.setTimeout(() => {
+              SquareBurst.playAt(to.x, to.y, theme, {
+                count: 12,
+                spread: 74,
+                duration: 420,
+                size: [6, 14],
+              })
+            }, 330)
+            Promise.all(finished).then(() => resolve())
+          }, i * 135)
+        })
+      )
+    }
+    return Promise.all(launches).then(() => undefined)
+  }
+
+  private spawnResourceTrailPiece(
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    colors: { color: string; glow: string },
+    spec: { size: number; lag: number; alpha: number }
+  ): Promise<void> {
+    return new Promise((resolve) => {
+      window.setTimeout(() => {
+        const piece = document.createElement('div')
+        piece.className = 'resource-trail-piece'
+        piece.style.width = `${spec.size}px`
+        piece.style.height = `${Math.round(spec.size * 1.34)}px`
+        piece.style.setProperty('--trail-color', colors.color)
+        piece.style.setProperty('--trail-glow', colors.glow)
+        piece.style.opacity = `${spec.alpha}`
+        document.body.appendChild(piece)
+        const dx = to.x - from.x
+        const dy = to.y - from.y
+        const curve = Math.min(90, Math.max(34, Math.abs(dx) * 0.08 + Math.abs(dy) * 0.05))
+        const anim = piece.animate(
+          [
+            {
+              transform: `translate(${from.x - spec.size / 2}px, ${from.y - spec.size / 2}px) rotate(-8deg) scale(0.82)`,
+              opacity: 0,
+              filter: 'blur(0.2px)',
+            },
+            {
+              transform: `translate(${from.x + dx * 0.58 - spec.size / 2}px, ${from.y + dy * 0.58 - curve - spec.size / 2}px) rotate(10deg) scale(1)`,
+              opacity: spec.alpha,
+              filter: 'blur(0px)',
+              offset: 0.58,
+            },
+            {
+              transform: `translate(${to.x - spec.size / 2}px, ${to.y - spec.size / 2}px) rotate(2deg) scale(0.54)`,
+              opacity: 0,
+              filter: 'blur(0.8px)',
+            },
+          ],
+          { duration: 390, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)', fill: 'forwards' }
+        )
+        anim.onfinish = () => {
+          piece.remove()
+          resolve()
+        }
+        window.setTimeout(() => {
+          piece.remove()
+          resolve()
+        }, 560)
+      }, spec.lag)
+    })
+  }
+
   /** Start count-up animations that were requested by renderScorePanel().
    *  This covers resource changes that happen immediately before a render,
    *  while playScoreGainFeedback/playCoinGainFeedback covers changes that can
@@ -2454,23 +2721,26 @@ export class GameBoardRenderer {
       // full card area instead of pinpointing the centre — radiates outward
       // evenly so the dissolve and burst read as one beat.
       window.setTimeout(() => {
-        const radius = Math.min(ghostWidth, ghostHeight) * 0.22
+        const radius = Math.min(ghostWidth, ghostHeight) * 0.28
         SquareBurst.playAt(targetX, targetY, theme, {
-          count: 22,
-          spread: 220,
-          duration: 620,
+          count: 26,
+          spread: 270,
+          duration: 680,
+          size: [7, 16],
         })
         SquareBurst.playAt(targetX - radius, targetY - radius * 0.4, theme, {
           count: 10,
-          spread: 130,
-          duration: 560,
+          spread: 165,
+          duration: 600,
+          size: [6, 13],
         })
         SquareBurst.playAt(targetX + radius, targetY + radius * 0.4, theme, {
           count: 10,
-          spread: 130,
-          duration: 560,
+          spread: 165,
+          duration: 600,
+          size: [6, 13],
         })
-      }, 700)
+      }, 640)
       // Intentionally do NOT remove `is-hand-use-source` when the ghost is
       // done. The hand is already mutated; the slot DOM is stale and will
       // be rebuilt on the next render(). If we restored the slot's opacity
@@ -2676,7 +2946,10 @@ export class GameBoardRenderer {
       const element = this.findCardElement(bloom.cardId)
       if (!element) continue
       elements.push(element)
-      SquareBurst.playOn(element, 'flower-bloom', { count: 22, spread: 120 })
+      SquareBurst.playOn(element, this.flowerBurstTheme(bloom.flowerKind), {
+        count: 22,
+        spread: 120,
+      })
     }
     return this.animateElements(elements, 'is-flower-blooming', 560)
   }
@@ -2692,7 +2965,7 @@ export class GameBoardRenderer {
         String(Math.min(1.8, 1 + growth.value * 0.08))
       )
       elements.push(element)
-      SquareBurst.playOn(element, 'flower-bloom', {
+      SquareBurst.playOn(element, this.flowerBurstTheme(growth.flowerKind), {
         count: Math.min(30, 10 + growth.value * 3),
         spread: Math.min(170, 78 + growth.value * 12),
       })
