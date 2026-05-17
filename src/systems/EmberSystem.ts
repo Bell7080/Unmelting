@@ -18,6 +18,7 @@ export interface SpawnWeights {
   enemy: number
   trap: number
   treasure: number
+  flower: number
 }
 
 export interface SpawnBuckets {
@@ -26,6 +27,7 @@ export interface SpawnBuckets {
   bombTrap: number
   sporeTrap: number
   treasure: number
+  flower: number
 }
 
 export interface EnemyStatBonus {
@@ -36,10 +38,24 @@ export interface EnemyStatBonus {
 const SPAWN_BUCKETS: Record<EmberTier, SpawnBuckets> = {
   // Bomb and spore buckets preserve the former absolute odds, while extra
   // ordinary web traps come out of the enemy bucket to soften early clumping.
-  bright: { enemy: 55, webTrap: 12, bombTrap: 4, sporeTrap: 4, treasure: 25 },
-  dim: { enemy: 65, webTrap: 12, bombTrap: 4, sporeTrap: 4, treasure: 15 },
-  flickering: { enemy: 78, webTrap: 35 / 3, bombTrap: 11 / 3, sporeTrap: 11 / 3, treasure: 3 },
-  extinguished: { enemy: 82, webTrap: 34 / 3, bombTrap: 10 / 3, sporeTrap: 10 / 3, treasure: 0 },
+  bright: { enemy: 50, webTrap: 12, bombTrap: 4, sporeTrap: 4, treasure: 22, flower: 8 },
+  dim: { enemy: 60, webTrap: 12, bombTrap: 4, sporeTrap: 4, treasure: 13, flower: 7 },
+  flickering: {
+    enemy: 74,
+    webTrap: 35 / 3,
+    bombTrap: 11 / 3,
+    sporeTrap: 11 / 3,
+    treasure: 3,
+    flower: 4,
+  },
+  extinguished: {
+    enemy: 80,
+    webTrap: 34 / 3,
+    bombTrap: 10 / 3,
+    sporeTrap: 10 / 3,
+    treasure: 0,
+    flower: 2,
+  },
 }
 
 const ENEMY_BONUS: Record<EmberTier, EnemyStatBonus> = {
@@ -93,6 +109,7 @@ export class EmberSystem {
       enemy: buckets.enemy,
       trap: buckets.webTrap + buckets.bombTrap + buckets.sporeTrap,
       treasure: buckets.treasure,
+      flower: buckets.flower,
     }
   }
 

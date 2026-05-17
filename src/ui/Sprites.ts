@@ -8,10 +8,11 @@
  *   - Mimic (special enemy): enemy_003.
  *   - Treasure: chest_001 / chest_002 / chest_003 by groupCount (1/2/3).
  *   - Trap: trap_001 web, trap_004 bomb, trap_007 spore.
+ *   - Flower: flower_000 seed, flower_001~005 blooms, enemyflower_001 monster flower.
  *   - Rail / stage backdrop: background_001.
  */
 
-import { Card, CardType, type EnemySpriteId, type TrapKind } from '@entities/Card'
+import { Card, CardType, type EnemySpriteId, type FlowerKind, type TrapKind } from '@entities/Card'
 import type { HandCardId } from '@entities/HandCard'
 
 import backgroundUrl from '../assets/sprites/background_001.webp'
@@ -23,6 +24,13 @@ import enemy004Url from '../assets/sprites/enemy_004.webp'
 import enemy005Url from '../assets/sprites/enemy_005.webp'
 import enemy006Url from '../assets/sprites/enemy_006.webp'
 import enemy007Url from '../assets/sprites/enemy_007.webp'
+import enemyFlower001Url from '../assets/sprites/enemyflower_001.webp'
+import flower000Url from '../assets/sprites/flower_000.webp'
+import flower001Url from '../assets/sprites/flower_001.webp'
+import flower002Url from '../assets/sprites/flower_002.webp'
+import flower003Url from '../assets/sprites/flower_003.webp'
+import flower004Url from '../assets/sprites/flower_004.webp'
+import flower005Url from '../assets/sprites/flower_005.webp'
 import trap001Url from '../assets/sprites/trap_001.webp'
 import trap004Url from '../assets/sprites/trap_004.webp'
 import trap007Url from '../assets/sprites/trap_007.webp'
@@ -56,6 +64,7 @@ export const SpriteUrls = {
   enemyMouse: enemy001Url,
   enemyFrog: enemy002Url,
   mimic: enemy003Url,
+  monsterFlower: enemyFlower001Url,
   enemyMoth: enemy004Url,
   enemyChitin: enemy005Url,
   enemyBird: enemy006Url,
@@ -68,6 +77,14 @@ export const SpriteUrls = {
   chestSmall: chest001Url,
   chestMedium: chest002Url,
   chestLarge: chest003Url,
+  flowers: {
+    seed: flower000Url,
+    chamomile: flower001Url,
+    redRose: flower002Url,
+    marigold: flower003Url,
+    oleander: flower004Url,
+    lavender: flower005Url,
+  } satisfies Record<FlowerKind, string>,
   cardBack: cardBackUrl,
   relics: {
     'red-potion': relic001Url,
@@ -133,6 +150,7 @@ function spriteForNormalEnemy(card: Card): string {
 
 export function spriteForCard(card: Card): string {
   if (card.type === CardType.ENEMY) {
+    if (card.specialEnemyKind === 'monsterFlower') return SpriteUrls.monsterFlower
     if (card.isSpecialEnemy) return SpriteUrls.mimic
     return spriteForNormalEnemy(card)
   }
@@ -143,6 +161,9 @@ export function spriteForCard(card: Card): string {
     if (card.groupCount >= 3) return SpriteUrls.chestLarge
     if (card.groupCount === 2) return SpriteUrls.chestMedium
     return SpriteUrls.chestSmall
+  }
+  if (card.type === CardType.FLOWER) {
+    return SpriteUrls.flowers[card.flowerKind]
   }
   return ''
 }

@@ -7,7 +7,15 @@
  * candle creatures gradually between shops.
  */
 
-import { Card, CardType, type EnemySpriteId, type TrapKind } from '@entities/Card'
+import {
+  Card,
+  CardType,
+  flowerDescription,
+  flowerDisplayName,
+  type EnemySpriteId,
+  type FlowerKind,
+  type TrapKind,
+} from '@entities/Card'
 import { EmberSystem, EmberTier, SpawnWeights } from './EmberSystem'
 
 interface CardDefinition {
@@ -181,7 +189,8 @@ export class CardSpawner {
       : buckets.webTrap
     const bombTrap = options.openingBoard ? 0 : buckets.bombTrap
     const sporeTrap = options.openingBoard ? 0 : buckets.sporeTrap
-    const total = buckets.enemy + webTrap + bombTrap + sporeTrap + buckets.treasure
+    const flower = options.openingBoard ? 0 : buckets.flower
+    const total = buckets.enemy + webTrap + bombTrap + sporeTrap + buckets.treasure + flower
     const roll = Math.random() * total
 
     if (roll < buckets.enemy) return this.generateEnemy()
@@ -190,7 +199,10 @@ export class CardSpawner {
     if (roll < buckets.enemy + webTrap + bombTrap + sporeTrap) {
       return this.generateTrap({ trapKind: 'spore' })
     }
-    return this.generateTreasure()
+    if (roll < buckets.enemy + webTrap + bombTrap + sporeTrap + buckets.treasure) {
+      return this.generateTreasure()
+    }
+    return this.generateFlowerSeed()
   }
 
   /** Enemy availability follows shop breakpoints: 1-10, 11-20, then 21+. */
@@ -263,6 +275,51 @@ export class CardSpawner {
     )
   }
 
+  /** Spawn a dormant flower seed; it only becomes a buff after reaching front row. */
+  private generateFlowerSeed(): Card {
+    this.spawnSerial++
+    return new Card(
+      `flower-${this.spawnSerial}-${Math.random()}`,
+      CardType.FLOWER,
+      flowerDisplayName('seed'),
+      flowerDescription('seed'),
+      0,
+      0,
+      { flowerKind: 'seed' }
+    )
+  }
+
+  /** Pick the flower produced when a seed reaches the active row. */
+  randomBloomKind(): Exclude<FlowerKind, 'seed'> {
+    const kinds: Exclude<FlowerKind, 'seed'>[] = [
+      'chamomile',
+      'redRose',
+      'marigold',
+      'oleander',
+      'lavender',
+    ]
+    return kinds[Math.floor(Math.random() * kinds.length)]
+  }
+
+  /** Monster flower inherits threat from the flower value that was gambled. */
+  spawnMonsterFlower(power: number = 1): Card {
+    const safePower = Math.max(1, power)
+    this.spawnSerial++
+    return new Card(
+      `monster-flower-${this.spawnSerial}-${Math.random()}`,
+      CardType.ENEMY,
+      '괴물꽃',
+      `Withered from a value-${safePower} flower`,
+      safePower,
+      safePower,
+      {
+        isSpecialEnemy: true,
+        specialEnemyKind: 'monsterFlower',
+        defeatDropCount: Math.max(1, Math.min(3, Math.ceil(safePower / 2))),
+      }
+    )
+  }
+
   /** Read the active spawn weights so the UI can show the tier visually. */
   getActiveWeights(): SpawnWeights {
     return EmberSystem.getSpawnWeights(this.currentTier)
@@ -285,6 +342,7 @@ export class CardSpawner {
       stats.attack,
       {
         isSpecialEnemy: true,
+        specialEnemyKind: 'mimic',
         defeatDropCount: stats.drops,
       }
     )

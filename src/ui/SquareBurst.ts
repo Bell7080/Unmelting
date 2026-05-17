@@ -23,6 +23,8 @@ export type BurstTheme =
   | 'mimic-shift'
   | 'wax-freeze'
   | 'bomb-blast'
+  | 'flower-bloom'
+  | 'flower-wilt'
   | 'hand-recovery'
   | 'hand-tool'
   | 'hand-control'
@@ -49,6 +51,10 @@ const PALETTES: Record<BurstTheme, Palette> = {
   // damage burst so the explosion reads as a focal event without breaking
   // the warm ember palette that the rest of the UI lives in.
   'bomb-blast': { shades: ['#0a0508', '#5c1410', '#ff5a1c', '#fff3a0'] },
+  // Flower bloom/growth — soft green stems through warm petal light.
+  'flower-bloom': { shades: ['#14301d', '#4f8f45', '#e6b34d', '#fff0c5'] },
+  // Flower wilt — muddy grey-green into ash, distinct from treasure vanish.
+  'flower-wilt': { shades: ['#10130f', '#3f4a37', '#7f806f', '#c8c0aa'] },
   // Hand-use, per category — each is a two-tone interpolation.
   'hand-recovery': { shades: ['#0e1f12', '#2c5e34', '#7ed091', '#e2f7c8'] },
   'hand-tool': { shades: ['#1c1304', '#6b4910', '#dca233', '#ffe9a4'] },
@@ -119,7 +125,7 @@ function spawnSquare(
   palette: Palette,
   spread: number,
   duration: number,
-  sizeRange: [number, number],
+  sizeRange: [number, number]
 ): void {
   const piece = document.createElement('div')
   piece.className = 'square-burst-piece'
@@ -163,7 +169,7 @@ function spawnSquare(
       duration,
       easing: 'cubic-bezier(0.18, 0.78, 0.28, 1)',
       fill: 'forwards',
-    },
+    }
   )
 
   anim.onfinish = () => piece.remove()
@@ -196,7 +202,7 @@ export const SquareBurst = {
   playOn(
     target: HTMLElement | DOMRect | null | undefined,
     theme: BurstTheme,
-    opts: BurstOptions = {},
+    opts: BurstOptions = {}
   ): void {
     if (!target) return
     const rect = target instanceof HTMLElement ? target.getBoundingClientRect() : target

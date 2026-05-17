@@ -49,6 +49,33 @@ describe('Card enemy grouping health', () => {
     expect(wounded.getHealth()).toBe(4)
   })
 
+  it('keeps flowers single-cell while monster flowers merge only with each other', () => {
+    const flowerA = new Card('flower-a', CardType.FLOWER, '씨앗', 'seed', 0, 0, {
+      flowerKind: 'seed',
+    })
+    const flowerB = new Card('flower-b', CardType.FLOWER, '씨앗', 'seed', 0, 0, {
+      flowerKind: 'seed',
+    })
+    const monsterA = new Card('monster-a', CardType.ENEMY, '괴물꽃', 'wilted', 2, 2, {
+      isSpecialEnemy: true,
+      specialEnemyKind: 'monsterFlower',
+    })
+    const monsterB = new Card('monster-b', CardType.ENEMY, '괴물꽃', 'wilted', 3, 3, {
+      isSpecialEnemy: true,
+      specialEnemyKind: 'monsterFlower',
+    })
+    const normal = new Card('normal', CardType.ENEMY, '양초 생쥐', 'normal', 2, 1)
+
+    flowerA.merge(flowerB)
+    expect(flowerA.groupCount).toBe(1)
+    normal.merge(monsterA)
+    expect(normal.groupCount).toBe(1)
+    monsterA.merge(monsterB)
+    expect(monsterA.groupCount).toBe(2)
+    expect(monsterA.getHealth()).toBe(5)
+    expect(monsterA.getDamage()).toBe(5)
+  })
+
   it('keeps special mimic enemies from merging with normal enemies', () => {
     const enemy = new Card('enemy', CardType.ENEMY, '양초 생쥐', 'Small candle mouse', 2, 1)
     const mimic = new Card('mimic', CardType.ENEMY, '미믹', 'Was a treasure once', 1, 1, {

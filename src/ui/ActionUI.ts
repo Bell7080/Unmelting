@@ -62,9 +62,7 @@ export class ActionUI {
   }
 
   private render(card: Card, actions: ActionType[]): void {
-    const actionButtons = actions
-      .map((action) => this.getActionButton(action, card))
-      .join('')
+    const actionButtons = actions.map((action) => this.getActionButton(action, card)).join('')
 
     this.containerElement.innerHTML = `
       <div class="action-panel">
@@ -88,6 +86,7 @@ export class ActionUI {
       [ActionType.ATTACK_ENEMY]: `⚔️ Attack`,
       [ActionType.EVADE_TRAP]: `🏃 Evade`,
       [ActionType.TAKE_TREASURE]: `💰 Take`,
+      [ActionType.TAKE_FLOWER]: `✦ Harvest`,
     }
 
     return `<button class="action-btn" data-action="${action}">${labels[action]}</button>`

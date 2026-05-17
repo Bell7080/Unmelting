@@ -474,4 +474,55 @@ export const GAME_BOARD_RAIL_STYLES = `
   65%      { transform: rotate(0.4deg) translate(0.5px, -0.5px); }
 }
 
+/* Flower buff cells use a muted living-green accent that still sits inside the
+   parchment/wax card language used by enemies, traps, and treasures. */
+.cell.card.type-flower { border-color: rgba(124, 184, 92, 0.82); }
+.cell.card.type-flower::before {
+  content: '';
+  position: absolute;
+  left: 6px; right: 6px; top: 2px;
+  height: 3px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, transparent, rgba(120, 196, 92, 0.92) 26%, rgba(229, 180, 76, 0.84) 74%, transparent);
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0.82;
+}
+.cell.card.type-flower .card-overlay {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(145, 205, 105, 0.2), rgba(42, 48, 28, 0.38) 70%),
+    linear-gradient(180deg, rgba(20, 16, 28, 0.0) 38%, rgba(20, 16, 28, 0.55) 70%, rgba(10, 7, 18, 0.92) 100%);
+}
+.cell.card.type-flower.flower-seed .card-overlay {
+  background:
+    radial-gradient(circle at 50% 42%, rgba(190, 164, 96, 0.16), rgba(44, 34, 26, 0.42) 72%),
+    linear-gradient(180deg, rgba(20, 16, 28, 0.0) 38%, rgba(20, 16, 28, 0.55) 70%, rgba(10, 7, 18, 0.92) 100%);
+}
+.flower-note { color: rgba(224, 255, 196, 0.96); }
+.cell.card.is-flower-blooming .card-art {
+  animation: flower-bloom-pop 0.56s cubic-bezier(.17, .84, .28, 1.25) both;
+}
+.cell.card.is-flower-growing {
+  animation: flower-growth-shimmer 0.52s ease-out both;
+}
+.cell.card.is-flower-wilting .card-art {
+  animation: flower-wilt-crumble 0.62s ease-in both;
+  filter: grayscale(0.82) brightness(0.7) saturate(0.55);
+}
+@keyframes flower-bloom-pop {
+  0% { transform: scale(0.22); filter: brightness(1.35) saturate(1.45); opacity: 0.15; }
+  58% { transform: scale(1.14); filter: brightness(1.18) saturate(1.28); opacity: 1; }
+  100% { transform: scale(1); filter: none; opacity: 1; }
+}
+@keyframes flower-growth-shimmer {
+  0% { filter: brightness(1) saturate(1); box-shadow: var(--card-depth-shadow); }
+  45% { filter: brightness(1.24) saturate(1.28); box-shadow: var(--card-depth-shadow), 0 0 calc(16px * var(--flower-growth-scale, 1)) rgba(164, 220, 104, 0.52); }
+  100% { filter: brightness(1) saturate(1); box-shadow: var(--card-depth-shadow); }
+}
+@keyframes flower-wilt-crumble {
+  0% { transform: scale(1); opacity: 1; }
+  48% { transform: scale(0.9) rotate(-1deg); opacity: 0.58; }
+  100% { transform: scale(1.08); opacity: 1; }
+}
+
 `

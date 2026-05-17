@@ -17,9 +17,22 @@
  */
 
 import { GameState } from '@core/GameState'
-import { Card, CardType } from '@entities/Card'
+import {
+  Card,
+  CardType,
+  flowerDescription,
+  flowerDisplayName,
+  type FlowerKind,
+} from '@entities/Card'
 import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
-import type { BombExplosion, EnemyHit, TreasureChange } from '@core/TurnManager'
+import type {
+  BombExplosion,
+  EnemyHit,
+  FlowerBloom,
+  FlowerGrowth,
+  FlowerWilt,
+  TreasureChange,
+} from '@core/TurnManager'
 import { spriteForCard, spriteForHandCard, spriteForRelic, SpriteUrls } from '@ui/Sprites'
 import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandCategory, HandEffectTargeting } from '@entities/HandCard'
@@ -415,6 +428,7 @@ export class GameBoardRenderer {
       'card',
       `type-${card.type}`,
       card.type === CardType.TRAP ? `trap-${card.trapKind}` : '',
+      card.type === CardType.FLOWER ? `flower-${card.flowerKind}` : '',
       card.type === CardType.TRAP && card.isBombArmed ? 'is-bomb-armed' : '',
       isActive ? 'is-active' : 'is-preview',
       isSelected ? 'is-selected' : '',
@@ -538,6 +552,11 @@ export class GameBoardRenderer {
           </div>
         `
       }
+    } else if (card.type === CardType.FLOWER) {
+      // Flower cells expose their current harvest value. Seeds show a waiting
+      // label because they cannot be picked until the front-row bloom beat.
+      const label = card.flowerKind === 'seed' ? '대기' : `+${card.flowerValue}`
+      stats = `<div class="card-stats group-note flower-note">${sparkleIcon()}<span>${label}</span></div>`
     } else if (card.type === CardType.TREASURE && card.groupCount > 1) {
       // Treasure groups describe their extra pickup as text-only metadata under
       // the name, matching the flat no-plate language requested for web labels.
@@ -580,6 +599,7 @@ export class GameBoardRenderer {
     if (type === CardType.ENEMY) return span === 2 ? '적 무리' : '거대 적 무리'
     if (type === CardType.TRAP) return span === 2 ? '함정 무리' : '거대 함정'
     if (type === CardType.TREASURE) return span === 2 ? '적당한 상자' : '큰 상자'
+    if (type === CardType.FLOWER) return '꽃밭'
     return ''
   }
 
@@ -979,7 +999,6 @@ export class GameBoardRenderer {
     `
   }
 
-
   /** Single source of truth for shop-card affordance classes. Keeping this
    *  separate lets purchase refreshes update existing DOM nodes without
    *  rebuilding images, which removes the small flash/reload feeling. */
@@ -1008,7 +1027,8 @@ export class GameBoardRenderer {
         `${def.name} — ${offer.purchased ? '구매 완료' : `점수 ${offer.price}점`}`
       )
       const label = card.querySelector<HTMLElement>('.shop-price-label-text')
-      if (label) label.textContent = offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
+      if (label)
+        label.textContent = offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
     }
     shell.classList.add('has-entered')
     return true
@@ -1073,9 +1093,7 @@ export class GameBoardRenderer {
         if (!buyTarget || buyTarget.classList.contains('is-purchased')) return
         const relicId = buyTarget.dataset.shopBuy as RelicId | undefined
         if (!relicId) return
-        document.dispatchEvent(
-          new CustomEvent<ShopBuyDetail>('shopBuy', { detail: { relicId } })
-        )
+        document.dispatchEvent(new CustomEvent<ShopBuyDetail>('shopBuy', { detail: { relicId } }))
       })
       document.body.appendChild(this.shopOverlayElement)
     }
@@ -1182,7 +1200,10 @@ export class GameBoardRenderer {
   private shopShutterPanelsFromLanes(lanes?: Lane[]): string {
     let panelIndex = 0
     if (!lanes) {
-      return Array.from({ length: 9 }, () => `<span style="--shutter-i:${panelIndex++}"></span>`).join('')
+      return Array.from(
+        { length: 9 },
+        () => `<span style="--shutter-i:${panelIndex++}"></span>`
+      ).join('')
     }
 
     const rows: string[] = []
@@ -1335,6 +1356,7 @@ export class GameBoardRenderer {
       { id: 'enemies', label: '적' },
       { id: 'traps', label: '함정' },
       { id: 'treasures', label: '보물' },
+      { id: 'flowers', label: '꽃' },
       { id: 'hand', label: '손패' },
       { id: 'combo', label: '조합' },
       { id: 'relics', label: '유물' },
@@ -1350,6 +1372,7 @@ export class GameBoardRenderer {
     if (activeTab === 'enemies') body = this.renderCompendiumEnemies()
     else if (activeTab === 'traps') body = this.renderCompendiumTraps()
     else if (activeTab === 'treasures') body = this.renderCompendiumTreasures()
+    else if (activeTab === 'flowers') body = this.renderCompendiumFlowers()
     else if (activeTab === 'hand') body = this.renderCompendiumHand()
     else if (activeTab === 'combo') body = this.renderCompendiumCombo()
     else if (activeTab === 'relics') body = this.renderCompendiumRelics()
@@ -1476,6 +1499,69 @@ export class GameBoardRenderer {
         '작은/큰/거대한 상자를 별도 카드로 나누지 않고, 보물상자 한 항목에서 칸 수별 보상과 변이 확률을 비교한다.',
     })
     return `<div class="compendium-grid">${card}</div>`
+  }
+
+  private renderCompendiumFlowers(): string {
+    const flowerKinds: FlowerKind[] = [
+      'seed',
+      'chamomile',
+      'redRose',
+      'marigold',
+      'oleander',
+      'lavender',
+    ]
+    const rewardRows: Record<FlowerKind, [string, string][]> = {
+      seed: [
+        ['등장', '대기 라인에서 씨앗으로 등장'],
+        ['전방 도착', '꽃 001~005 중 무작위 발화'],
+      ],
+      chamomile: [
+        ['수확', '점수 획득'],
+        ['성장', '턴마다 보상 증가'],
+      ],
+      redRose: [
+        ['수확', '체력 회복'],
+        ['성장', '1부터 턴마다 +1'],
+      ],
+      marigold: [
+        ['수확', '상점 화폐 획득'],
+        ['성장', '1부터 2턴마다 +1'],
+      ],
+      oleander: [
+        ['수확', '방패 획득'],
+        ['성장', '1부터 턴마다 +1'],
+      ],
+      lavender: [
+        ['수확', '손패 콤보 게이지 획득'],
+        ['성장', '1부터 턴마다 +1'],
+      ],
+    }
+    const cards = flowerKinds
+      .map((kind) =>
+        this.fieldCardFace({
+          artUrl: SpriteUrls.flowers[kind],
+          name: flowerDisplayName(kind),
+          badge: kind === 'seed' ? '씨앗' : '버프칸',
+          stats: rewardRows[kind],
+          description:
+            kind === 'seed'
+              ? '시작 3×3에는 등장하지 않으며, 전방칸에 도착하면 색상 사각형 블라스트와 함께 무작위 꽃으로 발화한다.'
+              : `${flowerDescription(kind)}. 성장할수록 수확량은 커지지만 매 턴 시들 확률도 10%부터 급격히 오른다.`,
+        })
+      )
+      .join('')
+    const monster = this.fieldCardFace({
+      artUrl: SpriteUrls.monsterFlower,
+      name: '괴물꽃',
+      badge: '특수 적',
+      stats: [
+        ['기본', 'HP/ATK 1/1'],
+        ['성장 꽃', '꽃 수확값만큼 HP/ATK'],
+        ['병합', '괴물꽃끼리만 합체'],
+      ],
+      description: '꽃이 시들면 같은 칸에 등장하는 특수 적. 다른 적과는 합쳐지지 않는다.',
+    })
+    return `<div class="compendium-grid">${cards}${monster}</div>`
   }
 
   private renderCompendiumHand(): string {
@@ -1760,7 +1846,7 @@ export class GameBoardRenderer {
     const countdown = scorePanel.emberDecayCountdown ?? 10
     const weights = scorePanel.spawnWeights
     const weightsText = weights
-      ? `적 ${weights.enemy}% · 함정 ${weights.trap}% · 보물 ${weights.treasure}%`
+      ? `적 ${weights.enemy}% · 함정 ${weights.trap}% · 보물 ${weights.treasure}% · 꽃 ${weights.flower}%`
       : ''
     return `
       <div class="ember-hud" aria-label="Ember status">
@@ -2295,8 +2381,6 @@ export class GameBoardRenderer {
     )
   }
 
-
-
   /**
    * Animate the already-open hover preview, not the compact hand slot. The
    * source hand card quietly fades while the preview keeps its original size,
@@ -2585,6 +2669,49 @@ export class GameBoardRenderer {
     )
   }
 
+  /** Seed bloom beat: color-matched square burst and a quick growing flower pop. */
+  async animateFlowerBlooms(blooms: FlowerBloom[]): Promise<void> {
+    const elements: HTMLElement[] = []
+    for (const bloom of blooms) {
+      const element = this.findCardElement(bloom.cardId)
+      if (!element) continue
+      elements.push(element)
+      SquareBurst.playOn(element, 'flower-bloom', { count: 22, spread: 120 })
+    }
+    return this.animateElements(elements, 'is-flower-blooming', 560)
+  }
+
+  /** Flower growth feedback scales via CSS using the current harvest value. */
+  async animateFlowerGrowth(growths: FlowerGrowth[]): Promise<void> {
+    const elements: HTMLElement[] = []
+    for (const growth of growths) {
+      const element = this.findCardElement(growth.cardId)
+      if (!element) continue
+      element.style.setProperty(
+        '--flower-growth-scale',
+        String(Math.min(1.8, 1 + growth.value * 0.08))
+      )
+      elements.push(element)
+      SquareBurst.playOn(element, 'flower-bloom', {
+        count: Math.min(30, 10 + growth.value * 3),
+        spread: Math.min(170, 78 + growth.value * 12),
+      })
+    }
+    return this.animateElements(elements, 'is-flower-growing', 520)
+  }
+
+  /** Wilting uses a grey-green burst on the flower cell before the monster art appears. */
+  async animateFlowerWilts(wilts: FlowerWilt[]): Promise<void> {
+    const elements: HTMLElement[] = []
+    for (const wilt of wilts) {
+      const element = this.findCardElement(wilt.monsterCardId) ?? this.findCardElement(wilt.cardId)
+      if (!element) continue
+      elements.push(element)
+      SquareBurst.playOn(element, 'flower-wilt', { count: 24, spread: 135 })
+    }
+    return this.animateElements(elements, 'is-flower-wilting', 620)
+  }
+
   /**
    * Treasure volatility mutates the model before the next render, but the old
    * DOM is still present. Use that old DOM to show dust and fading first.
@@ -2700,8 +2827,10 @@ export class GameBoardRenderer {
         copySources.forEach((sourceUid, copyIndex) => {
           const sourceRect = sourceUid ? previousRects.get(sourceUid) : null
           if (!sourceRect) return
-          const dx = sourceRect.left + sourceRect.width / 2 - (targetRect.left + targetRect.width / 2)
-          const dy = sourceRect.top + sourceRect.height / 2 - (targetRect.top + targetRect.height / 2)
+          const dx =
+            sourceRect.left + sourceRect.width / 2 - (targetRect.left + targetRect.width / 2)
+          const dy =
+            sourceRect.top + sourceRect.height / 2 - (targetRect.top + targetRect.height / 2)
           const prefix = copyIndex === 0 ? 'a' : 'b'
           el.style.setProperty(`--merge-copy-${prefix}-dx`, `${dx}px`)
           el.style.setProperty(`--merge-copy-${prefix}-dy`, `${dy}px`)

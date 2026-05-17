@@ -1,14 +1,17 @@
 /**
- * Card Entity - MVP card model for enemies, traps, and treasures.
+ * Card Entity - MVP card model for enemies, traps, treasures, and flowers.
  */
 
 export enum CardType {
   ENEMY = 'enemy',
   TRAP = 'trap',
   TREASURE = 'treasure',
+  FLOWER = 'flower',
 }
 
 export type TrapKind = 'web' | 'bomb' | 'spore'
+export type FlowerKind = 'seed' | 'chamomile' | 'redRose' | 'marigold' | 'oleander' | 'lavender'
+export type SpecialEnemyKind = 'mimic' | 'monsterFlower'
 
 export type EnemySpriteId =
   | 'enemyMouse'
@@ -29,6 +32,10 @@ export interface CardOptions {
   enemyPower?: number
   /** Trap subtype with distinct art and behavior. */
   trapKind?: TrapKind
+  /** Flower subtype; seeds bloom when they reach the active row. */
+  flowerKind?: FlowerKind
+  /** Special-enemy family controls limited same-family merging. */
+  specialEnemyKind?: SpecialEnemyKind
 }
 
 interface EnemyGroupStats {
@@ -45,6 +52,42 @@ function enemyGroupBonus(groupCount: number): { hp: number; damage: number } {
   if (groupCount >= 3) return { hp: 3, damage: 3 }
   if (groupCount === 2) return { hp: 2, damage: 2 }
   return { hp: 0, damage: 0 }
+}
+
+/** Flower names are kept with the model so spawner, bloom, and docs stay aligned. */
+export function flowerDisplayName(kind: FlowerKind): string {
+  switch (kind) {
+    case 'seed':
+      return '씨앗'
+    case 'chamomile':
+      return '캐모마일'
+    case 'redRose':
+      return '레드로즈'
+    case 'marigold':
+      return '메리골드'
+    case 'oleander':
+      return '올레안더'
+    case 'lavender':
+      return '라벤더'
+  }
+}
+
+/** Short rail/compendium copy for each flower buff. */
+export function flowerDescription(kind: FlowerKind): string {
+  switch (kind) {
+    case 'seed':
+      return 'Blooms into a random buff flower on the front row'
+    case 'chamomile':
+      return 'Gain score; higher flower value pays more'
+    case 'redRose':
+      return 'Heal for flower value'
+    case 'marigold':
+      return 'Gain coins; grows every two turns'
+    case 'oleander':
+      return 'Gain shield for flower value'
+    case 'lavender':
+      return 'Gain hand combo gauge for flower value'
+  }
 }
 
 export class Card {
@@ -69,6 +112,12 @@ export class Card {
   trapKind: TrapKind
   isBombArmed: boolean
   sporeTurnsUntilSpread: number
+  /** Special-enemy family; monster flowers merge only with each other. */
+  specialEnemyKind: SpecialEnemyKind | null
+  /** Flower growth state: seed in waiting row, then a random bloom on front row. */
+  flowerKind: FlowerKind
+  flowerTurnsAlive: number
+  flowerValue: number
 
   constructor(
     id: string,
@@ -97,6 +146,10 @@ export class Card {
     this.trapKind = options.trapKind ?? 'web'
     this.isBombArmed = false
     this.sporeTurnsUntilSpread = this.trapKind === 'spore' ? 2 : 0
+    this.specialEnemyKind = options.specialEnemyKind ?? null
+    this.flowerKind = options.flowerKind ?? 'seed'
+    this.flowerTurnsAlive = 0
+    this.flowerValue = this.type === CardType.FLOWER && this.flowerKind !== 'seed' ? 1 : 0
   }
 
   /** Return proportional stats for a merged enemy group based on real members. */
@@ -157,6 +210,32 @@ export class Card {
     return this.frozenTurns > 0
   }
 
+  /** Convert a waiting seed into one of the five usable flower buffs. */
+  bloom(kind: Exclude<FlowerKind, 'seed'>): void {
+    if (this.type !== CardType.FLOWER) return
+    this.flowerKind = kind
+    this.flowerTurnsAlive = 0
+    this.flowerValue = 1
+    this.name = flowerDisplayName(kind)
+    this.description = flowerDescription(kind)
+  }
+
+  /** Grow a flower on its own cadence; returns true when its reward improved. */
+  growFlowerOneTurn(): boolean {
+    if (this.type !== CardType.FLOWER || this.flowerKind === 'seed') return false
+    this.flowerTurnsAlive += 1
+    const shouldGrow = this.flowerKind === 'marigold' ? this.flowerTurnsAlive % 2 === 0 : true
+    if (shouldGrow) this.flowerValue += 1
+    return shouldGrow
+  }
+
+  /** Wilting starts at 10% and accelerates sharply as flower value rises. */
+  getFlowerWiltChance(): number {
+    if (this.type !== CardType.FLOWER || this.flowerKind === 'seed') return 0
+    const maturity = Math.max(0, this.flowerValue - 1)
+    return Math.min(0.85, 0.1 + maturity * maturity * 0.08)
+  }
+
   /** Return trap damage for the current trap width and subtype. */
   getTrapDamagePenalty(): number {
     if (this.type !== CardType.TRAP) return 0
@@ -178,7 +257,18 @@ export class Card {
    */
   canMergeWith(other: Card): boolean {
     if (this.type !== other.type) return false
-    if (this.isSpecialEnemy || other.isSpecialEnemy) return false
+    // Blooming flowers and seeds are deliberate single-cell opportunities.
+    if (this.type === CardType.FLOWER) return false
+    // Special enemies normally stand alone; monster flowers are the one
+    // exception and only merge with the same corrupted-flower family.
+    if (this.isSpecialEnemy || other.isSpecialEnemy) {
+      return (
+        this.type === CardType.ENEMY &&
+        other.type === CardType.ENEMY &&
+        this.specialEnemyKind === 'monsterFlower' &&
+        other.specialEnemyKind === 'monsterFlower'
+      )
+    }
     if (this.type === CardType.TRAP) {
       // Bomb timing should never be reset by lane grouping, and unlike trap
       // subtypes should not merge into one ambiguous hazard.
@@ -231,6 +321,20 @@ export class Card {
    */
   merge(other: Card): void {
     if (!this.canMergeWith(other)) return
+
+    if (this.type === CardType.ENEMY && this.specialEnemyKind === 'monsterFlower') {
+      // Corrupted flowers add their stats directly, staying separate from
+      // ordinary enemy formations and preserving current damage already dealt.
+      this.groupCount += other.groupCount
+      this.baseHealth += other.baseHealth
+      this.baseDamage += other.baseDamage
+      this.health += other.health
+      this.enemyHealthTotal = this.baseHealth
+      this.enemyDamageTotal = this.baseDamage
+      this.name = this.groupCount >= 3 ? '괴물꽃 군락' : '괴물꽃 무리'
+      this.description = 'Withered flower monster pack'
+      return
+    }
 
     if (this.type === CardType.ENEMY) {
       const existingDamage = Math.max(0, this.getCurrentMaxHealth() - this.health)
