@@ -2130,8 +2130,13 @@ export class GameBoardRenderer {
   animateEnemyAttacks(hits: EnemyHit[]): Promise<void> {
     const elements = new Set<HTMLElement>()
     for (const hit of hits) {
-      const selector = `.cell.card.is-active[data-lane="${hit.laneIndex}"]`
-      const element = this.boardElement.querySelector<HTMLElement>(selector)
+      // Grouped enemies render once at the group's leftmost lane, so cardId is
+      // authoritative; lane fallback keeps older hit payloads harmless.
+      const element =
+        this.findCardElement(hit.cardId) ??
+        this.boardElement.querySelector<HTMLElement>(
+          `.cell.card.is-active[data-lane="${hit.laneIndex}"]`
+        )
       if (element) elements.add(element)
     }
     return this.animateElements([...elements], 'is-enemy-slamming', 420)
@@ -2315,6 +2320,12 @@ export class GameBoardRenderer {
   ): Promise<void> {
     const center = new DOMRect(window.innerWidth / 2 - 8, window.innerHeight * 0.46 - 8, 16, 16)
     return this.animateResourceTrail(center, this.findResourceTrailTarget(target), count, theme)
+  }
+
+  /** Fly a square-card target blast from the played-card center toward an affected rail card. */
+  animateTargetBlastFromCenterToCard(cardId: string, theme: BurstTheme): Promise<void> {
+    const center = new DOMRect(window.innerWidth / 2 - 8, window.innerHeight * 0.46 - 8, 16, 16)
+    return this.animateResourceTrail(center, this.findCardElement(cardId), 1, theme)
   }
 
   /** Fly a resource trail from the currently visible chain/combo banner. */
@@ -2828,7 +2839,12 @@ export class GameBoardRenderer {
     // until the next render() actually drops the card. Otherwise the class
     // is removed mid-await and the card visibly snaps back to full opacity
     // for a frame — that's the "blink" the player sees on slow machines.
-    return this.animateElements(elements, 'is-consuming', 480, { persist: true })
+    return this.animateElements(
+      elements,
+      card.type === CardType.ENEMY ? 'is-enemy-defeated-consuming' : 'is-consuming',
+      card.type === CardType.ENEMY ? 560 : 480,
+      { persist: true }
+    )
   }
 
   /**
@@ -2867,7 +2883,14 @@ export class GameBoardRenderer {
           duration: 640,
         })
       }
-      animations.push(this.animateElements(elements, 'is-consuming', 480, { persist: true }))
+      animations.push(
+        this.animateElements(
+          elements,
+          type === CardType.ENEMY ? 'is-enemy-defeated-consuming' : 'is-consuming',
+          type === CardType.ENEMY ? 560 : 480,
+          { persist: true }
+        )
+      )
     }
     return Promise.all(animations).then(() => undefined)
   }

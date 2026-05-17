@@ -312,6 +312,16 @@ async function playResourceTrail(
 /** Diff player-facing numeric gains and route them through the shared table.
  *  Gauge consumption is intentionally ignored here; explicit spend beats such
  *  as shop purchases get their own source→target trail. */
+
+/** Send the center played-card blast to every rail card touched by a hand effect. */
+async function playHandTargetBlasts(cardIds: Iterable<string>, theme: BurstTheme): Promise<void> {
+  const uniqueIds = [...new Set(cardIds)].filter(Boolean)
+  if (uniqueIds.length === 0) return
+  await Promise.all(
+    uniqueIds.map((cardId) => boardRenderer.animateTargetBlastFromCenterToCard(cardId, theme))
+  )
+}
+
 async function playPlayerGainTrails(
   source: ResourceTrailSource,
   before: PlayerResourceSnapshot,
@@ -1062,10 +1072,24 @@ async function applyHandSingle(
   // consume burst at the same location.
   const singleDamageLosses = diffFieldHealthLosses(beforeSingleHealth)
   const singleDamagedIds = new Set(singleDamageLosses.map((loss) => loss.cardId))
-  await boardRenderer.animateDamageNumbersById(singleDamageLosses)
+  const newlyFrozenIds = diffNewlyFrozenCards(beforeSingleFreeze)
+  const thawedIds = diffThawedCards(beforeSingleFreeze)
+  const affectedCardIds = [
+    ...(target ? [target.card.id] : []),
+    ...singleDamageLosses.map((loss) => loss.cardId),
+    ...result.removedFieldCards.map((removed) => removed.cardId),
+    ...newlyFrozenIds,
+    ...thawedIds,
+  ]
+  // The played-card preview dissolves at center; this square-card blast points
+  // from that center beat to every field cell that was hit, removed, gained, or hardened.
+  if (handUseTheme) await playHandTargetBlasts(affectedCardIds, handUseTheme)
+  await Promise.all([
+    boardRenderer.animateDamageNumbersById(singleDamageLosses),
+    boardRenderer.animateWaxFreezeByIds(newlyFrozenIds),
+    boardRenderer.animateWaxThawByIds(thawedIds),
+  ])
   await applyBloodPackRecoveryTrigger(beforeSingleRecovery)
-  await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeSingleFreeze))
-  await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeSingleFreeze))
   // Append only the just-used card first. Recipes are resolved below after
   // a small delay so the previous card's effect visibly lands before the combo.
   if (usedDef) {
@@ -1389,15 +1413,15 @@ async function handleCardAction(e: Event): Promise<void> {
   // drop into the hand, then any resulting triple synthesis resolves after
   // that landing beat instead of appearing as an already-merged card.
   let gainedHandCardCount = 0
+  const rewardFeedbacks: Promise<void>[] = []
+  let shouldBurstScore = false
+  let shouldBurstCoin = false
   if (result.success) {
     const gainedItems = result.itemGainedNames ?? []
     gainedHandCardCount = gainedItems.length
     // Only acquisitions produce log rows now: hand-card drops + light gain.
     // Damage / overflow / textual results live on damage-floats, the light
     // pulse, and the chain banner.
-    const rewardFeedbacks: Promise<void>[] = []
-    let shouldBurstScore = false
-    let shouldBurstCoin = false
     if (gainedItems.length > 0) {
       rewardFeedbacks.push(
         playResourceTrail({ kind: 'card', cardId: card.id }, 'hand', gainedItems.length)
@@ -1453,14 +1477,6 @@ async function handleCardAction(e: Event): Promise<void> {
         })
       )
     }
-    if (rewardFeedbacks.length > 0) await Promise.all(rewardFeedbacks)
-    if (shouldBurstScore) burstScoreGain()
-    if (shouldBurstCoin) burstCoinGain()
-    if (rewardFeedbacks.length > 0) {
-      // Reveal hand/stat model changes on the exact destination-burst beat;
-      // card removal and damage floats can continue in parallel afterward.
-      render()
-    }
   }
   const sameBeatAnimations: Promise<void>[] = []
   if (result.damageDealt && result.damageDealt > 0) {
@@ -1477,17 +1493,17 @@ async function handleCardAction(e: Event): Promise<void> {
     )
   }
 
-  if (
-    result.cardRemoved &&
-    (card.type === CardType.TRAP ||
-      card.type === CardType.TREASURE ||
-      card.type === CardType.FLOWER)
-  ) {
-    // Trap damage + trap consume now start in the same beat, removing the
-    // previous 타/닥 delay between click feedback and hurt feedback.
+  if (result.cardRemoved) {
+    // Damage/reward math has already happened in the model; all visible beats
+    // now start together so the player never sees calculation, hurt, and death
+    // as separate delayed steps.
     sameBeatAnimations.push(boardRenderer.animateCardConsume(card))
   }
+  if (rewardFeedbacks.length > 0)
+    sameBeatAnimations.push(Promise.all(rewardFeedbacks).then(() => undefined))
   if (sameBeatAnimations.length > 0) await Promise.all(sameBeatAnimations)
+  if (shouldBurstScore) burstScoreGain()
+  if (shouldBurstCoin) burstCoinGain()
 
   if (result.cardRemoved) {
     gameState.removeCardFromRow(card, distance)

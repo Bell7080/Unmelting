@@ -21,6 +21,9 @@ import { EmberSystem } from '@systems/EmberSystem'
 
 export interface EnemyHit {
   laneIndex: number
+  /** Stable card id lets grouped 2/3-lane enemies animate even when the
+   *  striking lane is not the leftmost rendered DOM cell. */
+  cardId: string
   cardName: string
   damage: number
 }
@@ -99,7 +102,7 @@ export class TurnManager {
 
       // Record actual damage so the UI and death check match state.
       const damage = character.takeDamage(card.getDamage())
-      hits.push({ laneIndex: i, cardName: card.name, damage })
+      hits.push({ laneIndex: i, cardId: card.id, cardName: card.name, damage })
 
       if (!character.isAlive()) {
         this.gameState.endGame('character_defeated')
@@ -163,6 +166,9 @@ export class TurnManager {
       if (!card || seen.has(card) || card.type !== CardType.TRAP || card.trapKind !== 'bomb')
         continue
       seen.add(card)
+      // 굳음은 상자 변동처럼 턴 타이머를 멈춘다: 밀랍으로 굳은 폭탄은
+      // 전방에 있어도 해동될 때까지 새로 점화되지 않는다.
+      if (card.isFrozen()) continue
       if (!card.isBombArmed) {
         card.isBombArmed = true
         armed++
