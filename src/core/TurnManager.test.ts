@@ -174,6 +174,26 @@ describe('TurnManager treasure volatility', () => {
     expect(spore.sporeTurnsUntilSpread).toBe(2)
   })
 
+  it('regroups newly adjacent front-row spores after the spread pass', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const spore = new Card('spore', CardType.TRAP, '감염 포자', 'test', 0, 1, { trapKind: 'spore' })
+    spore.sporeTurnsUntilSpread = 1
+    gameState.lanes[0].setCardAtDistance(0, spore)
+    gameState.lanes[1].setCardAtDistance(
+      0,
+      new Card('victim', CardType.TREASURE, '작은 상자', 'test')
+    )
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+
+    turnManager.applySporeSpread()
+
+    // Spore spreading is a post-drop event; regroup here so the next rendered
+    // player decision sees one 2-lane colony rather than two separate spores.
+    expect(gameState.lanes[0].getCardAtDistance(0)).toBe(gameState.lanes[1].getCardAtDistance(0))
+    expect(gameState.lanes[0].getCardAtDistance(0)?.groupCount).toBe(2)
+  })
+
   it('does not tick newly infected spores again during the same spread pass', () => {
     const gameState = new GameState()
     const turnManager = new TurnManager(gameState)
@@ -220,8 +240,8 @@ describe('TurnManager treasure volatility', () => {
     // The player's kill leaves distance 0 empty until cleanup; the enemy phase
     // must not compact first, otherwise this waiting enemy would get a same-turn hit.
     const hitsBeforeGravity = turnManager.runEnemyPhase()
-    gameState.compactAndRefillRails((laneIndex) =>
-      new Card(`refill-${laneIndex}`, CardType.TREASURE, '리필 상자', 'test')
+    gameState.compactAndRefillRails(
+      (laneIndex) => new Card(`refill-${laneIndex}`, CardType.TREASURE, '리필 상자', 'test')
     )
     const hitsAfterGravity = turnManager.runEnemyPhase()
 
@@ -242,8 +262,8 @@ describe('TurnManager treasure volatility', () => {
 
     // Spore logic itself still ignores empty holes; the game loop now calls it
     // only after cleanup gravity, so this real card becomes a valid neighbor.
-    gameState.compactAndRefillRails((laneIndex) =>
-      new Card(`refill-${laneIndex}`, CardType.TREASURE, '리필 상자', 'test')
+    gameState.compactAndRefillRails(
+      (laneIndex) => new Card(`refill-${laneIndex}`, CardType.TREASURE, '리필 상자', 'test')
     )
     const spreads = turnManager.applySporeSpread()
 

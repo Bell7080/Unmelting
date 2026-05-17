@@ -53,6 +53,12 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
   letter-spacing: -0.04em;
 }
 
+.player-shield-chip.is-gone {
+  opacity: 0;
+  transform: translateY(-3px) scale(0.86);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
 
 .hp-column {
   display: flex;
@@ -123,8 +129,8 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
   /* Owned relics now start larger and sit a touch lower, so reading is
      possible before hover; hover is mostly for layer priority. */
   align-self: center;
-  height: clamp(148px, 19vh, 204px);
-  max-height: clamp(148px, 19vh, 204px);
+  height: clamp(168px, 22vh, 232px);
+  max-height: clamp(168px, 22vh, 232px);
   align-items: center;
   justify-content: center;
   padding: 0;
@@ -135,7 +141,7 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
 }
 .relic-stack {
   position: relative;
-  width: clamp(168px, 18vw, 236px);
+  width: clamp(194px, 21vw, 272px);
   height: 100%;
   overflow: visible;
   transform: translateY(16px);
@@ -145,7 +151,7 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
   position: absolute;
   left: 50%;
   bottom: 4px;
-  width: clamp(96px, 8.1vw, 128px);
+  width: clamp(112px, 9.4vw, 148px);
   aspect-ratio: 0.72;
   min-width: 0;
   overflow: visible;
@@ -167,7 +173,7 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
 }
 .relic-mini-card .relic-preview-card {
   display: grid;
-  grid-template-rows: 50% 1fr;
+  grid-template-rows: 44% minmax(0, 1fr);
   width: 100%;
   height: 100%;
   min-height: 0;
@@ -185,19 +191,20 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
 }
 .relic-mini-card .shop-relic-body {
   padding: 7px 8px 8px;
-  gap: 4px;
+  gap: 3px;
+  overflow: hidden;
 }
 .relic-mini-card .shop-relic-title {
   font-size: clamp(11px, 1vw, 13px);
   line-height: 1.05;
 }
 .relic-mini-card .shop-relic-effect {
-  font-size: clamp(10px, 0.82vw, 12px);
-  line-height: 1.18;
+  font-size: clamp(10px, 0.78vw, 11.5px);
+  line-height: 1.12;
 }
 .relic-mini-card .shop-relic-flavor {
-  font-size: 9px;
-  line-height: 1.18;
+  font-size: clamp(8px, 0.62vw, 9.5px);
+  line-height: 1.08;
 }
 /* Hover/focus only nudges the artifact forward instead of becoming the
    primary reading state; the card is already legible at rest. */
@@ -224,17 +231,17 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
 .relic-mini-card:not(.is-revive-locked):hover .shop-relic-title,
 .relic-mini-card:not(.is-revive-locked):focus-visible .shop-relic-title,
 .relic-mini-card.is-pinned:not(.is-revive-locked) .shop-relic-title {
-  font-size: 13px;
+  font-size: clamp(12px, 0.95vw, 13px);
 }
 .relic-mini-card:not(.is-revive-locked):hover .shop-relic-effect,
 .relic-mini-card:not(.is-revive-locked):focus-visible .shop-relic-effect,
 .relic-mini-card.is-pinned:not(.is-revive-locked) .shop-relic-effect {
-  font-size: 12px;
+  font-size: clamp(10.5px, 0.86vw, 12px);
 }
 .relic-mini-card:not(.is-revive-locked):hover .shop-relic-flavor,
 .relic-mini-card:not(.is-revive-locked):focus-visible .shop-relic-flavor,
 .relic-mini-card.is-pinned:not(.is-revive-locked) .shop-relic-flavor {
-  font-size: 10px;
+  font-size: clamp(8.5px, 0.68vw, 10px);
 }
 .relic-mini-card.is-arriving {
   opacity: 0;

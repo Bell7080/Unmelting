@@ -187,6 +187,15 @@ export const GAME_BOARD_BASE_STYLES = `
   filter: drop-shadow(0 0 10px rgba(255, 215, 120, 0.5));
 }
 
+/* Shared numeric roll for resource HUD values beyond just score/coin. It keeps
+   the existing warm candle glow but stays subtle inside dense labels like HP. */
+[data-count-start].is-counter-ticking {
+  font-variant-numeric: tabular-nums;
+  text-shadow:
+    0 0 6px rgba(255, 232, 168, 0.45),
+    0 1px 2px rgba(0, 0, 0, 0.72);
+}
+
 .coin-number.is-score-popping::after,
 .score-number.is-score-popping::after {
   content: '✦ ✧ ✦';
