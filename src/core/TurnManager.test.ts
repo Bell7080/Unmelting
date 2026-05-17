@@ -211,6 +211,46 @@ describe('TurnManager treasure volatility', () => {
     expect(spore.sporeTurnsUntilSpread).toBe(2)
   })
 
+  it('lets enemies attack before rail gravity pulls the next enemy into a cleared front slot', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const waitingEnemy = new Card('waiting-enemy', CardType.ENEMY, '대기 중인 적', 'test', 3, 2)
+    gameState.lanes[0].setCardAtDistance(1, waitingEnemy)
+
+    // The player's kill leaves distance 0 empty until cleanup; the enemy phase
+    // must not compact first, otherwise this waiting enemy would get a same-turn hit.
+    const hitsBeforeGravity = turnManager.runEnemyPhase()
+    gameState.compactAndRefillRails((laneIndex) =>
+      new Card(`refill-${laneIndex}`, CardType.TREASURE, '리필 상자', 'test')
+    )
+    const hitsAfterGravity = turnManager.runEnemyPhase()
+
+    expect(hitsBeforeGravity).toEqual([])
+    expect(gameState.lanes[0].getCardAtDistance(0)).toBe(waitingEnemy)
+    expect(hitsAfterGravity).toHaveLength(1)
+  })
+
+  it('spreads into a card that rail gravity drops into an adjacent empty neighbor', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const spore = new Card('spore', CardType.TRAP, '감염 포자', 'test', 0, 1, { trapKind: 'spore' })
+    const droppedVictim = new Card('dropped-victim', CardType.TREASURE, '떨어진 상자', 'test')
+    spore.sporeTurnsUntilSpread = 1
+    gameState.lanes[0].setCardAtDistance(0, spore)
+    gameState.lanes[1].setCardAtDistance(1, droppedVictim)
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+
+    // Spore logic itself still ignores empty holes; the game loop now calls it
+    // only after cleanup gravity, so this real card becomes a valid neighbor.
+    gameState.compactAndRefillRails((laneIndex) =>
+      new Card(`refill-${laneIndex}`, CardType.TREASURE, '리필 상자', 'test')
+    )
+    const spreads = turnManager.applySporeSpread()
+
+    expect(spreads[0]?.infected[0]).toEqual({ laneIndex: 1, distance: 0 })
+    expect(gameState.lanes[1].getCardAtDistance(0)?.trapKind).toBe('spore')
+  })
+
   it('reports the card id for a grouped enemy strike so the renderer can animate the whole group', () => {
     const gameState = new GameState()
     const turnManager = new TurnManager(gameState)
