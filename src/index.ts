@@ -328,9 +328,13 @@ async function playPlayerGainTrails(
     ['gauge', Math.max(0, c.candle - before.candle)],
     ['attack', Math.max(0, c.damage - before.damage)],
   ]
-  for (const [resource, amount] of gains) {
-    await playResourceTrail(source, resource, amount, themeOverride?.[resource])
-  }
+  // Fire independent stat trails together so HP / shield / ember / gauge
+  // gains calculate on the same impact beat instead of queueing one by one.
+  await Promise.all(
+    gains.map(([resource, amount]) =>
+      playResourceTrail(source, resource, amount, themeOverride?.[resource])
+    )
+  )
 }
 
 /** Heal from Red Potion after enemy defeats, then allow Blood Pack to react once. */
@@ -1391,8 +1395,13 @@ async function handleCardAction(e: Event): Promise<void> {
     // Only acquisitions produce log rows now: hand-card drops + light gain.
     // Damage / overflow / textual results live on damage-floats, the light
     // pulse, and the chain banner.
+    const rewardFeedbacks: Promise<void>[] = []
+    let shouldBurstScore = false
+    let shouldBurstCoin = false
     if (gainedItems.length > 0) {
-      await playResourceTrail({ kind: 'card', cardId: card.id }, 'hand', gainedItems.length)
+      rewardFeedbacks.push(
+        playResourceTrail({ kind: 'card', cardId: card.id }, 'hand', gainedItems.length)
+      )
       pushActivityLogsInDisplayOrder(createItemGainLogs(gainedItems))
     }
     if (result.cardRemoved && card.type !== CardType.FLOWER) {
@@ -1401,43 +1410,56 @@ async function handleCardAction(e: Event): Promise<void> {
         pushActivityLogsInDisplayOrder([
           createScoreLog(scoreLabelForCard(card), base, activityKindForCard(card)),
         ])
-        await playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1)
-        burstScoreGain()
+        rewardFeedbacks.push(playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1))
+        shouldBurstScore = true
       }
     }
-    if (result.cardRemoved && card.type === CardType.TREASURE) await applyWaxCrowTreasureGains(1)
+    if (result.cardRemoved && card.type === CardType.TREASURE) {
+      // Relic side-rewards still mutate through their owner, but their visible
+      // trail now resolves on impact so they no longer add an extra late delay.
+      rewardFeedbacks.push(applyWaxCrowTreasureGains(1))
+    }
     if (result.cardRemoved && card.type === CardType.FLOWER) {
-      // Flower light/coin rewards live in index.ts because those run-level
-      // wallets are intentionally outside the Character entity. Health, shield,
-      // and gauge flowers are detected by the player-resource diff below.
+      // Flower light/coin/stat rewards are kicked off together; the board render
+      // below happens as the destination burst lands, not after a separate pause.
+      const theme = flowerRewardTheme(card.flowerKind)
       if (result.flowerReward?.kind === 'score') {
         pushActivityLogsInDisplayOrder([
           createScoreLog(`${card.name} 수확`, 24 + result.flowerReward.amount * 12, 'score'),
         ])
-        await playResourceTrail(
-          { kind: 'card', cardId: card.id },
-          'score',
-          1,
-          flowerRewardTheme(card.flowerKind)
+        rewardFeedbacks.push(
+          playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1, theme)
         )
-        burstScoreGain()
+        shouldBurstScore = true
       } else if (result.flowerReward?.kind === 'coin') {
         coins += result.flowerReward.amount
         coinPulseKey++
         recordCoinGain(`${card.name} 수확`, result.flowerReward.amount)
-        await playResourceTrail(
-          { kind: 'card', cardId: card.id },
-          'coin',
-          result.flowerReward.amount,
-          flowerRewardTheme(card.flowerKind)
+        rewardFeedbacks.push(
+          playResourceTrail(
+            { kind: 'card', cardId: card.id },
+            'coin',
+            result.flowerReward.amount,
+            theme
+          )
         )
-        burstCoinGain()
+        shouldBurstCoin = true
       }
-      await playPlayerGainTrails({ kind: 'card', cardId: card.id }, beforeActionResources, {
-        health: flowerRewardTheme(card.flowerKind),
-        shield: flowerRewardTheme(card.flowerKind),
-        gauge: flowerRewardTheme(card.flowerKind),
-      })
+      rewardFeedbacks.push(
+        playPlayerGainTrails({ kind: 'card', cardId: card.id }, beforeActionResources, {
+          health: theme,
+          shield: theme,
+          gauge: theme,
+        })
+      )
+    }
+    if (rewardFeedbacks.length > 0) await Promise.all(rewardFeedbacks)
+    if (shouldBurstScore) burstScoreGain()
+    if (shouldBurstCoin) burstCoinGain()
+    if (rewardFeedbacks.length > 0) {
+      // Reveal hand/stat model changes on the exact destination-burst beat;
+      // card removal and damage floats can continue in parallel afterward.
+      render()
     }
   }
   const sameBeatAnimations: Promise<void>[] = []

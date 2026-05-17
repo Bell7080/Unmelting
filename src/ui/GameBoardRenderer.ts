@@ -2374,10 +2374,14 @@ export class GameBoardRenderer {
     }
     if (target === 'gauge') return this.boardElement.querySelector<HTMLElement>('.candle-gauge')
     if (target === 'attack') return this.boardElement.querySelector<HTMLElement>('.atk-stat')
-    return (
-      this.boardElement.querySelector<HTMLElement>('.hand-stack') ??
-      this.boardElement.querySelector<HTMLElement>('.hand-panel')
-    )
+    const handStack = this.boardElement.querySelector<HTMLElement>('.hand-stack')
+    if (handStack) {
+      const rect = handStack.getBoundingClientRect()
+      // Hand rewards should aim just below the combo gauge / top of the hand
+      // column, matching the new top-down card acquisition motion.
+      return new DOMRect(rect.left + rect.width / 2 - 8, rect.top + 14, 16, 16)
+    }
+    return this.boardElement.querySelector<HTMLElement>('.hand-panel')
   }
 
   private ensureResourceTrailStyles(): void {
@@ -2467,8 +2471,13 @@ export class GameBoardRenderer {
                 duration: 420,
                 size: [6, 14],
               })
+              // Resolve on impact, not after every tail particle fades. Callers
+              // can update counters/hand cards during this burst beat.
+              resolve()
             }, 330)
-            Promise.all(finished).then(() => resolve())
+            // Trail pieces remove themselves asynchronously after the impact;
+            // keeping that cleanup separate prevents old sequential calculations.
+            void Promise.all(finished)
           }, i * 135)
         })
       )
