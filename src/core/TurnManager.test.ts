@@ -136,6 +136,21 @@ describe('TurnManager treasure volatility', () => {
     expect(gameState.lanes[1].getCardAtDistance(0)).toBeNull()
   })
 
+  it('keeps frozen front bombs from advancing their fuse timer', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const bomb = new Card('frozen-bomb', CardType.TRAP, '양초 폭탄', 'test', 0, 0, {
+      trapKind: 'bomb',
+    })
+    bomb.freeze(1)
+    gameState.lanes[1].setCardAtDistance(0, bomb)
+
+    expect(turnManager.armFrontBombs()).toBe(0)
+    expect(bomb.isBombArmed).toBe(false)
+    expect(turnManager.applyBombExplosions()).toEqual([])
+    expect(gameState.lanes[1].getCardAtDistance(0)).toBe(bomb)
+  })
+
   it('spreads a ready spore into one orthogonal neighboring cell', () => {
     const gameState = new GameState()
     const turnManager = new TurnManager(gameState)
@@ -176,6 +191,23 @@ describe('TurnManager treasure volatility', () => {
     expect(infected).toEqual({ laneIndex: 1, distance: 0 })
     expect(infectedCard?.trapKind).toBe('spore')
     expect(infectedCard?.sporeTurnsUntilSpread).toBe(2)
+  })
+
+  it('reports the card id for a grouped enemy strike so the renderer can animate the whole group', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const enemies = [0, 1].map(
+      (laneIndex) => new Card(`enemy-${laneIndex}`, CardType.ENEMY, '양초 무리', 'test', 3, 1)
+    )
+    enemies.forEach((enemy, laneIndex) => gameState.lanes[laneIndex].setCardAtDistance(0, enemy))
+    gameState.regroupAllRows()
+    const groupedEnemy = gameState.lanes[0].getCardAtDistance(0)
+
+    const hits = turnManager.runEnemyPhase()
+
+    expect(hits).toHaveLength(1)
+    expect(hits[0]?.cardId).toBe(groupedEnemy?.id)
+    expect(hits[0]?.damage).toBe(groupedEnemy?.getDamage())
   })
 
   it('does not end the game just because three traps occupy the active row', () => {

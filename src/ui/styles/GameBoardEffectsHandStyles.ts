@@ -59,11 +59,11 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
     filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
   }
   42% {
-    transform: translateY(24px) scale(1.04, 0.96);
-    filter: drop-shadow(0 14px 18px rgba(168, 58, 58, 0.65));
+    transform: translateY(34px) scale(1.04, 0.96);
+    filter: drop-shadow(0 18px 22px rgba(168, 58, 58, 0.7));
   }
   66% {
-    transform: translateY(-3px) scale(0.99, 1.02);
+    transform: translateY(9px) scale(0.99, 1.02);
   }
 }
 
@@ -128,6 +128,37 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   pointer-events: none;
   animation: card-consume 0.48s cubic-bezier(0.2, 0.78, 0.32, 1) forwards;
   z-index: 7;
+}
+
+/* Defeated enemies collapse inward like their candle body is snuffed, which
+   distinguishes kills from treasure/trap puffs that expand outward. */
+.cell.card.is-enemy-defeated-consuming {
+  pointer-events: none;
+  animation: enemy-defeat-shrink 0.56s cubic-bezier(0.18, 0.86, 0.22, 1) forwards;
+  transform-origin: center bottom;
+  z-index: 8;
+}
+@keyframes enemy-defeat-shrink {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    filter: brightness(1) saturate(1);
+  }
+  42% {
+    transform: translateY(5px) scale(0.86, 1.08);
+    opacity: 0.9;
+    filter: brightness(1.45) saturate(1.22);
+  }
+  72% {
+    transform: translateY(10px) scale(0.62, 0.7);
+    opacity: 0.62;
+    filter: brightness(1.1) saturate(0.82);
+  }
+  100% {
+    transform: translateY(18px) scale(0.18, 0.12);
+    opacity: 0;
+    filter: brightness(0.65) saturate(0.45) blur(0.6px);
+  }
 }
 @keyframes card-consume {
   0% {
