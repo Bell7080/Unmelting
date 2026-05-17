@@ -11,7 +11,7 @@ describe('Card enemy grouping health', () => {
     const right = new Card('right', CardType.ENEMY, '양초 개구리', 'Leaping candle frog', 1, 2)
 
     left.merge(right)
-    expect(left.name).toBe('양초 생쥐 무리')
+    expect(left.name).toBe('양초 무리')
     expect(left.groupCount).toBe(2)
     expect(left.getHealth()).toBe(5)
     expect(left.getDamage()).toBe(5)
@@ -28,7 +28,7 @@ describe('Card enemy grouping health', () => {
 
     first.merge(second)
     first.merge(third)
-    expect(first.name).toBe('양초 생쥐 무리')
+    expect(first.name).toBe('양초 군단')
     expect(first.groupCount).toBe(3)
     expect(first.getHealth()).toBe(8)
     expect(first.getDamage()).toBe(7)

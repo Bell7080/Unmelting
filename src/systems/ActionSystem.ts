@@ -36,7 +36,7 @@ export interface ActionResult {
   itemGainedNames?: string[]
   /** Hand cards that did not fit because the hand was full (for overflow UI). */
   overflow?: HandCard[]
-  /** Flower rewards that live outside Character, such as score and shop money. */
+  /** Flower rewards that live outside Character, such as light and currency. */
   flowerReward?: { kind: 'score' | 'coin'; amount: number }
   cardRemoved: boolean
 }
@@ -163,7 +163,7 @@ export class ActionSystem {
       case 'chamomile':
         return {
           success: true,
-          message: `${card.name} 수확: 점수 +${amount}`,
+          message: `${card.name} 수확: 불빛 +${amount}`,
           flowerReward: { kind: 'score', amount },
           cardRemoved: true,
         }

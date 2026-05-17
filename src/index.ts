@@ -23,6 +23,7 @@ import {
   ActivityLogEntry,
   ShopBuyDetail,
   ShopOfferView,
+  type ResourceTrailTarget,
 } from '@ui/GameBoardRenderer'
 import { CardSpawner } from '@systems/CardSpawner'
 import { ActionSystem, ActionType } from '@systems/ActionSystem'
@@ -226,21 +227,132 @@ function snapshotPlayerRecovery(): PlayerRecoverySnapshot {
   }
 }
 
+interface PlayerResourceSnapshot {
+  health: number
+  maxHealth: number
+  shield: number
+  ember: number
+  candle: number
+  damage: number
+}
+
+type ResourceTrailSource = { kind: 'card'; cardId: string } | { kind: 'center' } | { kind: 'chain' }
+
+interface NumericResourceRule {
+  target: ResourceTrailTarget
+  theme: BurstTheme
+}
+
+/** Single rules table for numeric reward destinations. Every caller only
+ *  chooses a source; this table owns the destination HUD and default palette. */
+const NUMERIC_RESOURCE_TRAILS: Record<
+  'health' | 'shield' | 'ember' | 'gauge' | 'attack' | 'score' | 'coin' | 'hand',
+  NumericResourceRule
+> = {
+  health: { target: 'health', theme: 'health-gain' },
+  shield: { target: 'shield', theme: 'shield-gain' },
+  ember: { target: 'ember', theme: 'ember-gain' },
+  gauge: { target: 'gauge', theme: 'gauge-gain' },
+  attack: { target: 'attack', theme: 'attack-gain' },
+  score: { target: 'score', theme: 'score' },
+  coin: { target: 'coin', theme: 'score' },
+  hand: { target: 'hand', theme: 'hand-tool' },
+}
+
+/** Flower reward trails override the default resource palette with species color. */
+function flowerRewardTheme(kind: Card['flowerKind']): BurstTheme {
+  switch (kind) {
+    case 'chamomile':
+      return 'flower-chamomile'
+    case 'redRose':
+      return 'flower-red-rose'
+    case 'marigold':
+      return 'flower-marigold'
+    case 'oleander':
+      return 'flower-oleander'
+    case 'lavender':
+      return 'flower-lavender'
+    case 'seed':
+      return 'flower-bloom'
+  }
+}
+
+function snapshotPlayerResources(): PlayerResourceSnapshot {
+  const c = gameState.character
+  return {
+    health: c.health,
+    maxHealth: c.maxHealth,
+    shield: c.shield,
+    ember: c.ember,
+    candle: c.candle,
+    damage: c.damage,
+  }
+}
+
+async function playResourceTrail(
+  source: ResourceTrailSource,
+  resource: keyof typeof NUMERIC_RESOURCE_TRAILS,
+  count: number,
+  themeOverride?: BurstTheme
+): Promise<void> {
+  if (count <= 0) return
+  const rule = NUMERIC_RESOURCE_TRAILS[resource]
+  const theme = themeOverride ?? rule.theme
+  if (source.kind === 'card') {
+    await boardRenderer.animateResourceTrailFromCard(source.cardId, rule.target, count, theme)
+    return
+  }
+  if (source.kind === 'center') {
+    await boardRenderer.animateResourceTrailFromCenter(rule.target, count, theme)
+    return
+  }
+  await boardRenderer.animateResourceTrailFromChain(rule.target, count, theme)
+}
+
+/** Diff player-facing numeric gains and route them through the shared table.
+ *  Gauge consumption is intentionally ignored here; explicit spend beats such
+ *  as shop purchases get their own source→target trail. */
+async function playPlayerGainTrails(
+  source: ResourceTrailSource,
+  before: PlayerResourceSnapshot,
+  themeOverride?: Partial<Record<keyof typeof NUMERIC_RESOURCE_TRAILS, BurstTheme>>
+): Promise<void> {
+  const c = gameState.character
+  const gains: Array<[keyof typeof NUMERIC_RESOURCE_TRAILS, number]> = [
+    [
+      'health',
+      Math.max(Math.max(0, c.health - before.health), Math.max(0, c.maxHealth - before.maxHealth)),
+    ],
+    ['shield', Math.max(0, c.shield - before.shield)],
+    ['ember', Math.max(0, c.ember - before.ember)],
+    ['gauge', Math.max(0, c.candle - before.candle)],
+    ['attack', Math.max(0, c.damage - before.damage)],
+  ]
+  for (const [resource, amount] of gains) {
+    await playResourceTrail(source, resource, amount, themeOverride?.[resource])
+  }
+}
+
 /** Heal from Red Potion after enemy defeats, then allow Blood Pack to react once. */
 async function applyRedPotionEnemyDefeats(count: number, allowBloodPack = true): Promise<void> {
   if (count <= 0 || !gameState.character.hasRelic('red-potion')) return
   const before = snapshotPlayerRecovery()
+  const beforeResources = snapshotPlayerResources()
   const healed = gameState.character.heal(count)
   if (healed <= 0) return
   recordRelicActivation('red-potion', `체력 +${healed}`)
+  await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
   if (allowBloodPack) await applyBloodPackRecoveryTrigger(before)
 }
 
 /** Shield from Wax Crow when treasure cards are actually acquired. */
-function applyWaxCrowTreasureGains(count: number): void {
+async function applyWaxCrowTreasureGains(count: number): Promise<void> {
   if (count <= 0 || !gameState.character.hasRelic('wax-crow')) return
+  const beforeResources = snapshotPlayerResources()
   const shielded = gameState.character.addShield(count)
-  if (shielded > 0) recordRelicActivation('wax-crow', `방패 +${shielded}`)
+  if (shielded <= 0) return
+  recordRelicActivation('wax-crow', `방패 +${shielded}`)
+  await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
 }
 
 /** Blood Pack converts healing/max-HP gains into one random front enemy hit. */
@@ -267,6 +379,7 @@ async function applyBloodPackRecoveryTrigger(before: PlayerRecoverySnapshot): Pr
 async function tryResolveHopeRevive(): Promise<boolean> {
   const character = gameState.character
   if (character.isAlive() || !character.hasRelic('hope')) return false
+  const beforeResources = snapshotPlayerResources()
   character.removeRelic('hope', true)
   character.maxHealth = Math.max(character.maxHealth, 10)
   character.health = 10
@@ -274,20 +387,22 @@ async function tryResolveHopeRevive(): Promise<boolean> {
   gameState.isGameOver = false
   gameState.gameOverReason = ''
   recordRelicActivation('hope', '체력 10으로 부활, 필드 제거')
+  await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
   render()
   await runPreparationRefreshAfterFieldEffects()
   return true
 }
 
 /** Golden Squirrel pays a small shop coin every five completed turns. */
-function applyTurnStartRelics(): void {
+async function applyTurnStartRelics(): Promise<void> {
   if (!gameState.character.hasRelic('golden-squirrel')) return
   if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 5 !== 0) return
   coins += 1
   coinPulseKey++
-  burstCoinGain()
   recordCoinGain('황금 다람쥐', 1)
   recordRelicActivation('golden-squirrel', '+1$')
+  await playResourceTrail({ kind: 'chain' }, 'coin', 1)
+  burstCoinGain()
 }
 
 /**
@@ -328,14 +443,18 @@ function rollShopOffers(): ShopOfferView[] {
 /** Immediate stat effects for relics whose benefit is granted on purchase. */
 async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
   if (id === 'carving-knife') {
+    const beforeResources = snapshotPlayerResources()
     gameState.character.applyDamageBoost(1)
     recordRelicActivation('carving-knife', '공격력 +1')
+    await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
     return
   }
   if (id === 'lifeline') {
     const before = snapshotPlayerRecovery()
+    const beforeResources = snapshotPlayerResources()
     const amount = gameState.character.increaseMaxHealth(5)
     recordRelicActivation('lifeline', `최대 체력 +${amount}`)
+    await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
     await applyBloodPackRecoveryTrigger(before)
   }
 }
@@ -370,9 +489,8 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     render()
     return
   }
-  // Pay the score price. We DO log the deduction — pure number-pulse on the
-  // score panel is too easy to miss, so the activity log row makes "you
-  // just spent 872점" concrete.
+  // Pay the light price. We DO log the deduction — pure number-pulse on the
+  // light panel is too easy to miss, so the activity log row makes the spend concrete.
   const def = getRelicDef(detail.relicId)
   score = Math.max(0, score - offer.price)
   scorePulseKey++
@@ -383,6 +501,13 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
       kind: 'score' as const,
     },
   ])
+  // Spend feedback reverses the usual gain trail: 불빛 leaves the left panel
+  // and lands on the clicked relic card before that card turns purchased.
+  boardRenderer.playScoreSpendFeedback(score, scorePulseKey)
+  await boardRenderer.animateShopPurchaseTrailToRelic(
+    detail.relicId,
+    Math.min(9, Math.max(1, Math.ceil(offer.price / 200)))
+  )
   offer.purchased = true
   await applyRelicPurchaseEffect(detail.relicId)
   render()
@@ -574,17 +699,17 @@ function snapshotFieldCardsById(): Map<string, Card> {
 }
 
 /**
- * Push one score-gain log per removed rail card and fire ONE score-burst at
+ * Push one light-gain log per removed rail card and fire ONE light-burst at
  * the end. Used by both the hand-card single-effect beat and the recipe beat.
  *
  * Cards that the snapshot can't resolve (e.g. spore offsprings spawned during
  * the same beat) are silently skipped — they were not "처리" by the player,
  * they appeared from another mechanic.
  */
-function awardScoreForRemovedCards(
+async function awardScoreForRemovedCards(
   removed: { cardId: string; type: CardType }[],
   snapshot: Map<string, Card>
-): void {
+): Promise<void> {
   if (removed.length === 0) return
   const logs: ActivityLogDraft[] = []
   for (const r of removed) {
@@ -596,6 +721,11 @@ function awardScoreForRemovedCards(
   }
   if (logs.length === 0) return
   pushActivityLogsInDisplayOrder(logs)
+  await Promise.all(
+    removed
+      .filter((r) => snapshot.has(r.cardId))
+      .map((r) => playResourceTrail({ kind: 'card', cardId: r.cardId }, 'score', 1))
+  )
   burstScoreGain()
 }
 
@@ -729,7 +859,7 @@ type NoticeLogKind = 'info' | 'win' | 'hurt' | 'melt' | 'recipe' | 'gauge' | 're
 
 /**
  * The activity log on the left panel is now strictly "resource acquired /
- * resource spent" — score / coin / hand card gain rows + the relic-purchase
+ * resource spent" — light / coin / hand card gain rows + the relic-purchase
  * deduction row. All other textual notices (damage taken, relic activation,
  * gauge / recipe text, ember decay, shop status) are communicated via the
  * chain banner, damage-float numbers, relic chip appearance, or the pulse
@@ -767,11 +897,17 @@ function candleModeLabel(mode: CandleMode): string {
 }
 
 /** Apply the selected full-gauge payoff and preserve overflow for the next gauge. */
-function fireCandleGaugeEffect(): { name: string; message: string; mode: CandleMode } | null {
+function fireCandleGaugeEffect(): {
+  name: string
+  message: string
+  mode: CandleMode
+  drawnHandCount?: number
+} | null {
   const character = gameState.character
   if (!character.isCandleFull()) return null
   const mode = character.candleMode
   let message = ''
+  let drawnHandCount = 0
   switch (mode) {
     case 'max-health': {
       const amount = character.increaseMaxHealth(5)
@@ -802,6 +938,7 @@ function fireCandleGaugeEffect(): { name: string; message: string; mode: CandleM
       // drops from rail actions). Overflow lost cards are silent — the
       // wallet/score/hand UI is the visual cue, not the activity log.
       if (drawnNames.length > 0) {
+        drawnHandCount = drawnNames.length
         pushActivityLogsInDisplayOrder(createItemGainLogs(drawnNames))
       }
       message =
@@ -813,7 +950,7 @@ function fireCandleGaugeEffect(): { name: string; message: string; mode: CandleM
   }
   // Spend only one full gauge so combo-count overflow starts filling the next one.
   character.consumeFullCandleGauge()
-  return { name: `게이지: ${candleModeLabel(mode)}`, message, mode }
+  return { name: `게이지: ${candleModeLabel(mode)}`, message, mode, drawnHandCount }
 }
 
 document.addEventListener('cardAction', (e: Event) => {
@@ -894,6 +1031,7 @@ async function applyHandSingle(
   const beforeSingleFreeze = snapshotFieldFreezeState()
   const beforeSingleHealth = snapshotFieldHealthState()
   const beforeSingleRecovery = snapshotPlayerRecovery()
+  const beforeSingleResources = snapshotPlayerResources()
   // Snapshot rail cards by id BEFORE useSingle mutates the model, so we can
   // still resolve baseHealth/getDamage on the removed cards for the score
   // strength formula.
@@ -914,17 +1052,6 @@ async function applyHandSingle(
     // while the larger played-card ghost lingers over the field.
     void boardRenderer.animateHandCardUse(slotIndex, handUseTheme)
   }
-  if (usedDef && (usedDef.id === 'wax-drop' || usedDef.id === 'candle')) {
-    boardRenderer.burstAtElement(
-      document.querySelector<HTMLElement>('.player-card'),
-      handUseTheme ?? 'hand-recovery',
-      {
-        count: 16,
-        spread: 125,
-      }
-    )
-  }
-
   // If this card damaged or hardened/thawed a target, add the one-shot
   // feedback before the next render changes the persistent field state. The
   // damaged id set is reused below so a lethal hit does not also fire a second
@@ -949,19 +1076,21 @@ async function applyHandSingle(
     // duplicate banner entries would read as extra physical cards consumed.
     boardRenderer.refreshChainBanner(buildChainHints())
   }
+  await playPlayerGainTrails({ kind: 'center' }, beforeSingleResources)
   if (result.coinsGained && result.coinsGained > 0) {
     coins += result.coinsGained
     coinPulseKey++
+    await playResourceTrail({ kind: 'center' }, 'coin', result.coinsGained)
     burstCoinGain()
     if (usedDef) recordCoinGain(usedDef.name, result.coinsGained)
   }
   pendingHandTarget = null
   boardRenderer.setHandTargetingMode(null)
 
-  // Score for any field cards the hand-card effect just removed (kill / clear
+  // Light for any field cards the hand-card effect just removed (kill / clear
   // / grab). Same strength formula as direct clicks, so 손패 사용 도 "직접
   // 타격" 과 동일한 점수 룰을 따른다.
-  awardScoreForRemovedCards(result.removedFieldCards, beforeSingleCards)
+  await awardScoreForRemovedCards(result.removedFieldCards, beforeSingleCards)
 
   // Animate removals caused by the single hand card while the old board DOM is
   // still present. This is the "previous effect" beat the combo waits for.
@@ -972,7 +1101,7 @@ async function applyHandSingle(
     await applyRedPotionEnemyDefeats(
       result.removedFieldCards.filter((removed) => removed.type === CardType.ENEMY).length
     )
-    applyWaxCrowTreasureGains(
+    await applyWaxCrowTreasureGains(
       result.removedFieldCards.filter((removed) => removed.type === CardType.TREASURE).length
     )
   }
@@ -1000,6 +1129,7 @@ async function applyHandSingle(
       const gainedCoins = recipeResult.coinsGained ?? 0
       coins += gainedCoins
       coinPulseKey++
+      await playResourceTrail({ kind: 'chain' }, 'coin', gainedCoins)
       burstCoinGain()
       // Attribute the coin log row to the first fired recipe that produced it.
       const coinRecipe = recipeResult.firedRecipes[0]?.recipe
@@ -1018,6 +1148,7 @@ async function applyHandSingle(
     // Recipe-drawn hand cards (셔플 / 따뜻함 등) log one acquisition row each
     // so "손패를 뽑는 행위" 가 어디서 발생했든 일관되게 활동 로그에 표기된다.
     if (recipeResult.drawnHandCardDefIds && recipeResult.drawnHandCardDefIds.length > 0) {
+      await playResourceTrail({ kind: 'chain' }, 'hand', recipeResult.drawnHandCardDefIds.length)
       pushActivityLogsInDisplayOrder(
         createItemGainLogs(recipeResult.drawnHandCardDefIds.map((id) => getHandCardDef(id).name))
       )
@@ -1033,8 +1164,8 @@ async function applyHandSingle(
     await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeRecipeFreeze))
     await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeRecipeFreeze))
 
-    // Score for recipe-driven removals.
-    awardScoreForRemovedCards(recipeResult.removedFieldCards, beforeRecipeCards)
+    // Light for recipe-driven removals.
+    await awardScoreForRemovedCards(recipeResult.removedFieldCards, beforeRecipeCards)
 
     // Animate cards removed by delayed recipes separately so combo impact reads
     // as its own hit instead of merging with the hand-card effect animation.
@@ -1045,7 +1176,7 @@ async function applyHandSingle(
       await applyRedPotionEnemyDefeats(
         recipeResult.removedFieldCards.filter((removed) => removed.type === CardType.ENEMY).length
       )
-      applyWaxCrowTreasureGains(
+      await applyWaxCrowTreasureGains(
         recipeResult.removedFieldCards.filter((removed) => removed.type === CardType.TREASURE)
           .length
       )
@@ -1060,6 +1191,7 @@ async function applyHandSingle(
   while (gameState.character.isCandleFull()) {
     await wait(GAUGE_TRIGGER_DELAY_MS)
     const beforeGaugeRecovery = snapshotPlayerRecovery()
+    const beforeGaugeResources = snapshotPlayerResources()
     const gauge = fireCandleGaugeEffect()
     if (!gauge) break
     recordNotice(`${gauge.name}: ${gauge.message}`, 'gauge')
@@ -1071,6 +1203,10 @@ async function applyHandSingle(
       uid: nextChainUid(),
     })
     boardRenderer.refreshChainBanner(buildChainHints())
+    await playPlayerGainTrails({ kind: 'chain' }, beforeGaugeResources)
+    if (gauge.drawnHandCount && gauge.drawnHandCount > 0) {
+      await playResourceTrail({ kind: 'chain' }, 'hand', gauge.drawnHandCount)
+    }
     await applyBloodPackRecoveryTrigger(beforeGaugeRecovery)
   }
 
@@ -1100,7 +1236,7 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
       const ember = gameState.character.ember
       recordNotice(`불씨가 사그라들었다 (${ember}/${gameState.character.emberMax})`, 'hurt')
     }
-    applyTurnStartRelics()
+    await applyTurnStartRelics()
   }
 
   const moved = compactAndRefillAllLanes()
@@ -1243,6 +1379,7 @@ async function handleCardAction(e: Event): Promise<void> {
     await boardRenderer.animatePlayerAttack(card)
   }
   const beforeActionHealth = snapshotFieldHealthState()
+  const beforeActionResources = snapshotPlayerResources()
   const result = ActionSystem.executeAction(gameState.getCharacter(), lane, card, actionType)
   // Hand-card rewards are staged visually: first the freshly gained cards
   // drop into the hand, then any resulting triple synthesis resolves after
@@ -1251,10 +1388,11 @@ async function handleCardAction(e: Event): Promise<void> {
   if (result.success) {
     const gainedItems = result.itemGainedNames ?? []
     gainedHandCardCount = gainedItems.length
-    // Only acquisitions produce log rows now: hand-card drops + score gain.
-    // Damage / overflow / textual results live on damage-floats, the score
+    // Only acquisitions produce log rows now: hand-card drops + light gain.
+    // Damage / overflow / textual results live on damage-floats, the light
     // pulse, and the chain banner.
     if (gainedItems.length > 0) {
+      await playResourceTrail({ kind: 'card', cardId: card.id }, 'hand', gainedItems.length)
       pushActivityLogsInDisplayOrder(createItemGainLogs(gainedItems))
     }
     if (result.cardRemoved && card.type !== CardType.FLOWER) {
@@ -1263,24 +1401,43 @@ async function handleCardAction(e: Event): Promise<void> {
         pushActivityLogsInDisplayOrder([
           createScoreLog(scoreLabelForCard(card), base, activityKindForCard(card)),
         ])
+        await playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1)
         burstScoreGain()
       }
     }
-    if (result.cardRemoved && card.type === CardType.TREASURE) applyWaxCrowTreasureGains(1)
-    if (result.cardRemoved && card.type === CardType.FLOWER && result.flowerReward) {
-      // Flower score/coin rewards live in index.ts because those run-level
-      // wallets are intentionally outside the Character entity.
-      if (result.flowerReward.kind === 'score') {
+    if (result.cardRemoved && card.type === CardType.TREASURE) await applyWaxCrowTreasureGains(1)
+    if (result.cardRemoved && card.type === CardType.FLOWER) {
+      // Flower light/coin rewards live in index.ts because those run-level
+      // wallets are intentionally outside the Character entity. Health, shield,
+      // and gauge flowers are detected by the player-resource diff below.
+      if (result.flowerReward?.kind === 'score') {
         pushActivityLogsInDisplayOrder([
           createScoreLog(`${card.name} 수확`, 24 + result.flowerReward.amount * 12, 'score'),
         ])
+        await playResourceTrail(
+          { kind: 'card', cardId: card.id },
+          'score',
+          1,
+          flowerRewardTheme(card.flowerKind)
+        )
         burstScoreGain()
-      } else {
+      } else if (result.flowerReward?.kind === 'coin') {
         coins += result.flowerReward.amount
         coinPulseKey++
         recordCoinGain(`${card.name} 수확`, result.flowerReward.amount)
+        await playResourceTrail(
+          { kind: 'card', cardId: card.id },
+          'coin',
+          result.flowerReward.amount,
+          flowerRewardTheme(card.flowerKind)
+        )
         burstCoinGain()
       }
+      await playPlayerGainTrails({ kind: 'card', cardId: card.id }, beforeActionResources, {
+        health: flowerRewardTheme(card.flowerKind),
+        shield: flowerRewardTheme(card.flowerKind),
+        gauge: flowerRewardTheme(card.flowerKind),
+      })
     }
   }
   const sameBeatAnimations: Promise<void>[] = []
