@@ -2,7 +2,7 @@
  * ActionSystem - Handles player actions and card interactions.
  *
  * Resolves Attack/Evade/Take against active-row cards, awarding hand-card
- * drops on enemy defeat or treasure open. The hand cards land directly in
+ * drops on enemy defeat, treasure open, or flower pickup. The hand cards land directly in
  * the character's hand; non-fitting drops are reported back to the caller.
  */
 
@@ -17,6 +17,7 @@ export enum ActionType {
   ATTACK_ENEMY = 'attack',
   EVADE_TRAP = 'evade',
   TAKE_TREASURE = 'take',
+  TAKE_FLOWER = 'flower',
 }
 
 const TREASURE_DROPS_BY_SPAN: Record<number, number> = {
@@ -35,6 +36,8 @@ export interface ActionResult {
   itemGainedNames?: string[]
   /** Hand cards that did not fit because the hand was full (for overflow UI). */
   overflow?: HandCard[]
+  /** Flower rewards that live outside Character, such as score and shop money. */
+  flowerReward?: { kind: 'score' | 'coin'; amount: number }
   cardRemoved: boolean
 }
 
@@ -59,6 +62,8 @@ export class ActionSystem {
         return this.evadeTrap(character, lane, card)
       case ActionType.TAKE_TREASURE:
         return this.takeTreasure(character, lane, card)
+      case ActionType.TAKE_FLOWER:
+        return this.takeFlower(character, lane, card)
       default:
         return { success: false, message: 'Invalid action', cardRemoved: false }
     }
@@ -145,6 +150,42 @@ export class ActionSystem {
       message,
       damageTaken: actualDamage,
       cardRemoved: true,
+    }
+  }
+
+  /** Pick a bloomed flower for its current buff; dormant seeds cannot be taken. */
+  private static takeFlower(character: Character, _lane: Lane, card: Card): ActionResult {
+    if (card.type !== CardType.FLOWER || card.flowerKind === 'seed') {
+      return { success: false, message: 'Not a bloomed flower', cardRemoved: false }
+    }
+    const amount = Math.max(1, card.flowerValue)
+    switch (card.flowerKind) {
+      case 'chamomile':
+        return {
+          success: true,
+          message: `${card.name} 수확: 점수 +${amount}`,
+          flowerReward: { kind: 'score', amount },
+          cardRemoved: true,
+        }
+      case 'redRose': {
+        const healed = character.heal(amount)
+        return { success: true, message: `${card.name} 수확: 체력 +${healed}`, cardRemoved: true }
+      }
+      case 'marigold':
+        return {
+          success: true,
+          message: `${card.name} 수확: ${amount}$`,
+          flowerReward: { kind: 'coin', amount },
+          cardRemoved: true,
+        }
+      case 'oleander': {
+        const shielded = character.addShield(amount)
+        return { success: true, message: `${card.name} 수확: 방패 +${shielded}`, cardRemoved: true }
+      }
+      case 'lavender': {
+        const gauge = character.gainCandle(amount)
+        return { success: true, message: `${card.name} 수확: 게이지 +${gauge}`, cardRemoved: true }
+      }
     }
   }
 

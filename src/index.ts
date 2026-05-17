@@ -448,7 +448,10 @@ async function runPreparationRefreshAfterFieldEffects(): Promise<void> {
     if (!moved && !filled) break
   }
   gameState.regroupAllRows()
+  const blooms = turnManager.bloomFrontSeeds(cardSpawner)
+  turnManager.armFrontBombs()
   render()
+  if (blooms.length > 0) await boardRenderer.animateFlowerBlooms(blooms)
   if (movedAny) await wait(120)
 }
 
@@ -517,12 +520,16 @@ function scoreForCardRemoval(card: Card): number {
     if (card.groupCount === 2) return 40
     return 18
   }
+  if (card.type === CardType.FLOWER) {
+    return 24 + Math.max(1, card.flowerValue) * 12
+  }
   return 0
 }
 
 function activityKindForCard(card: Card): ActivityLogEntry['kind'] {
   if (card.type === CardType.ENEMY) return 'enemy'
   if (card.type === CardType.TRAP) return 'trap'
+  if (card.type === CardType.FLOWER) return 'score'
   return 'treasure'
 }
 
@@ -531,6 +538,7 @@ function activityKindForCard(card: Card): ActivityLogEntry['kind'] {
 function scoreLabelForCard(card: Card): string {
   if (card.type === CardType.ENEMY) return `${card.name} 처치`
   if (card.type === CardType.TRAP) return `${card.name} 회피`
+  if (card.type === CardType.FLOWER) return `${card.name} 수확`
   return `${card.name} 획득`
 }
 
@@ -613,6 +621,8 @@ function actionTypeFor(cardType: CardType): ActionType | null {
       return ActionType.EVADE_TRAP
     case CardType.TREASURE:
       return ActionType.TAKE_TREASURE
+    case CardType.FLOWER:
+      return ActionType.TAKE_FLOWER
     default:
       return null
   }
@@ -795,7 +805,9 @@ function fireCandleGaugeEffect(): { name: string; message: string; mode: CandleM
         pushActivityLogsInDisplayOrder(createItemGainLogs(drawnNames))
       }
       message =
-        overflow > 0 ? `손패 +${drawnNames.length}, ${overflow}장 넘침` : `손패 +${drawnNames.length}`
+        overflow > 0
+          ? `손패 +${drawnNames.length}, ${overflow}장 넘침`
+          : `손패 +${drawnNames.length}`
       break
     }
   }
@@ -1096,9 +1108,11 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
   if (moved) await wait(460)
 
   gameState.regroupAllRows()
+  const blooms = turnManager.bloomFrontSeeds(cardSpawner)
   turnManager.armFrontBombs()
   boardRenderer.clearSelection()
   render()
+  if (blooms.length > 0) await boardRenderer.animateFlowerBlooms(blooms)
 }
 
 async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
@@ -1107,6 +1121,7 @@ async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
   const bombExplosions = turnManager.applyBombExplosions()
   const sporeSpreads = turnManager.applySporeSpread()
+  const flowerChanges = turnManager.applyFlowerGrowthAndWilt(cardSpawner)
   const eventAnimations: Promise<void>[] = []
   if (hits.length > 0) eventAnimations.push(boardRenderer.animateEnemyAttacks(hits))
   if (treasureChanges.length > 0) {
@@ -1140,6 +1155,14 @@ async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
   if (sporeSpreads.length > 0) {
     const spreadCount = sporeSpreads.reduce((sum, spread) => sum + spread.infected.length, 0)
     recordNotice(`포자 번식: ${spreadCount}칸 감염`, 'hurt')
+  }
+  if (flowerChanges.growths.length > 0) {
+    eventAnimations.push(boardRenderer.animateFlowerGrowth(flowerChanges.growths))
+  }
+  if (flowerChanges.wilts.length > 0) {
+    for (const wilt of flowerChanges.wilts)
+      recordNotice(`${wilt.flowerName}이(가) 괴물꽃으로 시듦`, 'hurt')
+    eventAnimations.push(boardRenderer.animateFlowerWilts(flowerChanges.wilts))
   }
   if (eventAnimations.length > 0) await Promise.all(eventAnimations)
 
@@ -1234,7 +1257,7 @@ async function handleCardAction(e: Event): Promise<void> {
     if (gainedItems.length > 0) {
       pushActivityLogsInDisplayOrder(createItemGainLogs(gainedItems))
     }
-    if (result.cardRemoved) {
+    if (result.cardRemoved && card.type !== CardType.FLOWER) {
       const base = scoreForCardRemoval(card)
       if (base > 0) {
         pushActivityLogsInDisplayOrder([
@@ -1244,6 +1267,21 @@ async function handleCardAction(e: Event): Promise<void> {
       }
     }
     if (result.cardRemoved && card.type === CardType.TREASURE) applyWaxCrowTreasureGains(1)
+    if (result.cardRemoved && card.type === CardType.FLOWER && result.flowerReward) {
+      // Flower score/coin rewards live in index.ts because those run-level
+      // wallets are intentionally outside the Character entity.
+      if (result.flowerReward.kind === 'score') {
+        pushActivityLogsInDisplayOrder([
+          createScoreLog(`${card.name} 수확`, 24 + result.flowerReward.amount * 12, 'score'),
+        ])
+        burstScoreGain()
+      } else {
+        coins += result.flowerReward.amount
+        coinPulseKey++
+        recordCoinGain(`${card.name} 수확`, result.flowerReward.amount)
+        burstCoinGain()
+      }
+    }
   }
   const sameBeatAnimations: Promise<void>[] = []
   if (result.damageDealt && result.damageDealt > 0) {
@@ -1260,7 +1298,12 @@ async function handleCardAction(e: Event): Promise<void> {
     )
   }
 
-  if (result.cardRemoved && (card.type === CardType.TRAP || card.type === CardType.TREASURE)) {
+  if (
+    result.cardRemoved &&
+    (card.type === CardType.TRAP ||
+      card.type === CardType.TREASURE ||
+      card.type === CardType.FLOWER)
+  ) {
     // Trap damage + trap consume now start in the same beat, removing the
     // previous 타/닥 delay between click feedback and hurt feedback.
     sameBeatAnimations.push(boardRenderer.animateCardConsume(card))
@@ -1308,6 +1351,7 @@ async function handleCardAction(e: Event): Promise<void> {
     const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
     const bombExplosions = turnManager.applyBombExplosions()
     const sporeSpreads = turnManager.applySporeSpread()
+    const flowerChanges = turnManager.applyFlowerGrowthAndWilt(cardSpawner)
     const eventAnimations: Promise<void>[] = []
     if (treasureChanges.length > 0)
       eventAnimations.push(boardRenderer.animateTreasureChanges(treasureChanges))
@@ -1336,6 +1380,14 @@ async function handleCardAction(e: Event): Promise<void> {
     if (sporeSpreads.length > 0) {
       const spreadCount = sporeSpreads.reduce((sum, spread) => sum + spread.infected.length, 0)
       recordNotice(`포자 번식: ${spreadCount}칸 감염`, 'hurt')
+    }
+    if (flowerChanges.growths.length > 0) {
+      eventAnimations.push(boardRenderer.animateFlowerGrowth(flowerChanges.growths))
+    }
+    if (flowerChanges.wilts.length > 0) {
+      for (const wilt of flowerChanges.wilts)
+        recordNotice(`${wilt.flowerName}이(가) 괴물꽃으로 시듦`, 'hurt')
+      eventAnimations.push(boardRenderer.animateFlowerWilts(flowerChanges.wilts))
     }
     if (eventAnimations.length > 0) await Promise.all(eventAnimations)
     if (gameState.isGameOver && !(await tryResolveHopeRevive())) {

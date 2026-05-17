@@ -49,6 +49,29 @@ export interface SporeSpread {
   infected: { laneIndex: number; distance: number }[]
 }
 
+export interface FlowerBloom {
+  laneIndex: number
+  distance: number
+  cardId: string
+  flowerName: string
+}
+
+export interface FlowerGrowth {
+  laneIndex: number
+  distance: number
+  cardId: string
+  flowerName: string
+  value: number
+}
+
+export interface FlowerWilt {
+  laneIndex: number
+  distance: number
+  cardId: string
+  monsterCardId: string
+  flowerName: string
+}
+
 export class TurnManager {
   gameState: GameState
 
@@ -262,6 +285,76 @@ export class TurnManager {
       targets.push(target)
     }
     return targets
+  }
+
+  /** Bloom every seed that has just fallen into the active row. */
+  bloomFrontSeeds(spawner: CardSpawner): FlowerBloom[] {
+    const blooms: FlowerBloom[] = []
+    for (let laneIndex = 0; laneIndex < this.gameState.lanes.length; laneIndex++) {
+      const card = this.gameState.lanes[laneIndex].getCardAtDistance(0)
+      if (!card || card.type !== CardType.FLOWER || card.flowerKind !== 'seed') continue
+      card.bloom(spawner.randomBloomKind())
+      blooms.push({
+        laneIndex,
+        distance: 0,
+        cardId: card.id,
+        flowerName: card.name,
+      })
+    }
+    return blooms
+  }
+
+  /** Grow bloomed flowers, then roll their escalating wilt chance into monster flowers. */
+  applyFlowerGrowthAndWilt(spawner: CardSpawner): { growths: FlowerGrowth[]; wilts: FlowerWilt[] } {
+    const growths: FlowerGrowth[] = []
+    const wilts: FlowerWilt[] = []
+    const flowersAtTurnStart: { card: Card; laneIndex: number; distance: number }[] = []
+    const seen = new Set<Card>()
+
+    // Snapshot first so a replaced monster flower cannot be processed again in
+    // the same scan, and shared future groups never double-tick.
+    for (let laneIndex = 0; laneIndex < this.gameState.lanes.length; laneIndex++) {
+      for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
+        const card = this.gameState.lanes[laneIndex].getCardAtDistance(distance)
+        if (
+          !card ||
+          seen.has(card) ||
+          card.type !== CardType.FLOWER ||
+          card.flowerKind === 'seed'
+        ) {
+          continue
+        }
+        seen.add(card)
+        flowersAtTurnStart.push({ card, laneIndex, distance })
+      }
+    }
+
+    for (const { card, laneIndex, distance } of flowersAtTurnStart) {
+      if (card.isFrozen()) continue
+      const grew = card.growFlowerOneTurn()
+      if (grew) {
+        growths.push({
+          laneIndex,
+          distance,
+          cardId: card.id,
+          flowerName: card.name,
+          value: card.flowerValue,
+        })
+      }
+      if (Math.random() >= card.getFlowerWiltChance()) continue
+
+      const monster = spawner.spawnMonsterFlower(card.flowerValue)
+      this.gameState.lanes[laneIndex].setCardAtDistance(distance, monster)
+      wilts.push({
+        laneIndex,
+        distance,
+        cardId: card.id,
+        monsterCardId: monster.id,
+        flowerName: card.name,
+      })
+    }
+
+    return { growths, wilts }
   }
 
   /**

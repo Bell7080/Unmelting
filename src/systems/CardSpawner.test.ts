@@ -41,6 +41,7 @@ describe('EmberSystem spawn weights', () => {
     expect(brightBuckets.webTrap).toBe(12)
     expect(brightBuckets.bombTrap).toBe(4)
     expect(brightBuckets.sporeTrap).toBe(4)
-    expect(brightWeights).toEqual({ enemy: 55, trap: 20, treasure: 25 })
+    expect(brightBuckets.flower).toBe(8)
+    expect(brightWeights).toEqual({ enemy: 50, trap: 20, treasure: 22, flower: 8 })
   })
 })
