@@ -329,7 +329,6 @@ async function playHandTargetBlasts(cardIds: Iterable<string>, theme: BurstTheme
   )
 }
 
-
 /** Collect currently rendered field cards once so grouped cards are only hit by
  *  one Hope cleanup blast even if they occupy multiple lane cells. */
 function snapshotFieldCardPayloads(): { cardId: string; type: CardType }[] {
@@ -422,7 +421,7 @@ async function tryResolveHopeRevive(): Promise<boolean> {
   const fieldCards = snapshotFieldCardPayloads()
 
   // The relic must still be present in the owned fan while this plays, so the
-  // one-shot removal happens after the centered zoom/shake/white-pop beat.
+  // one-shot removal happens after the centered shake/white-pop beat.
   await boardRenderer.animateHopeRelicRevive('hope')
   character.removeRelic('hope', true)
 
@@ -442,7 +441,7 @@ async function tryResolveHopeRevive(): Promise<boolean> {
   recordRelicActivation('hope', '체력 10으로 부활, 필드 제거')
   render()
   await playPlayerGainTrails({ kind: 'center' }, beforeResources)
-  await runPreparationRefreshAfterFieldEffects()
+  await runPreparationRefreshAfterFieldEffects({ suppressFrontRegroupOnce: true })
   return true
 }
 
@@ -589,16 +588,28 @@ async function closeShopAndResume(): Promise<void> {
  * refills the top row, regroups the active row, and renders once so removed
  * cards never leave visible holes before player control returns.
  */
-async function runPreparationRefreshAfterFieldEffects(): Promise<void> {
+interface PreparationRefreshOptions {
+  /**
+   * Full-field cleanup effects can refill an entire 3×3 board at once. Skip
+   * immediate front-row grouping for that first rebuilt board so the player
+   * gets one readable response window instead of facing a freshly merged wall.
+   */
+  suppressFrontRegroupOnce?: boolean
+}
+
+async function runPreparationRefreshAfterFieldEffects(
+  options: PreparationRefreshOptions = {}
+): Promise<void> {
   // Mirror compactAndRefillRails() as visible beats: cards fall first, then new
   // top cards appear, and the loop repeats until every rail is continuous/full.
   let movedAny = false
+  let shouldRegroupFront = !options.suppressFrontRegroupOnce
   let safety = LANE_DISTANCE_COUNT * 3 + 3
   while (safety-- > 0) {
     const moved = gameState.compactLanes()
     if (moved) {
       movedAny = true
-      gameState.regroupAllRows()
+      if (shouldRegroupFront) gameState.regroupAllRows()
       // If a hand/combo effect makes a bomb fall into the front row, arm it in
       // the same preparation beat so every front-row bomb advertises the same
       // one-action fuse instead of waiting for a later cleanup path.
@@ -617,7 +628,7 @@ async function runPreparationRefreshAfterFieldEffects(): Promise<void> {
     }
     if (filled) {
       movedAny = true
-      gameState.regroupAllRows()
+      if (shouldRegroupFront) gameState.regroupAllRows()
       // If a hand/combo effect makes a bomb fall into the front row, arm it in
       // the same preparation beat so every front-row bomb advertises the same
       // one-action fuse instead of waiting for a later cleanup path.
@@ -627,7 +638,7 @@ async function runPreparationRefreshAfterFieldEffects(): Promise<void> {
     }
     if (!moved && !filled) break
   }
-  gameState.regroupAllRows()
+  if (shouldRegroupFront) gameState.regroupAllRows()
   const blooms = turnManager.bloomFrontSeeds(cardSpawner)
   turnManager.armFrontBombs()
   render()
@@ -1077,6 +1088,12 @@ async function handleHandSlotClick(slotIndex: number): Promise<void> {
   await applyHandSingle(slotIndex)
 }
 
+/** Broad clears get the opening-board mercy rule: the freshly rebuilt front
+ *  row waits one player action before it can collapse into a 2/3-lane group. */
+function shouldSuppressRegroupAfterClear(removedCount: number): boolean {
+  return removedCount >= Math.ceil(gameState.lanes.length * LANE_DISTANCE_COUNT * 0.65)
+}
+
 /** Apply a single-use hand card (with optional target). */
 async function applyHandSingle(
   slotIndex: number,
@@ -1182,7 +1199,9 @@ async function applyHandSingle(
   // Prepare the rail immediately after the single card effect. Recipes should
   // resolve against a compacted/refilled/front-regrouped board, preventing holes
   // after effects such as 한 걸음씩 or 밀매 remove cards from the field.
-  await runPreparationRefreshAfterFieldEffects()
+  await runPreparationRefreshAfterFieldEffects({
+    suppressFrontRegroupOnce: shouldSuppressRegroupAfterClear(result.removedFieldCards.length),
+  })
 
   // Resolve combo recipes one at a time. Each recipe gets its own delay,
   // animations, and preparation refresh so chained removals cannot leave rail
@@ -1254,7 +1273,11 @@ async function applyHandSingle(
           .length
       )
     }
-    await runPreparationRefreshAfterFieldEffects()
+    await runPreparationRefreshAfterFieldEffects({
+      suppressFrontRegroupOnce: shouldSuppressRegroupAfterClear(
+        recipeResult.removedFieldCards.length
+      ),
+    })
   }
 
   // Full gauge fires last: card effect -> recipe effect -> gauge effect.
@@ -1333,6 +1356,8 @@ async function resolvePostDropSporeSpread(): Promise<void> {
   if (sporeSpreads.length === 0) return
 
   const spreadCount = sporeSpreads.reduce((sum, spread) => sum + spread.infected.length, 0)
+  // TurnManager already regroups newly adjacent front-row spores before this
+  // render, so the shutter/open-turn view cannot show separate matching spores.
   recordNotice(`포자 번식: ${spreadCount}칸 감염`, 'hurt')
   render()
 }

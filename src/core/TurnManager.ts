@@ -266,6 +266,10 @@ export class TurnManager {
         spreads.push({ sourceLane: laneIndex, sourceDistance: distance, infected })
       }
     }
+    // Spread runs after the usual cleanup regroup in the game loop, so newly
+    // adjacent front-row spores need one immediate regroup pass to render and
+    // act as a single 2/3-lane colony before the next player input.
+    if (spreads.length > 0) this.gameState.regroupAllRows()
     return spreads
   }
 

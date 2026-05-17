@@ -184,6 +184,10 @@ export class GameBoardRenderer {
    *  while the sparkle/burst effect is playing. */
   private displayedScoreValue = 0
   private displayedCoinValue = 0
+  /** Generic HUD counters (HP, shield, ember, candle gauge, attack) keep
+   *  their own last rendered value so full re-renders can still count from
+   *  the previous visible number instead of jumping straight to the model. */
+  private displayedHudCounters = new Map<string, number>()
   /** Immediate gain feedback can be followed by a full board re-render. Keep
    *  that pulse key alive for one CSS beat so the newly-rendered number still
    *  receives the ✦ sparkle class instead of only leaving the body SquareBurst. */
@@ -255,10 +259,19 @@ export class GameBoardRenderer {
     const character = gameState.getCharacter()
     const lanes = gameState.getLanes()
     const turn = gameState.getCurrentTurn()
+    // A run restart renders turn 0 after previously showing later turns. Clear
+    // remembered counters so fresh runs start at their reset values, not by
+    // rolling down from the previous death/shop state.
+    const isRunReset = this.hasRendered && turn === 0 && this.previousTurn > 0
+    if (isRunReset) {
+      this.displayedHudCounters.clear()
+      this.displayedScoreValue = scorePanel.score
+      this.displayedCoinValue = scorePanel.coins
+    }
     // Trigger the small turn-tick pop animation only when the displayed
     // turn actually changes — re-renders within the same turn must not
     // re-fire the shimmer.
-    const turnChanged = turn !== this.previousTurn && this.hasRendered
+    const turnChanged = turn !== this.previousTurn && this.hasRendered && !isRunReset
     const turnPopClass = turnChanged ? 'is-tick-popping' : ''
     this.previousTurn = turn
 
@@ -309,6 +322,16 @@ export class GameBoardRenderer {
     this.selected = null
   }
 
+  /** Build a numeric HUD span that starts from the previous visible value.
+   *  The actual text animation runs after render() in animateRenderedResourceCounters(). */
+  private renderHudCounter(key: string, targetValue: number, suffix = '', extraAttrs = ''): string {
+    const safeTarget = Math.round(Number.isFinite(targetValue) ? targetValue : 0)
+    const previous = this.displayedHudCounters.get(key)
+    const startValue = this.hasRendered && previous !== undefined ? previous : safeTarget
+    this.displayedHudCounters.set(key, safeTarget)
+    return `<span ${extraAttrs} data-count-key="${key}" data-count-start="${startValue}" data-count-end="${safeTarget}" data-count-suffix="${suffix}">${startValue.toLocaleString()}${suffix}</span>`
+  }
+
   private renderScorePanel(scorePanel: ScorePanelState): string {
     const logs =
       scorePanel.logs.length > 0
@@ -348,8 +371,10 @@ export class GameBoardRenderer {
       scorePanel.scorePulseKey !== this.previousScorePulseKey && scorePanel.scorePulseKey > 0
     const coinChanged =
       scorePanel.coinPulseKey !== this.previousCoinPulseKey && scorePanel.coinPulseKey > 0
-    const scoreIncreasing = scoreChanged && scorePanel.score > this.displayedScoreValue
-    const coinIncreasing = coinChanged && scorePanel.coins > this.displayedCoinValue
+    const scoreCounting = scoreChanged && scorePanel.score !== this.displayedScoreValue
+    const coinCounting = coinChanged && scorePanel.coins !== this.displayedCoinValue
+    const scoreIncreasing = scoreCounting && scorePanel.score > this.displayedScoreValue
+    const coinIncreasing = coinCounting && scorePanel.coins > this.displayedCoinValue
     // Immediate feedback is played on the mounted DOM before some flows trigger
     // a full render. If that render lands inside the same pulse beat, re-apply
     // the sparkle class to the replacement DOM so score and wallet behave alike.
@@ -360,8 +385,8 @@ export class GameBoardRenderer {
       scorePanel.coinPulseKey === this.activeCoinPulseKey && now < this.activeCoinPulseUntil
     const scorePulseClass = scoreIncreasing || scorePulseStillActive ? 'is-score-popping' : ''
     const coinPulseClass = coinIncreasing || coinPulseStillActive ? 'is-score-popping' : ''
-    const renderedScore = scoreIncreasing ? this.displayedScoreValue : scorePanel.score
-    const renderedCoins = coinIncreasing ? this.displayedCoinValue : scorePanel.coins
+    const renderedScore = scoreCounting ? this.displayedScoreValue : scorePanel.score
+    const renderedCoins = coinCounting ? this.displayedCoinValue : scorePanel.coins
     this.previousScorePulseKey = scorePanel.scorePulseKey
     this.previousCoinPulseKey = scorePanel.coinPulseKey
     this.displayedScoreValue = scorePanel.score
@@ -374,7 +399,7 @@ export class GameBoardRenderer {
             <span class="score-kicker-icon">${coinIcon()}</span>
             불빛
           </div>
-          <div class="score-number ${scorePulseClass}" data-score-pulse="${scorePanel.scorePulseKey}" data-count-start="${renderedScore}" data-count-end="${scorePanel.score}">
+          <div class="score-number ${scorePulseClass}" data-score-pulse="${scorePanel.scorePulseKey}" data-count-start="${renderedScore}" data-count-end="${scorePanel.score}" data-count-suffix="">
             ${renderedScore.toLocaleString()}
           </div>
         </section>
@@ -383,7 +408,7 @@ export class GameBoardRenderer {
             <span class="score-kicker-icon">${coinIcon()}</span>
             화폐
           </div>
-          <div class="coin-number ${coinPulseClass}" data-coin-pulse="${scorePanel.coinPulseKey}" data-count-start="${renderedCoins}" data-count-end="${scorePanel.coins}">
+          <div class="coin-number ${coinPulseClass}" data-coin-pulse="${scorePanel.coinPulseKey}" data-count-start="${renderedCoins}" data-count-end="${scorePanel.coins}" data-count-suffix=" $">
             ${renderedCoins.toLocaleString()} $
           </div>
         </section>
@@ -672,6 +697,8 @@ export class GameBoardRenderer {
     const candlePct = Math.max(0, Math.min(100, (candle / candleMax) * 100))
     const currentMode = character.candleMode ?? 'max-health'
     const mode = this.candleModeMeta(currentMode)
+    const candleText = this.renderHudCounter('candle', candle)
+    const candleMaxText = this.renderHudCounter('candleMax', candleMax)
     const ticks = Array.from({ length: candleMax }, (_, idx) => {
       const filled = idx < candle ? 'is-filled' : ''
       return `<span class="candle-gauge-tick ${filled}" aria-hidden="true"></span>`
@@ -713,7 +740,7 @@ export class GameBoardRenderer {
           <div class="candle-gauge-meter" style="--candle-fill: ${candlePct}%">
             ${ticks}
           </div>
-          <div class="candle-gauge-label">${candle}/${candleMax} · ${mode.effect}</div>
+          <div class="candle-gauge-label">${candleText}/${candleMaxText} · ${mode.effect}</div>
         </div>
       </div>
     `
@@ -772,18 +799,25 @@ export class GameBoardRenderer {
 
   private renderPlayer(character: Character): string {
     const hpPct = Math.max(0, Math.min(100, (character.health / character.maxHealth) * 100))
+    const hpText = this.renderHudCounter('health', character.health)
+    const maxHpText = this.renderHudCounter('maxHealth', character.maxHealth)
+    const previousShield = this.displayedHudCounters.get('shield') ?? 0
+    const shouldRenderShieldChip = character.shield > 0 || (this.hasRendered && previousShield > 0)
     // Keep the exact shield amount in aria-label while capping the tiny in-icon
     // text at 99+ so large shield stacks do not spill outside the silhouette.
-    const shieldDisplay = character.shield > 99 ? '99+' : String(character.shield)
-    const shieldChip =
-      character.shield > 0
-        ? `<span class="player-shield-chip" aria-label="방패 ${character.shield}">
+    const shieldTarget = Math.min(character.shield, 99)
+    if (character.shield > 99) this.displayedHudCounters.set('shield', shieldTarget)
+    const shieldHideAttr = character.shield <= 0 ? 'data-count-hide-when-zero="true"' : ''
+    const shieldCounter = this.renderHudCounter('shield', shieldTarget, '', shieldHideAttr)
+    const shieldDisplay = character.shield > 99 ? '99+' : shieldCounter
+    const shieldChip = shouldRenderShieldChip
+      ? `<span class="player-shield-chip ${character.shield <= 0 ? 'is-emptying' : ''}" aria-label="방패 ${character.shield}">
              <span class="player-shield-chip-icon" aria-hidden="true">
                ${shieldIcon()}
                <span class="player-shield-chip-value ${character.shield > 99 ? 'is-capped' : ''}">${shieldDisplay}</span>
              </span>
            </span>`
-        : ''
+      : ''
     return `
       <div class="player-row">
         <div class="player-card">
@@ -797,13 +831,13 @@ export class GameBoardRenderer {
                   <div class="hp-fill" style="width: ${hpPct}%"></div>
                   <span class="hp-text">
                     <span class="hp-text-icon">${heartIcon()}</span>
-                    ${character.health}/${character.maxHealth}
+                    ${hpText}/${maxHpText}
                   </span>
                 </div>
               </div>
               <div class="atk-stat">
                 <span class="atk-stat-icon">${swordIcon()}</span>
-                ${character.damage}
+                ${this.renderHudCounter('attack', character.damage)}
               </div>
             </div>
           </div>
@@ -1899,6 +1933,8 @@ export class GameBoardRenderer {
     const ember = character.ember
     const emberMax = character.emberMax
     const pct = Math.max(0, Math.min(100, (ember / emberMax) * 100))
+    const emberText = this.renderHudCounter('ember', ember)
+    const emberMaxText = this.renderHudCounter('emberMax', emberMax)
     const countdown = scorePanel.emberDecayCountdown ?? 10
     const weights = scorePanel.spawnWeights
     const weightsText = weights
@@ -1911,7 +1947,7 @@ export class GameBoardRenderer {
             <span class="ember-icon">${flameIcon()}</span>
             <div class="ember-bar">
               <div class="ember-bar-fill ember-tier-${tier}" style="width: ${pct}%"></div>
-              <span class="ember-bar-label">불씨 ${ember}/${emberMax} · ${EmberSystem.tierLabel(tier)}</span>
+              <span class="ember-bar-label">불씨 ${emberText}/${emberMaxText} · ${EmberSystem.tierLabel(tier)}</span>
             </div>
             <span class="ember-countdown" title="다음 불씨 감소까지 남은 턴">
               ${countdown}턴 뒤 -1
@@ -2425,14 +2461,9 @@ export class GameBoardRenderer {
     const centerX = window.innerWidth / 2
     const centerY = window.innerHeight * 0.46
 
-    const boardZoom = this.boardElement.animate(
-      [
-        { transform: 'scale(1)', filter: 'brightness(1)' },
-        { transform: 'scale(1.035)', filter: 'brightness(0.78) saturate(0.9)' },
-        { transform: 'scale(1)', filter: 'brightness(1)' },
-      ],
-      { duration: 2300, easing: 'cubic-bezier(0.18, 0.86, 0.22, 1)' }
-    )
+    // Do not animate the whole board here: browser zoom/transform stacks can
+    // make fixed-position relic clones drift on some web runtimes. The overlay
+    // and relic clone now carry the revival emphasis by themselves.
     overlay.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], {
       duration: 2300,
       easing: 'ease-in-out',
@@ -2444,14 +2475,17 @@ export class GameBoardRenderer {
       const sparkleThemes: BurstTheme[] = ['score', 'treasure-gain', 'health-gain', 'gauge-gain']
       for (let i = 0; i < 7; i += 1) {
         sparkleTimers.push(
-          window.setTimeout(() => {
-            SquareBurst.playAt(centerX, centerY, sparkleThemes[i % sparkleThemes.length], {
-              count: 12 + (i % 3) * 3,
-              spread: 76 + i * 10,
-              duration: 620,
-              size: [6, 15],
-            })
-          }, 520 + i * 150)
+          window.setTimeout(
+            () => {
+              SquareBurst.playAt(centerX, centerY, sparkleThemes[i % sparkleThemes.length], {
+                count: 12 + (i % 3) * 3,
+                spread: 76 + i * 10,
+                duration: 620,
+                size: [6, 15],
+              })
+            },
+            520 + i * 150
+          )
         )
       }
 
@@ -2537,9 +2571,7 @@ export class GameBoardRenderer {
             source.classList.remove('is-revive-locked')
             clone.remove()
             overlay.remove()
-            // Let the board zoom animation naturally finish if it is still
-            // unwinding, then hand control back to the game loop.
-            boardZoom.finished.finally(() => resolve())
+            resolve()
           }
         }
       }
@@ -2901,17 +2933,16 @@ export class GameBoardRenderer {
    *  while playScoreGainFeedback/playCoinGainFeedback covers changes that can
    *  safely animate on the already-mounted DOM. */
   private animateRenderedResourceCounters(): void {
-    const scoreEl = this.boardElement.querySelector<HTMLElement>('.score-number[data-count-start]')
-    const coinEl = this.boardElement.querySelector<HTMLElement>('.coin-number[data-count-start]')
-    const run = (el: HTMLElement | null, suffix: string) => {
-      if (!el) return
-      const start = Number.parseInt(el.dataset.countStart ?? '', 10)
-      const end = Number.parseInt(el.dataset.countEnd ?? '', 10)
-      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return
-      this.animateResourceCounterElement(el, start, end, suffix)
-    }
-    run(scoreEl, '')
-    run(coinEl, ' $')
+    this.boardElement
+      .querySelectorAll<HTMLElement>('[data-count-start][data-count-end]')
+      .forEach((el) => {
+        const start = Number.parseInt(el.dataset.countStart ?? '', 10)
+        const end = Number.parseInt(el.dataset.countEnd ?? '', 10)
+        if (!Number.isFinite(start) || !Number.isFinite(end) || end === start) return
+        // Each counter carries its own suffix so composite labels like 10/20,
+        // score, and wallet values can share the exact same ticking routine.
+        this.animateResourceCounterElement(el, start, end, el.dataset.countSuffix ?? '')
+      })
   }
 
   /** Animate a resource number on the current DOM, then remember that the
@@ -2922,7 +2953,7 @@ export class GameBoardRenderer {
     selector: '.score-number' | '.coin-number',
     targetValue: number,
     suffix: string,
-    duration = 640
+    duration?: number
   ): void {
     const el = this.boardElement.querySelector<HTMLElement>(selector)
     if (!el) return
@@ -2936,17 +2967,26 @@ export class GameBoardRenderer {
     startValue: number,
     targetValue: number,
     suffix: string,
-    duration = 640
+    duration?: number
   ): void {
     const delta = targetValue - startValue
+    const absDelta = Math.abs(delta)
     const startedAt = performance.now()
-    el.classList.remove('is-score-popping')
+    const runDuration = duration ?? this.counterDurationForDelta(absDelta)
+    el.classList.remove('is-score-popping', 'is-counter-ticking')
     void el.offsetWidth
-    if (delta > 0) el.classList.add('is-score-popping')
+    el.classList.add('is-counter-ticking')
+    if (
+      delta > 0 &&
+      (el.classList.contains('score-number') || el.classList.contains('coin-number'))
+    ) {
+      el.classList.add('is-score-popping')
+    }
 
     const tick = (now: number) => {
-      const t = Math.min(1, (now - startedAt) / duration)
-      // Ease out quickly at the end so the last few +1 ticks remain readable.
+      const t = Math.min(1, (now - startedAt) / runDuration)
+      // Ease out quickly at the end so small deltas read as +1/-1 ticks, while
+      // huge light purchases/rewards still finish in a compact accelerated roll.
       const eased = 1 - Math.pow(1 - t, 3)
       const value = Math.round(startValue + delta * eased)
       el.textContent = `${value.toLocaleString()}${suffix}`
@@ -2954,10 +2994,20 @@ export class GameBoardRenderer {
         requestAnimationFrame(tick)
       } else {
         el.textContent = `${targetValue.toLocaleString()}${suffix}`
-        window.setTimeout(() => el.classList.remove('is-score-popping'), 120)
+        if (el.dataset.countHideWhenZero === 'true' && targetValue <= 0) {
+          el.closest<HTMLElement>('.player-shield-chip')?.classList.add('is-gone')
+        }
+        window.setTimeout(() => el.classList.remove('is-score-popping', 'is-counter-ticking'), 120)
       }
     }
     requestAnimationFrame(tick)
+  }
+
+  /** Larger jumps run longer but not linearly longer, so 5 HP ticks stay
+   *  readable and 500 light still resolves as a fast slot-machine roll. */
+  private counterDurationForDelta(absDelta: number): number {
+    if (absDelta <= 0) return 0
+    return Math.min(1320, Math.max(280, 260 + Math.sqrt(absDelta) * 105))
   }
 
   /** Play score gain feedback immediately on the existing panel so the number
