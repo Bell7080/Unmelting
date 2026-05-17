@@ -215,6 +215,9 @@ export class GameBoardRenderer {
   /** Resize/scroll listener that keeps the shop shell anchored over the
    *  rail. Stored so we can remove it cleanly on shop close. */
   private shopResizeListener: (() => void) | null = null
+  /** Owned relic cards can be click-pinned for reading long text without
+   *  requiring the mouse to stay perfectly over the fanned card. */
+  private pinnedRelicId: RelicId | null = null
 
   constructor(containerId: string = 'game-board') {
     const container = document.getElementById(containerId)
@@ -222,6 +225,21 @@ export class GameBoardRenderer {
       throw new Error(`Container ${containerId} not found`)
     }
     this.boardElement = container
+
+    // A single document-level dismiss listener keeps pinned relic previews
+    // transient: clicking any non-relic UI releases the enlarged card.
+    document.addEventListener(
+      'click',
+      (e) => {
+        if (!this.pinnedRelicId) return
+        // Keep the pin while the click is on any owned relic; every other
+        // board/HUD click should dismiss it, even if that target stops bubbling.
+        if (e.target instanceof HTMLElement && e.target.closest('.relic-mini-card')) return
+        this.pinnedRelicId = null
+        this.updatePinnedRelicClasses()
+      },
+      { capture: true }
+    )
   }
 
   /** Toggle the UI overlay used while a targeted hand card is awaiting a board click. */
@@ -719,27 +737,37 @@ export class GameBoardRenderer {
     const rotate = Math.max(-18, Math.min(18, offset * 7))
     const spread = Math.max(-54, Math.min(54, offset * 22))
     const lift = Math.abs(offset) * 3
+    // Edge cards enlarge inward so a large relic fan remains readable instead
+    // of letting the left/right cards grow offscreen.
+    const hoverShift = Math.round(Math.max(-92, Math.min(92, -offset * 18)))
+    const pinnedClass = this.pinnedRelicId === def.id ? 'is-pinned' : ''
     return `
-      <article class="relic-mini-card"
+      <article class="relic-mini-card ${pinnedClass}"
                data-owned-relic="${def.id}"
-               style="--relic-i:${index}; --relic-x:${spread}px; --relic-rot:${rotate}deg; --relic-y:${lift}px;"
+               style="--relic-i:${index}; --relic-x:${spread}px; --relic-rot:${rotate}deg; --relic-y:${lift}px; --relic-hover-shift:${hoverShift}px;"
+               tabindex="0"
+               title="${def.name}: ${def.effect}"
                aria-label="${def.name}: ${def.effect}">
         ${this.relicPreviewFace(def.id)}
       </article>
     `
   }
 
-  /** Full relic hover face, intentionally separate from hand cards so the
-   *  preview reads as a wax-sealed artifact card rather than a playable card. */
+  /** Owned relics reuse the shop card reading structure without the price tag.
+   *  Keeping the same art/body/title/effect/flavor class names lets inventory
+   *  cards scale up on hover with text legibility matching shop relic cards. */
   private relicPreviewFace(id: RelicId): string {
     const def = getRelicDef(id)
-    return this.commonCardFace({
-      artUrl: spriteForRelic(id),
-      name: def.name,
-      description: `${def.effect}<br><span class="common-card-subdesc">${def.flavor}</span>`,
-      extraClass: 'relic-preview-card',
-      badge: '유물',
-    })
+    return `
+      <article class="relic-preview-card" aria-hidden="true">
+        <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
+        <div class="shop-relic-body">
+          <h3 class="shop-relic-title">${def.name}</h3>
+          <p class="shop-relic-effect">${def.effect}</p>
+          <p class="shop-relic-flavor">${def.flavor}</p>
+        </div>
+      </article>
+    `
   }
 
   private renderPlayer(character: Character): string {
@@ -2051,6 +2079,27 @@ export class GameBoardRenderer {
       )
     }
 
+    // Owned relics can be click-pinned so long descriptions can be read
+    // without holding a hover. Keyboard Enter/Space mirrors the same toggle.
+    this.boardElement.querySelectorAll<HTMLElement>('.relic-mini-card').forEach((el) => {
+      const togglePinned = () => {
+        const relicId = el.dataset.ownedRelic as RelicId | undefined
+        if (!relicId) return
+        this.pinnedRelicId = this.pinnedRelicId === relicId ? null : relicId
+        this.updatePinnedRelicClasses()
+      }
+      el.addEventListener('click', (e) => {
+        e.stopPropagation()
+        togglePinned()
+      })
+      el.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return
+        e.preventDefault()
+        e.stopPropagation()
+        togglePinned()
+      })
+    })
+
     // Compendium opens an overlay browser of every spawning card + every hand
     // card. It is purely informational (does not pause/advance a turn).
     this.boardElement
@@ -2059,6 +2108,12 @@ export class GameBoardRenderer {
         e.stopPropagation()
         this.openCompendium()
       })
+  }
+
+  private updatePinnedRelicClasses(): void {
+    this.boardElement.querySelectorAll<HTMLElement>('.relic-mini-card').forEach((card) => {
+      card.classList.toggle('is-pinned', card.dataset.ownedRelic === this.pinnedRelicId)
+    })
   }
 
   private handleCardClick(el: HTMLElement, laneIndex: number, distance: number): void {
@@ -2121,7 +2176,75 @@ export class GameBoardRenderer {
         )
       if (element) elements.add(element)
     }
-    return this.animateElements([...elements], 'is-enemy-slamming', 420)
+
+    const attackers = [...elements]
+    const player = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
+    if (!player || attackers.length === 0) return Promise.resolve()
+
+    // Enemy cells live inside the rail grid, whose boundaries can visually clip
+    // a full-width front-row group. Clone each attacker into a fixed overlay and
+    // lunge the clone toward the player so 3-lane wax armies always read as a
+    // real charge rather than a cut-off in-rail nudge.
+    const playerRect = player.getBoundingClientRect()
+    const playerCenterX = playerRect.left + playerRect.width / 2
+    const playerTop = playerRect.top + playerRect.height * 0.08
+
+    return Promise.all(
+      attackers.map((element) => {
+        const rect = element.getBoundingClientRect()
+        const clone = element.cloneNode(true) as HTMLElement
+        const dx = (playerCenterX - (rect.left + rect.width / 2)) * 0.22
+        const dy = Math.min(210, Math.max(58, playerTop - rect.bottom + 18))
+        element.classList.add('is-enemy-slamming-source')
+        clone.classList.add('enemy-attack-clone')
+        clone.style.position = 'fixed'
+        clone.style.left = `${rect.left}px`
+        clone.style.top = `${rect.top}px`
+        clone.style.width = `${rect.width}px`
+        clone.style.height = `${rect.height}px`
+        clone.style.margin = '0'
+        clone.style.zIndex = '245'
+        clone.style.pointerEvents = 'none'
+        clone.style.transformOrigin = '50% 100%'
+        document.body.appendChild(clone)
+
+        const animation = clone.animate(
+          [
+            { transform: 'translate(0, 0) scale(1)', filter: 'brightness(1)' },
+            {
+              transform: `translate(${dx * 0.35}px, ${dy * 0.22}px) scale(1.03, 0.98)`,
+              filter: 'brightness(1.18)',
+              offset: 0.28,
+            },
+            {
+              transform: `translate(${dx}px, ${dy}px) scale(1.08, 0.92)`,
+              filter: 'brightness(1.35) drop-shadow(0 22px 26px rgba(168, 58, 58, 0.74))',
+              offset: 0.58,
+            },
+            {
+              transform: `translate(${dx * 0.2}px, ${dy * 0.08}px) scale(0.99, 1.02)`,
+              filter: 'brightness(1.05)',
+              offset: 0.78,
+            },
+            { transform: 'translate(0, 0) scale(1)', filter: 'brightness(1)' },
+          ],
+          { duration: 560, easing: 'cubic-bezier(0.2, 0.9, 0.24, 1)', fill: 'forwards' }
+        )
+
+        return new Promise<void>((resolve) => {
+          animation.onfinish = () => {
+            clone.remove()
+            element.classList.remove('is-enemy-slamming-source')
+            resolve()
+          }
+          window.setTimeout(() => {
+            clone.remove()
+            element.classList.remove('is-enemy-slamming-source')
+            resolve()
+          }, 760)
+        })
+      })
+    ).then(() => undefined)
   }
 
   /**
@@ -2244,6 +2367,179 @@ export class GameBoardRenderer {
     opts?: Parameters<typeof SquareBurst.playAt>[3]
   ): void {
     SquareBurst.playAt(x, y, theme, opts)
+  }
+
+  /** One-shot Hope revive presentation: spotlight the owned relic before it is
+   *  consumed, shake it like a desperate charm, then burst into the existing
+   *  square sparkle language used by score/treasure/health feedback. */
+  animateHopeRelicRevive(relicId: RelicId = 'hope'): Promise<void> {
+    const source = this.boardElement.querySelector<HTMLElement>(
+      `.relic-mini-card[data-owned-relic="${relicId}"]`
+    )
+    const sourceRect = source?.getBoundingClientRect()
+    if (!source || !sourceRect) {
+      SquareBurst.playAt(window.innerWidth / 2, window.innerHeight * 0.48, 'health-gain', {
+        count: 34,
+        spread: 180,
+        duration: 900,
+      })
+      return new Promise((resolve) => window.setTimeout(resolve, 780))
+    }
+
+    const overlay = document.createElement('div')
+    overlay.className = 'hope-revive-overlay'
+    overlay.setAttribute('aria-hidden', 'true')
+    overlay.style.position = 'fixed'
+    overlay.style.inset = '0'
+    overlay.style.zIndex = '285'
+    overlay.style.pointerEvents = 'none'
+    overlay.style.background =
+      'radial-gradient(circle at 50% 46%, rgba(255,245,220,0.14), rgba(8,5,14,0.72) 64%, rgba(8,5,14,0.86))'
+    overlay.style.opacity = '0'
+    document.body.appendChild(overlay)
+
+    const clone = source.cloneNode(true) as HTMLElement
+    clone.classList.add('hope-revive-card', 'is-pinned')
+    clone.style.position = 'fixed'
+    clone.style.left = `${sourceRect.left}px`
+    clone.style.top = `${sourceRect.top}px`
+    clone.style.width = `${sourceRect.width}px`
+    clone.style.height = `${sourceRect.height}px`
+    clone.style.margin = '0'
+    clone.style.zIndex = '286'
+    clone.style.pointerEvents = 'none'
+    clone.style.transformOrigin = '50% 50%'
+    document.body.appendChild(clone)
+
+    const targetWidth = Math.min(330, Math.max(230, window.innerWidth * 0.24))
+    const targetHeight = targetWidth / 0.72
+    const targetLeft = window.innerWidth / 2 - targetWidth / 2
+    const targetTop = window.innerHeight * 0.46 - targetHeight / 2
+    const dx = targetLeft - sourceRect.left
+    const dy = targetTop - sourceRect.top
+    const sx = targetWidth / Math.max(1, sourceRect.width)
+    const sy = targetHeight / Math.max(1, sourceRect.height)
+    const centerX = window.innerWidth / 2
+    const centerY = window.innerHeight * 0.46
+
+    const boardZoom = this.boardElement.animate(
+      [
+        { transform: 'scale(1)', filter: 'brightness(1)' },
+        { transform: 'scale(1.035)', filter: 'brightness(0.78) saturate(0.9)' },
+        { transform: 'scale(1)', filter: 'brightness(1)' },
+      ],
+      { duration: 2300, easing: 'cubic-bezier(0.18, 0.86, 0.22, 1)' }
+    )
+    overlay.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], {
+      duration: 2300,
+      easing: 'ease-in-out',
+      fill: 'forwards',
+    })
+
+    return new Promise((resolve) => {
+      const sparkleTimers: number[] = []
+      const sparkleThemes: BurstTheme[] = ['score', 'treasure-gain', 'health-gain', 'gauge-gain']
+      for (let i = 0; i < 7; i += 1) {
+        sparkleTimers.push(
+          window.setTimeout(() => {
+            SquareBurst.playAt(centerX, centerY, sparkleThemes[i % sparkleThemes.length], {
+              count: 12 + (i % 3) * 3,
+              spread: 76 + i * 10,
+              duration: 620,
+              size: [6, 15],
+            })
+          }, 520 + i * 150)
+        )
+      }
+
+      const zoom = clone.animate(
+        [
+          { transform: 'translate(0, 0) scale(1)', filter: 'brightness(1)', opacity: 1 },
+          {
+            transform: `translate(${dx * 0.7}px, ${dy - 18}px) scale(${(sx + sy) / 2 + 0.12})`,
+            filter: 'brightness(1.35) drop-shadow(0 24px 40px rgba(255, 232, 168, 0.36))',
+            opacity: 1,
+            offset: 0.42,
+          },
+          {
+            transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`,
+            filter: 'brightness(1.18) drop-shadow(0 28px 50px rgba(255, 232, 168, 0.42))',
+            opacity: 1,
+          },
+        ],
+        { duration: 620, easing: 'cubic-bezier(0.18, 0.86, 0.22, 1)', fill: 'forwards' }
+      )
+
+      zoom.onfinish = () => {
+        const shake = clone.animate(
+          [
+            {
+              transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy}) rotate(0deg)`,
+              filter: 'brightness(1.2)',
+            },
+            {
+              transform: `translate(${dx - 16}px, ${dy + 2}px) scale(${sx * 1.02}, ${sy * 0.98}) rotate(-3deg)`,
+              filter: 'brightness(1.38)',
+            },
+            {
+              transform: `translate(${dx + 18}px, ${dy - 1}px) scale(${sx * 0.99}, ${sy * 1.02}) rotate(3.5deg)`,
+              filter: 'brightness(1.55)',
+            },
+            {
+              transform: `translate(${dx - 12}px, ${dy + 1}px) scale(${sx * 1.03}, ${sy * 0.97}) rotate(-4deg)`,
+              filter: 'brightness(1.76)',
+            },
+            {
+              transform: `translate(${dx + 10}px, ${dy}px) scale(${sx}, ${sy}) rotate(2deg)`,
+              filter: 'brightness(2.2) saturate(0.45)',
+            },
+            {
+              transform: `translate(${dx}px, ${dy}px) scale(${sx * 1.1}, ${sy * 1.1}) rotate(0deg)`,
+              filter: 'brightness(4) saturate(0) contrast(1.35)',
+            },
+          ],
+          { duration: 900, easing: 'cubic-bezier(0.22, 0.96, 0.28, 1)', fill: 'forwards' }
+        )
+
+        shake.onfinish = () => {
+          SquareBurst.playAt(centerX, centerY, 'score', {
+            count: 34,
+            spread: 170,
+            duration: 920,
+            size: [8, 22],
+          })
+          SquareBurst.playAt(centerX, centerY, 'health-gain', {
+            count: 30,
+            spread: 135,
+            duration: 860,
+            size: [7, 18],
+          })
+          const vanish = clone.animate(
+            [
+              {
+                transform: `translate(${dx}px, ${dy}px) scale(${sx * 1.08}, ${sy * 1.08})`,
+                opacity: 1,
+                filter: 'brightness(4) saturate(0)',
+              },
+              {
+                transform: `translate(${dx}px, ${dy}px) scale(${sx * 1.36}, ${sy * 1.36})`,
+                opacity: 0,
+                filter: 'brightness(6) saturate(0) blur(1px)',
+              },
+            ],
+            { duration: 420, easing: 'cubic-bezier(0.16, 0.88, 0.26, 1)', fill: 'forwards' }
+          )
+          vanish.onfinish = () => {
+            sparkleTimers.forEach((timer) => window.clearTimeout(timer))
+            clone.remove()
+            overlay.remove()
+            // Let the board zoom animation naturally finish if it is still
+            // unwinding, then hand control back to the game loop.
+            boardZoom.finished.finally(() => resolve())
+          }
+        }
+      }
+    })
   }
 
   /** Find the rendered DOM element for a card (by id) for burst placement. */

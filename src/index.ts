@@ -72,6 +72,9 @@ const gameState = new GameState()
 const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
 const boardRenderer = new GameBoardRenderer('game-board')
+// Temporary QA toggle: start each run with Hope so the revive animation and
+// post-revive turn flow can be tested immediately. Remove when testing ends.
+const START_WITH_HOPE_FOR_REVIVE_TEST = true
 
 let gameActive = true
 let inputLocked = false
@@ -391,11 +394,16 @@ async function applyBloodPackRecoveryTrigger(before: PlayerRecoverySnapshot): Pr
   }
 }
 
-/** Hope is a one-shot revive: remove itself, ban future offers, clear field. */
+/** Hope is a one-shot revive: show its bespoke relic burst, remove itself,
+ *  ban future offers, clear the rail, then hand control back to the player. */
 async function tryResolveHopeRevive(): Promise<boolean> {
   const character = gameState.character
   if (character.isAlive() || !character.hasRelic('hope')) return false
   const beforeResources = snapshotPlayerResources()
+
+  // The relic must still be present in the owned fan while this plays, so the
+  // one-shot removal happens after the zoom/shake/white-pop presentation.
+  await boardRenderer.animateHopeRelicRevive('hope')
   character.removeRelic('hope', true)
   character.maxHealth = Math.max(character.maxHealth, 10)
   character.health = 10
@@ -810,6 +818,11 @@ function startGame(): void {
   chain = HandSystem.newChain()
   pendingHandTarget = null
   gameState.reset()
+  if (START_WITH_HOPE_FOR_REVIVE_TEST) {
+    // Test-only starting relic injection. Character.addRelic preserves normal
+    // duplicate/banned checks, so this behaves like owning Hope from a shop.
+    gameState.character.addRelic('hope')
+  }
   score = 0
   scorePulseKey = 0
   coins = 0
@@ -1352,7 +1365,13 @@ async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
       totalDamage
     )
   }
-  if (gameState.isGameOver && !(await tryResolveHopeRevive())) {
+  if (gameState.isGameOver) {
+    if (await tryResolveHopeRevive()) {
+      // Hope consumes the fatal event and starts a fresh player decision beat;
+      // do not continue into cleanup/shop timing from the lethal turn.
+      inputLocked = false
+      return
+    }
     finishTurn()
     return
   }
@@ -1406,10 +1425,13 @@ async function handleCardAction(e: Event): Promise<void> {
         document.querySelector<HTMLElement>('.player-card'),
         dmg
       )
-      if (
-        (!gameState.character.isAlive() || gameState.isGameOver) &&
-        !(await tryResolveHopeRevive())
-      ) {
+      if (!gameState.character.isAlive() || gameState.isGameOver) {
+        if (await tryResolveHopeRevive()) {
+          // A fatal first strike is fully absorbed by Hope; resume on the
+          // player's turn instead of spending the revived turn immediately.
+          inputLocked = false
+          return
+        }
         finishTurn()
         return
       }
@@ -1557,10 +1579,14 @@ async function handleCardAction(e: Event): Promise<void> {
 
   if (!gameState.character.isAlive()) {
     gameState.endGame('character_defeated')
-    if (!(await tryResolveHopeRevive())) {
-      finishTurn()
+    if (await tryResolveHopeRevive()) {
+      // Trap/self-damage deaths should not fall through into the enemy phase
+      // after the revive field reset. The next input is a normal player turn.
+      inputLocked = false
       return
     }
+    finishTurn()
+    return
   }
 
   if (turnManager.isEnemyFirstStrike()) {
@@ -1602,7 +1628,11 @@ async function handleCardAction(e: Event): Promise<void> {
       eventAnimations.push(boardRenderer.animateFlowerWilts(flowerChanges.wilts))
     }
     if (eventAnimations.length > 0) await Promise.all(eventAnimations)
-    if (gameState.isGameOver && !(await tryResolveHopeRevive())) {
+    if (gameState.isGameOver) {
+      if (await tryResolveHopeRevive()) {
+        inputLocked = false
+        return
+      }
       finishTurn()
       return
     }

@@ -151,7 +151,7 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
   border-radius: 14px;
   background: transparent;
   box-shadow: none;
-  cursor: default;
+  cursor: zoom-in;
   transform-origin: 50% 112%;
   transform:
     translateX(calc(-50% + var(--relic-x, 0px)))
@@ -164,33 +164,73 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
     filter 0.2s ease;
 }
 .relic-mini-card .relic-preview-card {
+  display: grid;
+  grid-template-rows: 50% 1fr;
   width: 100%;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
   pointer-events: none;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 215, 120, 0.42);
+  background: linear-gradient(180deg, rgba(45, 30, 39, 0.96), rgba(18, 12, 24, 0.96));
   box-shadow:
     0 10px 18px rgba(0, 0, 0, 0.5),
     inset 0 1px 0 rgba(255, 232, 168, 0.18);
 }
-.relic-mini-card .common-card-art {
-  min-height: 0;
+.relic-mini-card .shop-relic-art {
+  border-radius: 14px 14px 0 0;
+}
+.relic-mini-card .shop-relic-body {
+  padding: 7px 8px 8px;
+  gap: 4px;
+}
+.relic-mini-card .shop-relic-title {
+  font-size: clamp(11px, 1vw, 13px);
+  line-height: 1.05;
+}
+.relic-mini-card .shop-relic-effect {
+  font-size: clamp(10px, 0.82vw, 12px);
+  line-height: 1.18;
+}
+.relic-mini-card .shop-relic-flavor {
+  font-size: 9px;
+  line-height: 1.18;
 }
 .relic-mini-card:hover,
-.relic-mini-card:focus-within {
+.relic-mini-card:focus-visible,
+.relic-mini-card.is-pinned {
   transform:
-    translateX(calc(-50% + var(--relic-x, 0px)))
-    translateY(calc(var(--relic-y, 0px) - 18px))
-    rotate(calc(var(--relic-rot, 0deg) * 0.32))
-    scale(1.04);
-  z-index: 80;
-  filter: drop-shadow(0 20px 28px rgba(0, 0, 0, 0.76));
+    translateX(calc(-50% + var(--relic-x, 0px) + var(--relic-hover-shift, 0px)))
+    translateY(calc(var(--relic-y, 0px) - 54px))
+    rotate(calc(var(--relic-rot, 0deg) * 0.16))
+    scale(2.16);
+  z-index: 160;
+  filter: drop-shadow(0 24px 34px rgba(0, 0, 0, 0.8));
 }
 .relic-mini-card:hover .relic-preview-card,
-.relic-mini-card:focus-within .relic-preview-card {
+.relic-mini-card:focus-visible .relic-preview-card,
+.relic-mini-card.is-pinned .relic-preview-card {
+  border-color: rgba(255, 232, 168, 0.7);
   box-shadow:
     0 20px 34px rgba(0, 0, 0, 0.72),
     0 0 26px rgba(244, 164, 96, 0.34),
     inset 0 1px 0 rgba(255, 232, 168, 0.3);
+}
+.relic-mini-card:hover .shop-relic-title,
+.relic-mini-card:focus-visible .shop-relic-title,
+.relic-mini-card.is-pinned .shop-relic-title {
+  font-size: 13px;
+}
+.relic-mini-card:hover .shop-relic-effect,
+.relic-mini-card:focus-visible .shop-relic-effect,
+.relic-mini-card.is-pinned .shop-relic-effect {
+  font-size: 12px;
+}
+.relic-mini-card:hover .shop-relic-flavor,
+.relic-mini-card:focus-visible .shop-relic-flavor,
+.relic-mini-card.is-pinned .shop-relic-flavor {
+  font-size: 10px;
 }
 .relic-mini-card.is-arriving {
   opacity: 0;

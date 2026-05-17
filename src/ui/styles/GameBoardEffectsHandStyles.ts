@@ -108,6 +108,16 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   z-index: 5;
 }
 
+.cell.card.is-enemy-slamming-source {
+  /* The body-mounted clone performs the unclipped lunge; dim the in-rail
+     source slightly so the player follows the charging copy. */
+  opacity: 0.38;
+}
+
+.enemy-attack-clone {
+  box-sizing: border-box;
+}
+
 .cell.card.is-treasure-vanishing {
   pointer-events: none;
   animation: treasure-dust-fade 0.52s ease-out forwards;
