@@ -67,6 +67,49 @@ describe('HandSystem combo-count cards', () => {
 })
 
 describe('HandSystem broad hand effects', () => {
+  it('lets 밀랍 target and freeze front-row timed hazards and flowers', () => {
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+    const spore = new Card('spore-front', CardType.TRAP, '감염 포자', 'test', 0, 1, {
+      trapKind: 'spore',
+    })
+    gameState.lanes[0].setCardAtDistance(0, spore)
+    gameState.character.addHandCard(DropSystem.makeCard('wax'))
+
+    const result = HandSystem.useSingle(gameState, chain, 0, {
+      laneIndex: 0,
+      distance: 0,
+      card: spore,
+    })
+
+    expect(result.success).toBe(true)
+    expect(spore.isFrozen()).toBe(true)
+  })
+
+  it('makes triple 밀랍 freeze every front-row turn timer card', () => {
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+    const flower = new Card('flower-front', CardType.FLOWER, '캐모마일', 'test', 0, 0, {
+      flowerKind: 'chamomile',
+    })
+    flower.bloom('chamomile')
+    const bomb = new Card('bomb-front', CardType.TRAP, '양초 폭탄', 'test', 0, 0, {
+      trapKind: 'bomb',
+    })
+    const web = new Card('web-front', CardType.TRAP, '거미줄', 'test', 0, 2, { trapKind: 'web' })
+    gameState.lanes[0].setCardAtDistance(0, flower)
+    gameState.lanes[1].setCardAtDistance(0, bomb)
+    gameState.lanes[2].setCardAtDistance(0, web)
+    gameState.character.addHandCard({ ...DropSystem.makeCard('wax'), merged: true })
+
+    const result = HandSystem.useSingle(gameState, chain, 0)
+
+    expect(result.success).toBe(true)
+    expect(flower.frozenTurns).toBe(3)
+    expect(bomb.frozenTurns).toBe(3)
+    expect(web.frozenTurns).toBe(0)
+  })
+
   /** Count visible spore references after a Holy Water cleanup. */
   const countSpores = (gameState: GameState): number =>
     gameState.lanes
@@ -77,9 +120,18 @@ describe('HandSystem broad hand effects', () => {
     const gameState = new GameState()
     const chain = HandSystem.newChain()
     const web = new Card('web-a', CardType.TRAP, '거미줄', 'test', 0, 2, { trapKind: 'web' })
-    gameState.lanes[0].setCardAtDistance(0, new Card('spore-a', CardType.TRAP, '포자 A', 'test', 0, 1, { trapKind: 'spore' }))
-    gameState.lanes[1].setCardAtDistance(0, new Card('spore-b', CardType.TRAP, '포자 B', 'test', 0, 1, { trapKind: 'spore' }))
-    gameState.lanes[2].setCardAtDistance(0, new Card('spore-c', CardType.TRAP, '포자 C', 'test', 0, 1, { trapKind: 'spore' }))
+    gameState.lanes[0].setCardAtDistance(
+      0,
+      new Card('spore-a', CardType.TRAP, '포자 A', 'test', 0, 1, { trapKind: 'spore' })
+    )
+    gameState.lanes[1].setCardAtDistance(
+      0,
+      new Card('spore-b', CardType.TRAP, '포자 B', 'test', 0, 1, { trapKind: 'spore' })
+    )
+    gameState.lanes[2].setCardAtDistance(
+      0,
+      new Card('spore-c', CardType.TRAP, '포자 C', 'test', 0, 1, { trapKind: 'spore' })
+    )
     gameState.lanes[0].setCardAtDistance(1, web)
     gameState.character.addHandCard(DropSystem.makeCard('holy-water'))
 
@@ -95,9 +147,18 @@ describe('HandSystem broad hand effects', () => {
     const gameState = new GameState()
     const chain = HandSystem.newChain()
     const web = new Card('web-a', CardType.TRAP, '거미줄', 'test', 0, 2, { trapKind: 'web' })
-    gameState.lanes[0].setCardAtDistance(0, new Card('spore-a', CardType.TRAP, '포자 A', 'test', 0, 1, { trapKind: 'spore' }))
-    gameState.lanes[1].setCardAtDistance(0, new Card('spore-b', CardType.TRAP, '포자 B', 'test', 0, 1, { trapKind: 'spore' }))
-    gameState.lanes[2].setCardAtDistance(0, new Card('spore-c', CardType.TRAP, '포자 C', 'test', 0, 1, { trapKind: 'spore' }))
+    gameState.lanes[0].setCardAtDistance(
+      0,
+      new Card('spore-a', CardType.TRAP, '포자 A', 'test', 0, 1, { trapKind: 'spore' })
+    )
+    gameState.lanes[1].setCardAtDistance(
+      0,
+      new Card('spore-b', CardType.TRAP, '포자 B', 'test', 0, 1, { trapKind: 'spore' })
+    )
+    gameState.lanes[2].setCardAtDistance(
+      0,
+      new Card('spore-c', CardType.TRAP, '포자 C', 'test', 0, 1, { trapKind: 'spore' })
+    )
     gameState.lanes[0].setCardAtDistance(1, web)
     gameState.character.addHandCard({ ...DropSystem.makeCard('holy-water'), merged: true })
 

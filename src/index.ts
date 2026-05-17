@@ -524,7 +524,9 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   )
   offer.purchased = true
   await applyRelicPurchaseEffect(detail.relicId)
+  boardRenderer.prepareRelicArrivalFromShop(detail.relicId)
   render()
+  await boardRenderer.animatePreparedRelicArrival()
   boardRenderer.openShop(currentShopOffers, score, gameState.character)
 }
 
@@ -1518,7 +1520,14 @@ async function handleCardAction(e: Event): Promise<void> {
   HandSystem.resetChain(chain)
   clearChainTimeline()
 
-  render()
+  if (result.cardRemoved) {
+    // Fill the action-created rail gap before turn-timer events. In particular,
+    // spores should infect the card that drops into an adjacent empty front slot,
+    // not the transient hole left by the player's click.
+    await runPreparationRefreshAfterFieldEffects()
+  } else {
+    render()
+  }
 
   if (gainedHandCardCount > 0) {
     // Let the acquisition drop finish before scanning triples. The delay scales

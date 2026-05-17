@@ -116,111 +116,104 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
   box-shadow: inset 0 -44px 54px rgba(13, 9, 19, 0.76);
 }
 
-/* Owned relics now match the player-card height and wrap vertically inside a
-   warm themed scroll well instead of drifting sideways in a horizontal strip. */
+/* Owned relics now sit as a transparent fan of full preview cards beside
+   the player. There is intentionally no empty-state plate or label: with zero
+   relics the right utility layer is not rendered at all. */
 .relic-layer {
   align-self: center;
-  height: clamp(92px, 14vh, 140px);
-  max-height: clamp(92px, 14vh, 140px);
+  height: clamp(130px, 18vh, 188px);
+  max-height: clamp(130px, 18vh, 188px);
   align-items: center;
-  padding: 6px;
+  justify-content: center;
+  padding: 0;
   overflow: visible;
+  border-color: transparent;
+  background: transparent;
+  backdrop-filter: none;
 }
 .relic-stack {
-  width: 100%;
-  max-width: clamp(150px, 17vw, 200px);
+  position: relative;
+  width: clamp(168px, 18vw, 236px);
   height: 100%;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
-  grid-auto-rows: minmax(76px, 1fr);
-  align-content: start;
-  gap: 7px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 3px 5px 4px 2px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(244, 164, 96, 0.72) rgba(20, 16, 28, 0.5);
-}
-.relic-stack::-webkit-scrollbar { width: 5px; }
-.relic-stack::-webkit-scrollbar-track {
-  background: rgba(20, 16, 28, 0.48);
-  border-radius: 999px;
-  box-shadow: inset 0 0 0 1px rgba(255, 232, 168, 0.08);
-}
-.relic-stack::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: linear-gradient(180deg, var(--color-flame), var(--color-flame-deep));
-  box-shadow: 0 0 8px rgba(244, 164, 96, 0.36);
+  overflow: visible;
+  transform: translateY(10px);
+  isolation: isolate;
 }
 .relic-mini-card {
-  width: 100%;
-  min-width: 0;
-}
-.relic-hover-preview {
-  display: none;
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: 190px;
-  aspect-ratio: 0.72;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-50%) translateX(-10px) rotateY(-88deg);
-  transform-origin: left center;
-  transform-style: preserve-3d;
-  z-index: 120;
-  filter: drop-shadow(0 16px 28px rgba(0, 0, 0, 0.72));
-}
-.relic-hover-preview.is-floating {
-  display: block;
-  animation: relic-preview-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
-}
-.relic-hover-preview::before {
-  content: '';
   position: absolute;
-  inset: 0;
-  z-index: 2;
+  left: 50%;
+  bottom: 4px;
+  width: clamp(86px, 7.4vw, 116px);
+  aspect-ratio: 0.72;
+  min-width: 0;
+  overflow: visible;
+  border: 0;
   border-radius: 14px;
-  background: var(--hand-card-back) center / cover no-repeat;
-  backface-visibility: hidden;
-  transform: rotateY(0deg);
+  background: transparent;
+  box-shadow: none;
+  cursor: default;
+  transform-origin: 50% 112%;
+  transform:
+    translateX(calc(-50% + var(--relic-x, 0px)))
+    translateY(var(--relic-y, 0px))
+    rotate(var(--relic-rot, 0deg))
+    scale(0.88);
+  z-index: calc(10 + var(--relic-i, 0));
+  transition:
+    transform 0.2s cubic-bezier(0.18, 0.86, 0.22, 1),
+    filter 0.2s ease;
 }
-.relic-mini-card:hover .relic-hover-preview,
-.relic-mini-card:focus-within .relic-hover-preview {
-  display: block;
-  animation: relic-preview-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
-}
-.relic-hover-preview.is-floating::before,
-.relic-mini-card:hover .relic-hover-preview::before,
-.relic-mini-card:focus-within .relic-hover-preview::before {
-  animation: relic-preview-back-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
-}
-.relic-preview-card {
-  min-height: 264px;
-  border-color: rgba(255, 215, 120, 0.58);
-  background:
-    radial-gradient(circle at 50% 0%, rgba(255, 215, 120, 0.18), transparent 56%),
-    linear-gradient(180deg, rgba(48, 34, 43, 0.99), rgba(13, 9, 19, 0.99));
-}
-.relic-preview-card .common-card-art {
-  border-radius: 999px 999px 12px 12px;
+.relic-mini-card .relic-preview-card {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  pointer-events: none;
   box-shadow:
-    inset 0 -34px 46px rgba(13, 9, 19, 0.7),
-    0 0 18px rgba(255, 215, 120, 0.16);
+    0 10px 18px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 232, 168, 0.18);
 }
-.relic-preview-card .common-card-badge {
-  color: rgba(255, 232, 168, 0.96);
-  border-color: rgba(255, 215, 120, 0.56);
-  background: rgba(128, 77, 33, 0.28);
+.relic-mini-card .common-card-art {
+  min-height: 0;
 }
-@keyframes relic-preview-flip {
-  0% { opacity: 0; transform: translateY(-50%) translateX(-14px) rotateY(-92deg); }
-  48% { opacity: 1; transform: translateY(-50%) translateX(-5px) rotateY(-28deg); }
-  100% { opacity: 1; transform: translateY(-50%) translateX(0) rotateY(0deg); }
+.relic-mini-card:hover,
+.relic-mini-card:focus-within {
+  transform:
+    translateX(calc(-50% + var(--relic-x, 0px)))
+    translateY(calc(var(--relic-y, 0px) - 18px))
+    rotate(calc(var(--relic-rot, 0deg) * 0.32))
+    scale(1.04);
+  z-index: 80;
+  filter: drop-shadow(0 20px 28px rgba(0, 0, 0, 0.76));
 }
-@keyframes relic-preview-back-flip {
-  0%, 42% { opacity: 1; transform: rotateY(0deg); }
-  76%, 100% { opacity: 0; transform: rotateY(102deg); }
+.relic-mini-card:hover .relic-preview-card,
+.relic-mini-card:focus-within .relic-preview-card {
+  box-shadow:
+    0 20px 34px rgba(0, 0, 0, 0.72),
+    0 0 26px rgba(244, 164, 96, 0.34),
+    inset 0 1px 0 rgba(255, 232, 168, 0.3);
+}
+.relic-mini-card.is-arriving {
+  opacity: 0;
+}
+.relic-mini-card.is-arrival-settling {
+  animation: relic-arrival-settle 0.48s cubic-bezier(0.18, 0.86, 0.22, 1);
+}
+.relic-arrival-clone {
+  position: fixed;
+  z-index: 260;
+  pointer-events: none;
+  transform-origin: top left;
+  filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.74));
+}
+.relic-arrival-clone .relic-preview-card {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+@keyframes relic-arrival-settle {
+  0% { filter: brightness(1.5); }
+  38% { transform: translateX(calc(-50% + var(--relic-x, 0px))) translateY(calc(var(--relic-y, 0px) - 10px)) rotate(calc(var(--relic-rot, 0deg) * 0.7)) scale(1.03); }
+  100% { filter: brightness(1); }
 }
 
 /* Legacy .shop-modal/.shop-relic-card overrides removed — the in-rail shop

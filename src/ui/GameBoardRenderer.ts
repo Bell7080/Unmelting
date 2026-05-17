@@ -205,6 +205,9 @@ export class GameBoardRenderer {
   private handTargetingMode: HandTargetingMode | null = null
   /** Body-level shop overlay is kept outside board re-renders. */
   private shopOverlayElement: HTMLElement | null = null
+  /** Source rect for a just-bought shop relic; the next render uses it to
+   *  fly a full artifact card into the owned fan instead of popping in. */
+  private pendingRelicArrival: { relicId: RelicId; rect: DOMRect } | null = null
   /** True while the shop shutter must survive full board re-renders. Purchase
    *  refreshes rebuild the rail DOM, so the shutter state lives in the renderer
    *  instead of only in the transient `.rail-shutter` element. */
@@ -228,9 +231,6 @@ export class GameBoardRenderer {
   }
 
   render(gameState: GameState, scorePanel: ScorePanelState): void {
-    // Detached relic previews are body-mounted during hover; remove stale ones
-    // before replacing the board DOM so old hover cards never linger onscreen.
-    document.querySelectorAll('.relic-hover-preview.is-floating').forEach((el) => el.remove())
     const previousRects = this.captureCardRects()
     const previousHandRects = this.captureHandRects()
     this.currentGameState = gameState
@@ -509,8 +509,19 @@ export class GameBoardRenderer {
     if (rule.filter === 'enemy-or-treasure') {
       return card.type === CardType.ENEMY || card.type === CardType.TREASURE
     }
+    if (rule.filter === 'turn-timer') return this.isTurnTimerHandTarget(card)
     if (rule.filter === 'hazard') return card.type === CardType.TRAP || card.isFrozen()
     if (rule.filter === 'any') return true
+    return false
+  }
+
+  /** UI mirror of HandSystem's wax target family, kept local so hover hints
+   *  highlight every front-row card whose own turn beat can be paused. */
+  private isTurnTimerHandTarget(card: Card): boolean {
+    if (card.type === CardType.ENEMY) return true
+    if (card.type === CardType.TREASURE) return true
+    if (card.type === CardType.TRAP) return card.trapKind === 'bomb' || card.trapKind === 'spore'
+    if (card.type === CardType.FLOWER) return card.flowerKind !== 'seed'
     return false
   }
 
@@ -614,6 +625,10 @@ export class GameBoardRenderer {
   }
 
   private renderPlayerZone(character: Character): string {
+    const relicLayer =
+      character.relics.length > 0
+        ? `<div class="utility-layer relic-layer" aria-label="Owned relics">${this.renderRelicLayer(character)}</div>`
+        : ''
     return `
       <div class="player-zone" aria-label="Player controls and relic plan">
         <div class="utility-layer utility-layer-left" aria-label="Utility buttons">
@@ -623,9 +638,7 @@ export class GameBoardRenderer {
           </button>
         </div>
         ${this.renderPlayer(character)}
-        <div class="utility-layer relic-layer" aria-label="Owned relics">
-          ${this.renderRelicLayer(character)}
-        </div>
+        ${relicLayer}
       </div>
     `
   }
@@ -688,25 +701,30 @@ export class GameBoardRenderer {
     `
   }
 
-  /** Render owned relics as compact card previews beside the player. */
+  /** Render owned relics as a fanned hand of artifact preview cards beside the player. */
   private renderRelicLayer(character: Character): string {
-    if (character.relics.length === 0) {
-      return `<span class="relic-plan-label">유물 없음<br>상점 대기</span>`
-    }
-    const relics = character.relics.map((id) => this.renderRelicMiniCard(id)).join('')
-    return `<div class="relic-stack" aria-label="보유 유물">${relics}</div>`
+    const total = character.relics.length
+    const relics = character.relics
+      .map((id, index) => this.renderRelicMiniCard(id, index, total))
+      .join('')
+    return `<div class="relic-stack" aria-label="보유 유물" style="--relic-count:${total}">${relics}</div>`
   }
 
-  /** Small owned-relic chip: the rail shows only the illustration while the
-   *  hidden hover card carries all readable relic details. */
-  private renderRelicMiniCard(id: RelicId): string {
+  /** Owned relic card in the fan. The card itself is the preview, so hover only
+   *  lifts this card above its siblings rather than opening a separate layer. */
+  private renderRelicMiniCard(id: RelicId, index: number, total: number): string {
     const def = getRelicDef(id)
+    const center = (total - 1) / 2
+    const offset = index - center
+    const rotate = Math.max(-18, Math.min(18, offset * 7))
+    const spread = Math.max(-54, Math.min(54, offset * 22))
+    const lift = Math.abs(offset) * 3
     return `
-      <article class="relic-mini-card" aria-label="${def.name}: ${def.effect}">
-        <div class="relic-mini-art" style="background-image: url('${spriteForRelic(id)}')" aria-hidden="true"></div>
-        <div class="relic-hover-preview" style="--hand-card-back: url('${SpriteUrls.cardBack}');" aria-hidden="true">
-          ${this.relicPreviewFace(def.id)}
-        </div>
+      <article class="relic-mini-card"
+               data-owned-relic="${def.id}"
+               style="--relic-i:${index}; --relic-x:${spread}px; --relic-rot:${rotate}deg; --relic-y:${lift}px;"
+               aria-label="${def.name}: ${def.effect}">
+        ${this.relicPreviewFace(def.id)}
       </article>
     `
   }
@@ -2033,17 +2051,6 @@ export class GameBoardRenderer {
       )
     }
 
-    // Relic chips live inside a scroll well, so their fixed hover cards receive
-    // viewport coordinates at hover-time to avoid clipping against that well.
-    this.boardElement.querySelectorAll<HTMLElement>('.relic-mini-card').forEach((chip) => {
-      const preview = chip.querySelector<HTMLElement>('.relic-hover-preview')
-      if (!preview) return
-      chip.addEventListener('mouseenter', () => this.showRelicPreview(chip, preview))
-      chip.addEventListener('mouseleave', () => this.hideRelicPreview(chip, preview))
-      chip.addEventListener('focusin', () => this.showRelicPreview(chip, preview))
-      chip.addEventListener('focusout', () => this.hideRelicPreview(chip, preview))
-    })
-
     // Compendium opens an overlay browser of every spawning card + every hand
     // card. It is purely informational (does not pause/advance a turn).
     this.boardElement
@@ -2052,31 +2059,6 @@ export class GameBoardRenderer {
         e.stopPropagation()
         this.openCompendium()
       })
-  }
-
-  /** Move relic previews to <body> while visible so scroll wells cannot clip them. */
-  private showRelicPreview(chip: HTMLElement, preview: HTMLElement): void {
-    this.positionRelicPreview(chip, preview)
-    preview.classList.add('is-floating')
-    document.body.appendChild(preview)
-  }
-
-  /** Return a hidden relic preview to its chip after hover/focus ends. */
-  private hideRelicPreview(chip: HTMLElement, preview: HTMLElement): void {
-    preview.classList.remove('is-floating')
-    chip.appendChild(preview)
-  }
-
-  /** Position the relic hover preview as a fixed card near its chip so the
-   *  relic stack can keep its compact scroll layout without clipping previews. */
-  private positionRelicPreview(chip: HTMLElement, preview: HTMLElement): void {
-    const rect = chip.getBoundingClientRect()
-    const previewWidth = 190
-    const gap = 16
-    const rightSideLeft = rect.right + gap
-    const hasRightRoom = rightSideLeft + previewWidth < window.innerWidth - 12
-    preview.style.left = `${hasRightRoom ? rightSideLeft : rect.left - previewWidth - gap}px`
-    preview.style.top = `${rect.top + rect.height / 2}px`
   }
 
   private handleCardClick(el: HTMLElement, laneIndex: number, distance: number): void {
@@ -2343,6 +2325,72 @@ export class GameBoardRenderer {
       count,
       theme
     )
+  }
+
+  /** Capture the clicked shop card before the board re-renders with the newly owned relic. */
+  prepareRelicArrivalFromShop(relicId: RelicId): void {
+    const source = this.shopOverlayElement?.querySelector<HTMLElement>(
+      `.shop-relic-card[data-shop-buy="${relicId}"]`
+    )
+    this.pendingRelicArrival = source ? { relicId, rect: source.getBoundingClientRect() } : null
+  }
+
+  /** Fly a purchased relic card from the shop stall into its final fan slot. */
+  animatePreparedRelicArrival(): Promise<void> {
+    const pending = this.pendingRelicArrival
+    this.pendingRelicArrival = null
+    if (!pending) return Promise.resolve()
+    const target = this.boardElement.querySelector<HTMLElement>(
+      `.relic-mini-card[data-owned-relic="${pending.relicId}"]`
+    )
+    if (!target) return Promise.resolve()
+    const targetRect = target.getBoundingClientRect()
+    const clone = document.createElement('div')
+    clone.className = 'relic-arrival-clone'
+    clone.style.left = `${pending.rect.left}px`
+    clone.style.top = `${pending.rect.top}px`
+    clone.style.width = `${pending.rect.width}px`
+    clone.style.height = `${pending.rect.height}px`
+    clone.innerHTML = this.relicPreviewFace(pending.relicId)
+    document.body.appendChild(clone)
+    target.classList.add('is-arriving')
+    // Hide the real destination until the clone snaps into place, then pop it
+    // back with the same card-draw shadow language as hover.
+    const dx = targetRect.left - pending.rect.left
+    const dy = targetRect.top - pending.rect.top
+    const sx = targetRect.width / Math.max(1, pending.rect.width)
+    const sy = targetRect.height / Math.max(1, pending.rect.height)
+    return new Promise((resolve) => {
+      const anim = clone.animate(
+        [
+          { transform: 'translate(0, 0) scale(1)', opacity: 1, filter: 'brightness(1.15)' },
+          {
+            transform: `translate(${dx * 0.72}px, ${dy - 38}px) scale(${(sx + sy) / 2 + 0.05})`,
+            opacity: 1,
+            filter: 'brightness(1.38)',
+          },
+          {
+            transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`,
+            opacity: 1,
+            filter: 'brightness(1)',
+          },
+        ],
+        { duration: 560, easing: 'cubic-bezier(0.18, 0.86, 0.22, 1)', fill: 'forwards' }
+      )
+      anim.onfinish = () => {
+        clone.remove()
+        target.classList.remove('is-arriving')
+        target.classList.add('is-arrival-settling')
+        window.setTimeout(() => target.classList.remove('is-arrival-settling'), 520)
+        SquareBurst.playOn(target, 'score', { count: 18, spread: 90, duration: 620 })
+        resolve()
+      }
+      anim.oncancel = () => {
+        clone.remove()
+        target.classList.remove('is-arriving')
+        resolve()
+      }
+    })
   }
 
   /** Spend-light purchase trail: the blast starts on the 불빛 counter and

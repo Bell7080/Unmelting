@@ -286,7 +286,9 @@ export class TurnManager {
       const lane = this.gameState.lanes[target.laneIndex]
       if (!lane || target.distance < 0 || target.distance >= LANE_DISTANCE_COUNT) continue
       const existing = lane.getCardAtDistance(target.distance)
-      if (existing === source) continue
+      // Infection converts an actual neighboring card; transient holes wait
+      // until gravity/refill has placed a card there, avoiding phantom spores.
+      if (!existing || existing === source) continue
       // Do not partially overwrite a multi-lane card; wait for a single-cell
       // neighbor so infection cannot leave stale shared-card references behind.
       if (existing && existing.groupCount > 1) continue
