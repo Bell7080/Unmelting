@@ -180,6 +180,10 @@ describe('TurnManager treasure volatility', () => {
     const spore = new Card('spore', CardType.TRAP, '감염 포자', 'test', 0, 1, { trapKind: 'spore' })
     spore.sporeTurnsUntilSpread = 1
     gameState.lanes[0].setCardAtDistance(0, spore)
+    gameState.lanes[1].setCardAtDistance(
+      0,
+      new Card('victim', CardType.TREASURE, '작은 상자', 'test')
+    )
     vi.spyOn(Math, 'random').mockReturnValue(0)
 
     const spreads = turnManager.applySporeSpread()
@@ -191,6 +195,20 @@ describe('TurnManager treasure volatility', () => {
     expect(infected).toEqual({ laneIndex: 1, distance: 0 })
     expect(infectedCard?.trapKind).toBe('spore')
     expect(infectedCard?.sporeTurnsUntilSpread).toBe(2)
+  })
+
+  it('does not spread into a transient empty neighbor before rail gravity refills it', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const spore = new Card('spore', CardType.TRAP, '감염 포자', 'test', 0, 1, { trapKind: 'spore' })
+    spore.sporeTurnsUntilSpread = 1
+    gameState.lanes[0].setCardAtDistance(0, spore)
+
+    const spreads = turnManager.applySporeSpread()
+
+    expect(spreads).toHaveLength(0)
+    expect(gameState.lanes[1].getCardAtDistance(0)).toBeNull()
+    expect(spore.sporeTurnsUntilSpread).toBe(2)
   })
 
   it('reports the card id for a grouped enemy strike so the renderer can animate the whole group', () => {

@@ -475,6 +475,7 @@ export class HandSystem {
     if (rule.filter === 'enemy-or-treasure') {
       return target.card.type === CardType.ENEMY || target.card.type === CardType.TREASURE
     }
+    if (rule.filter === 'turn-timer') return HandSystem.isTurnTimerCard(target.card)
     if (rule.filter === 'hazard')
       return target.card.type === CardType.TRAP || target.card.isFrozen()
     if (rule.filter === 'any') return true
@@ -664,6 +665,16 @@ export class HandSystem {
     return gained
   }
 
+  /** Cards with per-turn behavior can be stopped by wax: active enemies, volatile
+   *  treasures, bombs/spores, and bloomed flowers all own a timer-like beat. */
+  private static isTurnTimerCard(card: Card): boolean {
+    if (card.type === CardType.ENEMY) return true
+    if (card.type === CardType.TREASURE) return true
+    if (card.type === CardType.TRAP) return card.trapKind === 'bomb' || card.trapKind === 'spore'
+    if (card.type === CardType.FLOWER) return card.flowerKind !== 'seed'
+    return false
+  }
+
   /** Apply wax hardening to a selected front card. */
   private static freezeTarget(target: HandTarget | undefined, turns: number): string {
     if (!target) return '굳힐 대상 없음'
@@ -671,14 +682,14 @@ export class HandSystem {
     return `${target.card.name} ${turns}턴 굳음`
   }
 
-  /** Apply wax hardening to every front enemy/treasure. */
+  /** Apply wax hardening to every front card with a turn timer. */
   private static freezeFrontCards(gs: GameState, turns: number): string {
     const seen = new Set<Card>()
     let count = 0
     for (const lane of gs.lanes) {
       const card = lane.getCardAtDistance(0)
       if (!card || seen.has(card)) continue
-      if (card.type !== CardType.ENEMY && card.type !== CardType.TREASURE) continue
+      if (!HandSystem.isTurnTimerCard(card)) continue
       seen.add(card)
       card.freeze(turns)
       count++
@@ -702,7 +713,6 @@ export class HandSystem {
     }
     return `${prefix}포자 ${cleansed}장 제거`
   }
-
 
   /** Triple 성수 removes every spore while preserving webs, bombs, and frozen cards. */
   private static cleanseAllSpores(gs: GameState): string {

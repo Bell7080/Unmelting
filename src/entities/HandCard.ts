@@ -30,6 +30,7 @@ export type HandEffectFilter =
   | 'spore'
   | 'treasure'
   | 'enemy-or-treasure'
+  | 'turn-timer'
   | 'hazard'
   | 'any'
   | 'none'
