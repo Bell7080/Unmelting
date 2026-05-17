@@ -110,13 +110,13 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
    Without this gate, every full re-render of the hand panel would replay
    the drop on every card, which made the whole stack twitch. */
 .hand-slot.hand-card.is-entering {
-  /* New cards fall one-by-one from just below the combo gauge, overshoot like
-     soft jelly, then settle into the stack. */
+  /* New cards now enter from the top edge directly under the combo gauge,
+     then fall into their bottom-up slot so rewards do not appear mid-column. */
   animation: hand-card-drop 0.74s cubic-bezier(0.16, 0.92, 0.14, 1.04) both;
   animation-delay: calc(var(--hand-enter-order, 0) * 135ms);
 }
 @keyframes hand-card-drop {
-  0%   { transform: translate3d(0, -255px, 0) scale(0.95, 1.07); opacity: 0.01; filter: brightness(1.32); }
+  0%   { transform: translate3d(0, min(-72vh, -640px), 0) scale(0.95, 1.07); opacity: 0.01; filter: brightness(1.32); }
   52%  { transform: translate3d(0, 6px, 0) scale(1.018, 0.952); opacity: 1; filter: brightness(1.12); }
   69%  { transform: translate3d(0, -4px, 0) scale(0.99, 1.026); }
   84%  { transform: translate3d(0, 1.5px, 0) scale(1.004, 0.994); }
