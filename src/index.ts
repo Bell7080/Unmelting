@@ -72,6 +72,12 @@ const gameState = new GameState()
 const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
 const boardRenderer = new GameBoardRenderer('game-board')
+/**
+ * Temporary QA hook: every new run starts with Hope so death-revive testing is
+ * immediately available. Do not remove this forced grant until the user
+ * explicitly asks us to delete it.
+ */
+const FORCE_STARTING_HOPE_RELIC_FOR_TESTING = true
 let gameActive = true
 let inputLocked = false
 let chain: ChainState = HandSystem.newChain()
@@ -841,6 +847,10 @@ function startGame(): void {
   chain = HandSystem.newChain()
   pendingHandTarget = null
   gameState.reset()
+  // Temporary QA hook: grant Hope after reset so restarts also keep the test
+  // setup. Do not remove this forced run-start relic until the user explicitly
+  // asks us to delete it.
+  if (FORCE_STARTING_HOPE_RELIC_FOR_TESTING) gameState.character.addRelic('hope')
   score = 0
   scorePulseKey = 0
   coins = 0
