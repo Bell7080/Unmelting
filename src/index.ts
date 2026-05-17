@@ -72,10 +72,6 @@ const gameState = new GameState()
 const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
 const boardRenderer = new GameBoardRenderer('game-board')
-// Temporary QA toggle: start each run with Hope so the revive animation and
-// post-revive turn flow can be tested immediately. Remove when testing ends.
-const START_WITH_HOPE_FOR_REVIVE_TEST = true
-
 let gameActive = true
 let inputLocked = false
 let chain: ChainState = HandSystem.newChain()
@@ -327,6 +323,23 @@ async function playHandTargetBlasts(cardIds: Iterable<string>, theme: BurstTheme
   )
 }
 
+
+/** Collect currently rendered field cards once so grouped cards are only hit by
+ *  one Hope cleanup blast even if they occupy multiple lane cells. */
+function snapshotFieldCardPayloads(): { cardId: string; type: CardType }[] {
+  const seen = new Set<string>()
+  const payloads: { cardId: string; type: CardType }[] = []
+  for (const lane of gameState.lanes) {
+    for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
+      const card = lane.getCardAtDistance(distance)
+      if (!card || seen.has(card.id)) continue
+      seen.add(card.id)
+      payloads.push({ cardId: card.id, type: card.type })
+    }
+  }
+  return payloads
+}
+
 async function playPlayerGainTrails(
   source: ResourceTrailSource,
   before: PlayerResourceSnapshot,
@@ -400,19 +413,29 @@ async function tryResolveHopeRevive(): Promise<boolean> {
   const character = gameState.character
   if (character.isAlive() || !character.hasRelic('hope')) return false
   const beforeResources = snapshotPlayerResources()
+  const fieldCards = snapshotFieldCardPayloads()
 
   // The relic must still be present in the owned fan while this plays, so the
-  // one-shot removal happens after the zoom/shake/white-pop presentation.
+  // one-shot removal happens after the centered zoom/shake/white-pop beat.
   await boardRenderer.animateHopeRelicRevive('hope')
   character.removeRelic('hope', true)
+
+  // Hope is a full field-cleanup relic: first mark every visible card from the
+  // center, then let the stale DOM cards burst/fade before the model is cleared.
+  await playHandTargetBlasts(
+    fieldCards.map((card) => card.cardId),
+    'score'
+  )
+  await boardRenderer.animateCardConsumeByIds(fieldCards)
+
+  gameState.clearField()
   character.maxHealth = Math.max(character.maxHealth, 10)
   character.health = 10
-  gameState.clearField()
   gameState.isGameOver = false
   gameState.gameOverReason = ''
   recordRelicActivation('hope', '체력 10으로 부활, 필드 제거')
-  await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
   render()
+  await playPlayerGainTrails({ kind: 'center' }, beforeResources)
   await runPreparationRefreshAfterFieldEffects()
   return true
 }
@@ -818,11 +841,6 @@ function startGame(): void {
   chain = HandSystem.newChain()
   pendingHandTarget = null
   gameState.reset()
-  if (START_WITH_HOPE_FOR_REVIVE_TEST) {
-    // Test-only starting relic injection. Character.addRelic preserves normal
-    // duplicate/banned checks, so this behaves like owning Hope from a shop.
-    gameState.character.addRelic('hope')
-  }
   score = 0
   scorePulseKey = 0
   coins = 0
