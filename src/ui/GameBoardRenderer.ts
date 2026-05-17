@@ -2398,8 +2398,11 @@ export class GameBoardRenderer {
     overlay.style.opacity = '0'
     document.body.appendChild(overlay)
 
+    source.classList.add('is-revive-locked')
     const clone = source.cloneNode(true) as HTMLElement
-    clone.classList.add('hope-revive-card', 'is-pinned')
+    // The revive clone must ignore normal inventory hover/pin enlargement;
+    // the WebAnimation below owns its exact center-screen placement.
+    clone.classList.add('hope-revive-card', 'is-revive-locked')
     clone.style.position = 'fixed'
     clone.style.left = `${sourceRect.left}px`
     clone.style.top = `${sourceRect.top}px`
@@ -2411,7 +2414,7 @@ export class GameBoardRenderer {
     clone.style.transformOrigin = '50% 50%'
     document.body.appendChild(clone)
 
-    const targetWidth = Math.min(330, Math.max(230, window.innerWidth * 0.24))
+    const targetWidth = Math.min(230, Math.max(188, window.innerWidth * 0.18))
     const targetHeight = targetWidth / 0.72
     const targetLeft = window.innerWidth / 2 - targetWidth / 2
     const targetTop = window.innerHeight * 0.46 - targetHeight / 2
@@ -2531,6 +2534,7 @@ export class GameBoardRenderer {
           )
           vanish.onfinish = () => {
             sparkleTimers.forEach((timer) => window.clearTimeout(timer))
+            source.classList.remove('is-revive-locked')
             clone.remove()
             overlay.remove()
             // Let the board zoom animation naturally finish if it is still
@@ -2732,9 +2736,9 @@ export class GameBoardRenderer {
     const handStack = this.boardElement.querySelector<HTMLElement>('.hand-stack')
     if (handStack) {
       const rect = handStack.getBoundingClientRect()
-      // Hand rewards should aim just below the combo gauge / top of the hand
-      // column, matching the new top-down card acquisition motion.
-      return new DOMRect(rect.left + rect.width / 2 - 8, rect.top + 14, 16, 16)
+      // Hand rewards aim just below the combo gauge, nudged down a little so
+      // the first visible card starts at the top edge instead of popping in mid-stack.
+      return new DOMRect(rect.left + rect.width / 2 - 8, rect.top + 22, 16, 16)
     }
     return this.boardElement.querySelector<HTMLElement>('.hand-panel')
   }

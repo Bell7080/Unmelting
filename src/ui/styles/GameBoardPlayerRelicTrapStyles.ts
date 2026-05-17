@@ -120,9 +120,11 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
    the player. There is intentionally no empty-state plate or label: with zero
    relics the right utility layer is not rendered at all. */
 .relic-layer {
+  /* Owned relics now start larger and sit a touch lower, so reading is
+     possible before hover; hover is mostly for layer priority. */
   align-self: center;
-  height: clamp(130px, 18vh, 188px);
-  max-height: clamp(130px, 18vh, 188px);
+  height: clamp(148px, 19vh, 204px);
+  max-height: clamp(148px, 19vh, 204px);
   align-items: center;
   justify-content: center;
   padding: 0;
@@ -136,14 +138,14 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
   width: clamp(168px, 18vw, 236px);
   height: 100%;
   overflow: visible;
-  transform: translateY(10px);
+  transform: translateY(16px);
   isolation: isolate;
 }
 .relic-mini-card {
   position: absolute;
   left: 50%;
   bottom: 4px;
-  width: clamp(86px, 7.4vw, 116px);
+  width: clamp(96px, 8.1vw, 128px);
   aspect-ratio: 0.72;
   min-width: 0;
   overflow: visible;
@@ -151,13 +153,13 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
   border-radius: 14px;
   background: transparent;
   box-shadow: none;
-  cursor: zoom-in;
+  cursor: pointer;
   transform-origin: 50% 112%;
   transform:
     translateX(calc(-50% + var(--relic-x, 0px)))
     translateY(var(--relic-y, 0px))
     rotate(var(--relic-rot, 0deg))
-    scale(0.88);
+    scale(0.98);
   z-index: calc(10 + var(--relic-i, 0));
   transition:
     transform 0.2s cubic-bezier(0.18, 0.86, 0.22, 1),
@@ -197,39 +199,41 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
   font-size: 9px;
   line-height: 1.18;
 }
-.relic-mini-card:hover,
-.relic-mini-card:focus-visible,
-.relic-mini-card.is-pinned {
+/* Hover/focus only nudges the artifact forward instead of becoming the
+   primary reading state; the card is already legible at rest. */
+.relic-mini-card:not(.is-revive-locked):hover,
+.relic-mini-card:not(.is-revive-locked):focus-visible,
+.relic-mini-card.is-pinned:not(.is-revive-locked) {
   transform:
     translateX(calc(-50% + var(--relic-x, 0px) + var(--relic-hover-shift, 0px)))
-    translateY(calc(var(--relic-y, 0px) - 54px))
-    rotate(calc(var(--relic-rot, 0deg) * 0.16))
-    scale(2.16);
+    translateY(calc(var(--relic-y, 0px) - 18px))
+    rotate(calc(var(--relic-rot, 0deg) * 0.08))
+    scale(1.22);
   z-index: 160;
-  filter: drop-shadow(0 24px 34px rgba(0, 0, 0, 0.8));
+  filter: drop-shadow(0 16px 24px rgba(0, 0, 0, 0.72));
 }
-.relic-mini-card:hover .relic-preview-card,
-.relic-mini-card:focus-visible .relic-preview-card,
-.relic-mini-card.is-pinned .relic-preview-card {
+.relic-mini-card:not(.is-revive-locked):hover .relic-preview-card,
+.relic-mini-card:not(.is-revive-locked):focus-visible .relic-preview-card,
+.relic-mini-card.is-pinned:not(.is-revive-locked) .relic-preview-card {
   border-color: rgba(255, 232, 168, 0.7);
   box-shadow:
     0 20px 34px rgba(0, 0, 0, 0.72),
     0 0 26px rgba(244, 164, 96, 0.34),
     inset 0 1px 0 rgba(255, 232, 168, 0.3);
 }
-.relic-mini-card:hover .shop-relic-title,
-.relic-mini-card:focus-visible .shop-relic-title,
-.relic-mini-card.is-pinned .shop-relic-title {
+.relic-mini-card:not(.is-revive-locked):hover .shop-relic-title,
+.relic-mini-card:not(.is-revive-locked):focus-visible .shop-relic-title,
+.relic-mini-card.is-pinned:not(.is-revive-locked) .shop-relic-title {
   font-size: 13px;
 }
-.relic-mini-card:hover .shop-relic-effect,
-.relic-mini-card:focus-visible .shop-relic-effect,
-.relic-mini-card.is-pinned .shop-relic-effect {
+.relic-mini-card:not(.is-revive-locked):hover .shop-relic-effect,
+.relic-mini-card:not(.is-revive-locked):focus-visible .shop-relic-effect,
+.relic-mini-card.is-pinned:not(.is-revive-locked) .shop-relic-effect {
   font-size: 12px;
 }
-.relic-mini-card:hover .shop-relic-flavor,
-.relic-mini-card:focus-visible .shop-relic-flavor,
-.relic-mini-card.is-pinned .shop-relic-flavor {
+.relic-mini-card:not(.is-revive-locked):hover .shop-relic-flavor,
+.relic-mini-card:not(.is-revive-locked):focus-visible .shop-relic-flavor,
+.relic-mini-card.is-pinned:not(.is-revive-locked) .shop-relic-flavor {
   font-size: 10px;
 }
 .relic-mini-card.is-arriving {

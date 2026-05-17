@@ -116,7 +116,8 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   animation-delay: calc(var(--hand-enter-order, 0) * 135ms);
 }
 @keyframes hand-card-drop {
-  0%   { transform: translate3d(0, min(-72vh, -640px), 0) scale(0.95, 1.07); opacity: 0.01; filter: brightness(1.32); }
+  0%   { transform: translate3d(0, min(-72vh, -640px), 0) scale(0.95, 1.07); opacity: 1; filter: brightness(1.32); }
+  18%  { opacity: 1; filter: brightness(1.24); }
   52%  { transform: translate3d(0, 6px, 0) scale(1.018, 0.952); opacity: 1; filter: brightness(1.12); }
   69%  { transform: translate3d(0, -4px, 0) scale(0.99, 1.026); }
   84%  { transform: translate3d(0, 1.5px, 0) scale(1.004, 0.994); }
