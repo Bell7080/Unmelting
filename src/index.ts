@@ -647,12 +647,13 @@ function frontRowIsEmpty(): boolean {
   return gameState.lanes.every((lane) => !lane.getCardAtDistance(0))
 }
 
-function fillFrontRowWithSeparatedRefillRow(): void {
+function fillTopRowWithSeparatedRefillRow(): void {
   const cards = cardSpawner.spawnCardsForSeparatedRefillRow(gameState.lanes.length)
+  const topDistance = LANE_DISTANCE_COUNT - 1
   for (let laneIndex = 0; laneIndex < gameState.lanes.length; laneIndex++) {
-    // Hope rebuilds seed the front row before the upper rows fall, avoiding a
-    // late visual pop from replacing already-rendered front candidates.
-    gameState.lanes[laneIndex].setCardAtDistance(0, cards[laneIndex] ?? null)
+    // Keep the separated refill candidate, but place it on the top rail so the
+    // front row is still produced by visible gravity like regular turn refills.
+    gameState.lanes[laneIndex].setCardAtDistance(topDistance, cards[laneIndex] ?? null)
   }
 }
 
@@ -664,7 +665,9 @@ async function runPreparationRefreshAfterFieldEffects(
   let movedAny = false
   const shouldRegroupFront = !options.suppressFrontRegroupOnce
   if (options.avoidFrontMergeOnFullRefill && frontRowIsEmpty()) {
-    fillFrontRowWithSeparatedRefillRow()
+    // Hope/full-clear rebuilds still prefer non-merging candidates, but we now
+    // feed them through the normal top->front drop sequence for consistency.
+    fillTopRowWithSeparatedRefillRow()
     movedAny = true
     render()
     await wait(200)
