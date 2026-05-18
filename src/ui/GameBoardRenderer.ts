@@ -163,6 +163,19 @@ export interface ScorePanelState {
   pendingHandTarget?: HandTargetingMode | null
 }
 
+/** Tracks one in-flight number roll so a re-render can resume it on the new
+ *  span at the current animated value instead of letting innerHTML replace it
+ *  with the final target (which produced the visible "snaps to target"
+ *  symptom on large score gains). */
+interface CounterAnimationState {
+  startedAt: number
+  duration: number
+  startValue: number
+  endValue: number
+  suffix: string
+  popClass: boolean
+}
+
 export class GameBoardRenderer {
   private boardElement: HTMLElement
   private selected: { laneIndex: number; distance: number } | null = null
@@ -182,6 +195,13 @@ export class GameBoardRenderer {
    *  their own last rendered value so full re-renders can still count from
    *  the previous visible number instead of jumping straight to the model. */
   private displayedHudCounters = new Map<string, number>()
+  /** In-flight counter rolls keyed by stable element identity ('score',
+   *  'coin', `hud:<key>`). The roll lifetime can span re-renders: each
+   *  render's innerHTML wipe orphans the previous span, and this map is what
+   *  lets animateRenderedResourceCounters take over the freshly rendered
+   *  span at the current animated value instead of letting it snap to the
+   *  final target. */
+  private activeCounterAnimations = new Map<string, CounterAnimationState>()
   /** Immediate gain feedback can be followed by a full board re-render. Keep
    *  that pulse key alive for one CSS beat so the newly-rendered number still
    *  receives the ✦ sparkle class instead of only leaving the body SquareBurst. */
@@ -259,6 +279,7 @@ export class GameBoardRenderer {
     const isRunReset = this.hasRendered && turn === 0 && this.previousTurn > 0
     if (isRunReset) {
       this.displayedHudCounters.clear()
+      this.activeCounterAnimations.clear()
       this.displayedScoreValue = scorePanel.score
       this.displayedCoinValue = scorePanel.coins
     }
@@ -304,6 +325,7 @@ export class GameBoardRenderer {
     this.injectStyles()
     this.attachListeners()
     this.animateRenderedResourceCounters()
+    this.alignNewHandSlotsWithTrailSpawn()
     this.animateMovedCards(previousRects)
     this.animateMovedHandSlots(previousHandRects)
     this.playNewHandMergeEffects(previousHandRects)
@@ -317,13 +339,42 @@ export class GameBoardRenderer {
   }
 
   /** Build a numeric HUD span that starts from the previous visible value.
-   *  The actual text animation runs after render() in animateRenderedResourceCounters(). */
+   *  The actual text animation runs after render() in animateRenderedResourceCounters().
+   *  When a roll is already in flight for this key (because render fired
+   *  mid-animation), start from the current animated value so the new span
+   *  does not briefly show the final target before the transfer kicks in. */
   private renderHudCounter(key: string, targetValue: number, suffix = '', extraAttrs = ''): string {
     const safeTarget = Math.round(Number.isFinite(targetValue) ? targetValue : 0)
     const previous = this.displayedHudCounters.get(key)
-    const startValue = this.hasRendered && previous !== undefined ? previous : safeTarget
+    const active = this.activeCounterAnimations.get(`hud:${key}`)
+    let startValue: number
+    if (active) {
+      startValue = this.computeActiveCounterValue(active)
+    } else if (this.hasRendered && previous !== undefined) {
+      startValue = previous
+    } else {
+      startValue = safeTarget
+    }
     this.displayedHudCounters.set(key, safeTarget)
     return `<span ${extraAttrs} data-count-key="${key}" data-count-start="${startValue}" data-count-end="${safeTarget}" data-count-suffix="${suffix}">${startValue.toLocaleString()}${suffix}</span>`
+  }
+
+  /** Identify which active-animation slot owns a given counter element. */
+  private counterKeyFor(el: HTMLElement): string | null {
+    if (el.dataset.countKey) return `hud:${el.dataset.countKey}`
+    if (el.classList.contains('score-number')) return 'score'
+    if (el.classList.contains('coin-number')) return 'coin'
+    return null
+  }
+
+  /** Sample the current animated integer for an in-flight counter roll. */
+  private computeActiveCounterValue(
+    anim: CounterAnimationState,
+    now: number = performance.now()
+  ): number {
+    const t = Math.min(1, Math.max(0, (now - anim.startedAt) / anim.duration))
+    const eased = 1 - Math.pow(1 - t, 3)
+    return Math.round(anim.startValue + (anim.endValue - anim.startValue) * eased)
   }
 
   private renderScorePanel(scorePanel: ScorePanelState): string {
@@ -379,8 +430,21 @@ export class GameBoardRenderer {
       scorePanel.coinPulseKey === this.activeCoinPulseKey && now < this.activeCoinPulseUntil
     const scorePulseClass = scoreIncreasing || scorePulseStillActive ? 'is-score-popping' : ''
     const coinPulseClass = coinIncreasing || coinPulseStillActive ? 'is-score-popping' : ''
-    const renderedScore = scoreCounting ? this.displayedScoreValue : scorePanel.score
-    const renderedCoins = coinCounting ? this.displayedCoinValue : scorePanel.coins
+    // Mid-roll renders: if a live counter animation is in flight, render the
+    // current animated value so the freshly-mounted number does not flash the
+    // final target before animateRenderedResourceCounters resumes the roll.
+    const activeScoreAnim = this.activeCounterAnimations.get('score')
+    const activeCoinAnim = this.activeCounterAnimations.get('coin')
+    const renderedScore = activeScoreAnim
+      ? this.computeActiveCounterValue(activeScoreAnim)
+      : scoreCounting
+        ? this.displayedScoreValue
+        : scorePanel.score
+    const renderedCoins = activeCoinAnim
+      ? this.computeActiveCounterValue(activeCoinAnim)
+      : coinCounting
+        ? this.displayedCoinValue
+        : scorePanel.coins
     this.previousScorePulseKey = scorePanel.scorePulseKey
     this.previousCoinPulseKey = scorePanel.coinPulseKey
     this.displayedScoreValue = scorePanel.score
@@ -2993,17 +3057,51 @@ export class GameBoardRenderer {
   /** Start count-up animations that were requested by renderScorePanel().
    *  This covers resource changes that happen immediately before a render,
    *  while playScoreGainFeedback/playCoinGainFeedback covers changes that can
-   *  safely animate on the already-mounted DOM. */
+   *  safely animate on the already-mounted DOM. Crucially, if a counter was
+   *  already mid-roll on the OLD DOM (because burstScoreGain/playHudCounter
+   *  Feedback fired right before this render), the active map lets us seam
+   *  lessly transfer that roll to the new span instead of letting it snap. */
   private animateRenderedResourceCounters(): void {
     this.boardElement
       .querySelectorAll<HTMLElement>('[data-count-start][data-count-end]')
       .forEach((el) => {
-        const start = Number.parseInt(el.dataset.countStart ?? '', 10)
+        const suffix = el.dataset.countSuffix ?? ''
+        const key = this.counterKeyFor(el)
+        const active = key ? this.activeCounterAnimations.get(key) : null
         const end = Number.parseInt(el.dataset.countEnd ?? '', 10)
-        if (!Number.isFinite(start) || !Number.isFinite(end) || end === start) return
-        // Each counter carries its own suffix so composite labels like 10/20,
-        // score, and wallet values can share the exact same ticking routine.
-        this.animateResourceCounterElement(el, start, end, el.dataset.countSuffix ?? '')
+        if (!Number.isFinite(end)) return
+        if (active) {
+          // Pick up the in-flight roll on the new span. Use the current
+          // animated value as the visible/start point so the slot-machine
+          // never visually jumps backward; target the latest data-count-end
+          // so cumulative gains during the roll still resolve to the right
+          // number.
+          const now = performance.now()
+          const currentValue = this.computeActiveCounterValue(active, now)
+          if (currentValue === end) {
+            el.textContent = `${end.toLocaleString()}${suffix}`
+            this.activeCounterAnimations.delete(key!)
+            return
+          }
+          // If the target hasn't moved, finish the remaining time the
+          // original animation budgeted. Otherwise extend the duration
+          // proportionally to the new delta so an enlarged target still
+          // reads as a slot-machine instead of a faster jump.
+          const elapsed = now - active.startedAt
+          const remaining = Math.max(40, active.duration - elapsed)
+          const freshDuration = this.counterDurationForDelta(Math.abs(end - currentValue))
+          const duration =
+            end === active.endValue ? remaining : Math.max(remaining, freshDuration)
+          el.textContent = `${currentValue.toLocaleString()}${suffix}`
+          if (active.popClass) el.classList.add('is-score-popping')
+          // animateResourceCounterElement re-registers a fresh active state
+          // keyed under the same counter, replacing the orphaned entry.
+          this.animateResourceCounterElement(el, currentValue, end, suffix, duration)
+          return
+        }
+        const start = Number.parseInt(el.dataset.countStart ?? '', 10)
+        if (!Number.isFinite(start) || end === start) return
+        this.animateResourceCounterElement(el, start, end, suffix)
       })
   }
 
@@ -3038,14 +3136,37 @@ export class GameBoardRenderer {
     el.classList.remove('is-score-popping', 'is-counter-ticking')
     void el.offsetWidth
     el.classList.add('is-counter-ticking')
-    if (
-      delta > 0 &&
-      (el.classList.contains('score-number') || el.classList.contains('coin-number'))
-    ) {
-      el.classList.add('is-score-popping')
+    const isScoreCoin =
+      el.classList.contains('score-number') || el.classList.contains('coin-number')
+    const popClass = delta > 0 && isScoreCoin
+    if (popClass) el.classList.add('is-score-popping')
+
+    // Register this roll so a re-render that orphans `el` can resume the
+    // count on the freshly-mounted span via animateRenderedResourceCounters.
+    const key = this.counterKeyFor(el)
+    if (key) {
+      this.activeCounterAnimations.set(key, {
+        startedAt,
+        duration: runDuration,
+        startValue,
+        endValue: targetValue,
+        suffix,
+        popClass,
+      })
     }
 
     const tick = (now: number) => {
+      // The OLD span gets detached the moment innerHTML is replaced. Stop
+      // ticking that orphan; the transfer path in animateRenderedResource
+      // Counters has already mounted a fresh tick on the new span.
+      if (!document.contains(el)) return
+      // Stale-animation guard: when a newer roll has claimed the same slot
+      // (e.g. two score gains in quick succession), abandon this tick so
+      // two rAF chains don't both write to el.textContent each frame.
+      if (key) {
+        const current = this.activeCounterAnimations.get(key)
+        if (current && current.startedAt !== startedAt) return
+      }
       const t = Math.min(1, (now - startedAt) / runDuration)
       // Ease out quickly at the end so small deltas read as +1/-1 ticks, while
       // huge light purchases/rewards still finish in a compact accelerated roll.
@@ -3060,6 +3181,11 @@ export class GameBoardRenderer {
           el.closest<HTMLElement>('.player-shield-chip')?.classList.add('is-gone')
         }
         window.setTimeout(() => el.classList.remove('is-score-popping', 'is-counter-ticking'), 120)
+        if (key) {
+          // Only clear if no fresher roll has replaced this one in the slot.
+          const current = this.activeCounterAnimations.get(key)
+          if (current?.startedAt === startedAt) this.activeCounterAnimations.delete(key)
+        }
       }
     }
     requestAnimationFrame(tick)
@@ -3104,17 +3230,15 @@ export class GameBoardRenderer {
    */
   playHudCounterFeedback(key: string, targetValue: number, duration?: number): void {
     const safeTarget = Math.round(Number.isFinite(targetValue) ? targetValue : 0)
-    const previous = this.displayedHudCounters.get(key)
+    const active = this.activeCounterAnimations.get(`hud:${key}`)
+    const previous = active
+      ? this.computeActiveCounterValue(active)
+      : this.displayedHudCounters.get(key)
     if (previous === undefined || previous === safeTarget) {
-      // Either we have no displayed snapshot yet (first frame) or the number
-      // already matches. Sync state without animating so a later render does
-      // not mistake the current value for an outstanding roll.
       this.displayedHudCounters.set(key, safeTarget)
       return
     }
     const els = this.boardElement.querySelectorAll<HTMLElement>(`[data-count-key="${key}"]`)
-    // Sync state up front so a re-render between the tick start and the next
-    // animation frame does not re-trigger the same roll on a fresh DOM.
     this.displayedHudCounters.set(key, safeTarget)
     els.forEach((el) => {
       const suffix = el.dataset.countSuffix ?? ''
@@ -3555,6 +3679,35 @@ export class GameBoardRenderer {
       if (uid) rects.set(uid, el.getBoundingClientRect())
     })
     return rects
+  }
+
+  /** Per-render pass that aligns every freshly-entering hand slot with the
+   *  resource-trail spawn point. The trail target (findResourceTrailTarget
+   *  for 'hand') is `stackTop + 22`, so each new slot starts at exactly that
+   *  screen Y and falls down to its real slot position. Without this, the
+   *  CSS keyframe used a generic -640px fallback so cards visibly slid in
+   *  from off-screen, disconnected from the burst that landed under the
+   *  combo gauge. The trail flight time is also folded into the animation
+   *  delay so each card materializes the instant its trail lands. */
+  private alignNewHandSlotsWithTrailSpawn(): void {
+    const handStack = this.boardElement.querySelector<HTMLElement>('.hand-stack')
+    const enteringSlots = this.boardElement.querySelectorAll<HTMLElement>(
+      '.hand-slot.hand-card.is-entering'
+    )
+    if (!handStack || enteringSlots.length === 0) return
+    const stackRect = handStack.getBoundingClientRect()
+    // Match the spawn Y used by findResourceTrailTarget('hand'): a tiny nudge
+    // below the combo gauge so the first visible card peeks out at the top.
+    const spawnY = stackRect.top + 22
+    // Matches the impact beat of one resource-trail piece in
+    // animateResourceTrail (window.setTimeout at 330ms).
+    const trailLandMs = 330
+    enteringSlots.forEach((el) => {
+      const slotRect = el.getBoundingClientRect()
+      const offsetY = spawnY - slotRect.top
+      el.style.setProperty('--hand-drop-start-y', `${offsetY}px`)
+      el.style.setProperty('--hand-drop-delay-ms', String(trailLandMs))
+    })
   }
 
   /** Smooth hand-card slots from their previous position when the hand is

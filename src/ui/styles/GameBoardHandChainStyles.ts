@@ -111,13 +111,22 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
    the drop on every card, which made the whole stack twitch. */
 .hand-slot.hand-card.is-entering {
   /* New cards now enter from the top edge directly under the combo gauge,
-     then fall into their bottom-up slot so rewards do not appear mid-column. */
-  animation: hand-card-drop 0.74s cubic-bezier(0.16, 0.92, 0.14, 1.04) both;
-  animation-delay: calc(var(--hand-enter-order, 0) * 135ms);
+     then fall into their bottom-up slot so rewards do not appear mid-column.
+     --hand-drop-start-y is set per-slot in JS to (spawnY - slotFinalY) so
+     every entering slot starts at the same screen point (matching the
+     resource-trail target) regardless of which slot it ends up in.
+     --hand-drop-delay-ms is the trail flight time before the slot becomes
+     visible, so the slot materializes exactly when the trail lands. */
+  animation: hand-card-drop 0.62s cubic-bezier(0.16, 0.92, 0.14, 1.04) both;
+  animation-delay: calc(
+    var(--hand-enter-order, 0) * 135ms + var(--hand-drop-delay-ms, 0) * 1ms
+  );
 }
 @keyframes hand-card-drop {
-  0%   { transform: translate3d(0, min(-72vh, -640px), 0) scale(0.95, 1.07); opacity: 1; filter: brightness(1.32); }
-  18%  { opacity: 1; filter: brightness(1.24); }
+  /* Held invisible while the resource trail is in flight, then materialize
+     at the spawn point right under the combo gauge and fall to the slot. */
+  0%   { transform: translate3d(0, var(--hand-drop-start-y, -160px), 0) scale(0.96, 1.06); opacity: 0; filter: brightness(1.32); }
+  1%   { opacity: 1; }
   52%  { transform: translate3d(0, 6px, 0) scale(1.018, 0.952); opacity: 1; filter: brightness(1.12); }
   69%  { transform: translate3d(0, -4px, 0) scale(0.99, 1.026); }
   84%  { transform: translate3d(0, 1.5px, 0) scale(1.004, 0.994); }

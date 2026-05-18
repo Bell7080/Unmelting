@@ -1275,10 +1275,14 @@ async function applyHandSingle(
     // Recipe-drawn hand cards (셔플 / 따뜻함 등) log one acquisition row each
     // so "손패를 뽑는 행위" 가 어디서 발생했든 일관되게 활동 로그에 표기된다.
     if (recipeResult.drawnHandCardDefIds && recipeResult.drawnHandCardDefIds.length > 0) {
-      await playResourceTrail({ kind: 'chain' }, 'hand', recipeResult.drawnHandCardDefIds.length)
       pushActivityLogsInDisplayOrder(
         createItemGainLogs(recipeResult.drawnHandCardDefIds.map((id) => getHandCardDef(id).name))
       )
+      // Same pattern as the single-card path: mount the new slots first so
+      // they hold invisibly at the spawn point during the trail flight and
+      // pop in exactly when each burst lands.
+      render()
+      await playResourceTrail({ kind: 'chain' }, 'hand', recipeResult.drawnHandCardDefIds.length)
     }
 
     // Recipe effects get their own damage diff after the combo delay. As above,
@@ -1336,6 +1340,11 @@ async function applyHandSingle(
     boardRenderer.refreshChainBanner(buildChainHints())
     await playPlayerGainTrails({ kind: 'chain' }, beforeGaugeResources)
     if (gauge.drawnHandCount && gauge.drawnHandCount > 0) {
+      // Render now so the new gauge-drawn hand slots wait through the trail
+      // flight and materialize at each burst impact (same idea as the single
+      // card path; without this the slots only appear after every trail has
+      // already landed, breaking the burst → drop continuity).
+      render()
       await playResourceTrail({ kind: 'chain' }, 'hand', gauge.drawnHandCount)
     }
     await applyBloodPackRecoveryTrigger(beforeGaugeRecovery)
@@ -1546,10 +1555,18 @@ async function handleCardAction(e: Event): Promise<void> {
     // Damage / overflow / textual results live on damage-floats, the light
     // pulse, and the chain banner.
     if (gainedItems.length > 0) {
+      pushActivityLogsInDisplayOrder(createItemGainLogs(gainedItems))
+      // Mount the freshly-gained hand slots BEFORE the trail launches so each
+      // slot can wait through the trail flight and materialize at the exact
+      // moment its burst lands at the combo-gauge spawn point. The slots' CSS
+      // delay (hand-card-drop) folds in the 330ms trail flight time, and
+      // alignNewHandSlotsWithTrailSpawn pins their start offset to that same
+      // spawn Y. The field card cell stays in DOM because gameState still
+      // owns it until removeCardFromRow runs after sameBeatAnimations.
+      render()
       rewardFeedbacks.push(
         playResourceTrail({ kind: 'card', cardId: card.id }, 'hand', gainedItems.length)
       )
-      pushActivityLogsInDisplayOrder(createItemGainLogs(gainedItems))
     }
     if (result.cardRemoved && card.type !== CardType.FLOWER) {
       const base = scoreForCardRemoval(card)
