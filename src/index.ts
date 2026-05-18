@@ -313,8 +313,9 @@ async function playResourceTrail(
     await boardRenderer.animateResourceTrailFromChain(rule.target, count, theme)
   }
   // Tick the destination HUD counter exactly when the trail lands so the
-  // number visibly rolls during the impact beat. score/coin own their own
-  // burst feedback (burstScoreGain/burstCoinGain); hand has no numeric HUD.
+  // number visibly rolls during the impact beat. Light and wallet now use this
+  // same landing hook instead of waiting for slower consume/cleanup animations,
+  // while hand-card drops intentionally keep their non-numeric card materialize beat.
   tickHudCounterAfterTrail(resource)
 }
 
@@ -344,9 +345,13 @@ function tickHudCounterAfterTrail(resource: keyof typeof NUMERIC_RESOURCE_TRAILS
       boardRenderer.playHudCounterFeedback('attack', c.damage)
       return
     case 'score':
+      burstScoreGain()
+      return
     case 'coin':
+      burstCoinGain()
+      return
     case 'hand':
-      // Already handled by burstScoreGain/burstCoinGain or carries no counter.
+      // Hand trails materialize cards rather than ticking a numeric HUD counter.
       return
   }
 }
@@ -638,7 +643,7 @@ async function runPreparationRefreshAfterFieldEffects(
   // Mirror compactAndRefillRails() as visible beats: cards fall first, then new
   // top cards appear, and the loop repeats until every rail is continuous/full.
   let movedAny = false
-  let shouldRegroupFront = !options.suppressFrontRegroupOnce
+  const shouldRegroupFront = !options.suppressFrontRegroupOnce
   let safety = LANE_DISTANCE_COUNT * 3 + 3
   while (safety-- > 0) {
     const moved = gameState.compactLanes()
@@ -827,7 +832,6 @@ async function awardScoreForRemovedCards(
       .filter((r) => snapshot.has(r.cardId))
       .map((r) => playResourceTrail({ kind: 'card', cardId: r.cardId }, 'score', 1))
   )
-  burstScoreGain()
 }
 
 /** Coin gain log row — kind: 'score' for consistent warm color, but the
@@ -1058,6 +1062,37 @@ function fireCandleGaugeEffect(): {
   return { name: `게이지: ${candleModeLabel(mode)}`, message, mode, drawnHandCount }
 }
 
+/** Resolve every full hand-combo gauge from any source that can add candle
+ *  progress. Hand-card plays, lavender flowers, and future relics all share
+ *  this payoff loop so a gauge reaching 10 never depends on which system
+ *  supplied the final point. */
+async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promise<void> {
+  while (gameState.character.isCandleFull()) {
+    await wait(GAUGE_TRIGGER_DELAY_MS)
+    const beforeGaugeRecovery = snapshotPlayerRecovery()
+    const beforeGaugeResources = snapshotPlayerResources()
+    const gauge = fireCandleGaugeEffect()
+    if (!gauge) break
+    recordNotice(`${gauge.name}: ${gauge.message}`, 'gauge')
+    chainTimeline.push({
+      kind: 'gauge',
+      mode: gauge.mode,
+      name: gauge.name,
+      flavor: gauge.message,
+      uid: nextChainUid(),
+    })
+    boardRenderer.refreshChainBanner(buildChainHints())
+    await playPlayerGainTrails(source, beforeGaugeResources)
+    if (gauge.drawnHandCount && gauge.drawnHandCount > 0) {
+      // Mount drawn hand slots before the trail lands so they appear from the
+      // same top-of-hand spawn point used by ordinary hand-card rewards.
+      render()
+      await playResourceTrail(source, 'hand', gauge.drawnHandCount)
+    }
+    await applyBloodPackRecoveryTrigger(beforeGaugeRecovery)
+  }
+}
+
 document.addEventListener('cardAction', (e: Event) => {
   void handleCardAction(e)
 })
@@ -1206,7 +1241,6 @@ async function applyHandSingle(
     coins += result.coinsGained
     coinPulseKey++
     await playResourceTrail({ kind: 'center' }, 'coin', result.coinsGained)
-    burstCoinGain()
     if (usedDef) recordCoinGain(usedDef.name, result.coinsGained)
   }
   pendingHandTarget = null
@@ -1257,7 +1291,6 @@ async function applyHandSingle(
       coins += gainedCoins
       coinPulseKey++
       await playResourceTrail({ kind: 'chain' }, 'coin', gainedCoins)
-      burstCoinGain()
       // Attribute the coin log row to the first fired recipe that produced it.
       const coinRecipe = recipeResult.firedRecipes[0]?.recipe
       if (coinRecipe) recordCoinGain(coinRecipe.name, gainedCoins)
@@ -1323,32 +1356,7 @@ async function applyHandSingle(
   // Overflow is consumed one 10-slot gauge at a time so a large `카드` bonus can
   // roll remaining progress into the next gauge, and future larger bonuses can
   // safely trigger multiple payoffs in sequence.
-  while (gameState.character.isCandleFull()) {
-    await wait(GAUGE_TRIGGER_DELAY_MS)
-    const beforeGaugeRecovery = snapshotPlayerRecovery()
-    const beforeGaugeResources = snapshotPlayerResources()
-    const gauge = fireCandleGaugeEffect()
-    if (!gauge) break
-    recordNotice(`${gauge.name}: ${gauge.message}`, 'gauge')
-    chainTimeline.push({
-      kind: 'gauge',
-      mode: gauge.mode,
-      name: gauge.name,
-      flavor: gauge.message,
-      uid: nextChainUid(),
-    })
-    boardRenderer.refreshChainBanner(buildChainHints())
-    await playPlayerGainTrails({ kind: 'chain' }, beforeGaugeResources)
-    if (gauge.drawnHandCount && gauge.drawnHandCount > 0) {
-      // Render now so the new gauge-drawn hand slots wait through the trail
-      // flight and materialize at each burst impact (same idea as the single
-      // card path; without this the slots only appear after every trail has
-      // already landed, breaking the burst → drop continuity).
-      render()
-      await playResourceTrail({ kind: 'chain' }, 'hand', gauge.drawnHandCount)
-    }
-    await applyBloodPackRecoveryTrigger(beforeGaugeRecovery)
-  }
+  await resolveFullCandleGaugeEffects({ kind: 'chain' })
 
   // Refill after all delayed recipe/gauge effects have resolved. This is the
   // UI-facing preparation refresh: removed cards are compacted and replaced in
@@ -1546,8 +1554,6 @@ async function handleCardAction(e: Event): Promise<void> {
   // that landing beat instead of appearing as an already-merged card.
   let gainedHandCardCount = 0
   const rewardFeedbacks: Promise<void>[] = []
-  let shouldBurstScore = false
-  let shouldBurstCoin = false
   if (result.success) {
     const gainedItems = result.itemGainedNames ?? []
     gainedHandCardCount = gainedItems.length
@@ -1575,7 +1581,6 @@ async function handleCardAction(e: Event): Promise<void> {
           createScoreLog(scoreLabelForCard(card), base, activityKindForCard(card)),
         ])
         rewardFeedbacks.push(playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1))
-        shouldBurstScore = true
       }
     }
     if (result.cardRemoved && card.type === CardType.TREASURE) {
@@ -1594,7 +1599,6 @@ async function handleCardAction(e: Event): Promise<void> {
         rewardFeedbacks.push(
           playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1, theme)
         )
-        shouldBurstScore = true
       } else if (result.flowerReward?.kind === 'coin') {
         coins += result.flowerReward.amount
         coinPulseKey++
@@ -1607,7 +1611,6 @@ async function handleCardAction(e: Event): Promise<void> {
             theme
           )
         )
-        shouldBurstCoin = true
       }
       rewardFeedbacks.push(
         playPlayerGainTrails({ kind: 'card', cardId: card.id }, beforeActionResources, {
@@ -1642,9 +1645,6 @@ async function handleCardAction(e: Event): Promise<void> {
   if (rewardFeedbacks.length > 0)
     sameBeatAnimations.push(Promise.all(rewardFeedbacks).then(() => undefined))
   if (sameBeatAnimations.length > 0) await Promise.all(sameBeatAnimations)
-  if (shouldBurstScore) burstScoreGain()
-  if (shouldBurstCoin) burstCoinGain()
-
   if (result.cardRemoved) {
     gameState.removeCardFromRow(card, distance)
     boardRenderer.clearSelection()
@@ -1681,6 +1681,11 @@ async function handleCardAction(e: Event): Promise<void> {
       await wait(980)
     }
   }
+
+  // Board rewards can also fill the combo gauge (notably lavender flowers).
+  // Resolve that payoff before the enemy/event phase so reaching 10 always
+  // behaves like hand-card combo progress without changing turn structure.
+  await resolveFullCandleGaugeEffects({ kind: 'chain' })
 
   if (!gameState.character.isAlive()) {
     gameState.endGame('character_defeated')

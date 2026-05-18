@@ -2975,8 +2975,10 @@ export class GameBoardRenderer {
             const finished: Promise<void>[] = []
             const specs = [
               { size: 24, lag: 0, alpha: 0.72 },
-              { size: 17, lag: 42, alpha: 0.52 },
-              { size: 11, lag: 82, alpha: 0.36 },
+              // Tighter lags keep the familiar triple-tail silhouette while
+              // reducing the small pause before the HUD number starts ticking.
+              { size: 17, lag: 30, alpha: 0.52 },
+              { size: 11, lag: 58, alpha: 0.36 },
             ]
             for (const spec of specs) {
               finished.push(this.spawnResourceTrailPiece(from, to, colors, spec))
@@ -2991,11 +2993,11 @@ export class GameBoardRenderer {
               // Resolve on impact, not after every tail particle fades. Callers
               // can update counters/hand cards during this burst beat.
               resolve()
-            }, 330)
+            }, 280)
             // Trail pieces remove themselves asynchronously after the impact;
             // keeping that cleanup separate prevents old sequential calculations.
             void Promise.all(finished)
-          }, i * 135)
+          }, i * 95)
         })
       )
     }
@@ -3040,7 +3042,7 @@ export class GameBoardRenderer {
               filter: 'blur(0.8px)',
             },
           ],
-          { duration: 390, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)', fill: 'forwards' }
+          { duration: 330, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)', fill: 'forwards' }
         )
         anim.onfinish = () => {
           piece.remove()
@@ -3049,7 +3051,7 @@ export class GameBoardRenderer {
         window.setTimeout(() => {
           piece.remove()
           resolve()
-        }, 560)
+        }, 500)
       }, spec.lag)
     })
   }
@@ -3195,7 +3197,7 @@ export class GameBoardRenderer {
    *  readable and 500 light still resolves as a fast slot-machine roll. */
   private counterDurationForDelta(absDelta: number): number {
     if (absDelta <= 0) return 0
-    return Math.min(1320, Math.max(280, 260 + Math.sqrt(absDelta) * 105))
+    return Math.min(1080, Math.max(220, 220 + Math.sqrt(absDelta) * 82))
   }
 
   /** Play score gain feedback immediately on the existing panel so the number
