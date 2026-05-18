@@ -505,6 +505,9 @@ export const GAME_BOARD_RAIL_STYLES = `
 .cell.card.is-flower-growing {
   animation: flower-growth-shimmer 0.52s ease-out both;
 }
+.cell.card.is-flower-progressing {
+  animation: flower-progress-glint 0.42s ease-out both;
+}
 .cell.card.is-flower-wilting .card-art {
   animation: flower-wilt-crumble 0.62s ease-in both;
   filter: grayscale(0.82) brightness(0.7) saturate(0.55);
@@ -517,6 +520,11 @@ export const GAME_BOARD_RAIL_STYLES = `
 @keyframes flower-growth-shimmer {
   0% { filter: brightness(1) saturate(1); box-shadow: var(--card-depth-shadow); }
   45% { filter: brightness(1.24) saturate(1.28); box-shadow: var(--card-depth-shadow), 0 0 calc(16px * var(--flower-growth-scale, 1)) rgba(164, 220, 104, 0.52); }
+  100% { filter: brightness(1) saturate(1); box-shadow: var(--card-depth-shadow); }
+}
+@keyframes flower-progress-glint {
+  0% { filter: brightness(1) saturate(1); box-shadow: var(--card-depth-shadow); }
+  48% { filter: brightness(1.12) saturate(1.14); box-shadow: var(--card-depth-shadow), 0 0 12px rgba(243, 167, 43, 0.42); }
   100% { filter: brightness(1) saturate(1); box-shadow: var(--card-depth-shadow); }
 }
 @keyframes flower-wilt-crumble {

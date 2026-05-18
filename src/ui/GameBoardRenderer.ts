@@ -681,7 +681,12 @@ export class GameBoardRenderer {
     } else if (card.type === CardType.FLOWER) {
       // Flower cells expose their current harvest value. Seeds show a waiting
       // label because they cannot be picked until the front-row bloom beat.
-      const label = card.flowerKind === 'seed' ? '대기' : `+${card.flowerValue}`
+      const label =
+        card.flowerKind === 'seed'
+          ? '대기'
+          : card.flowerKind === 'marigold' && card.flowerTurnsAlive % 2 === 1
+            ? `다음 +${card.flowerValue + 1}`
+            : `+${card.flowerValue}`
       stats = `<div class="card-stats group-note flower-note">${sparkleIcon()}<span>${label}</span></div>`
     } else if (card.type === CardType.TREASURE && card.groupCount > 1) {
       // Treasure groups describe their extra pickup as text-only metadata under
@@ -3677,7 +3682,8 @@ export class GameBoardRenderer {
 
   /** Flower growth feedback scales via CSS using the current harvest value. */
   async animateFlowerGrowth(growths: FlowerGrowth[]): Promise<void> {
-    const elements: HTMLElement[] = []
+    const grownElements: HTMLElement[] = []
+    const progressElements: HTMLElement[] = []
     for (const growth of growths) {
       const element = this.findCardElement(growth.cardId)
       if (!element) continue
@@ -3685,13 +3691,27 @@ export class GameBoardRenderer {
         '--flower-growth-scale',
         String(Math.min(1.8, 1 + growth.value * 0.08))
       )
-      elements.push(element)
-      SquareBurst.playOn(element, this.flowerBurstTheme(growth.flowerKind), {
-        count: Math.min(30, 10 + growth.value * 3),
-        spread: Math.min(170, 78 + growth.value * 12),
-      })
+      if (growth.phase === 'progress') {
+        // Marigold's odd turn gets a small anticipatory glint, not the full
+        // reward-increase burst used when the value actually rises.
+        progressElements.push(element)
+        SquareBurst.playOn(element, this.flowerBurstTheme(growth.flowerKind), {
+          count: 8,
+          spread: 62,
+          duration: 420,
+        })
+      } else {
+        grownElements.push(element)
+        SquareBurst.playOn(element, this.flowerBurstTheme(growth.flowerKind), {
+          count: Math.min(30, 10 + growth.value * 3),
+          spread: Math.min(170, 78 + growth.value * 12),
+        })
+      }
     }
-    return this.animateElements(elements, 'is-flower-growing', 520)
+    await Promise.all([
+      this.animateElements(grownElements, 'is-flower-growing', 520),
+      this.animateElements(progressElements, 'is-flower-progressing', 420),
+    ])
   }
 
   /** Wilting uses a grey-green burst on the flower cell before the monster art appears. */

@@ -181,6 +181,35 @@ export class CardSpawner {
     return this.generateRandomCard()
   }
 
+  /**
+   * Build a normal refill row while avoiding adjacent merge families when
+   * possible. Full-field rebuilds use this for the front row so a revived
+   * player is not handed an immediate 2/3-lane wall unless RNG cannot find a
+   * separator after several fair rerolls.
+   */
+  spawnCardsForSeparatedRefillRow(laneCount: number = 3): Card[] {
+    const cards: Card[] = []
+
+    for (let laneIndex = 0; laneIndex < laneCount; laneIndex++) {
+      const previous = cards[laneIndex - 1] ?? null
+      let chosen: Card | null = null
+
+      // Keep normal refill odds as the first choice, but reroll short streaks
+      // that would instantly merge across the freshly rebuilt front row.
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const candidate = this.spawnCardForRefill()
+        if (!previous || !previous.canMergeWith(candidate)) {
+          chosen = candidate
+          break
+        }
+      }
+
+      cards.push(chosen ?? this.generateRefillSeparator(previous))
+    }
+
+    return cards
+  }
+
   /** Pick a card type using per-kind buckets, then build the card. */
   private generateRandomCard(options: { openingBoard?: boolean } = {}): Card {
     const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
@@ -260,6 +289,18 @@ export class CardSpawner {
     // between enemy/web trap after a chest so the row does not become uniform.
     if (previous.type === CardType.ENEMY || previous.type === CardType.TRAP)
       return this.generateTreasure()
+    return Math.random() < 0.5 ? this.generateEnemy() : this.generateTrap({ trapKind: 'web' })
+  }
+
+  /** Pick a non-merging normal-refill fallback when rerolls keep matching neighbors. */
+  private generateRefillSeparator(previous: Card | null): Card {
+    if (!previous) return this.spawnCardForRefill()
+
+    // A chest is the safest visual divider after enemies/traps; after a chest,
+    // choose an enemy or web so the row does not become a treasure streak.
+    if (previous.type === CardType.ENEMY || previous.type === CardType.TRAP) {
+      return this.generateTreasure()
+    }
     return Math.random() < 0.5 ? this.generateEnemy() : this.generateTrap({ trapKind: 'web' })
   }
 

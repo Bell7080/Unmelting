@@ -288,6 +288,23 @@ describe('TurnManager treasure volatility', () => {
     expect(hits[0]?.damage).toBe(groupedEnemy?.getDamage())
   })
 
+  it('reports a quiet marigold progress beat on the non-growth turn', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const marigold = new Card('marigold', CardType.FLOWER, '메리골드', 'test', 0, 0, {
+      flowerKind: 'marigold',
+    })
+    marigold.bloom('marigold')
+    gameState.lanes[0].setCardAtDistance(0, marigold)
+    vi.spyOn(Math, 'random').mockReturnValue(0.99)
+
+    const first = turnManager.applyFlowerGrowthAndWilt(new CardSpawner())
+    const second = turnManager.applyFlowerGrowthAndWilt(new CardSpawner())
+
+    expect(first.growths[0]).toMatchObject({ phase: 'progress', value: 1 })
+    expect(second.growths[0]).toMatchObject({ phase: 'growth', value: 2 })
+  })
+
   it('does not end the game just because three traps occupy the active row', () => {
     const gameState = new GameState()
     const turnManager = new TurnManager(gameState)
