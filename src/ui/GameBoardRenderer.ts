@@ -3090,6 +3090,40 @@ export class GameBoardRenderer {
     if (anchor) this.burstAtElement(anchor, 'score', { count: 22, spread: 170, duration: 640 })
   }
 
+  /**
+   * Tick a generic HUD counter (HP/maxHP/shield/ember/emberMax/candle/
+   * candleMax/attack) on the LIVE DOM so the number visibly rolls during the
+   * same beat the resource trail lands, instead of waiting for the next full
+   * board re-render. Mirrors the existing playScoreGainFeedback /
+   * playCoinGainFeedback path so every resource shares one ticking grammar.
+   *
+   * Without this hook, an enemy defeat → heal/shield/ember trail would fly,
+   * burst at the HUD, and the number would only update much later when an
+   * unrelated render() ran. The counter still rolls correctly on the next
+   * render because displayedHudCounters is synced here.
+   */
+  playHudCounterFeedback(key: string, targetValue: number, duration?: number): void {
+    const safeTarget = Math.round(Number.isFinite(targetValue) ? targetValue : 0)
+    const previous = this.displayedHudCounters.get(key)
+    if (previous === undefined || previous === safeTarget) {
+      // Either we have no displayed snapshot yet (first frame) or the number
+      // already matches. Sync state without animating so a later render does
+      // not mistake the current value for an outstanding roll.
+      this.displayedHudCounters.set(key, safeTarget)
+      return
+    }
+    const els = this.boardElement.querySelectorAll<HTMLElement>(`[data-count-key="${key}"]`)
+    // Sync state up front so a re-render between the tick start and the next
+    // animation frame does not re-trigger the same roll on a fresh DOM.
+    this.displayedHudCounters.set(key, safeTarget)
+    els.forEach((el) => {
+      const suffix = el.dataset.countSuffix ?? ''
+      el.dataset.countStart = String(previous)
+      el.dataset.countEnd = String(safeTarget)
+      this.animateResourceCounterElement(el, previous, safeTarget, suffix, duration)
+    })
+  }
+
   /** Store the currently-playing direct resource pulse so a near-immediate
    *  board re-render cannot sever the CSS sparkle from the persistent burst. */
   private rememberImmediateResourcePulse(

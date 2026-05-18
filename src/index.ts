@@ -307,13 +307,48 @@ async function playResourceTrail(
   const theme = themeOverride ?? rule.theme
   if (source.kind === 'card') {
     await boardRenderer.animateResourceTrailFromCard(source.cardId, rule.target, count, theme)
-    return
-  }
-  if (source.kind === 'center') {
+  } else if (source.kind === 'center') {
     await boardRenderer.animateResourceTrailFromCenter(rule.target, count, theme)
-    return
+  } else {
+    await boardRenderer.animateResourceTrailFromChain(rule.target, count, theme)
   }
-  await boardRenderer.animateResourceTrailFromChain(rule.target, count, theme)
+  // Tick the destination HUD counter exactly when the trail lands so the
+  // number visibly rolls during the impact beat. score/coin own their own
+  // burst feedback (burstScoreGain/burstCoinGain); hand has no numeric HUD.
+  tickHudCounterAfterTrail(resource)
+}
+
+/** Map a trail resource onto the matching HUD counter keys and roll them to
+ *  the live model value. Centralizes the resource → counter wiring so future
+ *  resources only have to extend this switch. */
+function tickHudCounterAfterTrail(resource: keyof typeof NUMERIC_RESOURCE_TRAILS): void {
+  const c = gameState.character
+  switch (resource) {
+    case 'health':
+      // Healing and max-health gains share the same trail, so keep both rolls
+      // in sync to avoid one number snapping while the other animates.
+      boardRenderer.playHudCounterFeedback('health', c.health)
+      boardRenderer.playHudCounterFeedback('maxHealth', c.maxHealth)
+      return
+    case 'shield':
+      boardRenderer.playHudCounterFeedback('shield', Math.min(c.shield, 99))
+      return
+    case 'ember':
+      boardRenderer.playHudCounterFeedback('ember', c.ember)
+      boardRenderer.playHudCounterFeedback('emberMax', c.emberMax)
+      return
+    case 'gauge':
+      boardRenderer.playHudCounterFeedback('candle', c.candle)
+      return
+    case 'attack':
+      boardRenderer.playHudCounterFeedback('attack', c.damage)
+      return
+    case 'score':
+    case 'coin':
+    case 'hand':
+      // Already handled by burstScoreGain/burstCoinGain or carries no counter.
+      return
+  }
 }
 
 /** Diff player-facing numeric gains and route them through the shared table.
