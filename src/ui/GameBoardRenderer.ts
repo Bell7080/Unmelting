@@ -345,16 +345,7 @@ export class GameBoardRenderer {
    *  does not briefly show the final target before the transfer kicks in. */
   private renderHudCounter(key: string, targetValue: number, suffix = '', extraAttrs = ''): string {
     const safeTarget = Math.round(Number.isFinite(targetValue) ? targetValue : 0)
-    const previous = this.displayedHudCounters.get(key)
-    const active = this.activeCounterAnimations.get(`hud:${key}`)
-    let startValue: number
-    if (active) {
-      startValue = this.computeActiveCounterValue(active)
-    } else if (this.hasRendered && previous !== undefined) {
-      startValue = previous
-    } else {
-      startValue = safeTarget
-    }
+    const startValue = this.hudCounterVisibleStartValue(key, safeTarget)
     this.displayedHudCounters.set(key, safeTarget)
     return `<span ${extraAttrs} data-count-key="${key}" data-count-start="${startValue}" data-count-end="${safeTarget}" data-count-suffix="${suffix}">${startValue.toLocaleString()}${suffix}</span>`
   }
@@ -375,6 +366,19 @@ export class GameBoardRenderer {
     const t = Math.min(1, Math.max(0, (now - anim.startedAt) / anim.duration))
     const eased = 1 - Math.pow(1 - t, 3)
     return Math.round(anim.startValue + (anim.endValue - anim.startValue) * eased)
+  }
+
+  /** Pick the visible start value that a freshly-rendered HUD number should
+   *  display before its roll begins. Bars/ticks use the same value so HP,
+   *  ember, and gauge fills drain/fill in lockstep with the text instead of
+   *  snapping to the model target on render. */
+  private hudCounterVisibleStartValue(key: string, targetValue: number): number {
+    const safeTarget = Math.round(Number.isFinite(targetValue) ? targetValue : 0)
+    const active = this.activeCounterAnimations.get(`hud:${key}`)
+    if (active) return this.computeActiveCounterValue(active)
+    const previous = this.displayedHudCounters.get(key)
+    if (this.hasRendered && previous !== undefined) return previous
+    return safeTarget
   }
 
   private renderScorePanel(scorePanel: ScorePanelState): string {
@@ -752,13 +756,14 @@ export class GameBoardRenderer {
   private renderCandleGauge(character: Character): string {
     const candle = character.candle ?? 0
     const candleMax = character.candleMax ?? 10
-    const candlePct = Math.max(0, Math.min(100, (candle / candleMax) * 100))
+    const visualCandle = this.hudCounterVisibleStartValue('candle', candle)
+    const candlePct = Math.max(0, Math.min(100, (visualCandle / candleMax) * 100))
     const currentMode = character.candleMode ?? 'max-health'
     const mode = this.candleModeMeta(currentMode)
     const candleText = this.renderHudCounter('candle', candle)
     const candleMaxText = this.renderHudCounter('candleMax', candleMax)
     const ticks = Array.from({ length: candleMax }, (_, idx) => {
-      const filled = idx < candle ? 'is-filled' : ''
+      const filled = idx < visualCandle ? 'is-filled' : ''
       return `<span class="candle-gauge-tick ${filled}" aria-hidden="true"></span>`
     }).join('')
 
@@ -856,7 +861,12 @@ export class GameBoardRenderer {
   }
 
   private renderPlayer(character: Character): string {
-    const hpPct = Math.max(0, Math.min(100, (character.health / character.maxHealth) * 100))
+    const visualHealth = this.hudCounterVisibleStartValue('health', character.health)
+    const visualMaxHealth = Math.max(
+      1,
+      this.hudCounterVisibleStartValue('maxHealth', character.maxHealth)
+    )
+    const hpPct = Math.max(0, Math.min(100, (visualHealth / visualMaxHealth) * 100))
     const hpText = this.renderHudCounter('health', character.health)
     const maxHpText = this.renderHudCounter('maxHealth', character.maxHealth)
     const previousShield = this.displayedHudCounters.get('shield') ?? 0
@@ -1735,11 +1745,31 @@ export class GameBoardRenderer {
       growth: string
     }
     const specs: Spec[] = [
-      { kind: 'chamomile', harvest: { label: '수확 ', value: '불빛', tone: 'gold' }, growth: '턴마다 +1' },
-      { kind: 'redRose', harvest: { label: '수확 ', value: '체력', tone: 'hp' }, growth: '턴마다 +1' },
-      { kind: 'marigold', harvest: { label: '수확 ', value: '화폐', tone: 'gold' }, growth: '2턴마다 +1' },
-      { kind: 'oleander', harvest: { label: '수확 ', value: '방패', tone: 'shield' }, growth: '턴마다 +1' },
-      { kind: 'lavender', harvest: { label: '수확 ', value: '손패 게이지', tone: 'flower' }, growth: '턴마다 +1' },
+      {
+        kind: 'chamomile',
+        harvest: { label: '수확 ', value: '불빛', tone: 'gold' },
+        growth: '턴마다 +1',
+      },
+      {
+        kind: 'redRose',
+        harvest: { label: '수확 ', value: '체력', tone: 'hp' },
+        growth: '턴마다 +1',
+      },
+      {
+        kind: 'marigold',
+        harvest: { label: '수확 ', value: '화폐', tone: 'gold' },
+        growth: '2턴마다 +1',
+      },
+      {
+        kind: 'oleander',
+        harvest: { label: '수확 ', value: '방패', tone: 'shield' },
+        growth: '턴마다 +1',
+      },
+      {
+        kind: 'lavender',
+        harvest: { label: '수확 ', value: '손패 게이지', tone: 'flower' },
+        growth: '턴마다 +1',
+      },
     ]
     const seedTile = this.codexTile({
       art: { kind: 'sprite', url: SpriteUrls.flowers.seed },
@@ -2058,7 +2088,9 @@ export class GameBoardRenderer {
     if (!character) return ''
     const ember = character.ember
     const emberMax = character.emberMax
-    const pct = Math.max(0, Math.min(100, (ember / emberMax) * 100))
+    const visualEmber = this.hudCounterVisibleStartValue('ember', ember)
+    const visualEmberMax = Math.max(1, this.hudCounterVisibleStartValue('emberMax', emberMax))
+    const pct = Math.max(0, Math.min(100, (visualEmber / visualEmberMax) * 100))
     const emberText = this.renderHudCounter('ember', ember)
     const emberMaxText = this.renderHudCounter('emberMax', emberMax)
     const countdown = scorePanel.emberDecayCountdown ?? 10
@@ -3092,8 +3124,7 @@ export class GameBoardRenderer {
           const elapsed = now - active.startedAt
           const remaining = Math.max(40, active.duration - elapsed)
           const freshDuration = this.counterDurationForDelta(Math.abs(end - currentValue))
-          const duration =
-            end === active.endValue ? remaining : Math.max(remaining, freshDuration)
+          const duration = end === active.endValue ? remaining : Math.max(remaining, freshDuration)
           el.textContent = `${currentValue.toLocaleString()}${suffix}`
           if (active.popClass) el.classList.add('is-score-popping')
           // animateResourceCounterElement re-registers a fresh active state
@@ -3175,10 +3206,12 @@ export class GameBoardRenderer {
       const eased = 1 - Math.pow(1 - t, 3)
       const value = Math.round(startValue + delta * eased)
       el.textContent = `${value.toLocaleString()}${suffix}`
+      if (key?.startsWith('hud:')) this.syncHudCounterLinkedVisuals(key.slice(4), value)
       if (t < 1) {
         requestAnimationFrame(tick)
       } else {
         el.textContent = `${targetValue.toLocaleString()}${suffix}`
+        if (key?.startsWith('hud:')) this.syncHudCounterLinkedVisuals(key.slice(4), targetValue)
         if (el.dataset.countHideWhenZero === 'true' && targetValue <= 0) {
           el.closest<HTMLElement>('.player-shield-chip')?.classList.add('is-gone')
         }
@@ -3191,6 +3224,42 @@ export class GameBoardRenderer {
       }
     }
     requestAnimationFrame(tick)
+  }
+
+  /** Keep non-text meters visually tied to the same integer roll. The model
+   *  value may already be final, but this method deliberately paints the
+   *  displayed value so decreases (HP damage, ember decay, gauge spend) drain
+   *  one visible step at a time instead of snapping their bars/ticks. */
+  private syncHudCounterLinkedVisuals(key: string, value: number): void {
+    const character = this.currentGameState?.getCharacter()
+    if (!character) return
+    if (key === 'health' || key === 'maxHealth') {
+      const health =
+        key === 'health' ? value : (this.displayedHudCounters.get('health') ?? character.health)
+      const maxHealth = Math.max(1, key === 'maxHealth' ? value : character.maxHealth)
+      const fill = this.boardElement.querySelector<HTMLElement>('.hp-fill')
+      if (fill) fill.style.width = `${Math.max(0, Math.min(100, (health / maxHealth) * 100))}%`
+      return
+    }
+    if (key === 'ember' || key === 'emberMax') {
+      const ember =
+        key === 'ember' ? value : (this.displayedHudCounters.get('ember') ?? character.ember)
+      const emberMax = Math.max(1, key === 'emberMax' ? value : character.emberMax)
+      const fill = this.boardElement.querySelector<HTMLElement>('.ember-bar-fill')
+      if (fill) fill.style.width = `${Math.max(0, Math.min(100, (ember / emberMax) * 100))}%`
+      return
+    }
+    if (key === 'candle' || key === 'candleMax') {
+      const candle =
+        key === 'candle' ? value : (this.displayedHudCounters.get('candle') ?? character.candle)
+      const candleMax = Math.max(1, key === 'candleMax' ? value : character.candleMax)
+      const clampedPct = Math.max(0, Math.min(100, (candle / candleMax) * 100))
+      const meter = this.boardElement.querySelector<HTMLElement>('.candle-gauge-meter')
+      if (meter) meter.style.setProperty('--candle-fill', `${clampedPct}%`)
+      this.boardElement.querySelectorAll<HTMLElement>('.candle-gauge-tick').forEach((tick, idx) => {
+        tick.classList.toggle('is-filled', idx < candle)
+      })
+    }
   }
 
   /** Larger jumps run longer but not linearly longer, so 5 HP ticks stay

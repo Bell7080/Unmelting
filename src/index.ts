@@ -1082,6 +1082,10 @@ async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promi
       uid: nextChainUid(),
     })
     boardRenderer.refreshChainBanner(buildChainHints())
+    // The payoff spends one full 10-step gauge immediately after firing. Roll
+    // that decrease on the live gauge as its own drain beat, so overflow such
+    // as 13 progress visibly settles to 3 instead of snapping on the next render.
+    boardRenderer.playHudCounterFeedback('candle', gameState.character.candle)
     await playPlayerGainTrails(source, beforeGaugeResources)
     if (gauge.drawnHandCount && gauge.drawnHandCount > 0) {
       // Mount drawn hand slots before the trail lands so they appear from the
