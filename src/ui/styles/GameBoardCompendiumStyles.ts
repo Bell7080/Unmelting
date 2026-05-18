@@ -108,16 +108,209 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
   background: linear-gradient(180deg, var(--color-flame), var(--color-flame-warm));
 }
 .compendium-section {
-  margin: 8px 0 4px;
+  margin: 14px 0 6px;
+  padding-left: 10px;
   font-size: 12px;
   color: var(--color-flame);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
+  font-weight: 800;
+  border-left: 2px solid rgba(244, 164, 96, 0.55);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
 }
+.compendium-section:first-child { margin-top: 4px; }
 .compendium-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 12px;
+}
+
+/* ---------- Codex tile: normalized compact card for catalog tabs ----------
+   Used by enemies, traps, treasures, flowers, relics, terms. Mirrors the
+   warm-gold / dark-glass language from the shop-relic card so the codex
+   shares visual grammar with the left panel and the rail. */
+.codex-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+  gap: 12px;
+}
+.codex-tile {
+  position: relative;
+  display: grid;
+  grid-template-rows: 116px auto auto auto;
+  gap: 8px;
+  padding: 10px 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 215, 120, 0.36);
+  background:
+    linear-gradient(180deg, rgba(45, 32, 50, 0.96), rgba(18, 12, 24, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.16),
+    0 8px 18px rgba(0, 0, 0, 0.5);
+  color: rgba(255, 245, 220, 0.96);
+  min-height: 0;
+  transition: transform 0.18s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.codex-tile:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 215, 120, 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.22),
+    0 12px 26px rgba(0, 0, 0, 0.6),
+    0 0 18px rgba(244, 164, 96, 0.22);
+}
+.codex-tile-art {
+  position: relative;
+  border-radius: 8px;
+  background: rgba(10, 7, 18, 0.55) center / contain no-repeat;
+  border: 1px solid rgba(255, 232, 168, 0.16);
+  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+.codex-tile-art::after {
+  /* Subtle vignette so sprites with hard edges blend into the tile body. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(120% 70% at 50% 0%, transparent 55%, rgba(8, 5, 14, 0.62) 100%);
+}
+.codex-tile-art--icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-flame);
+  background-color: rgba(10, 7, 18, 0.55);
+}
+.codex-tile-art--icon .icon {
+  width: 46px;
+  height: 46px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
+}
+.codex-tile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+.codex-tile-name {
+  font-size: 13px;
+  font-weight: 900;
+  color: #fff5dc;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.78);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.codex-tile-tag {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: var(--color-flame);
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(244, 164, 96, 0.42);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.78);
+}
+.codex-tile-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.codex-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 232, 168, 0.18);
+  color: rgba(255, 245, 220, 0.92);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+.codex-stat-chip .icon {
+  width: 13px;
+  height: 13px;
+}
+.codex-stat-chip.is-hp {
+  color: #ffb3a1;
+  border-color: rgba(255, 150, 130, 0.35);
+}
+.codex-stat-chip.is-atk {
+  color: #ffd58a;
+  border-color: rgba(255, 215, 120, 0.4);
+}
+.codex-stat-chip.is-gold {
+  color: #ffe8a0;
+  border-color: rgba(255, 215, 120, 0.42);
+}
+.codex-stat-chip.is-shield {
+  color: #ffe0b0;
+  border-color: rgba(255, 215, 120, 0.32);
+}
+.codex-stat-chip.is-spore {
+  color: #c9b6e0;
+  border-color: rgba(176, 150, 220, 0.4);
+}
+.codex-stat-chip.is-bomb {
+  color: #ffb088;
+  border-color: rgba(255, 130, 90, 0.42);
+}
+.codex-stat-chip.is-flower {
+  color: #ffd2c8;
+  border-color: rgba(255, 200, 200, 0.34);
+}
+.codex-tile-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.42;
+  color: rgba(232, 214, 180, 0.78);
+  word-break: keep-all;
+}
+.codex-tile-flavor {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(232, 214, 180, 0.6);
+  font-style: italic;
+  word-break: keep-all;
+}
+.codex-tile-grid--terms {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+.codex-tile--term {
+  grid-template-rows: 48px auto auto;
+  padding-top: 8px;
+}
+.codex-tile--term .codex-tile-art {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.codex-tile--term .codex-tile-art::after { display: none; }
+.codex-tile--term .codex-tile-art--icon .icon {
+  width: 32px;
+  height: 32px;
+}
+.codex-tile--owned {
+  border-color: rgba(132, 215, 112, 0.58);
+  box-shadow:
+    inset 0 1px 0 rgba(223, 255, 183, 0.22),
+    0 8px 18px rgba(0, 0, 0, 0.5),
+    0 0 18px rgba(78, 168, 82, 0.18);
+}
+.codex-tile--owned .codex-tile-tag {
+  color: rgba(224, 255, 190, 0.96);
+  border-color: rgba(132, 215, 112, 0.58);
+  background: linear-gradient(180deg, rgba(35, 70, 38, 0.92), rgba(18, 38, 23, 0.96));
 }
 /* Shared card-shaped face for hand hover previews and hand-card compendium
    entries. The art is clipped through a rounded mask and object-fit preserves
@@ -239,16 +432,6 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
   aspect-ratio: auto;
   height: auto;
   min-height: 270px;
-}
-.compendium-field-card {
-  min-height: 330px;
-  height: auto;
-}
-.compendium-field-card .common-card-body {
-  min-height: 124px;
-}
-.compendium-field-card .common-card-desc {
-  align-self: start;
 }
 .compendium-grid .common-card-face {
   height: auto;

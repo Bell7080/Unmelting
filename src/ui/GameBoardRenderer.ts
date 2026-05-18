@@ -17,13 +17,7 @@
  */
 
 import { GameState } from '@core/GameState'
-import {
-  Card,
-  CardType,
-  flowerDescription,
-  flowerDisplayName,
-  type FlowerKind,
-} from '@entities/Card'
+import { Card, CardType, flowerDisplayName, type FlowerKind } from '@entities/Card'
 import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
 import type {
   BombExplosion,
@@ -39,7 +33,7 @@ import { HandCardId, HandCategory, HandEffectTargeting } from '@entities/HandCar
 import { getHandCardDef } from '@data/HandCards'
 import type { EmberTier, SpawnWeights } from '@systems/EmberSystem'
 import { EmberSystem } from '@systems/EmberSystem'
-import { ENEMY_DEFINITIONS, TRAP_DEFINITIONS, MIMIC_BY_SPAN } from '@systems/CardSpawner'
+import { ENEMY_DEFINITIONS, MIMIC_BY_SPAN } from '@systems/CardSpawner'
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_DEFINITIONS, type RelicId } from '@data/Relics'
 import { RECIPES } from '@data/Recipes'
@@ -895,26 +889,56 @@ export class GameBoardRenderer {
     })
   }
 
-  /** Field-card compendium wrapper converts stat rows into compact effect text
-   *  so enemies, traps, and treasures use the same large-name card template as
-   *  playable hand cards. */
-  private fieldCardFace(opts: {
-    artUrl: string
+  /**
+   * Normalized codex tile shared across the catalog tabs (enemies/traps/
+   * treasures/flowers/relics/terms). One tile communicates: art → name + tag →
+   * a small set of stat chips → optional one-line note + flavor. Keeps the
+   * warm-gold / dark-glass visual language consistent with the rail cards and
+   * the owned-relic fan.
+   */
+  private codexTile(opts: {
+    art: { kind: 'sprite'; url: string } | { kind: 'icon'; svg: string }
     name: string
-    badge: string
-    stats: [string, string][]
-    description: string
+    tag?: string
+    chips?: Array<{
+      label?: string
+      value: string
+      icon?: string
+      tone?: 'hp' | 'atk' | 'gold' | 'shield' | 'spore' | 'bomb' | 'flower' | 'plain'
+    }>
+    note?: string
+    flavor?: string
+    extraClass?: string
   }): string {
-    const statText = opts.stats
-      .map(([label, value]) => `<span class="common-card-subdesc">${label}</span> ${value}`)
-      .join('<br>')
-    return this.commonCardFace({
-      artUrl: opts.artUrl,
-      name: opts.name,
-      badge: opts.badge,
-      description: `${statText}<br>${opts.description}`,
-      extraClass: 'compendium-field-card',
-    })
+    const artHtml =
+      opts.art.kind === 'sprite'
+        ? `<div class="codex-tile-art" style="background-image: url('${opts.art.url}');" aria-hidden="true"></div>`
+        : `<div class="codex-tile-art codex-tile-art--icon" aria-hidden="true">${opts.art.svg}</div>`
+    const tagHtml = opts.tag ? `<span class="codex-tile-tag">${opts.tag}</span>` : ''
+    const chipsHtml = (opts.chips ?? [])
+      .map((c) => {
+        const tone = c.tone && c.tone !== 'plain' ? `is-${c.tone}` : ''
+        const iconHtml = c.icon ?? ''
+        const labelHtml = c.label ? `<span class="codex-stat-key">${c.label}</span>` : ''
+        return `<span class="codex-stat-chip ${tone}">${iconHtml}${labelHtml}${c.value}</span>`
+      })
+      .join('')
+    const noteHtml = opts.note ? `<p class="codex-tile-note">${opts.note}</p>` : ''
+    const flavorHtml = opts.flavor ? `<p class="codex-tile-flavor">${opts.flavor}</p>` : ''
+    const chipsRow = chipsHtml ? `<div class="codex-tile-stats">${chipsHtml}</div>` : ''
+    const classes = ['codex-tile', opts.extraClass ?? ''].filter(Boolean).join(' ')
+    return `
+      <article class="${classes}">
+        ${artHtml}
+        <header class="codex-tile-head">
+          <span class="codex-tile-name">${opts.name}</span>
+          ${tagHtml}
+        </header>
+        ${chipsRow}
+        ${noteHtml}
+        ${flavorHtml}
+      </article>
+    `
   }
 
   /** Read hand-effect reach from the shared gameplay table for codex rows. */
@@ -1484,174 +1508,213 @@ export class GameBoardRenderer {
   }
 
   private renderCompendiumEnemies(): string {
-    const stackStats = (hp: number, atk: number, span: number): [string, string][] => {
-      // Compendium rows show a same-enemy example of the real field rule:
-      // sum each member, then add +2/+2 for 2칸 or +3/+3 for 3칸.
-      const widthBonus = span === 2 ? 2 : span >= 3 ? 3 : 0
-      return [
-        [`${span}칸 HP`, String(hp * span + widthBonus)],
-        [`${span}칸 ATK`, String(atk * span + widthBonus)],
-      ]
-    }
-    const normal = ENEMY_DEFINITIONS.map((def) => {
-      const baseHp = def.healthOrDamage ?? 1
-      const baseAtk = def.attack ?? 1
+    const heart = heartIcon()
+    const sword = swordIcon()
+    // 1칸 row: each base enemy as a single tile with HP/ATK chips only.
+    const baseTiles = ENEMY_DEFINITIONS.map((def) => {
+      const hp = def.healthOrDamage ?? 1
+      const atk = def.attack ?? 1
       const spriteUrl = def.enemySpriteId ? SpriteUrls[def.enemySpriteId] : SpriteUrls.enemyMouse
-      return this.fieldCardFace({
-        artUrl: spriteUrl,
+      return this.codexTile({
+        art: { kind: 'sprite', url: spriteUrl },
         name: def.name,
-        badge: '기본 적',
-        stats: [
-          ['HP', String(baseHp)],
-          ['ATK', String(baseAtk)],
+        tag: '1칸',
+        chips: [
+          { icon: heart, value: String(hp), tone: 'hp' },
+          { icon: sword, value: String(atk), tone: 'atk' },
         ],
-        description: def.description,
       })
     }).join('')
-    const groupRows: [string, string][] = ENEMY_DEFINITIONS.flatMap((def) => {
-      const baseHp = def.healthOrDamage ?? 1
-      const baseAtk = def.attack ?? 1
-      const spanTwo = stackStats(baseHp, baseAtk, 2)
-      const spanThree = stackStats(baseHp, baseAtk, 3)
-      // Each enemy keeps one readable line for 2칸/3칸 group effects instead
-      // of spawning six separate variant cards in the tab.
-      return [
-        [`${def.name} 2칸`, `HP ${spanTwo[0][1]} / ATK ${spanTwo[1][1]}`],
-        [`${def.name} 3칸`, `HP ${spanThree[0][1]} / ATK ${spanThree[1][1]}`],
-      ]
-    })
-    const groupCard = this.fieldCardFace({
-      artUrl: SpriteUrls.enemyMole,
-      name: '적 무리',
-      badge: '추가 개체',
-      stats: groupRows,
-      description:
-        '같은 전방 라인에서 합쳐진 적 무리는 실제 구성원의 HP/ATK를 합산한 뒤 2칸은 HP/ATK +2, 3칸은 +3을 더한다. 일러스트는 가장 강한 구성원을 따라간다.',
-    })
-    const mimicRows: [string, string][] = [1, 2, 3].flatMap((span) => {
-      const stats = MIMIC_BY_SPAN[span]
-      // Mimic span variants are summarized in one Mimic entry so changing
-      // lane width reads as the same creature gaining stronger effects.
-      return [
-        [`${span}칸 HP/ATK`, `${stats.health} / ${stats.attack}`],
-        [`${span}칸 드롭`, `${stats.drops}장`],
-      ]
-    })
-    const mimicCard = this.fieldCardFace({
-      artUrl: SpriteUrls.mimic,
-      name: '미믹',
-      badge: '특수',
-      stats: mimicRows,
-      description:
-        '보물 카드가 변이된 특수 적. 한 도감 칸 안에서 1/2/3칸별 능력치와 드롭량을 한 번에 비교한다.',
-    })
+
+    // 2/3칸 rows: a single merged-formation tile per span. Stats shown are an
+    // example using the cheapest enemy stack so readers see the +α effect of
+    // the width bonus rather than a wall of per-enemy combinations.
+    const formationTile = (span: 2 | 3, name: string, sprite: string) => {
+      const bonus = span === 2 ? 2 : 3
+      return this.codexTile({
+        art: { kind: 'sprite', url: sprite },
+        name,
+        tag: `${span}칸`,
+        chips: [
+          { icon: heart, value: `합산 +${bonus}`, tone: 'hp' },
+          { icon: sword, value: `합산 +${bonus}`, tone: 'atk' },
+        ],
+        note: `구성원 HP/ATK 합 + ${bonus}/${bonus}. 일러스트는 가장 강한 구성원을 따른다.`,
+      })
+    }
+    const mergeTwo = formationTile(2, '양초 무리', SpriteUrls.enemyWaves[2])
+    const mergeThree = formationTile(3, '양초 군단', SpriteUrls.enemyWaves[3])
+
+    // Mimic gets one tile per span because each lane width is mechanically a
+    // different fight (separate HP/ATK and reward).
+    const mimicTiles = ([1, 2, 3] as const)
+      .map((span) => {
+        const stats = MIMIC_BY_SPAN[span]
+        return this.codexTile({
+          art: { kind: 'sprite', url: SpriteUrls.mimic },
+          name: '미믹',
+          tag: `${span}칸`,
+          chips: [
+            { icon: heart, value: String(stats.health), tone: 'hp' },
+            { icon: sword, value: String(stats.attack), tone: 'atk' },
+            { label: '드롭 ', value: `${stats.drops}장`, tone: 'gold' },
+          ],
+          note: span === 1 ? '보물상자가 변이된 특수 적. 처치 시 카드 다량 드롭.' : undefined,
+        })
+      })
+      .join('')
+
     return `
-      <h3 class="compendium-section">일반 적</h3>
-      <div class="compendium-grid">${normal}${groupCard}</div>
+      <h3 class="compendium-section">일반 적 · 1칸</h3>
+      <div class="codex-tile-grid">${baseTiles}</div>
+      <h3 class="compendium-section">합쳐진 적</h3>
+      <div class="codex-tile-grid">${mergeTwo}${mergeThree}</div>
       <h3 class="compendium-section">특수 적</h3>
-      <div class="compendium-grid">${mimicCard}</div>
+      <div class="codex-tile-grid">${mimicTiles}</div>
     `
   }
 
   private renderCompendiumTraps(): string {
-    const baseDamage = TRAP_DEFINITIONS[0].healthOrDamage ?? 2
-    const spanRows: [string, string][] = [1, 2, 3].map((span) => {
-      // Trap rows intentionally mirror enemy stat rows: the name/width is on
-      // the left and only sword damage is shown on the right for quick reading.
-      const damage = span >= 3 ? 999 : span === 2 ? 5 : baseDamage
-      return [`${span}칸`, `${swordIcon()} ${damage}`]
-    })
-    const card = this.fieldCardFace({
-      artUrl: SpriteUrls.traps.web,
-      name: TRAP_DEFINITIONS[0].name,
-      badge: '함정',
-      stats: spanRows,
-      description: '같은 함정 한 칸 안에서 1/2/3칸 폭에 따른 충돌 피해만 표시한다.',
-    })
-    return `<div class="compendium-grid">${card}</div>`
-  }
-
-  private renderCompendiumTreasures(): string {
-    const spanRows: [string, string][] = [1, 2, 3].flatMap((span) => {
-      // Treasure rows keep the shared vanish/mimic chances visible while only
-      // the drop amount changes per width.
-      return [
-        [`${span}칸 드롭`, `손패 ${span}장`],
-        [`${span}칸 변화`, '사라짐 50%/턴 · 미믹화 10%/턴'],
-      ]
-    })
-    const card = this.fieldCardFace({
-      artUrl: SpriteUrls.chestLarge,
-      name: '보물상자',
-      badge: '보물',
-      stats: spanRows,
-      description:
-        '작은/큰/거대한 상자를 별도 카드로 나누지 않고, 보물상자 한 항목에서 칸 수별 보상과 변이 확률을 비교한다.',
-    })
-    return `<div class="compendium-grid">${card}</div>`
-  }
-
-  private renderCompendiumFlowers(): string {
-    const flowerKinds: FlowerKind[] = [
-      'seed',
-      'chamomile',
-      'redRose',
-      'marigold',
-      'oleander',
-      'lavender',
-    ]
-    const rewardRows: Record<FlowerKind, [string, string][]> = {
-      seed: [
-        ['등장', '대기 라인에서 씨앗으로 등장'],
-        ['전방 도착', '꽃 001~005 중 무작위 발화'],
-      ],
-      chamomile: [
-        ['수확', '점수 획득'],
-        ['성장', '턴마다 보상 증가'],
-      ],
-      redRose: [
-        ['수확', '체력 회복'],
-        ['성장', '1부터 턴마다 +1'],
-      ],
-      marigold: [
-        ['수확', '화폐 획득'],
-        ['성장', '1부터 2턴마다 +1'],
-      ],
-      oleander: [
-        ['수확', '방패 획득'],
-        ['성장', '1부터 턴마다 +1'],
-      ],
-      lavender: [
-        ['수확', '손패 콤보 게이지 획득'],
-        ['성장', '1부터 턴마다 +1'],
-      ],
+    const sword = swordIcon()
+    // Web variants: one tile per merge stage with that stage's actual name.
+    const webNames: Record<1 | 2 | 3, string> = {
+      1: '양초 거미줄',
+      2: '촛농 거미집',
+      3: '밀랍 거미굴',
     }
-    const cards = flowerKinds
-      .map((kind) =>
-        this.fieldCardFace({
-          artUrl: SpriteUrls.flowers[kind],
-          name: flowerDisplayName(kind),
-          badge: kind === 'seed' ? '씨앗' : '버프칸',
-          stats: rewardRows[kind],
-          description:
-            kind === 'seed'
-              ? '시작 3×3에는 등장하지 않으며, 전방칸에 도착하면 색상 사각형 블라스트와 함께 무작위 꽃으로 발화한다.'
-              : `${flowerDescription(kind)}. 성장할수록 수확량은 커지지만 매 턴 시들 확률도 10%부터 급격히 오른다.`,
+    const webDamage: Record<1 | 2 | 3, string> = { 1: '2', 2: '5', 3: '999' }
+    const webTiles = ([1, 2, 3] as const)
+      .map((span) =>
+        this.codexTile({
+          art: { kind: 'sprite', url: SpriteUrls.trapGroups.web[span] },
+          name: webNames[span],
+          tag: `${span}칸`,
+          chips: [{ icon: sword, value: webDamage[span], tone: 'atk' }],
         })
       )
       .join('')
-    const monster = this.fieldCardFace({
-      artUrl: SpriteUrls.monsterFlower,
-      name: '괴물꽃',
-      badge: '특수 적',
-      stats: [
-        ['기본', 'HP/ATK 1/1'],
-        ['성장 꽃', '꽃 수확값만큼 HP/ATK'],
-        ['병합', '괴물꽃끼리만 합체'],
+
+    // Spore variants. Spores carry both bite damage and a 2-turn spread tick.
+    const sporeNames: Record<1 | 2 | 3, string> = {
+      1: '감염 포자',
+      2: '번식 포자군',
+      3: '포자 군락',
+    }
+    const sporeDamage: Record<1 | 2 | 3, string> = { 1: '1', 2: '3', 3: '5' }
+    const sporeTiles = ([1, 2, 3] as const)
+      .map((span) =>
+        this.codexTile({
+          art: { kind: 'sprite', url: SpriteUrls.trapGroups.spore[span] },
+          name: sporeNames[span],
+          tag: `${span}칸`,
+          chips: [
+            { icon: sword, value: sporeDamage[span], tone: 'atk' },
+            { label: '전염 ', value: '2턴마다', tone: 'spore' },
+          ],
+        })
+      )
+      .join('')
+
+    // Bomb does not merge by design, so it's documented as a single 1칸 tile.
+    const bombTile = this.codexTile({
+      art: { kind: 'sprite', url: SpriteUrls.traps.bomb },
+      name: '양초 폭탄',
+      tag: '1칸',
+      chips: [
+        { icon: sword, value: '5', tone: 'bomb' },
+        { label: '점화 ', value: '1턴', tone: 'bomb' },
       ],
-      description: '꽃이 시들면 같은 칸에 등장하는 특수 적. 다른 적과는 합쳐지지 않는다.',
+      note: '전방 도착 시 점화, 다음 턴 폭발. 인접 적도 피해.',
     })
-    return `<div class="compendium-grid">${cards}${monster}</div>`
+
+    return `
+      <h3 class="compendium-section">거미줄</h3>
+      <div class="codex-tile-grid">${webTiles}</div>
+      <h3 class="compendium-section">폭탄</h3>
+      <div class="codex-tile-grid">${bombTile}</div>
+      <h3 class="compendium-section">포자</h3>
+      <div class="codex-tile-grid">${sporeTiles}</div>
+    `
+  }
+
+  private renderCompendiumTreasures(): string {
+    // One tile per chest size mirrors the rail: the sprite, the lane name,
+    // and only the per-size drop count differ; vanish/mimic odds are shared.
+    const chestSpec: Array<{ span: 1 | 2 | 3; name: string; sprite: string }> = [
+      { span: 1, name: '작은 상자', sprite: SpriteUrls.chestSmall },
+      { span: 2, name: '큰 상자', sprite: SpriteUrls.chestMedium },
+      { span: 3, name: '거대한 상자', sprite: SpriteUrls.chestLarge },
+    ]
+    const tiles = chestSpec
+      .map((c) =>
+        this.codexTile({
+          art: { kind: 'sprite', url: c.sprite },
+          name: c.name,
+          tag: `${c.span}칸`,
+          chips: [
+            { label: '드롭 ', value: `손패 ${c.span}장`, tone: 'gold' },
+            { label: '사라짐 ', value: '50%/턴', tone: 'plain' },
+            { label: '미믹화 ', value: '10%/턴', tone: 'spore' },
+          ],
+        })
+      )
+      .join('')
+    return `<div class="codex-tile-grid">${tiles}</div>`
+  }
+
+  private renderCompendiumFlowers(): string {
+    const heart = heartIcon()
+    const sword = swordIcon()
+    type Spec = {
+      kind: FlowerKind
+      harvest: { label: string; value: string; tone: 'hp' | 'atk' | 'gold' | 'shield' | 'flower' }
+      growth: string
+    }
+    const specs: Spec[] = [
+      { kind: 'chamomile', harvest: { label: '수확 ', value: '불빛', tone: 'gold' }, growth: '턴마다 +1' },
+      { kind: 'redRose', harvest: { label: '수확 ', value: '체력', tone: 'hp' }, growth: '턴마다 +1' },
+      { kind: 'marigold', harvest: { label: '수확 ', value: '화폐', tone: 'gold' }, growth: '2턴마다 +1' },
+      { kind: 'oleander', harvest: { label: '수확 ', value: '방패', tone: 'shield' }, growth: '턴마다 +1' },
+      { kind: 'lavender', harvest: { label: '수확 ', value: '손패 게이지', tone: 'flower' }, growth: '턴마다 +1' },
+    ]
+    const seedTile = this.codexTile({
+      art: { kind: 'sprite', url: SpriteUrls.flowers.seed },
+      name: flowerDisplayName('seed'),
+      tag: '씨앗',
+      chips: [{ label: '발화 ', value: '5종 중 랜덤', tone: 'flower' }],
+      note: '대기 라인에서만 등장. 전방 도착 시 꽃으로 발화.',
+    })
+    const flowerTiles = specs
+      .map((s) =>
+        this.codexTile({
+          art: { kind: 'sprite', url: SpriteUrls.flowers[s.kind] },
+          name: flowerDisplayName(s.kind),
+          tag: '버프칸',
+          chips: [
+            { label: s.harvest.label, value: s.harvest.value, tone: s.harvest.tone },
+            { label: '성장 ', value: s.growth, tone: 'plain' },
+          ],
+        })
+      )
+      .join('')
+    const monster = this.codexTile({
+      art: { kind: 'sprite', url: SpriteUrls.monsterFlower },
+      name: '괴물꽃',
+      tag: '특수 적',
+      chips: [
+        { icon: heart, value: '꽃 수확값', tone: 'hp' },
+        { icon: sword, value: '꽃 수확값', tone: 'atk' },
+      ],
+      note: '꽃이 시들면 변이. 괴물꽃끼리만 병합.',
+    })
+    return `
+      <h3 class="compendium-section">씨앗</h3>
+      <div class="codex-tile-grid">${seedTile}</div>
+      <h3 class="compendium-section">꽃</h3>
+      <div class="codex-tile-grid">${flowerTiles}</div>
+      <h3 class="compendium-section">시듦</h3>
+      <div class="codex-tile-grid">${monster}</div>
+    `
   }
 
   private renderCompendiumHand(): string {
@@ -1693,24 +1756,22 @@ export class GameBoardRenderer {
   private renderCompendiumRelics(): string {
     const owned = new Set(this.currentGameState?.getCharacter().relics ?? [])
     const cards = Object.values(RELIC_DEFINITIONS)
-      .map((def) =>
-        this.compendiumCard({
+      .map((def) => {
+        const isOwned = owned.has(def.id)
+        return this.codexTile({
           art: { kind: 'sprite', url: spriteForRelic(def.id) },
           name: def.name,
-          badge: owned.has(def.id) ? '보유 중' : '상점 유물',
-          categoryClass: owned.has(def.id) ? 'compendium-relic-owned' : 'compendium-relic-card',
-          stats: [
-            ['효과', def.effect],
-            ['비용', '점수 (상점에서 매번 가격 변동)'],
-          ],
-          description: def.flavor,
+          tag: isOwned ? '보유 중' : '상점',
+          chips: [{ label: '효과 ', value: def.effect, tone: 'gold' }],
+          flavor: def.flavor,
+          extraClass: isOwned ? 'codex-tile--owned' : undefined,
         })
-      )
+      })
       .join('')
     return `
       <h3 class="compendium-section">유물 (Relics)</h3>
-      <p class="compendium-section-blurb">10턴마다 열리는 생쥐 상점에서 구매하는 지속 효과야. 발동한 유물은 활동 로그와 체인 배너 아래의 작은 토스트로 함께 표시된다.</p>
-      <div class="compendium-grid compendium-relic-grid">${cards}</div>
+      <p class="compendium-section-blurb">10턴마다 열리는 생쥐 상점에서 구매하는 지속 효과. 보유 중인 유물은 초록색 테두리로 표시된다.</p>
+      <div class="codex-tile-grid">${cards}</div>
     `
   }
 
@@ -1793,15 +1854,16 @@ export class GameBoardRenderer {
     ]
     const cards = terms
       .map(([name, description]) =>
-        this.compendiumCard({
+        this.codexTile({
           art: { kind: 'icon', svg: bookIcon() },
           name,
-          badge: '용어',
-          stats: [['정의', description]],
+          tag: '용어',
+          note: description,
+          extraClass: 'codex-tile--term',
         })
       )
       .join('')
-    return `<div class="compendium-grid">${cards}</div>`
+    return `<div class="codex-tile-grid codex-tile-grid--terms">${cards}</div>`
   }
 
   private renderCompendiumCombo(): string {
