@@ -67,6 +67,11 @@ export interface FlowerGrowth {
   flowerName: string
   flowerKind: FlowerKind
   value: number
+  /**
+   * 'progress' means the flower consumed a turn without increasing its reward.
+   * Marigold uses this halfway beat to foreshadow next-turn growth.
+   */
+  phase: 'growth' | 'progress'
 }
 
 export interface FlowerWilt {
@@ -348,7 +353,9 @@ export class TurnManager {
     for (const { card, laneIndex, distance } of flowersAtTurnStart) {
       if (card.isFrozen()) continue
       const grew = card.growFlowerOneTurn()
-      if (grew) {
+      if (grew || card.flowerKind === 'marigold') {
+        // Marigold grows every other turn; on the quiet in-between turn, report
+        // a low-intensity progress beat so the player sees its clock advancing.
         growths.push({
           laneIndex,
           distance,
@@ -356,6 +363,7 @@ export class TurnManager {
           flowerName: card.name,
           flowerKind: card.flowerKind,
           value: card.flowerValue,
+          phase: grew ? 'growth' : 'progress',
         })
       }
       if (Math.random() >= card.getFlowerWiltChance()) continue

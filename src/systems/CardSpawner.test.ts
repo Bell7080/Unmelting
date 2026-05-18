@@ -31,6 +31,20 @@ describe('CardSpawner opening board', () => {
     expect(row[1].canMergeWith(row[2])).toBe(false)
     vi.restoreAllMocks()
   })
+
+  it('separates adjacent normal refill cells for full-board rebuild front rows', () => {
+    const spawner = new CardSpawner()
+    // A constant enemy roll would normally create a merged front row; the
+    // separated-refill helper should pick a non-merging fallback separator.
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+
+    const row = spawner.spawnCardsForSeparatedRefillRow(3)
+
+    expect(row).toHaveLength(3)
+    expect(row[0].canMergeWith(row[1])).toBe(false)
+    expect(row[1].canMergeWith(row[2])).toBe(false)
+    vi.restoreAllMocks()
+  })
 })
 
 describe('EmberSystem spawn weights', () => {

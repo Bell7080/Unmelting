@@ -481,7 +481,7 @@ async function tryResolveHopeRevive(): Promise<boolean> {
   recordRelicActivation('hope', '체력 10으로 부활, 필드 제거')
   render()
   await playPlayerGainTrails({ kind: 'center' }, beforeResources)
-  await runPreparationRefreshAfterFieldEffects({ suppressFrontRegroupOnce: true })
+  await runPreparationRefreshAfterFieldEffects({ avoidFrontMergeOnFullRefill: true })
   return true
 }
 
@@ -635,6 +635,25 @@ interface PreparationRefreshOptions {
    * gets one readable response window instead of facing a freshly merged wall.
    */
   suppressFrontRegroupOnce?: boolean
+  /**
+   * Hope-like full rebuilds should still regroup if overlap survives, but first
+   * try to reroll adjacent front-row merge families so the fresh 3×3 board is
+   * usually three readable choices.
+   */
+  avoidFrontMergeOnFullRefill?: boolean
+}
+
+function frontRowIsEmpty(): boolean {
+  return gameState.lanes.every((lane) => !lane.getCardAtDistance(0))
+}
+
+function fillFrontRowWithSeparatedRefillRow(): void {
+  const cards = cardSpawner.spawnCardsForSeparatedRefillRow(gameState.lanes.length)
+  for (let laneIndex = 0; laneIndex < gameState.lanes.length; laneIndex++) {
+    // Hope rebuilds seed the front row before the upper rows fall, avoiding a
+    // late visual pop from replacing already-rendered front candidates.
+    gameState.lanes[laneIndex].setCardAtDistance(0, cards[laneIndex] ?? null)
+  }
 }
 
 async function runPreparationRefreshAfterFieldEffects(
@@ -644,6 +663,12 @@ async function runPreparationRefreshAfterFieldEffects(
   // top cards appear, and the loop repeats until every rail is continuous/full.
   let movedAny = false
   const shouldRegroupFront = !options.suppressFrontRegroupOnce
+  if (options.avoidFrontMergeOnFullRefill && frontRowIsEmpty()) {
+    fillFrontRowWithSeparatedRefillRow()
+    movedAny = true
+    render()
+    await wait(200)
+  }
   let safety = LANE_DISTANCE_COUNT * 3 + 3
   while (safety-- > 0) {
     const moved = gameState.compactLanes()
@@ -1632,6 +1657,9 @@ async function handleCardAction(e: Event): Promise<void> {
     )
   }
   if (result.damageTaken && result.damageTaken > 0) {
+    // Trap penalties are already applied by ActionSystem; render immediately so
+    // the HP counter starts rolling on the same beat as the trap impact.
+    render()
     sameBeatAnimations.push(
       boardRenderer.animateDamageImpactOnElement(
         document.querySelector<HTMLElement>('.player-card'),
