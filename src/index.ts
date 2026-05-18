@@ -647,13 +647,19 @@ function frontRowIsEmpty(): boolean {
   return gameState.lanes.every((lane) => !lane.getCardAtDistance(0))
 }
 
-function fillFrontRowWithSeparatedRefillRow(): void {
+function seedTopRowWithSeparatedRefillRow(): boolean {
   const cards = cardSpawner.spawnCardsForSeparatedRefillRow(gameState.lanes.length)
+  const topDistance = LANE_DISTANCE_COUNT - 1
+  let seeded = false
   for (let laneIndex = 0; laneIndex < gameState.lanes.length; laneIndex++) {
-    // Hope rebuilds seed the front row before the upper rows fall, avoiding a
-    // late visual pop from replacing already-rendered front candidates.
-    gameState.lanes[laneIndex].setCardAtDistance(0, cards[laneIndex] ?? null)
+    const lane = gameState.lanes[laneIndex]
+    if (lane.getCardAtDistance(topDistance)) continue
+    // Keep the same safe-reroll logic, but place cards on the top rail so the
+    // front row is still rebuilt through the normal falling animation beats.
+    lane.setCardAtDistance(topDistance, cards[laneIndex] ?? null)
+    seeded = true
   }
+  return seeded
 }
 
 async function runPreparationRefreshAfterFieldEffects(
@@ -664,10 +670,14 @@ async function runPreparationRefreshAfterFieldEffects(
   let movedAny = false
   const shouldRegroupFront = !options.suppressFrontRegroupOnce
   if (options.avoidFrontMergeOnFullRefill && frontRowIsEmpty()) {
-    fillFrontRowWithSeparatedRefillRow()
-    movedAny = true
-    render()
-    await wait(200)
+    // Full-board rebuilds still use merge-safe candidates, but now they enter
+    // from the top row first so the front row also arrives via falling refill.
+    const seededTop = seedTopRowWithSeparatedRefillRow()
+    if (seededTop) {
+      movedAny = true
+      render()
+      await wait(200)
+    }
   }
   let safety = LANE_DISTANCE_COUNT * 3 + 3
   while (safety-- > 0) {
