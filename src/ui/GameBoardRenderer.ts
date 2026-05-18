@@ -1471,9 +1471,9 @@ export class GameBoardRenderer {
       { id: 'traps', label: '함정' },
       { id: 'treasures', label: '보물' },
       { id: 'flowers', label: '꽃' },
+      { id: 'relics', label: '유물' },
       { id: 'hand', label: '손패' },
       { id: 'combo', label: '조합' },
-      { id: 'relics', label: '유물' },
       { id: 'terms', label: '용어' },
     ]
     const tabBar = tabs
@@ -1539,7 +1539,7 @@ export class GameBoardRenderer {
           { icon: heart, value: `합산 +${bonus}`, tone: 'hp' },
           { icon: sword, value: `합산 +${bonus}`, tone: 'atk' },
         ],
-        note: `구성원 HP/ATK 합 + ${bonus}/${bonus}. 일러스트는 가장 강한 구성원을 따른다.`,
+        note: `구성원 HP/ATK 합 + ${bonus}/${bonus}.`,
       })
     }
     const mergeTwo = formationTile(2, '양초 무리', SpriteUrls.enemyWaves[2])
@@ -1908,11 +1908,11 @@ export class GameBoardRenderer {
       })
     }).join('')
     return `
-      <h3 class="compendium-section">합성 (Synthesis)</h3>
-      <div class="compendium-grid">${synthesisIntro}</div>
       <h3 class="compendium-section">조합 레시피 (Recipes)</h3>
       <p class="compendium-section-blurb">손패를 사용할 때마다 해당 카드가 활성 체인에 추가된다. 체인의 multiset이 아래 재료를 모두 포함하면 그 레시피가 보너스로 발동한다.</p>
       <div class="compendium-grid">${recipeCards}</div>
+      <h3 class="compendium-section">합성 (Synthesis)</h3>
+      <div class="compendium-grid">${synthesisIntro}</div>
     `
   }
 

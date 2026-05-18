@@ -137,7 +137,7 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
 .codex-tile {
   position: relative;
   display: grid;
-  grid-template-rows: 116px auto auto auto;
+  grid-template-rows: 152px auto auto auto;
   gap: 8px;
   padding: 10px 10px 12px;
   border-radius: 12px;
@@ -162,7 +162,11 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
 .codex-tile-art {
   position: relative;
   border-radius: 8px;
-  background: rgba(10, 7, 18, 0.55) center / contain no-repeat;
+  /* cover (not contain) lets the sprite fill the upper panel edge-to-edge so
+     square or portrait illustrations stop reading as a postage stamp. The
+     panel itself preserves the image's aspect ratio because background-size
+     keeps the source proportional; only the crop window changes. */
+  background: rgba(10, 7, 18, 0.55) center / cover no-repeat;
   border: 1px solid rgba(255, 232, 168, 0.16);
   box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.55);
   overflow: hidden;
