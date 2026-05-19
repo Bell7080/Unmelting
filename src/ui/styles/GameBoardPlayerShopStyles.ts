@@ -260,13 +260,17 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-artifact-layer {
   justify-content: center;
-  gap: clamp(8px, 1.1vw, 14px);
+  gap: clamp(12px, 1.5vw, 20px);
+  /* Keep relic cards visually centered by nudging the whole cluster left. */
+  transform: translateX(clamp(-10px, -1vw, -6px));
   padding-left: clamp(8px, 1.3vw, 16px);
   padding-right: clamp(8px, 1.3vw, 16px);
 }
 .shop-pack-layer {
   justify-content: center;
   gap: clamp(4px, 0.55vw, 8px);
+  /* Match the relic row's optical center while keeping button anchors fixed. */
+  transform: translateX(clamp(-10px, -1vw, -6px));
   background: transparent;
   border: none;
 }
@@ -285,7 +289,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0;
+  gap: 4px;
   width: clamp(96px, 9.8vw, 122px);
   height: clamp(68px, 8.4vh, 90px);
   padding: 8px 12px;
@@ -315,25 +319,21 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
     0 8px 18px rgba(0, 0, 0, 0.65),
     0 0 16px rgba(244, 164, 96, 0.35);
 }
+.shop-reroll-btn-title {
+  font-size: 14px;
+  line-height: 1;
+}
 .shop-reroll-btn-cost {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
   font-variant-numeric: tabular-nums;
 }
-.shop-reroll-btn-cost-icon {
-  display: inline-flex;
-  width: 28px;
-  height: 28px;
-  color: #ffd778;
-}
-.shop-reroll-btn-cost-icon .icon { width: 100%; height: 100%; }
 .shop-reroll-btn-cost-text { font-size: 13px; }
 .shop-reroll-btn.is-unaffordable {
   filter: saturate(0.7) brightness(0.78);
   cursor: not-allowed;
 }
-.shop-reroll-btn.is-unaffordable .shop-reroll-btn-cost-icon { color: rgba(255, 197, 181, 0.6); }
 .shop-reroll-btn.is-affordable { border-color: rgba(122, 202, 113, 0.7); }
 .shop-reroll-btn.is-reroll-impacted {
   animation: shop-reroll-impact 0.42s cubic-bezier(0.2, 0.86, 0.22, 1);
@@ -390,7 +390,6 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-pack-card.is-unaffordable {
   filter: saturate(0.82) brightness(0.84);
-  border-color: rgba(166, 62, 58, 0.5);
 }
 .shop-pack-illustration {
   position: absolute;
@@ -430,9 +429,6 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 /* Theme tints are applied as a glow on the card frame; the inner art comes
    from the pack_00X.webp sprite assigned inline in the renderer. */
-.shop-pack-card.pack-theme-resource { border-color: rgba(146, 220, 138, 0.5); }
-.shop-pack-card.pack-theme-upgrade { border-color: rgba(244, 164, 96, 0.55); }
-.shop-pack-card.pack-theme-unlock { border-color: rgba(180, 142, 230, 0.55); }
 
 /* Pack-picker overlay: a half-screen modal on top of the shop shell showing
    the 3 candidate cards. Background dims the shop slightly. */
