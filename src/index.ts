@@ -25,6 +25,10 @@ import {
   ActivityLogEntry,
   ShopBuyDetail,
   ShopOfferView,
+  ShopPackItemView,
+  ShopPackKind,
+  ShopPackPickDetail,
+  ShopPackPickerView,
   ShopStateView,
   type ResourceTrailTarget,
 } from '@ui/GameBoardRenderer'
@@ -122,12 +126,18 @@ let shopUpgradePackBuys = 0
 let shopUnlockPackBuys = 0
 let freeCardClaimed = false
 let currentShopMode: 'shop' | 'altar' = 'shop'
-let shopResources = [
-  { id: 'heal' as const, name: '체력 회복', valueLabel: '체력 +2', price: 90, bought: false },
-  { id: 'ember' as const, name: '불씨 회복', valueLabel: '불씨 +3', price: 80, bought: false },
-  { id: 'gauge' as const, name: '콤보 충전', valueLabel: '게이지 +2', price: 85, bought: false },
-  { id: 'hand' as const, name: '랜덤 손패', valueLabel: '손패 +1', price: 100, bought: false },
-]
+/** Active pack-picker session. Holds the rolled items + the pack kind so the
+ *  shopPackPick handler can look the picked item up and apply its effect. */
+interface ActivePackSession {
+  kind: ShopPackKind
+  items: ShopPackPickItem[]
+}
+interface ShopPackPickItem extends ShopPackItemView {
+  /** Applied when the player picks this card. Coins/score may be mutated
+   *  through closures, hence the void return + async wrapper. */
+  apply: () => Promise<void> | void
+}
+let activePackSession: ActivePackSession | null = null
 /** Run-length target and milestone placeholders for future boss/trial system. */
 const RUN_TARGET_TURNS = 100
 let altarBossPending = false
@@ -595,7 +605,6 @@ function buildShopStateView(): ShopStateView {
     basicPackCost: 120 + shopBasicPackBuys * 40,
     upgradePackCost: 700 + shopUpgradePackBuys * 130,
     unlockPackCost: 520 + shopUnlockPackBuys * 120,
-    resourceOffers: shopResources,
   }
 }
 
@@ -631,7 +640,7 @@ async function maybeOpenShopAfterTurn(): Promise<boolean> {
   shopUpgradePackBuys = 0
   shopUnlockPackBuys = 0
   freeCardClaimed = false
-  shopResources = shopResources.map((it) => ({ ...it, bought: false }))
+  activePackSession = null
   // The shutter is a hard turn break: cut the chain before the shop overlay
   // appears so the floating chain text never hangs above the shop tab.
   HandSystem.resetChain(chain)
@@ -679,9 +688,129 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
   return false
 }
 
+/** Return up to `n` items sampled without replacement from `pool`. */
+function sampleWithoutReplacement<T>(pool: T[], n: number): T[] {
+  const copy = pool.slice()
+  const out: T[] = []
+  while (copy.length > 0 && out.length < n) {
+    const idx = Math.floor(Math.random() * copy.length)
+    out.push(copy.splice(idx, 1)[0])
+  }
+  return out
+}
+
+/** Build the random "3-card" contents for a pack the player just bought.
+ *  Each entry carries an `apply` closure so the pick handler stays small. */
+function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
+  const character = gameState.character
+  if (kind === 'basic-pack') {
+    const pool: ShopPackPickItem[] = [
+      { id: 'heal-1', theme: 'resource', title: '체농 한 방울', effect: '체력 +1', apply: () => character.heal(1) },
+      { id: 'heal-2', theme: 'resource', title: '체력 회복', effect: '체력 +2', apply: () => character.heal(2) },
+      { id: 'heal-3', theme: 'resource', title: '체력 회복(대)', effect: '체력 +3', apply: () => character.heal(3) },
+      { id: 'ember-2', theme: 'resource', title: '불씨 회복', effect: '불씨 +2', apply: () => character.gainEmber(2) },
+      { id: 'ember-3', theme: 'resource', title: '불씨 회복(대)', effect: '불씨 +3', apply: () => character.gainEmber(3) },
+      { id: 'gauge-2', theme: 'resource', title: '콤보 충전', effect: '게이지 +2', apply: () => character.gainCandle(2) },
+      { id: 'coin-2', theme: 'resource', title: '화폐 한 줌', effect: '화폐 +2', apply: () => { coins += 2 } },
+      { id: 'score-100', theme: 'resource', title: '불빛 결정', effect: '불빛 +100', apply: () => { score += 100; scorePulseKey++ } },
+    ]
+    return sampleWithoutReplacement(pool, 3)
+  }
+  if (kind === 'upgrade-pack') {
+    const pool: ShopPackPickItem[] = [
+      { id: 'atk-1', theme: 'upgrade', title: '벼린 칼날', effect: '공격력 +1', apply: () => character.applyDamageBoost(1) },
+      { id: 'maxhp-3', theme: 'upgrade', title: '굳어진 심지', effect: '최대 체력 +3', apply: () => character.increaseMaxHealth(3) },
+      { id: 'maxhp-5', theme: 'upgrade', title: '굳어진 심지(대)', effect: '최대 체력 +5', apply: () => character.increaseMaxHealth(5) },
+      { id: 'shield-1', theme: 'upgrade', title: '밀랍 방패', effect: '방패 +1', apply: () => character.addShield(1) },
+      { id: 'shield-2', theme: 'upgrade', title: '밀랍 방패(대)', effect: '방패 +2', apply: () => character.addShield(2) },
+      { id: 'ember-5', theme: 'upgrade', title: '불씨 보양', effect: '불씨 +5', apply: () => character.gainEmber(5) },
+      { id: 'gauge-3', theme: 'upgrade', title: '심지 충전(대)', effect: '게이지 +3', apply: () => character.gainCandle(3) },
+    ]
+    return sampleWithoutReplacement(pool, 3)
+  }
+  // unlock-pack: roll 3 random hand-card defs and let the player add one to
+  // their hand. All cards are meta-unlocked by default in the current run,
+  // so this functions as a "draw-a-card" buffet rather than a permanent unlock.
+  const drawIds = sampleWithoutReplacement([...HAND_CARD_IDS], 3)
+  return drawIds.map((id) => {
+    const def = getHandCardDef(id)
+    return {
+      id: `unlock-${id}`,
+      theme: 'unlock' as const,
+      title: def.name,
+      effect: def.description,
+      apply: () => {
+        gameState.character.addHandCard(DropSystem.makeCard(id))
+      },
+    }
+  })
+}
+
+/** Open the pack picker for the just-clicked pack tile. Deducts the price
+ *  if the player can afford it, otherwise no-op. */
+function openPackPurchase(kind: ShopPackKind): void {
+  const cost =
+    kind === 'basic-pack'
+      ? 120 + shopBasicPackBuys * 40
+      : kind === 'upgrade-pack'
+        ? 700 + shopUpgradePackBuys * 130
+        : 520 + shopUnlockPackBuys * 120
+  if (score < cost) return
+  score = Math.max(0, score - cost)
+  scorePulseKey++
+  if (kind === 'basic-pack') shopBasicPackBuys += 1
+  if (kind === 'upgrade-pack') shopUpgradePackBuys += 1
+  if (kind === 'unlock-pack') shopUnlockPackBuys += 1
+  const title =
+    kind === 'basic-pack'
+      ? '기본 자원팩'
+      : kind === 'upgrade-pack'
+        ? currentShopMode === 'altar'
+          ? '단일 강화팩'
+          : '강화팩'
+        : currentShopMode === 'altar'
+          ? '카드 폐기팩'
+          : '해금팩'
+  const items = rollPackItems(kind)
+  activePackSession = { kind, items }
+  // Spend feedback before the picker so the score panel ticks down on click.
+  boardRenderer.playScoreSpendFeedback(score, scorePulseKey)
+  boardRenderer.openShop(buildShopStateView(), score, gameState.character)
+  const view: ShopPackPickerView = {
+    packKind: kind,
+    title,
+    items: items.map(({ id, title, effect, theme }) => ({ id, title, effect, theme })),
+  }
+  boardRenderer.openPackPicker(view)
+}
+
+/** Apply the player's pick from an active pack session, then close the picker. */
+async function handleShopPackPick(detail: ShopPackPickDetail): Promise<void> {
+  if (!activePackSession || activePackSession.kind !== detail.packKind) return
+  const picked = activePackSession.items.find((it) => it.id === detail.itemId)
+  if (!picked) return
+  const beforeResources = snapshotPlayerResources()
+  await picked.apply()
+  activePackSession = null
+  boardRenderer.closePackPicker()
+  // Most pack effects mutate character stats; play the standard player-gain
+  // trail so HP/방패/공격력 등 변화에 카드/숫자 피드백이 같이 따라온다.
+  await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
+  render()
+  boardRenderer.openShop(buildShopStateView(), score, gameState.character)
+}
+
 async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   if (!shopOpen) return
-  if (detail.kind !== 'relic' && detail.kind !== 'resource' && detail.kind !== 'free-card' && detail.kind !== 'basic-pack' && detail.kind !== 'upgrade-pack' && detail.kind !== 'unlock-pack') return
+  if (
+    detail.kind !== 'relic' &&
+    detail.kind !== 'free-card' &&
+    detail.kind !== 'reroll' &&
+    detail.kind !== 'basic-pack' &&
+    detail.kind !== 'upgrade-pack' &&
+    detail.kind !== 'unlock-pack'
+  )
+    return
   if (detail.kind === 'free-card') {
     if (!freeCardClaimed) coins += 1
     freeCardClaimed = true
@@ -689,22 +818,15 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     boardRenderer.openShop(buildShopStateView(), score, gameState.character)
     return
   }
-  if (detail.kind === 'basic-pack') { shopBasicPackBuys += 1; boardRenderer.openShop(buildShopStateView(), score, gameState.character); return }
-  if (detail.kind === 'upgrade-pack') { shopUpgradePackBuys += 1; boardRenderer.openShop(buildShopStateView(), score, gameState.character); return }
-  if (detail.kind === 'unlock-pack') { shopUnlockPackBuys += 1; boardRenderer.openShop(buildShopStateView(), score, gameState.character); return }
-  if (detail.kind === 'resource') {
-    const target = shopResources.find((it) => it.id === detail.resourceId)
-    if (!target || target.bought) return
-    target.bought = true
-    if (target.id === 'heal') gameState.character.heal(2)
-    if (target.id === 'ember') gameState.character.gainEmber(3)
-    if (target.id === 'gauge') gameState.character.gainCandle(2)
-    if (target.id === 'hand') coins += 1
-    render()
-    boardRenderer.openShop(buildShopStateView(), score, gameState.character)
+  if (
+    detail.kind === 'basic-pack' ||
+    detail.kind === 'upgrade-pack' ||
+    detail.kind === 'unlock-pack'
+  ) {
+    openPackPurchase(detail.kind)
     return
   }
-  if (!detail.relicId) {
+  if (detail.kind === 'reroll') {
     const rerollCost = 1 + shopRerollCount
     if (score < rerollCost) return
     score = Math.max(0, score - rerollCost)
@@ -714,6 +836,7 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     boardRenderer.openShop(buildShopStateView(), score, gameState.character)
     return
   }
+  if (!detail.relicId) return
   const offer = currentShopOffers.find((entry) => entry.relicId === detail.relicId)
   if (!offer || offer.purchased) return
   if (score < offer.price) { boardRenderer.openShop(buildShopStateView(), score, gameState.character); return }
@@ -752,6 +875,13 @@ async function closeShopAndResume(): Promise<void> {
   if (!shopOpen) return
   shopOpen = false
   currentShopOffers = []
+  // EXIT while a pack picker is mid-open just drops the picker; the cost has
+  // already been spent so the unused roll simply burns. Clearing the session
+  // prevents stale picks from firing after the next shop opens.
+  if (activePackSession) {
+    activePackSession = null
+    boardRenderer.closePackPicker()
+  }
   // Exit beat: cards bounce down then swoosh upward in random staggered
   // order WITHOUT covering the candle gauge (clipped by the shell). Only
   // after the cards have fully left do we tear down the overlay and
@@ -1307,6 +1437,10 @@ document.addEventListener('candleModeSelect', (e: Event) => {
 
 document.addEventListener('shopBuy', (e: Event) => {
   void handleShopBuy((e as CustomEvent<ShopBuyDetail>).detail)
+})
+
+document.addEventListener('shopPackPick', (e: Event) => {
+  void handleShopPackPick((e as CustomEvent<ShopPackPickDetail>).detail)
 })
 
 document.addEventListener('shopClose', () => {

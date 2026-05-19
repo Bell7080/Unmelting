@@ -221,11 +221,14 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 /* SHOP stamp removed by player request — shop now identifies itself
    purely by the relic stalls + EXIT label. */
 
-/* 3 relic cards across the rail, one card per lane. Cards drop in from
-   above and on close bounce-down then swoosh-up in random order. */
+/* Balatro-style 2-tier shop:
+   - Top : [새로고침] [유물] [유물] [유물]  (4 equal columns)
+   - Bottom: [무료카드] [카드팩] [카드팩] [카드팩] (4 equal columns)
+   Every tile shares the .shop-relic-card frame so the row reads as one row of
+   equally-weighted cards. */
 .shop-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: clamp(8px, 1.4vw, 18px);
   align-items: stretch;
   height: auto;
@@ -233,34 +236,143 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   padding: 0 6px;
   overflow: visible;
 }
-.shop-grid.top {
-  grid-template-columns: 1fr 1fr 1fr auto;
-  grid-template-rows: auto 1fr;
-  align-content: start;
-}
 .shop-grid.bottom {
-  grid-template-columns: 1fr 1fr 1fr 1fr;
   margin-top: 10px;
 }
-.shop-mode-chip {
-  grid-column: 1 / span 1;
-  align-self: center;
-  justify-self: start;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 215, 120, 0.4);
+
+/* Reroll tile — same dimensions as a relic card so the top row stays a
+   straight 4-up grid. Uses a swirl-tinted art band so it reads as "shuffle"
+   without an emoji. */
+.shop-reroll-card .shop-reroll-art {
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 232, 168, 0.32), transparent 60%),
+    radial-gradient(circle at 70% 70%, rgba(244, 164, 96, 0.28), transparent 60%),
+    repeating-conic-gradient(from 0deg, rgba(255, 215, 120, 0.18) 0deg 12deg, rgba(20, 14, 28, 0.6) 12deg 28deg);
 }
-.shop-action-btn-reroll { grid-column: 4; justify-self: end; }
-.shop-action-btn-pack { min-height: 30px; }
-.shop-pack-zone { grid-column: 1 / span 2; }
-.shop-free-card { grid-column: 4; }
-.shop-pack-zone-title { margin: 0 0 4px; }
-.shop-pack-zone-note { margin: 0; opacity: 0.85; font-size: 12px; }
-.shop-action-btn {
-  border-radius: 10px;
-  border: 1px solid rgba(255, 215, 120, 0.42);
-  background: linear-gradient(180deg, rgba(48, 31, 43, 0.95), rgba(24, 16, 28, 0.95));
-  color: rgba(255, 236, 186, 0.96);
+/* Free-card tile gets a warm candle-glow art band. */
+.shop-free-card .shop-free-art {
+  background:
+    radial-gradient(ellipse 60% 80% at 50% 60%, rgba(255, 232, 168, 0.55), transparent 70%),
+    radial-gradient(circle at 50% 30%, rgba(255, 188, 96, 0.32), transparent 60%),
+    linear-gradient(180deg, rgba(48, 31, 43, 0.92), rgba(18, 12, 24, 0.96));
+}
+
+/* Pack tiles: relic-card chassis, themed art band per pack type. */
+.shop-pack-art {
+  position: relative;
+}
+.shop-pack-art::after {
+  /* Small wax-stamp dot in the centre of the pack art so each pack reads as
+     a sealed envelope rather than a blank card. */
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 26%;
+  height: 26%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 35% 30%, #ffd778, #c44a1c 70%, #58140c 100%);
+  box-shadow: 0 0 14px rgba(255, 188, 96, 0.55);
+  opacity: 0.92;
+}
+.pack-theme-resource .shop-pack-art {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(146, 220, 138, 0.36), transparent 60%),
+    linear-gradient(180deg, rgba(38, 56, 38, 0.92), rgba(16, 26, 18, 0.96));
+}
+.pack-theme-upgrade .shop-pack-art {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(244, 164, 96, 0.36), transparent 60%),
+    linear-gradient(180deg, rgba(72, 36, 22, 0.92), rgba(28, 14, 12, 0.96));
+}
+.pack-theme-unlock .shop-pack-art {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(180, 142, 230, 0.36), transparent 60%),
+    linear-gradient(180deg, rgba(46, 30, 70, 0.92), rgba(18, 12, 32, 0.96));
+}
+.shop-pack-card.pack-theme-resource { border-color: rgba(146, 220, 138, 0.46); }
+.shop-pack-card.pack-theme-upgrade { border-color: rgba(244, 164, 96, 0.5); }
+.shop-pack-card.pack-theme-unlock { border-color: rgba(180, 142, 230, 0.5); }
+
+/* Pack-picker overlay: a half-screen modal on top of the shop shell showing
+   the 3 candidate cards. Background dims the shop slightly. */
+.shop-pack-picker {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.shop-pack-picker.is-open {
+  display: flex;
+  pointer-events: auto;
+  background: radial-gradient(ellipse at 50% 50%, rgba(10, 6, 14, 0.68), rgba(4, 2, 8, 0.88));
+  backdrop-filter: blur(2px);
+  animation: shop-overlay-in 0.22s ease;
+}
+.shop-pack-picker-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  max-width: 92%;
+}
+.shop-pack-picker-head {
+  text-align: center;
+  color: rgba(255, 232, 168, 0.96);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+.shop-pack-picker-head h2 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  font-weight: 900;
+}
+.shop-pack-picker-head p {
+  margin: 4px 0 0;
+  color: rgba(232, 214, 180, 0.82);
+  font-size: 13px;
+}
+.shop-pack-picker-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 200px));
+  gap: clamp(10px, 1.4vw, 18px);
+}
+.shop-pack-pick-card {
+  position: relative;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 215, 120, 0.5);
+  background: linear-gradient(180deg, rgba(45, 30, 39, 0.98), rgba(18, 12, 24, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.22),
+    0 14px 28px rgba(0, 0, 0, 0.65);
+  padding: 14px 12px 16px;
+  min-height: 160px;
+  cursor: pointer;
+  transform-origin: center bottom;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  animation: shop-pack-pick-in 0.4s cubic-bezier(0.18, 0.86, 0.22, 1) backwards;
+  animation-delay: calc(var(--pick-i, 0) * 80ms);
+}
+.shop-pack-pick-card:hover,
+.shop-pack-pick-card:focus-visible {
+  transform: translateY(-3px) scale(1.04);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.32),
+    0 18px 36px rgba(0, 0, 0, 0.7),
+    0 0 28px rgba(244, 164, 96, 0.4);
+}
+.shop-pack-pick-card.pack-theme-resource { border-color: rgba(146, 220, 138, 0.62); }
+.shop-pack-pick-card.pack-theme-upgrade { border-color: rgba(244, 164, 96, 0.62); }
+.shop-pack-pick-card.pack-theme-unlock { border-color: rgba(180, 142, 230, 0.62); }
+@keyframes shop-pack-pick-in {
+  0% { transform: translateY(-40%) scale(0.86); opacity: 0; }
+  72% { transform: translateY(6px) scale(1.02); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
 }
 
 .shop-relic-card {
@@ -287,8 +399,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   animation-direction: normal, alternate;
 }
 .shop-grid > .shop-relic-card:nth-child(1) { animation-delay: 60ms; }
-.shop-grid > .shop-relic-card:nth-child(2) { animation-delay: 160ms; }
-.shop-grid > .shop-relic-card:nth-child(3) { animation-delay: 260ms; }
+.shop-grid > .shop-relic-card:nth-child(2) { animation-delay: 140ms; }
+.shop-grid > .shop-relic-card:nth-child(3) { animation-delay: 220ms; }
+.shop-grid > .shop-relic-card:nth-child(4) { animation-delay: 300ms; }
 .shop-shell.has-entered .shop-relic-card {
   /* Buying a card rebuilds the shop contents; this guard prevents that
      refresh from replaying the first-open drop animation. */

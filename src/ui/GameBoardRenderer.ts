@@ -63,10 +63,16 @@ export interface ItemActionDetail {
   shiftKey?: boolean
 }
 
+export type ShopPackKind = 'basic-pack' | 'upgrade-pack' | 'unlock-pack'
+
 export interface ShopBuyDetail {
-  kind: 'relic' | 'free-card' | 'basic-pack' | 'upgrade-pack' | 'unlock-pack' | 'resource'
+  kind: 'relic' | 'free-card' | 'reroll' | ShopPackKind
   relicId?: RelicId
-  resourceId?: 'heal' | 'ember' | 'gauge' | 'hand'
+}
+
+export interface ShopPackPickDetail {
+  packKind: ShopPackKind
+  itemId: string
 }
 
 export interface ShopOfferView {
@@ -77,12 +83,20 @@ export interface ShopOfferView {
   price: number
   purchased?: boolean
 }
-export interface ShopResourceOfferView {
-  id: 'heal' | 'ember' | 'gauge' | 'hand'
-  name: string
-  valueLabel: string
-  price: number
-  bought?: boolean
+/** One option that pops out when a pack is torn open. */
+export interface ShopPackItemView {
+  /** Stable id within this picker session — echoed back via shopPackPick. */
+  id: string
+  title: string
+  /** Effect line ("체력 +2", "공격력 +1" 등). */
+  effect: string
+  /** Theme tints the card frame: resource(자원)/upgrade(강화)/unlock(해금). */
+  theme: 'resource' | 'upgrade' | 'unlock'
+}
+export interface ShopPackPickerView {
+  packKind: ShopPackKind
+  title: string
+  items: ShopPackItemView[]
 }
 export interface ShopStateView {
   /** Normal 10/20/... shop vs 30/60/... altar variant. */
@@ -92,7 +106,6 @@ export interface ShopStateView {
   rerollCost: number
   basicPackCost: number
   upgradePackCost: number
-  resourceOffers: ShopResourceOfferView[]
   unlockPackCost: number
 }
 
@@ -1224,14 +1237,19 @@ export class GameBoardRenderer {
    *  and ARIA text so card art does not blink as if the shop reloaded. */
   private refreshOpenShopCards(offers: ShopOfferView[], score: number): boolean {
     const shell = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-shell')
-    const grid = shell?.querySelector<HTMLElement>('.shop-grid')
-    if (!shell || !grid || !this.shopOverlayElement?.classList.contains('is-open')) return false
-    const cards = Array.from(grid.querySelectorAll<HTMLElement>('.shop-relic-card'))
+    if (!shell || !this.shopOverlayElement?.classList.contains('is-open')) return false
+    // Only the relic cards carry data-shop-buy; reroll/free/pack tiles use
+    // data-shop-buy-kind without a relic id and must stay untouched here.
+    const cards = Array.from(
+      shell.querySelectorAll<HTMLElement>('.shop-grid.top .shop-relic-card[data-shop-buy]')
+    )
     if (cards.length !== offers.length) return false
 
     for (const offer of offers) {
       const def = RELIC_DEFINITIONS[offer.relicId]
-      const card = grid.querySelector<HTMLElement>(`.shop-relic-card[data-shop-buy="${def.id}"]`)
+      const card = shell.querySelector<HTMLElement>(
+        `.shop-grid.top .shop-relic-card[data-shop-buy="${def.id}"]`
+      )
       if (!card) return false
       card.classList.remove('is-affordable', 'is-unaffordable', 'is-purchased')
       card.classList.add(this.shopRelicAffordabilityClass(offer, score))
@@ -1245,6 +1263,139 @@ export class GameBoardRenderer {
     }
     shell.classList.add('has-entered')
     return true
+  }
+
+  /** Reroll tile — sits in the top-row's first column with the same width
+   *  as a relic card so the player reads a 4-up row of equal slots. */
+  private renderShopRerollCard(cost: number, score: number): string {
+    const affordable = score >= cost ? 'is-affordable' : 'is-unaffordable'
+    return `
+      <article class="shop-relic-card shop-reroll-card ${affordable}"
+               data-shop-buy-kind="reroll"
+               tabindex="0"
+               aria-label="새로고침 — ${cost}점">
+        <div class="shop-relic-art shop-reroll-art" aria-hidden="true"></div>
+        <div class="shop-relic-body">
+          <h3 class="shop-relic-title">새로고침</h3>
+          <p class="shop-relic-effect">유물 진열을 다시 굴린다</p>
+          <p class="shop-relic-flavor">남은 칸은 그대로 둔다</p>
+        </div>
+        <span class="shop-price-label" aria-hidden="true">
+          <span class="shop-price-label-icon">${tagIcon()}</span>
+          <span class="shop-price-label-text">${cost.toLocaleString()}점</span>
+        </span>
+      </article>
+    `
+  }
+
+  /** Free card tile (Balatro voucher slot). Bottom-left of the shop. */
+  private renderShopFreeCard(claimed: boolean, label: string): string {
+    const stateClass = claimed ? 'is-purchased' : 'is-affordable'
+    return `
+      <article class="shop-relic-card shop-free-card ${stateClass}"
+               data-shop-buy-kind="free-card"
+               tabindex="0"
+               aria-label="${label} — ${claimed ? '획득 완료' : '무료 1회'}">
+        <div class="shop-relic-art shop-free-art" aria-hidden="true"></div>
+        <div class="shop-relic-body">
+          <h3 class="shop-relic-title">${label}</h3>
+          <p class="shop-relic-effect">이번 방문 1회 무료 획득</p>
+          <p class="shop-relic-flavor">촛불이 남긴 작은 호의</p>
+        </div>
+        <span class="shop-price-label" aria-hidden="true">
+          <span class="shop-price-label-icon">${tagIcon()}</span>
+          <span class="shop-price-label-text">${claimed ? '획득 완료' : '무료'}</span>
+        </span>
+      </article>
+    `
+  }
+
+  /** One of the three pack tiles (basic / upgrade / unlock).
+   *  Click → openPackPicker is opened by index.ts after price is deducted. */
+  private renderShopPackCard(
+    kind: ShopPackKind,
+    title: string,
+    effect: string,
+    cost: number,
+    score: number,
+    theme: 'resource' | 'upgrade' | 'unlock'
+  ): string {
+    const affordable = score >= cost ? 'is-affordable' : 'is-unaffordable'
+    return `
+      <article class="shop-relic-card shop-pack-card pack-theme-${theme} ${affordable}"
+               data-shop-buy-kind="${kind}"
+               tabindex="0"
+               aria-label="${title} — ${cost}점">
+        <div class="shop-relic-art shop-pack-art pack-theme-${theme}" aria-hidden="true"></div>
+        <div class="shop-relic-body">
+          <h3 class="shop-relic-title">${title}</h3>
+          <p class="shop-relic-effect">${effect}</p>
+          <p class="shop-relic-flavor">${theme === 'resource' ? '한 줌의 보급품' : theme === 'upgrade' ? '소녀를 단단히 한다' : '잠긴 손패가 비집고 나온다'}</p>
+        </div>
+        <span class="shop-price-label" aria-hidden="true">
+          <span class="shop-price-label-icon">${tagIcon()}</span>
+          <span class="shop-price-label-text">${cost.toLocaleString()}점</span>
+        </span>
+      </article>
+    `
+  }
+
+  /** Open the modal pack-picker: 3 cards pop out of the pack; the player
+   *  picks one. The overlay sits above the shop shell and is dismissed
+   *  automatically when index.ts applies the pick. */
+  openPackPicker(view: ShopPackPickerView): void {
+    if (!this.shopOverlayElement) return
+    let host = this.shopOverlayElement.querySelector<HTMLElement>('.shop-pack-picker')
+    if (!host) {
+      host = document.createElement('div')
+      host.className = 'shop-pack-picker'
+      host.addEventListener('click', (e) => {
+        const t = e.target as HTMLElement
+        const card = t.closest<HTMLElement>('[data-pack-pick]')
+        if (!card) return
+        const itemId = card.dataset.packPick
+        const packKind = card.dataset.packKind as ShopPackKind | undefined
+        if (!itemId || !packKind) return
+        document.dispatchEvent(
+          new CustomEvent<ShopPackPickDetail>('shopPackPick', { detail: { packKind, itemId } })
+        )
+      })
+      this.shopOverlayElement.appendChild(host)
+    }
+    const cards = view.items
+      .map(
+        (item, i) => `
+          <article class="shop-pack-pick-card pack-theme-${item.theme}"
+                   data-pack-pick="${item.id}"
+                   data-pack-kind="${view.packKind}"
+                   style="--pick-i:${i};"
+                   tabindex="0"
+                   aria-label="${item.title} — ${item.effect}">
+            <div class="shop-relic-body">
+              <h3 class="shop-relic-title">${item.title}</h3>
+              <p class="shop-relic-effect">${item.effect}</p>
+            </div>
+          </article>`
+      )
+      .join('')
+    host.innerHTML = `
+      <div class="shop-pack-picker-shell" role="dialog" aria-label="${view.title}">
+        <header class="shop-pack-picker-head">
+          <h2>${view.title}</h2>
+          <p>3장 중 1장을 골라.</p>
+        </header>
+        <div class="shop-pack-picker-cards">${cards}</div>
+      </div>
+    `
+    host.classList.add('is-open')
+  }
+
+  /** Hide the pack picker overlay without touching the shop shell. */
+  closePackPicker(): void {
+    const host = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-pack-picker')
+    if (!host) return
+    host.classList.remove('is-open')
+    host.innerHTML = ''
   }
 
   /** Shop relic card. Click on the card itself buys the relic (the
@@ -1308,8 +1459,7 @@ export class GameBoardRenderer {
         const kind = buyTarget.dataset.shopBuyKind as ShopBuyDetail['kind'] | undefined
         if (!kind) return
         const relicId = buyTarget.dataset.shopBuy as RelicId | undefined
-        const resourceId = buyTarget.dataset.shopResource as ShopBuyDetail['resourceId'] | undefined
-        document.dispatchEvent(new CustomEvent<ShopBuyDetail>('shopBuy', { detail: { kind, relicId, resourceId } }))
+        document.dispatchEvent(new CustomEvent<ShopBuyDetail>('shopBuy', { detail: { kind, relicId } }))
       })
       document.body.appendChild(this.shopOverlayElement)
     }
@@ -1329,32 +1479,25 @@ export class GameBoardRenderer {
     // Plain shell — no SHOP label, no separate header. Each card is its
     // own clickable buy target with a flat price tag at the bottom; the
     // EXIT button hangs off the bottom-right.
-    const modeLabel = shop.mode === 'altar' ? '제단' : '상점'
+    //
+    // New layout (Balatro-style 2-tier grid):
+    //   Top    : 새로고침 카드 + 유물 3장 (4 equal columns)
+    //   Bottom : 무료 카드 + 카드팩 3장 (4 equal columns, relic-card 외형)
+    // Clicking a 카드팩 opens the pack-picker overlay (3 random items → pick 1).
+    const upgradePackLabel = shop.mode === 'altar' ? '단일 강화팩' : '강화팩'
+    const unlockPackLabel = shop.mode === 'altar' ? '카드 폐기팩' : '해금팩'
+    const freeCardLabel = shop.mode === 'altar' ? '제단의 무료 축복' : '무료 카드'
     this.shopOverlayElement.innerHTML = `
       <div class="shop-shell ${suppressEnterAnimation}" role="dialog" aria-label="상점">
-        <section class="shop-grid top" aria-label="상점 유물 목록">
-          <div class="shop-mode-chip">${modeLabel}</div>
-          <button class="shop-action-btn shop-action-btn-pack" data-shop-buy-kind="basic-pack">기본 자원팩 ${shop.basicPackCost}점</button>
-          <button class="shop-action-btn shop-action-btn-pack" data-shop-buy-kind="upgrade-pack">${shop.mode === 'altar' ? '단일 강화팩' : '강화팩'} ${shop.upgradePackCost}점</button>
-          <button class="shop-action-btn shop-action-btn-pack" data-shop-buy-kind="unlock-pack">${shop.mode === 'altar' ? '카드 폐기팩' : '해금팩'} ${shop.unlockPackCost}점</button>
-          <button class="shop-action-btn shop-action-btn-reroll" data-shop-buy-kind="relic">새로고침 ${shop.rerollCost}점</button>
+        <section class="shop-grid top" aria-label="유물 상점">
+          ${this.renderShopRerollCard(shop.rerollCost, score)}
           ${cards}
         </section>
-        <section class="shop-grid bottom" aria-label="상점 보충 목록">
-          <section class="shop-pack-zone">
-            <h4 class="shop-pack-zone-title">카드팩 구역</h4>
-            <p class="shop-pack-zone-note">기본 자원 · 강화 · 해금(또는 제단 폐기)</p>
-          </section>
-          <article class="shop-relic-card ${shop.freeCardClaimed ? 'is-purchased' : 'is-affordable'} shop-free-card" data-shop-buy-kind="free-card">
-            <div class="shop-relic-body"><h3 class="shop-relic-title">${shop.mode === 'altar' ? '제단의 무료 축복' : '무료 카드'}</h3><p class="shop-relic-effect">이번 방문 1회 무료 획득</p></div>
-          </article>
-          ${shop.resourceOffers
-            .map(
-              (resource) => `<article class="shop-relic-card ${resource.bought ? 'is-purchased' : 'is-affordable'}" data-shop-buy-kind="resource" data-shop-resource="${resource.id}">
-              <div class="shop-relic-body"><h3 class="shop-relic-title">${resource.name}</h3><p class="shop-relic-effect">${resource.valueLabel}</p><p class="shop-relic-flavor">${resource.price}점</p></div>
-            </article>`
-            )
-            .join('')}
+        <section class="shop-grid bottom" aria-label="카드 및 카드팩">
+          ${this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel)}
+          ${this.renderShopPackCard('basic-pack', '기본 자원팩', '자원 3장 중 1택', shop.basicPackCost, score, 'resource')}
+          ${this.renderShopPackCard('upgrade-pack', upgradePackLabel, '강화 3장 중 1택', shop.upgradePackCost, score, 'upgrade')}
+          ${this.renderShopPackCard('unlock-pack', unlockPackLabel, '해금 3장 중 1택', shop.unlockPackCost, score, 'unlock')}
         </section>
         <button class="shop-close-btn" type="button" data-shop-close aria-label="상점 나가기">EXIT</button>
       </div>
