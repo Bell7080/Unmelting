@@ -1277,8 +1277,9 @@ export class GameBoardRenderer {
     `
   }
 
-  /** Pack tile — full illustration with centered text overlay, NOT the
-   *  art+body card split. Each pack carries its own themed colorway. */
+  /** Pack tile — full illustration (pack_001/002/003.webp) with centered
+   *  title/effect overlay. NOT the art+body card split: the pack reads as
+   *  a sealed envelope, not a card with a separate text panel. */
   private renderShopPackCard(
     kind: ShopPackKind,
     title: string,
@@ -1288,12 +1289,13 @@ export class GameBoardRenderer {
     theme: 'resource' | 'upgrade' | 'unlock'
   ): string {
     const affordable = score >= cost ? 'is-affordable' : 'is-unaffordable'
+    const artUrl = SpriteUrls.packs[kind]
     return `
       <article class="shop-pack-card pack-theme-${theme} ${affordable}"
                data-shop-buy-kind="${kind}"
                tabindex="0"
                aria-label="${title} — ${cost}점">
-        <div class="shop-pack-illustration pack-theme-${theme}" aria-hidden="true"></div>
+        <div class="shop-pack-illustration" style="background-image: url('${artUrl}')" aria-hidden="true"></div>
         <div class="shop-pack-overlay">
           <h3 class="shop-pack-title">${title}</h3>
           <p class="shop-pack-effect">${effect}</p>
@@ -1448,22 +1450,25 @@ export class GameBoardRenderer {
     const unlockPackLabel = shop.mode === 'altar' ? '카드 폐기팩' : '해금팩'
     const freeCardLabel = shop.mode === 'altar' ? '제단의 무료 축복' : '무료 카드'
     // New layered layout:
-    //   .rail-shutter      — single 보자기 cloth (rendered inside .rail) that
-    //                        unfurls top-down on shop open and stays behind
-    //                        every layer until shop close.
-    //   .shop-top-row      — 8:2 grid: artifact layer (left) + reroll btn (right)
-    //   .shop-bottom-row   — 3:7 grid: free card layer (left) + pack layer (right)
-    //   .shop-layer        — subtle dark backdrop, NO border, just gives the
-    //                        contents a sense of "space" without boxing them in.
-    //   Cards/buttons inside the layers keep their fixed widths so they read
-    //   as physical objects placed onto the cloth, not as fluid grid cells.
+    //   .rail-shutter   — original 9-panel wax shutter (in .rail), closes
+    //                     sequentially first.
+    //   .shop-dim-veil  — semi-transparent black sheet inside the shell,
+    //                     descends top-down AFTER the shutter, providing the
+    //                     unified darkening backdrop the player asked for.
+    //   .shop-top-row   — 2:8 grid: reroll button (LEFT, small) + artifact
+    //                     layer (RIGHT, 3 cards floating).
+    //   .shop-bottom-row — 3:7 grid: free card layer (LEFT) + pack layer (RIGHT).
+    //   .shop-layer     — visual area marker (subtle dark wash, no border);
+    //                     cards inside keep fixed sizes and may extend past
+    //                     the layer's bounds by design.
     this.shopOverlayElement.innerHTML = `
       <div class="shop-shell" role="dialog" aria-label="상점">
+        <div class="shop-dim-veil" aria-hidden="true"></div>
         <section class="shop-row shop-top-row" aria-label="유물 상점">
-          <div class="shop-layer shop-artifact-layer">${cards}</div>
           <div class="shop-layer shop-reroll-zone">
             ${this.renderShopRerollButton(shop.rerollCost, shop.coins)}
           </div>
+          <div class="shop-layer shop-artifact-layer">${cards}</div>
         </section>
         <section class="shop-row shop-bottom-row" aria-label="카드 및 카드팩">
           <div class="shop-layer shop-free-layer">
@@ -1576,7 +1581,9 @@ export class GameBoardRenderer {
   playShopExitAnimation(): Promise<void> {
     const shell = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-shell')
     if (!shell) return Promise.resolve()
-    const cards = Array.from(shell.querySelectorAll<HTMLElement>('.shop-relic-card'))
+    const cards = Array.from(
+      shell.querySelectorAll<HTMLElement>('.shop-relic-card, .shop-pack-card')
+    )
     shell.classList.add('is-closing')
     if (cards.length === 0) return Promise.resolve()
 

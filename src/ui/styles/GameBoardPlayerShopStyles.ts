@@ -104,50 +104,81 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   align-items: end;
 }
 
-/* ---------- Shop shutter (보자기) + modal ---------- */
+/* ---------- Shop shutter + dim veil + modal ---------- */
 .rail.is-shop-quaking {
   animation: shop-rail-quake 0.52s cubic-bezier(0.18, 0.9, 0.24, 1);
 }
-/* New shutter behavior: a single 보자기-style cloth panel unfurls top-down
-   in one motion, replacing the previous 9 individual wax drapes. The cloth
-   is semi-transparent black with a subtle woven texture so the rail
-   underneath shows just enough to remind the player "the run is paused,
-   but still there".  All inner span panels are hidden — kept around only
-   so existing shutter-build code doesn't break. */
+/* Wax shutter restored to the original 9-panel parchment drape (per
+   feedback to roll the closure animation back). A separate semi-
+   transparent black "dim veil" descends ON TOP of the shutter
+   sequentially — that's the .shop-dim-veil layer inside the shell. */
 .rail-shutter {
   position: absolute;
   inset: 0;
   z-index: 35;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: clamp(7px, 1vw, 12px);
+  padding: clamp(7px, 1vw, 12px);
   pointer-events: none;
-  background:
-    repeating-linear-gradient(
-      135deg,
-      rgba(255, 232, 168, 0.04) 0 6px,
-      rgba(0, 0, 0, 0.16) 6px 12px
-    ),
-    linear-gradient(180deg, rgba(8, 5, 14, 0.78) 0%, rgba(4, 2, 8, 0.92) 100%);
-  border-bottom: 1px solid rgba(255, 215, 120, 0.18);
-  box-shadow: inset 0 -22px 40px rgba(0, 0, 0, 0.5);
-  transform: scaleY(0);
-  transform-origin: top;
-  animation: shop-cloth-unfurl 0.58s cubic-bezier(0.18, 0.86, 0.22, 1) forwards;
 }
 .rail-shutter span {
-  /* The old per-panel drapes are replaced by a single cloth; legacy spans
-     are kept for backward compat but hidden so they don't render. */
-  display: none;
+  position: relative;
+  border-radius: 8px 8px 14px 14px;
+  background:
+    radial-gradient(ellipse 80% 35% at 50% 100%, rgba(244, 164, 96, 0.32), transparent 70%),
+    radial-gradient(circle at 18% 18%, rgba(0, 0, 0, 0.45), transparent 38%),
+    repeating-linear-gradient(
+      125deg,
+      rgba(255, 232, 168, 0.08) 0 3px,
+      rgba(0, 0, 0, 0.25) 3px 9px
+    ),
+    linear-gradient(180deg, rgba(120, 64, 28, 0.72) 0%, rgba(48, 24, 14, 0.92) 35%, rgba(20, 10, 14, 0.98) 100%);
+  border: 1px solid rgba(180, 110, 52, 0.46);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.18),
+    inset 0 -10px 16px rgba(0, 0, 0, 0.55),
+    0 10px 22px rgba(0, 0, 0, 0.6);
+  transform: translateY(-120%) scaleY(0.82);
+  transform-origin: top;
+  animation: shop-shutter-drop 0.52s cubic-bezier(0.18, 0.86, 0.22, 1) forwards;
+  animation-delay: calc(var(--shutter-i) * 36ms);
+  overflow: hidden;
 }
-.rail-shutter.is-closed {
-  transform: scaleY(1);
+.rail-shutter span::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffd778, #c44a1c 70%, #58140c 100%);
+  box-shadow: 0 0 6px rgba(255, 188, 96, 0.55);
 }
-.rail-shutter.is-persistent {
-  /* Purchase renders recreate the rail while the shop is open. Lock the
-     already-unfurled cloth in place instead of replaying the drop. */
+.rail-shutter span::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 8px;
+  background: radial-gradient(ellipse 70% 90% at 50% 0%, rgba(244, 164, 96, 0.38), transparent 72%);
+  pointer-events: none;
+}
+.rail-shutter.is-closed span {
+  transform: translateY(0) scaleY(1);
+}
+.rail-shutter.is-persistent span {
   animation: none;
-  transform: scaleY(1);
+  opacity: 1;
+  transform: translateY(0) scaleY(1);
 }
-.rail-shutter.is-opening {
-  animation: shop-cloth-furl 0.42s cubic-bezier(0.42, 0, 0.24, 1) forwards;
+.rail-shutter.is-opening span {
+  animation: shop-shutter-open 0.42s cubic-bezier(0.42, 0, 0.24, 1) forwards;
+  animation-delay: calc(var(--shutter-i) * 18ms);
 }
 /* In-rail shop overlay. Body-mounted but pointer-transparent, so the score
    panel, hand panel and player card stay readable AND interactive for
@@ -178,16 +209,31 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   overflow: visible;
   animation: shop-overlay-in 0.32s cubic-bezier(0.18, 0.86, 0.22, 1);
 }
-/* The 보자기 cloth backdrop lives in .rail-shutter (single cloth panel,
-   styled above). The shop-shell itself stays transparent; the layers
-   provide their own subtle dark backgrounds on top of that cloth. */
+/* Dim veil — semi-transparent black layer that descends sequentially AFTER
+   the wax shutter, sitting BEHIND every layer/card inside the shell. The
+   shutter (in .rail) and this veil stack: shutter first, veil second.  The
+   veil has a long animation-delay so it visibly lags the shutter close. */
+.shop-dim-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0.74) 100%);
+  transform: scaleY(0);
+  transform-origin: top;
+  /* Drops the moment openShop mounts. The wax shutter has already finished
+     closing by the time we get here, so this is the second of two sequential
+     beats (shutter → veil). */
+  animation: shop-dim-veil-drop 0.42s cubic-bezier(0.22, 0.86, 0.22, 1) both;
+}
 
 /* Layered shop layout:
-   - Top : artifact layer (8) + reroll zone (2)
+   - Top : reroll button (2) + artifact layer (8)   ← reroll moved LEFT
    - Bottom: free-card layer (3) + pack layer (7)
-   Each layer is a subtle dark "tray" without a border so the contents read as
-   loosely placed objects, not as a boxed-up grid cell.  Cards/buttons inside
-   keep fixed sizes — the layers absorb the slack. */
+   Each layer just MARKS an area with a subtle dark wash — no border, no
+   constraint on the cards' size. Cards keep fixed widths and can visually
+   extend past the layer's boundary; the layer is a hint, not a frame. */
 .shop-row {
   position: relative;
   z-index: 1;
@@ -195,8 +241,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   gap: clamp(10px, 1.4vw, 18px);
   align-items: stretch;
   min-height: 0;
+  overflow: visible;
 }
-.shop-top-row    { grid-template-columns: 8fr 2fr; }
+.shop-top-row    { grid-template-columns: 2fr 8fr; }
 .shop-bottom-row { grid-template-columns: 3fr 7fr; }
 
 .shop-layer {
@@ -205,12 +252,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   align-items: center;
   justify-content: center;
   gap: clamp(8px, 1.2vw, 16px);
-  padding: clamp(8px, 1.2vh, 14px) clamp(10px, 1.4vw, 18px);
+  padding: clamp(6px, 0.8vh, 10px) clamp(8px, 1vw, 14px);
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.34);
-  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.22);
   min-height: 0;
-  overflow: visible;
+  overflow: visible; /* cards can extend past the layer edges by design */
 }
 .shop-artifact-layer {
   justify-content: space-around;
@@ -303,27 +349,34 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-pack-card {
   position: relative;
   flex: 0 0 auto;
-  width: clamp(110px, 10.5vw, 158px);
+  /* Card sizes raised ~20% from the previous (110/10.5vw/158) sizing. */
+  width: clamp(132px, 12.6vw, 190px);
   aspect-ratio: 3 / 4;
   border-radius: 14px;
   border: 1px solid rgba(255, 215, 120, 0.4);
   overflow: visible;
   cursor: pointer;
+  scale: 1;
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.18),
     0 14px 26px rgba(0, 0, 0, 0.6);
   transform-origin: center bottom;
-  transition: transform 0.22s cubic-bezier(0.18, 0.86, 0.22, 1), box-shadow 0.22s ease;
+  /* Hover scale uses the individual scale property so it composes with the
+     translate/rotate channels used by the float keyframes (transform-based
+     animations can not be overridden by static :hover transforms, which is
+     why scale lives on its own track here). */
+  transition: scale 0.18s ease, box-shadow 0.22s ease, filter 0.16s ease;
   animation:
     shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both,
-    shop-pack-drift 4.6s ease-in-out 0.55s infinite alternate;
+    shop-pack-drift 6.6s ease-in-out 0.55s infinite alternate;
 }
-.shop-pack-layer > .shop-pack-card:nth-child(1) { animation-delay: 100ms, 0.6s; }
-.shop-pack-layer > .shop-pack-card:nth-child(2) { animation-delay: 200ms, 1s; }
-.shop-pack-layer > .shop-pack-card:nth-child(3) { animation-delay: 300ms, 1.4s; }
+.shop-pack-layer > .shop-pack-card:nth-child(1) { animation-delay: 500ms, 1.3s; }
+.shop-pack-layer > .shop-pack-card:nth-child(2) { animation-delay: 600ms, 2.1s; }
+.shop-pack-layer > .shop-pack-card:nth-child(3) { animation-delay: 700ms, 2.9s; }
 .shop-pack-card:hover,
 .shop-pack-card:focus-visible {
-  transform: translateY(-2px) scale(1.05);
+  animation-play-state: paused;
+  scale: 1.06;
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.32),
     0 20px 38px rgba(0, 0, 0, 0.7),
@@ -342,21 +395,6 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   background-size: cover;
   pointer-events: none;
 }
-.shop-pack-illustration::after {
-  /* Wax-stamp dot near the upper-third of the illustration so each pack
-     reads as a sealed envelope rather than a blank tile. */
-  content: '';
-  position: absolute;
-  top: 22%;
-  left: 50%;
-  width: 30%;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  transform: translateX(-50%);
-  background: radial-gradient(circle at 35% 30%, #ffd778, #c44a1c 65%, #58140c 100%);
-  box-shadow: 0 0 16px rgba(255, 188, 96, 0.55);
-  opacity: 0.92;
-}
 .shop-pack-overlay {
   position: absolute;
   inset: 0;
@@ -367,7 +405,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   justify-content: flex-end;
   padding: clamp(8px, 1vw, 14px);
   text-align: center;
-  background: linear-gradient(180deg, transparent 35%, rgba(0, 0, 0, 0.78) 100%);
+  background: linear-gradient(180deg, transparent 55%, rgba(0, 0, 0, 0.8) 100%);
   border-radius: inherit;
   pointer-events: none;
 }
@@ -385,24 +423,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   font-size: var(--font-size-sm);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
 }
-.shop-pack-price {
-  bottom: -10px;
-}
-.pack-theme-resource .shop-pack-illustration {
-  background-image:
-    radial-gradient(circle at 50% 60%, rgba(176, 230, 152, 0.4), transparent 60%),
-    linear-gradient(170deg, rgba(40, 70, 38, 0.95) 0%, rgba(12, 30, 18, 0.98) 100%);
-}
-.pack-theme-upgrade .shop-pack-illustration {
-  background-image:
-    radial-gradient(circle at 50% 60%, rgba(255, 188, 96, 0.42), transparent 60%),
-    linear-gradient(170deg, rgba(96, 44, 24, 0.95) 0%, rgba(30, 14, 12, 0.98) 100%);
-}
-.pack-theme-unlock .shop-pack-illustration {
-  background-image:
-    radial-gradient(circle at 50% 60%, rgba(196, 158, 240, 0.4), transparent 60%),
-    linear-gradient(170deg, rgba(58, 36, 88, 0.95) 0%, rgba(20, 12, 36, 0.98) 100%);
-}
+/* Theme tints are applied as a glow on the card frame; the inner art comes
+   from the pack_00X.webp sprite assigned inline in the renderer. */
 .shop-pack-card.pack-theme-resource { border-color: rgba(146, 220, 138, 0.5); }
 .shop-pack-card.pack-theme-upgrade { border-color: rgba(244, 164, 96, 0.55); }
 .shop-pack-card.pack-theme-unlock { border-color: rgba(180, 142, 230, 0.55); }
@@ -496,63 +518,78 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   border: 1px solid rgba(255, 215, 120, 0.42);
   background: linear-gradient(180deg, rgba(45, 30, 39, 0.96), rgba(18, 12, 24, 0.96));
   box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.18), 0 12px 24px rgba(0, 0, 0, 0.55);
-  /* Fixed dimensions — the surrounding layer absorbs any extra space, so the
-     cards always read as the same physical objects regardless of layer width. */
+  /* Fixed dimensions — the layer absorbs extra space; cards may extend past
+     the layer edges because the layer is just a visual area marker.
+     Sizes are ~20% larger than the previous (110/10.5vw/158) tier. */
   flex: 0 0 auto;
-  width: clamp(110px, 10.5vw, 158px);
+  width: clamp(132px, 12.6vw, 190px);
   aspect-ratio: 3 / 4;
   height: auto;
   min-height: 0;
   cursor: pointer;
-  transform-origin: center bottom;
-  transition: transform 0.22s cubic-bezier(0.18, 0.86, 0.22, 1),
-              box-shadow 0.22s ease;
-  /* Two animations: enter (one-shot drop-in) then float (idle sway). Float
-     waits ~0.55s so it doesn't clobber the drop-in transform during the
-     first half-second. Per-card animation-delay below desyncs the float so
-     the row doesn't sway in lock-step. */
+  scale: 1;
+  /* Hover lift uses individual scale so it composes with the float
+     animation's translate/rotate channels (transforms set via keyframes
+     can not be overridden by a static :hover transform). */
+  transition: scale 0.18s ease, box-shadow 0.22s ease, filter 0.16s ease;
   animation:
     shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both,
-    shop-card-float 5.4s ease-in-out 0.55s infinite alternate;
+    shop-card-float 6.6s ease-in-out 0.55s infinite alternate;
 }
-.shop-artifact-layer > .shop-relic-card:nth-child(1) { animation-delay: 60ms, 0.55s; }
-.shop-artifact-layer > .shop-relic-card:nth-child(2) { animation-delay: 160ms, 0.95s; }
-.shop-artifact-layer > .shop-relic-card:nth-child(3) { animation-delay: 260ms, 1.4s; }
+/* Cards land AFTER the dim veil settles (~420ms). Per-card enter delays
+   keep the cascade; float delays are staggered so the row doesn't sway in
+   lock-step. */
+.shop-artifact-layer > .shop-relic-card:nth-child(1) { animation-delay: 460ms, 1.1s; }
+.shop-artifact-layer > .shop-relic-card:nth-child(2) { animation-delay: 560ms, 2.0s; }
+.shop-artifact-layer > .shop-relic-card:nth-child(3) { animation-delay: 660ms, 2.9s; }
+.shop-free-layer > .shop-relic-card { animation-delay: 520ms, 1.6s; }
+/* Reroll button fades in after the veil so it doesn't pop in before the
+   backdrop is ready. */
+.shop-reroll-btn {
+  opacity: 0;
+  animation: shop-overlay-in 0.32s cubic-bezier(0.22, 0.86, 0.22, 1) 460ms both;
+}
 @keyframes shop-card-enter {
   0%   { transform: translateY(-130%) scale(0.9); opacity: 0; }
   72%  { transform: translateY(8px) scale(1.02); opacity: 1; }
   100% { transform: translateY(0) scale(1); opacity: 1; }
 }
-/* Idle side-to-side drift for the artifact cards — they should feel like
-   they were tossed onto the cloth, rocking gently rather than locked to a
-   grid cell.  Per-card initial transform sets the rest pose; the keyframes
-   only nudge a few px on each side. */
+/* Idle drift — toned WAY down per feedback ("너무 떠다니는 느낌"). Uses the
+   individual translate/rotate channels so :hover's scale can lift the
+   card without colliding with the animation. */
 @keyframes shop-card-float {
-  0%   { transform: translate(-3px, 0) rotate(-1.6deg); }
-  50%  { transform: translate(4px, -2px) rotate(0.8deg); }
-  100% { transform: translate(-2px, 1px) rotate(-0.4deg); }
+  0%   { translate: -1px 0; rotate: -0.4deg; }
+  50%  { translate: 1px -1px; rotate: 0.3deg; }
+  100% { translate: -1px 1px; rotate: -0.15deg; }
 }
 @keyframes shop-pack-drift {
-  0%   { transform: translateY(0) rotate(-0.6deg); }
-  50%  { transform: translateY(-3px) rotate(0.4deg); }
-  100% { transform: translateY(0) rotate(-0.2deg); }
+  0%   { translate: 0 0; rotate: -0.25deg; }
+  50%  { translate: 0 -1px; rotate: 0.2deg; }
+  100% { translate: 0 0; rotate: -0.1deg; }
 }
-@keyframes shop-cloth-unfurl {
-  0%   { transform: scaleY(0); opacity: 0.6; }
+/* Dim veil — semi-transparent black sheet that descends top-down on top
+   of the wax shutter, AFTER the shutter has finished closing.  This is the
+   "extra layer" the player asked for: a clean monotone darkening pass that
+   unifies whatever the shutter left behind. */
+@keyframes shop-dim-veil-drop {
+  0%   { transform: scaleY(0); opacity: 0; }
   100% { transform: scaleY(1); opacity: 1; }
 }
-@keyframes shop-cloth-furl {
+@keyframes shop-dim-veil-lift {
   0%   { transform: scaleY(1); opacity: 1; }
   100% { transform: scaleY(0); opacity: 0; }
 }
 
-/* Hover scale — clicking the grown card buys it. */
+/* Hover: pause float + slight scale via the individual scale property so
+   the lift sticks even while the float animation owns the transform track. */
 .shop-relic-card:hover,
 .shop-relic-card:focus-visible {
-  transform: scale(1.06) translateY(-2px);
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.32),
-              0 18px 36px rgba(0, 0, 0, 0.65),
-              0 0 30px rgba(244, 164, 96, 0.4);
+  animation-play-state: paused;
+  scale: 1.06;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.32),
+    0 18px 36px rgba(0, 0, 0, 0.65),
+    0 0 30px rgba(244, 164, 96, 0.4);
   z-index: 6;
 }
 .shop-relic-card.is-affordable {
@@ -615,21 +652,22 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   line-height: 1.3;
 }
 
-/* Flat shop price label: replaces the taped parchment with the shared tag
-   icon language used by the rest of the UI chrome. */
+/* Price tag — hangs fully below the card with a short connector "string"
+   so it reads as a separated tag rather than a label overlapping the
+   description. Tag-shaped (rectangular top, slightly rounded bottom). */
 .shop-price-label {
   position: absolute;
-  bottom: -8px;
+  bottom: -34px;
   left: 50%;
   transform: translateX(-50%);
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-width: 92px;
+  min-width: 84px;
   justify-content: center;
-  padding: 5px 12px 5px 9px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 215, 120, 0.38);
+  padding: 4px 11px 5px 8px;
+  border-radius: 4px 4px 8px 8px;
+  border: 1px solid rgba(255, 215, 120, 0.42);
   background: linear-gradient(180deg, rgba(42, 31, 46, 0.96), rgba(20, 14, 28, 0.98));
   color: rgba(255, 232, 168, 0.96);
   font-weight: 900;
@@ -638,10 +676,26 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   font-variant-numeric: tabular-nums;
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.14),
-    0 8px 18px rgba(0, 0, 0, 0.5);
+    0 8px 18px rgba(0, 0, 0, 0.55);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.88);
   z-index: 7;
   pointer-events: none;
+}
+.shop-price-label::before {
+  /* Short string between the card's bottom edge and the tag's top, filling
+     the gap so the tag visually reads as tied to the card. */
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 2px;
+  height: 7px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, rgba(255, 215, 120, 0.6), rgba(255, 215, 120, 0.15));
+  border-radius: 1px;
+}
+.shop-pack-price {
+  bottom: -34px;
 }
 .shop-price-label-icon {
   display: inline-flex;

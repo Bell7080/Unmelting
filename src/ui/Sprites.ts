@@ -62,6 +62,9 @@ import relic004Url from '../assets/sprites/relics_004.webp'
 import relic005Url from '../assets/sprites/relics_005.webp'
 import relic006Url from '../assets/sprites/relics_006.webp'
 import relic007Url from '../assets/sprites/relics_007.webp'
+import pack001Url from '../assets/sprites/pack_001.webp'
+import pack002Url from '../assets/sprites/pack_002.webp'
+import pack003Url from '../assets/sprites/pack_003.webp'
 import type { RelicId } from '@data/Relics'
 
 export const SpriteUrls = {
@@ -121,6 +124,13 @@ export const SpriteUrls = {
     card: handCard009Url,
     coin: handCard010Url,
   } satisfies Record<HandCardId, string>,
+  /** Shop card-pack illustrations. Index follows the pack pickers in the
+   *  shop bottom row: basic (자원) / upgrade (강화) / unlock (해금). */
+  packs: {
+    'basic-pack': pack001Url,
+    'upgrade-pack': pack002Url,
+    'unlock-pack': pack003Url,
+  } as const,
 }
 
 const NORMAL_ENEMY_VARIANTS = [SpriteUrls.enemyMouse, SpriteUrls.enemyFrog]
