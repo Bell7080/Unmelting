@@ -44,6 +44,7 @@ import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
+import { HAND_CARD_RARITY, SHOP_PACK_POOLS } from '@data/ShopPools'
 import type { BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
@@ -706,49 +707,77 @@ function sampleWithoutReplacement<T>(pool: T[], n: number): T[] {
  *  Each entry carries an `apply` closure so the pick handler stays small. */
 function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
   const character = gameState.character
-  if (kind === 'basic-pack') {
-    const pool: ShopPackPickItem[] = [
-      { id: 'heal-1', theme: 'resource', title: '체농 한 방울', effect: '체력 +1', apply: () => character.heal(1) },
-      { id: 'heal-2', theme: 'resource', title: '체력 회복', effect: '체력 +2', apply: () => character.heal(2) },
-      { id: 'heal-3', theme: 'resource', title: '체력 회복(대)', effect: '체력 +3', apply: () => character.heal(3) },
-      { id: 'ember-2', theme: 'resource', title: '불씨 회복', effect: '불씨 +2', apply: () => character.gainEmber(2) },
-      { id: 'ember-3', theme: 'resource', title: '불씨 회복(대)', effect: '불씨 +3', apply: () => character.gainEmber(3) },
-      { id: 'gauge-2', theme: 'resource', title: '콤보 충전', effect: '게이지 +2', apply: () => character.gainCandle(2) },
-      { id: 'coin-2', theme: 'resource', title: '화폐 한 줌', effect: '화폐 +2', apply: () => { coins += 2 } },
-      { id: 'score-100', theme: 'resource', title: '불빛 결정', effect: '불빛 +100', apply: () => { score += 100; scorePulseKey++ } },
-    ]
-    return sampleWithoutReplacement(pool, 3)
+  if (kind === 'unlock-pack') {
+    const drawIds = sampleWithoutReplacement([...HAND_CARD_IDS], 3)
+    return drawIds.map((id) => {
+      const def = getHandCardDef(id)
+      return {
+        id: `unlock-${id}`,
+        theme: 'unlock' as const,
+        title: def.name,
+        effect: def.description,
+        rarity: HAND_CARD_RARITY[id],
+        apply: () => {
+          gameState.character.addHandCard(DropSystem.makeCard(id))
+        },
+      }
+    })
   }
-  if (kind === 'upgrade-pack') {
-    const pool: ShopPackPickItem[] = [
-      { id: 'atk-1', theme: 'upgrade', title: '벼린 칼날', effect: '공격력 +1', apply: () => character.applyDamageBoost(1) },
-      { id: 'maxhp-3', theme: 'upgrade', title: '굳어진 심지', effect: '최대 체력 +3', apply: () => character.increaseMaxHealth(3) },
-      { id: 'maxhp-5', theme: 'upgrade', title: '굳어진 심지(대)', effect: '최대 체력 +5', apply: () => character.increaseMaxHealth(5) },
-      { id: 'shield-1', theme: 'upgrade', title: '밀랍 방패', effect: '방패 +1', apply: () => character.addShield(1) },
-      { id: 'shield-2', theme: 'upgrade', title: '밀랍 방패(대)', effect: '방패 +2', apply: () => character.addShield(2) },
-      { id: 'ember-5', theme: 'upgrade', title: '불씨 보양', effect: '불씨 +5', apply: () => character.gainEmber(5) },
-      { id: 'gauge-3', theme: 'upgrade', title: '심지 충전(대)', effect: '게이지 +3', apply: () => character.gainCandle(3) },
-    ]
-    return sampleWithoutReplacement(pool, 3)
-  }
-  // unlock-pack: roll 3 random hand-card defs and let the player add one to
-  // their hand. All cards are meta-unlocked by default in the current run,
-  // so this functions as a "draw-a-card" buffet rather than a permanent unlock.
-  const drawIds = sampleWithoutReplacement([...HAND_CARD_IDS], 3)
-  return drawIds.map((id) => {
-    const def = getHandCardDef(id)
-    return {
-      id: `unlock-${id}`,
-      theme: 'unlock' as const,
-      title: def.name,
-      effect: def.description,
-      apply: () => {
-        gameState.character.addHandCard(DropSystem.makeCard(id))
-      },
-    }
-  })
+  const pool = SHOP_PACK_POOLS[kind].map((entry) => ({
+    ...entry,
+    apply: () => {
+      switch (entry.id) {
+        case 'heal-1':
+          character.heal(1)
+          return
+        case 'heal-2':
+          character.heal(2)
+          return
+        case 'heal-3':
+          character.heal(3)
+          return
+        case 'ember-2':
+          character.gainEmber(2)
+          return
+        case 'ember-3':
+          character.gainEmber(3)
+          return
+        case 'gauge-2':
+          character.gainCandle(2)
+          return
+        case 'coin-2':
+          coins += 2
+          return
+        case 'score-100':
+          score += 100
+          scorePulseKey++
+          return
+        case 'atk-1':
+          character.applyDamageBoost(1)
+          return
+        case 'maxhp-3':
+          character.increaseMaxHealth(3)
+          return
+        case 'maxhp-5':
+          character.increaseMaxHealth(5)
+          return
+        case 'shield-1':
+          character.addShield(1)
+          return
+        case 'shield-2':
+          character.addShield(2)
+          return
+        case 'ember-5':
+          character.gainEmber(5)
+          return
+        case 'gauge-3':
+          character.gainCandle(3)
+          return
+      }
+    },
+  }))
+  return sampleWithoutReplacement(pool, 3)
 }
-
 /** Open the pack picker for the just-clicked pack tile. Deducts the price
  *  if the player can afford it, otherwise no-op. */
 function openPackPurchase(kind: ShopPackKind): void {
@@ -782,7 +811,7 @@ function openPackPurchase(kind: ShopPackKind): void {
   const view: ShopPackPickerView = {
     packKind: kind,
     title,
-    items: items.map(({ id, title, effect, theme }) => ({ id, title, effect, theme })),
+    items: items.map(({ id, title, effect, theme, rarity }) => ({ id, title, effect, theme, rarity })),
   }
   boardRenderer.openPackPicker(view)
 }

@@ -36,6 +36,7 @@ import { EmberSystem } from '@systems/EmberSystem'
 import { ENEMY_DEFINITIONS, MIMIC_BY_SPAN } from '@systems/CardSpawner'
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_DEFINITIONS, type RelicId } from '@data/Relics'
+import { RARITY_CLASS_BY_TIER, RELIC_RARITY, type CardRarity } from '@data/ShopPools'
 import { RECIPES } from '@data/Recipes'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { GAME_BOARD_STYLES } from '@ui/styles/GameBoardStyles'
@@ -93,6 +94,7 @@ export interface ShopPackItemView {
   effect: string
   /** Theme tints the card frame: resource(자원)/upgrade(강화)/unlock(해금). */
   theme: 'resource' | 'upgrade' | 'unlock'
+  rarity: CardRarity
 }
 export interface ShopPackPickerView {
   packKind: ShopPackKind
@@ -1260,9 +1262,10 @@ export class GameBoardRenderer {
   private renderShopFreeCard(claimed: boolean, label: string): string {
     const stateClass = claimed ? 'is-purchased' : 'is-affordable'
     return `
-      <article class="shop-relic-card shop-free-card ${stateClass}"
+      <article class="shop-relic-card shop-free-card ${stateClass} ${RARITY_CLASS_BY_TIER.common}"
                data-shop-buy-kind="free-card"
                tabindex="0"
+               style="--cardback-url:url('${SpriteUrls.cardBack}');"
                aria-label="${label} — ${claimed ? '획득 완료' : '무료 1회'}">
         <div class="shop-relic-art shop-free-art" aria-hidden="true"></div>
         <div class="shop-relic-body">
@@ -1292,9 +1295,10 @@ export class GameBoardRenderer {
     const affordable = score >= cost ? 'is-affordable' : 'is-unaffordable'
     const artUrl = SpriteUrls.packs[kind]
     return `
-      <article class="shop-pack-card pack-theme-${theme} ${affordable}"
+      <article class="shop-pack-card pack-theme-${theme} ${affordable} ${RARITY_CLASS_BY_TIER.rare}"
                data-shop-buy-kind="${kind}"
                tabindex="0"
+               style="--cardback-url:url('${SpriteUrls.cardBack}');"
                aria-label="${title} — ${cost}점">
         <div class="shop-pack-illustration" style="background-image: url('${artUrl}')" aria-hidden="true"></div>
         <div class="shop-pack-overlay">
@@ -1334,10 +1338,10 @@ export class GameBoardRenderer {
     const cards = view.items
       .map(
         (item, i) => `
-          <article class="shop-pack-pick-card pack-theme-${item.theme}"
+          <article class="shop-pack-pick-card pack-theme-${item.theme} ${RARITY_CLASS_BY_TIER[item.rarity]}"
                    data-pack-pick="${item.id}"
                    data-pack-kind="${view.packKind}"
-                   style="--pick-i:${i};"
+                   style="--pick-i:${i}; --cardback-url:url('${SpriteUrls.cardBack}');"
                    tabindex="0"
                    aria-label="${item.title} — ${item.effect}">
             <div class="shop-relic-body">
@@ -1375,13 +1379,14 @@ export class GameBoardRenderer {
    *  taps "the bigger card" instead of hunting for a small button. */
   private renderShopRelicCard(offer: ShopOfferView, score: number, _character: Character): string {
     const def = RELIC_DEFINITIONS[offer.relicId]
+    const rarityClass = RARITY_CLASS_BY_TIER[RELIC_RARITY[offer.relicId]]
     const affordabilityClass = this.shopRelicAffordabilityClass(offer, score)
     const cardLeaveDelay = Math.floor(Math.random() * 240)
     return `
-      <article class="shop-relic-card ${affordabilityClass}"
+      <article class="shop-relic-card ${affordabilityClass} ${rarityClass}"
                data-shop-buy="${def.id}"
                data-shop-buy-kind="relic"
-               style="--card-leave-delay:${cardLeaveDelay}ms;"
+               style="--card-leave-delay:${cardLeaveDelay}ms; --cardback-url:url('${SpriteUrls.cardBack}');"
                tabindex="0"
                aria-label="${def.name} — ${offer.purchased ? '구매 완료' : `점수 ${offer.price}점`}">
         <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
