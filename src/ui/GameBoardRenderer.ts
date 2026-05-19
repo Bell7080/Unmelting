@@ -103,7 +103,10 @@ export interface ShopStateView {
   mode: 'shop' | 'altar'
   relicOffers: ShopOfferView[]
   freeCardClaimed: boolean
+  /** Reroll cost is paid from coins (화폐, $), not score (불빛). */
   rerollCost: number
+  /** Current coin balance — used to compute reroll-button affordability. */
+  coins: number
   basicPackCost: number
   upgradePackCost: number
   unlockPackCost: number
@@ -1233,62 +1236,26 @@ export class GameBoardRenderer {
     return score >= offer.price ? 'is-affordable' : 'is-unaffordable'
   }
 
-  /** Refresh an already-open shop in place. We only change classes, labels,
-   *  and ARIA text so card art does not blink as if the shop reloaded. */
-  private refreshOpenShopCards(offers: ShopOfferView[], score: number): boolean {
-    const shell = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-shell')
-    if (!shell || !this.shopOverlayElement?.classList.contains('is-open')) return false
-    // Only the relic cards carry data-shop-buy; reroll/free/pack tiles use
-    // data-shop-buy-kind without a relic id and must stay untouched here.
-    const cards = Array.from(
-      shell.querySelectorAll<HTMLElement>('.shop-grid.top .shop-relic-card[data-shop-buy]')
-    )
-    if (cards.length !== offers.length) return false
-
-    for (const offer of offers) {
-      const def = RELIC_DEFINITIONS[offer.relicId]
-      const card = shell.querySelector<HTMLElement>(
-        `.shop-grid.top .shop-relic-card[data-shop-buy="${def.id}"]`
-      )
-      if (!card) return false
-      card.classList.remove('is-affordable', 'is-unaffordable', 'is-purchased')
-      card.classList.add(this.shopRelicAffordabilityClass(offer, score))
-      card.setAttribute(
-        'aria-label',
-        `${def.name} — ${offer.purchased ? '구매 완료' : `점수 ${offer.price}점`}`
-      )
-      const label = card.querySelector<HTMLElement>('.shop-price-label-text')
-      if (label)
-        label.textContent = offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
-    }
-    shell.classList.add('has-entered')
-    return true
-  }
-
-  /** Reroll tile — sits in the top-row's first column with the same width
-   *  as a relic card so the player reads a 4-up row of equal slots. */
-  private renderShopRerollCard(cost: number, score: number): string {
-    const affordable = score >= cost ? 'is-affordable' : 'is-unaffordable'
+  /** Reroll button — sits inside the top-row's small right column. Compact
+   *  button (NOT a card) that pays in coins (화폐, $) instead of score. */
+  private renderShopRerollButton(cost: number, coins: number): string {
+    const affordable = coins >= cost ? 'is-affordable' : 'is-unaffordable'
     return `
-      <article class="shop-relic-card shop-reroll-card ${affordable}"
-               data-shop-buy-kind="reroll"
-               tabindex="0"
-               aria-label="새로고침 — ${cost}점">
-        <div class="shop-relic-art shop-reroll-art" aria-hidden="true"></div>
-        <div class="shop-relic-body">
-          <h3 class="shop-relic-title">새로고침</h3>
-          <p class="shop-relic-effect">유물 진열을 다시 굴린다</p>
-          <p class="shop-relic-flavor">남은 칸은 그대로 둔다</p>
-        </div>
-        <span class="shop-price-label" aria-hidden="true">
-          <span class="shop-price-label-icon">${tagIcon()}</span>
-          <span class="shop-price-label-text">${cost.toLocaleString()}점</span>
+      <button type="button"
+              class="shop-reroll-btn ${affordable}"
+              data-shop-buy-kind="reroll"
+              aria-label="새로고침 — ${cost} 화폐">
+        <span class="shop-reroll-btn-label">새로고침</span>
+        <span class="shop-reroll-btn-cost">
+          <span class="shop-reroll-btn-cost-icon">${coinIcon()}</span>
+          <span class="shop-reroll-btn-cost-text">${cost.toLocaleString()}</span>
         </span>
-      </article>
+      </button>
     `
   }
 
-  /** Free card tile (Balatro voucher slot). Bottom-left of the shop. */
+  /** Free card tile (Balatro voucher slot). Centered inside its bottom-left
+   *  layer, fixed-size relic-card style. */
   private renderShopFreeCard(claimed: boolean, label: string): string {
     const stateClass = claimed ? 'is-purchased' : 'is-affordable'
     return `
@@ -1310,8 +1277,8 @@ export class GameBoardRenderer {
     `
   }
 
-  /** One of the three pack tiles (basic / upgrade / unlock).
-   *  Click → openPackPicker is opened by index.ts after price is deducted. */
+  /** Pack tile — full illustration with centered text overlay, NOT the
+   *  art+body card split. Each pack carries its own themed colorway. */
   private renderShopPackCard(
     kind: ShopPackKind,
     title: string,
@@ -1322,17 +1289,16 @@ export class GameBoardRenderer {
   ): string {
     const affordable = score >= cost ? 'is-affordable' : 'is-unaffordable'
     return `
-      <article class="shop-relic-card shop-pack-card pack-theme-${theme} ${affordable}"
+      <article class="shop-pack-card pack-theme-${theme} ${affordable}"
                data-shop-buy-kind="${kind}"
                tabindex="0"
                aria-label="${title} — ${cost}점">
-        <div class="shop-relic-art shop-pack-art pack-theme-${theme}" aria-hidden="true"></div>
-        <div class="shop-relic-body">
-          <h3 class="shop-relic-title">${title}</h3>
-          <p class="shop-relic-effect">${effect}</p>
-          <p class="shop-relic-flavor">${theme === 'resource' ? '한 줌의 보급품' : theme === 'upgrade' ? '소녀를 단단히 한다' : '잠긴 손패가 비집고 나온다'}</p>
+        <div class="shop-pack-illustration pack-theme-${theme}" aria-hidden="true"></div>
+        <div class="shop-pack-overlay">
+          <h3 class="shop-pack-title">${title}</h3>
+          <p class="shop-pack-effect">${effect}</p>
         </div>
-        <span class="shop-price-label" aria-hidden="true">
+        <span class="shop-price-label shop-pack-price" aria-hidden="true">
           <span class="shop-price-label-icon">${tagIcon()}</span>
           <span class="shop-price-label-text">${cost.toLocaleString()}점</span>
         </span>
@@ -1463,41 +1429,51 @@ export class GameBoardRenderer {
       })
       document.body.appendChild(this.shopOverlayElement)
     }
-    if (this.refreshOpenShopCards(shop.relicOffers, score)) {
+    // While the overlay is already open, refresh affordability/labels in place
+    // on the existing DOM nodes — rebuilding innerHTML caused a visible white
+    // flash on every purchase/reroll. Full HTML build is reserved for the very
+    // first open of a shop visit.
+    if (this.shopOverlayElement.classList.contains('is-open')) {
+      this.refreshOpenShopInPlace(shop, score, character)
       this.positionShopShellOverRail()
+      return
     }
     const cards =
       shop.relicOffers.length > 0
-        ? shop.relicOffers.map((offer) => this.renderShopRelicCard(offer, score, character)).join('')
+        ? shop.relicOffers
+            .map((offer) => this.renderShopRelicCard(offer, score, character))
+            .join('')
         : '<div class="shop-empty">오늘의 잡화는 모두 팔렸어.</div>'
-    // A purchase refresh rebuilds the cards while the overlay is already
-    // visible. Mark that shell so the entrance drop animation does not replay
-    // after a click; only the first shop open should drop cards from above.
-    const suppressEnterAnimation = this.shopOverlayElement.classList.contains('is-open')
-      ? 'has-entered'
-      : ''
-    // Plain shell — no SHOP label, no separate header. Each card is its
-    // own clickable buy target with a flat price tag at the bottom; the
-    // EXIT button hangs off the bottom-right.
-    //
-    // New layout (Balatro-style 2-tier grid):
-    //   Top    : 새로고침 카드 + 유물 3장 (4 equal columns)
-    //   Bottom : 무료 카드 + 카드팩 3장 (4 equal columns, relic-card 외형)
-    // Clicking a 카드팩 opens the pack-picker overlay (3 random items → pick 1).
     const upgradePackLabel = shop.mode === 'altar' ? '단일 강화팩' : '강화팩'
     const unlockPackLabel = shop.mode === 'altar' ? '카드 폐기팩' : '해금팩'
     const freeCardLabel = shop.mode === 'altar' ? '제단의 무료 축복' : '무료 카드'
+    // New layered layout:
+    //   .rail-shutter      — single 보자기 cloth (rendered inside .rail) that
+    //                        unfurls top-down on shop open and stays behind
+    //                        every layer until shop close.
+    //   .shop-top-row      — 8:2 grid: artifact layer (left) + reroll btn (right)
+    //   .shop-bottom-row   — 3:7 grid: free card layer (left) + pack layer (right)
+    //   .shop-layer        — subtle dark backdrop, NO border, just gives the
+    //                        contents a sense of "space" without boxing them in.
+    //   Cards/buttons inside the layers keep their fixed widths so they read
+    //   as physical objects placed onto the cloth, not as fluid grid cells.
     this.shopOverlayElement.innerHTML = `
-      <div class="shop-shell ${suppressEnterAnimation}" role="dialog" aria-label="상점">
-        <section class="shop-grid top" aria-label="유물 상점">
-          ${this.renderShopRerollCard(shop.rerollCost, score)}
-          ${cards}
+      <div class="shop-shell" role="dialog" aria-label="상점">
+        <section class="shop-row shop-top-row" aria-label="유물 상점">
+          <div class="shop-layer shop-artifact-layer">${cards}</div>
+          <div class="shop-layer shop-reroll-zone">
+            ${this.renderShopRerollButton(shop.rerollCost, shop.coins)}
+          </div>
         </section>
-        <section class="shop-grid bottom" aria-label="카드 및 카드팩">
-          ${this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel)}
-          ${this.renderShopPackCard('basic-pack', '기본 자원팩', '자원 3장 중 1택', shop.basicPackCost, score, 'resource')}
-          ${this.renderShopPackCard('upgrade-pack', upgradePackLabel, '강화 3장 중 1택', shop.upgradePackCost, score, 'upgrade')}
-          ${this.renderShopPackCard('unlock-pack', unlockPackLabel, '해금 3장 중 1택', shop.unlockPackCost, score, 'unlock')}
+        <section class="shop-row shop-bottom-row" aria-label="카드 및 카드팩">
+          <div class="shop-layer shop-free-layer">
+            ${this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel)}
+          </div>
+          <div class="shop-layer shop-pack-layer">
+            ${this.renderShopPackCard('basic-pack', '기본 자원팩', '자원 3장 중 1택', shop.basicPackCost, score, 'resource')}
+            ${this.renderShopPackCard('upgrade-pack', upgradePackLabel, '강화 3장 중 1택', shop.upgradePackCost, score, 'upgrade')}
+            ${this.renderShopPackCard('unlock-pack', unlockPackLabel, '해금 3장 중 1택', shop.unlockPackCost, score, 'unlock')}
+          </div>
         </section>
         <button class="shop-close-btn" type="button" data-shop-close aria-label="상점 나가기">EXIT</button>
       </div>
@@ -1508,6 +1484,74 @@ export class GameBoardRenderer {
       this.shopResizeListener = () => this.positionShopShellOverRail()
       window.addEventListener('resize', this.shopResizeListener)
       window.addEventListener('scroll', this.shopResizeListener, { passive: true })
+    }
+  }
+
+  /** Update labels, affordability classes, and purchased states on the
+   *  already-rendered shop without touching innerHTML. This is what kills
+   *  the white flash on purchase/reroll — the DOM nodes (and their images)
+   *  stay mounted; only attributes/text change. */
+  private refreshOpenShopInPlace(
+    shop: ShopStateView,
+    score: number,
+    _character: Character
+  ): void {
+    const shell = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-shell')
+    if (!shell) return
+
+    // Relic cards: replicate the old refreshOpenShopCards path.
+    for (const offer of shop.relicOffers) {
+      const def = RELIC_DEFINITIONS[offer.relicId]
+      const card = shell.querySelector<HTMLElement>(
+        `.shop-artifact-layer .shop-relic-card[data-shop-buy="${def.id}"]`
+      )
+      if (!card) continue
+      card.classList.remove('is-affordable', 'is-unaffordable', 'is-purchased')
+      card.classList.add(this.shopRelicAffordabilityClass(offer, score))
+      card.setAttribute(
+        'aria-label',
+        `${def.name} — ${offer.purchased ? '구매 완료' : `점수 ${offer.price}점`}`
+      )
+      const label = card.querySelector<HTMLElement>('.shop-price-label-text')
+      if (label)
+        label.textContent = offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
+    }
+
+    // Reroll button (coins-based affordance + cost text).
+    const reroll = shell.querySelector<HTMLElement>('.shop-reroll-btn')
+    if (reroll) {
+      reroll.classList.remove('is-affordable', 'is-unaffordable')
+      reroll.classList.add(shop.coins >= shop.rerollCost ? 'is-affordable' : 'is-unaffordable')
+      const costText = reroll.querySelector<HTMLElement>('.shop-reroll-btn-cost-text')
+      if (costText) costText.textContent = shop.rerollCost.toLocaleString()
+      reroll.setAttribute('aria-label', `새로고침 — ${shop.rerollCost} 화폐`)
+    }
+
+    // Free card claimed state.
+    const free = shell.querySelector<HTMLElement>('.shop-free-card')
+    if (free) {
+      free.classList.remove('is-affordable', 'is-purchased')
+      free.classList.add(shop.freeCardClaimed ? 'is-purchased' : 'is-affordable')
+      const freeLabel = free.querySelector<HTMLElement>('.shop-price-label-text')
+      if (freeLabel) freeLabel.textContent = shop.freeCardClaimed ? '획득 완료' : '무료'
+    }
+
+    // Pack tiles (cost + affordance based on score).
+    const packMap: Record<ShopPackKind, number> = {
+      'basic-pack': shop.basicPackCost,
+      'upgrade-pack': shop.upgradePackCost,
+      'unlock-pack': shop.unlockPackCost,
+    }
+    for (const kind of Object.keys(packMap) as ShopPackKind[]) {
+      const tile = shell.querySelector<HTMLElement>(
+        `.shop-pack-card[data-shop-buy-kind="${kind}"]`
+      )
+      if (!tile) continue
+      const cost = packMap[kind]
+      tile.classList.remove('is-affordable', 'is-unaffordable')
+      tile.classList.add(score >= cost ? 'is-affordable' : 'is-unaffordable')
+      const priceText = tile.querySelector<HTMLElement>('.shop-price-label-text')
+      if (priceText) priceText.textContent = `${cost.toLocaleString()}점`
     }
   }
 
@@ -3089,6 +3133,13 @@ export class GameBoardRenderer {
   playScoreSpendFeedback(targetScore: number, pulseKey: number): void {
     this.rememberImmediateResourcePulse('score', targetScore, pulseKey)
     this.animateResourceCounter('.score-number', targetScore, '')
+  }
+
+  /** Coin counterpart of playScoreSpendFeedback — used for shop reroll which
+   *  is paid in 화폐 (coins). Ticks the wallet without firing a gain burst. */
+  playCoinSpendFeedback(targetCoins: number, pulseKey: number): void {
+    this.rememberImmediateResourcePulse('coin', targetCoins, pulseKey)
+    this.animateResourceCounter('.coin-number', targetCoins, ' $')
   }
 
   private findResourceTrailTarget(target: ResourceTrailTarget): HTMLElement | DOMRect | null {

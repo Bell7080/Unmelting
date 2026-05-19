@@ -595,13 +595,16 @@ async function openTrialOverlay(): Promise<void> {
   })
 }
 
-/** Build the renderer-facing split-shop state with dynamic inflation costs. */
+/** Build the renderer-facing split-shop state with dynamic inflation costs.
+ *  Reroll cost is denominated in coins (화폐) — the renderer reads `coins`
+ *  to decide whether the reroll button is affordable. */
 function buildShopStateView(): ShopStateView {
   return {
     mode: currentShopMode,
     relicOffers: currentShopOffers,
     freeCardClaimed,
     rerollCost: 1 + shopRerollCount,
+    coins,
     basicPackCost: 120 + shopBasicPackBuys * 40,
     upgradePackCost: 700 + shopUpgradePackBuys * 130,
     unlockPackCost: 520 + shopUnlockPackBuys * 120,
@@ -828,11 +831,14 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   }
   if (detail.kind === 'reroll') {
     const rerollCost = 1 + shopRerollCount
-    if (score < rerollCost) return
-    score = Math.max(0, score - rerollCost)
+    // Reroll is paid in 화폐(coins) now, not 불빛(score).
+    if (coins < rerollCost) return
+    coins = Math.max(0, coins - rerollCost)
+    coinPulseKey++
     shopRerollCount += 1
     const remaining = currentShopOffers.filter((entry) => !entry.purchased).length
     currentShopOffers = rollShopOffers().slice(0, remaining)
+    boardRenderer.playCoinSpendFeedback(coins, coinPulseKey)
     boardRenderer.openShop(buildShopStateView(), score, gameState.character)
     return
   }

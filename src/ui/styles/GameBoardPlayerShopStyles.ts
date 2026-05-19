@@ -104,87 +104,50 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   align-items: end;
 }
 
-/* ---------- Shop shutter + modal ---------- */
+/* ---------- Shop shutter (보자기) + modal ---------- */
 .rail.is-shop-quaking {
   animation: shop-rail-quake 0.52s cubic-bezier(0.18, 0.9, 0.24, 1);
 }
+/* New shutter behavior: a single 보자기-style cloth panel unfurls top-down
+   in one motion, replacing the previous 9 individual wax drapes. The cloth
+   is semi-transparent black with a subtle woven texture so the rail
+   underneath shows just enough to remind the player "the run is paused,
+   but still there".  All inner span panels are hidden — kept around only
+   so existing shutter-build code doesn't break. */
 .rail-shutter {
   position: absolute;
   inset: 0;
   z-index: 35;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-  gap: clamp(7px, 1vw, 12px);
-  padding: clamp(7px, 1vw, 12px);
   pointer-events: none;
-}
-/* Shutter panels read as candle-stained parchment drapes hanging from the
-   rail header: warm wax flecks running diagonally, a slightly torn lower
-   edge implied by a soft ember glow, and the upper hem caught in shadow.
-   Each panel still slides in with its own short delay so the closure has
-   the feel of paper drapes dropping one by one. */
-.rail-shutter span {
-  position: relative;
-  border-radius: 8px 8px 14px 14px;
   background:
-    radial-gradient(ellipse 80% 35% at 50% 100%, rgba(244, 164, 96, 0.32), transparent 70%),
-    radial-gradient(circle at 18% 18%, rgba(0, 0, 0, 0.45), transparent 38%),
     repeating-linear-gradient(
-      125deg,
-      rgba(255, 232, 168, 0.08) 0 3px,
-      rgba(0, 0, 0, 0.25) 3px 9px
+      135deg,
+      rgba(255, 232, 168, 0.04) 0 6px,
+      rgba(0, 0, 0, 0.16) 6px 12px
     ),
-    linear-gradient(180deg, rgba(120, 64, 28, 0.72) 0%, rgba(48, 24, 14, 0.92) 35%, rgba(20, 10, 14, 0.98) 100%);
-  border: 1px solid rgba(180, 110, 52, 0.46);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.18),
-    inset 0 -10px 16px rgba(0, 0, 0, 0.55),
-    0 10px 22px rgba(0, 0, 0, 0.6);
-  transform: translateY(-120%) scaleY(0.82);
+    linear-gradient(180deg, rgba(8, 5, 14, 0.78) 0%, rgba(4, 2, 8, 0.92) 100%);
+  border-bottom: 1px solid rgba(255, 215, 120, 0.18);
+  box-shadow: inset 0 -22px 40px rgba(0, 0, 0, 0.5);
+  transform: scaleY(0);
   transform-origin: top;
-  animation: shop-shutter-drop 0.52s cubic-bezier(0.18, 0.86, 0.22, 1) forwards;
-  animation-delay: calc(var(--shutter-i) * 36ms);
-  overflow: hidden;
+  animation: shop-cloth-unfurl 0.58s cubic-bezier(0.18, 0.86, 0.22, 1) forwards;
 }
-.rail-shutter span::before {
-  /* Wax seal dot near the top centre of each drape — small candlelit accent
-     that ties the shutter back to the rest of the wax/seal/parchment UI. */
-  content: '';
-  position: absolute;
-  top: 4px;
-  left: 50%;
-  width: 8px;
-  height: 8px;
-  margin-left: -4px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #ffd778, #c44a1c 70%, #58140c 100%);
-  box-shadow: 0 0 6px rgba(255, 188, 96, 0.55);
+.rail-shutter span {
+  /* The old per-panel drapes are replaced by a single cloth; legacy spans
+     are kept for backward compat but hidden so they don't render. */
+  display: none;
 }
-.rail-shutter span::after {
-  /* Torn bottom hem hinted by a soft warm gradient bleeding off the panel. */
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -4px;
-  height: 8px;
-  background: radial-gradient(ellipse 70% 90% at 50% 0%, rgba(244, 164, 96, 0.38), transparent 72%);
-  pointer-events: none;
+.rail-shutter.is-closed {
+  transform: scaleY(1);
 }
-.rail-shutter.is-closed span {
-  transform: translateY(0) scaleY(1);
-}
-.rail-shutter.is-persistent span {
-  /* Purchase renders recreate the rail while the shop is open. Keep the
-     already-closed shutter visually locked instead of replaying its drop. */
+.rail-shutter.is-persistent {
+  /* Purchase renders recreate the rail while the shop is open. Lock the
+     already-unfurled cloth in place instead of replaying the drop. */
   animation: none;
-  opacity: 1;
-  transform: translateY(0) scaleY(1);
+  transform: scaleY(1);
 }
-.rail-shutter.is-opening span {
-  animation: shop-shutter-open 0.42s cubic-bezier(0.42, 0, 0.24, 1) forwards;
-  animation-delay: calc(var(--shutter-i) * 18ms);
+.rail-shutter.is-opening {
+  animation: shop-cloth-furl 0.42s cubic-bezier(0.42, 0, 0.24, 1) forwards;
 }
 /* In-rail shop overlay. Body-mounted but pointer-transparent, so the score
    panel, hand panel and player card stay readable AND interactive for
@@ -207,48 +170,125 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   background: transparent;
   border: 0;
   box-shadow: none;
-  /* No SHOP label any more, so the top padding shrinks to just enough
-     room for the card drop-in arc + the flat price tag that hangs off
-     the bottom. */
   padding: clamp(14px, 1.6vh, 22px) clamp(12px, 1.4vw, 18px) clamp(18px, 2.2vh, 26px);
   display: grid;
   grid-template-rows: 1fr 1fr;
+  gap: clamp(10px, 1.4vh, 16px);
   align-items: stretch;
   overflow: visible;
   animation: shop-overlay-in 0.32s cubic-bezier(0.18, 0.86, 0.22, 1);
 }
+/* The 보자기 cloth backdrop lives in .rail-shutter (single cloth panel,
+   styled above). The shop-shell itself stays transparent; the layers
+   provide their own subtle dark backgrounds on top of that cloth. */
 
-/* SHOP stamp removed by player request — shop now identifies itself
-   purely by the relic stalls + EXIT label. */
-
-/* Balatro-style 2-tier shop:
-   - Top : [새로고침] [유물] [유물] [유물]  (4 equal columns)
-   - Bottom: [무료카드] [카드팩] [카드팩] [카드팩] (4 equal columns)
-   Every tile shares the .shop-relic-card frame so the row reads as one row of
-   equally-weighted cards. */
-.shop-grid {
+/* Layered shop layout:
+   - Top : artifact layer (8) + reroll zone (2)
+   - Bottom: free-card layer (3) + pack layer (7)
+   Each layer is a subtle dark "tray" without a border so the contents read as
+   loosely placed objects, not as a boxed-up grid cell.  Cards/buttons inside
+   keep fixed sizes — the layers absorb the slack. */
+.shop-row {
+  position: relative;
+  z-index: 1;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: clamp(8px, 1.4vw, 18px);
+  gap: clamp(10px, 1.4vw, 18px);
   align-items: stretch;
-  height: auto;
-  width: 100%;
-  padding: 0 6px;
+  min-height: 0;
+}
+.shop-top-row    { grid-template-columns: 8fr 2fr; }
+.shop-bottom-row { grid-template-columns: 3fr 7fr; }
+
+.shop-layer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 1.2vw, 16px);
+  padding: clamp(8px, 1.2vh, 14px) clamp(10px, 1.4vw, 18px);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.34);
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.45);
+  min-height: 0;
   overflow: visible;
 }
-.shop-grid.bottom {
-  margin-top: 10px;
+.shop-artifact-layer {
+  justify-content: space-around;
+  gap: clamp(10px, 1.6vw, 22px);
+  padding-left: clamp(14px, 2vw, 26px);
+  padding-right: clamp(14px, 2vw, 26px);
+}
+.shop-pack-layer {
+  justify-content: space-around;
+  gap: clamp(10px, 1.4vw, 20px);
+}
+.shop-free-layer,
+.shop-reroll-zone {
+  /* Free-card and reroll layers center their single child. */
+  justify-content: center;
 }
 
-/* Reroll tile — same dimensions as a relic card so the top row stays a
-   straight 4-up grid. Uses a swirl-tinted art band so it reads as "shuffle"
-   without an emoji. */
-.shop-reroll-card .shop-reroll-art {
+/* Reroll button — compact rectangle, fixed size, paid in 화폐(coins). Lives in
+   the small top-right layer.  Carved-wood frame matches the existing buy/EXIT
+   button family so it reads as "control" rather than a card. */
+.shop-reroll-btn {
+  appearance: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: clamp(96px, 11vw, 130px);
+  height: clamp(64px, 8vh, 86px);
+  padding: 6px 12px;
+  border: 2px solid rgba(28, 14, 6, 0.92);
+  border-radius: 6px;
   background:
-    radial-gradient(circle at 30% 30%, rgba(255, 232, 168, 0.32), transparent 60%),
-    radial-gradient(circle at 70% 70%, rgba(244, 164, 96, 0.28), transparent 60%),
-    repeating-conic-gradient(from 0deg, rgba(255, 215, 120, 0.18) 0deg 12deg, rgba(20, 14, 28, 0.6) 12deg 28deg);
+    linear-gradient(180deg, rgba(120, 76, 36, 0.96), rgba(58, 30, 14, 0.96)),
+    repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.06) 0 2px, rgba(255, 232, 168, 0.04) 2px 5px);
+  color: rgba(255, 232, 168, 0.96);
+  font-family: inherit;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.3),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.55),
+    0 6px 14px rgba(0, 0, 0, 0.55);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
 }
+.shop-reroll-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.5),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.6),
+    0 8px 18px rgba(0, 0, 0, 0.65),
+    0 0 16px rgba(244, 164, 96, 0.35);
+}
+.shop-reroll-btn-label { font-size: 13px; }
+.shop-reroll-btn-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.shop-reroll-btn-cost-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  color: #ffd778;
+}
+.shop-reroll-btn-cost-icon .icon { width: 100%; height: 100%; }
+.shop-reroll-btn-cost-text { font-size: 13px; }
+.shop-reroll-btn.is-unaffordable {
+  filter: saturate(0.7) brightness(0.78);
+  cursor: not-allowed;
+}
+.shop-reroll-btn.is-unaffordable .shop-reroll-btn-cost-icon { color: rgba(255, 197, 181, 0.6); }
+.shop-reroll-btn.is-affordable { border-color: rgba(122, 202, 113, 0.7); }
+
 /* Free-card tile gets a warm candle-glow art band. */
 .shop-free-card .shop-free-art {
   background:
@@ -257,43 +297,115 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
     linear-gradient(180deg, rgba(48, 31, 43, 0.92), rgba(18, 12, 24, 0.96));
 }
 
-/* Pack tiles: relic-card chassis, themed art band per pack type. */
-.shop-pack-art {
+/* Pack tile — FULL illustration with centered title/effect overlay. This is
+   intentionally NOT the relic-card art+body split: the pack reads as a
+   single illustrated envelope, not a card with a separate text panel. */
+.shop-pack-card {
   position: relative;
+  flex: 0 0 auto;
+  width: clamp(110px, 10.5vw, 158px);
+  aspect-ratio: 3 / 4;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 215, 120, 0.4);
+  overflow: visible;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.18),
+    0 14px 26px rgba(0, 0, 0, 0.6);
+  transform-origin: center bottom;
+  transition: transform 0.22s cubic-bezier(0.18, 0.86, 0.22, 1), box-shadow 0.22s ease;
+  animation:
+    shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both,
+    shop-pack-drift 4.6s ease-in-out 0.55s infinite alternate;
 }
-.shop-pack-art::after {
-  /* Small wax-stamp dot in the centre of the pack art so each pack reads as
-     a sealed envelope rather than a blank card. */
+.shop-pack-layer > .shop-pack-card:nth-child(1) { animation-delay: 100ms, 0.6s; }
+.shop-pack-layer > .shop-pack-card:nth-child(2) { animation-delay: 200ms, 1s; }
+.shop-pack-layer > .shop-pack-card:nth-child(3) { animation-delay: 300ms, 1.4s; }
+.shop-pack-card:hover,
+.shop-pack-card:focus-visible {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.32),
+    0 20px 38px rgba(0, 0, 0, 0.7),
+    0 0 28px rgba(244, 164, 96, 0.4);
+  z-index: 6;
+}
+.shop-pack-card.is-unaffordable {
+  filter: saturate(0.82) brightness(0.84);
+  border-color: rgba(166, 62, 58, 0.5);
+}
+.shop-pack-illustration {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-position: center;
+  background-size: cover;
+  pointer-events: none;
+}
+.shop-pack-illustration::after {
+  /* Wax-stamp dot near the upper-third of the illustration so each pack
+     reads as a sealed envelope rather than a blank tile. */
   content: '';
   position: absolute;
-  top: 50%;
+  top: 22%;
   left: 50%;
-  width: 26%;
-  height: 26%;
+  width: 30%;
+  aspect-ratio: 1;
   border-radius: 50%;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle at 35% 30%, #ffd778, #c44a1c 70%, #58140c 100%);
-  box-shadow: 0 0 14px rgba(255, 188, 96, 0.55);
+  transform: translateX(-50%);
+  background: radial-gradient(circle at 35% 30%, #ffd778, #c44a1c 65%, #58140c 100%);
+  box-shadow: 0 0 16px rgba(255, 188, 96, 0.55);
   opacity: 0.92;
 }
-.pack-theme-resource .shop-pack-art {
-  background:
-    radial-gradient(circle at 50% 38%, rgba(146, 220, 138, 0.36), transparent 60%),
-    linear-gradient(180deg, rgba(38, 56, 38, 0.92), rgba(16, 26, 18, 0.96));
+.shop-pack-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding: clamp(8px, 1vw, 14px);
+  text-align: center;
+  background: linear-gradient(180deg, transparent 35%, rgba(0, 0, 0, 0.78) 100%);
+  border-radius: inherit;
+  pointer-events: none;
 }
-.pack-theme-upgrade .shop-pack-art {
-  background:
-    radial-gradient(circle at 50% 38%, rgba(244, 164, 96, 0.36), transparent 60%),
-    linear-gradient(180deg, rgba(72, 36, 22, 0.92), rgba(28, 14, 12, 0.96));
+.shop-pack-title {
+  margin: 0;
+  color: rgba(255, 244, 210, 0.98);
+  font-size: var(--font-size-base);
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
-.pack-theme-unlock .shop-pack-art {
-  background:
-    radial-gradient(circle at 50% 38%, rgba(180, 142, 230, 0.36), transparent 60%),
-    linear-gradient(180deg, rgba(46, 30, 70, 0.92), rgba(18, 12, 32, 0.96));
+.shop-pack-effect {
+  margin: 4px 0 0;
+  color: rgba(255, 244, 210, 0.86);
+  font-size: var(--font-size-sm);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
 }
-.shop-pack-card.pack-theme-resource { border-color: rgba(146, 220, 138, 0.46); }
-.shop-pack-card.pack-theme-upgrade { border-color: rgba(244, 164, 96, 0.5); }
-.shop-pack-card.pack-theme-unlock { border-color: rgba(180, 142, 230, 0.5); }
+.shop-pack-price {
+  bottom: -10px;
+}
+.pack-theme-resource .shop-pack-illustration {
+  background-image:
+    radial-gradient(circle at 50% 60%, rgba(176, 230, 152, 0.4), transparent 60%),
+    linear-gradient(170deg, rgba(40, 70, 38, 0.95) 0%, rgba(12, 30, 18, 0.98) 100%);
+}
+.pack-theme-upgrade .shop-pack-illustration {
+  background-image:
+    radial-gradient(circle at 50% 60%, rgba(255, 188, 96, 0.42), transparent 60%),
+    linear-gradient(170deg, rgba(96, 44, 24, 0.95) 0%, rgba(30, 14, 12, 0.98) 100%);
+}
+.pack-theme-unlock .shop-pack-illustration {
+  background-image:
+    radial-gradient(circle at 50% 60%, rgba(196, 158, 240, 0.4), transparent 60%),
+    linear-gradient(170deg, rgba(58, 36, 88, 0.95) 0%, rgba(20, 12, 36, 0.98) 100%);
+}
+.shop-pack-card.pack-theme-resource { border-color: rgba(146, 220, 138, 0.5); }
+.shop-pack-card.pack-theme-upgrade { border-color: rgba(244, 164, 96, 0.55); }
+.shop-pack-card.pack-theme-unlock { border-color: rgba(180, 142, 230, 0.55); }
 
 /* Pack-picker overlay: a half-screen modal on top of the shop shell showing
    the 3 candidate cards. Background dims the shop slightly. */
@@ -384,33 +496,54 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   border: 1px solid rgba(255, 215, 120, 0.42);
   background: linear-gradient(180deg, rgba(45, 30, 39, 0.96), rgba(18, 12, 24, 0.96));
   box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.18), 0 12px 24px rgba(0, 0, 0, 0.55);
-  height: 100%;
+  /* Fixed dimensions — the surrounding layer absorbs any extra space, so the
+     cards always read as the same physical objects regardless of layer width. */
+  flex: 0 0 auto;
+  width: clamp(110px, 10.5vw, 158px);
+  aspect-ratio: 3 / 4;
+  height: auto;
   min-height: 0;
   cursor: pointer;
   transform-origin: center bottom;
   transition: transform 0.22s cubic-bezier(0.18, 0.86, 0.22, 1),
               box-shadow 0.22s ease;
-  /* Drop-in entrance animation when the shop opens. Each card uses a
-     per-card stagger via --card-i. */
-  animation: shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) backwards;
-  animation-name: shop-card-enter, shop-card-drift;
-  animation-duration: 0.5s, 4.8s;
-  animation-iteration-count: 1, infinite;
-  animation-direction: normal, alternate;
+  /* Two animations: enter (one-shot drop-in) then float (idle sway). Float
+     waits ~0.55s so it doesn't clobber the drop-in transform during the
+     first half-second. Per-card animation-delay below desyncs the float so
+     the row doesn't sway in lock-step. */
+  animation:
+    shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both,
+    shop-card-float 5.4s ease-in-out 0.55s infinite alternate;
 }
-.shop-grid > .shop-relic-card:nth-child(1) { animation-delay: 60ms; }
-.shop-grid > .shop-relic-card:nth-child(2) { animation-delay: 140ms; }
-.shop-grid > .shop-relic-card:nth-child(3) { animation-delay: 220ms; }
-.shop-grid > .shop-relic-card:nth-child(4) { animation-delay: 300ms; }
-.shop-shell.has-entered .shop-relic-card {
-  /* Buying a card rebuilds the shop contents; this guard prevents that
-     refresh from replaying the first-open drop animation. */
-  animation: none;
-}
+.shop-artifact-layer > .shop-relic-card:nth-child(1) { animation-delay: 60ms, 0.55s; }
+.shop-artifact-layer > .shop-relic-card:nth-child(2) { animation-delay: 160ms, 0.95s; }
+.shop-artifact-layer > .shop-relic-card:nth-child(3) { animation-delay: 260ms, 1.4s; }
 @keyframes shop-card-enter {
   0%   { transform: translateY(-130%) scale(0.9); opacity: 0; }
   72%  { transform: translateY(8px) scale(1.02); opacity: 1; }
   100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+/* Idle side-to-side drift for the artifact cards — they should feel like
+   they were tossed onto the cloth, rocking gently rather than locked to a
+   grid cell.  Per-card initial transform sets the rest pose; the keyframes
+   only nudge a few px on each side. */
+@keyframes shop-card-float {
+  0%   { transform: translate(-3px, 0) rotate(-1.6deg); }
+  50%  { transform: translate(4px, -2px) rotate(0.8deg); }
+  100% { transform: translate(-2px, 1px) rotate(-0.4deg); }
+}
+@keyframes shop-pack-drift {
+  0%   { transform: translateY(0) rotate(-0.6deg); }
+  50%  { transform: translateY(-3px) rotate(0.4deg); }
+  100% { transform: translateY(0) rotate(-0.2deg); }
+}
+@keyframes shop-cloth-unfurl {
+  0%   { transform: scaleY(0); opacity: 0.6; }
+  100% { transform: scaleY(1); opacity: 1; }
+}
+@keyframes shop-cloth-furl {
+  0%   { transform: scaleY(1); opacity: 1; }
+  100% { transform: scaleY(0); opacity: 0; }
 }
 
 /* Hover scale — clicking the grown card buys it. */
@@ -441,10 +574,6 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   filter: saturate(0.55) brightness(0.72);
   pointer-events: none;
   animation: shop-card-burnout 0.42s ease forwards;
-}
-@keyframes shop-card-drift {
-  from { transform: translateY(0px) scale(1); }
-  to { transform: translateY(-3px) scale(1.01); }
 }
 @keyframes shop-card-burnout {
   0% { opacity: 1; clip-path: inset(0 0 0 0); }
@@ -547,7 +676,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   overflow: hidden; /* clip the swoosh so cards don't pass over the candle gauge */
 }
 .shop-shell.is-closing .shop-close-btn { opacity: 0; pointer-events: none; transition: opacity 0.18s ease; }
-.shop-shell.is-closing .shop-relic-card {
+.shop-shell.is-closing .shop-relic-card,
+.shop-shell.is-closing .shop-pack-card {
   pointer-events: none;
   animation:
     shop-card-bounce 0.22s cubic-bezier(0.2, 0.86, 0.22, 1) forwards,
@@ -668,8 +798,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   to { opacity: 1; }
 }
 @media (max-width: 820px) {
-  .shop-grid { grid-template-columns: 1fr; }
-  .shop-relic-card { min-height: 360px; }
+  .shop-top-row,
+  .shop-bottom-row { grid-template-columns: 1fr; }
+  .shop-artifact-layer,
+  .shop-pack-layer { flex-wrap: wrap; }
 }
 
 /* Player card mirrors the rail-card structure (sprite art → bottom dark
