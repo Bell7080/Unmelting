@@ -79,12 +79,6 @@ const gameState = new GameState()
 const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
 const boardRenderer = new GameBoardRenderer('game-board')
-/**
- * Temporary QA hook: every new run starts with Hope so death-revive testing is
- * immediately available. Do not remove this forced grant until the user
- * explicitly asks us to delete it.
- */
-const FORCE_STARTING_HOPE_RELIC_FOR_TESTING = true
 let gameActive = true
 let inputLocked = false
 let chain: ChainState = HandSystem.newChain()
@@ -154,6 +148,8 @@ const runModifiers = {
 /** 메타 사당 해금(추후 저장소 연동) + 런 내 카드풀 분리를 위한 토대. */
 const metaUnlockedCardIds = [...HAND_CARD_IDS]
 const runCardPool = new RunCardPool(HAND_CARD_IDS, metaUnlockedCardIds)
+/** Dev-only command palette is temporary tooling and must be removed before release. */
+const ENABLE_DEV_COMMAND_PALETTE = true
 
 type ActivityLogDraft = Omit<ActivityLogEntry, 'id'>
 
@@ -1239,10 +1235,6 @@ function startGame(): void {
   chain = HandSystem.newChain()
   pendingHandTarget = null
   gameState.reset()
-  // Temporary QA hook: grant Hope after reset so restarts also keep the test
-  // setup. Do not remove this forced run-start relic until the user explicitly
-  // asks us to delete it.
-  if (FORCE_STARTING_HOPE_RELIC_FOR_TESTING) gameState.character.addRelic('hope')
   score = 0
   scorePulseKey = 0
   coins = 0
@@ -1294,6 +1286,110 @@ function render(): void {
     vignetteIntensity: EmberSystem.getVignetteIntensity(tier),
     chainHints: buildChainHints(),
     pendingHandTarget,
+  })
+}
+
+/** Register slash-command debug palette. Opens with `/` like Minecraft chat. */
+function setupDevCommandPalette(): void {
+  if (!ENABLE_DEV_COMMAND_PALETTE) return
+  const host = document.createElement('div')
+  host.className = 'dev-command-palette'
+  host.innerHTML = `
+    <div class="dev-command-shell">
+      <span class="dev-command-prefix">/</span>
+      <input class="dev-command-input" type="text" spellcheck="false" autocomplete="off" />
+      <div class="dev-command-hint">예시: /25turn, /희망, /양초</div>
+    </div>
+  `
+  document.body.appendChild(host)
+  const style = document.createElement('style')
+  style.textContent = `
+    .dev-command-palette { position: fixed; inset: 0 auto auto 0; width: 100%; z-index: 140; pointer-events: none; opacity: 0; transform: translateY(-8px); transition: opacity .14s ease, transform .14s ease; }
+    .dev-command-palette.is-open { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    .dev-command-shell { margin: 8px auto 0; width: min(760px, calc(100% - 24px)); border: 1px solid rgba(255,215,120,.4); border-radius: 12px; background: linear-gradient(180deg, rgba(38,26,48,.98), rgba(18,12,24,.98)); box-shadow: 0 14px 28px rgba(0,0,0,.55); padding: 10px 12px; display: grid; grid-template-columns: 18px 1fr; grid-template-areas: "prefix input" "hint hint"; column-gap: 8px; row-gap: 6px; }
+    .dev-command-prefix { grid-area: prefix; color: rgba(255,215,120,.92); font-weight: 900; align-self: center; }
+    .dev-command-input { grid-area: input; border: 0; outline: none; background: transparent; color: rgba(255,245,220,.98); font: 900 15px/1.3 'OkDanDan', Georgia, serif; }
+    .dev-command-hint { grid-area: hint; color: rgba(232,214,180,.78); font-size: 12px; }
+  `
+  document.head.appendChild(style)
+  const input = host.querySelector<HTMLInputElement>('.dev-command-input')
+  const hint = host.querySelector<HTMLDivElement>('.dev-command-hint')
+  if (!input || !hint) return
+  let opened = false
+  const handNameMap = new Map<string, HandCardId>()
+  for (const id of HAND_CARD_IDS) {
+    handNameMap.set(id.toLowerCase(), id)
+    handNameMap.set(getHandCardDef(id).name.toLowerCase(), id)
+  }
+  const relicNameMap = new Map<string, RelicId>()
+  for (const id of RELIC_IDS) {
+    relicNameMap.set(id.toLowerCase(), id)
+    relicNameMap.set(getRelicDef(id).name.toLowerCase(), id)
+  }
+  const setHint = (msg: string): void => { hint.textContent = msg }
+  const close = (): void => { opened = false; host.classList.remove('is-open'); input.value = '' }
+  const open = (): void => {
+    opened = true
+    host.classList.add('is-open')
+    setHint('예시: /25turn, /희망, /양초')
+    input.value = ''
+    window.setTimeout(() => input.focus(), 0)
+  }
+  const execute = (rawValue: string): void => {
+    const token = rawValue.trim().replace(/^\/+/, '')
+    if (!token) return
+    const turnMatch = token.match(/^(\d{1,3})\s*turn$/i)
+    if (turnMatch) {
+      const turn = Number(turnMatch[1])
+      if (!Number.isFinite(turn) || turn < 1 || turn > 100) { setHint('턴 이동은 1~100 범위만 가능합니다.'); return }
+      gameState.setCurrentTurnForDebug(turn)
+      syncSpawnerTier()
+      render()
+      setHint(`디버그: ${turn}턴으로 이동`)
+      return
+    }
+    const key = token.toLowerCase()
+    const relicId = relicNameMap.get(key)
+    if (relicId) {
+      const ok = gameState.character.addRelic(relicId)
+      render()
+      setHint(ok ? `디버그: 유물 지급 (${getRelicDef(relicId).name})` : '이미 보유 중이거나 지급할 수 없습니다.')
+      return
+    }
+    const handId = handNameMap.get(key)
+    if (handId) {
+      const ok = gameState.character.addHandCard(DropSystem.makeCard(handId))
+      render()
+      setHint(ok ? `디버그: 손패 지급 (${getHandCardDef(handId).name})` : '손패가 가득 찼습니다.')
+      return
+    }
+    setHint('알 수 없는 명령어입니다. /25turn, /희망, /양초')
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '/' && !opened) {
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
+      e.preventDefault()
+      open()
+      return
+    }
+    if (!opened) return
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      close()
+    }
+  })
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      execute(input.value)
+      input.select()
+      return
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      close()
+    }
   })
 }
 
@@ -2213,4 +2309,5 @@ globalStyle.textContent = `
 `
 document.head.appendChild(globalStyle)
 
+setupDevCommandPalette()
 startGame()

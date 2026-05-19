@@ -1018,6 +1018,7 @@ export class GameBoardRenderer {
     art: { kind: 'sprite'; url: string } | { kind: 'icon'; svg: string }
     name: string
     tag?: string
+    rarityClass?: string
     chips?: Array<{
       label?: string
       value: string
@@ -1044,7 +1045,7 @@ export class GameBoardRenderer {
     const noteHtml = opts.note ? `<p class="codex-tile-note">${opts.note}</p>` : ''
     const flavorHtml = opts.flavor ? `<p class="codex-tile-flavor">${opts.flavor}</p>` : ''
     const chipsRow = chipsHtml ? `<div class="codex-tile-stats">${chipsHtml}</div>` : ''
-    const classes = ['codex-tile', opts.extraClass ?? ''].filter(Boolean).join(' ')
+    const classes = ['codex-tile', opts.rarityClass ?? '', opts.extraClass ?? ''].filter(Boolean).join(' ')
     return `
       <article class="${classes}">
         ${artHtml}
@@ -1248,7 +1249,6 @@ export class GameBoardRenderer {
               class="shop-reroll-btn ${affordable}"
               data-shop-buy-kind="reroll"
               aria-label="새로고침 — ${cost} 화폐">
-        <span class="shop-reroll-btn-label">새로고침</span>
         <span class="shop-reroll-btn-cost">
           <span class="shop-reroll-btn-cost-icon">${rerollMonogramIcon()}</span>
           <span class="shop-reroll-btn-cost-text">${cost.toLocaleString()}</span>
@@ -1294,8 +1294,16 @@ export class GameBoardRenderer {
   ): string {
     const affordable = score >= cost ? 'is-affordable' : 'is-unaffordable'
     const artUrl = SpriteUrls.packs[kind]
+    // Pack tiers are intentionally fixed by kind so shop, picker, and codex share
+    // one rarity source instead of each view hardcoding different glow levels.
+    const packRarityClassMap: Record<ShopPackKind, CardRarity> = {
+      'basic-pack': 'common',
+      'upgrade-pack': 'rare',
+      'unlock-pack': 'epic',
+    }
+    const rarityClass = RARITY_CLASS_BY_TIER[packRarityClassMap[kind]]
     return `
-      <article class="shop-pack-card pack-theme-${theme} ${affordable} ${RARITY_CLASS_BY_TIER.rare}"
+      <article class="shop-pack-card pack-theme-${theme} ${affordable} ${rarityClass}"
                data-shop-buy-kind="${kind}"
                tabindex="0"
                style="--cardback-url:url('${SpriteUrls.cardBack}');"
@@ -2105,6 +2113,7 @@ export class GameBoardRenderer {
           art: { kind: 'sprite', url: spriteForRelic(def.id) },
           name: def.name,
           tag: isOwned ? '보유 중' : '상점',
+          rarityClass: RARITY_CLASS_BY_TIER[RELIC_RARITY[def.id]],
           chips: [{ label: '효과 ', value: def.effect, tone: 'gold' }],
           flavor: def.flavor,
           extraClass: isOwned ? 'codex-tile--owned' : undefined,
@@ -3170,15 +3179,17 @@ export class GameBoardRenderer {
     void reroll.offsetWidth
     reroll.classList.add('is-reroll-impacted')
     const cards = Array.from(
-      document.querySelectorAll<HTMLElement>('#shop-overlay .shop-relic-card, #shop-overlay .shop-pack-card')
+      // Only relics reroll: pack/free slots are fixed inventory and must not flip.
+      document.querySelectorAll<HTMLElement>('#shop-overlay .shop-relic-card[data-shop-buy-kind="relic"]')
     ).filter((card) => !card.classList.contains('is-purchased'))
     cards.forEach((card, index) => {
-      card.style.setProperty('--shop-reroll-stagger', `${index * 52}ms`)
+      // The tiny per-card offset makes 1→2→3 almost simultaneous "촤라락" sequencing.
+      card.style.setProperty('--shop-reroll-stagger', `${index * 36}ms`)
       card.classList.remove('is-rerolling')
       void card.offsetWidth
       card.classList.add('is-rerolling')
     })
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 540 + cards.length * 52))
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 520 + cards.length * 36))
   }
 
   private findResourceTrailTarget(target: ResourceTrailTarget): HTMLElement | DOMRect | null {

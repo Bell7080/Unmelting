@@ -201,7 +201,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   background: transparent;
   border: 0;
   box-shadow: none;
-  padding: clamp(14px, 1.6vh, 22px) clamp(12px, 1.4vw, 18px) clamp(18px, 2.2vh, 26px);
+  padding: clamp(14px, 1.6vh, 22px) clamp(16px, 2vw, 28px) clamp(18px, 2.2vh, 26px);
   display: grid;
   grid-template-rows: 1fr 1fr;
   gap: clamp(10px, 1.4vh, 16px);
@@ -285,8 +285,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  width: clamp(104px, 11.4vw, 140px);
+  gap: 0;
+  width: clamp(96px, 9.8vw, 122px);
   height: clamp(68px, 8.4vh, 90px);
   padding: 8px 12px;
   border: 1px solid rgba(255, 215, 120, 0.42);
@@ -315,7 +315,6 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
     0 8px 18px rgba(0, 0, 0, 0.65),
     0 0 16px rgba(244, 164, 96, 0.35);
 }
-.shop-reroll-btn-label { font-size: 13px; }
 .shop-reroll-btn-cost {
   display: inline-flex;
   align-items: center;
@@ -324,8 +323,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-reroll-btn-cost-icon {
   display: inline-flex;
-  width: 20px;
-  height: 20px;
+  width: 28px;
+  height: 28px;
   color: #ffd778;
 }
 .shop-reroll-btn-cost-icon .icon { width: 100%; height: 100%; }
@@ -355,16 +354,14 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   position: relative;
   flex: 0 0 auto;
   /* Card sizes raised ~20% from the previous (110/10.5vw/158) sizing. */
-  width: clamp(122px, 11.4vw, 174px);
+  width: clamp(116px, 10.9vw, 164px);
   aspect-ratio: 3 / 4;
   border-radius: 14px;
   border: none;
   overflow: visible;
   cursor: pointer;
   scale: 1;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.18),
-    0 14px 26px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.6);
   transform-origin: center bottom;
   /* Hover scale uses the individual scale property so it composes with the
      translate/rotate channels used by the float keyframes (transform-based
@@ -388,10 +385,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-pack-card:focus-visible {
   animation-play-state: paused;
   scale: 1.06;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.32),
-    0 20px 38px rgba(0, 0, 0, 0.7),
-    0 0 28px rgba(244, 164, 96, 0.4);
+  box-shadow: 0 20px 38px rgba(0, 0, 0, 0.7);
   z-index: 6;
 }
 .shop-pack-card.is-unaffordable {
