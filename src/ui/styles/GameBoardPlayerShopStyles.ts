@@ -440,22 +440,20 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 /* Theme tints are applied as a glow on the card frame; the inner art comes
    from the pack_00X.webp sprite assigned inline in the renderer. */
 
-/* Pack-picker overlay: lives INSIDE .shop-shell, clipped to the rail's
-   rounded rectangle so it never pokes outside the shop UI's footprint.
-   A warm veil descends from the top, then the 3 cards drop in face-down
-   (cardback texture facing the camera) and flip front-up in sequence.
-   Picking a card raises both the cards and the veil straight back up. */
+/* Pack-picker overlay: lives INSIDE .shop-shell. Instead of feeling like a
+   hard rectangular layer, the veil is a radial-feathered "big shadow"
+   that dims the center where the cards land and fades to nothing at the
+   shop UI's edges, naturally pulling the eye to the 3 picked cards.
+   overflow:hidden still clips the cards' drop-in trajectory so they
+   never escape the shop footprint. */
 .shop-pack-picker {
   position: absolute;
-  /* Pull in to match the rail's inner padding so the veil/cards never
-     overlap the rail border or shutter rim. The shop-shell is sized to
-     the rail's outer rect; the rail itself has padding clamp(10px,1.6vh,14px). */
-  inset: clamp(10px, 1.6vh, 14px);
+  inset: 0;
   z-index: 11;
   display: none;
-  /* Match the rail's border-radius so the corners are clipped to the
-     same curve as the shop UI behind it. */
-  border-radius: 12px;
+  /* Rounded clip matches the rail curve so any visible edge follows the
+     shop UI's silhouette instead of a flat rectangle. */
+  border-radius: 14px;
   overflow: hidden;
   pointer-events: none;
 }
@@ -465,10 +463,34 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-pack-picker-veil {
   position: absolute;
-  inset: 0;
+  /* Extend slightly past the picker bounds so the radial fade smooths into
+     the shop edges without leaving a visible cutoff line. */
+  inset: -4%;
   background:
-    linear-gradient(180deg, rgba(8, 5, 12, 0.97), rgba(4, 2, 8, 0.94)),
-    repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.08) 0 3px, rgba(255, 232, 168, 0.02) 3px 6px);
+    repeating-linear-gradient(
+      135deg,
+      rgba(255, 232, 168, 0.03) 0 3px,
+      rgba(0, 0, 0, 0.06) 3px 7px
+    ),
+    radial-gradient(
+      ellipse 62% 74% at 50% 50%,
+      rgba(28, 18, 14, 0.86) 0%,
+      rgba(34, 22, 16, 0.66) 48%,
+      rgba(36, 24, 18, 0.22) 80%,
+      rgba(36, 24, 18, 0) 100%
+    );
+  /* Feather edges with a soft mask so the dim reads as a halo around the
+     cards rather than a hard rectangle pinned to the shop rim. */
+  -webkit-mask-image: radial-gradient(
+    ellipse 78% 84% at 50% 50%,
+    rgba(0, 0, 0, 1) 54%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  mask-image: radial-gradient(
+    ellipse 78% 84% at 50% 50%,
+    rgba(0, 0, 0, 1) 54%,
+    rgba(0, 0, 0, 0) 100%
+  );
   transform-origin: top center;
   animation: shop-pack-veil-drop 0.4s cubic-bezier(0.18, 0.86, 0.22, 1) both;
 }
