@@ -212,7 +212,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
      the bottom. */
   padding: clamp(14px, 1.6vh, 22px) clamp(12px, 1.4vw, 18px) clamp(18px, 2.2vh, 26px);
   display: grid;
-  grid-template-rows: 1fr;
+  grid-template-rows: 1fr 1fr;
   align-items: stretch;
   overflow: visible;
   animation: shop-overlay-in 0.32s cubic-bezier(0.18, 0.86, 0.22, 1);
@@ -228,10 +228,39 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: clamp(8px, 1.4vw, 18px);
   align-items: stretch;
-  height: 100%;
+  height: auto;
   width: 100%;
   padding: 0 6px;
   overflow: visible;
+}
+.shop-grid.top {
+  grid-template-columns: 1fr 1fr 1fr auto;
+  grid-template-rows: auto 1fr;
+  align-content: start;
+}
+.shop-grid.bottom {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  margin-top: 10px;
+}
+.shop-mode-chip {
+  grid-column: 1 / span 1;
+  align-self: center;
+  justify-self: start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 215, 120, 0.4);
+}
+.shop-action-btn-reroll { grid-column: 4; justify-self: end; }
+.shop-action-btn-pack { min-height: 30px; }
+.shop-pack-zone { grid-column: 1 / span 2; }
+.shop-free-card { grid-column: 4; }
+.shop-pack-zone-title { margin: 0 0 4px; }
+.shop-pack-zone-note { margin: 0; opacity: 0.85; font-size: 12px; }
+.shop-action-btn {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 215, 120, 0.42);
+  background: linear-gradient(180deg, rgba(48, 31, 43, 0.95), rgba(24, 16, 28, 0.95));
+  color: rgba(255, 236, 186, 0.96);
 }
 
 .shop-relic-card {
@@ -252,6 +281,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   /* Drop-in entrance animation when the shop opens. Each card uses a
      per-card stagger via --card-i. */
   animation: shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) backwards;
+  animation-name: shop-card-enter, shop-card-drift;
+  animation-duration: 0.5s, 4.8s;
+  animation-iteration-count: 1, infinite;
+  animation-direction: normal, alternate;
 }
 .shop-grid > .shop-relic-card:nth-child(1) { animation-delay: 60ms; }
 .shop-grid > .shop-relic-card:nth-child(2) { animation-delay: 160ms; }
@@ -294,6 +327,15 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-relic-card.is-purchased {
   filter: saturate(0.55) brightness(0.72);
   pointer-events: none;
+  animation: shop-card-burnout 0.42s ease forwards;
+}
+@keyframes shop-card-drift {
+  from { transform: translateY(0px) scale(1); }
+  to { transform: translateY(-3px) scale(1.01); }
+}
+@keyframes shop-card-burnout {
+  0% { opacity: 1; clip-path: inset(0 0 0 0); }
+  100% { opacity: 0; clip-path: inset(100% 0 0 0); }
 }
 .shop-relic-art {
   min-height: 0;
