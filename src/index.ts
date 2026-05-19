@@ -864,8 +864,17 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     shopRerollCount += 1
     boardRenderer.playCoinSpendFeedback(coins, coinPulseKey)
     await boardRenderer.playShopRerollFeedback(rerollCost)
-    const remaining = currentShopOffers.filter((entry) => !entry.purchased).length
-    currentShopOffers = rollShopOffers().slice(0, remaining)
+    // Keep purchased slots as-is and reroll only visible/purchasable relic slots,
+    // so EXIT does not resurrect cards into already-bought gaps.
+    const freshOffers = rollShopOffers()
+    let freshIndex = 0
+    currentShopOffers = currentShopOffers.map((entry) => {
+      if (entry.purchased) return entry
+      const next = freshOffers[freshIndex]
+      freshIndex += 1
+      // Fallback to the previous entry if the pool is temporarily exhausted.
+      return next ?? entry
+    })
     boardRenderer.openShop(buildShopStateView(), score, gameState.character)
     return
   }

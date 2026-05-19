@@ -47,7 +47,6 @@ import {
   flameIcon,
   heartIcon,
   pouchIcon,
-  rerollMonogramIcon,
   shieldIcon,
   sparkleIcon,
   swordIcon,
@@ -1240,18 +1239,18 @@ export class GameBoardRenderer {
     return score >= offer.price ? 'is-affordable' : 'is-unaffordable'
   }
 
-  /** Reroll button — sits inside the top-row's small right column. Compact
-   *  button (NOT a card) that pays in coins (화폐, $) instead of score. */
+  /** Reroll button — compact control with a fixed two-line label.
+   *  Top line is the action text, bottom line is the coin price. */
   private renderShopRerollButton(cost: number, coins: number): string {
     const affordable = coins >= cost ? 'is-affordable' : 'is-unaffordable'
     return `
       <button type="button"
               class="shop-reroll-btn ${affordable}"
               data-shop-buy-kind="reroll"
-              aria-label="새로고침 — ${cost} 화폐">
+              aria-label="ReRoll — ${cost}$">
+        <span class="shop-reroll-btn-title">ReRoll</span>
         <span class="shop-reroll-btn-cost">
-          <span class="shop-reroll-btn-cost-icon">${rerollMonogramIcon()}</span>
-          <span class="shop-reroll-btn-cost-text">${cost.toLocaleString()}</span>
+          <span class="shop-reroll-btn-cost-text">${cost.toLocaleString()}$</span>
         </span>
       </button>
     `
@@ -1542,8 +1541,8 @@ export class GameBoardRenderer {
       reroll.classList.remove('is-affordable', 'is-unaffordable')
       reroll.classList.add(shop.coins >= shop.rerollCost ? 'is-affordable' : 'is-unaffordable')
       const costText = reroll.querySelector<HTMLElement>('.shop-reroll-btn-cost-text')
-      if (costText) costText.textContent = shop.rerollCost.toLocaleString()
-      reroll.setAttribute('aria-label', `새로고침 — ${shop.rerollCost} 화폐`)
+      if (costText) costText.textContent = `${shop.rerollCost.toLocaleString()}$`
+      reroll.setAttribute('aria-label', `ReRoll — ${shop.rerollCost}$`)
     }
 
     // Free card claimed state.
@@ -3183,13 +3182,13 @@ export class GameBoardRenderer {
       document.querySelectorAll<HTMLElement>('#shop-overlay .shop-relic-card[data-shop-buy-kind="relic"]')
     ).filter((card) => !card.classList.contains('is-purchased'))
     cards.forEach((card, index) => {
-      // The tiny per-card offset makes 1→2→3 almost simultaneous "촤라락" sequencing.
-      card.style.setProperty('--shop-reroll-stagger', `${index * 36}ms`)
+      // Slightly wider stagger keeps 1→2→3 readable while still feeling linked.
+      card.style.setProperty('--shop-reroll-stagger', `${index * 95}ms`)
       card.classList.remove('is-rerolling')
       void card.offsetWidth
       card.classList.add('is-rerolling')
     })
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 520 + cards.length * 36))
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 760 + cards.length * 95))
   }
 
   private findResourceTrailTarget(target: ResourceTrailTarget): HTMLElement | DOMRect | null {
