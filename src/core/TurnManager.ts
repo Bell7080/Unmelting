@@ -85,9 +85,19 @@ export interface FlowerWilt {
 
 export class TurnManager {
   gameState: GameState
+  /** 보스전 전용 단계는 일반 턴 카운트에서 제외하기 위해 분리한다. */
+  private turnMode: 'normal_turn' | 'boss_phase' = 'normal_turn'
 
   constructor(gameState: GameState) {
     this.gameState = gameState
+  }
+
+  setTurnMode(mode: 'normal_turn' | 'boss_phase'): void {
+    this.turnMode = mode
+  }
+
+  isBossPhase(): boolean {
+    return this.turnMode === 'boss_phase'
   }
 
   /**

@@ -37,8 +37,9 @@ import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { CandleMode } from '@entities/Character'
 import { HandCardId, HandCategory } from '@entities/HandCard'
-import { getHandCardDef } from '@data/HandCards'
+import { getHandCardDef, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
+import { RunCardPool } from '@core/RunCardPool'
 import type { BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
@@ -132,6 +133,16 @@ const RUN_TARGET_TURNS = 100
 let altarBossPending = false
 let altarBossDefeated = false
 let trialPending = false
+/** 보스/시련의 영속 modifier: 이번 런 내내 스폰/스탯/함정 계산에 누적된다. */
+const runModifiers = {
+  spawnWeightScale: 1,
+  enemyHpBonus: 0,
+  enemyDamageBonus: 0,
+  trapDamageBonus: 0,
+}
+/** 메타 사당 해금(추후 저장소 연동) + 런 내 카드풀 분리를 위한 토대. */
+const metaUnlockedCardIds = [...HAND_CARD_IDS]
+const runCardPool = new RunCardPool(HAND_CARD_IDS, metaUnlockedCardIds)
 
 type ActivityLogDraft = Omit<ActivityLogEntry, 'id'>
 
@@ -550,6 +561,30 @@ function rollShopOffers(): ShopOfferView[] {
     .map(({ relicId }) => ({ relicId, price: priceForRelic(relicId) }))
 }
 
+/** 독립 시련 오버레이(3선택). 선택은 즉시 런 영속 modifier로 반영한다. */
+async function openTrialOverlay(): Promise<void> {
+  const existing = document.getElementById('trial-overlay')
+  if (existing) existing.remove()
+  const host = document.createElement('div')
+  host.id = 'trial-overlay'
+  host.style.cssText = 'position:fixed;inset:0;z-index:420;display:flex;align-items:center;justify-content:center;background:rgba(10,8,18,0.72);'
+  host.innerHTML = `<section style="width:min(940px,92vw);border:1px solid rgba(230,194,129,.42);border-radius:20px;padding:22px;background:linear-gradient(180deg, rgba(35,24,44,.98), rgba(15,10,21,.98));box-shadow:0 24px 60px rgba(0,0,0,.45);color:#f7e7c8;"><h2 style="margin:0 0 12px;font-size:22px;">시련 선택</h2><p style="margin:0 0 16px;opacity:.84">선택 결과는 이번 런 전체에 누적 적용됩니다.</p><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;"><button data-trial="spawn" style="padding:14px;border-radius:14px;border:1px solid rgba(160,190,255,.45);background:rgba(42,58,100,.35);color:#dfe9ff;">군집의 장막<br/><small>스폰 가중치 +15%</small></button><button data-trial="enemy" style="padding:14px;border-radius:14px;border:1px solid rgba(214,136,162,.45);background:rgba(90,40,58,.36);color:#ffe1ea;">피의 맹세<br/><small>적 HP/ATK +1</small></button><button data-trial="trap" style="padding:14px;border-radius:14px;border:1px solid rgba(206,174,116,.45);background:rgba(74,54,25,.36);color:#ffeec4;">가시의 세례<br/><small>함정 피해 +1</small></button></div></section>`
+  document.body.appendChild(host)
+  inputLocked = true
+  await new Promise<void>((resolve) => {
+    host.addEventListener('click', (event) => {
+      const target = (event.target as HTMLElement).closest<HTMLElement>('[data-trial]')
+      if (!target) return
+      const choice = target.dataset.trial
+      if (choice === 'spawn') runModifiers.spawnWeightScale += 0.15
+      if (choice === 'enemy') { runModifiers.enemyHpBonus += 1; runModifiers.enemyDamageBonus += 1 }
+      if (choice === 'trap') runModifiers.trapDamageBonus += 1
+      host.remove()
+      resolve()
+    })
+  })
+}
+
 /** Build the renderer-facing split-shop state with dynamic inflation costs. */
 function buildShopStateView(): ShopStateView {
   return {
@@ -627,13 +662,17 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
     altarBossPending = false
     altarBossDefeated = true
     trialPending = true
+    turnManager.setTurnMode('boss_phase')
     recordNotice('제단의 수문장 출현: 보스(HP30/ATK5, 3턴 주기) 설계 토대 활성', 'hurt')
+    // 현재는 프리뷰 단계이므로 즉시 일반 턴으로 되돌려 카운트 제외 규칙만 고정한다.
+    turnManager.setTurnMode('normal_turn')
     render()
     return true
   }
   if (trialPending) {
     trialPending = false
-    recordNotice('시련 카드 제시: 적+1/+1, 함정+1, 보물확률-10% (선택 UI 토대)', 'info')
+    await openTrialOverlay()
+    recordNotice(`시련 각인 완료 · 스폰x${runModifiers.spawnWeightScale.toFixed(2)} / 적+${runModifiers.enemyHpBonus},+${runModifiers.enemyDamageBonus} / 함정+${runModifiers.trapDamageBonus}`, 'info')
     render()
     return true
   }
@@ -1051,6 +1090,9 @@ function startGame(): void {
   turnManager.armFrontBombs()
   boardRenderer.setHandTargetingMode(null)
   boardRenderer.clearSelection()
+  const poolSnapshot = runCardPool.snapshot()
+  // 메타 사당 해금(영구) + 런 카드풀(임시) 이중 구조를 플레이 로그로 명시한다.
+  recordNotice(`카드 풀 초기화: 메타해금 ${poolSnapshot.unlocked.length} / 잠김 ${poolSnapshot.locked.length} / 금지 ${poolSnapshot.banned.length}`, 'info')
   render()
 }
 
@@ -1508,7 +1550,7 @@ async function applyHandSingle(
 }
 
 async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
-  if (advanceTurn) {
+  if (advanceTurn && !turnManager.isBossPhase()) {
     const beforeTurnFreeze = snapshotFieldFreezeState()
     gameState.nextTurn()
     await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeTurnFreeze))
