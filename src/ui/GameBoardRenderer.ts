@@ -1325,22 +1325,32 @@ export class GameBoardRenderer {
    *  automatically when index.ts applies the pick. */
   openPackPicker(view: ShopPackPickerView): void {
     if (!this.shopOverlayElement) return
-    let host = this.shopOverlayElement.querySelector<HTMLElement>('.shop-pack-picker')
+    // Anchor the picker INSIDE the shop shell so it covers only the rail
+    // area (where the shutter is) — not the entire screen. The shell is
+    // already re-positioned over the rail's bounding rect.
+    const shell = this.shopOverlayElement.querySelector<HTMLElement>('.shop-shell')
+    if (!shell) return
+    let host = shell.querySelector<HTMLElement>('.shop-pack-picker')
     if (!host) {
       host = document.createElement('div')
       host.className = 'shop-pack-picker'
       host.addEventListener('click', (e) => {
+        if (host?.classList.contains('is-closing')) return
         const t = e.target as HTMLElement
         const card = t.closest<HTMLElement>('[data-pack-pick]')
         if (!card) return
         const itemId = card.dataset.packPick
         const packKind = card.dataset.packKind as ShopPackKind | undefined
         if (!itemId || !packKind) return
+        // Run the close animation (cards lift + veil retract) immediately so
+        // the pick reads as visceral feedback; the state apply fires in the
+        // same beat so index.ts can sequence the next stage without stutter.
+        this.closePackPicker()
         document.dispatchEvent(
           new CustomEvent<ShopPackPickDetail>('shopPackPick', { detail: { packKind, itemId } })
         )
       })
-      this.shopOverlayElement.appendChild(host)
+      shell.appendChild(host)
     }
     const cards = view.items
       .map(
@@ -1351,6 +1361,7 @@ export class GameBoardRenderer {
                    style="--pick-i:${i}; --cardback-url:url('${SpriteUrls.cardBack}');"
                    tabindex="0"
                    aria-label="${item.title} — ${item.effect}">
+            <div class="shop-pack-pick-back" aria-hidden="true"></div>
             <div class="shop-relic-body">
               <h3 class="shop-relic-title">${item.title}</h3>
               <p class="shop-relic-effect">${item.effect}</p>
@@ -1358,7 +1369,9 @@ export class GameBoardRenderer {
           </article>`
       )
       .join('')
+    host.classList.remove('is-closing')
     host.innerHTML = `
+      <div class="shop-pack-picker-veil" aria-hidden="true"></div>
       <div class="shop-pack-picker-shell" role="dialog" aria-label="${view.title}">
         <header class="shop-pack-picker-head">
           <h2>${view.title}</h2>
@@ -1370,12 +1383,25 @@ export class GameBoardRenderer {
     host.classList.add('is-open')
   }
 
-  /** Hide the pack picker overlay without touching the shop shell. */
+  /** Hide the pack picker overlay. Plays the lift-out animation first
+   *  (cards rise + veil retracts), then tears down the DOM. Idempotent —
+   *  calling it again while already closing is a no-op so the click
+   *  handler and the index.ts pick handler can both invoke it safely. */
   closePackPicker(): void {
     const host = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-pack-picker')
     if (!host) return
-    host.classList.remove('is-open')
-    host.innerHTML = ''
+    if (host.classList.contains('is-closing')) return
+    if (!host.classList.contains('is-open')) {
+      host.innerHTML = ''
+      return
+    }
+    host.classList.add('is-closing')
+    // Lift animation duration ≈ 340ms + max-stagger 160ms; tear down a hair
+    // after the last card has left so nothing pops.
+    window.setTimeout(() => {
+      host.classList.remove('is-open', 'is-closing')
+      host.innerHTML = ''
+    }, 540)
   }
 
   /** Shop relic card. Click on the card itself buys the relic (the
@@ -3220,12 +3246,13 @@ export class GameBoardRenderer {
           window.setTimeout(() => {
             this.applyShopRelicContent(card, offer, score, character)
           }, delay + HALF_FLIP_MS)
-          // Hand control back after the flip finishes; clean the class so the
-          // card's idle drift resumes and the button can be clicked again.
+          // KEEP the .is-rerolling class on after the flip lands. Removing it
+          // changes the `animation` shorthand back to the base rule, which in
+          // turn restarts shop-card-enter — the card vanishes for the 460ms
+          // delay and then drops in from the top of the screen. The flip
+          // animation has `both` fill, so the card holds rotateY(360deg)
+          // (== visually identity) and remains interactive.
           window.setTimeout(() => {
-            card.classList.remove('is-rerolling')
-            card.style.removeProperty('--shop-reroll-stagger')
-            card.style.removeProperty('--shop-reroll-flip-ms')
             resolve()
           }, delay + FLIP_MS + 30)
         })

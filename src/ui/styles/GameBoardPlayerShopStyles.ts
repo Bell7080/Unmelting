@@ -431,36 +431,69 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 /* Theme tints are applied as a glow on the card frame; the inner art comes
    from the pack_00X.webp sprite assigned inline in the renderer. */
 
-/* Pack-picker overlay: a half-screen modal on top of the shop shell showing
-   the 3 candidate cards. Background dims the shop slightly. */
+/* Pack-picker overlay: lives INSIDE .shop-shell so it covers only the rail
+   area, not the full screen. A black veil descends from the top, then the
+   3 cards drop in face-down (cardback texture facing the camera) and flip
+   front-up in sequence. Picking a card raises both the cards and the veil. */
 .shop-pack-picker {
   position: absolute;
   inset: 0;
-  z-index: 9;
+  z-index: 11;
   display: none;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
   pointer-events: none;
+  border-radius: inherit;
 }
 .shop-pack-picker.is-open {
-  display: flex;
+  display: block;
   pointer-events: auto;
-  background: radial-gradient(ellipse at 50% 50%, rgba(10, 6, 14, 0.68), rgba(4, 2, 8, 0.88));
-  backdrop-filter: blur(2px);
-  animation: shop-overlay-in 0.22s ease;
+}
+.shop-pack-picker-veil {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(8, 5, 12, 0.97), rgba(4, 2, 8, 0.94)),
+    repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.08) 0 3px, rgba(255, 232, 168, 0.02) 3px 6px);
+  transform-origin: top center;
+  animation: shop-pack-veil-drop 0.4s cubic-bezier(0.18, 0.86, 0.22, 1) both;
+}
+.shop-pack-picker.is-closing .shop-pack-picker-veil {
+  animation: shop-pack-veil-lift 0.34s cubic-bezier(0.6, 0.04, 0.74, 0.92) both;
+}
+@keyframes shop-pack-veil-drop {
+  0%   { transform: scaleY(0); opacity: 0.4; }
+  100% { transform: scaleY(1); opacity: 1; }
+}
+@keyframes shop-pack-veil-lift {
+  0%   { transform: scaleY(1); opacity: 1; }
+  100% { transform: scaleY(0); opacity: 0; }
 }
 .shop-pack-picker-shell {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-  padding: 18px;
-  max-width: 92%;
+  justify-content: center;
+  gap: clamp(8px, 1.2vh, 14px);
+  padding: clamp(10px, 1.4vh, 18px);
 }
 .shop-pack-picker-head {
   text-align: center;
   color: rgba(255, 232, 168, 0.96);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  animation: shop-pack-head-fade 0.32s ease 0.28s both;
+}
+.shop-pack-picker.is-closing .shop-pack-picker-head {
+  animation: shop-pack-head-fade-out 0.22s ease both;
+}
+@keyframes shop-pack-head-fade {
+  0%   { opacity: 0; transform: translateY(-6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes shop-pack-head-fade-out {
+  0%   { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-6px); }
 }
 .shop-pack-picker-head h2 {
   margin: 0;
@@ -475,8 +508,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-pack-picker-cards {
   display: grid;
-  grid-template-columns: repeat(3, minmax(140px, 200px));
-  gap: clamp(10px, 1.4vw, 18px);
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  gap: clamp(8px, 1.2vw, 16px);
+  width: 100%;
+  max-width: clamp(420px, 56vw, 640px);
 }
 .shop-pack-pick-card {
   position: relative;
@@ -489,14 +524,42 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   padding: 14px 12px 16px;
   min-height: 160px;
   cursor: pointer;
+  transform-style: preserve-3d;
   transform-origin: center bottom;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
-  animation: shop-pack-pick-in 0.4s cubic-bezier(0.18, 0.86, 0.22, 1) backwards;
-  animation-delay: calc(var(--pick-i, 0) * 80ms);
+  /* Drop in face-down, then flip face-up. The drop lands AFTER the veil has
+     finished, and each card staggers 110ms so they read left→right.  The
+     flip uses the same 3D mechanism as the reroll cards (real backface). */
+  animation:
+    shop-pack-pick-drop 0.42s cubic-bezier(0.18, 0.86, 0.22, 1) calc(var(--pick-i, 0) * 110ms + 0.42s) both,
+    shop-pack-pick-flip 0.55s cubic-bezier(0.24, 0.86, 0.2, 1) calc(var(--pick-i, 0) * 110ms + 0.84s) both;
+}
+.shop-pack-pick-card > * {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+/* Painted back face — rotated 180° so it shows while the card is face-down
+   and during the 90°–270° section of the flip. Same cardback texture as
+   the hand-card hover preview, for consistency. */
+.shop-pack-pick-back {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(14, 10, 18, 0.18), rgba(0, 0, 0, 0.55)),
+    var(--cardback-url) center / cover no-repeat;
+  border: 1px solid rgba(255, 215, 120, 0.42);
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.18);
+  transform: rotateY(180deg);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  pointer-events: none;
+  z-index: 4;
 }
 .shop-pack-pick-card:hover,
 .shop-pack-pick-card:focus-visible {
-  transform: translateY(-3px) scale(1.04);
+  /* Scale via individual property so it composes with the rotateY held by
+     the flip animation's 'both' fill mode. */
+  scale: 1.04;
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.32),
     0 18px 36px rgba(0, 0, 0, 0.7),
@@ -505,10 +568,24 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-pack-pick-card.pack-theme-resource { border-color: rgba(146, 220, 138, 0.62); }
 .shop-pack-pick-card.pack-theme-upgrade { border-color: rgba(244, 164, 96, 0.62); }
 .shop-pack-pick-card.pack-theme-unlock { border-color: rgba(180, 142, 230, 0.62); }
-@keyframes shop-pack-pick-in {
-  0% { transform: translateY(-40%) scale(0.86); opacity: 0; }
-  72% { transform: translateY(6px) scale(1.02); opacity: 1; }
-  100% { transform: translateY(0) scale(1); opacity: 1; }
+@keyframes shop-pack-pick-drop {
+  0%   { transform: translateY(-180%) rotateY(180deg); opacity: 0; }
+  78%  { transform: translateY(8px) rotateY(180deg); opacity: 1; }
+  100% { transform: translateY(0) rotateY(180deg); opacity: 1; }
+}
+@keyframes shop-pack-pick-flip {
+  0%   { transform: rotateY(180deg); filter: brightness(0.86); }
+  100% { transform: rotateY(360deg); filter: brightness(1); }
+}
+.shop-pack-picker.is-closing .shop-pack-pick-card {
+  /* Override the entrance animations so cards lift back up cleanly when
+     the player picks one. Stagger reversed so the leftmost rises first. */
+  animation: shop-pack-pick-lift 0.34s cubic-bezier(0.6, 0.04, 0.74, 0.92) calc(var(--pick-i, 0) * 80ms) both;
+  pointer-events: none;
+}
+@keyframes shop-pack-pick-lift {
+  0%   { transform: translateY(0) rotateY(360deg); opacity: 1; }
+  100% { transform: translateY(-200%) rotateY(360deg); opacity: 0; }
 }
 
 .shop-relic-card {
@@ -545,11 +622,20 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-artifact-layer > .shop-relic-card:nth-child(2) { animation-delay: 560ms, 2.0s; }
 .shop-artifact-layer > .shop-relic-card:nth-child(3) { animation-delay: 660ms, 2.9s; }
 .shop-free-layer > .shop-relic-card { animation-delay: 520ms, 1.6s; }
-/* Reroll button fades in after the veil so it doesn't pop in before the
-   backdrop is ready. */
+/* Reroll button fades in after the veil. Driven by a TRANSITION rather than
+   an animation so .is-reroll-impacted (which overrides the animation
+   shorthand) can't clobber the held opacity:1 state and make the button
+   disappear after the first reroll. */
 .shop-reroll-btn {
   opacity: 0;
-  animation: shop-overlay-in 0.32s cubic-bezier(0.22, 0.86, 0.22, 1) 460ms both;
+  transition:
+    opacity 0.32s cubic-bezier(0.22, 0.86, 0.22, 1) 460ms,
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    filter 0.16s ease;
+}
+.shop-overlay.is-open .shop-reroll-btn {
+  opacity: 1;
 }
 @keyframes shop-card-enter {
   0%   { transform: translateY(-130%) scale(0.9); opacity: 0; }
