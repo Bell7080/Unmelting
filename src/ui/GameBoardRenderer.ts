@@ -3221,10 +3221,13 @@ export class GameBoardRenderer {
         '#shop-overlay .shop-artifact-layer .shop-relic-card[data-shop-buy-kind="relic"]'
       )
     )
-    // Slightly faster than the previous 620ms flip, with a left→right stagger.
-    const STAGGER_MS = 110
-    const FLIP_MS = 520
-    const HALF_FLIP_MS = FLIP_MS / 2
+    // Three-beat flip with a visible back-side pause (see the keyframes in
+    // GameBoardPlayerShopStyles for the 0/32/58/100 stops). The pause window
+    // spans 32%-58% of the total duration, so the content swap fires at 45%
+    // — squarely in the middle of the held back face.
+    const STAGGER_MS = 130
+    const FLIP_MS = 800
+    const SWAP_AT_MS = Math.round(FLIP_MS * 0.45)
     const flips: Promise<void>[] = []
     let flipIndex = 0
     allCards.forEach((card, idx) => {
@@ -3242,10 +3245,12 @@ export class GameBoardRenderer {
       card.classList.add('is-rerolling')
       flips.push(
         new Promise<void>((resolve) => {
-          // Mid-flip swap: card back is facing the camera, hiding the swap.
+          // Swap during the middle of the held-back pause: the card has
+          // already finished its front→back rotation and is paused with the
+          // cardback facing the camera, so the swap is invisible.
           window.setTimeout(() => {
             this.applyShopRelicContent(card, offer, score, character)
-          }, delay + HALF_FLIP_MS)
+          }, delay + SWAP_AT_MS)
           // KEEP the .is-rerolling class on after the flip lands. Removing it
           // changes the `animation` shorthand back to the base rule, which in
           // turn restarts shop-card-enter — the card vanishes for the 460ms

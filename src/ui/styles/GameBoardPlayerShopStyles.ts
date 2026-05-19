@@ -219,7 +219,16 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   z-index: 0;
   pointer-events: none;
   border-radius: 6px;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0.74) 100%);
+  /* Warm dark papyrus tone matching the wax shutter umber, with a subtle
+     parchment grain on top. Brighter than the previous near-black veil
+     so the shop reads as "candle-lit room" rather than "blackout". */
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(255, 232, 168, 0.04) 0 3px,
+      rgba(0, 0, 0, 0.10) 3px 7px
+    ),
+    linear-gradient(180deg, rgba(64, 44, 28, 0.62) 0%, rgba(36, 22, 16, 0.74) 100%);
   transform: scaleY(0);
   transform-origin: top;
   /* Drops the moment openShop mounts. The wax shutter has already finished
@@ -431,18 +440,24 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 /* Theme tints are applied as a glow on the card frame; the inner art comes
    from the pack_00X.webp sprite assigned inline in the renderer. */
 
-/* Pack-picker overlay: lives INSIDE .shop-shell so it covers only the rail
-   area, not the full screen. A black veil descends from the top, then the
-   3 cards drop in face-down (cardback texture facing the camera) and flip
-   front-up in sequence. Picking a card raises both the cards and the veil. */
+/* Pack-picker overlay: lives INSIDE .shop-shell, clipped to the rail's
+   rounded rectangle so it never pokes outside the shop UI's footprint.
+   A warm veil descends from the top, then the 3 cards drop in face-down
+   (cardback texture facing the camera) and flip front-up in sequence.
+   Picking a card raises both the cards and the veil straight back up. */
 .shop-pack-picker {
   position: absolute;
-  inset: 0;
+  /* Pull in to match the rail's inner padding so the veil/cards never
+     overlap the rail border or shutter rim. The shop-shell is sized to
+     the rail's outer rect; the rail itself has padding clamp(10px,1.6vh,14px). */
+  inset: clamp(10px, 1.6vh, 14px);
   z-index: 11;
   display: none;
+  /* Match the rail's border-radius so the corners are clipped to the
+     same curve as the shop UI behind it. */
+  border-radius: 12px;
   overflow: hidden;
   pointer-events: none;
-  border-radius: inherit;
 }
 .shop-pack-picker.is-open {
   display: block;
@@ -622,20 +637,48 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-artifact-layer > .shop-relic-card:nth-child(2) { animation-delay: 560ms, 2.0s; }
 .shop-artifact-layer > .shop-relic-card:nth-child(3) { animation-delay: 660ms, 2.9s; }
 .shop-free-layer > .shop-relic-card { animation-delay: 520ms, 1.6s; }
-/* Reroll button fades in after the veil. Driven by a TRANSITION rather than
-   an animation so .is-reroll-impacted (which overrides the animation
-   shorthand) can't clobber the held opacity:1 state and make the button
-   disappear after the first reroll. */
+/* Reroll button enters AND exits with the relic cards.  Driven by a
+   transition keyed to .shop-overlay.is-open / .shop-shell.is-closing
+   (not an animation), so the .is-reroll-impacted animation can't clobber
+   the held opacity. Uses the individual translate/scale channels so the
+   impact's transform and the hover's transform compose without fighting. */
 .shop-reroll-btn {
   opacity: 0;
+  translate: 0 -130%;
+  scale: 0.9;
   transition:
-    opacity 0.32s cubic-bezier(0.22, 0.86, 0.22, 1) 460ms,
+    opacity 0.34s cubic-bezier(0.6, 0.04, 0.74, 0.92),
+    translate 0.34s cubic-bezier(0.6, 0.04, 0.74, 0.92),
+    scale 0.34s cubic-bezier(0.6, 0.04, 0.74, 0.92),
     transform 0.16s ease,
     box-shadow 0.16s ease,
     filter 0.16s ease;
 }
 .shop-overlay.is-open .shop-reroll-btn {
   opacity: 1;
+  translate: 0 0;
+  scale: 1;
+  /* Land in sync with the rightmost relic card (~660ms enter delay + 500ms). */
+  transition:
+    opacity 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 560ms,
+    translate 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 560ms,
+    scale 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 560ms,
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    filter 0.16s ease;
+}
+.shop-shell.is-closing .shop-reroll-btn {
+  /* Leave together with the cards' bounce+swoosh. No transition-delay on
+     exit so the button departs in the same beat the cards start their
+     swoosh upward. */
+  opacity: 0;
+  translate: 0 -200%;
+  scale: 0.92;
+  pointer-events: none;
+  transition:
+    opacity 0.5s cubic-bezier(0.18, 0.86, 0.22, 1),
+    translate 0.5s cubic-bezier(0.18, 0.86, 0.22, 1),
+    scale 0.5s cubic-bezier(0.18, 0.86, 0.22, 1);
 }
 @keyframes shop-card-enter {
   0%   { transform: translateY(-130%) scale(0.9); opacity: 0; }
@@ -843,8 +886,14 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   100% { transform: translateY(0) scale(1); box-shadow: 0 0 0 rgba(244, 164, 96, 0); }
 }
 @keyframes shop-reroll-card-flip {
+  /* Three-beat flip: front→back (0-32%), HOLD on the back (32-58%), then
+     back→front (58-100%). The hold makes the back card clearly visible —
+     a "blind" pause in which the artifact identity is swapped invisibly —
+     so the player reads "card turned around, something changed, it
+     returned" instead of a one-tick 360° spin. */
   0%   { transform: perspective(820px) rotateY(0deg); filter: brightness(1); }
-  50%  { transform: perspective(820px) rotateY(180deg); filter: brightness(0.78); }
+  32%  { transform: perspective(820px) rotateY(180deg); filter: brightness(0.74); }
+  58%  { transform: perspective(820px) rotateY(180deg); filter: brightness(0.74); }
   100% { transform: perspective(820px) rotateY(360deg); filter: brightness(1); }
 }
 /* Rugged carved-wood buy buttons: deep umber base, dark inset rim, warm
