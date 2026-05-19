@@ -64,7 +64,9 @@ export interface ItemActionDetail {
 }
 
 export interface ShopBuyDetail {
-  relicId: RelicId
+  kind: 'relic' | 'free-card' | 'basic-pack' | 'upgrade-pack' | 'unlock-pack' | 'resource'
+  relicId?: RelicId
+  resourceId?: 'heal' | 'ember' | 'gauge' | 'hand'
 }
 
 export interface ShopOfferView {
@@ -74,6 +76,24 @@ export interface ShopOfferView {
    *  round numbers). Computed once when the shop is rolled. */
   price: number
   purchased?: boolean
+}
+export interface ShopResourceOfferView {
+  id: 'heal' | 'ember' | 'gauge' | 'hand'
+  name: string
+  valueLabel: string
+  price: number
+  bought?: boolean
+}
+export interface ShopStateView {
+  /** Normal 10/20/... shop vs 30/60/... altar variant. */
+  mode: 'shop' | 'altar'
+  relicOffers: ShopOfferView[]
+  freeCardClaimed: boolean
+  rerollCost: number
+  basicPackCost: number
+  upgradePackCost: number
+  resourceOffers: ShopResourceOfferView[]
+  unlockPackCost: number
 }
 
 export interface ActivityLogEntry {
@@ -1240,6 +1260,7 @@ export class GameBoardRenderer {
     return `
       <article class="shop-relic-card ${affordabilityClass}"
                data-shop-buy="${def.id}"
+               data-shop-buy-kind="relic"
                style="--card-leave-delay:${cardLeaveDelay}ms;"
                tabindex="0"
                aria-label="${def.name} — ${offer.purchased ? '구매 완료' : `점수 ${offer.price}점`}">
@@ -1268,7 +1289,7 @@ export class GameBoardRenderer {
    *  shopping. Outside the shell, pointer events pass through, but
    *  `inputLocked` blocks any actual game actions on those panels.
    */
-  openShop(offers: ShopOfferView[], score: number, character: Character): void {
+  openShop(shop: ShopStateView, score: number, character: Character): void {
     if (!this.shopOverlayElement) {
       this.shopOverlayElement = document.createElement('div')
       this.shopOverlayElement.id = 'shop-overlay'
@@ -1282,23 +1303,22 @@ export class GameBoardRenderer {
         }
         // The whole relic card is the buy target now (no separate buy
         // button) — click the hover-grown card to purchase.
-        const buyTarget = t.closest<HTMLElement>('[data-shop-buy]')
+        const buyTarget = t.closest<HTMLElement>('[data-shop-buy-kind]')
         if (!buyTarget || buyTarget.classList.contains('is-purchased')) return
+        const kind = buyTarget.dataset.shopBuyKind as ShopBuyDetail['kind'] | undefined
+        if (!kind) return
         const relicId = buyTarget.dataset.shopBuy as RelicId | undefined
-        if (!relicId) return
-        document.dispatchEvent(new CustomEvent<ShopBuyDetail>('shopBuy', { detail: { relicId } }))
+        const resourceId = buyTarget.dataset.shopResource as ShopBuyDetail['resourceId'] | undefined
+        document.dispatchEvent(new CustomEvent<ShopBuyDetail>('shopBuy', { detail: { kind, relicId, resourceId } }))
       })
       document.body.appendChild(this.shopOverlayElement)
     }
-
-    if (this.refreshOpenShopCards(offers, score)) {
+    if (this.refreshOpenShopCards(shop.relicOffers, score)) {
       this.positionShopShellOverRail()
-      return
     }
-
     const cards =
-      offers.length > 0
-        ? offers.map((offer) => this.renderShopRelicCard(offer, score, character)).join('')
+      shop.relicOffers.length > 0
+        ? shop.relicOffers.map((offer) => this.renderShopRelicCard(offer, score, character)).join('')
         : '<div class="shop-empty">오늘의 잡화는 모두 팔렸어.</div>'
     // A purchase refresh rebuilds the cards while the overlay is already
     // visible. Mark that shell so the entrance drop animation does not replay
@@ -1309,9 +1329,33 @@ export class GameBoardRenderer {
     // Plain shell — no SHOP label, no separate header. Each card is its
     // own clickable buy target with a flat price tag at the bottom; the
     // EXIT button hangs off the bottom-right.
+    const modeLabel = shop.mode === 'altar' ? '제단' : '상점'
     this.shopOverlayElement.innerHTML = `
       <div class="shop-shell ${suppressEnterAnimation}" role="dialog" aria-label="상점">
-        <section class="shop-grid" aria-label="상점 유물 목록">${cards}</section>
+        <section class="shop-grid top" aria-label="상점 유물 목록">
+          <div class="shop-mode-chip">${modeLabel}</div>
+          <button class="shop-action-btn shop-action-btn-pack" data-shop-buy-kind="basic-pack">기본 자원팩 ${shop.basicPackCost}점</button>
+          <button class="shop-action-btn shop-action-btn-pack" data-shop-buy-kind="upgrade-pack">${shop.mode === 'altar' ? '단일 강화팩' : '강화팩'} ${shop.upgradePackCost}점</button>
+          <button class="shop-action-btn shop-action-btn-pack" data-shop-buy-kind="unlock-pack">${shop.mode === 'altar' ? '카드 폐기팩' : '해금팩'} ${shop.unlockPackCost}점</button>
+          <button class="shop-action-btn shop-action-btn-reroll" data-shop-buy-kind="relic">새로고침 ${shop.rerollCost}점</button>
+          ${cards}
+        </section>
+        <section class="shop-grid bottom" aria-label="상점 보충 목록">
+          <section class="shop-pack-zone">
+            <h4 class="shop-pack-zone-title">카드팩 구역</h4>
+            <p class="shop-pack-zone-note">기본 자원 · 강화 · 해금(또는 제단 폐기)</p>
+          </section>
+          <article class="shop-relic-card ${shop.freeCardClaimed ? 'is-purchased' : 'is-affordable'} shop-free-card" data-shop-buy-kind="free-card">
+            <div class="shop-relic-body"><h3 class="shop-relic-title">${shop.mode === 'altar' ? '제단의 무료 축복' : '무료 카드'}</h3><p class="shop-relic-effect">이번 방문 1회 무료 획득</p></div>
+          </article>
+          ${shop.resourceOffers
+            .map(
+              (resource) => `<article class="shop-relic-card ${resource.bought ? 'is-purchased' : 'is-affordable'}" data-shop-buy-kind="resource" data-shop-resource="${resource.id}">
+              <div class="shop-relic-body"><h3 class="shop-relic-title">${resource.name}</h3><p class="shop-relic-effect">${resource.valueLabel}</p><p class="shop-relic-flavor">${resource.price}점</p></div>
+            </article>`
+            )
+            .join('')}
+        </section>
         <button class="shop-close-btn" type="button" data-shop-close aria-label="상점 나가기">EXIT</button>
       </div>
     `

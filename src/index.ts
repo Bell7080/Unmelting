@@ -25,6 +25,7 @@ import {
   ActivityLogEntry,
   ShopBuyDetail,
   ShopOfferView,
+  ShopStateView,
   type ResourceTrailTarget,
 } from '@ui/GameBoardRenderer'
 import { CardSpawner } from '@systems/CardSpawner'
@@ -114,6 +115,23 @@ let nextActivityLogId = 1
 let activityLogs: ActivityLogEntry[] = []
 let shopOpen = false
 let currentShopOffers: ShopOfferView[] = []
+let shopRerollCount = 0
+let shopBasicPackBuys = 0
+let shopUpgradePackBuys = 0
+let shopUnlockPackBuys = 0
+let freeCardClaimed = false
+let currentShopMode: 'shop' | 'altar' = 'shop'
+let shopResources = [
+  { id: 'heal' as const, name: '체력 회복', valueLabel: '체력 +2', price: 90, bought: false },
+  { id: 'ember' as const, name: '불씨 회복', valueLabel: '불씨 +3', price: 80, bought: false },
+  { id: 'gauge' as const, name: '콤보 충전', valueLabel: '게이지 +2', price: 85, bought: false },
+  { id: 'hand' as const, name: '랜덤 손패', valueLabel: '손패 +1', price: 100, bought: false },
+]
+/** Run-length target and milestone placeholders for future boss/trial system. */
+const RUN_TARGET_TURNS = 100
+let altarBossPending = false
+let altarBossDefeated = false
+let trialPending = false
 
 type ActivityLogDraft = Omit<ActivityLogEntry, 'id'>
 
@@ -532,6 +550,20 @@ function rollShopOffers(): ShopOfferView[] {
     .map(({ relicId }) => ({ relicId, price: priceForRelic(relicId) }))
 }
 
+/** Build the renderer-facing split-shop state with dynamic inflation costs. */
+function buildShopStateView(): ShopStateView {
+  return {
+    mode: currentShopMode,
+    relicOffers: currentShopOffers,
+    freeCardClaimed,
+    rerollCost: 1 + shopRerollCount,
+    basicPackCost: 120 + shopBasicPackBuys * 40,
+    upgradePackCost: 700 + shopUpgradePackBuys * 130,
+    unlockPackCost: 520 + shopUnlockPackBuys * 120,
+    resourceOffers: shopResources,
+  }
+}
+
 /** Immediate stat effects for relics whose benefit is granted on purchase. */
 async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
   if (id === 'carving-knife') {
@@ -553,30 +585,99 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
 
 async function maybeOpenShopAfterTurn(): Promise<boolean> {
   if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 10 !== 0) return false
+  // Every 30 turns swaps to altar mode; this is the first phase of the
+  // 100-turn run loop (10 shop, 20 shop, 30 altar ...).
+  currentShopMode = gameState.getCurrentTurn() % 30 === 0 ? 'altar' : 'shop'
   shopOpen = true
   inputLocked = true
   currentShopOffers = rollShopOffers()
+  shopRerollCount = 0
+  shopBasicPackBuys = 0
+  shopUpgradePackBuys = 0
+  shopUnlockPackBuys = 0
+  freeCardClaimed = false
+  shopResources = shopResources.map((it) => ({ ...it, bought: false }))
   // The shutter is a hard turn break: cut the chain before the shop overlay
   // appears so the floating chain text never hangs above the shop tab.
   HandSystem.resetChain(chain)
   clearChainTimeline()
-  recordNotice('레일이 멈추고 상점이 열렸다', 'info')
+  recordNotice(currentShopMode === 'altar' ? '레일이 멈추고 제단이 열렸다' : '레일이 멈추고 상점이 열렸다', 'info')
   render()
   await boardRenderer.playShopTransition()
-  boardRenderer.openShop(currentShopOffers, score, gameState.character)
+  boardRenderer.openShop(buildShopStateView(), score, gameState.character)
   return true
+}
+
+/** Phase milestone controller: altar(30n) -> boss preview -> trial preview.
+ *  This is a non-invasive scaffold so the core turn engine stays stable while
+ *  boss combat rules are implemented in follow-up slices. */
+async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
+  const turn = gameState.getCurrentTurn()
+  if (turn >= RUN_TARGET_TURNS) {
+    gameState.endGame('run_clear_100_turns')
+    recordNotice('100턴 생존 성공 — 시련의 장막이 닫힌다', 'win')
+    render()
+    return true
+  }
+  // After each altar visit (30, 60, 90), queue a dedicated boss gate.
+  if (turn > 0 && turn % 30 === 0 && !altarBossDefeated) {
+    altarBossPending = true
+  }
+  if (altarBossPending) {
+    altarBossPending = false
+    altarBossDefeated = true
+    trialPending = true
+    recordNotice('제단의 수문장 출현: 보스(HP30/ATK5, 3턴 주기) 설계 토대 활성', 'hurt')
+    render()
+    return true
+  }
+  if (trialPending) {
+    trialPending = false
+    recordNotice('시련 카드 제시: 적+1/+1, 함정+1, 보물확률-10% (선택 UI 토대)', 'info')
+    render()
+    return true
+  }
+  return false
 }
 
 async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   if (!shopOpen) return
-  const offer = currentShopOffers.find((entry) => entry.relicId === detail.relicId)
-  if (!offer || offer.purchased) return
-  if (score < offer.price) {
-    // Insufficient — re-render the shop with no log entry. The card's
-    // disabled / dimmed state is the visual cue.
-    boardRenderer.openShop(currentShopOffers, score, gameState.character)
+  if (detail.kind !== 'relic' && detail.kind !== 'resource' && detail.kind !== 'free-card' && detail.kind !== 'basic-pack' && detail.kind !== 'upgrade-pack' && detail.kind !== 'unlock-pack') return
+  if (detail.kind === 'free-card') {
+    if (!freeCardClaimed) coins += 1
+    freeCardClaimed = true
+    render()
+    boardRenderer.openShop(buildShopStateView(), score, gameState.character)
     return
   }
+  if (detail.kind === 'basic-pack') { shopBasicPackBuys += 1; boardRenderer.openShop(buildShopStateView(), score, gameState.character); return }
+  if (detail.kind === 'upgrade-pack') { shopUpgradePackBuys += 1; boardRenderer.openShop(buildShopStateView(), score, gameState.character); return }
+  if (detail.kind === 'unlock-pack') { shopUnlockPackBuys += 1; boardRenderer.openShop(buildShopStateView(), score, gameState.character); return }
+  if (detail.kind === 'resource') {
+    const target = shopResources.find((it) => it.id === detail.resourceId)
+    if (!target || target.bought) return
+    target.bought = true
+    if (target.id === 'heal') gameState.character.heal(2)
+    if (target.id === 'ember') gameState.character.gainEmber(3)
+    if (target.id === 'gauge') gameState.character.gainCandle(2)
+    if (target.id === 'hand') coins += 1
+    render()
+    boardRenderer.openShop(buildShopStateView(), score, gameState.character)
+    return
+  }
+  if (!detail.relicId) {
+    const rerollCost = 1 + shopRerollCount
+    if (score < rerollCost) return
+    score = Math.max(0, score - rerollCost)
+    shopRerollCount += 1
+    const remaining = currentShopOffers.filter((entry) => !entry.purchased).length
+    currentShopOffers = rollShopOffers().slice(0, remaining)
+    boardRenderer.openShop(buildShopStateView(), score, gameState.character)
+    return
+  }
+  const offer = currentShopOffers.find((entry) => entry.relicId === detail.relicId)
+  if (!offer || offer.purchased) return
+  if (score < offer.price) { boardRenderer.openShop(buildShopStateView(), score, gameState.character); return }
   if (!gameState.character.addRelic(detail.relicId)) {
     render()
     return
@@ -605,7 +706,7 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   boardRenderer.prepareRelicArrivalFromShop(detail.relicId)
   render()
   await boardRenderer.animatePreparedRelicArrival()
-  boardRenderer.openShop(currentShopOffers, score, gameState.character)
+  boardRenderer.openShop(buildShopStateView(), score, gameState.character)
 }
 
 async function closeShopAndResume(): Promise<void> {
@@ -1523,6 +1624,7 @@ async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
   await runCleanupPhase(true)
   await resolvePostDropSporeSpread()
 
+  if (await maybeRunMilestoneEventsAfterTurn()) return
   if (await maybeOpenShopAfterTurn()) return
 
   setTimeout(() => {
@@ -1790,6 +1892,7 @@ async function handleCardAction(e: Event): Promise<void> {
     }
     await runCleanupPhase(true)
     await resolvePostDropSporeSpread()
+    if (await maybeRunMilestoneEventsAfterTurn()) return
     if (await maybeOpenShopAfterTurn()) return
     setTimeout(() => {
       inputLocked = false
