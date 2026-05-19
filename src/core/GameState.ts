@@ -39,6 +39,16 @@ export class GameState {
     return this.currentTurn
   }
 
+  /** Dev-only helper: jump directly to a specific turn for debug commands. */
+  setCurrentTurnForDebug(turn: number): void {
+    // Clamp to a safe integer range so malformed command input can not poison state.
+    const safeTurn = Math.max(0, Math.floor(turn))
+    this.currentTurn = safeTurn
+    // Character.turn mirrors GameState.currentTurn in normal flow (nextTurn),
+    // so keep both counters aligned when a debug jump bypasses nextTurn calls.
+    this.character.turn = safeTurn
+  }
+
   nextTurn(): void {
     this.currentTurn++
     this.character.nextTurn()
