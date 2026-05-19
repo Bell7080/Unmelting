@@ -3164,8 +3164,18 @@ export class GameBoardRenderer {
   }
 
   /** Shop reroll FX: wallet blast -> reroll button impact -> relic cards
-   *  perform a left-to-right full spin (front->back->front). */
-  async playShopRerollFeedback(cost: number): Promise<void> {
+   *  perform a left-to-right one-turn flip. At the 180° back-face moment we
+   *  swap each card's content (relic id/art/name/effect/price) so when the
+   *  card finishes turning back to the front, the new offer is already there.
+   *  After the last card lands a square burst on the artifact layer marks
+   *  "fresh stock". The reroll button is NOT touched after impact — it must
+   *  remain visible and clickable for the next reroll. */
+  async playShopRerollFeedback(
+    cost: number,
+    nextOffers: ShopOfferView[],
+    score: number,
+    character: Character
+  ): Promise<void> {
     const reroll = document.querySelector<HTMLElement>('#shop-overlay .shop-reroll-btn')
     if (!reroll) return
     await this.animateResourceTrail(
@@ -3174,24 +3184,99 @@ export class GameBoardRenderer {
       Math.max(1, Math.min(6, cost)),
       'score'
     )
-    SquareBurst.playOn(reroll, 'score', { count: 16, spread: 74, duration: 460 })
+    SquareBurst.playOn(reroll, 'score', { count: 14, spread: 60, duration: 380 })
     reroll.classList.remove('is-reroll-impacted')
     void reroll.offsetWidth
     reroll.classList.add('is-reroll-impacted')
-    const cards = Array.from(
-      // Only relics reroll: pack/free slots are fixed inventory and must not flip.
-      document.querySelectorAll<HTMLElement>('#shop-overlay .shop-relic-card[data-shop-buy-kind="relic"]')
-    ).filter((card) => !card.classList.contains('is-purchased'))
-    cards.forEach((card, index) => {
-      // Slightly wider stagger keeps 1→2→3 readable while still feeling linked.
-      card.style.setProperty('--shop-reroll-stagger', `${index * 95}ms`)
+
+    // Only relics flip — pack/free slots are fixed inventory.
+    const allCards = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '#shop-overlay .shop-artifact-layer .shop-relic-card[data-shop-buy-kind="relic"]'
+      )
+    )
+    // Slightly faster than the previous 620ms flip, with a left→right stagger.
+    const STAGGER_MS = 110
+    const FLIP_MS = 520
+    const HALF_FLIP_MS = FLIP_MS / 2
+    const flips: Promise<void>[] = []
+    let flipIndex = 0
+    allCards.forEach((card, idx) => {
+      const offer = nextOffers[idx]
+      if (!offer) return
+      // Purchased slots are already burned out — don't resurrect them with a flip.
+      if (card.classList.contains('is-purchased')) return
+      const delay = flipIndex * STAGGER_MS
+      flipIndex += 1
+      card.style.setProperty('--shop-reroll-stagger', `${delay}ms`)
+      card.style.setProperty('--shop-reroll-flip-ms', `${FLIP_MS}ms`)
       card.classList.remove('is-rerolling')
+      // Force reflow so re-adding the class restarts the flip keyframes.
       void card.offsetWidth
       card.classList.add('is-rerolling')
+      flips.push(
+        new Promise<void>((resolve) => {
+          // Mid-flip swap: card back is facing the camera, hiding the swap.
+          window.setTimeout(() => {
+            this.applyShopRelicContent(card, offer, score, character)
+          }, delay + HALF_FLIP_MS)
+          // Hand control back after the flip finishes; clean the class so the
+          // card's idle drift resumes and the button can be clicked again.
+          window.setTimeout(() => {
+            card.classList.remove('is-rerolling')
+            card.style.removeProperty('--shop-reroll-stagger')
+            card.style.removeProperty('--shop-reroll-flip-ms')
+            resolve()
+          }, delay + FLIP_MS + 30)
+        })
+      )
     })
-    // Keep state refresh synchronized with the slower full-spin keyframe so the
-    // new relic payload appears only after the 1->2->3 turn finishes.
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 980 + cards.length * 95))
+    await Promise.all(flips)
+    // Single capstone burst across the artifact layer once all cards have landed.
+    const layer = document.querySelector<HTMLElement>('#shop-overlay .shop-artifact-layer')
+    if (layer) SquareBurst.playOn(layer, 'score', { count: 22, spread: 120, duration: 520 })
+  }
+
+  /** Swap a single shop relic card's visible content in place. Used during the
+   *  reroll mid-flip beat so the card finishes its turn already showing the
+   *  new offer. Touches data attributes, classes, art, copy, and price label
+   *  without rebuilding the DOM node. */
+  private applyShopRelicContent(
+    card: HTMLElement,
+    offer: ShopOfferView,
+    score: number,
+    _character: Character
+  ): void {
+    const def = RELIC_DEFINITIONS[offer.relicId]
+    card.dataset.shopBuy = def.id
+    card.setAttribute(
+      'aria-label',
+      `${def.name} — ${offer.purchased ? '구매 완료' : `점수 ${offer.price}점`}`
+    )
+    // Swap the rarity glow class to match the new relic.
+    const RARITY_CLASSES: readonly string[] = [
+      RARITY_CLASS_BY_TIER.common,
+      RARITY_CLASS_BY_TIER.rare,
+      RARITY_CLASS_BY_TIER.epic,
+      RARITY_CLASS_BY_TIER.unique,
+      RARITY_CLASS_BY_TIER.legendary,
+    ]
+    for (const cls of RARITY_CLASSES) card.classList.remove(cls)
+    card.classList.add(RARITY_CLASS_BY_TIER[RELIC_RARITY[offer.relicId]])
+    // Affordability vs current score (purchased stays purchased — unreachable here).
+    card.classList.remove('is-affordable', 'is-unaffordable', 'is-purchased')
+    card.classList.add(this.shopRelicAffordabilityClass(offer, score))
+    const art = card.querySelector<HTMLElement>('.shop-relic-art')
+    if (art) art.style.backgroundImage = `url('${spriteForRelic(def.id)}')`
+    const title = card.querySelector<HTMLElement>('.shop-relic-title')
+    if (title) title.textContent = def.name
+    const effect = card.querySelector<HTMLElement>('.shop-relic-effect')
+    if (effect) effect.textContent = def.effect
+    const flavor = card.querySelector<HTMLElement>('.shop-relic-flavor')
+    if (flavor) flavor.textContent = def.flavor
+    const label = card.querySelector<HTMLElement>('.shop-price-label-text')
+    if (label)
+      label.textContent = offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
   }
 
   private findResourceTrailTarget(target: ResourceTrailTarget): HTMLElement | DOMRect | null {

@@ -860,21 +860,24 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     if (coins < rerollCost) return
     coins = Math.max(0, coins - rerollCost)
     coinPulseKey++
-    // Keep wallet number and blast timing locked before rebuilding shop offers.
     shopRerollCount += 1
-    boardRenderer.playCoinSpendFeedback(coins, coinPulseKey)
-    await boardRenderer.playShopRerollFeedback(rerollCost)
-    // Keep purchased slots as-is and reroll only visible/purchasable relic slots,
-    // so EXIT does not resurrect cards into already-bought gaps.
+    // Resolve the new offer slate BEFORE the flip so we can swap the
+    // relic content mid-flip (180° back-face moment). Purchased slots
+    // stay frozen so EXIT does not resurrect cards into bought gaps.
     const freshOffers = rollShopOffers()
     let freshIndex = 0
-    currentShopOffers = currentShopOffers.map((entry) => {
+    const nextOffers = currentShopOffers.map((entry) => {
       if (entry.purchased) return entry
       const next = freshOffers[freshIndex]
       freshIndex += 1
-      // Fallback to the previous entry if the pool is temporarily exhausted.
       return next ?? entry
     })
+    boardRenderer.playCoinSpendFeedback(coins, coinPulseKey)
+    // Commit the new offers BEFORE running the flip so any incidental
+    // re-render (e.g. openShop's refresh path) sees the fresh data,
+    // matching what the mid-flip swap puts on screen.
+    currentShopOffers = nextOffers
+    await boardRenderer.playShopRerollFeedback(rerollCost, nextOffers, score, gameState.character)
     boardRenderer.openShop(buildShopStateView(), score, gameState.character)
     return
   }

@@ -373,10 +373,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
     shop-pack-drift 6.6s ease-in-out 0.55s infinite alternate;
 }
 .shop-relic-card.is-rerolling {
-  animation:
-    /* Reroll should read as one full spin (front->back->front), not a half turn. */
-    shop-reroll-card-lift 0.2s ease-out var(--shop-reroll-stagger, 0ms) both,
-    shop-reroll-card-flip 0.62s cubic-bezier(0.24, 0.86, 0.2, 1) calc(var(--shop-reroll-stagger, 0ms) + 0.18s) both;
+  /* True 3D flip — the card's children get backface-visibility:hidden so the
+     front content vanishes past 90°, and a back-face pseudo painted with the
+     cardback texture takes over until 270°. One animation, no pre-lift. */
+  transform-style: preserve-3d;
+  animation: shop-reroll-card-flip var(--shop-reroll-flip-ms, 0.52s) cubic-bezier(0.4, 0.08, 0.6, 0.94) var(--shop-reroll-stagger, 0ms) both;
 }
 .shop-pack-layer > .shop-pack-card:nth-child(1) { animation-delay: 500ms, 1.3s; }
 .shop-pack-layer > .shop-pack-card:nth-child(2) { animation-delay: 600ms, 2.1s; }
@@ -755,16 +756,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   40% { transform: translateY(-2px) scale(1.04); box-shadow: 0 0 22px rgba(244, 164, 96, 0.42); }
   100% { transform: translateY(0) scale(1); box-shadow: 0 0 0 rgba(244, 164, 96, 0); }
 }
-@keyframes shop-reroll-card-lift {
-  0% { transform: translateY(0); }
-  100% { transform: translateY(-8px); }
-}
 @keyframes shop-reroll-card-flip {
-  0% { transform: perspective(760px) rotateY(0deg) translateY(-8px); filter: brightness(1); }
-  24% { transform: perspective(760px) rotateY(88deg) translateY(-5px); filter: brightness(0.74); }
-  50% { transform: perspective(760px) rotateY(180deg) translateY(-2px); filter: brightness(0.68); }
-  76% { transform: perspective(760px) rotateY(272deg) translateY(-3px); filter: brightness(0.76); }
-  100% { transform: perspective(760px) rotateY(360deg) translateY(0); filter: brightness(1); }
+  0%   { transform: perspective(820px) rotateY(0deg); filter: brightness(1); }
+  50%  { transform: perspective(820px) rotateY(180deg); filter: brightness(0.78); }
+  100% { transform: perspective(820px) rotateY(360deg); filter: brightness(1); }
 }
 /* Rugged carved-wood buy buttons: deep umber base, dark inset rim, warm
    ember type. Replaces the flat candle-pill button so the prices feel
@@ -1039,21 +1034,30 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .rarity-unique { box-shadow: 0 0 0 1px rgba(242, 212, 92, 0.72), 0 0 30px rgba(242,212,92,0.34), 0 12px 22px rgba(0,0,0,0.58); }
 .rarity-legendary { box-shadow: 0 0 0 1px rgba(220, 78, 78, 0.72), 0 0 30px rgba(220,78,78,0.34), 0 12px 22px rgba(0,0,0,0.58); }
 
-/* Mid-flip back-face flash: briefly shows the same hand-card back texture. */
-.shop-relic-card.is-rerolling::before {
+/* Real 3D back face — painted with cardback_001.webp, kept at rotateY(180deg)
+   so it sits opposite the card's front. While the card is rotating between
+   90° and 270°, the front children are hidden (backface-visibility:hidden)
+   and this back face is the only visible plane — exactly mirroring the
+   hand-card hover preview mechanism. */
+.shop-relic-card.is-rerolling > * {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.shop-relic-card.is-rerolling::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(180deg, rgba(14,10,18,0.14), rgba(0,0,0,0.6)), var(--cardback-url) center/cover no-repeat;
-  opacity: 0;
+  background:
+    linear-gradient(180deg, rgba(14, 10, 18, 0.18), rgba(0, 0, 0, 0.55)),
+    var(--cardback-url) center / cover no-repeat;
+  border: 1px solid rgba(255, 215, 120, 0.42);
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.18), 0 12px 24px rgba(0, 0, 0, 0.55);
+  transform: rotateY(180deg);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
   pointer-events: none;
-  animation: shop-reroll-backflash 0.62s linear calc(var(--shop-reroll-stagger, 0ms) + 0.18s) both;
-}
-@keyframes shop-reroll-backflash {
-  0%, 19%, 31%, 69%, 81%, 100% { opacity: 0; }
-  /* Two narrow flashes at 90deg / 270deg make the rightward full spin readable. */
-  25%, 75% { opacity: 0.92; }
+  z-index: 4;
 }
 
 /* Card packs are sealed products, so they do not inherit relic rarity-frame glows.

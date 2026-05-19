@@ -7,8 +7,13 @@ export default defineConfig({
   build: {
     outDir: '../dist',
     emptyOutDir: true,
+    // JS + CSS both go through esbuild — fastest path Vite supports.
     minify: 'esbuild',
+    cssMinify: 'esbuild',
+    target: 'es2020',
     sourcemap: false,
+    // gzip size scan is the slow tail of `vite build`; skip it for faster CI.
+    reportCompressedSize: false,
   },
   resolve: {
     alias: {
