@@ -553,17 +553,18 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   -webkit-backface-visibility: hidden;
 }
 /* Painted back face — rotated 180° so it shows while the card is face-down
-   and during the 90°–270° section of the flip. Same cardback texture as
-   the hand-card hover preview, for consistency. */
+   and during the 90°–270° section of the flip. The cardback_001.webp art
+   is the dominant visual: no darkening overlay, just a thin gold rim and
+   a soft inner shadow for depth, matching the hand-card hover preview. */
 .shop-pack-pick-back {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background:
-    linear-gradient(180deg, rgba(14, 10, 18, 0.18), rgba(0, 0, 0, 0.55)),
-    var(--cardback-url) center / cover no-repeat;
-  border: 1px solid rgba(255, 215, 120, 0.42);
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.18);
+  background: var(--cardback-url) center / cover no-repeat;
+  border: 1px solid rgba(255, 215, 120, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.22),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.32);
   transform: rotateY(180deg);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
@@ -1179,15 +1180,19 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   -webkit-backface-visibility: hidden;
 }
 .shop-relic-card.is-rerolling::after {
+  /* Back face during the held-back pause of a reroll flip. Same rule as
+     the pack-picker back: cardback_001.webp is the dominant texture, with
+     a soft inner shadow for depth instead of a flat darkening overlay. */
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background:
-    linear-gradient(180deg, rgba(14, 10, 18, 0.18), rgba(0, 0, 0, 0.55)),
-    var(--cardback-url) center / cover no-repeat;
-  border: 1px solid rgba(255, 215, 120, 0.42);
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.18), 0 12px 24px rgba(0, 0, 0, 0.55);
+  background: var(--cardback-url) center / cover no-repeat;
+  border: 1px solid rgba(255, 215, 120, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.22),
+    inset 0 -12px 22px rgba(0, 0, 0, 0.32),
+    0 12px 24px rgba(0, 0, 0, 0.55);
   transform: rotateY(180deg);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
