@@ -3163,7 +3163,8 @@ export class GameBoardRenderer {
     this.animateResourceCounter('.coin-number', targetCoins, ' $')
   }
 
-  /** Shop reroll FX: wallet blast -> reroll button impact -> card hover+flip beat. */
+  /** Shop reroll FX: wallet blast -> reroll button impact -> relic cards
+   *  perform a left-to-right full spin (front->back->front). */
   async playShopRerollFeedback(cost: number): Promise<void> {
     const reroll = document.querySelector<HTMLElement>('#shop-overlay .shop-reroll-btn')
     if (!reroll) return
@@ -3188,7 +3189,9 @@ export class GameBoardRenderer {
       void card.offsetWidth
       card.classList.add('is-rerolling')
     })
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 760 + cards.length * 95))
+    // Keep state refresh synchronized with the slower full-spin keyframe so the
+    // new relic payload appears only after the 1->2->3 turn finishes.
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 980 + cards.length * 95))
   }
 
   private findResourceTrailTarget(target: ResourceTrailTarget): HTMLElement | DOMRect | null {

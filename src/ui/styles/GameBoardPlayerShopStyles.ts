@@ -372,11 +372,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
     shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both,
     shop-pack-drift 6.6s ease-in-out 0.55s infinite alternate;
 }
-.shop-relic-card.is-rerolling,
-.shop-pack-card.is-rerolling {
+.shop-relic-card.is-rerolling {
   animation:
-    shop-reroll-card-lift 0.24s ease-out var(--shop-reroll-stagger, 0ms) both,
-    shop-reroll-card-flip 0.36s cubic-bezier(0.24, 0.86, 0.2, 1) calc(var(--shop-reroll-stagger, 0ms) + 0.2s) both;
+    /* Reroll should read as one full spin (front->back->front), not a half turn. */
+    shop-reroll-card-lift 0.2s ease-out var(--shop-reroll-stagger, 0ms) both,
+    shop-reroll-card-flip 0.62s cubic-bezier(0.24, 0.86, 0.2, 1) calc(var(--shop-reroll-stagger, 0ms) + 0.18s) both;
 }
 .shop-pack-layer > .shop-pack-card:nth-child(1) { animation-delay: 500ms, 1.3s; }
 .shop-pack-layer > .shop-pack-card:nth-child(2) { animation-delay: 600ms, 2.1s; }
@@ -761,9 +761,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 @keyframes shop-reroll-card-flip {
   0% { transform: perspective(760px) rotateY(0deg) translateY(-8px); filter: brightness(1); }
-  48% { transform: perspective(760px) rotateY(88deg) translateY(-4px); filter: brightness(0.7); }
-  52% { transform: perspective(760px) rotateY(92deg) translateY(-4px); filter: brightness(0.68); }
-  100% { transform: perspective(760px) rotateY(180deg) translateY(0); filter: brightness(1); }
+  24% { transform: perspective(760px) rotateY(88deg) translateY(-5px); filter: brightness(0.74); }
+  50% { transform: perspective(760px) rotateY(180deg) translateY(-2px); filter: brightness(0.68); }
+  76% { transform: perspective(760px) rotateY(272deg) translateY(-3px); filter: brightness(0.76); }
+  100% { transform: perspective(760px) rotateY(360deg) translateY(0); filter: brightness(1); }
 }
 /* Rugged carved-wood buy buttons: deep umber base, dark inset rim, warm
    ember type. Replaces the flat candle-pill button so the prices feel
@@ -1039,8 +1040,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .rarity-legendary { box-shadow: 0 0 0 1px rgba(220, 78, 78, 0.72), 0 0 30px rgba(220,78,78,0.34), 0 12px 22px rgba(0,0,0,0.58); }
 
 /* Mid-flip back-face flash: briefly shows the same hand-card back texture. */
-.shop-relic-card.is-rerolling::before,
-.shop-pack-card.is-rerolling::before {
+.shop-relic-card.is-rerolling::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -1048,11 +1048,22 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   background: linear-gradient(180deg, rgba(14,10,18,0.14), rgba(0,0,0,0.6)), var(--cardback-url) center/cover no-repeat;
   opacity: 0;
   pointer-events: none;
-  animation: shop-reroll-backflash 0.36s linear calc(var(--shop-reroll-stagger, 0ms) + 0.2s) both;
+  animation: shop-reroll-backflash 0.62s linear calc(var(--shop-reroll-stagger, 0ms) + 0.18s) both;
 }
 @keyframes shop-reroll-backflash {
-  0%, 44%, 58%, 100% { opacity: 0; }
-  50% { opacity: 0.92; }
+  0%, 19%, 31%, 69%, 81%, 100% { opacity: 0; }
+  /* Two narrow flashes at 90deg / 270deg make the rightward full spin readable. */
+  25%, 75% { opacity: 0.92; }
+}
+
+/* Card packs are sealed products, so they do not inherit relic rarity-frame glows.
+   Only the 3 pack-picker results (inner random cards) show rarity borders/glows. */
+.shop-pack-card.rarity-common,
+.shop-pack-card.rarity-rare,
+.shop-pack-card.rarity-epic,
+.shop-pack-card.rarity-unique,
+.shop-pack-card.rarity-legendary {
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.6);
 }
 
 `
