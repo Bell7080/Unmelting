@@ -835,10 +835,12 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     if (coins < rerollCost) return
     coins = Math.max(0, coins - rerollCost)
     coinPulseKey++
+    // Keep wallet number and blast timing locked before rebuilding shop offers.
     shopRerollCount += 1
+    boardRenderer.playCoinSpendFeedback(coins, coinPulseKey)
+    await boardRenderer.playShopRerollFeedback(rerollCost)
     const remaining = currentShopOffers.filter((entry) => !entry.purchased).length
     currentShopOffers = rollShopOffers().slice(0, remaining)
-    boardRenderer.playCoinSpendFeedback(coins, coinPulseKey)
     boardRenderer.openShop(buildShopStateView(), score, gameState.character)
     return
   }

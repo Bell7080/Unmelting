@@ -174,6 +174,17 @@ export function tagIcon(): string {
   )
 }
 
+/** Reroll glyph — "n$" monogram used by the shop refresh button. */
+export function rerollMonogramIcon(): string {
+  return svg(
+    [
+      stroke('M5.4 8.3h13.2M5.4 15.7h13.2', 1.2),
+      fill('M6.2 7.1h2l3.8 6.2V7.1h1.8v9.8h-2l-3.8-6.2v6.2H6.2V7.1Z'),
+      stroke('M16.3 9.2h2.4c1.1 0 2 .9 2 2 0 .8-.5 1.6-1.3 1.9l-1.2.4c-.8.3-1.3 1-1.3 1.9v.2h3.8', 1.25),
+    ].join(''),
+  )
+}
+
 /** Open book — used for the compendium button so the chrome stays
  *  flat-iconic instead of relying on an emoji. */
 export function bookIcon(): string {
