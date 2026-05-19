@@ -1434,6 +1434,10 @@ export class GameBoardRenderer {
             offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
           }</span>
         </span>
+        <!-- Real DOM cardback layer (not a pseudo-element) so the
+             cardbackground_001.webp asset fully covers the front content
+             at the back-facing half of the reroll flip. -->
+        <div class="shop-relic-cardback" aria-hidden="true"></div>
       </article>
     `
   }

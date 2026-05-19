@@ -574,24 +574,21 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
-/* Painted back face — rotated 180° so it shows while the card is face-down
-   and during the 90°–270° section of the flip. The cardback_001.webp art
-   is the dominant visual: no darkening overlay, just a thin gold rim and
-   a soft inner shadow for depth, matching the hand-card hover preview. */
+/* Painted back face — a dedicated DOM element painted purely with
+   cardbackground_001.webp. Sits at rotateY(180deg) so it shows while the
+   card is face-down (the entrance state) and during the 90°-270° section
+   of the flip. No border or overlay: the asset itself is the back-of-card
+   art and fully covers the card content beneath. */
 .shop-pack-pick-back {
   position: absolute;
   inset: 0;
   border-radius: inherit;
   background: var(--cardback-url) center / cover no-repeat;
-  border: 1px solid rgba(255, 215, 120, 0.5);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.22),
-    inset 0 -10px 18px rgba(0, 0, 0, 0.32);
   transform: rotateY(180deg);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   pointer-events: none;
-  z-index: 4;
+  z-index: 5;
 }
 .shop-pack-pick-card:hover,
 .shop-pack-pick-card:focus-visible {
@@ -1192,34 +1189,30 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .rarity-unique { box-shadow: 0 0 0 1px rgba(242, 212, 92, 0.72), 0 0 30px rgba(242,212,92,0.34), 0 12px 22px rgba(0,0,0,0.58); }
 .rarity-legendary { box-shadow: 0 0 0 1px rgba(220, 78, 78, 0.72), 0 0 30px rgba(220,78,78,0.34), 0 12px 22px rgba(0,0,0,0.58); }
 
-/* Real 3D back face — painted with cardback_001.webp, kept at rotateY(180deg)
-   so it sits opposite the card's front. While the card is rotating between
-   90° and 270°, the front children are hidden (backface-visibility:hidden)
-   and this back face is the only visible plane — exactly mirroring the
-   hand-card hover preview mechanism. */
+/* Real 3D back face — a dedicated .shop-relic-cardback DOM element painted
+   purely with cardbackground_001.webp. Sits at rotateY(180deg) opposite the
+   card's front, with backface-visibility:hidden on every front child so
+   that during the back-facing half of the reroll flip ONLY this cardback
+   element is visible — fully covering the relic art/title/effect/price
+   beneath. No border or overlay: the asset itself is the back-of-card art. */
+.shop-relic-cardback {
+  display: none;
+}
 .shop-relic-card.is-rerolling > * {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
-.shop-relic-card.is-rerolling::after {
-  /* Back face during the held-back pause of a reroll flip. Same rule as
-     the pack-picker back: cardback_001.webp is the dominant texture, with
-     a soft inner shadow for depth instead of a flat darkening overlay. */
-  content: '';
+.shop-relic-card.is-rerolling .shop-relic-cardback {
+  display: block;
   position: absolute;
   inset: 0;
   border-radius: inherit;
   background: var(--cardback-url) center / cover no-repeat;
-  border: 1px solid rgba(255, 215, 120, 0.5);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.22),
-    inset 0 -12px 22px rgba(0, 0, 0, 0.32),
-    0 12px 24px rgba(0, 0, 0, 0.55);
   transform: rotateY(180deg);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   pointer-events: none;
-  z-index: 4;
+  z-index: 5;
 }
 
 /* Card packs are sealed products, so they do not inherit relic rarity-frame glows.
