@@ -265,8 +265,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   padding-right: clamp(8px, 1.3vw, 16px);
 }
 .shop-pack-layer {
-  justify-content: space-around;
-  gap: clamp(10px, 1.4vw, 20px);
+  justify-content: center;
+  gap: clamp(4px, 0.55vw, 8px);
+  background: transparent;
+  border: none;
 }
 .shop-free-layer,
 .shop-reroll-zone {
@@ -356,7 +358,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   width: clamp(122px, 11.4vw, 174px);
   aspect-ratio: 3 / 4;
   border-radius: 14px;
-  border: 1px solid rgba(255, 215, 120, 0.4);
+  border: none;
   overflow: visible;
   cursor: pointer;
   scale: 1;
@@ -398,7 +400,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-pack-illustration {
   position: absolute;
-  inset: 0;
+  inset: -2px 0 0;
   border-radius: inherit;
   background-position: center;
   background-size: cover;
@@ -769,7 +771,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 @keyframes shop-reroll-card-flip {
   0% { transform: perspective(760px) rotateY(0deg) translateY(-8px); filter: brightness(1); }
-  50% { transform: perspective(760px) rotateY(92deg) translateY(-4px); filter: brightness(0.74); }
+  48% { transform: perspective(760px) rotateY(88deg) translateY(-4px); filter: brightness(0.7); }
+  52% { transform: perspective(760px) rotateY(92deg) translateY(-4px); filter: brightness(0.68); }
   100% { transform: perspective(760px) rotateY(180deg) translateY(0); filter: brightness(1); }
 }
 /* Rugged carved-wood buy buttons: deep umber base, dark inset rim, warm
@@ -1034,6 +1037,32 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   .rail-row.dist-2 { opacity: 0.3; transform: scale(0.86); }
   .rail-row.dist-1 { opacity: 0.6; transform: scale(0.92); }
   .player-card { width: clamp(120px, 14vw, 160px); }
+}
+
+
+
+/* Rarity glow-only language (no text labels) shared by relic/free/pack cards. */
+.rarity-common { box-shadow: 0 0 0 1px rgba(116, 124, 136, 0.5), 0 12px 22px rgba(0,0,0,0.58); }
+.rarity-rare { box-shadow: 0 0 0 1px rgba(80, 152, 255, 0.58), 0 0 24px rgba(80,152,255,0.24), 0 12px 22px rgba(0,0,0,0.58); }
+.rarity-epic { box-shadow: 0 0 0 1px rgba(161, 108, 255, 0.62), 0 0 26px rgba(161,108,255,0.28), 0 12px 22px rgba(0,0,0,0.58); }
+.rarity-unique { box-shadow: 0 0 0 1px rgba(242, 212, 92, 0.72), 0 0 30px rgba(242,212,92,0.34), 0 12px 22px rgba(0,0,0,0.58); }
+.rarity-legendary { box-shadow: 0 0 0 1px rgba(220, 78, 78, 0.72), 0 0 30px rgba(220,78,78,0.34), 0 12px 22px rgba(0,0,0,0.58); }
+
+/* Mid-flip back-face flash: briefly shows the same hand-card back texture. */
+.shop-relic-card.is-rerolling::before,
+.shop-pack-card.is-rerolling::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(14,10,18,0.14), rgba(0,0,0,0.6)), var(--cardback-url) center/cover no-repeat;
+  opacity: 0;
+  pointer-events: none;
+  animation: shop-reroll-backflash 0.36s linear calc(var(--shop-reroll-stagger, 0ms) + 0.2s) both;
+}
+@keyframes shop-reroll-backflash {
+  0%, 44%, 58%, 100% { opacity: 0; }
+  50% { opacity: 0.92; }
 }
 
 `
