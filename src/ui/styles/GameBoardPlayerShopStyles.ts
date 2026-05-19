@@ -28,8 +28,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   padding-right: clamp(4px, 0.8vw, 10px);
 }
 .relic-layer {
-  justify-content: flex-start;
-  padding-left: clamp(4px, 0.8vw, 10px);
+  justify-content: center;
+  padding-left: clamp(2px, 0.4vw, 6px);
   overflow: visible;
 }
 .relic-plan-label {
@@ -259,10 +259,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   overflow: visible; /* cards can extend past the layer edges by design */
 }
 .shop-artifact-layer {
-  justify-content: space-around;
-  gap: clamp(10px, 1.6vw, 22px);
-  padding-left: clamp(14px, 2vw, 26px);
-  padding-right: clamp(14px, 2vw, 26px);
+  justify-content: center;
+  gap: clamp(8px, 1.1vw, 14px);
+  padding-left: clamp(8px, 1.3vw, 16px);
+  padding-right: clamp(8px, 1.3vw, 16px);
 }
 .shop-pack-layer {
   justify-content: space-around;
@@ -284,11 +284,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   align-items: center;
   justify-content: center;
   gap: 6px;
-  width: clamp(96px, 11vw, 130px);
-  height: clamp(64px, 8vh, 86px);
-  padding: 6px 12px;
-  border: 2px solid rgba(28, 14, 6, 0.92);
-  border-radius: 6px;
+  width: clamp(104px, 11.4vw, 140px);
+  height: clamp(68px, 8.4vh, 90px);
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 215, 120, 0.42);
+  border-radius: 12px;
   background:
     linear-gradient(180deg, rgba(120, 76, 36, 0.96), rgba(58, 30, 14, 0.96)),
     repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.06) 0 2px, rgba(255, 232, 168, 0.04) 2px 5px);
@@ -322,8 +322,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-reroll-btn-cost-icon {
   display: inline-flex;
-  width: 14px;
-  height: 14px;
+  width: 20px;
+  height: 20px;
   color: #ffd778;
 }
 .shop-reroll-btn-cost-icon .icon { width: 100%; height: 100%; }
@@ -334,6 +334,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-reroll-btn.is-unaffordable .shop-reroll-btn-cost-icon { color: rgba(255, 197, 181, 0.6); }
 .shop-reroll-btn.is-affordable { border-color: rgba(122, 202, 113, 0.7); }
+.shop-reroll-btn.is-reroll-impacted {
+  animation: shop-reroll-impact 0.42s cubic-bezier(0.2, 0.86, 0.22, 1);
+}
 
 /* Free-card tile gets a warm candle-glow art band. */
 .shop-free-card .shop-free-art {
@@ -350,7 +353,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   position: relative;
   flex: 0 0 auto;
   /* Card sizes raised ~20% from the previous (110/10.5vw/158) sizing. */
-  width: clamp(132px, 12.6vw, 190px);
+  width: clamp(122px, 11.4vw, 174px);
   aspect-ratio: 3 / 4;
   border-radius: 14px;
   border: 1px solid rgba(255, 215, 120, 0.4);
@@ -369,6 +372,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   animation:
     shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both,
     shop-pack-drift 6.6s ease-in-out 0.55s infinite alternate;
+}
+.shop-relic-card.is-rerolling,
+.shop-pack-card.is-rerolling {
+  animation:
+    shop-reroll-card-lift 0.24s ease-out var(--shop-reroll-stagger, 0ms) both,
+    shop-reroll-card-flip 0.36s cubic-bezier(0.24, 0.86, 0.2, 1) calc(var(--shop-reroll-stagger, 0ms) + 0.2s) both;
 }
 .shop-pack-layer > .shop-pack-card:nth-child(1) { animation-delay: 500ms, 1.3s; }
 .shop-pack-layer > .shop-pack-card:nth-child(2) { animation-delay: 600ms, 2.1s; }
@@ -748,6 +757,20 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 @keyframes shop-card-swoosh {
   0%   { transform: translateY(8px) scale(1); opacity: 1; }
   100% { transform: translateY(-260%) scale(0.92); opacity: 0; }
+}
+@keyframes shop-reroll-impact {
+  0% { transform: translateY(0) scale(1); box-shadow: 0 0 0 rgba(244, 164, 96, 0); }
+  40% { transform: translateY(-2px) scale(1.04); box-shadow: 0 0 22px rgba(244, 164, 96, 0.42); }
+  100% { transform: translateY(0) scale(1); box-shadow: 0 0 0 rgba(244, 164, 96, 0); }
+}
+@keyframes shop-reroll-card-lift {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-8px); }
+}
+@keyframes shop-reroll-card-flip {
+  0% { transform: perspective(760px) rotateY(0deg) translateY(-8px); filter: brightness(1); }
+  50% { transform: perspective(760px) rotateY(92deg) translateY(-4px); filter: brightness(0.74); }
+  100% { transform: perspective(760px) rotateY(180deg) translateY(0); filter: brightness(1); }
 }
 /* Rugged carved-wood buy buttons: deep umber base, dark inset rim, warm
    ember type. Replaces the flat candle-pill button so the prices feel

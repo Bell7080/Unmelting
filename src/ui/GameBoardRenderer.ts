@@ -46,6 +46,7 @@ import {
   flameIcon,
   heartIcon,
   pouchIcon,
+  rerollMonogramIcon,
   shieldIcon,
   sparkleIcon,
   swordIcon,
@@ -1247,7 +1248,7 @@ export class GameBoardRenderer {
               aria-label="새로고침 — ${cost} 화폐">
         <span class="shop-reroll-btn-label">새로고침</span>
         <span class="shop-reroll-btn-cost">
-          <span class="shop-reroll-btn-cost-icon">${coinIcon()}</span>
+          <span class="shop-reroll-btn-cost-icon">${rerollMonogramIcon()}</span>
           <span class="shop-reroll-btn-cost-text">${cost.toLocaleString()}</span>
         </span>
       </button>
@@ -1583,7 +1584,7 @@ export class GameBoardRenderer {
     if (!shell) return Promise.resolve()
     const cards = Array.from(
       shell.querySelectorAll<HTMLElement>('.shop-relic-card, .shop-pack-card')
-    )
+    ).filter((card) => !card.classList.contains('is-purchased'))
     shell.classList.add('is-closing')
     if (cards.length === 0) return Promise.resolve()
 
@@ -3147,6 +3148,32 @@ export class GameBoardRenderer {
   playCoinSpendFeedback(targetCoins: number, pulseKey: number): void {
     this.rememberImmediateResourcePulse('coin', targetCoins, pulseKey)
     this.animateResourceCounter('.coin-number', targetCoins, ' $')
+  }
+
+  /** Shop reroll FX: wallet blast -> reroll button impact -> card hover+flip beat. */
+  async playShopRerollFeedback(cost: number): Promise<void> {
+    const reroll = document.querySelector<HTMLElement>('#shop-overlay .shop-reroll-btn')
+    if (!reroll) return
+    await this.animateResourceTrail(
+      this.findCoinPulseAnchor(),
+      reroll,
+      Math.max(1, Math.min(6, cost)),
+      'score'
+    )
+    SquareBurst.playOn(reroll, 'score', { count: 16, spread: 74, duration: 460 })
+    reroll.classList.remove('is-reroll-impacted')
+    void reroll.offsetWidth
+    reroll.classList.add('is-reroll-impacted')
+    const cards = Array.from(
+      document.querySelectorAll<HTMLElement>('#shop-overlay .shop-relic-card, #shop-overlay .shop-pack-card')
+    ).filter((card) => !card.classList.contains('is-purchased'))
+    cards.forEach((card, index) => {
+      card.style.setProperty('--shop-reroll-stagger', `${index * 52}ms`)
+      card.classList.remove('is-rerolling')
+      void card.offsetWidth
+      card.classList.add('is-rerolling')
+    })
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 540 + cards.length * 52))
   }
 
   private findResourceTrailTarget(target: ResourceTrailTarget): HTMLElement | DOMRect | null {
