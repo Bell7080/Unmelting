@@ -224,6 +224,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   transform: scaleY(0);
   transform-origin: top;
   animation: shop-dim-veil-drop 0.42s cubic-bezier(0.22, 0.86, 0.22, 1) both;
+  opacity: 0.92;
 }
 
 /* Layered shop layout:
@@ -278,6 +279,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-reroll-zone {
   /* Free-card and reroll layers center their single child. */
   justify-content: center;
+}
+.shop-free-layer {
+  transform: translate(clamp(10px, 1.2vw, 16px), clamp(-8px, -0.7vh, -4px));
+}
+.shop-reroll-zone {
+  transform: translateX(clamp(10px, 1vw, 16px));
 }
 
 /* Reroll button — compact rectangle, fixed size, paid in 화폐(coins). Lives in
@@ -347,13 +354,19 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
     linear-gradient(180deg, rgba(48, 31, 43, 0.92), rgba(18, 12, 24, 0.96));
 }
 
+
+/* Free card stays visually secondary to paid relic offers, so shrink it a touch. */
+.shop-free-card {
+  width: clamp(124px, 11.8vw, 178px);
+}
+
 /* Pack tile — FULL illustration with centered title/effect overlay. This is
    intentionally NOT the relic-card art+body split: the pack reads as a
    single illustrated envelope, not a card with a separate text panel. */
 .shop-pack-card {
   position: relative;
   flex: 0 0 auto;
-  /* Card sizes raised ~20% from the previous (110/10.5vw/158) sizing. */
+  /* Keep the original pack-card size so bottom-row rhythm stays unchanged. */
   width: clamp(116px, 10.9vw, 164px);
   aspect-ratio: 3 / 4;
   border-radius: 14px;
@@ -361,7 +374,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   overflow: visible;
   cursor: pointer;
   scale: 1;
-  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.6);
+  box-shadow: none;
   transform-origin: center bottom;
   /* Hover scale uses the individual scale property so it composes with the
      translate/rotate channels used by the float keyframes (transform-based
@@ -386,7 +399,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-pack-card:focus-visible {
   animation-play-state: paused;
   scale: 1.06;
-  box-shadow: 0 20px 38px rgba(0, 0, 0, 0.7);
+  box-shadow: none;
   z-index: 6;
 }
 .shop-pack-card.is-unaffordable {
@@ -459,14 +472,14 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   background-position: center;
   background-repeat: no-repeat;
   /* 셔터 이후 rail 크기 안에서만 은은하게 나타나도록 투명도만 올린다. */
-  animation: shop-pack-veil-fade-in 0.34s ease both;
+  animation: shop-pack-veil-fade-in 0.38s ease both;
 }
 .shop-pack-picker.is-closing .shop-pack-picker-veil {
   animation: shop-pack-veil-lift 0.34s cubic-bezier(0.6, 0.04, 0.74, 0.92) both;
 }
 @keyframes shop-pack-veil-fade-in {
-  0%   { opacity: 0; }
-  100% { opacity: 1; }
+  0%   { opacity: 0; transform: translateY(-100%) scaleY(0.92); transform-origin: top; }
+  100% { opacity: 0.95; transform: translateY(0) scaleY(1); transform-origin: top; }
 }
 @keyframes shop-pack-veil-lift {
   0%   { transform: scaleY(1); opacity: 1; }
@@ -534,7 +547,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
      하늘에서 떨어지지 않고, 원래 자리에서 등장한다. */
   animation:
     shop-pack-pick-fade-in 0.26s ease calc(var(--pick-i, 0) * 110ms + 0.34s) both,
-    shop-reroll-card-flip 0.8s cubic-bezier(0.4, 0.08, 0.6, 0.94) calc(var(--pick-i, 0) * 110ms + 0.5s) both;
+    shop-reroll-card-flip 0.8s cubic-bezier(0.4, 0.08, 0.6, 0.94) calc(var(--pick-i, 0) * 110ms + 0.72s) both;
 }
 .shop-pack-pick-card > * {
   backface-visibility: hidden;
@@ -589,8 +602,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 
 .shop-relic-card {
   position: relative;
-  display: grid;
-  grid-template-rows: 50% 1fr;
+  /* Front content uses an inner .shop-relic-front grid. The card root stays
+     as the 3D container when rerolling flips are active. */
+  display: block;
   overflow: visible; /* let the flat price tag poke past the bottom */
   border-radius: 14px;
   border: 1px solid rgba(255, 215, 120, 0.42);
@@ -731,6 +745,17 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   0% { opacity: 1; clip-path: inset(0 0 0 0); }
   100% { opacity: 0; clip-path: inset(100% 0 0 0); }
 }
+
+/* Explicit front-face wrapper for relic cards. Keeping this separate from the
+   root lets us run a true two-sided 3D flip (front vs cardback). */
+.shop-relic-front {
+  position: relative;
+  display: grid;
+  grid-template-rows: 50% 1fr;
+  height: 100%;
+  min-height: 0;
+}
+
 .shop-relic-art {
   min-height: 0;
   background-size: cover;
@@ -843,6 +868,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
    leaving cards. */
 .shop-shell.is-closing {
   overflow: hidden; /* clip the swoosh so cards don't pass over the candle gauge */
+}
+
+.shop-shell.is-pack-picker-open .shop-close-btn {
+  opacity: 0;
+  pointer-events: none;
 }
 .shop-shell.is-closing .shop-close-btn { opacity: 0; pointer-events: none; transition: opacity 0.18s ease; }
 .shop-shell.is-closing .shop-relic-card,
@@ -1151,21 +1181,17 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .rarity-unique { box-shadow: 0 0 0 1px rgba(242, 212, 92, 0.72), 0 0 30px rgba(242,212,92,0.34), 0 12px 22px rgba(0,0,0,0.58); }
 .rarity-legendary { box-shadow: 0 0 0 1px rgba(220, 78, 78, 0.72), 0 0 30px rgba(220,78,78,0.34), 0 12px 22px rgba(0,0,0,0.58); }
 
-/* Real 3D back face — a dedicated .shop-relic-cardback DOM element painted
-   purely with cardbackground_001.webp. Sits at rotateY(180deg) opposite the
-   card's front, with backface-visibility:hidden on every front child so
-   that during the back-facing half of the reroll flip ONLY this cardback
-   element is visible — fully covering the relic art/title/effect/price
-   beneath. No border or overlay: the asset itself is the back-of-card art. */
+/* Real two-face relic card for reroll:
+   - .shop-relic-front is the front face (0deg)
+   - .shop-relic-cardback is the back face (180deg) with cardbackground_001.webp
+   Both faces always exist, so the back image reads as the actual reverse side
+   throughout the full rotation interval instead of appearing as a temporary mask. */
+.shop-relic-front,
 .shop-relic-cardback {
-  display: none;
-}
-.shop-relic-card.is-rerolling > * {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
-.shop-relic-card.is-rerolling .shop-relic-cardback {
-  display: block;
+.shop-relic-cardback {
   position: absolute;
   inset: 0;
   border-radius: inherit;
@@ -1174,20 +1200,31 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   background-position: center;
   background-repeat: no-repeat;
   transform: rotateY(180deg);
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
   pointer-events: none;
   z-index: 5;
+  opacity: 0;
+}
+/* Only during reroll do we turn the card into a full 3D object.
+   Back face becomes visible for the entire back-facing half naturally. */
+.shop-relic-card.is-rerolling {
+  transform-style: preserve-3d;
+}
+.shop-relic-card.is-rerolling .shop-relic-front {
+  transform: rotateY(0deg);
+}
+.shop-relic-card.is-rerolling .shop-relic-cardback {
+  opacity: 1;
 }
 
 /* Card packs are sealed products, so they do not inherit relic rarity-frame glows.
-   Only the 3 pack-picker results (inner random cards) show rarity borders/glows. */
+   기본 자원팩/강화팩/해금팩 3종에는 어떤 시각 효과도 추가하지 않는다.
+   (테두리, 그림자, 발광 등 전부 금지) */
 .shop-pack-card.rarity-common,
 .shop-pack-card.rarity-rare,
 .shop-pack-card.rarity-epic,
 .shop-pack-card.rarity-unique,
 .shop-pack-card.rarity-legendary {
-  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.6);
+  box-shadow: none;
 }
 
 `
