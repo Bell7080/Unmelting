@@ -390,6 +390,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
      front content vanishes past 90°, and a back-face pseudo painted with the
      cardback texture takes over until 270°. One animation, no pre-lift. */
   transform-style: preserve-3d;
+  /* Force parent base paint off during the 3D turn.
+     Otherwise the opaque root background can visually mask the back-face art
+     on some compositor paths while rotateY is near 180deg. */
+  background: transparent;
   animation: shop-reroll-card-flip var(--shop-reroll-flip-ms, 0.52s) cubic-bezier(0.4, 0.08, 0.6, 0.94) var(--shop-reroll-stagger, 0ms) both;
 }
 .shop-relic-card.is-rerolling .shop-relic-front {
@@ -764,6 +768,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   grid-template-rows: 50% 1fr;
   height: 100%;
   min-height: 0;
+  /* Explicit front-face plane so backface culling is stable across engines. */
+  transform: rotateY(0deg);
 }
 
 .shop-relic-art {
@@ -1223,7 +1229,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   background-repeat: no-repeat;
   transform: rotateY(180deg);
   pointer-events: none;
-  z-index: 5;
+  /* Keep the back texture above all front-face children while rerolling.
+     This avoids title/price artifacts bleeding through during the hold beat. */
+  z-index: 9;
   opacity: 0;
 }
 /* NOTE: reroll 활성 상태 제어는 상단 .shop-relic-card.is-rerolling 블록에서
