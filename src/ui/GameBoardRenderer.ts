@@ -1501,9 +1501,8 @@ export class GameBoardRenderer {
     //   .shop-top-row   — 2:8 grid: reroll button (LEFT, small) + artifact
     //                     layer (RIGHT, 3 cards floating).
     //   .shop-bottom-row — 3:7 grid: free card layer (LEFT) + pack layer (RIGHT).
-    //   .shop-layer     — visual area marker (subtle dark wash, no border);
-    //                     cards inside keep fixed sizes and may extend past
-    //                     the layer's bounds by design.
+    //   .shop-layer     — hit/layout 전용 투명 레이어.
+    //                     카드는 고정 크기를 유지하고 경계를 넘을 수 있다.
     this.shopOverlayElement.innerHTML = `
       <div class="shop-shell" role="dialog" aria-label="상점">
         <div class="shop-dim-veil" style="--shop-veil-bg:url('${SpriteUrls.shopVeilBg}');" aria-hidden="true"></div>
