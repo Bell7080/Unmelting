@@ -209,31 +209,20 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   overflow: visible;
   animation: shop-overlay-in 0.32s cubic-bezier(0.18, 0.86, 0.22, 1);
 }
-/* Dim veil — semi-transparent black layer that descends sequentially AFTER
-   the wax shutter, sitting BEHIND every layer/card inside the shell. The
-   shutter (in .rail) and this veil stack: shutter first, veil second.  The
-   veil has a long animation-delay so it visibly lags the shutter close. */
+/* Dim veil — full shop backdrop that descends AFTER the wax shutter.
+   background_002.webp (parchment + candles) replaces the old CSS gradient. */
 .shop-dim-veil {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   border-radius: 6px;
-  /* Warm dark papyrus tone matching the wax shutter umber, with a subtle
-     parchment grain on top. Brighter than the previous near-black veil
-     so the shop reads as "candle-lit room" rather than "blackout". */
-  background:
-    repeating-linear-gradient(
-      135deg,
-      rgba(255, 232, 168, 0.04) 0 3px,
-      rgba(0, 0, 0, 0.10) 3px 7px
-    ),
-    linear-gradient(180deg, rgba(64, 44, 28, 0.62) 0%, rgba(36, 22, 16, 0.74) 100%);
+  background-image: var(--shop-veil-bg);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   transform: scaleY(0);
   transform-origin: top;
-  /* Drops the moment openShop mounts. The wax shutter has already finished
-     closing by the time we get here, so this is the second of two sequential
-     beats (shutter → veil). */
   animation: shop-dim-veil-drop 0.42s cubic-bezier(0.22, 0.86, 0.22, 1) both;
 }
 
@@ -462,34 +451,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-pack-picker-veil {
   position: absolute;
-  /* Extend slightly past the picker bounds so the radial fade smooths into
-     the shop edges without leaving a visible cutoff line. */
-  inset: -4%;
-  background:
-    repeating-linear-gradient(
-      135deg,
-      rgba(255, 232, 168, 0.03) 0 3px,
-      rgba(0, 0, 0, 0.06) 3px 7px
-    ),
-    radial-gradient(
-      ellipse 62% 74% at 50% 50%,
-      rgba(28, 18, 14, 0.86) 0%,
-      rgba(34, 22, 16, 0.66) 48%,
-      rgba(36, 24, 18, 0.22) 80%,
-      rgba(36, 24, 18, 0) 100%
-    );
-  /* Feather edges with a soft mask so the dim reads as a halo around the
-     cards rather than a hard rectangle pinned to the shop rim. */
-  -webkit-mask-image: radial-gradient(
-    ellipse 78% 84% at 50% 50%,
-    rgba(0, 0, 0, 1) 54%,
-    rgba(0, 0, 0, 0) 100%
-  );
-  mask-image: radial-gradient(
-    ellipse 78% 84% at 50% 50%,
-    rgba(0, 0, 0, 1) 54%,
-    rgba(0, 0, 0, 0) 100%
-  );
+  inset: 0;
+  background-image: var(--shop-picker-bg);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   transform-origin: top center;
   animation: shop-pack-veil-drop 0.4s cubic-bezier(0.18, 0.86, 0.22, 1) both;
 }
