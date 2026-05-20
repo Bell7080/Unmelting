@@ -595,7 +595,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   transform: rotateY(180deg);
   animation: shop-reroll-card-flip 0.78s cubic-bezier(0.4, 0.08, 0.6, 0.94) calc(var(--pick-i, 0) * 110ms + 0.86s) both;
 }
-.shop-pack-pick-front { position: relative; z-index: 2; display: grid; grid-template-rows: 58% 42%; min-height: 100%; height: 100%; border-radius: inherit; border: 1px solid rgba(255, 215, 120, 0.5); background: linear-gradient(180deg, rgba(45, 30, 39, 0.98), rgba(18, 12, 24, 0.98)); overflow: hidden; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.55); }
+/* Keep pack-pick front as a true face plane (absolute/inset), mirroring back
+   face geometry so the cardback reliably appears during 180deg intervals. */
+.shop-pack-pick-front { position: absolute; inset: 0; z-index: 2; display: grid; grid-template-rows: 58% 42%; min-height: 100%; height: 100%; border-radius: inherit; border: 1px solid rgba(255, 215, 120, 0.5); background: linear-gradient(180deg, rgba(45, 30, 39, 0.98), rgba(18, 12, 24, 0.98)); overflow: hidden; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.55); transform: rotateY(0deg) translateZ(0.1px); }
 .shop-pack-pick-art {
   position: relative;
   border-radius: 14px 14px 0 0;
@@ -627,6 +629,13 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   -webkit-backface-visibility: hidden;
   pointer-events: none;
   z-index: 5;
+}
+/* Explicit culling on both pack faces keeps cross-browser flip parity with
+   relic cards and prevents the front plane ghosting over the cardback. */
+.shop-pack-pick-front,
+.shop-pack-pick-back {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 .shop-pack-pick-card:hover,
 .shop-pack-pick-card:focus-visible {
@@ -806,7 +815,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 /* Explicit front-face wrapper for relic cards. Keeping this separate from the
    root lets us run a true two-sided 3D flip (front vs cardback). */
 .shop-relic-front {
-  position: relative;
+  /* Relic front/back must share one absolute face stack; keeping front in
+     normal flow can flatten the 3D context and hide cardback on some GPUs. */
+  position: absolute;
+  inset: 0;
   display: grid;
   grid-template-rows: 50% 1fr;
   height: 100%;
@@ -819,7 +831,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
     0 12px 24px rgba(0, 0, 0, 0.55);
   overflow: hidden;
   /* Explicit front-face plane so backface culling is stable across engines. */
-  transform: rotateY(0deg);
+  transform: rotateY(0deg) translateZ(0.1px);
 }
 
 .shop-relic-art {
@@ -1272,7 +1284,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   pointer-events: none;
   /* Keep the back texture above all front-face children while rerolling.
      This avoids title/price artifacts bleeding through during the hold beat. */
-  z-index: 2;
+  /* Leave z-index neutral so face visibility is governed by 3D rotation +
+     backface culling, not static stacking order. */
+  z-index: 1;
 }
 /* NOTE: reroll 활성 상태 제어는 상단 .shop-relic-flipper.is-rerolling 블록에서
    단일 소스로 관리한다. 중복 선언을 제거해 앞/뒷면 애니메이션 충돌을 막는다. */
