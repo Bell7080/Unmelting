@@ -146,6 +146,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   animation-delay: calc(var(--shutter-i) * 36ms);
   overflow: hidden;
 }
+/* The top rail channels visually narrow; taper the first row shutter cells. */
+.rail-shutter span:nth-child(-n + 3) { margin-inline: clamp(4px, 0.7vw, 8px); }
+.rail-shutter span:nth-child(n + 4):nth-child(-n + 6) { margin-inline: clamp(2px, 0.35vw, 4px); }
 .rail-shutter span::before {
   content: '';
   position: absolute;
@@ -224,7 +227,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   transform: scaleY(0);
   transform-origin: top;
   animation: shop-dim-veil-drop 0.42s cubic-bezier(0.22, 0.86, 0.22, 1) both;
-  opacity: 0.92;
+  opacity: 0.94;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 232, 168, 0.18),
+    inset 0 0 0 2px rgba(30, 20, 34, 0.72),
+    inset 0 0 44px rgba(0, 0, 0, 0.62),
+    inset 0 0 88px rgba(0, 0, 0, 0.44);
 }
 
 /* Layered shop layout:
@@ -396,7 +404,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
      카드 루트는 불투명 상태를 유지해, 백페이스가 실제로 어디에/어떻게 보이는지
      레이어 겹침 이슈를 디버깅할 때 항상 같은 기준면을 확보한다. */
   will-change: transform;
-  animation: shop-reroll-card-flip var(--shop-reroll-flip-ms, 0.52s) cubic-bezier(0.4, 0.08, 0.6, 0.94) var(--shop-reroll-stagger, 0ms) both;
+  /* Flip tempo intentionally faster with a shorter backface hold so the
+     transient gray backside is perceived as a crisp flash, not residue. */
+  animation: shop-reroll-card-flip var(--shop-reroll-flip-ms, 0.46s) cubic-bezier(0.36, 0.12, 0.58, 0.96) var(--shop-reroll-stagger, 0ms) both;
 }
 .shop-pack-layer > .shop-pack-card:nth-child(1) { animation-delay: 500ms, 1.3s; }
 .shop-pack-layer > .shop-pack-card:nth-child(2) { animation-delay: 600ms, 2.1s; }
@@ -479,6 +489,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   background-repeat: no-repeat;
   /* 셔터 이후 rail 크기 안에서만 은은하게 나타나도록 투명도만 올린다. */
   animation: shop-pack-veil-fade-in 0.38s ease both;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 232, 168, 0.18),
+    inset 0 0 0 2px rgba(30, 20, 34, 0.72),
+    inset 0 0 44px rgba(0, 0, 0, 0.62),
+    inset 0 0 88px rgba(0, 0, 0, 0.44);
 }
 .shop-pack-picker.is-closing .shop-pack-picker-veil {
   animation: shop-pack-veil-lift 0.34s cubic-bezier(0.6, 0.04, 0.74, 0.92) both;
@@ -544,21 +559,32 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.22),
     0 14px 28px rgba(0, 0, 0, 0.65);
-  padding: 14px 12px 16px;
+  padding: 0;
   min-height: 160px;
   cursor: pointer;
   transform-style: preserve-3d;
   transform-origin: center bottom;
-  /* 손패/리롤과 같은 backface 노출 플립만 사용한다.
-     하늘에서 떨어지지 않고, 원래 자리에서 등장한다. */
+  /* Pack shell now drops from the sky, then flips with the same backface
+     language as relic/hand previews. */
   animation:
-    shop-pack-pick-fade-in 0.26s ease calc(var(--pick-i, 0) * 110ms + 0.34s) both,
-    shop-reroll-card-flip 0.8s cubic-bezier(0.4, 0.08, 0.6, 0.94) calc(var(--pick-i, 0) * 110ms + 0.72s) both;
+    shop-pack-pick-drop-in 0.42s cubic-bezier(0.18, 0.86, 0.22, 1) calc(var(--pick-i, 0) * 110ms + 0.22s) both,
+    shop-reroll-card-flip 0.78s cubic-bezier(0.4, 0.08, 0.6, 0.94) calc(var(--pick-i, 0) * 110ms + 0.86s) both;
 }
 .shop-pack-pick-card > * {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
+.shop-pack-pick-front { position: relative; z-index: 2; display: grid; grid-template-rows: 58% 42%; min-height: 164px; height: 100%; }
+.shop-pack-pick-art {
+  position: relative;
+  border-radius: 14px 14px 0 0;
+  overflow: hidden;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+.shop-pack-pick-art::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(6, 6, 12, 0.05), rgba(6, 6, 12, 0.52)); }
+.shop-pack-pick-body { position: relative; padding: 10px 10px 12px; }
 /* Painted back face — a dedicated DOM element painted purely with
    cardbackground_001.webp. Sits at rotateY(180deg) so it shows while the
    card is face-down (the entrance state) and during the 90°-270° section
@@ -594,6 +620,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 @keyframes shop-pack-pick-fade-in {
   0% { opacity: 0; }
   100% { opacity: 1; }
+}
+@keyframes shop-pack-pick-drop-in {
+  0%   { opacity: 0; transform: translateY(-135%) scale(0.94); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 .shop-pack-picker.is-closing .shop-pack-pick-card {
   /* Override the entrance animations so cards lift back up cleanly when
@@ -662,12 +692,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   opacity: 1;
   translate: 0 0;
   scale: 1;
-  /* 상점 진입 시 유물 카드가 먼저 다 열린 뒤, 리롤 버튼은 한 텀 늦게
-     부드럽게 따라 나오도록 의도적으로 딜레이를 더 준다. */
+  /* Reroll timing now keys off the dim-veil drop (420ms): wait until the
+     shutter-top layer is visually seated, then trail by a short beat. */
   transition:
-    opacity 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 760ms,
-    translate 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 760ms,
-    scale 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 760ms,
+    opacity 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 540ms,
+    translate 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 540ms,
+    scale 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 540ms,
     transform 0.16s ease,
     box-shadow 0.16s ease,
     filter 0.16s ease;
@@ -909,12 +939,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   100% { transform: translateY(0) scale(1); box-shadow: 0 0 0 rgba(244, 164, 96, 0); }
 }
 @keyframes shop-reroll-card-flip {
-  /* Three-beat flip: front→back (0-32%), HOLD on the back (32-58%), then
-     back→front (58-100%). No filter in keyframes — filter forces
+  /* Faster three-beat flip: front→back (0-26%), BRIEF back hold (26-34%),
+     then back→front (34-100%). No filter in keyframes — filter forces
      transform-style:flat and breaks the 3D backface mechanism. */
   0%   { transform: perspective(820px) rotateY(0deg); }
-  32%  { transform: perspective(820px) rotateY(180deg); }
-  58%  { transform: perspective(820px) rotateY(180deg); }
+  26%  { transform: perspective(820px) rotateY(180deg); }
+  34%  { transform: perspective(820px) rotateY(180deg); }
   100% { transform: perspective(820px) rotateY(360deg); }
 }
 /* Rugged carved-wood buy buttons: deep umber base, dark inset rim, warm

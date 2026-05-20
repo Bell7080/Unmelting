@@ -1310,7 +1310,7 @@ function setupDevCommandPalette(): void {
     <div class="dev-command-shell">
       <span class="dev-command-prefix">/</span>
       <input class="dev-command-input" type="text" spellcheck="false" autocomplete="off" />
-      <div class="dev-command-hint">예시: /25turn, /희망, /양초</div>
+      <div class="dev-command-hint">예시: /25turn, /희망, /양초, /1000불빛, /10$, /10화폐</div>
     </div>
   `
   document.body.appendChild(host)
@@ -1343,13 +1343,33 @@ function setupDevCommandPalette(): void {
   const open = (): void => {
     opened = true
     host.classList.add('is-open')
-    setHint('예시: /25turn, /희망, /양초')
+    setHint('예시: /25turn, /희망, /양초, /1000불빛, /10$, /10화폐')
     input.value = ''
     window.setTimeout(() => input.focus(), 0)
   }
   const execute = (rawValue: string): void => {
     const token = rawValue.trim().replace(/^\/+/, '')
     if (!token) return
+    // Resource debug grants: allow concise numeric commands so designers can
+    // test shop pacing without spawning hand/relic side effects.
+    const scoreGrantMatch = token.match(/^(\d{1,7})\s*(불빛|점수|score|light)$/i)
+    if (scoreGrantMatch) {
+      const amount = Number(scoreGrantMatch[1])
+      if (!Number.isFinite(amount) || amount <= 0) { setHint('불빛 지급량은 1 이상이어야 합니다.'); return }
+      score += amount
+      render()
+      setHint(`디버그: 불빛 +${amount.toLocaleString()} (현재 ${score.toLocaleString()})`)
+      return
+    }
+    const coinGrantMatch = token.match(/^(\d{1,7})\s*(\$|화폐|코인|coin|coins)$/i)
+    if (coinGrantMatch) {
+      const amount = Number(coinGrantMatch[1])
+      if (!Number.isFinite(amount) || amount <= 0) { setHint('화폐 지급량은 1 이상이어야 합니다.'); return }
+      coins += amount
+      render()
+      setHint(`디버그: 화폐 +${amount.toLocaleString()}$ (현재 ${coins.toLocaleString()}$)`)
+      return
+    }
     const turnMatch = token.match(/^(\d{1,3})\s*turn$/i)
     if (turnMatch) {
       const turn = Number(turnMatch[1])
@@ -1375,7 +1395,7 @@ function setupDevCommandPalette(): void {
       setHint(ok ? `디버그: 손패 지급 (${getHandCardDef(handId).name})` : '손패가 가득 찼습니다.')
       return
     }
-    setHint('알 수 없는 명령어입니다. /25turn, /희망, /양초')
+    setHint('알 수 없는 명령어입니다. /25turn, /희망, /양초, /1000불빛, /10$, /10화폐')
   }
   document.addEventListener('keydown', (e) => {
     if (e.key === '/' && !opened) {
