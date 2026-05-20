@@ -1381,6 +1381,7 @@ export class GameBoardRenderer {
       </div>
     `
     host.classList.add('is-open')
+    shell.classList.add('is-pack-picker-open')
   }
 
   /** Hide the pack picker overlay. Plays the lift-out animation first
@@ -1401,6 +1402,8 @@ export class GameBoardRenderer {
     window.setTimeout(() => {
       host.classList.remove('is-open', 'is-closing')
       host.innerHTML = ''
+      const shell = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-shell')
+      shell?.classList.remove('is-pack-picker-open')
     }, 540)
   }
 
@@ -1422,21 +1425,24 @@ export class GameBoardRenderer {
                style="--card-leave-delay:${cardLeaveDelay}ms; --cardback-url:url('${SpriteUrls.cardBack}');"
                tabindex="0"
                aria-label="${def.name} — ${offer.purchased ? '구매 완료' : `점수 ${offer.price}점`}">
-        <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
-        <div class="shop-relic-body">
-          <h3 class="shop-relic-title">${def.name}</h3>
-          <p class="shop-relic-effect">${def.effect}</p>
-          <p class="shop-relic-flavor">${def.flavor}</p>
+        <!-- Front face is grouped into a dedicated wrapper so the reroll flip
+             is a true two-face card: front at 0deg, back at 180deg. -->
+        <div class="shop-relic-front">
+          <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
+          <div class="shop-relic-body">
+            <h3 class="shop-relic-title">${def.name}</h3>
+            <p class="shop-relic-effect">${def.effect}</p>
+            <p class="shop-relic-flavor">${def.flavor}</p>
+          </div>
+          <span class="shop-price-label" aria-hidden="true">
+            <span class="shop-price-label-icon">${tagIcon()}</span>
+            <span class="shop-price-label-text">${
+              offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
+            }</span>
+          </span>
         </div>
-        <span class="shop-price-label" aria-hidden="true">
-          <span class="shop-price-label-icon">${tagIcon()}</span>
-          <span class="shop-price-label-text">${
-            offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
-          }</span>
-        </span>
-        <!-- Real DOM cardback layer (not a pseudo-element) so the
-             cardbackground_001.webp asset fully covers the front content
-             at the back-facing half of the reroll flip. -->
+        <!-- Back face is ALWAYS present as a full cardbackground_001.webp panel.
+             During rotation it behaves like a real card back, not an overlay hack. -->
         <div class="shop-relic-cardback" aria-hidden="true"></div>
       </article>
     `
