@@ -209,31 +209,20 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   overflow: visible;
   animation: shop-overlay-in 0.32s cubic-bezier(0.18, 0.86, 0.22, 1);
 }
-/* Dim veil — semi-transparent black layer that descends sequentially AFTER
-   the wax shutter, sitting BEHIND every layer/card inside the shell. The
-   shutter (in .rail) and this veil stack: shutter first, veil second.  The
-   veil has a long animation-delay so it visibly lags the shutter close. */
+/* Dim veil — full shop backdrop that descends AFTER the wax shutter.
+   background_002.webp (parchment + candles) replaces the old CSS gradient. */
 .shop-dim-veil {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   border-radius: 6px;
-  /* Warm dark papyrus tone matching the wax shutter umber, with a subtle
-     parchment grain on top. Brighter than the previous near-black veil
-     so the shop reads as "candle-lit room" rather than "blackout". */
-  background:
-    repeating-linear-gradient(
-      135deg,
-      rgba(255, 232, 168, 0.04) 0 3px,
-      rgba(0, 0, 0, 0.10) 3px 7px
-    ),
-    linear-gradient(180deg, rgba(64, 44, 28, 0.62) 0%, rgba(36, 22, 16, 0.74) 100%);
+  background-image: var(--shop-veil-bg);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   transform: scaleY(0);
   transform-origin: top;
-  /* Drops the moment openShop mounts. The wax shutter has already finished
-     closing by the time we get here, so this is the second of two sequential
-     beats (shutter → veil). */
   animation: shop-dim-veil-drop 0.42s cubic-bezier(0.22, 0.86, 0.22, 1) both;
 }
 
@@ -419,7 +408,6 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   justify-content: flex-end;
   padding: clamp(8px, 1vw, 14px);
   text-align: center;
-  background: linear-gradient(180deg, transparent 55%, rgba(0, 0, 0, 0.8) 100%);
   border-radius: inherit;
   pointer-events: none;
 }
@@ -463,34 +451,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-pack-picker-veil {
   position: absolute;
-  /* Extend slightly past the picker bounds so the radial fade smooths into
-     the shop edges without leaving a visible cutoff line. */
-  inset: -4%;
-  background:
-    repeating-linear-gradient(
-      135deg,
-      rgba(255, 232, 168, 0.03) 0 3px,
-      rgba(0, 0, 0, 0.06) 3px 7px
-    ),
-    radial-gradient(
-      ellipse 62% 74% at 50% 50%,
-      rgba(28, 18, 14, 0.86) 0%,
-      rgba(34, 22, 16, 0.66) 48%,
-      rgba(36, 24, 18, 0.22) 80%,
-      rgba(36, 24, 18, 0) 100%
-    );
-  /* Feather edges with a soft mask so the dim reads as a halo around the
-     cards rather than a hard rectangle pinned to the shop rim. */
-  -webkit-mask-image: radial-gradient(
-    ellipse 78% 84% at 50% 50%,
-    rgba(0, 0, 0, 1) 54%,
-    rgba(0, 0, 0, 0) 100%
-  );
-  mask-image: radial-gradient(
-    ellipse 78% 84% at 50% 50%,
-    rgba(0, 0, 0, 1) 54%,
-    rgba(0, 0, 0, 0) 100%
-  );
+  inset: 0;
+  background-image: var(--shop-picker-bg);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   transform-origin: top center;
   animation: shop-pack-veil-drop 0.4s cubic-bezier(0.18, 0.86, 0.22, 1) both;
 }
@@ -583,7 +548,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: var(--cardback-url) center / cover no-repeat;
+  background-image: var(--cardback-url);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   transform: rotateY(180deg);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
@@ -609,8 +577,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   100% { transform: translateY(0) rotateY(180deg); opacity: 1; }
 }
 @keyframes shop-pack-pick-flip {
-  0%   { transform: rotateY(180deg); filter: brightness(0.86); }
-  100% { transform: rotateY(360deg); filter: brightness(1); }
+  /* No filter — filter forces transform-style:flat and breaks backface-visibility. */
+  0%   { transform: rotateY(180deg); }
+  100% { transform: rotateY(360deg); }
 }
 .shop-pack-picker.is-closing .shop-pack-pick-card {
   /* Override the entrance animations so cards lift back up cleanly when
@@ -907,14 +876,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 @keyframes shop-reroll-card-flip {
   /* Three-beat flip: front→back (0-32%), HOLD on the back (32-58%), then
-     back→front (58-100%). The hold makes the back card clearly visible —
-     a "blind" pause in which the artifact identity is swapped invisibly —
-     so the player reads "card turned around, something changed, it
-     returned" instead of a one-tick 360° spin. */
-  0%   { transform: perspective(820px) rotateY(0deg); filter: brightness(1); }
-  32%  { transform: perspective(820px) rotateY(180deg); filter: brightness(0.74); }
-  58%  { transform: perspective(820px) rotateY(180deg); filter: brightness(0.74); }
-  100% { transform: perspective(820px) rotateY(360deg); filter: brightness(1); }
+     back→front (58-100%). No filter in keyframes — filter forces
+     transform-style:flat and breaks the 3D backface mechanism. */
+  0%   { transform: perspective(820px) rotateY(0deg); }
+  32%  { transform: perspective(820px) rotateY(180deg); }
+  58%  { transform: perspective(820px) rotateY(180deg); }
+  100% { transform: perspective(820px) rotateY(360deg); }
 }
 /* Rugged carved-wood buy buttons: deep umber base, dark inset rim, warm
    ember type. Replaces the flat candle-pill button so the prices feel
@@ -1207,7 +1174,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: var(--cardback-url) center / cover no-repeat;
+  background-image: var(--cardback-url);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   transform: rotateY(180deg);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;

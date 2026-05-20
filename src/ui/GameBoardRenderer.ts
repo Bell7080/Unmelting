@@ -1371,7 +1371,7 @@ export class GameBoardRenderer {
       .join('')
     host.classList.remove('is-closing')
     host.innerHTML = `
-      <div class="shop-pack-picker-veil" aria-hidden="true"></div>
+      <div class="shop-pack-picker-veil" style="--shop-picker-bg:url('${SpriteUrls.shopPickerBg}');" aria-hidden="true"></div>
       <div class="shop-pack-picker-shell" role="dialog" aria-label="${view.title}">
         <header class="shop-pack-picker-head">
           <h2>${view.title}</h2>
@@ -1506,7 +1506,7 @@ export class GameBoardRenderer {
     //                     the layer's bounds by design.
     this.shopOverlayElement.innerHTML = `
       <div class="shop-shell" role="dialog" aria-label="상점">
-        <div class="shop-dim-veil" aria-hidden="true"></div>
+        <div class="shop-dim-veil" style="--shop-veil-bg:url('${SpriteUrls.shopVeilBg}');" aria-hidden="true"></div>
         <section class="shop-row shop-top-row" aria-label="유물 상점">
           <div class="shop-layer shop-reroll-zone">
             ${this.renderShopRerollButton(shop.rerollCost, shop.coins)}

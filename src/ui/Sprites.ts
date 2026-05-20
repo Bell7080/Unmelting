@@ -16,6 +16,8 @@ import { Card, CardType, type EnemySpriteId, type FlowerKind, type TrapKind } fr
 import type { HandCardId } from '@entities/HandCard'
 
 import backgroundUrl from '../assets/sprites/background_001.webp'
+import shopVeilBgUrl from '../assets/sprites/background_002.webp'
+import shopPickerBgUrl from '../assets/sprites/background_003.webp'
 import playerUrl from '../assets/sprites/player_001.webp'
 import enemy001Url from '../assets/sprites/enemy_001.webp'
 import enemy002Url from '../assets/sprites/enemy_002.webp'
@@ -69,6 +71,10 @@ import type { RelicId } from '@data/Relics'
 
 export const SpriteUrls = {
   background: backgroundUrl,
+  /** Shop overlay full-area backdrop (replaces the dim-veil gradient). */
+  shopVeilBg: shopVeilBgUrl,
+  /** Pack-picker veil backdrop (shown when opening a card pack). */
+  shopPickerBg: shopPickerBgUrl,
   player: playerUrl,
   enemyMouse: enemy001Url,
   enemyFrog: enemy002Url,
