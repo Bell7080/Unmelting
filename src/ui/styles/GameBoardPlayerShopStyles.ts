@@ -392,7 +392,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   transform-style: preserve-3d;
 }
 .shop-relic-flipper.is-rerolling {
-  /* 손패 미리보기와 같은 방식으로 flipper만 회전시켜 루트 레이어 깜빡임을 막는다. */
+  /* 손패 미리보기와 같은 방식으로 flipper만 회전시킨다.
+     카드 루트는 불투명 상태를 유지해, 백페이스가 실제로 어디에/어떻게 보이는지
+     레이어 겹침 이슈를 디버깅할 때 항상 같은 기준면을 확보한다. */
   will-change: transform;
   animation: shop-reroll-card-flip var(--shop-reroll-flip-ms, 0.52s) cubic-bezier(0.4, 0.08, 0.6, 0.94) var(--shop-reroll-stagger, 0ms) both;
 }
