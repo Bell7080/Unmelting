@@ -597,7 +597,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 /* Keep pack-pick front as a true face plane (absolute/inset), mirroring back
    face geometry so the cardback reliably appears during 180deg intervals. */
-.shop-pack-pick-front { position: absolute; inset: 0; z-index: 2; display: grid; grid-template-rows: 58% 42%; min-height: 100%; height: 100%; border-radius: inherit; border: 1px solid rgba(255, 215, 120, 0.5); background: linear-gradient(180deg, rgba(45, 30, 39, 0.98), rgba(18, 12, 24, 0.98)); overflow: hidden; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.55); transform: rotateY(0deg) translateZ(0.1px); }
+.shop-pack-pick-front { position: absolute; inset: 0; z-index: 2; display: grid; grid-template-rows: 58% 42%; min-height: 100%; height: 100%; border-radius: inherit; border: 1px solid rgba(255, 215, 120, 0.5); background: linear-gradient(180deg, rgba(45, 30, 39, 0.98), rgba(18, 12, 24, 0.98)); overflow: hidden; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.55); transform: rotateY(0deg); }
 .shop-pack-pick-art {
   position: relative;
   border-radius: 14px 14px 0 0;
@@ -830,8 +830,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
     inset 0 1px 0 rgba(255, 232, 168, 0.18),
     0 12px 24px rgba(0, 0, 0, 0.55);
   overflow: hidden;
-  /* Explicit front-face plane so backface culling is stable across engines. */
-  transform: rotateY(0deg) translateZ(0.1px);
+  /* Keep front/back on the exact same plane so cardback culling is stable. */
+  transform: rotateY(0deg);
 }
 
 .shop-relic-art {
@@ -1282,11 +1282,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.55);
   transform: rotateY(180deg);
   pointer-events: none;
-  /* Keep the back texture above all front-face children while rerolling.
-     This avoids title/price artifacts bleeding through during the hold beat. */
-  /* Leave z-index neutral so face visibility is governed by 3D rotation +
-     backface culling, not static stacking order. */
-  z-index: 1;
+  /* Keep stacking neutral: 3D face orientation decides visibility, not z-order. */
+  z-index: auto;
 }
 /* NOTE: reroll 활성 상태 제어는 상단 .shop-relic-flipper.is-rerolling 블록에서
    단일 소스로 관리한다. 중복 선언을 제거해 앞/뒷면 애니메이션 충돌을 막는다. */
