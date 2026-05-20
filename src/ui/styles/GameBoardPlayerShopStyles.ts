@@ -404,7 +404,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
      카드 루트는 불투명 상태를 유지해, 백페이스가 실제로 어디에/어떻게 보이는지
      레이어 겹침 이슈를 디버깅할 때 항상 같은 기준면을 확보한다. */
   will-change: transform;
-  animation: shop-reroll-card-flip var(--shop-reroll-flip-ms, 0.52s) cubic-bezier(0.4, 0.08, 0.6, 0.94) var(--shop-reroll-stagger, 0ms) both;
+  /* Flip tempo intentionally faster with a shorter backface hold so the
+     transient gray backside is perceived as a crisp flash, not residue. */
+  animation: shop-reroll-card-flip var(--shop-reroll-flip-ms, 0.46s) cubic-bezier(0.36, 0.12, 0.58, 0.96) var(--shop-reroll-stagger, 0ms) both;
 }
 .shop-pack-layer > .shop-pack-card:nth-child(1) { animation-delay: 500ms, 1.3s; }
 .shop-pack-layer > .shop-pack-card:nth-child(2) { animation-delay: 600ms, 2.1s; }
@@ -690,12 +692,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   opacity: 1;
   translate: 0 0;
   scale: 1;
-  /* 상점 진입 시 유물 카드가 먼저 다 열린 뒤, 리롤 버튼은 한 텀 늦게
-     부드럽게 따라 나오도록 의도적으로 딜레이를 더 준다. */
+  /* Reroll timing now keys off the dim-veil drop (420ms): wait until the
+     shutter-top layer is visually seated, then trail by a short beat. */
   transition:
-    opacity 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 920ms,
-    translate 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 920ms,
-    scale 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 920ms,
+    opacity 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 540ms,
+    translate 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 540ms,
+    scale 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 540ms,
     transform 0.16s ease,
     box-shadow 0.16s ease,
     filter 0.16s ease;
@@ -937,12 +939,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   100% { transform: translateY(0) scale(1); box-shadow: 0 0 0 rgba(244, 164, 96, 0); }
 }
 @keyframes shop-reroll-card-flip {
-  /* Three-beat flip: front→back (0-32%), HOLD on the back (32-58%), then
-     back→front (58-100%). No filter in keyframes — filter forces
+  /* Faster three-beat flip: front→back (0-26%), BRIEF back hold (26-34%),
+     then back→front (34-100%). No filter in keyframes — filter forces
      transform-style:flat and breaks the 3D backface mechanism. */
   0%   { transform: perspective(820px) rotateY(0deg); }
-  32%  { transform: perspective(820px) rotateY(180deg); }
-  58%  { transform: perspective(820px) rotateY(180deg); }
+  26%  { transform: perspective(820px) rotateY(180deg); }
+  34%  { transform: perspective(820px) rotateY(180deg); }
   100% { transform: perspective(820px) rotateY(360deg); }
 }
 /* Rugged carved-wood buy buttons: deep umber base, dark inset rim, warm

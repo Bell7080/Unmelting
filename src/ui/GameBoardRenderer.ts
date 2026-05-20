@@ -3234,13 +3234,12 @@ export class GameBoardRenderer {
         '#shop-overlay .shop-artifact-layer .shop-relic-card[data-shop-buy-kind="relic"]'
       )
     )
-    // Three-beat flip with a visible back-side pause (see the keyframes in
-    // GameBoardPlayerShopStyles for the 0/32/58/100 stops). The pause window
-    // spans 32%-58% of the total duration, so the content swap fires at 45%
-    // — squarely in the middle of the held back face.
+    // Three-beat flip with a BRIEF back-side pause (see the keyframes in
+    // GameBoardPlayerShopStyles for the 0/26/34/100 stops). We still swap in
+    // the middle of the hold so content changes remain invisible to players.
     const STAGGER_MS = 130
-    const FLIP_MS = 800
-    const SWAP_AT_MS = Math.round(FLIP_MS * 0.45)
+    const FLIP_MS = 620
+    const SWAP_AT_MS = Math.round(FLIP_MS * 0.30)
     const flips: Promise<void>[] = []
     let flipIndex = 0
     allCards.forEach((card, idx) => {
