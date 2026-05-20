@@ -252,7 +252,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   gap: clamp(8px, 1.2vw, 16px);
   padding: clamp(6px, 0.8vh, 10px) clamp(8px, 1vw, 14px);
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.22);
+  /* 기본 레이어는 완전 투명: 상점 실루엣은 셔터/배경이 맡고 카드 일러스트만 드러낸다. */
+  background: transparent;
   min-height: 0;
   overflow: visible; /* cards can extend past the layer edges by design */
 }
@@ -271,6 +272,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   transform: translateX(clamp(-10px, -1vw, -6px));
   background: transparent;
   border: none;
+  box-shadow: none;
 }
 .shop-free-layer,
 .shop-reroll-zone {
@@ -456,15 +458,15 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  transform-origin: top center;
-  animation: shop-pack-veil-drop 0.4s cubic-bezier(0.18, 0.86, 0.22, 1) both;
+  /* 셔터 이후 rail 크기 안에서만 은은하게 나타나도록 투명도만 올린다. */
+  animation: shop-pack-veil-fade-in 0.34s ease both;
 }
 .shop-pack-picker.is-closing .shop-pack-picker-veil {
   animation: shop-pack-veil-lift 0.34s cubic-bezier(0.6, 0.04, 0.74, 0.92) both;
 }
-@keyframes shop-pack-veil-drop {
-  0%   { transform: scaleY(0); opacity: 0.4; }
-  100% { transform: scaleY(1); opacity: 1; }
+@keyframes shop-pack-veil-fade-in {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
 }
 @keyframes shop-pack-veil-lift {
   0%   { transform: scaleY(1); opacity: 1; }
@@ -528,12 +530,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   cursor: pointer;
   transform-style: preserve-3d;
   transform-origin: center bottom;
-  /* Drop in face-down, then flip face-up. The drop lands AFTER the veil has
-     finished, and each card staggers 110ms so they read left→right.  The
-     flip uses the same 3D mechanism as the reroll cards (real backface). */
+  /* 손패/리롤과 같은 backface 노출 플립만 사용한다.
+     하늘에서 떨어지지 않고, 원래 자리에서 등장한다. */
   animation:
-    shop-pack-pick-drop 0.42s cubic-bezier(0.18, 0.86, 0.22, 1) calc(var(--pick-i, 0) * 110ms + 0.42s) both,
-    shop-pack-pick-flip 0.55s cubic-bezier(0.24, 0.86, 0.2, 1) calc(var(--pick-i, 0) * 110ms + 0.84s) both;
+    shop-pack-pick-fade-in 0.26s ease calc(var(--pick-i, 0) * 110ms + 0.34s) both,
+    shop-reroll-card-flip 0.8s cubic-bezier(0.4, 0.08, 0.6, 0.94) calc(var(--pick-i, 0) * 110ms + 0.5s) both;
 }
 .shop-pack-pick-card > * {
   backface-visibility: hidden;
@@ -571,15 +572,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-pack-pick-card.pack-theme-resource { border-color: rgba(146, 220, 138, 0.62); }
 .shop-pack-pick-card.pack-theme-upgrade { border-color: rgba(244, 164, 96, 0.62); }
 .shop-pack-pick-card.pack-theme-unlock { border-color: rgba(180, 142, 230, 0.62); }
-@keyframes shop-pack-pick-drop {
-  0%   { transform: translateY(-180%) rotateY(180deg); opacity: 0; }
-  78%  { transform: translateY(8px) rotateY(180deg); opacity: 1; }
-  100% { transform: translateY(0) rotateY(180deg); opacity: 1; }
-}
-@keyframes shop-pack-pick-flip {
-  /* No filter — filter forces transform-style:flat and breaks backface-visibility. */
-  0%   { transform: rotateY(180deg); }
-  100% { transform: rotateY(360deg); }
+@keyframes shop-pack-pick-fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
 }
 .shop-pack-picker.is-closing .shop-pack-pick-card {
   /* Override the entrance animations so cards lift back up cleanly when
@@ -670,9 +665,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
     scale 0.5s cubic-bezier(0.18, 0.86, 0.22, 1);
 }
 @keyframes shop-card-enter {
-  0%   { transform: translateY(-130%) scale(0.9); opacity: 0; }
-  72%  { transform: translateY(8px) scale(1.02); opacity: 1; }
-  100% { transform: translateY(0) scale(1); opacity: 1; }
+  /* 상점 카드/팩은 기존 위치에서 스르륵 나타나도록 투명도 중심으로 입장한다. */
+  0%   { transform: scale(0.985); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
 /* Idle drift — toned WAY down per feedback ("너무 떠다니는 느낌"). Uses the
    individual translate/rotate channels so :hover's scale can lift the
