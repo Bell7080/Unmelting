@@ -1266,16 +1266,22 @@ export class GameBoardRenderer {
                tabindex="0"
                style="--cardback-url:url('${SpriteUrls.cardBack}');"
                aria-label="${label} — ${claimed ? '획득 완료' : '무료 1회'}">
-        <div class="shop-relic-art shop-free-art" aria-hidden="true"></div>
-        <div class="shop-relic-body">
-          <h3 class="shop-relic-title">${label}</h3>
-          <p class="shop-relic-effect">이번 방문 1회 무료 획득</p>
-          <p class="shop-relic-flavor">촛불이 남긴 작은 호의</p>
+        <!-- 무료 카드도 유물 카드와 동일한 2면 구조를 사용해 항상 카드백에서 시작한다. -->
+        <div class="shop-relic-flipper">
+          <div class="shop-relic-front">
+            <div class="shop-relic-art shop-free-art" aria-hidden="true"></div>
+            <div class="shop-relic-body">
+              <h3 class="shop-relic-title">${label}</h3>
+              <p class="shop-relic-effect">이번 방문 1회 무료 획득</p>
+              <p class="shop-relic-flavor">촛불이 남긴 작은 호의</p>
+            </div>
+            <span class="shop-price-label" aria-hidden="true">
+              <span class="shop-price-label-icon">${tagIcon()}</span>
+              <span class="shop-price-label-text">${claimed ? '획득 완료' : '무료'}</span>
+            </span>
+          </div>
+          <div class="shop-relic-cardback" aria-hidden="true"></div>
         </div>
-        <span class="shop-price-label" aria-hidden="true">
-          <span class="shop-price-label-icon">${tagIcon()}</span>
-          <span class="shop-price-label-text">${claimed ? '획득 완료' : '무료'}</span>
-        </span>
       </article>
     `
   }
@@ -1361,12 +1367,15 @@ export class GameBoardRenderer {
                    style="--pick-i:${i}; --cardback-url:url('${SpriteUrls.cardBack}');"
                    tabindex="0"
                    aria-label="${item.title} — ${item.effect}">
-            <div class="shop-pack-pick-back" aria-hidden="true"></div>
-            <div class="shop-pack-pick-front">
-              <div class="shop-pack-pick-art" style="background-image:url('${SpriteUrls.packs[view.packKind]}');" aria-hidden="true"></div>
-              <div class="shop-pack-pick-body">
-                <h3 class="shop-relic-title">${item.title}</h3>
-                <p class="shop-relic-effect">${item.effect}</p>
+            <!-- 카드 팩 3선택도 flipper 내부 2면을 회전시켜 테두리/배경/콘텐츠가 함께 뒤집힌다. -->
+            <div class="shop-pack-pick-flipper">
+              <div class="shop-pack-pick-back" aria-hidden="true"></div>
+              <div class="shop-pack-pick-front">
+                <div class="shop-pack-pick-art" style="background-image:url('${SpriteUrls.packs[view.packKind]}');" aria-hidden="true"></div>
+                <div class="shop-pack-pick-body">
+                  <h3 class="shop-relic-title">${item.title}</h3>
+                  <p class="shop-relic-effect">${item.effect}</p>
+                </div>
               </div>
             </div>
           </article>`
