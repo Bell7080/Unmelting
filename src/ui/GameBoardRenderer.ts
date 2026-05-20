@@ -1362,9 +1362,12 @@ export class GameBoardRenderer {
                    tabindex="0"
                    aria-label="${item.title} — ${item.effect}">
             <div class="shop-pack-pick-back" aria-hidden="true"></div>
-            <div class="shop-relic-body">
-              <h3 class="shop-relic-title">${item.title}</h3>
-              <p class="shop-relic-effect">${item.effect}</p>
+            <div class="shop-pack-pick-front">
+              <div class="shop-pack-pick-art" style="background-image:url('${SpriteUrls.packs[view.packKind]}');" aria-hidden="true"></div>
+              <div class="shop-pack-pick-body">
+                <h3 class="shop-relic-title">${item.title}</h3>
+                <p class="shop-relic-effect">${item.effect}</p>
+              </div>
             </div>
           </article>`
       )

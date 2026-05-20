@@ -465,7 +465,8 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 4;
+  /* Keep mode-list above shop/illustration overlays so it never gets clipped. */
+  z-index: 120;
 }
 .candle-mode-btn {
   appearance: none;
@@ -526,7 +527,8 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   border-radius: 0;
   box-shadow: none;
   pointer-events: none;
-  z-index: 50;
+  /* Floating menu must stay on the very top interaction layer. */
+  z-index: 130;
 }
 .candle-mode-wheel.is-fan-open .candle-mode-list {
   pointer-events: auto;
