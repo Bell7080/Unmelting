@@ -1425,8 +1425,8 @@ export class GameBoardRenderer {
                style="--card-leave-delay:${cardLeaveDelay}ms; --cardback-url:url('${SpriteUrls.cardBack}');"
                tabindex="0"
                aria-label="${def.name} — ${offer.purchased ? '구매 완료' : `점수 ${offer.price}점`}">
-        <!-- Front face is grouped into a dedicated wrapper so the reroll flip
-             is a true two-face card: front at 0deg, back at 180deg. -->
+        <!-- Hand-preview와 동일한 2면 플립 구조: flipper 컨테이너 내부에 앞/뒷면을 고정한다. -->
+        <div class="shop-relic-flipper">
         <div class="shop-relic-front">
           <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
           <div class="shop-relic-body">
@@ -1444,6 +1444,7 @@ export class GameBoardRenderer {
         <!-- Back face is ALWAYS present as a full cardbackground_001.webp panel.
              During rotation it behaves like a real card back, not an overlay hack. -->
         <div class="shop-relic-cardback" aria-hidden="true"></div>
+        </div>
       </article>
     `
   }
@@ -3248,10 +3249,12 @@ export class GameBoardRenderer {
       flipIndex += 1
       card.style.setProperty('--shop-reroll-stagger', `${delay}ms`)
       card.style.setProperty('--shop-reroll-flip-ms', `${FLIP_MS}ms`)
-      card.classList.remove('is-rerolling')
-      // Force reflow so re-adding the class restarts the flip keyframes.
-      void card.offsetWidth
-      card.classList.add('is-rerolling')
+      const flipper = card.querySelector<HTMLElement>('.shop-relic-flipper')
+      if (!flipper) return
+      flipper.classList.remove('is-rerolling')
+      // Reflow로 애니메이션 재시작을 보장해 리롤마다 항상 같은 플립 타이밍을 맞춘다.
+      void flipper.offsetWidth
+      flipper.classList.add('is-rerolling')
       flips.push(
         new Promise<void>((resolve) => {
           // Swap during the middle of the held-back pause: the card has
@@ -3260,13 +3263,9 @@ export class GameBoardRenderer {
           window.setTimeout(() => {
             this.applyShopRelicContent(card, offer, score, character)
           }, delay + SWAP_AT_MS)
-          // KEEP the .is-rerolling class on after the flip lands. Removing it
-          // changes the `animation` shorthand back to the base rule, which in
-          // turn restarts shop-card-enter — the card vanishes for the 460ms
-          // delay and then drops in from the top of the screen. The flip
-          // animation has `both` fill, so the card holds rotateY(360deg)
-          // (== visually identity) and remains interactive.
+          // 플립 완료 시 클래스를 즉시 해제해 다음 리롤에서도 투명/잔상 상태가 누적되지 않게 한다.
           window.setTimeout(() => {
+            flipper.classList.remove('is-rerolling')
             resolve()
           }, delay + FLIP_MS + 30)
         })

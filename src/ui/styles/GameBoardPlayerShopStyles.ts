@@ -385,25 +385,16 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
     shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both,
     shop-pack-drift 6.6s ease-in-out 0.55s infinite alternate;
 }
-.shop-relic-card.is-rerolling {
-  /* True 3D flip — the card's children get backface-visibility:hidden so the
-     front content vanishes past 90°, and a back-face pseudo painted with the
-     cardback texture takes over until 270°. One animation, no pre-lift. */
+.shop-relic-flipper {
+  position: relative;
+  width: 100%;
+  height: 100%;
   transform-style: preserve-3d;
-  /* Force parent base paint off during the 3D turn.
-     Otherwise the opaque root background can visually mask the back-face art
-     on some compositor paths while rotateY is near 180deg. */
-  background: transparent;
+}
+.shop-relic-flipper.is-rerolling {
+  /* 손패 미리보기와 같은 방식으로 flipper만 회전시켜 루트 레이어 깜빡임을 막는다. */
+  will-change: transform;
   animation: shop-reroll-card-flip var(--shop-reroll-flip-ms, 0.52s) cubic-bezier(0.4, 0.08, 0.6, 0.94) var(--shop-reroll-stagger, 0ms) both;
-}
-.shop-relic-card.is-rerolling .shop-relic-front {
-  /* 손패 호버 미리보기처럼 앞면 가시성을 별도 트랙으로 제어해
-     중반 백페이스 체류 구간에서 앞면 텍스트 잔상이 비치지 않게 한다. */
-  animation: shop-reroll-front-fade var(--shop-reroll-flip-ms, 0.52s) cubic-bezier(0.4, 0.08, 0.6, 0.94) var(--shop-reroll-stagger, 0ms) both;
-}
-.shop-relic-card.is-rerolling .shop-relic-cardback {
-  /* hand-preview-back-flip 패턴과 동일하게 백면을 독립적으로 노출한다. */
-  animation: shop-reroll-back-face var(--shop-reroll-flip-ms, 0.52s) cubic-bezier(0.4, 0.08, 0.6, 0.94) var(--shop-reroll-stagger, 0ms) both;
 }
 .shop-pack-layer > .shop-pack-card:nth-child(1) { animation-delay: 500ms, 1.3s; }
 .shop-pack-layer > .shop-pack-card:nth-child(2) { animation-delay: 600ms, 2.1s; }
@@ -924,18 +915,6 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   58%  { transform: perspective(820px) rotateY(180deg); }
   100% { transform: perspective(820px) rotateY(360deg); }
 }
-@keyframes shop-reroll-front-fade {
-  /* 앞면은 초반 노출 → 중반 숨김 → 후반 복귀. */
-  0%, 34% { opacity: 1; }
-  42%, 64% { opacity: 0; }
-  74%, 100% { opacity: 1; }
-}
-@keyframes shop-reroll-back-face {
-  /* 뒷면은 회전축(180deg)은 고정하고 불투명도만 제어해 체류감을 만든다. */
-  0%, 28% { opacity: 0; transform: rotateY(180deg); }
-  36%, 62% { opacity: 1; transform: rotateY(180deg); }
-  74%, 100% { opacity: 0; transform: rotateY(180deg); }
-}
 /* Rugged carved-wood buy buttons: deep umber base, dark inset rim, warm
    ember type. Replaces the flat candle-pill button so the prices feel
    like they're stamped onto thick wood. */
@@ -1231,10 +1210,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   pointer-events: none;
   /* Keep the back texture above all front-face children while rerolling.
      This avoids title/price artifacts bleeding through during the hold beat. */
-  z-index: 9;
-  opacity: 0;
+  z-index: 2;
 }
-/* NOTE: reroll 활성 상태 제어는 상단 .shop-relic-card.is-rerolling 블록에서
+/* NOTE: reroll 활성 상태 제어는 상단 .shop-relic-flipper.is-rerolling 블록에서
    단일 소스로 관리한다. 중복 선언을 제거해 앞/뒷면 애니메이션 충돌을 막는다. */
 
 /* Card packs are sealed products, so they do not inherit relic rarity-frame glows.
