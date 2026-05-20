@@ -392,6 +392,15 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   transform-style: preserve-3d;
   animation: shop-reroll-card-flip var(--shop-reroll-flip-ms, 0.52s) cubic-bezier(0.4, 0.08, 0.6, 0.94) var(--shop-reroll-stagger, 0ms) both;
 }
+.shop-relic-card.is-rerolling .shop-relic-front {
+  /* 손패 호버 미리보기처럼 앞면 가시성을 별도 트랙으로 제어해
+     중반 백페이스 체류 구간에서 앞면 텍스트 잔상이 비치지 않게 한다. */
+  animation: shop-reroll-front-fade var(--shop-reroll-flip-ms, 0.52s) cubic-bezier(0.4, 0.08, 0.6, 0.94) var(--shop-reroll-stagger, 0ms) both;
+}
+.shop-relic-card.is-rerolling .shop-relic-cardback {
+  /* hand-preview-back-flip 패턴과 동일하게 백면을 독립적으로 노출한다. */
+  animation: shop-reroll-back-face var(--shop-reroll-flip-ms, 0.52s) cubic-bezier(0.4, 0.08, 0.6, 0.94) var(--shop-reroll-stagger, 0ms) both;
+}
 .shop-pack-layer > .shop-pack-card:nth-child(1) { animation-delay: 500ms, 1.3s; }
 .shop-pack-layer > .shop-pack-card:nth-child(2) { animation-delay: 600ms, 2.1s; }
 .shop-pack-layer > .shop-pack-card:nth-child(3) { animation-delay: 700ms, 2.9s; }
@@ -656,11 +665,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   opacity: 1;
   translate: 0 0;
   scale: 1;
-  /* Land in sync with the rightmost relic card (~660ms enter delay + 500ms). */
+  /* 상점 진입 시 유물 카드가 먼저 다 열린 뒤, 리롤 버튼은 한 텀 늦게
+     부드럽게 따라 나오도록 의도적으로 딜레이를 더 준다. */
   transition:
-    opacity 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 560ms,
-    translate 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 560ms,
-    scale 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 560ms,
+    opacity 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 760ms,
+    translate 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 760ms,
+    scale 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 760ms,
     transform 0.16s ease,
     box-shadow 0.16s ease,
     filter 0.16s ease;
@@ -907,6 +917,18 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   32%  { transform: perspective(820px) rotateY(180deg); }
   58%  { transform: perspective(820px) rotateY(180deg); }
   100% { transform: perspective(820px) rotateY(360deg); }
+}
+@keyframes shop-reroll-front-fade {
+  /* 앞면은 초반 노출 → 중반 숨김 → 후반 복귀. */
+  0%, 34% { opacity: 1; }
+  42%, 64% { opacity: 0; }
+  74%, 100% { opacity: 1; }
+}
+@keyframes shop-reroll-back-face {
+  /* 뒷면은 회전축(180deg)은 고정하고 불투명도만 제어해 체류감을 만든다. */
+  0%, 28% { opacity: 0; transform: rotateY(180deg); }
+  36%, 62% { opacity: 1; transform: rotateY(180deg); }
+  74%, 100% { opacity: 0; transform: rotateY(180deg); }
 }
 /* Rugged carved-wood buy buttons: deep umber base, dark inset rim, warm
    ember type. Replaces the flat candle-pill button so the prices feel
@@ -1204,17 +1226,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   z-index: 5;
   opacity: 0;
 }
-/* Only during reroll do we turn the card into a full 3D object.
-   Back face becomes visible for the entire back-facing half naturally. */
-.shop-relic-card.is-rerolling {
-  transform-style: preserve-3d;
-}
-.shop-relic-card.is-rerolling .shop-relic-front {
-  transform: rotateY(0deg);
-}
-.shop-relic-card.is-rerolling .shop-relic-cardback {
-  opacity: 1;
-}
+/* NOTE: reroll 활성 상태 제어는 상단 .shop-relic-card.is-rerolling 블록에서
+   단일 소스로 관리한다. 중복 선언을 제거해 앞/뒷면 애니메이션 충돌을 막는다. */
 
 /* Card packs are sealed products, so they do not inherit relic rarity-frame glows.
    기본 자원팩/강화팩/해금팩 3종에는 어떤 시각 효과도 추가하지 않는다.
