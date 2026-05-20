@@ -399,6 +399,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   height: 100%;
   transform-style: preserve-3d;
 }
+/* 무료 카드 슬롯은 상점 진입 시 카드백에서 시작했다가 앞면으로 공개한다. */
+.shop-free-card .shop-relic-flipper {
+  transform: rotateY(180deg);
+  animation: shop-reroll-card-flip 0.72s cubic-bezier(0.38, 0.1, 0.6, 0.96) 820ms both;
+}
 .shop-relic-flipper.is-rerolling {
   /* 손패 미리보기와 같은 방식으로 flipper만 회전시킨다.
      카드 루트는 불투명 상태를 유지해, 백페이스가 실제로 어디에/어떻게 보이는지
@@ -564,15 +569,19 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   cursor: pointer;
   transform-style: preserve-3d;
   transform-origin: center bottom;
-  /* Pack shell now drops from the sky, then flips with the same backface
-     language as relic/hand previews. */
-  animation:
-    shop-pack-pick-drop-in 0.42s cubic-bezier(0.18, 0.86, 0.22, 1) calc(var(--pick-i, 0) * 110ms + 0.22s) both,
-    shop-reroll-card-flip 0.78s cubic-bezier(0.4, 0.08, 0.6, 0.94) calc(var(--pick-i, 0) * 110ms + 0.86s) both;
+  /* 카드 루트는 낙하/호버만 담당하고 실제 앞뒤 회전은 내부 flipper가 담당한다. */
+  animation: shop-pack-pick-drop-in 0.42s cubic-bezier(0.18, 0.86, 0.22, 1) calc(var(--pick-i, 0) * 110ms + 0.22s) both;
 }
 .shop-pack-pick-card > * {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+}
+.shop-pack-pick-flipper {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform: rotateY(180deg);
+  animation: shop-reroll-card-flip 0.78s cubic-bezier(0.4, 0.08, 0.6, 0.94) calc(var(--pick-i, 0) * 110ms + 0.86s) both;
 }
 .shop-pack-pick-front { position: relative; z-index: 2; display: grid; grid-template-rows: 58% 42%; min-height: 164px; height: 100%; }
 .shop-pack-pick-art {
@@ -632,8 +641,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   pointer-events: none;
 }
 @keyframes shop-pack-pick-lift {
-  0%   { transform: translateY(0) rotateY(360deg); opacity: 1; }
-  100% { transform: translateY(-200%) rotateY(360deg); opacity: 0; }
+  0%   { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-200%); opacity: 0; }
 }
 
 .shop-relic-card {
