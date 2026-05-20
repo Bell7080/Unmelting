@@ -399,6 +399,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   position: relative;
   width: 100%;
   height: 100%;
+  /* Front/back share this mask so rounded corners remain clean while flipping. */
+  border-radius: inherit;
+  overflow: hidden;
   transform-style: preserve-3d;
 }
 /* 무료 카드 슬롯은 상점 진입 시 카드백에서 시작했다가 앞면으로 공개한다. */
@@ -553,7 +556,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-pack-picker-cards {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  /* Pack choices read better when they share the same portrait bias as the
+     cardback surface (3:4-ish). Keep them wider than before so text is not
+     compressed into a short strip. */
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
   gap: clamp(8px, 1.2vw, 16px);
   width: 100%;
   max-width: clamp(420px, 56vw, 640px);
@@ -564,11 +570,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   /* Root stays neutral; front/back faces own frame paint so the whole card flips together. */
   border: none;
   background: transparent;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.22),
-    0 14px 28px rgba(0, 0, 0, 0.65);
+  box-shadow: none;
   padding: 0;
-  min-height: 160px;
+  min-height: 188px;
+  aspect-ratio: 3 / 4;
   cursor: pointer;
   transform-style: preserve-3d;
   transform-origin: center bottom;
@@ -582,11 +587,17 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-pack-pick-flipper {
   position: absolute;
   inset: 0;
+  /* Clip both faces inside the same rounded mask so artwork never pokes
+     past rounded corners while flipping. */
+  border-radius: inherit;
+  overflow: hidden;
   transform-style: preserve-3d;
   transform: rotateY(180deg);
   animation: shop-reroll-card-flip 0.78s cubic-bezier(0.4, 0.08, 0.6, 0.94) calc(var(--pick-i, 0) * 110ms + 0.86s) both;
 }
-.shop-pack-pick-front { position: relative; z-index: 2; display: grid; grid-template-rows: 58% 42%; min-height: 164px; height: 100%; border-radius: inherit; border: 1px solid rgba(255, 215, 120, 0.5); background: linear-gradient(180deg, rgba(45, 30, 39, 0.98), rgba(18, 12, 24, 0.98)); overflow: hidden; }
+/* Keep pack-pick front as a true face plane (absolute/inset), mirroring back
+   face geometry so the cardback reliably appears during 180deg intervals. */
+.shop-pack-pick-front { position: absolute; inset: 0; z-index: 2; display: grid; grid-template-rows: 58% 42%; min-height: 100%; height: 100%; border-radius: inherit; border: 1px solid rgba(255, 215, 120, 0.5); background: linear-gradient(180deg, rgba(45, 30, 39, 0.98), rgba(18, 12, 24, 0.98)); overflow: hidden; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.55); transform: rotateY(0deg) translateZ(0.1px); }
 .shop-pack-pick-art {
   position: relative;
   border-radius: 14px 14px 0 0;
@@ -612,25 +623,34 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.55);
   transform: rotateY(180deg);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   pointer-events: none;
   z-index: 5;
 }
+/* Explicit culling on both pack faces keeps cross-browser flip parity with
+   relic cards and prevents the front plane ghosting over the cardback. */
+.shop-pack-pick-front,
+.shop-pack-pick-back {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
 .shop-pack-pick-card:hover,
 .shop-pack-pick-card:focus-visible {
   /* Scale via individual property so it composes with the rotateY held by
      the flip animation's 'both' fill mode. */
   scale: 1.04;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.32),
-    0 18px 36px rgba(0, 0, 0, 0.7),
-    0 0 28px rgba(244, 164, 96, 0.4);
+  box-shadow: none;
 }
-.shop-pack-pick-card.pack-theme-resource { border-color: rgba(146, 220, 138, 0.62); }
-.shop-pack-pick-card.pack-theme-upgrade { border-color: rgba(244, 164, 96, 0.62); }
-.shop-pack-pick-card.pack-theme-unlock { border-color: rgba(180, 142, 230, 0.62); }
+/* Theme/rarity visuals are face-owned so they rotate with the slab. */
+.shop-pack-pick-card.pack-theme-resource .shop-pack-pick-front,
+.shop-pack-pick-card.pack-theme-resource .shop-pack-pick-back { border-color: rgba(146, 220, 138, 0.62); }
+.shop-pack-pick-card.pack-theme-upgrade .shop-pack-pick-front,
+.shop-pack-pick-card.pack-theme-upgrade .shop-pack-pick-back { border-color: rgba(244, 164, 96, 0.62); }
+.shop-pack-pick-card.pack-theme-unlock .shop-pack-pick-front,
+.shop-pack-pick-card.pack-theme-unlock .shop-pack-pick-back { border-color: rgba(180, 142, 230, 0.62); }
 @keyframes shop-pack-pick-fade-in {
   0% { opacity: 0; }
   100% { opacity: 1; }
@@ -660,7 +680,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   /* Frame paint lives on front/back faces so free/relic cards flip with one cohesive slab. */
   border: none;
   background: transparent;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.55);
+  box-shadow: none;
   /* Fixed dimensions — the layer absorbs extra space; cards may extend past
      the layer edges because the layer is just a visual area marker.
      Sizes are ~20% larger than the previous (110/10.5vw/158) tier. */
@@ -767,18 +787,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-relic-card:focus-visible {
   animation-play-state: paused;
   scale: 1.06;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.32),
-    0 18px 36px rgba(0, 0, 0, 0.65),
-    0 0 30px rgba(244, 164, 96, 0.4);
+  box-shadow: none;
   z-index: 6;
 }
 .shop-relic-card.is-affordable {
   border-color: rgba(122, 202, 113, 0.62);
-  box-shadow:
-    inset 0 1px 0 rgba(223, 255, 183, 0.22),
-    0 12px 24px rgba(0, 0, 0, 0.55),
-    0 0 20px rgba(78, 168, 82, 0.16);
+  box-shadow: none;
 }
 .shop-relic-card.is-unaffordable {
   border-color: rgba(166, 62, 58, 0.58);
@@ -801,7 +815,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 /* Explicit front-face wrapper for relic cards. Keeping this separate from the
    root lets us run a true two-sided 3D flip (front vs cardback). */
 .shop-relic-front {
-  position: relative;
+  /* Relic front/back must share one absolute face stack; keeping front in
+     normal flow can flatten the 3D context and hide cardback on some GPUs. */
+  position: absolute;
+  inset: 0;
   display: grid;
   grid-template-rows: 50% 1fr;
   height: 100%;
@@ -809,10 +826,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   border-radius: inherit;
   border: 1px solid rgba(255, 215, 120, 0.42);
   background: linear-gradient(180deg, rgba(45, 30, 39, 0.96), rgba(18, 12, 24, 0.96));
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.18),
+    0 12px 24px rgba(0, 0, 0, 0.55);
   overflow: hidden;
   /* Explicit front-face plane so backface culling is stable across engines. */
-  transform: rotateY(0deg);
+  transform: rotateY(0deg) translateZ(0.1px);
 }
 
 .shop-relic-art {
@@ -1260,11 +1279,14 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.55);
   transform: rotateY(180deg);
   pointer-events: none;
   /* Keep the back texture above all front-face children while rerolling.
      This avoids title/price artifacts bleeding through during the hold beat. */
-  z-index: 2;
+  /* Leave z-index neutral so face visibility is governed by 3D rotation +
+     backface culling, not static stacking order. */
+  z-index: 1;
 }
 /* NOTE: reroll 활성 상태 제어는 상단 .shop-relic-flipper.is-rerolling 블록에서
    단일 소스로 관리한다. 중복 선언을 제거해 앞/뒷면 애니메이션 충돌을 막는다. */
@@ -1279,5 +1301,27 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-pack-card.rarity-legendary {
   box-shadow: none;
 }
+
+/* Rarity glow lives on both faces so border/glow/depth remain attached during flip. */
+.shop-relic-card.rarity-common .shop-relic-front,
+.shop-relic-card.rarity-common .shop-relic-cardback,
+.shop-pack-pick-card.rarity-common .shop-pack-pick-front,
+.shop-pack-pick-card.rarity-common .shop-pack-pick-back { box-shadow: 0 0 0 1px rgba(116, 124, 136, 0.5), 0 12px 22px rgba(0,0,0,0.58); }
+.shop-relic-card.rarity-rare .shop-relic-front,
+.shop-relic-card.rarity-rare .shop-relic-cardback,
+.shop-pack-pick-card.rarity-rare .shop-pack-pick-front,
+.shop-pack-pick-card.rarity-rare .shop-pack-pick-back { box-shadow: 0 0 0 1px rgba(80, 152, 255, 0.58), 0 0 24px rgba(80,152,255,0.24), 0 12px 22px rgba(0,0,0,0.58); }
+.shop-relic-card.rarity-epic .shop-relic-front,
+.shop-relic-card.rarity-epic .shop-relic-cardback,
+.shop-pack-pick-card.rarity-epic .shop-pack-pick-front,
+.shop-pack-pick-card.rarity-epic .shop-pack-pick-back { box-shadow: 0 0 0 1px rgba(161, 108, 255, 0.62), 0 0 26px rgba(161,108,255,0.28), 0 12px 22px rgba(0,0,0,0.58); }
+.shop-relic-card.rarity-unique .shop-relic-front,
+.shop-relic-card.rarity-unique .shop-relic-cardback,
+.shop-pack-pick-card.rarity-unique .shop-pack-pick-front,
+.shop-pack-pick-card.rarity-unique .shop-pack-pick-back { box-shadow: 0 0 0 1px rgba(242, 212, 92, 0.72), 0 0 30px rgba(242,212,92,0.34), 0 12px 22px rgba(0,0,0,0.58); }
+.shop-relic-card.rarity-legendary .shop-relic-front,
+.shop-relic-card.rarity-legendary .shop-relic-cardback,
+.shop-pack-pick-card.rarity-legendary .shop-pack-pick-front,
+.shop-pack-pick-card.rarity-legendary .shop-pack-pick-back { box-shadow: 0 0 0 1px rgba(220, 78, 78, 0.72), 0 0 30px rgba(220,78,78,0.34), 0 12px 22px rgba(0,0,0,0.58); }
 
 `
