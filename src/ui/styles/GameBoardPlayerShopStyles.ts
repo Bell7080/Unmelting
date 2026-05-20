@@ -419,7 +419,6 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   justify-content: flex-end;
   padding: clamp(8px, 1vw, 14px);
   text-align: center;
-  background: linear-gradient(180deg, transparent 55%, rgba(0, 0, 0, 0.8) 100%);
   border-radius: inherit;
   pointer-events: none;
 }
@@ -583,7 +582,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: var(--cardback-url) center / cover no-repeat;
+  background-image: var(--cardback-url);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   transform: rotateY(180deg);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
@@ -609,8 +611,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   100% { transform: translateY(0) rotateY(180deg); opacity: 1; }
 }
 @keyframes shop-pack-pick-flip {
-  0%   { transform: rotateY(180deg); filter: brightness(0.86); }
-  100% { transform: rotateY(360deg); filter: brightness(1); }
+  /* No filter — filter forces transform-style:flat and breaks backface-visibility. */
+  0%   { transform: rotateY(180deg); }
+  100% { transform: rotateY(360deg); }
 }
 .shop-pack-picker.is-closing .shop-pack-pick-card {
   /* Override the entrance animations so cards lift back up cleanly when
@@ -907,14 +910,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 @keyframes shop-reroll-card-flip {
   /* Three-beat flip: front→back (0-32%), HOLD on the back (32-58%), then
-     back→front (58-100%). The hold makes the back card clearly visible —
-     a "blind" pause in which the artifact identity is swapped invisibly —
-     so the player reads "card turned around, something changed, it
-     returned" instead of a one-tick 360° spin. */
-  0%   { transform: perspective(820px) rotateY(0deg); filter: brightness(1); }
-  32%  { transform: perspective(820px) rotateY(180deg); filter: brightness(0.74); }
-  58%  { transform: perspective(820px) rotateY(180deg); filter: brightness(0.74); }
-  100% { transform: perspective(820px) rotateY(360deg); filter: brightness(1); }
+     back→front (58-100%). No filter in keyframes — filter forces
+     transform-style:flat and breaks the 3D backface mechanism. */
+  0%   { transform: perspective(820px) rotateY(0deg); }
+  32%  { transform: perspective(820px) rotateY(180deg); }
+  58%  { transform: perspective(820px) rotateY(180deg); }
+  100% { transform: perspective(820px) rotateY(360deg); }
 }
 /* Rugged carved-wood buy buttons: deep umber base, dark inset rim, warm
    ember type. Replaces the flat candle-pill button so the prices feel
@@ -1207,7 +1208,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: var(--cardback-url) center / cover no-repeat;
+  background-image: var(--cardback-url);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   transform: rotateY(180deg);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
