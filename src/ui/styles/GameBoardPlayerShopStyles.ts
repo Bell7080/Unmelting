@@ -124,7 +124,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   pointer-events: none;
 }
 .rail-shutter span {
-  position: relative;
+  position: absolute;
+  left: var(--shutter-cell-x, 0);
+  top: var(--shutter-cell-y, 0);
+  width: var(--shutter-cell-w, 0);
+  height: var(--shutter-cell-h, 0);
   border-radius: 8px 8px 14px 14px;
   background:
     radial-gradient(ellipse 80% 35% at 50% 100%, rgba(244, 164, 96, 0.32), transparent 70%),
@@ -146,9 +150,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   animation-delay: calc(var(--shutter-i) * 36ms);
   overflow: hidden;
 }
-/* The top rail channels visually narrow; taper the first row shutter cells. */
-.rail-shutter span:nth-child(-n + 3) { margin-inline: clamp(4px, 0.7vw, 8px); }
-.rail-shutter span:nth-child(n + 4):nth-child(-n + 6) { margin-inline: clamp(2px, 0.35vw, 4px); }
+/* Size/position now comes from measured rail cell bounds, so no manual taper. */
 .rail-shutter span::before {
   content: '';
   position: absolute;
