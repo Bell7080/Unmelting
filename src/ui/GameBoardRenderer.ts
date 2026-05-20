@@ -362,6 +362,9 @@ export class GameBoardRenderer {
 
     this.injectStyles()
     this.attachListeners()
+    // When the shop is open, the shutter must keep matching the rail's real
+    // perspective-scaled cells even after full re-renders (purchase refresh etc.).
+    this.syncShopShutterToRailCells()
     this.animateRenderedResourceCounters()
     this.alignNewHandSlotsWithTrailSpawn()
     this.animateMovedCards(previousRects)
@@ -1755,6 +1758,29 @@ export class GameBoardRenderer {
     return host.content.firstElementChild as HTMLElement
   }
 
+  /** Project each shutter panel onto the current rail cell bounds so the shop
+   *  shutter follows the same perspective (front/mid/top row scale + 2/3-span). */
+  private syncShopShutterToRailCells(): void {
+    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
+    const shutter = rail?.querySelector<HTMLElement>('.rail-shutter')
+    if (!rail || !shutter) return
+
+    const railRect = rail.getBoundingClientRect()
+    const rowCells = [...rail.querySelectorAll<HTMLElement>('.rail-row .cell')]
+    const panels = [...shutter.querySelectorAll<HTMLElement>('span')]
+    if (rowCells.length === 0 || panels.length === 0) return
+
+    const count = Math.min(rowCells.length, panels.length)
+    for (let i = 0; i < count; i++) {
+      const cellRect = rowCells[i].getBoundingClientRect()
+      const panel = panels[i]
+      panel.style.setProperty('--shutter-cell-x', `${cellRect.left - railRect.left}px`)
+      panel.style.setProperty('--shutter-cell-y', `${cellRect.top - railRect.top}px`)
+      panel.style.setProperty('--shutter-cell-w', `${cellRect.width}px`)
+      panel.style.setProperty('--shutter-cell-h', `${cellRect.height}px`)
+    }
+  }
+
   /** 10-turn shop transition: rail quake, then the 3×3 shutter closes and stays closed. */
   playShopTransition(): Promise<void> {
     const rail = this.boardElement.querySelector<HTMLElement>('.rail')
@@ -1764,6 +1790,8 @@ export class GameBoardRenderer {
     oldShutter?.remove()
     const shutter = this.createShopShutter(rail)
     rail.appendChild(shutter)
+    // Immediately pin panels to live rail cells before the drop animation runs.
+    this.syncShopShutterToRailCells()
     // While the shutter is down, pause only distracting in-rail loop effects
     // (not gameplay timers), so armed bombs do not sparkle behind the paper.
     rail.classList.add('is-shop-quaking', 'is-shop-shuttered')
@@ -1782,6 +1810,8 @@ export class GameBoardRenderer {
     if (!shutter.isConnected) {
       shutter.classList.add('is-closed')
       rail.appendChild(shutter)
+      // Persisted shutter recreated after re-render should still match cell geometry.
+      this.syncShopShutterToRailCells()
     }
 
     // Resume mirrors the entry beat: first the rail clatters, then the closed
