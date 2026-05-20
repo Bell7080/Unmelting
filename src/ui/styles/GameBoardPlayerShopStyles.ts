@@ -559,8 +559,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-pack-pick-card {
   position: relative;
   border-radius: 14px;
-  border: 1px solid rgba(255, 215, 120, 0.5);
-  background: linear-gradient(180deg, rgba(45, 30, 39, 0.98), rgba(18, 12, 24, 0.98));
+  /* Root stays neutral; front/back faces own frame paint so the whole card flips together. */
+  border: none;
+  background: transparent;
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.22),
     0 14px 28px rgba(0, 0, 0, 0.65);
@@ -583,7 +584,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   transform: rotateY(180deg);
   animation: shop-reroll-card-flip 0.78s cubic-bezier(0.4, 0.08, 0.6, 0.94) calc(var(--pick-i, 0) * 110ms + 0.86s) both;
 }
-.shop-pack-pick-front { position: relative; z-index: 2; display: grid; grid-template-rows: 58% 42%; min-height: 164px; height: 100%; }
+.shop-pack-pick-front { position: relative; z-index: 2; display: grid; grid-template-rows: 58% 42%; min-height: 164px; height: 100%; border-radius: inherit; border: 1px solid rgba(255, 215, 120, 0.5); background: linear-gradient(180deg, rgba(45, 30, 39, 0.98), rgba(18, 12, 24, 0.98)); overflow: hidden; }
 .shop-pack-pick-art {
   position: relative;
   border-radius: 14px 14px 0 0;
@@ -603,6 +604,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   position: absolute;
   inset: 0;
   border-radius: inherit;
+  border: 1px solid rgba(255, 215, 120, 0.5);
+  background-color: rgba(18, 12, 24, 0.98);
   background-image: var(--cardback-url);
   background-size: cover;
   background-position: center;
@@ -652,9 +655,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   display: block;
   overflow: visible; /* let the flat price tag poke past the bottom */
   border-radius: 14px;
-  border: 1px solid rgba(255, 215, 120, 0.42);
-  background: linear-gradient(180deg, rgba(45, 30, 39, 0.96), rgba(18, 12, 24, 0.96));
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.18), 0 12px 24px rgba(0, 0, 0, 0.55);
+  /* Frame paint lives on front/back faces so free/relic cards flip with one cohesive slab. */
+  border: none;
+  background: transparent;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.55);
   /* Fixed dimensions — the layer absorbs extra space; cards may extend past
      the layer edges because the layer is just a visual area marker.
      Sizes are ~20% larger than the previous (110/10.5vw/158) tier. */
@@ -800,6 +804,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   grid-template-rows: 50% 1fr;
   height: 100%;
   min-height: 0;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 215, 120, 0.42);
+  background: linear-gradient(180deg, rgba(45, 30, 39, 0.96), rgba(18, 12, 24, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.18);
+  overflow: hidden;
   /* Explicit front-face plane so backface culling is stable across engines. */
   transform: rotateY(0deg);
 }
@@ -1243,6 +1252,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   position: absolute;
   inset: 0;
   border-radius: inherit;
+  border: 1px solid rgba(255, 215, 120, 0.42);
+  background-color: rgba(18, 12, 24, 0.96);
   background-image: var(--cardback-url);
   background-size: cover;
   background-position: center;
