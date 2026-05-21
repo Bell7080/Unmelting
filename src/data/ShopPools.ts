@@ -64,3 +64,11 @@ export const SHOP_PACK_POOLS: Record<ShopPackKind, Omit<ShopPackPoolItem, 'apply
   ],
   'unlock-pack': [],
 }
+
+/** Shop pack UI copy source of truth.
+ *  Keep names/effects centralized so shop tiles and pack picker titles never drift. */
+export const SHOP_PACK_LABELS: Record<ShopPackKind, { title: string; effect: string }> = {
+  'basic-pack': { title: '자원팩', effect: '자원 보충' },
+  'upgrade-pack': { title: '강화팩', effect: '카드 강화' },
+  'unlock-pack': { title: '해금팩', effect: '카드 해금' },
+}

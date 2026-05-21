@@ -36,7 +36,7 @@ import { EmberSystem } from '@systems/EmberSystem'
 import { ENEMY_DEFINITIONS, MIMIC_BY_SPAN } from '@systems/CardSpawner'
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_DEFINITIONS, type RelicId } from '@data/Relics'
-import { RARITY_CLASS_BY_TIER, RELIC_RARITY, type CardRarity } from '@data/ShopPools'
+import { RARITY_CLASS_BY_TIER, RELIC_RARITY, SHOP_PACK_LABELS, type CardRarity } from '@data/ShopPools'
 import { RECIPES } from '@data/Recipes'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { GAME_BOARD_STYLES } from '@ui/styles/GameBoardStyles'
@@ -1267,7 +1267,7 @@ export class GameBoardRenderer {
       <article class="shop-relic-card shop-free-card ${stateClass} ${RARITY_CLASS_BY_TIER.common}"
                data-shop-buy-kind="free-card"
                tabindex="0"
-               style="--cardback-url:url('${SpriteUrls.cardBack}');"
+               style="--cardback-url:url('${SpriteUrls.cardBack}');--shop-free-art:url('${SpriteUrls.freeCard}');"
                aria-label="${label} — ${claimed ? '획득 완료' : '무료 1회'}">
         <!-- 무료 카드도 유물 카드와 동일한 2면 구조를 사용해 항상 카드백에서 시작한다. -->
         <div class="shop-relic-flipper">
@@ -1526,8 +1526,10 @@ export class GameBoardRenderer {
             .map((offer) => this.renderShopRelicCard(offer, score, character))
             .join('')
         : '<div class="shop-empty">오늘의 잡화는 모두 팔렸어.</div>'
-    const upgradePackLabel = shop.mode === 'altar' ? '단일 강화팩' : '강화팩'
-    const unlockPackLabel = shop.mode === 'altar' ? '카드 폐기팩' : '해금팩'
+    // Shared pack labels/effects avoid one-off hardcoded strings per view.
+    const basicPackLabel = SHOP_PACK_LABELS['basic-pack']
+    const upgradePackLabel = SHOP_PACK_LABELS['upgrade-pack']
+    const unlockPackLabel = SHOP_PACK_LABELS['unlock-pack']
     const freeCardLabel = shop.mode === 'altar' ? '제단의 무료 축복' : '무료 카드'
     // New layered layout:
     //   .rail-shutter   — original 9-panel wax shutter (in .rail), closes
@@ -1542,7 +1544,7 @@ export class GameBoardRenderer {
     //                     카드는 고정 크기를 유지하고 경계를 넘을 수 있다.
     this.shopOverlayElement.innerHTML = `
       <div class="shop-shell" role="dialog" aria-label="상점">
-        <div class="shop-dim-veil" style="--shop-veil-bg:url('${SpriteUrls.shopVeilBg}');" aria-hidden="true"></div>
+        <div class="shop-dim-veil" style="--shop-veil-bg:url('${shop.mode === 'altar' ? SpriteUrls.altarVeilBg : SpriteUrls.shopVeilBg}');" aria-hidden="true"></div>
         <section class="shop-row shop-top-row" aria-label="유물 상점">
           <div class="shop-layer shop-reroll-zone">
             ${this.renderShopRerollButton(shop.rerollCost, shop.coins)}
@@ -1554,9 +1556,9 @@ export class GameBoardRenderer {
             ${this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel)}
           </div>
           <div class="shop-layer shop-pack-layer">
-            ${this.renderShopPackCard('basic-pack', '기본 자원팩', '자원 3장 중 1택', shop.basicPackCost, score, 'resource')}
-            ${this.renderShopPackCard('upgrade-pack', upgradePackLabel, '강화 3장 중 1택', shop.upgradePackCost, score, 'upgrade')}
-            ${this.renderShopPackCard('unlock-pack', unlockPackLabel, '해금 3장 중 1택', shop.unlockPackCost, score, 'unlock')}
+            ${this.renderShopPackCard('basic-pack', basicPackLabel.title, basicPackLabel.effect, shop.basicPackCost, score, 'resource')}
+            ${this.renderShopPackCard('upgrade-pack', upgradePackLabel.title, upgradePackLabel.effect, shop.upgradePackCost, score, 'upgrade')}
+            ${this.renderShopPackCard('unlock-pack', unlockPackLabel.title, unlockPackLabel.effect, shop.unlockPackCost, score, 'unlock')}
           </div>
         </section>
         <button class="shop-close-btn" type="button" data-shop-close aria-label="상점 나가기">EXIT</button>
@@ -3256,13 +3258,9 @@ export class GameBoardRenderer {
     this.animateResourceCounter('.coin-number', targetCoins, ' $')
   }
 
-  /** Shop reroll FX: wallet blast -> reroll button impact -> relic cards
-   *  perform a left-to-right one-turn flip. At the 180° back-face moment we
-   *  swap each card's content (relic id/art/name/effect/price) so when the
-   *  card finishes turning back to the front, the new offer is already there.
-   *  After the last card lands a square burst on the artifact layer marks
-   *  "fresh stock". The reroll button is NOT touched after impact — it must
-   *  remain visible and clickable for the next reroll. */
+  /** Shop reroll FX: wallet blast -> reroll impact -> instant content swap.
+   *  We intentionally removed flip/fade phases so cards never disappear or
+   *  go transparent during reroll; only a vivid burst sells the replacement. */
   async playShopRerollFeedback(
     cost: number,
     nextOffers: ShopOfferView[],
@@ -3282,55 +3280,40 @@ export class GameBoardRenderer {
     void reroll.offsetWidth
     reroll.classList.add('is-reroll-impacted')
 
-    // Only relics flip — pack/free slots are fixed inventory.
+    // Only relic slots reroll — free/pack inventory stays fixed.
     const allCards = Array.from(
       document.querySelectorAll<HTMLElement>(
         '#shop-overlay .shop-artifact-layer .shop-relic-card[data-shop-buy-kind="relic"]'
       )
     )
-    // Three-beat flip with a BRIEF back-side pause (see the keyframes in
-    // GameBoardPlayerShopStyles for the 0/26/34/100 stops). We still swap in
-    // the middle of the hold so content changes remain invisible to players.
-    const STAGGER_MS = 130
-    // One full turn. We swap at half-turn (180°) so the revealed front is already rerolled.
-    const FLIP_MS = 560
-    const SWAP_AT_MS = Math.round(FLIP_MS * 0.5)
-    const flips: Promise<void>[] = []
-    let flipIndex = 0
+    const swaps: Promise<void>[] = []
+    let swapIndex = 0
     allCards.forEach((card, idx) => {
       const offer = nextOffers[idx]
       if (!offer) return
-      // Purchased slots are already burned out — don't resurrect them with a flip.
+      // Purchased slots are already burned out — keep them as fixed empty slots.
       if (card.classList.contains('is-purchased')) return
-      const delay = flipIndex * STAGGER_MS
-      flipIndex += 1
-      card.style.setProperty('--shop-reroll-stagger', `${delay}ms`)
-      card.style.setProperty('--shop-reroll-flip-ms', `${FLIP_MS}ms`)
-      // Rotate the whole relic slab (shadow/glow/border included), not only the inner face.
-      card.classList.remove('is-rerolling')
-      // Reflow로 애니메이션 재시작을 보장해 리롤마다 항상 같은 플립 타이밍을 맞춘다.
-      void card.offsetWidth
-      card.classList.add('is-rerolling')
-      flips.push(
+      const delay = swapIndex * 70
+      swapIndex += 1
+      swaps.push(
         new Promise<void>((resolve) => {
-          // Swap during the middle of the held-back pause: the card has
-          // already finished its front→back rotation and is paused with the
-          // cardback facing the camera, so the swap is invisible.
           window.setTimeout(() => {
             this.applyShopRelicContent(card, offer, score, character)
-          }, delay + SWAP_AT_MS)
-          // 플립 완료 시 클래스를 즉시 해제해 다음 리롤에서도 투명/잔상 상태가 누적되지 않게 한다.
-          window.setTimeout(() => {
-            card.classList.remove('is-rerolling')
+            // Per-card burst keeps the reroll read flashy even without flip.
+            SquareBurst.playOn(card, 'score', { count: 16, spread: 86, duration: 460 })
+            card.classList.remove('is-reroll-impacted')
+            void card.offsetWidth
+            card.classList.add('is-reroll-impacted')
+            window.setTimeout(() => card.classList.remove('is-reroll-impacted'), 260)
             resolve()
-          }, delay + FLIP_MS + 30)
+          }, delay)
         })
       )
     })
-    await Promise.all(flips)
-    // Single capstone burst across the artifact layer once all cards have landed.
+    await Promise.all(swaps)
+    // Capstone burst once all replacement cards are set.
     const layer = document.querySelector<HTMLElement>('#shop-overlay .shop-artifact-layer')
-    if (layer) SquareBurst.playOn(layer, 'score', { count: 22, spread: 120, duration: 520 })
+    if (layer) SquareBurst.playOn(layer, 'score', { count: 34, spread: 160, duration: 620 })
   }
 
   /** Swap a single shop relic card's visible content in place. Used during the

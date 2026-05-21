@@ -230,12 +230,13 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   transform: scaleY(0);
   transform-origin: top;
   animation: shop-dim-veil-drop 0.42s cubic-bezier(0.22, 0.86, 0.22, 1) both;
-  opacity: 0.94;
+  opacity: 0.72;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 232, 168, 0.18),
-    inset 0 0 0 2px rgba(30, 20, 34, 0.72),
-    inset 0 0 44px rgba(0, 0, 0, 0.62),
-    inset 0 0 88px rgba(0, 0, 0, 0.44);
+    inset 0 0 0 1px rgba(255, 232, 168, 0.14),
+    inset 0 0 0 2px rgba(18, 12, 24, 0.88),
+    inset 0 0 70px rgba(0, 0, 0, 0.82),
+    inset 0 0 180px rgba(0, 0, 0, 0.75),
+    inset 0 0 240px 36px rgba(0, 0, 0, 0.9);
 }
 
 /* Layered shop layout:
@@ -292,10 +293,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   justify-content: center;
 }
 .shop-free-layer {
-  transform: translate(clamp(10px, 1.2vw, 16px), clamp(-8px, -0.7vh, -4px));
+  transform: translate(clamp(18px, 1.8vw, 26px), clamp(-8px, -0.7vh, -4px));
 }
 .shop-reroll-zone {
-  transform: translateX(clamp(10px, 1vw, 16px));
+  transform: translateX(clamp(18px, 1.7vw, 26px));
 }
 
 /* Reroll button — compact rectangle, fixed size, paid in 화폐(coins). Lives in
@@ -347,7 +348,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   justify-content: center;
   font-variant-numeric: tabular-nums;
 }
-.shop-reroll-btn-cost-text { font-size: 13px; }
+.shop-reroll-btn-cost-text {
+  font-size: clamp(24px, 2.2vw, 32px);
+  line-height: 1;
+  font-weight: 900;
+}
 .shop-reroll-btn.is-unaffordable {
   filter: saturate(0.7) brightness(0.78);
   cursor: not-allowed;
@@ -360,9 +365,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 /* Free-card tile gets a warm candle-glow art band. */
 .shop-free-card .shop-free-art {
   background:
-    radial-gradient(ellipse 60% 80% at 50% 60%, rgba(255, 232, 168, 0.55), transparent 70%),
-    radial-gradient(circle at 50% 30%, rgba(255, 188, 96, 0.32), transparent 60%),
-    linear-gradient(180deg, rgba(48, 31, 43, 0.92), rgba(18, 12, 24, 0.96));
+    linear-gradient(180deg, rgba(8, 5, 12, 0.14), rgba(8, 5, 12, 0.52)),
+    var(--shop-free-art);
+  background-size: cover;
+  background-position: center;
 }
 
 
@@ -494,10 +500,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   /* 셔터 이후 rail 크기 안에서만 은은하게 나타나도록 투명도만 올린다. */
   animation: shop-pack-veil-fade-in 0.38s ease both;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 232, 168, 0.18),
-    inset 0 0 0 2px rgba(30, 20, 34, 0.72),
-    inset 0 0 44px rgba(0, 0, 0, 0.62),
-    inset 0 0 88px rgba(0, 0, 0, 0.44);
+    inset 0 0 0 1px rgba(255, 232, 168, 0.1),
+    inset 0 0 90px rgba(0, 0, 0, 0.86),
+    inset 0 0 220px rgba(0, 0, 0, 0.82),
+    inset 0 0 280px 44px rgba(0, 0, 0, 0.92);
+  filter: saturate(1.08) contrast(1.06) brightness(0.68);
 }
 .shop-pack-picker.is-closing .shop-pack-picker-veil {
   animation: shop-pack-veil-lift 0.34s cubic-bezier(0.6, 0.04, 0.74, 0.92) both;
@@ -585,7 +592,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   /* Clip both faces inside the same rounded mask so artwork never pokes
      past rounded corners while flipping. */
   border-radius: inherit;
-  overflow: hidden;
+  overflow: visible;
   transform-style: preserve-3d;
   transform: rotateY(0deg);
   animation: none;
