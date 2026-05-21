@@ -508,9 +508,13 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   will-change: transform;
   animation: shop-reroll-card-whole-spin var(--shop-reroll-flip-ms, 0.56s) cubic-bezier(0.36, 0.12, 0.58, 0.96) var(--shop-reroll-stagger, 0ms) both;
 }
-.shop-pack-layer > .shop-pack-card:nth-child(1) { animation-delay: 500ms, 1.3s; }
-.shop-pack-layer > .shop-pack-card:nth-child(2) { animation-delay: 600ms, 2.1s; }
-.shop-pack-layer > .shop-pack-card:nth-child(3) { animation-delay: 700ms, 2.9s; }
+/* pack 슬롯 개수(상점 3 / 제단 4)가 바뀌어도 nth-child 하드코딩 없이
+   동일한 등장/유영 스태거를 유지하도록 각 카드가 넘긴 order 변수를 사용한다. */
+.shop-pack-layer > .shop-pack-card {
+  --shop-pack-enter-delay: calc(500ms + var(--shop-pack-order, 0) * 100ms);
+  --shop-pack-float-delay: calc(1.3s + var(--shop-pack-order, 0) * 0.8s);
+  animation-delay: var(--shop-pack-enter-delay), var(--shop-pack-float-delay);
+}
 .shop-pack-card:hover,
 .shop-pack-card:focus-visible {
   animation-play-state: paused;
@@ -833,9 +837,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   /* Bundle layer now owns the global reveal timing, so reroll uses immediate
      local easing and opens together with all other shop/altar controls. */
   transition:
-    opacity 0.5s cubic-bezier(0.18, 0.86, 0.22, 1),
-    translate 0.5s cubic-bezier(0.18, 0.86, 0.22, 1),
-    scale 0.5s cubic-bezier(0.18, 0.86, 0.22, 1),
+    /* 리롤 버튼만 먼저 뜨지 않도록 유물/무료/팩 카드 enter 딜레이(약 460ms)
+       와 맞춰 같은 beat에 읽히도록 오픈 전이를 지연한다. */
+    opacity 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 460ms,
+    translate 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 460ms,
+    scale 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 460ms,
     transform 0.16s ease,
     box-shadow 0.16s ease,
     filter 0.16s ease;
