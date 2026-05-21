@@ -1736,6 +1736,49 @@ export class GameBoardRenderer {
     }
   }
 
+  /** Forced trial reuses shop shell/bundle grammar so altar->boss->trial feels
+   *  like one uninterrupted rail event flow (drop layer -> pick -> EXIT). */
+  openForcedTrialShopFlow(): void {
+    if (!this.shopOverlayElement) {
+      this.shopOverlayElement = document.createElement('div')
+      this.shopOverlayElement.id = 'shop-overlay'
+      this.shopOverlayElement.className = 'shop-overlay'
+      document.body.appendChild(this.shopOverlayElement)
+    }
+    this.shopOverlayElement.innerHTML = `
+      <div class="shop-shell shop-shell--trial" data-shop-mode="altar" role="dialog" aria-label="시련 선택">
+        <div class="shop-dim-veil" style="--shop-veil-bg:url('${SpriteUrls.altarVeilBg}');" aria-hidden="true"></div>
+        <div class="shop-content-bundle">
+          <section class="shop-row shop-top-row" aria-label="시련 카드">
+            <div class="shop-layer shop-artifact-layer shop-trial-layer">
+              <button class="shop-relic-card shop-trial-card is-affordable" data-trial-pick="a" type="button">
+                <h3>시련 A</h3><p>미정 미정 미정</p>
+              </button>
+              <button class="shop-relic-card shop-trial-card is-affordable" data-trial-pick="b" type="button">
+                <h3>시련 B</h3><p>미정 미정 미정</p>
+              </button>
+              <button class="shop-relic-card shop-trial-card is-affordable" data-trial-pick="c" type="button">
+                <h3>시련 C</h3><p>미정 미정 미정</p>
+              </button>
+            </div>
+          </section>
+          <button class="shop-close-btn" type="button" data-trial-exit aria-label="시련 종료">EXIT</button>
+        </div>
+      </div>
+    `
+    this.shopOverlayElement.onclick = (event) => {
+      const target = event.target as HTMLElement
+      const pick = target.closest<HTMLElement>('[data-trial-pick]')
+      if (pick) {
+        document.dispatchEvent(new CustomEvent('forcedTrialPick', { detail: { id: pick.dataset.trialPick } }))
+        return
+      }
+      if (target.closest('[data-trial-exit]')) document.dispatchEvent(new CustomEvent('forcedTrialExit'))
+    }
+    this.shopOverlayElement.classList.add('is-open')
+    this.positionShopShellOverRail()
+  }
+
   /** Build shutter spans from the current rail. Grouped front cards (2/3칸)
    *  become one wide panel so no card art peeks through inner column gaps. */
   private shopShutterPanelsFromLanes(lanes?: Lane[]): string {
