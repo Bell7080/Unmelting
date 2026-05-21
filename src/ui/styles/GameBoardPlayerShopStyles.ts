@@ -324,11 +324,14 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 /* 제단 유물 3장 레이어는 요청사항대로 광학 중심을 더 정확히 맞추고 카드 판독 크기를 소폭 확장한다. */
 .shop-shell[data-shop-mode="altar"] .shop-artifact-layer {
-  transform: translateX(clamp(-4px, -0.45vw, -2px));
-  gap: clamp(14px, 1.75vw, 24px);
+  /* 제단 유물 3장은 중앙 정렬이 더 또렷하게 보이도록 전체 클러스터를
+     조금 더 안쪽으로 모으고 간격은 과도하게 벌어지지 않게 고정한다. */
+  transform: translateX(clamp(-1px, -0.12vw, 0px));
+  gap: clamp(16px, 1.9vw, 26px);
 }
 .shop-shell[data-shop-mode="altar"] .shop-artifact-layer .shop-relic-card {
-  width: clamp(132px, 12.6vw, 196px);
+  /* 요청사항: 제단 상단 유물 카드 가독성을 위해 기본 대비 소폭 확대. */
+  width: clamp(140px, 13.4vw, 206px);
 }
 .shop-pack-layer {
   justify-content: center;
@@ -361,7 +364,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-free-layer > .shop-relic-card:hover,
 .shop-free-layer > .shop-relic-card:focus-visible {
   animation-play-state: paused;
-  scale: 1.05;
+  /* hover 시에는 부채꼴 각도만 펴고 살짝 확대해 선택 가능 상태를 강조한다. */
+  scale: 1.06;
   z-index: 7;
 }
 .shop-free-layer > .shop-relic-card:nth-child(1):hover,
