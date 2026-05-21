@@ -511,6 +511,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-pack-layer > .shop-pack-card:nth-child(1) { animation-delay: 500ms, 1.3s; }
 .shop-pack-layer > .shop-pack-card:nth-child(2) { animation-delay: 600ms, 2.1s; }
 .shop-pack-layer > .shop-pack-card:nth-child(3) { animation-delay: 700ms, 2.9s; }
+/* 제단은 팩이 4장이라 4번째(우측 삭제팩)도 명시 지연을 줘야
+   1~3번 카드와 같은 타이밍 규칙으로 등장한다. 미지정 시 0ms로
+   시작되어 삭제팩만 먼저 튀어나와 보이는 현상이 발생한다. */
+.shop-pack-layer > .shop-pack-card:nth-child(4) { animation-delay: 800ms, 3.7s; }
 .shop-pack-card:hover,
 .shop-pack-card:focus-visible {
   animation-play-state: paused;
@@ -833,9 +837,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   /* Bundle layer now owns the global reveal timing, so reroll uses immediate
      local easing and opens together with all other shop/altar controls. */
   transition:
-    opacity 0.5s cubic-bezier(0.18, 0.86, 0.22, 1),
-    translate 0.5s cubic-bezier(0.18, 0.86, 0.22, 1),
-    scale 0.5s cubic-bezier(0.18, 0.86, 0.22, 1),
+    /* 리롤 버튼만 먼저 뜨지 않도록 유물/무료/팩 카드 enter 딜레이(약 460ms)
+       와 맞춰 같은 beat에 읽히도록 오픈 전이를 지연한다. */
+    opacity 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 460ms,
+    translate 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 460ms,
+    scale 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 460ms,
     transform 0.16s ease,
     box-shadow 0.16s ease,
     filter 0.16s ease;
