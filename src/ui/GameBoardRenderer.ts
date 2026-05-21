@@ -116,6 +116,11 @@ export interface ShopStateView {
   upgradePackCost: number
   unlockPackCost: number
 }
+export interface ForcedTrialCardView {
+  id: string
+  title: string
+  effect: string
+}
 
 export interface ActivityLogEntry {
   id: number
@@ -1734,6 +1739,45 @@ export class GameBoardRenderer {
       window.removeEventListener('scroll', this.shopResizeListener)
       this.shopResizeListener = null
     }
+  }
+
+  /** Forced trial reuses shop shell/bundle grammar so altar->boss->trial feels
+   *  like one uninterrupted rail event flow (drop layer -> pick -> EXIT). */
+  openForcedTrialShopFlow(cards: ForcedTrialCardView[]): void {
+    if (!this.shopOverlayElement) {
+      this.shopOverlayElement = document.createElement('div')
+      this.shopOverlayElement.id = 'shop-overlay'
+      this.shopOverlayElement.className = 'shop-overlay'
+      document.body.appendChild(this.shopOverlayElement)
+    }
+    this.shopOverlayElement.innerHTML = `
+      <div class="shop-shell shop-shell--trial" data-shop-mode="altar" role="dialog" aria-label="시련 선택">
+        <div class="shop-dim-veil" style="--shop-veil-bg:url('${SpriteUrls.altarVeilBg}');" aria-hidden="true"></div>
+        <div class="shop-content-bundle">
+          <section class="shop-row shop-top-row" aria-label="시련 카드">
+            <div class="shop-layer shop-artifact-layer shop-trial-layer">
+              ${cards.map((card) => `
+                <button class="shop-relic-card shop-trial-card is-affordable" data-trial-pick="${card.id}" type="button">
+                  <h3>${card.title}</h3><p>${card.effect}</p>
+                </button>
+              `).join('')}
+            </div>
+          </section>
+          <button class="shop-close-btn" type="button" data-trial-exit aria-label="시련 종료">EXIT</button>
+        </div>
+      </div>
+    `
+    this.shopOverlayElement.onclick = (event) => {
+      const target = event.target as HTMLElement
+      const pick = target.closest<HTMLElement>('[data-trial-pick]')
+      if (pick) {
+        document.dispatchEvent(new CustomEvent('forcedTrialPick', { detail: { id: pick.dataset.trialPick } }))
+        return
+      }
+      if (target.closest('[data-trial-exit]')) document.dispatchEvent(new CustomEvent('forcedTrialExit'))
+    }
+    this.shopOverlayElement.classList.add('is-open')
+    this.positionShopShellOverRail()
   }
 
   /** Build shutter spans from the current rail. Grouped front cards (2/3칸)

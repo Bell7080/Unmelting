@@ -333,6 +333,29 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   /* 요청사항: 제단 상단 유물 카드 가독성을 위해 기본 대비 소폭 확대. */
   width: clamp(140px, 13.4vw, 206px);
 }
+
+/* Forced trial uses the same shell/content grammar as shop so shutter rhythm
+   and card reveal feel identical to the standard rail interruption flow. */
+.shop-shell--trial .shop-top-row {
+  grid-template-columns: 1fr;
+}
+.shop-shell--trial .shop-trial-layer {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 4px;
+}
+.shop-shell--trial .shop-trial-card {
+  min-height: 220px;
+  text-align: left;
+}
+.shop-shell--trial .shop-trial-card h3 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+.shop-shell--trial .shop-trial-card p {
+  margin: 0;
+  opacity: .85;
+}
 .shop-pack-layer {
   justify-content: center;
   gap: clamp(4px, 0.55vw, 8px);
