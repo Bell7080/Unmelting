@@ -694,66 +694,125 @@ export const GAME_BOARD_RAIL_STYLES = `
 }
 .boss-rail-cadence-value { color: #ffd57a; font-weight: 700; }
 
-/* 등장 인트로 패널: 보스 타일 위쪽에 잠깐 떴다 사라지는 검은 설명 탭.
-   in-rail로 유지하기 위해 boss-rail-front 안에서 절대 위치로 띄운다. */
-.boss-intro-panel {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%);
+/* 풀스크린 보스 인트로: 보스 타일이 셔터 위로 강하하기 직전, 화면 전체를
+   어둡게 가린 채 좌측 일러스트 + 우측 보스 정보(이름/능력치/특수/연출)를
+   보여준다. 어느 곳이나 클릭하면 닫히고 다음 비트로 이어진다. */
+.boss-intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 470;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  min-width: clamp(280px, 56%, 520px);
-  border: 1px solid rgba(230, 194, 129, 0.5);
-  border-radius: 12px;
+  justify-content: center;
+  padding: clamp(16px, 4vh, 36px);
+  background: rgba(4, 2, 8, 0.92);
+  cursor: pointer;
+  animation: boss-intro-overlay-fade-in 0.32s ease-out both;
+}
+.boss-intro-overlay.is-closing {
+  animation: boss-intro-overlay-fade-out 0.24s ease-in forwards;
+}
+@keyframes boss-intro-overlay-fade-in {
+  from { opacity: 0; backdrop-filter: blur(0); }
+  to   { opacity: 1; backdrop-filter: blur(2px); }
+}
+@keyframes boss-intro-overlay-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.boss-intro-overlay-card {
+  display: grid;
+  grid-template-columns: minmax(220px, 32%) 1fr;
+  gap: clamp(18px, 2.6vw, 30px);
+  width: min(880px, 92vw);
+  padding: clamp(18px, 2.6vh, 28px);
+  border: 1px solid rgba(230, 194, 129, 0.46);
+  border-radius: 18px;
   background:
-    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(244, 164, 96, 0.18), transparent 70%),
-    linear-gradient(180deg, rgba(20, 12, 26, 0.96), rgba(8, 5, 14, 0.98));
+    radial-gradient(ellipse 90% 70% at 50% 0%, rgba(244, 164, 96, 0.16), transparent 70%),
+    linear-gradient(180deg, rgba(28, 18, 36, 0.98), rgba(11, 6, 16, 0.98));
   box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.16),
-    0 12px 24px rgba(0, 0, 0, 0.65);
+    inset 0 1px 0 rgba(255, 232, 168, 0.18),
+    0 22px 48px rgba(0, 0, 0, 0.65);
   color: #f7e7c8;
-  z-index: 5;
+  transform: translateY(18px) scale(0.96);
   opacity: 0;
-  pointer-events: none;
-  animation: boss-intro-show 2.6s cubic-bezier(0.18, 0.86, 0.22, 1) 0.4s forwards;
+  animation: boss-intro-overlay-card-rise 0.46s cubic-bezier(0.18, 0.86, 0.22, 1) 0.08s forwards;
 }
-@keyframes boss-intro-show {
-  0%   { opacity: 0; transform: translate(-50%, -16px) scale(0.96); }
-  18%  { opacity: 1; transform: translate(-50%, 0) scale(1); }
-  72%  { opacity: 1; transform: translate(-50%, 0) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -10px) scale(0.98); }
+@keyframes boss-intro-overlay-card-rise {
+  from { transform: translateY(18px) scale(0.96); opacity: 0; }
+  to   { transform: translateY(0) scale(1); opacity: 1; }
 }
-.boss-intro-portrait {
-  width: 48px;
-  height: 48px;
+.boss-intro-overlay-art {
+  aspect-ratio: 1;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 214, 153, 0.46);
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 214, 153, 0.46);
-  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.55);
-  flex: 0 0 auto;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.2),
+    inset 0 -12px 22px rgba(0, 0, 0, 0.6),
+    0 10px 24px rgba(0, 0, 0, 0.55);
 }
-.boss-intro-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.boss-intro-kicker {
+.boss-intro-overlay-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.boss-intro-overlay-kicker {
   font-size: 11px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.18em;
   color: #ffb3a1;
   text-transform: uppercase;
 }
-.boss-intro-name {
-  font-size: 18px;
+.boss-intro-overlay-name {
+  margin: 0;
+  font-size: clamp(24px, 3.4vh, 32px);
   color: #ffe1a3;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.65);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7), 0 0 16px rgba(244, 164, 96, 0.42);
 }
-.boss-intro-desc {
-  margin: 4px 0 0;
+.boss-intro-overlay-stats {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.boss-intro-overlay-stats li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid rgba(230, 194, 129, 0.4);
+  border-radius: 10px;
+  background: rgba(20, 12, 26, 0.78);
+}
+.boss-intro-overlay-stat-label {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  opacity: 0.74;
+}
+.boss-intro-overlay-stat-value {
+  font-size: 18px;
+  color: #ffd57a;
+  font-weight: 700;
+}
+.boss-intro-overlay-desc {
+  margin: 6px 0 0;
+  line-height: 1.55;
+  font-size: 13px;
+  opacity: 0.88;
+}
+.boss-intro-overlay-hint {
+  margin: 12px 0 0;
   font-size: 12px;
-  opacity: 0.86;
-  line-height: 1.4;
+  letter-spacing: 0.08em;
+  color: #ffd57a;
+  opacity: 0.82;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
 }
 
 /* 보스 등장 시 셔터 진동을 한 비트 더 강화. 기본 quake와 결합해 더 묵직한 쿵 임팩트. */

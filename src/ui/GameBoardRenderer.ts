@@ -1962,6 +1962,52 @@ export class GameBoardRenderer {
     rail.classList.remove('is-shop-quaking')
   }
 
+  /** 보스 등장 직전, 화면을 어둡게 가린 풀스크린 인트로 카드:
+   *  좌측에 보스 일러스트, 우측에 이름/HP/공격력/특수/연출 설명. 어느 곳이나
+   *  클릭하면 닫히고 다음 비트(셔터 위 보스 타일 강하)로 이어진다. */
+  async openBossIntroOverlay(opts: {
+    name: string
+    maxHp: number
+    attack: number
+    spriteUrl?: string
+  }): Promise<void> {
+    // 잔재 정리: 직전 보스 이벤트가 비정상 종료됐다면 같은 노드가 남아 있을 수 있다.
+    document.getElementById('boss-intro-overlay')?.remove()
+    const spriteUrl = opts.spriteUrl ?? SpriteUrls.enemyWaves[3]
+    const host = document.createElement('div')
+    host.id = 'boss-intro-overlay'
+    host.className = 'boss-intro-overlay'
+    host.innerHTML = `
+      <section class="boss-intro-overlay-card" role="dialog" aria-label="보스 출현">
+        <div class="boss-intro-overlay-art" style="background-image:url('${spriteUrl}');" aria-hidden="true"></div>
+        <div class="boss-intro-overlay-body">
+          <span class="boss-intro-overlay-kicker">제단의 수문장</span>
+          <h2 class="boss-intro-overlay-name">${escapeHtml(opts.name)}</h2>
+          <ul class="boss-intro-overlay-stats">
+            <li><span class="boss-intro-overlay-stat-label">체력</span><span class="boss-intro-overlay-stat-value">${opts.maxHp}</span></li>
+            <li><span class="boss-intro-overlay-stat-label">공격력</span><span class="boss-intro-overlay-stat-value">${opts.attack}</span></li>
+            <li><span class="boss-intro-overlay-stat-label">반격 주기</span><span class="boss-intro-overlay-stat-value">3턴</span></li>
+          </ul>
+          <p class="boss-intro-overlay-desc">셔터가 멈춘 채 보스 가상 턴이 진행된다. 양초 스매시류 즉사기에는 대부분 면역이며, 격파 시 보물 레일 3칸이 떨어진다.</p>
+          <p class="boss-intro-overlay-hint">아무 곳이나 클릭하면 전투 시작</p>
+        </div>
+      </section>
+    `
+    document.body.appendChild(host)
+    // 등장 비트가 자리잡도록 한 프레임 정도 대기 후 클릭 수락.
+    await bossRailWait(80)
+    await new Promise<void>((resolve) => {
+      const close = (): void => {
+        host.classList.add('is-closing')
+        window.setTimeout(() => {
+          host.remove()
+          resolve()
+        }, 240)
+      }
+      host.addEventListener('click', close, { once: true })
+    })
+  }
+
   /** Boss event lives ON the rail (over the closed shutter), reusing the same
    *  cell/card grammar that normal enemy/treasure tiles use. The returned
    *  controller lets index.ts drive the virtual-turn loop without popups. */
@@ -4797,14 +4843,6 @@ function renderBossTileMarkup(opts: BossTileState & { spriteUrl: string }): stri
               </span>
             </div>
           </div>
-        </div>
-      </div>
-      <div class="boss-intro-panel" data-boss-intro aria-hidden="true">
-        <div class="boss-intro-portrait" style="background-image:url('${opts.spriteUrl}');"></div>
-        <div class="boss-intro-body">
-          <span class="boss-intro-kicker">제단의 수문장</span>
-          <strong class="boss-intro-name">${escapeHtml(opts.name)}</strong>
-          <p class="boss-intro-desc">HP ${opts.maxHp} · ATK ${opts.attack} · 3턴마다 반격<br/>레일이 멈춘 채 보스 가상 턴이 진행된다.</p>
         </div>
       </div>
     </div>

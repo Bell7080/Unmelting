@@ -1049,12 +1049,21 @@ async function runBossRailEvent(): Promise<void> {
   const bossAttack = 5
   const attackInterval = 3
   const playerDamagePerHit = 12
+  const bossName = '밀랍 군단'
   let bossHp = bossMaxHp
   let bossTurn = 0
   let nextAttackIn = attackInterval
 
+  // 보스 등장 인트로(풀스크린 검은 배경 + 좌측 일러스트 + 우측 정보).
+  // 어느 곳이나 클릭하면 닫히고 곧장 셔터 위 보스 타일 강하로 이어진다.
+  await boardRenderer.openBossIntroOverlay({
+    name: bossName,
+    maxHp: bossMaxHp,
+    attack: bossAttack,
+  })
+
   const ctrl = boardRenderer.beginBossRailEvent({
-    name: '밀랍 군단',
+    name: bossName,
     maxHp: bossMaxHp,
     attack: bossAttack,
     attackInterval,
