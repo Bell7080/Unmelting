@@ -224,10 +224,13 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-rows: 1fr 1fr auto;
+  /* Keep the bundle's internal track math identical to pre-wrapper layout so
+     top/bottom rows stay anchored to their original rail positions. */
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   gap: clamp(10px, 1.4vh, 16px);
   align-items: stretch;
   min-height: 0;
+  height: 100%;
   opacity: 0;
   transform: translateY(8px) scale(0.992);
   filter: saturate(0.88);
