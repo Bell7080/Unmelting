@@ -376,6 +376,16 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-free-layer > .shop-relic-card:nth-child(2):focus-visible {
   transform: translateX(clamp(-12px, -1vw, -18px)) rotate(0deg);
 }
+
+.shop-reroll-card-anchor {
+  /* 리롤 버튼을 유물 카드 레이어 안으로 이동시켜 동일 레이어 reveal/stack beat를 공유한다. */
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: clamp(8px, 1vw, 14px);
+}
 .shop-reroll-zone {
   transform: translateX(clamp(18px, 1.7vw, 26px));
 }
@@ -813,43 +823,17 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-artifact-layer > .shop-relic-card:nth-child(2) { animation-delay: 560ms, 2.0s; }
 .shop-artifact-layer > .shop-relic-card:nth-child(3) { animation-delay: 660ms, 2.9s; }
 .shop-free-layer > .shop-relic-card { animation-delay: 520ms, 1.6s; }
-/* Reroll button enters AND exits with the relic cards.  Driven by a
-   transition keyed to .shop-overlay.is-open / .shop-shell.is-closing
-   (not an animation), so the .is-reroll-impacted animation can't clobber
-   the held opacity. Uses the individual translate/scale channels so the
-   impact's transform and the hover's transform compose without fighting. */
+/* Reroll button now lives inside the artifact card layer, so it uses the same
+   card-enter timing beat and no longer pops ahead of relic cards. */
 .shop-reroll-btn {
   opacity: 0;
-  translate: 0 -130%;
-  scale: 0.9;
-  transition:
-    opacity 0.34s cubic-bezier(0.6, 0.04, 0.74, 0.92),
-    translate 0.34s cubic-bezier(0.6, 0.04, 0.74, 0.92),
-    scale 0.34s cubic-bezier(0.6, 0.04, 0.74, 0.92),
-    transform 0.16s ease,
-    box-shadow 0.16s ease,
-    filter 0.16s ease;
+  animation: shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both;
 }
-.shop-overlay.is-open .shop-reroll-btn {
-  opacity: 1;
-  translate: 0 0;
-  scale: 1;
-  /* Bundle layer now owns the global reveal timing, so reroll uses immediate
-     local easing and opens together with all other shop/altar controls. */
-  transition:
-    /* 리롤 버튼만 먼저 뜨지 않도록 유물/무료/팩 카드 enter 딜레이(약 460ms)
-       와 맞춰 같은 beat에 읽히도록 오픈 전이를 지연한다. */
-    opacity 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 460ms,
-    translate 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 460ms,
-    scale 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 460ms,
-    transform 0.16s ease,
-    box-shadow 0.16s ease,
-    filter 0.16s ease;
+.shop-artifact-layer > .shop-reroll-card-anchor:nth-child(1) .shop-reroll-btn {
+  /* 카드 1장과 같은 460ms 진입 지연으로 묶어 선노출을 차단한다. */
+  animation-delay: 460ms;
 }
 .shop-shell.is-closing .shop-reroll-btn {
-  /* Leave together with the cards' bounce+swoosh. No transition-delay on
-     exit so the button departs in the same beat the cards start their
-     swoosh upward. */
   opacity: 0;
   translate: 0 -200%;
   scale: 0.92;
@@ -1460,6 +1444,23 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   25% { transform: translate(-2px, 1px) rotate(-1.2deg) scale(1.03); }
   50% { transform: translate(2px, -1px) rotate(1.4deg) scale(1.05); }
   100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+}
+
+
+/* 제단 무료카드 2장은 유영 애니메이션보다 부채꼴 유지가 우선이므로
+   최초 스폰 이후에도 transform ownership을 fan 규칙에 고정한다. */
+.shop-shell[data-shop-mode="altar"] .shop-free-layer > .shop-free-card {
+  animation: shop-card-enter-fade 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both;
+}
+.shop-shell[data-shop-mode="altar"] .shop-free-layer > .shop-free-card:nth-child(1) {
+  animation-delay: 520ms;
+}
+.shop-shell[data-shop-mode="altar"] .shop-free-layer > .shop-free-card:nth-child(2) {
+  animation-delay: 620ms;
+}
+@keyframes shop-card-enter-fade {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 `

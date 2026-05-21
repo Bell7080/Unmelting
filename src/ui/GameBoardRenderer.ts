@@ -1559,10 +1559,11 @@ export class GameBoardRenderer {
              실제 상호작용 UI를 하나의 번들 레이어로 묶는다. -->
         <div class="shop-content-bundle">
           <section class="shop-row shop-top-row" aria-label="유물 상점">
-            <div class="shop-layer shop-reroll-zone">
-              ${shop.mode === 'altar' ? '' : this.renderShopRerollButton(shop.rerollCost, shop.coins)}
+            <div class="shop-layer shop-reroll-zone" aria-hidden="true"></div>
+            <div class="shop-layer shop-artifact-layer">
+              ${shop.mode === 'altar' ? '' : `<div class="shop-reroll-card-anchor">${this.renderShopRerollButton(shop.rerollCost, shop.coins)}</div>`}
+              ${cards}
             </div>
-            <div class="shop-layer shop-artifact-layer">${cards}</div>
           </section>
           <section class="shop-row shop-bottom-row" aria-label="카드 및 카드팩">
             <div class="shop-layer shop-free-layer">
