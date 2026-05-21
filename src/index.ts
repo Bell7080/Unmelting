@@ -1015,7 +1015,7 @@ async function closeShopAndResume(): Promise<void> {
   render()
 }
 
-/** Temporary boss slice expanded into an in-rail style chain with manual player actions. */
+/** Boss event runs as an in-rail interruption: one giant tile, 3-hit enemy cadence, then rail rewards/trial. */
 async function runBossStubCombatAndRewards(): Promise<void> {
   // Boss phase uses a dedicated loop so normal turn counters/milestones do not move.
   let bossHp = 90
@@ -1027,18 +1027,17 @@ async function runBossStubCombatAndRewards(): Promise<void> {
   // Intro now includes a 3x3 drop-board beat before the title card opens.
   await boardRenderer.openBossIntroOverlay()
   while (bossHp > 0) {
-    const action = await openBossBattleTurnOverlay({ bossHp, bossMaxHp, bossAttack, bossTurn, nextAttackIn })
-    const damage = action === 'skill' ? 8 : 12
+    // Boss tile follows rail grammar: each hit is one player turn worth of pressure.
+    await openBossBattleTurnOverlay({ bossHp, bossMaxHp, bossAttack, bossTurn, nextAttackIn })
+    const damage = 12
     bossHp = Math.max(0, bossHp - damage)
-    if (action === 'turn') {
-      bossTurn += 1
-      nextAttackIn = bossHp <= 0 ? nextAttackIn : Math.max(1, 3 - (bossTurn % 3))
-      if (bossTurn % 3 === 0 && bossHp > 0) {
-        gameState.character.takeDamage(bossAttack)
-        await boardRenderer.animateDamageFlash()
-        nextAttackIn = 3
-        recordNotice(`보스 반격! 플레이어가 ${bossAttack} 피해를 받았다`, 'hurt')
-      }
+    bossTurn += 1
+    nextAttackIn = bossHp <= 0 ? nextAttackIn : Math.max(1, 3 - (bossTurn % 3))
+    if (bossTurn % 3 === 0 && bossHp > 0) {
+      gameState.character.takeDamage(bossAttack)
+      await boardRenderer.animateDamageFlash()
+      nextAttackIn = 3
+      recordNotice(`보스 반격! 플레이어가 ${bossAttack} 피해를 받았다`, 'hurt')
     }
     recordNotice(`보스 턴 ${bossTurn} · 보스 HP ${bossHp}/${bossMaxHp} · 다음 공격 ${nextAttackIn}턴`, 'info')
     render()
@@ -1059,26 +1058,27 @@ async function openBossBattleTurnOverlay(state: {
   bossAttack: number
   bossTurn: number
   nextAttackIn: number
-}): Promise<'turn' | 'skill'> {
+}): Promise<void> {
   const host = document.createElement('div')
   host.id = 'boss-battle-overlay'
   host.style.cssText = 'position:fixed;inset:0;z-index:452;display:flex;align-items:center;justify-content:center;background:rgba(8,6,14,.82);'
   host.innerHTML = `<section style="width:min(980px,94vw);border:1px solid rgba(230,194,129,.42);border-radius:16px;padding:18px;background:linear-gradient(180deg, rgba(35,24,44,.98), rgba(15,10,21,.98));color:#f7e7c8;">
     <h2 style="margin:0 0 8px;">보스 전투</h2>
     <p style="margin:0 0 12px;opacity:.86;">보스 HP ${state.bossHp}/${state.bossMaxHp} · ATK ${state.bossAttack} · 보스턴 ${state.bossTurn} · 다음 공격 ${state.nextAttackIn}턴</p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-      <button data-boss-act="turn" style="padding:18px;border-radius:12px;">기본 공격 (턴 +1, 피해 12)</button>
-      <button data-boss-act="skill" style="padding:18px;border-radius:12px;">카드/스킬 공격 (턴 소모 없음, 피해 8)</button>
+    <div style="display:grid;grid-template-columns:220px 1fr;gap:12px;align-items:center;">
+      <div style="aspect-ratio:1;border:1px solid rgba(255,214,153,.44);border-radius:12px;background:url('${SpriteUrls.enemyWaves[3]}') center/cover no-repeat;position:relative;">
+        <span style="position:absolute;left:10px;top:10px;padding:2px 8px;border-radius:999px;border:1px solid rgba(230,194,129,.46);background:rgba(12,8,20,.8);font-size:12px;">거대 적 칸</span>
+      </div>
+      <button data-boss-act="hit" style="padding:18px;border-radius:12px;border:1px solid rgba(230,194,129,.42);background:linear-gradient(180deg, rgba(68,49,34,.9), rgba(34,22,16,.96));color:#f7e7c8;">공격하기 (1턴 진행, 피해 12)</button>
     </div>
   </section>`
   document.body.appendChild(host)
-  return await new Promise<'turn' | 'skill'>((resolve) => {
+  await new Promise<void>((resolve) => {
     host.addEventListener('click', (event) => {
       const btn = (event.target as HTMLElement).closest<HTMLElement>('[data-boss-act]')
       if (!btn) return
-      const action = (btn.dataset.bossAct as 'turn' | 'skill') ?? 'turn'
       host.remove()
-      resolve(action)
+      resolve()
     })
   })
 }
@@ -1090,11 +1090,11 @@ async function openBossRewardOverlay(): Promise<void> {
   host.style.cssText = 'position:fixed;inset:0;z-index:450;display:flex;align-items:center;justify-content:center;background:rgba(8,5,14,.86);'
   host.innerHTML = `<section style="width:min(940px,94vw);padding:20px;border:1px solid rgba(230,194,129,.42);border-radius:16px;background:linear-gradient(180deg, rgba(35,24,44,.98), rgba(15,10,21,.98));color:#f7e7c8;">
   <h2 style="margin:0 0 10px;">보스 처치 보상 레일</h2>
-  <p style="margin:0 0 14px;opacity:.8;">보물상자처럼 3칸 보상이 위에서 내려옵니다. 3개를 모두 직접 선택해야 합니다.</p>
+  <p style="margin:0 0 14px;opacity:.8;">일반 레일 보물상자처럼 3칸 보상이 떨어집니다. 세 칸을 순서대로 전진 선택해 모두 획득합니다.</p>
   <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
-    <button data-reward="chest" style="padding:22px;border-radius:12px;animation:boss-drop .36s ease both;animation-delay:0ms;">보물상자 3칸</button>
-    <button data-reward="heal" style="padding:22px;border-radius:12px;animation:boss-drop .36s ease both;animation-delay:120ms;">체력/불씨 완전 회복</button>
-    <button data-reward="coin" style="padding:22px;border-radius:12px;animation:boss-drop .36s ease both;animation-delay:240ms;">1~10$ 랜덤</button>
+    <button data-reward="chest" style="padding:22px;border-radius:12px;animation:boss-drop .36s ease both;animation-delay:0ms;">레일 보상 상자</button>
+    <button data-reward="heal" style="padding:22px;border-radius:12px;animation:boss-drop .36s ease both;animation-delay:120ms;">회복 상자</button>
+    <button data-reward="coin" style="padding:22px;border-radius:12px;animation:boss-drop .36s ease both;animation-delay:240ms;">화폐 상자</button>
   </div>
   <style>@keyframes boss-drop{from{transform:translateY(-46px);opacity:0}to{transform:translateY(0);opacity:1}}</style></section>`
   document.body.appendChild(host)
@@ -1123,7 +1123,7 @@ async function openBossRewardOverlay(): Promise<void> {
         }
         recordNotice(`+$${amount}`, 'info')
       }
-      if (kind === 'chest') recordNotice('보물상자 3칸 보상을 획득했다', 'win')
+      if (kind === 'chest') recordNotice('레일 보상 상자 보상을 획득했다', 'win')
       render()
       if (claimed.size >= 3) { host.remove(); resolve() }
     })
@@ -1139,7 +1139,7 @@ async function openTrialOverlayForced(): Promise<void> {
   <div style="height:180px;background:url('${SpriteUrls.altarVeilBg}') center/cover no-repeat;opacity:.78"></div>
   <div style="padding:16px;">
     <h2 style="margin:0 0 10px;">시련 선택</h2>
-    <p style="margin:0 0 14px;opacity:.82">유물 카드 양식 3장 중 반드시 1장을 선택합니다.</p>
+    <p style="margin:0 0 14px;opacity:.82">인게임 상점 탭 톤으로 시련 카드 3장 중 1장을 선택한 뒤 EXIT로 복귀합니다.</p>
     <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;">
       <button data-trial="a" style="padding:30px 20px;border-radius:14px;border:1px solid rgba(230,194,129,.42);background:linear-gradient(180deg, rgba(53,40,68,.92), rgba(25,18,34,.98));">미정 미정 미정</button>
       <button data-trial="b" style="padding:30px 20px;border-radius:14px;border:1px solid rgba(230,194,129,.42);background:linear-gradient(180deg, rgba(53,40,68,.92), rgba(25,18,34,.98));">미정 미정 미정</button>
@@ -1151,7 +1151,7 @@ async function openTrialOverlayForced(): Promise<void> {
     host.addEventListener('click', async (event) => {
       const btn = (event.target as HTMLElement).closest<HTMLElement>('[data-trial]')
       if (!btn) return
-      recordNotice('시련 적용 완료 · 셔터가 상승하며 일반 턴으로 복귀', 'info')
+      recordNotice('시련 적용 완료 · EXIT로 닫히며 셔터가 상승하고 일반 턴으로 복귀', 'info')
       host.remove()
       await boardRenderer.playShopResumeTransition()
       resolve()
