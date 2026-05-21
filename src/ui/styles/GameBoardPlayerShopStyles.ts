@@ -1308,4 +1308,41 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-pack-pick-card.rarity-legendary .shop-pack-pick-front,
 .shop-pack-pick-card.rarity-legendary .shop-pack-pick-back { box-shadow: 0 0 0 1px rgba(220, 78, 78, 0.72), 0 0 30px rgba(220,78,78,0.34), 0 12px 22px rgba(0,0,0,0.58); }
 
+
+/* --- 2026-05 shop timing/picker unification overrides --- */
+.shop-overlay.is-open .shop-reroll-btn {
+  transition-delay: 620ms, 620ms, 620ms, 0ms, 0ms, 0ms;
+}
+.shop-price-label { z-index: 12; }
+.shop-relic-card.is-rerolling { opacity: 1 !important; visibility: visible !important; }
+.shop-pack-picker-veil {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 232, 168, 0.14),
+    inset 0 0 0 2px rgba(18, 12, 24, 0.92),
+    inset 0 0 96px rgba(0, 0, 0, 0.82),
+    inset 0 0 160px rgba(0, 0, 0, 0.7);
+}
+@keyframes shop-pack-veil-fade-in {
+  0% { opacity: 0; transform: scaleY(0); transform-origin: center; }
+  100% { opacity: 1; transform: scaleY(1); transform-origin: center; }
+}
+.shop-pack-pick-card.is-fading-out { opacity: 0; scale: 0.88; transition: opacity 0.26s ease, scale 0.26s ease; }
+.shop-pack-pick-card.is-selected { z-index: 8; animation: shop-pack-pick-selected 0.44s cubic-bezier(0.2, 0.86, 0.22, 1) forwards; }
+@keyframes shop-pack-pick-selected {
+  0% { transform: translateY(0) scale(1); }
+  100% { transform: translateY(-8px) scale(1.24); }
+}
+.shop-pack-picker.is-closing .shop-pack-pick-card { animation: shop-pack-pick-lift 0.34s cubic-bezier(0.6, 0.04, 0.74, 0.92) calc(var(--pick-i, 0) * 30ms) both; }
+@keyframes shop-pack-pick-lift {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(0) scale(0.86); opacity: 0; }
+}
+.is-shop-purchase-impact { animation: shop-common-buy-impact 0.28s cubic-bezier(0.2, 0.86, 0.22, 1); }
+@keyframes shop-common-buy-impact {
+  0% { transform: translate(0, 0) rotate(0deg) scale(1); }
+  25% { transform: translate(-2px, 1px) rotate(-1.2deg) scale(1.03); }
+  50% { transform: translate(2px, -1px) rotate(1.4deg) scale(1.05); }
+  100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+}
+
 `

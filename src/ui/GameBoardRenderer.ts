@@ -1329,6 +1329,16 @@ export class GameBoardRenderer {
     `
   }
 
+  /** Shared shop purchase impact: brief shake + palette square burst so every
+   *  shop element uses one common buy beat before its own follow-up event. */
+  async playShopPurchaseImpact(target: HTMLElement, theme: Parameters<typeof SquareBurst.playOn>[1] = 'score'): Promise<void> {
+    target.classList.remove('is-shop-purchase-impact')
+    void target.offsetWidth
+    target.classList.add('is-shop-purchase-impact')
+    SquareBurst.playOn(target, theme, { count: 20, spread: 110, duration: 520 })
+    await new Promise((resolve) => window.setTimeout(resolve, 280))
+  }
+
   /** Open the modal pack-picker: 3 cards pop out of the pack; the player
    *  picks one. The overlay sits above the shop shell and is dismissed
    *  automatically when index.ts applies the pick. */
@@ -1351,15 +1361,18 @@ export class GameBoardRenderer {
         const itemId = card.dataset.packPick
         const packKind = card.dataset.packKind as ShopPackKind | undefined
         if (!itemId || !packKind) return
-          // Pick feedback should be immediate and minimal: only a square blast.
-          SquareBurst.playOn(card, 'score', { count: 16, spread: 86, duration: 360 })
-          // Run the close animation (cards lift + veil retract) immediately so
-        // the pick reads as visceral feedback; the state apply fires in the
-        // same beat so index.ts can sequence the next stage without stutter.
-        this.closePackPicker()
-        document.dispatchEvent(
-          new CustomEvent<ShopPackPickDetail>('shopPackPick', { detail: { packKind, itemId } })
-        )
+          host?.classList.add('is-pick-resolving')
+          const choices = Array.from(host?.querySelectorAll<HTMLElement>('.shop-pack-pick-card') ?? [])
+          choices.forEach((choice) => {
+            if (choice !== card) choice.classList.add('is-fading-out')
+          })
+          card.classList.add('is-selected')
+          window.setTimeout(async () => {
+            await this.playShopPurchaseImpact(card, 'score')
+            document.dispatchEvent(
+              new CustomEvent<ShopPackPickDetail>('shopPackPick', { detail: { packKind, itemId } })
+            )
+          }, 460)
       })
       shell.appendChild(host)
     }
@@ -1421,7 +1434,7 @@ export class GameBoardRenderer {
       host.innerHTML = ''
       const shell = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-shell')
       shell?.classList.remove('is-pack-picker-open')
-    }, 540)
+    }, 640)
   }
 
   /** Shop relic card. Click on the card itself buys the relic (the
