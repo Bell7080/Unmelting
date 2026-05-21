@@ -508,13 +508,13 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   will-change: transform;
   animation: shop-reroll-card-whole-spin var(--shop-reroll-flip-ms, 0.56s) cubic-bezier(0.36, 0.12, 0.58, 0.96) var(--shop-reroll-stagger, 0ms) both;
 }
-.shop-pack-layer > .shop-pack-card:nth-child(1) { animation-delay: 500ms, 1.3s; }
-.shop-pack-layer > .shop-pack-card:nth-child(2) { animation-delay: 600ms, 2.1s; }
-.shop-pack-layer > .shop-pack-card:nth-child(3) { animation-delay: 700ms, 2.9s; }
-/* 제단은 팩이 4장이라 4번째(우측 삭제팩)도 명시 지연을 줘야
-   1~3번 카드와 같은 타이밍 규칙으로 등장한다. 미지정 시 0ms로
-   시작되어 삭제팩만 먼저 튀어나와 보이는 현상이 발생한다. */
-.shop-pack-layer > .shop-pack-card:nth-child(4) { animation-delay: 800ms, 3.7s; }
+/* pack 슬롯 개수(상점 3 / 제단 4)가 바뀌어도 nth-child 하드코딩 없이
+   동일한 등장/유영 스태거를 유지하도록 각 카드가 넘긴 order 변수를 사용한다. */
+.shop-pack-layer > .shop-pack-card {
+  --shop-pack-enter-delay: calc(500ms + var(--shop-pack-order, 0) * 100ms);
+  --shop-pack-float-delay: calc(1.3s + var(--shop-pack-order, 0) * 0.8s);
+  animation-delay: var(--shop-pack-enter-delay), var(--shop-pack-float-delay);
+}
 .shop-pack-card:hover,
 .shop-pack-card:focus-visible {
   animation-play-state: paused;

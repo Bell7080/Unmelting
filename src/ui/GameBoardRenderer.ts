@@ -1301,7 +1301,8 @@ export class GameBoardRenderer {
     effect: string,
     cost: number,
     score: number,
-    theme: 'resource' | 'upgrade' | 'unlock'
+    theme: 'resource' | 'upgrade' | 'unlock',
+    order: number
   ): string {
     const affordable = score >= cost ? 'is-affordable' : 'is-unaffordable'
     const artUrl = SpriteUrls.packs[kind]
@@ -1321,7 +1322,7 @@ export class GameBoardRenderer {
       <article class="shop-pack-card pack-theme-${theme} ${affordable} ${rarityClass}"
                data-shop-buy-kind="${kind}"
                tabindex="0"
-               style="--cardback-url:url('${SpriteUrls.cardBack}');"
+               style="--cardback-url:url('${SpriteUrls.cardBack}'); --shop-pack-order:${order};"
                aria-label="${title} — ${cost}점">
         <div class="shop-pack-illustration" style="background-image: url('${artUrl}')" aria-hidden="true"></div>
         <div class="shop-pack-overlay">
@@ -1571,15 +1572,15 @@ export class GameBoardRenderer {
             <div class="shop-layer shop-pack-layer">
               ${shop.mode === 'altar'
                 ? [
-                    this.renderShopPackCard('blessing-pack', '축복팩', '패시브 능력 3택1 획득', shop.basicPackCost, score, 'upgrade'),
-                    this.renderShopPackCard('resource-pack', '자원팩', '최대 수치 3택1 증가', shop.upgradePackCost, score, 'resource'),
-                    this.renderShopPackCard('enhance-pack', '강화팩', '카드 단일 능력 3택1 강화', shop.unlockPackCost, score, 'unlock'),
-                    this.renderShopPackCard('delete-pack', '삭제팩', '카드 등장 금지 3택1', shop.unlockPackCost, score, 'unlock'),
+                    this.renderShopPackCard('blessing-pack', '축복팩', '패시브 능력 3택1 획득', shop.basicPackCost, score, 'upgrade', 0),
+                    this.renderShopPackCard('resource-pack', '자원팩', '최대 수치 3택1 증가', shop.upgradePackCost, score, 'resource', 1),
+                    this.renderShopPackCard('enhance-pack', '강화팩', '카드 단일 능력 3택1 강화', shop.unlockPackCost, score, 'unlock', 2),
+                    this.renderShopPackCard('delete-pack', '삭제팩', '카드 등장 금지 3택1', shop.unlockPackCost, score, 'unlock', 3),
                   ].join('')
                 : [
-                    this.renderShopPackCard('basic-pack', basicPackLabel.title, basicPackLabel.effect, shop.basicPackCost, score, 'resource'),
-                    this.renderShopPackCard('upgrade-pack', upgradePackLabel.title, upgradePackLabel.effect, shop.upgradePackCost, score, 'upgrade'),
-                    this.renderShopPackCard('unlock-pack', unlockPackLabel.title, unlockPackLabel.effect, shop.unlockPackCost, score, 'unlock'),
+                    this.renderShopPackCard('basic-pack', basicPackLabel.title, basicPackLabel.effect, shop.basicPackCost, score, 'resource', 0),
+                    this.renderShopPackCard('upgrade-pack', upgradePackLabel.title, upgradePackLabel.effect, shop.upgradePackCost, score, 'upgrade', 1),
+                    this.renderShopPackCard('unlock-pack', unlockPackLabel.title, unlockPackLabel.effect, shop.unlockPackCost, score, 'unlock', 2),
                   ].join('')}
             </div>
           </section>
