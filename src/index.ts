@@ -594,6 +594,7 @@ async function openTrialOverlay(): Promise<void> {
   host.id = 'trial-overlay'
   host.style.cssText = 'position:fixed;inset:0;z-index:420;display:flex;align-items:center;justify-content:center;background:rgba(10,8,18,0.72);'
   host.innerHTML = `<section style="width:min(940px,92vw);border:1px solid rgba(230,194,129,.42);border-radius:20px;padding:22px;background:linear-gradient(180deg, rgba(35,24,44,.98), rgba(15,10,21,.98));box-shadow:0 24px 60px rgba(0,0,0,.45);color:#f7e7c8;"><h2 style="margin:0 0 12px;font-size:22px;">시련 선택</h2><p style="margin:0 0 16px;opacity:.84">선택 결과는 이번 런 전체에 누적 적용됩니다.</p><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;"><button data-trial="spawn" style="padding:14px;border-radius:14px;border:1px solid rgba(160,190,255,.45);background:rgba(42,58,100,.35);color:#dfe9ff;">군집의 장막<br/><small>스폰 가중치 +15%</small></button><button data-trial="enemy" style="padding:14px;border-radius:14px;border:1px solid rgba(214,136,162,.45);background:rgba(90,40,58,.36);color:#ffe1ea;">피의 맹세<br/><small>적 HP/ATK +1</small></button><button data-trial="trap" style="padding:14px;border-radius:14px;border:1px solid rgba(206,174,116,.45);background:rgba(74,54,25,.36);color:#ffeec4;">가시의 세례<br/><small>함정 피해 +1</small></button></div></section>`
+  // Keep trial as a rail interruption layer, not a separate scene.
   document.body.appendChild(host)
   inputLocked = true
   await new Promise<void>((resolve) => {
@@ -1017,7 +1018,8 @@ async function closeShopAndResume(): Promise<void> {
 
 /** Boss event runs as an in-rail interruption: one giant tile, 3-hit enemy cadence, then rail rewards/trial. */
 async function runBossStubCombatAndRewards(): Promise<void> {
-  // Boss phase uses a dedicated loop so normal turn counters/milestones do not move.
+  // Boss phase uses virtual turns only; main run turn must remain frozen (e.g. stays at 30).
+  const frozenRunTurn = gameState.getCurrentTurn()
   let bossHp = 90
   const bossMaxHp = 90
   const bossAttack = 5
@@ -1049,6 +1051,9 @@ async function runBossStubCombatAndRewards(): Promise<void> {
   turnManager.setTurnMode('normal_turn')
   await openBossRewardOverlay()
   await openTrialOverlayForced()
+  // Safety guard: if future edits accidentally advance real turns during boss, restore intent via notice.
+  if (gameState.getCurrentTurn() !== frozenRunTurn)
+    recordNotice(`경고: 보스 이벤트 중 실제 턴(${frozenRunTurn})이 변경됨`, 'hurt')
 }
 
 /** Manual boss combat panel: only basic attack advances boss turn, skill does not. */
@@ -1130,7 +1135,7 @@ async function openBossRewardOverlay(): Promise<void> {
   })
 }
 
-/** Forced trial after boss: shop-like veil + 3 relic-card style mandatory pick. */
+/** Forced trial after boss: follows shop flow semantics (down layer -> pick -> resume). */
 async function openTrialOverlayForced(): Promise<void> {
   const host = document.createElement('div')
   host.id = 'trial-overlay-forced'
