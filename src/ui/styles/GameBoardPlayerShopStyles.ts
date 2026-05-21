@@ -212,7 +212,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   gap: clamp(10px, 1.4vh, 16px);
   align-items: stretch;
   overflow: visible;
-  animation: shop-overlay-in 0.32s cubic-bezier(0.18, 0.86, 0.22, 1);
+  /* Keep current position and descend with its host context instead of popping in. */
+  animation: none;
 }
 /* Dim veil — full shop backdrop that descends AFTER the wax shutter.
    background_002.webp (parchment + candles) replaces the old CSS gradient. */
@@ -405,18 +406,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   transform-style: preserve-3d;
 }
 /* 무료 카드 슬롯은 상점 진입 시 카드백에서 시작했다가 앞면으로 공개한다. */
-.shop-free-card .shop-relic-flipper {
-  transform: rotateY(180deg);
-  animation: shop-reroll-card-flip 0.72s cubic-bezier(0.38, 0.1, 0.6, 0.96) 820ms both;
-}
-.shop-relic-flipper.is-rerolling {
-  /* 손패 미리보기와 같은 방식으로 flipper만 회전시킨다.
-     카드 루트는 불투명 상태를 유지해, 백페이스가 실제로 어디에/어떻게 보이는지
-     레이어 겹침 이슈를 디버깅할 때 항상 같은 기준면을 확보한다. */
+.shop-free-card .shop-relic-flipper { transform: none; animation: none; }
+/* Reroll must spin the ENTIRE relic layer (including glow/shadow/border). */
+.shop-relic-card.is-rerolling {
   will-change: transform;
-  /* Flip tempo intentionally faster with a shorter backface hold so the
-     transient gray backside is perceived as a crisp flash, not residue. */
-  animation: shop-reroll-card-flip var(--shop-reroll-flip-ms, 0.46s) cubic-bezier(0.36, 0.12, 0.58, 0.96) var(--shop-reroll-stagger, 0ms) both;
+  animation: shop-reroll-card-whole-spin var(--shop-reroll-flip-ms, 0.56s) cubic-bezier(0.36, 0.12, 0.58, 0.96) var(--shop-reroll-stagger, 0ms) both;
 }
 .shop-pack-layer > .shop-pack-card:nth-child(1) { animation-delay: 500ms, 1.3s; }
 .shop-pack-layer > .shop-pack-card:nth-child(2) { animation-delay: 600ms, 2.1s; }
@@ -578,7 +572,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   transform-style: preserve-3d;
   transform-origin: center bottom;
   /* 카드 루트는 낙하/호버만 담당하고 실제 앞뒤 회전은 내부 flipper가 담당한다. */
-  animation: shop-pack-pick-drop-in 0.42s cubic-bezier(0.18, 0.86, 0.22, 1) calc(var(--pick-i, 0) * 110ms + 0.22s) both;
+  /* Pack picks appear in-place; no flip/drop entrance now. */
+  animation: shop-pack-pick-fade-in 0.26s ease calc(var(--pick-i, 0) * 80ms + 0.16s) both;
 }
 .shop-pack-pick-card > * {
   backface-visibility: hidden;
@@ -592,8 +587,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   border-radius: inherit;
   overflow: hidden;
   transform-style: preserve-3d;
-  transform: rotateY(180deg);
-  animation: shop-reroll-card-flip 0.78s cubic-bezier(0.4, 0.08, 0.6, 0.94) calc(var(--pick-i, 0) * 110ms + 0.86s) both;
+  transform: rotateY(0deg);
+  animation: none;
 }
 /* Keep pack-pick front as a true face plane (absolute/inset), mirroring back
    face geometry so the cardback reliably appears during 180deg intervals. */
@@ -654,10 +649,6 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 @keyframes shop-pack-pick-fade-in {
   0% { opacity: 0; }
   100% { opacity: 1; }
-}
-@keyframes shop-pack-pick-drop-in {
-  0%   { opacity: 0; transform: translateY(-135%) scale(0.94); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 .shop-pack-picker.is-closing .shop-pack-pick-card {
   /* Override the entrance animations so cards lift back up cleanly when
@@ -977,13 +968,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   40% { transform: translateY(-2px) scale(1.04); box-shadow: 0 0 22px rgba(244, 164, 96, 0.42); }
   100% { transform: translateY(0) scale(1); box-shadow: 0 0 0 rgba(244, 164, 96, 0); }
 }
-@keyframes shop-reroll-card-flip {
-  /* Faster three-beat flip: front→back (0-26%), BRIEF back hold (26-34%),
-     then back→front (34-100%). No filter in keyframes — filter forces
-     transform-style:flat and breaks the 3D backface mechanism. */
+@keyframes shop-reroll-card-whole-spin {
+  /* One-turn spin. Content swap happens at 180deg from renderer timeout. */
   0%   { transform: perspective(820px) rotateY(0deg); }
-  26%  { transform: perspective(820px) rotateY(180deg); }
-  34%  { transform: perspective(820px) rotateY(180deg); }
+  50%  { transform: perspective(820px) rotateY(180deg); }
   100% { transform: perspective(820px) rotateY(360deg); }
 }
 /* Rugged carved-wood buy buttons: deep umber base, dark inset rim, warm
@@ -1285,8 +1273,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   /* Keep stacking neutral: 3D face orientation decides visibility, not z-order. */
   z-index: auto;
 }
-/* NOTE: reroll 활성 상태 제어는 상단 .shop-relic-flipper.is-rerolling 블록에서
-   단일 소스로 관리한다. 중복 선언을 제거해 앞/뒷면 애니메이션 충돌을 막는다. */
+/* NOTE: reroll 활성 상태 제어는 .shop-relic-card.is-rerolling에서 단일 관리한다. */
 
 /* Card packs are sealed products, so they do not inherit relic rarity-frame glows.
    기본 자원팩/강화팩/해금팩 3종에는 어떤 시각 효과도 추가하지 않는다.
