@@ -1982,6 +1982,10 @@ export class GameBoardRenderer {
     // 이전 보스 이벤트의 잔재가 남아있으면 먼저 제거한다.
     rail.querySelectorAll('.boss-rail-layer').forEach((el) => el.remove())
 
+    // 등장 비트: 보스 타일 drop과 함께 셔터 진동을 한 번 더 트리거해 "쿵" 임팩트를 살린다.
+    rail.classList.add('is-shop-quaking', 'is-boss-quaking')
+    window.setTimeout(() => rail.classList.remove('is-shop-quaking', 'is-boss-quaking'), 620)
+
     const layer = document.createElement('div')
     layer.className = 'boss-rail-layer'
     rail.appendChild(layer)
@@ -4759,8 +4763,12 @@ interface BossTileState {
 }
 
 /** 거대 보스 1칸의 마크업. 일반 적 카드(`cell card type-enemy is-grouped`)와 같은
- *  클래스를 그대로 사용해 hover/strike/defeat 애니메이션이 동일하게 동작한다. */
+ *  클래스를 그대로 사용해 hover/strike/defeat 애니메이션이 동일하게 동작한다.
+ *  HP/ATK 표시는 플레이어 카드의 hp-bar/atk-stat 톤을 차용해 "보스바" 인상이
+ *  나도록 보강했다. 등장 직후 잠깐 노출되는 boss-intro-panel은 in-rail에서
+ *  페이드인/아웃되는 검은 설명 탭이다. */
 function renderBossTileMarkup(opts: BossTileState & { spriteUrl: string }): string {
+  const hpPct = Math.max(0, Math.min(100, (opts.hp / Math.max(1, opts.maxHp)) * 100))
   return `
     <div class="boss-rail-row boss-rail-front">
       <div class="cell card type-enemy is-grouped is-active boss-rail-tile is-entering"
@@ -4768,16 +4776,35 @@ function renderBossTileMarkup(opts: BossTileState & { spriteUrl: string }): stri
            style="--boss-art:url('${opts.spriteUrl}');">
         <div class="card-face boss-rail-face">
           <div class="boss-rail-art" aria-hidden="true"></div>
-          <div class="boss-rail-name">${escapeHtml(opts.name)}</div>
-          <div class="card-stats boss-rail-stats">
-            <span class="stat hp">${miniHeartSvg()}<span class="stat-value" data-boss-hp>${opts.hp}</span><span class="stat-sep">/</span><span class="stat-value" data-boss-hp-max>${opts.maxHp}</span></span>
-            <span class="stat atk">${miniSwordSvg()}<span class="stat-value">${opts.attack}</span></span>
+          <div class="boss-rail-info">
+            <div class="boss-rail-title-row">
+              <span class="boss-rail-tag">BOSS</span>
+              <span class="boss-rail-name">${escapeHtml(opts.name)}</span>
+            </div>
+            <div class="boss-rail-hpbar" aria-label="보스 체력">
+              <div class="boss-rail-hpbar-fill" data-boss-hpfill style="width:${hpPct}%"></div>
+              <span class="boss-rail-hpbar-text">
+                <span class="boss-rail-hpbar-icon">${miniHeartSvg()}</span>
+                <span data-boss-hp>${opts.hp}</span><span class="boss-rail-hpbar-sep">/</span><span data-boss-hp-max>${opts.maxHp}</span>
+              </span>
+            </div>
+            <div class="boss-rail-substats">
+              <span class="boss-rail-atk-chip">${miniSwordSvg()}<span>${opts.attack}</span></span>
+              <span class="boss-rail-cadence">
+                <span class="boss-rail-cadence-label">다음 공격</span>
+                <span class="boss-rail-cadence-value" data-boss-next>${opts.nextAttackIn}</span>
+                <span class="boss-rail-cadence-unit">턴</span>
+              </span>
+            </div>
           </div>
-          <div class="boss-rail-cadence">
-            <span class="boss-rail-cadence-label">다음 공격</span>
-            <span class="boss-rail-cadence-value" data-boss-next>${opts.nextAttackIn}</span>
-            <span class="boss-rail-cadence-unit">턴</span>
-          </div>
+        </div>
+      </div>
+      <div class="boss-intro-panel" data-boss-intro aria-hidden="true">
+        <div class="boss-intro-portrait" style="background-image:url('${opts.spriteUrl}');"></div>
+        <div class="boss-intro-body">
+          <span class="boss-intro-kicker">제단의 수문장</span>
+          <strong class="boss-intro-name">${escapeHtml(opts.name)}</strong>
+          <p class="boss-intro-desc">HP ${opts.maxHp} · ATK ${opts.attack} · 3턴마다 반격<br/>레일이 멈춘 채 보스 가상 턴이 진행된다.</p>
         </div>
       </div>
     </div>
@@ -4791,6 +4818,11 @@ function updateBossTileChrome(tile: HTMLElement, state: BossTileState): void {
   if (hp) hp.textContent = String(state.hp)
   const next = tile.querySelector<HTMLElement>('[data-boss-next]')
   if (next) next.textContent = String(state.nextAttackIn)
+  const fill = tile.querySelector<HTMLElement>('[data-boss-hpfill]')
+  if (fill) {
+    const pct = Math.max(0, Math.min(100, (state.hp / Math.max(1, state.maxHp)) * 100))
+    fill.style.width = `${pct}%`
+  }
 }
 
 /** 보상 보물상자 행. type-treasure 그대로 + boss-chest- 한정 클래스만 추가. */

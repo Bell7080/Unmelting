@@ -1114,17 +1114,14 @@ async function runBossRailEvent(): Promise<void> {
     recordNotice(`경고: 보스 이벤트 중 실제 턴(${frozenRunTurn})이 변경됨`, 'hurt')
 }
 
-/** 보스 보상 적용. 회복 상자는 HP와 불씨 게이지를 가득 채우되, 콤보(촛불) 게이지는
- *  10칸 상한을 절대 넘기지 않도록 max-current 만큼만 더해준다(과거 999 누적 버그 방지). */
+/** 보스 보상 적용. 회복 상자는 플레이어 HP를 풀로 채우고 불씨 게이지를 가득 채운다.
+ *  (콤보 게이지는 절대 건드리지 않는다 — 과거 999 누적 버그 원인) */
 async function applyBossChestReward(kind: string): Promise<void> {
   const character = gameState.character
   if (kind === 'heal') {
     character.heal(character.maxHealth)
     character.gainEmber(character.emberMax)
-    // 콤보 게이지는 한 칸 미만으로 채워 즉발 Melt 폭주를 막는다 — 부족분만 채움.
-    const needed = Math.max(0, character.candleMax - character.candle)
-    if (needed > 0) character.gainCandle(needed)
-    recordNotice('회복 상자: HP·불씨 회복 / 콤보 게이지 보충', 'win')
+    recordNotice('회복 보상: 체력 풀 회복 / 불씨 가득', 'win')
     return
   }
   if (kind === 'coin') {

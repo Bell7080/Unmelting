@@ -585,50 +585,190 @@ export const GAME_BOARD_RAIL_STYLES = `
   position: relative;
   flex: 1 1 auto;
   display: grid;
-  grid-template-rows: 1fr auto auto auto;
-  gap: 6px;
-  padding: clamp(10px, 1.4vh, 16px);
+  grid-template-columns: 1.05fr 1fr;
+  gap: clamp(10px, 1.6vw, 18px);
+  padding: clamp(12px, 1.6vh, 18px);
   overflow: hidden;
   border-radius: 9px;
 }
 .boss-rail-art {
   background: var(--boss-art) center / contain no-repeat;
-  border-radius: 8px;
-  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.55));
+  border-radius: 10px;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.6));
   min-height: 0;
 }
+.boss-rail-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(6px, 1.2vh, 12px);
+  min-width: 0;
+  color: #f7e7c8;
+}
+.boss-rail-title-row {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.boss-rail-tag {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 196, 120, 0.6);
+  color: #ffd178;
+  background: rgba(48, 22, 18, 0.78);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
 .boss-rail-name {
-  font-size: clamp(16px, 2.2vh, 22px);
+  font-size: clamp(18px, 2.6vh, 26px);
   letter-spacing: 0.04em;
   color: #ffe1a3;
-  text-align: center;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55), 0 0 12px rgba(244, 164, 96, 0.4);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6), 0 0 14px rgba(244, 164, 96, 0.42);
 }
-.boss-rail-stats {
+/* 플레이어 hp-bar 톤을 차용한 보스 HP 바. 가로폭이 넉넉해 "보스바" 인상을 준다. */
+.boss-rail-hpbar {
+  position: relative;
+  height: clamp(18px, 2.4vh, 24px);
+  border-radius: 999px;
+  border: 1px solid rgba(168, 58, 58, 0.7);
+  background: linear-gradient(180deg, rgba(34, 12, 14, 0.85), rgba(12, 6, 10, 0.95));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.16),
+    inset 0 -8px 14px rgba(0, 0, 0, 0.55),
+    0 4px 10px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+.boss-rail-hpbar-fill {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  background: linear-gradient(180deg, #f4a460 0%, #c44a1c 55%, #6b1b1b 100%);
+  box-shadow: inset 0 0 18px rgba(255, 196, 120, 0.42);
+  transition: width 0.28s cubic-bezier(0.2, 0.86, 0.28, 1);
+}
+.boss-rail-hpbar-text {
+  position: relative;
+  z-index: 2;
   display: flex;
+  align-items: center;
   justify-content: center;
-  gap: 14px;
-  font-size: clamp(13px, 1.6vh, 16px);
+  gap: 4px;
+  height: 100%;
+  font-size: clamp(12px, 1.6vh, 14px);
+  letter-spacing: 0.04em;
+  color: #fff5dc;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
 }
-.boss-rail-stats .stat { display: inline-flex; align-items: center; gap: 4px; }
-.boss-rail-stats .stat.hp { color: #ffb3a1; }
-.boss-rail-stats .stat.atk { color: #ffd178; }
-.boss-rail-stats .stat-sep { opacity: 0.6; margin: 0 2px; }
+.boss-rail-hpbar-icon { color: #ffb3a1; display: inline-flex; align-items: center; }
+.boss-rail-hpbar-sep { opacity: 0.55; margin: 0 2px; }
+.boss-rail-substats {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.boss-rail-atk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 13px;
+  border-radius: 999px;
+  color: #ffd178;
+  border: 1px solid rgba(244, 164, 96, 0.46);
+  background: rgba(28, 18, 12, 0.78);
+}
 .boss-rail-cadence {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 4px;
   font-size: 12px;
   letter-spacing: 0.06em;
   padding: 4px 10px;
-  margin: 0 auto;
   border: 1px solid rgba(230, 194, 129, 0.5);
   border-radius: 999px;
   background: rgba(20, 12, 28, 0.78);
   color: #f7e7c8;
 }
 .boss-rail-cadence-value { color: #ffd57a; font-weight: 700; }
+
+/* 등장 인트로 패널: 보스 타일 위쪽에 잠깐 떴다 사라지는 검은 설명 탭.
+   in-rail로 유지하기 위해 boss-rail-front 안에서 절대 위치로 띄운다. */
+.boss-intro-panel {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  min-width: clamp(280px, 56%, 520px);
+  border: 1px solid rgba(230, 194, 129, 0.5);
+  border-radius: 12px;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(244, 164, 96, 0.18), transparent 70%),
+    linear-gradient(180deg, rgba(20, 12, 26, 0.96), rgba(8, 5, 14, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.16),
+    0 12px 24px rgba(0, 0, 0, 0.65);
+  color: #f7e7c8;
+  z-index: 5;
+  opacity: 0;
+  pointer-events: none;
+  animation: boss-intro-show 2.6s cubic-bezier(0.18, 0.86, 0.22, 1) 0.4s forwards;
+}
+@keyframes boss-intro-show {
+  0%   { opacity: 0; transform: translate(-50%, -16px) scale(0.96); }
+  18%  { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  72%  { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -10px) scale(0.98); }
+}
+.boss-intro-portrait {
+  width: 48px;
+  height: 48px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 214, 153, 0.46);
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.55);
+  flex: 0 0 auto;
+}
+.boss-intro-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.boss-intro-kicker {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: #ffb3a1;
+  text-transform: uppercase;
+}
+.boss-intro-name {
+  font-size: 18px;
+  color: #ffe1a3;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.65);
+}
+.boss-intro-desc {
+  margin: 4px 0 0;
+  font-size: 12px;
+  opacity: 0.86;
+  line-height: 1.4;
+}
+
+/* 보스 등장 시 셔터 진동을 한 비트 더 강화. 기본 quake와 결합해 더 묵직한 쿵 임팩트. */
+.rail.is-boss-quaking {
+  animation: boss-rail-impact-quake 0.62s cubic-bezier(0.32, 0.04, 0.18, 0.96);
+}
+@keyframes boss-rail-impact-quake {
+  0%   { transform: translate(0, 0); }
+  14%  { transform: translate(-3px, 2px); }
+  28%  { transform: translate(4px, -2px); }
+  42%  { transform: translate(-2px, 3px); }
+  56%  { transform: translate(3px, 1px); }
+  72%  { transform: translate(-2px, -1px); }
+  100% { transform: translate(0, 0); }
+}
 
 .boss-rail-chest-row .boss-chest-tile {
   cursor: pointer;
