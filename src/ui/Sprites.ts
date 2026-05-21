@@ -18,6 +18,7 @@ import type { HandCardId } from '@entities/HandCard'
 import backgroundUrl from '../assets/sprites/background_001.webp'
 import shopVeilBgUrl from '../assets/sprites/background_002.webp'
 import shopPickerBgUrl from '../assets/sprites/background_003.webp'
+import altarVeilBgUrl from '../assets/sprites/background_004.webp'
 import playerUrl from '../assets/sprites/player_001.webp'
 import enemy001Url from '../assets/sprites/enemy_001.webp'
 import enemy002Url from '../assets/sprites/enemy_002.webp'
@@ -67,6 +68,7 @@ import relic007Url from '../assets/sprites/relics_007.webp'
 import pack001Url from '../assets/sprites/pack_001.webp'
 import pack002Url from '../assets/sprites/pack_002.webp'
 import pack003Url from '../assets/sprites/pack_003.webp'
+import free001Url from '../assets/sprites/free_001.webp'
 import type { RelicId } from '@data/Relics'
 
 export const SpriteUrls = {
@@ -75,6 +77,8 @@ export const SpriteUrls = {
   shopVeilBg: shopVeilBgUrl,
   /** Pack-picker veil backdrop (shown when opening a card pack). */
   shopPickerBg: shopPickerBgUrl,
+  /** Altar visit backdrop; currently reuses the shop flow with a darker plate. */
+  altarVeilBg: altarVeilBgUrl,
   player: playerUrl,
   enemyMouse: enemy001Url,
   enemyFrog: enemy002Url,
@@ -137,6 +141,8 @@ export const SpriteUrls = {
     'upgrade-pack': pack002Url,
     'unlock-pack': pack003Url,
   } as const,
+  /** Free-card dedicated artwork. */
+  freeCard: free001Url,
 }
 
 const NORMAL_ENEMY_VARIANTS = [SpriteUrls.enemyMouse, SpriteUrls.enemyFrog]

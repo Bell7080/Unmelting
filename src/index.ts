@@ -44,7 +44,7 @@ import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
-import { HAND_CARD_RARITY, SHOP_PACK_POOLS } from '@data/ShopPools'
+import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
 import type { BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
@@ -631,6 +631,7 @@ async function maybeOpenShopAfterTurn(): Promise<boolean> {
   if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 10 !== 0) return false
   // Every 30 turns swaps to altar mode; this is the first phase of the
   // 100-turn run loop (10 shop, 20 shop, 30 altar ...).
+  // 임시: 30턴도 상점 흐름 그대로 진입시키되, 배경만 altar 모드로 분기한다.
   currentShopMode = gameState.getCurrentTurn() % 30 === 0 ? 'altar' : 'shop'
   shopOpen = true
   inputLocked = true
@@ -664,9 +665,8 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
     return true
   }
   // After each altar visit (30, 60, 90), queue a dedicated boss gate.
-  if (turn > 0 && turn % 30 === 0 && !altarBossDefeated) {
-    altarBossPending = true
-  }
+  // 임시 동결: 제단 진입 안정화 전까지 30턴 보스 게이트를 열지 않는다.
+  if (turn > 0 && turn % 30 === 0 && !altarBossDefeated) altarBossPending = false
   if (altarBossPending) {
     altarBossPending = false
     altarBossDefeated = true
@@ -789,16 +789,8 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
   if (kind === 'basic-pack') shopBasicPackBuys += 1
   if (kind === 'upgrade-pack') shopUpgradePackBuys += 1
   if (kind === 'unlock-pack') shopUnlockPackBuys += 1
-  const title =
-    kind === 'basic-pack'
-      ? '기본 자원팩'
-      : kind === 'upgrade-pack'
-        ? currentShopMode === 'altar'
-          ? '단일 강화팩'
-          : '강화팩'
-        : currentShopMode === 'altar'
-          ? '카드 폐기팩'
-          : '해금팩'
+  // Keep picker title synchronized with the shared pack label table.
+  const title = SHOP_PACK_LABELS[kind].title
   const items = rollPackItems(kind)
   activePackSession = { kind, items }
   // Spend feedback before the picker so the score panel ticks down on click.
