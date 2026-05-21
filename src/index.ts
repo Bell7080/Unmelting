@@ -1134,33 +1134,25 @@ async function openBossRewardOverlay(): Promise<void> {
     })
   })
 }
-
-/** Forced trial after boss: follows shop flow semantics (down layer -> pick -> resume). */
+/** Forced trial after boss: fully reuses shop-shell flow (drop layer -> pick -> EXIT -> shutter up). */
 async function openTrialOverlayForced(): Promise<void> {
-  const host = document.createElement('div')
-  host.id = 'trial-overlay-forced'
-  host.style.cssText = 'position:fixed;inset:0;z-index:455;display:flex;align-items:center;justify-content:center;background:rgba(10,8,18,0.8);'
-  host.innerHTML = `<section style="width:min(980px,95vw);padding:0;border:1px solid rgba(230,194,129,.42);border-radius:16px;overflow:hidden;background:linear-gradient(180deg, rgba(35,24,44,.98), rgba(15,10,21,.98));color:#f7e7c8;">
-  <div style="height:180px;background:url('${SpriteUrls.altarVeilBg}') center/cover no-repeat;opacity:.78"></div>
-  <div style="padding:16px;">
-    <h2 style="margin:0 0 10px;">시련 선택</h2>
-    <p style="margin:0 0 14px;opacity:.82">인게임 상점 탭 톤으로 시련 카드 3장 중 1장을 선택한 뒤 EXIT로 복귀합니다.</p>
-    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;">
-      <button data-trial="a" style="padding:30px 20px;border-radius:14px;border:1px solid rgba(230,194,129,.42);background:linear-gradient(180deg, rgba(53,40,68,.92), rgba(25,18,34,.98));">미정 미정 미정</button>
-      <button data-trial="b" style="padding:30px 20px;border-radius:14px;border:1px solid rgba(230,194,129,.42);background:linear-gradient(180deg, rgba(53,40,68,.92), rgba(25,18,34,.98));">미정 미정 미정</button>
-      <button data-trial="c" style="padding:30px 20px;border-radius:14px;border:1px solid rgba(230,194,129,.42);background:linear-gradient(180deg, rgba(53,40,68,.92), rgba(25,18,34,.98));">미정 미정 미정</button>
-    </div>
-  </div></section>`
-  document.body.appendChild(host)
+  // Use renderer-level shop shell so trial sequencing matches normal shop.
+  boardRenderer.openForcedTrialShopFlow()
   await new Promise<void>((resolve) => {
-    host.addEventListener('click', async (event) => {
-      const btn = (event.target as HTMLElement).closest<HTMLElement>('[data-trial]')
-      if (!btn) return
+    const onPick = (): void => {
+      // Pick is separate from exit so user can inspect then explicitly leave.
+      recordNotice('시련 카드 선택 완료 · EXIT로 복귀를 진행한다', 'info')
+    }
+    const onExit = async (): Promise<void> => {
+      document.removeEventListener('forcedTrialPick', onPick)
+      document.removeEventListener('forcedTrialExit', onExit as EventListener)
+      boardRenderer.closeShop()
       recordNotice('시련 적용 완료 · EXIT로 닫히며 셔터가 상승하고 일반 턴으로 복귀', 'info')
-      host.remove()
       await boardRenderer.playShopResumeTransition()
       resolve()
-    })
+    }
+    document.addEventListener('forcedTrialPick', onPick)
+    document.addEventListener('forcedTrialExit', onExit as EventListener)
   })
 }
 
