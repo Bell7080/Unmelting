@@ -1067,23 +1067,25 @@ async function runBossRailEvent(): Promise<void> {
   let bossTurn = 0
   let nextAttackIn = attackInterval
 
-  // 보스 등장 인트로(풀스크린 검은 배경 + 좌측 일러스트 + 우측 정보).
-  // 어느 곳이나 클릭하면 닫히고 곧장 셔터 위 보스 타일 강하로 이어진다.
-  await boardRenderer.openBossIntroOverlay({
-    name: bossName,
-    maxHp: bossMaxHp,
-    attack: bossAttack,
-  })
-
+  // 보스 강하와 풀스크린 인트로(좌측 일러스트 + 우측 정보)를 동시에 시작.
+  // 인트로는 아무 곳이나 클릭하면 닫히고, 그 사이 보스 타일은 셔터 위에서
+  // 이미 강하·정착해 있다. 인트로 닫힘 후 첫 클릭부터 보스 공격이 가능.
   const ctrl = boardRenderer.beginBossRailEvent({
     name: bossName,
     maxHp: bossMaxHp,
     attack: bossAttack,
     attackInterval,
   })
-
-  // 첫 타일 드롭이 시각적으로 자리잡도록 한 비트 대기.
-  await new Promise((resolve) => window.setTimeout(resolve, 560))
+  const introClosed = boardRenderer.openBossIntroOverlay({
+    name: bossName,
+    maxHp: bossMaxHp,
+    attack: bossAttack,
+  })
+  // 보스 강하 모션이 정착할 최소 비트와 인트로 클릭을 함께 기다린다.
+  await Promise.all([
+    new Promise((resolve) => window.setTimeout(resolve, 560)),
+    introClosed,
+  ])
 
   // 가상 턴 루프: 모든 입력은 보스 타일 클릭으로만 진행된다.
   while (bossHp > 0) {

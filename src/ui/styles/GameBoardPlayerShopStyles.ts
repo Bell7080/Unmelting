@@ -339,45 +339,29 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-shell--trial .shop-top-row {
   grid-template-columns: 1fr;
 }
+/* 시련 트레이는 레일 그리드 frame 없이 단순 3분할. dim veil이 이미 한 겹
+   덮고 있으므로 별도 frame 없이 카드만 떠 있는 인상을 준다. */
 .shop-shell--trial .shop-trial-layer {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: clamp(12px, 1.4vw, 18px);
   padding: clamp(10px, 1.4vh, 14px);
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
-/* 시련 레일 프레임: 카드들이 일반 .rail의 3x3 격자 톤(같은 border/grid 라인)
-   안에 들어 있는 인상을 주기 위한 트레이. 셔터·dim veil 뒤로 보이는 한 장의
-   레일 그리드 레이어처럼 보이게 한다. */
-.shop-shell--trial .trial-rail-frame {
-  position: relative;
-  border: 1px solid rgba(139, 111, 71, 0.55);
-  border-radius: 14px;
-  background:
-    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(244, 164, 96, 0.16), transparent 70%),
-    rgba(14, 10, 22, 0.72);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 215, 120, 0.06),
-    inset 0 0 60px rgba(0, 0, 0, 0.45),
-    0 10px 28px rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(2px);
-}
+.shop-shell--trial .trial-rail-frame,
 .shop-shell--trial .trial-rail-frame-gridlines {
-  position: absolute;
-  inset: clamp(10px, 1.4vh, 14px);
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(12px, 1.4vw, 18px);
-  pointer-events: none;
-  z-index: 0;
+  /* 이전 레일 그리드 frame 흔적을 무력화 — 클래스가 마크업에 남아 있어도
+     배경/보더가 보이지 않도록 빈 상태로 유지한다. */
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
 }
-.shop-shell--trial .trial-rail-frame-gridlines > span {
-  border: 1px dashed rgba(255, 232, 168, 0.16);
-  border-radius: 10px;
-  background:
-    repeating-linear-gradient(
-      45deg,
-      rgba(255, 255, 255, 0.018) 0 6px,
-      transparent 6px 12px
-    );
+.shop-shell--trial .trial-rail-frame-gridlines { display: none; }
+/* 시련의 어두운 배경 veil을 한층 더 진하게. 일반 상점/제단보다 톤을 죽인다. */
+.shop-shell--trial .shop-dim-veil {
+  filter: brightness(0.72) saturate(0.95);
 }
 .shop-shell--trial .shop-trial-card {
   position: relative;

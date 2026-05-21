@@ -2103,16 +2103,23 @@ export class GameBoardRenderer {
         state.bossTurn = bossTurn
         const tile = layer.querySelector<HTMLElement>('[data-boss-tile]')
         if (!tile) return
-        // 보스 타일이 일반 적 카드와 동일한 피격 비트를 갖도록 player-strike pop 재사용.
-        tile.classList.add('is-player-striking')
-        SquareBurst.playOn(tile, 'damage', { count: 14, spread: 110, duration: 520 })
+        // 일반 적과 동일한 player-strike pop을 그대로 쓰고, 보스 임팩트만 강화하기
+        // 위해 보스 전용 is-boss-hit(brightness flash)와 레일 짧은 진동을 한 비트
+        // 더 얹는다. 일반 적의 피격 톤(흔들/번쩍)을 그대로 유지하면서 무게감만 추가.
+        tile.classList.add('is-player-striking', 'is-boss-hit')
+        SquareBurst.playOn(tile, 'damage', { count: 20, spread: 160, duration: 640 })
+        const rail = renderer.boardElement.querySelector<HTMLElement>('.rail')
+        if (rail) {
+          rail.classList.add('is-boss-quaking')
+          window.setTimeout(() => rail.classList.remove('is-boss-quaking'), 320)
+        }
         if (damageDealt > 0) {
           const rect = tile.getBoundingClientRect()
           renderer.flashDamageNumber(rect.left + rect.width / 2, rect.top + rect.height * 0.36, damageDealt)
         }
         updateBossTileChrome(tile, state)
-        await bossRailWait(360)
-        tile.classList.remove('is-player-striking')
+        await bossRailWait(420)
+        tile.classList.remove('is-player-striking', 'is-boss-hit')
       },
       playBossCounterAttack: async (damage): Promise<void> => {
         const tile = layer.querySelector<HTMLElement>('[data-boss-tile]')
@@ -4820,9 +4827,8 @@ interface BossTileState {
 
 /** 거대 보스 1칸의 마크업. 일반 적 카드(`cell card type-enemy is-grouped`)와 같은
  *  클래스를 그대로 사용해 hover/strike/defeat 애니메이션이 동일하게 동작한다.
- *  HP/ATK 표시는 플레이어 카드의 hp-bar/atk-stat 톤을 차용해 "보스바" 인상이
- *  나도록 보강했다. 등장 직후 잠깐 노출되는 boss-intro-panel은 in-rail에서
- *  페이드인/아웃되는 검은 설명 탭이다. */
+ *  레이아웃은 플레이어 카드와 동일한 톤 — 카드 전체가 풀 일러스트 배경,
+ *  그 위에 어두운 그라데이션 overlay + 하단에 HP 바/ATK 칩/cadence 정렬. */
 function renderBossTileMarkup(opts: BossTileState & { spriteUrl: string }): string {
   const hpPct = Math.max(0, Math.min(100, (opts.hp / Math.max(1, opts.maxHp)) * 100))
   return `
@@ -4832,25 +4838,26 @@ function renderBossTileMarkup(opts: BossTileState & { spriteUrl: string }): stri
            style="--boss-art:url('${opts.spriteUrl}');">
         <div class="card-face boss-rail-face">
           <div class="boss-rail-art" aria-hidden="true"></div>
-          <div class="boss-rail-info">
+          <div class="boss-rail-overlay" aria-hidden="true"></div>
+          <div class="boss-rail-content">
             <div class="boss-rail-title-row">
               <span class="boss-rail-tag">BOSS</span>
               <span class="boss-rail-name">${escapeHtml(opts.name)}</span>
             </div>
-            <div class="boss-rail-hpbar" aria-label="보스 체력">
-              <div class="boss-rail-hpbar-fill" data-boss-hpfill style="width:${hpPct}%"></div>
-              <span class="boss-rail-hpbar-text">
-                <span class="boss-rail-hpbar-icon">${miniHeartSvg()}</span>
-                <span data-boss-hp>${opts.hp}</span><span class="boss-rail-hpbar-sep">/</span><span data-boss-hp-max>${opts.maxHp}</span>
-              </span>
-            </div>
-            <div class="boss-rail-substats">
+            <div class="boss-rail-stats">
+              <div class="boss-rail-hpbar" aria-label="보스 체력">
+                <div class="boss-rail-hpbar-fill" data-boss-hpfill style="width:${hpPct}%"></div>
+                <span class="boss-rail-hpbar-text">
+                  <span class="boss-rail-hpbar-icon">${miniHeartSvg()}</span>
+                  <span data-boss-hp>${opts.hp}</span><span class="boss-rail-hpbar-sep">/</span><span data-boss-hp-max>${opts.maxHp}</span>
+                </span>
+              </div>
               <span class="boss-rail-atk-chip">${miniSwordSvg()}<span>${opts.attack}</span></span>
-              <span class="boss-rail-cadence">
-                <span class="boss-rail-cadence-label">다음 공격</span>
-                <span class="boss-rail-cadence-value" data-boss-next>${opts.nextAttackIn}</span>
-                <span class="boss-rail-cadence-unit">턴</span>
-              </span>
+            </div>
+            <div class="boss-rail-cadence">
+              <span class="boss-rail-cadence-label">다음 공격</span>
+              <span class="boss-rail-cadence-value" data-boss-next>${opts.nextAttackIn}</span>
+              <span class="boss-rail-cadence-unit">턴</span>
             </div>
           </div>
         </div>

@@ -581,71 +581,89 @@ export const GAME_BOARD_RAIL_STYLES = `
   78%  { transform: translateY(-6px) scale(0.99, 1.02); }
   100% { transform: translateY(0) scale(1); opacity: 1; }
 }
+/* 보스 face는 플레이어 카드와 같은 풀-아트 + overlay + content 3-layer 구조. */
 .boss-rail-face {
   position: relative;
   flex: 1 1 auto;
-  display: grid;
-  grid-template-columns: 1.05fr 1fr;
-  gap: clamp(10px, 1.6vw, 18px);
-  padding: clamp(12px, 1.6vh, 18px);
   overflow: hidden;
   border-radius: 9px;
+  isolation: isolate;
+  background: #14101c;
 }
 .boss-rail-art {
-  background: var(--boss-art) center / contain no-repeat;
-  border-radius: 10px;
-  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.6));
-  min-height: 0;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--boss-art) center 32% / cover no-repeat;
+  filter: saturate(1.06) contrast(1.04);
 }
-.boss-rail-info {
+/* 어두운 그라데이션 overlay — 플레이어 카드 .player-overlay와 톤 일치. */
+.boss-rail-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(20, 16, 28, 0) 28%, rgba(20, 16, 28, 0.55) 62%, rgba(8, 5, 14, 0.95) 100%),
+    radial-gradient(130% 60% at 50% 0%, rgba(244, 164, 96, 0.14), transparent 70%);
+}
+.boss-rail-content {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: clamp(6px, 1.2vh, 12px);
-  min-width: 0;
+  justify-content: space-between;
+  padding: clamp(12px, 1.6vh, 18px) clamp(14px, 2vw, 22px);
   color: #f7e7c8;
 }
 .boss-rail-title-row {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  align-self: center;
 }
 .boss-rail-tag {
   font-size: 11px;
-  letter-spacing: 0.18em;
-  padding: 3px 8px;
+  letter-spacing: 0.22em;
+  padding: 3px 9px;
   border-radius: 4px;
-  border: 1px solid rgba(255, 196, 120, 0.6);
+  border: 1px solid rgba(255, 196, 120, 0.7);
   color: #ffd178;
-  background: rgba(48, 22, 18, 0.78);
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+  background: rgba(48, 22, 18, 0.85);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
 }
 .boss-rail-name {
-  font-size: clamp(18px, 2.6vh, 26px);
+  font-size: clamp(20px, 2.8vh, 28px);
   letter-spacing: 0.04em;
   color: #ffe1a3;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6), 0 0 14px rgba(244, 164, 96, 0.42);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.75), 0 0 16px rgba(244, 164, 96, 0.5);
 }
-/* 플레이어 hp-bar 톤을 차용한 보스 HP 바. 가로폭이 넉넉해 "보스바" 인상을 준다. */
+/* 하단 stats: 플레이어 카드의 hp-bar + atk-stat과 동일한 톤. */
+.boss-rail-stats {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  margin-top: auto;
+}
 .boss-rail-hpbar {
   position: relative;
   height: clamp(18px, 2.4vh, 24px);
   border-radius: 999px;
-  border: 1px solid rgba(168, 58, 58, 0.7);
-  background: linear-gradient(180deg, rgba(34, 12, 14, 0.85), rgba(12, 6, 10, 0.95));
+  border: 1px solid rgba(168, 58, 58, 0.78);
+  background: rgba(0, 0, 0, 0.55);
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.16),
-    inset 0 -8px 14px rgba(0, 0, 0, 0.55),
-    0 4px 10px rgba(0, 0, 0, 0.55);
+    inset 0 -6px 12px rgba(0, 0, 0, 0.55);
   overflow: hidden;
 }
 .boss-rail-hpbar-fill {
   position: absolute;
   inset: 0;
-  height: 100%;
-  background: linear-gradient(180deg, #f4a460 0%, #c44a1c 55%, #6b1b1b 100%);
-  box-shadow: inset 0 0 18px rgba(255, 196, 120, 0.42);
+  background: linear-gradient(90deg, #c9472a 0%, #f4a460 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 215, 120, 0.4);
   transition: width 0.28s cubic-bezier(0.2, 0.86, 0.28, 1);
 }
 .boss-rail-hpbar-text {
@@ -654,45 +672,57 @@ export const GAME_BOARD_RAIL_STYLES = `
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 5px;
   height: 100%;
   font-size: clamp(12px, 1.6vh, 14px);
-  letter-spacing: 0.04em;
+  font-weight: 700;
   color: #fff5dc;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  font-variant-numeric: tabular-nums;
 }
-.boss-rail-hpbar-icon { color: #ffb3a1; display: inline-flex; align-items: center; }
+.boss-rail-hpbar-icon { color: #ffd5c5; display: inline-flex; align-items: center; }
 .boss-rail-hpbar-sep { opacity: 0.55; margin: 0 2px; }
-.boss-rail-substats {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
 .boss-rail-atk-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  font-size: 13px;
+  gap: 5px;
+  padding: 4px 12px;
+  font-size: clamp(12px, 1.7vh, 14px);
+  font-weight: 700;
   border-radius: 999px;
-  color: #ffd178;
-  border: 1px solid rgba(244, 164, 96, 0.46);
-  background: rgba(28, 18, 12, 0.78);
+  color: var(--color-flame);
+  border: 1px solid rgba(255, 215, 120, 0.4);
+  background: rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .boss-rail-cadence {
+  align-self: center;
+  margin-top: 6px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  padding: 4px 10px;
-  border: 1px solid rgba(230, 194, 129, 0.5);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  padding: 3px 10px;
+  border: 1px solid rgba(230, 194, 129, 0.46);
   border-radius: 999px;
   background: rgba(20, 12, 28, 0.78);
   color: #f7e7c8;
 }
 .boss-rail-cadence-value { color: #ffd57a; font-weight: 700; }
+
+/* 보스 전용 피격 flash — 일반 적 player-strike pop 위에 한 비트 더 얹어
+   보스 임팩트를 묵직하게 만든다. brightness/saturation만 짧게 펌프한다. */
+.boss-rail-tile.is-boss-hit .boss-rail-art {
+  animation: boss-hit-flash 0.42s cubic-bezier(0.18, 0.86, 0.22, 1);
+}
+@keyframes boss-hit-flash {
+  0%   { filter: saturate(1.06) contrast(1.04) brightness(1); }
+  22%  { filter: saturate(1.4) contrast(1.18) brightness(1.55); }
+  60%  { filter: saturate(1.2) contrast(1.1) brightness(1.12); }
+  100% { filter: saturate(1.06) contrast(1.04) brightness(1); }
+}
 
 /* 풀스크린 보스 인트로: 보스 타일이 셔터 위로 강하하기 직전, 화면 전체를
    어둡게 가린 채 좌측 일러스트 + 우측 보스 정보(이름/능력치/특수/연출)를
