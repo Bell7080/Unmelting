@@ -458,13 +458,19 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   font-size: var(--font-size-base);
   font-weight: 900;
   letter-spacing: 0.03em;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.88),
+    0 0 8px rgba(0, 0, 0, 0.62),
+    0 0 16px rgba(0, 0, 0, 0.42);
 }
 .shop-pack-effect {
   margin: 4px 0 0;
   color: rgba(255, 244, 210, 0.86);
   font-size: var(--font-size-sm);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.86),
+    0 0 7px rgba(0, 0, 0, 0.58),
+    0 0 14px rgba(0, 0, 0, 0.38);
 }
 /* Theme tints are applied as a glow on the card frame; the inner art comes
    from the pack_00X.webp sprite assigned inline in the renderer. */
@@ -526,12 +532,17 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   justify-content: center;
   gap: clamp(8px, 1.2vh, 14px);
   padding: clamp(10px, 1.4vh, 18px);
+  /* 베일 레이어 뒤에 붙은 보조 레이어처럼 한 박자 늦게 같은 top-down 모션으로 열린다. */
+  opacity: 0;
+  transform: translateY(-100%) scaleY(0.92);
+  transform-origin: top;
+  animation: shop-pack-picker-shell-drop 0.42s cubic-bezier(0.22, 0.86, 0.22, 1) 0.42s both;
 }
 .shop-pack-picker-head {
   text-align: center;
   color: rgba(255, 232, 168, 0.96);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
-  animation: shop-pack-head-fade 0.32s ease 0.28s both;
+  animation: shop-pack-head-fade 0.32s ease 0.72s both;
 }
 .shop-pack-picker.is-closing .shop-pack-picker-head {
   animation: shop-pack-head-fade-out 0.22s ease both;
@@ -580,7 +591,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   transform-origin: center bottom;
   /* 카드 루트는 낙하/호버만 담당하고 실제 앞뒤 회전은 내부 flipper가 담당한다. */
   /* Pack picks appear in-place; no flip/drop entrance now. */
-  animation: shop-pack-pick-fade-in 0.26s ease calc(var(--pick-i, 0) * 80ms + 0.16s) both;
+  animation: shop-pack-pick-fade-in 0.26s ease calc(var(--pick-i, 0) * 80ms + 0.62s) both;
 }
 .shop-pack-pick-card > * {
   backface-visibility: hidden;
@@ -656,6 +667,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 @keyframes shop-pack-pick-fade-in {
   0% { opacity: 0; }
   100% { opacity: 1; }
+}
+@keyframes shop-pack-picker-shell-drop {
+  0% { opacity: 0; transform: translateY(-100%) scaleY(0.92); transform-origin: top; }
+  100% { opacity: 1; transform: translateY(0) scaleY(1); transform-origin: top; }
 }
 .shop-pack-picker.is-closing .shop-pack-pick-card {
   /* Override the entrance animations so cards lift back up cleanly when
@@ -1318,9 +1333,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 
 /* --- 2026-05 shop timing/picker unification overrides --- */
 .shop-overlay.is-open .shop-reroll-btn {
-  transition-delay: 620ms, 620ms, 620ms, 0ms, 0ms, 0ms;
+  /* 기존 딜레이(620ms)에 2초를 추가해 리롤 버튼이 다른 요소 뒤에 천천히 등장한다. */
+  transition-delay: 2620ms, 2620ms, 2620ms, 0ms, 0ms, 0ms;
 }
 .shop-price-label { z-index: 12; }
+.shop-relic-price-label { z-index: 12; }
 .shop-relic-card.is-rerolling { opacity: 1 !important; visibility: visible !important; }
 .shop-pack-picker-veil {
   box-shadow:
