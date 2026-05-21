@@ -63,6 +63,10 @@ export const SHOP_PACK_POOLS: Record<ShopPackKind, Omit<ShopPackPoolItem, 'apply
     { id: 'gauge-3', theme: 'upgrade', title: '심지 충전(대)', effect: '게이지 +3', rarity: 'legendary' },
   ],
   'unlock-pack': [],
+  'blessing-pack': [],
+  'resource-pack': [],
+  'enhance-pack': [],
+  'delete-pack': [],
 }
 
 /** Shop pack UI copy source of truth.
@@ -71,4 +75,8 @@ export const SHOP_PACK_LABELS: Record<ShopPackKind, { title: string; effect: str
   'basic-pack': { title: '자원팩', effect: '자원 보충' },
   'upgrade-pack': { title: '강화팩', effect: '카드 강화' },
   'unlock-pack': { title: '해금팩', effect: '카드 해금' },
+  'blessing-pack': { title: '축복팩', effect: '패시브 능력 획득' },
+  'resource-pack': { title: '자원팩', effect: '최대 수치 증가' },
+  'enhance-pack': { title: '강화팩', effect: '카드 단일 강화' },
+  'delete-pack': { title: '삭제팩', effect: '등장 카드 삭제' },
 }
