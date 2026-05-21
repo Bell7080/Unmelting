@@ -106,6 +106,8 @@ export interface ShopStateView {
   relicOffers: ShopOfferView[]
   freeCardClaimed: boolean
   freeCoinCardClaimed?: boolean
+  /** 선물 상자 랜덤 결과 문구(예: ✦300 / 1$). */
+  freeCardDescription?: string
   /** Reroll cost is paid from coins (화폐, $), not score (불빛). */
   rerollCost: number
   /** Current coin balance — used to compute reroll-button affordability. */
@@ -1262,13 +1264,13 @@ export class GameBoardRenderer {
 
   /** Free card tile (Balatro voucher slot). Centered inside its bottom-left
    *  layer, fixed-size relic-card style. */
-  private renderShopFreeCard(claimed: boolean, label: string, kind: 'free-card' | 'free-coin-card' = 'free-card'): string {
+  private renderShopFreeCard(claimed: boolean, label: string, description: string, kind: 'free-card' | 'free-coin-card' = 'free-card'): string {
     const stateClass = claimed ? 'is-purchased' : 'is-affordable'
     return `
       <article class="shop-relic-card shop-free-card ${stateClass} ${RARITY_CLASS_BY_TIER.common}"
                data-shop-buy-kind="${kind}"
                tabindex="0"
-               style="--cardback-url:url('${SpriteUrls.cardBack}');--shop-free-art:url('${SpriteUrls.freeCard}');"
+               style="--cardback-url:url('${SpriteUrls.cardBack}');--shop-free-art:url('${kind === 'free-coin-card' ? SpriteUrls.freeCoinCard : SpriteUrls.freeCard}');"
                aria-label="${label} — ${claimed ? '획득 완료' : '무료 1회'}">
         <!-- 무료 카드도 유물 카드와 동일한 2면 구조를 사용해 항상 카드백에서 시작한다. -->
         <div class="shop-relic-flipper">
@@ -1276,7 +1278,7 @@ export class GameBoardRenderer {
             <div class="shop-relic-art shop-free-art" aria-hidden="true"></div>
             <div class="shop-relic-body">
               <h3 class="shop-relic-title">${label}</h3>
-              <p class="shop-relic-effect">이번 방문 1회 무료 획득</p>
+              <p class="shop-relic-effect">${description}</p>
               <p class="shop-relic-flavor">촛불이 남긴 작은 호의</p>
             </div>
             <span class="shop-price-label" aria-hidden="true">
@@ -1562,8 +1564,8 @@ export class GameBoardRenderer {
           </section>
           <section class="shop-row shop-bottom-row" aria-label="카드 및 카드팩">
             <div class="shop-layer shop-free-layer">
-              ${this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel, 'free-card')}
-              ${shop.mode === 'altar' ? this.renderShopFreeCard(!!shop.freeCoinCardClaimed, '수당', 'free-coin-card') : ''}
+              ${this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel, shop.freeCardDescription ?? '1$', 'free-card')}
+              ${shop.mode === 'altar' ? this.renderShopFreeCard(!!shop.freeCoinCardClaimed, '수당', '5$', 'free-coin-card') : ''}
             </div>
             <div class="shop-layer shop-pack-layer">
               ${shop.mode === 'altar'
@@ -3324,7 +3326,24 @@ export class GameBoardRenderer {
     this.animateResourceCounter('.coin-number', targetCoins, ' $')
   }
 
-  /** Shop reroll FX: wallet blast -> reroll impact -> instant content swap.
+  
+  /** Consume a free card tile and route its blast to the matching HUD target.
+   *  This keeps free-card rewards aligned with existing source→destination grammar
+   *  (coin→wallet, hand→hand stack, health→hp bar, gauge→candle gauge). */
+  async consumeFreeCardAndRouteReward(
+    kind: 'free-card' | 'free-coin-card',
+    target: ResourceTrailTarget,
+    amount: number,
+    theme: BurstTheme = 'score'
+  ): Promise<void> {
+    const card = document.querySelector<HTMLElement>(`#shop-overlay .shop-free-card[data-shop-buy-kind="${kind}"]`)
+    if (!card) return
+    await this.playShopPurchaseImpact(card, 'score')
+    await this.animateResourceTrail(card, this.findResourceTrailTarget(target), Math.max(1, amount), theme)
+    card.classList.add('is-consumed')
+    window.setTimeout(() => card.remove(), 260)
+  }
+/** Shop reroll FX: wallet blast -> reroll impact -> instant content swap.
    *  We intentionally removed flip/fade phases so cards never disappear or
    *  go transparent during reroll; only a vivid burst sells the replacement. */
   async playShopRerollFeedback(

@@ -319,6 +319,16 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-free-layer {
   transform: translate(clamp(18px, 1.8vw, 26px), clamp(-8px, -0.7vh, -4px));
 }
+/* 무료카드 2장은 보유 유물 부채꼴과 같은 톤으로 겹쳐 배치한다.
+   (좌/우 오프셋 + 반대 각도) */
+.shop-free-layer > .shop-relic-card:nth-child(1) {
+  transform: translateX(clamp(12px, 1vw, 18px)) rotate(-7deg);
+  z-index: 2;
+}
+.shop-free-layer > .shop-relic-card:nth-child(2) {
+  transform: translateX(clamp(-12px, -1vw, -18px)) rotate(7deg);
+  z-index: 1;
+}
 .shop-reroll-zone {
   transform: translateX(clamp(18px, 1.7vw, 26px));
 }
@@ -399,6 +409,15 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 /* Free card stays visually secondary to paid relic offers, so shrink it a touch. */
 .shop-free-card {
   width: clamp(124px, 11.8vw, 178px);
+}
+
+.shop-free-card.is-consumed {
+  pointer-events: none;
+  animation: shop-free-card-consumed 0.24s ease forwards;
+}
+@keyframes shop-free-card-consumed {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-18px) scale(0.92); }
 }
 
 /* Pack tile — FULL illustration with centered title/effect overlay. This is
