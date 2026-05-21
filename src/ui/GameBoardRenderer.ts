@@ -1464,17 +1464,18 @@ export class GameBoardRenderer {
             <p class="shop-relic-effect">${def.effect}</p>
             <p class="shop-relic-flavor">${def.flavor}</p>
           </div>
-          <span class="shop-price-label" aria-hidden="true">
-            <span class="shop-price-label-icon">${tagIcon()}</span>
-            <span class="shop-price-label-text">${
-              offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
-            }</span>
-          </span>
         </div>
         <!-- Back face is ALWAYS present as a full cardbackground_001.webp panel.
              During rotation it behaves like a real card back, not an overlay hack. -->
         <div class="shop-relic-cardback" aria-hidden="true"></div>
         </div>
+        <!-- 가격 라벨은 flipper(둥근 마스크) 밖으로 분리해서 카드 하단 아래에 항상 노출되게 유지한다. -->
+        <span class="shop-price-label shop-relic-price-label" aria-hidden="true">
+          <span class="shop-price-label-icon">${tagIcon()}</span>
+          <span class="shop-price-label-text">${
+            offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
+          }</span>
+        </span>
       </article>
     `
   }
