@@ -776,7 +776,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
 }
 /** Open the pack picker for the just-clicked pack tile. Deducts the price
  *  if the player can afford it, otherwise no-op. */
-function openPackPurchase(kind: ShopPackKind): void {
+async function openPackPurchase(kind: ShopPackKind): Promise<void> {
   const cost =
     kind === 'basic-pack'
       ? 120 + shopBasicPackBuys * 40
@@ -802,6 +802,8 @@ function openPackPurchase(kind: ShopPackKind): void {
   const items = rollPackItems(kind)
   activePackSession = { kind, items }
   // Spend feedback before the picker so the score panel ticks down on click.
+  const packTile = document.querySelector<HTMLElement>(`#shop-overlay .shop-pack-card[data-shop-buy-kind="${kind}"]`)
+  if (packTile) await boardRenderer.playShopPurchaseImpact(packTile, "score")
   boardRenderer.playScoreSpendFeedback(score, scorePulseKey)
   boardRenderer.openShop(buildShopStateView(), score, gameState.character)
   const view: ShopPackPickerView = {
@@ -840,6 +842,8 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   )
     return
   if (detail.kind === 'free-card') {
+    const freeCard = document.querySelector<HTMLElement>('#shop-overlay .shop-free-card')
+    if (freeCard) await boardRenderer.playShopPurchaseImpact(freeCard, "score")
     if (!freeCardClaimed) coins += 1
     freeCardClaimed = true
     render()
@@ -851,7 +855,7 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     detail.kind === 'upgrade-pack' ||
     detail.kind === 'unlock-pack'
   ) {
-    openPackPurchase(detail.kind)
+    await openPackPurchase(detail.kind)
     return
   }
   if (detail.kind === 'reroll') {
@@ -872,6 +876,8 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
       freshIndex += 1
       return next ?? entry
     })
+    const rerollBtn = document.querySelector<HTMLElement>('#shop-overlay .shop-reroll-btn')
+    if (rerollBtn) await boardRenderer.playShopPurchaseImpact(rerollBtn, "score")
     boardRenderer.playCoinSpendFeedback(coins, coinPulseKey)
     // Commit the new offers BEFORE running the flip so any incidental
     // re-render (e.g. openShop's refresh path) sees the fresh data,
@@ -903,6 +909,8 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   ])
   // Spend feedback reverses the usual gain trail: 불빛 leaves the left panel
   // and lands on the clicked relic card before that card turns purchased.
+  const relicCard = document.querySelector<HTMLElement>(`#shop-overlay .shop-relic-card[data-shop-buy="${detail.relicId}"]`)
+  if (relicCard) await boardRenderer.playShopPurchaseImpact(relicCard, "score")
   boardRenderer.playScoreSpendFeedback(score, scorePulseKey)
   await boardRenderer.animateShopPurchaseTrailToRelic(
     detail.relicId,
