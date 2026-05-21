@@ -1551,7 +1551,8 @@ export class GameBoardRenderer {
     //   .shop-layer     — hit/layout 전용 투명 레이어.
     //                     카드는 고정 크기를 유지하고 경계를 넘을 수 있다.
     this.shopOverlayElement.innerHTML = `
-      <div class="shop-shell" role="dialog" aria-label="상점">
+      <!-- 제단/상점 모드별 레이아웃 미세 조정을 위해 모드 데이터를 shell에 남긴다. -->
+      <div class="shop-shell" data-shop-mode="${shop.mode}" role="dialog" aria-label="상점">
         <div class="shop-dim-veil" style="--shop-veil-bg:url('${shop.mode === 'altar' ? SpriteUrls.altarVeilBg : SpriteUrls.shopVeilBg}');" aria-hidden="true"></div>
         <!-- 셔터+일러스트(veil) 이후 동일 텀으로 상점/제단 콘텐츠가 한 번에 열리도록
              실제 상호작용 UI를 하나의 번들 레이어로 묶는다. -->
@@ -3340,8 +3341,9 @@ export class GameBoardRenderer {
     if (!card) return
     await this.playShopPurchaseImpact(card, 'score')
     await this.animateResourceTrail(card, this.findResourceTrailTarget(target), Math.max(1, amount), theme)
+    // 무료 카드 소모는 선택 순간 "사라짐"이 읽히도록 약간 긴 퇴장 타이밍을 사용한다.
     card.classList.add('is-consumed')
-    window.setTimeout(() => card.remove(), 260)
+    window.setTimeout(() => card.remove(), 420)
   }
 /** Shop reroll FX: wallet blast -> reroll impact -> instant content swap.
    *  We intentionally removed flip/fade phases so cards never disappear or

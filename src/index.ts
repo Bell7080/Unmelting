@@ -44,7 +44,7 @@ import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
-import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
+import { HAND_CARD_RARITY, RELIC_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
 import type { BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
@@ -563,12 +563,25 @@ function priceForRelic(id: RelicId): number {
 /** Generate up to three unowned, unbanned relics + per-spawn score price. */
 function rollShopOffers(): ShopOfferView[] {
   const character = gameState.character
-  const pool = RELIC_IDS.filter(
+  const basePool = RELIC_IDS.filter(
     (id) => !character.hasRelic(id) && !character.bannedRelics.includes(id)
   )
-  return pool
+  // 제단 유물 풀은 상위 등급만 허용해 분위기와 보상 체감을 분리한다.
+  const allowedAltarRarity = new Set(['epic', 'unique', 'legendary'])
+  const sourcePool = currentShopMode === 'altar'
+    ? basePool.filter((id) => allowedAltarRarity.has(RELIC_RARITY[id]))
+    : basePool
+  // 제단은 동일한 상위 등급대 안에서 약한 가중치만 적용한다.
+  const weightedPool = sourcePool.flatMap((relicId) => {
+    const rarity = RELIC_RARITY[relicId]
+    const weight = rarity === 'legendary' ? 2 : rarity === 'unique' ? 3 : 4
+    return Array.from({ length: weight }, () => relicId)
+  })
+  return weightedPool
     .map((relicId) => ({ relicId, sort: Math.random() }))
     .sort((a, b) => a.sort - b.sort)
+    // 실제 노출 3장은 항상 중복 없이 보이도록 정규화한다.
+    .filter((entry, i, arr) => arr.findIndex((v) => v.relicId === entry.relicId) === i)
     .slice(0, 3)
     .map(({ relicId }) => ({ relicId, price: priceForRelic(relicId) }))
 }

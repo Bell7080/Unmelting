@@ -246,9 +246,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-shell.is-closing .shop-content-bundle {
   opacity: 0;
-  transform: translateY(-6px) scale(0.986);
+  transform: translateY(-16px) scale(0.984);
   filter: saturate(0.82);
   transition-delay: 0ms, 0ms, 0ms;
+}
+.shop-shell.is-closing .shop-dim-veil {
+  animation: shop-dim-veil-lift 0.34s cubic-bezier(0.22, 0.86, 0.22, 1) 90ms both;
 }
 /* Dim veil — full shop backdrop that descends AFTER the wax shutter.
    background_002.webp (parchment + candles) replaces the old CSS gradient. */
@@ -313,6 +316,14 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   padding-left: clamp(8px, 1.3vw, 16px);
   padding-right: clamp(8px, 1.3vw, 16px);
 }
+/* 제단 유물 3장 레이어는 요청사항대로 광학 중심을 더 정확히 맞추고 카드 판독 크기를 소폭 확장한다. */
+.shop-shell[data-shop-mode="altar"] .shop-artifact-layer {
+  transform: translateX(clamp(-4px, -0.45vw, -2px));
+  gap: clamp(14px, 1.75vw, 24px);
+}
+.shop-shell[data-shop-mode="altar"] .shop-artifact-layer .shop-relic-card {
+  width: clamp(132px, 12.6vw, 196px);
+}
 .shop-pack-layer {
   justify-content: center;
   gap: clamp(4px, 0.55vw, 8px);
@@ -339,6 +350,21 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-free-layer > .shop-relic-card:nth-child(2) {
   transform: translateX(clamp(-12px, -1vw, -18px)) rotate(7deg);
   z-index: 1;
+}
+/* 무료카드 hover는 부채꼴 배치를 유지하되 기울기만 풀고 살짝 확대한다. */
+.shop-free-layer > .shop-relic-card:hover,
+.shop-free-layer > .shop-relic-card:focus-visible {
+  animation-play-state: paused;
+  scale: 1.05;
+  z-index: 7;
+}
+.shop-free-layer > .shop-relic-card:nth-child(1):hover,
+.shop-free-layer > .shop-relic-card:nth-child(1):focus-visible {
+  transform: translateX(clamp(12px, 1vw, 18px)) rotate(0deg);
+}
+.shop-free-layer > .shop-relic-card:nth-child(2):hover,
+.shop-free-layer > .shop-relic-card:nth-child(2):focus-visible {
+  transform: translateX(clamp(-12px, -1vw, -18px)) rotate(0deg);
 }
 .shop-reroll-zone {
   transform: translateX(clamp(18px, 1.7vw, 26px));
@@ -427,8 +453,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   animation: shop-free-card-consumed 0.24s ease forwards;
 }
 @keyframes shop-free-card-consumed {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to { opacity: 0; transform: translateY(-18px) scale(0.92); }
+  from { opacity: 1; transform: translateY(0) scale(1); filter: saturate(1); }
+  to { opacity: 0; transform: translateY(-30px) scale(0.86); filter: saturate(0.7) brightness(1.1); }
 }
 
 /* Pack tile — FULL illustration with centered title/effect overlay. This is
