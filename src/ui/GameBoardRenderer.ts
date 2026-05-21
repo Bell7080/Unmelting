@@ -64,10 +64,10 @@ export interface ItemActionDetail {
   shiftKey?: boolean
 }
 
-export type ShopPackKind = 'basic-pack' | 'upgrade-pack' | 'unlock-pack'
+export type ShopPackKind = 'basic-pack' | 'upgrade-pack' | 'unlock-pack' | 'blessing-pack' | 'resource-pack' | 'enhance-pack' | 'delete-pack'
 
 export interface ShopBuyDetail {
-  kind: 'relic' | 'free-card' | 'reroll' | ShopPackKind
+  kind: 'relic' | 'free-card' | 'free-coin-card' | 'reroll' | ShopPackKind
   relicId?: RelicId
 }
 
@@ -105,6 +105,7 @@ export interface ShopStateView {
   mode: 'shop' | 'altar'
   relicOffers: ShopOfferView[]
   freeCardClaimed: boolean
+  freeCoinCardClaimed?: boolean
   /** Reroll cost is paid from coins (화폐, $), not score (불빛). */
   rerollCost: number
   /** Current coin balance — used to compute reroll-button affordability. */
@@ -1261,11 +1262,11 @@ export class GameBoardRenderer {
 
   /** Free card tile (Balatro voucher slot). Centered inside its bottom-left
    *  layer, fixed-size relic-card style. */
-  private renderShopFreeCard(claimed: boolean, label: string): string {
+  private renderShopFreeCard(claimed: boolean, label: string, kind: 'free-card' | 'free-coin-card' = 'free-card'): string {
     const stateClass = claimed ? 'is-purchased' : 'is-affordable'
     return `
       <article class="shop-relic-card shop-free-card ${stateClass} ${RARITY_CLASS_BY_TIER.common}"
-               data-shop-buy-kind="free-card"
+               data-shop-buy-kind="${kind}"
                tabindex="0"
                style="--cardback-url:url('${SpriteUrls.cardBack}');--shop-free-art:url('${SpriteUrls.freeCard}');"
                aria-label="${label} — ${claimed ? '획득 완료' : '무료 1회'}">
@@ -1308,6 +1309,10 @@ export class GameBoardRenderer {
       'basic-pack': 'common',
       'upgrade-pack': 'rare',
       'unlock-pack': 'epic',
+      'blessing-pack': 'epic',
+      'resource-pack': 'epic',
+      'enhance-pack': 'unique',
+      'delete-pack': 'legendary',
     }
     const rarityClass = RARITY_CLASS_BY_TIER[packRarityClassMap[kind]]
     return `
@@ -1548,18 +1553,28 @@ export class GameBoardRenderer {
         <div class="shop-dim-veil" style="--shop-veil-bg:url('${shop.mode === 'altar' ? SpriteUrls.altarVeilBg : SpriteUrls.shopVeilBg}');" aria-hidden="true"></div>
         <section class="shop-row shop-top-row" aria-label="유물 상점">
           <div class="shop-layer shop-reroll-zone">
-            ${this.renderShopRerollButton(shop.rerollCost, shop.coins)}
+            ${shop.mode === 'altar' ? '' : this.renderShopRerollButton(shop.rerollCost, shop.coins)}
           </div>
           <div class="shop-layer shop-artifact-layer">${cards}</div>
         </section>
         <section class="shop-row shop-bottom-row" aria-label="카드 및 카드팩">
           <div class="shop-layer shop-free-layer">
-            ${this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel)}
+            ${this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel, 'free-card')}
+            ${shop.mode === 'altar' ? this.renderShopFreeCard(!!shop.freeCoinCardClaimed, '수당', 'free-coin-card') : ''}
           </div>
           <div class="shop-layer shop-pack-layer">
-            ${this.renderShopPackCard('basic-pack', basicPackLabel.title, basicPackLabel.effect, shop.basicPackCost, score, 'resource')}
-            ${this.renderShopPackCard('upgrade-pack', upgradePackLabel.title, upgradePackLabel.effect, shop.upgradePackCost, score, 'upgrade')}
-            ${this.renderShopPackCard('unlock-pack', unlockPackLabel.title, unlockPackLabel.effect, shop.unlockPackCost, score, 'unlock')}
+            ${shop.mode === 'altar'
+              ? [
+                  this.renderShopPackCard('blessing-pack', '축복팩', '패시브 능력 3택1 획득', shop.basicPackCost, score, 'upgrade'),
+                  this.renderShopPackCard('resource-pack', '자원팩', '최대 수치 3택1 증가', shop.upgradePackCost, score, 'resource'),
+                  this.renderShopPackCard('enhance-pack', '강화팩', '카드 단일 능력 3택1 강화', shop.unlockPackCost, score, 'unlock'),
+                  this.renderShopPackCard('delete-pack', '삭제팩', '카드 등장 금지 3택1', shop.unlockPackCost, score, 'unlock'),
+                ].join('')
+              : [
+                  this.renderShopPackCard('basic-pack', basicPackLabel.title, basicPackLabel.effect, shop.basicPackCost, score, 'resource'),
+                  this.renderShopPackCard('upgrade-pack', upgradePackLabel.title, upgradePackLabel.effect, shop.upgradePackCost, score, 'upgrade'),
+                  this.renderShopPackCard('unlock-pack', unlockPackLabel.title, unlockPackLabel.effect, shop.unlockPackCost, score, 'unlock'),
+                ].join('')}
           </div>
         </section>
         <button class="shop-close-btn" type="button" data-shop-close aria-label="상점 나가기">EXIT</button>
@@ -1628,6 +1643,10 @@ export class GameBoardRenderer {
       'basic-pack': shop.basicPackCost,
       'upgrade-pack': shop.upgradePackCost,
       'unlock-pack': shop.unlockPackCost,
+      'blessing-pack': shop.basicPackCost,
+      'resource-pack': shop.upgradePackCost,
+      'enhance-pack': shop.unlockPackCost,
+      'delete-pack': shop.unlockPackCost,
     }
     for (const kind of Object.keys(packMap) as ShopPackKind[]) {
       const tile = shell.querySelector<HTMLElement>(
@@ -1845,6 +1864,48 @@ export class GameBoardRenderer {
         rail.classList.remove('is-shop-shuttered')
         resolve()
       }, 560 + 760)
+    })
+  }
+
+  /** Altar EXIT keeps the shutter closed and shakes the full rail before boss entry. */
+  async playAltarBossGateTransition(): Promise<void> {
+    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
+    if (!rail) return
+    rail.classList.add('is-shop-quaking')
+    await new Promise((resolve) => window.setTimeout(resolve, 620))
+    rail.classList.remove('is-shop-quaking')
+  }
+
+  /** Boss intro card: dark slide layer + basic RPG sheet for the next combat page. */
+  async openBossIntroOverlay(): Promise<void> {
+    const existing = document.getElementById('boss-intro-overlay')
+    existing?.remove()
+    const host = document.createElement('div')
+    host.id = 'boss-intro-overlay'
+    host.style.cssText =
+      'position:fixed;inset:0;z-index:460;display:flex;align-items:center;justify-content:center;background:linear-gradient(90deg,rgba(0,0,0,.9),rgba(0,0,0,.82));'
+    host.innerHTML = `
+      <section style="width:min(980px,94vw);border:1px solid rgba(230,194,129,.42);border-radius:18px;padding:18px;background:linear-gradient(180deg, rgba(28,20,36,.98), rgba(11,8,17,.98));display:grid;grid-template-columns:220px 1fr;gap:16px;color:#f7e7c8;">
+        <div style="border:1px solid rgba(255,214,153,.42);border-radius:14px;padding:10px;background:rgba(0,0,0,.35);">
+          <div style="aspect-ratio:1;background:url('${SpriteUrls.enemyWaves[3]}') center/cover no-repeat;border-radius:10px;"></div>
+          <p style="margin:8px 0 0;font-size:12px;opacity:.84;">보스 타이틀</p>
+          <h2 style="margin:4px 0 0;font-size:22px;">밀랍 군단</h2>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px;">전투 정보</h3>
+          <p style="margin:0 0 6px;">체력 30 · 공격력 5 · 3턴마다 공격</p>
+          <p style="margin:0 0 6px;">특수: 대부분 즉사/파괴형 능력 면역.</p>
+          <p style="margin:0;">추천: 단일 고딜보다 연속 제어 + 방패 유지.</p>
+          <p style="margin:16px 0 0;opacity:.84;">화면 클릭 시 전투 시작</p>
+        </div>
+      </section>
+    `
+    document.body.appendChild(host)
+    await new Promise<void>((resolve) => {
+      host.addEventListener('click', () => {
+        host.remove()
+        resolve()
+      }, { once: true })
     })
   }
 

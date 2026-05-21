@@ -69,6 +69,10 @@ import pack001Url from '../assets/sprites/pack_001.webp'
 import pack002Url from '../assets/sprites/pack_002.webp'
 import pack003Url from '../assets/sprites/pack_003.webp'
 import free001Url from '../assets/sprites/free_001.webp'
+import pack004Url from '../assets/sprites/pack_004.webp'
+import pack005Url from '../assets/sprites/pack_005.webp'
+import pack006Url from '../assets/sprites/pack_006.webp'
+import pack007Url from '../assets/sprites/pack_007.webp'
 import type { RelicId } from '@data/Relics'
 
 export const SpriteUrls = {
@@ -140,6 +144,10 @@ export const SpriteUrls = {
     'basic-pack': pack001Url,
     'upgrade-pack': pack002Url,
     'unlock-pack': pack003Url,
+    'blessing-pack': pack004Url,
+    'resource-pack': pack005Url,
+    'enhance-pack': pack006Url,
+    'delete-pack': pack007Url,
   } as const,
   /** Free-card dedicated artwork. */
   freeCard: free001Url,

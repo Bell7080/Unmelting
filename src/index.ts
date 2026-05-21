@@ -120,6 +120,7 @@ let shopBasicPackBuys = 0
 let shopUpgradePackBuys = 0
 let shopUnlockPackBuys = 0
 let freeCardClaimed = false
+let freeCoinCardClaimed = false
 let currentShopMode: 'shop' | 'altar' = 'shop'
 /** Active pack-picker session. Holds the rolled items + the pack kind so the
  *  shopPackPick handler can look the picked item up and apply its effect. */
@@ -600,11 +601,12 @@ function buildShopStateView(): ShopStateView {
     mode: currentShopMode,
     relicOffers: currentShopOffers,
     freeCardClaimed,
+    freeCoinCardClaimed,
     rerollCost: 1 + shopRerollCount,
     coins,
-    basicPackCost: 120 + shopBasicPackBuys * 40,
-    upgradePackCost: 700 + shopUpgradePackBuys * 130,
-    unlockPackCost: 520 + shopUnlockPackBuys * 120,
+    basicPackCost: currentShopMode === 'altar' ? 500 : 120 + shopBasicPackBuys * 40,
+    upgradePackCost: currentShopMode === 'altar' ? 500 : 700 + shopUpgradePackBuys * 130,
+    unlockPackCost: currentShopMode === 'altar' ? 500 : 520 + shopUnlockPackBuys * 120,
   }
 }
 
@@ -703,6 +705,16 @@ function sampleWithoutReplacement<T>(pool: T[], n: number): T[] {
  *  Each entry carries an `apply` closure so the pick handler stays small. */
 function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
   const character = gameState.character
+  if (kind === 'blessing-pack' || kind === 'resource-pack' || kind === 'enhance-pack' || kind === 'delete-pack') {
+    return [1,2,3].map((n) => ({
+      id: `${kind}-${n}`,
+      theme: kind === 'resource-pack' ? 'resource' : kind === 'enhance-pack' ? 'upgrade' : 'unlock',
+      title: `선택지 ${n}`,
+      effect: kind === 'delete-pack' ? '미정 미정 미정 (카드 등장 금지 예정)' : '미정 미정 미정',
+      rarity: 'epic' as const,
+      apply: () => undefined,
+    }))
+  }
   if (kind === 'unlock-pack') {
     const drawIds = sampleWithoutReplacement([...HAND_CARD_IDS], 3)
     return drawIds.map((id) => {
@@ -777,12 +789,12 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
 /** Open the pack picker for the just-clicked pack tile. Deducts the price
  *  if the player can afford it, otherwise no-op. */
 async function openPackPurchase(kind: ShopPackKind): Promise<void> {
-  const cost =
-    kind === 'basic-pack'
+  const cost = currentShopMode === 'altar' ? 500 :
+    (kind === 'basic-pack'
       ? 120 + shopBasicPackBuys * 40
       : kind === 'upgrade-pack'
         ? 700 + shopUpgradePackBuys * 130
-        : 520 + shopUnlockPackBuys * 120
+        : 520 + shopUnlockPackBuys * 120)
   if (score < cost) return
   score = Math.max(0, score - cost)
   scorePulseKey++
@@ -827,25 +839,31 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   if (
     detail.kind !== 'relic' &&
     detail.kind !== 'free-card' &&
+    detail.kind !== 'free-coin-card' &&
     detail.kind !== 'reroll' &&
     detail.kind !== 'basic-pack' &&
     detail.kind !== 'upgrade-pack' &&
-    detail.kind !== 'unlock-pack'
+    detail.kind !== 'unlock-pack' &&
+    detail.kind !== 'blessing-pack' && detail.kind !== 'resource-pack' && detail.kind !== 'enhance-pack' && detail.kind !== 'delete-pack'
   )
     return
-  if (detail.kind === 'free-card') {
+  if (detail.kind === 'free-card' || detail.kind === 'free-coin-card') {
     const freeCard = document.querySelector<HTMLElement>('#shop-overlay .shop-free-card')
     if (freeCard) await boardRenderer.playShopPurchaseImpact(freeCard, "score")
-    if (!freeCardClaimed) coins += 1
-    freeCardClaimed = true
+    if (detail.kind === 'free-card') {
+      if (!freeCardClaimed) coins += 1
+      freeCardClaimed = true
+    } else {
+      if (!freeCoinCardClaimed) coins += 5
+      freeCoinCardClaimed = true
+    }
     render()
     boardRenderer.openShop(buildShopStateView(), score, gameState.character)
     return
   }
   if (
-    detail.kind === 'basic-pack' ||
-    detail.kind === 'upgrade-pack' ||
-    detail.kind === 'unlock-pack'
+    detail.kind === 'basic-pack' || detail.kind === 'upgrade-pack' || detail.kind === 'unlock-pack' ||
+    detail.kind === 'blessing-pack' || detail.kind === 'resource-pack' || detail.kind === 'enhance-pack' || detail.kind === 'delete-pack'
   ) {
     await openPackPurchase(detail.kind)
     return
@@ -933,9 +951,91 @@ async function closeShopAndResume(): Promise<void> {
   // raise the shutter so the player can resume the turn.
   await boardRenderer.playShopExitAnimation()
   boardRenderer.closeShop()
+  // Altar EXIT does not raise shutter; it transitions directly into boss gate.
+  if (currentShopMode === 'altar') {
+    await boardRenderer.playAltarBossGateTransition()
+    turnManager.setTurnMode('boss_phase')
+    recordNotice('셔터 레일이 흔들리며 보스가 강림한다', 'hurt')
+    await boardRenderer.openBossIntroOverlay()
+    await runBossStubCombatAndRewards()
+    inputLocked = false
+    render()
+    return
+  }
   await boardRenderer.playShopResumeTransition()
   inputLocked = false
   render()
+}
+
+/** Temporary boss slice: applies requested 3-turn cadence + defeat rewards flow scaffold. */
+async function runBossStubCombatAndRewards(): Promise<void> {
+  // This stub keeps combat rules isolated from normal turns until dedicated boss page lands.
+  let bossHp = 30
+  let bossTurn = 0
+  while (bossHp > 0) {
+    bossTurn += 1
+    // Placeholder auto damage so cinematic chain can proceed in this slice.
+    bossHp -= 10
+    if (bossTurn % 3 === 0) {
+      gameState.character.takeDamage(5)
+      await boardRenderer.animateDamageFlash()
+    }
+  }
+  turnManager.setTurnMode('normal_turn')
+  await openBossRewardOverlay()
+  await openTrialOverlayForced()
+}
+
+/** Post-boss reward overlay: 3x3 rewards represented as three mandatory slots. */
+async function openBossRewardOverlay(): Promise<void> {
+  const host = document.createElement('div')
+  host.id = 'boss-reward-overlay'
+  host.style.cssText = 'position:fixed;inset:0;z-index:450;display:flex;align-items:center;justify-content:center;background:rgba(8,5,14,.86);'
+  host.innerHTML = `<section style="width:min(860px,94vw);padding:16px;border:1px solid rgba(230,194,129,.42);border-radius:16px;background:linear-gradient(180deg, rgba(35,24,44,.98), rgba(15,10,21,.98));color:#f7e7c8;">
+  <h2 style="margin:0 0 10px;">보스 처치 보상</h2>
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;">
+    <button data-reward=\"chest\" style=\"padding:18px;border-radius:12px;\">보물상자</button>
+    <button data-reward=\"heal\" style=\"padding:18px;border-radius:12px;\">체력/불씨 전회복</button>
+    <button data-reward=\"coin\" style=\"padding:18px;border-radius:12px;\">1~10$ 랜덤</button>
+  </div></section>`
+  document.body.appendChild(host)
+  const claimed = new Set<string>()
+  await new Promise<void>((resolve) => {
+    host.addEventListener('click', (event) => {
+      const btn = (event.target as HTMLElement).closest<HTMLElement>('[data-reward]')
+      if (!btn) return
+      const kind = btn.dataset.reward ?? ''
+      if (claimed.has(kind)) return
+      claimed.add(kind)
+      btn.style.opacity = '.45'
+      if (kind === 'heal') { gameState.character.heal(999); gameState.character.gainEmber(999) }
+      if (kind === 'coin') coins += 1 + Math.floor(Math.random() * 10)
+      if (claimed.size >= 3) { host.remove(); resolve() }
+    })
+  })
+}
+
+/** Forced trial after boss: no EXIT and placeholder "미정" content as requested. */
+async function openTrialOverlayForced(): Promise<void> {
+  const host = document.createElement('div')
+  host.id = 'trial-overlay-forced'
+  host.style.cssText = 'position:fixed;inset:0;z-index:455;display:flex;align-items:center;justify-content:center;background:rgba(10,8,18,0.8);'
+  host.innerHTML = `<section style="width:min(920px,94vw);padding:18px;border:1px solid rgba(230,194,129,.42);border-radius:16px;background:linear-gradient(180deg, rgba(35,24,44,.98), rgba(15,10,21,.98));color:#f7e7c8;">
+  <h2 style="margin:0 0 12px;">시련 선택</h2>
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
+    <button data-trial=\"a\" style=\"padding:24px;border-radius:12px;\">미정 미정 미정</button>
+    <button data-trial=\"b\" style=\"padding:24px;border-radius:12px;\">미정 미정 미정</button>
+    <button data-trial=\"c\" style=\"padding:24px;border-radius:12px;\">미정 미정 미정</button>
+  </div></section>`
+  document.body.appendChild(host)
+  await new Promise<void>((resolve) => {
+    host.addEventListener('click', (event) => {
+      const btn = (event.target as HTMLElement).closest<HTMLElement>('[data-trial]')
+      if (!btn) return
+      host.remove()
+      resolve()
+    })
+  })
 }
 
 /**
