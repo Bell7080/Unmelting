@@ -154,6 +154,15 @@ export const SpriteUrls = {
   freeCard: free001Url,
   /** Altar coin free-card artwork (수당). */
   freeCoinCard: free002Url,
+  /** 시련 카드 일러스트 자리 — trial_001/004/007 슬롯.
+   *  실제 trial_*.webp 파일이 아직 없으므로 톤이 가까운 기존 sprite를 임시로
+   *  매핑한다(방화광=폭탄, 양초 사냥꾼=거미줄, 가난=작은 상자). 추후 trial_*.webp
+   *  파일이 들어오면 import만 바꾸면 된다. */
+  trials: {
+    '001': trap004Url,
+    '004': trap001Url,
+    '007': chest001Url,
+  } satisfies Record<'001' | '004' | '007', string>,
 }
 
 const NORMAL_ENEMY_VARIANTS = [SpriteUrls.enemyMouse, SpriteUrls.enemyFrog]

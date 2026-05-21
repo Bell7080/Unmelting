@@ -120,6 +120,8 @@ export interface ForcedTrialCardView {
   id: string
   title: string
   effect: string
+  /** 시련 카드 일러스트 URL. 일러스트 미준비 시 호출부가 임시 sprite를 넘긴다. */
+  spriteUrl: string
 }
 
 /** 보스 보상 칸 한 칸의 시각 명세. */
@@ -1786,10 +1788,18 @@ export class GameBoardRenderer {
         <div class="shop-dim-veil" style="--shop-veil-bg:url('${SpriteUrls.altarVeilBg}');" aria-hidden="true"></div>
         <div class="shop-content-bundle">
           <section class="shop-row shop-top-row" aria-label="시련 카드">
-            <div class="shop-layer shop-artifact-layer shop-trial-layer">
+            <div class="shop-layer shop-artifact-layer shop-trial-layer trial-rail-frame" aria-hidden="false">
+              <div class="trial-rail-frame-gridlines" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </div>
               ${cards.map((card) => `
-                <button class="shop-relic-card shop-trial-card is-affordable" data-trial-pick="${card.id}" type="button">
-                  <h3>${card.title}</h3><p>${card.effect}</p>
+                <button class="shop-relic-card shop-trial-card is-affordable" data-trial-pick="${card.id}" type="button"
+                        style="--trial-card-art:url('${card.spriteUrl}');">
+                  <div class="shop-trial-card-art" aria-hidden="true"></div>
+                  <div class="shop-trial-card-body">
+                    <h3 class="shop-trial-card-title">${card.title}</h3>
+                    <p class="shop-trial-card-effect">${card.effect}</p>
+                  </div>
                 </button>
               `).join('')}
             </div>

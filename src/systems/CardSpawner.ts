@@ -117,10 +117,29 @@ export class CardSpawner {
   private spawnSerial: number = 0
   private currentTier: EmberTier = 'bright'
   private progressionTurn: number = 1
+  /** 시련(보스 클리어 후 강제 선택) 효과로 누적되는 영속 modifier들.
+   *  spawn/적 스탯/함정 피해 모두 다음 스폰부터 즉시 반영된다. */
+  private trialEnemyHpBonus: number = 0
+  private trialEnemyAtkBonus: number = 0
+  private trialTrapDamageBonus: number = 0
+  private trialTreasureSpawnScale: number = 1
 
   /** Update the active ember tier so the next spawn run uses the matching weights. */
   setTier(tier: EmberTier): void {
     this.currentTier = tier
+  }
+
+  /** 시련 효과 주입. index.ts의 runModifiers에서 호출되어 누적 상태와 동기화된다. */
+  setTrialModifiers(mods: {
+    enemyHpBonus: number
+    enemyAtkBonus: number
+    trapDamageBonus: number
+    treasureSpawnScale: number
+  }): void {
+    this.trialEnemyHpBonus = Math.max(0, mods.enemyHpBonus)
+    this.trialEnemyAtkBonus = Math.max(0, mods.enemyAtkBonus)
+    this.trialTrapDamageBonus = Math.max(0, mods.trapDamageBonus)
+    this.trialTreasureSpawnScale = Math.max(0, mods.treasureSpawnScale)
   }
 
   /** Sync the completed game turn so enemy pools unlock at 1/11/21. */
@@ -219,7 +238,9 @@ export class CardSpawner {
     const bombTrap = options.openingBoard ? 0 : buckets.bombTrap
     const sporeTrap = options.openingBoard ? 0 : buckets.sporeTrap
     const flower = options.openingBoard ? 0 : buckets.flower
-    const total = buckets.enemy + webTrap + bombTrap + sporeTrap + buckets.treasure + flower
+    // 시련 '가난'은 보물상자 가중치를 25% 깎는다. 1 이상이면 평소 그대로.
+    const treasure = buckets.treasure * this.trialTreasureSpawnScale
+    const total = buckets.enemy + webTrap + bombTrap + sporeTrap + treasure + flower
     const roll = Math.random() * total
 
     if (roll < buckets.enemy) return this.generateEnemy()
@@ -228,7 +249,7 @@ export class CardSpawner {
     if (roll < buckets.enemy + webTrap + bombTrap + sporeTrap) {
       return this.generateTrap({ trapKind: 'spore' })
     }
-    if (roll < buckets.enemy + webTrap + bombTrap + sporeTrap + buckets.treasure) {
+    if (roll < buckets.enemy + webTrap + bombTrap + sporeTrap + treasure) {
       return this.generateTreasure()
     }
     return this.generateFlowerSeed()
@@ -241,7 +262,8 @@ export class CardSpawner {
     return ENEMY_DEFINITIONS.slice(0, 2)
   }
 
-  /** Pick one of the current one-lane enemies, applying tier bonus if any. */
+  /** Pick one of the current one-lane enemies, applying tier bonus if any.
+   *  시련 '방화광'이 누적될 경우 trialEnemyHp/AtkBonus가 정수 단위로 추가된다. */
   private generateEnemy(): Card {
     const pool = this.getActiveEnemyDefinitions()
     const definition = pool[Math.floor(Math.random() * pool.length)]
@@ -252,8 +274,8 @@ export class CardSpawner {
       CardType.ENEMY,
       definition.name,
       definition.description,
-      (definition.healthOrDamage ?? 1) + bonus.hp,
-      (definition.attack ?? 1) + bonus.atk,
+      (definition.healthOrDamage ?? 1) + bonus.hp + this.trialEnemyHpBonus,
+      (definition.attack ?? 1) + bonus.atk + this.trialEnemyAtkBonus,
       {
         enemySpriteId: definition.enemySpriteId,
         enemyPower: definition.enemyPower,
@@ -261,7 +283,9 @@ export class CardSpawner {
     )
   }
 
-  /** Spawn the current one-lane trap; wider traps are produced by row grouping. */
+  /** Spawn the current one-lane trap; wider traps are produced by row grouping.
+   *  시련 '양초 사냥꾼' 누적 시 trialTrapDamageBonus가 baseDamage에 더해진다.
+   *  단 bomb은 baseDamage를 사용하지 않으므로 모든 카운트다운 처리는 영향이 없다. */
   private generateTrap(options: { trapKind?: TrapKind } = {}): Card {
     // Trap kind is usually selected by weighted buckets; the random fallback is
     // kept for targeted debug calls and future systems that request any trap.
@@ -276,7 +300,7 @@ export class CardSpawner {
       definition.name,
       definition.description,
       0,
-      definition.healthOrDamage ?? 2,
+      (definition.healthOrDamage ?? 2) + this.trialTrapDamageBonus,
       { trapKind: definition.trapKind }
     )
   }

@@ -341,20 +341,90 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-shell--trial .shop-trial-layer {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  padding: 4px;
+  gap: clamp(12px, 1.4vw, 18px);
+  padding: clamp(10px, 1.4vh, 14px);
+}
+/* 시련 레일 프레임: 카드들이 일반 .rail의 3x3 격자 톤(같은 border/grid 라인)
+   안에 들어 있는 인상을 주기 위한 트레이. 셔터·dim veil 뒤로 보이는 한 장의
+   레일 그리드 레이어처럼 보이게 한다. */
+.shop-shell--trial .trial-rail-frame {
+  position: relative;
+  border: 1px solid rgba(139, 111, 71, 0.55);
+  border-radius: 14px;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(244, 164, 96, 0.16), transparent 70%),
+    rgba(14, 10, 22, 0.72);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 215, 120, 0.06),
+    inset 0 0 60px rgba(0, 0, 0, 0.45),
+    0 10px 28px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+.shop-shell--trial .trial-rail-frame-gridlines {
+  position: absolute;
+  inset: clamp(10px, 1.4vh, 14px);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(12px, 1.4vw, 18px);
+  pointer-events: none;
+  z-index: 0;
+}
+.shop-shell--trial .trial-rail-frame-gridlines > span {
+  border: 1px dashed rgba(255, 232, 168, 0.16);
+  border-radius: 10px;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.018) 0 6px,
+      transparent 6px 12px
+    );
 }
 .shop-shell--trial .shop-trial-card {
-  min-height: 220px;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 8px;
+  padding: clamp(12px, 1.4vh, 16px);
   text-align: left;
+  /* shop-relic-card의 base width를 받지만, 트레이 안에서 균등 분할로 채워야
+     해 가로폭을 강제로 셀에 맞춘다. */
+  width: auto;
+  aspect-ratio: 3 / 4;
+  background: linear-gradient(180deg, rgba(40, 26, 50, 0.95), rgba(16, 10, 24, 0.98));
+  border: 1px solid rgba(230, 194, 129, 0.42);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.16),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.45),
+    0 6px 16px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
 }
-.shop-shell--trial .shop-trial-card h3 {
-  margin: 0 0 10px;
-  font-size: 18px;
+.shop-shell--trial .shop-trial-card-art {
+  background: var(--trial-card-art) center / cover no-repeat;
+  border: 1px solid rgba(255, 214, 153, 0.42);
+  border-radius: 10px;
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.55);
+  min-height: 0;
 }
-.shop-shell--trial .shop-trial-card p {
+.shop-shell--trial .shop-trial-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.shop-shell--trial .shop-trial-card-title {
   margin: 0;
-  opacity: .85;
+  font-size: clamp(15px, 1.8vh, 18px);
+  color: #ffe1a3;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+}
+.shop-shell--trial .shop-trial-card-effect {
+  margin: 0;
+  font-size: clamp(12px, 1.5vh, 13px);
+  line-height: 1.45;
+  opacity: 0.88;
+  color: #f7e7c8;
 }
 .shop-pack-layer {
   justify-content: center;

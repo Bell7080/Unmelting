@@ -143,32 +143,61 @@ const RUN_TARGET_TURNS = 100
 let altarBossPending = false
 let altarBossDefeated = false
 let trialPending = false
-/** 보스/시련의 영속 modifier: 이번 런 내내 스폰/스탯/함정 계산에 누적된다. */
+/** 보스/시련의 영속 modifier: 이번 런 내내 스폰/스탯/함정 계산에 누적된다.
+ *  apply 시 CardSpawner.setTrialModifiers로도 동기화돼야 실제 스폰에 반영된다. */
 const runModifiers = {
-  spawnWeightScale: 1,
   enemyHpBonus: 0,
   enemyDamageBonus: 0,
   trapDamageBonus: 0,
+  /** 보물상자 스폰 가중치 배율. '가난' 누적 시마다 0.75를 곱한다. */
+  treasureSpawnScale: 1,
 }
-/** Forced-trial card table keeps UI copy + runtime modifier in one source. */
+/** 사람 친화적 요약 한 줄: 적+1/1, 함정+1, 보물x0.75 같은 식으로. */
+function formatTrialSummary(prefix: string): string {
+  return `${prefix} · 적+${runModifiers.enemyHpBonus}/${runModifiers.enemyDamageBonus} · 함정+${runModifiers.trapDamageBonus} · 보물x${runModifiers.treasureSpawnScale.toFixed(2)}`
+}
+/** runModifiers의 현재 값을 CardSpawner로 흘려보내 다음 스폰부터 즉시 반영시킨다. */
+function syncRunModifiersToSpawner(): void {
+  cardSpawner.setTrialModifiers({
+    enemyHpBonus: runModifiers.enemyHpBonus,
+    enemyAtkBonus: runModifiers.enemyDamageBonus,
+    trapDamageBonus: runModifiers.trapDamageBonus,
+    treasureSpawnScale: runModifiers.treasureSpawnScale,
+  })
+}
+/** 강제 시련 카드 3종(임시 능력). 일러스트는 trial_001/004/007 자리(SpriteUrls.trials)를
+ *  잡아 두었고 실제 webp가 들어오면 import만 교체하면 된다. */
 const FORCED_TRIAL_CARDS = [
   {
-    id: 'spawn',
-    title: '군집의 장막',
-    effect: '스폰 가중치 +15%',
-    apply: () => { runModifiers.spawnWeightScale += 0.15 },
+    id: 'arsonist',
+    title: '방화광',
+    effect: '앞으로 나올 모든 적의 체력 +1, 공격력 +1',
+    spriteUrl: SpriteUrls.trials['001'],
+    apply: (): void => {
+      runModifiers.enemyHpBonus += 1
+      runModifiers.enemyDamageBonus += 1
+      syncRunModifiersToSpawner()
+    },
   },
   {
-    id: 'enemy',
-    title: '피의 맹세',
-    effect: '적 HP/ATK +1',
-    apply: () => { runModifiers.enemyHpBonus += 1; runModifiers.enemyDamageBonus += 1 },
+    id: 'candle-hunter',
+    title: '양초 사냥꾼',
+    effect: '앞으로 나올 모든 함정의 피해 +1',
+    spriteUrl: SpriteUrls.trials['004'],
+    apply: (): void => {
+      runModifiers.trapDamageBonus += 1
+      syncRunModifiersToSpawner()
+    },
   },
   {
-    id: 'trap',
-    title: '가시의 세례',
-    effect: '함정 피해 +1',
-    apply: () => { runModifiers.trapDamageBonus += 1 },
+    id: 'poverty',
+    title: '가난',
+    effect: '앞으로 나올 보물상자 등장 확률 25% 감소',
+    spriteUrl: SpriteUrls.trials['007'],
+    apply: (): void => {
+      runModifiers.treasureSpawnScale = Math.max(0, runModifiers.treasureSpawnScale * 0.75)
+      syncRunModifiersToSpawner()
+    },
   },
 ] as const
 /** 메타 사당 해금(추후 저장소 연동) + 런 내 카드풀 분리를 위한 토대. */
@@ -607,29 +636,13 @@ function rollShopOffers(): ShopOfferView[] {
     .map(({ relicId }) => ({ relicId, price: priceForRelic(relicId) }))
 }
 
-/** 독립 시련 오버레이(3선택). 선택은 즉시 런 영속 modifier로 반영한다. */
+/** 보스 흐름 외의 milestone 분기(maybeRunMilestoneEventsAfterTurn)에서 호출되는
+ *  비상용 트라이얼 — 평소엔 사용되지 않지만 흐름이 살아 있을 때를 대비해 새 카드
+ *  3종(방화광/양초 사냥꾼/가난) 정의를 그대로 사용한다. */
 async function openTrialOverlay(): Promise<void> {
-  const existing = document.getElementById('trial-overlay')
-  if (existing) existing.remove()
-  const host = document.createElement('div')
-  host.id = 'trial-overlay'
-  host.style.cssText = 'position:fixed;inset:0;z-index:420;display:flex;align-items:center;justify-content:center;background:rgba(10,8,18,0.72);'
-  host.innerHTML = `<section style="width:min(940px,92vw);border:1px solid rgba(230,194,129,.42);border-radius:20px;padding:22px;background:linear-gradient(180deg, rgba(35,24,44,.98), rgba(15,10,21,.98));box-shadow:0 24px 60px rgba(0,0,0,.45);color:#f7e7c8;"><h2 style="margin:0 0 12px;font-size:22px;">시련 선택</h2><p style="margin:0 0 16px;opacity:.84">선택 결과는 이번 런 전체에 누적 적용됩니다.</p><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;"><button data-trial="spawn" style="padding:14px;border-radius:14px;border:1px solid rgba(160,190,255,.45);background:rgba(42,58,100,.35);color:#dfe9ff;">군집의 장막<br/><small>스폰 가중치 +15%</small></button><button data-trial="enemy" style="padding:14px;border-radius:14px;border:1px solid rgba(214,136,162,.45);background:rgba(90,40,58,.36);color:#ffe1ea;">피의 맹세<br/><small>적 HP/ATK +1</small></button><button data-trial="trap" style="padding:14px;border-radius:14px;border:1px solid rgba(206,174,116,.45);background:rgba(74,54,25,.36);color:#ffeec4;">가시의 세례<br/><small>함정 피해 +1</small></button></div></section>`
-  // Keep trial as a rail interruption layer, not a separate scene.
-  document.body.appendChild(host)
   inputLocked = true
-  await new Promise<void>((resolve) => {
-    host.addEventListener('click', (event) => {
-      const target = (event.target as HTMLElement).closest<HTMLElement>('[data-trial]')
-      if (!target) return
-      const choice = target.dataset.trial
-      if (choice === 'spawn') runModifiers.spawnWeightScale += 0.15
-      if (choice === 'enemy') { runModifiers.enemyHpBonus += 1; runModifiers.enemyDamageBonus += 1 }
-      if (choice === 'trap') runModifiers.trapDamageBonus += 1
-      host.remove()
-      resolve()
-    })
-  })
+  await openTrialOverlayForced()
+  inputLocked = false
 }
 
 /** Build the renderer-facing split-shop state with dynamic inflation costs.
@@ -725,7 +738,7 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
   if (trialPending) {
     trialPending = false
     await openTrialOverlay()
-    recordNotice(`시련 각인 완료 · 스폰x${runModifiers.spawnWeightScale.toFixed(2)} / 적+${runModifiers.enemyHpBonus},+${runModifiers.enemyDamageBonus} / 함정+${runModifiers.trapDamageBonus}`, 'info')
+    recordNotice(formatTrialSummary('시련 각인 완료'), 'info')
     render()
     return true
   }
@@ -1160,7 +1173,7 @@ async function openTrialOverlayForced(): Promise<void> {
   // 상점과 동일한 shop-shell 흐름을 재사용한다. 선택 → 이펙트 → 자동 EXIT 순서로
   // 카드 회수(swoosh up) → 레이어 회수 → 마지막에 셔터 상승이 한 번에 이어진다.
   boardRenderer.openForcedTrialShopFlow(
-    FORCED_TRIAL_CARDS.map(({ id, title, effect }) => ({ id, title, effect }))
+    FORCED_TRIAL_CARDS.map(({ id, title, effect, spriteUrl }) => ({ id, title, effect, spriteUrl }))
   )
   await new Promise<void>((resolve) => {
     let picked = false
@@ -1185,10 +1198,7 @@ async function openTrialOverlayForced(): Promise<void> {
       // 시각 비트를 만든 뒤 자동으로 EXIT 시퀀스가 이어진다.
       const pickedEl = document.querySelector<HTMLElement>(`[data-trial-pick="${id}"]`)
       if (pickedEl) SquareBurst.playOn(pickedEl, 'score', { count: 18, spread: 140, duration: 620 })
-      recordNotice(
-        `시련 적용: ${pickedCard.title} · 스폰x${runModifiers.spawnWeightScale.toFixed(2)} / 적+${runModifiers.enemyHpBonus},+${runModifiers.enemyDamageBonus} / 함정+${runModifiers.trapDamageBonus}`,
-        'info'
-      )
+      recordNotice(formatTrialSummary(`시련 적용: ${pickedCard.title}`), 'info')
       window.setTimeout(() => void finalize(), 620)
     }
     const onExit = (): void => {
