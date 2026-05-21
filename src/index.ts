@@ -1155,7 +1155,6 @@ async function openBossRewardOverlay(): Promise<void> {
     })
   })
 }
-
 /** Forced trial after boss: fully reuses shop-shell flow (drop layer -> pick -> EXIT -> shutter up). */
 async function openTrialOverlayForced(): Promise<void> {
   // Use renderer-level shop shell so trial sequencing matches normal shop.
