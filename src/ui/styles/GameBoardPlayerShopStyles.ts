@@ -219,7 +219,18 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 /* 셔터/일러스트 veil 이후 카드팩 베일과 같은 텀(≈2.62s) 뒤에
    상점/제단의 모든 상호작용 UI가 한 번에 열리도록 묶음 레이어를 둔다. */
 .shop-content-bundle {
-  display: contents;
+  /* NOTE: must be a real container (not display:contents) so opacity/transform
+     can gate ALL shop/altar controls as one synchronized reveal layer. */
+  position: relative;
+  z-index: 1;
+  display: grid;
+  /* Keep the bundle's internal track math identical to pre-wrapper layout so
+     top/bottom rows stay anchored to their original rail positions. */
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(10px, 1.4vh, 16px);
+  align-items: stretch;
+  min-height: 0;
+  height: 100%;
   opacity: 0;
   transform: translateY(8px) scale(0.992);
   filter: saturate(0.88);
@@ -271,7 +282,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
    extend past the layer's boundary; the layer is a hint, not a frame. */
 .shop-row {
   position: relative;
-  z-index: 1;
+  z-index: 0;
   display: grid;
   gap: clamp(10px, 1.4vw, 18px);
   align-items: stretch;
@@ -783,12 +794,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   opacity: 1;
   translate: 0 0;
   scale: 1;
-  /* Reroll timing now keys off the dim-veil drop (420ms): wait until the
-     shutter-top layer is visually seated, then trail by a short beat. */
+  /* Bundle layer now owns the global reveal timing, so reroll uses immediate
+     local easing and opens together with all other shop/altar controls. */
   transition:
-    opacity 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 540ms,
-    translate 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 540ms,
-    scale 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) 540ms,
+    opacity 0.5s cubic-bezier(0.18, 0.86, 0.22, 1),
+    translate 0.5s cubic-bezier(0.18, 0.86, 0.22, 1),
+    scale 0.5s cubic-bezier(0.18, 0.86, 0.22, 1),
     transform 0.16s ease,
     box-shadow 0.16s ease,
     filter 0.16s ease;
