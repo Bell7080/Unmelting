@@ -1885,7 +1885,7 @@ export class GameBoardRenderer {
     rail.classList.remove('is-shop-quaking')
   }
 
-  /** Boss intro card: stomp beat, then left-to-right title slide before boss page starts. */
+  /** Boss intro card now starts with a 3x3 enemy-tile drop before title slide. */
   async openBossIntroOverlay(): Promise<void> {
     const existing = document.getElementById('boss-intro-overlay')
     existing?.remove()
@@ -1894,22 +1894,27 @@ export class GameBoardRenderer {
     host.style.cssText =
       'position:fixed;inset:0;z-index:460;display:flex;align-items:center;justify-content:center;background:linear-gradient(90deg,rgba(0,0,0,.9),rgba(0,0,0,.82));'
     host.innerHTML = `
-      <section style="width:min(980px,94vw);border:1px solid rgba(230,194,129,.42);border-radius:18px;padding:18px;background:linear-gradient(180deg, rgba(28,20,36,.98), rgba(11,8,17,.98));display:grid;grid-template-columns:220px 1fr;gap:16px;color:#f7e7c8;transform:translateX(-46px);opacity:0;animation:boss-slide-in .48s cubic-bezier(.18,.86,.22,1) forwards;">
-        <div style="border:1px solid rgba(255,214,153,.42);border-radius:14px;padding:10px;background:rgba(0,0,0,.35);position:relative;">
-          <div style="position:absolute;left:10px;top:10px;padding:2px 8px;border-radius:999px;background:rgba(28,18,12,.8);border:1px solid rgba(255,214,153,.46);font-size:12px;">3T</div>
-          <div style="aspect-ratio:1;background:url('${SpriteUrls.enemyWaves[3]}') center/cover no-repeat;border-radius:10px;"></div>
-          <p style="margin:8px 0 0;font-size:12px;opacity:.84;">보스 타이틀</p>
-          <h2 style="margin:4px 0 0;font-size:22px;">밀랍 군단</h2>
+      <section style="width:min(980px,94vw);display:grid;gap:14px;">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+          ${Array.from({ length: 9 }, (_, i) => `<div style="aspect-ratio:1;border:1px solid rgba(255,214,153,.42);border-radius:10px;background:url('${SpriteUrls.enemyWaves[3]}') center/cover no-repeat;transform:translateY(-80px);opacity:0;animation:boss-tile-drop .34s ease forwards;animation-delay:${i * 55}ms;"></div>`).join('')}
         </div>
-        <div>
-          <h3 style="margin:0 0 8px;">전투 정보</h3>
-          <p style="margin:0 0 6px;">보스 전용 체력 게이지 90 · 공격력 5 · 3턴마다 공격</p>
-          <p style="margin:0 0 6px;">특수: 양초 스매시류 파괴형/즉사기에 대부분 면역.</p>
-          <p style="margin:0;">연출: 보스 강하(쿵) 이후 타이틀 슬라이드 인.</p>
-          <p style="margin:16px 0 0;opacity:.84;">화면 클릭 시 전투 시작</p>
-        </div>
+        <section style="border:1px solid rgba(230,194,129,.42);border-radius:18px;padding:18px;background:linear-gradient(180deg, rgba(28,20,36,.98), rgba(11,8,17,.98));display:grid;grid-template-columns:220px 1fr;gap:16px;color:#f7e7c8;transform:translateX(-46px);opacity:0;animation:boss-slide-in .48s cubic-bezier(.18,.86,.22,1) forwards;animation-delay:520ms;">
+          <div style="border:1px solid rgba(255,214,153,.42);border-radius:14px;padding:10px;background:rgba(0,0,0,.35);position:relative;">
+            <div style="position:absolute;left:10px;top:10px;padding:2px 8px;border-radius:999px;background:rgba(28,18,12,.8);border:1px solid rgba(255,214,153,.46);font-size:12px;">3T</div>
+            <div style="aspect-ratio:1;background:url('${SpriteUrls.enemyWaves[3]}') center/cover no-repeat;border-radius:10px;"></div>
+            <p style="margin:8px 0 0;font-size:12px;opacity:.84;">보스 타이틀</p>
+            <h2 style="margin:4px 0 0;font-size:22px;">밀랍 군단</h2>
+          </div>
+          <div>
+            <h3 style="margin:0 0 8px;">전투 정보</h3>
+            <p style="margin:0 0 6px;">보스 전용 체력 게이지 90 · 공격력 5 · 3턴마다 공격</p>
+            <p style="margin:0 0 6px;">특수: 양초 스매시류 파괴형/즉사기에 대부분 면역.</p>
+            <p style="margin:0;">연출: 보스 3x3 칸 낙하 이후 타이틀 슬라이드 인.</p>
+            <p style="margin:16px 0 0;opacity:.84;">화면 클릭 시 전투 시작</p>
+          </div>
+        </section>
       </section>
-      <style>@keyframes boss-slide-in{from{transform:translateX(-46px);opacity:0}to{transform:translateX(0);opacity:1}}</style>
+      <style>@keyframes boss-slide-in{from{transform:translateX(-46px);opacity:0}to{transform:translateX(0);opacity:1}}@keyframes boss-tile-drop{from{transform:translateY(-80px);opacity:0}to{transform:translateY(0);opacity:1}}</style>
     `
     document.body.appendChild(host)
     await new Promise((resolve) => window.setTimeout(resolve, 220))
