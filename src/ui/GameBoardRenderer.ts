@@ -1551,33 +1551,37 @@ export class GameBoardRenderer {
     this.shopOverlayElement.innerHTML = `
       <div class="shop-shell" role="dialog" aria-label="상점">
         <div class="shop-dim-veil" style="--shop-veil-bg:url('${shop.mode === 'altar' ? SpriteUrls.altarVeilBg : SpriteUrls.shopVeilBg}');" aria-hidden="true"></div>
-        <section class="shop-row shop-top-row" aria-label="유물 상점">
-          <div class="shop-layer shop-reroll-zone">
-            ${shop.mode === 'altar' ? '' : this.renderShopRerollButton(shop.rerollCost, shop.coins)}
-          </div>
-          <div class="shop-layer shop-artifact-layer">${cards}</div>
-        </section>
-        <section class="shop-row shop-bottom-row" aria-label="카드 및 카드팩">
-          <div class="shop-layer shop-free-layer">
-            ${this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel, 'free-card')}
-            ${shop.mode === 'altar' ? this.renderShopFreeCard(!!shop.freeCoinCardClaimed, '수당', 'free-coin-card') : ''}
-          </div>
-          <div class="shop-layer shop-pack-layer">
-            ${shop.mode === 'altar'
-              ? [
-                  this.renderShopPackCard('blessing-pack', '축복팩', '패시브 능력 3택1 획득', shop.basicPackCost, score, 'upgrade'),
-                  this.renderShopPackCard('resource-pack', '자원팩', '최대 수치 3택1 증가', shop.upgradePackCost, score, 'resource'),
-                  this.renderShopPackCard('enhance-pack', '강화팩', '카드 단일 능력 3택1 강화', shop.unlockPackCost, score, 'unlock'),
-                  this.renderShopPackCard('delete-pack', '삭제팩', '카드 등장 금지 3택1', shop.unlockPackCost, score, 'unlock'),
-                ].join('')
-              : [
-                  this.renderShopPackCard('basic-pack', basicPackLabel.title, basicPackLabel.effect, shop.basicPackCost, score, 'resource'),
-                  this.renderShopPackCard('upgrade-pack', upgradePackLabel.title, upgradePackLabel.effect, shop.upgradePackCost, score, 'upgrade'),
-                  this.renderShopPackCard('unlock-pack', unlockPackLabel.title, unlockPackLabel.effect, shop.unlockPackCost, score, 'unlock'),
-                ].join('')}
-          </div>
-        </section>
-        <button class="shop-close-btn" type="button" data-shop-close aria-label="상점 나가기">EXIT</button>
+        <!-- 셔터+일러스트(veil) 이후 동일 텀으로 상점/제단 콘텐츠가 한 번에 열리도록
+             실제 상호작용 UI를 하나의 번들 레이어로 묶는다. -->
+        <div class="shop-content-bundle">
+          <section class="shop-row shop-top-row" aria-label="유물 상점">
+            <div class="shop-layer shop-reroll-zone">
+              ${shop.mode === 'altar' ? '' : this.renderShopRerollButton(shop.rerollCost, shop.coins)}
+            </div>
+            <div class="shop-layer shop-artifact-layer">${cards}</div>
+          </section>
+          <section class="shop-row shop-bottom-row" aria-label="카드 및 카드팩">
+            <div class="shop-layer shop-free-layer">
+              ${this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel, 'free-card')}
+              ${shop.mode === 'altar' ? this.renderShopFreeCard(!!shop.freeCoinCardClaimed, '수당', 'free-coin-card') : ''}
+            </div>
+            <div class="shop-layer shop-pack-layer">
+              ${shop.mode === 'altar'
+                ? [
+                    this.renderShopPackCard('blessing-pack', '축복팩', '패시브 능력 3택1 획득', shop.basicPackCost, score, 'upgrade'),
+                    this.renderShopPackCard('resource-pack', '자원팩', '최대 수치 3택1 증가', shop.upgradePackCost, score, 'resource'),
+                    this.renderShopPackCard('enhance-pack', '강화팩', '카드 단일 능력 3택1 강화', shop.unlockPackCost, score, 'unlock'),
+                    this.renderShopPackCard('delete-pack', '삭제팩', '카드 등장 금지 3택1', shop.unlockPackCost, score, 'unlock'),
+                  ].join('')
+                : [
+                    this.renderShopPackCard('basic-pack', basicPackLabel.title, basicPackLabel.effect, shop.basicPackCost, score, 'resource'),
+                    this.renderShopPackCard('upgrade-pack', upgradePackLabel.title, upgradePackLabel.effect, shop.upgradePackCost, score, 'upgrade'),
+                    this.renderShopPackCard('unlock-pack', unlockPackLabel.title, unlockPackLabel.effect, shop.unlockPackCost, score, 'unlock'),
+                  ].join('')}
+            </div>
+          </section>
+          <button class="shop-close-btn" type="button" data-shop-close aria-label="상점 나가기">EXIT</button>
+        </div>
       </div>
     `
     this.shopOverlayElement.classList.add('is-open')

@@ -215,6 +215,30 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   /* Keep current position and descend with its host context instead of popping in. */
   animation: none;
 }
+
+/* 셔터/일러스트 veil 이후 카드팩 베일과 같은 텀(≈2.62s) 뒤에
+   상점/제단의 모든 상호작용 UI가 한 번에 열리도록 묶음 레이어를 둔다. */
+.shop-content-bundle {
+  display: contents;
+  opacity: 0;
+  transform: translateY(8px) scale(0.992);
+  filter: saturate(0.88);
+  transition:
+    opacity 0.42s cubic-bezier(0.18, 0.86, 0.22, 1) 2620ms,
+    transform 0.42s cubic-bezier(0.18, 0.86, 0.22, 1) 2620ms,
+    filter 0.42s cubic-bezier(0.18, 0.86, 0.22, 1) 2620ms;
+}
+.shop-overlay.is-open .shop-content-bundle {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: saturate(1);
+}
+.shop-shell.is-closing .shop-content-bundle {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.986);
+  filter: saturate(0.82);
+  transition-delay: 0ms, 0ms, 0ms;
+}
 /* Dim veil — full shop backdrop that descends AFTER the wax shutter.
    background_002.webp (parchment + candles) replaces the old CSS gradient. */
 .shop-dim-veil {
@@ -1332,10 +1356,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 
 
 /* --- 2026-05 shop timing/picker unification overrides --- */
-.shop-overlay.is-open .shop-reroll-btn {
-  /* 기존 딜레이(620ms)에 2초를 추가해 리롤 버튼이 다른 요소 뒤에 천천히 등장한다. */
-  transition-delay: 2620ms, 2620ms, 2620ms, 0ms, 0ms, 0ms;
-}
+/* 리롤만 단독 지연하지 않고, shop-content-bundle 단위로 전체를 동시에 공개한다. */
 .shop-price-label { z-index: 12; }
 .shop-relic-price-label { z-index: 12; }
 .shop-relic-card.is-rerolling { opacity: 1 !important; visibility: visible !important; }
