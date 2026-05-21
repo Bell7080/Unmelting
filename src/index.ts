@@ -150,6 +150,27 @@ const runModifiers = {
   enemyDamageBonus: 0,
   trapDamageBonus: 0,
 }
+/** Forced-trial card table keeps UI copy + runtime modifier in one source. */
+const FORCED_TRIAL_CARDS = [
+  {
+    id: 'spawn',
+    title: '군집의 장막',
+    effect: '스폰 가중치 +15%',
+    apply: () => { runModifiers.spawnWeightScale += 0.15 },
+  },
+  {
+    id: 'enemy',
+    title: '피의 맹세',
+    effect: '적 HP/ATK +1',
+    apply: () => { runModifiers.enemyHpBonus += 1; runModifiers.enemyDamageBonus += 1 },
+  },
+  {
+    id: 'trap',
+    title: '가시의 세례',
+    effect: '함정 피해 +1',
+    apply: () => { runModifiers.trapDamageBonus += 1 },
+  },
+] as const
 /** 메타 사당 해금(추후 저장소 연동) + 런 내 카드풀 분리를 위한 토대. */
 const metaUnlockedCardIds = [...HAND_CARD_IDS]
 const runCardPool = new RunCardPool(HAND_CARD_IDS, metaUnlockedCardIds)
@@ -1137,13 +1158,30 @@ async function openBossRewardOverlay(): Promise<void> {
 /** Forced trial after boss: fully reuses shop-shell flow (drop layer -> pick -> EXIT -> shutter up). */
 async function openTrialOverlayForced(): Promise<void> {
   // Use renderer-level shop shell so trial sequencing matches normal shop.
-  boardRenderer.openForcedTrialShopFlow()
+  boardRenderer.openForcedTrialShopFlow(
+    FORCED_TRIAL_CARDS.map(({ id, title, effect }) => ({ id, title, effect }))
+  )
   await new Promise<void>((resolve) => {
-    const onPick = (): void => {
+    let picked = false
+    const onPick = (event: Event): void => {
+      const custom = event as CustomEvent<{ id?: string }>
+      const id = custom.detail?.id
+      const pickedCard = FORCED_TRIAL_CARDS.find((card) => card.id === id)
+      if (!pickedCard || picked) return
+      picked = true
+      // Apply run modifier at pick time so logs and later spawns stay deterministic.
+      pickedCard.apply()
       // Pick is separate from exit so user can inspect then explicitly leave.
-      recordNotice('시련 카드 선택 완료 · EXIT로 복귀를 진행한다', 'info')
+      recordNotice(
+        `시련 카드 선택: ${pickedCard.title} · 스폰x${runModifiers.spawnWeightScale.toFixed(2)} / 적+${runModifiers.enemyHpBonus},+${runModifiers.enemyDamageBonus} / 함정+${runModifiers.trapDamageBonus}`,
+        'info'
+      )
     }
     const onExit = async (): Promise<void> => {
+      if (!picked) {
+        recordNotice('시련 카드를 먼저 선택해야 EXIT 할 수 있다', 'info')
+        return
+      }
       document.removeEventListener('forcedTrialPick', onPick)
       document.removeEventListener('forcedTrialExit', onExit as EventListener)
       boardRenderer.closeShop()

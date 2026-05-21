@@ -116,6 +116,11 @@ export interface ShopStateView {
   upgradePackCost: number
   unlockPackCost: number
 }
+export interface ForcedTrialCardView {
+  id: string
+  title: string
+  effect: string
+}
 
 export interface ActivityLogEntry {
   id: number
@@ -1738,7 +1743,7 @@ export class GameBoardRenderer {
 
   /** Forced trial reuses shop shell/bundle grammar so altar->boss->trial feels
    *  like one uninterrupted rail event flow (drop layer -> pick -> EXIT). */
-  openForcedTrialShopFlow(): void {
+  openForcedTrialShopFlow(cards: ForcedTrialCardView[]): void {
     if (!this.shopOverlayElement) {
       this.shopOverlayElement = document.createElement('div')
       this.shopOverlayElement.id = 'shop-overlay'
@@ -1751,15 +1756,11 @@ export class GameBoardRenderer {
         <div class="shop-content-bundle">
           <section class="shop-row shop-top-row" aria-label="시련 카드">
             <div class="shop-layer shop-artifact-layer shop-trial-layer">
-              <button class="shop-relic-card shop-trial-card is-affordable" data-trial-pick="a" type="button">
-                <h3>시련 A</h3><p>미정 미정 미정</p>
-              </button>
-              <button class="shop-relic-card shop-trial-card is-affordable" data-trial-pick="b" type="button">
-                <h3>시련 B</h3><p>미정 미정 미정</p>
-              </button>
-              <button class="shop-relic-card shop-trial-card is-affordable" data-trial-pick="c" type="button">
-                <h3>시련 C</h3><p>미정 미정 미정</p>
-              </button>
+              ${cards.map((card) => `
+                <button class="shop-relic-card shop-trial-card is-affordable" data-trial-pick="${card.id}" type="button">
+                  <h3>${card.title}</h3><p>${card.effect}</p>
+                </button>
+              `).join('')}
             </div>
           </section>
           <button class="shop-close-btn" type="button" data-trial-exit aria-label="시련 종료">EXIT</button>
