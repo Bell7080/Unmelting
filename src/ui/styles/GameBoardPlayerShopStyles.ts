@@ -29,7 +29,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .relic-layer {
   justify-content: center;
-  padding-left: 0;
+  padding-left: clamp(2px, 0.4vw, 6px);
   overflow: visible;
 }
 .relic-plan-label {
@@ -46,13 +46,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   display: flex;
   align-items: center;
   gap: 7px;
-  justify-content: center;
-  max-width: clamp(152px, 18.5vw, 230px);
+  max-width: clamp(120px, 16vw, 190px);
   overflow-x: auto;
   padding: 4px 2px 6px;
 }
 .relic-mini-card {
-  flex: 0 0 clamp(66px, 6vw, 82px);
+  flex: 0 0 clamp(58px, 5.4vw, 72px);
   aspect-ratio: 1;
   position: relative;
   overflow: visible;
@@ -313,6 +312,14 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   transform: translateX(clamp(-10px, -1vw, -6px));
   padding-left: clamp(8px, 1.3vw, 16px);
   padding-right: clamp(8px, 1.3vw, 16px);
+}
+/* 제단 유물 3장 레이어는 요청사항대로 광학 중심을 더 정확히 맞추고 카드 판독 크기를 소폭 확장한다. */
+.shop-shell[data-shop-mode="altar"] .shop-artifact-layer {
+  transform: translateX(clamp(-4px, -0.45vw, -2px));
+  gap: clamp(14px, 1.75vw, 24px);
+}
+.shop-shell[data-shop-mode="altar"] .shop-artifact-layer .shop-relic-card {
+  width: clamp(132px, 12.6vw, 196px);
 }
 .shop-pack-layer {
   justify-content: center;

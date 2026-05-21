@@ -1551,7 +1551,8 @@ export class GameBoardRenderer {
     //   .shop-layer     — hit/layout 전용 투명 레이어.
     //                     카드는 고정 크기를 유지하고 경계를 넘을 수 있다.
     this.shopOverlayElement.innerHTML = `
-      <div class="shop-shell" role="dialog" aria-label="상점">
+      <!-- 제단/상점 모드별 레이아웃 미세 조정을 위해 모드 데이터를 shell에 남긴다. -->
+      <div class="shop-shell" data-shop-mode="${shop.mode}" role="dialog" aria-label="상점">
         <div class="shop-dim-veil" style="--shop-veil-bg:url('${shop.mode === 'altar' ? SpriteUrls.altarVeilBg : SpriteUrls.shopVeilBg}');" aria-hidden="true"></div>
         <!-- 셔터+일러스트(veil) 이후 동일 텀으로 상점/제단 콘텐츠가 한 번에 열리도록
              실제 상호작용 UI를 하나의 번들 레이어로 묶는다. -->
