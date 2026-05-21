@@ -45,7 +45,7 @@ import { getHandCardDef, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
 import { HAND_CARD_RARITY, RELIC_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
-import type { BurstTheme } from '@ui/SquareBurst'
+import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
 import { SpriteUrls } from '@ui/Sprites'
@@ -1022,12 +1022,12 @@ async function closeShopAndResume(): Promise<void> {
   // raise the shutter so the player can resume the turn.
   await boardRenderer.playShopExitAnimation()
   boardRenderer.closeShop()
-  // Altar EXIT does not raise shutter; it transitions directly into boss gate.
+  // 제단 EXIT는 셔터를 올리지 않고 곧장 보스 게이트로 이어간다.
   if (currentShopMode === 'altar') {
     await boardRenderer.playAltarBossGateTransition()
     turnManager.setTurnMode('boss_phase')
     recordNotice('셔터 레일이 흔들리며 보스가 강림한다', 'hurt')
-    await runBossStubCombatAndRewards()
+    await runBossRailEvent()
     inputLocked = false
     render()
     return
@@ -1037,157 +1037,160 @@ async function closeShopAndResume(): Promise<void> {
   render()
 }
 
-/** Boss event runs as an in-rail interruption: one giant tile, 3-hit enemy cadence, then rail rewards/trial. */
-async function runBossStubCombatAndRewards(): Promise<void> {
-  // Boss phase uses virtual turns only; main run turn must remain frozen (e.g. stays at 30).
+/** 보스 이벤트는 일반 레일/칸 문법을 그대로 사용하는 in-rail 이벤트다.
+ *  - 셔터는 오르지 않은 채 보스 타일이 거대 1칸으로 떨어진다.
+ *  - 플레이어 클릭 = 1 가상 턴, 3 가상 턴마다 보스가 반격(피해 5).
+ *  - 격파 후 같은 자리에 보물상자 3칸이 드롭, 하나씩 클릭해 모두 획득.
+ *  - 끝나면 상점과 동일한 shop-shell을 재사용하는 강제 시련 3택으로 이어진다.
+ *  실제 런 턴 카운터는 이벤트 내내 동결된다. */
+async function runBossRailEvent(): Promise<void> {
   const frozenRunTurn = gameState.getCurrentTurn()
-  let bossHp = 90
   const bossMaxHp = 90
   const bossAttack = 5
+  const attackInterval = 3
+  const playerDamagePerHit = 12
+  let bossHp = bossMaxHp
   let bossTurn = 0
-  let nextAttackIn = 3
+  let nextAttackIn = attackInterval
 
-  // Intro now includes a 3x3 drop-board beat before the title card opens.
-  await boardRenderer.openBossIntroOverlay()
+  const ctrl = boardRenderer.beginBossRailEvent({
+    name: '밀랍 군단',
+    maxHp: bossMaxHp,
+    attack: bossAttack,
+    attackInterval,
+  })
+
+  // 첫 타일 드롭이 시각적으로 자리잡도록 한 비트 대기.
+  await new Promise((resolve) => window.setTimeout(resolve, 560))
+
+  // 가상 턴 루프: 모든 입력은 보스 타일 클릭으로만 진행된다.
   while (bossHp > 0) {
-    // Boss tile follows rail grammar: each hit is one player turn worth of pressure.
-    await openBossBattleTurnOverlay({ bossHp, bossMaxHp, bossAttack, bossTurn, nextAttackIn })
-    const damage = 12
-    bossHp = Math.max(0, bossHp - damage)
+    await ctrl.awaitBossClick()
+    const dealt = Math.min(playerDamagePerHit, bossHp)
+    bossHp = Math.max(0, bossHp - dealt)
     bossTurn += 1
-    nextAttackIn = bossHp <= 0 ? nextAttackIn : Math.max(1, 3 - (bossTurn % 3))
-    if (bossTurn % 3 === 0 && bossHp > 0) {
+    nextAttackIn = bossHp <= 0 ? 0 : Math.max(1, attackInterval - (bossTurn % attackInterval))
+    if (bossHp === 0) nextAttackIn = 0
+    await ctrl.playBossHit(dealt, bossHp, nextAttackIn, bossTurn)
+    if (bossTurn % attackInterval === 0 && bossHp > 0) {
       gameState.character.takeDamage(bossAttack)
-      await boardRenderer.animateDamageFlash()
-      nextAttackIn = 3
+      await ctrl.playBossCounterAttack(bossAttack)
+      nextAttackIn = attackInterval
       recordNotice(`보스 반격! 플레이어가 ${bossAttack} 피해를 받았다`, 'hurt')
+      render()
     }
-    recordNotice(`보스 턴 ${bossTurn} · 보스 HP ${bossHp}/${bossMaxHp} · 다음 공격 ${nextAttackIn}턴`, 'info')
+  }
+
+  recordNotice('보스 처치! 레일 보상이 떨어진다', 'win')
+  await ctrl.playBossDefeat()
+  turnManager.setTurnMode('normal_turn')
+
+  // 일반 레일의 3칸짜리 큰 보물상자 톤을 그대로 사용. 3개가 위→가운데→아래
+  // 순서로 떨어져 3x3 전체를 채운다(컨트롤러 drop stagger 적용).
+  const chestSpecs: { kind: 'heal' | 'coin' | 'chest'; label: string; spriteUrl: string }[] = [
+    { kind: 'heal', label: '회복 보상', spriteUrl: SpriteUrls.chestLarge },
+    { kind: 'chest', label: '레일 보상', spriteUrl: SpriteUrls.chestLarge },
+    { kind: 'coin', label: '화폐 보상', spriteUrl: SpriteUrls.chestLarge },
+  ]
+  await ctrl.dropChests(chestSpecs)
+
+  // 세 상자를 순서 무관하게 모두 획득해야 진행된다.
+  const claimed = new Set<string>()
+  while (claimed.size < chestSpecs.length) {
+    const kind = await ctrl.awaitChestClick()
+    if (!kind || claimed.has(kind)) continue
+    claimed.add(kind)
+    await applyBossChestReward(kind)
+    await ctrl.consumeChest(kind)
     render()
   }
 
-  // Defeat effect beat is intentionally delayed so reward shutters don't pop too early.
-  recordNotice('보스 처치! 레일 보상 셔터가 낙하한다', 'win')
-  await new Promise((resolve) => window.setTimeout(resolve, 700))
-  turnManager.setTurnMode('normal_turn')
-  await openBossRewardOverlay()
+  ctrl.close()
+
+  // 시련은 기존 shop-shell 흐름을 재사용. EXIT 시 셔터가 비로소 상승한다.
   await openTrialOverlayForced()
-  // Safety guard: if future edits accidentally advance real turns during boss, restore intent via notice.
+
   if (gameState.getCurrentTurn() !== frozenRunTurn)
     recordNotice(`경고: 보스 이벤트 중 실제 턴(${frozenRunTurn})이 변경됨`, 'hurt')
 }
 
-/** Manual boss combat panel: only basic attack advances boss turn, skill does not. */
-async function openBossBattleTurnOverlay(state: {
-  bossHp: number
-  bossMaxHp: number
-  bossAttack: number
-  bossTurn: number
-  nextAttackIn: number
-}): Promise<void> {
-  const host = document.createElement('div')
-  host.id = 'boss-battle-overlay'
-  host.style.cssText = 'position:fixed;inset:0;z-index:452;display:flex;align-items:center;justify-content:center;background:rgba(8,6,14,.82);'
-  host.innerHTML = `<section style="width:min(980px,94vw);border:1px solid rgba(230,194,129,.42);border-radius:16px;padding:18px;background:linear-gradient(180deg, rgba(35,24,44,.98), rgba(15,10,21,.98));color:#f7e7c8;">
-    <h2 style="margin:0 0 8px;">보스 전투</h2>
-    <p style="margin:0 0 12px;opacity:.86;">보스 HP ${state.bossHp}/${state.bossMaxHp} · ATK ${state.bossAttack} · 보스턴 ${state.bossTurn} · 다음 공격 ${state.nextAttackIn}턴</p>
-    <div style="display:grid;grid-template-columns:220px 1fr;gap:12px;align-items:center;">
-      <div style="aspect-ratio:1;border:1px solid rgba(255,214,153,.44);border-radius:12px;background:url('${SpriteUrls.enemyWaves[3]}') center/cover no-repeat;position:relative;">
-        <span style="position:absolute;left:10px;top:10px;padding:2px 8px;border-radius:999px;border:1px solid rgba(230,194,129,.46);background:rgba(12,8,20,.8);font-size:12px;">거대 적 칸</span>
-      </div>
-      <button data-boss-act="hit" style="padding:18px;border-radius:12px;border:1px solid rgba(230,194,129,.42);background:linear-gradient(180deg, rgba(68,49,34,.9), rgba(34,22,16,.96));color:#f7e7c8;">공격하기 (1턴 진행, 피해 12)</button>
-    </div>
-  </section>`
-  document.body.appendChild(host)
-  await new Promise<void>((resolve) => {
-    host.addEventListener('click', (event) => {
-      const btn = (event.target as HTMLElement).closest<HTMLElement>('[data-boss-act]')
-      if (!btn) return
-      host.remove()
-      resolve()
-    })
-  })
-}
-
-/** Post-boss reward overlay: 3 reward blocks drop as stacked 3-cell chest-like picks. */
-async function openBossRewardOverlay(): Promise<void> {
-  const host = document.createElement('div')
-  host.id = 'boss-reward-overlay'
-  host.style.cssText = 'position:fixed;inset:0;z-index:450;display:flex;align-items:center;justify-content:center;background:rgba(8,5,14,.86);'
-  host.innerHTML = `<section style="width:min(940px,94vw);padding:20px;border:1px solid rgba(230,194,129,.42);border-radius:16px;background:linear-gradient(180deg, rgba(35,24,44,.98), rgba(15,10,21,.98));color:#f7e7c8;">
-  <h2 style="margin:0 0 10px;">보스 처치 보상 레일</h2>
-  <p style="margin:0 0 14px;opacity:.8;">일반 레일 보물상자처럼 3칸 보상이 떨어집니다. 세 칸을 순서대로 전진 선택해 모두 획득합니다.</p>
-  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
-    <button data-reward="chest" style="padding:22px;border-radius:12px;animation:boss-drop .36s ease both;animation-delay:0ms;">레일 보상 상자</button>
-    <button data-reward="heal" style="padding:22px;border-radius:12px;animation:boss-drop .36s ease both;animation-delay:120ms;">회복 상자</button>
-    <button data-reward="coin" style="padding:22px;border-radius:12px;animation:boss-drop .36s ease both;animation-delay:240ms;">화폐 상자</button>
-  </div>
-  <style>@keyframes boss-drop{from{transform:translateY(-46px);opacity:0}to{transform:translateY(0);opacity:1}}</style></section>`
-  document.body.appendChild(host)
-  const claimed = new Set<string>()
-  await new Promise<void>((resolve) => {
-    host.addEventListener('click', async (event) => {
-      const btn = (event.target as HTMLElement).closest<HTMLElement>('[data-reward]')
-      if (!btn) return
-      const kind = btn.dataset.reward ?? ''
-      if (claimed.has(kind)) return
-      claimed.add(kind)
-      btn.style.opacity = '.45'
-      if (kind === 'heal') {
-        // Boss clear reward restores both HP and candle gauge fully.
-        gameState.character.heal(999)
-        gameState.character.gainCandle(999)
-      }
-      if (kind === 'coin') {
-        const amount = 1 + Math.floor(Math.random() * 10)
-        // Coin reward uses incremental tick grammar (1$ per beat) to match request.
-        for (let i = 0; i < amount; i++) {
-          coins += 1
-          coinPulseKey++
-          boardRenderer.playCoinGainFeedback(coins, coinPulseKey)
-          await new Promise((r) => window.setTimeout(r, 70))
-        }
-        recordNotice(`+$${amount}`, 'info')
-      }
-      if (kind === 'chest') recordNotice('레일 보상 상자 보상을 획득했다', 'win')
-      render()
-      if (claimed.size >= 3) { host.remove(); resolve() }
-    })
-  })
+/** 보스 보상 적용. 회복 상자는 HP와 불씨 게이지를 가득 채우되, 콤보(촛불) 게이지는
+ *  10칸 상한을 절대 넘기지 않도록 max-current 만큼만 더해준다(과거 999 누적 버그 방지). */
+async function applyBossChestReward(kind: string): Promise<void> {
+  const character = gameState.character
+  if (kind === 'heal') {
+    character.heal(character.maxHealth)
+    character.gainEmber(character.emberMax)
+    // 콤보 게이지는 한 칸 미만으로 채워 즉발 Melt 폭주를 막는다 — 부족분만 채움.
+    const needed = Math.max(0, character.candleMax - character.candle)
+    if (needed > 0) character.gainCandle(needed)
+    recordNotice('회복 상자: HP·불씨 회복 / 콤보 게이지 보충', 'win')
+    return
+  }
+  if (kind === 'coin') {
+    const amount = 1 + Math.floor(Math.random() * 10)
+    for (let i = 0; i < amount; i++) {
+      coins += 1
+      coinPulseKey++
+      boardRenderer.playCoinGainFeedback(coins, coinPulseKey)
+      await new Promise((r) => window.setTimeout(r, 70))
+    }
+    recordNotice(`화폐 상자: +$${amount}`, 'info')
+    return
+  }
+  if (kind === 'chest') {
+    // 레일 보상 상자는 일반 보물상자처럼 손패 1장을 즉시 드롭.
+    const drawIds = sampleWithoutReplacement([...HAND_CARD_IDS], 1)
+    const id = drawIds[0]
+    if (id) {
+      const accepted = character.addHandCard(DropSystem.makeCard(id))
+      if (accepted) recordNotice(`레일 보상: 손패 ${getHandCardDef(id).name} 획득`, 'item-gain')
+      else recordNotice('레일 보상: 손패가 가득 차 카드를 받지 못했다', 'info')
+    }
+  }
 }
 /** Forced trial after boss: fully reuses shop-shell flow (drop layer -> pick -> EXIT -> shutter up). */
 async function openTrialOverlayForced(): Promise<void> {
-  // Use renderer-level shop shell so trial sequencing matches normal shop.
+  // 상점과 동일한 shop-shell 흐름을 재사용한다. 선택 → 이펙트 → 자동 EXIT 순서로
+  // 카드 회수(swoosh up) → 레이어 회수 → 마지막에 셔터 상승이 한 번에 이어진다.
   boardRenderer.openForcedTrialShopFlow(
     FORCED_TRIAL_CARDS.map(({ id, title, effect }) => ({ id, title, effect }))
   )
   await new Promise<void>((resolve) => {
     let picked = false
+    const finalize = async (): Promise<void> => {
+      document.removeEventListener('forcedTrialPick', onPick)
+      document.removeEventListener('forcedTrialExit', onExit as EventListener)
+      // playShopExitAnimation: 카드들이 위로 빠진다 → closeShop: 레이어 회수
+      // → playShopResumeTransition: 셔터 상승. 상점 EXIT와 완전히 같은 비트.
+      await boardRenderer.playShopExitAnimation()
+      boardRenderer.closeShop()
+      await boardRenderer.playShopResumeTransition()
+      resolve()
+    }
     const onPick = (event: Event): void => {
       const custom = event as CustomEvent<{ id?: string }>
       const id = custom.detail?.id
       const pickedCard = FORCED_TRIAL_CARDS.find((card) => card.id === id)
       if (!pickedCard || picked) return
       picked = true
-      // Apply run modifier at pick time so logs and later spawns stay deterministic.
       pickedCard.apply()
-      // Pick is separate from exit so user can inspect then explicitly leave.
+      // 선택된 카드 자체에 burst 이펙트. 동일한 카드 위에서 효과가 "터지며 적용"되는
+      // 시각 비트를 만든 뒤 자동으로 EXIT 시퀀스가 이어진다.
+      const pickedEl = document.querySelector<HTMLElement>(`[data-trial-pick="${id}"]`)
+      if (pickedEl) SquareBurst.playOn(pickedEl, 'score', { count: 18, spread: 140, duration: 620 })
       recordNotice(
-        `시련 카드 선택: ${pickedCard.title} · 스폰x${runModifiers.spawnWeightScale.toFixed(2)} / 적+${runModifiers.enemyHpBonus},+${runModifiers.enemyDamageBonus} / 함정+${runModifiers.trapDamageBonus}`,
+        `시련 적용: ${pickedCard.title} · 스폰x${runModifiers.spawnWeightScale.toFixed(2)} / 적+${runModifiers.enemyHpBonus},+${runModifiers.enemyDamageBonus} / 함정+${runModifiers.trapDamageBonus}`,
         'info'
       )
+      window.setTimeout(() => void finalize(), 620)
     }
-    const onExit = async (): Promise<void> => {
+    const onExit = (): void => {
       if (!picked) {
         recordNotice('시련 카드를 먼저 선택해야 EXIT 할 수 있다', 'info')
         return
       }
-      document.removeEventListener('forcedTrialPick', onPick)
-      document.removeEventListener('forcedTrialExit', onExit as EventListener)
-      boardRenderer.closeShop()
-      recordNotice('시련 적용 완료 · EXIT로 닫히며 셔터가 상승하고 일반 턴으로 복귀', 'info')
-      await boardRenderer.playShopResumeTransition()
-      resolve()
+      void finalize()
     }
     document.addEventListener('forcedTrialPick', onPick)
     document.addEventListener('forcedTrialExit', onExit as EventListener)

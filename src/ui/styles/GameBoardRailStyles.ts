@@ -533,4 +533,148 @@ export const GAME_BOARD_RAIL_STYLES = `
   100% { transform: scale(1.08); opacity: 1; }
 }
 
+/* ---------- Boss rail event ----------
+   30턴 제단 이후 보스 이벤트는 별도 화면이 아니라 셔터 위에 얹히는 레일 이벤트다.
+   셔터(z-index 35) 위에 boss-rail-layer를 띄우고, 거대 1칸 보스 → 보물상자 3칸
+   순서로 일반 cell/card 문법을 그대로 사용한다. */
+/* 일반 .rail과 동일한 3x3 grid 레이아웃을 그대로 흉내내, 셔터 위에서도
+   "원래 레일에서 칸이 떨어진다"는 시각 문법을 유지한다. */
+.boss-rail-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  padding: clamp(10px, 1.6vh, 14px);
+  display: grid;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(6px, 1vw, 10px);
+  pointer-events: auto;
+}
+.boss-rail-row {
+  display: contents; /* 자식 cell을 layer grid에 직접 얹는다 */
+}
+.boss-rail-row.boss-rail-front .boss-rail-tile {
+  /* 거대 보스는 3x3 전 영역을 점유한다 */
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+}
+.boss-rail-row.boss-rail-chest-row {
+  /* 보상 보물 라인은 가로 3칸짜리 큰 보물상자가 3행을 채우는 형태.
+     contents로 layer grid 위에 직접 배치된다. */
+  display: contents;
+}
+.boss-rail-row.boss-rail-chest-row .boss-chest-tile {
+  grid-column: 1 / -1;
+}
+.boss-rail-row.boss-rail-chest-row .boss-chest-tile:nth-child(1) { grid-row: 1 / 2; }
+.boss-rail-row.boss-rail-chest-row .boss-chest-tile:nth-child(2) { grid-row: 2 / 3; }
+.boss-rail-row.boss-rail-chest-row .boss-chest-tile:nth-child(3) { grid-row: 3 / 4; }
+.boss-rail-tile {
+  position: relative;
+  cursor: pointer;
+  /* 셔터 위에서 등장하므로 더 강한 drop-in을 부여한다. */
+  animation: boss-rail-drop 0.56s cubic-bezier(0.16, 0.86, 0.22, 1) both;
+}
+@keyframes boss-rail-drop {
+  0%   { transform: translateY(-220%) scale(0.94); opacity: 0; }
+  62%  { transform: translateY(18px) scale(1.02, 0.97); opacity: 1; }
+  78%  { transform: translateY(-6px) scale(0.99, 1.02); }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.boss-rail-face {
+  position: relative;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-rows: 1fr auto auto auto;
+  gap: 6px;
+  padding: clamp(10px, 1.4vh, 16px);
+  overflow: hidden;
+  border-radius: 9px;
+}
+.boss-rail-art {
+  background: var(--boss-art) center / contain no-repeat;
+  border-radius: 8px;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.55));
+  min-height: 0;
+}
+.boss-rail-name {
+  font-size: clamp(16px, 2.2vh, 22px);
+  letter-spacing: 0.04em;
+  color: #ffe1a3;
+  text-align: center;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55), 0 0 12px rgba(244, 164, 96, 0.4);
+}
+.boss-rail-stats {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  font-size: clamp(13px, 1.6vh, 16px);
+}
+.boss-rail-stats .stat { display: inline-flex; align-items: center; gap: 4px; }
+.boss-rail-stats .stat.hp { color: #ffb3a1; }
+.boss-rail-stats .stat.atk { color: #ffd178; }
+.boss-rail-stats .stat-sep { opacity: 0.6; margin: 0 2px; }
+.boss-rail-cadence {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  margin: 0 auto;
+  border: 1px solid rgba(230, 194, 129, 0.5);
+  border-radius: 999px;
+  background: rgba(20, 12, 28, 0.78);
+  color: #f7e7c8;
+}
+.boss-rail-cadence-value { color: #ffd57a; font-weight: 700; }
+
+.boss-rail-chest-row .boss-chest-tile {
+  cursor: pointer;
+  animation: boss-rail-drop 0.5s cubic-bezier(0.16, 0.86, 0.22, 1) both;
+  animation-delay: var(--boss-chest-delay, 0ms);
+}
+.boss-chest-face {
+  position: relative;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 4px;
+  padding: clamp(8px, 1.2vh, 12px);
+  overflow: hidden;
+  border-radius: 9px;
+}
+.boss-chest-art {
+  background: var(--boss-chest-art) center / contain no-repeat;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.55));
+  min-height: 0;
+}
+.boss-chest-label {
+  text-align: center;
+  font-size: clamp(12px, 1.4vh, 14px);
+  color: #ffe1a3;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+}
+
+/* 보스 타일 피해 숫자(body 마운트). */
+.boss-rail-damage-number {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  color: #ffd178;
+  font-weight: 800;
+  font-size: 28px;
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7), 0 0 14px rgba(244, 164, 96, 0.7);
+  pointer-events: none;
+  z-index: 260;
+  animation: boss-rail-damage-float 0.7s ease-out forwards;
+}
+@keyframes boss-rail-damage-float {
+  0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
+  20%  { transform: translate(-50%, -70%) scale(1.1); opacity: 1; }
+  100% { transform: translate(-50%, -160%) scale(0.95); opacity: 0; }
+}
+
 `
