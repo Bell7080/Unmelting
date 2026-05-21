@@ -3340,8 +3340,9 @@ export class GameBoardRenderer {
     if (!card) return
     await this.playShopPurchaseImpact(card, 'score')
     await this.animateResourceTrail(card, this.findResourceTrailTarget(target), Math.max(1, amount), theme)
+    // 무료 카드 소모는 선택 순간 "사라짐"이 읽히도록 약간 긴 퇴장 타이밍을 사용한다.
     card.classList.add('is-consumed')
-    window.setTimeout(() => card.remove(), 260)
+    window.setTimeout(() => card.remove(), 420)
   }
 /** Shop reroll FX: wallet blast -> reroll impact -> instant content swap.
    *  We intentionally removed flip/fade phases so cards never disappear or
