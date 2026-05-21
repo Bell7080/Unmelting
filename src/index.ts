@@ -121,6 +121,10 @@ let shopUpgradePackBuys = 0
 let shopUnlockPackBuys = 0
 let freeCardClaimed = false
 let freeCoinCardClaimed = false
+
+// 공용 무료카드(선물 상자)는 방문마다 하나의 랜덤 효과로 고정한다.
+type ShopFreeGiftKind = 'score-300' | 'coin-1' | 'health-5' | 'gauge-3' | 'hand-2'
+let freeGiftKind: ShopFreeGiftKind = 'coin-1'
 let currentShopMode: 'shop' | 'altar' = 'shop'
 /** Active pack-picker session. Holds the rolled items + the pack kind so the
  *  shopPackPick handler can look the picked item up and apply its effect. */
@@ -602,6 +606,7 @@ function buildShopStateView(): ShopStateView {
     relicOffers: currentShopOffers,
     freeCardClaimed,
     freeCoinCardClaimed,
+    freeCardDescription: freeGiftKind === 'score-300' ? '✦300' : freeGiftKind === 'coin-1' ? '1$' : freeGiftKind === 'health-5' ? '체력 5' : freeGiftKind === 'gauge-3' ? '불씨 게이지 3' : '랜덤 손패 2',
     rerollCost: 1 + shopRerollCount,
     coins,
     basicPackCost: currentShopMode === 'altar' ? 500 : 120 + shopBasicPackBuys * 40,
@@ -643,6 +648,8 @@ async function maybeOpenShopAfterTurn(): Promise<boolean> {
   shopUpgradePackBuys = 0
   shopUnlockPackBuys = 0
   freeCardClaimed = false
+  // 방문 시작 시 선물 상자의 효과를 5종 중 하나로 확정한다.
+  freeGiftKind = (['score-300', 'coin-1', 'health-5', 'gauge-3', 'hand-2'] as ShopFreeGiftKind[])[Math.floor(Math.random() * 5)]
   activePackSession = null
   // The shutter is a hard turn break: cut the chain before the shop overlay
   // appears so the floating chain text never hangs above the shop tab.
@@ -848,15 +855,44 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   )
     return
   if (detail.kind === 'free-card' || detail.kind === 'free-coin-card') {
-    const freeCard = document.querySelector<HTMLElement>('#shop-overlay .shop-free-card')
-    if (freeCard) await boardRenderer.playShopPurchaseImpact(freeCard, "score")
     if (detail.kind === 'free-card') {
-      if (!freeCardClaimed) coins += 1
+      if (freeCardClaimed) return
       freeCardClaimed = true
+      // 선물 상자는 사용 즉시 소모되며, 블라스트/증가 애니메이션은 공통 지갑 피드백을 따른다.
+      if (freeGiftKind === 'score-300') {
+        score += 300
+        scorePulseKey++
+        // 불빛 보상은 무료카드에서 불빛 패널로 직접 날려 기존 획득 문법을 유지한다.
+        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'score', 3, 'score')
+      } else if (freeGiftKind === 'coin-1') {
+        coins += 1
+        coinPulseKey++
+        // 화폐 보상은 지갑 패널로 날려 수당/리롤과 동일한 읽기 규칙을 맞춘다.
+        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'coin', 1, 'score')
+      } else if (freeGiftKind === 'health-5') {
+        gameState.character.heal(5)
+        // 체력 보상은 HP 바로 꽂혀야 피드백이 정확히 읽힌다.
+        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'health', 2, 'health-gain')
+      } else if (freeGiftKind === 'gauge-3') {
+        gameState.character.gainCandle(3)
+        // 게이지 보상은 캔들 게이지 목적지로 분기한다.
+        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'gauge', 2, 'gauge-gain')
+      } else {
+        gameState.character.addHandCard(DropSystem.makeCard(HAND_CARD_IDS[Math.floor(Math.random() * HAND_CARD_IDS.length)]))
+        gameState.character.addHandCard(DropSystem.makeCard(HAND_CARD_IDS[Math.floor(Math.random() * HAND_CARD_IDS.length)]))
+        // 손패 보상은 손패 스택 목적지로 날려 카드 획득 흐름과 같은 언어를 사용한다.
+        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'hand', 2, 'hand-control')
+      }
     } else {
-      if (!freeCoinCardClaimed) coins += 5
+      if (freeCoinCardClaimed) return
       freeCoinCardClaimed = true
+      coins += 5
+      coinPulseKey++
+      // 제단 수당은 요청사항대로 화폐 패널로 블라스트 후 5$ 롤링 증가를 사용한다.
+      await boardRenderer.consumeFreeCardAndRouteReward('free-coin-card', 'coin', 5, 'score')
     }
+    boardRenderer.playScoreGainFeedback(score, scorePulseKey)
+    boardRenderer.playCoinGainFeedback(coins, coinPulseKey)
     render()
     boardRenderer.openShop(buildShopStateView(), score, gameState.character)
     return
