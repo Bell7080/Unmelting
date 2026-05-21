@@ -206,11 +206,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   background: transparent;
   border: 0;
   box-shadow: none;
-  padding: clamp(14px, 1.6vh, 22px) clamp(16px, 2vw, 28px) clamp(18px, 2.2vh, 26px);
-  display: grid;
-  grid-template-rows: 1fr 1fr;
-  gap: clamp(10px, 1.4vh, 16px);
-  align-items: stretch;
+  /* Keep shell padding values in vars so overlay children can share exact insets. */
+  --shop-shell-pad-top: clamp(14px, 1.6vh, 22px);
+  --shop-shell-pad-x: clamp(16px, 2vw, 28px);
+  --shop-shell-pad-bottom: clamp(18px, 2.2vh, 26px);
+  box-sizing: border-box;
   overflow: visible;
   /* Keep current position and descend with its host context instead of popping in. */
   animation: none;
@@ -221,7 +221,13 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-content-bundle {
   /* NOTE: must be a real container (not display:contents) so opacity/transform
      can gate ALL shop/altar controls as one synchronized reveal layer. */
-  position: relative;
+  position: absolute;
+  /* Keep wrapped controls exactly where they were before bundling by matching shell padding. */
+  inset:
+    var(--shop-shell-pad-top)
+    var(--shop-shell-pad-x)
+    var(--shop-shell-pad-bottom)
+    var(--shop-shell-pad-x);
   z-index: 1;
   display: grid;
   /* Keep the bundle's internal track math identical to pre-wrapper layout so
