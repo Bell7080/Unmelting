@@ -151,6 +151,9 @@ export interface BossRailController {
   awaitChestClick(): Promise<string>
   /** 특정 보상을 consume 애니메이션과 함께 제거. */
   consumeChest(kind: string): Promise<void>
+  /** 보스가 일정 피해 구간에 도달했을 때 발사하는 손패 지급 trail.
+   *  일반 게임의 손패 획득 trail/burst 양식을 그대로 재사용한다. */
+  playHandGift(): Promise<void>
   /** 보스 레일 레이어 자체 정리. */
   close(): void
 }
@@ -1998,10 +2001,11 @@ export class GameBoardRenderer {
             <li><span class="boss-intro-overlay-stat-label">공격력</span><span class="boss-intro-overlay-stat-value">${opts.attack}</span></li>
             <li><span class="boss-intro-overlay-stat-label">반격 주기</span><span class="boss-intro-overlay-stat-value">3턴</span></li>
           </ul>
-          <p class="boss-intro-overlay-desc">셔터가 멈춘 채 보스 가상 턴이 진행된다. 양초 스매시류 즉사기에는 대부분 면역이며, 격파 시 보물 레일 3칸이 떨어진다.</p>
-          <p class="boss-intro-overlay-hint">아무 곳이나 클릭하면 전투 시작</p>
+          <p class="boss-intro-overlay-desc">셔터가 멈춘 채 보스 가상 턴이 진행되며, 일반 적과 같은 규칙으로 플레이어 공격력만큼 피해를 입는다. 양초 스매시류 즉사기에는 대부분 면역이며, 격파 시 보물 레일 3칸이 떨어진다.</p>
+          <p class="boss-intro-overlay-trait"><strong>특징</strong> · 보스 체력이 3 닳을 때마다 플레이어에게 랜덤 손패 1장을 지급한다.</p>
         </div>
       </section>
+      <div class="boss-intro-overlay-hint" aria-hidden="true">CLICK ANYWHERE TO CONTINUE</div>
     `
     document.body.appendChild(host)
     // 등장 비트가 자리잡도록 한 프레임 정도 대기 후 클릭 수락.
@@ -2114,8 +2118,14 @@ export class GameBoardRenderer {
           window.setTimeout(() => rail.classList.remove('is-boss-quaking'), 320)
         }
         if (damageDealt > 0) {
+          // 일반 적과 동일한 .damage-float 톤(붉은 부유 숫자)을 그대로 띄우되,
+          // 보스 카드는 3x3 전 영역을 차지하므로 위치를 카드 중앙쯤으로 올린다.
           const rect = tile.getBoundingClientRect()
-          renderer.flashDamageNumber(rect.left + rect.width / 2, rect.top + rect.height * 0.36, damageDealt)
+          void renderer.spawnFieldDamageNumber(
+            rect.left + rect.width / 2,
+            rect.top + rect.height * 0.5,
+            damageDealt
+          )
         }
         updateBossTileChrome(tile, state)
         await bossRailWait(420)
@@ -2194,6 +2204,13 @@ export class GameBoardRenderer {
         await bossRailWait(480)
         tile.remove()
       },
+      playHandGift: async (): Promise<void> => {
+        // 일반 적 처치 후 손패 드롭에 쓰이는 trail+burst 그라마를 그대로 사용.
+        // 보스 타일 위에서 손패 패널로 흐르는 hand-recovery 톤 trail.
+        const tile = layer.querySelector<HTMLElement>('[data-boss-tile]')
+        if (tile) SquareBurst.playOn(tile, 'hand-recovery', { count: 14, spread: 110, duration: 520 })
+        await renderer.animateResourceTrailFromCenter('hand', 1, 'hand-recovery')
+      },
       close: (): void => {
         layer.removeEventListener('click', handleClick)
         layer.remove()
@@ -2201,15 +2218,11 @@ export class GameBoardRenderer {
     }
   }
 
-  /** 보스 타일 피해 숫자 띄움. 카드 인스턴스에 의존하지 않는 가벼운 float-up 텍스트. */
-  private flashDamageNumber(x: number, y: number, amount: number): void {
-    const el = document.createElement('div')
-    el.className = 'boss-rail-damage-number'
-    el.textContent = `-${amount}`
-    el.style.left = `${x}px`
-    el.style.top = `${y}px`
-    document.body.appendChild(el)
-    window.setTimeout(() => el.remove(), 760)
+  /** 일반 적 카드에 사용하는 .damage-float(붉은 부유 숫자)을 카드 인스턴스
+   *  없이 임의 좌표에 띄우기 위한 public 래퍼. 보스 타일이 일반 적과 같은
+   *  데미지 글자 톤/모션을 그대로 받도록 한다. */
+  spawnFieldDamageNumber(x: number, y: number, amount: number): Promise<void> {
+    return this.animateDamageNumberAt(x, y, amount)
   }
 
   /** Open the compendium overlay listing every field-card + hand-card def
@@ -4852,7 +4865,11 @@ function renderBossTileMarkup(opts: BossTileState & { spriteUrl: string }): stri
                   <span data-boss-hp>${opts.hp}</span><span class="boss-rail-hpbar-sep">/</span><span data-boss-hp-max>${opts.maxHp}</span>
                 </span>
               </div>
-              <span class="boss-rail-atk-chip">${miniSwordSvg()}<span>${opts.attack}</span></span>
+              <!-- ATK 표기는 일반 적 카드(.card-stats .stat.atk)와 같은 그라마를 따른다.
+                   sword 아이콘도 플레이어/일반 적과 동일한 swordIcon()을 그대로 사용. -->
+              <div class="card-stats boss-rail-atk-row">
+                <span class="stat atk boss-rail-atk-stat">${swordIcon()}<span class="stat-value">${opts.attack}</span></span>
+              </div>
             </div>
             <div class="boss-rail-cadence">
               <span class="boss-rail-cadence-label">다음 공격</span>
@@ -4909,6 +4926,7 @@ function createBossRailNoopController(): BossRailController {
     dropChests: () => resolved,
     awaitChestClick: () => Promise.resolve(''),
     consumeChest: () => resolved,
+    playHandGift: () => resolved,
     close: () => undefined,
   }
 }

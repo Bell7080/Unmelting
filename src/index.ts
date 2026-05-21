@@ -1058,14 +1058,18 @@ async function closeShopAndResume(): Promise<void> {
  *  실제 런 턴 카운터는 이벤트 내내 동결된다. */
 async function runBossRailEvent(): Promise<void> {
   const frozenRunTurn = gameState.getCurrentTurn()
-  const bossMaxHp = 90
+  // 보스 규칙은 가능한 한 일반 적 카드 규칙을 그대로 따른다.
+  // 데미지는 플레이어 공격력(character.damage)로 들어가고, 보스 HP는 30.
+  // 보스 HP가 3 닳을 때마다 플레이어에게 랜덤 손패 1장이 지급된다.
+  const bossMaxHp = 30
   const bossAttack = 5
   const attackInterval = 3
-  const playerDamagePerHit = 12
+  const handGiftStep = 3
   const bossName = '밀랍 군단'
   let bossHp = bossMaxHp
   let bossTurn = 0
   let nextAttackIn = attackInterval
+  let nextHandGiftAt = bossMaxHp - handGiftStep // 27, 24, 21, ... 시점마다 지급
 
   // 보스 강하와 풀스크린 인트로(좌측 일러스트 + 우측 정보)를 동시에 시작.
   // 인트로는 아무 곳이나 클릭하면 닫히고, 그 사이 보스 타일은 셔터 위에서
@@ -1087,15 +1091,42 @@ async function runBossRailEvent(): Promise<void> {
     introClosed,
   ])
 
-  // 가상 턴 루프: 모든 입력은 보스 타일 클릭으로만 진행된다.
+  // 보스 전투 중에는 손패 카드를 일반 레일처럼 자유롭게 쓸 수 있도록 입력을 푼다.
+  // 보스 타일 클릭은 boss-rail-layer가 직접 가로채므로 일반 필드 카드 클릭이
+  // 잘못 트리거될 일은 없다. (격파 후 다음 단계 진입 직전에 다시 잠근다.)
+  inputLocked = false
+
+  // 가상 턴 루프: 보스 타일 클릭은 보스 가상 턴을 진행하지만, 손패 카드는
+  // 일반 레일처럼 턴 소모 없이 별도로 사용 가능하다(inputLocked는 풀려 있음).
   while (bossHp > 0) {
     await ctrl.awaitBossClick()
-    const dealt = Math.min(playerDamagePerHit, bossHp)
+    // 데미지는 플레이어 공격력 그대로. 일반 적 카드를 가격할 때와 동일한 규칙.
+    const dealt = Math.min(gameState.character.damage, bossHp)
     bossHp = Math.max(0, bossHp - dealt)
     bossTurn += 1
     nextAttackIn = bossHp <= 0 ? 0 : Math.max(1, attackInterval - (bossTurn % attackInterval))
     if (bossHp === 0) nextAttackIn = 0
     await ctrl.playBossHit(dealt, bossHp, nextAttackIn, bossTurn)
+
+    // HP가 일정 구간(3) 닳을 때마다 플레이어에게 랜덤 손패 1장 지급.
+    // 한 클릭에 여러 구간을 한꺼번에 넘기는 경우도 있으니 while로 처리한다.
+    while (bossHp <= nextHandGiftAt && nextHandGiftAt > 0) {
+      const drawIds = sampleWithoutReplacement([...HAND_CARD_IDS], 1)
+      const id = drawIds[0]
+      if (id) {
+        const accepted = gameState.character.addHandCard(DropSystem.makeCard(id))
+        if (accepted) {
+          recordNotice(`보스 피해 보상: 손패 ${getHandCardDef(id).name} 획득`, 'info')
+          // 일반 게임의 손패 획득 trail/burst 그라마를 그대로 재사용.
+          await ctrl.playHandGift()
+        } else {
+          recordNotice('보스 피해 보상: 손패가 가득 차 카드를 받지 못했다', 'info')
+        }
+      }
+      nextHandGiftAt -= handGiftStep
+      render()
+    }
+
     if (bossTurn % attackInterval === 0 && bossHp > 0) {
       gameState.character.takeDamage(bossAttack)
       await ctrl.playBossCounterAttack(bossAttack)
@@ -1106,6 +1137,8 @@ async function runBossRailEvent(): Promise<void> {
   }
 
   recordNotice('보스 처치! 레일 보상이 떨어진다', 'win')
+  // 격파 후 보상/시련 시퀀스로 넘어가는 동안엔 다시 입력을 잠근다.
+  inputLocked = true
   await ctrl.playBossDefeat()
   turnManager.setTurnMode('normal_turn')
 

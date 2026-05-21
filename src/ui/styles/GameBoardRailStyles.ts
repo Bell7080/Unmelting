@@ -682,19 +682,22 @@ export const GAME_BOARD_RAIL_STYLES = `
 }
 .boss-rail-hpbar-icon { color: #ffd5c5; display: inline-flex; align-items: center; }
 .boss-rail-hpbar-sep { opacity: 0.55; margin: 0 2px; }
-.boss-rail-atk-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 12px;
-  font-size: clamp(12px, 1.7vh, 14px);
-  font-weight: 700;
-  border-radius: 999px;
-  color: var(--color-flame);
-  border: 1px solid rgba(255, 215, 120, 0.4);
-  background: rgba(0, 0, 0, 0.45);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
+/* ATK 표기는 일반 적 카드 .card-stats .stat.atk 톤을 그대로 따르되, 보스는
+   3x3 전체를 차지하므로 글자/아이콘만 한 단계 크게 키운다 (chip/border 없음). */
+.boss-rail-atk-row {
+  /* 일반 card-stats는 카드 하단에 가운데 정렬되는 한 줄 stats 컨테이너. 보스는
+     hp-bar 옆 우측에 붙는 짧은 stat이므로 정렬만 살짝 조정. */
+  justify-content: flex-end;
+  font-size: clamp(16px, 2vh, 19px);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.6);
+}
+.boss-rail-atk-stat .icon,
+.boss-rail-atk-stat svg {
+  width: clamp(18px, 2.2vh, 22px);
+  height: clamp(18px, 2.2vh, 22px);
+}
+.boss-rail-atk-stat .stat-value {
+  font-size: clamp(16px, 2vh, 19px);
 }
 .boss-rail-cadence {
   align-self: center;
@@ -752,18 +755,16 @@ export const GAME_BOARD_RAIL_STYLES = `
 }
 .boss-intro-overlay-card {
   display: grid;
-  grid-template-columns: minmax(220px, 32%) 1fr;
-  gap: clamp(18px, 2.6vw, 30px);
-  width: min(880px, 92vw);
-  padding: clamp(18px, 2.6vh, 28px);
-  border: 1px solid rgba(230, 194, 129, 0.46);
+  /* 프로필을 더 크게 — 왼쪽 art 컬럼을 우측 정보보다 더 넓게 가져간다. */
+  grid-template-columns: minmax(320px, 46%) 1fr;
+  gap: clamp(20px, 3vw, 36px);
+  width: min(1080px, 94vw);
+  padding: clamp(20px, 2.8vh, 32px);
+  /* 테두리 제거 + 거의 순흑에 가까운 톤으로 자연스럽게 가라앉힌다. */
+  border: none;
   border-radius: 18px;
-  background:
-    radial-gradient(ellipse 90% 70% at 50% 0%, rgba(244, 164, 96, 0.16), transparent 70%),
-    linear-gradient(180deg, rgba(28, 18, 36, 0.98), rgba(11, 6, 16, 0.98));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.18),
-    0 22px 48px rgba(0, 0, 0, 0.65);
+  background: linear-gradient(180deg, rgba(8, 6, 12, 0.96), rgba(4, 2, 8, 0.98));
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.7);
   color: #f7e7c8;
   transform: translateY(18px) scale(0.96);
   opacity: 0;
@@ -776,14 +777,12 @@ export const GAME_BOARD_RAIL_STYLES = `
 .boss-intro-overlay-art {
   aspect-ratio: 1;
   border-radius: 14px;
-  border: 1px solid rgba(255, 214, 153, 0.46);
+  /* 테두리/내부 그림자 제거 — 일러스트가 검은 배경에 자연스럽게 흡수되게 한다. */
+  border: none;
+  box-shadow: none;
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.2),
-    inset 0 -12px 22px rgba(0, 0, 0, 0.6),
-    0 10px 24px rgba(0, 0, 0, 0.55);
 }
 .boss-intro-overlay-body {
   display: flex;
@@ -836,13 +835,37 @@ export const GAME_BOARD_RAIL_STYLES = `
   font-size: 13px;
   opacity: 0.88;
 }
-.boss-intro-overlay-hint {
-  margin: 12px 0 0;
+/* 보스 특징 한 줄 — 인트로 카드 안에 추가. 회색-금색 톤으로 desc와 구분. */
+.boss-intro-overlay-trait {
+  margin: 8px 0 0;
+  padding: 8px 12px;
   font-size: 12px;
-  letter-spacing: 0.08em;
-  color: #ffd57a;
-  opacity: 0.82;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
+  line-height: 1.45;
+  border-radius: 8px;
+  background: rgba(255, 232, 168, 0.06);
+  color: #f7e7c8;
+  border-left: 2px solid rgba(244, 164, 96, 0.55);
+}
+.boss-intro-overlay-trait strong { color: #ffd178; letter-spacing: 0.04em; }
+
+/* 인트로 hint는 카드 옆/안이 아니라 화면 하단에 회색 톤으로 깜빡인다. */
+.boss-intro-overlay-hint {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(28px, 6vh, 56px);
+  transform: translateX(-50%);
+  font-size: 12px;
+  letter-spacing: 0.32em;
+  font-weight: 600;
+  color: rgba(220, 220, 220, 0.78);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  animation: boss-intro-hint-pulse 2.2s ease-in-out infinite;
+  z-index: 1; /* host(z=470) 내부 안에 있으므로 카드보다만 살짝 앞 */
+}
+@keyframes boss-intro-hint-pulse {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 0.95; }
 }
 
 /* 보스 등장 시 셔터 진동을 한 비트 더 강화. 기본 quake와 결합해 더 묵직한 쿵 임팩트. */
@@ -887,23 +910,11 @@ export const GAME_BOARD_RAIL_STYLES = `
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
 }
 
-/* 보스 타일 피해 숫자(body 마운트). */
-.boss-rail-damage-number {
-  position: fixed;
-  transform: translate(-50%, -50%);
-  color: #ffd178;
-  font-weight: 800;
-  font-size: 28px;
-  letter-spacing: 0.04em;
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7), 0 0 14px rgba(244, 164, 96, 0.7);
-  pointer-events: none;
-  z-index: 260;
-  animation: boss-rail-damage-float 0.7s ease-out forwards;
-}
-@keyframes boss-rail-damage-float {
-  0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
-  20%  { transform: translate(-50%, -70%) scale(1.1); opacity: 1; }
-  100% { transform: translate(-50%, -160%) scale(0.95); opacity: 0; }
+/* 보스 카운터 비트의 원본 dim은 일반 적용 opacity 0.38이 너무 강해
+   "보스가 사라진 것처럼" 보였다. 보스 타일은 0.78로만 살짝 어두워지게 override.
+   (clone은 그대로 player 쪽으로 lunge하므로 두 마리가 동시에 보이는 효과가 된다.) */
+.boss-rail-tile.is-enemy-slamming-source {
+  opacity: 0.78;
 }
 
 `
