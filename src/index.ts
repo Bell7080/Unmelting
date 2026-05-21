@@ -1150,7 +1150,7 @@ async function applyBossChestReward(kind: string): Promise<void> {
     const id = drawIds[0]
     if (id) {
       const accepted = character.addHandCard(DropSystem.makeCard(id))
-      if (accepted) recordNotice(`레일 보상: 손패 ${getHandCardDef(id).name} 획득`, 'item-gain')
+      if (accepted) recordNotice(`레일 보상: 손패 ${getHandCardDef(id).name} 획득`, 'info')
       else recordNotice('레일 보상: 손패가 가득 차 카드를 받지 못했다', 'info')
     }
   }
