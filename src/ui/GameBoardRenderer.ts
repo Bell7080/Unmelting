@@ -1351,7 +1351,9 @@ export class GameBoardRenderer {
         const itemId = card.dataset.packPick
         const packKind = card.dataset.packKind as ShopPackKind | undefined
         if (!itemId || !packKind) return
-        // Run the close animation (cards lift + veil retract) immediately so
+          // Pick feedback should be immediate and minimal: only a square blast.
+          SquareBurst.playOn(card, 'score', { count: 16, spread: 86, duration: 360 })
+          // Run the close animation (cards lift + veil retract) immediately so
         // the pick reads as visceral feedback; the state apply fires in the
         // same beat so index.ts can sequence the next stage without stutter.
         this.closePackPicker()
@@ -3277,8 +3279,9 @@ export class GameBoardRenderer {
     // GameBoardPlayerShopStyles for the 0/26/34/100 stops). We still swap in
     // the middle of the hold so content changes remain invisible to players.
     const STAGGER_MS = 130
-    const FLIP_MS = 620
-    const SWAP_AT_MS = Math.round(FLIP_MS * 0.30)
+    // One full turn. We swap at half-turn (180°) so the revealed front is already rerolled.
+    const FLIP_MS = 560
+    const SWAP_AT_MS = Math.round(FLIP_MS * 0.5)
     const flips: Promise<void>[] = []
     let flipIndex = 0
     allCards.forEach((card, idx) => {
@@ -3290,12 +3293,11 @@ export class GameBoardRenderer {
       flipIndex += 1
       card.style.setProperty('--shop-reroll-stagger', `${delay}ms`)
       card.style.setProperty('--shop-reroll-flip-ms', `${FLIP_MS}ms`)
-      const flipper = card.querySelector<HTMLElement>('.shop-relic-flipper')
-      if (!flipper) return
-      flipper.classList.remove('is-rerolling')
+      // Rotate the whole relic slab (shadow/glow/border included), not only the inner face.
+      card.classList.remove('is-rerolling')
       // Reflow로 애니메이션 재시작을 보장해 리롤마다 항상 같은 플립 타이밍을 맞춘다.
-      void flipper.offsetWidth
-      flipper.classList.add('is-rerolling')
+      void card.offsetWidth
+      card.classList.add('is-rerolling')
       flips.push(
         new Promise<void>((resolve) => {
           // Swap during the middle of the held-back pause: the card has
@@ -3306,7 +3308,7 @@ export class GameBoardRenderer {
           }, delay + SWAP_AT_MS)
           // 플립 완료 시 클래스를 즉시 해제해 다음 리롤에서도 투명/잔상 상태가 누적되지 않게 한다.
           window.setTimeout(() => {
-            flipper.classList.remove('is-rerolling')
+            card.classList.remove('is-rerolling')
             resolve()
           }, delay + FLIP_MS + 30)
         })
