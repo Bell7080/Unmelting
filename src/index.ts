@@ -1005,7 +1005,6 @@ async function closeShopAndResume(): Promise<void> {
     await boardRenderer.playAltarBossGateTransition()
     turnManager.setTurnMode('boss_phase')
     recordNotice('셔터 레일이 흔들리며 보스가 강림한다', 'hurt')
-    await boardRenderer.openBossIntroOverlay()
     await runBossStubCombatAndRewards()
     inputLocked = false
     render()
@@ -1016,65 +1015,100 @@ async function closeShopAndResume(): Promise<void> {
   render()
 }
 
-/** Temporary boss slice: applies requested 3-turn cadence + defeat rewards flow scaffold. */
+/** Temporary boss slice: wires a dedicated boss page flow without touching normal turn count. */
 async function runBossStubCombatAndRewards(): Promise<void> {
-  // This stub keeps combat rules isolated from normal turns until dedicated boss page lands.
-  let bossHp = 30
+  // Boss phase uses a dedicated loop so normal turn counters/milestones do not move.
+  let bossHp = 90
+  const bossMaxHp = 90
+  const bossAttack = 5
   let bossTurn = 0
+  let nextAttackIn = 3
+  const playerBurst = 12
+
+  // Intro overlays: first landing, then title slide before the page starts.
+  await boardRenderer.openBossIntroOverlay()
   while (bossHp > 0) {
     bossTurn += 1
-    // Placeholder auto damage so cinematic chain can proceed in this slice.
-    bossHp -= 10
-    if (bossTurn % 3 === 0) {
-      gameState.character.takeDamage(5)
+    bossHp = Math.max(0, bossHp - playerBurst)
+    nextAttackIn = bossHp <= 0 ? nextAttackIn : Math.max(1, 3 - (bossTurn % 3))
+    if (bossTurn % 3 === 0 && bossHp > 0) {
+      gameState.character.takeDamage(bossAttack)
       await boardRenderer.animateDamageFlash()
+      nextAttackIn = 3
     }
+    recordNotice(`보스 턴 ${bossTurn} · 보스 HP ${bossHp}/${bossMaxHp} · 다음 공격 ${nextAttackIn}턴`, 'info')
+    render()
+    await new Promise((resolve) => window.setTimeout(resolve, 220))
   }
+
+  // Defeat effect beat is intentionally delayed so reward shutters don't pop too early.
+  recordNotice('보스 처치! 레일 보상 셔터가 낙하한다', 'win')
+  await new Promise((resolve) => window.setTimeout(resolve, 700))
   turnManager.setTurnMode('normal_turn')
   await openBossRewardOverlay()
   await openTrialOverlayForced()
 }
 
-/** Post-boss reward overlay: 3x3 rewards represented as three mandatory slots. */
+/** Post-boss reward overlay: mandatory 3x3 clear (three 3-cell rail rewards). */
 async function openBossRewardOverlay(): Promise<void> {
   const host = document.createElement('div')
   host.id = 'boss-reward-overlay'
   host.style.cssText = 'position:fixed;inset:0;z-index:450;display:flex;align-items:center;justify-content:center;background:rgba(8,5,14,.86);'
-  host.innerHTML = `<section style="width:min(860px,94vw);padding:16px;border:1px solid rgba(230,194,129,.42);border-radius:16px;background:linear-gradient(180deg, rgba(35,24,44,.98), rgba(15,10,21,.98));color:#f7e7c8;">
-  <h2 style="margin:0 0 10px;">보스 처치 보상</h2>
-  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;">
-    <button data-reward=\"chest\" style=\"padding:18px;border-radius:12px;\">보물상자</button>
-    <button data-reward=\"heal\" style=\"padding:18px;border-radius:12px;\">체력/불씨 전회복</button>
-    <button data-reward=\"coin\" style=\"padding:18px;border-radius:12px;\">1~10$ 랜덤</button>
+  host.innerHTML = `<section style="width:min(940px,94vw);padding:20px;border:1px solid rgba(230,194,129,.42);border-radius:16px;background:linear-gradient(180deg, rgba(35,24,44,.98), rgba(15,10,21,.98));color:#f7e7c8;">
+  <h2 style="margin:0 0 10px;">보스 처치 보상 레일 (3x3)</h2>
+  <p style="margin:0 0 14px;opacity:.8;">3칸 보상 3개를 전부 획득해야 다음 단계로 진행됩니다.</p>
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
+    <button data-reward="chest" style="padding:22px;border-radius:12px;">1) 보물상자 (3칸)</button>
+    <button data-reward="heal" style="padding:22px;border-radius:12px;">2) 체력/불씨 완전 회복</button>
+    <button data-reward="coin" style="padding:22px;border-radius:12px;">3) 1~10$ 랜덤</button>
   </div></section>`
   document.body.appendChild(host)
   const claimed = new Set<string>()
   await new Promise<void>((resolve) => {
-    host.addEventListener('click', (event) => {
+    host.addEventListener('click', async (event) => {
       const btn = (event.target as HTMLElement).closest<HTMLElement>('[data-reward]')
       if (!btn) return
       const kind = btn.dataset.reward ?? ''
       if (claimed.has(kind)) return
       claimed.add(kind)
       btn.style.opacity = '.45'
-      if (kind === 'heal') { gameState.character.heal(999); gameState.character.gainEmber(999) }
-      if (kind === 'coin') coins += 1 + Math.floor(Math.random() * 10)
+      if (kind === 'heal') {
+        // Boss clear reward restores both HP and candle gauge fully.
+        gameState.character.heal(999)
+        gameState.character.gainCandle(999)
+      }
+      if (kind === 'coin') {
+        const amount = 1 + Math.floor(Math.random() * 10)
+        // Coin reward uses incremental tick grammar (1$ per beat) to match request.
+        for (let i = 0; i < amount; i++) {
+          coins += 1
+          coinPulseKey++
+          boardRenderer.playCoinGainFeedback(coins, coinPulseKey)
+          await new Promise((r) => window.setTimeout(r, 70))
+        }
+        recordNotice(`+$${amount}`, 'info')
+      }
+      render()
       if (claimed.size >= 3) { host.remove(); resolve() }
     })
   })
 }
 
-/** Forced trial after boss: no EXIT and placeholder "미정" content as requested. */
+/** Forced trial after boss: no EXIT, layer 005, and mandatory 3-card pick. */
 async function openTrialOverlayForced(): Promise<void> {
   const host = document.createElement('div')
   host.id = 'trial-overlay-forced'
   host.style.cssText = 'position:fixed;inset:0;z-index:455;display:flex;align-items:center;justify-content:center;background:rgba(10,8,18,0.8);'
-  host.innerHTML = `<section style="width:min(920px,94vw);padding:18px;border:1px solid rgba(230,194,129,.42);border-radius:16px;background:linear-gradient(180deg, rgba(35,24,44,.98), rgba(15,10,21,.98));color:#f7e7c8;">
-  <h2 style="margin:0 0 12px;">시련 선택</h2>
-  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
-    <button data-trial=\"a\" style=\"padding:24px;border-radius:12px;\">미정 미정 미정</button>
-    <button data-trial=\"b\" style=\"padding:24px;border-radius:12px;\">미정 미정 미정</button>
-    <button data-trial=\"c\" style=\"padding:24px;border-radius:12px;\">미정 미정 미정</button>
+  host.innerHTML = `<section style="width:min(980px,95vw);padding:0;border:1px solid rgba(230,194,129,.42);border-radius:16px;overflow:hidden;background:linear-gradient(180deg, rgba(35,24,44,.98), rgba(15,10,21,.98));color:#f7e7c8;">
+  <div style="height:180px;background:url('${SpriteUrls.altarVeilBg}') center/cover no-repeat;opacity:.78"></div>
+  <div style="padding:16px;">
+    <h2 style="margin:0 0 10px;">시련 선택</h2>
+    <p style="margin:0 0 14px;opacity:.82">버튼 없이 반드시 1장을 선택해야 진행됩니다.</p>
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;">
+      <button data-trial="a" style="padding:30px 20px;border-radius:14px;">미정 미정 미정</button>
+      <button data-trial="b" style="padding:30px 20px;border-radius:14px;">미정 미정 미정</button>
+      <button data-trial="c" style="padding:30px 20px;border-radius:14px;">미정 미정 미정</button>
+    </div>
   </div></section>`
   document.body.appendChild(host)
   await new Promise<void>((resolve) => {
