@@ -1213,7 +1213,9 @@ async function handleBossClick(card: Card): Promise<void> {
   // 3 가상 턴마다 보스 반격(일반 적 lunge 그라마 그대로 재사용).
   if (state.turn % state.attackInterval === 0) {
     character.takeDamage(card.getDamage())
-    await boardRenderer.animateEnemyAttacks([{ cardId: card.id, laneIndex: 0, damage: card.getDamage() }])
+    await boardRenderer.animateEnemyAttacks([
+      { cardId: card.id, cardName: card.name, laneIndex: 0, damage: card.getDamage() },
+    ])
     await boardRenderer.animateDamageFlash()
     recordNotice(`보스 반격! 플레이어가 ${card.getDamage()} 피해를 받았다`, 'hurt')
     render()
