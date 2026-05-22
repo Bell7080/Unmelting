@@ -1144,9 +1144,8 @@ async function runBossRailEvent(): Promise<void> {
   bossEventState = null
   render()
 
-  // 보스 격파 보상: 일반 적 처치 후 손패 드롭과 동일한 그라마로 회복/손패/화폐를 지급.
-  // 추후 보스별 보상 메커니즘으로 확장 가능하지만 일단 즉시 지급으로 통일.
-  await applyBossClearRewards()
+  // 보스 격파 보상은 셔터 위 보상 탭(3x1)으로 순차 지급한다.
+  await applyBossClearRewardsRail()
 
   // 시련은 기존 shop-shell 흐름을 재사용. EXIT 시 셔터가 비로소 상승한다.
   await openTrialOverlayForced()
@@ -1155,13 +1154,38 @@ async function runBossRailEvent(): Promise<void> {
     recordNotice(`경고: 보스 이벤트 중 실제 턴(${frozenRunTurn})이 변경됨`, 'hurt')
 }
 
-/** 보스 격파 직후 즉시 지급되는 통합 보상: HP 풀 회복 / 불씨 가득 / 화폐 +N / 손패 1장.
- *  추후 보스별 보상 메커니즘으로 확장 가능. (콤보 게이지는 건드리지 않는다.) */
-async function applyBossClearRewards(): Promise<void> {
+/** 보스 격파 보상은 3개의 3x1 보물 탭을 순차 처리한다.
+ *  1) 체력/불씨 전회복, 2) 큰 보물상자(손패 3장), 3) 현상금(1~10$). */
+async function applyBossClearRewardsRail(): Promise<void> {
+  const bossId = bossEventState?.card.id ?? null
+  // 3x1 보상 레일 연출은 기존 보드 보상 톤(드롭→블라스트→HUD trail)을 그대로 따른다.
+  await boardRenderer.playBossRewardRail([
+    { id: 'restore', label: '재점화', sublabel: '체력/불씨 전회복', art: 'treasure_003' },
+    { id: 'big-chest', label: '큰 보물상자', sublabel: '손패 3장 획득', art: 'treasure_003' },
+    { id: 'bounty', label: '현상금', sublabel: '클릭 시 1~10$', art: 'coin_001' },
+  ])
+
   const character = gameState.character
   character.heal(character.maxHealth)
   character.gainEmber(character.emberMax)
-  recordNotice('보스 보상: 체력 풀 회복 / 불씨 가득', 'win')
+  recordNotice('보스 보상[1/3]: 체력/불씨 전회복', 'win')
+  render()
+  if (bossId) {
+    await Promise.all([
+      boardRenderer.animateResourceTrailFromCard(bossId, 'health', Math.max(1, character.maxHealth), 'score'),
+      boardRenderer.animateResourceTrailFromCard(bossId, 'ember', Math.max(1, character.emberMax), 'ember-gain'),
+    ])
+  }
+
+  let gained = 0
+  for (let i = 0; i < 3; i++) {
+    const id = sampleWithoutReplacement([...HAND_CARD_IDS], 1)[0]
+    if (!id) continue
+    if (!character.addHandCard(DropSystem.makeCard(id))) continue
+    gained++
+    if (bossId) await boardRenderer.animateResourceTrailFromCard(bossId, 'hand', 1, 'hand-recovery')
+  }
+  recordNotice(`보스 보상[2/3]: 큰 보물상자 손패 ${gained}장`, 'info')
 
   const amount = 1 + Math.floor(Math.random() * 10)
   for (let i = 0; i < amount; i++) {
@@ -1170,15 +1194,8 @@ async function applyBossClearRewards(): Promise<void> {
     boardRenderer.playCoinGainFeedback(coins, coinPulseKey)
     await new Promise((r) => window.setTimeout(r, 70))
   }
-  recordNotice(`보스 보상: +$${amount}`, 'info')
-
-  const drawIds = sampleWithoutReplacement([...HAND_CARD_IDS], 1)
-  const id = drawIds[0]
-  if (id) {
-    const accepted = character.addHandCard(DropSystem.makeCard(id))
-    if (accepted) recordNotice(`보스 보상: 손패 ${getHandCardDef(id).name} 획득`, 'info')
-    else recordNotice('보스 보상: 손패가 가득 차 카드를 받지 못했다', 'info')
-  }
+  recordNotice(`보스 보상[3/3]: 현상금 +$${amount}`, 'info')
+  if (bossId) await boardRenderer.animateResourceTrailFromCard(bossId, 'coin', amount, 'score')
   render()
 }
 
@@ -1250,9 +1267,8 @@ async function handleBossDefeated(): Promise<void> {
   const state = bossEventState
   // 격파 비트는 일반 적 처치 그라마(.is-enemy-defeated-consuming + treasure-gain burst)를
   // 그대로 사용. 격파 시각 후 resolver 호출 → runBossRailEvent가 다음 단계 진행.
-  const tile = document.querySelector<HTMLElement>(`[data-card-id="${state.card.id}"]`)
-  if (tile) tile.classList.add('is-enemy-defeated-consuming')
-  await new Promise((r) => window.setTimeout(r, 480))
+  // 보스 전용 파괴 연출(흔들림→균열→사각 버스트→확대 페이드)을 재생한다.
+  await boardRenderer.animateCardConsume(state.card)
   for (let i = 0; i < 3; i++) gameState.lanes[i].setCardAtDistance(0, null)
   render()
   state.defeated?.()
@@ -2214,6 +2230,8 @@ async function applyHandSingle(
   // UI-facing preparation refresh: removed cards are compacted and replaced in
   // one beat so the rail never displays holes before input unlocks.
   await runPreparationRefreshAfterFieldEffects()
+  // 손패/조합으로 보스 HP가 0이 된 경로도 클릭 처치와 같은 격파 흐름으로 합류시킨다.
+  await checkBossDefeatedAfterHandEffect()
   setTimeout(() => {
     inputLocked = false
   }, 320)
