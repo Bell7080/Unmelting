@@ -713,9 +713,9 @@ export class GameBoardRenderer {
     if (card.type === CardType.BOSS) {
       return this.renderBossFace(card)
     }
+    // 위 분기에서 BOSS는 이미 renderBossFace로 우회 처리됐으므로 여기는 ENEMY만 검사.
     let stats = ''
-    if (card.type === CardType.ENEMY || card.type === CardType.BOSS) {
-      // BOSS도 ENEMY와 같은 HP/ATK 칩 그라마. CSS에서 .type-boss에 별도 톤만 추가.
+    if (card.type === CardType.ENEMY) {
       stats = `
         <div class="card-stats">
           <span class="stat hp">${heartIcon()}<span class="stat-value">${card.getHealth()}</span></span>
