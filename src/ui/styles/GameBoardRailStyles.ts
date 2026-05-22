@@ -535,9 +535,8 @@ export const GAME_BOARD_RAIL_STYLES = `
 
 /* ---------- Boss rail event ----------
    보스는 5번째 카드 종류(CardType.BOSS)로 lanes의 active row에 정식 박힌다.
-   일반 적 카드와 같은 cell/card 그라마(클릭/손패 타겟팅/strike pop/defeat shrink)를
-   그대로 따라가되, 셔터(z-index 35)가 닫힌 채 유지되므로 BOSS 셀만 z-index 40으로
-   셔터 위에 떠 보이게 한다. */
+   공통: 카드면이 .boss-face 풀-아트 + 하단 보스바 + 좌상단 N턴 뱃지 그라마를 따른다.
+   사이즈 유형(3x3 거대, 1x3, 1x1 등)은 .boss-kind-* 마커별 CSS에서 분기. */
 .cell.card.type-boss {
   position: relative;
   z-index: 40;
@@ -549,11 +548,160 @@ export const GAME_BOARD_RAIL_STYLES = `
     var(--card-lift-shadow-grouped, 0 4px 10px rgba(0, 0, 0, 0.55)),
     var(--card-depth-shadow, 0 14px 24px rgba(0, 0, 0, 0.45)),
     0 0 26px rgba(244, 164, 96, 0.42);
+  overflow: hidden;
 }
 /* 보스 phase 동안 active row가 셔터 위에 노출되도록 row stacking context도 함께 올린다. */
 .rail-row.dist-0:has(.cell.card.type-boss) {
   position: relative;
   z-index: 40;
+}
+/* ---- 사이즈 유형: boss-kind-waxArmy = 3x3 거대 적 ----
+   active row의 grouped 3-cell이 .rail의 3 row를 모두 점유해 3x3 풀필드로 보인다.
+   윗 두 row(dist-1, dist-2)는 보스 phase 동안 보스에 가려져야 하므로 숨긴다.
+   (lanes 데이터는 그대로 보존 — 격파/시련 종료 후 자연 복원된다.) */
+.rail:has(.cell.card.boss-kind-waxArmy) .rail-row.dist-0 {
+  grid-row: 1 / -1;
+}
+.rail:has(.cell.card.boss-kind-waxArmy) .rail-row.dist-1,
+.rail:has(.cell.card.boss-kind-waxArmy) .rail-row.dist-2 {
+  display: none;
+}
+
+/* ---- 보스 공통 face(풀-아트 + overlay + 하단 보스바 + 좌상단 N턴 뱃지) ---- */
+.boss-face {
+  position: absolute;
+  inset: 0;
+  display: block;
+  isolation: isolate;
+  background: #14101c;
+  border-radius: 9px;
+  overflow: hidden;
+}
+.boss-face-art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--boss-art) center 32% / cover no-repeat;
+  filter: saturate(1.06) contrast(1.04);
+}
+.boss-face-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(20, 16, 28, 0) 28%, rgba(20, 16, 28, 0.55) 62%, rgba(8, 5, 14, 0.95) 100%),
+    radial-gradient(130% 60% at 50% 0%, rgba(244, 164, 96, 0.14), transparent 70%);
+}
+/* 좌상단 N턴 뱃지 — 폭탄/포자 frozen-badge 톤을 따라 어두운 wax 칩으로. */
+.boss-face-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 3;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #ffd178;
+  border: 1px solid rgba(255, 196, 120, 0.6);
+  border-radius: 999px;
+  background: rgba(28, 18, 12, 0.85);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
+}
+.boss-face-title-row {
+  position: absolute;
+  top: 14px;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.boss-face-tag {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  padding: 3px 9px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 196, 120, 0.7);
+  color: #ffd178;
+  background: rgba(48, 22, 18, 0.85);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
+}
+.boss-face-name {
+  font-size: clamp(20px, 3.2vh, 30px);
+  letter-spacing: 0.04em;
+  color: #ffe1a3;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.75), 0 0 16px rgba(244, 164, 96, 0.5);
+}
+/* 하단 stats: 플레이어 hp-bar + atk-stat 톤. */
+.boss-face-stats {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  padding: clamp(10px, 1.4vh, 14px) clamp(14px, 2vw, 22px);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  color: #f7e7c8;
+}
+.boss-face-hpbar {
+  position: relative;
+  height: clamp(18px, 2.4vh, 24px);
+  border-radius: 999px;
+  border: 1px solid rgba(168, 58, 58, 0.78);
+  background: rgba(0, 0, 0, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.16),
+    inset 0 -6px 12px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+.boss-face-hpbar-fill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #c9472a 0%, #f4a460 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 215, 120, 0.4);
+  transition: width 0.28s cubic-bezier(0.2, 0.86, 0.28, 1);
+}
+.boss-face-hpbar-text {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 100%;
+  font-size: clamp(12px, 1.6vh, 14px);
+  font-weight: 700;
+  color: #fff5dc;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  font-variant-numeric: tabular-nums;
+}
+.boss-face-hpbar-icon { color: #ffd5c5; display: inline-flex; align-items: center; }
+.boss-face-hpbar-sep { opacity: 0.55; margin: 0 2px; }
+/* ATK는 일반 적 톤이지만 보스라 한 단계 큼. 아이콘/숫자 모두 키운다. */
+.boss-face-atk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px;
+  font-weight: 700;
+  border-radius: 999px;
+  color: var(--color-flame);
+  border: 1px solid rgba(255, 215, 120, 0.4);
+  background: rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}
+.boss-face-atk svg { width: clamp(20px, 2.6vh, 26px); height: clamp(20px, 2.6vh, 26px); }
+.boss-face-atk-value {
+  font-size: clamp(18px, 2.4vh, 22px);
+  font-variant-numeric: tabular-nums;
 }
 /* 보스 등장 시 셔터 진동을 한 비트 강화. 인트로 + 강하와 함께 묵직한 쿵 임팩트. */
 .rail.is-boss-quaking {

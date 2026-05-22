@@ -604,8 +604,12 @@ export class GameBoardRenderer {
       this.hasRendered && !this.previousCardIds.has(card.id) ? 'is-entering' : '',
       this.shouldAnimateGroup(card.id, span) ? 'is-newly-grouped' : '',
       card.isFrozen() ? 'is-frozen' : '',
-      // 보스 카드(CardType.BOSS)는 셔터 위로 떠 있어야 한다. type-boss 클래스가
-      // 자동으로 적용되므로 별도 마커는 필요 없고, CSS의 .type-boss가 z-index를 띄운다.
+      // 보스는 5번째 카드 종류. 보스마다 메커니즘/스타일이 다를 수 있으므로,
+      // 공통은 type-boss(셔터 위 z-index) 하나만 적용하고, 이 보스(밀랍 군단)만의
+      // 풀필드 확장·좌상단 3T 뱃지 등은 boss-kind-<id> 마커로 한정한다.
+      card.type === CardType.BOSS && card.specialEnemyKind
+        ? `boss-kind-${card.specialEnemyKind}`
+        : '',
     ]
       .filter(Boolean)
       .join(' ')
@@ -704,6 +708,11 @@ export class GameBoardRenderer {
   }
 
   private renderCardFace(card: Card, span: number): string {
+    // 보스 face(BOSS 태그/이름/HP 바/ATK 칩/좌상단 N턴 뱃지)는 모든 보스 공통 그라마.
+    // 3x3 확장 같은 "사이즈 유형"은 specialEnemyKind 마커로 CSS에서만 분기된다.
+    if (card.type === CardType.BOSS) {
+      return this.renderBossFace(card)
+    }
     let stats = ''
     if (card.type === CardType.ENEMY || card.type === CardType.BOSS) {
       // BOSS도 ENEMY와 같은 HP/ATK 칩 그라마. CSS에서 .type-boss에 별도 톤만 추가.
@@ -779,6 +788,38 @@ export class GameBoardRenderer {
           ${stats}
         </div>
       </div>
+    `
+  }
+
+  /** 보스 공통 face. 풀-아트 + 하단 보스바(플레이어 hp-bar 톤) + 큰 ATK 칩 +
+   *  좌상단 N턴 뱃지 layout. "3x3 거대" 같은 사이즈 유형은 specialEnemyKind 마커가
+   *  걸리는 .boss-kind-* CSS에서 분기된다(face 마크업은 동일). */
+  private renderBossFace(card: Card): string {
+    const sprite = spriteForCard(card)
+    const hp = card.getHealth()
+    const maxHp = card.enemyHealthTotal || card.baseHealth || hp
+    const hpPct = Math.max(0, Math.min(100, (hp / Math.max(1, maxHp)) * 100))
+    const atk = card.getDamage()
+    return `
+      <article class="boss-face" style="--boss-art: url('${sprite}');">
+        <div class="boss-face-art" aria-hidden="true"></div>
+        <div class="boss-face-overlay" aria-hidden="true"></div>
+        <div class="boss-face-badge" aria-label="3턴마다 반격">3T</div>
+        <div class="boss-face-title-row">
+          <span class="boss-face-tag">BOSS</span>
+          <span class="boss-face-name">${escapeHtml(card.name)}</span>
+        </div>
+        <div class="boss-face-stats">
+          <div class="boss-face-hpbar" aria-label="보스 체력">
+            <div class="boss-face-hpbar-fill" style="width:${hpPct}%"></div>
+            <span class="boss-face-hpbar-text">
+              <span class="boss-face-hpbar-icon">${heartIcon()}</span>
+              <span>${hp}</span><span class="boss-face-hpbar-sep">/</span><span>${maxHp}</span>
+            </span>
+          </div>
+          <span class="boss-face-atk">${swordIcon()}<span class="boss-face-atk-value">${atk}</span></span>
+        </div>
+      </article>
     `
   }
 

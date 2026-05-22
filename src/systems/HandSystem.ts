@@ -483,14 +483,19 @@ export class HandSystem {
     return false
   }
 
-  /** Deal damage to a chosen field enemy, or to the first enemy for merged auto-use. */
+  /** Deal damage to a chosen field enemy/boss, or to the first enemy-like card for merged auto-use. */
   private static damageTargetEnemy(
     gs: GameState,
     target: HandTarget | undefined,
     amount: number
   ): string {
-    const actualTarget = target ?? HandSystem.findFirstOnField(gs, [CardType.ENEMY])
-    if (!actualTarget || actualTarget.card.type !== CardType.ENEMY) return '대상 적 없음'
+    // BOSS도 적과 같은 양식의 5번째 카드 종류이므로 손패 적 타겟팅이 동일하게 닿는다.
+    const actualTarget = target ?? HandSystem.findFirstOnField(gs, [CardType.ENEMY, CardType.BOSS])
+    if (
+      !actualTarget ||
+      (actualTarget.card.type !== CardType.ENEMY && actualTarget.card.type !== CardType.BOSS)
+    )
+      return '대상 적 없음'
     actualTarget.card.takeDamage(amount)
     if (actualTarget.card.getHealth() <= 0) {
       gs.removeCardFromRow(actualTarget.card, actualTarget.distance)
@@ -499,7 +504,7 @@ export class HandSystem {
     return `${actualTarget.card.name} 피해 ${amount}`
   }
 
-  /** Damage enemies in either the whole field or only the active front row. */
+  /** Damage enemies/boss in either the whole field or only the active front row. */
   private static damageEnemies(gs: GameState, scope: 'front' | 'field', amount: number): string {
     const seen = new Set<Card>()
     let hit = 0
@@ -508,7 +513,8 @@ export class HandSystem {
       const maxDistance = scope === 'front' ? 1 : LANE_DISTANCE_COUNT
       for (let d = 0; d < maxDistance; d++) {
         const card = gs.lanes[lane].getCardAtDistance(d)
-        if (!card || seen.has(card) || card.type !== CardType.ENEMY) continue
+        if (!card || seen.has(card)) continue
+        if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) continue
         seen.add(card)
         card.takeDamage(amount)
         hit++
@@ -522,13 +528,14 @@ export class HandSystem {
     return `${scopeLabel} ${hit}체에 피해 ${amount}${defeated > 0 ? ` · ${defeated}체 처치` : ''}`
   }
 
-  /** Destroy one random enemy from the active row. */
+  /** Destroy one random enemy/boss from the active row. */
   private static destroyRandomFrontEnemy(gs: GameState): string {
     const enemies: { card: Card; distance: number }[] = []
     const seen = new Set<Card>()
     for (const lane of gs.lanes) {
       const card = lane.getCardAtDistance(0)
-      if (!card || seen.has(card) || card.type !== CardType.ENEMY) continue
+      if (!card || seen.has(card)) continue
+      if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) continue
       seen.add(card)
       enemies.push({ card, distance: 0 })
     }

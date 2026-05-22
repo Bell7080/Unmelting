@@ -1085,13 +1085,16 @@ async function runBossRailEvent(): Promise<void> {
   }
 
   // 보스 카드 = 5번째 카드 종류. 3-cell wide grouped enemy처럼 lanes 3개에 같은 인스턴스.
+  // specialEnemyKind 'waxArmy'는 이 보스(밀랍 군단)만의 식별자 — 3x3 풀필드 확장,
+  // 좌상단 3T 뱃지 등 이 보스 한정 스타일/메커니즘이 이 마커로만 적용된다.
   const bossCard = new Card(
     `boss-altar-${gameState.getCurrentTurn()}`,
     CardType.BOSS,
     bossName,
     '제단의 수문장',
     bossMaxHp,
-    bossAttack
+    bossAttack,
+    { specialEnemyKind: 'waxArmy' }
   )
   bossCard.groupCount = 3
   bossCard.enemyHealthTotal = bossMaxHp
