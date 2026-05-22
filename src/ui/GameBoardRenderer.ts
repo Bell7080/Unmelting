@@ -4942,6 +4942,3 @@ function escapeAttr(s: string): string {
 function miniHeartSvg(): string {
   return `<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M8 13.2 2.6 8.2A3.3 3.3 0 0 1 8 4.3a3.3 3.3 0 0 1 5.4 3.9Z"/></svg>`
 }
-function miniSwordSvg(): string {
-  return `<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M12 1.2 14.8 4 8.2 10.6 5.4 7.8Zm-7 9 1.8 1.8L4 14.8 1.2 12Z"/></svg>`
-}
