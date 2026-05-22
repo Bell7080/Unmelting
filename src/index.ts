@@ -915,8 +915,9 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
       } else if (freeGiftKind === 'coin-1') {
         coins += 1
         coinPulseKey++
-        // 화폐 보상은 지갑 패널로 날려 수당/리롤과 동일한 읽기 규칙을 맞춘다.
-        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'coin', 1, 'score')
+        // 화폐 보상은 코인 톤 burst(treasure-gain)로 발사 — 불빛(score) burst가
+        // 같이 뜨던 버그 수정. 보상 종류에 맞는 입자 색감만 보이도록 한다.
+        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'coin', 1, 'treasure-gain')
       } else if (freeGiftKind === 'health-5') {
         gameState.character.heal(5)
         // 체력 보상은 HP 바로 꽂혀야 피드백이 정확히 읽힌다.
@@ -936,8 +937,9 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
       freeCoinCardClaimed = true
       coins += 5
       coinPulseKey++
-      // 제단 수당은 요청사항대로 화폐 패널로 블라스트 후 5$ 롤링 증가를 사용한다.
-      await boardRenderer.consumeFreeCardAndRouteReward('free-coin-card', 'coin', 5, 'score')
+      // 제단 수당은 화폐 패널로 블라스트 후 5$ 롤링 증가. source burst도 코인 톤
+      // (treasure-gain)으로 발사해 불빛 입자가 같이 뜨는 시각 혼선을 제거.
+      await boardRenderer.consumeFreeCardAndRouteReward('free-coin-card', 'coin', 5, 'treasure-gain')
     }
     boardRenderer.playScoreGainFeedback(score, scorePulseKey)
     boardRenderer.playCoinGainFeedback(coins, coinPulseKey)
@@ -1079,6 +1081,10 @@ interface BossRewardState {
   remaining: number
 }
 let bossRewardState: BossRewardState | null = null
+/** 보스전 이후 보상 페이지·시련 페이지 진행 동안은 손패 카드 사용을 차단한다.
+ *  보스 phase 본전(클릭/손패) 단계와 달리, 보상/시련 단계는 cardAction 클릭만 받는다.
+ *  stageBossRewardChests 진입 시 true, 시련 종료(셔터 상승 직전) 직후 false. */
+let bossPostPhaseHandLocked = false
 
 async function runBossRailEvent(): Promise<void> {
   const frozenRunTurn = gameState.getCurrentTurn()
@@ -1123,6 +1129,8 @@ async function runBossRailEvent(): Promise<void> {
   }
 
   turnManager.setTurnMode('boss_phase')
+  // 좌상단 카운트 초기값 = attackInterval. 가상 턴이 진행될 때마다 1씩 감소한다.
+  boardRenderer.setBossAttackCountdown(attackInterval)
 
   // 셔터 진동 + 보스 강하(render의 is-entering 키프레임으로 자동) + 풀스크린 인트로 병렬.
   await boardRenderer.playAltarBossGateTransition()
@@ -1171,8 +1179,11 @@ async function handleBossClick(card: Card): Promise<void> {
   const state = bossEventState
   const character = gameState.character
 
-  // 굳음 상태인 보스는 가격해도 데미지가 들어가지 않는다(일반 적 freeze 그라마와 동일).
+  // 굳음(밀랍) 상태인 보스는 가격해도 데미지가 들어가지 않는다. 단순 무시가 아니라
+  // 일반 적 freeze 그라마와 통일된 시각 피드백을 부여한다 — 카드가 살짝 발작하듯
+  // 떨리고, 데미지 부유 숫자와 같은 양식으로 "저항" 글자가 떠오른다.
   if (card.isFrozen()) {
+    await boardRenderer.playBossFreezeResist(card.id)
     recordNotice('보스가 굳어 있어 공격이 통하지 않는다', 'info')
     return
   }
@@ -1184,6 +1195,11 @@ async function handleBossClick(card: Card): Promise<void> {
   const dealt = Math.min(character.damage, card.getHealth())
   card.takeDamage(dealt)
   state.turn += 1
+  // 보스 가상 턴도 실제 턴처럼 ember decay를 한 비트 진행시킨다(불씨 게이지 감소).
+  turnManager.tickEmberDecay()
+  // 다음 공격까지 남은 가상 턴 수를 좌상단 뱃지에 in-place로 표시.
+  const nextAttackIn = state.attackInterval - (state.turn % state.attackInterval)
+  boardRenderer.setBossAttackCountdown(nextAttackIn === state.attackInterval ? 0 : nextAttackIn)
   await boardRenderer.animateDamageNumbersById([{ cardId: card.id, amount: dealt }])
 
   // HP 3 임계를 넘을 때마다 손패 1장 지급(트리거는 클릭/손패 데미지 모두 공통).
@@ -1260,6 +1276,8 @@ async function handleBossDefeated(): Promise<void> {
   await boardRenderer.playBossDefeatSequence(state.card.id)
   // lanes에서 보스 인스턴스 정리 → 다음 render에서 active row가 비고 보상 chest가 박힌다.
   for (let i = 0; i < 3; i++) gameState.lanes[i].setCardAtDistance(0, null)
+  // 격파 후 좌상단 카운트는 더 이상 의미 없으므로 reset.
+  boardRenderer.setBossAttackCountdown(null)
   render()
   state.defeated?.()
 }
@@ -1284,11 +1302,16 @@ async function stageBossRewardChests(savedActiveRow: (Card | null)[]): Promise<v
     gameState.lanes[lane].setCardAtDistance(1, chestCard)
     gameState.lanes[lane].setCardAtDistance(2, bountyCard)
   }
+  // 보상 단계 진입: 손패 카드는 차단(사용자 요청), 카드 클릭 입력은 풀어둔다.
+  bossPostPhaseHandLocked = true
+  inputLocked = false
   render()
   await new Promise<void>((resolve) => {
     bossRewardState = { resolved: resolve, remaining: 3 }
   })
   bossRewardState = null
+  // 보상 소진 → 시련 단계로 이어진다. 손패 차단은 시련까지 유지된다.
+  inputLocked = true
   // 보상이 모두 소진된 뒤 active row가 자연 복원되도록 임시 저장된 카드들을 다시 박는다.
   for (let i = 0; i < 3; i++) gameState.lanes[i].setCardAtDistance(0, savedActiveRow[i])
   render()
@@ -1350,10 +1373,11 @@ function isBossRewardCard(card: Card): boolean {
 async function checkBossDefeatedAfterHandEffect(): Promise<void> {
   await applyBossPostHandEffect()
 }
-/** Forced trial after boss: fully reuses shop-shell flow (drop layer -> pick -> EXIT -> shutter up). */
+/** Forced trial after boss: 진동 → 베일이 레일 크기로 내려옴 → 카드들이 한 박자 늦게
+ *  떨어진다. 선택 시 자동 EXIT 흐름(카드 회수 → 레이어 회수 → 셔터 상승). */
 async function openTrialOverlayForced(): Promise<void> {
-  // 상점과 동일한 shop-shell 흐름을 재사용한다. 선택 → 이펙트 → 자동 EXIT 순서로
-  // 카드 회수(swoosh up) → 레이어 회수 → 마지막에 셔터 상승이 한 번에 이어진다.
+  // 진동 한 비트 — 보스 등장과 동일한 셔터 진동 그라마(.is-shop-quaking).
+  await boardRenderer.playAltarBossGateTransition()
   boardRenderer.openForcedTrialShopFlow(
     FORCED_TRIAL_CARDS.map(({ id, title, effect, spriteUrl }) => ({ id, title, effect, spriteUrl }))
   )
@@ -1361,12 +1385,13 @@ async function openTrialOverlayForced(): Promise<void> {
     let picked = false
     const finalize = async (): Promise<void> => {
       document.removeEventListener('forcedTrialPick', onPick)
-      document.removeEventListener('forcedTrialExit', onExit as EventListener)
       // playShopExitAnimation: 카드들이 위로 빠진다 → closeShop: 레이어 회수
       // → playShopResumeTransition: 셔터 상승. 상점 EXIT와 완전히 같은 비트.
       await boardRenderer.playShopExitAnimation()
       boardRenderer.closeShop()
       await boardRenderer.playShopResumeTransition()
+      // 시련 종료 직전 손패 차단 해제 → 일반 turn 입력 가능.
+      bossPostPhaseHandLocked = false
       resolve()
     }
     const onPick = (event: Event): void => {
@@ -1384,10 +1409,8 @@ async function openTrialOverlayForced(): Promise<void> {
       window.setTimeout(() => void finalize(), 620)
     }
     const onExit = (): void => {
-      if (!picked) {
-        recordNotice('시련 카드를 먼저 선택해야 EXIT 할 수 있다', 'info')
-        return
-      }
+      // EXIT 버튼은 제거됐지만 호환성을 위해 핸들러는 남겨 둔다(강제 선택 시 무시).
+      if (!picked) return
       void finalize()
     }
     document.addEventListener('forcedTrialPick', onPick)
@@ -2072,6 +2095,8 @@ document.addEventListener('shopClose', () => {
 /** Click on a hand slot. Plain click = use single (or arm targeting). */
 async function handleHandSlotClick(slotIndex: number): Promise<void> {
   if (!gameActive || inputLocked) return
+  // 보스 격파 후 보상·시련 단계 동안 손패 사용 차단(사용자 요청).
+  if (bossPostPhaseHandLocked) return
   const character = gameState.character
   const card = character.hand[slotIndex]
   if (!card) return

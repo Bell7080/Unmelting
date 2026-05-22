@@ -339,76 +339,32 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-shell--trial .shop-top-row {
   grid-template-columns: 1fr;
 }
-/* 시련 트레이는 레일 그리드 frame 없이 단순 3분할. dim veil이 이미 한 겹
-   덮고 있으므로 별도 frame 없이 카드만 떠 있는 인상을 준다. */
+/* 시련 트레이는 상점 유물 layer를 그대로 활용해 중앙에 카드 3장이 균등 배치된다. */
 .shop-shell--trial .shop-trial-layer {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(12px, 1.4vw, 18px);
-  padding: clamp(10px, 1.4vh, 14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(20px, 2.4vw, 36px);
+  padding: clamp(12px, 1.6vh, 20px);
   background: transparent;
   border: none;
   box-shadow: none;
 }
-.shop-shell--trial .trial-rail-frame,
-.shop-shell--trial .trial-rail-frame-gridlines {
-  /* 이전 레일 그리드 frame 흔적을 무력화 — 클래스가 마크업에 남아 있어도
-     배경/보더가 보이지 않도록 빈 상태로 유지한다. */
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  backdrop-filter: none;
-}
-.shop-shell--trial .trial-rail-frame-gridlines { display: none; }
-/* 시련의 어두운 배경 veil을 한층 더 진하게. 일반 상점/제단보다 톤을 죽인다. */
+/* 시련 dim veil을 일반 상점/제단보다 한 톤 더 죽여 시련 단계의 무게감을 살린다. */
 .shop-shell--trial .shop-dim-veil {
   filter: brightness(0.72) saturate(0.95);
 }
+/* 시련 카드는 상점 유물카드 마크업/CSS(.shop-relic-card → .shop-relic-front /
+   .shop-relic-art / .shop-relic-body / .shop-relic-title / .shop-relic-effect)를
+   그대로 따라가 폰트·테두리·플립 톤이 자동 통일된다. 시련 단계에선 더 강조되도록
+   가로 폭만 한 단계 키운다(중앙 정렬 + 큰 카드). */
 .shop-shell--trial .shop-trial-card {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-rows: 1fr auto;
-  gap: 8px;
-  padding: clamp(12px, 1.4vh, 16px);
+  width: clamp(176px, 17vw, 256px);
+}
+.shop-shell--trial .shop-trial-card .shop-relic-effect {
+  /* 시련 효과 설명은 길어질 수 있어 좌측 정렬 + 더 큰 line-height. */
   text-align: left;
-  /* shop-relic-card의 base width를 받지만, 트레이 안에서 균등 분할로 채워야
-     해 가로폭을 강제로 셀에 맞춘다. */
-  width: auto;
-  aspect-ratio: 3 / 4;
-  background: linear-gradient(180deg, rgba(40, 26, 50, 0.95), rgba(16, 10, 24, 0.98));
-  border: 1px solid rgba(230, 194, 129, 0.42);
-  border-radius: 14px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.16),
-    inset 0 -10px 18px rgba(0, 0, 0, 0.45),
-    0 6px 16px rgba(0, 0, 0, 0.55);
-  overflow: hidden;
-}
-.shop-shell--trial .shop-trial-card-art {
-  background: var(--trial-card-art) center / cover no-repeat;
-  border: 1px solid rgba(255, 214, 153, 0.42);
-  border-radius: 10px;
-  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.55);
-  min-height: 0;
-}
-.shop-shell--trial .shop-trial-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.shop-shell--trial .shop-trial-card-title {
-  margin: 0;
-  font-size: clamp(15px, 1.8vh, 18px);
-  color: #ffe1a3;
-  letter-spacing: 0.04em;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
-}
-.shop-shell--trial .shop-trial-card-effect {
-  margin: 0;
-  font-size: clamp(12px, 1.5vh, 13px);
   line-height: 1.45;
-  opacity: 0.88;
-  color: #f7e7c8;
 }
 .shop-pack-layer {
   justify-content: center;

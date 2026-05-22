@@ -808,7 +808,7 @@ export class GameBoardRenderer {
       <article class="boss-face" style="--boss-art: url('${sprite}');">
         <div class="boss-face-art" aria-hidden="true"></div>
         <div class="boss-face-overlay" aria-hidden="true"></div>
-        <div class="boss-face-badge" aria-label="3턴마다 반격">3T</div>
+        <div class="boss-face-badge" aria-label="다음 공격 카운트" data-boss-attack-countdown>${this.getBossAttackCountdownText()}</div>
         <div class="boss-face-title-row">
           <span class="boss-face-tag">BOSS</span>
           <span class="boss-face-name">${escapeHtml(card.name)}</span>
@@ -1809,22 +1809,23 @@ export class GameBoardRenderer {
         <div class="shop-content-bundle">
           <section class="shop-row shop-top-row" aria-label="시련 카드">
             <div class="shop-layer shop-artifact-layer shop-trial-layer trial-rail-frame" aria-hidden="false">
-              <div class="trial-rail-frame-gridlines" aria-hidden="true">
-                <span></span><span></span><span></span>
-              </div>
               ${cards.map((card) => `
                 <button class="shop-relic-card shop-trial-card is-affordable" data-trial-pick="${card.id}" type="button"
-                        style="--trial-card-art:url('${card.spriteUrl}');">
-                  <div class="shop-trial-card-art" aria-hidden="true"></div>
-                  <div class="shop-trial-card-body">
-                    <h3 class="shop-trial-card-title">${card.title}</h3>
-                    <p class="shop-trial-card-effect">${card.effect}</p>
+                        style="--cardback-url:url('${SpriteUrls.cardBack}');"
+                        aria-label="${card.title}">
+                  <div class="shop-relic-flipper">
+                    <div class="shop-relic-front">
+                      <div class="shop-relic-art" style="background-image: url('${card.spriteUrl}')" aria-hidden="true"></div>
+                      <div class="shop-relic-body">
+                        <h3 class="shop-relic-title">${card.title}</h3>
+                        <p class="shop-relic-effect">${card.effect}</p>
+                      </div>
+                    </div>
                   </div>
                 </button>
               `).join('')}
             </div>
           </section>
-          <button class="shop-close-btn" type="button" data-trial-exit aria-label="시련 종료">EXIT</button>
         </div>
       </div>
     `
@@ -2045,6 +2046,59 @@ export class GameBoardRenderer {
    *  데미지 글자 톤/모션을 그대로 받도록 한다. */
   spawnFieldDamageNumber(x: number, y: number, amount: number): Promise<void> {
     return this.animateDamageNumberAt(x, y, amount)
+  }
+
+  /** 보스 좌상단 뱃지에 표시할 "N턴 뒤 공격" 카운트. null이면 마크업이 정적 텍스트로
+   *  fallback 한다. index.ts의 보스 가상 턴 흐름이 매 턴마다 update한다. */
+  private bossAttackCountdown: number | null = null
+  setBossAttackCountdown(n: number | null): void {
+    this.bossAttackCountdown = n
+    // 보스 카드가 화면에 있다면 바로 텍스트만 in-place로 갱신해 render 부담을 줄인다.
+    document.querySelectorAll<HTMLElement>('[data-boss-attack-countdown]').forEach((el) => {
+      el.textContent = n == null ? '' : `${n}턴 뒤 공격`
+    })
+  }
+  getBossAttackCountdownText(): string {
+    return this.bossAttackCountdown == null ? '3턴 뒤 공격' : `${this.bossAttackCountdown}턴 뒤 공격`
+  }
+
+  /** 보스가 굳음(밀랍 freeze) 상태일 때 가격을 시도하면 데미지 대신 "저항" 글자를
+   *  데미지 부유 숫자와 같은 양식으로 띄우고, 카드가 살짝 발작하듯 떨린다.
+   *  손패 freeze 효과가 보스에 정상 적용되었음을 명확히 보여주는 피드백. */
+  async playBossFreezeResist(cardId: string): Promise<void> {
+    const tile = this.findCardElement(cardId)
+    if (!tile) return
+    tile.classList.add('is-boss-resisting')
+    const rect = tile.getBoundingClientRect()
+    void this.spawnFieldFloatText(rect.left + rect.width / 2, rect.top + rect.height * 0.34, '저항')
+    await new Promise((r) => window.setTimeout(r, 460))
+    tile.classList.remove('is-boss-resisting')
+  }
+
+  /** 데미지 부유 숫자와 동일 톤으로 임의 텍스트를 띄운다(저항/면역 등 상태 피드백용). */
+  spawnFieldFloatText(x: number, y: number, text: string): Promise<void> {
+    const el = document.createElement('div')
+    el.className = 'damage-float damage-float--text'
+    el.textContent = text
+    el.style.left = `${x}px`
+    el.style.top = `${y}px`
+    document.body.appendChild(el)
+    const anim = el.animate(
+      [
+        { transform: 'translate(-50%, -20%) scale(0.78)', opacity: 0, filter: 'brightness(1.2)' },
+        { transform: 'translate(-50%, -68%) scale(1.2)', opacity: 1, filter: 'brightness(1.65)', offset: 0.22 },
+        { transform: 'translate(-50%, -110%) scale(1.08)', opacity: 1, filter: 'brightness(1.32)', offset: 0.65 },
+        { transform: 'translate(-50%, -160%) scale(1)', opacity: 0, filter: 'brightness(1)' },
+      ],
+      { duration: 980, easing: 'cubic-bezier(0.16, 0.86, 0.28, 1)', fill: 'forwards' }
+    )
+    return new Promise((resolve) => {
+      anim.onfinish = () => {
+        el.remove()
+        resolve()
+      }
+      window.setTimeout(() => { el.remove(); resolve() }, 1120)
+    })
   }
 
   /** 보스 격파 시퀀스(공통): 짧은 흔들 → 사각 burst 연발 → 갈라짐 → 펑(큰 burst) →

@@ -879,6 +879,26 @@ export const GAME_BOARD_RAIL_STYLES = `
   z-index: 40;
 }
 
+/* 보스가 굳음(freeze) 상태에서 가격당하면 발작하듯 잘게 떨린다. */
+.cell.card.type-boss.is-boss-resisting {
+  animation: boss-resist-jitter 0.42s linear;
+}
+@keyframes boss-resist-jitter {
+  0%, 100% { transform: translate(0, 0); }
+  10%      { transform: translate(-2px, 1px); }
+  22%      { transform: translate(3px, -1px); }
+  34%      { transform: translate(-2px, -1px); }
+  46%      { transform: translate(2px, 1px); }
+  58%      { transform: translate(-3px, 1px); }
+  70%      { transform: translate(2px, -1px); }
+  82%      { transform: translate(-1px, 1px); }
+}
+/* 데미지 부유 숫자를 텍스트로도 사용. 색만 차분한 wax 톤으로. */
+.damage-float.damage-float--text {
+  color: #e4eaf4;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.75), 0 0 12px rgba(228, 234, 244, 0.55);
+}
+
 /* ---- 보스 격파 시퀀스 ----
    handleBossDefeated가 .is-boss-defeating → .is-boss-cracking → .is-boss-blown을
    순차로 부여한다. 모든 사각 burst는 SquareBurst가 같은 톤으로 발사된다. */
