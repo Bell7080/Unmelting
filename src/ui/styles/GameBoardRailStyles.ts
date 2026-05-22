@@ -534,199 +534,39 @@ export const GAME_BOARD_RAIL_STYLES = `
 }
 
 /* ---------- Boss rail event ----------
-   30턴 제단 이후 보스 이벤트는 별도 화면이 아니라 셔터 위에 얹히는 레일 이벤트다.
-   셔터(z-index 35) 위에 boss-rail-layer를 띄우고, 거대 1칸 보스 → 보물상자 3칸
-   순서로 일반 cell/card 문법을 그대로 사용한다. */
-/* 일반 .rail과 동일한 3x3 grid 레이아웃을 그대로 흉내내, 셔터 위에서도
-   "원래 레일에서 칸이 떨어진다"는 시각 문법을 유지한다. */
-.boss-rail-layer {
-  position: absolute;
-  inset: 0;
+   보스는 5번째 카드 종류(CardType.BOSS)로 lanes의 active row에 정식 박힌다.
+   일반 적 카드와 같은 cell/card 그라마(클릭/손패 타겟팅/strike pop/defeat shrink)를
+   그대로 따라가되, 셔터(z-index 35)가 닫힌 채 유지되므로 BOSS 셀만 z-index 40으로
+   셔터 위에 떠 보이게 한다. */
+.cell.card.type-boss {
+  position: relative;
   z-index: 40;
-  padding: clamp(10px, 1.6vh, 14px);
-  display: grid;
-  grid-template-rows: repeat(3, minmax(0, 1fr));
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(6px, 1vw, 10px);
-  pointer-events: auto;
-}
-.boss-rail-row {
-  display: contents; /* 자식 cell을 layer grid에 직접 얹는다 */
-}
-.boss-rail-row.boss-rail-front .boss-rail-tile {
-  /* 거대 보스는 3x3 전 영역을 점유한다 */
-  grid-column: 1 / -1;
-  grid-row: 1 / -1;
-}
-.boss-rail-row.boss-rail-chest-row {
-  /* 보상 보물 라인은 가로 3칸짜리 큰 보물상자가 3행을 채우는 형태.
-     contents로 layer grid 위에 직접 배치된다. */
-  display: contents;
-}
-.boss-rail-row.boss-rail-chest-row .boss-chest-tile {
-  grid-column: 1 / -1;
-}
-.boss-rail-row.boss-rail-chest-row .boss-chest-tile:nth-child(1) { grid-row: 1 / 2; }
-.boss-rail-row.boss-rail-chest-row .boss-chest-tile:nth-child(2) { grid-row: 2 / 3; }
-.boss-rail-row.boss-rail-chest-row .boss-chest-tile:nth-child(3) { grid-row: 3 / 4; }
-.boss-rail-tile {
-  position: relative;
-  cursor: pointer;
-  /* 셔터 위에서 등장하므로 더 강한 drop-in을 부여한다. */
-  animation: boss-rail-drop 0.56s cubic-bezier(0.16, 0.86, 0.22, 1) both;
-}
-@keyframes boss-rail-drop {
-  0%   { transform: translateY(-220%) scale(0.94); opacity: 0; }
-  62%  { transform: translateY(18px) scale(1.02, 0.97); opacity: 1; }
-  78%  { transform: translateY(-6px) scale(0.99, 1.02); }
-  100% { transform: translateY(0) scale(1); opacity: 1; }
-}
-/* 보스 face는 플레이어 카드와 같은 풀-아트 + overlay + content 3-layer 구조. */
-.boss-rail-face {
-  position: relative;
-  flex: 1 1 auto;
-  overflow: hidden;
-  border-radius: 9px;
-  isolation: isolate;
-  background: #14101c;
-}
-.boss-rail-art {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background: var(--boss-art) center 32% / cover no-repeat;
-  filter: saturate(1.06) contrast(1.04);
-}
-/* 어두운 그라데이션 overlay — 플레이어 카드 .player-overlay와 톤 일치. */
-.boss-rail-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background:
-    linear-gradient(180deg, rgba(20, 16, 28, 0) 28%, rgba(20, 16, 28, 0.55) 62%, rgba(8, 5, 14, 0.95) 100%),
-    radial-gradient(130% 60% at 50% 0%, rgba(244, 164, 96, 0.14), transparent 70%);
-}
-.boss-rail-content {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: clamp(12px, 1.6vh, 18px) clamp(14px, 2vw, 22px);
-  color: #f7e7c8;
-}
-.boss-rail-title-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-self: center;
-}
-.boss-rail-tag {
-  font-size: 11px;
-  letter-spacing: 0.22em;
-  padding: 3px 9px;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 196, 120, 0.7);
-  color: #ffd178;
-  background: rgba(48, 22, 18, 0.85);
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
-}
-.boss-rail-name {
-  font-size: clamp(20px, 2.8vh, 28px);
-  letter-spacing: 0.04em;
-  color: #ffe1a3;
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.75), 0 0 16px rgba(244, 164, 96, 0.5);
-}
-/* 하단 stats: 플레이어 카드의 hp-bar + atk-stat과 동일한 톤. */
-.boss-rail-stats {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  align-items: center;
-  margin-top: auto;
-}
-.boss-rail-hpbar {
-  position: relative;
-  height: clamp(18px, 2.4vh, 24px);
-  border-radius: 999px;
-  border: 1px solid rgba(168, 58, 58, 0.78);
-  background: rgba(0, 0, 0, 0.55);
+  /* 보스 임팩트만 약간 보강 — 일반 적 카드의 빨간 톤은 그대로 유지하고 빛만 추가. */
+  border-color: rgba(244, 164, 96, 0.78);
   box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.16),
-    inset 0 -6px 12px rgba(0, 0, 0, 0.55);
-  overflow: hidden;
+    inset 0 1px 0 rgba(255, 232, 168, 0.28),
+    inset 0 -12px 22px rgba(0, 0, 0, 0.55),
+    var(--card-lift-shadow-grouped, 0 4px 10px rgba(0, 0, 0, 0.55)),
+    var(--card-depth-shadow, 0 14px 24px rgba(0, 0, 0, 0.45)),
+    0 0 26px rgba(244, 164, 96, 0.42);
 }
-.boss-rail-hpbar-fill {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, #c9472a 0%, #f4a460 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 215, 120, 0.4);
-  transition: width 0.28s cubic-bezier(0.2, 0.86, 0.28, 1);
-}
-.boss-rail-hpbar-text {
+/* 보스 phase 동안 active row가 셔터 위에 노출되도록 row stacking context도 함께 올린다. */
+.rail-row.dist-0:has(.cell.card.type-boss) {
   position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  height: 100%;
-  font-size: clamp(12px, 1.6vh, 14px);
-  font-weight: 700;
-  color: #fff5dc;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
-  font-variant-numeric: tabular-nums;
+  z-index: 40;
 }
-.boss-rail-hpbar-icon { color: #ffd5c5; display: inline-flex; align-items: center; }
-.boss-rail-hpbar-sep { opacity: 0.55; margin: 0 2px; }
-/* ATK 표기는 일반 적 카드 .card-stats .stat.atk 톤을 그대로 따르되, 보스는
-   3x3 전체를 차지하므로 글자/아이콘만 한 단계 크게 키운다 (chip/border 없음). */
-.boss-rail-atk-row {
-  /* 일반 card-stats는 카드 하단에 가운데 정렬되는 한 줄 stats 컨테이너. 보스는
-     hp-bar 옆 우측에 붙는 짧은 stat이므로 정렬만 살짝 조정. */
-  justify-content: flex-end;
-  font-size: clamp(16px, 2vh, 19px);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.6);
+/* 보스 등장 시 셔터 진동을 한 비트 강화. 인트로 + 강하와 함께 묵직한 쿵 임팩트. */
+.rail.is-boss-quaking {
+  animation: boss-rail-impact-quake 0.62s cubic-bezier(0.32, 0.04, 0.18, 0.96);
 }
-.boss-rail-atk-stat .icon,
-.boss-rail-atk-stat svg {
-  width: clamp(18px, 2.2vh, 22px);
-  height: clamp(18px, 2.2vh, 22px);
-}
-.boss-rail-atk-stat .stat-value {
-  font-size: clamp(16px, 2vh, 19px);
-}
-.boss-rail-cadence {
-  align-self: center;
-  margin-top: 6px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  padding: 3px 10px;
-  border: 1px solid rgba(230, 194, 129, 0.46);
-  border-radius: 999px;
-  background: rgba(20, 12, 28, 0.78);
-  color: #f7e7c8;
-}
-.boss-rail-cadence-value { color: #ffd57a; font-weight: 700; }
-
-/* 보스 전용 피격 flash — 일반 적 player-strike pop 위에 한 비트 더 얹어
-   보스 임팩트를 묵직하게 만든다. brightness/saturation만 짧게 펌프한다. */
-.boss-rail-tile.is-boss-hit .boss-rail-art {
-  animation: boss-hit-flash 0.42s cubic-bezier(0.18, 0.86, 0.22, 1);
-}
-@keyframes boss-hit-flash {
-  /* 일러스트가 흰색에 가깝게 사라진 듯 보이지 않도록 brightness 피크를 1.25로
-     낮춘다. 임팩트는 saturate/contrast 펌프와 SquareBurst가 담당. */
-  0%   { filter: saturate(1.06) contrast(1.04) brightness(1); }
-  22%  { filter: saturate(1.32) contrast(1.14) brightness(1.25); }
-  60%  { filter: saturate(1.16) contrast(1.08) brightness(1.08); }
-  100% { filter: saturate(1.06) contrast(1.04) brightness(1); }
+@keyframes boss-rail-impact-quake {
+  0%   { transform: translate(0, 0); }
+  14%  { transform: translate(-3px, 2px); }
+  28%  { transform: translate(4px, -2px); }
+  42%  { transform: translate(-2px, 3px); }
+  56%  { transform: translate(3px, 1px); }
+  72%  { transform: translate(-2px, -1px); }
+  100% { transform: translate(0, 0); }
 }
 
 /* 풀스크린 보스 인트로: 보스 타일이 셔터 위로 강하하기 직전, 화면 전체를

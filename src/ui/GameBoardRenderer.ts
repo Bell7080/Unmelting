@@ -124,40 +124,6 @@ export interface ForcedTrialCardView {
   spriteUrl: string
 }
 
-/** 보스 보상 칸 한 칸의 시각 명세. */
-export interface BossChestSpec {
-  /** 클릭 식별 키 (heal/coin/chest 등). */
-  kind: string
-  /** 카드 면에 노출되는 짧은 한글 라벨. */
-  label: string
-  /** 카드 아트로 사용할 sprite URL (보통 SpriteUrls.chestSmall/Medium/Large). */
-  spriteUrl: string
-}
-
-/** 30턴 제단 이후 레일에서 진행되는 보스 이벤트 핸들. 일반 레일/칸 문법을 그대로
- *  사용하며, 가상 턴 흐름은 호출부(index.ts)가 직접 관리한다. */
-export interface BossRailController {
-  /** 플레이어가 보스 타일을 클릭(=공격)할 때까지 대기. */
-  awaitBossClick(): Promise<void>
-  /** 한 번 가격한 결과를 시각화 (피해 숫자/burst/스탯 갱신/다음 공격 카운트). */
-  playBossHit(damageDealt: number, newHp: number, nextAttackIn: number, bossTurn: number): Promise<void>
-  /** 보스 반격 비트 — 적 lunge 클론 + 플레이어 damage flash. */
-  playBossCounterAttack(damage: number): Promise<void>
-  /** 보스 격파 collapse 비트. */
-  playBossDefeat(): Promise<void>
-  /** 보스가 사라진 자리에 보물상자 3칸을 일반 보물 칸 문법으로 떨군다. */
-  dropChests(specs: BossChestSpec[]): Promise<void>
-  /** 다음 클릭된 보상의 kind 반환. */
-  awaitChestClick(): Promise<string>
-  /** 특정 보상을 consume 애니메이션과 함께 제거. */
-  consumeChest(kind: string): Promise<void>
-  /** 보스가 일정 피해 구간에 도달했을 때 발사하는 손패 지급 trail.
-   *  일반 게임의 손패 획득 trail/burst 양식을 그대로 재사용한다. */
-  playHandGift(): Promise<void>
-  /** 보스 레일 레이어 자체 정리. */
-  close(): void
-}
-
 export interface ActivityLogEntry {
   id: number
   label: string
@@ -379,14 +345,6 @@ export class GameBoardRenderer {
       }
     }
 
-    // 보스 이벤트 중에는 .rail 자식으로 동적 mount된 boss-rail-layer가
-    // 살아 있다. innerHTML 재생성으로 사라지지 않도록 일시 detach 후, 새
-    // .rail이 만들어진 직후에 그대로 다시 붙여 click handler/HP 바 상태가
-    // 손패 카드 사용·타겟팅 모드 진입 등 어떤 render()를 거쳐도 유지된다.
-    const preservedBossLayer =
-      this.boardElement.querySelector<HTMLElement>('.rail .boss-rail-layer') ?? null
-    if (preservedBossLayer) preservedBossLayer.remove()
-
     this.boardElement.innerHTML = `
       ${this.renderEmberHud(scorePanel)}
       <div class="game-shell">
@@ -414,12 +372,6 @@ export class GameBoardRenderer {
 
     this.injectStyles()
     this.attachListeners()
-    // 보스 layer를 재구축된 .rail 위에 다시 부착. element 자체가 그대로라
-    // 등록된 click 핸들러/HP 바 fill 상태가 유지된다.
-    if (preservedBossLayer) {
-      const newRail = this.boardElement.querySelector<HTMLElement>('.rail')
-      if (newRail) newRail.appendChild(preservedBossLayer)
-    }
     // When the shop is open, the shutter must keep matching the rail's real
     // perspective-scaled cells even after full re-renders (purchase refresh etc.).
     this.syncShopShutterToRailCells()
@@ -652,6 +604,8 @@ export class GameBoardRenderer {
       this.hasRendered && !this.previousCardIds.has(card.id) ? 'is-entering' : '',
       this.shouldAnimateGroup(card.id, span) ? 'is-newly-grouped' : '',
       card.isFrozen() ? 'is-frozen' : '',
+      // 보스 카드(CardType.BOSS)는 셔터 위로 떠 있어야 한다. type-boss 클래스가
+      // 자동으로 적용되므로 별도 마커는 필요 없고, CSS의 .type-boss가 z-index를 띄운다.
     ]
       .filter(Boolean)
       .join(' ')
@@ -703,7 +657,9 @@ export class GameBoardRenderer {
     if (rule.zone === 'front' && distance !== 0) return false
     if (rule.zone === 'waiting' && distance === 0) return false
     if (rule.zone !== 'front' && rule.zone !== 'waiting' && rule.zone !== 'field') return false
-    if (rule.filter === 'enemy') return card.type === CardType.ENEMY
+    // 보스는 적과 같은 양식을 따르므로 enemy/enemy-or-treasure/turn-timer 등
+     // "적을 향한" 손패 타겟팅 필터에 모두 포함된다.
+    if (rule.filter === 'enemy') return card.type === CardType.ENEMY || card.type === CardType.BOSS
     if (rule.filter === 'trap') return card.type === CardType.TRAP
     if (rule.filter === 'spore') {
       // Mirrors HandSystem's 성수-only 포자 targeting rule for hover hints.
@@ -711,7 +667,7 @@ export class GameBoardRenderer {
     }
     if (rule.filter === 'treasure') return card.type === CardType.TREASURE
     if (rule.filter === 'enemy-or-treasure') {
-      return card.type === CardType.ENEMY || card.type === CardType.TREASURE
+      return card.type === CardType.ENEMY || card.type === CardType.BOSS || card.type === CardType.TREASURE
     }
     if (rule.filter === 'turn-timer') return this.isTurnTimerHandTarget(card)
     if (rule.filter === 'hazard') return card.type === CardType.TRAP || card.isFrozen()
@@ -723,6 +679,7 @@ export class GameBoardRenderer {
    *  highlight every front-row card whose own turn beat can be paused. */
   private isTurnTimerHandTarget(card: Card): boolean {
     if (card.type === CardType.ENEMY) return true
+    if (card.type === CardType.BOSS) return true
     if (card.type === CardType.TREASURE) return true
     if (card.type === CardType.TRAP) return card.trapKind === 'bomb' || card.trapKind === 'spore'
     if (card.type === CardType.FLOWER) return card.flowerKind !== 'seed'
@@ -748,7 +705,8 @@ export class GameBoardRenderer {
 
   private renderCardFace(card: Card, span: number): string {
     let stats = ''
-    if (card.type === CardType.ENEMY) {
+    if (card.type === CardType.ENEMY || card.type === CardType.BOSS) {
+      // BOSS도 ENEMY와 같은 HP/ATK 칩 그라마. CSS에서 .type-boss에 별도 톤만 추가.
       stats = `
         <div class="card-stats">
           <span class="stat hp">${heartIcon()}<span class="stat-value">${card.getHealth()}</span></span>
@@ -2023,7 +1981,7 @@ export class GameBoardRenderer {
     `
     document.body.appendChild(host)
     // 등장 비트가 자리잡도록 한 프레임 정도 대기 후 클릭 수락.
-    await bossRailWait(80)
+    await new Promise((resolve) => window.setTimeout(resolve, 80))
     await new Promise<void>((resolve) => {
       const close = (): void => {
         host.classList.add('is-closing')
@@ -2036,201 +1994,6 @@ export class GameBoardRenderer {
     })
   }
 
-  /** Boss event lives ON the rail (over the closed shutter), reusing the same
-   *  cell/card grammar that normal enemy/treasure tiles use. The returned
-   *  controller lets index.ts drive the virtual-turn loop without popups. */
-  beginBossRailEvent(opts: {
-    name: string
-    maxHp: number
-    attack: number
-    attackInterval: number
-    spriteUrl?: string
-  }): BossRailController {
-    const renderer = this
-    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
-    if (!rail) {
-      // 컨테이너가 없을 때도 호출부가 깨지지 않도록 noop 컨트롤러 반환.
-      return createBossRailNoopController()
-    }
-
-    // 이전 보스 이벤트의 잔재가 남아있으면 먼저 제거한다.
-    rail.querySelectorAll('.boss-rail-layer').forEach((el) => el.remove())
-
-    // 등장 비트: 보스 타일 drop과 함께 셔터 진동을 한 번 더 트리거해 "쿵" 임팩트를 살린다.
-    rail.classList.add('is-shop-quaking', 'is-boss-quaking')
-    window.setTimeout(() => rail.classList.remove('is-shop-quaking', 'is-boss-quaking'), 620)
-
-    const layer = document.createElement('div')
-    layer.className = 'boss-rail-layer'
-    rail.appendChild(layer)
-
-    const spriteUrl = opts.spriteUrl ?? SpriteUrls.enemyWaves[3]
-    const state = {
-      hp: opts.maxHp,
-      maxHp: opts.maxHp,
-      attack: opts.attack,
-      bossTurn: 0,
-      nextAttackIn: opts.attackInterval,
-      name: opts.name,
-    }
-
-    // 보스 타일은 레일 내부 전체를 차지하는 거대 1칸으로 등장한다.
-    layer.innerHTML = renderBossTileMarkup({
-      name: state.name,
-      hp: state.hp,
-      maxHp: state.maxHp,
-      attack: state.attack,
-      bossTurn: state.bossTurn,
-      nextAttackIn: state.nextAttackIn,
-      spriteUrl,
-    })
-
-    let bossClickResolver: (() => void) | null = null
-    let chestClickResolver: ((kind: string) => void) | null = null
-    const claimedChests = new Set<string>()
-
-    const handleClick = (event: Event): void => {
-      const target = event.target as HTMLElement
-      const bossTile = target.closest<HTMLElement>('[data-boss-tile]')
-      if (bossTile && bossClickResolver) {
-        const r = bossClickResolver
-        bossClickResolver = null
-        r()
-        return
-      }
-      const chestTile = target.closest<HTMLElement>('[data-boss-chest]')
-      if (chestTile && chestClickResolver) {
-        const kind = chestTile.dataset.bossChest ?? ''
-        if (claimedChests.has(kind)) return
-        const r = chestClickResolver
-        chestClickResolver = null
-        r(kind)
-      }
-    }
-    layer.addEventListener('click', handleClick)
-
-    return {
-      awaitBossClick: (): Promise<void> => {
-        return new Promise((resolve) => {
-          bossClickResolver = resolve
-        })
-      },
-      playBossHit: async (damageDealt, newHp, nextAttackIn, bossTurn): Promise<void> => {
-        state.hp = newHp
-        state.nextAttackIn = nextAttackIn
-        state.bossTurn = bossTurn
-        const tile = layer.querySelector<HTMLElement>('[data-boss-tile]')
-        if (!tile) return
-        // 일반 적과 동일한 player-strike pop을 그대로 쓰고, 보스 임팩트만 강화하기
-        // 위해 보스 전용 is-boss-hit(brightness flash)와 레일 짧은 진동을 한 비트
-        // 더 얹는다. 일반 적의 피격 톤(흔들/번쩍)을 그대로 유지하면서 무게감만 추가.
-        tile.classList.add('is-player-striking', 'is-boss-hit')
-        SquareBurst.playOn(tile, 'damage', { count: 20, spread: 160, duration: 640 })
-        const rail = renderer.boardElement.querySelector<HTMLElement>('.rail')
-        if (rail) {
-          rail.classList.add('is-boss-quaking')
-          window.setTimeout(() => rail.classList.remove('is-boss-quaking'), 320)
-        }
-        if (damageDealt > 0) {
-          // 일반 적과 동일한 .damage-float 톤(붉은 부유 숫자)을 그대로 띄우되,
-          // 보스 카드는 3x3 전 영역을 차지하므로 위치를 카드 중앙쯤으로 올린다.
-          const rect = tile.getBoundingClientRect()
-          void renderer.spawnFieldDamageNumber(
-            rect.left + rect.width / 2,
-            rect.top + rect.height * 0.5,
-            damageDealt
-          )
-        }
-        updateBossTileChrome(tile, state)
-        await bossRailWait(420)
-        tile.classList.remove('is-player-striking', 'is-boss-hit')
-      },
-      playBossCounterAttack: async (damage): Promise<void> => {
-        const tile = layer.querySelector<HTMLElement>('[data-boss-tile]')
-        const player = renderer.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
-        if (!tile || !player) {
-          await renderer.animateDamageFlash()
-          return
-        }
-        // 일반 적 카드가 플레이어를 가격할 때와 같은 lunge 문법을 그대로 사용.
-        const tileRect = tile.getBoundingClientRect()
-        const playerRect = player.getBoundingClientRect()
-        const dx = (playerRect.left + playerRect.width / 2) - (tileRect.left + tileRect.width / 2)
-        const dy = Math.min(220, Math.max(60, playerRect.top - tileRect.bottom + 18))
-        const clone = tile.cloneNode(true) as HTMLElement
-        clone.classList.add('enemy-attack-clone')
-        clone.style.position = 'fixed'
-        clone.style.left = `${tileRect.left}px`
-        clone.style.top = `${tileRect.top}px`
-        clone.style.width = `${tileRect.width}px`
-        clone.style.height = `${tileRect.height}px`
-        clone.style.margin = '0'
-        clone.style.zIndex = '245'
-        clone.style.pointerEvents = 'none'
-        clone.style.transformOrigin = '50% 100%'
-        document.body.appendChild(clone)
-        tile.classList.add('is-enemy-slamming-source')
-        const animation = clone.animate(
-          [
-            { transform: 'translate(0, 0) scale(1)', filter: 'brightness(1)' },
-            { transform: `translate(${dx * 0.35}px, ${dy * 0.22}px) scale(1.03, 0.98)`, filter: 'brightness(1.18)', offset: 0.28 },
-            { transform: `translate(${dx}px, ${dy}px) scale(1.08, 0.92)`, filter: 'brightness(1.35) drop-shadow(0 22px 26px rgba(168, 58, 58, 0.74))', offset: 0.58 },
-            { transform: `translate(${dx * 0.2}px, ${dy * 0.08}px) scale(0.99, 1.02)`, filter: 'brightness(1.05)', offset: 0.78 },
-            { transform: 'translate(0, 0) scale(1)', filter: 'brightness(1)' },
-          ],
-          { duration: 560, easing: 'cubic-bezier(0.2, 0.9, 0.24, 1)', fill: 'forwards' }
-        )
-        await new Promise<void>((resolve) => {
-          animation.onfinish = (): void => resolve()
-          window.setTimeout(resolve, 760)
-        })
-        clone.remove()
-        tile.classList.remove('is-enemy-slamming-source')
-        if (damage > 0) await renderer.animateDamageFlash()
-      },
-      playBossDefeat: async (): Promise<void> => {
-        const tile = layer.querySelector<HTMLElement>('[data-boss-tile]')
-        if (!tile) return
-        // 격파 시에도 일반 적 카드의 shrink defeat 애니메이션을 그대로 재사용.
-        tile.classList.add('is-enemy-defeated-consuming')
-        SquareBurst.playOn(tile, 'treasure-gain', { count: 22, spread: 160, duration: 700 })
-        await bossRailWait(560)
-        tile.remove()
-      },
-      dropChests: async (specs): Promise<void> => {
-        // 보스 타일을 보물상자 3개 행으로 교체. 같은 cell/card 문법(type-treasure)을 사용해
-        // 동일한 레일에서 떨어진 보상처럼 보이게 한다.
-        layer.innerHTML = renderBossChestRowMarkup(specs)
-        // 등장 애니메이션이 자리잡을 시간 확보 뒤 클릭 수락.
-        await bossRailWait(420)
-      },
-      awaitChestClick: (): Promise<string> => {
-        return new Promise((resolve) => {
-          chestClickResolver = resolve
-        })
-      },
-      consumeChest: async (kind): Promise<void> => {
-        claimedChests.add(kind)
-        const tile = layer.querySelector<HTMLElement>(`[data-boss-chest="${kind}"]`)
-        if (!tile) return
-        SquareBurst.playOn(tile, 'treasure-gain', { count: 16, spread: 120, duration: 560 })
-        tile.classList.add('is-consuming')
-        await bossRailWait(480)
-        tile.remove()
-      },
-      playHandGift: async (): Promise<void> => {
-        // 일반 적 처치 후 손패 드롭에 쓰이는 trail+burst 그라마를 그대로 사용.
-        // 보스 타일 위에서 손패 패널로 흐르는 hand-recovery 톤 trail.
-        const tile = layer.querySelector<HTMLElement>('[data-boss-tile]')
-        if (tile) SquareBurst.playOn(tile, 'hand-recovery', { count: 14, spread: 110, duration: 520 })
-        await renderer.animateResourceTrailFromCenter('hand', 1, 'hand-recovery')
-      },
-      close: (): void => {
-        layer.removeEventListener('click', handleClick)
-        layer.remove()
-      },
-    }
-  }
 
   /** 일반 적 카드에 사용하는 .damage-float(붉은 부유 숫자)을 카드 인스턴스
    *  없이 임의 좌표에 띄우기 위한 public 래퍼. 보스 타일이 일반 적과 같은
@@ -4835,124 +4598,3 @@ export class GameBoardRenderer {
   }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// 보스 레일 이벤트 helper (모듈 스코프)
-// ────────────────────────────────────────────────────────────────────────────
-
-function bossRailWait(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms))
-}
-
-interface BossTileState {
-  name: string
-  hp: number
-  maxHp: number
-  attack: number
-  bossTurn: number
-  nextAttackIn: number
-}
-
-/** 거대 보스 1칸의 마크업. 일반 적 카드(`cell card type-enemy is-grouped`)와 같은
- *  클래스를 그대로 사용해 hover/strike/defeat 애니메이션이 동일하게 동작한다.
- *  레이아웃은 플레이어 카드와 동일한 톤 — 카드 전체가 풀 일러스트 배경,
- *  그 위에 어두운 그라데이션 overlay + 하단에 HP 바/ATK 칩/cadence 정렬. */
-function renderBossTileMarkup(opts: BossTileState & { spriteUrl: string }): string {
-  const hpPct = Math.max(0, Math.min(100, (opts.hp / Math.max(1, opts.maxHp)) * 100))
-  return `
-    <div class="boss-rail-row boss-rail-front">
-      <div class="cell card type-enemy is-grouped is-active boss-rail-tile is-entering"
-           data-boss-tile data-span="3" tabindex="0" role="button"
-           style="--boss-art:url('${opts.spriteUrl}');">
-        <div class="card-face boss-rail-face">
-          <div class="boss-rail-art" aria-hidden="true"></div>
-          <div class="boss-rail-overlay" aria-hidden="true"></div>
-          <div class="boss-rail-content">
-            <div class="boss-rail-title-row">
-              <span class="boss-rail-tag">BOSS</span>
-              <span class="boss-rail-name">${escapeHtml(opts.name)}</span>
-            </div>
-            <div class="boss-rail-stats">
-              <div class="boss-rail-hpbar" aria-label="보스 체력">
-                <div class="boss-rail-hpbar-fill" data-boss-hpfill style="width:${hpPct}%"></div>
-                <span class="boss-rail-hpbar-text">
-                  <span class="boss-rail-hpbar-icon">${miniHeartSvg()}</span>
-                  <span data-boss-hp>${opts.hp}</span><span class="boss-rail-hpbar-sep">/</span><span data-boss-hp-max>${opts.maxHp}</span>
-                </span>
-              </div>
-              <!-- ATK 표기는 일반 적 카드(.card-stats .stat.atk)와 같은 그라마를 따른다.
-                   sword 아이콘도 플레이어/일반 적과 동일한 swordIcon()을 그대로 사용. -->
-              <div class="card-stats boss-rail-atk-row">
-                <span class="stat atk boss-rail-atk-stat">${swordIcon()}<span class="stat-value">${opts.attack}</span></span>
-              </div>
-            </div>
-            <div class="boss-rail-cadence">
-              <span class="boss-rail-cadence-label">다음 공격</span>
-              <span class="boss-rail-cadence-value" data-boss-next>${opts.nextAttackIn}</span>
-              <span class="boss-rail-cadence-unit">턴</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `
-}
-
-/** 한 번 가격 후 HP/다음 공격 카운트만 in-place로 갱신. innerHTML 재생성을 피해
- *  진행 중인 strike pop 애니메이션이 끊기지 않도록 한다. */
-function updateBossTileChrome(tile: HTMLElement, state: BossTileState): void {
-  const hp = tile.querySelector<HTMLElement>('[data-boss-hp]')
-  if (hp) hp.textContent = String(state.hp)
-  const next = tile.querySelector<HTMLElement>('[data-boss-next]')
-  if (next) next.textContent = String(state.nextAttackIn)
-  const fill = tile.querySelector<HTMLElement>('[data-boss-hpfill]')
-  if (fill) {
-    const pct = Math.max(0, Math.min(100, (state.hp / Math.max(1, state.maxHp)) * 100))
-    fill.style.width = `${pct}%`
-  }
-}
-
-/** 보상 보물상자 행. type-treasure 그대로 + boss-chest- 한정 클래스만 추가. */
-function renderBossChestRowMarkup(specs: BossChestSpec[]): string {
-  const cells = specs
-    .map(
-      (spec, idx) => `
-      <div class="cell card type-treasure is-active boss-chest-tile is-entering"
-           data-boss-chest="${escapeAttr(spec.kind)}" tabindex="0" role="button"
-           style="--boss-chest-art:url('${spec.spriteUrl}'); --boss-chest-delay:${idx * 110}ms;">
-        <div class="card-face boss-chest-face">
-          <div class="boss-chest-art" aria-hidden="true"></div>
-          <div class="boss-chest-label">${escapeHtml(spec.label)}</div>
-        </div>
-      </div>
-    `
-    )
-    .join('')
-  return `<div class="boss-rail-row boss-rail-chest-row">${cells}</div>`
-}
-
-function createBossRailNoopController(): BossRailController {
-  const resolved = Promise.resolve()
-  return {
-    awaitBossClick: () => resolved,
-    playBossHit: () => resolved,
-    playBossCounterAttack: () => resolved,
-    playBossDefeat: () => resolved,
-    dropChests: () => resolved,
-    awaitChestClick: () => Promise.resolve(''),
-    consumeChest: () => resolved,
-    playHandGift: () => resolved,
-    close: () => undefined,
-  }
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
-}
-function escapeAttr(s: string): string {
-  return escapeHtml(s)
-}
-
-/** 보스/상자 칩에서 사용하는 단색 인라인 SVG. Icons.ts의 톤(currentColor, 평면 stroke)을 따른다. */
-function miniHeartSvg(): string {
-  return `<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M8 13.2 2.6 8.2A3.3 3.3 0 0 1 8 4.3a3.3 3.3 0 0 1 5.4 3.9Z"/></svg>`
-}

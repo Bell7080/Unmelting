@@ -7,11 +7,14 @@ export enum CardType {
   TRAP = 'trap',
   TREASURE = 'treasure',
   FLOWER = 'flower',
+  /** 보스는 적과 같은 양식(HP/ATK/공격/격파)을 따라가지만, 별도 트리거·메커니즘이
+   *  많이 동반될 5번째 카드 종류. 추후 다른 보스도 같은 type으로 확장된다. */
+  BOSS = 'boss',
 }
 
 export type TrapKind = 'web' | 'bomb' | 'spore'
 export type FlowerKind = 'seed' | 'chamomile' | 'redRose' | 'marigold' | 'oleander' | 'lavender'
-export type SpecialEnemyKind = 'mimic' | 'monsterFlower'
+export type SpecialEnemyKind = 'mimic' | 'monsterFlower' | 'waxArmy'
 
 export type EnemySpriteId =
   | 'enemyMouse'
@@ -135,12 +138,14 @@ export class Card {
     this.baseHealth = baseHealth
     this.baseDamage = baseDamage
     this.groupCount = 1
-    this.health = type === CardType.ENEMY ? baseHealth : 0
+    // 보스는 적과 같은 HP/ATK 모델을 그대로 따라가야 한다(피격·격파 흐름 통일).
+    const enemyLike = type === CardType.ENEMY || type === CardType.BOSS
+    this.health = enemyLike ? baseHealth : 0
     this.isSpecialEnemy = options.isSpecialEnemy ?? false
     this.defeatDropCount = options.defeatDropCount ?? 1
     this.frozenTurns = 0
-    this.enemyHealthTotal = type === CardType.ENEMY ? baseHealth : 0
-    this.enemyDamageTotal = type === CardType.ENEMY ? baseDamage : 0
+    this.enemyHealthTotal = enemyLike ? baseHealth : 0
+    this.enemyDamageTotal = enemyLike ? baseDamage : 0
     this.enemySpriteId = options.enemySpriteId ?? null
     this.enemyPower = options.enemyPower ?? 0
     this.trapKind = options.trapKind ?? 'web'
@@ -163,30 +168,35 @@ export class Card {
     }
   }
 
+  /** Boss는 적과 같은 enemy-like 모델을 따른다(HP·ATK·격파 흐름 통일). */
+  private isEnemyLike(): boolean {
+    return this.type === CardType.ENEMY || this.type === CardType.BOSS
+  }
+
   /** Read the max HP that corresponds to this card's current grouping state. */
   private getCurrentMaxHealth(): number {
-    if (this.type !== CardType.ENEMY) return 0
+    if (!this.isEnemyLike()) return 0
     const groupedStats = this.isSpecialEnemy ? null : this.getNormalEnemyGroupStats(this.groupCount)
     return groupedStats?.health ?? this.baseHealth
   }
 
-  /** Read the current enemy HP. Non-enemies never expose HP. */
+  /** Read the current enemy/boss HP. */
   getHealth(): number {
-    if (this.type !== CardType.ENEMY) return 0
+    if (!this.isEnemyLike()) return 0
     return this.health
   }
 
-  /** Read the exact attack value for enemies, including fixed grouped enemies. */
+  /** Read the exact attack value for enemies/boss, including fixed grouped enemies. */
   getDamage(): number {
-    if (this.type !== CardType.ENEMY) return 0
-    if (this.isSpecialEnemy) return this.baseDamage
+    if (!this.isEnemyLike()) return 0
+    if (this.isSpecialEnemy || this.type === CardType.BOSS) return this.baseDamage
     const groupedStats = this.getNormalEnemyGroupStats(this.groupCount)
     return groupedStats?.damage ?? this.baseDamage
   }
 
   /** Apply damage directly to the current HP pool and return remaining HP. */
   takeDamage(amount: number): number {
-    if (this.type !== CardType.ENEMY) return 0
+    if (!this.isEnemyLike()) return 0
     const actualDamage = Math.max(0, amount)
     this.health = Math.max(0, this.health - actualDamage)
     return this.health

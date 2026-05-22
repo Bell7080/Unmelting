@@ -205,8 +205,12 @@ function spriteForNormalEnemy(card: Card): string {
 }
 
 export function spriteForCard(card: Card): string {
+  // 보스는 적과 같은 양식을 따라가는 5번째 카드 종류. 아트는 3-cell wave를 임시
+  // 사용(추후 보스별 sprite로 분기). 적과 같은 sprite 그라마를 유지한다.
+  if (card.type === CardType.BOSS) return SpriteUrls.enemyWaves[3]
   if (card.type === CardType.ENEMY) {
     if (card.specialEnemyKind === 'monsterFlower') return SpriteUrls.monsterFlower
+    if (card.specialEnemyKind === 'waxArmy') return SpriteUrls.enemyWaves[3]
     if (card.isSpecialEnemy) return SpriteUrls.mimic
     if (card.groupCount >= 3) return SpriteUrls.enemyWaves[3]
     if (card.groupCount === 2) return SpriteUrls.enemyWaves[2]

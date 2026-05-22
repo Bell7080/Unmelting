@@ -465,7 +465,8 @@ export class HandSystem {
     if (rule.zone === 'waiting' && target.distance === 0) return false
     if (rule.zone !== 'front' && rule.zone !== 'waiting' && rule.zone !== 'field') return false
 
-    if (rule.filter === 'enemy') return target.card.type === CardType.ENEMY
+    // 보스는 5번째 카드 종류지만 적 양식을 그대로 따라가 손패 적 타겟팅에도 매칭된다.
+    if (rule.filter === 'enemy') return target.card.type === CardType.ENEMY || target.card.type === CardType.BOSS
     if (rule.filter === 'trap') return target.card.type === CardType.TRAP
     if (rule.filter === 'spore') {
       // 성수 전용 필터: 일반 함정/폭탄은 두고 번식 포자만 대상으로 삼는다.
@@ -473,7 +474,7 @@ export class HandSystem {
     }
     if (rule.filter === 'treasure') return target.card.type === CardType.TREASURE
     if (rule.filter === 'enemy-or-treasure') {
-      return target.card.type === CardType.ENEMY || target.card.type === CardType.TREASURE
+      return target.card.type === CardType.ENEMY || target.card.type === CardType.BOSS || target.card.type === CardType.TREASURE
     }
     if (rule.filter === 'turn-timer') return HandSystem.isTurnTimerCard(target.card)
     if (rule.filter === 'hazard')
@@ -669,6 +670,7 @@ export class HandSystem {
    *  treasures, bombs/spores, and bloomed flowers all own a timer-like beat. */
   private static isTurnTimerCard(card: Card): boolean {
     if (card.type === CardType.ENEMY) return true
+    if (card.type === CardType.BOSS) return true
     if (card.type === CardType.TREASURE) return true
     if (card.type === CardType.TRAP) return card.trapKind === 'bomb' || card.trapKind === 'spore'
     if (card.type === CardType.FLOWER) return card.flowerKind !== 'seed'
