@@ -721,9 +721,11 @@ export const GAME_BOARD_RAIL_STYLES = `
   animation: boss-hit-flash 0.42s cubic-bezier(0.18, 0.86, 0.22, 1);
 }
 @keyframes boss-hit-flash {
+  /* 일러스트가 흰색에 가깝게 사라진 듯 보이지 않도록 brightness 피크를 1.25로
+     낮춘다. 임팩트는 saturate/contrast 펌프와 SquareBurst가 담당. */
   0%   { filter: saturate(1.06) contrast(1.04) brightness(1); }
-  22%  { filter: saturate(1.4) contrast(1.18) brightness(1.55); }
-  60%  { filter: saturate(1.2) contrast(1.1) brightness(1.12); }
+  22%  { filter: saturate(1.32) contrast(1.14) brightness(1.25); }
+  60%  { filter: saturate(1.16) contrast(1.08) brightness(1.08); }
   100% { filter: saturate(1.06) contrast(1.04) brightness(1); }
 }
 

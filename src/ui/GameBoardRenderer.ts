@@ -379,6 +379,14 @@ export class GameBoardRenderer {
       }
     }
 
+    // 보스 이벤트 중에는 .rail 자식으로 동적 mount된 boss-rail-layer가
+    // 살아 있다. innerHTML 재생성으로 사라지지 않도록 일시 detach 후, 새
+    // .rail이 만들어진 직후에 그대로 다시 붙여 click handler/HP 바 상태가
+    // 손패 카드 사용·타겟팅 모드 진입 등 어떤 render()를 거쳐도 유지된다.
+    const preservedBossLayer =
+      this.boardElement.querySelector<HTMLElement>('.rail .boss-rail-layer') ?? null
+    if (preservedBossLayer) preservedBossLayer.remove()
+
     this.boardElement.innerHTML = `
       ${this.renderEmberHud(scorePanel)}
       <div class="game-shell">
@@ -406,6 +414,12 @@ export class GameBoardRenderer {
 
     this.injectStyles()
     this.attachListeners()
+    // 보스 layer를 재구축된 .rail 위에 다시 부착. element 자체가 그대로라
+    // 등록된 click 핸들러/HP 바 fill 상태가 유지된다.
+    if (preservedBossLayer) {
+      const newRail = this.boardElement.querySelector<HTMLElement>('.rail')
+      if (newRail) newRail.appendChild(preservedBossLayer)
+    }
     // When the shop is open, the shutter must keep matching the rail's real
     // perspective-scaled cells even after full re-renders (purchase refresh etc.).
     this.syncShopShutterToRailCells()
