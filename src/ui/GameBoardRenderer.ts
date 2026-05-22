@@ -4166,36 +4166,6 @@ export class GameBoardRenderer {
     return Promise.all(animations).then(() => undefined)
   }
 
-
-  /** Boss clear reward strip: three 3x1 treasure tabs stack onto the shutter rail sequentially. */
-  async playBossRewardRail(items: { id: string; label: string; sublabel: string; art: string }[]): Promise<void> {
-    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
-    if (!rail) return
-    const row = document.createElement('div')
-    row.className = 'boss-rail-chest-row'
-    row.innerHTML = items
-      .map((item, index) =>
-        `<button class="boss-chest-tile" type="button" style="--boss-chest-delay:${index * 160}ms" data-boss-reward="${item.id}">
-` +
-        `  <div class="boss-chest-face">
-` +
-        `    <div class="boss-chest-art" style="--boss-chest-art:url('${((SpriteUrls as unknown as Record<string, string>)[item.art] ?? SpriteUrls.background)}');"></div>
-` +
-        `    <div class="boss-chest-label">${escapeHtml(item.label)}<small>${escapeHtml(item.sublabel)}</small></div>
-` +
-        `  </div>
-` +
-        `</button>`
-      )
-      .join('')
-    rail.appendChild(row)
-    for (const tile of [...row.querySelectorAll<HTMLElement>('.boss-chest-tile')]) {
-      await new Promise((r) => window.setTimeout(r, 180))
-      SquareBurst.playOn(tile, 'treasure-gain', { count: 16, spread: 120, duration: 560 })
-    }
-    await new Promise((r) => window.setTimeout(r, 360))
-    row.remove()
-  }
   /**
    * "Eaten" animation for trap/treasure (and any other consumed card):
    * the card scales up + brightens + fades out while a themed SquareBurst
@@ -4212,7 +4182,7 @@ export class GameBoardRenderer {
     const theme: BurstTheme =
       card.type === CardType.TREASURE
         ? 'treasure-gain'
-        : card.type === CardType.ENEMY || card.type === CardType.BOSS
+        : card.type === CardType.ENEMY
           ? 'damage'
           : 'vanish-smoke'
     // Burst from the visual center of the (possibly wide) group.
@@ -4233,12 +4203,8 @@ export class GameBoardRenderer {
     // for a frame — that's the "blink" the player sees on slow machines.
     return this.animateElements(
       elements,
-      card.type === CardType.BOSS
-        ? 'is-boss-defeated-consuming'
-        : card.type === CardType.ENEMY
-          ? 'is-enemy-defeated-consuming'
-          : 'is-consuming',
-      card.type === CardType.BOSS ? 1100 : card.type === CardType.ENEMY ? 560 : 480,
+      card.type === CardType.ENEMY ? 'is-enemy-defeated-consuming' : 'is-consuming',
+      card.type === CardType.ENEMY ? 560 : 480,
       { persist: true }
     )
   }
@@ -4264,7 +4230,7 @@ export class GameBoardRenderer {
       const theme: BurstTheme =
         type === CardType.TREASURE
           ? 'treasure-gain'
-          : type === CardType.ENEMY || type === CardType.BOSS
+          : type === CardType.ENEMY
             ? 'damage'
             : 'vanish-smoke'
       const r1 = elements[0].getBoundingClientRect()
@@ -4282,12 +4248,8 @@ export class GameBoardRenderer {
       animations.push(
         this.animateElements(
           elements,
-          type === CardType.BOSS
-            ? 'is-boss-defeated-consuming'
-            : type === CardType.ENEMY
-              ? 'is-enemy-defeated-consuming'
-              : 'is-consuming',
-          type === CardType.BOSS ? 1100 : type === CardType.ENEMY ? 560 : 480,
+          type === CardType.ENEMY ? 'is-enemy-defeated-consuming' : 'is-consuming',
+          type === CardType.ENEMY ? 560 : 480,
           { persist: true }
         )
       )

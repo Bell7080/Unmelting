@@ -907,29 +907,4 @@ export const GAME_BOARD_RAIL_STYLES = `
   opacity: 0.78;
 }
 
-.is-boss-defeated-consuming {
-  animation: boss-defeat-shatter 1.05s cubic-bezier(0.16, 0.88, 0.22, 1) forwards;
-  filter: saturate(1.15);
-}
-.is-boss-defeated-consuming .boss-face {
-  animation: boss-defeat-face-crack 1.05s ease-in forwards;
-}
-@keyframes boss-defeat-shatter {
-  0% { transform: translate3d(0,0,0) scale(1); opacity: 1; }
-  24% { transform: translate3d(-8px, 5px, 0) scale(1.03); }
-  52% { transform: translate3d(9px, -7px, 0) scale(1.05); }
-  76% { transform: translate3d(-6px, 3px, 0) scale(1.12); opacity: 0.85; filter: blur(0.4px); }
-  100% { transform: translate3d(0, -16px, 0) scale(1.22); opacity: 0; filter: blur(2.4px); }
-}
-@keyframes boss-defeat-face-crack {
-  0% { clip-path: inset(0 0 0 0); }
-  50% { clip-path: polygon(0 0, 47% 0, 43% 100%, 0 100%); }
-  100% { clip-path: polygon(0 0, 58% 0, 38% 100%, 0 100%); }
-}
-.boss-face-badge {
-  border-color: #e9d7b4;
-  background: linear-gradient(160deg, rgba(43, 31, 28, 0.96), rgba(76, 54, 44, 0.9));
-  box-shadow: 0 8px 16px rgba(14, 10, 9, 0.4), inset 0 0 0 1px rgba(255, 229, 188, 0.26);
-}
-
 `
