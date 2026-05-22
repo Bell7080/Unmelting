@@ -593,21 +593,22 @@ export const GAME_BOARD_RAIL_STYLES = `
     linear-gradient(180deg, rgba(20, 16, 28, 0) 28%, rgba(20, 16, 28, 0.55) 62%, rgba(8, 5, 14, 0.95) 100%),
     radial-gradient(130% 60% at 50% 0%, rgba(244, 164, 96, 0.14), transparent 70%);
 }
-/* 좌상단 N턴 뱃지 — 폭탄/포자 frozen-badge 톤을 따라 어두운 wax 칩으로. */
+/* 좌상단 N턴 뱃지 — 일반 카드 .frozen-badge와 동일한 톤(밝은 칩 + 어두운 글자)을
+   그대로 차용해 다른 유형 카드의 상태 뱃지와 시각 통일성을 가져간다. */
 .boss-face-badge {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 3;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  color: #ffd178;
-  border: 1px solid rgba(255, 196, 120, 0.6);
+  top: 6px;
+  left: 8px;
+  z-index: 6;
+  padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(28, 18, 12, 0.85);
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
+  color: #1c1424;
+  background: rgba(228, 234, 244, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  box-shadow: 0 0 6px rgba(216, 232, 248, 0.22);
 }
 .boss-face-title-row {
   position: absolute;
@@ -858,19 +859,79 @@ export const GAME_BOARD_RAIL_STYLES = `
   50%      { opacity: 0.95; }
 }
 
-/* 보스 등장 시 셔터 진동을 한 비트 더 강화. 기본 quake와 결합해 더 묵직한 쿵 임팩트. */
-.rail.is-boss-quaking {
-  animation: boss-rail-impact-quake 0.62s cubic-bezier(0.32, 0.04, 0.18, 0.96);
+/* ---- 보스 격파 보상 칸 ----
+   격파 직후 lanes의 dist 0/1/2에 박히는 3-cell wide 보물 카드. 셔터(z 35)가 닫힌
+   채 노출되어야 하므로 z-index 40으로 올리고, row stacking도 같이 끌어올린다. */
+.cell.card.is-boss-reward {
+  position: relative;
+  z-index: 40;
+  /* 보물 보상 톤을 살짝 더 따뜻하게(추후 sprite로 분기 가능). */
+  border-color: rgba(244, 196, 110, 0.78);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.28),
+    inset 0 -12px 22px rgba(0, 0, 0, 0.55),
+    var(--card-lift-shadow-grouped, 0 4px 10px rgba(0, 0, 0, 0.55)),
+    var(--card-depth-shadow, 0 14px 24px rgba(0, 0, 0, 0.45)),
+    0 0 22px rgba(244, 196, 110, 0.46);
 }
-@keyframes boss-rail-impact-quake {
-  0%   { transform: translate(0, 0); }
-  14%  { transform: translate(-3px, 2px); }
-  28%  { transform: translate(4px, -2px); }
-  42%  { transform: translate(-2px, 3px); }
-  56%  { transform: translate(3px, 1px); }
-  72%  { transform: translate(-2px, -1px); }
-  100% { transform: translate(0, 0); }
+.rail-row:has(.cell.card.is-boss-reward) {
+  position: relative;
+  z-index: 40;
 }
+
+/* ---- 보스 격파 시퀀스 ----
+   handleBossDefeated가 .is-boss-defeating → .is-boss-cracking → .is-boss-blown을
+   순차로 부여한다. 모든 사각 burst는 SquareBurst가 같은 톤으로 발사된다. */
+.cell.card.type-boss.is-boss-defeating {
+  animation: boss-defeating-shake 0.86s cubic-bezier(0.32, 0.04, 0.18, 0.96);
+  filter: saturate(1.18) brightness(1.05);
+}
+@keyframes boss-defeating-shake {
+  0%, 100% { transform: translate(0, 0); }
+  12%      { transform: translate(-5px, 3px) rotate(-0.6deg); }
+  26%      { transform: translate(6px, -4px) rotate(0.6deg); }
+  40%      { transform: translate(-4px, 4px) rotate(-0.4deg); }
+  54%      { transform: translate(5px, 2px) rotate(0.4deg); }
+  68%      { transform: translate(-3px, -3px) rotate(-0.2deg); }
+  82%      { transform: translate(2px, 2px) rotate(0.1deg); }
+}
+/* 갈라짐: 카드 face 가운데에 균열 그라데이션 두 줄을 띄운다. */
+.cell.card.type-boss.is-boss-cracking::before,
+.cell.card.type-boss.is-boss-cracking::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background:
+    linear-gradient(105deg, transparent 48%, rgba(255, 224, 168, 0.92) 49.4%, rgba(255, 224, 168, 0.92) 50.6%, transparent 52%),
+    linear-gradient(78deg, transparent 38%, rgba(255, 192, 120, 0.78) 39.6%, rgba(255, 192, 120, 0.78) 40.4%, transparent 42%);
+  mix-blend-mode: screen;
+  opacity: 0;
+  animation: boss-cracking-flare 0.5s ease-out forwards;
+}
+.cell.card.type-boss.is-boss-cracking::after {
+  background:
+    linear-gradient(-118deg, transparent 56%, rgba(255, 216, 152, 0.88) 57.4%, rgba(255, 216, 152, 0.88) 58.6%, transparent 60%);
+  animation-delay: 0.12s;
+}
+@keyframes boss-cracking-flare {
+  0%   { opacity: 0; }
+  40%  { opacity: 1; }
+  100% { opacity: 0.78; }
+}
+/* 펑 + 흐릿 확대 사라짐 */
+.cell.card.type-boss.is-boss-blown {
+  animation: boss-blown 0.64s cubic-bezier(0.2, 0.86, 0.22, 1) forwards;
+  pointer-events: none;
+}
+@keyframes boss-blown {
+  0%   { transform: scale(1); opacity: 1; filter: blur(0) brightness(1.1) saturate(1.2); }
+  35%  { transform: scale(1.18); opacity: 0.92; filter: blur(2px) brightness(1.5) saturate(1.6); }
+  100% { transform: scale(1.6); opacity: 0; filter: blur(8px) brightness(1.3) saturate(1.1); }
+}
+
+/* 보스 등장 시 셔터 진동을 한 비트 더 강화. (위쪽 정의의 중복 — 한 번만 유지) */
 
 .boss-rail-chest-row .boss-chest-tile {
   cursor: pointer;

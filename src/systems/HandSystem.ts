@@ -498,7 +498,11 @@ export class HandSystem {
       return '대상 적 없음'
     actualTarget.card.takeDamage(amount)
     if (actualTarget.card.getHealth() <= 0) {
-      gs.removeCardFromRow(actualTarget.card, actualTarget.distance)
+      // 보스는 lanes에 그대로 두고 격파 시퀀스(흔들→갈라짐→펑→흐릿 확대)가 element를
+      // 그대로 잡아 시각화한 뒤 직접 정리한다. 일반 적은 즉시 제거.
+      if (actualTarget.card.type !== CardType.BOSS) {
+        gs.removeCardFromRow(actualTarget.card, actualTarget.distance)
+      }
       return `${actualTarget.card.name} 피해 ${amount}로 처치`
     }
     return `${actualTarget.card.name} 피해 ${amount}`
@@ -519,7 +523,11 @@ export class HandSystem {
         card.takeDamage(amount)
         hit++
         if (card.getHealth() <= 0) {
-          gs.removeCardFromRow(card, d)
+          // 보스는 별도 격파 시퀀스가 lanes 정리를 담당한다(시퀀스 도중 element가
+          // 사라지지 않도록). 일반 적은 즉시 lane에서 제거.
+          if (card.type !== CardType.BOSS) {
+            gs.removeCardFromRow(card, d)
+          }
           defeated++
         }
       }

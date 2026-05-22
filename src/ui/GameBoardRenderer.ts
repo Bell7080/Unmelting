@@ -554,13 +554,13 @@ export class GameBoardRenderer {
         continue
       }
 
-      // Detect span across consecutive same Card instances.
-      // Only apply grouping to active row (distance 0); preview rows always render individually.
+      // 같은 카드 인스턴스가 인접 lane에 연속해 있으면 한 칸으로 grouping한다.
+      // 일반 게임은 active row 외에서 같은 인스턴스를 박지 않으므로 영향이 없고,
+      // 보스/보상 카드(같은 인스턴스를 3-cell span으로 박는다)는 모든 row에서 한 칸
+      // wide tile로 표현된다.
       let span = 1
-      if (isActive) {
-        while (i + span < lanes.length && lanes[i + span].getCardAtDistance(distance) === card) {
-          span++
-        }
+      while (i + span < lanes.length && lanes[i + span].getCardAtDistance(distance) === card) {
+        span++
       }
       cells.push(this.renderCardCell(card, i, distance, span, isActive))
       i += span
@@ -609,6 +609,10 @@ export class GameBoardRenderer {
       // 풀필드 확장·좌상단 3T 뱃지 등은 boss-kind-<id> 마커로 한정한다.
       card.type === CardType.BOSS && card.specialEnemyKind
         ? `boss-kind-${card.specialEnemyKind}`
+        : '',
+      // 보스 격파 후 lanes에 박히는 보상 chest도 닫힌 셔터 위에 노출되어야 한다.
+      card.type === CardType.TREASURE && card.id.startsWith('boss-reward-')
+        ? 'is-boss-reward'
         : '',
     ]
       .filter(Boolean)
@@ -2041,6 +2045,31 @@ export class GameBoardRenderer {
    *  데미지 글자 톤/모션을 그대로 받도록 한다. */
   spawnFieldDamageNumber(x: number, y: number, amount: number): Promise<void> {
     return this.animateDamageNumberAt(x, y, amount)
+  }
+
+  /** 보스 격파 시퀀스(공통): 짧은 흔들 → 사각 burst 연발 → 갈라짐 → 펑(큰 burst) →
+   *  흐릿하게 확대되며 사라짐. 모든 burst는 기존 SquareBurst 그라마(damage/treasure-gain)
+   *  를 그대로 사용해 일반 게임 톤과 통일된다. */
+  async playBossDefeatSequence(cardId: string): Promise<void> {
+    const tile = this.findCardElement(cardId)
+    if (!tile) return
+    tile.classList.add('is-boss-defeating')
+
+    // beat 1: 흔들 + 작은 burst 두 번 — 일반 enemy hit burst('damage') 톤.
+    SquareBurst.playOn(tile, 'damage', { count: 16, spread: 140, duration: 520 })
+    await new Promise((r) => window.setTimeout(r, 220))
+    SquareBurst.playOn(tile, 'damage', { count: 18, spread: 160, duration: 520 })
+    await new Promise((r) => window.setTimeout(r, 240))
+
+    // beat 2: 갈라짐 표시(클래스로 ::before/::after crack line 노출) + 한 발 더.
+    tile.classList.add('is-boss-cracking')
+    SquareBurst.playOn(tile, 'treasure-gain', { count: 22, spread: 180, duration: 560 })
+    await new Promise((r) => window.setTimeout(r, 360))
+
+    // beat 3: 펑 — 큰 burst + 흐릿 확대 사라짐(.is-boss-blown).
+    SquareBurst.playOn(tile, 'treasure-gain', { count: 32, spread: 230, duration: 760 })
+    tile.classList.add('is-boss-blown')
+    await new Promise((r) => window.setTimeout(r, 640))
   }
 
   /** Open the compendium overlay listing every field-card + hand-card def
