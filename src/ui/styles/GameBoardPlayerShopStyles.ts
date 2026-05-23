@@ -339,13 +339,31 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-shell--trial .shop-top-row {
   grid-template-columns: 1fr;
 }
-/* 시련 트레이는 상점 유물 layer를 그대로 활용해 중앙에 카드 3장이 균등 배치된다. */
+/* 시련 트레이는 상점 유물 layer를 그대로 활용해 중앙에 카드 3장이 균등 배치된다.
+   시련 단계에서 카드 자체가 시각의 중심이 되도록 트레이 전체를 화면 중앙으로
+   강조한다(가로/세로 가운데 정렬 + 넉넉한 gap). */
+.shop-shell--trial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.shop-shell--trial .shop-content-bundle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+.shop-shell--trial .shop-row.shop-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .shop-shell--trial .shop-trial-layer {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(20px, 2.4vw, 36px);
-  padding: clamp(12px, 1.6vh, 20px);
+  gap: clamp(28px, 3vw, 48px);
+  padding: clamp(16px, 2vh, 28px);
   background: transparent;
   border: none;
   box-shadow: none;
@@ -356,15 +374,20 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 /* 시련 카드는 상점 유물카드 마크업/CSS(.shop-relic-card → .shop-relic-front /
    .shop-relic-art / .shop-relic-body / .shop-relic-title / .shop-relic-effect)를
-   그대로 따라가 폰트·테두리·플립 톤이 자동 통일된다. 시련 단계에선 더 강조되도록
-   가로 폭만 한 단계 키운다(중앙 정렬 + 큰 카드). */
+   그대로 따라가 폰트·테두리·플립 톤이 자동 통일된다. 시련 단계에선 시각의 중심이
+   되도록 가로 폭을 상점 유물카드보다 한 단계 더 크게(약 30~40% 확대). */
 .shop-shell--trial .shop-trial-card {
-  width: clamp(176px, 17vw, 256px);
+  width: clamp(208px, 20vw, 312px);
+}
+.shop-shell--trial .shop-trial-card .shop-relic-title {
+  font-size: clamp(18px, 2.4vh, 24px);
+  letter-spacing: 0.04em;
 }
 .shop-shell--trial .shop-trial-card .shop-relic-effect {
   /* 시련 효과 설명은 길어질 수 있어 좌측 정렬 + 더 큰 line-height. */
   text-align: left;
-  line-height: 1.45;
+  line-height: 1.5;
+  font-size: clamp(13px, 1.7vh, 16px);
 }
 .shop-pack-layer {
   justify-content: center;

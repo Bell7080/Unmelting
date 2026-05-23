@@ -1094,11 +1094,21 @@ async function runBossRailEvent(): Promise<void> {
   const handGiftStep = 3
   const bossName = '밀랍 군단'
 
-  // active row의 일반 카드를 임시 보관. 보스 phase 동안 active row는 보스 1장으로 덮인다.
-  const savedActiveRow: (Card | null)[] = []
-  for (let i = 0; i < gameState.lanes.length; i++) {
-    savedActiveRow.push(gameState.lanes[i].getCardAtDistance(0))
+  // 보스 phase 동안엔 일반 레일 카드들이 셔터 뒤 lanes에 그대로 살아있어 손패·조합식
+  // 효과가 우연히 그들에게 적용되는 사고가 있다. dist 0/1/2 전체를 임시 보관하고 lanes를
+  // 모두 비워 보스(+이후 보상 chest)만 lanes에 존재하게 만든다. 격파/시련 종료 후 원상 복원.
+  const savedField: (Card | null)[][] = []
+  for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+    const row: (Card | null)[] = []
+    for (let i = 0; i < gameState.lanes.length; i++) {
+      row.push(gameState.lanes[i].getCardAtDistance(d))
+      gameState.lanes[i].setCardAtDistance(d, null)
+    }
+    savedField.push(row)
   }
+  // savedActiveRow는 격파 후 복원 흐름에서 호환을 위해 그대로 유지(보스 phase 진입
+  // 시점의 active row 스냅샷). 실제 복원은 savedField 전체로 진행한다.
+  const savedActiveRow = savedField[0]
 
   // 보스 카드 = 5번째 카드 종류. 3-cell wide grouped enemy처럼 lanes 3개에 같은 인스턴스.
   // specialEnemyKind 'waxArmy'는 이 보스(밀랍 군단)만의 식별자 — 3x3 풀필드 확장,
@@ -1161,7 +1171,7 @@ async function runBossRailEvent(): Promise<void> {
   bossEventState = null
   // 보상 chest 3장을 lanes의 active(dist 0) / mid(1) / top(2) row에 각자 3-cell wide로
   // 박는다. lanes에 정식 박힌 카드라 일반 cardAction이 그대로 클릭/획득을 처리한다.
-  await stageBossRewardChests(savedActiveRow)
+  await stageBossRewardChests(savedField)
 
   turnManager.setTurnMode('normal_turn')
 
@@ -1190,16 +1200,22 @@ async function handleBossClick(card: Card): Promise<void> {
 
   inputLocked = true
 
-  // 일반 적 그라마: player-strike pop + .damage-float 부유 숫자(붉은 톤).
+  // 일반 적 그라마: player-strike pop + .damage-float 부유 숫자(붉은 톤) +
+  // 보스 카드 위에 사각 burst('damage' 톤)를 한 번 더 얹어 묵직한 임팩트.
   await boardRenderer.animatePlayerAttack(card)
+  const bossTile = boardRenderer.findCardElement(card.id)
+  if (bossTile) SquareBurst.playOn(bossTile, 'damage', { count: 22, spread: 180, duration: 560 })
   const dealt = Math.min(character.damage, card.getHealth())
   card.takeDamage(dealt)
   state.turn += 1
   // 보스 가상 턴도 실제 턴처럼 ember decay를 한 비트 진행시킨다(불씨 게이지 감소).
   turnManager.tickEmberDecay()
   // 다음 공격까지 남은 가상 턴 수를 좌상단 뱃지에 in-place로 표시.
-  const nextAttackIn = state.attackInterval - (state.turn % state.attackInterval)
-  boardRenderer.setBossAttackCountdown(nextAttackIn === state.attackInterval ? 0 : nextAttackIn)
+  // 3 → 2 → 1 → (반격) → 3 ... 순환. turn % interval === 0이면 방금 반격이
+  // 일어나는 비트이므로 다음 사이클의 시작값(interval)으로 reset 표시.
+  const remaining = state.attackInterval - (state.turn % state.attackInterval)
+  const displayValue = remaining === state.attackInterval ? state.attackInterval : remaining
+  boardRenderer.setBossAttackCountdown(displayValue)
   await boardRenderer.animateDamageNumbersById([{ cardId: card.id, amount: dealt }])
 
   // HP 3 임계를 넘을 때마다 손패 1장 지급(트리거는 클릭/손패 데미지 모두 공통).
@@ -1285,7 +1301,7 @@ async function handleBossDefeated(): Promise<void> {
 /** 격파 직후 보상 chest 3장을 lanes의 dist 0/1/2에 박고, 사용자가 active row부터
  *  클릭으로 차례차례 획득하도록 한다. cardAction 이벤트가 보상 chest 클릭을 식별해
  *  applyBossRewardClaim으로 분기 처리한다. 모든 보상이 소진되면 시련 단계 진행. */
-async function stageBossRewardChests(savedActiveRow: (Card | null)[]): Promise<void> {
+async function stageBossRewardChests(savedField: (Card | null)[][]): Promise<void> {
   // 보상 카드 = TREASURE 타입(일반 보물 칸 유형). id prefix로 보스 보상임을 식별한다.
   // 사용자가 받은 카드들을 식별하기 위해 id에 보상 종류를 인코딩한다.
   const healCard = new Card('boss-reward-heal', CardType.TREASURE, '회복의 봉인함', '체력과 불씨 게이지를 모두 회복한다')
@@ -1312,8 +1328,13 @@ async function stageBossRewardChests(savedActiveRow: (Card | null)[]): Promise<v
   bossRewardState = null
   // 보상 소진 → 시련 단계로 이어진다. 손패 차단은 시련까지 유지된다.
   inputLocked = true
-  // 보상이 모두 소진된 뒤 active row가 자연 복원되도록 임시 저장된 카드들을 다시 박는다.
-  for (let i = 0; i < 3; i++) gameState.lanes[i].setCardAtDistance(0, savedActiveRow[i])
+  // 보상 소진 후 보스 phase 진입 직전 lanes 전체(dist 0/1/2)를 그대로 복원해
+  // 일반 게임이 같은 상태에서 이어진다(셔터 뒤 카드 손실 없음).
+  for (let d = 0; d < savedField.length; d++) {
+    for (let i = 0; i < 3; i++) {
+      gameState.lanes[i].setCardAtDistance(d, savedField[d][i])
+    }
+  }
   render()
 }
 
@@ -1351,11 +1372,14 @@ async function applyBossRewardClaim(card: Card): Promise<void> {
     void boardRenderer.animateResourceTrailFromCard(card.id, 'hand', 1, 'treasure-gain')
   }
 
+  // 일반 보물칸 처치 그라마(.is-consuming + treasure-gain burst)로 흔들+확대 사라짐.
+  // boss-reward 전용 keyframe(boss-reward-pop)이 회전·shake·blur를 한 비트 더 얹는다.
+  await boardRenderer.playBossRewardClaimedConsume(card.id)
   // 클릭한 카드를 lanes에서 제거하고 윗 row 카드들이 한 칸씩 떨어지게 정리(일반 레일 그라마).
   for (let i = 0; i < 3; i++) gameState.lanes[i].setCardAtDistance(0, null)
   gameState.compactLanes()
   render()
-  await new Promise((r) => window.setTimeout(r, 320))
+  await new Promise((r) => window.setTimeout(r, 280))
 
   bossRewardState.remaining -= 1
   if (bossRewardState.remaining <= 0) {

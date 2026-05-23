@@ -593,22 +593,31 @@ export const GAME_BOARD_RAIL_STYLES = `
     linear-gradient(180deg, rgba(20, 16, 28, 0) 28%, rgba(20, 16, 28, 0.55) 62%, rgba(8, 5, 14, 0.95) 100%),
     radial-gradient(130% 60% at 50% 0%, rgba(244, 164, 96, 0.14), transparent 70%);
 }
-/* 좌상단 N턴 뱃지 — 일반 카드 .frozen-badge와 동일한 톤(밝은 칩 + 어두운 글자)을
-   그대로 차용해 다른 유형 카드의 상태 뱃지와 시각 통일성을 가져간다. */
+/* 좌상단 N턴 뱃지 — frozen-badge 위치/형태 양식은 유지하되, 보스의 임박한 반격
+   카운트는 회색 톤이 아니라 붉은 위험 톤으로 표현(.type-enemy 띠 색과 통일).
+   N이 적을수록 더 위험하다는 인상을 주기 위해 살짝 펄스 한다. */
 .boss-face-badge {
   position: absolute;
   top: 6px;
   left: 8px;
   z-index: 6;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 999px;
-  color: #1c1424;
-  background: rgba(228, 234, 244, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.62);
-  font-size: 11px;
+  color: #fff;
+  background: linear-gradient(180deg, rgba(196, 64, 48, 0.96), rgba(120, 22, 22, 0.96));
+  border: 1px solid rgba(255, 138, 116, 0.72);
+  font-size: 12px;
   font-weight: 900;
-  letter-spacing: 0.06em;
-  box-shadow: 0 0 6px rgba(216, 232, 248, 0.22);
+  letter-spacing: 0.08em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 196, 168, 0.32),
+    0 0 10px rgba(196, 64, 48, 0.5);
+  animation: boss-badge-pulse 1.3s ease-in-out infinite;
+}
+@keyframes boss-badge-pulse {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255, 196, 168, 0.3), 0 0 8px rgba(196, 64, 48, 0.42); }
+  50%      { box-shadow: inset 0 1px 0 rgba(255, 196, 168, 0.42), 0 0 16px rgba(255, 96, 80, 0.7); }
 }
 .boss-face-title-row {
   position: absolute;
@@ -897,6 +906,34 @@ export const GAME_BOARD_RAIL_STYLES = `
 .damage-float.damage-float--text {
   color: #e4eaf4;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.75), 0 0 12px rgba(228, 234, 244, 0.55);
+}
+
+/* 보스 보상 칸 획득: 일반 보물칸 처치(is-consuming)의 확대 페이드 위에 가벼운
+   회전·shake·blur를 한 비트 더 얹어 묵직한 획득감을 준다. */
+.cell.card.is-boss-reward.is-boss-reward-claimed {
+  pointer-events: none;
+  animation: boss-reward-claimed 0.52s cubic-bezier(0.2, 0.86, 0.22, 1) forwards;
+  z-index: 60;
+}
+@keyframes boss-reward-claimed {
+  0%   { transform: scale(1) rotate(0); opacity: 1; filter: brightness(1) blur(0); }
+  18%  { transform: scale(1.08) rotate(-1.4deg); }
+  44%  { transform: scale(1.22) rotate(1.6deg); filter: brightness(1.32) blur(0.4px); }
+  70%  { transform: scale(1.32) rotate(-0.6deg); opacity: 0.72; }
+  100% { transform: scale(1.55) rotate(0); opacity: 0; filter: brightness(1.05) blur(2px); }
+}
+
+/* 보스 피격 보강 — 일반 적의 is-player-striking pop 위에 saturate/brightness 짧은
+   펌프를 보스에만 추가. 클릭 한 번이 일반 적과 동일한 톤이지만 명확히 임팩트가 보인다. */
+.cell.card.type-boss.is-player-striking {
+  animation:
+    player-strike-pop 0.36s cubic-bezier(0.2, 0.9, 0.25, 1),
+    boss-strike-flash 0.36s cubic-bezier(0.2, 0.86, 0.22, 1);
+}
+@keyframes boss-strike-flash {
+  0%   { filter: saturate(1.06) brightness(1); }
+  35%  { filter: saturate(1.4) brightness(1.18); }
+  100% { filter: saturate(1.06) brightness(1); }
 }
 
 /* ---- 보스 격파 시퀀스 ----
