@@ -7,9 +7,12 @@
  *   - Normal enemy 2/3-cell merged: follows the strongest member's art.
  *   - Mimic (special enemy): enemy_003.
  *   - Treasure: chest_001 / chest_002 / chest_003 by groupCount (1/2/3).
+ *   - Boss reward: reward_001 heal / reward_002 chest / reward_003 bounty.
  *   - Trap: trap_001 web, trap_004 bomb, trap_007 spore.
  *   - Flower: flower_000 seed, flower_001~005 blooms, enemyflower_001 monster flower.
  *   - Rail / stage backdrop: background_001.
+ *   - Boss: boss_001. Trial veil: background_005.
+ *   - Trial cards: trial_001 광란 / trial_004 역경 / trial_007 가난.
  */
 
 import { Card, CardType, type EnemySpriteId, type FlowerKind, type TrapKind } from '@entities/Card'
@@ -19,6 +22,8 @@ import backgroundUrl from '../assets/sprites/background_001.webp'
 import shopVeilBgUrl from '../assets/sprites/background_002.webp'
 import shopPickerBgUrl from '../assets/sprites/background_003.webp'
 import altarVeilBgUrl from '../assets/sprites/background_004.webp'
+import trialVeilBgUrl from '../assets/sprites/background_005.webp'
+import boss001Url from '../assets/sprites/boss_001.webp'
 import playerUrl from '../assets/sprites/player_001.webp'
 import enemy001Url from '../assets/sprites/enemy_001.webp'
 import enemy002Url from '../assets/sprites/enemy_002.webp'
@@ -46,6 +51,9 @@ import enemyWave002Url from '../assets/sprites/enemywave_002.webp'
 import chest001Url from '../assets/sprites/chest_001.webp'
 import chest002Url from '../assets/sprites/chest_002.webp'
 import chest003Url from '../assets/sprites/chest_003.webp'
+import reward001Url from '../assets/sprites/reward_001.webp'
+import reward002Url from '../assets/sprites/reward_002.webp'
+import reward003Url from '../assets/sprites/reward_003.webp'
 
 import cardBackUrl from '../assets/sprites/cardbackground_001.webp'
 import handCard001Url from '../assets/sprites/handcard_001.webp'
@@ -70,6 +78,9 @@ import pack002Url from '../assets/sprites/pack_002.webp'
 import pack003Url from '../assets/sprites/pack_003.webp'
 import free001Url from '../assets/sprites/free_001.webp'
 import free002Url from '../assets/sprites/free_002.webp'
+import trial001Url from '../assets/sprites/trial_001.webp'
+import trial004Url from '../assets/sprites/trial_004.webp'
+import trial007Url from '../assets/sprites/trial_007.webp'
 import pack004Url from '../assets/sprites/pack_004.webp'
 import pack005Url from '../assets/sprites/pack_005.webp'
 import pack006Url from '../assets/sprites/pack_006.webp'
@@ -84,6 +95,10 @@ export const SpriteUrls = {
   shopPickerBg: shopPickerBgUrl,
   /** Altar visit backdrop; currently reuses the shop flow with a darker plate. */
   altarVeilBg: altarVeilBgUrl,
+  /** Trial (시련) overlay backdrop. */
+  trialVeilBg: trialVeilBgUrl,
+  /** Boss card illustration. */
+  boss: boss001Url,
   player: playerUrl,
   enemyMouse: enemy001Url,
   enemyFrog: enemy002Url,
@@ -154,14 +169,17 @@ export const SpriteUrls = {
   freeCard: free001Url,
   /** Altar coin free-card artwork (수당). */
   freeCoinCard: free002Url,
-  /** 시련 카드 일러스트 자리 — trial_001/004/007 슬롯.
-   *  실제 trial_*.webp 파일이 아직 없으므로 톤이 가까운 기존 sprite를 임시로
-   *  매핑한다(방화광=폭탄, 양초 사냥꾼=거미줄, 가난=작은 상자). 추후 trial_*.webp
-   *  파일이 들어오면 import만 바꾸면 된다. */
+  /** Boss reward illustrations: heal / chest / bounty. */
+  rewards: {
+    heal: reward001Url,
+    chest: reward002Url,
+    bounty: reward003Url,
+  } as const,
+  /** 시련 카드 일러스트 — 광란(001) / 역경(004) / 가난(007). */
   trials: {
-    '001': trap004Url,
-    '004': trap001Url,
-    '007': chest001Url,
+    '001': trial001Url,
+    '004': trial004Url,
+    '007': trial007Url,
   } satisfies Record<'001' | '004' | '007', string>,
 }
 
@@ -205,9 +223,7 @@ function spriteForNormalEnemy(card: Card): string {
 }
 
 export function spriteForCard(card: Card): string {
-  // 보스는 적과 같은 양식을 따라가는 5번째 카드 종류. 아트는 3-cell wave를 임시
-  // 사용(추후 보스별 sprite로 분기). 적과 같은 sprite 그라마를 유지한다.
-  if (card.type === CardType.BOSS) return SpriteUrls.enemyWaves[3]
+  if (card.type === CardType.BOSS) return SpriteUrls.boss
   if (card.type === CardType.ENEMY) {
     if (card.specialEnemyKind === 'monsterFlower') return SpriteUrls.monsterFlower
     if (card.specialEnemyKind === 'waxArmy') return SpriteUrls.enemyWaves[3]
@@ -225,6 +241,9 @@ export function spriteForCard(card: Card): string {
     return SpriteUrls.traps[card.trapKind]
   }
   if (card.type === CardType.TREASURE) {
+    if (card.id === 'boss-reward-heal') return SpriteUrls.rewards.heal
+    if (card.id === 'boss-reward-chest') return SpriteUrls.rewards.chest
+    if (card.id === 'boss-reward-bounty') return SpriteUrls.rewards.bounty
     if (card.groupCount >= 3) return SpriteUrls.chestLarge
     if (card.groupCount === 2) return SpriteUrls.chestMedium
     return SpriteUrls.chestSmall

@@ -1180,6 +1180,7 @@ async function runBossRailEvent(): Promise<void> {
     name: bossName,
     maxHp: bossMaxHp,
     attack: bossAttack,
+    spriteUrl: SpriteUrls.boss,
   })
   render()
   await Promise.all([

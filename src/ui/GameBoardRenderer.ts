@@ -1827,7 +1827,7 @@ export class GameBoardRenderer {
     }
     this.shopOverlayElement.innerHTML = `
       <div class="shop-shell shop-shell--trial" data-shop-mode="altar" role="dialog" aria-label="시련 선택">
-        <div class="shop-dim-veil" style="--shop-veil-bg:url('${SpriteUrls.altarVeilBg}');" aria-hidden="true"></div>
+        <div class="shop-dim-veil" style="--shop-veil-bg:url('${SpriteUrls.trialVeilBg}');" aria-hidden="true"></div>
         <div class="shop-content-bundle">
           <section class="shop-row shop-top-row" aria-label="시련 카드">
             <div class="shop-layer shop-artifact-layer shop-trial-layer trial-rail-frame" aria-hidden="false">

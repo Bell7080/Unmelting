@@ -25,14 +25,14 @@ export interface TrialDefinition {
 export const TRIAL_DEFINITIONS: TrialDefinition[] = [
   {
     id: 'arsonist',
-    title: '방화광',
+    title: '광란',
     effect: '앞으로 나올 모든 적의 체력 +1, 공격력 +1',
     spriteKey: '001',
     effectKind: { type: 'enemy-stat-bonus', hpBonus: 1, atkBonus: 1 },
   },
   {
     id: 'candle-hunter',
-    title: '양초 사냥꾼',
+    title: '역경',
     effect: '앞으로 나올 모든 함정의 피해 +1',
     spriteKey: '004',
     effectKind: { type: 'trap-damage-bonus', value: 1 },
