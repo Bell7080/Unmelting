@@ -94,6 +94,8 @@ export interface ShopPackItemView {
   /** Theme tints the card frame: resource(자원)/upgrade(강화)/unlock(해금). */
   theme: 'resource' | 'upgrade' | 'unlock'
   rarity: CardRarity
+  /** 카드별 개별 일러스트 URL. 없으면 팩 커버 이미지를 fallback으로 사용한다. */
+  spriteUrl?: string
 }
 export interface ShopPackPickerView {
   packKind: ShopPackKind
@@ -1444,7 +1446,10 @@ export class GameBoardRenderer {
     }
     const cards = view.items
       .map(
-        (item, i) => `
+        (item, i) => {
+          // 개별 카드 아트가 있으면 우선 사용, 없으면 팩 커버 fallback
+          const artUrl = item.spriteUrl ?? SpriteUrls.packs[view.packKind]
+          return `
           <article class="shop-pack-pick-card pack-theme-${item.theme} ${RARITY_CLASS_BY_TIER[item.rarity]}"
                    data-pack-pick="${item.id}"
                    data-pack-kind="${view.packKind}"
@@ -1455,14 +1460,18 @@ export class GameBoardRenderer {
             <div class="shop-pack-pick-flipper">
               <div class="shop-pack-pick-back" aria-hidden="true"></div>
               <div class="shop-pack-pick-front">
-                <div class="shop-pack-pick-art" style="background-image:url('${SpriteUrls.packs[view.packKind]}');" aria-hidden="true"></div>
+                <div class="shop-pack-pick-art" style="background-image:url('${artUrl}');" aria-hidden="true"></div>
                 <div class="shop-pack-pick-body">
-                  <h3 class="shop-relic-title">${item.title}</h3>
-                  <p class="shop-relic-effect">${item.effect}</p>
+                  <header class="shop-pack-pick-card-head">
+                    <span class="shop-pack-pick-card-name">${item.title}</span>
+                    <span class="shop-pack-pick-card-rarity ${RARITY_CLASS_BY_TIER[item.rarity]}">${item.rarity}</span>
+                  </header>
+                  <p class="shop-pack-pick-card-effect">${item.effect}</p>
                 </div>
               </div>
             </div>
           </article>`
+        }
       )
       .join('')
     host.classList.remove('is-closing')
@@ -3587,6 +3596,9 @@ export class GameBoardRenderer {
     reroll.classList.remove('is-reroll-impacted')
     void reroll.offsetWidth
     reroll.classList.add('is-reroll-impacted')
+    // shop-card-enter(fill:both)가 shop-reroll-impact에 덮여 사라지므로
+    // 애니메이션 종료 후 클래스를 제거해 opacity:1 상태를 복원한다.
+    window.setTimeout(() => reroll.classList.remove('is-reroll-impacted'), 460)
 
     // Only relic slots reroll — free/pack inventory stays fixed.
     const allCards = Array.from(

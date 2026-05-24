@@ -318,7 +318,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   justify-content: center;
   gap: clamp(12px, 1.5vw, 20px);
   /* Keep relic cards visually centered by nudging the whole cluster left. */
-  transform: translateX(clamp(-10px, -1vw, -6px));
+  transform: translateX(clamp(-22px, -2vw, -12px));
   padding-left: clamp(8px, 1.3vw, 16px);
   padding-right: clamp(8px, 1.3vw, 16px);
 }
@@ -393,7 +393,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   justify-content: center;
   gap: clamp(4px, 0.55vw, 8px);
   /* Match the relic row's optical center while keeping button anchors fixed. */
-  transform: translateX(clamp(-10px, -1vw, -6px));
+  transform: translateX(clamp(-22px, -2vw, -12px));
   background: transparent;
   border: none;
   box-shadow: none;
@@ -780,7 +780,52 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   background-repeat: no-repeat;
 }
 .shop-pack-pick-art::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(6, 6, 12, 0.05), rgba(6, 6, 12, 0.52)); }
-.shop-pack-pick-body { position: relative; padding: 10px 10px 12px; }
+.shop-pack-pick-body {
+  position: relative;
+  padding: 10px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.shop-pack-pick-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+}
+.shop-pack-pick-card-name {
+  font-size: 13px;
+  font-weight: 900;
+  color: rgba(255, 232, 168, 0.96);
+  line-height: 1.2;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shop-pack-pick-card-rarity {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  border: 1px solid currentColor;
+  opacity: 0.75;
+}
+.shop-pack-pick-card-rarity.is-rarity-common  { color: rgba(200, 200, 200, 0.9); }
+.shop-pack-pick-card-rarity.is-rarity-rare    { color: rgba(100, 180, 255, 0.9); }
+.shop-pack-pick-card-rarity.is-rarity-epic    { color: rgba(200, 120, 255, 0.9); }
+.shop-pack-pick-card-rarity.is-rarity-unique  { color: rgba(255, 210, 80, 0.9); }
+.shop-pack-pick-card-rarity.is-rarity-legendary { color: rgba(255, 140, 60, 0.9); }
+.shop-pack-pick-card-effect {
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(220, 200, 170, 0.82);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  margin: 0;
+}
 /* Painted back face — a dedicated DOM element painted purely with
    cardbackground_001.webp. Sits at rotateY(180deg) so it shows while the
    card is face-down (the entrance state) and during the 90°-270° section
