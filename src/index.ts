@@ -633,7 +633,7 @@ function buildShopStateView(): ShopStateView {
     relicOffers: currentShopOffers,
     freeCardClaimed,
     freeCoinCardClaimed,
-    freeCardDescription: freeGiftKind === 'score-300' ? '✦300' : freeGiftKind === 'coin-1' ? '1$' : freeGiftKind === 'health-5' ? '체력 5' : freeGiftKind === 'gauge-3' ? '불씨 게이지 3' : '랜덤 손패 2',
+    freeCardDescription: freeGiftKind === 'score-300' ? '✦300' : freeGiftKind === 'coin-1' ? '1$' : freeGiftKind === 'health-5' ? '체력 5' : freeGiftKind === 'gauge-3' ? '콤보 게이지 3' : '랜덤 손패 2',
     rerollCost: 1 + shopRerollCount,
     coins,
     basicPackCost: currentShopMode === 'altar' ? 500 : 120 + shopBasicPackBuys * 40,
