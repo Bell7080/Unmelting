@@ -1939,6 +1939,9 @@ export class GameBoardRenderer {
   /** Project each shutter panel onto the current rail cell bounds so the shop
    *  shutter follows the same perspective (front/mid/top row scale + 2/3-span). */
   private syncShopShutterToRailCells(): void {
+    // 스냅샷이 활성화된 동안(보스 이벤트·보상 페이지)에는 CSS vars를 재계산하지 않는다.
+    // 보상 3-wide 레이아웃이 셔터 위치를 덮어쓰는 것을 막는다.
+    if (this.shopShutterSnapshot !== null) return
     const rail = this.boardElement.querySelector<HTMLElement>('.rail')
     const shutter = rail?.querySelector<HTMLElement>('.rail-shutter')
     if (!rail || !shutter) return
@@ -1967,12 +1970,11 @@ export class GameBoardRenderer {
     const oldShutter = rail.querySelector<HTMLElement>('.rail-shutter')
     oldShutter?.remove()
     const shutter = this.createShopShutter(rail)
-    // 진입 시점의 패널 레이아웃을 스냅샷으로 보존 → render() 재호출 시 레인이
-    // 변해도(보스 보상 3-wide 등) 셔터 모양이 그대로 유지된다.
-    this.shopShutterSnapshot = shutter.innerHTML
     rail.appendChild(shutter)
-    // Immediately pin panels to live rail cells before the drop animation runs.
+    // CSS vars(위치) 계산 후 스냅샷 저장 → re-render 시 CSS vars가 포함된 패널 HTML을
+    // 재사용하고 syncShopShutterToRailCells()가 덮어쓰지 않도록 guard와 연동된다.
     this.syncShopShutterToRailCells()
+    this.shopShutterSnapshot = shutter.innerHTML
     // While the shutter is down, pause only distracting in-rail loop effects
     // (not gameplay timers), so armed bombs do not sparkle behind the paper.
     rail.classList.add('is-shop-quaking', 'is-shop-shuttered')
@@ -1995,6 +1997,8 @@ export class GameBoardRenderer {
     // 보스→시련 흐름에서 셔터가 중간 상태로 노출될 수 있어 매번 클린 상태로 시작.
     shutter.classList.remove('is-opening')
     shutter.classList.add('is-closed', 'is-persistent')
+    // 스냅샷을 먼저 해제해야 syncShopShutterToRailCells()가 복원된 레인 기준으로 동작한다.
+    this.shopShutterSnapshot = null
     this.syncShopShutterToRailCells()
 
     // 셔터가 닫힌 채 레일이 흔들리고, 그 직후 쿠궁하며 상승.
