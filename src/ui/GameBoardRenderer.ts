@@ -1834,12 +1834,9 @@ export class GameBoardRenderer {
                         aria-label="${card.title}">
                   <div class="shop-relic-flipper">
                     <div class="shop-relic-front shop-trial-front">
-                      <div class="shop-relic-art shop-trial-art" style="background-image: url('${card.spriteUrl}')" aria-hidden="true">
-                        <span class="shop-trial-badge" aria-hidden="true">시련</span>
-                      </div>
+                      <div class="shop-relic-art shop-trial-art" style="background-image: url('${card.spriteUrl}')" aria-hidden="true"></div>
                       <div class="shop-relic-body shop-trial-body">
                         <h3 class="shop-relic-title shop-trial-title">${card.title}</h3>
-                        <div class="shop-trial-divider" aria-hidden="true"></div>
                         <p class="shop-relic-effect shop-trial-effect">${card.effect}</p>
                       </div>
                     </div>

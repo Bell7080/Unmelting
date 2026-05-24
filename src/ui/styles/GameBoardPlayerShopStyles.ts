@@ -373,78 +373,66 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   filter: brightness(0.72) saturate(0.95);
 }
 /* ────────────────────── 시련 카드 전용 스타일 ──────────────────────
-   상점 유물카드 마크업을 재사용하되 시련 특유의 무게감과 크기를 강조.
-   폰트는 OkDanDan 명시 지정, 카드는 약 35% 확대. */
+   - 뱃지 없음. 황금 구분선은 일러스트↔이름 경계(art border-bottom)에만.
+   - 색감: 위협적인 심적색/흑자 계열. 폰트 OkDanDan 명시. */
 .shop-shell--trial .shop-trial-card {
-  width: clamp(232px, 22vw, 346px);
-  /* 시련 카드는 hover 시 위로 약간 더 들려 선택 의도를 강조한다. */
+  /* 더 크게: 기존 ~346 → 최대 440px */
+  width: clamp(278px, 26vw, 440px);
   transition: scale 0.18s ease, box-shadow 0.22s ease, filter 0.18s ease;
 }
 .shop-shell--trial .shop-trial-card:hover,
 .shop-shell--trial .shop-trial-card:focus-visible {
   scale: 1.04;
-  filter: brightness(1.06);
+  filter: brightness(1.07);
 }
-/* 시련 front face — 상단 64% 일러스트 / 하단 36% 본문 */
+/* 시련 front face — 상단 62% 일러스트 / 하단 38% 본문 */
 .shop-trial-front {
-  grid-template-rows: 64% 1fr !important;
-  border-color: rgba(180, 100, 60, 0.55) !important;
-  background: linear-gradient(180deg, rgba(28, 14, 22, 0.97), rgba(10, 6, 16, 0.99)) !important;
+  grid-template-rows: 62% 1fr !important;
+  /* 심적색 테두리 — 위협적인 다크 크림슨 */
+  border-color: rgba(140, 30, 30, 0.72) !important;
+  background: linear-gradient(180deg,
+    rgba(22, 8, 12, 0.98) 0%,
+    rgba(12, 4, 8, 0.99) 100%) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 200, 140, 0.12),
-    0 14px 32px rgba(0, 0, 0, 0.65) !important;
+    inset 0 1px 0 rgba(200, 80, 60, 0.14),
+    0 18px 40px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(100, 20, 20, 0.35) !important;
 }
-/* 일러스트 + 시련 뱃지 */
+/* 일러스트 — 구분선은 border-bottom으로 대체 */
 .shop-trial-art {
-  position: relative;
   background-position: center 15% !important;
-  box-shadow: inset 0 -48px 56px rgba(10, 6, 16, 0.82) !important;
+  /* 일러스트 하단에서 배경색으로 자연스럽게 흡수 */
+  box-shadow: inset 0 -56px 64px rgba(12, 4, 8, 0.88) !important;
+  /* 황금 구분선: art와 body 사이 경계선 */
+  border-bottom: 1px solid rgba(160, 90, 40, 0.55) !important;
 }
-.shop-trial-badge {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  font-family: 'OkDanDan', Georgia, serif;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-  color: rgba(240, 180, 100, 0.92);
-  background: rgba(10, 5, 18, 0.78);
-  border: 1px solid rgba(200, 130, 60, 0.5);
-  border-radius: 6px;
-  padding: 2px 7px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
-  backdrop-filter: blur(2px);
-}
-/* 본문 영역 */
+/* 본문 영역 — 좌우하단 여백 충분히 */
 .shop-trial-body {
-  padding: 12px 14px 14px !important;
-  gap: 7px !important;
+  padding: 14px 18px 20px !important;
+  gap: 8px !important;
 }
 /* 제목 */
 .shop-trial-title {
   font-family: 'OkDanDan', Georgia, serif !important;
-  font-size: clamp(17px, 2.2vh, 22px) !important;
+  font-size: clamp(18px, 2.3vh, 24px) !important;
   font-weight: 900 !important;
   letter-spacing: 0.05em !important;
-  color: rgba(255, 224, 160, 0.98) !important;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9), 0 0 12px rgba(200, 120, 40, 0.18) !important;
-}
-/* 구분선 */
-.shop-trial-divider {
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(180, 110, 50, 0.45), transparent);
-  flex-shrink: 0;
+  /* 위협적인 암적색 톤 — 금색보다 차갑게 */
+  color: rgba(240, 190, 150, 0.96) !important;
+  text-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.95),
+    0 0 16px rgba(160, 40, 20, 0.22) !important;
 }
 /* 효과 설명 */
 .shop-trial-effect {
   font-family: 'OkDanDan', Georgia, serif !important;
-  font-size: clamp(12px, 1.6vh, 15px) !important;
-  line-height: 1.55 !important;
+  font-size: clamp(12px, 1.65vh, 15px) !important;
+  line-height: 1.65 !important;
   text-align: left !important;
-  color: rgba(230, 210, 175, 0.88) !important;
+  /* 차갑고 탁한 회백색 — 금빛보다 위협적인 느낌 */
+  color: rgba(200, 185, 170, 0.82) !important;
 }
-/* 시련 카드 등장 타이밍 — 일반 상점보다 늦게 3장 순차 진입 */
+/* 시련 카드 등장 타이밍 — 순차 진입 */
 .shop-shell--trial .shop-trial-layer > .shop-trial-card:nth-child(1) { animation-delay: 380ms, 1.0s; }
 .shop-shell--trial .shop-trial-layer > .shop-trial-card:nth-child(2) { animation-delay: 520ms, 2.1s; }
 .shop-shell--trial .shop-trial-layer > .shop-trial-card:nth-child(3) { animation-delay: 660ms, 3.0s; }
