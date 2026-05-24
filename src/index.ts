@@ -766,31 +766,20 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     ...entry,
     apply: () => {
       switch (entry.id) {
-        case 'heal-1':
-          character.heal(1)
-          return
-        case 'heal-2':
-          character.heal(2)
-          return
-        case 'heal-3':
-          character.heal(3)
-          return
-        case 'ember-2':
-          character.gainEmber(2)
-          return
-        case 'ember-3':
-          character.gainEmber(3)
-          return
-        case 'gauge-2':
-          character.gainCandle(2)
-          return
-        case 'coin-2':
-          coins += 2
-          return
-        case 'score-100':
-          score += 100
-          scorePulseKey++
-          return
+        // 자원팩 common
+        case 'heal-3':   character.heal(3);         return
+        case 'ember-1':  character.gainEmber(1);    return
+        case 'gauge-1':  character.gainCandle(1);   return
+        // 자원팩 rare
+        case 'heal-5':   character.heal(5);         return
+        case 'ember-3':  character.gainEmber(3);    return
+        case 'gauge-3':  character.gainCandle(3);   return
+        // 자원팩 epic
+        case 'coin-1p':  coins += 1;                return
+        case 'heal-10':  character.heal(10);        return
+        case 'ember-10': character.gainEmber(10);   return
+        case 'gauge-5':  character.gainCandle(5);   return
+        case 'shield-3': character.addShield(3);    return
         case 'atk-1':
           character.applyDamageBoost(1)
           return

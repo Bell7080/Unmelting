@@ -32,14 +32,20 @@ export const HAND_CARD_RARITY: Record<HandCardId, CardRarity> = {
 /** Shop pack pool config moved to data so shop/free/pack roll tables are data-driven. */
 export const SHOP_PACK_POOLS: Record<ShopPackKind, Omit<ShopPackPoolItem, 'apply'>[]> = {
   'basic-pack': [
-    { id: 'heal-1', theme: 'resource', title: '체농 한 방울', effect: '체력 +1', rarity: 'common' },
-    { id: 'heal-2', theme: 'resource', title: '체력 회복', effect: '체력 +2', rarity: 'common' },
-    { id: 'heal-3', theme: 'resource', title: '체력 회복(대)', effect: '체력 +3', rarity: 'rare' },
-    { id: 'ember-2', theme: 'resource', title: '불씨 회복', effect: '불씨 +2', rarity: 'common' },
-    { id: 'ember-3', theme: 'resource', title: '불씨 회복(대)', effect: '불씨 +3', rarity: 'rare' },
-    { id: 'gauge-2', theme: 'resource', title: '콤보 충전', effect: '게이지 +2', rarity: 'rare' },
-    { id: 'coin-2', theme: 'resource', title: '화폐 한 줌', effect: '화폐 +2', rarity: 'common' },
-    { id: 'score-100', theme: 'resource', title: '불빛 결정', effect: '불빛 +100', rarity: 'rare' },
+    // Common
+    { id: 'heal-3',   theme: 'resource', title: '체력 회복',       effect: '체력 +3',   rarity: 'common' },
+    { id: 'ember-1',  theme: 'resource', title: '불씨 한 점',      effect: '불씨 +1',   rarity: 'common' },
+    { id: 'gauge-1',  theme: 'resource', title: '심지 한 마디',    effect: '게이지 +1', rarity: 'common' },
+    // Rare
+    { id: 'heal-5',   theme: 'resource', title: '체력 회복(대)',    effect: '체력 +5',   rarity: 'rare' },
+    { id: 'ember-3',  theme: 'resource', title: '불씨 회복',       effect: '불씨 +3',   rarity: 'rare' },
+    { id: 'gauge-3',  theme: 'resource', title: '콤보 충전',       effect: '게이지 +3', rarity: 'rare' },
+    // Epic
+    { id: 'coin-1p',  theme: 'resource', title: '화폐 한 닢',      effect: '화폐 +1',   rarity: 'epic' },
+    { id: 'heal-10',  theme: 'resource', title: '체력 회복(극대)', effect: '체력 +10',  rarity: 'epic' },
+    { id: 'ember-10', theme: 'resource', title: '불씨 폭발',       effect: '불씨 +10',  rarity: 'epic' },
+    { id: 'gauge-5',  theme: 'resource', title: '심지 대충전',     effect: '게이지 +5', rarity: 'epic' },
+    { id: 'shield-3', theme: 'resource', title: '밀랍 방패(대)',    effect: '방패 +3',   rarity: 'epic' },
   ],
   'upgrade-pack': [
     { id: 'atk-1', theme: 'upgrade', title: '벼린 칼날', effect: '공격력 +1', rarity: 'rare' },
