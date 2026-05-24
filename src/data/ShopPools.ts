@@ -1,6 +1,5 @@
 import type { HandCardId } from '@entities/HandCard'
 import type { ShopPackKind } from '@ui/GameBoardRenderer'
-import type { RelicId } from '@data/Relics'
 
 /** Shared rarity palette across relic/shop/free-pack visuals. */
 export type CardRarity = 'common' | 'rare' | 'epic' | 'unique' | 'legendary'
@@ -22,17 +21,6 @@ export const RARITY_CLASS_BY_TIER: Record<CardRarity, string> = {
   epic: 'rarity-epic',
   unique: 'rarity-unique',
   legendary: 'rarity-legendary',
-}
-
-/** Relic rarity table. Unique is reserved for exceptional mechanics (e.g. Hope). */
-export const RELIC_RARITY: Record<RelicId, CardRarity> = {
-  'red-potion': 'common',
-  'golden-squirrel': 'rare',
-  'wax-crow': 'epic',
-  'carving-knife': 'common',
-  lifeline: 'rare',
-  'blood-pack': 'epic',
-  hope: 'unique',
 }
 
 /** Unlock-pack rarity lookup for hand cards shown in picker cards. */

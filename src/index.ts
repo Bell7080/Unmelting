@@ -44,7 +44,7 @@ import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
-import { HAND_CARD_RARITY, RELIC_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
+import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
@@ -579,24 +579,9 @@ async function applyTurnStartRelics(): Promise<void> {
   burstCoinGain()
 }
 
-/**
- * Per-relic base score price. Tuned so an average run reaching turn 10 has
- * enough score (~800) to buy one mid-tier relic. Stronger relics cost more.
- * Each shop spawn also adds a small ±jitter so prices read as 872 / 1183
- * rather than round numbers (inflation feel).
- */
-const RELIC_BASE_PRICES: Record<RelicId, number> = {
-  'golden-squirrel': 540,
-  'wax-crow': 720,
-  'carving-knife': 800,
-  'red-potion': 870,
-  lifeline: 880,
-  'blood-pack': 1020,
-  hope: 1240,
-}
+/** basePrice는 Relics.ts 정의에서 읽는다. ±90 지터로 870→826 같은 비원형 값이 나온다. */
 function priceForRelic(id: RelicId): number {
-  const base = RELIC_BASE_PRICES[id] ?? 800
-  // ±90 jitter, weighted off-center so prices land on non-round values.
+  const base = getRelicDef(id).basePrice
   const jitter = Math.floor((Math.random() - 0.42) * 180)
   return Math.max(120, base + jitter)
 }
@@ -610,11 +595,11 @@ function rollShopOffers(): ShopOfferView[] {
   // 제단 유물 풀은 상위 등급만 허용해 분위기와 보상 체감을 분리한다.
   const allowedAltarRarity = new Set(['epic', 'unique', 'legendary'])
   const sourcePool = currentShopMode === 'altar'
-    ? basePool.filter((id) => allowedAltarRarity.has(RELIC_RARITY[id]))
+    ? basePool.filter((id) => allowedAltarRarity.has(getRelicDef(id).rarity))
     : basePool
   // 제단은 동일한 상위 등급대 안에서 약한 가중치만 적용한다.
   const weightedPool = sourcePool.flatMap((relicId) => {
-    const rarity = RELIC_RARITY[relicId]
+    const rarity = getRelicDef(relicId).rarity
     const weight = rarity === 'legendary' ? 2 : rarity === 'unique' ? 3 : 4
     return Array.from({ length: weight }, () => relicId)
   })

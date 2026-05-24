@@ -8,6 +8,12 @@
 
 export type HandCategory = 'recovery' | 'tool' | 'control' | 'attack'
 
+/** Where a hand card can appear from during a run. */
+export type HandCardDropSource =
+  | 'any'        // 범용: 적 처치/보물/모든 일반 경로
+  | 'enemy-kill' // 적 처치 전용
+  | 'treasure'   // 보물상자 전용
+
 export type HandCardId =
   | 'wax-drop'
   | 'candle'
@@ -64,6 +70,12 @@ export interface HandCardDefinition {
   targeting: HandCardTargetingTable
   /** Optional weight that biases drop selection (defaults to 1). */
   dropWeight?: number
+  /** Where this card can drop from during a run. */
+  dropSource: HandCardDropSource
+  /** Must be unlocked in the meta shrine before entering any run pool. */
+  metaRequired: boolean
+  /** Starts locked within a run even when meta-unlocked; needs an in-run event to unlock. */
+  runLocked: boolean
 }
 
 export interface HandCard {
