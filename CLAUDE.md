@@ -1,6 +1,7 @@
 # CLAUDE.md
 
 Unmelting 협업용 핵심 요약. **현재 코드 기준**으로만 유지한다.
+**Unmelting_Game_Concept.md**문서를 필수로 참고한다.
 
 ## 프로젝트 요약
 - 장르: 3레인 × 3행 카드 레인 로그라이트.
