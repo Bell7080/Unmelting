@@ -730,6 +730,8 @@ export const GAME_BOARD_RAIL_STYLES = `
 /* 풀스크린 보스 인트로: 보스 타일이 셔터 위로 강하하기 직전, 화면 전체를
    어둡게 가린 채 좌측 일러스트 + 우측 보스 정보(이름/능력치/특수/연출)를
    보여준다. 어느 곳이나 클릭하면 닫히고 다음 비트로 이어진다. */
+/* 보스 인트로 오버레이: 보스 타일이 레일에 완전히 착지(~0.6s)한 뒤
+   천천히 은은하게 화면을 덮도록 0.7s 딜레이 + 1.0s 슬로우 페이드. */
 .boss-intro-overlay {
   position: fixed;
   inset: 0;
@@ -740,14 +742,15 @@ export const GAME_BOARD_RAIL_STYLES = `
   padding: clamp(16px, 4vh, 36px);
   background: rgba(4, 2, 8, 0.92);
   cursor: pointer;
-  animation: boss-intro-overlay-fade-in 0.32s ease-out both;
+  animation: boss-intro-overlay-fade-in 1.0s ease-out 0.7s both;
 }
 .boss-intro-overlay.is-closing {
-  animation: boss-intro-overlay-fade-out 0.24s ease-in forwards;
+  animation: boss-intro-overlay-fade-out 0.28s ease-in forwards;
 }
 @keyframes boss-intro-overlay-fade-in {
-  from { opacity: 0; backdrop-filter: blur(0); }
-  to   { opacity: 1; backdrop-filter: blur(2px); }
+  0%   { opacity: 0; backdrop-filter: blur(0px); }
+  40%  { opacity: 0.35; backdrop-filter: blur(0.5px); }
+  100% { opacity: 1;  backdrop-filter: blur(2px); }
 }
 @keyframes boss-intro-overlay-fade-out {
   from { opacity: 1; }
@@ -768,7 +771,8 @@ export const GAME_BOARD_RAIL_STYLES = `
   color: #f7e7c8;
   transform: translateY(18px) scale(0.96);
   opacity: 0;
-  animation: boss-intro-overlay-card-rise 0.46s cubic-bezier(0.18, 0.86, 0.22, 1) 0.08s forwards;
+  /* 오버레이가 충분히 덮인 후 카드가 부상하도록 딜레이를 맞춘다. */
+  animation: boss-intro-overlay-card-rise 0.52s cubic-bezier(0.18, 0.86, 0.22, 1) 1.4s forwards;
 }
 @keyframes boss-intro-overlay-card-rise {
   from { transform: translateY(18px) scale(0.96); opacity: 0; }

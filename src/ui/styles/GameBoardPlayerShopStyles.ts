@@ -372,23 +372,82 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-shell--trial .shop-dim-veil {
   filter: brightness(0.72) saturate(0.95);
 }
-/* 시련 카드는 상점 유물카드 마크업/CSS(.shop-relic-card → .shop-relic-front /
-   .shop-relic-art / .shop-relic-body / .shop-relic-title / .shop-relic-effect)를
-   그대로 따라가 폰트·테두리·플립 톤이 자동 통일된다. 시련 단계에선 시각의 중심이
-   되도록 가로 폭을 상점 유물카드보다 한 단계 더 크게(약 30~40% 확대). */
+/* ────────────────────── 시련 카드 전용 스타일 ──────────────────────
+   상점 유물카드 마크업을 재사용하되 시련 특유의 무게감과 크기를 강조.
+   폰트는 OkDanDan 명시 지정, 카드는 약 35% 확대. */
 .shop-shell--trial .shop-trial-card {
-  width: clamp(208px, 20vw, 312px);
+  width: clamp(232px, 22vw, 346px);
+  /* 시련 카드는 hover 시 위로 약간 더 들려 선택 의도를 강조한다. */
+  transition: scale 0.18s ease, box-shadow 0.22s ease, filter 0.18s ease;
 }
-.shop-shell--trial .shop-trial-card .shop-relic-title {
-  font-size: clamp(18px, 2.4vh, 24px);
-  letter-spacing: 0.04em;
+.shop-shell--trial .shop-trial-card:hover,
+.shop-shell--trial .shop-trial-card:focus-visible {
+  scale: 1.04;
+  filter: brightness(1.06);
 }
-.shop-shell--trial .shop-trial-card .shop-relic-effect {
-  /* 시련 효과 설명은 길어질 수 있어 좌측 정렬 + 더 큰 line-height. */
-  text-align: left;
-  line-height: 1.5;
-  font-size: clamp(13px, 1.7vh, 16px);
+/* 시련 front face — 상단 64% 일러스트 / 하단 36% 본문 */
+.shop-trial-front {
+  grid-template-rows: 64% 1fr !important;
+  border-color: rgba(180, 100, 60, 0.55) !important;
+  background: linear-gradient(180deg, rgba(28, 14, 22, 0.97), rgba(10, 6, 16, 0.99)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 200, 140, 0.12),
+    0 14px 32px rgba(0, 0, 0, 0.65) !important;
 }
+/* 일러스트 + 시련 뱃지 */
+.shop-trial-art {
+  position: relative;
+  background-position: center 15% !important;
+  box-shadow: inset 0 -48px 56px rgba(10, 6, 16, 0.82) !important;
+}
+.shop-trial-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  font-family: 'OkDanDan', Georgia, serif;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: rgba(240, 180, 100, 0.92);
+  background: rgba(10, 5, 18, 0.78);
+  border: 1px solid rgba(200, 130, 60, 0.5);
+  border-radius: 6px;
+  padding: 2px 7px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(2px);
+}
+/* 본문 영역 */
+.shop-trial-body {
+  padding: 12px 14px 14px !important;
+  gap: 7px !important;
+}
+/* 제목 */
+.shop-trial-title {
+  font-family: 'OkDanDan', Georgia, serif !important;
+  font-size: clamp(17px, 2.2vh, 22px) !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.05em !important;
+  color: rgba(255, 224, 160, 0.98) !important;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9), 0 0 12px rgba(200, 120, 40, 0.18) !important;
+}
+/* 구분선 */
+.shop-trial-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(180, 110, 50, 0.45), transparent);
+  flex-shrink: 0;
+}
+/* 효과 설명 */
+.shop-trial-effect {
+  font-family: 'OkDanDan', Georgia, serif !important;
+  font-size: clamp(12px, 1.6vh, 15px) !important;
+  line-height: 1.55 !important;
+  text-align: left !important;
+  color: rgba(230, 210, 175, 0.88) !important;
+}
+/* 시련 카드 등장 타이밍 — 일반 상점보다 늦게 3장 순차 진입 */
+.shop-shell--trial .shop-trial-layer > .shop-trial-card:nth-child(1) { animation-delay: 380ms, 1.0s; }
+.shop-shell--trial .shop-trial-layer > .shop-trial-card:nth-child(2) { animation-delay: 520ms, 2.1s; }
+.shop-shell--trial .shop-trial-layer > .shop-trial-card:nth-child(3) { animation-delay: 660ms, 3.0s; }
 .shop-pack-layer {
   justify-content: center;
   gap: clamp(4px, 0.55vw, 8px);
@@ -446,65 +505,117 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   transform: translateX(clamp(18px, 1.7vw, 26px));
 }
 
-/* Reroll button — compact rectangle, fixed size, paid in 화폐(coins). Lives in
-   the small top-right layer.  Carved-wood frame matches the existing buy/EXIT
-   button family so it reads as "control" rather than a card. */
+/* Reroll button — 촛불/밀랍 테마 장식 컨트롤. 아이콘+라벨 / 황금 구분선 / 비용 3구역. */
 .shop-reroll-btn {
   appearance: none;
+  position: relative;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 0;
   width: clamp(96px, 9.8vw, 122px);
-  height: clamp(68px, 8.4vh, 90px);
-  padding: 8px 12px;
-  border: 1px solid rgba(255, 215, 120, 0.42);
-  border-radius: 12px;
+  height: clamp(84px, 10vh, 108px);
+  padding: clamp(8px, 1.1vh, 12px) 10px clamp(8px, 1.1vh, 12px);
+  border: 1px solid rgba(200, 152, 60, 0.48);
+  border-radius: 14px;
+  /* 상단 따뜻한 밀랍 + 하단 깊은 적흑 그라데이션 */
   background:
-    linear-gradient(180deg, rgba(120, 76, 36, 0.96), rgba(58, 30, 14, 0.96)),
-    repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.06) 0 2px, rgba(255, 232, 168, 0.04) 2px 5px);
-  color: rgba(255, 232, 168, 0.96);
+    linear-gradient(180deg,
+      rgba(108, 62, 22, 0.97) 0%,
+      rgba(72, 36, 14, 0.98) 52%,
+      rgba(32, 14, 6, 0.99) 100%),
+    repeating-linear-gradient(135deg,
+      rgba(255, 220, 140, 0.05) 0 2px,
+      transparent 2px 7px);
+  color: rgba(255, 228, 160, 0.95);
   font-family: inherit;
   font-weight: 900;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   cursor: pointer;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.85);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
   box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.3),
-    inset 0 -3px 6px rgba(0, 0, 0, 0.55),
-    0 6px 14px rgba(0, 0, 0, 0.55);
-  transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+    inset 0 1px 0 rgba(255, 228, 160, 0.22),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.6),
+    inset 1px 0 0 rgba(255, 200, 100, 0.08),
+    inset -1px 0 0 rgba(255, 200, 100, 0.08),
+    0 6px 16px rgba(0, 0, 0, 0.6),
+    0 2px 4px rgba(0, 0, 0, 0.4);
+  transition: transform 0.16s ease, box-shadow 0.18s ease, filter 0.16s ease, border-color 0.18s ease;
+  overflow: hidden;
+}
+/* 상단 장식 광택 */
+.shop-reroll-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 12%;
+  right: 12%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 228, 160, 0.38), transparent);
+  border-radius: 0 0 50% 50%;
 }
 .shop-reroll-btn:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.1);
+  transform: translateY(-2px) scale(1.02);
+  border-color: rgba(220, 172, 80, 0.72);
   box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.5),
-    inset 0 -3px 6px rgba(0, 0, 0, 0.6),
-    0 8px 18px rgba(0, 0, 0, 0.65),
-    0 0 16px rgba(244, 164, 96, 0.35);
+    inset 0 1px 0 rgba(255, 228, 160, 0.3),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.55),
+    0 10px 22px rgba(0, 0, 0, 0.65),
+    0 0 20px rgba(220, 140, 40, 0.28);
+  filter: brightness(1.08);
 }
-.shop-reroll-btn-title {
-  font-size: 14px;
+.shop-reroll-btn:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 0.06s;
+}
+/* 아이콘 + 라벨 묶음 */
+.shop-reroll-btn-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+.shop-reroll-icon {
+  display: block;
+  opacity: 0.88;
+  flex-shrink: 0;
+}
+.shop-reroll-btn-label {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  opacity: 0.72;
   line-height: 1;
 }
+/* 황금 구분선 */
+.shop-reroll-btn-rule {
+  display: block;
+  width: 54%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(210, 160, 60, 0.55), transparent);
+  flex-shrink: 0;
+}
+/* 비용 숫자 */
 .shop-reroll-btn-cost {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
 }
 .shop-reroll-btn-cost-text {
-  font-size: clamp(24px, 2.2vw, 32px);
+  font-size: clamp(20px, 1.9vw, 28px);
   line-height: 1;
   font-weight: 900;
 }
 .shop-reroll-btn.is-unaffordable {
-  filter: saturate(0.7) brightness(0.78);
+  filter: saturate(0.55) brightness(0.72);
   cursor: not-allowed;
+  border-color: rgba(160, 120, 60, 0.3);
 }
-.shop-reroll-btn.is-affordable { border-color: rgba(122, 202, 113, 0.7); }
+.shop-reroll-btn.is-affordable { border-color: rgba(130, 210, 110, 0.65); }
+.shop-reroll-btn.is-affordable:hover { border-color: rgba(160, 240, 130, 0.8); }
 .shop-reroll-btn.is-reroll-impacted {
   animation: shop-reroll-impact 0.42s cubic-bezier(0.2, 0.86, 0.22, 1);
 }

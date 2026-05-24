@@ -1429,11 +1429,10 @@ function isBossRewardCard(card: Card): boolean {
 async function checkBossDefeatedAfterHandEffect(): Promise<void> {
   await applyBossPostHandEffect()
 }
-/** Forced trial after boss: 진동 → 베일이 레일 크기로 내려옴 → 카드들이 한 박자 늦게
- *  떨어진다. 선택 시 자동 EXIT 흐름(카드 회수 → 레이어 회수 → 셔터 상승). */
+/** Forced trial after boss: 베일이 레일 크기로 내려옴 → 카드들이 한 박자 늦게
+ *  떨어진다. 선택 시 자동 EXIT 흐름(카드 회수 → 레이어 회수 → 셔터 상승).
+ *  진동 없이 바로 열도록 변경 — quake가 셔터를 들썩여 보여 제거. */
 async function openTrialOverlayForced(): Promise<void> {
-  // 진동 한 비트 — 보스 등장과 동일한 셔터 진동 그라마(.is-shop-quaking).
-  await boardRenderer.playAltarBossGateTransition()
   boardRenderer.openForcedTrialShopFlow(
     FORCED_TRIAL_CARDS.map(({ id, title, effect, spriteUrl }) => ({ id, title, effect, spriteUrl }))
   )

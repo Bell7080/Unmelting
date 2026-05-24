@@ -1305,16 +1305,26 @@ export class GameBoardRenderer {
     return score >= offer.price ? 'is-affordable' : 'is-unaffordable'
   }
 
-  /** Reroll button — compact control with a fixed two-line label.
-   *  Top line is the action text, bottom line is the coin price. */
+  /** Reroll button — ornate candle-frame control matching the game's carved-wood palette. */
   private renderShopRerollButton(cost: number, coins: number): string {
     const affordable = coins >= cost ? 'is-affordable' : 'is-unaffordable'
+    // 두 화살표 순환 아이콘 — Icons.ts 동일 flat SVG 스타일(currentColor, 단색 stroke).
+    const rerollIcon = `<svg class="shop-reroll-icon" width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 11a7 7 0 0 1 12.3-4.6"/>
+      <path d="M18 11a7 7 0 0 1-12.3 4.6"/>
+      <polyline points="15.4 6.4 17.3 6.4 17.3 4.5"/>
+      <polyline points="6.6 15.6 4.7 15.6 4.7 17.5"/>
+    </svg>`
     return `
       <button type="button"
               class="shop-reroll-btn ${affordable}"
               data-shop-buy-kind="reroll"
               aria-label="ReRoll — ${cost}$">
-        <span class="shop-reroll-btn-title">ReRoll</span>
+        <span class="shop-reroll-btn-top">
+          ${rerollIcon}
+          <span class="shop-reroll-btn-label">RE-ROLL</span>
+        </span>
+        <span class="shop-reroll-btn-rule" aria-hidden="true"></span>
         <span class="shop-reroll-btn-cost">
           <span class="shop-reroll-btn-cost-text">${cost.toLocaleString()}$</span>
         </span>
@@ -1823,11 +1833,14 @@ export class GameBoardRenderer {
                         style="--cardback-url:url('${SpriteUrls.cardBack}');"
                         aria-label="${card.title}">
                   <div class="shop-relic-flipper">
-                    <div class="shop-relic-front">
-                      <div class="shop-relic-art" style="background-image: url('${card.spriteUrl}')" aria-hidden="true"></div>
-                      <div class="shop-relic-body">
-                        <h3 class="shop-relic-title">${card.title}</h3>
-                        <p class="shop-relic-effect">${card.effect}</p>
+                    <div class="shop-relic-front shop-trial-front">
+                      <div class="shop-relic-art shop-trial-art" style="background-image: url('${card.spriteUrl}')" aria-hidden="true">
+                        <span class="shop-trial-badge" aria-hidden="true">시련</span>
+                      </div>
+                      <div class="shop-relic-body shop-trial-body">
+                        <h3 class="shop-relic-title shop-trial-title">${card.title}</h3>
+                        <div class="shop-trial-divider" aria-hidden="true"></div>
+                        <p class="shop-relic-effect shop-trial-effect">${card.effect}</p>
                       </div>
                     </div>
                   </div>
