@@ -192,7 +192,8 @@ const FORCED_TRIAL_CARDS = TRIAL_DEFINITIONS.map((def) => ({
   apply: () => applyTrialEffect(def.effectKind),
 }))
 /** 메타 사당 해금(추후 저장소 연동) + 런 내 카드풀 분리를 위한 토대. */
-const metaUnlockedCardIds = [...HAND_CARD_IDS]
+// runLocked 카드는 런 시작 시 잠긴 상태로 출발해 해금팩으로만 획득 가능.
+const metaUnlockedCardIds = HAND_CARD_IDS.filter((id) => !getHandCardDef(id).runLocked)
 const runCardPool = new RunCardPool(HAND_CARD_IDS, metaUnlockedCardIds)
 /** Dev-only command palette is temporary tooling and must be removed before release. */
 const ENABLE_DEV_COMMAND_PALETTE = true
@@ -736,29 +737,54 @@ function sampleWithoutReplacement<T>(pool: T[], n: number): T[] {
  *  Each entry carries an `apply` closure so the pick handler stays small. */
 function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
   const character = gameState.character
-  if (kind === 'blessing-pack' || kind === 'resource-pack' || kind === 'enhance-pack' || kind === 'delete-pack') {
+  if (kind === 'blessing-pack' || kind === 'resource-pack' || kind === 'enhance-pack') {
     return [1,2,3].map((n) => ({
       id: `${kind}-${n}`,
-      theme: kind === 'resource-pack' ? 'resource' : kind === 'enhance-pack' ? 'upgrade' : 'unlock',
+      theme: 'upgrade' as const,
       title: `선택지 ${n}`,
-      effect: kind === 'delete-pack' ? '미정 미정 미정 (카드 등장 금지 예정)' : '미정 미정 미정',
+      effect: '미정',
       rarity: 'epic' as const,
       apply: () => undefined,
     }))
   }
   if (kind === 'unlock-pack') {
-    const drawIds = sampleWithoutReplacement([...HAND_CARD_IDS], 3)
+    // 풀 = 런에서 잠긴 카드(runLocked) + 삭제팩으로 밴된 카드
+    const { locked, banned } = runCardPool.snapshot()
+    const pool = [...locked, ...banned]
+    if (pool.length === 0) return []
+    const drawIds = sampleWithoutReplacement(pool, Math.min(3, pool.length))
     return drawIds.map((id) => {
       const def = getHandCardDef(id)
+      const isBanned = banned.includes(id)
       return {
         id: `unlock-${id}`,
         theme: 'unlock' as const,
         title: def.name,
-        effect: def.description,
+        effect: isBanned ? `[재해금] ${def.description}` : def.description,
         rarity: HAND_CARD_RARITY[id],
         apply: () => {
+          // 밴된 카드는 unban (풀 복귀), 잠긴 카드는 unlockForRun
+          if (isBanned) runCardPool.unban(id)
+          else runCardPool.unlockForRun(id)
           gameState.character.addHandCard(DropSystem.makeCard(id))
         },
+      }
+    })
+  }
+  if (kind === 'delete-pack') {
+    // 풀 = 현재 해금된 카드 (런 내 활성 풀)
+    const { unlocked } = runCardPool.snapshot()
+    if (unlocked.length === 0) return []
+    const drawIds = sampleWithoutReplacement(unlocked, Math.min(3, unlocked.length))
+    return drawIds.map((id) => {
+      const def = getHandCardDef(id)
+      return {
+        id: `delete-${id}`,
+        theme: 'unlock' as const,
+        title: def.name,
+        effect: `앞으로 ${def.name} 등장 금지`,
+        rarity: HAND_CARD_RARITY[id],
+        apply: () => { runCardPool.ban(id) },
       }
     })
   }
@@ -780,27 +806,24 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
         case 'ember-10': character.gainEmber(10);   return
         case 'gauge-5':  character.gainCandle(5);   return
         case 'shield-3': character.addShield(3);    return
-        case 'atk-1':
-          character.applyDamageBoost(1)
-          return
-        case 'maxhp-3':
-          character.increaseMaxHealth(3)
-          return
-        case 'maxhp-5':
-          character.increaseMaxHealth(5)
-          return
-        case 'shield-1':
-          character.addShield(1)
-          return
-        case 'shield-2':
-          character.addShield(2)
-          return
-        case 'ember-5':
-          character.gainEmber(5)
-          return
-        case 'gauge-3':
-          character.gainCandle(3)
-          return
+        // 강화팩 common — 트리플 보너스
+        case 'triple-wax-drop':   gameState.enhancements.tripleBonus['wax-drop'] = (gameState.enhancements.tripleBonus['wax-drop'] ?? 0) + 1; return
+        case 'triple-candle':     gameState.enhancements.tripleBonus['candle']   = (gameState.enhancements.tripleBonus['candle']   ?? 0) + 1; return
+        case 'triple-ember':      gameState.enhancements.tripleBonus['ember']    = (gameState.enhancements.tripleBonus['ember']    ?? 0) + 1; return
+        case 'triple-match':      gameState.enhancements.tripleBonus['match']    = (gameState.enhancements.tripleBonus['match']    ?? 0) + 1; return
+        case 'triple-coin':       gameState.enhancements.tripleBonus['coin']     = (gameState.enhancements.tripleBonus['coin']     ?? 0) + 1; return
+        case 'triple-card':       gameState.enhancements.tripleBonus['card']     = (gameState.enhancements.tripleBonus['card']     ?? 0) + 1; return
+        // 강화팩 rare — 레시피 피해 보너스
+        case 'recipe-ignite':       gameState.enhancements.recipeBonus['ignite'] = (gameState.enhancements.recipeBonus['ignite'] ?? 0) + 1; return
+        case 'recipe-hot':          gameState.enhancements.recipeBonus['hot']    = (gameState.enhancements.recipeBonus['hot']    ?? 0) + 1; return
+        case 'recipe-fuse':         gameState.enhancements.recipeBonus['fuse']   = (gameState.enhancements.recipeBonus['fuse']   ?? 0) + 1; return
+        // 강화팩 epic — 레시피 횟수 보너스
+        case 'recipe-greed':        gameState.enhancements.recipeBonus['greed']        = (gameState.enhancements.recipeBonus['greed']        ?? 0) + 1; return
+        case 'recipe-locksmith':    gameState.enhancements.recipeBonus['locksmith']    = (gameState.enhancements.recipeBonus['locksmith']    ?? 0) + 1; return
+        case 'recipe-mine-sweeper': gameState.enhancements.recipeBonus['mine-sweeper'] = (gameState.enhancements.recipeBonus['mine-sweeper'] ?? 0) + 1; return
+        // 강화팩 legendary — 레시피 보상 보너스
+        case 'recipe-shuffle':  gameState.enhancements.recipeBonus['shuffle']  = (gameState.enhancements.recipeBonus['shuffle']  ?? 0) + 1; return
+        case 'recipe-dividend': gameState.enhancements.recipeBonus['dividend'] = (gameState.enhancements.recipeBonus['dividend'] ?? 0) + 1; return
       }
     },
   }))

@@ -40,6 +40,13 @@ export class RunCardPool {
     this.banned.add(id)
   }
 
+  /** 삭제팩으로 밴된 카드를 해금팩 풀로 복귀시킨다. */
+  unban(id: HandCardId): void {
+    if (!this.banned.has(id)) return
+    this.banned.delete(id)
+    this.unlocked.add(id)
+  }
+
   unlockForRun(id: HandCardId): void {
     if (this.banned.has(id)) return
     this.locked.delete(id)

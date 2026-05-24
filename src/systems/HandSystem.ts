@@ -163,7 +163,10 @@ export class HandSystem {
     // `카드` item's combo-count text now means hand-gauge progress, not hidden
     // recipe ingredients, so recipes still read only this physical sequence.
     chain.sequence.push(card.defId)
-    const gaugeCountBonus = HandSystem.gaugeCountBonusFor(card.defId, card.merged === true)
+    const baseGaugeBonus = HandSystem.gaugeCountBonusFor(card.defId, card.merged === true)
+    const extraGaugeBonus =
+      card.defId === 'card' && card.merged ? (gs.enhancements.tripleBonus['card'] ?? 0) : 0
+    const gaugeCountBonus = baseGaugeBonus + extraGaugeBonus
     if (gaugeCountBonus > 0) character.gainCandle(gaugeCountBonus)
 
     // Recipes are deliberately resolved later by fireNextPendingRecipe(), which
@@ -187,7 +190,9 @@ export class HandSystem {
       message,
       mergeMessages,
       removedFieldCards,
-      coinsGained: card.defId === 'coin' ? (card.merged ? 5 : 1) : 0,
+      coinsGained: card.defId === 'coin'
+        ? (card.merged ? 5 + (gs.enhancements.tripleBonus['coin'] ?? 0) : 1)
+        : 0,
       gaugeCountBonus,
     }
   }
@@ -287,6 +292,8 @@ export class HandSystem {
   /** Apply a recipe's effect against the GameState. */
   private static applyRecipeEffect(gs: GameState, recipe: Recipe): RecipeEffectResult {
     const c = gs.character
+    const rb = gs.enhancements.recipeBonus
+    const bonus = rb[recipe.id] ?? 0
     switch (recipe.effect) {
       case 'gain-wax-drop': {
         if (!c.hasHandRoom()) return { message: '손패가 가득 차 촛농 획득 실패' }
@@ -295,24 +302,46 @@ export class HandSystem {
         return { message: '촛농 1장 획득', drawnHandCardDefId: 'wax-drop' }
       }
       case 'damage-all-field-enemies-1':
-        return { message: HandSystem.damageEnemies(gs, 'field', 1) }
-      case 'gain-coin-1':
-        return { message: '+1$', coinsGained: 1 }
+        return { message: HandSystem.damageEnemies(gs, 'field', 1 + bonus) }
+      case 'gain-coin-1': {
+        const total = 1 + bonus
+        return { message: `+${total}$`, coinsGained: total }
+      }
       case 'draw-random-hand-1': {
-        if (!c.hasHandRoom()) return { message: '손패가 가득 차 드로우 실패' }
-        const drop = DropSystem.generateDrop()
-        c.addHandCard(drop)
+        // 셔플 강화: bonus장 추가 드로우
+        const count = 1 + bonus
+        let lastId: HandCardId | undefined
+        for (let i = 0; i < count; i++) {
+          if (!c.hasHandRoom()) break
+          const drop = DropSystem.generateDrop()
+          c.addHandCard(drop)
+          lastId = drop.defId
+        }
         HandSystem.runAutoMerges(c)
-        return { message: '랜덤 손패 1장 획득', drawnHandCardDefId: drop.defId }
+        return lastId
+          ? { message: `랜덤 손패 ${count}장 획득`, drawnHandCardDefId: lastId }
+          : { message: '손패가 가득 차 드로우 실패' }
       }
       case 'destroy-random-front-enemy':
         return { message: HandSystem.destroyRandomFrontEnemy(gs) }
-      case 'convert-random-hazard-to-treasure':
-        return { message: HandSystem.convertRandomHazardToTreasure(gs) }
-      case 'collect-random-treasure':
-        return { message: HandSystem.collectRandomTreasure(gs, c) }
-      case 'convert-random-waiting-to-treasure':
-        return { message: HandSystem.convertRandomWaitingSlotToTreasure(gs) }
+      case 'convert-random-hazard-to-treasure': {
+        // 지뢰제거반 강화: bonus회 추가 변환
+        const msgs: string[] = []
+        for (let i = 0; i < 1 + bonus; i++) msgs.push(HandSystem.convertRandomHazardToTreasure(gs))
+        return { message: msgs.join(' / ') }
+      }
+      case 'collect-random-treasure': {
+        // 열쇠공 강화: bonus개 추가 획득
+        const msgs: string[] = []
+        for (let i = 0; i < 1 + bonus; i++) msgs.push(HandSystem.collectRandomTreasure(gs, c))
+        return { message: msgs.join(' / ') }
+      }
+      case 'convert-random-waiting-to-treasure': {
+        // 탐욕 강화: bonus칸 추가 변환
+        const msgs: string[] = []
+        for (let i = 0; i < 1 + bonus; i++) msgs.push(HandSystem.convertRandomWaitingSlotToTreasure(gs))
+        return { message: msgs.join(' / ') }
+      }
       case 'clear-all-field-cards': {
         const cleared = HandSystem.clearAllOfTypes(gs, [
           CardType.ENEMY,
@@ -322,13 +351,13 @@ export class HandSystem {
         return { message: `필드 ${cleared}장 제거` }
       }
       case 'damage-front-enemies-3':
-        return { message: HandSystem.damageEnemies(gs, 'front', 3) }
+        return { message: HandSystem.damageEnemies(gs, 'front', 3 + bonus) }
       case 'clear-front-cards':
         return { message: HandSystem.clearFrontCards(gs) }
       case 'collect-waiting-treasures':
         return { message: HandSystem.collectWaitingTreasures(gs, c) }
       case 'damage-front-enemies-2':
-        return { message: HandSystem.damageEnemies(gs, 'front', 2) }
+        return { message: HandSystem.damageEnemies(gs, 'front', 2 + bonus) }
     }
   }
 
@@ -369,30 +398,31 @@ export class HandSystem {
     }
   }
 
-  /** Apply the enhanced merged-card effect. */
+  /** Apply the enhanced merged-card effect. coin/card 보너스는 use()에서 별도 처리한다. */
   private static applyTripleEffect(
     gs: GameState,
     def: HandCardDefinition,
     target?: HandTarget
   ): string {
     const c = gs.character
+    const bonus = gs.enhancements.tripleBonus[def.id] ?? 0
     switch (def.id) {
       case 'wax-drop': {
-        const healed = c.heal(5)
+        const healed = c.heal(5 + bonus)
         return `트리플 체력 +${healed}`
       }
       case 'candle': {
-        const shielded = c.addShield(5)
+        const shielded = c.addShield(5 + bonus)
         return `트리플 방패 +${shielded}`
       }
       case 'ember':
-        return HandSystem.damageTargetEnemy(gs, target, 10)
+        return HandSystem.damageTargetEnemy(gs, target, 10 + bonus)
       case 'key':
         return HandSystem.collectAllTreasures(gs, c)
       case 'wax':
         return HandSystem.freezeFrontCards(gs, 3)
       case 'match': {
-        const gained = c.gainEmber(5)
+        const gained = c.gainEmber(5 + bonus)
         return `트리플 불씨 카운트 +${gained}`
       }
       case 'holy-water':
@@ -401,10 +431,14 @@ export class HandSystem {
         const cleared = HandSystem.clearAllOfTypes(gs, [CardType.TRAP])
         return `트리플 함정 ${cleared}장 제거`
       }
-      case 'card':
-        return '트리플 손패 콤보 카운트 +7'
+      case 'card': {
+        // gainCandle 호출은 use()에서 gs.enhancements를 직접 읽어 처리한다.
+        const total = 7 + bonus
+        return `트리플 손패 콤보 카운트 +${total}`
+      }
       case 'coin':
-        return '+5$'
+        // coinsGained는 use()에서 처리된다.
+        return `+${5 + bonus}$`
     }
   }
 

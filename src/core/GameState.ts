@@ -6,6 +6,7 @@
 import { Character } from '@entities/Character'
 import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { Card, CardType } from '@entities/Card'
+import { RunEnhancements, makeDefaultEnhancements } from '@core/RunEnhancements'
 
 export class GameState {
   character: Character
@@ -13,6 +14,8 @@ export class GameState {
   currentTurn: number
   isGameOver: boolean
   gameOverReason: string
+  /** 강화팩으로 획득한 트리플/레시피 보너스 누적값. HandSystem이 효과 적용 시 참조한다. */
+  enhancements: RunEnhancements
 
   constructor() {
     this.character = new Character()
@@ -20,6 +23,7 @@ export class GameState {
     this.currentTurn = 0
     this.isGameOver = false
     this.gameOverReason = ''
+    this.enhancements = makeDefaultEnhancements()
   }
 
   getCharacter(): Character {
@@ -241,5 +245,6 @@ export class GameState {
     this.currentTurn = 0
     this.isGameOver = false
     this.gameOverReason = ''
+    this.enhancements = makeDefaultEnhancements()
   }
 }

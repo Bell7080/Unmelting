@@ -97,7 +97,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropWeight: 11,
     dropSource: 'any',
     metaRequired: false,
-    runLocked: false,
+    runLocked: true, // 해금팩으로만 입수
   },
   match: {
     id: 'match',
@@ -125,7 +125,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropWeight: 8,
     dropSource: 'any',
     metaRequired: false,
-    runLocked: false,
+    runLocked: true, // 해금팩으로만 입수
   },
   chitin: {
     id: 'chitin',
@@ -152,7 +152,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropWeight: 8,
     dropSource: 'any',
     metaRequired: false,
-    runLocked: false,
+    runLocked: true, // 해금팩으로만 입수
   },
   coin: {
     id: 'coin',

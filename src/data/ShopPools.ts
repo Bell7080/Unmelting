@@ -48,13 +48,24 @@ export const SHOP_PACK_POOLS: Record<ShopPackKind, Omit<ShopPackPoolItem, 'apply
     { id: 'shield-3', theme: 'resource', title: '밀랍 방패(대)',    effect: '방패 +3',   rarity: 'epic' },
   ],
   'upgrade-pack': [
-    { id: 'atk-1', theme: 'upgrade', title: '벼린 칼날', effect: '공격력 +1', rarity: 'rare' },
-    { id: 'maxhp-3', theme: 'upgrade', title: '굳어진 심지', effect: '최대 체력 +3', rarity: 'rare' },
-    { id: 'maxhp-5', theme: 'upgrade', title: '굳어진 심지(대)', effect: '최대 체력 +5', rarity: 'epic' },
-    { id: 'shield-1', theme: 'upgrade', title: '밀랍 방패', effect: '방패 +1', rarity: 'rare' },
-    { id: 'shield-2', theme: 'upgrade', title: '밀랍 방패(대)', effect: '방패 +2', rarity: 'epic' },
-    { id: 'ember-5', theme: 'upgrade', title: '불씨 보양', effect: '불씨 +5', rarity: 'epic' },
-    { id: 'gauge-3', theme: 'upgrade', title: '심지 충전(대)', effect: '게이지 +3', rarity: 'legendary' },
+    // Common — 손패 트리플 효과 +1
+    { id: 'triple-wax-drop', theme: 'upgrade', title: '촛농의 여운',   effect: '촛농 트리플 체력 +1',   rarity: 'common' },
+    { id: 'triple-candle',   theme: 'upgrade', title: '양초의 온기',   effect: '양초 트리플 방패 +1',   rarity: 'common' },
+    { id: 'triple-ember',    theme: 'upgrade', title: '불씨의 격렬함', effect: '불씨 트리플 피해 +1',   rarity: 'common' },
+    { id: 'triple-match',    theme: 'upgrade', title: '성냥의 기세',   effect: '성냥 트리플 불씨 +1',   rarity: 'common' },
+    { id: 'triple-coin',     theme: 'upgrade', title: '동전의 중력',   effect: '동전 트리플 화폐 +1',   rarity: 'common' },
+    { id: 'triple-card',     theme: 'upgrade', title: '카드의 울림',   effect: '카드 트리플 게이지 +1', rarity: 'common' },
+    // Rare — 레시피 피해 +1
+    { id: 'recipe-ignite',       theme: 'upgrade', title: '점화 강화',   effect: '점화 피해 +1',   rarity: 'rare' },
+    { id: 'recipe-hot',          theme: 'upgrade', title: '뜨거움 강화', effect: '뜨거움 피해 +1', rarity: 'rare' },
+    { id: 'recipe-fuse',         theme: 'upgrade', title: '도화선 강화', effect: '도화선 피해 +1', rarity: 'rare' },
+    // Epic — 레시피 범위/횟수 +1
+    { id: 'recipe-greed',        theme: 'upgrade', title: '탐욕 강화',     effect: '탐욕 변환 +1칸',   rarity: 'epic' },
+    { id: 'recipe-locksmith',    theme: 'upgrade', title: '열쇠공 강화',   effect: '열쇠공 획득 +1개', rarity: 'epic' },
+    { id: 'recipe-mine-sweeper', theme: 'upgrade', title: '지뢰제거반 강화', effect: '지뢰제거 +1칸', rarity: 'epic' },
+    // Legendary — 레시피 보상 +1
+    { id: 'recipe-shuffle',   theme: 'upgrade', title: '셔플 강화',   effect: '셔플 드로우 +1장', rarity: 'legendary' },
+    { id: 'recipe-dividend',  theme: 'upgrade', title: '배당금 강화', effect: '배당금 +1$',       rarity: 'legendary' },
   ],
   'unlock-pack': [],
   'blessing-pack': [],
