@@ -343,27 +343,30 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
    시련 단계에서 카드 자체가 시각의 중심이 되도록 트레이 전체를 화면 중앙으로
    강조한다(가로/세로 가운데 정렬 + 넉넉한 gap). */
 .shop-shell--trial {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
 }
+/* content-bundle: 패딩 inset을 최소화해 카드가 패널을 최대로 채운다.
+   2행 grid → 1행으로 축소해 하단 빈 행이 높이를 잡아먹지 않게 한다. */
 .shop-shell--trial .shop-content-bundle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
+  inset: clamp(6px, 0.8vh, 10px) clamp(8px, 1vw, 14px) !important;
+  grid-template-rows: 1fr !important;
+  display: grid !important;
+  align-items: stretch !important;
 }
 .shop-shell--trial .shop-row.shop-top-row {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  height: 100%;
 }
+/* 3-column grid: 각 카드가 패널 너비의 정확히 1/3을 차지. */
 .shop-shell--trial .shop-trial-layer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: clamp(28px, 3vw, 48px);
-  padding: clamp(16px, 2vh, 28px);
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  align-items: center !important;
+  height: 100% !important;
+  width: 100% !important;
+  padding: clamp(8px, 1vh, 14px) clamp(10px, 1.2vw, 16px) !important;
+  gap: clamp(10px, 1.4vw, 16px) !important;
   background: transparent;
   border: none;
   box-shadow: none;
@@ -376,8 +379,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
    - 뱃지 없음. 황금 구분선은 일러스트↔이름 경계(art border-bottom)에만.
    - 색감: 위협적인 심적색/흑자 계열. 폰트 OkDanDan 명시. */
 .shop-shell--trial .shop-trial-card {
-  /* 더 크게: 기존 ~346 → 최대 440px */
-  width: clamp(278px, 26vw, 440px);
+  /* grid 1fr column을 꽉 채운다. height는 aspect-ratio(3/4)가 결정. */
+  width: 100% !important;
+  height: auto !important;
+  /* 패널 높이를 넘지 않도록 보정 */
+  max-height: 98% !important;
+  flex: none !important;
   transition: scale 0.18s ease, box-shadow 0.22s ease, filter 0.18s ease;
 }
 .shop-shell--trial .shop-trial-card:hover,

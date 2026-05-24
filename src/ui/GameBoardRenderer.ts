@@ -280,6 +280,9 @@ export class GameBoardRenderer {
    *  refreshes rebuild the rail DOM, so the shutter state lives in the renderer
    *  instead of only in the transient `.rail-shutter` element. */
   private shopShutterLocked = false
+  /** 셔터가 닫힌 시점의 패널 HTML 스냅샷. render() 재호출 시 lanes가 변해도
+   *  (보스 보상 3-wide 등) 셔터 모양이 변형되지 않도록 최초 레이아웃을 고정한다. */
+  private shopShutterSnapshot: string | null = null
   /** Resize/scroll listener that keeps the shop shell anchored over the
    *  rail. Stored so we can remove it cleanly on shop close. */
   private shopResizeListener: (() => void) | null = null
@@ -361,7 +364,7 @@ export class GameBoardRenderer {
         <main class="stage">
           <section class="rail ${this.shopShutterLocked ? 'is-shop-shuttered' : ''}" aria-label="Card rail">
             ${this.renderRail(lanes)}
-            ${this.shopShutterLocked ? this.renderShopShutter(true) : ''}
+            ${this.shopShutterLocked ? this.renderShopShutter(true, lanes) : ''}
           </section>
 
           ${this.renderPlayerZone(character)}
@@ -1918,7 +1921,11 @@ export class GameBoardRenderer {
     const classes = ['rail-shutter', persistent ? 'is-closed is-persistent' : '']
       .filter(Boolean)
       .join(' ')
-    return `<div class="${classes}" aria-hidden="true">${this.shopShutterPanelsFromLanes(lanes)}</div>`
+    // 영구 셔터는 진입 시점 스냅샷 우선 — lanes가 보스 보상 등으로 변해도 모양 고정.
+    const panels = persistent && this.shopShutterSnapshot
+      ? this.shopShutterSnapshot
+      : this.shopShutterPanelsFromLanes(lanes)
+    return `<div class="${classes}" aria-hidden="true">${panels}</div>`
   }
 
   /** Create the wax shutter grid used by shop stop/resume transitions. */
@@ -1960,6 +1967,9 @@ export class GameBoardRenderer {
     const oldShutter = rail.querySelector<HTMLElement>('.rail-shutter')
     oldShutter?.remove()
     const shutter = this.createShopShutter(rail)
+    // 진입 시점의 패널 레이아웃을 스냅샷으로 보존 → render() 재호출 시 레인이
+    // 변해도(보스 보상 3-wide 등) 셔터 모양이 그대로 유지된다.
+    this.shopShutterSnapshot = shutter.innerHTML
     rail.appendChild(shutter)
     // Immediately pin panels to live rail cells before the drop animation runs.
     this.syncShopShutterToRailCells()
@@ -1994,6 +2004,7 @@ export class GameBoardRenderer {
       window.setTimeout(() => shutter.classList.add('is-opening'), 560)
       window.setTimeout(() => {
         this.shopShutterLocked = false
+        this.shopShutterSnapshot = null  // 다음 상점 진입을 위해 스냅샷 초기화
         shutter.remove()
         rail.classList.remove('is-shop-shuttered')
         resolve()
