@@ -7,6 +7,8 @@
  */
 
 import { HandCardDefinition, HandCardId, HandEffectTargeting } from '@entities/HandCard'
+// dropSource / metaRequired / runLocked: 현재 10종 모두 범용 기본값.
+// 이후 시트에서 등장 조건/해금 조건을 지정하면 이 파일에서만 수치를 수정하면 된다.
 
 const selfOne: HandEffectTargeting = {
   selection: 'none',
@@ -36,6 +38,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     tripleDescription: '체력 +5',
     targeting: { base: selfOne, triple: { ...selfOne, countLimit: 5 } },
     dropWeight: 14,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
   },
   candle: {
     id: 'candle',
@@ -45,6 +50,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     tripleDescription: '방패 +5',
     targeting: { base: selfOne, triple: { ...selfOne, countLimit: 5 } },
     dropWeight: 14,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
   },
   ember: {
     id: 'ember',
@@ -57,6 +65,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
       triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
     },
     dropWeight: 13,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
   },
   key: {
     id: 'key',
@@ -69,6 +80,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
       triple: { selection: 'all', zone: 'field', filter: 'treasure', countLimit: null },
     },
     dropWeight: 9,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
   },
   wax: {
     id: 'wax',
@@ -81,6 +95,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
       triple: { selection: 'all', zone: 'front', filter: 'turn-timer', countLimit: null },
     },
     dropWeight: 11,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
   },
   match: {
     id: 'match',
@@ -90,6 +107,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     tripleDescription: '불씨 카운트 +5',
     targeting: { base: selfOne, triple: { ...selfOne, countLimit: 5 } },
     dropWeight: 11,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
   },
   'holy-water': {
     id: 'holy-water',
@@ -103,6 +123,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
       triple: { selection: 'all', zone: 'field', filter: 'spore', countLimit: null },
     },
     dropWeight: 8,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
   },
   chitin: {
     id: 'chitin',
@@ -115,6 +138,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
       triple: { selection: 'all', zone: 'field', filter: 'trap', countLimit: null },
     },
     dropWeight: 8,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
   },
   card: {
     id: 'card',
@@ -124,6 +150,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     tripleDescription: '손패 콤보 카운트 +7',
     targeting: { base: handOne, triple: handSeven },
     dropWeight: 8,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
   },
   coin: {
     id: 'coin',
@@ -133,6 +162,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     tripleDescription: '+5$',
     targeting: { base: selfOne, triple: { ...selfOne, countLimit: 5 } },
     dropWeight: 10,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
   },
 }
 

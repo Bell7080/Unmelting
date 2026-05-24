@@ -36,7 +36,7 @@ import { EmberSystem } from '@systems/EmberSystem'
 import { ENEMY_DEFINITIONS, MIMIC_BY_SPAN } from '@systems/CardSpawner'
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_DEFINITIONS, type RelicId } from '@data/Relics'
-import { RARITY_CLASS_BY_TIER, RELIC_RARITY, SHOP_PACK_LABELS, type CardRarity } from '@data/ShopPools'
+import { RARITY_CLASS_BY_TIER, SHOP_PACK_LABELS, type CardRarity } from '@data/ShopPools'
 import { RECIPES } from '@data/Recipes'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { GAME_BOARD_STYLES } from '@ui/styles/GameBoardStyles'
@@ -1511,7 +1511,7 @@ export class GameBoardRenderer {
    *  taps "the bigger card" instead of hunting for a small button. */
   private renderShopRelicCard(offer: ShopOfferView, score: number, _character: Character): string {
     const def = RELIC_DEFINITIONS[offer.relicId]
-    const rarityClass = RARITY_CLASS_BY_TIER[RELIC_RARITY[offer.relicId]]
+    const rarityClass = RARITY_CLASS_BY_TIER[getRelicDef(offer.relicId).rarity]
     const affordabilityClass = this.shopRelicAffordabilityClass(offer, score)
     const cardLeaveDelay = Math.floor(Math.random() * 240)
     return `
@@ -2055,11 +2055,22 @@ export class GameBoardRenderer {
     this.bossAttackCountdown = n
     // 보스 카드가 화면에 있다면 바로 텍스트만 in-place로 갱신해 render 부담을 줄인다.
     document.querySelectorAll<HTMLElement>('[data-boss-attack-countdown]').forEach((el) => {
-      el.textContent = n == null ? '' : `${n}턴 뒤 공격`
+      el.textContent = n == null ? '' : `${n}턴`
     })
   }
   getBossAttackCountdownText(): string {
-    return this.bossAttackCountdown == null ? '3턴 뒤 공격' : `${this.bossAttackCountdown}턴 뒤 공격`
+    return this.bossAttackCountdown == null ? '3턴' : `${this.bossAttackCountdown}턴`
+  }
+
+  /** 보스 보상 카드 클릭 시 일반 보물칸 처치 그라마를 그대로 재사용해 흔들+확대 사라짐.
+   *  .is-consuming(공통 card-consume 키프레임) + boss-reward 전용 회전·blur를 한 비트
+   *  더 얹는 .is-boss-reward-claimed 키프레임. SquareBurst는 treasure-gain 톤. */
+  async playBossRewardClaimedConsume(cardId: string): Promise<void> {
+    const tile = this.findCardElement(cardId)
+    if (!tile) return
+    SquareBurst.playOn(tile, 'treasure-gain', { count: 18, spread: 140, duration: 560 })
+    tile.classList.add('is-boss-reward-claimed')
+    await new Promise((r) => window.setTimeout(r, 520))
   }
 
   /** 보스가 굳음(밀랍 freeze) 상태일 때 가격을 시도하면 데미지 대신 "저항" 글자를
@@ -2486,7 +2497,7 @@ export class GameBoardRenderer {
           art: { kind: 'sprite', url: spriteForRelic(def.id) },
           name: def.name,
           tag: isOwned ? '보유 중' : '상점',
-          rarityClass: RARITY_CLASS_BY_TIER[RELIC_RARITY[def.id]],
+          rarityClass: RARITY_CLASS_BY_TIER[def.rarity],
           chips: [{ label: '효과 ', value: def.effect, tone: 'gold' }],
           flavor: def.flavor,
           extraClass: isOwned ? 'codex-tile--owned' : undefined,
@@ -3638,7 +3649,7 @@ export class GameBoardRenderer {
       RARITY_CLASS_BY_TIER.legendary,
     ]
     for (const cls of RARITY_CLASSES) card.classList.remove(cls)
-    card.classList.add(RARITY_CLASS_BY_TIER[RELIC_RARITY[offer.relicId]])
+    card.classList.add(RARITY_CLASS_BY_TIER[getRelicDef(offer.relicId).rarity])
     // Affordability vs current score (purchased stays purchased — unreachable here).
     card.classList.remove('is-affordable', 'is-unaffordable', 'is-purchased')
     card.classList.add(this.shopRelicAffordabilityClass(offer, score))
@@ -4026,8 +4037,11 @@ export class GameBoardRenderer {
   }
 
   /** Play score gain feedback immediately on the existing panel so the number
-   *  rises during the same beat as the square burst and ✦ sparkle. */
+   *  rises during the same beat as the square burst and ✦ sparkle.
+   *  pulseKey가 직전과 같다면 실제 변동이 없는 호출이므로 burst를 발동하지 않는다
+   *  (화폐 보상 등 무관한 단계에서 점수 패널 burst가 같이 뜨던 시각 혼선 제거). */
   playScoreGainFeedback(targetScore: number, pulseKey: number): void {
+    if (pulseKey === this.previousScorePulseKey && pulseKey === this.activeScorePulseKey) return
     this.rememberImmediateResourcePulse('score', targetScore, pulseKey)
     this.animateResourceCounter('.score-number', targetScore, '')
     const anchor = this.findScorePulseAnchor()
@@ -4035,8 +4049,10 @@ export class GameBoardRenderer {
   }
 
   /** Play shop-currency gain feedback with the exact same sparkle language as
-   *  score, but keep the wallet's trailing dollar marker. */
+   *  score, but keep the wallet's trailing dollar marker.
+   *  pulseKey 미변동 시 skip — 점수 보상 시 화폐 패널 burst가 같이 뜨던 문제 차단. */
   playCoinGainFeedback(targetCoins: number, pulseKey: number): void {
+    if (pulseKey === this.previousCoinPulseKey && pulseKey === this.activeCoinPulseKey) return
     this.rememberImmediateResourcePulse('coin', targetCoins, pulseKey)
     this.animateResourceCounter('.coin-number', targetCoins, ' $')
     const anchor = this.findCoinPulseAnchor()
