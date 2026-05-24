@@ -45,6 +45,7 @@ import { getHandCardDef, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
 import { HAND_CARD_RARITY, RELIC_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
+import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
@@ -165,41 +166,31 @@ function syncRunModifiersToSpawner(): void {
     treasureSpawnScale: runModifiers.treasureSpawnScale,
   })
 }
-/** 강제 시련 카드 3종(임시 능력). 일러스트는 trial_001/004/007 자리(SpriteUrls.trials)를
- *  잡아 두었고 실제 webp가 들어오면 import만 교체하면 된다. */
-const FORCED_TRIAL_CARDS = [
-  {
-    id: 'arsonist',
-    title: '방화광',
-    effect: '앞으로 나올 모든 적의 체력 +1, 공격력 +1',
-    spriteUrl: SpriteUrls.trials['001'],
-    apply: (): void => {
-      runModifiers.enemyHpBonus += 1
-      runModifiers.enemyDamageBonus += 1
-      syncRunModifiersToSpawner()
-    },
-  },
-  {
-    id: 'candle-hunter',
-    title: '양초 사냥꾼',
-    effect: '앞으로 나올 모든 함정의 피해 +1',
-    spriteUrl: SpriteUrls.trials['004'],
-    apply: (): void => {
-      runModifiers.trapDamageBonus += 1
-      syncRunModifiersToSpawner()
-    },
-  },
-  {
-    id: 'poverty',
-    title: '가난',
-    effect: '앞으로 나올 보물상자 등장 확률 25% 감소',
-    spriteUrl: SpriteUrls.trials['007'],
-    apply: (): void => {
-      runModifiers.treasureSpawnScale = Math.max(0, runModifiers.treasureSpawnScale * 0.75)
-      syncRunModifiersToSpawner()
-    },
-  },
-] as const
+/** effectKind 서술자를 런타임 apply()로 변환. runModifiers는 여기에 스코프돼 있으므로 index에서 해석한다. */
+function applyTrialEffect(kind: TrialEffectKind): void {
+  switch (kind.type) {
+    case 'enemy-stat-bonus':
+      runModifiers.enemyHpBonus += kind.hpBonus
+      runModifiers.enemyDamageBonus += kind.atkBonus
+      break
+    case 'trap-damage-bonus':
+      runModifiers.trapDamageBonus += kind.value
+      break
+    case 'treasure-spawn-scale':
+      runModifiers.treasureSpawnScale = Math.max(0, runModifiers.treasureSpawnScale * kind.factor)
+      break
+  }
+  syncRunModifiersToSpawner()
+}
+
+/** TRIAL_DEFINITIONS(src/data/Trials.ts)에서 파생. 일러스트는 trial_*.webp 파일 입고 시 spriteKey만 추가하면 된다. */
+const FORCED_TRIAL_CARDS = TRIAL_DEFINITIONS.map((def) => ({
+  id: def.id,
+  title: def.title,
+  effect: def.effect,
+  spriteUrl: SpriteUrls.trials[def.spriteKey],
+  apply: () => applyTrialEffect(def.effectKind),
+}))
 /** 메타 사당 해금(추후 저장소 연동) + 런 내 카드풀 분리를 위한 토대. */
 const metaUnlockedCardIds = [...HAND_CARD_IDS]
 const runCardPool = new RunCardPool(HAND_CARD_IDS, metaUnlockedCardIds)
