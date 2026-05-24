@@ -2160,7 +2160,27 @@ export class GameBoardRenderer {
     SquareBurst.playOn(tile, 'damage', { count: 18, spread: 160, duration: 520 })
     await new Promise((r) => window.setTimeout(r, 240))
 
-    // beat 2: 갈라짐 표시(클래스로 ::before/::after crack line 노출) + 한 발 더.
+    // beat 2: 3~5줄 랜덤 균열선 삽입 + 갈라짐 클래스 + burst.
+    const lineCount = 3 + Math.floor(Math.random() * 3)
+    for (let i = 0; i < lineCount; i++) {
+      const line = document.createElement('div')
+      // 대각선 방향 유지: 50~130도 기반, 50% 확률로 방향 반전, ±10 jitter
+      const base = 50 + Math.random() * 80
+      const angle = (Math.random() < 0.5 ? 1 : -1) * base
+      const pos = 12 + Math.random() * 76        // 카드 전체에 분산 (12~88%)
+      const w = 1.1 + Math.random() * 1.1        // 선 굵기 1.1~2.2%
+      const alpha = (0.82 + Math.random() * 0.15).toFixed(2)
+      line.className = 'boss-crack-line'
+      line.style.background = [
+        `linear-gradient(${angle.toFixed(1)}deg,`,
+        `transparent ${(pos - w).toFixed(1)}%,`,
+        `rgba(255,224,168,${alpha}) ${(pos - w * 0.3).toFixed(1)}%,`,
+        `rgba(255,204,120,${alpha}) ${(pos + w * 0.3).toFixed(1)}%,`,
+        `transparent ${(pos + w).toFixed(1)}%)`,
+      ].join(' ')
+      line.style.animationDelay = `${Math.round(Math.random() * 110)}ms`
+      tile.appendChild(line)
+    }
     tile.classList.add('is-boss-cracking')
     SquareBurst.playOn(tile, 'treasure-gain', { count: 22, spread: 180, duration: 560 })
     await new Promise((r) => window.setTimeout(r, 360))

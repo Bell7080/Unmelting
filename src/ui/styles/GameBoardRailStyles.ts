@@ -959,25 +959,15 @@ export const GAME_BOARD_RAIL_STYLES = `
   68%      { transform: translate(-3px, -3px) rotate(-0.2deg); }
   82%      { transform: translate(2px, 2px) rotate(0.1deg); }
 }
-/* 갈라짐: 카드 face 가운데에 균열 그라데이션 두 줄을 띄운다. */
-.cell.card.type-boss.is-boss-cracking::before,
-.cell.card.type-boss.is-boss-cracking::after {
-  content: '';
+/* 갈라짐: JS가 3~5개 랜덤 위치/각도로 .boss-crack-line div를 삽입한다. */
+.boss-crack-line {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 5;
-  background:
-    linear-gradient(105deg, transparent 48%, rgba(255, 224, 168, 0.92) 49.4%, rgba(255, 224, 168, 0.92) 50.6%, transparent 52%),
-    linear-gradient(78deg, transparent 38%, rgba(255, 192, 120, 0.78) 39.6%, rgba(255, 192, 120, 0.78) 40.4%, transparent 42%);
   mix-blend-mode: screen;
   opacity: 0;
   animation: boss-cracking-flare 0.5s ease-out forwards;
-}
-.cell.card.type-boss.is-boss-cracking::after {
-  background:
-    linear-gradient(-118deg, transparent 56%, rgba(255, 216, 152, 0.88) 57.4%, rgba(255, 216, 152, 0.88) 58.6%, transparent 60%);
-  animation-delay: 0.12s;
 }
 @keyframes boss-cracking-flare {
   0%   { opacity: 0; }
