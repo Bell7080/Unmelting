@@ -823,7 +823,7 @@ export class GameBoardRenderer {
             <div class="boss-face-hpbar-fill" style="width:${hpPct}%"></div>
             <span class="boss-face-hpbar-text">
               <span class="boss-face-hpbar-icon">${heartIcon()}</span>
-              <span>${hp}</span><span class="boss-face-hpbar-sep">/</span><span>${maxHp}</span>
+              ${this.renderHudCounter('boss-hp', hp)}<span class="boss-face-hpbar-sep">/</span><span>${maxHp}</span>
             </span>
           </div>
           <span class="boss-face-atk">${swordIcon()}<span class="boss-face-atk-value">${atk}</span></span>

@@ -585,7 +585,8 @@ export class HandSystem {
     for (const lane of gs.lanes) {
       const card = lane.getCardAtDistance(0)
       if (!card || seen.has(card)) continue
-      if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) continue
+      // 보스는 레시피 즉사 대상에서 제외 — 보스 면역 처리는 index.ts에서 저항 연출 담당.
+      if (card.type !== CardType.ENEMY) continue
       seen.add(card)
       enemies.push({ card, distance: 0 })
     }
@@ -659,6 +660,8 @@ export class HandSystem {
     for (let lane = 0; lane < gs.lanes.length; lane++) {
       const card = gs.lanes[lane].getCardAtDistance(0)
       if (!card || seen.has(card)) continue
+      // 보스는 전방 소멸 레시피에서 면역 — 저항 연출은 index.ts 레시피 루프에서 재생.
+      if (card.type === CardType.BOSS) continue
       seen.add(card)
       gs.removeCardFromRow(card, 0)
       cleared++

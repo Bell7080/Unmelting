@@ -1337,13 +1337,12 @@ async function handleBossDefeated(): Promise<void> {
 async function stageBossRewardChests(savedField: (Card | null)[][]): Promise<void> {
   // 보상 카드 = TREASURE 타입(일반 보물 칸 유형). id prefix로 보스 보상임을 식별한다.
   // 사용자가 받은 카드들을 식별하기 위해 id에 보상 종류를 인코딩한다.
-  const healCard = new Card('boss-reward-heal', CardType.TREASURE, '회복의 봉인함', '체력과 불씨 게이지를 모두 회복한다')
-  const chestCard = new Card('boss-reward-chest', CardType.TREASURE, '큰 보물상자', '일반 보물상자와 같은 보상을 즉시 지급한다')
+  const healCard = new Card('boss-reward-heal', CardType.TREASURE, '점화액', '체력과 불씨를 모두 회복한다')
+  const chestCard = new Card('boss-reward-chest', CardType.TREASURE, '전리품', '랜덤 유물을 하나 획득한다')
   const bountyCard = new Card('boss-reward-bounty', CardType.TREASURE, '현상금', '1~10 골드 무작위 지급')
   for (const c of [healCard, chestCard, bountyCard]) {
     c.groupCount = 3
-    // 3-cell wide 보물 칸 표기를 위해 grouped name/sprite를 큰 상자 톤으로.
-    c.name = c === healCard ? '회복의 봉인함' : c === chestCard ? '큰 보물상자' : '현상금'
+    c.name = c === healCard ? '점화액' : c === chestCard ? '전리품' : '현상금'
   }
   // dist 0(active row)부터 사용자가 먼저 클릭하므로 첫째 보상이 active row에 가도록 박는다.
   for (let lane = 0; lane < 3; lane++) {
@@ -1395,14 +1394,20 @@ async function applyBossRewardClaim(card: Card): Promise<void> {
     recordNotice(`현상금: +$${amount}`, 'info')
     void boardRenderer.animateResourceTrailFromCard(card.id, 'coin', amount, 'treasure-gain')
   } else if (card.id === 'boss-reward-chest') {
-    const drawIds = sampleWithoutReplacement([...HAND_CARD_IDS], 1)
-    const id = drawIds[0]
-    if (id) {
-      const accepted = character.addHandCard(DropSystem.makeCard(id))
-      if (accepted) recordNotice(`큰 보물상자: 손패 ${getHandCardDef(id).name} 획득`, 'info')
-      else recordNotice('큰 보물상자: 손패가 가득 차 카드를 받지 못했다', 'info')
+    // 보유하지 않은 유물 중 랜덤 1개 지급.
+    const unownedRelics = RELIC_IDS.filter(
+      (id) => !character.hasRelic(id) && !character.bannedRelics.includes(id)
+    ) as RelicId[]
+    const relicId = unownedRelics.length > 0
+      ? unownedRelics[Math.floor(Math.random() * unownedRelics.length)]
+      : null
+    if (relicId) {
+      character.addRelic(relicId)
+      recordNotice(`전리품: 유물 ${getRelicDef(relicId).name} 획득`, 'info')
+    } else {
+      recordNotice('전리품: 획득 가능한 유물이 없다', 'info')
     }
-    void boardRenderer.animateResourceTrailFromCard(card.id, 'hand', 1, 'treasure-gain')
+    void boardRenderer.animateResourceTrailFromCard(card.id, 'score', 1, 'treasure-gain')
   }
 
   // 일반 보물칸 처치 그라마(.is-consuming + treasure-gain burst)로 흔들+확대 사라짐.
@@ -2316,6 +2321,13 @@ async function applyHandSingle(
       if (coinRecipe) recordCoinGain(coinRecipe.name, gainedCoins)
     }
     for (const fired of recipeResult.firedRecipes) {
+      // 보스 전투 중 즉사·전방소멸 레시피 시도 → 보스는 이미 면역 처리됐으므로 저항 연출만 재생.
+      if (
+        bossEventState &&
+        (fired.recipe.effect === 'destroy-random-front-enemy' || fired.recipe.effect === 'clear-front-cards')
+      ) {
+        void boardRenderer.playBossFreezeResist(bossEventState.card.id)
+      }
       chainTimeline.push({
         kind: 'recipe',
         recipeId: fired.recipe.id,
