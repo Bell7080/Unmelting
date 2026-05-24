@@ -361,7 +361,7 @@ export class GameBoardRenderer {
         <main class="stage">
           <section class="rail ${this.shopShutterLocked ? 'is-shop-shuttered' : ''}" aria-label="Card rail">
             ${this.renderRail(lanes)}
-            ${this.shopShutterLocked ? this.renderShopShutter(true, lanes) : ''}
+            ${this.shopShutterLocked ? this.renderShopShutter(true) : ''}
           </section>
 
           ${this.renderPlayerZone(character)}
