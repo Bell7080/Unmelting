@@ -1404,6 +1404,8 @@ async function applyBossRewardClaim(card: Card): Promise<void> {
     if (relicId) {
       character.addRelic(relicId)
       recordNotice(`전리품: 유물 ${getRelicDef(relicId).name} 획득`, 'info')
+      // 상점 구매와 동일하게 즉시 발동 효과(lifeline 체력 증가 등)를 적용한다.
+      await applyRelicPurchaseEffect(relicId)
     } else {
       recordNotice('전리품: 획득 가능한 유물이 없다', 'info')
     }
