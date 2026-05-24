@@ -1337,9 +1337,9 @@ async function handleBossDefeated(): Promise<void> {
 async function stageBossRewardChests(savedField: (Card | null)[][]): Promise<void> {
   // 보상 카드 = TREASURE 타입(일반 보물 칸 유형). id prefix로 보스 보상임을 식별한다.
   // 사용자가 받은 카드들을 식별하기 위해 id에 보상 종류를 인코딩한다.
-  const healCard = new Card('boss-reward-heal', CardType.TREASURE, '점화액', '체력과 불씨를 모두 회복한다')
-  const chestCard = new Card('boss-reward-chest', CardType.TREASURE, '전리품', '랜덤 유물을 하나 획득한다')
-  const bountyCard = new Card('boss-reward-bounty', CardType.TREASURE, '현상금', '1~10 골드 무작위 지급')
+  const healCard = new Card('boss-reward-heal', CardType.TREASURE, '점화액', '체력 / 불씨 회복')
+  const chestCard = new Card('boss-reward-chest', CardType.TREASURE, '전리품', '유물 획득')
+  const bountyCard = new Card('boss-reward-bounty', CardType.TREASURE, '현상금', '1~10$')
   for (const c of [healCard, chestCard, bountyCard]) {
     c.groupCount = 3
     c.name = c === healCard ? '점화액' : c === chestCard ? '전리품' : '현상금'
