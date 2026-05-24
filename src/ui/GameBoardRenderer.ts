@@ -764,9 +764,11 @@ export class GameBoardRenderer {
             : `+${card.flowerValue}`
       stats = `<div class="card-stats group-note flower-note">${sparkleIcon()}<span>${label}</span></div>`
     } else if (card.type === CardType.TREASURE && card.groupCount > 1) {
-      // Treasure groups describe their extra pickup as text-only metadata under
-      // the name, matching the flat no-plate language requested for web labels.
-      stats = `<div class="card-stats group-note treasure-group-note">${sparkleIcon()}<span>카드 ${card.groupCount}장</span></div>`
+      // 보스 보상 카드는 "카드 N장" 대신 개별 효과 설명을 표시한다.
+      const treasureNote = card.id.startsWith('boss-reward-')
+        ? escapeHtml(card.description)
+        : `카드 ${card.groupCount}장`
+      stats = `<div class="card-stats group-note treasure-group-note">${sparkleIcon()}<span>${treasureNote}</span></div>`
     }
 
     const groupBadge = span > 1 ? `<div class="group-badge">×${span}</div>` : ''
@@ -780,7 +782,10 @@ export class GameBoardRenderer {
           ? `<div class="frozen-badge spore-badge">번식 ${card.sporeTurnsUntilSpread}</div>`
           : ''
 
-    const groupName = span > 1 && !card.isSpecialEnemy ? this.groupName(card.type, span) : card.name
+    // 보스 보상 카드는 3-wide span이어도 카드 자체 이름을 그대로 표시한다.
+    const groupName = span > 1 && !card.isSpecialEnemy && !card.id.startsWith('boss-reward-')
+      ? this.groupName(card.type, span)
+      : card.name
 
     const sprite = spriteForCard(card)
     const artStyle = sprite ? `style="background-image: url('${sprite}')"` : ''
