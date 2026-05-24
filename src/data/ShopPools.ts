@@ -69,7 +69,15 @@ export const SHOP_PACK_POOLS: Record<ShopPackKind, Omit<ShopPackPoolItem, 'apply
   ],
   'unlock-pack': [],
   'blessing-pack': [],
-  'resource-pack': [],
+  'resource-pack': [
+    // 제단 전용 — 최대 수치/영구 보정 팩. 3종 랜덤 선택.
+    { id: 'res-atk-1',        theme: 'upgrade', title: '칼날 벼리기',     effect: '공격력 +1',              rarity: 'rare' },
+    { id: 'res-handmax-2',    theme: 'upgrade', title: '넉넉한 손',        effect: '최대 손패 +2',           rarity: 'rare' },
+    { id: 'res-maxhp-5',      theme: 'upgrade', title: '심지 연장',        effect: '최대 체력 +5',           rarity: 'rare' },
+    { id: 'res-embermax-2',   theme: 'upgrade', title: '불씨 그릇',        effect: '최대 불씨 게이지 +2',    rarity: 'rare' },
+    { id: 'res-candlemax-m1', theme: 'upgrade', title: '빠른 손',          effect: '손패 콤보 게이지 -1',    rarity: 'epic' },
+    { id: 'res-scoremult-15', theme: 'upgrade', title: '촛불의 축복',      effect: '불빛 획득량 +15%',       rarity: 'epic' },
+  ],
   'enhance-pack': [],
   'delete-pack': [],
 }

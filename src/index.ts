@@ -47,6 +47,7 @@ import { RunCardPool } from '@core/RunCardPool'
 import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { buildUnlockedUpgradePool } from '@systems/UpgradePackPool'
+import { buildUnlockedEnhancePool } from '@systems/EnhancePackPool'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
@@ -738,14 +739,43 @@ function sampleWithoutReplacement<T>(pool: T[], n: number): T[] {
  *  Each entry carries an `apply` closure so the pick handler stays small. */
 function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
   const character = gameState.character
-  if (kind === 'blessing-pack' || kind === 'resource-pack' || kind === 'enhance-pack') {
+  if (kind === 'blessing-pack') {
     return [1,2,3].map((n) => ({
-      id: `${kind}-${n}`,
+      id: `blessing-${n}`,
       theme: 'upgrade' as const,
       title: `선택지 ${n}`,
       effect: '미정',
       rarity: 'epic' as const,
       apply: () => undefined,
+    }))
+  }
+  if (kind === 'resource-pack') {
+    // 제단 5번 팩 — 최대 수치/영구 보정. 6종 중 3종 랜덤 선택.
+    const rawPool = SHOP_PACK_POOLS['resource-pack'].map((entry) => ({
+      ...entry,
+      apply: () => {
+        switch (entry.id) {
+          case 'res-atk-1':        character.applyDamageBoost(1);                                            return
+          case 'res-handmax-2':    character.handMax += 2;                                                   return
+          case 'res-maxhp-5':      character.increaseMaxHealth(5);                                           return
+          case 'res-embermax-2':   character.emberMax += 2;                                                  return
+          case 'res-candlemax-m1': character.candleMax = Math.max(1, character.candleMax - 1);               return
+          case 'res-scoremult-15': gameState.enhancements.scoreMultiplier *= 1.15;                           return
+        }
+      },
+    }))
+    return sampleWithoutReplacement(rawPool, Math.min(3, rawPool.length))
+  }
+  if (kind === 'enhance-pack') {
+    // 제단 6번 팩 — 해금된 카드의 단일 사용 효과 +1 (코인 제외).
+    const entries = buildUnlockedEnhancePool(runCardPool.snapshot().unlocked)
+    if (entries.length === 0) return []
+    return sampleWithoutReplacement(entries, Math.min(3, entries.length)).map((entry) => ({
+      ...entry,
+      apply: () => {
+        const id = entry.targetCardId
+        gameState.enhancements.singleBonus[id] = (gameState.enhancements.singleBonus[id] ?? 0) + 1
+      },
     }))
   }
   if (kind === 'unlock-pack') {
@@ -1553,7 +1583,8 @@ function createItemGainLogs(itemNames: string[]): ActivityLogDraft[] {
  */
 function getTurnScoreMultiplier(): number {
   const turn = gameState.getCurrentTurn()
-  return 1 + turn * 0.08 + turn * turn * 0.001
+  const base = 1 + turn * 0.08 + turn * turn * 0.001
+  return base * gameState.enhancements.scoreMultiplier
 }
 
 /**

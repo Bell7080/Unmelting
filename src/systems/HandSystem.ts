@@ -164,8 +164,11 @@ export class HandSystem {
     // recipe ingredients, so recipes still read only this physical sequence.
     chain.sequence.push(card.defId)
     const baseGaugeBonus = HandSystem.gaugeCountBonusFor(card.defId, card.merged === true)
-    const extraGaugeBonus =
-      card.defId === 'card' && card.merged ? (gs.enhancements.tripleBonus['card'] ?? 0) : 0
+    const extraGaugeBonus = card.defId === 'card'
+      ? (card.merged
+          ? (gs.enhancements.tripleBonus['card'] ?? 0)
+          : (gs.enhancements.singleBonus['card'] ?? 0))
+      : 0
     const gaugeCountBonus = baseGaugeBonus + extraGaugeBonus
     if (gaugeCountBonus > 0) character.gainCandle(gaugeCountBonus)
 
@@ -191,7 +194,9 @@ export class HandSystem {
       mergeMessages,
       removedFieldCards,
       coinsGained: card.defId === 'coin'
-        ? (card.merged ? 5 + (gs.enhancements.tripleBonus['coin'] ?? 0) : 1)
+        ? (card.merged
+            ? 5 + (gs.enhancements.tripleBonus['coin'] ?? 0)
+            : 1 + (gs.enhancements.singleBonus['coin'] ?? 0))
         : 0,
       gaugeCountBonus,
     }
@@ -361,30 +366,31 @@ export class HandSystem {
     }
   }
 
-  /** Apply a hand card's single-use effect. Returns a short message. */
+  /** Apply a hand card's single-use effect. coin/card 보너스는 use()에서 처리한다. */
   private static applySingleEffect(
     gs: GameState,
     def: HandCardDefinition,
     target?: HandTarget
   ): string {
     const c = gs.character
+    const bonus = gs.enhancements.singleBonus[def.id] ?? 0
     switch (def.id) {
       case 'wax-drop': {
-        const healed = c.heal(1)
+        const healed = c.heal(1 + bonus)
         return `체력 +${healed}`
       }
       case 'candle': {
-        const shielded = c.addShield(1)
+        const shielded = c.addShield(1 + bonus)
         return `방패 +${shielded}`
       }
       case 'ember':
-        return HandSystem.damageTargetEnemy(gs, target, 2)
+        return HandSystem.damageTargetEnemy(gs, target, 2 + bonus)
       case 'key':
         return HandSystem.collectRandomTreasure(gs, c)
       case 'wax':
         return HandSystem.freezeTarget(target, 1)
       case 'match': {
-        const gained = c.gainEmber(1)
+        const gained = c.gainEmber(1 + bonus)
         return `불씨 카운트 +${gained}`
       }
       case 'holy-water':
@@ -392,9 +398,11 @@ export class HandSystem {
       case 'chitin':
         return HandSystem.removeTargetTrap(gs, target)
       case 'card':
-        return '손패 콤보 카운트 +1'
+        // gainCandle 보너스는 use()에서 gs.enhancements.singleBonus['card']로 처리.
+        return `손패 콤보 카운트 +${1 + bonus}`
       case 'coin':
-        return '+1$'
+        // coinsGained 보너스는 use()에서 처리.
+        return `+${1 + bonus}$`
     }
   }
 
