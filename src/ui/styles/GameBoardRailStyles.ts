@@ -875,10 +875,13 @@ export const GAME_BOARD_RAIL_STYLES = `
 /* ---- 보스 격파 보상 칸 ----
    격파 직후 lanes의 dist 0/1/2에 박히는 3-cell wide 보물 카드. 셔터(z 35)가 닫힌
    채 노출되어야 하므로 z-index 40으로 올리고, row stacking도 같이 끌어올린다. */
+.cell.card.is-boss-reward .card-art {
+  background-position: center center;
+}
 .cell.card.is-boss-reward {
   position: relative;
   z-index: 40;
-  /* 보물 보상 톤을 살짝 더 따뜻하게(추후 sprite로 분기 가능). */
+  /* 보물 보상 톤을 살짝 더 따뜻하게. */
   border-color: rgba(244, 196, 110, 0.78);
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.28),

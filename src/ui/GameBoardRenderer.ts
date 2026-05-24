@@ -1989,22 +1989,26 @@ export class GameBoardRenderer {
     if (!rail) return Promise.resolve()
     const shutter = rail.querySelector<HTMLElement>('.rail-shutter') ?? this.createShopShutter()
     if (!shutter.isConnected) {
-      shutter.classList.add('is-closed')
       rail.appendChild(shutter)
-      // Persisted shutter recreated after re-render should still match cell geometry.
-      this.syncShopShutterToRailCells()
     }
+    // 항상 is-opening을 제거하고 is-closed+is-persistent로 강제 초기화.
+    // 보스→시련 흐름에서 셔터가 중간 상태로 노출될 수 있어 매번 클린 상태로 시작.
+    shutter.classList.remove('is-opening')
+    shutter.classList.add('is-closed', 'is-persistent')
+    this.syncShopShutterToRailCells()
 
-    // Resume mirrors the entry beat: first the rail clatters, then the closed
-    // shutter reverses upward. This keeps the shutter from looking like it
-    // escaped by itself while shop cards are still leaving.
+    // 셔터가 닫힌 채 레일이 흔들리고, 그 직후 쿠궁하며 상승.
+    // is-opening 추가 직전 is-persistent·is-closed를 제거해 CSS animation 충돌 방지.
     return new Promise((resolve) => {
       rail.classList.add('is-shop-quaking')
       window.setTimeout(() => rail.classList.remove('is-shop-quaking'), 520)
-      window.setTimeout(() => shutter.classList.add('is-opening'), 560)
+      window.setTimeout(() => {
+        shutter.classList.remove('is-persistent', 'is-closed')
+        shutter.classList.add('is-opening')
+      }, 560)
       window.setTimeout(() => {
         this.shopShutterLocked = false
-        this.shopShutterSnapshot = null  // 다음 상점 진입을 위해 스냅샷 초기화
+        this.shopShutterSnapshot = null
         shutter.remove()
         rail.classList.remove('is-shop-shuttered')
         resolve()

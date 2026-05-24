@@ -375,6 +375,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-shell--trial .shop-dim-veil {
   filter: brightness(0.72) saturate(0.95);
 }
+/* 시련 종료 시 veil을 유지해 카드가 날아가는 동안 셔터가 보이지 않게 한다.
+   closeShop()이 is-open을 제거하는 순간 overlay 자체가 사라지므로 veil lift는 불필요. */
+.shop-shell--trial.is-closing .shop-dim-veil {
+  animation: none;
+}
 /* ────────────────────── 시련 카드 전용 스타일 ──────────────────────
    - 뱃지 없음. 황금 구분선은 일러스트↔이름 경계(art border-bottom)에만.
    - 색감: 위협적인 심적색/흑자 계열. 폰트 OkDanDan 명시. */
