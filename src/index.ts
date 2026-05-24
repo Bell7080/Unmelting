@@ -1124,7 +1124,7 @@ async function runBossRailEvent(): Promise<void> {
   const bossAttack = 5
   const attackInterval = 3
   const handGiftStep = 3
-  const bossName = '밀랍 군단'
+  const bossName = '양초 백작'
 
   // 보스 phase 동안엔 일반 레일 카드들이 셔터 뒤 lanes에 그대로 살아있어 손패·조합식
   // 효과가 우연히 그들에게 적용되는 사고가 있다. dist 0/1/2 전체를 임시 보관하고 lanes를

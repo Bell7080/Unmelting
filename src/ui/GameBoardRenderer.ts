@@ -2042,14 +2042,14 @@ export class GameBoardRenderer {
       <section class="boss-intro-overlay-card" role="dialog" aria-label="보스 출현">
         <div class="boss-intro-overlay-art" style="background-image:url('${spriteUrl}');" aria-hidden="true"></div>
         <div class="boss-intro-overlay-body">
-          <span class="boss-intro-overlay-kicker">제단의 수문장</span>
+          <span class="boss-intro-overlay-kicker">탐욕의 대가</span>
           <h2 class="boss-intro-overlay-name">${escapeHtml(opts.name)}</h2>
           <ul class="boss-intro-overlay-stats">
             <li><span class="boss-intro-overlay-stat-label">체력</span><span class="boss-intro-overlay-stat-value">${opts.maxHp}</span></li>
             <li><span class="boss-intro-overlay-stat-label">공격력</span><span class="boss-intro-overlay-stat-value">${opts.attack}</span></li>
             <li><span class="boss-intro-overlay-stat-label">반격 주기</span><span class="boss-intro-overlay-stat-value">3턴</span></li>
           </ul>
-          <p class="boss-intro-overlay-desc">셔터가 멈춘 채 보스 가상 턴이 진행되며, 일반 적과 같은 규칙으로 플레이어 공격력만큼 피해를 입는다. 양초 스매시류 즉사기에는 대부분 면역이며, 격파 시 보물 레일 3칸이 떨어진다.</p>
+          <p class="boss-intro-overlay-desc">"내 집에 온 것을 환영하네, 위태로운 불씨여."</p>
           <p class="boss-intro-overlay-trait"><strong>특징</strong> · 보스 체력이 3 닳을 때마다 플레이어에게 랜덤 손패 1장을 지급한다.</p>
         </div>
       </section>

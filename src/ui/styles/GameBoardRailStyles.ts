@@ -795,14 +795,14 @@ export const GAME_BOARD_RAIL_STYLES = `
   min-width: 0;
 }
 .boss-intro-overlay-kicker {
-  font-size: 11px;
+  font-size: 15px;
   letter-spacing: 0.18em;
   color: #ffb3a1;
   text-transform: uppercase;
 }
 .boss-intro-overlay-name {
   margin: 0;
-  font-size: clamp(24px, 3.4vh, 32px);
+  font-size: clamp(28px, 3.4vh, 36px);
   color: #ffe1a3;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7), 0 0 16px rgba(244, 164, 96, 0.42);
 }
@@ -824,26 +824,26 @@ export const GAME_BOARD_RAIL_STYLES = `
   background: rgba(20, 12, 26, 0.78);
 }
 .boss-intro-overlay-stat-label {
-  font-size: 11px;
+  font-size: 15px;
   letter-spacing: 0.14em;
   opacity: 0.74;
 }
 .boss-intro-overlay-stat-value {
-  font-size: 18px;
+  font-size: 22px;
   color: #ffd57a;
   font-weight: 700;
 }
 .boss-intro-overlay-desc {
   margin: 6px 0 0;
   line-height: 1.55;
-  font-size: 13px;
+  font-size: 17px;
   opacity: 0.88;
 }
 /* 보스 특징 한 줄 — 인트로 카드 안에 추가. 회색-금색 톤으로 desc와 구분. */
 .boss-intro-overlay-trait {
   margin: 8px 0 0;
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.45;
   border-radius: 8px;
   background: rgba(255, 232, 168, 0.06);
