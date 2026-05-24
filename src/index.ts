@@ -46,6 +46,7 @@ import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
 import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
+import { buildUnlockedUpgradePool } from '@systems/UpgradePackPool'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
@@ -788,7 +789,13 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
       }
     })
   }
-  const pool = SHOP_PACK_POOLS[kind].map((entry) => ({
+  // 강화팩: 현재 해금된 카드/조합식 항목만 포함 (UpgradePackPool.ts).
+  const rawPool =
+    kind === 'upgrade-pack'
+      ? buildUnlockedUpgradePool(runCardPool.snapshot().unlocked)
+      : SHOP_PACK_POOLS[kind]
+
+  const pool = rawPool.map((entry) => ({
     ...entry,
     apply: () => {
       switch (entry.id) {
