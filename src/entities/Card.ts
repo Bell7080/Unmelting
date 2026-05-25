@@ -230,6 +230,11 @@ export class Card {
     return this.frozenTurns > 0
   }
 
+  /** Clear wax '굳음' immediately (used by boss debuff-immunity resist flow). */
+  clearFrozen(): void {
+    this.frozenTurns = 0
+  }
+
   /** Convert a waiting seed into one of the five usable flower buffs. */
   bloom(kind: Exclude<FlowerKind, 'seed'>): void {
     if (this.type !== CardType.FLOWER) return
