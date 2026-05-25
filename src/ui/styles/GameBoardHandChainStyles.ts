@@ -1006,4 +1006,37 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   from { opacity: 0.72; filter: brightness(1); }
   to { opacity: 0.95; filter: brightness(1.18); }
 }
+
+/* ─── Mobile touch: is-touch-previewing mirrors :hover / :focus-within ─── */
+/* Scoped to (hover: none) so PC :hover rules are never overridden. */
+@media (hover: none) and (pointer: coarse) {
+  .hand-slot.hand-card.is-touch-previewing {
+    transform: translateY(-2px);
+    z-index: 32;
+    box-shadow:
+      0 6px 18px rgba(0, 0, 0, 0.55),
+      0 0 14px rgba(255, 215, 120, 0.35);
+  }
+  .hand-slot.hand-card.is-touch-previewing .hand-card-preview {
+    display: block;
+    animation: hand-preview-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
+  }
+  .hand-slot.is-low-preview.is-touch-previewing .hand-card-preview {
+    animation-name: hand-preview-low-flip;
+  }
+  .hand-slot.hand-card.is-touch-previewing .hand-card-preview::before {
+    animation: hand-preview-back-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
+  }
+  .hand-slot.is-low-preview.is-touch-previewing .hand-card-preview::before {
+    animation: hand-preview-back-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
+  }
+  .hand-slot.hand-card.is-recipe-ready.is-touch-previewing .hand-recipe-preview {
+    display: grid;
+    gap: 7px;
+    animation: recipe-preview-slide 0.28s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
+  }
+  .hand-slot.is-low-preview.is-recipe-ready.is-touch-previewing .hand-recipe-preview {
+    animation-name: recipe-preview-low-slide;
+  }
+}
 `

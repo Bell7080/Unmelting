@@ -1675,4 +1675,38 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   100% { opacity: 1; }
 }
 
+/* ─── Mobile touch: is-touch-active mirrors :hover for shop elements ──── */
+/* Gated on (hover: none) so PC hover rules are completely unaffected. */
+@media (hover: none) and (pointer: coarse) {
+  .shop-relic-card.is-touch-active {
+    animation-play-state: paused;
+    scale: 1.06;
+    box-shadow: none;
+    z-index: 6;
+  }
+  .shop-free-layer > .shop-relic-card.is-touch-active {
+    animation-play-state: paused;
+    scale: 1.06;
+    z-index: 7;
+  }
+  .shop-free-layer > .shop-relic-card:nth-child(1).is-touch-active {
+    transform: translateX(clamp(12px, 1vw, 18px)) rotate(0deg);
+  }
+  .shop-free-layer > .shop-relic-card:nth-child(2).is-touch-active {
+    transform: translateX(clamp(-12px, -1vw, -18px)) rotate(0deg);
+  }
+  .shop-pack-pick-card.is-touch-active {
+    scale: 1.04;
+    box-shadow: none;
+  }
+  .shop-reroll-btn.is-touch-active {
+    transform: translateY(-2px) scale(1.02);
+    border-color: rgba(220, 172, 80, 0.72);
+    filter: brightness(1.08);
+  }
+  [data-shop-close].is-touch-active {
+    transform: rotate(-3deg) translateY(-1px);
+    filter: brightness(1.08);
+  }
+}
 `

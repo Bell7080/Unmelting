@@ -40,6 +40,7 @@ import { RARITY_CLASS_BY_TIER, SHOP_PACK_LABELS, type CardRarity } from '@data/S
 import { RECIPES } from '@data/Recipes'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { GAME_BOARD_STYLES } from '@ui/styles/GameBoardStyles'
+import { initTouchBody, attachHandCardTouch, attachShopTouchHighlight } from '@ui/MobileTouchManager'
 import {
   bookIcon,
   candleIcon,
@@ -296,6 +297,9 @@ export class GameBoardRenderer {
       throw new Error(`Container ${containerId} not found`)
     }
     this.boardElement = container
+
+    // Mark touch devices once so mobile CSS rules and JS branches activate.
+    initTouchBody()
 
     // A single document-level dismiss listener keeps pinned relic previews
     // transient: clicking any non-relic UI releases the enlarged card.
@@ -1604,6 +1608,9 @@ export class GameBoardRenderer {
         document.dispatchEvent(new CustomEvent<ShopBuyDetail>('shopBuy', { detail: { kind, relicId } }))
       })
       document.body.appendChild(this.shopOverlayElement)
+      // Mobile: add touch-active highlight so shop cards give visual feedback
+      // equivalent to the :hover scale they show on desktop.
+      attachShopTouchHighlight(this.shopOverlayElement)
     }
     // While the overlay is already open, refresh affordability/labels in place
     // on the existing DOM nodes — rebuilding innerHTML caused a visible white
@@ -2943,6 +2950,17 @@ export class GameBoardRenderer {
           )
         })
       })
+
+    // Mobile: first tap shows preview, second tap fires itemAction.
+    // The touchend handler calls e.preventDefault() to suppress the ghost click
+    // so the click listener above does not double-fire on touch devices.
+    attachHandCardTouch(this.boardElement, (itemIndex) => {
+      document.dispatchEvent(
+        new CustomEvent<ItemActionDetail>('itemAction', {
+          detail: { itemIndex, shiftKey: false },
+        })
+      )
+    })
 
     // Chain reset is bound on the body-mounted chain banner (updateChainBanner)
     // since the old in-stage strip is gone.
