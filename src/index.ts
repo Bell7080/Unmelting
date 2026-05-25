@@ -52,6 +52,7 @@ import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
 import { SpriteUrls, spriteForHandCard } from '@ui/Sprites'
+import { SpeechBubble } from '@ui/SpeechBubble'
 import okDanDanBoldUrl from './assets/fonts/OkDanDanBold.woff2'
 
 console.log('🕯 Unmelting starting...')
@@ -82,6 +83,7 @@ const gameState = new GameState()
 const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
 const boardRenderer = new GameBoardRenderer('game-board')
+const speechBubble = new SpeechBubble()
 let gameActive = true
 let inputLocked = false
 let chain: ChainState = HandSystem.newChain()
@@ -1809,6 +1811,8 @@ function startGame(): void {
   // 메타 사당 해금(영구) + 런 카드풀(임시) 이중 구조를 플레이 로그로 명시한다.
   recordNotice(`카드 풀 초기화: 메타해금 ${poolSnapshot.unlocked.length} / 잠김 ${poolSnapshot.locked.length} / 금지 ${poolSnapshot.banned.length}`, 'info')
   render()
+  // 1턴 시작 대사: 살짝 딜레이 후 캐릭터 말풍선 등장
+  speechBubble.show('역경 아래, 작은 불빛을 밝혀야만 해.', 800)
 }
 
 function buildChainHints() {
@@ -2115,10 +2119,12 @@ async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promi
 }
 
 document.addEventListener('cardAction', (e: Event) => {
+  speechBubble.dismiss()
   void handleCardAction(e)
 })
 
 document.addEventListener('itemAction', (e: Event) => {
+  speechBubble.dismiss()
   const detail = (e as CustomEvent<ItemActionDetail>).detail
   void handleHandSlotClick(detail.itemIndex)
 })
