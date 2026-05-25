@@ -123,6 +123,9 @@ export class CardSpawner {
   private trialEnemyAtkBonus: number = 0
   private trialTrapDamageBonus: number = 0
   private trialTreasureSpawnScale: number = 1
+  // After a spore spawns, block spore generation for the next N cards to prevent
+  // consecutive spore clusters. 5 cards ≈ at least 1 full 3-lane turn gap.
+  private sporeCooldownCards: number = 0
 
   /** Update the active ember tier so the next spawn run uses the matching weights. */
   setTier(tier: EmberTier): void {
@@ -236,17 +239,24 @@ export class CardSpawner {
       ? buckets.webTrap + buckets.bombTrap + buckets.sporeTrap
       : buckets.webTrap
     const bombTrap = options.openingBoard ? 0 : buckets.bombTrap
-    const sporeTrap = options.openingBoard ? 0 : buckets.sporeTrap
+    // Spores on cooldown are treated as weight 0; the slot is silently folded into
+    // the rest of the distribution so the total chance of non-spore cards increases.
+    const sporeCooling = this.sporeCooldownCards > 0
+    const sporeTrap = options.openingBoard || sporeCooling ? 0 : buckets.sporeTrap
     const flower = options.openingBoard ? 0 : buckets.flower
     // 시련 '가난'은 보물상자 가중치를 25% 깎는다. 1 이상이면 평소 그대로.
     const treasure = buckets.treasure * this.trialTreasureSpawnScale
     const total = buckets.enemy + webTrap + bombTrap + sporeTrap + treasure + flower
     const roll = Math.random() * total
 
+    if (this.sporeCooldownCards > 0) this.sporeCooldownCards--
+
     if (roll < buckets.enemy) return this.generateEnemy()
     if (roll < buckets.enemy + webTrap) return this.generateTrap({ trapKind: 'web' })
     if (roll < buckets.enemy + webTrap + bombTrap) return this.generateTrap({ trapKind: 'bomb' })
     if (roll < buckets.enemy + webTrap + bombTrap + sporeTrap) {
+      // Reset cooldown so the next 5 spawned cards cannot be spores.
+      this.sporeCooldownCards = 5
       return this.generateTrap({ trapKind: 'spore' })
     }
     if (roll < buckets.enemy + webTrap + bombTrap + sporeTrap + treasure) {

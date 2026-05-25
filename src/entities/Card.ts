@@ -150,7 +150,9 @@ export class Card {
     this.enemyPower = options.enemyPower ?? 0
     this.trapKind = options.trapKind ?? 'web'
     this.isBombArmed = false
-    this.sporeTurnsUntilSpread = this.trapKind === 'spore' ? 2 : 0
+    // Init at 3 so the birth-turn tick (in resolvePostDropSporeSpread) brings it
+    // to 2, making the spore show exactly "2 turns remaining" when first visible on the rail.
+    this.sporeTurnsUntilSpread = this.trapKind === 'spore' ? 3 : 0
     this.specialEnemyKind = options.specialEnemyKind ?? null
     this.flowerKind = options.flowerKind ?? 'seed'
     this.flowerTurnsAlive = 0
