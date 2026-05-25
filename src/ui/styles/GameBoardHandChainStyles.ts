@@ -1007,21 +1007,26 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   to { opacity: 0.95; filter: brightness(1.18); }
 }
 
-/* ─── Mobile landscape layout fix ──────────────────────────────────────── */
-/* Below 760px in landscape the game collapses to 1-column with hand-panel
-   spanning full width. The preview at right:calc(100%+16px) would go
-   ~600 px off-screen. Fix: constrain hand-stack to the right edge so the
-   preview floats into the visible game-board area to its left. */
+/* ─── Mobile landscape: hand card sizing ────────────────────────────────── */
+/* The 3-column layout is restored by GameBoardPlayerShopStyles.ts so the
+   hand panel is back in its own right column (~120-180px wide). Width/margin
+   constraints are not needed; we only need to scale card heights to fit the
+   full viewport height available to the hand column. */
 @media (max-width: 760px) and (orientation: landscape) {
-  .hand-stack {
-    width: clamp(140px, 28vw, 200px);
-    margin-left: auto; /* dock to the right edge of hand-panel */
+  /* Non-crowded (< 8 cards): each card claims a fair share of the panel height.
+     125px accounts for game-shell padding + panel header + combo gauge + gaps. */
+  .hand-slot.hand-card {
+    min-height: clamp(30px, calc((100vh - 125px) / var(--hand-count, 6)), 78px);
+  }
+  /* Crowded (8+ cards): compress further so all 10 cards stay inside the panel. */
+  .hand-stack.is-crowded .hand-slot.hand-card {
+    min-height: clamp(22px, calc((100vh - 125px) / var(--hand-count, 10)), 78px);
   }
   .hand-card-preview {
-    /* Smaller preview matches the narrower hand cards. */
+    /* Narrower preview to match the narrower hand column. */
     width: clamp(108px, 19vw, 155px);
   }
-  /* Recipe preview needs ~430px horizontal space — hide it in landscape. */
+  /* Recipe preview needs ~430px horizontal space — not available in landscape. */
   .hand-recipe-preview { display: none !important; }
 }
 

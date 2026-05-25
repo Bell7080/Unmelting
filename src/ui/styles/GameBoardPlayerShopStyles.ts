@@ -1560,8 +1560,36 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
    lets each card cluster use its own column rather than stacking top-to-bottom
    and overflowing the shell in both directions at once. */
 @media (max-width: 760px) and (orientation: landscape) {
+  /* Restore 3-column game layout: landscape needs side-by-side panels.
+     Single-column layout (from the 760px breakpoint) breaks shop overflow
+     AND hand card stacking because there is no bounded right column. */
+  .game-shell {
+    grid-template-columns:
+      minmax(100px, 0.55fr)      /* left — player card + relics, compact */
+      minmax(0, 1fr)              /* center — rail */
+      clamp(120px, 24vw, 180px); /* right — hand panel */
+    grid-template-rows: 1fr;
+    /* Reduce top clearance; ember HUD is ~14px, 18px gives comfortable gap. */
+    padding-top: clamp(18px, 3vh, 28px);
+  }
+  .left-panel { min-height: 0; }
+  /* Override the single-column hand-panel row assignment. */
+  .hand-panel { grid-row: auto !important; }
+
+  /* Restore 2-column shop row layout (820px breakpoint collapsed these to 1). */
   .shop-top-row    { grid-template-columns: 2fr 8fr; }
   .shop-bottom-row { grid-template-columns: 3fr 7fr; }
+
+  /* At 667px landscape the rail column is ~340px. Shop card vw values
+     (12.6vw ≈ 84px) are already below the 132px pixel minimum, so 3 cards
+     × 132px = 396px > 340px causes the horizontal overflow.
+     Lower the px floor so the vw value takes effect and cards fit. */
+  .shop-relic-card  { width: clamp(80px, 12.6vw, 190px); }
+  .shop-shell[data-shop-mode="altar"] .shop-artifact-layer .shop-relic-card {
+    width: clamp(86px, 13.4vw, 206px);
+  }
+  .shop-free-card   { width: clamp(72px, 11.8vw, 178px); }
+  .shop-pack-card   { width: clamp(68px, 10.9vw, 164px); }
 }
 
 
