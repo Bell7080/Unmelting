@@ -40,7 +40,7 @@ import { RARITY_CLASS_BY_TIER, SHOP_PACK_LABELS, type CardRarity } from '@data/S
 import { RECIPES } from '@data/Recipes'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { GAME_BOARD_STYLES } from '@ui/styles/GameBoardStyles'
-import { initTouchBody, attachHandCardTouch, attachShopTouchHighlight } from '@ui/MobileTouchManager'
+import { initTouchBody, attachHandCardTouch, attachShopTouchHighlight, isTouchDevice } from '@ui/MobileTouchManager'
 import {
   bookIcon,
   candleIcon,
@@ -1769,18 +1769,26 @@ export class GameBoardRenderer {
     const shell = this.shopOverlayElement.querySelector<HTMLElement>('.shop-shell')
     if (!rail || !shell) return
 
-    // On mobile landscape the rail column (~340px) is too narrow for shop card layers.
-    // Expand the shell to the full visual viewport so card rows have room to breathe.
-    // window.innerHeight is the visual viewport (excludes browser chrome) and reliably
-    // reads < 500px on all landscape phones.
-    if (window.innerHeight < 500) {
+    // On any touch device in landscape, switch the shell from position:fixed to
+    // position:absolute so it fills the .shop-overlay parent (which is already
+    // position:fixed;inset:0 = full screen). This sidesteps the containing-block
+    // problem where backdrop-filter on .rail traps position:fixed descendants in
+    // some mobile browsers, causing the shell to stay pinned to the rail column.
+    if (isTouchDevice() && window.innerWidth > window.innerHeight) {
+      shell.style.position = 'absolute'
       shell.style.top = '0'
       shell.style.left = '0'
-      shell.style.width = `${window.innerWidth}px`
-      shell.style.height = `${window.innerHeight}px`
+      shell.style.right = '0'
+      shell.style.bottom = '0'
+      shell.style.width = ''
+      shell.style.height = ''
       return
     }
 
+    // Desktop / portrait: reset to fixed and pin over the rail column.
+    shell.style.position = ''
+    shell.style.right = ''
+    shell.style.bottom = ''
     const rect = rail.getBoundingClientRect()
     shell.style.top = `${rect.top}px`
     shell.style.left = `${rect.left}px`
