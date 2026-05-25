@@ -1,6 +1,6 @@
 /**
  * SpeechBubble - 캐릭터 대사용 말풍선.
- * fixed 포지션, pointer-events: none. .player-card 위에 자동 배치된다.
+ * fixed 포지션, pointer-events: none. .player-card 기준으로 우측 오프셋 배치.
  */
 
 const STYLE_ID = 'speech-bubble-styles'
@@ -15,17 +15,17 @@ const CSS = `
   position: relative;
   background: rgba(14, 8, 24, 0.95);
   border: 1.5px solid rgba(255, 215, 120, 0.82);
-  /* 코너마다 반지름이 조금씩 달라 손으로 자른 듯한 질감 */
   border-radius: 6px 10px 8px 11px / 10px 7px 11px 8px;
-  padding: 10px 15px;
+  padding: 12px 22px;
   box-shadow:
-    0 6px 24px rgba(0, 0, 0, 0.78),
+    0 8px 28px rgba(0, 0, 0, 0.82),
     0 2px 8px  rgba(0, 0, 0, 0.55),
-    0 0 18px   rgba(255, 200, 80, 0.09),
-    inset 0 1px 0 rgba(255, 215, 120, 0.07);
-  font-size: 14px;
-  line-height: 1.55;
-  color: rgba(255, 248, 224, 0.95);
+    0 0 22px   rgba(255, 200, 80, 0.12),
+    inset 0 1px 0 rgba(255, 215, 120, 0.09);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: rgba(255, 248, 224, 0.97);
   white-space: nowrap;
   transform-origin: center bottom;
   opacity: 0;
@@ -42,7 +42,7 @@ const CSS = `
   border-right: 8px solid transparent;
   border-top: 9px solid rgba(255, 215, 120, 0.82);
 }
-/* 꼬리 내부 (어두운 배경색) */
+/* 꼬리 내부 (어두운 배경) */
 .sb-bubble::after {
   content: '';
   position: absolute;
@@ -59,39 +59,54 @@ const CSS = `
 }
 .sb-bubble.is-visible {
   opacity: 1;
-  animation: sb-breathe 2.8s ease-in-out infinite;
+  /* 숨쉬기: 흡기(+2.2%) → 호기(-0.6%) → 안정 */
+  animation: sb-breathe 2.4s ease-in-out infinite;
 }
 .sb-bubble.is-exiting {
   animation: sb-exit 240ms ease-in forwards;
 }
-/* 각 글자에 개별 지연을 줘서 미세한 떨림 */
-.sb-char {
-  display: inline;
-  animation: sb-tremble 3.2s ease-in-out infinite;
-}
-/* white-space: pre-wrap 으로 공백 span이 접히지 않게 */
 .sb-text {
   display: inline;
   white-space: pre-wrap;
 }
+/* 타자기로 나올 때 bounce 팝인 후 지속 떨림 */
+.sb-char {
+  display: inline-block;
+  vertical-align: baseline;
+  line-height: 1;
+  /* 1) pop-in 0.32s (한 번만), 2) tremble 0.32s 이후 무한 */
+  animation:
+    sb-char-pop  0.32s cubic-bezier(0.22, 0.92, 0.36, 1) forwards,
+    sb-tremble   2.4s  ease-in-out 0.32s infinite;
+}
 @keyframes sb-enter {
-  from { opacity: 0; transform: scale(0.84); }
+  from { opacity: 0; transform: scale(0.82); }
   to   { opacity: 1; transform: scale(1.0);  }
 }
 @keyframes sb-exit {
   from { opacity: 1; transform: scale(1.0);  }
-  to   { opacity: 0; transform: scale(0.84); }
+  to   { opacity: 0; transform: scale(0.82); }
 }
 @keyframes sb-breathe {
-  0%,100% { transform: scale(1.0);   }
-  50%     { transform: scale(1.007); }
+  0%   { transform: scale(1.0);   }
+  35%  { transform: scale(1.022); }
+  65%  { transform: scale(0.993); }
+  100% { transform: scale(1.0);   }
 }
+/* 글자 팝인: 아래서 튀어올라 살짝 오버슈팅 후 안착 */
+@keyframes sb-char-pop {
+  0%   { transform: translateY(8px)  scale(0.5);  opacity: 0; }
+  55%  { transform: translateY(-4px) scale(1.2);  opacity: 1; }
+  80%  { transform: translateY(1.5px) scale(0.96); }
+  100% { transform: translateY(0px)  scale(1.0);  }
+}
+/* 지속 떨림: ±1.5px / ±0.8deg - 눈에 띄되 거슬리지 않는 강도 */
 @keyframes sb-tremble {
   0%   { transform: translate(0px,    0px)    rotate(0deg);    }
-  15%  { transform: translate(-0.4px,  0.3px) rotate(-0.25deg); }
-  35%  { transform: translate( 0.5px, -0.4px) rotate( 0.3deg);  }
-  55%  { transform: translate(-0.3px,  0.45px) rotate( 0.15deg); }
-  75%  { transform: translate( 0.45px,-0.25px) rotate(-0.2deg);  }
+  20%  { transform: translate(-1.3px,  0.8px) rotate(-0.7deg); }
+  40%  { transform: translate( 1.5px, -1.0px) rotate( 0.8deg); }
+  60%  { transform: translate(-1.0px,  1.2px) rotate( 0.55deg);}
+  80%  { transform: translate( 1.2px, -0.8px) rotate(-0.6deg); }
   100% { transform: translate(0px,    0px)    rotate(0deg);    }
 }
 `
@@ -190,14 +205,13 @@ export class SpeechBubble {
     const next = () => {
       if (this.state !== 'visible') return
       if (i >= chars.length) {
-        // 마지막 글자 이후 4.2초 뒤 자동 소멸
+        // 마지막 글자 후 4.2s 뒤 자동 소멸
         this.autoDismissTimer = window.setTimeout(() => this.dismiss(), 4200)
         return
       }
       const span = document.createElement('span')
       span.className = 'sb-char'
-      // 글자마다 다른 위상으로 떨림이 자연스럽게 분산됨
-      span.style.animationDelay = `${((i * 113) % 3200) / 1000}s`
+      // 각 글자가 70ms 간격으로 등장하므로 자연스럽게 떨림 위상이 분산됨
       span.textContent = chars[i++]
       this.textEl.appendChild(span)
       this.typewriterTimer = window.setTimeout(next, 70)
@@ -209,10 +223,11 @@ export class SpeechBubble {
     const card = document.querySelector<HTMLElement>('.player-card')
     if (!card) return
     const rect = card.getBoundingClientRect()
-    const cx = rect.left + rect.width / 2
-    // 꼬리 높이(9px) + 여백(4px) 확보
+    // 플레이어 카드 중심에서 우측으로 40px 오프셋
+    const cx = rect.left + rect.width / 2 + 40
     this.host.style.left = `${cx}px`
     this.host.style.top = `${rect.top}px`
+    // 꼬리 높이(9px) + 여백(4px) 만큼 위로 올림
     this.host.style.transform = `translate(-50%, calc(-100% - 13px))`
   }
 
