@@ -1555,21 +1555,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   .rail-row.dist-2 { opacity: 0.3; transform: scale(0.86); }
   .rail-row.dist-1 { opacity: 0.6; transform: scale(0.92); }
   .player-card { width: clamp(120px, 14vw, 160px); }
-  /* Pack picker cards shrink to fit the shorter viewport. */
   .shop-pack-pick-card { min-height: clamp(110px, 28vh, 188px); }
   .shop-pack-picker-cards { max-width: clamp(310px, 52vw, 640px); }
-
-  /* JS positionShopShellOverRail() already sets the shell to full-screen on
-     mobile landscape (window.innerHeight < 500). These rules restore the
-     2-column shop layout and set card widths appropriate for the full viewport. */
-  .shop-top-row    { grid-template-columns: 2fr 8fr; }
-  .shop-bottom-row { grid-template-columns: 3fr 7fr; }
-  .shop-relic-card  { width: clamp(110px, 12.6vw, 190px); }
-  .shop-shell[data-shop-mode="altar"] .shop-artifact-layer .shop-relic-card {
-    width: clamp(118px, 13.4vw, 206px);
-  }
-  .shop-free-card   { width: clamp(100px, 11.8vw, 178px); }
-  .shop-pack-card   { width: clamp(96px, 10.9vw, 164px); }
 }
 
 /* Mobile landscape: restore the 3-column game layout that the 760px breakpoint collapses. */
@@ -1712,6 +1699,30 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 
 /* ─── Mobile touch: is-touch-active mirrors :hover for shop elements ──── */
+/* Touch landscape only — no effect on desktop/mouse users.
+   Shell fills the full overlay so shop content isn't clipped to the rail column.
+   !important beats JS inline styles set by positionShopShellOverRail(). */
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  .shop-shell {
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: auto !important;
+    height: auto !important;
+  }
+  /* Restore 2-column layout (820px breakpoint collapses it to 1 column). */
+  .shop-top-row    { grid-template-columns: 2fr 8fr; }
+  .shop-bottom-row { grid-template-columns: 3fr 7fr; }
+  /* Card sizes for full-viewport shell. */
+  .shop-relic-card  { width: clamp(110px, 12.6vw, 190px); }
+  .shop-shell[data-shop-mode="altar"] .shop-artifact-layer .shop-relic-card {
+    width: clamp(118px, 13.4vw, 206px);
+  }
+  .shop-free-card  { width: clamp(100px, 11.8vw, 178px); }
+  .shop-pack-card  { width: clamp(96px, 10.9vw, 164px); }
+}
+
 /* Gated on (hover: none) so PC hover rules are completely unaffected. */
 @media (hover: none) and (pointer: coarse) {
   .shop-relic-card.is-touch-active {

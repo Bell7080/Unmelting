@@ -40,7 +40,7 @@ import { RARITY_CLASS_BY_TIER, SHOP_PACK_LABELS, type CardRarity } from '@data/S
 import { RECIPES } from '@data/Recipes'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { GAME_BOARD_STYLES } from '@ui/styles/GameBoardStyles'
-import { initTouchBody, attachHandCardTouch, attachShopTouchHighlight, isTouchDevice } from '@ui/MobileTouchManager'
+import { initTouchBody, attachHandCardTouch, attachShopTouchHighlight } from '@ui/MobileTouchManager'
 import {
   bookIcon,
   candleIcon,
@@ -1762,29 +1762,14 @@ export class GameBoardRenderer {
     }
   }
 
-  /** Re-anchor the shop shell so it always sits exactly over the rail. */
+  /** Re-anchor the shop shell so it always sits exactly over the rail.
+   *  On touch-landscape devices, CSS overrides these values with !important
+   *  to fill the full overlay instead. */
   private positionShopShellOverRail(): void {
     if (!this.shopOverlayElement?.classList.contains('is-open')) return
     const rail = this.boardElement.querySelector<HTMLElement>('.rail')
     const shell = this.shopOverlayElement.querySelector<HTMLElement>('.shop-shell')
     if (!rail || !shell) return
-
-    // .shop-shell is now position:absolute inside .shop-overlay (fixed, inset:0).
-    // On mobile landscape: fill the overlay = full screen.
-    // On desktop/portrait: pin over the rail column using the rail's bounding rect
-    // (overlay starts at viewport 0,0 so getBoundingClientRect values are correct).
-    if (isTouchDevice() && window.innerWidth > window.innerHeight) {
-      shell.style.top = '0'
-      shell.style.left = '0'
-      shell.style.right = '0'
-      shell.style.bottom = '0'
-      shell.style.width = ''
-      shell.style.height = ''
-      return
-    }
-
-    shell.style.right = ''
-    shell.style.bottom = ''
     const rect = rail.getBoundingClientRect()
     shell.style.top = `${rect.top}px`
     shell.style.left = `${rect.left}px`
