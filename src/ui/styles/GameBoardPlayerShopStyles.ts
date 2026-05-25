@@ -201,7 +201,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   display: block;
 }
 .shop-shell {
-  position: fixed;
+  /* Absolute inside .shop-overlay (position:fixed;inset:0) so the shell is
+     positioned relative to the overlay, not the viewport. This avoids the
+     backdrop-filter containing-block trap: position:fixed descendants of any
+     element with backdrop-filter are re-contained inside it (e.g. .rail has
+     backdrop-filter:blur(2px) which would pin a fixed shell to the rail column). */
+  position: absolute;
   pointer-events: auto;
   background: transparent;
   border: 0;

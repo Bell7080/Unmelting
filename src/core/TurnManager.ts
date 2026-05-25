@@ -236,9 +236,12 @@ export class TurnManager {
     const sporesAtTurnStart: { card: Card; laneIndex: number; distance: number }[] = []
     const seen = new Set<Card>()
 
-    // Snapshot the spores before mutating the board. Newly infected spores can
-    // be placed in cells the nested scan has not reached yet, so a live scan
-    // would incorrectly tick them from 2 → 1 on their birth turn.
+    // Snapshot the spores before mutating the board. Two categories are excluded:
+    // 1. Newly infected spores (placed mid-spread by the loop below) — avoided by
+    //    taking the snapshot before any mutations.
+    // 2. Freshly spawned spores (justEnteredRail=true) — their justEnteredRail flag
+    //    is cleared here so turn counting starts from the NEXT call, giving the
+    //    player a full 2-turn warning from the moment the spore first appears.
     for (let laneIndex = 0; laneIndex < this.gameState.lanes.length; laneIndex++) {
       for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
         const card = this.gameState.lanes[laneIndex].getCardAtDistance(distance)
@@ -246,6 +249,11 @@ export class TurnManager {
           continue
         }
         seen.add(card)
+        if (card.justEnteredRail) {
+          // Skip this spore for ticking this turn; clear the flag so it ticks normally next turn.
+          card.justEnteredRail = false
+          continue
+        }
         sporesAtTurnStart.push({ card, laneIndex, distance })
       }
     }

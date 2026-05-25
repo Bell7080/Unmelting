@@ -257,7 +257,11 @@ export class CardSpawner {
     if (roll < buckets.enemy + webTrap + bombTrap + sporeTrap) {
       // Reset cooldown so the next 5 spawned cards cannot be spores.
       this.sporeCooldownCards = 5
-      return this.generateTrap({ trapKind: 'spore' })
+      const spore = this.generateTrap({ trapKind: 'spore' })
+      // Flag the spore so applySporeSpread skips the birth-turn tick; turn counting
+      // starts from the NEXT turn so the player sees a full 2-turn warning.
+      spore.justEnteredRail = true
+      return spore
     }
     if (roll < buckets.enemy + webTrap + bombTrap + sporeTrap + treasure) {
       return this.generateTreasure()

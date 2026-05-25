@@ -1769,13 +1769,11 @@ export class GameBoardRenderer {
     const shell = this.shopOverlayElement.querySelector<HTMLElement>('.shop-shell')
     if (!rail || !shell) return
 
-    // On any touch device in landscape, switch the shell from position:fixed to
-    // position:absolute so it fills the .shop-overlay parent (which is already
-    // position:fixed;inset:0 = full screen). This sidesteps the containing-block
-    // problem where backdrop-filter on .rail traps position:fixed descendants in
-    // some mobile browsers, causing the shell to stay pinned to the rail column.
+    // .shop-shell is now position:absolute inside .shop-overlay (fixed, inset:0).
+    // On mobile landscape: fill the overlay = full screen.
+    // On desktop/portrait: pin over the rail column using the rail's bounding rect
+    // (overlay starts at viewport 0,0 so getBoundingClientRect values are correct).
     if (isTouchDevice() && window.innerWidth > window.innerHeight) {
-      shell.style.position = 'absolute'
       shell.style.top = '0'
       shell.style.left = '0'
       shell.style.right = '0'
@@ -1785,8 +1783,6 @@ export class GameBoardRenderer {
       return
     }
 
-    // Desktop / portrait: reset to fixed and pin over the rail column.
-    shell.style.position = ''
     shell.style.right = ''
     shell.style.bottom = ''
     const rect = rail.getBoundingClientRect()

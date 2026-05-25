@@ -115,6 +115,10 @@ export class Card {
   trapKind: TrapKind
   isBombArmed: boolean
   sporeTurnsUntilSpread: number
+  // True for exactly one applySporeSpread cycle after a spawned spore first enters
+  // the 3×3 rail. The snapshot skips these cards so the turn count starts from the
+  // NEXT turn, giving the player the full 2-turn warning from first appearance.
+  justEnteredRail: boolean
   /** Special-enemy family; monster flowers merge only with each other. */
   specialEnemyKind: SpecialEnemyKind | null
   /** Flower growth state: seed in waiting row, then a random bloom on front row. */
@@ -150,9 +154,8 @@ export class Card {
     this.enemyPower = options.enemyPower ?? 0
     this.trapKind = options.trapKind ?? 'web'
     this.isBombArmed = false
-    // Init at 3 so the birth-turn tick (in resolvePostDropSporeSpread) brings it
-    // to 2, making the spore show exactly "2 turns remaining" when first visible on the rail.
-    this.sporeTurnsUntilSpread = this.trapKind === 'spore' ? 3 : 0
+    this.sporeTurnsUntilSpread = this.trapKind === 'spore' ? 2 : 0
+    this.justEnteredRail = false
     this.specialEnemyKind = options.specialEnemyKind ?? null
     this.flowerKind = options.flowerKind ?? 'seed'
     this.flowerTurnsAlive = 0
