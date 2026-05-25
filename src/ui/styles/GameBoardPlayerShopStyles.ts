@@ -1546,27 +1546,19 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   .card-name { font-size: 12px; }
 }
 
-@media (max-height: 600px) {
+@media (max-height: 500px) {
   .rail-row.dist-2 { opacity: 0.3; transform: scale(0.86); }
   .rail-row.dist-1 { opacity: 0.6; transform: scale(0.92); }
   .player-card { width: clamp(120px, 14vw, 160px); }
-  /* Pack picker cards shrink to fit inside the shorter shop shell. */
+  /* Pack picker cards shrink to fit the shorter viewport. */
   .shop-pack-pick-card { min-height: clamp(110px, 28vh, 188px); }
   .shop-pack-picker-cards { max-width: clamp(310px, 52vw, 640px); }
 
-  /* positionShopShellOverRail() pins the shell to the rail column via JS inline
-     styles (~340px wide on iPhone SE/8 landscape). !important beats inline styles
-     so the shop becomes full-screen, giving enough width for all card layers. */
-  .shop-shell {
-    top: 0 !important;
-    left: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
-  }
-  /* Restore 2-column shop rows (820px breakpoint collapses them to 1 column). */
+  /* JS positionShopShellOverRail() already sets the shell to full-screen on
+     mobile landscape (window.innerHeight < 500). These rules restore the
+     2-column shop layout and set card widths appropriate for the full viewport. */
   .shop-top-row    { grid-template-columns: 2fr 8fr; }
   .shop-bottom-row { grid-template-columns: 3fr 7fr; }
-  /* Card sizes for full-screen shell — vw values resolve against viewport width. */
   .shop-relic-card  { width: clamp(110px, 12.6vw, 190px); }
   .shop-shell[data-shop-mode="altar"] .shop-artifact-layer .shop-relic-card {
     width: clamp(118px, 13.4vw, 206px);

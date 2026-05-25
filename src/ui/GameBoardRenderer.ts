@@ -1768,6 +1768,19 @@ export class GameBoardRenderer {
     const rail = this.boardElement.querySelector<HTMLElement>('.rail')
     const shell = this.shopOverlayElement.querySelector<HTMLElement>('.shop-shell')
     if (!rail || !shell) return
+
+    // On mobile landscape the rail column (~340px) is too narrow for shop card layers.
+    // Expand the shell to the full visual viewport so card rows have room to breathe.
+    // window.innerHeight is the visual viewport (excludes browser chrome) and reliably
+    // reads < 500px on all landscape phones.
+    if (window.innerHeight < 500) {
+      shell.style.top = '0'
+      shell.style.left = '0'
+      shell.style.width = `${window.innerWidth}px`
+      shell.style.height = `${window.innerHeight}px`
+      return
+    }
+
     const rect = rail.getBoundingClientRect()
     shell.style.top = `${rect.top}px`
     shell.style.left = `${rect.left}px`
