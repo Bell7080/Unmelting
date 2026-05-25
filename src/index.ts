@@ -1238,12 +1238,18 @@ async function handleBossClick(card: Card): Promise<void> {
   const state = bossEventState
   const character = gameState.character
 
+  // 보스전은 실제 nextTurn()을 호출하지 않으므로(가상 턴만 진행), 보스의 굳음 지속시간도
+  // 클릭 1회=가상 턴 1회 기준으로 수동 감소시킨다. 감소는 이 비트 종료 시점에 반영되어
+  // "N턴 굳음"이 정확히 N번의 플레이어 시도를 막도록 통일한다.
+  const shouldTickFreezeAfterBeat = card.isFrozen()
+
   // 굳음(밀랍) 상태인 보스는 가격해도 데미지가 들어가지 않는다. 단순 무시가 아니라
   // 일반 적 freeze 그라마와 통일된 시각 피드백을 부여한다 — 카드가 살짝 발작하듯
   // 떨리고, 데미지 부유 숫자와 같은 양식으로 "저항" 글자가 떠오른다.
   if (card.isFrozen()) {
     await boardRenderer.playBossFreezeResist(card.id)
     recordNotice('보스가 굳어 있어 공격이 통하지 않는다', 'info')
+    if (shouldTickFreezeAfterBeat) card.tickFrozen()
     return
   }
 
@@ -1266,6 +1272,9 @@ async function handleBossClick(card: Card): Promise<void> {
   const displayValue = remaining === state.attackInterval ? state.attackInterval : remaining
   boardRenderer.setBossAttackCountdown(displayValue)
   await boardRenderer.animateDamageNumbersById([{ cardId: card.id, amount: dealt }])
+
+  // 비동결 상태에서 시작한 비트는 굳음 타이머를 줄이지 않는다.
+  // (굳음 tick은 상태가 실제로 막았던 비트에서만 1회 차감)
 
   // HP 3 임계를 넘을 때마다 손패 1장 지급(트리거는 클릭/손패 데미지 모두 공통).
   await consumeBossHandGiftThresholds(card.id)
@@ -2235,6 +2244,9 @@ async function applyHandSingle(
     render()
     return
   }
+  // 보스는 디버프 면역 규칙을 따른다. 밀랍 계열 사용 시 보스에게 굳음 스택이 남아있다면
+  // 즉시 저항 연출을 띄우고 해제해, "저항 후 즉시 무효" 감각을 일관되게 유지한다.
+  await resolveBossDebuffImmunityOnWaxUse(usedDef?.id ?? null)
   // Reveal the used hand card near screen center, then dissolve it with its
   // category burst. This makes the hand action read like a card being played
   // instead of a slot-local pop.
@@ -2422,6 +2434,19 @@ async function applyHandSingle(
   setTimeout(() => {
     inputLocked = false
   }, 320)
+}
+
+/** Boss debuff immunity: wax attempts are resisted immediately, and legacy
+ *  frozen stacks (if any) are cleared on that same beat so no carry-over freeze remains. */
+async function resolveBossDebuffImmunityOnWaxUse(usedDefId: string | null): Promise<void> {
+  if (!bossEventState) return
+  if (usedDefId !== 'wax') return
+  const boss = bossEventState.card
+  const hadFrozen = boss.isFrozen()
+  // 면역 대상은 스택 수와 무관하게 즉시 정리한다.
+  if (hadFrozen) boss.clearFrozen()
+  await boardRenderer.playBossFreezeResist(boss.id)
+  recordNotice('보스가 디버프를 저항하며 굳음을 즉시 떨쳐냈다', 'info')
 }
 
 async function runCleanupPhase(advanceTurn: boolean): Promise<void> {

@@ -740,6 +740,8 @@ export class HandSystem {
   /** Apply wax hardening to a selected front card. */
   private static freezeTarget(target: HandTarget | undefined, turns: number): string {
     if (!target) return '굳힐 대상 없음'
+    // 보스는 디버프(굳음) 면역이므로 손패 밀랍으로는 상태를 고정하지 않는다.
+    if (target.card.type === CardType.BOSS) return `${target.card.name} 저항`
     target.card.freeze(turns)
     return `${target.card.name} ${turns}턴 굳음`
   }
@@ -752,6 +754,8 @@ export class HandSystem {
       const card = lane.getCardAtDistance(0)
       if (!card || seen.has(card)) continue
       if (!HandSystem.isTurnTimerCard(card)) continue
+      // 보스는 즉사/디버프 면역 기획: 전방 전체 굳음에도 포함하지 않는다.
+      if (card.type === CardType.BOSS) continue
       seen.add(card)
       card.freeze(turns)
       count++
