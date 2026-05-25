@@ -31,6 +31,12 @@ import enemy003Url from '../assets/sprites/enemy_003.webp'
 import enemy004Url from '../assets/sprites/enemy_004.webp'
 import enemy005Url from '../assets/sprites/enemy_005.webp'
 import enemy006Url from '../assets/sprites/enemy_006.webp'
+import enemy007Url from '../assets/sprites/enemy_007.webp'
+import enemy008Url from '../assets/sprites/enemy_008.webp'
+import enemy009Url from '../assets/sprites/enemy_009.webp'
+import enemy010Url from '../assets/sprites/enemy_010.webp'
+import enemy011Url from '../assets/sprites/enemy_011.webp'
+import enemy012Url from '../assets/sprites/enemy_012.webp'
 import mimic001Url from '../assets/sprites/mimic_001.webp'
 import enemyFlower001Url from '../assets/sprites/enemyflower_001.webp'
 import flower000Url from '../assets/sprites/flower_000.webp'
@@ -107,6 +113,12 @@ export const SpriteUrls = {
   enemyFrog: enemy004Url,
   enemyBird: enemy005Url,
   enemyMole: enemy006Url,
+  enemyBee: enemy007Url,
+  enemyMantis: enemy008Url,
+  enemyBat: enemy009Url,
+  enemyHedgehog: enemy010Url,
+  enemyLizard: enemy011Url,
+  enemyRaccoon: enemy012Url,
   // 미믹은 기존 enemy_003 대신 전용 mimic_001 일러스트를 사용한다.
   mimic: mimic001Url,
   monsterFlower: enemyFlower001Url,
@@ -194,6 +206,12 @@ const ENEMY_SPRITES: Record<EnemySpriteId, string> = {
   enemyChitin: SpriteUrls.enemyChitin,
   enemyBird: SpriteUrls.enemyBird,
   enemyMole: SpriteUrls.enemyMole,
+  enemyBee: SpriteUrls.enemyBee,
+  enemyMantis: SpriteUrls.enemyMantis,
+  enemyBat: SpriteUrls.enemyBat,
+  enemyHedgehog: SpriteUrls.enemyHedgehog,
+  enemyLizard: SpriteUrls.enemyLizard,
+  enemyRaccoon: SpriteUrls.enemyRaccoon,
 }
 
 /** Stable cheap hash so a given card always maps to the same sprite variant. */
@@ -220,6 +238,12 @@ function spriteForNormalEnemy(card: Card): string {
     if (card.name.includes('키틴')) return SpriteUrls.enemyChitin
     if (card.name.includes('새')) return SpriteUrls.enemyBird
     if (card.name.includes('두더지')) return SpriteUrls.enemyMole
+    if (card.name.includes('벌')) return SpriteUrls.enemyBee
+    if (card.name.includes('사마귀')) return SpriteUrls.enemyMantis
+    if (card.name.includes('박쥐')) return SpriteUrls.enemyBat
+    if (card.name.includes('고슴도치')) return SpriteUrls.enemyHedgehog
+    if (card.name.includes('도마뱀')) return SpriteUrls.enemyLizard
+    if (card.name.includes('너구리')) return SpriteUrls.enemyRaccoon
   }
   return NORMAL_ENEMY_VARIANTS[hashId(card.id) % NORMAL_ENEMY_VARIANTS.length]
 }

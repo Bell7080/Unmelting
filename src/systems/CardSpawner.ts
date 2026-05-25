@@ -37,19 +37,19 @@ interface CardDefinition {
 
 export const ENEMY_DEFINITIONS: CardDefinition[] = [
   {
-    name: '양초 거미',
-    description: 'Tiny candle spider',
-    healthOrDamage: 1,
-    attack: 1,
-    enemySpriteId: 'enemyMoth',
-    enemyPower: 1,
-  },
-  {
     name: '양초 키틴벌레',
     description: 'Wax-chitin crawler',
     healthOrDamage: 1,
     attack: 1,
     enemySpriteId: 'enemyChitin',
+    enemyPower: 1,
+  },
+  {
+    name: '양초 거미',
+    description: 'Tiny candle spider',
+    healthOrDamage: 1,
+    attack: 1,
+    enemySpriteId: 'enemyMoth',
     enemyPower: 2,
   },
   {
@@ -83,6 +83,54 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
     attack: 2,
     enemySpriteId: 'enemyMole',
     enemyPower: 6,
+  },
+  {
+    name: '양초 벌',
+    description: 'Wax stinger bee',
+    healthOrDamage: 3,
+    attack: 2,
+    enemySpriteId: 'enemyBee',
+    enemyPower: 7,
+  },
+  {
+    name: '양초 사마귀',
+    description: 'Candle mantis',
+    healthOrDamage: 3,
+    attack: 2,
+    enemySpriteId: 'enemyMantis',
+    enemyPower: 8,
+  },
+  {
+    name: '양초 박쥐',
+    description: 'Cave candle bat',
+    healthOrDamage: 4,
+    attack: 3,
+    enemySpriteId: 'enemyBat',
+    enemyPower: 9,
+  },
+  {
+    name: '양초 고슴도치',
+    description: 'Prickled candle hedgehog',
+    healthOrDamage: 5,
+    attack: 3,
+    enemySpriteId: 'enemyHedgehog',
+    enemyPower: 10,
+  },
+  {
+    name: '양초 도마뱀',
+    description: 'Waxscale lizard',
+    healthOrDamage: 5,
+    attack: 4,
+    enemySpriteId: 'enemyLizard',
+    enemyPower: 11,
+  },
+  {
+    name: '양초 너구리',
+    description: 'Ash-striped raccoon',
+    healthOrDamage: 8,
+    attack: 4,
+    enemySpriteId: 'enemyRaccoon',
+    enemyPower: 12,
   },
 ]
 
@@ -269,11 +317,23 @@ export class CardSpawner {
     return this.generateFlowerSeed()
   }
 
-  /** Enemy availability follows shop breakpoints: 1-10, 11-20, then 21+. */
+  /** Enemy availability follows turn milestones. 30/40/50층부터 1~6번 풀을
+   *  단계적으로 7~12번으로 치환해 후반부 난이도 곡선을 유지한다. */
   private getActiveEnemyDefinitions(): CardDefinition[] {
-    if (this.progressionTurn >= 21) return ENEMY_DEFINITIONS
-    if (this.progressionTurn >= 11) return ENEMY_DEFINITIONS.slice(0, 4)
-    return ENEMY_DEFINITIONS.slice(0, 2)
+    if (this.progressionTurn < 11) return ENEMY_DEFINITIONS.slice(0, 2)
+    if (this.progressionTurn < 21) return ENEMY_DEFINITIONS.slice(0, 4)
+    if (this.progressionTurn < 30) return ENEMY_DEFINITIONS.slice(0, 6)
+
+    // 30~39: 1/2번(키틴/거미)을 7/8번(벌/사마귀)로 교체.
+    if (this.progressionTurn < 40) {
+      return [...ENEMY_DEFINITIONS.slice(6, 8), ...ENEMY_DEFINITIONS.slice(2, 6)]
+    }
+    // 40~49: 3/4번(생쥐/개구리)을 9/10번(박쥐/고슴도치)로 교체.
+    if (this.progressionTurn < 50) {
+      return [...ENEMY_DEFINITIONS.slice(6, 10), ...ENEMY_DEFINITIONS.slice(4, 6)]
+    }
+    // 50+: 5/6번(새/두더지)을 11/12번(도마뱀/너구리)로 교체.
+    return ENEMY_DEFINITIONS.slice(6, 12)
   }
 
   /** Pick one of the current one-lane enemies, applying tier bonus if any.

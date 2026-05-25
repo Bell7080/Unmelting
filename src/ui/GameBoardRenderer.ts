@@ -2299,8 +2299,8 @@ export class GameBoardRenderer {
   private renderCompendiumEnemies(): string {
     const heart = heartIcon()
     const sword = swordIcon()
-    // 1칸 row: each base enemy as a single tile with HP/ATK chips only.
-    const baseTiles = ENEMY_DEFINITIONS.map((def) => {
+    // 1칸 row: 각 적은 다른 도감 카드와 동일한 codexTile 양식(아트+칩+태그)으로 노출.
+    const enemyTiles = (defs: typeof ENEMY_DEFINITIONS) => defs.map((def) => {
       const hp = def.healthOrDamage ?? 1
       const atk = def.attack ?? 1
       const spriteUrl = def.enemySpriteId ? SpriteUrls[def.enemySpriteId] : SpriteUrls.enemyMouse
@@ -2314,6 +2314,8 @@ export class GameBoardRenderer {
         ],
       })
     }).join('')
+    const baseTiles = enemyTiles(ENEMY_DEFINITIONS.slice(0, 6))
+    const evolvedTiles = enemyTiles(ENEMY_DEFINITIONS.slice(6, 12))
 
     // 2/3칸 rows: a single merged-formation tile per span. Stats shown are an
     // example using the cheapest enemy stack so readers see the +α effect of
@@ -2354,8 +2356,11 @@ export class GameBoardRenderer {
       .join('')
 
     return `
-      <h3 class="compendium-section">일반 적 · 1칸</h3>
+      <h3 class="compendium-section">일반 적 · 1칸 (1~6번)</h3>
       <div class="codex-tile-grid">${baseTiles}</div>
+      <h3 class="compendium-section">후반 치환 적 · 1칸 (7~12번)</h3>
+      <p class="compendium-section-blurb">30층부터 10층 단위(30/40/50)로 기존 1~6번 풀을 단계적으로 대체한다.</p>
+      <div class="codex-tile-grid">${evolvedTiles}</div>
       <h3 class="compendium-section">합쳐진 적</h3>
       <div class="codex-tile-grid">${mergeTwo}${mergeThree}</div>
       <h3 class="compendium-section">특수 적</h3>
@@ -4830,4 +4835,3 @@ export class GameBoardRenderer {
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
 }
-

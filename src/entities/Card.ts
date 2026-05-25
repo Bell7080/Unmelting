@@ -17,6 +17,12 @@ export type FlowerKind = 'seed' | 'chamomile' | 'redRose' | 'marigold' | 'oleand
 export type SpecialEnemyKind = 'mimic' | 'monsterFlower' | 'waxArmy'
 
 export type EnemySpriteId =
+  | 'enemyBee'
+  | 'enemyMantis'
+  | 'enemyBat'
+  | 'enemyHedgehog'
+  | 'enemyLizard'
+  | 'enemyRaccoon'
   | 'enemyMouse'
   | 'enemyFrog'
   | 'enemyMoth'
