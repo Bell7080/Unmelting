@@ -303,7 +303,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   min-height: 0;
   overflow: visible;
 }
-.shop-top-row    { grid-template-columns: 2fr 8fr; }
+/* 리롤 버튼은 artifact-layer 안으로 이동했으므로 reroll-zone 좌측 셀은 빈 ghost다.
+   단일 컬럼으로 전환해 유물 3장+리롤 묶음이 shell 중앙에 오도록 한다. */
+.shop-top-row    { grid-template-columns: 1fr; }
 .shop-bottom-row { grid-template-columns: 3fr 7fr; }
 
 .shop-layer {
@@ -322,8 +324,6 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-artifact-layer {
   justify-content: center;
   gap: clamp(12px, 1.5vw, 20px);
-  /* Keep relic cards visually centered by nudging the whole cluster left. */
-  transform: translateX(clamp(-22px, -2vw, -12px));
   padding-left: clamp(8px, 1.3vw, 16px);
   padding-right: clamp(8px, 1.3vw, 16px);
 }
@@ -462,9 +462,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   border: none;
   box-shadow: none;
 }
-.shop-free-layer,
 .shop-reroll-zone {
-  /* Free-card and reroll layers center their single child. */
+  /* Ghost cell — reroll button lives inside .shop-artifact-layer now. */
+  display: none;
+}
+.shop-free-layer {
   justify-content: center;
 }
 .shop-free-layer {
@@ -1396,7 +1398,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   to { opacity: 1; }
 }
 @media (max-width: 820px) {
-  .shop-top-row,
+  /* shop-top-row is already 1fr in base; only bottom-row needs to collapse. */
   .shop-bottom-row { grid-template-columns: 1fr; }
   .shop-artifact-layer,
   .shop-pack-layer { flex-wrap: wrap; }
@@ -1711,8 +1713,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
     width: auto !important;
     height: auto !important;
   }
-  /* Restore 2-column layout (820px breakpoint collapses it to 1 column). */
-  .shop-top-row    { grid-template-columns: 2fr 8fr; }
+  /* Restore bottom-row 2-column layout (820px breakpoint collapses it to 1 column). */
   .shop-bottom-row { grid-template-columns: 3fr 7fr; }
   /* Card sizes for full-viewport shell. */
   .shop-relic-card  { width: clamp(110px, 12.6vw, 190px); }
