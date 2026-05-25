@@ -1022,4 +1022,33 @@ export const GAME_BOARD_RAIL_STYLES = `
   opacity: 0.78;
 }
 
+/* ─── Boss intro overlay: mobile responsive ─────────────────────────────── */
+/* Portrait phones (≤640px): stack art above text in a single column. */
+@media (max-width: 640px) {
+  .boss-intro-overlay-card {
+    grid-template-columns: 1fr;
+    width: min(480px, 96vw);
+  }
+  .boss-intro-overlay-art {
+    /* Wide crop keeps the art visually generous without eating half the screen. */
+    aspect-ratio: 16 / 9;
+    max-height: 28vh;
+    border-radius: 10px;
+  }
+}
+/* Landscape phones (≤760px wide, landscape): drop the 320px minimum column so
+   both columns fit side-by-side in the ~627px card container. */
+@media (max-width: 760px) and (orientation: landscape) {
+  .boss-intro-overlay {
+    padding: clamp(8px, 2vh, 16px);
+    overflow-y: auto;
+  }
+  .boss-intro-overlay-card {
+    grid-template-columns: minmax(180px, 38%) 1fr;
+    gap: clamp(10px, 2vw, 20px);
+    padding: clamp(10px, 1.8vh, 22px);
+  }
+  .boss-intro-overlay-name { font-size: clamp(18px, 3.2vh, 28px); }
+}
+
 `

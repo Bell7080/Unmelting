@@ -1550,6 +1550,18 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   .rail-row.dist-2 { opacity: 0.3; transform: scale(0.86); }
   .rail-row.dist-1 { opacity: 0.6; transform: scale(0.92); }
   .player-card { width: clamp(120px, 14vw, 160px); }
+  /* Pack picker cards shrink to fit inside the shorter shop shell. */
+  .shop-pack-pick-card { min-height: clamp(110px, 28vh, 188px); }
+  .shop-pack-picker-cards { max-width: clamp(310px, 52vw, 640px); }
+}
+
+/* Mobile landscape: override the 820px single-column collapse for shop rows.
+   At 375px viewport height the shop shell is ~150px; keeping 2-column layout
+   lets each card cluster use its own column rather than stacking top-to-bottom
+   and overflowing the shell in both directions at once. */
+@media (max-width: 760px) and (orientation: landscape) {
+  .shop-top-row    { grid-template-columns: 2fr 8fr; }
+  .shop-bottom-row { grid-template-columns: 3fr 7fr; }
 }
 
 
@@ -1707,6 +1719,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   [data-shop-close].is-touch-active {
     transform: rotate(-3deg) translateY(-1px);
     filter: brightness(1.08);
+  }
+  /* Trial cards share .shop-relic-card but have no hover transform, so
+     add an explicit scale so the touch-active state feels distinct. */
+  .shop-trial-card.is-touch-active {
+    scale: 1.04;
+    filter: brightness(1.07);
   }
 }
 `

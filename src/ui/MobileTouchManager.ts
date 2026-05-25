@@ -98,17 +98,22 @@ function clearAllPreviewing(): void {
   previewingSlotIndex = null
 }
 
+// Guard: don't add multiple touchstart/end listeners to the same overlay.
+const touchHighlightAttached = new WeakSet<HTMLElement>()
+
 /**
- * Add visual touch-active states to shop interactive elements.
- * Call once when the shop overlay element is first created.
- * The existing click delegate on the overlay already handles purchase — this
- * only provides the hover-like scale feedback that CSS :hover cannot do on touch.
+ * Add visual touch-active states to shop and trial interactive elements.
+ * Safe to call on every open — uses WeakSet to attach only once per overlay.
+ * The existing click delegate already handles purchase/pick; this only
+ * provides the hover-like scale feedback CSS :hover cannot do on touch.
  */
 export function attachShopTouchHighlight(shopOverlay: HTMLElement): void {
-  if (!isTouchDevice()) return
+  if (!isTouchDevice() || touchHighlightAttached.has(shopOverlay)) return
+  touchHighlightAttached.add(shopOverlay)
 
   const TOUCHABLE = [
     '[data-shop-buy-kind]',
+    '[data-trial-pick]',    // forced trial cards use a different data attr
     '.shop-pack-pick-card',
     '.shop-reroll-btn',
     '[data-shop-close]',

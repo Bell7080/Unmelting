@@ -679,4 +679,20 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
   }
 }
 
+/* ─── Compendium: mobile responsive ────────────────────────────────────── */
+/* Portrait phones: tighter padding, smaller grid cells, enable body scroll. */
+@media (max-width: 480px) {
+  .compendium-overlay { padding: 10px; }
+  /* Allow scrolling; recipe card fan outside modal is secondary on mobile. */
+  .compendium-body { overflow-y: auto; }
+  .compendium-grid,
+  .codex-tile-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+}
+/* Landscape phones: maximize modal height and enable scroll. */
+@media (max-width: 760px) and (orientation: landscape) {
+  .compendium-overlay { padding: 6px; }
+  .compendium-modal { max-height: 96vh; }
+  .compendium-body { overflow-y: auto; }
+}
+
 `

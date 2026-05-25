@@ -1007,6 +1007,24 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   to { opacity: 0.95; filter: brightness(1.18); }
 }
 
+/* ─── Mobile landscape layout fix ──────────────────────────────────────── */
+/* Below 760px in landscape the game collapses to 1-column with hand-panel
+   spanning full width. The preview at right:calc(100%+16px) would go
+   ~600 px off-screen. Fix: constrain hand-stack to the right edge so the
+   preview floats into the visible game-board area to its left. */
+@media (max-width: 760px) and (orientation: landscape) {
+  .hand-stack {
+    width: clamp(140px, 28vw, 200px);
+    margin-left: auto; /* dock to the right edge of hand-panel */
+  }
+  .hand-card-preview {
+    /* Smaller preview matches the narrower hand cards. */
+    width: clamp(108px, 19vw, 155px);
+  }
+  /* Recipe preview needs ~430px horizontal space — hide it in landscape. */
+  .hand-recipe-preview { display: none !important; }
+}
+
 /* ─── Mobile touch: is-touch-previewing mirrors :hover / :focus-within ─── */
 /* Scoped to (hover: none) so PC :hover rules are never overridden. */
 @media (hover: none) and (pointer: coarse) {

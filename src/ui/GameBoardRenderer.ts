@@ -1872,6 +1872,8 @@ export class GameBoardRenderer {
       }
       if (target.closest('[data-trial-exit]')) document.dispatchEvent(new CustomEvent('forcedTrialExit'))
     }
+    // Mobile: wire touch-active highlight (idempotent — safe after shop→trial reuse).
+    attachShopTouchHighlight(this.shopOverlayElement)
     this.shopOverlayElement.classList.add('is-open')
     this.positionShopShellOverRail()
   }
