@@ -81,6 +81,10 @@ const CSS = `
   opacity: 0;
 }
 
+/* 꼬리 위치에 맞게 팝인 scale 기준점을 고정 */
+.sb-bubble.tail-bottom-left  { transform-origin: left bottom; }
+.sb-bubble.tail-bottom-right { transform-origin: right bottom; }
+
 /* ── 테마 ───────────────────────────────────────── */
 .sb-bubble--boss {
   --sb-border: rgba(212, 62, 62, 0.90);
@@ -306,19 +310,34 @@ export class SpeechBubble {
   private _updatePosition(): void {
     const anchor = document.querySelector<HTMLElement>(this.config.anchor)
     if (!anchor) return
-    const rect = anchor.getBoundingClientRect()
-    const cx = rect.left + rect.width / 2 + this.config.offsetX
-    const isBelow = this.config.tail === 'top'
+    const rect   = anchor.getBoundingClientRect()
+    const tail   = this.config.tail
+    const isBelow = tail === 'top'
 
-    this.host.style.left = `${cx}px`
-    if (isBelow) {
-      // 버블을 앵커 아래에
-      this.host.style.top       = `${rect.bottom + this.config.offsetY}px`
-      this.host.style.transform = `translate(-50%, 13px)`
+    // 꼬리 방향에 따라 버블의 성장 방향을 결정:
+    //   bottom-left  → 버블 좌측 고정, 텍스트가 오른쪽으로만 늘어남
+    //   bottom-right → 버블 우측 고정, 텍스트가 왼쪽으로만 늘어남
+    //   그 외         → 중앙 기준 양방향 성장
+    let left: number
+    let tx: string
+    if (tail === 'bottom-left') {
+      left = rect.left + this.config.offsetX
+      tx   = '0%'
+    } else if (tail === 'bottom-right') {
+      left = rect.right + this.config.offsetX
+      tx   = '-100%'
     } else {
-      // 버블을 앵커 위에 (bottom / bottom-left / bottom-right / none 공통)
+      left = rect.left + rect.width / 2 + this.config.offsetX
+      tx   = '-50%'
+    }
+
+    this.host.style.left = `${left}px`
+    if (isBelow) {
+      this.host.style.top       = `${rect.bottom + this.config.offsetY}px`
+      this.host.style.transform = `translate(${tx}, 13px)`
+    } else {
       this.host.style.top       = `${rect.top + this.config.offsetY}px`
-      this.host.style.transform = `translate(-50%, calc(-100% - 13px))`
+      this.host.style.transform = `translate(${tx}, calc(-100% - 13px))`
     }
   }
 
