@@ -38,6 +38,12 @@ export interface SpeechBubbleConfig {
   theme?: 'player' | 'boss' | 'neutral'
   /** 타이핑 완료 후 자동 소멸(ms). 0이면 수동 dismiss만. 기본값: 4200 */
   autoDismissMs?: number
+  /**
+   * 최대 너비(px). 설정하면 텍스트가 이 너비를 넘을 때 아랫줄로 내려감.
+   * 미설정 시 텍스트 길이에 따라 한 줄로 늘어남.
+   * 텍스트에 \n을 넣으면 해당 위치에서 강제 줄바꿈.
+   */
+  maxWidth?: number
 }
 
 const STYLE_ID = 'speech-bubble-styles'
@@ -201,8 +207,10 @@ const CSS = `
 }
 `
 
+type ResolvedConfig = Required<Omit<SpeechBubbleConfig, 'maxWidth'>> & { maxWidth: number | undefined }
+
 export class SpeechBubble {
-  private readonly config: Required<SpeechBubbleConfig>
+  private readonly config: ResolvedConfig
   private readonly host: HTMLDivElement
   private readonly bubble: HTMLDivElement
   private readonly textEl: HTMLSpanElement
@@ -221,6 +229,7 @@ export class SpeechBubble {
       theme:         config.theme         ?? 'player',
       autoDismissMs: config.autoDismissMs ?? 4200,
       fontSize:      config.fontSize      ?? 20,
+      maxWidth:      config.maxWidth,
     }
 
     injectStyles()
@@ -236,6 +245,11 @@ export class SpeechBubble {
     // 인스턴스별 폰트 크기 — CSS 기본값(20px)과 다를 때만 설정
     if (this.config.fontSize !== 20) {
       this.bubble.style.fontSize = `${this.config.fontSize}px`
+    }
+    // maxWidth가 있으면 white-space: normal로 전환해 줄바꿈 허용
+    if (this.config.maxWidth !== undefined) {
+      this.bubble.style.maxWidth    = `${this.config.maxWidth}px`
+      this.bubble.style.whiteSpace  = 'normal'
     }
 
     this.textEl = document.createElement('span')
@@ -305,10 +319,15 @@ export class SpeechBubble {
           this.autoDismissTimer = window.setTimeout(() => this.dismiss(), this.config.autoDismissMs)
         return
       }
-      const span = document.createElement('span')
-      span.className = 'sb-char'
-      span.textContent = chars[i++]
-      this.textEl.appendChild(span)
+      const ch = chars[i++]
+      if (ch === '\n') {
+        this.textEl.appendChild(document.createElement('br'))
+      } else {
+        const span = document.createElement('span')
+        span.className = 'sb-char'
+        span.textContent = ch
+        this.textEl.appendChild(span)
+      }
       this.typewriterTimer = window.setTimeout(next, 70)
     }
     next()

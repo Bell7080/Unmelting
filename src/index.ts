@@ -84,7 +84,7 @@ const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
 const boardRenderer = new GameBoardRenderer('game-board')
 const speechBubble = new SpeechBubble({ anchor: '.player-card', offsetX: 150, tail: 'bottom-left', fontSize: 22 })
-const bossBubble   = new SpeechBubble({ anchor: '.cell.type-boss', offsetX: 0, tail: 'bottom-right', theme: 'boss', autoDismissMs: 0 })
+const bossBubble   = new SpeechBubble({ anchor: '.cell.type-boss', offsetX: 40, offsetY: 40, tail: 'bottom-left', theme: 'boss', autoDismissMs: 0, maxWidth: 340 })
 let gameActive = true
 let inputLocked = false
 let chain: ChainState = HandSystem.newChain()
@@ -1182,10 +1182,17 @@ async function runBossRailEvent(): Promise<void> {
   // 보스 타일이 DOM에 올라온 뒤 대사 말풍선 출력
   render()
   bossBubble.show('내 저택에 온 것을 환영하네, 위태로운 불씨여')
-  // 등장(300ms) + 타자기(18자 × 70ms = 1260ms) + 읽기 여유(2600ms) ≈ 4160ms 대기
+  // 등장(300ms) + 타자기(18자 × 70ms ≈ 1260ms) + 읽기 여유(2600ms) ≈ 4160ms 대기
   await new Promise((resolve) => window.setTimeout(resolve, 4160))
-  // 말풍선이 사라지기 시작하는 타이밍에 타이틀 오버레이 오픈
   bossBubble.dismiss()
+  // 보스 대사 사라질 타이밍에 플레이어 반응 출력
+  await new Promise((resolve) => window.setTimeout(resolve, 320))
+  // 타자기(12자 × 70ms ≈ 840ms) + 읽기 여유(1800ms) + 퇴장(400ms) ≈ autoDismiss로 자동 소멸
+  speechBubble.show('네 저택이라고? 웃기시네!', 0)
+  // 등장+타자기+읽기(2800ms) 대기 후 타이틀 오픈
+  await new Promise((resolve) => window.setTimeout(resolve, 2800))
+  speechBubble.dismiss()
+  await new Promise((resolve) => window.setTimeout(resolve, 400))
   const introClosed = boardRenderer.openBossIntroOverlay({
     name: bossName,
     maxHp: bossMaxHp,
