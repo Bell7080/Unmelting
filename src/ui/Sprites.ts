@@ -5,7 +5,7 @@
  *   - Player: player_001
  *   - Normal enemy 1-cell: follows the spawned enemy definition.
  *   - Normal enemy 2/3-cell merged: follows the strongest member's art.
- *   - Mimic (special enemy): enemy_003.
+ *   - Mimic (special enemy): mimic_001.
  *   - Treasure: chest_001 / chest_002 / chest_003 by groupCount (1/2/3).
  *   - Boss reward: reward_001 heal / reward_002 chest / reward_003 bounty.
  *   - Trap: trap_001 web, trap_004 bomb, trap_007 spore.
@@ -31,7 +31,7 @@ import enemy003Url from '../assets/sprites/enemy_003.webp'
 import enemy004Url from '../assets/sprites/enemy_004.webp'
 import enemy005Url from '../assets/sprites/enemy_005.webp'
 import enemy006Url from '../assets/sprites/enemy_006.webp'
-import enemy007Url from '../assets/sprites/enemy_007.webp'
+import mimic001Url from '../assets/sprites/mimic_001.webp'
 import enemyFlower001Url from '../assets/sprites/enemyflower_001.webp'
 import flower000Url from '../assets/sprites/flower_000.webp'
 import flower001Url from '../assets/sprites/flower_001.webp'
@@ -100,14 +100,16 @@ export const SpriteUrls = {
   /** Boss card illustration. */
   boss: boss001Url,
   player: playerUrl,
-  enemyMouse: enemy001Url,
-  enemyFrog: enemy002Url,
-  mimic: enemy003Url,
+  // 사용자 지정 매핑: 001 키틴벌레, 002 거미, 003 생쥐, 004 개구리, 005 새, 006 두더지.
+  enemyChitin: enemy001Url,
+  enemyMoth: enemy002Url,
+  enemyMouse: enemy003Url,
+  enemyFrog: enemy004Url,
+  enemyBird: enemy005Url,
+  enemyMole: enemy006Url,
+  // 미믹은 기존 enemy_003 대신 전용 mimic_001 일러스트를 사용한다.
+  mimic: mimic001Url,
   monsterFlower: enemyFlower001Url,
-  enemyMoth: enemy004Url,
-  enemyChitin: enemy005Url,
-  enemyBird: enemy006Url,
-  enemyMole: enemy007Url,
   traps: {
     web: trap001Url,
     bomb: trap004Url,
