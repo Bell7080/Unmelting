@@ -83,7 +83,8 @@ const gameState = new GameState()
 const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
 const boardRenderer = new GameBoardRenderer('game-board')
-const speechBubble = new SpeechBubble({ anchor: '.player-card', offsetX: 120, tail: 'bottom-left' })
+const speechBubble = new SpeechBubble({ anchor: '.player-card', offsetX: 150, tail: 'bottom-left', fontSize: 22 })
+const bossBubble   = new SpeechBubble({ anchor: '.cell.type-boss', offsetX: 0, tail: 'bottom-right', theme: 'boss', autoDismissMs: 0 })
 let gameActive = true
 let inputLocked = false
 let chain: ChainState = HandSystem.newChain()
@@ -1176,15 +1177,21 @@ async function runBossRailEvent(): Promise<void> {
   // 좌상단 카운트 초기값 = attackInterval. 가상 턴이 진행될 때마다 1씩 감소한다.
   boardRenderer.setBossAttackCountdown(attackInterval)
 
-  // 셔터 진동 + 보스 강하(render의 is-entering 키프레임으로 자동) + 풀스크린 인트로 병렬.
+  // 셔터 진동 + 보스 강하
   await boardRenderer.playAltarBossGateTransition()
+  // 보스 타일이 DOM에 올라온 뒤 대사 말풍선 출력
+  render()
+  bossBubble.show('내 저택에 온 것을 환영하네, 위태로운 불씨여')
+  // 등장(300ms) + 타자기(18자 × 70ms = 1260ms) + 읽기 여유(2600ms) ≈ 4160ms 대기
+  await new Promise((resolve) => window.setTimeout(resolve, 4160))
+  // 말풍선이 사라지기 시작하는 타이밍에 타이틀 오버레이 오픈
+  bossBubble.dismiss()
   const introClosed = boardRenderer.openBossIntroOverlay({
     name: bossName,
     maxHp: bossMaxHp,
     attack: bossAttack,
     spriteUrl: SpriteUrls.boss,
   })
-  render()
   await Promise.all([
     new Promise((resolve) => window.setTimeout(resolve, 560)),
     introClosed,

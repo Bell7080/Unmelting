@@ -2073,7 +2073,7 @@ export class GameBoardRenderer {
             <li><span class="boss-intro-overlay-stat-label">공격력</span><span class="boss-intro-overlay-stat-value">${opts.attack}</span></li>
             <li><span class="boss-intro-overlay-stat-label">반격 주기</span><span class="boss-intro-overlay-stat-value">3턴</span></li>
           </ul>
-          <p class="boss-intro-overlay-desc">"내 집에 온 것을 환영하네, 위태로운 불씨여."</p>
+          <p class="boss-intro-overlay-desc">"내 저택에 온 것을 환영하네, 위태로운 불씨여."</p>
           <p class="boss-intro-overlay-trait"><strong>특징</strong> · 보스 체력이 3 닳을 때마다 플레이어에게 랜덤 손패 1장을 지급한다.</p>
         </div>
       </section>

@@ -22,6 +22,8 @@ export interface SpeechBubbleConfig {
   offsetX?: number
   /** 앵커 기준 수직 오프셋(px). 기본값: 0 */
   offsetY?: number
+  /** 폰트 크기(px). 기본값: 20 */
+  fontSize?: number
   /**
    * 꼬리 방향.
    *   'bottom'       버블 아래 중앙, 앵커 위에 배치
@@ -218,6 +220,7 @@ export class SpeechBubble {
       tail:          config.tail          ?? 'bottom',
       theme:         config.theme         ?? 'player',
       autoDismissMs: config.autoDismissMs ?? 4200,
+      fontSize:      config.fontSize      ?? 20,
     }
 
     injectStyles()
@@ -230,6 +233,10 @@ export class SpeechBubble {
     const tailClass  = this.config.tail !== 'none' ? `tail-${this.config.tail}` : ''
     const themeClass = this.config.theme !== 'player' ? `sb-bubble--${this.config.theme}` : ''
     this.bubble.className = ['sb-bubble', tailClass, themeClass].filter(Boolean).join(' ')
+    // 인스턴스별 폰트 크기 — CSS 기본값(20px)과 다를 때만 설정
+    if (this.config.fontSize !== 20) {
+      this.bubble.style.fontSize = `${this.config.fontSize}px`
+    }
 
     this.textEl = document.createElement('span')
     this.textEl.className = 'sb-text'
