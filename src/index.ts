@@ -44,7 +44,7 @@ import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
-import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
+import { CardRarity, HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { buildUnlockedUpgradePool } from '@systems/UpgradePackPool'
 import { buildUnlockedEnhancePool } from '@systems/EnhancePackPool'
@@ -605,10 +605,10 @@ function rollShopOffers(): ShopOfferView[] {
   const sourcePool = currentShopMode === 'altar'
     ? basePool.filter((id) => allowedAltarRarity.has(getRelicDef(id).rarity))
     : basePool
-  // 제단은 동일한 상위 등급대 안에서 약한 가중치만 적용한다.
+  // common 등급이 자주, legendary가 드물게 등장하도록 등급별 가중치를 적용한다.
   const weightedPool = sourcePool.flatMap((relicId) => {
     const rarity = getRelicDef(relicId).rarity
-    const weight = rarity === 'legendary' ? 2 : rarity === 'unique' ? 3 : 4
+    const weight = RARITY_DRAW_WEIGHTS[rarity] ?? 1
     return Array.from({ length: weight }, () => relicId)
   })
   return weightedPool
@@ -729,6 +729,33 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
   return false
 }
 
+/** Rarity → draw weight mapping used by weighted sampling. Higher = more common. */
+const RARITY_DRAW_WEIGHTS: Record<CardRarity, number> = {
+  common: 5, rare: 3, epic: 2, unique: 1, legendary: 1,
+}
+
+/**
+ * Weighted sampling without replacement: duplicates each item by its rarity weight,
+ * shuffles the expanded pool, then picks the first n unique item references.
+ * Items with a higher rarity weight appear proportionally more often in the first pick.
+ */
+function sampleWeightedWithoutReplacement<T extends { rarity: CardRarity }>(pool: T[], n: number): T[] {
+  const weighted = pool.flatMap((item) =>
+    Array.from({ length: RARITY_DRAW_WEIGHTS[item.rarity] ?? 1 }, () => item)
+  )
+  for (let i = weighted.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[weighted[i], weighted[j]] = [weighted[j], weighted[i]]
+  }
+  const seen = new Set<T>()
+  const out: T[] = []
+  for (const item of weighted) {
+    if (!seen.has(item)) { seen.add(item); out.push(item) }
+    if (out.length >= n) break
+  }
+  return out
+}
+
 /** Return up to `n` items sampled without replacement from `pool`. */
 function sampleWithoutReplacement<T>(pool: T[], n: number): T[] {
   const copy = pool.slice()
@@ -769,13 +796,13 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
         }
       },
     }))
-    return sampleWithoutReplacement(rawPool, Math.min(3, rawPool.length))
+    return sampleWeightedWithoutReplacement(rawPool, Math.min(3, rawPool.length))
   }
   if (kind === 'enhance-pack') {
     // 제단 6번 팩 — 해금된 카드의 단일 사용 효과 +1 (코인 제외).
     const entries = buildUnlockedEnhancePool(runCardPool.snapshot().unlocked)
     if (entries.length === 0) return []
-    return sampleWithoutReplacement(entries, Math.min(3, entries.length)).map((entry) => ({
+    return sampleWeightedWithoutReplacement(entries, Math.min(3, entries.length)).map((entry) => ({
       ...entry,
       spriteUrl: spriteForHandCard(entry.targetCardId),
       apply: () => {
@@ -872,7 +899,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
       }
     },
   }))
-  return sampleWithoutReplacement(pool, 3)
+  return sampleWeightedWithoutReplacement(pool, 3)
 }
 /** Open the pack picker for the just-clicked pack tile. Deducts the price
  *  if the player can afford it, otherwise no-op. */
