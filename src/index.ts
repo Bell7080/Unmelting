@@ -1646,6 +1646,7 @@ async function runPreparationRefreshAfterFieldEffects(
     if (!moved && !filled) break
   }
   if (shouldRegroupFront) gameState.regroupAllRows()
+  trackFieldEnemyEncounters()
   const blooms = turnManager.bloomFrontSeeds(cardSpawner)
   turnManager.armFrontBombs()
   render()
@@ -1840,9 +1841,7 @@ function syncSpawnerTier(): void {
 function compactAndRefillAllLanes(): boolean {
   // Delegate gravity + top-refill rules to GameState so row-clearing combo
   // effects cannot leave half-empty rails after a single maintenance pass.
-  const changed = gameState.compactAndRefillRails(() => cardSpawner.spawnCardForRefill())
-  if (changed) trackFieldEnemyEncounters()
-  return changed
+  return gameState.compactAndRefillRails(() => cardSpawner.spawnCardForRefill())
 }
 
 /** 현재 레일을 스캔해 적/보스/특수 카드 이름을 도감 발견 집합에 추가한다. */
@@ -2549,6 +2548,7 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
   if (moved) await wait(460)
 
   gameState.regroupAllRows()
+  trackFieldEnemyEncounters()
   const blooms = turnManager.bloomFrontSeeds(cardSpawner)
   turnManager.armFrontBombs()
   boardRenderer.clearSelection()
