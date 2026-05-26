@@ -44,7 +44,13 @@ import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
-import { CardRarity, HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
+import { COMBO_TRIGGER_DELAY_MS, GAUGE_TRIGGER_DELAY_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
+import {
+  RARITY_DRAW_WEIGHTS,
+  sampleWeightedWithoutReplacement,
+  sampleWithoutReplacement,
+} from '@core/Sampling'
+import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { buildUnlockedUpgradePool } from '@systems/UpgradePackPool'
 import { buildUnlockedEnhancePool } from '@systems/EnhancePackPool'
@@ -112,7 +118,6 @@ function clearChainTimeline(): void {
 /** Currently armed targeted hand card: waits for a board click to consume. */
 let pendingHandTarget: { slotIndex: number; defId: HandCardId } | null = null
 
-const MAX_ACTIVITY_LOGS = 80
 let score = 0
 let coins = 0
 let scorePulseKey = 0
@@ -733,43 +738,6 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
 }
 
 /** Rarity → draw weight mapping used by weighted sampling. Higher = more common. */
-const RARITY_DRAW_WEIGHTS: Record<CardRarity, number> = {
-  common: 5, rare: 3, epic: 2, unique: 1, legendary: 1,
-}
-
-/**
- * Weighted sampling without replacement: duplicates each item by its rarity weight,
- * shuffles the expanded pool, then picks the first n unique item references.
- * Items with a higher rarity weight appear proportionally more often in the first pick.
- */
-function sampleWeightedWithoutReplacement<T extends { rarity: CardRarity }>(pool: T[], n: number): T[] {
-  const weighted = pool.flatMap((item) =>
-    Array.from({ length: RARITY_DRAW_WEIGHTS[item.rarity] ?? 1 }, () => item)
-  )
-  for (let i = weighted.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[weighted[i], weighted[j]] = [weighted[j], weighted[i]]
-  }
-  const seen = new Set<T>()
-  const out: T[] = []
-  for (const item of weighted) {
-    if (!seen.has(item)) { seen.add(item); out.push(item) }
-    if (out.length >= n) break
-  }
-  return out
-}
-
-/** Return up to `n` items sampled without replacement from `pool`. */
-function sampleWithoutReplacement<T>(pool: T[], n: number): T[] {
-  const copy = pool.slice()
-  const out: T[] = []
-  while (copy.length > 0 && out.length < n) {
-    const idx = Math.floor(Math.random() * copy.length)
-    out.push(copy.splice(idx, 1)[0])
-  }
-  return out
-}
-
 /** Build the random "3-card" contents for a pack the player just bought.
  *  Each entry carries an `apply` closure so the pick handler stays small. */
 function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
@@ -2065,14 +2033,6 @@ function setupDevCommandPalette(): void {
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
-
-// Combo effects resolve after the hand-card beat, not inside HandSystem.useSingle.
-// This makes "밀랍 방패 → 밀랍 돌진" read as two impacts instead of one
-// simultaneous burst, even on slower machines. The longer delay also gives
-// the previous beat's bursts/damage numbers room to breathe.
-const COMBO_TRIGGER_DELAY_MS = 440
-// The hand gauge fires after card and recipe beats so it never feels simultaneous.
-const GAUGE_TRIGGER_DELAY_MS = 440
 
 type NoticeLogKind = 'info' | 'win' | 'hurt' | 'melt' | 'recipe' | 'gauge' | 'relic'
 
