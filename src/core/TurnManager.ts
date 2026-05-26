@@ -210,6 +210,10 @@ export class TurnManager {
         if (neighbor?.type === CardType.ENEMY) {
           neighbor.takeDamage(5)
           adjacentCardIds.push(neighbor.id)
+          // Remove dead enemies from the board.
+          if (neighbor.getHealth() === 0) {
+            this.gameState.removeCardFromRow(neighbor, 0)
+          }
         }
       }
       const playerDamage = this.gameState.character.takeDamage(5)
