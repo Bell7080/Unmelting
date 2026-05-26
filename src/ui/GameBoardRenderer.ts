@@ -2585,7 +2585,7 @@ export class GameBoardRenderer {
           { label: '기본 ', value: singleDesc, tone: 'plain' },
           { label: '★ ', value: tripleDesc, tone: 'plain' },
         ],
-        extraClass: locked ? 'codex-tile--unknown' : undefined,
+        extraClass: locked ? 'codex-tile--unknown' : 'codex-tile--hand',
       })
     })
     return `
@@ -2605,16 +2605,16 @@ export class GameBoardRenderer {
           name: def.name,
           tag: isOwned ? '보유 중' : '상점',
           rarityClass: RARITY_CLASS_BY_TIER[def.rarity],
-          chips: [{ label: '효과 ', value: def.effect, tone: 'gold' }],
+          chips: [{ value: def.effect, tone: 'gold' }],
           flavor: def.flavor,
-          extraClass: isOwned ? 'codex-tile--owned' : undefined,
+          extraClass: ['codex-tile--relic', isOwned ? 'codex-tile--owned' : ''].filter(Boolean).join(' '),
         })
       })
       .join('')
     return `
       <h3 class="compendium-section">유물 (Relics)</h3>
       <p class="compendium-section-blurb">10턴마다 열리는 생쥐 상점에서 구매하는 지속 효과. 보유 중인 유물은 초록색 테두리로 표시된다.</p>
-      <div class="codex-tile-grid">${cards}</div>
+      <div class="codex-tile-grid codex-tile-grid--relics">${cards}</div>
     `
   }
 

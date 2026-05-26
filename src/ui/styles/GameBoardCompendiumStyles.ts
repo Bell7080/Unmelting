@@ -18,14 +18,14 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
 .compendium-overlay.is-open { display: flex; }
 .compendium-modal {
   width: min(880px, 96vw);
-  max-height: 86vh;
+  height: 86vh;
   display: grid;
   grid-template-rows: auto auto 1fr auto;
   background: linear-gradient(180deg, rgba(34, 26, 50, 0.96), rgba(18, 14, 28, 0.98));
   border: 1px solid var(--color-border-warm);
   border-radius: 18px;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.65);
-  /* Keep recipe cards visible even when their hover fan extends past the codex panel. */
+  /* overflow: visible so recipe hover-float clones can escape the modal boundary. */
   overflow: visible;
   color: #fff5dc;
 }
@@ -80,9 +80,10 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
   border-color: rgba(244, 164, 96, 0.4);
 }
 .compendium-body {
-  /* Overflow is visible by design: recipe mini-cards may fan outside the panel
-     because readability is more important than clipping to the codex bounds. */
-  overflow: visible;
+  /* overflow-y: auto 로 탭 내용이 적어도 패널 크기는 고정. 레시피 hover float는
+     JS가 body에 클론을 붙이므로 스크롤 컨테이너여도 잘린다. */
+  overflow-y: auto;
+  min-height: 0;
   padding: 16px 20px;
   display: flex;
   flex-direction: column;
@@ -286,6 +287,30 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
   color: rgba(232, 214, 180, 0.6);
   font-style: italic;
   word-break: keep-all;
+}
+/* 유물 탭: 카드 폭/아트 높이 확대해 효과 텍스트 가독성 향상 */
+.codex-tile-grid--relics {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+.codex-tile--relic {
+  grid-template-rows: 180px auto auto auto;
+}
+.codex-tile--relic .codex-stat-chip {
+  font-size: 13px;
+  white-space: normal;
+  word-break: keep-all;
+  line-height: 1.45;
+}
+/* 손패 탭: 기본/★ 항상 세로 2줄, 폰트 확대 */
+.codex-tile--hand .codex-tile-stats {
+  flex-direction: column;
+  gap: 5px;
+}
+.codex-tile--hand .codex-stat-chip {
+  font-size: 13px;
+  white-space: normal;
+  word-break: keep-all;
+  line-height: 1.45;
 }
 .codex-tile-grid--terms {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
