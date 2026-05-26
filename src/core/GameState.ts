@@ -18,6 +18,8 @@ export class GameState {
   enhancements: RunEnhancements
   /** 보스 전투 활성 여부. HandSystem이 필드 수정 레시피를 차단하는 데 사용한다. */
   bossBattleActive = false
+  /** 한 번이라도 필드에 등장한 적/특수 카드의 이름 집합. 도감 적 탭의 발견 여부를 결정한다. */
+  encounteredEnemyNames = new Set<string>()
 
   constructor() {
     this.character = new Character()
@@ -249,5 +251,6 @@ export class GameState {
     this.gameOverReason = ''
     this.enhancements = makeDefaultEnhancements()
     this.bossBattleActive = false
+    this.encounteredEnemyNames = new Set()
   }
 }
