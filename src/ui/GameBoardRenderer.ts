@@ -36,7 +36,7 @@ import { EmberSystem } from '@systems/EmberSystem'
 import { ENEMY_DEFINITIONS, MIMIC_BY_SPAN } from '@systems/CardSpawner'
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_DEFINITIONS, type RelicId } from '@data/Relics'
-import { RARITY_CLASS_BY_TIER, SHOP_PACK_LABELS, type CardRarity } from '@data/ShopPools'
+import { HAND_CARD_RARITY, RARITY_CLASS_BY_TIER, SHOP_PACK_LABELS, type CardRarity } from '@data/ShopPools'
 import { RECIPES } from '@data/Recipes'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { GAME_BOARD_STYLES } from '@ui/styles/GameBoardStyles'
@@ -231,6 +231,8 @@ export class GameBoardRenderer {
   private boardElement: HTMLElement
   private selected: { laneIndex: number; distance: number } | null = null
   private currentGameState: GameState | null = null
+  /** 현재 런에서 잠긴 손패 카드 ID 집합. 도감에서 해금 여부 표시에 사용한다. */
+  private lockedCardIds = new Set<HandCardId>()
   private hasRendered = false
   private previousCardIds = new Set<string>()
   /** Track the last score/coin pulse keys so the pop animation only re-fires
@@ -1139,43 +1141,10 @@ export class GameBoardRenderer {
     `
   }
 
-  /** Read hand-effect reach from the shared gameplay table for codex rows. */
-  private handEffectScope(defId: HandCardId, merged = false): HandEffectTargeting {
-    const def = getHandCardDef(defId)
-    return merged ? def.targeting.triple : def.targeting.base
-  }
 
-  /** Korean labels for the shared hand-effect scope table shown in the compendium. */
-  private handScopeLabel(defId: HandCardId, merged = false): string {
-    const scope = this.handEffectScope(defId, merged)
-    const selectionLabel =
-      scope.selection === 'target'
-        ? '대상'
-        : scope.selection === 'random'
-          ? '랜덤'
-          : scope.selection === 'all'
-            ? '전체'
-            : '없음'
-    const zoneLabel =
-      scope.zone === 'front'
-        ? '전방'
-        : scope.zone === 'waiting'
-          ? '대기'
-          : scope.zone === 'field'
-            ? '필드'
-            : scope.zone === 'self'
-              ? '자신'
-              : scope.zone === 'hand'
-                ? '손패'
-                : '없음'
-    const countLabel = scope.countLimit === null ? '제한 없음' : `${scope.countLimit}개`
-    return `선택 ${selectionLabel} · 범위 ${zoneLabel} · 개수 ${countLabel}`
-  }
 
-  /** Compact two-line scope summary so balance changes remain visible in the codex. */
-  private handScopeDescription(defId: HandCardId): string {
-    return `<span class="common-card-subdesc">기본: ${this.handScopeLabel(defId)}</span><br><span class="common-card-subdesc">★: ${this.handScopeLabel(defId, true)}</span>`
-  }
+
+
 
   /**
    * 강화팩으로 누적된 singleBonus/tripleBonus를 반영한 설명 문자열을 반환한다.
@@ -2261,6 +2230,11 @@ export class GameBoardRenderer {
     await new Promise((r) => window.setTimeout(r, 640))
   }
 
+  /** runCardPool이 바뀔 때마다 호출해 도감 손패/조합 탭의 잠금 표시를 갱신한다. */
+  setLockedCardIds(ids: readonly HandCardId[]): void {
+    this.lockedCardIds = new Set(ids)
+  }
+
   /** Open the compendium overlay listing every field-card + hand-card def
    *  with stats and descriptions. Pure read-only browser; pressing the
    *  close button or ESC dismisses. */
@@ -2349,72 +2323,97 @@ export class GameBoardRenderer {
   private renderCompendiumEnemies(): string {
     const heart = heartIcon()
     const sword = swordIcon()
-    // 1칸 row: 각 적은 다른 도감 카드와 동일한 codexTile 양식(아트+칩+태그)으로 노출.
-    const enemyTiles = (defs: typeof ENEMY_DEFINITIONS) => defs.map((def) => {
+    const encountered = this.currentGameState?.encounteredEnemyNames ?? new Set<string>()
+
+    // 개별 적 타일: 만난 적은 정상 표시, 미발견은 어둡게 처리.
+    const enemyTile = (def: (typeof ENEMY_DEFINITIONS)[0]) => {
       const hp = def.healthOrDamage ?? 1
       const atk = def.attack ?? 1
       const spriteUrl = def.enemySpriteId ? SpriteUrls[def.enemySpriteId] : SpriteUrls.enemyMouse
+      const known = encountered.has(def.name)
       return this.codexTile({
         art: { kind: 'sprite', url: spriteUrl },
-        name: def.name,
+        name: known ? def.name : '???',
         tag: '1칸',
-        chips: [
-          { icon: heart, value: String(hp), tone: 'hp' },
-          { icon: sword, value: String(atk), tone: 'atk' },
-        ],
+        chips: known
+          ? [{ icon: heart, value: String(hp), tone: 'hp' }, { icon: sword, value: String(atk), tone: 'atk' }]
+          : [],
+        extraClass: known ? undefined : 'codex-tile--unknown',
       })
-    }).join('')
-    const baseTiles = enemyTiles(ENEMY_DEFINITIONS.slice(0, 6))
-    const evolvedTiles = enemyTiles(ENEMY_DEFINITIONS.slice(6, 12))
+    }
+    const allEnemyTiles = ENEMY_DEFINITIONS.map(enemyTile).join('')
 
-    // 2/3칸 rows: a single merged-formation tile per span. Stats shown are an
-    // example using the cheapest enemy stack so readers see the +α effect of
-    // the width bonus rather than a wall of per-enemy combinations.
+    // 합쳐진 적: 해당 이름이 encounteredEnemyNames에 있으면 표시.
     const formationTile = (span: 2 | 3, name: string, sprite: string) => {
       const bonus = span === 2 ? 2 : 3
+      const known = encountered.has(name)
       return this.codexTile({
         art: { kind: 'sprite', url: sprite },
-        name,
+        name: known ? name : '???',
         tag: `${span}칸`,
-        chips: [
-          { icon: heart, value: `합산 +${bonus}`, tone: 'hp' },
-          { icon: sword, value: `합산 +${bonus}`, tone: 'atk' },
-        ],
-        note: `구성원 HP/ATK 합 + ${bonus}/${bonus}.`,
+        chips: known
+          ? [{ icon: heart, value: `합산 +${bonus}`, tone: 'hp' }, { icon: sword, value: `합산 +${bonus}`, tone: 'atk' }]
+          : [],
+        note: known ? `구성원 HP/ATK 합 +${bonus}/${bonus}.` : undefined,
+        extraClass: known ? undefined : 'codex-tile--unknown',
       })
     }
     const mergeTwo = formationTile(2, '양초 무리', SpriteUrls.enemyWaves[2])
     const mergeThree = formationTile(3, '양초 군단', SpriteUrls.enemyWaves[3])
 
-    // Mimic gets one tile per span because each lane width is mechanically a
-    // different fight (separate HP/ATK and reward).
-    const mimicTiles = ([1, 2, 3] as const)
-      .map((span) => {
-        const stats = MIMIC_BY_SPAN[span]
-        return this.codexTile({
-          art: { kind: 'sprite', url: SpriteUrls.mimic },
-          name: '미믹',
-          tag: `${span}칸`,
-          chips: [
-            { icon: heart, value: String(stats.health), tone: 'hp' },
-            { icon: sword, value: String(stats.attack), tone: 'atk' },
-            { label: '드롭 ', value: `${stats.drops}장`, tone: 'gold' },
-          ],
-          note: span === 1 ? '보물상자가 변이된 특수 적. 처치 시 카드 다량 드롭.' : undefined,
-        })
+    // 미믹: 3가지 크기를 각각 독립 타일로.
+    const mimicTiles = ([1, 2, 3] as const).map((span) => {
+      const stats = MIMIC_BY_SPAN[span]
+      const known = encountered.has('미믹')
+      return this.codexTile({
+        art: { kind: 'sprite', url: SpriteUrls.mimic },
+        name: known ? '미믹' : '???',
+        tag: `${span}칸`,
+        chips: known
+          ? [
+              { icon: heart, value: String(stats.health), tone: 'hp' },
+              { icon: sword, value: String(stats.attack), tone: 'atk' },
+              { label: '드롭 ', value: `${stats.drops}장`, tone: 'gold' },
+            ]
+          : [],
+        note: known && span === 1 ? '보물상자가 변이된 특수 적.' : undefined,
+        extraClass: known ? undefined : 'codex-tile--unknown',
       })
-      .join('')
+    }).join('')
+
+    // 괴물꽃 (꽃 탭에서 이동).
+    const monsterFlowerKnown = encountered.has('괴물꽃')
+    const monsterFlowerTile = this.codexTile({
+      art: { kind: 'sprite', url: SpriteUrls.monsterFlower },
+      name: monsterFlowerKnown ? '괴물꽃' : '???',
+      tag: '특수 적',
+      chips: monsterFlowerKnown
+        ? [{ icon: heart, value: '꽃 수확값', tone: 'hp' }, { icon: sword, value: '꽃 수확값', tone: 'atk' }]
+        : [],
+      note: monsterFlowerKnown ? '꽃이 시들면 변이. 괴물꽃끼리만 병합.' : undefined,
+      extraClass: monsterFlowerKnown ? undefined : 'codex-tile--unknown',
+    })
+
+    // 보스.
+    const bossKnown = encountered.has('양초 백작')
+    const bossTile = this.codexTile({
+      art: { kind: 'sprite', url: SpriteUrls.boss },
+      name: bossKnown ? '양초 백작' : '???',
+      tag: '보스',
+      chips: bossKnown
+        ? [{ icon: heart, value: '30', tone: 'hp' }, { icon: sword, value: '5', tone: 'atk' }]
+        : [],
+      note: bossKnown ? '30턴 제단 수문장. 3칸을 점령.' : undefined,
+      extraClass: bossKnown ? undefined : 'codex-tile--unknown',
+    })
 
     return `
-      <h3 class="compendium-section">일반 적 · 1칸 (1~6번)</h3>
-      <div class="codex-tile-grid">${baseTiles}</div>
-      <h3 class="compendium-section">후반 치환 적 · 1칸 (7~12번)</h3>
-      <p class="compendium-section-blurb">30층부터 10층 단위(30/40/50)로 기존 1~6번 풀을 단계적으로 대체한다.</p>
-      <div class="codex-tile-grid">${evolvedTiles}</div>
+      <h3 class="compendium-section">적</h3>
+      <div class="codex-tile-grid">${allEnemyTiles}</div>
       <h3 class="compendium-section">합쳐진 적</h3>
       <div class="codex-tile-grid">${mergeTwo}${mergeThree}</div>
       <h3 class="compendium-section">특수 적</h3>
-      <div class="codex-tile-grid">${mimicTiles}</div>
+      <div class="codex-tile-grid">${mimicTiles}${monsterFlowerTile}${bossTile}</div>
     `
   }
 
@@ -2509,8 +2508,6 @@ export class GameBoardRenderer {
   }
 
   private renderCompendiumFlowers(): string {
-    const heart = heartIcon()
-    const sword = swordIcon()
     type Spec = {
       kind: FlowerKind
       harvest: { label: string; value: string; tone: 'hp' | 'atk' | 'gold' | 'shield' | 'flower' }
@@ -2563,62 +2560,36 @@ export class GameBoardRenderer {
         })
       )
       .join('')
-    const monster = this.codexTile({
-      art: { kind: 'sprite', url: SpriteUrls.monsterFlower },
-      name: '괴물꽃',
-      tag: '특수 적',
-      chips: [
-        { icon: heart, value: '꽃 수확값', tone: 'hp' },
-        { icon: sword, value: '꽃 수확값', tone: 'atk' },
-      ],
-      note: '꽃이 시들면 변이. 괴물꽃끼리만 병합.',
-    })
     return `
       <h3 class="compendium-section">씨앗</h3>
       <div class="codex-tile-grid">${seedTile}</div>
       <h3 class="compendium-section">꽃</h3>
       <div class="codex-tile-grid">${flowerTiles}</div>
-      <h3 class="compendium-section">시듦</h3>
-      <div class="codex-tile-grid">${monster}</div>
     `
   }
 
   private renderCompendiumHand(): string {
-    const groups: Record<string, string[]> = {
-      recovery: [],
-      tool: [],
-      control: [],
-      attack: [],
-    }
-    const groupLabels: Record<string, string> = {
-      recovery: '회복',
-      tool: '도구',
-      control: '컨트롤',
-      attack: '공격',
-    }
-    for (const id of HAND_CARD_IDS) {
+    const tiles = HAND_CARD_IDS.map((id) => {
       const def = HAND_CARD_DEFINITIONS[id]
-      // 강화팩 보너스를 반영한 동적 설명으로 도감에서도 실제 수치가 보이도록 한다.
+      const locked = this.lockedCardIds.has(id)
       const singleDesc = this.enhancedHandCardDescription(def.id, false)
       const tripleDesc = this.enhancedHandCardDescription(def.id, true)
-      groups[def.category].push(
-        this.handCardFace(
-          def.id,
-          `${singleDesc}<br>${this.handScopeDescription(def.id)}<br><span class="common-card-subdesc">★ 효과: ${tripleDesc}</span>`,
-          false,
-          `compendium-hand-card ${this.categoryClass(def.category)}`,
-          groupLabels[def.category]
-        )
-      )
-    }
-    return Object.entries(groups)
-      .map(
-        ([cat, cards]) => `
-          <h3 class="compendium-section">${groupLabels[cat]}</h3>
-          <div class="compendium-grid">${cards.join('')}</div>
-        `
-      )
-      .join('')
+      return this.codexTile({
+        art: { kind: 'sprite', url: spriteForHandCard(def.id) },
+        name: locked ? '???' : def.name,
+        tag: locked ? '잠김' : def.category === 'recovery' ? '회복' : def.category === 'tool' ? '도구' : def.category === 'control' ? '컨트롤' : '공격',
+        rarityClass: RARITY_CLASS_BY_TIER[HAND_CARD_RARITY[id]],
+        chips: locked ? [] : [
+          { label: '기본 ', value: singleDesc, tone: 'plain' },
+          { label: '★ ', value: tripleDesc, tone: 'plain' },
+        ],
+        extraClass: locked ? 'codex-tile--unknown' : undefined,
+      })
+    })
+    return `
+      <h3 class="compendium-section">손패 카드</h3>
+      <div class="codex-tile-grid">${tiles.join('')}</div>
+    `
   }
 
   /** Relic tab documents shop relics and which ones the current run owns. */
@@ -2750,11 +2721,11 @@ export class GameBoardRenderer {
       </article>
     `
     const recipeCards = RECIPES.map((r) => {
+      // 재료 카드 중 하나라도 잠겨 있으면 레시피 전체를 미발견 처리.
+      const isLocked = Object.keys(r.ingredients).some((id) => this.lockedCardIds.has(id as HandCardId))
       const ingredientCards = Object.entries(r.ingredients).flatMap(([id, n]) => {
         const def = HAND_CARD_DEFINITIONS[id as HandCardId]
         if (!def) return []
-        // Repeated ingredients are represented as overlapping mini hand cards
-        // so combo recipes use the same visual language as the hand tab.
         return Array.from({ length: n ?? 1 }, () =>
           this.handCardFace(
             def.id,
@@ -2769,12 +2740,10 @@ export class GameBoardRenderer {
           kind: 'recipe',
           html: `<div class="compendium-recipe-stack" style="--recipe-count: ${ingredientCards.length}; --recipe-center: ${(ingredientCards.length - 1) / 2}">${ingredientCards.join('')}</div>`,
         },
-        name: r.name,
+        name: isLocked ? '???' : r.name,
         badge: `${r.totalCount}장`,
-        // Recipe cards use a denser codex variant because their visual payload
-        // is already communicated by the stacked ingredient cards.
-        categoryClass: 'compendium-recipe-card',
-        stats: [['효과', r.flavor]],
+        categoryClass: `compendium-recipe-card${isLocked ? ' compendium-card--unknown' : ''}`,
+        stats: isLocked ? [] : [['효과', r.flavor]],
       })
     }).join('')
     return `

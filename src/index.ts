@@ -202,6 +202,7 @@ const metaUnlockedCardIds = HAND_CARD_IDS.filter((id) => !getHandCardDef(id).run
 const runCardPool = new RunCardPool(HAND_CARD_IDS, metaUnlockedCardIds)
 // 잠긴 카드가 드롭되지 않도록 초기 허용 풀을 동기화한다.
 DropSystem.setAllowedPool(runCardPool.snapshot().unlocked)
+boardRenderer.setLockedCardIds([...runCardPool.snapshot().locked, ...runCardPool.snapshot().banned])
 /** Dev-only command palette is temporary tooling and must be removed before release. */
 const ENABLE_DEV_COMMAND_PALETTE = true
 
@@ -943,8 +944,10 @@ async function handleShopPackPick(detail: ShopPackPickDetail): Promise<void> {
   if (!picked) return
   const beforeResources = snapshotPlayerResources()
   await picked.apply()
-  // unlock-pack/delete-pack 선택 후 runCardPool이 바뀌므로 드롭 풀을 재동기화한다.
-  DropSystem.setAllowedPool(runCardPool.snapshot().unlocked)
+  // unlock-pack/delete-pack 선택 후 runCardPool이 바뀌므로 드롭 풀 및 도감 잠금 표시를 재동기화한다.
+  const poolSnap = runCardPool.snapshot()
+  DropSystem.setAllowedPool(poolSnap.unlocked)
+  boardRenderer.setLockedCardIds([...poolSnap.locked, ...poolSnap.banned])
   activePackSession = null
   boardRenderer.closePackPicker()
   // Most pack effects mutate character stats; play the standard player-gain
@@ -1200,6 +1203,7 @@ async function runBossRailEvent(): Promise<void> {
   bossCard.enemyHealthTotal = bossMaxHp
   bossCard.enemyDamageTotal = bossAttack
   for (let i = 0; i < 3; i++) gameState.lanes[i].setCardAtDistance(0, bossCard)
+  gameState.encounteredEnemyNames.add(bossCard.name)
 
   bossEventState = {
     card: bossCard,
@@ -1836,7 +1840,24 @@ function syncSpawnerTier(): void {
 function compactAndRefillAllLanes(): boolean {
   // Delegate gravity + top-refill rules to GameState so row-clearing combo
   // effects cannot leave half-empty rails after a single maintenance pass.
-  return gameState.compactAndRefillRails(() => cardSpawner.spawnCardForRefill())
+  const changed = gameState.compactAndRefillRails(() => cardSpawner.spawnCardForRefill())
+  if (changed) trackFieldEnemyEncounters()
+  return changed
+}
+
+/** 현재 레일을 스캔해 적/보스/특수 카드 이름을 도감 발견 집합에 추가한다. */
+function trackFieldEnemyEncounters(): void {
+  const seen = new Set<Card>()
+  for (const lane of gameState.lanes) {
+    for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+      const card = lane.getCardAtDistance(d)
+      if (!card || seen.has(card)) continue
+      seen.add(card)
+      if (card.type === CardType.ENEMY || card.type === CardType.BOSS) {
+        gameState.encounteredEnemyNames.add(card.name)
+      }
+    }
+  }
 }
 
 function fillBoardAtStart(): void {
@@ -1852,6 +1873,7 @@ function fillBoardAtStart(): void {
     }
   }
   gameState.regroupAllRows()
+  trackFieldEnemyEncounters()
 }
 
 /** Runs now begin with an empty hand; first cards must come from play rewards. */

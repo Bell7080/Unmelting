@@ -304,6 +304,32 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
   width: 32px;
   height: 32px;
 }
+/* 미발견 적/잠긴 카드: 실루엣 느낌으로 어둡게 처리 */
+.codex-tile--unknown {
+  border-color: rgba(255, 255, 255, 0.07);
+  background: linear-gradient(180deg, rgba(14, 10, 20, 0.97), rgba(8, 5, 14, 0.99));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 14px rgba(0,0,0,0.6);
+}
+.codex-tile--unknown:hover {
+  transform: none;
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 14px rgba(0,0,0,0.6);
+}
+.codex-tile--unknown .codex-tile-art {
+  filter: brightness(0.06) saturate(0);
+}
+.codex-tile--unknown .codex-tile-name {
+  color: rgba(255, 255, 255, 0.18);
+}
+.codex-tile--unknown .codex-tile-tag {
+  opacity: 0.22;
+}
+/* 잠긴 레시피 카드 */
+.compendium-card--unknown {
+  opacity: 0.3;
+  filter: saturate(0.1);
+  pointer-events: none;
+}
 .codex-tile--owned {
   border-color: rgba(132, 215, 112, 0.58);
   box-shadow:
