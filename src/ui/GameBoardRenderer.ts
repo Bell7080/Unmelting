@@ -2582,7 +2582,7 @@ export class GameBoardRenderer {
         tag: locked ? '잠김' : def.category === 'recovery' ? '회복' : def.category === 'tool' ? '도구' : def.category === 'control' ? '컨트롤' : '공격',
         rarityClass: RARITY_CLASS_BY_TIER[HAND_CARD_RARITY[id]],
         chips: locked ? [] : [
-          { label: '기본 ', value: singleDesc, tone: 'plain' },
+          { label: '', value: singleDesc, tone: 'plain' },
           { label: '★ ', value: tripleDesc, tone: 'plain' },
         ],
         extraClass: locked ? 'codex-tile--unknown' : 'codex-tile--hand',
