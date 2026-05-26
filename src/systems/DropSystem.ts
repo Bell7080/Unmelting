@@ -30,7 +30,7 @@ export class DropSystem {
     const defs = DropSystem.allowedIds
       ? all.filter((d) => DropSystem.allowedIds!.has(d.id))
       : all
-    const pool = defs.length > 0 ? defs : all  // 풀이 비었을 때 전체 폴백
+    const pool = defs.length > 0 ? defs : all // 풀이 비었을 때 전체 폴백
     const total = pool.reduce((sum, d) => sum + (d.dropWeight ?? 1), 0)
     let roll = Math.random() * total
     for (const def of pool) {
