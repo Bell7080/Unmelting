@@ -2413,7 +2413,9 @@ export class GameBoardRenderer {
       <h3 class="compendium-section">합쳐진 적</h3>
       <div class="codex-tile-grid">${mergeTwo}${mergeThree}</div>
       <h3 class="compendium-section">특수 적</h3>
-      <div class="codex-tile-grid">${mimicTiles}${monsterFlowerTile}${bossTile}</div>
+      <div class="codex-tile-grid">${mimicTiles}${monsterFlowerTile}</div>
+      <h3 class="compendium-section">보스</h3>
+      <div class="codex-tile-grid">${bossTile}</div>
     `
   }
 
