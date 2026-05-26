@@ -200,6 +200,8 @@ const FORCED_TRIAL_CARDS = TRIAL_DEFINITIONS.map((def) => ({
 // runLocked 카드는 런 시작 시 잠긴 상태로 출발해 해금팩으로만 획득 가능.
 const metaUnlockedCardIds = HAND_CARD_IDS.filter((id) => !getHandCardDef(id).runLocked)
 const runCardPool = new RunCardPool(HAND_CARD_IDS, metaUnlockedCardIds)
+// 잠긴 카드가 드롭되지 않도록 초기 허용 풀을 동기화한다.
+DropSystem.setAllowedPool(runCardPool.snapshot().unlocked)
 /** Dev-only command palette is temporary tooling and must be removed before release. */
 const ENABLE_DEV_COMMAND_PALETTE = true
 
@@ -941,6 +943,8 @@ async function handleShopPackPick(detail: ShopPackPickDetail): Promise<void> {
   if (!picked) return
   const beforeResources = snapshotPlayerResources()
   await picked.apply()
+  // unlock-pack/delete-pack 선택 후 runCardPool이 바뀌므로 드롭 풀을 재동기화한다.
+  DropSystem.setAllowedPool(runCardPool.snapshot().unlocked)
   activePackSession = null
   boardRenderer.closePackPicker()
   // Most pack effects mutate character stats; play the standard player-gain
