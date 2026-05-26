@@ -204,13 +204,19 @@ export class TurnManager {
       if (!card.isBombArmed || card.isFrozen()) continue
 
       // Bomb splash hurts neighboring enemies but does not delete non-enemy cells.
+      // 사망한 적은 즉시 row에서 제거해야 미믹 등 특수 적이 0HP로 잔존하지 않는다.
       const adjacentCardIds: string[] = []
+      const defeatedNeighbors = new Set<Card>()
       for (const neighborLane of [i - 1, i + 1]) {
         const neighbor = this.gameState.lanes[neighborLane]?.getCardAtDistance(0)
         if (neighbor?.type === CardType.ENEMY) {
           neighbor.takeDamage(5)
           adjacentCardIds.push(neighbor.id)
+          if (neighbor.getHealth() <= 0) defeatedNeighbors.add(neighbor)
         }
+      }
+      for (const dead of defeatedNeighbors) {
+        this.gameState.removeCardFromRow(dead, 0)
       }
       const playerDamage = this.gameState.character.takeDamage(5)
       const bombCardId = card.id
