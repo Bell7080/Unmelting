@@ -245,13 +245,15 @@ interface FieldHealthSnapshotEntry {
   health: number
 }
 
-/** Snapshot enemy HP before an effect so damage numbers can be derived after mutation. */
+/** Snapshot enemy/boss HP before an effect so damage numbers can be derived after mutation. */
 function snapshotFieldHealthState(): Map<string, FieldHealthSnapshotEntry> {
   const snapshot = new Map<string, FieldHealthSnapshotEntry>()
   for (const lane of gameState.lanes) {
     for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
       const card = lane.getCardAtDistance(distance)
-      if (!card || snapshot.has(card.id) || card.type !== CardType.ENEMY) continue
+      // BOSS 포함: 레시피·손패 피해가 보스 HP 바에도 즉시 반영되도록 스냅샷에 넣는다.
+      if (!card || snapshot.has(card.id)) continue
+      if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) continue
       snapshot.set(card.id, { card, health: card.getHealth() })
     }
   }
@@ -1180,6 +1182,8 @@ async function runBossRailEvent(): Promise<void> {
   }
 
   turnManager.setTurnMode('boss_phase')
+  // HandSystem 레시피 필드-효과 차단용 플래그 설정
+  gameState.bossBattleActive = true
   // 좌상단 카운트 초기값 = attackInterval. 가상 턴이 진행될 때마다 1씩 감소한다.
   boardRenderer.setBossAttackCountdown(attackInterval)
 
@@ -1187,6 +1191,8 @@ async function runBossRailEvent(): Promise<void> {
   await boardRenderer.playAltarBossGateTransition()
   // 보스 타일이 DOM에 올라온 뒤 대사 말풍선 출력
   render()
+  // 보스 카드 착지 애니메이션: 하강 후 바운스 + 먼지 폭발
+  await boardRenderer.playBossLandingAnimation(bossCard.id)
   bossBubble.show('내 저택에 온 것을 환영하네, 위태로운 불씨여')
   // 등장(300ms) + 타자기(18자 × 70ms ≈ 1260ms) + 읽기 여유(2600ms) ≈ 4160ms 대기
   await new Promise((resolve) => window.setTimeout(resolve, 4160))
@@ -1356,6 +1362,8 @@ async function handleBossDefeated(): Promise<void> {
   await boardRenderer.playBossDefeatSequence(state.card.id)
   // lanes에서 보스 인스턴스 정리 → 다음 render에서 active row가 비고 보상 chest가 박힌다.
   for (let i = 0; i < 3; i++) gameState.lanes[i].setCardAtDistance(0, null)
+  // 보스 전투 종료: 레시피 필드-효과 차단 해제
+  gameState.bossBattleActive = false
   // 격파 후 좌상단 카운트는 더 이상 의미 없으므로 reset.
   boardRenderer.setBossAttackCountdown(null)
   render()
@@ -2286,6 +2294,10 @@ async function applyHandSingle(
     boardRenderer.animateWaxFreezeByIds(newlyFrozenIds),
     boardRenderer.animateWaxThawByIds(thawedIds),
   ])
+  // 손패 피해가 보스에게 닿았다면 HP 바 카운터를 즉시 반영한다.
+  if (bossEventState && singleDamagedIds.has(bossEventState.card.id)) {
+    boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossEventState.card.getHealth()))
+  }
   await applyBloodPackRecoveryTrigger(beforeSingleRecovery)
   // Append only the just-used card first. Recipes are resolved below after
   // a small delay so the previous card's effect visibly lands before the combo.
@@ -2396,6 +2408,10 @@ async function applyHandSingle(
     const recipeDamageLosses = diffFieldHealthLosses(beforeRecipeHealth)
     const recipeDamagedIds = new Set(recipeDamageLosses.map((loss) => loss.cardId))
     await boardRenderer.animateDamageNumbersById(recipeDamageLosses)
+    // 보스 피해 시 HP 바 카운터를 즉시 반영한다.
+    if (bossEventState && recipeDamagedIds.has(bossEventState.card.id)) {
+      boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossEventState.card.getHealth()))
+    }
     await applyBloodPackRecoveryTrigger(beforeRecipeRecovery)
     await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeRecipeFreeze))
     await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeRecipeFreeze))

@@ -985,8 +985,37 @@ export const GAME_BOARD_RAIL_STYLES = `
   100% { transform: scale(1.6); opacity: 0; filter: blur(8px) brightness(1.3) saturate(1.1); }
 }
 
+/* 보스 최초 하강 착지: 위에서 내려와 바운스 후 정착한다. */
+@keyframes boss-card-land {
+  0%   { transform: translateY(-120%) scaleY(0.82); opacity: 0; }
+  55%  { transform: translateY(6%) scaleY(1.04);    opacity: 1; }
+  72%  { transform: translateY(-3%) scaleY(0.98); }
+  85%  { transform: translateY(2%) scaleY(1.01); }
+  100% { transform: translateY(0) scaleY(1); }
+}
+.is-boss-landing {
+  animation: boss-card-land 0.72s cubic-bezier(0.22, 0.74, 0.28, 1) both;
+}
+
+/* 적/보스 피격 반동: 순간 밝아지며 좌우로 짧게 흔들린다. */
+@keyframes enemy-hit-recoil {
+  0%   { transform: translate(0, 0) scale(1); filter: brightness(1); }
+  18%  { transform: translate(-4px, -2px) scale(1.03); filter: brightness(1.55) saturate(1.4); }
+  40%  { transform: translate(5px, 1px) scale(1.02); filter: brightness(1.35); }
+  62%  { transform: translate(-3px, 0px) scale(1.01); filter: brightness(1.15); }
+  100% { transform: translate(0, 0) scale(1); filter: brightness(1); }
+}
+.is-enemy-hit {
+  animation: enemy-hit-recoil 0.38s cubic-bezier(0.22, 0.86, 0.26, 1) both;
+}
+
 /* 보스 등장 시 셔터 진동을 한 비트 더 강화. (위쪽 정의의 중복 — 한 번만 유지) */
 
+/* boss-rail-drop: 보스 보상 chest 타일 등장용 낙하 키프레임 */
+@keyframes boss-rail-drop {
+  0%   { transform: translateY(-60%); opacity: 0; }
+  100% { transform: translateY(0);    opacity: 1; }
+}
 .boss-rail-chest-row .boss-chest-tile {
   cursor: pointer;
   animation: boss-rail-drop 0.5s cubic-bezier(0.16, 0.86, 0.22, 1) both;

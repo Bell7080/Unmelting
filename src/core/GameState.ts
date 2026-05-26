@@ -16,6 +16,8 @@ export class GameState {
   gameOverReason: string
   /** 강화팩으로 획득한 트리플/레시피 보너스 누적값. HandSystem이 효과 적용 시 참조한다. */
   enhancements: RunEnhancements
+  /** 보스 전투 활성 여부. HandSystem이 필드 수정 레시피를 차단하는 데 사용한다. */
+  bossBattleActive = false
 
   constructor() {
     this.character = new Character()
@@ -246,5 +248,6 @@ export class GameState {
     this.isGameOver = false
     this.gameOverReason = ''
     this.enhancements = makeDefaultEnhancements()
+    this.bossBattleActive = false
   }
 }

@@ -1277,7 +1277,7 @@ export class GameBoardRenderer {
         .filter(Boolean)
         .join(' ')
       // 강화팩 보너스를 반영한 동적 설명을 사용해 손패 미리보기에서 강화 수치가 즉시 보이도록 한다.
-      const description = this.enhancedHandCardDescription(card.defId, card.merged)
+      const description = this.enhancedHandCardDescription(card.defId, card.merged === true)
       const handArt = spriteForHandCard(card.defId)
       // Triple cards keep two lightweight visual copies in the DOM. CSS only
       // reveals them during the first merged-card entry so players see three
@@ -2194,6 +2194,31 @@ export class GameBoardRenderer {
   /** 보스 격파 시퀀스(공통): 짧은 흔들 → 사각 burst 연발 → 갈라짐 → 펑(큰 burst) →
    *  흐릿하게 확대되며 사라짐. 모든 burst는 기존 SquareBurst 그라마(damage/treasure-gain)
    *  를 그대로 사용해 일반 게임 톤과 통일된다. */
+  /**
+   * 보스 카드 최초 착지 연출: 위에서 낙하 → 바운스 → 바닥 충격 시 좌우 먼지 burst.
+   * render() 직후 호출해 DOM에 타일이 있는 상태에서 진행한다.
+   */
+  async playBossLandingAnimation(cardId: string): Promise<void> {
+    const tile = this.findCardElement(cardId)
+    if (!tile) return
+    // 착지 애니메이션 적용
+    tile.classList.remove('is-boss-landing')
+    void tile.offsetWidth  // reflow로 애니메이션 재시작
+    tile.classList.add('is-boss-landing')
+    // 55%(0.72s × 0.55 ≈ 396ms) 지점이 최초 착지 순간 → 먼지 burst 발사
+    await new Promise((r) => window.setTimeout(r, 400))
+    const rect = tile.getBoundingClientRect()
+    const bottomY = rect.bottom - 4
+    const centerX = rect.left + rect.width / 2
+    // 좌우로 넓게 퍼지는 먼지 이펙트: 중앙 + 좌 + 우 세 포인트에서 폭발
+    SquareBurst.playAt(centerX,       bottomY, 'damage',        { count: 22, spread: 220, duration: 560 })
+    SquareBurst.playAt(centerX - 80, bottomY, 'bomb-blast',    { count: 14, spread: 140, duration: 480 })
+    SquareBurst.playAt(centerX + 80, bottomY, 'bomb-blast',    { count: 14, spread: 140, duration: 480 })
+    // 바운스가 완전히 끝날 때까지 대기
+    await new Promise((r) => window.setTimeout(r, 340))
+    tile.classList.remove('is-boss-landing')
+  }
+
   async playBossDefeatSequence(cardId: string): Promise<void> {
     const tile = this.findCardElement(cardId)
     if (!tile) return
@@ -3247,8 +3272,14 @@ export class GameBoardRenderer {
     return Promise.all(
       damages.map(({ cardId, amount }) => {
         const target = this.findCardElement(cardId)
-        if (target && amount > 0)
+        if (target && amount > 0) {
           SquareBurst.playOn(target, 'damage', { count: 14, spread: 110, duration: 620 })
+          // 피격 반동 애니메이션: 밝아지며 좌우 흔들림으로 타격감을 전달한다.
+          target.classList.remove('is-enemy-hit')
+          void target.offsetWidth
+          target.classList.add('is-enemy-hit')
+          window.setTimeout(() => target.classList.remove('is-enemy-hit'), 420)
+        }
         return this.animateDamageNumberOnElement(target, amount)
       })
     ).then(() => undefined)

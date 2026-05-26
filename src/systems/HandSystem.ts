@@ -299,6 +299,20 @@ export class HandSystem {
     const c = gs.character
     const rb = gs.enhancements.recipeBonus
     const bonus = rb[recipe.id] ?? 0
+
+    // 보스 전투 중에는 필드 카드를 변형·수집하는 레시피가 일반 레일에 영향을 주면 안 된다.
+    // 피해를 주는 레시피(damage-*)는 보스에게도 반영하므로 차단하지 않는다.
+    const BOSS_BLOCKED_EFFECTS: ReadonlySet<Recipe['effect']> = new Set([
+      'collect-random-treasure',
+      'convert-random-waiting-to-treasure',
+      'convert-random-hazard-to-treasure',
+      'clear-all-field-cards',
+      'collect-waiting-treasures',
+    ])
+    if (gs.bossBattleActive && BOSS_BLOCKED_EFFECTS.has(recipe.effect)) {
+      return { message: '보스 전투 중 — 필드 효과 차단' }
+    }
+
     switch (recipe.effect) {
       case 'gain-wax-drop': {
         if (!c.hasHandRoom()) return { message: '손패가 가득 차 촛농 획득 실패' }
