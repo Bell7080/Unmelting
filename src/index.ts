@@ -899,7 +899,8 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
   const view: ShopPackPickerView = {
     packKind: kind,
     title,
-    items: items.map(({ id, title, effect, theme, rarity }) => ({ id, title, effect, theme, rarity })),
+    // spriteUrl 포함: enhance/unlock/delete 팩은 카드별 일러스트가 있어야 식별 가능하다.
+    items: items.map(({ id, title, effect, theme, rarity, spriteUrl }) => ({ id, title, effect, theme, rarity, spriteUrl })),
   }
   boardRenderer.openPackPicker(view)
 }
@@ -916,6 +917,8 @@ async function handleShopPackPick(detail: ShopPackPickDetail): Promise<void> {
   // Most pack effects mutate character stats; play the standard player-gain
   // trail so HP/방패/공격력 등 변화에 카드/숫자 피드백이 같이 따라온다.
   await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
+  // 자원팩 등 게이지 아이템 선택 시 게이지가 가득 찼으면 보상 효과를 즉시 발동한다.
+  await resolveFullCandleGaugeEffects({ kind: 'chain' })
   render()
   boardRenderer.openShop(buildShopStateView(), score, gameState.character)
 }
@@ -957,6 +960,9 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
         gameState.character.gainCandle(3)
         // 게이지 보상은 캔들 게이지 목적지로 분기한다.
         await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'gauge', 2, 'gauge-gain')
+        // 트레일 직후 게이지 카운터를 즉시 반영하고, 가득 찼을 경우 보상 효과까지 처리한다.
+        boardRenderer.playHudCounterFeedback('candle', gameState.character.candle)
+        await resolveFullCandleGaugeEffects({ kind: 'center' })
       } else if (freeGiftKind === 'ember-3') {
         gameState.character.gainEmber(3)
         // 불씨 보상은 상단 ember HUD로 직접 날린다.

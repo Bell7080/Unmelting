@@ -768,10 +768,12 @@ export class GameBoardRenderer {
             : `+${card.flowerValue}`
       stats = `<div class="card-stats group-note flower-note">${sparkleIcon()}<span>${label}</span></div>`
     } else if (card.type === CardType.TREASURE && card.groupCount > 1) {
-      // 보스 보상 카드는 "카드 N장" 대신 개별 효과 설명을 표시한다.
+      // 보스 보상 카드는 개별 효과 설명을, 일반 상자는 실제 드롭 수(1/3/5)를 표시한다.
+      const CHEST_DROP_BY_SPAN: Record<number, number> = { 1: 1, 2: 3, 3: 5 }
+      const dropCount = CHEST_DROP_BY_SPAN[Math.min(3, Math.max(1, card.groupCount))] ?? card.groupCount
       const treasureNote = card.id.startsWith('boss-reward-')
         ? escapeHtml(card.description)
-        : `카드 ${card.groupCount}장`
+        : `손패 ${dropCount}장`
       stats = `<div class="card-stats group-note treasure-group-note">${sparkleIcon()}<span>${treasureNote}</span></div>`
     }
 
@@ -1174,6 +1176,28 @@ export class GameBoardRenderer {
   private handScopeDescription(defId: HandCardId): string {
     return `<span class="common-card-subdesc">기본: ${this.handScopeLabel(defId)}</span><br><span class="common-card-subdesc">★: ${this.handScopeLabel(defId, true)}</span>`
   }
+
+  /**
+   * 강화팩으로 누적된 singleBonus/tripleBonus를 반영한 설명 문자열을 반환한다.
+   * 보너스가 없으면 정적 def.description을 그대로 사용해 불필요한 재계산을 피한다.
+   */
+  private enhancedHandCardDescription(id: HandCardId, merged: boolean): string {
+    const def = getHandCardDef(id)
+    const enhancements = this.currentGameState?.enhancements
+    const bonus = merged
+      ? (enhancements?.tripleBonus[id] ?? 0)
+      : (enhancements?.singleBonus[id] ?? 0)
+    if (bonus === 0) return merged ? def.tripleDescription : def.description
+    switch (id) {
+      case 'wax-drop': return merged ? `체력 +${5 + bonus}` : `체력 +${1 + bonus}`
+      case 'candle':   return merged ? `방패 +${5 + bonus}` : `방패 +${1 + bonus}`
+      case 'ember':    return merged ? `필드 선택 적 1장 피해 ${10 + bonus}` : `필드 선택 적 1장 피해 ${2 + bonus}`
+      case 'match':    return merged ? `불씨 카운트 +${5 + bonus}` : `불씨 카운트 +${1 + bonus}`
+      case 'card':     return merged ? `손패 콤보 카운트 +${7 + bonus}` : `손패 콤보 카운트 +${1 + bonus}`
+      case 'coin':     return merged ? `+${5 + bonus}$` : `+${1 + bonus}$`
+      default:         return merged ? def.tripleDescription : def.description
+    }
+  }
   private candleModeMeta(mode: CandleMode): { label: string; effect: string; icon: string } {
     switch (mode) {
       case 'max-health':
@@ -1252,7 +1276,8 @@ export class GameBoardRenderer {
       ]
         .filter(Boolean)
         .join(' ')
-      const description = card.merged ? def.tripleDescription : def.description
+      // 강화팩 보너스를 반영한 동적 설명을 사용해 손패 미리보기에서 강화 수치가 즉시 보이도록 한다.
+      const description = this.enhancedHandCardDescription(card.defId, card.merged)
       const handArt = spriteForHandCard(card.defId)
       // Triple cards keep two lightweight visual copies in the DOM. CSS only
       // reveals them during the first merged-card entry so players see three
@@ -2434,10 +2459,12 @@ export class GameBoardRenderer {
   private renderCompendiumTreasures(): string {
     // One tile per chest size mirrors the rail: the sprite, the lane name,
     // and only the per-size drop count differ; vanish/mimic odds are shared.
+    // 이름은 rail의 groupName과 일치시킨다. 드롭 수는 ActionSystem.TREASURE_DROPS_BY_SPAN(1/3/5) 기준.
+    const CHEST_DROPS = [1, 3, 5] as const
     const chestSpec: Array<{ span: 1 | 2 | 3; name: string; sprite: string }> = [
       { span: 1, name: '작은 상자', sprite: SpriteUrls.chestSmall },
-      { span: 2, name: '큰 상자', sprite: SpriteUrls.chestMedium },
-      { span: 3, name: '거대한 상자', sprite: SpriteUrls.chestLarge },
+      { span: 2, name: '적당한 상자', sprite: SpriteUrls.chestMedium },
+      { span: 3, name: '큰 상자', sprite: SpriteUrls.chestLarge },
     ]
     const tiles = chestSpec
       .map((c) =>
@@ -2446,7 +2473,7 @@ export class GameBoardRenderer {
           name: c.name,
           tag: `${c.span}칸`,
           chips: [
-            { label: '드롭 ', value: `손패 ${c.span}장`, tone: 'gold' },
+            { label: '드롭 ', value: `손패 ${CHEST_DROPS[c.span - 1]}장`, tone: 'gold' },
             { label: '사라짐 ', value: '50%/턴', tone: 'plain' },
             { label: '미믹화 ', value: '10%/턴', tone: 'spore' },
           ],
@@ -2546,10 +2573,13 @@ export class GameBoardRenderer {
     }
     for (const id of HAND_CARD_IDS) {
       const def = HAND_CARD_DEFINITIONS[id]
+      // 강화팩 보너스를 반영한 동적 설명으로 도감에서도 실제 수치가 보이도록 한다.
+      const singleDesc = this.enhancedHandCardDescription(def.id, false)
+      const tripleDesc = this.enhancedHandCardDescription(def.id, true)
       groups[def.category].push(
         this.handCardFace(
           def.id,
-          `${def.description}<br>${this.handScopeDescription(def.id)}<br><span class="common-card-subdesc">★ 효과: ${def.tripleDescription}</span>`,
+          `${singleDesc}<br>${this.handScopeDescription(def.id)}<br><span class="common-card-subdesc">★ 효과: ${tripleDesc}</span>`,
           false,
           `compendium-hand-card ${this.categoryClass(def.category)}`,
           groupLabels[def.category]
