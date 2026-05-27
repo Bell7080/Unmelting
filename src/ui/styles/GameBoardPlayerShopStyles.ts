@@ -1702,38 +1702,78 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 
 /* ─── Mobile touch: is-touch-active mirrors :hover for shop elements ──── */
 /* Touch landscape: shell stays anchored over the rail (same as PC).
-   positionShopShellOverRail() sets inline top/left/width/height — no !important override needed.
-   Cards use flex-fill so they fit the narrower mobile rail column proportionally. */
+   positionShopShellOverRail() sets inline top/left/width/height — no !important override.
+   Shell padding reduced, elements scaled down, EXIT repositioned to fit the narrow rail. */
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
-  /* Clip to rail bounds — nothing spills outside the shell on mobile. */
-  .shop-shell { overflow: hidden; }
+  /* Clip to rail bounds. Reduced padding gives cards more room. */
+  .shop-shell {
+    overflow: hidden;
+    --shop-shell-pad-top: clamp(8px, 1vh, 12px);
+    --shop-shell-pad-x: clamp(8px, 1vw, 12px);
+    --shop-shell-pad-bottom: clamp(8px, 1vh, 12px);
+  }
+  /* EXIT button: moved inside the content-bundle (bottom: 6px) so overflow:hidden
+     doesn't clip it. Right-aligned so it clears the pack cards. */
+  .shop-close-btn {
+    bottom: 6px;
+    right: 10px;
+    font-size: 11px;
+    padding: 4px 14px;
+    letter-spacing: 0.16em;
+  }
+  /* Tighter gap between top/bottom rows to save vertical space. */
+  .shop-content-bundle { gap: clamp(4px, 0.6vh, 8px); }
   /* Restore bottom-row 2-column layout (820px breakpoint collapses it to 1 column). */
   .shop-bottom-row { grid-template-columns: 3fr 7fr; }
-  /* Fill available flex space equally instead of fixed vw widths that overflow
-     the narrower mobile rail. min/max-width keep cards legible. */
+  /* Layer padding/gap: reduced for compact mobile layout. */
+  .shop-layer {
+    padding: clamp(3px, 0.4vh, 6px) clamp(4px, 0.5vw, 8px);
+    gap: clamp(5px, 0.7vw, 9px);
+  }
+  .shop-artifact-layer { gap: clamp(6px, 0.8vw, 10px); }
+  /* Cards fill available flex space instead of fixed vw widths. */
   .shop-relic-card {
     flex: 1 1 0;
     width: auto;
-    min-width: 68px;
-    max-width: 130px;
+    min-width: 64px;
+    max-width: 120px;
   }
   .shop-shell[data-shop-mode="altar"] .shop-artifact-layer .shop-relic-card {
-    max-width: 148px;
+    max-width: 136px;
   }
   .shop-free-card {
     flex: 1 1 0;
     width: auto;
-    min-width: 64px;
-    max-width: 124px;
+    min-width: 60px;
+    max-width: 112px;
   }
   .shop-pack-card {
     flex: 1 1 0;
     width: auto;
-    min-width: 58px;
-    max-width: 108px;
+    min-width: 54px;
+    max-width: 100px;
   }
-  /* Neutralize layer offsets that assume full-viewport width —
-     on mobile the shell is only as wide as the rail column. */
+  /* Price label: shorter droop so it stays inside the overflow:hidden shell bounds. */
+  .shop-price-label {
+    bottom: -18px;
+    font-size: 10px;
+    padding: 2px 7px 3px 6px;
+    min-width: 60px;
+    gap: 4px;
+  }
+  .shop-price-label-icon { width: 11px; height: 11px; }
+  /* Pack text: scaled down for the compact mobile rail. */
+  .shop-pack-title { font-size: var(--font-size-sm); }
+  .shop-pack-effect { font-size: 8px; margin-top: 2px; }
+  /* Reroll button: smaller for the narrow mobile rail. */
+  .shop-reroll-btn {
+    width: clamp(64px, 7.8vw, 86px);
+    height: clamp(54px, 7.5vh, 74px);
+    font-size: 10px;
+    padding: 5px 7px;
+  }
+  .shop-reroll-card-anchor { margin-right: clamp(4px, 0.6vw, 8px); }
+  /* Neutralize translation offsets sized for full-viewport width. */
   .shop-pack-layer { transform: none; }
   .shop-free-layer { transform: none; }
 }
