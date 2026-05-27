@@ -1701,27 +1701,41 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 
 /* ─── Mobile touch: is-touch-active mirrors :hover for shop elements ──── */
-/* Touch landscape only — no effect on desktop/mouse users.
-   Shell fills the full overlay so shop content isn't clipped to the rail column.
-   !important beats JS inline styles set by positionShopShellOverRail(). */
+/* Touch landscape: shell stays anchored over the rail (same as PC).
+   positionShopShellOverRail() sets inline top/left/width/height — no !important override needed.
+   Cards use flex-fill so they fit the narrower mobile rail column proportionally. */
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
-  .shop-shell {
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    width: auto !important;
-    height: auto !important;
-  }
+  /* Clip to rail bounds — nothing spills outside the shell on mobile. */
+  .shop-shell { overflow: hidden; }
   /* Restore bottom-row 2-column layout (820px breakpoint collapses it to 1 column). */
   .shop-bottom-row { grid-template-columns: 3fr 7fr; }
-  /* Card sizes for full-viewport shell. */
-  .shop-relic-card  { width: clamp(110px, 12.6vw, 190px); }
-  .shop-shell[data-shop-mode="altar"] .shop-artifact-layer .shop-relic-card {
-    width: clamp(118px, 13.4vw, 206px);
+  /* Fill available flex space equally instead of fixed vw widths that overflow
+     the narrower mobile rail. min/max-width keep cards legible. */
+  .shop-relic-card {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 68px;
+    max-width: 130px;
   }
-  .shop-free-card  { width: clamp(100px, 11.8vw, 178px); }
-  .shop-pack-card  { width: clamp(96px, 10.9vw, 164px); }
+  .shop-shell[data-shop-mode="altar"] .shop-artifact-layer .shop-relic-card {
+    max-width: 148px;
+  }
+  .shop-free-card {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 64px;
+    max-width: 124px;
+  }
+  .shop-pack-card {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 58px;
+    max-width: 108px;
+  }
+  /* Neutralize layer offsets that assume full-viewport width —
+     on mobile the shell is only as wide as the rail column. */
+  .shop-pack-layer { transform: none; }
+  .shop-free-layer { transform: none; }
 }
 
 /* Gated on (hover: none) so PC hover rules are completely unaffected. */
