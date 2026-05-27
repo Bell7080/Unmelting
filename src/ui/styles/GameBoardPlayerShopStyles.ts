@@ -1712,17 +1712,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
     --shop-shell-pad-x: clamp(8px, 1vw, 12px);
     --shop-shell-pad-bottom: clamp(8px, 1vh, 12px);
   }
-  /* Trial is a forced modal choice — expand to fill the full overlay so
-     3 cards are comfortably readable. positionShopShellOverRail() sets
-     inline styles; !important reclaims the layout for trial only. */
-  .shop-shell--trial {
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    overflow: hidden;
-  }
-  /* Trial cards: cancel the general relic-card max-width constraint. */
+  /* Trial: stays in rail (same as PC). Cancel the relic-card max-width so
+     each 1fr column in the 3-column grid fills the full rail width. */
   .shop-shell--trial .shop-relic-card {
     max-width: none;
     min-width: 0;
