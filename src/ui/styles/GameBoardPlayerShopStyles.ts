@@ -1705,12 +1705,27 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
    positionShopShellOverRail() sets inline top/left/width/height — no !important override.
    Shell padding reduced, elements scaled down, EXIT repositioned to fit the narrow rail. */
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
-  /* Clip to rail bounds. Reduced padding gives cards more room. */
-  .shop-shell {
+  /* Regular shop: clip to rail bounds with reduced padding. */
+  .shop-shell:not(.shop-shell--trial) {
     overflow: hidden;
     --shop-shell-pad-top: clamp(8px, 1vh, 12px);
     --shop-shell-pad-x: clamp(8px, 1vw, 12px);
     --shop-shell-pad-bottom: clamp(8px, 1vh, 12px);
+  }
+  /* Trial is a forced modal choice — expand to fill the full overlay so
+     3 cards are comfortably readable. positionShopShellOverRail() sets
+     inline styles; !important reclaims the layout for trial only. */
+  .shop-shell--trial {
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    overflow: hidden;
+  }
+  /* Trial cards: cancel the general relic-card max-width constraint. */
+  .shop-shell--trial .shop-relic-card {
+    max-width: none;
+    min-width: 0;
   }
   /* EXIT button: moved inside the content-bundle (bottom: 6px) so overflow:hidden
      doesn't clip it. Right-aligned so it clears the pack cards. */
