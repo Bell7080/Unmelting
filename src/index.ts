@@ -51,13 +51,14 @@ import {
   sampleWithoutReplacement,
 } from '@core/Sampling'
 import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
+import { BASIC_PACK_POOL } from '@data/BasicPackPool'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { buildUnlockedUpgradePool } from '@systems/UpgradePackPool'
 import { buildUnlockedEnhancePool } from '@systems/EnhancePackPool'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
-import { SpriteUrls, spriteForHandCard } from '@ui/Sprites'
+import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
 import okDanDanBoldUrl from './assets/fonts/OkDanDanBold.woff2'
 
@@ -742,6 +743,32 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
  *  Each entry carries an `apply` closure so the pick handler stays small. */
 function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
   const character = gameState.character
+  if (kind === 'basic-pack') {
+    // 자원팩 — BasicPackPool.ts 에서 테이블 관리, 항목별 weight 사용.
+    return sampleWeightedWithoutReplacement(
+      BASIC_PACK_POOL.map((entry) => ({
+        ...entry,
+        theme: 'resource' as const,
+        spriteUrl: spriteForBasicPackItem(entry.illu),
+        apply: () => {
+          switch (entry.id) {
+            case 'basic_001': character.heal(3);        return
+            case 'basic_002': character.gainEmber(1);   return
+            case 'basic_003': character.gainCandle(1);  return
+            case 'basic_004': character.heal(5);        return
+            case 'basic_005': character.gainEmber(2);   return
+            case 'basic_006': character.gainCandle(2);  return
+            case 'basic_007': character.heal(10);       return
+            case 'basic_008': character.gainEmber(3);   return
+            case 'basic_009': character.gainCandle(3);  return
+            case 'basic_010': character.addShield(3);   return
+            case 'basic_011': coins += 1;               return
+          }
+        },
+      })),
+      3
+    )
+  }
   if (kind === 'blessing-pack') {
     return [1,2,3].map((n) => ({
       id: `blessing-${n}`,
@@ -835,20 +862,6 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     ...entry,
     apply: () => {
       switch (entry.id) {
-        // 자원팩 common
-        case 'heal-3':   character.heal(3);         return
-        case 'ember-1':  character.gainEmber(1);    return
-        case 'gauge-1':  character.gainCandle(1);   return
-        // 자원팩 rare
-        case 'heal-5':   character.heal(5);         return
-        case 'ember-3':  character.gainEmber(3);    return
-        case 'gauge-3':  character.gainCandle(3);   return
-        // 자원팩 epic
-        case 'coin-1p':  coins += 1;                return
-        case 'heal-10':  character.heal(10);        return
-        case 'ember-10': character.gainEmber(10);   return
-        case 'gauge-5':  character.gainCandle(5);   return
-        case 'shield-3': character.addShield(3);    return
         // 강화팩 common — 트리플 보너스
         case 'triple-wax-drop':   gameState.enhancements.tripleBonus['wax-drop'] = (gameState.enhancements.tripleBonus['wax-drop'] ?? 0) + 1; return
         case 'triple-candle':     gameState.enhancements.tripleBonus['candle']   = (gameState.enhancements.tripleBonus['candle']   ?? 0) + 1; return

@@ -17,12 +17,13 @@ export const RARITY_DRAW_WEIGHTS: Record<CardRarity, number> = {
  * 희귀도 가중 비복원 추출. 각 항목을 가중치만큼 복제한 풀을 셔플한 뒤
  * 앞에서부터 고유 참조를 n개 채워 반환한다. 가중치가 높을수록 첫 픽에 등장할 확률이 커진다.
  */
-export function sampleWeightedWithoutReplacement<T extends { rarity: CardRarity }>(
+export function sampleWeightedWithoutReplacement<T extends { rarity: CardRarity; weight?: number }>(
   pool: T[],
   n: number
 ): T[] {
   const weighted = pool.flatMap((item) =>
-    Array.from({ length: RARITY_DRAW_WEIGHTS[item.rarity] ?? 1 }, () => item)
+    // weight 직접 지정 시 우선 사용, 없으면 등급 공통 테이블로 폴백
+    Array.from({ length: item.weight ?? RARITY_DRAW_WEIGHTS[item.rarity] ?? 1 }, () => item)
   )
   for (let i = weighted.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
