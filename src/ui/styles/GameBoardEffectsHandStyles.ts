@@ -279,6 +279,19 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   0%, 100% { filter: brightness(1); }
   50% { filter: brightness(0.65); }
 }
+/* 디메리트 경계선 — dim→flickering 임계점(ember < 4)에 얇은 적색 마커 표시 */
+.ember-demerit-line {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  transform: translateX(-50%);
+  background: rgba(220, 90, 60, 0.85);
+  border-radius: 1px;
+  box-shadow: 0 0 4px rgba(220, 90, 60, 0.6), 0 0 8px rgba(220, 90, 60, 0.3);
+  pointer-events: none;
+  z-index: 2;
+}
 .ember-bar-label {
   position: absolute;
   inset: 0;
@@ -306,28 +319,31 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
 }
 
-/* ---------- Vignette overlay (Darkest Dungeon torch feel) ---------- */
+/* ---------- Vignette overlay (불씨 소멸 위태로움 연출) ----------
+   body 최상단에 단일 persistent 요소로 마운트되어 모든 UI 레이어를 덮는다.
+   사이드 비네팅(좌우 어둠) + backdrop-filter 탈색으로 중앙 가시성은 유지하면서
+   화면 전체가 서서히 회색빛으로 바래는 느낌을 준다. */
 .ember-vignette {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 38;
-  /* Side-weighted darkness preserves readability around the rail, hand, and
-     score zones while still making low ember feel oppressive at the edges. */
+  /* 모든 UI(상점/보스/오버레이) 위 */
+  z-index: 9999;
+  /* 좌우 사이드만 어두워짐 — 중앙 38~62%는 투명 유지 */
   background:
     linear-gradient(90deg,
-      rgba(0, 0, 0, calc(0.88 * var(--vignette-opacity, 0))) 0%,
-      rgba(0, 0, 0, calc(0.5 * var(--vignette-opacity, 0))) 13%,
-      rgba(0, 0, 0, calc(0.12 * var(--vignette-opacity, 0))) 29%,
-      rgba(0, 0, 0, calc(0.04 * var(--vignette-opacity, 0))) 50%,
-      rgba(0, 0, 0, calc(0.12 * var(--vignette-opacity, 0))) 71%,
-      rgba(0, 0, 0, calc(0.5 * var(--vignette-opacity, 0))) 87%,
-      rgba(0, 0, 0, calc(0.88 * var(--vignette-opacity, 0))) 100%),
-    radial-gradient(ellipse at center,
-      rgba(0, 0, 0, 0) 26%,
-      rgba(0, 0, 0, calc(0.18 * var(--vignette-opacity, 0))) 68%,
-      rgba(0, 0, 0, calc(0.48 * var(--vignette-opacity, 0))) 100%);
-  transition: background 0.4s ease;
+      rgba(10, 5, 20, calc(0.72 * var(--vignette-opacity, 0))) 0%,
+      rgba(10, 5, 20, calc(0.38 * var(--vignette-opacity, 0))) 15%,
+      rgba(10, 5, 20, calc(0.06 * var(--vignette-opacity, 0))) 28%,
+      transparent 38%,
+      transparent 62%,
+      rgba(10, 5, 20, calc(0.06 * var(--vignette-opacity, 0))) 72%,
+      rgba(10, 5, 20, calc(0.38 * var(--vignette-opacity, 0))) 85%,
+      rgba(10, 5, 20, calc(0.72 * var(--vignette-opacity, 0))) 100%);
+  /* 전체 화면 탈색 — 불빛이 꺼질수록 색조가 빠짐 (최대 40% 탈색) */
+  backdrop-filter: saturate(calc(1 - 0.4 * var(--vignette-opacity, 0)));
+  -webkit-backdrop-filter: saturate(calc(1 - 0.4 * var(--vignette-opacity, 0)));
+  transition: background 0.6s ease, backdrop-filter 0.6s ease;
 }
 
 /* ---------- Hand stack (bottom-up, 10 fixed slots) ----------

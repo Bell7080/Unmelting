@@ -378,9 +378,9 @@ export class GameBoardRenderer {
 
         ${this.renderHand(character, scorePanel)}
       </div>
-      ${this.renderVignette(scorePanel)}
     `
 
+    this.syncBodyVignette(scorePanel.vignetteIntensity ?? 0)
     this.injectStyles()
     this.attachListeners()
     // When the shop is open, the shutter must keep matching the rail's real
@@ -2845,6 +2845,8 @@ export class GameBoardRenderer {
     const weightsText = weights
       ? `적 ${weights.enemy}% · 함정 ${weights.trap}% · 보물 ${weights.treasure}% · 꽃 ${weights.flower}%`
       : ''
+    // dim→flickering 경계(ember < 4)에 디메리트 경고 라인 표시.
+    const demeritLinePct = Math.min(100, (4 / visualEmberMax) * 100)
     return `
       <div class="ember-hud" aria-label="Ember status">
         <div class="ember-hud-inner">
@@ -2852,6 +2854,7 @@ export class GameBoardRenderer {
             <span class="ember-icon">${flameIcon()}</span>
             <div class="ember-bar">
               <div class="ember-bar-fill ember-tier-${tier}" style="width: ${pct}%"></div>
+              <div class="ember-demerit-line" style="left: ${demeritLinePct.toFixed(1)}%" title="이 아래로 내려가면 적이 먼저 공격합니다" aria-hidden="true"></div>
               <span class="ember-bar-label">불씨 ${emberText}/${emberMaxText} · ${EmberSystem.tierLabel(tier)}</span>
             </div>
             <span class="ember-countdown" title="다음 불씨 감소까지 남은 턴">
@@ -2865,11 +2868,20 @@ export class GameBoardRenderer {
   }
 
   /** Vignette overlay whose intensity follows the ember tier. */
-  private renderVignette(scorePanel: ScorePanelState): string {
-    const intensity = Math.max(0, Math.min(1, scorePanel.vignetteIntensity ?? 0))
-    if (intensity <= 0) return ''
-    const opacity = intensity.toFixed(2)
-    return `<div class="ember-vignette" style="--vignette-opacity: ${opacity};" aria-hidden="true"></div>`
+  /** body 최상단에 비네팅 오버레이를 영속 유지.
+   *  innerHTML 재생성과 무관하게 전환 애니메이션이 끊기지 않으며,
+   *  모든 UI 레이어(상점/보스/오버레이)를 덮는다. */
+  private syncBodyVignette(intensity: number): void {
+    const clamped = Math.max(0, Math.min(1, intensity))
+    let el = document.getElementById('ember-vignette-overlay') as HTMLElement | null
+    if (!el) {
+      el = document.createElement('div')
+      el.id = 'ember-vignette-overlay'
+      el.className = 'ember-vignette'
+      el.setAttribute('aria-hidden', 'true')
+      document.body.appendChild(el)
+    }
+    el.style.setProperty('--vignette-opacity', clamped.toFixed(2))
   }
 
   /**

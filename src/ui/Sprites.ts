@@ -289,3 +289,14 @@ export function spriteForHandCard(defId: HandCardId): string {
 export function spriteForRelic(id: RelicId): string {
   return SpriteUrls.relics[id]
 }
+
+// src/assets/sprites/basic/ 에 파일을 추가하면 Vite가 자동으로 번들에 포함시킨다.
+const basicItemGlob = import.meta.glob<{ default: string }>(
+  '../assets/sprites/basic/*.webp',
+  { eager: true }
+)
+
+/** 자원팩 항목 일러스트. 파일이 없으면 undefined → 팩 기본 이미지로 폴백. */
+export function spriteForBasicPackItem(illu: string): string | undefined {
+  return basicItemGlob[`../assets/sprites/basic/${illu}.webp`]?.default
+}

@@ -51,13 +51,14 @@ import {
   sampleWithoutReplacement,
 } from '@core/Sampling'
 import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
+import { BASIC_PACK_POOL } from '@data/BasicPackPool'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { buildUnlockedUpgradePool } from '@systems/UpgradePackPool'
 import { buildUnlockedEnhancePool } from '@systems/EnhancePackPool'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
-import { SpriteUrls, spriteForHandCard } from '@ui/Sprites'
+import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
 import okDanDanBoldUrl from './assets/fonts/OkDanDanBold.woff2'
 
@@ -737,11 +738,36 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
   return false
 }
 
-/** Rarity → draw weight mapping used by weighted sampling. Higher = more common. */
 /** Build the random "3-card" contents for a pack the player just bought.
  *  Each entry carries an `apply` closure so the pick handler stays small. */
 function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
   const character = gameState.character
+  if (kind === 'basic-pack') {
+    // 자원팩 — BasicPackPool.ts 에서 테이블 관리, 항목별 weight 사용.
+    return sampleWeightedWithoutReplacement(
+      BASIC_PACK_POOL.map((entry) => ({
+        ...entry,
+        theme: 'resource' as const,
+        spriteUrl: spriteForBasicPackItem(entry.illu),
+        apply: () => {
+          switch (entry.id) {
+            case 'basic_001': character.heal(3);        return
+            case 'basic_002': character.gainEmber(1);   return
+            case 'basic_003': character.gainCandle(1);  return
+            case 'basic_004': character.heal(5);        return
+            case 'basic_005': character.gainEmber(2);   return
+            case 'basic_006': character.gainCandle(2);  return
+            case 'basic_007': character.heal(10);       return
+            case 'basic_008': character.gainEmber(3);   return
+            case 'basic_009': character.gainCandle(3);  return
+            case 'basic_010': character.addShield(3);   return
+            case 'basic_011': coins += 1;               return
+          }
+        },
+      })),
+      3
+    )
+  }
   if (kind === 'blessing-pack') {
     return [1,2,3].map((n) => ({
       id: `blessing-${n}`,
@@ -1330,7 +1356,10 @@ async function consumeBossHandGiftThresholds(bossCardId: string): Promise<void> 
 /** 일반 게임의 손패 획득 trail/burst 양식을 그대로 재사용. */
 async function grantBossHandGift(bossCardId: string): Promise<void> {
   const character = gameState.character
-  const drawIds = sampleWithoutReplacement([...HAND_CARD_IDS], 1)
+  // 해금된 카드만 후보 — 잠기거나 밴된 카드는 게임에 없는 것으로 취급한다.
+  const { unlocked } = runCardPool.snapshot()
+  if (unlocked.length === 0) return
+  const drawIds = sampleWithoutReplacement(unlocked, 1)
   const id = drawIds[0]
   if (!id) return
   const accepted = character.addHandCard(DropSystem.makeCard(id))
