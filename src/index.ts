@@ -604,7 +604,7 @@ function priceForRelic(id: RelicId): number {
 }
 
 /** Generate up to three unowned, unbanned relics + per-spawn score price. */
-function rollShopOffers(): ShopOfferView[] {
+function rollShopOffers(excludeIds: string[] = []): ShopOfferView[] {
   const character = gameState.character
   const basePool = RELIC_IDS.filter(
     (id) => !character.hasRelic(id) && !character.bannedRelics.includes(id)
@@ -614,8 +614,14 @@ function rollShopOffers(): ShopOfferView[] {
   const sourcePool = currentShopMode === 'altar'
     ? basePool.filter((id) => allowedAltarRarity.has(getRelicDef(id).rarity))
     : basePool
+  // 리롤 시 현재 배치된 유물은 제외한다. 풀이 부족하면 제외 없이 폴백한다.
+  const excludeSet = new Set(excludeIds)
+  const filteredPool = excludeSet.size > 0
+    ? sourcePool.filter((id) => !excludeSet.has(id))
+    : sourcePool
+  const effectivePool = filteredPool.length >= 3 ? filteredPool : sourcePool
   // common 등급이 자주, legendary가 드물게 등장하도록 등급별 가중치를 적용한다.
-  const weightedPool = sourcePool.flatMap((relicId) => {
+  const weightedPool = effectivePool.flatMap((relicId) => {
     const rarity = getRelicDef(relicId).rarity
     const weight = RARITY_DRAW_WEIGHTS[rarity] ?? 1
     return Array.from({ length: weight }, () => relicId)
@@ -1035,7 +1041,11 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     // Resolve the new offer slate BEFORE the flip so we can swap the
     // relic content mid-flip (180° back-face moment). Purchased slots
     // stay frozen so EXIT does not resurrect cards into bought gaps.
-    const freshOffers = rollShopOffers()
+    // 현재 배치된 비구매 유물은 리롤 결과에서 제외한다(풀이 부족하면 자동 폴백).
+    const currentRelicIds = currentShopOffers
+      .filter((e) => !e.purchased)
+      .map((e) => e.relicId)
+    const freshOffers = rollShopOffers(currentRelicIds)
     let freshIndex = 0
     const nextOffers = currentShopOffers.map((entry) => {
       if (entry.purchased) return entry
