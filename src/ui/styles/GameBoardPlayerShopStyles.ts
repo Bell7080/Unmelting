@@ -624,9 +624,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-reroll-btn.is-affordable { border-color: rgba(130, 210, 110, 0.65); }
 .shop-reroll-btn.is-affordable:hover { border-color: rgba(160, 240, 130, 0.8); }
 .shop-reroll-btn.is-reroll-impacted {
-  /* opacity:1을 명시해 base CSS의 opacity:0이 드러나지 않도록 고정한다. */
-  opacity: 1;
-  animation: shop-reroll-impact 0.42s cubic-bezier(0.2, 0.86, 0.22, 1) both;
+  animation: shop-reroll-impact 0.42s cubic-bezier(0.2, 0.86, 0.22, 1);
 }
 
 /* Free-card tile gets a warm candle-glow art band. */
@@ -1047,7 +1045,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 /* Reroll button now lives inside the artifact card layer, so it uses the same
    card-enter timing beat and no longer pops ahead of relic cards. */
 .shop-reroll-btn {
-  opacity: 0;
+  /* resting opacity는 1로 둔다. 인트로 숨김은 shop-card-enter(both)의
+     backwards-fill(0% 키프레임 opacity:0)이 460ms 딜레이 동안 처리한다.
+     base를 0으로 두면 is-shop-purchase-impact가 animation을 덮어 fill-mode를
+     none으로 리셋할 때 버튼이 영구히 사라지는 버그가 생긴다. */
   animation: shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both;
 }
 .shop-artifact-layer > .shop-reroll-card-anchor:nth-child(1) .shop-reroll-btn {
