@@ -1343,7 +1343,10 @@ async function consumeBossHandGiftThresholds(bossCardId: string): Promise<void> 
 /** 일반 게임의 손패 획득 trail/burst 양식을 그대로 재사용. */
 async function grantBossHandGift(bossCardId: string): Promise<void> {
   const character = gameState.character
-  const drawIds = sampleWithoutReplacement([...HAND_CARD_IDS], 1)
+  // 해금된 카드만 후보 — 잠기거나 밴된 카드는 게임에 없는 것으로 취급한다.
+  const { unlocked } = runCardPool.snapshot()
+  if (unlocked.length === 0) return
+  const drawIds = sampleWithoutReplacement(unlocked, 1)
   const id = drawIds[0]
   if (!id) return
   const accepted = character.addHandCard(DropSystem.makeCard(id))
