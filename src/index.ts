@@ -1169,10 +1169,10 @@ let bossPostPhaseHandLocked = false
 
 async function runBossRailEvent(): Promise<void> {
   const frozenRunTurn = gameState.getCurrentTurn()
-  const bossMaxHp = 30
+  const bossMaxHp = 50
   const bossAttack = 5
   const attackInterval = 3
-  const handGiftStep = 3
+  const handGiftStep = 10
   const bossName = '양초 백작'
 
   // 보스 phase 동안엔 일반 레일 카드들이 셔터 뒤 lanes에 그대로 살아있어 손패·조합식
