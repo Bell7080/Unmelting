@@ -1717,7 +1717,11 @@ export class GameBoardRenderer {
     // Reroll button (coins-based affordance + cost text).
     const reroll = shell.querySelector<HTMLElement>('.shop-reroll-btn')
     if (reroll) {
-      reroll.classList.remove('is-affordable', 'is-unaffordable')
+      // is-reroll-impacted overrides the animation, dropping opacity to 0. Remove it
+      // here (in-place refresh) and pin opacity via inline style so shop-card-enter's
+      // restart delay never flashes the button invisible.
+      reroll.classList.remove('is-affordable', 'is-unaffordable', 'is-reroll-impacted')
+      reroll.style.opacity = '1'
       reroll.classList.add(shop.coins >= shop.rerollCost ? 'is-affordable' : 'is-unaffordable')
       const costText = reroll.querySelector<HTMLElement>('.shop-reroll-btn-cost-text')
       if (costText) costText.textContent = `${shop.rerollCost.toLocaleString()}$`
@@ -3724,8 +3728,8 @@ export class GameBoardRenderer {
     reroll.classList.remove('is-reroll-impacted')
     void reroll.offsetWidth
     reroll.classList.add('is-reroll-impacted')
-    // shop-card-enter(fill:both)가 shop-reroll-impact에 덮여 사라지므로
-    // 애니메이션 종료 후 클래스를 제거해 opacity:1 상태를 복원한다.
+    // is-reroll-impacted 제거는 openShop → refreshOpenShopInPlace에서 처리하므로
+    // 타임아웃은 해당 흐름이 실패하는 경우를 위한 안전망으로만 남긴다.
     window.setTimeout(() => reroll.classList.remove('is-reroll-impacted'), 460)
 
     // Only relic slots reroll — free/pack inventory stays fixed.

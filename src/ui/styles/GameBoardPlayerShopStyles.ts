@@ -624,7 +624,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-reroll-btn.is-affordable { border-color: rgba(130, 210, 110, 0.65); }
 .shop-reroll-btn.is-affordable:hover { border-color: rgba(160, 240, 130, 0.8); }
 .shop-reroll-btn.is-reroll-impacted {
-  animation: shop-reroll-impact 0.42s cubic-bezier(0.2, 0.86, 0.22, 1);
+  /* opacity:1을 명시해 base CSS의 opacity:0이 드러나지 않도록 고정한다. */
+  opacity: 1;
+  animation: shop-reroll-impact 0.42s cubic-bezier(0.2, 0.86, 0.22, 1) both;
 }
 
 /* Free-card tile gets a warm candle-glow art band. */
