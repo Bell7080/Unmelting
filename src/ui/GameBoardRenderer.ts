@@ -2049,6 +2049,8 @@ export class GameBoardRenderer {
     name: string
     maxHp: number
     attack: number
+    attackInterval: number
+    handGiftStep: number
     spriteUrl?: string
   }): Promise<void> {
     // 잔재 정리: 직전 보스 이벤트가 비정상 종료됐다면 같은 노드가 남아 있을 수 있다.
@@ -2066,10 +2068,10 @@ export class GameBoardRenderer {
           <ul class="boss-intro-overlay-stats">
             <li><span class="boss-intro-overlay-stat-label">체력</span><span class="boss-intro-overlay-stat-value">${opts.maxHp}</span></li>
             <li><span class="boss-intro-overlay-stat-label">공격력</span><span class="boss-intro-overlay-stat-value">${opts.attack}</span></li>
-            <li><span class="boss-intro-overlay-stat-label">반격 주기</span><span class="boss-intro-overlay-stat-value">3턴</span></li>
+            <li><span class="boss-intro-overlay-stat-label">반격 주기</span><span class="boss-intro-overlay-stat-value">${opts.attackInterval}턴</span></li>
           </ul>
           <p class="boss-intro-overlay-desc">"내 저택에 온 것을 환영하네, 위태로운 불씨여."</p>
-          <p class="boss-intro-overlay-trait"><strong>특징</strong> · 보스 체력이 3 닳을 때마다 플레이어에게 랜덤 손패 1장을 지급한다.</p>
+          <p class="boss-intro-overlay-trait"><strong>특징</strong> · 보스 체력이 ${opts.handGiftStep} 닳을 때마다 플레이어에게 랜덤 손패 1장을 지급한다.</p>
         </div>
       </section>
       <div class="boss-intro-overlay-hint" aria-hidden="true">CLICK ANYWHERE TO CONTINUE</div>

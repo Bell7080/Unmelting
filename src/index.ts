@@ -728,7 +728,7 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
     altarBossDefeated = true
     trialPending = true
     turnManager.setTurnMode('boss_phase')
-    recordNotice('제단의 수문장 출현: 보스(HP30/ATK5, 3턴 주기) 설계 토대 활성', 'hurt')
+    recordNotice(`제단의 수문장 출현: 보스(HP${50}/ATK5, 3턴 주기) 설계 토대 활성`, 'hurt')
     // 현재는 프리뷰 단계이므로 즉시 일반 턴으로 되돌려 카운트 제외 규칙만 고정한다.
     turnManager.setTurnMode('normal_turn')
     render()
@@ -1248,6 +1248,8 @@ async function runBossRailEvent(): Promise<void> {
     name: bossName,
     maxHp: bossMaxHp,
     attack: bossAttack,
+    attackInterval,
+    handGiftStep,
     spriteUrl: SpriteUrls.boss,
   })
   await Promise.all([
