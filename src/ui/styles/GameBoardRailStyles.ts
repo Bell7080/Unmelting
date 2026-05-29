@@ -555,6 +555,13 @@ export const GAME_BOARD_RAIL_STYLES = `
   position: relative;
   z-index: 40;
 }
+/* waxSculptor는 dist-1도 보스 카드가 점유하므로 dist-0과 동일하게 셔터 위로 올린다.
+   back phase에서는 dist-2까지 점유하므로 dist-2도 함께 올린다. */
+.rail:has(.cell.card.boss-kind-waxSculptor) .rail-row.dist-1,
+.rail:has(.cell.card.boss-kind-waxSculptor) .rail-row.dist-2 {
+  position: relative;
+  z-index: 40;
+}
 /* ---- 사이즈 유형: boss-kind-waxArmy = 3x3 거대 적 ----
    active row의 grouped 3-cell이 .rail의 3 row를 모두 점유해 3x3 풀필드로 보인다.
    윗 두 row(dist-1, dist-2)는 보스 phase 동안 보스에 가려져야 하므로 숨긴다.
