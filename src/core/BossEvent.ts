@@ -470,15 +470,6 @@ export class BossEventController {
 
     this.inject.render()
     this.inject.recordNotice('밀랍 조각사가 후퇴하며 종복들을 소환했다!', 'hurt')
-
-    // 후방에서 플레이어에게 직접 타격
-    this.gs.character.takeDamage(state.def.attack)
-    await this.br.animateEnemyAttacks([
-      { cardId: state.card.id, cardName: state.def.name, laneIndex: 1, damage: state.def.attack },
-    ])
-    await this.br.animateDamageFlash()
-    this.inject.recordNotice(`조각사가 후방에서 강타! -${state.def.attack}`, 'hurt')
-    this.inject.render()
     this.inject.setInputLocked(false)
   }
 
@@ -505,6 +496,13 @@ export class BossEventController {
     card.takeDamage(dealt)
     await this.br.animateDamageNumbersById([{ cardId: card.id, amount: dealt }])
 
+    // 소환 적 타격도 보스 턴으로 집계 — 불씨 감소 + 카운트다운 갱신
+    state.turn += 1
+    this.tm.tickEmberDecay()
+    const remaining = state.def.attackInterval - (state.turn % state.def.attackInterval)
+    const displayValue = remaining === state.def.attackInterval ? state.def.attackInterval : remaining
+    this.br.setBossAttackCountdown(displayValue)
+
     if (card.getHealth() <= 0) {
       await this.br.animateCardConsume(card)
       // 해당 레인 dist-0에서 제거 (compact 없이 그대로 빈칸 유지 — 보스는 적 전멸 시에만 복귀)
@@ -515,7 +513,18 @@ export class BossEventController {
       this.inject.render()
     }
 
-    // 남은 소환 적이 있으면 반격, 없으면 보스 복귀
+    // 3턴 주기 도달 + 아직 소환 적 생존 → 후방에서 야비하게 플레이어 타격
+    if (state.turn % state.def.attackInterval === 0 && state.summonedEnemyIds.size > 0) {
+      character.takeDamage(state.def.attack)
+      await this.br.animateEnemyAttacks([
+        { cardId: state.card.id, cardName: state.def.name, laneIndex: 1, damage: state.def.attack },
+      ])
+      await this.br.animateDamageFlash()
+      this.inject.recordNotice(`조각사가 후방에서 야비하게 강타! -${state.def.attack}`, 'hurt')
+      this.inject.render()
+    }
+
+    // 남은 소환 적이 있으면 계속, 없으면 보스 복귀
     if (state.summonedEnemyIds.size > 0) {
       this.inject.setInputLocked(false)
       return
