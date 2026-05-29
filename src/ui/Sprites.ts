@@ -17,6 +17,7 @@
 
 import { Card, CardType, type EnemySpriteId, type FlowerKind, type TrapKind } from '@entities/Card'
 import type { HandCardId } from '@entities/HandCard'
+import { RECIPES } from '@data/Recipes'
 
 import backgroundUrl from '../assets/sprites/background_001.webp'
 import shopVeilBgUrl from '../assets/sprites/background_002.webp'
@@ -299,4 +300,19 @@ const basicItemGlob = import.meta.glob<{ default: string }>(
 /** 자원팩 항목 일러스트. 파일이 없으면 undefined → 팩 기본 이미지로 폴백. */
 export function spriteForBasicPackItem(illu: string): string | undefined {
   return basicItemGlob[`../assets/sprites/basic/${illu}.webp`]?.default
+}
+
+/** 강화팩 항목 일러스트 — 새 스프라이트 없이 기존 손패 아트를 재사용한다.
+ *  triple-{cardId}    → 그 카드 일러스트.
+ *  recipe-{recipeId}  → 레시피 첫 재료 카드 일러스트(마땅한 전용 아트가 없어 대표 재료로 대체). */
+export function spriteForUpgradePackItem(id: string): string | undefined {
+  if (id.startsWith('triple-')) {
+    return SpriteUrls.handCards[id.slice('triple-'.length) as HandCardId]
+  }
+  if (id.startsWith('recipe-')) {
+    const recipe = RECIPES.find((r) => r.id === id.slice('recipe-'.length))
+    const first = recipe ? (Object.keys(recipe.ingredients)[0] as HandCardId | undefined) : undefined
+    return first ? SpriteUrls.handCards[first] : undefined
+  }
+  return undefined
 }

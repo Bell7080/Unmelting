@@ -58,7 +58,7 @@ import { buildUnlockedEnhancePool } from '@systems/EnhancePackPool'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
-import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem } from '@ui/Sprites'
+import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, spriteForUpgradePackItem } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
 import okDanDanBoldUrl from './assets/fonts/OkDanDanBold.woff2'
 
@@ -857,30 +857,13 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
       }
     })
   }
-  // 강화팩: 현재 해금된 카드/조합식 항목만 포함 (UpgradePackPool.ts).
-  const rawPool =
-    kind === 'upgrade-pack'
-      ? buildUnlockedUpgradePool(runCardPool.snapshot().unlocked)
-      : SHOP_PACK_POOLS[kind]
-
-  const pool = rawPool.map((entry) => ({
+  // 강화팩: 현재 해금된 카드/조합식 항목만 포함(systems/UpgradePackPool.ts).
+  //   일러스트는 새 스프라이트 없이 기존 손패 아트를 재사용한다(triple→카드, recipe→첫 재료).
+  const pool = buildUnlockedUpgradePool(runCardPool.snapshot().unlocked).map((entry) => ({
     ...entry,
+    spriteUrl: spriteForUpgradePackItem(entry.id),
     apply: () => {
       switch (entry.id) {
-        // 자원팩 common
-        case 'heal-3':   character.heal(3);         return
-        case 'ember-1':  character.gainEmber(1);    return
-        case 'gauge-1':  character.gainCandle(1);   return
-        // 자원팩 rare
-        case 'heal-5':   character.heal(5);         return
-        case 'ember-3':  character.gainEmber(3);    return
-        case 'gauge-3':  character.gainCandle(3);   return
-        // 자원팩 epic
-        case 'coin-1p':  coins += 1;                return
-        case 'heal-10':  character.heal(10);        return
-        case 'ember-10': character.gainEmber(10);   return
-        case 'gauge-5':  character.gainCandle(5);   return
-        case 'shield-3': character.addShield(3);    return
         // 강화팩 common — 트리플 보너스
         case 'triple-wax-drop':   gameState.enhancements.tripleBonus['wax-drop'] = (gameState.enhancements.tripleBonus['wax-drop'] ?? 0) + 1; return
         case 'triple-candle':     gameState.enhancements.tripleBonus['candle']   = (gameState.enhancements.tripleBonus['candle']   ?? 0) + 1; return
@@ -911,7 +894,7 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
     (kind === 'basic-pack'
       ? 120 + shopBasicPackBuys * 40
       : kind === 'upgrade-pack'
-        ? 700 + shopUpgradePackBuys * 130
+        ? 500 + shopUpgradePackBuys * 130
         : 520 + shopUnlockPackBuys * 120)
   if (score < cost) return
   score = Math.max(0, score - cost)
