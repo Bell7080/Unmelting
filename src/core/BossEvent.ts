@@ -33,8 +33,12 @@ export interface BossDef {
   handGiftStep: number
   /** CSS boss-kind-* 마커 — Rail CSS 레이아웃과 연동 */
   specialEnemyKind: 'waxArmy' | 'waxSculptor'
-  /** lanes의 몇 개 row를 점유하는지(보스 카드 인스턴스를 박을 dist 수) */
-  groupRows: number
+  /** Card.groupCount 표시값 (점수·뱃지용). 실제 점유 행 수와 별도. */
+  groupCount: number
+  /** lanes에 보스 카드 인스턴스를 실제로 박을 dist 행 수.
+   *  waxArmy(30F)는 CSS로 시각 확장하므로 dist 0에만 박아 1.
+   *  waxSculptor(90F)는 실제 2행이므로 2. */
+  occupiedDistRows: number
   /** 일러스트 URL */
   spriteUrl: string
   /** 보스 타일 등장 연출 선택자 */
@@ -109,7 +113,8 @@ export class BossEventController {
       attackInterval: 3,
       handGiftStep: 10,
       specialEnemyKind: 'waxArmy',
-      groupRows: 3,
+      groupCount: 3,
+      occupiedDistRows: 1,   // CSS가 dist-0을 시각적으로 3행으로 확장, 데이터는 dist-0만
       spriteUrl: this.sprites.boss,
       appearAnimation: 'landing',
       introBubble: '내 저택에 온 것을 환영하네, 위태로운 불씨여',
@@ -128,7 +133,8 @@ export class BossEventController {
       attackInterval: 3,
       handGiftStep: 10,
       specialEnemyKind: 'waxSculptor',
-      groupRows: 2,
+      groupCount: 2,
+      occupiedDistRows: 2,   // dist-0 + dist-1 두 행에 실제로 카드 박음
       spriteUrl: this.sprites.boss90,
       appearAnimation: 'waxSculptor',
       introBubble: '...... 조각들이 당신을 바라본다',
@@ -277,10 +283,10 @@ export class BossEventController {
       def.attack,
       { specialEnemyKind: def.specialEnemyKind }
     )
-    bossCard.groupCount = def.groupRows
+    bossCard.groupCount = def.groupCount
     bossCard.enemyHealthTotal = def.maxHp
     bossCard.enemyDamageTotal = def.attack
-    for (let row = 0; row < def.groupRows; row++) {
+    for (let row = 0; row < def.occupiedDistRows; row++) {
       for (let i = 0; i < 3; i++) {
         this.gs.lanes[i].setCardAtDistance(row, bossCard)
       }
@@ -384,7 +390,10 @@ export class BossEventController {
     state.defeatTriggered = true
 
     await this.br.playBossDefeatSequence(state.card.id)
-    for (let i = 0; i < 3; i++) this.gs.lanes[i].setCardAtDistance(0, null)
+    // 보스가 실제로 점유했던 모든 행(occupiedDistRows)을 정리한다.
+    for (let row = 0; row < state.def.occupiedDistRows; row++) {
+      for (let i = 0; i < 3; i++) this.gs.lanes[i].setCardAtDistance(row, null)
+    }
     this.gs.bossBattleActive = false
     this.br.setBossAttackCountdown(null)
     this.inject.render()
