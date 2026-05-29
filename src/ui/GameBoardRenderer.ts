@@ -2216,8 +2216,11 @@ export class GameBoardRenderer {
     // 블라스트는 착지 순간(448ms)에 맞춰 발사한다
     await new Promise((r) => window.setTimeout(r, 448))
 
-    // 착지 순간 모든 face 중심 기준 블라스트
-    const rects = allFaces.map((f) => f.getBoundingClientRect())
+    // 착지 순간 가시 face(display:none인 행은 제외)의 중심 기준 블라스트
+    const rects = allFaces
+      .map((f) => f.getBoundingClientRect())
+      .filter((r) => r.width > 0 && r.height > 0)
+    if (rects.length === 0) return
     const cx = (Math.min(...rects.map((r) => r.left)) + Math.max(...rects.map((r) => r.right))) / 2
     const cy = (Math.min(...rects.map((r) => r.top))  + Math.max(...rects.map((r) => r.bottom))) / 2
     SquareBurst.playAt(cx, cy, 'damage', { count: 32, spread: 260, duration: 580 })

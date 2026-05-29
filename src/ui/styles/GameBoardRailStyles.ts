@@ -555,10 +555,10 @@ export const GAME_BOARD_RAIL_STYLES = `
   position: relative;
   z-index: 40;
 }
-/* waxSculptor는 dist-1도 보스 카드가 점유하므로 dist-0과 동일하게 셔터 위로 올린다.
-   back phase에서는 dist-2까지 점유하므로 dist-2도 함께 올린다. */
-.rail:has(.cell.card.boss-kind-waxSculptor) .rail-row.dist-1,
-.rail:has(.cell.card.boss-kind-waxSculptor) .rail-row.dist-2 {
+/* waxSculptor: 보이는 행만 셔터 위로 올린다.
+   front phase에서 dist-0은 type-boss 공통 규칙이 처리.
+   back phase에서 dist-1(보스 행)을 올린다. */
+.rail:has(.cell.card.boss-kind-waxSculptor) .rail-row.dist-1 {
   position: relative;
   z-index: 40;
 }
@@ -575,9 +575,24 @@ export const GAME_BOARD_RAIL_STYLES = `
 }
 
 /* ---- 사이즈 유형: boss-kind-waxSculptor = 2×3 ----
-   dist-0(active)·dist-1 두 행에 보스 카드가 박힌다.
-   dist-2는 null(빈 칸)이라 자연적으로 빈 상단 행(□□□)이 보인다.
-   CSS 레이아웃 override 불필요 — 기본 grid 순서(dist-2 위·dist-0 아래)가 정확히 맞음. */
+   :has()로 어느 dist에 보스 카드가 있는지 감지해 front/back phase를 구분한다.
+   front phase(dist-0+1 점유): dist-0을 2행 확장, dist-1 숨김 → 상단 □□□ + 하단 2행 보스.
+   back  phase(dist-1+2 점유): dist-1을 2행 확장, dist-2 숨김 → 상단 2행 보스 + 하단 소환 적. */
+/* front phase */
+.rail:has(.rail-row.dist-0 .cell.card.boss-kind-waxSculptor) .rail-row.dist-0 {
+  grid-row: 2 / 4;
+}
+.rail:has(.rail-row.dist-0 .cell.card.boss-kind-waxSculptor) .rail-row.dist-1 {
+  display: none;
+}
+/* back phase */
+.rail:has(.rail-row.dist-2 .cell.card.boss-kind-waxSculptor) .rail-row.dist-1 {
+  display: grid;
+  grid-row: 1 / 3;
+}
+.rail:has(.rail-row.dist-2 .cell.card.boss-kind-waxSculptor) .rail-row.dist-2 {
+  display: none;
+}
 
 /* waxSculptor 등장 연출 — 6칸 동시 투명→확대→쿵 착지 */
 .boss-face.is-wax-sculptor-entering {
