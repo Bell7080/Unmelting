@@ -93,6 +93,8 @@ export interface BossInjected {
   openTrialOverlayForced: () => Promise<void>
   /** 유물 구매 즉발 효과 적용 */
   applyRelicPurchaseEffect: (id: RelicId) => Promise<void>
+  /** 플레이어 체력 0 처리 — Hope 유물 부활 시 true, 실제 패배 시 false + 게임오버 화면 */
+  handlePlayerDeath: () => Promise<boolean>
 }
 
 // ---- Controller ------------------------------------------------------------
@@ -220,6 +222,10 @@ export class BossEventController {
       await this.br.animateDamageFlash()
       this.inject.recordNotice(`보스 반격! 플레이어가 ${card.getDamage()} 피해를 받았다`, 'hurt')
       this.inject.render()
+      if (!this.gs.character.isAlive()) {
+        await this.inject.handlePlayerDeath()
+        return
+      }
     }
 
     this.inject.setInputLocked(false)
@@ -565,6 +571,10 @@ export class BossEventController {
       const totalDmg = aliveEnemies.reduce((s, e) => s + e.getDamage(), 0)
       this.inject.recordNotice(`소환 적들의 반격! -${totalDmg}`, 'hurt')
       this.inject.render()
+      if (!character.isAlive()) {
+        await this.inject.handlePlayerDeath()
+        return
+      }
     }
 
     // 3턴 주기 도달 + 소환 적 생존 → 조각사가 후방에서 야비하게 돌진 타격
@@ -574,6 +584,10 @@ export class BossEventController {
       await this.br.animateDamageFlash()
       this.inject.recordNotice(`조각사가 후방에서 야비하게 강타! -${state.def.attack}`, 'hurt')
       this.inject.render()
+      if (!character.isAlive()) {
+        await this.inject.handlePlayerDeath()
+        return
+      }
     }
 
     if (state.summonedEnemyIds.size > 0) {

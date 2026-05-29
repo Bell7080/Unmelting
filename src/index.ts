@@ -221,6 +221,12 @@ const bossController = new BossEventController(
     recordNotice: (msg, kind) => recordNotice(msg, kind),
     openTrialOverlayForced: () => openTrialOverlayForced(),
     applyRelicPurchaseEffect: (id) => applyRelicPurchaseEffect(id),
+    handlePlayerDeath: async () => {
+      if (await tryResolveHopeRevive()) return true
+      gameState.endGame('character_defeated')
+      finishTurn()
+      return false
+    },
   }
 )
 /** Dev-only command palette is temporary tooling and must be removed before release. */
