@@ -1244,6 +1244,8 @@ async function runPreparationRefreshAfterFieldEffects(
       // the same preparation beat so every front-row bomb advertises the same
       // one-action fuse instead of waiting for a later cleanup path.
       turnManager.armFrontBombs()
+      // 조각사가 compact로 전방 복귀했다면 페이즈 전환 처리
+      bossController.checkSculptorPhaseAfterCompact()
       render()
       await wait(200)
     }
@@ -1253,6 +1255,8 @@ async function runPreparationRefreshAfterFieldEffects(
     for (let laneIndex = 0; laneIndex < gameState.lanes.length; laneIndex++) {
       const lane = gameState.lanes[laneIndex]
       if (lane.getCardAtDistance(topDistance)) continue
+      // 보스 전투 중에는 레일 최상단 리필을 억제해 보스 격리 공간을 유지한다
+      if (gameState.bossBattleActive) continue
       lane.setCardAtDistance(topDistance, cardSpawner.spawnCardForRefill())
       filled = true
     }

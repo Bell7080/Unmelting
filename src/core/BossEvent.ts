@@ -19,6 +19,7 @@ import type { SpeechBubble } from '@ui/SpeechBubble'
 import { getHandCardDef } from '@data/HandCards'
 import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
 import { sampleWithoutReplacement } from '@core/Sampling'
+import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
 
 // ---- 보스별 스탯 정의 -------------------------------------------------------
 
@@ -62,6 +63,10 @@ export interface BossEventState {
   defeated: (() => void) | null
   savedActiveRow: (Card | null)[]
   defeatTriggered: boolean
+  /** waxSculptor 전용: 현재 전방(front)/후방(back) 페이즈 */
+  sculptorPhase: 'front' | 'back'
+  /** waxSculptor 현재 점유 시작 dist-row (front=0, back=1) */
+  sculptorStartRow: number
 }
 
 export interface BossRewardState {
@@ -193,6 +198,11 @@ export class BossEventController {
     }
 
     if (state.turn % state.def.attackInterval === 0) {
+      if (state.def.specialEnemyKind === 'waxSculptor') {
+        // 3턴마다 조각사 페이즈 교체 — 공격 대신 소환/후방 이동 연출
+        await this.handleSculptorPhaseShift()
+        return
+      }
       character.takeDamage(card.getDamage())
       await this.br.animateEnemyAttacks([
         { cardId: card.id, cardName: card.name, laneIndex: 0, damage: card.getDamage() },
@@ -313,6 +323,8 @@ export class BossEventController {
       defeated: null,
       savedActiveRow: savedField[0],
       defeatTriggered: false,
+      sculptorPhase: 'front',
+      sculptorStartRow: 0,
     }
 
     this.tm.setTurnMode('boss_phase')
@@ -395,6 +407,72 @@ export class BossEventController {
     await this.br.animateResourceTrailFromCard(bossCardId, 'hand', 1, 'hand-recovery')
   }
 
+  // ---- waxSculptor 전용 페이즈 메커니즘 ------------------------------------
+
+  /** 3턴 트리거 시 조각사를 후방으로 이동시키고 dist-0에 적을 소환한다. */
+  private async handleSculptorPhaseShift(): Promise<void> {
+    const state = this.eventState!
+    // front → back: dist-0+dist-1 → dist-1+dist-2, dist-0에 적 소환
+    for (let i = 0; i < 3; i++) {
+      this.gs.lanes[i].setCardAtDistance(0, null)
+      this.gs.lanes[i].setCardAtDistance(1, null)
+    }
+    for (let i = 0; i < 3; i++) {
+      this.gs.lanes[i].setCardAtDistance(1, state.card)
+      this.gs.lanes[i].setCardAtDistance(2, state.card)
+    }
+    state.sculptorPhase = 'back'
+    state.sculptorStartRow = 1
+
+    // 각 레인에 후기 적 1마리씩 소환 (합산 금지 — 독립 인스턴스)
+    const pool = ENEMY_DEFINITIONS.slice(6, 12)
+    for (let i = 0; i < 3; i++) {
+      const def = pool[Math.floor(Math.random() * pool.length)]
+      const enemy = new Card(
+        `sculptor-summon-${i}-${Math.random()}`,
+        CardType.ENEMY,
+        def.name,
+        def.description,
+        def.healthOrDamage ?? 1,
+        def.attack ?? 1,
+        { enemySpriteId: def.enemySpriteId, enemyPower: def.enemyPower },
+      )
+      this.gs.lanes[i].setCardAtDistance(0, enemy)
+    }
+
+    this.inject.render()
+    this.inject.recordNotice('밀랍 조각사가 후퇴하며 종복들을 소환했다!', 'hurt')
+
+    // 후방에서 플레이어에게 직접 타격
+    this.gs.character.takeDamage(state.def.attack)
+    await this.br.animateEnemyAttacks([
+      { cardId: state.card.id, cardName: state.def.name, laneIndex: 1, damage: state.def.attack },
+    ])
+    await this.br.animateDamageFlash()
+    this.inject.recordNotice(`조각사가 후방에서 강타! -${state.def.attack}`, 'hurt')
+    this.inject.render()
+    this.inject.setInputLocked(false)
+  }
+
+  /**
+   * compactLanes 실행 후 호출. 조각사가 후방(dist-1+2)에서 dist-0+1(전방)으로
+   * 돌아왔다면 페이즈를 'front'로 전환한다.
+   * index.ts의 runPreparationRefreshAfterFieldEffects 내 compact 직후에 호출할 것.
+   */
+  checkSculptorPhaseAfterCompact(): void {
+    if (!this.eventState) return
+    const state = this.eventState
+    if (state.def.specialEnemyKind !== 'waxSculptor' || state.sculptorPhase !== 'back') return
+    // compactLanes가 조각사를 dist-0으로 내려보냈는지 확인
+    const atDist0 = this.gs.lanes[0].getCardAtDistance(0)
+    if (atDist0 === state.card) {
+      state.sculptorPhase = 'front'
+      state.sculptorStartRow = 0
+      this.inject.recordNotice('밀랍 조각사가 전방으로 복귀했다. 다시 쓰러뜨려라!', 'info')
+      this.inject.render()
+    }
+  }
+
   private async handleDefeated(): Promise<void> {
     if (!this.eventState) return
     const state = this.eventState
@@ -402,9 +480,14 @@ export class BossEventController {
     state.defeatTriggered = true
 
     await this.br.playBossDefeatSequence(state.card.id)
-    // 보스가 실제로 점유했던 모든 행(occupiedDistRows)을 정리한다.
-    for (let row = 0; row < state.def.occupiedDistRows; row++) {
+    // 보스가 현재 실제로 점유 중인 행(startRow부터 occupiedDistRows)을 정리한다.
+    const startRow = state.sculptorStartRow
+    for (let row = startRow; row < startRow + state.def.occupiedDistRows; row++) {
       for (let i = 0; i < 3; i++) this.gs.lanes[i].setCardAtDistance(row, null)
+    }
+    // 후방 페이즈 중 격파된 경우 dist-0 소환 적도 제거
+    if (state.def.specialEnemyKind === 'waxSculptor' && state.sculptorPhase === 'back') {
+      for (let i = 0; i < 3; i++) this.gs.lanes[i].setCardAtDistance(0, null)
     }
     this.gs.bossBattleActive = false
     this.br.setBossAttackCountdown(null)
