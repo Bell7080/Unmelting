@@ -1224,6 +1224,11 @@ function seedTopRowWithSeparatedRefillRow(): boolean {
 async function runPreparationRefreshAfterFieldEffects(
   options: PreparationRefreshOptions = {}
 ): Promise<void> {
+  // 보스 전투 중: compact/regroup/리필이 보스 레이아웃과 소환 적을 망가뜨리므로 렌더만 갱신
+  if (gameState.bossBattleActive) {
+    render()
+    return
+  }
   // Mirror compactAndRefillRails() as visible beats: cards fall first, then new
   // top cards appear, and the loop repeats until every rail is continuous/full.
   let movedAny = false

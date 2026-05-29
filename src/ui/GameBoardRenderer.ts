@@ -2063,6 +2063,8 @@ export class GameBoardRenderer {
     introBubble?: string
     /** 인트로 카드에 표시할 특징 한 줄 */
     trait?: string
+    /** 인트로 카드 상단 수식어 (기본: 탐욕의 대가) */
+    kicker?: string
   }): Promise<void> {
     // 잔재 정리: 직전 보스 이벤트가 비정상 종료됐다면 같은 노드가 남아 있을 수 있다.
     document.getElementById('boss-intro-overlay')?.remove()
@@ -2074,7 +2076,7 @@ export class GameBoardRenderer {
       <section class="boss-intro-overlay-card" role="dialog" aria-label="보스 출현">
         <div class="boss-intro-overlay-art" style="background-image:url('${spriteUrl}');" aria-hidden="true"></div>
         <div class="boss-intro-overlay-body">
-          <span class="boss-intro-overlay-kicker">탐욕의 대가</span>
+          <span class="boss-intro-overlay-kicker">${escapeHtml(opts.kicker ?? '탐욕의 대가')}</span>
           <h2 class="boss-intro-overlay-name">${escapeHtml(opts.name)}</h2>
           <ul class="boss-intro-overlay-stats">
             <li><span class="boss-intro-overlay-stat-label">체력</span><span class="boss-intro-overlay-stat-value">${opts.maxHp}</span></li>
@@ -2263,6 +2265,38 @@ export class GameBoardRenderer {
     }
     await new Promise((r) => window.setTimeout(r, 200))
     faces.forEach((f) => f.classList.remove('is-wax-sculptor-returning'))
+  }
+
+  /** 조각사 소환 연출 — 좌→우 순서로 각 적이 작은 상태에서 확대되며 격렬하게 흔들려 들어온다.
+   *  enemyIds는 레인 0→1→2 순서로 전달한다. */
+  async animateSculptorSummonEnemies(enemyIds: string[]): Promise<void> {
+    const STAGGER = 160  // 레인 간 지연 ms
+    const animations: Promise<void>[] = []
+
+    for (let i = 0; i < enemyIds.length; i++) {
+      const delay = i * STAGGER
+      const id = enemyIds[i]
+      animations.push(
+        new Promise<void>((resolve) => {
+          window.setTimeout(() => {
+            const el = this.boardElement.querySelector<HTMLElement>(
+              `.cell.card[data-card-id="${id}"]`
+            )
+            if (!el) { resolve(); return }
+            // 소환 시 사각 버스트 (작은 폭발 톤)
+            SquareBurst.playOn(el, 'damage', { count: 12, spread: 100, duration: 480 })
+            el.classList.add('is-sculptor-summoning')
+            window.setTimeout(() => {
+              el.classList.remove('is-sculptor-summoning')
+              resolve()
+            }, 620)
+          }, delay)
+        })
+      )
+    }
+    await Promise.all(animations)
+    // 마지막 카드 애니메이션이 끝난 후 짧은 여운
+    await new Promise((r) => window.setTimeout(r, 120))
   }
 
   /** 후방 페이즈 조각사 공격 전용 연출 — 들어올려짐 → 돌진 → 쾅 착지 → 복귀.

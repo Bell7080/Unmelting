@@ -595,6 +595,21 @@ export const GAME_BOARD_RAIL_STYLES = `
   display: none;
 }
 
+/* 소환 적 등장 — 작게 나타나 확대되며 격렬하게 흔들리듯 형태가 잡힘 */
+.cell.card.is-sculptor-summoning {
+  animation: sculptor-summon-appear 0.62s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes sculptor-summon-appear {
+  0%   { opacity: 0; transform: scale(0.28) rotate(-6deg); filter: brightness(2.4) saturate(0) blur(4px); }
+  30%  { opacity: 1; transform: scale(1.18) rotate(5deg);  filter: brightness(1.6) saturate(0.6) blur(0px); }
+  45%  { transform: scale(0.90) rotate(-4deg); filter: brightness(1.2) saturate(0.8); }
+  58%  { transform: scale(1.10) rotate(3deg);  filter: brightness(1.15); }
+  70%  { transform: scale(0.96) rotate(-2deg); }
+  82%  { transform: scale(1.04) rotate(1deg);  }
+  92%  { transform: scale(0.99) rotate(-0.5deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); filter: brightness(1) saturate(1); }
+}
+
 /* waxSculptor 등장 연출 — 6칸 동시 투명→확대→쿵 착지 */
 .boss-face.is-wax-sculptor-entering {
   animation: wax-sculptor-enter 0.56s cubic-bezier(0.22, 1, 0.36, 1) both;

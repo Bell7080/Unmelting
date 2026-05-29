@@ -53,6 +53,8 @@ export interface BossDef {
   playerBubbleMs: number
   /** 인트로 오버레이에 표시되는 특징 한 줄 */
   trait: string
+  /** 인트로 오버레이 상단 수식어 */
+  kicker: string
 }
 
 // ---- 내부 상태 인터페이스 ---------------------------------------------------
@@ -137,6 +139,7 @@ export class BossEventController {
       // 타자기(12자×70ms≈840ms) + 읽기(1800ms) + 퇴장(400ms)
       playerBubbleMs: 2800,
       trait: '보스 체력이 10 닳을 때마다 플레이어에게 랜덤 손패 1장을 지급한다.',
+      kicker: '탐욕의 대가',
     }
     await this.runBossEvent(def)
   }
@@ -162,6 +165,7 @@ export class BossEventController {
       // 타자기(15자×70ms≈1050ms) + 읽기(2000ms)
       playerBubbleMs: 3050,
       trait: '3턴마다 밀랍을 조각해 양초를 소환하고 몸을 숨깁니다.',
+      kicker: '광기의 예술가',
     }
     await this.runBossEvent(def)
   }
@@ -388,6 +392,7 @@ export class BossEventController {
       spriteUrl: def.spriteUrl,
       introBubble: def.introBubble,
       trait: def.trait,
+      kicker: def.kicker,
     })
     await Promise.all([
       new Promise((r) => window.setTimeout(r, 560)),
@@ -491,6 +496,9 @@ export class BossEventController {
 
     this.inject.render()
     this.inject.recordNotice('밀랍 조각사가 후퇴하며 종복들을 소환했다!', 'hurt')
+    // 좌→우 순서로 소환 연출 (enemyIds는 레인 0→1→2)
+    const summonedIds = [...state.summonedEnemyIds]
+    await this.br.animateSculptorSummonEnemies(summonedIds)
   }
 
   /** 후방 페이즈에 소환된 적 카드인지 식별. handleCardAction 라우팅에서 사용. */
