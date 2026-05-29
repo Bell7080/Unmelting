@@ -12,6 +12,7 @@
  *   - Flower: flower_000 seed, flower_001~005 blooms, enemyflower_001 monster flower.
  *   - Rail / stage backdrop: background_001.
  *   - Boss: boss_001. Trial veil: background_005.
+ *   - Boss 90F (밀랍 조각사): boss_003 (미준비 시 boss_001 폴백).
  *   - Trial cards: trial_001 광란 / trial_004 역경 / trial_007 가난.
  */
 
@@ -25,6 +26,7 @@ import shopPickerBgUrl from '../assets/sprites/background_003.webp'
 import altarVeilBgUrl from '../assets/sprites/background_004.webp'
 import trialVeilBgUrl from '../assets/sprites/background_005.webp'
 import boss001Url from '../assets/sprites/boss_001.webp'
+import boss003Url from '../assets/sprites/boss_003.webp'
 import playerUrl from '../assets/sprites/player_001.webp'
 import enemy001Url from '../assets/sprites/enemy_001.webp'
 import enemy002Url from '../assets/sprites/enemy_002.webp'
@@ -104,8 +106,10 @@ export const SpriteUrls = {
   altarVeilBg: altarVeilBgUrl,
   /** Trial (시련) overlay backdrop. */
   trialVeilBg: trialVeilBgUrl,
-  /** Boss card illustration. */
+  /** 30층 보스(양초 백작) 일러스트. */
   boss: boss001Url,
+  /** 90층 보스(밀랍 조각사) 일러스트. */
+  boss90: boss003Url,
   player: playerUrl,
   // 사용자 지정 매핑: 001 키틴벌레, 002 거미, 003 생쥐, 004 개구리, 005 새, 006 두더지.
   enemyChitin: enemy001Url,
@@ -250,7 +254,10 @@ function spriteForNormalEnemy(card: Card): string {
 }
 
 export function spriteForCard(card: Card): string {
-  if (card.type === CardType.BOSS) return SpriteUrls.boss
+  if (card.type === CardType.BOSS) {
+    if (card.specialEnemyKind === 'waxSculptor') return SpriteUrls.boss90
+    return SpriteUrls.boss
+  }
   if (card.type === CardType.ENEMY) {
     if (card.specialEnemyKind === 'monsterFlower') return SpriteUrls.monsterFlower
     if (card.specialEnemyKind === 'waxArmy') return SpriteUrls.enemyWaves[3]

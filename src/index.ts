@@ -1102,11 +1102,16 @@ async function closeShopAndResume(): Promise<void> {
   await boardRenderer.playShopExitAnimation()
   boardRenderer.closeShop()
   // 제단 EXIT는 셔터를 올리지 않고 곧장 보스 게이트로 이어간다.
+  // 30턴=30F 보스, 90턴=90F 보스(밀랍 조각사), 60턴은 60F 보스 미구현으로 30F 흐름 재사용.
   if (currentShopMode === 'altar') {
     await boardRenderer.playAltarBossGateTransition()
     turnManager.setTurnMode('boss_phase')
     recordNotice('셔터 레일이 흔들리며 보스가 강림한다', 'hurt')
-    await runBossRailEvent()
+    if (gameState.getCurrentTurn() === 90) {
+      await runBoss90RailEvent()
+    } else {
+      await runBossRailEvent()
+    }
     inputLocked = false
     render()
     return
@@ -1261,6 +1266,104 @@ async function runBossRailEvent(): Promise<void> {
   turnManager.setTurnMode('normal_turn')
 
   // 시련은 기존 shop-shell 흐름을 재사용. EXIT 시 셔터가 비로소 상승한다.
+  await openTrialOverlayForced()
+
+  if (gameState.getCurrentTurn() !== frozenRunTurn)
+    recordNotice(`경고: 보스 이벤트 중 실제 턴(${frozenRunTurn})이 변경됨`, 'hurt')
+}
+
+/** 90층 보스 이벤트 — 밀랍 조각사(2×3 waxSculptor).
+ *  runBossRailEvent와 동일한 흐름이지만 specialEnemyKind='waxSculptor',
+ *  groupCount=2(dist-0/1 두 행), 등장 연출은 playWaxSculptorAppearAnimation을 쓴다. */
+async function runBoss90RailEvent(): Promise<void> {
+  const frozenRunTurn = gameState.getCurrentTurn()
+  const bossMaxHp = 50
+  const bossAttack = 6
+  const attackInterval = 3
+  const handGiftStep = 10
+  const bossName = '밀랍 조각사'
+
+  // 필드 전체 백업 후 비우기 — 30F 보스와 동일한 방식.
+  const savedField: (Card | null)[][] = []
+  for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+    const row: (Card | null)[] = []
+    for (let i = 0; i < gameState.lanes.length; i++) {
+      row.push(gameState.lanes[i].getCardAtDistance(d))
+      gameState.lanes[i].setCardAtDistance(d, null)
+    }
+    savedField.push(row)
+  }
+  const savedActiveRow = savedField[0]
+
+  // 2×3 보스: lanes 3개 × dist 0/1 두 행에 같은 인스턴스를 박는다.
+  const bossCard = new Card(
+    `boss-altar-90-${gameState.getCurrentTurn()}`,
+    CardType.BOSS,
+    bossName,
+    '밀랍으로 빚은 조각들의 집합체',
+    bossMaxHp,
+    bossAttack,
+    { specialEnemyKind: 'waxSculptor' }
+  )
+  bossCard.groupCount = 2
+  bossCard.enemyHealthTotal = bossMaxHp
+  bossCard.enemyDamageTotal = bossAttack
+  for (let i = 0; i < 3; i++) {
+    gameState.lanes[i].setCardAtDistance(0, bossCard)
+    gameState.lanes[i].setCardAtDistance(1, bossCard)
+  }
+  gameState.encounteredEnemyNames.add(bossCard.name)
+
+  bossEventState = {
+    card: bossCard,
+    attackInterval,
+    handGiftStep,
+    turn: 0,
+    nextHandGiftAt: bossMaxHp - handGiftStep,
+    defeated: null,
+    savedActiveRow,
+    defeatTriggered: false,
+  }
+
+  gameState.bossBattleActive = true
+  boardRenderer.setBossAttackCountdown(attackInterval)
+
+  // 보스 타일을 렌더링한 뒤 6칸 랜덤 등장 연출(playWaxSculptorAppearAnimation).
+  render()
+  await boardRenderer.playWaxSculptorAppearAnimation(bossCard.id)
+  bossBubble.show('...... 조각들이 당신을 바라본다')
+  await new Promise((resolve) => window.setTimeout(resolve, 3800))
+  bossBubble.dismiss()
+  await new Promise((resolve) => window.setTimeout(resolve, 320))
+  speechBubble.show('말이 없군. 더 무서워!', 0)
+  await new Promise((resolve) => window.setTimeout(resolve, 2600))
+  speechBubble.dismiss()
+  await new Promise((resolve) => window.setTimeout(resolve, 400))
+  const introClosed = boardRenderer.openBossIntroOverlay({
+    name: bossName,
+    maxHp: bossMaxHp,
+    attack: bossAttack,
+    attackInterval,
+    handGiftStep,
+    spriteUrl: SpriteUrls.boss90,
+  })
+  await Promise.all([
+    new Promise((resolve) => window.setTimeout(resolve, 560)),
+    introClosed,
+  ])
+
+  inputLocked = false
+
+  await new Promise<void>((resolve) => {
+    bossEventState!.defeated = resolve
+  })
+
+  recordNotice('보스 처치! 레일 보상이 떨어진다', 'win')
+
+  bossEventState = null
+  await stageBossRewardChests(savedField)
+
+  turnManager.setTurnMode('normal_turn')
   await openTrialOverlayForced()
 
   if (gameState.getCurrentTurn() !== frozenRunTurn)

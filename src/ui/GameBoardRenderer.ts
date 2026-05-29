@@ -2198,6 +2198,58 @@ export class GameBoardRenderer {
     tile.classList.remove('is-boss-landing')
   }
 
+  /** 밀랍 조각사(2×3) 등장 연출.
+   *  dist-0/dist-1 두 row의 boss-face들을 랜덤 순서로 개별 출현시킨 뒤
+   *  전체 조립 펄스로 마무리한다. */
+  async playWaxSculptorAppearAnimation(cardId: string): Promise<void> {
+    // dist-0(3칸) + dist-1(3칸) = 6칸. 랜덤 순서로 출현 딜레이 배정.
+    const allFaces = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        `.rail-row.dist-0 .cell[data-card-id="${cardId}"] .boss-face,
+         .rail-row.dist-1 .cell[data-card-id="${cardId}"] .boss-face`
+      )
+    )
+    if (allFaces.length === 0) return
+
+    // 피셔-예이츠 셔플로 랜덤 순서 결정
+    const order = allFaces.map((_, i) => i)
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[order[i], order[j]] = [order[j], order[i]]
+    }
+
+    // 각 face에 딜레이 CSS 변수 + appearing 클래스 부여 (75ms 간격)
+    const delayStep = 75
+    order.forEach((faceIndex, rank) => {
+      const face = allFaces[faceIndex]
+      // 랜덤 기울기 — 셀마다 ±6도 안에서 다른 방향으로 등장
+      const tilt = ((Math.random() * 12) - 6).toFixed(1)
+      face.style.setProperty('--cell-delay', `${rank * delayStep}ms`)
+      face.style.setProperty('--cell-tilt', tilt)
+      face.classList.add('is-wax-cell-appearing')
+    })
+
+    // 마지막 셀이 출현 완료될 때까지 대기 (전체 딜레이 + 애니메이션 380ms)
+    const totalDelay = (allFaces.length - 1) * delayStep + 380
+    await new Promise((r) => window.setTimeout(r, totalDelay))
+
+    // 조립 완료 — 각 face의 appearing 클래스 제거 후 펄스
+    allFaces.forEach((face) => face.classList.remove('is-wax-cell-appearing'))
+    allFaces.forEach((face) => {
+      face.classList.add('is-wax-sculptor-assembled')
+      window.setTimeout(() => face.classList.remove('is-wax-sculptor-assembled'), 560)
+    })
+
+    // 중심 burst 한 번
+    const firstFace = allFaces[0]
+    const rect = firstFace.closest('.rail-row')?.getBoundingClientRect()
+    if (rect) {
+      SquareBurst.playAt(rect.left + rect.width / 2, rect.top + rect.height / 2,
+        'treasure-gain', { count: 28, spread: 200, duration: 600 })
+    }
+    await new Promise((r) => window.setTimeout(r, 560))
+  }
+
   async playBossDefeatSequence(cardId: string): Promise<void> {
     const tile = this.findCardElement(cardId)
     if (!tile) return
