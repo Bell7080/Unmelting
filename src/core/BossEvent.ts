@@ -46,6 +46,10 @@ export interface BossDef {
   /** 보스 대사 */
   introBubble: string
   playerResponseBubble: string
+  /** 보스 말풍선 표시 후 대기 ms (등장+타자기+읽기 여유 합산) */
+  introBubbleMs: number
+  /** 플레이어 반응 말풍선 대기 ms */
+  playerBubbleMs: number
 }
 
 // ---- 내부 상태 인터페이스 ---------------------------------------------------
@@ -119,6 +123,10 @@ export class BossEventController {
       appearAnimation: 'landing',
       introBubble: '내 저택에 온 것을 환영하네, 위태로운 불씨여',
       playerResponseBubble: '네 저택이라고? 웃기시네!',
+      // 등장(300ms) + 타자기(18자×70ms≈1260ms) + 읽기(2600ms)
+      introBubbleMs: 4160,
+      // 타자기(12자×70ms≈840ms) + 읽기(1800ms) + 퇴장(400ms)
+      playerBubbleMs: 2800,
     }
     await this.runBossEvent(def)
   }
@@ -137,8 +145,12 @@ export class BossEventController {
       occupiedDistRows: 2,   // dist-0 + dist-1 두 행에 실제로 카드 박음
       spriteUrl: this.sprites.boss90,
       appearAnimation: 'waxSculptor',
-      introBubble: '...... 조각들이 당신을 바라본다',
-      playerResponseBubble: '말이 없군. 더 무서워!',
+      introBubble: '분명 실패작이었는데?',
+      playerResponseBubble: '드디어 만났어. 널 불태워주마!',
+      // 등장(300ms) + 타자기(9자×70ms≈630ms) + 읽기(1800ms)
+      introBubbleMs: 2730,
+      // 타자기(15자×70ms≈1050ms) + 읽기(2000ms)
+      playerBubbleMs: 3050,
     }
     await this.runBossEvent(def)
   }
@@ -317,11 +329,11 @@ export class BossEventController {
 
     // 보스 대사
     this.bossBubble.show(def.introBubble)
-    await new Promise((r) => window.setTimeout(r, def.appearAnimation === 'waxSculptor' ? 3800 : 4160))
+    await new Promise((r) => window.setTimeout(r, def.introBubbleMs))
     this.bossBubble.dismiss()
     await new Promise((r) => window.setTimeout(r, 320))
     this.speechBubble.show(def.playerResponseBubble, 0)
-    await new Promise((r) => window.setTimeout(r, def.appearAnimation === 'waxSculptor' ? 2600 : 2800))
+    await new Promise((r) => window.setTimeout(r, def.playerBubbleMs))
     this.speechBubble.dismiss()
     await new Promise((r) => window.setTimeout(r, 400))
 

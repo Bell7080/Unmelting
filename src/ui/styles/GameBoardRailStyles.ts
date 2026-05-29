@@ -567,40 +567,20 @@ export const GAME_BOARD_RAIL_STYLES = `
   display: none;
 }
 
-/* ---- 사이즈 유형: boss-kind-waxSculptor = 2x3 가로 직사각형 ----
-   active(dist-0) + dist-1 두 row만 점유. dist-2는 숨긴다.
-   6칸 출현 애니메이션용 .wax-sculptor-cell-N 마커는 JS가 직접 삽입한다. */
-.rail:has(.cell.card.boss-kind-waxSculptor) .rail-row.dist-0 {
-  grid-row: 1 / 3;
-}
-.rail:has(.cell.card.boss-kind-waxSculptor) .rail-row.dist-1 {
-  grid-row: 2 / 3;
-}
-.rail:has(.cell.card.boss-kind-waxSculptor) .rail-row.dist-2 {
-  display: none;
-}
+/* ---- 사이즈 유형: boss-kind-waxSculptor = 2×3 ----
+   dist-0(active)·dist-1 두 행에 보스 카드가 박힌다.
+   dist-2는 null(빈 칸)이라 자연적으로 빈 상단 행(□□□)이 보인다.
+   CSS 레이아웃 override 불필요 — 기본 grid 순서(dist-2 위·dist-0 아래)가 정확히 맞음. */
 
-/* 6칸 출현 연출 — JS가 .is-wax-cell-appearing 클래스를 랜덤 순서로 부여하고
-   각 셀의 --cell-delay(0~450ms)로 순차 페이드인된다. 합쳐짐은 마지막 셀 등장 후
-   .is-wax-sculptor-assembled 클래스를 추가해 border/shadow를 통합 처리. */
-.boss-face.is-wax-cell-appearing {
-  opacity: 0;
-  transform: scale(0.82);
-  animation: wax-cell-appear 0.38s cubic-bezier(0.22, 1, 0.36, 1) var(--cell-delay, 0ms) both;
+/* waxSculptor 등장 연출 — 6칸 동시 투명→확대→쿵 착지 */
+.boss-face.is-wax-sculptor-entering {
+  animation: wax-sculptor-enter 0.56s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-@keyframes wax-cell-appear {
-  0%   { opacity: 0; transform: scale(0.72) rotate(calc(var(--cell-tilt, 0) * 1deg)); filter: brightness(2.2) saturate(0); }
-  60%  { opacity: 1; transform: scale(1.06) rotate(0deg); filter: brightness(1.3) saturate(1.1); }
-  100% { opacity: 1; transform: scale(1) rotate(0deg); filter: brightness(1) saturate(1); }
-}
-/* 전체 조립 완료 후 보스 face 전체에 글로우 펄스 한 번. */
-.boss-face.is-wax-sculptor-assembled {
-  animation: wax-sculptor-assemble-pulse 0.55s ease-out forwards;
-}
-@keyframes wax-sculptor-assemble-pulse {
-  0%   { box-shadow: 0 0 0  rgba(255, 200, 100, 0); }
-  40%  { box-shadow: 0 0 40px rgba(255, 200, 100, 0.72); }
-  100% { box-shadow: 0 0 0  rgba(255, 200, 100, 0); }
+@keyframes wax-sculptor-enter {
+  0%   { opacity: 0; transform: scale(0.52); filter: brightness(3) saturate(0) blur(6px); }
+  55%  { opacity: 1; transform: scale(1.13); filter: brightness(1.35) saturate(0.5) blur(0px); }
+  80%  { transform: scale(0.96); filter: brightness(1.05) saturate(0.85); }
+  100% { opacity: 1; transform: scale(1);    filter: brightness(1) saturate(1); }
 }
 
 /* ---- 보스 공통 face(풀-아트 + overlay + 하단 보스바 + 좌상단 N턴 뱃지) ---- */
