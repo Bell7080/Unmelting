@@ -1575,6 +1575,7 @@ function setupDevCommandPalette(): void {
     <div class="dev-command-shell">
       <span class="dev-command-prefix">/</span>
       <input class="dev-command-input" type="text" spellcheck="false" autocomplete="off" />
+      <button class="dev-command-close" aria-label="닫기">✕</button>
       <div class="dev-command-hint">예시: /25turn, /희망, /양초, /1000불빛, /10$, /10화폐</div>
     </div>
     <button class="dev-command-run">실행</button>
@@ -1592,9 +1593,11 @@ function setupDevCommandPalette(): void {
   style.textContent = `
     .dev-command-palette { position: fixed; inset: 0 auto auto 0; width: 100%; z-index: 140; pointer-events: none; opacity: 0; transform: translateY(-8px); transition: opacity .14s ease, transform .14s ease; }
     .dev-command-palette.is-open { opacity: 1; transform: translateY(0); pointer-events: auto; }
-    .dev-command-shell { margin: 8px auto 0; width: min(760px, calc(100% - 24px)); border: 1px solid rgba(255,215,120,.4); border-radius: 12px; background: linear-gradient(180deg, rgba(38,26,48,.98), rgba(18,12,24,.98)); box-shadow: 0 14px 28px rgba(0,0,0,.55); padding: 10px 12px; display: grid; grid-template-columns: 18px 1fr; grid-template-areas: "prefix input" "hint hint"; column-gap: 8px; row-gap: 6px; }
+    .dev-command-shell { margin: 8px auto 0; width: min(760px, calc(100% - 24px)); border: 1px solid rgba(255,215,120,.4); border-radius: 12px; background: linear-gradient(180deg, rgba(38,26,48,.98), rgba(18,12,24,.98)); box-shadow: 0 14px 28px rgba(0,0,0,.55); padding: 10px 12px; display: grid; grid-template-columns: 18px 1fr auto; grid-template-areas: "prefix input close" "hint hint hint"; column-gap: 8px; row-gap: 6px; }
     .dev-command-prefix { grid-area: prefix; color: rgba(255,215,120,.92); font-weight: 900; align-self: center; }
     .dev-command-input { grid-area: input; border: 0; outline: none; background: transparent; color: rgba(255,245,220,.98); font: 900 15px/1.3 'OkDanDan', Georgia, serif; }
+    .dev-command-close { grid-area: close; background: none; border: none; color: rgba(255,215,120,.55); font-size: 14px; cursor: pointer; padding: 0 2px; align-self: center; line-height: 1; }
+    .dev-command-close:hover { color: rgba(255,215,120,.9); }
     .dev-command-hint { grid-area: hint; color: rgba(232,214,180,.78); font-size: 12px; }
     .dev-command-run { display: none; margin: 6px auto 0; width: min(760px, calc(100% - 24px)); padding: 8px 0; border: 1px solid rgba(255,215,120,.35); border-radius: 10px; background: rgba(38,26,48,.92); color: rgba(255,215,120,.92); font: 900 14px/1 'OkDanDan', Georgia, serif; cursor: pointer; letter-spacing: .04em; }
     .dev-command-mobile-btn { display: none; position: fixed; top: 8px; left: 8px; width: 34px; height: 34px; border-radius: 9px; border: 1px solid rgba(255,215,120,.38); background: rgba(18,12,24,.88); color: rgba(255,215,120,.9); font: 900 17px/1 'OkDanDan', Georgia, serif; cursor: pointer; z-index: 141; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.5); }
@@ -1607,7 +1610,8 @@ function setupDevCommandPalette(): void {
   const input = host.querySelector<HTMLInputElement>('.dev-command-input')
   const hint = host.querySelector<HTMLDivElement>('.dev-command-hint')
   const runBtn = host.querySelector<HTMLButtonElement>('.dev-command-run')
-  if (!input || !hint || !runBtn) return
+  const closeBtn = host.querySelector<HTMLButtonElement>('.dev-command-close')
+  if (!input || !hint || !runBtn || !closeBtn) return
   let opened = false
   const handNameMap = new Map<string, HandCardId>()
   for (const id of HAND_CARD_IDS) {
@@ -1679,10 +1683,17 @@ function setupDevCommandPalette(): void {
     setHint('알 수 없는 명령어입니다. /25turn, /희망, /양초, /1000불빛, /10$, /10화폐')
   }
 
+  // 닫기 버튼 (shell 우상단 ✕)
+  closeBtn.addEventListener('click', () => close())
   // 모바일 트리거 버튼 — 터치 기기에서 팔레트를 여는 진입점
   mobileBtn.addEventListener('click', () => open())
   // 모바일 실행 버튼 — 가상 키보드의 Enter 대신 탭으로 실행
   runBtn.addEventListener('click', () => { execute(input.value); input.select() })
+  // 외부 클릭/탭으로 닫기 — host 영역 바깥을 누르면 닫힌다
+  document.addEventListener('pointerdown', (e) => {
+    if (!opened) return
+    if (!host.contains(e.target as Node)) close()
+  })
 
   document.addEventListener('keydown', (e) => {
     if (e.key === '/' && !opened) {
