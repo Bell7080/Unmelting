@@ -2059,6 +2059,10 @@ export class GameBoardRenderer {
     attackInterval: number
     handGiftStep: number
     spriteUrl?: string
+    /** 인트로 카드에 표시할 보스 첫 대사 */
+    introBubble?: string
+    /** 인트로 카드에 표시할 특징 한 줄 */
+    trait?: string
   }): Promise<void> {
     // 잔재 정리: 직전 보스 이벤트가 비정상 종료됐다면 같은 노드가 남아 있을 수 있다.
     document.getElementById('boss-intro-overlay')?.remove()
@@ -2077,8 +2081,8 @@ export class GameBoardRenderer {
             <li><span class="boss-intro-overlay-stat-label">공격력</span><span class="boss-intro-overlay-stat-value">${opts.attack}</span></li>
             <li><span class="boss-intro-overlay-stat-label">반격 주기</span><span class="boss-intro-overlay-stat-value">${opts.attackInterval}턴</span></li>
           </ul>
-          <p class="boss-intro-overlay-desc">"내 저택에 온 것을 환영하네, 위태로운 불씨여."</p>
-          <p class="boss-intro-overlay-trait"><strong>특징</strong> · 보스 체력이 ${opts.handGiftStep} 닳을 때마다 플레이어에게 랜덤 손패 1장을 지급한다.</p>
+          <p class="boss-intro-overlay-desc">"${escapeHtml(opts.introBubble ?? '내 저택에 온 것을 환영하네, 위태로운 불씨여.')}"</p>
+          <p class="boss-intro-overlay-trait"><strong>특징</strong> · ${escapeHtml(opts.trait ?? `보스 체력이 ${opts.handGiftStep} 닳을 때마다 플레이어에게 랜덤 손패 1장을 지급한다.`)}</p>
         </div>
       </section>
       <div class="boss-intro-overlay-hint" aria-hidden="true">CLICK ANYWHERE TO CONTINUE</div>
@@ -2259,6 +2263,50 @@ export class GameBoardRenderer {
     }
     await new Promise((r) => window.setTimeout(r, 200))
     faces.forEach((f) => f.classList.remove('is-wax-sculptor-returning'))
+  }
+
+  /** 후방 페이즈 조각사 공격 전용 연출 — 들어올려짐 → 돌진 → 쾅 착지 → 복귀.
+   *  일반 animateEnemyAttacks보다 dy 범위가 크고 위로 들어올리는 프리임이 추가된다. */
+  async animateSculptorBackAttack(cardId: string): Promise<void> {
+    const element = this.findCardElement(cardId)
+    if (!element) return
+    const player = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
+    if (!player) return
+    const rect = element.getBoundingClientRect()
+    const playerRect = player.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) return
+
+    const dx = (playerRect.left + playerRect.width / 2 - (rect.left + rect.width / 2)) * 0.30
+    // 조각사 상단 → 플레이어 상단까지 전체 거리 (캡 없음 — 실제 이동량)
+    const dy = playerRect.top - rect.top + 24
+
+    const clone = element.cloneNode(true) as HTMLElement
+    element.classList.add('is-enemy-slamming-source')
+    clone.classList.add('enemy-attack-clone')
+    clone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;margin:0;z-index:250;pointer-events:none;transform-origin:50% 100%`
+    document.body.appendChild(clone)
+
+    const animation = clone.animate(
+      [
+        // 현재 위치
+        { transform: 'translate(0,0) scale(1,1)',                                        filter: 'brightness(1)',                                                               offset: 0    },
+        // 위로 들어올려짐 — 대기라인 이탈 느낌
+        { transform: 'translate(0,-38px) scale(1.09,0.93)',                              filter: 'brightness(1.45) drop-shadow(0 -14px 20px rgba(220,110,50,0.65))',            offset: 0.17 },
+        // 돌진 중간
+        { transform: `translate(${dx*0.52}px,${dy*0.52}px) scale(1.15,0.85)`,           filter: 'brightness(1.7) drop-shadow(0 32px 40px rgba(200,48,48,0.82))',               offset: 0.50 },
+        // 쾅 착지
+        { transform: `translate(${dx}px,${dy}px) scale(1.26,0.70)`,                     filter: 'brightness(1.9) drop-shadow(0 44px 52px rgba(224,24,24,0.96))',               offset: 0.61 },
+        // 반동
+        { transform: `translate(${dx*0.07}px,${dy*0.03}px) scale(0.97,1.05)`,           filter: 'brightness(1.06)',                                                            offset: 0.82 },
+        { transform: 'translate(0,0) scale(1,1)',                                        filter: 'brightness(1)',                                                               offset: 1    },
+      ],
+      { duration: 760, easing: 'cubic-bezier(0.18, 0.96, 0.22, 1)', fill: 'forwards' }
+    )
+
+    return new Promise<void>((resolve) => {
+      animation.onfinish = () => { clone.remove(); element.classList.remove('is-enemy-slamming-source'); resolve() }
+      window.setTimeout(() => { clone.remove(); element.classList.remove('is-enemy-slamming-source'); resolve() }, 940)
+    })
   }
 
   async playBossDefeatSequence(cardId: string): Promise<void> {

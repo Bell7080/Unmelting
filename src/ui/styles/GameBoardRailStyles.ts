@@ -637,9 +637,9 @@ export const GAME_BOARD_RAIL_STYLES = `
   background: var(--boss-art) center 32% / cover no-repeat;
   filter: saturate(1.06) contrast(1.04);
 }
-/* waxSculptor 일러스트는 상단부가 더 잘 보이도록 초점을 아래로 내린다 */
+/* waxSculptor 일러스트는 기본 32%보다 살짝 위로 올려 상단부가 더 드러나게 한다 */
 .boss-kind-waxSculptor .boss-face-art {
-  background-position: center 50%;
+  background-position: center 29%;
 }
 .boss-face-overlay {
   position: absolute;
