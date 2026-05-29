@@ -1,7 +1,7 @@
 import type { HandCardId } from '@entities/HandCard'
 import type { ShopPackKind } from '@ui/GameBoardRenderer'
 import { BASIC_PACK_POOL } from '@data/BasicPackPool'
-import { UPGRADE_PACK_POOL } from '@data/UpgradePackPool'
+import { UPGRADE_PACK_POOL } from '@data/UpgradePackItems'
 
 /** Shared rarity palette across relic/shop/free-pack visuals. */
 export type CardRarity = 'common' | 'rare' | 'epic' | 'unique' | 'legendary'
@@ -36,7 +36,7 @@ export const HAND_CARD_RARITY: Record<HandCardId, CardRarity> = {
 /** Shop pack pool config moved to data so shop/free/pack roll tables are data-driven. */
 export const SHOP_PACK_POOLS: Record<ShopPackKind, Omit<ShopPackPoolItem, 'apply'>[]> = {
   'basic-pack': BASIC_PACK_POOL,
-  // 강화팩 항목 테이블은 UpgradePackPool.ts에서 관리한다(트리플/레시피 강화, 항목별 weight).
+  // 강화팩 항목 테이블은 UpgradePackItems.ts에서 관리한다(트리플/레시피 강화, 항목별 weight).
   'upgrade-pack': UPGRADE_PACK_POOL,
   'unlock-pack': [],
   'blessing-pack': [],
