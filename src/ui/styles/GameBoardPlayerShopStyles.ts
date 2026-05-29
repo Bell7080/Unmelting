@@ -1045,13 +1045,17 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 /* Reroll button now lives inside the artifact card layer, so it uses the same
    card-enter timing beat and no longer pops ahead of relic cards. */
 .shop-reroll-btn {
-  /* resting opacity는 1로 둔다. 인트로 숨김은 shop-card-enter(both)의
-     backwards-fill(0% 키프레임 opacity:0)이 460ms 딜레이 동안 처리한다.
-     base를 0으로 두면 is-shop-purchase-impact가 animation을 덮어 fill-mode를
-     none으로 리셋할 때 버튼이 영구히 사라지는 버그가 생긴다. */
+  /* 평상시에는 애니메이션 없이 opacity:1로 둔다. 진입 페이드를 base에 상시로
+     두면 임팩트 클래스(is-shop-purchase-impact/is-reroll-impacted)가 animation을
+     덮었다가 제거되는 순간 shop-card-enter가 재발동해, 리롤 직후 버튼이 460ms
+     동안 투명해졌다 다시 떠오르는 문제가 생긴다. 진입 연출은 최초 오픈
+     (.is-entering) 동안만 1회 재생한다. */
+  opacity: 1;
+}
+.shop-shell.is-entering .shop-reroll-btn {
   animation: shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both;
 }
-.shop-artifact-layer > .shop-reroll-card-anchor:nth-child(1) .shop-reroll-btn {
+.shop-shell.is-entering .shop-artifact-layer > .shop-reroll-card-anchor:nth-child(1) .shop-reroll-btn {
   /* 카드 1장과 같은 460ms 진입 지연으로 묶어 선노출을 차단한다. */
   animation-delay: 460ms;
 }

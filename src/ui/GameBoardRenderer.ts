@@ -1676,6 +1676,13 @@ export class GameBoardRenderer {
       </div>
     `
     this.shopOverlayElement.classList.add('is-open')
+    // 진입 페이드는 최초 오픈에서만 1회 재생한다. 이후 in-place 갱신/임팩트가
+    // animation을 건드려도 재발동하지 않도록, 입장이 끝나면 마커를 제거한다.
+    const enteringShell = this.shopOverlayElement.querySelector<HTMLElement>('.shop-shell')
+    if (enteringShell) {
+      enteringShell.classList.add('is-entering')
+      window.setTimeout(() => enteringShell.classList.remove('is-entering'), 1200)
+    }
     this.positionShopShellOverRail()
     if (!this.shopResizeListener) {
       this.shopResizeListener = () => this.positionShopShellOverRail()
