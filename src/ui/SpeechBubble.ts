@@ -334,8 +334,14 @@ export class SpeechBubble {
   }
 
   private _updatePosition(): void {
-    const anchor = document.querySelector<HTMLElement>(this.config.anchor)
-    if (!anchor) return
+    // 앵커가 여러 개 매칭될 수 있다(예: 2행에 걸친 보스 카드 — 한쪽 행은 display:none).
+    // 숨겨진 셀은 rect=(0,0)이라 버블이 좌상단에 붙으므로, 보이는 앵커를 우선한다.
+    const candidates = document.querySelectorAll<HTMLElement>(this.config.anchor)
+    if (candidates.length === 0) return
+    let anchor: HTMLElement = candidates[0]
+    for (const el of candidates) {
+      if (el.offsetParent !== null) { anchor = el; break }
+    }
     const rect   = anchor.getBoundingClientRect()
     const tail   = this.config.tail
     const isBelow = tail === 'top'

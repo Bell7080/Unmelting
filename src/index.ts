@@ -696,6 +696,8 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
 }
 
 async function maybeOpenShopAfterTurn(): Promise<boolean> {
+  // 보스 전투 중에는 실제 런 턴이 고정되므로 10/30턴 상점·제단을 재트리거하지 않는다.
+  if (gameState.bossBattleActive) return false
   if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 10 !== 0) return false
   // Every 30 turns swaps to altar mode; this is the first phase of the
   // 100-turn run loop (10 shop, 20 shop, 30 altar ...).
@@ -727,6 +729,8 @@ async function maybeOpenShopAfterTurn(): Promise<boolean> {
  *  This is a non-invasive scaffold so the core turn engine stays stable while
  *  boss combat rules are implemented in follow-up slices. */
 async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
+  // 보스 전투 중에는 마일스톤(제단/보스 게이트)을 재트리거하지 않는다.
+  if (gameState.bossBattleActive) return false
   const turn = gameState.getCurrentTurn()
   if (turn >= RUN_TARGET_TURNS) {
     gameState.endGame('run_clear_100_turns')
@@ -1244,8 +1248,6 @@ async function runPreparationRefreshAfterFieldEffects(
       // the same preparation beat so every front-row bomb advertises the same
       // one-action fuse instead of waiting for a later cleanup path.
       turnManager.armFrontBombs()
-      // 조각사가 compact로 전방 복귀했다면 페이즈 전환 처리
-      bossController.checkSculptorPhaseAfterCompact()
       render()
       await wait(200)
     }
@@ -2331,6 +2333,13 @@ async function handleCardAction(e: Event): Promise<void> {
   // 보스 카드(5번째 카드 종류) 클릭은 일반 적 흐름이 아니라 별도 가상 턴 처리.
   if (card.type === CardType.BOSS && bossController.eventState && bossController.eventState.card === card) {
     await bossController.handleClick(card)
+    return
+  }
+
+  // 밀랍 조각사 후방 페이즈의 소환 적은 일반 턴 흐름(리필/상점/제단/합산)을 타지 않도록
+  // 컨트롤러가 직접 처리한다.
+  if (bossController.isSummonedEnemy(card)) {
+    await bossController.handleSummonedEnemyClick(card)
     return
   }
 

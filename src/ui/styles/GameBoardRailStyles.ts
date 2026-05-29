@@ -555,10 +555,11 @@ export const GAME_BOARD_RAIL_STYLES = `
   position: relative;
   z-index: 40;
 }
-/* waxSculptor: 보이는 행만 셔터 위로 올린다.
+/* waxSculptor: 보이는 행을 모두 셔터 위로 올린다.
    front phase에서 dist-0은 type-boss 공통 규칙이 처리.
-   back phase에서 dist-1(보스 행)을 올린다. */
-.rail:has(.cell.card.boss-kind-waxSculptor) .rail-row.dist-1 {
+   back phase에서 dist-1(보스 행)과 dist-0(소환 적 행)을 함께 올린다. */
+.rail:has(.cell.card.boss-kind-waxSculptor) .rail-row.dist-1,
+.rail:has(.rail-row.dist-2 .cell.card.boss-kind-waxSculptor) .rail-row.dist-0 {
   position: relative;
   z-index: 40;
 }
@@ -603,6 +604,20 @@ export const GAME_BOARD_RAIL_STYLES = `
   55%  { opacity: 1; transform: scale(1.13); filter: brightness(1.35) saturate(0.5) blur(0px); }
   80%  { transform: scale(0.96); filter: brightness(1.05) saturate(0.85); }
   100% { opacity: 1; transform: scale(1);    filter: brightness(1) saturate(1); }
+}
+
+/* waxSculptor 전방 복귀 연출 — 위에서 쿵 떨어진 뒤 기절하듯 흔들림 */
+.boss-face.is-wax-sculptor-returning {
+  animation: wax-sculptor-return 0.62s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes wax-sculptor-return {
+  0%   { transform: translateY(-34%) scale(1.04); filter: brightness(1.3); }
+  55%  { transform: translateY(0)     scale(1);    filter: brightness(1.05); }
+  /* 85%≈쿵 착지 직후 기절하듯 좌우로 살짝 떨림 */
+  70%  { transform: translateX(-3px)  scale(0.985); }
+  80%  { transform: translateX(3px)   scale(1.005); }
+  90%  { transform: translateX(-2px)  scale(0.995); }
+  100% { transform: translateX(0)     scale(1);     filter: brightness(1); }
 }
 
 /* ---- 보스 공통 face(풀-아트 + overlay + 하단 보스바 + 좌상단 N턴 뱃지) ---- */

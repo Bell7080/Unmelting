@@ -2231,6 +2231,36 @@ export class GameBoardRenderer {
     await new Promise((r) => window.setTimeout(r, 180))
   }
 
+  /** 밀랍 조각사 전방 복귀 연출: 위에서 쿵 떨어지듯 착지 → 기절하듯 사각 블라스트. */
+  async playSculptorReturnAnimation(cardId: string): Promise<void> {
+    const faces = Array.from(
+      this.boardElement.querySelectorAll<HTMLElement>(
+        `.cell.card[data-card-id="${cardId}"] .boss-face`
+      )
+    )
+    if (faces.length === 0) return
+    faces.forEach((f) => {
+      f.classList.remove('is-wax-sculptor-returning')
+      void f.offsetWidth  // reflow로 재시작
+      f.classList.add('is-wax-sculptor-returning')
+    })
+    // 쿵 착지(85% ≈ 408ms) 시점에 맞춰 블라스트
+    await new Promise((r) => window.setTimeout(r, 408))
+    const rects = faces
+      .map((f) => f.getBoundingClientRect())
+      .filter((r) => r.width > 0 && r.height > 0)
+    if (rects.length > 0) {
+      const cx = (Math.min(...rects.map((r) => r.left)) + Math.max(...rects.map((r) => r.right))) / 2
+      const cy = (Math.min(...rects.map((r) => r.top))  + Math.max(...rects.map((r) => r.bottom))) / 2
+      // 중앙 강타 + 좌우로 튀는 기절 톤 사각 블라스트
+      SquareBurst.playAt(cx,       cy, 'damage',     { count: 28, spread: 240, duration: 560 })
+      SquareBurst.playAt(cx - 90,  cy, 'bomb-blast', { count: 14, spread: 150, duration: 480 })
+      SquareBurst.playAt(cx + 90,  cy, 'bomb-blast', { count: 14, spread: 150, duration: 480 })
+    }
+    await new Promise((r) => window.setTimeout(r, 200))
+    faces.forEach((f) => f.classList.remove('is-wax-sculptor-returning'))
+  }
+
   async playBossDefeatSequence(cardId: string): Promise<void> {
     const tile = this.findCardElement(cardId)
     if (!tile) return
@@ -3557,7 +3587,17 @@ export class GameBoardRenderer {
 
   /** Find the rendered DOM element for a card (by id) for burst placement. */
   findCardElement(cardId: string): HTMLElement | null {
-    return this.boardElement.querySelector<HTMLElement>(`.cell.card[data-card-id="${cardId}"]`)
+    // 보스는 2행에 걸쳐 박히고 한쪽 행은 display:none이다. querySelector는 DOM 순서상
+    // 먼저 오는(숨겨진) 셀을 반환할 수 있어 rect=(0,0)으로 이펙트/대사가 좌상단에 찍힌다.
+    // 실제로 보이는(offsetParent 존재) 셀을 우선 반환한다.
+    const matches = this.boardElement.querySelectorAll<HTMLElement>(
+      `.cell.card[data-card-id="${cardId}"]`
+    )
+    if (matches.length === 0) return null
+    for (const el of matches) {
+      if (el.offsetParent !== null) return el
+    }
+    return matches[0]
   }
 
   /** Find a hand slot element by index for burst placement. */
