@@ -225,6 +225,7 @@ export class BossEventController {
     const rawDamage = Math.min(character.damage, card.getHealth() + state.bossShield)
     const blocked = Math.min(state.bossShield, rawDamage)
     state.bossShield -= blocked
+    this.syncBossShieldToCard()
     const dealt = Math.min(rawDamage - blocked, card.getHealth())
     if (dealt > 0) card.takeDamage(dealt)
     if (blocked > 0) this.inject.recordNotice(`밀랍 방패가 피해 ${blocked}를 막았다`, 'info')
@@ -406,6 +407,7 @@ export class BossEventController {
       summonedEnemyIds: new Set<string>(),
       bossShield: 0,
     }
+    this.syncBossShieldToCard()
 
     this.tm.setTurnMode('boss_phase')
     this.gs.bossBattleActive = true
@@ -500,6 +502,12 @@ export class BossEventController {
     this.inject.render()
     await this.br.animateResourceTrailFromCard(bossCardId, 'hand', 1, 'hand-recovery')
   }
+  /** waxKnight 방패량을 Card에 복사해 렌더러가 플레이어와 같은 방패 칩을 그리게 한다. */
+  private syncBossShieldToCard(): void {
+    if (!this.eventState) return
+    this.eventState.card.bossShield = Math.max(0, this.eventState.bossShield)
+  }
+
   /** 손패/레시피처럼 외부 시스템이 보스 HP를 직접 깎은 뒤, waxKnight 방패로 피해를 되돌린다. */
   absorbExternalBossDamageWithShield(beforeHealth: number): number {
     if (!this.eventState || this.eventState.bossShield <= 0) return 0
@@ -508,6 +516,7 @@ export class BossEventController {
     if (damage <= 0) return 0
     const blocked = Math.min(state.bossShield, damage)
     state.bossShield -= blocked
+    this.syncBossShieldToCard()
     state.card.healEnemyLike(blocked)
     this.inject.recordNotice(`밀랍 방패가 손패 피해 ${blocked}를 막았다`, 'info')
     return blocked
@@ -530,6 +539,7 @@ export class BossEventController {
     for (const effect of cards) {
       if (effect === 'shield') {
         state.bossShield += 2
+        this.syncBossShieldToCard()
         await this.br.animateWaxKnightCardEffect(bossCardId, 'shield')
         this.inject.recordNotice('불씨 기사단장이 손패 사용: 방패 +2', 'info')
       } else if (effect === 'heal') {

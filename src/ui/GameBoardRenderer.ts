@@ -822,6 +822,18 @@ export class GameBoardRenderer {
     const maxHp = card.enemyHealthTotal || card.baseHealth || hp
     const hpPct = Math.max(0, Math.min(100, (hp / Math.max(1, maxHp)) * 100))
     const atk = card.getDamage()
+    // waxKnight의 밀랍 방패는 플레이어 HP 영역처럼 HP 게이지 좌상단에 붙여
+    // 체력/방패를 같은 시선 흐름에서 읽게 한다.
+    const shield = Math.max(0, card.bossShield ?? 0)
+    const shieldDisplay = shield > 99 ? '99+' : String(shield)
+    const shieldChip = shield > 0
+      ? `<span class="boss-face-shield-chip" aria-label="보스 방패 ${shield}">
+           <span class="boss-face-shield-chip-icon" aria-hidden="true">
+             ${shieldIcon()}
+             <span class="boss-face-shield-chip-value ${shield > 99 ? 'is-capped' : ''}">${shieldDisplay}</span>
+           </span>
+         </span>`
+      : ''
     return `
       <article class="boss-face" style="--boss-art: url('${sprite}');">
         <div class="boss-face-art" aria-hidden="true"></div>
@@ -832,12 +844,15 @@ export class GameBoardRenderer {
           <span class="boss-face-name">${escapeHtml(card.name)}</span>
         </div>
         <div class="boss-face-stats">
-          <div class="boss-face-hpbar" aria-label="보스 체력">
-            <div class="boss-face-hpbar-fill" style="width:${hpPct}%"></div>
-            <span class="boss-face-hpbar-text">
-              <span class="boss-face-hpbar-icon">${heartIcon()}</span>
-              ${this.renderHudCounter('boss-hp', hp)}<span class="boss-face-hpbar-sep">/</span><span>${maxHp}</span>
-            </span>
+          <div class="boss-face-hp-column">
+            ${shieldChip}
+            <div class="boss-face-hpbar" aria-label="보스 체력">
+              <div class="boss-face-hpbar-fill" style="width:${hpPct}%"></div>
+              <span class="boss-face-hpbar-text">
+                <span class="boss-face-hpbar-icon">${heartIcon()}</span>
+                ${this.renderHudCounter('boss-hp', hp)}<span class="boss-face-hpbar-sep">/</span><span>${maxHp}</span>
+              </span>
+            </div>
           </div>
           <span class="boss-face-atk">${swordIcon()}<span class="boss-face-atk-value">${atk}</span></span>
         </div>
@@ -2203,25 +2218,29 @@ export class GameBoardRenderer {
     await new Promise((r) => window.setTimeout(r, 340))
     tile.classList.remove('is-boss-landing')
   }
-  /** 불씨 기사단장(60F) 등장 연출: 왼쪽 밖에서 오른쪽으로 훙 지나오며 중앙 3×3에 정착한다. */
+  /** 불씨 기사단장(60F) 등장 연출: 왼쪽 밖에서 오른쪽으로 천천히 날아와 중앙 3×3에 쿵 정착한다. */
   async playWaxKnightSwoopAnimation(cardId: string): Promise<void> {
     const tile = this.findCardElement(cardId)
     if (!tile) return
+    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
     tile.classList.remove('is-wax-knight-swooping')
+    rail?.classList.remove('is-boss-quaking')
     void tile.offsetWidth  // CSS animation 재시작용 reflow
     tile.classList.add('is-wax-knight-swooping')
 
-    // 고속 진입이 중앙에 멈추는 순간, 연기 같은 사각 블라스트를 좌→우 잔상처럼 배치한다.
-    await new Promise((r) => window.setTimeout(r, 430))
+    // 느린 비행의 끝부분(약 70%)에 착지 임팩트를 몰아, 도착-쿵 beat가 분리되어 보이게 한다.
+    await new Promise((r) => window.setTimeout(r, 880))
     const rect = tile.getBoundingClientRect()
-    const centerY = rect.top + rect.height * 0.52
+    const centerY = rect.top + rect.height * 0.58
     const centerX = rect.left + rect.width / 2
-    SquareBurst.playAt(centerX - 120, centerY, 'bomb-blast', { count: 18, spread: 150, duration: 520 })
-    SquareBurst.playAt(centerX - 24,  centerY, 'damage',     { count: 28, spread: 230, duration: 620 })
-    SquareBurst.playAt(centerX + 90,  centerY, 'bomb-blast', { count: 16, spread: 140, duration: 520 })
+    rail?.classList.add('is-boss-quaking')
+    SquareBurst.playAt(centerX - 132, centerY, 'bomb-blast', { count: 18, spread: 150, duration: 620 })
+    SquareBurst.playAt(centerX - 18,  centerY, 'damage',     { count: 32, spread: 240, duration: 720 })
+    SquareBurst.playAt(centerX + 104, centerY, 'bomb-blast', { count: 18, spread: 150, duration: 620 })
 
-    await new Promise((r) => window.setTimeout(r, 360))
+    await new Promise((r) => window.setTimeout(r, 480))
     tile.classList.remove('is-wax-knight-swooping')
+    rail?.classList.remove('is-boss-quaking')
   }
   /** 불씨 기사단장이 사용하는 보스 카드 효과를 한 박자짜리 사각 블라스트로 표시한다. */
   async animateWaxKnightCardEffect(cardId: string, effect: 'shield' | 'heal' | 'strike'): Promise<void> {
