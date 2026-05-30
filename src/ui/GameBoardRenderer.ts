@@ -3849,8 +3849,8 @@ export class GameBoardRenderer {
 
   
   /** Consume a free card tile and route its blast to the matching HUD target.
-   *  This keeps free-card rewards aligned with existing source→destination grammar
-   *  (coin→wallet, hand→hand stack, health→hp bar, gauge→candle gauge). */
+   *  `amount` is the real reward value from gameplay; huge values such as ✦300
+   *  are compressed into readable launch chunks inside freeRewardTrailCount(). */
   async consumeFreeCardAndRouteReward(
     kind: 'free-card' | 'free-coin-card',
     target: ResourceTrailTarget,
@@ -3860,12 +3860,22 @@ export class GameBoardRenderer {
     const card = document.querySelector<HTMLElement>(`#shop-overlay .shop-free-card[data-shop-buy-kind="${kind}"]`)
     if (!card) return
     await this.playShopPurchaseImpact(card, 'score')
-    await this.animateResourceTrail(card, this.findResourceTrailTarget(target), Math.max(1, amount), theme)
+    await this.animateResourceTrail(card, this.findResourceTrailTarget(target), this.freeRewardTrailCount(target, amount), theme)
     // 무료 카드 소모는 선택 순간 "사라짐"이 읽히도록 약간 긴 퇴장 타이밍을 사용한다.
     card.classList.add('is-consumed')
     window.setTimeout(() => card.remove(), 420)
   }
-/** Shop reroll FX: wallet blast -> reroll impact -> instant content swap.
+
+  /** Convert actual reward numbers into trail launches without losing meaning.
+   *  Score rewards are displayed in 100-light chunks so ✦300 becomes three trails;
+   *  small HUD resources use their exact amount, capped only as a safety valve. */
+  private freeRewardTrailCount(target: ResourceTrailTarget, amount: number): number {
+    const safeAmount = Math.max(1, Math.floor(amount))
+    if (target === 'score') return Math.max(1, Math.ceil(safeAmount / 100))
+    return Math.min(12, safeAmount)
+  }
+
+  /** Shop reroll FX: wallet blast -> reroll impact -> instant content swap.
    *  We intentionally removed flip/fade phases so cards never disappear or
    *  go transparent during reroll; only a vivid burst sells the replacement. */
   async playShopRerollFeedback(

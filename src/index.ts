@@ -137,6 +137,17 @@ let freeCoinCardClaimed = false
 
 // 공용 무료카드(선물 상자)는 방문마다 하나의 랜덤 효과로 고정한다.
 type ShopFreeGiftKind = 'score-300' | 'coin-1' | 'health-5' | 'gauge-3' | 'ember-3' | 'hand-2'
+
+/** 선물 상자 보상 표기 소스. 항목을 추가해도 랜덤 추첨 주석/개수가 자동으로 따라간다. */
+const SHOP_FREE_GIFT_REWARDS: Record<ShopFreeGiftKind, { description: string; amount: number }> = {
+  'score-300': { description: '✦300', amount: 300 },
+  'coin-1': { description: '1$', amount: 1 },
+  'health-5': { description: '체력 5', amount: 5 },
+  'gauge-3': { description: '콤보 게이지 3', amount: 3 },
+  'ember-3': { description: '불씨 게이지 3', amount: 3 },
+  'hand-2': { description: '랜덤 손패 2', amount: 2 },
+}
+const SHOP_FREE_GIFT_KINDS = Object.keys(SHOP_FREE_GIFT_REWARDS) as ShopFreeGiftKind[]
 let freeGiftKind: ShopFreeGiftKind = 'coin-1'
 let currentShopMode: 'shop' | 'altar' = 'shop'
 /** Active pack-picker session. Holds the rolled items + the pack kind so the
@@ -616,7 +627,7 @@ async function applyTurnStartRelics(): Promise<void> {
   burstCoinGain()
 }
 
-/** basePrice는 Relics.ts 정의에서 읽는다. ±90 지터로 870→826 같은 비원형 값이 나온다. */
+/** basePrice는 Relics.ts 정의에서 읽는다. 실제 식은 -76~+104 비대칭 지터를 만들어 비원형 가격을 낸다. */
 function priceForRelic(id: RelicId): number {
   const base = getRelicDef(id).basePrice
   const jitter = Math.floor((Math.random() - 0.42) * 180)
@@ -664,6 +675,18 @@ async function openTrialOverlay(): Promise<void> {
   inputLocked = false
 }
 
+/** Pack cost source of truth. UI 표기와 실제 차감이 갈라지지 않도록 구매 처리도 이 함수만 사용한다. */
+function currentShopPackCost(kind: ShopPackKind): number {
+  if (currentShopMode === 'altar') return 500
+  switch (kind) {
+    case 'basic-pack': return 120 + shopBasicPackBuys * 40
+    case 'upgrade-pack': return 500 + shopUpgradePackBuys * 130
+    case 'unlock-pack': return 520 + shopUnlockPackBuys * 120
+    // 제단 전용 팩이 일반 상점에서 호출되면 안전한 기본값으로 막는다.
+    default: return 500
+  }
+}
+
 /** Build the renderer-facing split-shop state with dynamic inflation costs.
  *  Reroll cost is denominated in coins (화폐) — the renderer reads `coins`
  *  to decide whether the reroll button is affordable. */
@@ -673,12 +696,12 @@ function buildShopStateView(): ShopStateView {
     relicOffers: currentShopOffers,
     freeCardClaimed,
     freeCoinCardClaimed,
-    freeCardDescription: freeGiftKind === 'score-300' ? '✦300' : freeGiftKind === 'coin-1' ? '1$' : freeGiftKind === 'health-5' ? '체력 5' : freeGiftKind === 'gauge-3' ? '콤보 게이지 3' : freeGiftKind === 'ember-3' ? '불씨 게이지 3' : '랜덤 손패 2',
+    freeCardDescription: SHOP_FREE_GIFT_REWARDS[freeGiftKind].description,
     rerollCost: 1 + shopRerollCount,
     coins,
-    basicPackCost: currentShopMode === 'altar' ? 500 : 120 + shopBasicPackBuys * 40,
-    upgradePackCost: currentShopMode === 'altar' ? 500 : 700 + shopUpgradePackBuys * 130,
-    unlockPackCost: currentShopMode === 'altar' ? 500 : 520 + shopUnlockPackBuys * 120,
+    basicPackCost: currentShopPackCost('basic-pack'),
+    upgradePackCost: currentShopPackCost('upgrade-pack'),
+    unlockPackCost: currentShopPackCost('unlock-pack'),
   }
 }
 
@@ -717,8 +740,8 @@ async function maybeOpenShopAfterTurn(): Promise<boolean> {
   shopUpgradePackBuys = 0
   shopUnlockPackBuys = 0
   freeCardClaimed = false
-  // 방문 시작 시 선물 상자의 효과를 5종 중 하나로 확정한다.
-  freeGiftKind = (['score-300', 'coin-1', 'health-5', 'gauge-3', 'ember-3', 'hand-2'] as ShopFreeGiftKind[])[Math.floor(Math.random() * 6)]
+  // 방문 시작 시 선물 상자의 효과를 현재 등록된 n종 중 하나로 확정한다.
+  freeGiftKind = SHOP_FREE_GIFT_KINDS[Math.floor(Math.random() * SHOP_FREE_GIFT_KINDS.length)]
   activePackSession = null
   // The shutter is a hard turn break: cut the chain before the shop overlay
   // appears so the floating chain text never hangs above the shop tab.
@@ -914,12 +937,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
 /** Open the pack picker for the just-clicked pack tile. Deducts the price
  *  if the player can afford it, otherwise no-op. */
 async function openPackPurchase(kind: ShopPackKind): Promise<void> {
-  const cost = currentShopMode === 'altar' ? 500 :
-    (kind === 'basic-pack'
-      ? 120 + shopBasicPackBuys * 40
-      : kind === 'upgrade-pack'
-        ? 500 + shopUpgradePackBuys * 130
-        : 520 + shopUnlockPackBuys * 120)
+  const cost = currentShopPackCost(kind)
   if (score < cost) return
   score = Math.max(0, score - cost)
   scorePulseKey++
@@ -983,38 +1001,40 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     if (detail.kind === 'free-card') {
       if (freeCardClaimed) return
       freeCardClaimed = true
-      // 선물 상자는 사용 즉시 소모되며, 블라스트/증가 애니메이션은 공통 지갑 피드백을 따른다.
+      // 선물 상자는 사용 즉시 소모되며, 실제 보상량과 트레일 입력을 같은 데이터에서 읽는다.
+      const freeGift = SHOP_FREE_GIFT_REWARDS[freeGiftKind]
       if (freeGiftKind === 'score-300') {
-        score += 300
+        score += freeGift.amount
         scorePulseKey++
         // 불빛 보상은 무료카드에서 불빛 패널로 직접 날려 기존 획득 문법을 유지한다.
-        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'score', 3, 'score')
+        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'score', freeGift.amount, 'score')
       } else if (freeGiftKind === 'coin-1') {
-        coins += 1
+        coins += freeGift.amount
         coinPulseKey++
         // 화폐 보상은 코인 톤 burst(treasure-gain)로 발사 — 불빛(score) burst가
         // 같이 뜨던 버그 수정. 보상 종류에 맞는 입자 색감만 보이도록 한다.
-        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'coin', 1, 'treasure-gain')
+        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'coin', freeGift.amount, 'treasure-gain')
       } else if (freeGiftKind === 'health-5') {
-        gameState.character.heal(5)
+        gameState.character.heal(freeGift.amount)
         // 체력 보상은 HP 바로 꽂혀야 피드백이 정확히 읽힌다.
-        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'health', 2, 'health-gain')
+        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'health', freeGift.amount, 'health-gain')
       } else if (freeGiftKind === 'gauge-3') {
-        gameState.character.gainCandle(3)
+        gameState.character.gainCandle(freeGift.amount)
         // 게이지 보상은 캔들 게이지 목적지로 분기한다.
-        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'gauge', 2, 'gauge-gain')
+        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'gauge', freeGift.amount, 'gauge-gain')
         // 트레일 직후 게이지 카운터를 즉시 반영하고, 가득 찼을 경우 보상 효과까지 처리한다.
         boardRenderer.playHudCounterFeedback('candle', gameState.character.candle)
         await resolveFullCandleGaugeEffects({ kind: 'center' })
       } else if (freeGiftKind === 'ember-3') {
-        gameState.character.gainEmber(3)
+        gameState.character.gainEmber(freeGift.amount)
         // 불씨 보상은 상단 ember HUD로 직접 날린다.
-        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'ember', 3, 'score')
+        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'ember', freeGift.amount, 'score')
       } else {
-        gameState.character.addHandCard(DropSystem.makeCard(HAND_CARD_IDS[Math.floor(Math.random() * HAND_CARD_IDS.length)]))
-        gameState.character.addHandCard(DropSystem.makeCard(HAND_CARD_IDS[Math.floor(Math.random() * HAND_CARD_IDS.length)]))
+        for (let i = 0; i < freeGift.amount; i += 1) {
+          gameState.character.addHandCard(DropSystem.makeCard(HAND_CARD_IDS[Math.floor(Math.random() * HAND_CARD_IDS.length)]))
+        }
         // 손패 보상은 손패 스택 목적지로 날려 카드 획득 흐름과 같은 언어를 사용한다.
-        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'hand', 2, 'hand-control')
+        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'hand', freeGift.amount, 'hand-control')
       }
     } else {
       if (freeCoinCardClaimed) return
