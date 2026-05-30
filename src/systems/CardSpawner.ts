@@ -132,6 +132,54 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
     enemySpriteId: 'enemyRaccoon',
     enemyPower: 12,
   },
+  {
+    name: '양초 풍뎅이',
+    description: 'Armored candle beetle',
+    healthOrDamage: 6,
+    attack: 5,
+    enemySpriteId: 'enemyBeetle',
+    enemyPower: 13,
+  },
+  {
+    name: '양초 전갈',
+    description: 'Stinging candle scorpion',
+    healthOrDamage: 6,
+    attack: 5,
+    enemySpriteId: 'enemyScorpion',
+    enemyPower: 14,
+  },
+  {
+    name: '양초 담비',
+    description: 'Swift candle marten',
+    healthOrDamage: 8,
+    attack: 7,
+    enemySpriteId: 'enemyMarten',
+    enemyPower: 15,
+  },
+  {
+    name: '양초 오소리',
+    description: 'Fierce candle badger',
+    healthOrDamage: 7,
+    attack: 8,
+    enemySpriteId: 'enemyBadger',
+    enemyPower: 16,
+  },
+  {
+    name: '양초 나무늘보',
+    description: 'Hardy candle sloth',
+    healthOrDamage: 15,
+    attack: 4,
+    enemySpriteId: 'enemySloth',
+    enemyPower: 17,
+  },
+  {
+    name: '양초 자칼',
+    description: 'Savage candle jackal',
+    healthOrDamage: 7,
+    attack: 12,
+    enemySpriteId: 'enemyJackal',
+    enemyPower: 18,
+  },
 ]
 
 export const TRAP_DEFINITIONS: CardDefinition[] = [
@@ -332,8 +380,19 @@ export class CardSpawner {
     if (this.progressionTurn < 50) {
       return [...ENEMY_DEFINITIONS.slice(6, 10), ...ENEMY_DEFINITIONS.slice(4, 6)]
     }
-    // 50+: 5/6번(새/두더지)을 11/12번(도마뱀/너구리)로 교체.
-    return ENEMY_DEFINITIONS.slice(6, 12)
+    // 50~59: 5/6번(새/두더지)을 11/12번(도마뱀/너구리)로 교체. 7~12번 풀.
+    if (this.progressionTurn < 60) return ENEMY_DEFINITIONS.slice(6, 12)
+
+    // 60~69: 7/8번(벌/사마귀)을 13/14번(풍뎅이/전갈)로 교체. 9~14번 풀.
+    if (this.progressionTurn < 70) {
+      return [...ENEMY_DEFINITIONS.slice(12, 14), ...ENEMY_DEFINITIONS.slice(8, 12)]
+    }
+    // 70~79: 9/10번(박쥐/고슴도치)을 15/16번(담비/오소리)로 교체. 11~16번 풀.
+    if (this.progressionTurn < 80) {
+      return [...ENEMY_DEFINITIONS.slice(12, 16), ...ENEMY_DEFINITIONS.slice(10, 12)]
+    }
+    // 80+: 11/12번(도마뱀/너구리)을 17/18번(나무늘보/자칼)로 교체. 13~18번 풀.
+    return ENEMY_DEFINITIONS.slice(12, 18)
   }
 
   /** Pick one of the current one-lane enemies, applying tier bonus if any.
