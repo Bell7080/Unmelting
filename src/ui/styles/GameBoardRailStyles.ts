@@ -582,15 +582,17 @@ export const GAME_BOARD_RAIL_STYLES = `
 .boss-kind-waxKnight .boss-face-art {
   background-position: center 28%;
 }
-/* 불씨 기사단장 등장: 왼쪽에서 오른쪽으로 훙 지나오며 중앙에 급정지한다. */
+/* 불씨 기사단장 등장: 좌측 밖에서 느리게 날아온 뒤 중앙에서 쿵 눌리며 정착한다. */
 .is-wax-knight-swooping {
-  animation: wax-knight-swoop 0.78s cubic-bezier(0.16, 0.88, 0.18, 1) both;
+  animation: wax-knight-swoop 1.32s cubic-bezier(0.14, 0.74, 0.16, 1) both;
 }
 @keyframes wax-knight-swoop {
-  0%   { transform: translateX(-145%) skewX(-10deg) scale(0.94); opacity: 0; filter: brightness(1.9) blur(3px); }
-  48%  { transform: translateX(10%) skewX(-5deg) scale(1.04);  opacity: 1; filter: brightness(1.35) blur(0); }
-  66%  { transform: translateX(-3%) skewX(2deg) scale(1.02); filter: brightness(1.12); }
-  82%  { transform: translateX(1%) skewX(-1deg) scale(0.995); }
+  0%   { transform: translateX(-170%) skewX(-12deg) scale(0.92); opacity: 0; filter: brightness(2.1) blur(5px); }
+  34%  { transform: translateX(-58%) skewX(-8deg) scale(0.97); opacity: 0.72; filter: brightness(1.7) blur(2px); }
+  62%  { transform: translateX(12%) skewX(-4deg) scale(1.045); opacity: 1; filter: brightness(1.35) blur(0); }
+  72%  { transform: translateX(0) skewX(0) scale(1.06, 0.94); filter: brightness(1.2); }
+  82%  { transform: translateX(-2.5%) skewX(1deg) scale(0.985, 1.025); filter: brightness(1.08); }
+  92%  { transform: translateX(1%) skewX(-0.5deg) scale(1.01, 0.995); }
   100% { transform: translateX(0) skewX(0) scale(1); opacity: 1; filter: brightness(1); }
 }
 
@@ -721,6 +723,43 @@ export const GAME_BOARD_RAIL_STYLES = `
   0%, 100% { box-shadow: inset 0 1px 0 rgba(255, 196, 168, 0.3), 0 0 8px rgba(196, 64, 48, 0.42); }
   50%      { box-shadow: inset 0 1px 0 rgba(255, 196, 168, 0.42), 0 0 16px rgba(255, 96, 80, 0.7); }
 }
+/* 보스 방패 칩 — 플레이어처럼 HP 게이지 위 좌측에 놓되, 3×3 보스 크기에 맞춰 더 크게 읽힌다. */
+.boss-face-shield-chip {
+  display: inline-flex;
+  align-self: flex-start;
+  margin-left: 2px;
+  margin-bottom: 2px;
+  line-height: 1;
+}
+.boss-face-shield-chip-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(46px, 5.4vh, 58px);
+  height: clamp(46px, 5.4vh, 58px);
+  color: rgba(255, 232, 168, 0.94);
+  filter:
+    drop-shadow(0 3px 4px rgba(0, 0, 0, 0.75))
+    drop-shadow(0 0 10px rgba(244, 164, 96, 0.42));
+}
+.boss-face-shield-chip-icon .icon { width: 100%; height: 100%; }
+.boss-face-shield-chip-icon .icon path:first-child { fill: rgba(255, 232, 168, 0.94); }
+.boss-face-shield-chip-icon .icon path:not(:first-child) { color: rgba(255, 248, 224, 0.94); }
+.boss-face-shield-chip-value {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  transform: translate(-50%, -50%);
+  min-width: 1.2em;
+  color: #2a1b14;
+  font-size: clamp(16px, 2.1vh, 20px);
+  font-weight: 1000;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.62), 0 0 4px rgba(255, 248, 224, 0.7);
+}
+.boss-face-shield-chip-value.is-capped { font-size: clamp(13px, 1.8vh, 16px); letter-spacing: -0.04em; }
 .boss-face-title-row {
   position: absolute;
   top: 14px;
@@ -760,8 +799,15 @@ export const GAME_BOARD_RAIL_STYLES = `
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 12px;
-  align-items: center;
+  align-items: end;
   color: #f7e7c8;
+}
+/* 보스 HP 컬럼은 플레이어 hp-column처럼 방패 → 체력 게이지 순서로 세로 배치한다. */
+.boss-face-hp-column {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
 }
 .boss-face-hpbar {
   position: relative;

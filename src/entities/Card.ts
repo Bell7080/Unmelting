@@ -133,6 +133,8 @@ export class Card {
   justEnteredRail: boolean
   /** Special-enemy family; monster flowers merge only with each other. */
   specialEnemyKind: SpecialEnemyKind | null
+  /** waxKnight 전용 UI 수치: 보스 컨트롤러가 방패 상태를 렌더러에 전달한다. */
+  bossShield: number
   /** Flower growth state: seed in waiting row, then a random bloom on front row. */
   flowerKind: FlowerKind
   flowerTurnsAlive: number
@@ -169,6 +171,7 @@ export class Card {
     this.sporeTurnsUntilSpread = this.trapKind === 'spore' ? 2 : 0
     this.justEnteredRail = false
     this.specialEnemyKind = options.specialEnemyKind ?? null
+    this.bossShield = 0
     this.flowerKind = options.flowerKind ?? 'seed'
     this.flowerTurnsAlive = 0
     this.flowerValue = this.type === CardType.FLOWER && this.flowerKind !== 'seed' ? 1 : 0
