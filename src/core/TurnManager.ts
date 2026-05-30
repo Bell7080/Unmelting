@@ -145,7 +145,13 @@ export class TurnManager {
 
     for (let i = 0; i < this.gameState.lanes.length; i++) {
       const card = this.gameState.lanes[i].getCardAtDistance(d)
-      if (!card || card.type !== CardType.TREASURE || card.isFrozen()) continue
+      if (
+        !card ||
+        card.type !== CardType.TREASURE ||
+        card.treasureKind === 'starlight' ||
+        card.isFrozen()
+      )
+        continue
       if (visited.has(card)) continue
       visited.add(card)
 

@@ -38,6 +38,8 @@ export interface ActionResult {
   overflow?: HandCard[]
   /** Flower rewards that live outside Character, such as light and currency. */
   flowerReward?: { kind: 'score' | 'coin'; amount: number }
+  /** Final-ascent 별빛만 일반 행동 대신 90~100F 턴 진행을 허용한다. */
+  starlightCollected?: boolean
   cardRemoved: boolean
 }
 
@@ -195,6 +197,15 @@ export class ActionSystem {
   private static takeTreasure(character: Character, _lane: Lane, card: Card): ActionResult {
     if (card.type !== CardType.TREASURE) {
       return { success: false, message: 'Not a treasure', cardRemoved: false }
+    }
+    if (card.treasureKind === 'starlight') {
+      // 별빛은 손패 보상이 아니라 최종 등반용 턴 열쇠로만 소비된다.
+      return {
+        success: true,
+        message: `${card.name} 획득: 최종 등반 +1턴`,
+        starlightCollected: true,
+        cardRemoved: true,
+      }
     }
     const safeSpan = Math.max(1, Math.min(3, card.groupCount))
     const drops = TREASURE_DROPS_BY_SPAN[safeSpan]

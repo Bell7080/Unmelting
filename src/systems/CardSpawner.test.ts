@@ -47,6 +47,23 @@ describe('CardSpawner opening board', () => {
   })
 })
 
+describe('CardSpawner final ascent starlight', () => {
+  it('spawns non-merging starlight keys only after the final ascent rule is active', () => {
+    const spawner = new CardSpawner()
+    spawner.setFinalAscentActive(true)
+    // First roll enters the 12% starlight band; second roll only stabilizes the id suffix.
+    vi.spyOn(Math, 'random').mockReturnValueOnce(0.01).mockReturnValueOnce(0.42)
+
+    const card = spawner.spawnCardForRefill()
+
+    expect(card.type).toBe(CardType.TREASURE)
+    expect(card.name).toBe('별빛')
+    expect(card.treasureKind).toBe('starlight')
+    expect(card.canMergeWith(card)).toBe(false)
+    vi.restoreAllMocks()
+  })
+})
+
 describe('EmberSystem spawn weights', () => {
   it('raises ordinary trap odds while preserving former bomb and spore odds', () => {
     const brightBuckets = EmberSystem.getSpawnBuckets('bright')

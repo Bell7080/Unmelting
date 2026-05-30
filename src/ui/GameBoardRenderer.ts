@@ -770,6 +770,9 @@ export class GameBoardRenderer {
             ? `다음 +${card.flowerValue + 1}`
             : `+${card.flowerValue}`
       stats = `<div class="card-stats group-note flower-note">${sparkleIcon()}<span>${label}</span></div>`
+    } else if (card.type === CardType.TREASURE && card.treasureKind === 'starlight') {
+      // 90~100층 별빛은 손패 보상이 아닌 턴 열쇠임을 카드 자체에서 즉시 읽히게 한다.
+      stats = `<div class="card-stats group-note treasure-group-note starlight-note">${sparkleIcon()}<span>턴 +1</span></div>`
     } else if (card.type === CardType.TREASURE && card.groupCount > 1) {
       // 보스 보상 카드는 개별 효과 설명을, 일반 상자는 실제 드롭 수(1/3/5)를 표시한다.
       const CHEST_DROP_BY_SPAN: Record<number, number> = { 1: 1, 2: 3, 3: 5 }
@@ -792,7 +795,8 @@ export class GameBoardRenderer {
           : ''
 
     // 보스 보상 카드는 3-wide span이어도 카드 자체 이름을 그대로 표시한다.
-    const groupName = span > 1 && !card.isSpecialEnemy && !card.id.startsWith('boss-reward-')
+    const groupName = span > 1 && !card.isSpecialEnemy &&
+      card.treasureKind !== 'starlight' && !card.id.startsWith('boss-reward-')
       ? this.groupName(card.type, span)
       : card.name
 
@@ -5047,6 +5051,158 @@ export class GameBoardRenderer {
           window.setTimeout(() => el.classList.remove('is-merge-bursting'), 760)
         }, burstDelay)
       })
+  }
+
+
+  /**
+   * 90F 시련 종료 직후 최종 등반 규칙을 고지하는 전용 화면 연출.
+   * 기존 SquareBurst의 사각 파편 언어를 중심에 두고, 불길 플래시와 재 입자를
+   * 얹어 “이제 별빛만 턴을 움직인다”는 룰 전환을 짧게 각인한다.
+   */
+  async playFinalAscentRuleAwakening(): Promise<void> {
+    const styleId = 'final-ascent-awakening-styles'
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style')
+      style.id = styleId
+      style.textContent = `
+.final-ascent-awakening {
+  position: fixed;
+  inset: 0;
+  z-index: 218;
+  pointer-events: none;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 58%, rgba(255, 199, 92, 0.34), rgba(176, 53, 22, 0.22) 24%, rgba(26, 7, 10, 0.72) 62%, rgba(4, 3, 7, 0.9) 100%);
+  animation: final-ascent-fire-screen 1680ms cubic-bezier(0.18, 0.86, 0.2, 1) forwards;
+}
+.final-ascent-awakening::before {
+  content: '';
+  position: absolute;
+  inset: -18%;
+  background:
+    radial-gradient(circle at 30% 78%, rgba(255, 95, 25, 0.4), transparent 26%),
+    radial-gradient(circle at 67% 82%, rgba(255, 185, 76, 0.34), transparent 28%),
+    linear-gradient(0deg, rgba(255, 72, 18, 0.34), transparent 58%);
+  mix-blend-mode: screen;
+  filter: blur(10px);
+  animation: final-ascent-fire-roll 1680ms ease-out forwards;
+}
+.final-ascent-awakening-toast {
+  position: relative;
+  z-index: 2;
+  min-width: min(520px, 84vw);
+  padding: 18px 28px 20px;
+  border: 1px solid rgba(255, 218, 142, 0.62);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(52, 25, 14, 0.94), rgba(16, 10, 15, 0.9)),
+    radial-gradient(circle at 50% 0%, rgba(255, 214, 121, 0.18), transparent 62%);
+  box-shadow:
+    0 20px 70px rgba(0, 0, 0, 0.52),
+    0 0 44px rgba(255, 122, 38, 0.3),
+    inset 0 0 22px rgba(255, 215, 142, 0.12);
+  text-align: center;
+  transform: translateY(12px) scale(0.96);
+  opacity: 0;
+  animation: final-ascent-toast-in 1480ms cubic-bezier(0.18, 0.88, 0.2, 1) forwards;
+}
+.final-ascent-awakening-kicker {
+  display: block;
+  margin-bottom: 8px;
+  color: rgba(255, 204, 116, 0.86);
+  font-size: clamp(12px, 1.25vw, 15px);
+  font-weight: 900;
+  letter-spacing: 0.22em;
+}
+.final-ascent-awakening-title {
+  display: block;
+  color: #fff3cf;
+  font-size: clamp(25px, 3vw, 42px);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 18px rgba(255, 188, 86, 0.62), 0 2px 2px rgba(0, 0, 0, 0.9);
+}
+.final-ascent-awakening-copy {
+  display: block;
+  margin-top: 9px;
+  color: rgba(255, 238, 202, 0.86);
+  font-size: clamp(14px, 1.45vw, 18px);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+.final-ascent-ash {
+  position: absolute;
+  left: var(--ash-x);
+  bottom: -8vh;
+  width: var(--ash-size);
+  height: var(--ash-size);
+  background: rgba(232, 220, 197, 0.78);
+  box-shadow: 0 0 10px rgba(255, 214, 154, 0.28);
+  transform: rotate(var(--ash-rot));
+  opacity: 0;
+  animation: final-ascent-ash-rise var(--ash-dur) ease-out var(--ash-delay) forwards;
+}
+@keyframes final-ascent-fire-screen {
+  0% { opacity: 0; filter: saturate(0.9) brightness(0.8); }
+  18% { opacity: 1; filter: saturate(1.5) brightness(1.14); }
+  72% { opacity: 0.94; filter: saturate(1.15) brightness(1); }
+  100% { opacity: 0; filter: saturate(0.8) brightness(0.74); }
+}
+@keyframes final-ascent-fire-roll {
+  0% { transform: translateY(18%) scale(0.9); opacity: 0; }
+  32% { transform: translateY(0) scale(1.02); opacity: 0.9; }
+  100% { transform: translateY(-9%) scale(1.08); opacity: 0; }
+}
+@keyframes final-ascent-toast-in {
+  0% { opacity: 0; transform: translateY(18px) scale(0.94); }
+  18%, 72% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-12px) scale(0.985); }
+}
+@keyframes final-ascent-ash-rise {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(var(--ash-rot)) scale(0.7); }
+  18% { opacity: 0.82; }
+  100% { opacity: 0; transform: translate3d(var(--ash-drift), -112vh, 0) rotate(calc(var(--ash-rot) + 180deg)) scale(0.4); }
+}
+      `
+      document.head.appendChild(style)
+    }
+
+    document.querySelector('.final-ascent-awakening')?.remove()
+    const overlay = document.createElement('div')
+    overlay.className = 'final-ascent-awakening'
+    overlay.setAttribute('aria-live', 'polite')
+    overlay.innerHTML = `
+      <div class="final-ascent-awakening-toast">
+        <span class="final-ascent-awakening-kicker">FINAL ASCENT</span>
+        <span class="final-ascent-awakening-title">별빛 규칙 발동</span>
+        <span class="final-ascent-awakening-copy">별빛을 획득해야만 턴이 오른다</span>
+      </div>
+    `
+
+    // 재 입자는 DOM 수를 고정해 성능을 예측 가능하게 유지한다.
+    for (let i = 0; i < 34; i++) {
+      const ash = document.createElement('span')
+      ash.className = 'final-ascent-ash'
+      ash.style.setProperty('--ash-x', `${Math.random() * 100}%`)
+      ash.style.setProperty('--ash-size', `${4 + Math.random() * 8}px`)
+      ash.style.setProperty('--ash-drift', `${-90 + Math.random() * 180}px`)
+      ash.style.setProperty('--ash-rot', `${Math.random() * 180}deg`)
+      ash.style.setProperty('--ash-dur', `${1180 + Math.random() * 660}ms`)
+      ash.style.setProperty('--ash-delay', `${Math.random() * 320}ms`)
+      overlay.appendChild(ash)
+    }
+
+    document.body.appendChild(overlay)
+    const cx = window.innerWidth / 2
+    const cy = window.innerHeight * 0.54
+    SquareBurst.playAt(cx, cy, 'bomb-blast', { count: 34, spread: 280, duration: 820, size: [10, 24] })
+    SquareBurst.playAt(cx, cy, 'vanish-smoke', { count: 28, spread: 340, duration: 1120, size: [7, 18] })
+    SquareBurst.playAt(cx, cy, 'score', { count: 18, spread: 190, duration: 760, size: [8, 18] })
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 1680))
+    overlay.remove()
   }
 
   /** Remember ids and spans after each render for enter/merge animations. */
