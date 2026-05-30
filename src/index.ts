@@ -2260,8 +2260,20 @@ async function resolvePostDropSporeSpread(): Promise<void> {
   // gravity. This keeps enemy/chest/bomb/flower beats on the pre-drop board,
   // while still letting spores infect a real card that fell into a formerly
   // empty neighboring cell after the rail descended.
-  const sporeSpreads = turnManager.applySporeSpread()
-  if (sporeSpreads.length === 0) return
+  const sporeTicks = turnManager.tickSporeCountdowns()
+  const hasReadySpore = sporeTicks.some((tick) => tick.turnsUntilSpread === 0)
+  if (sporeTicks.length > 0) {
+    // 2→1→0 뱃지 흐름을 눈으로 읽은 뒤 전염/2턴 리셋이 이어지도록 분리 렌더한다.
+    render()
+    if (hasReadySpore) await wait(260)
+  }
+
+  const sporeSpreads = turnManager.spreadReadySpores()
+  if (sporeSpreads.length === 0) {
+    // 감염 대상이 없어도 준비된 포자는 0턴 시도 후 2턴으로 돌아가므로 뱃지를 갱신한다.
+    if (hasReadySpore) render()
+    return
+  }
 
   const spreadCount = sporeSpreads.reduce((sum, spread) => sum + spread.infected.length, 0)
   // TurnManager already regroups newly adjacent front-row spores before this

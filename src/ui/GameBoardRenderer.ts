@@ -787,7 +787,7 @@ export class GameBoardRenderer {
       card.type === CardType.TRAP && card.trapKind === 'bomb' && card.isBombArmed
         ? `<div class="frozen-badge bomb-badge">점화</div>`
         : card.type === CardType.TRAP && card.trapKind === 'spore'
-          ? `<div class="frozen-badge spore-badge">번식 ${card.sporeTurnsUntilSpread}</div>`
+          ? `<div class="frozen-badge spore-badge">번식 ${card.sporeTurnsUntilSpread}턴</div>`
           : ''
 
     // 보스 보상 카드는 3-wide span이어도 카드 자체 이름을 그대로 표시한다.
