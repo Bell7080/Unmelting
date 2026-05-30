@@ -436,7 +436,8 @@ export class BossEventController {
     this.speechBubble.show(def.playerResponseBubble, 0)
     await new Promise((r) => window.setTimeout(r, def.playerBubbleMs))
     this.speechBubble.dismiss()
-    await new Promise((r) => window.setTimeout(r, 400))
+    // 플레이어 응답과 타이틀 인트로 사이 공백을 줄여 보스 연출 템포를 더 타이트하게 만든다.
+    await new Promise((r) => window.setTimeout(r, 220))
 
     // 인트로 오버레이
     const introClosed = this.br.openBossIntroOverlay({
