@@ -100,6 +100,18 @@ export class Character {
     this.damage += Math.max(0, amount)
   }
 
+  /** Debug command setter: keep attack in a safe positive integer range. */
+  setDamageForDebug(value: number): void {
+    this.damage = Math.max(1, Math.floor(value))
+  }
+
+  /** Debug command setter: 체력 명령은 현재/최대 체력을 같은 값으로 맞춘다. */
+  setHealthForDebug(value: number): void {
+    const safeHealth = Math.max(1, Math.floor(value))
+    this.maxHealth = safeHealth
+    this.health = safeHealth
+  }
+
   /** Spend max HP as a shop currency while keeping the run alive. */
   spendMaxHealth(amount: number): boolean {
     const cost = Math.max(0, amount)

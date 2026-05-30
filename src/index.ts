@@ -1654,7 +1654,7 @@ function setupDevCommandPalette(): void {
       <span class="dev-command-prefix">/</span>
       <input class="dev-command-input" type="text" spellcheck="false" autocomplete="off" />
       <button class="dev-command-close" aria-label="닫기">✕</button>
-      <div class="dev-command-hint">예시: /25turn, /희망, /양초, /1000불빛, /10$, /10화폐</div>
+      <div class="dev-command-hint">예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$</div>
     </div>
     <button class="dev-command-run">실행</button>
   `
@@ -1706,7 +1706,7 @@ function setupDevCommandPalette(): void {
   const open = (): void => {
     opened = true
     host.classList.add('is-open')
-    setHint('예시: /25turn, /희망, /양초, /1000불빛, /10$, /10화폐')
+    setHint('예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$')
     input.value = ''
     window.setTimeout(() => input.focus(), 0)
   }
@@ -1743,6 +1743,29 @@ function setupDevCommandPalette(): void {
       setHint(`디버그: ${turn}턴으로 이동`)
       return
     }
+    const attackSetMatch = token.match(/^공격력\s*(\d{1,4})$/i)
+    if (attackSetMatch) {
+      const amount = Number(attackSetMatch[1])
+      if (!Number.isFinite(amount) || amount < 1) { setHint('공격력은 1 이상이어야 합니다.'); return }
+      // 디버그 명령은 누적 증가가 아니라 현재 공격력을 지정값으로 맞춘다.
+      gameState.character.setDamageForDebug(amount)
+      render()
+      boardRenderer.playHudCounterFeedback('attack', gameState.character.damage)
+      setHint(`디버그: 공격력 ${gameState.character.damage.toLocaleString()}으로 설정`)
+      return
+    }
+    const healthSetMatch = token.match(/^체력\s*(\d{1,4})$/i)
+    if (healthSetMatch) {
+      const amount = Number(healthSetMatch[1])
+      if (!Number.isFinite(amount) || amount < 1) { setHint('체력은 1 이상이어야 합니다.'); return }
+      // 체력 명령은 전투 테스트용으로 현재 HP와 최대 HP를 동시에 맞춘다.
+      gameState.character.setHealthForDebug(amount)
+      render()
+      boardRenderer.playHudCounterFeedback('health', gameState.character.health)
+      boardRenderer.playHudCounterFeedback('maxHealth', gameState.character.maxHealth)
+      setHint(`디버그: 체력/최대체력 ${gameState.character.health.toLocaleString()}으로 설정`)
+      return
+    }
     const key = token.toLowerCase()
     const relicId = relicNameMap.get(key)
     if (relicId) {
@@ -1758,7 +1781,7 @@ function setupDevCommandPalette(): void {
       setHint(ok ? `디버그: 손패 지급 (${getHandCardDef(handId).name})` : '손패가 가득 찼습니다.')
       return
     }
-    setHint('알 수 없는 명령어입니다. /25turn, /희망, /양초, /1000불빛, /10$, /10화폐')
+    setHint('알 수 없는 명령어입니다. /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$')
   }
 
   // 닫기 버튼 (shell 우상단 ✕)

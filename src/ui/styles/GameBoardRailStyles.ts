@@ -890,7 +890,7 @@ export const GAME_BOARD_RAIL_STYLES = `
   padding: clamp(16px, 4vh, 36px);
   background: rgba(4, 2, 8, 0.92);
   cursor: pointer;
-  animation: boss-intro-overlay-fade-in 1.0s ease-out 0.7s both;
+  animation: boss-intro-overlay-fade-in 0.82s ease-out 0.38s both;
 }
 .boss-intro-overlay.is-closing {
   animation: boss-intro-overlay-fade-out 0.28s ease-in forwards;
@@ -920,7 +920,7 @@ export const GAME_BOARD_RAIL_STYLES = `
   transform: translateY(18px) scale(0.96);
   opacity: 0;
   /* 오버레이가 충분히 덮인 후 카드가 부상하도록 딜레이를 맞춘다. */
-  animation: boss-intro-overlay-card-rise 0.52s cubic-bezier(0.18, 0.86, 0.22, 1) 1.4s forwards;
+  animation: boss-intro-overlay-card-rise 0.52s cubic-bezier(0.18, 0.86, 0.22, 1) 0.92s forwards;
 }
 @keyframes boss-intro-overlay-card-rise {
   from { transform: translateY(18px) scale(0.96); opacity: 0; }
@@ -1012,8 +1012,11 @@ export const GAME_BOARD_RAIL_STYLES = `
   color: rgba(220, 220, 220, 0.78);
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
   pointer-events: none;
-  animation: boss-intro-hint-pulse 2.2s ease-in-out infinite;
+  opacity: 0;
   z-index: 1; /* host(z=470) 내부 안에 있으므로 카드보다만 살짝 앞 */
+}
+.boss-intro-overlay.is-ready .boss-intro-overlay-hint {
+  animation: boss-intro-hint-pulse 2.2s ease-in-out infinite;
 }
 @keyframes boss-intro-hint-pulse {
   0%, 100% { opacity: 0.35; }

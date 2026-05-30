@@ -2110,8 +2110,9 @@ export class GameBoardRenderer {
       <div class="boss-intro-overlay-hint" aria-hidden="true">CLICK ANYWHERE TO CONTINUE</div>
     `
     document.body.appendChild(host)
-    // 등장 비트가 자리잡도록 한 프레임 정도 대기 후 클릭 수락.
-    await new Promise((resolve) => window.setTimeout(resolve, 80))
+    // 타이틀 카드가 완전히 떠오른 뒤에만 하단 문구와 클릭 입력을 연다.
+    await new Promise((resolve) => window.setTimeout(resolve, 1700))
+    host.classList.add('is-ready')
     await new Promise<void>((resolve) => {
       const close = (): void => {
         host.classList.add('is-closing')
@@ -5056,8 +5057,7 @@ export class GameBoardRenderer {
 
   /**
    * 90F 시련 종료 직후 최종 등반 규칙을 고지하는 전용 화면 연출.
-   * 기존 SquareBurst의 사각 파편 언어를 중심에 두고, 불길 플래시와 재 입자를
-   * 얹어 “이제 별빛만 턴을 움직인다”는 룰 전환을 짧게 각인한다.
+   * 보스 타이틀처럼 화면이 어둡게 잠긴 뒤, 텍스트만 떠오르고 하단 문구가 켜진 후 클릭을 받는다.
    */
   async playFinalAscentRuleAwakening(): Promise<void> {
     const styleId = 'final-ascent-awakening-styles'
@@ -5069,101 +5069,114 @@ export class GameBoardRenderer {
   position: fixed;
   inset: 0;
   z-index: 218;
-  pointer-events: none;
+  pointer-events: auto;
   overflow: hidden;
   display: grid;
   place-items: center;
   background:
-    radial-gradient(circle at 50% 58%, rgba(255, 199, 92, 0.34), rgba(176, 53, 22, 0.22) 24%, rgba(26, 7, 10, 0.72) 62%, rgba(4, 3, 7, 0.9) 100%);
-  animation: final-ascent-fire-screen 1680ms cubic-bezier(0.18, 0.86, 0.2, 1) forwards;
+    radial-gradient(circle at 50% 52%, rgba(79, 61, 146, 0.26), rgba(24, 18, 55, 0.52) 38%, rgba(4, 5, 14, 0.94) 100%),
+    linear-gradient(180deg, rgba(8, 12, 31, 0.68), rgba(3, 3, 10, 0.98));
+  cursor: default;
+  animation: final-ascent-nightfall 1180ms cubic-bezier(0.18, 0.86, 0.2, 1) both;
 }
+.final-ascent-awakening.is-ready { cursor: pointer; }
+.final-ascent-awakening.is-closing { animation: final-ascent-fade-out 260ms ease-in forwards; }
 .final-ascent-awakening::before {
   content: '';
   position: absolute;
-  inset: -18%;
+  inset: -16%;
   background:
-    radial-gradient(circle at 30% 78%, rgba(255, 95, 25, 0.4), transparent 26%),
-    radial-gradient(circle at 67% 82%, rgba(255, 185, 76, 0.34), transparent 28%),
-    linear-gradient(0deg, rgba(255, 72, 18, 0.34), transparent 58%);
+    radial-gradient(circle at 24% 26%, rgba(116, 146, 255, 0.22), transparent 24%),
+    radial-gradient(circle at 78% 72%, rgba(172, 94, 236, 0.22), transparent 28%),
+    radial-gradient(circle at 52% 58%, rgba(80, 72, 154, 0.34), transparent 42%);
   mix-blend-mode: screen;
-  filter: blur(10px);
-  animation: final-ascent-fire-roll 1680ms ease-out forwards;
+  filter: blur(14px);
+  opacity: 0;
+  animation: final-ascent-veil-bloom 1680ms ease-out forwards;
 }
-.final-ascent-awakening-toast {
+.final-ascent-awakening-copyblock {
   position: relative;
   z-index: 2;
-  min-width: min(520px, 84vw);
-  padding: 18px 28px 20px;
-  border: 1px solid rgba(255, 218, 142, 0.62);
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(52, 25, 14, 0.94), rgba(16, 10, 15, 0.9)),
-    radial-gradient(circle at 50% 0%, rgba(255, 214, 121, 0.18), transparent 62%);
-  box-shadow:
-    0 20px 70px rgba(0, 0, 0, 0.52),
-    0 0 44px rgba(255, 122, 38, 0.3),
-    inset 0 0 22px rgba(255, 215, 142, 0.12);
   text-align: center;
-  transform: translateY(12px) scale(0.96);
+  transform: translateY(18px) scale(0.96);
   opacity: 0;
-  animation: final-ascent-toast-in 1480ms cubic-bezier(0.18, 0.88, 0.2, 1) forwards;
-}
-.final-ascent-awakening-kicker {
-  display: block;
-  margin-bottom: 8px;
-  color: rgba(255, 204, 116, 0.86);
-  font-size: clamp(12px, 1.25vw, 15px);
-  font-weight: 900;
-  letter-spacing: 0.22em;
+  animation: final-ascent-title-rise 860ms cubic-bezier(0.18, 0.88, 0.2, 1) 760ms forwards;
 }
 .final-ascent-awakening-title {
   display: block;
-  color: #fff3cf;
-  font-size: clamp(25px, 3vw, 42px);
+  color: #e9e6ff;
+  font-size: clamp(34px, 5vw, 70px);
   font-weight: 900;
-  letter-spacing: 0.08em;
-  text-shadow: 0 0 18px rgba(255, 188, 86, 0.62), 0 2px 2px rgba(0, 0, 0, 0.9);
+  letter-spacing: 0.16em;
+  text-shadow:
+    0 0 26px rgba(121, 139, 255, 0.64),
+    0 0 42px rgba(147, 82, 220, 0.42),
+    0 3px 3px rgba(0, 0, 0, 0.92);
 }
 .final-ascent-awakening-copy {
   display: block;
-  margin-top: 9px;
-  color: rgba(255, 238, 202, 0.86);
-  font-size: clamp(14px, 1.45vw, 18px);
+  margin-top: 14px;
+  color: rgba(205, 198, 238, 0.88);
+  font-size: clamp(15px, 1.65vw, 22px);
   font-weight: 800;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 18px rgba(112, 126, 255, 0.36), 0 2px 2px rgba(0, 0, 0, 0.9);
 }
-.final-ascent-ash {
-  position: absolute;
-  left: var(--ash-x);
-  bottom: -8vh;
-  width: var(--ash-size);
-  height: var(--ash-size);
-  background: rgba(232, 220, 197, 0.78);
-  box-shadow: 0 0 10px rgba(255, 214, 154, 0.28);
-  transform: rotate(var(--ash-rot));
+.final-ascent-awakening-hint {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(28px, 6vh, 56px);
+  transform: translateX(-50%);
+  z-index: 3;
+  color: rgba(220, 220, 238, 0.78);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.86), 0 0 12px rgba(117, 132, 255, 0.34);
   opacity: 0;
-  animation: final-ascent-ash-rise var(--ash-dur) ease-out var(--ash-delay) forwards;
+  pointer-events: none;
 }
-@keyframes final-ascent-fire-screen {
-  0% { opacity: 0; filter: saturate(0.9) brightness(0.8); }
-  18% { opacity: 1; filter: saturate(1.5) brightness(1.14); }
-  72% { opacity: 0.94; filter: saturate(1.15) brightness(1); }
-  100% { opacity: 0; filter: saturate(0.8) brightness(0.74); }
+.final-ascent-awakening.is-ready .final-ascent-awakening-hint {
+  animation: final-ascent-hint-pulse 2.2s ease-in-out infinite;
 }
-@keyframes final-ascent-fire-roll {
-  0% { transform: translateY(18%) scale(0.9); opacity: 0; }
-  32% { transform: translateY(0) scale(1.02); opacity: 0.9; }
-  100% { transform: translateY(-9%) scale(1.08); opacity: 0; }
+.final-ascent-star {
+  position: absolute;
+  left: var(--star-x);
+  top: var(--star-y);
+  width: var(--star-size);
+  height: var(--star-size);
+  background: rgba(207, 213, 255, 0.88);
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(133, 148, 255, 0.68), 0 0 24px rgba(165, 94, 236, 0.34);
+  opacity: 0;
+  animation: final-ascent-star-fall var(--star-dur) ease-out var(--star-delay) forwards;
 }
-@keyframes final-ascent-toast-in {
-  0% { opacity: 0; transform: translateY(18px) scale(0.94); }
-  18%, 72% { opacity: 1; transform: translateY(0) scale(1); }
-  100% { opacity: 0; transform: translateY(-12px) scale(0.985); }
+@keyframes final-ascent-nightfall {
+  0% { opacity: 0; filter: brightness(1.08) saturate(0.85); }
+  48% { opacity: 1; filter: brightness(0.78) saturate(1.08); }
+  100% { opacity: 1; filter: brightness(0.64) saturate(1.15); }
 }
-@keyframes final-ascent-ash-rise {
-  0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(var(--ash-rot)) scale(0.7); }
-  18% { opacity: 0.82; }
-  100% { opacity: 0; transform: translate3d(var(--ash-drift), -112vh, 0) rotate(calc(var(--ash-rot) + 180deg)) scale(0.4); }
+@keyframes final-ascent-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes final-ascent-veil-bloom {
+  0% { opacity: 0; transform: scale(0.96) rotate(0deg); }
+  42% { opacity: 0.94; }
+  100% { opacity: 0.62; transform: scale(1.08) rotate(3deg); }
+}
+@keyframes final-ascent-title-rise {
+  0% { opacity: 0; transform: translateY(22px) scale(0.95); filter: blur(2px); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+@keyframes final-ascent-hint-pulse {
+  0%, 100% { opacity: 0.32; }
+  50% { opacity: 0.96; }
+}
+@keyframes final-ascent-star-fall {
+  0% { opacity: 0; transform: translate3d(0, -18px, 0) scale(0.65); }
+  18% { opacity: 0.9; }
+  100% { opacity: 0; transform: translate3d(var(--star-drift), 118vh, 0) scale(0.35); }
 }
       `
       document.head.appendChild(style)
@@ -5174,35 +5187,44 @@ export class GameBoardRenderer {
     overlay.className = 'final-ascent-awakening'
     overlay.setAttribute('aria-live', 'polite')
     overlay.innerHTML = `
-      <div class="final-ascent-awakening-toast">
-        <span class="final-ascent-awakening-kicker">FINAL ASCENT</span>
-        <span class="final-ascent-awakening-title">별빛 규칙 발동</span>
-        <span class="final-ascent-awakening-copy">별빛을 획득해야만 턴이 오른다</span>
+      <div class="final-ascent-awakening-copyblock">
+        <span class="final-ascent-awakening-title">잿빛 굴레</span>
+        <span class="final-ascent-awakening-copy">- 별빛으로 굴레를 벗어나리 -</span>
       </div>
+      <div class="final-ascent-awakening-hint" aria-hidden="true">CLICK ANYWHERE TO CONTINUE</div>
     `
 
-    // 재 입자는 DOM 수를 고정해 성능을 예측 가능하게 유지한다.
-    for (let i = 0; i < 34; i++) {
-      const ash = document.createElement('span')
-      ash.className = 'final-ascent-ash'
-      ash.style.setProperty('--ash-x', `${Math.random() * 100}%`)
-      ash.style.setProperty('--ash-size', `${4 + Math.random() * 8}px`)
-      ash.style.setProperty('--ash-drift', `${-90 + Math.random() * 180}px`)
-      ash.style.setProperty('--ash-rot', `${Math.random() * 180}deg`)
-      ash.style.setProperty('--ash-dur', `${1180 + Math.random() * 660}ms`)
-      ash.style.setProperty('--ash-delay', `${Math.random() * 320}ms`)
-      overlay.appendChild(ash)
+    // 별빛 입자는 고정 개수만 생성해 보스 인트로급 화면 효과를 유지하면서 비용을 제한한다.
+    for (let i = 0; i < 42; i++) {
+      const star = document.createElement('span')
+      star.className = 'final-ascent-star'
+      star.style.setProperty('--star-x', `${Math.random() * 100}%`)
+      star.style.setProperty('--star-y', `${-12 + Math.random() * 44}%`)
+      star.style.setProperty('--star-size', `${2 + Math.random() * 5}px`)
+      star.style.setProperty('--star-drift', `${-80 + Math.random() * 160}px`)
+      star.style.setProperty('--star-dur', `${1260 + Math.random() * 780}ms`)
+      star.style.setProperty('--star-delay', `${Math.random() * 580}ms`)
+      overlay.appendChild(star)
     }
 
     document.body.appendChild(overlay)
     const cx = window.innerWidth / 2
     const cy = window.innerHeight * 0.54
-    SquareBurst.playAt(cx, cy, 'bomb-blast', { count: 34, spread: 280, duration: 820, size: [10, 24] })
-    SquareBurst.playAt(cx, cy, 'vanish-smoke', { count: 28, spread: 340, duration: 1120, size: [7, 18] })
-    SquareBurst.playAt(cx, cy, 'score', { count: 18, spread: 190, duration: 760, size: [8, 18] })
+    SquareBurst.playAt(cx, cy, 'vanish-smoke', { count: 30, spread: 330, duration: 1120, size: [7, 18] })
+    SquareBurst.playAt(cx, cy, 'hand-control', { count: 24, spread: 250, duration: 980, size: [6, 16] })
 
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 1680))
-    overlay.remove()
+    await new Promise((resolve) => window.setTimeout(resolve, 1900))
+    overlay.classList.add('is-ready')
+    await new Promise<void>((resolve) => {
+      const close = (): void => {
+        overlay.classList.add('is-closing')
+        window.setTimeout(() => {
+          overlay.remove()
+          resolve()
+        }, 260)
+      }
+      overlay.addEventListener('click', close, { once: true })
+    })
   }
 
   /** Remember ids and spans after each render for enter/merge animations. */
