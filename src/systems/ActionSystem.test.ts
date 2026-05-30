@@ -56,6 +56,21 @@ describe('ActionSystem rewards', () => {
     expect(character.hand).toHaveLength(5)
   })
 
+  it('collects starlight as turn progress without adding hand-card drops', () => {
+    const character = new Character()
+    const lane = new Lane('lane-0', 0)
+    const starlight = new Card('starlight-test', CardType.TREASURE, '별빛', 'turn key', 0, 0, {
+      treasureKind: 'starlight',
+    })
+
+    const result = ActionSystem.executeAction(character, lane, starlight, ActionType.TAKE_TREASURE)
+
+    expect(result.cardRemoved).toBe(true)
+    expect(result.starlightCollected).toBe(true)
+    expect(result.itemGainedNames).toBeUndefined()
+    expect(character.hand).toHaveLength(0)
+  })
+
   it('reports overflow when the hand is already full', () => {
     const character = new Character()
     while (character.hasHandRoom()) {

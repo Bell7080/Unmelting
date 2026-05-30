@@ -219,6 +219,8 @@ export class CardSpawner {
   private trialEnemyAtkBonus: number = 0
   private trialTrapDamageBonus: number = 0
   private trialTreasureSpawnScale: number = 1
+  /** 90F boss+trial 이후에는 별빛만 턴을 올리는 최종 등반 규칙을 켠다. */
+  private finalAscentActive: boolean = false
   // After a spore spawns, block spore generation for the next N cards to prevent
   // consecutive spore clusters. 5 cards ≈ at least 1 full 3-lane turn gap.
   private sporeCooldownCards: number = 0
@@ -244,6 +246,11 @@ export class CardSpawner {
   /** Sync the completed game turn so enemy pools unlock at 1/11/21. */
   setProgressionTurn(turn: number): void {
     this.progressionTurn = Math.max(1, turn)
+  }
+
+  /** Toggle the 90~100F starlight-key refill rule after the 90F forced trial. */
+  setFinalAscentActive(active: boolean): void {
+    this.finalAscentActive = active
   }
 
   /** Spawn one random card per lane for the current turn refill. */
@@ -330,6 +337,13 @@ export class CardSpawner {
 
   /** Pick a card type using per-kind buckets, then build the card. */
   private generateRandomCard(options: { openingBoard?: boolean } = {}): Card {
+    // 최종 등반에서는 드문 별빛 칸을 섞어 10번 수집해야 100턴에 닿게 만든다.
+    if (!options.openingBoard && this.finalAscentActive && Math.random() < 0.12) {
+      // 별빛도 실제 리필 1장으로 취급해 포자 연속 방지 카운터를 함께 소모한다.
+      if (this.sporeCooldownCards > 0) this.sporeCooldownCards--
+      return this.generateStarlight()
+    }
+
     const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
     const webTrap = options.openingBoard
       ? buckets.webTrap + buckets.bombTrap + buckets.sporeTrap
@@ -470,6 +484,20 @@ export class CardSpawner {
       CardType.TREASURE,
       definition.name,
       definition.description
+    )
+  }
+
+  /** Spawn a final-ascent starlight key; it is treasure-like but never merges or drops hand cards. */
+  private generateStarlight(): Card {
+    this.spawnSerial++
+    return new Card(
+      `starlight-${this.spawnSerial}-${Math.random()}`,
+      CardType.TREASURE,
+      '별빛',
+      '90~100층 전용 열쇠: 획득할 때만 턴 +1',
+      0,
+      0,
+      { treasureKind: 'starlight' }
     )
   }
 

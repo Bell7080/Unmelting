@@ -15,6 +15,7 @@ export enum CardType {
 export type TrapKind = 'web' | 'bomb' | 'spore'
 export type FlowerKind = 'seed' | 'chamomile' | 'redRose' | 'marigold' | 'oleander' | 'lavender'
 export type SpecialEnemyKind = 'mimic' | 'monsterFlower' | 'waxArmy' | 'waxKnight' | 'waxSculptor'
+export type TreasureKind = 'chest' | 'starlight'
 
 export type EnemySpriteId =
   | 'enemyBee'
@@ -51,6 +52,8 @@ export interface CardOptions {
   flowerKind?: FlowerKind
   /** Special-enemy family controls limited same-family merging. */
   specialEnemyKind?: SpecialEnemyKind
+  /** Treasure subtype lets final-ascent starlight opt out of chest rules. */
+  treasureKind?: TreasureKind
 }
 
 interface EnemyGroupStats {
@@ -135,6 +138,8 @@ export class Card {
   specialEnemyKind: SpecialEnemyKind | null
   /** waxKnight 전용 UI 수치: 보스 컨트롤러가 방패 상태를 렌더러에 전달한다. */
   bossShield: number
+  /** Treasure subtype separates normal chests from final-ascent starlight keys. */
+  treasureKind: TreasureKind
   /** Flower growth state: seed in waiting row, then a random bloom on front row. */
   flowerKind: FlowerKind
   flowerTurnsAlive: number
@@ -171,6 +176,7 @@ export class Card {
     this.sporeTurnsUntilSpread = this.trapKind === 'spore' ? 2 : 0
     this.justEnteredRail = false
     this.specialEnemyKind = options.specialEnemyKind ?? null
+    this.treasureKind = options.treasureKind ?? 'chest'
     this.bossShield = 0
     this.flowerKind = options.flowerKind ?? 'seed'
     this.flowerTurnsAlive = 0
@@ -299,6 +305,12 @@ export class Card {
    */
   canMergeWith(other: Card): boolean {
     if (this.type !== other.type) return false
+    // 별빛은 90~100층 전용 열쇠 칸이므로 상자처럼 합쳐져 보상량이 바뀌면 안 된다.
+    if (
+      this.type === CardType.TREASURE &&
+      (this.treasureKind === 'starlight' || other.treasureKind === 'starlight')
+    )
+      return false
     // Blooming flowers and seeds are deliberate single-cell opportunities.
     if (this.type === CardType.FLOWER) return false
     // Special enemies normally stand alone; monster flowers are the one

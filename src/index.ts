@@ -167,6 +167,8 @@ const RUN_TARGET_TURNS = 100
 let altarBossPending = false
 let altarBossDefeated = false
 let trialPending = false
+/** 90F 보스+시련 후 활성화: 별빛 칸을 먹은 행동만 90~100층 턴을 올린다. */
+let finalAscentStarlightRuleActive = false
 /** 보스/시련의 영속 modifier: 이번 런 내내 스폰/스탯/함정 계산에 누적된다.
  *  apply 시 CardSpawner.setTrialModifiers로도 동기화돼야 실제 스폰에 반영된다. */
 const runModifiers = {
@@ -180,6 +182,26 @@ const runModifiers = {
 function formatTrialSummary(prefix: string): string {
   return `${prefix} · 적+${runModifiers.enemyHpBonus}/${runModifiers.enemyDamageBonus} · 함정+${runModifiers.trapDamageBonus} · 보물x${runModifiers.treasureSpawnScale.toFixed(2)}`
 }
+function syncFinalAscentRuleToSpawner(): void {
+  cardSpawner.setFinalAscentActive(
+    finalAscentStarlightRuleActive &&
+      gameState.getCurrentTurn() >= 90 &&
+      gameState.getCurrentTurn() < RUN_TARGET_TURNS
+  )
+}
+
+function activateFinalAscentStarlightRule(): void {
+  if (gameState.getCurrentTurn() !== 90 || finalAscentStarlightRuleActive) return
+  // 셔터가 열린 직후부터 별빛만 층/턴 진행을 담당한다.
+  finalAscentStarlightRuleActive = true
+  syncFinalAscentRuleToSpawner()
+  recordNotice('90층 이후 규칙 발동: 별빛을 모아야만 턴이 오른다', 'info')
+}
+
+function shouldAdvanceTurnForAction(starlightCollected: boolean): boolean {
+  return !finalAscentStarlightRuleActive || starlightCollected
+}
+
 /** runModifiers의 현재 값을 CardSpawner로 흘려보내 다음 스폰부터 즉시 반영시킨다. */
 function syncRunModifiersToSpawner(): void {
   cardSpawner.setTrialModifiers({
@@ -734,8 +756,8 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
 }
 
 async function maybeOpenShopAfterTurn(): Promise<boolean> {
-  // 보스 전투 중에는 실제 런 턴이 고정되므로 10/30턴 상점·제단을 재트리거하지 않는다.
-  if (gameState.bossBattleActive) return false
+  // 보스 전투/최종 별빛 등반 중에는 10/30턴 상점·제단을 재트리거하지 않는다.
+  if (gameState.bossBattleActive || finalAscentStarlightRuleActive) return false
   if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 10 !== 0) return false
   // Every 30 turns swaps to altar mode; this is the first phase of the
   // 100-turn run loop (10 shop, 20 shop, 30 altar ...).
@@ -1193,6 +1215,12 @@ async function openTrialOverlayForced(): Promise<void> {
       await boardRenderer.playShopExitAnimation()
       boardRenderer.closeShop()
       await boardRenderer.playShopResumeTransition()
+      if (gameState.getCurrentTurn() === 90) {
+        // 셔터가 완전히 열린 뒤 짧은 정적을 두고, 화면 연출과 함께 최종 등반 규칙을 켠다.
+        await wait(320)
+        activateFinalAscentStarlightRule()
+        await boardRenderer.playFinalAscentRuleAwakening()
+      }
       // 시련 종료 직전 손패 차단 해제 → 일반 turn 입력 가능.
       bossController.postPhaseHandLocked = false
       resolve()
@@ -1510,6 +1538,7 @@ function syncSpawnerTier(): void {
   cardSpawner.setTier(turnManager.getEmberTier())
   // Spawn progression is based on the upcoming playable turn: 1-10, 11-20, 21+.
   cardSpawner.setProgressionTurn(gameState.getCurrentTurn() + 1)
+  syncFinalAscentRuleToSpawner()
 }
 
 function compactAndRefillAllLanes(): boolean {
@@ -1556,6 +1585,8 @@ function startGame(): void {
   chain = HandSystem.newChain()
   pendingHandTarget = null
   gameState.reset()
+  finalAscentStarlightRuleActive = false
+  syncFinalAscentRuleToSpawner()
   score = 0
   scorePulseKey = 0
   coins = 0
@@ -2285,7 +2316,7 @@ async function resolvePostDropSporeSpread(): Promise<void> {
   render()
 }
 
-async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
+async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true): Promise<void> {
   const beforeTrapHealth = snapshotFieldHealthState()
   const hits = turnManager.runEnemyPhase()
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
@@ -2352,7 +2383,7 @@ async function resolveEventPhaseAndPrepareNextTurn(): Promise<void> {
     return
   }
 
-  await runCleanupPhase(true)
+  await runCleanupPhase(advanceTurn)
   await resolvePostDropSporeSpread()
 
   if (await maybeRunMilestoneEventsAfterTurn()) return
@@ -2643,7 +2674,7 @@ async function handleCardAction(e: Event): Promise<void> {
       finishTurn()
       return
     }
-    await runCleanupPhase(true)
+    await runCleanupPhase(shouldAdvanceTurnForAction(result.starlightCollected === true))
     await resolvePostDropSporeSpread()
     if (await maybeRunMilestoneEventsAfterTurn()) return
     if (await maybeOpenShopAfterTurn()) return
@@ -2651,7 +2682,7 @@ async function handleCardAction(e: Event): Promise<void> {
       inputLocked = false
     }, 340)
   } else {
-    await resolveEventPhaseAndPrepareNextTurn()
+    await resolveEventPhaseAndPrepareNextTurn(shouldAdvanceTurnForAction(result.starlightCollected === true))
   }
 }
 

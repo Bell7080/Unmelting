@@ -7,6 +7,7 @@
  *   - Normal enemy 2/3-cell merged: follows the strongest member's art.
  *   - Mimic (special enemy): mimic_001.
  *   - Treasure: chest_001 / chest_002 / chest_003 by groupCount (1/2/3).
+ *   - Final-ascent starlight: turnkey_001.
  *   - Boss reward: reward_001 heal / reward_002 chest / reward_003 bounty.
  *   - Trap: trap_001 web, trap_004 bomb, trap_007 spore.
  *   - Flower: flower_000 seed, flower_001~005 blooms, enemyflower_001 monster flower.
@@ -71,6 +72,7 @@ import chest003Url from '../assets/sprites/chest_003.webp'
 import reward001Url from '../assets/sprites/reward_001.webp'
 import reward002Url from '../assets/sprites/reward_002.webp'
 import reward003Url from '../assets/sprites/reward_003.webp'
+import turnkey001Url from '../assets/sprites/turnkey_001.webp'
 
 import cardBackUrl from '../assets/sprites/cardbackground_001.webp'
 import handCard001Url from '../assets/sprites/handcard_001.webp'
@@ -159,6 +161,8 @@ export const SpriteUrls = {
   chestSmall: chest001Url,
   chestMedium: chest002Url,
   chestLarge: chest003Url,
+  /** 90~100층 전용 별빛 칸 일러스트. */
+  starlight: turnkey001Url,
   flowers: {
     seed: flower000Url,
     chamomile: flower001Url,
@@ -304,6 +308,7 @@ export function spriteForCard(card: Card): string {
     return SpriteUrls.traps[card.trapKind]
   }
   if (card.type === CardType.TREASURE) {
+    if (card.treasureKind === 'starlight') return SpriteUrls.starlight
     if (card.id === 'boss-reward-heal') return SpriteUrls.rewards.heal
     if (card.id === 'boss-reward-chest') return SpriteUrls.rewards.chest
     if (card.id === 'boss-reward-bounty') return SpriteUrls.rewards.bounty
