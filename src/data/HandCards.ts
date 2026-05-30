@@ -7,7 +7,7 @@
  */
 
 import { HandCardDefinition, HandCardId, HandEffectTargeting } from '@entities/HandCard'
-// dropSource / metaRequired / runLocked: 현재 10종 모두 범용 기본값.
+// dropSource가 'treasure'인 카드는 보물상자 전용 보너스 풀에만 섞인다.
 // 이후 시트에서 등장 조건/해금 조건을 지정하면 이 파일에서만 수치를 수정하면 된다.
 
 const selfOne: HandEffectTargeting = {
@@ -162,7 +162,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     tripleDescription: '+5$',
     targeting: { base: selfOne, triple: { ...selfOne, countLimit: 5 } },
     dropWeight: 10,
-    dropSource: 'any',
+    dropSource: 'treasure',
     metaRequired: false,
     runLocked: false,
   },

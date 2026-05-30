@@ -1670,7 +1670,7 @@ export class GameBoardRenderer {
           <section class="shop-row shop-bottom-row" aria-label="카드 및 카드팩">
             <div class="shop-layer shop-free-layer">
               ${this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel, shop.freeCardDescription ?? '1$', 'free-card')}
-              ${shop.mode === 'altar' ? this.renderShopFreeCard(!!shop.freeCoinCardClaimed, '수당', '5$', 'free-coin-card') : ''}
+              ${shop.mode === 'altar' ? this.renderShopFreeCard(!!shop.freeCoinCardClaimed, '수당', '3$', 'free-coin-card') : ''}
             </div>
             <div class="shop-layer shop-pack-layer">
               ${shop.mode === 'altar'

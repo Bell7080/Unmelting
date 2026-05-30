@@ -1050,11 +1050,11 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     } else {
       if (freeCoinCardClaimed) return
       freeCoinCardClaimed = true
-      coins += 5
+      coins += 3
       coinPulseKey++
-      // 제단 수당은 화폐 패널로 블라스트 후 5$ 롤링 증가. source burst도 코인 톤
+      // 제단 수당은 경제 밸런스 완화 후 3$만 지급한다. source burst도 코인 톤
       // (treasure-gain)으로 발사해 불빛 입자가 같이 뜨는 시각 혼선을 제거.
-      await boardRenderer.consumeFreeCardAndRouteReward('free-coin-card', 'coin', 5, 'treasure-gain')
+      await boardRenderer.consumeFreeCardAndRouteReward('free-coin-card', 'coin', 3, 'treasure-gain')
     }
     boardRenderer.playScoreGainFeedback(score, scorePulseKey)
     boardRenderer.playCoinGainFeedback(coins, coinPulseKey)

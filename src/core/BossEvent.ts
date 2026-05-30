@@ -316,13 +316,15 @@ export class BossEventController {
       void this.br.animateResourceTrailFromCard(card.id, 'health', 1, 'health-gain')
       void this.br.animateResourceTrailFromCard(card.id, 'ember', 1, 'gauge-gain')
     } else if (card.id === 'boss-reward-bounty') {
-      const amount = 1 + Math.floor(Math.random() * 10)
+      const amount = 1 + Math.floor(Math.random() * 5)
       for (let i = 0; i < amount; i++) {
+        // 현상금은 한 덩어리 합산이 아니라 코인 트레일 1개가 닿을 때마다
+        // 지갑을 +1씩 굴려 “띠리리릭” 증가 리듬이 보이게 한다.
+        await this.br.animateResourceTrailFromCard(card.id, 'coin', 1, 'treasure-gain')
         this.inject.addOneCoin()
         await new Promise((r) => window.setTimeout(r, 70))
       }
       this.inject.recordNotice(`현상금: +$${amount}`, 'info')
-      void this.br.animateResourceTrailFromCard(card.id, 'coin', amount, 'treasure-gain')
     } else if (card.id === 'boss-reward-chest') {
       const unownedRelics = RELIC_IDS.filter(
         (id) => !character.hasRelic(id) && !character.bannedRelics.includes(id)
@@ -769,7 +771,7 @@ export class BossEventController {
   private async stageBossRewardChests(savedField: (Card | null)[][]): Promise<void> {
     const healCard   = new Card('boss-reward-heal',   CardType.TREASURE, '점화액',  '체력 / 불씨 회복')
     const chestCard  = new Card('boss-reward-chest',  CardType.TREASURE, '전리품',  '유물 획득')
-    const bountyCard = new Card('boss-reward-bounty', CardType.TREASURE, '현상금',  '1~10$')
+    const bountyCard = new Card('boss-reward-bounty', CardType.TREASURE, '현상금',  '1~5$')
     for (const c of [healCard, chestCard, bountyCard]) c.groupCount = 3
     for (let lane = 0; lane < 3; lane++) {
       this.gs.lanes[lane].setCardAtDistance(0, healCard)
