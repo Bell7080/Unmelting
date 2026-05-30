@@ -14,7 +14,7 @@ export enum CardType {
 
 export type TrapKind = 'web' | 'bomb' | 'spore'
 export type FlowerKind = 'seed' | 'chamomile' | 'redRose' | 'marigold' | 'oleander' | 'lavender'
-export type SpecialEnemyKind = 'mimic' | 'monsterFlower' | 'waxArmy' | 'waxSculptor'
+export type SpecialEnemyKind = 'mimic' | 'monsterFlower' | 'waxArmy' | 'waxKnight' | 'waxSculptor'
 
 export type EnemySpriteId =
   | 'enemyBee'
@@ -217,6 +217,14 @@ export class Card {
     const actualDamage = Math.max(0, amount)
     this.health = Math.max(0, this.health - actualDamage)
     return this.health
+  }
+
+  /** Restore enemy-like HP without exceeding the card's current maximum HP. */
+  healEnemyLike(amount: number): number {
+    if (!this.isEnemyLike()) return 0
+    const before = this.health
+    this.health = Math.min(this.getCurrentMaxHealth(), this.health + Math.max(0, amount))
+    return this.health - before
   }
 
   /** Apply the wax '굳음' status, keeping the longest remaining duration. */
