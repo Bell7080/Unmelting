@@ -40,6 +40,12 @@ import enemy009Url from '../assets/sprites/enemy_009.webp'
 import enemy010Url from '../assets/sprites/enemy_010.webp'
 import enemy011Url from '../assets/sprites/enemy_011.webp'
 import enemy012Url from '../assets/sprites/enemy_012.webp'
+import enemy013Url from '../assets/sprites/enemy_013.webp'
+import enemy014Url from '../assets/sprites/enemy_014.webp'
+import enemy015Url from '../assets/sprites/enemy_015.webp'
+import enemy016Url from '../assets/sprites/enemy_016.webp'
+import enemy017Url from '../assets/sprites/enemy_017.webp'
+import enemy018Url from '../assets/sprites/enemy_018.webp'
 import mimic001Url from '../assets/sprites/mimic_001.webp'
 import enemyFlower001Url from '../assets/sprites/enemyflower_001.webp'
 import flower000Url from '../assets/sprites/flower_000.webp'
@@ -111,7 +117,7 @@ export const SpriteUrls = {
   /** 90층 보스(밀랍 조각사) 일러스트. */
   boss90: boss003Url,
   player: playerUrl,
-  // 사용자 지정 매핑: 001 키틴벌레, 002 거미, 003 생쥐, 004 개구리, 005 새, 006 두더지.
+  // 사용자 지정 매핑: enemy_001~018을 타입 안전한 EnemySpriteId 키와 1:1로 연결한다.
   enemyChitin: enemy001Url,
   enemyMoth: enemy002Url,
   enemyMouse: enemy003Url,

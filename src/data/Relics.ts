@@ -2,7 +2,7 @@
  * Relic catalog: static definitions + shop pricing.
  *
  * costOptions(화폐 기반)는 제거됨 — 상점 구매는 불빛(score)으로 통일.
- * basePrice는 priceForRelic()의 지터 기준값이며 등급과 효과 체감에 비례해 설정.
+ * basePrice는 priceForRelic()의 비대칭 지터(-76~+104) 기준값이며 등급과 효과 체감에 비례해 설정.
  */
 
 import type { CardRarity } from '@data/ShopPools'
@@ -24,7 +24,7 @@ export interface RelicDefinition {
   rarity: CardRarity
   effect: string
   flavor: string
-  /** Base score(불빛) cost. priceForRelic()이 ±90 지터를 적용해 실제 가격을 산출한다. */
+  /** Base score(불빛) cost. priceForRelic()이 -76~+104 비대칭 지터로 실제 가격을 산출한다. */
   basePrice: number
   /** Prevents this relic from appearing again after its one-shot removal. */
   banWhenRemoved?: boolean
