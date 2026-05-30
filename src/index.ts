@@ -313,6 +313,15 @@ function diffFieldHealthLosses(
   return losses
 }
 
+/** Let boss-owned shields absorb damage from hand cards/recipes before UI diffs read HP loss. */
+function absorbBossShieldAfterFieldEffect(before: Map<string, FieldHealthSnapshotEntry>): void {
+  const state = bossController.eventState
+  if (!state) return
+  const snapshot = before.get(state.card.id)
+  if (!snapshot) return
+  bossController.absorbExternalBossDamageWithShield(snapshot.health)
+}
+
 interface FieldFreezeSnapshotEntry {
   card: Card
   frozenTurns: number
@@ -1146,13 +1155,15 @@ async function closeShopAndResume(): Promise<void> {
   await boardRenderer.playShopExitAnimation()
   boardRenderer.closeShop()
   // 제단 EXIT는 셔터를 올리지 않고 곧장 보스 게이트로 이어간다.
-  // 30턴=30F 보스, 90턴=90F 보스(밀랍 조각사), 60턴은 60F 보스 미구현으로 30F 흐름 재사용.
+  // 30/60/90턴 제단은 각 층 보스 전투로 분기하고, 보상/시련 구조는 공통 컨트롤러가 재사용한다.
   if (currentShopMode === 'altar') {
     await boardRenderer.playAltarBossGateTransition()
     turnManager.setTurnMode('boss_phase')
     recordNotice('셔터 레일이 흔들리며 보스가 강림한다', 'hurt')
     if (gameState.getCurrentTurn() === 90) {
       await bossController.run90F()
+    } else if (gameState.getCurrentTurn() === 60) {
+      await bossController.run60F()
     } else {
       await bossController.run30F()
     }
@@ -2013,6 +2024,7 @@ async function applyHandSingle(
   // feedback before the next render changes the persistent field state. The
   // damaged id set is reused below so a lethal hit does not also fire a second
   // consume burst at the same location.
+  absorbBossShieldAfterFieldEffect(beforeSingleHealth)
   const singleDamageLosses = diffFieldHealthLosses(beforeSingleHealth)
   const singleDamagedIds = new Set(singleDamageLosses.map((loss) => loss.cardId))
   const newlyFrozenIds = diffNewlyFrozenCards(beforeSingleFreeze)
@@ -2143,6 +2155,7 @@ async function applyHandSingle(
     // Recipe effects get their own damage diff after the combo delay. As above,
     // cards killed by that damage keep their damage burst and only suppress the
     // later removal burst.
+    absorbBossShieldAfterFieldEffect(beforeRecipeHealth)
     const recipeDamageLosses = diffFieldHealthLosses(beforeRecipeHealth)
     const recipeDamagedIds = new Set(recipeDamageLosses.map((loss) => loss.cardId))
     await boardRenderer.animateDamageNumbersById(recipeDamageLosses)

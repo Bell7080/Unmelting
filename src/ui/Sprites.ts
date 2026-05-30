@@ -12,7 +12,8 @@
  *   - Flower: flower_000 seed, flower_001~005 blooms, enemyflower_001 monster flower.
  *   - Rail / stage backdrop: background_001.
  *   - Boss: boss_001. Trial veil: background_005.
- *   - Boss 90F (밀랍 조각사): boss_003 (미준비 시 boss_001 폴백).
+ *   - Boss 60F (불씨 기사단장): boss_002.
+ *   - Boss 90F (밀랍 조각사): boss_003.
  *   - Trial cards: trial_001 광란 / trial_004 역경 / trial_007 가난.
  */
 
@@ -26,6 +27,7 @@ import shopPickerBgUrl from '../assets/sprites/background_003.webp'
 import altarVeilBgUrl from '../assets/sprites/background_004.webp'
 import trialVeilBgUrl from '../assets/sprites/background_005.webp'
 import boss001Url from '../assets/sprites/boss_001.webp'
+import boss002Url from '../assets/sprites/boss_002.webp'
 import boss003Url from '../assets/sprites/boss_003.webp'
 import playerUrl from '../assets/sprites/player_001.webp'
 import enemy001Url from '../assets/sprites/enemy_001.webp'
@@ -114,6 +116,8 @@ export const SpriteUrls = {
   trialVeilBg: trialVeilBgUrl,
   /** 30층 보스(양초 백작) 일러스트. */
   boss: boss001Url,
+  /** 60층 보스(불씨 기사단장) 일러스트. */
+  boss60: boss002Url,
   /** 90층 보스(밀랍 조각사) 일러스트. */
   boss90: boss003Url,
   player: playerUrl,
@@ -279,6 +283,7 @@ function spriteForNormalEnemy(card: Card): string {
 
 export function spriteForCard(card: Card): string {
   if (card.type === CardType.BOSS) {
+    if (card.specialEnemyKind === 'waxKnight') return SpriteUrls.boss60
     if (card.specialEnemyKind === 'waxSculptor') return SpriteUrls.boss90
     return SpriteUrls.boss
   }

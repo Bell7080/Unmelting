@@ -21,6 +21,8 @@ import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
 import { sampleWithoutReplacement } from '@core/Sampling'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
 
+type WaxKnightCardEffect = 'shield' | 'heal' | 'strike'
+
 // ---- 보스별 스탯 정의 -------------------------------------------------------
 
 export interface BossDef {
@@ -33,7 +35,7 @@ export interface BossDef {
   /** HP가 이 배수 이하가 될 때마다 손패 1장 지급 */
   handGiftStep: number
   /** CSS boss-kind-* 마커 — Rail CSS 레이아웃과 연동 */
-  specialEnemyKind: 'waxArmy' | 'waxSculptor'
+  specialEnemyKind: 'waxArmy' | 'waxKnight' | 'waxSculptor'
   /** Card.groupCount 표시값 (점수·뱃지용). 실제 점유 행 수와 별도. */
   groupCount: number
   /** lanes에 보스 카드 인스턴스를 실제로 박을 dist 행 수.
@@ -43,7 +45,7 @@ export interface BossDef {
   /** 일러스트 URL */
   spriteUrl: string
   /** 보스 타일 등장 연출 선택자 */
-  appearAnimation: 'landing' | 'waxSculptor'
+  appearAnimation: 'landing' | 'waxKnightSwoop' | 'waxSculptor'
   /** 보스 대사 */
   introBubble: string
   playerResponseBubble: string
@@ -73,6 +75,8 @@ export interface BossEventState {
   sculptorStartRow: number
   /** waxSculptor 후방 페이즈 중 dist-0에 소환된 적 카드 id 집합 */
   summonedEnemyIds: Set<string>
+  /** waxKnight 전용: 다음 피해를 먼저 흡수하는 밀랍 방패량 */
+  bossShield: number
 }
 
 export interface BossRewardState {
@@ -146,6 +150,33 @@ export class BossEventController {
     await this.runBossEvent(def)
   }
 
+  /** 60F 보스 이벤트 실행. 30F의 3×3 구조를 유지하되 전용 카드 사용 패턴을 적용한다. */
+  async run60F(): Promise<void> {
+    const def: BossDef = {
+      name: '불씨 기사단장',
+      flavor: '에나벨라를 위하여 검을 든 저택의 방패',
+      maxHp: 80,
+      attack: 7,
+      attackInterval: 3,
+      handGiftStep: 0,
+      specialEnemyKind: 'waxKnight',
+      groupCount: 3,
+      occupiedDistRows: 1,   // 30F처럼 데이터는 dist-0 한 줄, CSS가 3×3 중앙 보스로 확장한다.
+      spriteUrl: this.sprites.boss60,
+      appearAnimation: 'waxKnightSwoop',
+      introBubble: '에나벨라님을... 위하여.',
+      // 플레이어만 숨은 정체(레온하르트)를 눈치채는 스토리 암시 대사다.
+      playerResponseBubble: '설마... 레온하르트...?',
+      // 등장 훙! 연출(780ms) + 타자기(16자×70ms≈1120ms) + 읽기(2100ms)
+      introBubbleMs: 3220,
+      // 타자기(15자×70ms≈1050ms) + 읽기(1900ms) + 퇴장(400ms)
+      playerBubbleMs: 3350,
+      trait: '3턴마다 기사단장의 손패 2장 발동.',
+      kicker: '저택의 방패',
+    }
+    await this.runBossEvent(def)
+  }
+
   /** 90F 보스 이벤트 실행. closeShopAndResume 제단 EXIT 분기에서 호출한다. */
   async run90F(): Promise<void> {
     const def: BossDef = {
@@ -191,15 +222,19 @@ export class BossEventController {
     await this.br.animatePlayerAttack(card)
     const bossTile = this.br.findCardElement(card.id)
     if (bossTile) SquareBurst.playOn(bossTile, 'damage', { count: 22, spread: 180, duration: 560 })
-    const dealt = Math.min(character.damage, card.getHealth())
-    card.takeDamage(dealt)
+    const rawDamage = Math.min(character.damage, card.getHealth() + state.bossShield)
+    const blocked = Math.min(state.bossShield, rawDamage)
+    state.bossShield -= blocked
+    const dealt = Math.min(rawDamage - blocked, card.getHealth())
+    if (dealt > 0) card.takeDamage(dealt)
+    if (blocked > 0) this.inject.recordNotice(`밀랍 방패가 피해 ${blocked}를 막았다`, 'info')
     state.turn += 1
     this.tm.tickEmberDecay()
 
     const remaining = state.def.attackInterval - (state.turn % state.def.attackInterval)
     const displayValue = remaining === state.def.attackInterval ? state.def.attackInterval : remaining
     this.br.setBossAttackCountdown(displayValue)
-    await this.br.animateDamageNumbersById([{ cardId: card.id, amount: dealt }])
+    await this.br.animateDamageNumbersById(dealt > 0 ? [{ cardId: card.id, amount: dealt }] : [])
 
     await this.consumeHandGiftThresholds(card.id)
     this.inject.render()
@@ -215,13 +250,18 @@ export class BossEventController {
         await this.handleSculptorPhaseShift()
         return
       }
-      character.takeDamage(card.getDamage())
-      await this.br.animateEnemyAttacks([
-        { cardId: card.id, cardName: card.name, laneIndex: 0, damage: card.getDamage() },
-      ])
-      await this.br.animateDamageFlash()
-      this.inject.recordNotice(`보스 반격! 플레이어가 ${card.getDamage()} 피해를 받았다`, 'hurt')
-      this.inject.render()
+      if (state.def.specialEnemyKind === 'waxKnight') {
+        // 불씨 기사단장은 기본 타격 뒤 플레이어 손패처럼 2장의 효과 카드를 연속 사용한다.
+        await this.resolveWaxKnightCardTurn(card.id)
+      } else {
+        character.takeDamage(card.getDamage())
+        await this.br.animateEnemyAttacks([
+          { cardId: card.id, cardName: card.name, laneIndex: 0, damage: card.getDamage() },
+        ])
+        await this.br.animateDamageFlash()
+        this.inject.recordNotice(`보스 반격! 플레이어가 ${card.getDamage()} 피해를 받았다`, 'hurt')
+        this.inject.render()
+      }
       if (!this.gs.character.isAlive()) {
         await this.inject.handlePlayerDeath()
         return
@@ -364,6 +404,7 @@ export class BossEventController {
       sculptorPhase: 'front',
       sculptorStartRow: 0,
       summonedEnemyIds: new Set<string>(),
+      bossShield: 0,
     }
 
     this.tm.setTurnMode('boss_phase')
@@ -374,6 +415,8 @@ export class BossEventController {
     this.inject.render()
     if (def.appearAnimation === 'waxSculptor') {
       await this.br.playWaxSculptorAppearAnimation(bossCard.id)
+    } else if (def.appearAnimation === 'waxKnightSwoop') {
+      await this.br.playWaxKnightSwoopAnimation(bossCard.id)
     } else {
       await this.br.playBossLandingAnimation(bossCard.id)
     }
@@ -433,7 +476,7 @@ export class BossEventController {
   }
 
   private async consumeHandGiftThresholds(bossCardId: string): Promise<void> {
-    if (!this.eventState) return
+    if (!this.eventState || this.eventState.def.handGiftStep <= 0) return
     const state = this.eventState
     while (state.card.getHealth() <= state.nextHandGiftAt && state.nextHandGiftAt > 0) {
       await this.grantHandGift(bossCardId)
@@ -456,6 +499,55 @@ export class BossEventController {
     this.inject.recordNotice(`보스 피해 보상: 손패 ${getHandCardDef(id).name} 획득`, 'info')
     this.inject.render()
     await this.br.animateResourceTrailFromCard(bossCardId, 'hand', 1, 'hand-recovery')
+  }
+
+  /** 손패/레시피처럼 외부 시스템이 보스 HP를 직접 깎은 뒤, waxKnight 방패로 피해를 되돌린다. */
+  absorbExternalBossDamageWithShield(beforeHealth: number): number {
+    if (!this.eventState || this.eventState.bossShield <= 0) return 0
+    const state = this.eventState
+    const damage = Math.max(0, beforeHealth - state.card.getHealth())
+    if (damage <= 0) return 0
+    const blocked = Math.min(state.bossShield, damage)
+    state.bossShield -= blocked
+    state.card.healEnemyLike(blocked)
+    this.inject.recordNotice(`밀랍 방패가 손패 피해 ${blocked}를 막았다`, 'info')
+    return blocked
+  }
+
+  // ---- waxKnight 전용 카드 사용 메커니즘 ------------------------------------
+
+  /** 불씨 기사단장의 3턴 주기 행동: 기본 타격 + 랜덤 카드 2장 사용. */
+  private async resolveWaxKnightCardTurn(bossCardId: string): Promise<void> {
+    const state = this.eventState!
+    const character = this.gs.character
+
+    character.takeDamage(state.def.attack)
+    await this.br.animateEnemyAttacks([
+      { cardId: bossCardId, cardName: state.card.name, laneIndex: 0, damage: state.def.attack },
+    ])
+    await this.br.animateDamageFlash()
+    this.inject.recordNotice(`불씨 기사단장의 돌진! 플레이어가 ${state.def.attack} 피해를 받았다`, 'hurt')
+
+    const cards = sampleWithoutReplacement<WaxKnightCardEffect>(['shield', 'heal', 'strike'], 2)
+    for (const effect of cards) {
+      if (effect === 'shield') {
+        state.bossShield += 2
+        await this.br.animateWaxKnightCardEffect(bossCardId, 'shield')
+        this.inject.recordNotice('불씨 기사단장이 손패 사용: 방패 +2', 'info')
+      } else if (effect === 'heal') {
+        const healed = state.card.healEnemyLike(2)
+        await this.br.animateWaxKnightCardEffect(bossCardId, 'heal')
+        this.inject.recordNotice(`불씨 기사단장이 손패 사용: 체력 +${healed}`, 'info')
+      } else {
+        character.takeDamage(2)
+        await this.br.animateWaxKnightCardEffect(bossCardId, 'strike')
+        await this.br.animateDamageFlash()
+        this.inject.recordNotice('불씨 기사단장이 손패 사용: 플레이어에게 2 피해', 'hurt')
+      }
+      this.inject.render()
+      if (!character.isAlive()) return
+      await new Promise((r) => window.setTimeout(r, 180))
+    }
   }
 
   // ---- waxSculptor 전용 페이즈 메커니즘 ------------------------------------
@@ -529,7 +621,7 @@ export class BossEventController {
     if (tile) SquareBurst.playOn(tile, 'damage', { count: 18, spread: 150, duration: 540 })
     const dealt = Math.min(character.damage, card.getHealth())
     card.takeDamage(dealt)
-    await this.br.animateDamageNumbersById([{ cardId: card.id, amount: dealt }])
+    await this.br.animateDamageNumbersById(dealt > 0 ? [{ cardId: card.id, amount: dealt }] : [])
 
     if (card.getHealth() <= 0) {
       await this.br.animateCardConsume(card)

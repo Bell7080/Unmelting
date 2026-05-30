@@ -2204,6 +2204,41 @@ export class GameBoardRenderer {
     tile.classList.remove('is-boss-landing')
   }
 
+  /** 불씨 기사단장(60F) 등장 연출: 왼쪽 밖에서 오른쪽으로 훙 지나오며 중앙 3×3에 정착한다. */
+  async playWaxKnightSwoopAnimation(cardId: string): Promise<void> {
+    const tile = this.findCardElement(cardId)
+    if (!tile) return
+    tile.classList.remove('is-wax-knight-swooping')
+    void tile.offsetWidth  // CSS animation 재시작용 reflow
+    tile.classList.add('is-wax-knight-swooping')
+
+    // 고속 진입이 중앙에 멈추는 순간, 연기 같은 사각 블라스트를 좌→우 잔상처럼 배치한다.
+    await new Promise((r) => window.setTimeout(r, 430))
+    const rect = tile.getBoundingClientRect()
+    const centerY = rect.top + rect.height * 0.52
+    const centerX = rect.left + rect.width / 2
+    SquareBurst.playAt(centerX - 120, centerY, 'bomb-blast', { count: 18, spread: 150, duration: 520 })
+    SquareBurst.playAt(centerX - 24,  centerY, 'damage',     { count: 28, spread: 230, duration: 620 })
+    SquareBurst.playAt(centerX + 90,  centerY, 'bomb-blast', { count: 16, spread: 140, duration: 520 })
+
+    await new Promise((r) => window.setTimeout(r, 360))
+    tile.classList.remove('is-wax-knight-swooping')
+  }
+
+  /** 불씨 기사단장이 사용하는 보스 카드 효과를 한 박자짜리 사각 블라스트로 표시한다. */
+  async animateWaxKnightCardEffect(cardId: string, effect: 'shield' | 'heal' | 'strike'): Promise<void> {
+    const tile = this.findCardElement(cardId)
+    if (!tile) return
+    const theme = effect === 'shield' ? 'shield-gain' : effect === 'heal' ? 'health-gain' : 'damage'
+    const label = effect === 'shield' ? '방패 +2' : effect === 'heal' ? '체력 +2' : '피해 2'
+    SquareBurst.playOn(tile, theme, { count: effect === 'strike' ? 22 : 16, spread: 170, duration: 540 })
+    const rect = tile.getBoundingClientRect()
+    void this.spawnFieldFloatText(rect.left + rect.width / 2, rect.top + rect.height * 0.34, label)
+    tile.classList.add('is-wax-knight-casting')
+    await new Promise((r) => window.setTimeout(r, 420))
+    tile.classList.remove('is-wax-knight-casting')
+  }
+
   /** 밀랍 조각사(2×3) 등장 연출.
    *  6칸 동시 투명→확대→쿵 착지. 착지 순간 중심 블라스트. */
   async playWaxSculptorAppearAnimation(cardId: string): Promise<void> {
@@ -2549,18 +2584,25 @@ export class GameBoardRenderer {
       extraClass: monsterFlowerKnown ? undefined : 'codex-tile--unknown',
     })
 
-    // 보스.
-    const bossKnown = encountered.has('양초 백작')
-    const bossTile = this.codexTile({
-      art: { kind: 'sprite', url: SpriteUrls.boss },
-      name: bossKnown ? '양초 백작' : '???',
-      tag: '보스',
-      chips: bossKnown
-        ? [{ icon: heart, value: '30', tone: 'hp' }, { icon: sword, value: '5', tone: 'atk' }]
-        : [],
-      note: bossKnown ? '30턴 제단 수문장. 3칸을 점령.' : undefined,
-      extraClass: bossKnown ? undefined : 'codex-tile--unknown',
-    })
+    // 보스: 층별로 별도 타일을 유지해 처치/조우 진행도가 더 잘 읽히게 한다.
+    const bossTile = (name: string, sprite: string, floor: string, hp: string, atk: string, note: string) => {
+      const known = encountered.has(name)
+      return this.codexTile({
+        art: { kind: 'sprite', url: sprite },
+        name: known ? name : '???',
+        tag: `${floor} 보스`,
+        chips: known
+          ? [{ icon: heart, value: hp, tone: 'hp' }, { icon: sword, value: atk, tone: 'atk' }]
+          : [],
+        note: known ? note : undefined,
+        extraClass: known ? undefined : 'codex-tile--unknown',
+      })
+    }
+    const bossTiles = [
+      bossTile('양초 백작', SpriteUrls.boss, '30F', '50', '5', '30턴 제단 수문장. 3×3 보스.'),
+      bossTile('불씨 기사단장', SpriteUrls.boss60, '60F', '80', '7', '저택의 방패. 3턴마다 기사단장의 손패 2장 발동.'),
+      bossTile('밀랍 조각사', SpriteUrls.boss90, '90F', '60', '4', '90턴 제단 보스. 3턴마다 후방 이동과 소환 페이즈 사용.'),
+    ].join('')
 
     return `
       <h3 class="compendium-section">적</h3>
@@ -2570,7 +2612,7 @@ export class GameBoardRenderer {
       <h3 class="compendium-section">특수 적</h3>
       <div class="codex-tile-grid">${mimicTiles}${monsterFlowerTile}</div>
       <h3 class="compendium-section">보스</h3>
-      <div class="codex-tile-grid">${bossTile}</div>
+      <div class="codex-tile-grid">${bossTiles}</div>
     `
   }
 
