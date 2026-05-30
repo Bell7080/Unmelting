@@ -52,6 +52,12 @@ export interface SporeSpread {
   infected: { laneIndex: number; distance: number }[]
 }
 
+export interface SporeCountdownTick {
+  laneIndex: number
+  distance: number
+  turnsUntilSpread: number
+}
+
 export interface FlowerBloom {
   laneIndex: number
   distance: number
@@ -236,18 +242,11 @@ export class TurnManager {
     return explosions
   }
 
-  /** Tick infectious spores and convert up to groupCount adjacent cells every second tick. */
-  applySporeSpread(): SporeSpread[] {
-    const spreads: SporeSpread[] = []
-    const sporesAtTurnStart: { card: Card; laneIndex: number; distance: number }[] = []
+  /** Snapshot unique spore cards so grouped colonies tick once per turn. */
+  private collectSporeCountdownSources(): { card: Card; laneIndex: number; distance: number }[] {
+    const spores: { card: Card; laneIndex: number; distance: number }[] = []
     const seen = new Set<Card>()
 
-    // Snapshot the spores before mutating the board. Two categories are excluded:
-    // 1. Newly infected spores (placed mid-spread by the loop below) — avoided by
-    //    taking the snapshot before any mutations.
-    // 2. Freshly spawned spores (justEnteredRail=true) — their justEnteredRail flag
-    //    is cleared here so turn counting starts from the NEXT call, giving the
-    //    player a full 2-turn warning from the moment the spore first appears.
     for (let laneIndex = 0; laneIndex < this.gameState.lanes.length; laneIndex++) {
       for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
         const card = this.gameState.lanes[laneIndex].getCardAtDistance(distance)
@@ -255,19 +254,44 @@ export class TurnManager {
           continue
         }
         seen.add(card)
-        if (card.justEnteredRail) {
-          // Skip this spore for ticking this turn; clear the flag so it ticks normally next turn.
-          card.justEnteredRail = false
-          continue
-        }
-        sporesAtTurnStart.push({ card, laneIndex, distance })
+        spores.push({ card, laneIndex, distance })
       }
     }
 
-    for (const { card, laneIndex, distance } of sporesAtTurnStart) {
+    return spores
+  }
+
+  /**
+   * Tick spore timers only, leaving ready spores at 0 so the renderer can show
+   * the warning badge before the infection/reset beat runs.
+   */
+  tickSporeCountdowns(): SporeCountdownTick[] {
+    const ticks: SporeCountdownTick[] = []
+
+    for (const { card, laneIndex, distance } of this.collectSporeCountdownSources()) {
+      if (card.justEnteredRail) {
+        // 막 3×3 레일에 들어온 포자는 이번 호출에서 2턴 표기를 보존한다.
+        card.justEnteredRail = false
+        continue
+      }
       if (card.isFrozen()) continue
+
       card.sporeTurnsUntilSpread = Math.max(0, card.sporeTurnsUntilSpread - 1)
-      if (card.sporeTurnsUntilSpread > 0) continue
+      ticks.push({ laneIndex, distance, turnsUntilSpread: card.sporeTurnsUntilSpread })
+    }
+
+    return ticks
+  }
+
+  /** Infect from spores whose countdown already reached 0, then reset them to 2. */
+  spreadReadySpores(): SporeSpread[] {
+    const spreads: SporeSpread[] = []
+
+    // Countdown and infection are deliberately split: the UI renders the 0턴
+    // badge between these phases, while this snapshot prevents newborn spores
+    // from acting during the same spread pass.
+    for (const { card, laneIndex, distance } of this.collectSporeCountdownSources()) {
+      if (card.isFrozen() || card.justEnteredRail || card.sporeTurnsUntilSpread > 0) continue
 
       const candidates = this.collectSporeTargets(laneIndex, distance, card)
       const infected: { laneIndex: number; distance: number }[] = []
@@ -284,8 +308,7 @@ export class TurnManager {
           1,
           { trapKind: 'spore' }
         )
-        // Infected spores always start a full fresh clock; they are deliberately
-        // not part of sporesAtTurnStart, so they cannot act until a later turn.
+        // 감염된 포자는 새 2턴 주기를 받으며 이번 spread snapshot에는 포함되지 않는다.
         spore.sporeTurnsUntilSpread = 2
         this.gameState.lanes[target.laneIndex].setCardAtDistance(target.distance, spore)
         infected.push(target)
@@ -295,11 +318,18 @@ export class TurnManager {
         spreads.push({ sourceLane: laneIndex, sourceDistance: distance, infected })
       }
     }
+
     // Spread runs after the usual cleanup regroup in the game loop, so newly
     // adjacent front-row spores need one immediate regroup pass to render and
     // act as a single 2/3-lane colony before the next player input.
     if (spreads.length > 0) this.gameState.regroupAllRows()
     return spreads
+  }
+
+  /** Tick infectious spores, spread ready colonies, and reset their timer. */
+  applySporeSpread(): SporeSpread[] {
+    this.tickSporeCountdowns()
+    return this.spreadReadySpores()
   }
 
   /** Orthogonal-only spore candidates; no long-range spread after all sides are infected. */

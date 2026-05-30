@@ -151,6 +151,27 @@ describe('TurnManager treasure volatility', () => {
     expect(gameState.lanes[1].getCardAtDistance(0)).toBe(bomb)
   })
 
+  it('separates the visible 0-turn spore badge from the infection reset', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const spore = new Card('spore', CardType.TRAP, '감염 포자', 'test', 0, 1, { trapKind: 'spore' })
+    const victim = new Card('victim', CardType.TREASURE, '작은 상자', 'test')
+    spore.sporeTurnsUntilSpread = 1
+    gameState.lanes[1].setCardAtDistance(1, spore)
+    gameState.lanes[1].setCardAtDistance(0, victim)
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+
+    const ticks = turnManager.tickSporeCountdowns()
+
+    // UI가 이 중간 상태를 렌더링해 2→1→0을 보여준 뒤 spreadReadySpores가 2로 리셋한다.
+    expect(ticks).toEqual([{ laneIndex: 1, distance: 1, turnsUntilSpread: 0 }])
+    expect(spore.sporeTurnsUntilSpread).toBe(0)
+    const spreads = turnManager.spreadReadySpores()
+
+    expect(spreads).toHaveLength(1)
+    expect(spore.sporeTurnsUntilSpread).toBe(2)
+  })
+
   it('spreads a ready spore into one orthogonal neighboring cell', () => {
     const gameState = new GameState()
     const turnManager = new TurnManager(gameState)
