@@ -124,6 +124,12 @@ export const SpriteUrls = {
   enemyHedgehog: enemy010Url,
   enemyLizard: enemy011Url,
   enemyRaccoon: enemy012Url,
+  enemyBeetle: enemy013Url,
+  enemyScorpion: enemy014Url,
+  enemyMarten: enemy015Url,
+  enemyBadger: enemy016Url,
+  enemySloth: enemy017Url,
+  enemyJackal: enemy018Url,
   // 미믹은 기존 enemy_003 대신 전용 mimic_001 일러스트를 사용한다.
   mimic: mimic001Url,
   monsterFlower: enemyFlower001Url,
@@ -217,6 +223,12 @@ const ENEMY_SPRITES: Record<EnemySpriteId, string> = {
   enemyHedgehog: SpriteUrls.enemyHedgehog,
   enemyLizard: SpriteUrls.enemyLizard,
   enemyRaccoon: SpriteUrls.enemyRaccoon,
+  enemyBeetle: SpriteUrls.enemyBeetle,
+  enemyScorpion: SpriteUrls.enemyScorpion,
+  enemyMarten: SpriteUrls.enemyMarten,
+  enemyBadger: SpriteUrls.enemyBadger,
+  enemySloth: SpriteUrls.enemySloth,
+  enemyJackal: SpriteUrls.enemyJackal,
 }
 
 /** Stable cheap hash so a given card always maps to the same sprite variant. */
@@ -249,6 +261,12 @@ function spriteForNormalEnemy(card: Card): string {
     if (card.name.includes('고슴도치')) return SpriteUrls.enemyHedgehog
     if (card.name.includes('도마뱀')) return SpriteUrls.enemyLizard
     if (card.name.includes('너구리')) return SpriteUrls.enemyRaccoon
+    if (card.name.includes('풍뎅이')) return SpriteUrls.enemyBeetle
+    if (card.name.includes('전갈')) return SpriteUrls.enemyScorpion
+    if (card.name.includes('담비')) return SpriteUrls.enemyMarten
+    if (card.name.includes('오소리')) return SpriteUrls.enemyBadger
+    if (card.name.includes('나무늘보')) return SpriteUrls.enemySloth
+    if (card.name.includes('자칼')) return SpriteUrls.enemyJackal
   }
   return NORMAL_ENEMY_VARIANTS[hashId(card.id) % NORMAL_ENEMY_VARIANTS.length]
 }
