@@ -2203,8 +2203,7 @@ export class GameBoardRenderer {
     await new Promise((r) => window.setTimeout(r, 340))
     tile.classList.remove('is-boss-landing')
   }
-
-  /** 레온하르트(60F) 등장 연출: 왼쪽 밖에서 오른쪽으로 훙 지나오며 중앙 3×3에 정착한다. */
+  /** 불씨 기사단장(60F) 등장 연출: 왼쪽 밖에서 오른쪽으로 훙 지나오며 중앙 3×3에 정착한다. */
   async playWaxKnightSwoopAnimation(cardId: string): Promise<void> {
     const tile = this.findCardElement(cardId)
     if (!tile) return
@@ -2224,8 +2223,7 @@ export class GameBoardRenderer {
     await new Promise((r) => window.setTimeout(r, 360))
     tile.classList.remove('is-wax-knight-swooping')
   }
-
-  /** 레온하르트가 사용하는 보스 카드 효과를 한 박자짜리 사각 블라스트로 표시한다. */
+  /** 불씨 기사단장이 사용하는 보스 카드 효과를 한 박자짜리 사각 블라스트로 표시한다. */
   async animateWaxKnightCardEffect(cardId: string, effect: 'shield' | 'heal' | 'strike'): Promise<void> {
     const tile = this.findCardElement(cardId)
     if (!tile) return
@@ -2584,18 +2582,25 @@ export class GameBoardRenderer {
       extraClass: monsterFlowerKnown ? undefined : 'codex-tile--unknown',
     })
 
-    // 보스.
-    const bossKnown = encountered.has('양초 백작')
-    const bossTile = this.codexTile({
-      art: { kind: 'sprite', url: SpriteUrls.boss },
-      name: bossKnown ? '양초 백작' : '???',
-      tag: '보스',
-      chips: bossKnown
-        ? [{ icon: heart, value: '30', tone: 'hp' }, { icon: sword, value: '5', tone: 'atk' }]
-        : [],
-      note: bossKnown ? '30턴 제단 수문장. 3칸을 점령.' : undefined,
-      extraClass: bossKnown ? undefined : 'codex-tile--unknown',
-    })
+    // 보스: 층별로 별도 타일을 유지해 처치/조우 진행도가 더 잘 읽히게 한다.
+    const bossTile = (name: string, sprite: string, floor: string, hp: string, atk: string, note: string) => {
+      const known = encountered.has(name)
+      return this.codexTile({
+        art: { kind: 'sprite', url: sprite },
+        name: known ? name : '???',
+        tag: `${floor} 보스`,
+        chips: known
+          ? [{ icon: heart, value: hp, tone: 'hp' }, { icon: sword, value: atk, tone: 'atk' }]
+          : [],
+        note: known ? note : undefined,
+        extraClass: known ? undefined : 'codex-tile--unknown',
+      })
+    }
+    const bossTiles = [
+      bossTile('양초 백작', SpriteUrls.boss, '30F', '50', '5', '30턴 제단 수문장. 3×3 보스.'),
+      bossTile('불씨 기사단장', SpriteUrls.boss60, '60F', '80', '7', '저택의 방패. 3턴마다 기사단장의 손패 2장 발동.'),
+      bossTile('밀랍 조각사', SpriteUrls.boss90, '90F', '60', '4', '90턴 제단 보스. 3턴마다 후방 이동과 소환 페이즈 사용.'),
+    ].join('')
 
     return `
       <h3 class="compendium-section">적</h3>
@@ -2605,7 +2610,7 @@ export class GameBoardRenderer {
       <h3 class="compendium-section">특수 적</h3>
       <div class="codex-tile-grid">${mimicTiles}${monsterFlowerTile}</div>
       <h3 class="compendium-section">보스</h3>
-      <div class="codex-tile-grid">${bossTile}</div>
+      <div class="codex-tile-grid">${bossTiles}</div>
     `
   }
 

@@ -78,7 +78,7 @@ describe('Card enemy grouping health', () => {
 
 
   it('heals enemy-like cards without exceeding their max HP', () => {
-    const boss = new Card('boss', CardType.BOSS, '레온하르트', 'Wax knight', 55, 2, {
+    const boss = new Card('boss', CardType.BOSS, '불씨 기사단장', 'Wax knight', 80, 7, {
       specialEnemyKind: 'waxKnight',
     })
 
@@ -86,9 +86,9 @@ describe('Card enemy grouping health', () => {
 
     // Boss card healing uses the same capped HP pool as enemies so HP bars stay stable.
     expect(boss.healEnemyLike(2)).toBe(2)
-    expect(boss.getHealth()).toBe(52)
+    expect(boss.getHealth()).toBe(77)
     expect(boss.healEnemyLike(99)).toBe(3)
-    expect(boss.getHealth()).toBe(55)
+    expect(boss.getHealth()).toBe(80)
   })
 
   it('keeps special mimic enemies from merging with normal enemies', () => {

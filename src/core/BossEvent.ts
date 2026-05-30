@@ -153,10 +153,10 @@ export class BossEventController {
   /** 60F 보스 이벤트 실행. 30F의 3×3 구조를 유지하되 전용 카드 사용 패턴을 적용한다. */
   async run60F(): Promise<void> {
     const def: BossDef = {
-      name: '레온하르트',
-      flavor: '에나벨라를 위하여 검을 든 밀랍 기사',
-      maxHp: 55,
-      attack: 2,
+      name: '불씨 기사단장',
+      flavor: '에나벨라의 옛 방패',
+      maxHp: 80,
+      attack: 7,
       attackInterval: 3,
       handGiftStep: 0,
       specialEnemyKind: 'waxKnight',
@@ -165,13 +165,14 @@ export class BossEventController {
       spriteUrl: this.sprites.boss60,
       appearAnimation: 'waxKnightSwoop',
       introBubble: '에나벨라님을... 위하여.',
+      // 플레이어만 숨은 정체(레온하르트)를 눈치채는 스토리 암시 대사다.
       playerResponseBubble: '설마... 레온하르트...?',
       // 등장 훙! 연출(780ms) + 타자기(16자×70ms≈1120ms) + 읽기(2100ms)
       introBubbleMs: 3220,
       // 타자기(15자×70ms≈1050ms) + 읽기(1900ms) + 퇴장(400ms)
       playerBubbleMs: 3350,
-      trait: '3턴마다 플레이어를 타격하고 방패 2 / 체력 2 / 플레이어 피해 2 중 2장을 랜덤 발동한다.',
-      kicker: '충성의 잔향',
+      trait: '3턴마다 기사단장의 손패 2장 발동.',
+      kicker: '저택의 방패',
     }
     await this.runBossEvent(def)
   }
@@ -250,7 +251,7 @@ export class BossEventController {
         return
       }
       if (state.def.specialEnemyKind === 'waxKnight') {
-        // 레온하르트는 기본 타격 뒤 플레이어 손패처럼 2장의 효과 카드를 연속 사용한다.
+        // 불씨 기사단장은 기본 타격 뒤 플레이어 손패처럼 2장의 효과 카드를 연속 사용한다.
         await this.resolveWaxKnightCardTurn(card.id)
       } else {
         character.takeDamage(card.getDamage())
@@ -499,10 +500,22 @@ export class BossEventController {
     this.inject.render()
     await this.br.animateResourceTrailFromCard(bossCardId, 'hand', 1, 'hand-recovery')
   }
+  /** 손패/레시피처럼 외부 시스템이 보스 HP를 직접 깎은 뒤, waxKnight 방패로 피해를 되돌린다. */
+  absorbExternalBossDamageWithShield(beforeHealth: number): number {
+    if (!this.eventState || this.eventState.bossShield <= 0) return 0
+    const state = this.eventState
+    const damage = Math.max(0, beforeHealth - state.card.getHealth())
+    if (damage <= 0) return 0
+    const blocked = Math.min(state.bossShield, damage)
+    state.bossShield -= blocked
+    state.card.healEnemyLike(blocked)
+    this.inject.recordNotice(`밀랍 방패가 손패 피해 ${blocked}를 막았다`, 'info')
+    return blocked
+  }
 
   // ---- waxKnight 전용 카드 사용 메커니즘 ------------------------------------
 
-  /** 레온하르트의 3턴 주기 행동: 기본 타격 + 랜덤 카드 2장 사용. */
+  /** 불씨 기사단장의 3턴 주기 행동: 기본 타격 + 랜덤 카드 2장 사용. */
   private async resolveWaxKnightCardTurn(bossCardId: string): Promise<void> {
     const state = this.eventState!
     const character = this.gs.character
@@ -512,23 +525,22 @@ export class BossEventController {
       { cardId: bossCardId, cardName: state.card.name, laneIndex: 0, damage: state.def.attack },
     ])
     await this.br.animateDamageFlash()
-    this.inject.recordNotice(`레온하르트의 돌진! 플레이어가 ${state.def.attack} 피해를 받았다`, 'hurt')
-
+    this.inject.recordNotice(`불씨 기사단장의 돌진! 플레이어가 ${state.def.attack} 피해를 받았다`, 'hurt')
     const cards = sampleWithoutReplacement<WaxKnightCardEffect>(['shield', 'heal', 'strike'], 2)
     for (const effect of cards) {
       if (effect === 'shield') {
         state.bossShield += 2
         await this.br.animateWaxKnightCardEffect(bossCardId, 'shield')
-        this.inject.recordNotice('레온하르트가 카드 사용: 방패 +2', 'info')
+        this.inject.recordNotice('불씨 기사단장이 손패 사용: 방패 +2', 'info')
       } else if (effect === 'heal') {
         const healed = state.card.healEnemyLike(2)
         await this.br.animateWaxKnightCardEffect(bossCardId, 'heal')
-        this.inject.recordNotice(`레온하르트가 카드 사용: 체력 +${healed}`, 'info')
+        this.inject.recordNotice(`불씨 기사단장이 손패 사용: 체력 +${healed}`, 'info')
       } else {
         character.takeDamage(2)
         await this.br.animateWaxKnightCardEffect(bossCardId, 'strike')
         await this.br.animateDamageFlash()
-        this.inject.recordNotice('레온하르트가 카드 사용: 플레이어에게 2 피해', 'hurt')
+        this.inject.recordNotice('불씨 기사단장이 손패 사용: 플레이어에게 2 피해', 'hurt')
       }
       this.inject.render()
       if (!character.isAlive()) return

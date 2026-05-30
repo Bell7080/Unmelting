@@ -12,7 +12,7 @@
  *   - Flower: flower_000 seed, flower_001~005 blooms, enemyflower_001 monster flower.
  *   - Rail / stage backdrop: background_001.
  *   - Boss: boss_001. Trial veil: background_005.
- *   - Boss 60F (레온하르트): boss_002.
+ *   - Boss 60F (불씨 기사단장): boss_002.
  *   - Boss 90F (밀랍 조각사): boss_003.
  *   - Trial cards: trial_001 광란 / trial_004 역경 / trial_007 가난.
  */
@@ -116,7 +116,7 @@ export const SpriteUrls = {
   trialVeilBg: trialVeilBgUrl,
   /** 30층 보스(양초 백작) 일러스트. */
   boss: boss001Url,
-  /** 60층 보스(레온하르트) 일러스트. */
+  /** 60층 보스(불씨 기사단장) 일러스트. */
   boss60: boss002Url,
   /** 90층 보스(밀랍 조각사) 일러스트. */
   boss90: boss003Url,

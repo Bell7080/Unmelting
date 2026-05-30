@@ -582,8 +582,7 @@ export const GAME_BOARD_RAIL_STYLES = `
 .boss-kind-waxKnight .boss-face-art {
   background-position: center 28%;
 }
-
-/* 레온하르트 등장: 왼쪽에서 오른쪽으로 훙 지나오며 중앙에 급정지한다. */
+/* 불씨 기사단장 등장: 왼쪽에서 오른쪽으로 훙 지나오며 중앙에 급정지한다. */
 .is-wax-knight-swooping {
   animation: wax-knight-swoop 0.78s cubic-bezier(0.16, 0.88, 0.18, 1) both;
 }

@@ -313,6 +313,15 @@ function diffFieldHealthLosses(
   return losses
 }
 
+/** Let boss-owned shields absorb damage from hand cards/recipes before UI diffs read HP loss. */
+function absorbBossShieldAfterFieldEffect(before: Map<string, FieldHealthSnapshotEntry>): void {
+  const state = bossController.eventState
+  if (!state) return
+  const snapshot = before.get(state.card.id)
+  if (!snapshot) return
+  bossController.absorbExternalBossDamageWithShield(snapshot.health)
+}
+
 interface FieldFreezeSnapshotEntry {
   card: Card
   frozenTurns: number
@@ -2015,6 +2024,7 @@ async function applyHandSingle(
   // feedback before the next render changes the persistent field state. The
   // damaged id set is reused below so a lethal hit does not also fire a second
   // consume burst at the same location.
+  absorbBossShieldAfterFieldEffect(beforeSingleHealth)
   const singleDamageLosses = diffFieldHealthLosses(beforeSingleHealth)
   const singleDamagedIds = new Set(singleDamageLosses.map((loss) => loss.cardId))
   const newlyFrozenIds = diffNewlyFrozenCards(beforeSingleFreeze)
@@ -2145,6 +2155,7 @@ async function applyHandSingle(
     // Recipe effects get their own damage diff after the combo delay. As above,
     // cards killed by that damage keep their damage burst and only suppress the
     // later removal burst.
+    absorbBossShieldAfterFieldEffect(beforeRecipeHealth)
     const recipeDamageLosses = diffFieldHealthLosses(beforeRecipeHealth)
     const recipeDamagedIds = new Set(recipeDamageLosses.map((loss) => loss.cardId))
     await boardRenderer.animateDamageNumbersById(recipeDamageLosses)
