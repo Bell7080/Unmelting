@@ -1146,13 +1146,15 @@ async function closeShopAndResume(): Promise<void> {
   await boardRenderer.playShopExitAnimation()
   boardRenderer.closeShop()
   // 제단 EXIT는 셔터를 올리지 않고 곧장 보스 게이트로 이어간다.
-  // 30턴=30F 보스, 90턴=90F 보스(밀랍 조각사), 60턴은 60F 보스 미구현으로 30F 흐름 재사용.
+  // 30/60/90턴 제단은 각 층 보스 전투로 분기하고, 보상/시련 구조는 공통 컨트롤러가 재사용한다.
   if (currentShopMode === 'altar') {
     await boardRenderer.playAltarBossGateTransition()
     turnManager.setTurnMode('boss_phase')
     recordNotice('셔터 레일이 흔들리며 보스가 강림한다', 'hurt')
     if (gameState.getCurrentTurn() === 90) {
       await bossController.run90F()
+    } else if (gameState.getCurrentTurn() === 60) {
+      await bossController.run60F()
     } else {
       await bossController.run30F()
     }

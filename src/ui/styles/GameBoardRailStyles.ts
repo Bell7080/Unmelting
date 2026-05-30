@@ -567,12 +567,43 @@ export const GAME_BOARD_RAIL_STYLES = `
    active row의 grouped 3-cell이 .rail의 3 row를 모두 점유해 3x3 풀필드로 보인다.
    윗 두 row(dist-1, dist-2)는 보스 phase 동안 보스에 가려져야 하므로 숨긴다.
    (lanes 데이터는 그대로 보존 — 격파/시련 종료 후 자연 복원된다.) */
-.rail:has(.cell.card.boss-kind-waxArmy) .rail-row.dist-0 {
+.rail:has(.cell.card.boss-kind-waxArmy) .rail-row.dist-0,
+.rail:has(.cell.card.boss-kind-waxKnight) .rail-row.dist-0 {
   grid-row: 1 / -1;
 }
 .rail:has(.cell.card.boss-kind-waxArmy) .rail-row.dist-1,
-.rail:has(.cell.card.boss-kind-waxArmy) .rail-row.dist-2 {
+.rail:has(.cell.card.boss-kind-waxArmy) .rail-row.dist-2,
+.rail:has(.cell.card.boss-kind-waxKnight) .rail-row.dist-1,
+.rail:has(.cell.card.boss-kind-waxKnight) .rail-row.dist-2 {
   display: none;
+}
+
+/* waxKnight는 30F와 같은 3×3 보스지만, 기사 일러스트 상체가 잘리기 쉬워 살짝 위로 둔다. */
+.boss-kind-waxKnight .boss-face-art {
+  background-position: center 28%;
+}
+
+/* 레온하르트 등장: 왼쪽에서 오른쪽으로 훙 지나오며 중앙에 급정지한다. */
+.is-wax-knight-swooping {
+  animation: wax-knight-swoop 0.78s cubic-bezier(0.16, 0.88, 0.18, 1) both;
+}
+@keyframes wax-knight-swoop {
+  0%   { transform: translateX(-145%) skewX(-10deg) scale(0.94); opacity: 0; filter: brightness(1.9) blur(3px); }
+  48%  { transform: translateX(10%) skewX(-5deg) scale(1.04);  opacity: 1; filter: brightness(1.35) blur(0); }
+  66%  { transform: translateX(-3%) skewX(2deg) scale(1.02); filter: brightness(1.12); }
+  82%  { transform: translateX(1%) skewX(-1deg) scale(0.995); }
+  100% { transform: translateX(0) skewX(0) scale(1); opacity: 1; filter: brightness(1); }
+}
+
+/* 보스 카드 사용 시 손패를 휘두르는 듯한 짧은 흔들림을 더한다. */
+.is-wax-knight-casting {
+  animation: wax-knight-cast 0.42s cubic-bezier(0.18, 0.9, 0.24, 1) both;
+}
+@keyframes wax-knight-cast {
+  0%   { transform: translateY(0) scale(1); filter: brightness(1); }
+  32%  { transform: translateY(-5px) scale(1.018); filter: brightness(1.35) saturate(1.2); }
+  62%  { transform: translateY(2px) scale(0.995); }
+  100% { transform: translateY(0) scale(1); filter: brightness(1); }
 }
 
 /* ---- 사이즈 유형: boss-kind-waxSculptor = 2×3 ----
