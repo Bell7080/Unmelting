@@ -749,6 +749,8 @@ async function maybeOpenShopAfterTurn(): Promise<boolean> {
   shopUpgradePackBuys = 0
   shopUnlockPackBuys = 0
   freeCardClaimed = false
+  // 제단 수당도 방문 단위 무료 보상이므로 30/60/90턴마다 다시 활성화한다.
+  freeCoinCardClaimed = false
   // 방문 시작 시 선물 상자의 효과를 현재 등록된 n종 중 하나로 확정한다.
   freeGiftKind = SHOP_FREE_GIFT_KINDS[Math.floor(Math.random() * SHOP_FREE_GIFT_KINDS.length)]
   activePackSession = null
@@ -1334,16 +1336,17 @@ function createItemGainLogs(itemNames: string[]): ActivityLogDraft[] {
 }
 
 /**
- * Turn-scaled score multiplier with a slight quadratic kicker so the late
- * game ("turn 25+") feels noticeably inflated rather than purely linear.
- *  - turn  1  : ×1.08
- *  - turn 10  : ×1.90  (1 + 0.8 + 0.10)
- *  - turn 20  : ×3.00  (1 + 1.6 + 0.40)
- *  - turn 30  : ×4.30  (1 + 2.4 + 0.90)
+ * Turn-scaled light-income multiplier. Late turns should still pay more,
+ * but the old quadratic curve made 90F wallets explode into six figures.
+ * The softened linear curve keeps progression readable without runaway economy.
+ *  - turn  1  : ×1.015
+ *  - turn 30  : ×1.45
+ *  - turn 60  : ×1.90
+ *  - turn 90  : ×2.35
  */
 function getTurnScoreMultiplier(): number {
   const turn = gameState.getCurrentTurn()
-  const base = 1 + turn * 0.08 + turn * turn * 0.001
+  const base = 1 + Math.max(0, turn) * 0.015
   return base * gameState.enhancements.scoreMultiplier
 }
 
