@@ -4,7 +4,7 @@
  * that fuel single use, triple synthesis, and combo patterns.
  */
 
-import { HandCard, HandCardId } from '@entities/HandCard'
+import { HandCard, HandCardDropSource, HandCardId } from '@entities/HandCard'
 import { HAND_CARD_DEFINITIONS, getHandCardDef } from '@data/HandCards'
 
 let nextDropUid = 1
@@ -24,13 +24,17 @@ export class DropSystem {
   }
 
   /** Build a single random hand card weighted by each definition's dropWeight.
-   *  잠긴(locked) 카드와 밴된(banned) 카드는 드롭 대상에서 제외된다. */
-  static generateDrop(): HandCard {
+   *  기본 드롭은 적/보상/드로우 공용 풀만 쓰고, 보물상자는 기존 풀에
+   *  treasure-only 카드를 더해 동전이 상자에서만 보이도록 한다. */
+  static generateDrop(source: HandCardDropSource = 'enemy-kill'): HandCard {
     const all = Object.values(HAND_CARD_DEFINITIONS)
+    const sourcePool = all.filter((d) => d.dropSource === 'any' || d.dropSource === source)
     const defs = DropSystem.allowedIds
-      ? all.filter((d) => DropSystem.allowedIds!.has(d.id))
-      : all
-    const pool = defs.length > 0 ? defs : all // 풀이 비었을 때 전체 폴백
+      ? sourcePool.filter((d) => DropSystem.allowedIds!.has(d.id))
+      : sourcePool
+    // 해금/삭제로 현재 source 풀이 비면 같은 source의 전체 기본 풀로 되돌려
+    // treasure-only 동전이 일반 드롭에 끼어드는 안전망 버그를 피한다.
+    const pool = defs.length > 0 ? defs : sourcePool
     const total = pool.reduce((sum, d) => sum + (d.dropWeight ?? 1), 0)
     let roll = Math.random() * total
     for (const def of pool) {
@@ -46,9 +50,9 @@ export class DropSystem {
   }
 
   /** Convenience: generate `count` random drops. */
-  static generateDrops(count: number): HandCard[] {
+  static generateDrops(count: number, source: HandCardDropSource = 'enemy-kill'): HandCard[] {
     const out: HandCard[] = []
-    for (let i = 0; i < count; i++) out.push(DropSystem.generateDrop())
+    for (let i = 0; i < count; i++) out.push(DropSystem.generateDrop(source))
     return out
   }
 

@@ -69,15 +69,17 @@ export class ActionSystem {
     }
   }
 
-  /** Award `count` random hand cards into the character; report overflow. */
+  /** Award `count` random hand cards into the character; report overflow.
+   *  Treasure source keeps the normal drop table and adds treasure-only cards such as 동전. */
   private static awardDrops(
     character: Character,
-    count: number
+    count: number,
+    source: 'enemy-kill' | 'treasure' = 'enemy-kill'
   ): { gainedNames: string[]; overflow: HandCard[] } {
     const gainedNames: string[] = []
     const overflow: HandCard[] = []
     for (let i = 0; i < count; i++) {
-      const drop = DropSystem.generateDrop()
+      const drop = DropSystem.generateDrop(source)
       const def = getHandCardDef(drop.defId)
       if (character.addHandCard(drop)) {
         gainedNames.push(def.name)
@@ -104,7 +106,7 @@ export class ActionSystem {
 
     if (newHealth <= 0) {
       const dropCount = card.defeatDropCount
-      const { gainedNames, overflow } = ActionSystem.awardDrops(character, dropCount)
+      const { gainedNames, overflow } = ActionSystem.awardDrops(character, dropCount, 'enemy-kill')
       const summary =
         gainedNames.length === 0
           ? '손패가 가득 차 잃음'
@@ -196,7 +198,7 @@ export class ActionSystem {
     }
     const safeSpan = Math.max(1, Math.min(3, card.groupCount))
     const drops = TREASURE_DROPS_BY_SPAN[safeSpan]
-    const { gainedNames, overflow } = ActionSystem.awardDrops(character, drops)
+    const { gainedNames, overflow } = ActionSystem.awardDrops(character, drops, 'treasure')
     const summary =
       gainedNames.length === 0
         ? '손패가 가득 차 잃음'

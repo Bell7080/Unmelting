@@ -733,7 +733,8 @@ export class HandSystem {
     let gained = 0
     for (let i = 0; i < dropCount; i++) {
       if (!character.hasHandRoom()) break
-      character.addHandCard(DropSystem.generateDrop())
+      // 보물상자 개봉은 일반 드롭 풀에 treasure-only 동전을 추가한다.
+      character.addHandCard(DropSystem.generateDrop('treasure'))
       gained++
     }
     HandSystem.runAutoMerges(character)

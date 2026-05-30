@@ -199,6 +199,7 @@ export type ResourceTrailTarget =
   | 'ember'
   | 'gauge'
   | 'attack'
+  | 'relic'
 
 export interface ScorePanelState {
   score: number
@@ -1669,7 +1670,7 @@ export class GameBoardRenderer {
           <section class="shop-row shop-bottom-row" aria-label="카드 및 카드팩">
             <div class="shop-layer shop-free-layer">
               ${this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel, shop.freeCardDescription ?? '1$', 'free-card')}
-              ${shop.mode === 'altar' ? this.renderShopFreeCard(!!shop.freeCoinCardClaimed, '수당', '5$', 'free-coin-card') : ''}
+              ${shop.mode === 'altar' ? this.renderShopFreeCard(!!shop.freeCoinCardClaimed, '수당', '3$', 'free-coin-card') : ''}
             </div>
             <div class="shop-layer shop-pack-layer">
               ${shop.mode === 'altar'
@@ -3784,6 +3785,16 @@ export class GameBoardRenderer {
     return this.animateResourceTrail(source, this.findResourceTrailTarget(target), count, theme)
   }
 
+  /** Fly a resource trail from a captured card rect after the model was already cleaned up. */
+  animateResourceTrailFromRect(
+    source: DOMRect,
+    target: ResourceTrailTarget,
+    count: number,
+    theme: BurstTheme
+  ): Promise<void> {
+    return this.animateResourceTrail(source, this.findResourceTrailTarget(target), count, theme)
+  }
+
   /** Fly a resource trail from the center-screen played-card impact point. */
   animateResourceTrailFromCenter(
     target: ResourceTrailTarget,
@@ -4059,6 +4070,16 @@ export class GameBoardRenderer {
     }
     if (target === 'gauge') return this.boardElement.querySelector<HTMLElement>('.candle-gauge')
     if (target === 'attack') return this.boardElement.querySelector<HTMLElement>('.atk-stat')
+    if (target === 'relic') {
+      const latestRelic = this.boardElement.querySelector<HTMLElement>('.relic-mini-card:last-child')
+      // Boss/reward relic trails should land on the artifact fan, not on the
+      // light panel; fall back to the player card before the first relic exists.
+      return (
+        latestRelic ??
+        this.boardElement.querySelector<HTMLElement>('.relic-stack') ??
+        this.boardElement.querySelector<HTMLElement>('.player-card')
+      )
+    }
     const handStack = this.boardElement.querySelector<HTMLElement>('.hand-stack')
     if (handStack) {
       const rect = handStack.getBoundingClientRect()

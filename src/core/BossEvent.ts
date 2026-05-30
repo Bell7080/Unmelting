@@ -316,13 +316,15 @@ export class BossEventController {
       void this.br.animateResourceTrailFromCard(card.id, 'health', 1, 'health-gain')
       void this.br.animateResourceTrailFromCard(card.id, 'ember', 1, 'gauge-gain')
     } else if (card.id === 'boss-reward-bounty') {
-      const amount = 1 + Math.floor(Math.random() * 10)
+      const amount = 1 + Math.floor(Math.random() * 5)
       for (let i = 0; i < amount; i++) {
+        // 현상금은 한 덩어리 합산이 아니라 코인 트레일 1개가 닿을 때마다
+        // 지갑을 +1씩 굴려 “띠리리릭” 증가 리듬이 보이게 한다.
+        await this.br.animateResourceTrailFromCard(card.id, 'coin', 1, 'treasure-gain')
         this.inject.addOneCoin()
         await new Promise((r) => window.setTimeout(r, 70))
       }
       this.inject.recordNotice(`현상금: +$${amount}`, 'info')
-      void this.br.animateResourceTrailFromCard(card.id, 'coin', amount, 'treasure-gain')
     } else if (card.id === 'boss-reward-chest') {
       const unownedRelics = RELIC_IDS.filter(
         (id) => !character.hasRelic(id) && !character.bannedRelics.includes(id)
@@ -334,10 +336,13 @@ export class BossEventController {
         character.addRelic(relicId)
         this.inject.recordNotice(`전리품: 유물 ${getRelicDef(relicId).name} 획득`, 'info')
         await this.inject.applyRelicPurchaseEffect(relicId)
+        // 유물 보상은 새 보유 카드가 생긴 뒤 목적지가 계산되어야
+        // 보상 트레일이 불빛 패널이 아니라 유물 인벤토리로 꽂힌다.
+        this.inject.render()
       } else {
         this.inject.recordNotice('전리품: 획득 가능한 유물이 없다', 'info')
       }
-      void this.br.animateResourceTrailFromCard(card.id, 'score', 1, 'treasure-gain')
+      await this.br.animateResourceTrailFromCard(card.id, 'relic', 1, 'treasure-gain')
     }
 
     await this.br.playBossRewardClaimedConsume(card.id)
@@ -632,23 +637,28 @@ export class BossEventController {
     await this.br.animateDamageNumbersById(dealt > 0 ? [{ cardId: card.id, amount: dealt }] : [])
 
     if (card.getHealth() <= 0) {
+      const defeatedTile = this.br.findCardElement(card.id)
+      const defeatedRect = defeatedTile?.getBoundingClientRect()
       await this.br.animateCardConsume(card)
-      // 처치 보상: 손패 드롭 — lanes 제거 전에 실행해 트레일 출발점 DOM 유지
+      // 사망한 소환 적은 보상 손패 렌더보다 먼저 모델에서 제거한다.
+      // 이전 흐름은 손패 슬롯을 마운트하려고 죽은 적을 한 번 더 렌더해
+      // 우측 하단에서 다시 나타나는 것처럼 보이는 잔상을 만들었다.
+      for (let i = 0; i < 3; i++) {
+        if (this.gs.lanes[i].getCardAtDistance(0) === card) this.gs.lanes[i].setCardAtDistance(0, null)
+      }
+      state.summonedEnemyIds.delete(card.id)
+
       const dropNames: string[] = []
       for (let k = 0; k < card.defeatDropCount; k++) {
         const drop = DropSystem.generateDrop()
         if (this.gs.character.addHandCard(drop)) dropNames.push(getHandCardDef(drop.defId).name)
       }
       if (dropNames.length > 0) {
-        this.inject.render()  // 손패 슬롯 마운트 (카드는 아직 lanes에 있어 DOM 유지)
+        this.inject.render()
         this.inject.recordNotice(`${card.name} 처치! 손패: ${dropNames.join(', ')}`, 'win')
-        await this.br.animateResourceTrailFromCard(card.id, 'hand', dropNames.length, 'hand-recovery')
+        // 출발점은 제거 직전 rect를 사용해 DOM 재렌더 없이도 보상 방향을 유지한다.
+        if (defeatedRect) await this.br.animateResourceTrailFromRect(defeatedRect, 'hand', dropNames.length, 'hand-recovery')
       }
-      // 트레일 완료 후 lanes·집합에서 제거
-      for (let i = 0; i < 3; i++) {
-        if (this.gs.lanes[i].getCardAtDistance(0) === card) this.gs.lanes[i].setCardAtDistance(0, null)
-      }
-      state.summonedEnemyIds.delete(card.id)
     }
 
     // 보스 턴 집계 — 불씨 감소 + 카운트다운 + HP 바 갱신
@@ -761,7 +771,7 @@ export class BossEventController {
   private async stageBossRewardChests(savedField: (Card | null)[][]): Promise<void> {
     const healCard   = new Card('boss-reward-heal',   CardType.TREASURE, '점화액',  '체력 / 불씨 회복')
     const chestCard  = new Card('boss-reward-chest',  CardType.TREASURE, '전리품',  '유물 획득')
-    const bountyCard = new Card('boss-reward-bounty', CardType.TREASURE, '현상금',  '1~10$')
+    const bountyCard = new Card('boss-reward-bounty', CardType.TREASURE, '현상금',  '1~5$')
     for (const c of [healCard, chestCard, bountyCard]) c.groupCount = 3
     for (let lane = 0; lane < 3; lane++) {
       this.gs.lanes[lane].setCardAtDistance(0, healCard)
