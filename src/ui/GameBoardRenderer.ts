@@ -2203,7 +2203,6 @@ export class GameBoardRenderer {
     await new Promise((r) => window.setTimeout(r, 340))
     tile.classList.remove('is-boss-landing')
   }
-
   /** 불씨 기사단장(60F) 등장 연출: 왼쪽 밖에서 오른쪽으로 훙 지나오며 중앙 3×3에 정착한다. */
   async playWaxKnightSwoopAnimation(cardId: string): Promise<void> {
     const tile = this.findCardElement(cardId)
@@ -2224,7 +2223,6 @@ export class GameBoardRenderer {
     await new Promise((r) => window.setTimeout(r, 360))
     tile.classList.remove('is-wax-knight-swooping')
   }
-
   /** 불씨 기사단장이 사용하는 보스 카드 효과를 한 박자짜리 사각 블라스트로 표시한다. */
   async animateWaxKnightCardEffect(cardId: string, effect: 'shield' | 'heal' | 'strike'): Promise<void> {
     const tile = this.findCardElement(cardId)

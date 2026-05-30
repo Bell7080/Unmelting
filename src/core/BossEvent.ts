@@ -154,7 +154,7 @@ export class BossEventController {
   async run60F(): Promise<void> {
     const def: BossDef = {
       name: '불씨 기사단장',
-      flavor: '에나벨라를 위하여 검을 든 저택의 방패',
+      flavor: '에나벨라의 옛 방패',
       maxHp: 80,
       attack: 7,
       attackInterval: 3,
@@ -500,7 +500,6 @@ export class BossEventController {
     this.inject.render()
     await this.br.animateResourceTrailFromCard(bossCardId, 'hand', 1, 'hand-recovery')
   }
-
   /** 손패/레시피처럼 외부 시스템이 보스 HP를 직접 깎은 뒤, waxKnight 방패로 피해를 되돌린다. */
   absorbExternalBossDamageWithShield(beforeHealth: number): number {
     if (!this.eventState || this.eventState.bossShield <= 0) return 0
@@ -527,7 +526,6 @@ export class BossEventController {
     ])
     await this.br.animateDamageFlash()
     this.inject.recordNotice(`불씨 기사단장의 돌진! 플레이어가 ${state.def.attack} 피해를 받았다`, 'hurt')
-
     const cards = sampleWithoutReplacement<WaxKnightCardEffect>(['shield', 'heal', 'strike'], 2)
     for (const effect of cards) {
       if (effect === 'shield') {
