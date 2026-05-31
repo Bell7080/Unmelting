@@ -39,6 +39,10 @@ export type BurstTheme =
   | 'hand-tool'
   | 'hand-control'
   | 'hand-attack'
+  // 60F 불씨 기사단장 전용 카드 발동 톤 — 촛농/양초/불씨.
+  | 'boss-wax-drip'
+  | 'boss-candle-flame'
+  | 'boss-ember-spark'
 
 interface Palette {
   shades: [string, string, string, string]
@@ -82,6 +86,12 @@ const PALETTES: Record<BurstTheme, Palette> = {
   'hand-tool': { shades: ['#1c1304', '#6b4910', '#dca233', '#ffe9a4'] },
   'hand-control': { shades: ['#06121e', '#1f4a72', '#5fa6d8', '#dceefc'] },
   'hand-attack': { shades: ['#1c0608', '#7a1f22', '#d6492f', '#f4c34a'] },
+  // 불씨 기사단장 방패 카드 — 흘러내리는 황금 촛농(꿀빛 호박색).
+  'boss-wax-drip': { shades: ['#241405', '#7a4e12', '#d99a3a', '#ffe6ad'] },
+  // 불씨 기사단장 회복 카드 — 밝은 양초 불빛(따뜻한 크림빛).
+  'boss-candle-flame': { shades: ['#2a2008', '#8f7320', '#f2d650', '#fff8dc'] },
+  // 불씨 기사단장 타격 카드 — 타오르는 불씨(주홍→백열).
+  'boss-ember-spark': { shades: ['#2a0805', '#a83012', '#ff6a24', '#ffd98a'] },
 }
 
 export interface BurstOptions {
