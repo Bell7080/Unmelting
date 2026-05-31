@@ -911,10 +911,10 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
         rarity: HAND_CARD_RARITY[id],
         spriteUrl: spriteForHandCard(id),
         apply: () => {
-          // 밴된 카드는 unban (풀 복귀), 잠긴 카드는 unlockForRun
+          // 밴된 카드는 unban (풀 복귀), 잠긴 카드는 unlockForRun.
+          // 해금은 드롭 풀 등장만 허용할 뿐 즉시 손패를 지급하지 않는다.
           if (isBanned) runCardPool.unban(id)
           else runCardPool.unlockForRun(id)
-          gameState.character.addHandCard(DropSystem.makeCard(id))
         },
       }
     })
@@ -1064,7 +1064,8 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
         await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'ember', freeGift.amount, 'score')
       } else {
         for (let i = 0; i < freeGift.amount; i += 1) {
-          gameState.character.addHandCard(DropSystem.makeCard(HAND_CARD_IDS[Math.floor(Math.random() * HAND_CARD_IDS.length)]))
+          // 해금되지 않았거나 삭제팩으로 밴된 카드가 섞이지 않도록 드롭 풀(unlocked) 기준으로 뽑는다.
+          gameState.character.addHandCard(DropSystem.generateDrop())
         }
         // 손패 보상은 손패 스택 목적지로 날려 카드 획득 흐름과 같은 언어를 사용한다.
         await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'hand', freeGift.amount, 'hand-control')
@@ -1980,13 +1981,15 @@ document.addEventListener('chainReset', () => {
 })
 
 document.addEventListener('candleModeCycle', () => {
-  if (!gameActive || inputLocked) return
+  // 상점/제단은 inputLocked 상태지만 콤보 게이지 모드 전환은 안전한 idle 동작이라 허용한다.
+  if (!gameActive || (inputLocked && !shopOpen)) return
   gameState.character.cycleCandleMode()
   render()
 })
 
 document.addEventListener('candleModeSelect', (e: Event) => {
-  if (!gameActive || inputLocked) return
+  // 상점/제단은 inputLocked 상태지만 콤보 게이지 모드 전환은 안전한 idle 동작이라 허용한다.
+  if (!gameActive || (inputLocked && !shopOpen)) return
   const detail = (e as CustomEvent<{ mode: CandleMode }>).detail
   if (!detail?.mode) return
   gameState.character.setCandleMode(detail.mode)
