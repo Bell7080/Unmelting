@@ -158,6 +158,7 @@ export class BossEventController {
       maxHp: 80,
       attack: 7,
       attackInterval: 3,
+      // 일정 체력마다 손패 지급은 30F 전용 메커니즘이므로 60/90F는 0으로 비활성화한다.
       handGiftStep: 0,
       specialEnemyKind: 'waxKnight',
       groupCount: 3,
@@ -185,7 +186,8 @@ export class BossEventController {
       maxHp: 60,
       attack: 4,
       attackInterval: 3,
-      handGiftStep: 10,
+      // 일정 체력마다 손패 지급은 30F 전용 메커니즘이므로 60/90F는 0으로 비활성화한다.
+      handGiftStep: 0,
       specialEnemyKind: 'waxSculptor',
       groupCount: 2,
       occupiedDistRows: 2,   // dist-0 + dist-1 두 행에 실제로 카드 박음
