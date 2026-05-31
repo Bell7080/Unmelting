@@ -138,6 +138,10 @@ export class Card {
   specialEnemyKind: SpecialEnemyKind | null
   /** waxKnight 전용 UI 수치: 보스 컨트롤러가 방패 상태를 렌더러에 전달한다. */
   bossShield: number
+  /** 불씨 티어에 따라 동적으로 가감되는 공격력 보너스(일반 적 전용).
+   *  필드 진입/티어 변동 시 현재 티어 값으로 동기화되며, 불씨가 회복되면 다시 줄어든다.
+   *  HP는 절대 건드리지 않아 1체력 적이 회복으로 즉사하는 문제를 피한다. */
+  emberAtkBonus: number
   /** Treasure subtype separates normal chests from final-ascent starlight keys. */
   treasureKind: TreasureKind
   /** Flower growth state: seed in waiting row, then a random bloom on front row. */
@@ -178,6 +182,7 @@ export class Card {
     this.specialEnemyKind = options.specialEnemyKind ?? null
     this.treasureKind = options.treasureKind ?? 'chest'
     this.bossShield = 0
+    this.emberAtkBonus = 0
     this.flowerKind = options.flowerKind ?? 'seed'
     this.flowerTurnsAlive = 0
     this.flowerValue = this.type === CardType.FLOWER && this.flowerKind !== 'seed' ? 1 : 0
@@ -212,12 +217,15 @@ export class Card {
     return this.health
   }
 
-  /** Read the exact attack value for enemies/boss, including fixed grouped enemies. */
+  /** Read the exact attack value for enemies/boss, including fixed grouped enemies.
+   *  일반 적은 불씨 티어 보너스(emberAtkBonus)를 동적으로 더해, 불씨가 줄면 즉시 강해지고
+   *  회복되면 즉시 약해진다(HP는 불변). 보스/특수 적은 보너스를 받지 않는다. */
   getDamage(): number {
     if (!this.isEnemyLike()) return 0
     if (this.isSpecialEnemy || this.type === CardType.BOSS) return this.baseDamage
     const groupedStats = this.getNormalEnemyGroupStats(this.groupCount)
-    return groupedStats?.damage ?? this.baseDamage
+    const base = groupedStats?.damage ?? this.baseDamage
+    return base + Math.max(0, this.emberAtkBonus)
   }
 
   /** Apply damage directly to the current HP pool and return remaining HP. */

@@ -100,6 +100,21 @@ export class Character {
     this.damage += Math.max(0, amount)
   }
 
+  /** Permanently raise the ember ceiling (and top off the new headroom). */
+  increaseEmberMax(amount: number): number {
+    const actualIncrease = Math.max(0, amount)
+    this.emberMax += actualIncrease
+    this.ember += actualIncrease
+    return actualIncrease
+  }
+
+  /** Permanently raise the hand-size ceiling for this run. */
+  increaseHandMax(amount: number): number {
+    const actualIncrease = Math.max(0, amount)
+    this.handMax += actualIncrease
+    return actualIncrease
+  }
+
   /** Debug command setter: keep attack in a safe positive integer range. */
   setDamageForDebug(value: number): void {
     this.damage = Math.max(1, Math.floor(value))

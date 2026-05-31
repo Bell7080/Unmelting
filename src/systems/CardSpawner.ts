@@ -414,20 +414,25 @@ export class CardSpawner {
   private generateEnemy(): Card {
     const pool = this.getActiveEnemyDefinitions()
     const definition = pool[Math.floor(Math.random() * pool.length)]
+    // 불씨 티어 공격력 보너스는 정적으로 굽지 않고 emberAtkBonus로 동적 반영한다.
+    // HP는 더 이상 티어로 올리지 않으므로 trial 보너스만 baseHealth에 더한다.
     const bonus = EmberSystem.getEnemyStatBonus(this.currentTier)
     this.spawnSerial++
-    return new Card(
+    const card = new Card(
       `enemy-${this.spawnSerial}-${Math.random()}`,
       CardType.ENEMY,
       definition.name,
       definition.description,
-      (definition.healthOrDamage ?? 1) + bonus.hp + this.trialEnemyHpBonus,
-      (definition.attack ?? 1) + bonus.atk + this.trialEnemyAtkBonus,
+      (definition.healthOrDamage ?? 1) + this.trialEnemyHpBonus,
+      (definition.attack ?? 1) + this.trialEnemyAtkBonus,
       {
         enemySpriteId: definition.enemySpriteId,
         enemyPower: definition.enemyPower,
       }
     )
+    // 레일 진입 직후 동기화 흐름과 동일하게 현재 티어 공격력 보너스를 즉시 적용한다.
+    card.emberAtkBonus = bonus.atk
+    return card
   }
 
   /** Spawn the current one-lane trap; wider traps are produced by row grouping.
