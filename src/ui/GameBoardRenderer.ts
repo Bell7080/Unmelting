@@ -1377,10 +1377,6 @@ export class GameBoardRenderer {
               <p class="shop-relic-effect">${description}</p>
               <p class="shop-relic-flavor">촛불이 남긴 작은 호의</p>
             </div>
-            <span class="shop-price-label" aria-hidden="true">
-              <span class="shop-price-label-icon">${tagIcon()}</span>
-              <span class="shop-price-label-text">${claimed ? '획득 완료' : '무료'}</span>
-            </span>
           </div>
           <div class="shop-relic-cardback" aria-hidden="true"></div>
         </div>
@@ -1752,13 +1748,11 @@ export class GameBoardRenderer {
       reroll.setAttribute('aria-label', `ReRoll — ${shop.rerollCost}$`)
     }
 
-    // Free card claimed state.
+    // Free card claimed state. (무료 카드는 가격 라벨 없이 상태 클래스만 갱신한다.)
     const free = shell.querySelector<HTMLElement>('.shop-free-card')
     if (free) {
       free.classList.remove('is-affordable', 'is-purchased')
       free.classList.add(shop.freeCardClaimed ? 'is-purchased' : 'is-affordable')
-      const freeLabel = free.querySelector<HTMLElement>('.shop-price-label-text')
-      if (freeLabel) freeLabel.textContent = shop.freeCardClaimed ? '획득 완료' : '무료'
     }
 
     // Pack tiles (cost + affordance based on score).
