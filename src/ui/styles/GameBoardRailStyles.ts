@@ -607,6 +607,78 @@ export const GAME_BOARD_RAIL_STYLES = `
   100% { transform: translateY(0) scale(1); filter: brightness(1); }
 }
 
+/* ────────────────── 불씨 기사단장 전용 발동 카드 ──────────────────
+   시련 카드와 같은 심적색 톤의 보스 손패. 화면 하단에서 출력되어 보스를
+   향해 날아가며, 효과별 강조색(촛농/양초/불씨)만 다르게 입힌다.
+   위치/이동은 JS(animateWaxKnightCardEffect)의 transform 키프레임이 담당한다. */
+.boss-cast-card {
+  position: fixed;
+  z-index: 240;
+  width: clamp(98px, 12vw, 132px);
+  aspect-ratio: 3 / 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 10px 13px;
+  border-radius: 12px;
+  pointer-events: none;
+  will-change: transform, opacity, filter;
+  font-family: 'OkDanDan', Georgia, serif;
+  /* 시련 카드와 동일한 다크 크림슨 프레임 */
+  border: 1.5px solid rgba(150, 32, 32, 0.78);
+  background: linear-gradient(180deg, rgba(34, 10, 14, 0.99) 0%, rgba(14, 4, 8, 1) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(220, 90, 64, 0.18),
+    0 16px 34px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(110, 22, 22, 0.4),
+    0 0 22px rgba(150, 30, 24, 0.42);
+}
+.boss-cast-card-glow {
+  position: absolute;
+  inset: -2px;
+  z-index: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at 50% 32%, rgba(255, 120, 70, 0.3), transparent 68%);
+  pointer-events: none;
+}
+/* 글로우 위에 아이콘/문구가 또렷이 얹히도록 본문 요소를 한 층 올린다. */
+.boss-cast-card-icon,
+.boss-cast-card-title,
+.boss-cast-card-effect {
+  position: relative;
+  z-index: 1;
+}
+.boss-cast-card-icon {
+  width: 46%;
+  margin-top: 6px;
+  color: var(--boss-cast-accent, #f0b48a);
+  filter: drop-shadow(0 0 8px rgba(255, 110, 60, 0.5));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.boss-cast-card-icon svg { width: 100%; height: auto; }
+.boss-cast-card-title {
+  margin-top: auto;
+  font-size: clamp(13px, 1.7vh, 16px);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: rgba(244, 196, 158, 0.97);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9), 0 0 14px rgba(170, 44, 22, 0.3);
+}
+.boss-cast-card-effect {
+  font-size: clamp(11px, 1.4vh, 13px);
+  color: rgba(255, 222, 196, 0.9);
+}
+/* 효과별 강조색 — 촛농(호박)/양초(크림)/불씨(주홍) */
+.boss-cast-card--shield { --boss-cast-accent: #ffd97a; }
+.boss-cast-card--heal   { --boss-cast-accent: #ffe6a6; }
+.boss-cast-card--strike {
+  --boss-cast-accent: #ff8a4a;
+  border-color: rgba(190, 60, 30, 0.82);
+}
+
 /* ---- 사이즈 유형: boss-kind-waxSculptor = 2×3 ----
    :has()로 어느 dist에 보스 카드가 있는지 감지해 front/back phase를 구분한다.
    front phase(dist-0+1 점유): dist-0을 2행 확장, dist-1 숨김 → 상단 □□□ + 하단 2행 보스.

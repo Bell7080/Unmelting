@@ -2249,16 +2249,77 @@ export class GameBoardRenderer {
     rail?.classList.remove('is-boss-quaking')
   }
   /** 불씨 기사단장이 사용하는 보스 카드 효과를 한 박자짜리 사각 블라스트로 표시한다. */
+  /** 불씨 기사단장 카드 발동 연출:
+   *  보스 전용 손패(시련 톤 붉은 카드)가 화면 하단에서 출력되어 보스를 향해 날아가고,
+   *  도착 순간 효과별 촛농/양초/불씨 사각 블라스트가 터진다. */
   async animateWaxKnightCardEffect(cardId: string, effect: 'shield' | 'heal' | 'strike'): Promise<void> {
     const tile = this.findCardElement(cardId)
     if (!tile) return
-    const theme = effect === 'shield' ? 'shield-gain' : effect === 'heal' ? 'health-gain' : 'damage'
-    const label = effect === 'shield' ? '방패 +2' : effect === 'heal' ? '체력 +2' : '피해 2'
-    SquareBurst.playOn(tile, theme, { count: effect === 'strike' ? 22 : 16, spread: 170, duration: 540 })
-    const rect = tile.getBoundingClientRect()
-    void this.spawnFieldFloatText(rect.left + rect.width / 2, rect.top + rect.height * 0.34, label)
+
+    // 효과별 카드 메타 — 아이콘은 효과를, 블라스트 팔레트는 촛농/양초/불씨를 표현한다.
+    const META = {
+      shield: { title: '밀랍 방패', desc: '방패 +2', label: '방패 +2', icon: shieldIcon(), burst: 'boss-wax-drip' as const, tilt: -5 },
+      heal:   { title: '촛불 가호', desc: '체력 +2', label: '체력 +2', icon: candleIcon(), burst: 'boss-candle-flame' as const, tilt: 4 },
+      strike: { title: '불씨 일격', desc: '피해 2',  label: '피해 2',  icon: flameIcon(),  burst: 'boss-ember-spark' as const, tilt: 7 },
+    }[effect]
+
+    // 보스가 3칸에 걸쳐 보이므로 가시 셀들의 합집합 중심을 목적지로 삼는다.
+    const cells = Array.from(
+      this.boardElement.querySelectorAll<HTMLElement>(`.cell.card[data-card-id="${cardId}"]`)
+    ).filter((el) => el.offsetParent !== null)
+    const rects = cells.map((c) => c.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0)
+    const baseRect = rects.length > 0 ? rects[0] : tile.getBoundingClientRect()
+    const bossX = rects.length > 0
+      ? (Math.min(...rects.map((r) => r.left)) + Math.max(...rects.map((r) => r.right))) / 2
+      : baseRect.left + baseRect.width / 2
+    const bossY = rects.length > 0
+      ? (Math.min(...rects.map((r) => r.top)) + Math.max(...rects.map((r) => r.bottom))) / 2
+      : baseRect.top + baseRect.height / 2
+
+    // 하단 중앙 출력 위치(플레이어 손패 영역 높이대)에서 보스까지의 이동 벡터.
+    const startX = window.innerWidth / 2
+    const startY = window.innerHeight - Math.min(160, window.innerHeight * 0.2)
+    const dx = startX - bossX
+    const dy = startY - bossY
+
+    const card = document.createElement('div')
+    card.className = `boss-cast-card boss-cast-card--${effect}`
+    card.style.left = `${bossX}px`
+    card.style.top = `${bossY}px`
+    card.innerHTML = `
+      <span class="boss-cast-card-glow" aria-hidden="true"></span>
+      <span class="boss-cast-card-icon" aria-hidden="true">${META.icon}</span>
+      <span class="boss-cast-card-title">${META.title}</span>
+      <span class="boss-cast-card-effect">${META.desc}</span>
+    `
+    document.body.appendChild(card)
+
+    // 1) 하단에서 카드가 솟아 출력되며 잠깐 멈춘다.
+    await card.animate(
+      [
+        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy + 70}px)) scale(0.62) rotate(${META.tilt - 6}deg)`, opacity: 0 },
+        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1.06) rotate(${META.tilt}deg)`, opacity: 1, offset: 0.55 },
+        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1) rotate(${META.tilt}deg)`, opacity: 1 },
+      ],
+      { duration: 380, easing: 'cubic-bezier(0.2, 0.92, 0.26, 1)', fill: 'forwards' }
+    ).finished
+
+    // 2) 보스를 향해 휘둘러 날아간다.
+    await card.animate(
+      [
+        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1) rotate(${META.tilt}deg)`, opacity: 1, filter: 'brightness(1)' },
+        { transform: `translate(calc(-50% + ${dx * 0.42}px), calc(-50% + ${dy * 0.42}px)) scale(0.9) rotate(${-META.tilt}deg)`, opacity: 1, filter: 'brightness(1.25)', offset: 0.6 },
+        { transform: `translate(-50%, -50%) scale(0.58) rotate(0deg)`, opacity: 0, filter: 'brightness(1.7)' },
+      ],
+      { duration: 340, easing: 'cubic-bezier(0.5, 0, 0.5, 1)', fill: 'forwards' }
+    ).finished
+    card.remove()
+
+    // 3) 도착 순간: 효과별 촛농/양초/불씨 블라스트 + 수치 플로트 + 보스 흔들림.
+    SquareBurst.playAt(bossX, bossY, META.burst, { count: effect === 'strike' ? 26 : 18, spread: 190, duration: 560 })
+    void this.spawnFieldFloatText(bossX, baseRect.top + baseRect.height * 0.34, META.label)
     tile.classList.add('is-wax-knight-casting')
-    await new Promise((r) => window.setTimeout(r, 420))
+    await new Promise((r) => window.setTimeout(r, 320))
     tile.classList.remove('is-wax-knight-casting')
   }
 
