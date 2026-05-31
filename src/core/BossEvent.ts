@@ -498,15 +498,15 @@ export class BossEventController {
     const character = this.gs.character
     const { unlocked } = this.runCardPool.snapshot()
     if (unlocked.length === 0) return
-    const drawIds = sampleWithoutReplacement(unlocked, 1)
-    const id = drawIds[0]
-    if (!id) return
-    const accepted = character.addHandCard(DropSystem.makeCard(id))
+    // generateDrop은 런 해금 풀 + dropSource 필터를 모두 거치므로 보물 전용 카드(동전)가
+    // 보스 손패 지급으로 새지 않는다. 일반 적 처치 드롭과 같은 풀을 공유한다.
+    const drop = DropSystem.generateDrop('enemy-kill')
+    const accepted = character.addHandCard(drop)
     if (!accepted) {
       this.inject.recordNotice('보스 피해 보상: 손패가 가득 차 카드를 받지 못했다', 'info')
       return
     }
-    this.inject.recordNotice(`보스 피해 보상: 손패 ${getHandCardDef(id).name} 획득`, 'info')
+    this.inject.recordNotice(`보스 피해 보상: 손패 ${getHandCardDef(drop.defId).name} 획득`, 'info')
     this.inject.render()
     await this.br.animateResourceTrailFromCard(bossCardId, 'hand', 1, 'hand-recovery')
   }

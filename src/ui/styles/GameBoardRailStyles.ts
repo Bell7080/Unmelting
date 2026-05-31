@@ -499,6 +499,30 @@ export const GAME_BOARD_RAIL_STYLES = `
     linear-gradient(180deg, rgba(20, 16, 28, 0.0) 38%, rgba(20, 16, 28, 0.55) 70%, rgba(10, 7, 18, 0.92) 100%);
 }
 .flower-note { color: rgba(224, 255, 196, 0.96); }
+
+/* ── 불씨 하락 시 적 강화(공격력↑) 위험 연출 ──
+   카드가 붉게 빛나며 살짝 확대됐다가 가라앉고, 공격력 칩은 잔상을 남기며 커진다. */
+.cell.card.is-ember-empowering {
+  animation: enemy-ember-empower 0.76s cubic-bezier(0.22, 0.84, 0.3, 1) both;
+  z-index: 5;
+}
+@keyframes enemy-ember-empower {
+  0%   { transform: scale(1); filter: brightness(1) drop-shadow(0 0 0 rgba(255, 60, 30, 0)); }
+  35%  { transform: scale(1.12); filter: brightness(1.45) drop-shadow(0 0 16px rgba(255, 70, 30, 0.8)) saturate(1.5); }
+  70%  { transform: scale(1.04); filter: brightness(1.2) drop-shadow(0 0 10px rgba(255, 70, 30, 0.5)); }
+  100% { transform: scale(1); filter: brightness(1) drop-shadow(0 0 0 rgba(255, 60, 30, 0)); }
+}
+/* 공격력 칩 잔상 확대 — 상승 수치가 커졌다 가라앉는 잔상 모션. */
+.card-stats .stat.atk.is-ember-empowering {
+  animation: atk-empower-afterimage 0.76s cubic-bezier(0.2, 0.85, 0.3, 1) both;
+}
+@keyframes atk-empower-afterimage {
+  0%   { transform: scale(1); color: #ffd58a; text-shadow: none; }
+  30%  { transform: scale(1.55); color: #ff7a3c; text-shadow: 0 0 12px rgba(255, 90, 40, 0.9), 0 0 4px rgba(255, 160, 90, 0.8); }
+  60%  { transform: scale(1.2); color: #ffa85a; text-shadow: 0 0 8px rgba(255, 110, 50, 0.6); }
+  100% { transform: scale(1); color: #ffd58a; text-shadow: none; }
+}
+
 .cell.card.is-flower-blooming .card-art {
   animation: flower-bloom-pop 0.56s cubic-bezier(.17, .84, .28, 1.25) both;
 }

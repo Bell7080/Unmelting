@@ -58,11 +58,13 @@ const SPAWN_BUCKETS: Record<EmberTier, SpawnBuckets> = {
   },
 }
 
+// 불씨 티어는 더 이상 적 HP를 올리지 않는다(불씨 회복 시 1체력 적이 죽는 문제 방지).
+// 공격력만 티어에 따라 동적으로 가감되며, 이는 Card.getDamage가 현재 보너스를 즉시 읽어 반영한다.
 const ENEMY_BONUS: Record<EmberTier, EnemyStatBonus> = {
   bright: { hp: 0, atk: 0 },
-  dim: { hp: 1, atk: 0 },
-  flickering: { hp: 2, atk: 1 },
-  extinguished: { hp: 3, atk: 2 },
+  dim: { hp: 0, atk: 0 },
+  flickering: { hp: 0, atk: 1 },
+  extinguished: { hp: 0, atk: 2 },
 }
 
 /** 0..1 vignette intensity per tier — used by the renderer. */

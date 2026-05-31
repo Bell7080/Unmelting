@@ -1542,6 +1542,24 @@ function syncSpawnerTier(): void {
   syncFinalAscentRuleToSpawner()
 }
 
+/** 현재 불씨 티어의 공격력 보너스를 필드의 모든 일반 적에게 동기화한다.
+ *  공격력만 가감하고 HP는 절대 건드리지 않는다(회복으로 1체력 적 즉사 방지).
+ *  공격력이 새로 증가한 적 id 목록을 반환해 호출부가 위험 연출을 띄울 수 있게 한다. */
+function syncFieldEnemyEmberBonus(): string[] {
+  const atk = EmberSystem.getEnemyStatBonus(turnManager.getEmberTier()).atk
+  const increasedIds: string[] = []
+  for (const lane of gameState.lanes) {
+    for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
+      const card = lane.getCardAtDistance(distance)
+      // 일반 적만 대상(보스/특수 적/합체 무리의 대표 카드는 baseDamage 고정).
+      if (!card || card.type !== CardType.ENEMY || card.isSpecialEnemy) continue
+      if (atk > card.emberAtkBonus && !increasedIds.includes(card.id)) increasedIds.push(card.id)
+      card.emberAtkBonus = atk
+    }
+  }
+  return increasedIds
+}
+
 function compactAndRefillAllLanes(): boolean {
   // Delegate gravity + top-refill rules to GameState so row-clearing combo
   // effects cannot leave half-empty rails after a single maintenance pass.
@@ -1629,6 +1647,9 @@ function buildChainHints() {
 
 function render(): void {
   const tier = turnManager.getEmberTier()
+  // 불씨가 회복되면 적 공격력 보너스가 줄어들어야 하므로 매 렌더마다 필드 적을 동기화한다.
+  // (HP는 불변이라 회복으로 적이 죽지 않는다. 증가 연출은 감소 턴 경로에서만 별도 처리.)
+  syncFieldEnemyEmberBonus()
   boardRenderer.render(gameState, {
     score,
     logs: activityLogs,
@@ -1864,9 +1885,9 @@ function candleModeLabel(mode: CandleMode): string {
     case 'attack':
       return '공격력'
     case 'ember':
-      return '불씨 회복'
+      return '불씨 최대치'
     case 'draw':
-      return '손패 획득'
+      return '손패 최대치'
   }
 }
 
@@ -1875,13 +1896,11 @@ function fireCandleGaugeEffect(): {
   name: string
   message: string
   mode: CandleMode
-  drawnHandCount?: number
 } | null {
   const character = gameState.character
   if (!character.isCandleFull()) return null
   const mode = character.candleMode
   let message = ''
-  let drawnHandCount = 0
   switch (mode) {
     case 'max-health': {
       const amount = character.increaseMaxHealth(5)
@@ -1893,38 +1912,21 @@ function fireCandleGaugeEffect(): {
       message = '공격력 +1'
       break
     case 'ember': {
-      const restored = character.gainEmber(3)
-      message = `불씨 +${restored}`
+      // 자원 회복 대신 불씨 최대치를 +2 영구 증가(헤드룸도 함께 채움)로 전환.
+      const amount = character.increaseEmberMax(2)
+      message = `불씨 최대치 +${amount}`
       break
     }
     case 'draw': {
-      const drawnNames: string[] = []
-      let overflow = 0
-      for (let i = 0; i < 3; i++) {
-        const drop = DropSystem.generateDrop()
-        if (HandSystem.enqueueDrop(character, drop)) {
-          drawnNames.push(getHandCardDef(drop.defId).name)
-        } else {
-          overflow++
-        }
-      }
-      // Each drawn hand card gets its own acquisition row (consistent with
-      // drops from rail actions). Overflow lost cards are silent — the
-      // wallet/score/hand UI is the visual cue, not the activity log.
-      if (drawnNames.length > 0) {
-        drawnHandCount = drawnNames.length
-        pushActivityLogsInDisplayOrder(createItemGainLogs(drawnNames))
-      }
-      message =
-        overflow > 0
-          ? `손패 +${drawnNames.length}, ${overflow}장 넘침`
-          : `손패 +${drawnNames.length}`
+      // 랜덤 손패 대신 손패 최대치를 +2 영구 증가로 전환.
+      const amount = character.increaseHandMax(2)
+      message = `손패 최대치 +${amount}`
       break
     }
   }
   // Spend only one full gauge so combo-count overflow starts filling the next one.
   character.consumeFullCandleGauge()
-  return { name: `게이지: ${candleModeLabel(mode)}`, message, mode, drawnHandCount }
+  return { name: `게이지: ${candleModeLabel(mode)}`, message, mode }
 }
 
 /** Resolve every full hand-combo gauge from any source that can add candle
@@ -1952,11 +1954,11 @@ async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promi
     // as 13 progress visibly settles to 3 instead of snapping on the next render.
     boardRenderer.playHudCounterFeedback('candle', gameState.character.candle)
     await playPlayerGainTrails(source, beforeGaugeResources)
-    if (gauge.drawnHandCount && gauge.drawnHandCount > 0) {
-      // Mount drawn hand slots before the trail lands so they appear from the
-      // same top-of-hand spawn point used by ordinary hand-card rewards.
+    // 불씨/손패 최대치 모드는 상단 HUD 카운터를 즉시 굴려 증가를 읽히게 한다.
+    if (gauge.mode === 'ember') {
+      boardRenderer.playHudCounterFeedback('emberMax', gameState.character.emberMax)
+    } else if (gauge.mode === 'draw') {
       render()
-      await playResourceTrail(source, 'hand', gauge.drawnHandCount)
     }
     await applyBloodPackRecoveryTrigger(beforeGaugeRecovery)
   }
@@ -2298,6 +2300,13 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
     if (tickedDown) {
       const ember = gameState.character.ember
       recordNotice(`불씨가 사그라들었다 (${ember}/${gameState.character.emberMax})`, 'hurt')
+      // 불씨 하락으로 필드 적의 공격력이 오르면, 적 카드가 붉게 확대되며
+      // 잔상을 남기는 위험 연출을 띄운다(HP는 불변, 공격력만 동적 반영).
+      const empoweredIds = syncFieldEnemyEmberBonus()
+      if (empoweredIds.length > 0) {
+        render()
+        await boardRenderer.animateEnemyEmberEmpower(empoweredIds)
+      }
     }
     await applyTurnStartRelics()
   }

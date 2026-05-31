@@ -395,6 +395,43 @@ export class GameBoardRenderer {
     this.rememberRenderedCards()
     // Floating chain banner (body-mounted, above the player profile).
     this.updateChainBanner(scorePanel.chainHints)
+    // 선공(적 우선 공격) 딱지: 불씨가 꺼져감/꺼졌다 티어면 우상단에 불타오르듯 표시한다.
+    this.updateFirstStrikeBadge(
+      scorePanel.emberTier ? EmberSystem.isEnemyFirstStrike(scorePanel.emberTier) : false
+    )
+  }
+
+  /** Body-mounted "선공" badge in the top-right. Mounts with a fiery rise when
+   *  enemy first-strike turns on and burns away when it turns off, so the
+   *  player always knows whether enemies will act before them this turn. */
+  private firstStrikeBadgeActive = false
+  private updateFirstStrikeBadge(active: boolean): void {
+    let badge = document.getElementById('first-strike-badge') as HTMLElement | null
+    if (active) {
+      if (!badge) {
+        badge = document.createElement('div')
+        badge.id = 'first-strike-badge'
+        badge.className = 'first-strike-badge'
+        badge.setAttribute('aria-label', '적 선공: 적이 먼저 공격합니다')
+        badge.innerHTML = `
+          <span class="first-strike-badge-flames" aria-hidden="true"></span>
+          <span class="first-strike-badge-icon" aria-hidden="true">${flameIcon()}</span>
+          <span class="first-strike-badge-text">선공</span>
+        `
+        document.body.appendChild(badge)
+        // reflow 후 entering 클래스를 붙여 등장 애니메이션이 1회 재생되게 한다.
+        void badge.offsetWidth
+        badge.classList.add('is-igniting')
+      }
+      this.firstStrikeBadgeActive = true
+    } else if (badge && this.firstStrikeBadgeActive) {
+      // 선공권 소멸: 불타 사라지는 연출 후 DOM에서 제거한다.
+      this.firstStrikeBadgeActive = false
+      badge.classList.remove('is-igniting')
+      badge.classList.add('is-burning-out')
+      const el = badge
+      window.setTimeout(() => el.remove(), 620)
+    }
   }
 
   clearSelection(): void {
@@ -1194,9 +1231,9 @@ export class GameBoardRenderer {
       case 'attack':
         return { label: '공격', effect: '공격력 +1', icon: swordIcon() }
       case 'ember':
-        return { label: '불씨', effect: '불씨 +3', icon: flameIcon() }
+        return { label: '불씨', effect: '불씨 최대 +2', icon: flameIcon() }
       case 'draw':
-        return { label: '손패', effect: '랜덤 3장', icon: pouchIcon() }
+        return { label: '손패', effect: '손패 최대 +2', icon: pouchIcon() }
     }
   }
 
@@ -4910,6 +4947,29 @@ export class GameBoardRenderer {
     return Promise.all(promises).then(
       () => new Promise<void>((resolve) => window.setTimeout(resolve, 160))
     )
+  }
+
+  /** 불씨 하락으로 필드 적의 공격력이 오르는 위험 연출.
+   *  각 적 카드가 붉게 빛나며 살짝 확대되고, 상승 스탯이 잔상을 남기며 커졌다 가라앉는다.
+   *  불씨가 줄어드는 순간 필드 전체가 강해지는 위협감을 전달한다. */
+  async animateEnemyEmberEmpower(enemyIds: string[]): Promise<void> {
+    const elements: HTMLElement[] = []
+    for (const id of enemyIds) {
+      const el = this.findCardElement(id)
+      if (!el) continue
+      elements.push(el)
+      // 공격력 칩에 잔상 확대 클래스를 걸어 수치가 커지는 느낌을 강조한다.
+      const atkChip = el.querySelector<HTMLElement>('.stat.atk')
+      if (atkChip) {
+        atkChip.classList.remove('is-ember-empowering')
+        void atkChip.offsetWidth
+        atkChip.classList.add('is-ember-empowering')
+        window.setTimeout(() => atkChip.classList.remove('is-ember-empowering'), 760)
+      }
+      // 붉은 불씨 톤 사각 블라스트로 강화 순간을 친다.
+      SquareBurst.playOn(el, 'damage', { count: 12, spread: 90, duration: 480 })
+    }
+    return this.animateElements(elements, 'is-ember-empowering', 760)
   }
 
   /** Seed bloom beat: color-matched square burst and a quick growing flower pop. */
