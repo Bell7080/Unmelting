@@ -4218,6 +4218,13 @@ export class GameBoardRenderer {
         return { color: 'rgba(95, 166, 216, 0.74)', glow: 'rgba(220, 238, 252, 0.26)' }
       case 'hand-recovery':
         return { color: 'rgba(126, 208, 145, 0.76)', glow: 'rgba(226, 247, 200, 0.24)' }
+      // 불씨 기사단장 카드 효과 — 촛농/양초/불씨 트레일 톤.
+      case 'boss-wax-drip':
+        return { color: 'rgba(217, 154, 58, 0.8)', glow: 'rgba(255, 230, 173, 0.3)' }
+      case 'boss-candle-flame':
+        return { color: 'rgba(242, 214, 80, 0.8)', glow: 'rgba(255, 248, 220, 0.3)' }
+      case 'boss-ember-spark':
+        return { color: 'rgba(255, 122, 44, 0.8)', glow: 'rgba(255, 217, 138, 0.3)' }
       default:
         return { color: 'rgba(220, 162, 51, 0.78)', glow: 'rgba(255, 233, 164, 0.26)' }
     }
