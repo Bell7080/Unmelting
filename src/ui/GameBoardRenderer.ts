@@ -2244,20 +2244,25 @@ export class GameBoardRenderer {
   }
   /** 불씨 기사단장이 사용하는 보스 카드 효과를 한 박자짜리 사각 블라스트로 표시한다. */
   /** 불씨 기사단장 카드 발동 연출:
-   *  보스 전용 손패(시련 톤 붉은 카드)가 화면 하단에서 출력되어 보스를 향해 날아가고,
-   *  도착 순간 효과별 촛농/양초/불씨 사각 블라스트가 터진다. */
+   *  보스 전용 손패(시련 톤 붉은 카드, 상단 촛농/양초/불씨 일러스트)가 보스 중앙에서
+   *  커지듯 나타나 ~1.5초 잔류한 뒤, 팡 터지며 효과별 수치가 알맞은 HUD로 블라스트된다.
+   *  - 방패 → 플레이어 방패 칩, 체력 → 플레이어 체력, 피해 → 플레이어 카드로 발사. */
   async animateWaxKnightCardEffect(cardId: string, effect: 'shield' | 'heal' | 'strike'): Promise<void> {
     const tile = this.findCardElement(cardId)
     if (!tile) return
 
-    // 효과별 카드 메타 — 아이콘은 효과를, 블라스트 팔레트는 촛농/양초/불씨를 표현한다.
+    // 효과별 카드 메타 — 일러스트/팔레트/목적지를 플레이어 손패 의미와 일치시킨다.
+    //  · 방패(+2) = 양초 손패 톤 → 보스 방패 칩으로 블라스트
+    //  · 체력(+2) = 촛농 손패 톤 → 보스 체력 바로 블라스트
+    //  · 피해(2)  = 불씨 손패 톤 → 플레이어 카드로 블라스트
+    // 일러스트는 실제 플레이어 손패 webp(handcard_00x)를 그대로 연동한다.
     const META = {
-      shield: { title: '밀랍 방패', desc: '방패 +2', label: '방패 +2', icon: shieldIcon(), burst: 'boss-wax-drip' as const, tilt: -5 },
-      heal:   { title: '촛불 가호', desc: '체력 +2', label: '체력 +2', icon: candleIcon(), burst: 'boss-candle-flame' as const, tilt: 4 },
-      strike: { title: '불씨 일격', desc: '피해 2',  label: '피해 2',  icon: flameIcon(),  burst: 'boss-ember-spark' as const, tilt: 7 },
+      shield: { title: '밀랍 방패', desc: '방패 +2', label: '방패 +2', illust: spriteForHandCard('candle'),   burst: 'boss-candle-flame' as const, dest: 'boss-shield' as const },
+      heal:   { title: '촛불 가호', desc: '체력 +2', label: '체력 +2', illust: spriteForHandCard('wax-drop'), burst: 'boss-wax-drip' as const,     dest: 'boss-health' as const },
+      strike: { title: '불씨 일격', desc: '피해 2',  label: '피해 2',  illust: spriteForHandCard('ember'),    burst: 'boss-ember-spark' as const,  dest: 'player' as const },
     }[effect]
 
-    // 보스가 3칸에 걸쳐 보이므로 가시 셀들의 합집합 중심을 목적지로 삼는다.
+    // 보스가 3칸에 걸쳐 보이므로 가시 셀들의 합집합 중심을 카드 출현 좌표로 삼는다.
     const cells = Array.from(
       this.boardElement.querySelectorAll<HTMLElement>(`.cell.card[data-card-id="${cardId}"]`)
     ).filter((el) => el.offsetParent !== null)
@@ -2270,50 +2275,68 @@ export class GameBoardRenderer {
       ? (Math.min(...rects.map((r) => r.top)) + Math.max(...rects.map((r) => r.bottom))) / 2
       : baseRect.top + baseRect.height / 2
 
-    // 하단 중앙 출력 위치(플레이어 손패 영역 높이대)에서 보스까지의 이동 벡터.
-    const startX = window.innerWidth / 2
-    const startY = window.innerHeight - Math.min(160, window.innerHeight * 0.2)
-    const dx = startX - bossX
-    const dy = startY - bossY
-
     const card = document.createElement('div')
     card.className = `boss-cast-card boss-cast-card--${effect}`
     card.style.left = `${bossX}px`
     card.style.top = `${bossY}px`
     card.innerHTML = `
       <span class="boss-cast-card-glow" aria-hidden="true"></span>
-      <span class="boss-cast-card-icon" aria-hidden="true">${META.icon}</span>
+      <span class="boss-cast-card-illust" aria-hidden="true">
+        <img src="${META.illust}" alt="" />
+      </span>
       <span class="boss-cast-card-title">${META.title}</span>
       <span class="boss-cast-card-effect">${META.desc}</span>
     `
     document.body.appendChild(card)
 
-    // 1) 하단에서 카드가 솟아 출력되며 잠깐 멈춘다.
+    // 1) 보스 중앙에서 작게 → 크게 솟아오르며 등장(살짝 오버슈트).
     await card.animate(
       [
-        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy + 70}px)) scale(0.62) rotate(${META.tilt - 6}deg)`, opacity: 0 },
-        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1.06) rotate(${META.tilt}deg)`, opacity: 1, offset: 0.55 },
-        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1) rotate(${META.tilt}deg)`, opacity: 1 },
+        { transform: 'translate(-50%, -50%) scale(0.2) rotate(-4deg)', opacity: 0, filter: 'brightness(1.6)' },
+        { transform: 'translate(-50%, -50%) scale(1.12) rotate(1.5deg)', opacity: 1, filter: 'brightness(1.15)', offset: 0.7 },
+        { transform: 'translate(-50%, -50%) scale(1) rotate(0deg)', opacity: 1, filter: 'brightness(1)' },
       ],
-      { duration: 380, easing: 'cubic-bezier(0.2, 0.92, 0.26, 1)', fill: 'forwards' }
+      { duration: 420, easing: 'cubic-bezier(0.18, 0.86, 0.24, 1.2)', fill: 'forwards' }
     ).finished
 
-    // 2) 보스를 향해 휘둘러 날아간다.
+    // 2) 화면에 ~1.5초 잔류(살짝 떠 있는 숨쉬기 모션).
+    card.classList.add('is-hovering')
+    await new Promise((r) => window.setTimeout(r, 1500))
+    card.classList.remove('is-hovering')
+
+    // 3) 팡! 카드가 터지듯 사라지며 보스 중앙 블라스트.
+    SquareBurst.playAt(bossX, bossY, META.burst, { count: effect === 'strike' ? 26 : 20, spread: 200, duration: 560 })
     await card.animate(
       [
-        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1) rotate(${META.tilt}deg)`, opacity: 1, filter: 'brightness(1)' },
-        { transform: `translate(calc(-50% + ${dx * 0.42}px), calc(-50% + ${dy * 0.42}px)) scale(0.9) rotate(${-META.tilt}deg)`, opacity: 1, filter: 'brightness(1.25)', offset: 0.6 },
-        { transform: `translate(-50%, -50%) scale(0.58) rotate(0deg)`, opacity: 0, filter: 'brightness(1.7)' },
+        { transform: 'translate(-50%, -50%) scale(1) rotate(0deg)', opacity: 1, filter: 'brightness(1)' },
+        { transform: 'translate(-50%, -50%) scale(1.18) rotate(-2deg)', opacity: 1, filter: 'brightness(1.9)', offset: 0.3 },
+        { transform: 'translate(-50%, -50%) scale(0.4) rotate(3deg)', opacity: 0, filter: 'brightness(2.4)' },
       ],
-      { duration: 340, easing: 'cubic-bezier(0.5, 0, 0.5, 1)', fill: 'forwards' }
+      { duration: 300, easing: 'cubic-bezier(0.5, 0, 0.6, 1)', fill: 'forwards' }
     ).finished
     card.remove()
 
-    // 3) 도착 순간: 효과별 촛농/양초/불씨 블라스트 + 수치 플로트 + 보스 흔들림.
-    SquareBurst.playAt(bossX, bossY, META.burst, { count: effect === 'strike' ? 26 : 18, spread: 190, duration: 560 })
+    // 4) 효과 수치를 알맞은 위치로 발사 — 방패/체력은 보스 HUD, 피해는 플레이어 카드.
+    //    기존 resource-trail 양식(animateResourceTrail)을 그대로 써서 출처→목적지로 흘린다.
+    //    보스 내부 타깃은 보이는 셀(tile) 안에서 찾아 숨은 행의 좌표를 잡지 않게 한다.
+    const destEl =
+      META.dest === 'player'
+        ? this.boardElement.querySelector<HTMLElement>('.player-card')
+        : META.dest === 'boss-shield'
+          ? (tile.querySelector<HTMLElement>('.boss-face-shield-chip') ??
+             tile.querySelector<HTMLElement>('.boss-face-hp-column'))
+          : (tile.querySelector<HTMLElement>('.boss-face-hpbar') ??
+             tile.querySelector<HTMLElement>('.boss-face-hp-column'))
     void this.spawnFieldFloatText(bossX, baseRect.top + baseRect.height * 0.34, META.label)
     tile.classList.add('is-wax-knight-casting')
-    await new Promise((r) => window.setTimeout(r, 320))
+    if (destEl) {
+      const bossOrigin = new DOMRect(bossX - 12, bossY - 12, 24, 24)
+      await this.animateResourceTrail(bossOrigin, destEl, effect === 'strike' ? 8 : 6, META.burst)
+      SquareBurst.playOn(destEl, META.burst, { count: 14, spread: 120, duration: 480 })
+      await new Promise((r) => window.setTimeout(r, 200))
+    } else {
+      await new Promise((r) => window.setTimeout(r, 240))
+    }
     tile.classList.remove('is-wax-knight-casting')
   }
 

@@ -608,19 +608,20 @@ export const GAME_BOARD_RAIL_STYLES = `
 }
 
 /* ────────────────── 불씨 기사단장 전용 발동 카드 ──────────────────
-   시련 카드와 같은 심적색 톤의 보스 손패. 화면 하단에서 출력되어 보스를
-   향해 날아가며, 효과별 강조색(촛농/양초/불씨)만 다르게 입힌다.
-   위치/이동은 JS(animateWaxKnightCardEffect)의 transform 키프레임이 담당한다. */
+   시련 카드와 같은 심적색 톤의 보스 손패. 보스 중앙에서 커지듯 나타나
+   ~1.5초 잔류하다 팡 터진다. 상단에 촛농/양초/불씨 일러스트 헤더를 둔다.
+   위치/등장/소멸 transform은 JS(animateWaxKnightCardEffect)가 담당한다. */
 .boss-cast-card {
   position: fixed;
   z-index: 240;
-  width: clamp(98px, 12vw, 132px);
+  width: clamp(108px, 13vw, 144px);
   aspect-ratio: 3 / 4;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding: 14px 10px 13px;
+  padding: 0 0 12px;
+  overflow: hidden;
   border-radius: 12px;
   pointer-events: none;
   will-change: transform, opacity, filter;
@@ -632,35 +633,54 @@ export const GAME_BOARD_RAIL_STYLES = `
     inset 0 1px 0 rgba(220, 90, 64, 0.18),
     0 16px 34px rgba(0, 0, 0, 0.7),
     0 0 0 1px rgba(110, 22, 22, 0.4),
-    0 0 22px rgba(150, 30, 24, 0.42);
+    0 0 26px rgba(150, 30, 24, 0.5);
+}
+/* ~1.5초 잔류 동안 살짝 떠 있는 숨쉬기 모션 (JS transform과 겹치지 않게 filter만 사용). */
+.boss-cast-card.is-hovering {
+  animation: boss-cast-breathe 1.5s ease-in-out both;
+}
+@keyframes boss-cast-breathe {
+  0%   { filter: brightness(1) drop-shadow(0 0 0 rgba(255, 120, 60, 0)); }
+  50%  { filter: brightness(1.12) drop-shadow(0 0 14px rgba(255, 120, 60, 0.45)); }
+  100% { filter: brightness(1) drop-shadow(0 0 4px rgba(255, 120, 60, 0.2)); }
 }
 .boss-cast-card-glow {
   position: absolute;
   inset: -2px;
   z-index: 0;
   border-radius: inherit;
-  background: radial-gradient(circle at 50% 32%, rgba(255, 120, 70, 0.3), transparent 68%);
+  background: radial-gradient(circle at 50% 30%, rgba(255, 120, 70, 0.32), transparent 70%);
   pointer-events: none;
 }
-/* 글로우 위에 아이콘/문구가 또렷이 얹히도록 본문 요소를 한 층 올린다. */
-.boss-cast-card-icon,
+/* 글로우 위에 일러스트/문구가 또렷이 얹히도록 본문 요소를 한 층 올린다. */
+.boss-cast-card-illust,
 .boss-cast-card-title,
 .boss-cast-card-effect {
   position: relative;
   z-index: 1;
 }
-.boss-cast-card-icon {
-  width: 46%;
-  margin-top: 6px;
-  color: var(--boss-cast-accent, #f0b48a);
-  filter: drop-shadow(0 0 8px rgba(255, 110, 60, 0.5));
+/* 상단 일러스트 헤더 — 효과별 촛농/양초/불씨 톤의 그라데이션 위에 큰 심볼. */
+.boss-cast-card-illust {
+  width: 100%;
+  height: 58%;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-bottom: 1px solid rgba(160, 90, 40, 0.55);
+  background:
+    radial-gradient(circle at 50% 42%, var(--boss-cast-illust-hi, rgba(255, 190, 110, 0.5)), transparent 72%),
+    linear-gradient(180deg, var(--boss-cast-illust-bg, rgba(70, 30, 14, 0.95)) 0%, rgba(18, 6, 8, 0.96) 100%);
 }
-.boss-cast-card-icon svg { width: 100%; height: auto; }
+/* 플레이어 손패와 동일한 webp 일러스트를 헤더에 꽉 채운다(촛농/양초/불씨). */
+.boss-cast-card-illust img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 22%;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.55)) saturate(1.05);
+}
 .boss-cast-card-title {
-  margin-top: auto;
+  margin-top: 8px;
   font-size: clamp(13px, 1.7vh, 16px);
   font-weight: 900;
   letter-spacing: 0.04em;
@@ -671,11 +691,21 @@ export const GAME_BOARD_RAIL_STYLES = `
   font-size: clamp(11px, 1.4vh, 13px);
   color: rgba(255, 222, 196, 0.9);
 }
-/* 효과별 강조색 — 촛농(호박)/양초(크림)/불씨(주홍) */
-.boss-cast-card--shield { --boss-cast-accent: #ffd97a; }
-.boss-cast-card--heal   { --boss-cast-accent: #ffe6a6; }
+/* 효과별 강조색/일러스트 톤 — 촛농(호박)/양초(크림)/불씨(주홍) */
+.boss-cast-card--shield {
+  --boss-cast-accent: #ffd97a;
+  --boss-cast-illust-bg: rgba(90, 58, 16, 0.95);
+  --boss-cast-illust-hi: rgba(255, 214, 120, 0.5);
+}
+.boss-cast-card--heal {
+  --boss-cast-accent: #ffe6a6;
+  --boss-cast-illust-bg: rgba(96, 70, 22, 0.95);
+  --boss-cast-illust-hi: rgba(255, 240, 180, 0.5);
+}
 .boss-cast-card--strike {
   --boss-cast-accent: #ff8a4a;
+  --boss-cast-illust-bg: rgba(108, 36, 14, 0.96);
+  --boss-cast-illust-hi: rgba(255, 130, 70, 0.55);
   border-color: rgba(190, 60, 30, 0.82);
 }
 
