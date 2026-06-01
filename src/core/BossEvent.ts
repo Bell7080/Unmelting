@@ -28,7 +28,6 @@ type WaxKnightCardEffect = 'shield' | 'heal' | 'strike'
 export interface BossDef {
   /** 화면 표시 이름 */
   name: string
-  flavor: string
   maxHp: number
   attack: number
   attackInterval: number
@@ -126,9 +125,10 @@ export class BossEventController {
 
   /** 30F 보스 이벤트 실행. closeShopAndResume 제단 EXIT 분기에서 호출한다. */
   async run30F(): Promise<void> {
+    // 세계관: 양초 백작이 "내 저택"이라 부르는 곳은 본래 주인공 에나가 살던 집이다.
+    // 플레이어의 격앙된 응답("네 저택이라고…?")이 이 빼앗긴 과거를 암시한다.
     const def: BossDef = {
       name: '양초 백작',
-      flavor: '제단의 수문장',
       maxHp: 50,
       attack: 5,
       attackInterval: 3,
@@ -139,10 +139,10 @@ export class BossEventController {
       spriteUrl: this.sprites.boss,
       appearAnimation: 'landing',
       introBubble: '내 저택에 온 것을 환영하네, 위태로운 불씨여',
-      playerResponseBubble: '네 저택이라고? 웃기시네!',
+      playerResponseBubble: '네 저택이라고…? 웃기시네!',
       // 등장(300ms) + 타자기(18자×70ms≈1260ms) + 읽기(2600ms)
       introBubbleMs: 4160,
-      // 타자기(12자×70ms≈840ms) + 읽기(1800ms) + 퇴장(400ms)
+      // 타자기(13자×70ms≈910ms) + 읽기(1800ms) + 퇴장(400ms)
       playerBubbleMs: 2800,
       trait: '보스 체력이 10 닳을 때마다 플레이어에게 랜덤 손패 1장을 지급한다.',
       kicker: '탐욕의 대가',
@@ -152,9 +152,11 @@ export class BossEventController {
 
   /** 60F 보스 이벤트 실행. 30F의 3×3 구조를 유지하되 전용 카드 사용 패턴을 적용한다. */
   async run60F(): Promise<void> {
+    // 세계관: 불씨 기사단장의 정체는 기사왕 레온하르트로, 과거 주인공 에나(에나벨라)를
+    // 섬기던 기사다. "에나벨라님을… 위하여…"라는 인트로와 이를 알아채는 플레이어
+    // 응답으로만 그 정체를 암시한다.
     const def: BossDef = {
       name: '불씨 기사단장',
-      flavor: '에나벨라의 옛 방패',
       maxHp: 80,
       attack: 7,
       attackInterval: 3,
@@ -165,10 +167,10 @@ export class BossEventController {
       occupiedDistRows: 1,   // 30F처럼 데이터는 dist-0 한 줄, CSS가 3×3 중앙 보스로 확장한다.
       spriteUrl: this.sprites.boss60,
       appearAnimation: 'waxKnightSwoop',
-      introBubble: '에나벨라님을... 위하여.',
+      introBubble: '에나벨라님을… 위하여…',
       // 플레이어만 숨은 정체(레온하르트)를 눈치채는 스토리 암시 대사다.
       playerResponseBubble: '설마... 레온하르트...?',
-      // 등장 훙! 연출(780ms) + 타자기(16자×70ms≈1120ms) + 읽기(2100ms)
+      // 등장 훙! 연출(780ms) + 타자기(11자×70ms≈770ms) + 읽기(2100ms)
       introBubbleMs: 3220,
       // 타자기(15자×70ms≈1050ms) + 읽기(1900ms) + 퇴장(400ms)
       playerBubbleMs: 3350,
@@ -180,9 +182,11 @@ export class BossEventController {
 
   /** 90F 보스 이벤트 실행. closeShopAndResume 제단 EXIT 분기에서 호출한다. */
   async run90F(): Promise<void> {
+    // 세계관: 밀랍 조각사는 스스로 만든 존재가 아니라 누군가에게 조각된 꼭두각시다.
+    // 그를 빚어낸 조각가가 제피르였다는 사실이 추후 밝혀지며, 플레이어 응답
+    // ("제피르의 꼭두각시")이 그 복선을 미리 깐다.
     const def: BossDef = {
       name: '밀랍 조각사',
-      flavor: '밀랍으로 빚은 조각들의 집합체',
       maxHp: 60,
       attack: 4,
       attackInterval: 3,
@@ -193,11 +197,11 @@ export class BossEventController {
       occupiedDistRows: 2,   // dist-0 + dist-1 두 행에 실제로 카드 박음
       spriteUrl: this.sprites.boss90,
       appearAnimation: 'waxSculptor',
-      introBubble: '분명 실패작이었는데?',
-      playerResponseBubble: '드디어 만났어. 널 불태워주마!',
-      // 등장(300ms) + 타자기(9자×70ms≈630ms) + 읽기(1800ms)
-      introBubbleMs: 2730,
-      // 타자기(15자×70ms≈1050ms) + 읽기(2000ms)
+      introBubble: '분명히 넌… 실패작이었는데?',
+      playerResponseBubble: '드디어 만났다, 제피르의 꼭두각시.',
+      // 등장(300ms) + 타자기(13자×70ms≈910ms) + 읽기(1800ms)
+      introBubbleMs: 3010,
+      // 타자기(16자×70ms≈1120ms) + 읽기(2000ms)
       playerBubbleMs: 3050,
       trait: '3턴마다 밀랍을 조각해 양초를 소환하고 몸을 숨깁니다.',
       kicker: '광기의 예술가',
@@ -386,7 +390,7 @@ export class BossEventController {
       `boss-altar-${def.specialEnemyKind}-${this.gs.getCurrentTurn()}`,
       CardType.BOSS,
       def.name,
-      def.flavor,
+      def.name,   // 보스 카드 description은 화면에 노출되지 않아 이름으로 채운다(과거 flavor 제거).
       def.maxHp,
       def.attack,
       { specialEnemyKind: def.specialEnemyKind }
