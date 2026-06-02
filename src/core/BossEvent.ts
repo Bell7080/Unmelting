@@ -189,8 +189,8 @@ export class BossEventController {
     // ("제피르의 꼭두각시")이 그 복선을 미리 깐다.
     const def: BossDef = {
       name: '밀랍 조각사',
-      maxHp: 60,
-      attack: 4,
+      maxHp: 120,
+      attack: 10,
       attackInterval: 3,
       // 일정 체력마다 손패 지급은 30F 전용 메커니즘이므로 60/90F는 0으로 비활성화한다.
       handGiftStep: 0,
@@ -555,19 +555,19 @@ export class BossEventController {
     const cards = sampleWithoutReplacement<WaxKnightCardEffect>(['shield', 'heal', 'strike'], 2)
     for (const effect of cards) {
       if (effect === 'shield') {
-        state.bossShield += 2
+        state.bossShield += 5
         this.syncBossShieldToCard()
         await this.br.animateWaxKnightCardEffect(bossCardId, 'shield')
-        this.inject.recordNotice('불씨 기사단장이 손패 사용: 방패 +2', 'info')
+        this.inject.recordNotice('불씨 기사단장이 손패 사용: 방패 +5', 'info')
       } else if (effect === 'heal') {
-        const healed = state.card.healEnemyLike(2)
+        const healed = state.card.healEnemyLike(5)
         await this.br.animateWaxKnightCardEffect(bossCardId, 'heal')
         this.inject.recordNotice(`불씨 기사단장이 손패 사용: 체력 +${healed}`, 'info')
       } else {
-        character.takeDamage(2)
+        character.takeDamage(5)
         await this.br.animateWaxKnightCardEffect(bossCardId, 'strike')
         await this.br.animateDamageFlash()
-        this.inject.recordNotice('불씨 기사단장이 손패 사용: 플레이어에게 2 피해', 'hurt')
+        this.inject.recordNotice('불씨 기사단장이 손패 사용: 플레이어에게 5 피해', 'hurt')
       }
       this.inject.render()
       if (!character.isAlive()) return false
