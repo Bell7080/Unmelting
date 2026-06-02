@@ -92,6 +92,9 @@ import relic004Url from '../assets/sprites/relics_004.webp'
 import relic005Url from '../assets/sprites/relics_005.webp'
 import relic006Url from '../assets/sprites/relics_006.webp'
 import relic007Url from '../assets/sprites/relics_007.webp'
+import relic008Url from '../assets/sprites/relics_008.webp'
+import relic009Url from '../assets/sprites/relics_009.webp'
+import relic010Url from '../assets/sprites/relics_010.webp'
 import pack001Url from '../assets/sprites/pack_001.webp'
 import pack002Url from '../assets/sprites/pack_002.webp'
 import pack003Url from '../assets/sprites/pack_003.webp'
@@ -180,6 +183,9 @@ export const SpriteUrls = {
     lifeline: relic005Url,
     'blood-pack': relic006Url,
     hope: relic007Url,
+    'ink-quill': relic008Url,
+    'first-candle': relic009Url,
+    'graceful-response': relic010Url,
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,
@@ -327,7 +333,7 @@ export function spriteForHandCard(defId: HandCardId): string {
   return SpriteUrls.handCards[defId]
 }
 
-/** Dedicated relic art follows RELIC_IDS order: relics_001.webp through relics_007.webp. */
+/** Dedicated relic art follows RELIC_IDS order: relics_001.webp through relics_010.webp. */
 export function spriteForRelic(id: RelicId): string {
   return SpriteUrls.relics[id]
 }

@@ -210,6 +210,26 @@ export class GameState {
     return { cardId: pick.card.id, amount, defeated }
   }
 
+  /** Deal damage to a specific on-field enemy by id (품격있는 대처 유물용).
+   *  Returns the hit summary, or null if the id is not an active enemy. */
+  damageEnemyById(
+    cardId: string,
+    amount: number
+  ): { cardId: string; amount: number; defeated: boolean } | null {
+    for (const lane of this.lanes) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = lane.getCardAtDistance(d)
+        if (!card || card.id !== cardId) continue
+        if (card.type !== CardType.ENEMY) return null
+        card.takeDamage(amount)
+        const defeated = card.getHealth() <= 0
+        if (defeated) this.removeCardFromRow(card, d)
+        return { cardId: card.id, amount, defeated }
+      }
+    }
+    return null
+  }
+
   /**
    * Remove every slot reference of a given Card from a row, returning the
    * lane indices that were cleared.
