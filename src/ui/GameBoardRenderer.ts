@@ -781,8 +781,13 @@ export class GameBoardRenderer {
       // only exceptions are the bomb's countdown state and the 3-trap death
       // gate, which are status words rather than numeric damage.
       if (card.trapKind === 'bomb') {
-        const bombText = card.isBombArmed ? '점화' : '폭발'
-        stats = `<div class="card-stats"><span class="stat trap-state">${bombText}</span></div>`
+        // 점화 상태는 좌상단 배지로만 표기하고, 중앙 하단은 다른 함정과 동일하게
+        // 검+폭발 피해(5, 도감 표기와 일치)를 보여 준다.
+        stats = `
+          <div class="card-stats">
+            <span class="stat atk">${swordIcon()}<span class="stat-value">5</span></span>
+          </div>
+        `
       } else {
         // Every non-bomb trap (including the 3-cell "instant death" gate
         // and spore) uses the same flat sword+number readout as enemies.
