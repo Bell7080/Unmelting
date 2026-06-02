@@ -22,6 +22,8 @@ export class BgmManager {
   private kickHandler: ((event: Event) => void) | null = null
   /** 루프 경계에서 겹쳐 들려줄 페이드 길이(초). */
   private readonly fadeSeconds = 3
+  /** 첫 재생의 페이드인은 짧게 잡아 시작 직후 바로 들리게 한다. */
+  private readonly introFadeSeconds = 0.6
   /** 다음 구간을 실제 시작 시점보다 얼마나 미리 예약할지(초). */
   private readonly lookaheadSeconds = 1
   private volume = 0.55
@@ -63,7 +65,8 @@ export class BgmManager {
       return
     }
     this.removeUnlockListeners()
-    this.scheduleIteration(first, buffer, this.ctx.currentTime + 0.08)
+    // 첫 곡은 짧은 페이드인으로 시작해 클릭 직후 바로 들리게 한다.
+    this.scheduleIteration(first, buffer, this.ctx.currentTime + 0.04, this.introFadeSeconds)
   }
 
   /** 재생이 시작되면 자동재생 언락 리스너를 떼어낸다. */
@@ -151,10 +154,17 @@ export class BgmManager {
    * 구간에 다음(무작위) 트랙의 페이드인이 겹치도록 다음 호출을 타이머로 잡는다.
    * 시작 시각을 절대값(startAt)으로 넘기므로 타이머가 약간 늦어도 자연스럽게 이어진다.
    */
-  private scheduleIteration(index: number, buffer: AudioBuffer, startAt: number): void {
+  private scheduleIteration(
+    index: number,
+    buffer: AudioBuffer,
+    startAt: number,
+    fadeInSeconds: number = this.fadeSeconds
+  ): void {
     if (!this.ctx || !this.masterGain) return
     const dur = buffer.duration
+    // 꼬리 페이드아웃은 항상 fadeSeconds — 다음 곡의 fadeSeconds 페이드인과 크로스페이드된다.
     const fade = Math.min(this.fadeSeconds, dur / 2)
+    const fadeIn = Math.min(fadeInSeconds, dur / 2)
 
     const src = this.ctx.createBufferSource()
     src.buffer = buffer
@@ -163,7 +173,7 @@ export class BgmManager {
 
     // 시작 페이드인 → 유지 → 꼬리 페이드아웃.
     gain.gain.setValueAtTime(0, startAt)
-    gain.gain.linearRampToValueAtTime(1, startAt + fade)
+    gain.gain.linearRampToValueAtTime(1, startAt + fadeIn)
     gain.gain.setValueAtTime(1, startAt + dur - fade)
     gain.gain.linearRampToValueAtTime(0, startAt + dur)
 
