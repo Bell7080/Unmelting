@@ -61,6 +61,8 @@ import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, spriteForUpgradePackItem } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
+import { BgmManager } from '@/audio/BgmManager'
+import bgm001Url from './assets/audio/bgm_001.mp3'
 import okDanDanBoldUrl from './assets/fonts/OkDanDanBold.woff2'
 
 console.log('🕯 Unmelting starting...')
@@ -91,6 +93,8 @@ const gameState = new GameState()
 const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
 const boardRenderer = new GameBoardRenderer('game-board')
+// 배경음: 첫 입력에서 크로스페이드 루프로 자동재생(자동재생 정책 우회).
+const bgm = new BgmManager(bgm001Url)
 const speechBubble = new SpeechBubble({ anchor: '.player-card', offsetX: 150, tail: 'bottom-left', fontSize: 22 })
 const bossBubble   = new SpeechBubble({ anchor: '.cell.type-boss', offsetX: 40, offsetY: 70, tail: 'bottom-left', theme: 'boss', autoDismissMs: 0 })
 let gameActive = true
@@ -2902,4 +2906,6 @@ globalStyle.textContent = `
 document.head.appendChild(globalStyle)
 
 setupDevCommandPalette()
+// 게임 부팅 후 첫 사용자 입력에서 배경음 루프를 켠다(브라우저 자동재생 정책).
+bgm.armAutoplay()
 startGame()
