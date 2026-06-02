@@ -603,7 +603,8 @@ export class BossEventController {
 
     // 각 레인에 후기 적 1마리씩 소환 (합산 금지 — 독립 인스턴스).
     // 이 적들은 컨트롤러가 직접 처리하므로 regroup/리필/턴 흐름을 타지 않는다.
-    const pool = ENEMY_DEFINITIONS.slice(6, 12)
+    // 90F 보스답게 60~90층대 적 풀(인덱스 12~17: 풍뎅이/전갈/담비/오소리/나무늘보/자칼)에서 소환한다.
+    const pool = ENEMY_DEFINITIONS.slice(12, 18)
     for (let i = 0; i < 3; i++) {
       const enemyDef = pool[Math.floor(Math.random() * pool.length)]
       const enemy = new Card(
