@@ -251,6 +251,7 @@ const bossController = new BossEventController(
     setInputLocked: (v) => { inputLocked = v },
     addOneCoin: () => { coins += 1; coinPulseKey++; boardRenderer.playCoinGainFeedback(coins, coinPulseKey) },
     render: () => render(),
+    clearChainTimeline: () => { clearChainTimeline(); boardRenderer.refreshChainBanner(buildChainHints()) },
     recordNotice: (msg, kind) => recordNotice(msg, kind),
     openTrialOverlayForced: () => openTrialOverlayForced(),
     applyRelicPurchaseEffect: (id) => applyRelicPurchaseEffect(id),
@@ -738,19 +739,19 @@ function buildShopStateView(): ShopStateView {
 
 /** Immediate stat effects for relics whose benefit is granted on purchase. */
 async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
+  // 구매 즉시 스탯만 올리고 체인 로그에는 남기지 않는다. 트레일은 상점에서
+  // 숨겨진 체인 배너 대신 화면 중앙에서 HUD로 날린다.
   if (id === 'carving-knife') {
     const beforeResources = snapshotPlayerResources()
     gameState.character.applyDamageBoost(1)
-    recordRelicActivation('carving-knife', '공격력 +1')
-    await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
+    await playPlayerGainTrails({ kind: 'center' }, beforeResources)
     return
   }
   if (id === 'lifeline') {
     const before = snapshotPlayerRecovery()
     const beforeResources = snapshotPlayerResources()
-    const amount = gameState.character.increaseMaxHealth(5)
-    recordRelicActivation('lifeline', `최대 체력 +${amount}`)
-    await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
+    gameState.character.increaseMaxHealth(5)
+    await playPlayerGainTrails({ kind: 'center' }, beforeResources)
     await applyBloodPackRecoveryTrigger(before)
   }
 }
@@ -1865,8 +1866,17 @@ function recordNotice(_message: string, _kind: NoticeLogKind = 'info'): void {
   // Intentionally empty — see comment above. Do not push to activityLogs.
 }
 
+/** 상점/제단과 보스 보상·시련 단계에서는 체인 로그를 노출하지 않는다.
+ *  - 상점: 유물 구매·선물 상자 등은 전투 콤보가 아니라 체인이 뜰 자리가 아니다.
+ *  - 보스 보상: 손패 사용 차단(postPhaseHandLocked)과 함께 체인도 끊는다. */
+function chainRecordingSuppressed(): boolean {
+  return shopOpen || bossController.postPhaseHandLocked
+}
+
 /** Record relic activation in the floating chain-area toast only. */
 function recordRelicActivation(relicId: RelicId, message: string): void {
+  // 상점/보스 보상 단계에서 발동한 유물 효과는 체인 로그에 남기지 않는다.
+  if (chainRecordingSuppressed()) return
   const relic = getRelicDef(relicId)
   chainTimeline.push({
     kind: 'relic',
@@ -1941,14 +1951,17 @@ async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promi
     const gauge = fireCandleGaugeEffect()
     if (!gauge) break
     recordNotice(`${gauge.name}: ${gauge.message}`, 'gauge')
-    chainTimeline.push({
-      kind: 'gauge',
-      mode: gauge.mode,
-      name: gauge.name,
-      flavor: gauge.message,
-      uid: nextChainUid(),
-    })
-    boardRenderer.refreshChainBanner(buildChainHints())
+    // 상점/보스 보상 단계의 게이지 페이오프는 체인 로그에서 제외한다.
+    if (!chainRecordingSuppressed()) {
+      chainTimeline.push({
+        kind: 'gauge',
+        mode: gauge.mode,
+        name: gauge.name,
+        flavor: gauge.message,
+        uid: nextChainUid(),
+      })
+      boardRenderer.refreshChainBanner(buildChainHints())
+    }
     // The payoff spends one full 10-step gauge immediately after firing. Roll
     // that decrease on the live gauge as its own drain beat, so overflow such
     // as 13 progress visibly settles to 3 instead of snapping on the next render.

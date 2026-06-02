@@ -91,6 +91,8 @@ export interface BossInjected {
   /** 화폐 1단위씩 증가 + HUD 피드백까지 처리 */
   addOneCoin: () => void
   render: () => void
+  /** 체인 타임라인을 비우고 배너를 갱신 — 보스 보상 단계 진입 시 잔존 전투 체인 제거 */
+  clearChainTimeline: () => void
   recordNotice: (msg: string, kind: 'info' | 'win' | 'hurt') => void
   /** 보스 격파 후 시련 오버레이를 열고 완료까지 대기 */
   openTrialOverlayForced: () => Promise<void>
@@ -786,6 +788,8 @@ export class BossEventController {
       this.gs.lanes[lane].setCardAtDistance(2, bountyCard)
     }
     this.postPhaseHandLocked = true
+    // 보상·시련 단계에서는 손패 사용과 함께 체인도 끊는다(전투 중 쌓인 체인 잔상 제거).
+    this.inject.clearChainTimeline()
     this.inject.setInputLocked(false)
     this.inject.render()
     await new Promise<void>((resolve) => {
