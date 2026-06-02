@@ -1,29 +1,37 @@
 /**
- * 배경음 매니저. Web Audio API로 mp3를 디코딩해 끝과 시작이 겹치는
- * 크로스페이드 루프(끝 페이드아웃 ↔ 시작 페이드인)를 만든다.
+ * 배경음 매니저. 여러 트랙을 무작위 순서로 이어 재생한다.
+ * - 트랙 사이는 끝 페이드아웃 ↔ 다음 시작 페이드인이 겹치는 크로스페이드로 잇는다.
+ * - 첫 곡도 무작위, 다음 곡도 직전과 다른 트랙으로 무작위 선택한다.
+ * - 메모리는 현재+다음 트랙 버퍼만 유지하고 나머지는 비운다(필요 시 재디코딩).
  *
  * 브라우저 자동재생 정책상 소리는 첫 사용자 입력 전까지 막히므로,
- * `armAutoplay()`로 최초 클릭/키 입력에 컨텍스트를 열고 루프를 시작한다.
+ * `armAutoplay()`로 최초 클릭/키 입력에 컨텍스트를 열고 재생을 시작한다.
  */
 export class BgmManager {
   private ctx: AudioContext | null = null
-  private buffer: AudioBuffer | null = null
   private masterGain: GainNode | null = null
-  private loadPromise: Promise<void> | null = null
   private started = false
   private loopTimer: number | null = null
+  /** 디코딩된 트랙 버퍼 캐시(인덱스 → 버퍼). 현재/다음만 유지한다. */
+  private readonly buffers = new Map<number, AudioBuffer>()
+  /** 진행 중인 디코딩(인덱스 → Promise)으로 중복 fetch를 막는다. */
+  private readonly loads = new Map<number, Promise<AudioBuffer | null>>()
+  /** armAutoplay에서 미리 골라 둔 첫 트랙(첫 클릭 즉시 시작용). */
+  private firstIndex = -1
   /** 루프 경계에서 겹쳐 들려줄 페이드 길이(초). */
   private readonly fadeSeconds = 3
   /** 다음 구간을 실제 시작 시점보다 얼마나 미리 예약할지(초). */
   private readonly lookaheadSeconds = 1
   private volume = 0.55
 
-  constructor(private readonly url: string) {}
+  constructor(private readonly urls: string[]) {}
 
   /** 첫 사용자 입력에서 컨텍스트를 열고 재생을 시작한다(자동재생 정책 우회). */
   armAutoplay(): void {
-    // 입력 전에 미리 디코딩해 두면 첫 클릭 즉시 끊김 없이 시작된다.
-    void this.ensureLoaded()
+    if (!this.ensureContext()) return
+    // 첫 곡을 미리 골라 디코딩해 두면 첫 클릭 즉시 끊김 없이 시작된다.
+    this.firstIndex = this.randomIndex()
+    void this.ensureBuffer(this.firstIndex)
     const kick = (): void => {
       void this.start()
       window.removeEventListener('pointerdown', kick)
@@ -35,14 +43,19 @@ export class BgmManager {
     window.addEventListener('touchstart', kick, { once: true })
   }
 
-  /** 컨텍스트를 깨우고 크로스페이드 루프를 시작한다. 이미 재생 중이면 무시. */
+  /** 컨텍스트를 깨우고 무작위 트랙으로 재생을 시작한다. 이미 재생 중이면 무시. */
   async start(): Promise<void> {
     if (this.started) return
-    await this.ensureLoaded()
-    if (!this.ctx || !this.buffer || !this.masterGain) return
+    if (!this.ensureContext() || !this.ctx) return
     if (this.ctx.state === 'suspended') await this.ctx.resume()
     this.started = true
-    this.scheduleIteration(this.ctx.currentTime + 0.08)
+    const first = this.firstIndex >= 0 ? this.firstIndex : this.randomIndex()
+    const buffer = await this.ensureBuffer(first)
+    if (!buffer) {
+      this.started = false
+      return
+    }
+    this.scheduleIteration(first, buffer, this.ctx.currentTime + 0.08)
   }
 
   /** 0~1 음량. 즉시 반영한다. */
@@ -53,7 +66,7 @@ export class BgmManager {
     }
   }
 
-  /** 루프를 멈추고 다음 예약을 취소한다. */
+  /** 재생을 멈추고 다음 예약을 취소한다(컨텍스트는 재시작 대비 유지). */
   stop(): void {
     if (this.loopTimer !== null) {
       window.clearTimeout(this.loopTimer)
@@ -61,47 +74,79 @@ export class BgmManager {
     }
     this.started = false
     if (this.masterGain && this.ctx) {
-      // 부드럽게 죽인 뒤 컨텍스트는 유지(재시작 대비).
       this.masterGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.2)
     }
   }
 
-  /** mp3를 한 번만 fetch+decode 한다. 반복 호출은 같은 Promise를 돌려준다. */
-  private ensureLoaded(): Promise<void> {
-    if (!this.ctx) {
-      const Ctor = window.AudioContext ?? (window as unknown as {
-        webkitAudioContext?: typeof AudioContext
-      }).webkitAudioContext
-      if (!Ctor) return Promise.resolve()
-      this.ctx = new Ctor()
-      this.masterGain = this.ctx.createGain()
-      this.masterGain.gain.value = this.volume
-      this.masterGain.connect(this.ctx.destination)
+  private randomIndex(): number {
+    return Math.floor(Math.random() * this.urls.length)
+  }
+
+  /** 직전 트랙과 다른 인덱스를 고른다(트랙이 하나뿐이면 그대로). */
+  private randomOtherIndex(exclude: number): number {
+    if (this.urls.length <= 1) return 0
+    let pick = exclude
+    while (pick === exclude) pick = this.randomIndex()
+    return pick
+  }
+
+  /** AudioContext/마스터 게인을 1회 생성한다. 생성 가능 여부를 반환. */
+  private ensureContext(): boolean {
+    if (this.ctx) return true
+    const Ctor =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!Ctor) return false
+    this.ctx = new Ctor()
+    this.masterGain = this.ctx.createGain()
+    this.masterGain.gain.value = this.volume
+    this.masterGain.connect(this.ctx.destination)
+    return true
+  }
+
+  /** 트랙을 fetch+decode 해 캐시한다. 실패 시 null. */
+  private ensureBuffer(index: number): Promise<AudioBuffer | null> {
+    const cached = this.buffers.get(index)
+    if (cached) return Promise.resolve(cached)
+    const inflight = this.loads.get(index)
+    if (inflight) return inflight
+    const ctx = this.ctx
+    if (!ctx) return Promise.resolve(null)
+    const task = fetch(this.urls[index])
+      .then((res) => res.arrayBuffer())
+      .then((data) => ctx.decodeAudioData(data))
+      .then((buf) => {
+        this.buffers.set(index, buf)
+        this.loads.delete(index)
+        return buf
+      })
+      .catch(() => {
+        this.loads.delete(index)
+        return null
+      })
+    this.loads.set(index, task)
+    return task
+  }
+
+  /** 현재/다음으로 지정한 인덱스 외의 캐시 버퍼는 비워 메모리를 제한한다. */
+  private evictExcept(keep: number[]): void {
+    for (const index of [...this.buffers.keys()]) {
+      if (!keep.includes(index)) this.buffers.delete(index)
     }
-    if (!this.loadPromise) {
-      const ctx = this.ctx
-      this.loadPromise = fetch(this.url)
-        .then((res) => res.arrayBuffer())
-        .then((data) => ctx.decodeAudioData(data))
-        .then((buf) => {
-          this.buffer = buf
-        })
-    }
-    return this.loadPromise
   }
 
   /**
-   * 한 번의 재생 구간을 페이드 인/아웃 엔벨로프와 함께 예약하고, 꼬리 페이드아웃
-   * 구간에 다음 구간의 페이드인이 겹치도록 다음 호출을 타이머로 잡는다.
-   * 시작 시각을 절대값(startAt)으로 넘기므로 타이머가 약간 늦어도 샘플 단위로 이어진다.
+   * 한 트랙의 재생 구간을 페이드 인/아웃 엔벨로프와 함께 예약하고, 꼬리 페이드아웃
+   * 구간에 다음(무작위) 트랙의 페이드인이 겹치도록 다음 호출을 타이머로 잡는다.
+   * 시작 시각을 절대값(startAt)으로 넘기므로 타이머가 약간 늦어도 자연스럽게 이어진다.
    */
-  private scheduleIteration(startAt: number): void {
-    if (!this.ctx || !this.buffer || !this.masterGain) return
-    const dur = this.buffer.duration
+  private scheduleIteration(index: number, buffer: AudioBuffer, startAt: number): void {
+    if (!this.ctx || !this.masterGain) return
+    const dur = buffer.duration
     const fade = Math.min(this.fadeSeconds, dur / 2)
 
     const src = this.ctx.createBufferSource()
-    src.buffer = this.buffer
+    src.buffer = buffer
     const gain = this.ctx.createGain()
     src.connect(gain).connect(this.masterGain)
 
@@ -118,9 +163,18 @@ export class BgmManager {
       gain.disconnect()
     }
 
-    // 다음 구간은 이 구간의 꼬리 페이드 시작 지점에서 출발 → 크로스페이드.
+    // 다음 트랙은 직전과 다른 무작위 곡으로, 이 구간의 꼬리 페이드 지점에서 출발한다.
+    const nextIndex = this.randomOtherIndex(index)
     const nextAt = startAt + dur - fade
-    const fireInMs = (nextAt - this.lookaheadSeconds - this.ctx.currentTime) * 1000
-    this.loopTimer = window.setTimeout(() => this.scheduleIteration(nextAt), Math.max(0, fireInMs))
+    void this.ensureBuffer(nextIndex).then((nextBuffer) => {
+      // 현재 재생 중인 트랙은 꼬리 페이드가 끝날 때까지 필요하므로 함께 남긴다.
+      this.evictExcept([index, nextIndex])
+      if (!nextBuffer || !this.ctx || !this.started) return
+      const fireInMs = (nextAt - this.lookaheadSeconds - this.ctx.currentTime) * 1000
+      this.loopTimer = window.setTimeout(
+        () => this.scheduleIteration(nextIndex, nextBuffer, nextAt),
+        Math.max(0, fireInMs)
+      )
+    })
   }
 }

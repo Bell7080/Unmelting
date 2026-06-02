@@ -63,6 +63,8 @@ import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, spriteForUpgrade
 import { SpeechBubble } from '@ui/SpeechBubble'
 import { BgmManager } from '@/audio/BgmManager'
 import bgm001Url from './assets/audio/bgm_001.mp3'
+import bgm002Url from './assets/audio/bgm_002.mp3'
+import bgm003Url from './assets/audio/bgm_003.mp3'
 import okDanDanBoldUrl from './assets/fonts/OkDanDanBold.woff2'
 
 console.log('🕯 Unmelting starting...')
@@ -93,8 +95,8 @@ const gameState = new GameState()
 const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
 const boardRenderer = new GameBoardRenderer('game-board')
-// 배경음: 첫 입력에서 크로스페이드 루프로 자동재생(자동재생 정책 우회).
-const bgm = new BgmManager(bgm001Url)
+// 배경음: 3트랙을 무작위 순서로 크로스페이드 연결, 첫 입력에서 자동재생.
+const bgm = new BgmManager([bgm001Url, bgm002Url, bgm003Url])
 const speechBubble = new SpeechBubble({ anchor: '.player-card', offsetX: 150, tail: 'bottom-left', fontSize: 22 })
 const bossBubble   = new SpeechBubble({ anchor: '.cell.type-boss', offsetX: 40, offsetY: 70, tail: 'bottom-left', theme: 'boss', autoDismissMs: 0 })
 let gameActive = true
