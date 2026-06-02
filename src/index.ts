@@ -622,15 +622,17 @@ async function onEnemiesDefeated(count: number, allowBloodPack = true): Promise<
   applyInkQuillKills(count)
 }
 
-/** 잉크와 깃펜: 적 5처치마다 최대 손패 콤보 게이지 -1. 처치 수는 런 동안 누적한다. */
+/** 잉크와 깃펜: 적 5처치마다 손패 콤보 게이지 +1. 처치 수는 런 동안 누적한다.
+ *  채워진 게이지는 액션 종료 시 resolveFullCandleGaugeEffects가 정산한다. */
 let inkQuillKillCount = 0
 function applyInkQuillKills(count: number): void {
   if (count <= 0 || !gameState.character.hasRelic('ink-quill')) return
   inkQuillKillCount += count
   while (inkQuillKillCount >= 5) {
     inkQuillKillCount -= 5
-    const reduced = gameState.character.decreaseCandleMax(1)
-    if (reduced > 0) recordRelicActivation('ink-quill', '최대 콤보 게이지 -1')
+    gameState.character.gainCandle(1)
+    boardRenderer.playHudCounterFeedback('candle', gameState.character.candle)
+    recordRelicActivation('ink-quill', '콤보 게이지 +1')
   }
 }
 
@@ -801,11 +803,11 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
   if (id === 'first-candle') {
     const before = snapshotPlayerRecovery()
     const beforeResources = snapshotPlayerResources()
-    // 첫 양초: 최대 체력 +5 / 공격력 +1 / 불씨 +2 / 최대 손패 +2 / 최대 콤보 게이지 -1.
+    // 첫 양초: 최대 체력 +5 / 공격력 +1 / 최대 불씨 게이지 +2 / 최대 손패 +2 / 최대 콤보 게이지 -1.
     // 손패·콤보 게이지 상한은 수치 트레일이 없으므로 체력/불씨/공격력만 중앙 트레일로 보인다.
     gameState.character.increaseMaxHealth(5)
     gameState.character.applyDamageBoost(1)
-    gameState.character.gainEmber(2)
+    gameState.character.increaseEmberMax(2)
     gameState.character.increaseHandMax(2)
     gameState.character.decreaseCandleMax(1)
     await playPlayerGainTrails({ kind: 'center' }, beforeResources)
