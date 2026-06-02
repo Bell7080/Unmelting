@@ -50,6 +50,8 @@ export interface HandEffectTargeting {
   filter: HandEffectFilter
   /** Null means every valid object in the zone can be affected. */
   countLimit: number | null
+  /** 대상 카드의 최대 폭(칸=groupCount) 제한. 지정 시 이 폭을 넘는 카드는 대상에서 제외한다. */
+  maxSpan?: number
 }
 
 export interface HandCardTargetingTable {

@@ -151,6 +151,8 @@ export interface ActivityLogEntry {
 export interface HandTargetingMode {
   slotIndex: number
   defId: HandCardId
+  /** 합체(트리플) 카드 여부 — 타겟 하이라이트가 base/triple 규칙을 올바로 고르게 한다. */
+  merged?: boolean
 }
 
 export interface ChainEventBase {
@@ -705,7 +707,8 @@ export class GameBoardRenderer {
   private isValidHandTarget(card: Card, distance: number): boolean {
     if (!this.handTargetingMode) return false
     const def = getHandCardDef(this.handTargetingMode.defId)
-    return this.isValidTargetRule(def.targeting.base, card, distance)
+    const rule = this.handTargetingMode.merged ? def.targeting.triple : def.targeting.base
+    return this.isValidTargetRule(rule, card, distance)
   }
 
   /** Check a hand target rule without mutating game state. */
@@ -714,6 +717,8 @@ export class GameBoardRenderer {
     if (rule.zone === 'front' && distance !== 0) return false
     if (rule.zone === 'waiting' && distance === 0) return false
     if (rule.zone !== 'front' && rule.zone !== 'waiting' && rule.zone !== 'field') return false
+    // 폭 제한(키틴 2칸/3칸): maxSpan을 넘는 폭의 카드는 대상에서 제외한다.
+    if (rule.maxSpan != null && card.groupCount > rule.maxSpan) return false
     // 보스는 적과 같은 양식을 따르므로 enemy/enemy-or-treasure/turn-timer 등
      // "적을 향한" 손패 타겟팅 필터에 모두 포함된다.
     if (rule.filter === 'enemy') return card.type === CardType.ENEMY || card.type === CardType.BOSS

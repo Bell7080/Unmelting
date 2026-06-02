@@ -2112,7 +2112,7 @@ async function handleHandSlotClick(slotIndex: number): Promise<void> {
       return
     }
     pendingHandTarget = { slotIndex, defId: def.id }
-    boardRenderer.setHandTargetingMode({ slotIndex, defId: def.id })
+    boardRenderer.setHandTargetingMode({ slotIndex, defId: def.id, merged: card.merged === true })
     render()
     return
   }
