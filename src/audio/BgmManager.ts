@@ -18,6 +18,8 @@ export class BgmManager {
   private readonly loads = new Map<number, Promise<AudioBuffer | null>>()
   /** armAutoplay에서 미리 골라 둔 첫 트랙(첫 클릭 즉시 시작용). */
   private firstIndex = -1
+  /** 자동재생 언락 리스너 핸들러(성공 시 제거하려고 보관). */
+  private kickHandler: ((event: Event) => void) | null = null
   /** 루프 경계에서 겹쳐 들려줄 페이드 길이(초). */
   private readonly fadeSeconds = 3
   /** 다음 구간을 실제 시작 시점보다 얼마나 미리 예약할지(초). */
@@ -32,30 +34,45 @@ export class BgmManager {
     // 첫 곡을 미리 골라 디코딩해 두면 첫 클릭 즉시 끊김 없이 시작된다.
     this.firstIndex = this.randomIndex()
     void this.ensureBuffer(this.firstIndex)
-    const kick = (): void => {
-      void this.start()
-      window.removeEventListener('pointerdown', kick)
-      window.removeEventListener('keydown', kick)
-      window.removeEventListener('touchstart', kick)
-    }
-    window.addEventListener('pointerdown', kick, { once: true })
-    window.addEventListener('keydown', kick, { once: true })
-    window.addEventListener('touchstart', kick, { once: true })
+    // 캡처 단계로 등록해야 게임 카드 핸들러가 stopPropagation 해도 첫 입력을 잡는다.
+    // 시작이 실제로 성공할 때까지 리스너를 유지해 한 번 막혀도 다음 입력에 재시도한다.
+    this.kickHandler = () => { void this.start() }
+    window.addEventListener('pointerdown', this.kickHandler, true)
+    window.addEventListener('keydown', this.kickHandler, true)
+    window.addEventListener('touchstart', this.kickHandler, true)
   }
 
   /** 컨텍스트를 깨우고 무작위 트랙으로 재생을 시작한다. 이미 재생 중이면 무시. */
   async start(): Promise<void> {
     if (this.started) return
     if (!this.ensureContext() || !this.ctx) return
-    if (this.ctx.state === 'suspended') await this.ctx.resume()
+    // 동시 입력(pointerdown+touchstart 등)으로 두 번 시작되지 않게 먼저 잠근다.
     this.started = true
+    if (this.ctx.state === 'suspended') {
+      try {
+        await this.ctx.resume()
+      } catch {
+        this.started = false
+        return
+      }
+    }
     const first = this.firstIndex >= 0 ? this.firstIndex : this.randomIndex()
     const buffer = await this.ensureBuffer(first)
     if (!buffer) {
       this.started = false
       return
     }
+    this.removeUnlockListeners()
     this.scheduleIteration(first, buffer, this.ctx.currentTime + 0.08)
+  }
+
+  /** 재생이 시작되면 자동재생 언락 리스너를 떼어낸다. */
+  private removeUnlockListeners(): void {
+    if (!this.kickHandler) return
+    window.removeEventListener('pointerdown', this.kickHandler, true)
+    window.removeEventListener('keydown', this.kickHandler, true)
+    window.removeEventListener('touchstart', this.kickHandler, true)
+    this.kickHandler = null
   }
 
   /** 0~1 음량. 즉시 반영한다. */
@@ -112,7 +129,9 @@ export class BgmManager {
         this.loads.delete(index)
         return buf
       })
-      .catch(() => {
+      .catch((err) => {
+        // 자산 로드/디코딩 실패 시 무음이 되므로 원인을 콘솔로 남긴다.
+        console.warn(`[bgm] 트랙 로드 실패: ${this.urls[index]}`, err)
         this.loads.delete(index)
         return null
       })
