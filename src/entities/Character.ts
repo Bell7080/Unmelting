@@ -115,6 +115,14 @@ export class Character {
     return actualIncrease
   }
 
+  /** Permanently lower the combo-gauge ceiling (min 1) so payoffs fire sooner.
+   *  Returns the amount actually reduced. */
+  decreaseCandleMax(amount: number): number {
+    const before = this.candleMax
+    this.candleMax = Math.max(1, this.candleMax - Math.max(0, amount))
+    return before - this.candleMax
+  }
+
   /** Debug command setter: keep attack in a safe positive integer range. */
   setDamageForDebug(value: number): void {
     this.damage = Math.max(1, Math.floor(value))

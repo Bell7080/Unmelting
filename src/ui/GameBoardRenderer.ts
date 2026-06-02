@@ -1025,6 +1025,15 @@ export class GameBoardRenderer {
     `
   }
 
+  /** 유물 효과 본문에서 '불빛' 표기를 다이아(✦) 아이콘으로 치환한 HTML을 만든다.
+   *  title/aria/textContent 등 평문 컨텍스트에서는 def.effect 원문(불빛 단어)을 그대로 둔다. */
+  private relicEffectHtml(effect: string): string {
+    return escapeHtml(effect).replace(
+      /불빛/g,
+      `<span class="relic-effect-light">${sparkleIcon()}</span>`
+    )
+  }
+
   /** Owned relics reuse the shop card reading structure without the price tag.
    *  Keeping the same art/body/title/effect/flavor class names lets inventory
    *  cards scale up on hover with text legibility matching shop relic cards. */
@@ -1035,7 +1044,7 @@ export class GameBoardRenderer {
         <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
         <div class="shop-relic-body">
           <h3 class="shop-relic-title">${def.name}</h3>
-          <p class="shop-relic-effect">${def.effect}</p>
+          <p class="shop-relic-effect">${this.relicEffectHtml(def.effect)}</p>
           <p class="shop-relic-flavor">${def.flavor}</p>
         </div>
       </article>
@@ -1605,7 +1614,7 @@ export class GameBoardRenderer {
           <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
           <div class="shop-relic-body">
             <h3 class="shop-relic-title">${def.name}</h3>
-            <p class="shop-relic-effect">${def.effect}</p>
+            <p class="shop-relic-effect">${this.relicEffectHtml(def.effect)}</p>
             <p class="shop-relic-flavor">${def.flavor}</p>
           </div>
         </div>
@@ -2940,7 +2949,7 @@ export class GameBoardRenderer {
           name: def.name,
           tag: isOwned ? '보유 중' : '상점',
           rarityClass: RARITY_CLASS_BY_TIER[def.rarity],
-          chips: [{ value: def.effect, tone: 'gold' }],
+          chips: [{ value: this.relicEffectHtml(def.effect), tone: 'gold' }],
           flavor: def.flavor,
           extraClass: ['codex-tile--relic', isOwned ? 'codex-tile--owned' : ''].filter(Boolean).join(' '),
         })

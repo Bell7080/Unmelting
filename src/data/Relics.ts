@@ -16,6 +16,9 @@ export type RelicId =
   | 'lifeline'
   | 'blood-pack'
   | 'hope'
+  | 'ink-quill'
+  | 'first-candle'
+  | 'graceful-response'
 
 /** Immutable relic rules used by gameplay and presentation. */
 export interface RelicDefinition {
@@ -32,20 +35,23 @@ export interface RelicDefinition {
 
 /** Central relic table. Add future shop inventory here first. */
 export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
+  // id는 세이브/핸들러 키라 유지하고 표시 이름·효과·설명만 별빛 랜턴으로 교체한다.
   'golden-squirrel': {
     id: 'golden-squirrel',
-    name: '황금 다람쥐',
+    name: '별빛 랜턴',
     rarity: 'rare',
-    effect: '5턴마다 1$ 획득',
-    flavor: '작은 발톱으로 동전을 꼭 쥔 잡화점의 행운 부적.',
-    basePrice: 540,
+    // '불빛'은 GameBoardRenderer.relicEffectHtml가 본문에서 다이아(✦) 아이콘으로 치환한다.
+    effect: '5턴마다 불빛 500 획득',
+    flavor: '별빛을 모아 둔 등불, 다섯 걸음마다 한 줌의 빛을 흘려보낸다.',
+    basePrice: 600,
   },
+  // id는 유지하고 표시 이름·설명만 귀족의 품격으로 교체한다(효과 동일).
   'wax-crow': {
     id: 'wax-crow',
-    name: '밀랍 까마귀',
+    name: '귀족의 품격',
     rarity: 'epic',
     effect: '보물상자 획득 시 방패 1 획득',
-    flavor: '밀랍 깃털이 상자 뚜껑 소리에 맞춰 바스락거린다.',
+    flavor: '전리품마저 품위 있게 두르는 옛 귀족의 몸가짐.',
     basePrice: 720,
   },
   'carving-knife': {
@@ -88,6 +94,30 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '꺼진 심지 끝에 남은 아주 작은 불빛.',
     basePrice: 1240,
     banWhenRemoved: true,
+  },
+  'ink-quill': {
+    id: 'ink-quill',
+    name: '잉크와 깃펜',
+    rarity: 'epic',
+    effect: '적을 5번 잡을 때마다 최대 손패 콤보 게이지 -1',
+    flavor: '쓰러뜨린 수를 적어 내려갈수록 손끝의 합이 간결해진다.',
+    basePrice: 940,
+  },
+  'first-candle': {
+    id: 'first-candle',
+    name: '첫 양초',
+    rarity: 'legendary',
+    effect: '최대 체력 +5, 공격력 +1, 불씨 게이지 +2, 최대 손패 +2, 최대 손패 콤보 게이지 -1',
+    flavor: '가장 먼저 밝힌 초 한 자루가 모든 시작을 든든히 데운다.',
+    basePrice: 1500,
+  },
+  'graceful-response': {
+    id: 'graceful-response',
+    name: '품격있는 대처',
+    rarity: 'epic',
+    effect: '피해를 입힌 적 1장에게 피해 1',
+    flavor: '흐트러짐 없는 한 수가 상처 입은 적을 마저 갈무리한다.',
+    basePrice: 1000,
   },
 }
 

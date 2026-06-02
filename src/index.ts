@@ -610,7 +610,50 @@ async function applyBloodPackRecoveryTrigger(before: PlayerRecoverySnapshot): Pr
     await boardRenderer.animateCardConsumeByIds([{ cardId: hit.cardId, type: CardType.ENEMY }], {
       suppressBurstIds: new Set([hit.cardId]),
     })
-    await applyRedPotionEnemyDefeats(1, false)
+    await onEnemiesDefeated(1, false)
+  }
+}
+
+/** 적 처치 시 처치 기반 유물을 한 번에 처리한다(붉은 포션 회복 + 잉크와 깃펜 카운트).
+ *  blood-pack/품격있는 대처의 처치 후속도 이 함수로 모아 누락을 막는다. */
+async function onEnemiesDefeated(count: number, allowBloodPack = true): Promise<void> {
+  if (count <= 0) return
+  await applyRedPotionEnemyDefeats(count, allowBloodPack)
+  applyInkQuillKills(count)
+}
+
+/** 잉크와 깃펜: 적 5처치마다 최대 손패 콤보 게이지 -1. 처치 수는 런 동안 누적한다. */
+let inkQuillKillCount = 0
+function applyInkQuillKills(count: number): void {
+  if (count <= 0 || !gameState.character.hasRelic('ink-quill')) return
+  inkQuillKillCount += count
+  while (inkQuillKillCount >= 5) {
+    inkQuillKillCount -= 5
+    const reduced = gameState.character.decreaseCandleMax(1)
+    if (reduced > 0) recordRelicActivation('ink-quill', '최대 콤보 게이지 -1')
+  }
+}
+
+/** 품격있는 대처: 직전 타격으로 피해를 입고 아직 살아남은 적 1장에게 추가 피해 1. */
+async function applyDignifiedResponseDamage(damagedIds: Set<string>): Promise<void> {
+  if (damagedIds.size === 0 || !gameState.character.hasRelic('graceful-response')) return
+  const aliveEnemyIds = new Set(
+    snapshotFieldCardPayloads()
+      .filter((p) => p.type === CardType.ENEMY)
+      .map((p) => p.cardId)
+  )
+  const candidates = [...damagedIds].filter((id) => aliveEnemyIds.has(id))
+  if (candidates.length === 0) return
+  const pick = candidates[Math.floor(Math.random() * candidates.length)]
+  const hit = gameState.damageEnemyById(pick, 1)
+  if (!hit) return
+  recordRelicActivation('graceful-response', '피해 입은 적 +1')
+  await boardRenderer.animateDamageNumbersById([{ cardId: hit.cardId, amount: hit.amount }])
+  if (hit.defeated) {
+    await boardRenderer.animateCardConsumeByIds([{ cardId: hit.cardId, type: CardType.ENEMY }], {
+      suppressBurstIds: new Set([hit.cardId]),
+    })
+    await onEnemiesDefeated(1, false)
   }
 }
 
@@ -647,16 +690,17 @@ async function tryResolveHopeRevive(): Promise<boolean> {
   return true
 }
 
-/** Golden Squirrel pays a small shop coin every five completed turns. */
+/** 별빛 랜턴(id: golden-squirrel)은 5턴마다 불빛 500을 흘려보낸다. */
 async function applyTurnStartRelics(): Promise<void> {
   if (!gameState.character.hasRelic('golden-squirrel')) return
   if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 5 !== 0) return
-  coins += 1
-  coinPulseKey++
-  recordCoinGain('황금 다람쥐', 1)
-  recordRelicActivation('golden-squirrel', '+1$')
-  await playResourceTrail({ kind: 'chain' }, 'coin', 1)
-  burstCoinGain()
+  // 불빛은 턴 배율 없이 고정 500을 더하고 점수 패널로 트레일/버스트를 띄운다.
+  score += 500
+  scorePulseKey++
+  pushActivityLogsInDisplayOrder([{ label: '별빛 랜턴', scoreDelta: 500, kind: 'score' }])
+  recordRelicActivation('golden-squirrel', '불빛 +500')
+  await playResourceTrail({ kind: 'chain' }, 'score', 1)
+  burstScoreGain()
 }
 
 /** basePrice는 Relics.ts 정의에서 읽는다. 실제 식은 -76~+104 비대칭 지터를 만들어 비원형 가격을 낸다. */
@@ -751,6 +795,19 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
     const before = snapshotPlayerRecovery()
     const beforeResources = snapshotPlayerResources()
     gameState.character.increaseMaxHealth(5)
+    await playPlayerGainTrails({ kind: 'center' }, beforeResources)
+    await applyBloodPackRecoveryTrigger(before)
+  }
+  if (id === 'first-candle') {
+    const before = snapshotPlayerRecovery()
+    const beforeResources = snapshotPlayerResources()
+    // 첫 양초: 최대 체력 +5 / 공격력 +1 / 불씨 +2 / 최대 손패 +2 / 최대 콤보 게이지 -1.
+    // 손패·콤보 게이지 상한은 수치 트레일이 없으므로 체력/불씨/공격력만 중앙 트레일로 보인다.
+    gameState.character.increaseMaxHealth(5)
+    gameState.character.applyDamageBoost(1)
+    gameState.character.gainEmber(2)
+    gameState.character.increaseHandMax(2)
+    gameState.character.decreaseCandleMax(1)
     await playPlayerGainTrails({ kind: 'center' }, beforeResources)
     await applyBloodPackRecoveryTrigger(before)
   }
@@ -1611,6 +1668,7 @@ function startGame(): void {
   scorePulseKey = 0
   coins = 0
   coinPulseKey = 0
+  inkQuillKillCount = 0
   nextActivityLogId = 1
   activityLogs = []
   shopOpen = false
@@ -2124,6 +2182,7 @@ async function applyHandSingle(
     boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))
   }
   await applyBloodPackRecoveryTrigger(beforeSingleRecovery)
+  await applyDignifiedResponseDamage(singleDamagedIds)
   // Append only the just-used card first. Recipes are resolved below after
   // a small delay so the previous card's effect visibly lands before the combo.
   if (usedDef) {
@@ -2159,7 +2218,7 @@ async function applyHandSingle(
     await boardRenderer.animateCardConsumeByIds(result.removedFieldCards, {
       suppressBurstIds: singleDamagedIds,
     })
-    await applyRedPotionEnemyDefeats(
+    await onEnemiesDefeated(
       result.removedFieldCards.filter((removed) => removed.type === CardType.ENEMY).length
     )
     await applyWaxCrowTreasureGains(
@@ -2239,6 +2298,7 @@ async function applyHandSingle(
       boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))
     }
     await applyBloodPackRecoveryTrigger(beforeRecipeRecovery)
+    await applyDignifiedResponseDamage(recipeDamagedIds)
     await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeRecipeFreeze))
     await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeRecipeFreeze))
 
@@ -2251,7 +2311,7 @@ async function applyHandSingle(
       await boardRenderer.animateCardConsumeByIds(recipeResult.removedFieldCards, {
         suppressBurstIds: recipeDamagedIds,
       })
-      await applyRedPotionEnemyDefeats(
+      await onEnemiesDefeated(
         recipeResult.removedFieldCards.filter((removed) => removed.type === CardType.ENEMY).length
       )
       await applyWaxCrowTreasureGains(
@@ -2627,7 +2687,14 @@ async function handleCardAction(e: Event): Promise<void> {
   }
 
   if (result.cardRemoved && card.type === CardType.ENEMY) {
-    await applyRedPotionEnemyDefeats(1)
+    await onEnemiesDefeated(1)
+  }
+  // 품격있는 대처: 직격으로 피해만 입고 살아남은 적 1장에게 추가 피해 1.
+  if (result.damageDealt && result.damageDealt > 0) {
+    const clickDamagedIds = new Set(
+      diffFieldHealthLosses(beforeActionHealth).map((loss) => loss.cardId)
+    )
+    await applyDignifiedResponseDamage(clickDamagedIds)
   }
 
   // Board action resets the chain so combos do not bleed across turns.
