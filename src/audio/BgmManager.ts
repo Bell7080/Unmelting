@@ -1,7 +1,7 @@
 /**
  * 배경음 매니저. 여러 트랙을 무작위 순서로 이어 재생한다.
  * - 트랙 사이는 끝 페이드아웃 ↔ 다음 시작 페이드인이 겹치는 크로스페이드로 잇는다.
- * - 첫 곡도 무작위, 다음 곡도 직전과 다른 트랙으로 무작위 선택한다.
+ * - 첫 곡도, 다음 곡도 순수 무작위로 고른다(같은 곡이 연달아 나올 수 있다).
  * - 메모리는 현재+다음 트랙 버퍼만 유지하고 나머지는 비운다(필요 시 재디코딩).
  *
  * 브라우저 자동재생 정책상 소리는 첫 사용자 입력 전까지 막히므로,
@@ -82,14 +82,6 @@ export class BgmManager {
     return Math.floor(Math.random() * this.urls.length)
   }
 
-  /** 직전 트랙과 다른 인덱스를 고른다(트랙이 하나뿐이면 그대로). */
-  private randomOtherIndex(exclude: number): number {
-    if (this.urls.length <= 1) return 0
-    let pick = exclude
-    while (pick === exclude) pick = this.randomIndex()
-    return pick
-  }
-
   /** AudioContext/마스터 게인을 1회 생성한다. 생성 가능 여부를 반환. */
   private ensureContext(): boolean {
     if (this.ctx) return true
@@ -163,8 +155,8 @@ export class BgmManager {
       gain.disconnect()
     }
 
-    // 다음 트랙은 직전과 다른 무작위 곡으로, 이 구간의 꼬리 페이드 지점에서 출발한다.
-    const nextIndex = this.randomOtherIndex(index)
+    // 다음 트랙은 순수 무작위(같은 곡 연속 허용), 이 구간의 꼬리 페이드 지점에서 출발한다.
+    const nextIndex = this.randomIndex()
     const nextAt = startAt + dur - fade
     void this.ensureBuffer(nextIndex).then((nextBuffer) => {
       // 현재 재생 중인 트랙은 꼬리 페이드가 끝날 때까지 필요하므로 함께 남긴다.
