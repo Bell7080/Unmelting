@@ -128,8 +128,8 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'graceful-response',
     name: '품격있는 대처',
     rarity: 'epic',
-    effect: '피해를 입힌 적 1장에게 피해 1',
-    flavor: '흐트러짐 없는 한 수가 상처 입은 적을 마저 갈무리한다.',
+    effect: '나에게 피해를 입힌 적에게 피해 1',
+    flavor: '받은 만큼 품위 있게 되돌려 주는 단정한 응수.',
     basePrice: 1000,
   },
 }

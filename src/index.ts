@@ -17,7 +17,7 @@
  */
 
 import { GameState } from '@core/GameState'
-import { TurnManager } from '@core/TurnManager'
+import { TurnManager, type EnemyHit } from '@core/TurnManager'
 import { BossEventController } from '@core/BossEvent'
 import {
   GameBoardRenderer,
@@ -641,26 +641,30 @@ function applyInkQuillKills(count: number): void {
   }
 }
 
-/** 품격있는 대처: 직전 타격으로 피해를 입고 아직 살아남은 적 1장에게 추가 피해 1. */
-async function applyDignifiedResponseDamage(damagedIds: Set<string>): Promise<void> {
-  if (damagedIds.size === 0 || !gameState.character.hasRelic('graceful-response')) return
-  const aliveEnemyIds = new Set(
-    snapshotFieldCardPayloads()
-      .filter((p) => p.type === CardType.ENEMY)
-      .map((p) => p.cardId)
-  )
-  const candidates = [...damagedIds].filter((id) => aliveEnemyIds.has(id))
-  if (candidates.length === 0) return
-  const pick = candidates[Math.floor(Math.random() * candidates.length)]
-  const hit = gameState.damageEnemyById(pick, 1)
-  if (!hit) return
-  recordRelicActivation('graceful-response', '피해 입은 적 +1')
-  await boardRenderer.animateDamageNumbersById([{ cardId: hit.cardId, amount: hit.amount }])
-  if (hit.defeated) {
-    await boardRenderer.animateCardConsumeByIds([{ cardId: hit.cardId, type: CardType.ENEMY }], {
-      suppressBurstIds: new Set([hit.cardId]),
-    })
-    await onEnemiesDefeated(1, false)
+/** 품격있는 대처: 나에게 피해를 입힌 적들에게 각각 피해 1로 반격한다.
+ *  적 페이즈(runEnemyPhase) 직후, 플레이어 피격 연출이 끝난 뒤 호출한다. */
+async function applyDignifiedRetaliation(hits: EnemyHit[]): Promise<void> {
+  if (gameState.isGameOver || !gameState.character.hasRelic('graceful-response')) return
+  // 실제로 피해를 입힌 적만(방패로 0이면 제외), 다중 레인 점유 적은 cardId로 중복 제거.
+  const attackerIds = [...new Set(hits.filter((h) => h.damage > 0).map((h) => h.cardId))]
+  if (attackerIds.length === 0) return
+  const damaged: { cardId: string; amount: number }[] = []
+  const killedIds: string[] = []
+  for (const id of attackerIds) {
+    const hit = gameState.damageEnemyById(id, 1)
+    if (!hit) continue
+    damaged.push({ cardId: hit.cardId, amount: hit.amount })
+    if (hit.defeated) killedIds.push(hit.cardId)
+  }
+  if (damaged.length === 0) return
+  recordRelicActivation('graceful-response', `반격 피해 1 (${damaged.length}체)`)
+  await boardRenderer.animateDamageNumbersById(damaged)
+  if (killedIds.length > 0) {
+    await boardRenderer.animateCardConsumeByIds(
+      killedIds.map((cardId) => ({ cardId, type: CardType.ENEMY })),
+      { suppressBurstIds: new Set(killedIds) }
+    )
+    await onEnemiesDefeated(killedIds.length, false)
   }
 }
 
@@ -2188,7 +2192,6 @@ async function applyHandSingle(
     boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))
   }
   await applyBloodPackRecoveryTrigger(beforeSingleRecovery)
-  await applyDignifiedResponseDamage(singleDamagedIds)
   // Append only the just-used card first. Recipes are resolved below after
   // a small delay so the previous card's effect visibly lands before the combo.
   if (usedDef) {
@@ -2304,7 +2307,6 @@ async function applyHandSingle(
       boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))
     }
     await applyBloodPackRecoveryTrigger(beforeRecipeRecovery)
-    await applyDignifiedResponseDamage(recipeDamagedIds)
     await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeRecipeFreeze))
     await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeRecipeFreeze))
 
@@ -2486,6 +2488,8 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
       totalDamage
     )
   }
+  // 품격있는 대처: 피격 연출 뒤 나를 때린 적들에게 반격.
+  await applyDignifiedRetaliation(hits)
   if (gameState.isGameOver) {
     if (await tryResolveHopeRevive()) {
       // Hope consumes the fatal event and starts a fresh player decision beat;
@@ -2569,6 +2573,8 @@ async function handleCardAction(e: Event): Promise<void> {
         document.querySelector<HTMLElement>('.player-card'),
         dmg
       )
+      // 품격있는 대처: 먼저 때린 적들에게 반격(플레이어가 살아남았을 때만 동작).
+      await applyDignifiedRetaliation(hits)
       if (!gameState.character.isAlive() || gameState.isGameOver) {
         if (await tryResolveHopeRevive()) {
           // A fatal first strike is fully absorbed by Hope; resume on the
@@ -2694,13 +2700,6 @@ async function handleCardAction(e: Event): Promise<void> {
 
   if (result.cardRemoved && card.type === CardType.ENEMY) {
     await onEnemiesDefeated(1)
-  }
-  // 품격있는 대처: 직격으로 피해만 입고 살아남은 적 1장에게 추가 피해 1.
-  if (result.damageDealt && result.damageDealt > 0) {
-    const clickDamagedIds = new Set(
-      diffFieldHealthLosses(beforeActionHealth).map((loss) => loss.cardId)
-    )
-    await applyDignifiedResponseDamage(clickDamagedIds)
   }
 
   // Board action resets the chain so combos do not bleed across turns.

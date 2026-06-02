@@ -261,7 +261,7 @@ export class BossEventController {
       }
       if (state.def.specialEnemyKind === 'waxKnight') {
         // 불씨 기사단장은 기본 타격 뒤 플레이어 손패처럼 2장의 효과 카드를 연속 사용한다.
-        await this.resolveWaxKnightCardTurn(card.id)
+        if (await this.resolveWaxKnightCardTurn(card.id)) return
       } else {
         character.takeDamage(card.getDamage())
         await this.br.animateEnemyAttacks([
@@ -270,6 +270,8 @@ export class BossEventController {
         await this.br.animateDamageFlash()
         this.inject.recordNotice(`보스 반격! 플레이어가 ${card.getDamage()} 피해를 받았다`, 'hurt')
         this.inject.render()
+        // 품격있는 대처: 보스의 반격에 되받아친다.
+        if (await this.retaliateGracefulResponse([card.id])) return
       }
       if (!this.gs.character.isAlive()) {
         await this.inject.handlePlayerDeath()
@@ -538,8 +540,9 @@ export class BossEventController {
 
   // ---- waxKnight 전용 카드 사용 메커니즘 ------------------------------------
 
-  /** 불씨 기사단장의 3턴 주기 행동: 기본 타격 + 랜덤 카드 2장 사용. */
-  private async resolveWaxKnightCardTurn(bossCardId: string): Promise<void> {
+  /** 불씨 기사단장의 3턴 주기 행동: 기본 타격 + 랜덤 카드 2장 사용.
+   *  품격있는 대처 반격으로 보스가 쓰러지면 true를 반환한다. */
+  private async resolveWaxKnightCardTurn(bossCardId: string): Promise<boolean> {
     const state = this.eventState!
     const character = this.gs.character
 
@@ -567,9 +570,11 @@ export class BossEventController {
         this.inject.recordNotice('불씨 기사단장이 손패 사용: 플레이어에게 2 피해', 'hurt')
       }
       this.inject.render()
-      if (!character.isAlive()) return
+      if (!character.isAlive()) return false
       await new Promise((r) => window.setTimeout(r, 180))
     }
+    // 품격있는 대처: 기사단장의 한 턴 타격에 한 번 되받아친다.
+    return await this.retaliateGracefulResponse([bossCardId])
   }
 
   // ---- waxSculptor 전용 페이즈 메커니즘 ------------------------------------
@@ -646,28 +651,7 @@ export class BossEventController {
     await this.br.animateDamageNumbersById(dealt > 0 ? [{ cardId: card.id, amount: dealt }] : [])
 
     if (card.getHealth() <= 0) {
-      const defeatedTile = this.br.findCardElement(card.id)
-      const defeatedRect = defeatedTile?.getBoundingClientRect()
-      await this.br.animateCardConsume(card)
-      // 사망한 소환 적은 보상 손패 렌더보다 먼저 모델에서 제거한다.
-      // 이전 흐름은 손패 슬롯을 마운트하려고 죽은 적을 한 번 더 렌더해
-      // 우측 하단에서 다시 나타나는 것처럼 보이는 잔상을 만들었다.
-      for (let i = 0; i < 3; i++) {
-        if (this.gs.lanes[i].getCardAtDistance(0) === card) this.gs.lanes[i].setCardAtDistance(0, null)
-      }
-      state.summonedEnemyIds.delete(card.id)
-
-      const dropNames: string[] = []
-      for (let k = 0; k < card.defeatDropCount; k++) {
-        const drop = DropSystem.generateDrop()
-        if (this.gs.character.addHandCard(drop)) dropNames.push(getHandCardDef(drop.defId).name)
-      }
-      if (dropNames.length > 0) {
-        this.inject.render()
-        this.inject.recordNotice(`${card.name} 처치! 손패: ${dropNames.join(', ')}`, 'win')
-        // 출발점은 제거 직전 rect를 사용해 DOM 재렌더 없이도 보상 방향을 유지한다.
-        if (defeatedRect) await this.br.animateResourceTrailFromRect(defeatedRect, 'hand', dropNames.length, 'hand-recovery')
-      }
+      await this.defeatSummonedEnemy(card)
     }
 
     // 보스 턴 집계 — 불씨 감소 + 카운트다운 + HP 바 갱신
@@ -694,6 +678,8 @@ export class BossEventController {
         await this.inject.handlePlayerDeath()
         return
       }
+      // 품격있는 대처: 나를 때린 소환 적들에게 각 1 반격.
+      await this.retaliateGracefulResponse(aliveEnemies.map((e) => e.id))
     }
 
     // 3턴 주기 도달 + 소환 적 생존 → 조각사가 후방에서 야비하게 돌진 타격
@@ -707,6 +693,8 @@ export class BossEventController {
         await this.inject.handlePlayerDeath()
         return
       }
+      // 품격있는 대처: 후방에서 강타한 조각사에게 되받아친다.
+      if (await this.retaliateGracefulResponse([state.card.id])) return
     }
 
     if (state.summonedEnemyIds.size > 0) {
@@ -714,6 +702,68 @@ export class BossEventController {
       return
     }
     await this.returnSculptorToFront()
+  }
+
+  /** 소환 적 처치 처리: 소멸 연출 → 모델 제거 → 보상 손패 드롭. 클릭/반격 공통. */
+  private async defeatSummonedEnemy(card: Card): Promise<void> {
+    const state = this.eventState
+    if (!state) return
+    const defeatedTile = this.br.findCardElement(card.id)
+    const defeatedRect = defeatedTile?.getBoundingClientRect()
+    await this.br.animateCardConsume(card)
+    // 사망한 소환 적은 보상 손패 렌더보다 먼저 모델에서 제거해 재등장 잔상을 막는다.
+    for (let i = 0; i < 3; i++) {
+      if (this.gs.lanes[i].getCardAtDistance(0) === card) this.gs.lanes[i].setCardAtDistance(0, null)
+    }
+    state.summonedEnemyIds.delete(card.id)
+
+    const dropNames: string[] = []
+    for (let k = 0; k < card.defeatDropCount; k++) {
+      const drop = DropSystem.generateDrop()
+      if (this.gs.character.addHandCard(drop)) dropNames.push(getHandCardDef(drop.defId).name)
+    }
+    if (dropNames.length > 0) {
+      this.inject.render()
+      this.inject.recordNotice(`${card.name} 처치! 손패: ${dropNames.join(', ')}`, 'win')
+      if (defeatedRect) await this.br.animateResourceTrailFromRect(defeatedRect, 'hand', dropNames.length, 'hand-recovery')
+    }
+  }
+
+  /** 품격있는 대처(반격): 보스 전투에서 나를 때린 보스/소환 적에게 각 1 피해.
+   *  보스가 반격으로 쓰러지면 처치 흐름을 돌리고 true를 반환한다(호출부는 즉시 return). */
+  private async retaliateGracefulResponse(attackerIds: string[]): Promise<boolean> {
+    const state = this.eventState
+    if (!state || this.gs.character.health <= 0) return false
+    if (!this.gs.character.hasRelic('graceful-response')) return false
+    const damaged: { cardId: string; amount: number }[] = []
+    const killedSummons: Card[] = []
+    let bossHit = false
+    for (const id of [...new Set(attackerIds)]) {
+      if (id === state.card.id) {
+        // 보스는 밀랍 방패와 무관한 순수 반사 피해 1을 HP에 직접 입힌다.
+        if (state.card.getHealth() <= 0) continue
+        state.card.takeDamage(1)
+        bossHit = true
+        damaged.push({ cardId: id, amount: 1 })
+      } else {
+        const card = this.getAliveSummonedCards().find((c) => c.id === id)
+        if (!card) continue
+        card.takeDamage(1)
+        damaged.push({ cardId: id, amount: 1 })
+        if (card.getHealth() <= 0) killedSummons.push(card)
+      }
+    }
+    if (damaged.length === 0) return false
+    this.inject.recordNotice(`품격있는 대처: 반격 피해 1 (${damaged.length}체)`, 'info')
+    await this.br.animateDamageNumbersById(damaged)
+    if (bossHit) this.br.playHudCounterFeedback('boss-hp', Math.max(0, state.card.getHealth()))
+    for (const card of killedSummons) await this.defeatSummonedEnemy(card)
+    this.inject.render()
+    if (bossHit && state.card.getHealth() <= 0) {
+      await this.handleDefeated()
+      return true
+    }
+    return false
   }
 
   /** 현재 dist-0에서 살아있는 소환 적 카드 목록 (레인 순서 유지) */
