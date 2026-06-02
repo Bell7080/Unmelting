@@ -1027,13 +1027,10 @@ export class GameBoardRenderer {
     `
   }
 
-  /** 유물 효과 본문에서 '불빛' 표기를 다이아(✦) 아이콘으로 치환한 HTML을 만든다.
+  /** 유물 효과 본문에서 '불빛' 표기를 무료 카드(✦300)와 같은 ✦ 글리프로 치환한다.
    *  title/aria/textContent 등 평문 컨텍스트에서는 def.effect 원문(불빛 단어)을 그대로 둔다. */
   private relicEffectHtml(effect: string): string {
-    return escapeHtml(effect).replace(
-      /불빛/g,
-      `<span class="relic-effect-light">${sparkleIcon()}</span>`
-    )
+    return escapeHtml(effect).replace(/불빛/g, '✦')
   }
 
   /** Owned relics reuse the shop card reading structure without the price tag.

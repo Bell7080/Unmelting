@@ -31,6 +31,19 @@ export interface RelicDefinition {
   basePrice: number
   /** Prevents this relic from appearing again after its one-shot removal. */
   banWhenRemoved?: boolean
+  /** 상점 등장 가중치 개별 지정값. 없으면 등급 기본값(RELIC_BASE_DRAW_WEIGHTS)을 쓴다.
+   *  같은 등급이라도 유물마다 다른 등장 빈도를 주고 싶을 때 사용한다. */
+  weight?: number
+}
+
+/** 유물 상점 등장 가중치의 등급별 기본값. 개별 유물의 weight가 우선한다.
+ *  (팩 추첨이 쓰는 공통 RARITY_DRAW_WEIGHTS와 분리해 유물에만 적용한다.) */
+export const RELIC_BASE_DRAW_WEIGHTS: Record<CardRarity, number> = {
+  common: 10,
+  rare: 5,
+  epic: 2,
+  unique: 1,
+  legendary: 1,
 }
 
 /** Central relic table. Add future shop inventory here first. */
@@ -57,7 +70,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
   'carving-knife': {
     id: 'carving-knife',
     name: '조각칼',
-    rarity: 'common',
+    rarity: 'rare',
     effect: '공격력 1 증가',
     flavor: '어둠을 얇게 깎아낼 수 있을 것 같은 작은 칼.',
     basePrice: 800,
@@ -73,7 +86,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
   lifeline: {
     id: 'lifeline',
     name: '생명선',
-    rarity: 'rare',
+    rarity: 'common',
     effect: '최대 체력 5 증가',
     flavor: '끊어질 듯 이어지는 따뜻한 실 한 가닥.',
     basePrice: 880,
@@ -126,4 +139,10 @@ export const RELIC_IDS = Object.keys(RELIC_DEFINITIONS) as RelicId[]
 /** Read a relic definition with a precise id type. */
 export function getRelicDef(id: RelicId): RelicDefinition {
   return RELIC_DEFINITIONS[id]
+}
+
+/** 상점 등장 가중치. 유물별 weight 지정이 있으면 우선, 없으면 등급 기본값을 쓴다. */
+export function relicDrawWeight(id: RelicId): number {
+  const def = RELIC_DEFINITIONS[id]
+  return def.weight ?? RELIC_BASE_DRAW_WEIGHTS[def.rarity] ?? 1
 }
