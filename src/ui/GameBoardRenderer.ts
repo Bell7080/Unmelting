@@ -832,7 +832,9 @@ export class GameBoardRenderer {
           : ''
 
     // 보스 보상 카드는 3-wide span이어도 카드 자체 이름을 그대로 표시한다.
-    const groupName = span > 1 && !card.isSpecialEnemy &&
+    // 함정은 합쳐질 때 Card가 도감과 동일한 이름(촛농 거미집/밀랍 거미굴, 번식 포자군/
+    // 포자 군락)을 이미 갖고 있으므로 일반 라벨로 덮지 않고 card.name을 그대로 쓴다.
+    const groupName = span > 1 && !card.isSpecialEnemy && card.type !== CardType.TRAP &&
       card.treasureKind !== 'starlight' && !card.id.startsWith('boss-reward-')
       ? this.groupName(card.type, span)
       : card.name
@@ -905,7 +907,7 @@ export class GameBoardRenderer {
   private groupName(type: CardType, span: number): string {
     if (span <= 1) return ''
     if (type === CardType.ENEMY) return span === 2 ? '적 무리' : '거대 적 무리'
-    if (type === CardType.TRAP) return span === 2 ? '함정 무리' : '거대 함정'
+    // 함정은 호출부에서 card.name(도감명)을 직접 쓰므로 여기서 라벨을 만들지 않는다.
     if (type === CardType.TREASURE) return span === 2 ? '적당한 상자' : '큰 상자'
     if (type === CardType.FLOWER) return '꽃밭'
     return ''
