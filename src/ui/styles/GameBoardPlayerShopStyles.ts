@@ -1182,16 +1182,6 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   line-height: 1.32;
   font-size: var(--font-size-sm);
 }
-/* 별빛 랜턴 등 불빛 보상 표기에 쓰는 다이아(✦) 아이콘 — 점수 패널과 같은 따뜻한 금색. */
-.relic-effect-light {
-  color: rgba(255, 211, 92, 0.96);
-  margin: 0 0.04em;
-}
-.relic-effect-light .icon {
-  width: 0.92em;
-  height: 0.92em;
-  vertical-align: -0.1em;
-}
 .shop-relic-flavor {
   margin: 0;
   color: rgba(232, 214, 180, 0.62);

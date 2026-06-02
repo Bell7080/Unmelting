@@ -342,18 +342,6 @@ export const GAME_BOARD_RAIL_STYLES = `
 .card-stats .stat-value { font-variant-numeric: tabular-nums; }
 .card-stats .stat.hp { color: #ffb3a1; }
 .card-stats .stat.atk { color: #ffd58a; }
-/* Trap "점화 / 폭발 / 즉사" status word: flat warm-ink chip, matched to
-   the bomb/spore badges instead of a bright red pill. */
-.card-stats .stat.trap-state {
-  color: #ffd9c3;
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  padding: 1px 6px;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 150, 120, 0.42);
-  background: rgba(76, 22, 18, 0.62);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
-}
 .card-stats.danger {
   color: #fff;
   background: var(--color-enemy);

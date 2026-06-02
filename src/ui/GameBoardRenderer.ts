@@ -781,8 +781,13 @@ export class GameBoardRenderer {
       // only exceptions are the bomb's countdown state and the 3-trap death
       // gate, which are status words rather than numeric damage.
       if (card.trapKind === 'bomb') {
-        const bombText = card.isBombArmed ? '점화' : '폭발'
-        stats = `<div class="card-stats"><span class="stat trap-state">${bombText}</span></div>`
+        // 점화 상태는 좌상단 배지로만 표기하고, 중앙 하단은 다른 함정과 동일하게
+        // 검+폭발 피해(5, 도감 표기와 일치)를 보여 준다.
+        stats = `
+          <div class="card-stats">
+            <span class="stat atk">${swordIcon()}<span class="stat-value">5</span></span>
+          </div>
+        `
       } else {
         // Every non-bomb trap (including the 3-cell "instant death" gate
         // and spore) uses the same flat sword+number readout as enemies.
@@ -1027,13 +1032,10 @@ export class GameBoardRenderer {
     `
   }
 
-  /** 유물 효과 본문에서 '불빛' 표기를 다이아(✦) 아이콘으로 치환한 HTML을 만든다.
+  /** 유물 효과 본문에서 '불빛' 표기를 무료 카드(✦300)와 같은 ✦ 글리프로 치환한다.
    *  title/aria/textContent 등 평문 컨텍스트에서는 def.effect 원문(불빛 단어)을 그대로 둔다. */
   private relicEffectHtml(effect: string): string {
-    return escapeHtml(effect).replace(
-      /불빛/g,
-      `<span class="relic-effect-light">${sparkleIcon()}</span>`
-    )
+    return escapeHtml(effect).replace(/불빛/g, '✦')
   }
 
   /** Owned relics reuse the shop card reading structure without the price tag.

@@ -43,11 +43,10 @@ import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { CandleMode } from '@entities/Character'
 import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS } from '@data/HandCards'
-import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
+import { getRelicDef, relicDrawWeight, RELIC_IDS, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
 import { COMBO_TRIGGER_DELAY_MS, GAUGE_TRIGGER_DELAY_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
 import {
-  RARITY_DRAW_WEIGHTS,
   sampleWeightedWithoutReplacement,
   sampleWithoutReplacement,
 } from '@core/Sampling'
@@ -735,10 +734,9 @@ function rollShopOffers(excludeIds: string[] = []): ShopOfferView[] {
     ? sourcePool.filter((id) => !excludeSet.has(id))
     : sourcePool
   const effectivePool = filteredPool.length >= 3 ? filteredPool : sourcePool
-  // common 등급이 자주, legendary가 드물게 등장하도록 등급별 가중치를 적용한다.
+  // 등급 기본 가중치(common 자주, legendary 드물게)에 유물별 지정 weight를 더해 적용한다.
   const weightedPool = effectivePool.flatMap((relicId) => {
-    const rarity = getRelicDef(relicId).rarity
-    const weight = RARITY_DRAW_WEIGHTS[rarity] ?? 1
+    const weight = relicDrawWeight(relicId)
     return Array.from({ length: weight }, () => relicId)
   })
   return weightedPool
