@@ -564,32 +564,28 @@ export class CardSpawner {
   }
 
   /** 미믹·식인꽃처럼 고정/꽃값 기반 특수 적은 고층에서 일반 적보다 약해진다.
-   *  진행 층 구간별 추가 스탯 + 시련 보너스로 일반 적 곡선에 맞춘다. */
-  private specialEnemyStatBonus(): { hp: number; atk: number } {
-    const t = this.progressionTurn
-    const floor =
-      t < 30 ? { hp: 0, atk: 0 } :
-      t < 60 ? { hp: 3, atk: 2 } :
-      t < 90 ? { hp: 6, atk: 4 } :
-      { hp: 10, atk: 7 }
+   *  20층 단위로 초기 스탯에 배수(×1, ×2, ×3 …)를 곱해 일반 적 곡선에 맞춘다.
+   *  예) 미믹 4/2 → 8/4 → 12/6, 2칸 꽃 2/2 → 4/4 → 6/6. 시련 보너스는 곱한 뒤 더한다. */
+  private scaleSpecialEnemyStats(baseHp: number, baseAtk: number): { hp: number; atk: number } {
+    const tier = Math.floor(this.progressionTurn / 20) + 1
     return {
-      hp: floor.hp + this.trialEnemyHpBonus,
-      atk: floor.atk + this.trialEnemyAtkBonus,
+      hp: baseHp * tier + this.trialEnemyHpBonus,
+      atk: baseAtk * tier + this.trialEnemyAtkBonus,
     }
   }
 
   /** Monster flower inherits threat from the flower value that was gambled. */
   spawnMonsterFlower(power: number = 1): Card {
     const safePower = Math.max(1, power)
-    const bonus = this.specialEnemyStatBonus()
+    const scaled = this.scaleSpecialEnemyStats(safePower, safePower)
     this.spawnSerial++
     return new Card(
       `monster-flower-${this.spawnSerial}-${Math.random()}`,
       CardType.ENEMY,
       '괴물꽃',
       `Withered from a value-${safePower} flower`,
-      safePower + bonus.hp,
-      safePower + bonus.atk,
+      scaled.hp,
+      scaled.atk,
       {
         isSpecialEnemy: true,
         specialEnemyKind: 'monsterFlower',
@@ -610,15 +606,15 @@ export class CardSpawner {
   spawnMimic(span: number = 1): Card {
     const safeSpan = Math.max(1, Math.min(3, span))
     const stats = MIMIC_BY_SPAN[safeSpan]
-    const bonus = this.specialEnemyStatBonus()
+    const scaled = this.scaleSpecialEnemyStats(stats.health, stats.attack)
     this.spawnSerial++
     const mimic = new Card(
       `mimic-${this.spawnSerial}-${Math.random()}`,
       CardType.ENEMY,
       '미믹',
       `Was a ${safeSpan}-lane treasure once`,
-      stats.health + bonus.hp,
-      stats.attack + bonus.atk,
+      scaled.hp,
+      scaled.atk,
       {
         isSpecialEnemy: true,
         specialEnemyKind: 'mimic',
