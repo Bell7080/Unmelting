@@ -53,7 +53,7 @@ export interface BossDef {
   introBubbleMs: number
   /** 플레이어 반응 말풍선 대기 ms */
   playerBubbleMs: number
-  /** 인트로 오버레이에 표시되는 특징 한 줄 */
+  /** 인트로 오버레이에 표시되는 특징 문구. 줄바꿈을 넣으면 인트로 카드에서 3줄 목록으로 표시된다. */
   trait: string
   /** 인트로 오버레이 상단 수식어 */
   kicker: string
@@ -241,7 +241,11 @@ export class BossEventController {
       // 각 점 사이 침묵을 길게 읽히게 하기 위해 일반 타자기 시간보다 넉넉히 둔다.
       introBubbleMs: 3600,
       playerBubbleMs: 2500,
-      trait: '1페이지 손패 소각, 2페이지 보스 손패 4장, 3페이지 강화 소환.',
+      trait: [
+        '첫 번째 : 체력이 10 줄어드는 고비마다 손패 2장을 잿빛 불씨로 소각한다.',
+        '두 번째 : 반격 주기마다 보스 손패 4장을 펼치고, 겹친 효과가 있으면 추가 카드로 한 번 더 쓴다.',
+        '세 번째 : 후방으로 물러나 강화된 종복을 부르며, 이전 페이지 능력들도 끝까지 남는다.',
+      ].join('\n'),
       kicker: '잿빛 굴레의 주인',
     }
     await this.runBossEvent(def)
@@ -293,10 +297,16 @@ export class BossEventController {
 
     if (state.turn % state.def.attackInterval === 0) {
       if (state.def.specialEnemyKind === 'waxWitch') {
-        // 100F는 페이지별로 공격 주기 행동이 바뀐다. 2페이지는 기사단장식 카드 4장, 3페이지는 조각사식 후퇴 소환.
-        if (state.witchPage === 2) {
+        // 100F 페이지 능력은 해금 뒤 사라지지 않는다.
+        // 2페이지부터는 보스 손패 4장 콤보가 계속 발동하고, 3페이지에서는 그 뒤에 강화 소환까지 이어진다.
+        if (state.witchPage >= 2) {
           if (await this.resolveWaxWitchPageTwoTurn(card.id)) return
-        } else if (state.witchPage === 3) {
+          if (!this.gs.character.isAlive()) {
+            await this.inject.handlePlayerDeath()
+            return
+          }
+        }
+        if (state.witchPage === 3) {
           await this.performWitchSummonToBack()
           this.inject.setInputLocked(false)
           return
@@ -334,6 +344,10 @@ export class BossEventController {
   async applyPostHandEffect(): Promise<void> {
     if (!this.eventState) return
     await this.consumeHandGiftThresholds(this.eventState.card.id)
+    if (this.eventState.card.getHealth() <= 0) {
+      await this.handleDefeated()
+      return
+    }
     if (await this.resolveWaxWitchAfterDamage(null)) return
     if (this.eventState.card.getHealth() <= 0) {
       await this.handleDefeated()
@@ -621,11 +635,14 @@ export class BossEventController {
     if (!state || state.def.specialEnemyKind !== 'waxWitch') return false
     const hp = state.card.getHealth()
 
+    // 1페이지 소각 능력은 한 번 열리면 이후 페이지에서도 남는다.
+    // nextWitchHandBurnAt은 단조 감소하므로 회복 후 다시 내려와도 같은 HP 고비 이벤트가 재발하지 않는다.
+    while (state.nextWitchHandBurnAt > 0 && hp <= state.nextWitchHandBurnAt) {
+      await this.burnRandomHandCardsFromWitch(state.card.id)
+      state.nextWitchHandBurnAt -= 10
+    }
+
     if (state.witchPage === 1) {
-      while (state.nextWitchHandBurnAt > 140 && hp <= state.nextWitchHandBurnAt) {
-        await this.burnRandomHandCardsFromWitch(state.card.id)
-        state.nextWitchHandBurnAt -= 10
-      }
       if (hp <= 140) {
         // 페이지 경계는 초과 피해를 버리고 정확히 140에서 멈춘다.
         if (state.card.health < 140) state.card.health = 140
@@ -678,29 +695,25 @@ export class BossEventController {
     })
     const bonusEffects = (['shield', 'heal', 'strike'] as WaxKnightCardEffect[])
       .filter((effect) => effects.filter((v) => v === effect).length >= 2)
-    const sequence = [...effects, ...bonusEffects]
-
-    for (const effect of sequence) {
+    const applyWitchCardEffect = async (effect: WaxKnightCardEffect): Promise<void> => {
       if (effect === 'shield') {
         state.bossShield += amount
         this.syncBossShieldToCard()
-        await this.br.animateWaxKnightCardEffect(bossCardId, 'shield', amount)
         this.inject.recordNotice(`녹지 않는 마녀가 손패 사용: 방패 +${amount}`, 'info')
       } else if (effect === 'heal') {
+        // 페이지 경계는 최초 하향 돌파 이벤트만 막고, 회복은 현재 페이지를 되돌리지 않는다.
         const healed = state.card.healEnemyLike(amount)
-        if (state.card.health > 140) state.card.health = 140
-        await this.br.animateWaxKnightCardEffect(bossCardId, 'heal', amount)
         this.inject.recordNotice(`녹지 않는 마녀가 손패 사용: 체력 +${healed}`, 'info')
       } else {
         character.takeDamage(amount)
-        await this.br.animateWaxKnightCardEffect(bossCardId, 'strike', amount)
         await this.br.animateDamageFlash()
         this.inject.recordNotice(`녹지 않는 마녀가 손패 사용: 플레이어에게 ${amount} 피해`, 'hurt')
       }
       this.inject.render()
-      if (!character.isAlive()) return false
-      await new Promise((r) => window.setTimeout(r, 150))
     }
+
+    await this.br.animateWaxWitchHandCombo(bossCardId, effects, bonusEffects, amount, applyWitchCardEffect)
+    if (!character.isAlive()) return false
 
     character.takeDamage(state.def.attack)
     await this.br.animateEnemyAttacks([
@@ -824,7 +837,7 @@ export class BossEventController {
     state.sculptorStartRow = 1
     state.summonedEnemyIds.clear()
 
-    // 최종 보스 소환수는 90F 후기 적 풀을 기반으로 HP+5/ATK+3 버프를 받은 독립 개체다.
+    // 최종 보스 소환수는 90F 후기 적 풀을 기반으로 HP+10/ATK+3 버프를 받은 독립 개체다.
     const pool = ENEMY_DEFINITIONS.slice(12, 18)
     for (let i = 0; i < 3; i++) {
       const enemyDef = pool[Math.floor(Math.random() * pool.length)]
@@ -833,7 +846,7 @@ export class BossEventController {
         CardType.ENEMY,
         enemyDef.name,
         enemyDef.description,
-        (enemyDef.healthOrDamage ?? 1) + 5,
+        (enemyDef.healthOrDamage ?? 1) + 10,
         (enemyDef.attack ?? 1) + 3,
         { enemySpriteId: enemyDef.enemySpriteId, enemyPower: (enemyDef.enemyPower ?? 0) + 100 },
       )
