@@ -714,12 +714,11 @@ async function applyTurnStartRelics(): Promise<void> {
   burstScoreGain()
 }
 
-/** 상점 가격(불빛) 인플레이션 배수. 첫 상점인 10층을 기본 1배로 잡고, 유저 불빛 수입
- *  인플레이션(getTurnScoreMultiplier)과 같은 0.015/턴 선형으로 완만히 증가한다.
- *  (예: 30층 ≈1.3배, 60층 ≈1.75배, 90층 ≈2.2배) */
+/** 상점 가격(불빛) 인플레이션 배수. 첫 상점인 10층을 기본 1배로 잡고, 0.02/턴 선형으로
+ *  증가한다. (예: 30층 ≈1.4배, 60층 ≈2배, 90층 ≈2.6배) */
 function getShopPriceMultiplier(): number {
   const turn = gameState.getCurrentTurn()
-  return 1 + Math.max(0, turn - 10) * 0.015
+  return 1 + Math.max(0, turn - 10) * 0.02
 }
 
 /** basePrice는 Relics.ts 정의에서 읽는다. 실제 식은 -76~+104 비대칭 지터를 만들어 비원형 가격을 낸다.
