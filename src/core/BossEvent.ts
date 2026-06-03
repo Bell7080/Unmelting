@@ -94,6 +94,8 @@ export interface BossInjected {
   /** 체인 타임라인을 비우고 배너를 갱신 — 보스 보상 단계 진입 시 잔존 전투 체인 제거 */
   clearChainTimeline: () => void
   recordNotice: (msg: string, kind: 'info' | 'win' | 'hurt') => void
+  /** 변칙 유물: 누적 피해 10마다 불씨 +1 (보스 피격 직후 호출) */
+  applyAnomalyHealthLoss: () => void
   /** 보스 격파 후 시련 오버레이를 열고 완료까지 대기 */
   openTrialOverlayForced: () => Promise<void>
   /** 유물 구매 즉발 효과 적용 */
@@ -272,6 +274,7 @@ export class BossEventController {
         await this.br.animateDamageFlash()
         this.inject.recordNotice(`보스 반격! 플레이어가 ${card.getDamage()} 피해를 받았다`, 'hurt')
         this.inject.render()
+        this.inject.applyAnomalyHealthLoss()
         // 품격있는 대처: 보스의 반격에 되받아친다.
         if (await this.retaliateGracefulResponse([card.id])) return
       }
@@ -576,6 +579,8 @@ export class BossEventController {
       if (!character.isAlive()) return false
       await new Promise((r) => window.setTimeout(r, 180))
     }
+    // 변칙: 기사단장 한 턴에 잃은 체력 10마다 불씨 +1.
+    this.inject.applyAnomalyHealthLoss()
     // 품격있는 대처: 기사단장의 한 턴 타격에 한 번 되받아친다.
     return await this.retaliateGracefulResponse([bossCardId])
   }
@@ -682,6 +687,7 @@ export class BossEventController {
         await this.inject.handlePlayerDeath()
         return
       }
+      this.inject.applyAnomalyHealthLoss()
       // 품격있는 대처: 나를 때린 소환 적들에게 각 1 반격.
       await this.retaliateGracefulResponse(aliveEnemies.map((e) => e.id))
     }
@@ -697,6 +703,7 @@ export class BossEventController {
         await this.inject.handlePlayerDeath()
         return
       }
+      this.inject.applyAnomalyHealthLoss()
       // 품격있는 대처: 후방에서 강타한 조각사에게 되받아친다.
       if (await this.retaliateGracefulResponse([state.card.id])) return
     }

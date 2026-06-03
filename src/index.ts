@@ -256,14 +256,15 @@ const bossController = new BossEventController(
   gameState, turnManager, boardRenderer, bossBubble, speechBubble, runCardPool, SpriteUrls,
   {
     setInputLocked: (v) => { inputLocked = v },
-    addOneCoin: () => { coins += 1; coinPulseKey++; boardRenderer.playCoinGainFeedback(coins, coinPulseKey) },
+    addOneCoin: () => { coins += 1; coinPulseKey++; boardRenderer.playCoinGainFeedback(coins, coinPulseKey); applyBlindFaithCoins(1) },
     render: () => render(),
     clearChainTimeline: () => { clearChainTimeline(); boardRenderer.refreshChainBanner(buildChainHints()) },
     recordNotice: (msg, kind) => recordNotice(msg, kind),
+    applyAnomalyHealthLoss: () => applyAnomalyHealthLoss(),
     openTrialOverlayForced: () => openTrialOverlayForced(),
     applyRelicPurchaseEffect: (id) => applyRelicPurchaseEffect(id),
     handlePlayerDeath: async () => {
-      if (await tryResolveHopeRevive()) return true
+      if (await tryResolveSurvivalRelics()) return true
       gameState.endGame('character_defeated')
       finishTurn()
       return false
@@ -627,6 +628,59 @@ async function onEnemiesDefeated(count: number, allowBloodPack = true): Promise<
   if (count <= 0) return
   await applyRedPotionEnemyDefeats(count, allowBloodPack)
   applyInkQuillKills(count)
+  applyAmbitionKills(count)
+}
+
+/** 야망: 적 10처치마다 불빛을 25씩 늘어나며(25→50→75…) 획득한다. 누적 보너스는 런 동안 유지. */
+let ambitionKillCount = 0
+let ambitionBonus = 0
+function applyAmbitionKills(count: number): void {
+  if (count <= 0 || !gameState.character.hasRelic('ambition')) return
+  ambitionKillCount += count
+  while (ambitionKillCount >= 10) {
+    ambitionKillCount -= 10
+    ambitionBonus += 25
+    const gained = gainFixedLight('야망', ambitionBonus)
+    recordRelicActivation('ambition', `불빛 +${gained}`)
+    void playResourceTrail({ kind: 'chain' }, 'score', 1)
+    burstScoreGain()
+  }
+}
+
+/** 정직: 손패 5장 사용마다 불빛 50 획득. 사용 수는 런 동안 누적. */
+let honestyHandUseCount = 0
+function applyHonestyHandUse(count: number): void {
+  if (count <= 0 || !gameState.character.hasRelic('honesty')) return
+  honestyHandUseCount += count
+  while (honestyHandUseCount >= 5) {
+    honestyHandUseCount -= 5
+    const gained = gainFixedLight('정직', 50)
+    recordRelicActivation('honesty', `불빛 +${gained}`)
+    void playResourceTrail({ kind: 'chain' }, 'score', 1)
+    burstScoreGain()
+  }
+}
+
+/** 변칙: 플레이어가 체력을 10 잃을 때마다 불씨 게이지 1 획득. 누적 피해는 Character가 보관한다.
+ *  미보유 시 누적을 비워, 나중에 획득해도 이전 피해가 소급 발동하지 않게 한다. */
+function applyAnomalyHealthLoss(): void {
+  const character = gameState.character
+  if (!character.hasRelic('anomaly')) { character.relicDamageTaken = 0; return }
+  while (character.relicDamageTaken >= 10) {
+    character.relicDamageTaken -= 10
+    character.gainEmber(1)
+    boardRenderer.playHudCounterFeedback('ember', character.ember)
+    recordRelicActivation('anomaly', '불씨 +1')
+  }
+}
+
+/** 맹신: 1$ 획득마다 불빛 50 획득(코인 1당 +50). 코인 획득 지점마다 amount로 호출한다. */
+function applyBlindFaithCoins(amount: number): void {
+  if (amount <= 0 || !gameState.character.hasRelic('blind-faith')) return
+  const gained = gainFixedLight('맹신', 50 * amount)
+  recordRelicActivation('blind-faith', `불빛 +${gained}`)
+  void playResourceTrail({ kind: 'chain' }, 'score', 1)
+  burstScoreGain()
 }
 
 /** 잉크와 깃펜: 적 5처치마다 손패 콤보 게이지 +1. 처치 수는 런 동안 누적한다.
@@ -672,6 +726,28 @@ async function applyDignifiedRetaliation(hits: EnemyHit[]): Promise<void> {
 
 /** Hope is a one-shot revive: show its bespoke relic burst, remove itself,
  *  ban future offers, clear the rail, then hand control back to the player. */
+/** 권위: 치명적 피해를 단 한 번 체력 1로 버틴다(필드는 그대로). 발동 후 다시 등장하지 않게 밴한다.
+ *  희망처럼 화면 중앙 연출 + 체력 게이지 확대 + 붉은빛을 보여 준 뒤 유물을 파괴한다. */
+async function tryResolveAuthoritySurvive(): Promise<boolean> {
+  const character = gameState.character
+  if (character.isAlive() || !character.hasRelic('authority')) return false
+  await boardRenderer.animateAuthoritySurvive('authority')
+  character.removeRelic('authority', true)
+  character.health = 1
+  gameState.isGameOver = false
+  gameState.gameOverReason = ''
+  recordRelicActivation('authority', '체력 1로 생존')
+  render()
+  return true
+}
+
+/** 사망(치명타) 처리 순서: 권위(체력 1로 생존, 필드 유지) → 희망(체력 10 부활, 필드 제거). */
+async function tryResolveSurvivalRelics(): Promise<boolean> {
+  if (await tryResolveAuthoritySurvive()) return true
+  if (await tryResolveHopeRevive()) return true
+  return false
+}
+
 async function tryResolveHopeRevive(): Promise<boolean> {
   const character = gameState.character
   if (character.isAlive() || !character.hasRelic('hope')) return false
@@ -703,15 +779,26 @@ async function tryResolveHopeRevive(): Promise<boolean> {
   return true
 }
 
+/** 고정 불빛 획득 공통 경로. 턴 배율(getTurnScoreMultiplier)은 적용하지 않되, 자원팩 등이
+ *  올리는 글로벌 불빛 획득량 보너스(enhancements.scoreMultiplier)는 모든 불빛 획득에 반영한다.
+ *  야망/맹신/정직/별빛 랜턴/무료카드 등 고정 불빛 획득이 모두 이 함수를 거친다. */
+function gainFixedLight(label: string, baseValue: number, kind: ActivityLogEntry['kind'] = 'score'): number {
+  if (baseValue <= 0) return 0
+  const amount = Math.max(0, Math.round(baseValue * gameState.enhancements.scoreMultiplier))
+  if (amount <= 0) return 0
+  score += amount
+  scorePulseKey++
+  pushActivityLogsInDisplayOrder([{ label, scoreDelta: amount, kind }])
+  return amount
+}
+
 /** 별빛 랜턴(id: golden-squirrel)은 5턴마다 불빛 300을 흘려보낸다. */
 async function applyTurnStartRelics(): Promise<void> {
   if (!gameState.character.hasRelic('golden-squirrel')) return
   if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 5 !== 0) return
-  // 불빛은 턴 배율 없이 고정 300을 더하고 점수 패널로 트레일/버스트를 띄운다.
-  score += 300
-  scorePulseKey++
-  pushActivityLogsInDisplayOrder([{ label: '별빛 랜턴', scoreDelta: 300, kind: 'score' }])
-  recordRelicActivation('golden-squirrel', '불빛 +300')
+  // 턴 배율 없이 고정 300(글로벌 불빛 보너스만 반영)을 더하고 점수 패널로 트레일/버스트를 띄운다.
+  const gained = gainFixedLight('별빛 랜턴', 300)
+  recordRelicActivation('golden-squirrel', `불빛 +${gained}`)
   await playResourceTrail({ kind: 'chain' }, 'score', 1)
   burstScoreGain()
 }
@@ -830,6 +917,21 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
     await playPlayerGainTrails({ kind: 'center' }, beforeResources)
     await applyBloodPackRecoveryTrigger(before)
   }
+  if (id === 'hegemony') {
+    const beforeResources = snapshotPlayerResources()
+    // 패도: 최대 체력 -15(제 살 깎기) + 공격력 +2. 구매 가능 여부는 relicPurchaseBlocked가 막는다.
+    gameState.character.spendMaxHealth(15)
+    gameState.character.applyDamageBoost(2)
+    render()
+    await playPlayerGainTrails({ kind: 'center' }, beforeResources)
+  }
+}
+
+/** 일부 유물은 불빛 가격 외 추가 구매 조건이 있다(패도: 최대 체력 16 이상). 충족 못 하면 true. */
+function relicPurchaseBlocked(id: RelicId): boolean {
+  // spendMaxHealth는 최대 체력이 1 미만이 되지 않게 막으므로, -15 후 최소 1이 남는 16 이상이어야 한다.
+  if (id === 'hegemony') return gameState.character.maxHealth < 16
+  return false
 }
 
 async function maybeOpenShopAfterTurn(): Promise<boolean> {
@@ -925,7 +1027,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
             case 'basic_008': character.gainEmber(3);   return
             case 'basic_009': character.gainCandle(3);  return
             case 'basic_010': character.addShield(3);   return
-            case 'basic_011': coins += 1;               return
+            case 'basic_011': coins += 1; applyBlindFaithCoins(1); return
           }
         },
       })),
@@ -1115,13 +1217,14 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
       // 선물 상자는 사용 즉시 소모되며, 실제 보상량과 트레일 입력을 같은 데이터에서 읽는다.
       const freeGift = SHOP_FREE_GIFT_REWARDS[freeGiftKind]
       if (freeGiftKind === 'score-300') {
-        score += freeGift.amount
-        scorePulseKey++
+        // 불빛 보상도 글로벌 불빛 획득량 보너스(scoreMultiplier)를 공통 적용한다.
+        gainFixedLight('선물 상자', freeGift.amount)
         // 불빛 보상은 무료카드에서 불빛 패널로 직접 날려 기존 획득 문법을 유지한다.
         await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'score', freeGift.amount, 'score')
       } else if (freeGiftKind === 'coin-1') {
         coins += freeGift.amount
         coinPulseKey++
+        applyBlindFaithCoins(freeGift.amount)
         // 화폐 보상은 코인 톤 burst(treasure-gain)로 발사 — 불빛(score) burst가
         // 같이 뜨던 버그 수정. 보상 종류에 맞는 입자 색감만 보이도록 한다.
         await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'coin', freeGift.amount, 'treasure-gain')
@@ -1153,6 +1256,7 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
       freeCoinCardClaimed = true
       coins += 3
       coinPulseKey++
+      applyBlindFaithCoins(3)
       // 제단 수당은 경제 밸런스 완화 후 3$만 지급한다. source burst도 코인 톤
       // (treasure-gain)으로 발사해 불빛 입자가 같이 뜨는 시각 혼선을 제거.
       await boardRenderer.consumeFreeCardAndRouteReward('free-coin-card', 'coin', 3, 'treasure-gain')
@@ -1206,6 +1310,8 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   if (!detail.relicId) return
   const offer = currentShopOffers.find((entry) => entry.relicId === detail.relicId)
   if (!offer || offer.purchased) return
+  // 불빛 가격 외 추가 구매 조건(패도 최대 체력 등) 미충족 시 자원 부족처럼 막는다(상점·제단 공통).
+  if (relicPurchaseBlocked(detail.relicId)) { boardRenderer.openShop(buildShopStateView(), score, gameState.character); return }
   // 제단: 유물은 무료 단일 픽 — 가격 없이 1장만 획득하고 나머지는 사그라들며 사라진다.
   if (currentShopMode === 'altar') {
     await pickAltarRelicFree(detail.relicId)
@@ -1714,6 +1820,9 @@ function startGame(): void {
   coins = 0
   coinPulseKey = 0
   inkQuillKillCount = 0
+  ambitionKillCount = 0
+  ambitionBonus = 0
+  honestyHandUseCount = 0
   nextActivityLogId = 1
   activityLogs = []
   shopOpen = false
@@ -2186,6 +2295,8 @@ async function applyHandSingle(
     render()
     return
   }
+  // 정직: 손패 1장 사용으로 집계(합체 카드도 슬롯 1장이므로 1로 센다).
+  applyHonestyHandUse(1)
   // 보스는 디버프 면역 규칙을 따른다. 밀랍 계열 사용 시 보스에게 굳음 스택이 남아있다면
   // 즉시 저항 연출을 띄우고 해제해, "저항 후 즉시 무효" 감각을 일관되게 유지한다.
   await resolveBossDebuffImmunityOnWaxUse(usedDef?.id ?? null)
@@ -2246,6 +2357,7 @@ async function applyHandSingle(
   if (result.coinsGained && result.coinsGained > 0) {
     coins += result.coinsGained
     coinPulseKey++
+    applyBlindFaithCoins(result.coinsGained)
     await playResourceTrail({ kind: 'center' }, 'coin', result.coinsGained)
     if (usedDef) recordCoinGain(usedDef.name, result.coinsGained)
   }
@@ -2296,6 +2408,7 @@ async function applyHandSingle(
       const gainedCoins = recipeResult.coinsGained ?? 0
       coins += gainedCoins
       coinPulseKey++
+      applyBlindFaithCoins(gainedCoins)
       await playResourceTrail({ kind: 'chain' }, 'coin', gainedCoins)
       // Attribute the coin log row to the first fired recipe that produced it.
       const coinRecipe = recipeResult.firedRecipes[0]?.recipe
@@ -2526,9 +2639,11 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   }
   // 품격있는 대처: 피격 연출 뒤 나를 때린 적들에게 반격.
   await applyDignifiedRetaliation(hits)
+  // 변칙: 이 페이즈에서 잃은 체력 10마다 불씨 +1.
+  applyAnomalyHealthLoss()
   if (gameState.isGameOver) {
-    if (await tryResolveHopeRevive()) {
-      // Hope consumes the fatal event and starts a fresh player decision beat;
+    if (await tryResolveSurvivalRelics()) {
+      // 권위/희망이 치명타를 흡수하고 새 플레이어 결정 비트로 복귀한다.
       // do not continue into cleanup/shop timing from the lethal turn.
       inputLocked = false
       return
@@ -2611,10 +2726,11 @@ async function handleCardAction(e: Event): Promise<void> {
       )
       // 품격있는 대처: 먼저 때린 적들에게 반격(플레이어가 살아남았을 때만 동작).
       await applyDignifiedRetaliation(hits)
+      // 변칙: 선공으로 잃은 체력 10마다 불씨 +1.
+      applyAnomalyHealthLoss()
       if (!gameState.character.isAlive() || gameState.isGameOver) {
-        if (await tryResolveHopeRevive()) {
-          // A fatal first strike is fully absorbed by Hope; resume on the
-          // player's turn instead of spending the revived turn immediately.
+        if (await tryResolveSurvivalRelics()) {
+          // 치명적 선공을 권위/희망이 흡수하고 플레이어 턴으로 복귀한다.
           inputLocked = false
           return
         }
@@ -2683,6 +2799,7 @@ async function handleCardAction(e: Event): Promise<void> {
       } else if (result.flowerReward?.kind === 'coin') {
         coins += result.flowerReward.amount
         coinPulseKey++
+        applyBlindFaithCoins(result.flowerReward.amount)
         recordCoinGain(`${card.name} 수확`, result.flowerReward.amount)
         rewardFeedbacks.push(
           playResourceTrail(
@@ -2718,6 +2835,8 @@ async function handleCardAction(e: Event): Promise<void> {
         result.damageTaken
       )
     )
+    // 변칙: 함정으로 잃은 체력 10마다 불씨 +1.
+    applyAnomalyHealthLoss()
   }
 
   if (result.cardRemoved) {
@@ -2773,7 +2892,7 @@ async function handleCardAction(e: Event): Promise<void> {
 
   if (!gameState.character.isAlive()) {
     gameState.endGame('character_defeated')
-    if (await tryResolveHopeRevive()) {
+    if (await tryResolveSurvivalRelics()) {
       // Trap/self-damage deaths should not fall through into the enemy phase
       // after the revive field reset. The next input is a normal player turn.
       inputLocked = false
@@ -2823,7 +2942,7 @@ async function handleCardAction(e: Event): Promise<void> {
     }
     if (eventAnimations.length > 0) await Promise.all(eventAnimations)
     if (gameState.isGameOver) {
-      if (await tryResolveHopeRevive()) {
+      if (await tryResolveSurvivalRelics()) {
         inputLocked = false
         return
       }

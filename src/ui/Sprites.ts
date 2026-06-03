@@ -95,6 +95,12 @@ import relic007Url from '../assets/sprites/relics_007.webp'
 import relic008Url from '../assets/sprites/relics_008.webp'
 import relic009Url from '../assets/sprites/relics_009.webp'
 import relic010Url from '../assets/sprites/relics_010.webp'
+import relic011Url from '../assets/sprites/relics_011.webp'
+import relic012Url from '../assets/sprites/relics_012.webp'
+import relic013Url from '../assets/sprites/relics_013.webp'
+import relic014Url from '../assets/sprites/relics_014.webp'
+import relic015Url from '../assets/sprites/relics_015.webp'
+import relic016Url from '../assets/sprites/relics_016.webp'
 import pack001Url from '../assets/sprites/pack_001.webp'
 import pack002Url from '../assets/sprites/pack_002.webp'
 import pack003Url from '../assets/sprites/pack_003.webp'
@@ -186,6 +192,12 @@ export const SpriteUrls = {
     'ink-quill': relic008Url,
     'first-candle': relic009Url,
     'graceful-response': relic010Url,
+    ambition: relic011Url,
+    anomaly: relic012Url,
+    'blind-faith': relic013Url,
+    honesty: relic014Url,
+    hegemony: relic015Url,
+    authority: relic016Url,
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,

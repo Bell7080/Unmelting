@@ -46,6 +46,8 @@ export class Character {
   relics: RelicId[]
   /** One-shot relics that should never reappear after being consumed. */
   bannedRelics: RelicId[]
+  /** 변칙 유물용 누적 피해(10 잃을 때마다 발동). takeDamage가 더하고 외부가 소비한다. */
+  relicDamageTaken: number = 0
 
   constructor(id: string = 'unmelting-girl', name: string = '녹지 않는 소녀') {
     this.id = id
@@ -73,6 +75,8 @@ export class Character {
     this.shield -= blocked
     actualDamage -= blocked
     this.health = Math.max(0, this.health - actualDamage)
+    // 방패로 막지 못하고 실제 HP가 깎인 양만 변칙 유물 누적 피해로 적립한다.
+    this.relicDamageTaken += actualDamage
     return actualDamage
   }
 
@@ -264,5 +268,6 @@ export class Character {
     this.relics = []
     this.bannedRelics = []
     this.shield = 0
+    this.relicDamageTaken = 0
   }
 }
