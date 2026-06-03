@@ -1045,17 +1045,20 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     }))
   }
   if (kind === 'resource-pack') {
-    // 제단 5번 팩 — 최대 수치/영구 보정. 6종 중 3종 랜덤 선택.
+    // 제단 자원팩 — 30층마다 고정 가격으로 열리는 영구 보정 풀이며 항목별 weight를 따른다.
     const rawPool = SHOP_PACK_POOLS['resource-pack'].map((entry) => ({
       ...entry,
+      spriteUrl: entry.illu ? spriteForBasicPackItem(entry.illu) : undefined,
       apply: () => {
         switch (entry.id) {
-          case 'res-atk-1':        character.applyDamageBoost(1);                                            return
-          case 'res-handmax-2':    character.handMax += 2;                                                   return
-          case 'res-maxhp-5':      character.increaseMaxHealth(5);                                           return
-          case 'res-embermax-2':   character.emberMax += 2;                                                  return
-          case 'res-candlemax-m1': character.candleMax = Math.max(1, character.candleMax - 1);               return
-          case 'res-scoremult-15': gameState.enhancements.scoreMultiplier *= 1.15;                           return
+          case 'altar-clothes-thick':  character.increaseMaxHealth(5);                 return
+          case 'altar-heating':        character.applyDamageBoost(1);                  return
+          case 'altar-backpack-large': character.increaseHandMax(2);                   return
+          case 'altar-matchbox':       character.increaseEmberMax(2);                  return
+          case 'altar-wick-thick':     character.increaseEmberDecayTurns(1);           return
+          case 'altar-joker-card':     character.decreaseCandleMax(1);                 return
+          case 'altar-lantern':        gameState.enhancements.scoreMultiplier *= 1.10; return
+          case 'altar-one-coin':       coins += 1; applyBlindFaithCoins(1);            return
         }
       },
     }))
