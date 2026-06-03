@@ -223,8 +223,8 @@ export class CardSpawner {
   private finalAscentActive: boolean = false
   // 포자/별빛은 "배치된 카드" 기준으로 연속 등장을 막는다. 리롤로 버려진 후보는
   // 카운트를 소모하지 않도록 쿨다운은 commitSpawnCooldowns(배치 시점)에서만 갱신한다.
-  // SPORE_COOLDOWN_CARDS 5 ≈ 한 번 등장 후 최소 1턴(3레인) 간격.
-  private static readonly SPORE_COOLDOWN_CARDS = 5
+  // 연속 등장(바로 다음 칸)만 막으면 되므로 최소 1칸 간격으로 둔다. 빈도 자체는 유지.
+  private static readonly SPORE_COOLDOWN_CARDS = 1
   // STARLIGHT_COOLDOWN_CARDS 3 ≈ 한 번 등장 후 같은 턴/바로 다음 칸 연속 등장 차단(최소 1칸↑).
   private static readonly STARLIGHT_COOLDOWN_CARDS = 3
   private sporeCooldownCards: number = 0
@@ -563,17 +563,33 @@ export class CardSpawner {
     return kinds[Math.floor(Math.random() * kinds.length)]
   }
 
+  /** 미믹·식인꽃처럼 고정/꽃값 기반 특수 적은 고층에서 일반 적보다 약해진다.
+   *  진행 층 구간별 추가 스탯 + 시련 보너스로 일반 적 곡선에 맞춘다. */
+  private specialEnemyStatBonus(): { hp: number; atk: number } {
+    const t = this.progressionTurn
+    const floor =
+      t < 30 ? { hp: 0, atk: 0 } :
+      t < 60 ? { hp: 3, atk: 2 } :
+      t < 90 ? { hp: 6, atk: 4 } :
+      { hp: 10, atk: 7 }
+    return {
+      hp: floor.hp + this.trialEnemyHpBonus,
+      atk: floor.atk + this.trialEnemyAtkBonus,
+    }
+  }
+
   /** Monster flower inherits threat from the flower value that was gambled. */
   spawnMonsterFlower(power: number = 1): Card {
     const safePower = Math.max(1, power)
+    const bonus = this.specialEnemyStatBonus()
     this.spawnSerial++
     return new Card(
       `monster-flower-${this.spawnSerial}-${Math.random()}`,
       CardType.ENEMY,
       '괴물꽃',
       `Withered from a value-${safePower} flower`,
-      safePower,
-      safePower,
+      safePower + bonus.hp,
+      safePower + bonus.atk,
       {
         isSpecialEnemy: true,
         specialEnemyKind: 'monsterFlower',
@@ -594,14 +610,15 @@ export class CardSpawner {
   spawnMimic(span: number = 1): Card {
     const safeSpan = Math.max(1, Math.min(3, span))
     const stats = MIMIC_BY_SPAN[safeSpan]
+    const bonus = this.specialEnemyStatBonus()
     this.spawnSerial++
     const mimic = new Card(
       `mimic-${this.spawnSerial}-${Math.random()}`,
       CardType.ENEMY,
       '미믹',
       `Was a ${safeSpan}-lane treasure once`,
-      stats.health,
-      stats.attack,
+      stats.health + bonus.hp,
+      stats.attack + bonus.atk,
       {
         isSpecialEnemy: true,
         specialEnemyKind: 'mimic',
