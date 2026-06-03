@@ -50,8 +50,8 @@ import {
   pouchIcon,
   shieldIcon,
   sparkleIcon,
+  spadeGemIcon,
   swordIcon,
-  tagIcon,
 } from '@ui/Icons'
 
 export interface CardActionDetail {
@@ -118,6 +118,8 @@ export interface ShopStateView {
   basicPackCost: number
   upgradePackCost: number
   unlockPackCost: number
+  /** 제단 4팩처럼 기본 3팩과 매핑이 다른 경우에도 각 팩 가격을 독립 갱신한다. */
+  packCosts?: Partial<Record<ShopPackKind, number>>
 }
 export interface ForcedTrialCardView {
   id: string
@@ -1460,15 +1462,15 @@ export class GameBoardRenderer {
                data-shop-buy-kind="${kind}"
                tabindex="0"
                style="--cardback-url:url('${SpriteUrls.cardBack}'); --shop-pack-order:${order};"
-               aria-label="${title} — ${cost}점">
+               aria-label="${title} — 불빛 ${cost}">
         <div class="shop-pack-illustration" style="background-image: url('${artUrl}')" aria-hidden="true"></div>
         <div class="shop-pack-overlay">
           <h3 class="shop-pack-title">${title}</h3>
           <p class="shop-pack-effect">${effect}</p>
         </div>
         <span class="shop-price-label shop-pack-price" aria-hidden="true">
-          <span class="shop-price-label-icon">${tagIcon()}</span>
-          <span class="shop-price-label-text">${cost.toLocaleString()}점</span>
+          <span class="shop-price-label-icon">${spadeGemIcon()}</span>
+          <span class="shop-price-label-text">${cost.toLocaleString()}</span>
         </span>
       </article>
     `
@@ -1590,8 +1592,8 @@ export class GameBoardRenderer {
   }
 
   /** Shop relic card. Click on the card itself buys the relic (the
-   *  separate price button is gone). Price uses the flat tag icon from
-   *  the shared SVG icon family instead of the old taped label.
+   *  separate price button is gone). Price uses the flat diamond-like light
+   *  icon from the shared SVG family instead of the old tag+점 label.
    *
    *  The hover-grown card is the click target so the player naturally
    *  taps "the bigger card" instead of hunting for a small button. */
@@ -1606,7 +1608,7 @@ export class GameBoardRenderer {
                data-shop-buy-kind="relic"
                style="--card-leave-delay:${cardLeaveDelay}ms; --cardback-url:url('${SpriteUrls.cardBack}');"
                tabindex="0"
-               aria-label="${def.name} — ${offer.purchased ? '구매 완료' : `점수 ${offer.price}점`}">
+               aria-label="${def.name} — ${offer.purchased ? '구매 완료' : `불빛 ${offer.price}`}">
         <!-- Hand-preview와 동일한 2면 플립 구조: flipper 컨테이너 내부에 앞/뒷면을 고정한다. -->
         <div class="shop-relic-flipper">
         <div class="shop-relic-front">
@@ -1623,9 +1625,9 @@ export class GameBoardRenderer {
         </div>
         <!-- 가격 라벨은 flipper(둥근 마스크) 밖으로 분리해서 카드 하단 아래에 항상 노출되게 유지한다. -->
         <span class="shop-price-label shop-relic-price-label" aria-hidden="true">
-          <span class="shop-price-label-icon">${tagIcon()}</span>
+          <span class="shop-price-label-icon">${spadeGemIcon()}</span>
           <span class="shop-price-label-text">${
-            offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
+            offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}`
           }</span>
         </span>
       </article>
@@ -1659,7 +1661,8 @@ export class GameBoardRenderer {
         const buyTarget = t.closest<HTMLElement>('[data-shop-buy-kind]')
         if (!buyTarget || buyTarget.classList.contains('is-purchased')) return
         const kind = buyTarget.dataset.shopBuyKind as ShopBuyDetail['kind'] | undefined
-        if (!kind) return
+        // 리롤 애니메이션 중에는 같은 버튼에서 추가 shopBuy 이벤트를 만들지 않는다.
+        if (!kind || buyTarget.classList.contains('is-reroll-locked')) return
         const relicId = buyTarget.dataset.shopBuy as RelicId | undefined
         document.dispatchEvent(new CustomEvent<ShopBuyDetail>('shopBuy', { detail: { kind, relicId } }))
       })
@@ -1721,15 +1724,15 @@ export class GameBoardRenderer {
             <div class="shop-layer shop-pack-layer">
               ${shop.mode === 'altar'
                 ? [
-                    this.renderShopPackCard('blessing-pack', '축복팩', '패시브 능력 3택1 획득', shop.basicPackCost, score, 'upgrade', 0),
-                    this.renderShopPackCard('resource-pack', '자원팩', '최대 수치 3택1 증가', shop.upgradePackCost, score, 'resource', 1),
-                    this.renderShopPackCard('enhance-pack', '강화팩', '카드 단일 능력 3택1 강화', shop.unlockPackCost, score, 'unlock', 2),
-                    this.renderShopPackCard('delete-pack', '삭제팩', '카드 등장 금지 3택1', shop.unlockPackCost, score, 'unlock', 3),
+                    this.renderShopPackCard('blessing-pack', '축복팩', '패시브 능력 3택1 획득', shop.packCosts?.['blessing-pack'] ?? shop.basicPackCost, score, 'upgrade', 0),
+                    this.renderShopPackCard('resource-pack', '자원팩', '최대 수치 3택1 증가', shop.packCosts?.['resource-pack'] ?? shop.upgradePackCost, score, 'resource', 1),
+                    this.renderShopPackCard('enhance-pack', '강화팩', '카드 단일 능력 3택1 강화', shop.packCosts?.['enhance-pack'] ?? shop.unlockPackCost, score, 'unlock', 2),
+                    this.renderShopPackCard('delete-pack', '삭제팩', '카드 등장 금지 3택1', shop.packCosts?.['delete-pack'] ?? shop.unlockPackCost, score, 'unlock', 3),
                   ].join('')
                 : [
-                    this.renderShopPackCard('basic-pack', basicPackLabel.title, basicPackLabel.effect, shop.basicPackCost, score, 'resource', 0),
-                    this.renderShopPackCard('upgrade-pack', upgradePackLabel.title, upgradePackLabel.effect, shop.upgradePackCost, score, 'upgrade', 1),
-                    this.renderShopPackCard('unlock-pack', unlockPackLabel.title, unlockPackLabel.effect, shop.unlockPackCost, score, 'unlock', 2),
+                    this.renderShopPackCard('basic-pack', basicPackLabel.title, basicPackLabel.effect, shop.packCosts?.['basic-pack'] ?? shop.basicPackCost, score, 'resource', 0),
+                    this.renderShopPackCard('upgrade-pack', upgradePackLabel.title, upgradePackLabel.effect, shop.packCosts?.['upgrade-pack'] ?? shop.upgradePackCost, score, 'upgrade', 1),
+                    this.renderShopPackCard('unlock-pack', unlockPackLabel.title, unlockPackLabel.effect, shop.packCosts?.['unlock-pack'] ?? shop.unlockPackCost, score, 'unlock', 2),
                   ].join('')}
             </div>
           </section>
@@ -1784,11 +1787,11 @@ export class GameBoardRenderer {
       card.classList.add(this.shopRelicAffordabilityClass(offer, score))
       card.setAttribute(
         'aria-label',
-        `${def.name} — ${offer.purchased ? '구매 완료' : `점수 ${offer.price}점`}`
+        `${def.name} — ${offer.purchased ? '구매 완료' : `불빛 ${offer.price}`}`
       )
       const label = card.querySelector<HTMLElement>('.shop-price-label-text')
       if (label)
-        label.textContent = offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
+        label.textContent = offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}`
     }
 
     // Reroll button (coins-based affordance + cost text).
@@ -1811,13 +1814,13 @@ export class GameBoardRenderer {
 
     // Pack tiles (cost + affordance based on score).
     const packMap: Record<ShopPackKind, number> = {
-      'basic-pack': shop.basicPackCost,
-      'upgrade-pack': shop.upgradePackCost,
-      'unlock-pack': shop.unlockPackCost,
-      'blessing-pack': shop.basicPackCost,
-      'resource-pack': shop.upgradePackCost,
-      'enhance-pack': shop.unlockPackCost,
-      'delete-pack': shop.unlockPackCost,
+      'basic-pack': shop.packCosts?.['basic-pack'] ?? shop.basicPackCost,
+      'upgrade-pack': shop.packCosts?.['upgrade-pack'] ?? shop.upgradePackCost,
+      'unlock-pack': shop.packCosts?.['unlock-pack'] ?? shop.unlockPackCost,
+      'blessing-pack': shop.packCosts?.['blessing-pack'] ?? shop.basicPackCost,
+      'resource-pack': shop.packCosts?.['resource-pack'] ?? shop.upgradePackCost,
+      'enhance-pack': shop.packCosts?.['enhance-pack'] ?? shop.unlockPackCost,
+      'delete-pack': shop.packCosts?.['delete-pack'] ?? shop.unlockPackCost,
     }
     for (const kind of Object.keys(packMap) as ShopPackKind[]) {
       const tile = shell.querySelector<HTMLElement>(
@@ -1828,7 +1831,7 @@ export class GameBoardRenderer {
       tile.classList.remove('is-affordable', 'is-unaffordable')
       tile.classList.add(score >= cost ? 'is-affordable' : 'is-unaffordable')
       const priceText = tile.querySelector<HTMLElement>('.shop-price-label-text')
-      if (priceText) priceText.textContent = `${cost.toLocaleString()}점`
+      if (priceText) priceText.textContent = `${cost.toLocaleString()}`
     }
   }
 
@@ -4231,6 +4234,8 @@ export class GameBoardRenderer {
   ): Promise<void> {
     const reroll = document.querySelector<HTMLElement>('#shop-overlay .shop-reroll-btn')
     if (!reroll) return
+    // 진행 중임을 DOM에도 남겨 빠른 연타/터치 반복이 시각적으로 막힌다.
+    reroll.classList.add('is-reroll-locked')
     await this.animateResourceTrail(
       this.findCoinPulseAnchor(),
       reroll,
@@ -4293,7 +4298,7 @@ export class GameBoardRenderer {
     card.dataset.shopBuy = def.id
     card.setAttribute(
       'aria-label',
-      `${def.name} — ${offer.purchased ? '구매 완료' : `점수 ${offer.price}점`}`
+      `${def.name} — ${offer.purchased ? '구매 완료' : `불빛 ${offer.price}`}`
     )
     // Swap the rarity glow class to match the new relic.
     const RARITY_CLASSES: readonly string[] = [
@@ -4318,7 +4323,7 @@ export class GameBoardRenderer {
     if (flavor) flavor.textContent = def.flavor
     const label = card.querySelector<HTMLElement>('.shop-price-label-text')
     if (label)
-      label.textContent = offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}점`
+      label.textContent = offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}`
   }
 
   private findResourceTrailTarget(target: ResourceTrailTarget): HTMLElement | DOMRect | null {

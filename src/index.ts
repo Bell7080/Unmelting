@@ -136,9 +136,13 @@ let currentShopOffers: ShopOfferView[] = []
 /** 제단(30턴) 무료 유물은 1회 단일 픽이다. 한 번 고르면 다시 못 고르게 잠근다. */
 let altarRelicPicked = false
 let shopRerollCount = 0
-let shopBasicPackBuys = 0
-let shopUpgradePackBuys = 0
-let shopUnlockPackBuys = 0
+const SHOP_PACK_KINDS: readonly ShopPackKind[] = ['basic-pack', 'upgrade-pack', 'unlock-pack', 'blessing-pack', 'resource-pack', 'enhance-pack', 'delete-pack']
+/** 방문 내 카드팩별 구매 횟수. 가격은 각 팩의 초기 가격을 매 구매마다 한 번 더 얹는다. */
+let shopPackBuys: Record<ShopPackKind, number> = Object.fromEntries(
+  SHOP_PACK_KINDS.map((kind) => [kind, 0])
+) as Record<ShopPackKind, number>
+/** 리롤 연타로 유물 DOM/상태가 엇갈리지 않도록 비동기 리롤 동안 입력을 잠근다. */
+let shopRerollInProgress = false
 let freeCardClaimed = false
 let freeCoinCardClaimed = false
 
@@ -855,21 +859,33 @@ async function openTrialOverlay(): Promise<void> {
 }
 
 /** Pack cost source of truth. UI 표기와 실제 차감이 갈라지지 않도록 구매 처리도 이 함수만 사용한다.
- *  하드코딩 기본/증가값에 후반 인플레이션 배수를 곱해 유물 가격과 함께 가팔라지게 한다. */
-function currentShopPackCost(kind: ShopPackKind): number {
-  const mult = getShopPriceMultiplier()
-  const inflate = (raw: number): number => Math.round(raw * mult)
-  if (currentShopMode === 'altar') return inflate(500)
+ *  카드팩은 유물과 달리 고정 시작가에 방문 내 구매 횟수만 누적한다. */
+function altarBasePackCost(): number {
+  const turn = gameState.getCurrentTurn()
+  // 30/60/90층 제단 팩은 층별 고정 시작가를 사용해 UI 표기와 차감을 정확히 맞춘다.
+  if (turn >= 90) return 2500
+  if (turn >= 60) return 1500
+  return 500
+}
+
+function baseShopPackCost(kind: ShopPackKind): number {
+  if (currentShopMode === 'altar') return altarBasePackCost()
   switch (kind) {
-    case 'basic-pack': return inflate(120 + shopBasicPackBuys * 40)
-    case 'upgrade-pack': return inflate(500 + shopUpgradePackBuys * 130)
-    case 'unlock-pack': return inflate(520 + shopUnlockPackBuys * 120)
+    case 'basic-pack': return 120
+    case 'upgrade-pack': return 500
+    case 'unlock-pack': return 520
     // 제단 전용 팩이 일반 상점에서 호출되면 안전한 기본값으로 막는다.
-    default: return inflate(500)
+    default: return altarBasePackCost()
   }
 }
 
-/** Build the renderer-facing split-shop state with dynamic inflation costs.
+function currentShopPackCost(kind: ShopPackKind): number {
+  const base = baseShopPackCost(kind)
+  // 각 팩은 구매할 때마다 자기 초기 가격만큼 증가한다(예: 1500→3000→4500).
+  return base * ((shopPackBuys[kind] ?? 0) + 1)
+}
+
+/** Build the renderer-facing split-shop state with visit-local pack costs.
  *  Reroll cost is denominated in coins (화폐) — the renderer reads `coins`
  *  to decide whether the reroll button is affordable. */
 function buildShopStateView(): ShopStateView {
@@ -884,6 +900,10 @@ function buildShopStateView(): ShopStateView {
     basicPackCost: currentShopPackCost('basic-pack'),
     upgradePackCost: currentShopPackCost('upgrade-pack'),
     unlockPackCost: currentShopPackCost('unlock-pack'),
+    // 렌더러가 4종 제단팩과 3종 일반팩을 모두 독립 가격으로 표시하도록 전체 맵을 넘긴다.
+    packCosts: Object.fromEntries(
+      SHOP_PACK_KINDS.map((kind) => [kind, currentShopPackCost(kind)])
+    ) as Partial<Record<ShopPackKind, number>>,
   }
 }
 
@@ -947,9 +967,10 @@ async function maybeOpenShopAfterTurn(): Promise<boolean> {
   currentShopOffers = rollShopOffers()
   altarRelicPicked = false
   shopRerollCount = 0
-  shopBasicPackBuys = 0
-  shopUpgradePackBuys = 0
-  shopUnlockPackBuys = 0
+  shopPackBuys = Object.fromEntries(
+    SHOP_PACK_KINDS.map((kind) => [kind, 0])
+  ) as Record<ShopPackKind, number>
+  shopRerollInProgress = false
   freeCardClaimed = false
   // 제단 수당도 방문 단위 무료 보상이므로 30/60/90턴마다 다시 활성화한다.
   freeCoinCardClaimed = false
@@ -1166,9 +1187,8 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
   if (score < cost) return
   score = Math.max(0, score - cost)
   scorePulseKey++
-  if (kind === 'basic-pack') shopBasicPackBuys += 1
-  if (kind === 'upgrade-pack') shopUpgradePackBuys += 1
-  if (kind === 'unlock-pack') shopUnlockPackBuys += 1
+  // 구매 직후 같은 팩 가격을 초기 가격만큼 올려 다음 표기/차감에 반영한다.
+  shopPackBuys[kind] = (shopPackBuys[kind] ?? 0) + 1
   // Keep picker title synchronized with the shared pack label table.
   const title = SHOP_PACK_LABELS[kind].title
   const items = rollPackItems(kind)
@@ -1287,36 +1307,46 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     return
   }
   if (detail.kind === 'reroll') {
-    const rerollCost = 1 + shopRerollCount
-    // Reroll is paid in 화폐(coins) now, not 불빛(score).
-    if (coins < rerollCost) return
-    coins = Math.max(0, coins - rerollCost)
-    coinPulseKey++
-    shopRerollCount += 1
-    // Resolve the new offer slate BEFORE the flip so we can swap the
-    // relic content mid-flip (180° back-face moment). Purchased slots
-    // stay frozen so EXIT does not resurrect cards into bought gaps.
-    // 현재 배치된 비구매 유물은 리롤 결과에서 제외한다(풀이 부족하면 자동 폴백).
-    const currentRelicIds = currentShopOffers
-      .filter((e) => !e.purchased)
-      .map((e) => e.relicId)
-    const freshOffers = rollShopOffers(currentRelicIds)
-    let freshIndex = 0
-    const nextOffers = currentShopOffers.map((entry) => {
-      if (entry.purchased) return entry
-      const next = freshOffers[freshIndex]
-      freshIndex += 1
-      return next ?? entry
-    })
-    const rerollBtn = document.querySelector<HTMLElement>('#shop-overlay .shop-reroll-btn')
-    if (rerollBtn) await boardRenderer.playShopPurchaseImpact(rerollBtn, "score")
-    boardRenderer.playCoinSpendFeedback(coins, coinPulseKey)
-    // Commit the new offers BEFORE running the flip so any incidental
-    // re-render (e.g. openShop's refresh path) sees the fresh data,
-    // matching what the mid-flip swap puts on screen.
-    currentShopOffers = nextOffers
-    await boardRenderer.playShopRerollFeedback(rerollCost, nextOffers, score, gameState.character)
-    boardRenderer.openShop(buildShopStateView(), score, gameState.character)
+    if (shopRerollInProgress) return
+    shopRerollInProgress = true
+    try {
+      const rerollCost = 1 + shopRerollCount
+      // Reroll is paid in 화폐(coins) now, not 불빛(score).
+      if (coins < rerollCost) return
+      coins = Math.max(0, coins - rerollCost)
+      coinPulseKey++
+      shopRerollCount += 1
+      // Resolve the new offer slate BEFORE the flip so we can swap the
+      // relic content mid-flip (180° back-face moment). Purchased slots
+      // stay frozen so EXIT does not resurrect cards into bought gaps.
+      // 현재 배치된 비구매 유물은 리롤 결과에서 제외한다(풀이 부족하면 자동 폴백).
+      const currentRelicIds = currentShopOffers
+        .filter((e) => !e.purchased)
+        .map((e) => e.relicId)
+      const freshOffers = rollShopOffers(currentRelicIds)
+      let freshIndex = 0
+      const nextOffers = currentShopOffers.map((entry) => {
+        if (entry.purchased) return entry
+        const next = freshOffers[freshIndex]
+        freshIndex += 1
+        return next ?? entry
+      })
+      const rerollBtn = document.querySelector<HTMLElement>('#shop-overlay .shop-reroll-btn')
+      // 애니메이션이 시작되기 전부터 버튼을 비활성처럼 보여 연타 피드백을 차단한다.
+      rerollBtn?.classList.add('is-reroll-locked')
+      if (rerollBtn) await boardRenderer.playShopPurchaseImpact(rerollBtn, "score")
+      boardRenderer.playCoinSpendFeedback(coins, coinPulseKey)
+      // Commit the new offers BEFORE running the flip so any incidental
+      // re-render (e.g. openShop's refresh path) sees the fresh data,
+      // matching what the mid-flip swap puts on screen.
+      currentShopOffers = nextOffers
+      await boardRenderer.playShopRerollFeedback(rerollCost, nextOffers, score, gameState.character)
+      boardRenderer.openShop(buildShopStateView(), score, gameState.character)
+    } finally {
+      // 어떤 애니메이션 경로로 끝나도 다음 리롤은 완료 후에만 다시 열린다.
+      document.querySelector<HTMLElement>('#shop-overlay .shop-reroll-btn')?.classList.remove('is-reroll-locked')
+      shopRerollInProgress = false
+    }
     return
   }
   if (!detail.relicId) return

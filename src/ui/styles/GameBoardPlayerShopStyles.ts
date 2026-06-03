@@ -616,10 +616,15 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   line-height: 1;
   font-weight: 900;
 }
-.shop-reroll-btn.is-unaffordable {
+.shop-reroll-btn.is-unaffordable,
+.shop-reroll-btn.is-reroll-locked {
   filter: saturate(0.55) brightness(0.72);
   cursor: not-allowed;
   border-color: rgba(160, 120, 60, 0.3);
+}
+.shop-reroll-btn.is-reroll-locked {
+  /* 리롤 정산 중에는 pointer-events를 끊어 연타로 유물 슬롯이 엇갈리는 것을 막는다. */
+  pointer-events: none;
 }
 .shop-reroll-btn.is-affordable { border-color: rgba(130, 210, 110, 0.65); }
 .shop-reroll-btn.is-affordable:hover { border-color: rgba(160, 240, 130, 0.8); }
@@ -849,10 +854,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   /* Pack choices read better when they share the same portrait bias as the
      cardback surface (3:4-ish). Keep them wider than before so text is not
      compressed into a short strip. */
-  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  grid-template-columns: repeat(3, minmax(154px, 1fr));
   gap: clamp(8px, 1.2vw, 16px);
   width: 100%;
-  max-width: clamp(420px, 56vw, 640px);
+  max-width: clamp(462px, 61.6vw, 704px);
 }
 .shop-pack-pick-card {
   position: relative;
@@ -862,7 +867,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   background: transparent;
   box-shadow: none;
   padding: 0;
-  min-height: 188px;
+  min-height: 207px;
   aspect-ratio: 3 / 4;
   cursor: pointer;
   transform-style: preserve-3d;
@@ -1200,10 +1205,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-width: 84px;
+  min-width: 112px;
   justify-content: center;
-  padding: 4px 11px 5px 8px;
-  border-radius: 4px 4px 8px 8px;
+  padding: 4px 13px 5px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
   border: 1px solid rgba(255, 215, 120, 0.42);
   background: linear-gradient(180deg, rgba(42, 31, 46, 0.96), rgba(20, 14, 28, 0.98));
   color: rgba(255, 232, 168, 0.96);
@@ -1219,25 +1225,21 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   pointer-events: none;
 }
 .shop-price-label::before {
-  /* Short string between the card's bottom edge and the tag's top, filling
-     the gap so the tag visually reads as tied to the card. */
+  /* 기존 매단 가격표 끈 대신 불빛 보석 뒤의 은은한 halo만 남겨 라벨+가격+점 구조를 제거한다. */
   content: '';
   position: absolute;
-  top: -7px;
-  left: 50%;
-  width: 2px;
-  height: 7px;
-  transform: translateX(-50%);
-  background: linear-gradient(180deg, rgba(255, 215, 120, 0.6), rgba(255, 215, 120, 0.15));
-  border-radius: 1px;
+  inset: -3px;
+  border-radius: inherit;
+  background: radial-gradient(circle at 24% 50%, rgba(255, 232, 168, 0.18), transparent 38%);
+  pointer-events: none;
 }
 .shop-pack-price {
   bottom: -34px;
 }
 .shop-price-label-icon {
   display: inline-flex;
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   color: currentColor;
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.55));
 }
@@ -1564,8 +1566,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   .rail-row.dist-2 { opacity: 0.3; transform: scale(0.86); }
   .rail-row.dist-1 { opacity: 0.6; transform: scale(0.92); }
   .player-card { width: clamp(120px, 14vw, 160px); }
-  .shop-pack-pick-card { min-height: clamp(110px, 28vh, 188px); }
-  .shop-pack-picker-cards { max-width: clamp(310px, 52vw, 640px); }
+  .shop-pack-pick-card { min-height: clamp(121px, 30.8vh, 207px); }
+  .shop-pack-picker-cards { max-width: clamp(341px, 57.2vw, 704px); }
 }
 
 /* Mobile landscape: restore the 3-column game layout that the 760px breakpoint collapses. */
@@ -1620,6 +1622,26 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   z-index: auto;
 }
 /* NOTE: reroll 활성 상태 제어는 .shop-relic-card.is-rerolling에서 단일 관리한다. */
+
+
+/* 상점/제단 유물은 등급별 빛을 앞면 자체에 한 번 더 둘러 희귀도 차이를 즉시 읽게 한다. */
+.shop-relic-card.rarity-common .shop-relic-front::after,
+.shop-relic-card.rarity-rare .shop-relic-front::after,
+.shop-relic-card.rarity-epic .shop-relic-front::after,
+.shop-relic-card.rarity-unique .shop-relic-front::after,
+.shop-relic-card.rarity-legendary .shop-relic-front::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+.shop-relic-card.rarity-common .shop-relic-front::after { box-shadow: inset 0 0 18px rgba(170, 180, 196, 0.16); }
+.shop-relic-card.rarity-rare .shop-relic-front::after { box-shadow: inset 0 0 22px rgba(80, 152, 255, 0.26), 0 0 22px rgba(80, 152, 255, 0.22); }
+.shop-relic-card.rarity-epic .shop-relic-front::after { box-shadow: inset 0 0 24px rgba(161, 108, 255, 0.3), 0 0 26px rgba(161, 108, 255, 0.25); }
+.shop-relic-card.rarity-unique .shop-relic-front::after { box-shadow: inset 0 0 26px rgba(242, 212, 92, 0.34), 0 0 30px rgba(242, 212, 92, 0.3); }
+.shop-relic-card.rarity-legendary .shop-relic-front::after { box-shadow: inset 0 0 28px rgba(255, 108, 76, 0.36), 0 0 34px rgba(220, 78, 78, 0.32); }
 
 /* Card packs are sealed products, so they do not inherit relic rarity-frame glows.
    기본 자원팩/강화팩/해금팩 3종에는 어떤 시각 효과도 추가하지 않는다.
@@ -1771,7 +1793,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   .shop-free-card {
     flex: 1 1 0;
     width: auto;
-    min-width: 60px;
+    min-width: 76px;
     max-width: 112px;
   }
   .shop-pack-card {
@@ -1785,7 +1807,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
     bottom: -18px;
     font-size: 10px;
     padding: 2px 7px 3px 6px;
-    min-width: 60px;
+    min-width: 76px;
     gap: 4px;
   }
   .shop-price-label-icon { width: 11px; height: 11px; }
