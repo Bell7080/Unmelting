@@ -33,7 +33,7 @@ export const TRIAL_DEFINITIONS: TrialDefinition[] = [
   {
     id: 'candle-hunter',
     title: '역경',
-    effect: '앞으로 나올 모든 함정(거미줄/포자/폭탄)의 피해 +2',
+    effect: '앞으로 나올 모든 함정의 피해 +2',
     spriteKey: '004',
     effectKind: { type: 'trap-damage-bonus', value: 2 },
   },

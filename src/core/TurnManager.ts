@@ -215,8 +215,8 @@ export class TurnManager {
       seen.add(card)
       if (!card.isBombArmed || card.isFrozen()) continue
 
-      // 폭탄 기본 피해 5 + 시련 '역경' 함정 피해 보너스(거미줄/포자와 동일 적용).
-      const bombDamage = 5 + card.trapDamageBonus
+      // 폭탄 폭발 피해 = 기본 5 + 시련 '역경' 보너스. 함정 표기와 같은 값을 쓴다.
+      const bombDamage = card.effectiveTrapDamage()
       // Bomb splash hurts neighboring enemies but does not delete non-enemy cells.
       // 사망한 적은 즉시 row에서 제거해야 미믹 등 특수 적이 0HP로 잔존하지 않는다.
       const adjacentCardIds: string[] = []

@@ -781,32 +781,15 @@ export class GameBoardRenderer {
         </div>
       `
     } else if (card.type === CardType.TRAP) {
-      // Trap stats use the same flat sword + number layout as enemies so
-      // every "이 카드가 주는 피해" reads identically across the rail. The
-      // only exceptions are the bomb's countdown state and the 3-trap death
-      // gate, which are status words rather than numeric damage.
-      if (card.trapKind === 'bomb') {
-        // 점화 상태는 좌상단 배지로만 표기하고, 중앙 하단은 다른 함정과 동일하게
-        // 검+폭발 피해(기본 5 + 시련 '역경' 보너스)를 보여 준다.
-        stats = `
-          <div class="card-stats">
-            <span class="stat atk">${swordIcon()}<span class="stat-value">${5 + card.trapDamageBonus}</span></span>
-          </div>
-        `
-      } else {
-        // Every non-bomb trap (including the 3-cell "instant death" gate
-        // and spore) uses the same flat sword+number readout as enemies.
-        // 3-cell traps display 999 instead of their actual penalty so the
-        // "you'll die" weight reads at a glance without falling back to
-        // a text pill.
-        const damage =
-          card.groupCount >= 3 && card.trapKind !== 'spore' ? 999 : card.getTrapDamagePenalty()
-        stats = `
-          <div class="card-stats">
-            <span class="stat atk">${swordIcon()}<span class="stat-value">${damage}</span></span>
-          </div>
-        `
-      }
+      // 모든 함정(거미줄/포자/폭탄, 2·3칸 포함)을 한 종류로 묶어 검+단일 피해 수치로
+      // 표기한다. effectiveTrapDamage가 시련 '역경' 보너스를 합산한 최종값(예: 7)을
+      // 돌려주므로 폭탄 점화 상태는 좌상단 배지로만 남고 중앙 하단은 다른 함정과 동일하다.
+      const damage = card.effectiveTrapDamage()
+      stats = `
+        <div class="card-stats">
+          <span class="stat atk">${swordIcon()}<span class="stat-value">${damage}</span></span>
+        </div>
+      `
     } else if (card.type === CardType.FLOWER) {
       // Flower cells expose their current harvest value. Seeds show a waiting
       // label because they cannot be picked until the front-row bloom beat.

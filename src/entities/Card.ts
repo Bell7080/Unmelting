@@ -109,6 +109,8 @@ export function flowerDescription(kind: FlowerKind): string {
 }
 
 export class Card {
+  /** 폭탄 기본 폭발 피해. 시련 '역경' 보너스(trapDamageBonus)가 여기에 더해진다. */
+  static readonly BOMB_DAMAGE = 5
   id: string
   type: CardType
   name: string
@@ -297,7 +299,7 @@ export class Card {
   /** Return trap damage for the current trap width and subtype. */
   getTrapDamagePenalty(): number {
     if (this.type !== CardType.TRAP) return 0
-    // 폭탄 피해는 TurnManager가 직접(5 + trapDamageBonus) 처리한다.
+    // 폭탄은 밟음 피해가 없다(폭발은 effectiveTrapDamage/TurnManager가 따로 처리).
     if (this.trapKind === 'bomb') return 0
     // 시련 '역경'의 함정 피해 보너스는 거미줄/포자 모든 변형에 더한다(즉사 999 칸은 제외).
     const bonus = this.trapDamageBonus
@@ -309,6 +311,15 @@ export class Card {
     if (this.groupCount >= 3) return 999
     if (this.groupCount === 2) return 5 + bonus
     return (this.baseDamage || 2) + bonus
+  }
+
+  /** 함정이 실제로 가하는/표기할 피해를 하나의 수치로 돌려준다(보너스 합산 포함).
+   *  거미줄·포자 등은 밟음 피해와 동일하고, 폭탄은 폭발 피해(5+보너스)를 따른다.
+   *  필드 표기와 폭탄 폭발(TurnManager)이 같은 값을 쓰도록 함정을 한 종류로 묶는다. */
+  effectiveTrapDamage(): number {
+    if (this.type !== CardType.TRAP) return 0
+    if (this.trapKind === 'bomb') return Card.BOMB_DAMAGE + this.trapDamageBonus
+    return this.getTrapDamagePenalty()
   }
 
   /**
