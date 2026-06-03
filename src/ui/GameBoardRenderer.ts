@@ -2363,7 +2363,6 @@ export class GameBoardRenderer {
         <span class="boss-cast-card-illust" aria-hidden="true"><img src="${meta.illust}" alt="" /></span>
         <span class="boss-cast-card-title">${meta.title}</span>
         <span class="boss-cast-card-effect">${meta.desc}</span>
-        ${bonus ? '<span class="boss-witch-combo-bonus">추가</span>' : ''}
       `
       document.body.appendChild(card)
       return card
@@ -2703,6 +2702,74 @@ export class GameBoardRenderer {
     SquareBurst.playOn(tile, 'treasure-gain', { count: 32, spread: 230, duration: 760 })
     tile.classList.add('is-boss-blown')
     await new Promise((r) => window.setTimeout(r, 640))
+  }
+
+  /** 100F 마녀 격파 직전 컷신의 보스 칸 전부를 모으는 헬퍼. 3×3 보스라 보이는 셀이 여러 장이다. */
+  private collectVisibleBossCells(cardId: string): HTMLElement[] {
+    return Array.from(
+      this.boardElement.querySelectorAll<HTMLElement>(`.cell.card[data-card-id="${cardId}"]`)
+    ).filter((el) => el.offsetParent !== null)
+  }
+
+  /** 격파 직전 빛의 선 한 줄을 보스 칸에 그린다. beat가 커질수록 더 밝고 가는 빛이 늘어난다. */
+  private drawWitchLightLine(cell: HTMLElement): void {
+    const line = document.createElement('div')
+    const base = 40 + Math.random() * 100
+    const angle = (Math.random() < 0.5 ? 1 : -1) * base
+    const pos = 8 + Math.random() * 84            // 칸 전체에 분산
+    const w = 0.5 + Math.random() * 0.9           // 가는 빛줄기
+    line.className = 'witch-light-line'
+    line.style.background = [
+      `linear-gradient(${angle.toFixed(1)}deg,`,
+      `transparent ${(pos - w).toFixed(1)}%,`,
+      `rgba(255,250,232,0.96) ${pos.toFixed(1)}%,`,
+      `transparent ${(pos + w).toFixed(1)}%)`,
+    ].join(' ')
+    line.style.animationDelay = `${Math.round(Math.random() * 130)}ms`
+    cell.appendChild(line)
+  }
+
+  /** 마녀 격파 직전 한 마디: 빛의 선 묶음을 긋고, 미세 떨림과 칸 확대를 건다. */
+  async playWaxWitchDeathBeat(cardId: string, beat: number): Promise<void> {
+    const cells = this.collectVisibleBossCells(cardId)
+    if (cells.length === 0) return
+    const scale = (1 + beat * 0.05).toFixed(3)
+    for (const cell of cells) {
+      for (let i = 0; i < beat + 1; i++) this.drawWitchLightLine(cell)
+      cell.classList.add('is-witch-dying')
+      cell.style.setProperty('--witch-death-scale', scale)
+      // 떨림은 매 마디 1회 재시작(클래스 토글 + reflow).
+      cell.classList.remove('is-witch-trembling')
+      void cell.offsetWidth
+      cell.classList.add('is-witch-trembling')
+    }
+    // 빛줄기가 번지는 만큼만 짧게 기다리고 반환 — 떨림/확대는 대사가 뜬 동안 이어진다.
+    await new Promise((r) => window.setTimeout(r, 320))
+  }
+
+  /** 마지막 마디: 빛의 선이 마구 그어진다. 직후 호출되는 폭발 시퀀스로 자연스럽게 넘어간다. */
+  async playWaxWitchDeathFrenzy(cardId: string): Promise<void> {
+    const cells = this.collectVisibleBossCells(cardId)
+    if (cells.length === 0) return
+    for (const cell of cells) {
+      cell.classList.add('is-witch-dying')
+      cell.style.setProperty('--witch-death-scale', '1.2')
+      cell.classList.add('is-witch-frenzy')
+    }
+    // 빛의 선을 짧은 간격으로 연달아 긋는다.
+    for (let burst = 0; burst < 5; burst++) {
+      for (const cell of cells) {
+        this.drawWitchLightLine(cell)
+        this.drawWitchLightLine(cell)
+      }
+      await new Promise((r) => window.setTimeout(r, 90))
+    }
+    await new Promise((r) => window.setTimeout(r, 160))
+    // 폭발 시퀀스가 transform을 다시 잡도록 확대/떨림 잔여 클래스를 정리한다.
+    for (const cell of cells) {
+      cell.classList.remove('is-witch-trembling', 'is-witch-frenzy', 'is-witch-dying')
+      cell.style.removeProperty('--witch-death-scale')
+    }
   }
 
   /** runCardPool이 바뀔 때마다 호출해 도감 손패/조합 탭의 잠금 표시를 갱신한다. */

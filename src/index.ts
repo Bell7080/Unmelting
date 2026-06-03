@@ -355,6 +355,8 @@ function absorbBossShieldAfterFieldEffect(before: Map<string, FieldHealthSnapsho
   const snapshot = before.get(state.card.id)
   if (!snapshot) return
   bossController.absorbExternalBossDamageWithShield(snapshot.health)
+  // 100F 마녀 페이지 경계: UI diff가 읽기 전에 HP를 하한으로 되돌려 경계 아래로 깜빡이지 않게 한다.
+  bossController.clampWaxWitchExternalDamageToPageFloor()
 }
 
 interface FieldFreezeSnapshotEntry {
@@ -954,14 +956,10 @@ function relicPurchaseBlocked(id: RelicId): boolean {
   return false
 }
 
-async function maybeOpenShopAfterTurn(): Promise<boolean> {
-  // 보스 전투/최종 별빛 등반 중에는 10/30턴 상점·제단을 재트리거하지 않는다.
-  if (gameState.bossBattleActive || finalAscentStarlightRuleActive) return false
-  if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 10 !== 0) return false
-  // Every 30 turns swaps to altar mode; this is the first phase of the
-  // 100-turn run loop (10 shop, 20 shop, 30 altar ...).
-  // 임시: 30턴도 상점 흐름 그대로 진입시키되, 배경만 altar 모드로 분기한다.
-  currentShopMode = gameState.getCurrentTurn() % 30 === 0 ? 'altar' : 'shop'
+/** 상점/제단 오버레이를 연다. 셔터를 내리고 방문 단위 상태를 초기화한 뒤 본문을 노출한다.
+ *  10/20턴 상점, 30/60/90턴 제단, 100F 보스 직전 마지막 제단이 모두 이 경로를 공유한다. */
+async function openShopOverlay(mode: 'shop' | 'altar'): Promise<void> {
+  currentShopMode = mode
   shopOpen = true
   inputLocked = true
   currentShopOffers = rollShopOffers()
@@ -981,10 +979,19 @@ async function maybeOpenShopAfterTurn(): Promise<boolean> {
   // appears so the floating chain text never hangs above the shop tab.
   HandSystem.resetChain(chain)
   clearChainTimeline()
-  recordNotice(currentShopMode === 'altar' ? '레일이 멈추고 제단이 열렸다' : '레일이 멈추고 상점이 열렸다', 'info')
+  recordNotice(mode === 'altar' ? '레일이 멈추고 제단이 열렸다' : '레일이 멈추고 상점이 열렸다', 'info')
   render()
   await boardRenderer.playShopTransition()
   boardRenderer.openShop(buildShopStateView(), score, gameState.character)
+}
+
+async function maybeOpenShopAfterTurn(): Promise<boolean> {
+  // 보스 전투/최종 별빛 등반 중에는 10/30턴 상점·제단을 재트리거하지 않는다.
+  if (gameState.bossBattleActive || finalAscentStarlightRuleActive) return false
+  if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 10 !== 0) return false
+  // Every 30 turns swaps to altar mode; this is the first phase of the
+  // 100-turn run loop (10 shop, 20 shop, 30 altar ...).
+  await openShopOverlay(gameState.getCurrentTurn() % 30 === 0 ? 'altar' : 'shop')
   return true
 }
 
@@ -997,17 +1004,11 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
   const turn = gameState.getCurrentTurn()
   if (turn >= RUN_TARGET_TURNS) {
     // 100층은 즉시 클리어가 아니라 최종 보스 '녹지 않는 마녀' 전투로 닫는다.
+    // 보스 직전 마지막 제단을 먼저 열고(셔터 하강), 제단 EXIT가 보스 게이트로 이어진다.
+    // 격파→보상→시련 흐름은 closeShopAndResume의 100F 분기와 runBossEvent가 그대로 잇는다.
     finalAscentStarlightRuleActive = false
     syncFinalAscentRuleToSpawner()
-    inputLocked = true
-    await boardRenderer.playAltarBossGateTransition()
-    turnManager.setTurnMode('boss_phase')
-    recordNotice('100층 최종 보스가 잿빛 굴레를 드리운다', 'hurt')
-    await bossController.run100F()
-    gameState.endGame('run_clear_100_turns')
-    recordNotice('100층 보스 격파 — 잿빛 굴레가 풀렸다', 'win')
-    inputLocked = false
-    render()
+    await openShopOverlay('altar')
     return true
   }
   // After each altar visit (30, 60, 90), queue a dedicated boss gate.
@@ -1436,7 +1437,13 @@ async function closeShopAndResume(): Promise<void> {
     await boardRenderer.playAltarBossGateTransition()
     turnManager.setTurnMode('boss_phase')
     recordNotice('셔터 레일이 흔들리며 보스가 강림한다', 'hurt')
-    if (gameState.getCurrentTurn() === 90) {
+    if (gameState.getCurrentTurn() >= RUN_TARGET_TURNS) {
+      // 100F 최종 보스: 격파 후 runBossEvent가 보상/시련까지 잇고, 돌아오면 런 클리어로 닫는다.
+      recordNotice('100층 최종 보스가 잿빛 굴레를 드리운다', 'hurt')
+      await bossController.run100F()
+      gameState.endGame('run_clear_100_turns')
+      recordNotice('100층 보스 격파 — 잿빛 굴레가 풀렸다', 'win')
+    } else if (gameState.getCurrentTurn() === 90) {
       await bossController.run90F()
     } else if (gameState.getCurrentTurn() === 60) {
       await bossController.run60F()

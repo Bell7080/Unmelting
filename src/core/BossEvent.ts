@@ -275,7 +275,11 @@ export class BossEventController {
     const blocked = Math.min(state.bossShield, rawDamage)
     state.bossShield -= blocked
     this.syncBossShieldToCard()
-    const dealt = Math.min(rawDamage - blocked, card.getHealth())
+    // 페이지 경계 초과 피해는 깎기 전에 버린다 — HP바가 경계 아래로 내려갔다 복구되며 깜빡이지 않게 한다.
+    const pageFloor = this.waxWitchPageFloor()
+    const dealt = pageFloor > 0
+      ? Math.min(rawDamage - blocked, Math.max(0, card.getHealth() - pageFloor))
+      : Math.min(rawDamage - blocked, card.getHealth())
     if (dealt > 0) card.takeDamage(dealt)
     if (blocked > 0) this.inject.recordNotice(`밀랍 방패가 피해 ${blocked}를 막았다`, 'info')
     state.turn += 1
@@ -298,16 +302,17 @@ export class BossEventController {
     if (state.turn % state.def.attackInterval === 0) {
       if (state.def.specialEnemyKind === 'waxWitch') {
         // 100F 페이지 능력은 해금 뒤 사라지지 않는다.
-        // 2페이지부터는 보스 손패 4장 콤보가 계속 발동하고, 3페이지에서는 그 뒤에 강화 소환까지 이어진다.
+        // 2페이지부터는 보스 손패 4장 콤보가 반격까지 포함해 1회만 친다. 여기서 바로 반환해
+        // 아래 공통 반격(else 분기)으로 내려가 두 번 때리던 버그를 막는다. 3페이지는 그 뒤 강화 소환을 잇는다.
         if (state.witchPage >= 2) {
           if (await this.resolveWaxWitchPageTwoTurn(card.id)) return
           if (!this.gs.character.isAlive()) {
             await this.inject.handlePlayerDeath()
             return
           }
-        }
-        if (state.witchPage === 3) {
-          await this.performWitchSummonToBack()
+          if (state.witchPage === 3) {
+            await this.performWitchSummonToBack()
+          }
           this.inject.setInputLocked(false)
           return
         }
@@ -583,6 +588,23 @@ export class BossEventController {
     this.inject.render()
     await this.br.animateResourceTrailFromCard(bossCardId, 'hand', 1, 'hand-recovery')
   }
+  /** 100F 마녀의 현재 페이지 HP 하한. 1페이지 140, 2페이지 70, 그 외(마녀 아님/3페이지)는 0. */
+  private waxWitchPageFloor(): number {
+    const state = this.eventState
+    if (!state || state.def.specialEnemyKind !== 'waxWitch') return 0
+    if (state.witchPage === 1) return 140
+    if (state.witchPage === 2) return 70
+    return 0
+  }
+
+  /** 손패/조합 등 외부 피해가 페이지 경계를 넘어 보스 HP를 깎았을 때, UI diff가 읽기 전에 하한으로 되돌린다. */
+  clampWaxWitchExternalDamageToPageFloor(): void {
+    const floor = this.waxWitchPageFloor()
+    if (floor > 0 && this.eventState && this.eventState.card.health < floor) {
+      this.eventState.card.health = floor
+    }
+  }
+
   /** waxKnight 방패량을 Card에 복사해 렌더러가 플레이어와 같은 방패 칩을 그리게 한다. */
   private syncBossShieldToCard(): void {
     if (!this.eventState) return
@@ -1044,12 +1066,37 @@ export class BossEventController {
     this.inject.setInputLocked(false)
   }
 
+  /** 100F 마녀 전용 격파 직전 컷신. 빛의 선이 한 줄씩 늘며 칸이 미세히 떨리고 확대되고,
+   *  세 마디 독백을 지나 빛의 선이 마구 그어진 뒤 폭발(playBossDefeatSequence)로 이어진다. */
+  private async playWitchDeathCutscene(cardId: string): Promise<void> {
+    const lines = [
+      '결국. . . 이렇게 되는 건가.',
+      '하나만. . . 기억해.',
+      '현실이 이상은 아니라는 것을. . . . . .',
+    ]
+    const holdMs = [2600, 2300, 3300]
+    for (let beat = 0; beat < lines.length; beat++) {
+      // 빛의 선 + 미세 떨림 + 칸 확대를 먼저 깐 뒤, 떨리는 동안 대사를 띄운다.
+      await this.br.playWaxWitchDeathBeat(cardId, beat + 1)
+      this.bossBubble.show(lines[beat])
+      await new Promise((r) => window.setTimeout(r, holdMs[beat]))
+      this.bossBubble.dismiss()
+      await new Promise((r) => window.setTimeout(r, 240))
+    }
+    // 빛의 선이 하나 둘 더 그어지다 마구 그어진다 — 폭발 직전 마디.
+    await this.br.playWaxWitchDeathFrenzy(cardId)
+  }
+
   private async handleDefeated(): Promise<void> {
     if (!this.eventState) return
     const state = this.eventState
     if (state.defeatTriggered) return
     state.defeatTriggered = true
 
+    // 100F 마녀는 최종 보스답게 빛의 선이 번지며 칸이 확대되는 격파 직전 독백 컷신을 먼저 재생한다.
+    if (state.def.specialEnemyKind === 'waxWitch') {
+      await this.playWitchDeathCutscene(state.card.id)
+    }
     await this.br.playBossDefeatSequence(state.card.id)
     // 보스가 현재 실제로 점유 중인 행(startRow부터 occupiedDistRows)을 정리한다.
     const startRow = state.sculptorStartRow

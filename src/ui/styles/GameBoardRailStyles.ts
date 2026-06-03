@@ -736,27 +736,28 @@ export const GAME_BOARD_RAIL_STYLES = `
   45%  { filter: brightness(1.9) saturate(1.25); box-shadow: 0 18px 38px rgba(0, 0, 0, 0.74), 0 0 34px rgba(255, 210, 112, 0.92); }
   100% { filter: brightness(1.18); box-shadow: 0 16px 34px rgba(0, 0, 0, 0.7), 0 0 24px rgba(255, 178, 86, 0.62); }
 }
+/* 추가(보너스) 카드는 별도 라벨 없이 더 밝게 빛나는 것만으로 구분한다. */
 .boss-witch-combo-card.is-bonus {
-  border-color: rgba(255, 210, 112, 0.9);
+  border-color: rgba(255, 224, 150, 0.95);
+  filter: brightness(1.16) saturate(1.12);
   box-shadow:
-    inset 0 1px 0 rgba(255, 238, 184, 0.32),
+    inset 0 1px 0 rgba(255, 244, 200, 0.4),
     0 16px 34px rgba(0, 0, 0, 0.72),
-    0 0 0 1px rgba(210, 120, 42, 0.52),
-    0 0 30px rgba(255, 190, 92, 0.72);
+    0 0 0 1px rgba(230, 150, 60, 0.6),
+    0 0 42px rgba(255, 206, 110, 0.95);
+  animation: boss-witch-bonus-glow 1.5s ease-in-out infinite;
 }
-.boss-witch-combo-bonus {
-  position: absolute;
-  right: 7px;
-  top: 7px;
-  z-index: 2;
-  padding: 2px 6px;
-  border-radius: 999px;
-  color: #31180d;
-  background: linear-gradient(180deg, #ffe4a2, #f4a460);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55), 0 0 12px rgba(255, 198, 96, 0.6);
+@keyframes boss-witch-bonus-glow {
+  0%, 100% { box-shadow:
+    inset 0 1px 0 rgba(255, 244, 200, 0.4),
+    0 16px 34px rgba(0, 0, 0, 0.72),
+    0 0 0 1px rgba(230, 150, 60, 0.6),
+    0 0 38px rgba(255, 206, 110, 0.85); }
+  50% { box-shadow:
+    inset 0 1px 0 rgba(255, 248, 214, 0.5),
+    0 16px 34px rgba(0, 0, 0, 0.72),
+    0 0 0 1px rgba(245, 168, 72, 0.72),
+    0 0 56px rgba(255, 216, 132, 1); }
 }
 .boss-witch-combo-card.is-resolving {
   filter: brightness(1.35) saturate(1.12);
@@ -1338,6 +1339,45 @@ export const GAME_BOARD_RAIL_STYLES = `
   0%   { transform: scale(1); opacity: 1; filter: blur(0) brightness(1.1) saturate(1.2); }
   35%  { transform: scale(1.18); opacity: 0.92; filter: blur(2px) brightness(1.5) saturate(1.6); }
   100% { transform: scale(1.6); opacity: 0; filter: blur(8px) brightness(1.3) saturate(1.1); }
+}
+
+/* ---- 100F 마녀 격파 직전 컷신 ----
+   빛의 선(.witch-light-line)이 칸에 번지며, 칸이 미세히 떨리고(--witch-death-scale) 확대된다.
+   confirm 폭발(is-boss-defeating/blown) 직전 마디로, frenzy 종료 시 클래스를 정리해 폭발 transform에 양보한다. */
+.cell.card.type-boss.is-witch-dying {
+  transform: scale(var(--witch-death-scale, 1));
+  transition: transform 0.5s cubic-bezier(0.22, 0.8, 0.3, 1), filter 0.5s ease-out;
+  filter: brightness(calc(1 + (var(--witch-death-scale, 1) - 1) * 1.8)) saturate(1.12);
+  z-index: 60;
+}
+.cell.card.type-boss.is-witch-trembling {
+  /* transform(scale)과 합성되도록 떨림은 translate 개별 속성으로 준다. */
+  animation: witch-death-tremble 0.52s ease-in-out;
+}
+@keyframes witch-death-tremble {
+  0%, 100% { translate: 0 0; }
+  20% { translate: -1.6px 1px; }
+  40% { translate: 2px -1px; }
+  60% { translate: -1.6px -1px; }
+  80% { translate: 1px 1.6px; }
+}
+.cell.card.type-boss.is-witch-frenzy {
+  filter: brightness(1.5) saturate(1.2);
+  transition: filter 0.18s ease-out;
+}
+.witch-light-line {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 7;
+  mix-blend-mode: screen;
+  opacity: 0;
+  animation: witch-light-streak 0.62s ease-out forwards;
+}
+@keyframes witch-light-streak {
+  0%   { opacity: 0; }
+  35%  { opacity: 1; }
+  100% { opacity: 0.85; }
 }
 
 /* 보스 최초 하강 착지: 위에서 내려와 바운스 후 정착한다. */
