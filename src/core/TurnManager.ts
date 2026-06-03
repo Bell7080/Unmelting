@@ -215,6 +215,8 @@ export class TurnManager {
       seen.add(card)
       if (!card.isBombArmed || card.isFrozen()) continue
 
+      // 폭탄 기본 피해 5 + 시련 '역경' 함정 피해 보너스(거미줄/포자와 동일 적용).
+      const bombDamage = 5 + card.trapDamageBonus
       // Bomb splash hurts neighboring enemies but does not delete non-enemy cells.
       // 사망한 적은 즉시 row에서 제거해야 미믹 등 특수 적이 0HP로 잔존하지 않는다.
       const adjacentCardIds: string[] = []
@@ -222,7 +224,7 @@ export class TurnManager {
       for (const neighborLane of [i - 1, i + 1]) {
         const neighbor = this.gameState.lanes[neighborLane]?.getCardAtDistance(0)
         if (neighbor?.type === CardType.ENEMY) {
-          neighbor.takeDamage(5)
+          neighbor.takeDamage(bombDamage)
           adjacentCardIds.push(neighbor.id)
           if (neighbor.getHealth() <= 0) defeatedNeighbors.add(neighbor)
         }
@@ -230,7 +232,7 @@ export class TurnManager {
       for (const dead of defeatedNeighbors) {
         this.gameState.removeCardFromRow(dead, 0)
       }
-      const playerDamage = this.gameState.character.takeDamage(5)
+      const playerDamage = this.gameState.character.takeDamage(bombDamage)
       const bombCardId = card.id
       this.gameState.removeCardFromRow(card, 0)
       explosions.push({

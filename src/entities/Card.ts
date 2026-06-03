@@ -128,6 +128,8 @@ export class Card {
   enemyPower: number
   /** Trap subtype and behavior state for web/bomb/spore rules. */
   trapKind: TrapKind
+  /** 시련 '역경' 누적 함정 피해 보너스. 거미줄/포자/폭탄 모든 함정 피해에 더해진다. */
+  trapDamageBonus: number = 0
   isBombArmed: boolean
   sporeTurnsUntilSpread: number
   // True for exactly one applySporeSpread cycle after a spawned spore first enters
@@ -295,15 +297,18 @@ export class Card {
   /** Return trap damage for the current trap width and subtype. */
   getTrapDamagePenalty(): number {
     if (this.type !== CardType.TRAP) return 0
+    // 폭탄 피해는 TurnManager가 직접(5 + trapDamageBonus) 처리한다.
     if (this.trapKind === 'bomb') return 0
+    // 시련 '역경'의 함정 피해 보너스는 거미줄/포자 모든 변형에 더한다(즉사 999 칸은 제외).
+    const bonus = this.trapDamageBonus
     if (this.trapKind === 'spore') {
-      if (this.groupCount >= 3) return 5
-      if (this.groupCount === 2) return 3
-      return 1
+      if (this.groupCount >= 3) return 5 + bonus
+      if (this.groupCount === 2) return 3 + bonus
+      return 1 + bonus
     }
     if (this.groupCount >= 3) return 999
-    if (this.groupCount === 2) return 5
-    return this.baseDamage || 2
+    if (this.groupCount === 2) return 5 + bonus
+    return (this.baseDamage || 2) + bonus
   }
 
   /**

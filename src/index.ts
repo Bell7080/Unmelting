@@ -754,7 +754,7 @@ function rollShopOffers(excludeIds: string[] = []): ShopOfferView[] {
 
 /** 보스 흐름 외의 milestone 분기(maybeRunMilestoneEventsAfterTurn)에서 호출되는
  *  비상용 트라이얼 — 평소엔 사용되지 않지만 흐름이 살아 있을 때를 대비해 새 카드
- *  3종(방화광/양초 사냥꾼/가난) 정의를 그대로 사용한다. */
+ *  3종(광란/역경/가난) 정의를 그대로 사용한다. */
 async function openTrialOverlay(): Promise<void> {
   inputLocked = true
   await openTrialOverlayForced()

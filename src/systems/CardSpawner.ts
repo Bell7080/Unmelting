@@ -440,7 +440,7 @@ export class CardSpawner {
   }
 
   /** Pick one of the current one-lane enemies, applying tier bonus if any.
-   *  시련 '방화광'이 누적될 경우 trialEnemyHp/AtkBonus가 정수 단위로 추가된다. */
+   *  시련 '광란'이 누적될 경우 trialEnemyHp/AtkBonus가 정수 단위로 추가된다. */
   private generateEnemy(): Card {
     const pool = this.getActiveEnemyDefinitions()
     const definition = pool[Math.floor(Math.random() * pool.length)]
@@ -466,8 +466,8 @@ export class CardSpawner {
   }
 
   /** Spawn the current one-lane trap; wider traps are produced by row grouping.
-   *  시련 '양초 사냥꾼' 누적 시 trialTrapDamageBonus가 baseDamage에 더해진다.
-   *  단 bomb은 baseDamage를 사용하지 않으므로 모든 카운트다운 처리는 영향이 없다. */
+   *  시련 '역경' 누적 함정 피해 보너스는 trapDamageBonus로 실어, 거미줄/포자/폭탄
+   *  모든 함정 피해(고정치 포함)에 일관되게 더해진다. */
   private generateTrap(options: { trapKind?: TrapKind } = {}): Card {
     // Trap kind is usually selected by weighted buckets; the random fallback is
     // kept for targeted debug calls and future systems that request any trap.
@@ -476,15 +476,17 @@ export class CardSpawner {
       : TRAP_DEFINITIONS
     const definition = trapPool[Math.floor(Math.random() * trapPool.length)]
     this.spawnSerial++
-    return new Card(
+    const trap = new Card(
       `trap-${this.spawnSerial}-${Math.random()}`,
       CardType.TRAP,
       definition.name,
       definition.description,
       0,
-      (definition.healthOrDamage ?? 2) + this.trialTrapDamageBonus,
+      definition.healthOrDamage ?? 2,
       { trapKind: definition.trapKind }
     )
+    trap.trapDamageBonus = this.trialTrapDamageBonus
+    return trap
   }
 
   /** Pick a non-merging opening fallback when rerolls keep matching neighbors. */

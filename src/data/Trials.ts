@@ -26,16 +26,16 @@ export const TRIAL_DEFINITIONS: TrialDefinition[] = [
   {
     id: 'arsonist',
     title: '광란',
-    effect: '앞으로 나올 모든 적의 체력 +1, 공격력 +1',
+    effect: '앞으로 나올 모든 적의 체력 +2, 공격력 +1',
     spriteKey: '001',
-    effectKind: { type: 'enemy-stat-bonus', hpBonus: 1, atkBonus: 1 },
+    effectKind: { type: 'enemy-stat-bonus', hpBonus: 2, atkBonus: 1 },
   },
   {
     id: 'candle-hunter',
     title: '역경',
-    effect: '앞으로 나올 모든 함정의 피해 +1',
+    effect: '앞으로 나올 모든 함정(거미줄/포자/폭탄)의 피해 +2',
     spriteKey: '004',
-    effectKind: { type: 'trap-damage-bonus', value: 1 },
+    effectKind: { type: 'trap-damage-bonus', value: 2 },
   },
   {
     id: 'poverty',

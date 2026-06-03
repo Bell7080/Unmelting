@@ -787,10 +787,10 @@ export class GameBoardRenderer {
       // gate, which are status words rather than numeric damage.
       if (card.trapKind === 'bomb') {
         // 점화 상태는 좌상단 배지로만 표기하고, 중앙 하단은 다른 함정과 동일하게
-        // 검+폭발 피해(5, 도감 표기와 일치)를 보여 준다.
+        // 검+폭발 피해(기본 5 + 시련 '역경' 보너스)를 보여 준다.
         stats = `
           <div class="card-stats">
-            <span class="stat atk">${swordIcon()}<span class="stat-value">5</span></span>
+            <span class="stat atk">${swordIcon()}<span class="stat-value">${5 + card.trapDamageBonus}</span></span>
           </div>
         `
       } else {
