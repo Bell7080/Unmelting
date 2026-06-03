@@ -723,6 +723,44 @@ export const GAME_BOARD_RAIL_STYLES = `
   --boss-cast-illust-hi: rgba(255, 130, 70, 0.55);
   border-color: rgba(190, 60, 30, 0.82);
 }
+/* 100F 마녀 손패 콤보: 4장을 한 줄로 펼친 뒤 중복 카드와 추가 카드를 명확히 강조한다. */
+.boss-witch-combo-card {
+  z-index: 245;
+  width: clamp(92px, 10.4vw, 124px);
+}
+.boss-witch-combo-card.is-duplicate {
+  animation: boss-witch-duplicate-ding 0.42s cubic-bezier(0.18, 0.86, 0.24, 1.2) both;
+}
+@keyframes boss-witch-duplicate-ding {
+  0%   { filter: brightness(1); box-shadow: 0 16px 34px rgba(0, 0, 0, 0.7), 0 0 26px rgba(150, 30, 24, 0.5); }
+  45%  { filter: brightness(1.9) saturate(1.25); box-shadow: 0 18px 38px rgba(0, 0, 0, 0.74), 0 0 34px rgba(255, 210, 112, 0.92); }
+  100% { filter: brightness(1.18); box-shadow: 0 16px 34px rgba(0, 0, 0, 0.7), 0 0 24px rgba(255, 178, 86, 0.62); }
+}
+.boss-witch-combo-card.is-bonus {
+  border-color: rgba(255, 210, 112, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 238, 184, 0.32),
+    0 16px 34px rgba(0, 0, 0, 0.72),
+    0 0 0 1px rgba(210, 120, 42, 0.52),
+    0 0 30px rgba(255, 190, 92, 0.72);
+}
+.boss-witch-combo-bonus {
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  z-index: 2;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: #31180d;
+  background: linear-gradient(180deg, #ffe4a2, #f4a460);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55), 0 0 12px rgba(255, 198, 96, 0.6);
+}
+.boss-witch-combo-card.is-resolving {
+  filter: brightness(1.35) saturate(1.12);
+}
 
 /* ---- 사이즈 유형: boss-kind-waxSculptor = 2×3 ----
    :has()로 어느 dist에 보스 카드가 있는지 감지해 front/back phase를 구분한다.
@@ -958,6 +996,18 @@ export const GAME_BOARD_RAIL_STYLES = `
   box-shadow: inset 0 1px 0 rgba(255, 215, 120, 0.4);
   transition: width 0.28s cubic-bezier(0.2, 0.86, 0.28, 1);
 }
+/* 100F 보스 페이지 경계선 — 불씨 게이지의 작은 눈금처럼 HP바 위에 140/70 전환점을 표시한다. */
+.boss-face-hpbar-page-marker {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  z-index: 1;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(255, 246, 210, 0.95);
+  box-shadow: 0 0 0 1px rgba(60, 18, 12, 0.72), 0 0 8px rgba(255, 210, 120, 0.64);
+}
 .boss-face-hpbar-text {
   position: relative;
   z-index: 2;
@@ -1130,6 +1180,29 @@ export const GAME_BOARD_RAIL_STYLES = `
   border-left: 2px solid rgba(244, 164, 96, 0.55);
 }
 .boss-intro-overlay-trait strong { color: #ffd178; letter-spacing: 0.04em; }
+.boss-intro-overlay-trait ul {
+  margin: 7px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.boss-intro-overlay-trait li {
+  position: relative;
+  padding-left: 14px;
+  line-height: 1.45;
+}
+.boss-intro-overlay-trait li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.68em;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #ffd178;
+  box-shadow: 0 0 8px rgba(255, 183, 86, 0.55);
+}
 
 /* 인트로 hint는 카드 옆/안이 아니라 화면 하단에 회색 톤으로 깜빡인다. */
 .boss-intro-overlay-hint {

@@ -889,6 +889,7 @@ export class GameBoardRenderer {
             ${shieldChip}
             <div class="boss-face-hpbar" aria-label="보스 체력">
               <div class="boss-face-hpbar-fill" style="width:${hpPct}%"></div>
+              ${this.renderBossHpPhaseMarkers(maxHp)}
               <span class="boss-face-hpbar-text">
                 <span class="boss-face-hpbar-icon">${heartIcon()}</span>
                 ${this.renderHudCounter('boss-hp', hp)}<span class="boss-face-hpbar-sep">/</span><span>${maxHp}</span>
@@ -899,6 +900,17 @@ export class GameBoardRenderer {
         </div>
       </article>
     `
+  }
+
+  /** 100F 최종 보스 HP바에는 불씨 게이지 눈금처럼 140/70 페이지 경계선을 새긴다. */
+  private renderBossHpPhaseMarkers(maxHp: number): string {
+    if (maxHp !== 210) return ''
+    return [140, 70]
+      .map((threshold) => {
+        const left = Math.max(0, Math.min(100, (threshold / maxHp) * 100))
+        return `<span class="boss-face-hpbar-page-marker" style="left:${left}%" aria-hidden="true"></span>`
+      })
+      .join('')
   }
 
   private groupName(type: CardType, span: number): string {
@@ -2140,6 +2152,13 @@ export class GameBoardRenderer {
     // 잔재 정리: 직전 보스 이벤트가 비정상 종료됐다면 같은 노드가 남아 있을 수 있다.
     document.getElementById('boss-intro-overlay')?.remove()
     const spriteUrl = opts.spriteUrl ?? SpriteUrls.enemyWaves[3]
+    const traitLines = (opts.trait ?? `보스 체력이 ${opts.handGiftStep} 닳을 때마다 플레이어에게 랜덤 손패 1장을 지급한다.`)
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+    const traitMarkup = traitLines.length > 1
+      ? `<div class="boss-intro-overlay-trait"><strong>특징</strong><ul>${traitLines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul></div>`
+      : `<p class="boss-intro-overlay-trait"><strong>특징</strong> · ${escapeHtml(traitLines[0] ?? '')}</p>`
     const host = document.createElement('div')
     host.id = 'boss-intro-overlay'
     host.className = 'boss-intro-overlay'
@@ -2155,7 +2174,7 @@ export class GameBoardRenderer {
             <li><span class="boss-intro-overlay-stat-label">반격 주기</span><span class="boss-intro-overlay-stat-value">${opts.attackInterval}턴</span></li>
           </ul>
           <p class="boss-intro-overlay-desc">"${escapeHtml(opts.introBubble ?? '내 저택에 온 것을 환영하네, 위태로운 불씨여.')}"</p>
-          <p class="boss-intro-overlay-trait"><strong>특징</strong> · ${escapeHtml(opts.trait ?? `보스 체력이 ${opts.handGiftStep} 닳을 때마다 플레이어에게 랜덤 손패 1장을 지급한다.`)}</p>
+          ${traitMarkup}
         </div>
       </section>
       <div class="boss-intro-overlay-hint" aria-hidden="true">CLICK ANYWHERE TO CONTINUE</div>
@@ -2304,6 +2323,114 @@ export class GameBoardRenderer {
    *  보스 전용 손패(시련 톤 붉은 카드, 상단 촛농/양초/불씨 일러스트)가 보스 중앙에서
    *  커지듯 나타나 ~1.5초 잔류한 뒤, 팡 터지며 효과별 수치가 알맞은 HUD로 블라스트된다.
    *  - 방패 → 플레이어 방패 칩, 체력 → 플레이어 체력, 피해 → 플레이어 카드로 발사. */
+  /** 100F 마녀 2페이지 손패 콤보: 4장을 일렬로 펼친 뒤 중복 카드를 빛내고 보너스 카드를 추가해 순차 해결한다. */
+  async animateWaxWitchHandCombo(
+    cardId: string,
+    effects: ('shield' | 'heal' | 'strike')[],
+    bonusEffects: ('shield' | 'heal' | 'strike')[],
+    amount: number,
+    onResolve: (effect: 'shield' | 'heal' | 'strike') => Promise<void>,
+  ): Promise<void> {
+    const tile = this.findCardElement(cardId)
+    if (!tile) return
+
+    const cells = Array.from(
+      this.boardElement.querySelectorAll<HTMLElement>(`.cell.card[data-card-id="${cardId}"]`)
+    ).filter((el) => el.offsetParent !== null)
+    const rects = cells.map((c) => c.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0)
+    const baseRect = rects.length > 0 ? rects[0] : tile.getBoundingClientRect()
+    const bossX = rects.length > 0
+      ? (Math.min(...rects.map((r) => r.left)) + Math.max(...rects.map((r) => r.right))) / 2
+      : baseRect.left + baseRect.width / 2
+    const bossY = rects.length > 0
+      ? (Math.min(...rects.map((r) => r.top)) + Math.max(...rects.map((r) => r.bottom))) / 2
+      : baseRect.top + baseRect.height / 2
+    const metaFor = (effect: 'shield' | 'heal' | 'strike') => ({
+      shield: { title: '밀랍 방패', desc: `방패 +${amount}`, label: `방패 +${amount}`, illust: spriteForHandCard('candle'),   burst: 'boss-candle-flame' as const, dest: 'boss-shield' as const },
+      heal:   { title: '촛불 가호', desc: `체력 +${amount}`, label: `체력 +${amount}`, illust: spriteForHandCard('wax-drop'), burst: 'boss-wax-drip' as const,     dest: 'boss-health' as const },
+      strike: { title: '불씨 일격', desc: `피해 ${amount}`,  label: `피해 ${amount}`,  illust: spriteForHandCard('ember'),    burst: 'boss-ember-spark' as const,  dest: 'player' as const },
+    }[effect])
+    const createCard = (effect: 'shield' | 'heal' | 'strike', index: number, bonus = false): HTMLElement => {
+      const meta = metaFor(effect)
+      const card = document.createElement('div')
+      card.className = `boss-cast-card boss-cast-card--${effect} boss-witch-combo-card${bonus ? ' is-bonus' : ''}`
+      card.dataset.effect = effect
+      card.style.left = `${bossX}px`
+      card.style.top = `${bossY}px`
+      card.style.setProperty('--combo-index', String(index))
+      card.innerHTML = `
+        <span class="boss-cast-card-glow" aria-hidden="true"></span>
+        <span class="boss-cast-card-illust" aria-hidden="true"><img src="${meta.illust}" alt="" /></span>
+        <span class="boss-cast-card-title">${meta.title}</span>
+        <span class="boss-cast-card-effect">${meta.desc}</span>
+        ${bonus ? '<span class="boss-witch-combo-bonus">추가</span>' : ''}
+      `
+      document.body.appendChild(card)
+      return card
+    }
+
+    // 4장의 기본 손패를 같은 박자에 차라락 펼치되, index별 지연으로 좌→우 리듬을 만든다.
+    const cards = effects.map((effect, index) => createCard(effect, index))
+    await Promise.all(cards.map((card, index) => card.animate(
+      [
+        { transform: 'translate(-50%, -50%) scale(0.18) rotate(-7deg)', opacity: 0, filter: 'brightness(1.8)' },
+        { transform: `translate(calc(-50% + ${(index - 1.5) * 118}px), -50%) scale(1.08) rotate(${(index - 1.5) * 2}deg)`, opacity: 1, filter: 'brightness(1.18)', offset: 0.76 },
+        { transform: `translate(calc(-50% + ${(index - 1.5) * 118}px), -50%) scale(1) rotate(${(index - 1.5) * 1.2}deg)`, opacity: 1, filter: 'brightness(1)' },
+      ],
+      { duration: 360, delay: index * 70, easing: 'cubic-bezier(0.18, 0.86, 0.24, 1.18)', fill: 'forwards' }
+    ).finished))
+
+    const duplicated = new Set(bonusEffects)
+    if (duplicated.size > 0) {
+      cards.forEach((card) => {
+        if (duplicated.has(card.dataset.effect as 'shield' | 'heal' | 'strike')) card.classList.add('is-duplicate')
+      })
+      await new Promise((r) => window.setTimeout(r, 420))
+    }
+
+    // 중복 효과가 있으면 오른쪽 끝에 5번째 이후 추가 카드를 띵! 하고 꽂는다.
+    const bonusCards = bonusEffects.map((effect, bonusIndex) => createCard(effect, effects.length + bonusIndex, true))
+    await Promise.all(bonusCards.map((card, bonusIndex) => card.animate(
+      [
+        { transform: 'translate(calc(-50% + 244px), -50%) scale(0.25) rotate(7deg)', opacity: 0, filter: 'brightness(2.2)' },
+        { transform: `translate(calc(-50% + ${244 + bonusIndex * 82}px), -50%) scale(1.16) rotate(4deg)`, opacity: 1, filter: 'brightness(1.7)', offset: 0.62 },
+        { transform: `translate(calc(-50% + ${244 + bonusIndex * 82}px), -50%) scale(1) rotate(2deg)`, opacity: 1, filter: 'brightness(1)' },
+      ],
+      { duration: 320, delay: bonusIndex * 80, easing: 'cubic-bezier(0.18, 0.86, 0.24, 1.22)', fill: 'forwards' }
+    ).finished))
+
+    const sequence = [...cards, ...bonusCards]
+    for (const card of sequence) {
+      const effect = card.dataset.effect as 'shield' | 'heal' | 'strike'
+      const meta = metaFor(effect)
+      card.classList.add('is-resolving')
+      await onResolve(effect)
+      const cardRect = card.getBoundingClientRect()
+      const originX = cardRect.left + cardRect.width / 2
+      const originY = cardRect.top + cardRect.height / 2
+      const destEl =
+        meta.dest === 'player'
+          ? this.boardElement.querySelector<HTMLElement>('.player-card')
+          : meta.dest === 'boss-shield'
+            ? (tile.querySelector<HTMLElement>('.boss-face-shield-chip') ?? tile.querySelector<HTMLElement>('.boss-face-hp-column'))
+            : (tile.querySelector<HTMLElement>('.boss-face-hpbar') ?? tile.querySelector<HTMLElement>('.boss-face-hp-column'))
+      SquareBurst.playAt(originX, originY, meta.burst, { count: effect === 'strike' ? 24 : 18, spread: 180, duration: 520 })
+      void this.spawnFieldFloatText(originX, originY - 24, meta.label)
+      tile.classList.add('is-wax-knight-casting')
+      if (destEl) await this.animateResourceTrail(new DOMRect(originX - 10, originY - 10, 20, 20), destEl, effect === 'strike' ? 7 : 5, meta.burst)
+      tile.classList.remove('is-wax-knight-casting')
+      await card.animate(
+        [
+          { transform: getComputedStyle(card).transform === 'none' ? 'translate(-50%, -50%) scale(1)' : getComputedStyle(card).transform, opacity: 1, filter: 'brightness(1.4)' },
+          { transform: 'translate(-50%, -50%) scale(0.38) rotate(5deg)', opacity: 0, filter: 'brightness(2.4)' },
+        ],
+        { duration: 240, easing: 'cubic-bezier(0.5, 0, 0.6, 1)', fill: 'forwards' }
+      ).finished
+      card.remove()
+      if (effect === 'strike') await new Promise((r) => window.setTimeout(r, 90))
+    }
+  }
+
   async animateWaxKnightCardEffect(cardId: string, effect: 'shield' | 'heal' | 'strike', amount: number): Promise<void> {
     const tile = this.findCardElement(cardId)
     if (!tile) return
