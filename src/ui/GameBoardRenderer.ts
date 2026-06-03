@@ -3982,6 +3982,23 @@ export class GameBoardRenderer {
     )
   }
 
+  /** Boss-origin blast that burns a specific hand slot before the model re-renders it away. */
+  async animateBossBlastToHandSlot(cardId: string, slotIndex: number, theme: BurstTheme): Promise<void> {
+    const boss = this.findCardElement(cardId)
+    const slot = this.findHandSlotElement(slotIndex)
+    if (!boss || !slot) return
+    await this.animateResourceTrail(boss, slot, 3, theme)
+    SquareBurst.playOn(slot, theme, { count: 18, spread: 125, duration: 520 })
+    await slot.animate(
+      [
+        { transform: 'scale(1)', opacity: 1, filter: 'brightness(1)' },
+        { transform: 'scale(1.05) rotate(-1deg)', opacity: 1, filter: 'brightness(1.8) saturate(0.8)', offset: 0.36 },
+        { transform: 'scale(0.82) rotate(2deg)', opacity: 0, filter: 'brightness(2.4) saturate(0.15) blur(2px)' },
+      ],
+      { duration: 420, easing: 'cubic-bezier(0.22, 0.86, 0.22, 1)', fill: 'forwards' }
+    ).finished
+  }
+
   /** Flower-specific SquareBurst palettes keep red rose, marigold, lavender,
    *  oleander, and chamomile rewards visually distinct while still using the
    *  same square language as the rest of the board. */

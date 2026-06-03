@@ -15,6 +15,7 @@
  *   - Boss: boss_001. Trial veil: background_005.
  *   - Boss 60F (불씨 기사단장): boss_002.
  *   - Boss 90F (밀랍 조각사): boss_003.
+ *   - Boss 100F (녹지 않는 마녀): boss_004.
  *   - Trial cards: trial_001 광란 / trial_004 역경 / trial_007 가난.
  */
 
@@ -30,6 +31,7 @@ import trialVeilBgUrl from '../assets/sprites/background_005.webp'
 import boss001Url from '../assets/sprites/boss_001.webp'
 import boss002Url from '../assets/sprites/boss_002.webp'
 import boss003Url from '../assets/sprites/boss_003.webp'
+import boss004Url from '../assets/sprites/boss_004.webp'
 import playerUrl from '../assets/sprites/player_001.webp'
 import enemy001Url from '../assets/sprites/enemy_001.webp'
 import enemy002Url from '../assets/sprites/enemy_002.webp'
@@ -131,6 +133,8 @@ export const SpriteUrls = {
   boss60: boss002Url,
   /** 90층 보스(밀랍 조각사) 일러스트. */
   boss90: boss003Url,
+  /** 100층 보스(녹지 않는 마녀) 일러스트. */
+  boss100: boss004Url,
   player: playerUrl,
   // 사용자 지정 매핑: enemy_001~018을 타입 안전한 EnemySpriteId 키와 1:1로 연결한다.
   enemyChitin: enemy001Url,
@@ -307,6 +311,7 @@ export function spriteForCard(card: Card): string {
   if (card.type === CardType.BOSS) {
     if (card.specialEnemyKind === 'waxKnight') return SpriteUrls.boss60
     if (card.specialEnemyKind === 'waxSculptor') return SpriteUrls.boss90
+    if (card.specialEnemyKind === 'waxWitch') return SpriteUrls.boss100
     return SpriteUrls.boss
   }
   if (card.type === CardType.ENEMY) {
