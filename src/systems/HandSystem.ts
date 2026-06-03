@@ -362,10 +362,12 @@ export class HandSystem {
         return { message: msgs.join(' / ') }
       }
       case 'clear-all-field-cards': {
+        // "필드의 모든 칸 제거" — 꽃 칸도 포함해 전부 제거한다(보스만 타입 미포함으로 면역).
         const cleared = HandSystem.clearAllOfTypes(gs, [
           CardType.ENEMY,
           CardType.TRAP,
           CardType.TREASURE,
+          CardType.FLOWER,
         ])
         return { message: `필드 ${cleared}장 제거` }
       }
