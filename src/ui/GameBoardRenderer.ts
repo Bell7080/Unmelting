@@ -3949,6 +3949,31 @@ export class GameBoardRenderer {
     )
   }
 
+  /** 제단 무료 유물 단일 픽 연출: 선택 1장은 살짝 떠오르고(is-altar-picked), 나머지
+   *  2장은 불씨가 사그라들듯 ember 버스트와 함께 사라진다(is-altar-fading). */
+  async resolveAltarRelicPick(relicId: RelicId): Promise<void> {
+    const cards = [
+      ...(this.shopOverlayElement?.querySelectorAll<HTMLElement>(
+        '.shop-relic-card[data-shop-buy-kind="relic"]'
+      ) ?? []),
+    ]
+    if (cards.length === 0) return
+    for (const card of cards) {
+      if (card.dataset.shopBuy === relicId) {
+        card.classList.add('is-altar-picked')
+        continue
+      }
+      card.classList.add('is-altar-fading')
+      const rect = card.getBoundingClientRect()
+      SquareBurst.playAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 'ember-gain', {
+        count: 14,
+        spread: 90,
+        duration: 520,
+      })
+    }
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 340))
+  }
+
   /** Capture the clicked shop card before the board re-renders with the newly owned relic. */
   prepareRelicArrivalFromShop(relicId: RelicId): void {
     const source = this.shopOverlayElement?.querySelector<HTMLElement>(

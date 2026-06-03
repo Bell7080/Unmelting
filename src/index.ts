@@ -133,6 +133,8 @@ let nextActivityLogId = 1
 let activityLogs: ActivityLogEntry[] = []
 let shopOpen = false
 let currentShopOffers: ShopOfferView[] = []
+/** 제단(30턴) 무료 유물은 1회 단일 픽이다. 한 번 고르면 다시 못 고르게 잠근다. */
+let altarRelicPicked = false
 let shopRerollCount = 0
 let shopBasicPackBuys = 0
 let shopUpgradePackBuys = 0
@@ -845,6 +847,7 @@ async function maybeOpenShopAfterTurn(): Promise<boolean> {
   shopOpen = true
   inputLocked = true
   currentShopOffers = rollShopOffers()
+  altarRelicPicked = false
   shopRerollCount = 0
   shopBasicPackBuys = 0
   shopUpgradePackBuys = 0
@@ -1207,6 +1210,11 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   if (!detail.relicId) return
   const offer = currentShopOffers.find((entry) => entry.relicId === detail.relicId)
   if (!offer || offer.purchased) return
+  // 제단: 유물은 무료 단일 픽 — 가격 없이 1장만 획득하고 나머지는 사그라들며 사라진다.
+  if (currentShopMode === 'altar') {
+    await pickAltarRelicFree(detail.relicId)
+    return
+  }
   if (score < offer.price) { boardRenderer.openShop(buildShopStateView(), score, gameState.character); return }
   if (!gameState.character.addRelic(detail.relicId)) {
     render()
@@ -1236,6 +1244,26 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   offer.purchased = true
   await applyRelicPurchaseEffect(detail.relicId)
   boardRenderer.prepareRelicArrivalFromShop(detail.relicId)
+  render()
+  await boardRenderer.animatePreparedRelicArrival()
+  boardRenderer.openShop(buildShopStateView(), score, gameState.character)
+}
+
+/** 제단 무료 유물 단일 픽: 선택 1장만 무료로 획득하고, 비선택 2장은 불씨가 사그라들듯
+ *  사라진다. 픽 후에는 제단 유물 레이어를 비워 재선택을 막는다. */
+async function pickAltarRelicFree(relicId: RelicId): Promise<void> {
+  if (altarRelicPicked) return
+  if (!gameState.character.addRelic(relicId)) { render(); return }
+  altarRelicPicked = true
+  const def = getRelicDef(relicId)
+  pushActivityLogsInDisplayOrder([{ label: `제단 유물: ${def.name}`, kind: 'item-gain' as const }])
+  // 선택 1장은 살짝 떠오르고, 나머지 2장은 ember 버스트와 함께 사그라든다.
+  await boardRenderer.resolveAltarRelicPick(relicId)
+  // 즉발 효과(조각칼/첫 양초 등) 적용 후 보유 유물 부채꼴로 이동.
+  await applyRelicPurchaseEffect(relicId)
+  boardRenderer.prepareRelicArrivalFromShop(relicId)
+  // 픽이 끝나면 유물 오퍼를 비워 재렌더 시 제단 유물 카드가 사라지게 한다.
+  currentShopOffers = []
   render()
   await boardRenderer.animatePreparedRelicArrival()
   boardRenderer.openShop(buildShopStateView(), score, gameState.character)
@@ -1694,6 +1722,7 @@ function startGame(): void {
   activityLogs = []
   shopOpen = false
   currentShopOffers = []
+  altarRelicPicked = false
   boardRenderer.closeShop()
   syncSpawnerTier()
   fillBoardAtStart()

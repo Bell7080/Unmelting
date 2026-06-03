@@ -1672,6 +1672,20 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   100% { opacity: 1; transform: scaleY(1); transform-origin: center; }
 }
 .shop-pack-pick-card.is-fading-out { opacity: 0; scale: 0.88; transition: opacity 0.26s ease, scale 0.26s ease; }
+
+/* 제단 모드 유물은 무료 단일 픽이라 하단 가격 라벨을 숨긴다. */
+.shop-shell[data-shop-mode="altar"] .shop-relic-price-label { display: none; }
+/* 선택 1장은 살짝 떠오르고, 비선택 2장은 불씨가 사그라들듯(어둡게·축소·하강) 사라진다. */
+.shop-relic-card.is-altar-picked { z-index: 8; animation: altar-relic-pick 0.4s cubic-bezier(0.2, 0.86, 0.22, 1) forwards; }
+@keyframes altar-relic-pick {
+  0% { transform: translateY(0) scale(1); }
+  100% { transform: translateY(-8px) scale(1.12); }
+}
+.shop-relic-card.is-altar-fading { pointer-events: none; animation: altar-relic-fade 0.34s ease forwards; }
+@keyframes altar-relic-fade {
+  from { opacity: 1; transform: translateY(0) scale(1); filter: brightness(1) saturate(1); }
+  to { opacity: 0; transform: translateY(12px) scale(0.82); filter: brightness(0.65) saturate(0.55); }
+}
 .shop-pack-pick-card.is-selected { z-index: 8; animation: shop-pack-pick-selected 0.44s cubic-bezier(0.2, 0.86, 0.22, 1) forwards; }
 @keyframes shop-pack-pick-selected {
   0% { transform: translateY(0) scale(1); }
