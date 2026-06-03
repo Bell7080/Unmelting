@@ -2,7 +2,7 @@
  * EmberSystem - Time pressure module.
  *
  * Ember (불씨) is the game's external time. It wanes by 1 every
- * Character.EMBER_DECAY_TURNS turns. As ember falls the world darkens:
+ * active ember-decay cadence turn. As ember falls the world darkens:
  * spawn weights shift, enemies gain stat bonuses, and the screen
  * vignette deepens (Darkest Dungeon torch & sanity feel).
  *
@@ -10,7 +10,7 @@
  * brutal tier — enemies/traps are stronger and treasures stop spawning.
  */
 
-import { Character } from '@entities/Character'
+import type { Character } from '@entities/Character'
 
 export type EmberTier = 'bright' | 'dim' | 'flickering' | 'extinguished'
 
@@ -85,7 +85,8 @@ export class EmberSystem {
   static tickDecayCountdown(character: Character): boolean {
     character.emberDecayCountdown -= 1
     if (character.emberDecayCountdown <= 0) {
-      character.emberDecayCountdown = Character.EMBER_DECAY_TURNS
+      // 제단 자원팩 보상은 캐릭터의 활성 소모 주기를 늘려 3턴→4턴 식으로 늦춘다.
+      character.emberDecayCountdown = character.emberDecayTurns
       EmberSystem.wane(character, 1)
       return true
     }

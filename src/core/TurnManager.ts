@@ -455,7 +455,7 @@ export class TurnManager {
 
   /**
    * Tick the per-turn ember decay countdown. The ember loses 1 only when the
-   * countdown expires (every Character.EMBER_DECAY_TURNS turns). Returns
+   * countdown expires (every active ember-decay cadence turn). Returns
    * `true` when the ember actually decreased on this turn so the caller can
    * surface the change in the activity log.
    *

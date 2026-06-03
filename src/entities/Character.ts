@@ -20,7 +20,7 @@ export class Character {
   static readonly CANDLE_MAX = 15
   /** Hand stacks bottom-up (slot 0 = bottommost). 10 slots total. */
   static readonly HAND_MAX = 10
-  /** Ember wanes by 1 every EMBER_DECAY_TURNS turns. */
+  /** Base cadence before altar resource-pack modifiers slow ember decay. */
   static readonly EMBER_DECAY_TURNS = 3
 
   id: string
@@ -32,8 +32,10 @@ export class Character {
 
   ember: number
   emberMax: number
-  /** Turns remaining until the next ember tick (resets to EMBER_DECAY_TURNS). */
+  /** Turns remaining until the next ember tick (resets to the active decay cadence). */
   emberDecayCountdown: number
+  /** Active ember-decay cadence; altar rewards can raise this from 3 to 4+. */
+  emberDecayTurns: number
   candle: number
   candleMax: number
   hand: HandCard[]
@@ -59,7 +61,8 @@ export class Character {
 
     this.ember = Character.STARTING_EMBER
     this.emberMax = Character.EMBER_MAX
-    this.emberDecayCountdown = Character.EMBER_DECAY_TURNS
+    this.emberDecayTurns = Character.EMBER_DECAY_TURNS
+    this.emberDecayCountdown = this.emberDecayTurns
     this.candle = 0
     this.candleMax = Character.CANDLE_MAX
     this.candleMode = 'max-health'
@@ -116,6 +119,15 @@ export class Character {
   increaseHandMax(amount: number): number {
     const actualIncrease = Math.max(0, amount)
     this.handMax += actualIncrease
+    return actualIncrease
+  }
+
+  /** Slow ember decay by extending the active countdown cadence for this run. */
+  increaseEmberDecayTurns(amount: number): number {
+    const actualIncrease = Math.max(0, amount)
+    this.emberDecayTurns += actualIncrease
+    // 현재 남은 카운트도 같이 늘려 보상을 받은 직후의 체감 지연을 보장한다.
+    this.emberDecayCountdown += actualIncrease
     return actualIncrease
   }
 
@@ -259,7 +271,8 @@ export class Character {
     this.turn = 0
     this.ember = Character.STARTING_EMBER
     this.emberMax = Character.EMBER_MAX
-    this.emberDecayCountdown = Character.EMBER_DECAY_TURNS
+    this.emberDecayTurns = Character.EMBER_DECAY_TURNS
+    this.emberDecayCountdown = this.emberDecayTurns
     this.candle = 0
     this.candleMax = Character.CANDLE_MAX
     this.candleMode = 'max-health'

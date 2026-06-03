@@ -41,13 +41,15 @@ export const SHOP_PACK_POOLS: Record<ShopPackKind, Omit<ShopPackPoolItem, 'apply
   'unlock-pack': [],
   'blessing-pack': [],
   'resource-pack': [
-    // 제단 전용 — 최대 수치/영구 보정 팩. 3종 랜덤 선택.
-    { id: 'res-atk-1',        theme: 'upgrade', title: '칼날 벼리기',     effect: '공격력 +1',              rarity: 'rare' },
-    { id: 'res-handmax-2',    theme: 'upgrade', title: '넉넉한 손',        effect: '최대 손패 +2',           rarity: 'rare' },
-    { id: 'res-maxhp-5',      theme: 'upgrade', title: '심지 연장',        effect: '최대 체력 +5',           rarity: 'rare' },
-    { id: 'res-embermax-2',   theme: 'upgrade', title: '불씨 그릇',        effect: '최대 불씨 게이지 +2',    rarity: 'rare' },
-    { id: 'res-candlemax-m1', theme: 'upgrade', title: '빠른 손',          effect: '손패 콤보 게이지 -1',    rarity: 'epic' },
-    { id: 'res-scoremult-15', theme: 'upgrade', title: '촛불의 축복',      effect: '불빛 획득량 +15%',       rarity: 'epic' },
+    // 제단 전용 자원팩 — basic2_001~007을 순서대로 쓰고, 동전만 기존 basic_011을 재사용한다.
+    { id: 'altar-clothes-thick',  illu: 'basic2_001', theme: 'resource', title: '두꺼운 의복', effect: '최대체력 +5',              rarity: 'common',    weight: 20 },
+    { id: 'altar-heating',        illu: 'basic2_002', theme: 'resource', title: '가열',        effect: '공격력 +1',                rarity: 'legendary', weight: 1  },
+    { id: 'altar-backpack-large', illu: 'basic2_003', theme: 'resource', title: '큰 배낭',     effect: '최대 손패 +2',             rarity: 'common',    weight: 20 },
+    { id: 'altar-matchbox',       illu: 'basic2_004', theme: 'resource', title: '성냥갑',      effect: '최대 불씨 게이지 +2',      rarity: 'rare',      weight: 15 },
+    { id: 'altar-wick-thick',     illu: 'basic2_005', theme: 'resource', title: '두꺼운 심지', effect: '불씨 게이지 소모 턴 +1',    rarity: 'epic',      weight: 3  },
+    { id: 'altar-joker-card',     illu: 'basic2_006', theme: 'resource', title: '조커 카드',   effect: '손패 콤보 게이지 -1',      rarity: 'legendary', weight: 1  },
+    { id: 'altar-lantern',        illu: 'basic2_007', theme: 'resource', title: '랜턴',        effect: '불빛 획득량 +10%',         rarity: 'rare',      weight: 10 },
+    { id: 'altar-one-coin',       illu: 'basic_011',  theme: 'resource', title: '동전 한 닢',  effect: '1$',                       rarity: 'unique',    weight: 1  },
   ],
   'enhance-pack': [],
   'delete-pack': [],
