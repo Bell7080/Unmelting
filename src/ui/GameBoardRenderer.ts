@@ -1368,6 +1368,9 @@ export class GameBoardRenderer {
    *  rebuilding images, which removes the small flash/reload feeling. */
   private shopRelicAffordabilityClass(offer: ShopOfferView, score: number): string {
     if (offer.purchased) return 'is-purchased'
+    // 패도는 최대 체력 16 이상에서만 구매 가능(index.ts relicPurchaseBlocked와 동일 조건).
+    const maxHealth = this.currentGameState?.getCharacter().maxHealth ?? 0
+    if (offer.relicId === 'hegemony' && maxHealth < 16) return 'is-unaffordable'
     // 제단 유물은 무료 단일 픽이라 가격과 무관하게 항상 밝게(affordable) 표시한다.
     if (this.currentShopRenderMode === 'altar') return 'is-affordable'
     return score >= offer.price ? 'is-affordable' : 'is-unaffordable'
@@ -3851,6 +3854,102 @@ export class GameBoardRenderer {
           )
           vanish.onfinish = () => {
             sparkleTimers.forEach((timer) => window.clearTimeout(timer))
+            source.classList.remove('is-revive-locked')
+            clone.remove()
+            overlay.remove()
+            resolve()
+          }
+        }
+      }
+    })
+  }
+
+  /** 권위 발동 연출: 유물을 화면 중앙으로 띄워 붉은 빛으로 떨다 터지고, 동시에 플레이어
+   *  체력 게이지를 크게 확대해 붉은 잔광을 남긴다("피 1로 버텼다"는 강조). 희망과 같은 톤. */
+  animateAuthoritySurvive(relicId: RelicId = 'authority'): Promise<void> {
+    const centerX = window.innerWidth / 2
+    const centerY = window.innerHeight * 0.46
+
+    // 체력 게이지를 확 키웠다가 붉은 잔광으로 줄인다. (다음 render가 요소를 새로 그린다)
+    const hpBar = this.boardElement.querySelector<HTMLElement>('.player-card .hp-bar')
+    hpBar?.animate(
+      [
+        { transform: 'scale(1)', filter: 'none' },
+        { transform: 'scale(1.5)', filter: 'drop-shadow(0 0 18px rgba(220, 60, 60, 0.85)) brightness(1.2)', offset: 0.4 },
+        { transform: 'scale(1.18)', filter: 'drop-shadow(0 0 10px rgba(220, 60, 60, 0.5))' },
+      ],
+      { duration: 1400, easing: 'cubic-bezier(0.18, 0.86, 0.22, 1)', fill: 'forwards' }
+    )
+
+    const source = this.boardElement.querySelector<HTMLElement>(`.relic-mini-card[data-owned-relic="${relicId}"]`)
+    const sourceRect = source?.getBoundingClientRect()
+    if (!source || !sourceRect) {
+      SquareBurst.playAt(centerX, centerY, 'damage', { count: 32, spread: 175, duration: 900 })
+      return new Promise((resolve) => window.setTimeout(resolve, 900))
+    }
+
+    const overlay = document.createElement('div')
+    overlay.setAttribute('aria-hidden', 'true')
+    overlay.style.cssText =
+      'position:fixed;inset:0;z-index:285;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 46%, rgba(120,18,18,0.20), rgba(8,5,14,0.74) 62%, rgba(8,5,14,0.88));'
+    document.body.appendChild(overlay)
+
+    source.classList.add('is-revive-locked')
+    const clone = source.cloneNode(true) as HTMLElement
+    clone.classList.add('hope-revive-card', 'is-revive-locked')
+    clone.style.cssText = `position:fixed;left:${sourceRect.left}px;top:${sourceRect.top}px;width:${sourceRect.width}px;height:${sourceRect.height}px;margin:0;z-index:286;pointer-events:none;transform-origin:50% 50%;`
+    document.body.appendChild(clone)
+
+    const targetWidth = Math.min(230, Math.max(188, window.innerWidth * 0.18))
+    const targetHeight = targetWidth / 0.72
+    const dx = window.innerWidth / 2 - targetWidth / 2 - sourceRect.left
+    const dy = centerY - targetHeight / 2 - sourceRect.top
+    const sx = targetWidth / Math.max(1, sourceRect.width)
+    const sy = targetHeight / Math.max(1, sourceRect.height)
+
+    overlay.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], {
+      duration: 1700,
+      easing: 'ease-in-out',
+      fill: 'forwards',
+    })
+
+    return new Promise((resolve) => {
+      const timers: number[] = []
+      for (let i = 0; i < 5; i += 1) {
+        timers.push(
+          window.setTimeout(() => {
+            SquareBurst.playAt(centerX, centerY, 'damage', { count: 12 + i * 2, spread: 80 + i * 14, duration: 600, size: [6, 16] })
+          }, 360 + i * 150)
+        )
+      }
+      const zoom = clone.animate(
+        [
+          { transform: 'translate(0,0) scale(1)', filter: 'brightness(1)' },
+          { transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`, filter: 'brightness(1.2) drop-shadow(0 22px 44px rgba(220, 60, 60, 0.5))' },
+        ],
+        { duration: 560, easing: 'cubic-bezier(0.18, 0.86, 0.22, 1)', fill: 'forwards' }
+      )
+      zoom.onfinish = () => {
+        const shake = clone.animate(
+          [
+            { transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy}) rotate(0deg)`, filter: 'brightness(1.2)' },
+            { transform: `translate(${dx - 12}px, ${dy}px) scale(${sx}, ${sy}) rotate(-3deg)`, filter: 'brightness(1.5) drop-shadow(0 0 16px rgba(220,60,60,0.7))' },
+            { transform: `translate(${dx + 12}px, ${dy}px) scale(${sx}, ${sy}) rotate(3deg)`, filter: 'brightness(1.7) drop-shadow(0 0 20px rgba(220,60,60,0.8))' },
+            { transform: `translate(${dx}px, ${dy}px) scale(${sx * 1.08}, ${sy * 1.08}) rotate(0deg)`, filter: 'brightness(2.2) saturate(1.4)' },
+          ],
+          { duration: 620, easing: 'cubic-bezier(0.22, 0.96, 0.28, 1)', fill: 'forwards' }
+        )
+        shake.onfinish = () => {
+          SquareBurst.playAt(centerX, centerY, 'damage', { count: 34, spread: 170, duration: 900, size: [8, 22] })
+          const vanish = clone.animate(
+            [
+              { transform: `translate(${dx}px, ${dy}px) scale(${sx * 1.08}, ${sy * 1.08})`, opacity: 1 },
+              { transform: `translate(${dx}px, ${dy}px) scale(${sx * 1.36}, ${sy * 1.36})`, opacity: 0, filter: 'brightness(2) blur(1px)' },
+            ],
+            { duration: 420, easing: 'cubic-bezier(0.16, 0.88, 0.26, 1)', fill: 'forwards' }
+          )
+          vanish.onfinish = () => {
+            timers.forEach((t) => window.clearTimeout(t))
             source.classList.remove('is-revive-locked')
             clone.remove()
             overlay.remove()

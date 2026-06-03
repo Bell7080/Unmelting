@@ -19,6 +19,12 @@ export type RelicId =
   | 'ink-quill'
   | 'first-candle'
   | 'graceful-response'
+  | 'ambition'
+  | 'anomaly'
+  | 'blind-faith'
+  | 'honesty'
+  | 'hegemony'
+  | 'authority'
 
 /** Immutable relic rules used by gameplay and presentation. */
 export interface RelicDefinition {
@@ -131,6 +137,57 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '나에게 피해를 입힌 적에게 피해 1',
     flavor: '받은 만큼 품위 있게 되돌려 주는 단정한 응수.',
     basePrice: 1000,
+  },
+  // --- 체스 테마 유물(011~016) ---
+  ambition: {
+    id: 'ambition',
+    name: '야망',
+    rarity: 'common',
+    // '불빛'은 relicEffectHtml가 다이아(✦) 글리프로 치환한다. 획득량은 발동마다 +25 누적.
+    effect: '적 10회 처치마다 불빛 25 획득(발동마다 +25 누적)',
+    flavor: '한 칸씩 전진할 때마다 더 멀리 내다보는 야심.',
+    basePrice: 620,
+  },
+  anomaly: {
+    id: 'anomaly',
+    name: '변칙',
+    rarity: 'rare',
+    effect: '체력을 10 잃을 때마다 불씨 게이지 1 획득',
+    flavor: '정석을 벗어난 한 수가 판을 뒤집는다.',
+    basePrice: 720,
+  },
+  'blind-faith': {
+    id: 'blind-faith',
+    name: '맹신',
+    rarity: 'rare',
+    effect: '1$ 획득 시마다 불빛 50 획득',
+    flavor: '의심 없는 믿음이 곳간을 빛으로 채운다.',
+    basePrice: 760,
+  },
+  honesty: {
+    id: 'honesty',
+    name: '정직',
+    rarity: 'epic',
+    effect: '손패 5장 사용마다 불빛 50 획득',
+    flavor: '꾸밈없는 수순이 결국 가장 큰 보상을 부른다.',
+    basePrice: 960,
+  },
+  hegemony: {
+    id: 'hegemony',
+    name: '패도',
+    rarity: 'legendary',
+    effect: '구매 즉시 최대 체력 -15, 공격력 +2 (최대 체력 16 이상에서만 구매)',
+    flavor: '제 살을 깎아 칼끝을 세우는 패자의 길.',
+    basePrice: 1400,
+  },
+  authority: {
+    id: 'authority',
+    name: '권위',
+    rarity: 'unique',
+    effect: '치명적인 피해를 단 한 번 체력 1로 버틴다. 발동 후 다시 등장하지 않음.',
+    flavor: '누구도 거역 못 할 한 번의 명령, 너는 아직 쓰러지지 않는다.',
+    basePrice: 1300,
+    banWhenRemoved: true,
   },
 }
 
