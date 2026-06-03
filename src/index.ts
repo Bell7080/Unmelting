@@ -734,14 +734,10 @@ function priceForRelic(id: RelicId): number {
 /** Generate up to three unowned, unbanned relics + per-spawn score price. */
 function rollShopOffers(excludeIds: string[] = []): ShopOfferView[] {
   const character = gameState.character
-  const basePool = RELIC_IDS.filter(
+  // 제단도 상점과 동일하게 전체 유물 풀에서 3장을 뽑는다(상위 등급 제한 없음).
+  const sourcePool = RELIC_IDS.filter(
     (id) => !character.hasRelic(id) && !character.bannedRelics.includes(id)
   )
-  // 제단 유물 풀은 상위 등급만 허용해 분위기와 보상 체감을 분리한다.
-  const allowedAltarRarity = new Set(['epic', 'unique', 'legendary'])
-  const sourcePool = currentShopMode === 'altar'
-    ? basePool.filter((id) => allowedAltarRarity.has(getRelicDef(id).rarity))
-    : basePool
   // 리롤 시 현재 배치된 유물은 제외한다. 풀이 부족하면 제외 없이 폴백한다.
   const excludeSet = new Set(excludeIds)
   const filteredPool = excludeSet.size > 0
