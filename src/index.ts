@@ -701,27 +701,25 @@ async function tryResolveHopeRevive(): Promise<boolean> {
   return true
 }
 
-/** 별빛 랜턴(id: golden-squirrel)은 5턴마다 불빛 500을 흘려보낸다. */
+/** 별빛 랜턴(id: golden-squirrel)은 5턴마다 불빛 300을 흘려보낸다. */
 async function applyTurnStartRelics(): Promise<void> {
   if (!gameState.character.hasRelic('golden-squirrel')) return
   if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 5 !== 0) return
-  // 불빛은 턴 배율 없이 고정 500을 더하고 점수 패널로 트레일/버스트를 띄운다.
-  score += 500
+  // 불빛은 턴 배율 없이 고정 300을 더하고 점수 패널로 트레일/버스트를 띄운다.
+  score += 300
   scorePulseKey++
-  pushActivityLogsInDisplayOrder([{ label: '별빛 랜턴', scoreDelta: 500, kind: 'score' }])
-  recordRelicActivation('golden-squirrel', '불빛 +500')
+  pushActivityLogsInDisplayOrder([{ label: '별빛 랜턴', scoreDelta: 300, kind: 'score' }])
+  recordRelicActivation('golden-squirrel', '불빛 +300')
   await playResourceTrail({ kind: 'chain' }, 'score', 1)
   burstScoreGain()
 }
 
-/** 상점 가격(불빛) 인플레이션 배수. 10~30층은 1배로 두고, 30층 이후 제곱 곡선으로
- *  가팔라져 후반 불빛 과잉을 흡수한다. (예: 60층 ≈2배, 90층 ≈5배, 100층 ≈6.4배)
- *  수입 배수(getTurnScoreMultiplier, 선형)보다 후반에 더 빨리 올라가도록 의도했다. */
+/** 상점 가격(불빛) 인플레이션 배수. 첫 상점인 10층을 기본 1배로 잡고, 유저 불빛 수입
+ *  인플레이션(getTurnScoreMultiplier)과 같은 0.015/턴 선형으로 완만히 증가한다.
+ *  (예: 30층 ≈1.3배, 60층 ≈1.75배, 90층 ≈2.2배) */
 function getShopPriceMultiplier(): number {
   const turn = gameState.getCurrentTurn()
-  if (turn <= 30) return 1
-  const t = (turn - 30) / 30
-  return 1 + t * t
+  return 1 + Math.max(0, turn - 10) * 0.015
 }
 
 /** basePrice는 Relics.ts 정의에서 읽는다. 실제 식은 -76~+104 비대칭 지터를 만들어 비원형 가격을 낸다.
