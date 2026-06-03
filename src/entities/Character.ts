@@ -17,7 +17,7 @@ export class Character {
   private static readonly STARTING_MAX_HEALTH = 20
   static readonly STARTING_EMBER = 10
   static readonly EMBER_MAX = 10
-  static readonly CANDLE_MAX = 10
+  static readonly CANDLE_MAX = 15
   /** Hand stacks bottom-up (slot 0 = bottommost). 10 slots total. */
   static readonly HAND_MAX = 10
   /** Ember wanes by 1 every EMBER_DECAY_TURNS turns. */

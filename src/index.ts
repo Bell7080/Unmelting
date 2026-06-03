@@ -714,11 +714,22 @@ async function applyTurnStartRelics(): Promise<void> {
   burstScoreGain()
 }
 
-/** basePrice는 Relics.ts 정의에서 읽는다. 실제 식은 -76~+104 비대칭 지터를 만들어 비원형 가격을 낸다. */
+/** 상점 가격(불빛) 인플레이션 배수. 10~30층은 1배로 두고, 30층 이후 제곱 곡선으로
+ *  가팔라져 후반 불빛 과잉을 흡수한다. (예: 60층 ≈2배, 90층 ≈5배, 100층 ≈6.4배)
+ *  수입 배수(getTurnScoreMultiplier, 선형)보다 후반에 더 빨리 올라가도록 의도했다. */
+function getShopPriceMultiplier(): number {
+  const turn = gameState.getCurrentTurn()
+  if (turn <= 30) return 1
+  const t = (turn - 30) / 30
+  return 1 + t * t
+}
+
+/** basePrice는 Relics.ts 정의에서 읽는다. 실제 식은 -76~+104 비대칭 지터를 만들어 비원형 가격을 낸다.
+ *  후반 인플레이션 배수를 곱해 고층에서 불빛 가격이 가팔라지게 한다. */
 function priceForRelic(id: RelicId): number {
   const base = getRelicDef(id).basePrice
   const jitter = Math.floor((Math.random() - 0.42) * 180)
-  return Math.max(120, base + jitter)
+  return Math.max(120, Math.round((base + jitter) * getShopPriceMultiplier()))
 }
 
 /** Generate up to three unowned, unbanned relics + per-spawn score price. */
@@ -761,15 +772,18 @@ async function openTrialOverlay(): Promise<void> {
   inputLocked = false
 }
 
-/** Pack cost source of truth. UI 표기와 실제 차감이 갈라지지 않도록 구매 처리도 이 함수만 사용한다. */
+/** Pack cost source of truth. UI 표기와 실제 차감이 갈라지지 않도록 구매 처리도 이 함수만 사용한다.
+ *  하드코딩 기본/증가값에 후반 인플레이션 배수를 곱해 유물 가격과 함께 가팔라지게 한다. */
 function currentShopPackCost(kind: ShopPackKind): number {
-  if (currentShopMode === 'altar') return 500
+  const mult = getShopPriceMultiplier()
+  const inflate = (raw: number): number => Math.round(raw * mult)
+  if (currentShopMode === 'altar') return inflate(500)
   switch (kind) {
-    case 'basic-pack': return 120 + shopBasicPackBuys * 40
-    case 'upgrade-pack': return 500 + shopUpgradePackBuys * 130
-    case 'unlock-pack': return 520 + shopUnlockPackBuys * 120
+    case 'basic-pack': return inflate(120 + shopBasicPackBuys * 40)
+    case 'upgrade-pack': return inflate(500 + shopUpgradePackBuys * 130)
+    case 'unlock-pack': return inflate(520 + shopUnlockPackBuys * 120)
     // 제단 전용 팩이 일반 상점에서 호출되면 안전한 기본값으로 막는다.
-    default: return 500
+    default: return inflate(500)
   }
 }
 

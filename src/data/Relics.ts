@@ -70,10 +70,10 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
   'carving-knife': {
     id: 'carving-knife',
     name: '조각칼',
-    rarity: 'rare',
+    rarity: 'epic',
     effect: '공격력 1 증가',
     flavor: '어둠을 얇게 깎아낼 수 있을 것 같은 작은 칼.',
-    basePrice: 800,
+    basePrice: 1100,
   },
   'red-potion': {
     id: 'red-potion',
