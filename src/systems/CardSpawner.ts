@@ -221,9 +221,14 @@ export class CardSpawner {
   private trialTreasureSpawnScale: number = 1
   /** 90F boss+trial 이후에는 별빛만 턴을 올리는 최종 등반 규칙을 켠다. */
   private finalAscentActive: boolean = false
-  // After a spore spawns, block spore generation for the next N cards to prevent
-  // consecutive spore clusters. 5 cards ≈ at least 1 full 3-lane turn gap.
+  // 포자/별빛은 "배치된 카드" 기준으로 연속 등장을 막는다. 리롤로 버려진 후보는
+  // 카운트를 소모하지 않도록 쿨다운은 commitSpawnCooldowns(배치 시점)에서만 갱신한다.
+  // SPORE_COOLDOWN_CARDS 5 ≈ 한 번 등장 후 최소 1턴(3레인) 간격.
+  private static readonly SPORE_COOLDOWN_CARDS = 5
+  // STARLIGHT_COOLDOWN_CARDS 3 ≈ 한 번 등장 후 같은 턴/바로 다음 칸 연속 등장 차단(최소 1칸↑).
+  private static readonly STARLIGHT_COOLDOWN_CARDS = 3
   private sporeCooldownCards: number = 0
+  private starlightCooldownCards: number = 0
 
   /** Update the active ember tier so the next spawn run uses the matching weights. */
   setTier(tier: EmberTier): void {
@@ -253,12 +258,14 @@ export class CardSpawner {
     this.finalAscentActive = active
   }
 
-  /** Spawn one random card per lane for the current turn refill. */
+  /** Spawn one random card per lane for the current turn refill (배치 → 쿨다운 commit). */
   spawnCardsForTurn(): Card[] {
     const cards: Card[] = []
 
     for (let i = 0; i < 3; i++) {
-      cards.push(this.generateRandomCard())
+      const card = this.generateRandomCard()
+      this.commitSpawnCooldowns(card)
+      cards.push(card)
     }
 
     return cards
@@ -295,15 +302,19 @@ export class CardSpawner {
         }
       }
 
-      cards.push(chosen ?? this.generateOpeningFallback(previous))
+      const placed = chosen ?? this.generateOpeningFallback(previous)
+      this.commitSpawnCooldowns(placed)
+      cards.push(placed)
     }
 
     return cards
   }
 
-  /** Spawn a single fresh card for rail-maintenance refills. */
+  /** Spawn a single fresh card for rail-maintenance refills (직접 배치 → 쿨다운 commit). */
   spawnCardForRefill(): Card {
-    return this.generateRandomCard()
+    const card = this.generateRandomCard()
+    this.commitSpawnCooldowns(card)
+    return card
   }
 
   /**
@@ -321,26 +332,34 @@ export class CardSpawner {
 
       // Keep normal refill odds as the first choice, but reroll short streaks
       // that would instantly merge across the freshly rebuilt front row.
+      // 리롤 후보는 순수 생성(generateRandomCard)으로 뽑아 버려져도 쿨다운을 소모하지 않게 한다.
       for (let attempt = 0; attempt < 8; attempt++) {
-        const candidate = this.spawnCardForRefill()
+        const candidate = this.generateRandomCard()
         if (!previous || !previous.canMergeWith(candidate)) {
           chosen = candidate
           break
         }
       }
 
-      cards.push(chosen ?? this.generateRefillSeparator(previous))
+      const placed = chosen ?? this.generateRefillSeparator(previous)
+      this.commitSpawnCooldowns(placed)
+      cards.push(placed)
     }
 
     return cards
   }
 
-  /** Pick a card type using per-kind buckets, then build the card. */
+  /** Pick a card type using per-kind buckets, then build the card.
+   *  순수 생성: 쿨다운은 읽기만 하고 갱신하지 않는다(갱신은 commitSpawnCooldowns). */
   private generateRandomCard(options: { openingBoard?: boolean } = {}): Card {
     // 최종 등반에서는 드문 별빛 칸을 섞어 10번 수집해야 100턴에 닿게 만든다.
-    if (!options.openingBoard && this.finalAscentActive && Math.random() < 0.12) {
-      // 별빛도 실제 리필 1장으로 취급해 포자 연속 방지 카운터를 함께 소모한다.
-      if (this.sporeCooldownCards > 0) this.sporeCooldownCards--
+    // 단, 별빛 쿨다운 중에는 연속 등장을 막기 위해 별빛을 뽑지 않는다.
+    if (
+      !options.openingBoard &&
+      this.finalAscentActive &&
+      this.starlightCooldownCards <= 0 &&
+      Math.random() < 0.12
+    ) {
       return this.generateStarlight()
     }
 
@@ -359,14 +378,10 @@ export class CardSpawner {
     const total = buckets.enemy + webTrap + bombTrap + sporeTrap + treasure + flower
     const roll = Math.random() * total
 
-    if (this.sporeCooldownCards > 0) this.sporeCooldownCards--
-
     if (roll < buckets.enemy) return this.generateEnemy()
     if (roll < buckets.enemy + webTrap) return this.generateTrap({ trapKind: 'web' })
     if (roll < buckets.enemy + webTrap + bombTrap) return this.generateTrap({ trapKind: 'bomb' })
     if (roll < buckets.enemy + webTrap + bombTrap + sporeTrap) {
-      // Reset cooldown so the next 5 spawned cards cannot be spores.
-      this.sporeCooldownCards = 5
       const spore = this.generateTrap({ trapKind: 'spore' })
       // Flag the spore so applySporeSpread skips the birth-turn tick; turn counting
       // starts from the NEXT turn so the player sees a full 2-turn warning.
@@ -377,6 +392,21 @@ export class CardSpawner {
       return this.generateTreasure()
     }
     return this.generateFlowerSeed()
+  }
+
+  /** 실제로 레일에 배치된 카드 1장 기준으로 포자/별빛 연속 방지 쿨다운을 갱신한다.
+   *  배치된 카드가 포자/별빛이면 쿨다운을 재설정하고, 아니면 1씩 줄인다. */
+  private commitSpawnCooldowns(card: Card): void {
+    if (card.type === CardType.TRAP && card.trapKind === 'spore') {
+      this.sporeCooldownCards = CardSpawner.SPORE_COOLDOWN_CARDS
+    } else if (this.sporeCooldownCards > 0) {
+      this.sporeCooldownCards--
+    }
+    if (card.treasureKind === 'starlight') {
+      this.starlightCooldownCards = CardSpawner.STARLIGHT_COOLDOWN_CARDS
+    } else if (this.starlightCooldownCards > 0) {
+      this.starlightCooldownCards--
+    }
   }
 
   /** Enemy availability follows turn milestones. 30/40/50층부터 1~6번 풀을
@@ -468,9 +498,10 @@ export class CardSpawner {
     return Math.random() < 0.5 ? this.generateEnemy() : this.generateTrap({ trapKind: 'web' })
   }
 
-  /** Pick a non-merging normal-refill fallback when rerolls keep matching neighbors. */
+  /** Pick a non-merging normal-refill fallback when rerolls keep matching neighbors.
+   *  쿨다운 commit은 호출부(행 빌더)에서 최종 카드에 1회만 적용하므로 여기선 순수 생성만 한다. */
   private generateRefillSeparator(previous: Card | null): Card {
-    if (!previous) return this.spawnCardForRefill()
+    if (!previous) return this.generateRandomCard()
 
     // A chest is the safest visual divider after enemies/traps; after a chest,
     // choose an enemy or web so the row does not become a treasure streak.

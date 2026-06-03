@@ -450,8 +450,8 @@ export class HandSystem {
       case 'holy-water':
         return HandSystem.cleanseAllSpores(gs)
       case 'chitin': {
-        const cleared = HandSystem.clearAllOfTypes(gs, [CardType.TRAP])
-        return `트리플 함정 ${cleared}장 제거`
+        // 트리플도 단일 대상이되 3칸 함정까지 제거 가능(폭 제한은 targeting.maxSpan).
+        return HandSystem.removeTargetTrap(gs, target)
       }
       case 'card': {
         // gainCandle 호출은 use()에서 gs.enhancements를 직접 읽어 처리한다.
@@ -520,6 +520,9 @@ export class HandSystem {
     if (rule.zone === 'front' && target.distance !== 0) return false
     if (rule.zone === 'waiting' && target.distance === 0) return false
     if (rule.zone !== 'front' && rule.zone !== 'waiting' && rule.zone !== 'field') return false
+
+    // 폭 제한: 지정된 maxSpan(칸=groupCount)을 넘는 카드는 대상에서 제외한다(키틴 2칸/3칸 분기).
+    if (rule.maxSpan != null && target.card.groupCount > rule.maxSpan) return false
 
     // 보스는 5번째 카드 종류지만 적 양식을 그대로 따라가 손패 적 타겟팅에도 매칭된다.
     if (rule.filter === 'enemy') return target.card.type === CardType.ENEMY || target.card.type === CardType.BOSS
