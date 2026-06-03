@@ -493,8 +493,9 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
 .candle-gauge-meter {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
-  gap: 3px;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 2px;
   padding: 3px;
   border-radius: 9px;
   background: rgba(0, 0, 0, 0.34);
@@ -710,8 +711,9 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
 .candle-gauge-meter {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
-  gap: 3px;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 2px;
   padding: 3px;
   border-radius: 9px;
   background: rgba(0, 0, 0, 0.34);

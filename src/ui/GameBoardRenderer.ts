@@ -279,6 +279,8 @@ export class GameBoardRenderer {
   private handTargetingMode: HandTargetingMode | null = null
   /** Body-level shop overlay is kept outside board re-renders. */
   private shopOverlayElement: HTMLElement | null = null
+  /** 현재 열린 상점 모드. 제단(altar) 유물은 무료라 가격 기반 affordable 판정을 건너뛴다. */
+  private currentShopRenderMode: 'shop' | 'altar' = 'shop'
   /** Source rect for a just-bought shop relic; the next render uses it to
    *  fly a full artifact card into the owned fan instead of popping in. */
   private pendingRelicArrival: { relicId: RelicId; rect: DOMRect } | null = null
@@ -1366,6 +1368,8 @@ export class GameBoardRenderer {
    *  rebuilding images, which removes the small flash/reload feeling. */
   private shopRelicAffordabilityClass(offer: ShopOfferView, score: number): string {
     if (offer.purchased) return 'is-purchased'
+    // 제단 유물은 무료 단일 픽이라 가격과 무관하게 항상 밝게(affordable) 표시한다.
+    if (this.currentShopRenderMode === 'altar') return 'is-affordable'
     return score >= offer.price ? 'is-affordable' : 'is-unaffordable'
   }
 
@@ -1635,6 +1639,7 @@ export class GameBoardRenderer {
    *  `inputLocked` blocks any actual game actions on those panels.
    */
   openShop(shop: ShopStateView, score: number, character: Character): void {
+    this.currentShopRenderMode = shop.mode
     if (!this.shopOverlayElement) {
       this.shopOverlayElement = document.createElement('div')
       this.shopOverlayElement.id = 'shop-overlay'
@@ -1756,6 +1761,14 @@ export class GameBoardRenderer {
   ): void {
     const shell = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-shell')
     if (!shell) return
+
+    // 오퍼 목록에서 빠진 유물 카드는 DOM에서 제거한다(제단 무료 픽 후 선택/소실 카드 정리).
+    const offerIds = new Set(shop.relicOffers.map((o) => RELIC_DEFINITIONS[o.relicId].id as string))
+    shell
+      .querySelectorAll<HTMLElement>('.shop-artifact-layer .shop-relic-card[data-shop-buy]')
+      .forEach((card) => {
+        if (!offerIds.has(card.dataset.shopBuy ?? '')) card.remove()
+      })
 
     // Relic cards: replicate the old refreshOpenShopCards path.
     for (const offer of shop.relicOffers) {
