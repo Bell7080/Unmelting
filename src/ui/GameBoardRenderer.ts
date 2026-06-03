@@ -2298,19 +2298,19 @@ export class GameBoardRenderer {
    *  보스 전용 손패(시련 톤 붉은 카드, 상단 촛농/양초/불씨 일러스트)가 보스 중앙에서
    *  커지듯 나타나 ~1.5초 잔류한 뒤, 팡 터지며 효과별 수치가 알맞은 HUD로 블라스트된다.
    *  - 방패 → 플레이어 방패 칩, 체력 → 플레이어 체력, 피해 → 플레이어 카드로 발사. */
-  async animateWaxKnightCardEffect(cardId: string, effect: 'shield' | 'heal' | 'strike'): Promise<void> {
+  async animateWaxKnightCardEffect(cardId: string, effect: 'shield' | 'heal' | 'strike', amount: number): Promise<void> {
     const tile = this.findCardElement(cardId)
     if (!tile) return
 
     // 효과별 카드 메타 — 일러스트/팔레트/목적지를 플레이어 손패 의미와 일치시킨다.
-    //  · 방패(+2) = 양초 손패 톤 → 보스 방패 칩으로 블라스트
-    //  · 체력(+2) = 촛농 손패 톤 → 보스 체력 바로 블라스트
-    //  · 피해(2)  = 불씨 손패 톤 → 플레이어 카드로 블라스트
-    // 일러스트는 실제 플레이어 손패 webp(handcard_00x)를 그대로 연동한다.
+    //  · 방패(+amount) = 양초 손패 톤 → 보스 방패 칩으로 블라스트
+    //  · 체력(+amount) = 촛농 손패 톤 → 보스 체력 바로 블라스트
+    //  · 피해(amount)  = 불씨 손패 톤 → 플레이어 카드로 블라스트
+    // 표기 수치는 BossEvent의 실제 적용값(amount)을 그대로 받아 항상 일치시킨다.
     const META = {
-      shield: { title: '밀랍 방패', desc: '방패 +2', label: '방패 +2', illust: spriteForHandCard('candle'),   burst: 'boss-candle-flame' as const, dest: 'boss-shield' as const },
-      heal:   { title: '촛불 가호', desc: '체력 +2', label: '체력 +2', illust: spriteForHandCard('wax-drop'), burst: 'boss-wax-drip' as const,     dest: 'boss-health' as const },
-      strike: { title: '불씨 일격', desc: '피해 2',  label: '피해 2',  illust: spriteForHandCard('ember'),    burst: 'boss-ember-spark' as const,  dest: 'player' as const },
+      shield: { title: '밀랍 방패', desc: `방패 +${amount}`, label: `방패 +${amount}`, illust: spriteForHandCard('candle'),   burst: 'boss-candle-flame' as const, dest: 'boss-shield' as const },
+      heal:   { title: '촛불 가호', desc: `체력 +${amount}`, label: `체력 +${amount}`, illust: spriteForHandCard('wax-drop'), burst: 'boss-wax-drip' as const,     dest: 'boss-health' as const },
+      strike: { title: '불씨 일격', desc: `피해 ${amount}`,  label: `피해 ${amount}`,  illust: spriteForHandCard('ember'),    burst: 'boss-ember-spark' as const,  dest: 'player' as const },
     }[effect]
 
     // 보스가 3칸에 걸쳐 보이므로 가시 셀들의 합집합 중심을 카드 출현 좌표로 삼는다.

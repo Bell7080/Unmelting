@@ -105,6 +105,8 @@ export interface BossInjected {
 // ---- Controller ------------------------------------------------------------
 
 export class BossEventController {
+  /** 불씨 기사단장 손패(방패/체력/피해) 공통 수치. 효과·표기·이펙트가 모두 이 값을 따른다. */
+  private static readonly WAX_KNIGHT_CARD_AMOUNT = 5
   /** index.ts에서 `bossEventState` 대신 이 프로퍼티를 참조한다. */
   eventState: BossEventState | null = null
   /** index.ts에서 `bossRewardState` 대신 이 프로퍼티를 참조한다. */
@@ -553,21 +555,22 @@ export class BossEventController {
     await this.br.animateDamageFlash()
     this.inject.recordNotice(`불씨 기사단장의 돌진! 플레이어가 ${state.def.attack} 피해를 받았다`, 'hurt')
     const cards = sampleWithoutReplacement<WaxKnightCardEffect>(['shield', 'heal', 'strike'], 2)
+    const amount = BossEventController.WAX_KNIGHT_CARD_AMOUNT
     for (const effect of cards) {
       if (effect === 'shield') {
-        state.bossShield += 5
+        state.bossShield += amount
         this.syncBossShieldToCard()
-        await this.br.animateWaxKnightCardEffect(bossCardId, 'shield')
-        this.inject.recordNotice('불씨 기사단장이 손패 사용: 방패 +5', 'info')
+        await this.br.animateWaxKnightCardEffect(bossCardId, 'shield', amount)
+        this.inject.recordNotice(`불씨 기사단장이 손패 사용: 방패 +${amount}`, 'info')
       } else if (effect === 'heal') {
-        const healed = state.card.healEnemyLike(5)
-        await this.br.animateWaxKnightCardEffect(bossCardId, 'heal')
+        const healed = state.card.healEnemyLike(amount)
+        await this.br.animateWaxKnightCardEffect(bossCardId, 'heal', amount)
         this.inject.recordNotice(`불씨 기사단장이 손패 사용: 체력 +${healed}`, 'info')
       } else {
-        character.takeDamage(5)
-        await this.br.animateWaxKnightCardEffect(bossCardId, 'strike')
+        character.takeDamage(amount)
+        await this.br.animateWaxKnightCardEffect(bossCardId, 'strike', amount)
         await this.br.animateDamageFlash()
-        this.inject.recordNotice('불씨 기사단장이 손패 사용: 플레이어에게 5 피해', 'hurt')
+        this.inject.recordNotice(`불씨 기사단장이 손패 사용: 플레이어에게 ${amount} 피해`, 'hurt')
       }
       this.inject.render()
       if (!character.isAlive()) return false

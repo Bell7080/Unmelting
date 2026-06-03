@@ -211,7 +211,10 @@ export class Card {
   /** Read the max HP that corresponds to this card's current grouping state. */
   private getCurrentMaxHealth(): number {
     if (!this.isEnemyLike()) return 0
-    const groupedStats = this.isSpecialEnemy ? null : this.getNormalEnemyGroupStats(this.groupCount)
+    // 보스/특수 적은 그룹 HP 보너스를 적용하지 않는다. 보스는 groupCount가 3이어도
+    // 일반 3그룹 보정(+HP)이 붙으면 회복이 정의된 최대 체력을 넘어선다(예: 80→82).
+    const skipGroupStats = this.isSpecialEnemy || this.type === CardType.BOSS
+    const groupedStats = skipGroupStats ? null : this.getNormalEnemyGroupStats(this.groupCount)
     return groupedStats?.health ?? this.baseHealth
   }
 
