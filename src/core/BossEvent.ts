@@ -22,6 +22,7 @@ import { sampleWithoutReplacement } from '@core/Sampling'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
 
 type WaxKnightCardEffect = 'shield' | 'heal' | 'strike'
+type BossPage = 1 | 2 | 3
 
 // ---- 보스별 스탯 정의 -------------------------------------------------------
 
@@ -34,7 +35,7 @@ export interface BossDef {
   /** HP가 이 배수 이하가 될 때마다 손패 1장 지급 */
   handGiftStep: number
   /** CSS boss-kind-* 마커 — Rail CSS 레이아웃과 연동 */
-  specialEnemyKind: 'waxArmy' | 'waxKnight' | 'waxSculptor'
+  specialEnemyKind: 'waxArmy' | 'waxKnight' | 'waxSculptor' | 'waxWitch'
   /** Card.groupCount 표시값 (점수·뱃지용). 실제 점유 행 수와 별도. */
   groupCount: number
   /** lanes에 보스 카드 인스턴스를 실제로 박을 dist 행 수.
@@ -74,8 +75,12 @@ export interface BossEventState {
   sculptorStartRow: number
   /** waxSculptor 후방 페이즈 중 dist-0에 소환된 적 카드 id 집합 */
   summonedEnemyIds: Set<string>
-  /** waxKnight 전용: 다음 피해를 먼저 흡수하는 밀랍 방패량 */
+  /** waxKnight/waxWitch 전용: 다음 피해를 먼저 흡수하는 밀랍 방패량 */
   bossShield: number
+  /** waxWitch 전용: 현재 HP 페이지(210~141 / 140~71 / 70~0). */
+  witchPage: BossPage
+  /** waxWitch 1페이지: 다음 손패 소각 HP 임계값. */
+  nextWitchHandBurnAt: number
 }
 
 export interface BossRewardState {
@@ -215,6 +220,33 @@ export class BossEventController {
     await this.runBossEvent(def)
   }
 
+
+  /** 100F 보스 이벤트 실행. 최종 등반의 별빛 규칙이 100층에 닿으면 호출한다. */
+  async run100F(): Promise<void> {
+    // 최종 보스는 앞선 30/60/90F 보스 메커니즘을 페이지별로 압축해 재사용한다.
+    // 3×3 타일은 양초 백작과 같은 CSS 확장 규칙을 쓰고, 3페이지에서만 2×3 후방 대기형으로 변한다.
+    const def: BossDef = {
+      name: '녹지 않는 마녀',
+      maxHp: 210,
+      attack: 15,
+      attackInterval: 2,
+      handGiftStep: 0,
+      specialEnemyKind: 'waxWitch',
+      groupCount: 3,
+      occupiedDistRows: 1,
+      spriteUrl: this.sprites.boss100,
+      appearAnimation: 'landing',
+      introBubble: '. . .',
+      playerResponseBubble: '이제 다 끝났어.',
+      // 각 점 사이 침묵을 길게 읽히게 하기 위해 일반 타자기 시간보다 넉넉히 둔다.
+      introBubbleMs: 3600,
+      playerBubbleMs: 2500,
+      trait: '1페이지 손패 소각, 2페이지 보스 손패 4장, 3페이지 강화 소환.',
+      kicker: '잿빛 굴레의 주인',
+    }
+    await this.runBossEvent(def)
+  }
+
   /** 보스 카드 클릭 처리. handleCardAction 내 BOSS 분기에서 호출한다. */
   async handleClick(card: Card): Promise<void> {
     if (!this.eventState || this.eventState.card !== card) return
@@ -234,6 +266,7 @@ export class BossEventController {
     await this.br.animatePlayerAttack(card)
     const bossTile = this.br.findCardElement(card.id)
     if (bossTile) SquareBurst.playOn(bossTile, 'damage', { count: 22, spread: 180, duration: 560 })
+    const beforeBossHp = card.getHealth()
     const rawDamage = Math.min(character.damage, card.getHealth() + state.bossShield)
     const blocked = Math.min(state.bossShield, rawDamage)
     state.bossShield -= blocked
@@ -250,6 +283,7 @@ export class BossEventController {
     await this.br.animateDamageNumbersById(dealt > 0 ? [{ cardId: card.id, amount: dealt }] : [])
 
     await this.consumeHandGiftThresholds(card.id)
+    if (await this.resolveWaxWitchAfterDamage(beforeBossHp)) return
     this.inject.render()
 
     if (card.getHealth() <= 0) {
@@ -258,7 +292,16 @@ export class BossEventController {
     }
 
     if (state.turn % state.def.attackInterval === 0) {
-      if (state.def.specialEnemyKind === 'waxSculptor') {
+      if (state.def.specialEnemyKind === 'waxWitch') {
+        // 100F는 페이지별로 공격 주기 행동이 바뀐다. 2페이지는 기사단장식 카드 4장, 3페이지는 조각사식 후퇴 소환.
+        if (state.witchPage === 2) {
+          if (await this.resolveWaxWitchPageTwoTurn(card.id)) return
+        } else if (state.witchPage === 3) {
+          await this.performWitchSummonToBack()
+          this.inject.setInputLocked(false)
+          return
+        }
+      } else if (state.def.specialEnemyKind === 'waxSculptor') {
         // 3턴마다 조각사 페이즈 교체 — 공격 대신 소환/후방 이동 연출
         await this.handleSculptorPhaseShift()
         return
@@ -291,6 +334,7 @@ export class BossEventController {
   async applyPostHandEffect(): Promise<void> {
     if (!this.eventState) return
     await this.consumeHandGiftThresholds(this.eventState.card.id)
+    if (await this.resolveWaxWitchAfterDamage(null)) return
     if (this.eventState.card.getHealth() <= 0) {
       await this.handleDefeated()
       return
@@ -426,6 +470,8 @@ export class BossEventController {
       sculptorStartRow: 0,
       summonedEnemyIds: new Set<string>(),
       bossShield: 0,
+      witchPage: 1,
+      nextWitchHandBurnAt: def.specialEnemyKind === 'waxWitch' ? def.maxHp - 10 : 0,
     }
     this.syncBossShieldToCard()
 
@@ -543,6 +589,130 @@ export class BossEventController {
     return blocked
   }
 
+
+  // ---- waxWitch 전용 페이지 메커니즘 ----------------------------------------
+
+  /** 100F 1페이지: HP 10 손실 임계마다 랜덤 손패 2장을 보스 블라스트로 소각한다. */
+  private async burnRandomHandCardsFromWitch(bossCardId: string): Promise<void> {
+    const hand = this.gs.character.hand
+    if (hand.length === 0) {
+      this.inject.recordNotice('녹지 않는 마녀의 잿불이 빈 손패를 훑고 지나갔다', 'info')
+      return
+    }
+    const count = Math.min(2, hand.length)
+    const indices = sampleWithoutReplacement(
+      Array.from({ length: hand.length }, (_, i) => i),
+      count,
+    ).sort((a, b) => b - a)
+
+    for (const slotIndex of indices) {
+      const removed = this.gs.character.removeHandCardAt(slotIndex)
+      if (!removed) continue
+      await this.br.animateBossBlastToHandSlot(bossCardId, slotIndex, 'boss-ember-spark')
+      this.inject.recordNotice(`잿빛 소각: ${getHandCardDef(removed.defId).name} 손패 소실`, 'hurt')
+      this.inject.render()
+      await new Promise((r) => window.setTimeout(r, 120))
+    }
+  }
+
+  /** 100F 피격 뒤 페이지 전환/1페이지 손패 소각을 처리한다. 전환 연출이 끼면 true로 턴을 종료한다. */
+  private async resolveWaxWitchAfterDamage(beforeHp: number | null): Promise<boolean> {
+    const state = this.eventState
+    if (!state || state.def.specialEnemyKind !== 'waxWitch') return false
+    const hp = state.card.getHealth()
+
+    if (state.witchPage === 1) {
+      while (state.nextWitchHandBurnAt > 140 && hp <= state.nextWitchHandBurnAt) {
+        await this.burnRandomHandCardsFromWitch(state.card.id)
+        state.nextWitchHandBurnAt -= 10
+      }
+      if (hp <= 140) {
+        // 페이지 경계는 초과 피해를 버리고 정확히 140에서 멈춘다.
+        if (state.card.health < 140) state.card.health = 140
+        state.witchPage = 2
+        state.turn = 0
+        this.br.setBossAttackCountdown(state.def.attackInterval)
+        this.inject.render()
+        this.bossBubble.show('그래, 정말 이 세계는 이제 다 끝났네.')
+        await new Promise((r) => window.setTimeout(r, 3100))
+        this.bossBubble.dismiss()
+        await new Promise((r) => window.setTimeout(r, 260))
+        this.speechBubble.show('같잖은 말장난을...', 0)
+        await new Promise((r) => window.setTimeout(r, 2500))
+        this.speechBubble.dismiss()
+        this.inject.setInputLocked(false)
+        return true
+      }
+    }
+
+    if (state.witchPage === 2 && hp <= 70) {
+      // 페이지 경계는 초과 피해를 버리고 정확히 70에서 멈춘 뒤 즉시 3페이지 소환을 연다.
+      if (state.card.health < 70) state.card.health = 70
+      state.witchPage = 3
+      state.turn = 0
+      this.br.setBossAttackCountdown(state.def.attackInterval)
+      this.inject.render()
+      this.bossBubble.show('이제 너도 그만 사라져.')
+      await new Promise((r) => window.setTimeout(r, 2500))
+      this.bossBubble.dismiss()
+      await new Promise((r) => window.setTimeout(r, 260))
+      this.speechBubble.show('. . .', 0)
+      await new Promise((r) => window.setTimeout(r, 3300))
+      this.speechBubble.dismiss()
+      await this.performWitchSummonToBack()
+      this.inject.setInputLocked(false)
+      return true
+    }
+
+    return beforeHp !== null && beforeHp !== hp && false
+  }
+
+  /** 100F 2페이지: 보스 손패 4장을 공격 전에 사용하고, 같은 효과 2장 이상이면 추가 1회 발동한다. */
+  private async resolveWaxWitchPageTwoTurn(bossCardId: string): Promise<boolean> {
+    const state = this.eventState!
+    const character = this.gs.character
+    const amount = BossEventController.WAX_KNIGHT_CARD_AMOUNT
+    const effects: WaxKnightCardEffect[] = Array.from({ length: 4 }, () => {
+      const pool: WaxKnightCardEffect[] = ['shield', 'heal', 'strike']
+      return pool[Math.floor(Math.random() * pool.length)]
+    })
+    const bonusEffects = (['shield', 'heal', 'strike'] as WaxKnightCardEffect[])
+      .filter((effect) => effects.filter((v) => v === effect).length >= 2)
+    const sequence = [...effects, ...bonusEffects]
+
+    for (const effect of sequence) {
+      if (effect === 'shield') {
+        state.bossShield += amount
+        this.syncBossShieldToCard()
+        await this.br.animateWaxKnightCardEffect(bossCardId, 'shield', amount)
+        this.inject.recordNotice(`녹지 않는 마녀가 손패 사용: 방패 +${amount}`, 'info')
+      } else if (effect === 'heal') {
+        const healed = state.card.healEnemyLike(amount)
+        if (state.card.health > 140) state.card.health = 140
+        await this.br.animateWaxKnightCardEffect(bossCardId, 'heal', amount)
+        this.inject.recordNotice(`녹지 않는 마녀가 손패 사용: 체력 +${healed}`, 'info')
+      } else {
+        character.takeDamage(amount)
+        await this.br.animateWaxKnightCardEffect(bossCardId, 'strike', amount)
+        await this.br.animateDamageFlash()
+        this.inject.recordNotice(`녹지 않는 마녀가 손패 사용: 플레이어에게 ${amount} 피해`, 'hurt')
+      }
+      this.inject.render()
+      if (!character.isAlive()) return false
+      await new Promise((r) => window.setTimeout(r, 150))
+    }
+
+    character.takeDamage(state.def.attack)
+    await this.br.animateEnemyAttacks([
+      { cardId: bossCardId, cardName: state.card.name, laneIndex: 0, damage: state.def.attack },
+    ])
+    await this.br.animateDamageFlash()
+    this.inject.recordNotice(`녹지 않는 마녀의 반격! 플레이어가 ${state.def.attack} 피해를 받았다`, 'hurt')
+    this.inject.render()
+    this.inject.applyAnomalyHealthLoss()
+    return await this.retaliateGracefulResponse([bossCardId])
+  }
+
   // ---- waxKnight 전용 카드 사용 메커니즘 ------------------------------------
 
   /** 불씨 기사단장의 3턴 주기 행동: 기본 타격 + 랜덤 카드 2장 사용.
@@ -567,6 +737,7 @@ export class BossEventController {
         this.inject.recordNotice(`불씨 기사단장이 손패 사용: 방패 +${amount}`, 'info')
       } else if (effect === 'heal') {
         const healed = state.card.healEnemyLike(amount)
+        if (state.card.health > 140) state.card.health = 140
         await this.br.animateWaxKnightCardEffect(bossCardId, 'heal', amount)
         this.inject.recordNotice(`불씨 기사단장이 손패 사용: 체력 +${healed}`, 'info')
       } else {
@@ -633,6 +804,48 @@ export class BossEventController {
     // 좌→우 순서로 소환 연출 (enemyIds는 레인 0→1→2)
     const summonedIds = [...state.summonedEnemyIds]
     await this.br.animateSculptorSummonEnemies(summonedIds)
+  }
+
+
+  /** 100F 3페이지 전용 소환: 3×3 마녀를 후방 2×3으로 접고, 강화된 소환 적 3마리를 세운다. */
+  private async performWitchSummonToBack(): Promise<void> {
+    const state = this.eventState!
+    for (let i = 0; i < 3; i++) {
+      this.gs.lanes[i].setCardAtDistance(0, null)
+      this.gs.lanes[i].setCardAtDistance(1, null)
+      this.gs.lanes[i].setCardAtDistance(2, null)
+    }
+    for (let i = 0; i < 3; i++) {
+      this.gs.lanes[i].setCardAtDistance(1, state.card)
+      this.gs.lanes[i].setCardAtDistance(2, state.card)
+    }
+    state.def.occupiedDistRows = 2
+    state.sculptorPhase = 'back'
+    state.sculptorStartRow = 1
+    state.summonedEnemyIds.clear()
+
+    // 최종 보스 소환수는 90F 후기 적 풀을 기반으로 HP+5/ATK+3 버프를 받은 독립 개체다.
+    const pool = ENEMY_DEFINITIONS.slice(12, 18)
+    for (let i = 0; i < 3; i++) {
+      const enemyDef = pool[Math.floor(Math.random() * pool.length)]
+      const enemy = new Card(
+        `witch-summon-${i}-${Math.random()}`,
+        CardType.ENEMY,
+        enemyDef.name,
+        enemyDef.description,
+        (enemyDef.healthOrDamage ?? 1) + 5,
+        (enemyDef.attack ?? 1) + 3,
+        { enemySpriteId: enemyDef.enemySpriteId, enemyPower: (enemyDef.enemyPower ?? 0) + 100 },
+      )
+      this.gs.lanes[i].setCardAtDistance(0, enemy)
+      state.summonedEnemyIds.add(enemy.id)
+    }
+
+    this.inject.render()
+    this.inject.recordNotice('녹지 않는 마녀가 후방으로 물러나 강화된 잿빛 종복을 불렀다!', 'hurt')
+    const summonedIds = [...state.summonedEnemyIds]
+    await this.br.animateSculptorSummonEnemies(summonedIds)
+    await this.br.animateEnemyEmberEmpower(summonedIds)
   }
 
   /** 후방 페이즈에 소환된 적 카드인지 식별. handleCardAction 라우팅에서 사용. */
@@ -789,18 +1002,20 @@ export class BossEventController {
     return result
   }
 
-  /** 소환 적 전멸 시 조각사를 전방(dist-0+1)으로 복귀시킨다. 쿵 착지 + 기절 블라스트 + 턴 초기화. */
+  /** 소환 적 전멸 시 보스를 전방으로 복귀시킨다. 쿵 착지 + 기절 블라스트 + 턴 초기화. */
   private async returnSculptorToFront(): Promise<void> {
     const state = this.eventState!
-    // dist-1+2(후방) → dist-0+1(전방)으로 이동
+    const isWitch = state.def.specialEnemyKind === 'waxWitch'
+    // 후방 점유(dist-1+2)를 지운 뒤, 조각사는 2×3 / 마녀는 3×3 전방 형태로 복귀한다.
     for (let i = 0; i < 3; i++) {
       this.gs.lanes[i].setCardAtDistance(1, null)
       this.gs.lanes[i].setCardAtDistance(2, null)
     }
     for (let i = 0; i < 3; i++) {
       this.gs.lanes[i].setCardAtDistance(0, state.card)
-      this.gs.lanes[i].setCardAtDistance(1, state.card)
+      if (!isWitch) this.gs.lanes[i].setCardAtDistance(1, state.card)
     }
+    state.def.occupiedDistRows = isWitch ? 1 : 2
     state.sculptorPhase = 'front'
     state.sculptorStartRow = 0
     this.inject.render()
@@ -811,7 +1026,7 @@ export class BossEventController {
     // 공격 카운트다운을 다시 3턴으로 초기화
     state.turn = 0
     this.br.setBossAttackCountdown(state.def.attackInterval)
-    this.inject.recordNotice('밀랍 조각사가 다시 전방으로 내려왔다. 공격 주기 초기화!', 'info')
+    this.inject.recordNotice(`${state.def.name}이(가) 다시 전방으로 내려왔다. 공격 주기 초기화!`, 'info')
     this.inject.render()
     this.inject.setInputLocked(false)
   }

@@ -975,8 +975,17 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
   if (gameState.bossBattleActive) return false
   const turn = gameState.getCurrentTurn()
   if (turn >= RUN_TARGET_TURNS) {
+    // 100층은 즉시 클리어가 아니라 최종 보스 '녹지 않는 마녀' 전투로 닫는다.
+    finalAscentStarlightRuleActive = false
+    syncFinalAscentRuleToSpawner()
+    inputLocked = true
+    await boardRenderer.playAltarBossGateTransition()
+    turnManager.setTurnMode('boss_phase')
+    recordNotice('100층 최종 보스가 잿빛 굴레를 드리운다', 'hurt')
+    await bossController.run100F()
     gameState.endGame('run_clear_100_turns')
-    recordNotice('100턴 생존 성공 — 시련의 장막이 닫힌다', 'win')
+    recordNotice('100층 보스 격파 — 잿빛 굴레가 풀렸다', 'win')
+    inputLocked = false
     render()
     return true
   }

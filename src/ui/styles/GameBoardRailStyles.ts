@@ -580,13 +580,16 @@ export const GAME_BOARD_RAIL_STYLES = `
    윗 두 row(dist-1, dist-2)는 보스 phase 동안 보스에 가려져야 하므로 숨긴다.
    (lanes 데이터는 그대로 보존 — 격파/시련 종료 후 자연 복원된다.) */
 .rail:has(.cell.card.boss-kind-waxArmy) .rail-row.dist-0,
-.rail:has(.cell.card.boss-kind-waxKnight) .rail-row.dist-0 {
+.rail:has(.cell.card.boss-kind-waxKnight) .rail-row.dist-0,
+.rail:has(.rail-row.dist-0 .cell.card.boss-kind-waxWitch) .rail-row.dist-0 {
   grid-row: 1 / -1;
 }
 .rail:has(.cell.card.boss-kind-waxArmy) .rail-row.dist-1,
 .rail:has(.cell.card.boss-kind-waxArmy) .rail-row.dist-2,
 .rail:has(.cell.card.boss-kind-waxKnight) .rail-row.dist-1,
-.rail:has(.cell.card.boss-kind-waxKnight) .rail-row.dist-2 {
+.rail:has(.cell.card.boss-kind-waxKnight) .rail-row.dist-2,
+.rail:has(.rail-row.dist-0 .cell.card.boss-kind-waxWitch) .rail-row.dist-1,
+.rail:has(.rail-row.dist-0 .cell.card.boss-kind-waxWitch) .rail-row.dist-2 {
   display: none;
 }
 
@@ -739,6 +742,20 @@ export const GAME_BOARD_RAIL_STYLES = `
 }
 .rail:has(.rail-row.dist-2 .cell.card.boss-kind-waxSculptor) .rail-row.dist-2 {
   display: none;
+}
+
+
+/* waxWitch 3페이지 후방 대기: 90F 조각사처럼 2×3으로 접혀 후방 두 행을 차지한다. */
+.rail:has(.rail-row.dist-2 .cell.card.boss-kind-waxWitch) .rail-row.dist-1 {
+  display: grid;
+  grid-row: 1 / 3;
+}
+.rail:has(.rail-row.dist-2 .cell.card.boss-kind-waxWitch) .rail-row.dist-2 {
+  display: none;
+}
+.boss-kind-waxWitch .boss-face-art {
+  background-position: center 30%;
+  filter: saturate(0.9) contrast(1.08) brightness(0.96);
 }
 
 /* 소환 적 등장 — 작게 나타나 확대되며 격렬하게 흔들리듯 형태가 잡힘 */
