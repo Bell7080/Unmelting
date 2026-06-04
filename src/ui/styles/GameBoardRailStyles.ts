@@ -1091,7 +1091,8 @@ export const GAME_BOARD_RAIL_STYLES = `
   /* 프로필을 더 크게 — 왼쪽 art 컬럼을 우측 정보보다 더 넓게 가져간다. */
   grid-template-columns: minmax(320px, 46%) 1fr;
   gap: clamp(20px, 3vw, 36px);
-  width: min(1080px, 94vw);
+  /* 특징 3줄이 줄바꿈 없이 한 줄로 들어가도록 카드를 넓힌다(레이아웃 비율은 유지). */
+  width: min(1340px, 96vw);
   padding: clamp(20px, 2.8vh, 32px);
   /* 테두리 제거 + 거의 순흑에 가까운 톤으로 자연스럽게 가라앉힌다. */
   border: none;
@@ -1169,13 +1170,11 @@ export const GAME_BOARD_RAIL_STYLES = `
   font-size: 17px;
   opacity: 0.88;
 }
-/* 보스 특징 — 인트로 카드 하단에 art+body 두 칸을 가로질러 전폭으로 깐다.
-   전폭을 써야 각 특징 줄이 줄바꿈 없이 한 줄로 보인다. 회색-금색 톤으로 desc와 구분. */
+/* 보스 특징 한 줄 — 인트로 카드 안에 추가. 회색-금색 톤으로 desc와 구분. */
 .boss-intro-overlay-trait {
-  grid-column: 1 / -1;
-  margin: 4px 0 0;
-  padding: 8px 14px;
-  font-size: clamp(13px, 1.4vw, 16px);
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  font-size: 16px;
   line-height: 1.45;
   border-radius: 8px;
   background: rgba(255, 232, 168, 0.06);

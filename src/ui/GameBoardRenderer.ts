@@ -2174,8 +2174,8 @@ export class GameBoardRenderer {
             <li><span class="boss-intro-overlay-stat-label">반격 주기</span><span class="boss-intro-overlay-stat-value">${opts.attackInterval}턴</span></li>
           </ul>
           <p class="boss-intro-overlay-desc">"${escapeHtml(opts.introBubble ?? '내 저택에 온 것을 환영하네, 위태로운 불씨여.')}"</p>
+          ${traitMarkup}
         </div>
-        ${traitMarkup}
       </section>
       <div class="boss-intro-overlay-hint" aria-hidden="true">CLICK ANYWHERE TO CONTINUE</div>
     `
