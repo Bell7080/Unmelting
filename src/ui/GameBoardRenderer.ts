@@ -2418,17 +2418,18 @@ export class GameBoardRenderer {
       SquareBurst.playAt(originX, originY, meta.burst, { count: effect === 'strike' ? 24 : 18, spread: 180, duration: 520 })
       void this.spawnFieldFloatText(originX, originY - 24, meta.label)
       liveTile.classList.add('is-wax-knight-casting')
-      if (destEl) await this.animateResourceTrail(new DOMRect(originX - 10, originY - 10, 20, 20), destEl, effect === 'strike' ? 7 : 5, meta.burst)
+      // 카드별 사용 템포를 더 빠르게 — 트레일 입자 수와 퇴장/간격을 줄여 하나씩 처리되는 답답함을 줄인다.
+      if (destEl) await this.animateResourceTrail(new DOMRect(originX - 10, originY - 10, 20, 20), destEl, effect === 'strike' ? 4 : 3, meta.burst)
       liveTile.classList.remove('is-wax-knight-casting')
       await card.animate(
         [
           { transform: getComputedStyle(card).transform === 'none' ? 'translate(-50%, -50%) scale(1)' : getComputedStyle(card).transform, opacity: 1, filter: 'brightness(1.4)' },
           { transform: 'translate(-50%, -50%) scale(0.38) rotate(5deg)', opacity: 0, filter: 'brightness(2.4)' },
         ],
-        { duration: 240, easing: 'cubic-bezier(0.5, 0, 0.6, 1)', fill: 'forwards' }
+        { duration: 150, easing: 'cubic-bezier(0.5, 0, 0.6, 1)', fill: 'forwards' }
       ).finished
       card.remove()
-      if (effect === 'strike') await new Promise((r) => window.setTimeout(r, 90))
+      if (effect === 'strike') await new Promise((r) => window.setTimeout(r, 30))
     }
   }
 
@@ -4188,13 +4189,16 @@ export class GameBoardRenderer {
     if (!boss || !slot) return
     await this.animateResourceTrail(boss, slot, 3, theme)
     SquareBurst.playOn(slot, theme, { count: 18, spread: 125, duration: 520 })
+    // 즉시 사라지지 않고 잿불에 닿은 듯 흔들→회색→검게 타오르며 사라진다.
     await slot.animate(
       [
-        { transform: 'scale(1)', opacity: 1, filter: 'brightness(1)' },
-        { transform: 'scale(1.05) rotate(-1deg)', opacity: 1, filter: 'brightness(1.8) saturate(0.8)', offset: 0.36 },
-        { transform: 'scale(0.82) rotate(2deg)', opacity: 0, filter: 'brightness(2.4) saturate(0.15) blur(2px)' },
+        { transform: 'translateX(0) rotate(0deg) scale(1)', opacity: 1, filter: 'brightness(1) saturate(1) grayscale(0)' },
+        { transform: 'translateX(-3px) rotate(-2deg) scale(1.01)', opacity: 1, filter: 'brightness(0.96) saturate(0.4) grayscale(0.6)', offset: 0.2 },
+        { transform: 'translateX(3px) rotate(2deg) scale(1)', opacity: 1, filter: 'brightness(0.72) saturate(0) grayscale(1)', offset: 0.42 },
+        { transform: 'translateX(-2px) rotate(-1.4deg) scale(0.97)', opacity: 0.92, filter: 'brightness(0.42) saturate(0) grayscale(1)', offset: 0.64 },
+        { transform: 'translateX(0) rotate(0deg) scale(0.9)', opacity: 0, filter: 'brightness(0.06) saturate(0) grayscale(1) blur(2px)' },
       ],
-      { duration: 420, easing: 'cubic-bezier(0.22, 0.86, 0.22, 1)', fill: 'forwards' }
+      { duration: 620, easing: 'cubic-bezier(0.3, 0.1, 0.35, 1)', fill: 'forwards' }
     ).finished
   }
 

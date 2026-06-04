@@ -485,7 +485,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 /* 무료카드 hover는 부채꼴 배치를 유지하되 기울기만 풀고 살짝 확대한다. */
 .shop-free-layer > .shop-relic-card:hover,
 .shop-free-layer > .shop-relic-card:focus-visible {
-  animation-play-state: paused;
+  /* 진입은 계속 돌리고 유영만 멈춘다(커서 위 등장 시 투명 고착 방지). */
+  animation-play-state: running, paused;
   /* hover 시에는 부채꼴 각도만 펴고 살짝 확대해 선택 가능 상태를 강조한다. */
   scale: 1.06;
   z-index: 7;
@@ -706,7 +707,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-pack-card:hover,
 .shop-pack-card:focus-visible {
-  animation-play-state: paused;
+  /* 진입(shop-card-enter)은 계속, 유영(shop-pack-drift)만 멈춘다. 커서 위 등장 시 투명 고착 방지. */
+  animation-play-state: running, paused;
   scale: 1.06;
   box-shadow: none;
   z-index: 6;
@@ -1109,7 +1111,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
    the lift sticks even while the float animation owns the transform track. */
 .shop-relic-card:hover,
 .shop-relic-card:focus-visible {
-  animation-play-state: paused;
+  /* 진입(shop-card-enter)은 계속 돌리고 유영(shop-card-float)만 멈춘다. paused로 둘 다
+     멈추면 카드가 커서 위에서 등장할 때 진입이 opacity:0에서 얼어 투명하게 남았다. */
+  animation-play-state: running, paused;
   scale: 1.06;
   box-shadow: none;
   z-index: 6;

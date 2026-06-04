@@ -631,27 +631,30 @@ export class BossEventController {
 
   // ---- waxWitch 전용 페이지 메커니즘 ----------------------------------------
 
-  /** 100F 1페이지: HP 10 손실 임계마다 랜덤 손패 2장을 보스 블라스트로 소각한다. */
-  private async burnRandomHandCardsFromWitch(bossCardId: string): Promise<void> {
+  /** 100F 1페이지: HP 10 손실 임계마다 손패를 소각한다. 임계가 여러 개 겹치면 개수만큼
+   *  블라스트를 한꺼번에 날리고, 카드는 흔들→회색→검게 타며 동시에 사라진다. */
+  private async burnRandomHandCardsFromWitch(bossCardId: string, requestedCount: number): Promise<void> {
     const hand = this.gs.character.hand
     if (hand.length === 0) {
       this.inject.recordNotice('녹지 않는 마녀의 잿불이 빈 손패를 훑고 지나갔다', 'info')
       return
     }
-    const count = Math.min(2, hand.length)
+    const count = Math.min(requestedCount, hand.length)
+    if (count <= 0) return
+    // 내림차순 인덱스: 애니메이션 뒤 한꺼번에 제거해도 남은 인덱스가 밀리지 않는다.
     const indices = sampleWithoutReplacement(
       Array.from({ length: hand.length }, (_, i) => i),
       count,
     ).sort((a, b) => b - a)
+    const names = indices.map((i) => getHandCardDef(hand[i].defId).name)
 
-    for (const slotIndex of indices) {
-      const removed = this.gs.character.removeHandCardAt(slotIndex)
-      if (!removed) continue
-      await this.br.animateBossBlastToHandSlot(bossCardId, slotIndex, 'boss-ember-spark')
-      this.inject.recordNotice(`잿빛 소각: ${getHandCardDef(removed.defId).name} 손패 소실`, 'hurt')
-      this.inject.render()
-      await new Promise((r) => window.setTimeout(r, 120))
-    }
+    // 개수만큼 블라스트 + 소각 애니메이션을 동시에 재생한 뒤 카드를 한 번에 제거한다.
+    await Promise.all(indices.map((slotIndex) =>
+      this.br.animateBossBlastToHandSlot(bossCardId, slotIndex, 'boss-ember-spark')
+    ))
+    for (const slotIndex of indices) this.gs.character.removeHandCardAt(slotIndex)
+    this.inject.recordNotice(`잿빛 소각: ${names.join(', ')} 손패 소실`, 'hurt')
+    this.inject.render()
   }
 
   /** 100F 피격 뒤 페이지 전환/1페이지 손패 소각을 처리한다. 전환 연출이 끼면 true로 턴을 종료한다. */
@@ -662,9 +665,14 @@ export class BossEventController {
 
     // 1페이지 소각 능력은 한 번 열리면 이후 페이지에서도 남는다.
     // nextWitchHandBurnAt은 단조 감소하므로 회복 후 다시 내려와도 같은 HP 고비 이벤트가 재발하지 않는다.
+    // 한 번에 여러 임계가 깎여도(예: HP 20 하락 → 4장) 순차가 아니라 개수만큼 한꺼번에 소각한다.
+    let burnSteps = 0
     while (state.nextWitchHandBurnAt > 0 && hp <= state.nextWitchHandBurnAt) {
-      await this.burnRandomHandCardsFromWitch(state.card.id)
+      burnSteps += 1
       state.nextWitchHandBurnAt -= 10
+    }
+    if (burnSteps > 0) {
+      await this.burnRandomHandCardsFromWitch(state.card.id, burnSteps * 2)
     }
 
     if (state.witchPage === 1) {
@@ -943,20 +951,31 @@ export class BossEventController {
       await this.retaliateGracefulResponse(aliveEnemies.map((e) => e.id))
     }
 
-    // 3턴 주기 도달 + 소환 적 생존 → 조각사가 후방에서 야비하게 돌진 타격
+    // 3턴 주기 도달 + 소환 적 생존 → 보스가 후방에서 공격한다.
     if (state.turn % state.def.attackInterval === 0 && state.summonedEnemyIds.size > 0) {
-      character.takeDamage(state.def.attack)
-      await this.br.animateSculptorBackAttack(state.card.id)
-      await this.br.animateDamageFlash()
-      this.inject.recordNotice(`조각사가 후방에서 야비하게 강타! -${state.def.attack}`, 'hurt')
-      this.inject.render()
-      if (!character.isAlive()) {
-        await this.inject.handlePlayerDeath()
-        return
+      if (state.def.specialEnemyKind === 'waxWitch') {
+        // 마녀는 후방 대기 중에도 공격 주기마다 손패 콤보를 펼쳐 사용하고 반격한다.
+        // resolveWaxWitchPageTwoTurn이 콤보 + 본체 공격 + 변칙/품격 반격까지 모두 처리한다.
+        if (await this.resolveWaxWitchPageTwoTurn(state.card.id)) return
+        if (!character.isAlive()) {
+          await this.inject.handlePlayerDeath()
+          return
+        }
+      } else {
+        // 조각사: 후방에서 야비하게 돌진 타격
+        character.takeDamage(state.def.attack)
+        await this.br.animateSculptorBackAttack(state.card.id)
+        await this.br.animateDamageFlash()
+        this.inject.recordNotice(`조각사가 후방에서 야비하게 강타! -${state.def.attack}`, 'hurt')
+        this.inject.render()
+        if (!character.isAlive()) {
+          await this.inject.handlePlayerDeath()
+          return
+        }
+        this.inject.applyAnomalyHealthLoss()
+        // 품격있는 대처: 후방에서 강타한 조각사에게 되받아친다.
+        if (await this.retaliateGracefulResponse([state.card.id])) return
       }
-      this.inject.applyAnomalyHealthLoss()
-      // 품격있는 대처: 후방에서 강타한 조각사에게 되받아친다.
-      if (await this.retaliateGracefulResponse([state.card.id])) return
     }
 
     if (state.summonedEnemyIds.size > 0) {
