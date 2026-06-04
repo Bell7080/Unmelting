@@ -44,7 +44,6 @@ import { initTouchBody, attachHandCardTouch, attachShopTouchHighlight } from '@u
 import {
   bookIcon,
   candleIcon,
-  coinIcon,
   flameIcon,
   heartIcon,
   pouchIcon,
@@ -563,16 +562,17 @@ export class GameBoardRenderer {
       <aside class="score-panel" aria-label="Action score panel">
         <section class="score-panel-total">
           <div class="score-kicker">
-            <span class="score-kicker-icon">${coinIcon()}</span>
+            <span class="score-kicker-icon">${sparkleIcon()}</span>
             불빛
           </div>
-          <div class="score-number ${scorePulseClass}" data-score-pulse="${scorePanel.scorePulseKey}" data-count-start="${renderedScore}" data-count-end="${scorePanel.score}" data-count-suffix="">
-            ${renderedScore.toLocaleString()}
+          <div class="score-value-row">
+            <span class="score-value-icon" aria-hidden="true">${sparkleIcon()}</span>
+            <span class="score-number ${scorePulseClass}" data-score-pulse="${scorePanel.scorePulseKey}" data-count-start="${renderedScore}" data-count-end="${scorePanel.score}" data-count-suffix="">${renderedScore.toLocaleString()}</span>
           </div>
         </section>
         <section class="coin-panel-total" aria-label="Shop currency">
           <div class="score-kicker">
-            <span class="score-kicker-icon">${coinIcon()}</span>
+            <span class="score-kicker-icon score-kicker-icon--coin">$</span>
             화폐
           </div>
           <div class="coin-number ${coinPulseClass}" data-coin-pulse="${scorePanel.coinPulseKey}" data-count-start="${renderedCoins}" data-count-end="${scorePanel.coins}" data-count-suffix=" $">
