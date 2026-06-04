@@ -302,16 +302,15 @@ export class BossEventController {
     if (state.turn % state.def.attackInterval === 0) {
       if (state.def.specialEnemyKind === 'waxWitch') {
         // 100F 페이지 능력은 해금 뒤 사라지지 않는다.
-        // 2페이지부터는 보스 손패 4장 콤보가 반격까지 포함해 1회만 친다. 여기서 바로 반환해
-        // 아래 공통 반격(else 분기)으로 내려가 두 번 때리던 버그를 막는다. 3페이지는 그 뒤 강화 소환을 잇는다.
+        // 2/3페이지 공통: 손패 4장 콤보 + 반격을 1회만 친 뒤 바로 반환해 아래 공통 반격(else)으로
+        // 내려가 두 번 때리던 버그를 막는다. 3페이지 강화 소환은 페이지 진입 시 1회뿐이며
+        // (resolveWaxWitchAfterDamage), 90F 조각사와 달리 마녀는 콤보가 본 패턴이라 매 주기
+        // 재소환까지 겹치면 전방↔후방 레일이 반복적으로 접혔다 펴지는 어색한 연출이 났다.
         if (state.witchPage >= 2) {
           if (await this.resolveWaxWitchPageTwoTurn(card.id)) return
           if (!this.gs.character.isAlive()) {
             await this.inject.handlePlayerDeath()
             return
-          }
-          if (state.witchPage === 3) {
-            await this.performWitchSummonToBack()
           }
           this.inject.setInputLocked(false)
           return

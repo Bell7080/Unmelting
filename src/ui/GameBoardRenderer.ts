@@ -50,7 +50,6 @@ import {
   pouchIcon,
   shieldIcon,
   sparkleIcon,
-  spadeGemIcon,
   swordIcon,
 } from '@ui/Icons'
 
@@ -1481,7 +1480,7 @@ export class GameBoardRenderer {
           <p class="shop-pack-effect">${effect}</p>
         </div>
         <span class="shop-price-label shop-pack-price" aria-hidden="true">
-          <span class="shop-price-label-icon">${spadeGemIcon()}</span>
+          <span class="shop-price-label-icon">${sparkleIcon()}</span>
           <span class="shop-price-label-text">${cost.toLocaleString()}</span>
         </span>
       </article>
@@ -1637,7 +1636,7 @@ export class GameBoardRenderer {
         </div>
         <!-- 가격 라벨은 flipper(둥근 마스크) 밖으로 분리해서 카드 하단 아래에 항상 노출되게 유지한다. -->
         <span class="shop-price-label shop-relic-price-label" aria-hidden="true">
-          <span class="shop-price-label-icon">${spadeGemIcon()}</span>
+          <span class="shop-price-label-icon">${sparkleIcon()}</span>
           <span class="shop-price-label-text">${
             offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}`
           }</span>
