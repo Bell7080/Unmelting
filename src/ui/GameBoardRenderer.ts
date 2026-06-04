@@ -2407,17 +2407,20 @@ export class GameBoardRenderer {
       const cardRect = card.getBoundingClientRect()
       const originX = cardRect.left + cardRect.width / 2
       const originY = cardRect.top + cardRect.height / 2
+      // onResolve가 보드를 다시 렌더해 캡처해 둔 tile이 떨어져 나갔을 수 있다.
+      // 방패/체력 목적지는 매번 살아 있는 보스 셀을 다시 찾아 좌표가 화면 밖/0,0으로 새는 걸 막는다.
+      const liveTile = this.findCardElement(cardId) ?? tile
       const destEl =
         meta.dest === 'player'
           ? this.boardElement.querySelector<HTMLElement>('.player-card')
           : meta.dest === 'boss-shield'
-            ? (tile.querySelector<HTMLElement>('.boss-face-shield-chip') ?? tile.querySelector<HTMLElement>('.boss-face-hp-column'))
-            : (tile.querySelector<HTMLElement>('.boss-face-hpbar') ?? tile.querySelector<HTMLElement>('.boss-face-hp-column'))
+            ? (liveTile.querySelector<HTMLElement>('.boss-face-shield-chip') ?? liveTile.querySelector<HTMLElement>('.boss-face-hp-column'))
+            : (liveTile.querySelector<HTMLElement>('.boss-face-hpbar') ?? liveTile.querySelector<HTMLElement>('.boss-face-hp-column'))
       SquareBurst.playAt(originX, originY, meta.burst, { count: effect === 'strike' ? 24 : 18, spread: 180, duration: 520 })
       void this.spawnFieldFloatText(originX, originY - 24, meta.label)
-      tile.classList.add('is-wax-knight-casting')
+      liveTile.classList.add('is-wax-knight-casting')
       if (destEl) await this.animateResourceTrail(new DOMRect(originX - 10, originY - 10, 20, 20), destEl, effect === 'strike' ? 7 : 5, meta.burst)
-      tile.classList.remove('is-wax-knight-casting')
+      liveTile.classList.remove('is-wax-knight-casting')
       await card.animate(
         [
           { transform: getComputedStyle(card).transform === 'none' ? 'translate(-50%, -50%) scale(1)' : getComputedStyle(card).transform, opacity: 1, filter: 'brightness(1.4)' },

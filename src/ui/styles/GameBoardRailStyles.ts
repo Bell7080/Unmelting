@@ -1270,6 +1270,8 @@ export const GAME_BOARD_RAIL_STYLES = `
 }
 /* 데미지 부유 숫자를 텍스트로도 사용. 색만 차분한 wax 톤으로. */
 .damage-float.damage-float--text {
+  /* 보스 손패 수치 라벨 — 보스 발동/콤보 카드(z 240~245)보다 앞에 떠야 카드 뒤로 숨지 않는다. */
+  z-index: 260;
   color: #e4eaf4;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.75), 0 0 12px rgba(228, 234, 244, 0.55);
 }
