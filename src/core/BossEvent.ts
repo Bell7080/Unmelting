@@ -332,7 +332,7 @@ export class BossEventController {
         await this.br.animateEnemyAttacks([
           { cardId: card.id, cardName: card.name, laneIndex: 0, damage: card.getDamage() },
         ])
-        await this.br.animateDamageFlash()
+        await this.br.animatePlayerDamageImpact(card.getDamage())
         this.inject.recordNotice(`보스 반격! 플레이어가 ${card.getDamage()} 피해를 받았다`, 'hurt')
         this.inject.render()
         this.inject.applyAnomalyHealthLoss()
@@ -739,7 +739,7 @@ export class BossEventController {
         this.inject.recordNotice(`녹지 않는 마녀가 손패 사용: 체력 +${healed}`, 'info')
       } else {
         character.takeDamage(amount)
-        await this.br.animateDamageFlash()
+        await this.br.animatePlayerDamageImpact(amount)
         this.inject.recordNotice(`녹지 않는 마녀가 손패 사용: 플레이어에게 ${amount} 피해`, 'hurt')
       }
       this.inject.render()
@@ -752,7 +752,7 @@ export class BossEventController {
     await this.br.animateEnemyAttacks([
       { cardId: bossCardId, cardName: state.card.name, laneIndex: 0, damage: state.def.attack },
     ])
-    await this.br.animateDamageFlash()
+    await this.br.animatePlayerDamageImpact(state.def.attack)
     this.inject.recordNotice(`녹지 않는 마녀의 반격! 플레이어가 ${state.def.attack} 피해를 받았다`, 'hurt')
     this.inject.render()
     this.inject.applyAnomalyHealthLoss()
@@ -771,7 +771,7 @@ export class BossEventController {
     await this.br.animateEnemyAttacks([
       { cardId: bossCardId, cardName: state.card.name, laneIndex: 0, damage: state.def.attack },
     ])
-    await this.br.animateDamageFlash()
+    await this.br.animatePlayerDamageImpact(state.def.attack)
     this.inject.recordNotice(`불씨 기사단장의 돌진! 플레이어가 ${state.def.attack} 피해를 받았다`, 'hurt')
     const cards = sampleWithoutReplacement<WaxKnightCardEffect>(['shield', 'heal', 'strike'], 2)
     const amount = BossEventController.WAX_KNIGHT_CARD_AMOUNT
@@ -789,7 +789,7 @@ export class BossEventController {
       } else {
         character.takeDamage(amount)
         await this.br.animateWaxKnightCardEffect(bossCardId, 'strike', amount)
-        await this.br.animateDamageFlash()
+        await this.br.animatePlayerDamageImpact(amount)
         this.inject.recordNotice(`불씨 기사단장이 손패 사용: 플레이어에게 ${amount} 피해`, 'hurt')
       }
       this.inject.render()
@@ -937,9 +937,9 @@ export class BossEventController {
         cardId: e.id, cardName: e.name, laneIndex: idx, damage: e.getDamage(),
       }))
       for (const e of aliveEnemies) character.takeDamage(e.getDamage())
-      await this.br.animateEnemyAttacks(hits)
-      await this.br.animateDamageFlash()
       const totalDmg = aliveEnemies.reduce((s, e) => s + e.getDamage(), 0)
+      await this.br.animateEnemyAttacks(hits)
+      await this.br.animatePlayerDamageImpact(totalDmg)
       this.inject.recordNotice(`소환 적들의 반격! -${totalDmg}`, 'hurt')
       this.inject.render()
       if (!character.isAlive()) {
@@ -965,7 +965,7 @@ export class BossEventController {
         // 조각사: 후방에서 야비하게 돌진 타격
         character.takeDamage(state.def.attack)
         await this.br.animateSculptorBackAttack(state.card.id)
-        await this.br.animateDamageFlash()
+        await this.br.animatePlayerDamageImpact(state.def.attack)
         this.inject.recordNotice(`조각사가 후방에서 야비하게 강타! -${state.def.attack}`, 'hurt')
         this.inject.render()
         if (!character.isAlive()) {
