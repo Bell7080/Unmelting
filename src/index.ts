@@ -1698,7 +1698,7 @@ function activityKindForCard(card: Card): ActivityLogEntry['kind'] {
  *  card is actually removed by this beat. */
 function scoreLabelForCard(card: Card): string {
   if (card.type === CardType.ENEMY) return `${card.name} 처치`
-  if (card.type === CardType.TRAP) return `${card.name} 회피`
+  if (card.type === CardType.TRAP) return `${card.name} 처리`
   if (card.type === CardType.FLOWER) return `${card.name} 수확`
   return `${card.name} 획득`
 }
