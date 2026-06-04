@@ -178,6 +178,28 @@ export const GAME_BOARD_BASE_STYLES = `
   font-variant-numeric: tabular-nums;
 }
 
+/* 불빛 수치는 화폐의 "10 $"와 대칭으로 앞쪽에 불빛(✦) 아이콘을 붙인다. 카운터 롤 애니메이션이
+   숫자 span의 textContent를 덮어쓰므로 아이콘은 형제 span으로 분리해 둔다. */
+.score-value-row {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.score-value-row .score-number {
+  margin-top: 0;
+}
+.score-value-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-flame);
+  font-size: clamp(20px, 2.9vw, 30px);
+}
+/* 화폐 키커는 ● 동전 대신 $ 글자를 쓴다. */
+.score-kicker-icon--coin {
+  font-weight: 900;
+}
+
 /* Pop on gain — exaggerates the original slot-pop with a brighter
    candle-flash and a second sparkle ring that arcs the OTHER way so the
    payoff reads as a proper "ding" instead of a small bounce. */

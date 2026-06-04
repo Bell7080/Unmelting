@@ -809,10 +809,13 @@ async function applyTurnStartRelics(): Promise<void> {
   burstScoreGain()
 }
 
-/** 상점 가격(불빛) 인플레이션 배수. 첫 상점인 10층을 기본 1배로 잡고, 0.02/턴 선형으로
- *  증가한다. (예: 30층 ≈1.4배, 60층 ≈2배, 90층 ≈2.6배) */
+/** 상점 가격(불빛) 인플레이션 배수.
+ *  첫 상점인 10층은 초기 자본(불빛 ~500-700)에 맞춰 살짝 더 싸게 ×0.8로 낮춘다.
+ *  20층부터는 기존 곡선(1 + (turn-10)*0.02)을 그대로 유지한다.
+ *  (예: 20층 ≈1.2배, 30층 ≈1.4배, 60층 ≈2배, 90층 ≈2.6배) */
 function getShopPriceMultiplier(): number {
   const turn = gameState.getCurrentTurn()
+  if (turn <= 10) return 0.8
   return 1 + Math.max(0, turn - 10) * 0.02
 }
 
