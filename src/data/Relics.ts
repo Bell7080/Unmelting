@@ -60,7 +60,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: '별빛 랜턴',
     rarity: 'rare',
     // '불빛'은 GameBoardRenderer.relicEffectHtml가 본문에서 다이아(✦) 아이콘으로 치환한다.
-    effect: '5턴마다 불빛 300 획득',
+    effect: '5턴마다 불빛 150 획득',
     flavor: '별빛을 모아 둔 등불, 다섯 걸음마다 한 줌의 빛을 흘려보낸다.',
     basePrice: 600,
   },

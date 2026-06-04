@@ -798,12 +798,12 @@ function gainFixedLight(label: string, baseValue: number, kind: ActivityLogEntry
   return amount
 }
 
-/** 별빛 랜턴(id: golden-squirrel)은 5턴마다 불빛 300을 흘려보낸다. */
+/** 별빛 랜턴(id: golden-squirrel)은 5턴마다 불빛 150을 흘려보낸다. */
 async function applyTurnStartRelics(): Promise<void> {
   if (!gameState.character.hasRelic('golden-squirrel')) return
   if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 5 !== 0) return
-  // 턴 배율 없이 고정 300(글로벌 불빛 보너스만 반영)을 더하고 점수 패널로 트레일/버스트를 띄운다.
-  const gained = gainFixedLight('별빛 랜턴', 300)
+  // 턴 배율 없이 고정 150(글로벌 불빛 보너스만 반영)을 더하고 점수 패널로 트레일/버스트를 띄운다.
+  const gained = gainFixedLight('별빛 랜턴', 150)
   recordRelicActivation('golden-squirrel', `불빛 +${gained}`)
   await playResourceTrail({ kind: 'chain' }, 'score', 1)
   burstScoreGain()
@@ -1698,10 +1698,14 @@ function activityKindForCard(card: Card): ActivityLogEntry['kind'] {
  *  card is actually removed by this beat. */
 function scoreLabelForCard(card: Card): string {
   if (card.type === CardType.ENEMY) return `${card.name} 처치`
-  if (card.type === CardType.TRAP) return `${card.name} 회피`
+  if (card.type === CardType.TRAP) return `${card.name} 처리`
   if (card.type === CardType.FLOWER) return `${card.name} 수확`
   return `${card.name} 획득`
 }
+
+/** 플레이어 기본 불빛 획득량 전체 상향 배율(약 +0.2x). 카드 처리/수확 등 행동 기반 불빛에만
+ *  적용되며, gainFixedLight(별빛 랜턴 등 고정 유물 보너스)에는 적용하지 않는다. */
+const BASE_LIGHT_GAIN_MULTIPLIER = 1.2
 
 function createScoreLog(
   label: string,
@@ -1710,7 +1714,7 @@ function createScoreLog(
 ): ActivityLogDraft {
   const amount = Math.max(
     1,
-    Math.round(baseValue * getTurnScoreMultiplier() * scoreInflationJitter())
+    Math.round(baseValue * getTurnScoreMultiplier() * scoreInflationJitter() * BASE_LIGHT_GAIN_MULTIPLIER)
   )
   score += amount
   scorePulseKey++
