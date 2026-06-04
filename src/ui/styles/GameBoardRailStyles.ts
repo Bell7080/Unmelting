@@ -792,6 +792,14 @@ export const GAME_BOARD_RAIL_STYLES = `
 .rail:has(.rail-row.dist-2 .cell.card.boss-kind-waxWitch) .rail-row.dist-2 {
   display: none;
 }
+/* waxWitch back phase(3페이지)에서 보스 행(dist-1)과 소환 적 행(dist-0)을 셔터 위로 올린다.
+   조각사와 달리 이 규칙이 없어 후퇴한 마녀와 소환 적이 닫힌 셔터 뒤로 숨어 보이지 않았다.
+   front phase(dist-0)는 type-boss 공통 규칙(.rail-row.dist-0:has(.cell.card.type-boss))이 처리한다. */
+.rail:has(.rail-row.dist-2 .cell.card.boss-kind-waxWitch) .rail-row.dist-1,
+.rail:has(.rail-row.dist-2 .cell.card.boss-kind-waxWitch) .rail-row.dist-0 {
+  position: relative;
+  z-index: 40;
+}
 .boss-kind-waxWitch .boss-face-art {
   background-position: center 30%;
   filter: saturate(0.9) contrast(1.08) brightness(0.96);
