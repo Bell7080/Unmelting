@@ -1169,11 +1169,13 @@ export const GAME_BOARD_RAIL_STYLES = `
   font-size: 17px;
   opacity: 0.88;
 }
-/* 보스 특징 한 줄 — 인트로 카드 안에 추가. 회색-금색 톤으로 desc와 구분. */
+/* 보스 특징 — 인트로 카드 하단에 art+body 두 칸을 가로질러 전폭으로 깐다.
+   전폭을 써야 각 특징 줄이 줄바꿈 없이 한 줄로 보인다. 회색-금색 톤으로 desc와 구분. */
 .boss-intro-overlay-trait {
-  margin: 8px 0 0;
-  padding: 8px 12px;
-  font-size: 16px;
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  padding: 8px 14px;
+  font-size: clamp(13px, 1.4vw, 16px);
   line-height: 1.45;
   border-radius: 8px;
   background: rgba(255, 232, 168, 0.06);
@@ -1192,6 +1194,8 @@ export const GAME_BOARD_RAIL_STYLES = `
   position: relative;
   padding-left: 14px;
   line-height: 1.45;
+  /* 각 특징은 한 줄로만 보이게 줄바꿈을 막는다. */
+  white-space: nowrap;
 }
 .boss-intro-overlay-trait li::before {
   content: '';
