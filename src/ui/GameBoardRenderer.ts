@@ -2668,6 +2668,8 @@ export class GameBoardRenderer {
   async playBossDefeatSequence(cardId: string): Promise<void> {
     const tile = this.findCardElement(cardId)
     if (!tile) return
+    // 확대 폭발이 레일/스테이지 밖으로 번져도 잘리지 않도록 상위 클리핑을 잠시 푼다.
+    this.boardElement.classList.add('is-boss-finale')
     tile.classList.add('is-boss-defeating')
 
     // beat 1: 흔들 + 작은 burst 두 번 — 일반 enemy hit burst('damage') 톤.
@@ -2705,6 +2707,8 @@ export class GameBoardRenderer {
     SquareBurst.playOn(tile, 'treasure-gain', { count: 32, spread: 230, duration: 760 })
     tile.classList.add('is-boss-blown')
     await new Promise((r) => window.setTimeout(r, 640))
+    // 격파 연출 종료 — 상위 컨테이너 클리핑을 원복한다.
+    this.boardElement.classList.remove('is-boss-finale')
   }
 
   /** 100F 마녀 격파 직전 컷신의 보스 칸 전부를 모으는 헬퍼. 3×3 보스라 보이는 셀이 여러 장이다. */
@@ -2736,6 +2740,8 @@ export class GameBoardRenderer {
   async playWaxWitchDeathBeat(cardId: string, beat: number): Promise<void> {
     const cells = this.collectVisibleBossCells(cardId)
     if (cells.length === 0) return
+    // 컷신 확대도 레일/스테이지 밖으로 번질 수 있게 클리핑을 푼다(폭발 시퀀스 종료 시 원복).
+    this.boardElement.classList.add('is-boss-finale')
     const scale = (1 + beat * 0.05).toFixed(3)
     for (const cell of cells) {
       for (let i = 0; i < beat + 1; i++) this.drawWitchLightLine(cell)
@@ -3770,6 +3776,14 @@ export class GameBoardRenderer {
    * brightness pass). If the player card is offscreen for any reason we fall
    * back to a viewport-center burst.
    */
+  /** 보스전 플레이어 피격 피드백: 일반 적 피격과 같은 붉은 피해 수치 + 버스트를 player-card에 띄운다.
+   *  기존 animateDamageFlash(버스트만)를 대체해 보스전에서도 수치 애니메이션이 보이게 통일한다. */
+  animatePlayerDamageImpact(amount: number): Promise<void> {
+    const playerCard = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
+    if (!playerCard || amount <= 0) return this.animateDamageFlash()
+    return this.animateDamageImpactOnElement(playerCard, amount)
+  }
+
   animateDamageFlash(): Promise<void> {
     const playerCard = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
     if (playerCard) {

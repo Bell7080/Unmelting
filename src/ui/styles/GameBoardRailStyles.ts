@@ -1393,6 +1393,17 @@ export const GAME_BOARD_RAIL_STYLES = `
   100% { opacity: 0.85; }
 }
 
+/* 보스 격파 연출 동안에는 확대되는 보스 타일이 레일/스테이지 밖으로 번져도 잘리지 않도록
+   상위 컨테이너의 클리핑을 잠시 푼다(평소엔 넘침/스크롤 방지로 hidden). 격파 시퀀스가
+   끝나면 클래스가 제거되어 원래 hidden으로 복귀한다. */
+.is-boss-finale .game-shell,
+.is-boss-finale .stage {
+  overflow: visible;
+}
+.is-boss-finale .rail {
+  z-index: 60;
+}
+
 /* 보스 최초 하강 착지: 위에서 내려와 바운스 후 정착한다. */
 @keyframes boss-card-land {
   0%   { transform: translateY(-120%) scaleY(0.82); opacity: 0; }
