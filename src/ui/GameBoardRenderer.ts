@@ -1735,10 +1735,10 @@ export class GameBoardRenderer {
             <div class="shop-layer shop-pack-layer">
               ${shop.mode === 'altar'
                 ? [
-                    this.renderShopPackCard('blessing-pack', '축복팩', '패시브 능력 3택1 획득', shop.packCosts?.['blessing-pack'] ?? shop.basicPackCost, score, 'upgrade', 0),
-                    this.renderShopPackCard('resource-pack', '자원팩', '최대 수치 3택1 증가', shop.packCosts?.['resource-pack'] ?? shop.upgradePackCost, score, 'resource', 1),
-                    this.renderShopPackCard('enhance-pack', '강화팩', '카드 단일 능력 3택1 강화', shop.packCosts?.['enhance-pack'] ?? shop.unlockPackCost, score, 'unlock', 2),
-                    this.renderShopPackCard('delete-pack', '삭제팩', '카드 등장 금지 3택1', shop.packCosts?.['delete-pack'] ?? shop.unlockPackCost, score, 'unlock', 3),
+                    // 축복팩(blessing-pack)은 미구현이라 일단 비활성화한다. 재활성화 시 0번 슬롯으로 복구.
+                    this.renderShopPackCard('resource-pack', '자원팩', '최대 수치 3택1 증가', shop.packCosts?.['resource-pack'] ?? shop.upgradePackCost, score, 'resource', 0),
+                    this.renderShopPackCard('enhance-pack', '강화팩', '카드 단일 능력 3택1 강화', shop.packCosts?.['enhance-pack'] ?? shop.unlockPackCost, score, 'unlock', 1),
+                    this.renderShopPackCard('delete-pack', '삭제팩', '카드 등장 금지 3택1', shop.packCosts?.['delete-pack'] ?? shop.unlockPackCost, score, 'unlock', 2),
                   ].join('')
                 : [
                     this.renderShopPackCard('basic-pack', basicPackLabel.title, basicPackLabel.effect, shop.packCosts?.['basic-pack'] ?? shop.basicPackCost, score, 'resource', 0),
