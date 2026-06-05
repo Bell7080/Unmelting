@@ -784,10 +784,15 @@ export class GameBoardRenderer {
     } else if (card.type === CardType.TREASURE && card.treasureKind === 'starlight') {
       // 90~100층 별빛은 손패 보상이 아닌 턴 열쇠임을 카드 자체에서 즉시 읽히게 한다.
       stats = `<div class="card-stats group-note treasure-group-note starlight-note">${sparkleIcon()}<span>턴 +1</span></div>`
-    } else if (card.type === CardType.TREASURE && card.groupCount > 1) {
-      // 보스 보상 카드는 개별 효과 설명을, 일반 상자는 실제 드롭 수(1/3/5)를 표시한다.
-      const CHEST_DROP_BY_SPAN: Record<number, number> = { 1: 1, 2: 3, 3: 5 }
-      const dropCount = CHEST_DROP_BY_SPAN[Math.min(3, Math.max(1, card.groupCount))] ?? card.groupCount
+    } else if (card.type === CardType.TREASURE && (card.groupCount > 1 || card.treasureKind === 'goldenChest')) {
+      // 보스 보상 카드는 개별 효과 설명을, 일반/황금 상자는 실제 드롭 수를 표시한다.
+      const safeSpan = Math.min(3, Math.max(1, card.groupCount))
+      let dropCount: number
+      if (card.treasureKind === 'goldenChest') {
+        dropCount = [3, 8, 15][safeSpan - 1]
+      } else {
+        dropCount = ({ 1: 1, 2: 3, 3: 5 } as Record<number, number>)[safeSpan] ?? safeSpan
+      }
       const treasureNote = card.id.startsWith('boss-reward-')
         ? escapeHtml(card.description)
         : `손패 ${dropCount}장`

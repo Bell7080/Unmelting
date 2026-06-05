@@ -750,10 +750,12 @@ export class HandSystem {
     return `트리플 보물 ${treasures.length}개 획득: 손패 ${gained}장`
   }
 
-  /** Award item drops based on chest width: 1/3/5, matching ActionSystem. */
+  /** Award item drops based on chest width and kind, matching ActionSystem. */
   private static awardTreasureDrops(character: Character, treasure: Card): number {
     const safeSpan = Math.max(1, Math.min(3, treasure.groupCount))
-    const dropCount = safeSpan === 1 ? 1 : safeSpan === 2 ? 3 : 5
+    const dropCount = treasure.treasureKind === 'goldenChest'
+      ? [3, 8, 15][safeSpan - 1]
+      : safeSpan === 1 ? 1 : safeSpan === 2 ? 3 : 5
     let gained = 0
     for (let i = 0; i < dropCount; i++) {
       if (!character.hasHandRoom()) break

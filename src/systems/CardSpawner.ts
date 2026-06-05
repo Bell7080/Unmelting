@@ -225,6 +225,8 @@ export class CardSpawner {
   private relicSpawnAdjust: { enemy: number; treasure: number } = { enemy: 0, treasure: 0 }
   /** 유물 에나벨라의 펜던트로 적용되는 적 스폰 시 HP 보너스(보스 미적용). */
   private relicEnemyHpBonus: number = 0
+  /** 황금 열쇠 유물 장착 시 활성화되는 황금 상자 대체 가중치. */
+  private goldenChestWeight: number = 0
   // 포자/별빛은 "배치된 카드" 기준으로 연속 등장을 막는다. 리롤로 버려진 후보는
   // 카운트를 소모하지 않도록 쿨다운은 commitSpawnCooldowns(배치 시점)에서만 갱신한다.
   // 연속 등장(바로 다음 칸)만 막으면 되므로 최소 1칸 간격으로 둔다. 빈도 자체는 유지.
@@ -267,6 +269,12 @@ export class CardSpawner {
     this.relicSpawnAdjust[type] += delta
   }
 
+  /** 황금 열쇠 유물 장착 시 황금 상자 대체 가중치를 설정한다.
+   *  goldenChestWeight / effectiveTreasureWeight 비율로 황금 상자가 등장한다. */
+  adjustGoldenChestWeight(weight: number): void {
+    this.goldenChestWeight += weight
+  }
+
   /** 에나벨라의 펜던트: 적 스폰 시 HP 보너스를 delta만큼 누적한다. */
   adjustRelicEnemyHpBonus(delta: number): void {
     this.relicEnemyHpBonus += delta
@@ -276,6 +284,7 @@ export class CardSpawner {
   resetRelicModifiers(): void {
     this.relicSpawnAdjust = { enemy: 0, treasure: 0 }
     this.relicEnemyHpBonus = 0
+    this.goldenChestWeight = 0
   }
 
   /** Spawn one random card per lane for the current turn refill (배치 → 쿨다운 commit). */
@@ -536,8 +545,17 @@ export class CardSpawner {
     return Math.random() < 0.5 ? this.generateEnemy() : this.generateTrap({ trapKind: 'web' })
   }
 
-  /** Spawn the current one-lane chest; wider chests are produced by row grouping. */
+  /** Spawn the current one-lane chest; wider chests are produced by row grouping.
+   *  황금 열쇠 유물이 활성화되어 있으면 goldenChestWeight / effectiveTreasureWeight
+   *  확률로 황금 상자를 대신 등장시킨다. */
   private generateTreasure(): Card {
+    if (this.goldenChestWeight > 0) {
+      const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
+      const effectiveTreasureWeight = Math.max(1, buckets.treasure + this.relicSpawnAdjust.treasure)
+      if (Math.random() < this.goldenChestWeight / effectiveTreasureWeight) {
+        return this.generateGoldenChest()
+      }
+    }
     const definition = TREASURE_DEFINITIONS[Math.floor(Math.random() * TREASURE_DEFINITIONS.length)]
     this.spawnSerial++
     return new Card(
@@ -545,6 +563,21 @@ export class CardSpawner {
       CardType.TREASURE,
       definition.name,
       definition.description
+    )
+  }
+
+  /** 황금 상자: 1칸 기준 스폰, 합쳐지면 2/3칸으로 확장된다.
+   *  일반 상자보다 드롭 수(3/8/15)와 불빛이 2배이며, 미믹으로 변환되지 않는다. */
+  private generateGoldenChest(): Card {
+    this.spawnSerial++
+    return new Card(
+      `golden-treasure-${this.spawnSerial}-${Math.random()}`,
+      CardType.TREASURE,
+      '황금 상자',
+      '3 item reward golden chest',
+      0,
+      0,
+      { treasureKind: 'goldenChest' }
     )
   }
 

@@ -27,6 +27,13 @@ const TREASURE_DROPS_BY_SPAN: Record<number, number> = {
   3: 5,
 }
 
+const GOLDEN_TREASURE_DROPS_BY_SPAN: Record<number, number> = {
+  // 황금 상자는 일반 상자보다 훨씬 많은 카드를 보상한다(1/8/15).
+  1: 3,
+  2: 8,
+  3: 15,
+}
+
 export interface ActionResult {
   success: boolean
   message: string
@@ -208,7 +215,8 @@ export class ActionSystem {
       }
     }
     const safeSpan = Math.max(1, Math.min(3, card.groupCount))
-    const drops = TREASURE_DROPS_BY_SPAN[safeSpan]
+    const dropTable = card.treasureKind === 'goldenChest' ? GOLDEN_TREASURE_DROPS_BY_SPAN : TREASURE_DROPS_BY_SPAN
+    const drops = dropTable[safeSpan]
     const { gainedNames, overflow } = ActionSystem.awardDrops(character, drops, 'treasure')
     const summary =
       gainedNames.length === 0

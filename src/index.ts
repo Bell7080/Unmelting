@@ -1100,6 +1100,10 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
     // 적 스폰 가중치 -5.
     cardSpawner.adjustRelicSpawn('enemy', -5)
   }
+  if (id === 'golden-key') {
+    // 보물 스폰 중 가중치 2만큼 황금 상자로 대체한다.
+    cardSpawner.adjustGoldenChestWeight(2)
+  }
 }
 
 /** 일부 유물은 불빛 가격 외 추가 구매 조건이 있다(패도: 최대 체력 16 이상). 충족 못 하면 true. */
@@ -1830,9 +1834,11 @@ function scoreForCardRemoval(card: Card): number {
     return 30
   }
   if (card.type === CardType.TREASURE) {
-    if (card.groupCount >= 3) return 75
-    if (card.groupCount === 2) return 40
-    return 18
+    // 황금 상자는 일반 상자보다 불빛 2배.
+    const isGolden = card.treasureKind === 'goldenChest'
+    if (card.groupCount >= 3) return isGolden ? 150 : 75
+    if (card.groupCount === 2) return isGolden ? 80 : 40
+    return isGolden ? 36 : 18
   }
   if (card.type === CardType.FLOWER) {
     return 24 + Math.max(1, card.flowerValue) * 12

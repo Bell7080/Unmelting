@@ -38,6 +38,7 @@ export type RelicId =
   | 'padlock'
   | 'charred-paper'
   | 'water-bucket'
+  | 'golden-key'
 
 /** Immutable relic rules used by gameplay and presentation. */
 export interface RelicDefinition {
@@ -309,6 +310,15 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '직접 타격한 적의 체력 15% 확률로 1 추가 감소',
     flavor: '물이 닿은 자리는 더 잘 무너진다.',
     basePrice: 760,
+  },
+  'golden-key': {
+    id: 'golden-key',
+    name: '황금 열쇠',
+    rarity: 'unique',
+    // 황금 상자는 일반 상자보다 카드와 불빛을 2배 주는 희귀 보물칸.
+    effect: '상자 등장 확률 (가중치2)%가 황금 상자로 대체됩니다.',
+    flavor: '어떤 자물쇠도 이 열쇠를 거부하지 못한다.',
+    basePrice: 1400,
   },
 }
 
