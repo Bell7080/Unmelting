@@ -2151,7 +2151,7 @@ function setupDevCommandPalette(): void {
     input.value = ''
     window.setTimeout(() => input.focus(), 0)
   }
-  const execute = (rawValue: string): void => {
+  const execute = async (rawValue: string): Promise<void> => {
     const token = rawValue.trim().replace(/^\/+/, '')
     if (!token) return
     // Resource debug grants: allow concise numeric commands so designers can
@@ -2211,6 +2211,7 @@ function setupDevCommandPalette(): void {
     const relicId = relicNameMap.get(key)
     if (relicId) {
       const ok = gameState.character.addRelic(relicId)
+      if (ok) await applyRelicPurchaseEffect(relicId)
       render()
       setHint(ok ? `디버그: 유물 지급 (${getRelicDef(relicId).name})` : '이미 보유 중이거나 지급할 수 없습니다.')
       return
@@ -2882,9 +2883,10 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   // 소중한 머리: 체력이 절반 이하이면 전체 회복 후 파괴.
   await applyPreciousHeadCheck()
   if (gameState.isGameOver || gameState.character.authoritySurvivePending) {
+    const authorityFired = gameState.character.authoritySurvivePending
     if (await tryResolveSurvivalRelics()) {
-      // 권위/희망이 치명타를 흡수하고 새 플레이어 결정 비트로 복귀한다.
-      // do not continue into cleanup/shop timing from the lethal turn.
+      // 권위: 필드를 유지하므로 레일 정리/리필이 필요하다. 희망은 자체 필드 리셋을 수행한다.
+      if (authorityFired) await runCleanupPhase(advanceTurn)
       inputLocked = false
       return
     }
@@ -3202,7 +3204,9 @@ async function handleCardAction(e: Event): Promise<void> {
     }
     if (eventAnimations.length > 0) await Promise.all(eventAnimations)
     if (gameState.isGameOver || gameState.character.authoritySurvivePending) {
+      const authorityFired = gameState.character.authoritySurvivePending
       if (await tryResolveSurvivalRelics()) {
+        if (authorityFired) await runCleanupPhase(shouldAdvanceTurnForAction(result.starlightCollected === true))
         inputLocked = false
         return
       }
