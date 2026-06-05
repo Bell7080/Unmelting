@@ -4715,7 +4715,7 @@ export class GameBoardRenderer {
     const title = card.querySelector<HTMLElement>('.shop-relic-title')
     if (title) title.textContent = def.name
     const effect = card.querySelector<HTMLElement>('.shop-relic-effect')
-    if (effect) effect.textContent = def.effect
+    if (effect) effect.innerHTML = this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx)
     const flavor = card.querySelector<HTMLElement>('.shop-relic-flavor')
     if (flavor) flavor.textContent = def.flavor
     const label = card.querySelector<HTMLElement>('.shop-price-label-text')
