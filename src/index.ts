@@ -1136,6 +1136,12 @@ async function openShopOverlay(mode: 'shop' | 'altar'): Promise<void> {
   // appears so the floating chain text never hangs above the shop tab.
   HandSystem.resetChain(chain)
   clearChainTimeline()
+  // 상점/제단 방문 시 해당 모드의 팩 종류를 발견 처리한다.
+  const packsByMode: Record<'shop' | 'altar', string[]> = {
+    shop:  ['basic-pack', 'upgrade-pack', 'unlock-pack'],
+    altar: ['resource-pack', 'enhance-pack', 'delete-pack'],
+  }
+  for (const k of packsByMode[mode]) gameState.encounteredPackKinds.add(k)
   recordNotice(mode === 'altar' ? '레일이 멈추고 제단이 열렸다' : '레일이 멈추고 상점이 열렸다', 'info')
   render()
   await boardRenderer.playShopTransition()
@@ -2008,6 +2014,13 @@ function trackFieldEnemyEncounters(): void {
       seen.add(card)
       if (card.type === CardType.ENEMY || card.type === CardType.BOSS) {
         gameState.encounteredEnemyNames.add(card.name)
+      } else if (
+        card.type === CardType.TRAP ||
+        card.type === CardType.TREASURE ||
+        card.type === CardType.FLOWER
+      ) {
+        // 함정/보물/꽃도 필드에 등장하면 도감 발견 처리.
+        gameState.encounteredCardNames.add(card.name)
       }
     }
   }
