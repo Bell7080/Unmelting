@@ -1100,6 +1100,10 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
     // 적 스폰 가중치 -5.
     cardSpawner.adjustRelicSpawn('enemy', -5)
   }
+  if (id === 'golden-key') {
+    // 보물 스폰 중 가중치 2만큼 황금 상자로 대체한다.
+    cardSpawner.adjustGoldenChestWeight(2)
+  }
 }
 
 /** 일부 유물은 불빛 가격 외 추가 구매 조건이 있다(패도: 최대 체력 16 이상). 충족 못 하면 true. */
@@ -1616,7 +1620,18 @@ async function closeShopAndResume(): Promise<void> {
  *  진동 없이 바로 열도록 변경 — quake가 셔터를 들썩여 보여 제거. */
 async function openTrialOverlayForced(): Promise<void> {
   boardRenderer.openForcedTrialShopFlow(
-    FORCED_TRIAL_CARDS.map(({ id, title, effect, spriteUrl }) => ({ id, title, effect, spriteUrl }))
+    FORCED_TRIAL_CARDS.map(({ id, title, effect, spriteUrl }) => {
+      // 시련 {{trial-spawn}} 토큰을 현 시점 실효 확률 변화량으로 치환한다.
+      const resolvedEffect = effect.replace('{{trial-spawn}}', () => {
+        const def = TRIAL_DEFINITIONS.find((d) => d.id === id)
+        if (def?.effectKind.type === 'treasure-spawn-scale') {
+          const pct = cardSpawner.trialScaleToPct(def.effectKind.factor)
+          return `${pct >= 0 ? '+' : ''}${pct}%`
+        }
+        return ''
+      })
+      return { id, title, effect: resolvedEffect, spriteUrl }
+    })
   )
   await new Promise<void>((resolve) => {
     let picked = false
@@ -1830,9 +1845,11 @@ function scoreForCardRemoval(card: Card): number {
     return 30
   }
   if (card.type === CardType.TREASURE) {
-    if (card.groupCount >= 3) return 75
-    if (card.groupCount === 2) return 40
-    return 18
+    // 황금 상자는 일반 상자보다 불빛 2배.
+    const isGolden = card.treasureKind === 'goldenChest'
+    if (card.groupCount >= 3) return isGolden ? 150 : 75
+    if (card.groupCount === 2) return isGolden ? 80 : 40
+    return isGolden ? 36 : 18
   }
   if (card.type === CardType.FLOWER) {
     return 24 + Math.max(1, card.flowerValue) * 12
@@ -2079,6 +2096,8 @@ function render(): void {
     coinPulseKey,
     emberTier: tier,
     spawnWeights: cardSpawner.getActiveWeights(),
+    spawnWeightContext: cardSpawner.getEffectiveWeights(),
+    spawnPercents: cardSpawner.getEffectiveSpawnPercents(),
     emberDecayCountdown: gameState.character.emberDecayCountdown,
     vignetteIntensity: EmberSystem.getVignetteIntensity(tier),
     chainHints: buildChainHints(),

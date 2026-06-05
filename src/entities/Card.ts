@@ -15,7 +15,7 @@ export enum CardType {
 export type TrapKind = 'web' | 'bomb' | 'spore'
 export type FlowerKind = 'seed' | 'chamomile' | 'redRose' | 'marigold' | 'oleander' | 'lavender'
 export type SpecialEnemyKind = 'mimic' | 'monsterFlower' | 'waxArmy' | 'waxKnight' | 'waxSculptor' | 'waxWitch'
-export type TreasureKind = 'chest' | 'starlight'
+export type TreasureKind = 'chest' | 'goldenChest' | 'starlight'
 
 export type EnemySpriteId =
   | 'enemyBee'
@@ -332,22 +332,21 @@ export class Card {
    */
   canMergeWith(other: Card): boolean {
     if (this.type !== other.type) return false
-    // 별빛은 90~100층 전용 열쇠 칸이므로 상자처럼 합쳐져 보상량이 바뀌면 안 된다.
-    if (
-      this.type === CardType.TREASURE &&
-      (this.treasureKind === 'starlight' || other.treasureKind === 'starlight')
-    )
-      return false
+    if (this.type === CardType.TREASURE) {
+      // 별빛은 90~100층 전용 열쇠 칸이므로 합쳐져 보상량이 바뀌면 안 된다.
+      if (this.treasureKind === 'starlight' || other.treasureKind === 'starlight') return false
+      // 황금 상자는 황금 상자끼리만 합쳐진다.
+      return this.treasureKind === other.treasureKind
+    }
     // Blooming flowers and seeds are deliberate single-cell opportunities.
     if (this.type === CardType.FLOWER) return false
-    // Special enemies normally stand alone; monster flowers are the one
-    // exception and only merge with the same corrupted-flower family.
+    // Special enemies: mimic↔mimic and monsterFlower↔monsterFlower each form
+    // their own same-family group; all other special enemies stay solo.
     if (this.isSpecialEnemy || other.isSpecialEnemy) {
+      if (this.type !== CardType.ENEMY || other.type !== CardType.ENEMY) return false
       return (
-        this.type === CardType.ENEMY &&
-        other.type === CardType.ENEMY &&
-        this.specialEnemyKind === 'monsterFlower' &&
-        other.specialEnemyKind === 'monsterFlower'
+        this.specialEnemyKind === other.specialEnemyKind &&
+        (this.specialEnemyKind === 'monsterFlower' || this.specialEnemyKind === 'mimic')
       )
     }
     if (this.type === CardType.TRAP) {
@@ -388,10 +387,16 @@ export class Card {
     }
 
     if (this.type === CardType.TREASURE) {
-      this.name = this.groupCount === 2 ? '적당한 상자' : '큰 상자'
-      const chestDrops = this.groupCount === 2 ? 3 : 5
-      // Keep grouped chest text aligned with the 1/3/5 reward table.
-      this.description = `${chestDrops} item reward chest`
+      if (this.treasureKind === 'goldenChest') {
+        this.name = this.groupCount === 2 ? '적당한 황금 상자' : '대형 황금 상자'
+        const drops = this.groupCount === 2 ? 8 : 15
+        this.description = `${drops} item reward golden chest`
+      } else {
+        this.name = this.groupCount === 2 ? '적당한 상자' : '큰 상자'
+        const chestDrops = this.groupCount === 2 ? 3 : 5
+        // Keep grouped chest text aligned with the 1/3/5 reward table.
+        this.description = `${chestDrops} item reward chest`
+      }
     }
   }
 
@@ -403,12 +408,29 @@ export class Card {
   merge(other: Card): void {
     if (!this.canMergeWith(other)) return
 
+    if (this.type === CardType.ENEMY && this.specialEnemyKind === 'mimic') {
+      // Merged mimics sum their stats and gain the same width bonus as normal enemies.
+      const newGroupCount = this.groupCount + other.groupCount
+      const bonus = enemyGroupBonus(newGroupCount)
+      this.groupCount = newGroupCount
+      this.baseHealth += other.baseHealth + bonus.hp
+      this.baseDamage += other.baseDamage + bonus.damage
+      this.health += other.health
+      this.enemyHealthTotal = this.baseHealth
+      this.enemyDamageTotal = this.baseDamage
+      this.defeatDropCount += other.defeatDropCount
+      this.name = this.groupCount >= 3 ? '미믹 군단' : '미믹 무리'
+      this.description = 'Merged mimic formation'
+      return
+    }
+
     if (this.type === CardType.ENEMY && this.specialEnemyKind === 'monsterFlower') {
-      // Corrupted flowers add their stats directly, staying separate from
-      // ordinary enemy formations and preserving current damage already dealt.
-      this.groupCount += other.groupCount
-      this.baseHealth += other.baseHealth
-      this.baseDamage += other.baseDamage
+      // Corrupted flowers add their stats with the same width bonus as normal enemies.
+      const newGroupCount = this.groupCount + other.groupCount
+      const bonus = enemyGroupBonus(newGroupCount)
+      this.groupCount = newGroupCount
+      this.baseHealth += other.baseHealth + bonus.hp
+      this.baseDamage += other.baseDamage + bonus.damage
       this.health += other.health
       this.enemyHealthTotal = this.baseHealth
       this.enemyDamageTotal = this.baseDamage

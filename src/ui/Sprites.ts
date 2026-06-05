@@ -71,6 +71,7 @@ import enemyWave002Url from '../assets/sprites/enemywave_002.webp'
 import chest001Url from '../assets/sprites/chest_001.webp'
 import chest002Url from '../assets/sprites/chest_002.webp'
 import chest003Url from '../assets/sprites/chest_003.webp'
+import chest004Url from '../assets/sprites/chest_004.webp'
 import reward001Url from '../assets/sprites/reward_001.webp'
 import reward002Url from '../assets/sprites/reward_002.webp'
 import reward003Url from '../assets/sprites/reward_003.webp'
@@ -116,6 +117,7 @@ import relic026Url from '../assets/sprites/relics_026.webp'
 import relic027Url from '../assets/sprites/relics_027.webp'
 import relic028Url from '../assets/sprites/relics_028.webp'
 import relic029Url from '../assets/sprites/relics_029.webp'
+import relic030Url from '../assets/sprites/relics_030.webp'
 import pack001Url from '../assets/sprites/pack_001.webp'
 import pack002Url from '../assets/sprites/pack_002.webp'
 import pack003Url from '../assets/sprites/pack_003.webp'
@@ -187,6 +189,8 @@ export const SpriteUrls = {
   chestSmall: chest001Url,
   chestMedium: chest002Url,
   chestLarge: chest003Url,
+  /** 황금 상자 — 1/2/3칸 모두 동일 이미지(chest_004). */
+  chestGolden: chest004Url,
   /** 90~100층 전용 별빛 칸 일러스트. */
   starlight: turnkey001Url,
   flowers: {
@@ -228,6 +232,7 @@ export const SpriteUrls = {
     padlock: relic027Url,
     'charred-paper': relic028Url,
     'water-bucket': relic029Url,
+    'golden-key': relic030Url,
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,
@@ -361,6 +366,8 @@ export function spriteForCard(card: Card): string {
     if (card.id === 'boss-reward-heal') return SpriteUrls.rewards.heal
     if (card.id === 'boss-reward-chest') return SpriteUrls.rewards.chest
     if (card.id === 'boss-reward-bounty') return SpriteUrls.rewards.bounty
+    // 황금 상자는 크기에 무관하게 chest_004 하나로 처리한다.
+    if (card.treasureKind === 'goldenChest') return SpriteUrls.chestGolden
     if (card.groupCount >= 3) return SpriteUrls.chestLarge
     if (card.groupCount === 2) return SpriteUrls.chestMedium
     return SpriteUrls.chestSmall

@@ -40,7 +40,7 @@ export const TRIAL_DEFINITIONS: TrialDefinition[] = [
   {
     id: 'poverty',
     title: '가난',
-    effect: '앞으로 나올 보물상자 등장 확률 25% 감소',
+    effect: '앞으로 나올 보물상자 등장 확률 {{trial-spawn}} 변화',
     spriteKey: '007',
     effectKind: { type: 'treasure-spawn-scale', factor: 0.75 },
   },

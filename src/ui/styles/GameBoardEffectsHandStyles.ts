@@ -349,12 +349,59 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   letter-spacing: 0.04em;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
 }
+/* ember-weights div removed from HUD; kept hidden for any remnant references */
 .ember-weights {
-  font-size: 10px;
-  color: rgba(255, 245, 220, 0.6);
-  text-align: right;
-  letter-spacing: 0.04em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  display: none;
+}
+
+/* ---------- Spawn Probability Panel (손패 패널 상단) ---------- */
+.spawn-prob-panel {
+  width: 100%;
+  min-width: 0;
+}
+.spawn-prob-bar {
+  display: flex;
+  height: 28px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 232, 168, 0.14);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  gap: 1px;
+}
+.spawn-prob-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+  transition: flex 0.35s ease;
+  cursor: default;
+}
+.spawn-prob-seg-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  /* hide when segment too narrow */
+  overflow: hidden;
+  text-overflow: clip;
+}
+/* Category colours — warm candle palette */
+.spp-enemy {
+  background: linear-gradient(180deg, rgba(200, 80, 80, 0.82), rgba(160, 50, 50, 0.72));
+}
+.spp-trap {
+  background: linear-gradient(180deg, rgba(160, 100, 40, 0.82), rgba(120, 70, 20, 0.72));
+}
+.spp-treasure {
+  background: linear-gradient(180deg, rgba(200, 170, 60, 0.82), rgba(160, 130, 30, 0.72));
+}
+.spp-flower {
+  background: linear-gradient(180deg, rgba(100, 170, 80, 0.82), rgba(70, 130, 50, 0.72));
 }
 
 /* ---------- Vignette overlay (불씨 소멸 위태로움 연출) ----------
@@ -405,13 +452,13 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
    - overflow:visible on the stack so hover-pop/animation/burst don't get
      clipped against the panel wall when a card is selected.
 */
-/* Hand panel — three rows: header (auto), inline combo gauge (auto), then
+/* Hand panel — four rows: header (auto), spawn-prob-panel (auto), candle gauge (auto), then
    the hand-stack (1fr). The stack uses justify-content: flex-end so cards
    dock to the bottom of that 1fr row, matching the "cards fall from the
    top, stack from the bottom" feel. */
 .hand-panel {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 8px;
   min-height: 0;
   padding: 10px;

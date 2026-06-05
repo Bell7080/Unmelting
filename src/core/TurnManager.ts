@@ -137,6 +137,7 @@ export class TurnManager {
   /**
    * Per-treasure roll: 30% it vanishes, 10% it morphs into a mimic enemy,
    * and the remaining 60% keeps the treasure in place.
+   * 황금 상자는 별도 규칙: 50% 사라짐, 미믹 변환 없음.
    */
   applyTreasureVolatility(spawner: CardSpawner): TreasureChange[] {
     const changes: TreasureChange[] = []
@@ -156,7 +157,17 @@ export class TurnManager {
       visited.add(card)
 
       const roll = Math.random()
-      // 개봉식: 상자 사라질 확률을 30% → 25%로 낮춘다.
+
+      // 황금 상자: 50% 사라짐, 미믹 변환 없음.
+      if (card.treasureKind === 'goldenChest') {
+        if (roll < 0.5) {
+          this.gameState.removeCardFromRow(card, d)
+          changes.push({ laneIndex: i, distance: d, outcome: 'disappeared', cardName: card.name })
+        }
+        continue
+      }
+
+      // 개봉식: 일반 상자 사라질 확률을 30% → 25%로 낮춘다.
       const disappearThreshold = this.gameState.character.hasRelic('opening-ceremony') ? 0.25 : 0.30
       if (roll < disappearThreshold) {
         this.gameState.removeCardFromRow(card, d)
