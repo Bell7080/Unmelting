@@ -265,10 +265,15 @@ const bossController = new BossEventController(
     clearChainTimeline: () => { clearChainTimeline(); boardRenderer.refreshChainBanner(buildChainHints()) },
     recordNotice: (msg, kind) => recordNotice(msg, kind),
     applyAnomalyHealthLoss: () => applyAnomalyHealthLoss(),
+    applyPlayerAttackRelics: () => applyGreatNegotiationOnAttack(),
     openTrialOverlayForced: () => openTrialOverlayForced(),
     applyRelicPurchaseEffect: (id) => applyRelicPurchaseEffect(id),
     handlePlayerDeath: async () => {
-      if (await tryResolveSurvivalRelics()) return true
+      if (await tryResolveSurvivalRelics()) {
+        // 권위/희망이 보스전 도중 살려냈다면 입력을 풀어 전투를 계속 잇게 한다.
+        inputLocked = false
+        return true
+      }
       gameState.endGame('character_defeated')
       finishTurn()
       return false
@@ -736,10 +741,12 @@ async function applyDignifiedRetaliation(hits: EnemyHit[]): Promise<void> {
  *  희망처럼 화면 중앙 연출 + 체력 게이지 확대 + 붉은빛을 보여 준 뒤 유물을 파괴한다. */
 async function tryResolveAuthoritySurvive(): Promise<boolean> {
   const character = gameState.character
-  if (character.isAlive() || !character.hasRelic('authority')) return false
+  // takeDamage가 체력을 1에서 멈추고 세운 pending 플래그로만 발동한다(0→부활이 아니라 1에서 정지).
+  if (!character.authoritySurvivePending) return false
+  character.authoritySurvivePending = false
   await boardRenderer.animateAuthoritySurvive('authority')
   character.removeRelic('authority', true)
-  character.health = 1
+  character.health = Math.max(1, character.health)
   gameState.isGameOver = false
   gameState.gameOverReason = ''
   recordRelicActivation('authority', '체력 1로 생존')
@@ -825,6 +832,8 @@ async function applyPreciousHeadCheck(): Promise<void> {
   if (character.health <= 0 || character.health > character.maxHealth / 2) return
   const before = snapshotPlayerRecovery()
   const beforeResources = snapshotPlayerResources()
+  // 파괴 연출(강도 2)을 먼저 보여 준 뒤 회복/파괴를 확정한다.
+  await boardRenderer.animateRelicDestroy('precious-head', 2)
   character.fullHeal()
   character.removeRelic('precious-head', true)
   recordRelicActivation('precious-head', '체력 전체 회복 (발동 후 파괴)')
@@ -837,12 +846,12 @@ async function applyPreciousHeadCheck(): Promise<void> {
 async function applyGreatNegotiationOnAttack(): Promise<void> {
   const character = gameState.character
   if (!character.hasRelic('great-negotiation') || Math.random() >= 0.025) return
+  // 파괴 연출(강도 1: 정말 간단한 소각)을 유물이 부채에 남아 있는 동안 먼저 재생한다.
+  await boardRenderer.animateRelicDestroy('great-negotiation', 1)
   character.damage = Math.max(1, character.damage - 2)
   character.removeRelic('great-negotiation', true)
   recordRelicActivation('great-negotiation', '파괴! 공격력 -2 환원')
   render()
-  const beforeResources = snapshotPlayerResources()
-  await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
 }
 
 /** 찬스: 적 타격 후 10% 확률로 추가 타격. 빠른 따닥 느낌으로 짧게 처리. */
@@ -2750,6 +2759,8 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
       // 고품격 뗄감: 불씨가 완전히 꺼지면 가득 채우고 유물 파괴.
       if (ember <= 0 && gameState.character.hasRelic('premium-firewood')) {
         const beforeResources = snapshotPlayerResources()
+        // 파괴 연출(강도 2)을 먼저 보여 준 뒤 불씨를 채우고 파괴한다.
+        await boardRenderer.animateRelicDestroy('premium-firewood', 2)
         gameState.character.ember = gameState.character.emberMax
         syncSpawnerTier()
         gameState.character.removeRelic('premium-firewood', true)
@@ -2870,7 +2881,7 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   applyAnomalyHealthLoss()
   // 소중한 머리: 체력이 절반 이하이면 전체 회복 후 파괴.
   await applyPreciousHeadCheck()
-  if (gameState.isGameOver) {
+  if (gameState.isGameOver || gameState.character.authoritySurvivePending) {
     if (await tryResolveSurvivalRelics()) {
       // 권위/희망이 치명타를 흡수하고 새 플레이어 결정 비트로 복귀한다.
       // do not continue into cleanup/shop timing from the lethal turn.
@@ -2959,7 +2970,7 @@ async function handleCardAction(e: Event): Promise<void> {
       applyAnomalyHealthLoss()
       // 소중한 머리: 선공 피해로 체력 절반 이하 시 전체 회복.
       await applyPreciousHeadCheck()
-      if (!gameState.character.isAlive() || gameState.isGameOver) {
+      if (!gameState.character.isAlive() || gameState.isGameOver || gameState.character.authoritySurvivePending) {
         if (await tryResolveSurvivalRelics()) {
           // 치명적 선공을 권위/희망이 흡수하고 플레이어 턴으로 복귀한다.
           inputLocked = false
@@ -3135,6 +3146,10 @@ async function handleCardAction(e: Event): Promise<void> {
   // behaves like hand-card combo progress without changing turn structure.
   await resolveFullCandleGaugeEffects({ kind: 'chain' })
 
+  // 권위가 체력 1에서 막아냈다면(사망 아님) 연출만 처리하고 정상 흐름을 잇는다.
+  if (gameState.character.authoritySurvivePending) {
+    await tryResolveSurvivalRelics()
+  }
   if (!gameState.character.isAlive()) {
     gameState.endGame('character_defeated')
     if (await tryResolveSurvivalRelics()) {
@@ -3186,7 +3201,7 @@ async function handleCardAction(e: Event): Promise<void> {
       eventAnimations.push(boardRenderer.animateFlowerWilts(flowerChanges.wilts))
     }
     if (eventAnimations.length > 0) await Promise.all(eventAnimations)
-    if (gameState.isGameOver) {
+    if (gameState.isGameOver || gameState.character.authoritySurvivePending) {
       if (await tryResolveSurvivalRelics()) {
         inputLocked = false
         return

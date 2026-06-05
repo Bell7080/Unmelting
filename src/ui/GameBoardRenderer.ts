@@ -3079,7 +3079,19 @@ export class GameBoardRenderer {
         extraClass: 'codex-tile--relic',
       })
 
-    // 팩 한 종류 = 섹션 제목(이름·장소) + 테마 blurb + 항목 타일 그리드.
+    // 팩 간판(대문) 타일: 팩 일러스트를 카드 타일처럼 보여 주는 머리 카드.
+    const coverTile = (packKind: ShopPackKind, venue: '상점' | '제단', theme: string): string => {
+      const label = SHOP_PACK_LABELS[packKind]
+      return this.codexTile({
+        art: { kind: 'sprite', url: SpriteUrls.packs[packKind] },
+        name: label.title,
+        tag: venue,
+        chips: [{ value: theme, tone: 'gold' }],
+        extraClass: 'codex-tile--relic codex-tile--packcover',
+      })
+    }
+
+    // 팩 한 종류 = 섹션 제목 + (간판 카드 → 항목 타일) 한 그리드. 간판 카드를 먼저 보여 준다.
     const packSection = (
       packKind: ShopPackKind,
       venue: '상점' | '제단',
@@ -3089,8 +3101,7 @@ export class GameBoardRenderer {
       const label = SHOP_PACK_LABELS[packKind]
       return `
         <h3 class="compendium-section">${label.title} · ${venue}</h3>
-        <p class="compendium-section-blurb">${theme}</p>
-        <div class="codex-tile-grid codex-tile-grid--relics">${tiles.join('')}</div>
+        <div class="codex-tile-grid codex-tile-grid--relics">${coverTile(packKind, venue, theme)}${tiles.join('')}</div>
       `
     }
 
@@ -4133,6 +4144,114 @@ export class GameBoardRenderer {
           )
           vanish.onfinish = () => {
             timers.forEach((t) => window.clearTimeout(t))
+            source.classList.remove('is-revive-locked')
+            clone.remove()
+            overlay.remove()
+            resolve()
+          }
+        }
+      }
+    })
+  }
+
+  /** 유물 파괴 공통 연출(희망/권위와 같은 톤이되 더 가볍다). 강도로 규모를 나눈다:
+   *  1 = 제자리에서 짧게 흔들다 회색으로 타들어가며 사라짐(정말 간단한 파괴),
+   *  2 = 유물을 살짝 중앙으로 띄워 떨다 터지는 간결 연출(생사엔 큰 지장 없는 효과).
+   *  희망/권위(강도 3)는 각자 전용 연출(animateHopeRelicRevive/animateAuthoritySurvive)을 유지한다. */
+  animateRelicDestroy(relicId: RelicId, intensity: 1 | 2 = 2): Promise<void> {
+    const source = this.boardElement.querySelector<HTMLElement>(
+      `.relic-mini-card[data-owned-relic="${relicId}"]`
+    )
+    const sourceRect = source?.getBoundingClientRect()
+    const centerX = window.innerWidth / 2
+    const centerY = window.innerHeight * 0.46
+    if (!source || !sourceRect) {
+      // DOM을 못 찾으면 중앙 버스트로 폴백한다.
+      SquareBurst.playAt(centerX, centerY, 'damage', {
+        count: intensity === 1 ? 16 : 26,
+        spread: intensity === 1 ? 90 : 150,
+        duration: 600,
+      })
+      return new Promise((resolve) => window.setTimeout(resolve, intensity === 1 ? 340 : 600))
+    }
+
+    source.classList.add('is-revive-locked')
+    const clone = source.cloneNode(true) as HTMLElement
+    clone.classList.add('hope-revive-card', 'is-revive-locked')
+    clone.style.cssText = `position:fixed;left:${sourceRect.left}px;top:${sourceRect.top}px;width:${sourceRect.width}px;height:${sourceRect.height}px;margin:0;z-index:286;pointer-events:none;transform-origin:50% 50%;`
+    document.body.appendChild(clone)
+    const cloneCx = sourceRect.left + sourceRect.width / 2
+    const cloneCy = sourceRect.top + sourceRect.height / 2
+
+    // 강도 1: 제자리 짧은 흔들림 + 회색 소각. 별도 띄움/오버레이 없이 간결하게.
+    if (intensity === 1) {
+      SquareBurst.playAt(cloneCx, cloneCy, 'damage', { count: 12, spread: 70, duration: 460, size: [5, 12] })
+      return new Promise((resolve) => {
+        clone
+          .animate(
+            [
+              { transform: 'translateX(0) rotate(0deg) scale(1)', opacity: 1, filter: 'brightness(1) saturate(1) grayscale(0)' },
+              { transform: 'translateX(-4px) rotate(-3deg) scale(1.02)', opacity: 1, filter: 'brightness(1.1) saturate(0.5) grayscale(0.5)', offset: 0.3 },
+              { transform: 'translateX(4px) rotate(3deg) scale(0.99)', opacity: 0.95, filter: 'brightness(0.7) saturate(0) grayscale(1)', offset: 0.6 },
+              { transform: 'translateX(0) rotate(0deg) scale(0.86)', opacity: 0, filter: 'brightness(0.1) saturate(0) grayscale(1) blur(2px)' },
+            ],
+            { duration: 460, easing: 'cubic-bezier(0.3, 0.1, 0.35, 1)', fill: 'forwards' }
+          )
+          .finished.then(() => {
+            source.classList.remove('is-revive-locked')
+            clone.remove()
+            resolve()
+          })
+      })
+    }
+
+    // 강도 2: 살짝 중앙으로 띄워 떨다 터지고 사라진다(권위보다 짧고 가벼운 버전).
+    const overlay = document.createElement('div')
+    overlay.setAttribute('aria-hidden', 'true')
+    overlay.style.cssText =
+      'position:fixed;inset:0;z-index:285;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 46%, rgba(70,40,20,0.18), rgba(8,5,14,0.55) 66%, rgba(8,5,14,0.7));'
+    document.body.appendChild(overlay)
+    overlay.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], {
+      duration: 1100,
+      easing: 'ease-in-out',
+      fill: 'forwards',
+    })
+
+    const targetWidth = Math.min(180, Math.max(150, window.innerWidth * 0.13))
+    const targetHeight = targetWidth / 0.72
+    const dx = centerX - targetWidth / 2 - sourceRect.left
+    const dy = centerY - targetHeight / 2 - sourceRect.top
+    const sx = targetWidth / Math.max(1, sourceRect.width)
+    const sy = targetHeight / Math.max(1, sourceRect.height)
+
+    return new Promise((resolve) => {
+      const zoom = clone.animate(
+        [
+          { transform: 'translate(0,0) scale(1)', filter: 'brightness(1)' },
+          { transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`, filter: 'brightness(1.2) drop-shadow(0 16px 32px rgba(255, 200, 120, 0.4))' },
+        ],
+        { duration: 420, easing: 'cubic-bezier(0.18, 0.86, 0.22, 1)', fill: 'forwards' }
+      )
+      zoom.onfinish = () => {
+        const shake = clone.animate(
+          [
+            { transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy}) rotate(0deg)`, filter: 'brightness(1.2)' },
+            { transform: `translate(${dx - 10}px, ${dy}px) scale(${sx}, ${sy}) rotate(-3deg)`, filter: 'brightness(1.5)' },
+            { transform: `translate(${dx + 10}px, ${dy}px) scale(${sx}, ${sy}) rotate(3deg)`, filter: 'brightness(1.8) saturate(0.6)' },
+            { transform: `translate(${dx}px, ${dy}px) scale(${sx * 1.06}, ${sy * 1.06}) rotate(0deg)`, filter: 'brightness(2.4) saturate(0)' },
+          ],
+          { duration: 480, easing: 'cubic-bezier(0.22, 0.96, 0.28, 1)', fill: 'forwards' }
+        )
+        shake.onfinish = () => {
+          SquareBurst.playAt(centerX, centerY, 'damage', { count: 26, spread: 140, duration: 760, size: [7, 18] })
+          const vanish = clone.animate(
+            [
+              { transform: `translate(${dx}px, ${dy}px) scale(${sx * 1.06}, ${sy * 1.06})`, opacity: 1, filter: 'brightness(2.4) saturate(0)' },
+              { transform: `translate(${dx}px, ${dy}px) scale(${sx * 1.3}, ${sy * 1.3})`, opacity: 0, filter: 'brightness(3) saturate(0) blur(1px)' },
+            ],
+            { duration: 380, easing: 'cubic-bezier(0.16, 0.88, 0.26, 1)', fill: 'forwards' }
+          )
+          vanish.onfinish = () => {
             source.classList.remove('is-revive-locked')
             clone.remove()
             overlay.remove()

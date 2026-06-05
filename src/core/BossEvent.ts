@@ -101,6 +101,8 @@ export interface BossInjected {
   recordNotice: (msg: string, kind: 'info' | 'win' | 'hurt') => void
   /** 변칙 유물: 누적 피해 10마다 불씨 +1 (보스 피격 직후 호출) */
   applyAnomalyHealthLoss: () => void
+  /** 플레이어가 적(보스/소환물)을 직접 공격할 때마다 발동하는 유물(훌륭한 대화수단 등) */
+  applyPlayerAttackRelics: () => Promise<void>
   /** 보스 격파 후 시련 오버레이를 열고 완료까지 대기 */
   openTrialOverlayForced: () => Promise<void>
   /** 유물 구매 즉발 효과 적용 */
@@ -289,6 +291,8 @@ export class BossEventController {
     const displayValue = remaining === state.def.attackInterval ? state.def.attackInterval : remaining
     this.br.setBossAttackCountdown(displayValue)
     await this.br.animateDamageNumbersById(dealt > 0 ? [{ cardId: card.id, amount: dealt }] : [])
+    // 플레이어가 보스를 직접 공격했으므로 공격 시 발동 유물(훌륭한 대화수단)을 판정한다.
+    await this.inject.applyPlayerAttackRelics()
 
     await this.consumeHandGiftThresholds(card.id)
     if (await this.resolveWaxWitchAfterDamage(beforeBossHp)) return
@@ -306,7 +310,7 @@ export class BossEventController {
         // 내려가 두 번 때리던 버그를 막는다.
         if (state.witchPage >= 2) {
           if (await this.resolveWaxWitchPageTwoTurn(card.id)) return
-          if (!this.gs.character.isAlive()) {
+          if (!this.gs.character.isAlive() || this.gs.character.authoritySurvivePending) {
             await this.inject.handlePlayerDeath()
             return
           }
@@ -339,7 +343,7 @@ export class BossEventController {
         // 품격있는 대처: 보스의 반격에 되받아친다.
         if (await this.retaliateGracefulResponse([card.id])) return
       }
-      if (!this.gs.character.isAlive()) {
+      if (!this.gs.character.isAlive() || this.gs.character.authoritySurvivePending) {
         await this.inject.handlePlayerDeath()
         return
       }
@@ -746,7 +750,7 @@ export class BossEventController {
     }
 
     await this.br.animateBossHandCombo(bossCardId, effects, bonusEffects, amount, applyWitchCardEffect)
-    if (!character.isAlive()) return false
+    if (!character.isAlive() || character.authoritySurvivePending) return false
 
     character.takeDamage(state.def.attack)
     await this.br.animateEnemyAttacks([
@@ -773,7 +777,7 @@ export class BossEventController {
     ])
     await this.br.animatePlayerDamageImpact(state.def.attack)
     this.inject.recordNotice(`불씨 기사단장의 돌진! 플레이어가 ${state.def.attack} 피해를 받았다`, 'hurt')
-    if (!character.isAlive()) return false
+    if (!character.isAlive() || character.authoritySurvivePending) return false
 
     const cards = sampleWithoutReplacement<WaxKnightCardEffect>(['shield', 'heal', 'strike'], 2)
     const amount = BossEventController.WAX_KNIGHT_CARD_AMOUNT
@@ -794,7 +798,7 @@ export class BossEventController {
       this.inject.render()
     }
     await this.br.animateBossHandCombo(bossCardId, cards, [], amount, applyKnightCardEffect)
-    if (!character.isAlive()) return false
+    if (!character.isAlive() || character.authoritySurvivePending) return false
 
     // 변칙: 기사단장 한 턴에 잃은 체력 10마다 불씨 +1.
     this.inject.applyAnomalyHealthLoss()
@@ -917,6 +921,8 @@ export class BossEventController {
     const dealt = Math.min(character.damage, card.getHealth())
     card.takeDamage(dealt)
     await this.br.animateDamageNumbersById(dealt > 0 ? [{ cardId: card.id, amount: dealt }] : [])
+    // 소환물도 직접 공격이므로 공격 시 발동 유물(훌륭한 대화수단)을 판정한다.
+    await this.inject.applyPlayerAttackRelics()
 
     if (card.getHealth() <= 0) {
       await this.defeatSummonedEnemy(card)
@@ -942,7 +948,7 @@ export class BossEventController {
       await this.br.animatePlayerDamageImpact(totalDmg)
       this.inject.recordNotice(`소환 적들의 반격! -${totalDmg}`, 'hurt')
       this.inject.render()
-      if (!character.isAlive()) {
+      if (!character.isAlive() || character.authoritySurvivePending) {
         await this.inject.handlePlayerDeath()
         return
       }
@@ -957,7 +963,7 @@ export class BossEventController {
         // 마녀는 후방 대기 중에도 공격 주기마다 손패 콤보를 펼쳐 사용하고 반격한다.
         // resolveWaxWitchPageTwoTurn이 콤보 + 본체 공격 + 변칙/품격 반격까지 모두 처리한다.
         if (await this.resolveWaxWitchPageTwoTurn(state.card.id)) return
-        if (!character.isAlive()) {
+        if (!character.isAlive() || character.authoritySurvivePending) {
           await this.inject.handlePlayerDeath()
           return
         }
@@ -968,7 +974,7 @@ export class BossEventController {
         await this.br.animatePlayerDamageImpact(state.def.attack)
         this.inject.recordNotice(`조각사가 후방에서 야비하게 강타! -${state.def.attack}`, 'hurt')
         this.inject.render()
-        if (!character.isAlive()) {
+        if (!character.isAlive() || character.authoritySurvivePending) {
           await this.inject.handlePlayerDeath()
           return
         }

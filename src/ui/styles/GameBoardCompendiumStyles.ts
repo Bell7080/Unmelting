@@ -295,6 +295,23 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
 .codex-tile--relic {
   grid-template-rows: 180px auto auto auto;
 }
+/* 카드팩 간판(대문) 타일: 항목 카드보다 따뜻한 금빛 테두리로 머리 카드임을 강조 */
+.codex-tile--packcover {
+  border-color: rgba(255, 205, 110, 0.6);
+  background: linear-gradient(180deg, rgba(58, 42, 30, 0.96), rgba(24, 16, 24, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.24),
+    0 10px 22px rgba(0, 0, 0, 0.55),
+    0 0 16px rgba(244, 164, 96, 0.22);
+}
+.codex-tile--packcover .codex-tile-name {
+  color: var(--color-flame-warm);
+  font-size: 15px;
+}
+.codex-tile--packcover .codex-tile-tag {
+  color: #ffe6b0;
+  border-color: rgba(255, 205, 110, 0.6);
+}
 .codex-tile--relic .codex-stat-chip {
   font-size: 13px;
   white-space: normal;

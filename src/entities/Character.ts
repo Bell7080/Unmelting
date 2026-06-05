@@ -50,6 +50,9 @@ export class Character {
   bannedRelics: RelicId[]
   /** 변칙 유물용 누적 피해(10 잃을 때마다 발동). takeDamage가 더하고 외부가 소비한다. */
   relicDamageTaken: number = 0
+  /** 권위: 치명타를 체력 1에서 막아냈음을 표시한다. 외부가 연출/파괴 후 false로 소비한다.
+   *  (체력이 0으로 떨어졌다가 부활하는 대신, 처음부터 1에서 멈추게 한다.) */
+  authoritySurvivePending: boolean = false
 
   constructor(id: string = 'unmelting-girl', name: string = '녹지 않는 소녀') {
     this.id = id
@@ -77,7 +80,19 @@ export class Character {
     const blocked = Math.min(this.shield, actualDamage)
     this.shield -= blocked
     actualDamage -= blocked
-    this.health = Math.max(0, this.health - actualDamage)
+    // 권위: 이 피해가 치명적이면 체력 0으로 내려가지 않고 1에서 멈춘다. 한 번만 흡수하며
+    // (authoritySurvivePending), 실제 연출/유물 파괴는 외부 생존 처리에서 마무리한다.
+    if (
+      this.health - actualDamage <= 0 &&
+      this.hasRelic('authority') &&
+      !this.authoritySurvivePending
+    ) {
+      actualDamage = Math.max(0, this.health - 1)
+      this.health = 1
+      this.authoritySurvivePending = true
+    } else {
+      this.health = Math.max(0, this.health - actualDamage)
+    }
     // 방패로 막지 못하고 실제 HP가 깎인 양만 변칙 유물 누적 피해로 적립한다.
     this.relicDamageTaken += actualDamage
     return actualDamage
@@ -282,5 +297,6 @@ export class Character {
     this.bannedRelics = []
     this.shield = 0
     this.relicDamageTaken = 0
+    this.authoritySurvivePending = false
   }
 }
