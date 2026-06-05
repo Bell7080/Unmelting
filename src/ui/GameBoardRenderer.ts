@@ -1381,40 +1381,42 @@ export class GameBoardRenderer {
     this.updateTargetBanner(targeting)
 
     return `
-      <aside class="hand-panel" aria-label="Hand">
-        <header class="hand-header">
-          <span class="hand-header-icon">${pouchIcon()}</span>
-          손패 (${character.hand.length}/${handMax})
-        </header>
+      <div class="hand-column">
         ${this.renderSpawnProbPanel(scorePanel)}
-        ${this.renderCandleGauge(character)}
-        <ul class="hand-stack ${character.hand.length >= 8 ? 'is-crowded' : ''}" style="--hand-count: ${character.hand.length}">${reversed}</ul>
-      </aside>
+        <aside class="hand-panel" aria-label="Hand">
+          <header class="hand-header">
+            <span class="hand-header-icon">${pouchIcon()}</span>
+            손패 (${character.hand.length}/${handMax})
+          </header>
+          ${this.renderCandleGauge(character)}
+          <ul class="hand-stack ${character.hand.length >= 8 ? 'is-crowded' : ''}" style="--hand-count: ${character.hand.length}">${reversed}</ul>
+        </aside>
+      </div>
     `
   }
 
-  /** 손패 패널 상단에 표시하는 4종 스폰 확률 바.
+  /** 손패 컬럼 상단에 독립 레이어로 표시하는 4종 스폰 확률 바.
    *  불씨 등급·유물·시련 모두 반영한 실효 가중치를 100% 기준 세그먼트로 표시한다. */
   private renderSpawnProbPanel(scorePanel: ScorePanelState): string {
     const p = scorePanel.spawnPercents
     if (!p) return ''
     const cats: Array<{ key: keyof typeof p; label: string; cls: string }> = [
-      { key: 'enemy',   label: '적',   cls: 'spp-enemy'   },
-      { key: 'trap',    label: '함정', cls: 'spp-trap'    },
-      { key: 'treasure',label: '보물', cls: 'spp-treasure'},
-      { key: 'flower',  label: '꽃',   cls: 'spp-flower'  },
+      { key: 'enemy',    label: '적',   cls: 'spp-enemy'    },
+      { key: 'trap',     label: '함정', cls: 'spp-trap'     },
+      { key: 'treasure', label: '보물', cls: 'spp-treasure' },
+      { key: 'flower',   label: '꽃',   cls: 'spp-flower'   },
     ]
     const segments = cats
       .map(({ key, label, cls }) => {
         const pct = p[key]
         if (pct <= 0) return ''
         return `<div class="spawn-prob-seg ${cls}" style="flex:${pct}" title="${label} ${pct}%">
-          <span class="spawn-prob-seg-label">${label}<br><strong>${pct}%</strong></span>
+          <span class="spawn-prob-seg-label"><span class="spp-cat">${label}</span><span class="spp-pct">${pct}%</span></span>
         </div>`
       })
       .join('')
     return `
-      <div class="spawn-prob-panel" aria-label="스폰 확률">
+      <div class="spawn-prob-panel" aria-label="스폰 확률" title="레일 스폰 확률">
         <div class="spawn-prob-bar">${segments}</div>
       </div>
     `
