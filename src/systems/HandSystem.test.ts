@@ -170,24 +170,66 @@ describe('HandSystem broad hand effects', () => {
     expect(gameState.lanes[0].getCardAtDistance(1)).toBe(web)
   })
 
-  it('lets merged 키틴 remove every trap on the field without a selected target', () => {
+  it('lets normal 키틴 remove a selected 2칸 front trap but reject a 3칸 trap', () => {
+    // 키틴 일반판의 폭 제한을 고정해 3칸 함정이 실수로 허용되지 않게 한다.
     const gameState = new GameState()
     const chain = HandSystem.newChain()
+    const twoSpanTrap = new Card('trap-2span', CardType.TRAP, '2칸 함정', 'test', 0, 2)
+    twoSpanTrap.groupCount = 2
+    gameState.lanes[0].setCardAtDistance(0, twoSpanTrap)
+    gameState.lanes[1].setCardAtDistance(0, twoSpanTrap)
+    gameState.character.addHandCard(DropSystem.makeCard('chitin'))
+
+    const removeTwoSpan = HandSystem.useSingle(gameState, chain, 0, {
+      laneIndex: 0,
+      distance: 0,
+      card: twoSpanTrap,
+    })
+
+    expect(removeTwoSpan.success).toBe(true)
+    expect(gameState.lanes[0].getCardAtDistance(0)).toBeNull()
+    expect(gameState.lanes[1].getCardAtDistance(0)).toBeNull()
+
+    const threeSpanTrap = new Card('trap-3span', CardType.TRAP, '3칸 함정', 'test', 0, 2)
+    threeSpanTrap.groupCount = 3
+    gameState.lanes[0].setCardAtDistance(0, threeSpanTrap)
+    gameState.lanes[1].setCardAtDistance(0, threeSpanTrap)
+    gameState.lanes[2].setCardAtDistance(0, threeSpanTrap)
+    gameState.character.addHandCard(DropSystem.makeCard('chitin'))
+
+    const rejectThreeSpan = HandSystem.useSingle(gameState, chain, 0, {
+      laneIndex: 0,
+      distance: 0,
+      card: threeSpanTrap,
+    })
+
+    expect(rejectThreeSpan.success).toBe(false)
+    expect(gameState.lanes[0].getCardAtDistance(0)).toBe(threeSpanTrap)
+    expect(gameState.lanes[1].getCardAtDistance(0)).toBe(threeSpanTrap)
+    expect(gameState.lanes[2].getCardAtDistance(0)).toBe(threeSpanTrap)
+  })
+
+  it('lets triple 키틴 remove a selected 3칸 front trap', () => {
+    // 사용자 제보 회귀 방지: 트리플 키틴은 선택한 3칸짜리 전방 함정을 제거해야 한다.
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+    const threeSpanTrap = new Card('trap-3span', CardType.TRAP, '3칸 함정', 'test', 0, 2)
+    threeSpanTrap.groupCount = 3
+    gameState.lanes[0].setCardAtDistance(0, threeSpanTrap)
+    gameState.lanes[1].setCardAtDistance(0, threeSpanTrap)
+    gameState.lanes[2].setCardAtDistance(0, threeSpanTrap)
     gameState.character.addHandCard({ ...DropSystem.makeCard('chitin'), merged: true })
 
-    const trapA = new Card('trap-a', CardType.TRAP, '함정 A', 'test', 0, 2)
-    const trapB = new Card('trap-b', CardType.TRAP, '함정 B', 'test', 0, 2)
-    const enemy = new Card('enemy-a', CardType.ENEMY, '적', 'test', 3, 1)
-    gameState.lanes[0].setCardAtDistance(0, trapA)
-    gameState.lanes[1].setCardAtDistance(1, trapB)
-    gameState.lanes[2].setCardAtDistance(2, enemy)
-
-    const result = HandSystem.useSingle(gameState, chain, 0)
+    const result = HandSystem.useSingle(gameState, chain, 0, {
+      laneIndex: 0,
+      distance: 0,
+      card: threeSpanTrap,
+    })
 
     expect(result.success).toBe(true)
-    expect(result.message).toContain('트리플 함정 2장 제거')
+    expect(result.message).toContain('3칸 함정 제거')
     expect(gameState.lanes[0].getCardAtDistance(0)).toBeNull()
-    expect(gameState.lanes[1].getCardAtDistance(1)).toBeNull()
-    expect(gameState.lanes[2].getCardAtDistance(2)).toBe(enemy)
+    expect(gameState.lanes[1].getCardAtDistance(0)).toBeNull()
+    expect(gameState.lanes[2].getCardAtDistance(0)).toBeNull()
   })
 })
