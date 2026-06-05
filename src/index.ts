@@ -3058,7 +3058,9 @@ globalStyle.textContent = `
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 100;
+    /* 콤보 게이지 휠(z-index 120)·셔터(470) 등 모든 보드 오버레이 위를 덮어야 패배 화면에서
+       콤보 버튼이 튀어나오지 않는다. */
+    z-index: 1000;
     animation: fade-in 0.3s ease;
     padding: 16px;
   }

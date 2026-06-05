@@ -204,73 +204,27 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
 }
 
 /* ────────────────── 선공(적 우선 공격) 딱지 ──────────────────
-   불씨 꺼져감/꺼졌다 티어에서 우상단에 불타오르듯 등장하고, 선공권이
-   사라지면 불타 없어진다. 이글거리는 불씨 톤으로 위험을 즉시 읽힌다. */
-.first-strike-badge {
-  position: fixed;
-  top: clamp(12px, 1.6vh, 20px);
-  right: clamp(12px, 1.6vw, 22px);
-  z-index: 60;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 13px 7px 11px;
+   선공 활성 동안 적/특수적/보스 소환적 카드 우상단에 붙는 작은 불씨 라벨.
+   불씨 게이지가 차서 선공이 풀리면 다음 렌더에서 조건이 거짓이 되어 사라진다. */
+.first-strike-card-badge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  z-index: 8;
+  padding: 1px 6px;
   border-radius: 999px;
   pointer-events: none;
   font-family: 'OkDanDan', Georgia, serif;
   font-weight: 900;
-  letter-spacing: 0.06em;
+  font-size: 10px;
+  letter-spacing: 0.04em;
   color: #fff3d6;
-  border: 1.5px solid rgba(255, 138, 60, 0.85);
-  background: linear-gradient(180deg, rgba(96, 26, 10, 0.96) 0%, rgba(54, 12, 6, 0.97) 100%);
+  border: 1px solid rgba(255, 138, 60, 0.85);
+  background: linear-gradient(180deg, rgba(110, 30, 12, 0.96), rgba(58, 13, 7, 0.97));
   box-shadow:
-    0 0 0 1px rgba(120, 30, 14, 0.5),
-    0 6px 20px rgba(0, 0, 0, 0.55),
-    0 0 22px rgba(255, 110, 40, 0.5);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 12px rgba(255, 140, 50, 0.55);
-  overflow: visible;
-}
-/* 테두리에서 일렁이는 불꽃 오라 — 끊임없이 타오르는 느낌. */
-.first-strike-badge-flames {
-  position: absolute;
-  inset: -3px;
-  border-radius: inherit;
-  pointer-events: none;
-  background: radial-gradient(circle at 50% 120%, rgba(255, 150, 50, 0.55), transparent 70%);
-  filter: blur(2px);
-  animation: first-strike-flicker 0.9s ease-in-out infinite;
-}
-@keyframes first-strike-flicker {
-  0%, 100% { opacity: 0.65; transform: scaleY(1); }
-  50%      { opacity: 1;    transform: scaleY(1.12); }
-}
-.first-strike-badge-icon {
-  position: relative;
-  display: inline-flex;
-  width: 16px;
-  height: 16px;
-  color: #ffb347;
-  filter: drop-shadow(0 0 6px rgba(255, 140, 50, 0.8));
-}
-.first-strike-badge-icon svg { width: 100%; height: 100%; }
-.first-strike-badge-text { position: relative; font-size: clamp(13px, 1.6vh, 15px); }
-/* 점화 등장 — 아래에서 불씨가 솟듯 떠오른다. */
-.first-strike-badge.is-igniting {
-  animation: first-strike-ignite 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.2) both;
-}
-@keyframes first-strike-ignite {
-  0%   { opacity: 0; transform: translateY(14px) scale(0.7); filter: brightness(2.2); }
-  55%  { opacity: 1; transform: translateY(-3px) scale(1.08); filter: brightness(1.5); }
-  100% { opacity: 1; transform: translateY(0) scale(1); filter: brightness(1); }
-}
-/* 소멸 — 위로 흩어지며 불타 사라진다. */
-.first-strike-badge.is-burning-out {
-  animation: first-strike-burnout 0.6s cubic-bezier(0.4, 0, 0.7, 1) both;
-}
-@keyframes first-strike-burnout {
-  0%   { opacity: 1; transform: translateY(0) scale(1); filter: brightness(1); }
-  40%  { opacity: 1; transform: translateY(-6px) scale(1.1); filter: brightness(1.8) saturate(1.3); }
-  100% { opacity: 0; transform: translateY(-22px) scale(0.78); filter: brightness(2.6); }
+    0 1px 4px rgba(0, 0, 0, 0.6),
+    0 0 10px rgba(255, 110, 40, 0.45);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 8px rgba(255, 140, 50, 0.5);
 }
 .ember-hud-inner {
   display: flex;
@@ -350,17 +304,31 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   50% { filter: brightness(0.65); }
 }
 /* 디메리트 경계선 — dim→flickering 임계점(ember < 4)에 얇은 적색 마커 표시 */
-.ember-demerit-line {
+/* 적 공격력 +1 경계 — 얇고 연한 라인. */
+.ember-atk1-line {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 1px;
+  transform: translateX(-50%);
+  background: rgba(255, 176, 96, 0.42);
+  border-radius: 1px;
+  box-shadow: 0 0 3px rgba(255, 176, 96, 0.28);
+  pointer-events: none;
+  z-index: 2;
+}
+/* 적 공격력 +2 경계 — 또렷한 붉은 라인. */
+.ember-atk2-line {
   position: absolute;
   top: -2px;
   bottom: -2px;
   width: 2px;
   transform: translateX(-50%);
-  background: rgba(220, 90, 60, 0.85);
+  background: rgba(232, 58, 46, 0.92);
   border-radius: 1px;
-  box-shadow: 0 0 4px rgba(220, 90, 60, 0.6), 0 0 8px rgba(220, 90, 60, 0.3);
+  box-shadow: 0 0 4px rgba(232, 58, 46, 0.65), 0 0 8px rgba(232, 58, 46, 0.35);
   pointer-events: none;
-  z-index: 2;
+  z-index: 3;
 }
 .ember-bar-label {
   position: absolute;
@@ -414,6 +382,14 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   backdrop-filter: saturate(calc(1 - 0.4 * var(--vignette-opacity, 0)));
   -webkit-backdrop-filter: saturate(calc(1 - 0.4 * var(--vignette-opacity, 0)));
   transition: background 0.6s ease, backdrop-filter 0.6s ease;
+}
+/* 선공 구간(불씨 낮음): 가장자리 어둠이 촛불처럼 아주 미세하게 일렁인다. */
+.ember-vignette.is-first-strike-shimmer {
+  animation: ember-first-strike-shimmer 2.6s ease-in-out infinite;
+}
+@keyframes ember-first-strike-shimmer {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.86; transform: scale(1.012); }
 }
 
 /* ---------- Hand stack (bottom-up, 10 fixed slots) ----------

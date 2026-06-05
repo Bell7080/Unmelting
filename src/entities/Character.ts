@@ -65,7 +65,7 @@ export class Character {
     this.emberDecayCountdown = this.emberDecayTurns
     this.candle = 0
     this.candleMax = Character.CANDLE_MAX
-    this.candleMode = 'max-health'
+    this.candleMode = 'attack'
     this.hand = []
     this.handMax = Character.HAND_MAX
     this.relics = []
@@ -202,7 +202,7 @@ export class Character {
 
   /** Cycle the 10-slot gauge's payoff mode from the UI icon button. */
   cycleCandleMode(): CandleMode {
-    const modes: CandleMode[] = ['max-health', 'attack', 'ember', 'draw']
+    const modes: CandleMode[] = ['attack', 'max-health', 'ember', 'draw']
     const current = modes.indexOf(this.candleMode)
     this.candleMode = modes[(current + 1) % modes.length]
     return this.candleMode
@@ -275,7 +275,7 @@ export class Character {
     this.emberDecayCountdown = this.emberDecayTurns
     this.candle = 0
     this.candleMax = Character.CANDLE_MAX
-    this.candleMode = 'max-health'
+    this.candleMode = 'attack'
     this.hand = []
     this.handMax = Character.HAND_MAX
     this.relics = []
