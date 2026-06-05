@@ -245,7 +245,9 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 .hand-slot.hand-card:hover,
 .hand-slot.hand-card:focus-within {
   transform: translateY(-2px);
-  z-index: 32;
+  /* hover 시 transform이 새 쌓임 맥락을 만들어 미리보기(z-index 70)를 그 안에 가둔다.
+     상점/제단 오버레이(z-index 60) 위로 미리보기가 떠 잘리지 않도록 슬롯 자체를 더 높인다. */
+  z-index: 130;
   box-shadow:
     0 6px 18px rgba(0, 0, 0, 0.55),
     0 0 14px rgba(255, 215, 120, 0.35);

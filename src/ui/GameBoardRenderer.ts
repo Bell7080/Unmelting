@@ -927,7 +927,7 @@ export class GameBoardRenderer {
     const candleMax = character.candleMax ?? 10
     const visualCandle = this.hudCounterVisibleStartValue('candle', candle)
     const candlePct = Math.max(0, Math.min(100, (visualCandle / candleMax) * 100))
-    const currentMode = character.candleMode ?? 'max-health'
+    const currentMode = character.candleMode ?? 'attack'
     const mode = this.candleModeMeta(currentMode)
     const candleText = this.renderHudCounter('candle', candle)
     const candleMaxText = this.renderHudCounter('candleMax', candleMax)
@@ -939,7 +939,7 @@ export class GameBoardRenderer {
     // Vertical mode list: ordered from "next-to-current at top" through the
     // rest. We render in a fixed canonical order so the player can rely on
     // muscle memory; the currently-selected mode reads as sunken/dark.
-    const allModes: CandleMode[] = ['max-health', 'attack', 'ember', 'draw']
+    const allModes: CandleMode[] = ['attack', 'max-health', 'ember', 'draw']
     const listItems = allModes
       .map((m) => {
         const meta = this.candleModeMeta(m)
@@ -3332,6 +3332,8 @@ export class GameBoardRenderer {
       document.body.appendChild(el)
     }
     el.style.setProperty('--vignette-opacity', clamped.toFixed(2))
+    // 선공(불씨 낮음) 동안에는 화면 가장자리가 사알짝 일렁이는 느낌을 더해 위기감을 준다.
+    el.classList.toggle('is-first-strike-shimmer', this.firstStrikeActive)
   }
 
   /**

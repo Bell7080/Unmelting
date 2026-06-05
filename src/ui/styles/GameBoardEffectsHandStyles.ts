@@ -383,6 +383,14 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   -webkit-backdrop-filter: saturate(calc(1 - 0.4 * var(--vignette-opacity, 0)));
   transition: background 0.6s ease, backdrop-filter 0.6s ease;
 }
+/* 선공 구간(불씨 낮음): 가장자리 어둠이 촛불처럼 아주 미세하게 일렁인다. */
+.ember-vignette.is-first-strike-shimmer {
+  animation: ember-first-strike-shimmer 2.6s ease-in-out infinite;
+}
+@keyframes ember-first-strike-shimmer {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.86; transform: scale(1.012); }
+}
 
 /* ---------- Hand stack (bottom-up, 10 fixed slots) ----------
    Layout rationale:
