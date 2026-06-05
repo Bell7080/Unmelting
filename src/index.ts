@@ -2029,10 +2029,7 @@ function trackFieldEnemyEncounters(): void {
 function fillBoardAtStart(): void {
   syncSpawnerTier()
   for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
-    // 전방 라인(distance 0)은 2칸 병합도 막아 즉시 2/3-lane 벽이 서지 않게 한다.
-    // 후방 라인은 3칸 병합만 막아 ■ㅁ■ 고정 패턴을 피한다.
-    const strict = distance === 0
-    const cards = cardSpawner.spawnCardsForOpeningRow(gameState.lanes.length, strict)
+    const cards = cardSpawner.spawnCardsForOpeningRow(gameState.lanes.length)
     for (let i = 0; i < gameState.lanes.length; i++) {
       const lane = gameState.lanes[i]
       const card = cards[i]

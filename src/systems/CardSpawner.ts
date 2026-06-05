@@ -310,14 +310,10 @@ export class CardSpawner {
   }
 
   /**
-   * Build one opening-board row.
-   *
-   * strictSeparation=true (전방 라인): adjacent merges are blocked so no
-   * 2-lane or 3-lane wall appears on the front row.
-   * strictSeparation=false (후방 라인): only 3-lane walls are blocked;
-   * 2-lane merges are allowed so the ■ㅁ■ forced-gap pattern is avoided.
+   * Build one opening-board row with adjacent merge families separated.
+   * Keeps every row from immediately becoming a 2/3-lane wall.
    */
-  spawnCardsForOpeningRow(laneCount: number = 3, strictSeparation: boolean = true): Card[] {
+  spawnCardsForOpeningRow(laneCount: number = 3): Card[] {
     const cards: Card[] = []
 
     for (let laneIndex = 0; laneIndex < laneCount; laneIndex++) {
@@ -325,17 +321,8 @@ export class CardSpawner {
 
       for (let attempt = 0; attempt < 8; attempt++) {
         const candidate = this.spawnCardForOpeningBoard()
-        let bad: boolean
-        if (strictSeparation) {
-          // 전방 라인: 이웃 카드와 병합되면 거부
-          bad = laneIndex >= 1 && cards[laneIndex - 1].canMergeWith(candidate)
-        } else {
-          // 후방 라인: 3칸 병합만 거부, 2칸 병합(■■)은 허용
-          bad =
-            laneIndex >= 2 &&
-            cards[laneIndex - 1].canMergeWith(candidate) &&
-            cards[laneIndex - 2].canMergeWith(cards[laneIndex - 1])
-        }
+        // 인접 카드와 병합되는 후보는 거부해 모든 행에서 단일 칸만 배치한다.
+        const bad = laneIndex >= 1 && cards[laneIndex - 1].canMergeWith(candidate)
         if (!bad) {
           chosen = candidate
           break
@@ -369,16 +356,11 @@ export class CardSpawner {
     for (let laneIndex = 0; laneIndex < laneCount; laneIndex++) {
       let chosen: Card | null = null
 
-      // 3칸 병합(예: ■■■)만 막는다. 2칸 병합(■■)은 허용해
-      // 가운데 레인이 항상 다른 타입으로 강제되는 ■ㅁ■ 패턴을 방지한다.
-      // 포자/별빛은 쿨다운 메커니즘이 별도로 인접 연속을 막으므로 여기서 중복 차단하지 않는다.
+      // 인접 카드와 병합되는 후보는 거부해 단일 칸 배치를 유지한다.
       for (let attempt = 0; attempt < 8; attempt++) {
         const candidate = this.generateRandomCard()
-        const wouldMake3Lane =
-          laneIndex >= 2 &&
-          cards[laneIndex - 1].canMergeWith(candidate) &&
-          cards[laneIndex - 2].canMergeWith(cards[laneIndex - 1])
-        if (!wouldMake3Lane) {
+        const bad = laneIndex >= 1 && cards[laneIndex - 1].canMergeWith(candidate)
+        if (!bad) {
           chosen = candidate
           break
         }
