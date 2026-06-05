@@ -318,20 +318,23 @@ export class CardSpawner {
     const cards: Card[] = []
 
     for (let laneIndex = 0; laneIndex < laneCount; laneIndex++) {
-      const previous = cards[laneIndex - 1] ?? null
       let chosen: Card | null = null
 
-      // Reroll a few times before falling back so randomness remains visible
-      // but adjacent opening cells rarely share a merge-compatible family.
+      // 3칸 병합(예: ■■■)만 막는다. 2칸 병합(■■)은 허용해
+      // 가운데 레인이 항상 다른 타입으로 강제되는 ■ㅁ■ 패턴을 방지한다.
       for (let attempt = 0; attempt < 8; attempt++) {
         const candidate = this.spawnCardForOpeningBoard()
-        if (!previous || !previous.canMergeWith(candidate)) {
+        const wouldMake3Lane =
+          laneIndex >= 2 &&
+          cards[laneIndex - 1].canMergeWith(candidate) &&
+          cards[laneIndex - 2].canMergeWith(cards[laneIndex - 1])
+        if (!wouldMake3Lane) {
           chosen = candidate
           break
         }
       }
 
-      const placed = chosen ?? this.generateOpeningFallback(previous)
+      const placed = chosen ?? this.generateOpeningFallback(cards[laneIndex - 1] ?? null)
       this.commitSpawnCooldowns(placed)
       cards.push(placed)
     }
@@ -356,21 +359,24 @@ export class CardSpawner {
     const cards: Card[] = []
 
     for (let laneIndex = 0; laneIndex < laneCount; laneIndex++) {
-      const previous = cards[laneIndex - 1] ?? null
       let chosen: Card | null = null
 
-      // Keep normal refill odds as the first choice, but reroll short streaks
-      // that would instantly merge across the freshly rebuilt front row.
-      // 리롤 후보는 순수 생성(generateRandomCard)으로 뽑아 버려져도 쿨다운을 소모하지 않게 한다.
+      // 3칸 병합(예: ■■■)만 막는다. 2칸 병합(■■)은 허용해
+      // 가운데 레인이 항상 다른 타입으로 강제되는 ■ㅁ■ 패턴을 방지한다.
+      // 포자/별빛은 쿨다운 메커니즘이 별도로 인접 연속을 막으므로 여기서 중복 차단하지 않는다.
       for (let attempt = 0; attempt < 8; attempt++) {
         const candidate = this.generateRandomCard()
-        if (!previous || !previous.canMergeWith(candidate)) {
+        const wouldMake3Lane =
+          laneIndex >= 2 &&
+          cards[laneIndex - 1].canMergeWith(candidate) &&
+          cards[laneIndex - 2].canMergeWith(cards[laneIndex - 1])
+        if (!wouldMake3Lane) {
           chosen = candidate
           break
         }
       }
 
-      const placed = chosen ?? this.generateRefillSeparator(previous)
+      const placed = chosen ?? this.generateRefillSeparator(cards[laneIndex - 1] ?? null)
       this.commitSpawnCooldowns(placed)
       cards.push(placed)
     }
