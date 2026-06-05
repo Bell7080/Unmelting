@@ -304,16 +304,16 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   50% { filter: brightness(0.65); }
 }
 /* 디메리트 경계선 — dim→flickering 임계점(ember < 4)에 얇은 적색 마커 표시 */
-/* 적 공격력 +1 경계 — 얇고 연한 라인. */
+/* 적 공격력 +1 경계 — 얇지만 또렷한 붉은빛 주황 라인. */
 .ember-atk1-line {
   position: absolute;
   top: -1px;
   bottom: -1px;
   width: 1px;
   transform: translateX(-50%);
-  background: rgba(255, 176, 96, 0.42);
+  background: rgba(255, 116, 48, 0.95);
   border-radius: 1px;
-  box-shadow: 0 0 3px rgba(255, 176, 96, 0.28);
+  box-shadow: 0 0 4px rgba(255, 116, 48, 0.7), 0 0 8px rgba(255, 90, 40, 0.4);
   pointer-events: none;
   z-index: 2;
 }
