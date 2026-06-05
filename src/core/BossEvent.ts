@@ -745,7 +745,7 @@ export class BossEventController {
       this.inject.render()
     }
 
-    await this.br.animateWaxWitchHandCombo(bossCardId, effects, bonusEffects, amount, applyWitchCardEffect)
+    await this.br.animateBossHandCombo(bossCardId, effects, bonusEffects, amount, applyWitchCardEffect)
     if (!character.isAlive()) return false
 
     character.takeDamage(state.def.attack)
@@ -773,29 +773,29 @@ export class BossEventController {
     ])
     await this.br.animatePlayerDamageImpact(state.def.attack)
     this.inject.recordNotice(`불씨 기사단장의 돌진! 플레이어가 ${state.def.attack} 피해를 받았다`, 'hurt')
+    if (!character.isAlive()) return false
+
     const cards = sampleWithoutReplacement<WaxKnightCardEffect>(['shield', 'heal', 'strike'], 2)
     const amount = BossEventController.WAX_KNIGHT_CARD_AMOUNT
-    for (const effect of cards) {
+    // 100F 마녀처럼 손패 2장을 한 번에 펼쳐 빠르게 순차 발동한다(이펙트 목적지는 살아 있는 보스 셀 기준).
+    const applyKnightCardEffect = async (effect: WaxKnightCardEffect): Promise<void> => {
       if (effect === 'shield') {
         state.bossShield += amount
         this.syncBossShieldToCard()
-        await this.br.animateWaxKnightCardEffect(bossCardId, 'shield', amount)
         this.inject.recordNotice(`불씨 기사단장이 손패 사용: 방패 +${amount}`, 'info')
       } else if (effect === 'heal') {
         const healed = state.card.healEnemyLike(amount)
-        if (state.card.health > 140) state.card.health = 140
-        await this.br.animateWaxKnightCardEffect(bossCardId, 'heal', amount)
         this.inject.recordNotice(`불씨 기사단장이 손패 사용: 체력 +${healed}`, 'info')
       } else {
         character.takeDamage(amount)
-        await this.br.animateWaxKnightCardEffect(bossCardId, 'strike', amount)
         await this.br.animatePlayerDamageImpact(amount)
         this.inject.recordNotice(`불씨 기사단장이 손패 사용: 플레이어에게 ${amount} 피해`, 'hurt')
       }
       this.inject.render()
-      if (!character.isAlive()) return false
-      await new Promise((r) => window.setTimeout(r, 180))
     }
+    await this.br.animateBossHandCombo(bossCardId, cards, [], amount, applyKnightCardEffect)
+    if (!character.isAlive()) return false
+
     // 변칙: 기사단장 한 턴에 잃은 체력 10마다 불씨 +1.
     this.inject.applyAnomalyHealthLoss()
     // 품격있는 대처: 기사단장의 한 턴 타격에 한 번 되받아친다.

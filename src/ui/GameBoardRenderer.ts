@@ -354,6 +354,11 @@ export class GameBoardRenderer {
     const turnPopClass = turnChanged ? 'is-tick-popping' : ''
     this.previousTurn = turn
 
+    // 선공 딱지: 적/특수적/보스 소환적 카드 우상단에 붙일지 결정하는 현재 선공 상태(불씨 티어 기반).
+    // 불씨가 차서 선공이 풀리면 다음 렌더에서 조건이 거짓이 되어 딱지가 자연히 사라진다.
+    this.firstStrikeActive = scorePanel.emberTier
+      ? EmberSystem.isEnemyFirstStrike(scorePanel.emberTier)
+      : false
     if (this.selected) {
       const lane = lanes[this.selected.laneIndex]
       if (!lane || !lane.getCardAtDistance(this.selected.distance)) {
@@ -399,44 +404,11 @@ export class GameBoardRenderer {
     this.rememberRenderedCards()
     // Floating chain banner (body-mounted, above the player profile).
     this.updateChainBanner(scorePanel.chainHints)
-    // 선공(적 우선 공격) 딱지: 불씨가 꺼져감/꺼졌다 티어면 우상단에 불타오르듯 표시한다.
-    this.updateFirstStrikeBadge(
-      scorePanel.emberTier ? EmberSystem.isEnemyFirstStrike(scorePanel.emberTier) : false
-    )
   }
 
-  /** Body-mounted "선공" badge in the top-right. Mounts with a fiery rise when
-   *  enemy first-strike turns on and burns away when it turns off, so the
-   *  player always knows whether enemies will act before them this turn. */
-  private firstStrikeBadgeActive = false
-  private updateFirstStrikeBadge(active: boolean): void {
-    let badge = document.getElementById('first-strike-badge') as HTMLElement | null
-    if (active) {
-      if (!badge) {
-        badge = document.createElement('div')
-        badge.id = 'first-strike-badge'
-        badge.className = 'first-strike-badge'
-        badge.setAttribute('aria-label', '적 선공: 적이 먼저 공격합니다')
-        badge.innerHTML = `
-          <span class="first-strike-badge-flames" aria-hidden="true"></span>
-          <span class="first-strike-badge-icon" aria-hidden="true">${flameIcon()}</span>
-          <span class="first-strike-badge-text">선공</span>
-        `
-        document.body.appendChild(badge)
-        // reflow 후 entering 클래스를 붙여 등장 애니메이션이 1회 재생되게 한다.
-        void badge.offsetWidth
-        badge.classList.add('is-igniting')
-      }
-      this.firstStrikeBadgeActive = true
-    } else if (badge && this.firstStrikeBadgeActive) {
-      // 선공권 소멸: 불타 사라지는 연출 후 DOM에서 제거한다.
-      this.firstStrikeBadgeActive = false
-      badge.classList.remove('is-igniting')
-      badge.classList.add('is-burning-out')
-      const el = badge
-      window.setTimeout(() => el.remove(), 620)
-    }
-  }
+  /** 적 선공 활성 여부. render() 시작에서 불씨 티어로 갱신하고, renderCardFace가 적 카드
+   *  우상단에 '선공' 딱지를 붙일지 판단하는 데 쓴다. */
+  private firstStrikeActive = false
 
   clearSelection(): void {
     this.selected = null
@@ -817,6 +789,10 @@ export class GameBoardRenderer {
     }
 
     const groupBadge = span > 1 ? `<div class="group-badge">×${span}</div>` : ''
+    // 선공 딱지: 선공 활성 시 적/특수적/보스 소환적(모두 CardType.ENEMY) 우상단에 붙는다.
+    const firstStrikeBadge = this.firstStrikeActive && card.type === CardType.ENEMY
+      ? `<div class="first-strike-card-badge" aria-label="선공: 이 적이 먼저 공격합니다">선공</div>`
+      : ''
     const frozenBadge = card.isFrozen()
       ? `<div class="frozen-badge">굳음 ${card.frozenTurns}</div>`
       : ''
@@ -840,6 +816,7 @@ export class GameBoardRenderer {
 
     return `
       ${groupBadge}
+      ${firstStrikeBadge}
       ${frozenBadge}
       ${trapBadge}
       <div class="card-face">
@@ -2322,8 +2299,10 @@ export class GameBoardRenderer {
    *  보스 전용 손패(시련 톤 붉은 카드, 상단 촛농/양초/불씨 일러스트)가 보스 중앙에서
    *  커지듯 나타나 ~1.5초 잔류한 뒤, 팡 터지며 효과별 수치가 알맞은 HUD로 블라스트된다.
    *  - 방패 → 플레이어 방패 칩, 체력 → 플레이어 체력, 피해 → 플레이어 카드로 발사. */
-  /** 100F 마녀 2페이지 손패 콤보: 4장을 일렬로 펼친 뒤 중복 카드를 빛내고 보너스 카드를 추가해 순차 해결한다. */
-  async animateWaxWitchHandCombo(
+  /** 보스 손패 콤보 공통 연출: 손패 N장을 중앙 정렬로 한 번에 펼친 뒤 중복 카드를 빛내고
+   *  보너스 카드를 추가해 순차 해결한다. 100F 마녀(4장)와 60F 불씨 기사단장(2장)이 공유한다.
+   *  목적지는 매 해결마다 살아 있는 보스 셀을 다시 찾아 이펙트가 엉뚱한 곳으로 날아가지 않는다. */
+  async animateBossHandCombo(
     cardId: string,
     effects: ('shield' | 'heal' | 'strike')[],
     bonusEffects: ('shield' | 'heal' | 'strike')[],
@@ -2367,13 +2346,15 @@ export class GameBoardRenderer {
       return card
     }
 
-    // 4장의 기본 손패를 같은 박자에 차라락 펼치되, index별 지연으로 좌→우 리듬을 만든다.
+    // 기본 손패를 같은 박자에 차라락 펼치되, index별 지연으로 좌→우 리듬을 만든다.
+    // 카드 장수에 맞춰 중앙 정렬한다(4장이면 ±1.5, 2장이면 ±0.5로 좌우 대칭).
+    const centerOffset = (effects.length - 1) / 2
     const cards = effects.map((effect, index) => createCard(effect, index))
     await Promise.all(cards.map((card, index) => card.animate(
       [
         { transform: 'translate(-50%, -50%) scale(0.18) rotate(-7deg)', opacity: 0, filter: 'brightness(1.8)' },
-        { transform: `translate(calc(-50% + ${(index - 1.5) * 118}px), -50%) scale(1.08) rotate(${(index - 1.5) * 2}deg)`, opacity: 1, filter: 'brightness(1.18)', offset: 0.76 },
-        { transform: `translate(calc(-50% + ${(index - 1.5) * 118}px), -50%) scale(1) rotate(${(index - 1.5) * 1.2}deg)`, opacity: 1, filter: 'brightness(1)' },
+        { transform: `translate(calc(-50% + ${(index - centerOffset) * 118}px), -50%) scale(1.08) rotate(${(index - centerOffset) * 2}deg)`, opacity: 1, filter: 'brightness(1.18)', offset: 0.76 },
+        { transform: `translate(calc(-50% + ${(index - centerOffset) * 118}px), -50%) scale(1) rotate(${(index - centerOffset) * 1.2}deg)`, opacity: 1, filter: 'brightness(1)' },
       ],
       { duration: 360, delay: index * 70, easing: 'cubic-bezier(0.18, 0.86, 0.24, 1.18)', fill: 'forwards' }
     ).finished))
@@ -2431,99 +2412,6 @@ export class GameBoardRenderer {
       card.remove()
       if (effect === 'strike') await new Promise((r) => window.setTimeout(r, 30))
     }
-  }
-
-  async animateWaxKnightCardEffect(cardId: string, effect: 'shield' | 'heal' | 'strike', amount: number): Promise<void> {
-    const tile = this.findCardElement(cardId)
-    if (!tile) return
-
-    // 효과별 카드 메타 — 일러스트/팔레트/목적지를 플레이어 손패 의미와 일치시킨다.
-    //  · 방패(+amount) = 양초 손패 톤 → 보스 방패 칩으로 블라스트
-    //  · 체력(+amount) = 촛농 손패 톤 → 보스 체력 바로 블라스트
-    //  · 피해(amount)  = 불씨 손패 톤 → 플레이어 카드로 블라스트
-    // 표기 수치는 BossEvent의 실제 적용값(amount)을 그대로 받아 항상 일치시킨다.
-    const META = {
-      shield: { title: '밀랍 방패', desc: `방패 +${amount}`, label: `방패 +${amount}`, illust: spriteForHandCard('candle'),   burst: 'boss-candle-flame' as const, dest: 'boss-shield' as const },
-      heal:   { title: '촛불 가호', desc: `체력 +${amount}`, label: `체력 +${amount}`, illust: spriteForHandCard('wax-drop'), burst: 'boss-wax-drip' as const,     dest: 'boss-health' as const },
-      strike: { title: '불씨 일격', desc: `피해 ${amount}`,  label: `피해 ${amount}`,  illust: spriteForHandCard('ember'),    burst: 'boss-ember-spark' as const,  dest: 'player' as const },
-    }[effect]
-
-    // 보스가 3칸에 걸쳐 보이므로 가시 셀들의 합집합 중심을 카드 출현 좌표로 삼는다.
-    const cells = Array.from(
-      this.boardElement.querySelectorAll<HTMLElement>(`.cell.card[data-card-id="${cardId}"]`)
-    ).filter((el) => el.offsetParent !== null)
-    const rects = cells.map((c) => c.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0)
-    const baseRect = rects.length > 0 ? rects[0] : tile.getBoundingClientRect()
-    const bossX = rects.length > 0
-      ? (Math.min(...rects.map((r) => r.left)) + Math.max(...rects.map((r) => r.right))) / 2
-      : baseRect.left + baseRect.width / 2
-    const bossY = rects.length > 0
-      ? (Math.min(...rects.map((r) => r.top)) + Math.max(...rects.map((r) => r.bottom))) / 2
-      : baseRect.top + baseRect.height / 2
-
-    const card = document.createElement('div')
-    card.className = `boss-cast-card boss-cast-card--${effect}`
-    card.style.left = `${bossX}px`
-    card.style.top = `${bossY}px`
-    card.innerHTML = `
-      <span class="boss-cast-card-glow" aria-hidden="true"></span>
-      <span class="boss-cast-card-illust" aria-hidden="true">
-        <img src="${META.illust}" alt="" />
-      </span>
-      <span class="boss-cast-card-title">${META.title}</span>
-      <span class="boss-cast-card-effect">${META.desc}</span>
-    `
-    document.body.appendChild(card)
-
-    // 1) 보스 중앙에서 작게 → 크게 솟아오르며 등장(살짝 오버슈트).
-    await card.animate(
-      [
-        { transform: 'translate(-50%, -50%) scale(0.2) rotate(-4deg)', opacity: 0, filter: 'brightness(1.6)' },
-        { transform: 'translate(-50%, -50%) scale(1.12) rotate(1.5deg)', opacity: 1, filter: 'brightness(1.15)', offset: 0.7 },
-        { transform: 'translate(-50%, -50%) scale(1) rotate(0deg)', opacity: 1, filter: 'brightness(1)' },
-      ],
-      { duration: 420, easing: 'cubic-bezier(0.18, 0.86, 0.24, 1.2)', fill: 'forwards' }
-    ).finished
-
-    // 2) 화면에 ~1.5초 잔류(살짝 떠 있는 숨쉬기 모션).
-    card.classList.add('is-hovering')
-    await new Promise((r) => window.setTimeout(r, 1500))
-    card.classList.remove('is-hovering')
-
-    // 3) 팡! 카드가 터지듯 사라지며 보스 중앙 블라스트.
-    SquareBurst.playAt(bossX, bossY, META.burst, { count: effect === 'strike' ? 26 : 20, spread: 200, duration: 560 })
-    await card.animate(
-      [
-        { transform: 'translate(-50%, -50%) scale(1) rotate(0deg)', opacity: 1, filter: 'brightness(1)' },
-        { transform: 'translate(-50%, -50%) scale(1.18) rotate(-2deg)', opacity: 1, filter: 'brightness(1.9)', offset: 0.3 },
-        { transform: 'translate(-50%, -50%) scale(0.4) rotate(3deg)', opacity: 0, filter: 'brightness(2.4)' },
-      ],
-      { duration: 300, easing: 'cubic-bezier(0.5, 0, 0.6, 1)', fill: 'forwards' }
-    ).finished
-    card.remove()
-
-    // 4) 효과 수치를 알맞은 위치로 발사 — 방패/체력은 보스 HUD, 피해는 플레이어 카드.
-    //    기존 resource-trail 양식(animateResourceTrail)을 그대로 써서 출처→목적지로 흘린다.
-    //    보스 내부 타깃은 보이는 셀(tile) 안에서 찾아 숨은 행의 좌표를 잡지 않게 한다.
-    const destEl =
-      META.dest === 'player'
-        ? this.boardElement.querySelector<HTMLElement>('.player-card')
-        : META.dest === 'boss-shield'
-          ? (tile.querySelector<HTMLElement>('.boss-face-shield-chip') ??
-             tile.querySelector<HTMLElement>('.boss-face-hp-column'))
-          : (tile.querySelector<HTMLElement>('.boss-face-hpbar') ??
-             tile.querySelector<HTMLElement>('.boss-face-hp-column'))
-    void this.spawnFieldFloatText(bossX, baseRect.top + baseRect.height * 0.34, META.label)
-    tile.classList.add('is-wax-knight-casting')
-    if (destEl) {
-      const bossOrigin = new DOMRect(bossX - 12, bossY - 12, 24, 24)
-      await this.animateResourceTrail(bossOrigin, destEl, effect === 'strike' ? 8 : 6, META.burst)
-      SquareBurst.playOn(destEl, META.burst, { count: 14, spread: 120, duration: 480 })
-      await new Promise((r) => window.setTimeout(r, 200))
-    } else {
-      await new Promise((r) => window.setTimeout(r, 240))
-    }
-    tile.classList.remove('is-wax-knight-casting')
   }
 
   /** 밀랍 조각사(2×3) 등장 연출.
@@ -3403,8 +3291,10 @@ export class GameBoardRenderer {
     const weightsText = weights
       ? `적 ${weights.enemy}% · 함정 ${weights.trap}% · 보물 ${weights.treasure}% · 꽃 ${weights.flower}%`
       : ''
-    // dim→flickering 경계(ember < 4)에 디메리트 경고 라인 표시.
-    const demeritLinePct = Math.min(100, (4 / visualEmberMax) * 100)
+    // 선공 발동 경계(dim→flickering, ember < 4)는 붉은 라인,
+    // 적 강화가 심화되는 경계(flickering→extinguished, ember < 1)는 더 얇고 연한 라인으로 표시한다.
+    const firstStrikeLinePct = Math.min(100, (4 / visualEmberMax) * 100)
+    const empowerLinePct = Math.min(100, (1 / visualEmberMax) * 100)
     return `
       <div class="ember-hud" aria-label="Ember status">
         <div class="ember-hud-inner">
@@ -3412,7 +3302,8 @@ export class GameBoardRenderer {
             <span class="ember-icon">${flameIcon()}</span>
             <div class="ember-bar">
               <div class="ember-bar-fill ember-tier-${tier}" style="width: ${pct}%"></div>
-              <div class="ember-demerit-line" style="left: ${demeritLinePct.toFixed(1)}%" title="이 아래로 내려가면 적이 먼저 공격합니다" aria-hidden="true"></div>
+              <div class="ember-demerit-line" style="left: ${firstStrikeLinePct.toFixed(1)}%" title="선공: 이 아래로 내려가면 적이 먼저 공격합니다" aria-hidden="true"></div>
+              <div class="ember-empower-line" style="left: ${empowerLinePct.toFixed(1)}%" title="이 아래로 내려가면 적이 더 강해집니다" aria-hidden="true"></div>
               <span class="ember-bar-label">불씨 ${emberText}/${emberMaxText} · ${EmberSystem.tierLabel(tier)}</span>
             </div>
             <span class="ember-countdown" title="다음 불씨 감소까지 남은 턴">

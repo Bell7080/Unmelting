@@ -622,10 +622,10 @@ export const GAME_BOARD_RAIL_STYLES = `
   100% { transform: translateY(0) scale(1); filter: brightness(1); }
 }
 
-/* ────────────────── 불씨 기사단장 전용 발동 카드 ──────────────────
-   시련 카드와 같은 심적색 톤의 보스 손패. 보스 중앙에서 커지듯 나타나
-   ~1.5초 잔류하다 팡 터진다. 상단에 촛농/양초/불씨 일러스트 헤더를 둔다.
-   위치/등장/소멸 transform은 JS(animateWaxKnightCardEffect)가 담당한다. */
+/* ────────────────── 보스 발동 카드(손패 콤보) ──────────────────
+   시련 카드와 같은 심적색 톤의 보스 손패. 손패 N장을 중앙 정렬로 펼쳐 순차 발동한다.
+   상단에 촛농/양초/불씨 일러스트 헤더를 둔다. 60F 기사단장(2장)/100F 마녀(4장) 공용.
+   위치/등장/소멸 transform은 JS(animateBossHandCombo)가 담당한다. */
 .boss-cast-card {
   position: fixed;
   z-index: 240;
@@ -649,15 +649,6 @@ export const GAME_BOARD_RAIL_STYLES = `
     0 16px 34px rgba(0, 0, 0, 0.7),
     0 0 0 1px rgba(110, 22, 22, 0.4),
     0 0 26px rgba(150, 30, 24, 0.5);
-}
-/* ~1.5초 잔류 동안 살짝 떠 있는 숨쉬기 모션 (JS transform과 겹치지 않게 filter만 사용). */
-.boss-cast-card.is-hovering {
-  animation: boss-cast-breathe 1.5s ease-in-out both;
-}
-@keyframes boss-cast-breathe {
-  0%   { filter: brightness(1) drop-shadow(0 0 0 rgba(255, 120, 60, 0)); }
-  50%  { filter: brightness(1.12) drop-shadow(0 0 14px rgba(255, 120, 60, 0.45)); }
-  100% { filter: brightness(1) drop-shadow(0 0 4px rgba(255, 120, 60, 0.2)); }
 }
 .boss-cast-card-glow {
   position: absolute;
