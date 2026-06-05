@@ -3291,10 +3291,11 @@ export class GameBoardRenderer {
     const weightsText = weights
       ? `적 ${weights.enemy}% · 함정 ${weights.trap}% · 보물 ${weights.treasure}% · 꽃 ${weights.flower}%`
       : ''
-    // 선공 발동 경계(dim→flickering, ember < 4)는 붉은 라인,
-    // 적 강화가 심화되는 경계(flickering→extinguished, ember < 1)는 더 얇고 연한 라인으로 표시한다.
-    const firstStrikeLinePct = Math.min(100, (4 / visualEmberMax) * 100)
-    const empowerLinePct = Math.min(100, (1 / visualEmberMax) * 100)
+    // 적 공격력 +1 경계(dim→flickering, ember < 4)는 얇고 연한 라인,
+    // 공격력 +2로 심화되는 경계(flickering→extinguished, ember < 1)는 더 진한 붉은 라인.
+    // 선공은 두 구간(ember < 4) 모두에서 발동한다.
+    const atk1LinePct = Math.min(100, (4 / visualEmberMax) * 100)
+    const atk2LinePct = Math.min(100, (1 / visualEmberMax) * 100)
     return `
       <div class="ember-hud" aria-label="Ember status">
         <div class="ember-hud-inner">
@@ -3302,8 +3303,8 @@ export class GameBoardRenderer {
             <span class="ember-icon">${flameIcon()}</span>
             <div class="ember-bar">
               <div class="ember-bar-fill ember-tier-${tier}" style="width: ${pct}%"></div>
-              <div class="ember-demerit-line" style="left: ${firstStrikeLinePct.toFixed(1)}%" title="선공: 이 아래로 내려가면 적이 먼저 공격합니다" aria-hidden="true"></div>
-              <div class="ember-empower-line" style="left: ${empowerLinePct.toFixed(1)}%" title="이 아래로 내려가면 적이 더 강해집니다" aria-hidden="true"></div>
+              <div class="ember-atk1-line" style="left: ${atk1LinePct.toFixed(1)}%" title="이 아래로 내려가면 적 공격력 +1, 적이 먼저 공격합니다" aria-hidden="true"></div>
+              <div class="ember-atk2-line" style="left: ${atk2LinePct.toFixed(1)}%" title="이 아래로 내려가면 적 공격력 +2" aria-hidden="true"></div>
               <span class="ember-bar-label">불씨 ${emberText}/${emberMaxText} · ${EmberSystem.tierLabel(tier)}</span>
             </div>
             <span class="ember-countdown" title="다음 불씨 감소까지 남은 턴">

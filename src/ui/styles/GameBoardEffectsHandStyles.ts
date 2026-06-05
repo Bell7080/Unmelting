@@ -304,21 +304,8 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   50% { filter: brightness(0.65); }
 }
 /* 디메리트 경계선 — dim→flickering 임계점(ember < 4)에 얇은 적색 마커 표시 */
-/* 선공 발동 경계 — 또렷한 붉은 라인. */
-.ember-demerit-line {
-  position: absolute;
-  top: -2px;
-  bottom: -2px;
-  width: 2px;
-  transform: translateX(-50%);
-  background: rgba(232, 58, 46, 0.92);
-  border-radius: 1px;
-  box-shadow: 0 0 4px rgba(232, 58, 46, 0.65), 0 0 8px rgba(232, 58, 46, 0.35);
-  pointer-events: none;
-  z-index: 3;
-}
-/* 적 강화 심화 경계 — 더 얇고 연한 라인. */
-.ember-empower-line {
+/* 적 공격력 +1 경계 — 얇고 연한 라인. */
+.ember-atk1-line {
   position: absolute;
   top: -1px;
   bottom: -1px;
@@ -329,6 +316,19 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   box-shadow: 0 0 3px rgba(255, 176, 96, 0.28);
   pointer-events: none;
   z-index: 2;
+}
+/* 적 공격력 +2 경계 — 또렷한 붉은 라인. */
+.ember-atk2-line {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  transform: translateX(-50%);
+  background: rgba(232, 58, 46, 0.92);
+  border-radius: 1px;
+  box-shadow: 0 0 4px rgba(232, 58, 46, 0.65), 0 0 8px rgba(232, 58, 46, 0.35);
+  pointer-events: none;
+  z-index: 3;
 }
 .ember-bar-label {
   position: absolute;
