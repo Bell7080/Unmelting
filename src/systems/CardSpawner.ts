@@ -310,25 +310,33 @@ export class CardSpawner {
   }
 
   /**
-   * Build one opening-board row with adjacent merge families separated. This
-   * keeps the first few front rows from immediately becoming 2/3-lane enemies
-   * while still using normal opening-safe card odds as the first choice.
+   * Build one opening-board row.
+   *
+   * strictSeparation=true (전방 라인): adjacent merges are blocked so no
+   * 2-lane or 3-lane wall appears on the front row.
+   * strictSeparation=false (후방 라인): only 3-lane walls are blocked;
+   * 2-lane merges are allowed so the ■ㅁ■ forced-gap pattern is avoided.
    */
-  spawnCardsForOpeningRow(laneCount: number = 3): Card[] {
+  spawnCardsForOpeningRow(laneCount: number = 3, strictSeparation: boolean = true): Card[] {
     const cards: Card[] = []
 
     for (let laneIndex = 0; laneIndex < laneCount; laneIndex++) {
       let chosen: Card | null = null
 
-      // 3칸 병합(예: ■■■)만 막는다. 2칸 병합(■■)은 허용해
-      // 가운데 레인이 항상 다른 타입으로 강제되는 ■ㅁ■ 패턴을 방지한다.
       for (let attempt = 0; attempt < 8; attempt++) {
         const candidate = this.spawnCardForOpeningBoard()
-        const wouldMake3Lane =
-          laneIndex >= 2 &&
-          cards[laneIndex - 1].canMergeWith(candidate) &&
-          cards[laneIndex - 2].canMergeWith(cards[laneIndex - 1])
-        if (!wouldMake3Lane) {
+        let bad: boolean
+        if (strictSeparation) {
+          // 전방 라인: 이웃 카드와 병합되면 거부
+          bad = laneIndex >= 1 && cards[laneIndex - 1].canMergeWith(candidate)
+        } else {
+          // 후방 라인: 3칸 병합만 거부, 2칸 병합(■■)은 허용
+          bad =
+            laneIndex >= 2 &&
+            cards[laneIndex - 1].canMergeWith(candidate) &&
+            cards[laneIndex - 2].canMergeWith(cards[laneIndex - 1])
+        }
+        if (!bad) {
           chosen = candidate
           break
         }

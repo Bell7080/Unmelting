@@ -32,17 +32,19 @@ describe('CardSpawner opening board', () => {
     vi.restoreAllMocks()
   })
 
-  it('separates adjacent normal refill cells for full-board rebuild front rows', () => {
+  it('prevents 3-lane walls for back-row refills while allowing 2-lane merges', () => {
     const spawner = new CardSpawner()
-    // A constant enemy roll would normally create a merged front row; the
-    // separated-refill helper should pick a non-merging fallback separator.
+    // A constant enemy roll would create a 3-lane wall; the helper should break it.
+    // 2-lane merges (e.g. lanes 0+1 both enemy) are intentionally allowed for back rows
+    // so the ■ㅁ■ forced-gap pattern is avoided.
     vi.spyOn(Math, 'random').mockReturnValue(0)
 
     const row = spawner.spawnCardsForSeparatedRefillRow(3)
 
     expect(row).toHaveLength(3)
-    expect(row[0].canMergeWith(row[1])).toBe(false)
-    expect(row[1].canMergeWith(row[2])).toBe(false)
+    // All three must NOT be merge-compatible (no full 3-lane wall).
+    const all3Merge = row[0].canMergeWith(row[1]) && row[1].canMergeWith(row[2])
+    expect(all3Merge).toBe(false)
     vi.restoreAllMocks()
   })
 })
