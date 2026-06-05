@@ -3055,7 +3055,6 @@ export class GameBoardRenderer {
       { kind: 'basic-pack',    venue: '상점', theme: '즉시 효과 — 체력·불씨·콤보 게이지·방패·화폐를 즉시 보충한다.',        rarityClass: 'common',    color: '#a8d8a8' },
       { kind: 'upgrade-pack',  venue: '상점', theme: '누적 강화 — 트리플 발동 효과와 레시피 보상을 런 전체에서 +1한다.',      rarityClass: 'epic',      color: '#b8a0e8' },
       { kind: 'unlock-pack',   venue: '상점', theme: '해금 — 손패 카드를 새로 해금해 드로우 풀과 레시피 후보를 확장한다.',    rarityClass: 'rare',      color: '#80c8e8' },
-      { kind: 'blessing-pack', venue: '상점', theme: '축복 — 런 전체에 영향을 주는 패시브 능력을 부여한다.',                  rarityClass: 'legendary', color: '#ffd080' },
       { kind: 'resource-pack', venue: '제단', theme: '최대치 증가 — 최대 체력·손패·불씨 게이지 등 영구 상한을 높인다.',       rarityClass: 'common',    color: '#a8d8a8' },
       { kind: 'enhance-pack',  venue: '제단', theme: '단일 강화 — 손패 카드 1장의 단발 또는 트리플 효과를 선택적으로 올린다.', rarityClass: 'epic',      color: '#b8a0e8' },
       { kind: 'delete-pack',   venue: '제단', theme: '삭제 — 드로우 풀에서 손패 카드를 제거해 덱 농도를 높인다.',             rarityClass: 'rare',      color: '#e89090' },
@@ -3105,7 +3104,6 @@ export class GameBoardRenderer {
     `
 
     const unlockNote = itemRow('손패 카드', '해금되지 않은 손패 카드 중 가중치 기반 1장 해금 (런 보유 카드에 따라 목록 변동)', 'rare')
-    const blessingNote = itemRow('축복 능력', '패시브 능력 목록은 추후 공개 예정', 'legendary')
     const enhanceNote = itemRow('카드 단일 강화', '현재 런에서 해금된 카드 중 1장 선택 강화 (단발/트리플 중 택일)', 'epic')
     const deleteNote = itemRow('손패 카드 삭제', '현재 런 드로우 풀에서 특정 카드를 제거해 뽑힐 빈도를 낮춘다', 'rare')
 
@@ -3125,13 +3123,6 @@ export class GameBoardRenderer {
             <span class="pack-codex-list-venue">상점</span>
           </div>
           <div class="pack-codex-list-body">${unlockNote}</div>
-        </div>
-        <div class="pack-codex-list">
-          <div class="pack-codex-list-head">
-            <span class="pack-codex-list-title">축복팩</span>
-            <span class="pack-codex-list-venue">상점</span>
-          </div>
-          <div class="pack-codex-list-body">${blessingNote}</div>
         </div>
         ${listSection('자원팩', '제단', resourcePackItems as Array<{ title: string; effect: string; rarity: CardRarity }>)}
         <div class="pack-codex-list">
