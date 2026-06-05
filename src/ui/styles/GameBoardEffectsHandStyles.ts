@@ -371,102 +371,42 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
 /* ---------- Spawn Probability Panel — 레일 스폰 확률 독립 레이어 ----------
    손패 패널 위에 작은 게이지 바 형태로 노출. 황금백·청담색·밀랍색 계열 팔레트.  */
 .spawn-prob-panel {
-  width: 100%;
-  min-width: 0;
-  /* 패널 자체에 미묘한 어두운 배경 — 손패 패널 위 공간에 얇게 자리잡는다 */
-  background: rgba(10, 7, 18, 0.52);
-  border: 1px solid rgba(200, 165, 80, 0.18);
-  border-radius: 8px;
-  padding: 3px 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 232, 168, 0.06);
-  backdrop-filter: blur(2px);
-}
-.spawn-prob-bar {
-  display: flex;
-  height: 22px;
-  border-radius: 5px;
-  overflow: hidden;
-  gap: 1.5px;
-}
-.spawn-prob-seg {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 5px 8px;
+  width: 100%;
   min-width: 0;
-  overflow: hidden;
-  transition: flex 0.38s cubic-bezier(0.22, 0.61, 0.36, 1);
-  cursor: default;
-  position: relative;
+  background: rgba(10, 7, 18, 0.45);
+  border: 1px solid rgba(200, 165, 80, 0.14);
+  border-radius: 7px;
+  box-sizing: border-box;
 }
-/* 세그먼트 상단 얇은 하이라이트 선 */
-.spawn-prob-seg::after {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.22);
-  pointer-events: none;
-}
-.spawn-prob-seg-label {
+.spp-item {
   display: flex;
   align-items: baseline;
-  gap: 2px;
-  pointer-events: none;
-  overflow: hidden;
+  gap: 3px;
+  white-space: nowrap;
 }
 .spp-cat {
-  font-size: 8.5px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.72);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
-  white-space: nowrap;
-  letter-spacing: 0.02em;
-}
-.spp-pct {
-  font-size: 9px;
-  font-weight: 800;
-  color: rgba(255, 248, 220, 0.95);
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
-  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(210, 175, 90, 0.70);
   letter-spacing: 0.01em;
 }
-
-/* ── 카테고리 배경 색 ── 황금백·청담색·밀랍색 기반 다크 판타지 팔레트 */
-
-/* 적: 진한 가넷-크림슨 (dark garnet) */
-.spp-enemy {
-  background: linear-gradient(175deg,
-    #5A1220 0%,
-    #7D1E30 55%,
-    #6A1828 100%);
-  box-shadow: inset 0 0 8px rgba(180, 40, 60, 0.3);
+.spp-pct {
+  font-size: 12px;
+  font-weight: 700;
+  color: #F0C84A;
+  text-shadow: 0 0 8px rgba(240, 180, 40, 0.55);
+  letter-spacing: 0.02em;
 }
-
-/* 함정: 밀랍색 — 어두운 앰버-왁스 */
-.spp-trap {
-  background: linear-gradient(175deg,
-    #3E2408 0%,
-    #5E3810 55%,
-    #4A2C0A 100%);
-  box-shadow: inset 0 0 8px rgba(160, 100, 20, 0.28);
-}
-
-/* 보물: 황금백 — 앤틱 골드, 촛불빛 금색 */
-.spp-treasure {
-  background: linear-gradient(175deg,
-    #6B4C08 0%,
-    #9A6E0E 55%,
-    #7A5608 100%);
-  box-shadow: inset 0 0 10px rgba(218, 165, 32, 0.35);
-}
-
-/* 꽃: 청담색 — 옥색·비취빛 틸 */
-.spp-flower {
-  background: linear-gradient(175deg,
-    #0E3D38 0%,
-    #185C54 55%,
-    #124840 100%);
-  box-shadow: inset 0 0 8px rgba(50, 160, 140, 0.3);
+.spp-sep {
+  font-size: 11px;
+  color: rgba(200, 165, 80, 0.30);
+  user-select: none;
 }
 
 /* ---------- Vignette overlay (불씨 소멸 위태로움 연출) ----------

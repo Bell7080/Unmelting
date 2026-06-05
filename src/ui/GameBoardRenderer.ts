@@ -1400,24 +1400,21 @@ export class GameBoardRenderer {
   private renderSpawnProbPanel(scorePanel: ScorePanelState): string {
     const p = scorePanel.spawnPercents
     if (!p) return ''
-    const cats: Array<{ key: keyof typeof p; label: string; cls: string }> = [
-      { key: 'enemy',    label: '적',   cls: 'spp-enemy'    },
-      { key: 'trap',     label: '함정', cls: 'spp-trap'     },
-      { key: 'treasure', label: '보물', cls: 'spp-treasure' },
-      { key: 'flower',   label: '꽃',   cls: 'spp-flower'   },
+    const cats: Array<{ key: keyof typeof p; label: string }> = [
+      { key: 'enemy',    label: '적'   },
+      { key: 'trap',     label: '함정' },
+      { key: 'treasure', label: '보물' },
+      { key: 'flower',   label: '꽃'   },
     ]
-    const segments = cats
-      .map(({ key, label, cls }) => {
-        const pct = p[key]
-        if (pct <= 0) return ''
-        return `<div class="spawn-prob-seg ${cls}" style="flex:${pct}" title="${label} ${pct}%">
-          <span class="spawn-prob-seg-label"><span class="spp-cat">${label}</span><span class="spp-pct">${pct}%</span></span>
-        </div>`
-      })
-      .join('')
+    const items = cats
+      .filter(({ key }) => p[key] > 0)
+      .map(({ key, label }) =>
+        `<span class="spp-item"><span class="spp-cat">${label}</span><span class="spp-pct">${p[key]}%</span></span>`
+      )
+      .join('<span class="spp-sep">·</span>')
     return `
-      <div class="spawn-prob-panel" aria-label="스폰 확률" title="레일 스폰 확률">
-        <div class="spawn-prob-bar">${segments}</div>
+      <div class="spawn-prob-panel" aria-label="스폰 확률">
+        ${items}
       </div>
     `
   }
