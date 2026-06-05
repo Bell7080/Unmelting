@@ -203,6 +203,15 @@ export type ResourceTrailTarget =
   | 'attack'
   | 'relic'
 
+/** 실제 스폰 가중치 원시값 — 렌더러에서 % 변화량 계산에 사용한다. */
+export interface SpawnWeightContext {
+  enemy: number
+  trap: number
+  treasure: number
+  flower: number
+  total: number
+}
+
 export interface ScorePanelState {
   score: number
   logs: ActivityLogEntry[]
@@ -211,6 +220,10 @@ export interface ScorePanelState {
   coinPulseKey: number
   emberTier?: EmberTier
   spawnWeights?: SpawnWeights
+  /** 렌더러가 실제 % 표시와 유물 효과 텍스트 치환에 사용하는 실효 가중치. */
+  spawnWeightContext?: SpawnWeightContext
+  /** 가중치 기반으로 정규화된 0-100 실효 확률. */
+  spawnPercents?: { enemy: number; trap: number; treasure: number; flower: number }
   emberDecayCountdown?: number
   vignetteIntensity?: number
   chainHints?: ChainHints
@@ -297,6 +310,8 @@ export class GameBoardRenderer {
   /** Owned relic cards can be click-pinned for reading long text without
    *  requiring the mouse to stay perfectly over the fanned card. */
   private pinnedRelicId: RelicId | null = null
+  /** 유물 효과 텍스트 {{spawn}} 치환에 쓰는 현재 실효 스폰 가중치. render() 마다 갱신. */
+  private currentSpawnWeightCtx: SpawnWeightContext | undefined = undefined
 
   constructor(containerId: string = 'game-board') {
     const container = document.getElementById(containerId)
@@ -334,6 +349,7 @@ export class GameBoardRenderer {
     const previousRects = this.captureCardRects()
     const previousHandRects = this.captureHandRects()
     this.currentGameState = gameState
+    this.currentSpawnWeightCtx = scorePanel.spawnWeightContext
     // Main state is authoritative for armed hand targeting; syncing here keeps
     // board highlights correct even after any render that did not call the
     // imperative setHandTargetingMode path first.
@@ -1023,10 +1039,22 @@ export class GameBoardRenderer {
     `
   }
 
-  /** 유물 효과 본문에서 '불빛' 표기를 무료 카드(✦300)와 같은 ✦ 글리프로 치환한다.
-   *  title/aria/textContent 등 평문 컨텍스트에서는 def.effect 원문(불빛 단어)을 그대로 둔다. */
-  private relicEffectHtml(effect: string): string {
-    return escapeHtml(effect).replace(/불빛/g, '✦')
+  /** 유물 효과 본문에서 '불빛'→✦ 치환 + {{spawn}} 토큰을 현 시점 실제 확률 변화량으로 치환한다.
+   *  def.spawnEffect가 있을 때만 {{spawn}} 토큰이 등장하므로 일반 유물에는 영향 없다. */
+  private relicEffectHtml(effect: string, spawnEffect?: { type: 'enemy' | 'treasure'; delta: number }, ctx?: SpawnWeightContext): string {
+    let text = escapeHtml(effect).replace(/불빛/g, '✦')
+    if (spawnEffect && ctx && ctx.total > 0) {
+      const current = spawnEffect.type === 'enemy' ? ctx.enemy : ctx.treasure
+      const newVal = Math.max(0, current + spawnEffect.delta)
+      const newTotal = Math.max(1, ctx.total + spawnEffect.delta)
+      const pctChange = Math.round((newVal / newTotal - current / ctx.total) * 100)
+      const sign = pctChange >= 0 ? '+' : ''
+      text = text.replace('{{spawn}}', `${sign}${pctChange}%`)
+    } else {
+      // 컨텍스트 없을 땐 토큰만 제거한다.
+      text = text.replace('{{spawn}}', '')
+    }
+    return text
   }
 
   /** Owned relics reuse the shop card reading structure without the price tag.
@@ -1039,7 +1067,7 @@ export class GameBoardRenderer {
         <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
         <div class="shop-relic-body">
           <h3 class="shop-relic-title">${def.name}</h3>
-          <p class="shop-relic-effect">${this.relicEffectHtml(def.effect)}</p>
+          <p class="shop-relic-effect">${this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx)}</p>
           <p class="shop-relic-flavor">${def.flavor}</p>
         </div>
       </article>
@@ -1358,9 +1386,37 @@ export class GameBoardRenderer {
           <span class="hand-header-icon">${pouchIcon()}</span>
           손패 (${character.hand.length}/${handMax})
         </header>
+        ${this.renderSpawnProbPanel(scorePanel)}
         ${this.renderCandleGauge(character)}
         <ul class="hand-stack ${character.hand.length >= 8 ? 'is-crowded' : ''}" style="--hand-count: ${character.hand.length}">${reversed}</ul>
       </aside>
+    `
+  }
+
+  /** 손패 패널 상단에 표시하는 4종 스폰 확률 바.
+   *  불씨 등급·유물·시련 모두 반영한 실효 가중치를 100% 기준 세그먼트로 표시한다. */
+  private renderSpawnProbPanel(scorePanel: ScorePanelState): string {
+    const p = scorePanel.spawnPercents
+    if (!p) return ''
+    const cats: Array<{ key: keyof typeof p; label: string; cls: string }> = [
+      { key: 'enemy',   label: '적',   cls: 'spp-enemy'   },
+      { key: 'trap',    label: '함정', cls: 'spp-trap'    },
+      { key: 'treasure',label: '보물', cls: 'spp-treasure'},
+      { key: 'flower',  label: '꽃',   cls: 'spp-flower'  },
+    ]
+    const segments = cats
+      .map(({ key, label, cls }) => {
+        const pct = p[key]
+        if (pct <= 0) return ''
+        return `<div class="spawn-prob-seg ${cls}" style="flex:${pct}" title="${label} ${pct}%">
+          <span class="spawn-prob-seg-label">${label}<br><strong>${pct}%</strong></span>
+        </div>`
+      })
+      .join('')
+    return `
+      <div class="spawn-prob-panel" aria-label="스폰 확률">
+        <div class="spawn-prob-bar">${segments}</div>
+      </div>
     `
   }
 
@@ -1614,7 +1670,7 @@ export class GameBoardRenderer {
           <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
           <div class="shop-relic-body">
             <h3 class="shop-relic-title">${def.name}</h3>
-            <p class="shop-relic-effect">${this.relicEffectHtml(def.effect)}</p>
+            <p class="shop-relic-effect">${this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx)}</p>
             <p class="shop-relic-flavor">${def.flavor}</p>
           </div>
         </div>
@@ -3148,7 +3204,7 @@ export class GameBoardRenderer {
           name: def.name,
           tag: isOwned ? '보유 중' : '상점',
           rarityClass: RARITY_CLASS_BY_TIER[def.rarity],
-          chips: [{ value: this.relicEffectHtml(def.effect), tone: 'gold' }],
+          chips: [{ value: this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx), tone: 'gold' }],
           flavor: def.flavor,
           extraClass: ['codex-tile--relic', isOwned ? 'codex-tile--owned' : ''].filter(Boolean).join(' '),
         })
@@ -3384,10 +3440,6 @@ export class GameBoardRenderer {
     const emberText = this.renderHudCounter('ember', ember)
     const emberMaxText = this.renderHudCounter('emberMax', emberMax)
     const countdown = scorePanel.emberDecayCountdown ?? 10
-    const weights = scorePanel.spawnWeights
-    const weightsText = weights
-      ? `적 ${weights.enemy}% · 함정 ${weights.trap}% · 보물 ${weights.treasure}% · 꽃 ${weights.flower}%`
-      : ''
     // 적 공격력 +1 경계(dim→flickering, ember < 4)는 얇고 연한 라인,
     // 공격력 +2로 심화되는 경계(flickering→extinguished, ember < 1)는 더 진한 붉은 라인.
     // 선공은 두 구간(ember < 4) 모두에서 발동한다.
@@ -3408,7 +3460,6 @@ export class GameBoardRenderer {
               ${countdown}턴 뒤 -1
             </span>
           </div>
-          <div class="ember-weights">${weightsText}</div>
         </div>
       </div>
     `

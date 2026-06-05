@@ -54,6 +54,9 @@ export interface RelicDefinition {
   /** 상점 등장 가중치 개별 지정값. 없으면 등급 기본값(RELIC_BASE_DRAW_WEIGHTS)을 쓴다.
    *  같은 등급이라도 유물마다 다른 등장 빈도를 주고 싶을 때 사용한다. */
   weight?: number
+  /** 스폰 가중치를 바꾸는 유물 전용. effect 텍스트 안의 {{spawn}} 토큰을
+   *  렌더러가 현 시점 실제 확률 변화량(%)으로 치환할 때 사용한다. */
+  spawnEffect?: { type: 'enemy' | 'treasure'; delta: number }
 }
 
 /** 유물 상점 등장 가중치의 등급별 기본값. 개별 유물의 weight가 우선한다.
@@ -234,9 +237,10 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'pickaxe',
     name: '곡괭이',
     rarity: 'common',
-    effect: '보물 상자 등장 확률 +5%',
+    effect: '보물 상자 등장 확률 {{spawn}}',
     flavor: '암반을 깨면 반드시 무언가 나온다.',
     basePrice: 500,
+    spawnEffect: { type: 'treasure', delta: 5 },
   },
   axe: {
     id: 'axe',
@@ -258,9 +262,10 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'annabella-pendant',
     name: '에나벨라의 펜던트',
     rarity: 'epic',
-    effect: '공격력 +2. 앞으로 등장하는 적 체력 +3 (보스 미적용). 적 등장 확률 +5%.',
+    effect: '공격력 +2. 앞으로 등장하는 적 체력 +3 (보스 미적용). 적 등장 확률 {{spawn}}.',
     flavor: '강해질수록 맞서는 것도 강해진다.',
     basePrice: 1200,
+    spawnEffect: { type: 'enemy', delta: 5 },
   },
   'precious-head': {
     id: 'precious-head',
@@ -291,17 +296,19 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'padlock',
     name: '자물쇠',
     rarity: 'epic',
-    effect: '보물 상자 등장 확률 -5%. 미믹 처치 시 불빛 +25%, 손패 +1.',
+    effect: '보물 상자 등장 확률 {{spawn}}. 미믹 처치 시 불빛 +25%, 손패 +1.',
     flavor: '잠긴 것은 더 값지다.',
     basePrice: 1050,
+    spawnEffect: { type: 'treasure', delta: -5 },
   },
   'charred-paper': {
     id: 'charred-paper',
     name: '불 탄 종이',
     rarity: 'common',
-    effect: '적 등장 확률 -5%',
+    effect: '적 등장 확률 {{spawn}}',
     flavor: '읽힌 경고는 이미 늦다.',
     basePrice: 480,
+    spawnEffect: { type: 'enemy', delta: -5 },
   },
   'water-bucket': {
     id: 'water-bucket',
@@ -316,9 +323,10 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: '황금 열쇠',
     rarity: 'unique',
     // 황금 상자는 일반 상자보다 카드와 불빛을 2배 주는 희귀 보물칸.
-    effect: '상자 등장 확률 (가중치2)%가 황금 상자로 대체됩니다.',
+    effect: '보물 스폰 중 {{spawn}} 확률이 황금 상자로 대체됩니다.',
     flavor: '어떤 자물쇠도 이 열쇠를 거부하지 못한다.',
     basePrice: 1400,
+    spawnEffect: { type: 'treasure', delta: 2 },
   },
 }
 

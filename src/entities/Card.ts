@@ -388,7 +388,7 @@ export class Card {
 
     if (this.type === CardType.TREASURE) {
       if (this.treasureKind === 'goldenChest') {
-        this.name = this.groupCount === 2 ? '황금 상자' : '황금 대형 상자'
+        this.name = this.groupCount === 2 ? '적당한 황금 상자' : '대형 황금 상자'
         const drops = this.groupCount === 2 ? 8 : 15
         this.description = `${drops} item reward golden chest`
       } else {

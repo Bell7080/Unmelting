@@ -657,6 +657,61 @@ export class CardSpawner {
     return EmberSystem.getSpawnWeights(this.currentTier)
   }
 
+  /** 유물·시련·티어 보정이 모두 반영된 실제 스폰 가중치.
+   *  포자 쿨다운은 순간 상태라 제외하고 항상 고정 베이스 값을 사용한다. */
+  getEffectiveWeights(): { enemy: number; trap: number; treasure: number; flower: number; total: number } {
+    const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
+    const enemy = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy)
+    const trap = buckets.webTrap + buckets.bombTrap + buckets.sporeTrap
+    const treasure = Math.max(0, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure)
+    const flower = buckets.flower
+    const total = enemy + trap + treasure + flower
+    return { enemy, trap, treasure, flower, total }
+  }
+
+  /** 실제 스폰 확률을 0-100 정수 백분율로 반환. 최대잉여(Largest-Remainder) 반올림으로 합계 100 보장. */
+  getEffectiveSpawnPercents(): { enemy: number; trap: number; treasure: number; flower: number } {
+    const w = this.getEffectiveWeights()
+    if (w.total <= 0) return { enemy: 25, trap: 25, treasure: 25, flower: 25 }
+    const cats: { key: keyof typeof w; raw: number; floor: number; rem: number }[] = [
+      'enemy', 'trap', 'treasure', 'flower',
+    ].map(k => {
+      const raw = (w[k as keyof typeof w] as number) / w.total * 100
+      const floor = Math.floor(raw)
+      return { key: k as keyof typeof w, raw, floor, rem: raw - floor }
+    })
+    let leftover = 100 - cats.reduce((s, c) => s + c.floor, 0)
+    cats.sort((a, b) => b.rem - a.rem)
+    for (const c of cats) { if (leftover-- > 0) c.floor++ }
+    const result = {} as { enemy: number; trap: number; treasure: number; flower: number }
+    for (const c of cats) result[c.key as keyof typeof result] = c.floor
+    return result
+  }
+
+  /** 가중치 delta를 적용할 때 해당 카테고리의 확률이 실제로 몇 % 달라지는지 반환(양수/음수).
+   *  상점/시련 카드 효과 텍스트에서 하드코딩 % 대신 현 시점 기준 값을 표시하는 데 쓴다. */
+  weightDeltaToPct(type: 'enemy' | 'treasure', delta: number): number {
+    const w = this.getEffectiveWeights()
+    if (w.total <= 0) return 0
+    const before = (type === 'enemy' ? w.enemy : w.treasure) / w.total * 100
+    const newVal = Math.max(0, (type === 'enemy' ? w.enemy : w.treasure) + delta)
+    const newTotal = Math.max(1, w.total + delta)
+    const after = newVal / newTotal * 100
+    return Math.round(after - before)
+  }
+
+  /** 시련 보물 상자 scale factor(예: 0.75)를 적용할 때 보물 확률이 실제로 몇 % 달라지는지 반환. */
+  trialScaleToPct(factor: number): number {
+    const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
+    const w = this.getEffectiveWeights()
+    if (w.total <= 0) return 0
+    const before = w.treasure / w.total * 100
+    const newTreasure = Math.max(0, buckets.treasure * factor + this.relicSpawnAdjust.treasure)
+    const newTotal = Math.max(1, w.total - w.treasure + newTreasure)
+    const after = newTreasure / newTotal * 100
+    return Math.round(after - before)
+  }
+
   /**
    * Mimic: treasure event enemy whose stats and rewards mirror the chest width.
    * The 3-lane case is implemented even though normal play almost never creates it.

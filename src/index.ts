@@ -1620,7 +1620,18 @@ async function closeShopAndResume(): Promise<void> {
  *  진동 없이 바로 열도록 변경 — quake가 셔터를 들썩여 보여 제거. */
 async function openTrialOverlayForced(): Promise<void> {
   boardRenderer.openForcedTrialShopFlow(
-    FORCED_TRIAL_CARDS.map(({ id, title, effect, spriteUrl }) => ({ id, title, effect, spriteUrl }))
+    FORCED_TRIAL_CARDS.map(({ id, title, effect, spriteUrl }) => {
+      // 시련 {{trial-spawn}} 토큰을 현 시점 실효 확률 변화량으로 치환한다.
+      const resolvedEffect = effect.replace('{{trial-spawn}}', () => {
+        const def = TRIAL_DEFINITIONS.find((d) => d.id === id)
+        if (def?.effectKind.type === 'treasure-spawn-scale') {
+          const pct = cardSpawner.trialScaleToPct(def.effectKind.factor)
+          return `${pct >= 0 ? '+' : ''}${pct}%`
+        }
+        return ''
+      })
+      return { id, title, effect: resolvedEffect, spriteUrl }
+    })
   )
   await new Promise<void>((resolve) => {
     let picked = false
@@ -2085,6 +2096,8 @@ function render(): void {
     coinPulseKey,
     emberTier: tier,
     spawnWeights: cardSpawner.getActiveWeights(),
+    spawnWeightContext: cardSpawner.getEffectiveWeights(),
+    spawnPercents: cardSpawner.getEffectiveSpawnPercents(),
     emberDecayCountdown: gameState.character.emberDecayCountdown,
     vignetteIntensity: EmberSystem.getVignetteIntensity(tier),
     chainHints: buildChainHints(),
