@@ -334,6 +334,12 @@ export class GameBoardRenderer {
     const previousRects = this.captureCardRects()
     const previousHandRects = this.captureHandRects()
     this.currentGameState = gameState
+    // Main state is authoritative for armed hand targeting; syncing here keeps
+    // board highlights correct even after any render that did not call the
+    // imperative setHandTargetingMode path first.
+    if ('pendingHandTarget' in scorePanel) {
+      this.handTargetingMode = scorePanel.pendingHandTarget ?? null
+    }
     const character = gameState.getCharacter()
     const lanes = gameState.getLanes()
     const turn = gameState.getCurrentTurn()

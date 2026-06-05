@@ -122,8 +122,10 @@ function nextChainUid(): string {
 function clearChainTimeline(): void {
   chainTimeline = []
 }
-/** Currently armed targeted hand card: waits for a board click to consume. */
-let pendingHandTarget: { slotIndex: number; defId: HandCardId } | null = null
+/** Currently armed targeted hand card: waits for a board click to consume.
+ *  Keep `merged` here as well as in GameBoardRenderer so re-renders never
+ *  fall back to the base targeting rule while a triple card is armed. */
+let pendingHandTarget: { slotIndex: number; defId: HandCardId; merged?: boolean } | null = null
 
 let score = 0
 let coins = 0
@@ -2452,8 +2454,8 @@ async function handleHandSlotClick(slotIndex: number): Promise<void> {
   if (!card) return
   const def = getHandCardDef(card.defId)
 
-  // Plain click on a targeted card arms it; merged 키틴/밀랍 switch
-  // to broad field/front effects, so those enhanced cards should fire directly.
+  // Plain click on a targeted card arms it. The pending target stores
+  // merged=true so UI target hints use the triple maxSpan/filter after render.
   const activeTargeting = card.merged === true ? def.targeting.triple : def.targeting.base
   if (activeTargeting.selection === 'target') {
     if (pendingHandTarget && pendingHandTarget.slotIndex === slotIndex) {
@@ -2462,8 +2464,8 @@ async function handleHandSlotClick(slotIndex: number): Promise<void> {
       render()
       return
     }
-    pendingHandTarget = { slotIndex, defId: def.id }
-    boardRenderer.setHandTargetingMode({ slotIndex, defId: def.id, merged: card.merged === true })
+    pendingHandTarget = { slotIndex, defId: def.id, merged: card.merged === true }
+    boardRenderer.setHandTargetingMode(pendingHandTarget)
     render()
     return
   }
