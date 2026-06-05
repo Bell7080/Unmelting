@@ -127,12 +127,15 @@ export class HandSystem {
     return m
   }
 
-  /** Run a single use on slot `slotIndex`; recipe firing is delayed by index.ts. */
+  /** Run a single use on slot `slotIndex`; recipe firing is delayed by index.ts.
+   *  `deferAutoMerge`로 트리플 자동 합성을 미루면, UI가 손패 이동/낙하 연출이 끝난 뒤
+   *  별도 비트로 합성 연출을 재생할 수 있다(이동·합성 애니메이션 충돌 방지). */
   static useSingle(
     gs: GameState,
     chain: ChainState,
     slotIndex: number,
-    target?: HandTarget
+    target?: HandTarget,
+    deferAutoMerge: boolean = false
   ): HandUseResult {
     const character = gs.character
     const card = character.hand[slotIndex]
@@ -174,7 +177,8 @@ export class HandSystem {
 
     // Recipes are deliberately resolved later by fireNextPendingRecipe(), which
     // gives the UI a readable beat between the card effect and combo explosion.
-    const mergeMessages = HandSystem.runAutoMerges(character)
+    // deferAutoMerge면 합성을 미뤄 두고, index.ts가 손패 이동 연출 뒤 runAutoMerges를 직접 호출한다.
+    const mergeMessages = deferAutoMerge ? [] : HandSystem.runAutoMerges(character)
 
     // The 10-slot gauge always advances once per played hand card. This is
     // gameplay flow, not per-card rules data, so the card definitions no longer
@@ -467,6 +471,21 @@ export class HandSystem {
   }
 
   /** Scan the hand for runs of three consecutive same-defId cards. */
+  /** 연속 동일 비합체 3장이 있어 자동 합성이 대기 중인지(모델 변경 없이) 확인한다.
+   *  UI가 이동/낙하 연출 뒤 합성 비트를 분리할지 판단하는 데 쓴다. */
+  static hasPendingAutoMerge(character: Character): boolean {
+    const hand = character.hand
+    for (let i = 0; i + 2 < hand.length; i++) {
+      const a = hand[i]
+      const b = hand[i + 1]
+      const c = hand[i + 2]
+      if (!a || !b || !c) continue
+      if (a.merged || b.merged || c.merged) continue
+      if (a.defId === b.defId && b.defId === c.defId) return true
+    }
+    return false
+  }
+
   static runAutoMerges(character: Character): string[] {
     const messages: string[] = []
     let didChange = true
