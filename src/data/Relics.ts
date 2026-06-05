@@ -25,6 +25,19 @@ export type RelicId =
   | 'honesty'
   | 'hegemony'
   | 'authority'
+  | 'hourglass'
+  | 'great-negotiation'
+  | 'premium-firewood'
+  | 'pickaxe'
+  | 'axe'
+  | 'annabella-ring'
+  | 'annabella-pendant'
+  | 'precious-head'
+  | 'chance'
+  | 'opening-ceremony'
+  | 'padlock'
+  | 'charred-paper'
+  | 'water-bucket'
 
 /** Immutable relic rules used by gameplay and presentation. */
 export interface RelicDefinition {
@@ -188,6 +201,114 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '누구도 거역 못 할 한 번의 명령, 너는 아직 쓰러지지 않는다.',
     basePrice: 1300,
     banWhenRemoved: true,
+  },
+  // --- 추가 유물(017~029) ---
+  hourglass: {
+    id: 'hourglass',
+    name: '모래시계',
+    rarity: 'epic',
+    effect: '불씨 게이지 소모 주기 +1턴 (3턴마다 → 4턴마다)',
+    flavor: '모래가 더 천천히 흘러내린다. 불빛이 조금 더 버틸 수 있을 것 같다.',
+    basePrice: 1100,
+  },
+  'great-negotiation': {
+    id: 'great-negotiation',
+    name: '훌륭한 대화수단',
+    rarity: 'legendary',
+    effect: '공격력 +2. 단, 매 턴 2.5% 확률로 파괴되며 공격력도 원상복귀.',
+    flavor: '날이 서있는 동안만 통하는 설득이다.',
+    basePrice: 1600,
+    banWhenRemoved: true,
+  },
+  'premium-firewood': {
+    id: 'premium-firewood',
+    name: '고품격 뗄감',
+    rarity: 'rare',
+    effect: '불씨 게이지가 완전히 소모되면 즉시 가득 채움. 이후 파괴.',
+    flavor: '한 번은 살릴 수 있다. 한 번만.',
+    basePrice: 800,
+    banWhenRemoved: true,
+  },
+  pickaxe: {
+    id: 'pickaxe',
+    name: '곡괭이',
+    rarity: 'common',
+    effect: '보물 상자 등장 가중치 +5',
+    flavor: '암반을 깨면 반드시 무언가 나온다.',
+    basePrice: 500,
+  },
+  axe: {
+    id: 'axe',
+    name: '도끼',
+    rarity: 'common',
+    effect: '불빛 획득량 +10%',
+    flavor: '잘 벤 장작은 더 오래, 더 밝게 탄다.',
+    basePrice: 520,
+  },
+  'annabella-ring': {
+    id: 'annabella-ring',
+    name: '에나벨라의 반지',
+    rarity: 'unique',
+    effect: '매 턴 최하단 손패 한 장을 최상단으로 끌어올림',
+    flavor: '에나벨라는 언제나 가장 낡은 것을 앞에 두었다.',
+    basePrice: 1400,
+  },
+  'annabella-pendant': {
+    id: 'annabella-pendant',
+    name: '에나벨라의 펜던트',
+    rarity: 'epic',
+    effect: '공격력 +2. 앞으로 등장하는 적 체력 +3 (보스 미적용). 적 등장 가중치 +5.',
+    flavor: '강해질수록 맞서는 것도 강해진다.',
+    basePrice: 1200,
+  },
+  'precious-head': {
+    id: 'precious-head',
+    name: '소중한 머리',
+    rarity: 'epic',
+    effect: '체력이 최대치의 절반 이하로 감소하면 체력을 전부 회복. 이후 파괴.',
+    flavor: '머리가 붙어있는 한 다시 일어설 수 있다.',
+    basePrice: 1000,
+    banWhenRemoved: true,
+  },
+  chance: {
+    id: 'chance',
+    name: '찬스',
+    rarity: 'common',
+    effect: '적을 직접 타격할 때 10% 확률로 한 번 더 타격',
+    flavor: '기회는 준비된 자에게 두 번 온다.',
+    basePrice: 580,
+  },
+  'opening-ceremony': {
+    id: 'opening-ceremony',
+    name: '개봉식',
+    rarity: 'common',
+    effect: '보물 상자가 사라질 확률 5% 감소',
+    flavor: '뚜껑을 열기 전까지는 사라지지 않는다.',
+    basePrice: 450,
+  },
+  padlock: {
+    id: 'padlock',
+    name: '자물쇠',
+    rarity: 'epic',
+    effect: '보물 상자 등장 가중치 -5. 미믹 처치 시 불빛 +25%, 손패 +1.',
+    flavor: '잠긴 것은 더 값지다.',
+    basePrice: 1050,
+  },
+  'charred-paper': {
+    id: 'charred-paper',
+    name: '불 탄 종이',
+    rarity: 'common',
+    effect: '적 등장 가중치 -5',
+    flavor: '읽힌 경고는 이미 늦다.',
+    basePrice: 480,
+  },
+  'water-bucket': {
+    id: 'water-bucket',
+    name: '물양동이',
+    rarity: 'rare',
+    effect: '직접 타격한 적의 체력 15% 확률로 1 추가 감소',
+    flavor: '물이 닿은 자리는 더 잘 무너진다.',
+    basePrice: 760,
   },
 }
 

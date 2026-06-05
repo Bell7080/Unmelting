@@ -103,6 +103,19 @@ import relic013Url from '../assets/sprites/relics_013.webp'
 import relic014Url from '../assets/sprites/relics_014.webp'
 import relic015Url from '../assets/sprites/relics_015.webp'
 import relic016Url from '../assets/sprites/relics_016.webp'
+import relic017Url from '../assets/sprites/relics_017.webp'
+import relic018Url from '../assets/sprites/relics_018.webp'
+import relic019Url from '../assets/sprites/relics_019.webp'
+import relic020Url from '../assets/sprites/relics_020.webp'
+import relic021Url from '../assets/sprites/relics_021.webp'
+import relic022Url from '../assets/sprites/relics_022.webp'
+import relic023Url from '../assets/sprites/relics_023.webp'
+import relic024Url from '../assets/sprites/relics_024.webp'
+import relic025Url from '../assets/sprites/relics_025.webp'
+import relic026Url from '../assets/sprites/relics_026.webp'
+import relic027Url from '../assets/sprites/relics_027.webp'
+import relic028Url from '../assets/sprites/relics_028.webp'
+import relic029Url from '../assets/sprites/relics_029.webp'
 import pack001Url from '../assets/sprites/pack_001.webp'
 import pack002Url from '../assets/sprites/pack_002.webp'
 import pack003Url from '../assets/sprites/pack_003.webp'
@@ -202,6 +215,19 @@ export const SpriteUrls = {
     honesty: relic014Url,
     hegemony: relic015Url,
     authority: relic016Url,
+    hourglass: relic017Url,
+    'great-negotiation': relic018Url,
+    'premium-firewood': relic019Url,
+    pickaxe: relic020Url,
+    axe: relic021Url,
+    'annabella-ring': relic022Url,
+    'annabella-pendant': relic023Url,
+    'precious-head': relic024Url,
+    chance: relic025Url,
+    'opening-ceremony': relic026Url,
+    padlock: relic027Url,
+    'charred-paper': relic028Url,
+    'water-bucket': relic029Url,
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,

@@ -221,6 +221,10 @@ export class CardSpawner {
   private trialTreasureSpawnScale: number = 1
   /** 90F boss+trial 이후에는 별빛만 턴을 올리는 최종 등반 규칙을 켠다. */
   private finalAscentActive: boolean = false
+  /** 유물 구매로 누적된 스폰 가중치 보정. 양수=증가, 음수=감소. 정규화는 roll 총합으로 자동 처리. */
+  private relicSpawnAdjust: { enemy: number; treasure: number } = { enemy: 0, treasure: 0 }
+  /** 유물 에나벨라의 펜던트로 적용되는 적 스폰 시 HP 보너스(보스 미적용). */
+  private relicEnemyHpBonus: number = 0
   // 포자/별빛은 "배치된 카드" 기준으로 연속 등장을 막는다. 리롤로 버려진 후보는
   // 카운트를 소모하지 않도록 쿨다운은 commitSpawnCooldowns(배치 시점)에서만 갱신한다.
   // 연속 등장(바로 다음 칸)만 막으면 되므로 최소 1칸 간격으로 둔다. 빈도 자체는 유지.
@@ -256,6 +260,22 @@ export class CardSpawner {
   /** Toggle the 90~100F starlight-key refill rule after the 90F forced trial. */
   setFinalAscentActive(active: boolean): void {
     this.finalAscentActive = active
+  }
+
+  /** 유물 구매/런 리셋 시 스폰 가중치 보정을 delta 값만큼 누적한다. */
+  adjustRelicSpawn(type: 'enemy' | 'treasure', delta: number): void {
+    this.relicSpawnAdjust[type] += delta
+  }
+
+  /** 에나벨라의 펜던트: 적 스폰 시 HP 보너스를 delta만큼 누적한다. */
+  adjustRelicEnemyHpBonus(delta: number): void {
+    this.relicEnemyHpBonus += delta
+  }
+
+  /** 런 시작 시 유물 modifiers를 초기화한다. */
+  resetRelicModifiers(): void {
+    this.relicSpawnAdjust = { enemy: 0, treasure: 0 }
+    this.relicEnemyHpBonus = 0
   }
 
   /** Spawn one random card per lane for the current turn refill (배치 → 쿨다운 commit). */
@@ -364,6 +384,9 @@ export class CardSpawner {
     }
 
     const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
+    // 유물 보정(곡괭이 +5 보물 / 불 탄 종이 -5 적 / 자물쇠 -5 보물 / 펜던트 +5 적)을
+    // 기본 가중치에 더해 총합으로 roll 하면 전체 비율이 자동 정규화된다.
+    const enemyWeight = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy)
     const webTrap = options.openingBoard
       ? buckets.webTrap + buckets.bombTrap + buckets.sporeTrap
       : buckets.webTrap
@@ -373,22 +396,22 @@ export class CardSpawner {
     const sporeCooling = this.sporeCooldownCards > 0
     const sporeTrap = options.openingBoard || sporeCooling ? 0 : buckets.sporeTrap
     const flower = options.openingBoard ? 0 : buckets.flower
-    // 시련 '가난'은 보물상자 가중치를 25% 깎는다. 1 이상이면 평소 그대로.
-    const treasure = buckets.treasure * this.trialTreasureSpawnScale
-    const total = buckets.enemy + webTrap + bombTrap + sporeTrap + treasure + flower
+    // 시련 '가난'은 보물상자 가중치를 25% 깎는다. 유물 보정도 여기서 합산한다.
+    const treasure = Math.max(0, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure)
+    const total = enemyWeight + webTrap + bombTrap + sporeTrap + treasure + flower
     const roll = Math.random() * total
 
-    if (roll < buckets.enemy) return this.generateEnemy()
-    if (roll < buckets.enemy + webTrap) return this.generateTrap({ trapKind: 'web' })
-    if (roll < buckets.enemy + webTrap + bombTrap) return this.generateTrap({ trapKind: 'bomb' })
-    if (roll < buckets.enemy + webTrap + bombTrap + sporeTrap) {
+    if (roll < enemyWeight) return this.generateEnemy()
+    if (roll < enemyWeight + webTrap) return this.generateTrap({ trapKind: 'web' })
+    if (roll < enemyWeight + webTrap + bombTrap) return this.generateTrap({ trapKind: 'bomb' })
+    if (roll < enemyWeight + webTrap + bombTrap + sporeTrap) {
       const spore = this.generateTrap({ trapKind: 'spore' })
       // Flag the spore so applySporeSpread skips the birth-turn tick; turn counting
       // starts from the NEXT turn so the player sees a full 2-turn warning.
       spore.justEnteredRail = true
       return spore
     }
-    if (roll < buckets.enemy + webTrap + bombTrap + sporeTrap + treasure) {
+    if (roll < enemyWeight + webTrap + bombTrap + sporeTrap + treasure) {
       return this.generateTreasure()
     }
     return this.generateFlowerSeed()
@@ -453,7 +476,7 @@ export class CardSpawner {
       CardType.ENEMY,
       definition.name,
       definition.description,
-      (definition.healthOrDamage ?? 1) + this.trialEnemyHpBonus,
+      (definition.healthOrDamage ?? 1) + this.trialEnemyHpBonus + this.relicEnemyHpBonus,
       (definition.attack ?? 1) + this.trialEnemyAtkBonus,
       {
         enemySpriteId: definition.enemySpriteId,

@@ -798,15 +798,116 @@ function gainFixedLight(label: string, baseValue: number, kind: ActivityLogEntry
   return amount
 }
 
-/** 별빛 랜턴(id: golden-squirrel)은 5턴마다 불빛 150을 흘려보낸다. */
+/** 매 턴 발동하는 유물 효과를 한 곳에서 처리한다. */
 async function applyTurnStartRelics(): Promise<void> {
-  if (!gameState.character.hasRelic('golden-squirrel')) return
-  if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 5 !== 0) return
-  // 턴 배율 없이 고정 150(글로벌 불빛 보너스만 반영)을 더하고 점수 패널로 트레일/버스트를 띄운다.
-  const gained = gainFixedLight('별빛 랜턴', 150)
-  recordRelicActivation('golden-squirrel', `불빛 +${gained}`)
+  const character = gameState.character
+  const turn = gameState.getCurrentTurn()
+
+  // 별빛 랜턴: 5턴마다 불빛 150 (턴 배율 없음).
+  if (character.hasRelic('golden-squirrel') && turn !== 0 && turn % 5 === 0) {
+    const gained = gainFixedLight('별빛 랜턴', 150)
+    recordRelicActivation('golden-squirrel', `불빛 +${gained}`)
+    await playResourceTrail({ kind: 'chain' }, 'score', 1)
+    burstScoreGain()
+  }
+
+  // 훌륭한 대화수단: 매 턴 2.5% 확률로 파괴, 공격력 +2 환원.
+  if (character.hasRelic('great-negotiation') && Math.random() < 0.025) {
+    character.damage = Math.max(1, character.damage - 2)
+    character.removeRelic('great-negotiation', true)
+    recordRelicActivation('great-negotiation', '파괴! 공격력 -2 환원')
+    render()
+    const beforeResources = snapshotPlayerResources()
+    await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
+  }
+
+  // 에나벨라의 반지: 최하단 손패 → 최상단 이동.
+  if (character.hasRelic('annabella-ring') && character.hand.length > 1) {
+    character.hand.push(character.hand.shift()!)
+    render()
+  }
+}
+
+/** 소중한 머리: 체력이 최대치의 절반 이하로 감소하면 전체 회복 후 파괴. */
+async function applyPreciousHeadCheck(): Promise<void> {
+  const character = gameState.character
+  if (!character.hasRelic('precious-head')) return
+  if (character.health <= 0 || character.health > character.maxHealth / 2) return
+  const before = snapshotPlayerRecovery()
+  const beforeResources = snapshotPlayerResources()
+  character.fullHeal()
+  character.removeRelic('precious-head', true)
+  recordRelicActivation('precious-head', '체력 전체 회복 (발동 후 파괴)')
+  render()
+  await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
+  await applyBloodPackRecoveryTrigger(before)
+}
+
+/** 찬스: 적 타격 후 10% 확률로 추가 타격. 빠른 따닥 느낌으로 짧게 처리. */
+async function applyChanceExtraHit(card: Card, distance: number): Promise<void> {
+  if (!gameState.character.hasRelic('chance') || Math.random() >= 0.1) return
+  if (card.health <= 0) return
+  const char = gameState.character
+  // 빠른 추가 타격 — 공격 애니메이션 없이 피해 숫자만 즉시 표시.
+  const newHealth = card.takeDamage(char.damage)
+  recordRelicActivation('chance', `추가 타격 ${char.damage}`)
+  await boardRenderer.animateDamageNumbersById([{ cardId: card.id, amount: char.damage }])
+  if (newHealth <= 0) {
+    const base = scoreForCardRemoval(card)
+    if (base > 0) {
+      pushActivityLogsInDisplayOrder([createScoreLog(scoreLabelForCard(card), base, 'enemy')])
+      await playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1)
+    }
+    if (card.isSpecialEnemy) await applyPadlockMimicBonus(card)
+    await boardRenderer.animateCardConsumeByIds([{ cardId: card.id, type: CardType.ENEMY }], {
+      suppressBurstIds: new Set([card.id]),
+    })
+    gameState.removeCardFromRow(card, distance)
+    await onEnemiesDefeated(1)
+  }
+}
+
+/** 물양동이: 타격한 적 15% 확률로 체력 1 추가 감소. */
+async function applyWaterBucketExtraDamage(card: Card, distance: number): Promise<void> {
+  if (!gameState.character.hasRelic('water-bucket') || Math.random() >= 0.15) return
+  if (card.health <= 0) return
+  const newHealth = card.takeDamage(1)
+  recordRelicActivation('water-bucket', '추가 피해 1')
+  await boardRenderer.animateDamageNumbersById([{ cardId: card.id, amount: 1 }])
+  if (newHealth <= 0) {
+    const base = scoreForCardRemoval(card)
+    if (base > 0) {
+      pushActivityLogsInDisplayOrder([createScoreLog(scoreLabelForCard(card), base, 'enemy')])
+      await playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1)
+    }
+    if (card.isSpecialEnemy) await applyPadlockMimicBonus(card)
+    await boardRenderer.animateCardConsumeByIds([{ cardId: card.id, type: CardType.ENEMY }], {
+      suppressBurstIds: new Set([card.id]),
+    })
+    gameState.removeCardFromRow(card, distance)
+    await onEnemiesDefeated(1)
+  }
+}
+
+/** 자물쇠: 미믹 처치 시 불빛 +25% + 손패 +1. */
+async function applyPadlockMimicBonus(card: Card): Promise<void> {
+  if (!gameState.character.hasRelic('padlock')) return
+  // 불빛 +25% (미믹 기본 점수 기준, 턴 배율 없이 고정 지급)
+  const baseScore = scoreForCardRemoval(card)
+  const bonusLight = Math.max(1, Math.ceil(baseScore * 0.25))
+  const gained = gainFixedLight('자물쇠 · 미믹 불빛', bonusLight)
+  recordRelicActivation('padlock', `미믹 불빛 +${gained}`)
   await playResourceTrail({ kind: 'chain' }, 'score', 1)
   burstScoreGain()
+  // 손패 +1
+  const drop = DropSystem.generateDrop('enemy-kill')
+  const added = gameState.character.addHandCard(drop)
+  if (added) {
+    const dropDef = getHandCardDef(drop.defId)
+    pushActivityLogsInDisplayOrder(createItemGainLogs([dropDef.name]))
+    render()
+    await playResourceTrail({ kind: 'chain' }, 'hand', 1)
+  }
 }
 
 /** 상점 가격(불빛) 인플레이션 배수.
@@ -949,6 +1050,42 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
     gameState.character.applyDamageBoost(2)
     render()
     await playPlayerGainTrails({ kind: 'center' }, beforeResources)
+  }
+  if (id === 'hourglass') {
+    // 불씨 소모 주기 +1턴.
+    const beforeResources = snapshotPlayerResources()
+    gameState.character.increaseEmberDecayTurns(1)
+    await playPlayerGainTrails({ kind: 'center' }, beforeResources)
+  }
+  if (id === 'great-negotiation') {
+    // 공격력 +2. 매 턴 파괴 확률은 applyTurnStartRelics에서 처리.
+    const beforeResources = snapshotPlayerResources()
+    gameState.character.applyDamageBoost(2)
+    await playPlayerGainTrails({ kind: 'center' }, beforeResources)
+  }
+  if (id === 'pickaxe') {
+    // 보물 스폰 가중치 +5.
+    cardSpawner.adjustRelicSpawn('treasure', 5)
+  }
+  if (id === 'axe') {
+    // 불빛 획득량 +10% (글로벌 scoreMultiplier에 누적).
+    gameState.enhancements.scoreMultiplier *= 1.10
+  }
+  if (id === 'annabella-pendant') {
+    const beforeResources = snapshotPlayerResources()
+    // 공격력 +2 + 적 스폰 HP +3 + 적 스폰 가중치 +5.
+    gameState.character.applyDamageBoost(2)
+    cardSpawner.adjustRelicSpawn('enemy', 5)
+    cardSpawner.adjustRelicEnemyHpBonus(3)
+    await playPlayerGainTrails({ kind: 'center' }, beforeResources)
+  }
+  if (id === 'padlock') {
+    // 보물 스폰 가중치 -5.
+    cardSpawner.adjustRelicSpawn('treasure', -5)
+  }
+  if (id === 'charred-paper') {
+    // 적 스폰 가중치 -5.
+    cardSpawner.adjustRelicSpawn('enemy', -5)
   }
 }
 
@@ -1869,6 +2006,7 @@ function startGame(): void {
   chain = HandSystem.newChain()
   pendingHandTarget = null
   gameState.reset()
+  cardSpawner.resetRelicModifiers()
   finalAscentStarlightRuleActive = false
   syncFinalAscentRuleToSpawner()
   score = 0
@@ -2607,6 +2745,16 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
     if (tickedDown) {
       const ember = gameState.character.ember
       recordNotice(`불씨가 사그라들었다 (${ember}/${gameState.character.emberMax})`, 'hurt')
+      // 고품격 뗄감: 불씨가 완전히 꺼지면 가득 채우고 유물 파괴.
+      if (ember <= 0 && gameState.character.hasRelic('premium-firewood')) {
+        const beforeResources = snapshotPlayerResources()
+        gameState.character.ember = gameState.character.emberMax
+        syncSpawnerTier()
+        gameState.character.removeRelic('premium-firewood', true)
+        recordRelicActivation('premium-firewood', `불씨 완전 회복 (발동 후 파괴)`)
+        render()
+        await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
+      }
       // 불씨 하락으로 필드 적의 공격력이 오르면, 적 카드가 붉게 확대되며
       // 잔상을 남기는 위험 연출을 띄운다(HP는 불변, 공격력만 동적 반영).
       const empoweredIds = syncFieldEnemyEmberBonus()
@@ -2718,6 +2866,8 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   await applyDignifiedRetaliation(hits)
   // 변칙: 이 페이즈에서 잃은 체력 10마다 불씨 +1.
   applyAnomalyHealthLoss()
+  // 소중한 머리: 체력이 절반 이하이면 전체 회복 후 파괴.
+  await applyPreciousHeadCheck()
   if (gameState.isGameOver) {
     if (await tryResolveSurvivalRelics()) {
       // 권위/희망이 치명타를 흡수하고 새 플레이어 결정 비트로 복귀한다.
@@ -2805,6 +2955,8 @@ async function handleCardAction(e: Event): Promise<void> {
       await applyDignifiedRetaliation(hits)
       // 변칙: 선공으로 잃은 체력 10마다 불씨 +1.
       applyAnomalyHealthLoss()
+      // 소중한 머리: 선공 피해로 체력 절반 이하 시 전체 회복.
+      await applyPreciousHeadCheck()
       if (!gameState.character.isAlive() || gameState.isGameOver) {
         if (await tryResolveSurvivalRelics()) {
           // 치명적 선공을 권위/희망이 흡수하고 플레이어 턴으로 복귀한다.
@@ -2914,6 +3066,8 @@ async function handleCardAction(e: Event): Promise<void> {
     )
     // 변칙: 함정으로 잃은 체력 10마다 불씨 +1.
     applyAnomalyHealthLoss()
+    // 소중한 머리: 함정 피해로 체력 절반 이하 시 전체 회복.
+    await applyPreciousHeadCheck()
   }
 
   if (result.cardRemoved) {
@@ -2931,7 +3085,16 @@ async function handleCardAction(e: Event): Promise<void> {
   }
 
   if (result.cardRemoved && card.type === CardType.ENEMY) {
+    // 자물쇠: 미믹 처치 시 불빛 +25% + 손패 +1.
+    if (card.isSpecialEnemy) await applyPadlockMimicBonus(card)
     await onEnemiesDefeated(1)
+  }
+
+  // 찬스: 적이 살아있을 때만 10% 확률 추가 타격.
+  if (!result.cardRemoved && card.type === CardType.ENEMY) {
+    await applyChanceExtraHit(card, distance)
+    // 물양동이: 15% 확률로 1 추가 피해 (찬스로 처치된 경우 이미 제거되므로 health 확인).
+    await applyWaterBucketExtraDamage(card, distance)
   }
 
   // Board action resets the chain so combos do not bleed across turns.

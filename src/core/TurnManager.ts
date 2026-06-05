@@ -156,7 +156,9 @@ export class TurnManager {
       visited.add(card)
 
       const roll = Math.random()
-      if (roll < 0.3) {
+      // 개봉식: 상자 사라질 확률을 30% → 25%로 낮춘다.
+      const disappearThreshold = this.gameState.character.hasRelic('opening-ceremony') ? 0.25 : 0.30
+      if (roll < disappearThreshold) {
         this.gameState.removeCardFromRow(card, d)
         changes.push({
           laneIndex: i,
