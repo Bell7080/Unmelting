@@ -2327,6 +2327,22 @@ function shouldSuppressRegroupAfterClear(removedCount: number): boolean {
   return removedCount >= Math.ceil(gameState.lanes.length * LANE_DISTANCE_COUNT * 0.65)
 }
 
+/** 손패 이동/낙하 연출이 끝난 뒤 트리플 자동 합성을 별도 비트로 재생한다.
+ *  useSingle에서 합성을 미뤘으므로(deferAutoMerge), 카드가 자리를 잡은 다음에 한 번에 합성해
+ *  이동 애니메이션과 합성(is-entering) 애니메이션이 같은 렌더에서 충돌해 순간이동처럼 보이던
+ *  문제를 막는다. 합성 대기 카드가 없으면 즉시 반환해 일반 사용 템포를 늦추지 않는다. */
+async function resolveDeferredHandMerges(): Promise<void> {
+  if (!HandSystem.hasPendingAutoMerge(gameState.character)) return
+  // 빈 슬롯을 메우는 이동/낙하 연출(animateMovedHandSlots ~460ms)이 끝나길 기다린다.
+  await wait(500)
+  const merges = HandSystem.runAutoMerges(gameState.character)
+  if (merges.length === 0) return
+  // 합성 카드가 is-merged.is-entering으로 새로 렌더되어 수렴+버스트 연출이 온전히 재생된다.
+  render()
+  // 합성 연출(낙하 대기 620ms + 젤리/버스트)이 다음 렌더에 끊기지 않도록 충분히 기다린다.
+  await wait(1180)
+}
+
 /** Apply a single-use hand card (with optional target). */
 async function applyHandSingle(
   slotIndex: number,
@@ -2345,7 +2361,9 @@ async function applyHandSingle(
   // still resolve baseHealth/getDamage on the removed cards for the score
   // strength formula.
   const beforeSingleCards = snapshotFieldCardsById()
-  const result = HandSystem.useSingle(gameState, chain, slotIndex, target)
+  // 트리플 자동 합성은 미뤄 두고, 손패 이동/낙하 연출이 끝난 뒤 별도 비트로 재생한다
+  // (이동 애니메이션과 합성 애니메이션이 한 렌더에서 충돌해 순간이동처럼 보이던 문제 방지).
+  const result = HandSystem.useSingle(gameState, chain, slotIndex, target, true)
   if (!result.success) {
     inputLocked = false
     render()
@@ -2445,6 +2463,9 @@ async function applyHandSingle(
   await runPreparationRefreshAfterFieldEffects({
     suppressFrontRegroupOnce: shouldSuppressRegroupAfterClear(result.removedFieldCards.length),
   })
+
+  // 손패가 빈 슬롯을 메우며 이동/낙하한 뒤, 충분히 자리잡은 다음 트리플 합성을 별도 비트로 재생한다.
+  await resolveDeferredHandMerges()
 
   // Resolve combo recipes one at a time. Each recipe gets its own delay,
   // animations, and preparation refresh so chained removals cannot leave rail
