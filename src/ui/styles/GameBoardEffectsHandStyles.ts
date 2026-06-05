@@ -354,19 +354,39 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   display: none;
 }
 
-/* ---------- Spawn Probability Panel (손패 패널 상단) ---------- */
+/* ---------- Hand column wrapper — 손패 패널 위에 스폰 패널을 띄우는 flex 컬럼 ---------- */
+.hand-column {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 0;
+  align-self: stretch;
+}
+/* hand-panel은 hand-column 내부에서 남은 공간을 채운다 */
+.hand-column > .hand-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---------- Spawn Probability Panel — 레일 스폰 확률 독립 레이어 ----------
+   손패 패널 위에 작은 게이지 바 형태로 노출. 황금백·청담색·밀랍색 계열 팔레트.  */
 .spawn-prob-panel {
   width: 100%;
   min-width: 0;
+  /* 패널 자체에 미묘한 어두운 배경 — 손패 패널 위 공간에 얇게 자리잡는다 */
+  background: rgba(10, 7, 18, 0.52);
+  border: 1px solid rgba(200, 165, 80, 0.18);
+  border-radius: 8px;
+  padding: 3px 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 232, 168, 0.06);
+  backdrop-filter: blur(2px);
 }
 .spawn-prob-bar {
   display: flex;
-  height: 28px;
-  border-radius: 6px;
+  height: 22px;
+  border-radius: 5px;
   overflow: hidden;
-  border: 1px solid rgba(255, 232, 168, 0.14);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-  gap: 1px;
+  gap: 1.5px;
 }
 .spawn-prob-seg {
   display: flex;
@@ -374,34 +394,79 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   justify-content: center;
   min-width: 0;
   overflow: hidden;
-  transition: flex 0.35s ease;
+  transition: flex 0.38s cubic-bezier(0.22, 0.61, 0.36, 1);
   cursor: default;
+  position: relative;
+}
+/* 세그먼트 상단 얇은 하이라이트 선 */
+.spawn-prob-seg::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.22);
+  pointer-events: none;
 }
 .spawn-prob-seg-label {
-  font-size: 9px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.92);
-  text-align: center;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
-  line-height: 1.2;
-  white-space: nowrap;
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
   pointer-events: none;
-  /* hide when segment too narrow */
   overflow: hidden;
-  text-overflow: clip;
 }
-/* Category colours — warm candle palette */
+.spp-cat {
+  font-size: 8.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.72);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+.spp-pct {
+  font-size: 9px;
+  font-weight: 800;
+  color: rgba(255, 248, 220, 0.95);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+/* ── 카테고리 배경 색 ── 황금백·청담색·밀랍색 기반 다크 판타지 팔레트 */
+
+/* 적: 진한 가넷-크림슨 (dark garnet) */
 .spp-enemy {
-  background: linear-gradient(180deg, rgba(200, 80, 80, 0.82), rgba(160, 50, 50, 0.72));
+  background: linear-gradient(175deg,
+    #5A1220 0%,
+    #7D1E30 55%,
+    #6A1828 100%);
+  box-shadow: inset 0 0 8px rgba(180, 40, 60, 0.3);
 }
+
+/* 함정: 밀랍색 — 어두운 앰버-왁스 */
 .spp-trap {
-  background: linear-gradient(180deg, rgba(160, 100, 40, 0.82), rgba(120, 70, 20, 0.72));
+  background: linear-gradient(175deg,
+    #3E2408 0%,
+    #5E3810 55%,
+    #4A2C0A 100%);
+  box-shadow: inset 0 0 8px rgba(160, 100, 20, 0.28);
 }
+
+/* 보물: 황금백 — 앤틱 골드, 촛불빛 금색 */
 .spp-treasure {
-  background: linear-gradient(180deg, rgba(200, 170, 60, 0.82), rgba(160, 130, 30, 0.72));
+  background: linear-gradient(175deg,
+    #6B4C08 0%,
+    #9A6E0E 55%,
+    #7A5608 100%);
+  box-shadow: inset 0 0 10px rgba(218, 165, 32, 0.35);
 }
+
+/* 꽃: 청담색 — 옥색·비취빛 틸 */
 .spp-flower {
-  background: linear-gradient(180deg, rgba(100, 170, 80, 0.82), rgba(70, 130, 50, 0.72));
+  background: linear-gradient(175deg,
+    #0E3D38 0%,
+    #185C54 55%,
+    #124840 100%);
+  box-shadow: inset 0 0 8px rgba(50, 160, 140, 0.3);
 }
 
 /* ---------- Vignette overlay (불씨 소멸 위태로움 연출) ----------
@@ -452,13 +517,11 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
    - overflow:visible on the stack so hover-pop/animation/burst don't get
      clipped against the panel wall when a card is selected.
 */
-/* Hand panel — four rows: header (auto), spawn-prob-panel (auto), candle gauge (auto), then
-   the hand-stack (1fr). The stack uses justify-content: flex-end so cards
-   dock to the bottom of that 1fr row, matching the "cards fall from the
-   top, stack from the bottom" feel. */
+/* Hand panel — three rows: header (auto), candle gauge (auto), stack (1fr).
+   스폰 확률 패널은 hand-column 래퍼 맨 위에 별도 레이어로 분리됐다. */
 .hand-panel {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 8px;
   min-height: 0;
   padding: 10px;
