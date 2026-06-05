@@ -36,7 +36,7 @@ import { EmberSystem } from '@systems/EmberSystem'
 import { ENEMY_DEFINITIONS, MIMIC_BY_SPAN } from '@systems/CardSpawner'
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_DEFINITIONS, type RelicId } from '@data/Relics'
-import { HAND_CARD_RARITY, RARITY_CLASS_BY_TIER, SHOP_PACK_LABELS, type CardRarity } from '@data/ShopPools'
+import { HAND_CARD_RARITY, RARITY_CLASS_BY_TIER, SHOP_PACK_LABELS, SHOP_PACK_POOLS, type CardRarity } from '@data/ShopPools'
 import { RECIPES } from '@data/Recipes'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { GAME_BOARD_STYLES } from '@ui/styles/GameBoardStyles'
@@ -2723,6 +2723,7 @@ export class GameBoardRenderer {
       { id: 'traps', label: '함정' },
       { id: 'treasures', label: '보물' },
       { id: 'flowers', label: '꽃' },
+      { id: 'packs', label: '카드팩' },
       { id: 'relics', label: '유물' },
       { id: 'hand', label: '손패' },
       { id: 'combo', label: '조합' },
@@ -2741,6 +2742,7 @@ export class GameBoardRenderer {
     else if (activeTab === 'flowers') body = this.renderCompendiumFlowers()
     else if (activeTab === 'hand') body = this.renderCompendiumHand()
     else if (activeTab === 'combo') body = this.renderCompendiumCombo()
+    else if (activeTab === 'packs') body = this.renderCompendiumPacks()
     else if (activeTab === 'relics') body = this.renderCompendiumRelics()
     else body = this.renderCompendiumTerms()
     return `
@@ -3041,6 +3043,106 @@ export class GameBoardRenderer {
   }
 
   /** Relic tab documents shop relics and which ones the current run owns. */
+  private renderCompendiumPacks(): string {
+    // 팩 종류별 메인 테마 배너 + 하단 항목 리스트
+    const packDefs: Array<{
+      kind: string
+      venue: '상점' | '제단'
+      theme: string          // 한 줄 테마 설명
+      rarityClass: CardRarity
+      color: string          // CSS accent (인라인 badge 색)
+    }> = [
+      { kind: 'basic-pack',    venue: '상점', theme: '즉시 효과 — 체력·불씨·콤보 게이지·방패·화폐를 즉시 보충한다.',        rarityClass: 'common',    color: '#a8d8a8' },
+      { kind: 'upgrade-pack',  venue: '상점', theme: '누적 강화 — 트리플 발동 효과와 레시피 보상을 런 전체에서 +1한다.',      rarityClass: 'epic',      color: '#b8a0e8' },
+      { kind: 'unlock-pack',   venue: '상점', theme: '해금 — 손패 카드를 새로 해금해 드로우 풀과 레시피 후보를 확장한다.',    rarityClass: 'rare',      color: '#80c8e8' },
+      { kind: 'resource-pack', venue: '제단', theme: '최대치 증가 — 최대 체력·손패·불씨 게이지 등 영구 상한을 높인다.',       rarityClass: 'common',    color: '#a8d8a8' },
+      { kind: 'enhance-pack',  venue: '제단', theme: '단일 강화 — 손패 카드 1장의 단발 또는 트리플 효과를 선택적으로 올린다.', rarityClass: 'epic',      color: '#b8a0e8' },
+      { kind: 'delete-pack',   venue: '제단', theme: '삭제 — 드로우 풀에서 손패 카드를 제거해 덱 농도를 높인다.',             rarityClass: 'rare',      color: '#e89090' },
+    ]
+
+    // 상단 테마 배너
+    const banners = packDefs.map(({ kind, venue, theme, rarityClass, color }) => {
+      const label = SHOP_PACK_LABELS[kind as keyof typeof SHOP_PACK_LABELS]
+      return `
+        <div class="pack-codex-banner ${RARITY_CLASS_BY_TIER[rarityClass]}">
+          <div class="pack-codex-banner-head">
+            <span class="pack-codex-banner-name">${label.title}</span>
+            <span class="pack-codex-banner-venue" style="color:${color}">${venue}</span>
+          </div>
+          <p class="pack-codex-banner-theme">${theme}</p>
+        </div>
+      `
+    }).join('')
+
+    // 하단 팩별 항목 리스트
+    const shopPackItems = SHOP_PACK_POOLS['basic-pack']
+    const upgradePackItems = SHOP_PACK_POOLS['upgrade-pack']
+    const resourcePackItems = SHOP_PACK_POOLS['resource-pack']
+
+    const rarityLabel: Record<CardRarity, string> = {
+      common: '일반', rare: '희귀', epic: '영웅', unique: '고유', legendary: '전설',
+    }
+
+    const itemRow = (title: string, effect: string, rarity: CardRarity) => `
+      <div class="pack-codex-item">
+        <span class="pack-codex-item-rarity ${RARITY_CLASS_BY_TIER[rarity]}">${rarityLabel[rarity]}</span>
+        <span class="pack-codex-item-title">${title}</span>
+        <span class="pack-codex-item-effect">${effect}</span>
+      </div>
+    `
+
+    const listSection = (heading: string, venue: '상점' | '제단', items: Array<{ title: string; effect: string; rarity: CardRarity }>) => `
+      <div class="pack-codex-list">
+        <div class="pack-codex-list-head">
+          <span class="pack-codex-list-title">${heading}</span>
+          <span class="pack-codex-list-venue">${venue}</span>
+        </div>
+        <div class="pack-codex-list-body">
+          ${items.map((i) => itemRow(i.title, i.effect, i.rarity)).join('')}
+        </div>
+      </div>
+    `
+
+    const unlockNote = itemRow('손패 카드', '해금되지 않은 손패 카드 중 가중치 기반 1장 해금 (런 보유 카드에 따라 목록 변동)', 'rare')
+    const enhanceNote = itemRow('카드 단일 강화', '현재 런에서 해금된 카드 중 1장 선택 강화 (단발/트리플 중 택일)', 'epic')
+    const deleteNote = itemRow('손패 카드 삭제', '현재 런 드로우 풀에서 특정 카드를 제거해 뽑힐 빈도를 낮춘다', 'rare')
+
+    return `
+      <h3 class="compendium-section">카드팩 (Packs)</h3>
+      <p class="compendium-section-blurb">10·20턴 상점과 30턴 제단에서 구매하는 팩. 상단은 각 팩의 메인 테마, 하단은 등장 항목 리스트다.</p>
+
+      <div class="pack-codex-banners">${banners}</div>
+
+      <h3 class="compendium-section">항목 리스트</h3>
+      <div class="pack-codex-lists">
+        ${listSection('자원팩', '상점', shopPackItems as Array<{ title: string; effect: string; rarity: CardRarity }>)}
+        ${listSection('강화팩', '상점', upgradePackItems as Array<{ title: string; effect: string; rarity: CardRarity }>)}
+        <div class="pack-codex-list">
+          <div class="pack-codex-list-head">
+            <span class="pack-codex-list-title">해금팩</span>
+            <span class="pack-codex-list-venue">상점</span>
+          </div>
+          <div class="pack-codex-list-body">${unlockNote}</div>
+        </div>
+        ${listSection('자원팩', '제단', resourcePackItems as Array<{ title: string; effect: string; rarity: CardRarity }>)}
+        <div class="pack-codex-list">
+          <div class="pack-codex-list-head">
+            <span class="pack-codex-list-title">강화팩</span>
+            <span class="pack-codex-list-venue">제단</span>
+          </div>
+          <div class="pack-codex-list-body">${enhanceNote}</div>
+        </div>
+        <div class="pack-codex-list">
+          <div class="pack-codex-list-head">
+            <span class="pack-codex-list-title">삭제팩</span>
+            <span class="pack-codex-list-venue">제단</span>
+          </div>
+          <div class="pack-codex-list-body">${deleteNote}</div>
+        </div>
+      </div>
+    `
+  }
+
   private renderCompendiumRelics(): string {
     const owned = new Set(this.currentGameState?.getCharacter().relics ?? [])
     const cards = Object.values(RELIC_DEFINITIONS)

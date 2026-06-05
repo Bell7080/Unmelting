@@ -629,6 +629,137 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
   line-height: 1.5;
 }
 
+/* ---------- 카드팩 도감 탭 ---------- */
+.pack-codex-banners {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.pack-codex-banner {
+  padding: 10px 13px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 215, 120, 0.28);
+  background: linear-gradient(160deg, rgba(40, 28, 48, 0.95), rgba(18, 12, 24, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.1), 0 4px 12px rgba(0, 0, 0, 0.45);
+  transition: border-color 0.18s, box-shadow 0.2s;
+}
+.pack-codex-banner:hover {
+  border-color: rgba(255, 215, 120, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.16), 0 6px 18px rgba(0, 0, 0, 0.55), 0 0 14px rgba(244, 164, 96, 0.15);
+}
+/* 희귀도 등급별 왼쪽 강조선 재사용 */
+.pack-codex-banner.rarity-common  { border-left: 3px solid #a8d8a8; }
+.pack-codex-banner.rarity-rare    { border-left: 3px solid #80c8e8; }
+.pack-codex-banner.rarity-epic    { border-left: 3px solid #c8a0f0; }
+.pack-codex-banner.rarity-unique  { border-left: 3px solid #ffd080; }
+.pack-codex-banner.rarity-legendary { border-left: 3px solid #ffc060; }
+.pack-codex-banner-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.pack-codex-banner-name {
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff5dc;
+  letter-spacing: 0.03em;
+}
+.pack-codex-banner-venue {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.pack-codex-banner-theme {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(232, 214, 180, 0.75);
+  word-break: keep-all;
+}
+
+/* 하단 항목 리스트 그리드 */
+.pack-codex-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.pack-codex-list {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 215, 120, 0.18);
+  background: rgba(28, 18, 36, 0.85);
+  overflow: hidden;
+}
+.pack-codex-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  background: rgba(244, 164, 96, 0.08);
+  border-bottom: 1px solid rgba(255, 215, 120, 0.18);
+}
+.pack-codex-list-title {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--color-flame-warm);
+  letter-spacing: 0.05em;
+}
+.pack-codex-list-venue {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  letter-spacing: 0.08em;
+}
+.pack-codex-list-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 0;
+}
+.pack-codex-item {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  transition: background 0.12s;
+}
+.pack-codex-item:hover { background: rgba(255, 232, 168, 0.04); }
+.pack-codex-item-rarity {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-align: center;
+  padding: 2px 4px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  white-space: nowrap;
+}
+/* 희귀도별 뱃지 색 */
+.pack-codex-item-rarity.rarity-common    { color: #a8d8a8; border-color: rgba(168, 216, 168, 0.4); }
+.pack-codex-item-rarity.rarity-rare      { color: #80c8e8; border-color: rgba(128, 200, 232, 0.4); }
+.pack-codex-item-rarity.rarity-epic      { color: #c8a0f0; border-color: rgba(200, 160, 240, 0.4); }
+.pack-codex-item-rarity.rarity-unique    { color: #ffd080; border-color: rgba(255, 208, 128, 0.4); }
+.pack-codex-item-rarity.rarity-legendary { color: #ffc060; border-color: rgba(255, 192, 96, 0.4); }
+.pack-codex-item-title {
+  font-weight: 800;
+  color: rgba(255, 245, 220, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pack-codex-item-effect {
+  font-size: 11px;
+  color: rgba(200, 185, 155, 0.75);
+  text-align: right;
+  white-space: nowrap;
+}
+
 .compendium-title {
   display: inline-flex;
   align-items: center;
