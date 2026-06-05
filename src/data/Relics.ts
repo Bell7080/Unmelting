@@ -215,7 +215,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'great-negotiation',
     name: '훌륭한 대화수단',
     rarity: 'legendary',
-    effect: '공격력 +2. 단, 매 턴 2.5% 확률로 파괴되며 공격력도 원상복귀.',
+    effect: '공격력 +2. 단, 적을 공격할 때마다 2.5% 확률로 파괴되며 공격력도 원상복귀.',
     flavor: '날이 서있는 동안만 통하는 설득이다.',
     basePrice: 1600,
     banWhenRemoved: true,

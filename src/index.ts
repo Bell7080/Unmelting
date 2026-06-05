@@ -811,16 +811,6 @@ async function applyTurnStartRelics(): Promise<void> {
     burstScoreGain()
   }
 
-  // 훌륭한 대화수단: 매 턴 2.5% 확률로 파괴, 공격력 +2 환원.
-  if (character.hasRelic('great-negotiation') && Math.random() < 0.025) {
-    character.damage = Math.max(1, character.damage - 2)
-    character.removeRelic('great-negotiation', true)
-    recordRelicActivation('great-negotiation', '파괴! 공격력 -2 환원')
-    render()
-    const beforeResources = snapshotPlayerResources()
-    await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
-  }
-
   // 에나벨라의 반지: 최하단 손패 → 최상단 이동.
   if (character.hasRelic('annabella-ring') && character.hand.length > 1) {
     character.hand.push(character.hand.shift()!)
@@ -841,6 +831,18 @@ async function applyPreciousHeadCheck(): Promise<void> {
   render()
   await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
   await applyBloodPackRecoveryTrigger(before)
+}
+
+/** 훌륭한 대화수단: 플레이어가 적을 공격할 때마다 2.5% 확률로 파괴, 공격력 +2 환원. */
+async function applyGreatNegotiationOnAttack(): Promise<void> {
+  const character = gameState.character
+  if (!character.hasRelic('great-negotiation') || Math.random() >= 0.025) return
+  character.damage = Math.max(1, character.damage - 2)
+  character.removeRelic('great-negotiation', true)
+  recordRelicActivation('great-negotiation', '파괴! 공격력 -2 환원')
+  render()
+  const beforeResources = snapshotPlayerResources()
+  await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
 }
 
 /** 찬스: 적 타격 후 10% 확률로 추가 타격. 빠른 따닥 느낌으로 짧게 처리. */
@@ -3083,6 +3085,9 @@ async function handleCardAction(e: Event): Promise<void> {
     gameState.removeCardFromRow(card, distance)
     boardRenderer.clearSelection()
   }
+
+  // 훌륭한 대화수단: 적을 직접 공격할 때마다 2.5% 파괴 판정.
+  if (card.type === CardType.ENEMY) await applyGreatNegotiationOnAttack()
 
   if (result.cardRemoved && card.type === CardType.ENEMY) {
     // 자물쇠: 미믹 처치 시 불빛 +25% + 손패 +1.

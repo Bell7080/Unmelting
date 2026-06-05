@@ -27,7 +27,7 @@ import type {
   FlowerWilt,
   TreasureChange,
 } from '@core/TurnManager'
-import { spriteForCard, spriteForHandCard, spriteForRelic, SpriteUrls } from '@ui/Sprites'
+import { spriteForCard, spriteForHandCard, spriteForRelic, spriteForBasicPackItem, spriteForUpgradePackItem, SpriteUrls } from '@ui/Sprites'
 import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandCategory, HandEffectTargeting } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
@@ -3042,104 +3042,77 @@ export class GameBoardRenderer {
     `
   }
 
-  /** Relic tab documents shop relics and which ones the current run owns. */
+  /** Pack tab: 손패/유물 탭과 같은 codexTile 그리드 양식으로 팩별 등장 항목을 보여준다.
+   *  팩마다 섹션 제목 + 테마 한 줄(blurb) + 항목 타일 그리드로 구성한다. */
   private renderCompendiumPacks(): string {
-    // 팩 종류별 메인 테마 배너 + 하단 항목 리스트
-    const packDefs: Array<{
-      kind: string
-      venue: '상점' | '제단'
-      theme: string          // 한 줄 테마 설명
-      rarityClass: CardRarity
-      color: string          // CSS accent (인라인 badge 색)
-    }> = [
-      { kind: 'basic-pack',    venue: '상점', theme: '즉시 효과 — 체력·불씨·콤보 게이지·방패·화폐를 즉시 보충한다.',        rarityClass: 'common',    color: '#a8d8a8' },
-      { kind: 'upgrade-pack',  venue: '상점', theme: '누적 강화 — 트리플 발동 효과와 레시피 보상을 런 전체에서 +1한다.',      rarityClass: 'epic',      color: '#b8a0e8' },
-      { kind: 'unlock-pack',   venue: '상점', theme: '해금 — 손패 카드를 새로 해금해 드로우 풀과 레시피 후보를 확장한다.',    rarityClass: 'rare',      color: '#80c8e8' },
-      { kind: 'resource-pack', venue: '제단', theme: '최대치 증가 — 최대 체력·손패·불씨 게이지 등 영구 상한을 높인다.',       rarityClass: 'common',    color: '#a8d8a8' },
-      { kind: 'enhance-pack',  venue: '제단', theme: '단일 강화 — 손패 카드 1장의 단발 또는 트리플 효과를 선택적으로 올린다.', rarityClass: 'epic',      color: '#b8a0e8' },
-      { kind: 'delete-pack',   venue: '제단', theme: '삭제 — 드로우 풀에서 손패 카드를 제거해 덱 농도를 높인다.',             rarityClass: 'rare',      color: '#e89090' },
-    ]
-
-    // 상단 테마 배너
-    const banners = packDefs.map(({ kind, venue, theme, rarityClass, color }) => {
-      const label = SHOP_PACK_LABELS[kind as keyof typeof SHOP_PACK_LABELS]
-      return `
-        <div class="pack-codex-banner ${RARITY_CLASS_BY_TIER[rarityClass]}">
-          <div class="pack-codex-banner-head">
-            <span class="pack-codex-banner-name">${label.title}</span>
-            <span class="pack-codex-banner-venue" style="color:${color}">${venue}</span>
-          </div>
-          <p class="pack-codex-banner-theme">${theme}</p>
-        </div>
-      `
-    }).join('')
-
-    // 하단 팩별 항목 리스트
-    const shopPackItems = SHOP_PACK_POOLS['basic-pack']
-    const upgradePackItems = SHOP_PACK_POOLS['upgrade-pack']
-    const resourcePackItems = SHOP_PACK_POOLS['resource-pack']
-
     const rarityLabel: Record<CardRarity, string> = {
       common: '일반', rare: '희귀', epic: '영웅', unique: '고유', legendary: '전설',
     }
 
-    const itemRow = (title: string, effect: string, rarity: CardRarity) => `
-      <div class="pack-codex-item">
-        <span class="pack-codex-item-rarity ${RARITY_CLASS_BY_TIER[rarity]}">${rarityLabel[rarity]}</span>
-        <span class="pack-codex-item-title">${title}</span>
-        <span class="pack-codex-item-effect">${effect}</span>
-      </div>
-    `
+    // 데이터 풀 항목(title/effect/rarity/illu)을 codexTile로 변환한다. illu가 없으면 팩 기본 아트.
+    const itemTile = (
+      item: { title: string; effect: string; rarity: CardRarity; illu?: string },
+      packKind: ShopPackKind
+    ): string => {
+      const itemArt =
+        (item.illu ? spriteForBasicPackItem(item.illu) : undefined) ??
+        spriteForUpgradePackItem((item as { id?: string }).id ?? '') ??
+        SpriteUrls.packs[packKind]
+      return this.codexTile({
+        art: { kind: 'sprite', url: itemArt },
+        name: item.title,
+        tag: rarityLabel[item.rarity],
+        rarityClass: RARITY_CLASS_BY_TIER[item.rarity],
+        chips: [{ value: item.effect, tone: 'gold' }],
+        extraClass: 'codex-tile--relic',
+      })
+    }
 
-    const listSection = (heading: string, venue: '상점' | '제단', items: Array<{ title: string; effect: string; rarity: CardRarity }>) => `
-      <div class="pack-codex-list">
-        <div class="pack-codex-list-head">
-          <span class="pack-codex-list-title">${heading}</span>
-          <span class="pack-codex-list-venue">${venue}</span>
-        </div>
-        <div class="pack-codex-list-body">
-          ${items.map((i) => itemRow(i.title, i.effect, i.rarity)).join('')}
-        </div>
-      </div>
-    `
+    // 동적 풀(해금/강화/삭제)은 런 상태에 따라 목록이 바뀌므로 단일 안내 타일로 표현한다.
+    const noteTile = (packKind: ShopPackKind, name: string, effect: string, rarity: CardRarity): string =>
+      this.codexTile({
+        art: { kind: 'sprite', url: SpriteUrls.packs[packKind] },
+        name,
+        tag: '가변',
+        rarityClass: RARITY_CLASS_BY_TIER[rarity],
+        chips: [{ value: effect, tone: 'gold' }],
+        extraClass: 'codex-tile--relic',
+      })
 
-    const unlockNote = itemRow('손패 카드', '해금되지 않은 손패 카드 중 가중치 기반 1장 해금 (런 보유 카드에 따라 목록 변동)', 'rare')
-    const enhanceNote = itemRow('카드 단일 강화', '현재 런에서 해금된 카드 중 1장 선택 강화 (단발/트리플 중 택일)', 'epic')
-    const deleteNote = itemRow('손패 카드 삭제', '현재 런 드로우 풀에서 특정 카드를 제거해 뽑힐 빈도를 낮춘다', 'rare')
+    // 팩 한 종류 = 섹션 제목(이름·장소) + 테마 blurb + 항목 타일 그리드.
+    const packSection = (
+      packKind: ShopPackKind,
+      venue: '상점' | '제단',
+      theme: string,
+      tiles: string[]
+    ): string => {
+      const label = SHOP_PACK_LABELS[packKind]
+      return `
+        <h3 class="compendium-section">${label.title} · ${venue}</h3>
+        <p class="compendium-section-blurb">${theme}</p>
+        <div class="codex-tile-grid codex-tile-grid--relics">${tiles.join('')}</div>
+      `
+    }
+
+    const basicTiles = SHOP_PACK_POOLS['basic-pack'].map((i) => itemTile(i, 'basic-pack'))
+    const upgradeTiles = SHOP_PACK_POOLS['upgrade-pack'].map((i) => itemTile(i, 'upgrade-pack'))
+    const resourceTiles = SHOP_PACK_POOLS['resource-pack'].map((i) => itemTile(i, 'resource-pack'))
 
     return `
       <h3 class="compendium-section">카드팩 (Packs)</h3>
-      <p class="compendium-section-blurb">10·20턴 상점과 30턴 제단에서 구매하는 팩. 상단은 각 팩의 메인 테마, 하단은 등장 항목 리스트다.</p>
-
-      <div class="pack-codex-banners">${banners}</div>
-
-      <h3 class="compendium-section">항목 리스트</h3>
-      <div class="pack-codex-lists">
-        ${listSection('자원팩', '상점', shopPackItems as Array<{ title: string; effect: string; rarity: CardRarity }>)}
-        ${listSection('강화팩', '상점', upgradePackItems as Array<{ title: string; effect: string; rarity: CardRarity }>)}
-        <div class="pack-codex-list">
-          <div class="pack-codex-list-head">
-            <span class="pack-codex-list-title">해금팩</span>
-            <span class="pack-codex-list-venue">상점</span>
-          </div>
-          <div class="pack-codex-list-body">${unlockNote}</div>
-        </div>
-        ${listSection('자원팩', '제단', resourcePackItems as Array<{ title: string; effect: string; rarity: CardRarity }>)}
-        <div class="pack-codex-list">
-          <div class="pack-codex-list-head">
-            <span class="pack-codex-list-title">강화팩</span>
-            <span class="pack-codex-list-venue">제단</span>
-          </div>
-          <div class="pack-codex-list-body">${enhanceNote}</div>
-        </div>
-        <div class="pack-codex-list">
-          <div class="pack-codex-list-head">
-            <span class="pack-codex-list-title">삭제팩</span>
-            <span class="pack-codex-list-venue">제단</span>
-          </div>
-          <div class="pack-codex-list-body">${deleteNote}</div>
-        </div>
-      </div>
+      <p class="compendium-section-blurb">10·20턴 상점과 30턴 제단에서 구매하는 팩. 팩마다 메인 테마와 등장 항목을 카드로 정리했다.</p>
+      ${packSection('basic-pack', '상점', '즉시 효과 — 체력·불씨·콤보 게이지·방패·화폐를 즉시 보충한다.', basicTiles)}
+      ${packSection('upgrade-pack', '상점', '누적 강화 — 트리플 발동 효과와 레시피 보상을 런 전체에서 +1한다.', upgradeTiles)}
+      ${packSection('unlock-pack', '상점', '해금 — 손패 카드를 새로 해금해 드로우 풀과 레시피 후보를 확장한다.', [
+        noteTile('unlock-pack', '손패 카드 해금', '해금되지 않은 손패 카드 중 가중치 기반 1장을 해금 (런 보유 카드에 따라 변동)', 'rare'),
+      ])}
+      ${packSection('resource-pack', '제단', '최대치 증가 — 최대 체력·손패·불씨 게이지 등 영구 상한을 높인다.', resourceTiles)}
+      ${packSection('enhance-pack', '제단', '단일 강화 — 손패 카드 1장의 단발 또는 트리플 효과를 선택적으로 올린다.', [
+        noteTile('enhance-pack', '카드 단일 강화', '현재 런에서 해금된 카드 중 1장을 선택 강화 (단발/트리플 중 택일)', 'epic'),
+      ])}
+      ${packSection('delete-pack', '제단', '삭제 — 드로우 풀에서 손패 카드를 제거해 덱 농도를 높인다.', [
+        noteTile('delete-pack', '손패 카드 삭제', '현재 런 드로우 풀에서 특정 카드를 제거해 뽑힐 빈도를 낮춘다', 'rare'),
+      ])}
     `
   }
 
