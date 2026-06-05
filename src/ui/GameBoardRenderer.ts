@@ -2938,55 +2938,56 @@ export class GameBoardRenderer {
 
   private renderCompendiumTraps(): string {
     const sword = swordIcon()
-    // Web variants: one tile per merge stage with that stage's actual name.
-    const webNames: Record<1 | 2 | 3, string> = {
-      1: '양초 거미줄',
-      2: '촛농 거미집',
-      3: '밀랍 거미굴',
-    }
+    const seen = this.currentGameState?.encounteredCardNames ?? new Set<string>()
+
+    const webNames: Record<1 | 2 | 3, string> = { 1: '양초 거미줄', 2: '촛농 거미집', 3: '밀랍 거미굴' }
     const webDamage: Record<1 | 2 | 3, string> = { 1: '2', 2: '5', 3: '999' }
     const webTiles = ([1, 2, 3] as const)
-      .map((span) =>
-        this.codexTile({
+      .map((span) => {
+        const known = seen.has(webNames[span])
+        return this.codexTile({
           art: { kind: 'sprite', url: SpriteUrls.trapGroups.web[span] },
-          name: webNames[span],
+          name: known ? webNames[span] : '???',
           tag: `${span}칸`,
-          chips: [{ icon: sword, value: webDamage[span], tone: 'atk' }],
+          chips: known ? [{ icon: sword, value: webDamage[span], tone: 'atk' }] : [],
+          extraClass: known ? undefined : 'codex-tile--unknown',
         })
-      )
+      })
       .join('')
 
-    // Spore variants. Spores carry both bite damage and a 2-turn spread tick.
-    const sporeNames: Record<1 | 2 | 3, string> = {
-      1: '감염 포자',
-      2: '번식 포자군',
-      3: '포자 군락',
-    }
+    const sporeNames: Record<1 | 2 | 3, string> = { 1: '감염 포자', 2: '번식 포자군', 3: '포자 군락' }
     const sporeDamage: Record<1 | 2 | 3, string> = { 1: '1', 2: '3', 3: '5' }
     const sporeTiles = ([1, 2, 3] as const)
-      .map((span) =>
-        this.codexTile({
+      .map((span) => {
+        const known = seen.has(sporeNames[span])
+        return this.codexTile({
           art: { kind: 'sprite', url: SpriteUrls.trapGroups.spore[span] },
-          name: sporeNames[span],
+          name: known ? sporeNames[span] : '???',
           tag: `${span}칸`,
-          chips: [
-            { icon: sword, value: sporeDamage[span], tone: 'atk' },
-            { label: '전염 ', value: '2턴마다', tone: 'spore' },
-          ],
+          chips: known
+            ? [
+                { icon: sword, value: sporeDamage[span], tone: 'atk' },
+                { label: '전염 ', value: '2턴마다', tone: 'spore' },
+              ]
+            : [],
+          extraClass: known ? undefined : 'codex-tile--unknown',
         })
-      )
+      })
       .join('')
 
-    // Bomb does not merge by design, so it's documented as a single 1칸 tile.
+    const bombKnown = seen.has('양초 폭탄')
     const bombTile = this.codexTile({
       art: { kind: 'sprite', url: SpriteUrls.traps.bomb },
-      name: '양초 폭탄',
+      name: bombKnown ? '양초 폭탄' : '???',
       tag: '1칸',
-      chips: [
-        { icon: sword, value: '5', tone: 'bomb' },
-        { label: '점화 ', value: '1턴', tone: 'bomb' },
-      ],
-      note: '전방 도착 시 점화, 다음 턴 폭발. 인접 적도 피해.',
+      chips: bombKnown
+        ? [
+            { icon: sword, value: '5', tone: 'bomb' },
+            { label: '점화 ', value: '1턴', tone: 'bomb' },
+          ]
+        : [],
+      note: bombKnown ? '전방 도착 시 점화, 다음 턴 폭발. 인접 적도 피해.' : undefined,
+      extraClass: bombKnown ? undefined : 'codex-tile--unknown',
     })
 
     return `
@@ -3000,85 +3001,114 @@ export class GameBoardRenderer {
   }
 
   private renderCompendiumTreasures(): string {
-    // One tile per chest size mirrors the rail: the sprite, the lane name,
-    // and only the per-size drop count differ; vanish/mimic odds are shared.
-    // 이름은 rail의 groupName과 일치시킨다. 드롭 수는 ActionSystem.TREASURE_DROPS_BY_SPAN(1/3/5) 기준.
+    const seen = this.currentGameState?.encounteredCardNames ?? new Set<string>()
+
+    // 일반 상자: 드롭 수 1/3/5, 50% 사라짐+10% 미믹화.
     const CHEST_DROPS = [1, 3, 5] as const
     const chestSpec: Array<{ span: 1 | 2 | 3; name: string; sprite: string }> = [
-      { span: 1, name: '작은 상자', sprite: SpriteUrls.chestSmall },
+      { span: 1, name: '작은 상자',  sprite: SpriteUrls.chestSmall  },
       { span: 2, name: '적당한 상자', sprite: SpriteUrls.chestMedium },
-      { span: 3, name: '큰 상자', sprite: SpriteUrls.chestLarge },
+      { span: 3, name: '큰 상자',    sprite: SpriteUrls.chestLarge  },
     ]
-    const tiles = chestSpec
-      .map((c) =>
-        this.codexTile({
+    const normalTiles = chestSpec
+      .map((c) => {
+        const known = seen.has(c.name)
+        return this.codexTile({
           art: { kind: 'sprite', url: c.sprite },
-          name: c.name,
+          name: known ? c.name : '???',
           tag: `${c.span}칸`,
-          chips: [
-            { label: '드롭 ', value: `손패 ${CHEST_DROPS[c.span - 1]}장`, tone: 'gold' },
-            { label: '사라짐 ', value: '50%/턴', tone: 'plain' },
-            { label: '미믹화 ', value: '10%/턴', tone: 'spore' },
-          ],
+          chips: known
+            ? [
+                { label: '드롭 ', value: `손패 ${CHEST_DROPS[c.span - 1]}장`, tone: 'gold' },
+                { label: '사라짐 ', value: '50%/턴', tone: 'plain' },
+                { label: '미믹화 ', value: '10%/턴', tone: 'spore' },
+              ]
+            : [],
+          extraClass: known ? undefined : 'codex-tile--unknown',
         })
-      )
+      })
       .join('')
-    return `<div class="codex-tile-grid">${tiles}</div>`
+
+    // 황금 상자: 드롭 수 3/8/15, 50% 사라짐, 미믹화 없음 (황금 열쇠 유물 필요).
+    const GOLDEN_DROPS = [3, 8, 15] as const
+    const goldenSpec: Array<{ span: 1 | 2 | 3; name: string }> = [
+      { span: 1, name: '황금 상자'       },
+      { span: 2, name: '적당한 황금 상자' },
+      { span: 3, name: '대형 황금 상자'   },
+    ]
+    const goldenTiles = goldenSpec
+      .map((c) => {
+        const known = seen.has(c.name)
+        return this.codexTile({
+          art: { kind: 'sprite', url: SpriteUrls.chestGolden },
+          name: known ? c.name : '???',
+          tag: `${c.span}칸`,
+          chips: known
+            ? [
+                { label: '드롭 ', value: `손패 ${GOLDEN_DROPS[c.span - 1]}장`, tone: 'gold' },
+                { label: '사라짐 ', value: '50%/턴', tone: 'plain' },
+                { label: '불빛 ', value: '×2', tone: 'gold' },
+              ]
+            : [],
+          extraClass: known ? 'codex-tile--golden' : 'codex-tile--unknown',
+        })
+      })
+      .join('')
+
+    return `
+      <h3 class="compendium-section">일반 상자</h3>
+      <div class="codex-tile-grid">${normalTiles}</div>
+      <h3 class="compendium-section">황금 상자</h3>
+      <p class="compendium-section-blurb">황금 열쇠 유물 보유 시 등장. 미믹화 없음.</p>
+      <div class="codex-tile-grid">${goldenTiles}</div>
+    `
   }
 
   private renderCompendiumFlowers(): string {
+    const seen = this.currentGameState?.encounteredCardNames ?? new Set<string>()
+
     type Spec = {
       kind: FlowerKind
       harvest: { label: string; value: string; tone: 'hp' | 'atk' | 'gold' | 'shield' | 'flower' }
       growth: string
     }
     const specs: Spec[] = [
-      {
-        kind: 'chamomile',
-        harvest: { label: '수확 ', value: '불빛', tone: 'gold' },
-        growth: '턴마다 +1',
-      },
-      {
-        kind: 'redRose',
-        harvest: { label: '수확 ', value: '체력', tone: 'hp' },
-        growth: '턴마다 +1',
-      },
-      {
-        kind: 'marigold',
-        harvest: { label: '수확 ', value: '화폐', tone: 'gold' },
-        growth: '2턴마다 +1',
-      },
-      {
-        kind: 'oleander',
-        harvest: { label: '수확 ', value: '방패', tone: 'shield' },
-        growth: '턴마다 +1',
-      },
-      {
-        kind: 'lavender',
-        harvest: { label: '수확 ', value: '손패 게이지', tone: 'flower' },
-        growth: '턴마다 +1',
-      },
+      { kind: 'chamomile', harvest: { label: '수확 ', value: '불빛',      tone: 'gold'   }, growth: '턴마다 +1'   },
+      { kind: 'redRose',   harvest: { label: '수확 ', value: '체력',      tone: 'hp'     }, growth: '턴마다 +1'   },
+      { kind: 'marigold',  harvest: { label: '수확 ', value: '화폐',      tone: 'gold'   }, growth: '2턴마다 +1'  },
+      { kind: 'oleander',  harvest: { label: '수확 ', value: '방패',      tone: 'shield' }, growth: '턴마다 +1'   },
+      { kind: 'lavender',  harvest: { label: '수확 ', value: '손패 게이지', tone: 'flower' }, growth: '턴마다 +1'  },
     ]
+
+    const seedKnown = seen.has(flowerDisplayName('seed'))
     const seedTile = this.codexTile({
       art: { kind: 'sprite', url: SpriteUrls.flowers.seed },
-      name: flowerDisplayName('seed'),
+      name: seedKnown ? flowerDisplayName('seed') : '???',
       tag: '씨앗',
-      chips: [{ label: '발화 ', value: '5종 중 랜덤', tone: 'flower' }],
-      note: '대기 라인에서만 등장. 전방 도착 시 꽃으로 발화.',
+      chips: seedKnown ? [{ label: '발화 ', value: '5종 중 랜덤', tone: 'flower' }] : [],
+      note: seedKnown ? '대기 라인에서만 등장. 전방 도착 시 꽃으로 발화.' : undefined,
+      extraClass: seedKnown ? undefined : 'codex-tile--unknown',
     })
+
     const flowerTiles = specs
-      .map((s) =>
-        this.codexTile({
+      .map((s) => {
+        const name = flowerDisplayName(s.kind)
+        const known = seen.has(name)
+        return this.codexTile({
           art: { kind: 'sprite', url: SpriteUrls.flowers[s.kind] },
-          name: flowerDisplayName(s.kind),
+          name: known ? name : '???',
           tag: '버프칸',
-          chips: [
-            { label: s.harvest.label, value: s.harvest.value, tone: s.harvest.tone },
-            { label: '성장 ', value: s.growth, tone: 'plain' },
-          ],
+          chips: known
+            ? [
+                { label: s.harvest.label, value: s.harvest.value, tone: s.harvest.tone },
+                { label: '성장 ', value: s.growth, tone: 'plain' },
+              ]
+            : [],
+          extraClass: known ? undefined : 'codex-tile--unknown',
         })
-      )
+      })
       .join('')
+
     return `
       <h3 class="compendium-section">씨앗</h3>
       <div class="codex-tile-grid">${seedTile}</div>
@@ -3112,13 +3142,13 @@ export class GameBoardRenderer {
   }
 
   /** Pack tab: 손패/유물 탭과 같은 codexTile 그리드 양식으로 팩별 등장 항목을 보여준다.
-   *  팩마다 섹션 제목 + 테마 한 줄(blurb) + 항목 타일 그리드로 구성한다. */
+   *  상점/제단 방문 전에는 해당 팩 섹션이 ???로 마스킹된다. */
   private renderCompendiumPacks(): string {
+    const seenPacks = this.currentGameState?.encounteredPackKinds ?? new Set<string>()
     const rarityLabel: Record<CardRarity, string> = {
       common: '일반', rare: '희귀', epic: '영웅', unique: '고유', legendary: '전설',
     }
 
-    // 데이터 풀 항목(title/effect/rarity/illu)을 codexTile로 변환한다. illu가 없으면 팩 기본 아트.
     const itemTile = (
       item: { title: string; effect: string; rarity: CardRarity; illu?: string },
       packKind: ShopPackKind
@@ -3137,7 +3167,6 @@ export class GameBoardRenderer {
       })
     }
 
-    // 동적 풀(해금/강화/삭제)은 런 상태에 따라 목록이 바뀌므로 단일 안내 타일로 표현한다.
     const noteTile = (packKind: ShopPackKind, name: string, effect: string, rarity: CardRarity): string =>
       this.codexTile({
         art: { kind: 'sprite', url: SpriteUrls.packs[packKind] },
@@ -3148,19 +3177,7 @@ export class GameBoardRenderer {
         extraClass: 'codex-tile--relic',
       })
 
-    // 팩 간판(대문) 타일: 팩 일러스트를 카드 타일처럼 보여 주는 머리 카드.
-    const coverTile = (packKind: ShopPackKind, venue: '상점' | '제단', theme: string): string => {
-      const label = SHOP_PACK_LABELS[packKind]
-      return this.codexTile({
-        art: { kind: 'sprite', url: SpriteUrls.packs[packKind] },
-        name: label.title,
-        tag: venue,
-        chips: [{ value: theme, tone: 'gold' }],
-        extraClass: 'codex-tile--relic codex-tile--packcover',
-      })
-    }
-
-    // 팩 한 종류 = 섹션 제목 + (간판 카드 → 항목 타일) 한 그리드. 간판 카드를 먼저 보여 준다.
+    // 팩 섹션: 방문 전에는 간판 카드 1장만 ???로 표시하고 항목 타일은 숨긴다.
     const packSection = (
       packKind: ShopPackKind,
       venue: '상점' | '제단',
@@ -3168,9 +3185,26 @@ export class GameBoardRenderer {
       tiles: string[]
     ): string => {
       const label = SHOP_PACK_LABELS[packKind]
+      const known = seenPacks.has(packKind)
+      const coverArt = SpriteUrls.packs[packKind]
+      const coverCard = known
+        ? this.codexTile({
+            art: { kind: 'sprite', url: coverArt },
+            name: label.title,
+            tag: venue,
+            chips: [{ value: theme, tone: 'gold' }],
+            extraClass: 'codex-tile--relic codex-tile--packcover',
+          })
+        : this.codexTile({
+            art: { kind: 'sprite', url: coverArt },
+            name: '???',
+            tag: venue,
+            chips: [],
+            extraClass: 'codex-tile--relic codex-tile--packcover codex-tile--unknown',
+          })
       return `
-        <h3 class="compendium-section">${label.title} · ${venue}</h3>
-        <div class="codex-tile-grid codex-tile-grid--relics">${coverTile(packKind, venue, theme)}${tiles.join('')}</div>
+        <h3 class="compendium-section">${known ? label.title : '???'} · ${venue}</h3>
+        <div class="codex-tile-grid codex-tile-grid--relics">${coverCard}${known ? tiles.join('') : ''}</div>
       `
     }
 
@@ -3180,7 +3214,7 @@ export class GameBoardRenderer {
 
     return `
       <h3 class="compendium-section">카드팩 (Packs)</h3>
-      <p class="compendium-section-blurb">10·20턴 상점과 30턴 제단에서 구매하는 팩. 팩마다 메인 테마와 등장 항목을 카드로 정리했다.</p>
+      <p class="compendium-section-blurb">10·20턴 상점과 30턴 제단에서 구매하는 팩. 방문해야 내용이 공개된다.</p>
       ${packSection('basic-pack', '상점', '즉시 효과 — 체력·불씨·콤보 게이지·방패·화폐를 즉시 보충한다.', basicTiles)}
       ${packSection('upgrade-pack', '상점', '누적 강화 — 트리플 발동 효과와 레시피 보상을 런 전체에서 +1한다.', upgradeTiles)}
       ${packSection('unlock-pack', '상점', '해금 — 손패 카드를 새로 해금해 드로우 풀과 레시피 후보를 확장한다.', [

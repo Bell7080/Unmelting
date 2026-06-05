@@ -20,6 +20,10 @@ export class GameState {
   bossBattleActive = false
   /** 한 번이라도 필드에 등장한 적/특수 카드의 이름 집합. 도감 적 탭의 발견 여부를 결정한다. */
   encounteredEnemyNames = new Set<string>()
+  /** 필드에 등장한 함정/보물/꽃 카드 이름 집합. 도감 탭의 미식별 마스킹에 사용한다. */
+  encounteredCardNames = new Set<string>()
+  /** 상점/제단이 열린 적 있는 팩 종류 집합. 도감 팩 탭의 미식별 마스킹에 사용한다. */
+  encounteredPackKinds = new Set<string>()
 
   constructor() {
     this.character = new Character()
@@ -272,5 +276,7 @@ export class GameState {
     this.enhancements = makeDefaultEnhancements()
     this.bossBattleActive = false
     this.encounteredEnemyNames = new Set()
+    this.encounteredCardNames = new Set()
+    this.encounteredPackKinds = new Set()
   }
 }
