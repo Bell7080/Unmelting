@@ -461,7 +461,7 @@ export class HandSystem {
         return HandSystem.damageTargetEnemy(gs, target, 5 + bonus)
       case 'levatein':
         // 적 행동 시뮬레이션(2회)과 %HP 피해는 useSingle 반환값으로 index.ts에 위임한다.
-        return '레바테인: 적 행동 2회 시뮬레이션 후 최대체력 30% 피해'
+        return '레바테인: 즉시 2턴 흐름 후 최대체력 30% 피해'
       case 'firework':
         return HandSystem.distributeDamageAmongEnemies(gs, 4 + bonus)
       case 'book-of-flames':
@@ -518,7 +518,7 @@ export class HandSystem {
         return HandSystem.damageTargetEnemy(gs, target, 7 + bonus)
       case 'levatein':
         // 적 행동 시뮬레이션(1회)과 %HP 피해는 useSingle 반환값으로 index.ts에 위임한다.
-        return '레바테인: 적 행동 1회 시뮬레이션 후 최대체력 45% 피해'
+        return '레바테인: 즉시 1턴 흐름 후 최대체력 45% 피해'
       case 'firework':
         return HandSystem.distributeDamageAmongEnemies(gs, 15 + bonus)
       case 'book-of-flames':

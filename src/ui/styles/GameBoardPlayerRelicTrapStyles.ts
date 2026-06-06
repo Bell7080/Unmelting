@@ -89,6 +89,102 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
   -webkit-text-stroke: 1px rgba(74, 8, 13, 0.86);
 }
 
+/* ---------- 레바테인 연출 ----------
+   턴 흐름(황금 숫자) · 화염 볼트 · 대형 피해 수치 · HP 롤링 틱. */
+
+/* 플레이어 카드 위에 뜨는 황금 턴 흐름 숫자(외곽: 위치 고정 / 내부: 흔들림). */
+.levatein-charge-mark {
+  position: fixed;
+  z-index: 248;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+}
+.levatein-charge-inner {
+  display: inline-block;
+  font-family: var(--font-family-display);
+  font-size: clamp(40px, 5.4vw, 76px);
+  font-weight: 950;
+  line-height: 1;
+  color: #ffe07a;
+  text-shadow:
+    0 2px 3px rgba(0, 0, 0, 0.92),
+    0 0 10px rgba(255, 210, 90, 0.95),
+    0 0 26px rgba(240, 170, 40, 0.72),
+    0 0 46px rgba(200, 120, 20, 0.5);
+  -webkit-text-stroke: 1px rgba(90, 50, 8, 0.7);
+}
+/* 등장 펄스(1회) 후 흔들림(무한)으로 이어진다. */
+.levatein-charge-inner.is-pulsing {
+  animation:
+    levatein-mark-in 0.28s cubic-bezier(0.2, 0.9, 0.24, 1) backwards,
+    levatein-mark-shake 0.46s ease-in-out 0.28s infinite;
+}
+.levatein-charge-inner.is-leaving {
+  animation: levatein-mark-out 0.3s ease forwards;
+}
+@keyframes levatein-mark-in {
+  0%   { opacity: 0; transform: scale(0.5) translateY(22px); }
+  60%  { opacity: 1; transform: scale(1.22) translateY(-6px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes levatein-mark-shake {
+  0%, 100% { transform: translate(0, 0) rotate(-3.2deg); }
+  25%      { transform: translate(-2px, -1px) rotate(2.6deg); }
+  50%      { transform: translate(2px, 1px) rotate(-2deg); }
+  75%      { transform: translate(-1px, 1px) rotate(3deg); }
+}
+@keyframes levatein-mark-out {
+  0%   { opacity: 1; transform: scale(1) translateY(0); }
+  100% { opacity: 0; transform: scale(1.4) translateY(-26px); }
+}
+
+/* 플레이어 → 적으로 날아가는 황금 화염 볼트(streak). */
+.levatein-bolt {
+  position: fixed;
+  z-index: 246;
+  pointer-events: none;
+  width: 132px;
+  height: 16px;
+  border-radius: 9px;
+  transform-origin: 50% 50%;
+  background: linear-gradient(90deg,
+    rgba(255, 160, 40, 0) 0%,
+    rgba(255, 200, 80, 0.92) 42%,
+    #fff3c0 72%,
+    rgba(255, 255, 255, 0.96) 100%);
+  box-shadow:
+    0 0 18px rgba(255, 180, 60, 0.92),
+    0 0 38px rgba(240, 140, 30, 0.7);
+  filter: drop-shadow(0 0 9px rgba(255, 200, 90, 0.82));
+}
+
+/* 레바테인 대형 피해 수치 — 기본 damage-float보다 크고 황금빛이 강하다. */
+.damage-float--levatein {
+  color: #ffd24a;
+  font-size: clamp(48px, 7.2vw, 104px);
+  text-shadow:
+    0 3px 4px rgba(0, 0, 0, 0.96),
+    0 0 14px rgba(255, 210, 90, 0.96),
+    0 0 30px rgba(240, 150, 40, 0.82),
+    0 0 52px rgba(200, 110, 20, 0.6);
+  -webkit-text-stroke: 1px rgba(86, 38, 6, 0.8);
+}
+
+/* HP 롤링 틱: 깎이는 동안 붉게 달아오르고, 한 칸 줄 때마다 톡 튄다. */
+.stat.hp .stat-value.is-hp-draining {
+  color: #ff6a4a;
+}
+.stat.hp .stat-value.is-hp-tick {
+  animation: levatein-hp-tick 0.09s ease;
+}
+@keyframes levatein-hp-tick {
+  0%   { transform: scale(1.34); filter: brightness(1.6); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+.is-levatein-struck {
+  z-index: 60;
+}
+
 
 /* Restored codex scrolling while hovered recipe previews escape via the
    body-mounted .compendium-recipe-float clone rather than by disabling scroll. */

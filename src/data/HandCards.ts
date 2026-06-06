@@ -202,8 +202,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'levatein',
     name: '레바테인',
     category: 'attack',
-    description: '적 행동 2회 실행 (턴 미소모) 후, 선택 적 최대체력 30%(최소 10) 피해',
-    tripleDescription: '적 행동 1회 실행 (턴 미소모) 후, 선택 적 최대체력 45%(최소 15) 피해',
+    description: '즉시 2턴 흐름<br>이후, 선택 적 1장 최대체력 30% 피해 (최소 10)',
+    tripleDescription: '즉시 1턴 흐름<br>이후, 선택 적 1장 최대체력 45% 피해 (최소 15)',
     targeting: {
       base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },

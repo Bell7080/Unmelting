@@ -3978,6 +3978,165 @@ export class GameBoardRenderer {
     })
   }
 
+  /** 레바테인 턴 흐름 표시: 플레이어 카드 위에 황금빛 숫자(1,2…)를 흔들리며 띄운다.
+   *  같은 요소를 갱신해 시뮬레이션 페이즈마다 숫자만 교체한다(흔들림 지속). */
+  showLevateinChargeMark(n: number): void {
+    const player = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
+    if (!player) return
+    const rect = player.getBoundingClientRect()
+    let mark = document.getElementById('levatein-charge-mark')
+    if (!mark) {
+      mark = document.createElement('div')
+      mark.id = 'levatein-charge-mark'
+      mark.className = 'levatein-charge-mark'
+      mark.innerHTML = '<span class="levatein-charge-inner"></span>'
+      document.body.appendChild(mark)
+    }
+    mark.style.left = `${rect.left + rect.width / 2}px`
+    mark.style.top = `${rect.top - rect.height * 0.06}px`
+    const inner = mark.querySelector<HTMLElement>('.levatein-charge-inner')
+    if (inner) {
+      inner.textContent = String(n)
+      // 숫자가 바뀔 때마다 등장 펄스를 재시작해 "차오르는" 느낌을 준다.
+      inner.classList.remove('is-pulsing')
+      void inner.offsetWidth
+      inner.classList.add('is-pulsing')
+    }
+  }
+
+  /** 레바테인 턴 흐름 숫자를 위로 흩어지며 사라지게 한다(강타 직전 정리). */
+  clearLevateinChargeMark(): void {
+    const mark = document.getElementById('levatein-charge-mark')
+    if (!mark) return
+    const inner = mark.querySelector<HTMLElement>('.levatein-charge-inner')
+    inner?.classList.add('is-leaving')
+    window.setTimeout(() => mark.remove(), 320)
+  }
+
+  /** 레바테인 강타: 플레이어 카드에서 대상 적으로 황금 화염 볼트를 쏘고, 착탄 시
+   *  큰 버스트 + 큰 피해 수치를 출력하며 대상 HP 숫자를 1씩 빠르게 깎아낸다.
+   *  보스는 HP 숫자(.stat.hp)가 없어 HP바가 따로 갱신되므로 틱은 자동 생략된다. */
+  async animateLevateinStrike(cardId: string, damage: number, fromHp: number, toHp: number): Promise<void> {
+    const enemy = this.findCardElement(cardId)
+    if (!enemy) return
+    const enemyRect = enemy.getBoundingClientRect()
+    const ex = enemyRect.left + enemyRect.width / 2
+    const ey = enemyRect.top + enemyRect.height / 2
+
+    // 1) 플레이어 → 적으로 화염 볼트가 날아가는 연출.
+    const player = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
+    if (player) {
+      const pRect = player.getBoundingClientRect()
+      const px = pRect.left + pRect.width / 2
+      const py = pRect.top + pRect.height * 0.28
+      const dx = ex - px
+      const dy = ey - py
+      const angle = (Math.atan2(dy, dx) * 180) / Math.PI
+      const bolt = document.createElement('div')
+      bolt.className = 'levatein-bolt'
+      bolt.style.left = `${px}px`
+      bolt.style.top = `${py}px`
+      document.body.appendChild(bolt)
+      const fly = bolt.animate(
+        [
+          { transform: `translate(-50%, -50%) rotate(${angle}deg) scaleX(0.35)`, opacity: 0 },
+          {
+            transform: `translate(calc(-50% + ${dx * 0.5}px), calc(-50% + ${dy * 0.5}px)) rotate(${angle}deg) scaleX(1.25)`,
+            opacity: 1,
+            offset: 0.55,
+          },
+          {
+            transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) rotate(${angle}deg) scaleX(0.55)`,
+            opacity: 0.85,
+          },
+        ],
+        { duration: 240, easing: 'cubic-bezier(0.3, 0.7, 0.2, 1)', fill: 'forwards' }
+      )
+      await new Promise<void>((resolve) => {
+        fly.onfinish = () => {
+          bolt.remove()
+          resolve()
+        }
+        window.setTimeout(() => {
+          bolt.remove()
+          resolve()
+        }, 340)
+      })
+    }
+
+    // 2) 착탄: 강렬한 이중 버스트 + 피격 반동.
+    SquareBurst.playAt(ex, ey, 'bomb-blast', { count: 30, spread: 210, duration: 720, size: [12, 30] })
+    SquareBurst.playAt(ex, ey, 'hand-attack', { count: 22, spread: 150, duration: 640 })
+    enemy.classList.remove('is-enemy-hit')
+    void enemy.offsetWidth
+    enemy.classList.add('is-enemy-hit', 'is-levatein-struck')
+    window.setTimeout(() => enemy.classList.remove('is-enemy-hit', 'is-levatein-struck'), 540)
+
+    // 3) 큰 피해 수치 + 대상 HP 1씩 롤링 다운(같은 beat).
+    await Promise.all([
+      this.animateBigDamageNumberAt(ex, enemyRect.top + enemyRect.height * 0.28, damage),
+      this.tickCardHealthDown(enemy, fromHp, toHp),
+    ])
+  }
+
+  /** 레바테인 전용 대형 피해 수치(기본 damage-float보다 크고 황금빛). */
+  private animateBigDamageNumberAt(x: number, y: number, amount: number): Promise<void> {
+    if (amount <= 0) return Promise.resolve()
+    const el = document.createElement('div')
+    el.className = 'damage-float damage-float--levatein'
+    el.textContent = `-${amount}`
+    el.style.left = `${x}px`
+    el.style.top = `${y}px`
+    document.body.appendChild(el)
+    const anim = el.animate(
+      [
+        { transform: 'translate(-50%, -18%) scale(0.6)', opacity: 0, filter: 'brightness(1.3)' },
+        { transform: 'translate(-50%, -70%) scale(1.32)', opacity: 1, filter: 'brightness(1.7)', offset: 0.24 },
+        { transform: 'translate(-50%, -116%) scale(1.12)', opacity: 1, filter: 'brightness(1.34)', offset: 0.68 },
+        { transform: 'translate(-50%, -168%) scale(1)', opacity: 0, filter: 'brightness(1)' },
+      ],
+      { duration: 1120, easing: 'cubic-bezier(0.16, 0.86, 0.28, 1)', fill: 'forwards' }
+    )
+    return new Promise((resolve) => {
+      anim.onfinish = () => {
+        el.remove()
+        resolve()
+      }
+      window.setTimeout(() => {
+        el.remove()
+        resolve()
+      }, 1240)
+    })
+  }
+
+  /** 대상 카드의 HP 숫자를 fromHp→toHp까지 1씩 빠르게(띠리릭) 깎아내린다. */
+  private tickCardHealthDown(enemyEl: HTMLElement, fromHp: number, toHp: number): Promise<void> {
+    const valueEl = enemyEl.querySelector<HTMLElement>('.stat.hp .stat-value')
+    if (!valueEl || fromHp <= toHp) return Promise.resolve()
+    const total = fromHp - toHp
+    // 1씩 깎되 전체가 너무 길어지지 않게 스텝 간격을 동적으로 잡는다(대략 ~620ms 내).
+    const stepMs = Math.max(16, Math.min(64, Math.floor(620 / total)))
+    return new Promise<void>((resolve) => {
+      let cur = fromHp
+      valueEl.classList.add('is-hp-draining')
+      const tick = () => {
+        cur -= 1
+        const shown = Math.max(toHp, cur)
+        valueEl.textContent = String(shown)
+        valueEl.classList.remove('is-hp-tick')
+        void valueEl.offsetWidth
+        valueEl.classList.add('is-hp-tick')
+        if (cur > toHp) {
+          window.setTimeout(tick, stepMs)
+        } else {
+          window.setTimeout(() => valueEl.classList.remove('is-hp-draining', 'is-hp-tick'), 120)
+          resolve()
+        }
+      }
+      window.setTimeout(tick, stepMs)
+    })
+  }
+
   /** Wax release effect: wider, softer shards as hardened wax cracks open. */
   animateWaxThawByIds(cardIds: string[]): Promise<void> {
     if (cardIds.length === 0) return Promise.resolve()

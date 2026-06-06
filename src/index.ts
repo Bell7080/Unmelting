@@ -2783,38 +2783,49 @@ async function applyHandSingle(
   // 레바테인: 전투 페이즈 시뮬레이션(또는 보스 주기 전진) 후 최대체력 % 피해를 적용한다.
   // 시뮬레이션 중 플레이어/보스가 쓰러지면 조기 종료하고 후처리는 기존 경로에 맡긴다.
   if (result.simulatedBattlePhases && result.simulatedBattlePhases > 0) {
+    const phases = result.simulatedBattlePhases
+    // 턴 흐름: 각 시뮬레이션 페이즈마다 플레이어 카드 위에 황금 숫자(1,2…)를 흔들리게 띄운다.
     if (gameState.bossBattleActive && bossController.eventState) {
-      await bossController.advanceBossTurnsForLevatein(result.simulatedBattlePhases)
+      for (let phase = 0; phase < phases; phase++) {
+        if (gameState.isGameOver || !bossController.eventState) break
+        boardRenderer.showLevateinChargeMark(phase + 1)
+        await wait(340)
+        await bossController.advanceBossTurnsForLevatein(1)
+      }
     } else if (!gameState.bossBattleActive) {
-      for (let phase = 0; phase < result.simulatedBattlePhases; phase++) {
+      for (let phase = 0; phase < phases; phase++) {
         if (gameState.isGameOver) break
+        boardRenderer.showLevateinChargeMark(phase + 1)
+        await wait(340)
         await runSimulatedEnemyPhase()
       }
     }
-    // 시뮬레이션 이후 대상 카드가 아직 살아있으면 % 피해를 입힌다.
+    boardRenderer.clearLevateinChargeMark()
+
+    // 시뮬레이션 이후 대상 카드가 아직 살아있으면 강타로 % 피해를 입힌다.
     const levDmg = result.levateainDamage ?? 0
     if (levDmg > 0 && !gameState.isGameOver && target && target.card.getHealth() > 0) {
-      const beforeLevHealth = snapshotFieldHealthState()
+      const targetId = target.card.id
       const beforeBossHp = bossController.eventState?.card.getHealth() ?? 0
+      const beforeHp = target.card.getHealth()
+      // 점수 정산은 제거 전 스냅샷이 필요하므로 takeDamage 이전에 캡처한다.
+      const preStrikeSnapshot = snapshotFieldCardsById()
       target.card.takeDamage(levDmg)
-      if (target.card.getHealth() <= 0 && target.card.type !== CardType.BOSS) {
-        gameState.removeCardFromRow(target.card, target.distance)
-      }
-      // 보스 밀랍 방패 처리
+      // 보스 밀랍 방패/페이지 클램프(보스 HP 보정)를 먼저 반영해 최종 HP를 확정한다.
       if (bossController.eventState) {
         bossController.absorbExternalBossDamageWithShield(beforeBossHp)
         bossController.clampWaxWitchExternalDamageToPageFloor()
+      }
+      const afterHp = target.card.getHealth()
+      const killed = afterHp <= 0 && target.card.type !== CardType.BOSS
+      if (killed) gameState.removeCardFromRow(target.card, target.distance)
+      // 강타 연출: 화염 볼트 → 착탄 버스트 → 큰 피해 수치 + HP 1씩 롤링.
+      await boardRenderer.animateLevateinStrike(targetId, levDmg, beforeHp, Math.max(0, afterHp))
+      if (bossController.eventState) {
         boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))
       }
-      const levDamageLosses = diffFieldHealthLosses(beforeLevHealth)
-      await boardRenderer.animateDamageNumbersById(levDamageLosses)
-      if (levDamageLosses.length > 0) {
-        await awardScoreForRemovedCards(
-          target.card.getHealth() <= 0 && target.card.type !== CardType.BOSS
-            ? [{ cardId: target.card.id, type: target.card.type }]
-            : [],
-          snapshotFieldCardsById()
-        )
+      if (killed) {
+        await awardScoreForRemovedCards([{ cardId: targetId, type: target.card.type }], preStrikeSnapshot)
       }
     }
   }
