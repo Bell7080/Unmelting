@@ -384,6 +384,66 @@ export class BossEventController {
     }
   }
 
+  /** 레바테인 손패 전용: 보스 공격 주기 카운터를 n 증가시키고, 주기 도달마다 보스 행동을 즉시 실행한다.
+   *  실제 런 턴 카운터(GameState.turn)는 건드리지 않는다. inputLocked은 호출부가 관리한다. */
+  async advanceBossTurnsForLevatein(n: number): Promise<void> {
+    if (!this.eventState) return
+    const state = this.eventState
+    const character = this.gs.character
+
+    for (let i = 0; i < n; i++) {
+      if (state.defeatTriggered || !character.isAlive()) break
+
+      state.turn += 1
+      this.tm.tickEmberDecay()
+      const remaining = state.def.attackInterval - (state.turn % state.def.attackInterval)
+      const displayValue = remaining === state.def.attackInterval ? state.def.attackInterval : remaining
+      this.br.setBossAttackCountdown(displayValue)
+
+      // HP 10 손실 보상 손패 지급
+      await this.consumeHandGiftThresholds(state.card.id)
+      if (state.card.getHealth() <= 0) { await this.handleDefeated(); return }
+
+      if (state.turn % state.def.attackInterval === 0) {
+        if (state.def.specialEnemyKind === 'waxArmy') {
+          // 탐욕 살포 → 플레이어 타격
+          await this.scatterGreedCards(state.card.id)
+          const dmg = state.card.getDamage()
+          character.takeDamage(dmg)
+          await this.br.animateEnemyAttacks([{ cardId: state.card.id, cardName: state.card.name, laneIndex: 0, damage: dmg }])
+          await this.br.animatePlayerDamageImpact(dmg)
+          this.inject.recordNotice(`레바테인: 보스 반격 — 피해 ${dmg}`, 'hurt')
+          this.inject.render()
+          this.inject.applyAnomalyHealthLoss()
+        } else if (state.def.specialEnemyKind === 'waxKnight') {
+          if (await this.resolveWaxKnightCardTurn(state.card.id)) return
+        } else if (state.def.specialEnemyKind === 'waxSculptor') {
+          // handleSculptorPhaseShift 대신 내부 로직만 호출 (setInputLocked는 호출부가 관리)
+          await this.performSummonToBack()
+        } else if (state.def.specialEnemyKind === 'waxWitch') {
+          if (state.witchPage >= 2) {
+            if (await this.resolveWaxWitchPageTwoTurn(state.card.id)) return
+          } else {
+            const dmg = state.def.attack
+            character.takeDamage(dmg)
+            await this.br.animateEnemyAttacks([{ cardId: state.card.id, cardName: state.card.name, laneIndex: 0, damage: dmg }])
+            await this.br.animatePlayerDamageImpact(dmg)
+            this.inject.recordNotice(`레바테인: 보스 반격 — 피해 ${dmg}`, 'hurt')
+            this.inject.render()
+            this.inject.applyAnomalyHealthLoss()
+          }
+        }
+
+        if (!character.isAlive() || character.authoritySurvivePending) {
+          await this.inject.handlePlayerDeath()
+          return
+        }
+      }
+
+      this.inject.render()
+    }
+  }
+
   /** 손패 효과가 소환 적을 제거한 뒤, lanes에 남지 않은 적을 집합에서 제거하고
    *  모두 사라졌으면 조각사를 전방으로 복귀시킨다. */
   private async reconcileSummonedEnemiesAfterHand(): Promise<void> {

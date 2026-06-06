@@ -63,6 +63,10 @@ export interface HandUseResult {
   selfDamage?: number
   /** 탐욕의 동전: 획득 불빛 base값. UI(index.ts)가 인플레이션을 적용해 합산한다. */
   lightGained?: number
+  /** 레바테인: index.ts가 피해 적용 전에 runSimulatedEnemyPhase()를 이 횟수만큼 실행한다. */
+  simulatedBattlePhases?: number
+  /** 레바테인: 시뮬레이션 이후 대상 카드에 입힐 피해량. index.ts가 takeDamage로 적용한다. */
+  levateainDamage?: number
 }
 
 export interface RecipeFireResult {
@@ -214,6 +218,13 @@ export class HandSystem {
       // 자해 피해와 불빛은 UI가 애니메이션과 함께 적용한다(모델은 여기서 건드리지 않음).
       selfDamage: HandSystem.selfDamageFor(card.defId, card.merged === true),
       lightGained: card.defId === 'greed-coin' ? HandSystem.GREED_COIN_LIGHT_BASE : 0,
+      // 레바테인: 시뮬레이션 페이즈 수 + % 피해량을 index.ts에 전달해 적 행동 뒤 적용하게 한다.
+      simulatedBattlePhases: card.defId === 'levatein' ? (card.merged ? 1 : 2) : undefined,
+      levateainDamage: card.defId === 'levatein'
+        ? (card.merged
+          ? Math.max(15, Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.45))
+          : Math.max(10, Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.30)))
+        : undefined,
     }
   }
 
@@ -448,6 +459,9 @@ export class HandSystem {
       case 'sacrifice-candle':
         // 자해 2는 use()의 selfDamage로 처리. 여기서는 선택 적 피해만 적용한다.
         return HandSystem.damageTargetEnemy(gs, target, 5 + bonus)
+      case 'levatein':
+        // 적 행동 시뮬레이션(2회)과 %HP 피해는 useSingle 반환값으로 index.ts에 위임한다.
+        return '레바테인: 적 행동 2회 시뮬레이션 후 최대체력 30% 피해'
       case 'firework':
         return HandSystem.distributeDamageAmongEnemies(gs, 4 + bonus)
       case 'book-of-flames':
@@ -502,6 +516,9 @@ export class HandSystem {
       case 'sacrifice-candle':
         // 트리플은 자해 없이 더 큰 피해만 입힌다.
         return HandSystem.damageTargetEnemy(gs, target, 7 + bonus)
+      case 'levatein':
+        // 적 행동 시뮬레이션(1회)과 %HP 피해는 useSingle 반환값으로 index.ts에 위임한다.
+        return '레바테인: 적 행동 1회 시뮬레이션 후 최대체력 45% 피해'
       case 'firework':
         return HandSystem.distributeDamageAmongEnemies(gs, 15 + bonus)
       case 'book-of-flames':

@@ -90,6 +90,7 @@ import handCard009Url from '../assets/sprites/handcard_009.webp'
 import handCard010Url from '../assets/sprites/handcard_010.webp'
 import handCard011Url from '../assets/sprites/handcard_011.webp'
 import handCard012Url from '../assets/sprites/handcard_012.webp'
+import handCard013Url from '../assets/sprites/handcard_013.webp'
 import handCard014Url from '../assets/sprites/handcard_014.webp'
 import handCard015Url from '../assets/sprites/handcard_015.webp'
 import relic001Url from '../assets/sprites/relics_001.webp'
@@ -251,6 +252,7 @@ export const SpriteUrls = {
     coin: handCard010Url,
     'greed-coin': handCard011Url,
     'sacrifice-candle': handCard012Url,
+    levatein: handCard013Url,
     firework: handCard014Url,
     'book-of-flames': handCard015Url,
   } satisfies Record<HandCardId, string>,

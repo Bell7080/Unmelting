@@ -2779,6 +2779,46 @@ async function applyHandSingle(
   // UI-facing preparation refresh: removed cards are compacted and replaced in
   // one beat so the rail never displays holes before input unlocks.
   await runPreparationRefreshAfterFieldEffects()
+
+  // 레바테인: 전투 페이즈 시뮬레이션(또는 보스 주기 전진) 후 최대체력 % 피해를 적용한다.
+  // 시뮬레이션 중 플레이어/보스가 쓰러지면 조기 종료하고 후처리는 기존 경로에 맡긴다.
+  if (result.simulatedBattlePhases && result.simulatedBattlePhases > 0) {
+    if (gameState.bossBattleActive && bossController.eventState) {
+      await bossController.advanceBossTurnsForLevatein(result.simulatedBattlePhases)
+    } else if (!gameState.bossBattleActive) {
+      for (let phase = 0; phase < result.simulatedBattlePhases; phase++) {
+        if (gameState.isGameOver) break
+        await runSimulatedEnemyPhase()
+      }
+    }
+    // 시뮬레이션 이후 대상 카드가 아직 살아있으면 % 피해를 입힌다.
+    const levDmg = result.levateainDamage ?? 0
+    if (levDmg > 0 && !gameState.isGameOver && target && target.card.getHealth() > 0) {
+      const beforeLevHealth = snapshotFieldHealthState()
+      const beforeBossHp = bossController.eventState?.card.getHealth() ?? 0
+      target.card.takeDamage(levDmg)
+      if (target.card.getHealth() <= 0 && target.card.type !== CardType.BOSS) {
+        gameState.removeCardFromRow(target.card, target.distance)
+      }
+      // 보스 밀랍 방패 처리
+      if (bossController.eventState) {
+        bossController.absorbExternalBossDamageWithShield(beforeBossHp)
+        bossController.clampWaxWitchExternalDamageToPageFloor()
+        boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))
+      }
+      const levDamageLosses = diffFieldHealthLosses(beforeLevHealth)
+      await boardRenderer.animateDamageNumbersById(levDamageLosses)
+      if (levDamageLosses.length > 0) {
+        await awardScoreForRemovedCards(
+          target.card.getHealth() <= 0 && target.card.type !== CardType.BOSS
+            ? [{ cardId: target.card.id, type: target.card.type }]
+            : [],
+          snapshotFieldCardsById()
+        )
+      }
+    }
+  }
+
   // 손패 카드(조합식 포함)로 보스 HP가 깎였다면 HP 3 임계 손패 트리거 + 격파 검사.
   // 클릭 데미지·손패 데미지·조합식 데미지 어느 경로든 동일한 후처리가 적용된다.
   await bossController.applyPostHandEffect()
@@ -2798,6 +2838,56 @@ async function resolveBossDebuffImmunityOnWaxUse(usedDefId: string | null): Prom
   if (hadFrozen) boss.clearFrozen()
   await boardRenderer.playBossFreezeResist(boss.id)
   recordNotice('보스가 디버프를 저항하며 굳음을 즉시 떨쳐냈다', 'info')
+}
+
+/** 레바테인 전용: 적 공격/폭탄/꽃/보물 처리를 1회 실행하되 실제 턴 카운터를 올리지 않는다. */
+async function runSimulatedEnemyPhase(): Promise<void> {
+  const beforeTrapHealth = snapshotFieldHealthState()
+  const hits = turnManager.runEnemyPhase()
+  const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
+  const bombExplosions = turnManager.applyBombExplosions()
+  const flowerChanges = turnManager.applyFlowerGrowthAndWilt(cardSpawner)
+
+  const eventAnimations: Promise<void>[] = []
+  if (hits.length > 0) eventAnimations.push(boardRenderer.animateEnemyAttacks(hits))
+  if (treasureChanges.length > 0) eventAnimations.push(boardRenderer.animateTreasureChanges(treasureChanges))
+  if (bombExplosions.length > 0) {
+    const playerDamageTotal = bombExplosions.reduce((s, e) => s + e.playerDamage, 0)
+    const damageLosses = diffFieldHealthLosses(beforeTrapHealth)
+    for (const exp of bombExplosions) recordNotice(`${exp.cardName} 폭발! -${exp.playerDamage}`, 'hurt')
+    eventAnimations.push(
+      (async () => {
+        await boardRenderer.animateBombExplosion(bombExplosions)
+        await Promise.all([
+          boardRenderer.animateDamageNumbersById(damageLosses),
+          playerDamageTotal > 0
+            ? boardRenderer.animateDamageImpactOnElement(
+                boardRenderer.findCardElement('__player__') ?? document.querySelector<HTMLElement>('.player-card'),
+                playerDamageTotal
+              )
+            : Promise.resolve(),
+        ])
+      })()
+    )
+  }
+  if (flowerChanges.growths.length > 0) eventAnimations.push(boardRenderer.animateFlowerGrowth(flowerChanges.growths))
+  if (flowerChanges.wilts.length > 0) eventAnimations.push(boardRenderer.animateFlowerWilts(flowerChanges.wilts))
+  if (eventAnimations.length > 0) await Promise.all(eventAnimations)
+
+  const totalDamage = hits.reduce((acc, h) => acc + h.damage, 0)
+  if (totalDamage > 0) {
+    recordNotice(`레바테인: 적 행동 (피해 ${totalDamage})`, 'hurt')
+    render()
+    await boardRenderer.animateDamageImpactOnElement(
+      boardRenderer.findCardElement('__player__') ?? document.querySelector<HTMLElement>('.player-card'),
+      totalDamage
+    )
+  }
+  applyAnomalyHealthLoss()
+
+  if (!gameState.character.isAlive() && !gameState.character.authoritySurvivePending) {
+    gameState.endGame('character_defeated')
+  }
 }
 
 async function runCleanupPhase(advanceTurn: boolean): Promise<void> {

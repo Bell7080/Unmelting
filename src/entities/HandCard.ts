@@ -28,6 +28,7 @@ export type HandCardId =
   | 'coin'
   | 'greed-coin'
   | 'sacrifice-candle'
+  | 'levatein'
   | 'firework'
   | 'book-of-flames'
 

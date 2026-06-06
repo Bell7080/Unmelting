@@ -196,6 +196,23 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: false,
   },
+  // 레바테인: 사용 전 N회 적 행동을 먼저 실행(턴 카운터 비소모), 이후 선택 적의 최대 체력 %를 피해로 입힌다.
+  // 보스 전투 중에는 공격 주기 카운터를 N 증가시켜 주기 도달 시 보스 행동이 즉시 발동한다.
+  levatein: {
+    id: 'levatein',
+    name: '레바테인',
+    category: 'attack',
+    description: '적 행동 2회 실행 (턴 미소모) 후, 선택 적 최대체력 30%(최소 10) 피해',
+    tripleDescription: '적 행동 1회 실행 (턴 미소모) 후, 선택 적 최대체력 45%(최소 15) 피해',
+    targeting: {
+      base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
+      triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
+    },
+    dropWeight: 4,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
   // 폭죽: 필드의 적들에게 총 피해를 무작위로 쪼개 분배한다(대상 지정 없음).
   firework: {
     id: 'firework',
