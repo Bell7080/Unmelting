@@ -296,7 +296,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'padlock',
     name: '자물쇠',
     rarity: 'epic',
-    effect: '보물 상자 등장 확률 {{spawn}}. 미믹 처치 시 불빛 +25%, 손패 +1.',
+    effect: '보물 상자 등장 확률 {{spawn}}. 미믹이 주는 불빛 +25%, 손패 +1.',
     flavor: '잠긴 것은 더 값지다.',
     basePrice: 1050,
     spawnEffect: { type: 'treasure', delta: -5 },
@@ -323,7 +323,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: '황금 열쇠',
     rarity: 'unique',
     // 황금 상자는 일반 상자보다 카드와 불빛을 2배 주는 희귀 보물칸.
-    effect: '보물 스폰 중 2% 확률이 황금 상자로 대체됩니다.',
+    effect: '보물 스폰 중 10% 확률이 황금 상자로 대체됩니다.',
     flavor: '어떤 자물쇠도 이 열쇠를 거부하지 못한다.',
     basePrice: 1400,
   },

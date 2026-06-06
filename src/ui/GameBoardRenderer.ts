@@ -3007,8 +3007,13 @@ export class GameBoardRenderer {
 
   private renderCompendiumTreasures(): string {
     const seen = this.currentGameState?.encounteredCardNames ?? new Set<string>()
+    const char = this.currentGameState?.getCharacter()
+    // 개봉식 유물 보유 시 일반 상자 사라짐 30→25%, 미믹화 확률은 역산으로 10→15%.
+    const hasCeremony = char?.relics.includes('opening-ceremony') ?? false
+    const disappearPct = hasCeremony ? 25 : 30
+    const mimicPct = hasCeremony ? 15 : 10
 
-    // 일반 상자: 드롭 수 1/3/5, 50% 사라짐+10% 미믹화.
+    // 일반 상자: 드롭 수 1/3/5, 기본 30% 사라짐 + 10% 미믹화.
     const CHEST_DROPS = [1, 3, 5] as const
     const chestSpec: Array<{ span: 1 | 2 | 3; name: string; sprite: string }> = [
       { span: 1, name: '작은 상자',  sprite: SpriteUrls.chestSmall  },
@@ -3025,8 +3030,8 @@ export class GameBoardRenderer {
           chips: known
             ? [
                 { label: '드롭 ', value: `손패 ${CHEST_DROPS[c.span - 1]}장`, tone: 'gold' },
-                { label: '사라짐 ', value: '50%/턴', tone: 'plain' },
-                { label: '미믹화 ', value: '10%/턴', tone: 'spore' },
+                { label: '사라짐 ', value: `${disappearPct}%`, tone: 'plain' },
+                { label: '미믹화 ', value: `${mimicPct}%`, tone: 'spore' },
               ]
             : [],
           extraClass: known ? undefined : 'codex-tile--unknown',
@@ -3051,7 +3056,7 @@ export class GameBoardRenderer {
           chips: known
             ? [
                 { label: '드롭 ', value: `손패 ${GOLDEN_DROPS[c.span - 1]}장`, tone: 'gold' },
-                { label: '사라짐 ', value: '50%/턴', tone: 'plain' },
+                { label: '사라짐 ', value: '50%', tone: 'plain' },
                 { label: '불빛 ', value: '×2', tone: 'gold' },
               ]
             : [],
@@ -3060,11 +3065,15 @@ export class GameBoardRenderer {
       })
       .join('')
 
+    const goldenKeyNote = char?.relics.includes('golden-key')
+      ? '황금 열쇠 유물 보유 중 · 보물상자의 10%가 황금 상자로 교체. 미믹화 없음.'
+      : '황금 열쇠 유물 보유 시 등장. 미믹화 없음.'
+
     return `
       <h3 class="compendium-section">일반 상자</h3>
       <div class="codex-tile-grid">${normalTiles}</div>
       <h3 class="compendium-section">황금 상자</h3>
-      <p class="compendium-section-blurb">황금 열쇠 유물 보유 시 등장. 미믹화 없음.</p>
+      <p class="compendium-section-blurb">${goldenKeyNote}</p>
       <div class="codex-tile-grid">${goldenTiles}</div>
     `
   }

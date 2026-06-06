@@ -1101,8 +1101,8 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
     cardSpawner.adjustRelicSpawn('enemy', -5)
   }
   if (id === 'golden-key') {
-    // 보물 스폰 중 가중치 2만큼 황금 상자로 대체한다.
-    cardSpawner.adjustGoldenChestWeight(0.02)
+    // 보물 스폰 중 10% 확률로 황금 상자로 대체한다.
+    cardSpawner.adjustGoldenChestWeight(0.1)
   }
 }
 
