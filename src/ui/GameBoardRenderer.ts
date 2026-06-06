@@ -3008,10 +3008,10 @@ export class GameBoardRenderer {
   private renderCompendiumTreasures(): string {
     const seen = this.currentGameState?.encounteredCardNames ?? new Set<string>()
     const char = this.currentGameState?.getCharacter()
-    // 개봉식 유물 보유 시 일반 상자 사라짐 30→25%, 미믹화 확률은 역산으로 10→15%.
+    // 개봉식 유물 보유 시 사라짐 50→40%, 미믹화 10% 고정.
     const hasCeremony = char?.relics.includes('opening-ceremony') ?? false
-    const disappearPct = hasCeremony ? 25 : 30
-    const mimicPct = hasCeremony ? 15 : 10
+    const disappearPct = hasCeremony ? 40 : 50
+    const mimicPct = 10
 
     // 일반 상자: 드롭 수 1/3/5, 기본 30% 사라짐 + 10% 미믹화.
     const CHEST_DROPS = [1, 3, 5] as const

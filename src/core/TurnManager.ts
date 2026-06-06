@@ -167,8 +167,8 @@ export class TurnManager {
         continue
       }
 
-      // 개봉식: 일반 상자 사라질 확률을 30% → 25%로 낮춘다.
-      const disappearThreshold = this.gameState.character.hasRelic('opening-ceremony') ? 0.25 : 0.30
+      // 개봉식: 사라질 확률 50% → 40% (생존 +10%). 미믹화 10% 고정.
+      const disappearThreshold = this.gameState.character.hasRelic('opening-ceremony') ? 0.40 : 0.50
       if (roll < disappearThreshold) {
         this.gameState.removeCardFromRow(card, d)
         changes.push({
@@ -177,7 +177,7 @@ export class TurnManager {
           outcome: 'disappeared',
           cardName: card.name,
         })
-      } else if (roll < 0.4) {
+      } else if (roll < disappearThreshold + 0.10) {
         const occupiedLanes = this.gameState.getGroupLanes(i, d)
         const mimic = spawner.spawnMimic(card.groupCount)
         this.gameState.removeCardFromRow(card, d)

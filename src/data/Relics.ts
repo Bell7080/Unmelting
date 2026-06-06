@@ -288,7 +288,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'opening-ceremony',
     name: '개봉식',
     rarity: 'common',
-    effect: '보물 상자가 사라질 확률 5% 감소',
+    effect: '보물 상자 생존 확률 +10%',
     flavor: '뚜껑을 열기 전까지는 사라지지 않는다.',
     basePrice: 450,
   },

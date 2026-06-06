@@ -15,11 +15,11 @@ describe('TurnManager treasure volatility', () => {
     vi.restoreAllMocks()
   })
 
-  it('uses a 30% disappear window for active-row treasures', () => {
+  it('uses a 50% disappear window for active-row treasures', () => {
     const gameState = new GameState()
     const turnManager = new TurnManager(gameState)
     placeTreasure(gameState)
-    vi.spyOn(Math, 'random').mockReturnValue(0.29)
+    vi.spyOn(Math, 'random').mockReturnValue(0.49)
 
     const changes = turnManager.applyTreasureVolatility(new CardSpawner())
 
@@ -27,7 +27,7 @@ describe('TurnManager treasure volatility', () => {
     expect(gameState.lanes[0].getCardAtDistance(0)).toBeNull()
   })
 
-  it('keeps treasures in place when they hit the 60% safe window', () => {
+  it('keeps treasures in place when they hit the 40% safe window', () => {
     const gameState = new GameState()
     const turnManager = new TurnManager(gameState)
     const treasure = placeTreasure(gameState)
@@ -43,7 +43,7 @@ describe('TurnManager treasure volatility', () => {
     const gameState = new GameState()
     const turnManager = new TurnManager(gameState)
     placeTreasure(gameState)
-    vi.spyOn(Math, 'random').mockReturnValue(0.35)
+    vi.spyOn(Math, 'random').mockReturnValue(0.55)
 
     const changes = turnManager.applyTreasureVolatility(new CardSpawner())
     const mimic = gameState.lanes[0].getCardAtDistance(0)
@@ -64,7 +64,7 @@ describe('TurnManager treasure volatility', () => {
     gameState.lanes[0].setCardAtDistance(0, left)
     gameState.lanes[1].setCardAtDistance(0, right)
     gameState.regroupAllRows()
-    vi.spyOn(Math, 'random').mockReturnValue(0.35)
+    vi.spyOn(Math, 'random').mockReturnValue(0.55)
 
     turnManager.applyTreasureVolatility(new CardSpawner())
     const mimic = gameState.lanes[0].getCardAtDistance(0)
@@ -86,7 +86,7 @@ describe('TurnManager treasure volatility', () => {
       gameState.lanes[laneIndex].setCardAtDistance(0, treasure)
     )
     gameState.regroupAllRows()
-    vi.spyOn(Math, 'random').mockReturnValue(0.35)
+    vi.spyOn(Math, 'random').mockReturnValue(0.55)
 
     turnManager.applyTreasureVolatility(new CardSpawner())
     const mimic = gameState.lanes[0].getCardAtDistance(0)
@@ -107,7 +107,7 @@ describe('TurnManager treasure volatility', () => {
     gameState.lanes[0].setCardAtDistance(0, left)
     gameState.lanes[1].setCardAtDistance(0, right)
     gameState.regroupAllRows()
-    vi.spyOn(Math, 'random').mockReturnValue(0.29)
+    vi.spyOn(Math, 'random').mockReturnValue(0.49)
 
     const changes = turnManager.applyTreasureVolatility(new CardSpawner())
 
