@@ -88,6 +88,7 @@ import handCard007Url from '../assets/sprites/handcard_007.webp'
 import handCard008Url from '../assets/sprites/handcard_008.webp'
 import handCard009Url from '../assets/sprites/handcard_009.webp'
 import handCard010Url from '../assets/sprites/handcard_010.webp'
+import handCard011Url from '../assets/sprites/handcard_011.webp'
 import relic001Url from '../assets/sprites/relics_001.webp'
 import relic002Url from '../assets/sprites/relics_002.webp'
 import relic003Url from '../assets/sprites/relics_003.webp'
@@ -245,8 +246,8 @@ export const SpriteUrls = {
     chitin: handCard008Url,
     card: handCard009Url,
     coin: handCard010Url,
-    // 탐욕의 동전은 동전 일러스트를 재사용한다(전용 에셋 없음).
-    'greed-coin': handCard010Url,
+    // 탐욕의 동전 전용 일러스트(handcard_011). 작업 전까지는 동전 아트를 복사한 플레이스홀더.
+    'greed-coin': handCard011Url,
   } satisfies Record<HandCardId, string>,
   /** Shop card-pack illustrations. Index follows the pack pickers in the
    *  shop bottom row: basic (자원) / upgrade (강화) / unlock (해금). */
