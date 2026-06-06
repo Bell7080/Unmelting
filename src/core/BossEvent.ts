@@ -17,6 +17,7 @@ import { SquareBurst } from '@ui/SquareBurst'
 import type { SpriteUrls as SpriteUrlsType } from '@ui/Sprites'
 import type { SpeechBubble } from '@ui/SpeechBubble'
 import { getHandCardDef } from '@data/HandCards'
+import type { HandCard } from '@entities/HandCard'
 import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
 import { sampleWithoutReplacement } from '@core/Sampling'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
@@ -32,8 +33,10 @@ export interface BossDef {
   maxHp: number
   attack: number
   attackInterval: number
-  /** HP가 이 배수 이하가 될 때마다 손패 1장 지급 */
+  /** HP를 이 값만큼 잃을 때마다 플레이어에게 손패 1장 지급(30/60/90/100F 공통). */
   handGiftStep: number
+  /** 보스 손패 효과(방패/체력/피해) 공통 수치. waxKnight/waxWitch가 사용한다. */
+  handCardAmount: number
   /** CSS boss-kind-* 마커 — Rail CSS 레이아웃과 연동 */
   specialEnemyKind: 'waxArmy' | 'waxKnight' | 'waxSculptor' | 'waxWitch'
   /** Card.groupCount 표시값 (점수·뱃지용). 실제 점유 행 수와 별도. */
@@ -114,8 +117,6 @@ export interface BossInjected {
 // ---- Controller ------------------------------------------------------------
 
 export class BossEventController {
-  /** 불씨 기사단장 손패(방패/체력/피해) 공통 수치. 효과·표기·이펙트가 모두 이 값을 따른다. */
-  private static readonly WAX_KNIGHT_CARD_AMOUNT = 5
   /** index.ts에서 `bossEventState` 대신 이 프로퍼티를 참조한다. */
   eventState: BossEventState | null = null
   /** index.ts에서 `bossRewardState` 대신 이 프로퍼티를 참조한다. */
@@ -142,10 +143,11 @@ export class BossEventController {
     // 플레이어의 격앙된 응답("네 저택이라고…?")이 이 빼앗긴 과거를 암시한다.
     const def: BossDef = {
       name: '양초 백작',
-      maxHp: 50,
-      attack: 5,
-      attackInterval: 3,
+      maxHp: 45,
+      attack: 3,
+      attackInterval: 2,
       handGiftStep: 10,
+      handCardAmount: 0,   // 30F는 전용 손패 효과를 쓰지 않는다(탐욕 살포로 대체).
       specialEnemyKind: 'waxArmy',
       groupCount: 3,
       occupiedDistRows: 1,   // CSS가 dist-0을 시각적으로 3행으로 확장, 데이터는 dist-0만
@@ -157,7 +159,10 @@ export class BossEventController {
       introBubbleMs: 4160,
       // 타자기(13자×70ms≈910ms) + 읽기(1800ms) + 퇴장(400ms)
       playerBubbleMs: 2800,
-      trait: '보스 체력이 10 닳을 때마다 플레이어에게 랜덤 손패 1장을 지급한다.',
+      trait: [
+        '호화로운 탐욕을 선물한다 — 공격 주기마다 손패에 카드 2~4장을 흩뿌린다.',
+        '그중 일부는 쓰면 자신을 다치게 하는 「탐욕의 동전」이다.',
+      ].join('\n'),
       kicker: '탐욕의 대가',
     }
     await this.runBossEvent(def)
@@ -170,11 +175,12 @@ export class BossEventController {
     // 응답으로만 그 정체를 암시한다.
     const def: BossDef = {
       name: '불씨 기사단장',
-      maxHp: 80,
-      attack: 7,
-      attackInterval: 3,
-      // 일정 체력마다 손패 지급은 30F 전용 메커니즘이므로 60/90F는 0으로 비활성화한다.
-      handGiftStep: 0,
+      maxHp: 60,
+      attack: 5,
+      attackInterval: 2,
+      // 보스 체력 10 손실마다 손패 1장 지급(30/60/90/100F 공통).
+      handGiftStep: 10,
+      handCardAmount: 3,
       specialEnemyKind: 'waxKnight',
       groupCount: 3,
       occupiedDistRows: 1,   // 30F처럼 데이터는 dist-0 한 줄, CSS가 3×3 중앙 보스로 확장한다.
@@ -187,7 +193,7 @@ export class BossEventController {
       introBubbleMs: 3220,
       // 타자기(15자×70ms≈1050ms) + 읽기(1900ms) + 퇴장(400ms)
       playerBubbleMs: 3350,
-      trait: '3턴마다 기사단장의 손패 2장 발동.',
+      trait: '2턴마다 기사단장의 손패 2장 발동.',
       kicker: '저택의 방패',
     }
     await this.runBossEvent(def)
@@ -200,11 +206,12 @@ export class BossEventController {
     // ("제피르의 꼭두각시")이 그 복선을 미리 깐다.
     const def: BossDef = {
       name: '밀랍 조각사',
-      maxHp: 120,
-      attack: 10,
+      maxHp: 100,
+      attack: 7,
       attackInterval: 3,
-      // 일정 체력마다 손패 지급은 30F 전용 메커니즘이므로 60/90F는 0으로 비활성화한다.
-      handGiftStep: 0,
+      // 보스 체력 10 손실마다 손패 1장 지급(30/60/90/100F 공통).
+      handGiftStep: 10,
+      handCardAmount: 0,   // 조각사는 전용 손패 효과를 쓰지 않는다.
       specialEnemyKind: 'waxSculptor',
       groupCount: 2,
       occupiedDistRows: 2,   // dist-0 + dist-1 두 행에 실제로 카드 박음
@@ -232,7 +239,9 @@ export class BossEventController {
       maxHp: 210,
       attack: 15,
       attackInterval: 2,
-      handGiftStep: 0,
+      // 보스 체력 10 손실마다 손패 1장 지급(30/60/90/100F 공통).
+      handGiftStep: 10,
+      handCardAmount: 5,
       specialEnemyKind: 'waxWitch',
       groupCount: 3,
       occupiedDistRows: 1,
@@ -329,9 +338,13 @@ export class BossEventController {
         return
       }
       if (state.def.specialEnemyKind === 'waxKnight') {
-        // 불씨 기사단장은 기본 타격 뒤 플레이어 손패처럼 2장의 효과 카드를 연속 사용한다.
+        // 불씨 기사단장은 특징(손패 2장) 연출 후 기본 타격 순으로 행동한다.
         if (await this.resolveWaxKnightCardTurn(card.id)) return
       } else {
+        // 30F 양초 백작: 특징 연출(탐욕의 손패 살포)을 먼저 보여준 뒤 보스가 타격한다.
+        if (state.def.specialEnemyKind === 'waxArmy') {
+          await this.scatterGreedCards(card.id)
+        }
         character.takeDamage(card.getDamage())
         await this.br.animateEnemyAttacks([
           { cardId: card.id, cardName: card.name, laneIndex: 0, damage: card.getDamage() },
@@ -595,6 +608,47 @@ export class BossEventController {
     this.inject.render()
     await this.br.animateResourceTrailFromCard(bossCardId, 'hand', 1, 'hand-recovery')
   }
+
+  /** 30F 양초 백작 특징: 공격 주기마다 손패에 카드 2~4장을 흩뿌린다.
+   *  2장=탐욕동전1+랜덤1, 3장=탐욕동전1~2+랜덤(합3), 4장=탐욕동전2+랜덤2.
+   *  탐욕의 동전은 쓰면 자신을 다치게 하는 찌꺼기 카드라 손패를 갉아먹는다. */
+  private async scatterGreedCards(bossCardId: string): Promise<void> {
+    const character = this.gs.character
+    const count = 2 + Math.floor(Math.random() * 3) // 2~4
+    let greedCount: number
+    if (count === 2) greedCount = 1
+    else if (count === 4) greedCount = 2
+    else greedCount = 1 + Math.floor(Math.random() * 2) // 3장은 탐욕동전 1 또는 2
+    const randomCount = count - greedCount
+
+    const cards: HandCard[] = []
+    for (let i = 0; i < greedCount; i++) cards.push(DropSystem.makeCard('greed-coin'))
+    for (let i = 0; i < randomCount; i++) cards.push(DropSystem.generateDrop('enemy-kill'))
+    // 탐욕 동전이 항상 같은 자리에 몰리지 않도록 순서를 섞는다.
+    for (let i = cards.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[cards[i], cards[j]] = [cards[j], cards[i]]
+    }
+
+    const addedUids: string[] = []
+    for (const c of cards) {
+      if (character.addHandCard(c)) addedUids.push(c.uid)
+    }
+    if (addedUids.length === 0) {
+      this.inject.recordNotice('양초 백작이 탐욕을 뿌렸지만 손패가 가득 차 있었다', 'info')
+      return
+    }
+    this.inject.render()
+    const slotIndices = addedUids
+      .map((uid) => character.hand.findIndex((h) => h?.uid === uid))
+      .filter((idx) => idx >= 0)
+    const greedAdded = addedUids.filter((uid) => uid.startsWith('greed-coin')).length
+    this.inject.recordNotice(
+      `양초 백작이 호화로운 탐욕을 뿌렸다 — 손패 ${addedUids.length}장(탐욕의 동전 ${greedAdded})`,
+      'hurt'
+    )
+    await this.br.animateBossScatterToHandSlots(bossCardId, slotIndices)
+  }
   /** 100F 마녀의 현재 페이지 HP 하한. 1페이지 140, 2페이지 70, 그 외(마녀 아님/3페이지)는 0. */
   private waxWitchPageFloor(): number {
     const state = this.eventState
@@ -725,7 +779,7 @@ export class BossEventController {
   private async resolveWaxWitchPageTwoTurn(bossCardId: string): Promise<boolean> {
     const state = this.eventState!
     const character = this.gs.character
-    const amount = BossEventController.WAX_KNIGHT_CARD_AMOUNT
+    const amount = state.def.handCardAmount
     const effects: WaxKnightCardEffect[] = Array.from({ length: 4 }, () => {
       const pool: WaxKnightCardEffect[] = ['shield', 'heal', 'strike']
       return pool[Math.floor(Math.random() * pool.length)]
@@ -765,23 +819,15 @@ export class BossEventController {
 
   // ---- waxKnight 전용 카드 사용 메커니즘 ------------------------------------
 
-  /** 불씨 기사단장의 3턴 주기 행동: 기본 타격 + 랜덤 카드 2장 사용.
+  /** 불씨 기사단장의 주기 행동: 특징(손패 2장 발동)을 먼저 연출한 뒤 기본 타격.
    *  품격있는 대처 반격으로 보스가 쓰러지면 true를 반환한다. */
   private async resolveWaxKnightCardTurn(bossCardId: string): Promise<boolean> {
     const state = this.eventState!
     const character = this.gs.character
 
-    character.takeDamage(state.def.attack)
-    await this.br.animateEnemyAttacks([
-      { cardId: bossCardId, cardName: state.card.name, laneIndex: 0, damage: state.def.attack },
-    ])
-    await this.br.animatePlayerDamageImpact(state.def.attack)
-    this.inject.recordNotice(`불씨 기사단장의 돌진! 플레이어가 ${state.def.attack} 피해를 받았다`, 'hurt')
-    if (!character.isAlive() || character.authoritySurvivePending) return false
-
+    // 1) 특징 연출: 손패 2장을 한 번에 펼쳐 빠르게 순차 발동한다(이펙트 목적지는 살아 있는 보스 셀 기준).
     const cards = sampleWithoutReplacement<WaxKnightCardEffect>(['shield', 'heal', 'strike'], 2)
-    const amount = BossEventController.WAX_KNIGHT_CARD_AMOUNT
-    // 100F 마녀처럼 손패 2장을 한 번에 펼쳐 빠르게 순차 발동한다(이펙트 목적지는 살아 있는 보스 셀 기준).
+    const amount = state.def.handCardAmount
     const applyKnightCardEffect = async (effect: WaxKnightCardEffect): Promise<void> => {
       if (effect === 'shield') {
         state.bossShield += amount
@@ -798,6 +844,15 @@ export class BossEventController {
       this.inject.render()
     }
     await this.br.animateBossHandCombo(bossCardId, cards, [], amount, applyKnightCardEffect)
+    if (!character.isAlive() || character.authoritySurvivePending) return false
+
+    // 2) 특징 연출이 끝난 뒤 보스가 플레이어를 타격한다.
+    character.takeDamage(state.def.attack)
+    await this.br.animateEnemyAttacks([
+      { cardId: bossCardId, cardName: state.card.name, laneIndex: 0, damage: state.def.attack },
+    ])
+    await this.br.animatePlayerDamageImpact(state.def.attack)
+    this.inject.recordNotice(`불씨 기사단장의 돌진! 플레이어가 ${state.def.attack} 피해를 받았다`, 'hurt')
     if (!character.isAlive() || character.authoritySurvivePending) return false
 
     // 변칙: 기사단장 한 턴에 잃은 체력 10마다 불씨 +1.

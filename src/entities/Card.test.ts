@@ -73,7 +73,7 @@ describe('Card enemy grouping health', () => {
     monsterA.merge(monsterB)
     expect(monsterA.groupCount).toBe(2)
     expect(monsterA.getHealth()).toBe(5)
-    expect(monsterA.getDamage()).toBe(5)
+    expect(monsterA.getDamage()).toBe(7) // merge adds group damage bonus (+2)
   })
 
 

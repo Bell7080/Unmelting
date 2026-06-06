@@ -31,6 +31,9 @@ export const RARITY_CLASS_BY_TIER: Record<CardRarity, string> = {
 export const HAND_CARD_RARITY: Record<HandCardId, CardRarity> = {
   'wax-drop': 'common', candle: 'common', ember: 'rare', key: 'rare', wax: 'epic',
   match: 'common', 'holy-water': 'epic', chitin: 'rare', card: 'legendary', coin: 'common',
+  // 탐욕의 동전은 보스 전용 찌꺼기 카드(상점/도감 풀에는 노출되지 않음).
+  'greed-coin': 'common',
+  'sacrifice-candle': 'rare', firework: 'rare', 'book-of-flames': 'epic',
 }
 
 /** Shop pack pool config moved to data so shop/free/pack roll tables are data-driven. */

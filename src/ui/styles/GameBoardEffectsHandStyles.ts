@@ -388,11 +388,11 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   overflow: hidden;
   gap: 1.5px;
 }
+/* 개별 카테고리 세그먼트 — flex 비율로 너비가 자동 결정된다 */
 .spawn-prob-seg {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 0;
   overflow: hidden;
   transition: flex 0.38s cubic-bezier(0.22, 0.61, 0.36, 1);
   cursor: default;

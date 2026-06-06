@@ -71,10 +71,10 @@ describe('EmberSystem spawn weights', () => {
     const brightBuckets = EmberSystem.getSpawnBuckets('bright')
     const brightWeights = EmberSystem.getSpawnWeights('bright')
 
-    expect(brightBuckets.webTrap).toBe(12)
+    expect(brightBuckets.webTrap).toBe(17)
     expect(brightBuckets.bombTrap).toBe(4)
     expect(brightBuckets.sporeTrap).toBe(4)
-    expect(brightBuckets.flower).toBe(8)
-    expect(brightWeights).toEqual({ enemy: 50, trap: 20, treasure: 22, flower: 8 })
+    expect(brightBuckets.flower).toBe(9)
+    expect(brightWeights).toEqual({ enemy: 44, trap: 25, treasure: 22, flower: 9 })
   })
 })

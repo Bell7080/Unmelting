@@ -2166,6 +2166,14 @@ export class GameBoardRenderer {
     })
   }
 
+  /** 새 런 시작 시 셔터 상태를 초기화한다. 보스전 중 게임오버 시 잠긴 상태가 잔류하는 걸 방지. */
+  resetShutter(): void {
+    this.shopShutterLocked = false
+    this.shopShutterSnapshot = null
+    document.querySelector<HTMLElement>('#game-board .rail-shutter')?.remove()
+    document.querySelector<HTMLElement>('#game-board .rail')?.classList.remove('is-shop-shuttered', 'is-shop-quaking')
+  }
+
   /** Altar EXIT keeps the shutter closed and shakes the full rail before boss entry.
    *  The boss tile drops directly onto the shuttered rail in the new flow, so the
    *  quake is the only beat between shop exit and boss arrival. */
@@ -2204,6 +2212,8 @@ export class GameBoardRenderer {
     const traitMarkup = traitLines.length > 1
       ? `<div class="boss-intro-overlay-trait"><strong>특징</strong><ul>${traitLines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul></div>`
       : `<p class="boss-intro-overlay-trait"><strong>특징</strong> · ${escapeHtml(traitLines[0] ?? '')}</p>`
+    // 모든 보스 공통 규칙 레이어 — 특징과 같은 양식이되 색감만 살짝 다른 차가운 촛불 톤.
+    const commonMarkup = `<p class="boss-intro-overlay-trait boss-intro-overlay-common"><strong>공통</strong> · 보스 체력 10 감소마다 손패 1장 획득</p>`
     const host = document.createElement('div')
     host.id = 'boss-intro-overlay'
     host.className = 'boss-intro-overlay'
@@ -2219,6 +2229,7 @@ export class GameBoardRenderer {
             <li><span class="boss-intro-overlay-stat-label">반격 주기</span><span class="boss-intro-overlay-stat-value">${opts.attackInterval}턴</span></li>
           </ul>
           <p class="boss-intro-overlay-desc">"${escapeHtml(opts.introBubble ?? '내 저택에 온 것을 환영하네, 위태로운 불씨여.')}"</p>
+          ${commonMarkup}
           ${traitMarkup}
         </div>
       </section>
@@ -3002,8 +3013,13 @@ export class GameBoardRenderer {
 
   private renderCompendiumTreasures(): string {
     const seen = this.currentGameState?.encounteredCardNames ?? new Set<string>()
+    const char = this.currentGameState?.getCharacter()
+    // 개봉식 유물 보유 시 사라짐 50→40%, 미믹화 10% 고정.
+    const hasCeremony = char?.relics.includes('opening-ceremony') ?? false
+    const disappearPct = hasCeremony ? 40 : 50
+    const mimicPct = 10
 
-    // 일반 상자: 드롭 수 1/3/5, 50% 사라짐+10% 미믹화.
+    // 일반 상자: 드롭 수 1/3/5, 기본 50% 사라짐 + 10% 미믹화.
     const CHEST_DROPS = [1, 3, 5] as const
     const chestSpec: Array<{ span: 1 | 2 | 3; name: string; sprite: string }> = [
       { span: 1, name: '작은 상자',  sprite: SpriteUrls.chestSmall  },
@@ -3020,8 +3036,8 @@ export class GameBoardRenderer {
           chips: known
             ? [
                 { label: '드롭 ', value: `손패 ${CHEST_DROPS[c.span - 1]}장`, tone: 'gold' },
-                { label: '사라짐 ', value: '50%/턴', tone: 'plain' },
-                { label: '미믹화 ', value: '10%/턴', tone: 'spore' },
+                { label: '사라짐 ', value: `${disappearPct}%`, tone: 'plain' },
+                { label: '미믹화 ', value: `${mimicPct}%`, tone: 'spore' },
               ]
             : [],
           extraClass: known ? undefined : 'codex-tile--unknown',
@@ -3046,7 +3062,7 @@ export class GameBoardRenderer {
           chips: known
             ? [
                 { label: '드롭 ', value: `손패 ${GOLDEN_DROPS[c.span - 1]}장`, tone: 'gold' },
-                { label: '사라짐 ', value: '50%/턴', tone: 'plain' },
+                { label: '사라짐 ', value: '50%', tone: 'plain' },
                 { label: '불빛 ', value: '×2', tone: 'gold' },
               ]
             : [],
@@ -3055,11 +3071,15 @@ export class GameBoardRenderer {
       })
       .join('')
 
+    const goldenKeyNote = char?.relics.includes('golden-key')
+      ? '황금 열쇠 유물 보유 중 · 보물상자의 10%가 황금 상자로 교체. 미믹화 없음.'
+      : '황금 열쇠 유물 보유 시 등장. 미믹화 없음.'
+
     return `
       <h3 class="compendium-section">일반 상자</h3>
       <div class="codex-tile-grid">${normalTiles}</div>
       <h3 class="compendium-section">황금 상자</h3>
-      <p class="compendium-section-blurb">황금 열쇠 유물 보유 시 등장. 미믹화 없음.</p>
+      <p class="compendium-section-blurb">${goldenKeyNote}</p>
       <div class="codex-tile-grid">${goldenTiles}</div>
     `
   }
@@ -3118,7 +3138,8 @@ export class GameBoardRenderer {
   }
 
   private renderCompendiumHand(): string {
-    const tiles = HAND_CARD_IDS.map((id) => {
+    // 보스 전용 찌꺼기 카드(탐욕의 동전)는 플레이어 덱 카드가 아니므로 손패 도감에서 숨긴다.
+    const tiles = HAND_CARD_IDS.filter((id) => HAND_CARD_DEFINITIONS[id].dropSource !== 'boss').map((id) => {
       const def = HAND_CARD_DEFINITIONS[id]
       const locked = this.lockedCardIds.has(id)
       const singleDesc = this.enhancedHandCardDescription(def.id, false)
@@ -4402,6 +4423,33 @@ export class GameBoardRenderer {
     ).finished
   }
 
+  /** 30F 양초 백작: 보스에서 황금빛 분수 블라스트가 폭죽처럼 터진 뒤, 새로 생긴 손패
+   *  슬롯들로 트레일이 날아가며 카드가 톡 생성되는 연출. (소각 연출의 반대 방향) */
+  async animateBossScatterToHandSlots(cardId: string, slotIndices: number[]): Promise<void> {
+    const boss = this.findCardElement(cardId)
+    if (!boss || slotIndices.length === 0) return
+    // 분수처럼 솟구치는 황금빛 폭죽 블라스트.
+    SquareBurst.playOn(boss, 'treasure-gain', { count: 30, spread: 200, duration: 640, size: [8, 18] })
+    await new Promise((r) => window.setTimeout(r, 180))
+    // 각 슬롯으로 트레일을 순차 발사하고, 도착 시 슬롯이 톡 생성되도록 팝인.
+    await Promise.all(
+      slotIndices.map(async (slotIndex, i) => {
+        await new Promise((r) => window.setTimeout(r, i * 110))
+        const slot = this.findHandSlotElement(slotIndex)
+        if (!slot) return
+        await this.animateResourceTrail(boss, slot, 3, 'treasure-gain')
+        await slot.animate(
+          [
+            { transform: 'scale(0.6)', opacity: 0.2 },
+            { transform: 'scale(1.12)', opacity: 1, offset: 0.6 },
+            { transform: 'scale(1)', opacity: 1 },
+          ],
+          { duration: 320, easing: 'cubic-bezier(0.34,1.56,0.64,1)', fill: 'forwards' }
+        ).finished
+      })
+    )
+  }
+
   /** Flower-specific SquareBurst palettes keep red rose, marigold, lavender,
    *  oleander, and chamomile rewards visually distinct while still using the
    *  same square language as the rest of the board. */
@@ -4718,7 +4766,7 @@ export class GameBoardRenderer {
     const title = card.querySelector<HTMLElement>('.shop-relic-title')
     if (title) title.textContent = def.name
     const effect = card.querySelector<HTMLElement>('.shop-relic-effect')
-    if (effect) effect.textContent = def.effect
+    if (effect) effect.innerHTML = this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx)
     const flavor = card.querySelector<HTMLElement>('.shop-relic-flavor')
     if (flavor) flavor.textContent = def.flavor
     const label = card.querySelector<HTMLElement>('.shop-price-label-text')

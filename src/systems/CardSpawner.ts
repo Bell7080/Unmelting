@@ -560,15 +560,12 @@ export class CardSpawner {
   }
 
   /** Spawn the current one-lane chest; wider chests are produced by row grouping.
-   *  황금 열쇠 유물이 활성화되어 있으면 goldenChestWeight / effectiveTreasureWeight
-   *  확률로 황금 상자를 대신 등장시킨다. */
+   *  황금 열쇠 유물이 활성화되어 있으면 goldenChestWeight 확률(0~1 직접 확률값)로
+   *  황금 상자를 대신 등장시킨다. 현재 황금 열쇠 = 0.02(2%). */
   private generateTreasure(): Card {
-    if (this.goldenChestWeight > 0) {
-      const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
-      const effectiveTreasureWeight = Math.max(1, buckets.treasure + this.relicSpawnAdjust.treasure)
-      if (Math.random() < this.goldenChestWeight / effectiveTreasureWeight) {
-        return this.generateGoldenChest()
-      }
+    // goldenChestWeight는 직접 확률값(0~1)으로 저장된다. 현재 황금열쇠 = 0.02(2%).
+    if (this.goldenChestWeight > 0 && Math.random() < this.goldenChestWeight) {
+      return this.generateGoldenChest()
     }
     const definition = TREASURE_DEFINITIONS[Math.floor(Math.random() * TREASURE_DEFINITIONS.length)]
     this.spawnSerial++
@@ -714,13 +711,19 @@ export class CardSpawner {
     return Math.round(after - before)
   }
 
-  /** 시련 보물 상자 scale factor(예: 0.75)를 적용할 때 보물 확률이 실제로 몇 % 달라지는지 반환. */
+  /** 시련 보물 상자 scale factor(예: 0.75)를 적용할 때 보물 확률이 실제로 몇 % 달라지는지 반환.
+   *  가난은 누적 곱으로 적용되므로 현재 trialTreasureSpawnScale에 factor를 곱해야
+   *  연속 선택 시에도 올바른 예측 감소량이 나온다. */
   trialScaleToPct(factor: number): number {
     const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
     const w = this.getEffectiveWeights()
     if (w.total <= 0) return 0
     const before = w.treasure / w.total * 100
-    const newTreasure = Math.max(0, buckets.treasure * factor + this.relicSpawnAdjust.treasure)
+    // 유물 보정은 덧셈(scale 미적용)이므로 scale 부분만 factor 곱 후 다시 합산.
+    const newTreasure = Math.max(
+      0,
+      buckets.treasure * this.trialTreasureSpawnScale * factor + this.relicSpawnAdjust.treasure
+    )
     const newTotal = Math.max(1, w.total - w.treasure + newTreasure)
     const after = newTreasure / newTotal * 100
     return Math.round(after - before)

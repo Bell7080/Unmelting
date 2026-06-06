@@ -13,6 +13,7 @@ export type HandCardDropSource =
   | 'any'        // 범용: 적 처치/보물/모든 일반 경로
   | 'enemy-kill' // 적 처치 전용
   | 'treasure'   // 보물상자 전용
+  | 'boss'       // 보스 전용(일반 드롭/드로우 풀에 절대 섞이지 않음)
 
 export type HandCardId =
   | 'wax-drop'
@@ -25,6 +26,10 @@ export type HandCardId =
   | 'chitin'
   | 'card'
   | 'coin'
+  | 'greed-coin'
+  | 'sacrifice-candle'
+  | 'firework'
+  | 'book-of-flames'
 
 export type HandEffectSelection = 'target' | 'random' | 'all' | 'none'
 

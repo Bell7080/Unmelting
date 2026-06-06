@@ -59,6 +59,10 @@ export interface HandUseResult {
   coinsGained?: number
   /** Extra hand-gauge progress granted by the card's explicit effect. */
   gaugeCountBonus?: number
+  /** 탐욕의 동전: 사용자가 즉시 받는 피해. UI가 애니메이션과 함께 적용한다. */
+  selfDamage?: number
+  /** 탐욕의 동전: 획득 불빛 base값. UI(index.ts)가 인플레이션을 적용해 합산한다. */
+  lightGained?: number
 }
 
 export interface RecipeFireResult {
@@ -95,6 +99,11 @@ interface RecipeEffectResult {
 }
 
 export class HandSystem {
+  /** 탐욕의 동전 사용 시 받는 자해 피해. */
+  static readonly GREED_COIN_SELF_DAMAGE = 3
+  /** 탐욕의 동전 불빛 base값(30층 1칸 적 처치의 약 절반). index.ts가 인플레이션을 적용한다. */
+  static readonly GREED_COIN_LIGHT_BASE = 36
+
   /** Build a fresh empty chain. */
   static newChain(): ChainState {
     return { sequence: [], firedRecipeIds: new Set() }
@@ -180,10 +189,9 @@ export class HandSystem {
     // deferAutoMerge면 합성을 미뤄 두고, index.ts가 손패 이동 연출 뒤 runAutoMerges를 직접 호출한다.
     const mergeMessages = deferAutoMerge ? [] : HandSystem.runAutoMerges(character)
 
-    // The 10-slot gauge always advances once per played hand card. This is
-    // gameplay flow, not per-card rules data, so the card definitions no longer
-    // repeat a redundant candleGain value on every entry.
-    character.gainCandle(1)
+    // 카드를 쓰면 콤보 게이지가 오른다. 3장이 합쳐진 트리플 카드는 3장을 한 번에 쓴
+    // 셈이므로 +3, 일반 카드는 +1. (card 카드의 전용 게이지 효과는 위 gaugeCountBonus로 별도 가산)
+    character.gainCandle(card.merged ? 3 : 1)
 
     // Diff the field snapshot to record removed cards for animation.
     const afterField = HandSystem.snapshotFieldCards(gs)
@@ -203,7 +211,18 @@ export class HandSystem {
             : 1 + (gs.enhancements.singleBonus['coin'] ?? 0))
         : 0,
       gaugeCountBonus,
+      // 자해 피해와 불빛은 UI가 애니메이션과 함께 적용한다(모델은 여기서 건드리지 않음).
+      selfDamage: HandSystem.selfDamageFor(card.defId, card.merged === true),
+      lightGained: card.defId === 'greed-coin' ? HandSystem.GREED_COIN_LIGHT_BASE : 0,
     }
+  }
+
+  /** 카드별 자해 피해(UI가 애니메이션과 함께 적용). 탐욕의 동전·제물 양초가 사용한다. */
+  private static selfDamageFor(defId: HandCardId, isMerged: boolean): number {
+    if (defId === 'greed-coin') return HandSystem.GREED_COIN_SELF_DAMAGE
+    // 제물 양초는 단일 사용에만 자해 2(트리플은 자해 없이 더 큰 피해).
+    if (defId === 'sacrifice-candle' && !isMerged) return 2
+    return 0
   }
 
   /** Extra hand-gauge progress contributed by cards with combo-count effects. */
@@ -423,6 +442,16 @@ export class HandSystem {
       case 'coin':
         // coinsGained 보너스는 use()에서 처리.
         return `+${1 + bonus}$`
+      case 'greed-coin':
+        // 자해 피해/불빛은 use()의 selfDamage·lightGained로 보고되어 UI에서 처리한다.
+        return `소량의 불빛 · 자신 ${HandSystem.GREED_COIN_SELF_DAMAGE} 피해`
+      case 'sacrifice-candle':
+        // 자해 2는 use()의 selfDamage로 처리. 여기서는 선택 적 피해만 적용한다.
+        return HandSystem.damageTargetEnemy(gs, target, 5 + bonus)
+      case 'firework':
+        return HandSystem.distributeDamageAmongEnemies(gs, 4 + bonus)
+      case 'book-of-flames':
+        return HandSystem.applyBookOfFlames(gs, target, 0, 1)
     }
   }
 
@@ -467,6 +496,16 @@ export class HandSystem {
       case 'coin':
         // coinsGained는 use()에서 처리된다.
         return `+${5 + bonus}$`
+      case 'greed-coin':
+        // 탐욕의 동전은 트리플 합성되지 않으므로 이 분기는 실제로 도달하지 않는다.
+        return `소량의 불빛 · 자신 ${HandSystem.GREED_COIN_SELF_DAMAGE} 피해`
+      case 'sacrifice-candle':
+        // 트리플은 자해 없이 더 큰 피해만 입힌다.
+        return HandSystem.damageTargetEnemy(gs, target, 7 + bonus)
+      case 'firework':
+        return HandSystem.distributeDamageAmongEnemies(gs, 15 + bonus)
+      case 'book-of-flames':
+        return HandSystem.applyBookOfFlames(gs, target, 3 + bonus, 3)
     }
   }
 
@@ -481,6 +520,8 @@ export class HandSystem {
       const c = hand[i + 2]
       if (!a || !b || !c) continue
       if (a.merged || b.merged || c.merged) continue
+      // 탐욕의 동전은 합성되지 않는 찌꺼기 카드라 트리플 대기 판정에서 제외한다.
+      if (a.defId === 'greed-coin') continue
       if (a.defId === b.defId && b.defId === c.defId) return true
     }
     return false
@@ -501,6 +542,8 @@ export class HandSystem {
         // Already-merged cards do not stack into another merged card; otherwise
         // a flood of duplicates could chain into massive auto-effects.
         if (a.merged || b.merged || c.merged) continue
+        // 탐욕의 동전은 트리플 합성되지 않는다 — 손패를 갉아먹는 찌꺼기로 남는다.
+        if (a.defId === 'greed-coin') continue
         if (a.defId === b.defId && b.defId === c.defId) {
           const def = getHandCardDef(a.defId)
           // Splice 3 → 1 merged card at slot i.
@@ -614,6 +657,55 @@ export class HandSystem {
     }
     const scopeLabel = scope === 'front' ? '전방 적' : '필드 적'
     return `${scopeLabel} ${hit}체에 피해 ${amount}${defeated > 0 ? ` · ${defeated}체 처치` : ''}`
+  }
+
+  /** 폭죽: 총 피해를 필드 적/보스에게 1점씩 무작위로 쪼개 분배한다.
+   *  한 적에게 여러 점이 몰릴 수도, 여러 적에게 흩어질 수도 있다. */
+  private static distributeDamageAmongEnemies(gs: GameState, total: number): string {
+    // 살아 있는 적/보스 카드를 (대표 distance와 함께) 고유하게 모은다.
+    const living: { card: Card; distance: number }[] = []
+    const seen = new Set<Card>()
+    for (let lane = 0; lane < gs.lanes.length; lane++) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = gs.lanes[lane].getCardAtDistance(d)
+        if (!card || seen.has(card)) continue
+        if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) continue
+        seen.add(card)
+        living.push({ card, distance: d })
+      }
+    }
+    if (living.length === 0) return '대상 적 없음'
+
+    let defeated = 0
+    for (let i = 0; i < total && living.length > 0; i++) {
+      const pickIndex = Math.floor(Math.random() * living.length)
+      const entry = living[pickIndex]
+      entry.card.takeDamage(1)
+      if (entry.card.getHealth() <= 0) {
+        // 보스는 lanes에 남겨 격파 시퀀스가 정리한다. 일반 적은 즉시 제거하고 후보에서 뺀다.
+        if (entry.card.type !== CardType.BOSS) {
+          gs.removeCardFromRow(entry.card, entry.distance)
+        }
+        living.splice(pickIndex, 1)
+        defeated++
+      }
+    }
+    return `폭죽: 적들에게 피해 ${total} 분배${defeated > 0 ? ` · ${defeated}체 처치` : ''}`
+  }
+
+  /** 화염의 서: (base + 누적 n) 피해를 선택 적에게 입히고, n을 increment만큼 영구 증가시킨다. */
+  private static applyBookOfFlames(
+    gs: GameState,
+    target: HandTarget | undefined,
+    base: number,
+    increment: number
+  ): string {
+    const n = gs.enhancements.bookOfFlamesBonus ?? 0
+    const amount = base + n
+    const result = HandSystem.damageTargetEnemy(gs, target, amount)
+    // 피해를 입힌 뒤 영구 누적값을 올린다(다음 사용부터 강해진다).
+    gs.enhancements.bookOfFlamesBonus = n + increment
+    return `${result} · 화염의 서 피해 영구 +${increment}(누적 ${gs.enhancements.bookOfFlamesBonus})`
   }
 
   /** Destroy one random enemy/boss from the active row. */

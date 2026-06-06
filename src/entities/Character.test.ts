@@ -39,7 +39,7 @@ describe('Character item effects', () => {
     character.gainCandle(17)
     character.consumeFullCandleGauge()
 
-    expect(character.candle).toBe(7)
+    expect(character.candle).toBe(2) // CANDLE_MAX=15, 17-15=2 overflow
   })
 
   it('spends stat currencies without dropping below one', () => {

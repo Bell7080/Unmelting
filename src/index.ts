@@ -991,7 +991,7 @@ function baseShopPackCost(kind: ShopPackKind): number {
   if (currentShopMode === 'altar') return altarBasePackCost()
   switch (kind) {
     case 'basic-pack': return 120
-    case 'upgrade-pack': return 500
+    case 'upgrade-pack': return 250
     case 'unlock-pack': return 520
     // 제단 전용 팩이 일반 상점에서 호출되면 안전한 기본값으로 막는다.
     default: return altarBasePackCost()
@@ -1101,8 +1101,8 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
     cardSpawner.adjustRelicSpawn('enemy', -5)
   }
   if (id === 'golden-key') {
-    // 보물 스폰 중 가중치 2만큼 황금 상자로 대체한다.
-    cardSpawner.adjustGoldenChestWeight(2)
+    // 보물 스폰 중 10% 확률로 황금 상자로 대체한다.
+    cardSpawner.adjustGoldenChestWeight(0.1)
   }
 }
 
@@ -1272,9 +1272,10 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     }))
   }
   if (kind === 'unlock-pack') {
-    // 풀 = 런에서 잠긴 카드(runLocked) + 삭제팩으로 밴된 카드
+    // 풀 = 런에서 잠긴 카드(runLocked) + 삭제팩으로 밴된 카드.
+    // 단, 보스 전용 찌꺼기 카드(탐욕의 동전 등)는 해금팩으로 얻을 수 없게 제외한다.
     const { locked, banned } = runCardPool.snapshot()
-    const pool = [...locked, ...banned]
+    const pool = [...locked, ...banned].filter((id) => getHandCardDef(id).dropSource !== 'boss')
     if (pool.length === 0) return []
     const drawIds = sampleWithoutReplacement(pool, Math.min(3, pool.length))
     return drawIds.map((id) => {
@@ -1881,7 +1882,7 @@ function scoreLabelForCard(card: Card): string {
 
 /** 플레이어 기본 불빛 획득량 전체 상향 배율(약 +0.2x). 카드 처리/수확 등 행동 기반 불빛에만
  *  적용되며, gainFixedLight(별빛 랜턴 등 고정 유물 보너스)에는 적용하지 않는다. */
-const BASE_LIGHT_GAIN_MULTIPLIER = 1.2
+const BASE_LIGHT_GAIN_MULTIPLIER = 1.44
 
 function createScoreLog(
   label: string,
@@ -2069,6 +2070,7 @@ function startGame(): void {
   currentShopOffers = []
   altarRelicPicked = false
   boardRenderer.closeShop()
+  boardRenderer.resetShutter()
   syncSpawnerTier()
   fillBoardAtStart()
   turnManager.armFrontBombs()
@@ -2506,6 +2508,8 @@ async function handleHandSlotClick(slotIndex: number): Promise<void> {
   }
 
   await applyHandSingle(slotIndex)
+  // 대상 미지정 손패(폭죽 등)가 보스 HP를 0으로 만들었을 수 있으니 같은 격파 흐름으로 합류한다.
+  await bossController.applyPostHandEffect()
 }
 
 /** Broad clears get the opening-board mercy rule: the freshly rebuilt front
@@ -2621,6 +2625,24 @@ async function applyHandSingle(
     applyBlindFaithCoins(result.coinsGained)
     await playResourceTrail({ kind: 'center' }, 'coin', result.coinsGained)
     if (usedDef) recordCoinGain(usedDef.name, result.coinsGained)
+  }
+  // 탐욕의 동전: 소량의 불빛을 주지만(인플레이션 적용) 사용자가 즉시 피해를 입는 찌꺼기.
+  if (result.lightGained && result.lightGained > 0) {
+    pushActivityLogsInDisplayOrder([createScoreLog('탐욕의 동전', result.lightGained, 'score')])
+    await playResourceTrail({ kind: 'center' }, 'score', 1)
+  }
+  if (result.selfDamage && result.selfDamage > 0) {
+    gameState.character.takeDamage(result.selfDamage)
+    recordNotice(`${usedDef?.name ?? '카드'}의 대가 — 자신이 ${result.selfDamage} 피해를 입었다`, 'hurt')
+    render()
+    await boardRenderer.animatePlayerDamageImpact(result.selfDamage)
+    applyAnomalyHealthLoss()
+    if (!gameState.character.isAlive() && !gameState.character.authoritySurvivePending) {
+      gameState.endGame('character_defeated')
+      if (!(await tryResolveSurvivalRelics())) finishTurn()
+      inputLocked = false
+      return
+    }
   }
   pendingHandTarget = null
   boardRenderer.setHandTargetingMode(null)
@@ -3072,7 +3094,7 @@ async function handleCardAction(e: Event): Promise<void> {
       const theme = flowerRewardTheme(card.flowerKind)
       if (result.flowerReward?.kind === 'score') {
         pushActivityLogsInDisplayOrder([
-          createScoreLog(`${card.name} 수확`, 24 + result.flowerReward.amount * 12, 'score'),
+          createScoreLog(`${card.name} 수확`, 96 + result.flowerReward.amount * 48, 'score'),
         ])
         rewardFeedbacks.push(
           playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1, theme)

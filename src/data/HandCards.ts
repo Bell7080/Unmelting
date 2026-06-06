@@ -166,6 +166,68 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: false,
   },
+  // 탐욕의 동전: 양초 백작이 손패에 뿌리는 불편한 찌꺼기. 소량의 불빛을 주지만
+  // 사용 시 자신이 3 피해를 입는다. 보스 전용이라 일반 드롭/드로우 풀에는 섞이지 않고,
+  // 트리플 합성도 되지 않아 손패를 갉아먹는다.
+  'greed-coin': {
+    id: 'greed-coin',
+    name: '탐욕의 동전',
+    category: 'tool',
+    description: '소량의 불빛 획득 · 자신에게 피해 3',
+    tripleDescription: '소량의 불빛 획득 · 자신에게 피해 3',
+    targeting: { base: selfOne, triple: selfOne },
+    dropSource: 'boss',
+    metaRequired: false,
+    runLocked: true,
+  },
+  // 제물 양초: 자신을 제물로 바쳐 강하게 내리치는 단일 공격. 트리플은 자해 없이 더 큰 피해.
+  'sacrifice-candle': {
+    id: 'sacrifice-candle',
+    name: '제물 양초',
+    category: 'attack',
+    description: '자신에게 피해 2 · 필드 선택 적 1장에 피해 5',
+    tripleDescription: '필드 선택 적 1장에 피해 7',
+    targeting: {
+      base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
+      triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
+    },
+    dropWeight: 7,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
+  // 폭죽: 필드의 적들에게 총 피해를 무작위로 쪼개 분배한다(대상 지정 없음).
+  firework: {
+    id: 'firework',
+    name: '폭죽',
+    category: 'attack',
+    description: '필드의 랜덤 적들에게 피해 4를 나눠 입힘',
+    tripleDescription: '필드의 랜덤 적들에게 피해 15를 나눠 입힘',
+    targeting: {
+      base: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: null },
+      triple: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: null },
+    },
+    dropWeight: 6,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
+  // 화염의 서: 쓸수록 영구히 강해지는 누적 공격(n). 단일 +1, 트리플 +3씩 영구 증가.
+  'book-of-flames': {
+    id: 'book-of-flames',
+    name: '화염의 서',
+    category: 'attack',
+    description: '필드 선택 적 1장에 피해 (0+n) · 화염의 서 피해 영구 +1',
+    tripleDescription: '필드 선택 적 1장에 피해 (3+n) · 화염의 서 피해 영구 +3',
+    targeting: {
+      base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
+      triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
+    },
+    dropWeight: 5,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
 }
 
 export const HAND_CARD_IDS: HandCardId[] = Object.keys(HAND_CARD_DEFINITIONS) as HandCardId[]
