@@ -189,10 +189,9 @@ export class HandSystem {
     // deferAutoMerge면 합성을 미뤄 두고, index.ts가 손패 이동 연출 뒤 runAutoMerges를 직접 호출한다.
     const mergeMessages = deferAutoMerge ? [] : HandSystem.runAutoMerges(character)
 
-    // The 10-slot gauge always advances once per played hand card. This is
-    // gameplay flow, not per-card rules data, so the card definitions no longer
-    // repeat a redundant candleGain value on every entry.
-    character.gainCandle(1)
+    // 카드를 쓰면 콤보 게이지가 오른다. 3장이 합쳐진 트리플 카드는 3장을 한 번에 쓴
+    // 셈이므로 +3, 일반 카드는 +1. (card 카드의 전용 게이지 효과는 위 gaugeCountBonus로 별도 가산)
+    character.gainCandle(card.merged ? 3 : 1)
 
     // Diff the field snapshot to record removed cards for animation.
     const afterField = HandSystem.snapshotFieldCards(gs)

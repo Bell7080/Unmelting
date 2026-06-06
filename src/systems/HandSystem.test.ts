@@ -25,7 +25,7 @@ describe('HandSystem combo-count cards', () => {
     expect(HandSystem.fireNextPendingRecipe(gameState, chain).firedRecipes).toHaveLength(0)
   })
 
-  it('records a triple 카드 as one played card with seven explicit gauge counts', () => {
+  it('records a triple 카드 as one played card: 7 explicit counts + 3 for the merged play', () => {
     const gameState = new GameState()
     const chain = HandSystem.newChain()
     gameState.character.addHandCard({ ...DropSystem.makeCard('card'), merged: true })
@@ -35,7 +35,8 @@ describe('HandSystem combo-count cards', () => {
     expect(result.success).toBe(true)
     expect(result.gaugeCountBonus).toBe(7)
     expect(countChainEntries(chain, 'card')).toBe(1)
-    expect(gameState.character.candle).toBe(8)
+    // 트리플 카드 전용 +7 + 트리플 플레이 보정 +3 = 10.
+    expect(gameState.character.candle).toBe(10)
     expect(HandSystem.previewTriggeredRecipes(HandSystem.newChain(), 'card', true)).toHaveLength(0)
   })
 
