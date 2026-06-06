@@ -208,7 +208,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
       base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
     },
-    dropWeight: 4,
+    dropWeight: 1,
     dropSource: 'any',
     metaRequired: false,
     runLocked: false,
