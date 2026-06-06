@@ -542,15 +542,12 @@ export class CardSpawner {
   }
 
   /** Spawn the current one-lane chest; wider chests are produced by row grouping.
-   *  황금 열쇠 유물이 활성화되어 있으면 goldenChestWeight / effectiveTreasureWeight
-   *  확률로 황금 상자를 대신 등장시킨다. */
+   *  황금 열쇠 유물이 활성화되어 있으면 goldenChestWeight 확률(0~1 직접 확률값)로
+   *  황금 상자를 대신 등장시킨다. 현재 황금 열쇠 = 0.02(2%). */
   private generateTreasure(): Card {
-    if (this.goldenChestWeight > 0) {
-      const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
-      const effectiveTreasureWeight = Math.max(1, buckets.treasure + this.relicSpawnAdjust.treasure)
-      if (Math.random() < this.goldenChestWeight / effectiveTreasureWeight) {
-        return this.generateGoldenChest()
-      }
+    // goldenChestWeight는 직접 확률값(0~1)으로 저장된다. 현재 황금열쇠 = 0.02(2%).
+    if (this.goldenChestWeight > 0 && Math.random() < this.goldenChestWeight) {
+      return this.generateGoldenChest()
     }
     const definition = TREASURE_DEFINITIONS[Math.floor(Math.random() * TREASURE_DEFINITIONS.length)]
     this.spawnSerial++

@@ -2163,6 +2163,14 @@ export class GameBoardRenderer {
     })
   }
 
+  /** 새 런 시작 시 셔터 상태를 초기화한다. 보스전 중 게임오버 시 잠긴 상태가 잔류하는 걸 방지. */
+  resetShutter(): void {
+    this.shopShutterLocked = false
+    this.shopShutterSnapshot = null
+    document.querySelector<HTMLElement>('#game-board .rail-shutter')?.remove()
+    document.querySelector<HTMLElement>('#game-board .rail')?.classList.remove('is-shop-shuttered', 'is-shop-quaking')
+  }
+
   /** Altar EXIT keeps the shutter closed and shakes the full rail before boss entry.
    *  The boss tile drops directly onto the shuttered rail in the new flow, so the
    *  quake is the only beat between shop exit and boss arrival. */

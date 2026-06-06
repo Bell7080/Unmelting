@@ -38,7 +38,7 @@ export interface EnemyStatBonus {
 const SPAWN_BUCKETS: Record<EmberTier, SpawnBuckets> = {
   // Bomb and spore buckets preserve the former absolute odds, while extra
   // ordinary web traps come out of the enemy bucket to soften early clumping.
-  bright: { enemy: 50, webTrap: 12, bombTrap: 4, sporeTrap: 4, treasure: 22, flower: 8 },
+  bright: { enemy: 44, webTrap: 17, bombTrap: 4, sporeTrap: 4, treasure: 22, flower: 9 },
   dim: { enemy: 60, webTrap: 12, bombTrap: 4, sporeTrap: 4, treasure: 13, flower: 7 },
   flickering: {
     enemy: 74,

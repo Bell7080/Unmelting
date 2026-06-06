@@ -323,10 +323,9 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: '황금 열쇠',
     rarity: 'unique',
     // 황금 상자는 일반 상자보다 카드와 불빛을 2배 주는 희귀 보물칸.
-    effect: '보물 스폰 중 {{spawn}} 확률이 황금 상자로 대체됩니다.',
+    effect: '보물 스폰 중 2% 확률이 황금 상자로 대체됩니다.',
     flavor: '어떤 자물쇠도 이 열쇠를 거부하지 못한다.',
     basePrice: 1400,
-    spawnEffect: { type: 'treasure', delta: 2 },
   },
 }
 
