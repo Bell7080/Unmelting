@@ -230,12 +230,13 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     runLocked: false,
   },
   // 화염의 서: 쓸수록 영구히 강해지는 누적 공격(n). 단일 +1, 트리플 +3씩 영구 증가.
+  // 설명의 피해 수치는 GameBoardRenderer.enhancedHandCardDescription이 bookOfFlamesBonus를 읽어 동적 표시한다.
   'book-of-flames': {
     id: 'book-of-flames',
     name: '화염의 서',
     category: 'attack',
-    description: '필드 선택 적 1장에 피해 (0+n) · 화염의 서 피해 영구 +1',
-    tripleDescription: '필드 선택 적 1장에 피해 (3+n) · 화염의 서 피해 영구 +3',
+    description: '필드 선택 적 1장 피해 0<br>화염의 서 피해 1 증가',
+    tripleDescription: '필드 선택 적 1장 피해 3<br>화염의 서 피해 3 증가',
     targeting: {
       base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },

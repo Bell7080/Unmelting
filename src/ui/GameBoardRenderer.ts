@@ -1242,6 +1242,13 @@ export class GameBoardRenderer {
   private enhancedHandCardDescription(id: HandCardId, merged: boolean): string {
     const def = getHandCardDef(id)
     const enhancements = this.currentGameState?.enhancements
+    // 화염의 서는 bookOfFlamesBonus가 0이어도 항상 현재 누적값으로 동적 표시한다.
+    if (id === 'book-of-flames') {
+      const n = enhancements?.bookOfFlamesBonus ?? 0
+      return merged
+        ? `필드 선택 적 1장 피해 ${3 + n}<br>화염의 서 피해 3 증가`
+        : `필드 선택 적 1장 피해 ${n}<br>화염의 서 피해 1 증가`
+    }
     const bonus = merged
       ? (enhancements?.tripleBonus[id] ?? 0)
       : (enhancements?.singleBonus[id] ?? 0)
