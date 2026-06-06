@@ -3149,8 +3149,10 @@ export class GameBoardRenderer {
     const tiles = HAND_CARD_IDS.filter((id) => HAND_CARD_DEFINITIONS[id].dropSource !== 'boss').map((id) => {
       const def = HAND_CARD_DEFINITIONS[id]
       const locked = this.lockedCardIds.has(id)
-      const singleDesc = this.enhancedHandCardDescription(def.id, false)
-      const tripleDesc = this.enhancedHandCardDescription(def.id, true)
+      // <br>은 chip(inline-flex)에서 레이아웃이 불안정하므로 · 구분자로 교체한다.
+      const chipDesc = (desc: string) => desc.replace(/<br>/g, ' · ')
+      const singleDesc = chipDesc(this.enhancedHandCardDescription(def.id, false))
+      const tripleDesc = chipDesc(this.enhancedHandCardDescription(def.id, true))
       return this.codexTile({
         art: { kind: 'sprite', url: spriteForHandCard(def.id) },
         name: locked ? '???' : def.name,

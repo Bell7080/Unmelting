@@ -393,6 +393,7 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 0;
   overflow: hidden;
   transition: flex 0.38s cubic-bezier(0.22, 0.61, 0.36, 1);
   cursor: default;
