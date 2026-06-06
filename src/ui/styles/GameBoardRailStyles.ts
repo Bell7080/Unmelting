@@ -1181,6 +1181,13 @@ export const GAME_BOARD_RAIL_STYLES = `
   border-left: 2px solid rgba(244, 164, 96, 0.55);
 }
 .boss-intro-overlay-trait strong { color: #ffd178; letter-spacing: 0.04em; }
+/* 공통 규칙 레이어 — 특징과 같은 양식이되 색감만 살짝 다른 차가운 촛불 톤. */
+.boss-intro-overlay-common {
+  background: rgba(168, 214, 255, 0.06);
+  color: #dceaf7;
+  border-left-color: rgba(120, 178, 230, 0.55);
+}
+.boss-intro-overlay-common strong { color: #9fc8f5; }
 .boss-intro-overlay-trait ul {
   margin: 7px 0 0;
   padding: 0;

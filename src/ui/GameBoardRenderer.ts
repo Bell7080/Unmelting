@@ -2209,6 +2209,8 @@ export class GameBoardRenderer {
     const traitMarkup = traitLines.length > 1
       ? `<div class="boss-intro-overlay-trait"><strong>특징</strong><ul>${traitLines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul></div>`
       : `<p class="boss-intro-overlay-trait"><strong>특징</strong> · ${escapeHtml(traitLines[0] ?? '')}</p>`
+    // 모든 보스 공통 규칙 레이어 — 특징과 같은 양식이되 색감만 살짝 다른 차가운 촛불 톤.
+    const commonMarkup = `<p class="boss-intro-overlay-trait boss-intro-overlay-common"><strong>공통</strong> · 보스 체력 10 감소마다 손패 1장 획득</p>`
     const host = document.createElement('div')
     host.id = 'boss-intro-overlay'
     host.className = 'boss-intro-overlay'
@@ -2224,6 +2226,7 @@ export class GameBoardRenderer {
             <li><span class="boss-intro-overlay-stat-label">반격 주기</span><span class="boss-intro-overlay-stat-value">${opts.attackInterval}턴</span></li>
           </ul>
           <p class="boss-intro-overlay-desc">"${escapeHtml(opts.introBubble ?? '내 저택에 온 것을 환영하네, 위태로운 불씨여.')}"</p>
+          ${commonMarkup}
           ${traitMarkup}
         </div>
       </section>
