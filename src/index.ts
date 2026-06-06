@@ -1915,6 +1915,17 @@ function snapshotFieldCardsById(): Map<string, Card> {
   return map
 }
 
+/** 카드가 현재 위치한 거리를 찾는다. 레일 하강 이후 카드가 이동했을 수 있어,
+ *  제거 시 캡처된 옛 거리 대신 실시간 위치를 다시 조회할 때 쓴다. */
+function locateCardDistance(card: Card): number | null {
+  for (const lane of gameState.lanes) {
+    for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+      if (lane.getCardAtDistance(d) === card) return d
+    }
+  }
+  return null
+}
+
 /**
  * Push one light-gain log per removed rail card and fire ONE light-burst at
  * the end. Used by both the hand-card single-effect beat and the recipe beat.
@@ -2818,7 +2829,11 @@ async function applyHandSingle(
       }
       const afterHp = target.card.getHealth()
       const killed = afterHp <= 0 && target.card.type !== CardType.BOSS
-      if (killed) gameState.removeCardFromRow(target.card, target.distance)
+      if (killed) {
+        // 시뮬레이션 중 레일 하강으로 대상이 이동했을 수 있어 현재 거리를 다시 찾아 제거한다.
+        const currentDistance = locateCardDistance(target.card) ?? target.distance
+        gameState.removeCardFromRow(target.card, currentDistance)
+      }
       // 강타 연출: 화염 볼트 → 착탄 버스트 → 큰 피해 수치 + HP 1씩 롤링.
       await boardRenderer.animateLevateinStrike(targetId, levDmg, beforeHp, Math.max(0, afterHp))
       if (bossController.eventState) {
@@ -2898,6 +2913,12 @@ async function runSimulatedEnemyPhase(): Promise<void> {
 
   if (!gameState.character.isAlive() && !gameState.character.authoritySurvivePending) {
     gameState.endGame('character_defeated')
+  }
+
+  // 보물 휘발/폭탄 폭발 등으로 카드가 사라지면 레일에 구멍이 남는다. 일반 턴 cleanup과
+  // 동일하게 하강·리필(+재그룹/개화/폭탄 점화)을 돌려 빈 레일을 메운다. 턴 카운터는 올리지 않는다.
+  if (!gameState.isGameOver) {
+    await runPreparationRefreshAfterFieldEffects()
   }
 }
 
