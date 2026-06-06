@@ -2505,6 +2505,8 @@ async function handleHandSlotClick(slotIndex: number): Promise<void> {
   }
 
   await applyHandSingle(slotIndex)
+  // 대상 미지정 손패(폭죽 등)가 보스 HP를 0으로 만들었을 수 있으니 같은 격파 흐름으로 합류한다.
+  await bossController.applyPostHandEffect()
 }
 
 /** Broad clears get the opening-board mercy rule: the freshly rebuilt front
@@ -2628,7 +2630,7 @@ async function applyHandSingle(
   }
   if (result.selfDamage && result.selfDamage > 0) {
     gameState.character.takeDamage(result.selfDamage)
-    recordNotice(`탐욕의 동전의 대가 — 자신이 ${result.selfDamage} 피해를 입었다`, 'hurt')
+    recordNotice(`${usedDef?.name ?? '카드'}의 대가 — 자신이 ${result.selfDamage} 피해를 입었다`, 'hurt')
     render()
     await boardRenderer.animatePlayerDamageImpact(result.selfDamage)
     applyAnomalyHealthLoss()

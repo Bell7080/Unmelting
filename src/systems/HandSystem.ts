@@ -211,10 +211,18 @@ export class HandSystem {
             : 1 + (gs.enhancements.singleBonus['coin'] ?? 0))
         : 0,
       gaugeCountBonus,
-      // 탐욕의 동전: 자해 피해와 불빛은 UI가 애니메이션과 함께 적용한다(모델은 여기서 건드리지 않음).
-      selfDamage: card.defId === 'greed-coin' ? HandSystem.GREED_COIN_SELF_DAMAGE : 0,
+      // 자해 피해와 불빛은 UI가 애니메이션과 함께 적용한다(모델은 여기서 건드리지 않음).
+      selfDamage: HandSystem.selfDamageFor(card.defId, card.merged === true),
       lightGained: card.defId === 'greed-coin' ? HandSystem.GREED_COIN_LIGHT_BASE : 0,
     }
+  }
+
+  /** 카드별 자해 피해(UI가 애니메이션과 함께 적용). 탐욕의 동전·제물 양초가 사용한다. */
+  private static selfDamageFor(defId: HandCardId, isMerged: boolean): number {
+    if (defId === 'greed-coin') return HandSystem.GREED_COIN_SELF_DAMAGE
+    // 제물 양초는 단일 사용에만 자해 2(트리플은 자해 없이 더 큰 피해).
+    if (defId === 'sacrifice-candle' && !isMerged) return 2
+    return 0
   }
 
   /** Extra hand-gauge progress contributed by cards with combo-count effects. */
@@ -437,6 +445,13 @@ export class HandSystem {
       case 'greed-coin':
         // 자해 피해/불빛은 use()의 selfDamage·lightGained로 보고되어 UI에서 처리한다.
         return `소량의 불빛 · 자신 ${HandSystem.GREED_COIN_SELF_DAMAGE} 피해`
+      case 'sacrifice-candle':
+        // 자해 2는 use()의 selfDamage로 처리. 여기서는 선택 적 피해만 적용한다.
+        return HandSystem.damageTargetEnemy(gs, target, 5 + bonus)
+      case 'firework':
+        return HandSystem.distributeDamageAmongEnemies(gs, 4 + bonus)
+      case 'book-of-flames':
+        return HandSystem.applyBookOfFlames(gs, target, 0, 1)
     }
   }
 
@@ -484,6 +499,13 @@ export class HandSystem {
       case 'greed-coin':
         // 탐욕의 동전은 트리플 합성되지 않으므로 이 분기는 실제로 도달하지 않는다.
         return `소량의 불빛 · 자신 ${HandSystem.GREED_COIN_SELF_DAMAGE} 피해`
+      case 'sacrifice-candle':
+        // 트리플은 자해 없이 더 큰 피해만 입힌다.
+        return HandSystem.damageTargetEnemy(gs, target, 7 + bonus)
+      case 'firework':
+        return HandSystem.distributeDamageAmongEnemies(gs, 15 + bonus)
+      case 'book-of-flames':
+        return HandSystem.applyBookOfFlames(gs, target, 3 + bonus, 3)
     }
   }
 
@@ -635,6 +657,55 @@ export class HandSystem {
     }
     const scopeLabel = scope === 'front' ? '전방 적' : '필드 적'
     return `${scopeLabel} ${hit}체에 피해 ${amount}${defeated > 0 ? ` · ${defeated}체 처치` : ''}`
+  }
+
+  /** 폭죽: 총 피해를 필드 적/보스에게 1점씩 무작위로 쪼개 분배한다.
+   *  한 적에게 여러 점이 몰릴 수도, 여러 적에게 흩어질 수도 있다. */
+  private static distributeDamageAmongEnemies(gs: GameState, total: number): string {
+    // 살아 있는 적/보스 카드를 (대표 distance와 함께) 고유하게 모은다.
+    const living: { card: Card; distance: number }[] = []
+    const seen = new Set<Card>()
+    for (let lane = 0; lane < gs.lanes.length; lane++) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = gs.lanes[lane].getCardAtDistance(d)
+        if (!card || seen.has(card)) continue
+        if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) continue
+        seen.add(card)
+        living.push({ card, distance: d })
+      }
+    }
+    if (living.length === 0) return '대상 적 없음'
+
+    let defeated = 0
+    for (let i = 0; i < total && living.length > 0; i++) {
+      const pickIndex = Math.floor(Math.random() * living.length)
+      const entry = living[pickIndex]
+      entry.card.takeDamage(1)
+      if (entry.card.getHealth() <= 0) {
+        // 보스는 lanes에 남겨 격파 시퀀스가 정리한다. 일반 적은 즉시 제거하고 후보에서 뺀다.
+        if (entry.card.type !== CardType.BOSS) {
+          gs.removeCardFromRow(entry.card, entry.distance)
+        }
+        living.splice(pickIndex, 1)
+        defeated++
+      }
+    }
+    return `폭죽: 적들에게 피해 ${total} 분배${defeated > 0 ? ` · ${defeated}체 처치` : ''}`
+  }
+
+  /** 화염의 서: (base + 누적 n) 피해를 선택 적에게 입히고, n을 increment만큼 영구 증가시킨다. */
+  private static applyBookOfFlames(
+    gs: GameState,
+    target: HandTarget | undefined,
+    base: number,
+    increment: number
+  ): string {
+    const n = gs.enhancements.bookOfFlamesBonus ?? 0
+    const amount = base + n
+    const result = HandSystem.damageTargetEnemy(gs, target, amount)
+    // 피해를 입힌 뒤 영구 누적값을 올린다(다음 사용부터 강해진다).
+    gs.enhancements.bookOfFlamesBonus = n + increment
+    return `${result} · 화염의 서 피해 영구 +${increment}(누적 ${gs.enhancements.bookOfFlamesBonus})`
   }
 
   /** Destroy one random enemy/boss from the active row. */

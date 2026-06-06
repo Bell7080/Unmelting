@@ -16,8 +16,10 @@ export interface RunEnhancements {
   recipeBonus: Partial<Record<string, number>>
   /** 불빛 획득량 배율. 기본 1.0, 리소스팩 구매마다 누적 곱셈. */
   scoreMultiplier: number
+  /** 화염의 서 영구 피해 누적값(n). 사용할 때마다 단일 +1 / 트리플 +3 증가. */
+  bookOfFlamesBonus: number
 }
 
 export function makeDefaultEnhancements(): RunEnhancements {
-  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1 }
+  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0 }
 }

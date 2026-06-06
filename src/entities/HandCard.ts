@@ -27,6 +27,9 @@ export type HandCardId =
   | 'card'
   | 'coin'
   | 'greed-coin'
+  | 'sacrifice-candle'
+  | 'firework'
+  | 'book-of-flames'
 
 export type HandEffectSelection = 'target' | 'random' | 'all' | 'none'
 
