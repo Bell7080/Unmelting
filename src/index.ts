@@ -1882,7 +1882,7 @@ function scoreLabelForCard(card: Card): string {
 
 /** 플레이어 기본 불빛 획득량 전체 상향 배율(약 +0.2x). 카드 처리/수확 등 행동 기반 불빛에만
  *  적용되며, gainFixedLight(별빛 랜턴 등 고정 유물 보너스)에는 적용하지 않는다. */
-const BASE_LIGHT_GAIN_MULTIPLIER = 1.44
+const BASE_LIGHT_GAIN_MULTIPLIER = 1.25
 
 function createScoreLog(
   label: string,
@@ -3216,7 +3216,7 @@ async function handleCardAction(e: Event): Promise<void> {
       const theme = flowerRewardTheme(card.flowerKind)
       if (result.flowerReward?.kind === 'score') {
         pushActivityLogsInDisplayOrder([
-          createScoreLog(`${card.name} 수확`, 96 + result.flowerReward.amount * 48, 'score'),
+          createScoreLog(`${card.name} 수확`, 48 + result.flowerReward.amount * 24, 'score'),
         ])
         rewardFeedbacks.push(
           playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1, theme)
