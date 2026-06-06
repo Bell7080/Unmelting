@@ -166,6 +166,20 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: false,
   },
+  // 탐욕의 동전: 양초 백작이 손패에 뿌리는 불편한 찌꺼기. 소량의 불빛을 주지만
+  // 사용 시 자신이 3 피해를 입는다. 보스 전용이라 일반 드롭/드로우 풀에는 섞이지 않고,
+  // 트리플 합성도 되지 않아 손패를 갉아먹는다.
+  'greed-coin': {
+    id: 'greed-coin',
+    name: '탐욕의 동전',
+    category: 'tool',
+    description: '소량의 불빛 획득 · 자신에게 피해 3',
+    tripleDescription: '소량의 불빛 획득 · 자신에게 피해 3',
+    targeting: { base: selfOne, triple: selfOne },
+    dropSource: 'boss',
+    metaRequired: false,
+    runLocked: true,
+  },
 }
 
 export const HAND_CARD_IDS: HandCardId[] = Object.keys(HAND_CARD_DEFINITIONS) as HandCardId[]

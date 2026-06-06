@@ -59,6 +59,10 @@ export interface HandUseResult {
   coinsGained?: number
   /** Extra hand-gauge progress granted by the card's explicit effect. */
   gaugeCountBonus?: number
+  /** 탐욕의 동전: 사용자가 즉시 받는 피해. UI가 애니메이션과 함께 적용한다. */
+  selfDamage?: number
+  /** 탐욕의 동전: 획득 불빛 base값. UI(index.ts)가 인플레이션을 적용해 합산한다. */
+  lightGained?: number
 }
 
 export interface RecipeFireResult {
@@ -95,6 +99,11 @@ interface RecipeEffectResult {
 }
 
 export class HandSystem {
+  /** 탐욕의 동전 사용 시 받는 자해 피해. */
+  static readonly GREED_COIN_SELF_DAMAGE = 3
+  /** 탐욕의 동전 불빛 base값(30층 1칸 적 처치의 약 절반). index.ts가 인플레이션을 적용한다. */
+  static readonly GREED_COIN_LIGHT_BASE = 36
+
   /** Build a fresh empty chain. */
   static newChain(): ChainState {
     return { sequence: [], firedRecipeIds: new Set() }
@@ -203,6 +212,9 @@ export class HandSystem {
             : 1 + (gs.enhancements.singleBonus['coin'] ?? 0))
         : 0,
       gaugeCountBonus,
+      // 탐욕의 동전: 자해 피해와 불빛은 UI가 애니메이션과 함께 적용한다(모델은 여기서 건드리지 않음).
+      selfDamage: card.defId === 'greed-coin' ? HandSystem.GREED_COIN_SELF_DAMAGE : 0,
+      lightGained: card.defId === 'greed-coin' ? HandSystem.GREED_COIN_LIGHT_BASE : 0,
     }
   }
 
@@ -423,6 +435,9 @@ export class HandSystem {
       case 'coin':
         // coinsGained 보너스는 use()에서 처리.
         return `+${1 + bonus}$`
+      case 'greed-coin':
+        // 자해 피해/불빛은 use()의 selfDamage·lightGained로 보고되어 UI에서 처리한다.
+        return `소량의 불빛 · 자신 ${HandSystem.GREED_COIN_SELF_DAMAGE} 피해`
     }
   }
 
@@ -467,6 +482,9 @@ export class HandSystem {
       case 'coin':
         // coinsGained는 use()에서 처리된다.
         return `+${5 + bonus}$`
+      case 'greed-coin':
+        // 탐욕의 동전은 트리플 합성되지 않으므로 이 분기는 실제로 도달하지 않는다.
+        return `소량의 불빛 · 자신 ${HandSystem.GREED_COIN_SELF_DAMAGE} 피해`
     }
   }
 
@@ -481,6 +499,8 @@ export class HandSystem {
       const c = hand[i + 2]
       if (!a || !b || !c) continue
       if (a.merged || b.merged || c.merged) continue
+      // 탐욕의 동전은 합성되지 않는 찌꺼기 카드라 트리플 대기 판정에서 제외한다.
+      if (a.defId === 'greed-coin') continue
       if (a.defId === b.defId && b.defId === c.defId) return true
     }
     return false
@@ -501,6 +521,8 @@ export class HandSystem {
         // Already-merged cards do not stack into another merged card; otherwise
         // a flood of duplicates could chain into massive auto-effects.
         if (a.merged || b.merged || c.merged) continue
+        // 탐욕의 동전은 트리플 합성되지 않는다 — 손패를 갉아먹는 찌꺼기로 남는다.
+        if (a.defId === 'greed-coin') continue
         if (a.defId === b.defId && b.defId === c.defId) {
           const def = getHandCardDef(a.defId)
           // Splice 3 → 1 merged card at slot i.

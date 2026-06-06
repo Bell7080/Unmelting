@@ -1272,9 +1272,10 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     }))
   }
   if (kind === 'unlock-pack') {
-    // 풀 = 런에서 잠긴 카드(runLocked) + 삭제팩으로 밴된 카드
+    // 풀 = 런에서 잠긴 카드(runLocked) + 삭제팩으로 밴된 카드.
+    // 단, 보스 전용 찌꺼기 카드(탐욕의 동전 등)는 해금팩으로 얻을 수 없게 제외한다.
     const { locked, banned } = runCardPool.snapshot()
-    const pool = [...locked, ...banned]
+    const pool = [...locked, ...banned].filter((id) => getHandCardDef(id).dropSource !== 'boss')
     if (pool.length === 0) return []
     const drawIds = sampleWithoutReplacement(pool, Math.min(3, pool.length))
     return drawIds.map((id) => {
@@ -2619,6 +2620,24 @@ async function applyHandSingle(
     applyBlindFaithCoins(result.coinsGained)
     await playResourceTrail({ kind: 'center' }, 'coin', result.coinsGained)
     if (usedDef) recordCoinGain(usedDef.name, result.coinsGained)
+  }
+  // 탐욕의 동전: 소량의 불빛을 주지만(인플레이션 적용) 사용자가 즉시 피해를 입는 찌꺼기.
+  if (result.lightGained && result.lightGained > 0) {
+    pushActivityLogsInDisplayOrder([createScoreLog('탐욕의 동전', result.lightGained, 'score')])
+    await playResourceTrail({ kind: 'center' }, 'score', 1)
+  }
+  if (result.selfDamage && result.selfDamage > 0) {
+    gameState.character.takeDamage(result.selfDamage)
+    recordNotice(`탐욕의 동전의 대가 — 자신이 ${result.selfDamage} 피해를 입었다`, 'hurt')
+    render()
+    await boardRenderer.animatePlayerDamageImpact(result.selfDamage)
+    applyAnomalyHealthLoss()
+    if (!gameState.character.isAlive() && !gameState.character.authoritySurvivePending) {
+      gameState.endGame('character_defeated')
+      if (!(await tryResolveSurvivalRelics())) finishTurn()
+      inputLocked = false
+      return
+    }
   }
   pendingHandTarget = null
   boardRenderer.setHandTargetingMode(null)

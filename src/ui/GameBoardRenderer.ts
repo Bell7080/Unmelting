@@ -3132,7 +3132,8 @@ export class GameBoardRenderer {
   }
 
   private renderCompendiumHand(): string {
-    const tiles = HAND_CARD_IDS.map((id) => {
+    // 보스 전용 찌꺼기 카드(탐욕의 동전)는 플레이어 덱 카드가 아니므로 손패 도감에서 숨긴다.
+    const tiles = HAND_CARD_IDS.filter((id) => HAND_CARD_DEFINITIONS[id].dropSource !== 'boss').map((id) => {
       const def = HAND_CARD_DEFINITIONS[id]
       const locked = this.lockedCardIds.has(id)
       const singleDesc = this.enhancedHandCardDescription(def.id, false)
@@ -4414,6 +4415,33 @@ export class GameBoardRenderer {
       ],
       { duration: 620, easing: 'cubic-bezier(0.3, 0.1, 0.35, 1)', fill: 'forwards' }
     ).finished
+  }
+
+  /** 30F 양초 백작: 보스에서 황금빛 분수 블라스트가 폭죽처럼 터진 뒤, 새로 생긴 손패
+   *  슬롯들로 트레일이 날아가며 카드가 톡 생성되는 연출. (소각 연출의 반대 방향) */
+  async animateBossScatterToHandSlots(cardId: string, slotIndices: number[]): Promise<void> {
+    const boss = this.findCardElement(cardId)
+    if (!boss || slotIndices.length === 0) return
+    // 분수처럼 솟구치는 황금빛 폭죽 블라스트.
+    SquareBurst.playOn(boss, 'treasure-gain', { count: 30, spread: 200, duration: 640, size: [8, 18] })
+    await new Promise((r) => window.setTimeout(r, 180))
+    // 각 슬롯으로 트레일을 순차 발사하고, 도착 시 슬롯이 톡 생성되도록 팝인.
+    await Promise.all(
+      slotIndices.map(async (slotIndex, i) => {
+        await new Promise((r) => window.setTimeout(r, i * 110))
+        const slot = this.findHandSlotElement(slotIndex)
+        if (!slot) return
+        await this.animateResourceTrail(boss, slot, 3, 'treasure-gain')
+        await slot.animate(
+          [
+            { transform: 'scale(0.6)', opacity: 0.2 },
+            { transform: 'scale(1.12)', opacity: 1, offset: 0.6 },
+            { transform: 'scale(1)', opacity: 1 },
+          ],
+          { duration: 320, easing: 'cubic-bezier(0.34,1.56,0.64,1)', fill: 'forwards' }
+        ).finished
+      })
+    )
   }
 
   /** Flower-specific SquareBurst palettes keep red rose, marigold, lavender,

@@ -245,6 +245,8 @@ export const SpriteUrls = {
     chitin: handCard008Url,
     card: handCard009Url,
     coin: handCard010Url,
+    // 탐욕의 동전은 동전 일러스트를 재사용한다(전용 에셋 없음).
+    'greed-coin': handCard010Url,
   } satisfies Record<HandCardId, string>,
   /** Shop card-pack illustrations. Index follows the pack pickers in the
    *  shop bottom row: basic (자원) / upgrade (강화) / unlock (해금). */
