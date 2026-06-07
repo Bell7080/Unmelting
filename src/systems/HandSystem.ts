@@ -455,7 +455,7 @@ export class HandSystem {
         return `+${1 + bonus}$`
       case 'greed-coin':
         // 자해 피해/불빛은 use()의 selfDamage·lightGained로 보고되어 UI에서 처리한다.
-        return `소량의 불빛 · 자신 ${HandSystem.GREED_COIN_SELF_DAMAGE} 피해`
+        return `소량의 불빛 · 자해 ${HandSystem.GREED_COIN_SELF_DAMAGE}`
       case 'sacrifice-candle':
         // 자해 2는 use()의 selfDamage로 처리. 여기서는 선택 적 피해만 적용한다.
         return HandSystem.damageTargetEnemy(gs, target, 5 + bonus)
@@ -463,7 +463,7 @@ export class HandSystem {
         // 적 행동 시뮬레이션(2회)과 %HP 피해는 useSingle 반환값으로 index.ts에 위임한다.
         return '레바테인: 즉시 2턴 흐름 후 최대체력 30% 피해'
       case 'firework':
-        return HandSystem.distributeDamageAmongEnemies(gs, 4 + bonus)
+        return HandSystem.distributeDamageAmongEnemies(gs, 3 + bonus)
       case 'book-of-flames':
         return HandSystem.applyBookOfFlames(gs, target, 0, 1)
     }
@@ -512,7 +512,7 @@ export class HandSystem {
         return `+${5 + bonus}$`
       case 'greed-coin':
         // 탐욕의 동전은 트리플 합성되지 않으므로 이 분기는 실제로 도달하지 않는다.
-        return `소량의 불빛 · 자신 ${HandSystem.GREED_COIN_SELF_DAMAGE} 피해`
+        return `소량의 불빛 · 자해 ${HandSystem.GREED_COIN_SELF_DAMAGE}`
       case 'sacrifice-candle':
         // 트리플은 자해 없이 더 큰 피해만 입힌다.
         return HandSystem.damageTargetEnemy(gs, target, 7 + bonus)
@@ -520,7 +520,7 @@ export class HandSystem {
         // 적 행동 시뮬레이션(1회)과 %HP 피해는 useSingle 반환값으로 index.ts에 위임한다.
         return '레바테인: 즉시 1턴 흐름 후 최대체력 45% 피해'
       case 'firework':
-        return HandSystem.distributeDamageAmongEnemies(gs, 15 + bonus)
+        return HandSystem.distributeDamageAmongEnemies(gs, 12 + bonus)
       case 'book-of-flames':
         return HandSystem.applyBookOfFlames(gs, target, 3 + bonus, 3)
     }
