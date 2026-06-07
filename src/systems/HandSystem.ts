@@ -116,8 +116,8 @@ interface RecipeEffectResult {
 }
 
 export class HandSystem {
-  /** 탐욕의 동전 자해 피해는 매 사용마다 1~3 랜덤. */
-  static greedCoinSelfDamage(): number { return Math.floor(Math.random() * 3) + 1 }
+  /** 탐욕의 동전 자해 피해는 매 사용마다 2~5 랜덤. */
+  static greedCoinSelfDamage(): number { return Math.floor(Math.random() * 4) + 2 }
   /** 탐욕의 동전 불빛 base값(30층 1칸 적 처치의 약 절반). index.ts가 인플레이션을 적용한다. */
   static readonly GREED_COIN_LIGHT_BASE = 36
 
@@ -560,7 +560,7 @@ export class HandSystem {
         return `+${1 + bonus}$`
       case 'greed-coin':
         // 자해 피해/불빛은 use()의 selfDamage·lightGained로 보고되어 UI에서 처리한다.
-        return '소량의 불빛 · 자해 1~3'
+        return '소량의 불빛 · 자해 2~5'
       case 'sacrifice-candle':
         // 자해 2는 use()의 selfDamage로 처리. 여기서는 선택 적 피해만 적용한다.
         return HandSystem.damageTargetEnemy(gs, target, 4 + bonus)
@@ -660,7 +660,7 @@ export class HandSystem {
         return `+${5 + bonus}$`
       case 'greed-coin':
         // 탐욕의 동전은 트리플 합성되지 않으므로 이 분기는 실제로 도달하지 않는다.
-        return '소량의 불빛 · 자해 1~3'
+        return '소량의 불빛 · 자해 2~5'
       case 'sacrifice-candle':
         // 트리플은 자해 없이 더 큰 피해만 입힌다.
         return HandSystem.damageTargetEnemy(gs, target, 6 + bonus)

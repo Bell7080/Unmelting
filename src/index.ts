@@ -3084,9 +3084,9 @@ async function resolvePostDropSporeSpread(): Promise<void> {
   const sporeTicks = turnManager.tickSporeCountdowns()
   const hasReadySpore = sporeTicks.some((tick) => tick.turnsUntilSpread === 0)
   if (sporeTicks.length > 0) {
-    // 2→1→0 뱃지 흐름을 눈으로 읽은 뒤 전염/2턴 리셋이 이어지도록 분리 렌더한다.
     render()
-    if (hasReadySpore) await wait(260)
+    // 0턴 뱃지를 충분히 보여 준 뒤 전염/2턴 리셋이 이어지도록 멈춘다(보스 카운터 0 표기와 같은 의도).
+    if (hasReadySpore) await wait(420)
   }
 
   const sporeSpreads = turnManager.spreadReadySpores()

@@ -2985,7 +2985,7 @@ export class GameBoardRenderer {
     const seen = this.currentGameState?.encounteredCardNames ?? new Set<string>()
 
     const webNames: Record<1 | 2 | 3, string> = { 1: '양초 거미줄', 2: '촛농 거미집', 3: '밀랍 거미굴' }
-    const webDamage: Record<1 | 2 | 3, string> = { 1: '2', 2: '5', 3: '999' }
+    const webDamage: Record<1 | 2 | 3, string> = { 1: '1', 2: '5', 3: '999' }
     const webTiles = ([1, 2, 3] as const)
       .map((span) => {
         const known = seen.has(webNames[span])

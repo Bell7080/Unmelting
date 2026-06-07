@@ -313,7 +313,7 @@ export class Card {
     }
     if (this.groupCount >= 3) return 999
     if (this.groupCount === 2) return 5 + bonus
-    return (this.baseDamage || 2) + bonus
+    return this.baseDamage + bonus
   }
 
   /** 함정이 실제로 가하는/표기할 피해를 하나의 수치로 돌려준다(보너스 합산 포함).

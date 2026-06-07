@@ -183,7 +183,7 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
 ]
 
 export const TRAP_DEFINITIONS: CardDefinition[] = [
-  { name: '양초 거미줄', description: 'Deals 2 damage', healthOrDamage: 2, trapKind: 'web' },
+  { name: '양초 거미줄', description: 'Deals 1/5/instant damage', healthOrDamage: 1, trapKind: 'web' },
   {
     name: '양초 폭탄',
     description: 'Arms on the front rail, then explodes for 5 damage',
