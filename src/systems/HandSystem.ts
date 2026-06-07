@@ -453,6 +453,16 @@ export class HandSystem {
         const healed = c.heal(5 + bonus)
         return { message: `체력 +${healed}` }
       }
+      case 'heal-3': {
+        const healed = c.heal(3 + bonus)
+        return { message: `체력 +${healed}` }
+      }
+      case 'damage-split-field-4':
+        return { message: HandSystem.distributeDamageAmongEnemies(gs, 4 + bonus) }
+      case 'clear-all-field-traps': {
+        const cleared = HandSystem.clearAllOfTypes(gs, [CardType.TRAP])
+        return { message: `필드 함정 ${cleared}장 제거` }
+      }
     }
   }
 
