@@ -2735,13 +2735,14 @@ async function applyHandSingle(
   // 손패가 빈 슬롯을 메우며 이동/낙하한 뒤, 충분히 자리잡은 다음 트리플 합성을 별도 비트로 재생한다.
   await resolveDeferredHandMerges()
 
-  // 샹들리에: 처치 발생 시 동일 라운드를 200ms 딜레이로 반복 실행한다.
-  // 반복은 한번에 계산하지 않고 처치가 있을 때마다 독립적으로 재실행하는 빠른 연속 실행이다.
+  // 샹들리에: 처치 발생 시 동일 라운드를 빠른 딜레이로 반복 실행한다.
+  // 반복 중에는 레일을 내리지 않고, 모든 반복이 끝난 뒤 레일을 한 번만 하강/리필한다.
+  // (중간 하강을 허용하면 새로 내려온 1체력 적을 연속 처치하는 무한 연쇄가 발생한다.)
   if (result.chandelierRepeat) {
     const chandelierDamage = result.chandelierRepeat.isMerged ? 2 : 1
     let hadKills = result.removedFieldCards.some((r) => r.type === CardType.ENEMY)
     while (hadKills && !gameState.isGameOver) {
-      await wait(200)
+      await wait(80)
       if (gameState.isGameOver) break
       const beforeRepeatHealth = snapshotFieldHealthState()
       const beforeRepeatCards = snapshotFieldCardsById()
@@ -2757,19 +2758,20 @@ async function applyHandSingle(
           repeatResult.removedFieldCards.filter((r) => r.type === CardType.ENEMY).length
         )
       }
-      await runPreparationRefreshAfterFieldEffects()
       hadKills = repeatResult.removedFieldCards.some((r) => r.type === CardType.ENEMY)
     }
+    // 모든 반복 완료 후 레일 하강·리필을 한 번만 실행한다.
+    if (!gameState.isGameOver) await runPreparationRefreshAfterFieldEffects()
   }
 
-  // 주전자: 첫 타격(useSingle에서 실행) 이후 나머지 타격을 200ms 딜레이로 순차 실행한다.
+  // 주전자: 첫 타격(useSingle에서 실행) 이후 나머지 타격을 빠른 딜레이로 순차 실행한다.
   // 매 타격은 독립적으로 실행하는 빠른 연속 타격이며 한번에 더해 계산하지 않는다.
   if (result.teapotExtraHits && target) {
     const { damage: teapotDamage, totalCount } = result.teapotExtraHits
     for (let i = 1; i < totalCount; i++) {
       if (gameState.isGameOver) break
       if (target.card.getHealth() <= 0) break
-      await wait(200)
+      await wait(80)
       const beforeHitHealth = snapshotFieldHealthState()
       const beforeHitCards = snapshotFieldCardsById()
       const hitResult = HandSystem.applyTeapotHit(gameState, target, teapotDamage)
@@ -2943,6 +2945,12 @@ async function applyHandSingle(
       }
       if (killed) {
         await awardScoreForRemovedCards([{ cardId: targetId, type: target.card.type }], preStrikeSnapshot)
+        // 강타 후 적 처치 연출: 레바테인 볼트가 이미 버스트를 냈으므로 shrink만 재생한다.
+        await boardRenderer.animateCardConsumeByIds([{ cardId: targetId, type: target.card.type }], {
+          suppressBurstIds: new Set([targetId]),
+        })
+        await onEnemiesDefeated(1)
+        if (!gameState.isGameOver) await runPreparationRefreshAfterFieldEffects()
       }
     }
   }
