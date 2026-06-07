@@ -142,13 +142,13 @@ export const RECIPES: Recipe[] = [
   recipe('blood-pact',   '혈약',       { 'sacrifice-shield': 1, 'wax-drop': 1 },      'heal-3',                  '체력 3 회복'),
   recipe('cleanse',      '청결',       { sweep: 1, 'holy-water': 1 },                 'clear-all-field-traps',   '필드 모든 함정 제거'),
   // --- 신규 카드(21~27) 레시피 ---
-  recipe('fireworks-show', '불꽃놀이',  { chandelier: 1, firework: 1 },                'damage-split-field-5',         '필드 랜덤 적 전체 피해 5 분산'),
-  recipe('hospitality',    '대접',      { teacup: 1, 'wax-drop': 1 },                 'heal-5',                       '체력 5 회복'),
-  recipe('boiling-rage',   '끓는 분노', { teapot: 1, 'sacrifice-candle': 1 },         'destroy-all-front-enemies',    '전방 모든 적 처치'),
-  recipe('bright-ceiling', '밝은 천장', { chandelier: 1, match: 1 },                  'gain-ember-2',                 '불씨 게이지 +2'),
-  recipe('flame-chain',    '불꽃 사슬', { chandelier: 1, shackles: 1 },               'shield-2-and-damage-field-1',  '방패 +2 · 필드 적 전체 피해 1'),
-  recipe('banquet',        '연회',      { teapot: 1, firework: 1 },                   'damage-split-field-2x2',       '필드 랜덤 적 피해 2 × 2회'),
-  recipe('sweetness',      '달콤함',    { teacup: 1, 'sacrifice-shield': 1 },         'heal-by-player-attack',        '공격력만큼 체력 회복'),
+  recipe('fireworks-show', '불꽃놀이',  { chandelier: 1, firework: 1 },                'damage-split-field-5',         '필드 랜덤 적 전체 피해 5 분산', true),
+  recipe('hospitality',    '대접',      { teacup: 1, 'wax-drop': 1 },                 'heal-5',                       '체력 5 회복',                   true),
+  recipe('boiling-rage',   '끓는 분노', { teapot: 1, 'sacrifice-candle': 1 },         'destroy-all-front-enemies',    '전방 모든 적 처치',              true),
+  recipe('bright-ceiling', '밝은 천장', { chandelier: 1, match: 1 },                  'gain-ember-2',                 '불씨 게이지 +2',                 true),
+  recipe('flame-chain',    '불꽃 사슬', { chandelier: 1, shackles: 1 },               'shield-2-and-damage-field-1',  '방패 +2 · 필드 적 전체 피해 1', true),
+  recipe('banquet',        '연회',      { teapot: 1, firework: 1 },                   'damage-split-field-2x2',       '필드 랜덤 적 피해 2 × 2회',      true),
+  recipe('sweetness',      '달콤함',    { teacup: 1, 'sacrifice-shield': 1 },         'heal-by-player-attack',        '공격력만큼 체력 회복',            true),
 ]
 
 /** Lookup helper for the renderer/log. */
