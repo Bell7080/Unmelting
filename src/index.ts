@@ -2714,6 +2714,16 @@ async function applyHandSingle(
     )
   }
 
+  // 모닥불: 첫 타격으로 적이 처치됐을 때 즉시 체력을 회복한다.
+  if (result.bonfireHealOnKill && result.bonfireHealOnKill > 0) {
+    const enemiesKilled = result.removedFieldCards.filter((r) => r.type === CardType.ENEMY).length
+    if (enemiesKilled > 0) {
+      const beforeBonfireResources = snapshotPlayerResources()
+      gameState.character.heal(result.bonfireHealOnKill)
+      await playPlayerGainTrails({ kind: 'center' }, beforeBonfireResources)
+    }
+  }
+
   // Prepare the rail immediately after the single card effect. Recipes should
   // resolve against a compacted/refilled/front-regrouped board, preventing holes
   // after effects such as 한 걸음씩 or 밀매 remove cards from the field.
@@ -2723,6 +2733,60 @@ async function applyHandSingle(
 
   // 손패가 빈 슬롯을 메우며 이동/낙하한 뒤, 충분히 자리잡은 다음 트리플 합성을 별도 비트로 재생한다.
   await resolveDeferredHandMerges()
+
+  // 샹들리에: 처치 발생 시 동일 라운드를 200ms 딜레이로 반복 실행한다.
+  // 반복은 한번에 계산하지 않고 처치가 있을 때마다 독립적으로 재실행하는 빠른 연속 실행이다.
+  if (result.chandelierRepeat) {
+    const chandelierDamage = result.chandelierRepeat.isMerged ? 2 : 1
+    let hadKills = result.removedFieldCards.some((r) => r.type === CardType.ENEMY)
+    while (hadKills && !gameState.isGameOver) {
+      await wait(200)
+      if (gameState.isGameOver) break
+      const beforeRepeatHealth = snapshotFieldHealthState()
+      const beforeRepeatCards = snapshotFieldCardsById()
+      const repeatResult = HandSystem.applyChandelierRound(gameState, chandelierDamage)
+      const repeatLosses = diffFieldHealthLosses(beforeRepeatHealth)
+      await boardRenderer.animateDamageNumbersById(repeatLosses)
+      await awardScoreForRemovedCards(repeatResult.removedFieldCards, beforeRepeatCards)
+      if (repeatResult.removedFieldCards.length > 0) {
+        await boardRenderer.animateCardConsumeByIds(repeatResult.removedFieldCards, {
+          suppressBurstIds: new Set(repeatLosses.map((l) => l.cardId)),
+        })
+        await onEnemiesDefeated(
+          repeatResult.removedFieldCards.filter((r) => r.type === CardType.ENEMY).length
+        )
+      }
+      await runPreparationRefreshAfterFieldEffects()
+      hadKills = repeatResult.removedFieldCards.some((r) => r.type === CardType.ENEMY)
+    }
+  }
+
+  // 주전자: 첫 타격(useSingle에서 실행) 이후 나머지 타격을 200ms 딜레이로 순차 실행한다.
+  // 매 타격은 독립적으로 실행하는 빠른 연속 타격이며 한번에 더해 계산하지 않는다.
+  if (result.teapotExtraHits && target) {
+    const { damage: teapotDamage, totalCount } = result.teapotExtraHits
+    for (let i = 1; i < totalCount; i++) {
+      if (gameState.isGameOver) break
+      if (target.card.getHealth() <= 0) break
+      await wait(200)
+      const beforeHitHealth = snapshotFieldHealthState()
+      const beforeHitCards = snapshotFieldCardsById()
+      const hitResult = HandSystem.applyTeapotHit(gameState, target, teapotDamage)
+      const hitLosses = diffFieldHealthLosses(beforeHitHealth)
+      await boardRenderer.animateDamageNumbersById(hitLosses)
+      await awardScoreForRemovedCards(hitResult.removedFieldCards, beforeHitCards)
+      if (hitResult.removedFieldCards.length > 0) {
+        await boardRenderer.animateCardConsumeByIds(hitResult.removedFieldCards, {
+          suppressBurstIds: new Set(hitLosses.map((l) => l.cardId)),
+        })
+        await onEnemiesDefeated(
+          hitResult.removedFieldCards.filter((r) => r.type === CardType.ENEMY).length
+        )
+        await runPreparationRefreshAfterFieldEffects()
+      }
+      if (hitResult.targetKilled) break
+    }
+  }
 
   // Resolve combo recipes one at a time. Each recipe gets its own delay,
   // animations, and preparation refresh so chained removals cannot leave rail

@@ -98,6 +98,13 @@ import handCard017Url from '../assets/sprites/handcard_017.webp'
 import handCard018Url from '../assets/sprites/handcard_018.webp'
 import handCard019Url from '../assets/sprites/handcard_019.webp'
 import handCard020Url from '../assets/sprites/handcard_020.webp'
+import handCard021Url from '../assets/sprites/handcard_021.webp'
+import handCard022Url from '../assets/sprites/handcard_022.webp'
+import handCard023Url from '../assets/sprites/handcard_023.webp'
+import handCard024Url from '../assets/sprites/handcard_024.webp'
+import handCard025Url from '../assets/sprites/handcard_025.webp'
+import handCard026Url from '../assets/sprites/handcard_026.webp'
+import handCard027Url from '../assets/sprites/handcard_027.webp'
 import relic001Url from '../assets/sprites/relics_001.webp'
 import relic002Url from '../assets/sprites/relics_002.webp'
 import relic003Url from '../assets/sprites/relics_003.webp'
@@ -265,6 +272,13 @@ export const SpriteUrls = {
     'sacrifice-shield': handCard018Url,
     sweep: handCard019Url,
     'hand-mirror': handCard020Url,
+    chandelier: handCard021Url,
+    bonfire: handCard022Url,
+    teapot: handCard023Url,
+    teacup: handCard024Url,
+    'top-hat': handCard025Url,
+    slash: handCard026Url,
+    shackles: handCard027Url,
   } satisfies Record<HandCardId, string>,
   /** Shop card-pack illustrations. Index follows the pack pickers in the
    *  shop bottom row: basic (자원) / upgrade (강화) / unlock (해금). */

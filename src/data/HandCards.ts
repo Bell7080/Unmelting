@@ -333,6 +333,115 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: false,
   },
+  // 샹들리에: 필드 전체 적에게 피해. 처치 발생 시 약 200ms 딜레이 후 동일 라운드를 다시 실행한다.
+  // 반복은 한번에 더해 계산하지 않고 매번 독립적으로 재실행하는 빠른 연속 실행이다.
+  chandelier: {
+    id: 'chandelier',
+    name: '샹들리에',
+    category: 'attack',
+    description: '필드 전체 적 피해 1 · 처치 시 반복',
+    tripleDescription: '필드 전체 적 피해 2 · 처치 시 반복',
+    targeting: {
+      base: { selection: 'all', zone: 'field', filter: 'enemy', countLimit: null },
+      triple: { selection: 'all', zone: 'field', filter: 'enemy', countLimit: null },
+    },
+    dropWeight: 7,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
+  // 모닥불: 선택 적을 공격하고 처치 시 체력을 회복한다.
+  bonfire: {
+    id: 'bonfire',
+    name: '모닥불',
+    category: 'attack',
+    description: '필드 선택 적 1장 피해 1 · 처치 시 체력 +3',
+    tripleDescription: '필드 선택 적 1장 피해 4 · 처치 시 체력 +5',
+    targeting: {
+      base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
+      triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
+    },
+    dropWeight: 7,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
+  // 주전자: 전방 선택 적에게 필드 적 수만큼 반복 타격한다.
+  // 반복 타격은 한번에 계산하지 않고 200ms 딜레이로 순차 실행하는 빠른 연속 타격이다.
+  teapot: {
+    id: 'teapot',
+    name: '주전자',
+    category: 'attack',
+    description: '전방 선택 적 1장 피해 2 × 필드 적 수',
+    tripleDescription: '전방 선택 적 1장 피해 4 × 필드 적 수 × 2',
+    targeting: {
+      base: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
+      triple: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
+    },
+    dropWeight: 6,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
+  // 찻잔: 필드에 살아있는 적 수만큼 체력을 회복한다.
+  teacup: {
+    id: 'teacup',
+    name: '찻잔',
+    category: 'recovery',
+    description: '필드 적 수만큼 체력 회복',
+    tripleDescription: '필드 적 수 × 3만큼 체력 회복',
+    targeting: { base: selfOne, triple: selfOne },
+    dropWeight: 6,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
+  // 신사모: 전방 1칸 카드를 선택해 레인 맨 뒤로 순환 이동(d1→d0, d2→d1, d0→d2).
+  // 트리플은 d0 카드를 보물상자로 변환한 뒤 맨 뒤로 이동한다. 2·3칸 카드는 대상 불가.
+  'top-hat': {
+    id: 'top-hat',
+    name: '신사모',
+    category: 'control',
+    description: '전방 1칸 선택 카드 레인 맨 뒤로 이동',
+    tripleDescription: '전방 1칸 선택 카드 보물상자 변환 후 레인 맨 뒤로 이동',
+    targeting: {
+      base: { selection: 'target', zone: 'front', filter: 'any', countLimit: 1, maxSpan: 1 },
+      triple: { selection: 'target', zone: 'front', filter: 'any', countLimit: 1, maxSpan: 1 },
+    },
+    dropWeight: 6,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
+  // 참격: 전방 단일 적 피해. 트리플은 즉사(보스 면역).
+  slash: {
+    id: 'slash',
+    name: '참격',
+    category: 'attack',
+    description: '전방 선택 적 1장 피해 4',
+    tripleDescription: '전방 선택 적 1장 즉사 (보스 면역)',
+    targeting: {
+      base: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
+      triple: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
+    },
+    dropWeight: 7,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
+  // 족쇄: 방패를 얻고 즉시 1턴 흐름을 실행한다(레바테인 simulatedBattlePhases 방식 재사용).
+  shackles: {
+    id: 'shackles',
+    name: '족쇄',
+    category: 'recovery',
+    description: '방패 +4 · 즉시 1턴 흐름',
+    tripleDescription: '방패 +5 · 체력 +5 · 즉시 1턴 흐름',
+    targeting: { base: selfOne, triple: selfOne },
+    dropWeight: 5,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
 }
 
 export const HAND_CARD_IDS: HandCardId[] = Object.keys(HAND_CARD_DEFINITIONS) as HandCardId[]

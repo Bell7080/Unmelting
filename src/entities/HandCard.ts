@@ -36,6 +36,13 @@ export type HandCardId =
   | 'sacrifice-shield'
   | 'sweep'
   | 'hand-mirror'
+  | 'chandelier'
+  | 'bonfire'
+  | 'teapot'
+  | 'teacup'
+  | 'top-hat'
+  | 'slash'
+  | 'shackles'
 
 export type HandEffectSelection = 'target' | 'random' | 'all' | 'none'
 

@@ -71,6 +71,15 @@ export interface HandUseResult {
   suppressScoreForRemovedCards?: boolean
   /** 손거울(트리플): 복제된 손패 ID. index.ts가 획득 로그를 남긴다. */
   mirrorCopiedDefId?: HandCardId
+  /** 샹들리에: 처치 발생 시 index.ts가 200ms 딜레이로 동일 라운드를 반복 실행한다.
+   *  반복은 한번에 계산하지 않고 처치가 있을 때마다 재실행하는 빠른 연속 실행이다. */
+  chandelierRepeat?: { isMerged: boolean }
+  /** 주전자: index.ts가 200ms 딜레이로 나머지 타격을 순차 실행한다.
+   *  totalCount는 첫 타격 포함 총 횟수 — index.ts는 i=1부터 루프한다.
+   *  반복은 한번에 계산하지 않고 매 타격을 독립적으로 실행하는 빠른 연속 타격이다. */
+  teapotExtraHits?: { damage: number; totalCount: number }
+  /** 모닥불: 처치가 일어났을 때 index.ts가 적용할 체력 회복량. */
+  bonfireHealOnKill?: number
 }
 
 export interface RecipeFireResult {
@@ -172,6 +181,9 @@ export class HandSystem {
     // Snapshot the field BEFORE any mutation so we can diff removals after.
     const beforeField = HandSystem.snapshotFieldCards(gs)
 
+    // 주전자: 효과 실행 전에 필드 적 수를 캡처해 총 타격 횟수를 결정한다(효과 후 적 수가 변할 수 있음).
+    const preEffectEnemyCount = card.defId === 'teapot' ? HandSystem.countFieldEnemies(gs) : 0
+
     // Apply the card effect (merged cards use the enhanced version).
     const message = card.merged
       ? HandSystem.applyTripleEffect(gs, def, target)
@@ -232,8 +244,10 @@ export class HandSystem {
       // 자해 피해와 불빛은 UI가 애니메이션과 함께 적용한다(모델은 여기서 건드리지 않음).
       selfDamage: HandSystem.selfDamageFor(card.defId, card.merged === true),
       lightGained: card.defId === 'greed-coin' ? HandSystem.GREED_COIN_LIGHT_BASE : 0,
-      // 레바테인: 시뮬레이션 페이즈 수 + % 피해량을 index.ts에 전달해 적 행동 뒤 적용하게 한다.
-      simulatedBattlePhases: card.defId === 'levatein' ? (card.merged ? 1 : 2) : undefined,
+      // 레바테인/족쇄: 시뮬레이션 페이즈 수를 index.ts에 전달해 적 행동을 먼저 실행하게 한다.
+      simulatedBattlePhases: card.defId === 'levatein' ? (card.merged ? 1 : 2)
+        : card.defId === 'shackles' ? 1
+        : undefined,
       levateainDamage: card.defId === 'levatein'
         ? (card.merged
           ? Math.max(15, Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.45))
@@ -242,6 +256,21 @@ export class HandSystem {
       // 청소 단일: 제거된 거미줄의 불빛을 주지 않는다(트리플만 불빛 획득).
       suppressScoreForRemovedCards: card.defId === 'sweep' && !card.merged,
       mirrorCopiedDefId,
+      chandelierRepeat: card.defId === 'chandelier' ? { isMerged: card.merged === true } : undefined,
+      // 주전자: 첫 타격 포함 총 타격 횟수와 타격 피해를 index.ts에 전달한다.
+      teapotExtraHits: card.defId === 'teapot' && preEffectEnemyCount > 0
+        ? {
+            damage: (card.merged ? 4 : 2) + (card.merged
+              ? (gs.enhancements.tripleBonus['teapot'] ?? 0)
+              : (gs.enhancements.singleBonus['teapot'] ?? 0)),
+            totalCount: card.merged ? preEffectEnemyCount * 2 : preEffectEnemyCount,
+          }
+        : undefined,
+      bonfireHealOnKill: card.defId === 'bonfire'
+        ? (card.merged
+            ? 5 + (gs.enhancements.tripleBonus['bonfire'] ?? 0)
+            : 3 + (gs.enhancements.singleBonus['bonfire'] ?? 0))
+        : undefined,
     }
   }
 
@@ -533,6 +562,32 @@ export class HandSystem {
         return HandSystem.clearSingleCellWebTraps(gs)
       case 'hand-mirror':
         return HandSystem.damageTargetEnemyByAtk(gs, target, bonus)
+      case 'chandelier':
+        // 처치 발생 시 index.ts가 200ms 딜레이로 동일 라운드를 반복 실행한다(chandelierRepeat 참조).
+        return HandSystem.damageEnemies(gs, 'field', 1 + bonus)
+      case 'bonfire':
+        // 처치 발생 시 회복은 index.ts가 bonfireHealOnKill로 처리한다.
+        return HandSystem.damageTargetEnemy(gs, target, 1 + bonus)
+      case 'teapot':
+        // 첫 타격만 여기서 실행. 나머지는 index.ts가 200ms 딜레이로 순차 실행한다(teapotExtraHits 참조).
+        return HandSystem.damageTargetEnemy(gs, target, 2 + bonus)
+      case 'teacup': {
+        const count = HandSystem.countFieldEnemies(gs)
+        const healed = c.heal(count + bonus)
+        return `체력 +${healed}`
+      }
+      case 'top-hat': {
+        if (!target) return '이동할 카드 없음'
+        HandSystem.rotateFrontToBack(gs, target.laneIndex)
+        return `${target.card.name} 레인 맨 뒤로 이동`
+      }
+      case 'slash':
+        return HandSystem.damageTargetEnemy(gs, target, 4 + bonus)
+      case 'shackles': {
+        // 즉시 1턴 흐름은 simulatedBattlePhases=1로 index.ts에 위임한다.
+        const shielded = c.addShield(4 + bonus)
+        return `방패 +${shielded}`
+      }
     }
   }
 
@@ -610,6 +665,42 @@ export class HandSystem {
       case 'hand-mirror':
         // 복제 로직은 useSingle에서 chain.sequence를 직접 읽어 처리한다.
         return HandSystem.damageTargetEnemyByAtk(gs, target, bonus)
+      case 'chandelier':
+        // 처치 발생 시 index.ts가 200ms 딜레이로 동일 라운드를 반복 실행한다(chandelierRepeat 참조).
+        return HandSystem.damageEnemies(gs, 'field', 2 + bonus)
+      case 'bonfire':
+        // 처치 발생 시 회복은 index.ts가 bonfireHealOnKill로 처리한다.
+        return HandSystem.damageTargetEnemy(gs, target, 4 + bonus)
+      case 'teapot':
+        // 첫 타격만 여기서 실행. 나머지는 index.ts가 200ms 딜레이로 순차 실행한다(teapotExtraHits 참조).
+        return HandSystem.damageTargetEnemy(gs, target, 4 + bonus)
+      case 'teacup': {
+        const count = HandSystem.countFieldEnemies(gs)
+        const healed = c.heal(count * 3 + bonus)
+        return `트리플 체력 +${healed}`
+      }
+      case 'top-hat': {
+        if (!target) return '이동할 카드 없음'
+        // 전방 1칸 카드를 보물상자로 변환한 뒤 레인 맨 뒤로 순환 이동한다.
+        const treasure = HandSystem.makeRecipeTreasure()
+        HandSystem.rotateFrontToBack(gs, target.laneIndex, treasure)
+        return `${target.card.name} 보물상자 변환 후 맨 뒤로 이동`
+      }
+      case 'slash': {
+        // 즉사: 보스는 면역(저항 메시지만 반환하고 제거하지 않는다).
+        const t = target ?? HandSystem.findFirstOnField(gs, [CardType.ENEMY, CardType.BOSS])
+        if (!t || (t.card.type !== CardType.ENEMY && t.card.type !== CardType.BOSS))
+          return '대상 적 없음'
+        if (t.card.type === CardType.BOSS) return `${t.card.name} 저항`
+        gs.removeCardFromRow(t.card, t.distance)
+        return `${t.card.name} 즉사`
+      }
+      case 'shackles': {
+        // 즉시 1턴 흐름은 simulatedBattlePhases=1로 index.ts에 위임한다.
+        const shielded = c.addShield(5 + bonus)
+        const healed = c.heal(5 + bonus)
+        return `방패 +${shielded} · 체력 +${healed}`
+      }
     }
   }
 
@@ -1112,5 +1203,60 @@ export class HandSystem {
       }
     }
     return count
+  }
+
+  /** 필드에 살아있는 적/보스의 고유 수를 반환한다(주전자·찻잔에서 타격 횟수/회복량 계산에 사용). */
+  private static countFieldEnemies(gs: GameState): number {
+    const seen = new Set<Card>()
+    for (const lane of gs.lanes) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = lane.getCardAtDistance(d)
+        if (!card || seen.has(card)) continue
+        if (card.type === CardType.ENEMY || card.type === CardType.BOSS) seen.add(card)
+      }
+    }
+    return seen.size
+  }
+
+  /** 신사모: 선택 레인의 d0 카드를 맨 뒤(d2)로 순환 이동(d1→d0, d2→d1, d0→d2).
+   *  replacement가 있으면 원본 d0은 버리고 새 카드(보물상자)를 d2에 배치한다. */
+  private static rotateFrontToBack(gs: GameState, laneIndex: number, replacement?: Card | null): void {
+    const lane = gs.lanes[laneIndex]
+    const d0 = lane.getCardAtDistance(0)
+    const d1 = lane.getCardAtDistance(1)
+    const d2 = lane.getCardAtDistance(2)
+    lane.setCardAtDistance(0, d1)
+    lane.setCardAtDistance(1, d2)
+    lane.setCardAtDistance(2, replacement !== undefined ? replacement : d0)
+  }
+
+  /** 샹들리에 반복 라운드: 필드 전체 적에게 amount 피해를 입히고 제거된 카드 목록을 반환한다.
+   *  index.ts가 처치 발생 시 200ms 딜레이 후 이 메서드를 재호출해 연속 빠른 재실행을 구현한다. */
+  static applyChandelierRound(gs: GameState, amount: number): { removedFieldCards: RemovedFieldCard[] } {
+    const before = HandSystem.snapshotFieldCards(gs)
+    HandSystem.damageEnemies(gs, 'field', amount)
+    const after = HandSystem.snapshotFieldCards(gs)
+    const removedFieldCards: RemovedFieldCard[] = []
+    for (const [id, type] of before.entries()) {
+      if (!after.has(id)) removedFieldCards.push({ cardId: id, type })
+    }
+    return { removedFieldCards }
+  }
+
+  /** 주전자 단회 타격: target 적에게 amount 피해를 입히고 제거 여부와 카드 목록을 반환한다.
+   *  index.ts가 200ms 딜레이로 이 메서드를 반복 호출해 빠른 연속 타격을 구현한다. */
+  static applyTeapotHit(
+    gs: GameState,
+    target: HandTarget,
+    amount: number
+  ): { removedFieldCards: RemovedFieldCard[]; targetKilled: boolean } {
+    const before = HandSystem.snapshotFieldCards(gs)
+    HandSystem.damageTargetEnemy(gs, target, amount)
+    const after = HandSystem.snapshotFieldCards(gs)
+    const removedFieldCards: RemovedFieldCard[] = []
+    for (const [id, type] of before.entries()) {
+      if (!after.has(id)) removedFieldCards.push({ cardId: id, type })
+    }
+    return { removedFieldCards, targetKilled: !after.has(target.card.id) }
   }
 }
