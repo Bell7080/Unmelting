@@ -2685,10 +2685,20 @@ async function applyHandSingle(
   pendingHandTarget = null
   boardRenderer.setHandTargetingMode(null)
 
+  // 손거울 트리플: 이전 손패 복제 로그를 남긴다.
+  if (result.mirrorCopiedDefId) {
+    const copiedName = getHandCardDef(result.mirrorCopiedDefId).name
+    pushActivityLogsInDisplayOrder(createItemGainLogs([copiedName]))
+    await playResourceTrail({ kind: 'center' }, 'hand', 1)
+  }
+
   // Light for any field cards the hand-card effect just removed (kill / clear
   // / grab). Same strength formula as direct clicks, so 손패 사용 도 "직접
   // 타격" 과 동일한 점수 룰을 따른다.
-  await awardScoreForRemovedCards(result.removedFieldCards, beforeSingleCards)
+  // 청소(단일)는 불빛 없음 규칙으로 점수를 부여하지 않는다.
+  if (!result.suppressScoreForRemovedCards) {
+    await awardScoreForRemovedCards(result.removedFieldCards, beforeSingleCards)
+  }
 
   // Animate removals caused by the single hand card while the old board DOM is
   // still present. This is the "previous effect" beat the combo waits for.

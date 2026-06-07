@@ -255,6 +255,84 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: false,
   },
+  // 불화살: 전방 단일 적에게 무작위 피해. 트리플은 최대 피해 폭이 크게 늘어난다.
+  'fire-arrow': {
+    id: 'fire-arrow',
+    name: '불화살',
+    category: 'attack',
+    description: '전방 선택 적 1장 피해 1~5',
+    tripleDescription: '전방 선택 적 1장 피해 1~20',
+    targeting: {
+      base: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
+      triple: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
+    },
+    dropWeight: 8,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
+  // 방패 밀치기: 현재 방패 수치를 그대로 피해로 전환한다. 트리플은 방패를 먼저 얻은 뒤 3배로 때린다.
+  'shield-bash': {
+    id: 'shield-bash',
+    name: '방패 밀치기',
+    category: 'attack',
+    description: '전방 선택 적 1장 방패 수치만큼 피해',
+    tripleDescription: '방패 +3 · 전방 선택 적 1장 방패 수치×3 피해',
+    targeting: {
+      base: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
+      triple: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
+    },
+    dropWeight: 7,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
+  // 희생 방패: 자해를 대가로 방패를 얻는다. 트리플은 자해가 늘지만 방패 효율이 훨씬 높다.
+  'sacrifice-shield': {
+    id: 'sacrifice-shield',
+    name: '희생 방패',
+    category: 'recovery',
+    description: '자해 1 · 방패 +2',
+    tripleDescription: '자해 2 · 방패 +7',
+    targeting: { base: selfOne, triple: selfOne },
+    dropWeight: 8,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
+  // 청소: 필드의 1칸 거미줄만 대상으로 제거한다. 2·3칸 거미줄에는 효과 없음.
+  // 단일 사용 시 불빛 없이 제거, 트리플은 제거한 거미줄 수만큼 불빛을 획득한다.
+  'sweep': {
+    id: 'sweep',
+    name: '청소',
+    category: 'control',
+    description: '필드 1칸 거미줄 전체 제거 · 불빛 없음',
+    tripleDescription: '필드 1칸 거미줄 전체 제거 · 불빛 획득',
+    targeting: {
+      base: { selection: 'all', zone: 'field', filter: 'trap', countLimit: null },
+      triple: { selection: 'all', zone: 'field', filter: 'trap', countLimit: null },
+    },
+    dropWeight: 7,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
+  // 손거울: 대상의 공격력만큼 피해. 트리플은 같은 피해 후 바로 이전에 사용한 손패를 손패로 복제한다.
+  'hand-mirror': {
+    id: 'hand-mirror',
+    name: '손거울',
+    category: 'attack',
+    description: '전방 선택 적 1장 공격력만큼 피해',
+    tripleDescription: '전방 선택 적 1장 공격력만큼 피해 · 이전 손패 복제',
+    targeting: {
+      base: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
+      triple: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
+    },
+    dropWeight: 6,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
 }
 
 export const HAND_CARD_IDS: HandCardId[] = Object.keys(HAND_CARD_DEFINITIONS) as HandCardId[]

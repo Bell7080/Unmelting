@@ -31,6 +31,11 @@ export type HandCardId =
   | 'levatein'
   | 'firework'
   | 'book-of-flames'
+  | 'fire-arrow'
+  | 'shield-bash'
+  | 'sacrifice-shield'
+  | 'sweep'
+  | 'hand-mirror'
 
 export type HandEffectSelection = 'target' | 'random' | 'all' | 'none'
 

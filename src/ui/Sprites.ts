@@ -93,6 +93,11 @@ import handCard012Url from '../assets/sprites/handcard_012.webp'
 import handCard013Url from '../assets/sprites/handcard_013.webp'
 import handCard014Url from '../assets/sprites/handcard_014.webp'
 import handCard015Url from '../assets/sprites/handcard_015.webp'
+import handCard016Url from '../assets/sprites/handcard_016.webp'
+import handCard017Url from '../assets/sprites/handcard_017.webp'
+import handCard018Url from '../assets/sprites/handcard_018.webp'
+import handCard019Url from '../assets/sprites/handcard_019.webp'
+import handCard020Url from '../assets/sprites/handcard_020.webp'
 import relic001Url from '../assets/sprites/relics_001.webp'
 import relic002Url from '../assets/sprites/relics_002.webp'
 import relic003Url from '../assets/sprites/relics_003.webp'
@@ -255,6 +260,11 @@ export const SpriteUrls = {
     levatein: handCard013Url,
     firework: handCard014Url,
     'book-of-flames': handCard015Url,
+    'fire-arrow': handCard016Url,
+    'shield-bash': handCard017Url,
+    'sacrifice-shield': handCard018Url,
+    sweep: handCard019Url,
+    'hand-mirror': handCard020Url,
   } satisfies Record<HandCardId, string>,
   /** Shop card-pack illustrations. Index follows the pack pickers in the
    *  shop bottom row: basic (자원) / upgrade (강화) / unlock (해금). */

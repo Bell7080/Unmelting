@@ -34,6 +34,8 @@ export const HAND_CARD_RARITY: Record<HandCardId, CardRarity> = {
   // 탐욕의 동전은 보스 전용 찌꺼기 카드(상점/도감 풀에는 노출되지 않음).
   'greed-coin': 'common',
   'sacrifice-candle': 'rare', levatein: 'legendary', firework: 'rare', 'book-of-flames': 'epic',
+  'fire-arrow': 'rare', 'shield-bash': 'rare', 'sacrifice-shield': 'rare',
+  sweep: 'rare', 'hand-mirror': 'epic',
 }
 
 /** Shop pack pool config moved to data so shop/free/pack roll tables are data-driven. */

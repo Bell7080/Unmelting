@@ -67,6 +67,10 @@ export interface HandUseResult {
   simulatedBattlePhases?: number
   /** 레바테인: 시뮬레이션 이후 대상 카드에 입힐 피해량. index.ts가 takeDamage로 적용한다. */
   levateainDamage?: number
+  /** 청소(단일): true이면 제거된 필드 카드의 불빛 점수를 부여하지 않는다. */
+  suppressScoreForRemovedCards?: boolean
+  /** 손거울(트리플): 복제된 손패 ID. index.ts가 획득 로그를 남긴다. */
+  mirrorCopiedDefId?: HandCardId
 }
 
 export interface RecipeFireResult {
@@ -178,6 +182,16 @@ export class HandSystem {
     // Extend the visible recipe chain with exactly one real card entry. The
     // `카드` item's combo-count text now means hand-gauge progress, not hidden
     // recipe ingredients, so recipes still read only this physical sequence.
+    // 손거울 트리플: chain에 현재 카드가 추가되기 전에 이전 손패를 복제한다.
+    let mirrorCopiedDefId: HandCardId | undefined
+    if (card.defId === 'hand-mirror' && card.merged === true && chain.sequence.length > 0) {
+      const lastDefId = chain.sequence[chain.sequence.length - 1]
+      if (character.hasHandRoom()) {
+        character.addHandCard(DropSystem.makeCard(lastDefId))
+        mirrorCopiedDefId = lastDefId
+      }
+    }
+
     chain.sequence.push(card.defId)
     const baseGaugeBonus = HandSystem.gaugeCountBonusFor(card.defId, card.merged === true)
     const extraGaugeBonus = card.defId === 'card'
@@ -225,14 +239,19 @@ export class HandSystem {
           ? Math.max(15, Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.45))
           : Math.max(10, Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.30)))
         : undefined,
+      // 청소 단일: 제거된 거미줄의 불빛을 주지 않는다(트리플만 불빛 획득).
+      suppressScoreForRemovedCards: card.defId === 'sweep' && !card.merged,
+      mirrorCopiedDefId,
     }
   }
 
-  /** 카드별 자해 피해(UI가 애니메이션과 함께 적용). 탐욕의 동전·제물 양초가 사용한다. */
+  /** 카드별 자해 피해(UI가 애니메이션과 함께 적용). 탐욕의 동전·제물 양초·희생 방패가 사용한다. */
   private static selfDamageFor(defId: HandCardId, isMerged: boolean): number {
     if (defId === 'greed-coin') return HandSystem.GREED_COIN_SELF_DAMAGE
     // 제물 양초는 단일 사용에만 자해 2(트리플은 자해 없이 더 큰 피해).
     if (defId === 'sacrifice-candle' && !isMerged) return 2
+    // 희생 방패: 단일 자해 1, 트리플 자해 2.
+    if (defId === 'sacrifice-shield') return isMerged ? 2 : 1
     return 0
   }
 
@@ -487,6 +506,23 @@ export class HandSystem {
         return HandSystem.distributeDamageAmongEnemies(gs, 3 + bonus)
       case 'book-of-flames':
         return HandSystem.applyBookOfFlames(gs, target, 0, 1)
+      case 'fire-arrow': {
+        const damage = Math.ceil(Math.random() * 5) + bonus
+        return HandSystem.damageTargetEnemy(gs, target, damage)
+      }
+      case 'shield-bash': {
+        const damage = Math.max(0, c.shield) + bonus
+        return HandSystem.damageTargetEnemy(gs, target, damage)
+      }
+      case 'sacrifice-shield': {
+        // 자해는 selfDamageFor에서 처리. 방패 획득만 여기서 적용.
+        const shielded = c.addShield(2 + bonus)
+        return `자해 1 · 방패 +${shielded}`
+      }
+      case 'sweep':
+        return HandSystem.clearSingleCellWebTraps(gs)
+      case 'hand-mirror':
+        return HandSystem.damageTargetEnemyByAtk(gs, target, bonus)
     }
   }
 
@@ -544,6 +580,26 @@ export class HandSystem {
         return HandSystem.distributeDamageAmongEnemies(gs, 12 + bonus)
       case 'book-of-flames':
         return HandSystem.applyBookOfFlames(gs, target, 3 + bonus, 3)
+      case 'fire-arrow': {
+        const damage = Math.ceil(Math.random() * 20) + bonus
+        return HandSystem.damageTargetEnemy(gs, target, damage)
+      }
+      case 'shield-bash': {
+        // 방패를 먼저 얻어 수치를 올린 뒤 그 3배를 피해로 전환한다.
+        c.addShield(3)
+        const damage = Math.max(0, c.shield) * 3 + bonus
+        return `방패 +3 · ${HandSystem.damageTargetEnemy(gs, target, damage)}`
+      }
+      case 'sacrifice-shield': {
+        // 자해는 selfDamageFor에서 처리. 방패 획득만 여기서 적용.
+        const shielded = c.addShield(7 + bonus)
+        return `자해 2 · 방패 +${shielded}`
+      }
+      case 'sweep':
+        return HandSystem.clearSingleCellWebTraps(gs)
+      case 'hand-mirror':
+        // 복제 로직은 useSingle에서 chain.sequence를 직접 읽어 처리한다.
+        return HandSystem.damageTargetEnemyByAtk(gs, target, bonus)
     }
   }
 
@@ -998,6 +1054,37 @@ export class HandSystem {
       }
     }
     return out
+  }
+
+  /** 청소: groupCount === 1인 거미줄(web) 함정만 필드에서 제거한다.
+   *  2·3칸 거미줄은 플레이어에게 치명적이라 의도적으로 제외한다. */
+  private static clearSingleCellWebTraps(gs: GameState): string {
+    const seen = new Set<Card>()
+    let cleared = 0
+    for (const lane of gs.lanes) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = lane.getCardAtDistance(d)
+        if (!card || seen.has(card)) continue
+        if (card.type !== CardType.TRAP || card.trapKind !== 'web' || card.groupCount !== 1) continue
+        seen.add(card)
+        gs.removeCardFromRow(card, d)
+        cleared++
+      }
+    }
+    return cleared > 0 ? `1칸 거미줄 ${cleared}장 제거` : '제거할 1칸 거미줄 없음'
+  }
+
+  /** 손거울: 대상 적의 현재 공격력만큼 피해를 입힌다. */
+  private static damageTargetEnemyByAtk(
+    gs: GameState,
+    target: HandTarget | undefined,
+    bonus: number
+  ): string {
+    const t = target ?? HandSystem.findFirstOnField(gs, [CardType.ENEMY, CardType.BOSS])
+    if (!t || (t.card.type !== CardType.ENEMY && t.card.type !== CardType.BOSS))
+      return '대상 적 없음'
+    const amount = Math.max(0, t.card.getDamage() + bonus)
+    return HandSystem.damageTargetEnemy(gs, t, amount)
   }
 
   private static clearAllOfTypes(gs: GameState, types: CardType[]): number {
