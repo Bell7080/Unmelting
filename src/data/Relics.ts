@@ -69,6 +69,17 @@ export const RELIC_BASE_DRAW_WEIGHTS: Record<CardRarity, number> = {
   legendary: 1,
 }
 
+/**
+ * 유물 effect 스타일 규칙
+ * - 명사형 종결: 동사문·경어체 금지. 예) `증가` `획득` `제거` `반격` `파괴`
+ * - 1인칭 금지: `나에게` 대신 서술어 없는 조건문
+ * - 수치 표기: `+N` / 피해는 `피해 N` (조사 `에게` 생략)
+ * - 다중 효과 구분: 한 문장은 `·`, 별도 조건절은 `. ` 마침표로 분리
+ * - 발동·파괴 조건: `~시` 트리거 표기 (`~되면`/`~하면` 대신 명사형으로)
+ * - `불빛` 텍스트는 relicEffectHtml이 ✦ 글리프로 자동 치환하므로 그대로 쓴다
+ * - `{{spawn}}`은 렌더러가 실제 확률 변화량으로 치환한다
+ * - effect 문자열이 도감·상점 그대로 표시됨 — flavor와 혼용 금지
+ */
 /** Central relic table. Add future shop inventory here first. */
 export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
   // id는 세이브/핸들러 키라 유지하고 표시 이름·효과·설명만 별빛 랜턴으로 교체한다.
@@ -118,7 +129,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'blood-pack',
     name: '헌혈팩',
     rarity: 'epic',
-    effect: '최대 체력 획득 또는 체력 회복 시 전방 랜덤 적 1장에게 피해 1',
+    effect: '최대 체력 획득·체력 회복 시 전방 랜덤 적 1장 피해 1',
     flavor: '누군가의 온기가 아직 식지 않은 붉은 주머니.',
     basePrice: 1020,
   },
@@ -126,7 +137,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'hope',
     name: '희망',
     rarity: 'unique',
-    effect: '사망 시 체력 10으로 부활하고 필드 모든 카드를 제거. 발동 후 다시 등장하지 않음.',
+    effect: '사망 시 체력 10 부활 · 필드 전체 제거. 발동 후 재등장 없음.',
     flavor: '꺼진 심지 끝에 남은 아주 작은 불빛.',
     basePrice: 1240,
     banWhenRemoved: true,
@@ -135,7 +146,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'ink-quill',
     name: '잉크와 깃펜',
     rarity: 'epic',
-    effect: '적을 5번 잡을 때마다 손패 콤보 게이지 +1',
+    effect: '적 5회 처치마다 손패 콤보 게이지 +1',
     flavor: '쓰러뜨린 수를 적어 내려갈수록 손끝의 합이 무르익는다.',
     basePrice: 940,
   },
@@ -151,7 +162,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'graceful-response',
     name: '품격있는 대처',
     rarity: 'epic',
-    effect: '나에게 피해를 입힌 적에게 피해 1',
+    effect: '피해를 입힌 적에게 피해 1 반격',
     flavor: '받은 만큼 품위 있게 되돌려 주는 단정한 응수.',
     basePrice: 1000,
   },
@@ -169,7 +180,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'anomaly',
     name: '변칙',
     rarity: 'rare',
-    effect: '체력을 10 잃을 때마다 불씨 게이지 1 획득',
+    effect: '체력 10 손실마다 불씨 게이지 +1',
     flavor: '정석을 벗어난 한 수가 판을 뒤집는다.',
     basePrice: 720,
   },
@@ -201,7 +212,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'authority',
     name: '권위',
     rarity: 'unique',
-    effect: '치명적인 피해를 단 한 번 체력 1로 버틴다. 발동 후 다시 등장하지 않음.',
+    effect: '치명적 피해 1회를 체력 1로 버팀. 발동 후 재등장 없음.',
     flavor: '누구도 거역 못 할 한 번의 명령, 너는 아직 쓰러지지 않는다.',
     basePrice: 1300,
     banWhenRemoved: true,
@@ -219,7 +230,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'great-negotiation',
     name: '훌륭한 대화수단',
     rarity: 'legendary',
-    effect: '공격력 +2. 단, 적을 공격할 때마다 2.5% 확률로 파괴되며 공격력도 원상복귀.',
+    effect: '공격력 +2. 적 공격마다 2.5% 확률로 파괴 · 공격력 원상복귀.',
     flavor: '날이 서있는 동안만 통하는 설득이다.',
     basePrice: 1600,
     banWhenRemoved: true,
@@ -228,7 +239,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'premium-firewood',
     name: '고품격 뗄감',
     rarity: 'rare',
-    effect: '불씨 게이지가 완전히 소모되면 즉시 가득 채움. 이후 파괴.',
+    effect: '불씨 게이지 완전 소모 시 즉시 가득 채움. 이후 파괴.',
     flavor: '한 번은 살릴 수 있다. 한 번만.',
     basePrice: 800,
     banWhenRemoved: true,
@@ -254,7 +265,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'annabella-ring',
     name: '에나벨라의 반지',
     rarity: 'unique',
-    effect: '매 턴 최하단 손패 한 장을 최상단으로 끌어올림',
+    effect: '매 턴 최하단 손패 1장을 최상단으로 이동',
     flavor: '에나벨라는 언제나 가장 낡은 것을 앞에 두었다.',
     basePrice: 1400,
   },
@@ -262,7 +273,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'annabella-pendant',
     name: '에나벨라의 펜던트',
     rarity: 'epic',
-    effect: '공격력 +2. 앞으로 등장하는 적 체력 +3 (보스 미적용). 적 등장 확률 {{spawn}}.',
+    effect: '공격력 +2. 이후 등장 적 체력 +3 (보스 미적용). 적 등장 확률 {{spawn}}.',
     flavor: '강해질수록 맞서는 것도 강해진다.',
     basePrice: 1200,
     spawnEffect: { type: 'enemy', delta: 5 },
@@ -271,7 +282,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'precious-head',
     name: '소중한 머리',
     rarity: 'epic',
-    effect: '체력이 최대치의 절반 이하로 감소하면 체력을 전부 회복. 이후 파괴.',
+    effect: '체력 최대치 절반 이하 감소 시 전부 회복. 이후 파괴.',
     flavor: '머리가 붙어있는 한 다시 일어설 수 있다.',
     basePrice: 1000,
     banWhenRemoved: true,
@@ -314,7 +325,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'water-bucket',
     name: '물양동이',
     rarity: 'rare',
-    effect: '직접 타격한 적의 체력 15% 확률로 1 추가 감소',
+    effect: '직접 타격한 적 15% 확률로 체력 1 추가 감소',
     flavor: '물이 닿은 자리는 더 잘 무너진다.',
     basePrice: 760,
   },
@@ -323,7 +334,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: '황금 열쇠',
     rarity: 'unique',
     // 황금 상자는 일반 상자보다 카드와 불빛을 2배 주는 희귀 보물칸.
-    effect: '보물 스폰 중 10% 확률이 황금 상자로 대체됩니다.',
+    effect: '보물 스폰 중 10% 확률로 황금 상자 대체',
     flavor: '어떤 자물쇠도 이 열쇠를 거부하지 못한다.',
     basePrice: 1400,
   },

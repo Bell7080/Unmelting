@@ -29,6 +29,15 @@ const handSeven: HandEffectTargeting = {
   countLimit: 7,
 }
 
+/**
+ * 설명문 스타일 규칙 (description / tripleDescription)
+ * - 명사형 종결: 동사문·경어체 금지. 예) `피해 2` `굳음` `+1` `분산` `제거`
+ * - 대상 수식: `필드 선택 적 1장`, `전방 랜덤 함정 1장` 순서 고정
+ * - 수치 표기: 스탯 증감은 `+N` / 피해는 `피해 N` / 자해는 `자해 N`
+ * - 다중 효과: 같은 행은 `·` 구분, 줄바꿈 필요 시 `<br>` (도감 chip에서 ` · `로 치환됨)
+ * - 1인칭/수동 금지: `나에게` `자신에게` 대신 `자해 N` 표기
+ * - description 문자열이 도감·미리보기 그대로 표시됨 — 항상 동일하게 유지
+ */
 export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   'wax-drop': {
     id: 'wax-drop',
@@ -173,8 +182,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'greed-coin',
     name: '탐욕의 동전',
     category: 'tool',
-    description: '소량의 불빛 획득 · 자해 3',
-    tripleDescription: '소량의 불빛 획득 · 자해 3',
+    description: '소량의 불빛 · 자해 3',
+    tripleDescription: '소량의 불빛 · 자해 3',
     targeting: { base: selfOne, triple: selfOne },
     dropSource: 'boss',
     metaRequired: false,
@@ -218,8 +227,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'firework',
     name: '폭죽',
     category: 'attack',
-    description: '필드의 랜덤 적들에게 피해 3을 나눠 입힘',
-    tripleDescription: '필드의 랜덤 적들에게 피해 12를 나눠 입힘',
+    description: '필드 랜덤 적 전체 피해 3 분산',
+    tripleDescription: '필드 랜덤 적 전체 피해 12 분산',
     targeting: {
       base: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: null },
       triple: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: null },

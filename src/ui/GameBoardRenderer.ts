@@ -1239,6 +1239,11 @@ export class GameBoardRenderer {
    * 강화팩으로 누적된 singleBonus/tripleBonus를 반영한 설명 문자열을 반환한다.
    * 보너스가 없으면 정적 def.description을 그대로 사용해 불필요한 재계산을 피한다.
    */
+  /**
+   * 손패 설명문 반환. 강화 보너스가 0이면 HandCards.ts의 원본 문자열을 그대로 사용한다.
+   * 반환값은 미리보기 tooltip과 도감(renderCompendiumHand) 모두에 쓰이므로
+   * 여기서 스타일을 바꾸면 두 곳 모두 반영된다. 텍스트 규칙은 HandCards.ts 주석 참고.
+   */
   private enhancedHandCardDescription(id: HandCardId, merged: boolean): string {
     const def = getHandCardDef(id)
     const enhancements = this.currentGameState?.enhancements
@@ -3146,7 +3151,7 @@ export class GameBoardRenderer {
     const tiles = HAND_CARD_IDS.filter((id) => HAND_CARD_DEFINITIONS[id].dropSource !== 'boss').map((id) => {
       const def = HAND_CARD_DEFINITIONS[id]
       const locked = this.lockedCardIds.has(id)
-      // <br>은 chip(inline-flex)에서 레이아웃이 불안정하므로 · 구분자로 교체한다.
+      // chip은 inline-flex이므로 <br>을 · 구분자로 치환. 텍스트 내용은 변경하지 않는다.
       const chipDesc = (desc: string) => desc.replace(/<br>/g, ' · ')
       const singleDesc = chipDesc(this.enhancedHandCardDescription(def.id, false))
       const tripleDesc = chipDesc(this.enhancedHandCardDescription(def.id, true))
