@@ -492,6 +492,32 @@ export class HandSystem {
         const cleared = HandSystem.clearAllOfTypes(gs, [CardType.TRAP])
         return { message: `필드 함정 ${cleared}장 제거` }
       }
+      case 'damage-split-field-5':
+        return { message: HandSystem.distributeDamageAmongEnemies(gs, 5 + bonus) }
+      case 'destroy-all-front-enemies': {
+        // 끓는 분노: 전방 모든 적을 처치한다(보스 면역).
+        const killed = HandSystem.destroyAllFrontEnemies(gs)
+        return { message: `전방 적 ${killed}체 처치` }
+      }
+      case 'gain-ember-2': {
+        const gained = c.gainEmber(2 + bonus)
+        return { message: `불씨 게이지 +${gained}` }
+      }
+      case 'shield-2-and-damage-field-1': {
+        // 불꽃 사슬: 방패 고정 +2, 피해에만 bonus 적용.
+        c.addShield(2)
+        return { message: HandSystem.damageEnemies(gs, 'field', 1 + bonus) }
+      }
+      case 'damage-split-field-2x2': {
+        // 연회: 피해 2 분산을 2회 순차 실행한다(한번에 4로 계산하지 않음).
+        HandSystem.distributeDamageAmongEnemies(gs, 2 + bonus)
+        return { message: HandSystem.distributeDamageAmongEnemies(gs, 2 + bonus) }
+      }
+      case 'heal-by-player-attack': {
+        const amount = c.damage + bonus
+        const healed = c.heal(amount)
+        return { message: `공격력(${amount})만큼 체력 +${healed}` }
+      }
     }
   }
 
@@ -1203,6 +1229,21 @@ export class HandSystem {
       }
     }
     return count
+  }
+
+  /** 끓는 분노: 전방 모든 일반 적을 처치한다. 보스는 즉사 면역으로 제외한다. */
+  private static destroyAllFrontEnemies(gs: GameState): number {
+    const seen = new Set<Card>()
+    let killed = 0
+    for (const lane of gs.lanes) {
+      const card = lane.getCardAtDistance(0)
+      if (!card || seen.has(card)) continue
+      if (card.type !== CardType.ENEMY) continue
+      seen.add(card)
+      gs.removeCardFromRow(card, 0)
+      killed++
+    }
+    return killed
   }
 
   /** 필드에 살아있는 적/보스의 고유 수를 반환한다(주전자·찻잔에서 타격 횟수/회복량 계산에 사용). */
