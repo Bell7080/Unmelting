@@ -2670,7 +2670,8 @@ async function applyHandSingle(
     await playResourceTrail({ kind: 'center' }, 'score', 1)
   }
   if (result.selfDamage && result.selfDamage > 0) {
-    gameState.character.takeDamage(result.selfDamage)
+    // 자해는 방패를 무시하고 HP에 직접 닳는다(takeDirectDamage).
+    gameState.character.takeDirectDamage(result.selfDamage)
     recordNotice(`${usedDef?.name ?? '카드'}의 대가 — 자신이 ${result.selfDamage} 피해를 입었다`, 'hurt')
     render()
     await boardRenderer.animatePlayerDamageImpact(result.selfDamage)

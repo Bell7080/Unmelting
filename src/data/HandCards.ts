@@ -194,8 +194,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'sacrifice-candle',
     name: '제물 양초',
     category: 'attack',
-    description: '자해 2 · 필드 선택 적 1장 피해 5',
-    tripleDescription: '필드 선택 적 1장 피해 7',
+    description: '자해 2 · 필드 선택 적 1장 피해 4',
+    tripleDescription: '필드 선택 적 1장 피해 6',
     targeting: {
       base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },

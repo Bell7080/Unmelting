@@ -563,7 +563,7 @@ export class HandSystem {
         return `소량의 불빛 · 자해 ${HandSystem.GREED_COIN_SELF_DAMAGE}`
       case 'sacrifice-candle':
         // 자해 2는 use()의 selfDamage로 처리. 여기서는 선택 적 피해만 적용한다.
-        return HandSystem.damageTargetEnemy(gs, target, 5 + bonus)
+        return HandSystem.damageTargetEnemy(gs, target, 4 + bonus)
       case 'levatein':
         // 적 행동 시뮬레이션(2회)과 %HP 피해는 useSingle 반환값으로 index.ts에 위임한다.
         return '레바테인: 즉시 2턴 흐름 후 최대체력 30% 피해'
@@ -663,7 +663,7 @@ export class HandSystem {
         return `소량의 불빛 · 자해 ${HandSystem.GREED_COIN_SELF_DAMAGE}`
       case 'sacrifice-candle':
         // 트리플은 자해 없이 더 큰 피해만 입힌다.
-        return HandSystem.damageTargetEnemy(gs, target, 7 + bonus)
+        return HandSystem.damageTargetEnemy(gs, target, 6 + bonus)
       case 'levatein':
         // 적 행동 시뮬레이션(1회)과 %HP 피해는 useSingle 반환값으로 index.ts에 위임한다.
         return '레바테인: 즉시 1턴 흐름 후 최대체력 45% 피해'

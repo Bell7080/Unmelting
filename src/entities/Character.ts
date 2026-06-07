@@ -98,6 +98,24 @@ export class Character {
     return actualDamage
   }
 
+  /** 자해 전용: 방패를 무시하고 HP에 직접 피해를 입힌다. 권위 유물은 여전히 사망을 막는다. */
+  takeDirectDamage(amount: number): number {
+    let actualDamage = Math.max(0, amount)
+    if (
+      this.health - actualDamage <= 0 &&
+      this.hasRelic('authority') &&
+      !this.authoritySurvivePending
+    ) {
+      actualDamage = Math.max(0, this.health - 1)
+      this.health = 1
+      this.authoritySurvivePending = true
+    } else {
+      this.health = Math.max(0, this.health - actualDamage)
+    }
+    this.relicDamageTaken += actualDamage
+    return actualDamage
+  }
+
   heal(amount: number): number {
     const actualHeal = Math.max(0, amount)
     const before = this.health
