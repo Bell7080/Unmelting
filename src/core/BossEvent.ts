@@ -296,9 +296,13 @@ export class BossEventController {
     state.turn += 1
     this.tm.tickEmberDecay()
 
-    const remaining = state.def.attackInterval - (state.turn % state.def.attackInterval)
-    const displayValue = remaining === state.def.attackInterval ? state.def.attackInterval : remaining
+    // 카운터: 0이면 이번 턴에 반격 — 0을 잠깐 보여 준 뒤 공격한다.
+    const turnMod = state.turn % state.def.attackInterval
+    const displayValue = turnMod === 0 ? 0 : state.def.attackInterval - turnMod
     this.br.setBossAttackCountdown(displayValue)
+    if (turnMod === 0) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 220))
+    }
     await this.br.animateDamageNumbersById(dealt > 0 ? [{ cardId: card.id, amount: dealt }] : [])
     // 플레이어가 보스를 직접 공격했으므로 공격 시 발동 유물(훌륭한 대화수단)을 판정한다.
     await this.inject.applyPlayerAttackRelics()
@@ -312,7 +316,7 @@ export class BossEventController {
       return
     }
 
-    if (state.turn % state.def.attackInterval === 0) {
+    if (turnMod === 0) {
       if (state.def.specialEnemyKind === 'waxWitch') {
         // 100F 페이지 능력은 해금 뒤 사라지지 않는다.
         // 2/3페이지 공통으로 손패 4장 콤보 + 반격을 1회 친 뒤 바로 반환해, 아래 공통 반격(else)으로
@@ -362,6 +366,10 @@ export class BossEventController {
       }
     }
 
+    // 반격이 끝났으면 카운터를 다음 주기 초기값으로 복구한다.
+    if (turnMod === 0) {
+      this.br.setBossAttackCountdown(state.def.attackInterval)
+    }
     this.inject.setInputLocked(false)
   }
 
@@ -396,15 +404,18 @@ export class BossEventController {
 
       state.turn += 1
       this.tm.tickEmberDecay()
-      const remaining = state.def.attackInterval - (state.turn % state.def.attackInterval)
-      const displayValue = remaining === state.def.attackInterval ? state.def.attackInterval : remaining
-      this.br.setBossAttackCountdown(displayValue)
+      const lvTurnMod = state.turn % state.def.attackInterval
+      const lvDisplayValue = lvTurnMod === 0 ? 0 : state.def.attackInterval - lvTurnMod
+      this.br.setBossAttackCountdown(lvDisplayValue)
+      if (lvTurnMod === 0) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 220))
+      }
 
       // HP 10 손실 보상 손패 지급
       await this.consumeHandGiftThresholds(state.card.id)
       if (state.card.getHealth() <= 0) { await this.handleDefeated(); return }
 
-      if (state.turn % state.def.attackInterval === 0) {
+      if (lvTurnMod === 0) {
         if (state.def.specialEnemyKind === 'waxArmy') {
           // 탐욕 살포 → 플레이어 타격
           await this.scatterGreedCards(state.card.id)
@@ -438,6 +449,7 @@ export class BossEventController {
           await this.inject.handlePlayerDeath()
           return
         }
+        this.br.setBossAttackCountdown(state.def.attackInterval)
       }
 
       this.inject.render()

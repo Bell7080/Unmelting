@@ -116,8 +116,8 @@ interface RecipeEffectResult {
 }
 
 export class HandSystem {
-  /** 탐욕의 동전 사용 시 받는 자해 피해. */
-  static readonly GREED_COIN_SELF_DAMAGE = 3
+  /** 탐욕의 동전 자해 피해는 매 사용마다 1~3 랜덤. */
+  static greedCoinSelfDamage(): number { return Math.floor(Math.random() * 3) + 1 }
   /** 탐욕의 동전 불빛 base값(30층 1칸 적 처치의 약 절반). index.ts가 인플레이션을 적용한다. */
   static readonly GREED_COIN_LIGHT_BASE = 36
 
@@ -220,8 +220,8 @@ export class HandSystem {
     const mergeMessages = deferAutoMerge ? [] : HandSystem.runAutoMerges(character)
 
     // 카드를 쓰면 콤보 게이지가 오른다. 3장이 합쳐진 트리플 카드는 3장을 한 번에 쓴
-    // 셈이므로 +3, 일반 카드는 +1. (card 카드의 전용 게이지 효과는 위 gaugeCountBonus로 별도 가산)
-    character.gainCandle(card.merged ? 3 : 1)
+    // 셈이므로 +3, 일반 카드는 +1. 탐욕의 동전은 게이지를 올리지 않는다.
+    if (card.defId !== 'greed-coin') character.gainCandle(card.merged ? 3 : 1)
 
     // Diff the field snapshot to record removed cards for animation.
     const afterField = HandSystem.snapshotFieldCards(gs)
@@ -276,7 +276,7 @@ export class HandSystem {
 
   /** 카드별 자해 피해(UI가 애니메이션과 함께 적용). 탐욕의 동전·제물 양초·희생 방패가 사용한다. */
   private static selfDamageFor(defId: HandCardId, isMerged: boolean): number {
-    if (defId === 'greed-coin') return HandSystem.GREED_COIN_SELF_DAMAGE
+    if (defId === 'greed-coin') return HandSystem.greedCoinSelfDamage()
     // 제물 양초는 단일 사용에만 자해 2(트리플은 자해 없이 더 큰 피해).
     if (defId === 'sacrifice-candle' && !isMerged) return 2
     // 희생 방패: 단일 자해 1, 트리플 자해 2.
@@ -560,7 +560,7 @@ export class HandSystem {
         return `+${1 + bonus}$`
       case 'greed-coin':
         // 자해 피해/불빛은 use()의 selfDamage·lightGained로 보고되어 UI에서 처리한다.
-        return `소량의 불빛 · 자해 ${HandSystem.GREED_COIN_SELF_DAMAGE}`
+        return '소량의 불빛 · 자해 1~3'
       case 'sacrifice-candle':
         // 자해 2는 use()의 selfDamage로 처리. 여기서는 선택 적 피해만 적용한다.
         return HandSystem.damageTargetEnemy(gs, target, 4 + bonus)
@@ -660,7 +660,7 @@ export class HandSystem {
         return `+${5 + bonus}$`
       case 'greed-coin':
         // 탐욕의 동전은 트리플 합성되지 않으므로 이 분기는 실제로 도달하지 않는다.
-        return `소량의 불빛 · 자해 ${HandSystem.GREED_COIN_SELF_DAMAGE}`
+        return '소량의 불빛 · 자해 1~3'
       case 'sacrifice-candle':
         // 트리플은 자해 없이 더 큰 피해만 입힌다.
         return HandSystem.damageTargetEnemy(gs, target, 6 + bonus)

@@ -299,6 +299,9 @@ export class GameBoardRenderer {
   /** Source rect for a just-bought shop relic; the next render uses it to
    *  fly a full artifact card into the owned fan instead of popping in. */
   private pendingRelicArrival: { relicId: RelicId; rect: DOMRect } | null = null
+  /** 제단 유물 픽 순간 캡처한 rect — resolveAltarRelicPick이 채우고
+   *  prepareRelicArrivalFromShop이 소비한다(애니메이션 진행 중 DOM 이동 보정). */
+  private altarPickedRelicRect: { relicId: RelicId; rect: DOMRect } | null = null
   /** True while the shop shutter must survive full board re-renders. Purchase
    *  refreshes rebuild the rail DOM, so the shutter state lives in the renderer
    *  instead of only in the transient `.rail-shutter` element. */
@@ -390,6 +393,12 @@ export class GameBoardRenderer {
       }
     }
 
+    // 손패 패널을 미리 렌더해 기존 DOM과 비교한다. 내용이 동일하면 기존 요소를 복원해
+    // CSS hover 상태(미리보기)가 레일 하강 중 깜빡이지 않게 한다.
+    const prevHandEl = this.boardElement.querySelector<HTMLElement>('.hand-column')
+    const prevHandHtml = prevHandEl ? prevHandEl.outerHTML : ''
+    const newHandHtml = this.renderHand(character, scorePanel)
+
     this.boardElement.innerHTML = `
       ${this.renderEmberHud(scorePanel)}
       <div class="game-shell">
@@ -410,9 +419,17 @@ export class GameBoardRenderer {
           ${this.renderPlayerZone(character)}
         </main>
 
-        ${this.renderHand(character, scorePanel)}
+        ${newHandHtml}
       </div>
     `
+
+    // 손패 내용이 바뀌지 않았다면 기존 DOM 노드를 복원해 hover 상태를 보존한다.
+    if (prevHandEl && prevHandHtml) {
+      const freshHandEl = this.boardElement.querySelector<HTMLElement>('.hand-column')
+      if (freshHandEl && freshHandEl.outerHTML === prevHandHtml) {
+        freshHandEl.replaceWith(prevHandEl)
+      }
+    }
 
     this.syncBodyVignette(scorePanel.vignetteIntensity ?? 0)
     this.injectStyles()
@@ -3757,22 +3774,8 @@ export class GameBoardRenderer {
     })
   }
 
-  private handleCardClick(el: HTMLElement, laneIndex: number, distance: number): void {
-    const isAlreadySelected =
-      !!this.selected &&
-      this.selected.laneIndex === laneIndex &&
-      this.selected.distance === distance
-
-    if (isAlreadySelected) {
-      this.dispatchAction(laneIndex, distance)
-      return
-    }
-
-    this.boardElement
-      .querySelectorAll('.cell.card.is-selected')
-      .forEach((c) => c.classList.remove('is-selected'))
-    el.classList.add('is-selected')
-    this.selected = { laneIndex, distance }
+  private handleCardClick(_el: HTMLElement, laneIndex: number, distance: number): void {
+    this.dispatchAction(laneIndex, distance)
   }
 
   private dispatchAction(laneIndex: number, distance: number): void {
@@ -4708,8 +4711,8 @@ export class GameBoardRenderer {
     )
   }
 
-  /** 제단 무료 유물 단일 픽 연출: 선택 1장은 살짝 떠오르고(is-altar-picked), 나머지
-   *  2장은 불씨가 사그라들듯 ember 버스트와 함께 사라진다(is-altar-fading). */
+  /** 제단 무료 유물 단일 픽 연출: 비선택 카드가 먼저 사그라들고, 이후 선택 카드도 순차적으로 사라진다.
+   *  버스트 없이 CSS fade만 사용해 조용한 연출을 유지한다. */
   async resolveAltarRelicPick(relicId: RelicId): Promise<void> {
     const cards = [
       ...(this.shopOverlayElement?.querySelectorAll<HTMLElement>(
@@ -4717,24 +4720,34 @@ export class GameBoardRenderer {
       ) ?? []),
     ]
     if (cards.length === 0) return
+
+    // 픽 순간 rect 캡처 — 애니메이션 전 원래 위치를 보존해 비행 연출 기준점으로 쓴다.
+    const pickedCard = cards.find((c) => c.dataset.shopBuy === relicId) ?? null
+    if (pickedCard) {
+      this.altarPickedRelicRect = { relicId, rect: pickedCard.getBoundingClientRect() }
+    }
+
+    // 1단계: 비선택 카드 CSS 페이드(burst 없음).
     for (const card of cards) {
-      if (card.dataset.shopBuy === relicId) {
-        card.classList.add('is-altar-picked')
-        continue
-      }
-      card.classList.add('is-altar-fading')
-      const rect = card.getBoundingClientRect()
-      SquareBurst.playAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 'ember-gain', {
-        count: 14,
-        spread: 90,
-        duration: 520,
-      })
+      if (card.dataset.shopBuy !== relicId) card.classList.add('is-altar-fading')
     }
     await new Promise<void>((resolve) => window.setTimeout(resolve, 340))
+
+    // 2단계: 선택 카드도 순차적으로 사라진다.
+    if (pickedCard) {
+      pickedCard.classList.add('is-altar-fading')
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 280))
+    }
   }
 
-  /** Capture the clicked shop card before the board re-renders with the newly owned relic. */
+  /** Capture the clicked shop card before the board re-renders with the newly owned relic.
+   *  제단 픽은 resolveAltarRelicPick에서 미리 캡처한 rect를 우선 사용한다(애니메이션 후 이동 보정). */
   prepareRelicArrivalFromShop(relicId: RelicId): void {
+    if (this.altarPickedRelicRect?.relicId === relicId) {
+      this.pendingRelicArrival = { relicId, rect: this.altarPickedRelicRect.rect }
+      this.altarPickedRelicRect = null
+      return
+    }
     const source = this.shopOverlayElement?.querySelector<HTMLElement>(
       `.shop-relic-card[data-shop-buy="${relicId}"]`
     )
@@ -5166,6 +5179,10 @@ export class GameBoardRenderer {
    *  already mid-roll on the OLD DOM (because burstScoreGain/playHudCounter
    *  Feedback fired right before this render), the active map lets us seam
    *  lessly transfer that roll to the new span instead of letting it snap. */
+  /** 모든 수치형 HUD(불빛/화폐/체력/방패/불씨/콤보 게이지/공격력)에 롤링 카운터를 적용한다.
+   *  renderHudCounter가 data-count-start/end 속성을 심고, 이 함수가 render() 직후에 인계받아
+   *  integer tick 증감 — "띠리리릭" 슬롯머신 느낌 — 을 재생한다. 새 수치 HUD를 추가할 때는
+   *  반드시 renderHudCounter를 통해 span을 만들어야 자동으로 이 애니메이션이 적용된다. */
   private animateRenderedResourceCounters(): void {
     this.boardElement
       .querySelectorAll<HTMLElement>('[data-count-start][data-count-end]')
