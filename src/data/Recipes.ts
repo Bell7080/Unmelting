@@ -132,7 +132,7 @@ export const RECIPES: Recipe[] = [
   recipe('smokescreen',   '연막',       { wax: 1, firework: 1 },                       'clear-front-cards',          '전방 모든 칸 제거',          true),
   recipe('mythic-flame',  '신화의 불꽃',{ levatein: 1, ember: 1, match: 1 },           'damage-all-field-enemies-5', '필드 모든 적에게 피해 5',   true),
   // --- 신규 카드(16~20) 레시피 ---
-  recipe('glass-shards', '유리 파편',  { 'shield-bash': 1, 'sacrifice-shield': 1 },   'damage-split-field-4',    '필드 모든 적에게 4피해 분산'),
+  recipe('glass-shards', '유리 파편',  { 'shield-bash': 1, 'sacrifice-shield': 1 },   'damage-split-field-4',    '필드 랜덤 적 전체 피해 4 분산'),
   recipe('blood-pact',   '혈약',       { 'sacrifice-shield': 1, 'wax-drop': 1 },      'heal-3',                  '체력 3 회복'),
   recipe('cleanse',      '청결',       { sweep: 1, 'holy-water': 1 },                 'clear-all-field-traps',   '필드 모든 함정 제거'),
 ]
