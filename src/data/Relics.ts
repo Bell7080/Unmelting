@@ -146,7 +146,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'ink-quill',
     name: '잉크와 깃펜',
     rarity: 'epic',
-    effect: '적 5회 처치마다 손패 콤보 게이지 +1',
+    effect: '적 5회 처치마다 콤보 게이지 +1',
     flavor: '쓰러뜨린 수를 적어 내려갈수록 손끝의 합이 무르익는다.',
     basePrice: 940,
   },

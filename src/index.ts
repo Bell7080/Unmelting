@@ -156,8 +156,8 @@ const SHOP_FREE_GIFT_REWARDS: Record<ShopFreeGiftKind, { description: string; am
   'score-300': { description: '✦300', amount: 300 },
   'coin-1': { description: '1$', amount: 1 },
   'health-5': { description: '체력 5', amount: 5 },
-  'gauge-3': { description: '콤보 게이지 3', amount: 3 },
-  'ember-3': { description: '불씨 게이지 3', amount: 3 },
+  'gauge-3': { description: '콤보 게이지 +3', amount: 3 },
+  'ember-3': { description: '불씨 게이지 +3', amount: 3 },
   'hand-2': { description: '랜덤 손패 2', amount: 2 },
 }
 const SHOP_FREE_GIFT_KINDS = Object.keys(SHOP_FREE_GIFT_REWARDS) as ShopFreeGiftKind[]
@@ -674,7 +674,7 @@ function applyHonestyHandUse(count: number): void {
   }
 }
 
-/** 변칙: 플레이어가 체력을 10 잃을 때마다 불씨 게이지 1 획득. 누적 피해는 Character가 보관한다.
+/** 변칙: 플레이어가 체력을 10 잃을 때마다 불씨 게이지 +1. 누적 피해는 Character가 보관한다.
  *  미보유 시 누적을 비워, 나중에 획득해도 이전 피해가 소급 발동하지 않게 한다. */
 function applyAnomalyHealthLoss(): void {
   const character = gameState.character
@@ -696,7 +696,7 @@ function applyBlindFaithCoins(amount: number): void {
   burstScoreGain()
 }
 
-/** 잉크와 깃펜: 적 5처치마다 손패 콤보 게이지 +1. 처치 수는 런 동안 누적한다.
+/** 잉크와 깃펜: 적 5처치마다 콤보 게이지 +1. 처치 수는 런 동안 누적한다.
  *  채워진 게이지는 액션 종료 시 resolveFullCandleGaugeEffects가 정산한다. */
 let inkQuillKillCount = 0
 function applyInkQuillKills(count: number): void {
@@ -1046,8 +1046,8 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
   if (id === 'first-candle') {
     const before = snapshotPlayerRecovery()
     const beforeResources = snapshotPlayerResources()
-    // 첫 양초: 최대 체력 +5 / 공격력 +1 / 최대 불씨 게이지 +2 / 최대 손패 +2 / 최대 콤보 게이지 -1.
-    // 손패·콤보 게이지 상한은 수치 트레일이 없으므로 체력/불씨/공격력만 중앙 트레일로 보인다.
+    // 첫 양초: 최대 체력 +5 / 공격력 +1 / 불씨 한도 +2 / 최대 손패 +2 / 콤보 한도 -1.
+    // 손패·콤보 한도는 수치 트레일이 없으므로 체력/불씨/공격력만 중앙 트레일로 보인다.
     gameState.character.increaseMaxHealth(5)
     gameState.character.applyDamageBoost(1)
     gameState.character.increaseEmberMax(2)

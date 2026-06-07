@@ -441,7 +441,7 @@ export class HandSystem {
         return HandSystem.freezeTarget(target, 1)
       case 'match': {
         const gained = c.gainEmber(1 + bonus)
-        return `불씨 카운트 +${gained}`
+        return `불씨 게이지 +${gained}`
       }
       case 'holy-water':
         return HandSystem.cleanseRandomSpores(gs, 2)
@@ -449,7 +449,7 @@ export class HandSystem {
         return HandSystem.removeTargetTrap(gs, target)
       case 'card':
         // gainCandle 보너스는 use()에서 gs.enhancements.singleBonus['card']로 처리.
-        return `손패 콤보 카운트 +${1 + bonus}`
+        return `콤보 게이지 +${1 + bonus}`
       case 'coin':
         // coinsGained 보너스는 use()에서 처리.
         return `+${1 + bonus}$`
@@ -494,7 +494,7 @@ export class HandSystem {
         return HandSystem.freezeFrontCards(gs, 3)
       case 'match': {
         const gained = c.gainEmber(5 + bonus)
-        return `트리플 불씨 카운트 +${gained}`
+        return `트리플 불씨 게이지 +${gained}`
       }
       case 'holy-water':
         return HandSystem.cleanseAllSpores(gs)
@@ -505,7 +505,7 @@ export class HandSystem {
       case 'card': {
         // gainCandle 호출은 use()에서 gs.enhancements를 직접 읽어 처리한다.
         const total = 7 + bonus
-        return `트리플 손패 콤보 카운트 +${total}`
+        return `트리플 콤보 게이지 +${total}`
       }
       case 'coin':
         // coinsGained는 use()에서 처리된다.

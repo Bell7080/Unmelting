@@ -1262,8 +1262,8 @@ export class GameBoardRenderer {
       case 'wax-drop': return merged ? `체력 +${5 + bonus}` : `체력 +${1 + bonus}`
       case 'candle':   return merged ? `방패 +${5 + bonus}` : `방패 +${1 + bonus}`
       case 'ember':    return merged ? `필드 선택 적 1장 피해 ${10 + bonus}` : `필드 선택 적 1장 피해 ${2 + bonus}`
-      case 'match':    return merged ? `불씨 카운트 +${5 + bonus}` : `불씨 카운트 +${1 + bonus}`
-      case 'card':     return merged ? `손패 콤보 카운트 +${7 + bonus}` : `손패 콤보 카운트 +${1 + bonus}`
+      case 'match':    return merged ? `불씨 게이지 +${5 + bonus}` : `불씨 게이지 +${1 + bonus}`
+      case 'card':     return merged ? `콤보 게이지 +${7 + bonus}` : `콤보 게이지 +${1 + bonus}`
       case 'coin':     return merged ? `+${5 + bonus}$` : `+${1 + bonus}$`
       default:         return merged ? def.tripleDescription : def.description
     }
@@ -1275,7 +1275,7 @@ export class GameBoardRenderer {
       case 'attack':
         return { label: '공격', effect: '공격력 +1', icon: swordIcon() }
       case 'ember':
-        return { label: '불씨', effect: '불씨 최대 +2', icon: flameIcon() }
+        return { label: '불씨', effect: '불씨 한도 +2', icon: flameIcon() }
       case 'draw':
         return { label: '손패', effect: '손패 최대 +2', icon: pouchIcon() }
     }
@@ -3349,11 +3349,11 @@ export class GameBoardRenderer {
         '밀랍으로 하얗게 굳은 정지 상태. 남은 턴 동안 적 공격/보물 변동 같은 전방 이벤트가 멈춘다.',
       ],
       [
-        '불씨 카운트',
+        '불씨 게이지',
         '우측 상단 불씨 자원. 성냥이 회복하며, 낮아질수록 전투/스폰 위험도가 오른다.',
       ],
       [
-        '손패 콤보 카운트',
+        '콤보 게이지',
         '손패 10장 사용 시 선택한 게이지 보너스(최대 체력/공격력/불씨/손패)를 발동하는 진행도. 카드 아이템은 이 게이지를 추가로 채우며, 10칸 초과분은 다음 게이지에 남는다.',
       ],
       [

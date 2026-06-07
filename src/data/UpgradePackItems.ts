@@ -30,7 +30,7 @@ export const UPGRADE_PACK_POOL: UpgradePackItem[] = [
   { id: 'triple-match',    theme: 'upgrade', title: '성냥 트리플', effect: '성냥 트리플 발동 시 불씨 +1 추가',  rarity: 'common',    weight: 20 },
   // Legendary — 희귀 트리플 발동 효과 +1, weight 1
   { id: 'triple-coin',     theme: 'upgrade', title: '동전 트리플', effect: '동전 트리플 발동 시 화폐 +1 추가',  rarity: 'legendary', weight: 1  },
-  { id: 'triple-card',     theme: 'upgrade', title: '카드 트리플', effect: '카드 트리플 발동 시 게이지 +1 추가', rarity: 'legendary', weight: 1  },
+  { id: 'triple-card',     theme: 'upgrade', title: '카드 트리플', effect: '카드 트리플 발동 시 콤보 게이지 +1 추가', rarity: 'legendary', weight: 1  },
   // Rare — 레시피 피해 +1, weight 10
   { id: 'recipe-ignite',       theme: 'upgrade', title: '점화 강화',   effect: '점화 레시피 피해 +1',   rarity: 'rare', weight: 10 },
   { id: 'recipe-hot',          theme: 'upgrade', title: '뜨거움 강화', effect: '뜨거움 레시피 피해 +1', rarity: 'rare', weight: 10 },
