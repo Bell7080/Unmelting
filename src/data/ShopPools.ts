@@ -36,6 +36,8 @@ export const HAND_CARD_RARITY: Record<HandCardId, CardRarity> = {
   'sacrifice-candle': 'rare', levatein: 'legendary', firework: 'rare', 'book-of-flames': 'epic',
   'fire-arrow': 'rare', 'shield-bash': 'rare', 'sacrifice-shield': 'rare',
   sweep: 'rare', 'hand-mirror': 'epic',
+  chandelier: 'rare', bonfire: 'rare', teapot: 'epic', teacup: 'rare',
+  'top-hat': 'rare', slash: 'rare', shackles: 'epic',
 }
 
 /** Shop pack pool config moved to data so shop/free/pack roll tables are data-driven. */
