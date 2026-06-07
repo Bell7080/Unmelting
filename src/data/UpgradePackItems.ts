@@ -42,4 +42,8 @@ export const UPGRADE_PACK_POOL: UpgradePackItem[] = [
   // Legendary — 레시피 보상 +1, weight 1
   { id: 'recipe-shuffle',  theme: 'upgrade', title: '셔플 강화',   effect: '셔플 레시피 드로우 +1장', rarity: 'legendary', weight: 1 },
   { id: 'recipe-dividend', theme: 'upgrade', title: '배당금 강화', effect: '배당금 레시피 화폐 +1$',  rarity: 'legendary', weight: 1 },
+  // 해금팩 전용 레시피 강화 — 해금 후 런 내 강화팩에 등장
+  { id: 'recipe-backfire',     theme: 'upgrade', title: '역화 강화',       effect: '역화 레시피 피해 +1',       rarity: 'rare',      weight: 10 },
+  { id: 'recipe-rage',         theme: 'upgrade', title: '분노 강화',       effect: '분노 레시피 피해 +1',       rarity: 'rare',      weight: 10 },
+  { id: 'recipe-mythic-flame', theme: 'upgrade', title: '신화의 불꽃 강화', effect: '신화의 불꽃 레시피 피해 +1', rarity: 'legendary', weight: 1  },
 ]

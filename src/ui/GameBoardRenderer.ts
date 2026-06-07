@@ -249,6 +249,8 @@ export class GameBoardRenderer {
   private currentGameState: GameState | null = null
   /** 현재 런에서 잠긴 손패 카드 ID 집합. 도감에서 해금 여부 표시에 사용한다. */
   private lockedCardIds = new Set<HandCardId>()
+  /** 현재 런에서 잠긴 레시피 ID 집합. 해금팩으로 해금 전까지 도감에서 ??? 로 표시한다. */
+  private lockedRecipeIds = new Set<string>()
   private hasRendered = false
   private previousCardIds = new Set<string>()
   /** Track the last score/coin pulse keys so the pop animation only re-fires
@@ -2763,6 +2765,11 @@ export class GameBoardRenderer {
     this.lockedCardIds = new Set(ids)
   }
 
+  /** 해금팩 선택 후 호출해 도감 조합 탭의 레시피 잠금 표시를 갱신한다. */
+  setLockedRecipeIds(ids: readonly string[]): void {
+    this.lockedRecipeIds = new Set(ids)
+  }
+
   /** Open the compendium overlay listing every field-card + hand-card def
    *  with stats and descriptions. Pure read-only browser; pressing the
    *  close button or ESC dismisses. */
@@ -3391,7 +3398,9 @@ export class GameBoardRenderer {
     `
     const recipeCards = RECIPES.map((r) => {
       // 재료 카드 중 하나라도 잠겨 있으면 레시피 전체를 미발견 처리.
-      const isLocked = Object.keys(r.ingredients).some((id) => this.lockedCardIds.has(id as HandCardId))
+      const isLocked =
+        this.lockedRecipeIds.has(r.id) ||
+        Object.keys(r.ingredients).some((id) => this.lockedCardIds.has(id as HandCardId))
       const ingredientCards = Object.entries(r.ingredients).flatMap(([id, n]) => {
         const def = HAND_CARD_DEFINITIONS[id as HandCardId]
         if (!def) return []

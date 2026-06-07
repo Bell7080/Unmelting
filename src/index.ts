@@ -43,6 +43,7 @@ import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { CandleMode } from '@entities/Character'
 import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS } from '@data/HandCards'
+import { RECIPES } from '@data/Recipes'
 import { getRelicDef, relicDrawWeight, RELIC_IDS, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
 import { COMBO_TRIGGER_DELAY_MS, GAUGE_TRIGGER_DELAY_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
@@ -256,6 +257,8 @@ const runCardPool = new RunCardPool(HAND_CARD_IDS, metaUnlockedCardIds)
 // 잠긴 카드가 드롭되지 않도록 초기 허용 풀을 동기화한다.
 DropSystem.setAllowedPool(runCardPool.snapshot().unlocked)
 boardRenderer.setLockedCardIds([...runCardPool.snapshot().locked, ...runCardPool.snapshot().banned])
+// runLocked 레시피는 런 시작 시 전부 잠금 — 해금팩으로만 해제 가능하다.
+boardRenderer.setLockedRecipeIds(RECIPES.filter((r) => r.runLocked).map((r) => r.id))
 
 // 보스 이벤트 컨트롤러 — 보스별 스탯/흐름/보상/시련을 모두 관리한다.
 const bossController = new BossEventController(
@@ -1272,30 +1275,46 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     }))
   }
   if (kind === 'unlock-pack') {
-    // 풀 = 런에서 잠긴 카드(runLocked) + 삭제팩으로 밴된 카드.
+    // 풀 = 런에서 잠긴 카드(runLocked) + 삭제팩으로 밴된 카드 + runLocked 레시피.
     // 단, 보스 전용 찌꺼기 카드(탐욕의 동전 등)는 해금팩으로 얻을 수 없게 제외한다.
     const { locked, banned } = runCardPool.snapshot()
-    const pool = [...locked, ...banned].filter((id) => getHandCardDef(id).dropSource !== 'boss')
+    const cardPool = [...locked, ...banned].filter((id) => getHandCardDef(id).dropSource !== 'boss')
+    const lockedRecipes = RECIPES.filter((r) => r.runLocked && !gameState.unlockedRecipeIds.has(r.id))
+
+    type UnlockItem = { id: string; theme: 'unlock'; title: string; effect: string; rarity: (typeof HAND_CARD_RARITY)[keyof typeof HAND_CARD_RARITY]; spriteUrl: string; apply: () => void }
+    const pool: UnlockItem[] = [
+      ...cardPool.map((id) => {
+        const def = getHandCardDef(id)
+        const isBanned = banned.includes(id)
+        return {
+          id: `unlock-${id}`,
+          theme: 'unlock' as const,
+          title: def.name,
+          effect: isBanned ? `[재해금] ${def.description}` : def.description,
+          rarity: HAND_CARD_RARITY[id],
+          spriteUrl: spriteForHandCard(id),
+          apply: () => {
+            if (isBanned) runCardPool.unban(id)
+            else runCardPool.unlockForRun(id)
+          },
+        }
+      }),
+      ...lockedRecipes.map((r) => {
+        // 레시피 해금 아이템 — 일러스트는 첫 재료 카드 아트 재사용
+        const firstIngredientId = Object.keys(r.ingredients)[0] as HandCardId
+        return {
+          id: `unlock-recipe-${r.id}`,
+          theme: 'unlock' as const,
+          title: r.name,
+          effect: `[조합식 해금] ${r.flavor}`,
+          rarity: HAND_CARD_RARITY[firstIngredientId] ?? 'rare',
+          spriteUrl: spriteForHandCard(firstIngredientId),
+          apply: () => { gameState.unlockedRecipeIds.add(r.id) },
+        }
+      }),
+    ]
     if (pool.length === 0) return []
-    const drawIds = sampleWithoutReplacement(pool, Math.min(3, pool.length))
-    return drawIds.map((id) => {
-      const def = getHandCardDef(id)
-      const isBanned = banned.includes(id)
-      return {
-        id: `unlock-${id}`,
-        theme: 'unlock' as const,
-        title: def.name,
-        effect: isBanned ? `[재해금] ${def.description}` : def.description,
-        rarity: HAND_CARD_RARITY[id],
-        spriteUrl: spriteForHandCard(id),
-        apply: () => {
-          // 밴된 카드는 unban (풀 복귀), 잠긴 카드는 unlockForRun.
-          // 해금은 드롭 풀 등장만 허용할 뿐 즉시 손패를 지급하지 않는다.
-          if (isBanned) runCardPool.unban(id)
-          else runCardPool.unlockForRun(id)
-        },
-      }
-    })
+    return sampleWithoutReplacement(pool, Math.min(3, pool.length))
   }
   if (kind === 'delete-pack') {
     // 풀 = 현재 해금된 카드 (런 내 활성 풀)
@@ -1317,7 +1336,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
   }
   // 강화팩: 현재 해금된 카드/조합식 항목만 포함(systems/UpgradePackPool.ts).
   //   일러스트는 새 스프라이트 없이 기존 손패 아트를 재사용한다(triple→카드, recipe→첫 재료).
-  const pool = buildUnlockedUpgradePool(runCardPool.snapshot().unlocked).map((entry) => ({
+  const pool = buildUnlockedUpgradePool(runCardPool.snapshot().unlocked, gameState.unlockedRecipeIds).map((entry) => ({
     ...entry,
     spriteUrl: spriteForUpgradePackItem(entry.id),
     apply: () => {
@@ -1340,6 +1359,10 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
         // 강화팩 legendary — 레시피 보상 보너스
         case 'recipe-shuffle':  gameState.enhancements.recipeBonus['shuffle']  = (gameState.enhancements.recipeBonus['shuffle']  ?? 0) + 1; return
         case 'recipe-dividend': gameState.enhancements.recipeBonus['dividend'] = (gameState.enhancements.recipeBonus['dividend'] ?? 0) + 1; return
+        // 해금팩 레시피 강화
+        case 'recipe-backfire':     gameState.enhancements.recipeBonus['backfire']     = (gameState.enhancements.recipeBonus['backfire']     ?? 0) + 1; return
+        case 'recipe-rage':         gameState.enhancements.recipeBonus['rage']         = (gameState.enhancements.recipeBonus['rage']         ?? 0) + 1; return
+        case 'recipe-mythic-flame': gameState.enhancements.recipeBonus['mythic-flame'] = (gameState.enhancements.recipeBonus['mythic-flame'] ?? 0) + 1; return
       }
     },
   }))
@@ -1383,6 +1406,10 @@ async function handleShopPackPick(detail: ShopPackPickDetail): Promise<void> {
   const poolSnap = runCardPool.snapshot()
   DropSystem.setAllowedPool(poolSnap.unlocked)
   boardRenderer.setLockedCardIds([...poolSnap.locked, ...poolSnap.banned])
+  // runLocked 레시피 잠금도 재동기화한다.
+  boardRenderer.setLockedRecipeIds(
+    RECIPES.filter((r) => r.runLocked && !gameState.unlockedRecipeIds.has(r.id)).map((r) => r.id)
+  )
   activePackSession = null
   boardRenderer.closePackPicker()
   // Most pack effects mutate character stats; play the standard player-gain
@@ -2101,7 +2128,7 @@ function buildChainHints() {
   // while the recipe rules remain centralized in HandSystem/Recipes.ts.
   const recipeReadyBySlot: Record<number, { id: string; name: string; flavor: string }[]> = {}
   gameState.character.hand.forEach((card, slotIndex) => {
-    const recipes = HandSystem.previewTriggeredRecipes(chain, card.defId, card.merged === true)
+    const recipes = HandSystem.previewTriggeredRecipes(chain, card.defId, card.merged === true, gameState)
     if (recipes.length === 0) return
     recipeReadyBySlot[slotIndex] = recipes.map((recipe) => ({
       id: recipe.id,
@@ -2691,7 +2718,7 @@ async function applyHandSingle(
   // animations, and preparation refresh so chained removals cannot leave rail
   // gaps and active-row cards can merge before the next recipe checks the board.
   let recipeSafety = 32
-  while (HandSystem.hasPendingRecipe(chain) && recipeSafety-- > 0) {
+  while (HandSystem.hasPendingRecipe(chain, gameState) && recipeSafety-- > 0) {
     await wait(COMBO_TRIGGER_DELAY_MS)
     const beforeRecipeFreeze = snapshotFieldFreezeState()
     const beforeRecipeHealth = snapshotFieldHealthState()

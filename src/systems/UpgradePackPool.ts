@@ -16,10 +16,11 @@ export type UpgradePackEntry = Omit<ShopPackPoolItem, 'apply'>
 /**
  * 현재 런에서 해금된 카드/조합식에 해당하는 강화팩 항목만 반환한다.
  * - triple-{id}: 해당 카드가 unlocked 상태일 때만 포함.
- * - recipe-{id}: 해당 조합식의 모든 재료가 unlocked 상태일 때만 포함.
+ * - recipe-{id}: 해당 조합식의 모든 재료가 unlocked 상태이고, runLocked 레시피는 해금된 경우만 포함.
  */
 export function buildUnlockedUpgradePool(
-  unlockedIds: readonly HandCardId[]
+  unlockedIds: readonly HandCardId[],
+  unlockedRecipeIds?: ReadonlySet<string>
 ): UpgradePackEntry[] {
   const unlocked = new Set<string>(unlockedIds)
   const recipeById = new Map(RECIPES.map((r) => [r.id, r]))
@@ -33,6 +34,8 @@ export function buildUnlockedUpgradePool(
       const recipeId = entry.id.slice('recipe-'.length)
       const recipe = recipeById.get(recipeId)
       if (!recipe) return false
+      // runLocked 레시피는 해금돼야 강화 항목도 등장한다.
+      if (recipe.runLocked && !unlockedRecipeIds?.has(recipeId)) return false
       return Object.keys(recipe.ingredients).every((id) => unlocked.has(id))
     }
     return true

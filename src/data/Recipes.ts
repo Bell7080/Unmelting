@@ -12,6 +12,8 @@ import { HandCardId } from '@entities/HandCard'
 export type RecipeEffectKind =
   | 'gain-wax-drop'
   | 'damage-all-field-enemies-1'
+  | 'damage-all-field-enemies-2'
+  | 'damage-all-field-enemies-5'
   | 'gain-coin-1'
   | 'draw-random-hand-1'
   | 'destroy-random-front-enemy'
@@ -19,10 +21,13 @@ export type RecipeEffectKind =
   | 'collect-random-treasure'
   | 'convert-random-waiting-to-treasure'
   | 'clear-all-field-cards'
+  | 'damage-front-enemies-2'
   | 'damage-front-enemies-3'
+  | 'damage-front-enemies-5'
   | 'clear-front-cards'
   | 'collect-waiting-treasures'
-  | 'damage-front-enemies-2'
+  | 'gain-ember-3'
+  | 'heal-5'
 
 export interface Recipe {
   id: string
@@ -35,6 +40,8 @@ export interface Recipe {
   effect: RecipeEffectKind
   /** Short Korean blurb shown in the activity log and compendium. */
   flavor: string
+  /** 해금팩 해금 전까지 발동하지 않고 도감에서 ??? 로 표시된다. */
+  runLocked?: boolean
 }
 
 function totalCount(ing: Partial<Record<HandCardId, number>>): number {
@@ -46,9 +53,10 @@ function recipe(
   name: string,
   ingredients: Partial<Record<HandCardId, number>>,
   effect: RecipeEffectKind,
-  flavor: string
+  flavor: string,
+  runLocked?: boolean
 ): Recipe {
-  return { id, name, ingredients, totalCount: totalCount(ingredients), effect, flavor }
+  return { id, name, ingredients, totalCount: totalCount(ingredients), effect, flavor, runLocked }
 }
 
 export const RECIPES: Recipe[] = [
@@ -113,6 +121,13 @@ export const RECIPES: Recipe[] = [
     '대기칸 모든 보물상자 획득'
   ),
   recipe('hot', '뜨거움', { ember: 2 }, 'damage-front-enemies-2', '전방의 모든 적에게 피해 2'),
+  // --- 신규 레시피 (6개 — 해금팩으로 해금) ---
+  recipe('backfire',      '역화',       { firework: 1, match: 1 },                     'damage-all-field-enemies-2', '필드 모든 적에게 피해 2',   true),
+  recipe('rage',          '분노',       { 'sacrifice-candle': 1, ember: 1 },           'damage-front-enemies-5',     '전방 모든 적에게 피해 5',   true),
+  recipe('flame-infusion','불꽃 주입',  { 'book-of-flames': 1, match: 1 },             'gain-ember-3',               '불씨 게이지 +3',            true),
+  recipe('bond',          '결속',       { 'sacrifice-candle': 1, 'wax-drop': 1 },      'heal-5',                     '체력 5 회복',               true),
+  recipe('smokescreen',   '연막',       { wax: 1, firework: 1 },                       'clear-front-cards',          '전방 모든 칸 제거',          true),
+  recipe('mythic-flame',  '신화의 불꽃',{ levatein: 1, ember: 1, match: 1 },           'damage-all-field-enemies-5', '필드 모든 적에게 피해 5',   true),
 ]
 
 /** Lookup helper for the renderer/log. */

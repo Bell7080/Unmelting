@@ -258,6 +258,12 @@ export class HandSystem {
     return true
   }
 
+  /** runLocked 레시피를 런 해금 여부에 따라 필터한다. gs 없으면 전체 반환(도감 등 비전투 용도). */
+  private static activeRecipes(gs?: GameState): Recipe[] {
+    if (!gs) return RECIPES
+    return RECIPES.filter((r) => !r.runLocked || gs.unlockedRecipeIds.has(r.id))
+  }
+
   /**
    * Return every not-yet-fired recipe that would become active if `defId` were
    * used now. The renderer consumes this as a non-mutating hint source so recipe
@@ -266,7 +272,8 @@ export class HandSystem {
   static previewTriggeredRecipes(
     chain: ChainState,
     defId: HandCardId,
-    _isMerged: boolean = false
+    _isMerged: boolean = false,
+    gs?: GameState
   ): Recipe[] {
     const preview: ChainState = {
       sequence: [...chain.sequence, defId],
@@ -274,15 +281,15 @@ export class HandSystem {
     }
     // Recipe hints intentionally mirror physical ingredient rules, not gauge
     // progress: one `카드` preview must not promise `셔플`.
-    return RECIPES.filter((recipe) => {
+    return HandSystem.activeRecipes(gs).filter((recipe) => {
       if (preview.firedRecipeIds.has(recipe.id)) return false
       return HandSystem.recipeMatches(recipe, preview)
     })
   }
 
   /** Check whether the current chain has at least one newly satisfied recipe. */
-  static hasPendingRecipe(chain: ChainState): boolean {
-    for (const recipe of RECIPES) {
+  static hasPendingRecipe(chain: ChainState, gs?: GameState): boolean {
+    for (const recipe of HandSystem.activeRecipes(gs)) {
       if (chain.firedRecipeIds.has(recipe.id)) continue
       if (HandSystem.recipeMatches(recipe, chain)) return true
     }
@@ -312,7 +319,7 @@ export class HandSystem {
 
   private static fireNextMatchedRecipe(gs: GameState, chain: ChainState): FiredRecipe | null {
     // Sort by ingredient size ascending so smaller recipes resolve first.
-    const sorted = [...RECIPES].sort((a, b) => a.totalCount - b.totalCount)
+    const sorted = [...HandSystem.activeRecipes(gs)].sort((a, b) => a.totalCount - b.totalCount)
     for (const recipe of sorted) {
       if (chain.firedRecipeIds.has(recipe.id)) continue
       if (!HandSystem.recipeMatches(recipe, chain)) continue
@@ -413,6 +420,20 @@ export class HandSystem {
         return { message: HandSystem.collectWaitingTreasures(gs, c) }
       case 'damage-front-enemies-2':
         return { message: HandSystem.damageEnemies(gs, 'front', 2 + bonus) }
+      case 'damage-all-field-enemies-2':
+        return { message: HandSystem.damageEnemies(gs, 'field', 2 + bonus) }
+      case 'damage-front-enemies-5':
+        return { message: HandSystem.damageEnemies(gs, 'front', 5 + bonus) }
+      case 'damage-all-field-enemies-5':
+        return { message: HandSystem.damageEnemies(gs, 'field', 5 + bonus) }
+      case 'gain-ember-3': {
+        const gained = c.gainEmber(3 + bonus)
+        return { message: `불씨 게이지 +${gained}` }
+      }
+      case 'heal-5': {
+        const healed = c.heal(5 + bonus)
+        return { message: `체력 +${healed}` }
+      }
     }
   }
 
