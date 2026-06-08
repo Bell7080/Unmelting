@@ -2764,8 +2764,8 @@ async function applyHandSingle(
       }
       hadKills = repeatResult.removedFieldCards.some((r) => r.type === CardType.ENEMY)
     }
-    // 모든 반복 완료 후 레일 하강·리필을 한 번만 실행한다.
-    if (!gameState.isGameOver) await runPreparationRefreshAfterFieldEffects()
+    // 레일 하강은 레시피 루프 이후의 공통 cleanup(line 아래 runPreparationRefreshAfterFieldEffects)에 맡긴다.
+    // 여기서 하강하면 새 적이 내려온 뒤 레시피가 발동해 그 적도 처치하는 문제가 발생한다.
   }
 
   // 주전자: 첫 타격(useSingle에서 실행) 이후 나머지 타격을 빠른 딜레이로 순차 실행한다.
