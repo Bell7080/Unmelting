@@ -54,6 +54,7 @@ import {
 import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
 import { BASIC_PACK_POOL } from '@data/BasicPackPool'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
+import { JOBS } from '@data/Jobs'
 import { buildUnlockedUpgradePool } from '@systems/UpgradePackPool'
 import { buildUnlockedEnhancePool } from '@systems/EnhancePackPool'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
@@ -2113,7 +2114,7 @@ function fillBoardAtStart(): void {
 }
 
 /** Runs now begin with an empty hand; first cards must come from play rewards. */
-function startGame(): void {
+async function startGame(): Promise<void> {
   gameActive = true
   inputLocked = false
   chain = HandSystem.newChain()
@@ -2146,6 +2147,18 @@ function startGame(): void {
   // 메타 사당 해금(영구) + 런 카드풀(임시) 이중 구조를 플레이 로그로 명시한다.
   recordNotice(`카드 풀 초기화: 메타해금 ${poolSnapshot.unlocked.length} / 잠김 ${poolSnapshot.locked.length} / 금지 ${poolSnapshot.banned.length}`, 'info')
   render()
+
+  // 직업 선택 오버레이 — 플레이어 대사 전에 한 번만 선택한다
+  const chosenJobId = await boardRenderer.openJobSelect(JOBS)
+  const chosenJob = JOBS.find((j) => j.id === chosenJobId)
+  if (chosenJob) {
+    if (chosenJob.healthBonus > 0) gameState.character.increaseMaxHealth(chosenJob.healthBonus)
+    if (chosenJob.damageBonus > 0) gameState.character.applyDamageBoost(chosenJob.damageBonus)
+    if (chosenJob.coinBonus > 0) coins += chosenJob.coinBonus
+    cardSpawner.setJobSpawnAdjust(chosenJob.spawnEnemy, chosenJob.spawnTreasure, chosenJob.spawnFlower)
+    render()
+  }
+
   // 1턴 시작 대사: 살짝 딜레이 후 캐릭터 말풍선 등장
   speechBubble.show('역경 아래, 작은 불빛을 밝혀야만 해.', 800)
 }
@@ -3593,7 +3606,7 @@ function showGameOver(): void {
   document.body.appendChild(overlay)
   document.getElementById('restart-btn')?.addEventListener('click', () => {
     overlay.remove()
-    startGame()
+    void startGame()
   })
 }
 
@@ -3669,4 +3682,4 @@ document.head.appendChild(globalStyle)
 setupDevCommandPalette()
 // 게임 부팅 후 첫 사용자 입력에서 배경음 루프를 켠다(브라우저 자동재생 정책).
 bgm.armAutoplay()
-startGame()
+void startGame()

@@ -38,6 +38,7 @@ import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_DEFINITIONS, type RelicId } from '@data/Relics'
 import { HAND_CARD_RARITY, RARITY_CLASS_BY_TIER, SHOP_PACK_LABELS, SHOP_PACK_POOLS, type CardRarity } from '@data/ShopPools'
 import { RECIPES } from '@data/Recipes'
+import type { JobDef } from '@data/Jobs'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { GAME_BOARD_STYLES } from '@ui/styles/GameBoardStyles'
 import { initTouchBody, attachHandCardTouch, attachShopTouchHighlight } from '@ui/MobileTouchManager'
@@ -1972,6 +1973,61 @@ export class GameBoardRenderer {
           finishOne()
         })
       })
+    })
+  }
+
+  /** Full-screen job-selection overlay shown once at game start.
+   *  Resolves with the chosen job id when the player clicks a non-locked card. */
+  openJobSelect(jobs: JobDef[]): Promise<string> {
+    return new Promise<string>((resolve) => {
+      const lockIcon = `<svg class="job-card__lock-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="5" y="11" width="14" height="10" rx="2"/>
+        <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+      </svg>`
+
+      const overlay = document.createElement('div')
+      overlay.id = 'job-select-overlay'
+      overlay.setAttribute('role', 'dialog')
+      overlay.setAttribute('aria-label', '직업 선택')
+      overlay.innerHTML = `
+        <h2 class="job-select-title">직업을 선택하세요</h2>
+        <div class="job-select-cards">
+          ${jobs.map((job) => `
+            <button class="job-card${job.locked ? ' job-card--locked' : ''}"
+                    data-job-id="${job.id}"
+                    ${job.locked ? 'aria-disabled="true" tabindex="-1"' : ''}
+                    type="button">
+              ${job.locked ? `<div class="job-card__lock">${lockIcon}<span class="job-card__lock-label">잠김</span></div>` : ''}
+              <div class="job-card__symbol">${job.symbolSvg}</div>
+              <div class="job-card__body">
+                <div class="job-card__name">${job.name}</div>
+                <div class="job-card__traits">${job.traits}</div>
+                ${job.stats ? `<div class="job-card__stats">${job.stats}</div>` : ''}
+                <div class="job-card__flavor">${job.flavor}</div>
+              </div>
+            </button>
+          `).join('')}
+        </div>
+      `
+      document.body.appendChild(overlay)
+
+      const handleClick = (e: MouseEvent) => {
+        const card = (e.target as HTMLElement).closest<HTMLElement>('.job-card:not(.job-card--locked)')
+        if (!card) return
+        const jobId = card.dataset.jobId
+        if (!jobId) return
+
+        card.classList.add('job-card--selected')
+        overlay.classList.add('job-select--exiting')
+        overlay.removeEventListener('click', handleClick)
+        setTimeout(() => {
+          overlay.remove()
+          resolve(jobId)
+        }, 380)
+      }
+
+      overlay.addEventListener('click', handleClick)
     })
   }
 
