@@ -260,9 +260,9 @@ export class HandSystem {
       // 주전자: 첫 타격 포함 총 타격 횟수와 타격 피해를 index.ts에 전달한다.
       teapotExtraHits: card.defId === 'teapot' && preEffectEnemyCount > 0
         ? {
-            damage: (card.merged ? 4 : 2) + (card.merged
-              ? (gs.enhancements.tripleBonus['teapot'] ?? 0)
-              : (gs.enhancements.singleBonus['teapot'] ?? 0)),
+            damage: card.merged
+              ? 4 + (gs.enhancements.tripleBonus['teapot'] ?? 0) * 2
+              : 2 + (gs.enhancements.singleBonus['teapot'] ?? 0),
             totalCount: card.merged ? preEffectEnemyCount * 2 : preEffectEnemyCount,
           }
         : undefined,
@@ -430,8 +430,12 @@ export class HandSystem {
           ? { message: `랜덤 손패 ${count}장 획득`, drawnHandCardDefId: lastId }
           : { message: '손패가 가득 차 드로우 실패' }
       }
-      case 'destroy-random-front-enemy':
-        return { message: HandSystem.destroyRandomFrontEnemy(gs) }
+      case 'destroy-random-front-enemy': {
+        // 양초 스매쉬 강화: 1+bonus장 처치
+        const msgs: string[] = []
+        for (let i = 0; i < 1 + bonus; i++) msgs.push(HandSystem.destroyRandomFrontEnemy(gs))
+        return { message: msgs.join(' / ') }
+      }
       case 'convert-random-hazard-to-treasure': {
         // 지뢰제거반 강화: bonus회 추가 변환
         const msgs: string[] = []
@@ -639,7 +643,7 @@ export class HandSystem {
       case 'key':
         return HandSystem.collectAllTreasures(gs, c)
       case 'wax':
-        return HandSystem.freezeFrontCards(gs, 3)
+        return HandSystem.freezeFrontCards(gs, 3 + bonus)
       case 'match': {
         const gained = c.gainEmber(5 + bonus)
         return `트리플 불씨 게이지 +${gained}`
@@ -672,13 +676,14 @@ export class HandSystem {
       case 'book-of-flames':
         return HandSystem.applyBookOfFlames(gs, target, 3 + bonus, 3)
       case 'fire-arrow': {
-        const damage = Math.ceil(Math.random() * 20) + bonus
+        // 강화 1회당 최대 피해 +5. Math.ceil이므로 최솟값은 1로 유지된다.
+        const damage = Math.ceil(Math.random() * (20 + bonus * 5))
         return HandSystem.damageTargetEnemy(gs, target, damage)
       }
       case 'shield-bash': {
-        // 방패를 먼저 얻어 수치를 올린 뒤 그 3배를 피해로 전환한다.
+        // 방패를 먼저 얻어 수치를 올린 뒤 배율(3+bonus)배를 피해로 전환한다.
         c.addShield(3)
-        const damage = Math.max(0, c.shield) * 3 + bonus
+        const damage = Math.max(0, c.shield) * (3 + bonus)
         return `방패 +3 · ${HandSystem.damageTargetEnemy(gs, target, damage)}`
       }
       case 'sacrifice-shield': {
@@ -699,10 +704,12 @@ export class HandSystem {
         return HandSystem.damageTargetEnemy(gs, target, 4 + bonus)
       case 'teapot':
         // 첫 타격만 여기서 실행. 나머지는 index.ts가 200ms 딜레이로 순차 실행한다(teapotExtraHits 참조).
-        return HandSystem.damageTargetEnemy(gs, target, 4 + bonus)
+        // 강화 1회당 기본 피해 +2 (bonus * 2).
+        return HandSystem.damageTargetEnemy(gs, target, 4 + bonus * 2)
       case 'teacup': {
         const count = HandSystem.countFieldEnemies(gs)
-        const healed = c.heal(count * 3 + bonus)
+        // 강화 1회당 승수 +1 (3+bonus 배).
+        const healed = c.heal(count * (3 + bonus))
         return `트리플 체력 +${healed}`
       }
       case 'top-hat': {

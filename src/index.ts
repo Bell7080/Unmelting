@@ -1347,27 +1347,50 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     apply: () => {
       switch (entry.id) {
         // 강화팩 common — 트리플 보너스
+        // 트리플 보너스 — 기본 6장
         case 'triple-wax-drop':   gameState.enhancements.tripleBonus['wax-drop'] = (gameState.enhancements.tripleBonus['wax-drop'] ?? 0) + 1; return
         case 'triple-candle':     gameState.enhancements.tripleBonus['candle']   = (gameState.enhancements.tripleBonus['candle']   ?? 0) + 1; return
         case 'triple-ember':      gameState.enhancements.tripleBonus['ember']    = (gameState.enhancements.tripleBonus['ember']    ?? 0) + 1; return
         case 'triple-match':      gameState.enhancements.tripleBonus['match']    = (gameState.enhancements.tripleBonus['match']    ?? 0) + 1; return
         case 'triple-coin':       gameState.enhancements.tripleBonus['coin']     = (gameState.enhancements.tripleBonus['coin']     ?? 0) + 1; return
         case 'triple-card':       gameState.enhancements.tripleBonus['card']     = (gameState.enhancements.tripleBonus['card']     ?? 0) + 1; return
-        // 강화팩 rare — 레시피 피해 보너스
-        case 'recipe-ignite':       gameState.enhancements.recipeBonus['ignite'] = (gameState.enhancements.recipeBonus['ignite'] ?? 0) + 1; return
-        case 'recipe-hot':          gameState.enhancements.recipeBonus['hot']    = (gameState.enhancements.recipeBonus['hot']    ?? 0) + 1; return
-        case 'recipe-fuse':         gameState.enhancements.recipeBonus['fuse']   = (gameState.enhancements.recipeBonus['fuse']   ?? 0) + 1; return
-        // 강화팩 epic — 레시피 횟수 보너스
-        case 'recipe-greed':        gameState.enhancements.recipeBonus['greed']        = (gameState.enhancements.recipeBonus['greed']        ?? 0) + 1; return
-        case 'recipe-locksmith':    gameState.enhancements.recipeBonus['locksmith']    = (gameState.enhancements.recipeBonus['locksmith']    ?? 0) + 1; return
-        case 'recipe-mine-sweeper': gameState.enhancements.recipeBonus['mine-sweeper'] = (gameState.enhancements.recipeBonus['mine-sweeper'] ?? 0) + 1; return
-        // 강화팩 legendary — 레시피 보상 보너스
-        case 'recipe-shuffle':  gameState.enhancements.recipeBonus['shuffle']  = (gameState.enhancements.recipeBonus['shuffle']  ?? 0) + 1; return
-        case 'recipe-dividend': gameState.enhancements.recipeBonus['dividend'] = (gameState.enhancements.recipeBonus['dividend'] ?? 0) + 1; return
-        // 해금팩 레시피 강화
-        case 'recipe-backfire':     gameState.enhancements.recipeBonus['backfire']     = (gameState.enhancements.recipeBonus['backfire']     ?? 0) + 1; return
-        case 'recipe-rage':         gameState.enhancements.recipeBonus['rage']         = (gameState.enhancements.recipeBonus['rage']         ?? 0) + 1; return
-        case 'recipe-mythic-flame': gameState.enhancements.recipeBonus['mythic-flame'] = (gameState.enhancements.recipeBonus['mythic-flame'] ?? 0) + 1; return
+        // 트리플 보너스 — 신규 카드
+        case 'triple-wax':              gameState.enhancements.tripleBonus['wax']              = (gameState.enhancements.tripleBonus['wax']              ?? 0) + 1; return
+        case 'triple-sacrifice-candle': gameState.enhancements.tripleBonus['sacrifice-candle'] = (gameState.enhancements.tripleBonus['sacrifice-candle'] ?? 0) + 1; return
+        case 'triple-firework':         gameState.enhancements.tripleBonus['firework']         = (gameState.enhancements.tripleBonus['firework']         ?? 0) + 1; return
+        case 'triple-sacrifice-shield': gameState.enhancements.tripleBonus['sacrifice-shield'] = (gameState.enhancements.tripleBonus['sacrifice-shield'] ?? 0) + 1; return
+        case 'triple-chandelier':       gameState.enhancements.tripleBonus['chandelier']       = (gameState.enhancements.tripleBonus['chandelier']       ?? 0) + 1; return
+        case 'triple-fire-arrow':       gameState.enhancements.tripleBonus['fire-arrow']       = (gameState.enhancements.tripleBonus['fire-arrow']       ?? 0) + 1; return
+        case 'triple-book-of-flames':   gameState.enhancements.tripleBonus['book-of-flames']   = (gameState.enhancements.tripleBonus['book-of-flames']   ?? 0) + 1; return
+        case 'triple-shield-bash':      gameState.enhancements.tripleBonus['shield-bash']      = (gameState.enhancements.tripleBonus['shield-bash']      ?? 0) + 1; return
+        case 'triple-teapot':           gameState.enhancements.tripleBonus['teapot']           = (gameState.enhancements.tripleBonus['teapot']           ?? 0) + 1; return
+        case 'triple-teacup':           gameState.enhancements.tripleBonus['teacup']           = (gameState.enhancements.tripleBonus['teacup']           ?? 0) + 1; return
+        case 'triple-bonfire':          gameState.enhancements.tripleBonus['bonfire']          = (gameState.enhancements.tripleBonus['bonfire']          ?? 0) + 1; return
+        case 'triple-shackles':         gameState.enhancements.tripleBonus['shackles']         = (gameState.enhancements.tripleBonus['shackles']         ?? 0) + 1; return
+        // 레시피 보너스 — 기본
+        case 'recipe-ignite':         gameState.enhancements.recipeBonus['ignite']       = (gameState.enhancements.recipeBonus['ignite']       ?? 0) + 1; return
+        case 'recipe-hot':            gameState.enhancements.recipeBonus['hot']          = (gameState.enhancements.recipeBonus['hot']          ?? 0) + 1; return
+        case 'recipe-fuse':           gameState.enhancements.recipeBonus['fuse']         = (gameState.enhancements.recipeBonus['fuse']         ?? 0) + 1; return
+        case 'recipe-candle-smash':   gameState.enhancements.recipeBonus['candle-smash'] = (gameState.enhancements.recipeBonus['candle-smash'] ?? 0) + 1; return
+        case 'recipe-greed':          gameState.enhancements.recipeBonus['greed']        = (gameState.enhancements.recipeBonus['greed']        ?? 0) + 1; return
+        case 'recipe-locksmith':      gameState.enhancements.recipeBonus['locksmith']    = (gameState.enhancements.recipeBonus['locksmith']    ?? 0) + 1; return
+        case 'recipe-mine-sweeper':   gameState.enhancements.recipeBonus['mine-sweeper'] = (gameState.enhancements.recipeBonus['mine-sweeper'] ?? 0) + 1; return
+        case 'recipe-shuffle':        gameState.enhancements.recipeBonus['shuffle']      = (gameState.enhancements.recipeBonus['shuffle']      ?? 0) + 1; return
+        case 'recipe-dividend':       gameState.enhancements.recipeBonus['dividend']     = (gameState.enhancements.recipeBonus['dividend']     ?? 0) + 1; return
+        // 레시피 보너스 — 신규 레시피
+        case 'recipe-flame-infusion': gameState.enhancements.recipeBonus['flame-infusion'] = (gameState.enhancements.recipeBonus['flame-infusion'] ?? 0) + 1; return
+        case 'recipe-bond':           gameState.enhancements.recipeBonus['bond']           = (gameState.enhancements.recipeBonus['bond']           ?? 0) + 1; return
+        case 'recipe-glass-shards':   gameState.enhancements.recipeBonus['glass-shards']   = (gameState.enhancements.recipeBonus['glass-shards']   ?? 0) + 1; return
+        case 'recipe-blood-pact':     gameState.enhancements.recipeBonus['blood-pact']     = (gameState.enhancements.recipeBonus['blood-pact']     ?? 0) + 1; return
+        case 'recipe-bright-ceiling': gameState.enhancements.recipeBonus['bright-ceiling'] = (gameState.enhancements.recipeBonus['bright-ceiling'] ?? 0) + 1; return
+        case 'recipe-fireworks-show': gameState.enhancements.recipeBonus['fireworks-show'] = (gameState.enhancements.recipeBonus['fireworks-show'] ?? 0) + 1; return
+        case 'recipe-hospitality':    gameState.enhancements.recipeBonus['hospitality']    = (gameState.enhancements.recipeBonus['hospitality']    ?? 0) + 1; return
+        case 'recipe-flame-chain':    gameState.enhancements.recipeBonus['flame-chain']    = (gameState.enhancements.recipeBonus['flame-chain']    ?? 0) + 1; return
+        case 'recipe-banquet':        gameState.enhancements.recipeBonus['banquet']        = (gameState.enhancements.recipeBonus['banquet']        ?? 0) + 1; return
+        // 레시피 보너스 — 해금팩 전용
+        case 'recipe-backfire':       gameState.enhancements.recipeBonus['backfire']     = (gameState.enhancements.recipeBonus['backfire']     ?? 0) + 1; return
+        case 'recipe-rage':           gameState.enhancements.recipeBonus['rage']         = (gameState.enhancements.recipeBonus['rage']         ?? 0) + 1; return
+        case 'recipe-mythic-flame':   gameState.enhancements.recipeBonus['mythic-flame'] = (gameState.enhancements.recipeBonus['mythic-flame'] ?? 0) + 1; return
       }
     },
   }))
