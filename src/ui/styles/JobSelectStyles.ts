@@ -1,5 +1,5 @@
 /**
- * Job selection overlay — full-screen coverflow shown once at game start
+ * Job selection overlay — in-rail coverflow shown once at game start
  * (before the player intro dialogue). Cards are stacked like a fanned poker
  * hand: the centre card is largest/brightest, side cards shrink, dim and tilt
  * away with a separating shadow. The carousel loops infinitely; arrows, drag
@@ -13,27 +13,87 @@ export const JOB_SELECT_STYLES = `
   position: fixed;
   inset: 0;
   z-index: 200;
+  pointer-events: none;
+  animation: job-overlay-in 0.24s ease both;
+}
+
+.job-select-rail-shell {
+  position: fixed;
+  z-index: 201;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: clamp(10px, 2vh, 24px);
-  padding: clamp(14px, 2.8vh, 34px) clamp(8px, 1.2vw, 24px);
+  gap: clamp(8px, 1.6vh, 18px);
+  padding: clamp(10px, 2.1vh, 24px) clamp(8px, 1.2vw, 18px);
+  overflow: hidden;
+  pointer-events: auto;
+  border-radius: clamp(18px, 3.2vh, 28px);
   background:
-    radial-gradient(circle at 50% 38%, rgba(46, 30, 60, 0.6), transparent 66%),
-    radial-gradient(circle at 50% 120%, rgba(80, 44, 24, 0.34), transparent 60%),
-    rgba(5, 3, 10, 0.97);
-  backdrop-filter: blur(12px);
-  animation: job-overlay-in 0.34s ease both;
+    radial-gradient(circle at 50% 36%, rgba(72, 44, 92, 0.5), transparent 68%),
+    radial-gradient(circle at 50% 118%, rgba(111, 62, 31, 0.28), transparent 64%),
+    rgba(5, 3, 10, 0.66);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 215, 120, 0.14),
+    inset 0 0 48px rgba(0, 0, 0, 0.76),
+    0 18px 54px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(7px);
 }
 
-#job-select-overlay.job-select--exiting {
-  animation: job-overlay-out 0.4s ease forwards;
+.job-select-content-bundle {
+  position: relative;
+  z-index: 4;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 1.5vh, 16px);
+  animation: job-content-in 0.45s 0.32s ease both;
+}
+
+.job-rail-curtain {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 54%;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.58), rgba(7, 5, 13, 0.94) 18%, rgba(21, 15, 33, 0.96) 58%, rgba(6, 4, 12, 0.98)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 18px);
+  box-shadow: inset -18px 0 36px rgba(0, 0, 0, 0.55), inset 10px 0 26px rgba(255, 232, 168, 0.035);
+  filter: saturate(0.85);
+  animation: job-curtain-close-left 0.68s cubic-bezier(0.16, 0.84, 0.24, 1) both;
+}
+.job-rail-curtain--left { left: 0; transform-origin: left center; }
+.job-rail-curtain--right {
+  right: 0;
+  transform-origin: right center;
+  transform: scaleX(-1);
+  animation-name: job-curtain-close-right;
+}
+
+#job-select-overlay.job-select--picked .job-select-content-bundle {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.98);
+  transition: opacity 0.34s ease, transform 0.34s ease;
   pointer-events: none;
 }
+#job-select-overlay.job-select--opening { pointer-events: none; }
+#job-select-overlay.job-select--opening .job-select-rail-shell { background: transparent; box-shadow: none; backdrop-filter: none; transition: background 0.36s ease, box-shadow 0.36s ease, backdrop-filter 0.36s ease; }
+#job-select-overlay.job-select--opening .job-select-content-bundle { opacity: 0; pointer-events: none; }
+#job-select-overlay.job-select--opening .job-rail-curtain--left { animation: job-curtain-open-left 0.72s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
+#job-select-overlay.job-select--opening .job-rail-curtain--right { animation: job-curtain-open-right 0.72s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
 
 @keyframes job-overlay-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes job-overlay-out { from { opacity: 1; } to { opacity: 0; transform: scale(1.015); } }
+@keyframes job-content-in { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes job-curtain-close-left { from { transform: translateX(-104%) skewX(-2deg); } to { transform: translateX(0) skewX(0deg); } }
+@keyframes job-curtain-close-right { from { transform: translateX(104%) scaleX(-1) skewX(2deg); } to { transform: translateX(0) scaleX(-1) skewX(0deg); } }
+@keyframes job-curtain-open-left { from { transform: translateX(0) skewX(0deg); opacity: 1; } to { transform: translateX(-104%) skewX(-2deg); opacity: 0.78; } }
+@keyframes job-curtain-open-right { from { transform: translateX(0) scaleX(-1) skewX(0deg); opacity: 1; } to { transform: translateX(104%) scaleX(-1) skewX(2deg); opacity: 0.78; } }
 
 /* ─── Title with rule lines ────────────────────────────────────────── */
 .job-select-header {
@@ -95,7 +155,7 @@ export const JOB_SELECT_STYLES = `
   /* transform/opacity/filter/z-index are driven inline by the coverflow JS;
      translate(-50%,-50%) base keeps cards centred before the offset. */
   transform: translate(-50%, -50%);
-  height: min(64vh, 540px);
+  height: min(78%, 420px);
   aspect-ratio: 2 / 3;
   cursor: pointer;
   padding: 0;
@@ -358,6 +418,7 @@ export const JOB_SELECT_STYLES = `
 
 /* ─── Narrow screens keep the centre card readable ──────────────────── */
 @media (max-width: 680px) {
-  .job-card { height: min(56vh, 420px); }
+  .job-card { height: min(72%, 340px); }
+  .job-select-title { font-size: clamp(16px, 2.7vh, 24px); }
 }
 `

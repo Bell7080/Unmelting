@@ -2139,17 +2139,16 @@ async function startGame(): Promise<void> {
   boardRenderer.closeShop()
   boardRenderer.resetShutter()
   syncSpawnerTier()
-  fillBoardAtStart()
-  turnManager.armFrontBombs()
   boardRenderer.setHandTargetingMode(null)
   boardRenderer.clearSelection()
   const poolSnapshot = runCardPool.snapshot()
   // 메타 사당 해금(영구) + 런 카드풀(임시) 이중 구조를 플레이 로그로 명시한다.
   recordNotice(`카드 풀 초기화: 메타해금 ${poolSnapshot.unlocked.length} / 잠김 ${poolSnapshot.locked.length} / 금지 ${poolSnapshot.banned.length}`, 'info')
+  // 시작 직업 선택은 빈 레일 위의 암막 안에서 진행한다. 선택 전 3×3 스폰을 노출하지 않기 위함이다.
   render()
 
   // 직업 선택 오버레이 — 플레이어 대사 전에 한 번만 선택한다.
-  // 선택 카드는 화면 중앙으로 날아온 뒤, 능력을 HUD로 블라스트하며 사라진다.
+  // 선택 카드는 화면 중앙으로 남고, 암막이 닫힌 동안 실제 3×3 레일을 준비한다.
   const chosenJobId = await boardRenderer.openJobSelect(JOBS)
   const chosenJob = JOBS.find((j) => j.id === chosenJobId)
   if (chosenJob) {
@@ -2157,13 +2156,17 @@ async function startGame(): Promise<void> {
     if (chosenJob.damageBonus > 0) gameState.character.applyDamageBoost(chosenJob.damageBonus)
     if (chosenJob.coinBonus > 0) coins += chosenJob.coinBonus
     cardSpawner.setJobSpawnAdjust(chosenJob.spawnEnemy, chosenJob.spawnTreasure, chosenJob.spawnFlower)
+    // 닫힌 암막 뒤에서 최초 보드를 채워, 레일 공개가 직업 선택의 후속 연출처럼 이어지게 한다.
+    fillBoardAtStart()
+    turnManager.armFrontBombs()
     // render()가 스폰 확률 패널/체력/공격력/화폐 카운터를 새 값으로 굴린다.
     render()
     // 중앙 고스트 카드가 적용된 능력을 HUD로 블라스트하며 소멸한다.
     await boardRenderer.animateJobCardToHud(chosenJob)
+    await boardRenderer.playJobCurtainOpen()
   }
 
-  // 1턴 시작 대사: 살짝 딜레이 후 캐릭터 말풍선 등장
+  // 1턴 시작 대사: 암막이 완전히 걷힌 뒤 살짝 딜레이 후 캐릭터 말풍선 등장
   speechBubble.show('역경 아래, 작은 불빛을 밝혀야만 해.', 800)
 }
 
