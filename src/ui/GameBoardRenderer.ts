@@ -1978,8 +1978,12 @@ export class GameBoardRenderer {
 
   /** 직업 선택 후 화면 중앙으로 날아간 카드 고스트 — 게임 진입 후 HUD 블라스트에 재사용. */
   private jobFlightCard: HTMLElement | null = null
+  /** 레일 내부 직업 선택 암막. 선택 후 보드가 채워질 때까지 남겨 몰입 전환을 가린다. */
+  private jobSelectOverlayElement: HTMLElement | null = null
+  /** 창 크기 변화에도 직업 선택 암막이 레일 프레임에 붙어 있도록 유지하는 리스너. */
+  private jobSelectResizeListener: (() => void) | null = null
 
-  /** Full-screen job-selection overlay shown once at game start.
+  /** In-rail job-selection overlay shown once at game start.
    *  Character-select grammar: trial/relic-card aspect (3/4) illustrated cards
    *  (job_001~, wired via spriteForJob — empty placeholder until art exists),
    *  with name/trait/stat/flavor on a bottom scrim. Unlocked jobs are sorted
@@ -1989,6 +1993,7 @@ export class GameBoardRenderer {
    *  남은 고스트는 animateJobCardToHud가 HUD로 블라스트한다.
    *  Resolves with the chosen job id when the player clicks a non-locked card. */
   openJobSelect(jobs: JobDef[]): Promise<string> {
+    this.clearJobSelectOverlay()
     return new Promise<string>((resolve) => {
       const lockIcon = `<svg class="job-card__lock-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"
           stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -2009,41 +2014,65 @@ export class GameBoardRenderer {
       overlay.setAttribute('role', 'dialog')
       overlay.setAttribute('aria-label', '직업 선택')
       overlay.innerHTML = `
-        <div class="job-select-header">
-          <span class="job-select-rule"></span>
-          <h2 class="job-select-title">직업 선택</h2>
-          <span class="job-select-rule"></span>
-        </div>
-        <div class="job-select-stage">
-          <button class="job-nav job-nav--left" type="button" data-job-nav="left" aria-label="이전">${chevron('left')}</button>
-          <div class="job-coverflow">
-            ${ordered.map((job) => {
-              const art = spriteForJob(job.illu)
-              return `
-              <button class="job-card${job.locked ? ' job-card--locked' : ''}"
-                      data-job-id="${job.id}"
-                      ${job.locked ? 'aria-disabled="true"' : ''}
-                      type="button">
-                <div class="job-card__art${art ? '' : ' job-card__art--empty'}"
-                     ${art ? `style="background-image:url('${art}')"` : ''} aria-hidden="true">
-                  ${art ? '' : `<div class="job-card__symbol">${job.symbolSvg}</div>`}
-                </div>
-                <div class="job-card__sheen" aria-hidden="true"></div>
-                ${job.locked ? `<div class="job-card__lock">${lockIcon}<span class="job-card__lock-label">잠김</span></div>` : ''}
-                <div class="job-card__scrim">
-                  <div class="job-card__name">${job.name}</div>
-                  <div class="job-card__divider" aria-hidden="true"></div>
-                  <div class="job-card__traits">${job.traits}</div>
-                  ${job.stats ? `<div class="job-card__stats">${job.stats}</div>` : ''}
-                  <div class="job-card__flavor">${job.flavor}</div>
-                </div>
-              </button>
-            `}).join('')}
+        <div class="job-select-rail-shell">
+          <div class="job-rail-curtain job-rail-curtain--left" aria-hidden="true"></div>
+          <div class="job-rail-curtain job-rail-curtain--right" aria-hidden="true"></div>
+          <div class="job-select-content-bundle">
+            <div class="job-select-header">
+              <span class="job-select-rule"></span>
+              <h2 class="job-select-title">직업 선택</h2>
+              <span class="job-select-rule"></span>
+            </div>
+            <div class="job-select-stage">
+              <button class="job-nav job-nav--left" type="button" data-job-nav="left" aria-label="이전">${chevron('left')}</button>
+              <div class="job-coverflow">
+                ${ordered.map((job) => {
+                  const art = spriteForJob(job.illu)
+                  return `
+                  <button class="job-card${job.locked ? ' job-card--locked' : ''}"
+                          data-job-id="${job.id}"
+                          ${job.locked ? 'aria-disabled="true"' : ''}
+                          type="button">
+                    <div class="job-card__art${art ? '' : ' job-card__art--empty'}"
+                         ${art ? `style="background-image:url('${art}')"` : ''} aria-hidden="true">
+                      ${art ? '' : `<div class="job-card__symbol">${job.symbolSvg}</div>`}
+                    </div>
+                    <div class="job-card__sheen" aria-hidden="true"></div>
+                    ${job.locked ? `<div class="job-card__lock">${lockIcon}<span class="job-card__lock-label">잠김</span></div>` : ''}
+                    <div class="job-card__scrim">
+                      <div class="job-card__name">${job.name}</div>
+                      <div class="job-card__divider" aria-hidden="true"></div>
+                      <div class="job-card__traits">${job.traits}</div>
+                      ${job.stats ? `<div class="job-card__stats">${job.stats}</div>` : ''}
+                      <div class="job-card__flavor">${job.flavor}</div>
+                    </div>
+                  </button>
+                `}).join('')}
+              </div>
+              <button class="job-nav job-nav--right" type="button" data-job-nav="right" aria-label="다음">${chevron('right')}</button>
+            </div>
           </div>
-          <button class="job-nav job-nav--right" type="button" data-job-nav="right" aria-label="다음">${chevron('right')}</button>
         </div>
       `
       document.body.appendChild(overlay)
+      this.jobSelectOverlayElement = overlay
+
+      // 상점처럼 body 레이어를 레일 rect에 고정해 HUD/손패는 살아 있고 선택 UI만 보드 안에 뜨게 한다.
+      const alignToRail = (): void => {
+        const rail = this.boardElement.querySelector<HTMLElement>('.rail')
+        const shell = overlay.querySelector<HTMLElement>('.job-select-rail-shell')
+        if (!rail || !shell) return
+        const rect = rail.getBoundingClientRect()
+        shell.style.left = `${rect.left}px`
+        shell.style.top = `${rect.top}px`
+        shell.style.width = `${rect.width}px`
+        shell.style.height = `${rect.height}px`
+      }
+      let relayoutJobCards = (): void => {}
+      const onShellResize = () => { alignToRail(); relayoutJobCards() }
+      this.jobSelectResizeListener = onShellResize
+      window.addEventListener('resize', onShellResize)
+      window.addEventListener('scroll', onShellResize)
 
       // ── 커버플로우 캐러셀 ─────────────────────────────────────────
       // 무한 루프(끝↔끝 연결), 가운데 카드일수록 크고 밝게/좌우로 갈수록 작고 어둡게.
@@ -2085,6 +2114,7 @@ export class GameBoardRenderer {
           card.classList.toggle('is-center', a < 0.5)
         }
       }
+      relayoutJobCards = layout
       const settle = (next: number) => { flow.classList.remove('is-dragging'); current = next; layout() }
       const go = (dir: number) => { if (!resolving) settle(Math.round(current) + dir) }
 
@@ -2113,8 +2143,9 @@ export class GameBoardRenderer {
           ghost.style.pointerEvents = 'none'
           document.body.appendChild(ghost)
           this.jobFlightCard = ghost
-          overlay.classList.add('job-select--exiting')
-          window.setTimeout(() => { overlay.remove(); resolve(job.id) }, 360)
+          // 선택 후에는 콘텐츠만 접고 암막은 유지한다. 호출부가 보드를 채운 뒤 playJobCurtainOpen()으로 걷는다.
+          overlay.classList.add('job-select--picked')
+          window.setTimeout(() => resolve(job.id), 360)
         }, 440)
       }
 
@@ -2182,7 +2213,7 @@ export class GameBoardRenderer {
           if (!ordered[i].locked) confirmPick(cards[i], ordered[i])
         }
       }
-      const onResize = () => layout()
+      const onResize = () => { alignToRail(); layout() }
 
       flow.addEventListener('pointerdown', onDown)
       window.addEventListener('pointermove', onMove)
@@ -2202,8 +2233,9 @@ export class GameBoardRenderer {
         window.removeEventListener('resize', onResize)
       }
 
+      alignToRail()
       layout()
-      requestAnimationFrame(layout)   // 폰트/레이아웃 안정 후 카드 폭 재반영
+      requestAnimationFrame(() => { alignToRail(); layout() })   // 폰트/레이아웃 안정 후 카드 폭 재반영
     })
   }
 
@@ -2256,6 +2288,30 @@ export class GameBoardRenderer {
       .finished.catch(() => {})
     ghost.remove()
     this.jobFlightCard = null
+  }
+
+  /** 직업 선택 암막을 좌우로 걷어 새로 채워진 3×3 레일을 처음 공개한다. */
+  playJobCurtainOpen(): Promise<void> {
+    const overlay = this.jobSelectOverlayElement
+    if (!overlay) return Promise.resolve()
+    overlay.classList.add('job-select--opening')
+    return new Promise((resolve) => {
+      window.setTimeout(() => {
+        this.clearJobSelectOverlay()
+        resolve()
+      }, 780)
+    })
+  }
+
+  /** 직업 선택 레이어와 레일 정렬 리스너를 한 번에 치워 새 런/리셋 잔상을 막는다. */
+  private clearJobSelectOverlay(): void {
+    if (this.jobSelectResizeListener) {
+      window.removeEventListener('resize', this.jobSelectResizeListener)
+      window.removeEventListener('scroll', this.jobSelectResizeListener)
+      this.jobSelectResizeListener = null
+    }
+    this.jobSelectOverlayElement?.remove()
+    this.jobSelectOverlayElement = null
   }
 
   /** Hide the modal shop without destroying purchased state in index.ts. */
@@ -2479,6 +2535,9 @@ export class GameBoardRenderer {
 
   /** 새 런 시작 시 셔터 상태를 초기화한다. 보스전 중 게임오버 시 잠긴 상태가 잔류하는 걸 방지. */
   resetShutter(): void {
+    this.clearJobSelectOverlay()
+    this.jobFlightCard?.remove()
+    this.jobFlightCard = null
     this.shopShutterLocked = false
     this.shopShutterSnapshot = null
     document.querySelector<HTMLElement>('#game-board .rail-shutter')?.remove()
