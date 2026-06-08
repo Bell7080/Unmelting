@@ -219,6 +219,9 @@ export class SpeechBubble {
   private autoDismissTimer = 0
   // 현재 타이핑 중인 전체 텍스트 — completeTyping()에서 즉시 완성할 때 사용
   private pendingText = ''
+  // 다음에 렌더할 글자 인덱스. completeTyping()이 이미 출력된 글자를 다시 그리지 않고
+  // 남은 꼬리만 이어 붙이도록 _typewrite와 공유한다.
+  private typeCursor = 0
   private enterListener: ((e: Event) => void) | null = null
   private exitListener: ((e: Event) => void) | null = null
 
@@ -285,21 +288,17 @@ export class SpeechBubble {
     this.bubble.addEventListener('animationend', this.exitListener)
   }
 
-  /** 타이핑 중이면 나머지 글자를 즉시 출력하고 autoDismiss 타이머를 재시작한다. */
+  /** 타이핑 중이면 남은 글자만 이어 붙여 즉시 완성하고 autoDismiss 타이머를 재시작한다.
+   *  타이핑이 이미 끝났으면(typewriterTimer === 0) 아무 것도 하지 않아 재렌더 깜빡임을 막는다. */
   completeTyping(): void {
-    if (this.state !== 'visible' || !this.typewriterTimer) return
+    // 타이핑이 끝나면 _typewrite가 typewriterTimer를 0으로 리셋하므로, 완료 후 클릭은 여기서 무시된다.
+    if (this.state !== 'visible' || this.typewriterTimer === 0) return
     clearTimeout(this.typewriterTimer)
     this.typewriterTimer = 0
-    this.textEl.innerHTML = ''
-    for (const ch of [...this.pendingText]) {
-      if (ch === '\n') {
-        this.textEl.appendChild(document.createElement('br'))
-      } else {
-        const span = document.createElement('span')
-        span.className = 'sb-char'
-        span.textContent = ch
-        this.textEl.appendChild(span)
-      }
+    // 이미 출력된 글자는 그대로 두고 남은 꼬리만 붙여 전체 재렌더(pop 재생)를 피한다.
+    const chars = [...this.pendingText]
+    for (; this.typeCursor < chars.length; this.typeCursor++) {
+      this._appendChar(chars[this.typeCursor])
     }
     if (this.config.autoDismissMs > 0)
       this.autoDismissTimer = window.setTimeout(() => this.dismiss(), this.config.autoDismissMs)
@@ -338,27 +337,33 @@ export class SpeechBubble {
 
   private _typewrite(text: string): void {
     this.pendingText = text
+    this.typeCursor = 0
     const chars = [...text]
-    let i = 0
     const next = () => {
       if (this.state !== 'visible') return
-      if (i >= chars.length) {
+      if (this.typeCursor >= chars.length) {
+        // 자연 완료: 타이머를 0으로 비워 완료 이후의 completeTyping/클릭이 재렌더하지 않게 한다.
+        this.typewriterTimer = 0
         if (this.config.autoDismissMs > 0)
           this.autoDismissTimer = window.setTimeout(() => this.dismiss(), this.config.autoDismissMs)
         return
       }
-      const ch = chars[i++]
-      if (ch === '\n') {
-        this.textEl.appendChild(document.createElement('br'))
-      } else {
-        const span = document.createElement('span')
-        span.className = 'sb-char'
-        span.textContent = ch
-        this.textEl.appendChild(span)
-      }
+      this._appendChar(chars[this.typeCursor++])
       this.typewriterTimer = window.setTimeout(next, 70)
     }
     next()
+  }
+
+  /** 글자 1개를 텍스트 영역에 추가한다(개행은 <br>). */
+  private _appendChar(ch: string): void {
+    if (ch === '\n') {
+      this.textEl.appendChild(document.createElement('br'))
+      return
+    }
+    const span = document.createElement('span')
+    span.className = 'sb-char'
+    span.textContent = ch
+    this.textEl.appendChild(span)
   }
 
   private _updatePosition(): void {
