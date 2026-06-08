@@ -2740,8 +2740,7 @@ async function applyHandSingle(
   await resolveDeferredHandMerges()
 
   // 샹들리에: 처치 발생 시 동일 라운드를 빠른 딜레이로 반복 실행한다.
-  // 반복 중에는 레일을 내리지 않고, 모든 반복이 끝난 뒤 레일을 한 번만 하강/리필한다.
-  // (중간 하강을 허용하면 새로 내려온 1체력 적을 연속 처치하는 무한 연쇄가 발생한다.)
+  // 반복 중에는 레일을 내리지 않고, 루프 종료 직후 하강을 1회 실행한다.
   if (result.chandelierRepeat) {
     const chandelierDamage = result.chandelierRepeat.isMerged ? 2 : 1
     let hadKills = result.removedFieldCards.some((r) => r.type === CardType.ENEMY)
@@ -2764,8 +2763,12 @@ async function applyHandSingle(
       }
       hadKills = repeatResult.removedFieldCards.some((r) => r.type === CardType.ENEMY)
     }
-    // 레일 하강은 레시피 루프 이후의 공통 cleanup(line 아래 runPreparationRefreshAfterFieldEffects)에 맡긴다.
-    // 여기서 하강하면 새 적이 내려온 뒤 레시피가 발동해 그 적도 처치하는 문제가 발생한다.
+    // 루프 종료 후 레일을 한 번 하강/리필한다. 비-샹들리에 경로(위 2734)와 대칭이다.
+    if (!gameState.isGameOver) {
+      await runPreparationRefreshAfterFieldEffects({
+        suppressFrontRegroupOnce: shouldSuppressRegroupAfterClear(result.removedFieldCards.length),
+      })
+    }
   }
 
   // 주전자: 첫 타격(useSingle에서 실행) 이후 나머지 타격을 빠른 딜레이로 순차 실행한다.
