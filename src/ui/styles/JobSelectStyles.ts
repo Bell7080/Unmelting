@@ -61,21 +61,34 @@ export const JOB_SELECT_STYLES = `
   z-index: 3;
   width: 54%;
   pointer-events: none;
+  /* 바깥쪽(outer edge)은 두껍고 불투명, 안쪽(center-facing edge)은 투명으로 페이드해
+     두 커튼이 겹치는 중간 지점에서 경계선 없이 자연스럽게 이어진다. */
   background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0.58), rgba(7, 5, 13, 0.94) 18%, rgba(21, 15, 33, 0.96) 58%, rgba(6, 4, 12, 0.98)),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 18px);
-  box-shadow: inset -18px 0 36px rgba(0, 0, 0, 0.55), inset 10px 0 26px rgba(255, 232, 168, 0.035);
+    linear-gradient(90deg,
+      rgba(0, 0, 0, 0.58) 0%,
+      rgba(7, 5, 13, 0.94) 18%,
+      rgba(21, 15, 33, 0.96) 56%,
+      rgba(6, 4, 12, 0.98) 74%,
+      rgba(6, 4, 12, 0) 100%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.028) 0 1px, transparent 1px 18px);
+  /* 바깥 가장자리에만 따뜻한 광택, 안쪽 inset shadow 제거(겹침 경계 방지) */
+  box-shadow: inset 10px 0 26px rgba(255, 232, 168, 0.03);
   filter: saturate(0.85);
   animation: job-curtain-close-left 0.68s cubic-bezier(0.16, 0.84, 0.24, 1) both;
 }
 .job-rail-curtain--left { left: 0; }
 .job-rail-curtain--right {
   right: 0;
-  /* 그라데이션 방향을 반전해 안쪽(왼쪽)이 어둡게 보이게 한다. scaleX(-1) 없이 단순 translateX로 슬라이드. */
+  /* 270deg로 방향을 반전 — 안쪽(왼쪽) 끝도 동일하게 투명으로 페이드. */
   background:
-    linear-gradient(270deg, rgba(0, 0, 0, 0.58), rgba(7, 5, 13, 0.94) 18%, rgba(21, 15, 33, 0.96) 58%, rgba(6, 4, 12, 0.98)),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 18px);
-  box-shadow: inset 18px 0 36px rgba(0, 0, 0, 0.55), inset -10px 0 26px rgba(255, 232, 168, 0.035);
+    linear-gradient(270deg,
+      rgba(0, 0, 0, 0.58) 0%,
+      rgba(7, 5, 13, 0.94) 18%,
+      rgba(21, 15, 33, 0.96) 56%,
+      rgba(6, 4, 12, 0.98) 74%,
+      rgba(6, 4, 12, 0) 100%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.028) 0 1px, transparent 1px 18px);
+  box-shadow: inset -10px 0 26px rgba(255, 232, 168, 0.03);
   animation-name: job-curtain-close-right;
 }
 
