@@ -1081,8 +1081,8 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
     await playPlayerGainTrails({ kind: 'center' }, beforeResources)
   }
   if (id === 'pickaxe') {
-    // 보물 스폰 가중치 +5.
-    cardSpawner.adjustRelicSpawn('treasure', 5)
+    // 보물 스폰 가중치 +50 (10배 단위 기준).
+    cardSpawner.adjustRelicSpawn('treasure', 50)
   }
   if (id === 'axe') {
     // 불빛 획득량 +10% (글로벌 scoreMultiplier에 누적).
@@ -1090,19 +1090,19 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
   }
   if (id === 'annabella-pendant') {
     const beforeResources = snapshotPlayerResources()
-    // 공격력 +2 + 적 스폰 HP +3 + 적 스폰 가중치 +5.
+    // 공격력 +2 + 적 스폰 HP +3 + 적 스폰 가중치 +50 (10배 단위 기준).
     gameState.character.applyDamageBoost(2)
-    cardSpawner.adjustRelicSpawn('enemy', 5)
+    cardSpawner.adjustRelicSpawn('enemy', 50)
     cardSpawner.adjustRelicEnemyHpBonus(3)
     await playPlayerGainTrails({ kind: 'center' }, beforeResources)
   }
   if (id === 'padlock') {
-    // 보물 스폰 가중치 -5.
-    cardSpawner.adjustRelicSpawn('treasure', -5)
+    // 보물 스폰 가중치 -50 (10배 단위 기준).
+    cardSpawner.adjustRelicSpawn('treasure', -50)
   }
   if (id === 'charred-paper') {
-    // 적 스폰 가중치 -5.
-    cardSpawner.adjustRelicSpawn('enemy', -5)
+    // 적 스폰 가중치 -50 (10배 단위 기준).
+    cardSpawner.adjustRelicSpawn('enemy', -50)
   }
   if (id === 'golden-key') {
     // 보물 스폰 중 10% 확률로 황금 상자로 대체한다.

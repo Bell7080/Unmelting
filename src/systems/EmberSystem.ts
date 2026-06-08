@@ -35,26 +35,26 @@ export interface EnemyStatBonus {
   atk: number
 }
 
+// 가중치를 10배 단위로 관리해 유물·직업 보정(±50 단위)이 쉽게 하한에
+// 닿지 않도록 여유를 확보한다. 비율은 이전과 동일하게 유지된다.
 const SPAWN_BUCKETS: Record<EmberTier, SpawnBuckets> = {
-  // Bomb and spore buckets preserve the former absolute odds, while extra
-  // ordinary web traps come out of the enemy bucket to soften early clumping.
-  bright: { enemy: 44, webTrap: 17, bombTrap: 4, sporeTrap: 4, treasure: 22, flower: 9 },
-  dim: { enemy: 60, webTrap: 12, bombTrap: 4, sporeTrap: 4, treasure: 13, flower: 7 },
+  bright:      { enemy: 440, webTrap: 170, bombTrap: 40, sporeTrap: 40, treasure: 220, flower: 90 },
+  dim:         { enemy: 600, webTrap: 120, bombTrap: 40, sporeTrap: 40, treasure: 130, flower: 70 },
   flickering: {
-    enemy: 74,
-    webTrap: 35 / 3,
-    bombTrap: 11 / 3,
-    sporeTrap: 11 / 3,
-    treasure: 3,
-    flower: 4,
+    enemy: 740,
+    webTrap: 350 / 3,
+    bombTrap: 110 / 3,
+    sporeTrap: 110 / 3,
+    treasure: 30,
+    flower: 40,
   },
   extinguished: {
-    enemy: 80,
-    webTrap: 34 / 3,
-    bombTrap: 10 / 3,
-    sporeTrap: 10 / 3,
+    enemy: 800,
+    webTrap: 340 / 3,
+    bombTrap: 100 / 3,
+    sporeTrap: 100 / 3,
     treasure: 0,
-    flower: 2,
+    flower: 20,
   },
 }
 
