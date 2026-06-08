@@ -1,8 +1,10 @@
 /**
  * Job selection overlay — full-screen character-select shown once at game start
- * (before the player intro dialogue). Tall cards nearly fill the screen; each
- * card is dominated by its illustration (job_001~) with a bottom scrim carrying
- * the name / trait / stat / flavor. Candlelight + parchment palette.
+ * (before the player intro dialogue). Cards follow the trial/relic-card aspect
+ * (3/4): each is dominated by its illustration (job_001~) with a bottom scrim
+ * carrying the name / trait / stat / flavor. When cards overflow the stage a
+ * one-card-at-a-time carousel reveals transparent ◀ ▶ arrows on hover.
+ * Candlelight + parchment palette.
  */
 export const JOB_SELECT_STYLES = `
 /* ─── Overlay shell ────────────────────────────────────────────────── */
@@ -14,8 +16,8 @@ export const JOB_SELECT_STYLES = `
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: clamp(10px, 1.8vh, 22px);
-  padding: clamp(12px, 2.4vh, 30px) clamp(14px, 2vw, 40px);
+  gap: clamp(12px, 2.4vh, 28px);
+  padding: clamp(14px, 2.8vh, 34px) clamp(10px, 1.4vw, 28px);
   background:
     radial-gradient(circle at 50% 36%, rgba(46, 30, 60, 0.55), transparent 70%),
     radial-gradient(circle at 50% 120%, rgba(80, 44, 24, 0.35), transparent 60%),
@@ -57,29 +59,53 @@ export const JOB_SELECT_STYLES = `
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.95), 0 0 30px rgba(244, 164, 96, 0.26);
 }
 
-/* ─── Card row — fills the screen ──────────────────────────────────── */
-.job-select-cards {
+/* ─── Stage: arrows flank the scroll viewport ──────────────────────── */
+.job-select-stage {
+  position: relative;
   display: flex;
-  flex-direction: row;
-  gap: clamp(8px, 0.9vw, 18px);
-  align-items: stretch;
+  align-items: center;
   justify-content: center;
   width: 100%;
   flex: 1 1 auto;
   min-height: 0;
-  max-width: 1700px;
 }
 
-/* ─── Individual job card ──────────────────────────────────────────── */
-.job-card {
-  flex: 1 1 0;
-  min-width: 0;
+/* Scroll viewport — clips the track; native horizontal scroll + snap */
+.job-select-cards {
+  width: 100%;
   height: 100%;
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.job-select-cards::-webkit-scrollbar { display: none; }
+
+/* Track — margin:auto centers when it fits, collapses to scroll when it doesn't */
+.job-select-track {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: clamp(10px, 1.2vw, 22px);
+  margin: auto;
+  padding: clamp(6px, 1vh, 14px) clamp(8px, 1vw, 16px);
+  height: 100%;
+}
+
+/* ─── Individual job card — trial/relic 3:4 aspect ─────────────────── */
+.job-card {
+  flex: 0 0 auto;
+  height: min(72vh, 600px);
+  aspect-ratio: 3 / 4;
+  scroll-snap-align: center;
   position: relative;
   cursor: pointer;
   padding: 0;
   border: 1px solid rgba(255, 215, 120, 0.26);
-  border-radius: 18px;
+  border-radius: 16px;
   overflow: hidden;
   background: linear-gradient(180deg, rgba(26, 18, 38, 0.96) 0%, rgba(8, 5, 14, 0.99) 100%);
   box-shadow:
@@ -93,7 +119,7 @@ export const JOB_SELECT_STYLES = `
 
 .job-card:hover:not(.job-card--locked),
 .job-card:focus-visible:not(.job-card--locked) {
-  transform: translateY(-10px) scale(1.025);
+  transform: translateY(-10px) scale(1.03);
   border-color: rgba(255, 222, 140, 0.85);
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.3),
@@ -105,12 +131,12 @@ export const JOB_SELECT_STYLES = `
 .job-card:focus-visible { outline: none; }
 
 /* Staggered entrance (up to 6 cards) */
-.job-select-cards > .job-card:nth-child(1) { animation-delay:  80ms; }
-.job-select-cards > .job-card:nth-child(2) { animation-delay: 150ms; }
-.job-select-cards > .job-card:nth-child(3) { animation-delay: 220ms; }
-.job-select-cards > .job-card:nth-child(4) { animation-delay: 290ms; }
-.job-select-cards > .job-card:nth-child(5) { animation-delay: 360ms; }
-.job-select-cards > .job-card:nth-child(6) { animation-delay: 430ms; }
+.job-select-track > .job-card:nth-child(1) { animation-delay:  80ms; }
+.job-select-track > .job-card:nth-child(2) { animation-delay: 150ms; }
+.job-select-track > .job-card:nth-child(3) { animation-delay: 220ms; }
+.job-select-track > .job-card:nth-child(4) { animation-delay: 290ms; }
+.job-select-track > .job-card:nth-child(5) { animation-delay: 360ms; }
+.job-select-track > .job-card:nth-child(6) { animation-delay: 430ms; }
 
 @keyframes job-card-enter {
   from { opacity: 0; transform: translateY(26px); }
@@ -124,7 +150,6 @@ export const JOB_SELECT_STYLES = `
   background-size: cover;
   background-position: center 22%;
   background-repeat: no-repeat;
-  /* warm/cool grade so unkeyed art still matches the candlelit tone */
   filter: saturate(1.02) brightness(0.96);
   transition: transform 0.4s ease, filter 0.3s ease;
 }
@@ -147,8 +172,8 @@ export const JOB_SELECT_STYLES = `
     linear-gradient(180deg, rgba(34, 24, 46, 0.9), rgba(12, 8, 18, 0.95));
 }
 .job-card__symbol {
-  width: clamp(58px, 11vh, 132px);
-  height: clamp(58px, 11vh, 132px);
+  width: clamp(54px, 9vh, 112px);
+  height: clamp(54px, 9vh, 112px);
   color: rgba(255, 215, 120, 0.42);
   filter: drop-shadow(0 4px 18px rgba(0, 0, 0, 0.6));
 }
@@ -175,18 +200,17 @@ export const JOB_SELECT_STYLES = `
   display: flex;
   flex-direction: column;
   gap: clamp(3px, 0.7vh, 8px);
-  padding: clamp(36px, 6vh, 64px) clamp(12px, 1vw, 20px) clamp(14px, 2vh, 22px);
+  padding: clamp(34px, 5vh, 58px) clamp(12px, 1vw, 20px) clamp(13px, 1.8vh, 20px);
   background: linear-gradient(180deg,
     transparent 0%,
-    rgba(8, 5, 14, 0.55) 32%,
-    rgba(6, 4, 11, 0.92) 70%,
+    rgba(8, 5, 14, 0.55) 30%,
+    rgba(6, 4, 11, 0.92) 68%,
     rgba(5, 3, 10, 0.98) 100%);
-  transition: padding 0.2s ease;
 }
 
 .job-card__name {
   font-family: 'OkDanDan', Georgia, serif;
-  font-size: clamp(15px, 2.3vh, 26px);
+  font-size: clamp(15px, 2.2vh, 25px);
   font-weight: 900;
   letter-spacing: 0.05em;
   line-height: 1.15;
@@ -250,8 +274,8 @@ export const JOB_SELECT_STYLES = `
   color: rgba(220, 206, 184, 0.7);
 }
 .job-card__lock-icon {
-  width: clamp(28px, 4vh, 48px);
-  height: clamp(28px, 4vh, 48px);
+  width: clamp(28px, 4vh, 46px);
+  height: clamp(28px, 4vh, 46px);
   filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.7));
 }
 .job-card__lock-label {
@@ -273,20 +297,54 @@ export const JOB_SELECT_STYLES = `
   animation: job-card-pick 0.42s ease forwards;
 }
 @keyframes job-card-pick {
-  0%   { transform: translateY(-10px) scale(1.025); }
+  0%   { transform: translateY(-10px) scale(1.03); }
   35%  { transform: translateY(-14px) scale(1.07); filter: brightness(1.18); }
   100% { transform: translateY(-12px) scale(1.05); filter: brightness(1.1); }
 }
 
-/* ─── Narrow screens: allow horizontal scroll instead of crushing cards ─ */
+/* ─── Carousel arrows — transparent, reveal subtly on overlay hover ── */
+.job-nav {
+  flex: 0 0 auto;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(40px, 4.4vw, 60px);
+  height: clamp(40px, 4.4vw, 60px);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 215, 120, 0.28);
+  background: rgba(12, 8, 20, 0.6);
+  color: rgba(255, 232, 168, 0.92);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.26s ease, background 0.2s ease, border-color 0.2s ease, transform 0.18s ease;
+  backdrop-filter: blur(3px);
+}
+.job-nav--left  { left: clamp(4px, 1.4vw, 26px); }
+.job-nav--right { right: clamp(4px, 1.4vw, 26px); }
+.job-nav > svg { width: 56%; height: 56%; }
+
+/* Only interactive/visible when the stage actually overflows */
+#job-select-overlay.has-overflow .job-nav { pointer-events: auto; }
+#job-select-overlay.has-overflow:hover .job-nav { opacity: 0.4; }
+#job-select-overlay.has-overflow .job-nav:hover {
+  opacity: 1;
+  background: rgba(28, 18, 34, 0.86);
+  border-color: rgba(255, 222, 140, 0.7);
+  transform: translateY(-50%) scale(1.08);
+}
+/* At a scroll edge the corresponding arrow fades away */
+#job-select-overlay.has-overflow .job-nav.is-edge {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+/* ─── Narrow screens keep the card readable; carousel handles the rest ─ */
 @media (max-width: 680px) {
-  .job-select-cards {
-    overflow-x: auto;
-    justify-content: flex-start;
-    padding-bottom: 6px;
-  }
-  .job-card {
-    flex: 0 0 clamp(150px, 44vw, 210px);
-  }
+  .job-card { height: min(64vh, 460px); }
 }
 `

@@ -1977,9 +1977,10 @@ export class GameBoardRenderer {
   }
 
   /** Full-screen job-selection overlay shown once at game start.
-   *  Character-select grammar: each tall card is dominated by its illustration
+   *  Character-select grammar: trial/relic-card aspect (3/4) illustrated cards
    *  (job_001~, wired via spriteForJob — empty placeholder until art exists),
-   *  with name/trait/stat/flavor on a bottom scrim.
+   *  with name/trait/stat/flavor on a bottom scrim. Unlocked jobs are sorted
+   *  ahead of locked ones; a one-card-at-a-time carousel handles overflow.
    *  Resolves with the chosen job id when the player clicks a non-locked card. */
   openJobSelect(jobs: JobDef[]): Promise<string> {
     return new Promise<string>((resolve) => {
@@ -1988,6 +1989,14 @@ export class GameBoardRenderer {
         <rect x="5" y="11" width="14" height="10" rx="2"/>
         <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
       </svg>`
+      // 좌우 캐러셀 화살표 — chevron. 평소엔 투명, overlay hover 시 은은히 드러난다.
+      const chevron = (dir: 'left' | 'right') => `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"
+          stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="${dir === 'left' ? 'M15 5 L8 12 L15 19' : 'M9 5 L16 12 L9 19'}"/>
+      </svg>`
+
+      // 잠긴 직업은 뒤로(열린 직업 우선). 동일 그룹 내 원래 순서는 안정 정렬로 유지된다.
+      const ordered = [...jobs].sort((a, b) => (a.locked ? 1 : 0) - (b.locked ? 1 : 0))
 
       const overlay = document.createElement('div')
       overlay.id = 'job-select-overlay'
@@ -1999,32 +2008,65 @@ export class GameBoardRenderer {
           <h2 class="job-select-title">직업 선택</h2>
           <span class="job-select-rule"></span>
         </div>
-        <div class="job-select-cards">
-          ${jobs.map((job) => {
-            const art = spriteForJob(job.illu)
-            return `
-            <button class="job-card${job.locked ? ' job-card--locked' : ''}"
-                    data-job-id="${job.id}"
-                    ${job.locked ? 'aria-disabled="true" tabindex="-1"' : ''}
-                    type="button">
-              <div class="job-card__art${art ? '' : ' job-card__art--empty'}"
-                   ${art ? `style="background-image:url('${art}')"` : ''} aria-hidden="true">
-                ${art ? '' : `<div class="job-card__symbol">${job.symbolSvg}</div>`}
-              </div>
-              <div class="job-card__sheen" aria-hidden="true"></div>
-              ${job.locked ? `<div class="job-card__lock">${lockIcon}<span class="job-card__lock-label">잠김</span></div>` : ''}
-              <div class="job-card__scrim">
-                <div class="job-card__name">${job.name}</div>
-                <div class="job-card__divider" aria-hidden="true"></div>
-                <div class="job-card__traits">${job.traits}</div>
-                ${job.stats ? `<div class="job-card__stats">${job.stats}</div>` : ''}
-                <div class="job-card__flavor">${job.flavor}</div>
-              </div>
-            </button>
-          `}).join('')}
+        <div class="job-select-stage">
+          <button class="job-nav job-nav--left" type="button" data-job-nav="left" aria-label="이전">${chevron('left')}</button>
+          <div class="job-select-cards">
+            <div class="job-select-track">
+              ${ordered.map((job) => {
+                const art = spriteForJob(job.illu)
+                return `
+                <button class="job-card${job.locked ? ' job-card--locked' : ''}"
+                        data-job-id="${job.id}"
+                        ${job.locked ? 'aria-disabled="true" tabindex="-1"' : ''}
+                        type="button">
+                  <div class="job-card__art${art ? '' : ' job-card__art--empty'}"
+                       ${art ? `style="background-image:url('${art}')"` : ''} aria-hidden="true">
+                    ${art ? '' : `<div class="job-card__symbol">${job.symbolSvg}</div>`}
+                  </div>
+                  <div class="job-card__sheen" aria-hidden="true"></div>
+                  ${job.locked ? `<div class="job-card__lock">${lockIcon}<span class="job-card__lock-label">잠김</span></div>` : ''}
+                  <div class="job-card__scrim">
+                    <div class="job-card__name">${job.name}</div>
+                    <div class="job-card__divider" aria-hidden="true"></div>
+                    <div class="job-card__traits">${job.traits}</div>
+                    ${job.stats ? `<div class="job-card__stats">${job.stats}</div>` : ''}
+                    <div class="job-card__flavor">${job.flavor}</div>
+                  </div>
+                </button>
+              `}).join('')}
+            </div>
+          </div>
+          <button class="job-nav job-nav--right" type="button" data-job-nav="right" aria-label="다음">${chevron('right')}</button>
         </div>
       `
       document.body.appendChild(overlay)
+
+      // ── 캐러셀 동작 ──────────────────────────────────────────────
+      const viewport = overlay.querySelector<HTMLElement>('.job-select-cards')!
+      const track = overlay.querySelector<HTMLElement>('.job-select-track')!
+      const leftBtn = overlay.querySelector<HTMLElement>('[data-job-nav="left"]')!
+      const rightBtn = overlay.querySelector<HTMLElement>('[data-job-nav="right"]')!
+
+      // 한 장 너비(카드 폭 + gap)만큼 스크롤한다.
+      const cardStep = (): number => {
+        const card = track.querySelector<HTMLElement>('.job-card')
+        if (!card) return viewport.clientWidth * 0.8
+        const gap = parseFloat(getComputedStyle(track).columnGap || '0') || 16
+        return card.getBoundingClientRect().width + gap
+      }
+      // overflow 여부로 화살표 노출을, 스크롤 위치로 좌/우 끝 비활성을 갱신한다.
+      const updateNav = () => {
+        const overflow = viewport.scrollWidth - viewport.clientWidth > 2
+        overlay.classList.toggle('has-overflow', overflow)
+        leftBtn.classList.toggle('is-edge', viewport.scrollLeft <= 2)
+        rightBtn.classList.toggle('is-edge', viewport.scrollLeft >= viewport.scrollWidth - viewport.clientWidth - 2)
+      }
+      leftBtn.addEventListener('click', (e) => { e.stopPropagation(); viewport.scrollBy({ left: -cardStep(), behavior: 'smooth' }) })
+      rightBtn.addEventListener('click', (e) => { e.stopPropagation(); viewport.scrollBy({ left: cardStep(), behavior: 'smooth' }) })
+      viewport.addEventListener('scroll', updateNav, { passive: true })
+      const onResize = () => updateNav()
+      window.addEventListener('resize', onResize)
+      requestAnimationFrame(updateNav)
 
       const handleClick = (e: MouseEvent) => {
         const card = (e.target as HTMLElement).closest<HTMLElement>('.job-card:not(.job-card--locked)')
@@ -2035,6 +2077,7 @@ export class GameBoardRenderer {
         card.classList.add('job-card--selected')
         overlay.classList.add('job-select--exiting')
         overlay.removeEventListener('click', handleClick)
+        window.removeEventListener('resize', onResize)
         setTimeout(() => {
           overlay.remove()
           resolve(jobId)
