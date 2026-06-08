@@ -6,7 +6,9 @@
 export interface JobDef {
   id: string
   name: string
-  /** Inline SVG string shown in the symbol panel of the selection card. */
+  /** Illustration key (e.g. 'job_001'); resolved by spriteForJob. 없으면 심볼 placeholder. */
+  illu: string
+  /** Inline SVG string used as the illustration placeholder until art exists. */
   symbolSvg: string
   /** Short description of the spawn-weight trait (shown in the card). */
   traits: string
@@ -70,10 +72,33 @@ const haveNotSvg = symCombo(
   'M10 6 L10 18 L14 18 L14 6 Z'
 )
 
+// 도적 — dagger crossed with a coin
+const thiefSvg = symCombo(
+  'M6 18 L15 9 L16.5 7.5 L18.5 5.5 L20 4 L18.5 5.5 L16.5 7.5 L15 9 Z ' +
+  'M6 18 L4 20 L8 19 L9 18 M9 12 A4 4 0 1 0 9.1 12 Z',
+  'M6 18 L15 9 L13 7 L4 16 Z'
+)
+
 export const JOBS: JobDef[] = [
+  {
+    id: 'have-not',
+    name: '가지지 못한 자',
+    illu: 'job_001',
+    symbolSvg: haveNotSvg,
+    traits: '변화 없음',
+    stats: '',
+    flavor: '아무것도 없지만, 꺼지지 않는다.',
+    healthBonus: 0,
+    damageBonus: 0,
+    coinBonus: 0,
+    spawnEnemy: 0,
+    spawnTreasure: 0,
+    spawnFlower: 0,
+  },
   {
     id: 'knight',
     name: '기사',
+    illu: 'job_002',
     symbolSvg: knightSvg,
     traits: '적 출현 확률 ↑↑',
     stats: '최대 체력 +5',
@@ -88,6 +113,7 @@ export const JOBS: JobDef[] = [
   {
     id: 'mage',
     name: '마법사',
+    illu: 'job_003',
     symbolSvg: mageSvg,
     traits: '적 출현 확률 ↑',
     stats: '공격력 +1',
@@ -102,6 +128,7 @@ export const JOBS: JobDef[] = [
   {
     id: 'noble',
     name: '귀족',
+    illu: 'job_004',
     symbolSvg: nobleSvg,
     traits: '보물 출현 확률 ↑↑',
     stats: '시작 화폐 +2$',
@@ -116,6 +143,7 @@ export const JOBS: JobDef[] = [
   {
     id: 'gardener',
     name: '정원사',
+    illu: 'job_005',
     symbolSvg: gardenerSvg,
     traits: '꽃 출현 확률 ↑↑',
     stats: '최대 체력 +3',
@@ -129,17 +157,19 @@ export const JOBS: JobDef[] = [
     spawnFlower: 20,
   },
   {
-    id: 'have-not',
-    name: '가지지 못한 자',
-    symbolSvg: haveNotSvg,
-    traits: '변화 없음',
-    stats: '',
-    flavor: '아무것도 없지만, 꺼지지 않는다.',
+    id: 'thief',
+    name: '도적',
+    illu: 'job_006',
+    symbolSvg: thiefSvg,
+    traits: '보물 출현 확률 ↑',
+    stats: '시작 화폐 +1$',
+    flavor: '그림자 속에서 가장 빛나는 것을 노린다.',
+    locked: true,
     healthBonus: 0,
     damageBonus: 0,
-    coinBonus: 0,
+    coinBonus: 1,
     spawnEnemy: 0,
-    spawnTreasure: 0,
+    spawnTreasure: 10,
     spawnFlower: 0,
   },
 ]

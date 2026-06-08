@@ -433,6 +433,18 @@ export function spriteForBasicPackItem(illu: string): string | undefined {
   return basicItemGlob[`../assets/sprites/basic/${illu}.webp`]?.default
 }
 
+// 직업 일러스트(job_001~)는 추후 추가 예정. 글롭으로 묶어 파일이 생기면 자동 연동되고,
+// 없으면 undefined → 카드 일러스트 영역을 심볼 placeholder로 비워둔다.
+const jobIllustrationGlob = import.meta.glob<{ default: string }>(
+  '../assets/sprites/job_*.webp',
+  { eager: true }
+)
+
+/** 직업 선택 카드 일러스트. illu(예: 'job_001')에 해당하는 파일이 없으면 undefined. */
+export function spriteForJob(illu: string): string | undefined {
+  return jobIllustrationGlob[`../assets/sprites/${illu}.webp`]?.default
+}
+
 /** 강화팩 항목 일러스트 — 새 스프라이트 없이 기존 손패 아트를 재사용한다.
  *  triple-{cardId}    → 그 카드 일러스트.
  *  recipe-{recipeId}  → 레시피 첫 재료 카드 일러스트(마땅한 전용 아트가 없어 대표 재료로 대체). */

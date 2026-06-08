@@ -27,7 +27,7 @@ import type {
   FlowerWilt,
   TreasureChange,
 } from '@core/TurnManager'
-import { spriteForCard, spriteForHandCard, spriteForRelic, spriteForBasicPackItem, spriteForUpgradePackItem, SpriteUrls } from '@ui/Sprites'
+import { spriteForCard, spriteForHandCard, spriteForRelic, spriteForBasicPackItem, spriteForUpgradePackItem, spriteForJob, SpriteUrls } from '@ui/Sprites'
 import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandCategory, HandEffectTargeting } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
@@ -1977,6 +1977,9 @@ export class GameBoardRenderer {
   }
 
   /** Full-screen job-selection overlay shown once at game start.
+   *  Character-select grammar: each tall card is dominated by its illustration
+   *  (job_001~, wired via spriteForJob — empty placeholder until art exists),
+   *  with name/trait/stat/flavor on a bottom scrim.
    *  Resolves with the chosen job id when the player clicks a non-locked card. */
   openJobSelect(jobs: JobDef[]): Promise<string> {
     return new Promise<string>((resolve) => {
@@ -1991,23 +1994,34 @@ export class GameBoardRenderer {
       overlay.setAttribute('role', 'dialog')
       overlay.setAttribute('aria-label', '직업 선택')
       overlay.innerHTML = `
-        <h2 class="job-select-title">직업을 선택하세요</h2>
+        <div class="job-select-header">
+          <span class="job-select-rule"></span>
+          <h2 class="job-select-title">직업 선택</h2>
+          <span class="job-select-rule"></span>
+        </div>
         <div class="job-select-cards">
-          ${jobs.map((job) => `
+          ${jobs.map((job) => {
+            const art = spriteForJob(job.illu)
+            return `
             <button class="job-card${job.locked ? ' job-card--locked' : ''}"
                     data-job-id="${job.id}"
                     ${job.locked ? 'aria-disabled="true" tabindex="-1"' : ''}
                     type="button">
+              <div class="job-card__art${art ? '' : ' job-card__art--empty'}"
+                   ${art ? `style="background-image:url('${art}')"` : ''} aria-hidden="true">
+                ${art ? '' : `<div class="job-card__symbol">${job.symbolSvg}</div>`}
+              </div>
+              <div class="job-card__sheen" aria-hidden="true"></div>
               ${job.locked ? `<div class="job-card__lock">${lockIcon}<span class="job-card__lock-label">잠김</span></div>` : ''}
-              <div class="job-card__symbol">${job.symbolSvg}</div>
-              <div class="job-card__body">
+              <div class="job-card__scrim">
                 <div class="job-card__name">${job.name}</div>
+                <div class="job-card__divider" aria-hidden="true"></div>
                 <div class="job-card__traits">${job.traits}</div>
                 ${job.stats ? `<div class="job-card__stats">${job.stats}</div>` : ''}
                 <div class="job-card__flavor">${job.flavor}</div>
               </div>
             </button>
-          `).join('')}
+          `}).join('')}
         </div>
       `
       document.body.appendChild(overlay)
@@ -2024,7 +2038,7 @@ export class GameBoardRenderer {
         setTimeout(() => {
           overlay.remove()
           resolve(jobId)
-        }, 380)
+        }, 420)
       }
 
       overlay.addEventListener('click', handleClick)
