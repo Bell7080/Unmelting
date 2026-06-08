@@ -18,8 +18,10 @@ export interface RunEnhancements {
   scoreMultiplier: number
   /** 화염의 서 영구 피해 누적값(n). 사용할 때마다 단일 +1 / 트리플 +3 증가. */
   bookOfFlamesBonus: number
+  /** 직업 귀족 선택 시 설정되는 상점 할인율(%). 상점 가격 계산 시 참조한다. */
+  shopDiscountPct: number
 }
 
 export function makeDefaultEnhancements(): RunEnhancements {
-  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0 }
+  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, shopDiscountPct: 0 }
 }

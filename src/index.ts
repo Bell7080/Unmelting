@@ -2152,10 +2152,34 @@ async function startGame(): Promise<void> {
   const chosenJobId = await boardRenderer.openJobSelect(JOBS)
   const chosenJob = JOBS.find((j) => j.id === chosenJobId)
   if (chosenJob) {
-    if (chosenJob.healthBonus > 0) gameState.character.increaseMaxHealth(chosenJob.healthBonus)
-    if (chosenJob.damageBonus > 0) gameState.character.applyDamageBoost(chosenJob.damageBonus)
+    const c = gameState.character
+    // 체력 보너스: 양수는 maxHealth 증가, 음수는 maxHealth와 현재 HP를 함께 깎는다.
+    if (chosenJob.healthBonus > 0) {
+      c.increaseMaxHealth(chosenJob.healthBonus)
+    } else if (chosenJob.healthBonus < 0) {
+      c.maxHealth = Math.max(1, c.maxHealth + chosenJob.healthBonus)
+      c.health = Math.min(c.health, c.maxHealth)
+    }
+    if (chosenJob.damageBonus > 0) c.applyDamageBoost(chosenJob.damageBonus)
     if (chosenJob.coinBonus > 0) coins += chosenJob.coinBonus
-    cardSpawner.setJobSpawnAdjust(chosenJob.spawnEnemy, chosenJob.spawnTreasure, chosenJob.spawnFlower)
+    // 불빛 배율: 백분율을 scoreMultiplier 곱셈으로 누적한다.
+    if (chosenJob.scorePct !== 0) {
+      gameState.enhancements.scoreMultiplier *= (1 + chosenJob.scorePct / 100)
+    }
+    // 손패 한계 (증가만 허용)
+    if (chosenJob.handLimitBonus > 0) c.increaseHandMax(chosenJob.handLimitBonus)
+    // 불씨 한계: 양수는 increaseEmberMax, 음수는 직접 조정(최소 1 보장)
+    if (chosenJob.emberLimitBonus > 0) {
+      c.increaseEmberMax(chosenJob.emberLimitBonus)
+    } else if (chosenJob.emberLimitBonus < 0) {
+      c.emberMax = Math.max(1, c.emberMax + chosenJob.emberLimitBonus)
+      c.ember = Math.min(c.ember, c.emberMax)
+    }
+    // 상점 할인율 저장 (상점 가격 계산 시 참조)
+    if (chosenJob.shopDiscountPct !== 0) {
+      gameState.enhancements.shopDiscountPct = chosenJob.shopDiscountPct
+    }
+    cardSpawner.setJobSpawnAdjust(chosenJob.spawnEnemy, chosenJob.spawnTrap, chosenJob.spawnTreasure, chosenJob.spawnFlower)
     // 닫힌 암막 뒤에서 최초 보드를 채워, 레일 공개가 직업 선택의 후속 연출처럼 이어지게 한다.
     fillBoardAtStart()
     turnManager.armFrontBombs()

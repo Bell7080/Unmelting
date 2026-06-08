@@ -224,7 +224,7 @@ export class CardSpawner {
   /** 유물 구매로 누적된 스폰 가중치 보정. 양수=증가, 음수=감소. 정규화는 roll 총합으로 자동 처리. */
   private relicSpawnAdjust: { enemy: number; treasure: number } = { enemy: 0, treasure: 0 }
   /** 직업 선택으로 적용된 스폰 가중치 보정 — 런 내내 고정되며 런 리셋 시 초기화된다. */
-  private jobSpawnAdjust: { enemy: number; treasure: number; flower: number } = { enemy: 0, treasure: 0, flower: 0 }
+  private jobSpawnAdjust: { enemy: number; trap: number; treasure: number; flower: number } = { enemy: 0, trap: 0, treasure: 0, flower: 0 }
   /** 유물 에나벨라의 펜던트로 적용되는 적 스폰 시 HP 보너스(보스 미적용). */
   private relicEnemyHpBonus: number = 0
   /** 황금 열쇠 유물 장착 시 활성화되는 황금 상자 대체 가중치. */
@@ -272,8 +272,8 @@ export class CardSpawner {
   }
 
   /** 직업 선택 시 스폰 가중치를 설정한다. 런 리셋마다 resetRelicModifiers에서 함께 초기화된다. */
-  setJobSpawnAdjust(enemy: number, treasure: number, flower: number): void {
-    this.jobSpawnAdjust = { enemy, treasure, flower }
+  setJobSpawnAdjust(enemy: number, trap: number, treasure: number, flower: number): void {
+    this.jobSpawnAdjust = { enemy, trap, treasure, flower }
   }
 
   /** 황금 열쇠 유물 장착 시 황금 상자 대체 가중치를 설정한다.
@@ -290,7 +290,7 @@ export class CardSpawner {
   /** 런 시작 시 유물/직업 modifiers를 초기화한다. */
   resetRelicModifiers(): void {
     this.relicSpawnAdjust = { enemy: 0, treasure: 0 }
-    this.jobSpawnAdjust = { enemy: 0, treasure: 0, flower: 0 }
+    this.jobSpawnAdjust = { enemy: 0, trap: 0, treasure: 0, flower: 0 }
     this.relicEnemyHpBonus = 0
     this.goldenChestWeight = 0
   }
@@ -418,9 +418,10 @@ export class CardSpawner {
     // 유물 보정(곡괭이 +5 보물 / 불 탄 종이 -5 적 / 자물쇠 -5 보물 / 펜던트 +5 적)을
     // 기본 가중치에 더해 총합으로 roll 하면 전체 비율이 자동 정규화된다.
     const enemyWeight = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy + this.jobSpawnAdjust.enemy)
+    // 직업 trap 보정은 webTrap에 반영한다(일반 함정 비중을 증감). openingBoard에는 적용하지 않는다.
     const webTrap = options.openingBoard
       ? buckets.webTrap + buckets.bombTrap + buckets.sporeTrap
-      : buckets.webTrap
+      : Math.max(0, buckets.webTrap + this.jobSpawnAdjust.trap)
     const bombTrap = options.openingBoard ? 0 : buckets.bombTrap
     // Spores on cooldown are treated as weight 0; the slot is silently folded into
     // the rest of the distribution so the total chance of non-spore cards increases.
@@ -681,7 +682,7 @@ export class CardSpawner {
   getEffectiveWeights(): { enemy: number; trap: number; treasure: number; flower: number; total: number } {
     const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
     const enemy = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy + this.jobSpawnAdjust.enemy)
-    const trap = buckets.webTrap + buckets.bombTrap + buckets.sporeTrap
+    const trap = Math.max(0, buckets.webTrap + this.jobSpawnAdjust.trap) + buckets.bombTrap + buckets.sporeTrap
     const treasure = Math.max(0, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + this.jobSpawnAdjust.treasure)
     const flower = Math.max(0, buckets.flower + this.jobSpawnAdjust.flower)
     const total = enemy + trap + treasure + flower

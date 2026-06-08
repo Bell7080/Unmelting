@@ -331,6 +331,10 @@ export const JOB_SELECT_STYLES = `
   border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 
+/* ─── Stat color coding: golden for gains, red for losses ──────────── */
+.job-up { color: rgba(255, 215, 100, 0.96); }
+.job-dn { color: rgba(220, 80, 60, 0.96); }
+
 /* ─── Locked card ──────────────────────────────────────────────────── */
 .job-card--locked { cursor: not-allowed; }
 .job-card__lock {
