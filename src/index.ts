@@ -1277,9 +1277,14 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
   if (kind === 'unlock-pack') {
     // 풀 = 런에서 잠긴 카드(runLocked) + 삭제팩으로 밴된 카드 + runLocked 레시피.
     // 단, 보스 전용 찌꺼기 카드(탐욕의 동전 등)는 해금팩으로 얻을 수 없게 제외한다.
-    const { locked, banned } = runCardPool.snapshot()
+    const { locked, banned, unlocked } = runCardPool.snapshot()
     const cardPool = [...locked, ...banned].filter((id) => getHandCardDef(id).dropSource !== 'boss')
-    const lockedRecipes = RECIPES.filter((r) => r.runLocked && !gameState.unlockedRecipeIds.has(r.id))
+    // 조합식 해금은 재료 손패가 모두 이미 해금된 경우에만 제시한다
+    const lockedRecipes = RECIPES.filter((r) =>
+      r.runLocked &&
+      !gameState.unlockedRecipeIds.has(r.id) &&
+      Object.keys(r.ingredients).every((id) => unlocked.includes(id as HandCardId))
+    )
 
     type UnlockItem = { id: string; theme: 'unlock'; title: string; effect: string; rarity: (typeof HAND_CARD_RARITY)[keyof typeof HAND_CARD_RARITY]; spriteUrl: string; apply: () => void }
     const pool: UnlockItem[] = [
@@ -2474,14 +2479,21 @@ async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promi
 }
 
 document.addEventListener('cardAction', (e: Event) => {
-  speechBubble.dismiss()
+  // inputLocked 중엔 대사가 출력 중일 수 있으므로 강제 dismiss하지 않는다
+  if (!inputLocked) speechBubble.dismiss()
   void handleCardAction(e)
 })
 
 document.addEventListener('itemAction', (e: Event) => {
-  speechBubble.dismiss()
+  if (!inputLocked) speechBubble.dismiss()
   const detail = (e as CustomEvent<ItemActionDetail>).detail
   void handleHandSlotClick(detail.itemIndex)
+})
+
+// 마우스 클릭 시 진행 중인 대사(타이핑)를 즉시 완성한다
+document.addEventListener('mousedown', () => {
+  bossBubble.completeTyping()
+  speechBubble.completeTyping()
 })
 
 document.addEventListener('chainReset', () => {
@@ -2965,6 +2977,12 @@ async function applyHandSingle(
   // 손패 카드(조합식 포함)로 보스 HP가 깎였다면 HP 3 임계 손패 트리거 + 격파 검사.
   // 클릭 데미지·손패 데미지·조합식 데미지 어느 경로든 동일한 후처리가 적용된다.
   await bossController.applyPostHandEffect()
+  // 보스 전투 중엔 매 손패 행동 후 체인 로그를 초기화한다(연타 잔류 방지).
+  if (bossController.eventState) {
+    HandSystem.resetChain(chain)
+    clearChainTimeline()
+    boardRenderer.refreshChainBanner(buildChainHints())
+  }
   setTimeout(() => {
     inputLocked = false
   }, 320)
@@ -3055,6 +3073,8 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
     if (tickedDown) {
       const ember = gameState.character.ember
       recordNotice(`불씨가 사그라들었다 (${ember}/${gameState.character.emberMax})`, 'hurt')
+      // 불씨가 dim→flickering 경계(4) 직전에 플레이어에게 경고 대사를 띄운다
+      if (ember === 4) speechBubble.show('불씨가 약해지고 있어. . .')
       // 고품격 뗄감: 불씨가 완전히 꺼지면 가득 채우고 유물 파괴.
       if (ember <= 0 && gameState.character.hasRelic('premium-firewood')) {
         const beforeResources = snapshotPlayerResources()

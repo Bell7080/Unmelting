@@ -781,6 +781,10 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 .chain-banner.is-on {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+  /* 체인 배너 본체는 클릭을 아래 보드로 통과시킨다 */
+  pointer-events: none;
+}
+.chain-banner.is-on .chain-banner-reset {
   pointer-events: auto;
 }
 .chain-banner-label {

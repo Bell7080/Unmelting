@@ -217,6 +217,8 @@ export class SpeechBubble {
   private state: 'hidden' | 'entering' | 'visible' | 'exiting' = 'hidden'
   private typewriterTimer = 0
   private autoDismissTimer = 0
+  // 현재 타이핑 중인 전체 텍스트 — completeTyping()에서 즉시 완성할 때 사용
+  private pendingText = ''
   private enterListener: ((e: Event) => void) | null = null
   private exitListener: ((e: Event) => void) | null = null
 
@@ -283,6 +285,31 @@ export class SpeechBubble {
     this.bubble.addEventListener('animationend', this.exitListener)
   }
 
+  /** 타이핑 중이면 나머지 글자를 즉시 출력하고 autoDismiss 타이머를 재시작한다. */
+  completeTyping(): void {
+    if (this.state !== 'visible' || !this.typewriterTimer) return
+    clearTimeout(this.typewriterTimer)
+    this.typewriterTimer = 0
+    this.textEl.innerHTML = ''
+    for (const ch of [...this.pendingText]) {
+      if (ch === '\n') {
+        this.textEl.appendChild(document.createElement('br'))
+      } else {
+        const span = document.createElement('span')
+        span.className = 'sb-char'
+        span.textContent = ch
+        this.textEl.appendChild(span)
+      }
+    }
+    if (this.config.autoDismissMs > 0)
+      this.autoDismissTimer = window.setTimeout(() => this.dismiss(), this.config.autoDismissMs)
+  }
+
+  /** 현재 타이핑 애니메이션이 진행 중인지 여부. */
+  get isTyping(): boolean {
+    return this.state === 'visible' && this.typewriterTimer !== 0
+  }
+
   /** DOM에서 완전히 제거. 재사용하지 않을 때 호출. */
   destroy(): void {
     this.dismiss()
@@ -310,6 +337,7 @@ export class SpeechBubble {
   }
 
   private _typewrite(text: string): void {
+    this.pendingText = text
     const chars = [...text]
     let i = 0
     const next = () => {
