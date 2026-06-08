@@ -68,11 +68,14 @@ export const JOB_SELECT_STYLES = `
   filter: saturate(0.85);
   animation: job-curtain-close-left 0.68s cubic-bezier(0.16, 0.84, 0.24, 1) both;
 }
-.job-rail-curtain--left { left: 0; transform-origin: left center; }
+.job-rail-curtain--left { left: 0; }
 .job-rail-curtain--right {
   right: 0;
-  transform-origin: right center;
-  transform: scaleX(-1);
+  /* 그라데이션 방향을 반전해 안쪽(왼쪽)이 어둡게 보이게 한다. scaleX(-1) 없이 단순 translateX로 슬라이드. */
+  background:
+    linear-gradient(270deg, rgba(0, 0, 0, 0.58), rgba(7, 5, 13, 0.94) 18%, rgba(21, 15, 33, 0.96) 58%, rgba(6, 4, 12, 0.98)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 18px);
+  box-shadow: inset 18px 0 36px rgba(0, 0, 0, 0.55), inset -10px 0 26px rgba(255, 232, 168, 0.035);
   animation-name: job-curtain-close-right;
 }
 
@@ -91,9 +94,9 @@ export const JOB_SELECT_STYLES = `
 @keyframes job-overlay-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes job-content-in { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes job-curtain-close-left { from { transform: translateX(-104%) skewX(-2deg); } to { transform: translateX(0) skewX(0deg); } }
-@keyframes job-curtain-close-right { from { transform: translateX(104%) scaleX(-1) skewX(2deg); } to { transform: translateX(0) scaleX(-1) skewX(0deg); } }
+@keyframes job-curtain-close-right { from { transform: translateX(104%) skewX(2deg); } to { transform: translateX(0) skewX(0deg); } }
 @keyframes job-curtain-open-left { from { transform: translateX(0) skewX(0deg); opacity: 1; } to { transform: translateX(-104%) skewX(-2deg); opacity: 0.78; } }
-@keyframes job-curtain-open-right { from { transform: translateX(0) scaleX(-1) skewX(0deg); opacity: 1; } to { transform: translateX(104%) scaleX(-1) skewX(2deg); opacity: 0.78; } }
+@keyframes job-curtain-open-right { from { transform: translateX(0) skewX(0deg); opacity: 1; } to { transform: translateX(104%) skewX(2deg); opacity: 0.78; } }
 
 /* ─── Title with rule lines ────────────────────────────────────────── */
 .job-select-header {

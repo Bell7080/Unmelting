@@ -2126,23 +2126,27 @@ export class GameBoardRenderer {
         overlay.classList.add('is-resolving')
         card.classList.add('job-card--selected')
         window.setTimeout(() => {
+          // 복사본 대신 원본 카드를 body로 이동해 고스트로 활용한다.
+          // getBoundingClientRect() 로 현재 렌더 위치(scale 포함)를 캡처한 뒤
+          // inline fixed 좌표로 고정해 시각적 점프 없이 DOM 위치만 바꾼다.
           const rect = card.getBoundingClientRect()
-          const ghost = card.cloneNode(true) as HTMLElement
-          ghost.className = 'job-card job-flight-card'
-          ghost.style.cssText = ''
-          ghost.style.position = 'fixed'
-          ghost.style.left = `${rect.left}px`
-          ghost.style.top = `${rect.top}px`
-          ghost.style.width = `${rect.width}px`
-          ghost.style.height = `${rect.height}px`
-          ghost.style.margin = '0'
-          ghost.style.zIndex = '210'
-          ghost.style.opacity = '1'
-          ghost.style.transform = 'scale(1)'
-          ghost.style.transformOrigin = 'center center'
-          ghost.style.pointerEvents = 'none'
-          document.body.appendChild(ghost)
-          this.jobFlightCard = ghost
+          card.classList.remove('job-card--selected', 'is-center')
+          card.classList.add('job-flight-card')
+          card.style.position = 'fixed'
+          card.style.left = `${rect.left}px`
+          card.style.top = `${rect.top}px`
+          card.style.width = `${rect.width}px`
+          card.style.height = `${rect.height}px`
+          card.style.margin = '0'
+          card.style.zIndex = '210'
+          card.style.opacity = '1'
+          card.style.transform = 'none'
+          card.style.filter = 'none'
+          card.style.transition = 'none'
+          card.style.transformOrigin = 'center center'
+          card.style.pointerEvents = 'none'
+          document.body.appendChild(card)
+          this.jobFlightCard = card
           // 선택 후에는 콘텐츠만 접고 암막은 유지한다. 호출부가 보드를 채운 뒤 playJobCurtainOpen()으로 걷는다.
           overlay.classList.add('job-select--picked')
           window.setTimeout(() => resolve(job.id), 360)
