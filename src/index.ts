@@ -653,8 +653,8 @@ let ambitionBonus = 0
 function applyAmbitionKills(count: number): void {
   if (count <= 0 || !gameState.character.hasRelic('ambition')) return
   ambitionKillCount += count
-  while (ambitionKillCount >= 10) {
-    ambitionKillCount -= 10
+  while (ambitionKillCount >= 8) {
+    ambitionKillCount -= 8
     ambitionBonus += 25
     const gained = gainFixedLight('야망', ambitionBonus)
     recordRelicActivation('ambition', `불빛 +${gained}`)
@@ -859,9 +859,9 @@ async function applyGreatNegotiationOnAttack(): Promise<void> {
   render()
 }
 
-/** 찬스: 적 타격 후 10% 확률로 추가 타격. 빠른 따닥 느낌으로 짧게 처리. */
+/** 찬스: 적 타격 후 15% 확률로 추가 타격. 빠른 따닥 느낌으로 짧게 처리. */
 async function applyChanceExtraHit(card: Card, distance: number): Promise<void> {
-  if (!gameState.character.hasRelic('chance') || Math.random() >= 0.1) return
+  if (!gameState.character.hasRelic('chance') || Math.random() >= 0.15) return
   if (card.health <= 0) return
   const char = gameState.character
   // 빠른 추가 타격 — 공격 애니메이션 없이 피해 숫자만 즉시 표시.
@@ -883,9 +883,9 @@ async function applyChanceExtraHit(card: Card, distance: number): Promise<void> 
   }
 }
 
-/** 물양동이: 타격한 적 15% 확률로 체력 1 추가 감소. */
+/** 물양동이: 타격한 적 25% 확률로 체력 1 추가 감소. */
 async function applyWaterBucketExtraDamage(card: Card, distance: number): Promise<void> {
-  if (!gameState.character.hasRelic('water-bucket') || Math.random() >= 0.15) return
+  if (!gameState.character.hasRelic('water-bucket') || Math.random() >= 0.25) return
   if (card.health <= 0) return
   const newHealth = card.takeDamage(1)
   recordRelicActivation('water-bucket', '추가 피해 1')
@@ -3406,10 +3406,10 @@ async function handleCardAction(e: Event): Promise<void> {
     await onEnemiesDefeated(1)
   }
 
-  // 찬스: 적이 살아있을 때만 10% 확률 추가 타격.
+  // 찬스: 적이 살아있을 때만 15% 확률 추가 타격.
   if (!result.cardRemoved && card.type === CardType.ENEMY) {
     await applyChanceExtraHit(card, distance)
-    // 물양동이: 15% 확률로 1 추가 피해 (찬스로 처치된 경우 이미 제거되므로 health 확인).
+    // 물양동이: 25% 확률로 1 추가 피해 (찬스로 처치된 경우 이미 제거되므로 health 확인).
     await applyWaterBucketExtraDamage(card, distance)
   }
 

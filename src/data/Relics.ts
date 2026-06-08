@@ -90,7 +90,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     // '불빛'은 GameBoardRenderer.relicEffectHtml가 본문에서 다이아(✦) 아이콘으로 치환한다.
     effect: '5턴마다 불빛 150 획득',
     flavor: '별빛을 모아 둔 등불, 다섯 걸음마다 한 줌의 빛을 흘려보낸다.',
-    basePrice: 600,
+    basePrice: 700,
   },
   // id는 유지하고 표시 이름·설명만 귀족의 품격으로 교체한다(효과 동일).
   'wax-crow': {
@@ -99,7 +99,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     rarity: 'epic',
     effect: '보물상자 획득 시 방패 1 획득',
     flavor: '전리품마저 품위 있게 두르는 옛 귀족의 몸가짐.',
-    basePrice: 720,
+    basePrice: 950,
   },
   'carving-knife': {
     id: 'carving-knife',
@@ -115,7 +115,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     rarity: 'common',
     effect: '적 처치 시 체력 1 회복',
     flavor: '촛농처럼 진한 붉은 빛이 병 안에서 천천히 돈다.',
-    basePrice: 870,
+    basePrice: 650,
   },
   lifeline: {
     id: 'lifeline',
@@ -123,7 +123,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     rarity: 'common',
     effect: '최대 체력 +5',
     flavor: '끊어질 듯 이어지는 따뜻한 실 한 가닥.',
-    basePrice: 880,
+    basePrice: 680,
   },
   'blood-pack': {
     id: 'blood-pack',
@@ -139,7 +139,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     rarity: 'unique',
     effect: '사망 시 체력 10 부활 · 필드 전체 제거. 이후 파괴.',
     flavor: '꺼진 심지 끝에 남은 아주 작은 불빛.',
-    basePrice: 1240,
+    basePrice: 1500,
     banWhenRemoved: true,
   },
   'ink-quill': {
@@ -164,7 +164,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     rarity: 'epic',
     effect: '피해를 입힌 적에게 피해 1 반격',
     flavor: '받은 만큼 품위 있게 되돌려 주는 단정한 응수.',
-    basePrice: 1000,
+    basePrice: 1100,
   },
   // --- 체스 테마 유물(011~016) ---
   ambition: {
@@ -172,7 +172,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: '야망',
     rarity: 'common',
     // '불빛'은 relicEffectHtml가 다이아(✦) 글리프로 치환한다. 획득량은 발동마다 +25 누적.
-    effect: '적 10회 처치마다 불빛 25 획득 (+25 누적)',
+    effect: '적 8회 처치마다 불빛 25 획득 (+25 누적)',
     flavor: '한 칸씩 전진할 때마다 더 멀리 내다보는 야심.',
     basePrice: 620,
   },
@@ -182,7 +182,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     rarity: 'rare',
     effect: '체력 10 손실마다 불씨 게이지 +1',
     flavor: '정석을 벗어난 한 수가 판을 뒤집는다.',
-    basePrice: 720,
+    basePrice: 600,
   },
   'blind-faith': {
     id: 'blind-faith',
@@ -206,7 +206,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     rarity: 'legendary',
     effect: '구매 즉시 최대 체력 -15 · 공격력 +2 (체력 16+ 필요)',
     flavor: '제 살을 깎아 칼끝을 세우는 패자의 길.',
-    basePrice: 1400,
+    basePrice: 1250,
   },
   authority: {
     id: 'authority',
@@ -224,7 +224,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     rarity: 'epic',
     effect: '불씨 소모 주기 +1턴 (3→4턴)',
     flavor: '모래가 더 천천히 흘러내린다. 불빛이 조금 더 버틸 수 있을 것 같다.',
-    basePrice: 1100,
+    basePrice: 950,
   },
   'great-negotiation': {
     id: 'great-negotiation',
@@ -241,7 +241,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     rarity: 'rare',
     effect: '불씨 게이지 완전 소모 시 즉시 가득 채움. 이후 파괴.',
     flavor: '한 번은 살릴 수 있다. 한 번만.',
-    basePrice: 800,
+    basePrice: 780,
     banWhenRemoved: true,
   },
   pickaxe: {
@@ -259,7 +259,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     rarity: 'common',
     effect: '불빛 획득량 +10%',
     flavor: '잘 벤 장작은 더 오래, 더 밝게 탄다.',
-    basePrice: 520,
+    basePrice: 580,
   },
   'annabella-ring': {
     id: 'annabella-ring',
@@ -267,7 +267,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     rarity: 'unique',
     effect: '매 턴 최하단 손패 1장을 최상단으로 이동',
     flavor: '에나벨라는 언제나 가장 낡은 것을 앞에 두었다.',
-    basePrice: 1400,
+    basePrice: 1000,
   },
   'annabella-pendant': {
     id: 'annabella-pendant',
@@ -284,16 +284,16 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     rarity: 'epic',
     effect: '체력 최대치 절반 이하 감소 시 전부 회복. 이후 파괴.',
     flavor: '머리가 붙어있는 한 다시 일어설 수 있다.',
-    basePrice: 1000,
+    basePrice: 1100,
     banWhenRemoved: true,
   },
   chance: {
     id: 'chance',
     name: '찬스',
     rarity: 'common',
-    effect: '직접 타격 10% 확률로 1회 추가 타격',
+    effect: '직접 타격 15% 확률로 1회 추가 타격',
     flavor: '기회는 준비된 자에게 두 번 온다.',
-    basePrice: 580,
+    basePrice: 500,
   },
   'opening-ceremony': {
     id: 'opening-ceremony',
@@ -325,7 +325,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'water-bucket',
     name: '물양동이',
     rarity: 'rare',
-    effect: '직접 타격한 적 15% 확률로 체력 1 추가 감소',
+    effect: '직접 타격한 적 25% 확률로 체력 1 추가 감소',
     flavor: '물이 닿은 자리는 더 잘 무너진다.',
     basePrice: 760,
   },
@@ -336,7 +336,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     // 황금 상자는 일반 상자보다 카드와 불빛을 2배 주는 희귀 보물칸.
     effect: '보물 스폰 중 10% 확률로 황금 상자 대체',
     flavor: '어떤 자물쇠도 이 열쇠를 거부하지 못한다.',
-    basePrice: 1400,
+    basePrice: 1000,
   },
 }
 
