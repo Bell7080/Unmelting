@@ -2148,7 +2148,8 @@ async function startGame(): Promise<void> {
   recordNotice(`카드 풀 초기화: 메타해금 ${poolSnapshot.unlocked.length} / 잠김 ${poolSnapshot.locked.length} / 금지 ${poolSnapshot.banned.length}`, 'info')
   render()
 
-  // 직업 선택 오버레이 — 플레이어 대사 전에 한 번만 선택한다
+  // 직업 선택 오버레이 — 플레이어 대사 전에 한 번만 선택한다.
+  // 선택 카드는 화면 중앙으로 날아온 뒤, 능력을 HUD로 블라스트하며 사라진다.
   const chosenJobId = await boardRenderer.openJobSelect(JOBS)
   const chosenJob = JOBS.find((j) => j.id === chosenJobId)
   if (chosenJob) {
@@ -2156,7 +2157,10 @@ async function startGame(): Promise<void> {
     if (chosenJob.damageBonus > 0) gameState.character.applyDamageBoost(chosenJob.damageBonus)
     if (chosenJob.coinBonus > 0) coins += chosenJob.coinBonus
     cardSpawner.setJobSpawnAdjust(chosenJob.spawnEnemy, chosenJob.spawnTreasure, chosenJob.spawnFlower)
+    // render()가 스폰 확률 패널/체력/공격력/화폐 카운터를 새 값으로 굴린다.
     render()
+    // 중앙 고스트 카드가 적용된 능력을 HUD로 블라스트하며 소멸한다.
+    await boardRenderer.animateJobCardToHud(chosenJob)
   }
 
   // 1턴 시작 대사: 살짝 딜레이 후 캐릭터 말풍선 등장
