@@ -2728,9 +2728,13 @@ async function applyHandSingle(
   // Prepare the rail immediately after the single card effect. Recipes should
   // resolve against a compacted/refilled/front-regrouped board, preventing holes
   // after effects such as 한 걸음씩 or 밀매 remove cards from the field.
-  await runPreparationRefreshAfterFieldEffects({
-    suppressFrontRegroupOnce: shouldSuppressRegroupAfterClear(result.removedFieldCards.length),
-  })
+  // 샹들리에는 루프 종료 후 자체적으로 하강을 실행하므로 여기서는 건너뛴다.
+  // (여기서 하강하면 새 적이 내려와 루프가 그 적까지 처치하는 연쇄가 발생한다.)
+  if (!result.chandelierRepeat) {
+    await runPreparationRefreshAfterFieldEffects({
+      suppressFrontRegroupOnce: shouldSuppressRegroupAfterClear(result.removedFieldCards.length),
+    })
+  }
 
   // 손패가 빈 슬롯을 메우며 이동/낙하한 뒤, 충분히 자리잡은 다음 트리플 합성을 별도 비트로 재생한다.
   await resolveDeferredHandMerges()
