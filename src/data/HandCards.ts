@@ -462,6 +462,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropSource: 'any',
     metaRequired: false,
     runLocked: false,
+    jobTags: ['mage'] satisfies ReadonlyArray<JobTag>,
   },
   // 검과 방패: 전방 적을 공격하고 방패도 동시에 얻는 기사 카드. 기사도 유물과 연계된다.
   'sword-and-shield': {

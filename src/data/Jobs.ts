@@ -35,6 +35,8 @@ export interface JobDef {
   handLimitBonus: number
   /** 불씨 한계 보너스 (양수: 증가, 음수: 감소). */
   emberLimitBonus: number
+  /** 함정 무시 확률 (0~1). 도적 전용. */
+  trapIgnoreChance?: number
 }
 
 const symCombo = (stroke: string, fill: string) =>
@@ -217,6 +219,7 @@ export const JOBS: JobDef[] = [
     scorePct: -5,
     handLimitBonus: 5,
     emberLimitBonus: 0,
+    trapIgnoreChance: 0.15,
   },
   {
     id: 'prisoner',

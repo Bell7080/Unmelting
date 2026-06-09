@@ -2265,6 +2265,8 @@ async function startGame(): Promise<void> {
       gameState.enhancements.shopDiscountPct = chosenJob.shopDiscountPct
     }
     cardSpawner.setJobSpawnAdjust(chosenJob.spawnEnemy, chosenJob.spawnTrap, chosenJob.spawnTreasure, chosenJob.spawnFlower)
+    // 도적: 함정 무시 확률 적용.
+    if (chosenJob.trapIgnoreChance) c.trapIgnoreChance += chosenJob.trapIgnoreChance
     // 닫힌 암막 뒤에서 최초 보드를 채워, 레일 공개가 직업 선택의 후속 연출처럼 이어지게 한다.
     fillBoardAtStart()
     turnManager.armFrontBombs()
@@ -3562,12 +3564,15 @@ async function handleCardAction(e: Event): Promise<void> {
     // 소중한 머리: 함정 피해로 체력 절반 이하 시 전체 회복.
     await applyPreciousHeadCheck()
   }
-  // 함정의 대가: 함정 무효화 시 발동 피드백.
-  if (result.trapIgnored && gameState.character.hasRelic('trap-master')) {
-    recordRelicActivation('trap-master', '함정 완전 무효')
+  // 함정 무시 (도적/함정의 대가): "무시" 텍스트 + 트랩 지터. 유물 보유 시 발동 로그도 기록.
+  if (result.trapIgnored) {
+    sameBeatAnimations.push(boardRenderer.playTrapIgnoreResist(card.id))
+    if (gameState.character.hasRelic('trap-master')) {
+      recordRelicActivation('trap-master', '함정 무시')
+    }
   }
-  // 달콤한 유혹: 함정 제거 시 기본 불빛의 30% 추가 획득. 무효화 시에도 발동.
-  if (result.cardRemoved && card.type === CardType.TRAP && gameState.character.hasRelic('sweet-temptation')) {
+  // 달콤한 유혹: 함정 제거 시 기본 불빛의 30% 추가 획득. 무효화 시 미발동.
+  if (result.cardRemoved && card.type === CardType.TRAP && !result.trapIgnored && gameState.character.hasRelic('sweet-temptation')) {
     const baseLight = scoreForCardRemoval(card)
     const bonus = Math.max(1, Math.ceil(baseLight * 0.3))
     const gained = gainFixedLight('달콤한 유혹', bonus)

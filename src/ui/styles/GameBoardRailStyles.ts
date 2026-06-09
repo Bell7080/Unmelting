@@ -1260,6 +1260,19 @@ export const GAME_BOARD_RAIL_STYLES = `
   z-index: 40;
 }
 
+/* 함정의 대가/도적: 함정 무시 판정 성공 시 함정 카드가 잠깐 흔들린다. */
+.cell.card.type-trap.is-trap-ignored {
+  animation: trap-ignore-jitter 0.38s linear;
+}
+@keyframes trap-ignore-jitter {
+  0%, 100% { transform: translate(0, 0); }
+  15%      { transform: translate(2px, -1px); }
+  30%      { transform: translate(-2px, 1px); }
+  48%      { transform: translate(1px, -1px); }
+  65%      { transform: translate(-1px, 1px); }
+  80%      { transform: translate(1px, 0); }
+}
+
 /* 보스가 굳음(freeze) 상태에서 가격당하면 발작하듯 잘게 떨린다. */
 .cell.card.type-boss.is-boss-resisting {
   animation: boss-resist-jitter 0.42s linear;

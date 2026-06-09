@@ -2712,6 +2712,22 @@ export class GameBoardRenderer {
     await new Promise((r) => window.setTimeout(r, 520))
   }
 
+  /** 함정 무시(도적/함정의 대가) 판정 성공 시 함정 카드를 잠깐 흔들고
+   *  "무시" 글자를 플레이어 카드 위에 띄워 피해가 없음을 시각적으로 확인시킨다. */
+  async playTrapIgnoreResist(trapCardId: string): Promise<void> {
+    const trapTile = this.findCardElement(trapCardId)
+    const playerCard = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
+    if (trapTile) {
+      trapTile.classList.add('is-trap-ignored')
+    }
+    if (playerCard) {
+      const rect = playerCard.getBoundingClientRect()
+      void this.spawnFieldFloatText(rect.left + rect.width / 2, rect.top + rect.height * 0.3, '무시')
+    }
+    await new Promise((r) => window.setTimeout(r, 460))
+    if (trapTile) trapTile.classList.remove('is-trap-ignored')
+  }
+
   /** 보스가 굳음(밀랍 freeze) 상태일 때 가격을 시도하면 데미지 대신 "저항" 글자를
    *  데미지 부유 숫자와 같은 양식으로 띄우고, 카드가 살짝 발작하듯 떨린다.
    *  손패 freeze 효과가 보스에 정상 적용되었음을 명확히 보여주는 피드백. */
