@@ -336,7 +336,10 @@ export const JOB_SELECT_STYLES = `
 .job-dn { color: rgba(220, 80, 60, 0.96); }
 
 /* ─── Locked card ──────────────────────────────────────────────────── */
-.job-card--locked { cursor: not-allowed; }
+.job-card--locked {
+  cursor: not-allowed;
+  filter: brightness(0.55) saturate(0.35);
+}
 .job-card__lock {
   position: absolute;
   inset: 0;
@@ -347,7 +350,7 @@ export const JOB_SELECT_STYLES = `
   gap: 8px;
   z-index: 4;
   pointer-events: none;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.68);
   color: rgba(220, 206, 184, 0.7);
 }
 .job-card__lock-icon {
