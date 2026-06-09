@@ -104,6 +104,7 @@ import handCard024Url from '../assets/sprites/handcard_024.webp'
 import handCard025Url from '../assets/sprites/handcard_025.webp'
 import handCard026Url from '../assets/sprites/handcard_026.webp'
 import handCard027Url from '../assets/sprites/handcard_027.webp'
+import handCard028Url from '../assets/sprites/handcard_028.webp'
 import relic001Url from '../assets/sprites/relics_001.webp'
 import relic002Url from '../assets/sprites/relics_002.webp'
 import relic003Url from '../assets/sprites/relics_003.webp'
@@ -134,6 +135,11 @@ import relic027Url from '../assets/sprites/relics_027.webp'
 import relic028Url from '../assets/sprites/relics_028.webp'
 import relic029Url from '../assets/sprites/relics_029.webp'
 import relic030Url from '../assets/sprites/relics_030.webp'
+import relic033Url from '../assets/sprites/relics_033.webp'
+import relic034Url from '../assets/sprites/relics_034.webp'
+import relic035Url from '../assets/sprites/relics_035.webp'
+import relic036Url from '../assets/sprites/relics_036.webp'
+import relic037Url from '../assets/sprites/relics_037.webp'
 import pack001Url from '../assets/sprites/pack_001.webp'
 import pack002Url from '../assets/sprites/pack_002.webp'
 import pack003Url from '../assets/sprites/pack_003.webp'
@@ -249,14 +255,14 @@ export const SpriteUrls = {
     'charred-paper': relic028Url,
     'water-bucket': relic029Url,
     'golden-key': relic030Url,
-    // 신규 유물 — 전용 아트 입고 전까지 기존 스프라이트로 임시 대체한다.
+    // 신규 유물 — chivalry·sweet-temptation은 아트 미입고로 임시 대체.
     chivalry: relic001Url,
     'sweet-temptation': relic002Url,
-    'discount-coupon': relic003Url,
-    luxury: relic004Url,
-    sanitizer: relic005Url,
-    'wax-harmony': relic006Url,
-    'trap-master': relic007Url,
+    'discount-coupon': relic033Url,
+    luxury: relic034Url,
+    sanitizer: relic035Url,
+    'wax-harmony': relic036Url,
+    'trap-master': relic037Url,
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,
@@ -286,8 +292,8 @@ export const SpriteUrls = {
     'top-hat': handCard025Url,
     slash: handCard026Url,
     shackles: handCard027Url,
-    // 신규 손패 — 전용 아트 입고 전까지 기존 스프라이트로 임시 대체한다.
-    'candle-tome': handCard015Url,
+    // 신규 손패 — sword-and-shield·watering-can·garden-scissors는 아트 미입고로 임시 대체.
+    'candle-tome': handCard028Url,
     'sword-and-shield': handCard017Url,
     'watering-can': handCard023Url,
     'garden-scissors': handCard019Url,
