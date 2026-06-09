@@ -987,32 +987,44 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   white-space: normal;
   letter-spacing: 0.02em;
 }
-/* 삭제팩/해금팩 — 하단 중앙 넘기기 버튼 */
+/* 삭제팩/해금팩 — Pass 버튼 (하단 중앙, minimal pill) */
 .shop-pack-pass-btn {
   appearance: none;
   position: absolute;
-  bottom: clamp(12px, 1.6vh, 20px);
+  bottom: clamp(26px, 3.6vh, 42px);
   left: 50%;
   transform: translateX(-50%);
-  padding: 7px 28px;
+  padding: 6px 26px;
   border-radius: 999px;
-  border: 1px solid rgba(200, 180, 140, 0.38);
-  background: rgba(22, 14, 34, 0.84);
-  color: rgba(220, 200, 170, 0.68);
+  border: 1px solid rgba(185, 168, 136, 0.26);
+  background: transparent;
+  color: rgba(205, 188, 160, 0.50);
   font-family: inherit;
-  font-weight: 700;
-  font-size: 13px;
-  letter-spacing: 0.14em;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
   white-space: nowrap;
   z-index: 4;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+  transition: border-color 0.22s ease, color 0.22s ease;
+  transform-origin: center center;
 }
 .shop-pack-pass-btn:hover {
-  border-color: rgba(220, 195, 148, 0.62);
-  color: rgba(238, 218, 188, 0.90);
-  background: rgba(44, 28, 58, 0.90);
+  border-color: rgba(215, 196, 158, 0.46);
+  color: rgba(232, 214, 180, 0.78);
+}
+/* 클릭 후 선으로 수축하며 퇴장 */
+@keyframes pass-btn-to-line {
+  0%   { transform: translateX(-50%) scaleY(1)   scaleX(1);    opacity: 1; }
+  20%  { transform: translateX(-50%) scaleY(0.92) scaleX(0.96); opacity: 1; }
+  60%  { transform: translateX(-50%) scaleY(0.05) scaleX(1.08); opacity: 0.55; }
+  100% { transform: translateX(-50%) scaleY(0.01) scaleX(1.14); opacity: 0; }
+}
+.shop-pack-pass-btn.is-passing {
+  animation: pass-btn-to-line 0.34s cubic-bezier(0.48, 0, 0.52, 1) forwards;
+  pointer-events: none;
 }
 /* Painted back face — a dedicated DOM element painted purely with
    cardbackground_001.webp. Sits at rotateY(180deg) so it shows while the

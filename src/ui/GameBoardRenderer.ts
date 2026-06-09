@@ -1610,11 +1610,17 @@ export class GameBoardRenderer {
         if (host?.classList.contains('is-closing')) return
         const t = e.target as HTMLElement
 
-        // 넘기기(Pass) 버튼
+        // Pass 버튼 — 눌림 → 선 수축 애니 → 이벤트
         const passBtn = t.closest<HTMLElement>('[data-pack-pass]')
         if (passBtn) {
           const packKind = passBtn.dataset.packPass as ShopPackKind | undefined
-          if (packKind) document.dispatchEvent(new CustomEvent('shopPackPass', { detail: { packKind } }))
+          if (packKind) {
+            passBtn.classList.add('is-passing')
+            setTimeout(
+              () => document.dispatchEvent(new CustomEvent('shopPackPass', { detail: { packKind } })),
+              340
+            )
+          }
           return
         }
 
@@ -1680,7 +1686,7 @@ export class GameBoardRenderer {
       )
       .join('')
     const passBtn = view.passable
-      ? `<button class="shop-pack-pass-btn" data-pack-pass="${view.packKind}" aria-label="넘기기">넘기기</button>`
+      ? `<button class="shop-pack-pass-btn" data-pack-pass="${view.packKind}" aria-label="Pass">Pass</button>`
       : ''
     host.classList.remove('is-closing')
     host.innerHTML = `
