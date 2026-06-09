@@ -1234,12 +1234,14 @@ export class GameBoardRenderer {
     flavor?: string
     extraClass?: string
   }): string {
+    const tagList = opts.tags ?? (opts.tag ? [opts.tag] : [])
+    const tagsOverlay = tagList.length
+      ? `<div class="codex-tile-tags" aria-hidden="true">${tagList.map(t => `<span class="codex-tile-tag">${t}</span>`).join('')}</div>`
+      : ''
     const artHtml =
       opts.art.kind === 'sprite'
-        ? `<div class="codex-tile-art" style="background-image: url('${opts.art.url}');" aria-hidden="true"></div>`
-        : `<div class="codex-tile-art codex-tile-art--icon" aria-hidden="true">${opts.art.svg}</div>`
-    const tagList = opts.tags ?? (opts.tag ? [opts.tag] : [])
-    const tagHtml = tagList.map(t => `<span class="codex-tile-tag">${t}</span>`).join('')
+        ? `<div class="codex-tile-art" style="background-image: url('${opts.art.url}');" aria-hidden="true">${tagsOverlay}</div>`
+        : `<div class="codex-tile-art codex-tile-art--icon" aria-hidden="true">${opts.art.svg}${tagsOverlay}</div>`
     const chipsHtml = (opts.chips ?? [])
       .map((c) => {
         const tone = c.tone && c.tone !== 'plain' ? `is-${c.tone}` : ''
@@ -1257,7 +1259,6 @@ export class GameBoardRenderer {
         ${artHtml}
         <header class="codex-tile-head">
           <span class="codex-tile-name">${opts.name}</span>
-          ${tagHtml}
         </header>
         ${chipsRow}
         ${noteHtml}
