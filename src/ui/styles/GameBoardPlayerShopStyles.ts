@@ -455,9 +455,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-shell--trial .shop-trial-layer > .shop-trial-card:nth-child(3) { animation-delay: 660ms, 3.0s; }
 .shop-pack-layer {
   justify-content: center;
-  gap: clamp(4px, 0.55vw, 8px);
-  /* Match the relic row's optical center while keeping button anchors fixed. */
-  transform: translateX(clamp(-22px, -2vw, -12px));
+  gap: clamp(6px, 0.72vw, 10px);
+  /* Match the relic row's optical center while keeping button anchors fixed.
+     translateY로 약간 위로 올려 시각 무게중심을 레일 중앙에 가깝게 맞춘다. */
+  transform: translateX(clamp(-22px, -2vw, -12px)) translateY(clamp(-8px, -0.6vh, -4px));
   background: transparent;
   border: none;
   box-shadow: none;
@@ -663,8 +664,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-pack-card {
   position: relative;
   flex: 0 0 auto;
-  /* Keep the original pack-card size so bottom-row rhythm stays unchanged. */
-  width: clamp(116px, 10.9vw, 164px);
+  width: clamp(124px, 11.6vw, 174px);
   aspect-ratio: 3 / 4;
   border-radius: 14px;
   border: none;
@@ -744,18 +744,20 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   font-weight: 900;
   letter-spacing: 0.03em;
   text-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.88),
-    0 0 8px rgba(0, 0, 0, 0.62),
-    0 0 16px rgba(0, 0, 0, 0.42);
+    0 1px 3px rgba(0, 0, 0, 0.98),
+    0 2px 6px rgba(0, 0, 0, 0.94),
+    0 0 14px rgba(0, 0, 0, 0.88),
+    0 0 28px rgba(0, 0, 0, 0.72);
 }
 .shop-pack-effect {
   margin: 4px 0 0;
   color: rgba(255, 244, 210, 0.86);
   font-size: var(--font-size-sm);
   text-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.86),
-    0 0 7px rgba(0, 0, 0, 0.58),
-    0 0 14px rgba(0, 0, 0, 0.38);
+    0 1px 3px rgba(0, 0, 0, 0.96),
+    0 2px 5px rgba(0, 0, 0, 0.9),
+    0 0 12px rgba(0, 0, 0, 0.84),
+    0 0 24px rgba(0, 0, 0, 0.66);
 }
 /* Theme tints are applied as a glow on the card frame; the inner art comes
    from the pack_00X.webp sprite assigned inline in the renderer. */
@@ -814,9 +816,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  /* 카드는 세로 중앙에 두고, 헤더만 absolute로 상단에 띄운다. */
+  justify-content: center;
   gap: clamp(8px, 1.2vh, 14px);
-  padding: clamp(16px, 2.2vh, 26px) clamp(10px, 1.4vh, 18px) clamp(10px, 1.4vh, 18px);
+  padding: clamp(10px, 1.4vh, 18px);
   /* 베일 레이어 뒤에 붙은 보조 레이어처럼 한 박자 늦게 같은 top-down 모션으로 열린다. */
   opacity: 0;
   transform: translateY(-100%) scaleY(0.92);
@@ -824,6 +827,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   animation: shop-pack-picker-shell-drop 0.42s cubic-bezier(0.22, 0.86, 0.22, 1) 0.42s both;
 }
 .shop-pack-picker-head {
+  /* 카드는 flex 중앙에 남기고 헤더만 상단으로 띄운다. */
+  position: absolute;
+  top: clamp(10px, 1.5vh, 16px);
   text-align: center;
   color: rgba(255, 232, 168, 0.96);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
@@ -842,14 +848,14 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-pack-picker-head h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: clamp(20px, 2.2vh, 26px);
   letter-spacing: 0.08em;
   font-weight: 900;
 }
 .shop-pack-picker-head p {
   margin: 4px 0 0;
   color: rgba(232, 214, 180, 0.82);
-  font-size: 13px;
+  font-size: clamp(13px, 1.4vh, 15px);
 }
 .shop-pack-picker-cards {
   display: grid;
