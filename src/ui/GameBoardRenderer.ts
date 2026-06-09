@@ -808,14 +808,8 @@ export class GameBoardRenderer {
         </div>
       `
     } else if (card.type === CardType.FLOWER) {
-      // Flower cells expose their current harvest value. Seeds show a waiting
-      // label because they cannot be picked until the front-row bloom beat.
-      const label =
-        card.flowerKind === 'seed'
-          ? '대기'
-          : card.flowerKind === 'marigold' && card.flowerTurnsAlive % 2 === 1
-            ? `다음 +${card.flowerValue + 1}`
-            : `+${card.flowerValue}`
+      // Seeds wait to bloom; all grown flowers show current harvest value.
+      const label = card.flowerKind === 'seed' ? '대기' : `+${card.flowerValue}`
       stats = `<div class="card-stats group-note flower-note">${sparkleIcon()}<span>${label}</span></div>`
     } else if (card.type === CardType.TREASURE && card.treasureKind === 'starlight') {
       // 90~100층 별빛은 손패 보상이 아닌 턴 열쇠임을 카드 자체에서 즉시 읽히게 한다.
@@ -849,6 +843,10 @@ export class GameBoardRenderer {
         : card.type === CardType.TRAP && card.trapKind === 'spore'
           ? `<div class="frozen-badge spore-badge">번식 ${card.sporeTurnsUntilSpread}턴</div>`
           : ''
+    // 꽃 성장 뱃지: 씨앗 제외, 다음 성장까지 남은 턴수를 포자 배지와 동일 방식으로 표시한다.
+    const flowerGrowthBadge = card.type === CardType.FLOWER && card.flowerKind !== 'seed'
+      ? `<div class="frozen-badge flower-growth-badge">성장 ${card.flowerKind === 'marigold' && card.flowerTurnsAlive % 2 === 1 ? 1 : card.flowerKind === 'marigold' ? 2 : 1}턴</div>`
+      : ''
 
     // 보스 보상 카드는 3-wide span이어도 카드 자체 이름을 그대로 표시한다.
     // 함정은 합쳐질 때 Card가 도감과 동일한 이름(촛농 거미집/밀랍 거미굴, 번식 포자군/
@@ -866,6 +864,7 @@ export class GameBoardRenderer {
       ${firstStrikeBadge}
       ${frozenBadge}
       ${trapBadge}
+      ${flowerGrowthBadge}
       <div class="card-face">
         <div class="card-art" ${artStyle} aria-hidden="true"></div>
         <div class="card-overlay" aria-hidden="true"></div>

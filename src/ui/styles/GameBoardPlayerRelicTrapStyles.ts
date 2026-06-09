@@ -448,6 +448,7 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
 }
 .spore-badge { border-color: rgba(147, 209, 118, 0.7); color: rgba(220, 255, 190, 0.95); }
 .bomb-badge { border-color: rgba(255, 92, 72, 0.72); color: rgba(255, 214, 190, 0.98); }
+.flower-growth-badge { border-color: transparent; background: transparent; box-shadow: none; color: rgba(255, 220, 160, 0.95); text-shadow: 0 1px 3px rgba(0,0,0,0.92), 0 0 9px currentColor; animation: trap-turn-label-glimmer 1.9s ease-in-out infinite; }
 
 /* Spore traps get a quiet moss-tinted overlay so their breeding state reads
    at a glance, similar to how 굳음 marks waxed cards but without competing
