@@ -8,6 +8,9 @@
 
 export type HandCategory = 'recovery' | 'tool' | 'control' | 'attack'
 
+/** 직업별 전용 태그 — 도감·호버 미리보기에 카테고리 뱃지 옆에 표시한다. */
+export type JobTag = 'knight' | 'mage'
+
 /** Where a hand card can appear from during a run. */
 export type HandCardDropSource =
   | 'any'        // 범용: 적 처치/보물/모든 일반 경로
@@ -96,6 +99,8 @@ export interface HandCardDefinition {
   metaRequired: boolean
   /** Starts locked within a run even when meta-unlocked; needs an in-run event to unlock. */
   runLocked: boolean
+  /** 직업 태그 — 기사/마법사 전용 카드임을 표기한다. */
+  jobTags?: ReadonlyArray<JobTag>
 }
 
 export interface HandCard {

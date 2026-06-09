@@ -6,7 +6,7 @@
  * remains centralized and testable.
  */
 
-import { HandCardDefinition, HandCardId, HandEffectTargeting } from '@entities/HandCard'
+import { HandCardDefinition, HandCardId, HandEffectTargeting, JobTag } from '@entities/HandCard'
 // dropSource가 'treasure'인 카드는 보물상자 전용 보너스 풀에만 섞인다.
 // 이후 시트에서 등장 조건/해금 조건을 지정하면 이 파일에서만 수치를 수정하면 된다.
 
@@ -221,6 +221,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropSource: 'any',
     metaRequired: false,
     runLocked: false,
+    jobTags: ['knight', 'mage'] satisfies ReadonlyArray<JobTag>,
   },
   // 폭죽: 필드의 적들에게 총 피해를 무작위로 쪼개 분배한다(대상 지정 없음).
   firework: {

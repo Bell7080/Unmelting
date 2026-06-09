@@ -1167,8 +1167,11 @@ export class GameBoardRenderer {
     description: string
     extraClass?: string
     badge?: string
+    /** 다중 뱃지 — badge보다 우선 적용된다. */
+    badges?: string[]
   }): string {
-    const badgeHtml = opts.badge ? `<span class="common-card-badge">${opts.badge}</span>` : ''
+    const badgeList = opts.badges ?? (opts.badge ? [opts.badge] : [])
+    const badgeHtml = badgeList.map(b => `<span class="common-card-badge">${b}</span>`).join('')
     return `
       <article class="common-card-face ${opts.extraClass ?? ''}" style="--hand-card-art: url('${opts.artUrl}'); --hand-card-back: url('${SpriteUrls.cardBack}');">
         <div class="common-card-art" aria-hidden="true">
@@ -1194,12 +1197,15 @@ export class GameBoardRenderer {
     badge?: string
   ): string {
     const def = getHandCardDef(defId)
+    const JOB_LABEL: Record<string, string> = { knight: '기사', mage: '마법사' }
+    const jobBadges = (def.jobTags ?? []).map(t => JOB_LABEL[t])
+    const badges = badge ? [badge, ...jobBadges] : jobBadges.length ? jobBadges : undefined
     return this.commonCardFace({
       artUrl: spriteForHandCard(defId),
       name: `${def.name}${merged ? ' ★' : ''}`,
       description,
       extraClass,
-      badge,
+      badges,
     })
   }
 
@@ -1213,7 +1219,10 @@ export class GameBoardRenderer {
   private codexTile(opts: {
     art: { kind: 'sprite'; url: string } | { kind: 'icon'; svg: string }
     name: string
+    /** 단일 태그. tags가 제공되면 무시된다. */
     tag?: string
+    /** 다중 태그 — 카테고리 뱃지 옆에 순서대로 표시. */
+    tags?: string[]
     rarityClass?: string
     chips?: Array<{
       label?: string
@@ -1229,7 +1238,8 @@ export class GameBoardRenderer {
       opts.art.kind === 'sprite'
         ? `<div class="codex-tile-art" style="background-image: url('${opts.art.url}');" aria-hidden="true"></div>`
         : `<div class="codex-tile-art codex-tile-art--icon" aria-hidden="true">${opts.art.svg}</div>`
-    const tagHtml = opts.tag ? `<span class="codex-tile-tag">${opts.tag}</span>` : ''
+    const tagList = opts.tags ?? (opts.tag ? [opts.tag] : [])
+    const tagHtml = tagList.map(t => `<span class="codex-tile-tag">${t}</span>`).join('')
     const chipsHtml = (opts.chips ?? [])
       .map((c) => {
         const tone = c.tone && c.tone !== 'plain' ? `is-${c.tone}` : ''
@@ -3534,7 +3544,10 @@ export class GameBoardRenderer {
       return this.codexTile({
         art: { kind: 'sprite', url: spriteForHandCard(def.id) },
         name: locked ? '???' : def.name,
-        tag: locked ? '잠김' : def.category === 'recovery' ? '회복' : def.category === 'tool' ? '도구' : def.category === 'control' ? '컨트롤' : '공격',
+        tags: locked ? ['잠김'] : [
+          def.category === 'recovery' ? '회복' : def.category === 'tool' ? '도구' : def.category === 'control' ? '컨트롤' : '공격',
+          ...((def.jobTags ?? []).map(t => t === 'knight' ? '기사' : '마법사')),
+        ],
         rarityClass: RARITY_CLASS_BY_TIER[HAND_CARD_RARITY[id]],
         chips: locked ? [] : [
           { label: '', value: singleDesc, tone: 'plain' },
