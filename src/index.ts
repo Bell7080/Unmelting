@@ -1437,6 +1437,8 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
   const view: ShopPackPickerView = {
     packKind: kind,
     title,
+    // 삭제팩·해금팩은 선택을 강제하지 않고 넘기기 버튼으로 패스 가능하다.
+    passable: kind === 'delete-pack' || kind === 'unlock-pack',
     // spriteUrl 포함: enhance/unlock/delete 팩은 카드별 일러스트가 있어야 식별 가능하다.
     items: items.map(({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote }) => ({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote })),
   }
@@ -2613,6 +2615,12 @@ document.addEventListener('shopBuy', (e: Event) => {
 
 document.addEventListener('shopPackPick', (e: Event) => {
   void handleShopPackPick((e as CustomEvent<ShopPackPickDetail>).detail)
+})
+
+document.addEventListener('shopPackPass', () => {
+  activePackSession = null
+  boardRenderer.closePackPicker()
+  boardRenderer.openShop(buildShopStateView(), score, gameState.character)
 })
 
 document.addEventListener('shopClose', () => {

@@ -105,6 +105,8 @@ export interface ShopPackPickerView {
   packKind: ShopPackKind
   title: string
   items: ShopPackItemView[]
+  /** 넘기기 버튼 표시 여부 (delete-pack / unlock-pack). */
+  passable?: boolean
 }
 export interface ShopStateView {
   /** Normal 10/20/... shop vs 30/60/... altar variant. */
@@ -1607,6 +1609,15 @@ export class GameBoardRenderer {
       host.addEventListener('click', (e) => {
         if (host?.classList.contains('is-closing')) return
         const t = e.target as HTMLElement
+
+        // 넘기기(Pass) 버튼
+        const passBtn = t.closest<HTMLElement>('[data-pack-pass]')
+        if (passBtn) {
+          const packKind = passBtn.dataset.packPass as ShopPackKind | undefined
+          if (packKind) document.dispatchEvent(new CustomEvent('shopPackPass', { detail: { packKind } }))
+          return
+        }
+
         const card = t.closest<HTMLElement>('[data-pack-pick]')
         if (!card) return
         const itemId = card.dataset.packPick
@@ -1668,6 +1679,9 @@ export class GameBoardRenderer {
         }
       )
       .join('')
+    const passBtn = view.passable
+      ? `<button class="shop-pack-pass-btn" data-pack-pass="${view.packKind}" aria-label="넘기기">넘기기</button>`
+      : ''
     host.classList.remove('is-closing')
     host.innerHTML = `
       <div class="shop-pack-picker-veil" style="--shop-picker-bg:url('${SpriteUrls.shopPickerBg}');" aria-hidden="true"></div>
@@ -1677,6 +1691,7 @@ export class GameBoardRenderer {
           <p>3장 중 1장을 골라.</p>
         </header>
         <div class="shop-pack-picker-cards">${cards}</div>
+        ${passBtn}
       </div>
     `
     host.classList.add('is-open')

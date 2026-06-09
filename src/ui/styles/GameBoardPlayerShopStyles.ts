@@ -829,7 +829,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-pack-picker-head {
   /* 카드는 flex 중앙에 남기고 헤더만 상단으로 띄운다. */
   position: absolute;
-  top: clamp(10px, 1.5vh, 16px);
+  top: clamp(18px, 2.4vh, 28px);
   text-align: center;
   color: rgba(255, 232, 168, 0.96);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
@@ -986,6 +986,33 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   line-height: 1.3;
   white-space: normal;
   letter-spacing: 0.02em;
+}
+/* 삭제팩/해금팩 — 하단 중앙 넘기기 버튼 */
+.shop-pack-pass-btn {
+  appearance: none;
+  position: absolute;
+  bottom: clamp(12px, 1.6vh, 20px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 7px 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(200, 180, 140, 0.38);
+  background: rgba(22, 14, 34, 0.84);
+  color: rgba(220, 200, 170, 0.68);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+  z-index: 4;
+}
+.shop-pack-pass-btn:hover {
+  border-color: rgba(220, 195, 148, 0.62);
+  color: rgba(238, 218, 188, 0.90);
+  background: rgba(44, 28, 58, 0.90);
 }
 /* Painted back face — a dedicated DOM element painted purely with
    cardbackground_001.webp. Sits at rotateY(180deg) so it shows while the
