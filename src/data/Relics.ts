@@ -351,7 +351,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'chivalry',
     name: '기사도',
     rarity: 'unique',
-    effect: '3턴마다 검과 방패 획득',
+    effect: '3턴마다 기사 카드 획득',
     flavor: '기사도를 지키는 자만이 이 힘을 쓸 수 있다.',
     basePrice: 1000,
   },
