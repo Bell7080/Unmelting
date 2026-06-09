@@ -847,6 +847,10 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   filter: drop-shadow(0 0 6px rgba(255, 215, 120, 0.9));
   font-weight: 900;
 }
+.chain-event-mark--sparkle .icon {
+  width: 1em; height: 1em;
+  vertical-align: -0.12em;
+}
 .chain-event-copy { display: inline-grid; gap: 2px; justify-items: center; }
 .chain-event-name { font-weight: 800; }
 .chain-event-flavor { font-size: clamp(12px, 1.05vw, 14px); color: rgba(255, 245, 220, 0.78); letter-spacing: 0.02em; }

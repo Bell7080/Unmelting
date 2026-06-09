@@ -328,8 +328,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'hand-mirror',
     name: '손거울',
     category: 'attack',
-    description: '전방 선택 적 1장 공격력만큼 피해',
-    tripleDescription: '전방 선택 적 1장 공격력만큼 피해 · 이전 손패 복제',
+    description: '전방 선택 적 1장: 그 적의 공격력만큼 피해',
+    tripleDescription: '전방 선택 적 1장: 그 적의 공격력만큼 피해 · 이전 손패 복제',
     targeting: {
       base: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },

@@ -4001,7 +4001,7 @@ export class GameBoardRenderer {
       } else if (ev.kind === 'gauge') {
         parts.push(`
           <span class="chain-event chain-event-gauge ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
-            <span class="chain-event-mark">◆</span>
+            <span class="chain-event-mark chain-event-mark--sparkle">${sparkleIcon()}</span>
             <span class="chain-event-name">${ev.name}</span>
           </span>
         `)

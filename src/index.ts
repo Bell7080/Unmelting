@@ -2506,7 +2506,7 @@ function fireCandleGaugeEffect(): {
   }
   // Spend only one full gauge so combo-count overflow starts filling the next one.
   character.consumeFullCandleGauge()
-  return { name: `게이지: ${candleModeLabel(mode)}`, message, mode }
+  return { name: `콤보 : ${candleModeLabel(mode)}`, message, mode }
 }
 
 /** Resolve every full hand-combo gauge from any source that can add candle
