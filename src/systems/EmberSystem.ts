@@ -36,16 +36,16 @@ export interface EnemyStatBonus {
 }
 
 // 티어 압박은 적·함정 가중치만 올리고, 보물·꽃은 bright 값 그대로 고정한다.
-// 총합이 커지면서 보물·꽃 비율이 자연스럽게 줄어드는 방식이므로 수치를 직접 깎지 않는다.
+// bright 기준 enemy·webTrap이 티어마다 +8씩 누적 상승 (extinguished에서 총 +24).
 const SPAWN_BUCKETS: Record<EmberTier, SpawnBuckets> = {
-  // bright: 탐색·전투 균형. 기준점. 총합 100.
+  // bright: 총합 100
   bright:      { enemy: 44, webTrap: 17, bombTrap: 4, sporeTrap: 4, treasure: 22, flower: 9 },
-  // dim: 적 증가. 총합 111.
-  dim:         { enemy: 60, webTrap: 12, bombTrap: 4, sporeTrap: 4, treasure: 22, flower: 9 },
-  // flickering: 적·함정 대폭 증가. 총합 131.
-  flickering:  { enemy: 78, webTrap: 14, bombTrap: 4, sporeTrap: 4, treasure: 22, flower: 9 },
-  // extinguished: 최대 압박. 총합 143.
-  extinguished:{ enemy: 86, webTrap: 16, bombTrap: 5, sporeTrap: 5, treasure: 22, flower: 9 },
+  // dim: +8 each → 총합 116
+  dim:         { enemy: 52, webTrap: 25, bombTrap: 4, sporeTrap: 4, treasure: 22, flower: 9 },
+  // flickering: +8 each → 총합 132
+  flickering:  { enemy: 60, webTrap: 33, bombTrap: 4, sporeTrap: 4, treasure: 22, flower: 9 },
+  // extinguished: +8 each → 총합 148
+  extinguished:{ enemy: 68, webTrap: 41, bombTrap: 4, sporeTrap: 4, treasure: 22, flower: 9 },
 }
 
 // 불씨 티어는 더 이상 적 HP를 올리지 않는다(불씨 회복 시 1체력 적이 죽는 문제 방지).
