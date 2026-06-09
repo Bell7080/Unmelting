@@ -1197,15 +1197,12 @@ export class GameBoardRenderer {
     badge?: string
   ): string {
     const def = getHandCardDef(defId)
-    const JOB_LABEL: Record<string, string> = { knight: '기사', mage: '마법사' }
-    const jobBadges = (def.jobTags ?? []).map(t => JOB_LABEL[t])
-    const badges = badge ? [badge, ...jobBadges] : jobBadges.length ? jobBadges : undefined
     return this.commonCardFace({
       artUrl: spriteForHandCard(defId),
       name: `${def.name}${merged ? ' ★' : ''}`,
       description,
       extraClass,
-      badges,
+      badge,
     })
   }
 
