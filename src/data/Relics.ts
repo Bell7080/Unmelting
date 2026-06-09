@@ -276,7 +276,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '공격력 +2. 이후 등장 적 체력 +3 (보스 미적용). 적 등장 확률 {{spawn}}.',
     flavor: '강해질수록 맞서는 것도 강해진다.',
     basePrice: 1200,
-    spawnEffect: { type: 'enemy', delta: 8 },
+    spawnEffect: { type: 'enemy', delta: 15 },
   },
   'precious-head': {
     id: 'precious-head',
