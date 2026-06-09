@@ -276,12 +276,19 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
   overflow: hidden;
   pointer-events: none;
   border-radius: 14px;
-  border: 1px solid rgba(255, 215, 120, 0.42);
+  /* 기본 테두리는 중립 톤 — 등급별 glow가 덮어쓴다. */
+  border: 1px solid rgba(90, 80, 70, 0.35);
   background: linear-gradient(180deg, rgba(45, 30, 39, 0.96), rgba(18, 12, 24, 0.96));
   box-shadow:
     0 10px 18px rgba(0, 0, 0, 0.5),
     inset 0 1px 0 rgba(255, 232, 168, 0.18);
 }
+/* 등급별 테두리 + 발광 */
+.relic-mini-card.rarity-common   .relic-preview-card { border-color: rgba(116, 124, 136, 0.45); box-shadow: 0 10px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,232,168,0.18); }
+.relic-mini-card.rarity-rare     .relic-preview-card { border-color: rgba(80, 152, 255, 0.52); box-shadow: 0 10px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,232,168,0.18), 0 0 14px rgba(80,152,255,0.22); }
+.relic-mini-card.rarity-epic     .relic-preview-card { border-color: rgba(161, 108, 255, 0.56); box-shadow: 0 10px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,232,168,0.18), 0 0 16px rgba(161,108,255,0.26); }
+.relic-mini-card.rarity-unique   .relic-preview-card { border-color: rgba(242, 212, 92, 0.62); box-shadow: 0 10px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,232,168,0.18), 0 0 18px rgba(242,212,92,0.32); }
+.relic-mini-card.rarity-legendary .relic-preview-card { border-color: rgba(220, 78, 78, 0.62); box-shadow: 0 10px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,232,168,0.18), 0 0 20px rgba(220,78,78,0.34); }
 .relic-mini-card .shop-relic-art {
   border-radius: 14px 14px 0 0;
 }

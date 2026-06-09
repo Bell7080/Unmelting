@@ -96,6 +96,10 @@ export interface ShopPackItemView {
   rarity: CardRarity
   /** 카드별 개별 일러스트 URL. 없으면 팩 커버 이미지를 fallback으로 사용한다. */
   spriteUrl?: string
+  /** 카드 상단 타입 배지 (트리플/레시피/손패/단일/삭제 등). */
+  typeLabel?: string
+  /** 레시피 재료 n+n 표기. 레시피 관련 아이템에만 설정한다. */
+  recipeNote?: string
 }
 export interface ShopPackPickerView {
   packKind: ShopPackKind
@@ -1047,7 +1051,7 @@ export class GameBoardRenderer {
     const hoverShift = Math.round(Math.max(-92, Math.min(92, -offset * 18)))
     const pinnedClass = this.pinnedRelicId === def.id ? 'is-pinned' : ''
     return `
-      <article class="relic-mini-card ${pinnedClass}"
+      <article class="relic-mini-card ${RARITY_CLASS_BY_TIER[def.rarity]} ${pinnedClass}"
                data-owned-relic="${def.id}"
                style="--relic-i:${index}; --relic-x:${spread}px; --relic-rot:${rotate}deg; --relic-y:${lift}px; --relic-hover-shift:${hoverShift}px;"
                tabindex="0"
@@ -1369,6 +1373,7 @@ export class GameBoardRenderer {
         'hand-slot',
         'hand-card',
         this.categoryClass(def.category),
+        RARITY_CLASS_BY_TIER[HAND_CARD_RARITY[card.defId] ?? 'common'],
         merged,
         isArming ? 'is-arming-target' : '',
         recipeReady ? 'is-recipe-ready' : '',
@@ -1627,24 +1632,35 @@ export class GameBoardRenderer {
         (item, i) => {
           // 개별 카드 아트가 있으면 우선 사용, 없으면 팩 커버 fallback
           const artUrl = item.spriteUrl ?? SpriteUrls.packs[view.packKind]
+          const rarityClass = RARITY_CLASS_BY_TIER[item.rarity]
+          // 타입 접미사(' 트리플',' 강화')를 제거해 이름만 표시한다.
+          const cleanTitle = item.title.replace(/ (트리플|강화)$/, '')
+          const typeBadge = item.typeLabel
+            ? `<div class="shop-pack-type-badge">[ ${item.typeLabel} ]</div>`
+            : ''
+          const recipeNoteLine = item.recipeNote
+            ? `<p class="shop-pack-recipe-note">${item.recipeNote}</p>`
+            : ''
           return `
-          <article class="shop-pack-pick-card pack-theme-${item.theme} ${RARITY_CLASS_BY_TIER[item.rarity]}"
+          <article class="shop-pack-pick-card pack-theme-${item.theme} ${rarityClass}"
                    data-pack-pick="${item.id}"
                    data-pack-kind="${view.packKind}"
                    style="--pick-i:${i}; --cardback-url:url('${SpriteUrls.cardBack}');"
                    tabindex="0"
                    aria-label="${item.title} — ${item.effect}">
-            <!-- 카드 팩 3선택도 flipper 내부 2면을 회전시켜 테두리/배경/콘텐츠가 함께 뒤집힌다. -->
             <div class="shop-pack-pick-flipper">
               <div class="shop-pack-pick-back" aria-hidden="true"></div>
               <div class="shop-pack-pick-front">
-                <div class="shop-pack-pick-art" style="background-image:url('${artUrl}');" aria-hidden="true"></div>
+                <div class="shop-pack-pick-art" style="background-image:url('${artUrl}');" aria-hidden="true">
+                  <div class="shop-pack-pick-rarity-badge ${rarityClass}">${item.rarity}</div>
+                </div>
                 <div class="shop-pack-pick-body">
                   <header class="shop-pack-pick-card-head">
-                    <span class="shop-pack-pick-card-name">${item.title}</span>
-                    <span class="shop-pack-pick-card-rarity ${RARITY_CLASS_BY_TIER[item.rarity]}">${item.rarity}</span>
+                    ${typeBadge}
+                    <span class="shop-pack-pick-card-name">${cleanTitle}</span>
                   </header>
                   <p class="shop-pack-pick-card-effect">${item.effect}</p>
+                  ${recipeNoteLine}
                 </div>
               </div>
             </div>

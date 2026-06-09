@@ -60,7 +60,7 @@ import { buildUnlockedEnhancePool } from '@systems/EnhancePackPool'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
-import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, spriteForUpgradePackItem } from '@ui/Sprites'
+import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, spriteForUpgradePackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
 import { BgmManager } from '@/audio/BgmManager'
 import bgm001Url from './assets/audio/bgm_001.mp3'
@@ -1202,6 +1202,16 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
   return false
 }
 
+/** 레시피 재료를 "양초 + 불씨" / "성냥 ×2" 형식의 한 줄 문자열로 변환한다. */
+function buildRecipeNote(ingredients: Partial<Record<HandCardId, number>>): string {
+  return Object.entries(ingredients)
+    .filter(([, n]) => n && n > 0)
+    .map(([id, n]) => n === 1
+      ? getHandCardDef(id as HandCardId).name
+      : `${getHandCardDef(id as HandCardId).name} ×${n}`)
+    .join(' + ')
+}
+
 /** Build the random "3-card" contents for a pack the player just bought.
  *  Each entry carries an `apply` closure so the pick handler stays small. */
 function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
@@ -1269,6 +1279,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     return sampleWeightedWithoutReplacement(entries, Math.min(3, entries.length)).map((entry) => ({
       ...entry,
       spriteUrl: spriteForHandCard(entry.targetCardId),
+      typeLabel: '단일',
       apply: () => {
         const id = entry.targetCardId
         gameState.enhancements.singleBonus[id] = (gameState.enhancements.singleBonus[id] ?? 0) + 1
@@ -1287,7 +1298,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
       Object.keys(r.ingredients).every((id) => unlocked.includes(id as HandCardId))
     )
 
-    type UnlockItem = { id: string; theme: 'unlock'; title: string; effect: string; rarity: (typeof HAND_CARD_RARITY)[keyof typeof HAND_CARD_RARITY]; spriteUrl: string; apply: () => void }
+    type UnlockItem = { id: string; theme: 'unlock'; title: string; effect: string; rarity: (typeof HAND_CARD_RARITY)[keyof typeof HAND_CARD_RARITY]; spriteUrl: string; typeLabel: string; recipeNote?: string; apply: () => void }
     const pool: UnlockItem[] = [
       ...cardPool.map((id) => {
         const def = getHandCardDef(id)
@@ -1299,6 +1310,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
           effect: isBanned ? `[재해금] ${def.description}` : def.description,
           rarity: HAND_CARD_RARITY[id],
           spriteUrl: spriteForHandCard(id),
+          typeLabel: '손패',
           apply: () => {
             if (isBanned) runCardPool.unban(id)
             else runCardPool.unlockForRun(id)
@@ -1306,15 +1318,15 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
         }
       }),
       ...lockedRecipes.map((r) => {
-        // 레시피 해금 아이템 — 일러스트는 첫 재료 카드 아트 재사용
-        const firstIngredientId = Object.keys(r.ingredients)[0] as HandCardId
         return {
           id: `unlock-recipe-${r.id}`,
           theme: 'unlock' as const,
           title: r.name,
-          effect: `[조합식 해금] ${r.flavor}`,
-          rarity: HAND_CARD_RARITY[firstIngredientId] ?? 'rare',
-          spriteUrl: spriteForHandCard(firstIngredientId),
+          effect: r.flavor,
+          rarity: 'rare' as const,
+          spriteUrl: recipeSprite001 ?? SpriteUrls.packs['unlock-pack'],
+          typeLabel: '레시피',
+          recipeNote: buildRecipeNote(r.ingredients),
           apply: () => { gameState.unlockedRecipeIds.add(r.id) },
         }
       }),
@@ -1336,6 +1348,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
         effect: `앞으로 ${def.name} 등장 금지`,
         rarity: HAND_CARD_RARITY[id],
         spriteUrl: spriteForHandCard(id),
+        typeLabel: '삭제',
         apply: () => { runCardPool.ban(id) },
       }
     })
@@ -1345,6 +1358,12 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
   const pool = buildUnlockedUpgradePool(runCardPool.snapshot().unlocked, gameState.unlockedRecipeIds).map((entry) => ({
     ...entry,
     spriteUrl: spriteForUpgradePackItem(entry.id),
+    typeLabel: entry.id.startsWith('triple-') ? '트리플' : '레시피',
+    recipeNote: (() => {
+      if (entry.id.startsWith('triple-')) return undefined
+      const r = RECIPES.find((rc) => rc.id === entry.id.slice('recipe-'.length))
+      return r ? buildRecipeNote(r.ingredients) : undefined
+    })(),
     apply: () => {
       switch (entry.id) {
         // 강화팩 common — 트리플 보너스
@@ -1419,7 +1438,7 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
     packKind: kind,
     title,
     // spriteUrl 포함: enhance/unlock/delete 팩은 카드별 일러스트가 있어야 식별 가능하다.
-    items: items.map(({ id, title, effect, theme, rarity, spriteUrl }) => ({ id, title, effect, theme, rarity, spriteUrl })),
+    items: items.map(({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote }) => ({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote })),
   }
   boardRenderer.openPackPicker(view)
 }
