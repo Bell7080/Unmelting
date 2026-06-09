@@ -1279,6 +1279,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     return sampleWeightedWithoutReplacement(entries, Math.min(3, entries.length)).map((entry) => ({
       ...entry,
       spriteUrl: spriteForHandCard(entry.targetCardId),
+      typeLabel: '단일',
       apply: () => {
         const id = entry.targetCardId
         gameState.enhancements.singleBonus[id] = (gameState.enhancements.singleBonus[id] ?? 0) + 1

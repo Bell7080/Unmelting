@@ -974,7 +974,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-pack-pick-rarity-badge.rarity-common    { color: rgba(200, 200, 200, 0.9); }
 .shop-pack-pick-rarity-badge.rarity-rare      { color: rgba(100, 180, 255, 0.9); }
-.shop-pack-pick-rarity-badge.rarity-epic      { color: rgba(200, 120, 255, 0.9); }
+.shop-pack-pick-rarity-badge.rarity-epic      { color: rgba(225, 65, 245, 0.9); }
 .shop-pack-pick-rarity-badge.rarity-unique    { color: rgba(255, 210, 80, 0.9); }
 .shop-pack-pick-rarity-badge.rarity-legendary { color: rgba(255, 140, 60, 0.9); }
 /* 레시피 재료 n+n 표기 */
@@ -1628,12 +1628,22 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 
 
 
-/* Rarity glow-only language (no text labels) shared by relic/free/pack cards. */
+/* Rarity glow-only language (no text labels) shared by relic/free/pack cards.
+   에픽: 핑크-보라(마젠타) 계열로 변경해 레어(파랑)와 확실히 구분. */
 .rarity-common { box-shadow: 0 0 0 1px rgba(116, 124, 136, 0.5), 0 12px 22px rgba(0,0,0,0.58); }
 .rarity-rare { box-shadow: 0 0 0 1px rgba(80, 152, 255, 0.58), 0 0 24px rgba(80,152,255,0.24), 0 12px 22px rgba(0,0,0,0.58); }
-.rarity-epic { box-shadow: 0 0 0 1px rgba(161, 108, 255, 0.62), 0 0 26px rgba(161,108,255,0.28), 0 12px 22px rgba(0,0,0,0.58); }
+.rarity-epic { box-shadow: 0 0 0 1px rgba(210, 50, 235, 0.65), 0 0 26px rgba(210,50,235,0.30), 0 12px 22px rgba(0,0,0,0.58); }
 .rarity-unique { box-shadow: 0 0 0 1px rgba(242, 212, 92, 0.72), 0 0 30px rgba(242,212,92,0.34), 0 12px 22px rgba(0,0,0,0.58); }
 .rarity-legendary { box-shadow: 0 0 0 1px rgba(220, 78, 78, 0.72), 0 0 30px rgba(220,78,78,0.34), 0 12px 22px rgba(0,0,0,0.58); }
+
+/* 상점 유물 카드 루트에 외부 glow + 드롭 섀도를 명시적으로 추가한다.
+   .shop-relic-flipper의 overflow:hidden이 내부 face의 outer box-shadow를 잘라내므로
+   루트(.shop-relic-card)에 직접 걸어야 outside glow가 보인다. */
+.shop-relic-card.rarity-common  { box-shadow: 0 10px 24px rgba(0,0,0,0.65); }
+.shop-relic-card.rarity-rare    { box-shadow: 0 0 0 1px rgba(80,152,255,0.62), 0 0 32px rgba(80,152,255,0.46), 0 10px 24px rgba(0,0,0,0.65); }
+.shop-relic-card.rarity-epic    { box-shadow: 0 0 0 1px rgba(210,50,235,0.66), 0 0 34px rgba(210,50,235,0.48), 0 10px 24px rgba(0,0,0,0.65); }
+.shop-relic-card.rarity-unique  { box-shadow: 0 0 0 1px rgba(242,212,92,0.75), 0 0 36px rgba(242,212,92,0.52), 0 10px 24px rgba(0,0,0,0.65); }
+.shop-relic-card.rarity-legendary { box-shadow: 0 0 0 1px rgba(220,78,78,0.75), 0 0 38px rgba(220,78,78,0.54), 0 10px 24px rgba(0,0,0,0.65); }
 
 /* Real two-face relic card for reroll:
    - .shop-relic-front is the front face (0deg)
@@ -1679,7 +1689,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-relic-card.rarity-common .shop-relic-front::after { box-shadow: inset 0 0 24px rgba(170, 180, 196, 0.24); }
 .shop-relic-card.rarity-rare .shop-relic-front::after { box-shadow: inset 0 0 30px rgba(80, 152, 255, 0.4), 0 0 32px rgba(80, 152, 255, 0.34); }
-.shop-relic-card.rarity-epic .shop-relic-front::after { box-shadow: inset 0 0 32px rgba(161, 108, 255, 0.44), 0 0 36px rgba(161, 108, 255, 0.36); }
+.shop-relic-card.rarity-epic .shop-relic-front::after { box-shadow: inset 0 0 32px rgba(210, 50, 235, 0.46), 0 0 36px rgba(210, 50, 235, 0.38); }
 .shop-relic-card.rarity-unique .shop-relic-front::after { box-shadow: inset 0 0 34px rgba(242, 212, 92, 0.5), 0 0 40px rgba(242, 212, 92, 0.44); }
 .shop-relic-card.rarity-legendary .shop-relic-front::after { box-shadow: inset 0 0 36px rgba(255, 108, 76, 0.52), 0 0 44px rgba(220, 78, 78, 0.46); }
 
@@ -1706,7 +1716,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-relic-card.rarity-epic .shop-relic-front,
 .shop-relic-card.rarity-epic .shop-relic-cardback,
 .shop-pack-pick-card.rarity-epic .shop-pack-pick-front,
-.shop-pack-pick-card.rarity-epic .shop-pack-pick-back { box-shadow: 0 0 0 1px rgba(161, 108, 255, 0.62), 0 0 26px rgba(161,108,255,0.28), 0 12px 22px rgba(0,0,0,0.58); }
+.shop-pack-pick-card.rarity-epic .shop-pack-pick-back { box-shadow: 0 0 0 1px rgba(210, 50, 235, 0.65), 0 0 28px rgba(210,50,235,0.30), 0 12px 22px rgba(0,0,0,0.58); }
 .shop-relic-card.rarity-unique .shop-relic-front,
 .shop-relic-card.rarity-unique .shop-relic-cardback,
 .shop-pack-pick-card.rarity-unique .shop-pack-pick-front,
