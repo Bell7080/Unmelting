@@ -251,7 +251,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '보물 상자 등장 확률 {{spawn}}',
     flavor: '암반을 깨면 반드시 무언가 나온다.',
     basePrice: 500,
-    spawnEffect: { type: 'treasure', delta: 5 },
+    spawnEffect: { type: 'treasure', delta: 8 },
   },
   axe: {
     id: 'axe',
@@ -276,7 +276,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '공격력 +2. 이후 등장 적 체력 +3 (보스 미적용). 적 등장 확률 {{spawn}}.',
     flavor: '강해질수록 맞서는 것도 강해진다.',
     basePrice: 1200,
-    spawnEffect: { type: 'enemy', delta: 5 },
+    spawnEffect: { type: 'enemy', delta: 8 },
   },
   'precious-head': {
     id: 'precious-head',
@@ -310,7 +310,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '보물 상자 등장 확률 {{spawn}}. 미믹 보상 불빛 +25% · 손패 +1.',
     flavor: '잠긴 것은 더 값지다.',
     basePrice: 1050,
-    spawnEffect: { type: 'treasure', delta: -5 },
+    spawnEffect: { type: 'treasure', delta: -8 },
   },
   'charred-paper': {
     id: 'charred-paper',
@@ -319,7 +319,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '적 등장 확률 {{spawn}}',
     flavor: '읽힌 경고는 이미 늦다.',
     basePrice: 480,
-    spawnEffect: { type: 'enemy', delta: -5 },
+    spawnEffect: { type: 'enemy', delta: -8 },
   },
   'water-bucket': {
     id: 'water-bucket',
