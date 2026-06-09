@@ -829,6 +829,17 @@ async function applyTurnStartRelics(): Promise<void> {
     character.hand.push(character.hand.shift()!)
     render()
   }
+
+  // 기사도: 3턴마다 손패에 검과 방패 추가.
+  if (character.hasRelic('chivalry') && turn !== 0 && turn % 3 === 0) {
+    const drop = DropSystem.makeCard('sword-and-shield')
+    const added = character.addHandCard(drop)
+    if (added) {
+      recordRelicActivation('chivalry', '검과 방패 획득')
+      render()
+      await playResourceTrail({ kind: 'chain' }, 'hand', 1)
+    }
+  }
 }
 
 /** 소중한 머리: 체력이 최대치의 절반 이하로 감소하면 전체 회복 후 파괴. */
@@ -938,11 +949,14 @@ function getShopPriceMultiplier(): number {
 }
 
 /** basePrice는 Relics.ts 정의에서 읽는다. 실제 식은 -76~+104 비대칭 지터를 만들어 비원형 가격을 낸다.
- *  후반 인플레이션 배수를 곱해 고층에서 불빛 가격이 가팔라지게 한다. */
+ *  후반 인플레이션 배수를 곱해 고층에서 불빛 가격이 가팔라지게 한다.
+ *  할인 쿠폰 등 shopDiscountPct가 0 초과이면 해당 비율만큼 추가 인하한다. */
 function priceForRelic(id: RelicId): number {
   const base = getRelicDef(id).basePrice
   const jitter = Math.floor((Math.random() - 0.42) * 180)
-  return Math.max(120, Math.round((base + jitter) * getShopPriceMultiplier()))
+  const raw = Math.max(120, Math.round((base + jitter) * getShopPriceMultiplier()))
+  const discountFactor = 1 - Math.min(0.8, gameState.enhancements.shopDiscountPct / 100)
+  return Math.max(120, Math.round(raw * discountFactor))
 }
 
 /** Generate up to three unowned, unbanned relics + per-spawn score price. */
@@ -1005,7 +1019,9 @@ function baseShopPackCost(kind: ShopPackKind): number {
 function currentShopPackCost(kind: ShopPackKind): number {
   const base = baseShopPackCost(kind)
   // 각 팩은 구매할 때마다 자기 초기 가격만큼 증가한다(예: 1500→3000→4500).
-  return base * ((shopPackBuys[kind] ?? 0) + 1)
+  const raw = base * ((shopPackBuys[kind] ?? 0) + 1)
+  const discountFactor = 1 - Math.min(0.8, gameState.enhancements.shopDiscountPct / 100)
+  return Math.max(1, Math.round(raw * discountFactor))
 }
 
 /** Build the renderer-facing split-shop state with visit-local pack costs.
@@ -1108,6 +1124,27 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
     // 보물 스폰 중 10% 확률로 황금 상자로 대체한다.
     cardSpawner.adjustGoldenChestWeight(0.1)
   }
+  if (id === 'sweet-temptation') {
+    // 함정 피해 +1 (ActionSystem이 character.trapDamageBonus를 읽는다).
+    gameState.character.trapDamageBonus += 1
+  }
+  if (id === 'discount-coupon') {
+    // 상점 품목 5% 할인 (priceForRelic / currentShopPackCost에서 참조).
+    gameState.enhancements.shopDiscountPct += 5
+  }
+  if (id === 'sanitizer') {
+    // 포자 등장 확률 감소 (CardSpawner에 반영).
+    cardSpawner.adjustRelicSpawn('spore', -20)
+  }
+  if (id === 'wax-harmony') {
+    // 꽃 등장 확률 증가 (CardSpawner에 반영).
+    cardSpawner.adjustRelicSpawn('flower', 20)
+  }
+  if (id === 'trap-master') {
+    // 함정 15% 무효화 확률 (ActionSystem이 character.trapIgnoreChance를 읽는다).
+    gameState.character.trapIgnoreChance += 0.15
+  }
+  // chivalry, luxury: 구매 즉발 효과 없음 — 각각 매 3턴 트리거 / 불빛 소비 시 트리거.
 }
 
 /** 일부 유물은 불빛 가격 외 추가 구매 조건이 있다(패도: 최대 체력 16 이상). 충족 못 하면 true. */
@@ -1115,6 +1152,18 @@ function relicPurchaseBlocked(id: RelicId): boolean {
   // spendMaxHealth는 최대 체력이 1 미만이 되지 않게 막으므로, -15 후 최소 1이 남는 16 이상이어야 한다.
   if (id === 'hegemony') return gameState.character.maxHealth < 16
   return false
+}
+
+/** 사치품 유물: 불빛 소비량 누적 후 2000마다 공격력 +1 처리. */
+function applyLuxuryScoreSpend(amount: number): void {
+  if (!gameState.character.hasRelic('luxury') || amount <= 0) return
+  const enhancements = gameState.enhancements
+  enhancements.luxuryScoreSpent += amount
+  const gained = Math.floor(enhancements.luxuryScoreSpent / 2000)
+  if (gained <= 0) return
+  enhancements.luxuryScoreSpent %= 2000
+  gameState.character.applyDamageBoost(gained)
+  recordRelicActivation('luxury', `불빛 2000 소비 → 공격력 +${gained}`)
 }
 
 /** 상점/제단 오버레이를 연다. 셔터를 내리고 방문 단위 상태를 초기화한 뒤 본문을 노출한다.
@@ -1404,6 +1453,8 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
   if (score < cost) return
   score = Math.max(0, score - cost)
   scorePulseKey++
+  // 사치품: 불빛 소비 추적 (2000마다 공격력 +1).
+  applyLuxuryScoreSpend(cost)
   // 구매 직후 같은 팩 가격을 초기 가격만큼 올려 다음 표기/차감에 반영한다.
   shopPackBuys[kind] = (shopPackBuys[kind] ?? 0) + 1
   // Keep picker title synchronized with the shared pack label table.
@@ -1590,6 +1641,8 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   const def = getRelicDef(detail.relicId)
   score = Math.max(0, score - offer.price)
   scorePulseKey++
+  // 사치품: 불빛 소비 추적 (2000마다 공격력 +1).
+  applyLuxuryScoreSpend(offer.price)
   pushActivityLogsInDisplayOrder([
     {
       label: `유물 구매: ${def.name}`,
@@ -3468,6 +3521,18 @@ async function handleCardAction(e: Event): Promise<void> {
     applyAnomalyHealthLoss()
     // 소중한 머리: 함정 피해로 체력 절반 이하 시 전체 회복.
     await applyPreciousHeadCheck()
+    // 달콤한 유혹: 함정 처리 시 기준 피해(방패 흡수 전)의 30배 불빛 획득.
+    if (gameState.character.hasRelic('sweet-temptation') && (result.trapPenalty ?? 0) > 0) {
+      const lightGain = Math.ceil((result.trapPenalty ?? 0) * 30)
+      const gained = gainFixedLight('달콤한 유혹', lightGain)
+      recordRelicActivation('sweet-temptation', `불빛 +${gained}`)
+      await playResourceTrail({ kind: 'chain' }, 'score', 1)
+      burstScoreGain()
+    }
+  }
+  // 함정의 대가: 함정 무효화 시 발동 피드백.
+  if (result.trapIgnored && gameState.character.hasRelic('trap-master')) {
+    recordRelicActivation('trap-master', '함정 완전 무효')
   }
 
   if (result.cardRemoved) {

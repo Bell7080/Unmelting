@@ -292,6 +292,14 @@ export class Card {
     return shouldGrow
   }
 
+  /** 물뿌리개 전용: flowerValue만 amount만큼 올리고 flowerTurnsAlive는 건드리지 않는다.
+   *  시들 확률이 증가하지 않으므로 "이거로는 절대 시들지 않음" 규칙을 만족한다. */
+  growFlowerValueOnly(amount: number): boolean {
+    if (this.type !== CardType.FLOWER || this.flowerKind === 'seed') return false
+    this.flowerValue += Math.max(1, amount)
+    return true
+  }
+
   /** Wilting starts at 10% and accelerates sharply as flower value rises. */
   getFlowerWiltChance(): number {
     if (this.type !== CardType.FLOWER || this.flowerKind === 'seed') return 0

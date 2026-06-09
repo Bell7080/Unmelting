@@ -39,6 +39,13 @@ export type RelicId =
   | 'charred-paper'
   | 'water-bucket'
   | 'golden-key'
+  | 'chivalry'
+  | 'sweet-temptation'
+  | 'discount-coupon'
+  | 'luxury'
+  | 'sanitizer'
+  | 'wax-harmony'
+  | 'trap-master'
 
 /** Immutable relic rules used by gameplay and presentation. */
 export interface RelicDefinition {
@@ -55,8 +62,9 @@ export interface RelicDefinition {
    *  같은 등급이라도 유물마다 다른 등장 빈도를 주고 싶을 때 사용한다. */
   weight?: number
   /** 스폰 가중치를 바꾸는 유물 전용. effect 텍스트 안의 {{spawn}} 토큰을
-   *  렌더러가 현 시점 실제 확률 변화량(%)으로 치환할 때 사용한다. */
-  spawnEffect?: { type: 'enemy' | 'treasure'; delta: number }
+   *  렌더러가 현 시점 실제 확률 변화량(%)으로 치환할 때 사용한다.
+   *  'spore'/'flower'는 포자·꽃 스폰 가중치 보정에 사용한다. */
+  spawnEffect?: { type: 'enemy' | 'treasure' | 'spore' | 'flower'; delta: number }
 }
 
 /** 유물 상점 등장 가중치의 등급별 기본값. 개별 유물의 weight가 우선한다.
@@ -337,6 +345,65 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '보물 스폰 중 10% 확률로 황금 상자 대체',
     flavor: '어떤 자물쇠도 이 열쇠를 거부하지 못한다.',
     basePrice: 1000,
+  },
+  // --- 신규 유물(031~037) ---
+  chivalry: {
+    id: 'chivalry',
+    name: '기사도',
+    rarity: 'unique',
+    effect: '3턴마다 검과 방패 획득',
+    flavor: '기사도를 지키는 자만이 이 힘을 쓸 수 있다.',
+    basePrice: 1000,
+  },
+  'sweet-temptation': {
+    id: 'sweet-temptation',
+    name: '달콤한 유혹',
+    rarity: 'epic',
+    effect: '함정 피해 +1 · 함정 처리 시 불빛 획득',
+    flavor: '유혹은 달콤하게 오지만 그 값은 언제나 무겁다.',
+    basePrice: 1050,
+  },
+  'discount-coupon': {
+    id: 'discount-coupon',
+    name: '할인 쿠폰',
+    rarity: 'common',
+    effect: '상점 품목 5% 할인',
+    flavor: '한 번 접힌 종이에는 묘한 가치가 있다.',
+    basePrice: 480,
+  },
+  luxury: {
+    id: 'luxury',
+    name: '사치품',
+    rarity: 'rare',
+    effect: '불빛 2000 소비마다 공격력 +1',
+    flavor: '사치는 힘을 낳는다 — 쓰는 자만이 얻는다.',
+    basePrice: 750,
+  },
+  sanitizer: {
+    id: 'sanitizer',
+    name: '살균제',
+    rarity: 'rare',
+    effect: '포자 등장 확률 감소',
+    flavor: '퍼지기 전에 막아야 한다.',
+    basePrice: 700,
+    spawnEffect: { type: 'spore', delta: -20 },
+  },
+  'wax-harmony': {
+    id: 'wax-harmony',
+    name: '밀랍 조화',
+    rarity: 'common',
+    effect: '꽃 등장 확률 증가',
+    flavor: '밀랍과 꽃이 함께할 때 이 공간은 더 따뜻해진다.',
+    basePrice: 450,
+    spawnEffect: { type: 'flower', delta: 20 },
+  },
+  'trap-master': {
+    id: 'trap-master',
+    name: '함정의 대가',
+    rarity: 'legendary',
+    effect: '함정 15% 확률로 완전 무효',
+    flavor: '모든 덫을 꿰뚫는 발걸음.',
+    basePrice: 1400,
   },
 }
 

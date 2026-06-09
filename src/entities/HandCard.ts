@@ -43,6 +43,10 @@ export type HandCardId =
   | 'top-hat'
   | 'slash'
   | 'shackles'
+  | 'candle-tome'
+  | 'sword-and-shield'
+  | 'watering-can'
+  | 'garden-scissors'
 
 export type HandEffectSelection = 'target' | 'random' | 'all' | 'none'
 
@@ -58,6 +62,8 @@ export type HandEffectFilter =
   | 'hazard'
   | 'any'
   | 'none'
+  | 'flower'
+  | 'flower-or-monsterflower'
 
 export interface HandEffectTargeting {
   /** How the affected object is chosen: 대상/랜덤/전체/없음. */

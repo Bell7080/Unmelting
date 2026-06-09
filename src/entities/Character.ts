@@ -53,6 +53,10 @@ export class Character {
   /** 권위: 치명타를 체력 1에서 막아냈음을 표시한다. 외부가 연출/파괴 후 false로 소비한다.
    *  (체력이 0으로 떨어졌다가 부활하는 대신, 처음부터 1에서 멈추게 한다.) */
   authoritySurvivePending: boolean = false
+  /** 달콤한 유혹: 함정 밟음 피해에 더할 추가 피해량. */
+  trapDamageBonus: number = 0
+  /** 함정의 대가: 함정 무효화 확률(0~1). 매 함정 밟음마다 독립 판정. */
+  trapIgnoreChance: number = 0
 
   constructor(id: string = 'unmelting-girl', name: string = '녹지 않는 소녀') {
     this.id = id
@@ -316,5 +320,7 @@ export class Character {
     this.shield = 0
     this.relicDamageTaken = 0
     this.authoritySurvivePending = false
+    this.trapDamageBonus = 0
+    this.trapIgnoreChance = 0
   }
 }

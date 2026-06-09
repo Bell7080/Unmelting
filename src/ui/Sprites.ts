@@ -250,6 +250,14 @@ export const SpriteUrls = {
     'charred-paper': relic028Url,
     'water-bucket': relic029Url,
     'golden-key': relic030Url,
+    // 신규 유물 — 전용 아트 입고 전까지 기존 스프라이트로 임시 대체한다.
+    chivalry: relic001Url,
+    'sweet-temptation': relic002Url,
+    'discount-coupon': relic003Url,
+    luxury: relic004Url,
+    sanitizer: relic005Url,
+    'wax-harmony': relic006Url,
+    'trap-master': relic007Url,
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,
@@ -279,6 +287,11 @@ export const SpriteUrls = {
     'top-hat': handCard025Url,
     slash: handCard026Url,
     shackles: handCard027Url,
+    // 신규 손패 — 전용 아트 입고 전까지 기존 스프라이트로 임시 대체한다.
+    'candle-tome': handCard015Url,
+    'sword-and-shield': handCard017Url,
+    'watering-can': handCard023Url,
+    'garden-scissors': handCard019Url,
   } satisfies Record<HandCardId, string>,
   /** Shop card-pack illustrations. Index follows the pack pickers in the
    *  shop bottom row: basic (자원) / upgrade (강화) / unlock (해금). */

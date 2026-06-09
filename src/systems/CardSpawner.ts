@@ -222,7 +222,7 @@ export class CardSpawner {
   /** 90F boss+trial 이후에는 별빛만 턴을 올리는 최종 등반 규칙을 켠다. */
   private finalAscentActive: boolean = false
   /** 유물 구매로 누적된 스폰 가중치 보정. 양수=증가, 음수=감소. 정규화는 roll 총합으로 자동 처리. */
-  private relicSpawnAdjust: { enemy: number; treasure: number } = { enemy: 0, treasure: 0 }
+  private relicSpawnAdjust: { enemy: number; treasure: number; spore: number; flower: number } = { enemy: 0, treasure: 0, spore: 0, flower: 0 }
   /** 직업 선택으로 적용된 스폰 가중치 보정 — 런 내내 고정되며 런 리셋 시 초기화된다. */
   private jobSpawnAdjust: { enemy: number; trap: number; treasure: number; flower: number } = { enemy: 0, trap: 0, treasure: 0, flower: 0 }
   /** 유물 에나벨라의 펜던트로 적용되는 적 스폰 시 HP 보너스(보스 미적용). */
@@ -267,7 +267,7 @@ export class CardSpawner {
   }
 
   /** 유물 구매/런 리셋 시 스폰 가중치 보정을 delta 값만큼 누적한다. */
-  adjustRelicSpawn(type: 'enemy' | 'treasure', delta: number): void {
+  adjustRelicSpawn(type: 'enemy' | 'treasure' | 'spore' | 'flower', delta: number): void {
     this.relicSpawnAdjust[type] += delta
   }
 
@@ -289,7 +289,7 @@ export class CardSpawner {
 
   /** 런 시작 시 유물/직업 modifiers를 초기화한다. */
   resetRelicModifiers(): void {
-    this.relicSpawnAdjust = { enemy: 0, treasure: 0 }
+    this.relicSpawnAdjust = { enemy: 0, treasure: 0, spore: 0, flower: 0 }
     this.jobSpawnAdjust = { enemy: 0, trap: 0, treasure: 0, flower: 0 }
     this.relicEnemyHpBonus = 0
     this.goldenChestWeight = 0
@@ -682,9 +682,12 @@ export class CardSpawner {
   getEffectiveWeights(): { enemy: number; trap: number; treasure: number; flower: number; total: number } {
     const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
     const enemy = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy + this.jobSpawnAdjust.enemy)
-    const trap = Math.max(0, buckets.webTrap + this.jobSpawnAdjust.trap) + buckets.bombTrap + buckets.sporeTrap
+    // 살균제 유물: sporeTrap 가중치만 독립 감소. webTrap·bombTrap은 영향 없음.
+    const sporeTrap = Math.max(0, buckets.sporeTrap + this.relicSpawnAdjust.spore)
+    const trap = Math.max(0, buckets.webTrap + this.jobSpawnAdjust.trap) + buckets.bombTrap + sporeTrap
     const treasure = Math.max(0, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + this.jobSpawnAdjust.treasure)
-    const flower = Math.max(0, buckets.flower + this.jobSpawnAdjust.flower)
+    // 밀랍 조화 유물: flower 가중치 독립 증가.
+    const flower = Math.max(0, buckets.flower + this.jobSpawnAdjust.flower + this.relicSpawnAdjust.flower)
     const total = enemy + trap + treasure + flower
     return { enemy, trap, treasure, flower, total }
   }

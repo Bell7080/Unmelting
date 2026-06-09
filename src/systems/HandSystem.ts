@@ -618,6 +618,23 @@ export class HandSystem {
         const shielded = c.addShield(4 + bonus)
         return `방패 +${shielded}`
       }
+      case 'candle-tome': {
+        const enemyCount = HandSystem.countFieldEnemies(gs)
+        const shielded = c.addShield(enemyCount + bonus)
+        return `필드 적 ${enemyCount}마리 → 방패 +${shielded}`
+      }
+      case 'sword-and-shield': {
+        const dmg = HandSystem.damageTargetEnemy(gs, target, 1 + bonus)
+        const shielded = c.addShield(1 + bonus)
+        return `${dmg} · 방패 +${shielded}`
+      }
+      case 'watering-can': {
+        if (!target || target.card.type !== CardType.FLOWER) return '꽃 대상 없음'
+        const grew = target.card.growFlowerValueOnly(1 + bonus)
+        return grew ? `${target.card.name} 성장 → 수확값 +${1 + bonus}` : '씨앗은 성장 불가'
+      }
+      case 'garden-scissors':
+        return HandSystem.applyGardenScissorsSingle(gs, target)
     }
   }
 
@@ -734,6 +751,24 @@ export class HandSystem {
         const healed = c.heal(5 + bonus)
         return `방패 +${shielded} · 체력 +${healed}`
       }
+      case 'candle-tome': {
+        HandSystem.damageEnemies(gs, 'field', 1 + bonus)
+        const enemyCount = HandSystem.countFieldEnemies(gs)
+        const shielded = c.addShield(enemyCount * 3 + bonus)
+        return `트리플 전체 피해 ${1 + bonus} · 필드 적 ${enemyCount}마리 → 방패 +${shielded}`
+      }
+      case 'sword-and-shield': {
+        const dmg = HandSystem.damageTargetEnemy(gs, target, 4 + bonus)
+        const shielded = c.addShield(4 + bonus)
+        return `트리플 ${dmg} · 방패 +${shielded}`
+      }
+      case 'watering-can': {
+        if (!target || target.card.type !== CardType.FLOWER) return '꽃 대상 없음'
+        const grew = target.card.growFlowerValueOnly(4 + bonus)
+        return grew ? `트리플 ${target.card.name} 성장 → 수확값 +${4 + bonus}` : '씨앗은 성장 불가'
+      }
+      case 'garden-scissors':
+        return HandSystem.applyGardenScissorsAll(gs)
     }
   }
 
@@ -830,6 +865,12 @@ export class HandSystem {
     if (rule.filter === 'turn-timer') return HandSystem.isTurnTimerCard(target.card)
     if (rule.filter === 'hazard')
       return target.card.type === CardType.TRAP || target.card.isFrozen()
+    if (rule.filter === 'flower')
+      return target.card.type === CardType.FLOWER && target.card.flowerKind !== 'seed'
+    if (rule.filter === 'flower-or-monsterflower') {
+      if (target.card.type === CardType.FLOWER) return true
+      return target.card.type === CardType.ENEMY && target.card.specialEnemyKind === 'monsterFlower'
+    }
     if (rule.filter === 'any') return true
     return false
   }
@@ -1306,5 +1347,50 @@ export class HandSystem {
       if (!after.has(id)) removedFieldCards.push({ cardId: id, type })
     }
     return { removedFieldCards, targetKilled: !after.has(target.card.id) }
+  }
+
+  /** 정원 가위 단일: 꽃은 ActionSystem.takeFlower와 동일하게 처리하고, 괴물꽃은 즉사시킨다.
+   *  단순히 보상을 계산하지 않고 index.ts가 실제 보상 처리를 담당하도록 제거만 수행한다. */
+  static applyGardenScissorsSingle(
+    gs: GameState,
+    target: HandTarget | undefined
+  ): string {
+    if (!target) return '대상 없음'
+    const card = target.card
+    if (card.type === CardType.FLOWER && card.flowerKind !== 'seed') {
+      gs.removeCardFromRow(card, target.distance)
+      return `${card.name} 즉시 수확`
+    }
+    if (card.type === CardType.ENEMY && card.specialEnemyKind === 'monsterFlower') {
+      gs.removeCardFromRow(card, target.distance)
+      return `${card.name} 즉사`
+    }
+    return '꽃이나 괴물꽃 대상 필요'
+  }
+
+  /** 정원 가위 트리플: 필드 전체 꽃을 수확하고 괴물꽃을 즉사시킨다.
+   *  수확 보상(불빛/체력 등)은 index.ts가 removedFieldCards를 확인해 처리한다. */
+  static applyGardenScissorsAll(gs: GameState): string {
+    const seen = new Set<Card>()
+    let harvested = 0
+    let killed = 0
+    for (const lane of gs.lanes) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = lane.getCardAtDistance(d)
+        if (!card || seen.has(card)) continue
+        seen.add(card)
+        if (card.type === CardType.FLOWER && card.flowerKind !== 'seed') {
+          gs.removeCardFromRow(card, d)
+          harvested++
+        } else if (card.type === CardType.ENEMY && card.specialEnemyKind === 'monsterFlower') {
+          gs.removeCardFromRow(card, d)
+          killed++
+        }
+      }
+    }
+    const parts: string[] = []
+    if (harvested > 0) parts.push(`꽃 ${harvested}장 수확`)
+    if (killed > 0) parts.push(`괴물꽃 ${killed}체 즉사`)
+    return parts.length > 0 ? parts.join(' · ') : '대상 없음'
   }
 }

@@ -442,6 +442,67 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: false,
   },
+  // 양초의 서: 필드 적 수만큼 방패를 얻는 마법사 카드. 트리플은 먼저 전체 피해 후 방패 3배.
+  'candle-tome': {
+    id: 'candle-tome',
+    name: '양초의 서',
+    category: 'recovery',
+    description: '필드 적 수만큼 방패 획득',
+    tripleDescription: '필드 전체 적 피해 1 · 적 수×3 방패 획득',
+    targeting: { base: selfOne, triple: selfOne },
+    dropWeight: 5,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
+  // 검과 방패: 전방 적을 공격하고 방패도 동시에 얻는 기사 카드. 기사도 유물과 연계된다.
+  'sword-and-shield': {
+    id: 'sword-and-shield',
+    name: '검과 방패',
+    category: 'attack',
+    description: '전방 선택 적 1장 피해 1 · 방패 +1',
+    tripleDescription: '전방 선택 적 1장 피해 4 · 방패 +4',
+    targeting: {
+      base: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
+      triple: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
+    },
+    dropWeight: 8,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
+  // 물뿌리개: 꽃의 value만 성장시키며 flowerTurnsAlive는 그대로라 시들 확률이 오르지 않는다.
+  'watering-can': {
+    id: 'watering-can',
+    name: '물뿌리개',
+    category: 'tool',
+    description: '꽃 1턴 성장 (시들지 않음)',
+    tripleDescription: '꽃 4턴 성장 (시들지 않음)',
+    targeting: {
+      base: { selection: 'target', zone: 'field', filter: 'flower', countLimit: 1 },
+      triple: { selection: 'target', zone: 'field', filter: 'flower', countLimit: 1 },
+    },
+    dropWeight: 5,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
+  // 정원 가위: 꽃은 즉시 수확, 괴물꽃(일반 적 특수종)은 즉사. 트리플은 필드 전체 일괄 처리.
+  'garden-scissors': {
+    id: 'garden-scissors',
+    name: '정원 가위',
+    category: 'tool',
+    description: '전방 꽃 즉시 수확 · 전방 괴물꽃 즉사',
+    tripleDescription: '필드 전체 꽃 수확 · 필드 전체 괴물꽃 즉사',
+    targeting: {
+      base: { selection: 'target', zone: 'front', filter: 'flower-or-monsterflower', countLimit: 1 },
+      triple: { selection: 'none', zone: 'field', filter: 'none', countLimit: null },
+    },
+    dropWeight: 4,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
 }
 
 export const HAND_CARD_IDS: HandCardId[] = Object.keys(HAND_CARD_DEFINITIONS) as HandCardId[]

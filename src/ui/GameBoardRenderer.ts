@@ -1061,10 +1061,14 @@ export class GameBoardRenderer {
 
   /** 유물 효과 본문에서 '불빛'→✦ 치환 + {{spawn}} 토큰을 현 시점 실제 확률 변화량으로 치환한다.
    *  def.spawnEffect가 있을 때만 {{spawn}} 토큰이 등장하므로 일반 유물에는 영향 없다. */
-  private relicEffectHtml(effect: string, spawnEffect?: { type: 'enemy' | 'treasure'; delta: number }, ctx?: SpawnWeightContext): string {
+  private relicEffectHtml(effect: string, spawnEffect?: { type: 'enemy' | 'treasure' | 'spore' | 'flower'; delta: number }, ctx?: SpawnWeightContext): string {
     let text = escapeHtml(effect).replace(/불빛/g, '✦')
     if (spawnEffect && ctx && ctx.total > 0) {
-      const current = spawnEffect.type === 'enemy' ? ctx.enemy : ctx.treasure
+      // spore는 trap 가중치를 기준으로 변화량을 계산하고, flower는 flower 가중치를 사용한다.
+      const current = spawnEffect.type === 'enemy' ? ctx.enemy
+        : spawnEffect.type === 'treasure' ? ctx.treasure
+        : spawnEffect.type === 'flower' ? ctx.flower
+        : ctx.trap
       const newVal = Math.max(0, current + spawnEffect.delta)
       const newTotal = Math.max(1, ctx.total + spawnEffect.delta)
       const pctChange = Math.round((newVal / newTotal - current / ctx.total) * 100)

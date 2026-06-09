@@ -48,6 +48,10 @@ export interface ActionResult {
   /** Final-ascent 별빛만 일반 행동 대신 90~100F 턴 진행을 허용한다. */
   starlightCollected?: boolean
   cardRemoved: boolean
+  /** 함정의 대가: true이면 함정 피해가 완전 무효화되었다. */
+  trapIgnored?: boolean
+  /** 달콤한 유혹 불빛 계산용: 방패 흡수 전 실제 함정 피해 기준값. */
+  trapPenalty?: number
 }
 
 export class ActionSystem {
@@ -150,7 +154,18 @@ export class ActionSystem {
     if (card.type !== CardType.TRAP) {
       return { success: false, message: 'Not a trap', cardRemoved: false }
     }
-    const penalty = card.getTrapDamagePenalty()
+    // 함정의 대가: 15% 확률로 함정 피해 완전 무효.
+    if (character.trapIgnoreChance > 0 && Math.random() < character.trapIgnoreChance) {
+      return {
+        success: true,
+        message: `${card.name} 무효 (함정의 대가)`,
+        damageTaken: 0,
+        cardRemoved: true,
+        trapIgnored: true,
+        trapPenalty: 0,
+      }
+    }
+    const penalty = card.getTrapDamagePenalty() + character.trapDamageBonus
     const actualDamage = character.takeDamage(penalty)
     const message =
       card.trapKind === 'bomb'
@@ -161,6 +176,7 @@ export class ActionSystem {
       message,
       damageTaken: actualDamage,
       cardRemoved: true,
+      trapPenalty: penalty,
     }
   }
 
