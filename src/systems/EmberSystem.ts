@@ -35,27 +35,18 @@ export interface EnemyStatBonus {
   atk: number
 }
 
-// 가중치를 10배 단위로 관리해 유물·직업 보정(±50 단위)이 쉽게 하한에
-// 닿지 않도록 여유를 확보한다. 비율은 이전과 동일하게 유지된다.
+// 티어 압박은 보물을 깎는 대신 적·함정 가중치를 올리는 방식으로 표현한다.
+// 보물은 extinguished에서도 0에 닿지 않는 최소 가중치를 유지하며,
+// 이후 CardSpawner에서 Math.max(1, ...)로 추가 보장한다.
 const SPAWN_BUCKETS: Record<EmberTier, SpawnBuckets> = {
-  bright:      { enemy: 440, webTrap: 170, bombTrap: 40, sporeTrap: 40, treasure: 220, flower: 90 },
-  dim:         { enemy: 600, webTrap: 120, bombTrap: 40, sporeTrap: 40, treasure: 130, flower: 70 },
-  flickering: {
-    enemy: 740,
-    webTrap: 350 / 3,
-    bombTrap: 110 / 3,
-    sporeTrap: 110 / 3,
-    treasure: 30,
-    flower: 40,
-  },
-  extinguished: {
-    enemy: 800,
-    webTrap: 340 / 3,
-    bombTrap: 100 / 3,
-    sporeTrap: 100 / 3,
-    treasure: 0,
-    flower: 20,
-  },
+  // bright: 탐색·전투 균형. 기준점.
+  bright:      { enemy: 44, webTrap: 17, bombTrap: 4, sporeTrap: 4, treasure: 22, flower: 9 },
+  // dim: 적이 증가하기 시작, 보물은 소폭 감소.
+  dim:         { enemy: 60, webTrap: 12, bombTrap: 4, sporeTrap: 4, treasure: 13, flower: 7 },
+  // flickering: 적·함정 대폭 증가, 보물은 희박하지만 유지.
+  flickering:  { enemy: 78, webTrap: 14, bombTrap: 4, sporeTrap: 4, treasure: 8, flower: 3 },
+  // extinguished: 최대 압박, 보물 최소치 보존(5).
+  extinguished:{ enemy: 86, webTrap: 16, bombTrap: 5, sporeTrap: 5, treasure: 5, flower: 1 },
 }
 
 // 불씨 티어는 더 이상 적 HP를 올리지 않는다(불씨 회복 시 1체력 적이 죽는 문제 방지).

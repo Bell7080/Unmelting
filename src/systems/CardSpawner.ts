@@ -429,7 +429,8 @@ export class CardSpawner {
     const sporeTrap = options.openingBoard || sporeCooling ? 0 : buckets.sporeTrap
     const flower = options.openingBoard ? 0 : Math.max(0, buckets.flower + this.jobSpawnAdjust.flower)
     // 시련 '가난'은 보물상자 가중치를 25% 깎는다. 유물/직업 보정도 여기서 합산한다.
-    const treasure = Math.max(0, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + this.jobSpawnAdjust.treasure)
+    // 최소 1을 보장해 유물·시련 조합으로 보물이 완전히 사라지지 않도록 한다.
+    const treasure = Math.max(1, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + this.jobSpawnAdjust.treasure)
     const total = enemyWeight + webTrap + bombTrap + sporeTrap + treasure + flower
     const roll = Math.random() * total
 
@@ -683,7 +684,7 @@ export class CardSpawner {
     const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
     const enemy = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy + this.jobSpawnAdjust.enemy)
     const trap = Math.max(0, buckets.webTrap + this.jobSpawnAdjust.trap) + buckets.bombTrap + buckets.sporeTrap
-    const treasure = Math.max(0, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + this.jobSpawnAdjust.treasure)
+    const treasure = Math.max(1, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + this.jobSpawnAdjust.treasure)
     const flower = Math.max(0, buckets.flower + this.jobSpawnAdjust.flower)
     const total = enemy + trap + treasure + flower
     return { enemy, trap, treasure, flower, total }
