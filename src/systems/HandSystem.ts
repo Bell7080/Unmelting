@@ -329,8 +329,12 @@ export class HandSystem {
     }
     // Recipe hints intentionally mirror physical ingredient rules, not gauge
     // progress: one `카드` preview must not promise `셔플`.
+    // Guard: only highlight when THIS card is what completes the recipe.
+    // Without this, a recipe satisfied by chain.sequence (but not yet fired)
+    // would light up every card in hand until firedRecipeIds catches up.
     return HandSystem.activeRecipes(gs).filter((recipe) => {
       if (preview.firedRecipeIds.has(recipe.id)) return false
+      if (HandSystem.recipeMatches(recipe, chain)) return false
       return HandSystem.recipeMatches(recipe, preview)
     })
   }

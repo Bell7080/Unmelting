@@ -847,6 +847,10 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   filter: drop-shadow(0 0 6px rgba(255, 215, 120, 0.9));
   font-weight: 900;
 }
+.chain-event-mark--sparkle .icon {
+  width: 1em; height: 1em;
+  vertical-align: -0.12em;
+}
 .chain-event-copy { display: inline-grid; gap: 2px; justify-items: center; }
 .chain-event-name { font-weight: 800; }
 .chain-event-flavor { font-size: clamp(12px, 1.05vw, 14px); color: rgba(255, 245, 220, 0.78); letter-spacing: 0.02em; }
@@ -1068,4 +1072,11 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
     animation-name: recipe-preview-low-slide;
   }
 }
+
+/* 손패 등급별 테두리 + 은은한 발광 — is-recipe-ready/is-merged 등 강조 상태와 겹쳐도
+   자연스럽게 보이도록 box-shadow 합성으로 처리한다. */
+.hand-slot.hand-card.rarity-rare     { border-color: rgba(80, 152, 255, 0.38); box-shadow: 0 0 10px rgba(80, 152, 255, 0.16), inset 0 0 8px rgba(80, 152, 255, 0.08); }
+.hand-slot.hand-card.rarity-epic     { border-color: rgba(161, 108, 255, 0.42); box-shadow: 0 0 12px rgba(161, 108, 255, 0.18), inset 0 0 8px rgba(161, 108, 255, 0.09); }
+.hand-slot.hand-card.rarity-unique   { border-color: rgba(242, 212, 92, 0.46); box-shadow: 0 0 14px rgba(242, 212, 92, 0.22), inset 0 0 9px rgba(242, 212, 92, 0.1); }
+.hand-slot.hand-card.rarity-legendary { border-color: rgba(220, 78, 78, 0.46); box-shadow: 0 0 14px rgba(220, 78, 78, 0.22), inset 0 0 9px rgba(220, 78, 78, 0.1); }
 `

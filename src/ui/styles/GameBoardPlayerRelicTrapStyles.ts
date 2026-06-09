@@ -276,12 +276,19 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
   overflow: hidden;
   pointer-events: none;
   border-radius: 14px;
-  border: 1px solid rgba(255, 215, 120, 0.42);
+  /* 기본 테두리는 중립 톤 — 등급별 glow가 덮어쓴다. */
+  border: 1px solid rgba(90, 80, 70, 0.35);
   background: linear-gradient(180deg, rgba(45, 30, 39, 0.96), rgba(18, 12, 24, 0.96));
   box-shadow:
     0 10px 18px rgba(0, 0, 0, 0.5),
     inset 0 1px 0 rgba(255, 232, 168, 0.18);
 }
+/* 등급별 테두리 + 발광 */
+.relic-mini-card.rarity-common   .relic-preview-card { border-color: rgba(116, 124, 136, 0.45); box-shadow: 0 10px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,232,168,0.18); }
+.relic-mini-card.rarity-rare     .relic-preview-card { border-color: rgba(80, 152, 255, 0.52); box-shadow: 0 10px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,232,168,0.18), 0 0 14px rgba(80,152,255,0.22); }
+.relic-mini-card.rarity-epic     .relic-preview-card { border-color: rgba(161, 108, 255, 0.56); box-shadow: 0 10px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,232,168,0.18), 0 0 16px rgba(161,108,255,0.26); }
+.relic-mini-card.rarity-unique   .relic-preview-card { border-color: rgba(242, 212, 92, 0.62); box-shadow: 0 10px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,232,168,0.18), 0 0 18px rgba(242,212,92,0.32); }
+.relic-mini-card.rarity-legendary .relic-preview-card { border-color: rgba(220, 78, 78, 0.62); box-shadow: 0 10px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,232,168,0.18), 0 0 20px rgba(220,78,78,0.34); }
 .relic-mini-card .shop-relic-art {
   border-radius: 14px 14px 0 0;
 }
@@ -448,6 +455,7 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
 }
 .spore-badge { border-color: rgba(147, 209, 118, 0.7); color: rgba(220, 255, 190, 0.95); }
 .bomb-badge { border-color: rgba(255, 92, 72, 0.72); color: rgba(255, 214, 190, 0.98); }
+.flower-growth-badge { border-color: transparent; background: transparent; box-shadow: none; color: rgba(255, 220, 160, 0.95); text-shadow: 0 1px 3px rgba(0,0,0,0.92), 0 0 9px currentColor; animation: trap-turn-label-glimmer 1.9s ease-in-out infinite; }
 
 /* Spore traps get a quiet moss-tinted overlay so their breeding state reads
    at a glance, similar to how 굳음 marks waxed cards but without competing

@@ -195,31 +195,43 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
 .codex-tile-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  justify-content: center;
   min-width: 0;
 }
 .codex-tile-name {
   font-size: 13px;
   font-weight: 900;
   color: #fff5dc;
-  letter-spacing: 0.02em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.78);
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 8px rgba(244, 164, 96, 0.18);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 태그 컨테이너: 일러스트 좌상단에 세로 스택 */
+.codex-tile-tags {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 2;
+}
 .codex-tile-tag {
-  flex-shrink: 0;
-  font-size: 10px;
+  display: inline-block;
+  font-size: 9px;
   font-weight: 800;
-  letter-spacing: 0.08em;
-  padding: 2px 7px;
-  border-radius: 999px;
-  color: var(--color-flame);
-  background: rgba(0, 0, 0, 0.32);
-  border: 1px solid rgba(244, 164, 96, 0.42);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.78);
+  letter-spacing: 0.07em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: rgba(255, 225, 140, 0.96);
+  background: rgba(8, 4, 16, 0.72);
+  border: 1px solid rgba(244, 164, 96, 0.38);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(2px);
+  line-height: 1.4;
 }
 .codex-tile-stats {
   display: flex;

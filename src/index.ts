@@ -60,7 +60,7 @@ import { buildUnlockedEnhancePool } from '@systems/EnhancePackPool'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
-import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, spriteForUpgradePackItem } from '@ui/Sprites'
+import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, spriteForUpgradePackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
 import { BgmManager } from '@/audio/BgmManager'
 import bgm001Url from './assets/audio/bgm_001.mp3'
@@ -1097,8 +1097,8 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
     await playPlayerGainTrails({ kind: 'center' }, beforeResources)
   }
   if (id === 'pickaxe') {
-    // 보물 스폰 가중치 +50 (10배 단위 기준).
-    cardSpawner.adjustRelicSpawn('treasure', 50)
+    // 보물 스폰 가중치 +5.
+    cardSpawner.adjustRelicSpawn('treasure', 5)
   }
   if (id === 'axe') {
     // 불빛 획득량 +10% (글로벌 scoreMultiplier에 누적).
@@ -1106,19 +1106,19 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
   }
   if (id === 'annabella-pendant') {
     const beforeResources = snapshotPlayerResources()
-    // 공격력 +2 + 적 스폰 HP +3 + 적 스폰 가중치 +50 (10배 단위 기준).
+    // 공격력 +2 + 적 스폰 HP +3 + 적 스폰 가중치 +5.
     gameState.character.applyDamageBoost(2)
-    cardSpawner.adjustRelicSpawn('enemy', 50)
+    cardSpawner.adjustRelicSpawn('enemy', 5)
     cardSpawner.adjustRelicEnemyHpBonus(3)
     await playPlayerGainTrails({ kind: 'center' }, beforeResources)
   }
   if (id === 'padlock') {
-    // 보물 스폰 가중치 -50 (10배 단위 기준).
-    cardSpawner.adjustRelicSpawn('treasure', -50)
+    // 보물 스폰 가중치 -5.
+    cardSpawner.adjustRelicSpawn('treasure', -5)
   }
   if (id === 'charred-paper') {
-    // 적 스폰 가중치 -50 (10배 단위 기준).
-    cardSpawner.adjustRelicSpawn('enemy', -50)
+    // 적 스폰 가중치 -5.
+    cardSpawner.adjustRelicSpawn('enemy', -5)
   }
   if (id === 'golden-key') {
     // 보물 스폰 중 10% 확률로 황금 상자로 대체한다.
@@ -1251,6 +1251,16 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
   return false
 }
 
+/** 레시피 재료를 "양초 + 불씨" / "성냥 ×2" 형식의 한 줄 문자열로 변환한다. */
+function buildRecipeNote(ingredients: Partial<Record<HandCardId, number>>): string {
+  return Object.entries(ingredients)
+    .filter(([, n]) => n && n > 0)
+    .map(([id, n]) => n === 1
+      ? getHandCardDef(id as HandCardId).name
+      : `${getHandCardDef(id as HandCardId).name} ×${n}`)
+    .join(' + ')
+}
+
 /** Build the random "3-card" contents for a pack the player just bought.
  *  Each entry carries an `apply` closure so the pick handler stays small. */
 function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
@@ -1318,6 +1328,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     return sampleWeightedWithoutReplacement(entries, Math.min(3, entries.length)).map((entry) => ({
       ...entry,
       spriteUrl: spriteForHandCard(entry.targetCardId),
+      typeLabel: '단일',
       apply: () => {
         const id = entry.targetCardId
         gameState.enhancements.singleBonus[id] = (gameState.enhancements.singleBonus[id] ?? 0) + 1
@@ -1336,7 +1347,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
       Object.keys(r.ingredients).every((id) => unlocked.includes(id as HandCardId))
     )
 
-    type UnlockItem = { id: string; theme: 'unlock'; title: string; effect: string; rarity: (typeof HAND_CARD_RARITY)[keyof typeof HAND_CARD_RARITY]; spriteUrl: string; apply: () => void }
+    type UnlockItem = { id: string; theme: 'unlock'; title: string; effect: string; rarity: (typeof HAND_CARD_RARITY)[keyof typeof HAND_CARD_RARITY]; spriteUrl: string; typeLabel: string; recipeNote?: string; apply: () => void }
     const pool: UnlockItem[] = [
       ...cardPool.map((id) => {
         const def = getHandCardDef(id)
@@ -1348,6 +1359,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
           effect: isBanned ? `[재해금] ${def.description}` : def.description,
           rarity: HAND_CARD_RARITY[id],
           spriteUrl: spriteForHandCard(id),
+          typeLabel: '손패',
           apply: () => {
             if (isBanned) runCardPool.unban(id)
             else runCardPool.unlockForRun(id)
@@ -1355,15 +1367,15 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
         }
       }),
       ...lockedRecipes.map((r) => {
-        // 레시피 해금 아이템 — 일러스트는 첫 재료 카드 아트 재사용
-        const firstIngredientId = Object.keys(r.ingredients)[0] as HandCardId
         return {
           id: `unlock-recipe-${r.id}`,
           theme: 'unlock' as const,
           title: r.name,
-          effect: `[조합식 해금] ${r.flavor}`,
-          rarity: HAND_CARD_RARITY[firstIngredientId] ?? 'rare',
-          spriteUrl: spriteForHandCard(firstIngredientId),
+          effect: r.flavor,
+          rarity: 'rare' as const,
+          spriteUrl: recipeSprite001 ?? SpriteUrls.packs['unlock-pack'],
+          typeLabel: '레시피',
+          recipeNote: buildRecipeNote(r.ingredients),
           apply: () => { gameState.unlockedRecipeIds.add(r.id) },
         }
       }),
@@ -1385,6 +1397,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
         effect: `앞으로 ${def.name} 등장 금지`,
         rarity: HAND_CARD_RARITY[id],
         spriteUrl: spriteForHandCard(id),
+        typeLabel: '삭제',
         apply: () => { runCardPool.ban(id) },
       }
     })
@@ -1394,6 +1407,12 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
   const pool = buildUnlockedUpgradePool(runCardPool.snapshot().unlocked, gameState.unlockedRecipeIds).map((entry) => ({
     ...entry,
     spriteUrl: spriteForUpgradePackItem(entry.id),
+    typeLabel: entry.id.startsWith('triple-') ? '트리플' : '레시피',
+    recipeNote: (() => {
+      if (entry.id.startsWith('triple-')) return undefined
+      const r = RECIPES.find((rc) => rc.id === entry.id.slice('recipe-'.length))
+      return r ? buildRecipeNote(r.ingredients) : undefined
+    })(),
     apply: () => {
       switch (entry.id) {
         // 강화팩 common — 트리플 보너스
@@ -1470,7 +1489,7 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
     packKind: kind,
     title,
     // spriteUrl 포함: enhance/unlock/delete 팩은 카드별 일러스트가 있어야 식별 가능하다.
-    items: items.map(({ id, title, effect, theme, rarity, spriteUrl }) => ({ id, title, effect, theme, rarity, spriteUrl })),
+    items: items.map(({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote }) => ({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote })),
   }
   boardRenderer.openPackPicker(view)
 }
@@ -2277,7 +2296,9 @@ function render(): void {
     coinPulseKey,
     emberTier: tier,
     spawnWeights: cardSpawner.getActiveWeights(),
-    spawnWeightContext: cardSpawner.getEffectiveWeights(),
+    // {{spawn}} 토큰 치환용 컨텍스트는 bright 기준 고정값을 사용한다.
+    // 불씨 티어가 변해도 유물·시련 설명의 확률 표기가 흔들리지 않도록 하기 위함이다.
+    spawnWeightContext: cardSpawner.getEffectiveWeightsForDisplay(),
     spawnPercents: cardSpawner.getEffectiveSpawnPercents(),
     emberDecayCountdown: gameState.character.emberDecayCountdown,
     vignetteIntensity: EmberSystem.getVignetteIntensity(tier),
@@ -2557,7 +2578,7 @@ function fireCandleGaugeEffect(): {
   }
   // Spend only one full gauge so combo-count overflow starts filling the next one.
   character.consumeFullCandleGauge()
-  return { name: `게이지: ${candleModeLabel(mode)}`, message, mode }
+  return { name: `콤보 : ${candleModeLabel(mode)}`, message, mode }
 }
 
 /** Resolve every full hand-combo gauge from any source that can add candle

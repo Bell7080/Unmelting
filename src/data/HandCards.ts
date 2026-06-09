@@ -6,7 +6,7 @@
  * remains centralized and testable.
  */
 
-import { HandCardDefinition, HandCardId, HandEffectTargeting } from '@entities/HandCard'
+import { HandCardDefinition, HandCardId, HandEffectTargeting, JobTag } from '@entities/HandCard'
 // dropSource가 'treasure'인 카드는 보물상자 전용 보너스 풀에만 섞인다.
 // 이후 시트에서 등장 조건/해금 조건을 지정하면 이 파일에서만 수치를 수정하면 된다.
 
@@ -221,6 +221,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropSource: 'any',
     metaRequired: false,
     runLocked: false,
+    jobTags: ['knight', 'mage'] satisfies ReadonlyArray<JobTag>,
   },
   // 폭죽: 필드의 적들에게 총 피해를 무작위로 쪼개 분배한다(대상 지정 없음).
   firework: {
@@ -237,6 +238,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropSource: 'any',
     metaRequired: false,
     runLocked: false,
+    jobTags: ['mage'] satisfies ReadonlyArray<JobTag>,
   },
   // 화염의 서: 쓸수록 영구히 강해지는 누적 공격(n). 단일 +1, 트리플 +3씩 영구 증가.
   // 설명의 피해 수치는 GameBoardRenderer.enhancedHandCardDescription이 bookOfFlamesBonus를 읽어 동적 표시한다.
@@ -254,6 +256,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropSource: 'any',
     metaRequired: false,
     runLocked: false,
+    jobTags: ['mage'] satisfies ReadonlyArray<JobTag>,
   },
   // 불화살: 전방 단일 적에게 무작위 피해. 트리플은 최대 피해 폭이 크게 늘어난다.
   'fire-arrow': {
@@ -270,6 +273,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropSource: 'any',
     metaRequired: false,
     runLocked: false,
+    jobTags: ['mage'] satisfies ReadonlyArray<JobTag>,
   },
   // 방패 밀치기: 현재 방패 수치를 그대로 피해로 전환한다. 트리플은 방패를 먼저 얻은 뒤 3배로 때린다.
   'shield-bash': {
@@ -286,6 +290,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropSource: 'any',
     metaRequired: false,
     runLocked: false,
+    jobTags: ['knight'] satisfies ReadonlyArray<JobTag>,
   },
   // 희생 방패: 자해를 대가로 방패를 얻는다. 트리플은 자해가 늘지만 방패 효율이 훨씬 높다.
   'sacrifice-shield': {
@@ -299,6 +304,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropSource: 'any',
     metaRequired: false,
     runLocked: false,
+    jobTags: ['knight'] satisfies ReadonlyArray<JobTag>,
   },
   // 청소: 필드의 1칸 거미줄만 대상으로 제거한다. 2·3칸 거미줄에는 효과 없음.
   // 단일 사용 시 불빛 없이 제거, 트리플은 제거한 거미줄 수만큼 불빛을 획득한다.
@@ -322,8 +328,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'hand-mirror',
     name: '손거울',
     category: 'attack',
-    description: '전방 선택 적 1장 공격력만큼 피해',
-    tripleDescription: '전방 선택 적 1장 공격력만큼 피해 · 이전 손패 복제',
+    description: '전방 선택 적 1장: 그 적의 공격력만큼 피해',
+    tripleDescription: '전방 선택 적 1장: 그 적의 공격력만큼 피해 · 이전 손패 복제',
     targeting: {
       base: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
@@ -349,6 +355,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropSource: 'any',
     metaRequired: false,
     runLocked: true,
+    jobTags: ['mage'] satisfies ReadonlyArray<JobTag>,
   },
   // 모닥불: 선택 적을 공격하고 처치 시 체력을 회복한다.
   bonfire: {
@@ -428,6 +435,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropSource: 'any',
     metaRequired: false,
     runLocked: false,
+    jobTags: ['knight'] satisfies ReadonlyArray<JobTag>,
   },
   // 족쇄: 방패를 얻고 즉시 1턴 흐름을 실행한다(레바테인 simulatedBattlePhases 방식 재사용).
   shackles: {

@@ -35,27 +35,17 @@ export interface EnemyStatBonus {
   atk: number
 }
 
-// 가중치를 10배 단위로 관리해 유물·직업 보정(±50 단위)이 쉽게 하한에
-// 닿지 않도록 여유를 확보한다. 비율은 이전과 동일하게 유지된다.
+// 티어 압박은 적·함정 가중치만 올리고, 보물·꽃은 bright 값 그대로 고정한다.
+// bright 기준 enemy·webTrap이 티어마다 +8씩 누적 상승 (extinguished에서 총 +24).
 const SPAWN_BUCKETS: Record<EmberTier, SpawnBuckets> = {
-  bright:      { enemy: 440, webTrap: 170, bombTrap: 40, sporeTrap: 40, treasure: 220, flower: 90 },
-  dim:         { enemy: 600, webTrap: 120, bombTrap: 40, sporeTrap: 40, treasure: 130, flower: 70 },
-  flickering: {
-    enemy: 740,
-    webTrap: 350 / 3,
-    bombTrap: 110 / 3,
-    sporeTrap: 110 / 3,
-    treasure: 30,
-    flower: 40,
-  },
-  extinguished: {
-    enemy: 800,
-    webTrap: 340 / 3,
-    bombTrap: 100 / 3,
-    sporeTrap: 100 / 3,
-    treasure: 0,
-    flower: 20,
-  },
+  // bright: 총합 100
+  bright:      { enemy: 44, webTrap: 17, bombTrap: 4, sporeTrap: 4, treasure: 22, flower: 9 },
+  // dim: enemy+16, web+6, bomb+1, spore+1 → 총합 124
+  dim:         { enemy: 60, webTrap: 23, bombTrap: 5, sporeTrap: 5, treasure: 22, flower: 9 },
+  // flickering: enemy+16, web+6, bomb+1, spore+1 누적 → 총합 148
+  flickering:  { enemy: 76, webTrap: 29, bombTrap: 6, sporeTrap: 6, treasure: 22, flower: 9 },
+  // extinguished: enemy+16, web+6, bomb+1, spore+1 누적 → 총합 172
+  extinguished:{ enemy: 92, webTrap: 35, bombTrap: 7, sporeTrap: 7, treasure: 22, flower: 9 },
 }
 
 // 불씨 티어는 더 이상 적 HP를 올리지 않는다(불씨 회복 시 1체력 적이 죽는 문제 방지).

@@ -96,6 +96,10 @@ export interface ShopPackItemView {
   rarity: CardRarity
   /** 카드별 개별 일러스트 URL. 없으면 팩 커버 이미지를 fallback으로 사용한다. */
   spriteUrl?: string
+  /** 카드 상단 타입 배지 (트리플/레시피/손패/단일/삭제 등). */
+  typeLabel?: string
+  /** 레시피 재료 n+n 표기. 레시피 관련 아이템에만 설정한다. */
+  recipeNote?: string
 }
 export interface ShopPackPickerView {
   packKind: ShopPackKind
@@ -808,14 +812,8 @@ export class GameBoardRenderer {
         </div>
       `
     } else if (card.type === CardType.FLOWER) {
-      // Flower cells expose their current harvest value. Seeds show a waiting
-      // label because they cannot be picked until the front-row bloom beat.
-      const label =
-        card.flowerKind === 'seed'
-          ? '대기'
-          : card.flowerKind === 'marigold' && card.flowerTurnsAlive % 2 === 1
-            ? `다음 +${card.flowerValue + 1}`
-            : `+${card.flowerValue}`
+      // Seeds wait to bloom; all grown flowers show current harvest value.
+      const label = card.flowerKind === 'seed' ? '대기' : `+${card.flowerValue}`
       stats = `<div class="card-stats group-note flower-note">${sparkleIcon()}<span>${label}</span></div>`
     } else if (card.type === CardType.TREASURE && card.treasureKind === 'starlight') {
       // 90~100층 별빛은 손패 보상이 아닌 턴 열쇠임을 카드 자체에서 즉시 읽히게 한다.
@@ -849,6 +847,10 @@ export class GameBoardRenderer {
         : card.type === CardType.TRAP && card.trapKind === 'spore'
           ? `<div class="frozen-badge spore-badge">번식 ${card.sporeTurnsUntilSpread}턴</div>`
           : ''
+    // 꽃 성장 뱃지: 씨앗 제외, 다음 성장까지 남은 턴수를 포자 배지와 동일 방식으로 표시한다.
+    const flowerGrowthBadge = card.type === CardType.FLOWER && card.flowerKind !== 'seed'
+      ? `<div class="frozen-badge flower-growth-badge">성장 ${card.flowerKind === 'marigold' && card.flowerTurnsAlive % 2 === 1 ? 1 : card.flowerKind === 'marigold' ? 2 : 1}턴</div>`
+      : ''
 
     // 보스 보상 카드는 3-wide span이어도 카드 자체 이름을 그대로 표시한다.
     // 함정은 합쳐질 때 Card가 도감과 동일한 이름(촛농 거미집/밀랍 거미굴, 번식 포자군/
@@ -866,6 +868,7 @@ export class GameBoardRenderer {
       ${firstStrikeBadge}
       ${frozenBadge}
       ${trapBadge}
+      ${flowerGrowthBadge}
       <div class="card-face">
         <div class="card-art" ${artStyle} aria-hidden="true"></div>
         <div class="card-overlay" aria-hidden="true"></div>
@@ -1048,7 +1051,7 @@ export class GameBoardRenderer {
     const hoverShift = Math.round(Math.max(-92, Math.min(92, -offset * 18)))
     const pinnedClass = this.pinnedRelicId === def.id ? 'is-pinned' : ''
     return `
-      <article class="relic-mini-card ${pinnedClass}"
+      <article class="relic-mini-card ${RARITY_CLASS_BY_TIER[def.rarity]} ${pinnedClass}"
                data-owned-relic="${def.id}"
                style="--relic-i:${index}; --relic-x:${spread}px; --relic-rot:${rotate}deg; --relic-y:${lift}px; --relic-hover-shift:${hoverShift}px;"
                tabindex="0"
@@ -1059,8 +1062,14 @@ export class GameBoardRenderer {
     `
   }
 
-  /** 유물 효과 본문에서 '불빛'→✦ 치환 + {{spawn}} 토큰을 현 시점 실제 확률 변화량으로 치환한다.
-   *  def.spawnEffect가 있을 때만 {{spawn}} 토큰이 등장하므로 일반 유물에는 영향 없다. */
+  /**
+   * 유물 효과 본문에서 '불빛'→✦ 치환 + {{spawn}} 토큰을 확률 변화량으로 치환한다.
+   * def.spawnEffect가 있을 때만 {{spawn}} 토큰이 등장하므로 일반 유물에는 영향 없다.
+   *
+   * ctx는 반드시 CardSpawner.getEffectiveWeightsForDisplay() 기반이어야 한다.
+   * bright 티어 버킷을 고정 베이스로 사용하므로 불씨 게이지 변동에 무관하게
+   * 직업·유물·시련 누적 보정만 반영한 안정적인 % 값이 표시된다.
+   */
   private relicEffectHtml(effect: string, spawnEffect?: { type: 'enemy' | 'treasure' | 'spore' | 'flower'; delta: number }, ctx?: SpawnWeightContext): string {
     let text = escapeHtml(effect).replace(/불빛/g, '✦')
     if (spawnEffect && ctx && ctx.total > 0) {
@@ -1165,8 +1174,11 @@ export class GameBoardRenderer {
     description: string
     extraClass?: string
     badge?: string
+    /** 다중 뱃지 — badge보다 우선 적용된다. */
+    badges?: string[]
   }): string {
-    const badgeHtml = opts.badge ? `<span class="common-card-badge">${opts.badge}</span>` : ''
+    const badgeList = opts.badges ?? (opts.badge ? [opts.badge] : [])
+    const badgeHtml = badgeList.map(b => `<span class="common-card-badge">${b}</span>`).join('')
     return `
       <article class="common-card-face ${opts.extraClass ?? ''}" style="--hand-card-art: url('${opts.artUrl}'); --hand-card-back: url('${SpriteUrls.cardBack}');">
         <div class="common-card-art" aria-hidden="true">
@@ -1211,7 +1223,10 @@ export class GameBoardRenderer {
   private codexTile(opts: {
     art: { kind: 'sprite'; url: string } | { kind: 'icon'; svg: string }
     name: string
+    /** 단일 태그. tags가 제공되면 무시된다. */
     tag?: string
+    /** 다중 태그 — 카테고리 뱃지 옆에 순서대로 표시. */
+    tags?: string[]
     rarityClass?: string
     chips?: Array<{
       label?: string
@@ -1223,11 +1238,14 @@ export class GameBoardRenderer {
     flavor?: string
     extraClass?: string
   }): string {
+    const tagList = opts.tags ?? (opts.tag ? [opts.tag] : [])
+    const tagsOverlay = tagList.length
+      ? `<div class="codex-tile-tags" aria-hidden="true">${tagList.map(t => `<span class="codex-tile-tag">${t}</span>`).join('')}</div>`
+      : ''
     const artHtml =
       opts.art.kind === 'sprite'
-        ? `<div class="codex-tile-art" style="background-image: url('${opts.art.url}');" aria-hidden="true"></div>`
-        : `<div class="codex-tile-art codex-tile-art--icon" aria-hidden="true">${opts.art.svg}</div>`
-    const tagHtml = opts.tag ? `<span class="codex-tile-tag">${opts.tag}</span>` : ''
+        ? `<div class="codex-tile-art" style="background-image: url('${opts.art.url}');" aria-hidden="true">${tagsOverlay}</div>`
+        : `<div class="codex-tile-art codex-tile-art--icon" aria-hidden="true">${opts.art.svg}${tagsOverlay}</div>`
     const chipsHtml = (opts.chips ?? [])
       .map((c) => {
         const tone = c.tone && c.tone !== 'plain' ? `is-${c.tone}` : ''
@@ -1245,7 +1263,6 @@ export class GameBoardRenderer {
         ${artHtml}
         <header class="codex-tile-head">
           <span class="codex-tile-name">${opts.name}</span>
-          ${tagHtml}
         </header>
         ${chipsRow}
         ${noteHtml}
@@ -1360,6 +1377,7 @@ export class GameBoardRenderer {
         'hand-slot',
         'hand-card',
         this.categoryClass(def.category),
+        RARITY_CLASS_BY_TIER[HAND_CARD_RARITY[card.defId] ?? 'common'],
         merged,
         isArming ? 'is-arming-target' : '',
         recipeReady ? 'is-recipe-ready' : '',
@@ -1618,24 +1636,35 @@ export class GameBoardRenderer {
         (item, i) => {
           // 개별 카드 아트가 있으면 우선 사용, 없으면 팩 커버 fallback
           const artUrl = item.spriteUrl ?? SpriteUrls.packs[view.packKind]
+          const rarityClass = RARITY_CLASS_BY_TIER[item.rarity]
+          // 타입 접미사(' 트리플',' 강화')를 제거해 이름만 표시한다.
+          const cleanTitle = item.title.replace(/ (트리플|강화)$/, '')
+          const typeBadge = item.typeLabel
+            ? `<div class="shop-pack-type-badge">[ ${item.typeLabel} ]</div>`
+            : ''
+          const recipeNoteLine = item.recipeNote
+            ? `<p class="shop-pack-recipe-note">${item.recipeNote}</p>`
+            : ''
           return `
-          <article class="shop-pack-pick-card pack-theme-${item.theme} ${RARITY_CLASS_BY_TIER[item.rarity]}"
+          <article class="shop-pack-pick-card pack-theme-${item.theme} ${rarityClass}"
                    data-pack-pick="${item.id}"
                    data-pack-kind="${view.packKind}"
                    style="--pick-i:${i}; --cardback-url:url('${SpriteUrls.cardBack}');"
                    tabindex="0"
                    aria-label="${item.title} — ${item.effect}">
-            <!-- 카드 팩 3선택도 flipper 내부 2면을 회전시켜 테두리/배경/콘텐츠가 함께 뒤집힌다. -->
             <div class="shop-pack-pick-flipper">
               <div class="shop-pack-pick-back" aria-hidden="true"></div>
               <div class="shop-pack-pick-front">
-                <div class="shop-pack-pick-art" style="background-image:url('${artUrl}');" aria-hidden="true"></div>
+                <div class="shop-pack-pick-art" style="background-image:url('${artUrl}');" aria-hidden="true">
+                  <div class="shop-pack-pick-rarity-badge ${rarityClass}">${item.rarity}</div>
+                </div>
                 <div class="shop-pack-pick-body">
                   <header class="shop-pack-pick-card-head">
-                    <span class="shop-pack-pick-card-name">${item.title}</span>
-                    <span class="shop-pack-pick-card-rarity ${RARITY_CLASS_BY_TIER[item.rarity]}">${item.rarity}</span>
+                    ${typeBadge}
+                    <span class="shop-pack-pick-card-name">${cleanTitle}</span>
                   </header>
                   <p class="shop-pack-pick-card-effect">${item.effect}</p>
+                  ${recipeNoteLine}
                 </div>
               </div>
             </div>
@@ -3532,7 +3561,10 @@ export class GameBoardRenderer {
       return this.codexTile({
         art: { kind: 'sprite', url: spriteForHandCard(def.id) },
         name: locked ? '???' : def.name,
-        tag: locked ? '잠김' : def.category === 'recovery' ? '회복' : def.category === 'tool' ? '도구' : def.category === 'control' ? '컨트롤' : '공격',
+        tags: locked ? ['잠김'] : [
+          def.category === 'recovery' ? '회복' : def.category === 'tool' ? '도구' : def.category === 'control' ? '컨트롤' : '공격',
+          ...((def.jobTags ?? []).map(t => t === 'knight' ? '기사' : '마법사')),
+        ],
         rarityClass: RARITY_CLASS_BY_TIER[HAND_CARD_RARITY[id]],
         chips: locked ? [] : [
           { label: '', value: singleDesc, tone: 'plain' },
@@ -3988,7 +4020,7 @@ export class GameBoardRenderer {
       } else if (ev.kind === 'gauge') {
         parts.push(`
           <span class="chain-event chain-event-gauge ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
-            <span class="chain-event-mark">◆</span>
+            <span class="chain-event-mark chain-event-mark--sparkle">${sparkleIcon()}</span>
             <span class="chain-event-name">${ev.name}</span>
           </span>
         `)
