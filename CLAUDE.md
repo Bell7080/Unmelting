@@ -63,6 +63,19 @@ npm run build
 - 상태 변경은 가능한 한 시스템/엔티티에 두고, 렌더러는 표시/애니메이션 책임을 유지한다.
 - 테스트용 시드, 더미 UI, 완료된 과거 실험 코드는 남기지 않는다. 발견 시 제거하거나 최종 보고에 명시한다.
 
+## 스폰 가중치 표기 메커니즘 (`{{spawn}}`)
+
+- 유물/시련 효과 문자열에서 `{{spawn}}` 토큰은 `GameBoardRenderer.relicEffectHtml()`이 실시간 ±% 수치로 치환한다.
+- 기준값은 **항상 bright 티어** 고정 (`CardSpawner.getEffectiveWeightsForDisplay()`) — 불씨 게이지 변동은 표기에 영향을 주지 않는다.
+- 영구 수정자(직업·유물·시련)만 반영: 유물 장착/시련 적용 시점에 % 표기가 갱신된다.
+- 구현 위치: `src/systems/CardSpawner.ts` → `getEffectiveWeightsForDisplay()` / `src/ui/GameBoardRenderer.ts` → `relicEffectHtml()`
+
+## 불씨 티어별 스폰 압박
+
+- 티어는 절대 ember 수치 기준(bright ≥7, dim ≥4, flickering ≥1, extinguished =0)이며 emberMax와 무관하다.
+- 티어 하강 시 **적·함정 가중치를 높이는** 방식으로 압박을 표현한다. 보물은 extinguished에서도 최소 5 유지.
+- `CardSpawner`에서 `Math.max(1, ...)` 하한 보장으로 보물이 0이 되는 상황을 추가 방지한다.
+
 ## 기획 기준
 
 - `Unmelting_Game_Concept.md`는 원형 기획서다. 구현 판단은 이 파일의 현재 구조/규칙과 실제 코드가 우선한다.

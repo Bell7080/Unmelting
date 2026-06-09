@@ -678,10 +678,32 @@ export class CardSpawner {
     return EmberSystem.getSpawnWeights(this.currentTier)
   }
 
-  /** 유물·시련·티어 보정이 모두 반영된 실제 스폰 가중치.
+  /** 유물·시련·티어 보정이 모두 반영된 실제 스폰 가중치 (현재 불씨 티어 기준).
+   *  HUD 확률 패널과 getEffectiveSpawnPercents의 데이터 소스로 사용한다.
    *  포자 쿨다운은 순간 상태라 제외하고 항상 고정 베이스 값을 사용한다. */
   getEffectiveWeights(): { enemy: number; trap: number; treasure: number; flower: number; total: number } {
     const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
+    const enemy = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy + this.jobSpawnAdjust.enemy)
+    const trap = Math.max(0, buckets.webTrap + this.jobSpawnAdjust.trap) + buckets.bombTrap + buckets.sporeTrap
+    const treasure = Math.max(1, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + this.jobSpawnAdjust.treasure)
+    const flower = Math.max(0, buckets.flower + this.jobSpawnAdjust.flower)
+    const total = enemy + trap + treasure + flower
+    return { enemy, trap, treasure, flower, total }
+  }
+
+  /**
+   * 유물 효과 텍스트({{spawn}} 토큰)의 % 치환에 사용하는 고정 기준 가중치.
+   *
+   * 불씨 티어는 제외하고 항상 bright 버킷을 베이스로 삼는다.
+   * 직업·유물·시련처럼 런 내에서 한 번 결정되면 고정되는 수치만 반영한다.
+   * 덕분에 불씨가 오르내려도 유물 설명의 확률 표기가 흔들리지 않는다.
+   *
+   * 예) 귀족 직업(보물+20) 선택 후 곡괭이(+5) 미리보기:
+   *   current = 22+20=42, newVal = 47, pctChange ≈ +3%
+   *   불씨가 dim으로 내려가도 이 값은 변하지 않는다.
+   */
+  getEffectiveWeightsForDisplay(): { enemy: number; trap: number; treasure: number; flower: number; total: number } {
+    const buckets = EmberSystem.getSpawnBuckets('bright')
     const enemy = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy + this.jobSpawnAdjust.enemy)
     const trap = Math.max(0, buckets.webTrap + this.jobSpawnAdjust.trap) + buckets.bombTrap + buckets.sporeTrap
     const treasure = Math.max(1, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + this.jobSpawnAdjust.treasure)

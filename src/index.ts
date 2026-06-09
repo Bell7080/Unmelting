@@ -2224,7 +2224,9 @@ function render(): void {
     coinPulseKey,
     emberTier: tier,
     spawnWeights: cardSpawner.getActiveWeights(),
-    spawnWeightContext: cardSpawner.getEffectiveWeights(),
+    // {{spawn}} 토큰 치환용 컨텍스트는 bright 기준 고정값을 사용한다.
+    // 불씨 티어가 변해도 유물·시련 설명의 확률 표기가 흔들리지 않도록 하기 위함이다.
+    spawnWeightContext: cardSpawner.getEffectiveWeightsForDisplay(),
     spawnPercents: cardSpawner.getEffectiveSpawnPercents(),
     emberDecayCountdown: gameState.character.emberDecayCountdown,
     vignetteIntensity: EmberSystem.getVignetteIntensity(tier),

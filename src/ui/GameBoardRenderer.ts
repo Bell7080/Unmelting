@@ -1059,8 +1059,14 @@ export class GameBoardRenderer {
     `
   }
 
-  /** 유물 효과 본문에서 '불빛'→✦ 치환 + {{spawn}} 토큰을 현 시점 실제 확률 변화량으로 치환한다.
-   *  def.spawnEffect가 있을 때만 {{spawn}} 토큰이 등장하므로 일반 유물에는 영향 없다. */
+  /**
+   * 유물 효과 본문에서 '불빛'→✦ 치환 + {{spawn}} 토큰을 확률 변화량으로 치환한다.
+   * def.spawnEffect가 있을 때만 {{spawn}} 토큰이 등장하므로 일반 유물에는 영향 없다.
+   *
+   * ctx는 반드시 CardSpawner.getEffectiveWeightsForDisplay() 기반이어야 한다.
+   * bright 티어 버킷을 고정 베이스로 사용하므로 불씨 게이지 변동에 무관하게
+   * 직업·유물·시련 누적 보정만 반영한 안정적인 % 값이 표시된다.
+   */
   private relicEffectHtml(effect: string, spawnEffect?: { type: 'enemy' | 'treasure'; delta: number }, ctx?: SpawnWeightContext): string {
     let text = escapeHtml(effect).replace(/불빛/g, '✦')
     if (spawnEffect && ctx && ctx.total > 0) {
