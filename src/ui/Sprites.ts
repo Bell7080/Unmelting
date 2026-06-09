@@ -105,6 +105,9 @@ import handCard025Url from '../assets/sprites/handcard_025.webp'
 import handCard026Url from '../assets/sprites/handcard_026.webp'
 import handCard027Url from '../assets/sprites/handcard_027.webp'
 import handCard028Url from '../assets/sprites/handcard_028.webp'
+import handCard029Url from '../assets/sprites/handcard_029.webp'
+import handCard030Url from '../assets/sprites/handcard_030.webp'
+import handCard031Url from '../assets/sprites/handcard_031.webp'
 import relic001Url from '../assets/sprites/relics_001.webp'
 import relic002Url from '../assets/sprites/relics_002.webp'
 import relic003Url from '../assets/sprites/relics_003.webp'
@@ -135,6 +138,8 @@ import relic027Url from '../assets/sprites/relics_027.webp'
 import relic028Url from '../assets/sprites/relics_028.webp'
 import relic029Url from '../assets/sprites/relics_029.webp'
 import relic030Url from '../assets/sprites/relics_030.webp'
+import relic031Url from '../assets/sprites/relics_031.webp'
+import relic032Url from '../assets/sprites/relics_032.webp'
 import relic033Url from '../assets/sprites/relics_033.webp'
 import relic034Url from '../assets/sprites/relics_034.webp'
 import relic035Url from '../assets/sprites/relics_035.webp'
@@ -255,9 +260,9 @@ export const SpriteUrls = {
     'charred-paper': relic028Url,
     'water-bucket': relic029Url,
     'golden-key': relic030Url,
-    // 신규 유물 — chivalry·sweet-temptation은 아트 미입고로 임시 대체.
-    chivalry: relic001Url,
-    'sweet-temptation': relic002Url,
+    // 신규 유물 — 전용 아트 연동 완료.
+    chivalry: relic031Url,
+    'sweet-temptation': relic032Url,
     'discount-coupon': relic033Url,
     luxury: relic034Url,
     sanitizer: relic035Url,
@@ -292,11 +297,11 @@ export const SpriteUrls = {
     'top-hat': handCard025Url,
     slash: handCard026Url,
     shackles: handCard027Url,
-    // 신규 손패 — sword-and-shield·watering-can·garden-scissors는 아트 미입고로 임시 대체.
+    // 신규 손패 — 전용 아트 연동 완료.
     'candle-tome': handCard028Url,
-    'sword-and-shield': handCard017Url,
-    'watering-can': handCard023Url,
-    'garden-scissors': handCard019Url,
+    'sword-and-shield': handCard029Url,
+    'watering-can': handCard030Url,
+    'garden-scissors': handCard031Url,
   } satisfies Record<HandCardId, string>,
   /** Shop card-pack illustrations. Index follows the pack pickers in the
    *  shop bottom row: basic (자원) / upgrade (강화) / unlock (해금). */
