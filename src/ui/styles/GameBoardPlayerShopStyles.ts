@@ -455,9 +455,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-shell--trial .shop-trial-layer > .shop-trial-card:nth-child(3) { animation-delay: 660ms, 3.0s; }
 .shop-pack-layer {
   justify-content: center;
-  gap: clamp(4px, 0.55vw, 8px);
-  /* Match the relic row's optical center while keeping button anchors fixed. */
-  transform: translateX(clamp(-22px, -2vw, -12px));
+  gap: clamp(6px, 0.72vw, 10px);
+  /* Match the relic row's optical center while keeping button anchors fixed.
+     translateY로 약간 위로 올려 시각 무게중심을 레일 중앙에 가깝게 맞춘다. */
+  transform: translateX(clamp(-22px, -2vw, -12px)) translateY(clamp(-8px, -0.6vh, -4px));
   background: transparent;
   border: none;
   box-shadow: none;
@@ -663,8 +664,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-pack-card {
   position: relative;
   flex: 0 0 auto;
-  /* Keep the original pack-card size so bottom-row rhythm stays unchanged. */
-  width: clamp(116px, 10.9vw, 164px);
+  width: clamp(124px, 11.6vw, 174px);
   aspect-ratio: 3 / 4;
   border-radius: 14px;
   border: none;
@@ -744,18 +744,20 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   font-weight: 900;
   letter-spacing: 0.03em;
   text-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.88),
-    0 0 8px rgba(0, 0, 0, 0.62),
-    0 0 16px rgba(0, 0, 0, 0.42);
+    0 1px 3px rgba(0, 0, 0, 0.98),
+    0 2px 6px rgba(0, 0, 0, 0.94),
+    0 0 14px rgba(0, 0, 0, 0.88),
+    0 0 28px rgba(0, 0, 0, 0.72);
 }
 .shop-pack-effect {
   margin: 4px 0 0;
   color: rgba(255, 244, 210, 0.86);
   font-size: var(--font-size-sm);
   text-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.86),
-    0 0 7px rgba(0, 0, 0, 0.58),
-    0 0 14px rgba(0, 0, 0, 0.38);
+    0 1px 3px rgba(0, 0, 0, 0.96),
+    0 2px 5px rgba(0, 0, 0, 0.9),
+    0 0 12px rgba(0, 0, 0, 0.84),
+    0 0 24px rgba(0, 0, 0, 0.66);
 }
 /* Theme tints are applied as a glow on the card frame; the inner art comes
    from the pack_00X.webp sprite assigned inline in the renderer. */
@@ -814,7 +816,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  /* 카드는 세로 중앙에 두고, 헤더만 absolute로 상단에 띄운다. */
+  justify-content: center;
   gap: clamp(8px, 1.2vh, 14px);
   padding: clamp(16px, 2.2vh, 26px) clamp(10px, 1.4vh, 18px) clamp(10px, 1.4vh, 18px);
   /* 베일 레이어 뒤에 붙은 보조 레이어처럼 한 박자 늦게 같은 top-down 모션으로 열린다. */
@@ -824,6 +827,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   animation: shop-pack-picker-shell-drop 0.42s cubic-bezier(0.22, 0.86, 0.22, 1) 0.42s both;
 }
 .shop-pack-picker-head {
+  /* 카드는 flex 중앙에 남기고 헤더만 상단으로 띄운다. */
+  position: absolute;
+  top: clamp(18px, 2.4vh, 28px);
   text-align: center;
   color: rgba(255, 232, 168, 0.96);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
@@ -842,14 +848,14 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-pack-picker-head h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: clamp(20px, 2.2vh, 26px);
   letter-spacing: 0.08em;
   font-weight: 900;
 }
 .shop-pack-picker-head p {
   margin: 4px 0 0;
   color: rgba(232, 214, 180, 0.82);
-  font-size: 13px;
+  font-size: clamp(13px, 1.4vh, 15px);
 }
 .shop-pack-picker-cards {
   display: grid;
@@ -968,7 +974,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-pack-pick-rarity-badge.rarity-common    { color: rgba(200, 200, 200, 0.9); }
 .shop-pack-pick-rarity-badge.rarity-rare      { color: rgba(100, 180, 255, 0.9); }
-.shop-pack-pick-rarity-badge.rarity-epic      { color: rgba(200, 120, 255, 0.9); }
+.shop-pack-pick-rarity-badge.rarity-epic      { color: rgba(225, 65, 245, 0.9); }
 .shop-pack-pick-rarity-badge.rarity-unique    { color: rgba(255, 210, 80, 0.9); }
 .shop-pack-pick-rarity-badge.rarity-legendary { color: rgba(255, 140, 60, 0.9); }
 /* 레시피 재료 n+n 표기 */
@@ -980,6 +986,45 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   line-height: 1.3;
   white-space: normal;
   letter-spacing: 0.02em;
+}
+/* 삭제팩/해금팩 — Pass 버튼 (하단 중앙, minimal pill) */
+.shop-pack-pass-btn {
+  appearance: none;
+  position: absolute;
+  bottom: clamp(26px, 3.6vh, 42px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 26px;
+  border-radius: 999px;
+  border: 1px solid rgba(185, 168, 136, 0.26);
+  background: transparent;
+  color: rgba(205, 188, 160, 0.50);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  z-index: 4;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+  transition: border-color 0.22s ease, color 0.22s ease;
+  transform-origin: center center;
+}
+.shop-pack-pass-btn:hover {
+  border-color: rgba(215, 196, 158, 0.46);
+  color: rgba(232, 214, 180, 0.78);
+}
+/* 클릭 후 선으로 수축하며 퇴장 */
+@keyframes pass-btn-to-line {
+  0%   { transform: translateX(-50%) scaleY(1)   scaleX(1);    opacity: 1; }
+  20%  { transform: translateX(-50%) scaleY(0.92) scaleX(0.96); opacity: 1; }
+  60%  { transform: translateX(-50%) scaleY(0.05) scaleX(1.08); opacity: 0.55; }
+  100% { transform: translateX(-50%) scaleY(0.01) scaleX(1.14); opacity: 0; }
+}
+.shop-pack-pass-btn.is-passing {
+  animation: pass-btn-to-line 0.34s cubic-bezier(0.48, 0, 0.52, 1) forwards;
+  pointer-events: none;
 }
 /* Painted back face — a dedicated DOM element painted purely with
    cardbackground_001.webp. Sits at rotateY(180deg) so it shows while the
@@ -1622,12 +1667,22 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 
 
 
-/* Rarity glow-only language (no text labels) shared by relic/free/pack cards. */
+/* Rarity glow-only language (no text labels) shared by relic/free/pack cards.
+   에픽: 핑크-보라(마젠타) 계열로 변경해 레어(파랑)와 확실히 구분. */
 .rarity-common { box-shadow: 0 0 0 1px rgba(116, 124, 136, 0.5), 0 12px 22px rgba(0,0,0,0.58); }
 .rarity-rare { box-shadow: 0 0 0 1px rgba(80, 152, 255, 0.58), 0 0 24px rgba(80,152,255,0.24), 0 12px 22px rgba(0,0,0,0.58); }
-.rarity-epic { box-shadow: 0 0 0 1px rgba(161, 108, 255, 0.62), 0 0 26px rgba(161,108,255,0.28), 0 12px 22px rgba(0,0,0,0.58); }
+.rarity-epic { box-shadow: 0 0 0 1px rgba(210, 50, 235, 0.65), 0 0 26px rgba(210,50,235,0.30), 0 12px 22px rgba(0,0,0,0.58); }
 .rarity-unique { box-shadow: 0 0 0 1px rgba(242, 212, 92, 0.72), 0 0 30px rgba(242,212,92,0.34), 0 12px 22px rgba(0,0,0,0.58); }
 .rarity-legendary { box-shadow: 0 0 0 1px rgba(220, 78, 78, 0.72), 0 0 30px rgba(220,78,78,0.34), 0 12px 22px rgba(0,0,0,0.58); }
+
+/* 상점 유물 카드 루트에 외부 glow + 드롭 섀도를 명시적으로 추가한다.
+   .shop-relic-flipper의 overflow:hidden이 내부 face의 outer box-shadow를 잘라내므로
+   루트(.shop-relic-card)에 직접 걸어야 outside glow가 보인다. */
+.shop-relic-card.rarity-common  { box-shadow: 0 10px 24px rgba(0,0,0,0.65); }
+.shop-relic-card.rarity-rare    { box-shadow: 0 0 0 1px rgba(80,152,255,0.62), 0 0 32px rgba(80,152,255,0.46), 0 10px 24px rgba(0,0,0,0.65); }
+.shop-relic-card.rarity-epic    { box-shadow: 0 0 0 1px rgba(210,50,235,0.66), 0 0 34px rgba(210,50,235,0.48), 0 10px 24px rgba(0,0,0,0.65); }
+.shop-relic-card.rarity-unique  { box-shadow: 0 0 0 1px rgba(242,212,92,0.75), 0 0 36px rgba(242,212,92,0.52), 0 10px 24px rgba(0,0,0,0.65); }
+.shop-relic-card.rarity-legendary { box-shadow: 0 0 0 1px rgba(220,78,78,0.75), 0 0 38px rgba(220,78,78,0.54), 0 10px 24px rgba(0,0,0,0.65); }
 
 /* Real two-face relic card for reroll:
    - .shop-relic-front is the front face (0deg)
@@ -1673,7 +1728,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 .shop-relic-card.rarity-common .shop-relic-front::after { box-shadow: inset 0 0 24px rgba(170, 180, 196, 0.24); }
 .shop-relic-card.rarity-rare .shop-relic-front::after { box-shadow: inset 0 0 30px rgba(80, 152, 255, 0.4), 0 0 32px rgba(80, 152, 255, 0.34); }
-.shop-relic-card.rarity-epic .shop-relic-front::after { box-shadow: inset 0 0 32px rgba(161, 108, 255, 0.44), 0 0 36px rgba(161, 108, 255, 0.36); }
+.shop-relic-card.rarity-epic .shop-relic-front::after { box-shadow: inset 0 0 32px rgba(210, 50, 235, 0.46), 0 0 36px rgba(210, 50, 235, 0.38); }
 .shop-relic-card.rarity-unique .shop-relic-front::after { box-shadow: inset 0 0 34px rgba(242, 212, 92, 0.5), 0 0 40px rgba(242, 212, 92, 0.44); }
 .shop-relic-card.rarity-legendary .shop-relic-front::after { box-shadow: inset 0 0 36px rgba(255, 108, 76, 0.52), 0 0 44px rgba(220, 78, 78, 0.46); }
 
@@ -1700,7 +1755,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-relic-card.rarity-epic .shop-relic-front,
 .shop-relic-card.rarity-epic .shop-relic-cardback,
 .shop-pack-pick-card.rarity-epic .shop-pack-pick-front,
-.shop-pack-pick-card.rarity-epic .shop-pack-pick-back { box-shadow: 0 0 0 1px rgba(161, 108, 255, 0.62), 0 0 26px rgba(161,108,255,0.28), 0 12px 22px rgba(0,0,0,0.58); }
+.shop-pack-pick-card.rarity-epic .shop-pack-pick-back { box-shadow: 0 0 0 1px rgba(210, 50, 235, 0.65), 0 0 28px rgba(210,50,235,0.30), 0 12px 22px rgba(0,0,0,0.58); }
 .shop-relic-card.rarity-unique .shop-relic-front,
 .shop-relic-card.rarity-unique .shop-relic-cardback,
 .shop-pack-pick-card.rarity-unique .shop-pack-pick-front,

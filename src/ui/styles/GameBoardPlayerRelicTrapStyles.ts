@@ -264,8 +264,8 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
     scale(0.98);
   z-index: calc(10 + var(--relic-i, 0));
   transition:
-    transform 0.2s cubic-bezier(0.18, 0.86, 0.22, 1),
-    filter 0.2s ease;
+    transform 0.36s cubic-bezier(0.18, 0.86, 0.22, 1),
+    filter 0.28s ease;
 }
 .relic-mini-card .relic-preview-card {
   display: grid;
@@ -286,7 +286,7 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
 /* 등급별 테두리 + 발광 */
 .relic-mini-card.rarity-common   .relic-preview-card { border-color: rgba(116, 124, 136, 0.45); box-shadow: 0 10px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,232,168,0.18); }
 .relic-mini-card.rarity-rare     .relic-preview-card { border-color: rgba(80, 152, 255, 0.52); box-shadow: 0 10px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,232,168,0.18), 0 0 14px rgba(80,152,255,0.22); }
-.relic-mini-card.rarity-epic     .relic-preview-card { border-color: rgba(161, 108, 255, 0.56); box-shadow: 0 10px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,232,168,0.18), 0 0 16px rgba(161,108,255,0.26); }
+.relic-mini-card.rarity-epic     .relic-preview-card { border-color: rgba(210, 50, 235, 0.56); box-shadow: 0 10px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,232,168,0.18), 0 0 16px rgba(210,50,235,0.26); }
 .relic-mini-card.rarity-unique   .relic-preview-card { border-color: rgba(242, 212, 92, 0.62); box-shadow: 0 10px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,232,168,0.18), 0 0 18px rgba(242,212,92,0.32); }
 .relic-mini-card.rarity-legendary .relic-preview-card { border-color: rgba(220, 78, 78, 0.62); box-shadow: 0 10px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,232,168,0.18), 0 0 20px rgba(220,78,78,0.34); }
 .relic-mini-card .shop-relic-art {
@@ -331,6 +331,12 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
     0 0 26px rgba(244, 164, 96, 0.34),
     inset 0 1px 0 rgba(255, 232, 168, 0.3);
 }
+/* hover 시 등급 색 glow — 기본 금빛 hover를 등급 색상으로 덮어쓴다 */
+.relic-mini-card.rarity-common:not(.is-revive-locked):hover .relic-preview-card { border-color: rgba(200,204,214,0.65); box-shadow: 0 20px 34px rgba(0,0,0,0.72), 0 0 22px rgba(160,168,185,0.3), inset 0 1px 0 rgba(255,232,168,0.22); }
+.relic-mini-card.rarity-rare:not(.is-revive-locked):hover .relic-preview-card { border-color: rgba(80,152,255,0.72); box-shadow: 0 20px 34px rgba(0,0,0,0.72), 0 0 34px rgba(80,152,255,0.52), inset 0 1px 0 rgba(160,210,255,0.24); }
+.relic-mini-card.rarity-epic:not(.is-revive-locked):hover .relic-preview-card { border-color: rgba(210,50,235,0.72); box-shadow: 0 20px 34px rgba(0,0,0,0.72), 0 0 36px rgba(210,50,235,0.54), inset 0 1px 0 rgba(230,140,255,0.22); }
+.relic-mini-card.rarity-unique:not(.is-revive-locked):hover .relic-preview-card { border-color: rgba(242,212,92,0.78); box-shadow: 0 20px 34px rgba(0,0,0,0.72), 0 0 38px rgba(242,212,92,0.56), inset 0 1px 0 rgba(255,240,160,0.28); }
+.relic-mini-card.rarity-legendary:not(.is-revive-locked):hover .relic-preview-card { border-color: rgba(220,78,78,0.78); box-shadow: 0 20px 34px rgba(0,0,0,0.72), 0 0 40px rgba(220,78,78,0.58), inset 0 1px 0 rgba(255,160,140,0.26); }
 .relic-mini-card:not(.is-revive-locked):hover .shop-relic-title,
 .relic-mini-card:not(.is-revive-locked):focus-visible .shop-relic-title,
 .relic-mini-card.is-pinned:not(.is-revive-locked) .shop-relic-title {
