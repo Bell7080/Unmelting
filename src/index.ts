@@ -42,7 +42,7 @@ import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { CandleMode } from '@entities/Character'
 import { HandCardId, HandCategory } from '@entities/HandCard'
-import { getHandCardDef, HAND_CARD_IDS } from '@data/HandCards'
+import { getHandCardDef, HAND_CARD_IDS, HAND_CARD_DEFINITIONS } from '@data/HandCards'
 import { RECIPES } from '@data/Recipes'
 import { getRelicDef, relicDrawWeight, RELIC_IDS, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
@@ -830,14 +830,25 @@ async function applyTurnStartRelics(): Promise<void> {
     render()
   }
 
-  // 기사도: 3턴마다 손패에 검과 방패 추가.
+  // 기사도: 3턴마다 knight 태그 손패 중 dropWeight 기반 랜덤 1장 지급.
   if (character.hasRelic('chivalry') && turn !== 0 && turn % 3 === 0) {
-    const drop = DropSystem.makeCard('sword-and-shield')
-    const added = character.addHandCard(drop)
-    if (added) {
-      recordRelicActivation('chivalry', '검과 방패 획득')
-      render()
-      await playResourceTrail({ kind: 'chain' }, 'hand', 1)
+    const knightPool = HAND_CARD_IDS.filter((id) => HAND_CARD_DEFINITIONS[id].jobTags?.includes('knight'))
+    if (knightPool.length > 0) {
+      const total = knightPool.reduce((s, id) => s + (HAND_CARD_DEFINITIONS[id].dropWeight ?? 1), 0)
+      let roll = Math.random() * total
+      let picked = knightPool[0]
+      for (const id of knightPool) {
+        roll -= HAND_CARD_DEFINITIONS[id].dropWeight ?? 1
+        if (roll <= 0) { picked = id; break }
+      }
+      const drop = DropSystem.makeCard(picked)
+      const added = character.addHandCard(drop)
+      if (added) {
+        const name = HAND_CARD_DEFINITIONS[picked].name
+        recordRelicActivation('chivalry', `${name} 획득`)
+        render()
+        await playResourceTrail({ kind: 'chain' }, 'hand', 1)
+      }
     }
   }
 }
@@ -1133,12 +1144,12 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
     gameState.enhancements.shopDiscountPct += 5
   }
   if (id === 'sanitizer') {
-    // 포자 등장 확률 감소 (CardSpawner에 반영).
-    cardSpawner.adjustRelicSpawn('spore', -20)
+    // 포자 스폰 가중치 -2 (spawnEffect.delta와 동기화).
+    cardSpawner.adjustRelicSpawn('spore', -2)
   }
   if (id === 'wax-harmony') {
-    // 꽃 등장 확률 증가 (CardSpawner에 반영).
-    cardSpawner.adjustRelicSpawn('flower', 20)
+    // 꽃 스폰 가중치 +2 (spawnEffect.delta와 동기화).
+    cardSpawner.adjustRelicSpawn('flower', 2)
   }
   if (id === 'trap-master') {
     // 함정 15% 무효화 확률 (ActionSystem이 character.trapIgnoreChance를 읽는다).

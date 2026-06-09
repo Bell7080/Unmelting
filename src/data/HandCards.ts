@@ -478,6 +478,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropSource: 'any',
     metaRequired: false,
     runLocked: false,
+    jobTags: ['knight'] satisfies ReadonlyArray<JobTag>,
   },
   // 물뿌리개: 꽃의 value만 성장시키며 flowerTurnsAlive는 그대로라 시들 확률이 오르지 않는다.
   'watering-can': {
