@@ -40,12 +40,12 @@ export interface EnemyStatBonus {
 const SPAWN_BUCKETS: Record<EmberTier, SpawnBuckets> = {
   // bright: 총합 100
   bright:      { enemy: 44, webTrap: 17, bombTrap: 4, sporeTrap: 4, treasure: 22, flower: 9 },
-  // dim: enemy+8, web+6, bomb+1, spore+1 → 총합 116
-  dim:         { enemy: 52, webTrap: 23, bombTrap: 5, sporeTrap: 5, treasure: 22, flower: 9 },
-  // flickering: enemy+8, web+6, bomb+1, spore+1 누적 → 총합 132
-  flickering:  { enemy: 60, webTrap: 29, bombTrap: 6, sporeTrap: 6, treasure: 22, flower: 9 },
-  // extinguished: enemy+8, web+6, bomb+1, spore+1 누적 → 총합 148
-  extinguished:{ enemy: 68, webTrap: 35, bombTrap: 7, sporeTrap: 7, treasure: 22, flower: 9 },
+  // dim: enemy+16, web+6, bomb+1, spore+1 → 총합 124
+  dim:         { enemy: 60, webTrap: 23, bombTrap: 5, sporeTrap: 5, treasure: 22, flower: 9 },
+  // flickering: enemy+16, web+6, bomb+1, spore+1 누적 → 총합 148
+  flickering:  { enemy: 76, webTrap: 29, bombTrap: 6, sporeTrap: 6, treasure: 22, flower: 9 },
+  // extinguished: enemy+16, web+6, bomb+1, spore+1 누적 → 총합 172
+  extinguished:{ enemy: 92, webTrap: 35, bombTrap: 7, sporeTrap: 7, treasure: 22, flower: 9 },
 }
 
 // 불씨 티어는 더 이상 적 HP를 올리지 않는다(불씨 회복 시 1체력 적이 죽는 문제 방지).
