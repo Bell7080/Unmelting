@@ -500,11 +500,21 @@ export const GAME_BOARD_RAIL_STYLES = `
   pointer-events: none;
   opacity: 0.86;
 }
-/* 이벤트 뱃지 — frozen-badge 이후 로드되는 HandChain 스타일에 덮이지 않도록 이중 클래스로 specificity를 높인다. */
-.frozen-badge.event-badge {
-  border-color: rgba(255, 255, 255, 0.10);
+/* 이벤트 문 카운트다운 뱃지 — frozen-badge와 무관하게 단독 정의.
+   포지셔닝·폰트·색상을 모두 여기서 관리하므로 HandChain 로드 순서에 영향받지 않는다. */
+.event-badge {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  z-index: 6;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
   background: rgba(0, 0, 0, 0.58);
   color: rgba(255, 255, 255, 0.88);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.42);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
 }

@@ -856,7 +856,7 @@ export class GameBoardRenderer {
       : ''
     // 이벤트 문 카운트다운 뱃지: 전방 도달(-1→2) 후에만 표시(대기행에서는 미부착). 흑백 톤.
     const eventBadge = card.type === CardType.EVENT && card.eventTurnsUntilClose >= 0
-      ? `<div class="frozen-badge event-badge">${card.eventTurnsUntilClose}턴</div>`
+      ? `<div class="event-badge">${card.eventTurnsUntilClose}턴</div>`
       : ''
 
     // 보스 보상 카드는 3-wide span이어도 카드 자체 이름을 그대로 표시한다.
