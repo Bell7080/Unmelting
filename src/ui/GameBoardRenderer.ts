@@ -2414,11 +2414,19 @@ export class GameBoardRenderer {
     //    위협 버튼(emphasis==='danger')은 행에서 빼서 하단 중앙에 단독 배치한다.
     const dangerIdx = def.choices.findIndex((c) => c.emphasis === 'danger')
     const rowChoices = def.choices.map((c, i) => ({ c, i })).filter(({ i }) => i !== dangerIdx)
-    const choiceBtnHtml = (c: EventDefinition['choices'][number], i: number, extraClass = ''): string => `
-      <button class="event-choice-btn ${extraClass}" type="button" data-choice="${i}">
-        <span class="event-choice-label">${escapeHtml(c.label)}</span>
-        <span class="event-choice-effects">${c.effectLines.map((l) => `<span>${escapeHtml(l)}</span>`).join('')}</span>
+    const choiceBtnHtml = (c: EventDefinition['choices'][number], i: number, extraClass = ''): string => {
+      const effectText = c.effectLines.map((l) => escapeHtml(l)).join(' · ')
+      // 선택지는 버튼 외형만 바뀌며 데이터 효과는 그대로 유지한다.
+      return `
+      <button class="event-choice-btn ${extraClass}" type="button" data-choice="${i}" data-choice-label="${escapeHtml(c.label)}">
+        <span class="event-choice-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span class="event-choice-copy">
+          <span class="event-choice-label">${escapeHtml(c.label)}</span>
+          <span class="event-choice-divider" aria-hidden="true">ㅣ</span>
+          <span class="event-choice-effects">${effectText}</span>
+        </span>
       </button>`
+    }
     const overlay = document.createElement('div')
     overlay.id = 'event-entry-overlay'
     const art = spriteForEvent(def.illu)
@@ -2610,29 +2618,79 @@ export class GameBoardRenderer {
 }
 .event-entry-content > * { pointer-events: auto; }
 .event-choices[hidden] { display: none !important; }
-.event-choices { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.event-choices {
+  position: relative;
+  width: min(86%, 760px);
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  padding: 14px 18px 16px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(5, 4, 9, 0.76), rgba(7, 5, 13, 0.9));
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 232, 168, 0.08);
+}
+.event-choices::before {
+  content: '';
+  position: absolute; inset: -10px -14px; z-index: -1;
+  border-radius: 18px;
+  background: radial-gradient(95% 120% at 50% 100%, rgba(0, 0, 0, 0.76), rgba(0, 0, 0, 0.28) 58%, transparent 100%);
+  filter: blur(10px);
+}
 .event-choices.is-in { animation: event-line-in 0.3s ease both; }
 .event-choices.is-resolved { pointer-events: none; }
 .event-choices.is-choice-finished { animation: event-choice-finished 0.42s cubic-bezier(0.2, 0.72, 0.2, 1) both; }
-.event-choices-row { display: flex; gap: 28px; justify-content: center; }
+.event-choices-row { display: flex; flex-direction: column; gap: 8px; justify-content: center; }
 .event-choice-btn {
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  min-width: 126px; padding: 9px 20px;
-  border: 1px solid rgba(255, 214, 130, 0.62); border-radius: 9px;
-  background: rgba(6, 4, 10, 0.42); color: rgba(255, 240, 206, 0.96);
+  position: relative;
+  display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: center; gap: 14px;
+  width: 100%; min-height: 46px; padding: 10px 18px;
+  border: 1px solid rgba(255, 215, 120, 0.28); border-radius: 12px;
+  background: linear-gradient(180deg, rgba(26, 18, 38, 0.72) 0%, rgba(8, 5, 14, 0.88) 100%);
+  color: rgba(255, 238, 200, 0.9);
   font-family: 'OkDanDan', Georgia, serif; cursor: pointer;
-  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
-  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s, transform 0.12s;
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.1), 0 10px 24px rgba(0, 0, 0, 0.52);
+  overflow: hidden;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s, transform 0.12s, color 0.16s, filter 0.16s;
 }
-.event-choice-btn:hover { border-color: rgba(255, 232, 168, 0.95); background: rgba(18, 12, 24, 0.6); box-shadow: 0 0 20px rgba(244, 196, 108, 0.24); transform: translateY(-2px); }
-.event-choice-label { font-size: 16px; font-weight: 900; letter-spacing: 0.06em; }
-.event-choice-effects { display: flex; flex-direction: column; gap: 1px; font-size: 11px; color: rgba(232, 214, 180, 0.82); letter-spacing: 0.04em; }
-.event-choice-btn.is-selected { animation: event-choice-pick-pop 0.42s cubic-bezier(0.18, 0.86, 0.24, 1) both; }
-.event-burn-btn { margin-top: 16px; }
-.event-burn-btn.is-disabled { opacity: 0.26; pointer-events: none; }
-.event-burn-btn.is-armed { border-color: rgba(228, 96, 60, 0.85); box-shadow: 0 0 24px rgba(220, 60, 30, 0.34); }
-.event-burn-btn.is-armed:hover { border-color: rgba(255, 120, 80, 0.95); box-shadow: 0 0 30px rgba(230, 70, 30, 0.45); }
-.event-burn-btn.is-armed .event-choice-label { color: rgba(255, 210, 180, 0.96); text-shadow: 0 0 14px rgba(230, 80, 40, 0.5); }
+.event-choice-btn::before {
+  content: '';
+  position: absolute; inset: 1px;
+  border-radius: 11px;
+  background: linear-gradient(90deg, transparent, rgba(255, 232, 168, 0.06), transparent);
+  opacity: 0.55; pointer-events: none;
+}
+.event-choice-btn::after {
+  content: attr(data-choice-label);
+  position: absolute; left: 56px; top: 50%;
+  transform: translateY(-50%) scale(0.96);
+  font-size: 18px; font-weight: 900; letter-spacing: 0.1em;
+  color: rgba(255, 235, 190, 0.48);
+  opacity: 0; pointer-events: none;
+  text-shadow: 0 0 18px rgba(244, 196, 108, 0.5);
+}
+.event-choice-btn:hover {
+  border-color: rgba(255, 222, 140, 0.86);
+  background: linear-gradient(180deg, rgba(36, 24, 50, 0.9), rgba(10, 7, 16, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.24), 0 14px 32px rgba(0, 0, 0, 0.66), 0 0 38px rgba(244, 164, 96, 0.24);
+  color: rgba(255, 248, 224, 1);
+  transform: translateX(4px) scale(1.025);
+  animation: event-choice-hover-tremble 0.34s linear infinite;
+}
+.event-choice-mark { display: flex; flex-direction: column; gap: 4px; opacity: 0.78; }
+.event-choice-mark span { display: block; width: 18px; height: 2px; border-radius: 2px; background: rgba(255, 230, 170, 0.78); box-shadow: 0 0 8px rgba(244, 196, 108, 0.16); }
+.event-choice-copy { position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; min-width: 0; white-space: nowrap; }
+.event-choice-label { font-size: 17px; font-weight: 900; letter-spacing: 0.08em; transition: transform 0.14s ease, text-shadow 0.14s ease, color 0.14s ease; }
+.event-choice-divider { color: rgba(255, 215, 120, 0.5); font-size: 16px; }
+.event-choice-effects { font-size: 13px; color: rgba(232, 214, 180, 0.82); letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; }
+.event-choice-btn:hover .event-choice-label,
+.event-choice-btn:hover .event-choice-effects { color: rgba(255, 248, 224, 1); text-shadow: 0 0 16px rgba(244, 196, 108, 0.42), 0 0 28px rgba(255, 236, 188, 0.18); }
+.event-choice-btn.is-selected { animation: event-choice-pick-pop 0.5s cubic-bezier(0.18, 0.86, 0.24, 1) both; }
+.event-choice-btn.is-selected::after { animation: event-choice-afterimage 0.48s cubic-bezier(0.18, 0.86, 0.24, 1) both; }
+.event-burn-btn { margin-top: 0; }
+.event-burn-btn.is-disabled { opacity: 0.36; pointer-events: none; }
+.event-burn-btn, .event-burn-btn.is-armed { border-color: rgba(86, 78, 82, 0.48); color: rgba(112, 108, 114, 0.82); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 24px rgba(0, 0, 0, 0.56); }
+.event-burn-btn .event-choice-label, .event-burn-btn .event-choice-effects, .event-burn-btn .event-choice-divider { color: rgba(96, 94, 100, 0.86); text-shadow: none; }
+.event-burn-btn .event-choice-mark span { background: rgba(94, 90, 96, 0.76); box-shadow: none; }
+.event-burn-btn.is-armed:hover { border-color: rgba(126, 112, 108, 0.72); box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.08), 0 14px 32px rgba(0, 0, 0, 0.66), 0 0 24px rgba(80, 70, 66, 0.2); }
+.event-burn-btn.is-armed:hover .event-choice-label, .event-burn-btn.is-armed:hover .event-choice-effects { color: rgba(178, 172, 178, 0.96); text-shadow: 0 0 12px rgba(150, 140, 136, 0.24); }
 #event-entry-overlay.is-opening { pointer-events: none; }
 #event-entry-overlay.is-opening .event-entry-content { opacity: 0; transition: opacity 0.22s ease; }
 #event-entry-overlay.is-opening .event-entry-illu { animation: event-illu-fold-out 0.72s cubic-bezier(0.2, 0.72, 0.26, 1) forwards; }
@@ -2649,7 +2707,17 @@ export class GameBoardRenderer {
   100% { opacity: 0; clip-path: inset(0 50% 0 50%); transform: scaleY(0.965); filter: saturate(0.75) brightness(0.54); }
 }
 @keyframes event-line-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes event-choice-pick-pop { 0% { transform: scale(1); } 45% { transform: scale(1.14); } 100% { transform: scale(1.04); } }
+@keyframes event-choice-hover-tremble {
+  0%, 100% { translate: 0 0; }
+  25% { translate: 0.6px -0.4px; }
+  50% { translate: -0.5px 0.3px; }
+  75% { translate: 0.4px 0.5px; }
+}
+@keyframes event-choice-pick-pop { 0% { transform: scale(1); filter: brightness(1); } 45% { transform: scale(1.09); filter: brightness(1.24); } 100% { transform: scale(1.02); filter: brightness(1.04); } }
+@keyframes event-choice-afterimage {
+  0% { opacity: 0.78; transform: translateY(-50%) scale(0.96); filter: blur(0); }
+  100% { opacity: 0; transform: translateY(-50%) translateX(22px) scale(1.42); filter: blur(5px); }
+}
 @keyframes event-choice-finished { 0% { opacity: 1; transform: scale(1); filter: blur(0); } 45% { opacity: 0.96; transform: scale(1.08); } 100% { opacity: 0; transform: scale(0.86) translateY(8px); filter: blur(4px); } }
 `
     document.head.appendChild(style)

@@ -429,6 +429,20 @@ export class TurnManager {
     return swept
   }
 
+  /** 전방(활성 행)에 새로 도달한 이벤트 문의 카운트다운만 시작한다.
+   *  손패/조합식처럼 턴을 넘기지 않는 필드 갱신에서도 뱃지는 즉시 보여야 하지만,
+   *  기존 문이 추가로 1턴 줄어들면 안 되므로 tickFrontEventDoors와 분리한다. */
+  startFrontEventDoorArrivals(): EventDoorTick[] {
+    const ticks: EventDoorTick[] = []
+    for (let laneIndex = 0; laneIndex < this.gameState.lanes.length; laneIndex++) {
+      const card = this.gameState.lanes[laneIndex].getCardAtDistance(0)
+      if (!card || card.type !== CardType.EVENT || card.eventTurnsUntilClose >= 0) continue
+      card.eventTurnsUntilClose = 2
+      ticks.push({ laneIndex, cardId: card.id, phase: 'started', turnsLeft: 2 })
+    }
+    return ticks
+  }
+
   /** 전방(활성 행)에 도달한 이벤트 문의 닫힘 카운트다운을 진행한다.
    *  -1(대기) → 도달 즉시 2로 시작(뱃지 '슈룩' 등장), 이후 매 턴 감소, 0 아래로 가면 닫혀 제거된다.
    *  대기행(distance>0)에서는 카운트다운하지 않으므로 뱃지도 붙지 않는다. */

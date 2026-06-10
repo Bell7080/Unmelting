@@ -500,12 +500,13 @@ export const GAME_BOARD_RAIL_STYLES = `
   pointer-events: none;
   opacity: 0.86;
 }
-/* 이벤트 뱃지 — 색감 없이 깔끔한 흑백 톤. */
+/* 이벤트 뱃지 — 포자/꽃 뱃지와 구분되도록 완전한 검은 바탕+흰 글자로 고정한다. */
 .event-badge {
-  border-color: rgba(6, 6, 8, 0.92);
-  background: rgba(6, 6, 8, 0.84);
-  color: rgba(248, 248, 250, 0.97);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
+  border-color: rgba(255, 255, 255, 0.28);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.98), rgba(9, 9, 12, 0.94));
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 1);
 }
 /* 전방 도달 시 뱃지 '슈룩' 팝인(슬라이드+스케일 1회). */
 .event-badge.is-pop { animation: event-badge-pop 0.32s cubic-bezier(0.18, 0.84, 0.24, 1) both; }

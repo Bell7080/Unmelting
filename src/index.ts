@@ -1938,7 +1938,9 @@ async function runPreparationRefreshAfterFieldEffects(
   trackFieldEnemyEncounters()
   const blooms = turnManager.bloomFrontSeeds(cardSpawner)
   turnManager.armFrontBombs()
+  const startedEventDoors = turnManager.startFrontEventDoorArrivals()
   render()
+  for (const t of startedEventDoors) boardRenderer.popEventBadge(t.cardId)
   if (blooms.length > 0) await boardRenderer.animateFlowerBlooms(blooms)
   if (movedAny) await wait(120)
 }
@@ -3324,7 +3326,9 @@ async function tickFrontEventDoors(): Promise<void> {
     compactAndRefillAllLanes()
     gameState.regroupAllRows()
     turnManager.armFrontBombs()
+    const startedEventDoors = turnManager.startFrontEventDoorArrivals()
     render()
+    for (const t of startedEventDoors) boardRenderer.popEventBadge(t.cardId)
   }
 }
 
