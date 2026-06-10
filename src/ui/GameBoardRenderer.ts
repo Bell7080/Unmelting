@@ -2414,16 +2414,22 @@ export class GameBoardRenderer {
     //    위협 버튼(emphasis==='danger')은 행에서 빼서 하단 중앙에 단독 배치한다.
     const dangerIdx = def.choices.findIndex((c) => c.emphasis === 'danger')
     const rowChoices = def.choices.map((c, i) => ({ c, i })).filter(({ i }) => i !== dangerIdx)
+    // 디메리트 텍스트(체력 감소/소모 등)를 붉은 span으로 마킹한다.
+    const DEMERIT_RE = /\s-\d|소모|손해|감소/
+    const renderEffectParts = (lines: readonly string[]): string =>
+      lines.join(' · ').split(' · ').map((p) => {
+        const cls = DEMERIT_RE.test(p) ? 'event-effect-part is-demerit' : 'event-effect-part'
+        return `<span class="${cls}">${escapeHtml(p.trim())}</span>`
+      }).join('<span class="event-effect-sep"> · </span>')
+
     const choiceBtnHtml = (c: EventDefinition['choices'][number], i: number, extraClass = ''): string => {
-      const effectText = c.effectLines.map((l) => escapeHtml(l)).join(' · ')
-      // 선택지는 버튼 외형만 바뀌며 데이터 효과는 그대로 유지한다.
+      const themeClass = c.themeClass ? `event-choice--${c.themeClass}` : ''
       return `
-      <button class="event-choice-btn ${extraClass}" type="button" data-choice="${i}" data-choice-label="${escapeHtml(c.label)}">
-        <span class="event-choice-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+      <button class="event-choice-btn ${themeClass} ${extraClass}" type="button" data-choice="${i}" data-choice-label="${escapeHtml(c.label)}">
         <span class="event-choice-copy">
           <span class="event-choice-label">${escapeHtml(c.label)}</span>
-          <span class="event-choice-divider" aria-hidden="true">ㅣ</span>
-          <span class="event-choice-effects">${effectText}</span>
+          <span class="event-choice-divider-line" aria-hidden="true"></span>
+          <span class="event-choice-effects">${renderEffectParts(c.effectLines)}</span>
         </span>
       </button>`
     }
@@ -2587,8 +2593,6 @@ export class GameBoardRenderer {
 .event-entry-illu.event-entry-illu--empty {
   background: radial-gradient(120% 90% at 50% 38%, rgba(40, 28, 52, 0.96), rgba(8, 5, 13, 0.99));
 }
-/* 이벤트 커튼은 직업 선택보다 느리게 닫히되 폭은 줄여 중앙 겹침을 얕게 만든다.
-   투명 끝단을 조금 안쪽으로 당겨 닫힌 뒤에도 중앙이 과하게 두꺼워 보이지 않게 한다. */
 #event-entry-overlay .job-rail-curtain {
   width: 56%;
   animation-duration: 1.22s;
@@ -2609,93 +2613,140 @@ export class GameBoardRenderer {
   width: 1px; height: 1px;
   pointer-events: none;
 }
-/* 악마 말풍선 기준점을 이벤트 셸 내부에 둬 레일 좌표/오프셋 변화로 화면 밖에 뜨지 않게 한다. */
 .event-dialogue-anchor--demon { left: 50%; top: 62%; z-index: 7; }
 .event-entry-content {
   position: absolute; inset: 0; z-index: 6;
   display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
-  padding: 0 4% 5%; gap: 14px; pointer-events: none;
+  padding: 0 4% 6%; gap: 14px; pointer-events: none;
 }
 .event-entry-content > * { pointer-events: auto; }
+
+/* ── 선택지 컨테이너: 배경·테두리 없이 폰트 중심 ── */
 .event-choices[hidden] { display: none !important; }
 .event-choices {
   position: relative;
-  width: min(86%, 760px);
-  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
-  padding: 14px 18px 16px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(5, 4, 9, 0.76), rgba(7, 5, 13, 0.9));
-  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 232, 168, 0.08);
+  width: min(96%, 840px);
+  display: flex; flex-direction: column; align-items: stretch; gap: 10px;
+  padding: 20px 10px 14px;
 }
-.event-choices::before {
-  content: '';
-  position: absolute; inset: -10px -14px; z-index: -1;
-  border-radius: 18px;
-  background: radial-gradient(95% 120% at 50% 100%, rgba(0, 0, 0, 0.76), rgba(0, 0, 0, 0.28) 58%, transparent 100%);
-  filter: blur(10px);
-}
-.event-choices.is-in { animation: event-line-in 0.3s ease both; }
+.event-choices.is-in { animation: event-line-in 0.32s ease both; }
 .event-choices.is-resolved { pointer-events: none; }
-.event-choices.is-choice-finished { animation: event-choice-finished 0.42s cubic-bezier(0.2, 0.72, 0.2, 1) both; }
-.event-choices-row { display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+.event-choices.is-choice-finished { animation: event-choice-finished 0.44s cubic-bezier(0.2, 0.72, 0.2, 1) both; }
+
+/* 좌우 양초 선택지 row */
+.event-choices-row {
+  display: flex; flex-direction: row; gap: 20px; justify-content: center;
+}
+
+/* ── 공통 선택 버튼: 테두리·배경 없음, 폰트와 그림자로만 표현 ── */
 .event-choice-btn {
   position: relative;
-  display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: center; gap: 14px;
-  width: 100%; min-height: 46px; padding: 10px 18px;
-  border: 1px solid rgba(255, 215, 120, 0.28); border-radius: 12px;
-  background: linear-gradient(180deg, rgba(26, 18, 38, 0.72) 0%, rgba(8, 5, 14, 0.88) 100%);
-  color: rgba(255, 238, 200, 0.9);
-  font-family: 'OkDanDan', Georgia, serif; cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.1), 0 10px 24px rgba(0, 0, 0, 0.52);
-  overflow: hidden;
-  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s, transform 0.12s, color 0.16s, filter 0.16s;
+  flex: 1;
+  display: flex; flex-direction: column; align-items: flex-start;
+  min-height: 80px; padding: 16px 22px 14px;
+  border: none; background: none;
+  cursor: pointer; overflow: visible;
+  font-family: 'OkDanDan', Georgia, serif;
+  color: rgba(255, 238, 200, 0.88);
+  transition: color 0.18s, transform 0.14s;
 }
+/* 수평으로 길게 뻗는 어두운 그림자 띠 — 가로 경계 멀리 흐려지고 세로는 은은하게 */
 .event-choice-btn::before {
   content: '';
-  position: absolute; inset: 1px;
-  border-radius: 11px;
-  background: linear-gradient(90deg, transparent, rgba(255, 232, 168, 0.06), transparent);
-  opacity: 0.55; pointer-events: none;
+  position: absolute;
+  left: -110px; right: -110px; top: 0; bottom: 0;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(0, 0, 0, 0.34) 22%,
+    rgba(0, 0, 0, 0.40) 50%,
+    rgba(0, 0, 0, 0.34) 78%,
+    transparent 100%
+  );
+  pointer-events: none; z-index: 0;
+  transition: opacity 0.18s;
+  opacity: 0.82;
 }
-.event-choice-btn::after {
-  content: attr(data-choice-label);
-  position: absolute; left: 56px; top: 50%;
-  transform: translateY(-50%) scale(0.96);
-  font-size: 18px; font-weight: 900; letter-spacing: 0.1em;
-  color: rgba(255, 235, 190, 0.48);
-  opacity: 0; pointer-events: none;
-  text-shadow: 0 0 18px rgba(244, 196, 108, 0.5);
+.event-choice-btn:hover::before { opacity: 1; }
+.event-choice-btn:hover { color: rgba(255, 248, 226, 0.98); transform: translateY(-3px); }
+
+/* 레이블·구분선·효과 텍스트 — 그림자 레이어 위로 */
+.event-choice-copy {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; gap: 7px; width: 100%;
 }
-.event-choice-btn:hover {
-  border-color: rgba(255, 222, 140, 0.86);
-  background: linear-gradient(180deg, rgba(36, 24, 50, 0.9), rgba(10, 7, 16, 0.96));
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.24), 0 14px 32px rgba(0, 0, 0, 0.66), 0 0 38px rgba(244, 164, 96, 0.24);
-  color: rgba(255, 248, 224, 1);
-  transform: translateX(4px) scale(1.025);
-  animation: event-choice-hover-tremble 0.34s linear infinite;
+.event-choice-label {
+  font-size: 22px; font-weight: 900; letter-spacing: 0.07em; line-height: 1.1; display: block;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9), 0 1px 4px rgba(0, 0, 0, 0.95);
+  transition: text-shadow 0.18s, transform 0.14s;
 }
-.event-choice-mark { display: flex; flex-direction: column; gap: 4px; opacity: 0.78; }
-.event-choice-mark span { display: block; width: 18px; height: 2px; border-radius: 2px; background: rgba(255, 230, 170, 0.78); box-shadow: 0 0 8px rgba(244, 196, 108, 0.16); }
-.event-choice-copy { position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; min-width: 0; white-space: nowrap; }
-.event-choice-label { font-size: 17px; font-weight: 900; letter-spacing: 0.08em; transition: transform 0.14s ease, text-shadow 0.14s ease, color 0.14s ease; }
-.event-choice-divider { color: rgba(255, 215, 120, 0.5); font-size: 16px; }
-.event-choice-effects { font-size: 13px; color: rgba(232, 214, 180, 0.82); letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; }
-.event-choice-btn:hover .event-choice-label,
-.event-choice-btn:hover .event-choice-effects { color: rgba(255, 248, 224, 1); text-shadow: 0 0 16px rgba(244, 196, 108, 0.42), 0 0 28px rgba(255, 236, 188, 0.18); }
-.event-choice-btn.is-selected { animation: event-choice-pick-pop 0.5s cubic-bezier(0.18, 0.86, 0.24, 1) both; }
-.event-choice-btn.is-selected::after { animation: event-choice-afterimage 0.48s cubic-bezier(0.18, 0.86, 0.24, 1) both; }
-.event-burn-btn { margin-top: 0; }
-.event-burn-btn.is-disabled { opacity: 0.36; pointer-events: none; }
-.event-burn-btn, .event-burn-btn.is-armed { border-color: rgba(86, 78, 82, 0.48); color: rgba(112, 108, 114, 0.82); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 24px rgba(0, 0, 0, 0.56); }
-.event-burn-btn .event-choice-label, .event-burn-btn .event-choice-effects, .event-burn-btn .event-choice-divider { color: rgba(96, 94, 100, 0.86); text-shadow: none; }
-.event-burn-btn .event-choice-mark span { background: rgba(94, 90, 96, 0.76); box-shadow: none; }
-.event-burn-btn.is-armed:hover { border-color: rgba(126, 112, 108, 0.72); box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.08), 0 14px 32px rgba(0, 0, 0, 0.66), 0 0 24px rgba(80, 70, 66, 0.2); }
-.event-burn-btn.is-armed:hover .event-choice-label, .event-burn-btn.is-armed:hover .event-choice-effects { color: rgba(178, 172, 178, 0.96); text-shadow: 0 0 12px rgba(150, 140, 136, 0.24); }
+.event-choice-btn:hover .event-choice-label {
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.9), 0 0 28px currentColor, 0 1px 4px rgba(0, 0, 0, 0.95);
+}
+/* 직업카드 divider 스타일 — 좌측 currentColor에서 우측 투명으로 페이드 */
+.event-choice-divider-line {
+  display: block; height: 1.5px; width: 44px; border-radius: 2px;
+  background: linear-gradient(90deg, currentColor 0%, transparent 100%);
+  opacity: 0.40; margin: 1px 0;
+  transition: width 0.2s, opacity 0.18s;
+}
+.event-choice-btn:hover .event-choice-divider-line { width: 70px; opacity: 0.62; }
+.event-choice-effects {
+  font-size: 13px; color: rgba(210, 198, 178, 0.72); letter-spacing: 0.04em;
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.88); line-height: 1.5; white-space: normal;
+}
+.event-effect-part.is-demerit {
+  color: rgba(218, 72, 52, 0.88);
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.88), 0 0 10px rgba(200, 40, 28, 0.18);
+}
+.event-effect-sep { color: rgba(180, 168, 148, 0.55); }
+
+/* 붉은 양초 — 따뜻한 연붉은 */
+.event-choice--candle-red { color: rgba(238, 126, 112, 0.9); }
+.event-choice--candle-red:hover { color: rgba(255, 152, 138, 1); }
+.event-choice--candle-red .event-choice-divider-line {
+  background: linear-gradient(90deg, rgba(238, 100, 82, 0.85) 0%, transparent 100%);
+}
+
+/* 푸른 양초 — 차갑고 맑은 청색 */
+.event-choice--candle-blue { color: rgba(104, 158, 240, 0.9); }
+.event-choice--candle-blue:hover { color: rgba(130, 186, 255, 1); }
+.event-choice--candle-blue .event-choice-divider-line {
+  background: linear-gradient(90deg, rgba(88, 148, 228, 0.85) 0%, transparent 100%);
+}
+
+/* 불태우기 — 하단 중앙 단독 배치, 일렁이는 위험한 색 */
+.event-burn-btn {
+  flex: none; align-self: center;
+  width: min(60%, 360px); min-height: 68px;
+  align-items: center; text-align: center;
+  margin-top: 4px;
+}
+.event-burn-btn .event-choice-copy { align-items: center; }
+.event-burn-btn .event-choice-divider-line {
+  background: linear-gradient(90deg, transparent 0%, rgba(210, 72, 40, 0.72) 50%, transparent 100%);
+  width: 52px;
+}
+.event-burn-btn:hover .event-choice-divider-line { width: 80px; }
+.event-burn-btn.is-disabled { opacity: 0.28; pointer-events: none; }
+/* 비활성 상태: 소灯 회색톤 */
+.event-burn-btn:not(.is-armed) .event-choice-label { color: rgba(110, 100, 104, 0.60); }
+.event-burn-btn:not(.is-armed) .event-choice-effects { color: rgba(96, 88, 92, 0.55); }
+/* 활성 상태: 일렁이는 불꽃 */
+.event-burn-btn.is-armed .event-choice-label {
+  animation: event-burn-flicker 1.8s ease-in-out infinite;
+}
+.event-burn-btn.is-armed:hover { transform: translateY(-2px) scale(1.04); }
+
+/* 선택 완료 애니메이션 */
+.event-choice-btn.is-selected { animation: event-choice-pick-pop 0.48s cubic-bezier(0.18, 0.86, 0.24, 1) both; }
+
+/* 열기·닫기 */
 #event-entry-overlay.is-opening { pointer-events: none; }
 #event-entry-overlay.is-opening .event-entry-content { opacity: 0; transition: opacity 0.22s ease; }
 #event-entry-overlay.is-opening .event-entry-illu { animation: event-illu-fold-out 0.72s cubic-bezier(0.2, 0.72, 0.26, 1) forwards; }
 #event-entry-overlay.is-opening .job-rail-curtain--left { animation: job-curtain-open-left 0.9s 0.72s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
 #event-entry-overlay.is-opening .job-rail-curtain--right { animation: job-curtain-open-right 0.9s 0.72s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
+
 @keyframes event-illu-reveal {
   0% { opacity: 0; clip-path: inset(0 50% 0 50%); transform: scaleY(0.965); filter: saturate(0.75) brightness(0.58); }
   48% { opacity: 0.52; clip-path: inset(0 28% 0 28%); }
@@ -2706,19 +2757,26 @@ export class GameBoardRenderer {
   62% { opacity: 0.48; clip-path: inset(0 43% 0 43%); }
   100% { opacity: 0; clip-path: inset(0 50% 0 50%); transform: scaleY(0.965); filter: saturate(0.75) brightness(0.54); }
 }
-@keyframes event-line-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes event-choice-hover-tremble {
-  0%, 100% { translate: 0 0; }
-  25% { translate: 0.6px -0.4px; }
-  50% { translate: -0.5px 0.3px; }
-  75% { translate: 0.4px 0.5px; }
+@keyframes event-line-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes event-choice-pick-pop {
+  0% { transform: scale(1); filter: brightness(1); }
+  42% { transform: scale(1.07); filter: brightness(1.28); }
+  100% { transform: scale(1.01); filter: brightness(1.04); }
 }
-@keyframes event-choice-pick-pop { 0% { transform: scale(1); filter: brightness(1); } 45% { transform: scale(1.09); filter: brightness(1.24); } 100% { transform: scale(1.02); filter: brightness(1.04); } }
-@keyframes event-choice-afterimage {
-  0% { opacity: 0.78; transform: translateY(-50%) scale(0.96); filter: blur(0); }
-  100% { opacity: 0; transform: translateY(-50%) translateX(22px) scale(1.42); filter: blur(5px); }
+@keyframes event-choice-finished {
+  0% { opacity: 1; transform: scale(1); }
+  42% { opacity: 0.92; transform: scale(1.05); }
+  100% { opacity: 0; transform: scale(0.88) translateY(8px); filter: blur(4px); }
 }
-@keyframes event-choice-finished { 0% { opacity: 1; transform: scale(1); filter: blur(0); } 45% { opacity: 0.96; transform: scale(1.08); } 100% { opacity: 0; transform: scale(0.86) translateY(8px); filter: blur(4px); } }
+/* 불태우기 일렁임: 주황-적-황색 사이를 비규칙적으로 반짝인다 */
+@keyframes event-burn-flicker {
+  0%   { color: rgba(218, 78, 44, 0.92); text-shadow: 0 2px 14px rgba(0,0,0,0.9), 0 0 14px rgba(200, 58, 28, 0.28); }
+  18%  { color: rgba(255, 134, 54, 0.98); text-shadow: 0 2px 14px rgba(0,0,0,0.9), 0 0 22px rgba(255, 100, 38, 0.50); }
+  42%  { color: rgba(196, 44, 24, 0.88); text-shadow: 0 2px 14px rgba(0,0,0,0.9), 0 0 8px rgba(180, 28, 18, 0.16); }
+  66%  { color: rgba(255, 172, 64, 0.96); text-shadow: 0 2px 14px rgba(0,0,0,0.9), 0 0 30px rgba(255, 126, 44, 0.62); }
+  84%  { color: rgba(230, 60, 36, 0.90); text-shadow: 0 2px 14px rgba(0,0,0,0.9), 0 0 16px rgba(210, 48, 28, 0.36); }
+  100% { color: rgba(218, 78, 44, 0.92); text-shadow: 0 2px 14px rgba(0,0,0,0.9), 0 0 14px rgba(200, 58, 28, 0.28); }
+}
 `
     document.head.appendChild(style)
   }

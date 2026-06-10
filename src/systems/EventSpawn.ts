@@ -80,6 +80,13 @@ export class EventSpawnController {
     return this.chance
   }
 
+  /** 런 재시작 시 PRD 상태를 초기화한다. */
+  reset(): void {
+    this.chance = this.cfg.baseChance
+    this.misses = 0
+    this.firstDoorSpawned = false
+  }
+
   /** Resolve one turn. Ineligible turns carry the accumulated chance untouched.
    *  Eligible turns roll: a hit resets the ramp (and unlocks the gentle phase),
    *  a miss raises the chance for next time. Returns true when a door spawns. */

@@ -63,6 +63,7 @@ import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, spriteForUpgradePackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
+import { EventSpawnController } from '@systems/EventSpawn'
 import { BgmManager } from '@/audio/BgmManager'
 import bgm001Url from './assets/audio/bgm_001.mp3'
 import bgm002Url from './assets/audio/bgm_002.mp3'
@@ -96,6 +97,8 @@ document.body.style.backgroundAttachment = 'fixed'
 const gameState = new GameState()
 const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
+// 이벤트 문 PRD 컨트롤러 — 일반 스폰 버킷과 독립된 확률로 이벤트 칸을 생성한다.
+const eventSpawnCtrl = new EventSpawnController()
 const boardRenderer = new GameBoardRenderer('game-board')
 // 배경음: 3트랙을 무작위 순서로 크로스페이드 연결, 첫 입력에서 자동재생.
 const bgm = new BgmManager([bgm001Url, bgm002Url, bgm003Url])
@@ -2166,10 +2169,20 @@ function syncFieldEnemyEmberBonus(): string[] {
   return increasedIds
 }
 
-function compactAndRefillAllLanes(): boolean {
+function compactAndRefillAllLanes(
+  eventDoorInjection?: { laneIndex: number; card: ReturnType<CardSpawner['generateEventDoor']> }
+): boolean {
   // Delegate gravity + top-refill rules to GameState so row-clearing combo
   // effects cannot leave half-empty rails after a single maintenance pass.
-  return gameState.compactAndRefillRails(() => cardSpawner.spawnCardForRefill())
+  let injected = false
+  return gameState.compactAndRefillRails((laneIndex) => {
+    // 이벤트 문 주입: 지정 레인에서 최초 1회만 대체한다.
+    if (eventDoorInjection && !injected && laneIndex === eventDoorInjection.laneIndex) {
+      injected = true
+      return eventDoorInjection.card
+    }
+    return cardSpawner.spawnCardForRefill()
+  })
 }
 
 /** 현재 레일을 스캔해 적/보스/특수 카드 이름을 도감 발견 집합에 추가한다. */
@@ -2221,6 +2234,7 @@ async function startGame(): Promise<void> {
   pendingHandTarget = null
   gameState.reset()
   cardSpawner.resetRelicModifiers()
+  eventSpawnCtrl.reset()
   finalAscentStarlightRuleActive = false
   syncFinalAscentRuleToSpawner()
   score = 0
@@ -3295,7 +3309,13 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
     await applyTurnStartRelics()
   }
 
-  const moved = compactAndRefillAllLanes()
+  // 이벤트 문 독립 PRD 롤: 실제 턴 전진 시에만, 보스·최종등반 중엔 중단.
+  const eventDoorInjection =
+    advanceTurn && !gameState.bossBattleActive && !finalAscentStarlightRuleActive &&
+    eventSpawnCtrl.rollForTurn(gameState.getCurrentTurn())
+      ? { laneIndex: Math.floor(Math.random() * 3), card: cardSpawner.generateEventDoor() }
+      : undefined
+  const moved = compactAndRefillAllLanes(eventDoorInjection)
   render()
   if (moved) await wait(460)
 
@@ -3461,7 +3481,9 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   }, 220)
 }
 
-/** 이벤트 대사 한 줄을 보여주고, 클릭으로 타이핑 완료/다음 줄 넘김을 처리한다. */
+/** 이벤트 대사 한 줄을 보여주고, 클릭으로 타이핑 완료/다음 줄 넘김을 처리한다.
+ *  최소 보존 시간(380ms) 동안은 "다음 줄" 진행을 막아 연타로 대사를 건너뛰지 못하게 한다.
+ *  타이핑 중 클릭은 언제든 즉시 완성할 수 있다(completeTyping은 보존 시간과 무관). */
 async function playEventDialogueLine(line: EventDialogueLine): Promise<void> {
   const bubble = line.speaker === 'player' ? speechBubble : eventDemonBubble
   const otherBubble = line.speaker === 'player' ? eventDemonBubble : speechBubble
@@ -3470,19 +3492,21 @@ async function playEventDialogueLine(line: EventDialogueLine): Promise<void> {
 
   await new Promise<void>((resolve) => {
     let done = false
+    let minDisplayReady = false
+    const minDisplayTimer = window.setTimeout(() => { minDisplayReady = true }, 380)
     const finish = (): void => {
       if (done) return
       done = true
+      window.clearTimeout(minDisplayTimer)
       document.removeEventListener('mousedown', onClick, true)
       window.clearTimeout(fallback)
       resolve()
     }
     const onClick = (): void => {
-      // 첫 클릭은 타이핑을 끝내고, 이미 다 출력된 뒤의 클릭은 다음 줄로 넘긴다.
-      if (bubble.isTyping) {
-        bubble.completeTyping()
-        return
-      }
+      // 타이핑 중이면 즉시 완성(보존 시간 관계없이 허용).
+      if (bubble.isTyping) { bubble.completeTyping(); return }
+      // 최소 보존 시간이 지난 뒤에만 다음 줄로 넘어간다.
+      if (!minDisplayReady) return
       finish()
     }
     const fallback = window.setTimeout(finish, 1100 + line.text.length * 70)

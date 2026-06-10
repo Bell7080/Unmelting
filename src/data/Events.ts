@@ -48,6 +48,8 @@ export interface EventChoice {
   emphasis?: 'danger'
   /** 선택 효과가 끝난 뒤 이벤트 NPC가 마무리로 말하는 대사. */
   afterDialogue?: EventDialogueLine[]
+  /** CSS 테마 클래스 접미사: 'candle-red' → .event-choice--candle-red 로 적용된다. */
+  themeClass?: string
 }
 
 export interface EventDefinition {
@@ -83,6 +85,7 @@ const EVENT_001: EventDefinition = {
       label: '붉은 양초',
       effectLines: ['최대체력 -5 · 공격력+1'],
       effect: { kind: 'stat', maxHealth: -5, damage: 1 },
+      themeClass: 'candle-red',
       afterDialogue: [
         { speaker: 'npc', text: '음. . .' },
         { speaker: 'npc', text: '그 선택은. . . 뭐, 재밌네요.' },
@@ -92,6 +95,7 @@ const EVENT_001: EventDefinition = {
       label: '푸른 양초',
       effectLines: ['랜덤 손패 + 4'],
       effect: { kind: 'randomHand', count: 4 },
+      themeClass: 'candle-blue',
       afterDialogue: [
         { speaker: 'npc', text: '하하하!' },
         { speaker: 'npc', text: '역시, 이쪽이 더 마음에 드는 모양이지?' },
