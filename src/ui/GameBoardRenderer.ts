@@ -2580,6 +2580,20 @@ export class GameBoardRenderer {
 .event-entry-illu.event-entry-illu--empty {
   background: radial-gradient(120% 90% at 50% 38%, rgba(40, 28, 52, 0.96), rgba(8, 5, 13, 0.99));
 }
+/* 이벤트 진입 커튼은 직업선택보다 더 깊게 겹쳐 가운데까지 확실히 가린다.
+   공용 .job-rail-curtain은 그대로 두고, 이 오버레이에서만 폭을 넓히고 투명 페이드를
+   안쪽 끝단(92%→100%)으로 밀어 두 커튼이 만나는 중앙이 옅게 비치지 않게 한다. */
+#event-entry-overlay .job-rail-curtain { width: 68%; }
+#event-entry-overlay .job-rail-curtain--left {
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.6) 0%, rgba(7, 5, 13, 0.95) 16%, rgba(21, 15, 33, 0.97) 60%, rgba(6, 4, 12, 0.98) 92%, rgba(6, 4, 12, 0) 100%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.028) 0 1px, transparent 1px 18px);
+}
+#event-entry-overlay .job-rail-curtain--right {
+  background:
+    linear-gradient(270deg, rgba(0, 0, 0, 0.6) 0%, rgba(7, 5, 13, 0.95) 16%, rgba(21, 15, 33, 0.97) 60%, rgba(6, 4, 12, 0.98) 92%, rgba(6, 4, 12, 0) 100%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.028) 0 1px, transparent 1px 18px);
+}
 .event-entry-content {
   position: absolute; inset: 0; z-index: 6;
   display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
