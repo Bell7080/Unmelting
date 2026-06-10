@@ -101,8 +101,16 @@ const boardRenderer = new GameBoardRenderer('game-board')
 const bgm = new BgmManager([bgm001Url, bgm002Url, bgm003Url])
 const speechBubble = new SpeechBubble({ anchor: '.player-card', offsetX: 150, tail: 'bottom-left', fontSize: 22 })
 const bossBubble   = new SpeechBubble({ anchor: '.cell.type-boss', offsetX: 40, offsetY: 70, tail: 'bottom-left', theme: 'boss', autoDismissMs: 0 })
-// 이벤트 악마 대사 — 레일 좌측 상단에 임시 배치(위치는 추후 조정 예정). 수동 dismiss.
-const eventDemonBubble = new SpeechBubble({ anchor: '.rail', offsetX: -170, offsetY: -120, tail: 'none', theme: 'boss', autoDismissMs: 0, fontSize: 20 })
+// 이벤트 악마 대사 — 이벤트 오버레이 내부 앵커를 기준으로 띄워 커튼/레일 좌표 변화에도 가려지지 않게 한다.
+const eventDemonBubble = new SpeechBubble({
+  anchor: '#event-demon-anchor',
+  offsetY: -8,
+  tail: 'none',
+  theme: 'boss',
+  autoDismissMs: 0,
+  fontSize: 20,
+  maxWidth: 520,
+})
 let gameActive = true
 let inputLocked = false
 let chain: ChainState = HandSystem.newChain()

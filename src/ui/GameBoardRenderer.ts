@@ -2428,6 +2428,7 @@ export class GameBoardRenderer {
              ${art ? `style="background-image:url('${art}')"` : ''} aria-hidden="true"></div>
         <div class="job-rail-curtain job-rail-curtain--left" aria-hidden="true"></div>
         <div class="job-rail-curtain job-rail-curtain--right" aria-hidden="true"></div>
+        <div id="event-demon-anchor" class="event-dialogue-anchor event-dialogue-anchor--demon" aria-hidden="true"></div>
         <div class="event-entry-content">
           <div class="event-choices" hidden>
             <div class="event-choices-row">
@@ -2456,14 +2457,16 @@ export class GameBoardRenderer {
     window.addEventListener('resize', alignToRail)
     window.addEventListener('scroll', alignToRail)
 
-    // 3) 커튼이 닫히는 동안(≈0.68s) 기다린 뒤 문을 소비(커튼 뒤에서 제거 → 빈칸이 안 보임).
-    await new Promise((r) => window.setTimeout(r, 700))
+    // 3) 느린 이벤트 커튼이 충분히 닫힐 때까지 기다린 뒤 문을 소비한다.
+    //    선택지는 hidden 우선 CSS로 잠가 대사가 끝나기 전 버튼이 비치지 않게 한다.
+    await new Promise((r) => window.setTimeout(r, 1320))
     onConsume()
     alignToRail()
 
-    // 4) 이벤트 배경 일러스트 페이드인.
+    // 4) 커튼이 닫힌 뒤 한 박자 쉬고, 씬 일러스트를 세로 슬릿에서 좌우로 열어 공개한다.
+    await new Promise((r) => window.setTimeout(r, 260))
     overlay.querySelector<HTMLElement>('.event-entry-illu')?.classList.add('is-shown')
-    await new Promise((r) => window.setTimeout(r, 520))
+    await new Promise((r) => window.setTimeout(r, 760))
 
     // 5) 대사 진행: 별도 대사창 없이 게임의 말풍선 시스템(다라라락 타이핑)으로 출력한다.
     //    플레이어/악마 위치는 호출부가 말풍선 앵커로 잡아 처리한다.
@@ -2498,12 +2501,12 @@ export class GameBoardRenderer {
     )
   }
 
-  /** 이벤트 종료: 암막커튼을 열고(직업선택 open 키프레임 재사용) 오버레이를 제거한다. */
+  /** 이벤트 종료: 선택 UI → 일러스트 → 커튼 순서의 역재생이 끝난 뒤 오버레이를 제거한다. */
   async closeEventEntry(): Promise<void> {
     const overlay = this.eventEntryOverlayElement
     if (!overlay) return
     overlay.classList.add('is-opening')
-    await new Promise((r) => window.setTimeout(r, 760))
+    await new Promise((r) => window.setTimeout(r, 1400))
     this.clearEventEntryOverlay()
   }
 
@@ -2544,32 +2547,46 @@ export class GameBoardRenderer {
 .event-entry-illu {
   position: absolute; inset: 0; z-index: 5;
   background-size: cover; background-position: center;
-  opacity: 0; transition: opacity 0.5s ease;
+  opacity: 0;
+  clip-path: inset(0 50% 0 50%);
+  transform: scaleY(0.965);
+  filter: saturate(0.88) brightness(0.72);
 }
-.event-entry-illu.is-shown { opacity: 1; }
+.event-entry-illu.is-shown { animation: event-illu-reveal 0.72s cubic-bezier(0.18, 0.82, 0.22, 1) both; }
 .event-entry-illu.event-entry-illu--empty {
   background: radial-gradient(120% 90% at 50% 38%, rgba(40, 28, 52, 0.96), rgba(8, 5, 13, 0.99));
 }
-/* 이벤트 진입 커튼은 직업선택보다 더 깊게 겹쳐 가운데까지 확실히 가린다.
-   공용 .job-rail-curtain은 그대로 두고, 이 오버레이에서만 폭을 넓히고 투명 페이드를
-   안쪽 끝단(92%→100%)으로 밀어 두 커튼이 만나는 중앙이 옅게 비치지 않게 한다. */
-#event-entry-overlay .job-rail-curtain { width: 68%; }
+/* 이벤트 커튼은 직업 선택보다 느리게 닫히되 폭은 줄여 중앙 겹침을 얕게 만든다.
+   투명 끝단을 조금 안쪽으로 당겨 닫힌 뒤에도 중앙이 과하게 두꺼워 보이지 않게 한다. */
+#event-entry-overlay .job-rail-curtain {
+  width: 56%;
+  animation-duration: 1.22s;
+  animation-timing-function: cubic-bezier(0.15, 0.78, 0.22, 1);
+}
 #event-entry-overlay .job-rail-curtain--left {
   background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0.6) 0%, rgba(7, 5, 13, 0.95) 16%, rgba(21, 15, 33, 0.97) 60%, rgba(6, 4, 12, 0.98) 92%, rgba(6, 4, 12, 0) 100%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.56) 0%, rgba(7, 5, 13, 0.93) 18%, rgba(21, 15, 33, 0.95) 58%, rgba(6, 4, 12, 0.9) 82%, rgba(6, 4, 12, 0) 100%),
     repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.028) 0 1px, transparent 1px 18px);
 }
 #event-entry-overlay .job-rail-curtain--right {
   background:
-    linear-gradient(270deg, rgba(0, 0, 0, 0.6) 0%, rgba(7, 5, 13, 0.95) 16%, rgba(21, 15, 33, 0.97) 60%, rgba(6, 4, 12, 0.98) 92%, rgba(6, 4, 12, 0) 100%),
+    linear-gradient(270deg, rgba(0, 0, 0, 0.56) 0%, rgba(7, 5, 13, 0.93) 18%, rgba(21, 15, 33, 0.95) 58%, rgba(6, 4, 12, 0.9) 82%, rgba(6, 4, 12, 0) 100%),
     repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.028) 0 1px, transparent 1px 18px);
 }
+.event-dialogue-anchor {
+  position: absolute;
+  width: 1px; height: 1px;
+  pointer-events: none;
+}
+/* 악마 말풍선 기준점을 이벤트 셸 내부에 둬 레일 좌표/오프셋 변화로 화면 밖에 뜨지 않게 한다. */
+.event-dialogue-anchor--demon { left: 50%; top: 22%; z-index: 7; }
 .event-entry-content {
   position: absolute; inset: 0; z-index: 6;
   display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
   padding: 0 4% 5%; gap: 14px; pointer-events: none;
 }
 .event-entry-content > * { pointer-events: auto; }
+.event-choices[hidden] { display: none !important; }
 .event-choices { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .event-choices.is-in { animation: event-line-in 0.3s ease both; }
 .event-choices-row { display: flex; gap: 18px; justify-content: center; }
@@ -2591,10 +2608,20 @@ export class GameBoardRenderer {
 .event-burn-btn.is-armed:hover { border-color: rgba(255, 120, 80, 0.95); box-shadow: 0 0 30px rgba(230, 70, 30, 0.45); }
 .event-burn-btn.is-armed .event-choice-label { color: rgba(255, 210, 180, 0.96); text-shadow: 0 0 14px rgba(230, 80, 40, 0.5); }
 #event-entry-overlay.is-opening { pointer-events: none; }
-#event-entry-overlay.is-opening .event-entry-content { opacity: 0; transition: opacity 0.3s ease; }
-#event-entry-overlay.is-opening .job-rail-curtain--left { animation: job-curtain-open-left 0.72s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
-#event-entry-overlay.is-opening .job-rail-curtain--right { animation: job-curtain-open-right 0.72s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
-#event-entry-overlay.is-opening .event-entry-illu { opacity: 0; transition: opacity 0.4s ease; }
+#event-entry-overlay.is-opening .event-entry-content { opacity: 0; transition: opacity 0.22s ease; }
+#event-entry-overlay.is-opening .event-entry-illu { animation: event-illu-fold-out 0.56s cubic-bezier(0.2, 0.72, 0.26, 1) forwards; }
+#event-entry-overlay.is-opening .job-rail-curtain--left { animation: job-curtain-open-left 0.82s 0.5s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
+#event-entry-overlay.is-opening .job-rail-curtain--right { animation: job-curtain-open-right 0.82s 0.5s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
+@keyframes event-illu-reveal {
+  0% { opacity: 0; clip-path: inset(0 50% 0 50%); transform: scaleY(0.965); filter: saturate(0.75) brightness(0.58); }
+  42% { opacity: 0.94; clip-path: inset(0 34% 0 34%); }
+  100% { opacity: 1; clip-path: inset(0 0 0 0); transform: scaleY(1); filter: saturate(1) brightness(1); }
+}
+@keyframes event-illu-fold-out {
+  0% { opacity: 1; clip-path: inset(0 0 0 0); transform: scaleY(1); filter: saturate(1) brightness(1); }
+  56% { opacity: 0.9; clip-path: inset(0 38% 0 38%); }
+  100% { opacity: 0; clip-path: inset(0 50% 0 50%); transform: scaleY(0.965); filter: saturate(0.75) brightness(0.54); }
+}
 @keyframes event-line-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 `
     document.head.appendChild(style)

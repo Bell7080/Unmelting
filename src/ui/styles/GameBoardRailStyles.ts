@@ -487,8 +487,7 @@ export const GAME_BOARD_RAIL_STYLES = `
     linear-gradient(180deg, rgba(20, 16, 28, 0.0) 38%, rgba(20, 16, 28, 0.55) 70%, rgba(10, 7, 18, 0.92) 100%);
 }
 .flower-note { color: rgba(224, 255, 196, 0.96); }
-/* 이벤트 문 칸 — 다른 칸과 동일하게 상단 얇은 그라데이션 띠(::before)를 두되, 색감 없이
-   흑백 톤(흰→검정)으로 둔다. 테두리도 검은 톤으로 통일한다. */
+/* 이벤트 문 칸 — 검은 테두리와 섞이지 않도록 상단 라벨 띠는 흰색 그라데이션만 사용한다. */
 .cell.card.type-event { border-color: rgba(18, 18, 22, 0.9); }
 .cell.card.type-event::before {
   content: '';
@@ -496,7 +495,7 @@ export const GAME_BOARD_RAIL_STYLES = `
   left: 6px; right: 6px; top: 2px;
   height: 3px;
   border-radius: 4px;
-  background: linear-gradient(90deg, transparent, rgba(245, 245, 248, 0.92) 26%, rgba(14, 14, 18, 0.94) 74%, transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.94) 28%, rgba(255, 255, 255, 0.7) 72%, transparent);
   z-index: 3;
   pointer-events: none;
   opacity: 0.86;
