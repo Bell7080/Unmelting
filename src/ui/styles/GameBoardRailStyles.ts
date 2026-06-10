@@ -487,6 +487,23 @@ export const GAME_BOARD_RAIL_STYLES = `
     linear-gradient(180deg, rgba(20, 16, 28, 0.0) 38%, rgba(20, 16, 28, 0.55) 70%, rgba(10, 7, 18, 0.92) 100%);
 }
 .flower-note { color: rgba(224, 255, 196, 0.96); }
+/* 이벤트 문 라벨/뱃지 — 다른 칸의 황금 띠와 달리 색감 없이 깔끔한 흑백 톤. */
+.event-note {
+  color: rgba(246, 246, 248, 0.97);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.96), 0 0 8px rgba(0, 0, 0, 0.7);
+}
+.event-badge {
+  border-color: rgba(6, 6, 8, 0.92);
+  background: rgba(6, 6, 8, 0.84);
+  color: rgba(248, 248, 250, 0.97);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
+}
+/* 전방 도달 시 뱃지 '슈룩' 팝인(슬라이드+스케일 1회). */
+.event-badge.is-pop { animation: event-badge-pop 0.32s cubic-bezier(0.18, 0.84, 0.24, 1) both; }
+@keyframes event-badge-pop {
+  from { opacity: 0; transform: translateY(-6px) scale(0.4); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 /* ── 불씨 하락 시 적 강화(공격력↑) 위험 연출 ──
    카드가 붉게 빛나며 살짝 확대됐다가 가라앉고, 공격력 칩은 잔상을 남기며 커진다. */

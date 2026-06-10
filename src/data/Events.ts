@@ -5,70 +5,94 @@
  *  - 이벤트는 event_001, event_002 … 순서로 이 파일에 누적한다(한 이벤트 = 한 EventDefinition).
  *  - 각 이벤트의 씬 일러스트는 src/assets/sprites/event_XXX.webp 와 1:1 대응한다
  *    (event_000 은 레일 위 "문 칸" 전용이라 여기에는 들어가지 않는다).
- *  - 한 이벤트는 간단한 대사 → (있으면) 선택지 → (선택 시) 효과/미니게임 흐름을
- *    데이터로만 기술한다. 실제 효과/미니게임 로직은 추후 핸들러에서 id로 분기한다.
+ *  - 한 이벤트는 대사(화자별) → 선택지 버튼 흐름을 데이터로 기술한다.
+ *    실제 효과 적용/이벤트 전투는 index.ts 의 applyEventChoice 가 effect.kind 로 분기한다.
  *  - 새 이벤트를 추가할 때는 EventId 유니온과 EVENT_DEFINITIONS 두 곳만 갱신하면 된다.
  */
+
+import type { HandCardId } from '@entities/HandCard'
 
 /** 추가될 때마다 확장하는 이벤트 식별자. 파일명 event_XXX 와 동일하게 유지한다. */
 export type EventId = 'event_001'
 
-/**
- * 이벤트 진행 형식.
- *  - 'dialogue' : 대사만 보고 닫는 단순 이벤트.
- *  - 'choice'   : 대사 후 2~N개 선택지를 제시한다.
- *  - 'minigame' : 가위바위보/조커뽑기 등 특수 미니게임(추후 구현, kind로 분기).
- */
-export type EventKind = 'dialogue' | 'choice' | 'minigame'
+/** 대사 한 줄. 화자에 따라 이름표/정렬을 다르게 렌더한다. */
+export interface EventDialogueLine {
+  /** 'npc' = 이벤트 화자(인형 등), 'player' = 플레이어 응답. */
+  speaker: 'npc' | 'player'
+  text: string
+}
 
-/** 선택지 1개. 효과 적용은 추후 id 기반 핸들러에서 연결한다. */
+/**
+ * 선택지 효과. index.ts applyEventChoice 가 kind 로 분기해 실제 게임 상태에 적용한다.
+ *  - 'stat'       : 최대 체력/공격력 영구 가감(음수 가능).
+ *  - 'randomHand' : 랜덤 손패 n장 지급.
+ *  - 'combat'     : 위험한 이벤트 전투(보스전과 같은 흐름). 손패 불씨를 소모해 끌어낸다.
+ */
+export type EventEffect =
+  | { kind: 'stat'; maxHealth?: number; damage?: number }
+  | { kind: 'randomHand'; count: number }
+  | { kind: 'combat'; consumeHand: HandCardId }
+
 export interface EventChoice {
-  /** 버튼에 표시할 짧은 라벨. */
+  /** 버튼 제목. */
   label: string
-  /** 선택 직후 보여줄 결과 대사. */
-  resultText: string
-  // TODO(effect): 선택 효과 적용 훅. 런 modifier/보상/손패 등과 연결할 때 추가한다.
+  /** 제목 아래 작은 글씨로 표기할 효과 요약(여러 줄 가능). */
+  effectLines: string[]
+  effect: EventEffect
+  /**
+   * 조건부 버튼: 지정한 손패가 있어야 활성화된다(없으면 완전 반투명/비활성).
+   * 불태우기처럼 위험 선택을 손패 자원으로 잠가두는 용도.
+   */
+  requiresHand?: HandCardId
+  /** 'burn' 등 화면 하단 중앙에 단독 배치하는 특수 버튼 표시. */
+  emphasis?: 'danger'
 }
 
 export interface EventDefinition {
   id: EventId
-  kind: EventKind
   /** 씬 일러스트 키(Sprites.spriteForEvent 로 로드). 예: 'event_001'. */
   illu: string
-  /** 화면 상단 제목. 없으면 미표시. */
+  /** 대사 이름표에 쓰는 화자 이름. */
   title: string
-  /** 대사 화자 이름(선택). */
-  speaker?: string
-  /** 진입 시 순서대로 보여줄 대사 라인. */
-  dialogue: string[]
-  /** kind==='choice' 일 때 제시할 선택지. 그 외에는 생략. */
-  choices?: EventChoice[]
+  /** 진입 시 순서대로 보여줄 대사. */
+  dialogue: EventDialogueLine[]
+  /** 대사 종료 후 제시할 선택지. */
+  choices: EventChoice[]
 }
 
 /**
- * event_001 — "두 개의 촛불".
- * 촛농이 흘러내리는 인형 같은 문지기가 붉은 초와 푸른 초 중 하나를 권한다.
- * (효과는 추후 연결: 지금은 분위기/선택 흐름만 확정한다.)
+ * event_001 — "양초 악마 인형".
+ * 촛농 흘러내리는 인형 같은 문지기가 붉은 초/푸른 초, 그리고 위험한 '불태우기'를 권한다.
  */
 const EVENT_001: EventDefinition = {
   id: 'event_001',
-  kind: 'choice',
   illu: 'event_001',
-  title: '두 개의 촛불',
-  speaker: '촛농 인형',
+  title: '양초 악마 인형',
   dialogue: [
-    '. . . 문을 열었구나.',
-    '여기까지 온 손님에겐 작은 선물을 주지.',
-    '붉은 초와 푸른 초. 하나만 가져갈 수 있어.',
+    { speaker: 'npc', text: '어라. . .?' },
+    { speaker: 'npc', text: '아직도 잠식되지 않은 인간이 있네요?' },
+    { speaker: 'player', text: '알 수 없는 소리를 하네.' },
+    { speaker: 'npc', text: '뭐, 상관 없겠죠. 그렇다면 저의 귀한 손님일테니까요.' },
+    { speaker: 'npc', text: '(한숨을 고르고.)' },
+    { speaker: 'npc', text: '자! 고르세요. 진실과 거짓, 꿈과 현실! 무엇을 원하시죠?' },
   ],
   choices: [
     {
-      label: '붉은 초',
-      resultText: '붉은 불꽃이 손끝에서 타오른다. 뜨겁지만, 오래가지 않을 온기.',
+      label: '붉은 양초',
+      effectLines: ['최대 체력 -5', '공격력 +1'],
+      effect: { kind: 'stat', maxHealth: -5, damage: 1 },
     },
     {
-      label: '푸른 초',
-      resultText: '푸른 불꽃이 조용히 일렁인다. 차갑지만, 깊고 멀리 비추는 빛.',
+      label: '푸른 양초',
+      effectLines: ['랜덤 손패 +4'],
+      effect: { kind: 'randomHand', count: 4 },
+    },
+    {
+      label: '불태우기',
+      effectLines: ['손패 불씨를 소모', '위험한 이벤트 전투'],
+      effect: { kind: 'combat', consumeHand: 'ember' },
+      requiresHand: 'ember',
+      emphasis: 'danger',
     },
   ],
 }

@@ -71,6 +71,14 @@ export interface StarlightSweep {
   cardId: string
 }
 
+export interface EventDoorTick {
+  laneIndex: number
+  cardId: string
+  /** 'started' = 전방 도달해 2턴 시작(뱃지 등장), 'tick' = 감소, 'closed' = 0 경과로 닫혀 제거됨. */
+  phase: 'started' | 'tick' | 'closed'
+  turnsLeft: number
+}
+
 export interface FlowerGrowth {
   laneIndex: number
   distance: number
@@ -419,6 +427,31 @@ export class TurnManager {
       swept.push({ laneIndex, cardId: card.id })
     }
     return swept
+  }
+
+  /** 전방(활성 행)에 도달한 이벤트 문의 닫힘 카운트다운을 진행한다.
+   *  -1(대기) → 도달 즉시 2로 시작(뱃지 '슈룩' 등장), 이후 매 턴 감소, 0 아래로 가면 닫혀 제거된다.
+   *  대기행(distance>0)에서는 카운트다운하지 않으므로 뱃지도 붙지 않는다. */
+  tickFrontEventDoors(): EventDoorTick[] {
+    const ticks: EventDoorTick[] = []
+    for (let laneIndex = 0; laneIndex < this.gameState.lanes.length; laneIndex++) {
+      const lane = this.gameState.lanes[laneIndex]
+      const card = lane.getCardAtDistance(0)
+      if (!card || card.type !== CardType.EVENT) continue
+      if (card.eventTurnsUntilClose < 0) {
+        card.eventTurnsUntilClose = 2
+        ticks.push({ laneIndex, cardId: card.id, phase: 'started', turnsLeft: 2 })
+        continue
+      }
+      card.eventTurnsUntilClose -= 1
+      if (card.eventTurnsUntilClose < 0) {
+        lane.setCardAtDistance(0, null)
+        ticks.push({ laneIndex, cardId: card.id, phase: 'closed', turnsLeft: -1 })
+      } else {
+        ticks.push({ laneIndex, cardId: card.id, phase: 'tick', turnsLeft: card.eventTurnsUntilClose })
+      }
+    }
+    return ticks
   }
 
   /** Grow bloomed flowers, then roll their escalating wilt chance into monster flowers. */

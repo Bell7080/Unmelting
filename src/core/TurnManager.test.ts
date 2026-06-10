@@ -376,3 +376,37 @@ describe('TurnManager starlight sweep', () => {
     expect(gameState.lanes[0].getCardAtDistance(0)).toBe(chest)
   })
 })
+
+describe('TurnManager event door countdown', () => {
+  it('starts at 2 on front arrival, ticks down, then closes after 0', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const door = new Card('door', CardType.EVENT, '이벤트', 'door')
+    gameState.lanes[1].setCardAtDistance(0, door)
+    expect(door.eventTurnsUntilClose).toBe(-1) // 대기: 뱃지 없음
+
+    // 전방 도달 → 2 시작(뱃지 등장).
+    expect(turnManager.tickFrontEventDoors()).toEqual([
+      { laneIndex: 1, cardId: 'door', phase: 'started', turnsLeft: 2 },
+    ])
+    expect(door.eventTurnsUntilClose).toBe(2)
+
+    // 2 → 1 → 0 감소.
+    expect(turnManager.tickFrontEventDoors()[0]).toMatchObject({ phase: 'tick', turnsLeft: 1 })
+    expect(turnManager.tickFrontEventDoors()[0]).toMatchObject({ phase: 'tick', turnsLeft: 0 })
+
+    // 0 경과 → 닫혀 제거.
+    expect(turnManager.tickFrontEventDoors()[0]).toMatchObject({ phase: 'closed' })
+    expect(gameState.lanes[1].getCardAtDistance(0)).toBeNull()
+  })
+
+  it('does not count down doors waiting in preview rows', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const door = new Card('door', CardType.EVENT, '이벤트', 'door')
+    gameState.lanes[0].setCardAtDistance(1, door) // preview row
+
+    expect(turnManager.tickFrontEventDoors()).toEqual([])
+    expect(door.eventTurnsUntilClose).toBe(-1)
+  })
+})

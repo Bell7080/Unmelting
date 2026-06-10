@@ -40,7 +40,7 @@ import { HandSystem, ChainState } from '@systems/HandSystem'
 import { EmberSystem } from '@systems/EmberSystem'
 import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT, Lane } from '@entities/Lane'
-import { pickEventForDoor } from '@data/Events'
+import { pickEventForDoor, type EventDefinition } from '@data/Events'
 import { CandleMode } from '@entities/Character'
 import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS, HAND_CARD_DEFINITIONS } from '@data/HandCards'
@@ -3294,6 +3294,22 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
   render()
   if (blooms.length > 0) await boardRenderer.animateFlowerBlooms(blooms)
   await sweepFrontStarlights()
+  await tickFrontEventDoors()
+}
+
+/** 전방 이벤트 문의 2턴 카운트다운을 진행한다. 도달 즉시 뱃지 '슈룩' 등장,
+ *  0 경과 시 보물처럼 은은히 닫혀 사라진다. 진입(클릭)하지 않은 문만 대상이다. */
+async function tickFrontEventDoors(): Promise<void> {
+  const ticks = turnManager.tickFrontEventDoors()
+  if (ticks.length === 0) return
+  // closed 문은 이미 모델에서 제거됐으므로 render 전 현재 DOM에서 좌표를 먼저 확보한다.
+  const closedRects = ticks
+    .filter((t) => t.phase === 'closed')
+    .map((t) => boardRenderer.getCardRect(t.cardId))
+  render()
+  for (const t of ticks) if (t.phase === 'started') boardRenderer.popEventBadge(t.cardId)
+  for (const rect of closedRects) if (rect) boardRenderer.playEventDoorCloseAt(rect)
+  if (closedRects.length > 0) await wait(360)
 }
 
 /** 전방에 내려앉은 별빛을 자동 수집한다. 별빛 1장당 런 턴 +1 + 턴 HUD 블라스트.
@@ -3425,23 +3441,63 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   }, 220)
 }
 
-/** 이벤트 문 클릭 → 불빛/행동 없이 이벤트 진입 연출(현 스코프: 일러스트 페이드인까지).
- *  진입 동안 손패/칸 선택을 잠그고, 종료 후 소비된 칸을 메워 일반 진행으로 돌아온다.
+/** 이벤트 문 클릭 → 불빛/행동 없이 이벤트 진입(대사 → 선택 → 효과). 진입 동안 손패/칸
+ *  선택을 잠그고, 선택 효과를 적용한 뒤 버튼→HUD 획득 블라스트를 쏘고 커튼을 열어 마무리한다.
  *  이벤트 진입은 런 턴을 올리지 않는다(상점처럼 막간 상호작용). */
 async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
   inputLocked = true
   const def = pickEventForDoor()
-  await boardRenderer.runEventEntryPlaceholder(card.id, def.illu, () => {
+  const emberAvailable = gameState.character.hand.some((h) => h.defId === 'ember')
+  const { index, buttonRect } = await boardRenderer.runEventEntry(card.id, def, emberAvailable, () => {
     // 문 소비: 레일에서 제거(불빛 미지급). 커튼 뒤에서 제거돼 빈칸 노출이 없다.
     lane.setCardAtDistance(0, null)
     render()
   })
-  // 임시 종료 후: 소비된 칸을 메우고 일반 진행으로 복귀한다.
+  // 선택 효과 적용 → HUD 갱신 → 눌린 버튼에서 해당 HUD로 획득 블라스트.
+  const targets = applyEventChoice(def, index)
+  render()
+  await boardRenderer.playEventGainBlast(buttonRect, targets)
+  await boardRenderer.closeEventEntry()
+  // 종료: 소비된 칸을 메우고 일반 진행으로 복귀한다.
   compactAndRefillAllLanes()
   gameState.regroupAllRows()
   turnManager.armFrontBombs()
   render()
   inputLocked = false
+}
+
+/** 이벤트 선택 효과를 게임 상태에 적용하고, 획득 블라스트를 쏠 HUD 타깃 목록을 돌려준다. */
+function applyEventChoice(def: EventDefinition, index: number): string[] {
+  const character = gameState.character
+  const choice = def.choices[index]
+  const effect = choice.effect
+  if (effect.kind === 'stat') {
+    const targets: string[] = []
+    if (effect.maxHealth) {
+      if (effect.maxHealth < 0) character.spendMaxHealth(-effect.maxHealth)
+      else character.increaseMaxHealth(effect.maxHealth)
+      targets.push('health')
+    }
+    if (effect.damage) {
+      character.applyDamageBoost(effect.damage)
+      targets.push('attack')
+    }
+    recordNotice(`이벤트: ${choice.label} 선택`, 'info')
+    return targets
+  }
+  if (effect.kind === 'randomHand') {
+    let added = 0
+    for (const drop of DropSystem.generateDrops(effect.count)) {
+      if (character.addHandCard(drop)) added++
+    }
+    recordNotice(`이벤트: ${choice.label} — 랜덤 손패 +${added}`, 'info')
+    return ['hand']
+  }
+  // combat: 손패 불씨를 소모하고 위험한 이벤트 전투로 진입(현재는 진입 토대만, 전투는 추후 오더).
+  const idx = character.hand.findIndex((h) => h.defId === effect.consumeHand)
+  if (idx >= 0) character.removeHandCardAt(idx)
+  recordNotice('이벤트: 불태우기 — 위험한 기운이 깨어난다 (전투 준비 중)', 'hurt')
+  return []
 }
 
 /**

@@ -28,6 +28,7 @@ import type {
   TreasureChange,
 } from '@core/TurnManager'
 import { spriteForCard, spriteForHandCard, spriteForRelic, spriteForBasicPackItem, spriteForUpgradePackItem, spriteForJob, spriteForEvent, SpriteUrls } from '@ui/Sprites'
+import type { EventDefinition } from '@data/Events'
 import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandCategory, HandEffectTargeting } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
@@ -833,6 +834,9 @@ export class GameBoardRenderer {
         ? escapeHtml(card.description)
         : `손패 ${dropCount}장`
       stats = `<div class="card-stats group-note treasure-group-note">${sparkleIcon()}<span>${treasureNote}</span></div>`
+    } else if (card.type === CardType.EVENT) {
+      // 이벤트 문 라벨: 다른 칸과 같은 group-note 띠 양식, 색감 없이 흑백 톤.
+      stats = `<div class="card-stats group-note event-note"><span>이벤트</span></div>`
     }
 
     const groupBadge = span > 1 ? `<div class="group-badge">×${span}</div>` : ''
@@ -853,6 +857,10 @@ export class GameBoardRenderer {
     const flowerGrowthBadge = card.type === CardType.FLOWER && card.flowerKind !== 'seed'
       ? `<div class="frozen-badge flower-growth-badge">성장 ${card.flowerKind === 'marigold' && card.flowerTurnsAlive % 2 === 1 ? 1 : card.flowerKind === 'marigold' ? 2 : 1}턴</div>`
       : ''
+    // 이벤트 문 카운트다운 뱃지: 전방 도달(-1→2) 후에만 표시(대기행에서는 미부착). 흑백 톤.
+    const eventBadge = card.type === CardType.EVENT && card.eventTurnsUntilClose >= 0
+      ? `<div class="frozen-badge event-badge">${card.eventTurnsUntilClose}턴</div>`
+      : ''
 
     // 보스 보상 카드는 3-wide span이어도 카드 자체 이름을 그대로 표시한다.
     // 함정은 합쳐질 때 Card가 도감과 동일한 이름(촛농 거미집/밀랍 거미굴, 번식 포자군/
@@ -871,6 +879,7 @@ export class GameBoardRenderer {
       ${frozenBadge}
       ${trapBadge}
       ${flowerGrowthBadge}
+      ${eventBadge}
       <div class="card-face">
         <div class="card-art" ${artStyle} aria-hidden="true"></div>
         <div class="card-overlay" aria-hidden="true"></div>
@@ -2377,15 +2386,20 @@ export class GameBoardRenderer {
   private eventEntryResizeListener: (() => void) | null = null
 
   /**
-   * 이벤트 문 진입 연출. 현재 스코프는 "일러스트 페이드인까지"다.
-   * 흐름: 클릭 즉시 넓은 블라스트 → 직업선택과 동일한 암막커튼이 스르륵 닫힘 →
-   * onConsume()으로 문을 소비(레일 뒤에서 제거) → 이벤트 배경 일러스트 페이드인.
-   * 대사/선택지/미니게임은 다음 단계에서 이 일러스트 위에 얹는다.
-   *
-   * ⚠ 임시 dismiss: 대사 흐름이 들어오기 전까지 소프트락을 막기 위해, 페이드인 후
-   *   화면 클릭 1회로 커튼을 열고 종료한다. 다음 오더에서 이 dismiss 블록을 대체한다.
+   * 이벤트 문 진입 연출 + 대사/선택 흐름.
+   * 흐름: 클릭 즉시 넓은 블라스트 → 직업선택 암막커튼 닫힘 → onConsume()으로 문 소비 →
+   *   이벤트 배경 일러스트 페이드인 → 대사 진행(클릭으로 넘김) → 하단 선택 버튼 노출.
+   * 선택 버튼이 눌리면 { index, buttonRect }로 resolve한다(오버레이는 닫지 않는다).
+   *   호출부가 효과를 적용하고 playEventGainBlast로 버튼→HUD 블라스트를 쏜 뒤
+   *   closeEventEntry()로 커튼을 열어 마무리한다.
+   * @param emberAvailable 손패 불씨 보유 여부(불태우기 등 requiresHand 버튼 활성 판정).
    */
-  async runEventEntryPlaceholder(cardId: string, illu: string, onConsume: () => void): Promise<void> {
+  async runEventEntry(
+    cardId: string,
+    def: EventDefinition,
+    emberAvailable: boolean,
+    onConsume: () => void
+  ): Promise<{ index: number; buttonRect: DOMRect }> {
     this.ensureEventEntryStyles()
 
     // 1) 즉시 넓고 화려한 진입 블라스트(문 위치 기준). 별빛 톤 + 보물 톤 혼합.
@@ -2398,16 +2412,37 @@ export class GameBoardRenderer {
       SquareBurst.playAt(cx, cy, 'treasure-gain', { count: 20, spread: 180, duration: 560 })
     }
 
-    // 2) 레일 위에 암막커튼 오버레이를 띄운다(.job-rail-curtain CSS/키프레임 재사용 → 마운트 시 자동 닫힘).
+    // 2) 레일 위에 암막커튼 + 콘텐츠 오버레이(.job-rail-curtain CSS/키프레임 재사용 → 마운트 시 자동 닫힘).
+    //    위협 버튼(emphasis==='danger')은 행에서 빼서 하단 중앙에 단독 배치한다.
+    const dangerIdx = def.choices.findIndex((c) => c.emphasis === 'danger')
+    const rowChoices = def.choices.map((c, i) => ({ c, i })).filter(({ i }) => i !== dangerIdx)
+    const choiceBtnHtml = (c: EventDefinition['choices'][number], i: number, extraClass = ''): string => `
+      <button class="event-choice-btn ${extraClass}" type="button" data-choice="${i}">
+        <span class="event-choice-label">${escapeHtml(c.label)}</span>
+        <span class="event-choice-effects">${c.effectLines.map((l) => `<span>${escapeHtml(l)}</span>`).join('')}</span>
+      </button>`
     const overlay = document.createElement('div')
     overlay.id = 'event-entry-overlay'
-    const art = spriteForEvent(illu)
+    const art = spriteForEvent(def.illu)
     overlay.innerHTML = `
       <div class="event-entry-shell">
         <div class="event-entry-illu${art ? '' : ' event-entry-illu--empty'}"
              ${art ? `style="background-image:url('${art}')"` : ''} aria-hidden="true"></div>
         <div class="job-rail-curtain job-rail-curtain--left" aria-hidden="true"></div>
         <div class="job-rail-curtain job-rail-curtain--right" aria-hidden="true"></div>
+        <div class="event-entry-content">
+          <div class="event-dialogue">
+            <div class="event-dialogue-name"></div>
+            <div class="event-dialogue-text"></div>
+            <div class="event-dialogue-next" aria-hidden="true">▼</div>
+          </div>
+          <div class="event-choices" hidden>
+            <div class="event-choices-row">
+              ${rowChoices.map(({ c, i }) => choiceBtnHtml(c, i)).join('')}
+            </div>
+            ${dangerIdx >= 0 ? choiceBtnHtml(def.choices[dangerIdx], dangerIdx, `event-burn-btn ${emberAvailable ? 'is-armed' : 'is-disabled'}`) : ''}
+          </div>
+        </div>
       </div>`
     document.body.appendChild(overlay)
     this.eventEntryOverlayElement = overlay
@@ -2433,15 +2468,70 @@ export class GameBoardRenderer {
     onConsume()
     alignToRail()
 
-    // 4) 이벤트 배경 일러스트 페이드인 — 이번 스코프의 종착점.
+    // 4) 이벤트 배경 일러스트 페이드인.
     overlay.querySelector<HTMLElement>('.event-entry-illu')?.classList.add('is-shown')
     await new Promise((r) => window.setTimeout(r, 520))
 
-    // 5) [임시] 클릭 1회로 커튼을 열고 종료(소프트락 방지). 다음 오더에서 대사/버튼으로 대체.
-    await new Promise<void>((resolve) => {
-      const onClick = (): void => { overlay.removeEventListener('click', onClick); resolve() }
-      overlay.addEventListener('click', onClick)
+    // 5) 대사 진행: 오버레이 클릭으로 한 줄씩 넘기고, 마지막 줄 뒤 선택 버튼을 노출한다.
+    const nameEl = overlay.querySelector<HTMLElement>('.event-dialogue-name')!
+    const textEl = overlay.querySelector<HTMLElement>('.event-dialogue-text')!
+    const dialogueEl = overlay.querySelector<HTMLElement>('.event-dialogue')!
+    const choicesEl = overlay.querySelector<HTMLElement>('.event-choices')!
+    let line = 0
+    const showLine = (i: number): void => {
+      const ln = def.dialogue[i]
+      nameEl.textContent = ln.speaker === 'player' ? '플레이어' : def.title
+      textEl.textContent = ln.text
+      dialogueEl.classList.toggle('is-player', ln.speaker === 'player')
+      dialogueEl.classList.remove('is-line-in'); void dialogueEl.offsetWidth; dialogueEl.classList.add('is-line-in')
+    }
+    showLine(0)
+
+    return await new Promise<{ index: number; buttonRect: DOMRect }>((resolve) => {
+      const advance = (): void => {
+        line += 1
+        if (line < def.dialogue.length) { showLine(line); return }
+        // 대사 종료: 대사창을 접고 선택 버튼을 연다.
+        overlay.removeEventListener('click', onOverlayClick)
+        dialogueEl.classList.add('is-done')
+        choicesEl.hidden = false
+        choicesEl.classList.add('is-in')
+      }
+      const onOverlayClick = (e: Event): void => {
+        // 버튼 영역 클릭은 대사 넘김으로 처리하지 않는다.
+        if ((e.target as HTMLElement).closest('.event-choices')) return
+        advance()
+      }
+      overlay.addEventListener('click', onOverlayClick)
+
+      choicesEl.querySelectorAll<HTMLButtonElement>('.event-choice-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation()
+          if (btn.classList.contains('is-disabled')) return
+          const index = Number(btn.dataset.choice)
+          resolve({ index, buttonRect: btn.getBoundingClientRect() })
+        })
+      })
     })
+  }
+
+  /** 선택 효과 획득 블라스트: 눌린 버튼 위치에서 각 HUD 타깃으로 트레일을 쏜다. */
+  async playEventGainBlast(buttonRect: DOMRect, targets: readonly string[]): Promise<void> {
+    const themeByTarget: Record<string, BurstTheme> = {
+      health: 'health-gain', attack: 'attack-gain', hand: 'hand-tool',
+      ember: 'ember-gain', gauge: 'gauge-gain', shield: 'shield-gain', score: 'score', coin: 'treasure-gain',
+    }
+    await Promise.all(
+      targets.map((t) =>
+        this.animateResourceTrail(buttonRect, this.findResourceTrailTarget(t as ResourceTrailTarget), 3, themeByTarget[t] ?? 'score')
+      )
+    )
+  }
+
+  /** 이벤트 종료: 암막커튼을 열고(직업선택 open 키프레임 재사용) 오버레이를 제거한다. */
+  async closeEventEntry(): Promise<void> {
+    const overlay = this.eventEntryOverlayElement
+    if (!overlay) return
     overlay.classList.add('is-opening')
     await new Promise((r) => window.setTimeout(r, 760))
     this.clearEventEntryOverlay()
@@ -2457,8 +2547,23 @@ export class GameBoardRenderer {
     this.eventEntryOverlayElement = null
   }
 
+  /** 전방 도달 시 이벤트 문 2턴 뱃지를 "슈룩" 팝인시킨다(슬라이드인 1회 재생). */
+  popEventBadge(cardId: string): void {
+    const badge = this.findCardElement(cardId)?.querySelector<HTMLElement>('.event-badge')
+    if (!badge) return
+    badge.classList.remove('is-pop'); void badge.offsetWidth; badge.classList.add('is-pop')
+  }
+
+  /** 이벤트 문이 닫힐 때(0턴) 보물 소멸과 같은 연기 버스트를 좌표에 띄운다. */
+  playEventDoorCloseAt(rect: DOMRect): void {
+    SquareBurst.playAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 'vanish-smoke', {
+      count: 18, spread: 120, duration: 520,
+    })
+  }
+
   /** 이벤트 진입 오버레이 전용 스타일. 커튼 자체는 .job-rail-curtain(GAME_BOARD_STYLES)을
-   *  재사용하고, 여기서는 셸/일러스트 레이어와 커튼 열기 재생만 정의한다. */
+   *  재사용하고, 여기서는 셸/일러스트/대사창/선택 버튼과 커튼 열기 재생만 정의한다.
+   *  버튼은 색감을 빼고 황금빛 테두리 + 검은 반투명 내부의 고풍 스타일을 따른다. */
   private ensureEventEntryStyles(): void {
     if (document.getElementById('event-entry-styles')) return
     const style = document.createElement('style')
@@ -2475,9 +2580,51 @@ export class GameBoardRenderer {
 .event-entry-illu.event-entry-illu--empty {
   background: radial-gradient(120% 90% at 50% 38%, rgba(40, 28, 52, 0.96), rgba(8, 5, 13, 0.99));
 }
+.event-entry-content {
+  position: absolute; inset: 0; z-index: 6;
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+  padding: 0 4% 5%; gap: 14px; pointer-events: none;
+}
+.event-entry-content > * { pointer-events: auto; }
+.event-dialogue {
+  width: min(92%, 720px); padding: 14px 20px;
+  border: 1px solid rgba(255, 214, 130, 0.5); border-radius: 10px;
+  background: rgba(6, 4, 10, 0.64); color: rgba(255, 240, 210, 0.96);
+  font-family: 'OkDanDan', Georgia, serif; box-shadow: 0 4px 22px rgba(0, 0, 0, 0.6);
+}
+.event-dialogue.is-done { display: none; }
+.event-dialogue-name { font-size: 13px; font-weight: 900; letter-spacing: 0.1em; color: rgba(255, 214, 140, 0.92); margin-bottom: 5px; }
+.event-dialogue.is-player .event-dialogue-name { color: rgba(170, 205, 235, 0.92); }
+.event-dialogue-text { font-size: 16px; line-height: 1.5; letter-spacing: 0.02em; min-height: 1.5em; }
+.event-dialogue-next { text-align: right; font-size: 12px; color: rgba(255, 214, 140, 0.7); animation: event-next-blink 1.1s ease-in-out infinite; }
+.event-dialogue.is-line-in { animation: event-line-in 0.26s ease both; }
+.event-choices { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.event-choices.is-in { animation: event-line-in 0.3s ease both; }
+.event-choices-row { display: flex; gap: 18px; justify-content: center; }
+.event-choice-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  min-width: 118px; padding: 10px 18px;
+  border: 1px solid rgba(255, 214, 130, 0.62); border-radius: 9px;
+  background: rgba(6, 4, 10, 0.42); color: rgba(255, 240, 206, 0.96);
+  font-family: 'OkDanDan', Georgia, serif; cursor: pointer;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s, transform 0.12s;
+}
+.event-choice-btn:hover { border-color: rgba(255, 232, 168, 0.95); background: rgba(18, 12, 24, 0.6); box-shadow: 0 0 20px rgba(244, 196, 108, 0.24); transform: translateY(-2px); }
+.event-choice-label { font-size: 16px; font-weight: 900; letter-spacing: 0.06em; }
+.event-choice-effects { display: flex; flex-direction: column; gap: 1px; font-size: 11px; color: rgba(232, 214, 180, 0.82); letter-spacing: 0.04em; }
+.event-burn-btn { margin-top: 12px; }
+.event-burn-btn.is-disabled { opacity: 0.26; pointer-events: none; }
+.event-burn-btn.is-armed { border-color: rgba(228, 96, 60, 0.85); box-shadow: 0 0 24px rgba(220, 60, 30, 0.34); }
+.event-burn-btn.is-armed:hover { border-color: rgba(255, 120, 80, 0.95); box-shadow: 0 0 30px rgba(230, 70, 30, 0.45); }
+.event-burn-btn.is-armed .event-choice-label { color: rgba(255, 210, 180, 0.96); text-shadow: 0 0 14px rgba(230, 80, 40, 0.5); }
+#event-entry-overlay.is-opening { pointer-events: none; }
+#event-entry-overlay.is-opening .event-entry-content { opacity: 0; transition: opacity 0.3s ease; }
 #event-entry-overlay.is-opening .job-rail-curtain--left { animation: job-curtain-open-left 0.72s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
 #event-entry-overlay.is-opening .job-rail-curtain--right { animation: job-curtain-open-right 0.72s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
 #event-entry-overlay.is-opening .event-entry-illu { opacity: 0; transition: opacity 0.4s ease; }
+@keyframes event-line-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes event-next-blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.9; } }
 `
     document.head.appendChild(style)
   }
