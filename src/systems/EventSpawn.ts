@@ -41,9 +41,10 @@ export interface EventSpawnConfig {
  *  real first-door distribution so these are locked from data, not guesswork. */
 export const DEFAULT_EVENT_SPAWN_CONFIG: EventSpawnConfig = {
   baseChance: 0.01,
-  earlyStep: 0.05,
+  // 곡선 B(캘리브레이션 확정): 첫 문 평균 ~17턴(16~25 집중), 세그먼트당 ~1.2회.
+  earlyStep: 0.07,
   lateStep: 0.012,
-  earlyDelayRolls: 8,
+  earlyDelayRolls: 12,
   maxChance: 0.95,
   lastActiveTurn: 89,
 }

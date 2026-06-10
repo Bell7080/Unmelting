@@ -27,7 +27,7 @@ import type {
   FlowerWilt,
   TreasureChange,
 } from '@core/TurnManager'
-import { spriteForCard, spriteForHandCard, spriteForRelic, spriteForBasicPackItem, spriteForUpgradePackItem, spriteForJob, SpriteUrls } from '@ui/Sprites'
+import { spriteForCard, spriteForHandCard, spriteForRelic, spriteForBasicPackItem, spriteForUpgradePackItem, spriteForJob, spriteForEvent, SpriteUrls } from '@ui/Sprites'
 import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandCategory, HandEffectTargeting } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
@@ -2370,6 +2370,116 @@ export class GameBoardRenderer {
     }
     this.jobSelectOverlayElement?.remove()
     this.jobSelectOverlayElement = null
+  }
+
+  /** 이벤트 문 진입 레이어와 정렬 리스너. */
+  private eventEntryOverlayElement: HTMLElement | null = null
+  private eventEntryResizeListener: (() => void) | null = null
+
+  /**
+   * 이벤트 문 진입 연출. 현재 스코프는 "일러스트 페이드인까지"다.
+   * 흐름: 클릭 즉시 넓은 블라스트 → 직업선택과 동일한 암막커튼이 스르륵 닫힘 →
+   * onConsume()으로 문을 소비(레일 뒤에서 제거) → 이벤트 배경 일러스트 페이드인.
+   * 대사/선택지/미니게임은 다음 단계에서 이 일러스트 위에 얹는다.
+   *
+   * ⚠ 임시 dismiss: 대사 흐름이 들어오기 전까지 소프트락을 막기 위해, 페이드인 후
+   *   화면 클릭 1회로 커튼을 열고 종료한다. 다음 오더에서 이 dismiss 블록을 대체한다.
+   */
+  async runEventEntryPlaceholder(cardId: string, illu: string, onConsume: () => void): Promise<void> {
+    this.ensureEventEntryStyles()
+
+    // 1) 즉시 넓고 화려한 진입 블라스트(문 위치 기준). 별빛 톤 + 보물 톤 혼합.
+    const doorEl = this.findCardElement(cardId)
+    if (doorEl) {
+      const r = doorEl.getBoundingClientRect()
+      const cx = r.left + r.width / 2
+      const cy = r.top + r.height / 2
+      SquareBurst.playAt(cx, cy, 'starlight', { count: 34, spread: 250, duration: 660, size: [10, 26] })
+      SquareBurst.playAt(cx, cy, 'treasure-gain', { count: 20, spread: 180, duration: 560 })
+    }
+
+    // 2) 레일 위에 암막커튼 오버레이를 띄운다(.job-rail-curtain CSS/키프레임 재사용 → 마운트 시 자동 닫힘).
+    const overlay = document.createElement('div')
+    overlay.id = 'event-entry-overlay'
+    const art = spriteForEvent(illu)
+    overlay.innerHTML = `
+      <div class="event-entry-shell">
+        <div class="event-entry-illu${art ? '' : ' event-entry-illu--empty'}"
+             ${art ? `style="background-image:url('${art}')"` : ''} aria-hidden="true"></div>
+        <div class="job-rail-curtain job-rail-curtain--left" aria-hidden="true"></div>
+        <div class="job-rail-curtain job-rail-curtain--right" aria-hidden="true"></div>
+      </div>`
+    document.body.appendChild(overlay)
+    this.eventEntryOverlayElement = overlay
+
+    // 상점/직업선택과 동일하게 레일 rect에 셸을 고정한다.
+    const alignToRail = (): void => {
+      const rail = this.boardElement.querySelector<HTMLElement>('.rail')
+      const shell = overlay.querySelector<HTMLElement>('.event-entry-shell')
+      if (!rail || !shell) return
+      const rect = rail.getBoundingClientRect()
+      shell.style.left = `${rect.left}px`
+      shell.style.top = `${rect.top}px`
+      shell.style.width = `${rect.width}px`
+      shell.style.height = `${rect.height}px`
+    }
+    alignToRail()
+    this.eventEntryResizeListener = alignToRail
+    window.addEventListener('resize', alignToRail)
+    window.addEventListener('scroll', alignToRail)
+
+    // 3) 커튼이 닫히는 동안(≈0.68s) 기다린 뒤 문을 소비(커튼 뒤에서 제거 → 빈칸이 안 보임).
+    await new Promise((r) => window.setTimeout(r, 700))
+    onConsume()
+    alignToRail()
+
+    // 4) 이벤트 배경 일러스트 페이드인 — 이번 스코프의 종착점.
+    overlay.querySelector<HTMLElement>('.event-entry-illu')?.classList.add('is-shown')
+    await new Promise((r) => window.setTimeout(r, 520))
+
+    // 5) [임시] 클릭 1회로 커튼을 열고 종료(소프트락 방지). 다음 오더에서 대사/버튼으로 대체.
+    await new Promise<void>((resolve) => {
+      const onClick = (): void => { overlay.removeEventListener('click', onClick); resolve() }
+      overlay.addEventListener('click', onClick)
+    })
+    overlay.classList.add('is-opening')
+    await new Promise((r) => window.setTimeout(r, 760))
+    this.clearEventEntryOverlay()
+  }
+
+  private clearEventEntryOverlay(): void {
+    if (this.eventEntryResizeListener) {
+      window.removeEventListener('resize', this.eventEntryResizeListener)
+      window.removeEventListener('scroll', this.eventEntryResizeListener)
+      this.eventEntryResizeListener = null
+    }
+    this.eventEntryOverlayElement?.remove()
+    this.eventEntryOverlayElement = null
+  }
+
+  /** 이벤트 진입 오버레이 전용 스타일. 커튼 자체는 .job-rail-curtain(GAME_BOARD_STYLES)을
+   *  재사용하고, 여기서는 셸/일러스트 레이어와 커튼 열기 재생만 정의한다. */
+  private ensureEventEntryStyles(): void {
+    if (document.getElementById('event-entry-styles')) return
+    const style = document.createElement('style')
+    style.id = 'event-entry-styles'
+    style.textContent = `
+#event-entry-overlay { position: fixed; inset: 0; z-index: 140; }
+.event-entry-shell { position: fixed; overflow: hidden; border-radius: 14px; }
+.event-entry-illu {
+  position: absolute; inset: 0; z-index: 5;
+  background-size: cover; background-position: center;
+  opacity: 0; transition: opacity 0.5s ease;
+}
+.event-entry-illu.is-shown { opacity: 1; }
+.event-entry-illu.event-entry-illu--empty {
+  background: radial-gradient(120% 90% at 50% 38%, rgba(40, 28, 52, 0.96), rgba(8, 5, 13, 0.99));
+}
+#event-entry-overlay.is-opening .job-rail-curtain--left { animation: job-curtain-open-left 0.72s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
+#event-entry-overlay.is-opening .job-rail-curtain--right { animation: job-curtain-open-right 0.72s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
+#event-entry-overlay.is-opening .event-entry-illu { opacity: 0; transition: opacity 0.4s ease; }
+`
+    document.head.appendChild(style)
   }
 
   /** Hide the modal shop without destroying purchased state in index.ts. */

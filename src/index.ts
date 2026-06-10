@@ -39,7 +39,8 @@ import { DropSystem } from '@systems/DropSystem'
 import { HandSystem, ChainState } from '@systems/HandSystem'
 import { EmberSystem } from '@systems/EmberSystem'
 import { Card, CardType } from '@entities/Card'
-import { LANE_DISTANCE_COUNT } from '@entities/Lane'
+import { LANE_DISTANCE_COUNT, Lane } from '@entities/Lane'
+import { pickEventForDoor } from '@data/Events'
 import { CandleMode } from '@entities/Character'
 import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS, HAND_CARD_DEFINITIONS } from '@data/HandCards'
@@ -3424,6 +3425,25 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   }, 220)
 }
 
+/** 이벤트 문 클릭 → 불빛/행동 없이 이벤트 진입 연출(현 스코프: 일러스트 페이드인까지).
+ *  진입 동안 손패/칸 선택을 잠그고, 종료 후 소비된 칸을 메워 일반 진행으로 돌아온다.
+ *  이벤트 진입은 런 턴을 올리지 않는다(상점처럼 막간 상호작용). */
+async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
+  inputLocked = true
+  const def = pickEventForDoor()
+  await boardRenderer.runEventEntryPlaceholder(card.id, def.illu, () => {
+    // 문 소비: 레일에서 제거(불빛 미지급). 커튼 뒤에서 제거돼 빈칸 노출이 없다.
+    lane.setCardAtDistance(0, null)
+    render()
+  })
+  // 임시 종료 후: 소비된 칸을 메우고 일반 진행으로 복귀한다.
+  compactAndRefillAllLanes()
+  gameState.regroupAllRows()
+  turnManager.armFrontBombs()
+  render()
+  inputLocked = false
+}
+
 /**
  * Resolve one player click as a deliberate turn timeline. In flickering and
  * extinguished tiers the enemy phase fires before the player phase.
@@ -3466,6 +3486,12 @@ async function handleCardAction(e: Event): Promise<void> {
   // 보상 단계의 보물 카드 클릭은 일반 보물 ActionSystem 흐름이 아니라 보상 분기로.
   if (bossController.rewardState && bossController.isRewardCard(card)) {
     await bossController.handleRewardClaim(card)
+    return
+  }
+
+  // 이벤트 문 클릭: 불빛/행동 없이 이벤트 진입 연출로 분기한다(전방 도달 칸만 클릭 가능).
+  if (card.type === CardType.EVENT) {
+    await handleEventDoorClick(lane, card)
     return
   }
 
