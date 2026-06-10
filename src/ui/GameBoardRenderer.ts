@@ -2613,7 +2613,7 @@ export class GameBoardRenderer {
   width: 1px; height: 1px;
   pointer-events: none;
 }
-.event-dialogue-anchor--demon { left: 50%; top: 62%; z-index: 7; }
+.event-dialogue-anchor--demon { left: 50%; top: 74%; z-index: 7; }
 .event-entry-content {
   position: absolute; inset: 0; z-index: 6;
   display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
@@ -2633,9 +2633,25 @@ export class GameBoardRenderer {
 .event-choices.is-resolved { pointer-events: none; }
 .event-choices.is-choice-finished { animation: event-choice-finished 0.44s cubic-bezier(0.2, 0.72, 0.2, 1) both; }
 
-/* 좌우 양초 선택지 row */
+/* 좌우 양초 선택지 row — row 전체에 수평 그림자 띠를 씌워 버튼 개별이 밖으로 삐져나가지 않게 함 */
 .event-choices-row {
+  position: relative;
   display: flex; flex-direction: row; gap: 20px; justify-content: center;
+}
+/* row 전체를 가로지르는 그림자 띠: 세로는 은은하게, 가로는 좌우 40px까지만 확장 */
+.event-choices-row::before {
+  content: '';
+  position: absolute;
+  left: -40px; right: -40px; top: 0; bottom: 0;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(0, 0, 0, 0.30) 20%,
+    rgba(0, 0, 0, 0.38) 50%,
+    rgba(0, 0, 0, 0.30) 80%,
+    transparent 100%
+  );
+  pointer-events: none; z-index: 0;
+  transition: opacity 0.18s;
 }
 
 /* ── 공통 선택 버튼: 테두리·배경 없음, 폰트와 그림자로만 표현 ── */
@@ -2650,23 +2666,6 @@ export class GameBoardRenderer {
   color: rgba(255, 238, 200, 0.88);
   transition: color 0.18s, transform 0.14s;
 }
-/* 수평으로 길게 뻗는 어두운 그림자 띠 — 가로 경계 멀리 흐려지고 세로는 은은하게 */
-.event-choice-btn::before {
-  content: '';
-  position: absolute;
-  left: -110px; right: -110px; top: 0; bottom: 0;
-  background: linear-gradient(180deg,
-    transparent 0%,
-    rgba(0, 0, 0, 0.34) 22%,
-    rgba(0, 0, 0, 0.40) 50%,
-    rgba(0, 0, 0, 0.34) 78%,
-    transparent 100%
-  );
-  pointer-events: none; z-index: 0;
-  transition: opacity 0.18s;
-  opacity: 0.82;
-}
-.event-choice-btn:hover::before { opacity: 1; }
 .event-choice-btn:hover { color: rgba(255, 248, 226, 0.98); transform: translateY(-3px); }
 
 /* 레이블·구분선·효과 텍스트 — 그림자 레이어 위로 */
@@ -2714,12 +2713,25 @@ export class GameBoardRenderer {
   background: linear-gradient(90deg, rgba(88, 148, 228, 0.85) 0%, transparent 100%);
 }
 
-/* 불태우기 — 하단 중앙 단독 배치, 일렁이는 위험한 색 */
+/* 불태우기 — 하단 중앙 단독 배치, 일렁이는 위험한 색. 자체 수평 그림자 띠 포함. */
 .event-burn-btn {
   flex: none; align-self: center;
   width: min(60%, 360px); min-height: 68px;
   align-items: center; text-align: center;
   margin-top: 4px;
+}
+.event-burn-btn::before {
+  content: '';
+  position: absolute;
+  left: -32px; right: -32px; top: 0; bottom: 0;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(0, 0, 0, 0.26) 20%,
+    rgba(0, 0, 0, 0.34) 50%,
+    rgba(0, 0, 0, 0.26) 80%,
+    transparent 100%
+  );
+  pointer-events: none; z-index: 0;
 }
 .event-burn-btn .event-choice-copy { align-items: center; }
 .event-burn-btn .event-choice-divider-line {

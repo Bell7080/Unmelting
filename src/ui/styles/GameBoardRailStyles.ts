@@ -500,8 +500,8 @@ export const GAME_BOARD_RAIL_STYLES = `
   pointer-events: none;
   opacity: 0.86;
 }
-/* 이벤트 뱃지 — 검은 반투명 배경, 흰 글자. 은은하게 녹아드는 느낌. */
-.event-badge {
+/* 이벤트 뱃지 — frozen-badge 이후 로드되는 HandChain 스타일에 덮이지 않도록 이중 클래스로 specificity를 높인다. */
+.frozen-badge.event-badge {
   border-color: rgba(255, 255, 255, 0.10);
   background: rgba(0, 0, 0, 0.58);
   color: rgba(255, 255, 255, 0.88);
