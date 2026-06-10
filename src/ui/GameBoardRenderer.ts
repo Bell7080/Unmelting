@@ -2711,9 +2711,9 @@ export class GameBoardRenderer {
 /* 푸른 양초 — 우측 배치 대칭: 텍스트·라인 우정렬, 바깥쪽 패딩 대칭 조정 */
 .event-choice--candle-blue { color: rgba(104, 158, 240, 0.9); padding-right: 8px; }
 .event-choice--candle-blue:hover { color: rgba(130, 186, 255, 1); }
-.event-choice--candle-blue .event-choice-copy { align-items: flex-end; }
-.event-choice--candle-blue .event-choice-label { text-align: right; }
-.event-choice--candle-blue .event-choice-effects { text-align: right; }
+.event-choice--candle-blue .event-choice-copy { align-items: center; }
+.event-choice--candle-blue .event-choice-label { text-align: center; }
+.event-choice--candle-blue .event-choice-effects { text-align: center; }
 .event-choice--candle-blue .event-choice-divider-line {
   align-self: center;
   background: linear-gradient(90deg, transparent 0%, rgba(88, 148, 228, 0.85) 50%, transparent 100%);
