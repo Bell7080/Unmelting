@@ -10,6 +10,9 @@ export enum CardType {
   /** 보스는 적과 같은 양식(HP/ATK/공격/격파)을 따라가지만, 별도 트리거·메커니즘이
    *  많이 동반될 5번째 카드 종류. 추후 다른 보스도 같은 type으로 확장된다. */
   BOSS = 'boss',
+  /** 이벤트 문: 위협·보상이 없는 단일 칸. 전방 도달 시 2턴 카운트다운 후 닫혀 사라지고,
+   *  닫히기 전 클릭하면 이벤트(대사/선택지/미니게임)로 진입한다. 불빛은 주지 않는다. */
+  EVENT = 'event',
 }
 
 export type TrapKind = 'web' | 'bomb' | 'spore'
@@ -152,6 +155,9 @@ export class Card {
   flowerKind: FlowerKind
   flowerTurnsAlive: number
   flowerValue: number
+  /** 이벤트 문 닫힘 카운트다운. 미리보기 행에서는 -1(미시작)이고, 전방(활성 행)에
+   *  도달하면 2로 시작해 매 턴 줄어든다. 0에 닿으면 문이 닫히며 보물처럼 사라진다. */
+  eventTurnsUntilClose: number
 
   constructor(
     id: string,
@@ -190,6 +196,8 @@ export class Card {
     this.flowerKind = options.flowerKind ?? 'seed'
     this.flowerTurnsAlive = 0
     this.flowerValue = this.type === CardType.FLOWER && this.flowerKind !== 'seed' ? 1 : 0
+    // 문은 전방 도달 전까지 카운트다운을 시작하지 않는다(-1 = 미시작).
+    this.eventTurnsUntilClose = -1
   }
 
   /** Return proportional stats for a merged enemy group based on real members. */
@@ -348,6 +356,8 @@ export class Card {
     }
     // Blooming flowers and seeds are deliberate single-cell opportunities.
     if (this.type === CardType.FLOWER) return false
+    // 이벤트 문은 항상 단일 칸으로 등장한다(병합 금지).
+    if (this.type === CardType.EVENT) return false
     // Special enemies: mimic↔mimic and monsterFlower↔monsterFlower each form
     // their own same-family group; all other special enemies stay solo.
     if (this.isSpecialEnemy || other.isSpecialEnemy) {

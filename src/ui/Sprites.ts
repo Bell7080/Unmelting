@@ -432,6 +432,11 @@ export function spriteForCard(card: Card): string {
   if (card.type === CardType.FLOWER) {
     return SpriteUrls.flowers[card.flowerKind]
   }
+  // 이벤트 문은 칸 일러스트 event_000 하나로 통일(공통 문). 파일이 아직 없으면
+  // 글롭이 undefined를 반환해 placeholder로 비워진다(빌드 안전).
+  if (card.type === CardType.EVENT) {
+    return spriteForEvent('event_000') ?? ''
+  }
   return ''
 }
 
@@ -466,6 +471,18 @@ const jobIllustrationGlob = import.meta.glob<{ default: string }>(
 /** 직업 선택 카드 일러스트. illu(예: 'job_001')에 해당하는 파일이 없으면 undefined. */
 export function spriteForJob(illu: string): string | undefined {
   return jobIllustrationGlob[`../assets/sprites/${illu}.webp`]?.default
+}
+
+// 이벤트 일러스트: event_000(칸 문) + event_001~(인게임 이벤트 씬). 글롭으로 묶어
+// 파일이 추가되면 자동 연동되고, 없으면 undefined → placeholder로 폴백(빌드 안전).
+const eventIllustrationGlob = import.meta.glob<{ default: string }>(
+  '../assets/sprites/event_*.webp',
+  { eager: true }
+)
+
+/** 이벤트 일러스트. illu(예: 'event_000','event_001')에 해당하는 파일이 없으면 undefined. */
+export function spriteForEvent(illu: string): string | undefined {
+  return eventIllustrationGlob[`../assets/sprites/${illu}.webp`]?.default
 }
 
 // recipe_001.webp 가 추가되면 자동으로 사용된다. 없으면 팩 커버로 fallback.

@@ -2335,7 +2335,7 @@ function setupDevCommandPalette(): void {
       <span class="dev-command-prefix">/</span>
       <input class="dev-command-input" type="text" spellcheck="false" autocomplete="off" />
       <button class="dev-command-close" aria-label="닫기">✕</button>
-      <div class="dev-command-hint">예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정</div>
+      <div class="dev-command-hint">예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트</div>
     </div>
     <button class="dev-command-run">실행</button>
   `
@@ -2387,7 +2387,7 @@ function setupDevCommandPalette(): void {
   const open = (): void => {
     opened = true
     host.classList.add('is-open')
-    setHint('예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정')
+    setHint('예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트')
     input.value = ''
     window.setTimeout(() => input.focus(), 0)
   }
@@ -2449,11 +2449,12 @@ function setupDevCommandPalette(): void {
     }
     // 칸 스폰 디버그: 지정 종류 카드를 맨 위 대기행(distance 2)의 랜덤 한 칸에 박는다.
     // 이후 평소처럼 진행하면 그 칸이 하강·도착하는 과정을 그대로 검증할 수 있다.
-    const spawnKindByAlias: Record<string, 'enemy' | 'trap' | 'treasure' | 'seed'> = {
+    const spawnKindByAlias: Record<string, 'enemy' | 'trap' | 'treasure' | 'seed' | 'event'> = {
       '적': 'enemy', 'enemy': 'enemy',
       '함정': 'trap', 'trap': 'trap',
       '보물': 'treasure', 'treasure': 'treasure',
       '씨앗': 'seed', '꽃': 'seed', 'seed': 'seed',
+      '이벤트': 'event', '문': 'event', 'event': 'event',
     }
     const spawnKind = spawnKindByAlias[token.toLowerCase()]
     if (spawnKind) {
