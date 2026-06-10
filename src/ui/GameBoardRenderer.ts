@@ -2700,20 +2700,22 @@ export class GameBoardRenderer {
 }
 .event-effect-sep { color: rgba(180, 168, 148, 0.55); }
 
-/* 붉은 양초 — 따뜻한 연붉은 */
-.event-choice--candle-red { color: rgba(238, 126, 112, 0.9); }
+/* 붉은 양초 — 따뜻한 연붉은, 좌측 배치: 바깥쪽 패딩을 줄여 왼쪽에 밀착 */
+.event-choice--candle-red { color: rgba(238, 126, 112, 0.9); padding-left: 8px; }
 .event-choice--candle-red:hover { color: rgba(255, 152, 138, 1); }
 .event-choice--candle-red .event-choice-divider-line {
+  align-self: center;
   background: linear-gradient(90deg, transparent 0%, rgba(238, 100, 82, 0.85) 50%, transparent 100%);
 }
 
-/* 푸른 양초 — 우측 배치 대칭: 텍스트·라인 우정렬, 그라데이션 방향 반전 */
-.event-choice--candle-blue { color: rgba(104, 158, 240, 0.9); }
+/* 푸른 양초 — 우측 배치 대칭: 텍스트·라인 우정렬, 바깥쪽 패딩 대칭 조정 */
+.event-choice--candle-blue { color: rgba(104, 158, 240, 0.9); padding-right: 8px; }
 .event-choice--candle-blue:hover { color: rgba(130, 186, 255, 1); }
 .event-choice--candle-blue .event-choice-copy { align-items: flex-end; }
 .event-choice--candle-blue .event-choice-label { text-align: right; }
 .event-choice--candle-blue .event-choice-effects { text-align: right; }
 .event-choice--candle-blue .event-choice-divider-line {
+  align-self: center;
   background: linear-gradient(90deg, transparent 0%, rgba(88, 148, 228, 0.85) 50%, transparent 100%);
 }
 
