@@ -2693,6 +2693,7 @@ export class GameBoardRenderer {
   font-size: 13px; color: rgba(210, 198, 178, 0.72); letter-spacing: 0.04em;
   text-shadow: 0 1px 5px rgba(0, 0, 0, 0.88); line-height: 1.5; white-space: normal;
 }
+.event-effect-part { color: rgba(244, 206, 112, 0.85); }
 .event-effect-part.is-demerit {
   color: rgba(218, 72, 52, 0.88);
   text-shadow: 0 1px 5px rgba(0, 0, 0, 0.88), 0 0 10px rgba(200, 40, 28, 0.18);
@@ -2703,7 +2704,7 @@ export class GameBoardRenderer {
 .event-choice--candle-red { color: rgba(238, 126, 112, 0.9); }
 .event-choice--candle-red:hover { color: rgba(255, 152, 138, 1); }
 .event-choice--candle-red .event-choice-divider-line {
-  background: linear-gradient(90deg, rgba(238, 100, 82, 0.85) 0%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(238, 100, 82, 0.85) 50%, transparent 100%);
 }
 
 /* 푸른 양초 — 우측 배치 대칭: 텍스트·라인 우정렬, 그라데이션 방향 반전 */
@@ -2713,7 +2714,7 @@ export class GameBoardRenderer {
 .event-choice--candle-blue .event-choice-label { text-align: right; }
 .event-choice--candle-blue .event-choice-effects { text-align: right; }
 .event-choice--candle-blue .event-choice-divider-line {
-  background: linear-gradient(270deg, rgba(88, 148, 228, 0.85) 0%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(88, 148, 228, 0.85) 50%, transparent 100%);
 }
 
 /* 불태우기 — 하단 중앙 단독 배치, 일렁이는 위험한 색. 자체 수평 그림자 띠 포함. */
@@ -5464,6 +5465,25 @@ export class GameBoardRenderer {
         { transform: 'translateX(0) rotate(0deg) scale(0.9)', opacity: 0, filter: 'brightness(0.06) saturate(0) grayscale(1) blur(2px)' },
       ],
       { duration: 620, easing: 'cubic-bezier(0.3, 0.1, 0.35, 1)', fill: 'forwards' }
+    ).finished
+  }
+
+  /** 이벤트 불태우기: 지정 손패 슬롯을 흔들→회색화→위로 떠오르며 사라지는 소각 연출. */
+  async animateHandCardBurn(slotIndex: number): Promise<void> {
+    const slot = this.findHandSlotElement(slotIndex)
+    if (!slot) return
+    SquareBurst.playOn(slot, 'damage', { count: 12, spread: 72, duration: 380 })
+    await new Promise<void>((r) => window.setTimeout(r, 55))
+    await slot.animate(
+      [
+        { transform: 'translateX(0) translateY(0) scale(1)',       opacity: 1,    filter: 'brightness(1)    saturate(1)    grayscale(0)' },
+        { transform: 'translateX(-4px) translateY(-3px) scale(1.02)', opacity: 1, filter: 'brightness(1.08) saturate(0.55) grayscale(0.32)', offset: 0.14 },
+        { transform: 'translateX(4px)  translateY(-6px) scale(1.01)', opacity: 0.96, filter: 'brightness(0.88) saturate(0.2)  grayscale(0.72)', offset: 0.30 },
+        { transform: 'translateX(-3px) translateY(-11px) scale(0.97)', opacity: 0.80, filter: 'brightness(0.58) saturate(0)   grayscale(1)',    offset: 0.50 },
+        { transform: 'translateX(2px)  translateY(-18px) scale(0.93)', opacity: 0.50, filter: 'brightness(0.32) saturate(0)   grayscale(1)',    offset: 0.70 },
+        { transform: 'translateX(0)    translateY(-28px) scale(0.85)', opacity: 0,    filter: 'brightness(0.06) saturate(0)  grayscale(1) blur(3px)' },
+      ],
+      { duration: 760, easing: 'cubic-bezier(0.28, 0.1, 0.32, 1)', fill: 'forwards' }
     ).finished
   }
 

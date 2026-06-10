@@ -3533,6 +3533,12 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
     lane.setCardAtDistance(0, null)
     render()
   }, playDialogue)
+  // 불태우기(combat) 선택 시: 소비될 손패 불씨를 model 제거 전에 소각 연출.
+  const choiceEffect = def.choices[index]?.effect
+  if (choiceEffect?.kind === 'combat') {
+    const burnIdx = gameState.character.hand.findIndex((h) => h.defId === choiceEffect.consumeHand)
+    if (burnIdx >= 0) await boardRenderer.animateHandCardBurn(burnIdx)
+  }
   // 선택 효과 적용 → HUD 갱신 → 눌린 버튼에서 해당 HUD로 획득 블라스트.
   const targets = applyEventChoice(def, index)
   render()
