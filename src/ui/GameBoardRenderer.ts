@@ -1704,7 +1704,7 @@ export class GameBoardRenderer {
       <div class="shop-pack-picker-shell" role="dialog" aria-label="${view.title}">
         <header class="shop-pack-picker-head">
           <h2>${view.title}</h2>
-          <p>3장 중 1장을 골라.</p>
+          <p>3장 중 1장을 선택하시오.</p>
         </header>
         <div class="shop-pack-picker-cards">${cards}</div>
         ${passBtn}

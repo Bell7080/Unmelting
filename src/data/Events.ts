@@ -81,7 +81,7 @@ const EVENT_001: EventDefinition = {
   choices: [
     {
       label: '붉은 양초',
-      effectLines: ['[ 능력 ] 체력 -5', '[ 능력 ] 공격 +1'],
+      effectLines: ['최대 체력 -5', '공격력 +1'],
       effect: { kind: 'stat', maxHealth: -5, damage: 1 },
       afterDialogue: [
         { speaker: 'npc', text: '음. . .' },
@@ -90,7 +90,7 @@ const EVENT_001: EventDefinition = {
     },
     {
       label: '푸른 양초',
-      effectLines: ['[ 손패 ] 랜덤 +4'],
+      effectLines: ['랜덤 손패 +4'],
       effect: { kind: 'randomHand', count: 4 },
       afterDialogue: [
         { speaker: 'npc', text: '하하하!' },
@@ -100,7 +100,7 @@ const EVENT_001: EventDefinition = {
     },
     {
       label: '불태우기',
-      effectLines: ['[ 손패 ] 불씨 소모', '[ 위험 ] 이벤트 전투'],
+      effectLines: ['[ 손패 ] · 불씨 소모'],
       effect: { kind: 'combat', consumeHand: 'ember' },
       afterDialogue: [
         { speaker: 'npc', text: '. . . !' },
