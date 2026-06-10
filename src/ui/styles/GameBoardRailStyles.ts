@@ -487,11 +487,21 @@ export const GAME_BOARD_RAIL_STYLES = `
     linear-gradient(180deg, rgba(20, 16, 28, 0.0) 38%, rgba(20, 16, 28, 0.55) 70%, rgba(10, 7, 18, 0.92) 100%);
 }
 .flower-note { color: rgba(224, 255, 196, 0.96); }
-/* 이벤트 문 라벨/뱃지 — 다른 칸의 황금 띠와 달리 색감 없이 깔끔한 흑백 톤. */
-.event-note {
-  color: rgba(246, 246, 248, 0.97);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.96), 0 0 8px rgba(0, 0, 0, 0.7);
+/* 이벤트 문 칸 — 다른 칸과 동일하게 상단 얇은 그라데이션 띠(::before)를 두되, 색감 없이
+   흑백 톤(흰→검정)으로 둔다. 테두리도 검은 톤으로 통일한다. */
+.cell.card.type-event { border-color: rgba(18, 18, 22, 0.9); }
+.cell.card.type-event::before {
+  content: '';
+  position: absolute;
+  left: 6px; right: 6px; top: 2px;
+  height: 3px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, transparent, rgba(245, 245, 248, 0.92) 26%, rgba(14, 14, 18, 0.94) 74%, transparent);
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0.86;
 }
+/* 이벤트 뱃지 — 색감 없이 깔끔한 흑백 톤. */
 .event-badge {
   border-color: rgba(6, 6, 8, 0.92);
   background: rgba(6, 6, 8, 0.84);

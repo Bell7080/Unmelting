@@ -101,6 +101,8 @@ const boardRenderer = new GameBoardRenderer('game-board')
 const bgm = new BgmManager([bgm001Url, bgm002Url, bgm003Url])
 const speechBubble = new SpeechBubble({ anchor: '.player-card', offsetX: 150, tail: 'bottom-left', fontSize: 22 })
 const bossBubble   = new SpeechBubble({ anchor: '.cell.type-boss', offsetX: 40, offsetY: 70, tail: 'bottom-left', theme: 'boss', autoDismissMs: 0 })
+// 이벤트 악마 대사 — 레일 좌측 상단에 임시 배치(위치는 추후 조정 예정). 수동 dismiss.
+const eventDemonBubble = new SpeechBubble({ anchor: '.rail', offsetX: -170, offsetY: -120, tail: 'none', theme: 'boss', autoDismissMs: 0, fontSize: 20 })
 let gameActive = true
 let inputLocked = false
 let chain: ChainState = HandSystem.newChain()
@@ -3448,11 +3450,22 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
   inputLocked = true
   const def = pickEventForDoor()
   const emberAvailable = gameState.character.hand.some((h) => h.defId === 'ember')
+  // 대사는 게임의 말풍선 시스템으로 출력한다(다라라락 타이핑). 플레이어는 기존 플레이어
+  // 말풍선 위치, 악마는 좌측 상단 말풍선. 한 줄씩 보여주고 읽을 시간만큼 대기 후 다음 줄.
+  const playDialogue = async (): Promise<void> => {
+    for (const ln of def.dialogue) {
+      if (ln.speaker === 'player') { eventDemonBubble.dismiss(); speechBubble.show(ln.text, 0) }
+      else { speechBubble.dismiss(); eventDemonBubble.show(ln.text, 0) }
+      await wait(1100 + ln.text.length * 70)
+    }
+    speechBubble.dismiss()
+    eventDemonBubble.dismiss()
+  }
   const { index, buttonRect } = await boardRenderer.runEventEntry(card.id, def, emberAvailable, () => {
     // 문 소비: 레일에서 제거(불빛 미지급). 커튼 뒤에서 제거돼 빈칸 노출이 없다.
     lane.setCardAtDistance(0, null)
     render()
-  })
+  }, playDialogue)
   // 선택 효과 적용 → HUD 갱신 → 눌린 버튼에서 해당 HUD로 획득 블라스트.
   const targets = applyEventChoice(def, index)
   render()

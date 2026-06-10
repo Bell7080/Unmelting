@@ -391,11 +391,10 @@ describe('TurnManager event door countdown', () => {
     ])
     expect(door.eventTurnsUntilClose).toBe(2)
 
-    // 2 → 1 → 0 감소.
+    // 2 → 1 감소.
     expect(turnManager.tickFrontEventDoors()[0]).toMatchObject({ phase: 'tick', turnsLeft: 1 })
-    expect(turnManager.tickFrontEventDoors()[0]).toMatchObject({ phase: 'tick', turnsLeft: 0 })
 
-    // 0 경과 → 닫혀 제거.
+    // 0이 되는 순간 닫혀 제거(0턴 뱃지를 따로 보여주지 않는다).
     expect(turnManager.tickFrontEventDoors()[0]).toMatchObject({ phase: 'closed' })
     expect(gameState.lanes[1].getCardAtDistance(0)).toBeNull()
   })

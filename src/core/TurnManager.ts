@@ -444,9 +444,10 @@ export class TurnManager {
         continue
       }
       card.eventTurnsUntilClose -= 1
-      if (card.eventTurnsUntilClose < 0) {
+      if (card.eventTurnsUntilClose <= 0) {
+        // 0이 되는 순간 닫혀 사라진다(0턴 뱃지를 한 턴 더 보여주지 않는다).
         lane.setCardAtDistance(0, null)
-        ticks.push({ laneIndex, cardId: card.id, phase: 'closed', turnsLeft: -1 })
+        ticks.push({ laneIndex, cardId: card.id, phase: 'closed', turnsLeft: 0 })
       } else {
         ticks.push({ laneIndex, cardId: card.id, phase: 'tick', turnsLeft: card.eventTurnsUntilClose })
       }

@@ -834,9 +834,6 @@ export class GameBoardRenderer {
         ? escapeHtml(card.description)
         : `손패 ${dropCount}장`
       stats = `<div class="card-stats group-note treasure-group-note">${sparkleIcon()}<span>${treasureNote}</span></div>`
-    } else if (card.type === CardType.EVENT) {
-      // 이벤트 문 라벨: 다른 칸과 같은 group-note 띠 양식, 색감 없이 흑백 톤.
-      stats = `<div class="card-stats group-note event-note"><span>이벤트</span></div>`
     }
 
     const groupBadge = span > 1 ? `<div class="group-badge">×${span}</div>` : ''
@@ -2398,7 +2395,8 @@ export class GameBoardRenderer {
     cardId: string,
     def: EventDefinition,
     emberAvailable: boolean,
-    onConsume: () => void
+    onConsume: () => void,
+    playDialogue: () => Promise<void>
   ): Promise<{ index: number; buttonRect: DOMRect }> {
     this.ensureEventEntryStyles()
 
@@ -2431,11 +2429,6 @@ export class GameBoardRenderer {
         <div class="job-rail-curtain job-rail-curtain--left" aria-hidden="true"></div>
         <div class="job-rail-curtain job-rail-curtain--right" aria-hidden="true"></div>
         <div class="event-entry-content">
-          <div class="event-dialogue">
-            <div class="event-dialogue-name"></div>
-            <div class="event-dialogue-text"></div>
-            <div class="event-dialogue-next" aria-hidden="true">▼</div>
-          </div>
           <div class="event-choices" hidden>
             <div class="event-choices-row">
               ${rowChoices.map(({ c, i }) => choiceBtnHtml(c, i)).join('')}
@@ -2472,38 +2465,15 @@ export class GameBoardRenderer {
     overlay.querySelector<HTMLElement>('.event-entry-illu')?.classList.add('is-shown')
     await new Promise((r) => window.setTimeout(r, 520))
 
-    // 5) 대사 진행: 오버레이 클릭으로 한 줄씩 넘기고, 마지막 줄 뒤 선택 버튼을 노출한다.
-    const nameEl = overlay.querySelector<HTMLElement>('.event-dialogue-name')!
-    const textEl = overlay.querySelector<HTMLElement>('.event-dialogue-text')!
-    const dialogueEl = overlay.querySelector<HTMLElement>('.event-dialogue')!
+    // 5) 대사 진행: 별도 대사창 없이 게임의 말풍선 시스템(다라라락 타이핑)으로 출력한다.
+    //    플레이어/악마 위치는 호출부가 말풍선 앵커로 잡아 처리한다.
+    await playDialogue()
+
+    // 6) 대사 종료 후 하단 선택 버튼을 열고, 버튼 클릭을 기다려 resolve한다.
     const choicesEl = overlay.querySelector<HTMLElement>('.event-choices')!
-    let line = 0
-    const showLine = (i: number): void => {
-      const ln = def.dialogue[i]
-      nameEl.textContent = ln.speaker === 'player' ? '플레이어' : def.title
-      textEl.textContent = ln.text
-      dialogueEl.classList.toggle('is-player', ln.speaker === 'player')
-      dialogueEl.classList.remove('is-line-in'); void dialogueEl.offsetWidth; dialogueEl.classList.add('is-line-in')
-    }
-    showLine(0)
-
+    choicesEl.hidden = false
+    choicesEl.classList.add('is-in')
     return await new Promise<{ index: number; buttonRect: DOMRect }>((resolve) => {
-      const advance = (): void => {
-        line += 1
-        if (line < def.dialogue.length) { showLine(line); return }
-        // 대사 종료: 대사창을 접고 선택 버튼을 연다.
-        overlay.removeEventListener('click', onOverlayClick)
-        dialogueEl.classList.add('is-done')
-        choicesEl.hidden = false
-        choicesEl.classList.add('is-in')
-      }
-      const onOverlayClick = (e: Event): void => {
-        // 버튼 영역 클릭은 대사 넘김으로 처리하지 않는다.
-        if ((e.target as HTMLElement).closest('.event-choices')) return
-        advance()
-      }
-      overlay.addEventListener('click', onOverlayClick)
-
       choicesEl.querySelectorAll<HTMLButtonElement>('.event-choice-btn').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation()
@@ -2600,18 +2570,6 @@ export class GameBoardRenderer {
   padding: 0 4% 5%; gap: 14px; pointer-events: none;
 }
 .event-entry-content > * { pointer-events: auto; }
-.event-dialogue {
-  width: min(92%, 720px); padding: 14px 20px;
-  border: 1px solid rgba(255, 214, 130, 0.5); border-radius: 10px;
-  background: rgba(6, 4, 10, 0.64); color: rgba(255, 240, 210, 0.96);
-  font-family: 'OkDanDan', Georgia, serif; box-shadow: 0 4px 22px rgba(0, 0, 0, 0.6);
-}
-.event-dialogue.is-done { display: none; }
-.event-dialogue-name { font-size: 13px; font-weight: 900; letter-spacing: 0.1em; color: rgba(255, 214, 140, 0.92); margin-bottom: 5px; }
-.event-dialogue.is-player .event-dialogue-name { color: rgba(170, 205, 235, 0.92); }
-.event-dialogue-text { font-size: 16px; line-height: 1.5; letter-spacing: 0.02em; min-height: 1.5em; }
-.event-dialogue-next { text-align: right; font-size: 12px; color: rgba(255, 214, 140, 0.7); animation: event-next-blink 1.1s ease-in-out infinite; }
-.event-dialogue.is-line-in { animation: event-line-in 0.26s ease both; }
 .event-choices { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .event-choices.is-in { animation: event-line-in 0.3s ease both; }
 .event-choices-row { display: flex; gap: 18px; justify-content: center; }
@@ -2638,7 +2596,6 @@ export class GameBoardRenderer {
 #event-entry-overlay.is-opening .job-rail-curtain--right { animation: job-curtain-open-right 0.72s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
 #event-entry-overlay.is-opening .event-entry-illu { opacity: 0; transition: opacity 0.4s ease; }
 @keyframes event-line-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes event-next-blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.9; } }
 `
     document.head.appendChild(style)
   }
