@@ -399,6 +399,22 @@ describe('TurnManager event door countdown', () => {
     expect(gameState.lanes[1].getCardAtDistance(0)).toBeNull()
   })
 
+  it('starts a newly arrived door without ticking existing front doors', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const waitingDoor = new Card('waiting-door', CardType.EVENT, '이벤트', 'door')
+    const activeDoor = new Card('active-door', CardType.EVENT, '이벤트', 'door')
+    activeDoor.eventTurnsUntilClose = 1
+    gameState.lanes[0].setCardAtDistance(0, waitingDoor)
+    gameState.lanes[1].setCardAtDistance(0, activeDoor)
+
+    expect(turnManager.startFrontEventDoorArrivals()).toEqual([
+      { laneIndex: 0, cardId: 'waiting-door', phase: 'started', turnsLeft: 2 },
+    ])
+    expect(waitingDoor.eventTurnsUntilClose).toBe(2)
+    expect(activeDoor.eventTurnsUntilClose).toBe(1)
+  })
+
   it('does not count down doors waiting in preview rows', () => {
     const gameState = new GameState()
     const turnManager = new TurnManager(gameState)
