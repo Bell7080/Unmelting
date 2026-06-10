@@ -514,6 +514,18 @@ export const GAME_BOARD_RAIL_STYLES = `
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* 이벤트 문 시간 만료 — 보물 휘발보다 더 부드럽게 흔들리며 촛농 연기처럼 사라진다. */
+.cell.card.type-event.is-event-door-closing {
+  pointer-events: none;
+  animation: event-door-soft-vanish 0.68s cubic-bezier(0.2, 0.74, 0.25, 1) both;
+}
+@keyframes event-door-soft-vanish {
+  0% { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); filter: blur(0) saturate(1); }
+  28% { opacity: 0.92; transform: translate(-1px, -2px) scale(1.018) rotate(-0.8deg); filter: blur(0) saturate(1.05); }
+  58% { opacity: 0.54; transform: translate(1px, 1px) scale(0.965) rotate(0.7deg); filter: blur(1.4px) saturate(0.82); }
+  100% { opacity: 0; transform: translateY(8px) scale(0.9) rotate(0deg); filter: blur(4px) saturate(0.55); }
+}
+
 /* ── 불씨 하락 시 적 강화(공격력↑) 위험 연출 ──
    카드가 붉게 빛나며 살짝 확대됐다가 가라앉고, 공격력 칩은 잔상을 남기며 커진다. */
 .cell.card.is-ember-empowering {

@@ -2481,11 +2481,26 @@ export class GameBoardRenderer {
         btn.addEventListener('click', (e) => {
           e.stopPropagation()
           if (btn.classList.contains('is-disabled')) return
+          // 선택 직후에는 입력만 잠그고, 효과/마무리 대사가 끝난 뒤 별도 메서드로 버튼을 접는다.
+          choicesEl.classList.add('is-resolved')
+          btn.classList.add('is-selected')
           const index = Number(btn.dataset.choice)
           resolve({ index, buttonRect: btn.getBoundingClientRect() })
         })
       })
     })
+  }
+
+  /** 선택이 실제 효과까지 끝난 뒤 버튼들이 커졌다가 슉 사라지는 마무리 연출. */
+  async hideEventChoicesAfterSelection(index: number): Promise<void> {
+    const choicesEl = this.eventEntryOverlayElement?.querySelector<HTMLElement>('.event-choices')
+    if (!choicesEl) return
+    choicesEl.querySelectorAll<HTMLElement>('.event-choice-btn').forEach((btn) => {
+      btn.classList.toggle('is-selected', Number(btn.dataset.choice) === index)
+    })
+    choicesEl.classList.add('is-choice-finished')
+    await new Promise((r) => window.setTimeout(r, 460))
+    choicesEl.hidden = true
   }
 
   /** 선택 효과 획득 블라스트: 눌린 버튼 위치에서 각 HUD 타깃으로 트레일을 쏜다. */
@@ -2501,12 +2516,12 @@ export class GameBoardRenderer {
     )
   }
 
-  /** 이벤트 종료: 선택 UI → 일러스트 → 커튼 순서의 역재생이 끝난 뒤 오버레이를 제거한다. */
+  /** 이벤트 종료: 일러스트가 완전히 접혀 사라진 뒤, 커튼이 천천히 열리고 오버레이를 제거한다. */
   async closeEventEntry(): Promise<void> {
     const overlay = this.eventEntryOverlayElement
     if (!overlay) return
     overlay.classList.add('is-opening')
-    await new Promise((r) => window.setTimeout(r, 1400))
+    await new Promise((r) => window.setTimeout(r, 1720))
     this.clearEventEntryOverlay()
   }
 
@@ -2527,11 +2542,19 @@ export class GameBoardRenderer {
     badge.classList.remove('is-pop'); void badge.offsetWidth; badge.classList.add('is-pop')
   }
 
-  /** 이벤트 문이 닫힐 때(0턴) 보물 소멸과 같은 연기 버스트를 좌표에 띄운다. */
-  playEventDoorCloseAt(rect: DOMRect): void {
-    SquareBurst.playAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 'vanish-smoke', {
-      count: 18, spread: 120, duration: 520,
-    })
+  /** 이벤트 문이 닫힐 때(0턴) 카드 자체가 은은하게 흔들리며 흩어지는 연출. */
+  async animateEventDoorCloseByIds(cardIds: readonly string[]): Promise<void> {
+    const nodes = cardIds
+      .map((id) => this.findCardElement(id))
+      .filter((el): el is HTMLElement => Boolean(el))
+    for (const el of nodes) {
+      const rect = el.getBoundingClientRect()
+      el.classList.add('is-event-door-closing')
+      SquareBurst.playAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 'vanish-smoke', {
+        count: 22, spread: 132, duration: 720,
+      })
+    }
+    if (nodes.length > 0) await new Promise((r) => window.setTimeout(r, 680))
   }
 
   /** 이벤트 진입 오버레이 전용 스타일. 커튼 자체는 .job-rail-curtain(GAME_BOARD_STYLES)을
@@ -2579,7 +2602,7 @@ export class GameBoardRenderer {
   pointer-events: none;
 }
 /* 악마 말풍선 기준점을 이벤트 셸 내부에 둬 레일 좌표/오프셋 변화로 화면 밖에 뜨지 않게 한다. */
-.event-dialogue-anchor--demon { left: 50%; top: 22%; z-index: 7; }
+.event-dialogue-anchor--demon { left: 50%; top: 62%; z-index: 7; }
 .event-entry-content {
   position: absolute; inset: 0; z-index: 6;
   display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
@@ -2587,12 +2610,14 @@ export class GameBoardRenderer {
 }
 .event-entry-content > * { pointer-events: auto; }
 .event-choices[hidden] { display: none !important; }
-.event-choices { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.event-choices { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .event-choices.is-in { animation: event-line-in 0.3s ease both; }
-.event-choices-row { display: flex; gap: 18px; justify-content: center; }
+.event-choices.is-resolved { pointer-events: none; }
+.event-choices.is-choice-finished { animation: event-choice-finished 0.42s cubic-bezier(0.2, 0.72, 0.2, 1) both; }
+.event-choices-row { display: flex; gap: 28px; justify-content: center; }
 .event-choice-btn {
   display: flex; flex-direction: column; align-items: center; gap: 4px;
-  min-width: 118px; padding: 10px 18px;
+  min-width: 126px; padding: 9px 20px;
   border: 1px solid rgba(255, 214, 130, 0.62); border-radius: 9px;
   background: rgba(6, 4, 10, 0.42); color: rgba(255, 240, 206, 0.96);
   font-family: 'OkDanDan', Georgia, serif; cursor: pointer;
@@ -2602,27 +2627,30 @@ export class GameBoardRenderer {
 .event-choice-btn:hover { border-color: rgba(255, 232, 168, 0.95); background: rgba(18, 12, 24, 0.6); box-shadow: 0 0 20px rgba(244, 196, 108, 0.24); transform: translateY(-2px); }
 .event-choice-label { font-size: 16px; font-weight: 900; letter-spacing: 0.06em; }
 .event-choice-effects { display: flex; flex-direction: column; gap: 1px; font-size: 11px; color: rgba(232, 214, 180, 0.82); letter-spacing: 0.04em; }
-.event-burn-btn { margin-top: 12px; }
+.event-choice-btn.is-selected { animation: event-choice-pick-pop 0.42s cubic-bezier(0.18, 0.86, 0.24, 1) both; }
+.event-burn-btn { margin-top: 16px; }
 .event-burn-btn.is-disabled { opacity: 0.26; pointer-events: none; }
 .event-burn-btn.is-armed { border-color: rgba(228, 96, 60, 0.85); box-shadow: 0 0 24px rgba(220, 60, 30, 0.34); }
 .event-burn-btn.is-armed:hover { border-color: rgba(255, 120, 80, 0.95); box-shadow: 0 0 30px rgba(230, 70, 30, 0.45); }
 .event-burn-btn.is-armed .event-choice-label { color: rgba(255, 210, 180, 0.96); text-shadow: 0 0 14px rgba(230, 80, 40, 0.5); }
 #event-entry-overlay.is-opening { pointer-events: none; }
 #event-entry-overlay.is-opening .event-entry-content { opacity: 0; transition: opacity 0.22s ease; }
-#event-entry-overlay.is-opening .event-entry-illu { animation: event-illu-fold-out 0.56s cubic-bezier(0.2, 0.72, 0.26, 1) forwards; }
-#event-entry-overlay.is-opening .job-rail-curtain--left { animation: job-curtain-open-left 0.82s 0.5s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
-#event-entry-overlay.is-opening .job-rail-curtain--right { animation: job-curtain-open-right 0.82s 0.5s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
+#event-entry-overlay.is-opening .event-entry-illu { animation: event-illu-fold-out 0.72s cubic-bezier(0.2, 0.72, 0.26, 1) forwards; }
+#event-entry-overlay.is-opening .job-rail-curtain--left { animation: job-curtain-open-left 0.9s 0.72s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
+#event-entry-overlay.is-opening .job-rail-curtain--right { animation: job-curtain-open-right 0.9s 0.72s cubic-bezier(0.18, 0.82, 0.25, 1) forwards; }
 @keyframes event-illu-reveal {
   0% { opacity: 0; clip-path: inset(0 50% 0 50%); transform: scaleY(0.965); filter: saturate(0.75) brightness(0.58); }
-  42% { opacity: 0.94; clip-path: inset(0 34% 0 34%); }
+  48% { opacity: 0.52; clip-path: inset(0 28% 0 28%); }
   100% { opacity: 1; clip-path: inset(0 0 0 0); transform: scaleY(1); filter: saturate(1) brightness(1); }
 }
 @keyframes event-illu-fold-out {
   0% { opacity: 1; clip-path: inset(0 0 0 0); transform: scaleY(1); filter: saturate(1) brightness(1); }
-  56% { opacity: 0.9; clip-path: inset(0 38% 0 38%); }
+  62% { opacity: 0.48; clip-path: inset(0 43% 0 43%); }
   100% { opacity: 0; clip-path: inset(0 50% 0 50%); transform: scaleY(0.965); filter: saturate(0.75) brightness(0.54); }
 }
 @keyframes event-line-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes event-choice-pick-pop { 0% { transform: scale(1); } 45% { transform: scale(1.14); } 100% { transform: scale(1.04); } }
+@keyframes event-choice-finished { 0% { opacity: 1; transform: scale(1); filter: blur(0); } 45% { opacity: 0.96; transform: scale(1.08); } 100% { opacity: 0; transform: scale(0.86) translateY(8px); filter: blur(4px); } }
 `
     document.head.appendChild(style)
   }

@@ -46,6 +46,8 @@ export interface EventChoice {
   requiresHand?: HandCardId
   /** 'burn' 등 화면 하단 중앙에 단독 배치하는 특수 버튼 표시. */
   emphasis?: 'danger'
+  /** 선택 효과가 끝난 뒤 이벤트 NPC가 마무리로 말하는 대사. */
+  afterDialogue?: EventDialogueLine[]
 }
 
 export interface EventDefinition {
@@ -73,24 +75,38 @@ const EVENT_001: EventDefinition = {
     { speaker: 'npc', text: '아직도 잠식되지 않은 인간이 있네요?' },
     { speaker: 'player', text: '알 수 없는 소리를 하네.' },
     { speaker: 'npc', text: '뭐, 상관 없겠죠. 그렇다면 저의 귀한 손님일테니까요.' },
-    { speaker: 'npc', text: '(한숨을 고르고.)' },
+    { speaker: 'npc', text: '. . .' },
     { speaker: 'npc', text: '자! 고르세요. 진실과 거짓, 꿈과 현실! 무엇을 원하시죠?' },
   ],
   choices: [
     {
       label: '붉은 양초',
-      effectLines: ['최대 체력 -5', '공격력 +1'],
+      effectLines: ['[ 능력 ] 체력 -5', '[ 능력 ] 공격 +1'],
       effect: { kind: 'stat', maxHealth: -5, damage: 1 },
+      afterDialogue: [
+        { speaker: 'npc', text: '음. . .' },
+        { speaker: 'npc', text: '그 선택은. . . 뭐, 재밌네요.' },
+      ],
     },
     {
       label: '푸른 양초',
-      effectLines: ['랜덤 손패 +4'],
+      effectLines: ['[ 손패 ] 랜덤 +4'],
       effect: { kind: 'randomHand', count: 4 },
+      afterDialogue: [
+        { speaker: 'npc', text: '하하하!' },
+        { speaker: 'npc', text: '역시, 이쪽이 더 마음에 드는 모양이지?' },
+        { speaker: 'npc', text: '뭐, 열심히 발버둥쳐 보라고.' },
+      ],
     },
     {
       label: '불태우기',
-      effectLines: ['손패 불씨를 소모', '위험한 이벤트 전투'],
+      effectLines: ['[ 손패 ] 불씨 소모', '[ 위험 ] 이벤트 전투'],
       effect: { kind: 'combat', consumeHand: 'ember' },
+      afterDialogue: [
+        { speaker: 'npc', text: '. . . !' },
+        { speaker: 'npc', text: '자, 잠깐!' },
+        { speaker: 'npc', text: '뭐하는 짓이야!' },
+      ],
       requiresHand: 'ember',
       emphasis: 'danger',
     },

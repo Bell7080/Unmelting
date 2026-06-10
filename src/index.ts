@@ -40,7 +40,7 @@ import { HandSystem, ChainState } from '@systems/HandSystem'
 import { EmberSystem } from '@systems/EmberSystem'
 import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT, Lane } from '@entities/Lane'
-import { pickEventForDoor, type EventDefinition } from '@data/Events'
+import { pickEventForDoor, type EventDefinition, type EventDialogueLine } from '@data/Events'
 import { CandleMode } from '@entities/Character'
 import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS, HAND_CARD_DEFINITIONS } from '@data/HandCards'
@@ -104,8 +104,8 @@ const bossBubble   = new SpeechBubble({ anchor: '.cell.type-boss', offsetX: 40, 
 // 이벤트 악마 대사 — 이벤트 오버레이 내부 앵커를 기준으로 띄워 커튼/레일 좌표 변화에도 가려지지 않게 한다.
 const eventDemonBubble = new SpeechBubble({
   anchor: '#event-demon-anchor',
-  offsetY: -8,
-  tail: 'none',
+  offsetY: 8,
+  tail: 'top',
   theme: 'boss',
   autoDismissMs: 0,
   fontSize: 20,
@@ -2682,6 +2682,7 @@ document.addEventListener('itemAction', (e: Event) => {
 document.addEventListener('mousedown', () => {
   bossBubble.completeTyping()
   speechBubble.completeTyping()
+  eventDemonBubble.completeTyping()
 })
 
 document.addEventListener('chainReset', () => {
@@ -3312,14 +3313,19 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
 async function tickFrontEventDoors(): Promise<void> {
   const ticks = turnManager.tickFrontEventDoors()
   if (ticks.length === 0) return
-  // closed 문은 이미 모델에서 제거됐으므로 render 전 현재 DOM에서 좌표를 먼저 확보한다.
-  const closedRects = ticks
-    .filter((t) => t.phase === 'closed')
-    .map((t) => boardRenderer.getCardRect(t.cardId))
+  // closed 문은 이미 모델에서 제거됐으므로 render 전 현재 DOM에 소멸 애니메이션을 먼저 건다.
+  const closedIds = ticks.filter((t) => t.phase === 'closed').map((t) => t.cardId)
+  // 닫힌 문은 모델에서는 이미 빠졌지만 render 전 DOM은 살아 있으므로, 먼저 부드러운 소멸을 보여준다.
+  if (closedIds.length > 0) await boardRenderer.animateEventDoorCloseByIds(closedIds)
   render()
   for (const t of ticks) if (t.phase === 'started') boardRenderer.popEventBadge(t.cardId)
-  for (const rect of closedRects) if (rect) boardRenderer.playEventDoorCloseAt(rect)
-  if (closedRects.length > 0) await wait(360)
+  if (closedIds.length > 0) {
+    // 사라진 뒤 즉시 레일을 정리/보충해 빈칸이 다음 턴까지 남지 않게 한다.
+    compactAndRefillAllLanes()
+    gameState.regroupAllRows()
+    turnManager.armFrontBombs()
+    render()
+  }
 }
 
 /** 전방에 내려앉은 별빛을 자동 수집한다. 별빛 1장당 런 턴 +1 + 턴 HUD 블라스트.
@@ -3451,6 +3457,35 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   }, 220)
 }
 
+/** 이벤트 대사 한 줄을 보여주고, 클릭으로 타이핑 완료/다음 줄 넘김을 처리한다. */
+async function playEventDialogueLine(line: EventDialogueLine): Promise<void> {
+  const bubble = line.speaker === 'player' ? speechBubble : eventDemonBubble
+  const otherBubble = line.speaker === 'player' ? eventDemonBubble : speechBubble
+  otherBubble.dismiss()
+  bubble.show(line.text, 0)
+
+  await new Promise<void>((resolve) => {
+    let done = false
+    const finish = (): void => {
+      if (done) return
+      done = true
+      document.removeEventListener('mousedown', onClick, true)
+      window.clearTimeout(fallback)
+      resolve()
+    }
+    const onClick = (): void => {
+      // 첫 클릭은 타이핑을 끝내고, 이미 다 출력된 뒤의 클릭은 다음 줄로 넘긴다.
+      if (bubble.isTyping) {
+        bubble.completeTyping()
+        return
+      }
+      finish()
+    }
+    const fallback = window.setTimeout(finish, 1100 + line.text.length * 70)
+    document.addEventListener('mousedown', onClick, true)
+  })
+}
+
 /** 이벤트 문 클릭 → 불빛/행동 없이 이벤트 진입(대사 → 선택 → 효과). 진입 동안 손패/칸
  *  선택을 잠그고, 선택 효과를 적용한 뒤 버튼→HUD 획득 블라스트를 쏘고 커튼을 열어 마무리한다.
  *  이벤트 진입은 런 턴을 올리지 않는다(상점처럼 막간 상호작용). */
@@ -3458,14 +3493,10 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
   inputLocked = true
   const def = pickEventForDoor()
   const emberAvailable = gameState.character.hand.some((h) => h.defId === 'ember')
-  // 대사는 게임의 말풍선 시스템으로 출력한다(다라라락 타이핑). 플레이어는 기존 플레이어
-  // 말풍선 위치, 악마는 좌측 상단 말풍선. 한 줄씩 보여주고 읽을 시간만큼 대기 후 다음 줄.
-  const playDialogue = async (): Promise<void> => {
-    for (const ln of def.dialogue) {
-      if (ln.speaker === 'player') { eventDemonBubble.dismiss(); speechBubble.show(ln.text, 0) }
-      else { speechBubble.dismiss(); eventDemonBubble.show(ln.text, 0) }
-      await wait(1100 + ln.text.length * 70)
-    }
+  // 대사는 게임의 말풍선 시스템으로 출력한다. NPC 말풍선은 하단 배치/상단 꼬리로,
+  // 클릭 시 타이핑 완료 또는 다음 줄 스킵이 가능하게 보스/플레이어 대사와 같은 촉감을 맞춘다.
+  const playDialogue = async (lines: readonly EventDialogueLine[] = def.dialogue): Promise<void> => {
+    for (const ln of lines) await playEventDialogueLine(ln)
     speechBubble.dismiss()
     eventDemonBubble.dismiss()
   }
@@ -3478,6 +3509,8 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
   const targets = applyEventChoice(def, index)
   render()
   await boardRenderer.playEventGainBlast(buttonRect, targets)
+  await boardRenderer.hideEventChoicesAfterSelection(index)
+  await playDialogue(def.choices[index]?.afterDialogue ?? [])
   await boardRenderer.closeEventEntry()
   // 종료: 소비된 칸을 메우고 일반 진행으로 복귀한다.
   compactAndRefillAllLanes()
