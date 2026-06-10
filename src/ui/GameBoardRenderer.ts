@@ -2706,11 +2706,14 @@ export class GameBoardRenderer {
   background: linear-gradient(90deg, rgba(238, 100, 82, 0.85) 0%, transparent 100%);
 }
 
-/* 푸른 양초 — 차갑고 맑은 청색 */
+/* 푸른 양초 — 우측 배치 대칭: 텍스트·라인 우정렬, 그라데이션 방향 반전 */
 .event-choice--candle-blue { color: rgba(104, 158, 240, 0.9); }
 .event-choice--candle-blue:hover { color: rgba(130, 186, 255, 1); }
+.event-choice--candle-blue .event-choice-copy { align-items: flex-end; }
+.event-choice--candle-blue .event-choice-label { text-align: right; }
+.event-choice--candle-blue .event-choice-effects { text-align: right; }
 .event-choice--candle-blue .event-choice-divider-line {
-  background: linear-gradient(90deg, rgba(88, 148, 228, 0.85) 0%, transparent 100%);
+  background: linear-gradient(270deg, rgba(88, 148, 228, 0.85) 0%, transparent 100%);
 }
 
 /* 불태우기 — 하단 중앙 단독 배치, 일렁이는 위험한 색. 자체 수평 그림자 띠 포함. */
