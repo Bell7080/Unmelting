@@ -45,8 +45,6 @@ export interface ActionResult {
   overflow?: HandCard[]
   /** Flower rewards that live outside Character, such as light and currency. */
   flowerReward?: { kind: 'score' | 'coin'; amount: number }
-  /** Final-ascent 별빛만 일반 행동 대신 90~100F 턴 진행을 허용한다. */
-  starlightCollected?: boolean
   cardRemoved: boolean
   /** 함정의 대가: true이면 함정 피해가 완전 무효화되었다. */
   trapIgnored?: boolean
@@ -222,13 +220,9 @@ export class ActionSystem {
       return { success: false, message: 'Not a treasure', cardRemoved: false }
     }
     if (card.treasureKind === 'starlight') {
-      // 별빛은 손패 보상이 아니라 최종 등반용 턴 열쇠로만 소비된다.
-      return {
-        success: true,
-        message: `${card.name} 획득: 최종 등반 +1턴`,
-        starlightCollected: true,
-        cardRemoved: true,
-      }
+      // 별빛은 클릭으로 수집되지 않는다. 전방 활성 행에 도달하는 순간 자동 소비되며
+      // (TurnManager.sweepFrontStarlights) 그때만 런 턴이 오른다. 좌우 봉쇄 착취 차단.
+      return { success: false, message: '별빛은 자동으로 수집됩니다', cardRemoved: false }
     }
     const safeSpan = Math.max(1, Math.min(3, card.groupCount))
     const dropTable = card.treasureKind === 'goldenChest' ? GOLDEN_TREASURE_DROPS_BY_SPAN : TREASURE_DROPS_BY_SPAN

@@ -340,3 +340,39 @@ describe('TurnManager treasure volatility', () => {
     expect(gameState.lanes[0].getCardAtDistance(0)?.groupCount).toBe(3)
   })
 })
+
+describe('TurnManager starlight sweep', () => {
+  function placeStarlight(gameState: GameState, laneIndex: number, distance: number): Card {
+    const star = new Card(`star-${laneIndex}-${distance}`, CardType.TREASURE, '별빛', 'turn key', 0, 0, {
+      treasureKind: 'starlight',
+    })
+    gameState.lanes[laneIndex].setCardAtDistance(distance, star)
+    return star
+  }
+
+  it('auto-consumes only starlight that reached the active row, leaving previews intact', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    placeStarlight(gameState, 0, 0)
+    placeStarlight(gameState, 2, 0)
+    const waiting = placeStarlight(gameState, 1, 1) // still in the preview row
+
+    const swept = turnManager.sweepFrontStarlights()
+
+    expect(swept.map((s) => s.laneIndex).sort()).toEqual([0, 2])
+    expect(gameState.lanes[0].getCardAtDistance(0)).toBeNull()
+    expect(gameState.lanes[2].getCardAtDistance(0)).toBeNull()
+    // 전방에 닿지 않은 별빛은 그대로 남아 다음 하강을 기다린다.
+    expect(gameState.lanes[1].getCardAtDistance(1)).toBe(waiting)
+  })
+
+  it('ignores ordinary front-row treasures', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const chest = new Card('chest', CardType.TREASURE, '보물상자', 'test')
+    gameState.lanes[0].setCardAtDistance(0, chest)
+
+    expect(turnManager.sweepFrontStarlights()).toEqual([])
+    expect(gameState.lanes[0].getCardAtDistance(0)).toBe(chest)
+  })
+})

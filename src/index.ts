@@ -213,8 +213,10 @@ function activateFinalAscentStarlightRule(): void {
   recordNotice('90층 이후 규칙 발동: 별빛을 모아야만 턴이 오른다', 'info')
 }
 
-function shouldAdvanceTurnForAction(starlightCollected: boolean): boolean {
-  return !finalAscentStarlightRuleActive || starlightCollected
+function shouldAdvanceTurnForAction(): boolean {
+  // 최종 등반 중에는 일반 행동으로 턴이 오르지 않는다. 턴 진행은 전방 별빛
+  // 자동 수집(sweepFrontStarlights)만 담당한다.
+  return !finalAscentStarlightRuleActive
 }
 
 /** runModifiers의 현재 값을 CardSpawner로 흘려보내 다음 스폰부터 즉시 반영시킨다. */
@@ -2333,7 +2335,7 @@ function setupDevCommandPalette(): void {
       <span class="dev-command-prefix">/</span>
       <input class="dev-command-input" type="text" spellcheck="false" autocomplete="off" />
       <button class="dev-command-close" aria-label="닫기">✕</button>
-      <div class="dev-command-hint">예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$</div>
+      <div class="dev-command-hint">예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정</div>
     </div>
     <button class="dev-command-run">실행</button>
   `
@@ -2385,7 +2387,7 @@ function setupDevCommandPalette(): void {
   const open = (): void => {
     opened = true
     host.classList.add('is-open')
-    setHint('예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$')
+    setHint('예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정')
     input.value = ''
     window.setTimeout(() => input.focus(), 0)
   }
@@ -2443,6 +2445,24 @@ function setupDevCommandPalette(): void {
       boardRenderer.playHudCounterFeedback('health', gameState.character.health)
       boardRenderer.playHudCounterFeedback('maxHealth', gameState.character.maxHealth)
       setHint(`디버그: 체력/최대체력 ${gameState.character.health.toLocaleString()}으로 설정`)
+      return
+    }
+    // 칸 스폰 디버그: 지정 종류 카드를 맨 위 대기행(distance 2)의 랜덤 한 칸에 박는다.
+    // 이후 평소처럼 진행하면 그 칸이 하강·도착하는 과정을 그대로 검증할 수 있다.
+    const spawnKindByAlias: Record<string, 'enemy' | 'trap' | 'treasure' | 'seed'> = {
+      '적': 'enemy', 'enemy': 'enemy',
+      '함정': 'trap', 'trap': 'trap',
+      '보물': 'treasure', 'treasure': 'treasure',
+      '씨앗': 'seed', '꽃': 'seed', 'seed': 'seed',
+    }
+    const spawnKind = spawnKindByAlias[token.toLowerCase()]
+    if (spawnKind) {
+      const topDistance = LANE_DISTANCE_COUNT - 1
+      const laneIndex = Math.floor(Math.random() * gameState.lanes.length)
+      gameState.lanes[laneIndex].setCardAtDistance(topDistance, cardSpawner.spawnDebugCard(spawnKind))
+      gameState.regroupAllRows()
+      render()
+      setHint(`디버그: ${token} 칸을 ${laneIndex + 1}번 레인 맨 위 대기칸에 스폰`)
       return
     }
     const key = token.toLowerCase()
@@ -3271,6 +3291,24 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
   boardRenderer.clearSelection()
   render()
   if (blooms.length > 0) await boardRenderer.animateFlowerBlooms(blooms)
+  await sweepFrontStarlights()
+}
+
+/** 전방에 내려앉은 별빛을 자동 수집한다. 별빛 1장당 런 턴 +1 + 턴 HUD 블라스트.
+ *  최종 등반(90~100F) 외에는 별빛이 존재하지 않아 스캔 비용만 발생한다. */
+async function sweepFrontStarlights(): Promise<void> {
+  const swept = turnManager.sweepFrontStarlights()
+  if (swept.length === 0) return
+  // 모델에서 제거됐지만 아직 render() 전이라 DOM에는 별빛이 남아 있다.
+  // 모든 출발 rect를 먼저 확보한 뒤 순차 연출해, 첫 render로 다음 별빛 노드가
+  // 사라져도 좌표를 잃지 않게 한다.
+  const shots = swept.map((s) => ({ rect: boardRenderer.getCardRect(s.cardId) }))
+  for (const shot of shots) {
+    if (shot.rect) await boardRenderer.fireStarlightToTurn(shot.rect)
+    gameState.nextTurn()
+    render()
+    await wait(140)
+  }
 }
 
 async function resolvePostDropSporeSpread(): Promise<void> {
@@ -3702,14 +3740,14 @@ async function handleCardAction(e: Event): Promise<void> {
     if (gameState.isGameOver || gameState.character.authoritySurvivePending) {
       const authorityFired = gameState.character.authoritySurvivePending
       if (await tryResolveSurvivalRelics()) {
-        if (authorityFired) await runCleanupPhase(shouldAdvanceTurnForAction(result.starlightCollected === true))
+        if (authorityFired) await runCleanupPhase(shouldAdvanceTurnForAction())
         inputLocked = false
         return
       }
       finishTurn()
       return
     }
-    await runCleanupPhase(shouldAdvanceTurnForAction(result.starlightCollected === true))
+    await runCleanupPhase(shouldAdvanceTurnForAction())
     await resolvePostDropSporeSpread()
     if (await maybeRunMilestoneEventsAfterTurn()) return
     if (await maybeOpenShopAfterTurn()) return
@@ -3717,7 +3755,7 @@ async function handleCardAction(e: Event): Promise<void> {
       inputLocked = false
     }, 340)
   } else {
-    await resolveEventPhaseAndPrepareNextTurn(shouldAdvanceTurnForAction(result.starlightCollected === true))
+    await resolveEventPhaseAndPrepareNextTurn(shouldAdvanceTurnForAction())
   }
 }
 

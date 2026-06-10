@@ -43,6 +43,8 @@ export type BurstTheme =
   | 'boss-wax-drip'
   | 'boss-candle-flame'
   | 'boss-ember-spark'
+  // 90~100F 최종 등반 별빛 — 남청~보라빛 밤하늘에서 은빛 별로 터진다.
+  | 'starlight'
 
 interface Palette {
   shades: [string, string, string, string]
@@ -92,6 +94,8 @@ const PALETTES: Record<BurstTheme, Palette> = {
   'boss-candle-flame': { shades: ['#2a2008', '#8f7320', '#f2d650', '#fff8dc'] },
   // 불씨 기사단장 타격 카드 — 타오르는 불씨(주홍→백열).
   'boss-ember-spark': { shades: ['#2a0805', '#a83012', '#ff6a24', '#ffd98a'] },
+  // 최종 등반 별빛 — 깊은 남청·보라에서 은백색 별빛으로.
+  starlight: { shades: ['#0a0e2a', '#33307a', '#7b73d8', '#eef0ff'] },
 }
 
 export interface BurstOptions {

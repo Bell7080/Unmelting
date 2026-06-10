@@ -66,6 +66,11 @@ export interface FlowerBloom {
   flowerKind: FlowerKind
 }
 
+export interface StarlightSweep {
+  laneIndex: number
+  cardId: string
+}
+
 export interface FlowerGrowth {
   laneIndex: number
   distance: number
@@ -398,6 +403,22 @@ export class TurnManager {
       })
     }
     return blooms
+  }
+
+  /** Consume every final-ascent starlight that has fallen into the active row.
+   *  씨앗 발화처럼 클릭 없이 전방 도달만으로 소비된다 — 좌우 레인을 별빛으로 막고
+   *  중앙만 착취하는 구도를 차단하기 위해 "전방 도달 = 즉시 수집"으로 고정한다.
+   *  제거한 키 목록을 돌려주어 호출부가 런 턴 +1과 HUD 블라스트를 처리한다. */
+  sweepFrontStarlights(): StarlightSweep[] {
+    const swept: StarlightSweep[] = []
+    for (let laneIndex = 0; laneIndex < this.gameState.lanes.length; laneIndex++) {
+      const lane = this.gameState.lanes[laneIndex]
+      const card = lane.getCardAtDistance(0)
+      if (!card || card.type !== CardType.TREASURE || card.treasureKind !== 'starlight') continue
+      lane.setCardAtDistance(0, null)
+      swept.push({ laneIndex, cardId: card.id })
+    }
+    return swept
   }
 
   /** Grow bloomed flowers, then roll their escalating wilt chance into monster flowers. */

@@ -4997,6 +4997,25 @@ export class GameBoardRenderer {
     return matches[0]
   }
 
+  /** Capture a card's current screen rect before the model removes it, so a
+   *  follow-up blast can launch from where the card visually sat. */
+  getCardRect(cardId: string): DOMRect | null {
+    const el = this.findCardElement(cardId)
+    return el ? el.getBoundingClientRect() : null
+  }
+
+  /** 별빛 자동 소비 연출: 원점에서 별빛이 흩어지며 턴 브랜드로 사각 블라스트를
+   *  쏘고, 착탄(onImpact)에서 호출부가 턴을 +1 시킨다("탕" 맞으며 턴 상승). */
+  async fireStarlightToTurn(sourceRect: DOMRect): Promise<void> {
+    const turnBrand = this.boardElement.querySelector<HTMLElement>('.turn-brand')
+    const cx = sourceRect.left + sourceRect.width / 2
+    const cy = sourceRect.top + sourceRect.height / 2
+    // 원점 별빛 흩뿌림 — 카드가 빛으로 풀리는 출발 블라스트.
+    SquareBurst.playAt(cx, cy, 'starlight', { count: 14, spread: 80, duration: 420 })
+    // 트레일이 턴 브랜드에 닿으면 animateResourceTrail이 도착 버스트를 같은 beat에 찍는다.
+    await this.animateResourceTrail(sourceRect, turnBrand, 1, 'starlight')
+  }
+
   /** Find a hand slot element by index for burst placement. */
   findHandSlotElement(slotIndex: number): HTMLElement | null {
     return this.boardElement.querySelector<HTMLElement>(
@@ -5481,6 +5500,8 @@ export class GameBoardRenderer {
         return { color: 'rgba(242, 214, 80, 0.8)', glow: 'rgba(255, 248, 220, 0.3)' }
       case 'boss-ember-spark':
         return { color: 'rgba(255, 122, 44, 0.8)', glow: 'rgba(255, 217, 138, 0.3)' }
+      case 'starlight':
+        return { color: 'rgba(170, 166, 245, 0.84)', glow: 'rgba(224, 228, 255, 0.36)' }
       default:
         return { color: 'rgba(220, 162, 51, 0.78)', glow: 'rgba(255, 233, 164, 0.26)' }
     }

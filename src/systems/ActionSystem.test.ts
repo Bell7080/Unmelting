@@ -56,7 +56,7 @@ describe('ActionSystem rewards', () => {
     expect(character.hand).toHaveLength(5)
   })
 
-  it('collects starlight as turn progress without adding hand-card drops', () => {
+  it('does not let a click collect starlight; it is auto-swept at the front row instead', () => {
     const character = new Character()
     const lane = new Lane('lane-0', 0)
     const starlight = new Card('starlight-test', CardType.TREASURE, '별빛', 'turn key', 0, 0, {
@@ -65,9 +65,9 @@ describe('ActionSystem rewards', () => {
 
     const result = ActionSystem.executeAction(character, lane, starlight, ActionType.TAKE_TREASURE)
 
-    expect(result.cardRemoved).toBe(true)
-    expect(result.starlightCollected).toBe(true)
-    expect(result.itemGainedNames).toBeUndefined()
+    // 클릭 수집 금지 — 좌우 봉쇄로 중앙만 착취하는 구도를 차단한다.
+    expect(result.success).toBe(false)
+    expect(result.cardRemoved).toBe(false)
     expect(character.hand).toHaveLength(0)
   })
 

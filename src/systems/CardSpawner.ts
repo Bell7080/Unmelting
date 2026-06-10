@@ -400,6 +400,18 @@ export class CardSpawner {
     return cards
   }
 
+  /** 디버그 콘솔 전용: 지정한 종류의 카드 1장을 즉시 만든다. 가중치/쿨다운을
+   *  거치지 않아 설계자가 특정 칸 동작(스폰→하강→처리)을 반복 검증할 수 있다.
+   *  이벤트 칸 등 신규 종류는 이 분기에 한 줄을 추가하면 콘솔에서 바로 테스트된다. */
+  spawnDebugCard(kind: 'enemy' | 'trap' | 'treasure' | 'seed'): Card {
+    switch (kind) {
+      case 'enemy': return this.generateEnemy()
+      case 'trap': return this.generateTrap()
+      case 'treasure': return this.generateTreasure()
+      case 'seed': return this.generateFlowerSeed()
+    }
+  }
+
   /** Pick a card type using per-kind buckets, then build the card.
    *  순수 생성: 쿨다운은 읽기만 하고 갱신하지 않는다(갱신은 commitSpawnCooldowns). */
   private generateRandomCard(options: { openingBoard?: boolean } = {}): Card {
