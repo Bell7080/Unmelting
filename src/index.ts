@@ -40,7 +40,7 @@ import { HandSystem, ChainState } from '@systems/HandSystem'
 import { EmberSystem } from '@systems/EmberSystem'
 import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT, Lane } from '@entities/Lane'
-import { pickEventForDoor, type EventDefinition, type EventDialogueLine } from '@data/Events'
+import { pickEventForDoor, getEventDef, EVENT_IDS, type EventId, type EventDefinition, type EventDialogueLine } from '@data/Events'
 import { CandleMode } from '@entities/Character'
 import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS, HAND_CARD_DEFINITIONS } from '@data/HandCards'
@@ -99,6 +99,8 @@ const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
 // 이벤트 문 PRD 컨트롤러 — 일반 스폰 버킷과 독립된 확률로 이벤트 칸을 생성한다.
 const eventSpawnCtrl = new EventSpawnController()
+// 디버그 전용: 이벤트N 커맨드로 스폰된 칸이 클릭될 때 강제 사용할 이벤트 ID.
+let debugForcedEventId: EventId | null = null
 const boardRenderer = new GameBoardRenderer('game-board')
 // 배경음: 3트랙을 무작위 순서로 크로스페이드 연결, 첫 입력에서 자동재생.
 const bgm = new BgmManager([bgm001Url, bgm002Url, bgm003Url])
@@ -2363,7 +2365,7 @@ function setupDevCommandPalette(): void {
       <span class="dev-command-prefix">/</span>
       <input class="dev-command-input" type="text" spellcheck="false" autocomplete="off" />
       <button class="dev-command-close" aria-label="닫기">✕</button>
-      <div class="dev-command-hint">예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트</div>
+      <div class="dev-command-hint">예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1</div>
     </div>
     <button class="dev-command-run">실행</button>
   `
@@ -2415,7 +2417,7 @@ function setupDevCommandPalette(): void {
   const open = (): void => {
     opened = true
     host.classList.add('is-open')
-    setHint('예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트')
+    setHint('예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1')
     input.value = ''
     window.setTimeout(() => input.focus(), 0)
   }
@@ -2475,6 +2477,22 @@ function setupDevCommandPalette(): void {
       setHint(`디버그: 체력/최대체력 ${gameState.character.health.toLocaleString()}으로 설정`)
       return
     }
+    // 이벤트N 커맨드: N번 이벤트가 고정 등장하는 문 칸을 스폰한다(테스트 전용).
+    const fixedEventMatch = token.match(/^이벤트([1-9]\d*)$/)
+    if (fixedEventMatch) {
+      const idx = Number(fixedEventMatch[1]) - 1
+      const id = EVENT_IDS[idx] as EventId | undefined
+      if (!id) { setHint(`이벤트${idx + 1}번은 없습니다. (현재 ${EVENT_IDS.length}종)`); return }
+      const topDistance = LANE_DISTANCE_COUNT - 1
+      const laneIndex = Math.floor(Math.random() * gameState.lanes.length)
+      gameState.lanes[laneIndex].setCardAtDistance(topDistance, cardSpawner.generateEventDoor())
+      gameState.regroupAllRows()
+      render()
+      debugForcedEventId = id
+      setHint(`디버그: 이벤트${idx + 1} (${id}) 칸을 ${laneIndex + 1}번 레인 맨 위에 스폰`)
+      return
+    }
+
     // 칸 스폰 디버그: 지정 종류 카드를 맨 위 대기행(distance 2)의 랜덤 한 칸에 박는다.
     // 이후 평소처럼 진행하면 그 칸이 하강·도착하는 과정을 그대로 검증할 수 있다.
     const spawnKindByAlias: Record<string, 'enemy' | 'trap' | 'treasure' | 'seed' | 'event'> = {
@@ -3520,7 +3538,9 @@ async function playEventDialogueLine(line: EventDialogueLine): Promise<void> {
  *  이벤트 진입은 런 턴을 올리지 않는다(상점처럼 막간 상호작용). */
 async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
   inputLocked = true
-  const def = pickEventForDoor()
+  // 디버그 커맨드로 고정 이벤트가 예약된 경우 그것을 사용하고, 아니면 랜덤 선택.
+  const def = debugForcedEventId ? getEventDef(debugForcedEventId) : pickEventForDoor()
+  debugForcedEventId = null
   const emberAvailable = gameState.character.hand.some((h) => h.defId === 'ember')
   // 대사는 게임의 말풍선 시스템으로 출력한다. NPC 말풍선은 하단 배치/상단 꼬리로,
   // 클릭 시 타이핑 완료 또는 다음 줄 스킵이 가능하게 보스/플레이어 대사와 같은 촉감을 맞춘다.
