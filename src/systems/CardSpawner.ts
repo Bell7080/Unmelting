@@ -235,8 +235,14 @@ export class CardSpawner {
   private static readonly SPORE_COOLDOWN_CARDS = 1
   // STARLIGHT_COOLDOWN_CARDS 3 ≈ 한 번 등장 후 같은 턴/바로 다음 칸 연속 등장 차단(최소 1칸↑).
   private static readonly STARLIGHT_COOLDOWN_CARDS = 3
+  // 최소 STARLIGHT_MIN_INTERVAL 칸 이후부터 등장 가능. 이후 미등장 1칸마다 +5% 누적 확률.
+  private static readonly STARLIGHT_MIN_INTERVAL = 6
+  private static readonly STARLIGHT_BASE_CHANCE = 0.12
+  private static readonly STARLIGHT_ACCUM_PER_MISS = 0.05
   private sporeCooldownCards: number = 0
   private starlightCooldownCards: number = 0
+  /** 별빛 미등장 칸 수(최소 간격 이후 기준). 등장 시 0으로 리셋. */
+  private starlightMissStreak: number = 0
 
   /** Update the active ember tier so the next spawn run uses the matching weights. */
   setTier(tier: EmberTier): void {
@@ -428,15 +434,22 @@ export class CardSpawner {
   /** Pick a card type using per-kind buckets, then build the card.
    *  순수 생성: 쿨다운은 읽기만 하고 갱신하지 않는다(갱신은 commitSpawnCooldowns). */
   private generateRandomCard(options: { openingBoard?: boolean } = {}): Card {
-    // 최종 등반에서는 드문 별빛 칸을 섞어 10번 수집해야 100턴에 닿게 만든다.
-    // 단, 별빛 쿨다운 중에는 연속 등장을 막기 위해 별빛을 뽑지 않는다.
+    // 최종 등반에서는 별빛 칸을 섞어 10번 수집해야 100턴에 닿게 만든다.
+    // 최소 MIN_INTERVAL 칸 쿨다운 후 base 12% + 미등장마다 +5% 누적 확률로 등장.
     if (
       !options.openingBoard &&
       this.finalAscentActive &&
-      this.starlightCooldownCards <= 0 &&
-      Math.random() < 0.12
+      this.starlightCooldownCards <= 0
     ) {
-      return this.generateStarlight()
+      const chance = Math.min(0.8,
+        CardSpawner.STARLIGHT_BASE_CHANCE +
+        this.starlightMissStreak * CardSpawner.STARLIGHT_ACCUM_PER_MISS
+      )
+      if (Math.random() < chance) {
+        this.starlightMissStreak = 0
+        return this.generateStarlight()
+      }
+      this.starlightMissStreak++
     }
 
     const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
@@ -484,7 +497,8 @@ export class CardSpawner {
       this.sporeCooldownCards--
     }
     if (card.treasureKind === 'starlight') {
-      this.starlightCooldownCards = CardSpawner.STARLIGHT_COOLDOWN_CARDS
+      // 등장 후 MIN_INTERVAL + COOLDOWN_CARDS 칸 동안 재등장 차단
+      this.starlightCooldownCards = CardSpawner.STARLIGHT_COOLDOWN_CARDS + CardSpawner.STARLIGHT_MIN_INTERVAL
     } else if (this.starlightCooldownCards > 0) {
       this.starlightCooldownCards--
     }

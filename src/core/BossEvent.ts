@@ -85,7 +85,7 @@ export interface BossEventState {
   bossShield: number
   /** waxWitch 전용: 현재 HP 페이지(210~141 / 140~71 / 70~0). */
   witchPage: BossPage
-  /** waxWitch 1페이지: 다음 손패 소각 HP 임계값. */
+  /** waxWitch 1페이지: (미사용 — 공격주기 소각으로 전환됨) */
   nextWitchHandBurnAt: number
   /** waxDemon 현재 페이지 (1 → 2 전환은 HP 65% 이하 시). */
   demonPage: 1 | 2
@@ -372,6 +372,10 @@ export class BossEventController {
     if (turnMod === 0) {
       if (state.def.specialEnemyKind === 'waxWitch') {
         // 100F 페이지 능력은 해금 뒤 사라지지 않는다.
+        if (state.witchPage === 1) {
+          // 1페이지: 공격주기마다 손패 2장 소각
+          await this.burnRandomHandCardsFromWitch(card.id, 2)
+        }
         if (state.witchPage >= 2) {
           if (await this.resolveWaxWitchPageTwoTurn(card.id)) return
           if (!this.gs.character.isAlive() || this.gs.character.authoritySurvivePending) {
@@ -690,7 +694,7 @@ export class BossEventController {
       summonedEnemyIds: new Set<string>(),
       bossShield: 0,
       witchPage: 1,
-      nextWitchHandBurnAt: def.specialEnemyKind === 'waxWitch' ? def.maxHp - 10 : 0,
+      nextWitchHandBurnAt: 0, // 체력 임계 소각 로직 제거 — 공격주기마다 소각으로 전환
       demonPage: 1,
       demonCandleCounter: 0,
       nextDemonPageAt: def.specialEnemyKind === 'waxDemon'
@@ -906,8 +910,8 @@ export class BossEventController {
 
   // ---- waxWitch 전용 페이지 메커니즘 ----------------------------------------
 
-  /** 100F 1페이지: HP 10 손실 임계마다 손패를 소각한다. 임계가 여러 개 겹치면 개수만큼
-   *  블라스트를 한꺼번에 날리고, 카드는 흔들→회색→검게 타며 동시에 사라진다. */
+  /** 100F 1페이지: 공격주기마다(또는 2페이지 이상 손패 콤보 도중) 손패를 소각한다.
+   *  카드는 흔들→회색→검게 타며 동시에 사라진다. */
   private async burnRandomHandCardsFromWitch(bossCardId: string, requestedCount: number): Promise<void> {
     const hand = this.gs.character.hand
     if (hand.length === 0) {
@@ -932,23 +936,11 @@ export class BossEventController {
     this.inject.render()
   }
 
-  /** 100F 피격 뒤 페이지 전환/1페이지 손패 소각을 처리한다. 전환 연출이 끼면 true로 턴을 종료한다. */
+  /** 100F 피격 뒤 페이지 전환을 처리한다. 전환 연출이 끼면 true로 턴을 종료한다. */
   private async resolveWaxWitchAfterDamage(beforeHp: number | null): Promise<boolean> {
     const state = this.eventState
     if (!state || state.def.specialEnemyKind !== 'waxWitch') return false
     const hp = state.card.getHealth()
-
-    // 1페이지 소각 능력은 한 번 열리면 이후 페이지에서도 남는다.
-    // nextWitchHandBurnAt은 단조 감소하므로 회복 후 다시 내려와도 같은 HP 고비 이벤트가 재발하지 않는다.
-    // 한 번에 여러 임계가 깎여도(예: HP 20 하락 → 4장) 순차가 아니라 개수만큼 한꺼번에 소각한다.
-    let burnSteps = 0
-    while (state.nextWitchHandBurnAt > 0 && hp <= state.nextWitchHandBurnAt) {
-      burnSteps += 1
-      state.nextWitchHandBurnAt -= 10
-    }
-    if (burnSteps > 0) {
-      await this.burnRandomHandCardsFromWitch(state.card.id, burnSteps * 2)
-    }
 
     if (state.witchPage === 1) {
       if (hp <= 140) {

@@ -1272,6 +1272,20 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   font-size: 11px;
   line-height: 1.3;
 }
+.shop-relic-bonus-chip {
+  margin: 2px 0 0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(200, 160, 60, 0.18);
+  border: 1px solid rgba(200, 160, 60, 0.38);
+  color: rgba(255, 220, 120, 0.95);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.shop-relic-bonus-chip strong {
+  color: #ffd97a;
+  font-weight: 700;
+}
 
 /* Price tag — hangs fully below the card with a short connector "string"
    so it reads as a separated tag rather than a label overlapping the

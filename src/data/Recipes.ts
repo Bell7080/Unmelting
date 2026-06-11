@@ -51,6 +51,8 @@ export interface Recipe {
   flavor: string
   /** 해금팩 해금 전까지 발동하지 않고 도감에서 ??? 로 표시된다. */
   runLocked?: boolean
+  /** 이벤트 전용 레시피. 카드팩 해금 대상에서 제외되고 이벤트로만 활성화된다. */
+  eventOnly?: boolean
 }
 
 function totalCount(ing: Partial<Record<HandCardId, number>>): number {
@@ -63,9 +65,10 @@ function recipe(
   ingredients: Partial<Record<HandCardId, number>>,
   effect: RecipeEffectKind,
   flavor: string,
-  runLocked?: boolean
+  runLocked?: boolean,
+  eventOnly?: boolean
 ): Recipe {
-  return { id, name, ingredients, totalCount: totalCount(ingredients), effect, flavor, runLocked }
+  return { id, name, ingredients, totalCount: totalCount(ingredients), effect, flavor, runLocked, eventOnly }
 }
 
 export const RECIPES: Recipe[] = [
@@ -151,7 +154,7 @@ export const RECIPES: Recipe[] = [
   recipe('sweetness',      '달콤함',    { teacup: 1, 'sacrifice-shield': 1 },         'heal-by-player-attack',        '공격력만큼 체력 회복',            true),
   // event_001 불태우기 선택 시 해금되는 특수 이벤트 레시피 — 도감에 등록되고 런 내 발동 가능.
   // 조합식: 제물 양초 + 의식 양초 + 양초 + 불씨 — 4장 연계로 소환.
-  recipe('demon-summon',   '악마 소환', { 'sacrifice-candle': 1, 'ritual-candle': 1, candle: 1, ember: 1 }, 'destroy-all-front-enemies', '악마 소환.', true),
+  recipe('demon-summon',   '악마 소환', { 'sacrifice-candle': 1, 'ritual-candle': 1, candle: 1, ember: 1 }, 'destroy-all-front-enemies', '악마 소환.', true, true),
 ]
 
 /** Lookup helper for the renderer/log. */

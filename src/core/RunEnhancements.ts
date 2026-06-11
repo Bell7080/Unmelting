@@ -22,10 +22,14 @@ export interface RunEnhancements {
   shopDiscountPct: number
   /** 사치품 유물: 누적 불빛 소비량 추적(2000마다 공격력 +1). */
   luxuryScoreSpent: number
+  /** 사치품 유물: 현재까지 실제 획득한 공격력 누적치(최대 5). */
+  luxuryBonusAtk: number
   /** 악마 인형 유물: 누적 자해량 추적(20마다 불빛 +10%, 공격력 +1). */
   demonDollSelfDamageAccum: number
+  /** 악마 인형 유물: 현재까지 실제 획득한 공격력 누적치 (표기용). */
+  demonDollBonusAtk: number
 }
 
 export function makeDefaultEnhancements(): RunEnhancements {
-  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, demonDollSelfDamageAccum: 0 }
+  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0 }
 }

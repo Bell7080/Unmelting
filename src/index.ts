@@ -1193,23 +1193,29 @@ function applyDemonDollSelfDamage(amount: number): void {
   const gained = Math.floor(enhancements.demonDollSelfDamageAccum / 20)
   if (gained <= 0) return
   enhancements.demonDollSelfDamageAccum %= 20
+  enhancements.demonDollBonusAtk += gained
   for (let i = 0; i < gained; i++) {
     enhancements.scoreMultiplier *= 1.10
     gameState.character.applyDamageBoost(1)
   }
-  recordRelicActivation('demon-doll', `자해 20 누적 → 불빛 +10%, 공격력 +${gained}`)
+  recordRelicActivation('demon-doll', `자해 20 누적 → 불빛 +10%, 공격력 +${gained} (누적 +${enhancements.demonDollBonusAtk})`)
 }
 
-/** 사치품 유물: 불빛 소비량 누적 후 2000마다 공격력 +1 처리. */
+/** 사치품 유물: 불빛 소비량 누적 후 2000마다 공격력 +1 처리. 최대 누적 공격력 +5. */
 function applyLuxuryScoreSpend(amount: number): void {
   if (!gameState.character.hasRelic('luxury') || amount <= 0) return
   const enhancements = gameState.enhancements
+  const maxBonus = 5
+  if (enhancements.luxuryBonusAtk >= maxBonus) return // 이미 최대치
   enhancements.luxuryScoreSpent += amount
-  const gained = Math.floor(enhancements.luxuryScoreSpent / 2000)
-  if (gained <= 0) return
+  const potential = Math.floor(enhancements.luxuryScoreSpent / 2000)
+  if (potential <= 0) return
   enhancements.luxuryScoreSpent %= 2000
+  const gained = Math.min(potential, maxBonus - enhancements.luxuryBonusAtk)
+  if (gained <= 0) return
+  enhancements.luxuryBonusAtk += gained
   gameState.character.applyDamageBoost(gained)
-  recordRelicActivation('luxury', `불빛 2000 소비 → 공격력 +${gained}`)
+  recordRelicActivation('luxury', `불빛 2000 소비 → 공격력 +${gained} (누적 +${enhancements.luxuryBonusAtk})`)
 }
 
 /** 상점/제단 오버레이를 연다. 셔터를 내리고 방문 단위 상태를 초기화한 뒤 본문을 노출한다.
@@ -1389,6 +1395,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     // 조합식 해금은 재료 손패가 모두 이미 해금된 경우에만 제시한다
     const lockedRecipes = RECIPES.filter((r) =>
       r.runLocked &&
+      !r.eventOnly && // 이벤트 전용 레시피는 카드팩에서 제외
       !gameState.unlockedRecipeIds.has(r.id) &&
       Object.keys(r.ingredients).every((id) => unlocked.includes(id as HandCardId))
     )
@@ -3037,18 +3044,27 @@ async function applyHandSingle(
   }
 
   // 주전자: 첫 타격(useSingle에서 실행) 이후 나머지 타격을 빠른 딜레이로 순차 실행한다.
-  // 매 타격은 독립적으로 실행하는 빠른 연속 타격이며 한번에 더해 계산하지 않는다.
+  // 40ms 간격으로 촤르르르 연속 타격하며, 2뎀마다 체력 글자를 실시간 갱신한다.
   if (result.teapotExtraHits && target) {
     const { damage: teapotDamage, totalCount } = result.teapotExtraHits
+    let teapotHitsSinceHpUpdate = 0
     for (let i = 1; i < totalCount; i++) {
       if (gameState.isGameOver) break
       if (target.card.getHealth() <= 0) break
-      await wait(80)
+      await wait(40)
       const beforeHitHealth = snapshotFieldHealthState()
       const beforeHitCards = snapshotFieldCardsById()
       const hitResult = HandSystem.applyTeapotHit(gameState, target, teapotDamage)
       const hitLosses = diffFieldHealthLosses(beforeHitHealth)
-      await boardRenderer.animateDamageNumbersById(hitLosses)
+      // 피해 수치 표시는 매 타격마다 띄우고, HP 갱신은 2뎀마다 업데이트해 연타감을 준다.
+      boardRenderer.animateDamageNumbersById(hitLosses) // await 없이 비동기로 쌓아서 촤르르 효과
+      teapotHitsSinceHpUpdate += teapotDamage
+      if (teapotHitsSinceHpUpdate >= 2) {
+        teapotHitsSinceHpUpdate = 0
+        if (bossController.eventState && hitLosses.some((l) => l.cardId === bossController.eventState!.card.id)) {
+          boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()), 120)
+        }
+      }
       await awardScoreForRemovedCards(hitResult.removedFieldCards, beforeHitCards)
       if (hitResult.removedFieldCards.length > 0) {
         await boardRenderer.animateCardConsumeByIds(hitResult.removedFieldCards, {
@@ -3060,6 +3076,10 @@ async function applyHandSingle(
         await runPreparationRefreshAfterFieldEffects()
       }
       if (hitResult.targetKilled) break
+    }
+    // 루프 종료 후 보스 HP를 최종값으로 확정 갱신
+    if (bossController.eventState) {
+      boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))
     }
   }
 
@@ -3213,10 +3233,13 @@ async function applyHandSingle(
         gameState.removeCardFromRow(target.card, currentDistance)
       }
       // 강타 연출: 화염 볼트 → 착탄 버스트 → 큰 피해 수치 + HP 1씩 롤링.
-      await boardRenderer.animateLevateinStrike(targetId, levDmg, beforeHp, Math.max(0, afterHp))
-      if (bossController.eventState) {
-        boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))
-      }
+      // 보스가 대상이면 afterBossHp를 넘겨 볼트 착탄과 동시에 HUD 롤링이 시작되도록 한다.
+      const afterBossHp = bossController.eventState?.card.getHealth() ?? null
+      await boardRenderer.animateLevateinStrike(
+        targetId, levDmg, beforeHp, Math.max(0, afterHp),
+        bossController.eventState ? beforeBossHp : undefined,
+        bossController.eventState && afterBossHp !== null ? Math.max(0, afterBossHp) : undefined
+      )
       if (killed) {
         await awardScoreForRemovedCards([{ cardId: targetId, type: target.card.type }], preStrikeSnapshot)
         // 강타 후 적 처치 연출: 레바테인 볼트가 이미 버스트를 냈으므로 shrink만 재생한다.
@@ -3323,6 +3346,8 @@ async function runSimulatedEnemyPhase(): Promise<void> {
 }
 
 async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
+  const shouldTickEmber = advanceTurn
+    || (!turnManager.isBossPhase() && finalAscentStarlightRuleActive)
   if (advanceTurn && !turnManager.isBossPhase()) {
     const beforeTurnFreeze = snapshotFieldFreezeState()
     gameState.nextTurn()
@@ -3332,6 +3357,10 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
     // so the chain banner fades out at the same beat.
     HandSystem.resetChain(chain)
     clearChainTimeline()
+  }
+  // 일반 턴 전진 또는 90층 별빛 규칙 활성 시 불씨를 소모한다.
+  // 별빛 규칙 중엔 실제 턴이 오르지 않으므로 가상 불씨 틱만 처리한다.
+  if (shouldTickEmber && !turnManager.isBossPhase()) {
     // Tick the ember decay countdown; ember decreases every 3rd turn.
     const tickedDown = turnManager.tickEmberDecay()
     syncSpawnerTier()
@@ -3420,6 +3449,14 @@ async function sweepFrontStarlights(): Promise<void> {
     gameState.nextTurn()
     render()
     await wait(140)
+  }
+  // 별빛 제거로 빈칸이 생겼으면 즉시 정리/보충
+  const moved = compactAndRefillAllLanes()
+  gameState.regroupAllRows()
+  turnManager.armFrontBombs()
+  if (moved) {
+    render()
+    await wait(460)
   }
 }
 

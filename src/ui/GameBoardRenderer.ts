@@ -1107,12 +1107,21 @@ export class GameBoardRenderer {
    *  cards scale up on hover with text legibility matching shop relic cards. */
   private relicPreviewFace(id: RelicId): string {
     const def = getRelicDef(id)
+    const enh = this.currentGameState?.enhancements
+    // 사치품/악마인형: 유물 하단에 현재 누적 공격력 표기
+    let bonusChip = ''
+    if (id === 'luxury' && enh) {
+      bonusChip = `<p class="shop-relic-bonus-chip">공격력 누적 <strong>+${enh.luxuryBonusAtk}</strong> / 5</p>`
+    } else if (id === 'demon-doll' && enh) {
+      bonusChip = `<p class="shop-relic-bonus-chip">공격력 누적 <strong>+${enh.demonDollBonusAtk}</strong></p>`
+    }
     return `
       <article class="relic-preview-card" aria-hidden="true">
         <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
         <div class="shop-relic-body">
           <h3 class="shop-relic-title">${def.name}</h3>
           <p class="shop-relic-effect">${this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx)}</p>
+          ${bonusChip}
           <p class="shop-relic-flavor">${def.flavor}</p>
         </div>
       </article>
@@ -5175,7 +5184,7 @@ export class GameBoardRenderer {
   /** 레바테인 강타: 플레이어 카드에서 대상 적으로 황금 화염 볼트를 쏘고, 착탄 시
    *  큰 버스트 + 큰 피해 수치를 출력하며 대상 HP 숫자를 1씩 빠르게 깎아낸다.
    *  보스는 HP 숫자(.stat.hp)가 없어 HP바가 따로 갱신되므로 틱은 자동 생략된다. */
-  async animateLevateinStrike(cardId: string, damage: number, fromHp: number, toHp: number): Promise<void> {
+  async animateLevateinStrike(cardId: string, damage: number, fromHp: number, toHp: number, bossFromHp?: number, bossToHp?: number): Promise<void> {
     const enemy = this.findCardElement(cardId)
     if (!enemy) return
     const enemyRect = enemy.getBoundingClientRect()
@@ -5231,7 +5240,10 @@ export class GameBoardRenderer {
     enemy.classList.add('is-enemy-hit', 'is-levatein-struck')
     window.setTimeout(() => enemy.classList.remove('is-enemy-hit', 'is-levatein-struck'), 540)
 
-    // 3) 큰 피해 수치 + 대상 HP 1씩 롤링 다운(같은 beat).
+    // 3) 큰 피해 수치 + 대상 HP 1씩 롤링 다운(같은 beat). 보스 HP HUD도 동시 롤링.
+    if (bossFromHp !== undefined && bossToHp !== undefined && bossFromHp !== bossToHp) {
+      this.playHudCounterFeedback('boss-hp', Math.max(0, bossToHp))
+    }
     await Promise.all([
       this.animateBigDamageNumberAt(ex, enemyRect.top + enemyRect.height * 0.28, damage),
       this.tickCardHealthDown(enemy, fromHp, toHp),
