@@ -198,16 +198,17 @@ describe('HandSystem broad hand effects', () => {
     gameState.lanes[2].setCardAtDistance(0, threeSpanTrap)
     gameState.character.addHandCard(DropSystem.makeCard('chitin'))
 
-    const rejectThreeSpan = HandSystem.useSingle(gameState, chain, 0, {
+    // 단일 키틴도 3칸 함정 제거 가능 (maxSpan=3으로 통일).
+    const removeThreeSpan = HandSystem.useSingle(gameState, chain, 0, {
       laneIndex: 0,
       distance: 0,
       card: threeSpanTrap,
     })
 
-    expect(rejectThreeSpan.success).toBe(false)
-    expect(gameState.lanes[0].getCardAtDistance(0)).toBe(threeSpanTrap)
-    expect(gameState.lanes[1].getCardAtDistance(0)).toBe(threeSpanTrap)
-    expect(gameState.lanes[2].getCardAtDistance(0)).toBe(threeSpanTrap)
+    expect(removeThreeSpan.success).toBe(true)
+    expect(gameState.lanes[0].getCardAtDistance(0)).toBeNull()
+    expect(gameState.lanes[1].getCardAtDistance(0)).toBeNull()
+    expect(gameState.lanes[2].getCardAtDistance(0)).toBeNull()
   })
 
   it('lets triple 키틴 remove a selected 3칸 front trap', () => {
