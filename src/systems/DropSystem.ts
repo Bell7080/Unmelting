@@ -48,16 +48,15 @@ export class DropSystem {
     // treasure-only 동전이 일반 드롭에 끼어드는 안전망 버그를 피한다.
     const pool = defs.length > 0 ? defs : sourcePool
 
-    // 1단계: 풀에 실제로 존재하는 등급의 합산 가중치로 등급을 선택한다.
-    const rarityTotals = new Map<CardRarity, number>()
-    for (const def of pool) {
-      const rarity = HAND_CARD_RARITY[def.id] ?? 'common'
-      rarityTotals.set(rarity, (rarityTotals.get(rarity) ?? 0) + RARITY_WEIGHTS[rarity])
-    }
-    const tierTotal = Array.from(rarityTotals.values()).reduce((s, w) => s + w, 0)
+    // 1단계: 풀에 실제로 존재하는 등급을 수집하고 등급 가중치로 티어를 선택한다.
+    // 카드 수와 무관하게 등급 자체의 가중치(35/20/10/2)가 티어 확률을 결정한다.
+    const existingRarities = new Set<CardRarity>()
+    for (const def of pool) existingRarities.add(HAND_CARD_RARITY[def.id] ?? 'common')
+    const tierEntries = Array.from(existingRarities).map(r => [r, RARITY_WEIGHTS[r]] as const)
+    const tierTotal = tierEntries.reduce((s, [, w]) => s + w, 0)
     let tierRoll = Math.random() * tierTotal
     let chosenRarity: CardRarity = 'common'
-    for (const [rarity, weight] of rarityTotals) {
+    for (const [rarity, weight] of tierEntries) {
       tierRoll -= weight
       if (tierRoll <= 0) { chosenRarity = rarity; break }
     }
