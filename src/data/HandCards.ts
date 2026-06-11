@@ -461,7 +461,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropWeight: 5,
     dropSource: 'any',
     metaRequired: false,
-    runLocked: false,
+    runLocked: true,
     jobTags: ['mage'] satisfies ReadonlyArray<JobTag>,
   },
   // 검과 방패: 전방 적을 공격하고 방패도 동시에 얻는 기사 카드. 기사도 유물과 연계된다.
@@ -495,7 +495,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropWeight: 5,
     dropSource: 'any',
     metaRequired: false,
-    runLocked: false,
+    runLocked: true,
   },
   // 정원 가위: 꽃은 즉시 수확, 괴물꽃(일반 적 특수종)은 즉사. 트리플은 필드 전체 일괄 처리.
   'garden-scissors': {
@@ -511,7 +511,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropWeight: 4,
     dropSource: 'any',
     metaRequired: false,
-    runLocked: false,
+    runLocked: true,
   },
   // 의식 양초: 자해를 대가로 손패를 채운다. 트리플은 자해 없이 대량 드로우.
   'ritual-candle': {
