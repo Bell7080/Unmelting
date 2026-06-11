@@ -15,6 +15,7 @@ import { DropSystem } from '@systems/DropSystem'
 import type { RunCardPool } from '@core/RunCardPool'
 import { SquareBurst } from '@ui/SquareBurst'
 import type { SpriteUrls as SpriteUrlsType } from '@ui/Sprites'
+import { spriteForEventBoss } from '@ui/Sprites'
 import type { SpeechBubble } from '@ui/SpeechBubble'
 import { getHandCardDef } from '@data/HandCards'
 import type { HandCard } from '@entities/HandCard'
@@ -48,7 +49,7 @@ export interface BossDef {
   /** 일러스트 URL */
   spriteUrl: string
   /** 보스 타일 등장 연출 선택자 */
-  appearAnimation: 'landing' | 'waxKnightSwoop' | 'waxSculptor'
+  appearAnimation: 'landing' | 'waxKnightSwoop' | 'waxSculptor' | 'demonFire'
   /** 보스 대사 */
   introBubble: string
   playerResponseBubble: string
@@ -258,6 +259,32 @@ export class BossEventController {
         '세 번째 : 광폭화된 양초 적들을 소환합니다.',
       ].join('\n'),
       kicker: '잿빛 굴레의 주인',
+    }
+    await this.runBossEvent(def)
+  }
+
+  /** 악마 소환 레시피 발동 시 이벤트 보스 전투 — index.ts가 커튼을 닫은 뒤 호출한다. */
+  async runDemonSummon(): Promise<void> {
+    // 일러스트가 준비되지 않았을 때 30F 보스 이미지로 자동 폴백한다.
+    const spriteUrl = spriteForEventBoss('eventboss_001') ?? this.sprites.boss
+    const def: BossDef = {
+      name: '소환된 악마',
+      maxHp: 40,
+      attack: 5,
+      attackInterval: 2,
+      handGiftStep: 10,
+      handCardAmount: 0,
+      specialEnemyKind: 'waxArmy',
+      groupCount: 3,
+      occupiedDistRows: 1,
+      spriteUrl,
+      appearAnimation: 'demonFire',
+      introBubble: '...이 세상에... 불려왔다.',
+      playerResponseBubble: '내가 불렀지만... 이건 실수다.',
+      introBubbleMs: 3200,
+      playerBubbleMs: 2800,
+      trait: '악마의 힘이 레일을 지배한다.',
+      kicker: '강령의 존재',
     }
     await this.runBossEvent(def)
   }
@@ -598,6 +625,16 @@ export class BossEventController {
       await this.br.playWaxKnightSwoopAnimation(bossCard.id)
     } else {
       await this.br.playBossLandingAnimation(bossCard.id)
+    }
+    // demonFire: 보스 타일 위에 화염 폭발 후 커튼 열기 — 커튼은 이미 닫혀 있다.
+    if (def.appearAnimation === 'demonFire') {
+      const bossTile = this.br.findCardElement(bossCard.id)
+      if (bossTile) {
+        SquareBurst.playOn(bossTile, 'damage',    { count: 32, spread: 170, duration: 680, size: [8, 24] })
+        SquareBurst.playOn(bossTile, 'ember-gain',{ count: 18, spread: 120, duration: 520 })
+      }
+      await new Promise((r) => window.setTimeout(r, 380))
+      await this.br.openDemonCurtain()
     }
 
     // 보스 대사

@@ -304,6 +304,8 @@ export class GameBoardRenderer {
   private shopOverlayElement: HTMLElement | null = null
   /** Hold-to-peek button — shows during shop/altar/trial; fades overlay on hold. */
   private shopPeekButton: HTMLElement | null = null
+  /** 악마 소환 레시피 발동 시 레일 위에 겹치는 커튼 오버레이. */
+  private demonCurtainOverlay: HTMLElement | null = null
   /** 현재 열린 상점 모드. 제단(altar) 유물은 무료라 가격 기반 affordable 판정을 건너뛴다. */
   private currentShopRenderMode: 'shop' | 'altar' = 'shop'
   /** Source rect for a just-bought shop relic; the next render uses it to
@@ -1357,6 +1359,7 @@ export class GameBoardRenderer {
       const isArming = targeting && targeting.slotIndex === i
       const readyRecipes = scorePanel.chainHints?.recipeReadyBySlot?.[i] ?? []
       const recipeReady = readyRecipes.length > 0
+      const demonReady = readyRecipes.some((r) => r.id === 'demon-summon')
       const recipeReadyTitle = recipeReady
         ? `즉시 조합: ${readyRecipes.map((r) => r.name).join(', ')}`
         : ''
@@ -1420,7 +1423,7 @@ export class GameBoardRenderer {
                   style="--hand-card-art: url('${handArt}');"
                   aria-label="${def.name}: ${description}${recipeReadyTitle ? ` · ${recipeReadyTitle}` : ''}">
             ${tripleMergeCopies}
-            ${recipeReady ? '<span class="recipe-ready-mark" aria-hidden="true">✦</span>' : ''}
+            ${recipeReady ? `<span class="recipe-ready-mark${demonReady ? ' is-demon-ready' : ''}" aria-hidden="true">✦</span>` : ''}
             ${card.merged ? '<span class="merged-mark" aria-hidden="true">✦</span>' : ''}
             <span class="hand-card-thumb" aria-hidden="true">
               <img src="${handArt}" alt="" loading="lazy" />
@@ -2856,6 +2859,61 @@ export class GameBoardRenderer {
   private hideShopPeekButton(): void {
     this.shopPeekButton?.classList.remove('is-visible')
     document.body.classList.remove('body--peeking')
+  }
+
+  /** 악마 소환 레시피 발동 시 레일 위에 커튼을 닫는다.
+   *  job-rail-curtain의 기본 close 애니메이션(양쪽에서 중앙으로)을 재활용한다. */
+  async closeDemonCurtain(): Promise<void> {
+    this.ensureDemonCurtainStyles()
+    const overlay = document.createElement('div')
+    overlay.id = 'demon-curtain-overlay'
+    const shell = document.createElement('div')
+    shell.className = 'demon-curtain-shell'
+    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
+    if (rail) {
+      const rect = rail.getBoundingClientRect()
+      shell.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;overflow:hidden;border-radius:14px;`
+    }
+    shell.innerHTML = `
+      <div class="job-rail-curtain job-rail-curtain--left demon-curtain-panel" aria-hidden="true"></div>
+      <div class="job-rail-curtain job-rail-curtain--right demon-curtain-panel" aria-hidden="true"></div>`
+    overlay.appendChild(shell)
+    document.body.appendChild(overlay)
+    this.demonCurtainOverlay = overlay
+    // 기본 close 애니메이션(0.68s)이 끝날 때까지 대기.
+    await new Promise<void>((r) => window.setTimeout(r, 740))
+  }
+
+  /** 악마 보스 등장 후 커튼을 열어 보스를 공개한다. */
+  async openDemonCurtain(): Promise<void> {
+    const overlay = this.demonCurtainOverlay
+    if (!overlay) return
+    overlay.classList.add('is-opening')
+    await new Promise<void>((r) => window.setTimeout(r, 1100))
+    overlay.remove()
+    this.demonCurtainOverlay = null
+  }
+
+  private ensureDemonCurtainStyles(): void {
+    if (document.getElementById('demon-curtain-styles')) return
+    const style = document.createElement('style')
+    style.id = 'demon-curtain-styles'
+    style.textContent = `
+#demon-curtain-overlay {
+  position: fixed; inset: 0; z-index: 145; pointer-events: none;
+}
+#demon-curtain-overlay .demon-curtain-panel {
+  width: 56%;
+  filter: saturate(0.55) hue-rotate(-12deg) brightness(0.82);
+}
+#demon-curtain-overlay.is-opening .job-rail-curtain--left {
+  animation: job-curtain-open-left 0.92s cubic-bezier(0.18, 0.82, 0.25, 1) forwards;
+}
+#demon-curtain-overlay.is-opening .job-rail-curtain--right {
+  animation: job-curtain-open-right 0.92s cubic-bezier(0.18, 0.82, 0.25, 1) forwards;
+}
+`
+    document.head.appendChild(style)
   }
 
   /** Forced trial reuses shop shell/bundle grammar so altar->boss->trial feels
@@ -4522,8 +4580,9 @@ export class GameBoardRenderer {
           </span>
         `)
       } else if (ev.kind === 'recipe') {
+        const demonClass = ev.recipeId === 'demon-summon' ? 'chain-event-recipe--demon' : ''
         parts.push(`
-          <span class="chain-event chain-event-recipe ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
+          <span class="chain-event chain-event-recipe ${demonClass} ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
             <span class="chain-event-mark">✦</span>
             <span class="chain-event-copy"><span class="chain-event-name">${ev.name}</span><span class="chain-event-flavor">${ev.flavor}</span></span>
           </span>
@@ -5537,11 +5596,11 @@ export class GameBoardRenderer {
   }
 
   /** 이벤트 불태우기: 레시피 해금 카드가 등장해 불길하게 확대됐다 화염과 함께 도감으로 빨려 들어간다. */
-  async animateEventRecipeUnlock(_recipeId: string, recipeName: string, recipeEffect: string): Promise<void> {
+  async animateEventRecipeUnlock(_recipeId: string, recipeName: string, recipeEffect: string, ingredientText?: string): Promise<void> {
     const spriteUrl = recipeSprite001 ?? ''
     const compendiumBtn = this.boardElement.querySelector<HTMLElement>('[data-open-compendium]')
 
-    // 고정 오버레이에 해금 카드 DOM을 생성한다.
+    // 고정 오버레이에 해금 카드 DOM을 생성한다 (카드팩 카드 양식).
     const overlay = document.createElement('div')
     overlay.style.cssText = [
       'position:fixed;inset:0;z-index:9200',
@@ -5551,15 +5610,15 @@ export class GameBoardRenderer {
 
     const card = document.createElement('div')
     card.style.cssText = [
-      'width:clamp(140px,18vw,210px)',
-      'aspect-ratio:3/4',
-      'border-radius:8px',
+      'width:clamp(148px,20vw,220px)',
+      'aspect-ratio:2/3',
+      'border-radius:10px',
       'overflow:hidden',
       'display:grid',
-      'grid-template-rows:62% 1fr',
+      'grid-template-rows:58% 1fr',
       'border:1px solid rgba(180,40,20,0.75)',
       'background:linear-gradient(180deg,rgba(22,6,10,0.98) 0%,rgba(10,2,6,0.99) 100%)',
-      'box-shadow:0 0 0 1px rgba(120,20,10,0.4),0 18px 40px rgba(0,0,0,0.85),0 0 32px rgba(200,40,10,0.18)',
+      'box-shadow:0 0 0 1px rgba(120,20,10,0.4),inset 0 1px 0 rgba(220,80,40,0.18),0 20px 44px rgba(0,0,0,0.88),0 0 36px rgba(200,40,10,0.22)',
       'will-change:transform,opacity',
       'transform:scale(0.55) translateY(60px)',
       'opacity:0',
@@ -5571,36 +5630,63 @@ export class GameBoardRenderer {
       `background-image:url('${spriteUrl}')`,
       'background-size:cover',
       'background-position:center 15%',
-      'box-shadow:inset 0 -56px 64px rgba(10,2,6,0.9)',
-      'border-bottom:1px solid rgba(180,60,20,0.5)',
+      'box-shadow:inset 0 -60px 72px rgba(10,2,6,0.95)',
+      'border-bottom:1px solid rgba(180,60,20,0.55)',
+      'position:relative',
     ].join(';')
+    // 카테고리 배지 (레시피 / 조합)
+    const badge = document.createElement('span')
+    badge.textContent = '레시피'
+    badge.style.cssText = [
+      'position:absolute;top:8px;left:8px',
+      'font-size:10px;letter-spacing:0.10em;font-weight:700',
+      'padding:2px 7px;border-radius:4px',
+      'background:rgba(180,40,20,0.82);color:rgba(255,210,180,0.96)',
+      'border:1px solid rgba(220,80,40,0.5)',
+    ].join(';')
+    art.appendChild(badge)
 
     const body = document.createElement('div')
     body.style.cssText = [
-      'padding:10px 14px 14px',
-      'display:flex;flex-direction:column;gap:6px',
-      'background:transparent',
+      'padding:10px 13px 12px',
+      'display:flex;flex-direction:column;gap:5px',
     ].join(';')
 
     const title = document.createElement('h3')
     title.textContent = recipeName
     title.style.cssText = [
-      'margin:0;font-size:clamp(14px,2vh,20px)',
-      'font-weight:900;letter-spacing:0.04em',
+      'margin:0;font-size:clamp(14px,2.1vh,21px)',
+      'font-weight:900;letter-spacing:0.04em;line-height:1.1',
       'color:rgba(240,140,100,0.96)',
-      'text-shadow:0 1px 4px rgba(0,0,0,0.95),0 0 16px rgba(220,50,10,0.3)',
+      'text-shadow:0 1px 4px rgba(0,0,0,0.95),0 0 18px rgba(220,50,10,0.32)',
     ].join(';')
 
     const effect = document.createElement('p')
     effect.textContent = recipeEffect
     effect.style.cssText = [
-      'margin:0;font-size:clamp(11px,1.5vh,14px)',
+      'margin:0;font-size:clamp(11px,1.55vh,14px)',
       'line-height:1.5',
-      'color:rgba(210,175,155,0.82)',
+      'color:rgba(220,160,140,0.88)',
+      'letter-spacing:0.02em',
     ].join(';')
 
     body.appendChild(title)
     body.appendChild(effect)
+
+    if (ingredientText) {
+      const divider = document.createElement('div')
+      divider.style.cssText = 'height:1px;background:rgba(180,60,20,0.28);margin:3px 0 4px'
+      const ingredients = document.createElement('p')
+      ingredients.textContent = ingredientText
+      ingredients.style.cssText = [
+        'margin:0;font-size:clamp(9px,1.25vh,12px)',
+        'line-height:1.4;letter-spacing:0.02em',
+        'color:rgba(180,130,110,0.65)',
+      ].join(';')
+      body.appendChild(divider)
+      body.appendChild(ingredients)
+    }
+
     card.appendChild(art)
     card.appendChild(body)
     overlay.appendChild(card)

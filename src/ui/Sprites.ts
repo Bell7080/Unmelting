@@ -493,6 +493,16 @@ const recipeGlob = import.meta.glob('../assets/sprites/recipe_*.webp', {
 }) as Record<string, string>
 export const recipeSprite001: string | undefined = recipeGlob['../assets/sprites/recipe_001.webp']
 
+// 이벤트 보스 일러스트: eventboss_*.webp. 없으면 undefined → 일반 보스 이미지 폴백.
+const eventBossGlob = import.meta.glob<{ default: string }>(
+  '../assets/sprites/eventboss_*.webp',
+  { eager: true }
+)
+/** 이벤트 보스 일러스트. name 예: 'eventboss_001'. 파일 없으면 undefined. */
+export function spriteForEventBoss(name: string): string | undefined {
+  return eventBossGlob[`../assets/sprites/${name}.webp`]?.default
+}
+
 /** 강화팩/해금팩 항목 일러스트.
  *  triple-{cardId} → 카드 아트. recipe-{recipeId} → recipe_001 (공용) */
 export function spriteForUpgradePackItem(id: string): string | undefined {

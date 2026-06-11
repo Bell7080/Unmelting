@@ -3046,6 +3046,7 @@ async function applyHandSingle(
   // Resolve combo recipes one at a time. Each recipe gets its own delay,
   // animations, and preparation refresh so chained removals cannot leave rail
   // gaps and active-row cards can merge before the next recipe checks the board.
+  let demonBossPending = false
   let recipeSafety = 32
   while (HandSystem.hasPendingRecipe(chain, gameState) && recipeSafety-- > 0) {
     await wait(COMBO_TRIGGER_DELAY_MS)
@@ -3068,6 +3069,7 @@ async function applyHandSingle(
       if (coinRecipe) recordCoinGain(coinRecipe.name, gainedCoins)
     }
     for (const fired of recipeResult.firedRecipes) {
+      if (fired.recipe.id === 'demon-summon') demonBossPending = true
       // 보스 전투 중 즉사·전방소멸 레시피 시도 → 보스는 이미 면역 처리됐으므로 저항 연출만 재생.
       if (
         bossController.eventState &&
@@ -3205,6 +3207,16 @@ async function applyHandSingle(
         if (!gameState.isGameOver) await runPreparationRefreshAfterFieldEffects()
       }
     }
+  }
+
+  // 악마 소환 레시피 발동 — 모든 효과/정리 후 커튼 닫힘 → 이벤트 보스 전투 시작.
+  if (demonBossPending && !bossController.eventState && !gameState.isGameOver) {
+    demonBossPending = false
+    await boardRenderer.closeDemonCurtain()
+    await bossController.runDemonSummon()
+    // 보스 전투·보상·시련 완료 후 입력 복귀.
+    setTimeout(() => { inputLocked = false }, 320)
+    return
   }
 
   // 손패 카드(조합식 포함)로 보스 HP가 깎였다면 HP 3 임계 손패 트리거 + 격파 검사.
@@ -3572,7 +3584,12 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
   // combat + 레시피 해금: 마무리 대사 직후 해금 카드 연출 → 도감으로 블라스트.
   if (choiceEffect?.kind === 'combat' && choiceEffect.unlocksRecipe) {
     const recipe = RECIPES.find((r) => r.id === choiceEffect.unlocksRecipe)
-    if (recipe) await boardRenderer.animateEventRecipeUnlock(recipe.id, recipe.name, recipe.flavor)
+    if (recipe) {
+      const ingredientText = Object.keys(recipe.ingredients)
+        .map((id) => getHandCardDef(id as Parameters<typeof getHandCardDef>[0])?.name ?? id)
+        .join(' / ')
+      await boardRenderer.animateEventRecipeUnlock(recipe.id, recipe.name, recipe.flavor, ingredientText)
+    }
   }
   await boardRenderer.closeEventEntry()
   // 종료: 소비된 칸을 메우고 일반 진행으로 복귀한다.

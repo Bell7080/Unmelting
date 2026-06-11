@@ -528,6 +528,36 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   color: rgba(255, 237, 184, 0.96);
   text-shadow: 0 0 8px rgba(255, 201, 104, 0.9);
 }
+/* 악마 소환 발동 직전 — 더 붉고 불길하며 세로로 긴 다이아몬드 */
+.recipe-ready-mark.is-demon-ready {
+  font-size: 16px;
+  color: rgba(222, 38, 18, 0.96);
+  transform: scaleX(0.52) scaleY(1.52);
+  transform-origin: top left;
+  text-shadow:
+    0 0 6px rgba(222, 50, 20, 0.85),
+    0 0 16px rgba(200, 30, 10, 0.55);
+  animation: demon-diamond-pulse 0.72s ease-in-out infinite alternate;
+}
+@keyframes demon-diamond-pulse {
+  from { text-shadow: 0 0 6px rgba(222, 50, 20, 0.75), 0 0 14px rgba(200, 30, 10, 0.42); }
+  to   { text-shadow: 0 0 12px rgba(240, 60, 30, 1.0), 0 0 26px rgba(220, 40, 20, 0.70); }
+}
+
+/* 악마 소환 체인 이벤트 — 붉고 불길한 색감 */
+.chain-event-recipe--demon {
+  color: rgba(222, 50, 28, 0.96) !important;
+}
+.chain-event-recipe--demon .chain-event-name,
+.chain-event-recipe--demon .chain-event-flavor {
+  color: rgba(222, 50, 28, 0.96) !important;
+  text-shadow: 0 0 10px rgba(200, 38, 18, 0.48) !important;
+}
+.chain-event-recipe--demon .chain-event-mark {
+  color: rgba(240, 60, 28, 1) !important;
+  text-shadow: 0 0 8px rgba(220, 40, 20, 0.75) !important;
+}
+
 @keyframes recipe-ready-side-glow {
   0%, 100% {
     box-shadow:
