@@ -46,6 +46,7 @@ export type RelicId =
   | 'sanitizer'
   | 'wax-harmony'
   | 'trap-master'
+  | 'demon-doll'
 
 /** Immutable relic rules used by gameplay and presentation. */
 export interface RelicDefinition {
@@ -404,6 +405,16 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '함정 무시 확률 15% 증가',
     flavor: '모든 덫을 꿰뚫는 발걸음.',
     basePrice: 1400,
+  },
+  // 악마 이벤트 보스 전용 보상 유물. 자해 20마다 불빛 배율 +10%, 공격력 +1.
+  'demon-doll': {
+    id: 'demon-doll',
+    name: '악마 인형',
+    rarity: 'legendary',
+    effect: '자해 20마다 불빛 +10% · 공격력 +1',
+    flavor: '인형 안에는 뭔가 남아 있다 — 고통마다 조금씩 강해진다.',
+    basePrice: 0,   // 상점 미등장 — 이벤트 보스 보상 전용
+    weight: 0,
   },
 }
 

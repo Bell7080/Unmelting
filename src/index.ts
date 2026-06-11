@@ -1185,6 +1185,21 @@ function relicPurchaseBlocked(id: RelicId): boolean {
   return false
 }
 
+/** 악마 인형 유물: 자해 20마다 불빛 획득량 +10% · 공격력 +1. */
+function applyDemonDollSelfDamage(amount: number): void {
+  if (!gameState.character.hasRelic('demon-doll') || amount <= 0) return
+  const enhancements = gameState.enhancements
+  enhancements.demonDollSelfDamageAccum += amount
+  const gained = Math.floor(enhancements.demonDollSelfDamageAccum / 20)
+  if (gained <= 0) return
+  enhancements.demonDollSelfDamageAccum %= 20
+  for (let i = 0; i < gained; i++) {
+    enhancements.scoreMultiplier *= 1.10
+    gameState.character.applyDamageBoost(1)
+  }
+  recordRelicActivation('demon-doll', `자해 20 누적 → 불빛 +10%, 공격력 +${gained}`)
+}
+
 /** 사치품 유물: 불빛 소비량 누적 후 2000마다 공격력 +1 처리. */
 function applyLuxuryScoreSpend(amount: number): void {
   if (!gameState.character.hasRelic('luxury') || amount <= 0) return
@@ -2921,12 +2936,17 @@ async function applyHandSingle(
     render()
     await boardRenderer.animatePlayerDamageImpact(result.selfDamage)
     applyAnomalyHealthLoss()
+    applyDemonDollSelfDamage(result.selfDamage)
     if (!gameState.character.isAlive() && !gameState.character.authoritySurvivePending) {
       gameState.endGame('character_defeated')
       if (!(await tryResolveSurvivalRelics())) finishTurn()
       inputLocked = false
       return
     }
+  }
+  // 검은 양초 사용 시 이벤트 보스 누적 카운터 동기화
+  if (result.blackCandleCounterGain && bossController.eventState) {
+    bossController.eventState.demonCandleCounter += result.blackCandleCounterGain
   }
   pendingHandTarget = null
   boardRenderer.setHandTargetingMode(null)

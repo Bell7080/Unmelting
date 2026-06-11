@@ -45,6 +45,8 @@ export type BurstTheme =
   | 'boss-ember-spark'
   // 90~100F 최종 등반 별빛 — 남청~보라빛 밤하늘에서 은빛 별로 터진다.
   | 'starlight'
+  // 악마 소용돌이 — 심연 보라에서 균열 자주빛으로.
+  | 'demon-vortex'
 
 interface Palette {
   shades: [string, string, string, string]
@@ -96,6 +98,8 @@ const PALETTES: Record<BurstTheme, Palette> = {
   'boss-ember-spark': { shades: ['#2a0805', '#a83012', '#ff6a24', '#ffd98a'] },
   // 최종 등반 별빛 — 깊은 남청·보라에서 은백색 별빛으로.
   starlight: { shades: ['#0a0e2a', '#33307a', '#7b73d8', '#eef0ff'] },
+  // 악마 소용돌이 — 심연의 보라에서 균열 자주빛으로.
+  'demon-vortex': { shades: ['#0a0514', '#3c1270', '#8b38d8', '#d4a8ff'] },
 }
 
 export interface BurstOptions {

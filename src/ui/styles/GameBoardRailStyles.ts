@@ -630,6 +630,7 @@ export const GAME_BOARD_RAIL_STYLES = `
    (lanes 데이터는 그대로 보존 — 격파/시련 종료 후 자연 복원된다.) */
 .rail:has(.cell.card.boss-kind-waxArmy) .rail-row.dist-0,
 .rail:has(.cell.card.boss-kind-waxKnight) .rail-row.dist-0,
+.rail:has(.cell.card.boss-kind-waxDemon) .rail-row.dist-0,
 .rail:has(.rail-row.dist-0 .cell.card.boss-kind-waxWitch) .rail-row.dist-0 {
   grid-row: 1 / -1;
 }
@@ -637,9 +638,20 @@ export const GAME_BOARD_RAIL_STYLES = `
 .rail:has(.cell.card.boss-kind-waxArmy) .rail-row.dist-2,
 .rail:has(.cell.card.boss-kind-waxKnight) .rail-row.dist-1,
 .rail:has(.cell.card.boss-kind-waxKnight) .rail-row.dist-2,
+.rail:has(.cell.card.boss-kind-waxDemon) .rail-row.dist-1,
+.rail:has(.cell.card.boss-kind-waxDemon) .rail-row.dist-2,
 .rail:has(.rail-row.dist-0 .cell.card.boss-kind-waxWitch) .rail-row.dist-1,
 .rail:has(.rail-row.dist-0 .cell.card.boss-kind-waxWitch) .rail-row.dist-2 {
   display: none;
+}
+/* waxDemon — 짙은 붉은빛/보라빛 테두리 + 이름 색상 */
+.boss-kind-waxDemon {
+  border-color: rgba(140, 40, 80, 0.85) !important;
+  box-shadow: inset 0 0 0 1px rgba(100, 20, 60, 0.6), 0 0 24px rgba(120, 30, 80, 0.5) !important;
+}
+.boss-kind-waxDemon .boss-face-name {
+  color: rgba(220, 120, 180, 0.95);
+  text-shadow: 0 1px 6px rgba(160, 40, 100, 0.6), 0 0 18px rgba(120, 20, 80, 0.45);
 }
 
 /* waxKnight는 30F와 같은 3×3 보스지만, 기사 일러스트 상체가 잘리기 쉬워 살짝 위로 둔다. */
@@ -762,6 +774,86 @@ export const GAME_BOARD_RAIL_STYLES = `
   --boss-cast-illust-bg: rgba(108, 36, 14, 0.96);
   --boss-cast-illust-hi: rgba(255, 130, 70, 0.55);
   border-color: rgba(190, 60, 30, 0.82);
+}
+/* 검은 양초 악마 — 검은 양초 손패 카드 (심연 보라빛 톤) */
+.boss-cast-card--demon-candle {
+  --boss-cast-accent: #d4a8ff;
+  --boss-cast-illust-bg: rgba(30, 8, 48, 0.96);
+  --boss-cast-illust-hi: rgba(140, 60, 220, 0.55);
+  border-color: rgba(100, 30, 150, 0.85);
+  background: linear-gradient(180deg, rgba(18, 4, 32, 0.99) 0%, rgba(8, 2, 16, 1) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(160, 80, 240, 0.18),
+    0 16px 34px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(80, 20, 120, 0.5),
+    0 0 26px rgba(120, 40, 200, 0.55);
+}
+.boss-cast-card--demon-candle .boss-cast-card-title {
+  color: rgba(212, 168, 255, 0.97);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9), 0 0 14px rgba(140, 40, 200, 0.4);
+}
+/* 거짓과 진실 카드 — 훨씬 더 크고 보라빛 */
+.demon-truth-lie-card {
+  width: clamp(160px, 18vw, 210px);
+  border-color: rgba(120, 40, 180, 0.92);
+  background: linear-gradient(180deg, rgba(20, 6, 40, 0.99) 0%, rgba(10, 2, 20, 1) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(180, 100, 255, 0.22),
+    0 18px 40px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(100, 30, 160, 0.55),
+    0 0 36px rgba(150, 60, 240, 0.7);
+}
+.demon-truth-lie-card .boss-cast-card-title {
+  color: rgba(200, 140, 255, 0.97);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9), 0 0 16px rgba(160, 60, 240, 0.5);
+}
+.boss-cast-card--truth {
+  --boss-cast-illust-bg: rgba(24, 6, 48, 0.97);
+  --boss-cast-illust-hi: rgba(160, 80, 255, 0.6);
+}
+.boss-cast-card--lie {
+  --boss-cast-illust-bg: rgba(36, 6, 24, 0.97);
+  --boss-cast-illust-hi: rgba(200, 60, 140, 0.5);
+  border-color: rgba(160, 40, 100, 0.88);
+}
+/* 진실/거짓 일러스트 영역 — 한자 심볼 중앙 표시 */
+.demon-truth-lie-illust {
+  width: 100%;
+  height: 58%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid rgba(120, 60, 200, 0.5);
+  background:
+    radial-gradient(circle at 50% 42%, var(--boss-cast-illust-hi, rgba(140, 60, 220, 0.55)), transparent 72%),
+    linear-gradient(180deg, var(--boss-cast-illust-bg, rgba(30, 8, 48, 0.96)) 0%, rgba(8, 2, 16, 0.97) 100%);
+}
+.demon-truth-lie-symbol {
+  font-family: 'OkDanDan', Georgia, serif;
+  font-size: clamp(36px, 5vh, 52px);
+  font-weight: 900;
+  color: rgba(212, 168, 255, 0.96);
+  text-shadow: 0 0 24px rgba(160, 80, 240, 0.8), 0 2px 8px rgba(0, 0, 0, 0.9);
+  filter: drop-shadow(0 0 12px rgba(140, 60, 220, 0.7));
+}
+/* 악마 소멸 — 보라색 소용돌이 페이드아웃 */
+.is-demon-dying {
+  animation: demon-dying-pulse 0.6s ease-in-out infinite alternate;
+}
+@keyframes demon-dying-pulse {
+  0%   { filter: brightness(1) saturate(1); }
+  100% { filter: brightness(1.3) saturate(1.4) hue-rotate(30deg); box-shadow: inset 0 0 30px rgba(160, 60, 240, 0.5); }
+}
+/* 보라빛 균열선 (demon-crack-line) — 일반 boss-crack-line과 같은 구조, 보라 그라데이션 */
+.demon-crack-line {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  animation: demon-crack-appear 0.35s ease-out forwards;
+}
+@keyframes demon-crack-appear {
+  from { opacity: 0; transform: scaleX(0.8); }
+  to   { opacity: 1; transform: scaleX(1); }
 }
 /* 100F 마녀 손패 콤보: 4장을 한 줄로 펼친 뒤 중복 카드와 추가 카드를 명확히 강조한다. */
 .boss-witch-combo-card {

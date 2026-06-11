@@ -526,6 +526,22 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: false,
   },
+  // 검은 양초: 악마 이벤트 보스 전용 보상. 자해 후 적 2피해, 악마 피해 카운터 +2, 사용 후 손패로 복귀.
+  'black-candle': {
+    id: 'black-candle',
+    name: '검은 양초',
+    category: 'attack',
+    description: '자해 2 · 필드 선택 적 1장 피해 2<br>검은 양초 피해 +2. 사라질 시 복귀',
+    tripleDescription: '자해 4 · 필드 선택 적 1장 피해 6<br>검은 양초 피해 +6. 사라질 시 복귀',
+    targeting: {
+      base:   { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
+      triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
+    },
+    dropWeight: 0,   // 일반 드롭 풀 제외 — 이벤트 보스 보상 전용
+    dropSource: 'boss',
+    metaRequired: false,
+    runLocked: false,
+  },
 }
 
 export const HAND_CARD_IDS: HandCardId[] = Object.keys(HAND_CARD_DEFINITIONS) as HandCardId[]

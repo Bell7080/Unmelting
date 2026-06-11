@@ -3655,6 +3655,196 @@ export class GameBoardRenderer {
     this.boardElement.classList.remove('is-boss-finale')
   }
 
+  /** 검은 양초 악마 공격 주기: 1~3장의 검은 양초 보스 손패를 순차 발동한다.
+   *  각 카드에 실시간 누적 피해(startingCounter+1, +2, ...) 를 표시하고, onEachCandle 콜백으로 효과를 적용한다. */
+  async animateDemonCandleTurn(
+    cardId: string,
+    count: number,
+    startingCounter: number,
+    onEachCandle: (index: number) => Promise<void>,
+  ): Promise<void> {
+    const tile = this.findCardElement(cardId)
+    if (!tile) return
+
+    const cells = Array.from(
+      this.boardElement.querySelectorAll<HTMLElement>(`.cell.card[data-card-id="${cardId}"]`)
+    ).filter((el) => el.offsetParent !== null)
+    const rects = cells.map((c) => c.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0)
+    const baseRect = rects.length > 0 ? rects[0] : tile.getBoundingClientRect()
+    const bossX = rects.length > 0
+      ? (Math.min(...rects.map((r) => r.left)) + Math.max(...rects.map((r) => r.right))) / 2
+      : baseRect.left + baseRect.width / 2
+    const bossY = rects.length > 0
+      ? (Math.min(...rects.map((r) => r.top)) + Math.max(...rects.map((r) => r.bottom))) / 2
+      : baseRect.top + baseRect.height / 2
+
+    const centerOffset = (count - 1) / 2
+    const createCandleCard = (index: number, counter: number): HTMLElement => {
+      const card = document.createElement('div')
+      card.className = 'boss-cast-card boss-cast-card--demon-candle'
+      card.style.left = `${bossX}px`
+      card.style.top = `${bossY}px`
+      card.style.setProperty('--combo-index', String(index))
+      card.innerHTML = `
+        <span class="boss-cast-card-glow" aria-hidden="true"></span>
+        <span class="boss-cast-card-illust" aria-hidden="true"><img src="${spriteForHandCard('black-candle')}" alt="" /></span>
+        <span class="boss-cast-card-title">검은 양초</span>
+        <span class="boss-cast-card-effect">피해 ${counter}</span>
+      `
+      document.body.appendChild(card)
+      return card
+    }
+
+    // 전체 카드를 미리 펼쳐 예고한 뒤 순차 발동한다.
+    const cards = Array.from({ length: count }, (_, i) => createCandleCard(i, startingCounter + i + 1))
+    await Promise.all(cards.map((card, index) => card.animate(
+      [
+        { transform: 'translate(-50%, -50%) scale(0.18) rotate(-7deg)', opacity: 0, filter: 'brightness(1.8)' },
+        { transform: `translate(calc(-50% + ${(index - centerOffset) * 118}px), -50%) scale(1.08) rotate(${(index - centerOffset) * 2}deg)`, opacity: 1, filter: 'brightness(1.18)', offset: 0.76 },
+        { transform: `translate(calc(-50% + ${(index - centerOffset) * 118}px), -50%) scale(1) rotate(${(index - centerOffset) * 1.2}deg)`, opacity: 1, filter: 'brightness(1)' },
+      ],
+      { duration: 360, delay: index * 70, easing: 'cubic-bezier(0.18, 0.86, 0.24, 1.18)', fill: 'forwards' }
+    ).finished))
+
+    for (let i = 0; i < count; i++) {
+      const card = cards[i]
+      card.classList.add('is-resolving')
+      await onEachCandle(i)
+      const counter = startingCounter + i + 1
+      const cardRect = card.getBoundingClientRect()
+      const originX = cardRect.left + cardRect.width / 2
+      const originY = cardRect.top + cardRect.height / 2
+      SquareBurst.playAt(originX, originY, 'demon-vortex', { count: 20, spread: 160, duration: 480 })
+      void this.spawnFieldFloatText(originX, originY - 24, `피해 ${counter}`)
+      const playerEl = this.boardElement.querySelector<HTMLElement>('.player-card')
+      if (playerEl) await this.animateResourceTrail(new DOMRect(originX - 10, originY - 10, 20, 20), playerEl, 4, 'demon-vortex')
+      await card.animate(
+        [
+          { opacity: 1, filter: 'brightness(1.4)' },
+          { opacity: 0, transform: 'translate(-50%, -50%) scale(0.38) rotate(5deg)', filter: 'brightness(2.4)' },
+        ],
+        { duration: 150, easing: 'cubic-bezier(0.5, 0, 0.6, 1)', fill: 'forwards' }
+      ).finished
+      card.remove()
+    }
+  }
+
+  /** 거짓과 진실: 단일 크고 보라빛 카드를 펼쳐 isTrue 여부를 보여주고 applyEffect 콜백으로 게임 로직을 적용한다. */
+  async animateDemonTruthLie(
+    cardId: string,
+    isTrue: boolean,
+    onResolve: () => Promise<void>,
+  ): Promise<void> {
+    const tile = this.findCardElement(cardId)
+    if (!tile) return
+
+    const cells = Array.from(
+      this.boardElement.querySelectorAll<HTMLElement>(`.cell.card[data-card-id="${cardId}"]`)
+    ).filter((el) => el.offsetParent !== null)
+    const rects = cells.map((c) => c.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0)
+    const baseRect = rects.length > 0 ? rects[0] : tile.getBoundingClientRect()
+    const bossX = rects.length > 0
+      ? (Math.min(...rects.map((r) => r.left)) + Math.max(...rects.map((r) => r.right))) / 2
+      : baseRect.left + baseRect.width / 2
+    const bossY = rects.length > 0
+      ? (Math.min(...rects.map((r) => r.top)) + Math.max(...rects.map((r) => r.bottom))) / 2
+      : baseRect.top + baseRect.height / 2
+
+    const card = document.createElement('div')
+    card.className = `boss-cast-card demon-truth-lie-card boss-cast-card--${isTrue ? 'truth' : 'lie'}`
+    card.style.left = `${bossX}px`
+    card.style.top = `${bossY}px`
+    card.innerHTML = `
+      <span class="boss-cast-card-glow" aria-hidden="true"></span>
+      <span class="boss-cast-card-illust demon-truth-lie-illust" aria-hidden="true">
+        <span class="demon-truth-lie-symbol">${isTrue ? '眞' : '假'}</span>
+      </span>
+      <span class="boss-cast-card-title">거짓과 진실</span>
+      <span class="boss-cast-card-effect">${isTrue ? '진실' : '거짓'}</span>
+    `
+    document.body.appendChild(card)
+
+    await card.animate(
+      [
+        { transform: 'translate(-50%, -50%) scale(0.18) rotate(-7deg)', opacity: 0, filter: 'brightness(1.8)' },
+        { transform: 'translate(-50%, -50%) scale(1.12) rotate(0deg)', opacity: 1, filter: 'brightness(1.3)', offset: 0.7 },
+        { transform: 'translate(-50%, -50%) scale(1) rotate(0deg)', opacity: 1, filter: 'brightness(1)' },
+      ],
+      { duration: 520, easing: 'cubic-bezier(0.18, 0.86, 0.24, 1.18)', fill: 'forwards' }
+    ).finished
+    await new Promise((r) => window.setTimeout(r, 600))
+
+    card.classList.add('is-resolving')
+    await onResolve()
+
+    const cardRect = card.getBoundingClientRect()
+    const originX = cardRect.left + cardRect.width / 2
+    const originY = cardRect.top + cardRect.height / 2
+    SquareBurst.playAt(originX, originY, 'demon-vortex', { count: 28, spread: 200, duration: 600 })
+    const liveTile = this.findCardElement(cardId) ?? tile
+    if (isTrue) {
+      void this.spawnFieldFloatText(originX, originY - 24, '진실 — 체력+10 공격+1')
+      const atkEl = liveTile.querySelector<HTMLElement>('.boss-face-atk') ?? liveTile
+      await this.animateResourceTrail(new DOMRect(originX - 10, originY - 10, 20, 20), atkEl, 6, 'demon-vortex')
+    } else {
+      void this.spawnFieldFloatText(originX, originY - 24, '거짓 — 손패 파괴')
+    }
+
+    await card.animate(
+      [
+        { opacity: 1, filter: 'brightness(1.4)' },
+        { opacity: 0, transform: 'translate(-50%, -50%) scale(0.38) rotate(5deg)', filter: 'brightness(2.4)' },
+      ],
+      { duration: 200, easing: 'cubic-bezier(0.5, 0, 0.6, 1)', fill: 'forwards' }
+    ).finished
+    card.remove()
+  }
+
+  /** 검은 양초 악마 격파 시 보라빛 균열 소용돌이 소멸 연출. */
+  async playDemonDefeatSequence(cardId: string): Promise<void> {
+    const tile = this.findCardElement(cardId)
+    if (!tile) return
+    this.boardElement.classList.add('is-boss-finale')
+    tile.classList.add('is-boss-defeating')
+    tile.classList.add('is-demon-dying')
+
+    SquareBurst.playOn(tile, 'demon-vortex', { count: 20, spread: 160, duration: 560 })
+    await new Promise((r) => window.setTimeout(r, 280))
+    SquareBurst.playOn(tile, 'demon-vortex', { count: 24, spread: 200, duration: 560 })
+    await new Promise((r) => window.setTimeout(r, 300))
+
+    // 보라빛 균열선 삽입
+    const cells = this.collectVisibleBossCells(cardId)
+    for (const cell of cells) {
+      for (let i = 0; i < 4; i++) {
+        const line = document.createElement('div')
+        const base = 40 + Math.random() * 100
+        const angle = (Math.random() < 0.5 ? 1 : -1) * base
+        const pos = 12 + Math.random() * 76
+        const w = 1.1 + Math.random() * 1.1
+        const alpha = (0.82 + Math.random() * 0.15).toFixed(2)
+        line.className = 'boss-crack-line demon-crack-line'
+        line.style.background = [
+          `linear-gradient(${angle.toFixed(1)}deg,`,
+          `transparent ${(pos - w).toFixed(1)}%,`,
+          `rgba(180,80,240,${alpha}) ${(pos - w * 0.3).toFixed(1)}%,`,
+          `rgba(140,40,200,${alpha}) ${(pos + w * 0.3).toFixed(1)}%,`,
+          `transparent ${(pos + w).toFixed(1)}%)`,
+        ].join(' ')
+        line.style.animationDelay = `${Math.round(Math.random() * 110)}ms`
+        cell.appendChild(line)
+      }
+      cell.classList.add('is-boss-cracking')
+    }
+    SquareBurst.playOn(tile, 'demon-vortex', { count: 30, spread: 220, duration: 640 })
+    await new Promise((r) => window.setTimeout(r, 400))
+
+    SquareBurst.playOn(tile, 'demon-vortex', { count: 40, spread: 280, duration: 800 })
+    tile.classList.add('is-boss-blown')
+    await new Promise((r) => window.setTimeout(r, 700))
+    this.boardElement.classList.remove('is-boss-finale')
+  }
+
   /** 100F 마녀 격파 직전 컷신의 보스 칸 전부를 모으는 헬퍼. 3×3 보스라 보이는 셀이 여러 장이다. */
   private collectVisibleBossCells(cardId: string): HTMLElement[] {
     return Array.from(

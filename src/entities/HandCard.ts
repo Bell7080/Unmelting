@@ -51,6 +51,7 @@ export type HandCardId =
   | 'watering-can'
   | 'garden-scissors'
   | 'ritual-candle'
+  | 'black-candle'
 
 export type HandEffectSelection = 'target' | 'random' | 'all' | 'none'
 

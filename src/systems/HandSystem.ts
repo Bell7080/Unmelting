@@ -80,6 +80,8 @@ export interface HandUseResult {
   teapotExtraHits?: { damage: number; totalCount: number }
   /** 모닥불: 처치가 일어났을 때 index.ts가 적용할 체력 회복량. */
   bonfireHealOnKill?: number
+  /** 검은 양초: 사용 시 악마 보스 피해 카운터를 증가시킬 양. 보스가 없을 때는 무시한다. */
+  blackCandleCounterGain?: number
 }
 
 export interface RecipeFireResult {
@@ -191,6 +193,11 @@ export class HandSystem {
 
     character.removeHandCardAt(slotIndex)
 
+    // 검은 양초: 사용 후 즉시 손패로 복귀한다 — 소모되지 않는 카드.
+    if (card.defId === 'black-candle') {
+      character.addHandCard(DropSystem.makeCard('black-candle'))
+    }
+
     // Extend the visible recipe chain with exactly one real card entry. The
     // `카드` item's combo-count text now means hand-gauge progress, not hidden
     // recipe ingredients, so recipes still read only this physical sequence.
@@ -271,6 +278,10 @@ export class HandSystem {
             ? 5 + (gs.enhancements.tripleBonus['bonfire'] ?? 0)
             : 3 + (gs.enhancements.singleBonus['bonfire'] ?? 0))
         : undefined,
+      // 검은 양초: 사용 시 악마 보스 카운터 증가량을 전달 (단일+2, 트리플+6).
+      blackCandleCounterGain: card.defId === 'black-candle'
+        ? (card.merged ? 6 : 2)
+        : undefined,
     }
   }
 
@@ -283,6 +294,8 @@ export class HandSystem {
     if (defId === 'ritual-candle' && !isMerged) return 2
     // 희생 방패: 단일 자해 1, 트리플 자해 2.
     if (defId === 'sacrifice-shield') return isMerged ? 2 : 1
+    // 검은 양초: 단일 자해 2, 트리플 자해 4.
+    if (defId === 'black-candle') return isMerged ? 4 : 2
     return 0
   }
 
@@ -652,6 +665,10 @@ export class HandSystem {
         }
         return gained > 0 ? `자해 2 · 랜덤 손패 +${gained}` : '자해 2 · 손패 가득 참'
       }
+      case 'black-candle':
+        // 자해 2는 selfDamageFor, 카운터 +2는 HandUseResult.blackCandleCounterGain으로 처리.
+        // 복귀(return-to-hand)는 use()에서 처리. 여기서는 피해만 적용한다.
+        return HandSystem.damageTargetEnemy(gs, target, 2 + bonus)
     }
   }
 
@@ -797,6 +814,9 @@ export class HandSystem {
         }
         return gained > 0 ? `트리플 랜덤 손패 +${gained}` : '트리플 손패 가득 참'
       }
+      case 'black-candle':
+        // 트리플: 자해 4(selfDamageFor), 피해 6, 카운터 +6(HandUseResult), 복귀(use()).
+        return HandSystem.damageTargetEnemy(gs, target, 6 + bonus)
     }
   }
 

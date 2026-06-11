@@ -269,6 +269,8 @@ export const SpriteUrls = {
     sanitizer: relic035Url,
     'wax-harmony': relic036Url,
     'trap-master': relic037Url,
+    // 악마 인형 — 전용 일러스트 연동 전 임시 폴백.
+    'demon-doll': relic037Url,
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,
@@ -304,6 +306,8 @@ export const SpriteUrls = {
     'watering-can': handCard030Url,
     'garden-scissors': handCard031Url,
     'ritual-candle': handCard032Url,
+    // 검은 양초 — 전용 일러스트 연동 전 임시 폴백.
+    'black-candle': handCard032Url,
   } satisfies Record<HandCardId, string>,
   /** Shop card-pack illustrations. Index follows the pack pickers in the
    *  shop bottom row: basic (자원) / upgrade (강화) / unlock (해금). */

@@ -17,7 +17,7 @@ export enum CardType {
 
 export type TrapKind = 'web' | 'bomb' | 'spore'
 export type FlowerKind = 'seed' | 'chamomile' | 'redRose' | 'marigold' | 'oleander' | 'lavender'
-export type SpecialEnemyKind = 'mimic' | 'monsterFlower' | 'waxArmy' | 'waxKnight' | 'waxSculptor' | 'waxWitch'
+export type SpecialEnemyKind = 'mimic' | 'monsterFlower' | 'waxArmy' | 'waxKnight' | 'waxSculptor' | 'waxWitch' | 'waxDemon'
 export type TreasureKind = 'chest' | 'goldenChest' | 'starlight'
 
 export type EnemySpriteId =

@@ -39,7 +39,7 @@ export interface BossDef {
   /** 보스 손패 효과(방패/체력/피해) 공통 수치. waxKnight/waxWitch가 사용한다. */
   handCardAmount: number
   /** CSS boss-kind-* 마커 — Rail CSS 레이아웃과 연동 */
-  specialEnemyKind: 'waxArmy' | 'waxKnight' | 'waxSculptor' | 'waxWitch'
+  specialEnemyKind: 'waxArmy' | 'waxKnight' | 'waxSculptor' | 'waxWitch' | 'waxDemon'
   /** Card.groupCount 표시값 (점수·뱃지용). 실제 점유 행 수와 별도. */
   groupCount: number
   /** lanes에 보스 카드 인스턴스를 실제로 박을 dist 행 수.
@@ -61,6 +61,8 @@ export interface BossDef {
   trait: string
   /** 인트로 오버레이 상단 수식어 */
   kicker: string
+  /** 멀티라인 인트로 대사 — 지정 시 introBubble/playerResponseBubble 2줄 대신 순차 표시한다. */
+  introSequence?: Array<{ speaker: 'boss' | 'player'; text: string; holdMs: number }>
 }
 
 // ---- 내부 상태 인터페이스 ---------------------------------------------------
@@ -85,6 +87,12 @@ export interface BossEventState {
   witchPage: BossPage
   /** waxWitch 1페이지: 다음 손패 소각 HP 임계값. */
   nextWitchHandBurnAt: number
+  /** waxDemon 현재 페이지 (1 → 2 전환은 HP 65% 이하 시). */
+  demonPage: 1 | 2
+  /** waxDemon 검은 양초 누적 피해 카운터 — 양초를 쓸 때마다 증가, 손패 black-candle 사용도 반영. */
+  demonCandleCounter: number
+  /** waxDemon 2페이지 전환 HP 임계값 (maxHp * 0.65 반올림). */
+  nextDemonPageAt: number
 }
 
 export interface BossRewardState {
@@ -265,26 +273,43 @@ export class BossEventController {
 
   /** 악마 소환 레시피 발동 시 이벤트 보스 전투 — index.ts가 커튼을 닫은 뒤 호출한다. */
   async runDemonSummon(): Promise<void> {
-    // 일러스트가 준비되지 않았을 때 30F 보스 이미지로 자동 폴백한다.
+    const turnCount = this.gs.getCurrentTurn()
+    const maxHp = 100 + turnCount
+    const attack = 3 + Math.floor(turnCount / 10)
     const spriteUrl = spriteForEventBoss('eventboss_001') ?? this.sprites.boss
     const def: BossDef = {
-      name: '소환된 악마',
-      maxHp: 40,
-      attack: 5,
+      name: '검은 양초 악마',
+      maxHp,
+      attack,
       attackInterval: 2,
       handGiftStep: 10,
       handCardAmount: 0,
-      specialEnemyKind: 'waxArmy',
+      specialEnemyKind: 'waxDemon',
       groupCount: 3,
       occupiedDistRows: 1,
       spriteUrl,
       appearAnimation: 'demonFire',
-      introBubble: '...이 세상에... 불려왔다.',
-      playerResponseBubble: '내가 불렀지만... 이건 실수다.',
-      introBubbleMs: 3200,
-      playerBubbleMs: 2800,
-      trait: '악마의 힘이 레일을 지배한다.',
-      kicker: '강령의 존재',
+      // introSequence가 있으므로 아래 두 필드는 인트로 오버레이 카드에만 쓰인다.
+      introBubble: '결국 . . .',
+      playerResponseBubble: '네 놈은... 정체가 뭐야?',
+      introBubbleMs: 2400,
+      playerBubbleMs: 2200,
+      trait: [
+        '공통: 체력 10마다 손패 1장.',
+        '1페이지: 2턴마다 검은 양초 1~3장.',
+        '2페이지(체력 65% 이하): 검은 양초 + 거짓과 진실.',
+      ].join('\n'),
+      kicker: '어둠의 속삭임',
+      introSequence: [
+        { speaker: 'boss',   text: '결국 . . .',                                        holdMs: 2000 },
+        { speaker: 'boss',   text: '문을 열었군. . .',                                   holdMs: 2200 },
+        { speaker: 'boss',   text: '달콤한 꿈 속에 빠져서 녹았다면 편했을 것을. . .', holdMs: 3400 },
+        { speaker: 'player', text: '네 놈은... 정체가 뭐야?',                            holdMs: 2400 },
+        { speaker: 'boss',   text: '지금처럼 진실, 그 너머를 갈망한다면. . .',           holdMs: 3000 },
+        { speaker: 'player', text: '. . . 뭐?',                                         holdMs: 1600 },
+        { speaker: 'boss',   text: '마녀가 남긴 미처 끄지 못한 잔불이여.',              holdMs: 2800 },
+        { speaker: 'boss',   text: '현실을 직면해라, 그리고 진실 앞에 녹아내려라.',     holdMs: 3200 },
+      ],
     }
     await this.runBossEvent(def)
   }
@@ -336,6 +361,7 @@ export class BossEventController {
 
     await this.consumeHandGiftThresholds(card.id)
     if (await this.resolveWaxWitchAfterDamage(beforeBossHp)) return
+    if (await this.resolveDemonAfterDamage(beforeBossHp)) return
     this.inject.render()
 
     if (card.getHealth() <= 0) {
@@ -346,17 +372,12 @@ export class BossEventController {
     if (turnMod === 0) {
       if (state.def.specialEnemyKind === 'waxWitch') {
         // 100F 페이지 능력은 해금 뒤 사라지지 않는다.
-        // 2/3페이지 공통으로 손패 4장 콤보 + 반격을 1회 친 뒤 바로 반환해, 아래 공통 반격(else)으로
-        // 내려가 두 번 때리던 버그를 막는다.
         if (state.witchPage >= 2) {
           if (await this.resolveWaxWitchPageTwoTurn(card.id)) return
           if (!this.gs.character.isAlive() || this.gs.character.authoritySurvivePending) {
             await this.inject.handlePlayerDeath()
             return
           }
-          // 3페이지는 90F 조각사와 같은 패턴: 공격 주기마다 콤보로 손패를 쓴 뒤 강화 종복을
-          // 다시 소환하며 후방으로 물러난다(주기적). 전방 적을 모두 처치하면 handleSummonedEnemyClick이
-          // returnSculptorToFront로 마녀를 3×3 전방에 되돌리고 턴을 초기화한다.
           if (state.witchPage === 3) {
             await this.performWitchSummonToBack()
           }
@@ -364,8 +385,31 @@ export class BossEventController {
           return
         }
       } else if (state.def.specialEnemyKind === 'waxSculptor') {
-        // 3턴마다 조각사 페이즈 교체 — 공격 대신 소환/후방 이동 연출
         await this.handleSculptorPhaseShift()
+        return
+      } else if (state.def.specialEnemyKind === 'waxDemon') {
+        // 1P: 검은 양초만 / 2P: 검은 양초 + 거짓/진실
+        if (await this.resolveDemonCandleTurn(card.id)) return
+        if (state.demonPage >= 2) {
+          if (await this.resolveDemonTruthLieTurn(card.id)) return
+          if (!character.isAlive() || character.authoritySurvivePending) {
+            await this.inject.handlePlayerDeath(); return
+          }
+        }
+        character.takeDamage(card.getDamage())
+        await this.br.animateEnemyAttacks([
+          { cardId: card.id, cardName: card.name, laneIndex: 0, damage: card.getDamage() },
+        ])
+        await this.br.animatePlayerDamageImpact(card.getDamage())
+        this.inject.recordNotice(`검은 양초 악마의 강타! 플레이어가 ${card.getDamage()} 피해를 받았다`, 'hurt')
+        this.inject.render()
+        this.inject.applyAnomalyHealthLoss()
+        if (await this.retaliateGracefulResponse([card.id])) return
+        if (!character.isAlive() || character.authoritySurvivePending) {
+          await this.inject.handlePlayerDeath(); return
+        }
+        this.br.setBossAttackCountdown(state.def.attackInterval)
+        this.inject.setInputLocked(false)
         return
       }
       if (state.def.specialEnemyKind === 'waxKnight') {
@@ -409,6 +453,7 @@ export class BossEventController {
       return
     }
     if (await this.resolveWaxWitchAfterDamage(null)) return
+    if (await this.resolveDemonAfterDamage(null)) return
     if (this.eventState.card.getHealth() <= 0) {
       await this.handleDefeated()
       return
@@ -470,6 +515,21 @@ export class BossEventController {
             this.inject.render()
             this.inject.applyAnomalyHealthLoss()
           }
+        } else if (state.def.specialEnemyKind === 'waxDemon') {
+          if (await this.resolveDemonCandleTurn(state.card.id)) return
+          if (state.demonPage >= 2) {
+            if (await this.resolveDemonTruthLieTurn(state.card.id)) return
+            if (!character.isAlive() || character.authoritySurvivePending) {
+              await this.inject.handlePlayerDeath(); return
+            }
+          }
+          const dmg = state.card.getDamage()
+          character.takeDamage(dmg)
+          await this.br.animateEnemyAttacks([{ cardId: state.card.id, cardName: state.card.name, laneIndex: 0, damage: dmg }])
+          await this.br.animatePlayerDamageImpact(dmg)
+          this.inject.recordNotice(`레바테인: 검은 양초 악마 반격 — 피해 ${dmg}`, 'hurt')
+          this.inject.render()
+          this.inject.applyAnomalyHealthLoss()
         }
 
         if (!character.isAlive() || character.authoritySurvivePending) {
@@ -533,13 +593,34 @@ export class BossEventController {
         character.addRelic(relicId)
         this.inject.recordNotice(`전리품: 유물 ${getRelicDef(relicId).name} 획득`, 'info')
         await this.inject.applyRelicPurchaseEffect(relicId)
-        // 유물 보상은 새 보유 카드가 생긴 뒤 목적지가 계산되어야
-        // 보상 트레일이 불빛 패널이 아니라 유물 인벤토리로 꽂힌다.
         this.inject.render()
       } else {
         this.inject.recordNotice('전리품: 획득 가능한 유물이 없다', 'info')
       }
       await this.br.animateResourceTrailFromCard(card.id, 'relic', 1, 'treasure-gain')
+    } else if (card.id === 'boss-reward-demon-relic') {
+      // 이벤트 보스 전용: 악마 인형 유물 고정 지급 (이미 보유 중이면 건너뜀)
+      const relicId: RelicId = 'demon-doll'
+      if (!character.hasRelic(relicId) && !character.bannedRelics.includes(relicId)) {
+        character.addRelic(relicId)
+        this.inject.recordNotice(`${getRelicDef(relicId).name} 획득`, 'win')
+        await this.inject.applyRelicPurchaseEffect(relicId)
+        this.inject.render()
+      } else {
+        this.inject.recordNotice('악마 인형: 이미 보유 중', 'info')
+      }
+      await this.br.animateResourceTrailFromCard(card.id, 'relic', 1, 'demon-vortex')
+    } else if (card.id === 'boss-reward-demon-hand') {
+      // 이벤트 보스 전용: 검은 양초 손패 고정 지급
+      const blackCandle = DropSystem.makeCard('black-candle')
+      const accepted = character.addHandCard(blackCandle)
+      if (accepted) {
+        this.inject.recordNotice('검은 양초 획득', 'win')
+        this.inject.render()
+        await this.br.animateResourceTrailFromCard(card.id, 'hand', 1, 'demon-vortex')
+      } else {
+        this.inject.recordNotice('검은 양초: 손패가 가득 차 받지 못했다', 'info')
+      }
     }
 
     await this.br.playBossRewardClaimedConsume(card.id)
@@ -610,6 +691,11 @@ export class BossEventController {
       bossShield: 0,
       witchPage: 1,
       nextWitchHandBurnAt: def.specialEnemyKind === 'waxWitch' ? def.maxHp - 10 : 0,
+      demonPage: 1,
+      demonCandleCounter: 0,
+      nextDemonPageAt: def.specialEnemyKind === 'waxDemon'
+        ? Math.ceil(def.maxHp * 0.35)  // 65% HP 임계 = 남은 HP 35% 지점
+        : 0,
     }
     this.syncBossShieldToCard()
 
@@ -637,16 +723,30 @@ export class BossEventController {
       await this.br.openDemonCurtain()
     }
 
-    // 보스 대사
-    this.bossBubble.show(def.introBubble)
-    await new Promise((r) => window.setTimeout(r, def.introBubbleMs))
-    this.bossBubble.dismiss()
-    await new Promise((r) => window.setTimeout(r, 320))
-    this.speechBubble.show(def.playerResponseBubble, 0)
-    await new Promise((r) => window.setTimeout(r, def.playerBubbleMs))
-    this.speechBubble.dismiss()
-    // 플레이어 응답과 타이틀 인트로 사이 공백을 줄여 보스 연출 템포를 더 타이트하게 만든다.
-    await new Promise((r) => window.setTimeout(r, 220))
+    // 보스 대사 — introSequence가 있으면 멀티라인 순차 표시, 없으면 기존 2줄.
+    if (def.introSequence && def.introSequence.length > 0) {
+      for (const line of def.introSequence) {
+        if (line.speaker === 'boss') {
+          this.bossBubble.show(line.text)
+        } else {
+          this.speechBubble.show(line.text, 0)
+        }
+        await new Promise((r) => window.setTimeout(r, line.holdMs))
+        if (line.speaker === 'boss') this.bossBubble.dismiss()
+        else this.speechBubble.dismiss()
+        await new Promise((r) => window.setTimeout(r, 260))
+      }
+      await new Promise((r) => window.setTimeout(r, 160))
+    } else {
+      this.bossBubble.show(def.introBubble)
+      await new Promise((r) => window.setTimeout(r, def.introBubbleMs))
+      this.bossBubble.dismiss()
+      await new Promise((r) => window.setTimeout(r, 320))
+      this.speechBubble.show(def.playerResponseBubble, 0)
+      await new Promise((r) => window.setTimeout(r, def.playerBubbleMs))
+      this.speechBubble.dismiss()
+      await new Promise((r) => window.setTimeout(r, 220))
+    }
 
     // 인트로 오버레이
     const introClosed = this.br.openBossIntroOverlay({
@@ -682,8 +782,9 @@ export class BossEventController {
     })
 
     this.inject.recordNotice('보스 처치! 레일 보상이 떨어진다', 'win')
+    const bossKind = this.eventState!.def.specialEnemyKind
     this.eventState = null
-    await this.stageBossRewardChests(savedField)
+    await this.stageBossRewardChests(savedField, bossKind)
 
     this.tm.setTurnMode('normal_turn')
     await this.inject.openTrialOverlayForced()
@@ -758,12 +859,19 @@ export class BossEventController {
     )
     await this.br.animateBossScatterToHandSlots(bossCardId, slotIndices)
   }
-  /** 100F 마녀의 현재 페이지 HP 하한. 1페이지 140, 2페이지 70, 그 외(마녀 아님/3페이지)는 0. */
+  /** 보스 페이지 HP 하한 — 경계를 넘는 피해를 깎기 전에 버려 HP바가 깜빡이지 않게 한다.
+   *  waxWitch: 1P→140, 2P→70, 3P→0. waxDemon: 1P→nextDemonPageAt, 2P→0. */
   private waxWitchPageFloor(): number {
     const state = this.eventState
-    if (!state || state.def.specialEnemyKind !== 'waxWitch') return 0
-    if (state.witchPage === 1) return 140
-    if (state.witchPage === 2) return 70
+    if (!state) return 0
+    if (state.def.specialEnemyKind === 'waxWitch') {
+      if (state.witchPage === 1) return 140
+      if (state.witchPage === 2) return 70
+      return 0
+    }
+    if (state.def.specialEnemyKind === 'waxDemon' && state.demonPage === 1) {
+      return state.nextDemonPageAt
+    }
     return 0
   }
 
@@ -1258,6 +1366,127 @@ export class BossEventController {
     this.inject.setInputLocked(false)
   }
 
+  // ---- waxDemon 전용 페이지 메커니즘 ----------------------------------------
+
+  /** 피격 후 HP가 65% 임계(nextDemonPageAt) 이하로 내려가면 2페이지로 전환한다. */
+  private async resolveDemonAfterDamage(_beforeHp: number | null): Promise<boolean> {
+    const state = this.eventState
+    if (!state || state.def.specialEnemyKind !== 'waxDemon') return false
+    if (state.demonPage !== 1) return false
+    if (state.card.getHealth() > state.nextDemonPageAt) return false
+
+    // 경계 초과 피해를 버리고 정확히 임계값에서 멈춘다.
+    if (state.card.health < state.nextDemonPageAt) state.card.health = state.nextDemonPageAt
+    state.demonPage = 2
+    state.turn = 0
+    this.br.setBossAttackCountdown(state.def.attackInterval)
+    this.inject.render()
+
+    const lines = [
+      '과연. . .',
+      '아직, 이쪽에도. . . 이 정도 되는 작품이 남아 있던 건가.',
+      '. . .',
+      '흥미롭군.',
+    ]
+    for (const text of lines) {
+      this.bossBubble.show(text)
+      await new Promise((r) => window.setTimeout(r, 2200))
+      this.bossBubble.dismiss()
+      await new Promise((r) => window.setTimeout(r, 240))
+    }
+    this.inject.setInputLocked(false)
+    return true
+  }
+
+  /** 공격 주기마다 검은 양초 1~3장 사용. 양초마다 전역 카운터++ 피해 + 보스 체력 +5. */
+  private async resolveDemonCandleTurn(bossCardId: string): Promise<boolean> {
+    const state = this.eventState!
+    const character = this.gs.character
+    const count = 1 + Math.floor(Math.random() * 3)
+    const startingCounter = state.demonCandleCounter
+
+    const applyCandle = async (_index: number): Promise<void> => {
+      state.demonCandleCounter += 1
+      const dmg = state.demonCandleCounter
+      character.takeDamage(dmg)
+      state.card.healEnemyLike(5)
+      this.inject.recordNotice(`검은 양초! 피해 ${dmg} (악마 체력 +5)`, 'hurt')
+      this.inject.render()
+      this.inject.applyAnomalyHealthLoss()
+    }
+
+    await this.br.animateDemonCandleTurn(bossCardId, count, startingCounter, applyCandle)
+
+    if (!character.isAlive() || character.authoritySurvivePending) {
+      await this.inject.handlePlayerDeath()
+      return true
+    }
+    if (await this.retaliateGracefulResponse([bossCardId])) return true
+    return false
+  }
+
+  /** 2페이지마다 거짓과 진실 카드 발동. 진실: 체력+10/공격+1. 거짓: 손패 1~3장 파괴+체력+5씩. */
+  private async resolveDemonTruthLieTurn(bossCardId: string): Promise<boolean> {
+    const state = this.eventState!
+    const character = this.gs.character
+    const isTrue = Math.random() < 0.5
+
+    const applyEffect = async (): Promise<void> => {
+      if (isTrue) {
+        state.card.healEnemyLike(10)
+        state.def.attack += 1
+        state.card.baseDamage += 1
+        state.card.enemyDamageTotal = state.card.baseDamage
+        this.inject.recordNotice('거짓과 진실 — 진실: 악마 체력 +10, 공격력 +1', 'hurt')
+        this.inject.render()
+      } else {
+        const hand = character.hand
+        if (hand.length === 0) {
+          this.inject.recordNotice('거짓과 진실 — 거짓: 빈 손패, 효과 없음', 'info')
+          return
+        }
+        const destroyCount = Math.min(1 + Math.floor(Math.random() * 3), hand.length)
+        const indices = sampleWithoutReplacement(
+          Array.from({ length: hand.length }, (_, i) => i),
+          destroyCount,
+        ).sort((a, b) => b - a)
+        const names = indices.map((i) => getHandCardDef(hand[i].defId).name)
+        await Promise.all(indices.map((slotIndex) =>
+          this.br.animateBossBlastToHandSlot(bossCardId, slotIndex, 'demon-vortex')
+        ))
+        for (const slotIndex of indices) character.removeHandCardAt(slotIndex)
+        state.card.healEnemyLike(destroyCount * 5)
+        this.inject.recordNotice(`거짓과 진실 — 거짓: ${names.join(', ')} 파괴, 악마 체력 +${destroyCount * 5}`, 'hurt')
+        this.inject.render()
+      }
+    }
+
+    await this.br.animateDemonTruthLie(bossCardId, isTrue, applyEffect)
+    return false
+  }
+
+  /** 검은 양초 악마 격파 후 8줄 대화 컷신. */
+  private async playDemonDeathCutscene(_cardId: string): Promise<void> {
+    const lines: Array<{ speaker: 'boss' | 'player'; text: string; holdMs: number }> = [
+      { speaker: 'boss',   text: '. . .',                                              holdMs: 1800 },
+      { speaker: 'player', text: '다 끝났어. 진실에 대해 알려줘.',                    holdMs: 2600 },
+      { speaker: 'boss',   text: '정녕, 현실을 알고 싶은 건가?',                      holdMs: 2400 },
+      { speaker: 'player', text: '그래.',                                              holdMs: 1600 },
+      { speaker: 'boss',   text: '잿빛 굴레를 끊어내라, 그렇다면 직면할 수 있겠지.', holdMs: 3200 },
+      { speaker: 'player', text: '그게 무슨 소리야?',                                 holdMs: 2000 },
+      { speaker: 'boss',   text: '. . .',                                              holdMs: 1600 },
+      { speaker: 'boss',   text: '진실의 앞에서. . . 그분과 함께, 기다리고 있겠다.', holdMs: 3400 },
+    ]
+    for (const line of lines) {
+      if (line.speaker === 'boss') this.bossBubble.show(line.text)
+      else this.speechBubble.show(line.text, 0)
+      await new Promise((r) => window.setTimeout(r, line.holdMs))
+      if (line.speaker === 'boss') this.bossBubble.dismiss()
+      else this.speechBubble.dismiss()
+      await new Promise((r) => window.setTimeout(r, 240))
+    }
+  }
+
   /** 100F 마녀 전용 격파 직전 컷신. 빛의 선이 한 줄씩 늘며 칸이 미세히 떨리고 확대되고,
    *  세 마디 독백을 지나 빛의 선이 마구 그어진 뒤 폭발(playBossDefeatSequence)로 이어진다. */
   private async playWitchDeathCutscene(cardId: string): Promise<void> {
@@ -1285,11 +1514,17 @@ export class BossEventController {
     if (state.defeatTriggered) return
     state.defeatTriggered = true
 
-    // 100F 마녀는 최종 보스답게 빛의 선이 번지며 칸이 확대되는 격파 직전 독백 컷신을 먼저 재생한다.
-    if (state.def.specialEnemyKind === 'waxWitch') {
-      await this.playWitchDeathCutscene(state.card.id)
+    // 악마: 격파 후 대화 컷신 → 보라 소용돌이 소멸 연출
+    if (state.def.specialEnemyKind === 'waxDemon') {
+      await this.playDemonDeathCutscene(state.card.id)
+      await this.br.playDemonDefeatSequence(state.card.id)
+    } else {
+      // 100F 마녀는 최종 보스답게 빛의 선이 번지며 칸이 확대되는 격파 직전 독백 컷신을 먼저 재생한다.
+      if (state.def.specialEnemyKind === 'waxWitch') {
+        await this.playWitchDeathCutscene(state.card.id)
+      }
+      await this.br.playBossDefeatSequence(state.card.id)
     }
-    await this.br.playBossDefeatSequence(state.card.id)
     // 보스가 현재 실제로 점유 중인 행(startRow부터 occupiedDistRows)을 정리한다.
     const startRow = state.sculptorStartRow
     for (let row = startRow; row < startRow + state.def.occupiedDistRows; row++) {
@@ -1305,10 +1540,18 @@ export class BossEventController {
     state.defeated?.()
   }
 
-  private async stageBossRewardChests(savedField: (Card | null)[][]): Promise<void> {
-    const healCard   = new Card('boss-reward-heal',   CardType.TREASURE, '점화액',  '체력 / 불씨 회복')
-    const chestCard  = new Card('boss-reward-chest',  CardType.TREASURE, '전리품',  '유물 획득')
-    const bountyCard = new Card('boss-reward-bounty', CardType.TREASURE, '현상금',  '1~5$')
+  private async stageBossRewardChests(savedField: (Card | null)[][], kind?: BossDef['specialEnemyKind']): Promise<void> {
+    let healCard: Card, chestCard: Card, bountyCard: Card
+    if (kind === 'waxDemon') {
+      // 이벤트 보스 전용 보상: 회복 / 악마 인형 유물 / 검은 양초 손패
+      healCard   = new Card('boss-reward-heal',        CardType.TREASURE, '점화액',    '체력 / 불씨 회복')
+      chestCard  = new Card('boss-reward-demon-relic', CardType.TREASURE, '악마 인형', '유물 획득')
+      bountyCard = new Card('boss-reward-demon-hand',  CardType.TREASURE, '검은 양초', '손패 획득')
+    } else {
+      healCard   = new Card('boss-reward-heal',   CardType.TREASURE, '점화액',  '체력 / 불씨 회복')
+      chestCard  = new Card('boss-reward-chest',  CardType.TREASURE, '전리품',  '유물 획득')
+      bountyCard = new Card('boss-reward-bounty', CardType.TREASURE, '현상금',  '1~5$')
+    }
     for (const c of [healCard, chestCard, bountyCard]) c.groupCount = 3
     for (let lane = 0; lane < 3; lane++) {
       this.gs.lanes[lane].setCardAtDistance(0, healCard)
