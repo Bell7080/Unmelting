@@ -1965,6 +1965,9 @@ async function runPreparationRefreshAfterFieldEffects(
     if (!moved && !filled) break
   }
   if (shouldRegroupFront) gameState.regroupAllRows()
+  // suppress는 낙하 중 중간 병합 연출을 막기 위한 것이므로 최종 정착 시엔 항상 regroup 한다.
+  // 이를 빠뜨리면 거미줄 3칸이 별도 gc=1 객체로 남아 키틴이 1칸만 제거하는 버그가 발생한다.
+  else gameState.regroupAllRows()
   trackFieldEnemyEncounters()
   const blooms = turnManager.bloomFrontSeeds(cardSpawner)
   turnManager.armFrontBombs()
@@ -3265,12 +3268,8 @@ async function applyHandSingle(
   // 손패 카드(조합식 포함)로 보스 HP가 깎였다면 HP 3 임계 손패 트리거 + 격파 검사.
   // 클릭 데미지·손패 데미지·조합식 데미지 어느 경로든 동일한 후처리가 적용된다.
   await bossController.applyPostHandEffect()
-  // 보스 전투 중엔 매 손패 행동 후 체인 로그를 초기화한다(연타 잔류 방지).
-  if (bossController.eventState) {
-    HandSystem.resetChain(chain)
-    clearChainTimeline()
-    boardRenderer.refreshChainBanner(buildChainHints())
-  }
+  // 보스전 체인은 손패 사용으론 끊지 않는다 — 직접 타격(applyBoardAction) 시에만 리셋.
+  // 콤보 배너는 applyPostHandEffect 내 조합식 발동 후 buildChainHints로 갱신이 오므로 별도 갱신 불필요.
   setTimeout(() => {
     inputLocked = false
   }, 320)
