@@ -1955,4 +1955,72 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
     filter: brightness(1.07);
   }
 }
+
+/* ── Shop Peek Button ────────────────────────────────────────────────
+   꾹 눌러서 상점 오버레이와 셔터를 일시적으로 투명하게 만들어
+   레일 상태를 확인한다. 상점/제단 오픈 중에만 표시된다. */
+.shop-peek-btn {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 9100;
+  display: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(255, 215, 120, 0.28);
+  border-radius: 10px;
+  background: rgba(22, 13, 8, 0.52);
+  color: rgba(255, 208, 96, 0.56);
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  box-shadow: 0 0 6px rgba(255, 196, 72, 0.14), inset 0 1px 0 rgba(255, 232, 168, 0.12);
+  animation: peek-btn-pulse 3.2s ease-in-out infinite;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.shop-peek-btn.is-visible {
+  display: flex;
+}
+.shop-peek-btn:hover {
+  color: rgba(255, 228, 140, 0.82);
+  border-color: rgba(255, 215, 120, 0.50);
+  background: rgba(30, 18, 10, 0.65);
+}
+.shop-peek-btn:active,
+.shop-peek-btn.is-peeking {
+  color: rgba(255, 228, 140, 0.96);
+  border-color: rgba(255, 215, 120, 0.70);
+  background: rgba(40, 24, 12, 0.72);
+  animation: none;
+  box-shadow: 0 0 14px rgba(255, 196, 72, 0.32), inset 0 1px 0 rgba(255, 232, 168, 0.22);
+}
+
+/* Subtle amber glow pulse */
+@keyframes peek-btn-pulse {
+  0%, 100% { box-shadow: 0 0 5px rgba(255, 196, 72, 0.12), inset 0 1px 0 rgba(255, 232, 168, 0.10); }
+  50%       { box-shadow: 0 0 12px rgba(255, 196, 72, 0.30), inset 0 1px 0 rgba(255, 232, 168, 0.20); }
+}
+
+/* Opacity transition — always present so restore is smooth */
+.shop-overlay.is-open {
+  transition: opacity 0.38s ease;
+}
+.rail-shutter {
+  transition: opacity 0.38s ease;
+}
+
+/* During peek: shop overlay and shutter fade out to reveal the rail */
+body.body--peeking .shop-overlay.is-open {
+  opacity: 0.04 !important;
+  pointer-events: none !important;
+}
+body.body--peeking .rail-shutter {
+  opacity: 0.05 !important;
+}
 `

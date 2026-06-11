@@ -302,6 +302,8 @@ export class GameBoardRenderer {
   private handTargetingMode: HandTargetingMode | null = null
   /** Body-level shop overlay is kept outside board re-renders. */
   private shopOverlayElement: HTMLElement | null = null
+  /** Hold-to-peek button — shows during shop/altar/trial; fades overlay on hold. */
+  private shopPeekButton: HTMLElement | null = null
   /** 현재 열린 상점 모드. 제단(altar) 유물은 무료라 가격 기반 affordable 판정을 건너뛴다. */
   private currentShopRenderMode: 'shop' | 'altar' = 'shop'
   /** Source rect for a just-bought shop relic; the next render uses it to
@@ -1887,6 +1889,7 @@ export class GameBoardRenderer {
       </div>
     `
     this.shopOverlayElement.classList.add('is-open')
+    this.showShopPeekButton()
     // 진입 페이드는 최초 오픈에서만 1회 재생한다. 이후 in-place 갱신/임팩트가
     // animation을 건드려도 재발동하지 않도록, 입장이 끝나면 마커를 제거한다.
     const enteringShell = this.shopOverlayElement.querySelector<HTMLElement>('.shop-shell')
@@ -2810,6 +2813,44 @@ export class GameBoardRenderer {
       window.removeEventListener('scroll', this.shopResizeListener)
       this.shopResizeListener = null
     }
+    this.hideShopPeekButton()
+  }
+
+  /** Creates (once) and shows the hold-to-peek button in the viewport corner. */
+  private showShopPeekButton(): void {
+    if (!this.shopPeekButton) {
+      const btn = document.createElement('button')
+      btn.className = 'shop-peek-btn'
+      btn.type = 'button'
+      btn.setAttribute('aria-label', '레일 미리보기 (꾹 누르기)')
+      // Magnifying glass with a small flame inside the lens — flat SVG, game style.
+      btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="22" height="22">
+        <circle cx="10" cy="10" r="6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+        <line x1="14.6" y1="14.6" x2="20.5" y2="20.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        <path d="M10 7c-.45 1.3-1.1 2-1.1 3a1.1 1.1 0 0 0 2.2 0c0-1-.65-1.7-1.1-3Z" fill="currentColor"/>
+      </svg>`
+      const clearPeek = () => {
+        document.body.classList.remove('body--peeking')
+        btn.classList.remove('is-peeking')
+      }
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault()
+        document.body.classList.add('body--peeking')
+        btn.classList.add('is-peeking')
+        btn.setPointerCapture((e as PointerEvent).pointerId)
+      })
+      btn.addEventListener('pointerup', clearPeek)
+      btn.addEventListener('pointercancel', clearPeek)
+      document.body.appendChild(btn)
+      this.shopPeekButton = btn
+    }
+    this.shopPeekButton.classList.add('is-visible')
+  }
+
+  /** Hides the peek button and clears any active peek state. */
+  private hideShopPeekButton(): void {
+    this.shopPeekButton?.classList.remove('is-visible')
+    document.body.classList.remove('body--peeking')
   }
 
   /** Forced trial reuses shop shell/bundle grammar so altar->boss->trial feels
@@ -2859,6 +2900,7 @@ export class GameBoardRenderer {
     // Mobile: wire touch-active highlight (idempotent — safe after shop→trial reuse).
     attachShopTouchHighlight(this.shopOverlayElement)
     this.shopOverlayElement.classList.add('is-open')
+    this.showShopPeekButton()
     this.positionShopShellOverRail()
   }
 
