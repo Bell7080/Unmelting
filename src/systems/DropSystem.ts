@@ -6,8 +6,18 @@
 
 import { HandCard, HandCardDropSource, HandCardId } from '@entities/HandCard'
 import { HAND_CARD_DEFINITIONS, getHandCardDef } from '@data/HandCards'
+import { HAND_CARD_RARITY, type CardRarity } from '@data/ShopPools'
 
 let nextDropUid = 1
+
+// 등급 티어 가중치 — 먼저 등급을 고르고, 그 안에서 dropWeight로 다시 고른다.
+const RARITY_WEIGHTS: Record<CardRarity, number> = {
+  common: 35,
+  rare: 20,
+  epic: 10,
+  unique: 2,
+  legendary: 2,
+}
 
 function generateUid(defId: HandCardId): string {
   return `${defId}-${nextDropUid++}`
@@ -23,7 +33,9 @@ export class DropSystem {
     DropSystem.allowedIds = new Set(ids)
   }
 
-  /** Build a single random hand card weighted by each definition's dropWeight.
+  /** Build a single random hand card using 2-tier selection:
+   *  1단계: 등급 티어를 RARITY_WEIGHTS 가중치로 뽑는다.
+   *  2단계: 해당 등급 안에서 dropWeight 가중치로 카드를 뽑는다.
    *  기본 드롭은 적/보상/드로우 공용 풀만 쓰고, 보물상자는 기존 풀에
    *  treasure-only 카드를 더해 동전이 상자에서만 보이도록 한다. */
   static generateDrop(source: HandCardDropSource = 'enemy-kill'): HandCard {
@@ -35,13 +47,30 @@ export class DropSystem {
     // 해금/삭제로 현재 source 풀이 비면 같은 source의 전체 기본 풀로 되돌려
     // treasure-only 동전이 일반 드롭에 끼어드는 안전망 버그를 피한다.
     const pool = defs.length > 0 ? defs : sourcePool
-    const total = pool.reduce((sum, d) => sum + (d.dropWeight ?? 1), 0)
-    let roll = Math.random() * total
+
+    // 1단계: 풀에 실제로 존재하는 등급의 합산 가중치로 등급을 선택한다.
+    const rarityTotals = new Map<CardRarity, number>()
     for (const def of pool) {
+      const rarity = HAND_CARD_RARITY[def.id] ?? 'common'
+      rarityTotals.set(rarity, (rarityTotals.get(rarity) ?? 0) + RARITY_WEIGHTS[rarity])
+    }
+    const tierTotal = Array.from(rarityTotals.values()).reduce((s, w) => s + w, 0)
+    let tierRoll = Math.random() * tierTotal
+    let chosenRarity: CardRarity = 'common'
+    for (const [rarity, weight] of rarityTotals) {
+      tierRoll -= weight
+      if (tierRoll <= 0) { chosenRarity = rarity; break }
+    }
+
+    // 2단계: 선택된 등급 내에서 dropWeight 가중치로 카드를 선택한다.
+    const tierPool = pool.filter((d) => (HAND_CARD_RARITY[d.id] ?? 'common') === chosenRarity)
+    const total = tierPool.reduce((sum, d) => sum + (d.dropWeight ?? 1), 0)
+    let roll = Math.random() * total
+    for (const def of tierPool) {
       roll -= def.dropWeight ?? 1
       if (roll <= 0) return DropSystem.makeCard(def.id)
     }
-    return DropSystem.makeCard(pool[0].id)
+    return DropSystem.makeCard(tierPool[0].id)
   }
 
   /** Build a fresh hand card instance for a known definition id. */

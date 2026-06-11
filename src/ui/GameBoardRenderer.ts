@@ -27,7 +27,7 @@ import type {
   FlowerWilt,
   TreasureChange,
 } from '@core/TurnManager'
-import { spriteForCard, spriteForHandCard, spriteForRelic, spriteForBasicPackItem, spriteForUpgradePackItem, spriteForJob, spriteForEvent, SpriteUrls } from '@ui/Sprites'
+import { spriteForCard, spriteForHandCard, spriteForRelic, spriteForBasicPackItem, spriteForUpgradePackItem, spriteForJob, spriteForEvent, SpriteUrls, recipeSprite001 } from '@ui/Sprites'
 import type { EventDefinition } from '@data/Events'
 import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandCategory, HandEffectTargeting } from '@entities/HandCard'
@@ -5487,6 +5487,125 @@ export class GameBoardRenderer {
       ],
       { duration: 760, easing: 'cubic-bezier(0.28, 0.1, 0.32, 1)', fill: 'forwards' }
     ).finished
+  }
+
+  /** 이벤트 불태우기: 레시피 해금 카드가 등장해 불길하게 확대됐다 화염과 함께 도감으로 빨려 들어간다. */
+  async animateEventRecipeUnlock(_recipeId: string, recipeName: string, recipeEffect: string): Promise<void> {
+    const spriteUrl = recipeSprite001 ?? ''
+    const compendiumBtn = this.boardElement.querySelector<HTMLElement>('[data-open-compendium]')
+
+    // 고정 오버레이에 해금 카드 DOM을 생성한다.
+    const overlay = document.createElement('div')
+    overlay.style.cssText = [
+      'position:fixed;inset:0;z-index:9200',
+      'display:flex;align-items:center;justify-content:center',
+      'pointer-events:none',
+    ].join(';')
+
+    const card = document.createElement('div')
+    card.style.cssText = [
+      'width:clamp(140px,18vw,210px)',
+      'aspect-ratio:3/4',
+      'border-radius:8px',
+      'overflow:hidden',
+      'display:grid',
+      'grid-template-rows:62% 1fr',
+      'border:1px solid rgba(180,40,20,0.75)',
+      'background:linear-gradient(180deg,rgba(22,6,10,0.98) 0%,rgba(10,2,6,0.99) 100%)',
+      'box-shadow:0 0 0 1px rgba(120,20,10,0.4),0 18px 40px rgba(0,0,0,0.85),0 0 32px rgba(200,40,10,0.18)',
+      'will-change:transform,opacity',
+      'transform:scale(0.55) translateY(60px)',
+      'opacity:0',
+      'font-family:OkDanDan,Georgia,serif',
+    ].join(';')
+
+    const art = document.createElement('div')
+    art.style.cssText = [
+      `background-image:url('${spriteUrl}')`,
+      'background-size:cover',
+      'background-position:center 15%',
+      'box-shadow:inset 0 -56px 64px rgba(10,2,6,0.9)',
+      'border-bottom:1px solid rgba(180,60,20,0.5)',
+    ].join(';')
+
+    const body = document.createElement('div')
+    body.style.cssText = [
+      'padding:10px 14px 14px',
+      'display:flex;flex-direction:column;gap:6px',
+      'background:transparent',
+    ].join(';')
+
+    const title = document.createElement('h3')
+    title.textContent = recipeName
+    title.style.cssText = [
+      'margin:0;font-size:clamp(14px,2vh,20px)',
+      'font-weight:900;letter-spacing:0.04em',
+      'color:rgba(240,140,100,0.96)',
+      'text-shadow:0 1px 4px rgba(0,0,0,0.95),0 0 16px rgba(220,50,10,0.3)',
+    ].join(';')
+
+    const effect = document.createElement('p')
+    effect.textContent = recipeEffect
+    effect.style.cssText = [
+      'margin:0;font-size:clamp(11px,1.5vh,14px)',
+      'line-height:1.5',
+      'color:rgba(210,175,155,0.82)',
+    ].join(';')
+
+    body.appendChild(title)
+    body.appendChild(effect)
+    card.appendChild(art)
+    card.appendChild(body)
+    overlay.appendChild(card)
+    document.body.appendChild(overlay)
+
+    // 단계1: 카드가 화면 중앙에 무겁게 등장한다.
+    await card.animate(
+      [
+        { transform: 'scale(0.55) translateY(60px)', opacity: 0, filter: 'brightness(0.5)' },
+        { transform: 'scale(1.08) translateY(-8px)',  opacity: 1, filter: 'brightness(1.2)', offset: 0.55 },
+        { transform: 'scale(1.18) translateY(-14px)', opacity: 1, filter: 'brightness(1.0)' },
+      ],
+      { duration: 850, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'forwards' }
+    ).finished
+
+    // 불길한 멈춤.
+    await new Promise<void>((r) => window.setTimeout(r, 420))
+
+    // 단계2: 화염 파티클 폭발.
+    SquareBurst.playOn(card, 'damage', { count: 22, spread: 110, duration: 520, size: [6, 16] })
+    SquareBurst.playOn(card, 'ember-gain', { count: 10, spread: 80, duration: 400 })
+    await new Promise<void>((r) => window.setTimeout(r, 90))
+
+    // 단계3: 카드가 도감 버튼으로 빠르게 날아가며 사라진다.
+    const cardRect = card.getBoundingClientRect()
+    const compRect = compendiumBtn?.getBoundingClientRect()
+    const tx = compRect ? compRect.left + compRect.width / 2 - (cardRect.left + cardRect.width / 2) : 0
+    const ty = compRect ? compRect.top  + compRect.height / 2 - (cardRect.top  + cardRect.height / 2) : -200
+    await card.animate(
+      [
+        { transform: 'scale(1.18) translateY(-14px)',                                        opacity: 1,   filter: 'brightness(1.0)' },
+        { transform: `scale(0.18) translate(${tx}px, ${ty}px) rotate(8deg)`,                opacity: 0,   filter: 'brightness(2.5) blur(5px)' },
+      ],
+      { duration: 440, easing: 'cubic-bezier(0.55, 0, 0.7, 0.6)', fill: 'forwards' }
+    ).finished
+
+    // 도감 버튼 뽀용 + 황금 스파크.
+    if (compendiumBtn) {
+      SquareBurst.playOn(compendiumBtn, 'treasure-gain', { count: 16, spread: 55, duration: 380 })
+      await compendiumBtn.animate(
+        [
+          { transform: 'scale(1)' },
+          { transform: 'scale(1.38)', offset: 0.28 },
+          { transform: 'scale(0.90)', offset: 0.58 },
+          { transform: 'scale(1.10)', offset: 0.78 },
+          { transform: 'scale(1)' },
+        ],
+        { duration: 440, easing: 'ease-out' }
+      ).finished
+    }
+
+    overlay.remove()
   }
 
   /** 30F 양초 백작: 보스에서 황금빛 분수 블라스트가 폭죽처럼 터진 뒤, 새로 생긴 손패

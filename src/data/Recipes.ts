@@ -149,6 +149,8 @@ export const RECIPES: Recipe[] = [
   recipe('flame-chain',    '불꽃 사슬', { chandelier: 1, shackles: 1 },               'shield-2-and-damage-field-1',  '방패 +2 · 필드 적 전체 피해 1'),
   recipe('banquet',        '연회',      { teapot: 1, firework: 1 },                   'damage-split-field-2x2',       '필드 랜덤 적 피해 2 × 2회',      true),
   recipe('sweetness',      '달콤함',    { teacup: 1, 'sacrifice-shield': 1 },         'heal-by-player-attack',        '공격력만큼 체력 회복',            true),
+  // event_001 불태우기 선택 시 해금되는 특수 이벤트 레시피 — 도감에 등록되고 런 내 발동 가능.
+  recipe('demon-summon',   '악마 소환', { 'ritual-candle': 1, ember: 1 },              'destroy-all-front-enemies',    '전방 모든 적 즉사',               true),
 ]
 
 /** Lookup helper for the renderer/log. */

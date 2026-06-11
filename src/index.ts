@@ -99,6 +99,8 @@ const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
 // 이벤트 문 PRD 컨트롤러 — 일반 스폰 버킷과 독립된 확률로 이벤트 칸을 생성한다.
 const eventSpawnCtrl = new EventSpawnController()
+// 레인이 가득 차 주입 못 한 이벤트 문을 다음 리필까지 보류한다.
+let pendingEventDoor = false
 // 디버그 전용: 이벤트N 커맨드로 스폰된 칸이 클릭될 때 강제 사용할 이벤트 ID.
 let debugForcedEventId: EventId | null = null
 const boardRenderer = new GameBoardRenderer('game-board')
@@ -2172,20 +2174,20 @@ function syncFieldEnemyEmberBonus(): string[] {
   return increasedIds
 }
 
-function compactAndRefillAllLanes(
-  eventDoorInjection?: { laneIndex: number; card: ReturnType<CardSpawner['generateEventDoor']> }
-): boolean {
+function compactAndRefillAllLanes(): boolean {
   // Delegate gravity + top-refill rules to GameState so row-clearing combo
   // effects cannot leave half-empty rails after a single maintenance pass.
-  let injected = false
-  return gameState.compactAndRefillRails((laneIndex) => {
-    // 이벤트 문 주입: 지정 레인에서 최초 1회만 대체한다.
-    if (eventDoorInjection && !injected && laneIndex === eventDoorInjection.laneIndex) {
-      injected = true
-      return eventDoorInjection.card
+  // 보류 이벤트 문은 laneIndex에 묶지 않고 첫 빈 슬롯에 주입해 유실을 막는다.
+  let doorInjected = false
+  const result = gameState.compactAndRefillRails((_laneIndex) => {
+    if (pendingEventDoor && !doorInjected) {
+      doorInjected = true
+      return cardSpawner.generateEventDoor()
     }
     return cardSpawner.spawnCardForRefill()
   })
+  if (doorInjected) pendingEventDoor = false
+  return result
 }
 
 /** 현재 레일을 스캔해 적/보스/특수 카드 이름을 도감 발견 집합에 추가한다. */
@@ -2238,6 +2240,7 @@ async function startGame(): Promise<void> {
   gameState.reset()
   cardSpawner.resetRelicModifiers()
   eventSpawnCtrl.reset()
+  pendingEventDoor = false
   finalAscentStarlightRuleActive = false
   syncFinalAscentRuleToSpawner()
   score = 0
@@ -3329,12 +3332,12 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
   }
 
   // 이벤트 문 독립 PRD 롤: 실제 턴 전진 시에만, 보스·최종등반 중엔 중단.
-  const eventDoorInjection =
-    advanceTurn && !gameState.bossBattleActive && !finalAscentStarlightRuleActive &&
-    eventSpawnCtrl.rollForTurn(gameState.getCurrentTurn())
-      ? { laneIndex: Math.floor(Math.random() * 3), card: cardSpawner.generateEventDoor() }
-      : undefined
-  const moved = compactAndRefillAllLanes(eventDoorInjection)
+  // 당장 주입 못 해도 pendingEventDoor=true로 보류하면 다음 빈 슬롯에 자동 주입된다.
+  if (advanceTurn && !gameState.bossBattleActive && !finalAscentStarlightRuleActive &&
+      eventSpawnCtrl.rollForTurn(gameState.getCurrentTurn())) {
+    pendingEventDoor = true
+  }
+  const moved = compactAndRefillAllLanes()
   render()
   if (moved) await wait(460)
 
@@ -3566,6 +3569,11 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
   await boardRenderer.playEventGainBlast(buttonRect, targets)
   await boardRenderer.hideEventChoicesAfterSelection(index)
   await playDialogue(def.choices[index]?.afterDialogue ?? [])
+  // combat + 레시피 해금: 마무리 대사 직후 해금 카드 연출 → 도감으로 블라스트.
+  if (choiceEffect?.kind === 'combat' && choiceEffect.unlocksRecipe) {
+    const recipe = RECIPES.find((r) => r.id === choiceEffect.unlocksRecipe)
+    if (recipe) await boardRenderer.animateEventRecipeUnlock(recipe.id, recipe.name, recipe.flavor)
+  }
   await boardRenderer.closeEventEntry()
   // 종료: 소비된 칸을 메우고 일반 진행으로 복귀한다.
   compactAndRefillAllLanes()
@@ -3602,10 +3610,17 @@ function applyEventChoice(def: EventDefinition, index: number): string[] {
     recordNotice(`이벤트: ${choice.label} — 랜덤 손패 +${added}`, 'info')
     return ['hand']
   }
-  // combat: 손패 불씨를 소모하고 위험한 이벤트 전투로 진입(현재는 진입 토대만, 전투는 추후 오더).
+  // combat: 손패 불씨를 소모하고 레시피를 해금한다.
   const idx = character.hand.findIndex((h) => h.defId === effect.consumeHand)
   if (idx >= 0) character.removeHandCardAt(idx)
-  recordNotice('이벤트: 불태우기 — 위험한 기운이 깨어난다 (전투 준비 중)', 'hurt')
+  if (effect.unlocksRecipe) {
+    gameState.unlockedRecipeIds.add(effect.unlocksRecipe)
+    // 도감 레시피 잠금 상태도 즉시 동기화한다.
+    boardRenderer.setLockedRecipeIds(
+      RECIPES.filter((r) => r.runLocked && !gameState.unlockedRecipeIds.has(r.id)).map((r) => r.id)
+    )
+  }
+  recordNotice(`이벤트: 불태우기 — ${effect.unlocksRecipe ? '레시피 해금됨' : '위험한 기운이 깨어난다'}`, 'hurt')
   return []
 }
 

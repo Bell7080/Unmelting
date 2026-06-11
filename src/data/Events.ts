@@ -31,7 +31,7 @@ export interface EventDialogueLine {
 export type EventEffect =
   | { kind: 'stat'; maxHealth?: number; damage?: number }
   | { kind: 'randomHand'; count: number }
-  | { kind: 'combat'; consumeHand: HandCardId }
+  | { kind: 'combat'; consumeHand: HandCardId; unlocksRecipe?: string }
 
 export interface EventChoice {
   /** 버튼 제목. */
@@ -105,7 +105,7 @@ const EVENT_001: EventDefinition = {
     {
       label: '불태우기',
       effectLines: ['[ 손패 ] 불씨 소모 · [ 레시피 ] 악마 소환 해금'],
-      effect: { kind: 'combat', consumeHand: 'ember' },
+      effect: { kind: 'combat', consumeHand: 'ember', unlocksRecipe: 'demon-summon' },
       afterDialogue: [
         { speaker: 'npc', text: '. . . !' },
         { speaker: 'npc', text: '자, 잠깐!' },
