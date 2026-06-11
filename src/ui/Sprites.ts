@@ -108,6 +108,7 @@ import handCard028Url from '../assets/sprites/handcard_028.webp'
 import handCard029Url from '../assets/sprites/handcard_029.webp'
 import handCard030Url from '../assets/sprites/handcard_030.webp'
 import handCard031Url from '../assets/sprites/handcard_031.webp'
+import handCard032Url from '../assets/sprites/handcard_032.webp'
 import relic001Url from '../assets/sprites/relics_001.webp'
 import relic002Url from '../assets/sprites/relics_002.webp'
 import relic003Url from '../assets/sprites/relics_003.webp'
@@ -302,6 +303,7 @@ export const SpriteUrls = {
     'sword-and-shield': handCard029Url,
     'watering-can': handCard030Url,
     'garden-scissors': handCard031Url,
+    'ritual-candle': handCard032Url,
   } satisfies Record<HandCardId, string>,
   /** Shop card-pack illustrations. Index follows the pack pickers in the
    *  shop bottom row: basic (자원) / upgrade (강화) / unlock (해금). */

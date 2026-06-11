@@ -513,6 +513,19 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: false,
   },
+  // 의식 양초: 자해를 대가로 손패를 채운다. 트리플은 자해 없이 대량 드로우.
+  'ritual-candle': {
+    id: 'ritual-candle',
+    name: '의식 양초',
+    category: 'tool',
+    description: '자해 2 · 랜덤 손패 +1',
+    tripleDescription: '랜덤 손패 +3',
+    targeting: { base: selfOne, triple: selfOne },
+    dropWeight: 7,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
 }
 
 export const HAND_CARD_IDS: HandCardId[] = Object.keys(HAND_CARD_DEFINITIONS) as HandCardId[]

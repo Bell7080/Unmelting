@@ -50,6 +50,7 @@ export type HandCardId =
   | 'sword-and-shield'
   | 'watering-can'
   | 'garden-scissors'
+  | 'ritual-candle'
 
 export type HandEffectSelection = 'target' | 'random' | 'all' | 'none'
 

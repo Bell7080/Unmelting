@@ -1453,6 +1453,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
         // 트리플 보너스 — 신규 카드
         case 'triple-wax':              gameState.enhancements.tripleBonus['wax']              = (gameState.enhancements.tripleBonus['wax']              ?? 0) + 1; return
         case 'triple-sacrifice-candle': gameState.enhancements.tripleBonus['sacrifice-candle'] = (gameState.enhancements.tripleBonus['sacrifice-candle'] ?? 0) + 1; return
+        case 'triple-ritual-candle':    gameState.enhancements.tripleBonus['ritual-candle']    = (gameState.enhancements.tripleBonus['ritual-candle']    ?? 0) + 1; return
         case 'triple-firework':         gameState.enhancements.tripleBonus['firework']         = (gameState.enhancements.tripleBonus['firework']         ?? 0) + 1; return
         case 'triple-sacrifice-shield': gameState.enhancements.tripleBonus['sacrifice-shield'] = (gameState.enhancements.tripleBonus['sacrifice-shield'] ?? 0) + 1; return
         case 'triple-chandelier':       gameState.enhancements.tripleBonus['chandelier']       = (gameState.enhancements.tripleBonus['chandelier']       ?? 0) + 1; return

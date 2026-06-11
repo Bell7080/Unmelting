@@ -279,6 +279,8 @@ export class HandSystem {
     if (defId === 'greed-coin') return HandSystem.greedCoinSelfDamage()
     // 제물 양초는 단일 사용에만 자해 2(트리플은 자해 없이 더 큰 피해).
     if (defId === 'sacrifice-candle' && !isMerged) return 2
+    // 의식 양초도 단일 자해 2, 트리플은 자해 없음.
+    if (defId === 'ritual-candle' && !isMerged) return 2
     // 희생 방패: 단일 자해 1, 트리플 자해 2.
     if (defId === 'sacrifice-shield') return isMerged ? 2 : 1
     return 0
@@ -639,6 +641,17 @@ export class HandSystem {
       }
       case 'garden-scissors':
         return HandSystem.applyGardenScissorsSingle(gs, target)
+      case 'ritual-candle': {
+        // 자해 2는 selfDamageFor에서 처리. 랜덤 손패 드로우만 여기서 실행.
+        const count = 1 + bonus
+        let gained = 0
+        for (let i = 0; i < count; i++) {
+          if (!c.hasHandRoom()) break
+          c.addHandCard(DropSystem.generateDrop())
+          gained++
+        }
+        return gained > 0 ? `자해 2 · 랜덤 손패 +${gained}` : '자해 2 · 손패 가득 참'
+      }
     }
   }
 
@@ -773,6 +786,17 @@ export class HandSystem {
       }
       case 'garden-scissors':
         return HandSystem.applyGardenScissorsAll(gs)
+      case 'ritual-candle': {
+        // 트리플은 자해 없이 손패 3장 드로우.
+        const count = 3 + bonus
+        let gained = 0
+        for (let i = 0; i < count; i++) {
+          if (!c.hasHandRoom()) break
+          c.addHandCard(DropSystem.generateDrop())
+          gained++
+        }
+        return gained > 0 ? `트리플 랜덤 손패 +${gained}` : '트리플 손패 가득 참'
+      }
     }
   }
 

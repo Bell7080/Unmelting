@@ -46,6 +46,7 @@ export const UPGRADE_PACK_POOL: UpgradePackItem[] = [
   { id: 'triple-teacup',          theme: 'upgrade', title: '찻잔 트리플',     effect: '★ 승수 +1 추가',            rarity: 'rare', weight: 10 },
   { id: 'triple-bonfire',         theme: 'upgrade', title: '모닥불 트리플',   effect: '★ 피해·체력 각 +1 추가',    rarity: 'rare', weight: 10 },
   { id: 'triple-shackles',        theme: 'upgrade', title: '족쇄 트리플',     effect: '★ 방패·체력 각 +1 추가',    rarity: 'rare', weight: 10 },
+  { id: 'triple-ritual-candle',   theme: 'upgrade', title: '의식 양초 트리플', effect: '★ 손패 +1 추가',            rarity: 'rare', weight: 10 },
 
   // ── 레시피 강화 — 기본 (rare/epic/legendary) ─────────────────────────────────
   { id: 'recipe-ignite',         theme: 'upgrade', title: '점화 강화',       effect: '점화 레시피 피해 +1',         rarity: 'rare',      weight: 10 },
