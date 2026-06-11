@@ -1958,28 +1958,25 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 
 /* ── Shop Peek Button ────────────────────────────────────────────────
    꾹 눌러서 상점 오버레이와 셔터를 일시적으로 투명하게 만들어
-   레일 상태를 확인한다. 상점/제단 오픈 중에만 표시된다. */
+   레일 상태를 확인한다. 상점/제단 오픈 중에만 표시된다.
+   아이콘만 표시 — 배경/테두리 없음, drop-shadow로 가독성 확보. */
 .shop-peek-btn {
   position: fixed;
-  top: 12px;
-  left: 12px;
+  /* top/left은 JS에서 레일 rect 기준으로 동적 지정된다 */
   z-index: 9100;
   display: none;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 1px solid rgba(255, 215, 120, 0.28);
-  border-radius: 10px;
-  background: rgba(22, 13, 8, 0.52);
-  color: rgba(255, 208, 96, 0.56);
+  width: 28px;
+  height: 28px;
+  padding: 2px;
+  border: none;
+  background: none;
+  color: rgba(255, 208, 96, 0.48);
   cursor: pointer;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
-  box-shadow: 0 0 6px rgba(255, 196, 72, 0.14), inset 0 1px 0 rgba(255, 232, 168, 0.12);
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.58));
   animation: peek-btn-pulse 3.2s ease-in-out infinite;
-  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  transition: color 0.18s ease, filter 0.18s ease;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -1988,23 +1985,20 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   display: flex;
 }
 .shop-peek-btn:hover {
-  color: rgba(255, 228, 140, 0.82);
-  border-color: rgba(255, 215, 120, 0.50);
-  background: rgba(30, 18, 10, 0.65);
+  color: rgba(255, 228, 140, 0.74);
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.68)) drop-shadow(0 0 6px rgba(255, 196, 72, 0.22));
 }
 .shop-peek-btn:active,
 .shop-peek-btn.is-peeking {
-  color: rgba(255, 228, 140, 0.96);
-  border-color: rgba(255, 215, 120, 0.70);
-  background: rgba(40, 24, 12, 0.72);
+  color: rgba(255, 232, 148, 0.95);
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 10px rgba(255, 196, 72, 0.40));
   animation: none;
-  box-shadow: 0 0 14px rgba(255, 196, 72, 0.32), inset 0 1px 0 rgba(255, 232, 168, 0.22);
 }
 
-/* Subtle amber glow pulse */
+/* 은은한 호박색 글로우 맥동 */
 @keyframes peek-btn-pulse {
-  0%, 100% { box-shadow: 0 0 5px rgba(255, 196, 72, 0.12), inset 0 1px 0 rgba(255, 232, 168, 0.10); }
-  50%       { box-shadow: 0 0 12px rgba(255, 196, 72, 0.30), inset 0 1px 0 rgba(255, 232, 168, 0.20); }
+  0%, 100% { filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 2px rgba(255, 196, 72, 0.06)); }
+  50%       { filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 7px rgba(255, 196, 72, 0.22)); }
 }
 
 /* Opacity transition — always present so restore is smooth */

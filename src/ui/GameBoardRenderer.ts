@@ -1997,6 +1997,11 @@ export class GameBoardRenderer {
     shell.style.left = `${rect.left}px`
     shell.style.width = `${rect.width}px`
     shell.style.height = `${rect.height}px`
+    // 미리보기 버튼을 레일 좌상단 안쪽에 맞춘다.
+    if (this.shopPeekButton) {
+      this.shopPeekButton.style.top = `${rect.top + 10}px`
+      this.shopPeekButton.style.left = `${rect.left + 10}px`
+    }
   }
 
   /** Play the cards-leaving animation: every relic card bounces down a
@@ -2824,7 +2829,7 @@ export class GameBoardRenderer {
       btn.type = 'button'
       btn.setAttribute('aria-label', '레일 미리보기 (꾹 누르기)')
       // Magnifying glass with a small flame inside the lens — flat SVG, game style.
-      btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="22" height="22">
+      btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="18" height="18">
         <circle cx="10" cy="10" r="6" fill="none" stroke="currentColor" stroke-width="1.7"/>
         <line x1="14.6" y1="14.6" x2="20.5" y2="20.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
         <path d="M10 7c-.45 1.3-1.1 2-1.1 3a1.1 1.1 0 0 0 2.2 0c0-1-.65-1.7-1.1-3Z" fill="currentColor"/>
