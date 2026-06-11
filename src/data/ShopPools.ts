@@ -30,7 +30,7 @@ export const RARITY_CLASS_BY_TIER: Record<CardRarity, string> = {
 /** Unlock-pack rarity lookup for hand cards shown in picker cards. */
 export const HAND_CARD_RARITY: Record<HandCardId, CardRarity> = {
   'wax-drop': 'common', candle: 'common', ember: 'common', key: 'common', wax: 'common',
-  match: 'common', 'holy-water': 'rare', chitin: 'common', card: 'legendary', coin: 'common',
+  match: 'common', 'holy-water': 'rare', chitin: 'common', card: 'epic', coin: 'common',
   // 탐욕의 동전은 보스 전용 찌꺼기 카드(상점/도감 풀에는 노출되지 않음).
   'greed-coin': 'common',
   'sacrifice-candle': 'rare', levatein: 'legendary', firework: 'rare', 'book-of-flames': 'epic',

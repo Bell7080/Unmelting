@@ -31,7 +31,7 @@ export const UPGRADE_PACK_POOL: UpgradePackItem[] = [
   { id: 'triple-ember',    theme: 'upgrade', title: '불씨 트리플',   effect: '★ 피해 +1 추가',       rarity: 'common',    weight: 20 },
   { id: 'triple-match',    theme: 'upgrade', title: '성냥 트리플',   effect: '★ 불씨 +1 추가',       rarity: 'common',    weight: 20 },
   { id: 'triple-coin',     theme: 'upgrade', title: '동전 트리플',   effect: '★ 화폐 +1 추가',       rarity: 'legendary', weight: 1  },
-  { id: 'triple-card',     theme: 'upgrade', title: '카드 트리플',   effect: '★ 콤보 게이지 +1 추가', rarity: 'legendary', weight: 1  },
+  { id: 'triple-card',     theme: 'upgrade', title: '카드 트리플',   effect: '★ 콤보 게이지 +1 추가', rarity: 'epic',      weight: 5  },
 
   // ── 트리플 강화 — 신규 카드 ──────────────────────────────────────────────────
   { id: 'triple-wax',             theme: 'upgrade', title: '밀랍 트리플',       effect: '★ 굳음 +1턴 추가',          rarity: 'common',    weight: 15 },
