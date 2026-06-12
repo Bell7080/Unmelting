@@ -369,21 +369,39 @@ export class GameBoardRenderer {
   // WeakSet 키: DOM 리빌드 때마다 이전 stack 요소가 GC되므로 별도 cleanup 불필요.
   private readonly relicFocusAttached = new WeakSet<HTMLElement>()
 
-  /** boardElement의 mouseover 위임으로 .relic-stack이 새로 생겨도 재부착 없이 동작한다.
-   *  hover 시 카드 위치는 고정 — 경계 발광만 CSS로 처리하고 JS 이동은 없다. */
+  /** boardElement의 mouseover 위임으로 .relic-stack이 새로 생겨도 재부착 없이 동작한다. */
   private initRelicStackFocus(): void {
     this.boardElement.addEventListener('mouseover', (e: MouseEvent) => {
       const stack = (e.target as HTMLElement).closest<HTMLElement>('.relic-stack')
       if (!stack || this.relicFocusAttached.has(stack)) return
       this.relicFocusAttached.add(stack)
 
+      const applyFocus = (ev: MouseEvent): void => {
+        const cards = Array.from(stack.querySelectorAll<HTMLElement>('.relic-mini-card'))
+        const n = cards.length
+        if (n < 2) return
+        const rect = stack.getBoundingClientRect()
+        const t = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width))
+        const focusIdx = t * (n - 1)
+        cards.forEach((card, i) => {
+          // 커서 기준 선형 펼침 — cap 없이 각 카드 위치가 겹치지 않는다.
+          const extra = Math.round((i - focusIdx) * 12)
+          card.style.setProperty('--relic-extra-x', `${extra}px`)
+        })
+      }
+
       const clearFocus = (): void => {
         stack.classList.remove('is-focus-tracked')
+        Array.from(stack.querySelectorAll<HTMLElement>('.relic-mini-card')).forEach(card => {
+          card.style.removeProperty('--relic-extra-x')
+        })
         this.relicFocusAttached.delete(stack)
+        stack.removeEventListener('mousemove', applyFocus)
         stack.removeEventListener('mouseleave', clearFocus)
       }
 
       stack.classList.add('is-focus-tracked')
+      stack.addEventListener('mousemove', applyFocus)
       stack.addEventListener('mouseleave', clearFocus)
     })
   }
