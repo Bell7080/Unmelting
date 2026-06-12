@@ -376,7 +376,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'luxury',
     name: '사치품',
     rarity: 'rare',
-    effect: '불빛 2000 소비마다 공격력 +1',
+    effect: '불빛 2000 소비마다 공격력 +1 (최대 +3)',
     flavor: '사치는 힘을 낳는다 — 쓰는 자만이 얻는다.',
     basePrice: 750,
   },

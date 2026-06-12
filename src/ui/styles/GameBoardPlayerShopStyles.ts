@@ -987,6 +987,45 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   white-space: normal;
   letter-spacing: 0.02em;
 }
+/* 모든 팩 — 재뽑기 버튼 (카드 하단, Pass 위) */
+.shop-pack-reroll-btn {
+  appearance: none;
+  position: absolute;
+  bottom: clamp(60px, 8.2vh, 84px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 7px 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(200, 175, 110, 0.34);
+  background: rgba(40, 30, 18, 0.72);
+  color: rgba(230, 205, 145, 0.72);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.20em;
+  cursor: pointer;
+  white-space: nowrap;
+  z-index: 4;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+  transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
+}
+.shop-pack-reroll-btn .shop-pack-reroll-cost {
+  font-size: 11px;
+  opacity: 0.85;
+}
+.shop-pack-reroll-btn.is-affordable:hover {
+  border-color: rgba(230, 200, 120, 0.55);
+  color: rgba(245, 225, 170, 0.92);
+  background: rgba(55, 40, 18, 0.82);
+}
+.shop-pack-reroll-btn.is-unaffordable {
+  opacity: 0.35;
+  cursor: default;
+}
+/* Pass 버튼이 없을 때 재뽑기가 Pass 자리로 내려오도록 bottom 보정 */
+.shop-pack-picker-shell:not(:has(.shop-pack-pass-btn)) .shop-pack-reroll-btn {
+  bottom: clamp(26px, 3.6vh, 42px);
+}
 /* 삭제팩/해금팩 — Pass 버튼 (하단 중앙, minimal pill) */
 .shop-pack-pass-btn {
   appearance: none;

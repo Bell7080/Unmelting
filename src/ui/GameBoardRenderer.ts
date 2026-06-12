@@ -108,6 +108,10 @@ export interface ShopPackPickerView {
   items: ShopPackItemView[]
   /** 넘기기 버튼 표시 여부 (delete-pack / unlock-pack). */
   passable?: boolean
+  /** 재뽑기 버튼의 화폐 비용. 없으면 버튼을 숨긴다. */
+  rerollCost?: number
+  /** 현재 보유 화폐 (재뽑기 버튼 활성화 판정에 사용). */
+  coins?: number
 }
 export interface ShopStateView {
   /** Normal 10/20/... shop vs 30/60/... altar variant. */
@@ -1634,6 +1638,16 @@ export class GameBoardRenderer {
         if (host?.classList.contains('is-closing')) return
         const t = e.target as HTMLElement
 
+        // 재뽑기 버튼 — 즉시 이벤트
+        const rerollBtn = t.closest<HTMLElement>('[data-pack-reroll]')
+        if (rerollBtn && !rerollBtn.classList.contains('is-unaffordable')) {
+          const packKind = rerollBtn.dataset.packReroll as ShopPackKind | undefined
+          if (packKind) {
+            document.dispatchEvent(new CustomEvent('shopPackReroll', { detail: { packKind } }))
+          }
+          return
+        }
+
         // Pass 버튼 — 눌림 → 선 수축 애니 → 이벤트
         const passBtn = t.closest<HTMLElement>('[data-pack-pass]')
         if (passBtn) {
@@ -1712,6 +1726,14 @@ export class GameBoardRenderer {
     const passBtn = view.passable
       ? `<button class="shop-pack-pass-btn" data-pack-pass="${view.packKind}" aria-label="Pass">Pass</button>`
       : ''
+    const rerollAffordable = view.rerollCost != null && (view.coins ?? 0) >= view.rerollCost
+    const rerollBtn = view.rerollCost != null
+      ? `<button class="shop-pack-reroll-btn ${rerollAffordable ? 'is-affordable' : 'is-unaffordable'}"
+                 data-pack-reroll="${view.packKind}"
+                 aria-label="재뽑기 ${view.rerollCost}$">
+           재뽑기 <span class="shop-pack-reroll-cost">${view.rerollCost}$</span>
+         </button>`
+      : ''
     host.classList.remove('is-closing')
     host.innerHTML = `
       <div class="shop-pack-picker-veil" style="--shop-picker-bg:url('${SpriteUrls.shopPickerBg}');" aria-hidden="true"></div>
@@ -1721,6 +1743,7 @@ export class GameBoardRenderer {
           <p>3장 중 1장을 선택하시오.</p>
         </header>
         <div class="shop-pack-picker-cards">${cards}</div>
+        ${rerollBtn}
         ${passBtn}
       </div>
     `

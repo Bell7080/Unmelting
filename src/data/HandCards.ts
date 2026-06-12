@@ -354,7 +354,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropWeight: 4,
     dropSource: 'any',
     metaRequired: false,
-    runLocked: true,
+    runLocked: false,
     jobTags: ['mage'] satisfies ReadonlyArray<JobTag>,
   },
   // 모닥불: 선택 적을 공격하고 처치 시 체력을 회복한다.

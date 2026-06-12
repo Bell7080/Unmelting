@@ -188,6 +188,8 @@ let currentShopMode: 'shop' | 'altar' = 'shop'
 interface ActivePackSession {
   kind: ShopPackKind
   items: ShopPackPickItem[]
+  /** 세션 내 재뽑기 횟수. 비용은 1 + rerollCount$ */
+  rerollCount: number
 }
 interface ShopPackPickItem extends ShopPackItemView {
   /** Applied when the player picks this card. Coins/score may be mutated
@@ -255,6 +257,12 @@ function applyTrialEffect(kind: TrialEffectKind): void {
       break
     case 'trap-damage-bonus':
       runModifiers.trapDamageBonus += kind.value
+      // 이미 필드에 있는 함정 카드도 즉시 보너스 갱신해 피해 수치 표기를 맞춘다.
+      for (const lane of gameState.lanes)
+        for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+          const c = lane.getCardAtDistance(d)
+          if (c?.type === CardType.TRAP) c.trapDamageBonus = runModifiers.trapDamageBonus
+        }
       break
     case 'treasure-spawn-scale':
       runModifiers.treasureSpawnScale = Math.max(0, runModifiers.treasureSpawnScale * kind.factor)
@@ -1041,7 +1049,7 @@ function baseShopPackCost(kind: ShopPackKind): number {
   switch (kind) {
     case 'basic-pack': return 120
     case 'upgrade-pack': return 250
-    case 'unlock-pack': return 520
+    case 'unlock-pack': return 400
     // 제단 전용 팩이 일반 상점에서 호출되면 안전한 기본값으로 막는다.
     default: return altarBasePackCost()
   }
@@ -1201,11 +1209,11 @@ function applyDemonDollSelfDamage(amount: number): void {
   recordRelicActivation('demon-doll', `자해 20 누적 → 불빛 +10%, 공격력 +${gained} (누적 +${enhancements.demonDollBonusAtk})`)
 }
 
-/** 사치품 유물: 불빛 소비량 누적 후 2000마다 공격력 +1 처리. 최대 누적 공격력 +5. */
+/** 사치품 유물: 불빛 소비량 누적 후 2000마다 공격력 +1 처리. 최대 누적 공격력 +3. */
 function applyLuxuryScoreSpend(amount: number): void {
   if (!gameState.character.hasRelic('luxury') || amount <= 0) return
   const enhancements = gameState.enhancements
-  const maxBonus = 5
+  const maxBonus = 3
   if (enhancements.luxuryBonusAtk >= maxBonus) return // 이미 최대치
   enhancements.luxuryScoreSpent += amount
   const potential = Math.floor(enhancements.luxuryScoreSpent / 2000)
@@ -1335,7 +1343,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
             case 'basic_007': character.heal(10);       return
             case 'basic_008': character.gainEmber(3);   return
             case 'basic_009': character.gainCandle(3);  return
-            case 'basic_010': character.addShield(3);   return
+            case 'basic_010': character.addShield(5);   return
             case 'basic_011': coins += 1; applyBlindFaithCoins(1); return
           }
         },
@@ -1533,7 +1541,7 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
   // Keep picker title synchronized with the shared pack label table.
   const title = SHOP_PACK_LABELS[kind].title
   const items = rollPackItems(kind)
-  activePackSession = { kind, items }
+  activePackSession = { kind, items, rerollCount: 0 }
   // Spend feedback before the picker so the score panel ticks down on click.
   const packTile = document.querySelector<HTMLElement>(`#shop-overlay .shop-pack-card[data-shop-buy-kind="${kind}"]`)
   if (packTile) await boardRenderer.playShopPurchaseImpact(packTile, "score")
@@ -1546,6 +1554,8 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
     passable: kind === 'delete-pack' || kind === 'unlock-pack',
     // spriteUrl 포함: enhance/unlock/delete 팩은 카드별 일러스트가 있어야 식별 가능하다.
     items: items.map(({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote }) => ({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote })),
+    rerollCost: 1 + (activePackSession?.rerollCount ?? 0),
+    coins,
   }
   boardRenderer.openPackPicker(view)
 }
@@ -1574,6 +1584,28 @@ async function handleShopPackPick(detail: ShopPackPickDetail): Promise<void> {
   await resolveFullCandleGaugeEffects({ kind: 'chain' })
   render()
   boardRenderer.openShop(buildShopStateView(), score, gameState.character)
+}
+
+/** 팩 피커 재뽑기: 1+횟수$ 차감 후 같은 팩 종류로 새 3장을 뽑아 피커를 갱신한다. */
+async function handleShopPackReroll(packKind: ShopPackKind): Promise<void> {
+  if (!activePackSession || activePackSession.kind !== packKind) return
+  const cost = 1 + activePackSession.rerollCount
+  if (coins < cost) return
+  coins -= cost
+  coinPulseKey++
+  applyBlindFaithCoins(-cost)
+  boardRenderer.playCoinSpendFeedback(coins, coinPulseKey)
+  activePackSession.rerollCount++
+  activePackSession.items = rollPackItems(packKind)
+  const newView: ShopPackPickerView = {
+    packKind,
+    title: SHOP_PACK_LABELS[packKind].title,
+    passable: packKind === 'delete-pack' || packKind === 'unlock-pack',
+    items: activePackSession.items.map(({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote }) => ({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote })),
+    rerollCost: 1 + activePackSession.rerollCount,
+    coins,
+  }
+  boardRenderer.openPackPicker(newView)
 }
 
 async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
@@ -2779,6 +2811,10 @@ document.addEventListener('shopPackPick', (e: Event) => {
   void handleShopPackPick((e as CustomEvent<ShopPackPickDetail>).detail)
 })
 
+document.addEventListener('shopPackReroll', (e: Event) => {
+  void handleShopPackReroll((e as CustomEvent<{ packKind: ShopPackKind }>).detail.packKind)
+})
+
 document.addEventListener('shopPackPass', () => {
   activePackSession = null
   boardRenderer.closePackPicker()
@@ -3047,10 +3083,12 @@ async function applyHandSingle(
   }
 
   // 주전자: 첫 타격(useSingle에서 실행) 이후 나머지 타격을 빠른 딜레이로 순차 실행한다.
-  // 40ms 간격으로 촤르르르 연속 타격하며, 2뎀마다 체력 글자를 실시간 갱신한다.
+  // 40ms 간격으로 드르르르 연속 타격 → 루프 종료 후 단 1회 레일 정리를 수행한다.
+  // (루프 내 runPreparationRefreshAfterFieldEffects는 레일 보충 애니메이션으로 연속감을 끊으므로 제거)
   if (result.teapotExtraHits && target) {
     const { damage: teapotDamage, totalCount } = result.teapotExtraHits
     let teapotHitsSinceHpUpdate = 0
+    let teapotEnemiesKilled = 0
     for (let i = 1; i < totalCount; i++) {
       if (gameState.isGameOver) break
       if (target.card.getHealth() <= 0) break
@@ -3059,8 +3097,10 @@ async function applyHandSingle(
       const beforeHitCards = snapshotFieldCardsById()
       const hitResult = HandSystem.applyTeapotHit(gameState, target, teapotDamage)
       const hitLosses = diffFieldHealthLosses(beforeHitHealth)
-      // 피해 수치 표시는 매 타격마다 띄우고, HP 갱신은 2뎀마다 업데이트해 연타감을 준다.
-      boardRenderer.animateDamageNumbersById(hitLosses) // await 없이 비동기로 쌓아서 촤르르 효과
+      // 피해 수치 표시: 매 타격마다 비동기로 띄워 촤르르 효과
+      boardRenderer.animateDamageNumbersById(hitLosses)
+      // HP 수치 갱신: 매 타격마다 render()로 카드 체력을 실시간 반영
+      render()
       teapotHitsSinceHpUpdate += teapotDamage
       if (teapotHitsSinceHpUpdate >= 2) {
         teapotHitsSinceHpUpdate = 0
@@ -3073,17 +3113,17 @@ async function applyHandSingle(
         await boardRenderer.animateCardConsumeByIds(hitResult.removedFieldCards, {
           suppressBurstIds: new Set(hitLosses.map((l) => l.cardId)),
         })
-        await onEnemiesDefeated(
-          hitResult.removedFieldCards.filter((r) => r.type === CardType.ENEMY).length
-        )
-        await runPreparationRefreshAfterFieldEffects()
+        teapotEnemiesKilled += hitResult.removedFieldCards.filter((r) => r.type === CardType.ENEMY).length
+        // 레일 정리는 루프 종료 후 일괄 처리한다(중간 보충으로 연속감이 끊기는 것을 방지).
       }
       if (hitResult.targetKilled) break
     }
-    // 루프 종료 후 보스 HP를 최종값으로 확정 갱신
+    // 루프 종료 후: 붉은 포션 등 처치 유물 일괄 처리 → 보스 HP 확정 갱신 → 레일 1회 정리
+    if (teapotEnemiesKilled > 0) await onEnemiesDefeated(teapotEnemiesKilled)
     if (bossController.eventState) {
       boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))
     }
+    if (!gameState.isGameOver) await runPreparationRefreshAfterFieldEffects()
   }
 
   // Resolve combo recipes one at a time. Each recipe gets its own delay,
@@ -3456,6 +3496,12 @@ async function sweepFrontStarlights(): Promise<void> {
   if (moved) {
     render()
     await wait(460)
+  }
+  // 별빛 제거 후 낙하한 씨앗이 전방에 도달했으면 개화 처리한다.
+  const starlightBlooms = turnManager.bloomFrontSeeds(cardSpawner)
+  if (starlightBlooms.length > 0) {
+    render()
+    await boardRenderer.animateFlowerBlooms(starlightBlooms)
   }
 }
 

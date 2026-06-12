@@ -32,7 +32,7 @@ export const BASIC_PACK_POOL: BasicPackItem[] = [
   { id: 'basic_008', illu: 'basic_008', theme: 'resource', title: '대화재',    effect: '불씨 게이지 +3', rarity: 'epic',      weight: 5  },
   { id: 'basic_009', illu: 'basic_009', theme: 'resource', title: '플러시',    effect: '콤보 게이지 +3', rarity: 'epic',      weight: 5  },
   // Legendary — weight 2
-  { id: 'basic_010', illu: 'basic_010', theme: 'resource', title: '갑옷 장착', effect: '방패 +3',        rarity: 'legendary', weight: 2  },
+  { id: 'basic_010', illu: 'basic_010', theme: 'resource', title: '갑옷 장착', effect: '방패 +5',        rarity: 'legendary', weight: 2  },
   // Unique — weight 1
   { id: 'basic_011', illu: 'basic_011', theme: 'resource', title: '동전 한 닢', effect: '화폐 +1',       rarity: 'unique',    weight: 1  },
 ]
