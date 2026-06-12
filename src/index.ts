@@ -2613,7 +2613,7 @@ function setupDevCommandPalette(): void {
       await wait(280)
       chainTimeline.push({
         kind: 'recipe', recipeId: 'demon-summon',
-        name: '악마 소환', flavor: '어둠의 속삭임',
+        name: '악마 소환', flavor: '거짓 속의 진실을 직시하라.',
         uid: nextChainUid(),
       })
       boardRenderer.refreshChainBanner({
@@ -3370,7 +3370,7 @@ async function applyHandSingle(
     // 3. 악마 소환 체인 배너 임팩트 모드 (전체 레시피 항목, 더 크고 중앙, X 없음, 불타듯)
     chainTimeline.push({
       kind: 'recipe', recipeId: 'demon-summon',
-      name: '악마 소환', flavor: '어둠의 속삭임',
+      name: '악마 소환', flavor: '거짓 속의 진실을 직시하라.',
       uid: nextChainUid(),
     })
     boardRenderer.refreshChainBanner({

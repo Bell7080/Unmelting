@@ -715,8 +715,9 @@ export class BossEventController {
     } else {
       await this.br.playBossLandingAnimation(bossCard.id)
     }
-    // demonFire: 커튼 앞에서 보스 등장 — 보드를 커튼보다 높은 z-index로 올린 뒤 화염 폭발.
+    // demonFire: 커튼이 완전히 닫힌 뒤 잠깐의 암흑 — 그 후 보드를 앞으로 올리고 화염 폭발.
     if (def.appearAnimation === 'demonFire') {
+      await new Promise((r) => window.setTimeout(r, 680))
       this.br.elevateBoardAboveCurtain()
       const bossTile = this.br.findCardElement(bossCard.id)
       if (bossTile) {

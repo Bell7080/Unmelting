@@ -6009,8 +6009,8 @@ export class GameBoardRenderer {
       { duration: 850, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'forwards' }
     ).finished
 
-    // 불길한 멈춤.
-    await new Promise<void>((r) => window.setTimeout(r, 420))
+    // 카드를 충분히 읽을 수 있게 잔류시킨다.
+    await new Promise<void>((r) => window.setTimeout(r, 2200))
 
     // 단계2: 화염 파티클 폭발.
     SquareBurst.playOn(card, 'damage', { count: 22, spread: 110, duration: 520, size: [6, 16] })
