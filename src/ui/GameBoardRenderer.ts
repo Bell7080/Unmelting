@@ -5901,14 +5901,15 @@ export class GameBoardRenderer {
     const card = document.createElement('div')
     card.style.cssText = [
       'width:clamp(148px,20vw,220px)',
-      'aspect-ratio:2/3',
-      'border-radius:10px',
+      'aspect-ratio:3/4',
+      'border-radius:14px',
       'overflow:hidden',
       'display:grid',
-      'grid-template-rows:58% 1fr',
-      'border:1px solid rgba(180,40,20,0.75)',
-      'background:linear-gradient(180deg,rgba(22,6,10,0.98) 0%,rgba(10,2,6,0.99) 100%)',
-      'box-shadow:0 0 0 1px rgba(120,20,10,0.4),inset 0 1px 0 rgba(220,80,40,0.18),0 20px 44px rgba(0,0,0,0.88),0 0 36px rgba(200,40,10,0.22)',
+      'grid-template-rows:55% 45%',
+      // legendary 티어 테두리·그림자 (팩 피커 카드 기준)
+      'border:1px solid rgba(255,215,120,0.5)',
+      'background:linear-gradient(180deg,rgba(45,30,39,0.98),rgba(18,12,24,0.98))',
+      'box-shadow:0 12px 24px rgba(0,0,0,0.55),0 0 28px rgba(255,140,60,0.18)',
       'will-change:transform,opacity',
       'transform:scale(0.55) translateY(60px)',
       'opacity:0',
@@ -5920,58 +5921,74 @@ export class GameBoardRenderer {
       `background-image:url('${spriteUrl}')`,
       'background-size:cover',
       'background-position:center 15%',
-      'box-shadow:inset 0 -60px 72px rgba(10,2,6,0.95)',
-      'border-bottom:1px solid rgba(180,60,20,0.55)',
+      // 팩 피커 ::after 역할을 inline으로 대체
+      'box-shadow:inset 0 -52px 64px rgba(6,6,12,0.52)',
+      'border-bottom:1px solid rgba(180,100,40,0.35)',
+      'border-radius:14px 14px 0 0',
+      'overflow:hidden',
       'position:relative',
     ].join(';')
-    // 카테고리 배지 (레시피 / 조합)
-    const badge = document.createElement('span')
-    badge.textContent = '레시피'
-    badge.style.cssText = [
-      'position:absolute;top:8px;left:8px',
-      'font-size:10px;letter-spacing:0.10em;font-weight:700',
-      'padding:2px 7px;border-radius:4px',
-      'background:rgba(180,40,20,0.82);color:rgba(255,210,180,0.96)',
-      'border:1px solid rgba(220,80,40,0.5)',
+
+    // 희귀도 배지 (팩 피커의 .shop-pack-pick-rarity-badge — legendary 주황)
+    const rarityBadge = document.createElement('span')
+    rarityBadge.textContent = 'legendary'
+    rarityBadge.style.cssText = [
+      'position:absolute;top:7px;left:7px;z-index:3',
+      'font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase',
+      'padding:2px 6px;border-radius:999px;border:1px solid currentColor;opacity:0.85',
+      'pointer-events:none;background:rgba(10,7,18,0.55)',
+      'color:rgba(255,140,60,0.9)',
     ].join(';')
-    art.appendChild(badge)
+    art.appendChild(rarityBadge)
 
     const body = document.createElement('div')
     body.style.cssText = [
-      'padding:10px 13px 12px',
-      'display:flex;flex-direction:column;gap:5px',
+      'padding:10px 10px 12px',
+      'display:flex;flex-direction:column;align-items:center;gap:5px',
+    ].join(';')
+
+    // 타입 배지 (팩 피커의 .shop-pack-type-badge)
+    const typeBadge = document.createElement('div')
+    typeBadge.textContent = '[ 레시피 ]'
+    typeBadge.style.cssText = [
+      'font-size:10px;color:rgba(200,195,180,0.58)',
+      'letter-spacing:0.12em;line-height:1;white-space:nowrap;text-align:center',
     ].join(';')
 
     const title = document.createElement('h3')
     title.textContent = recipeName
     title.style.cssText = [
-      'margin:0;font-size:clamp(14px,2.1vh,21px)',
-      'font-weight:900;letter-spacing:0.04em;line-height:1.1',
-      'color:rgba(240,140,100,0.96)',
-      'text-shadow:0 1px 4px rgba(0,0,0,0.95),0 0 18px rgba(220,50,10,0.32)',
+      'margin:0;font-size:clamp(14px,1.3vw,16px)',
+      'font-weight:900;letter-spacing:0.04em;line-height:1.2',
+      'color:rgba(255,232,168,0.96)',
+      'text-shadow:0 1px 2px rgba(0,0,0,0.8)',
+      'text-align:center;white-space:normal',
     ].join(';')
 
     const effect = document.createElement('p')
     effect.textContent = recipeEffect
     effect.style.cssText = [
-      'margin:0;font-size:clamp(11px,1.55vh,14px)',
-      'line-height:1.5',
-      'color:rgba(220,160,140,0.88)',
-      'letter-spacing:0.02em',
+      'margin:0;font-size:13px',
+      'line-height:1.4',
+      'color:rgba(220,200,170,0.82)',
+      'text-shadow:0 1px 2px rgba(0,0,0,0.7)',
+      'text-align:center',
     ].join(';')
 
+    body.appendChild(typeBadge)
     body.appendChild(title)
     body.appendChild(effect)
 
     if (ingredientText) {
       const divider = document.createElement('div')
-      divider.style.cssText = 'height:1px;background:rgba(180,60,20,0.28);margin:3px 0 4px'
+      divider.style.cssText = 'width:100%;height:1px;background:rgba(200,175,110,0.18);margin:2px 0 3px'
       const ingredients = document.createElement('p')
       ingredients.textContent = ingredientText
       ingredients.style.cssText = [
-        'margin:0;font-size:clamp(9px,1.25vh,12px)',
-        'line-height:1.4;letter-spacing:0.02em',
-        'color:rgba(180,130,110,0.65)',
+        'margin:0;font-size:11px',
+        'line-height:1.3;letter-spacing:0.02em',
+        'color:rgba(200,185,165,0.58)',
+        'text-align:center;white-space:normal',
       ].join(';')
       body.appendChild(divider)
       body.appendChild(ingredients)

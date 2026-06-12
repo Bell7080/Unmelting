@@ -3781,7 +3781,7 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
     if (recipe) {
       const ingredientText = Object.keys(recipe.ingredients)
         .map((id) => getHandCardDef(id as Parameters<typeof getHandCardDef>[0])?.name ?? id)
-        .join(' / ')
+        .join(' + ')
       await boardRenderer.animateEventRecipeUnlock(recipe.id, recipe.name, recipe.flavor, ingredientText)
     }
   }
