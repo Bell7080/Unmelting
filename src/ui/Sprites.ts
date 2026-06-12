@@ -109,6 +109,9 @@ import handCard029Url from '../assets/sprites/handcard_029.webp'
 import handCard030Url from '../assets/sprites/handcard_030.webp'
 import handCard031Url from '../assets/sprites/handcard_031.webp'
 import handCard032Url from '../assets/sprites/handcard_032.webp'
+import handCard033Url from '../assets/sprites/handcard_033.webp'
+import reward004Url from '../assets/sprites/reward_004.png'
+import reward005Url from '../assets/sprites/reward_005.png'
 import relic001Url from '../assets/sprites/relics_001.webp'
 import relic002Url from '../assets/sprites/relics_002.webp'
 import relic003Url from '../assets/sprites/relics_003.webp'
@@ -306,8 +309,7 @@ export const SpriteUrls = {
     'watering-can': handCard030Url,
     'garden-scissors': handCard031Url,
     'ritual-candle': handCard032Url,
-    // 검은 양초 — 전용 일러스트 연동 전 임시 폴백.
-    'black-candle': handCard032Url,
+    'black-candle': handCard033Url,
   } satisfies Record<HandCardId, string>,
   /** Shop card-pack illustrations. Index follows the pack pickers in the
    *  shop bottom row: basic (자원) / upgrade (강화) / unlock (해금). */
@@ -329,6 +331,8 @@ export const SpriteUrls = {
     heal: reward001Url,
     chest: reward002Url,
     bounty: reward003Url,
+    demonRelic: reward004Url,
+    demonHand: reward005Url,
   } as const,
   /** 시련 카드 일러스트 — 광란(001) / 역경(004) / 가난(007). */
   trials: {
@@ -429,6 +433,8 @@ export function spriteForCard(card: Card): string {
     if (card.id === 'boss-reward-heal') return SpriteUrls.rewards.heal
     if (card.id === 'boss-reward-chest') return SpriteUrls.rewards.chest
     if (card.id === 'boss-reward-bounty') return SpriteUrls.rewards.bounty
+    if (card.id === 'boss-reward-demon-relic') return SpriteUrls.rewards.demonRelic
+    if (card.id === 'boss-reward-demon-hand') return SpriteUrls.rewards.demonHand
     // 황금 상자는 크기에 무관하게 chest_004 하나로 처리한다.
     if (card.treasureKind === 'goldenChest') return SpriteUrls.chestGolden
     if (card.groupCount >= 3) return SpriteUrls.chestLarge
