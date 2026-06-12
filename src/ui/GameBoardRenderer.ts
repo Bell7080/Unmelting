@@ -382,10 +382,12 @@ export class GameBoardRenderer {
         if (n < 2) return
         const rect = stack.getBoundingClientRect()
         const t = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width))
-        const focusIdx = t * (n - 1)
+        // 커서 바로 아래 카드를 pivot으로 고정 — 소수점 focusIdx로 hovered 카드가 흔들리는 걸 방지.
+        const pivotIdx = Math.round(t * (n - 1))
         cards.forEach((card, i) => {
-          // 커서 기준 선형 펼침 — cap 없이 각 카드 위치가 겹치지 않는다.
-          const extra = Math.round((i - focusIdx) * 12)
+          const dist = i - pivotIdx
+          // pivot 카드는 제자리, 나머지는 선형 비례로 펼침.
+          const extra = Math.round(dist * 12)
           card.style.setProperty('--relic-extra-x', `${extra}px`)
         })
       }
