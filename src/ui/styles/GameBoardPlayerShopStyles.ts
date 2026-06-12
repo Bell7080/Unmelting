@@ -42,62 +42,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   text-align: center;
   line-height: 1.2;
 }
-.relic-stack {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  max-width: clamp(120px, 16vw, 190px);
-  overflow-x: auto;
-  padding: 4px 2px 6px;
-}
-.relic-mini-card {
-  flex: 0 0 clamp(58px, 5.4vw, 72px);
-  aspect-ratio: 1;
-  position: relative;
-  overflow: visible;
-  /* Wax-sealed pocket case: brass-rimmed parchment back with a subtle inner
-     ring so each owned relic reads as a small artifact card rather than a
-     screenshot thumbnail. */
-  border-radius: 12px;
-  border: 1px solid rgba(255, 215, 120, 0.5);
-  background:
-    radial-gradient(circle at 50% 18%, rgba(255, 232, 168, 0.26), transparent 50%),
-    linear-gradient(160deg, rgba(44, 32, 40, 0.96), rgba(13, 9, 19, 0.96));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.28),
-    inset 0 0 0 1px rgba(74, 58, 42, 0.5),
-    inset 0 -10px 18px rgba(0, 0, 0, 0.36),
-    0 8px 18px rgba(0, 0, 0, 0.5);
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-}
-.relic-mini-card:hover {
-  transform: translateY(-1px);
-  border-color: rgba(255, 232, 168, 0.82);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.42),
-    inset 0 0 0 1px rgba(120, 90, 60, 0.6),
-    inset 0 -10px 18px rgba(0, 0, 0, 0.42),
-    0 10px 22px rgba(0, 0, 0, 0.55),
-    0 0 18px rgba(244, 164, 96, 0.28);
-}
-.relic-mini-art {
-  position: absolute;
-  inset: 5px;
-  border-radius: 8px;
-  background-size: cover;
-  background-position: center 20%;
-  filter: sepia(0.18) saturate(0.92) brightness(0.94);
-}
-.relic-mini-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  background:
-    linear-gradient(180deg, rgba(255, 232, 168, 0.22), transparent 36%, rgba(13, 9, 19, 0.42)),
-    radial-gradient(circle at 50% 50%, transparent 56%, rgba(0, 0, 0, 0.42) 100%);
-}
+/* Legacy thumbnail-style .relic-stack/.relic-mini-card/.relic-mini-art rules
+   were removed: owned relics now render as the fanned preview cards defined in
+   GameBoardPlayerRelicTrapStyles. The shared class names meant the old
+   .relic-mini-card:hover{transform} here overrode the fan card's centering
+   transform, yanking the hovered relic sideways. */
 .player-row {
   display: flex;
   justify-content: center;
