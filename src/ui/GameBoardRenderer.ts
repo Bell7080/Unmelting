@@ -202,6 +202,8 @@ export interface ChainHints {
   events: ChainEvent[]
   /** Slots whose next click would immediately satisfy at least one recipe. */
   recipeReadyBySlot?: Record<number, { id: string; name: string; flavor: string }[]>
+  /** 악마 소환 레시피가 체인에 포함됨 — 배너 최좌측 대형 붉은 다이아몬드로 이벤트 체인을 별도 표시. */
+  demonPending?: boolean
 }
 
 export type ResourceTrailTarget =
@@ -1436,7 +1438,8 @@ export class GameBoardRenderer {
                   style="--hand-card-art: url('${handArt}');"
                   aria-label="${def.name}: ${description}${recipeReadyTitle ? ` · ${recipeReadyTitle}` : ''}">
             ${tripleMergeCopies}
-            ${recipeReady ? `<span class="recipe-ready-mark${demonReady ? ' is-demon-ready' : ''}" aria-hidden="true">✦</span>` : ''}
+            ${recipeReady ? `<span class="recipe-ready-mark" aria-hidden="true">✦</span>` : ''}
+            ${demonReady ? `<span class="recipe-ready-mark recipe-ready-mark--demon" aria-hidden="true">✦</span>` : ''}
             ${card.merged ? '<span class="merged-mark" aria-hidden="true">✦</span>' : ''}
             <span class="hand-card-thumb" aria-hidden="true">
               <img src="${handArt}" alt="" loading="lazy" />
@@ -2914,6 +2917,25 @@ export class GameBoardRenderer {
     this.demonCurtainOverlay = overlay
     // 기본 close 애니메이션(0.68s)이 끝날 때까지 대기.
     await new Promise<void>((r) => window.setTimeout(r, 740))
+  }
+
+  /** 악마 소환 체인 마지막 — 체인 초기화 후 쿵 임팩트 연출.
+   *  중앙에 거대한 붉은 다이아몬드가 나타났다 화르르 사라진다. X 버튼 없음. */
+  async playDemonSummonChainImpact(): Promise<void> {
+    const overlay = document.createElement('div')
+    overlay.id = 'demon-chain-impact'
+    const diamond = document.createElement('span')
+    diamond.className = 'demon-chain-impact-diamond'
+    diamond.setAttribute('aria-hidden', 'true')
+    diamond.textContent = '✦'
+    overlay.appendChild(diamond)
+    document.body.appendChild(overlay)
+    // 등장 애니메이션이 끝날 때까지 대기 (0.55s) + 유지 시간 (0.45s).
+    await new Promise<void>((r) => window.setTimeout(r, 1000))
+    // 화르르 사라지는 연출.
+    diamond.classList.add('is-dissolving')
+    await new Promise<void>((r) => window.setTimeout(r, 540))
+    overlay.remove()
   }
 
   /** 악마 보스 등장 후 커튼을 열어 보스를 공개한다. */
@@ -4786,12 +4808,20 @@ export class GameBoardRenderer {
       })
     }
     const events = hints?.events ?? []
-    if (events.length === 0) {
+    const demonPending = hints?.demonPending ?? false
+    if (events.length === 0 && !demonPending) {
       banner.classList.remove('is-on')
       this.previousChainUids = new Set()
       return
     }
     const parts: string[] = ['<span class="chain-banner-label">체인</span>']
+    // 악마 소환 이벤트 체인은 배너 가장 좌측에 대형 붉은 다이아몬드로 별도 표시한다.
+    if (demonPending) {
+      parts.push(`<span class="chain-banner-demon-diamond" aria-label="악마 소환" title="악마 소환">✦</span>`)
+      if (events.length > 0) {
+        parts.push('<span class="chain-banner-demon-sep">|</span>')
+      }
+    }
     for (let i = 0; i < events.length; i++) {
       const ev = events[i]
       const isNew = !this.previousChainUids.has(ev.uid) ? 'is-new' : ''

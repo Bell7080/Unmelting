@@ -528,23 +528,68 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   color: rgba(255, 237, 184, 0.96);
   text-shadow: 0 0 8px rgba(255, 201, 104, 0.9);
 }
-/* 악마 소환 발동 직전 — 더 붉고 불길하며 세로로 긴 다이아몬드 */
-.recipe-ready-mark.is-demon-ready {
-  font-size: 16px;
+/* 악마 소환 발동 직전 — 기존 금빛 마크와 별도로 표시되는 붉은 세로 다이아몬드 */
+.recipe-ready-mark--demon {
+  position: absolute;
+  top: 4px;
+  left: 20px; /* 기본 ✦ 마크 오른쪽에 별도 배치 */
+  z-index: 1;
+  font-size: 18px;
   color: rgba(222, 38, 18, 0.96);
-  transform: scaleX(0.52) scaleY(1.52);
+  transform: scaleX(0.48) scaleY(1.58);
   transform-origin: top left;
   text-shadow:
     0 0 6px rgba(222, 50, 20, 0.85),
     0 0 16px rgba(200, 30, 10, 0.55);
   animation: demon-diamond-pulse 0.72s ease-in-out infinite alternate;
+  pointer-events: none;
 }
 @keyframes demon-diamond-pulse {
   from { text-shadow: 0 0 6px rgba(222, 50, 20, 0.75), 0 0 14px rgba(200, 30, 10, 0.42); }
   to   { text-shadow: 0 0 12px rgba(240, 60, 30, 1.0), 0 0 26px rgba(220, 40, 20, 0.70); }
 }
 
-/* 악마 소환 체인 이벤트 — 붉고 불길한 색감 */
+/* 체인 배너 왼쪽 악마 소환 대형 다이아몬드 — 다른 체인 이벤트와 분리된 이벤트 체인 표시 */
+.chain-banner-demon-diamond {
+  display: inline-block;
+  font-size: clamp(28px, 3.8vw, 48px);
+  line-height: 1;
+  color: rgba(222, 38, 18, 0.96);
+  transform: scaleX(0.45) scaleY(1.7);
+  transform-origin: center;
+  text-shadow:
+    0 0 8px rgba(222, 50, 20, 0.9),
+    0 0 20px rgba(200, 30, 10, 0.65),
+    0 0 40px rgba(180, 20, 0, 0.40);
+  animation: demon-banner-pulse 0.82s ease-in-out infinite alternate;
+  margin-right: 8px;
+}
+@keyframes demon-banner-pulse {
+  from {
+    text-shadow:
+      0 0 6px rgba(222, 50, 20, 0.8),
+      0 0 18px rgba(200, 30, 10, 0.55),
+      0 0 36px rgba(180, 20, 0, 0.32);
+    filter: brightness(0.92);
+  }
+  to {
+    text-shadow:
+      0 0 14px rgba(255, 60, 20, 1.0),
+      0 0 30px rgba(220, 40, 20, 0.80),
+      0 0 56px rgba(200, 20, 0, 0.55);
+    filter: brightness(1.12);
+  }
+}
+/* 악마 소환 이벤트 구분자 — 대형 다이아와 일반 체인 이벤트 사이 */
+.chain-banner-demon-sep {
+  color: rgba(222, 38, 18, 0.48);
+  font-size: clamp(12px, 1.2vw, 16px);
+  font-weight: 700;
+  margin: 0 4px;
+  align-self: center;
+}
+
+/* 악마 소환 체인 이벤트 — 체인 배너 내 정상 레시피 항목은 더 이상 표시 안 됨, 하위 호환용 */
 .chain-event-recipe--demon {
   color: rgba(222, 50, 28, 0.96) !important;
 }
@@ -556,6 +601,43 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 .chain-event-recipe--demon .chain-event-mark {
   color: rgba(240, 60, 28, 1) !important;
   text-shadow: 0 0 8px rgba(220, 40, 20, 0.75) !important;
+}
+
+/* 악마 소환 쿵 임팩트 오버레이 */
+#demon-chain-impact {
+  position: fixed;
+  inset: 0;
+  z-index: 310;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(120, 0, 0, 0.18) 0%, transparent 70%);
+}
+.demon-chain-impact-diamond {
+  font-size: clamp(80px, 14vw, 160px);
+  color: rgba(222, 38, 18, 0.0);
+  transform: scaleX(0.42) scaleY(1.9) scale(0);
+  transform-origin: center;
+  animation: demon-impact-appear 0.55s cubic-bezier(0.12, 0.88, 0.28, 1.18) forwards;
+  text-shadow:
+    0 0 20px rgba(240, 60, 20, 0.9),
+    0 0 50px rgba(220, 30, 10, 0.7),
+    0 0 90px rgba(200, 15, 0, 0.5);
+}
+@keyframes demon-impact-appear {
+  0%   { transform: scaleX(0.42) scaleY(1.9) scale(0.1); color: rgba(255, 80, 30, 0.0); }
+  35%  { transform: scaleX(0.42) scaleY(1.9) scale(1.22); color: rgba(255, 70, 20, 1.0); }
+  65%  { transform: scaleX(0.42) scaleY(1.9) scale(0.95); color: rgba(240, 55, 18, 1.0); }
+  100% { transform: scaleX(0.42) scaleY(1.9) scale(1.0);  color: rgba(222, 38, 18, 0.96); }
+}
+.demon-chain-impact-diamond.is-dissolving {
+  animation: demon-impact-dissolve 0.52s ease-in forwards;
+}
+@keyframes demon-impact-dissolve {
+  0%   { opacity: 1; filter: blur(0px); transform: scaleX(0.42) scaleY(1.9) scale(1.0); }
+  40%  { opacity: 0.72; filter: blur(2px); transform: scaleX(0.42) scaleY(1.9) scale(1.06); }
+  100% { opacity: 0; filter: blur(8px); transform: scaleX(0.42) scaleY(1.9) scale(0.7); }
 }
 
 @keyframes recipe-ready-side-glow {

@@ -2387,7 +2387,13 @@ function buildChainHints() {
       flavor: recipe.flavor,
     }))
   })
-  return { events: chainTimeline, recipeReadyBySlot }
+  // 악마 소환 레시피는 이벤트 체인으로 분리해 배너 최좌측 대형 다이아몬드로 표시.
+  // 나머지 체인 이벤트는 기존처럼 우측에 나열한다.
+  const demonPending = chainTimeline.some(ev => ev.kind === 'recipe' && ev.recipeId === 'demon-summon')
+  const events = demonPending
+    ? chainTimeline.filter(ev => !(ev.kind === 'recipe' && ev.recipeId === 'demon-summon'))
+    : chainTimeline
+  return { events, recipeReadyBySlot, demonPending }
 }
 
 function render(): void {
@@ -3295,9 +3301,15 @@ async function applyHandSingle(
     }
   }
 
-  // 악마 소환 레시피 발동 — 모든 효과/정리 후 커튼 닫힘 → 이벤트 보스 전투 시작.
+  // 악마 소환 레시피 발동 — 모든 효과/정리 후 순서:
+  // 체인 초기화 → 짧은 딜레이 → 쿵 임팩트 연출 → 커튼 닫힘 → 이벤트 보스 전투 시작.
   if (demonBossPending && !bossController.eventState && !gameState.isGameOver) {
     demonBossPending = false
+    // 체인 배너를 먼저 지워 일반 체인 흔적을 없앤다.
+    clearChainTimeline()
+    boardRenderer.refreshChainBanner(buildChainHints())
+    await wait(400)
+    await boardRenderer.playDemonSummonChainImpact()
     await boardRenderer.closeDemonCurtain()
     await bossController.runDemonSummon()
     // 보스 전투·보상·시련 완료 후 입력 복귀.
@@ -3655,6 +3667,12 @@ async function playEventDialogueLine(line: EventDialogueLine): Promise<void> {
  *  이벤트 진입은 런 턴을 올리지 않는다(상점처럼 막간 상호작용). */
 async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
   inputLocked = true
+  // 이벤트 진입 시 진행 중인 체인을 즉시 끊는다.
+  if (chainTimeline.length > 0) {
+    HandSystem.resetChain(chain)
+    clearChainTimeline()
+    boardRenderer.refreshChainBanner(buildChainHints())
+  }
   // 디버그 커맨드로 고정 이벤트가 예약된 경우 그것을 사용하고, 아니면 랜덤 선택.
   const def = debugForcedEventId ? getEventDef(debugForcedEventId) : pickEventForDoor()
   debugForcedEventId = null
