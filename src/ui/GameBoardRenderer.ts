@@ -3017,15 +3017,19 @@ export class GameBoardRenderer {
    */
   async playDemonFireAppearAnimation(cardId: string): Promise<void> {
     this.elevateBoardAboveCurtain()
-    await new Promise((r) => window.setTimeout(r, 700))
     const tile = this.findCardElement(cardId)
+    // render() 직후 풀 사이즈로 노출되지 않도록 즉시 숨긴 상태로 고정
+    if (tile) {
+      tile.style.transition = 'none'
+      tile.style.transform = 'scale(0.12)'
+      tile.style.opacity = '0'
+      tile.style.filter = 'blur(20px) brightness(0.08)'
+      void tile.offsetWidth  // reflow
+    }
+    // 커튼 뒤 암흑 유지 후 등장 시작
+    await new Promise((r) => window.setTimeout(r, 700))
     if (!tile) return
-    // 초기: 극소 크기 · 완전 흐림 · 암흑
-    tile.style.transition = 'none'
-    tile.style.transform = 'scale(0.12)'
-    tile.style.opacity = '0'
-    tile.style.filter = 'blur(20px) brightness(0.08)'
-    void tile.offsetWidth  // reflow
+    // reflow 없이 바로 transition 적용 (이미 초기 상태 고정됨)
     // Phase 1: 규모 성장 + 투명도 해소 (흐림은 유지)
     tile.style.transition = 'transform 0.82s cubic-bezier(0.18, 0.82, 0.25, 1), opacity 0.65s ease-out'
     tile.style.transform = 'scale(1.0)'
