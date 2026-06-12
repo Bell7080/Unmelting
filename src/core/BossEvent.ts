@@ -296,7 +296,7 @@ export class BossEventController {
       playerBubbleMs: 2200,
       trait: [
         '첫 번째 : 점차 강해지는 검은 양초 1~3장 랜덤 사용.',
-        '두 번째 : 체력 65% 이하, 검은 양초 + 거짓과 진실.',
+        '두 번째 : 검은 양초 + 거짓과 진실.',
       ].join('\n'),
       kicker: '어둠의 속삭임',
       introSequence: [
@@ -749,16 +749,9 @@ export class BossEventController {
       // demonFire는 커튼 이후 별도 블록에서 elevateBoardAboveCurtain + 화염 폭발로 등장한다.
       await this.br.playBossLandingAnimation(bossCard.id)
     }
-    // demonFire: 커튼이 완전히 닫힌 뒤 잠깐의 암흑 — 그 후 보드를 앞으로 올리고 화염 폭발.
+    // demonFire: 커튼 위로 보스가 순차 성장(크기→선명도) 등장. 커튼은 절대 걷히지 않는다.
     if (def.appearAnimation === 'demonFire') {
-      await new Promise((r) => window.setTimeout(r, 680))
-      this.br.elevateBoardAboveCurtain()
-      const bossTile = this.br.findCardElement(bossCard.id)
-      if (bossTile) {
-        SquareBurst.playOn(bossTile, 'damage',    { count: 32, spread: 170, duration: 680, size: [8, 24] })
-        SquareBurst.playOn(bossTile, 'ember-gain',{ count: 18, spread: 120, duration: 520 })
-      }
-      await new Promise((r) => window.setTimeout(r, 380))
+      await this.br.playDemonFireAppearAnimation(bossCard.id)
     }
 
     // 보스 대사 — introSequence가 있으면 멀티라인 클릭-스킵 순차 표시, 없으면 기존 2줄.

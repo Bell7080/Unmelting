@@ -2483,7 +2483,7 @@ function setupDevCommandPalette(): void {
   const open = (): void => {
     opened = true
     host.classList.add('is-open')
-    setHint('예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비')
+    setHint('예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비, /랜덤유물, /랜덤손패')
     input.value = ''
     window.setTimeout(() => input.focus(), 0)
   }
@@ -2644,6 +2644,35 @@ function setupDevCommandPalette(): void {
       }
       render()
       setHint(`디버그: 악마 소환 레시피 해금 + 손패 ${added}장 지급 (${ingredients.map((id) => getHandCardDef(id).name).join('/')}`)
+      return
+    }
+    // 랜덤 유물 10장 지급 (미보유·비차단 풀에서 셔플 후 순서대로)
+    if (key === '랜덤유물' || key === '랜덤 유물') {
+      const pool = RELIC_IDS
+        .filter((id) => !gameState.character.hasRelic(id) && !relicPurchaseBlocked(id))
+        .sort(() => Math.random() - 0.5)
+      let added = 0
+      for (const id of pool.slice(0, 10)) {
+        if (gameState.character.addRelic(id)) {
+          await applyRelicPurchaseEffect(id)
+          added++
+        }
+      }
+      render()
+      setHint(`디버그: 랜덤 유물 ${added}장 지급`)
+      return
+    }
+    // 랜덤 손패 10장 지급 (boss 전용 드롭 제외)
+    if (key === '랜덤손패' || key === '랜덤 손패') {
+      const pool = HAND_CARD_IDS.filter((id) => HAND_CARD_DEFINITIONS[id].dropSource !== 'boss')
+      let added = 0
+      for (let i = 0; i < 10; i++) {
+        const id = pool[Math.floor(Math.random() * pool.length)]
+        const ok = gameState.character.addHandCard(DropSystem.makeCard(id))
+        if (ok) added++
+      }
+      render()
+      setHint(`디버그: 랜덤 손패 ${added}장 지급`)
       return
     }
     setHint('알 수 없는 명령어입니다. /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /악마소환, /악마소환준비')

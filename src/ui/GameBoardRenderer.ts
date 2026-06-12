@@ -3013,6 +3013,39 @@ export class GameBoardRenderer {
     }
   }
 
+  /**
+   * 악마 보스 등장 연출: 커튼은 그대로 둔 채 보드를 올린 뒤
+   * 보스 타일이 작고 어두운 상태에서 점차 커지고(Phase1), 그 뒤 흐림이 걷히며 선명해진다(Phase2).
+   * 두 페이즈는 딜레이로 분리해 순차 진행한다.
+   */
+  async playDemonFireAppearAnimation(cardId: string): Promise<void> {
+    this.elevateBoardAboveCurtain()
+    await new Promise((r) => window.setTimeout(r, 700))
+    const tile = this.findCardElement(cardId)
+    if (!tile) return
+    // 초기: 극소 크기 · 완전 흐림 · 암흑
+    tile.style.transition = 'none'
+    tile.style.transform = 'scale(0.12)'
+    tile.style.opacity = '0'
+    tile.style.filter = 'blur(20px) brightness(0.08)'
+    void tile.offsetWidth  // reflow
+    // Phase 1: 규모 성장 + 투명도 해소 (흐림은 유지)
+    tile.style.transition = 'transform 0.82s cubic-bezier(0.18, 0.82, 0.25, 1), opacity 0.65s ease-out'
+    tile.style.transform = 'scale(1.0)'
+    tile.style.opacity = '1'
+    await new Promise((r) => window.setTimeout(r, 860))
+    // Phase 2: 흐림 해소 + 밝기 복원
+    tile.style.transition = 'filter 0.74s ease-out'
+    tile.style.filter = 'blur(0px) brightness(1)'
+    await new Promise((r) => window.setTimeout(r, 780))
+    // 인라인 스타일 정리
+    tile.style.transition = ''
+    tile.style.transform = ''
+    tile.style.opacity = ''
+    tile.style.filter = ''
+    await new Promise((r) => window.setTimeout(r, 300))
+  }
+
   /** 악마 보스 등장 후 커튼을 열어 보스를 공개한다. */
   async openDemonCurtain(): Promise<void> {
     const overlay = this.demonCurtainOverlay
