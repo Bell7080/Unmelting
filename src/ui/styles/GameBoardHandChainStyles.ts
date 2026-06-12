@@ -544,7 +544,7 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   animation: demon-diamond-pulse 0.65s ease-in-out infinite alternate;
   pointer-events: none;
 }
-/* 악마 소환과 다른 레시피가 동시에 준비됐을 때 — 악마 다이아(font-size:22px, left:4px) 오른쪽에 간격을 두고 배치 */
+/* 악마 다이아가 떠 있을 때 — 일반 금빛 ✦ 를 우측으로 밀어 겹침 방지 */
 .recipe-ready-mark.is-has-demon {
   left: 30px;
 }
