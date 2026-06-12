@@ -204,6 +204,8 @@ export interface ChainHints {
   recipeReadyBySlot?: Record<number, { id: string; name: string; flavor: string }[]>
   /** 악마 소환 레시피가 체인에 포함됨 — 배너 최좌측 대형 붉은 다이아몬드로 이벤트 체인을 별도 표시. */
   demonPending?: boolean
+  /** 악마 소환 임팩트 연출 — 체인 배너를 거대하게/중앙에/X 없이/불타듯 표시. */
+  demonImpactMode?: boolean
 }
 
 export type ResourceTrailTarget =
@@ -933,7 +935,7 @@ export class GameBoardRenderer {
             ${shieldChip}
             <div class="boss-face-hpbar" aria-label="보스 체력">
               <div class="boss-face-hpbar-fill" style="width:${hpPct}%"></div>
-              ${this.renderBossHpPhaseMarkers(maxHp)}
+              ${this.renderBossHpPhaseMarkers(card, maxHp)}
               <span class="boss-face-hpbar-text">
                 <span class="boss-face-hpbar-icon">${heartIcon()}</span>
                 ${this.renderHudCounter('boss-hp', hp)}<span class="boss-face-hpbar-sep">/</span><span>${maxHp}</span>
@@ -946,10 +948,16 @@ export class GameBoardRenderer {
     `
   }
 
-  /** 100F 최종 보스 HP바에는 불씨 게이지 눈금처럼 140/70 페이지 경계선을 새긴다. */
-  private renderBossHpPhaseMarkers(maxHp: number): string {
-    if (maxHp !== 210) return ''
-    return [140, 70]
+  /** 보스 HP바 페이지 경계선. 100F 마녀: 140/70, 악마: 65% 임계. */
+  private renderBossHpPhaseMarkers(card: Card, maxHp: number): string {
+    let thresholds: number[] = []
+    if (card.specialEnemyKind === 'waxWitch' && maxHp === 210) {
+      thresholds = [140, 70]
+    } else if (card.specialEnemyKind === 'waxDemon') {
+      thresholds = [Math.ceil(maxHp * 0.65)]
+    }
+    if (thresholds.length === 0) return ''
+    return thresholds
       .map((threshold) => {
         const left = Math.max(0, Math.min(100, (threshold / maxHp) * 100))
         return `<span class="boss-face-hpbar-page-marker" style="left:${left}%" aria-hidden="true"></span>`
@@ -1438,8 +1446,8 @@ export class GameBoardRenderer {
                   style="--hand-card-art: url('${handArt}');"
                   aria-label="${def.name}: ${description}${recipeReadyTitle ? ` · ${recipeReadyTitle}` : ''}">
             ${tripleMergeCopies}
-            ${recipeReady ? `<span class="recipe-ready-mark" aria-hidden="true">✦</span>` : ''}
             ${demonReady ? `<span class="recipe-ready-mark recipe-ready-mark--demon" aria-hidden="true">✦</span>` : ''}
+            ${recipeReady ? `<span class="recipe-ready-mark${demonReady ? ' is-has-demon' : ''}" aria-hidden="true">✦</span>` : ''}
             ${card.merged ? '<span class="merged-mark" aria-hidden="true">✦</span>' : ''}
             <span class="hand-card-thumb" aria-hidden="true">
               <img src="${handArt}" alt="" loading="lazy" />
@@ -2919,23 +2927,40 @@ export class GameBoardRenderer {
     await new Promise<void>((r) => window.setTimeout(r, 740))
   }
 
-  /** 악마 소환 체인 마지막 — 체인 초기화 후 쿵 임팩트 연출.
-   *  중앙에 거대한 붉은 다이아몬드가 나타났다 화르르 사라진다. X 버튼 없음. */
-  async playDemonSummonChainImpact(): Promise<void> {
-    const overlay = document.createElement('div')
-    overlay.id = 'demon-chain-impact'
-    const diamond = document.createElement('span')
-    diamond.className = 'demon-chain-impact-diamond'
-    diamond.setAttribute('aria-hidden', 'true')
-    diamond.textContent = '✦'
-    overlay.appendChild(diamond)
-    document.body.appendChild(overlay)
-    // 등장 애니메이션이 끝날 때까지 대기 (0.55s) + 유지 시간 (0.45s).
-    await new Promise<void>((r) => window.setTimeout(r, 1000))
-    // 화르르 사라지는 연출.
-    diamond.classList.add('is-dissolving')
-    await new Promise<void>((r) => window.setTimeout(r, 540))
-    overlay.remove()
+  /** 악마 소환 직전 — 화면에 불길한 붉은 일렁임을 잠시 띄운다 (fire-and-forget). */
+  playOminousShimmer(): void {
+    const el = document.createElement('div')
+    el.className = 'demon-summon-shimmer'
+    document.body.appendChild(el)
+    window.setTimeout(() => el.remove(), 1400)
+  }
+
+  /** 악마 소환 체인 배너를 화르르 사라지게 한다. */
+  async playDemonBannerBurnFade(): Promise<void> {
+    const banner = document.getElementById('chain-banner')
+    if (!banner) return
+    banner.classList.remove('is-demon-impact')
+    banner.classList.add('is-demon-impact-fading')
+    await new Promise<void>((r) => window.setTimeout(r, 720))
+    banner.classList.remove('is-demon-impact-fading')
+  }
+
+  /** 악마 보스 커튼 앞 등장: 게임 보드를 커튼 오버레이보다 높은 z-index로 올린다. */
+  elevateBoardAboveCurtain(): void {
+    this.boardElement.style.position = 'relative'
+    this.boardElement.style.zIndex = '150'
+    this.boardElement.style.isolation = 'isolate'
+  }
+
+  /** 악마 보스 커튼 제거 및 보드 z-index 복원. */
+  removeDemonCurtain(): void {
+    this.boardElement.style.position = ''
+    this.boardElement.style.zIndex = ''
+    this.boardElement.style.isolation = ''
+    if (this.demonCurtainOverlay) {
+      this.demonCurtainOverlay.remove()
+      this.demonCurtainOverlay = null
+    }
   }
 
   /** 악마 보스 등장 후 커튼을 열어 보스를 공개한다. */
@@ -4809,10 +4834,18 @@ export class GameBoardRenderer {
     }
     const events = hints?.events ?? []
     const demonPending = hints?.demonPending ?? false
-    if (events.length === 0 && !demonPending) {
+    const demonImpactMode = hints?.demonImpactMode ?? false
+    if (events.length === 0 && !demonPending && !demonImpactMode) {
       banner.classList.remove('is-on')
+      banner.classList.remove('is-demon-impact')
       this.previousChainUids = new Set()
       return
+    }
+    // 임팩트 모드: 체인 배너를 크게/중앙으로/불타듯 표시 (X 버튼 없음).
+    if (demonImpactMode) {
+      banner.classList.add('is-demon-impact')
+    } else {
+      banner.classList.remove('is-demon-impact')
     }
     const parts: string[] = ['<span class="chain-banner-label">체인</span>']
     // 악마 소환 이벤트 체인은 배너 가장 좌측에 대형 붉은 다이아몬드로 별도 표시한다.
@@ -4858,9 +4891,11 @@ export class GameBoardRenderer {
         parts.push('<span class="chain-banner-arrow">→</span>')
       }
     }
-    parts.push(
-      '<button class="chain-banner-reset" type="button" data-chain-reset title="체인 초기화">×</button>'
-    )
+    if (!demonImpactMode) {
+      parts.push(
+        '<button class="chain-banner-reset" type="button" data-chain-reset title="체인 초기화">×</button>'
+      )
+    }
     banner.innerHTML = parts.join('')
     banner.classList.add('is-on')
     // Snapshot uids so the next render won't re-animate existing events.

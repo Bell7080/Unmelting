@@ -528,25 +528,42 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   color: rgba(255, 237, 184, 0.96);
   text-shadow: 0 0 8px rgba(255, 201, 104, 0.9);
 }
-/* 악마 소환 발동 직전 — 기존 금빛 마크와 별도로 표시되는 붉은 세로 다이아몬드 */
+/* 악마 소환 발동 직전 — 가장 좌측에 단독 표시되는 거대 붉은 세로 다이아몬드 */
 .recipe-ready-mark--demon {
   position: absolute;
-  top: 4px;
-  left: 20px; /* 기본 ✦ 마크 오른쪽에 별도 배치 */
-  z-index: 1;
-  font-size: 18px;
+  top: 2px;
+  left: 4px;
+  z-index: 2;
+  font-size: 22px;
   color: rgba(222, 38, 18, 0.96);
-  transform: scaleX(0.48) scaleY(1.58);
+  transform: scaleX(0.42) scaleY(1.78);
   transform-origin: top left;
   text-shadow:
-    0 0 6px rgba(222, 50, 20, 0.85),
-    0 0 16px rgba(200, 30, 10, 0.55);
-  animation: demon-diamond-pulse 0.72s ease-in-out infinite alternate;
+    0 0 8px rgba(240, 50, 20, 0.9),
+    0 0 18px rgba(200, 30, 10, 0.65),
+    0 0 32px rgba(180, 15, 0, 0.40);
+  animation: demon-diamond-pulse 0.65s ease-in-out infinite alternate;
   pointer-events: none;
 }
+/* 악마 소환과 다른 레시피가 동시에 준비됐을 때 — 기본 금빛 ✦ 를 오른쪽으로 밀어 배치 순서를 지킨다 */
+.recipe-ready-mark.is-has-demon {
+  left: 22px;
+}
 @keyframes demon-diamond-pulse {
-  from { text-shadow: 0 0 6px rgba(222, 50, 20, 0.75), 0 0 14px rgba(200, 30, 10, 0.42); }
-  to   { text-shadow: 0 0 12px rgba(240, 60, 30, 1.0), 0 0 26px rgba(220, 40, 20, 0.70); }
+  from {
+    text-shadow:
+      0 0 6px rgba(222, 50, 20, 0.75),
+      0 0 14px rgba(200, 30, 10, 0.42),
+      0 0 26px rgba(180, 15, 0, 0.25);
+    filter: brightness(0.95);
+  }
+  to {
+    text-shadow:
+      0 0 14px rgba(255, 60, 30, 1.0),
+      0 0 28px rgba(220, 40, 20, 0.78),
+      0 0 46px rgba(200, 20, 0, 0.52);
+    filter: brightness(1.18);
+  }
 }
 
 /* 체인 배너 왼쪽 악마 소환 대형 다이아몬드 — 다른 체인 이벤트와 분리된 이벤트 체인 표시 */
@@ -603,41 +620,66 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   text-shadow: 0 0 8px rgba(220, 40, 20, 0.75) !important;
 }
 
-/* 악마 소환 쿵 임팩트 오버레이 */
-#demon-chain-impact {
+/* 악마 소환 화면 일렁임 */
+.demon-summon-shimmer {
   position: fixed;
   inset: 0;
-  z-index: 310;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  z-index: 140;
   pointer-events: none;
-  background: radial-gradient(ellipse at center, rgba(120, 0, 0, 0.18) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(160, 20, 20, 0.20) 0%, transparent 72%);
+  animation: demon-shimmer-flicker 1.4s ease-in-out forwards;
 }
-.demon-chain-impact-diamond {
-  font-size: clamp(80px, 14vw, 160px);
-  color: rgba(222, 38, 18, 0.0);
-  transform: scaleX(0.42) scaleY(1.9) scale(0);
-  transform-origin: center;
-  animation: demon-impact-appear 0.55s cubic-bezier(0.12, 0.88, 0.28, 1.18) forwards;
-  text-shadow:
-    0 0 20px rgba(240, 60, 20, 0.9),
-    0 0 50px rgba(220, 30, 10, 0.7),
-    0 0 90px rgba(200, 15, 0, 0.5);
+@keyframes demon-shimmer-flicker {
+  0%   { opacity: 0; }
+  18%  { opacity: 1; }
+  45%  { opacity: 0.6; }
+  62%  { opacity: 0.88; }
+  82%  { opacity: 0.5; }
+  100% { opacity: 0; }
 }
-@keyframes demon-impact-appear {
-  0%   { transform: scaleX(0.42) scaleY(1.9) scale(0.1); color: rgba(255, 80, 30, 0.0); }
-  35%  { transform: scaleX(0.42) scaleY(1.9) scale(1.22); color: rgba(255, 70, 20, 1.0); }
-  65%  { transform: scaleX(0.42) scaleY(1.9) scale(0.95); color: rgba(240, 55, 18, 1.0); }
-  100% { transform: scaleX(0.42) scaleY(1.9) scale(1.0);  color: rgba(222, 38, 18, 0.96); }
+
+/* 악마 소환 체인 배너 임팩트 모드 — 더 크고 중앙에, X 버튼 없음, 불타듯 */
+.chain-banner.is-demon-impact {
+  top: 38vh;
+  max-width: min(92vw, 960px);
+  animation: demon-banner-burn-pulse 0.88s ease-in-out infinite alternate;
 }
-.demon-chain-impact-diamond.is-dissolving {
-  animation: demon-impact-dissolve 0.52s ease-in forwards;
+.chain-banner.is-demon-impact .chain-event-recipe {
+  font-size: clamp(28px, 4vw, 52px);
+  letter-spacing: 0.08em;
 }
-@keyframes demon-impact-dissolve {
-  0%   { opacity: 1; filter: blur(0px); transform: scaleX(0.42) scaleY(1.9) scale(1.0); }
-  40%  { opacity: 0.72; filter: blur(2px); transform: scaleX(0.42) scaleY(1.9) scale(1.06); }
-  100% { opacity: 0; filter: blur(8px); transform: scaleX(0.42) scaleY(1.9) scale(0.7); }
+.chain-banner.is-demon-impact .chain-event-recipe--demon {
+  font-size: clamp(30px, 4.4vw, 58px);
+}
+.chain-banner.is-demon-impact .chain-banner-label {
+  font-size: clamp(14px, 1.4vw, 18px);
+}
+.chain-banner.is-demon-impact .chain-banner-reset {
+  display: none;
+}
+@keyframes demon-banner-burn-pulse {
+  from {
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.92),
+      0 0 20px rgba(200, 30, 10, 0.55),
+      0 0 48px rgba(180, 15, 0, 0.30);
+    filter: brightness(0.92);
+  }
+  to {
+    text-shadow:
+      0 1px 2px rgba(0,0,0,0.92),
+      0 0 32px rgba(240, 50, 20, 0.90),
+      0 0 70px rgba(220, 30, 0, 0.60);
+    filter: brightness(1.18);
+  }
+}
+.chain-banner.is-demon-impact-fading {
+  animation: demon-banner-burn-out 0.72s ease-in forwards !important;
+}
+@keyframes demon-banner-burn-out {
+  0%   { opacity: 1; filter: blur(0px) brightness(1.1); transform: translateX(-50%) translateY(0); }
+  35%  { opacity: 0.85; filter: blur(1px) brightness(1.5); transform: translateX(-50%) translateY(-4px); }
+  100% { opacity: 0; filter: blur(6px) brightness(0.2); transform: translateX(-50%) translateY(-12px); }
 }
 
 @keyframes recipe-ready-side-glow {

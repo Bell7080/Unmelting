@@ -2594,7 +2594,7 @@ function setupDevCommandPalette(): void {
       setHint(ok ? `디버그: 손패 지급 (${getHandCardDef(handId).name})` : '손패가 가득 찼습니다.')
       return
     }
-    // 악마 소환 레시피 즉시 발동 — 체인/손패 상태와 무관하게 임팩트 연출 → 커튼 → 보스 전투.
+    // 악마 소환 레시피 즉시 발동 — 전체 연출 포함 (불길함 → 배너 임팩트 → 커튼 → 보스).
     if (key === '악마소환' || key === '악마 소환') {
       if (inputLocked || bossController.eventState || gameState.isGameOver) {
         setHint('현재 입력이 잠겨 있거나 보스 전투 중입니다.')
@@ -2602,10 +2602,29 @@ function setupDevCommandPalette(): void {
       }
       close()
       inputLocked = true
+      HandSystem.resetChain(chain)
       clearChainTimeline()
       boardRenderer.refreshChainBanner(buildChainHints())
-      await wait(400)
-      await boardRenderer.playDemonSummonChainImpact()
+      await wait(300)
+      boardRenderer.playOminousShimmer()
+      speechBubble.show('정말… 나타나는 건가…?', 0)
+      await wait(2200)
+      speechBubble.dismiss()
+      await wait(280)
+      chainTimeline.push({
+        kind: 'recipe', recipeId: 'demon-summon',
+        name: '악마 소환', flavor: '어둠의 속삭임',
+        uid: nextChainUid(),
+      })
+      boardRenderer.refreshChainBanner({
+        events: [...chainTimeline],
+        recipeReadyBySlot: {},
+        demonImpactMode: true,
+      })
+      await wait(1800)
+      await boardRenderer.playDemonBannerBurnFade()
+      clearChainTimeline()
+      boardRenderer.refreshChainBanner(buildChainHints())
       await boardRenderer.closeDemonCurtain()
       await bossController.runDemonSummon()
       setTimeout(() => { inputLocked = false }, 320)
@@ -3318,15 +3337,37 @@ async function applyHandSingle(
     }
   }
 
-  // 악마 소환 레시피 발동 — 모든 효과/정리 후 순서:
-  // 체인 초기화 → 짧은 딜레이 → 쿵 임팩트 연출 → 커튼 닫힘 → 이벤트 보스 전투 시작.
+  // 악마 소환 레시피 발동 — 체인 초기화 → 불길한 연출 → 커튼 → 이벤트 보스 전투.
   if (demonBossPending && !bossController.eventState && !gameState.isGameOver) {
     demonBossPending = false
-    // 체인 배너를 먼저 지워 일반 체인 흔적을 없앤다.
+    // 1. 체인 배너 초기화
+    HandSystem.resetChain(chain)
     clearChainTimeline()
     boardRenderer.refreshChainBanner(buildChainHints())
-    await wait(400)
-    await boardRenderer.playDemonSummonChainImpact()
+    await wait(300)
+    // 2. 화면 일렁임 + 플레이어 대사 (동시 시작)
+    boardRenderer.playOminousShimmer()
+    speechBubble.show('정말… 나타나는 건가…?', 0)
+    await wait(2200)
+    speechBubble.dismiss()
+    await wait(280)
+    // 3. 악마 소환 체인 배너 임팩트 모드 (전체 레시피 항목, 더 크고 중앙, X 없음, 불타듯)
+    chainTimeline.push({
+      kind: 'recipe', recipeId: 'demon-summon',
+      name: '악마 소환', flavor: '어둠의 속삭임',
+      uid: nextChainUid(),
+    })
+    boardRenderer.refreshChainBanner({
+      events: [...chainTimeline],
+      recipeReadyBySlot: {},
+      demonImpactMode: true,
+    })
+    await wait(1800)
+    // 4. 불타듯 사라지기 + 체인 정리
+    await boardRenderer.playDemonBannerBurnFade()
+    clearChainTimeline()
+    boardRenderer.refreshChainBanner(buildChainHints())
+    // 5. 커튼 닫힘 → 보스 전투
     await boardRenderer.closeDemonCurtain()
     await bossController.runDemonSummon()
     // 보스 전투·보상·시련 완료 후 입력 복귀.

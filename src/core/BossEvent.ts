@@ -295,7 +295,6 @@ export class BossEventController {
       introBubbleMs: 2400,
       playerBubbleMs: 2200,
       trait: [
-        '공통: 체력 10마다 손패 1장.',
         '1페이지: 2턴마다 검은 양초 1~3장.',
         '2페이지(체력 65% 이하): 검은 양초 + 거짓과 진실.',
       ].join('\n'),
@@ -698,7 +697,7 @@ export class BossEventController {
       demonPage: 1,
       demonCandleCounter: 0,
       nextDemonPageAt: def.specialEnemyKind === 'waxDemon'
-        ? Math.ceil(def.maxHp * 0.35)  // 65% HP 임계 = 남은 HP 35% 지점
+        ? Math.ceil(def.maxHp * 0.65)  // HP 65% 이하에서 2페이지 전환
         : 0,
     }
     this.syncBossShieldToCard()
@@ -716,15 +715,15 @@ export class BossEventController {
     } else {
       await this.br.playBossLandingAnimation(bossCard.id)
     }
-    // demonFire: 보스 타일 위에 화염 폭발 후 커튼 열기 — 커튼은 이미 닫혀 있다.
+    // demonFire: 커튼 앞에서 보스 등장 — 보드를 커튼보다 높은 z-index로 올린 뒤 화염 폭발.
     if (def.appearAnimation === 'demonFire') {
+      this.br.elevateBoardAboveCurtain()
       const bossTile = this.br.findCardElement(bossCard.id)
       if (bossTile) {
         SquareBurst.playOn(bossTile, 'damage',    { count: 32, spread: 170, duration: 680, size: [8, 24] })
         SquareBurst.playOn(bossTile, 'ember-gain',{ count: 18, spread: 120, duration: 520 })
       }
       await new Promise((r) => window.setTimeout(r, 380))
-      await this.br.openDemonCurtain()
     }
 
     // 보스 대사 — introSequence가 있으면 멀티라인 순차 표시, 없으면 기존 2줄.
@@ -792,6 +791,11 @@ export class BossEventController {
 
     this.tm.setTurnMode('normal_turn')
     await this.inject.openTrialOverlayForced()
+
+    // 악마 소환 커튼: 보스전 완전히 끝난 뒤 제거하고 보드 z-index 복원.
+    if (def.appearAnimation === 'demonFire') {
+      this.br.removeDemonCurtain()
+    }
 
     if (this.gs.getCurrentTurn() !== frozenRunTurn)
       this.inject.recordNotice(`경고: 보스 이벤트 중 실제 턴(${frozenRunTurn})이 변경됨`, 'hurt')
