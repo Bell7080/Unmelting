@@ -389,8 +389,6 @@ export class GameBoardRenderer {
           // 커서 양쪽 카드를 밀어내 포커스 영역을 노출한다.
           const extra = Math.round(Math.sign(dist) * Math.min(absDist * 14, 42))
           card.style.setProperty('--relic-extra-x', `${extra}px`)
-          // 커서에 가까운 카드가 클릭 가능한 레이어 위로 올라오게 한다.
-          card.style.zIndex = String(Math.max(10, Math.round(100 - absDist * 9)))
         })
       }
 
@@ -398,7 +396,6 @@ export class GameBoardRenderer {
         stack.classList.remove('is-focus-tracked')
         Array.from(stack.querySelectorAll<HTMLElement>('.relic-mini-card')).forEach(card => {
           card.style.removeProperty('--relic-extra-x')
-          card.style.zIndex = ''
         })
         this.relicFocusAttached.delete(stack)
         stack.removeEventListener('mousemove', applyFocus)
