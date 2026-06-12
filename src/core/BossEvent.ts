@@ -777,7 +777,8 @@ export class BossEventController {
     this.tm.setTurnMode('normal_turn')
     await this.inject.openTrialOverlayForced()
 
-    // 악마 소환 커튼: 보스전 완전히 끝난 뒤 제거하고 보드 z-index 복원.
+    // 악마 소환 커튼: stageBossRewardChests 안에서 openDemonCurtain()이 이미 처리한다.
+    // 혹시 보상 단계를 건너뛴 경우를 대비한 안전망.
     if (def.appearAnimation === 'demonFire') {
       this.br.removeDemonCurtain()
     }

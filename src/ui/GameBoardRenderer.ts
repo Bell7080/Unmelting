@@ -3024,10 +3024,15 @@ export class GameBoardRenderer {
     await new Promise((r) => window.setTimeout(r, 300))
   }
 
-  /** 악마 보스 등장 후 커튼을 열어 보스를 공개한다. */
+  /** 악마 보스 등장 후 커튼을 열어 보스를 공개한다.
+   *  커튼이 보드 위에 있어야 열리면서 레일이 드러나므로, 먼저 보드 elevation을 복원한다. */
   async openDemonCurtain(): Promise<void> {
     const overlay = this.demonCurtainOverlay
     if (!overlay) return
+    // 보드를 커튼 아래로 복원해야 커튼 열림 연출이 레일을 가리다 걷히는 효과를 낸다.
+    this.boardElement.style.position = ''
+    this.boardElement.style.zIndex = ''
+    this.boardElement.style.isolation = ''
     overlay.classList.add('is-opening')
     await new Promise<void>((r) => window.setTimeout(r, 1100))
     overlay.remove()
