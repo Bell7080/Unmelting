@@ -2431,7 +2431,7 @@ function setupDevCommandPalette(): void {
       <span class="dev-command-prefix">/</span>
       <input class="dev-command-input" type="text" spellcheck="false" autocomplete="off" />
       <button class="dev-command-close" aria-label="닫기">✕</button>
-      <div class="dev-command-hint">예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1</div>
+      <div class="dev-command-hint">예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환</div>
     </div>
     <button class="dev-command-run">실행</button>
   `
@@ -2483,7 +2483,7 @@ function setupDevCommandPalette(): void {
   const open = (): void => {
     opened = true
     host.classList.add('is-open')
-    setHint('예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1')
+    setHint('예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환')
     input.value = ''
     window.setTimeout(() => input.focus(), 0)
   }
@@ -2594,7 +2594,24 @@ function setupDevCommandPalette(): void {
       setHint(ok ? `디버그: 손패 지급 (${getHandCardDef(handId).name})` : '손패가 가득 찼습니다.')
       return
     }
-    setHint('알 수 없는 명령어입니다. /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$')
+    // 악마 소환 레시피 즉시 발동 — 체인/손패 상태와 무관하게 임팩트 연출 → 커튼 → 보스 전투.
+    if (key === '악마소환' || key === '악마 소환') {
+      if (inputLocked || bossController.eventState || gameState.isGameOver) {
+        setHint('현재 입력이 잠겨 있거나 보스 전투 중입니다.')
+        return
+      }
+      close()
+      inputLocked = true
+      clearChainTimeline()
+      boardRenderer.refreshChainBanner(buildChainHints())
+      await wait(400)
+      await boardRenderer.playDemonSummonChainImpact()
+      await boardRenderer.closeDemonCurtain()
+      await bossController.runDemonSummon()
+      setTimeout(() => { inputLocked = false }, 320)
+      return
+    }
+    setHint('알 수 없는 명령어입니다. /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /악마소환')
   }
 
   // 닫기 버튼 (shell 우상단 ✕)
