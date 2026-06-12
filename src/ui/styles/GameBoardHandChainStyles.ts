@@ -529,7 +529,8 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   text-shadow: 0 0 8px rgba(255, 201, 104, 0.9);
 }
 /* 악마 소환 발동 직전 — 가장 좌측에 단독 표시되는 씨뻘건 발광 다이아몬드 */
-.recipe-ready-mark--demon {
+.recipe-ready-mark--demon,
+.hand-slot.is-recipe-ready .recipe-ready-mark--demon {
   position: absolute;
   top: 2px;
   left: 4px;
@@ -567,15 +568,13 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 /* 체인 배너 왼쪽 악마 소환 대형 다이아몬드 — 다른 체인 이벤트와 분리된 이벤트 체인 표시 */
 .chain-banner-demon-diamond {
   display: inline-block;
-  font-size: clamp(28px, 3.8vw, 48px);
+  font-size: clamp(20px, 2.8vw, 36px);
   line-height: 1;
-  color: rgba(222, 38, 18, 0.96);
-  transform: scaleX(0.45) scaleY(1.7);
-  transform-origin: center;
+  color: rgba(220, 20, 10, 0.97);
   text-shadow:
-    0 0 8px rgba(222, 50, 20, 0.9),
-    0 0 20px rgba(200, 30, 10, 0.65),
-    0 0 40px rgba(180, 20, 0, 0.40);
+    0 0 6px rgba(255, 0, 0, 1.0),
+    0 0 14px rgba(220, 10, 0, 0.85),
+    0 0 28px rgba(180, 0, 0, 0.60);
   animation: demon-banner-pulse 0.82s ease-in-out infinite alternate;
   margin-right: 8px;
 }

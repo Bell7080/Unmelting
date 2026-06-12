@@ -1430,6 +1430,9 @@ export class GameBoardRenderer {
       const readyRecipes = scorePanel.chainHints?.recipeReadyBySlot?.[i] ?? []
       const recipeReady = readyRecipes.length > 0
       const demonReady = readyRecipes.some((r) => r.id === 'demon-summon')
+      // demon-summon을 제외한 다른 레시피가 준비된 경우에만 일반 금빛 다이아를 표시한다.
+      const otherRecipesReady = readyRecipes.filter((r) => r.id !== 'demon-summon')
+      const hasOtherRecipes = otherRecipesReady.length > 0
       const recipeReadyTitle = recipeReady
         ? `즉시 조합: ${readyRecipes.map((r) => r.name).join(', ')}`
         : ''
@@ -1494,7 +1497,7 @@ export class GameBoardRenderer {
                   aria-label="${def.name}: ${description}${recipeReadyTitle ? ` · ${recipeReadyTitle}` : ''}">
             ${tripleMergeCopies}
             ${demonReady ? `<span class="recipe-ready-mark recipe-ready-mark--demon" aria-hidden="true">✦</span>` : ''}
-            ${recipeReady ? `<span class="recipe-ready-mark${demonReady ? ' is-has-demon' : ''}" aria-hidden="true">✦</span>` : ''}
+            ${hasOtherRecipes ? `<span class="recipe-ready-mark${demonReady ? ' is-has-demon' : ''}" aria-hidden="true">✦</span>` : ''}
             ${card.merged ? '<span class="merged-mark" aria-hidden="true">✦</span>' : ''}
             <span class="hand-card-thumb" aria-hidden="true">
               <img src="${handArt}" alt="" loading="lazy" />

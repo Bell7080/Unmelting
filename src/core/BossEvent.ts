@@ -712,7 +712,8 @@ export class BossEventController {
       await this.br.playWaxSculptorAppearAnimation(bossCard.id)
     } else if (def.appearAnimation === 'waxKnightSwoop') {
       await this.br.playWaxKnightSwoopAnimation(bossCard.id)
-    } else {
+    } else if (def.appearAnimation !== 'demonFire') {
+      // demonFire는 커튼 이후 별도 블록에서 elevateBoardAboveCurtain + 화염 폭발로 등장한다.
       await this.br.playBossLandingAnimation(bossCard.id)
     }
     // demonFire: 커튼이 완전히 닫힌 뒤 잠깐의 암흑 — 그 후 보드를 앞으로 올리고 화염 폭발.

@@ -317,7 +317,7 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
 }
 /* Hover/focus only nudges the artifact forward instead of becoming the
    primary reading state; the card is already legible at rest. */
-.relic-mini-card:not(.is-revive-locked):hover,
+/* 클릭 핀(is-pinned) + 키보드 포커스만 크게 올라오게 — hover는 펼침만 담당 */
 .relic-mini-card:not(.is-revive-locked):focus-visible,
 .relic-mini-card.is-pinned:not(.is-revive-locked) {
   transform:
@@ -328,6 +328,7 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
   z-index: 160;
   filter: drop-shadow(0 16px 24px rgba(0, 0, 0, 0.72));
 }
+/* hover: 테두리 발광만 — lift/scale 없이 JS spreading으로 카드를 구분한다 */
 .relic-mini-card:not(.is-revive-locked):hover .relic-preview-card,
 .relic-mini-card:not(.is-revive-locked):focus-visible .relic-preview-card,
 .relic-mini-card.is-pinned:not(.is-revive-locked) .relic-preview-card {
