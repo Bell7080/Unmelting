@@ -3747,6 +3747,26 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
     clearChainTimeline()
     boardRenderer.refreshChainBanner(buildChainHints())
   }
+  // 레일 안정화: 적 턴 없이 빈칸 낙하·전방 병합만 실행한다.
+  // 꽃 성장·포자 감소·적 공격·상자 소멸 등 적 처리 로직은 건드리지 않는다.
+  {
+    let anyMoved = false
+    let safety = LANE_DISTANCE_COUNT * 3 + 3
+    while (safety-- > 0) {
+      const moved = gameState.compactLanes()
+      if (!moved) break
+      anyMoved = true
+      gameState.regroupAllRows()
+      turnManager.armFrontBombs()
+      render()
+      await wait(200)
+    }
+    if (anyMoved) {
+      gameState.regroupAllRows()
+      render()
+      await wait(340)
+    }
+  }
   // 디버그 커맨드로 고정 이벤트가 예약된 경우 그것을 사용하고, 아니면 랜덤 선택.
   const def = debugForcedEventId ? getEventDef(debugForcedEventId) : pickEventForDoor()
   debugForcedEventId = null

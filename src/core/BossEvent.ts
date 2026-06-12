@@ -296,7 +296,7 @@ export class BossEventController {
       playerBubbleMs: 2200,
       trait: [
         '첫 번째 : 점차 강해지는 검은 양초 1~3장 랜덤 사용.',
-        '두 번째 (체력 65% 이하) : 검은 양초 + 거짓과 진실.',
+        '두 번째 : 체력 65% 이하, 검은 양초 + 거짓과 진실.',
       ].join('\n'),
       kicker: '어둠의 속삭임',
       introSequence: [
