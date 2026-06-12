@@ -140,10 +140,10 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'chitin',
     name: '키틴',
     category: 'control',
-    description: '전방 함정 1장 제거',
-    tripleDescription: '전방 함정 1장 제거 (트리플)',
+    description: '전방 2칸 이하 함정 1장 제거',
+    tripleDescription: '전방 3칸 이하 함정 1장 제거',
     targeting: {
-      base: { selection: 'target', zone: 'front', filter: 'trap', countLimit: 1, maxSpan: 3 },
+      base: { selection: 'target', zone: 'front', filter: 'trap', countLimit: 1, maxSpan: 2 },
       triple: { selection: 'target', zone: 'front', filter: 'trap', countLimit: 1, maxSpan: 3 },
     },
     dropWeight: 8,
