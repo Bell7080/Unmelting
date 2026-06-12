@@ -1116,14 +1116,11 @@ export class GameBoardRenderer {
     const rotate = Math.max(-18, Math.min(18, offset * 7))
     const spread = Math.max(-54, Math.min(54, offset * 22))
     const lift = Math.abs(offset) * 3
-    // Edge cards enlarge inward so a large relic fan remains readable instead
-    // of letting the left/right cards grow offscreen.
-    const hoverShift = Math.round(Math.max(-92, Math.min(92, -offset * 18)))
     const pinnedClass = this.pinnedRelicId === def.id ? 'is-pinned' : ''
     return `
       <article class="relic-mini-card ${RARITY_CLASS_BY_TIER[def.rarity]} ${pinnedClass}"
                data-owned-relic="${def.id}"
-               style="--relic-i:${index}; --relic-x:${spread}px; --relic-rot:${rotate}deg; --relic-y:${lift}px; --relic-hover-shift:${hoverShift}px;"
+               style="--relic-i:${index}; --relic-x:${spread}px; --relic-rot:${rotate}deg; --relic-y:${lift}px;"
                tabindex="0"
                title="${def.name}: ${def.effect}"
                aria-label="${def.name}: ${def.effect}">

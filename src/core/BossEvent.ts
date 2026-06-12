@@ -17,6 +17,7 @@ import { SquareBurst } from '@ui/SquareBurst'
 import type { SpriteUrls as SpriteUrlsType } from '@ui/Sprites'
 import { spriteForEventBoss } from '@ui/Sprites'
 import type { SpeechBubble } from '@ui/SpeechBubble'
+import { playDialogueLine } from '@ui/DialoguePlayer'
 import { getHandCardDef } from '@data/HandCards'
 import type { HandCard } from '@entities/HandCard'
 import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
@@ -614,16 +615,15 @@ export class BossEventController {
       }
       await this.br.animateResourceTrailFromCard(card.id, 'relic', 1, 'demon-vortex')
     } else if (card.id === 'boss-reward-demon-hand') {
-      // 이벤트 보스 전용: 검은 양초 손패 고정 지급
-      const blackCandle = DropSystem.makeCard('black-candle')
-      const accepted = character.addHandCard(blackCandle)
-      if (accepted) {
-        this.inject.recordNotice('검은 양초 획득', 'win')
-        this.inject.render()
-        await this.br.animateResourceTrailFromCard(card.id, 'hand', 1, 'demon-vortex')
-      } else {
-        this.inject.recordNotice('검은 양초: 손패가 가득 차 받지 못했다', 'info')
+      // 손패가 가득 차면 마지막 칸을 소각하고 검은 양초를 추가한다.
+      if (!character.hasHandRoom()) {
+        await this.br.animateHandCardBurn(character.hand.length - 1)
+        character.removeHandCardAt(character.hand.length - 1)
       }
+      character.addHandCard(DropSystem.makeCard('black-candle'))
+      this.inject.recordNotice('검은 양초 획득', 'win')
+      this.inject.render()
+      await this.br.animateResourceTrailFromCard(card.id, 'hand', 1, 'demon-vortex')
     }
 
     await this.br.playBossRewardClaimedConsume(card.id)
@@ -646,37 +646,11 @@ export class BossEventController {
 
   // ---- 내부 구현 -------------------------------------------------------------
 
-  /**
-   * introSequence 한 줄 표시. playEventDialogueLine과 동일한 클릭-스킵 로직:
-   * 380ms 최소 표시 → 타이핑 중 클릭 시 즉시 완성 → 완성 후 클릭 시 진행 → holdMs 폴백.
-   */
+  /** 보스/플레이어 대사 한 줄. DialoguePlayer 공통 클릭-스킵 로직 사용. */
   private async playIntroLine(speaker: 'boss' | 'player', text: string, holdMs: number): Promise<void> {
     const bubble = speaker === 'boss' ? this.bossBubble : this.speechBubble
     const other  = speaker === 'boss' ? this.speechBubble : this.bossBubble
-    other.dismiss()
-    bubble.show(text, 0)
-    await new Promise<void>((resolve) => {
-      let done = false
-      let minReady = false
-      const minTimer = window.setTimeout(() => { minReady = true }, 380)
-      const finish = (): void => {
-        if (done) return
-        done = true
-        window.clearTimeout(minTimer)
-        window.clearTimeout(fallback)
-        document.removeEventListener('mousedown', onClick, true)
-        resolve()
-      }
-      const onClick = (): void => {
-        if (bubble.isTyping) { bubble.completeTyping(); return }
-        if (!minReady) return
-        finish()
-      }
-      const fallback = window.setTimeout(finish, holdMs)
-      document.addEventListener('mousedown', onClick, true)
-    })
-    bubble.dismiss()
-    await new Promise((r) => window.setTimeout(r, 260))
+    await playDialogueLine(bubble, other, text, holdMs, 260)
   }
 
   /** 보스 종류에 무관한 공통 이벤트 흐름. BossDef가 종류별 분기를 담는다. */
@@ -784,10 +758,7 @@ export class BossEventController {
 
     // waxSculptor: 타이틀 닫힌 직후 추가 도발 대사 → 초기 소환 연출 (input 여전히 잠김)
     if (def.specialEnemyKind === 'waxSculptor') {
-      this.bossBubble.show('고작… 실패작 주제에 내 걸작들의 상대가 되겠나?')
-      await new Promise((r) => window.setTimeout(r, 2800))
-      this.bossBubble.dismiss()
-      await new Promise((r) => window.setTimeout(r, 300))
+      await this.playIntroLine('boss', '고작… 실패작 주제에 내 걸작들의 상대가 되겠나?', 2800)
       await this.performSummonToBack()
     }
 
@@ -968,13 +939,8 @@ export class BossEventController {
         state.turn = 0
         this.br.setBossAttackCountdown(state.def.attackInterval)
         this.inject.render()
-        this.bossBubble.show('그래, 정말 이 세계는 이제 다 끝났네.')
-        await new Promise((r) => window.setTimeout(r, 3100))
-        this.bossBubble.dismiss()
-        await new Promise((r) => window.setTimeout(r, 260))
-        this.speechBubble.show('같잖은 말장난을...', 0)
-        await new Promise((r) => window.setTimeout(r, 2500))
-        this.speechBubble.dismiss()
+        await this.playIntroLine('boss',   '그래, 정말 이 세계는 이제 다 끝났네.', 3100)
+        await this.playIntroLine('player', '같잖은 말장난을...', 2500)
         this.inject.setInputLocked(false)
         return true
       }
@@ -987,13 +953,8 @@ export class BossEventController {
       state.turn = 0
       this.br.setBossAttackCountdown(state.def.attackInterval)
       this.inject.render()
-      this.bossBubble.show('이제 너도 그만 사라져.')
-      await new Promise((r) => window.setTimeout(r, 2500))
-      this.bossBubble.dismiss()
-      await new Promise((r) => window.setTimeout(r, 260))
-      this.speechBubble.show('. . .', 0)
-      await new Promise((r) => window.setTimeout(r, 3300))
-      this.speechBubble.dismiss()
+      await this.playIntroLine('boss',   '이제 너도 그만 사라져.', 2500)
+      await this.playIntroLine('player', '. . .', 3300)
       await this.performWitchSummonToBack()
       this.inject.setInputLocked(false)
       return true
@@ -1399,10 +1360,7 @@ export class BossEventController {
       '흥미롭군.',
     ]
     for (const text of lines) {
-      this.bossBubble.show(text)
-      await new Promise((r) => window.setTimeout(r, 2200))
-      this.bossBubble.dismiss()
-      await new Promise((r) => window.setTimeout(r, 240))
+      await this.playIntroLine('boss', text, 2200)
     }
     this.inject.setInputLocked(false)
     return true
@@ -1488,12 +1446,7 @@ export class BossEventController {
       { speaker: 'boss',   text: '진실의 앞에서. . . 그분과 함께, 기다리고 있겠다.', holdMs: 3400 },
     ]
     for (const line of lines) {
-      if (line.speaker === 'boss') this.bossBubble.show(line.text)
-      else this.speechBubble.show(line.text, 0)
-      await new Promise((r) => window.setTimeout(r, line.holdMs))
-      if (line.speaker === 'boss') this.bossBubble.dismiss()
-      else this.speechBubble.dismiss()
-      await new Promise((r) => window.setTimeout(r, 240))
+      await this.playIntroLine(line.speaker, line.text, line.holdMs)
     }
   }
 
@@ -1509,10 +1462,7 @@ export class BossEventController {
     for (let beat = 0; beat < lines.length; beat++) {
       // 빛의 선 + 미세 떨림 + 칸 확대를 먼저 깐 뒤, 떨리는 동안 대사를 띄운다.
       await this.br.playWaxWitchDeathBeat(cardId, beat + 1)
-      this.bossBubble.show(lines[beat])
-      await new Promise((r) => window.setTimeout(r, holdMs[beat]))
-      this.bossBubble.dismiss()
-      await new Promise((r) => window.setTimeout(r, 240))
+      await this.playIntroLine('boss', lines[beat], holdMs[beat])
     }
     // 빛의 선이 하나 둘 더 그어지다 마구 그어진다 — 폭발 직전 마디.
     await this.br.playWaxWitchDeathFrenzy(cardId)

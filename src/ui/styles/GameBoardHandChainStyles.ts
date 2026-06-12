@@ -627,6 +627,10 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   top: 38vh;
   max-width: min(92vw, 960px);
   animation: demon-banner-burn-pulse 0.88s ease-in-out infinite alternate;
+  /* 레일 위에 떠있어 가독성이 낮으므로 어두운 타원형 그림자를 배경에 깐다 */
+  background: radial-gradient(ellipse at 50% 60%, rgba(8, 3, 20, 0.82) 0%, transparent 76%);
+  border-radius: 16px;
+  padding: 8px 24px;
 }
 .chain-banner.is-demon-impact .chain-event-recipe {
   font-size: clamp(28px, 4vw, 52px);
@@ -638,17 +642,22 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 .chain-banner.is-demon-impact .chain-banner-reset {
   display: none;
 }
-/* 임팩트 모드 내 악마 소환 레시피 이벤트 — 붉은 발광. 일반 체인엔 이 클래스가 등장하지 않는다. */
-.chain-banner.is-demon-impact .chain-event-recipe--demon {
+/* 임팩트·페이드아웃 모드 내 악마 소환 레시피 이벤트 — 붉은 발광.
+   페이드 중에도 붉은 색을 유지해 황금색 일반 체인으로 순간 전환되는 현상을 방지한다. */
+.chain-banner.is-demon-impact .chain-event-recipe--demon,
+.chain-banner.is-demon-impact-fading .chain-event-recipe--demon {
   color: rgba(222, 50, 28, 0.96);
   font-size: clamp(30px, 4.4vw, 58px);
 }
 .chain-banner.is-demon-impact .chain-event-recipe--demon .chain-event-name,
-.chain-banner.is-demon-impact .chain-event-recipe--demon .chain-event-flavor {
+.chain-banner.is-demon-impact .chain-event-recipe--demon .chain-event-flavor,
+.chain-banner.is-demon-impact-fading .chain-event-recipe--demon .chain-event-name,
+.chain-banner.is-demon-impact-fading .chain-event-recipe--demon .chain-event-flavor {
   color: rgba(222, 50, 28, 0.96);
   text-shadow: 0 0 10px rgba(200, 38, 18, 0.48);
 }
-.chain-banner.is-demon-impact .chain-event-recipe--demon .chain-event-mark {
+.chain-banner.is-demon-impact .chain-event-recipe--demon .chain-event-mark,
+.chain-banner.is-demon-impact-fading .chain-event-recipe--demon .chain-event-mark {
   color: rgba(240, 60, 28, 1);
   text-shadow: 0 0 8px rgba(220, 40, 20, 0.75);
 }

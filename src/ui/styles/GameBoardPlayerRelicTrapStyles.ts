@@ -317,11 +317,12 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
 }
 /* Hover/focus only nudges the artifact forward instead of becoming the
    primary reading state; the card is already legible at rest. */
-/* 클릭 핀(is-pinned) + 키보드 포커스만 크게 올라오게 — hover는 펼침만 담당 */
+/* 클릭 핀(is-pinned) + 키보드 포커스만 크게 올라오게 — hover는 펼침만 담당.
+   핀 시 중앙 이동 없이 팬 위치 그대로 확대된다 (--relic-hover-shift 제거). */
 .relic-mini-card:not(.is-revive-locked):focus-visible,
 .relic-mini-card.is-pinned:not(.is-revive-locked) {
   transform:
-    translateX(calc(-50% + var(--relic-x, 0px) + var(--relic-hover-shift, 0px) + var(--relic-extra-x, 0px)))
+    translateX(calc(-50% + var(--relic-x, 0px) + var(--relic-extra-x, 0px)))
     translateY(calc(var(--relic-y, 0px) - 18px))
     rotate(calc(var(--relic-rot, 0deg) * 0.08))
     scale(1.22);

@@ -63,6 +63,7 @@ import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, spriteForUpgradePackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
+import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
 import { BgmManager } from '@/audio/BgmManager'
 import bgm001Url from './assets/audio/bgm_001.mp3'
@@ -2387,13 +2388,8 @@ function buildChainHints() {
       flavor: recipe.flavor,
     }))
   })
-  // 악마 소환 레시피는 이벤트 체인으로 분리해 배너 최좌측 대형 다이아몬드로 표시.
-  // 나머지 체인 이벤트는 기존처럼 우측에 나열한다.
-  const demonPending = chainTimeline.some(ev => ev.kind === 'recipe' && ev.recipeId === 'demon-summon')
-  const events = demonPending
-    ? chainTimeline.filter(ev => !(ev.kind === 'recipe' && ev.recipeId === 'demon-summon'))
-    : chainTimeline
-  return { events, recipeReadyBySlot, demonPending }
+  // demon-summon은 chainTimeline에 추가되지 않으므로 별도 필터 불필요.
+  return { events: chainTimeline, recipeReadyBySlot }
 }
 
 function render(): void {
@@ -3247,13 +3243,16 @@ async function applyHandSingle(
       ) {
         void boardRenderer.playBossFreezeResist(bossController.eventState.card.id)
       }
-      chainTimeline.push({
-        kind: 'recipe',
-        recipeId: fired.recipe.id,
-        name: fired.recipe.name,
-        flavor: fired.recipe.flavor,
-        uid: nextChainUid(),
-      })
+      // demon-summon은 demonBossPending으로 별도 처리 — 체인 배너엔 표시하지 않는다.
+      if (fired.recipe.id !== 'demon-summon') {
+        chainTimeline.push({
+          kind: 'recipe',
+          recipeId: fired.recipe.id,
+          name: fired.recipe.name,
+          flavor: fired.recipe.flavor,
+          uid: nextChainUid(),
+        })
+      }
     }
     boardRenderer.refreshChainBanner(buildChainHints())
     // Recipe-drawn hand cards (셔플 / 따뜻함 등) log one acquisition row each
@@ -3732,37 +3731,11 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   }, 220)
 }
 
-/** 이벤트 대사 한 줄을 보여주고, 클릭으로 타이핑 완료/다음 줄 넘김을 처리한다.
- *  최소 보존 시간(380ms) 동안은 "다음 줄" 진행을 막아 연타로 대사를 건너뛰지 못하게 한다.
- *  타이핑 중 클릭은 언제든 즉시 완성할 수 있다(completeTyping은 보존 시간과 무관). */
+/** 이벤트 대사 한 줄. DialoguePlayer 공통 클릭-스킵 로직 사용. */
 async function playEventDialogueLine(line: EventDialogueLine): Promise<void> {
   const bubble = line.speaker === 'player' ? speechBubble : eventDemonBubble
   const otherBubble = line.speaker === 'player' ? eventDemonBubble : speechBubble
-  otherBubble.dismiss()
-  bubble.show(line.text, 0)
-
-  await new Promise<void>((resolve) => {
-    let done = false
-    let minDisplayReady = false
-    const minDisplayTimer = window.setTimeout(() => { minDisplayReady = true }, 380)
-    const finish = (): void => {
-      if (done) return
-      done = true
-      window.clearTimeout(minDisplayTimer)
-      document.removeEventListener('mousedown', onClick, true)
-      window.clearTimeout(fallback)
-      resolve()
-    }
-    const onClick = (): void => {
-      // 타이핑 중이면 즉시 완성(보존 시간 관계없이 허용).
-      if (bubble.isTyping) { bubble.completeTyping(); return }
-      // 최소 보존 시간이 지난 뒤에만 다음 줄로 넘어간다.
-      if (!minDisplayReady) return
-      finish()
-    }
-    const fallback = window.setTimeout(finish, 1100 + line.text.length * 70)
-    document.addEventListener('mousedown', onClick, true)
-  })
+  await playDialogueLine(bubble, otherBubble, line.text)
 }
 
 /** 이벤트 문 클릭 → 불빛/행동 없이 이벤트 진입(대사 → 선택 → 효과). 진입 동안 손패/칸
