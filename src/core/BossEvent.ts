@@ -615,10 +615,10 @@ export class BossEventController {
       }
       await this.br.animateResourceTrailFromCard(card.id, 'relic', 1, 'demon-vortex')
     } else if (card.id === 'boss-reward-demon-hand') {
-      // 손패가 가득 차면 마지막 칸을 소각하고 검은 양초를 추가한다.
+      // 손패가 가득 차면 가장 하단(인덱스 0) 칸을 소각하고 검은 양초를 추가한다.
       if (!character.hasHandRoom()) {
-        await this.br.animateHandCardBurn(character.hand.length - 1)
-        character.removeHandCardAt(character.hand.length - 1)
+        await this.br.animateHandCardBurn(0)
+        character.removeHandCardAt(0)
       }
       character.addHandCard(DropSystem.makeCard('black-candle'))
       this.inject.recordNotice('검은 양초 획득', 'win')
@@ -1534,5 +1534,11 @@ export class BossEventController {
       }
     }
     this.inject.render()
+
+    // 보상 수령 완료 후 짧은 딜레이 → 커튼 열기 → 일반 레일로 복귀.
+    await new Promise((r) => window.setTimeout(r, 300))
+    await this.br.openDemonCurtain()
+    this.postPhaseHandLocked = false
+    this.inject.setInputLocked(false)
   }
 }
