@@ -362,6 +362,50 @@ export class GameBoardRenderer {
       },
       { capture: true }
     )
+
+    this.initRelicStackFocus()
+  }
+
+  // WeakSet 키: DOM 리빌드 때마다 이전 stack 요소가 GC되므로 별도 cleanup 불필요.
+  private readonly relicFocusAttached = new WeakSet<HTMLElement>()
+
+  /** boardElement의 mouseover 위임으로 .relic-stack이 새로 생겨도 재부착 없이 동작한다. */
+  private initRelicStackFocus(): void {
+    this.boardElement.addEventListener('mouseover', (e: MouseEvent) => {
+      const stack = (e.target as HTMLElement).closest<HTMLElement>('.relic-stack')
+      if (!stack || this.relicFocusAttached.has(stack)) return
+      this.relicFocusAttached.add(stack)
+
+      const applyFocus = (ev: MouseEvent): void => {
+        const cards = Array.from(stack.querySelectorAll<HTMLElement>('.relic-mini-card'))
+        const n = cards.length
+        if (n < 2) return
+        const rect = stack.getBoundingClientRect()
+        const t = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width))
+        // 커서 바로 아래 카드를 pivot으로 고정 — 소수점 focusIdx로 hovered 카드가 흔들리는 걸 방지.
+        const pivotIdx = Math.round(t * (n - 1))
+        cards.forEach((card, i) => {
+          const dist = i - pivotIdx
+          // pivot 카드는 제자리, 나머지는 선형 비례로 펼침.
+          const extra = Math.round(dist * 12)
+          card.style.setProperty('--relic-extra-x', `${extra}px`)
+        })
+      }
+
+      const clearFocus = (): void => {
+        stack.classList.remove('is-focus-tracked')
+        Array.from(stack.querySelectorAll<HTMLElement>('.relic-mini-card')).forEach(card => {
+          card.style.removeProperty('--relic-extra-x')
+        })
+        this.relicFocusAttached.delete(stack)
+        stack.removeEventListener('mousemove', applyFocus)
+        stack.removeEventListener('mouseleave', clearFocus)
+      }
+
+      stack.classList.add('is-focus-tracked')
+      stack.addEventListener('mousemove', applyFocus)
+      stack.addEventListener('mouseleave', clearFocus)
+    })
   }
 
   /** Toggle the UI overlay used while a targeted hand card is awaiting a board click. */
