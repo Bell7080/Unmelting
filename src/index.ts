@@ -2603,10 +2603,7 @@ function setupDevCommandPalette(): void {
       boardRenderer.refreshChainBanner(buildChainHints())
       await wait(300)
       boardRenderer.playOminousShimmer()
-      speechBubble.show('정말… 나타나는 건가…?', 0)
-      await wait(2200)
-      speechBubble.dismiss()
-      await wait(280)
+      await playDialogueLine(speechBubble, null, '정말… 나타나는 건가…?', 2200, 280)
       chainTimeline.push({
         kind: 'recipe', recipeId: 'demon-summon',
         name: '악마 소환', flavor: '거짓 속의 진실을 직시하라.',
@@ -3391,10 +3388,7 @@ async function applyHandSingle(
     await wait(300)
     // 2. 화면 일렁임 + 플레이어 대사 (동시 시작)
     boardRenderer.playOminousShimmer()
-    speechBubble.show('정말… 나타나는 건가…?', 0)
-    await wait(2200)
-    speechBubble.dismiss()
-    await wait(280)
+    await playDialogueLine(speechBubble, null, '정말… 나타나는 건가…?', 2200, 280)
     // 3. 악마 소환 체인 배너 임팩트 모드 (전체 레시피 항목, 더 크고 중앙, X 없음, 불타듯)
     chainTimeline.push({
       kind: 'recipe', recipeId: 'demon-summon',
