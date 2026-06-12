@@ -2431,7 +2431,7 @@ function setupDevCommandPalette(): void {
       <span class="dev-command-prefix">/</span>
       <input class="dev-command-input" type="text" spellcheck="false" autocomplete="off" />
       <button class="dev-command-close" aria-label="닫기">✕</button>
-      <div class="dev-command-hint">예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환</div>
+      <div class="dev-command-hint">예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비</div>
     </div>
     <button class="dev-command-run">실행</button>
   `
@@ -2483,7 +2483,7 @@ function setupDevCommandPalette(): void {
   const open = (): void => {
     opened = true
     host.classList.add('is-open')
-    setHint('예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환')
+    setHint('예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비')
     input.value = ''
     window.setTimeout(() => input.focus(), 0)
   }
@@ -2630,7 +2630,23 @@ function setupDevCommandPalette(): void {
       setTimeout(() => { inputLocked = false }, 320)
       return
     }
-    setHint('알 수 없는 명령어입니다. /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /악마소환')
+    // 악마 소환 준비 — 레시피 해금 + 필요 손패 4장 지급.
+    if (key === '악마소환준비' || key === '악마 소환 준비') {
+      gameState.unlockedRecipeIds.add('demon-summon')
+      boardRenderer.setLockedRecipeIds(
+        RECIPES.filter((r) => r.runLocked && !gameState.unlockedRecipeIds.has(r.id)).map((r) => r.id)
+      )
+      const ingredients: HandCardId[] = ['sacrifice-candle', 'ritual-candle', 'candle', 'ember']
+      let added = 0
+      for (const id of ingredients) {
+        const ok = gameState.character.addHandCard(DropSystem.makeCard(id))
+        if (ok) added++
+      }
+      render()
+      setHint(`디버그: 악마 소환 레시피 해금 + 손패 ${added}장 지급 (${ingredients.map((id) => getHandCardDef(id).name).join('/')}`)
+      return
+    }
+    setHint('알 수 없는 명령어입니다. /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /악마소환, /악마소환준비')
   }
 
   // 닫기 버튼 (shell 우상단 ✕)
