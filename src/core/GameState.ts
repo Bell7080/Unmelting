@@ -122,7 +122,13 @@ export class GameState {
       }
       if (left.canMergeWith(right)) {
         left.merge(right)
-        this.lanes[i + 1].setCardAtDistance(distance, left)
+        // Update ALL lanes still referencing 'right' to prevent a second
+        // spurious merge when 'right' is already a multi-lane card (gc ≥ 2).
+        for (let j = i + 1; j < this.lanes.length; j++) {
+          if (this.lanes[j].getCardAtDistance(distance) === right) {
+            this.lanes[j].setCardAtDistance(distance, left)
+          }
+        }
       }
       i++
     }

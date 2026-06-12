@@ -198,17 +198,16 @@ describe('HandSystem broad hand effects', () => {
     gameState.lanes[2].setCardAtDistance(0, threeSpanTrap)
     gameState.character.addHandCard(DropSystem.makeCard('chitin'))
 
-    // 단일 키틴도 3칸 함정 제거 가능 (maxSpan=3으로 통일).
-    const removeThreeSpan = HandSystem.useSingle(gameState, chain, 0, {
+    const rejectThreeSpan = HandSystem.useSingle(gameState, chain, 0, {
       laneIndex: 0,
       distance: 0,
       card: threeSpanTrap,
     })
 
-    expect(removeThreeSpan.success).toBe(true)
-    expect(gameState.lanes[0].getCardAtDistance(0)).toBeNull()
-    expect(gameState.lanes[1].getCardAtDistance(0)).toBeNull()
-    expect(gameState.lanes[2].getCardAtDistance(0)).toBeNull()
+    expect(rejectThreeSpan.success).toBe(false)
+    expect(gameState.lanes[0].getCardAtDistance(0)).toBe(threeSpanTrap)
+    expect(gameState.lanes[1].getCardAtDistance(0)).toBe(threeSpanTrap)
+    expect(gameState.lanes[2].getCardAtDistance(0)).toBe(threeSpanTrap)
   })
 
   it('lets triple 키틴 remove a selected 3칸 front trap', () => {
@@ -230,6 +229,45 @@ describe('HandSystem broad hand effects', () => {
 
     expect(result.success).toBe(true)
     expect(result.message).toContain('3칸 함정 제거')
+    expect(gameState.lanes[0].getCardAtDistance(0)).toBeNull()
+    expect(gameState.lanes[1].getCardAtDistance(0)).toBeNull()
+    expect(gameState.lanes[2].getCardAtDistance(0)).toBeNull()
+  })
+
+  it('triple 키틴 removes a gc=3 web produced by regroupRow merging gc1+gc2 cards', () => {
+    // 회귀 방지: gc=1 거미줄(lane0) + gc=2 거미줄(lane1-2)이 regroupRow에서 합쳐질 때
+    // 이전 구현은 gc=5로 이중 합산되어 maxSpan=3 검사를 통과하지 못했다.
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+
+    // gc=2 web occupies lanes 1 and 2 (same object reference)
+    const webGc2 = new Card('web-gc2', CardType.TRAP, '거미줄', 'test', 0, 2, { trapKind: 'web' })
+    webGc2.groupCount = 2
+    gameState.lanes[1].setCardAtDistance(0, webGc2)
+    gameState.lanes[2].setCardAtDistance(0, webGc2)
+
+    // gc=1 web in lane 0
+    const webGc1 = new Card('web-gc1', CardType.TRAP, '거미줄', 'test', 0, 2, { trapKind: 'web' })
+    webGc1.groupCount = 1
+    gameState.lanes[0].setCardAtDistance(0, webGc1)
+
+    // regroupRow should produce a single gc=3 card, not gc=5
+    gameState.regroupRow(0)
+    const merged = gameState.lanes[0].getCardAtDistance(0)
+    expect(merged).not.toBeNull()
+    expect(merged!.groupCount).toBe(3)
+    expect(gameState.lanes[1].getCardAtDistance(0)).toBe(merged)
+    expect(gameState.lanes[2].getCardAtDistance(0)).toBe(merged)
+
+    // Triple 키틴 must be able to remove this gc=3 web
+    gameState.character.addHandCard({ ...DropSystem.makeCard('chitin'), merged: true })
+    const result = HandSystem.useSingle(gameState, chain, 0, {
+      laneIndex: 0,
+      distance: 0,
+      card: merged!,
+    })
+
+    expect(result.success).toBe(true)
     expect(gameState.lanes[0].getCardAtDistance(0)).toBeNull()
     expect(gameState.lanes[1].getCardAtDistance(0)).toBeNull()
     expect(gameState.lanes[2].getCardAtDistance(0)).toBeNull()
