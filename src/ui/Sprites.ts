@@ -410,6 +410,7 @@ export function spriteForCard(card: Card): string {
     if (card.specialEnemyKind === 'waxKnight') return SpriteUrls.boss60
     if (card.specialEnemyKind === 'waxSculptor') return SpriteUrls.boss90
     if (card.specialEnemyKind === 'waxWitch') return SpriteUrls.boss100
+    if (card.specialEnemyKind === 'waxDemon') return spriteForEventBoss('eventboss_001') ?? SpriteUrls.boss
     return SpriteUrls.boss
   }
   if (card.type === CardType.ENEMY) {
