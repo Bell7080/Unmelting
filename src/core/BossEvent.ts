@@ -64,6 +64,8 @@ export interface BossDef {
   kicker: string
   /** 멀티라인 인트로 대사 — 지정 시 introBubble/playerResponseBubble 2줄 대신 순차 표시한다. */
   introSequence?: Array<{ speaker: 'boss' | 'player'; text: string; holdMs: number }>
+  /** true이면 보상 후 강제 시련 오버레이를 열지 않는다 (악마 소환 이벤트 보스 등). */
+  skipForcedTrial?: boolean
 }
 
 // ---- 내부 상태 인터페이스 ---------------------------------------------------
@@ -310,6 +312,8 @@ export class BossEventController {
         { speaker: 'boss',   text: '마녀가 남긴 미처 끄지 못한 잔불이여.',              holdMs: 2800 },
         { speaker: 'boss',   text: '현실을 직면해라, 그리고 진실 앞에 녹아내려라.',     holdMs: 3200 },
       ],
+      // 레시피 발동 이벤트 보스는 보상 후 강제 시련 없이 일반 레일로 복귀한다.
+      skipForcedTrial: true,
     }
     await this.runBossEvent(def)
   }
@@ -775,7 +779,9 @@ export class BossEventController {
     await this.stageBossRewardChests(savedField, bossKind)
 
     this.tm.setTurnMode('normal_turn')
-    await this.inject.openTrialOverlayForced()
+    if (!def.skipForcedTrial) {
+      await this.inject.openTrialOverlayForced()
+    }
 
     // 악마 소환 커튼: stageBossRewardChests 안에서 openDemonCurtain()이 이미 처리한다.
     // 혹시 보상 단계를 건너뛴 경우를 대비한 안전망.
