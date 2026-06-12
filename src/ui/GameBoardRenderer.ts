@@ -362,6 +362,53 @@ export class GameBoardRenderer {
       },
       { capture: true }
     )
+
+    this.initRelicStackFocus()
+  }
+
+  // WeakSet 키: DOM 리빌드 때마다 이전 stack 요소가 GC되므로 별도 cleanup 불필요.
+  private readonly relicFocusAttached = new WeakSet<HTMLElement>()
+
+  /** boardElement의 mouseover 위임으로 .relic-stack이 새로 생겨도 재부착 없이 동작한다. */
+  private initRelicStackFocus(): void {
+    this.boardElement.addEventListener('mouseover', (e: MouseEvent) => {
+      const stack = (e.target as HTMLElement).closest<HTMLElement>('.relic-stack')
+      if (!stack || this.relicFocusAttached.has(stack)) return
+      this.relicFocusAttached.add(stack)
+
+      const applyFocus = (ev: MouseEvent): void => {
+        const cards = Array.from(stack.querySelectorAll<HTMLElement>('.relic-mini-card'))
+        const n = cards.length
+        if (n < 2) return
+        const rect = stack.getBoundingClientRect()
+        const t = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width))
+        const focusIdx = t * (n - 1)
+        cards.forEach((card, i) => {
+          const dist = i - focusIdx
+          const absDist = Math.abs(dist)
+          // 커서 양쪽 카드를 밀어내 포커스 영역을 노출한다.
+          const extra = Math.round(Math.sign(dist) * Math.min(absDist * 14, 42))
+          card.style.setProperty('--relic-extra-x', `${extra}px`)
+          // 커서에 가까운 카드가 클릭 가능한 레이어 위로 올라오게 한다.
+          card.style.zIndex = String(Math.max(10, Math.round(100 - absDist * 9)))
+        })
+      }
+
+      const clearFocus = (): void => {
+        stack.classList.remove('is-focus-tracked')
+        Array.from(stack.querySelectorAll<HTMLElement>('.relic-mini-card')).forEach(card => {
+          card.style.removeProperty('--relic-extra-x')
+          card.style.zIndex = ''
+        })
+        this.relicFocusAttached.delete(stack)
+        stack.removeEventListener('mousemove', applyFocus)
+        stack.removeEventListener('mouseleave', clearFocus)
+      }
+
+      stack.classList.add('is-focus-tracked')
+      stack.addEventListener('mousemove', applyFocus)
+      stack.addEventListener('mouseleave', clearFocus)
+    })
   }
 
   /** Toggle the UI overlay used while a targeted hand card is awaiting a board click. */

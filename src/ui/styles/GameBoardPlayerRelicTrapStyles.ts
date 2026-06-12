@@ -258,13 +258,19 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
   cursor: pointer;
   transform-origin: 50% 112%;
   transform:
-    translateX(calc(-50% + var(--relic-x, 0px)))
+    translateX(calc(-50% + var(--relic-x, 0px) + var(--relic-extra-x, 0px)))
     translateY(var(--relic-y, 0px))
     rotate(var(--relic-rot, 0deg))
     scale(0.98);
   z-index: calc(10 + var(--relic-i, 0));
   transition:
     transform 0.36s cubic-bezier(0.18, 0.86, 0.22, 1),
+    filter 0.28s ease;
+}
+/* 마우스 포커스 추적 중 transition을 짧게 줄여 빠른 마우스 움직임에 반응한다 */
+.relic-stack.is-focus-tracked .relic-mini-card {
+  transition:
+    transform 0.14s ease,
     filter 0.28s ease;
 }
 .relic-mini-card .relic-preview-card {
@@ -315,7 +321,7 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
 .relic-mini-card:not(.is-revive-locked):focus-visible,
 .relic-mini-card.is-pinned:not(.is-revive-locked) {
   transform:
-    translateX(calc(-50% + var(--relic-x, 0px) + var(--relic-hover-shift, 0px)))
+    translateX(calc(-50% + var(--relic-x, 0px) + var(--relic-hover-shift, 0px) + var(--relic-extra-x, 0px)))
     translateY(calc(var(--relic-y, 0px) - 18px))
     rotate(calc(var(--relic-rot, 0deg) * 0.08))
     scale(1.22);
