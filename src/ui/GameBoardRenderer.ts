@@ -4915,9 +4915,8 @@ export class GameBoardRenderer {
           </span>
         `)
       } else if (ev.kind === 'recipe') {
-        const demonClass = ev.recipeId === 'demon-summon' ? 'chain-event-recipe--demon' : ''
         parts.push(`
-          <span class="chain-event chain-event-recipe ${demonClass} ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
+          <span class="chain-event chain-event-recipe ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
             <span class="chain-event-mark">✦</span>
             <span class="chain-event-copy"><span class="chain-event-name">${ev.name}</span><span class="chain-event-flavor">${ev.flavor}</span></span>
           </span>

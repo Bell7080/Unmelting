@@ -603,19 +603,6 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   align-self: center;
 }
 
-/* 악마 소환 체인 이벤트 — 체인 배너 내 정상 레시피 항목은 더 이상 표시 안 됨, 하위 호환용 */
-.chain-event-recipe--demon {
-  color: rgba(222, 50, 28, 0.96) !important;
-}
-.chain-event-recipe--demon .chain-event-name,
-.chain-event-recipe--demon .chain-event-flavor {
-  color: rgba(222, 50, 28, 0.96) !important;
-  text-shadow: 0 0 10px rgba(200, 38, 18, 0.48) !important;
-}
-.chain-event-recipe--demon .chain-event-mark {
-  color: rgba(240, 60, 28, 1) !important;
-  text-shadow: 0 0 8px rgba(220, 40, 20, 0.75) !important;
-}
 
 /* 악마 소환 화면 일렁임 */
 .demon-summon-shimmer {
@@ -644,9 +631,6 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 .chain-banner.is-demon-impact .chain-event-recipe {
   font-size: clamp(28px, 4vw, 52px);
   letter-spacing: 0.08em;
-}
-.chain-banner.is-demon-impact .chain-event-recipe--demon {
-  font-size: clamp(30px, 4.4vw, 58px);
 }
 .chain-banner.is-demon-impact .chain-banner-label {
   font-size: clamp(14px, 1.4vw, 18px);
