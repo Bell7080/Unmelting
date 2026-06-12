@@ -768,14 +768,8 @@ export class BossEventController {
       }
       await new Promise((r) => window.setTimeout(r, 160))
     } else {
-      this.bossBubble.show(def.introBubble)
-      await new Promise((r) => window.setTimeout(r, def.introBubbleMs))
-      this.bossBubble.dismiss()
-      await new Promise((r) => window.setTimeout(r, 320))
-      this.speechBubble.show(def.playerResponseBubble, 0)
-      await new Promise((r) => window.setTimeout(r, def.playerBubbleMs))
-      this.speechBubble.dismiss()
-      await new Promise((r) => window.setTimeout(r, 220))
+      await this.playIntroLine('boss',   def.introBubble,          def.introBubbleMs)
+      await this.playIntroLine('player', def.playerResponseBubble, def.playerBubbleMs)
     }
 
     // 인트로 오버레이
