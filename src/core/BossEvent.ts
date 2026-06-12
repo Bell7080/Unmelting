@@ -290,20 +290,20 @@ export class BossEventController {
       spriteUrl,
       appearAnimation: 'demonFire',
       // introSequence가 있으므로 아래 두 필드는 인트로 오버레이 카드에만 쓰인다.
-      introBubble: '결국 . . .',
-      playerResponseBubble: '네 놈은... 정체가 뭐야?',
+      introBubble: '현실을 직면해라, 그리고 진실 앞에 녹아내려라.',
+      playerResponseBubble: '네 놈은. . . 정체가 뭐야?',
       introBubbleMs: 2400,
       playerBubbleMs: 2200,
       trait: [
-        '1페이지: 2턴마다 검은 양초 1~3장.',
-        '2페이지(체력 65% 이하): 검은 양초 + 거짓과 진실.',
+        '첫 번째 : 점차 강해지는 검은 양초 1~3장 랜덤 사용.',
+        '두 번째 (체력 65% 이하) : 검은 양초 + 거짓과 진실.',
       ].join('\n'),
       kicker: '어둠의 속삭임',
       introSequence: [
         { speaker: 'boss',   text: '결국 . . .',                                        holdMs: 2000 },
         { speaker: 'boss',   text: '문을 열었군. . .',                                   holdMs: 2200 },
         { speaker: 'boss',   text: '달콤한 꿈 속에 빠져서 녹았다면 편했을 것을. . .', holdMs: 3400 },
-        { speaker: 'player', text: '네 놈은... 정체가 뭐야?',                            holdMs: 2400 },
+        { speaker: 'player', text: '네 놈은. . . 정체가 뭐야?',                          holdMs: 2400 },
         { speaker: 'boss',   text: '지금처럼 진실, 그 너머를 갈망한다면. . .',           holdMs: 3000 },
         { speaker: 'player', text: '. . . 뭐?',                                         holdMs: 1600 },
         { speaker: 'boss',   text: '마녀가 남긴 미처 끄지 못한 잔불이여.',              holdMs: 2800 },
@@ -646,6 +646,39 @@ export class BossEventController {
 
   // ---- 내부 구현 -------------------------------------------------------------
 
+  /**
+   * introSequence 한 줄 표시. playEventDialogueLine과 동일한 클릭-스킵 로직:
+   * 380ms 최소 표시 → 타이핑 중 클릭 시 즉시 완성 → 완성 후 클릭 시 진행 → holdMs 폴백.
+   */
+  private async playIntroLine(speaker: 'boss' | 'player', text: string, holdMs: number): Promise<void> {
+    const bubble = speaker === 'boss' ? this.bossBubble : this.speechBubble
+    const other  = speaker === 'boss' ? this.speechBubble : this.bossBubble
+    other.dismiss()
+    bubble.show(text, 0)
+    await new Promise<void>((resolve) => {
+      let done = false
+      let minReady = false
+      const minTimer = window.setTimeout(() => { minReady = true }, 380)
+      const finish = (): void => {
+        if (done) return
+        done = true
+        window.clearTimeout(minTimer)
+        window.clearTimeout(fallback)
+        document.removeEventListener('mousedown', onClick, true)
+        resolve()
+      }
+      const onClick = (): void => {
+        if (bubble.isTyping) { bubble.completeTyping(); return }
+        if (!minReady) return
+        finish()
+      }
+      const fallback = window.setTimeout(finish, holdMs)
+      document.addEventListener('mousedown', onClick, true)
+    })
+    bubble.dismiss()
+    await new Promise((r) => window.setTimeout(r, 260))
+  }
+
   /** 보스 종류에 무관한 공통 이벤트 흐름. BossDef가 종류별 분기를 담는다. */
   private async runBossEvent(def: BossDef): Promise<void> {
     const frozenRunTurn = this.gs.getCurrentTurn()
@@ -728,18 +761,10 @@ export class BossEventController {
       await new Promise((r) => window.setTimeout(r, 380))
     }
 
-    // 보스 대사 — introSequence가 있으면 멀티라인 순차 표시, 없으면 기존 2줄.
+    // 보스 대사 — introSequence가 있으면 멀티라인 클릭-스킵 순차 표시, 없으면 기존 2줄.
     if (def.introSequence && def.introSequence.length > 0) {
       for (const line of def.introSequence) {
-        if (line.speaker === 'boss') {
-          this.bossBubble.show(line.text)
-        } else {
-          this.speechBubble.show(line.text, 0)
-        }
-        await new Promise((r) => window.setTimeout(r, line.holdMs))
-        if (line.speaker === 'boss') this.bossBubble.dismiss()
-        else this.speechBubble.dismiss()
-        await new Promise((r) => window.setTimeout(r, 260))
+        await this.playIntroLine(line.speaker, line.text, line.holdMs)
       }
       await new Promise((r) => window.setTimeout(r, 160))
     } else {
