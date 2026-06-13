@@ -27,10 +27,17 @@ export class DropSystem {
   // 현재 런에서 드롭 가능한 카드 ID 집합. runCardPool.unlocked만 포함하며
   // null이면 전체 허용(초기화 전 안전망).
   private static allowedIds: Set<HandCardId> | null = null
+  // 확률팩으로 누적된 추가 드롭 가중치 — 카드 id → 추가값.
+  private static additionalDropWeights: Partial<Record<string, number>> = {}
 
   /** runCardPool이 변경될 때마다 호출해 드롭 풀을 동기화한다. */
   static setAllowedPool(ids: readonly HandCardId[]): void {
     DropSystem.allowedIds = new Set(ids)
+  }
+
+  /** 확률팩 구매 시 호출해 추가 드롭 가중치를 동기화한다. */
+  static setAdditionalWeights(weights: Partial<Record<string, number>>): void {
+    DropSystem.additionalDropWeights = weights
   }
 
   /** Build a single random hand card using 2-tier selection:
@@ -61,12 +68,12 @@ export class DropSystem {
       if (tierRoll <= 0) { chosenRarity = rarity; break }
     }
 
-    // 2단계: 선택된 등급 내에서 dropWeight 가중치로 카드를 선택한다.
+    // 2단계: 선택된 등급 내에서 dropWeight + 확률팩 추가 가중치로 카드를 선택한다.
     const tierPool = pool.filter((d) => (HAND_CARD_RARITY[d.id] ?? 'common') === chosenRarity)
-    const total = tierPool.reduce((sum, d) => sum + (d.dropWeight ?? 1), 0)
+    const total = tierPool.reduce((sum, d) => sum + (d.dropWeight ?? 1) + (DropSystem.additionalDropWeights[d.id] ?? 0), 0)
     let roll = Math.random() * total
     for (const def of tierPool) {
-      roll -= def.dropWeight ?? 1
+      roll -= (def.dropWeight ?? 1) + (DropSystem.additionalDropWeights[def.id] ?? 0)
       if (roll <= 0) return DropSystem.makeCard(def.id)
     }
     return DropSystem.makeCard(tierPool[0].id)

@@ -312,12 +312,12 @@ export const SpriteUrls = {
     'black-candle': handCard033Url,
   } satisfies Record<HandCardId, string>,
   /** Shop card-pack illustrations. Index follows the pack pickers in the
-   *  shop bottom row: basic (자원) / upgrade (강화) / unlock (해금). */
+   *  shop bottom row: basic (자원) / recipe (조합) / unlock (해금) / chance (확률). */
   packs: {
     'basic-pack': pack001Url,
-    'upgrade-pack': pack002Url,
+    'recipe-pack': pack002Url,
     'unlock-pack': pack003Url,
-    'blessing-pack': pack004Url,
+    'chance-pack': pack004Url,
     'resource-pack': pack005Url,
     'enhance-pack': pack006Url,
     'delete-pack': pack007Url,
@@ -514,14 +514,3 @@ export function spriteForEventBoss(name: string): string | undefined {
   return eventBossGlob[`../assets/sprites/${name}.webp`]?.default
 }
 
-/** 강화팩/해금팩 항목 일러스트.
- *  triple-{cardId} → 카드 아트. recipe-{recipeId} → recipe_001 (공용) */
-export function spriteForUpgradePackItem(id: string): string | undefined {
-  if (id.startsWith('triple-')) {
-    return SpriteUrls.handCards[id.slice('triple-'.length) as HandCardId]
-  }
-  if (id.startsWith('recipe-')) {
-    return recipeSprite001 ?? SpriteUrls.packs['upgrade-pack']
-  }
-  return undefined
-}
