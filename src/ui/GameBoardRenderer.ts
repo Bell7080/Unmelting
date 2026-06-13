@@ -364,6 +364,14 @@ export class GameBoardRenderer {
     )
 
     this.initRelicStackFocus()
+
+    // Shift 키 상태를 body 클래스로 전달 — 손패·도감 공격력 수식 자세히보기 토글.
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Shift') document.body.classList.add('is-shift-detail')
+    })
+    document.addEventListener('keyup', (e) => {
+      if (e.key === 'Shift') document.body.classList.remove('is-shift-detail')
+    })
   }
 
   // WeakSet 키: DOM 리빌드 때마다 이전 stack 요소가 GC되므로 별도 cleanup 불필요.
@@ -1371,6 +1379,17 @@ export class GameBoardRenderer {
         ? `필드 선택 적 1장 피해 ${3 + n}<br>화염의 서 피해 3 증가`
         : `필드 선택 적 1장 피해 ${n}<br>화염의 서 피해 1 증가`
     }
+    // 불씨: 플레이어 공격력 비례(단일 1.0공+1 / 트리플 3.0공+5). Shift로 수식 자세히보기 전환.
+    if (id === 'ember') {
+      const atk = this.currentGameState?.getCharacter().damage ?? 1
+      const emberBonus = merged
+        ? (enhancements?.tripleBonus['ember'] ?? 0)
+        : (enhancements?.singleBonus['ember'] ?? 0)
+      const total = merged ? 3 * atk + 5 + emberBonus : atk + 1 + emberBonus
+      const formula = merged ? `3.0${swordIcon()}+5` : `1.0${swordIcon()}+1`
+      const bonusSuffix = emberBonus > 0 ? `+${emberBonus}` : ''
+      return `필드 선택 적 1장 <span class="desc-dyn"><span class="desc-dyn__s">피해 ${total}</span><span class="desc-dyn__d">(${formula}${bonusSuffix})피해</span></span>`
+    }
     const bonus = merged
       ? (enhancements?.tripleBonus[id] ?? 0)
       : (enhancements?.singleBonus[id] ?? 0)
@@ -1378,7 +1397,6 @@ export class GameBoardRenderer {
     switch (id) {
       case 'wax-drop': return merged ? `체력 +${5 + bonus}` : `체력 +${1 + bonus}`
       case 'candle':   return merged ? `방패 +${5 + bonus}` : `방패 +${1 + bonus}`
-      case 'ember':    return merged ? `필드 선택 적 1장 피해 ${10 + bonus}` : `필드 선택 적 1장 피해 ${2 + bonus}`
       case 'match':    return merged ? `불씨 게이지 +${5 + bonus}` : `불씨 게이지 +${1 + bonus}`
       case 'card':     return merged ? `콤보 게이지 +${7 + bonus}` : `콤보 게이지 +${1 + bonus}`
       case 'coin':     return merged ? `+${5 + bonus}$` : `+${1 + bonus}$`
