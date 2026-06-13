@@ -344,7 +344,8 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
 /* 도감 chip 안 desc-dyn: display 토글 방식으로 __d가 레이아웃 너비를 차지하지 않게 한다.
    inline-grid 방식의 phantom-width 문제를 피하기 위함. */
 .codex-stat-chip .desc-dyn { display: inline; }
-.codex-stat-chip .desc-dyn__d { display: none; }
+/* __d의 nowrap을 chip 안에서 해제 — shift 시 공식이 chip 밖으로 흘러넘치는 것을 방지한다. */
+.codex-stat-chip .desc-dyn__d { display: none; white-space: normal; }
 body.is-shift-detail .codex-stat-chip .desc-dyn__s { display: none; }
 body.is-shift-detail .codex-stat-chip .desc-dyn__d { display: inline; }
 .codex-tile-grid--terms {
