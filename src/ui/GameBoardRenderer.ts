@@ -1345,8 +1345,11 @@ export class GameBoardRenderer {
       .map((c) => {
         const tone = c.tone && c.tone !== 'plain' ? `is-${c.tone}` : ''
         const iconHtml = c.icon ?? ''
-        const labelHtml = c.label ? `<span class="codex-stat-key">${c.label}</span>` : ''
-        return `<span class="codex-stat-chip ${tone}">${iconHtml}${labelHtml}${c.value}</span>`
+        // label+value를 하나의 span으로 묶어 단일 flex item으로 만든다.
+        // 묶지 않으면 텍스트 노드와 desc-dyn span이 각각 별개의 flex item이 되어
+        // 두 칸으로 분리되는 레이아웃 버그가 발생한다.
+        const bodyHtml = `<span class="codex-chip-body">${c.label ? `<span class="codex-stat-key">${c.label}</span>` : ''}${c.value}</span>`
+        return `<span class="codex-stat-chip ${tone}">${iconHtml}${bodyHtml}</span>`
       })
       .join('')
     const noteHtml = opts.note ? `<p class="codex-tile-note">${opts.note}</p>` : ''

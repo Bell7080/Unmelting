@@ -253,9 +253,14 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
   color: rgba(255, 245, 220, 0.92);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
 }
+/* label+value를 하나의 flex item으로 묶는 래퍼. min-width:0으로 flex 내 shrink 허용. */
+.codex-chip-body {
+  min-width: 0;
+}
 .codex-stat-chip .icon {
   width: 13px;
   height: 13px;
+  flex-shrink: 0;
 }
 .codex-stat-chip.is-hp {
   color: #ffb3a1;
@@ -348,6 +353,8 @@ body.is-shift-detail .codex-stat-chip .desc-dyn__s { display: none; }
 /* inline-block + nowrap: 공식 전체를 하나의 단위로 취급.
    줄이 부족하면 괄호 전체가 다음 줄로 내려가고, 공식 중간에서 끊기지 않는다. */
 body.is-shift-detail .codex-stat-chip .desc-dyn__d { display: inline-block; white-space: nowrap; }
+/* 수식 안 검 아이콘은 0.8em 폰트에 맞게 더 작게 */
+.codex-stat-chip .desc-dyn__d .icon { width: 10px; height: 10px; }
 .codex-tile-grid--terms {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
