@@ -1478,6 +1478,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
       }
     })
   }
+  return []
 }
 /** Open the pack picker for the just-clicked pack tile. Deducts the price
  *  if the player can afford it, otherwise no-op. */
