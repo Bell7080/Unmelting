@@ -190,13 +190,13 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: true,
   },
-  // 제물 양초: 자신을 제물로 바쳐 강하게 내리치는 단일 공격. 트리플은 자해 없이 더 큰 피해.
+  // 제물 양초: 자신을 제물로 바쳐 강하게 내리치는 단일 공격. 트리플도 자해 후 대규모 피해.
   'sacrifice-candle': {
     id: 'sacrifice-candle',
     name: '제물 양초',
     category: 'attack',
-    description: '자해 2 · 필드 선택 적 1장 피해 4',
-    tripleDescription: '필드 선택 적 1장 피해 6',
+    description: '자해 2 · 필드 선택 적 1장 (1.5공+3)피해',
+    tripleDescription: '자해 5 · 필드 선택 적 1장 (5.0공+10)피해',
     targeting: {
       base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
@@ -212,8 +212,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'levatein',
     name: '레바테인',
     category: 'attack',
-    description: '즉시 2턴 흐름<br>이후, 선택 적 1장 최대체력 30% 피해 (최소 10)',
-    tripleDescription: '즉시 1턴 흐름<br>이후, 선택 적 1장 최대체력 45% 피해 (최소 15)',
+    description: '즉시 2턴 흐름<br>이후, 선택 적 1장 (0.3♥+10)피해',
+    tripleDescription: '즉시 1턴 흐름<br>이후, 선택 적 1장 (0.45♥+15)피해',
     targeting: {
       base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
@@ -229,8 +229,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'firework',
     name: '폭죽',
     category: 'attack',
-    description: '필드 랜덤 적 전체 피해 3 분산',
-    tripleDescription: '필드 랜덤 적 전체 피해 12 분산',
+    description: '필드 랜덤 적 전체 (1.0공+2)피해 분산',
+    tripleDescription: '필드 랜덤 적 전체 (3.0공+10)피해 분산',
     targeting: {
       base: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: null },
       triple: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: null },
@@ -264,8 +264,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'fire-arrow',
     name: '불화살',
     category: 'attack',
-    description: '전방 선택 적 1장 피해 1~5',
-    tripleDescription: '전방 선택 적 1장 피해 1~20',
+    description: '전방 선택 적 1장 1~(1.0공+3)피해',
+    tripleDescription: '전방 선택 적 1장 5~(3.0공)피해',
     targeting: {
       base: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
@@ -346,8 +346,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'chandelier',
     name: '샹들리에',
     category: 'attack',
-    description: '필드 전체 적 피해 1 · 처치 시 반복',
-    tripleDescription: '필드 전체 적 피해 2 · 처치 시 반복',
+    description: '필드 전체 적 (1.5공)피해 · 처치 시 반복',
+    tripleDescription: '필드 전체 적 (3.0공)피해 · 처치 시 반복',
     targeting: {
       base: { selection: 'all', zone: 'field', filter: 'enemy', countLimit: null },
       triple: { selection: 'all', zone: 'field', filter: 'enemy', countLimit: null },
@@ -363,8 +363,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'bonfire',
     name: '모닥불',
     category: 'attack',
-    description: '필드 선택 적 1장 피해 1 · 처치 시 체력 +3',
-    tripleDescription: '필드 선택 적 1장 피해 4 · 처치 시 체력 +5',
+    description: '필드 선택 적 1장 (1.0공)피해 · 처치 시 체력 +3',
+    tripleDescription: '필드 선택 적 1장 (3.0공+3)피해 · 처치 시 체력 +5',
     targeting: {
       base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
@@ -380,8 +380,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'teapot',
     name: '주전자',
     category: 'attack',
-    description: '전방 선택 적 1장 피해 2 × 필드 적 수',
-    tripleDescription: '전방 선택 적 1장 피해 4 × 필드 적 수 × 2',
+    description: '전방 선택 적 1장 (1.5공)피해 × 필드 적 수',
+    tripleDescription: '전방 선택 적 1장 (3.0공)피해 × 필드 적 수 × 3',
     targeting: {
       base: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
@@ -426,7 +426,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'slash',
     name: '참격',
     category: 'attack',
-    description: '전방 선택 적 1장 피해 4',
+    description: '전방 선택 적 1장 (3.0공+3)피해',
     tripleDescription: '전방 선택 적 1장 즉사 (보스 면역)',
     targeting: {
       base: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
@@ -457,7 +457,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     name: '양초의 서',
     category: 'recovery',
     description: '필드 적 수만큼 방패 획득',
-    tripleDescription: '필드 전체 적 피해 1 · 적 수×3 방패 획득',
+    tripleDescription: '필드 전체 적 (1.0공)피해 · 적 수×3 방패 획득',
     targeting: { base: selfOne, triple: selfOne },
     dropWeight: 5,
     dropSource: 'any',
@@ -470,8 +470,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'sword-and-shield',
     name: '검과 방패',
     category: 'attack',
-    description: '전방 선택 적 1장 피해 1 · 방패 +1',
-    tripleDescription: '전방 선택 적 1장 피해 4 · 방패 +4',
+    description: '전방 선택 적 1장 (0.5공+1)피해 · 방패 +1',
+    tripleDescription: '전방 선택 적 1장 (2.0공+3)피해 · 방패 +4',
     targeting: {
       base: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },

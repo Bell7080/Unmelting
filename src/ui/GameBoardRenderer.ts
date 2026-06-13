@@ -53,6 +53,7 @@ import {
   sparkleIcon,
   swordIcon,
 } from '@ui/Icons'
+import { atkDmgHtml, hpDmgHtml, rangeDmgHtml } from '@ui/DamageDisplay'
 
 export interface CardActionDetail {
   laneIndex: number
@@ -1379,7 +1380,7 @@ export class GameBoardRenderer {
         ? `필드 선택 적 1장 피해 ${3 + n}<br>화염의 서 피해 3 증가`
         : `필드 선택 적 1장 피해 ${n}<br>화염의 서 피해 1 증가`
     }
-    // 불씨: 수식이 기본 표시(__s). Shift 누름 중엔 합산 수치(__d)만 표시로 전환.
+    // 불씨: 합산 수치가 기본 표시(__s). Shift 누름 중엔 공격력 수식(__d)으로 전환.
     if (id === 'ember') {
       const atk = this.currentGameState?.getCharacter().damage ?? 1
       const emberBonus = merged
@@ -1388,8 +1389,65 @@ export class GameBoardRenderer {
       const total = merged ? 3 * atk + 5 + emberBonus : atk + 1 + emberBonus
       const formula = merged ? `3.0${swordIcon()}+5` : `1.0${swordIcon()}+1`
       const bonusSuffix = emberBonus > 0 ? `+${emberBonus}` : ''
-      // __s = 수식(기본 표시), __d = 합산 수치(Shift 시 표시)
-      return `필드 선택 적 1장 <span class="desc-dyn"><span class="desc-dyn__s">(${formula}${bonusSuffix})피해</span><span class="desc-dyn__d">피해 ${total}</span></span>`
+      return `필드 선택 적 1장 <span class="desc-dyn"><span class="desc-dyn__s">${total}피해</span><span class="desc-dyn__d">(${formula}${bonusSuffix})피해</span></span>`
+    }
+    // ATK 연동 공격 카드: 기본 합산 수치, Shift 수식 (DamageDisplay 매니저 사용)
+    const atk = this.currentGameState?.getCharacter().damage ?? 1
+    const maxHp = this.currentGameState?.getCharacter().maxHealth ?? 0
+    if (id === 'sacrifice-candle') {
+      const b = merged ? (enhancements?.tripleBonus['sacrifice-candle'] ?? 0) : (enhancements?.singleBonus['sacrifice-candle'] ?? 0)
+      const selfTag = merged ? '자해 5 · ' : '자해 2 · '
+      const dmg = merged ? atkDmgHtml(atk, 5, 10, b) : atkDmgHtml(atk, 1.5, 3, b)
+      return `${selfTag}필드 선택 적 1장 ${dmg}`
+    }
+    if (id === 'levatein') {
+      const b = merged ? (enhancements?.tripleBonus['levatein'] ?? 0) : (enhancements?.singleBonus['levatein'] ?? 0)
+      const turns = merged ? '즉시 1턴 흐름' : '즉시 2턴 흐름'
+      const dmg = merged ? hpDmgHtml(maxHp, 0.45, 15, b) : hpDmgHtml(maxHp, 0.3, 10, b)
+      return `${turns}<br>이후, 선택 적 1장 ${dmg}`
+    }
+    if (id === 'firework') {
+      const b = merged ? (enhancements?.tripleBonus['firework'] ?? 0) : (enhancements?.singleBonus['firework'] ?? 0)
+      const dmg = merged ? atkDmgHtml(atk, 3, 10, b) : atkDmgHtml(atk, 1, 2, b)
+      return `필드 랜덤 적 전체 ${dmg} 분산`
+    }
+    if (id === 'fire-arrow') {
+      const b = merged ? (enhancements?.tripleBonus['fire-arrow'] ?? 0) : (enhancements?.singleBonus['fire-arrow'] ?? 0)
+      const dmg = merged ? rangeDmgHtml(atk, 5, 3, 0, b) : rangeDmgHtml(atk, 1, 1, 3, b)
+      return `전방 선택 적 1장 ${dmg}`
+    }
+    if (id === 'chandelier') {
+      const b = merged ? (enhancements?.tripleBonus['chandelier'] ?? 0) : (enhancements?.singleBonus['chandelier'] ?? 0)
+      const dmg = merged ? atkDmgHtml(atk, 3, 0, b) : atkDmgHtml(atk, 1.5, 0, b)
+      return `필드 전체 적 ${dmg} · 처치 시 반복`
+    }
+    if (id === 'bonfire') {
+      const b = merged ? (enhancements?.tripleBonus['bonfire'] ?? 0) : (enhancements?.singleBonus['bonfire'] ?? 0)
+      const healVal = merged ? 5 + b : 3 + b
+      const dmg = merged ? atkDmgHtml(atk, 3, 3, b) : atkDmgHtml(atk, 1, 0, b)
+      return `필드 선택 적 1장 ${dmg} · 처치 시 체력 +${healVal}`
+    }
+    if (id === 'teapot') {
+      const b = merged ? (enhancements?.tripleBonus['teapot'] ?? 0) : (enhancements?.singleBonus['teapot'] ?? 0)
+      const suffix = merged ? ' × 필드 적 수 × 3' : ' × 필드 적 수'
+      const dmg = merged ? atkDmgHtml(atk, 3, 0, b) : atkDmgHtml(atk, 1.5, 0, b)
+      return `전방 선택 적 1장 ${dmg}${suffix}`
+    }
+    if (id === 'slash') {
+      if (merged) return getHandCardDef(id).tripleDescription // 즉사 텍스트 그대로
+      const b = enhancements?.singleBonus['slash'] ?? 0
+      return `전방 선택 적 1장 ${atkDmgHtml(atk, 3, 3, b)}`
+    }
+    if (id === 'candle-tome') {
+      if (!merged) return getHandCardDef(id).description // 단일은 정적 텍스트
+      const b = enhancements?.tripleBonus['candle-tome'] ?? 0
+      return `필드 전체 적 ${atkDmgHtml(atk, 1, 0, b)} · 적 수×3 방패 획득`
+    }
+    if (id === 'sword-and-shield') {
+      const b = merged ? (enhancements?.tripleBonus['sword-and-shield'] ?? 0) : (enhancements?.singleBonus['sword-and-shield'] ?? 0)
+      const shieldVal = merged ? 4 + b : 1 + b
+      const dmg = merged ? atkDmgHtml(atk, 2, 3, b) : atkDmgHtml(atk, 0.5, 1, b)
+      return `전방 선택 적 1장 ${dmg} · 방패 +${shieldVal}`
     }
     const bonus = merged
       ? (enhancements?.tripleBonus[id] ?? 0)
