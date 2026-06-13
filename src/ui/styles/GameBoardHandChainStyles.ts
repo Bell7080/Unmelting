@@ -1238,4 +1238,19 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 .hand-slot.hand-card.rarity-epic     { border-color: rgba(210, 50, 235, 0.44); box-shadow: 0 0 12px rgba(210, 50, 235, 0.20), inset 0 0 8px rgba(210, 50, 235, 0.10); }
 .hand-slot.hand-card.rarity-unique   { border-color: rgba(242, 212, 92, 0.46); box-shadow: 0 0 14px rgba(242, 212, 92, 0.22), inset 0 0 9px rgba(242, 212, 92, 0.1); }
 .hand-slot.hand-card.rarity-legendary { border-color: rgba(220, 78, 78, 0.46); box-shadow: 0 0 14px rgba(220, 78, 78, 0.22), inset 0 0 9px rgba(220, 78, 78, 0.1); }
+
+/* 공격력 비례 설명 이중 레이어: 기본은 합산 수치, Shift 누름 시 수식으로 스르륵 전환. */
+.desc-dyn {
+  display: inline-grid;
+}
+.desc-dyn__s,
+.desc-dyn__d {
+  grid-area: 1/1;
+  transition: opacity 0.18s ease;
+}
+.desc-dyn__d {
+  opacity: 0;
+}
+body.is-shift-detail .desc-dyn__s { opacity: 0; }
+body.is-shift-detail .desc-dyn__d { opacity: 1; }
 `

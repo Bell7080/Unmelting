@@ -562,7 +562,8 @@ export class HandSystem {
         return `방패 +${shielded}`
       }
       case 'ember':
-        return HandSystem.damageTargetEnemy(gs, target, 2 + bonus)
+        // 피해 = 1.0 × 공격력 + 1 (강화 보너스 별도 합산)
+        return HandSystem.damageTargetEnemy(gs, target, c.damage + 1 + bonus)
       case 'key':
         return HandSystem.collectRandomTreasure(gs, c)
       case 'wax':
@@ -690,7 +691,8 @@ export class HandSystem {
         return `트리플 방패 +${shielded}`
       }
       case 'ember':
-        return HandSystem.damageTargetEnemy(gs, target, 10 + bonus)
+        // 피해 = 3.0 × 공격력 + 5 (트리플 비례 스케일링)
+        return HandSystem.damageTargetEnemy(gs, target, 3 * c.damage + 5 + bonus)
       case 'key':
         return HandSystem.collectAllTreasures(gs, c)
       case 'wax':

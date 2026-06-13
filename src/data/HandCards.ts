@@ -63,12 +63,13 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: false,
   },
+  // 불씨 피해는 enhancedHandCardDescription이 플레이어 공격력으로 실시간 계산한다(단일 공+1, 트리플 3공+5).
   ember: {
     id: 'ember',
     name: '불씨',
     category: 'attack',
-    description: '필드 선택 적 1장 피해 2',
-    tripleDescription: '필드 선택 적 1장 피해 10',
+    description: '필드 선택 적 1장 피해 (공+1)',
+    tripleDescription: '필드 선택 적 1장 피해 (3공+5)',
     targeting: {
       base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
