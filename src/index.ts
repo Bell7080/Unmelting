@@ -63,6 +63,11 @@ import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, spriteForUpgradePackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
+import { SceneManager } from '@ui/scenes/SceneManager'
+import { LobbyScene } from '@ui/scenes/LobbyScene'
+import { CharacterSelectScene } from '@ui/scenes/CharacterSelectScene'
+import { RunSetupScene } from '@ui/scenes/RunSetupScene'
+import type { RunConfig } from '@ui/scenes/Scene'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
 import { BgmManager } from '@/audio/BgmManager'
@@ -105,6 +110,9 @@ let pendingEventDoor = false
 // 디버그 전용: 이벤트N 커맨드로 스폰된 칸이 클릭될 때 강제 사용할 이벤트 ID.
 let debugForcedEventId: EventId | null = null
 const boardRenderer = new GameBoardRenderer('game-board')
+// 런 시작 전 프론트엔드 흐름(로비→캐릭터→난이도/룰)을 거는 씬 전환기.
+// 기본 부팅은 여전히 직행 인게임이며, `/시작` 명령에서만 깨어난다.
+const sceneManager = new SceneManager(app)
 // 배경음: 3트랙을 무작위 순서로 크로스페이드 연결, 첫 입력에서 자동재생.
 const bgm = new BgmManager([bgm001Url, bgm002Url, bgm003Url])
 const speechBubble = new SpeechBubble({ anchor: '.player-card', offsetX: 150, tail: 'bottom-left', fontSize: 22 })
@@ -248,6 +256,18 @@ function syncRunModifiersToSpawner(): void {
     trapDamageBonus: runModifiers.trapDamageBonus,
     treasureSpawnScale: runModifiers.treasureSpawnScale,
   })
+}
+/**
+ * 런 시작 전 흐름에서 고른 설정을 게임에 반영한다. startGame() 직전에 호출한다.
+ * M1은 골격만 — characterId만 기록하고 difficulty/rules는 아직 no-op(시각 스텁)이다.
+ * TODO(M4): difficulty를 runModifiers(적 HP/공격력·함정·보물 배율)로, rules 토글을
+ *   runCardPool.ban/초반 손패(character.addHandCard)에 연결. 반복 진입 시 runModifiers를
+ *   기본값으로 먼저 리셋해 난이도 누적을 막는다.
+ */
+function applyRunConfig(cfg: RunConfig): void {
+  void cfg.characterId // Character는 현재 고정('녹지 않는 소녀'). M3에서 GameState로 연결.
+  void cfg.difficulty
+  void cfg.rules
 }
 /** effectKind 서술자를 런타임 apply()로 변환. runModifiers는 여기에 스코프돼 있으므로 index에서 해석한다. */
 function applyTrialEffect(kind: TrialEffectKind): void {
@@ -2427,7 +2447,7 @@ function setupDevCommandPalette(): void {
       <span class="dev-command-prefix">/</span>
       <input class="dev-command-input" type="text" spellcheck="false" autocomplete="off" />
       <button class="dev-command-close" aria-label="닫기">✕</button>
-      <div class="dev-command-hint">예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비</div>
+      <div class="dev-command-hint">예시: /시작, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비</div>
     </div>
     <button class="dev-command-run">실행</button>
   `
@@ -2479,7 +2499,7 @@ function setupDevCommandPalette(): void {
   const open = (): void => {
     opened = true
     host.classList.add('is-open')
-    setHint('예시: /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비, /랜덤유물, /랜덤손패')
+    setHint('예시: /시작, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비, /랜덤유물, /랜덤손패')
     input.value = ''
     window.setTimeout(() => input.focus(), 0)
   }
@@ -2668,7 +2688,20 @@ function setupDevCommandPalette(): void {
       setHint(`디버그: 랜덤 손패 ${added}장 지급`)
       return
     }
-    setHint('알 수 없는 명령어입니다. /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /악마소환, /악마소환준비')
+    // 런 시작 전 프론트엔드 흐름 진입. 보드를 숨기고 로비→캐릭터→난이도/룰을 거친 뒤
+    // 출발 시 설정 적용 후 기존 인게임으로 재진입한다(취소/ESC는 보드로 복귀).
+    if (/^(시작|start)$/i.test(token)) {
+      close()
+      sceneManager.start(
+        [new LobbyScene(), new CharacterSelectScene(), new RunSetupScene()],
+        {
+          onComplete: (cfg) => { applyRunConfig(cfg); void startGame() },
+          onCancel: () => {},
+        }
+      )
+      return
+    }
+    setHint('알 수 없는 명령어입니다. /시작, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /악마소환, /악마소환준비')
   }
 
   // 닫기 버튼 (shell 우상단 ✕)
