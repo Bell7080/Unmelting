@@ -53,6 +53,7 @@ import {
   sparkleIcon,
   swordIcon,
 } from '@ui/Icons'
+import { atkDmgHtml, hpDmgHtml, rangeDmgHtml } from '@ui/DamageDisplay'
 
 export interface CardActionDetail {
   laneIndex: number
@@ -1402,7 +1403,6 @@ export class GameBoardRenderer {
       const total = merged ? 3 * atk + 5 + emberBonus : atk + 1 + emberBonus
       const formula = merged ? `3.0${swordIcon()}+5` : `1.0${swordIcon()}+1`
       const bonusSuffix = emberBonus > 0 ? `+${emberBonus}` : ''
-      // __s = 합산 수치(기본), __d = 수식(Shift 시)
       return `필드 선택 적 1장 <span class="desc-dyn"><span class="desc-dyn__s">${total}피해</span><span class="desc-dyn__d">(${formula}${bonusSuffix})피해</span></span>`
     }
     const bonus = merged
@@ -4513,15 +4513,17 @@ export class GameBoardRenderer {
     const tiles = HAND_CARD_IDS.filter((id) => HAND_CARD_DEFINITIONS[id].dropSource !== 'boss').map((id) => {
       const def = HAND_CARD_DEFINITIONS[id]
       const locked = this.lockedCardIds.has(id)
-      // 불씨는 desc-dyn HTML을 그대로 chip에 넣어 shift 토글이 도감에서도 동작하게 한다.
-      // 나머지 카드는 <br>→· 치환 후 HTML 태그를 제거한 평문을 사용한다.
+      // ATK 연동 카드: <br>만 · 로 치환, desc-dyn span은 유지해 Shift 토글이 도감에서도 동작.
+      // 나머지 카드: <br>→· 후 HTML 태그 전부 제거한 평문 사용.
       const chipDesc = (desc: string) => desc.replace(/<br>/g, ' · ').replace(/<[^>]*>/g, '')
-      const singleDesc = def.id === 'ember'
-        ? this.enhancedHandCardDescription(def.id, false)
-        : chipDesc(this.enhancedHandCardDescription(def.id, false))
-      const tripleDesc = def.id === 'ember'
-        ? this.enhancedHandCardDescription(def.id, true)
-        : chipDesc(this.enhancedHandCardDescription(def.id, true))
+      const chipDescAtk = (desc: string) => desc.replace(/<br>/g, ' · ')
+      const ATK_CARDS: ReadonlySet<HandCardId> = new Set([
+        'ember', 'sacrifice-candle', 'levatein', 'firework', 'fire-arrow',
+        'chandelier', 'bonfire', 'teapot', 'slash', 'candle-tome', 'sword-and-shield',
+      ])
+      const toChip = ATK_CARDS.has(def.id) ? chipDescAtk : chipDesc
+      const singleDesc = toChip(this.enhancedHandCardDescription(def.id, false))
+      const tripleDesc = toChip(this.enhancedHandCardDescription(def.id, true))
       return this.codexTile({
         art: { kind: 'sprite', url: spriteForHandCard(def.id) },
         name: locked ? '???' : def.name,

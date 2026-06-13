@@ -255,22 +255,24 @@ export class HandSystem {
       simulatedBattlePhases: card.defId === 'levatein' ? (card.merged ? 1 : 2)
         : card.defId === 'shackles' ? 1
         : undefined,
+      // 레바테인 피해: floor(배율 × 최대체력) + 기본값. Max 대신 addend 방식.
       levateainDamage: card.defId === 'levatein'
         ? (card.merged
-          ? Math.max(15, Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.45))
-          : Math.max(10, Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.30)))
+          ? Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.45) + 15
+          : Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.30) + 10)
         : undefined,
       // 청소 단일: 제거된 거미줄의 불빛을 주지 않는다(트리플만 불빛 획득).
       suppressScoreForRemovedCards: card.defId === 'sweep' && !card.merged,
       mirrorCopiedDefId,
       chandelierRepeat: card.defId === 'chandelier' ? { isMerged: card.merged === true } : undefined,
       // 주전자: 첫 타격 포함 총 타격 횟수와 타격 피해를 index.ts에 전달한다.
+      // 주전자: 단일 floor(1.5×공) × 적수, 트리플 floor(3.0×공) × 적수×3.
       teapotExtraHits: card.defId === 'teapot' && preEffectEnemyCount > 0
         ? {
             damage: card.merged
-              ? 4 + (gs.enhancements.tripleBonus['teapot'] ?? 0) * 2
-              : 2 + (gs.enhancements.singleBonus['teapot'] ?? 0),
-            totalCount: card.merged ? preEffectEnemyCount * 2 : preEffectEnemyCount,
+              ? Math.floor(3 * gs.character.damage) + (gs.enhancements.tripleBonus['teapot'] ?? 0)
+              : Math.floor(1.5 * gs.character.damage) + (gs.enhancements.singleBonus['teapot'] ?? 0),
+            totalCount: card.merged ? preEffectEnemyCount * 3 : preEffectEnemyCount,
           }
         : undefined,
       bonfireHealOnKill: card.defId === 'bonfire'
@@ -288,8 +290,8 @@ export class HandSystem {
   /** 카드별 자해 피해(UI가 애니메이션과 함께 적용). 탐욕의 동전·제물 양초·희생 방패가 사용한다. */
   private static selfDamageFor(defId: HandCardId, isMerged: boolean): number {
     if (defId === 'greed-coin') return HandSystem.greedCoinSelfDamage()
-    // 제물 양초는 단일 사용에만 자해 2(트리플은 자해 없이 더 큰 피해).
-    if (defId === 'sacrifice-candle' && !isMerged) return 2
+    // 제물 양초: 단일 자해 2, 트리플 자해 5.
+    if (defId === 'sacrifice-candle') return isMerged ? 5 : 2
     // 의식 양초도 단일 자해 2, 트리플은 자해 없음.
     if (defId === 'ritual-candle' && !isMerged) return 2
     // 희생 방패: 단일 자해 1, 트리플 자해 2.
@@ -541,6 +543,48 @@ export class HandSystem {
         const healed = c.heal(amount)
         return { message: `공격력(${amount})만큼 체력 +${healed}` }
       }
+      // ATK 연동 레시피 효과 ─ 공격력 기반 스케일링
+      case 'ignite-atk':
+        return { message: HandSystem.damageEnemies(gs, 'field', Math.floor(0.3 * c.damage) + 1 + bonus) }
+      case 'hot-atk':
+        return { message: HandSystem.damageEnemies(gs, 'front', Math.floor(0.5 * c.damage) + 2 + bonus) }
+      case 'fuse-atk':
+        return { message: HandSystem.damageEnemies(gs, 'front', Math.floor(1.5 * c.damage) + bonus) }
+      case 'backfire-atk':
+        return { message: HandSystem.damageEnemies(gs, 'field', Math.floor(c.damage) + bonus) }
+      case 'rage-atk':
+        return { message: HandSystem.damageEnemies(gs, 'front', Math.floor(c.damage) + 3 + bonus) }
+      case 'flame-chain-atk': {
+        c.addShield(2)
+        return { message: HandSystem.damageEnemies(gs, 'field', Math.floor(c.damage) + bonus) }
+      }
+      case 'glass-shards-atk':
+        return { message: HandSystem.distributeDamageAmongEnemies(gs, Math.floor(0.5 * c.damage) + 3 + bonus) }
+      case 'fireworks-atk':
+        return { message: HandSystem.distributeDamageAmongEnemies(gs, Math.floor(3 * c.damage) + 3 + bonus) }
+      case 'banquet-atk': {
+        // floor(1.0×공) 피해를 공격력 횟수만큼 반복 분산
+        const dmgPerHit = Math.floor(c.damage) + bonus
+        const times = Math.max(1, c.damage)
+        for (let i = 0; i < times - 1; i++) HandSystem.distributeDamageAmongEnemies(gs, dmgPerHit)
+        return { message: HandSystem.distributeDamageAmongEnemies(gs, dmgPerHit) }
+      }
+      case 'hot-water-maxhp': {
+        // 전방 랜덤 적 1장에게 최대체력 × 0.2 피해
+        const frontEnemies: HandTarget[] = []
+        const seenCards = new Set<Card>()
+        for (let laneIdx = 0; laneIdx < gs.lanes.length; laneIdx++) {
+          const card = gs.lanes[laneIdx].getCardAtDistance(0)
+          if (!card || seenCards.has(card)) continue
+          if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) continue
+          seenCards.add(card)
+          frontEnemies.push({ card, distance: 0, laneIndex: laneIdx })
+        }
+        if (frontEnemies.length === 0) return { message: '전방 적 없음' }
+        const pick = frontEnemies[Math.floor(Math.random() * frontEnemies.length)]
+        const amount = Math.floor((pick.card.enemyHealthTotal ?? pick.card.getHealth()) * 0.2) + bonus
+        return { message: HandSystem.damageTargetEnemy(gs, pick, amount) }
+      }
     }
   }
 
@@ -587,16 +631,18 @@ export class HandSystem {
         return '소량의 불빛 · 자해 2~5'
       case 'sacrifice-candle':
         // 자해 2는 use()의 selfDamage로 처리. 여기서는 선택 적 피해만 적용한다.
-        return HandSystem.damageTargetEnemy(gs, target, 4 + bonus)
+        return HandSystem.damageTargetEnemy(gs, target, Math.floor(1.5 * c.damage) + 3 + bonus)
       case 'levatein':
-        // 적 행동 시뮬레이션(2회)과 %HP 피해는 useSingle 반환값으로 index.ts에 위임한다.
-        return '레바테인: 즉시 2턴 흐름 후 최대체력 30% 피해'
+        // 적 행동 시뮬레이션(2회)과 ♥피해는 levateainDamage로 index.ts에 위임한다.
+        return '레바테인: 즉시 2턴 흐름 후 (0.3♥+10)피해'
       case 'firework':
-        return HandSystem.distributeDamageAmongEnemies(gs, 3 + bonus)
+        return HandSystem.distributeDamageAmongEnemies(gs, Math.floor(c.damage) + 2 + bonus)
       case 'book-of-flames':
         return HandSystem.applyBookOfFlames(gs, target, 0, 1)
       case 'fire-arrow': {
-        const damage = Math.ceil(Math.random() * 5) + bonus
+        // 1 ~ floor(1.0×공)+3 범위 무작위 피해
+        const max = Math.max(1, Math.floor(c.damage) + 3 + bonus)
+        const damage = Math.ceil(Math.random() * max)
         return HandSystem.damageTargetEnemy(gs, target, damage)
       }
       case 'shield-bash': {
@@ -614,13 +660,13 @@ export class HandSystem {
         return HandSystem.damageTargetEnemyByAtk(gs, target, bonus)
       case 'chandelier':
         // 처치 발생 시 index.ts가 200ms 딜레이로 동일 라운드를 반복 실행한다(chandelierRepeat 참조).
-        return HandSystem.damageEnemies(gs, 'field', 1 + bonus)
+        return HandSystem.damageEnemies(gs, 'field', Math.floor(1.5 * c.damage) + bonus)
       case 'bonfire':
         // 처치 발생 시 회복은 index.ts가 bonfireHealOnKill로 처리한다.
-        return HandSystem.damageTargetEnemy(gs, target, 1 + bonus)
+        return HandSystem.damageTargetEnemy(gs, target, Math.floor(c.damage) + bonus)
       case 'teapot':
         // 첫 타격만 여기서 실행. 나머지는 index.ts가 200ms 딜레이로 순차 실행한다(teapotExtraHits 참조).
-        return HandSystem.damageTargetEnemy(gs, target, 2 + bonus)
+        return HandSystem.damageTargetEnemy(gs, target, Math.floor(1.5 * c.damage) + bonus)
       case 'teacup': {
         const count = HandSystem.countFieldEnemies(gs)
         const healed = c.heal(count + bonus)
@@ -632,7 +678,7 @@ export class HandSystem {
         return `${target.card.name} 레인 맨 뒤로 이동`
       }
       case 'slash':
-        return HandSystem.damageTargetEnemy(gs, target, 4 + bonus)
+        return HandSystem.damageTargetEnemy(gs, target, Math.floor(3 * c.damage) + 3 + bonus)
       case 'shackles': {
         // 즉시 1턴 흐름은 simulatedBattlePhases=1로 index.ts에 위임한다.
         const shielded = c.addShield(4 + bonus)
@@ -644,7 +690,7 @@ export class HandSystem {
         return `필드 적 ${enemyCount}마리 → 방패 +${shielded}`
       }
       case 'sword-and-shield': {
-        const dmg = HandSystem.damageTargetEnemy(gs, target, 1 + bonus)
+        const dmg = HandSystem.damageTargetEnemy(gs, target, Math.floor(0.5 * c.damage) + 1 + bonus)
         const shielded = c.addShield(1 + bonus)
         return `${dmg} · 방패 +${shielded}`
       }
@@ -719,18 +765,19 @@ export class HandSystem {
         // 탐욕의 동전은 트리플 합성되지 않으므로 이 분기는 실제로 도달하지 않는다.
         return '소량의 불빛 · 자해 2~5'
       case 'sacrifice-candle':
-        // 트리플은 자해 없이 더 큰 피해만 입힌다.
-        return HandSystem.damageTargetEnemy(gs, target, 6 + bonus)
+        // 자해 5는 selfDamageFor에서 처리. 여기서는 피해만 적용한다.
+        return HandSystem.damageTargetEnemy(gs, target, Math.floor(5 * c.damage) + 10 + bonus)
       case 'levatein':
-        // 적 행동 시뮬레이션(1회)과 %HP 피해는 useSingle 반환값으로 index.ts에 위임한다.
-        return '레바테인: 즉시 1턴 흐름 후 최대체력 45% 피해'
+        // 적 행동 시뮬레이션(1회)과 ♥피해는 levateainDamage로 index.ts에 위임한다.
+        return '레바테인: 즉시 1턴 흐름 후 (0.45♥+15)피해'
       case 'firework':
-        return HandSystem.distributeDamageAmongEnemies(gs, 12 + bonus)
+        return HandSystem.distributeDamageAmongEnemies(gs, Math.floor(3 * c.damage) + 10 + bonus)
       case 'book-of-flames':
         return HandSystem.applyBookOfFlames(gs, target, 3 + bonus, 3)
       case 'fire-arrow': {
-        // 강화 1회당 최대 피해 +5. Math.ceil이므로 최솟값은 1로 유지된다.
-        const damage = Math.ceil(Math.random() * (20 + bonus * 5))
+        // 5 ~ floor(3.0×공) 범위 무작위 피해
+        const maxDmg = Math.max(5, Math.floor(3 * c.damage) + bonus)
+        const damage = 5 + Math.floor(Math.random() * Math.max(1, maxDmg - 4))
         return HandSystem.damageTargetEnemy(gs, target, damage)
       }
       case 'shield-bash': {
@@ -751,14 +798,13 @@ export class HandSystem {
         return HandSystem.damageTargetEnemyByAtk(gs, target, bonus)
       case 'chandelier':
         // 처치 발생 시 index.ts가 200ms 딜레이로 동일 라운드를 반복 실행한다(chandelierRepeat 참조).
-        return HandSystem.damageEnemies(gs, 'field', 2 + bonus)
+        return HandSystem.damageEnemies(gs, 'field', Math.floor(3 * c.damage) + bonus)
       case 'bonfire':
         // 처치 발생 시 회복은 index.ts가 bonfireHealOnKill로 처리한다.
-        return HandSystem.damageTargetEnemy(gs, target, 4 + bonus)
+        return HandSystem.damageTargetEnemy(gs, target, Math.floor(3 * c.damage) + 3 + bonus)
       case 'teapot':
         // 첫 타격만 여기서 실행. 나머지는 index.ts가 200ms 딜레이로 순차 실행한다(teapotExtraHits 참조).
-        // 강화 1회당 기본 피해 +2 (bonus * 2).
-        return HandSystem.damageTargetEnemy(gs, target, 4 + bonus * 2)
+        return HandSystem.damageTargetEnemy(gs, target, Math.floor(3 * c.damage) + bonus)
       case 'teacup': {
         const count = HandSystem.countFieldEnemies(gs)
         // 강화 1회당 승수 +1 (3+bonus 배).
@@ -788,13 +834,14 @@ export class HandSystem {
         return `방패 +${shielded} · 체력 +${healed}`
       }
       case 'candle-tome': {
-        HandSystem.damageEnemies(gs, 'field', 1 + bonus)
+        const dmgPerEnemy = Math.floor(c.damage) + bonus
+        HandSystem.damageEnemies(gs, 'field', dmgPerEnemy)
         const enemyCount = HandSystem.countFieldEnemies(gs)
         const shielded = c.addShield(enemyCount * 3 + bonus)
-        return `트리플 전체 피해 ${1 + bonus} · 필드 적 ${enemyCount}마리 → 방패 +${shielded}`
+        return `트리플 전체 피해 ${dmgPerEnemy} · 필드 적 ${enemyCount}마리 → 방패 +${shielded}`
       }
       case 'sword-and-shield': {
-        const dmg = HandSystem.damageTargetEnemy(gs, target, 4 + bonus)
+        const dmg = HandSystem.damageTargetEnemy(gs, target, Math.floor(2 * c.damage) + 3 + bonus)
         const shielded = c.addShield(4 + bonus)
         return `트리플 ${dmg} · 방패 +${shielded}`
       }

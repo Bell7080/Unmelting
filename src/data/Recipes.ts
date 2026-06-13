@@ -37,6 +37,17 @@ export type RecipeEffectKind =
   | 'shield-2-and-damage-field-1'
   | 'damage-split-field-2x2'
   | 'heal-by-player-attack'
+  // ATK 연동 레시피 피해 효과 (공격력 기반 스케일링)
+  | 'ignite-atk'           // 점화: floor(0.3×공)+1 필드 전체
+  | 'hot-atk'              // 뜨거움: floor(0.5×공)+2 전방 전체
+  | 'fuse-atk'             // 도화선: floor(1.5×공) 전방 전체
+  | 'backfire-atk'         // 역화: floor(1.0×공) 필드 전체
+  | 'rage-atk'             // 분노: floor(1.0×공)+3 전방 전체
+  | 'flame-chain-atk'      // 불꽃 사슬: 방패+2 · floor(1.0×공) 필드 전체
+  | 'glass-shards-atk'     // 유리파편: floor(0.5×공)+3 분산
+  | 'fireworks-atk'        // 불꽃놀이: floor(3.0×공)+3 분산
+  | 'banquet-atk'          // 연회: floor(1.0×공) × 공격력 횟수 분산
+  | 'hot-water-maxhp'      // 뜨거운 물: 전방 랜덤 적 1장 floor(0.2×최대체력) 피해
 
 export interface Recipe {
   id: string
@@ -73,13 +84,7 @@ function recipe(
 
 export const RECIPES: Recipe[] = [
   recipe('warmth', '따뜻함', { candle: 1, ember: 1 }, 'gain-wax-drop', '손패에 촛농 1장 획득'),
-  recipe(
-    'ignite',
-    '점화',
-    { match: 1, ember: 1 },
-    'damage-all-field-enemies-1',
-    '필드 모든 적에게 피해 1'
-  ),
+  recipe('ignite', '점화', { match: 1, ember: 1 }, 'ignite-atk', '필드 모든 적에게 (0.3공+1)피해'),
   recipe('dividend', '배당금', { coin: 3 }, 'gain-coin-1', '+1$'),
   recipe('shuffle', '셔플', { card: 2 }, 'draw-random-hand-1', '랜덤 손패 1장 획득'),
   recipe(
@@ -117,7 +122,7 @@ export const RECIPES: Recipe[] = [
     'clear-all-field-cards',
     '필드의 모든 칸 제거'
   ),
-  recipe('fuse', '도화선', { match: 2 }, 'damage-front-enemies-3', '전방 모든 적에게 피해 3'),
+  recipe('fuse', '도화선', { match: 2 }, 'fuse-atk', '전방 모든 적에게 (1.5공)피해'),
   recipe(
     'holy-flame',
     '성화',
@@ -132,25 +137,24 @@ export const RECIPES: Recipe[] = [
     'collect-waiting-treasures',
     '대기칸 모든 보물상자 획득'
   ),
-  recipe('hot', '뜨거움', { ember: 2 }, 'damage-front-enemies-2', '전방의 모든 적에게 피해 2'),
+  recipe('hot', '뜨거움', { ember: 2 }, 'hot-atk', '전방 모든 적에게 (0.5공+2)피해'),
   // --- 신규 레시피 (6개 — 해금팩으로 해금) ---
-  recipe('backfire',      '역화',       { firework: 1, match: 1 },                     'damage-all-field-enemies-2', '필드 모든 적에게 피해 2',   true),
-  recipe('rage',          '분노',       { 'sacrifice-candle': 1, ember: 1 },           'damage-front-enemies-5',     '전방 모든 적에게 피해 5',   true),
-  recipe('flame-infusion','불꽃 주입',  { 'book-of-flames': 1, match: 1 },             'gain-ember-3',               '불씨 게이지 +3',            true),
-  recipe('bond',          '결속',       { 'sacrifice-candle': 1, 'wax-drop': 1 },      'heal-3',                     '체력 3 회복',               true),
-  recipe('smokescreen',   '연막',       { wax: 1, firework: 1 },                       'clear-front-cards',          '전방 모든 칸 제거',          true),
-  recipe('mythic-flame',  '신화의 불꽃',{ levatein: 1, ember: 1, match: 1 },           'damage-all-field-enemies-5', '필드 모든 적에게 피해 5',   true),
+  recipe('backfire',      '역화',       { firework: 1, match: 1 },                     'backfire-atk',  '필드 모든 적에게 (1.0공)피해',   true),
+  recipe('rage',          '분노',       { 'sacrifice-candle': 1, ember: 1 },           'rage-atk',      '전방 모든 적에게 (1.0공+3)피해',  true),
+  recipe('flame-infusion','불꽃 주입',  { 'book-of-flames': 1, match: 1 },             'gain-ember-3',  '불씨 게이지 +3',                   true),
+  recipe('bond',          '결속',       { 'sacrifice-candle': 1, 'wax-drop': 1 },      'heal-3',        '체력 3 회복',                      true),
+  recipe('smokescreen',   '연막',       { wax: 1, firework: 1 },                       'clear-front-cards', '전방 모든 칸 제거',              true),
   // --- 신규 카드(16~20) 레시피 ---
-  recipe('glass-shards', '유리 파편',  { 'shield-bash': 1, 'hand-mirror': 1 },        'damage-split-field-4',    '필드 랜덤 적 전체 피해 4 분산'),
+  recipe('glass-shards', '유리 파편',  { 'shield-bash': 1, 'hand-mirror': 1 },        'glass-shards-atk', '필드 랜덤 적 전체 (0.5공+3)피해 분산'),
   recipe('blood-pact',   '혈약',       { 'sacrifice-shield': 1, 'wax-drop': 1 },      'heal-3',                  '체력 3 회복'),
   recipe('cleanse',      '청결',       { sweep: 1, 'holy-water': 1 },                 'clear-all-field-traps',   '필드 모든 함정 제거'),
   // --- 신규 카드(21~27) 레시피 ---
-  recipe('fireworks-show', '불꽃놀이',  { chandelier: 1, firework: 1 },                'damage-split-field-5',         '필드 랜덤 적 전체 피해 5 분산', true),
-  recipe('hospitality',    '대접',      { teacup: 1, 'wax-drop': 1 },                 'heal-3',                       '체력 3 회복'),
-  recipe('boiling-rage',   '끓는 분노', { teapot: 1, 'sacrifice-candle': 1 },         'destroy-all-front-enemies',    '전방 모든 적 처치',              true),
-  recipe('bright-ceiling', '밝은 천장', { chandelier: 1, match: 1 },                  'gain-ember-2',                 '불씨 게이지 +2'),
-  recipe('flame-chain',    '불꽃 사슬', { chandelier: 1, shackles: 1 },               'shield-2-and-damage-field-1',  '방패 +2 · 필드 적 전체 피해 1'),
-  recipe('banquet',        '연회',      { teapot: 1, firework: 1 },                   'damage-split-field-2x2',       '필드 랜덤 적 피해 2 × 2회',      true),
+  recipe('fireworks-show', '불꽃놀이',  { chandelier: 1, firework: 1 },                'fireworks-atk',      '필드 랜덤 적 전체 (3.0공+3)피해 분산', true),
+  recipe('hospitality',    '대접',      { teacup: 1, 'wax-drop': 1 },                 'heal-3',             '체력 3 회복'),
+  recipe('hot-water',      '뜨거운 물', { teapot: 1, ember: 1 },                      'hot-water-maxhp',    '전방 랜덤 적 1장 최대체력 (×0.2)피해', true),
+  recipe('bright-ceiling', '밝은 천장', { chandelier: 1, match: 1 },                  'gain-ember-2',       '불씨 게이지 +2'),
+  recipe('flame-chain',    '불꽃 사슬', { chandelier: 1, shackles: 1 },               'flame-chain-atk',    '방패 +2 · 필드 적 전체 (1.0공)피해'),
+  recipe('banquet',        '연회',      { teapot: 1, firework: 1 },                   'banquet-atk',        '필드 랜덤 적 (1.0공)피해 × 공격력 횟수', true),
   recipe('sweetness',      '달콤함',    { teacup: 1, 'sacrifice-shield': 1 },         'heal-by-player-attack',        '공격력만큼 체력 회복',            true),
   // event_001 불태우기 선택 시 해금되는 특수 이벤트 레시피 — 도감에 등록되고 런 내 발동 가능.
   // 조합식: 제물 양초 + 의식 양초 + 양초 + 불씨 — 4장 연계로 소환.
