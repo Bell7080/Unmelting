@@ -56,7 +56,6 @@ import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopP
 import { BASIC_PACK_POOL } from '@data/BasicPackPool'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { JOBS } from '@data/Jobs'
-import { buildUnlockedEnhancePool } from '@systems/EnhancePackPool'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
@@ -166,7 +165,7 @@ let currentShopOffers: ShopOfferView[] = []
 /** 제단(30턴) 무료 유물은 1회 단일 픽이다. 한 번 고르면 다시 못 고르게 잠근다. */
 let altarRelicPicked = false
 let shopRerollCount = 0
-const SHOP_PACK_KINDS: readonly ShopPackKind[] = ['basic-pack', 'recipe-pack', 'unlock-pack', 'chance-pack', 'resource-pack', 'enhance-pack', 'delete-pack']
+const SHOP_PACK_KINDS: readonly ShopPackKind[] = ['basic-pack', 'recipe-pack', 'unlock-pack', 'chance-pack', 'resource-pack', 'delete-pack']
 /** 방문 내 카드팩별 구매 횟수. 가격은 각 팩의 초기 가격을 매 구매마다 한 번 더 얹는다. */
 let shopPackBuys: Record<ShopPackKind, number> = Object.fromEntries(
   SHOP_PACK_KINDS.map((kind) => [kind, 0])
@@ -1271,7 +1270,7 @@ async function openShopOverlay(mode: 'shop' | 'altar'): Promise<void> {
   // 상점/제단 방문 시 해당 모드의 팩 종류를 발견 처리한다.
   const packsByMode: Record<'shop' | 'altar', string[]> = {
     shop:  ['basic-pack', 'recipe-pack', 'unlock-pack'],
-    altar: ['resource-pack', 'enhance-pack', 'delete-pack', 'chance-pack'],
+    altar: ['resource-pack', 'delete-pack', 'chance-pack'],
   }
   for (const k of packsByMode[mode]) gameState.encounteredPackKinds.add(k)
   recordNotice(mode === 'altar' ? '레일이 멈추고 제단이 열렸다' : '레일이 멈추고 상점이 열렸다', 'info')
@@ -1436,20 +1435,6 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     }))
     return sampleWeightedWithoutReplacement(rawPool, Math.min(3, rawPool.length))
   }
-  if (kind === 'enhance-pack') {
-    // 제단 6번 팩 — 해금된 카드의 단일 사용 효과 +1 (코인 제외).
-    const entries = buildUnlockedEnhancePool(runCardPool.snapshot().unlocked)
-    if (entries.length === 0) return []
-    return sampleWeightedWithoutReplacement(entries, Math.min(3, entries.length)).map((entry) => ({
-      ...entry,
-      spriteUrl: spriteForHandCard(entry.targetCardId),
-      typeLabel: '단일',
-      apply: () => {
-        const id = entry.targetCardId
-        gameState.enhancements.singleBonus[id] = (gameState.enhancements.singleBonus[id] ?? 0) + 1
-      },
-    }))
-  }
   if (kind === 'unlock-pack') {
     // 해금팩 — 런에서 잠긴 카드(runLocked) + 삭제팩으로 밴된 카드를 해금한다.
     // 보스 전용 찌꺼기 카드(탐욕의 동전 등)는 제외한다.
@@ -1585,7 +1570,7 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     detail.kind !== 'basic-pack' &&
     detail.kind !== 'recipe-pack' &&
     detail.kind !== 'unlock-pack' &&
-    detail.kind !== 'chance-pack' && detail.kind !== 'resource-pack' && detail.kind !== 'enhance-pack' && detail.kind !== 'delete-pack'
+    detail.kind !== 'chance-pack' && detail.kind !== 'resource-pack' && detail.kind !== 'delete-pack'
   )
     return
   if (detail.kind === 'free-card' || detail.kind === 'free-coin-card') {
@@ -1647,7 +1632,7 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
   }
   if (
     detail.kind === 'basic-pack' || detail.kind === 'recipe-pack' || detail.kind === 'unlock-pack' ||
-    detail.kind === 'chance-pack' || detail.kind === 'resource-pack' || detail.kind === 'enhance-pack' || detail.kind === 'delete-pack'
+    detail.kind === 'chance-pack' || detail.kind === 'resource-pack' || detail.kind === 'delete-pack'
   ) {
     await openPackPurchase(detail.kind)
     return

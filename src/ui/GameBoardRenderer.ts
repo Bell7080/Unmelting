@@ -66,7 +66,7 @@ export interface ItemActionDetail {
   shiftKey?: boolean
 }
 
-export type ShopPackKind = 'basic-pack' | 'recipe-pack' | 'unlock-pack' | 'chance-pack' | 'resource-pack' | 'enhance-pack' | 'delete-pack'
+export type ShopPackKind = 'basic-pack' | 'recipe-pack' | 'unlock-pack' | 'chance-pack' | 'resource-pack' | 'delete-pack'
 
 export interface ShopBuyDetail {
   kind: 'relic' | 'free-card' | 'free-coin-card' | 'reroll' | ShopPackKind
@@ -1737,7 +1737,6 @@ export class GameBoardRenderer {
       'unlock-pack': 'epic',
       'chance-pack': 'rare',
       'resource-pack': 'epic',
-      'enhance-pack': 'unique',
       'delete-pack': 'legendary',
     }
     const rarityClass = RARITY_CLASS_BY_TIER[packRarityClassMap[kind]]
@@ -2059,8 +2058,7 @@ export class GameBoardRenderer {
                 ? [
                     this.renderShopPackCard('chance-pack', '확률팩', '카드 등장률 영구 상승', shop.packCosts?.['chance-pack'] ?? 500, score, 'resource', 0),
                     this.renderShopPackCard('resource-pack', '자원팩', '최대 수치 3택1 증가', shop.packCosts?.['resource-pack'] ?? 500, score, 'resource', 1),
-                    this.renderShopPackCard('enhance-pack', '강화팩', '카드 단일 능력 3택1 강화', shop.packCosts?.['enhance-pack'] ?? 500, score, 'unlock', 2),
-                    this.renderShopPackCard('delete-pack', '삭제팩', '카드 등장 금지 3택1', shop.packCosts?.['delete-pack'] ?? 500, score, 'unlock', 3),
+                    this.renderShopPackCard('delete-pack', '삭제팩', '카드 등장 금지 3택1', shop.packCosts?.['delete-pack'] ?? 500, score, 'unlock', 2),
                   ].join('')
                 : [
                     this.renderShopPackCard('basic-pack', basicPackLabel.title, basicPackLabel.effect, shop.packCosts?.['basic-pack'] ?? shop.basicPackCost, score, 'resource', 0),
@@ -2153,7 +2151,6 @@ export class GameBoardRenderer {
       'unlock-pack': shop.packCosts?.['unlock-pack'] ?? 400,
       'chance-pack': shop.packCosts?.['chance-pack'] ?? 500,
       'resource-pack': shop.packCosts?.['resource-pack'] ?? 500,
-      'enhance-pack': shop.packCosts?.['enhance-pack'] ?? 500,
       'delete-pack': shop.packCosts?.['delete-pack'] ?? 500,
     }
     for (const kind of Object.keys(packMap) as ShopPackKind[]) {
@@ -4688,9 +4685,6 @@ export class GameBoardRenderer {
         noteTile('chance-pack', '카드 등장률 상승', '현재 해금된 카드 중 1장 선택 — 해당 카드의 드롭 가중치를 기본값만큼 영구 추가', 'rare'),
       ])}
       ${packSection('resource-pack', '제단', '최대치 증가 — 최대 체력·손패·불씨 게이지 등 영구 상한을 높인다.', resourceTiles)}
-      ${packSection('enhance-pack', '제단', '단일 강화 — 손패 카드 1장의 단발 또는 트리플 효과를 선택적으로 올린다.', [
-        noteTile('enhance-pack', '카드 단일 강화', '현재 런에서 해금된 카드 중 1장을 선택 강화 (단발/트리플 중 택일)', 'epic'),
-      ])}
       ${packSection('delete-pack', '제단', '삭제 — 드로우 풀에서 손패 카드를 제거해 덱 농도를 높인다.', [
         noteTile('delete-pack', '손패 카드 삭제', '현재 런 드로우 풀에서 특정 카드를 제거해 뽑힐 빈도를 낮춘다', 'rare'),
       ])}

@@ -60,7 +60,6 @@ export const SHOP_PACK_POOLS: Record<ShopPackKind, Omit<ShopPackPoolItem, 'apply
     { id: 'altar-lantern',        illu: 'basic2_007', theme: 'resource', title: '랜턴',        effect: '불빛 획득량 +10%',         rarity: 'rare',      weight: 10 },
     { id: 'altar-one-coin',       illu: 'basic_011',  theme: 'resource', title: '동전 한 닢',  effect: '1$',                       rarity: 'unique',    weight: 1  },
   ],
-  'enhance-pack': [],
   'delete-pack': [],
 }
 
@@ -72,6 +71,5 @@ export const SHOP_PACK_LABELS: Record<ShopPackKind, { title: string; effect: str
   'unlock-pack': { title: '해금팩', effect: '카드 해금' },
   'chance-pack': { title: '확률팩', effect: '카드 등장률 상승' },
   'resource-pack': { title: '자원팩', effect: '최대 수치 증가' },
-  'enhance-pack': { title: '강화팩', effect: '카드 단일 강화' },
   'delete-pack': { title: '삭제팩', effect: '등장 카드 삭제' },
 }
