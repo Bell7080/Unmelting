@@ -341,6 +341,12 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
   word-break: keep-all;
   line-height: 1.45;
 }
+/* 도감 chip 안 desc-dyn: display 토글 방식으로 __d가 레이아웃 너비를 차지하지 않게 한다.
+   inline-grid 방식의 phantom-width 문제를 피하기 위함. */
+.codex-stat-chip .desc-dyn { display: inline; }
+.codex-stat-chip .desc-dyn__d { display: none; }
+body.is-shift-detail .codex-stat-chip .desc-dyn__s { display: none; }
+body.is-shift-detail .codex-stat-chip .desc-dyn__d { display: inline; }
 .codex-tile-grid--terms {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
