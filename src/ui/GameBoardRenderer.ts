@@ -384,23 +384,32 @@ export class GameBoardRenderer {
       if (!stack || this.relicFocusAttached.has(stack)) return
       this.relicFocusAttached.add(stack)
 
+      // RAF 스로틀: mousemove는 프레임보다 빠르게 쌓이므로 대기 중 RAF가 있으면 새 이벤트를 무시한다.
+      // getBoundingClientRect()를 프레임당 1회로 제한해 forced layout 횟수를 줄인다.
+      let rafId = 0
       const applyFocus = (ev: MouseEvent): void => {
-        const cards = Array.from(stack.querySelectorAll<HTMLElement>('.relic-mini-card'))
-        const n = cards.length
-        if (n < 2) return
-        const rect = stack.getBoundingClientRect()
-        const t = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width))
-        // 커서 바로 아래 카드를 pivot으로 고정 — 소수점 focusIdx로 hovered 카드가 흔들리는 걸 방지.
-        const pivotIdx = Math.round(t * (n - 1))
-        cards.forEach((card, i) => {
-          const dist = i - pivotIdx
-          // pivot 카드는 제자리, 나머지는 선형 비례로 펼침.
-          const extra = Math.round(dist * 12)
-          card.style.setProperty('--relic-extra-x', `${extra}px`)
+        if (rafId) return
+        const clientX = ev.clientX
+        rafId = requestAnimationFrame(() => {
+          rafId = 0
+          const cards = Array.from(stack.querySelectorAll<HTMLElement>('.relic-mini-card'))
+          const n = cards.length
+          if (n < 2) return
+          const rect = stack.getBoundingClientRect()
+          const t = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+          // 커서 바로 아래 카드를 pivot으로 고정 — 소수점 focusIdx로 hovered 카드가 흔들리는 걸 방지.
+          const pivotIdx = Math.round(t * (n - 1))
+          cards.forEach((card, i) => {
+            const dist = i - pivotIdx
+            // pivot 카드는 제자리, 나머지는 선형 비례로 펼침.
+            const extra = Math.round(dist * 12)
+            card.style.setProperty('--relic-extra-x', `${extra}px`)
+          })
         })
       }
 
       const clearFocus = (): void => {
+        if (rafId) { cancelAnimationFrame(rafId); rafId = 0 }
         stack.classList.remove('is-focus-tracked')
         Array.from(stack.querySelectorAll<HTMLElement>('.relic-mini-card')).forEach(card => {
           card.style.removeProperty('--relic-extra-x')
@@ -2158,6 +2167,9 @@ export class GameBoardRenderer {
   private jobSelectOverlayElement: HTMLElement | null = null
   /** 창 크기 변화에도 직업 선택 암막이 레일 프레임에 붙어 있도록 유지하는 리스너. */
   private jobSelectResizeListener: (() => void) | null = null
+  /** 커버플로우 캐러셀의 window 이벤트 리스너(pointermove 등)를 일괄 해제하는 핸들러.
+   *  confirmPick 뿐 아니라 clearJobSelectOverlay에서도 호출해 강제 제거 시 리스너 누수를 막는다. */
+  private coverflowTeardown: (() => void) | null = null
 
   /** In-rail job-selection overlay shown once at game start.
    *  Character-select grammar: trial/relic-card aspect (3/4) illustrated cards
@@ -2411,7 +2423,10 @@ export class GameBoardRenderer {
         flow.removeEventListener('click', onCardClick)
         window.removeEventListener('keydown', onKey)
         window.removeEventListener('resize', onResize)
+        this.coverflowTeardown = null
       }
+      // clearJobSelectOverlay가 강제 제거할 때도 window 리스너를 회수할 수 있도록 참조를 저장한다.
+      this.coverflowTeardown = teardown
 
       alignToRail()
       layout()
@@ -2483,8 +2498,10 @@ export class GameBoardRenderer {
     })
   }
 
-  /** 직업 선택 레이어와 레일 정렬 리스너를 한 번에 치워 새 런/리셋 잔상을 막는다. */
+  /** 직업 선택 레이어와 레일 정렬 리스너를 한 번에 치워 새 런/리셋 잔상을 막는다.
+   *  coverflowTeardown도 호출해 강제 제거 시 window.pointermove 등 리스너 누수를 방지한다. */
   private clearJobSelectOverlay(): void {
+    this.coverflowTeardown?.()
     if (this.jobSelectResizeListener) {
       window.removeEventListener('resize', this.jobSelectResizeListener)
       window.removeEventListener('scroll', this.jobSelectResizeListener)
