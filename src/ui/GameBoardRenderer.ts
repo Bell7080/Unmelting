@@ -1379,7 +1379,7 @@ export class GameBoardRenderer {
         ? `필드 선택 적 1장 피해 ${3 + n}<br>화염의 서 피해 3 증가`
         : `필드 선택 적 1장 피해 ${n}<br>화염의 서 피해 1 증가`
     }
-    // 불씨: 수식이 기본 표시(__s). Shift 누름 중엔 합산 수치(__d)만 표시로 전환.
+    // 불씨: 합산 수치가 기본 표시(__s). Shift 누름 중엔 공격력 수식(__d)으로 전환.
     if (id === 'ember') {
       const atk = this.currentGameState?.getCharacter().damage ?? 1
       const emberBonus = merged
@@ -1388,8 +1388,8 @@ export class GameBoardRenderer {
       const total = merged ? 3 * atk + 5 + emberBonus : atk + 1 + emberBonus
       const formula = merged ? `3.0${swordIcon()}+5` : `1.0${swordIcon()}+1`
       const bonusSuffix = emberBonus > 0 ? `+${emberBonus}` : ''
-      // __s = 수식(기본 표시), __d = 합산 수치(Shift 시 표시)
-      return `필드 선택 적 1장 <span class="desc-dyn"><span class="desc-dyn__s">(${formula}${bonusSuffix})피해</span><span class="desc-dyn__d">피해 ${total}</span></span>`
+      // __s = 합산 수치(기본), __d = 수식(Shift 시)
+      return `필드 선택 적 1장 <span class="desc-dyn"><span class="desc-dyn__s">${total}피해</span><span class="desc-dyn__d">(${formula}${bonusSuffix})피해</span></span>`
     }
     const bonus = merged
       ? (enhancements?.tripleBonus[id] ?? 0)
@@ -4500,15 +4500,17 @@ export class GameBoardRenderer {
       const def = HAND_CARD_DEFINITIONS[id]
       const locked = this.lockedCardIds.has(id)
       // chip은 inline-flex이므로 <br>을 · 구분자로 치환하고 HTML 태그를 제거한다.
-      // 불씨는 공격력 비례 수식을 SVG 없는 평문으로 대체해 chip 안에서도 깔끔하게 보이게 한다.
+      // chip 안에서 <br>을 · 로, 나머지 HTML 태그를 제거한다.
       const chipDesc = (desc: string) => desc.replace(/<br>/g, ' · ').replace(/<[^>]*>/g, '')
+      // 불씨는 공격력 비례 수식을 검 아이콘 포함 형식으로 직접 구성한다.
       const emberChipDesc = (merged: boolean): string => {
         const enhancements = this.currentGameState?.enhancements
         const bonus = merged ? (enhancements?.tripleBonus['ember'] ?? 0) : (enhancements?.singleBonus['ember'] ?? 0)
         const bonusSuffix = bonus > 0 ? `+${bonus}` : ''
+        const sword = swordIcon()
         return merged
-          ? `필드 선택 적 1장 (3.0공+5${bonusSuffix})피해`
-          : `필드 선택 적 1장 (1.0공+1${bonusSuffix})피해`
+          ? `필드 선택 적 1장 (3.0${sword}+5${bonusSuffix})피해`
+          : `필드 선택 적 1장 (1.0${sword}+1${bonusSuffix})피해`
       }
       const singleDesc = def.id === 'ember' ? emberChipDesc(false) : chipDesc(this.enhancedHandCardDescription(def.id, false))
       const tripleDesc = def.id === 'ember' ? emberChipDesc(true) : chipDesc(this.enhancedHandCardDescription(def.id, true))

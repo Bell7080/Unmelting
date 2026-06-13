@@ -1248,9 +1248,9 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   grid-area: 1/1;
   transition: opacity 0.18s ease;
 }
-.desc-dyn__d {
-  opacity: 0;
-}
+/* __s(합산 수치)는 명시적 1로 첫 렌더부터 보이게 고정. */
+.desc-dyn__s { opacity: 1; }
+.desc-dyn__d { opacity: 0; }
 body.is-shift-detail .desc-dyn__s { opacity: 0; }
 body.is-shift-detail .desc-dyn__d { opacity: 1; }
 `
