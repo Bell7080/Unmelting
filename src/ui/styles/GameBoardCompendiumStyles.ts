@@ -341,13 +341,13 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
   word-break: keep-all;
   line-height: 1.45;
 }
-/* 도감 chip 안 desc-dyn: display 토글 방식으로 __d가 레이아웃 너비를 차지하지 않게 한다.
-   inline-grid 방식의 phantom-width 문제를 피하기 위함. */
+/* 도감 chip 안 desc-dyn: display 토글 방식으로 __d가 레이아웃 너비를 차지하지 않게 한다. */
 .codex-stat-chip .desc-dyn { display: inline; }
-/* __d의 nowrap을 chip 안에서 해제 — shift 시 공식이 chip 밖으로 흘러넘치는 것을 방지한다. */
-.codex-stat-chip .desc-dyn__d { display: none; white-space: normal; }
+.codex-stat-chip .desc-dyn__d { display: none; }
 body.is-shift-detail .codex-stat-chip .desc-dyn__s { display: none; }
-body.is-shift-detail .codex-stat-chip .desc-dyn__d { display: inline; }
+/* inline-block + nowrap: 공식 전체를 하나의 단위로 취급.
+   줄이 부족하면 괄호 전체가 다음 줄로 내려가고, 공식 중간에서 끊기지 않는다. */
+body.is-shift-detail .codex-stat-chip .desc-dyn__d { display: inline-block; white-space: nowrap; }
 .codex-tile-grid--terms {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }

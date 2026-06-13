@@ -369,16 +369,20 @@ export class GameBoardRenderer {
     document.body.classList.remove('is-shift-detail')
 
     // Shift 키를 누르는 동안만 수식 표시, 놓으면 합산 수치로 복귀.
-    // window blur 시에도 리셋 — 포커스 이탈로 keyup이 누락되면 클래스가 잔류하는 문제 방지.
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Shift') document.body.classList.add('is-shift-detail')
     })
     document.addEventListener('keyup', (e) => {
       if (e.key === 'Shift') document.body.classList.remove('is-shift-detail')
     })
+    // blur·mousemove 이중 가드: 포커스 이탈이나 keyup 누락으로 클래스가 잔류할 때
+    // 마우스 이동으로 즉시 정정해 첫 hover부터 수치가 정상 표시된다.
     window.addEventListener('blur', () => {
       document.body.classList.remove('is-shift-detail')
     })
+    this.boardElement.addEventListener('mousemove', (e: MouseEvent) => {
+      if (!e.shiftKey) document.body.classList.remove('is-shift-detail')
+    }, { passive: true })
   }
 
   // WeakSet 키: DOM 리빌드 때마다 이전 stack 요소가 GC되므로 별도 cleanup 불필요.
