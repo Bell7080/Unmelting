@@ -1528,12 +1528,16 @@ export class GameBoardRenderer {
             <span class="hand-recipe-preview-kicker">발동 조합</span>
             ${readyRecipes
               .map(
-                (recipe) => `
+                (recipe) => {
+                  const recipeDef = RECIPES.find((r) => r.id === recipe.id)
+                  const flavorHtml = recipeDef ? this.recipeFlavorHtml(recipeDef) : recipe.flavor
+                  return `
                   <span class="hand-recipe-preview-row">
                     <strong>${recipe.name}</strong>
-                    <em>${recipe.flavor}</em>
+                    <em>${flavorHtml}</em>
                   </span>
                 `
+                }
               )
               .join('')}
           </aside>`
