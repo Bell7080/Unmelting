@@ -149,6 +149,7 @@ import relic034Url from '../assets/sprites/relics_034.webp'
 import relic035Url from '../assets/sprites/relics_035.webp'
 import relic036Url from '../assets/sprites/relics_036.webp'
 import relic037Url from '../assets/sprites/relics_037.webp'
+import relic038Url from '../assets/sprites/relics_038.webp'
 import pack001Url from '../assets/sprites/pack_001.webp'
 import pack002Url from '../assets/sprites/pack_002.webp'
 import pack003Url from '../assets/sprites/pack_003.webp'
@@ -272,8 +273,7 @@ export const SpriteUrls = {
     sanitizer: relic035Url,
     'wax-harmony': relic036Url,
     'trap-master': relic037Url,
-    // 악마 인형 — 전용 일러스트 연동 전 임시 폴백.
-    'demon-doll': relic037Url,
+    'demon-doll': relic038Url,
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,
