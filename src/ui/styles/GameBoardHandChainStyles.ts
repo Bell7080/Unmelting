@@ -1250,7 +1250,8 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 }
 /* __s(합산 수치)는 명시적 1로 첫 렌더부터 보이게 고정. */
 .desc-dyn__s { opacity: 1; }
-.desc-dyn__d { opacity: 0; }
+/* __d(공식)는 기본 숨김. 폰트 소형화+nowrap으로 overflow 방지. */
+.desc-dyn__d { opacity: 0; font-size: 0.8em; white-space: nowrap; }
 body.is-shift-detail .desc-dyn__s { opacity: 0; }
 body.is-shift-detail .desc-dyn__d { opacity: 1; }
 `

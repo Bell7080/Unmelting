@@ -4499,21 +4499,15 @@ export class GameBoardRenderer {
     const tiles = HAND_CARD_IDS.filter((id) => HAND_CARD_DEFINITIONS[id].dropSource !== 'boss').map((id) => {
       const def = HAND_CARD_DEFINITIONS[id]
       const locked = this.lockedCardIds.has(id)
-      // chip은 inline-flex이므로 <br>을 · 구분자로 치환하고 HTML 태그를 제거한다.
-      // chip 안에서 <br>을 · 로, 나머지 HTML 태그를 제거한다.
+      // 불씨는 desc-dyn HTML을 그대로 chip에 넣어 shift 토글이 도감에서도 동작하게 한다.
+      // 나머지 카드는 <br>→· 치환 후 HTML 태그를 제거한 평문을 사용한다.
       const chipDesc = (desc: string) => desc.replace(/<br>/g, ' · ').replace(/<[^>]*>/g, '')
-      // 불씨는 공격력 비례 수식을 검 아이콘 포함 형식으로 직접 구성한다.
-      const emberChipDesc = (merged: boolean): string => {
-        const enhancements = this.currentGameState?.enhancements
-        const bonus = merged ? (enhancements?.tripleBonus['ember'] ?? 0) : (enhancements?.singleBonus['ember'] ?? 0)
-        const bonusSuffix = bonus > 0 ? `+${bonus}` : ''
-        const sword = swordIcon()
-        return merged
-          ? `필드 선택 적 1장 (3.0${sword}+5${bonusSuffix})피해`
-          : `필드 선택 적 1장 (1.0${sword}+1${bonusSuffix})피해`
-      }
-      const singleDesc = def.id === 'ember' ? emberChipDesc(false) : chipDesc(this.enhancedHandCardDescription(def.id, false))
-      const tripleDesc = def.id === 'ember' ? emberChipDesc(true) : chipDesc(this.enhancedHandCardDescription(def.id, true))
+      const singleDesc = def.id === 'ember'
+        ? this.enhancedHandCardDescription(def.id, false)
+        : chipDesc(this.enhancedHandCardDescription(def.id, false))
+      const tripleDesc = def.id === 'ember'
+        ? this.enhancedHandCardDescription(def.id, true)
+        : chipDesc(this.enhancedHandCardDescription(def.id, true))
       return this.codexTile({
         art: { kind: 'sprite', url: spriteForHandCard(def.id) },
         name: locked ? '???' : def.name,
