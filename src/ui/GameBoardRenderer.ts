@@ -1379,7 +1379,7 @@ export class GameBoardRenderer {
         ? `필드 선택 적 1장 피해 ${3 + n}<br>화염의 서 피해 3 증가`
         : `필드 선택 적 1장 피해 ${n}<br>화염의 서 피해 1 증가`
     }
-    // 불씨: 플레이어 공격력 비례(단일 1.0공+1 / 트리플 3.0공+5). Shift로 수식 자세히보기 전환.
+    // 불씨: 수식이 기본 표시(__s). Shift 누름 중엔 합산 수치(__d)만 표시로 전환.
     if (id === 'ember') {
       const atk = this.currentGameState?.getCharacter().damage ?? 1
       const emberBonus = merged
@@ -1388,7 +1388,8 @@ export class GameBoardRenderer {
       const total = merged ? 3 * atk + 5 + emberBonus : atk + 1 + emberBonus
       const formula = merged ? `3.0${swordIcon()}+5` : `1.0${swordIcon()}+1`
       const bonusSuffix = emberBonus > 0 ? `+${emberBonus}` : ''
-      return `필드 선택 적 1장 <span class="desc-dyn"><span class="desc-dyn__s">피해 ${total}</span><span class="desc-dyn__d">(${formula}${bonusSuffix})피해</span></span>`
+      // __s = 수식(기본 표시), __d = 합산 수치(Shift 시 표시)
+      return `필드 선택 적 1장 <span class="desc-dyn"><span class="desc-dyn__s">(${formula}${bonusSuffix})피해</span><span class="desc-dyn__d">피해 ${total}</span></span>`
     }
     const bonus = merged
       ? (enhancements?.tripleBonus[id] ?? 0)
@@ -1488,6 +1489,8 @@ export class GameBoardRenderer {
         .join(' ')
       // 강화팩 보너스를 반영한 동적 설명을 사용해 손패 미리보기에서 강화 수치가 즉시 보이도록 한다.
       const description = this.enhancedHandCardDescription(card.defId, card.merged === true)
+      // aria-label에는 HTML/SVG 태그 없이 텍스트만 삽입한다.
+      const ariaDesc = description.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
       const handArt = spriteForHandCard(card.defId)
       // Triple cards keep two lightweight visual copies in the DOM. CSS only
       // reveals them during the first merged-card entry so players see three
@@ -1506,7 +1509,7 @@ export class GameBoardRenderer {
             ${recipeReadyTitle ? `title="${recipeReadyTitle}"` : ''}>
           <button type="button" data-item-index="${i}"
                   style="--hand-card-art: url('${handArt}');"
-                  aria-label="${def.name}: ${description}${recipeReadyTitle ? ` · ${recipeReadyTitle}` : ''}">
+                  aria-label="${def.name}: ${ariaDesc}${recipeReadyTitle ? ` · ${recipeReadyTitle}` : ''}">
             ${tripleMergeCopies}
             ${demonReady ? `<span class="recipe-ready-mark recipe-ready-mark--demon" aria-hidden="true">✦</span>` : ''}
             ${hasOtherRecipes ? `<span class="recipe-ready-mark${demonReady ? ' is-has-demon' : ''}" aria-hidden="true">✦</span>` : ''}
@@ -4496,10 +4499,19 @@ export class GameBoardRenderer {
     const tiles = HAND_CARD_IDS.filter((id) => HAND_CARD_DEFINITIONS[id].dropSource !== 'boss').map((id) => {
       const def = HAND_CARD_DEFINITIONS[id]
       const locked = this.lockedCardIds.has(id)
-      // chip은 inline-flex이므로 <br>을 · 구분자로 치환. 텍스트 내용은 변경하지 않는다.
-      const chipDesc = (desc: string) => desc.replace(/<br>/g, ' · ')
-      const singleDesc = chipDesc(this.enhancedHandCardDescription(def.id, false))
-      const tripleDesc = chipDesc(this.enhancedHandCardDescription(def.id, true))
+      // chip은 inline-flex이므로 <br>을 · 구분자로 치환하고 HTML 태그를 제거한다.
+      // 불씨는 공격력 비례 수식을 SVG 없는 평문으로 대체해 chip 안에서도 깔끔하게 보이게 한다.
+      const chipDesc = (desc: string) => desc.replace(/<br>/g, ' · ').replace(/<[^>]*>/g, '')
+      const emberChipDesc = (merged: boolean): string => {
+        const enhancements = this.currentGameState?.enhancements
+        const bonus = merged ? (enhancements?.tripleBonus['ember'] ?? 0) : (enhancements?.singleBonus['ember'] ?? 0)
+        const bonusSuffix = bonus > 0 ? `+${bonus}` : ''
+        return merged
+          ? `필드 선택 적 1장 (3.0공+5${bonusSuffix})피해`
+          : `필드 선택 적 1장 (1.0공+1${bonusSuffix})피해`
+      }
+      const singleDesc = def.id === 'ember' ? emberChipDesc(false) : chipDesc(this.enhancedHandCardDescription(def.id, false))
+      const tripleDesc = def.id === 'ember' ? emberChipDesc(true) : chipDesc(this.enhancedHandCardDescription(def.id, true))
       return this.codexTile({
         art: { kind: 'sprite', url: spriteForHandCard(def.id) },
         name: locked ? '???' : def.name,
