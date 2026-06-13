@@ -27,7 +27,7 @@ import type {
   FlowerWilt,
   TreasureChange,
 } from '@core/TurnManager'
-import { spriteForCard, spriteForHandCard, spriteForRelic, spriteForBasicPackItem, spriteForUpgradePackItem, spriteForJob, spriteForEvent, SpriteUrls, recipeSprite001 } from '@ui/Sprites'
+import { spriteForCard, spriteForHandCard, spriteForRelic, spriteForBasicPackItem, spriteForJob, spriteForEvent, SpriteUrls, recipeSprite001 } from '@ui/Sprites'
 import type { EventDefinition } from '@data/Events'
 import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandCategory, HandEffectTargeting } from '@entities/HandCard'
@@ -66,7 +66,7 @@ export interface ItemActionDetail {
   shiftKey?: boolean
 }
 
-export type ShopPackKind = 'basic-pack' | 'upgrade-pack' | 'unlock-pack' | 'blessing-pack' | 'resource-pack' | 'enhance-pack' | 'delete-pack'
+export type ShopPackKind = 'basic-pack' | 'recipe-pack' | 'unlock-pack' | 'chance-pack' | 'resource-pack' | 'enhance-pack' | 'delete-pack'
 
 export interface ShopBuyDetail {
   kind: 'relic' | 'free-card' | 'free-coin-card' | 'reroll' | ShopPackKind
@@ -127,8 +127,6 @@ export interface ShopStateView {
   /** Current coin balance — used to compute reroll-button affordability. */
   coins: number
   basicPackCost: number
-  upgradePackCost: number
-  unlockPackCost: number
   /** 제단 4팩처럼 기본 3팩과 매핑이 다른 경우에도 각 팩 가격을 독립 갱신한다. */
   packCosts?: Partial<Record<ShopPackKind, number>>
 }
@@ -1735,9 +1733,9 @@ export class GameBoardRenderer {
     // one rarity source instead of each view hardcoding different glow levels.
     const packRarityClassMap: Record<ShopPackKind, CardRarity> = {
       'basic-pack': 'common',
-      'upgrade-pack': 'rare',
+      'recipe-pack': 'epic',
       'unlock-pack': 'epic',
-      'blessing-pack': 'epic',
+      'chance-pack': 'rare',
       'resource-pack': 'epic',
       'enhance-pack': 'unique',
       'delete-pack': 'legendary',
@@ -2023,7 +2021,7 @@ export class GameBoardRenderer {
         : '<div class="shop-empty">오늘의 잡화는 모두 팔렸어.</div>'
     // Shared pack labels/effects avoid one-off hardcoded strings per view.
     const basicPackLabel = SHOP_PACK_LABELS['basic-pack']
-    const upgradePackLabel = SHOP_PACK_LABELS['upgrade-pack']
+    const recipePackLabel = SHOP_PACK_LABELS['recipe-pack']
     const unlockPackLabel = SHOP_PACK_LABELS['unlock-pack']
     const freeCardLabel = shop.mode === 'altar' ? '제단의 무료 축복' : '무료 카드'
     // New layered layout:
@@ -2059,15 +2057,15 @@ export class GameBoardRenderer {
             <div class="shop-layer shop-pack-layer">
               ${shop.mode === 'altar'
                 ? [
-                    // 축복팩(blessing-pack)은 미구현이라 일단 비활성화한다. 재활성화 시 0번 슬롯으로 복구.
-                    this.renderShopPackCard('resource-pack', '자원팩', '최대 수치 3택1 증가', shop.packCosts?.['resource-pack'] ?? shop.upgradePackCost, score, 'resource', 0),
-                    this.renderShopPackCard('enhance-pack', '강화팩', '카드 단일 능력 3택1 강화', shop.packCosts?.['enhance-pack'] ?? shop.unlockPackCost, score, 'unlock', 1),
-                    this.renderShopPackCard('delete-pack', '삭제팩', '카드 등장 금지 3택1', shop.packCosts?.['delete-pack'] ?? shop.unlockPackCost, score, 'unlock', 2),
+                    this.renderShopPackCard('chance-pack', '확률팩', '카드 등장률 영구 상승', shop.packCosts?.['chance-pack'] ?? 500, score, 'resource', 0),
+                    this.renderShopPackCard('resource-pack', '자원팩', '최대 수치 3택1 증가', shop.packCosts?.['resource-pack'] ?? 500, score, 'resource', 1),
+                    this.renderShopPackCard('enhance-pack', '강화팩', '카드 단일 능력 3택1 강화', shop.packCosts?.['enhance-pack'] ?? 500, score, 'unlock', 2),
+                    this.renderShopPackCard('delete-pack', '삭제팩', '카드 등장 금지 3택1', shop.packCosts?.['delete-pack'] ?? 500, score, 'unlock', 3),
                   ].join('')
                 : [
                     this.renderShopPackCard('basic-pack', basicPackLabel.title, basicPackLabel.effect, shop.packCosts?.['basic-pack'] ?? shop.basicPackCost, score, 'resource', 0),
-                    this.renderShopPackCard('upgrade-pack', upgradePackLabel.title, upgradePackLabel.effect, shop.packCosts?.['upgrade-pack'] ?? shop.upgradePackCost, score, 'upgrade', 1),
-                    this.renderShopPackCard('unlock-pack', unlockPackLabel.title, unlockPackLabel.effect, shop.packCosts?.['unlock-pack'] ?? shop.unlockPackCost, score, 'unlock', 2),
+                    this.renderShopPackCard('recipe-pack', recipePackLabel.title, recipePackLabel.effect, shop.packCosts?.['recipe-pack'] ?? 400, score, 'upgrade', 1),
+                    this.renderShopPackCard('unlock-pack', unlockPackLabel.title, unlockPackLabel.effect, shop.packCosts?.['unlock-pack'] ?? 400, score, 'unlock', 2),
                   ].join('')}
             </div>
           </section>
@@ -2151,12 +2149,12 @@ export class GameBoardRenderer {
     // Pack tiles (cost + affordance based on score).
     const packMap: Record<ShopPackKind, number> = {
       'basic-pack': shop.packCosts?.['basic-pack'] ?? shop.basicPackCost,
-      'upgrade-pack': shop.packCosts?.['upgrade-pack'] ?? shop.upgradePackCost,
-      'unlock-pack': shop.packCosts?.['unlock-pack'] ?? shop.unlockPackCost,
-      'blessing-pack': shop.packCosts?.['blessing-pack'] ?? shop.basicPackCost,
-      'resource-pack': shop.packCosts?.['resource-pack'] ?? shop.upgradePackCost,
-      'enhance-pack': shop.packCosts?.['enhance-pack'] ?? shop.unlockPackCost,
-      'delete-pack': shop.packCosts?.['delete-pack'] ?? shop.unlockPackCost,
+      'recipe-pack': shop.packCosts?.['recipe-pack'] ?? 400,
+      'unlock-pack': shop.packCosts?.['unlock-pack'] ?? 400,
+      'chance-pack': shop.packCosts?.['chance-pack'] ?? 500,
+      'resource-pack': shop.packCosts?.['resource-pack'] ?? 500,
+      'enhance-pack': shop.packCosts?.['enhance-pack'] ?? 500,
+      'delete-pack': shop.packCosts?.['delete-pack'] ?? 500,
     }
     for (const kind of Object.keys(packMap) as ShopPackKind[]) {
       const tile = shell.querySelector<HTMLElement>(
@@ -4621,7 +4619,6 @@ export class GameBoardRenderer {
     ): string => {
       const itemArt =
         (item.illu ? spriteForBasicPackItem(item.illu) : undefined) ??
-        spriteForUpgradePackItem((item as { id?: string }).id ?? '') ??
         SpriteUrls.packs[packKind]
       return this.codexTile({
         art: { kind: 'sprite', url: itemArt },
@@ -4675,16 +4672,20 @@ export class GameBoardRenderer {
     }
 
     const basicTiles = SHOP_PACK_POOLS['basic-pack'].map((i) => itemTile(i, 'basic-pack'))
-    const upgradeTiles = SHOP_PACK_POOLS['upgrade-pack'].map((i) => itemTile(i, 'upgrade-pack'))
     const resourceTiles = SHOP_PACK_POOLS['resource-pack'].map((i) => itemTile(i, 'resource-pack'))
 
     return `
       <h3 class="compendium-section">카드팩 (Packs)</h3>
       <p class="compendium-section-blurb">10·20턴 상점과 30턴 제단에서 구매하는 팩. 방문해야 내용이 공개된다.</p>
       ${packSection('basic-pack', '상점', '즉시 효과 — 체력·불씨·콤보 게이지·방패·화폐를 즉시 보충한다.', basicTiles)}
-      ${packSection('upgrade-pack', '상점', '누적 강화 — 트리플 발동 효과와 레시피 보상을 런 전체에서 +1한다.', upgradeTiles)}
-      ${packSection('unlock-pack', '상점', '해금 — 손패 카드를 새로 해금해 드로우 풀과 레시피 후보를 확장한다.', [
-        noteTile('unlock-pack', '손패 카드 해금', '해금되지 않은 손패 카드 중 가중치 기반 1장을 해금 (런 보유 카드에 따라 변동)', 'rare'),
+      ${packSection('recipe-pack', '상점', '레시피 해금 — runLocked 레시피를 해금해 조합 발동 범위를 확장한다.', [
+        noteTile('recipe-pack', '레시피 해금', '해금되지 않은 조합 레시피 중 재료가 갖춰진 항목을 해금 (런 보유 카드에 따라 변동)', 'rare'),
+      ])}
+      ${packSection('unlock-pack', '상점', '해금 — 손패 카드를 새로 해금해 드로우 풀을 확장한다.', [
+        noteTile('unlock-pack', '손패 카드 해금', '해금되지 않은 손패 카드 중 1장을 해금 (런 보유 카드에 따라 변동)', 'rare'),
+      ])}
+      ${packSection('chance-pack', '제단', '확률 상승 — 특정 손패 카드의 드롭 가중치를 영구적으로 높인다.', [
+        noteTile('chance-pack', '카드 등장률 상승', '현재 해금된 카드 중 1장 선택 — 해당 카드의 드롭 가중치를 기본값만큼 영구 추가', 'rare'),
       ])}
       ${packSection('resource-pack', '제단', '최대치 증가 — 최대 체력·손패·불씨 게이지 등 영구 상한을 높인다.', resourceTiles)}
       ${packSection('enhance-pack', '제단', '단일 강화 — 손패 카드 1장의 단발 또는 트리플 효과를 선택적으로 올린다.', [

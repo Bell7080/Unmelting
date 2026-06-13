@@ -56,12 +56,11 @@ import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopP
 import { BASIC_PACK_POOL } from '@data/BasicPackPool'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { JOBS } from '@data/Jobs'
-import { buildUnlockedUpgradePool } from '@systems/UpgradePackPool'
 import { buildUnlockedEnhancePool } from '@systems/EnhancePackPool'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
-import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, spriteForUpgradePackItem, recipeSprite001 } from '@ui/Sprites'
+import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
 import { SceneManager } from '@ui/scenes/SceneManager'
 import { LobbyScene } from '@ui/scenes/LobbyScene'
@@ -167,7 +166,7 @@ let currentShopOffers: ShopOfferView[] = []
 /** 제단(30턴) 무료 유물은 1회 단일 픽이다. 한 번 고르면 다시 못 고르게 잠근다. */
 let altarRelicPicked = false
 let shopRerollCount = 0
-const SHOP_PACK_KINDS: readonly ShopPackKind[] = ['basic-pack', 'upgrade-pack', 'unlock-pack', 'blessing-pack', 'resource-pack', 'enhance-pack', 'delete-pack']
+const SHOP_PACK_KINDS: readonly ShopPackKind[] = ['basic-pack', 'recipe-pack', 'unlock-pack', 'chance-pack', 'resource-pack', 'enhance-pack', 'delete-pack']
 /** 방문 내 카드팩별 구매 횟수. 가격은 각 팩의 초기 가격을 매 구매마다 한 번 더 얹는다. */
 let shopPackBuys: Record<ShopPackKind, number> = Object.fromEntries(
   SHOP_PACK_KINDS.map((kind) => [kind, 0])
@@ -306,6 +305,8 @@ const metaUnlockedCardIds = HAND_CARD_IDS.filter((id) => !getHandCardDef(id).run
 const runCardPool = new RunCardPool(HAND_CARD_IDS, metaUnlockedCardIds)
 // 잠긴 카드가 드롭되지 않도록 초기 허용 풀을 동기화한다.
 DropSystem.setAllowedPool(runCardPool.snapshot().unlocked)
+// 확률팩 가중치도 초기화 시점에 동기화한다(저장된 런 재개 대비).
+DropSystem.setAdditionalWeights(gameState.enhancements.additionalDropWeights)
 boardRenderer.setLockedCardIds([...runCardPool.snapshot().locked, ...runCardPool.snapshot().banned])
 // runLocked 레시피는 런 시작 시 전부 잠금 — 해금팩으로만 해제 가능하다.
 boardRenderer.setLockedRecipeIds(RECIPES.filter((r) => r.runLocked).map((r) => r.id))
@@ -1069,7 +1070,7 @@ function baseShopPackCost(kind: ShopPackKind): number {
   if (currentShopMode === 'altar') return altarBasePackCost()
   switch (kind) {
     case 'basic-pack': return 120
-    case 'upgrade-pack': return 250
+    case 'recipe-pack': return 400
     case 'unlock-pack': return 400
     // 제단 전용 팩이 일반 상점에서 호출되면 안전한 기본값으로 막는다.
     default: return altarBasePackCost()
@@ -1097,9 +1098,6 @@ function buildShopStateView(): ShopStateView {
     rerollCost: 1 + shopRerollCount,
     coins,
     basicPackCost: currentShopPackCost('basic-pack'),
-    upgradePackCost: currentShopPackCost('upgrade-pack'),
-    unlockPackCost: currentShopPackCost('unlock-pack'),
-    // 렌더러가 4종 제단팩과 3종 일반팩을 모두 독립 가격으로 표시하도록 전체 맵을 넘긴다.
     packCosts: Object.fromEntries(
       SHOP_PACK_KINDS.map((kind) => [kind, currentShopPackCost(kind)])
     ) as Partial<Record<ShopPackKind, number>>,
@@ -1272,8 +1270,8 @@ async function openShopOverlay(mode: 'shop' | 'altar'): Promise<void> {
   clearChainTimeline()
   // 상점/제단 방문 시 해당 모드의 팩 종류를 발견 처리한다.
   const packsByMode: Record<'shop' | 'altar', string[]> = {
-    shop:  ['basic-pack', 'upgrade-pack', 'unlock-pack'],
-    altar: ['resource-pack', 'enhance-pack', 'delete-pack'],
+    shop:  ['basic-pack', 'recipe-pack', 'unlock-pack'],
+    altar: ['resource-pack', 'enhance-pack', 'delete-pack', 'chance-pack'],
   }
   for (const k of packsByMode[mode]) gameState.encounteredPackKinds.add(k)
   recordNotice(mode === 'altar' ? '레일이 멈추고 제단이 열렸다' : '레일이 멈추고 상점이 열렸다', 'info')
@@ -1372,15 +1370,51 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
       3
     )
   }
-  if (kind === 'blessing-pack') {
-    return [1,2,3].map((n) => ({
-      id: `blessing-${n}`,
-      theme: 'upgrade' as const,
-      title: `선택지 ${n}`,
-      effect: '미정',
-      rarity: 'epic' as const,
-      apply: () => undefined,
+  if (kind === 'recipe-pack') {
+    // 조합팩 — runLocked 레시피 중 재료가 이미 해금된 항목만 제시한다.
+    const { unlocked } = runCardPool.snapshot()
+    const lockedRecipes = RECIPES.filter((r) =>
+      r.runLocked &&
+      !r.eventOnly &&
+      !gameState.unlockedRecipeIds.has(r.id) &&
+      Object.keys(r.ingredients).every((id) => unlocked.includes(id as HandCardId))
+    )
+    if (lockedRecipes.length === 0) return []
+    return sampleWithoutReplacement(lockedRecipes, Math.min(3, lockedRecipes.length)).map((r) => ({
+      id: `recipe-${r.id}`,
+      theme: 'unlock' as const,
+      title: r.name,
+      effect: r.flavor,
+      rarity: 'rare' as const,
+      spriteUrl: recipeSprite001 ?? SpriteUrls.packs['recipe-pack'],
+      typeLabel: '레시피',
+      recipeNote: buildRecipeNote(r.ingredients),
+      apply: () => { gameState.unlockedRecipeIds.add(r.id) },
     }))
+  }
+  if (kind === 'chance-pack') {
+    // 확률팩 — 해금된 카드 중 3장을 제시하고, 선택 시 dropWeight를 영구 추가한다.
+    const { unlocked } = runCardPool.snapshot()
+    if (unlocked.length === 0) return []
+    const drawIds = sampleWithoutReplacement(unlocked, Math.min(3, unlocked.length))
+    return drawIds.map((id) => {
+      const def = getHandCardDef(id)
+      const baseWeight = def.dropWeight ?? 1
+      const currentBoost = gameState.enhancements.additionalDropWeights[id] ?? 0
+      return {
+        id: `chance-${id}`,
+        theme: 'unlock' as const,
+        title: def.name,
+        effect: `등장 가중치 +${baseWeight} (현재 ${baseWeight + currentBoost} → ${baseWeight * 2 + currentBoost})`,
+        rarity: HAND_CARD_RARITY[id],
+        spriteUrl: spriteForHandCard(id),
+        typeLabel: '확률',
+        apply: () => {
+          gameState.enhancements.additionalDropWeights[id] = currentBoost + baseWeight
+          DropSystem.setAdditionalWeights(gameState.enhancements.additionalDropWeights)
+        },
+      }
+    })
   }
   if (kind === 'resource-pack') {
     // 제단 자원팩 — 30층마다 고정 가격으로 열리는 영구 보정 풀이며 항목별 weight를 따른다.
@@ -1417,53 +1451,28 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     }))
   }
   if (kind === 'unlock-pack') {
-    // 풀 = 런에서 잠긴 카드(runLocked) + 삭제팩으로 밴된 카드 + runLocked 레시피.
-    // 단, 보스 전용 찌꺼기 카드(탐욕의 동전 등)는 해금팩으로 얻을 수 없게 제외한다.
-    const { locked, banned, unlocked } = runCardPool.snapshot()
+    // 해금팩 — 런에서 잠긴 카드(runLocked) + 삭제팩으로 밴된 카드를 해금한다.
+    // 보스 전용 찌꺼기 카드(탐욕의 동전 등)는 제외한다.
+    const { locked, banned } = runCardPool.snapshot()
     const cardPool = [...locked, ...banned].filter((id) => getHandCardDef(id).dropSource !== 'boss')
-    // 조합식 해금은 재료 손패가 모두 이미 해금된 경우에만 제시한다
-    const lockedRecipes = RECIPES.filter((r) =>
-      r.runLocked &&
-      !r.eventOnly && // 이벤트 전용 레시피는 카드팩에서 제외
-      !gameState.unlockedRecipeIds.has(r.id) &&
-      Object.keys(r.ingredients).every((id) => unlocked.includes(id as HandCardId))
-    )
-
-    type UnlockItem = { id: string; theme: 'unlock'; title: string; effect: string; rarity: (typeof HAND_CARD_RARITY)[keyof typeof HAND_CARD_RARITY]; spriteUrl: string; typeLabel: string; recipeNote?: string; apply: () => void }
-    const pool: UnlockItem[] = [
-      ...cardPool.map((id) => {
-        const def = getHandCardDef(id)
-        const isBanned = banned.includes(id)
-        return {
-          id: `unlock-${id}`,
-          theme: 'unlock' as const,
-          title: def.name,
-          effect: isBanned ? `[재해금] ${def.description}` : def.description,
-          rarity: HAND_CARD_RARITY[id],
-          spriteUrl: spriteForHandCard(id),
-          typeLabel: '손패',
-          apply: () => {
-            if (isBanned) runCardPool.unban(id)
-            else runCardPool.unlockForRun(id)
-          },
-        }
-      }),
-      ...lockedRecipes.map((r) => {
-        return {
-          id: `unlock-recipe-${r.id}`,
-          theme: 'unlock' as const,
-          title: r.name,
-          effect: r.flavor,
-          rarity: 'rare' as const,
-          spriteUrl: recipeSprite001 ?? SpriteUrls.packs['unlock-pack'],
-          typeLabel: '레시피',
-          recipeNote: buildRecipeNote(r.ingredients),
-          apply: () => { gameState.unlockedRecipeIds.add(r.id) },
-        }
-      }),
-    ]
-    if (pool.length === 0) return []
-    return sampleWithoutReplacement(pool, Math.min(3, pool.length))
+    if (cardPool.length === 0) return []
+    return sampleWithoutReplacement(cardPool, Math.min(3, cardPool.length)).map((id) => {
+      const def = getHandCardDef(id)
+      const isBanned = banned.includes(id)
+      return {
+        id: `unlock-${id}`,
+        theme: 'unlock' as const,
+        title: def.name,
+        effect: isBanned ? `[재해금] ${def.description}` : def.description,
+        rarity: HAND_CARD_RARITY[id],
+        spriteUrl: spriteForHandCard(id),
+        typeLabel: '손패',
+        apply: () => {
+          if (isBanned) runCardPool.unban(id)
+          else runCardPool.unlockForRun(id)
+        },
+      }
+    })
   }
   if (kind === 'delete-pack') {
     // 풀 = 현재 해금된 카드 (런 내 활성 풀)
@@ -1484,69 +1493,6 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
       }
     })
   }
-  // 강화팩: 현재 해금된 카드/조합식 항목만 포함(systems/UpgradePackPool.ts).
-  //   일러스트는 새 스프라이트 없이 기존 손패 아트를 재사용한다(triple→카드, recipe→첫 재료).
-  const pool = buildUnlockedUpgradePool(runCardPool.snapshot().unlocked, gameState.unlockedRecipeIds).map((entry) => ({
-    ...entry,
-    spriteUrl: spriteForUpgradePackItem(entry.id),
-    typeLabel: entry.id.startsWith('triple-') ? '트리플' : '레시피',
-    recipeNote: (() => {
-      if (entry.id.startsWith('triple-')) return undefined
-      const r = RECIPES.find((rc) => rc.id === entry.id.slice('recipe-'.length))
-      return r ? buildRecipeNote(r.ingredients) : undefined
-    })(),
-    apply: () => {
-      switch (entry.id) {
-        // 강화팩 common — 트리플 보너스
-        // 트리플 보너스 — 기본 6장
-        case 'triple-wax-drop':   gameState.enhancements.tripleBonus['wax-drop'] = (gameState.enhancements.tripleBonus['wax-drop'] ?? 0) + 1; return
-        case 'triple-candle':     gameState.enhancements.tripleBonus['candle']   = (gameState.enhancements.tripleBonus['candle']   ?? 0) + 1; return
-        case 'triple-ember':      gameState.enhancements.tripleBonus['ember']    = (gameState.enhancements.tripleBonus['ember']    ?? 0) + 1; return
-        case 'triple-match':      gameState.enhancements.tripleBonus['match']    = (gameState.enhancements.tripleBonus['match']    ?? 0) + 1; return
-        case 'triple-coin':       gameState.enhancements.tripleBonus['coin']     = (gameState.enhancements.tripleBonus['coin']     ?? 0) + 1; return
-        case 'triple-card':       gameState.enhancements.tripleBonus['card']     = (gameState.enhancements.tripleBonus['card']     ?? 0) + 1; return
-        // 트리플 보너스 — 신규 카드
-        case 'triple-wax':              gameState.enhancements.tripleBonus['wax']              = (gameState.enhancements.tripleBonus['wax']              ?? 0) + 1; return
-        case 'triple-sacrifice-candle': gameState.enhancements.tripleBonus['sacrifice-candle'] = (gameState.enhancements.tripleBonus['sacrifice-candle'] ?? 0) + 1; return
-        case 'triple-ritual-candle':    gameState.enhancements.tripleBonus['ritual-candle']    = (gameState.enhancements.tripleBonus['ritual-candle']    ?? 0) + 1; return
-        case 'triple-firework':         gameState.enhancements.tripleBonus['firework']         = (gameState.enhancements.tripleBonus['firework']         ?? 0) + 1; return
-        case 'triple-sacrifice-shield': gameState.enhancements.tripleBonus['sacrifice-shield'] = (gameState.enhancements.tripleBonus['sacrifice-shield'] ?? 0) + 1; return
-        case 'triple-chandelier':       gameState.enhancements.tripleBonus['chandelier']       = (gameState.enhancements.tripleBonus['chandelier']       ?? 0) + 1; return
-        case 'triple-fire-arrow':       gameState.enhancements.tripleBonus['fire-arrow']       = (gameState.enhancements.tripleBonus['fire-arrow']       ?? 0) + 1; return
-        case 'triple-book-of-flames':   gameState.enhancements.tripleBonus['book-of-flames']   = (gameState.enhancements.tripleBonus['book-of-flames']   ?? 0) + 1; return
-        case 'triple-shield-bash':      gameState.enhancements.tripleBonus['shield-bash']      = (gameState.enhancements.tripleBonus['shield-bash']      ?? 0) + 1; return
-        case 'triple-teapot':           gameState.enhancements.tripleBonus['teapot']           = (gameState.enhancements.tripleBonus['teapot']           ?? 0) + 1; return
-        case 'triple-teacup':           gameState.enhancements.tripleBonus['teacup']           = (gameState.enhancements.tripleBonus['teacup']           ?? 0) + 1; return
-        case 'triple-bonfire':          gameState.enhancements.tripleBonus['bonfire']          = (gameState.enhancements.tripleBonus['bonfire']          ?? 0) + 1; return
-        case 'triple-shackles':         gameState.enhancements.tripleBonus['shackles']         = (gameState.enhancements.tripleBonus['shackles']         ?? 0) + 1; return
-        // 레시피 보너스 — 기본
-        case 'recipe-ignite':         gameState.enhancements.recipeBonus['ignite']       = (gameState.enhancements.recipeBonus['ignite']       ?? 0) + 1; return
-        case 'recipe-hot':            gameState.enhancements.recipeBonus['hot']          = (gameState.enhancements.recipeBonus['hot']          ?? 0) + 1; return
-        case 'recipe-fuse':           gameState.enhancements.recipeBonus['fuse']         = (gameState.enhancements.recipeBonus['fuse']         ?? 0) + 1; return
-        case 'recipe-candle-smash':   gameState.enhancements.recipeBonus['candle-smash'] = (gameState.enhancements.recipeBonus['candle-smash'] ?? 0) + 1; return
-        case 'recipe-greed':          gameState.enhancements.recipeBonus['greed']        = (gameState.enhancements.recipeBonus['greed']        ?? 0) + 1; return
-        case 'recipe-locksmith':      gameState.enhancements.recipeBonus['locksmith']    = (gameState.enhancements.recipeBonus['locksmith']    ?? 0) + 1; return
-        case 'recipe-mine-sweeper':   gameState.enhancements.recipeBonus['mine-sweeper'] = (gameState.enhancements.recipeBonus['mine-sweeper'] ?? 0) + 1; return
-        case 'recipe-shuffle':        gameState.enhancements.recipeBonus['shuffle']      = (gameState.enhancements.recipeBonus['shuffle']      ?? 0) + 1; return
-        case 'recipe-dividend':       gameState.enhancements.recipeBonus['dividend']     = (gameState.enhancements.recipeBonus['dividend']     ?? 0) + 1; return
-        // 레시피 보너스 — 신규 레시피
-        case 'recipe-flame-infusion': gameState.enhancements.recipeBonus['flame-infusion'] = (gameState.enhancements.recipeBonus['flame-infusion'] ?? 0) + 1; return
-        case 'recipe-bond':           gameState.enhancements.recipeBonus['bond']           = (gameState.enhancements.recipeBonus['bond']           ?? 0) + 1; return
-        case 'recipe-glass-shards':   gameState.enhancements.recipeBonus['glass-shards']   = (gameState.enhancements.recipeBonus['glass-shards']   ?? 0) + 1; return
-        case 'recipe-blood-pact':     gameState.enhancements.recipeBonus['blood-pact']     = (gameState.enhancements.recipeBonus['blood-pact']     ?? 0) + 1; return
-        case 'recipe-bright-ceiling': gameState.enhancements.recipeBonus['bright-ceiling'] = (gameState.enhancements.recipeBonus['bright-ceiling'] ?? 0) + 1; return
-        case 'recipe-fireworks-show': gameState.enhancements.recipeBonus['fireworks-show'] = (gameState.enhancements.recipeBonus['fireworks-show'] ?? 0) + 1; return
-        case 'recipe-hospitality':    gameState.enhancements.recipeBonus['hospitality']    = (gameState.enhancements.recipeBonus['hospitality']    ?? 0) + 1; return
-        case 'recipe-flame-chain':    gameState.enhancements.recipeBonus['flame-chain']    = (gameState.enhancements.recipeBonus['flame-chain']    ?? 0) + 1; return
-        case 'recipe-banquet':        gameState.enhancements.recipeBonus['banquet']        = (gameState.enhancements.recipeBonus['banquet']        ?? 0) + 1; return
-        // 레시피 보너스 — 해금팩 전용
-        case 'recipe-backfire':       gameState.enhancements.recipeBonus['backfire']     = (gameState.enhancements.recipeBonus['backfire']     ?? 0) + 1; return
-        case 'recipe-rage':           gameState.enhancements.recipeBonus['rage']         = (gameState.enhancements.recipeBonus['rage']         ?? 0) + 1; return
-        case 'recipe-mythic-flame':   gameState.enhancements.recipeBonus['mythic-flame'] = (gameState.enhancements.recipeBonus['mythic-flame'] ?? 0) + 1; return
-      }
-    },
-  }))
-  return sampleWeightedWithoutReplacement(pool, 3)
 }
 /** Open the pack picker for the just-clicked pack tile. Deducts the price
  *  if the player can afford it, otherwise no-op. */
@@ -1571,8 +1517,8 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
   const view: ShopPackPickerView = {
     packKind: kind,
     title,
-    // 삭제팩·해금팩은 선택을 강제하지 않고 넘기기 버튼으로 패스 가능하다.
-    passable: kind === 'delete-pack' || kind === 'unlock-pack',
+    // 삭제팩·해금팩·조합팩은 선택을 강제하지 않고 넘기기 버튼으로 패스 가능하다.
+    passable: kind === 'delete-pack' || kind === 'unlock-pack' || kind === 'recipe-pack',
     // spriteUrl 포함: enhance/unlock/delete 팩은 카드별 일러스트가 있어야 식별 가능하다.
     items: items.map(({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote }) => ({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote })),
     rerollCost: 1 + (activePackSession?.rerollCount ?? 0),
@@ -1621,7 +1567,7 @@ async function handleShopPackReroll(packKind: ShopPackKind): Promise<void> {
   const newView: ShopPackPickerView = {
     packKind,
     title: SHOP_PACK_LABELS[packKind].title,
-    passable: packKind === 'delete-pack' || packKind === 'unlock-pack',
+    passable: packKind === 'delete-pack' || packKind === 'unlock-pack' || packKind === 'recipe-pack',
     items: activePackSession.items.map(({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote }) => ({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote })),
     rerollCost: 1 + activePackSession.rerollCount,
     coins,
@@ -1637,9 +1583,9 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     detail.kind !== 'free-coin-card' &&
     detail.kind !== 'reroll' &&
     detail.kind !== 'basic-pack' &&
-    detail.kind !== 'upgrade-pack' &&
+    detail.kind !== 'recipe-pack' &&
     detail.kind !== 'unlock-pack' &&
-    detail.kind !== 'blessing-pack' && detail.kind !== 'resource-pack' && detail.kind !== 'enhance-pack' && detail.kind !== 'delete-pack'
+    detail.kind !== 'chance-pack' && detail.kind !== 'resource-pack' && detail.kind !== 'enhance-pack' && detail.kind !== 'delete-pack'
   )
     return
   if (detail.kind === 'free-card' || detail.kind === 'free-coin-card') {
@@ -1700,8 +1646,8 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     return
   }
   if (
-    detail.kind === 'basic-pack' || detail.kind === 'upgrade-pack' || detail.kind === 'unlock-pack' ||
-    detail.kind === 'blessing-pack' || detail.kind === 'resource-pack' || detail.kind === 'enhance-pack' || detail.kind === 'delete-pack'
+    detail.kind === 'basic-pack' || detail.kind === 'recipe-pack' || detail.kind === 'unlock-pack' ||
+    detail.kind === 'chance-pack' || detail.kind === 'resource-pack' || detail.kind === 'enhance-pack' || detail.kind === 'delete-pack'
   ) {
     await openPackPurchase(detail.kind)
     return

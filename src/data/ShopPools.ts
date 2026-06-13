@@ -1,7 +1,6 @@
 import type { HandCardId } from '@entities/HandCard'
 import type { ShopPackKind } from '@ui/GameBoardRenderer'
 import { BASIC_PACK_POOL } from '@data/BasicPackPool'
-import { UPGRADE_PACK_POOL } from '@data/UpgradePackItems'
 
 /** Shared rarity palette across relic/shop/free-pack visuals. */
 export type CardRarity = 'common' | 'rare' | 'epic' | 'unique' | 'legendary'
@@ -46,10 +45,10 @@ export const HAND_CARD_RARITY: Record<HandCardId, CardRarity> = {
 /** Shop pack pool config moved to data so shop/free/pack roll tables are data-driven. */
 export const SHOP_PACK_POOLS: Record<ShopPackKind, Omit<ShopPackPoolItem, 'apply'>[]> = {
   'basic-pack': BASIC_PACK_POOL,
-  // 강화팩 항목 테이블은 UpgradePackItems.ts에서 관리한다(트리플/레시피 강화, 항목별 weight).
-  'upgrade-pack': UPGRADE_PACK_POOL,
+  // 조합팩/해금팩/확률팩 항목은 런타임에 rollPackItems에서 동적으로 구성한다.
+  'recipe-pack': [],
   'unlock-pack': [],
-  'blessing-pack': [],
+  'chance-pack': [],
   'resource-pack': [
     // 제단 전용 자원팩 — basic2_001~007을 순서대로 쓰고, 동전만 기존 basic_011을 재사용한다.
     { id: 'altar-clothes-thick',  illu: 'basic2_001', theme: 'resource', title: '두꺼운 의복', effect: '최대체력 +5',              rarity: 'common',    weight: 20 },
@@ -69,9 +68,9 @@ export const SHOP_PACK_POOLS: Record<ShopPackKind, Omit<ShopPackPoolItem, 'apply
  *  Keep names/effects centralized so shop tiles and pack picker titles never drift. */
 export const SHOP_PACK_LABELS: Record<ShopPackKind, { title: string; effect: string }> = {
   'basic-pack': { title: '자원팩', effect: '자원 보충' },
-  'upgrade-pack': { title: '강화팩', effect: '카드 강화' },
+  'recipe-pack': { title: '조합팩', effect: '레시피 해금' },
   'unlock-pack': { title: '해금팩', effect: '카드 해금' },
-  'blessing-pack': { title: '축복팩', effect: '패시브 능력 획득' },
+  'chance-pack': { title: '확률팩', effect: '카드 등장률 상승' },
   'resource-pack': { title: '자원팩', effect: '최대 수치 증가' },
   'enhance-pack': { title: '강화팩', effect: '카드 단일 강화' },
   'delete-pack': { title: '삭제팩', effect: '등장 카드 삭제' },
