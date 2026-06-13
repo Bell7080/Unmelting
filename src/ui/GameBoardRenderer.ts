@@ -365,7 +365,11 @@ export class GameBoardRenderer {
 
     this.initRelicStackFocus()
 
-    // Shift 키 상태를 body 클래스로 전달 — 손패·도감 공격력 수식 자세히보기 토글.
+    // 렌더러 초기화 시 shift 상태를 반드시 리셋 — 이전 세션에서 클래스가 남아 있으면
+    // 첫 렌더부터 공식이 보이고 수치가 숨겨지는 문제가 생긴다.
+    document.body.classList.remove('is-shift-detail')
+
+    // Shift 키를 누르는 동안만 수식 표시(is-shift-detail), 놓으면 합산 수치로 복귀.
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Shift') document.body.classList.add('is-shift-detail')
     })
