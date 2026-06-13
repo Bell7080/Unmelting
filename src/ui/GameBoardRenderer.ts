@@ -38,7 +38,7 @@ import { ENEMY_DEFINITIONS, MIMIC_BY_SPAN } from '@systems/CardSpawner'
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { getRelicDef, RELIC_DEFINITIONS, type RelicId } from '@data/Relics'
 import { HAND_CARD_RARITY, RARITY_CLASS_BY_TIER, SHOP_PACK_LABELS, SHOP_PACK_POOLS, type CardRarity } from '@data/ShopPools'
-import { RECIPES } from '@data/Recipes'
+import { RECIPES, type Recipe } from '@data/Recipes'
 import type { JobDef } from '@data/Jobs'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { GAME_BOARD_STYLES } from '@ui/styles/GameBoardStyles'
@@ -4844,7 +4844,7 @@ export class GameBoardRenderer {
         name: isLocked ? '???' : r.name,
         badge: `${r.totalCount}장`,
         categoryClass: `compendium-recipe-card${isLocked ? ' compendium-card--unknown' : ''}`,
-        stats: isLocked ? [] : [['효과', r.flavor]],
+        stats: isLocked ? [] : [['효과', this.recipeFlavorHtml(r)]],
       })
     }).join('')
     return `
@@ -4854,6 +4854,29 @@ export class GameBoardRenderer {
       <h3 class="compendium-section">합성 (Synthesis)</h3>
       <div class="compendium-grid">${synthesisIntro}</div>
     `
+  }
+
+  /**
+   * ATK 연동 레시피의 효과 설명을 desc-dyn HTML로 반환한다.
+   * 기본: 합산 피해 수치. Shift: 공격력 배율 수식.
+   * enemy maxHP 기반(hot-water-maxhp)은 런타임에 알 수 없으므로 정적 텍스트로 반환.
+   */
+  private recipeFlavorHtml(r: Recipe): string {
+    const atk = this.currentGameState?.getCharacter().damage ?? 1
+    const bonus = this.currentGameState?.enhancements.recipeBonus[r.id] ?? 0
+    switch (r.effect) {
+      case 'ignite-atk':      return `필드 모든 적에게 ${atkDmgHtml(atk, 0.3, 1, bonus)}`
+      case 'hot-atk':         return `전방 모든 적에게 ${atkDmgHtml(atk, 0.5, 2, bonus)}`
+      case 'fuse-atk':        return `전방 모든 적에게 ${atkDmgHtml(atk, 1.5, 0, bonus)}`
+      case 'backfire-atk':    return `필드 모든 적에게 ${atkDmgHtml(atk, 1, 0, bonus)}`
+      case 'rage-atk':        return `전방 모든 적에게 ${atkDmgHtml(atk, 1, 3, bonus)}`
+      case 'flame-chain-atk': return `방패 +2 · 필드 적 전체 ${atkDmgHtml(atk, 1, 0, bonus)}`
+      case 'glass-shards-atk':return `필드 랜덤 적 전체 ${atkDmgHtml(atk, 0.5, 3, bonus)} 분산`
+      case 'fireworks-atk':   return `필드 랜덤 적 전체 ${atkDmgHtml(atk, 3, 3, bonus)} 분산`
+      case 'banquet-atk':     return `필드 랜덤 적 ${atkDmgHtml(atk, 1, 0, bonus)} × 공격력 횟수`
+      case 'hot-water-maxhp': return r.flavor  // 대상 적 최대체력 불명 → 정적 텍스트
+      default:                return r.flavor
+    }
   }
 
   /**
