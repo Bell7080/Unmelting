@@ -1560,6 +1560,7 @@ async function handleShopPackReroll(packKind: ShopPackKind): Promise<void> {
   coinPulseKey++
   applyBlindFaithCoins(-cost)
   boardRenderer.playCoinSpendFeedback(coins, coinPulseKey)
+  boardRenderer.playPackRerollFeedback(cost)
   activePackSession.rerollCount++
   activePackSession.items = rollPackItems(packKind)
   const newView: ShopPackPickerView = {

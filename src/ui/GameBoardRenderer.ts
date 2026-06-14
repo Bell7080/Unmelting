@@ -6551,6 +6551,21 @@ export class GameBoardRenderer {
     this.animateResourceCounter('.coin-number', targetCoins, ' $')
   }
 
+  /** 팩 피커 리롤 버튼 클릭 피드백: 화폐 패널 → 버튼 트레일 + 버튼 임팩트 burst. */
+  playPackRerollFeedback(cost: number): void {
+    const btn = document.querySelector<HTMLElement>('.shop-pack-picker-reroll-btn')
+    if (!btn) return
+    btn.classList.remove('is-pack-reroll-impacted')
+    void btn.offsetWidth
+    btn.classList.add('is-pack-reroll-impacted')
+    window.setTimeout(() => btn.classList.remove('is-pack-reroll-impacted'), 380)
+    SquareBurst.playOn(btn, 'score', { count: 12, spread: 58, duration: 360 })
+    const coinAnchor = this.findCoinPulseAnchor()
+    if (coinAnchor) {
+      void this.animateResourceTrail(coinAnchor, btn, Math.min(Math.max(1, cost), 5), 'score')
+    }
+  }
+
   
   /** Consume a free card tile and route its blast to the matching HUD target.
    *  `amount` is the real reward value from gameplay; huge values such as ✦300

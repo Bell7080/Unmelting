@@ -1075,16 +1075,30 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   filter: brightness(1.1);
   border-color: rgba(200, 172, 112, 0.68);
 }
-/* 클릭 후 선으로 수축하며 퇴장 */
-@keyframes pass-btn-to-line {
-  0%   { transform: scaleY(1) scaleX(1);     opacity: 1; }
-  20%  { transform: scaleY(0.92) scaleX(0.96); opacity: 1; }
-  60%  { transform: scaleY(0.05) scaleX(1.08); opacity: 0.55; }
-  100% { transform: scaleY(0.01) scaleX(1.14); opacity: 0; }
+/* 클릭 후 쿠궁 진동하며 퇴장 */
+@keyframes pass-btn-thud {
+  0%   { transform: scale(1)    translateY(0)   rotate(0deg);   opacity: 1; }
+  8%   { transform: scale(0.92) translateY(4px) rotate(0.4deg); opacity: 1; }
+  18%  { transform: scale(1.05) translateY(-2px) rotate(-0.6deg); opacity: 1; }
+  28%  { transform: scale(0.95) translateX(-7px) rotate(-1.2deg); opacity: 0.88; }
+  38%  { transform: scale(1.02) translateX(6px)  rotate(1deg);    opacity: 0.76; }
+  48%  { transform: scale(0.97) translateX(-4px) rotate(-0.7deg); opacity: 0.58; }
+  58%  { transform: scale(1.00) translateX(2px)  rotate(0.3deg);  opacity: 0.40; }
+  74%  { transform: scale(0.93) translateY(3px)  rotate(0deg);    opacity: 0.18; }
+  100% { transform: scale(0.82) translateY(6px)  rotate(0deg);    opacity: 0; }
 }
 .shop-pack-pass-btn.is-passing {
-  animation: pass-btn-to-line 0.34s cubic-bezier(0.48, 0, 0.52, 1) forwards;
+  animation: pass-btn-thud 0.48s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards;
   pointer-events: none;
+}
+/* 팩 리롤 버튼 클릭 임팩트 */
+.shop-pack-picker-reroll-btn.is-pack-reroll-impacted {
+  animation: pack-reroll-btn-impact 0.38s cubic-bezier(0.2, 0.86, 0.22, 1);
+}
+@keyframes pack-reroll-btn-impact {
+  0%   { transform: scale(1); filter: brightness(1); }
+  32%  { transform: translateY(-3px) scale(1.07); filter: brightness(1.28); box-shadow: 0 0 24px rgba(244, 164, 96, 0.55), inset 0 1px 0 rgba(255,228,160,0.3), inset 0 -4px 8px rgba(0,0,0,0.6); }
+  100% { transform: scale(1); filter: brightness(1); }
 }
 /* 팩 카드 리롤 시 빠른 퇴장 (좌→우 스태거) */
 @keyframes shop-pack-pick-blast {
