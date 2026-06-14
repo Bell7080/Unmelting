@@ -28,10 +28,10 @@ export interface RunEnhancements {
   demonDollSelfDamageAccum: number
   /** 악마 인형 유물: 현재까지 실제 획득한 공격력 누적치 (표기용). */
   demonDollBonusAtk: number
-  /** 확률팩으로 영구 추가된 드롭 가중치: 카드 id → 추가값. DropSystem이 2단계 카드 선택 시 합산. */
-  additionalDropWeights: Partial<Record<string, number>>
+  /** 확률팩·직업 보너스로 1차 거름망에 추가된 개별 카드 가중치: 카드 id → 누적값. */
+  tier1CardBoosts: Partial<Record<string, number>>
 }
 
 export function makeDefaultEnhancements(): RunEnhancements {
-  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, additionalDropWeights: {} }
+  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, tier1CardBoosts: {} }
 }

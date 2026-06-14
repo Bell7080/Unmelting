@@ -158,7 +158,6 @@ import free002Url from '../assets/sprites/free_002.webp'
 import trial001Url from '../assets/sprites/trial_001.webp'
 import trial004Url from '../assets/sprites/trial_004.webp'
 import trial007Url from '../assets/sprites/trial_007.webp'
-import pack004Url from '../assets/sprites/pack_004.webp'
 import pack005Url from '../assets/sprites/pack_005.webp'
 import pack006Url from '../assets/sprites/pack_006.webp'
 import pack007Url from '../assets/sprites/pack_007.webp'
@@ -317,9 +316,8 @@ export const SpriteUrls = {
     'basic-pack': pack001Url,
     'recipe-pack': pack002Url,
     'unlock-pack': pack003Url,
-    'chance-pack': pack004Url,
+    'chance-pack': pack006Url,
     'resource-pack': pack005Url,
-    'enhance-pack': pack006Url,
     'delete-pack': pack007Url,
   } as const,
   /** Free-card dedicated artwork. */

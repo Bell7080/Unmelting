@@ -305,7 +305,7 @@ const runCardPool = new RunCardPool(HAND_CARD_IDS, metaUnlockedCardIds)
 // 잠긴 카드가 드롭되지 않도록 초기 허용 풀을 동기화한다.
 DropSystem.setAllowedPool(runCardPool.snapshot().unlocked)
 // 확률팩 가중치도 초기화 시점에 동기화한다(저장된 런 재개 대비).
-DropSystem.setAdditionalWeights(gameState.enhancements.additionalDropWeights)
+DropSystem.setTier1CardBoosts(gameState.enhancements.tier1CardBoosts)
 boardRenderer.setLockedCardIds([...runCardPool.snapshot().locked, ...runCardPool.snapshot().banned])
 // runLocked 레시피는 런 시작 시 전부 잠금 — 해금팩으로만 해제 가능하다.
 boardRenderer.setLockedRecipeIds(RECIPES.filter((r) => r.runLocked).map((r) => r.id))
@@ -1383,7 +1383,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
       id: `recipe-${r.id}`,
       theme: 'unlock' as const,
       title: r.name,
-      effect: r.flavor,
+      effect: boardRenderer.recipeEffectHtml(r),
       rarity: 'rare' as const,
       spriteUrl: recipeSprite001 ?? SpriteUrls.packs['recipe-pack'],
       typeLabel: '레시피',
@@ -1392,25 +1392,29 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     }))
   }
   if (kind === 'chance-pack') {
-    // 확률팩 — 해금된 카드 중 3장을 제시하고, 선택 시 dropWeight를 영구 추가한다.
+    // 확률팩 — 해금된 카드 중 3장을 제시하고, 선택 시 1차 거름망 개별 카드 가중치를 영구 추가한다.
     const { unlocked } = runCardPool.snapshot()
     if (unlocked.length === 0) return []
     const drawIds = sampleWithoutReplacement(unlocked, Math.min(3, unlocked.length))
     return drawIds.map((id) => {
       const def = getHandCardDef(id)
-      const baseWeight = def.dropWeight ?? 1
-      const currentBoost = gameState.enhancements.additionalDropWeights[id] ?? 0
+      const boostToAdd = def.dropWeight ?? 1
+      const { before, after } = DropSystem.computeDropProbability(
+        id, unlocked, gameState.enhancements.tier1CardBoosts, boostToAdd,
+      )
+      const pBefore = Math.floor(before * 100)
+      const pAfter = Math.floor(after * 100)
       return {
         id: `chance-${id}`,
         theme: 'unlock' as const,
         title: def.name,
-        effect: `등장 가중치 +${baseWeight} (현재 ${baseWeight + currentBoost} → ${baseWeight * 2 + currentBoost})`,
+        effect: `1차 드롭 우선도 +${boostToAdd}　${pBefore}% → ${pAfter}%`,
         rarity: HAND_CARD_RARITY[id],
         spriteUrl: spriteForHandCard(id),
         typeLabel: '확률',
         apply: () => {
-          gameState.enhancements.additionalDropWeights[id] = currentBoost + baseWeight
-          DropSystem.setAdditionalWeights(gameState.enhancements.additionalDropWeights)
+          gameState.enhancements.tier1CardBoosts[id] = (gameState.enhancements.tier1CardBoosts[id] ?? 0) + boostToAdd
+          DropSystem.setTier1CardBoosts(gameState.enhancements.tier1CardBoosts)
         },
       }
     })
@@ -2310,6 +2314,16 @@ async function startGame(): Promise<void> {
       gameState.enhancements.shopDiscountPct = chosenJob.shopDiscountPct
     }
     cardSpawner.setJobSpawnAdjust(chosenJob.spawnEnemy, chosenJob.spawnTrap, chosenJob.spawnTreasure, chosenJob.spawnFlower)
+    // 기사/마법사: 직업 태그 카드를 1차 거름망에 가중치 10으로 추가한다.
+    if (chosenJob.id === 'knight' || chosenJob.id === 'mage') {
+      const tag = chosenJob.id
+      for (const id of HAND_CARD_IDS) {
+        if (HAND_CARD_DEFINITIONS[id].jobTags?.includes(tag)) {
+          gameState.enhancements.tier1CardBoosts[id] = (gameState.enhancements.tier1CardBoosts[id] ?? 0) + 10
+        }
+      }
+      DropSystem.setTier1CardBoosts(gameState.enhancements.tier1CardBoosts)
+    }
     // 도적: 함정 무시 확률 적용.
     if (chosenJob.trapIgnoreChance) c.trapIgnoreChance += chosenJob.trapIgnoreChance
     // 닫힌 암막 뒤에서 최초 보드를 채워, 레일 공개가 직업 선택의 후속 연출처럼 이어지게 한다.

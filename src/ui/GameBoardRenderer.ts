@@ -2061,14 +2061,14 @@ export class GameBoardRenderer {
             <div class="shop-layer shop-pack-layer">
               ${shop.mode === 'altar'
                 ? [
-                    this.renderShopPackCard('chance-pack', '확률팩', '카드 등장률 영구 상승', shop.packCosts?.['chance-pack'] ?? 500, score, 'resource', 0),
-                    this.renderShopPackCard('resource-pack', '자원팩', '최대 수치 3택1 증가', shop.packCosts?.['resource-pack'] ?? 500, score, 'resource', 1),
-                    this.renderShopPackCard('delete-pack', '삭제팩', '카드 등장 금지 3택1', shop.packCosts?.['delete-pack'] ?? 500, score, 'unlock', 2),
+                    this.renderShopPackCard('resource-pack', '자원팩', '체력·손패·불씨 한도 영구 상향', shop.packCosts?.['resource-pack'] ?? 500, score, 'resource', 0),
+                    this.renderShopPackCard('delete-pack', '삭제팩', '카드 제거 · 드롭 집중도 상향', shop.packCosts?.['delete-pack'] ?? 500, score, 'unlock', 1),
+                    this.renderShopPackCard('chance-pack', '확률팩', '특정 카드 1차 드롭 우선도 부여', shop.packCosts?.['chance-pack'] ?? 500, score, 'upgrade', 2),
                   ].join('')
                 : [
-                    this.renderShopPackCard('basic-pack', basicPackLabel.title, basicPackLabel.effect, shop.packCosts?.['basic-pack'] ?? shop.basicPackCost, score, 'resource', 0),
-                    this.renderShopPackCard('recipe-pack', recipePackLabel.title, recipePackLabel.effect, shop.packCosts?.['recipe-pack'] ?? 400, score, 'upgrade', 1),
-                    this.renderShopPackCard('unlock-pack', unlockPackLabel.title, unlockPackLabel.effect, shop.packCosts?.['unlock-pack'] ?? 400, score, 'unlock', 2),
+                    this.renderShopPackCard('basic-pack', basicPackLabel.title, 'HP·불씨·게이지 즉시 보충', shop.packCosts?.['basic-pack'] ?? shop.basicPackCost, score, 'resource', 0),
+                    this.renderShopPackCard('recipe-pack', recipePackLabel.title, '조합식 해금 · 덱 심도 확장', shop.packCosts?.['recipe-pack'] ?? 400, score, 'upgrade', 1),
+                    this.renderShopPackCard('unlock-pack', unlockPackLabel.title, '잠긴 손패 해금 · 드롭 풀 확대', shop.packCosts?.['unlock-pack'] ?? 400, score, 'unlock', 2),
                   ].join('')}
             </div>
           </section>
@@ -4865,6 +4865,11 @@ export class GameBoardRenderer {
    * 기본: 합산 피해 수치. Shift: 공격력 배율 수식.
    * enemy maxHP 기반(hot-water-maxhp)은 런타임에 알 수 없으므로 정적 텍스트로 반환.
    */
+  /** 조합팩 피커 effect 문자열 생성 — rollPackItems에서 호출. */
+  public recipeEffectHtml(r: Recipe): string {
+    return this.recipeFlavorHtml(r)
+  }
+
   private recipeFlavorHtml(r: Recipe): string {
     const atk = this.currentGameState?.getCharacter().damage ?? 1
     const bonus = this.currentGameState?.enhancements.recipeBonus[r.id] ?? 0
