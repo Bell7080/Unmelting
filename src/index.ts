@@ -1472,10 +1472,11 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     })
   }
   if (kind === 'delete-pack') {
-    // 풀 = 현재 해금된 카드 (런 내 활성 풀)
+    // 풀 = 현재 해금된 카드 중 이벤트 보스 전용(검은 양초 등) 제외
     const { unlocked } = runCardPool.snapshot()
-    if (unlocked.length === 0) return []
-    const drawIds = sampleWithoutReplacement(unlocked, Math.min(3, unlocked.length))
+    const deletePool = unlocked.filter(id => getHandCardDef(id).dropSource !== 'boss')
+    if (deletePool.length === 0) return []
+    const drawIds = sampleWithoutReplacement(deletePool, Math.min(3, deletePool.length))
     return drawIds.map((id) => {
       const def = getHandCardDef(id)
       return {
