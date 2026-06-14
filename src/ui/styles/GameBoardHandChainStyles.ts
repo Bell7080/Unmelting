@@ -1255,6 +1255,14 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 body.is-shift-detail .desc-dyn__s { opacity: 0; }
 body.is-shift-detail .desc-dyn__d { opacity: 1; }
 
+/* 손패 미리보기 desc-dyn: 도감 chip과 동일하게 display 토글로 __d 팬텀 너비/높이 제거 */
+.hand-card-preview .desc-dyn { display: inline; }
+.hand-card-preview .desc-dyn__s,
+.hand-card-preview .desc-dyn__d { transition: none; }
+.hand-card-preview .desc-dyn__d { display: none; opacity: 1; }
+body.is-shift-detail .hand-card-preview .desc-dyn__s { display: none; opacity: 1; }
+body.is-shift-detail .hand-card-preview .desc-dyn__d { display: inline; white-space: nowrap; }
+
 /* Shift 자세히 보기 힌트 — 카드 미리보기 하단에 은은하게 깜빡임 */
 .hand-shift-hint {
   position: absolute;
@@ -1268,11 +1276,11 @@ body.is-shift-detail .desc-dyn__d { opacity: 1; }
   opacity: 0;
   pointer-events: none;
 }
-/* 카드 플립(0.62s) 완료 후 0.7s 딜레이로 등장 */
+/* 카드 플립(0.62s) 완료 후 0.5s 딜레이로 등장 — fill: backwards로 딜레이 중에도 0% 프레임 유지 */
 .hand-slot.hand-card:hover .hand-shift-hint,
 .hand-slot.hand-card:focus-within .hand-shift-hint,
 .hand-slot.hand-card.is-arming-target .hand-shift-hint {
-  animation: shift-hint-pulse 3.5s ease-in-out 0.7s infinite;
+  animation: shift-hint-pulse 2.5s ease-in-out 0.5s infinite backwards;
 }
 /* 저위치 슬롯은 카드 위로 올림 */
 .hand-slot.is-low-preview:hover .hand-shift-hint,
@@ -1286,7 +1294,8 @@ body.is-shift-detail .hand-shift-hint,
 body.is-touch-device .hand-shift-hint { animation: none !important; opacity: 0 !important; }
 
 @keyframes shift-hint-pulse {
-  0%, 100% { opacity: 0; }
-  40%, 60% { opacity: 0.4; }
+  0% { opacity: 0.3; }
+  50% { opacity: 0.05; }
+  100% { opacity: 0.3; }
 }
 `
