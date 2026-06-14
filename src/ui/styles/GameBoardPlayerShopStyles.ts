@@ -888,7 +888,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   display: none;
 }
 .shop-pack-pick-card-effect {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.4;
   color: rgba(220, 200, 170, 0.82);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);

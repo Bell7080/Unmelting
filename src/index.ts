@@ -1393,23 +1393,30 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     }))
   }
   if (kind === 'chance-pack') {
-    // 확률팩 — 해금된 카드 중 3장을 제시하고, 선택 시 1차 거름망 개별 카드 가중치를 영구 추가한다.
+    // 확률팩 — 해금된 일반 드롭 풀 카드 중 3장 제시, 선택 시 T1 개별 카드 가중치 영구 추가.
     const { unlocked } = runCardPool.snapshot()
-    if (unlocked.length === 0) return []
-    const drawIds = sampleWithoutReplacement(unlocked, Math.min(3, unlocked.length))
+    // boss 전용·dropWeight 0 카드(검은 양초 등 이벤트 아이템) 제외
+    const chancePool = unlocked.filter(id => {
+      const d = HAND_CARD_DEFINITIONS[id]
+      return d && d.dropSource !== 'boss' && (d.dropWeight ?? 0) > 0
+    })
+    if (chancePool.length === 0) return []
+    // 등급별 부스트 가중치 — 커먼에 가까울수록 더 큰 폭 조정
+    const RARITY_BOOST: Record<string, number> = { common: 5, rare: 3, epic: 2, unique: 1, legendary: 1 }
+    // 확률을 2자리까지 표기하되 불필요한 끝자리 0 제거
+    const fmt = (p: number) => String(parseFloat((p * 100).toFixed(2)))
+    const drawIds = sampleWithoutReplacement(chancePool, Math.min(3, chancePool.length))
     return drawIds.map((id) => {
       const def = getHandCardDef(id)
-      const boostToAdd = def.dropWeight ?? 1
+      const boostToAdd = RARITY_BOOST[HAND_CARD_RARITY[id] ?? 'common'] ?? 1
       const { before, after } = DropSystem.computeDropProbability(
-        id, unlocked, gameState.enhancements.tier1CardBoosts, boostToAdd,
+        id, chancePool, gameState.enhancements.tier1CardBoosts, boostToAdd,
       )
-      const pBefore = Math.floor(before * 100)
-      const pAfter = Math.floor(after * 100)
       return {
         id: `chance-${id}`,
         theme: 'unlock' as const,
         title: def.name,
-        effect: `1차 드롭 우선도 +${boostToAdd}　${pBefore}% → ${pAfter}%`,
+        effect: `등장 확률 ${fmt(before)}% → ${fmt(after)}%`,
         rarity: HAND_CARD_RARITY[id],
         spriteUrl: spriteForHandCard(id),
         typeLabel: '확률',
