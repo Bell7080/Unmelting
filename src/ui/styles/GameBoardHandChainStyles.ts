@@ -243,7 +243,8 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   filter: saturate(0.72) brightness(0.82);
 }
 .hand-slot.hand-card:hover,
-.hand-slot.hand-card:focus-within {
+.hand-slot.hand-card:focus-within,
+.hand-slot.hand-card.is-preview-open {
   transform: translateY(-2px);
   /* hover 시 transform이 새 쌓임 맥락을 만들어 미리보기(z-index 70)를 그 안에 가둔다.
      상점/제단 오버레이(z-index 60) 위로 미리보기가 떠 잘리지 않도록 슬롯 자체를 더 높인다. */
@@ -362,7 +363,8 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   z-index: 2;
 }
 .hand-slot.hand-card:hover .hand-card-preview,
-.hand-slot.hand-card:focus-within .hand-card-preview {
+.hand-slot.hand-card:focus-within .hand-card-preview,
+.hand-slot.hand-card.is-preview-open .hand-card-preview {
   display: block;
   animation: hand-preview-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
 }
@@ -380,7 +382,8 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   100% { opacity: 1; transform: translateY(-50%) translateX(0) rotateY(0deg); }
 }
 .hand-slot.is-low-preview:hover .hand-card-preview,
-.hand-slot.is-low-preview:focus-within .hand-card-preview {
+.hand-slot.is-low-preview:focus-within .hand-card-preview,
+.hand-slot.is-low-preview.is-preview-open .hand-card-preview {
   animation-name: hand-preview-low-flip;
 }
 .hand-slot.is-low-preview.is-arming-target .hand-card-preview {
@@ -393,7 +396,8 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   100% { opacity: 1; transform: translateY(-8px) translateX(0) rotateY(0deg); }
 }
 .hand-slot.hand-card:hover .hand-card-preview::before,
-.hand-slot.hand-card:focus-within .hand-card-preview::before {
+.hand-slot.hand-card:focus-within .hand-card-preview::before,
+.hand-slot.hand-card.is-preview-open .hand-card-preview::before {
   animation: hand-preview-back-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
 }
 .hand-slot.hand-card.is-arming-target .hand-card-preview::before {
@@ -435,7 +439,8 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   transform: translateY(0) translateX(10px);
 }
 .hand-slot.hand-card.is-recipe-ready:hover .hand-recipe-preview,
-.hand-slot.hand-card.is-recipe-ready:focus-within .hand-recipe-preview {
+.hand-slot.hand-card.is-recipe-ready:focus-within .hand-recipe-preview,
+.hand-slot.hand-card.is-recipe-ready.is-preview-open .hand-recipe-preview {
   display: grid;
   gap: 7px;
   animation: recipe-preview-slide 0.28s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
@@ -467,7 +472,8 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   to { opacity: 1; transform: translateY(-50%) translateX(0); }
 }
 .hand-slot.is-low-preview:hover .hand-recipe-preview,
-.hand-slot.is-low-preview:focus-within .hand-recipe-preview {
+.hand-slot.is-low-preview:focus-within .hand-recipe-preview,
+.hand-slot.is-low-preview.is-preview-open .hand-recipe-preview {
   animation-name: recipe-preview-low-slide;
 }
 @keyframes recipe-preview-low-slide {
@@ -1281,8 +1287,34 @@ body.is-shift-detail .hand-card-preview .desc-dyn__d { display: inline; white-sp
 /* 카드 플립(0.62s) 완료 후 0.5s 딜레이로 등장 — fill: backwards로 딜레이 중에도 0% 프레임 유지 */
 .hand-slot.hand-card:hover .hand-shift-hint,
 .hand-slot.hand-card:focus-within .hand-shift-hint,
-.hand-slot.hand-card.is-arming-target .hand-shift-hint {
+.hand-slot.hand-card.is-arming-target .hand-shift-hint,
+.hand-slot.hand-card.is-preview-open .hand-shift-hint {
   animation: shift-hint-pulse 2.5s ease-in-out 0.5s infinite backwards;
+}
+/* 렌더 후 복원 시 플립 애니메이션을 건너뛰고 최종 열린 상태로 즉시 표시 */
+.hand-slot.hand-card.is-preview-open.is-preview-restored .hand-card-preview {
+  animation: none;
+  display: block;
+  opacity: 1;
+  transform: translateY(-50%) translateX(0) rotateY(0deg);
+}
+.hand-slot.is-low-preview.is-preview-open.is-preview-restored .hand-card-preview {
+  transform: translateY(-8px) translateX(0) rotateY(0deg);
+}
+.hand-slot.hand-card.is-preview-open.is-preview-restored .hand-card-preview::before {
+  animation: none;
+  opacity: 0;
+  transform: rotateY(-102deg);
+}
+.hand-slot.hand-card.is-recipe-ready.is-preview-open.is-preview-restored .hand-recipe-preview {
+  animation: none;
+  display: grid;
+  gap: 7px;
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+.hand-slot.is-low-preview.is-preview-open.is-preview-restored .hand-recipe-preview {
+  transform: translateY(0) translateX(0);
 }
 /* Shift 활성 중이거나 터치 기기엔 숨김 */
 body.is-shift-detail .hand-shift-hint,

@@ -334,6 +334,9 @@ export class GameBoardRenderer {
   /** Owned relic cards can be click-pinned for reading long text without
    *  requiring the mouse to stay perfectly over the fanned card. */
   private pinnedRelicId: RelicId | null = null
+  /** Index of the hand slot currently under the cursor; null when no slot is hovered.
+   *  Tracked via delegation so renders can restore the preview without relying on CSS :hover. */
+  private hoveredHandSlotIndex: number | null = null
   /** 유물 효과 텍스트 {{spawn}} 치환에 쓰는 현재 실효 스폰 가중치. render() 마다 갱신. */
   private currentSpawnWeightCtx: SpawnWeightContext | undefined = undefined
 
@@ -381,6 +384,40 @@ export class GameBoardRenderer {
     })
     this.boardElement.addEventListener('mousemove', (e: MouseEvent) => {
       if (!e.shiftKey) document.body.classList.remove('is-shift-detail')
+    }, { passive: true })
+
+    // ── Hand card click delegation (permanent, avoids listener accumulation on re-renders) ──
+    this.boardElement.addEventListener('click', (e: MouseEvent) => {
+      const btn = (e.target as Element).closest<HTMLElement>('.hand-card button[data-item-index]')
+      if (!btn) return
+      e.stopPropagation()
+      const itemIndex = parseInt(btn.dataset.itemIndex ?? '-1', 10)
+      document.dispatchEvent(new CustomEvent<ItemActionDetail>('itemAction', {
+        detail: { itemIndex, shiftKey: e.shiftKey },
+      }))
+    })
+
+    // ── Hand slot hover tracking (survives DOM replacement; preview restored after each render) ──
+    this.boardElement.addEventListener('mouseover', (e: MouseEvent) => {
+      const slot = (e.target as Element).closest<HTMLElement>('.hand-slot.hand-card')
+      const idx = slot ? parseInt(slot.dataset.slotIndex ?? '-1', 10) : -1
+      if (idx === this.hoveredHandSlotIndex) return
+      if (this.hoveredHandSlotIndex !== null) {
+        this.boardElement
+          .querySelector<HTMLElement>(`.hand-slot[data-slot-index="${this.hoveredHandSlotIndex}"]`)
+          ?.classList.remove('is-preview-open')
+      }
+      this.hoveredHandSlotIndex = idx >= 0 ? idx : null
+      if (slot && idx >= 0) slot.classList.add('is-preview-open')
+    }, { passive: true })
+
+    this.boardElement.addEventListener('mouseleave', () => {
+      if (this.hoveredHandSlotIndex !== null) {
+        this.boardElement
+          .querySelector<HTMLElement>(`.hand-slot[data-slot-index="${this.hoveredHandSlotIndex}"]`)
+          ?.classList.remove('is-preview-open')
+        this.hoveredHandSlotIndex = null
+      }
     }, { passive: true })
   }
 
@@ -512,6 +549,9 @@ export class GameBoardRenderer {
         freshHandEl.replaceWith(prevHandEl)
       }
     }
+
+    // JS hover 상태가 있으면 DOM 교체 후에도 미리보기 클래스를 복원한다.
+    this.restoreHandHoverState()
 
     this.syncBodyVignette(scorePanel.vignetteIntensity ?? 0)
     this.injectStyles()
@@ -5189,21 +5229,7 @@ export class GameBoardRenderer {
       })
     })
 
-    // Hand cards: clicking dispatches itemAction which the main loop turns
-    // into a single-use (or arms targeting) on that slot.
-    this.boardElement
-      .querySelectorAll<HTMLElement>('.hand-card button[data-item-index]')
-      .forEach((el) => {
-        el.addEventListener('click', (e) => {
-          e.stopPropagation()
-          const itemIndex = parseInt(el.dataset.itemIndex || '-1', 10)
-          document.dispatchEvent(
-            new CustomEvent<ItemActionDetail>('itemAction', {
-              detail: { itemIndex, shiftKey: (e as MouseEvent).shiftKey },
-            })
-          )
-        })
-      })
+    // Hand card clicks are handled by permanent delegation in the constructor.
 
     // Mobile: first tap shows preview, second tap fires itemAction.
     // The touchend handler calls e.preventDefault() to suppress the ghost click
@@ -5285,6 +5311,21 @@ export class GameBoardRenderer {
     this.boardElement.querySelectorAll<HTMLElement>('.relic-mini-card').forEach((card) => {
       card.classList.toggle('is-pinned', card.dataset.ownedRelic === this.pinnedRelicId)
     })
+  }
+
+  /** DOM 교체 후 손패 hover 미리보기를 복원한다.
+   *  is-preview-restored로 플립 애니메이션을 한 프레임만 억제해 재생 안 됨. */
+  private restoreHandHoverState(): void {
+    if (this.hoveredHandSlotIndex === null) return
+    const slot = this.boardElement.querySelector<HTMLElement>(
+      `.hand-slot[data-slot-index="${this.hoveredHandSlotIndex}"]`
+    )
+    if (slot?.classList.contains('hand-card')) {
+      slot.classList.add('is-preview-open', 'is-preview-restored')
+      window.requestAnimationFrame(() => slot.classList.remove('is-preview-restored'))
+    } else {
+      this.hoveredHandSlotIndex = null
+    }
   }
 
   private handleCardClick(_el: HTMLElement, laneIndex: number, distance: number): void {
