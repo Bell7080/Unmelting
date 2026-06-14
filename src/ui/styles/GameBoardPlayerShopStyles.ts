@@ -895,6 +895,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   margin: 0;
   text-align: center;
 }
+/* 팩 피커 카드 desc-dyn: 도감·손패 미리보기와 동일 display 토글 방식 */
+.shop-pack-pick-card-effect .desc-dyn { display: inline; }
+.shop-pack-pick-card-effect .desc-dyn__d { display: none; opacity: 1; }
+body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__s { display: none; opacity: 1; }
+body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline; white-space: nowrap; }
+
 /* 타입 배지 — [ 트리플 ] / [ 레시피 ] / [ 손패 ] 등 */
 .shop-pack-type-badge {
   font-size: 10px;

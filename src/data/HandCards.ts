@@ -426,7 +426,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'slash',
     name: '참격',
     category: 'attack',
-    description: '전방 선택 적 1장 (3.0공+3)피해',
+    description: '전방 선택 적 1장 (2.0공+2)피해',
     tripleDescription: '전방 선택 적 1장 즉사 (보스 면역)',
     targeting: {
       base: { selection: 'target', zone: 'front', filter: 'enemy', countLimit: 1 },

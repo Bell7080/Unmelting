@@ -1448,7 +1448,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
         id: `unlock-${id}`,
         theme: 'unlock' as const,
         title: def.name,
-        effect: isBanned ? `[재해금] ${def.description}` : def.description,
+        effect: isBanned ? `[재해금] ${boardRenderer.cardEffectHtml(id)}` : boardRenderer.cardEffectHtml(id),
         rarity: HAND_CARD_RARITY[id],
         spriteUrl: spriteForHandCard(id),
         typeLabel: '손패',

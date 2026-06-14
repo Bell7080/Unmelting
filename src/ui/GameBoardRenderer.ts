@@ -1382,6 +1382,11 @@ export class GameBoardRenderer {
    * 반환값은 미리보기 tooltip과 도감(renderCompendiumHand) 모두에 쓰이므로
    * 여기서 스타일을 바꾸면 두 곳 모두 반영된다. 텍스트 규칙은 HandCards.ts 주석 참고.
    */
+  /** 팩 피커 effect 문자열 생성 — rollPackItems에서 호출. */
+  public cardEffectHtml(id: HandCardId, merged = false): string {
+    return this.enhancedHandCardDescription(id, merged)
+  }
+
   private enhancedHandCardDescription(id: HandCardId, merged: boolean): string {
     const def = getHandCardDef(id)
     const enhancements = this.currentGameState?.enhancements
@@ -1447,7 +1452,7 @@ export class GameBoardRenderer {
     if (id === 'slash') {
       if (merged) return getHandCardDef(id).tripleDescription // 즉사 텍스트 그대로
       const b = enhancements?.singleBonus['slash'] ?? 0
-      return `전방 선택 적 1장 ${atkDmgHtml(atk, 3, 3, b)}`
+      return `전방 선택 적 1장 ${atkDmgHtml(atk, 2, 2, b)}`
     }
     if (id === 'candle-tome') {
       if (!merged) return getHandCardDef(id).description // 단일은 정적 텍스트
