@@ -1254,4 +1254,39 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 .desc-dyn__d { opacity: 0; font-size: 0.8em; white-space: nowrap; }
 body.is-shift-detail .desc-dyn__s { opacity: 0; }
 body.is-shift-detail .desc-dyn__d { opacity: 1; }
+
+/* Shift 자세히 보기 힌트 — 카드 미리보기 하단에 은은하게 깜빡임 */
+.hand-shift-hint {
+  position: absolute;
+  bottom: -24px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  color: rgba(255, 215, 120, 0.7);
+  letter-spacing: 0.06em;
+  opacity: 0;
+  pointer-events: none;
+}
+/* 카드 플립(0.62s) 완료 후 0.7s 딜레이로 등장 */
+.hand-slot.hand-card:hover .hand-shift-hint,
+.hand-slot.hand-card:focus-within .hand-shift-hint,
+.hand-slot.hand-card.is-arming-target .hand-shift-hint {
+  animation: shift-hint-pulse 3.5s ease-in-out 0.7s infinite;
+}
+/* 저위치 슬롯은 카드 위로 올림 */
+.hand-slot.is-low-preview:hover .hand-shift-hint,
+.hand-slot.is-low-preview:focus-within .hand-shift-hint,
+.hand-slot.is-low-preview.is-arming-target .hand-shift-hint {
+  bottom: auto;
+  top: -24px;
+}
+/* Shift 활성 중이거나 터치 기기엔 숨김 */
+body.is-shift-detail .hand-shift-hint,
+body.is-touch-device .hand-shift-hint { animation: none !important; opacity: 0 !important; }
+
+@keyframes shift-hint-pulse {
+  0%, 100% { opacity: 0; }
+  40%, 60% { opacity: 0.4; }
+}
 `

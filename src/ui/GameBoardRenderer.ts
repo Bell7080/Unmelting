@@ -1594,6 +1594,7 @@ export class GameBoardRenderer {
           </button>
           <div class="hand-card-preview" style="--hand-card-back: url('${SpriteUrls.cardBack}');" aria-hidden="true">
             ${this.handCardFace(card.defId, description, card.merged)}
+            <span class="hand-shift-hint" aria-hidden="true">Shift 자세히 보기</span>
           </div>
           ${recipePreviewHtml}
         </li>
