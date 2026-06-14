@@ -398,6 +398,8 @@ export class GameBoardRenderer {
     })
 
     // ── Hand slot hover tracking (survives DOM replacement; preview restored after each render) ──
+    // 첫 진입: is-preview-open + is-preview-flip 추가 (flip 애니메이션 재생).
+    // 700ms 후 is-preview-flip 제거 → 이후 렌더 복원 시 flip 없이 열린 상태 유지.
     this.boardElement.addEventListener('mouseover', (e: MouseEvent) => {
       const slot = (e.target as Element).closest<HTMLElement>('.hand-slot.hand-card')
       const idx = slot ? parseInt(slot.dataset.slotIndex ?? '-1', 10) : -1
@@ -405,17 +407,20 @@ export class GameBoardRenderer {
       if (this.hoveredHandSlotIndex !== null) {
         this.boardElement
           .querySelector<HTMLElement>(`.hand-slot[data-slot-index="${this.hoveredHandSlotIndex}"]`)
-          ?.classList.remove('is-preview-open')
+          ?.classList.remove('is-preview-open', 'is-preview-flip')
       }
       this.hoveredHandSlotIndex = idx >= 0 ? idx : null
-      if (slot && idx >= 0) slot.classList.add('is-preview-open')
+      if (slot && idx >= 0) {
+        slot.classList.add('is-preview-open', 'is-preview-flip')
+        window.setTimeout(() => slot.classList.remove('is-preview-flip'), 700)
+      }
     }, { passive: true })
 
     this.boardElement.addEventListener('mouseleave', () => {
       if (this.hoveredHandSlotIndex !== null) {
         this.boardElement
           .querySelector<HTMLElement>(`.hand-slot[data-slot-index="${this.hoveredHandSlotIndex}"]`)
-          ?.classList.remove('is-preview-open')
+          ?.classList.remove('is-preview-open', 'is-preview-flip')
         this.hoveredHandSlotIndex = null
       }
     }, { passive: true })
@@ -5311,15 +5316,15 @@ export class GameBoardRenderer {
   }
 
   /** DOM 교체 후 손패 hover 미리보기를 복원한다.
-   *  is-preview-restored로 플립 애니메이션을 한 프레임만 억제해 재생 안 됨. */
+   *  is-preview-open만 추가 (is-preview-flip 없음) → 플립 애니메이션 재생 없이
+   *  최종 열린 상태로 즉시 표시. */
   private restoreHandHoverState(): void {
     if (this.hoveredHandSlotIndex === null) return
     const slot = this.boardElement.querySelector<HTMLElement>(
       `.hand-slot[data-slot-index="${this.hoveredHandSlotIndex}"]`
     )
     if (slot?.classList.contains('hand-card')) {
-      slot.classList.add('is-preview-open', 'is-preview-restored')
-      window.requestAnimationFrame(() => slot.classList.remove('is-preview-restored'))
+      slot.classList.add('is-preview-open')
     } else {
       this.hoveredHandSlotIndex = null
     }
