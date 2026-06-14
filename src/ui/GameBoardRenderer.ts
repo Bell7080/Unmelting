@@ -398,8 +398,8 @@ export class GameBoardRenderer {
     })
 
     // ── Hand slot hover tracking (survives DOM replacement; preview restored after each render) ──
-    // 첫 진입: is-preview-open + is-preview-flip 추가 (flip 애니메이션 재생).
-    // 700ms 후 is-preview-flip 제거 → 이후 렌더 복원 시 flip 없이 열린 상태 유지.
+    // 이 핸들러는 인덱스 추적만 한다. 첫 진입 플립은 CSS :hover가 담당하고,
+    // 렌더 후 복원은 restoreHandHoverState()가 is-preview-open(animation:none)으로 처리한다.
     this.boardElement.addEventListener('mouseover', (e: MouseEvent) => {
       const slot = (e.target as Element).closest<HTMLElement>('.hand-slot.hand-card')
       const idx = slot ? parseInt(slot.dataset.slotIndex ?? '-1', 10) : -1
@@ -407,20 +407,17 @@ export class GameBoardRenderer {
       if (this.hoveredHandSlotIndex !== null) {
         this.boardElement
           .querySelector<HTMLElement>(`.hand-slot[data-slot-index="${this.hoveredHandSlotIndex}"]`)
-          ?.classList.remove('is-preview-open', 'is-preview-flip')
+          ?.classList.remove('is-preview-open')
       }
       this.hoveredHandSlotIndex = idx >= 0 ? idx : null
-      if (slot && idx >= 0) {
-        slot.classList.add('is-preview-open', 'is-preview-flip')
-        window.setTimeout(() => slot.classList.remove('is-preview-flip'), 700)
-      }
+      // is-preview-open은 여기서 추가하지 않는다 — :hover CSS가 첫 플립을 자연스럽게 처리
     }, { passive: true })
 
     this.boardElement.addEventListener('mouseleave', () => {
       if (this.hoveredHandSlotIndex !== null) {
         this.boardElement
           .querySelector<HTMLElement>(`.hand-slot[data-slot-index="${this.hoveredHandSlotIndex}"]`)
-          ?.classList.remove('is-preview-open', 'is-preview-flip')
+          ?.classList.remove('is-preview-open')
         this.hoveredHandSlotIndex = null
       }
     }, { passive: true })
@@ -1896,6 +1893,12 @@ export class GameBoardRenderer {
     `
     host.classList.add('is-open')
     shell.classList.add('is-pack-picker-open')
+    // 최초 열림 페이드인 트리거 — 리롤(is-blast) 경로와 분리해 잔상 방지
+    const pickerCardsEl = host.querySelector<HTMLElement>('.shop-pack-picker-cards')
+    if (pickerCardsEl) {
+      pickerCardsEl.classList.add('is-entering')
+      window.setTimeout(() => pickerCardsEl.classList.remove('is-entering'), 1500)
+    }
   }
 
   /** Refresh pack cards in-place for reroll — layer stays open.
@@ -5316,8 +5319,7 @@ export class GameBoardRenderer {
   }
 
   /** DOM 교체 후 손패 hover 미리보기를 복원한다.
-   *  is-preview-open만 추가 (is-preview-flip 없음) → 플립 애니메이션 재생 없이
-   *  최종 열린 상태로 즉시 표시. */
+   *  is-preview-open(CSS animation:none)만 추가 — :hover의 flip 재실행을 CSS 레벨에서 막는다. */
   private restoreHandHoverState(): void {
     if (this.hoveredHandSlotIndex === null) return
     const slot = this.boardElement.querySelector<HTMLElement>(

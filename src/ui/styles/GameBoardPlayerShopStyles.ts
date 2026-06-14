@@ -830,7 +830,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   transform-style: preserve-3d;
   transform-origin: center bottom;
   /* 카드 루트는 낙하/호버만 담당하고 실제 앞뒤 회전은 내부 flipper가 담당한다. */
-  /* Pack picks appear in-place; no flip/drop entrance now. */
+  /* 진입 애니메이션은 is-entering(최초 열림) / is-blast(리롤) 경로로 분리한다.
+     베이스에 animation을 두면 is-blast 제거 시 fill:backwards가 opacity:0으로 되돌려 잔상 발생. */
+}
+/* 팩 피커 최초 열림 페이드인 — 리롤에는 적용되지 않아야 하므로 is-entering 클래스로 격리 */
+.shop-pack-picker-cards.is-entering .shop-pack-pick-card {
   animation: shop-pack-pick-fade-in 0.26s ease calc(var(--pick-i, 0) * 80ms + 0.62s) both;
 }
 .shop-pack-pick-card > * {

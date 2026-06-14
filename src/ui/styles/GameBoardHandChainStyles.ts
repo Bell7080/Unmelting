@@ -369,25 +369,18 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   animation: hand-preview-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
 }
 /* ── JS 추적 복원 (.is-preview-open) ── 애니메이션 없이 최종 열린 상태 직접 표시.
-   같은 특이도라 CSS 순서상 :hover 뒤에 배치하면 :hover를 덮어 쓴다.
-   마우스가 올라와 있는 동안에도 :hover와 함께 적용될 수 있으나, 렌더 이후
-   복원 경로에서는 이 규칙만으로 플립 없이 미리보기를 즉시 표시한다. */
+   :hover와 특이도가 같으므로 이 파일에서 :hover 뒤에 위치해야 한다.
+   animation: none 이 핵심 — 없으면 :hover의 flip 애니가 is-preview-open 위에서도 계속 실행된다. */
 .hand-slot.hand-card.is-preview-open .hand-card-preview {
   display: block;
+  animation: none;
   opacity: 1;
   transform: translateY(-50%) translateX(0) rotateY(0deg);
 }
 .hand-slot.hand-card.is-preview-open .hand-card-preview::before {
+  animation: none;
   opacity: 0;
   transform: rotateY(-102deg);
-}
-/* ── 첫 hover 진입 시 플립 (.is-preview-flip) ── 특이도 0,4,0 으로 위 규칙보다 높아
-   is-preview-open이 있을 때도 플립 애니메이션을 강제 실행한다. */
-.hand-slot.hand-card.is-preview-open.is-preview-flip .hand-card-preview {
-  animation: hand-preview-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
-}
-.hand-slot.hand-card.is-preview-open.is-preview-flip .hand-card-preview::before {
-  animation: hand-preview-back-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
 }
 .hand-slot.hand-card.is-arming-target .hand-card-preview {
   /* Targeted cards stay previewed after click so the cursor can leave the hand
@@ -409,9 +402,6 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 }
 .hand-slot.is-low-preview.is-preview-open .hand-card-preview {
   transform: translateY(-8px) translateX(0) rotateY(0deg);
-}
-.hand-slot.is-low-preview.is-preview-open.is-preview-flip .hand-card-preview {
-  animation-name: hand-preview-low-flip;
 }
 .hand-slot.is-low-preview.is-arming-target .hand-card-preview {
   transform: translateY(-8px) translateX(0) rotateY(0deg);
@@ -473,11 +463,9 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 .hand-slot.hand-card.is-recipe-ready.is-preview-open .hand-recipe-preview {
   display: grid;
   gap: 7px;
+  animation: none;
   opacity: 1;
   transform: translateY(-50%) translateX(0);
-}
-.hand-slot.hand-card.is-recipe-ready.is-preview-open.is-preview-flip .hand-recipe-preview {
-  animation: recipe-preview-slide 0.28s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
 }
 .hand-recipe-preview-kicker {
   font-size: 12px;
