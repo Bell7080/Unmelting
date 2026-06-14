@@ -1515,8 +1515,8 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
   const view: ShopPackPickerView = {
     packKind: kind,
     title,
-    // 삭제팩·해금팩·조합팩은 선택을 강제하지 않고 넘기기 버튼으로 패스 가능하다.
-    passable: kind === 'delete-pack' || kind === 'unlock-pack' || kind === 'recipe-pack',
+    // 삭제팩·해금팩·조합팩·확률팩은 선택을 강제하지 않고 넘기기 버튼으로 패스 가능하다.
+    passable: kind === 'delete-pack' || kind === 'unlock-pack' || kind === 'recipe-pack' || kind === 'chance-pack',
     // spriteUrl 포함: enhance/unlock/delete 팩은 카드별 일러스트가 있어야 식별 가능하다.
     items: items.map(({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote }) => ({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote })),
     rerollCost: 1 + (activePackSession?.rerollCount ?? 0),
@@ -1565,12 +1565,12 @@ async function handleShopPackReroll(packKind: ShopPackKind): Promise<void> {
   const newView: ShopPackPickerView = {
     packKind,
     title: SHOP_PACK_LABELS[packKind].title,
-    passable: packKind === 'delete-pack' || packKind === 'unlock-pack' || packKind === 'recipe-pack',
+    passable: packKind === 'delete-pack' || packKind === 'unlock-pack' || packKind === 'recipe-pack' || packKind === 'chance-pack',
     items: activePackSession.items.map(({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote }) => ({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote })),
     rerollCost: 1 + activePackSession.rerollCount,
     coins,
   }
-  boardRenderer.openPackPicker(newView)
+  boardRenderer.refreshPackPickerCards(newView)
 }
 
 async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {

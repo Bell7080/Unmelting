@@ -1836,58 +1836,6 @@ export class GameBoardRenderer {
       })
       shell.appendChild(host)
     }
-    const cards = view.items
-      .map(
-        (item, i) => {
-          // 개별 카드 아트가 있으면 우선 사용, 없으면 팩 커버 fallback
-          const artUrl = item.spriteUrl ?? SpriteUrls.packs[view.packKind]
-          const rarityClass = RARITY_CLASS_BY_TIER[item.rarity]
-          // 타입 접미사(' 트리플',' 강화')를 제거해 이름만 표시한다.
-          const cleanTitle = item.title.replace(/ (트리플|강화)$/, '')
-          const typeBadge = item.typeLabel
-            ? `<div class="shop-pack-type-badge">[ ${item.typeLabel} ]</div>`
-            : ''
-          const recipeNoteLine = item.recipeNote
-            ? `<p class="shop-pack-recipe-note">${item.recipeNote}</p>`
-            : ''
-          return `
-          <article class="shop-pack-pick-card pack-theme-${item.theme} ${rarityClass}"
-                   data-pack-pick="${item.id}"
-                   data-pack-kind="${view.packKind}"
-                   style="--pick-i:${i}; --cardback-url:url('${SpriteUrls.cardBack}');"
-                   tabindex="0"
-                   aria-label="${item.title} — ${item.effect}">
-            <div class="shop-pack-pick-flipper">
-              <div class="shop-pack-pick-back" aria-hidden="true"></div>
-              <div class="shop-pack-pick-front">
-                <div class="shop-pack-pick-art" style="background-image:url('${artUrl}');" aria-hidden="true">
-                  <div class="shop-pack-pick-rarity-badge ${rarityClass}">${item.rarity}</div>
-                </div>
-                <div class="shop-pack-pick-body">
-                  <header class="shop-pack-pick-card-head">
-                    ${typeBadge}
-                    <span class="shop-pack-pick-card-name">${cleanTitle}</span>
-                  </header>
-                  <p class="shop-pack-pick-card-effect">${item.effect}</p>
-                  ${recipeNoteLine}
-                </div>
-              </div>
-            </div>
-          </article>`
-        }
-      )
-      .join('')
-    const passBtn = view.passable
-      ? `<button class="shop-pack-pass-btn" data-pack-pass="${view.packKind}" aria-label="Pass">Pass</button>`
-      : ''
-    const rerollAffordable = view.rerollCost != null && (view.coins ?? 0) >= view.rerollCost
-    const rerollBtn = view.rerollCost != null
-      ? `<button class="shop-pack-reroll-btn ${rerollAffordable ? 'is-affordable' : 'is-unaffordable'}"
-                 data-pack-reroll="${view.packKind}"
-                 aria-label="재뽑기 ${view.rerollCost}$">
-           재뽑기 <span class="shop-pack-reroll-cost">${view.rerollCost}$</span>
-         </button>`
-      : ''
     host.classList.remove('is-closing')
     host.innerHTML = `
       <div class="shop-pack-picker-veil" style="--shop-picker-bg:url('${SpriteUrls.shopPickerBg}');" aria-hidden="true"></div>
@@ -1896,13 +1844,116 @@ export class GameBoardRenderer {
           <h2>${view.title}</h2>
           <p>3장 중 1장을 선택하시오.</p>
         </header>
-        <div class="shop-pack-picker-cards">${cards}</div>
-        ${rerollBtn}
-        ${passBtn}
+        <div class="shop-pack-picker-cards">${this.buildPackPickerCardsHtml(view)}</div>
+        ${this.buildPackPickerFooterHtml(view)}
       </div>
     `
     host.classList.add('is-open')
     shell.classList.add('is-pack-picker-open')
+  }
+
+  /** Refresh pack cards in-place for reroll — layer stays open.
+   *  Cards blast out left-to-right, then new cards fade in. */
+  refreshPackPickerCards(view: ShopPackPickerView): void {
+    const host = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-pack-picker')
+    if (!host || !host.classList.contains('is-open')) {
+      this.openPackPicker(view)
+      return
+    }
+    const cardsEl = host.querySelector<HTMLElement>('.shop-pack-picker-cards')
+    const footerEl = host.querySelector<HTMLElement>('.shop-pack-picker-footer')
+    if (!cardsEl || cardsEl.classList.contains('is-refreshing')) return
+
+    cardsEl.classList.add('is-refreshing')
+    window.setTimeout(() => {
+      cardsEl.classList.remove('is-refreshing')
+      cardsEl.innerHTML = this.buildPackPickerCardsHtml(view)
+
+      // Update reroll cost in-place without rebuilding the whole footer
+      if (footerEl && view.rerollCost != null) {
+        const btn = footerEl.querySelector<HTMLElement>('.shop-pack-picker-reroll-btn')
+        if (btn) {
+          const affordable = (view.coins ?? 0) >= view.rerollCost
+          btn.classList.toggle('is-affordable', affordable)
+          btn.classList.toggle('is-unaffordable', !affordable)
+          const costEl = btn.querySelector<HTMLElement>('.shop-pack-picker-reroll-cost')
+          if (costEl) costEl.textContent = `${view.rerollCost}$`
+        }
+      }
+    }, 300)
+  }
+
+  private buildPackPickerCardsHtml(view: ShopPackPickerView): string {
+    return view.items.map((item, i) => {
+      // 개별 카드 아트가 있으면 우선 사용, 없으면 팩 커버 fallback
+      const artUrl = item.spriteUrl ?? SpriteUrls.packs[view.packKind]
+      const rarityClass = RARITY_CLASS_BY_TIER[item.rarity]
+      // 타입 접미사(' 트리플',' 강화')를 제거해 이름만 표시한다.
+      const cleanTitle = item.title.replace(/ (트리플|강화)$/, '')
+      const typeBadge = item.typeLabel
+        ? `<div class="shop-pack-type-badge">[ ${item.typeLabel} ]</div>`
+        : ''
+      const recipeNoteLine = item.recipeNote
+        ? `<p class="shop-pack-recipe-note">${item.recipeNote}</p>`
+        : ''
+      return `
+        <article class="shop-pack-pick-card pack-theme-${item.theme} ${rarityClass}"
+                 data-pack-pick="${item.id}"
+                 data-pack-kind="${view.packKind}"
+                 style="--pick-i:${i}; --cardback-url:url('${SpriteUrls.cardBack}');"
+                 tabindex="0"
+                 aria-label="${item.title} — ${item.effect}">
+          <div class="shop-pack-pick-flipper">
+            <div class="shop-pack-pick-back" aria-hidden="true"></div>
+            <div class="shop-pack-pick-front">
+              <div class="shop-pack-pick-art" style="background-image:url('${artUrl}');" aria-hidden="true">
+                <div class="shop-pack-pick-rarity-badge ${rarityClass}">${item.rarity}</div>
+              </div>
+              <div class="shop-pack-pick-body">
+                <header class="shop-pack-pick-card-head">
+                  ${typeBadge}
+                  <span class="shop-pack-pick-card-name">${cleanTitle}</span>
+                </header>
+                <p class="shop-pack-pick-card-effect">${item.effect}</p>
+                ${recipeNoteLine}
+              </div>
+            </div>
+          </div>
+        </article>`
+    }).join('')
+  }
+
+  // 재뽑기 아이콘 — 유물 리롤 버튼과 동일한 flat SVG
+  private readonly packRerollIcon = `<svg class="shop-pack-reroll-icon" width="20" height="20" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M4 11a7 7 0 0 1 12.3-4.6"/>
+    <path d="M18 11a7 7 0 0 1-12.3 4.6"/>
+    <polyline points="15.4 6.4 17.3 6.4 17.3 4.5"/>
+    <polyline points="6.6 15.6 4.7 15.6 4.7 17.5"/>
+  </svg>`
+
+  private buildPackPickerFooterHtml(view: ShopPackPickerView): string {
+    const rerollAffordable = view.rerollCost != null && (view.coins ?? 0) >= view.rerollCost
+    const rerollBtn = view.rerollCost != null
+      ? `<button type="button"
+                 class="shop-pack-picker-reroll-btn ${rerollAffordable ? 'is-affordable' : 'is-unaffordable'}"
+                 data-pack-reroll="${view.packKind}"
+                 aria-label="REROLL — ${view.rerollCost}$">
+           <span class="shop-pack-picker-reroll-top">
+             ${this.packRerollIcon}
+             <span class="shop-pack-picker-reroll-label">REROLL</span>
+           </span>
+           <span class="shop-pack-picker-reroll-rule" aria-hidden="true"></span>
+           <span class="shop-pack-picker-reroll-cost">${view.rerollCost}$</span>
+         </button>`
+      : ''
+    const passBtn = view.passable
+      ? `<button type="button"
+                 class="shop-pack-pass-btn"
+                 data-pack-pass="${view.packKind}"
+                 aria-label="Pass">PASS</button>`
+      : ''
+    if (!rerollBtn && !passBtn) return ''
+    return `<footer class="shop-pack-picker-footer">${rerollBtn}${passBtn}</footer>`
   }
 
   /** Hide the pack picker overlay. Plays the lift-out animation first

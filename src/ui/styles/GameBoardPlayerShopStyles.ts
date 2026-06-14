@@ -942,82 +942,153 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   white-space: normal;
   letter-spacing: 0.02em;
 }
-/* 모든 팩 — 재뽑기 버튼 (카드 하단, Pass 위) */
-.shop-pack-reroll-btn {
+/* 팩 피커 하단 버튼 컨테이너 — 리롤+패스를 가로로 묶어 flex 흐름에 편입 */
+.shop-pack-picker-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 1.4vw, 18px);
+  flex-shrink: 0;
+}
+.shop-pack-picker.is-closing .shop-pack-picker-footer {
+  animation: shop-pack-footer-fade-out 0.22s ease both;
+}
+@keyframes shop-pack-footer-fade-out {
+  0%   { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(18px); }
+}
+/* 팩 피커 — 재뽑기 버튼 (유물 리롤 버튼 스타일 참고, 카드 형태) */
+.shop-pack-picker-reroll-btn {
   appearance: none;
-  position: absolute;
-  bottom: clamp(60px, 8.2vh, 84px);
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 7px 28px;
-  border-radius: 999px;
-  border: 1px solid rgba(200, 175, 110, 0.34);
-  background: rgba(40, 30, 18, 0.72);
-  color: rgba(230, 205, 145, 0.72);
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  width: clamp(88px, 9vw, 110px);
+  height: clamp(78px, 9.5vh, 100px);
+  padding: clamp(8px, 1vh, 11px) 10px;
+  border: 1px solid rgba(200, 152, 60, 0.48);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg,
+      rgba(108, 62, 22, 0.97) 0%,
+      rgba(72, 36, 14, 0.98) 52%,
+      rgba(32, 14, 6, 0.99) 100%),
+    repeating-linear-gradient(135deg,
+      rgba(255, 220, 140, 0.04) 0 2px,
+      transparent 2px 7px);
+  color: rgba(255, 228, 160, 0.95);
   font-family: inherit;
-  font-weight: 600;
-  font-size: 12px;
-  letter-spacing: 0.20em;
+  font-weight: 900;
   cursor: pointer;
-  white-space: nowrap;
-  z-index: 4;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.9);
-  transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 228, 160, 0.22),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.6),
+    0 6px 16px rgba(0, 0, 0, 0.6);
+  transition: filter 0.16s ease, border-color 0.18s ease;
+  overflow: hidden;
 }
-.shop-pack-reroll-btn .shop-pack-reroll-cost {
-  font-size: 11px;
-  opacity: 0.85;
+/* 상단 광택 줄 */
+.shop-pack-picker-reroll-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 12%;
+  width: 76%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 228, 160, 0.38), transparent);
+  border-radius: 0 0 50% 50%;
 }
-.shop-pack-reroll-btn.is-affordable:hover {
-  border-color: rgba(230, 200, 120, 0.55);
-  color: rgba(245, 225, 170, 0.92);
-  background: rgba(55, 40, 18, 0.82);
+.shop-pack-picker-reroll-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
 }
-.shop-pack-reroll-btn.is-unaffordable {
-  opacity: 0.35;
-  cursor: default;
+.shop-pack-reroll-icon {
+  display: block;
+  opacity: 0.88;
+  flex-shrink: 0;
 }
-/* Pass 버튼이 없을 때 재뽑기가 Pass 자리로 내려오도록 bottom 보정 */
-.shop-pack-picker-shell:not(:has(.shop-pack-pass-btn)) .shop-pack-reroll-btn {
-  bottom: clamp(26px, 3.6vh, 42px);
+.shop-pack-picker-reroll-label {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  opacity: 0.72;
+  line-height: 1;
 }
-/* 삭제팩/해금팩 — Pass 버튼 (하단 중앙, minimal pill) */
+.shop-pack-picker-reroll-rule {
+  display: block;
+  width: 54%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(210, 160, 60, 0.55), transparent);
+  flex-shrink: 0;
+}
+.shop-pack-picker-reroll-cost {
+  font-size: clamp(18px, 1.7vw, 24px);
+  line-height: 1;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+.shop-pack-picker-reroll-btn.is-affordable { border-color: rgba(130, 210, 110, 0.65); }
+.shop-pack-picker-reroll-btn.is-affordable:hover {
+  border-color: rgba(160, 240, 130, 0.8);
+  filter: brightness(1.08);
+}
+.shop-pack-picker-reroll-btn.is-unaffordable {
+  filter: saturate(0.55) brightness(0.72);
+  cursor: not-allowed;
+  border-color: rgba(160, 120, 60, 0.3);
+}
+/* 팩 피커 — Pass 버튼 (가시성 강화, 유물 리롤 버튼 보조 스타일 참고) */
 .shop-pack-pass-btn {
   appearance: none;
-  position: absolute;
-  bottom: clamp(26px, 3.6vh, 42px);
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 6px 26px;
-  border-radius: 999px;
-  border: 1px solid rgba(185, 168, 136, 0.26);
-  background: transparent;
-  color: rgba(205, 188, 160, 0.50);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 22px;
+  border-radius: 12px;
+  border: 1px solid rgba(185, 168, 136, 0.38);
+  background: rgba(32, 22, 14, 0.72);
+  color: rgba(210, 192, 162, 0.72);
   font-family: inherit;
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.32em;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.28em;
   text-transform: uppercase;
   cursor: pointer;
   white-space: nowrap;
-  z-index: 4;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
-  transition: border-color 0.22s ease, color 0.22s ease;
-  transform-origin: center center;
+  box-shadow: inset 0 1px 0 rgba(255, 228, 160, 0.1), 0 4px 10px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.18s ease, color 0.18s ease, filter 0.16s ease;
 }
 .shop-pack-pass-btn:hover {
-  border-color: rgba(215, 196, 158, 0.46);
-  color: rgba(232, 214, 180, 0.78);
+  border-color: rgba(215, 196, 158, 0.56);
+  color: rgba(232, 214, 180, 0.9);
+  filter: brightness(1.06);
 }
 /* 클릭 후 선으로 수축하며 퇴장 */
 @keyframes pass-btn-to-line {
-  0%   { transform: translateX(-50%) scaleY(1)   scaleX(1);    opacity: 1; }
-  20%  { transform: translateX(-50%) scaleY(0.92) scaleX(0.96); opacity: 1; }
-  60%  { transform: translateX(-50%) scaleY(0.05) scaleX(1.08); opacity: 0.55; }
-  100% { transform: translateX(-50%) scaleY(0.01) scaleX(1.14); opacity: 0; }
+  0%   { transform: scaleY(1) scaleX(1);     opacity: 1; }
+  20%  { transform: scaleY(0.92) scaleX(0.96); opacity: 1; }
+  60%  { transform: scaleY(0.05) scaleX(1.08); opacity: 0.55; }
+  100% { transform: scaleY(0.01) scaleX(1.14); opacity: 0; }
 }
 .shop-pack-pass-btn.is-passing {
   animation: pass-btn-to-line 0.34s cubic-bezier(0.48, 0, 0.52, 1) forwards;
+  pointer-events: none;
+}
+/* 팩 카드 리롤 시 좌→우 블라스트 퇴장 */
+@keyframes shop-pack-pick-blast {
+  0%   { transform: translateY(0) scale(1);    opacity: 1; }
+  30%  { transform: translateY(-10px) scale(1.04); opacity: 0.85; }
+  100% { transform: translateY(-36px) scale(0.88); opacity: 0; }
+}
+.shop-pack-picker-cards.is-refreshing .shop-pack-pick-card {
+  animation: shop-pack-pick-blast 0.24s cubic-bezier(0.36, 0.07, 0.19, 0.97) calc(var(--pick-i, 0) * 50ms) both;
   pointer-events: none;
 }
 /* Painted back face — a dedicated DOM element painted purely with
