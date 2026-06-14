@@ -12,11 +12,11 @@ let nextDropUid = 1
 
 // 1차 거름망 등급 기본 가중치
 const RARITY_WEIGHTS: Record<CardRarity, number> = {
-  common: 35,
-  rare: 20,
-  epic: 10,
-  unique: 2,
-  legendary: 2,
+  common: 60,
+  rare: 35,
+  epic: 18,
+  unique: 5,
+  legendary: 5,
 }
 
 function generateUid(defId: HandCardId): string {
