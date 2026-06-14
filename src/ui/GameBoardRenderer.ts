@@ -1894,7 +1894,8 @@ export class GameBoardRenderer {
   }
 
   /** Refresh pack cards in-place for reroll — layer stays open.
-   *  Cards blast out left-to-right, then new cards fade in. */
+   *  블라스트 아웃 없이 즉시 교체 후 팝인+버스트 링을 단일 이벤트로 처리한다.
+   *  (블라스트 아웃→팝인 2단계가 이중 점멸로 지각되어 제거함) */
   refreshPackPickerCards(view: ShopPackPickerView): void {
     const host = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-pack-picker')
     if (!host || !host.classList.contains('is-open')) {
@@ -1903,28 +1904,24 @@ export class GameBoardRenderer {
     }
     const cardsEl = host.querySelector<HTMLElement>('.shop-pack-picker-cards')
     const footerEl = host.querySelector<HTMLElement>('.shop-pack-picker-footer')
-    if (!cardsEl || cardsEl.classList.contains('is-refreshing')) return
+    // is-blast 지속 중(600ms) 연타 무시
+    if (!cardsEl || cardsEl.classList.contains('is-blast')) return
 
-    cardsEl.classList.add('is-refreshing')
-    window.setTimeout(() => {
-      cardsEl.classList.remove('is-refreshing')
-      cardsEl.innerHTML = this.buildPackPickerCardsHtml(view)
-      // is-blast: 새 카드 빠른 페이드인 + 사각 버스트 연출
-      cardsEl.classList.add('is-blast')
-      window.setTimeout(() => cardsEl.classList.remove('is-blast'), 600)
+    cardsEl.innerHTML = this.buildPackPickerCardsHtml(view)
+    cardsEl.classList.add('is-blast')
+    window.setTimeout(() => cardsEl.classList.remove('is-blast'), 600)
 
-      // Update reroll cost in-place without rebuilding the whole footer
-      if (footerEl && view.rerollCost != null) {
-        const btn = footerEl.querySelector<HTMLElement>('.shop-pack-picker-reroll-btn')
-        if (btn) {
-          const affordable = (view.coins ?? 0) >= view.rerollCost
-          btn.classList.toggle('is-affordable', affordable)
-          btn.classList.toggle('is-unaffordable', !affordable)
-          const costEl = btn.querySelector<HTMLElement>('.shop-pack-picker-reroll-cost')
-          if (costEl) costEl.textContent = `${view.rerollCost}$`
-        }
+    // Update reroll cost in-place without rebuilding the whole footer
+    if (footerEl && view.rerollCost != null) {
+      const btn = footerEl.querySelector<HTMLElement>('.shop-pack-picker-reroll-btn')
+      if (btn) {
+        const affordable = (view.coins ?? 0) >= view.rerollCost
+        btn.classList.toggle('is-affordable', affordable)
+        btn.classList.toggle('is-unaffordable', !affordable)
+        const costEl = btn.querySelector<HTMLElement>('.shop-pack-picker-reroll-cost')
+        if (costEl) costEl.textContent = `${view.rerollCost}$`
       }
-    }, 160)
+    }
   }
 
   private buildPackPickerCardsHtml(view: ShopPackPickerView): string {

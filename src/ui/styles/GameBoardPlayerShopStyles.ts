@@ -1125,8 +1125,10 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   z-index: 10;
   animation: pack-card-reroll-burst 0.36s cubic-bezier(0.16, 0.84, 0.44, 1) calc(var(--pick-i, 0) * 45ms) both;
 }
+/* 0% opacity: 0으로 시작해 stagger 딜레이 중 fill:backwards로 테두리가 미리 보이는 현상 방지 */
 @keyframes pack-card-reroll-burst {
-  0%   { transform: scale(0.96); opacity: 0.55; }
+  0%   { transform: scale(0.96); opacity: 0; }
+  14%  { transform: scale(0.97); opacity: 0.58; }
   100% { transform: scale(1.28); opacity: 0; }
 }
 /* Painted back face — a dedicated DOM element painted purely with
