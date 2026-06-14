@@ -212,8 +212,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'levatein',
     name: '레바테인',
     category: 'attack',
-    description: '즉시 2턴 흐름<br>이후, 선택 적 1장 (0.3♥+10)피해',
-    tripleDescription: '즉시 1턴 흐름<br>이후, 선택 적 1장 (0.45♥+15)피해',
+    description: '즉시 2턴 흐름<br>선택 적 1장 적HP30%+10피해',
+    tripleDescription: '즉시 1턴 흐름<br>선택 적 1장 적HP45%+15피해',
     targeting: {
       base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },

@@ -39,13 +39,14 @@ export function atkDmgHtml(atk: number, mult: number, addend = 0, bonus = 0): st
 
 /**
  * 적 체력 배율 피해 span 반환 (레바테인 전용).
- * __s: "적HP 비례 피해" 텍스트, __d(Shift): "(0.3♥+10)피해" 수식
+ * __s: "적HP30%+10피해" 형태, __d(Shift): "(0.3♥+10)피해" 수식
  */
 export function hpDmgHtml(mult: number, addend = 0, bonus = 0): string {
+  const pct = Math.round(mult * 100)
   const bonusSuffix = bonus > 0 ? `+${bonus}` : ''
   return [
     `<span class="desc-dyn">`,
-    `<span class="desc-dyn__s">적HP 비례 피해</span>`,
+    `<span class="desc-dyn__s">적HP${pct}%${fmtAdd(addend + bonus)}피해</span>`,
     `<span class="desc-dyn__d">(${String(mult)}${heartIcon()}${fmtAdd(addend)}${bonusSuffix})피해</span>`,
     `</span>`,
   ].join('')
