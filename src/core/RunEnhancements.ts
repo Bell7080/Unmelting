@@ -28,10 +28,12 @@ export interface RunEnhancements {
   demonDollSelfDamageAccum: number
   /** 악마 인형 유물: 현재까지 실제 획득한 공격력 누적치 (표기용). */
   demonDollBonusAtk: number
-  /** 확률팩·직업 보너스로 1차 거름망에 추가된 개별 카드 가중치: 카드 id → 누적값. */
+  /** 확률팩으로 1차 거름망에 추가된 개별 카드 가중치: 카드 id → 누적값. */
   tier1CardBoosts: Partial<Record<string, number>>
+  /** 직업 선택으로 1차 거름망에 추가된 태그 그룹 가중치: 태그명 → 누적값. 당첨 시 태그 내 T2를 돌린다. */
+  tier1JobPoolBoosts: Partial<Record<string, number>>
 }
 
 export function makeDefaultEnhancements(): RunEnhancements {
-  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, tier1CardBoosts: {} }
+  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, tier1CardBoosts: {}, tier1JobPoolBoosts: {} }
 }

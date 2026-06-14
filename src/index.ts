@@ -304,8 +304,9 @@ const metaUnlockedCardIds = HAND_CARD_IDS.filter((id) => !getHandCardDef(id).run
 const runCardPool = new RunCardPool(HAND_CARD_IDS, metaUnlockedCardIds)
 // 잠긴 카드가 드롭되지 않도록 초기 허용 풀을 동기화한다.
 DropSystem.setAllowedPool(runCardPool.snapshot().unlocked)
-// 확률팩 가중치도 초기화 시점에 동기화한다(저장된 런 재개 대비).
+// 확률팩·직업 태그 가중치도 초기화 시점에 동기화한다(저장된 런 재개 대비).
 DropSystem.setTier1CardBoosts(gameState.enhancements.tier1CardBoosts)
+DropSystem.setTier1JobPoolBoosts(gameState.enhancements.tier1JobPoolBoosts)
 boardRenderer.setLockedCardIds([...runCardPool.snapshot().locked, ...runCardPool.snapshot().banned])
 // runLocked 레시피는 런 시작 시 전부 잠금 — 해금팩으로만 해제 가능하다.
 boardRenderer.setLockedRecipeIds(RECIPES.filter((r) => r.runLocked).map((r) => r.id))
@@ -2314,15 +2315,11 @@ async function startGame(): Promise<void> {
       gameState.enhancements.shopDiscountPct = chosenJob.shopDiscountPct
     }
     cardSpawner.setJobSpawnAdjust(chosenJob.spawnEnemy, chosenJob.spawnTrap, chosenJob.spawnTreasure, chosenJob.spawnFlower)
-    // 기사/마법사: 직업 태그 카드를 1차 거름망에 가중치 10으로 추가한다.
+    // 기사/마법사: 직업 태그 그룹을 1차 거름망에 단일 항목(가중치 10)으로 추가한다.
+    // 당첨 시 해당 태그 카드들 내에서 T2를 돌린다(개별 카드에 분산 추가하지 않음).
     if (chosenJob.id === 'knight' || chosenJob.id === 'mage') {
-      const tag = chosenJob.id
-      for (const id of HAND_CARD_IDS) {
-        if (HAND_CARD_DEFINITIONS[id].jobTags?.includes(tag)) {
-          gameState.enhancements.tier1CardBoosts[id] = (gameState.enhancements.tier1CardBoosts[id] ?? 0) + 10
-        }
-      }
-      DropSystem.setTier1CardBoosts(gameState.enhancements.tier1CardBoosts)
+      gameState.enhancements.tier1JobPoolBoosts[chosenJob.id] = (gameState.enhancements.tier1JobPoolBoosts[chosenJob.id] ?? 0) + 10
+      DropSystem.setTier1JobPoolBoosts(gameState.enhancements.tier1JobPoolBoosts)
     }
     // 도적: 함정 무시 확률 적용.
     if (chosenJob.trapIgnoreChance) c.trapIgnoreChance += chosenJob.trapIgnoreChance
