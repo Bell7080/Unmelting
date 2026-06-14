@@ -768,7 +768,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   /* 카드는 세로 중앙에 두고, 헤더만 absolute로 상단에 띄운다. */
   justify-content: center;
   gap: clamp(8px, 1.2vh, 14px);
-  padding: clamp(16px, 2.2vh, 26px) clamp(10px, 1.4vh, 18px) clamp(10px, 1.4vh, 18px);
+  padding: clamp(28px, 4vh, 50px) clamp(10px, 1.4vh, 18px) clamp(8px, 1vh, 12px);
   /* 베일 레이어 뒤에 붙은 보조 레이어처럼 한 박자 늦게 같은 top-down 모션으로 열린다. */
   opacity: 0;
   transform: translateY(-100%) scaleY(0.92);
@@ -949,6 +949,7 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   justify-content: center;
   gap: clamp(10px, 1.4vw, 18px);
   flex-shrink: 0;
+  margin-top: clamp(4px, 1vh, 12px);
 }
 .shop-pack-picker.is-closing .shop-pack-picker-footer {
   animation: shop-pack-footer-fade-out 0.22s ease both;
@@ -965,9 +966,9 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  width: clamp(88px, 9vw, 110px);
-  height: clamp(78px, 9.5vh, 100px);
-  padding: clamp(8px, 1vh, 11px) 10px;
+  width: clamp(74px, 7.6vw, 93px);
+  height: clamp(64px, 8vh, 82px);
+  padding: clamp(7px, 0.9vh, 10px) 9px;
   border: 1px solid rgba(200, 152, 60, 0.48);
   border-radius: 14px;
   background:
@@ -1027,7 +1028,7 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   flex-shrink: 0;
 }
 .shop-pack-picker-reroll-cost {
-  font-size: clamp(18px, 1.7vw, 24px);
+  font-size: clamp(15px, 1.4vw, 20px);
   line-height: 1;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
@@ -1043,32 +1044,36 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   cursor: not-allowed;
   border-color: rgba(160, 120, 60, 0.3);
 }
-/* 팩 피커 — Pass 버튼 (가시성 강화, 유물 리롤 버튼 보조 스타일 참고) */
+/* 팩 피커 — Pass 버튼 (상점 EXIT 버튼 스타일 참고, 어두운 밀랍 직사각형) */
 .shop-pack-pass-btn {
   appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 22px;
-  border-radius: 12px;
-  border: 1px solid rgba(185, 168, 136, 0.38);
-  background: rgba(32, 22, 14, 0.72);
-  color: rgba(210, 192, 162, 0.72);
+  padding: 7px 18px;
+  border-radius: 5px;
+  border: 1.5px solid rgba(155, 128, 88, 0.52);
+  background:
+    linear-gradient(180deg, rgba(52, 36, 20, 0.97), rgba(22, 13, 7, 0.98)),
+    repeating-linear-gradient(125deg, rgba(255, 200, 100, 0.04) 0 2px, transparent 2px 7px);
+  color: rgba(218, 198, 162, 0.88);
   font-family: inherit;
-  font-weight: 700;
+  font-weight: 900;
   font-size: 12px;
-  letter-spacing: 0.28em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
   cursor: pointer;
   white-space: nowrap;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
-  box-shadow: inset 0 1px 0 rgba(255, 228, 160, 0.1), 0 4px 10px rgba(0, 0, 0, 0.4);
-  transition: border-color 0.18s ease, color 0.18s ease, filter 0.16s ease;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 228, 160, 0.16),
+    inset 0 -2px 5px rgba(0, 0, 0, 0.5),
+    0 5px 12px rgba(0, 0, 0, 0.5);
+  transition: filter 0.16s ease, border-color 0.18s ease;
 }
 .shop-pack-pass-btn:hover {
-  border-color: rgba(215, 196, 158, 0.56);
-  color: rgba(232, 214, 180, 0.9);
-  filter: brightness(1.06);
+  filter: brightness(1.1);
+  border-color: rgba(200, 172, 112, 0.68);
 }
 /* 클릭 후 선으로 수축하며 퇴장 */
 @keyframes pass-btn-to-line {
@@ -1081,15 +1086,35 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   animation: pass-btn-to-line 0.34s cubic-bezier(0.48, 0, 0.52, 1) forwards;
   pointer-events: none;
 }
-/* 팩 카드 리롤 시 좌→우 블라스트 퇴장 */
+/* 팩 카드 리롤 시 빠른 퇴장 (좌→우 스태거) */
 @keyframes shop-pack-pick-blast {
-  0%   { transform: translateY(0) scale(1);    opacity: 1; }
-  30%  { transform: translateY(-10px) scale(1.04); opacity: 0.85; }
-  100% { transform: translateY(-36px) scale(0.88); opacity: 0; }
+  0%   { transform: translateY(0) scale(1);     opacity: 1; }
+  25%  { transform: translateY(-8px) scale(1.03); opacity: 0.7; }
+  100% { transform: translateY(-28px) scale(0.9); opacity: 0; }
 }
 .shop-pack-picker-cards.is-refreshing .shop-pack-pick-card {
-  animation: shop-pack-pick-blast 0.24s cubic-bezier(0.36, 0.07, 0.19, 0.97) calc(var(--pick-i, 0) * 50ms) both;
+  animation: shop-pack-pick-blast 0.13s cubic-bezier(0.36, 0.07, 0.19, 0.97) calc(var(--pick-i, 0) * 28ms) both;
   pointer-events: none;
+}
+/* 새 카드 등장 시 빠른 페이드인 (초기 0.62s 딜레이 생략) */
+.shop-pack-picker-cards.is-blast .shop-pack-pick-card {
+  animation: shop-pack-pick-fade-in 0.20s ease calc(var(--pick-i, 0) * 45ms) both;
+}
+/* 사각 버스트 — 각 카드 테두리에서 바깥으로 팽창하며 사라짐 */
+.shop-pack-picker-cards.is-blast .shop-pack-pick-card::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border: 2px solid rgba(255, 228, 140, 0.52);
+  border-radius: 16px;
+  pointer-events: none;
+  z-index: 10;
+  animation: pack-card-reroll-burst 0.36s cubic-bezier(0.16, 0.84, 0.44, 1) calc(var(--pick-i, 0) * 45ms) both;
+}
+@keyframes pack-card-reroll-burst {
+  0%   { transform: scale(0.88); opacity: 0; }
+  18%  { transform: scale(0.97); opacity: 0.65; }
+  100% { transform: scale(1.28); opacity: 0; }
 }
 /* Painted back face — a dedicated DOM element painted purely with
    cardbackground_001.webp. Sits at rotateY(180deg) so it shows while the

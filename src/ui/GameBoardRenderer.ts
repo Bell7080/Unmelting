@@ -1868,6 +1868,9 @@ export class GameBoardRenderer {
     window.setTimeout(() => {
       cardsEl.classList.remove('is-refreshing')
       cardsEl.innerHTML = this.buildPackPickerCardsHtml(view)
+      // is-blast: 새 카드 빠른 페이드인 + 사각 버스트 연출
+      cardsEl.classList.add('is-blast')
+      window.setTimeout(() => cardsEl.classList.remove('is-blast'), 600)
 
       // Update reroll cost in-place without rebuilding the whole footer
       if (footerEl && view.rerollCost != null) {
@@ -1880,7 +1883,7 @@ export class GameBoardRenderer {
           if (costEl) costEl.textContent = `${view.rerollCost}$`
         }
       }
-    }, 300)
+    }, 160)
   }
 
   private buildPackPickerCardsHtml(view: ShopPackPickerView): string {
