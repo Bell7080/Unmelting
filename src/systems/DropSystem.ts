@@ -77,7 +77,7 @@ export class DropSystem {
     }
     for (const [tag, weight] of Object.entries(DropSystem.tier1JobPoolBoosts)) {
       // 직업 태그 풀에 해당 카드가 1장이라도 있을 때만 항목 추가
-      if (weight && weight > 0 && pool.some(d => d.jobTags?.includes(tag))) {
+      if (weight && weight > 0 && pool.some(d => (d.jobTags as readonly string[] | undefined)?.includes(tag))) {
         tier1.push({ kind: 'job-pool', tag, weight })
       }
     }
@@ -94,7 +94,7 @@ export class DropSystem {
 
     if (selected.kind === 'job-pool') {
       // 직업 태그 그룹 당첨: 해당 태그 카드들 내에서 dropWeight T2
-      const tagPool = pool.filter(d => d.jobTags?.includes(selected.tag))
+      const tagPool = pool.filter(d => (d.jobTags as readonly string[] | undefined)?.includes(selected.tag))
       const tagDefs = tagPool.length > 0 ? tagPool : pool
       const total = tagDefs.reduce((s, d) => s + (d.dropWeight ?? 1), 0)
       let roll = Math.random() * total
@@ -152,7 +152,7 @@ export class DropSystem {
 
     const T1_base = Array.from(existingRarities).reduce((s, r) => s + RARITY_WEIGHTS[r], 0)
     const cardBoostTotal = pool.reduce((s, pid) => s + (currentBoosts[pid] ?? 0), 0)
-    const jobPoolTotal = Object.values(DropSystem.tier1JobPoolBoosts).reduce((s, w) => s + (w ?? 0), 0)
+    const jobPoolTotal = Object.values(DropSystem.tier1JobPoolBoosts).reduce<number>((s, w) => s + (w ?? 0), 0)
     const T1_current = T1_base + cardBoostTotal + jobPoolTotal
 
     const rarity = HAND_CARD_RARITY[id] ?? 'common'
@@ -164,10 +164,10 @@ export class DropSystem {
     // 직업 태그 그룹 경로: 이 카드가 가진 태그마다 pool 내 해당 태그 T2 기여를 합산
     const def = HAND_CARD_DEFINITIONS[id]
     const jobContrib = (total: number): number =>
-      Object.entries(DropSystem.tier1JobPoolBoosts).reduce((s, [tag, w]) => {
-        if (!w || !def?.jobTags?.includes(tag)) return s
+      Object.entries(DropSystem.tier1JobPoolBoosts).reduce<number>((s, [tag, w]) => {
+        if (!w || !(def?.jobTags as readonly string[] | undefined)?.includes(tag)) return s
         const T2_tag = defs
-          .filter(d => d.jobTags?.includes(tag))
+          .filter(d => (d.jobTags as readonly string[] | undefined)?.includes(tag))
           .reduce((sum, d) => sum + (d.dropWeight ?? 1), 0)
         return s + (T2_tag > 0 ? (w / total) * (W_C / T2_tag) : 0)
       }, 0)
