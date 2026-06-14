@@ -38,15 +38,14 @@ export function atkDmgHtml(atk: number, mult: number, addend = 0, bonus = 0): st
 }
 
 /**
- * 최대 체력 배율 피해 span 반환 (레바테인 전용).
- * @example hpDmgHtml(100, 0.3, 10, 0) → "40피해" / "(0.3♥+10)피해"
+ * 적 체력 배율 피해 span 반환 (레바테인 전용).
+ * __s: "적HP 비례 피해" 텍스트, __d(Shift): "(0.3♥+10)피해" 수식
  */
-export function hpDmgHtml(maxHp: number, mult: number, addend = 0, bonus = 0): string {
-  const total = Math.floor(mult * maxHp) + addend + bonus
+export function hpDmgHtml(mult: number, addend = 0, bonus = 0): string {
   const bonusSuffix = bonus > 0 ? `+${bonus}` : ''
   return [
     `<span class="desc-dyn">`,
-    `<span class="desc-dyn__s">${total}피해</span>`,
+    `<span class="desc-dyn__s">적HP 비례 피해</span>`,
     `<span class="desc-dyn__d">(${String(mult)}${heartIcon()}${fmtAdd(addend)}${bonusSuffix})피해</span>`,
     `</span>`,
   ].join('')

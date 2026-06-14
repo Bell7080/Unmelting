@@ -1405,7 +1405,6 @@ export class GameBoardRenderer {
     }
     // ATK 연동 공격 카드: 기본 합산 수치, Shift 수식 (DamageDisplay 매니저 사용)
     const atk = this.currentGameState?.getCharacter().damage ?? 1
-    const maxHp = this.currentGameState?.getCharacter().maxHealth ?? 0
     if (id === 'sacrifice-candle') {
       const b = merged ? (enhancements?.tripleBonus['sacrifice-candle'] ?? 0) : (enhancements?.singleBonus['sacrifice-candle'] ?? 0)
       const selfTag = merged ? '자해 5 · ' : '자해 2 · '
@@ -1415,7 +1414,7 @@ export class GameBoardRenderer {
     if (id === 'levatein') {
       const b = merged ? (enhancements?.tripleBonus['levatein'] ?? 0) : (enhancements?.singleBonus['levatein'] ?? 0)
       const turns = merged ? '즉시 1턴 흐름' : '즉시 2턴 흐름'
-      const dmg = merged ? hpDmgHtml(maxHp, 0.45, 15, b) : hpDmgHtml(maxHp, 0.3, 10, b)
+      const dmg = merged ? hpDmgHtml(0.45, 15, b) : hpDmgHtml(0.3, 10, b)
       return `${turns}<br>이후, 선택 적 1장 ${dmg}`
     }
     if (id === 'firework') {
