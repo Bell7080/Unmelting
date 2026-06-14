@@ -942,14 +942,14 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   white-space: normal;
   letter-spacing: 0.02em;
 }
-/* 팩 피커 하단 버튼 컨테이너 — 리롤+패스를 가로로 묶어 flex 흐름에 편입 */
+/* 팩 피커 하단 버튼 컨테이너 — 세로 배열 (리롤 위, 패스 아래) */
 .shop-pack-picker-footer {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: clamp(10px, 1.4vw, 18px);
+  gap: clamp(7px, 1.1vh, 12px);
   flex-shrink: 0;
-  margin-top: clamp(4px, 1vh, 12px);
+  margin-top: clamp(10px, 2.2vh, 26px);
 }
 .shop-pack-picker.is-closing .shop-pack-picker-footer {
   animation: shop-pack-footer-fade-out 0.22s ease both;
@@ -1044,19 +1044,19 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   cursor: not-allowed;
   border-color: rgba(160, 120, 60, 0.3);
 }
-/* 팩 피커 — Pass 버튼 (상점 EXIT 버튼 스타일 참고, 어두운 밀랍 직사각형) */
+/* 팩 피커 — Pass 버튼 (청아한 붉은색, EXIT 버튼 톤) */
 .shop-pack-pass-btn {
   appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 7px 18px;
+  padding: 7px 22px;
   border-radius: 5px;
-  border: 1.5px solid rgba(155, 128, 88, 0.52);
+  border: 1.5px solid rgba(210, 50, 50, 0.58);
   background:
-    linear-gradient(180deg, rgba(52, 36, 20, 0.97), rgba(22, 13, 7, 0.98)),
-    repeating-linear-gradient(125deg, rgba(255, 200, 100, 0.04) 0 2px, transparent 2px 7px);
-  color: rgba(218, 198, 162, 0.88);
+    linear-gradient(180deg, rgba(160, 26, 26, 0.96), rgba(86, 8, 8, 0.98)),
+    repeating-linear-gradient(125deg, rgba(255, 100, 100, 0.06) 0 2px, transparent 2px 7px);
+  color: rgba(255, 192, 192, 0.92);
   font-family: inherit;
   font-weight: 900;
   font-size: 12px;
@@ -1066,29 +1066,25 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   white-space: nowrap;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
   box-shadow:
-    inset 0 1px 0 rgba(255, 228, 160, 0.16),
-    inset 0 -2px 5px rgba(0, 0, 0, 0.5),
-    0 5px 12px rgba(0, 0, 0, 0.5);
+    inset 0 1px 0 rgba(255, 160, 160, 0.22),
+    inset 0 -2px 5px rgba(0, 0, 0, 0.55),
+    0 5px 12px rgba(0, 0, 0, 0.5),
+    0 0 18px rgba(180, 30, 30, 0.28);
   transition: filter 0.16s ease, border-color 0.18s ease;
 }
 .shop-pack-pass-btn:hover {
-  filter: brightness(1.1);
-  border-color: rgba(200, 172, 112, 0.68);
+  filter: brightness(1.12);
+  border-color: rgba(240, 76, 76, 0.72);
 }
-/* 클릭 후 쿠궁 진동하며 퇴장 */
-@keyframes pass-btn-thud {
-  0%   { transform: scale(1)    translateY(0)   rotate(0deg);   opacity: 1; }
-  8%   { transform: scale(0.92) translateY(4px) rotate(0.4deg); opacity: 1; }
-  18%  { transform: scale(1.05) translateY(-2px) rotate(-0.6deg); opacity: 1; }
-  28%  { transform: scale(0.95) translateX(-7px) rotate(-1.2deg); opacity: 0.88; }
-  38%  { transform: scale(1.02) translateX(6px)  rotate(1deg);    opacity: 0.76; }
-  48%  { transform: scale(0.97) translateX(-4px) rotate(-0.7deg); opacity: 0.58; }
-  58%  { transform: scale(1.00) translateX(2px)  rotate(0.3deg);  opacity: 0.40; }
-  74%  { transform: scale(0.93) translateY(3px)  rotate(0deg);    opacity: 0.18; }
-  100% { transform: scale(0.82) translateY(6px)  rotate(0deg);    opacity: 0; }
+/* 클릭 후: 탕! 블라스트 눌림 → 빠른 페이드 */
+@keyframes pass-btn-blast-fade {
+  0%   { transform: scale(1);    opacity: 1; }
+  10%  { transform: scale(0.87); opacity: 1; }    /* press in */
+  22%  { transform: scale(1.06); opacity: 0.88; } /* pop out */
+  100% { transform: scale(0.92); opacity: 0; }    /* fade */
 }
 .shop-pack-pass-btn.is-passing {
-  animation: pass-btn-thud 0.48s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards;
+  animation: pass-btn-blast-fade 0.28s cubic-bezier(0.22, 0.86, 0.22, 1) forwards;
   pointer-events: none;
 }
 /* 팩 리롤 버튼 클릭 임팩트 */
@@ -1110,11 +1106,15 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   animation: shop-pack-pick-blast 0.13s cubic-bezier(0.36, 0.07, 0.19, 0.97) calc(var(--pick-i, 0) * 28ms) both;
   pointer-events: none;
 }
-/* 새 카드 등장 시 빠른 페이드인 (초기 0.62s 딜레이 생략) */
+/* 새 카드 등장 — 투명도 변화 없이 스케일 팝으로만 처리해 이중 점멸 방지 */
 .shop-pack-picker-cards.is-blast .shop-pack-pick-card {
-  animation: shop-pack-pick-fade-in 0.20s ease calc(var(--pick-i, 0) * 45ms) both;
+  animation: pack-card-pop-in 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) calc(var(--pick-i, 0) * 45ms) both;
 }
-/* 사각 버스트 — 각 카드 테두리에서 바깥으로 팽창하며 사라짐 */
+@keyframes pack-card-pop-in {
+  0%   { transform: scale(0.86); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+/* 사각 버스트 — 처음부터 보이는 상태로 시작해 바깥으로 팽창하며 사라짐 */
 .shop-pack-picker-cards.is-blast .shop-pack-pick-card::after {
   content: '';
   position: absolute;
@@ -1126,8 +1126,7 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   animation: pack-card-reroll-burst 0.36s cubic-bezier(0.16, 0.84, 0.44, 1) calc(var(--pick-i, 0) * 45ms) both;
 }
 @keyframes pack-card-reroll-burst {
-  0%   { transform: scale(0.88); opacity: 0; }
-  18%  { transform: scale(0.97); opacity: 0.65; }
+  0%   { transform: scale(0.96); opacity: 0.55; }
   100% { transform: scale(1.28); opacity: 0; }
 }
 /* Painted back face — a dedicated DOM element painted purely with
@@ -1224,9 +1223,10 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
 /* Cards land AFTER the dim veil settles (~420ms). Per-card enter delays
    keep the cascade; float delays are staggered so the row doesn't sway in
    lock-step. */
-.shop-artifact-layer > .shop-relic-card:nth-child(1) { animation-delay: 460ms, 1.1s; }
-.shop-artifact-layer > .shop-relic-card:nth-child(2) { animation-delay: 560ms, 2.0s; }
-.shop-artifact-layer > .shop-relic-card:nth-child(3) { animation-delay: 660ms, 2.9s; }
+/* 리롤 앵커가 nth-child(1)이므로 유물 카드는 2·3·4번째 자식에 위치한다. */
+.shop-artifact-layer > .shop-relic-card:nth-child(2) { animation-delay: 460ms, 1.1s; }
+.shop-artifact-layer > .shop-relic-card:nth-child(3) { animation-delay: 560ms, 2.0s; }
+.shop-artifact-layer > .shop-relic-card:nth-child(4) { animation-delay: 660ms, 2.9s; }
 .shop-free-layer > .shop-relic-card { animation-delay: 520ms, 1.6s; }
 /* Reroll button now lives inside the artifact card layer, so it uses the same
    card-enter timing beat and no longer pops ahead of relic cards. */

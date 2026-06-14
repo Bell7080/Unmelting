@@ -1802,11 +1802,12 @@ export class GameBoardRenderer {
           return
         }
 
-        // Pass 버튼 — 눌림 → 선 수축 애니 → 이벤트
+        // Pass 버튼 — 블라스트 터짐 → 눌림 → 빠른 페이드
         const passBtn = t.closest<HTMLElement>('[data-pack-pass]')
         if (passBtn) {
           const packKind = passBtn.dataset.packPass as ShopPackKind | undefined
           if (packKind) {
+            SquareBurst.playOn(passBtn, 'damage', { count: 10, spread: 50, duration: 280 })
             passBtn.classList.add('is-passing')
             setTimeout(
               () => document.dispatchEvent(new CustomEvent('shopPackPass', { detail: { packKind } })),
@@ -6551,8 +6552,8 @@ export class GameBoardRenderer {
     this.animateResourceCounter('.coin-number', targetCoins, ' $')
   }
 
-  /** 팩 피커 리롤 버튼 클릭 피드백: 화폐 패널 → 버튼 트레일 + 버튼 임팩트 burst. */
-  playPackRerollFeedback(cost: number): void {
+  /** 팩 피커 리롤 버튼 클릭 피드백: 버튼 임팩트 burst (트레일 제거 — 잔상 방지). */
+  playPackRerollFeedback(_cost: number): void {
     const btn = document.querySelector<HTMLElement>('.shop-pack-picker-reroll-btn')
     if (!btn) return
     btn.classList.remove('is-pack-reroll-impacted')
@@ -6560,10 +6561,6 @@ export class GameBoardRenderer {
     btn.classList.add('is-pack-reroll-impacted')
     window.setTimeout(() => btn.classList.remove('is-pack-reroll-impacted'), 380)
     SquareBurst.playOn(btn, 'score', { count: 12, spread: 58, duration: 360 })
-    const coinAnchor = this.findCoinPulseAnchor()
-    if (coinAnchor) {
-      void this.animateResourceTrail(coinAnchor, btn, Math.min(Math.max(1, cost), 5), 'score')
-    }
   }
 
   
