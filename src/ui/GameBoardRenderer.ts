@@ -2062,8 +2062,8 @@ export class GameBoardRenderer {
               ${shop.mode === 'altar'
                 ? [
                     this.renderShopPackCard('resource-pack', '자원팩', '체력·손패·불씨 한도 영구 상향', shop.packCosts?.['resource-pack'] ?? 500, score, 'resource', 0),
-                    this.renderShopPackCard('delete-pack', '삭제팩', '카드 제거 · 드롭 집중도 상향', shop.packCosts?.['delete-pack'] ?? 500, score, 'unlock', 1),
-                    this.renderShopPackCard('chance-pack', '확률팩', '특정 카드 1차 드롭 우선도 부여', shop.packCosts?.['chance-pack'] ?? 500, score, 'upgrade', 2),
+                    this.renderShopPackCard('chance-pack', '확률팩', '특정 카드 1차 드롭 우선도 부여', shop.packCosts?.['chance-pack'] ?? 500, score, 'upgrade', 1),
+                    this.renderShopPackCard('delete-pack', '삭제팩', '카드 제거 · 드롭 집중도 상향', shop.packCosts?.['delete-pack'] ?? 500, score, 'unlock', 2),
                   ].join('')
                 : [
                     this.renderShopPackCard('basic-pack', basicPackLabel.title, 'HP·불씨·게이지 즉시 보충', shop.packCosts?.['basic-pack'] ?? shop.basicPackCost, score, 'resource', 0),
