@@ -823,6 +823,8 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 .common-card-name { font-size: 18px; }
 .common-card-badge { font-size: 12px; }
 .common-card-desc { font-size: 16px; }
+/* 3줄 이상으로 추정될 때 폰트를 살짝 줄여 하단 여백을 확보 */
+.hand-card-preview .common-card-face.is-long-desc .common-card-desc { font-size: 14px; }
 .compendium-hand-card { min-height: 316px; height: auto; }
 
 /* Combo tab recipe cards: mini hand cards overlap by default and fan out on

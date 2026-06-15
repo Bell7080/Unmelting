@@ -1377,11 +1377,16 @@ export class GameBoardRenderer {
     badge?: string
   ): string {
     const def = getHandCardDef(defId)
+    // 텍스트가 시각적으로 3줄 이상이 될 때 폰트를 살짝 줄인다.
+    // <br> 2개 이상이면 확실히 3줄, <br> 1개 + 긴 텍스트면 래핑으로 3줄 될 가능성이 있다.
+    const brCount = (description.match(/<br\s*\/?>/gi) ?? []).length
+    const strippedLen = description.replace(/<[^>]*>/g, '').length
+    const longClass = (brCount >= 2 || (brCount >= 1 && strippedLen >= 25)) ? 'is-long-desc' : ''
     return this.commonCardFace({
       artUrl: spriteForHandCard(defId),
       name: `${def.name}${merged ? ' ★' : ''}`,
       description,
-      extraClass,
+      extraClass: [extraClass, longClass].filter(Boolean).join(' '),
       badge,
     })
   }
@@ -1480,8 +1485,8 @@ export class GameBoardRenderer {
     if (id === 'black-candle') {
       const n = enhancements?.blackCandleBonus ?? 0
       return merged
-        ? `자해 4 · 필드 선택 적 1장 피해 ${6 + n}<br>검은 양초 피해 +6 · 손패 복귀`
-        : `자해 2 · 필드 선택 적 1장 피해 ${2 + n}<br>검은 양초 피해 +2 · 손패 복귀`
+        ? `자해 4 · 필드 선택 적 1장 피해 ${6 + n}<br>검은 양초 피해 +6 · 손패로 돌아옴`
+        : `자해 2 · 필드 선택 적 1장 피해 ${2 + n}<br>검은 양초 피해 +2 · 손패로 돌아옴`
     }
     // 불씨: 합산 수치가 기본 표시(__s). Shift 누름 중엔 공격력 수식(__d)으로 전환.
     if (id === 'ember') {

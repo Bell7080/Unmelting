@@ -532,8 +532,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'black-candle',
     name: '검은 양초',
     category: 'attack',
-    description: '자해 2 · 필드 선택 적 1장 피해 2<br>검은 양초 피해 +2 · 손패 복귀',
-    tripleDescription: '자해 4 · 필드 선택 적 1장 피해 6<br>검은 양초 피해 +6 · 손패 복귀',
+    description: '자해 2 · 필드 선택 적 1장 피해 2<br>검은 양초 피해 +2 · 손패로 돌아옴',
+    tripleDescription: '자해 4 · 필드 선택 적 1장 피해 6<br>검은 양초 피해 +6 · 손패로 돌아옴',
     targeting: {
       base:   { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
