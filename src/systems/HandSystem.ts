@@ -678,7 +678,7 @@ export class HandSystem {
         return `${target.card.name} 레인 맨 뒤로 이동`
       }
       case 'slash':
-        return HandSystem.damageTargetEnemy(gs, target, Math.floor(1.5 * c.damage) + 2 + bonus)
+        return HandSystem.damageTargetEnemy(gs, target, Math.floor(2 * c.damage) + 2 + bonus)
       case 'shackles': {
         // 즉시 1턴 흐름은 simulatedBattlePhases=1로 index.ts에 위임한다.
         const shielded = c.addShield(4 + bonus)

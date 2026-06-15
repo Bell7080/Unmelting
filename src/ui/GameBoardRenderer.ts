@@ -1523,7 +1523,7 @@ export class GameBoardRenderer {
     if (id === 'slash') {
       if (merged) return getHandCardDef(id).tripleDescription // 즉사 텍스트 그대로
       const b = enhancements?.singleBonus['slash'] ?? 0
-      return `전방 선택 적 1장 ${atkDmgHtml(atk, 1.5, 2, b)}`
+      return `전방 선택 적 1장 ${atkDmgHtml(atk, 2, 2, b)}`
     }
     if (id === 'candle-tome') {
       if (!merged) return getHandCardDef(id).description // 단일은 정적 텍스트
