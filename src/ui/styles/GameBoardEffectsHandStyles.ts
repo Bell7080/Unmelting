@@ -528,9 +528,10 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   border: 1px solid rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
-/* 채움 게이지: tick 위(z-index 2)에 단일 그라데이션을 깔고
-   '채움 비율 컷 × 칸 그리드' 두 마스크의 교집합으로 칸 안쪽에만 보이게 한다.
-   → gap에는 fill이 새지 않아 게이지가 칸에만 깔끔하게 나타난다. */
+/* 채움 게이지(이전 디자인 유지): 반투명 가로 그라데이션 fill을 tick 위(z-index 2)에 깔되,
+   '채움 비율 컷 × 칸 그리드' 마스크 교집합으로 칸 안쪽에만 보이게 한다.
+   아래 is-filled 칸의 세로 그라데이션과 겹쳐 이전과 같은 깊은 색감을 내고,
+   gap에는 fill이 새지 않는다. drop-shadow는 마스크된 칸 모양을 따라 은은히 발광한다. */
 .candle-gauge-meter::before {
   content: '';
   position: absolute;
@@ -538,7 +539,8 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   z-index: 2;
   pointer-events: none;
   border-radius: 6px;
-  background: linear-gradient(90deg, rgba(255, 196, 92, 0.94), rgba(255, 224, 132, 1));
+  background: linear-gradient(90deg, rgba(244, 164, 96, 0.42), rgba(255, 215, 120, 0.7));
+  filter: drop-shadow(0 0 5px rgba(255, 215, 120, 0.34));
   /* 칸 1개 너비 = (내부 폭 − gap합) / 칸 수 */
   --tw: calc((100% - (var(--candle-max, 10) - 1) * 2px) / var(--candle-max, 10));
   -webkit-mask:
@@ -556,12 +558,12 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   min-height: 18px;
   border-radius: 5px;
   border: 1px solid rgba(255, 232, 168, 0.18);
-  /* 불투명 빈 칸 — 뒤로 다른 레이어가 비치지 않는다 */
-  background: rgba(8, 5, 14, 0.55);
+  background: rgba(255, 255, 255, 0.045);
 }
-/* 채움은 ::before 마스크가 담당하므로 is-filled는 칸 테두리만 강조 */
 .candle-gauge-tick.is-filled {
-  border-color: rgba(255, 232, 168, 0.5);
+  border-color: rgba(255, 232, 168, 0.56);
+  background: linear-gradient(180deg, rgba(255, 232, 168, 0.75), rgba(244, 164, 96, 0.58));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 .candle-gauge-label {
   position: static;
