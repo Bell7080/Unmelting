@@ -3793,18 +3793,11 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
   compactAndRefillAllLanes()
   gameState.regroupAllRows()
   turnManager.armFrontBombs()
-  // 이벤트는 턴을 올리지 않으므로 적 공격·폭탄·보물 소멸은 건너뛴다.
-  // 꽃은 위치 기반(씨앗→개화) + 성장/시듦 틱을 이벤트 종료 시 1회 적용한다.
-  const flowerChanges = turnManager.applyFlowerGrowthAndWilt(cardSpawner)
+  // 이벤트는 턴을 올리지 않으므로 포자·성장·시듦 틱은 건너뛴다.
+  // 씨앗 개화는 위치 기반 트리거(전방 도달)이므로 이벤트 후에도 처리한다.
   const blooms = turnManager.bloomFrontSeeds(cardSpawner)
   render()
   if (blooms.length > 0) await boardRenderer.animateFlowerBlooms(blooms)
-  if (flowerChanges.growths.length > 0) await boardRenderer.animateFlowerGrowth(flowerChanges.growths)
-  if (flowerChanges.wilts.length > 0) {
-    for (const wilt of flowerChanges.wilts)
-      recordNotice(`${wilt.flowerName}이(가) 괴물꽃으로 시듦`, 'hurt')
-    await boardRenderer.animateFlowerWilts(flowerChanges.wilts)
-  }
   inputLocked = false
 }
 
