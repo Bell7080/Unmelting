@@ -259,9 +259,9 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
   transform-origin: 50% 112%;
   transform:
     translateX(calc(-50% + var(--relic-x, 0px) + var(--relic-extra-x, 0px)))
-    translateY(var(--relic-y, 0px))
-    rotate(var(--relic-rot, 0deg))
-    scale(0.98);
+    translateY(calc(var(--relic-y, 0px) + var(--relic-extra-y, 0px)))
+    rotate(calc(var(--relic-rot, 0deg) + var(--relic-extra-rot, 0deg)))
+    scale(calc(0.98 + var(--relic-extra-scale, 0)));
   z-index: calc(10 + var(--relic-i, 0));
   transition:
     transform 0.36s cubic-bezier(0.18, 0.86, 0.22, 1),
@@ -323,8 +323,8 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
 .relic-mini-card.is-pinned:not(.is-revive-locked) {
   transform:
     translateX(calc(-50% + var(--relic-x, 0px) + var(--relic-extra-x, 0px)))
-    translateY(calc(var(--relic-y, 0px) - 18px))
-    rotate(calc(var(--relic-rot, 0deg) * 0.08))
+    translateY(calc(var(--relic-y, 0px) + var(--relic-extra-y, 0px) - 18px))
+    rotate(calc((var(--relic-rot, 0deg) + var(--relic-extra-rot, 0deg)) * 0.08))
     scale(1.22);
   z-index: 160;
   filter: drop-shadow(0 16px 24px rgba(0, 0, 0, 0.72));

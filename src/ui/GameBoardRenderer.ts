@@ -443,9 +443,17 @@ export class GameBoardRenderer {
         const pivotIdx = Math.round(t * (n - 1))
         cards.forEach((card, i) => {
           const dist = i - pivotIdx
-          // pivot 카드는 제자리, 나머지는 선형 비례로 펼침.
-          const extra = Math.round(dist * 12)
-          card.style.setProperty('--relic-extra-x', `${extra}px`)
+          const isPivot = dist === 0
+          // transform-origin(50% 112%) 기준 회전 확대로 자연스러운 부채꼴 펼침을 구현한다.
+          card.style.setProperty('--relic-extra-rot', `${dist * 5}deg`)
+          // X 이동은 회전이 일부 담당하므로 기존보다 줄인다.
+          card.style.setProperty('--relic-extra-x', `${dist * 7}px`)
+          // pivot 카드만 살짝 위로 올려 시선을 끈다.
+          card.style.setProperty('--relic-extra-y', isPivot ? '-8px' : '0px')
+          // pivot 카드 미세 확대 — 핀(is-pinned) scale 1.22보다 훨씬 작게 유지.
+          card.style.setProperty('--relic-extra-scale', isPivot ? '0.06' : '0')
+          // z-index는 CSS calc로 표현 불가하므로 inline 직접 지정; mouseleave에서 복원.
+          card.style.zIndex = isPivot ? '100' : ''
         })
       }
 
@@ -453,6 +461,10 @@ export class GameBoardRenderer {
         stack.classList.remove('is-focus-tracked')
         Array.from(stack.querySelectorAll<HTMLElement>('.relic-mini-card')).forEach(card => {
           card.style.removeProperty('--relic-extra-x')
+          card.style.removeProperty('--relic-extra-rot')
+          card.style.removeProperty('--relic-extra-y')
+          card.style.removeProperty('--relic-extra-scale')
+          card.style.zIndex = ''
         })
         this.relicFocusAttached.delete(stack)
         stack.removeEventListener('mousemove', applyFocus)
