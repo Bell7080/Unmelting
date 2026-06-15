@@ -988,6 +988,8 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   color: rgba(255, 215, 120, 0.78);
   margin-right: 2px;
   text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .chain-banner-arrow {
   color: rgba(255, 232, 168, 0.68);
@@ -1017,6 +1019,7 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   color: rgba(255, 232, 168, 0.9);
 }
 .chain-event-recipe,
+.chain-event-relic,
 .chain-event-gauge {
   font-size: clamp(20px, 2.6vw, 32px);
   letter-spacing: 0.06em;
@@ -1053,8 +1056,9 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 .chain-event-card.is-new {
   animation: chain-card-pop 0.42s cubic-bezier(0.2, 1.4, 0.32, 1) 1;
 }
-/* Recipe events flash brighter on entry, layered on top of the steady glow. */
+/* Recipe/relic events flash brighter on entry, layered on top of the steady glow. */
 .chain-event-recipe.is-new,
+.chain-event-relic.is-new,
 .chain-event-gauge.is-new {
   animation:
     chain-recipe-burst 0.6s cubic-bezier(0.16, 0.88, 0.3, 1) 1,
@@ -1120,6 +1124,7 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   align-items: center;
   justify-content: center;
   margin-left: 4px;
+  flex-shrink: 0;
 }
 .chain-banner-reset:hover { background: rgba(244, 164, 96, 0.18); }
 
