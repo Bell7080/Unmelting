@@ -1443,8 +1443,8 @@ export class GameBoardRenderer {
     if (id === 'black-candle') {
       const b = merged ? (enhancements?.tripleBonus['black-candle'] ?? 0) : (enhancements?.singleBonus['black-candle'] ?? 0)
       return merged
-        ? `자해 4 · 필드 선택 적 1장 피해 ${6 + b}<br>양초 상처 +6 · 손패 복귀`
-        : `자해 2 · 필드 선택 적 1장 피해 ${2 + b}<br>양초 상처 +2 · 손패 복귀`
+        ? `자해 4 · 필드 선택 적 1장 피해 ${6 + b}<br>검은 양초 피해 +6 · 손패 복귀`
+        : `자해 2 · 필드 선택 적 1장 피해 ${2 + b}<br>검은 양초 피해 +2 · 손패 복귀`
     }
     // 불씨: 합산 수치가 기본 표시(__s). Shift 누름 중엔 공격력 수식(__d)으로 전환.
     if (id === 'ember') {
