@@ -1512,6 +1512,8 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
   const packTile = document.querySelector<HTMLElement>(`#shop-overlay .shop-pack-card[data-shop-buy-kind="${kind}"]`)
   if (packTile) await boardRenderer.playShopPurchaseImpact(packTile, "score")
   boardRenderer.playScoreSpendFeedback(score, scorePulseKey)
+  // 불빛 → 팩 타일 트레일 (피커 열림과 동시에 배경 재생)
+  boardRenderer.fireScoreSpendTrailToTarget(packTile, cost)
   boardRenderer.openShop(buildShopStateView(), score, gameState.character)
   const view: ShopPackPickerView = {
     packKind: kind,
@@ -1561,7 +1563,7 @@ async function handleShopPackReroll(packKind: ShopPackKind): Promise<void> {
   coinPulseKey++
   applyBlindFaithCoins(-cost)
   boardRenderer.playCoinSpendFeedback(coins, coinPulseKey)
-  boardRenderer.playPackRerollFeedback(cost)
+  await boardRenderer.playPackRerollFeedback(cost)
   activePackSession.rerollCount++
   activePackSession.items = rollPackItems(packKind)
   const newView: ShopPackPickerView = {

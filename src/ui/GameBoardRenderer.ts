@@ -516,8 +516,11 @@ export class GameBoardRenderer {
 
     // 손패 패널을 미리 렌더해 기존 DOM과 비교한다. 내용이 동일하면 기존 요소를 복원해
     // CSS hover 상태(미리보기)가 레일 하강 중 깜빡이지 않게 한다.
+    // 비교는 .hand-panel(카드 목록)만 사용한다 — .spawn-prob-panel은 불씨 티어에 따라
+    // 독립적으로 변하므로 비교에서 제외해 tier 변경이 hover 상태를 끊지 않도록 한다.
     const prevHandEl = this.boardElement.querySelector<HTMLElement>('.hand-column')
-    const prevHandHtml = prevHandEl ? prevHandEl.outerHTML : ''
+    const prevHandPanelEl = prevHandEl?.querySelector<HTMLElement>('.hand-panel')
+    const prevHandPanelHtml = prevHandPanelEl ? prevHandPanelEl.outerHTML : ''
     const newHandHtml = this.renderHand(character, scorePanel)
 
     this.boardElement.innerHTML = `
@@ -544,16 +547,35 @@ export class GameBoardRenderer {
       </div>
     `
 
-    // 손패 내용이 바뀌지 않았다면 기존 DOM 노드를 복원해 hover 상태를 보존한다.
-    if (prevHandEl && prevHandHtml) {
+    // 카드 목록(.hand-panel)이 바뀌지 않았으면 기존 DOM 노드를 복원해 hover 상태를 보존한다.
+    // 복원 후 spawn-prob-panel만 새 퍼센트로 교체해 불씨 티어 변경을 반영한다.
+    let handDomPreserved = false
+    if (prevHandEl && prevHandPanelHtml) {
       const freshHandEl = this.boardElement.querySelector<HTMLElement>('.hand-column')
-      if (freshHandEl && freshHandEl.outerHTML === prevHandHtml) {
-        freshHandEl.replaceWith(prevHandEl)
+      if (freshHandEl) {
+        const freshHandPanelEl = freshHandEl.querySelector<HTMLElement>('.hand-panel')
+        if (freshHandPanelEl && freshHandPanelEl.outerHTML === prevHandPanelHtml) {
+          freshHandEl.replaceWith(prevHandEl)
+          // spawn-prob-panel만 새 수치로 교체 (불씨 티어 변경 반영)
+          const freshSpawnPanel = freshHandEl.querySelector<HTMLElement>('.spawn-prob-panel')
+          const prevSpawnPanel = prevHandEl.querySelector<HTMLElement>('.spawn-prob-panel')
+          if (freshSpawnPanel && prevSpawnPanel) {
+            prevSpawnPanel.replaceWith(freshSpawnPanel)
+          } else if (freshSpawnPanel) {
+            prevHandEl.insertAdjacentElement('afterbegin', freshSpawnPanel)
+          } else if (prevSpawnPanel) {
+            prevSpawnPanel.remove()
+          }
+          handDomPreserved = true
+        }
       }
     }
 
-    // JS hover 상태가 있으면 DOM 교체 후에도 미리보기 클래스를 복원한다.
-    this.restoreHandHoverState()
+    // DOM이 교체된 경우에만 hover 미리보기 클래스를 복원한다.
+    // 기존 DOM이 그대로 재사용됐다면 :hover와 is-preview-open 모두 유지되므로 불필요하다.
+    if (!handDomPreserved) {
+      this.restoreHandHoverState()
+    }
 
     this.syncBodyVignette(scorePanel.vignetteIntensity ?? 0)
     this.injectStyles()
@@ -1501,7 +1523,7 @@ export class GameBoardRenderer {
     if (id === 'slash') {
       if (merged) return getHandCardDef(id).tripleDescription // 즉사 텍스트 그대로
       const b = enhancements?.singleBonus['slash'] ?? 0
-      return `전방 선택 적 1장 ${atkDmgHtml(atk, 2, 2, b)}`
+      return `전방 선택 적 1장 ${atkDmgHtml(atk, 1.5, 2, b)}`
     }
     if (id === 'candle-tome') {
       if (!merged) return getHandCardDef(id).description // 단일은 정적 텍스트
@@ -1841,9 +1863,10 @@ export class GameBoardRenderer {
         if (host?.classList.contains('is-closing')) return
         const t = e.target as HTMLElement
 
-        // 재뽑기 버튼 — 즉시 이벤트
+        // 재뽑기 버튼 — 즉시 이벤트 (연타 방지: is-reroll-locked 체크)
         const rerollBtn = t.closest<HTMLElement>('[data-pack-reroll]')
-        if (rerollBtn && !rerollBtn.classList.contains('is-unaffordable')) {
+        if (rerollBtn && !rerollBtn.classList.contains('is-unaffordable') && !rerollBtn.classList.contains('is-reroll-locked')) {
+          rerollBtn.classList.add('is-reroll-locked')
           const packKind = rerollBtn.dataset.packReroll as ShopPackKind | undefined
           if (packKind) {
             document.dispatchEvent(new CustomEvent('shopPackReroll', { detail: { packKind } }))
@@ -1926,11 +1949,18 @@ export class GameBoardRenderer {
     cardsEl.classList.add('is-blast')
     window.setTimeout(() => cardsEl.classList.remove('is-blast'), 600)
 
+    // 카드별 SquareBurst — CSS ::after 링 외에 JS 파티클을 추가해 유물 리롤과 동일한 팡 연출.
+    const pickCards = Array.from(cardsEl.querySelectorAll<HTMLElement>('.shop-pack-pick-card'))
+    pickCards.forEach((card, i) => {
+      window.setTimeout(() => SquareBurst.playOn(card, 'score', { count: 10, spread: 62, duration: 320 }), i * 45)
+    })
+
     // Update reroll cost in-place without rebuilding the whole footer
     if (footerEl && view.rerollCost != null) {
       const btn = footerEl.querySelector<HTMLElement>('.shop-pack-picker-reroll-btn')
       if (btn) {
         const affordable = (view.coins ?? 0) >= view.rerollCost
+        btn.classList.remove('is-reroll-locked')
         btn.classList.toggle('is-affordable', affordable)
         btn.classList.toggle('is-unaffordable', !affordable)
         const costEl = btn.querySelector<HTMLElement>('.shop-pack-picker-reroll-cost')
@@ -6581,6 +6611,18 @@ export class GameBoardRenderer {
     })
   }
 
+  /** 팩 구매 시 불빛 패널 → 팩 타일 트레일 (fire-and-forget).
+   *  팩 피커가 곧바로 열리기 전 비용 시각화 — await 없이 배경에서 재생된다. */
+  fireScoreSpendTrailToTarget(target: HTMLElement | null, cost: number): void {
+    if (!target) return
+    void this.animateResourceTrail(
+      this.findScorePulseAnchor(),
+      target,
+      Math.min(8, Math.max(1, Math.ceil(cost / 300))),
+      'score'
+    )
+  }
+
   /** Spend-light purchase trail: the blast starts on the 불빛 counter and
    *  lands on the clicked relic card before the shop refreshes its state. */
   animateShopPurchaseTrailToRelic(relicId: RelicId, count: number): Promise<void> {
@@ -6604,10 +6646,17 @@ export class GameBoardRenderer {
     this.animateResourceCounter('.coin-number', targetCoins, ' $')
   }
 
-  /** 팩 피커 리롤 버튼 클릭 피드백: 버튼 임팩트 burst (트레일 제거 — 잔상 방지). */
-  playPackRerollFeedback(_cost: number): void {
+  /** 팩 피커 리롤 버튼 클릭 피드백: 화폐 패널 → 버튼 트레일 + 버튼 임팩트 burst.
+   *  유물 리롤(playShopRerollFeedback)과 같은 흐름으로 트레일이 끝난 뒤 카드를 교체한다. */
+  async playPackRerollFeedback(cost: number): Promise<void> {
     const btn = document.querySelector<HTMLElement>('.shop-pack-picker-reroll-btn')
     if (!btn) return
+    await this.animateResourceTrail(
+      this.findCoinPulseAnchor(),
+      btn,
+      Math.max(1, Math.min(6, cost)),
+      'score'
+    )
     btn.classList.remove('is-pack-reroll-impacted')
     void btn.offsetWidth
     btn.classList.add('is-pack-reroll-impacted')

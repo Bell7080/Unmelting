@@ -1043,10 +1043,14 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   border-color: rgba(160, 240, 130, 0.8);
   filter: brightness(1.08);
 }
-.shop-pack-picker-reroll-btn.is-unaffordable {
+.shop-pack-picker-reroll-btn.is-unaffordable,
+.shop-pack-picker-reroll-btn.is-reroll-locked {
   filter: saturate(0.55) brightness(0.72);
   cursor: not-allowed;
   border-color: rgba(160, 120, 60, 0.3);
+}
+.shop-pack-picker-reroll-btn.is-reroll-locked {
+  pointer-events: none;
 }
 /* 팩 피커 — Pass 버튼 (청아한 붉은색, EXIT 버튼 톤) */
 .shop-pack-pass-btn {
