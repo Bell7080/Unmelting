@@ -955,11 +955,11 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   top: 20vh;
   transform: translateX(-50%) translateY(-10px);
   display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
+  align-items: center;
+  flex-wrap: nowrap;
   justify-content: center;
   gap: 8px;
-  max-width: min(78vw, 840px);
+  max-width: min(92vw, 1200px);
   padding: 4px 12px;
   z-index: 205;
   pointer-events: none;
@@ -1045,8 +1045,7 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   width: 1em; height: 1em;
   vertical-align: -0.12em;
 }
-/* name + flavor는 한 줄 인라인으로 배치하고, 체인이 길어지면 자연스럽게 줄바꿈 */
-.chain-event-copy { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+.chain-event-copy { display: inline-grid; gap: 2px; justify-items: center; }
 .chain-event-name { font-weight: 800; }
 .chain-event-flavor { font-size: clamp(12px, 1.05vw, 14px); color: rgba(255, 245, 220, 0.78); letter-spacing: 0.02em; }
 
