@@ -714,8 +714,8 @@ export class HandSystem {
       }
       case 'black-candle':
         // 자해 2는 selfDamageFor, 카운터 +2는 HandUseResult.blackCandleCounterGain으로 처리.
-        // 복귀(return-to-hand)는 use()에서 처리. 여기서는 피해만 적용한다.
-        return HandSystem.damageTargetEnemy(gs, target, 2 + bonus)
+        // 복귀(return-to-hand)는 use()에서 처리. 피해는 book-of-flames와 동일하게 누적.
+        return HandSystem.applyBlackCandle(gs, target, 2, 2)
     }
   }
 
@@ -864,8 +864,8 @@ export class HandSystem {
         return gained > 0 ? `트리플 랜덤 손패 +${gained}` : '트리플 손패 가득 참'
       }
       case 'black-candle':
-        // 트리플: 자해 4(selfDamageFor), 피해 6, 카운터 +6(HandUseResult), 복귀(use()).
-        return HandSystem.damageTargetEnemy(gs, target, 6 + bonus)
+        // 트리플: 자해 4(selfDamageFor), 카운터 +6(HandUseResult), 복귀(use()). 피해 누적.
+        return HandSystem.applyBlackCandle(gs, target, 6, 6)
     }
   }
 
@@ -1072,6 +1072,20 @@ export class HandSystem {
     // 피해를 입힌 뒤 영구 누적값을 올린다(다음 사용부터 강해진다).
     gs.enhancements.bookOfFlamesBonus = n + increment
     return `${result} · 화염의 서 피해 영구 +${increment}(누적 ${gs.enhancements.bookOfFlamesBonus})`
+  }
+
+  /** 검은 양초: book-of-flames와 동일하게 base 피해 후 누적 보너스를 increment만큼 증가. */
+  private static applyBlackCandle(
+    gs: GameState,
+    target: HandTarget | undefined,
+    base: number,
+    increment: number
+  ): string {
+    const n = gs.enhancements.blackCandleBonus ?? 0
+    const amount = base + n
+    const result = HandSystem.damageTargetEnemy(gs, target, amount)
+    gs.enhancements.blackCandleBonus = n + increment
+    return `${result} · 검은 양초 피해 영구 +${increment}(누적 ${gs.enhancements.blackCandleBonus})`
   }
 
   /** Destroy one random enemy/boss from the active row. */
