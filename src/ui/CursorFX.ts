@@ -124,7 +124,6 @@ class CursorFXManager {
   private ctx!: CanvasRenderingContext2D
   private overlay!: HTMLElement
   private trail: TrailPoint[] = []
-  private raf = 0
 
   init(): void {
     const cursorUrl = buildCursorDataUrl()
@@ -140,7 +139,7 @@ class CursorFXManager {
     document.addEventListener('mousemove', (e) => this.onMove(e), { passive: true })
     document.addEventListener('click', (e) => this.onClick(e))
 
-    this.raf = requestAnimationFrame(() => this.tick())
+    requestAnimationFrame(() => this.tick())
   }
 
   private resizeCanvas(): void {
@@ -210,7 +209,7 @@ class CursorFXManager {
 
   private tick(): void {
     this.drawTrail()
-    this.raf = requestAnimationFrame(() => this.tick())
+    requestAnimationFrame(() => this.tick())
   }
 
   private drawTrail(): void {
