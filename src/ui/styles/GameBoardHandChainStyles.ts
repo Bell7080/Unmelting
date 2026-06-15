@@ -1032,6 +1032,8 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
     0 0 36px rgba(244, 164, 96, 0.42);
   animation: chain-recipe-glow 1.35s ease-in-out infinite;
 }
+/* 유물은 recipe와 같은 발광/애니 양식이되 폰트는 기본 크기 유지 */
+.chain-event-relic { font-size: clamp(14px, 1.45vw, 18px); }
 .chain-event-gauge {
   color: rgba(213, 230, 255, 1);
   text-shadow:
