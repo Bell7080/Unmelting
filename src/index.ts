@@ -2032,21 +2032,12 @@ function scoreForCardRemoval(card: Card): number {
   if (card.type === CardType.ENEMY) {
     const hp = Math.max(0, card.baseHealth)
     const atk = Math.max(0, card.getDamage())
-    const gc = card.groupCount
-    // 일반 적 그룹: 1칸 기준 스코어 × 1.5(2칸) / 2.0(3칸)으로 재산정.
-    // 기존 총합 스탯 계산은 2.4~3.6배를 만들어 너무 가파르다.
-    if (gc > 1 && !card.isSpecialEnemy) {
-      const bonusStat = gc >= 3 ? 3 : 2
-      const emb = Math.max(0, card.emberAtkBonus)
-      const perHp  = (hp - bonusStat) / gc
-      const perAtk = (atk - emb - bonusStat) / gc
-      const singleScore = Math.max(0, perHp) * 14 + (Math.max(0, perAtk) + emb) * 12
-      const ratio = gc >= 3 ? 2.0 : 1.5
-      return Math.round(singleScore * ratio)
-    }
-    // 단일 적: HP 가중치를 높이고 ATK 가중치를 낮춰 자칼↔풍뎅이 배율을 완만하게.
-    const strength = hp * 14 + atk * 12
+    const strength = hp * 12 + atk * 20
     const specialBonus = card.isSpecialEnemy ? 60 + card.defeatDropCount * 20 : 0
+    // 그룹은 총합 스탯 기준에서 25% 감산 — 단일보다 확실히 높되 배수 구조를 희석한다.
+    if (card.groupCount > 1 && !card.isSpecialEnemy) {
+      return Math.round(strength * 0.75)
+    }
     return strength + specialBonus
   }
   if (card.type === CardType.TRAP) {
