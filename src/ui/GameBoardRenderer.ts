@@ -1950,7 +1950,7 @@ export class GameBoardRenderer {
     // CSS scale 팝 애니메이션을 제거했으므로 버스트 시 카드 위치가 정확하다.
     const pickCards = Array.from(cardsEl.querySelectorAll<HTMLElement>('.shop-pack-pick-card'))
     pickCards.forEach((card, i) => {
-      window.setTimeout(() => SquareBurst.playOn(card, 'score', { count: 12, spread: 72, duration: 340 }), i * 55)
+      window.setTimeout(() => SquareBurst.playOn(card, 'score', { count: 22, spread: 130, duration: 440 }), i * 55)
     })
 
     // Update reroll cost in-place without rebuilding the whole footer
