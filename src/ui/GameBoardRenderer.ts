@@ -1436,7 +1436,7 @@ export class GameBoardRenderer {
     if (id === 'book-of-flames') {
       const n = enhancements?.bookOfFlamesBonus ?? 0
       return merged
-        ? `필드 선택 적 1장 피해 ${3 + n}<br>화염의 서 피해 3 증가`
+        ? `필드 선택 적 1장 피해 ${2 * n}<br>화염의 서 피해 2 증가`
         : `필드 선택 적 1장 피해 ${n}<br>화염의 서 피해 1 증가`
     }
     // 검은 양초: book-of-flames와 동일하게 blackCandleBonus를 읽어 실시간 피해 표시.
