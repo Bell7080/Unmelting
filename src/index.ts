@@ -57,6 +57,7 @@ import { BASIC_PACK_POOL } from '@data/BasicPackPool'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { JOBS } from '@data/Jobs'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
+import { CursorFX } from '@ui/CursorFX'
 import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 } from '@ui/Sprites'
@@ -80,6 +81,8 @@ const app = document.getElementById('app')!
 app.innerHTML = `
   <div id="game-board"></div>
 `
+
+CursorFX.init()
 
 FontManager.initializeDefaults()
 FontManager.loadCustomFont({

@@ -1511,7 +1511,7 @@ export class GameBoardRenderer {
       const b = merged ? (enhancements?.tripleBonus['levatein'] ?? 0) : (enhancements?.singleBonus['levatein'] ?? 0)
       const turns = merged ? '즉시 1턴 흐름' : '즉시 2턴 흐름'
       const dmg = merged ? hpDmgHtml(0.45, 15, b) : hpDmgHtml(0.3, 10, b)
-      return `${turns}<br>선택 적 1장 ${dmg}`
+      return `${turns}<br>필드 선택 적 1장 ${dmg}`
     }
     if (id === 'firework') {
       const b = merged ? (enhancements?.tripleBonus['firework'] ?? 0) : (enhancements?.singleBonus['firework'] ?? 0)
