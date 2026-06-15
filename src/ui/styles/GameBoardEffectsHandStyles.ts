@@ -540,6 +540,7 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   pointer-events: none;
   border-radius: 6px;
   background: linear-gradient(90deg, rgba(244, 164, 96, 0.42), rgba(255, 215, 120, 0.7));
+  opacity: 0.82;
   filter: drop-shadow(0 0 5px rgba(255, 215, 120, 0.34));
   /* 칸 1개 너비 = (내부 폭 − gap합) / 칸 수 */
   --tw: calc((100% - (var(--candle-max, 10) - 1) * 2px) / var(--candle-max, 10));

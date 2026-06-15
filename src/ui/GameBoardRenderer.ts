@@ -5241,10 +5241,13 @@ export class GameBoardRenderer {
       } else if (ev.kind === 'recipe') {
         // 임팩트 모드에서만 is-demon-impact 스코프 CSS가 적용되므로 일반 체인엔 영향 없음.
         const demonClass = ev.recipeId === 'demon-summon' ? 'chain-event-recipe--demon' : ''
+        // recipeFlavorHtml로 desc-dyn 스팬 포함 실시간 수치 렌더; 정의 없으면 정적 텍스트 폴백
+        const recipeDef = RECIPES.find((r) => r.id === ev.recipeId)
+        const flavorHtml = recipeDef ? this.recipeFlavorHtml(recipeDef) : ev.flavor
         parts.push(`
           <span class="chain-event chain-event-recipe ${demonClass} ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
             <span class="chain-event-mark">✦</span>
-            <span class="chain-event-copy"><span class="chain-event-name">${ev.name}</span><span class="chain-event-flavor">${ev.flavor}</span></span>
+            <span class="chain-event-copy"><span class="chain-event-name">${ev.name}</span><span class="chain-event-flavor">${flavorHtml}</span></span>
           </span>
         `)
       } else if (ev.kind === 'gauge') {

@@ -1045,7 +1045,8 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   width: 1em; height: 1em;
   vertical-align: -0.12em;
 }
-.chain-event-copy { display: inline-grid; gap: 2px; justify-items: center; }
+/* name + flavor는 한 줄 인라인으로 배치하고, 체인이 길어지면 자연스럽게 줄바꿈 */
+.chain-event-copy { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px; }
 .chain-event-name { font-weight: 800; }
 .chain-event-flavor { font-size: clamp(12px, 1.05vw, 14px); color: rgba(255, 245, 220, 0.78); letter-spacing: 0.02em; }
 
@@ -1297,6 +1298,14 @@ body.is-shift-detail .desc-dyn__d { opacity: 1; }
 .hand-card-preview .desc-dyn__d { display: none; opacity: 1; }
 body.is-shift-detail .hand-card-preview .desc-dyn__s { display: none; opacity: 1; }
 body.is-shift-detail .hand-card-preview .desc-dyn__d { display: inline; white-space: nowrap; }
+
+/* 체인 로그 flavor desc-dyn: 손패 미리보기와 동일한 display 토글 방식 */
+.chain-event-flavor .desc-dyn { display: inline; }
+.chain-event-flavor .desc-dyn__s,
+.chain-event-flavor .desc-dyn__d { transition: none; }
+.chain-event-flavor .desc-dyn__d { display: none; opacity: 1; }
+body.is-shift-detail .chain-event-flavor .desc-dyn__s { display: none; opacity: 1; }
+body.is-shift-detail .chain-event-flavor .desc-dyn__d { display: inline; white-space: nowrap; }
 
 /* Shift 자세히 보기 힌트 — 카드 미리보기 하단에 은은하게 깜빡임 */
 .hand-shift-hint {
