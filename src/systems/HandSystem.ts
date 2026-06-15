@@ -773,7 +773,8 @@ export class HandSystem {
       case 'firework':
         return HandSystem.distributeDamageAmongEnemies(gs, Math.floor(3 * c.damage) + 10 + bonus)
       case 'book-of-flames':
-        return HandSystem.applyBookOfFlames(gs, target, 3 + bonus, 3)
+        // 단일의 2배(피해 2n) + 스택 2배 속도(+2/사용). bonus(강화팩) 미반영 — book-of-flames는 고유 누적만 사용.
+        return HandSystem.applyBookOfFlames(gs, target, 0, 2, 2)
       case 'fire-arrow': {
         // 5 ~ floor(3.0×공) 범위 무작위 피해
         const maxDmg = Math.max(5, Math.floor(3 * c.damage) + bonus)
@@ -1060,16 +1061,19 @@ export class HandSystem {
   }
 
   /** 화염의 서: (base + 누적 n) 피해를 선택 적에게 입히고, n을 increment만큼 영구 증가시킨다. */
+  /** base + n × multiplier 피해 후 n += increment.
+   *  단일: base=0, inc=1, mul=1 → 피해 n.
+   *  트리플: base=0, inc=2, mul=2 → 피해 2n (단일의 2배, 스택도 2배 속도). */
   private static applyBookOfFlames(
     gs: GameState,
     target: HandTarget | undefined,
     base: number,
-    increment: number
+    increment: number,
+    multiplier = 1
   ): string {
     const n = gs.enhancements.bookOfFlamesBonus ?? 0
-    const amount = base + n
+    const amount = base + n * multiplier
     const result = HandSystem.damageTargetEnemy(gs, target, amount)
-    // 피해를 입힌 뒤 영구 누적값을 올린다(다음 사용부터 강해진다).
     gs.enhancements.bookOfFlamesBonus = n + increment
     return `${result} · 화염의 서 피해 영구 +${increment}(누적 ${gs.enhancements.bookOfFlamesBonus})`
   }
