@@ -956,9 +956,10 @@ export class GameBoardRenderer {
       `
     } else if (card.type === CardType.TRAP) {
       // 모든 함정(거미줄/포자/폭탄, 2·3칸 포함)을 한 종류로 묶어 검+단일 피해 수치로
-      // 표기한다. effectiveTrapDamage가 시련 '역경' 보너스를 합산한 최종값(예: 7)을
-      // 돌려주므로 폭탄 점화 상태는 좌상단 배지로만 남고 중앙 하단은 다른 함정과 동일하다.
-      const damage = card.effectiveTrapDamage()
+      // 표기한다. effectiveTrapDamage(card 자체 보너스=시련) + character.trapDamageBonus(유물)
+      // 를 합산해 실제 ActionSystem과 동일한 최종 수치를 표기한다.
+      const charTrapBonus = this.currentGameState?.getCharacter().trapDamageBonus ?? 0
+      const damage = card.effectiveTrapDamage() + charTrapBonus
       stats = `
         <div class="card-stats">
           <span class="stat atk">${swordIcon()}<span class="stat-value">${damage}</span></span>

@@ -317,8 +317,9 @@ export class TurnManager {
     return ticks
   }
 
-  /** Infect from spores whose countdown already reached 0, then reset them to 2. */
-  spreadReadySpores(): SporeSpread[] {
+  /** Infect from spores whose countdown already reached 0, then reset them to 2.
+   *  trialTrapDamageBonus: 시련 '역경' 보너스 — CardSpawner.getTrialTrapDamageBonus()로 전달한다. */
+  spreadReadySpores(trialTrapDamageBonus = 0): SporeSpread[] {
     const spreads: SporeSpread[] = []
 
     // Countdown and infection are deliberately split: the UI renders the 0턴
@@ -344,6 +345,8 @@ export class TurnManager {
         )
         // 감염된 포자는 새 2턴 주기를 받으며 이번 spread snapshot에는 포함되지 않는다.
         spore.sporeTurnsUntilSpread = 2
+        // 시련 '역경' 함정 피해 보너스를 전염 포자에도 물려준다.
+        spore.trapDamageBonus = trialTrapDamageBonus
         this.gameState.lanes[target.laneIndex].setCardAtDistance(target.distance, spore)
         infected.push(target)
       }

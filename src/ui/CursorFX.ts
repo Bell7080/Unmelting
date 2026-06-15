@@ -24,8 +24,9 @@ function buildCursorDataUrl(): string {
     '</filter>',
     '</defs>',
     // 노치 있는 다트형 — stroke 없이 발광으로만 윤곽 표현
+    // fill-opacity를 낮추면 필터 아우터 글로우가 안쪽 경계에서 새어 노랗게 보임 → 완전 불투명 처리
     '<path d="M2,2 L20,12 L11,14.5 L8.5,24 Z"',
-    ' fill="#050208" fill-opacity="0.82"',
+    ' fill="#080510"',
     ' filter="url(#gl)"/>',
     '</svg>',
   ].join('')

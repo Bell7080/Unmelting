@@ -3620,7 +3620,7 @@ async function resolvePostDropSporeSpread(): Promise<void> {
     if (hasReadySpore) await wait(420)
   }
 
-  const sporeSpreads = turnManager.spreadReadySpores()
+  const sporeSpreads = turnManager.spreadReadySpores(cardSpawner.getTrialTrapDamageBonus())
   if (sporeSpreads.length === 0) {
     // 감염 대상이 없어도 준비된 포자는 0턴 시도 후 2턴으로 돌아가므로 뱃지를 갱신한다.
     if (hasReadySpore) render()

@@ -262,6 +262,11 @@ export class CardSpawner {
     this.trialTreasureSpawnScale = Math.max(0, mods.treasureSpawnScale)
   }
 
+  /** 전염된 포자 생성 시 시련 보너스를 물려주기 위해 TurnManager가 참조한다. */
+  getTrialTrapDamageBonus(): number {
+    return this.trialTrapDamageBonus
+  }
+
   /** Sync the completed game turn so enemy pools unlock at 1/11/21. */
   setProgressionTurn(turn: number): void {
     this.progressionTurn = Math.max(1, turn)
