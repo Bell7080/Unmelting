@@ -14,17 +14,13 @@ function buildCursorDataUrl(): string {
   const svg = [
     '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="26" viewBox="0 0 22 26">',
     '<defs>',
-    '<filter id="gl" x="-160%" y="-160%" width="420%" height="420%">',
-    // 1단계: 타이트한 밝은 엣지 글로우
-    '<feGaussianBlur in="SourceAlpha" stdDeviation="1.1" result="tight"/>',
-    '<feFlood flood-color="#ffe090" flood-opacity="1" result="bright"/>',
-    '<feComposite in="bright" in2="tight" operator="in" result="edge"/>',
-    // 2단계: 넓은 부드러운 호박빛 아우라
-    '<feGaussianBlur in="SourceAlpha" stdDeviation="3.8" result="wide"/>',
-    '<feFlood flood-color="#c88010" flood-opacity="0.72" result="amber"/>',
-    '<feComposite in="amber" in2="wide" operator="in" result="aura"/>',
-    // 아우라 → 엣지 → 도형 순서로 합성
-    '<feMerge><feMergeNode in="aura"/><feMergeNode in="edge"/><feMergeNode in="SourceGraphic"/></feMerge>',
+    '<filter id="gl" x="-140%" y="-140%" width="380%" height="380%">',
+    // SourceAlpha 블러 → 황금 컬러 적용 → 원본 알파를 out으로 빼서 외부만 남김
+    '<feGaussianBlur in="SourceAlpha" stdDeviation="3.2" result="blur"/>',
+    '<feFlood flood-color="#e8a020" flood-opacity="0.88" result="col"/>',
+    '<feComposite in="col" in2="blur" operator="in" result="glow"/>',
+    '<feComposite in="glow" in2="SourceAlpha" operator="out" result="outerGlow"/>',
+    '<feMerge><feMergeNode in="outerGlow"/><feMergeNode in="SourceGraphic"/></feMerge>',
     '</filter>',
     '</defs>',
     // 노치 있는 다트형 — stroke 없이 발광으로만 윤곽 표현
