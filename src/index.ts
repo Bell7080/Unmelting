@@ -2032,7 +2032,20 @@ function scoreForCardRemoval(card: Card): number {
   if (card.type === CardType.ENEMY) {
     const hp = Math.max(0, card.baseHealth)
     const atk = Math.max(0, card.getDamage())
-    const strength = hp * 12 + atk * 20
+    const gc = card.groupCount
+    // 일반 적 그룹: 1칸 기준 스코어 × 1.5(2칸) / 2.0(3칸)으로 재산정.
+    // 기존 총합 스탯 계산은 2.4~3.6배를 만들어 너무 가파르다.
+    if (gc > 1 && !card.isSpecialEnemy) {
+      const bonusStat = gc >= 3 ? 3 : 2
+      const emb = Math.max(0, card.emberAtkBonus)
+      const perHp  = (hp - bonusStat) / gc
+      const perAtk = (atk - emb - bonusStat) / gc
+      const singleScore = Math.max(0, perHp) * 14 + (Math.max(0, perAtk) + emb) * 12
+      const ratio = gc >= 3 ? 2.0 : 1.5
+      return Math.round(singleScore * ratio)
+    }
+    // 단일 적: HP 가중치를 높이고 ATK 가중치를 낮춰 자칼↔풍뎅이 배율을 완만하게.
+    const strength = hp * 14 + atk * 12
     const specialBonus = card.isSpecialEnemy ? 60 + card.defeatDropCount * 20 : 0
     return strength + specialBonus
   }
@@ -3978,7 +3991,7 @@ async function handleCardAction(e: Event): Promise<void> {
       const theme = flowerRewardTheme(card.flowerKind)
       if (result.flowerReward?.kind === 'score') {
         pushActivityLogsInDisplayOrder([
-          createScoreLog(`${card.name} 수확`, 48 + result.flowerReward.amount * 24, 'score'),
+          createScoreLog(`${card.name} 수확`, 70 + result.flowerReward.amount * 26, 'score'),
         ])
         rewardFeedbacks.push(
           playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1, theme)
