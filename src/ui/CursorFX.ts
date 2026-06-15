@@ -9,28 +9,28 @@
 // ── 커서 SVG ────────────────────────────────────────────────────────────────
 
 function buildCursorDataUrl(): string {
-  // 가늘고 길쭉한 다트형 포인터. 끝(2,2)이 핫스팟, 안쪽으로 살짝 휘어 꼬리로.
-  // 내부는 반투명 다크, 외곽선은 얇은 황금, 끝단에 림 발광.
+  // 스테인글래스 다트 포인터: 내부 딥 블랙, 테두리 없이 황금 발광으로만 형태 묘사.
+  // 이중 글로우(타이트 밝음 + 넓은 아우라)로 스테인글래스 특유의 빛 번짐 재현.
   const svg = [
     '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="26" viewBox="0 0 22 26">',
     '<defs>',
-    // 끝쪽이 밝고 아래로 갈수록 어두워지는 다크 글래스 그라데이션
-    '<linearGradient id="bd" x1="10%" y1="0%" x2="60%" y2="100%">',
-    '<stop offset="0%" stop-color="#2a2026" stop-opacity="0.82"/>',
-    '<stop offset="100%" stop-color="#050308" stop-opacity="0.7"/>',
-    '</linearGradient>',
-    // SourceAlpha 기반 아우터 글로우 — 윤곽 주변만 황금빛
-    '<filter id="gl" x="-130%" y="-130%" width="360%" height="360%">',
-    '<feGaussianBlur in="SourceAlpha" stdDeviation="1.6" result="b"/>',
-    '<feFlood flood-color="#f0b428" flood-opacity="0.92" result="c"/>',
-    '<feComposite in="c" in2="b" operator="in" result="g"/>',
-    '<feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>',
+    '<filter id="gl" x="-160%" y="-160%" width="420%" height="420%">',
+    // 1단계: 타이트한 밝은 엣지 글로우
+    '<feGaussianBlur in="SourceAlpha" stdDeviation="1.1" result="tight"/>',
+    '<feFlood flood-color="#ffe090" flood-opacity="1" result="bright"/>',
+    '<feComposite in="bright" in2="tight" operator="in" result="edge"/>',
+    // 2단계: 넓은 부드러운 호박빛 아우라
+    '<feGaussianBlur in="SourceAlpha" stdDeviation="3.8" result="wide"/>',
+    '<feFlood flood-color="#c88010" flood-opacity="0.72" result="amber"/>',
+    '<feComposite in="amber" in2="wide" operator="in" result="aura"/>',
+    // 아우라 → 엣지 → 도형 순서로 합성
+    '<feMerge><feMergeNode in="aura"/><feMergeNode in="edge"/><feMergeNode in="SourceGraphic"/></feMerge>',
     '</filter>',
     '</defs>',
-    // 다트형: 뾰족한 끝 → 한쪽은 길게, 한쪽은 짧게 → 안쪽 노치로 닫아 날렵하게
-    '<path d="M2,2 L19,13 L10,15 L8,24 Z"',
-    ' fill="url(#bd)" stroke="#f0c84a" stroke-width="0.85"',
-    ' stroke-linejoin="round" filter="url(#gl)"/>',
+    // 노치 있는 다트형 — stroke 없이 발광으로만 윤곽 표현
+    '<path d="M2,2 L20,12 L11,14.5 L8.5,24 Z"',
+    ' fill="#050208" fill-opacity="0.82"',
+    ' filter="url(#gl)"/>',
     '</svg>',
   ].join('')
   return `url("data:image/svg+xml;base64,${btoa(svg)}") 2 2, auto`
@@ -107,7 +107,8 @@ class CursorFXManager {
   init(): void {
     injectStyles(buildCursorDataUrl())
     this.overlay = createOverlay()
-    document.addEventListener('click', (e) => this.onClick(e))
+    // capture: true — 카드/적 요소가 stopPropagation을 해도 반드시 수신
+    window.addEventListener('click', (e) => this.onClick(e), { capture: true })
   }
 
   private onClick(e: MouseEvent): void {
