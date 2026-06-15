@@ -1184,7 +1184,7 @@ export class GameBoardRenderer {
           <div class="candle-mode-list" aria-hidden="true">${listItems}</div>
         </div>
         <div class="candle-gauge-body">
-          <div class="candle-gauge-meter" style="--candle-fill: ${candlePct}%">
+          <div class="candle-gauge-meter" style="--candle-fill: ${candlePct}%; --candle-max: ${candleMax}">
             ${ticks}
           </div>
           <div class="candle-gauge-label">${candleText}/${candleMaxText} · ${mode.effect}</div>

@@ -528,17 +528,27 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   border: 1px solid rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
+/* 채움 게이지: tick 위(z-index 2)에 단일 그라데이션을 깔고
+   '채움 비율 컷 × 칸 그리드' 두 마스크의 교집합으로 칸 안쪽에만 보이게 한다.
+   → gap에는 fill이 새지 않아 게이지가 칸에만 깔끔하게 나타난다. */
 .candle-gauge-meter::before {
   content: '';
   position: absolute;
-  inset: 3px auto 3px 3px;
-  width: calc(var(--candle-fill, 0%) - 6px);
-  max-width: calc(100% - 6px);
-  min-width: 0;
+  inset: 3px;
+  z-index: 2;
+  pointer-events: none;
   border-radius: 6px;
-  background: linear-gradient(90deg, rgba(244, 164, 96, 0.42), rgba(255, 215, 120, 0.7));
-  box-shadow: 0 0 12px rgba(255, 215, 120, 0.34);
-  transition: width 0.3s ease;
+  background: linear-gradient(90deg, rgba(255, 196, 92, 0.94), rgba(255, 224, 132, 1));
+  /* 칸 1개 너비 = (내부 폭 − gap합) / 칸 수 */
+  --tw: calc((100% - (var(--candle-max, 10) - 1) * 2px) / var(--candle-max, 10));
+  -webkit-mask:
+    linear-gradient(90deg, #000 0, #000 var(--candle-fill, 0%), transparent var(--candle-fill, 0%)),
+    repeating-linear-gradient(90deg, #000 0, #000 var(--tw), transparent var(--tw), transparent calc(var(--tw) + 2px));
+  -webkit-mask-composite: source-in;
+  mask:
+    linear-gradient(90deg, #000 0, #000 var(--candle-fill, 0%), transparent var(--candle-fill, 0%)),
+    repeating-linear-gradient(90deg, #000 0, #000 var(--tw), transparent var(--tw), transparent calc(var(--tw) + 2px));
+  mask-composite: intersect;
 }
 .candle-gauge-tick {
   position: relative;
@@ -546,12 +556,12 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   min-height: 18px;
   border-radius: 5px;
   border: 1px solid rgba(255, 232, 168, 0.18);
-  background: rgba(255, 255, 255, 0.045);
+  /* 불투명 빈 칸 — 뒤로 다른 레이어가 비치지 않는다 */
+  background: rgba(8, 5, 14, 0.55);
 }
+/* 채움은 ::before 마스크가 담당하므로 is-filled는 칸 테두리만 강조 */
 .candle-gauge-tick.is-filled {
-  border-color: rgba(255, 232, 168, 0.56);
-  background: linear-gradient(180deg, rgba(255, 232, 168, 0.75), rgba(244, 164, 96, 0.58));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 232, 168, 0.5);
 }
 .candle-gauge-label {
   position: static;
@@ -727,61 +737,5 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
 }
 .candle-mode-list-item.is-current .candle-mode-list-label {
   color: rgba(255, 232, 168, 0.42);
-}
-.candle-gauge-body {
-  display: grid;
-  grid-template-rows: 1fr auto;
-  gap: 4px;
-  min-width: 0;
-}
-.candle-gauge-meter {
-  position: relative;
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: 2px;
-  padding: 3px;
-  border-radius: 9px;
-  background: rgba(0, 0, 0, 0.34);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-}
-.candle-gauge-meter::before {
-  content: '';
-  position: absolute;
-  inset: 3px auto 3px 3px;
-  width: calc(var(--candle-fill, 0%) - 6px);
-  max-width: calc(100% - 6px);
-  min-width: 0;
-  border-radius: 6px;
-  background: linear-gradient(90deg, rgba(244, 164, 96, 0.42), rgba(255, 215, 120, 0.7));
-  box-shadow: 0 0 12px rgba(255, 215, 120, 0.34);
-  transition: width 0.3s ease;
-}
-.candle-gauge-tick {
-  position: relative;
-  z-index: 1;
-  min-height: 18px;
-  border-radius: 5px;
-  border: 1px solid rgba(255, 232, 168, 0.18);
-  background: rgba(255, 255, 255, 0.045);
-}
-.candle-gauge-tick.is-filled {
-  border-color: rgba(255, 232, 168, 0.56);
-  background: linear-gradient(180deg, rgba(255, 232, 168, 0.75), rgba(244, 164, 96, 0.58));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
-}
-.candle-gauge-label {
-  position: static;
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  font-weight: 800;
-  color: rgba(255, 232, 168, 0.86);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
-  letter-spacing: 0.02em;
 }
 `

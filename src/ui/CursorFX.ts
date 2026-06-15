@@ -9,25 +9,23 @@
 // ── 커서 SVG ────────────────────────────────────────────────────────────────
 
 function buildCursorDataUrl(): string {
-  // 스테인글래스 다트 포인터: 내부 딥 블랙, 테두리 없이 황금 발광으로만 형태 묘사.
-  // 이중 글로우(타이트 밝음 + 넓은 아우라)로 스테인글래스 특유의 빛 번짐 재현.
+  // 쨍한 황금 다트 포인터. 외부 발광 필터 없이, 살짝 블러한 테두리 path를
+  // 본체 뒤에 깔아 "테두리가 은은하게 풀리는" 발광을 표현한다.
+  const d = 'M2,2 L20,12 L11,14.5 L8.5,24 Z'
   const svg = [
     '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="26" viewBox="0 0 22 26">',
     '<defs>',
-    '<filter id="gl" x="-140%" y="-140%" width="380%" height="380%">',
-    // SourceAlpha 블러 → 황금 컬러 적용 → 원본 알파를 out으로 빼서 외부만 남김
-    '<feGaussianBlur in="SourceAlpha" stdDeviation="3.2" result="blur"/>',
-    '<feFlood flood-color="#e8a020" flood-opacity="0.88" result="col"/>',
-    '<feComposite in="col" in2="blur" operator="in" result="glow"/>',
-    '<feComposite in="glow" in2="SourceAlpha" operator="out" result="outerGlow"/>',
-    '<feMerge><feMergeNode in="outerGlow"/><feMergeNode in="SourceGraphic"/></feMerge>',
+    // 테두리 전용 약한 블러 — 외곽으로 크게 번지지 않고 선만 부드럽게 풀어준다
+    '<filter id="soft" x="-30%" y="-30%" width="160%" height="160%">',
+    '<feGaussianBlur stdDeviation="0.9"/>',
     '</filter>',
     '</defs>',
-    // 노치 있는 다트형 — stroke 없이 발광으로만 윤곽 표현
-    // fill-opacity를 낮추면 필터 아우터 글로우가 안쪽 경계에서 새어 노랗게 보임 → 완전 불투명 처리
-    '<path d="M2,2 L20,12 L11,14.5 L8.5,24 Z"',
-    ' fill="#080510"',
-    ' filter="url(#gl)"/>',
+    // 1) 뒤: 밝은 황금 테두리를 살짝 블러해 은은한 번짐(글로우 대체)
+    `<path d="${d}" fill="none" stroke="#ffe9a0" stroke-width="2.4"`,
+    ' stroke-linejoin="round" filter="url(#soft)" opacity="0.85"/>',
+    // 2) 앞: 쨍한 황금 본체 + 선명한 얇은 테두리
+    `<path d="${d}" fill="#f3c012" stroke="#fff3c8" stroke-width="0.9"`,
+    ' stroke-linejoin="round"/>',
     '</svg>',
   ].join('')
   return `url("data:image/svg+xml;base64,${btoa(svg)}") 2 2, auto`
