@@ -1207,9 +1207,12 @@ export class GameBoardRenderer {
     const def = getRelicDef(id)
     const center = (total - 1) / 2
     const offset = index - center
-    const rotate = Math.max(-18, Math.min(18, offset * 7))
-    const spread = Math.max(-54, Math.min(54, offset * 22))
-    const lift = Math.abs(offset) * 3
+    // 카드가 늘어도 ±18°/±54px 범위 안에서 균등 분포 — n≤6은 기존 스텝(7°/22px)과 동일.
+    const rotStep    = center > 0 ? Math.min(7,  18 / center) : 0
+    const spreadStep = center > 0 ? Math.min(22, 54 / center) : 0
+    const rotate = offset * rotStep
+    const spread = offset * spreadStep
+    const lift   = center > 0 ? (Math.abs(offset) / center) * 8 : 0
     const pinnedClass = this.pinnedRelicId === def.id ? 'is-pinned' : ''
     return `
       <article class="relic-mini-card ${RARITY_CLASS_BY_TIER[def.rarity]} ${pinnedClass}"
