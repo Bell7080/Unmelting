@@ -1104,41 +1104,8 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   32%  { transform: translateY(-3px) scale(1.07); filter: brightness(1.28); box-shadow: 0 0 24px rgba(244, 164, 96, 0.55), inset 0 1px 0 rgba(255,228,160,0.3), inset 0 -4px 8px rgba(0,0,0,0.6); }
   100% { transform: scale(1); filter: brightness(1); }
 }
-/* 팩 카드 리롤 시 빠른 퇴장 (좌→우 스태거) */
-@keyframes shop-pack-pick-blast {
-  0%   { transform: translateY(0) scale(1);     opacity: 1; }
-  25%  { transform: translateY(-8px) scale(1.03); opacity: 0.7; }
-  100% { transform: translateY(-28px) scale(0.9); opacity: 0; }
-}
-.shop-pack-picker-cards.is-refreshing .shop-pack-pick-card {
-  animation: shop-pack-pick-blast 0.13s cubic-bezier(0.36, 0.07, 0.19, 0.97) calc(var(--pick-i, 0) * 28ms) both;
-  pointer-events: none;
-}
-/* 새 카드 등장 — 투명도 변화 없이 스케일 팝으로만 처리해 이중 점멸 방지 */
-.shop-pack-picker-cards.is-blast .shop-pack-pick-card {
-  animation: pack-card-pop-in 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) calc(var(--pick-i, 0) * 45ms) both;
-}
-@keyframes pack-card-pop-in {
-  0%   { transform: scale(0.86); opacity: 1; }
-  100% { transform: scale(1);    opacity: 1; }
-}
-/* 사각 버스트 — 처음부터 보이는 상태로 시작해 바깥으로 팽창하며 사라짐 */
-.shop-pack-picker-cards.is-blast .shop-pack-pick-card::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border: 2px solid rgba(255, 228, 140, 0.52);
-  border-radius: 16px;
-  pointer-events: none;
-  z-index: 10;
-  animation: pack-card-reroll-burst 0.36s cubic-bezier(0.16, 0.84, 0.44, 1) calc(var(--pick-i, 0) * 45ms) both;
-}
-/* 0% opacity: 0으로 시작해 stagger 딜레이 중 fill:backwards로 테두리가 미리 보이는 현상 방지 */
-@keyframes pack-card-reroll-burst {
-  0%   { transform: scale(0.96); opacity: 0; }
-  14%  { transform: scale(0.97); opacity: 0.58; }
-  100% { transform: scale(1.28); opacity: 0; }
-}
+/* 리롤 카드 등장: CSS 애니메이션 없이 즉시 풀사이즈로 노출.
+   잔상/스케일 팝 모두 제거 — JS SquareBurst.playOn이 전용 파티클 연출을 담당한다. */
 /* Painted back face — a dedicated DOM element painted purely with
    cardbackground_001.webp. Sits at rotateY(180deg) so it shows while the
    card is face-down (the entrance state) and during the 90°-270° section

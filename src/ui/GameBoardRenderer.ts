@@ -1942,17 +1942,15 @@ export class GameBoardRenderer {
     }
     const cardsEl = host.querySelector<HTMLElement>('.shop-pack-picker-cards')
     const footerEl = host.querySelector<HTMLElement>('.shop-pack-picker-footer')
-    // is-blast 지속 중(600ms) 연타 무시
-    if (!cardsEl || cardsEl.classList.contains('is-blast')) return
+    if (!cardsEl) return
 
     cardsEl.innerHTML = this.buildPackPickerCardsHtml(view)
-    cardsEl.classList.add('is-blast')
-    window.setTimeout(() => cardsEl.classList.remove('is-blast'), 600)
 
-    // 카드별 SquareBurst — CSS ::after 링 외에 JS 파티클을 추가해 유물 리롤과 동일한 팡 연출.
+    // 카드 즉시 풀사이즈 노출 후 카드당 SquareBurst.
+    // CSS scale 팝 애니메이션을 제거했으므로 버스트 시 카드 위치가 정확하다.
     const pickCards = Array.from(cardsEl.querySelectorAll<HTMLElement>('.shop-pack-pick-card'))
     pickCards.forEach((card, i) => {
-      window.setTimeout(() => SquareBurst.playOn(card, 'score', { count: 10, spread: 62, duration: 320 }), i * 45)
+      window.setTimeout(() => SquareBurst.playOn(card, 'score', { count: 12, spread: 72, duration: 340 }), i * 55)
     })
 
     // Update reroll cost in-place without rebuilding the whole footer
