@@ -1234,22 +1234,40 @@ export class GameBoardRenderer {
    * ctx는 반드시 CardSpawner.getEffectiveWeightsForDisplay() 기반이어야 한다.
    * bright 티어 버킷을 고정 베이스로 사용하므로 불씨 게이지 변동에 무관하게
    * 직업·유물·시련 누적 보정만 반영한 안정적인 % 값이 표시된다.
+   *
+   * isOwned=true(인벤토리/도감 보유 중): ctx에 이미 자신의 delta가 포함돼 있으므로
+   * delta를 역산해 "적용 전 기준"으로 복원한 뒤 실제 효과 %를 계산한다.
+   * isOwned=false(상점 미구매): ctx가 "적용 전 기준"이므로 기존 로직 그대로.
    */
-  private relicEffectHtml(effect: string, spawnEffect?: { type: 'enemy' | 'treasure' | 'spore' | 'flower'; delta: number }, ctx?: SpawnWeightContext): string {
+  private relicEffectHtml(
+    effect: string,
+    spawnEffect?: { type: 'enemy' | 'treasure' | 'spore' | 'flower'; delta: number },
+    ctx?: SpawnWeightContext,
+    isOwned: boolean = false,
+  ): string {
     let text = escapeHtml(effect).replace(/불빛/g, '✦')
     if (spawnEffect && ctx && ctx.total > 0) {
-      // spore는 trap 가중치를 기준으로 변화량을 계산하고, flower는 flower 가중치를 사용한다.
-      const current = spawnEffect.type === 'enemy' ? ctx.enemy
+      const ctxVal = spawnEffect.type === 'enemy' ? ctx.enemy
         : spawnEffect.type === 'treasure' ? ctx.treasure
         : spawnEffect.type === 'flower' ? ctx.flower
         : ctx.trap
-      const newVal = Math.max(0, current + spawnEffect.delta)
-      const newTotal = Math.max(1, ctx.total + spawnEffect.delta)
-      const pctChange = Math.round((newVal / newTotal - current / ctx.total) * 100)
+      let pctChange: number
+      if (isOwned) {
+        // delta가 이미 적용된 상태 → 빼서 "적용 전" 기준 복원 후 실제 효과 계산
+        const beforeVal   = ctxVal - spawnEffect.delta
+        const beforeTotal = ctx.total - spawnEffect.delta
+        pctChange = beforeTotal > 0
+          ? Math.round((ctxVal / ctx.total - beforeVal / beforeTotal) * 100)
+          : 0
+      } else {
+        // 미구매: ctx가 "적용 전 기준"
+        const newVal   = Math.max(0, ctxVal + spawnEffect.delta)
+        const newTotal = Math.max(1, ctx.total + spawnEffect.delta)
+        pctChange = Math.round((newVal / newTotal - ctxVal / ctx.total) * 100)
+      }
       const sign = pctChange >= 0 ? '+' : ''
       text = text.replace('{{spawn}}', `${sign}${pctChange}%`)
     } else {
-      // 컨텍스트 없을 땐 토큰만 제거한다.
       text = text.replace('{{spawn}}', '')
     }
     return text
@@ -1273,7 +1291,7 @@ export class GameBoardRenderer {
         <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
         <div class="shop-relic-body">
           <h3 class="shop-relic-title">${def.name}</h3>
-          <p class="shop-relic-effect">${this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx)}</p>
+          <p class="shop-relic-effect">${this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx, true)}</p>
           ${bonusChip}
           <p class="shop-relic-flavor">${def.flavor}</p>
         </div>
@@ -4862,7 +4880,7 @@ export class GameBoardRenderer {
           name: def.name,
           tag: isOwned ? '보유 중' : '상점',
           rarityClass: RARITY_CLASS_BY_TIER[def.rarity],
-          chips: [{ value: this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx), tone: 'gold' }],
+          chips: [{ value: this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx, isOwned), tone: 'gold' }],
           flavor: def.flavor,
           extraClass: ['codex-tile--relic', isOwned ? 'codex-tile--owned' : ''].filter(Boolean).join(' '),
         })
