@@ -647,16 +647,18 @@ async function playPlayerGainTrails(
   )
 }
 
-/** Heal from Red Potion after enemy defeats, then allow Blood Pack to react once. */
+/** Heal 1 HP per defeated enemy; Blood Pack reacts to each heal separately. */
 async function applyRedPotionEnemyDefeats(count: number, allowBloodPack = true): Promise<void> {
   if (count <= 0 || !gameState.character.hasRelic('red-potion')) return
-  const before = snapshotPlayerRecovery()
-  const beforeResources = snapshotPlayerResources()
-  const healed = gameState.character.heal(count)
-  if (healed <= 0) return
-  recordRelicActivation('red-potion', `체력 +${healed}`)
-  await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
-  if (allowBloodPack) await applyBloodPackRecoveryTrigger(before)
+  for (let i = 0; i < count; i++) {
+    const before = snapshotPlayerRecovery()
+    const beforeResources = snapshotPlayerResources()
+    const healed = gameState.character.heal(1)
+    if (healed <= 0) continue
+    recordRelicActivation('red-potion', `체력 +${healed}`)
+    await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
+    if (allowBloodPack) await applyBloodPackRecoveryTrigger(before)
+  }
 }
 
 /** Shield from Wax Crow when treasure cards are actually acquired. */
@@ -721,20 +723,20 @@ function applyHonestyHandUse(count: number): void {
   honestyHandUseCount += count
   while (honestyHandUseCount >= 5) {
     honestyHandUseCount -= 5
-    const gained = gainFixedLight('정직', 50)
+    const gained = gainFixedLight('정직', 100)
     recordRelicActivation('honesty', `불빛 +${gained}`)
     void playResourceTrail({ kind: 'chain' }, 'score', 1)
     burstScoreGain()
   }
 }
 
-/** 변칙: 플레이어가 체력을 10 잃을 때마다 불씨 게이지 +1. 누적 피해는 Character가 보관한다.
+/** 변칙: 플레이어가 체력을 5 잃을 때마다 불씨 게이지 +1. 누적 피해는 Character가 보관한다.
  *  미보유 시 누적을 비워, 나중에 획득해도 이전 피해가 소급 발동하지 않게 한다. */
 function applyAnomalyHealthLoss(): void {
   const character = gameState.character
   if (!character.hasRelic('anomaly')) { character.relicDamageTaken = 0; return }
-  while (character.relicDamageTaken >= 10) {
-    character.relicDamageTaken -= 10
+  while (character.relicDamageTaken >= 5) {
+    character.relicDamageTaken -= 5
     character.gainEmber(1)
     boardRenderer.playHudCounterFeedback('ember', character.ember)
     recordRelicActivation('anomaly', '불씨 +1')
@@ -866,9 +868,9 @@ async function applyTurnStartRelics(): Promise<void> {
   const character = gameState.character
   const turn = gameState.getCurrentTurn()
 
-  // 별빛 랜턴: 5턴마다 불빛 150 (턴 배율 없음).
+  // 별빛 랜턴: 5턴마다 불빛 200 (턴 배율 없음).
   if (character.hasRelic('golden-squirrel') && turn !== 0 && turn % 5 === 0) {
-    const gained = gainFixedLight('별빛 랜턴', 150)
+    const gained = gainFixedLight('별빛 랜턴', 200)
     recordRelicActivation('golden-squirrel', `불빛 +${gained}`)
     await playResourceTrail({ kind: 'chain' }, 'score', 1)
     burstScoreGain()
@@ -880,8 +882,8 @@ async function applyTurnStartRelics(): Promise<void> {
     render()
   }
 
-  // 기사도: 3턴마다 knight 태그 손패 중 dropWeight 기반 랜덤 1장 지급.
-  if (character.hasRelic('chivalry') && turn !== 0 && turn % 3 === 0) {
+  // 기사도: 4턴마다 knight 태그 손패 중 dropWeight 기반 랜덤 1장 지급.
+  if (character.hasRelic('chivalry') && turn !== 0 && turn % 4 === 0) {
     const knightPool = HAND_CARD_IDS.filter((id) => HAND_CARD_DEFINITIONS[id].jobTags?.includes('knight'))
     if (knightPool.length > 0) {
       const total = knightPool.reduce((s, id) => s + (HAND_CARD_DEFINITIONS[id].dropWeight ?? 1), 0)
