@@ -1256,8 +1256,29 @@ export class GameBoardRenderer {
         }
         const sign = pctChange >= 0 ? '+' : ''
         t = t.replace('{{spawn}}', `${sign}${pctChange}%`)
+        // {{spawn_arrow}} shows "(before%→after%)" format for Shift detail context
+        if (t.includes('{{spawn_arrow}}')) {
+          const ctxVal2 = spawnEffect.type === 'enemy' ? ctx.enemy
+            : spawnEffect.type === 'treasure' ? ctx.treasure
+            : spawnEffect.type === 'flower' ? ctx.flower
+            : ctx.trap
+          let beforePct: number, afterPct: number
+          if (isOwned) {
+            const bv = ctxVal2 - spawnEffect.delta
+            const bt = ctx.total - spawnEffect.delta
+            beforePct = bt > 0 ? Math.round(bv / bt * 100) : 0
+            afterPct = ctx.total > 0 ? Math.round(ctxVal2 / ctx.total * 100) : 0
+          } else {
+            beforePct = ctx.total > 0 ? Math.round(ctxVal2 / ctx.total * 100) : 0
+            const nv = Math.max(0, ctxVal2 + spawnEffect.delta)
+            const nt = Math.max(1, ctx.total + spawnEffect.delta)
+            afterPct = Math.round(nv / nt * 100)
+          }
+          t = t.replace('{{spawn_arrow}}', `(${beforePct}→${afterPct}%)`)
+        }
       } else {
         t = t.replace('{{spawn}}', '')
+        t = t.replace('{{spawn_arrow}}', '')
       }
       return t
     }
@@ -1269,25 +1290,56 @@ export class GameBoardRenderer {
     return `<span class="desc-dyn"><span class="desc-dyn__s">${base}</span><span class="desc-dyn__d">${detail}</span></span>`
   }
 
+  /** 런타임 상태에 따라 동적으로 바뀌는 유물의 shiftDetail 문자열을 반환한다.
+   *  정적 shiftDetail가 없거나 런타임 값이 없으면 staticDetail를 그대로 반환한다. */
+  private relicDynamicShiftDetail(id: RelicId, staticDetail?: string): string | undefined {
+    const enh = this.currentGameState?.enhancements
+    const char = this.currentGameState?.getCharacter()
+    if (id === 'discount-coupon' && enh != null) {
+      return `상점 할인 (${enh.shopDiscountPct}→${enh.shopDiscountPct + 5}%)`
+    }
+    if (id === 'axe' && enh != null) {
+      const before = Math.round((enh.scoreMultiplier - 1) * 100)
+      const after = Math.round((enh.scoreMultiplier * 1.10 - 1) * 100)
+      return `불빛 배율 (+${before}%→+${after}%)`
+    }
+    if (id === 'trap-master' && char != null) {
+      const before = Math.round(char.trapIgnoreChance * 100)
+      const after = Math.round((char.trapIgnoreChance + 0.15) * 100)
+      return `함정 무시 (${before}→${after}%)`
+    }
+    return staticDetail
+  }
+
   /** Owned relics reuse the shop card reading structure without the price tag.
    *  Keeping the same art/body/title/effect/flavor class names lets inventory
    *  cards scale up on hover with text legibility matching shop relic cards. */
   private relicPreviewFace(id: RelicId): string {
     const def = getRelicDef(id)
     const enh = this.currentGameState?.enhancements
-    // 사치품/악마인형: 유물 하단에 현재 누적 공격력 표기
+    const char = this.currentGameState?.getCharacter()
+    // 유물별 런타임 누적치를 카드 하단 칩으로 표기한다.
     let bonusChip = ''
     if (id === 'luxury' && enh) {
-      bonusChip = `<p class="shop-relic-bonus-chip">공격력 누적 <strong>+${enh.luxuryBonusAtk}</strong> / 5</p>`
+      bonusChip = `<p class="shop-relic-bonus-chip">불빛 소모 <strong>${enh.luxuryScoreSpent}</strong> · 공격력 +<strong>${enh.luxuryBonusAtk}</strong>/3</p>`
     } else if (id === 'demon-doll' && enh) {
-      bonusChip = `<p class="shop-relic-bonus-chip">공격력 누적 <strong>+${enh.demonDollBonusAtk}</strong></p>`
+      bonusChip = `<p class="shop-relic-bonus-chip">자해 누적 <strong>${enh.demonDollSelfDamageAccum}</strong> · 공격력 +<strong>${enh.demonDollBonusAtk}</strong></p>`
+    } else if (id === 'anomaly' && char) {
+      bonusChip = `<p class="shop-relic-bonus-chip">피해 누적 <strong>${char.relicDamageTaken}</strong>/5</p>`
+    } else if (id === 'ink-quill' && enh) {
+      bonusChip = `<p class="shop-relic-bonus-chip">처치 누적 <strong>${enh.inkQuillKillCount}</strong>/5</p>`
+    } else if (id === 'honesty' && enh) {
+      bonusChip = `<p class="shop-relic-bonus-chip">사용 누적 <strong>${enh.honestyHandUseCount}</strong>/5</p>`
+    } else if (id === 'ambition' && enh) {
+      const nextGain = enh.ambitionCurrentGain + 25
+      bonusChip = `<p class="shop-relic-bonus-chip">처치 누적 <strong>${enh.ambitionKillCount}</strong>/8 · 다음 +${nextGain}</p>`
     }
     return `
       <article class="relic-preview-card" aria-hidden="true">
         <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
         <div class="shop-relic-body">
           <h3 class="shop-relic-title">${def.name}</h3>
-          <p class="shop-relic-effect">${this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx, true, def.shiftDetail)}</p>
+          <p class="shop-relic-effect">${this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx, true, this.relicDynamicShiftDetail(id, def.shiftDetail))}</p>
           ${bonusChip}
           <p class="shop-relic-flavor">${def.flavor}</p>
         </div>
@@ -2119,7 +2171,7 @@ export class GameBoardRenderer {
           <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
           <div class="shop-relic-body">
             <h3 class="shop-relic-title">${def.name}</h3>
-            <p class="shop-relic-effect">${this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx, false, def.shiftDetail)}</p>
+            <p class="shop-relic-effect">${this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx, false, this.relicDynamicShiftDetail(def.id, def.shiftDetail))}</p>
             <p class="shop-relic-flavor">${def.flavor}</p>
           </div>
         </div>
@@ -4873,7 +4925,7 @@ export class GameBoardRenderer {
           name: def.name,
           tag: isOwned ? '보유 중' : '상점',
           rarityClass: RARITY_CLASS_BY_TIER[def.rarity],
-          chips: [{ value: this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx, isOwned, def.shiftDetail), tone: 'gold' }],
+          chips: [{ value: this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx, isOwned, this.relicDynamicShiftDetail(def.id, def.shiftDetail)), tone: 'gold' }],
           flavor: def.flavor,
           extraClass: ['codex-tile--relic', isOwned ? 'codex-tile--owned' : ''].filter(Boolean).join(' '),
         })
@@ -6817,7 +6869,7 @@ export class GameBoardRenderer {
     const title = card.querySelector<HTMLElement>('.shop-relic-title')
     if (title) title.textContent = def.name
     const effect = card.querySelector<HTMLElement>('.shop-relic-effect')
-    if (effect) effect.innerHTML = this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx, false, def.shiftDetail)
+    if (effect) effect.innerHTML = this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx, false, this.relicDynamicShiftDetail(def.id, def.shiftDetail))
     const flavor = card.querySelector<HTMLElement>('.shop-relic-flavor')
     if (flavor) flavor.textContent = def.flavor
     const label = card.querySelector<HTMLElement>('.shop-price-label-text')
