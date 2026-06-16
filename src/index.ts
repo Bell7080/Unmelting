@@ -461,18 +461,6 @@ function diffThawedCards(before: Map<string, FieldFreezeSnapshotEntry>): string[
   return ids
 }
 
-interface PlayerRecoverySnapshot {
-  health: number
-  maxHealth: number
-}
-
-/** Snapshot player recovery stats so relics can react after a mutation. */
-function snapshotPlayerRecovery(): PlayerRecoverySnapshot {
-  return {
-    health: gameState.character.health,
-    maxHealth: gameState.character.maxHealth,
-  }
-}
 
 interface PlayerResourceSnapshot {
   health: number
@@ -650,17 +638,15 @@ async function playPlayerGainTrails(
   )
 }
 
-/** Heal 1 HP per defeated enemy; Blood Pack reacts to each heal separately. */
-async function applyRedPotionEnemyDefeats(count: number, allowBloodPack = true): Promise<void> {
+/** Heal 1 HP per defeated enemy; Blood Pack reacts via onHealGain callback. */
+async function applyRedPotionEnemyDefeats(count: number): Promise<void> {
   if (count <= 0 || !gameState.character.hasRelic('red-potion')) return
   for (let i = 0; i < count; i++) {
-    const before = snapshotPlayerRecovery()
     const beforeResources = snapshotPlayerResources()
     const healed = gameState.character.heal(1)
     if (healed <= 0) continue
     recordRelicActivation('red-potion', `체력 +${healed}`)
     await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
-    if (allowBloodPack) await applyBloodPackRecoveryTrigger(before)
   }
 }
 
@@ -674,14 +660,9 @@ async function applyWaxCrowTreasureGains(count: number): Promise<void> {
   await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
 }
 
-/** Blood Pack converts healing/max-HP gains into one random front enemy hit.
- *  피해량은 이번 회복량(체력 + 최대 체력 상승 합산, 최소 1)과 동일하다. */
-async function applyBloodPackRecoveryTrigger(before: PlayerRecoverySnapshot): Promise<void> {
-  const character = gameState.character
-  const recovered = character.health > before.health || character.maxHealth > before.maxHealth
-  if (!recovered || !character.hasRelic('blood-pack')) return
-  const healAmount = Math.max(1, (character.health - before.health) + (character.maxHealth - before.maxHealth))
-  const hit = gameState.damageRandomFrontEnemy(healAmount)
+/** 헌혈팩: 회복량만큼 전방 랜덤 적 1장에게 피해. onHealGain 콜백에서 호출된다. */
+async function applyBloodPackHit(amount: number): Promise<void> {
+  const hit = gameState.damageRandomFrontEnemy(amount)
   if (!hit) {
     recordRelicActivation('blood-pack', '전방 적 없음')
     return
@@ -692,15 +673,15 @@ async function applyBloodPackRecoveryTrigger(before: PlayerRecoverySnapshot): Pr
     await boardRenderer.animateCardConsumeByIds([{ cardId: hit.cardId, type: CardType.ENEMY }], {
       suppressBurstIds: new Set([hit.cardId]),
     })
-    await onEnemiesDefeated(1, false)
+    await onEnemiesDefeated(1, false) // allowBloodPack=false 재귀 방지는 콜백 자체가 없음
   }
 }
 
 /** 적 처치 시 처치 기반 유물을 한 번에 처리한다(붉은 포션 회복 + 잉크와 깃펜 카운트).
- *  blood-pack/품격있는 대처의 처치 후속도 이 함수로 모아 누락을 막는다. */
-async function onEnemiesDefeated(count: number, allowBloodPack = true): Promise<void> {
+ *  blood-pack은 onHealGain 콜백으로 자동 발동되므로 별도 파라미터 불필요. */
+async function onEnemiesDefeated(count: number): Promise<void> {
   if (count <= 0) return
-  await applyRedPotionEnemyDefeats(count, allowBloodPack)
+  await applyRedPotionEnemyDefeats(count)
   applyInkQuillKills(count)
   applyAmbitionKills(count)
 }
@@ -909,12 +890,12 @@ async function applyTurnStartRelics(): Promise<void> {
   }
 }
 
-/** 소중한 머리: 체력이 최대치의 절반 이하로 감소하면 전체 회복 후 파괴. */
+/** 소중한 머리: 체력이 최대치의 절반 이하로 감소하면 전체 회복 후 파괴.
+ *  fullHeal()이 onHealGain 콜백을 발동해 blood-pack을 자동 처리한다. */
 async function applyPreciousHeadCheck(): Promise<void> {
   const character = gameState.character
   if (!character.hasRelic('precious-head')) return
   if (character.health <= 0 || character.health > character.maxHealth / 2) return
-  const before = snapshotPlayerRecovery()
   const beforeResources = snapshotPlayerResources()
   // 파괴 연출(강도 2)을 먼저 보여 준 뒤 회복/파괴를 확정한다.
   await boardRenderer.animateRelicDestroy('precious-head', 2)
@@ -923,7 +904,6 @@ async function applyPreciousHeadCheck(): Promise<void> {
   recordRelicActivation('precious-head', '체력 전체 회복 (발동 후 파괴)')
   render()
   await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
-  await applyBloodPackRecoveryTrigger(before)
 }
 
 /** 훌륭한 대화수단: 플레이어가 적을 공격할 때마다 2.5% 확률로 파괴, 공격력 +2 환원. */
@@ -1122,24 +1102,22 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
     return
   }
   if (id === 'lifeline') {
-    const before = snapshotPlayerRecovery()
     const beforeResources = snapshotPlayerResources()
+    // increaseMaxHealth가 onHealGain 콜백으로 blood-pack을 자동 처리한다.
     gameState.character.increaseMaxHealth(5)
     await playPlayerGainTrails({ kind: 'center' }, beforeResources)
-    await applyBloodPackRecoveryTrigger(before)
   }
   if (id === 'first-candle') {
-    const before = snapshotPlayerRecovery()
     const beforeResources = snapshotPlayerResources()
     // 첫 양초: 최대 체력 +5 / 공격력 +1 / 불씨 한도 +2 / 최대 손패 +2 / 콤보 한도 -1.
     // 손패·콤보 한도는 수치 트레일이 없으므로 체력/불씨/공격력만 중앙 트레일로 보인다.
+    // increaseMaxHealth가 onHealGain 콜백으로 blood-pack을 자동 처리한다.
     gameState.character.increaseMaxHealth(5)
     gameState.character.applyDamageBoost(1)
     gameState.character.increaseEmberMax(2)
     gameState.character.increaseHandMax(2)
     gameState.character.decreaseCandleMax(1)
     await playPlayerGainTrails({ kind: 'center' }, beforeResources)
-    await applyBloodPackRecoveryTrigger(before)
   }
   if (id === 'hegemony') {
     const beforeResources = snapshotPlayerResources()
@@ -2276,6 +2254,10 @@ async function startGame(): Promise<void> {
   chain = HandSystem.newChain()
   pendingHandTarget = null
   gameState.reset()
+  // 헌혈팩 콜백: reset 이후 새 character 인스턴스에 설정해야 한다
+  gameState.character.onHealGain = (amount) => {
+    if (gameState.character.hasRelic('blood-pack')) void applyBloodPackHit(amount)
+  }
   cardSpawner.resetRelicModifiers()
   eventSpawnCtrl.reset()
   pendingEventDoor = false
@@ -2806,7 +2788,6 @@ function fireCandleGaugeEffect(): {
 async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promise<void> {
   while (gameState.character.isCandleFull()) {
     await wait(GAUGE_TRIGGER_DELAY_MS)
-    const beforeGaugeRecovery = snapshotPlayerRecovery()
     const beforeGaugeResources = snapshotPlayerResources()
     const gauge = fireCandleGaugeEffect()
     if (!gauge) break
@@ -2826,6 +2807,7 @@ async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promi
     // that decrease on the live gauge as its own drain beat, so overflow such
     // as 13 progress visibly settles to 3 instead of snapping on the next render.
     boardRenderer.playHudCounterFeedback('candle', gameState.character.candle)
+    // 게이지 페이오프로 HP/maxHP가 오르면 onHealGain 콜백이 blood-pack을 자동 처리한다.
     await playPlayerGainTrails(source, beforeGaugeResources)
     // 불씨/손패 최대치 모드는 상단 HUD 카운터를 즉시 굴려 증가를 읽히게 한다.
     if (gauge.mode === 'ember') {
@@ -2833,7 +2815,6 @@ async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promi
     } else if (gauge.mode === 'draw') {
       render()
     }
-    await applyBloodPackRecoveryTrigger(beforeGaugeRecovery)
   }
 }
 
@@ -2966,7 +2947,6 @@ async function applyHandSingle(
   const usedDef = usedCard ? getHandCardDef(usedCard.defId) : null
   const beforeSingleFreeze = snapshotFieldFreezeState()
   const beforeSingleHealth = snapshotFieldHealthState()
-  const beforeSingleRecovery = snapshotPlayerRecovery()
   const beforeSingleResources = snapshotPlayerResources()
   // Snapshot rail cards by id BEFORE useSingle mutates the model, so we can
   // still resolve baseHealth/getDamage on the removed cards for the score
@@ -3023,7 +3003,6 @@ async function applyHandSingle(
   if (bossController.eventState && singleDamagedIds.has(bossController.eventState.card.id)) {
     boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))
   }
-  await applyBloodPackRecoveryTrigger(beforeSingleRecovery)
   // Append only the just-used card first. Recipes are resolved below after
   // a small delay so the previous card's effect visibly lands before the combo.
   if (usedDef) {
@@ -3211,7 +3190,6 @@ async function applyHandSingle(
     await wait(COMBO_TRIGGER_DELAY_MS)
     const beforeRecipeFreeze = snapshotFieldFreezeState()
     const beforeRecipeHealth = snapshotFieldHealthState()
-    const beforeRecipeRecovery = snapshotPlayerRecovery()
     // Capture pre-recipe field so we can score whatever the recipe removes.
     const beforeRecipeCards = snapshotFieldCardsById()
     const recipeResult = HandSystem.fireNextPendingRecipe(gameState, chain)
@@ -3272,7 +3250,6 @@ async function applyHandSingle(
     if (bossController.eventState && recipeDamagedIds.has(bossController.eventState.card.id)) {
       boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))
     }
-    await applyBloodPackRecoveryTrigger(beforeRecipeRecovery)
     await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeRecipeFreeze))
     await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeRecipeFreeze))
 
