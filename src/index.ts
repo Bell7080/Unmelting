@@ -673,7 +673,7 @@ async function applyBloodPackHit(amount: number): Promise<void> {
     await boardRenderer.animateCardConsumeByIds([{ cardId: hit.cardId, type: CardType.ENEMY }], {
       suppressBurstIds: new Set([hit.cardId]),
     })
-    await onEnemiesDefeated(1, false) // allowBloodPack=false 재귀 방지는 콜백 자체가 없음
+    await onEnemiesDefeated(1)
   }
 }
 
@@ -774,7 +774,7 @@ async function applyDignifiedRetaliation(hits: EnemyHit[]): Promise<void> {
       killedIds.map((cardId) => ({ cardId, type: CardType.ENEMY })),
       { suppressBurstIds: new Set(killedIds) }
     )
-    await onEnemiesDefeated(killedIds.length, false)
+    await onEnemiesDefeated(killedIds.length)
   }
 }
 
