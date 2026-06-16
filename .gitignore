@@ -31,3 +31,6 @@ yarn-error.log*
 # Temporary
 .tmp/
 temp/
+
+# Claude Code internal
+.claude/
