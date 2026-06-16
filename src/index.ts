@@ -757,8 +757,8 @@ async function applyDignifiedRetaliation(hits: EnemyHit[]): Promise<void> {
   if (attackerIds.length === 0) return
   const damaged: { cardId: string; amount: number }[] = []
   const killedIds: string[] = []
-  // 반격 피해: 공격력 × 0.3 + 1 (최소 1)
-  const dmg = Math.max(1, Math.round(gameState.character.damage * 0.3 + 1))
+  // 반격 피해: Math.floor(공격력 × 0.3) + 1 — atkDmgHtml과 동일한 공식
+  const dmg = Math.max(1, Math.floor(gameState.character.damage * 0.3) + 1)
   for (const id of attackerIds) {
     const hit = gameState.damageEnemyById(id, dmg)
     if (!hit) continue
@@ -766,7 +766,7 @@ async function applyDignifiedRetaliation(hits: EnemyHit[]): Promise<void> {
     if (hit.defeated) killedIds.push(hit.cardId)
   }
   if (damaged.length === 0) return
-  const dmgForLog = Math.max(1, Math.round(gameState.character.damage * 0.3 + 1))
+  const dmgForLog = Math.max(1, Math.floor(gameState.character.damage * 0.3) + 1)
   recordRelicActivation('graceful-response', `반격 피해 ${dmgForLog} (${damaged.length}체)`)
   await boardRenderer.animateDamageNumbersById(damaged)
   if (killedIds.length > 0) {
@@ -946,7 +946,8 @@ async function applyChanceExtraHit(card: Card, distance: number): Promise<void> 
 async function applyWaterBucketExtraDamage(card: Card, distance: number): Promise<void> {
   if (!gameState.character.hasRelic('water-bucket') || Math.random() >= 0.25) return
   if (card.health <= 0) return
-  const dmg = Math.max(1, Math.round(gameState.character.damage * 0.5 + 1))
+  // atkDmgHtml과 동일한 공식
+  const dmg = Math.max(1, Math.floor(gameState.character.damage * 0.5) + 1)
   const newHealth = card.takeDamage(dmg)
   recordRelicActivation('water-bucket', `추가 피해 ${dmg}`)
   await boardRenderer.animateDamageNumbersById([{ cardId: card.id, amount: dmg }])
