@@ -1376,6 +1376,18 @@ export class GameBoardRenderer {
       return `함정 피해 [dyn:+1|(+${dmgBefore}→+${dmgAfter})] · 함정 처리 불빛 [dyn:+30%|(0→30%)]`
     }
 
+    // 품격있는 대처: 현재 공격력 기준 반격 피해를 기본값으로 실시간 계산
+    if (id === 'graceful-response' && char) {
+      const dmg = Math.max(1, Math.round(char.damage * 0.3 + 1))
+      return `피해를 입힌 적에게 반격 [dyn:${dmg}|([atk]×0.3+1)]피해`
+    }
+
+    // 물양동이: 현재 공격력 기준 추가 피해를 기본값으로 실시간 계산
+    if (id === 'water-bucket' && char) {
+      const dmg = Math.max(1, Math.round(char.damage * 0.5 + 1))
+      return `직접 타격한 적 25% 확률 추가 피해 [dyn:${dmg}|([atk]×0.5+1)]`
+    }
+
     return staticEffect
   }
 
