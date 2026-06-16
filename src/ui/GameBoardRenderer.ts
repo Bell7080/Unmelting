@@ -1276,11 +1276,12 @@ export class GameBoardRenderer {
       t = t.replace('{{spawn}}', '')
     }
 
+    // [atk]를 먼저 치환해야 [dyn:...|([atk]×...)] 수식 안의 ] 가 [^\]]+ 패턴을 조기 종료시키지 않는다.
+    t = t.replace(/\[atk\]/g, swordIcon())
+
     // [dyn:기본|수식] → 수식 부분만 desc-dyn으로 감싸기 (도감/손패 방식과 동일)
     t = t.replace(/\[dyn:([^\|]+)\|([^\]]+)\]/g, (_, s, d) => {
-      // [atk] placeholder in formula → sword icon (escapeHtml 이후라 HTML 삽입 가능)
-      const dHtml = d.replace(/\[atk\]/g, swordIcon())
-      return `<span class="desc-dyn"><span class="desc-dyn__s">${s}</span><span class="desc-dyn__d">${dHtml}</span></span>`
+      return `<span class="desc-dyn"><span class="desc-dyn__s">${s}</span><span class="desc-dyn__d">${d}</span></span>`
     })
 
     // [shift:텍스트] → .shift-only span
