@@ -120,11 +120,16 @@ export class Character {
     return actualDamage
   }
 
+  /** 헌혈팩 유물용: heal()로 실제 HP가 회복될 때마다 호출된다. 비동기 처리는 외부에서 담당. */
+  onHealGain?: (amount: number) => void
+
   heal(amount: number): number {
     const actualHeal = Math.max(0, amount)
     const before = this.health
     this.health = Math.min(this.maxHealth, this.health + actualHeal)
-    return this.health - before
+    const gained = this.health - before
+    if (gained > 0) this.onHealGain?.(gained)
+    return gained
   }
 
   fullHeal(): number {
@@ -136,6 +141,8 @@ export class Character {
     const actualIncrease = Math.max(0, amount)
     this.maxHealth += actualIncrease
     this.health += actualIncrease
+    // maxHP 증가 시에도 혈팩 발동 (최대치 상승량 = 즉시 HP 회복량)
+    if (actualIncrease > 0) this.onHealGain?.(actualIncrease)
     return actualIncrease
   }
 
