@@ -1347,6 +1347,13 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   line-height: 1.32;
   font-size: var(--font-size-sm);
 }
+/* 유물 카드 desc-dyn: 도감·손패 미리보기와 동일한 opacity 페이드 방식 */
+.shop-relic-effect .desc-dyn { display: inline-grid; }
+.shop-relic-effect .desc-dyn__s, .shop-relic-effect .desc-dyn__d { grid-area: 1/1; transition: opacity 0.18s ease; }
+.shop-relic-effect .desc-dyn__s { opacity: 1; }
+.shop-relic-effect .desc-dyn__d { opacity: 0; font-size: 0.82em; white-space: nowrap; }
+body.is-shift-detail .shop-relic-effect .desc-dyn__s { opacity: 0; }
+body.is-shift-detail .shop-relic-effect .desc-dyn__d { opacity: 1; }
 .shop-relic-flavor {
   margin: 0;
   color: rgba(232, 214, 180, 0.62);

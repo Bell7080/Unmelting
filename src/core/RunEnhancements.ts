@@ -34,8 +34,16 @@ export interface RunEnhancements {
   tier1CardBoosts: Partial<Record<string, number>>
   /** 직업 선택으로 1차 거름망에 추가된 태그 그룹 가중치: 태그명 → 누적값. 당첨 시 태그 내 T2를 돌린다. */
   tier1JobPoolBoosts: Partial<Record<string, number>>
+  /** 잉크와 깃펜 현재 처치 누적 카운트 (5마다 콤보 게이지 +1). */
+  inkQuillKillCount: number
+  /** 정직 현재 손패 사용 누적 카운트 (5마다 불빛 획득). */
+  honestyHandUseCount: number
+  /** 야망 현재 처치 누적 카운트 (8마다 발동). */
+  ambitionKillCount: number
+  /** 야망 다음 발동 시 지급할 불빛량 (25→50→75…). */
+  ambitionCurrentGain: number
 }
 
 export function makeDefaultEnhancements(): RunEnhancements {
-  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, blackCandleBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, tier1CardBoosts: {}, tier1JobPoolBoosts: {} }
+  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, blackCandleBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, tier1CardBoosts: {}, tier1JobPoolBoosts: {}, inkQuillKillCount: 0, honestyHandUseCount: 0, ambitionKillCount: 0, ambitionCurrentGain: 0 }
 }

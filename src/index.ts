@@ -650,16 +650,18 @@ async function playPlayerGainTrails(
   )
 }
 
-/** Heal from Red Potion after enemy defeats, then allow Blood Pack to react once. */
+/** Heal 1 HP per defeated enemy; Blood Pack reacts to each heal separately. */
 async function applyRedPotionEnemyDefeats(count: number, allowBloodPack = true): Promise<void> {
   if (count <= 0 || !gameState.character.hasRelic('red-potion')) return
-  const before = snapshotPlayerRecovery()
-  const beforeResources = snapshotPlayerResources()
-  const healed = gameState.character.heal(count)
-  if (healed <= 0) return
-  recordRelicActivation('red-potion', `체력 +${healed}`)
-  await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
-  if (allowBloodPack) await applyBloodPackRecoveryTrigger(before)
+  for (let i = 0; i < count; i++) {
+    const before = snapshotPlayerRecovery()
+    const beforeResources = snapshotPlayerResources()
+    const healed = gameState.character.heal(1)
+    if (healed <= 0) continue
+    recordRelicActivation('red-potion', `체력 +${healed}`)
+    await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
+    if (allowBloodPack) await applyBloodPackRecoveryTrigger(before)
+  }
 }
 
 /** Shield from Wax Crow when treasure cards are actually acquired. */
@@ -672,17 +674,19 @@ async function applyWaxCrowTreasureGains(count: number): Promise<void> {
   await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
 }
 
-/** Blood Pack converts healing/max-HP gains into one random front enemy hit. */
+/** Blood Pack converts healing/max-HP gains into one random front enemy hit.
+ *  피해량은 이번 회복량(체력 + 최대 체력 상승 합산, 최소 1)과 동일하다. */
 async function applyBloodPackRecoveryTrigger(before: PlayerRecoverySnapshot): Promise<void> {
   const character = gameState.character
   const recovered = character.health > before.health || character.maxHealth > before.maxHealth
   if (!recovered || !character.hasRelic('blood-pack')) return
-  const hit = gameState.damageRandomFrontEnemy(1)
+  const healAmount = Math.max(1, (character.health - before.health) + (character.maxHealth - before.maxHealth))
+  const hit = gameState.damageRandomFrontEnemy(healAmount)
   if (!hit) {
     recordRelicActivation('blood-pack', '전방 적 없음')
     return
   }
-  recordRelicActivation('blood-pack', '전방 랜덤 적 피해 1')
+  recordRelicActivation('blood-pack', `전방 랜덤 적 피해 ${hit.amount}`)
   await boardRenderer.animateDamageNumbersById([{ cardId: hit.cardId, amount: hit.amount }])
   if (hit.defeated) {
     await boardRenderer.animateCardConsumeByIds([{ cardId: hit.cardId, type: CardType.ENEMY }], {
@@ -701,43 +705,40 @@ async function onEnemiesDefeated(count: number, allowBloodPack = true): Promise<
   applyAmbitionKills(count)
 }
 
-/** 야망: 적 10처치마다 불빛을 25씩 늘어나며(25→50→75…) 획득한다. 누적 보너스는 런 동안 유지. */
-let ambitionKillCount = 0
-let ambitionBonus = 0
+/** 야망: 적 8처치마다 불빛을 25씩 늘어나며(25→50→75…) 획득한다. 누적 보너스는 런 동안 유지. */
 function applyAmbitionKills(count: number): void {
   if (count <= 0 || !gameState.character.hasRelic('ambition')) return
-  ambitionKillCount += count
-  while (ambitionKillCount >= 8) {
-    ambitionKillCount -= 8
-    ambitionBonus += 25
-    const gained = gainFixedLight('야망', ambitionBonus)
+  gameState.enhancements.ambitionKillCount += count
+  while (gameState.enhancements.ambitionKillCount >= 8) {
+    gameState.enhancements.ambitionKillCount -= 8
+    gameState.enhancements.ambitionCurrentGain += 25
+    const gained = gainFixedLight('야망', gameState.enhancements.ambitionCurrentGain)
     recordRelicActivation('ambition', `불빛 +${gained}`)
     void playResourceTrail({ kind: 'chain' }, 'score', 1)
     burstScoreGain()
   }
 }
 
-/** 정직: 손패 5장 사용마다 불빛 50 획득. 사용 수는 런 동안 누적. */
-let honestyHandUseCount = 0
+/** 정직: 손패 5장 사용마다 불빛 100 획득. 사용 수는 런 동안 누적. */
 function applyHonestyHandUse(count: number): void {
   if (count <= 0 || !gameState.character.hasRelic('honesty')) return
-  honestyHandUseCount += count
-  while (honestyHandUseCount >= 5) {
-    honestyHandUseCount -= 5
-    const gained = gainFixedLight('정직', 50)
+  gameState.enhancements.honestyHandUseCount += count
+  while (gameState.enhancements.honestyHandUseCount >= 5) {
+    gameState.enhancements.honestyHandUseCount -= 5
+    const gained = gainFixedLight('정직', 100)
     recordRelicActivation('honesty', `불빛 +${gained}`)
     void playResourceTrail({ kind: 'chain' }, 'score', 1)
     burstScoreGain()
   }
 }
 
-/** 변칙: 플레이어가 체력을 10 잃을 때마다 불씨 게이지 +1. 누적 피해는 Character가 보관한다.
+/** 변칙: 플레이어가 체력을 5 잃을 때마다 불씨 게이지 +1. 누적 피해는 Character가 보관한다.
  *  미보유 시 누적을 비워, 나중에 획득해도 이전 피해가 소급 발동하지 않게 한다. */
 function applyAnomalyHealthLoss(): void {
   const character = gameState.character
   if (!character.hasRelic('anomaly')) { character.relicDamageTaken = 0; return }
-  while (character.relicDamageTaken >= 10) {
-    character.relicDamageTaken -= 10
+  while (character.relicDamageTaken >= 5) {
+    character.relicDamageTaken -= 5
     character.gainEmber(1)
     boardRenderer.playHudCounterFeedback('ember', character.ember)
     recordRelicActivation('anomaly', '불씨 +1')
@@ -755,12 +756,11 @@ function applyBlindFaithCoins(amount: number): void {
 
 /** 잉크와 깃펜: 적 5처치마다 콤보 게이지 +1. 처치 수는 런 동안 누적한다.
  *  채워진 게이지는 액션 종료 시 resolveFullCandleGaugeEffects가 정산한다. */
-let inkQuillKillCount = 0
 function applyInkQuillKills(count: number): void {
   if (count <= 0 || !gameState.character.hasRelic('ink-quill')) return
-  inkQuillKillCount += count
-  while (inkQuillKillCount >= 5) {
-    inkQuillKillCount -= 5
+  gameState.enhancements.inkQuillKillCount += count
+  while (gameState.enhancements.inkQuillKillCount >= 5) {
+    gameState.enhancements.inkQuillKillCount -= 5
     gameState.character.gainCandle(1)
     boardRenderer.playHudCounterFeedback('candle', gameState.character.candle)
     recordRelicActivation('ink-quill', '콤보 게이지 +1')
@@ -776,14 +776,17 @@ async function applyDignifiedRetaliation(hits: EnemyHit[]): Promise<void> {
   if (attackerIds.length === 0) return
   const damaged: { cardId: string; amount: number }[] = []
   const killedIds: string[] = []
+  // 반격 피해: 공격력 × 0.3 + 1 (최소 1)
+  const dmg = Math.max(1, Math.round(gameState.character.damage * 0.3 + 1))
   for (const id of attackerIds) {
-    const hit = gameState.damageEnemyById(id, 1)
+    const hit = gameState.damageEnemyById(id, dmg)
     if (!hit) continue
     damaged.push({ cardId: hit.cardId, amount: hit.amount })
     if (hit.defeated) killedIds.push(hit.cardId)
   }
   if (damaged.length === 0) return
-  recordRelicActivation('graceful-response', `반격 피해 1 (${damaged.length}체)`)
+  const dmgForLog = Math.max(1, Math.round(gameState.character.damage * 0.3 + 1))
+  recordRelicActivation('graceful-response', `반격 피해 ${dmgForLog} (${damaged.length}체)`)
   await boardRenderer.animateDamageNumbersById(damaged)
   if (killedIds.length > 0) {
     await boardRenderer.animateCardConsumeByIds(
@@ -869,9 +872,9 @@ async function applyTurnStartRelics(): Promise<void> {
   const character = gameState.character
   const turn = gameState.getCurrentTurn()
 
-  // 별빛 랜턴: 5턴마다 불빛 150 (턴 배율 없음).
+  // 별빛 랜턴: 5턴마다 불빛 200 (턴 배율 없음).
   if (character.hasRelic('golden-squirrel') && turn !== 0 && turn % 5 === 0) {
-    const gained = gainFixedLight('별빛 랜턴', 150)
+    const gained = gainFixedLight('별빛 랜턴', 200)
     recordRelicActivation('golden-squirrel', `불빛 +${gained}`)
     await playResourceTrail({ kind: 'chain' }, 'score', 1)
     burstScoreGain()
@@ -883,8 +886,8 @@ async function applyTurnStartRelics(): Promise<void> {
     render()
   }
 
-  // 기사도: 3턴마다 knight 태그 손패 중 dropWeight 기반 랜덤 1장 지급.
-  if (character.hasRelic('chivalry') && turn !== 0 && turn % 3 === 0) {
+  // 기사도: 4턴마다 knight 태그 손패 중 dropWeight 기반 랜덤 1장 지급.
+  if (character.hasRelic('chivalry') && turn !== 0 && turn % 4 === 0) {
     const knightPool = HAND_CARD_IDS.filter((id) => HAND_CARD_DEFINITIONS[id].jobTags?.includes('knight'))
     if (knightPool.length > 0) {
       const total = knightPool.reduce((s, id) => s + (HAND_CARD_DEFINITIONS[id].dropWeight ?? 1), 0)
@@ -959,13 +962,14 @@ async function applyChanceExtraHit(card: Card, distance: number): Promise<void> 
   }
 }
 
-/** 물양동이: 타격한 적 25% 확률로 체력 1 추가 감소. */
+/** 물양동이: 타격한 적 25% 확률로 추가 피해(공격력 × 0.5 + 1, 최소 1). */
 async function applyWaterBucketExtraDamage(card: Card, distance: number): Promise<void> {
   if (!gameState.character.hasRelic('water-bucket') || Math.random() >= 0.25) return
   if (card.health <= 0) return
-  const newHealth = card.takeDamage(1)
-  recordRelicActivation('water-bucket', '추가 피해 1')
-  await boardRenderer.animateDamageNumbersById([{ cardId: card.id, amount: 1 }])
+  const dmg = Math.max(1, Math.round(gameState.character.damage * 0.5 + 1))
+  const newHealth = card.takeDamage(dmg)
+  recordRelicActivation('water-bucket', `추가 피해 ${dmg}`)
+  await boardRenderer.animateDamageNumbersById([{ cardId: card.id, amount: dmg }])
   if (newHealth <= 0) {
     const base = scoreForCardRemoval(card)
     if (base > 0) {
@@ -2281,10 +2285,7 @@ async function startGame(): Promise<void> {
   scorePulseKey = 0
   coins = 0
   coinPulseKey = 0
-  inkQuillKillCount = 0
-  ambitionKillCount = 0
-  ambitionBonus = 0
-  honestyHandUseCount = 0
+  // 처치/사용 카운터는 makeDefaultEnhancements()로 enhancements 재생성 시 함께 초기화된다.
   nextActivityLogId = 1
   activityLogs = []
   shopOpen = false

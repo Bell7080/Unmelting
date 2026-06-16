@@ -1228,49 +1228,103 @@ export class GameBoardRenderer {
   }
 
   /**
-   * 유물 효과 본문에서 '불빛'→✦ 치환 + {{spawn}} 토큰을 확률 변화량으로 치환한다.
-   * def.spawnEffect가 있을 때만 {{spawn}} 토큰이 등장하므로 일반 유물에는 영향 없다.
+   * 유물 효과 본문을 화면용 HTML로 변환한다.
    *
-   * ctx는 반드시 CardSpawner.getEffectiveWeightsForDisplay() 기반이어야 한다.
-   * bright 티어 버킷을 고정 베이스로 사용하므로 불씨 게이지 변동에 무관하게
-   * 직업·유물·시련 누적 보정만 반영한 안정적인 % 값이 표시된다.
-   *
-   * isOwned=true(인벤토리/도감 보유 중): ctx에 이미 자신의 delta가 포함돼 있으므로
-   * delta를 역산해 "적용 전 기준"으로 복원한 뒤 실제 효과 %를 계산한다.
-   * isOwned=false(상점 미구매): ctx가 "적용 전 기준"이므로 기존 로직 그대로.
+   * 변환 규칙:
+   * 1. `불빛` → ✦ 글리프 치환 (모든 유물 공통)
+   * 2. `{{spawn}}` → 실제 확률 변화량(%) 치환 (def.spawnEffect 있는 유물 전용)
+   *    - ctx는 CardSpawner.getEffectiveWeightsForDisplay() 기반 bright 티어 고정값
+   *    - isOwned=true: ctx에 자신의 delta가 이미 포함 → 역산 후 실제 효과 계산
+   *    - isOwned=false: ctx가 "적용 전 기준" → 그대로 사용
+   * 3. shiftDetail 있음 → desc-dyn 구조 생성
+   *    - 기본: effect 표시 / Shift 누름: shiftDetail 표시
+   *    - shiftDetail 안의 `[atk]` 플레이스홀더는 검 아이콘 SVG로 치환
+   *    - `불빛` → ✦ 치환도 동일하게 적용
+   *    - CSS: body.is-shift-detail 클래스로 .desc-dyn__s ↔ .desc-dyn__d 전환
    */
   private relicEffectHtml(
     effect: string,
     spawnEffect?: { type: 'enemy' | 'treasure' | 'spore' | 'flower'; delta: number },
     ctx?: SpawnWeightContext,
     isOwned: boolean = false,
+    shiftDetail?: string,
   ): string {
-    let text = escapeHtml(effect).replace(/불빛/g, '✦')
-    if (spawnEffect && ctx && ctx.total > 0) {
-      const ctxVal = spawnEffect.type === 'enemy' ? ctx.enemy
-        : spawnEffect.type === 'treasure' ? ctx.treasure
-        : spawnEffect.type === 'flower' ? ctx.flower
-        : ctx.trap
-      let pctChange: number
-      if (isOwned) {
-        // delta가 이미 적용된 상태 → 빼서 "적용 전" 기준 복원 후 실제 효과 계산
-        const beforeVal   = ctxVal - spawnEffect.delta
-        const beforeTotal = ctx.total - spawnEffect.delta
-        pctChange = beforeTotal > 0
-          ? Math.round((ctxVal / ctx.total - beforeVal / beforeTotal) * 100)
-          : 0
+    const processText = (raw: string): string => {
+      let t = escapeHtml(raw).replace(/불빛/g, '✦').replace(/\[atk\]/g, swordIcon())
+      if (spawnEffect && ctx && ctx.total > 0) {
+        const ctxVal = spawnEffect.type === 'enemy' ? ctx.enemy
+          : spawnEffect.type === 'treasure' ? ctx.treasure
+          : spawnEffect.type === 'flower' ? ctx.flower
+          : ctx.trap
+        let pctChange: number
+        if (isOwned) {
+          // delta가 이미 적용된 상태 → 빼서 "적용 전" 기준 복원 후 실제 효과 계산
+          const beforeVal   = ctxVal - spawnEffect.delta
+          const beforeTotal = ctx.total - spawnEffect.delta
+          pctChange = beforeTotal > 0
+            ? Math.round((ctxVal / ctx.total - beforeVal / beforeTotal) * 100)
+            : 0
+        } else {
+          // 미구매: ctx가 "적용 전 기준"
+          const newVal   = Math.max(0, ctxVal + spawnEffect.delta)
+          const newTotal = Math.max(1, ctx.total + spawnEffect.delta)
+          pctChange = Math.round((newVal / newTotal - ctxVal / ctx.total) * 100)
+        }
+        const sign = pctChange >= 0 ? '+' : ''
+        t = t.replace('{{spawn}}', `${sign}${pctChange}%`)
+        // {{spawn_arrow}} shows "(before%→after%)" format for Shift detail context
+        if (t.includes('{{spawn_arrow}}')) {
+          const ctxVal2 = spawnEffect.type === 'enemy' ? ctx.enemy
+            : spawnEffect.type === 'treasure' ? ctx.treasure
+            : spawnEffect.type === 'flower' ? ctx.flower
+            : ctx.trap
+          let beforePct: number, afterPct: number
+          if (isOwned) {
+            const bv = ctxVal2 - spawnEffect.delta
+            const bt = ctx.total - spawnEffect.delta
+            beforePct = bt > 0 ? Math.round(bv / bt * 100) : 0
+            afterPct = ctx.total > 0 ? Math.round(ctxVal2 / ctx.total * 100) : 0
+          } else {
+            beforePct = ctx.total > 0 ? Math.round(ctxVal2 / ctx.total * 100) : 0
+            const nv = Math.max(0, ctxVal2 + spawnEffect.delta)
+            const nt = Math.max(1, ctx.total + spawnEffect.delta)
+            afterPct = Math.round(nv / nt * 100)
+          }
+          t = t.replace('{{spawn_arrow}}', `(${beforePct}→${afterPct}%)`)
+        }
       } else {
-        // 미구매: ctx가 "적용 전 기준"
-        const newVal   = Math.max(0, ctxVal + spawnEffect.delta)
-        const newTotal = Math.max(1, ctx.total + spawnEffect.delta)
-        pctChange = Math.round((newVal / newTotal - ctxVal / ctx.total) * 100)
+        t = t.replace('{{spawn}}', '')
+        t = t.replace('{{spawn_arrow}}', '')
       }
-      const sign = pctChange >= 0 ? '+' : ''
-      text = text.replace('{{spawn}}', `${sign}${pctChange}%`)
-    } else {
-      text = text.replace('{{spawn}}', '')
+      return t
     }
-    return text
+
+    const base = processText(effect)
+    if (!shiftDetail) return base
+    // desc-dyn 래퍼: __s = 기본 수치, __d = Shift 자세히보기 수식/맥락
+    const detail = processText(shiftDetail)
+    return `<span class="desc-dyn"><span class="desc-dyn__s">${base}</span><span class="desc-dyn__d">${detail}</span></span>`
+  }
+
+  /** 런타임 상태에 따라 동적으로 바뀌는 유물의 shiftDetail 문자열을 반환한다.
+   *  정적 shiftDetail가 없거나 런타임 값이 없으면 staticDetail를 그대로 반환한다. */
+  private relicDynamicShiftDetail(id: RelicId, staticDetail?: string): string | undefined {
+    const enh = this.currentGameState?.enhancements
+    const char = this.currentGameState?.getCharacter()
+    if (id === 'discount-coupon' && enh != null) {
+      return `상점 할인 (${enh.shopDiscountPct}→${enh.shopDiscountPct + 5}%)`
+    }
+    if (id === 'axe' && enh != null) {
+      const before = Math.round((enh.scoreMultiplier - 1) * 100)
+      const after = Math.round((enh.scoreMultiplier * 1.10 - 1) * 100)
+      return `불빛 배율 (+${before}%→+${after}%)`
+    }
+    if (id === 'trap-master' && char != null) {
+      const before = Math.round(char.trapIgnoreChance * 100)
+      const after = Math.round((char.trapIgnoreChance + 0.15) * 100)
+      return `함정 무시 (${before}→${after}%)`
+    }
+    return staticDetail
   }
 
   /** Owned relics reuse the shop card reading structure without the price tag.
@@ -1279,19 +1333,29 @@ export class GameBoardRenderer {
   private relicPreviewFace(id: RelicId): string {
     const def = getRelicDef(id)
     const enh = this.currentGameState?.enhancements
-    // 사치품/악마인형: 유물 하단에 현재 누적 공격력 표기
+    const char = this.currentGameState?.getCharacter()
+    // 유물별 런타임 누적치를 카드 하단 칩으로 표기한다.
     let bonusChip = ''
     if (id === 'luxury' && enh) {
-      bonusChip = `<p class="shop-relic-bonus-chip">공격력 누적 <strong>+${enh.luxuryBonusAtk}</strong> / 5</p>`
+      bonusChip = `<p class="shop-relic-bonus-chip">불빛 소모 <strong>${enh.luxuryScoreSpent}</strong> · 공격력 +<strong>${enh.luxuryBonusAtk}</strong>/3</p>`
     } else if (id === 'demon-doll' && enh) {
-      bonusChip = `<p class="shop-relic-bonus-chip">공격력 누적 <strong>+${enh.demonDollBonusAtk}</strong></p>`
+      bonusChip = `<p class="shop-relic-bonus-chip">자해 누적 <strong>${enh.demonDollSelfDamageAccum}</strong> · 공격력 +<strong>${enh.demonDollBonusAtk}</strong></p>`
+    } else if (id === 'anomaly' && char) {
+      bonusChip = `<p class="shop-relic-bonus-chip">피해 누적 <strong>${char.relicDamageTaken}</strong>/5</p>`
+    } else if (id === 'ink-quill' && enh) {
+      bonusChip = `<p class="shop-relic-bonus-chip">처치 누적 <strong>${enh.inkQuillKillCount}</strong>/5</p>`
+    } else if (id === 'honesty' && enh) {
+      bonusChip = `<p class="shop-relic-bonus-chip">사용 누적 <strong>${enh.honestyHandUseCount}</strong>/5</p>`
+    } else if (id === 'ambition' && enh) {
+      const nextGain = enh.ambitionCurrentGain + 25
+      bonusChip = `<p class="shop-relic-bonus-chip">처치 누적 <strong>${enh.ambitionKillCount}</strong>/8 · 다음 +${nextGain}</p>`
     }
     return `
       <article class="relic-preview-card" aria-hidden="true">
         <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
         <div class="shop-relic-body">
           <h3 class="shop-relic-title">${def.name}</h3>
-          <p class="shop-relic-effect">${this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx, true)}</p>
+          <p class="shop-relic-effect">${this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx, true, this.relicDynamicShiftDetail(id, def.shiftDetail))}</p>
           ${bonusChip}
           <p class="shop-relic-flavor">${def.flavor}</p>
         </div>
@@ -2126,7 +2190,7 @@ export class GameBoardRenderer {
           <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
           <div class="shop-relic-body">
             <h3 class="shop-relic-title">${def.name}</h3>
-            <p class="shop-relic-effect">${this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx)}</p>
+            <p class="shop-relic-effect">${this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx, false, this.relicDynamicShiftDetail(def.id, def.shiftDetail))}</p>
             <p class="shop-relic-flavor">${def.flavor}</p>
           </div>
         </div>
@@ -4880,7 +4944,7 @@ export class GameBoardRenderer {
           name: def.name,
           tag: isOwned ? '보유 중' : '상점',
           rarityClass: RARITY_CLASS_BY_TIER[def.rarity],
-          chips: [{ value: this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx, isOwned), tone: 'gold' }],
+          chips: [{ value: this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx, isOwned, this.relicDynamicShiftDetail(def.id, def.shiftDetail)), tone: 'gold' }],
           flavor: def.flavor,
           extraClass: ['codex-tile--relic', isOwned ? 'codex-tile--owned' : ''].filter(Boolean).join(' '),
         })
@@ -6827,7 +6891,7 @@ export class GameBoardRenderer {
     const title = card.querySelector<HTMLElement>('.shop-relic-title')
     if (title) title.textContent = def.name
     const effect = card.querySelector<HTMLElement>('.shop-relic-effect')
-    if (effect) effect.innerHTML = this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx)
+    if (effect) effect.innerHTML = this.relicEffectHtml(def.effect, def.spawnEffect, this.currentSpawnWeightCtx, false, this.relicDynamicShiftDetail(def.id, def.shiftDetail))
     const flavor = card.querySelector<HTMLElement>('.shop-relic-flavor')
     if (flavor) flavor.textContent = def.flavor
     const label = card.querySelector<HTMLElement>('.shop-price-label-text')

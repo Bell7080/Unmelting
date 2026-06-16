@@ -66,6 +66,20 @@ export interface RelicDefinition {
    *  렌더러가 현 시점 실제 확률 변화량(%)으로 치환할 때 사용한다.
    *  'spore'/'flower'는 포자·꽃 스폰 가중치 보정에 사용한다. */
   spawnEffect?: { type: 'enemy' | 'treasure' | 'spore' | 'flower'; delta: number }
+  /**
+   * Shift(자세히 보기)를 누를 때 effect 대신 보여줄 상세 수식/맥락 텍스트.
+   * 설정하면 GameBoardRenderer.relicEffectHtml()이 자동으로 desc-dyn 구조를 생성해
+   * 기본: effect 표시 / Shift: shiftDetail 표시로 전환한다.
+   *
+   * 작성 규칙:
+   * - 변화가 있는 수치만 괄호형 before→after 로 표기: `(3→4)턴`
+   * - 공식 포함 시 검 아이콘은 코드에서 삽입(swordIcon()), 여기선 ⚔ 문자 대신 [atk] 플레이스홀더:
+   *   `([atk]×0.5+1)피해`  → 렌더러가 실제 아이콘으로 치환
+   * - 합산 수치+배율 모두 보여줄 때: `200(+배율)` 형태로 단순 병기
+   * - 현재 누적치 포함 시: 런타임 값은 bonusChip에서 처리하므로 shiftDetail에 넣지 않는다
+   * - `불빛` 텍스트는 ✦로 자동 치환됨
+   */
+  shiftDetail?: string
 }
 
 /** 유물 상점 등장 가중치의 등급별 기본값. 개별 유물의 weight가 우선한다.
@@ -88,6 +102,15 @@ export const RELIC_BASE_DRAW_WEIGHTS: Record<CardRarity, number> = {
  * - `불빛` 텍스트는 relicEffectHtml이 ✦ 글리프로 자동 치환하므로 그대로 쓴다
  * - `{{spawn}}`은 렌더러가 실제 확률 변화량으로 치환한다
  * - effect 문자열이 도감·상점 그대로 표시됨 — flavor와 혼용 금지
+ *
+ * Shift 자세히보기(desc-dyn) 패턴:
+ * - effect = 기본 표시 텍스트(합산 수치), shiftDetail = Shift 누를 때 보여줄 수식/맥락
+ * - relicEffectHtml()이 자동으로 <span class="desc-dyn">__s/__d</span> 구조 생성
+ * - 예시: effect: '5턴마다 불빛 200 획득' / shiftDetail: '5턴마다 불빛 200 획득'(현재는 동일)
+ * - 공식 포함 시 [atk] 플레이스홀더 사용: 렌더러가 검 아이콘으로 치환
+ *   예) shiftDetail: '([atk]×0.5+1)피해'
+ * - before→after 맥락 표기: '(3→4)턴', '(0→5%)', '(44→37%)'
+ * - 런타임 누적치(사치품 공격력+N 등)는 bonusChip에서 처리; shiftDetail에 넣지 않음
  */
 /** Central relic table. Add future shop inventory here first. */
 export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
@@ -97,7 +120,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: '별빛 랜턴',
     rarity: 'rare',
     // '불빛'은 GameBoardRenderer.relicEffectHtml가 본문에서 다이아(✦) 아이콘으로 치환한다.
-    effect: '5턴마다 불빛 150 획득',
+    effect: '5턴마다 불빛 200 획득',
     flavor: '별빛을 모아 둔 등불, 다섯 걸음마다 한 줌의 빛을 흘려보낸다.',
     basePrice: 700,
   },
@@ -106,7 +129,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'wax-crow',
     name: '귀족의 품격',
     rarity: 'epic',
-    effect: '보물상자 획득 시 방패 1 획득',
+    effect: '보물 획득 시 방패 1 획득',
     flavor: '전리품마저 품위 있게 두르는 옛 귀족의 몸가짐.',
     basePrice: 950,
   },
@@ -138,7 +161,8 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'blood-pack',
     name: '헌혈팩',
     rarity: 'epic',
-    effect: '최대 체력 획득·체력 회복 시 전방 랜덤 적 1장 피해 1',
+    effect: '체력 회복량만큼 전방 랜덤 적 피해',
+    shiftDetail: '회복량 = 피해량 (최소 1)',
     flavor: '누군가의 온기가 아직 식지 않은 붉은 주머니.',
     basePrice: 1020,
   },
@@ -171,7 +195,8 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'graceful-response',
     name: '품격있는 대처',
     rarity: 'epic',
-    effect: '피해를 입힌 적에게 피해 1 반격',
+    effect: '피해를 입힌 적에게 반격 (0.3공+1)피해',
+    shiftDetail: '피해를 입힌 적에게 반격 ([atk]×0.3+1)피해',
     flavor: '받은 만큼 품위 있게 되돌려 주는 단정한 응수.',
     basePrice: 1100,
   },
@@ -189,7 +214,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'anomaly',
     name: '변칙',
     rarity: 'rare',
-    effect: '체력 10 손실마다 불씨 게이지 +1',
+    effect: '체력 5 손실마다 불씨 게이지 +1',
     flavor: '정석을 벗어난 한 수가 판을 뒤집는다.',
     basePrice: 600,
   },
@@ -205,7 +230,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'honesty',
     name: '정직',
     rarity: 'epic',
-    effect: '손패 5장 사용마다 불빛 50 획득',
+    effect: '손패 5장 사용마다 불빛 100 획득',
     flavor: '꾸밈없는 수순이 결국 가장 큰 보상을 부른다.',
     basePrice: 960,
   },
@@ -231,7 +256,8 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'hourglass',
     name: '모래시계',
     rarity: 'epic',
-    effect: '불씨 소모 주기 +1턴 (3→4턴)',
+    effect: '불씨 소모 주기 +1턴',
+    shiftDetail: '불씨 소모 주기 (3→4)턴',
     flavor: '모래가 더 천천히 흘러내린다. 불빛이 조금 더 버틸 수 있을 것 같다.',
     basePrice: 950,
   },
@@ -258,6 +284,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: '곡괭이',
     rarity: 'common',
     effect: '보물 상자 등장 확률 {{spawn}}',
+    shiftDetail: '보물 상자 등장 확률 {{spawn_arrow}}',
     flavor: '암반을 깨면 반드시 무언가 나온다.',
     basePrice: 500,
     spawnEffect: { type: 'treasure', delta: 8 },
@@ -309,6 +336,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: '개봉식',
     rarity: 'common',
     effect: '보물 상자 생존 확률 +10%',
+    shiftDetail: '보물 상자 사라짐 (50→40%)',
     flavor: '뚜껑을 열기 전까지는 사라지지 않는다.',
     basePrice: 450,
   },
@@ -326,6 +354,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: '불 탄 종이',
     rarity: 'common',
     effect: '적 등장 확률 {{spawn}}',
+    shiftDetail: '적 등장 확률 {{spawn_arrow}}',
     flavor: '읽힌 경고는 이미 늦다.',
     basePrice: 480,
     spawnEffect: { type: 'enemy', delta: -8 },
@@ -334,7 +363,8 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'water-bucket',
     name: '물양동이',
     rarity: 'rare',
-    effect: '직접 타격한 적 25% 확률로 체력 1 추가 감소',
+    effect: '직접 타격한 적 25% 확률 추가 피해 (0.5공+1)',
+    shiftDetail: '25% 확률 추가 피해 ([atk]×0.5+1)',
     flavor: '물이 닿은 자리는 더 잘 무너진다.',
     basePrice: 760,
   },
@@ -344,6 +374,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     rarity: 'unique',
     // 황금 상자는 일반 상자보다 카드와 불빛을 2배 주는 희귀 보물칸.
     effect: '보물 스폰 중 10% 확률로 황금 상자 대체',
+    shiftDetail: '황금 상자 대체 확률 (0→10%)',
     flavor: '어떤 자물쇠도 이 열쇠를 거부하지 못한다.',
     basePrice: 1000,
   },
@@ -352,7 +383,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'chivalry',
     name: '기사도',
     rarity: 'unique',
-    effect: '3턴마다 기사 카드 획득',
+    effect: '4턴마다 기사 카드 획득',
     flavor: '기사도를 지키는 자만이 이 힘을 쓸 수 있다.',
     basePrice: 1000,
   },
@@ -361,6 +392,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: '달콤한 유혹',
     rarity: 'epic',
     effect: '함정 피해 +1 · 함정 처리 시 불빛 +30%',
+    shiftDetail: '함정 피해 +1 · 처리 시 불빛 (기본×30%)',
     flavor: '유혹은 달콤하게 오지만 그 값은 언제나 무겁다.',
     basePrice: 1050,
   },
@@ -385,6 +417,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: '살균제',
     rarity: 'rare',
     effect: '포자 등장 확률 {{spawn}}',
+    shiftDetail: '포자 등장 확률 {{spawn_arrow}}',
     flavor: '퍼지기 전에 막아야 한다.',
     basePrice: 700,
     spawnEffect: { type: 'spore', delta: -2 },
@@ -394,6 +427,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: '밀랍 조화',
     rarity: 'common',
     effect: '꽃 등장 확률 {{spawn}}',
+    shiftDetail: '꽃 등장 확률 {{spawn_arrow}}',
     flavor: '밀랍과 꽃이 함께할 때 이 공간은 더 따뜻해진다.',
     basePrice: 450,
     spawnEffect: { type: 'flower', delta: 2 },
