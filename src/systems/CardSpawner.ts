@@ -328,6 +328,11 @@ export class CardSpawner {
     return this.generateRandomCard({ openingBoard: true })
   }
 
+  /** 대기칸(distance > 0) 초기 배치 — 꽃 등장 허용(절반 가중치), 폭탄/포자 제외. */
+  spawnCardForOpeningBoardWaiting(): Card {
+    return this.generateRandomCard({ openingBoardWaiting: true })
+  }
+
   /**
    * Build one opening-board row.
    *
@@ -336,14 +341,14 @@ export class CardSpawner {
    * strictSeparation=false (후방 라인): only 3-lane walls are blocked;
    * 2-lane merges are allowed so the ■ㅁ■ forced-gap pattern is avoided.
    */
-  spawnCardsForOpeningRow(laneCount: number = 3, strictSeparation: boolean = true): Card[] {
+  spawnCardsForOpeningRow(laneCount: number = 3, strictSeparation: boolean = true, isWaiting: boolean = false): Card[] {
     const cards: Card[] = []
 
     for (let laneIndex = 0; laneIndex < laneCount; laneIndex++) {
       let chosen: Card | null = null
 
       for (let attempt = 0; attempt < 8; attempt++) {
-        const candidate = this.spawnCardForOpeningBoard()
+        const candidate = isWaiting ? this.spawnCardForOpeningBoardWaiting() : this.spawnCardForOpeningBoard()
         let bad: boolean
         if (strictSeparation) {
           // 전방 라인: 이웃 카드와 병합되면 거부
@@ -438,7 +443,7 @@ export class CardSpawner {
 
   /** Pick a card type using per-kind buckets, then build the card.
    *  순수 생성: 쿨다운은 읽기만 하고 갱신하지 않는다(갱신은 commitSpawnCooldowns). */
-  private generateRandomCard(options: { openingBoard?: boolean } = {}): Card {
+  private generateRandomCard(options: { openingBoard?: boolean; openingBoardWaiting?: boolean } = {}): Card {
     // 최종 등반에서는 별빛 칸을 섞어 10번 수집해야 100턴에 닿게 만든다.
     // 최소 MIN_INTERVAL 칸 쿨다운 후 base 12% + 미등장마다 +5% 누적 확률로 등장.
     if (
@@ -462,15 +467,21 @@ export class CardSpawner {
     // 기본 가중치에 더해 총합으로 roll 하면 전체 비율이 자동 정규화된다.
     const enemyWeight = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy + this.jobSpawnAdjust.enemy)
     // 직업 trap 보정은 webTrap에 반영한다(일반 함정 비중을 증감). openingBoard에는 적용하지 않는다.
+    const isOpening = options.openingBoard || options.openingBoardWaiting
     const webTrap = options.openingBoard
       ? buckets.webTrap + buckets.bombTrap + buckets.sporeTrap
-      : Math.max(0, buckets.webTrap + this.jobSpawnAdjust.trap)
-    const bombTrap = options.openingBoard ? 0 : buckets.bombTrap
+      : Math.max(0, buckets.webTrap + (isOpening ? 0 : this.jobSpawnAdjust.trap))
+    const bombTrap = isOpening ? 0 : buckets.bombTrap
     // Spores on cooldown are treated as weight 0; the slot is silently folded into
     // the rest of the distribution so the total chance of non-spore cards increases.
     const sporeCooling = this.sporeCooldownCards > 0
-    const sporeTrap = options.openingBoard || sporeCooling ? 0 : buckets.sporeTrap
-    const flower = options.openingBoard ? 0 : Math.max(0, buckets.flower + this.jobSpawnAdjust.flower)
+    const sporeTrap = isOpening || sporeCooling ? 0 : buckets.sporeTrap
+    // 대기칸 초기 배치에서는 꽃을 절반 가중치로 허용한다(전방칸은 여전히 0).
+    const flower = options.openingBoard
+      ? 0
+      : options.openingBoardWaiting
+        ? Math.max(0, buckets.flower + this.jobSpawnAdjust.flower) * 0.5
+        : Math.max(0, buckets.flower + this.jobSpawnAdjust.flower)
     // 시련 '가난'은 보물상자 가중치를 25% 깎는다. 유물/직업 보정도 여기서 합산한다.
     // 최소 1을 보장해 유물·시련 조합으로 보물이 완전히 사라지지 않도록 한다.
     const treasure = Math.max(1, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + this.jobSpawnAdjust.treasure)

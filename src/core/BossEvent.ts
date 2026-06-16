@@ -20,7 +20,7 @@ import type { SpeechBubble } from '@ui/SpeechBubble'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { getHandCardDef } from '@data/HandCards'
 import type { HandCard } from '@entities/HandCard'
-import { getRelicDef, RELIC_IDS, type RelicId } from '@data/Relics'
+import { getRelicDef, relicDrawWeight, RELIC_IDS, type RelicId } from '@data/Relics'
 import { sampleWithoutReplacement } from '@core/Sampling'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
 
@@ -332,6 +332,8 @@ export class BossEventController {
       return
     }
 
+    // 직접 타격은 턴을 갱신하는 행위이므로 체인을 끊는다(카드 사용과 달리).
+    this.inject.clearChainTimeline()
     this.inject.setInputLocked(true)
 
     await this.br.animatePlayerAttack(card)
@@ -594,9 +596,17 @@ export class BossEventController {
       const unownedRelics = RELIC_IDS.filter(
         (id) => !character.hasRelic(id) && !character.bannedRelics.includes(id)
       ) as RelicId[]
-      const relicId = unownedRelics.length > 0
-        ? unownedRelics[Math.floor(Math.random() * unownedRelics.length)]
-        : null
+      // 상점/제단과 동일하게 등급별 relicDrawWeight 가중치로 뽑는다.
+      let relicId: RelicId | null = null
+      if (unownedRelics.length > 0) {
+        const totalW = unownedRelics.reduce((s, id) => s + relicDrawWeight(id), 0)
+        let roll = Math.random() * totalW
+        for (const id of unownedRelics) {
+          roll -= relicDrawWeight(id)
+          if (roll <= 0) { relicId = id; break }
+        }
+        relicId ??= unownedRelics[unownedRelics.length - 1]
+      }
       if (relicId) {
         character.addRelic(relicId)
         this.inject.recordNotice(`전리품: 유물 ${getRelicDef(relicId).name} 획득`, 'info')
