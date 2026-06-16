@@ -1032,8 +1032,15 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
     0 0 36px rgba(244, 164, 96, 0.42);
   animation: chain-recipe-glow 1.35s ease-in-out infinite;
 }
-/* 유물은 recipe와 같은 발광/애니 양식이되 폰트는 기본 크기 유지 */
-.chain-event-relic { font-size: clamp(14px, 1.45vw, 18px); }
+/* 유물: 폰트 축소 + 발광 절반 수준으로 차분하게 */
+.chain-event-relic {
+  font-size: clamp(14px, 1.45vw, 18px);
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.85),
+    0 0 8px rgba(255, 215, 120, 0.35),
+    0 0 16px rgba(244, 164, 96, 0.18);
+  animation: chain-relic-glow 1.8s ease-in-out infinite;
+}
 .chain-event-gauge {
   color: rgba(213, 230, 255, 1);
   text-shadow:
@@ -1058,13 +1065,18 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 .chain-event-card.is-new {
   animation: chain-card-pop 0.42s cubic-bezier(0.2, 1.4, 0.32, 1) 1;
 }
-/* Recipe/relic events flash brighter on entry, layered on top of the steady glow. */
+/* Recipe/gauge events flash brighter on entry. */
 .chain-event-recipe.is-new,
-.chain-event-relic.is-new,
 .chain-event-gauge.is-new {
   animation:
     chain-recipe-burst 0.6s cubic-bezier(0.16, 0.88, 0.3, 1) 1,
     chain-recipe-glow 1.4s ease-in-out infinite 0.6s;
+}
+/* 유물 진입: 카드팝 수준의 가벼운 페이드인 후 은은한 glow 유지 */
+.chain-event-relic.is-new {
+  animation:
+    chain-relic-pop 0.38s cubic-bezier(0.2, 1.2, 0.32, 1) 1,
+    chain-relic-glow 1.8s ease-in-out infinite 0.38s;
 }
 
 @keyframes chain-card-pop {
@@ -1109,6 +1121,16 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
       0 0 24px rgba(255, 215, 120, 0.92),
       0 0 46px rgba(244, 164, 96, 0.58);
   }
+}
+/* 유물 전용: 훨씬 은은한 pulse */
+@keyframes chain-relic-glow {
+  0%, 100% { text-shadow: 0 1px 2px rgba(0,0,0,0.85), 0 0 6px rgba(255,215,120,0.28), 0 0 12px rgba(244,164,96,0.12); }
+  50%       { text-shadow: 0 1px 2px rgba(0,0,0,0.85), 0 0 10px rgba(255,215,120,0.44), 0 0 20px rgba(244,164,96,0.22); }
+}
+@keyframes chain-relic-pop {
+  0%   { transform: scale(0.72); opacity: 0; }
+  65%  { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); }
 }
 
 .chain-banner-reset {
