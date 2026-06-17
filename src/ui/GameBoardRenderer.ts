@@ -42,7 +42,7 @@ import { RECIPES, type Recipe } from '@data/Recipes'
 import type { JobDef } from '@data/Jobs'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { GAME_BOARD_STYLES } from '@ui/styles/GameBoardStyles'
-import { initTouchBody, attachHandCardTouch, attachShopTouchHighlight } from '@ui/MobileTouchManager'
+import { initTouchBody, attachHandCardTouch, attachShopTouchHighlight, initLongPressShiftDetail } from '@ui/MobileTouchManager'
 import {
   bookIcon,
   candleIcon,
@@ -385,6 +385,9 @@ export class GameBoardRenderer {
     this.boardElement.addEventListener('mousemove', (e: MouseEvent) => {
       if (!e.shiftKey) document.body.classList.remove('is-shift-detail')
     }, { passive: true })
+
+    // 모바일 전용: 화면 꾹 누름으로 Shift 자세히보기 활성
+    initLongPressShiftDetail()
 
     // ── Hand card click delegation (permanent, avoids listener accumulation on re-renders) ──
     this.boardElement.addEventListener('click', (e: MouseEvent) => {

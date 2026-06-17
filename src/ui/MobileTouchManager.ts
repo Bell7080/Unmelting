@@ -24,6 +24,56 @@ export function initTouchBody(): void {
   document.body.classList.add('is-touch-device')
 }
 
+// ── Long-press Shift detail (mobile only) ───────────────────────────────────
+
+let _shiftTimer: ReturnType<typeof setTimeout> | null = null
+let _shiftMoveHandler: ((e: TouchEvent) => void) | null = null
+const LONG_PRESS_MS = 480  // 일반 탭/스크롤과 구분할 임계치
+
+/**
+ * 화면을 꾹 누르면 is-shift-detail 활성(Shift 자세히보기 효과).
+ * 손가락을 떼거나 10px 이상 움직이면 즉시 해제.
+ * PC(non-touch)에는 전혀 영향 없음 — 한 번만 등록.
+ */
+let _longPressAttached = false
+export function initLongPressShiftDetail(): void {
+  if (!isTouchDevice() || _longPressAttached) return
+  _longPressAttached = true
+
+  document.addEventListener('touchstart', (e) => {
+    // 이전 타이머·무브 핸들러 정리
+    if (_shiftTimer !== null) { clearTimeout(_shiftTimer); _shiftTimer = null }
+    if (_shiftMoveHandler) { document.removeEventListener('touchmove', _shiftMoveHandler); _shiftMoveHandler = null }
+
+    if (e.touches.length === 0) return
+    const startX = e.touches[0].clientX
+    const startY = e.touches[0].clientY
+    let moved = false
+
+    _shiftMoveHandler = (ev: TouchEvent) => {
+      if (ev.touches.length === 0) return
+      if (Math.abs(ev.touches[0].clientX - startX) > 10 ||
+          Math.abs(ev.touches[0].clientY - startY) > 10) moved = true
+    }
+    document.addEventListener('touchmove', _shiftMoveHandler, { passive: true })
+
+    _shiftTimer = setTimeout(() => {
+      if (_shiftMoveHandler) { document.removeEventListener('touchmove', _shiftMoveHandler); _shiftMoveHandler = null }
+      _shiftTimer = null
+      if (!moved) document.body.classList.add('is-shift-detail')
+    }, LONG_PRESS_MS)
+  }, { passive: true })
+
+  const release = () => {
+    if (_shiftTimer !== null) { clearTimeout(_shiftTimer); _shiftTimer = null }
+    if (_shiftMoveHandler) { document.removeEventListener('touchmove', _shiftMoveHandler); _shiftMoveHandler = null }
+    document.body.classList.remove('is-shift-detail')
+  }
+  document.addEventListener('touchend', release, { passive: true })
+  document.addEventListener('touchcancel', release, { passive: true })
+}
+
+
 /**
  * Wire tap-to-preview / tap-to-use onto hand cards after each board render.
  * Re-applies the preview class if the same slot is still active post-render.
