@@ -111,9 +111,11 @@ export interface BossInjected {
   /** 화폐 1단위씩 증가 + HUD 피드백까지 처리 */
   addOneCoin: () => void
   render: () => void
-  /** 체인 타임라인을 비우고 배너를 갱신 — 보스 보상 단계 진입 시 잔존 전투 체인 제거 */
+  /** 체인 오브젝트 리셋 + 타임라인 제거 + 배너 갱신 — 직접 타격·보상 단계 진입 시 호출 */
   clearChainTimeline: () => void
   recordNotice: (msg: string, kind: 'info' | 'win' | 'hurt') => void
+  /** 소중한 머리 유물: 체력이 절반 이하로 감소했을 때 전체 회복 후 파괴 */
+  applyPreciousHeadCheck: () => Promise<void>
   /** 변칙 유물: 누적 피해 10마다 불씨 +1 (보스 피격 직후 호출) */
   applyAnomalyHealthLoss: () => void
   /** 플레이어가 적(보스/소환물)을 직접 공격할 때마다 발동하는 유물(훌륭한 대화수단 등) */
@@ -414,6 +416,7 @@ export class BossEventController {
         this.inject.recordNotice(`검은 양초 악마의 강타! 플레이어가 ${card.getDamage()} 피해를 받았다`, 'hurt')
         this.inject.render()
         this.inject.applyAnomalyHealthLoss()
+        await this.inject.applyPreciousHeadCheck()
         if (await this.retaliateGracefulResponse([card.id])) return
         if (!character.isAlive() || character.authoritySurvivePending) {
           await this.inject.handlePlayerDeath(); return
@@ -438,6 +441,7 @@ export class BossEventController {
         this.inject.recordNotice(`보스 반격! 플레이어가 ${card.getDamage()} 피해를 받았다`, 'hurt')
         this.inject.render()
         this.inject.applyAnomalyHealthLoss()
+        await this.inject.applyPreciousHeadCheck()
         // 품격있는 대처: 보스의 반격에 되받아친다.
         if (await this.retaliateGracefulResponse([card.id])) return
       }
@@ -508,6 +512,7 @@ export class BossEventController {
           this.inject.recordNotice(`레바테인: 보스 반격 — 피해 ${dmg}`, 'hurt')
           this.inject.render()
           this.inject.applyAnomalyHealthLoss()
+          await this.inject.applyPreciousHeadCheck()
         } else if (state.def.specialEnemyKind === 'waxKnight') {
           if (await this.resolveWaxKnightCardTurn(state.card.id)) return
         } else if (state.def.specialEnemyKind === 'waxSculptor') {
@@ -524,6 +529,7 @@ export class BossEventController {
             this.inject.recordNotice(`레바테인: 보스 반격 — 피해 ${dmg}`, 'hurt')
             this.inject.render()
             this.inject.applyAnomalyHealthLoss()
+            await this.inject.applyPreciousHeadCheck()
           }
         } else if (state.def.specialEnemyKind === 'waxDemon') {
           if (await this.resolveDemonCandleTurn(state.card.id)) return
@@ -540,6 +546,7 @@ export class BossEventController {
           this.inject.recordNotice(`레바테인: 검은 양초 악마 반격 — 피해 ${dmg}`, 'hurt')
           this.inject.render()
           this.inject.applyAnomalyHealthLoss()
+          await this.inject.applyPreciousHeadCheck()
         }
 
         if (!character.isAlive() || character.authoritySurvivePending) {
@@ -1019,6 +1026,7 @@ export class BossEventController {
     this.inject.recordNotice(`녹지 않는 마녀의 반격! 플레이어가 ${state.def.attack} 피해를 받았다`, 'hurt')
     this.inject.render()
     this.inject.applyAnomalyHealthLoss()
+    await this.inject.applyPreciousHeadCheck()
     return await this.retaliateGracefulResponse([bossCardId])
   }
 
@@ -1062,6 +1070,7 @@ export class BossEventController {
 
     // 변칙: 기사단장 한 턴에 잃은 체력 10마다 불씨 +1.
     this.inject.applyAnomalyHealthLoss()
+    await this.inject.applyPreciousHeadCheck()
     // 품격있는 대처: 기사단장의 한 턴 타격에 한 번 되받아친다.
     return await this.retaliateGracefulResponse([bossCardId])
   }
@@ -1213,6 +1222,7 @@ export class BossEventController {
         return
       }
       this.inject.applyAnomalyHealthLoss()
+      await this.inject.applyPreciousHeadCheck()
       // 품격있는 대처: 나를 때린 소환 적들에게 각 1 반격.
       await this.retaliateGracefulResponse(aliveEnemies.map((e) => e.id))
     }
@@ -1239,6 +1249,7 @@ export class BossEventController {
           return
         }
         this.inject.applyAnomalyHealthLoss()
+        await this.inject.applyPreciousHeadCheck()
         // 품격있는 대처: 후방에서 강타한 조각사에게 되받아친다.
         if (await this.retaliateGracefulResponse([state.card.id])) return
       }
