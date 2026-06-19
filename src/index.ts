@@ -273,10 +273,21 @@ function applyRunConfig(cfg: RunConfig): void {
 /** effectKind 서술자를 런타임 apply()로 변환. runModifiers는 여기에 스코프돼 있으므로 index에서 해석한다. */
 function applyTrialEffect(kind: TrialEffectKind): void {
   switch (kind.type) {
-    case 'enemy-stat-bonus':
+    case 'enemy-stat-bonus': {
       runModifiers.enemyHpBonus += kind.hpBonus
       runModifiers.enemyDamageBonus += kind.atkBonus
+      // 함정 시련과 동일하게, 이미 필드에 있는 적도 즉시 보너스를 받는다(이후 스폰 적과
+      // 동일 취급). 합체 적은 한 인스턴스가 여러 칸을 점유하므로 Card 단위로 1회만 적용한다.
+      const seenEnemies = new Set<Card>()
+      for (const lane of gameState.lanes)
+        for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+          const c = lane.getCardAtDistance(d)
+          if (!c || seenEnemies.has(c)) continue
+          seenEnemies.add(c)
+          c.applyTrialEnemyStatBonus(kind.atkBonus, kind.hpBonus)
+        }
       break
+    }
     case 'trap-damage-bonus':
       runModifiers.trapDamageBonus += kind.value
       // 이미 필드에 있는 함정 카드도 즉시 보너스 갱신해 피해 수치 표기를 맞춘다.
@@ -1974,6 +1985,11 @@ async function runPreparationRefreshAfterFieldEffects(
   for (const t of startedEventDoors) boardRenderer.popEventBadge(t.cardId)
   if (blooms.length > 0) await boardRenderer.animateFlowerBlooms(blooms)
   if (movedAny) await wait(120)
+  // 최종 등반: 손패/조합 효과가 별빛을 전방으로 떨어뜨렸다면 즉시 수집한다. 그렇지 않으면
+  // 전방이 별빛로만 막혀 클릭할 카드가 없고 손패만으론 턴이 오르지 않아 교착될 수 있다.
+  // (별빛은 클릭 수집이 없는 전방-도달 자동 수집 규칙이다.) 턴 100 도달 시 보스 게이트는
+  // 일반 행동 종료 경로 maybeRunMilestoneEventsAfterTurn가 이어받으므로 여기선 수집/턴+1까지만 한다.
+  if (finalAscentStarlightRuleActive) await sweepFrontStarlights()
 }
 
 function createItemGainLogs(itemNames: string[]): ActivityLogDraft[] {
@@ -3789,11 +3805,15 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
   // 종료: 소비된 칸을 메우고 일반 진행으로 복귀한다.
   compactAndRefillAllLanes()
   gameState.regroupAllRows()
+  trackFieldEnemyEncounters()
   turnManager.armFrontBombs()
   // 이벤트는 턴을 올리지 않으므로 포자·성장·시듦 틱은 건너뛴다.
   // 씨앗 개화는 위치 기반 트리거(전방 도달)이므로 이벤트 후에도 처리한다.
   const blooms = turnManager.bloomFrontSeeds(cardSpawner)
+  // 리필로 새 이벤트 문이 전방에 도달했다면 일반 턴과 동일하게 즉시 카운트다운 뱃지를 띄운다.
+  const startedEventDoors = turnManager.startFrontEventDoorArrivals()
   render()
+  for (const t of startedEventDoors) boardRenderer.popEventBadge(t.cardId)
   if (blooms.length > 0) await boardRenderer.animateFlowerBlooms(blooms)
   inputLocked = false
 }

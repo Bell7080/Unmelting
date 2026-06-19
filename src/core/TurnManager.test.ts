@@ -182,7 +182,8 @@ describe('TurnManager treasure volatility', () => {
     gameState.lanes[1].setCardAtDistance(0, victim)
     vi.spyOn(Math, 'random').mockReturnValue(0)
 
-    const spreads = turnManager.applySporeSpread()
+    turnManager.tickSporeCountdowns()
+    const spreads = turnManager.spreadReadySpores()
     const infected = spreads[0]?.infected[0]
     const infectedCard = infected
       ? gameState.lanes[infected.laneIndex].getCardAtDistance(infected.distance)
@@ -207,7 +208,8 @@ describe('TurnManager treasure volatility', () => {
     )
     vi.spyOn(Math, 'random').mockReturnValue(0)
 
-    turnManager.applySporeSpread()
+    turnManager.tickSporeCountdowns()
+    turnManager.spreadReadySpores()
 
     // Spore spreading is a post-drop event; regroup here so the next rendered
     // player decision sees one 2-lane colony rather than two separate spores.
@@ -227,7 +229,8 @@ describe('TurnManager treasure volatility', () => {
     )
     vi.spyOn(Math, 'random').mockReturnValue(0)
 
-    const spreads = turnManager.applySporeSpread()
+    turnManager.tickSporeCountdowns()
+    const spreads = turnManager.spreadReadySpores()
     const infected = spreads[0]?.infected[0]
     const infectedCard = infected
       ? gameState.lanes[infected.laneIndex].getCardAtDistance(infected.distance)
@@ -245,7 +248,8 @@ describe('TurnManager treasure volatility', () => {
     spore.sporeTurnsUntilSpread = 1
     gameState.lanes[0].setCardAtDistance(0, spore)
 
-    const spreads = turnManager.applySporeSpread()
+    turnManager.tickSporeCountdowns()
+    const spreads = turnManager.spreadReadySpores()
 
     expect(spreads).toHaveLength(0)
     expect(gameState.lanes[1].getCardAtDistance(0)).toBeNull()
@@ -286,7 +290,8 @@ describe('TurnManager treasure volatility', () => {
     gameState.compactAndRefillRails(
       (laneIndex) => new Card(`refill-${laneIndex}`, CardType.TREASURE, '리필 상자', 'test')
     )
-    const spreads = turnManager.applySporeSpread()
+    turnManager.tickSporeCountdowns()
+    const spreads = turnManager.spreadReadySpores()
 
     expect(spreads[0]?.infected[0]).toEqual({ laneIndex: 1, distance: 0 })
     expect(gameState.lanes[1].getCardAtDistance(0)?.trapKind).toBe('spore')
