@@ -2061,11 +2061,11 @@ function scoreForCardRemoval(card: Card): number {
     return 30
   }
   if (card.type === CardType.TREASURE) {
-    // 황금 상자는 일반 상자보다 불빛 2배.
+    // 황금 상자는 일반 상자보다 불빛 2배. (기존 18/40/75 · 36/80/150에서 전체 2배 상향)
     const isGolden = card.treasureKind === 'goldenChest'
-    if (card.groupCount >= 3) return isGolden ? 150 : 75
-    if (card.groupCount === 2) return isGolden ? 80 : 40
-    return isGolden ? 36 : 18
+    if (card.groupCount >= 3) return isGolden ? 300 : 150
+    if (card.groupCount === 2) return isGolden ? 160 : 80
+    return isGolden ? 72 : 36
   }
   if (card.type === CardType.FLOWER) {
     return 24 + Math.max(1, card.flowerValue) * 12
