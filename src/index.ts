@@ -2055,17 +2055,29 @@ function scoreForCardRemoval(card: Card): number {
     if (card.groupCount > 1) return Math.round(rankLight * card.groupCount * 0.75)
     return rankLight
   }
+  // 함정/보물은 강함수치가 없으므로, 경과 턴(층)만큼 기본 불빛에 더해 인플레이션을 따라가게 한다.
+  // 예) 함정 기본 30 → 10턴이면 40. (이후 createScoreLog의 턴 배율·지터는 동일하게 위에 곱해진다.)
+  const turnBonus = Math.max(0, gameState.getCurrentTurn())
   if (card.type === CardType.TRAP) {
-    if (card.groupCount >= 3) return 110
-    if (card.groupCount === 2) return 65
-    return 30
+    const base = card.groupCount >= 3 ? 110 : card.groupCount === 2 ? 65 : 30
+    return base + turnBonus
   }
   if (card.type === CardType.TREASURE) {
     // 황금 상자는 일반 상자보다 불빛 2배. (기존 18/40/75 · 36/80/150에서 전체 2배 상향)
     const isGolden = card.treasureKind === 'goldenChest'
-    if (card.groupCount >= 3) return isGolden ? 300 : 150
-    if (card.groupCount === 2) return isGolden ? 160 : 80
-    return isGolden ? 72 : 36
+    const base =
+      card.groupCount >= 3
+        ? isGolden
+          ? 300
+          : 150
+        : card.groupCount === 2
+          ? isGolden
+            ? 160
+            : 80
+          : isGolden
+            ? 72
+            : 36
+    return base + turnBonus
   }
   if (card.type === CardType.FLOWER) {
     return 24 + Math.max(1, card.flowerValue) * 12
