@@ -2043,8 +2043,8 @@ function scoreInflationJitter(): number {
  */
 // 일반 적 불빛 = ENEMY_LIGHT_BASE + ENEMY_LIGHT_PER_RANK × enemyPower(1~18+).
 // 두 상수만 만지면 곡선 전체를 조절할 수 있다(초반 ↑·후반 ↓는 PER_RANK를 낮추면 됨).
-const ENEMY_LIGHT_BASE = 22
-const ENEMY_LIGHT_PER_RANK = 13
+const ENEMY_LIGHT_BASE = 18
+const ENEMY_LIGHT_PER_RANK = 11
 function scoreForCardRemoval(card: Card): number {
   if (card.type === CardType.ENEMY) {
     // 특수 적(미믹/괴물꽃 등)은 기존 강함 기반 불빛량을 그대로 유지한다.
