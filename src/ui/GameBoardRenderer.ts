@@ -6382,6 +6382,15 @@ export class GameBoardRenderer {
     await this.animateResourceTrail(sourceRect, turnBrand, 1, 'starlight')
   }
 
+  /** 100턴 초과분 별빛 소멸 연출: 수집(턴 +1)하지 않고 그 자리에서 빛으로 흩어져 사라진다.
+   *  fireStarlightToTurn과 달리 턴 브랜드로 가는 트레일이 없다(턴을 올리지 않으므로). */
+  async dissolveStarlight(sourceRect: DOMRect): Promise<void> {
+    const cx = sourceRect.left + sourceRect.width / 2
+    const cy = sourceRect.top + sourceRect.height / 2
+    SquareBurst.playAt(cx, cy, 'starlight', { count: 20, spread: 130, duration: 520 })
+    await new Promise((r) => window.setTimeout(r, 320))
+  }
+
   /** Find a hand slot element by index for burst placement. */
   findHandSlotElement(slotIndex: number): HTMLElement | null {
     return this.boardElement.querySelector<HTMLElement>(

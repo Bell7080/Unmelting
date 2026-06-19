@@ -3592,10 +3592,19 @@ async function sweepFrontStarlights(): Promise<void> {
   // 사라져도 좌표를 잃지 않게 한다.
   const shots = swept.map((s) => ({ rect: boardRenderer.getCardRect(s.cardId) }))
   for (const shot of shots) {
-    if (shot.rect) await boardRenderer.fireStarlightToTurn(shot.rect)
-    gameState.nextTurn()
-    render()
-    await wait(140)
+    // 한 번의 sweep에서 여러 별빛을 먹어 100턴을 넘기는 경우(손패 콤보 등): 100에 도달한
+    // 뒤의 잔여 별빛은 수집(턴 +1)하지 않고 그 자리에서 소멸시켜 런 턴을 정확히 100으로
+    // 고정한다. 100턴 도달 = 최종 보스 진입 트리거이므로 초과 진행을 만들지 않는다.
+    if (gameState.getCurrentTurn() < RUN_TARGET_TURNS) {
+      if (shot.rect) await boardRenderer.fireStarlightToTurn(shot.rect)
+      gameState.nextTurn()
+      render()
+      await wait(140)
+    } else {
+      if (shot.rect) await boardRenderer.dissolveStarlight(shot.rect)
+      render()
+      await wait(100)
+    }
   }
   // 별빛 제거로 빈칸이 생겼으면 즉시 정리/보충
   const moved = compactAndRefillAllLanes()
