@@ -2041,10 +2041,13 @@ function scoreInflationJitter(): number {
  *
  * Caller multiplies the result by `getTurnScoreMultiplier()` via createScoreLog.
  */
-// 일반 적 불빛 = ENEMY_LIGHT_BASE + ENEMY_LIGHT_PER_RANK × enemyPower(1~18+).
-// 두 상수만 만지면 곡선 전체를 조절할 수 있다(초반 ↑·후반 ↓는 PER_RANK를 낮추면 됨).
+// 새(enemyPower 5)부터의 일반 적 불빛 = ENEMY_LIGHT_BASE + ENEMY_LIGHT_PER_RANK × enemyPower.
+// 두 상수만 만지면 후반 곡선 전체를 조절할 수 있다(후반 ↓는 PER_RANK를 낮추면 됨).
 const ENEMY_LIGHT_BASE = 18
 const ENEMY_LIGHT_PER_RANK = 11
+// 이 랭크 이하(키틴/거미/생쥐/개구리)는 기존 강함 공식을 그대로 써 초반 불빛을 현재값과
+// 오차 없이 일치시킨다. 새(5)부터 랭킹 선형식으로 정상화한다.
+const ENEMY_LIGHT_LEGACY_MAX_RANK = 4
 function scoreForCardRemoval(card: Card): number {
   if (card.type === CardType.ENEMY) {
     // 특수 적(미믹/괴물꽃 등)은 기존 강함 기반 불빛량을 그대로 유지한다.
@@ -2053,6 +2056,13 @@ function scoreForCardRemoval(card: Card): number {
       const atk = Math.max(0, card.getDamage())
       return hp * 12 + atk * 20 + 60 + card.defeatDropCount * 20
     }
+    // 새 이전 시작 적: 기존 강함(HP·ATK) 공식 그대로 — 이 구간은 체력 버프 대상도 아니라
+    // 현재값과 정확히 같다.
+    if (card.enemyPower <= ENEMY_LIGHT_LEGACY_MAX_RANK) {
+      const strength = Math.max(0, card.baseHealth) * 12 + Math.max(0, card.getDamage()) * 20
+      return card.groupCount > 1 ? Math.round(strength * 0.75) : strength
+    }
+    // 새부터: 강함 랭킹(enemyPower) 기반 선형식으로 정상화 — HP/ATK와 분리, 단조 증가.
     const rankLight = ENEMY_LIGHT_BASE + Math.max(1, card.enemyPower) * ENEMY_LIGHT_PER_RANK
     // 그룹은 칸 수만큼 곱하되 25% 감산 — 단일보다 확실히 높되 배수 구조를 희석한다.
     if (card.groupCount > 1) return Math.round(rankLight * card.groupCount * 0.75)
