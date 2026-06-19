@@ -2044,8 +2044,8 @@ function scoreInflationJitter(): number {
 // 일반 적 불빛 = ENEMY_LIGHT_BASE + ENEMY_LIGHT_PER_RANK × enemyPower(1~18+), 전 랭크 단일 공식.
 // HP/ATK와 분리돼 체력 버프·특이 스탯 적(100HP/1ATK 등)에도 랭크 순서대로 유지된다.
 // BASE는 초반(랭크 1) 값을 현재(≈32)와 맞추고, PER_RANK는 후반 상승폭을 조절한다(낮을수록 완만).
-const ENEMY_LIGHT_BASE = 30
-const ENEMY_LIGHT_PER_RANK = 3
+const ENEMY_LIGHT_BASE = 27
+const ENEMY_LIGHT_PER_RANK = 6
 function scoreForCardRemoval(card: Card): number {
   if (card.type === CardType.ENEMY) {
     // 특수 적(미믹/괴물꽃 등)은 기존 강함 기반 불빛량을 그대로 유지한다.
