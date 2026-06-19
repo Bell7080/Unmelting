@@ -2059,7 +2059,14 @@ function scoreForCardRemoval(card: Card): number {
   // 예) 함정 기본 30 → 10턴이면 40. (이후 createScoreLog의 턴 배율·지터는 동일하게 위에 곱해진다.)
   const turnBonus = Math.max(0, gameState.getCurrentTurn())
   if (card.type === CardType.TRAP) {
-    const base = card.groupCount >= 3 ? 100 : card.groupCount === 2 ? 55 : 20
+    const span = card.groupCount >= 3 ? 3 : card.groupCount === 2 ? 2 : 1
+    // 종류별 기본 불빛: 거미줄 20/50/80, 포자 10/20/30, 폭탄 50(합체 없음).
+    const base =
+      card.trapKind === 'spore'
+        ? [10, 20, 30][span - 1]
+        : card.trapKind === 'bomb'
+          ? 50
+          : [20, 50, 80][span - 1]
     return base + turnBonus
   }
   if (card.type === CardType.TREASURE) {
