@@ -713,10 +713,10 @@ export class CardSpawner {
     return Math.floor(this.progressionTurn / 20) + 1
   }
 
-  /** 특수 적 강함수치(enemyPower) — 단계마다 2씩 상승(2/4/6/8 ...)시켜 불빛 성장 곡선을
+  /** 특수 적 강함수치(enemyPower) — 단계마다 3씩 상승(3/6/9/12 ...)시켜 불빛 성장 곡선을
    *  일반 적과 같은 랭킹식(27 + 6×enemyPower)으로 자연스럽게 잇는다. */
   private getSpecialEnemyPower(): number {
-    return this.getSpecialEnemyTier() * 2
+    return this.getSpecialEnemyTier() * 3
   }
 
   /** Monster flower inherits threat from the flower value that was gambled. */
