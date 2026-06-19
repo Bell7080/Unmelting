@@ -71,8 +71,8 @@ describe('TurnManager treasure volatility', () => {
 
     expect(mimic).toBe(gameState.lanes[1].getCardAtDistance(0))
     expect(mimic?.groupCount).toBe(2)
-    expect(mimic?.getHealth()).toBe(10)
-    expect(mimic?.getDamage()).toBe(5)
+    expect(mimic?.getHealth()).toBe(10) // 4*2 + 합체 +2
+    expect(mimic?.getDamage()).toBe(6) // 2*2 + 합체 +2
     expect(mimic?.defeatDropCount).toBe(5)
   })
 
@@ -94,8 +94,8 @@ describe('TurnManager treasure volatility', () => {
     expect(mimic).toBe(gameState.lanes[1].getCardAtDistance(0))
     expect(mimic).toBe(gameState.lanes[2].getCardAtDistance(0))
     expect(mimic?.groupCount).toBe(3)
-    expect(mimic?.getHealth()).toBe(20)
-    expect(mimic?.getDamage()).toBe(10)
+    expect(mimic?.getHealth()).toBe(15) // 4*3 + 합체 +3
+    expect(mimic?.getDamage()).toBe(9) // 2*3 + 합체 +3
     expect(mimic?.defeatDropCount).toBe(10)
   })
 

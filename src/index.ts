@@ -2048,12 +2048,8 @@ const ENEMY_LIGHT_BASE = 27
 const ENEMY_LIGHT_PER_RANK = 6
 function scoreForCardRemoval(card: Card): number {
   if (card.type === CardType.ENEMY) {
-    // 특수 적(미믹/괴물꽃 등)은 기존 강함 기반 불빛량을 그대로 유지한다.
-    if (card.isSpecialEnemy) {
-      const hp = Math.max(0, card.baseHealth)
-      const atk = Math.max(0, card.getDamage())
-      return hp * 12 + atk * 20 + 60 + card.defeatDropCount * 20
-    }
+    // 일반/특수(미믹·괴물꽃) 모두 강함수치(enemyPower) 단일 랭킹식으로 통일한다.
+    // 미믹은 단계마다 2/4/6/8…, 합체 적/미믹/괴물꽃은 칸 수 배율로 불빛이 자연스럽게 오른다.
     const rankLight = ENEMY_LIGHT_BASE + Math.max(1, card.enemyPower) * ENEMY_LIGHT_PER_RANK
     // 그룹은 칸 수만큼 곱하되 25% 감산 — 단일보다 확실히 높되 배수 구조를 희석한다.
     if (card.groupCount > 1) return Math.round(rankLight * card.groupCount * 0.75)
@@ -4009,8 +4005,10 @@ async function handleCardAction(e: Event): Promise<void> {
       // below happens as the destination burst lands, not after a separate pause.
       const theme = flowerRewardTheme(card.flowerKind)
       if (result.flowerReward?.kind === 'score') {
+        // 캐모마일 불빛은 특수 적처럼 20층 단위로 30/60/90/120…씩 오른다(tier×30).
+        const chamomileTier = Math.floor(gameState.getCurrentTurn() / 20) + 1
         pushActivityLogsInDisplayOrder([
-          createScoreLog(`${card.name} 수확`, 70 + result.flowerReward.amount * 26, 'score'),
+          createScoreLog(`${card.name} 수확`, 30 * chamomileTier, 'score'),
         ])
         rewardFeedbacks.push(
           playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1, theme)

@@ -203,10 +203,10 @@ export const TREASURE_DEFINITIONS: CardDefinition[] = [
 ]
 
 export const MIMIC_BY_SPAN: Record<number, { health: number; attack: number; drops: number }> = {
-  // Mimics are riskier than their source chests and pay the requested bonus loot on defeat.
+  // 2/3칸은 합쳐진 적처럼 단일(4/2)을 칸 수만큼 더한 뒤 합체 보너스(2칸 +2/+2, 3칸 +3/+3)를 얹는다.
   1: { health: 4, attack: 2, drops: 2 },
-  2: { health: 10, attack: 5, drops: 5 },
-  3: { health: 20, attack: 10, drops: 10 },
+  2: { health: 10, attack: 6, drops: 5 }, // 4*2+2 / 2*2+2
+  3: { health: 15, attack: 9, drops: 10 }, // 4*3+3 / 2*3+3
 }
 
 export class CardSpawner {
@@ -701,11 +701,22 @@ export class CardSpawner {
    *  20층 단위로 초기 스탯에 배수(×1, ×2, ×3 …)를 곱해 일반 적 곡선에 맞춘다.
    *  예) 미믹 4/2 → 8/4 → 12/6, 2칸 꽃 2/2 → 4/4 → 6/6. 시련 보너스는 곱한 뒤 더한다. */
   private scaleSpecialEnemyStats(baseHp: number, baseAtk: number): { hp: number; atk: number } {
-    const tier = Math.floor(this.progressionTurn / 20) + 1
+    const tier = this.getSpecialEnemyTier()
     return {
       hp: baseHp * tier + this.trialEnemyHpBonus,
       atk: baseAtk * tier + this.trialEnemyAtkBonus,
     }
+  }
+
+  /** 특수 적 강도 단계 — 20층마다 1씩 오른다(1-19층 1, 20-39층 2 ...). */
+  private getSpecialEnemyTier(): number {
+    return Math.floor(this.progressionTurn / 20) + 1
+  }
+
+  /** 특수 적 강함수치(enemyPower) — 단계마다 2씩 상승(2/4/6/8 ...)시켜 불빛 성장 곡선을
+   *  일반 적과 같은 랭킹식(27 + 6×enemyPower)으로 자연스럽게 잇는다. */
+  private getSpecialEnemyPower(): number {
+    return this.getSpecialEnemyTier() * 2
   }
 
   /** Monster flower inherits threat from the flower value that was gambled. */
@@ -724,6 +735,7 @@ export class CardSpawner {
         isSpecialEnemy: true,
         specialEnemyKind: 'monsterFlower',
         defeatDropCount: Math.max(1, Math.min(3, Math.ceil(safePower / 2))),
+        enemyPower: this.getSpecialEnemyPower(),
       }
     )
   }
@@ -840,6 +852,7 @@ export class CardSpawner {
         isSpecialEnemy: true,
         specialEnemyKind: 'mimic',
         defeatDropCount: stats.drops,
+        enemyPower: this.getSpecialEnemyPower(),
       }
     )
 
