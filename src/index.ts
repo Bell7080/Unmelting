@@ -1521,6 +1521,7 @@ async function handleShopPackPick(detail: ShopPackPickDetail): Promise<void> {
   const picked = activePackSession.items.find((it) => it.id === detail.itemId)
   if (!picked) return
   const beforeResources = snapshotPlayerResources()
+  const beforeCoins = coins
   await picked.apply()
   // unlock-pack/delete-pack 선택 후 runCardPool이 바뀌므로 드롭 풀 및 도감 잠금 표시를 재동기화한다.
   const poolSnap = runCardPool.snapshot()
@@ -1535,6 +1536,15 @@ async function handleShopPackPick(detail: ShopPackPickDetail): Promise<void> {
   // Most pack effects mutate character stats; play the standard player-gain
   // trail so HP/방패/공격력 등 변화에 카드/숫자 피드백이 같이 따라온다.
   await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
+  // '동전 한 닢' 등 화폐 아이템은 playPlayerGainTrails가 다루지 않으므로(coin 미포함)
+  // 단독 코인 카드/수당과 같은 펄스키+트레일+지갑 버스트 문법으로 별도 라우팅한다.
+  // applyBlindFaithCoins는 apply() 내부에서 이미 처리됐으므로 여기서 재호출하지 않는다.
+  const pickedCoinGain = coins - beforeCoins
+  if (pickedCoinGain > 0) {
+    coinPulseKey++
+    recordCoinGain(picked.title, pickedCoinGain)
+    await playResourceTrail({ kind: 'chain' }, 'coin', pickedCoinGain)
+  }
   // 자원팩 등 게이지 아이템 선택 시 게이지가 가득 찼으면 보상 효과를 즉시 발동한다.
   await resolveFullCandleGaugeEffects({ kind: 'chain' })
   render()
@@ -2300,7 +2310,6 @@ async function startGame(): Promise<void> {
       c.health = Math.min(c.health, c.maxHealth)
     }
     if (chosenJob.damageBonus > 0) c.applyDamageBoost(chosenJob.damageBonus)
-    if (chosenJob.coinBonus > 0) coins += chosenJob.coinBonus
     // 불빛 배율: 백분율을 scoreMultiplier 곱셈으로 누적한다.
     if (chosenJob.scorePct !== 0) {
       gameState.enhancements.scoreMultiplier *= (1 + chosenJob.scorePct / 100)

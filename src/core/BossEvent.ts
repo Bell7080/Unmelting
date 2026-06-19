@@ -587,8 +587,16 @@ export class BossEventController {
       character.heal(character.maxHealth)
       character.gainEmber(character.emberMax)
       this.inject.recordNotice('회복의 봉인함: 체력 풀 회복 / 불씨 가득', 'win')
-      void this.br.animateResourceTrailFromCard(card.id, 'health', 1, 'health-gain')
-      void this.br.animateResourceTrailFromCard(card.id, 'ember', 1, 'gauge-gain')
+      // 트레일 착탄에 맞춰 체력/불씨 숫자가 굴러가도록 트레일을 기다린 뒤 카운터를
+      // 굴린다(이전엔 void로 흘려보내 뒤따르는 render()에서야 늦게 굴렀다).
+      await Promise.all([
+        this.br.animateResourceTrailFromCard(card.id, 'health', 1, 'health-gain'),
+        this.br.animateResourceTrailFromCard(card.id, 'ember', 1, 'gauge-gain'),
+      ])
+      this.br.playHudCounterFeedback('health', character.health)
+      this.br.playHudCounterFeedback('maxHealth', character.maxHealth)
+      this.br.playHudCounterFeedback('ember', character.ember)
+      this.br.playHudCounterFeedback('emberMax', character.emberMax)
     } else if (card.id === 'boss-reward-bounty') {
       const amount = 1 + Math.floor(Math.random() * 5)
       for (let i = 0; i < amount; i++) {
