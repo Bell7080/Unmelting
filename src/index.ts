@@ -2044,7 +2044,7 @@ function scoreInflationJitter(): number {
 // 일반 적 불빛 = ENEMY_LIGHT_BASE + ENEMY_LIGHT_PER_RANK × enemyPower(1~18+), 전 랭크 단일 공식.
 // HP/ATK와 분리돼 체력 버프·특이 스탯 적(100HP/1ATK 등)에도 랭크 순서대로 유지된다.
 // BASE는 초반(랭크 1) 값을 현재(≈32)와 맞추고, PER_RANK는 후반 상승폭을 조절한다(낮을수록 완만).
-const ENEMY_LIGHT_BASE = 27
+const ENEMY_LIGHT_BASE = 17
 const ENEMY_LIGHT_PER_RANK = 6
 function scoreForCardRemoval(card: Card): number {
   if (card.type === CardType.ENEMY) {
@@ -2059,7 +2059,7 @@ function scoreForCardRemoval(card: Card): number {
   // 예) 함정 기본 30 → 10턴이면 40. (이후 createScoreLog의 턴 배율·지터는 동일하게 위에 곱해진다.)
   const turnBonus = Math.max(0, gameState.getCurrentTurn())
   if (card.type === CardType.TRAP) {
-    const base = card.groupCount >= 3 ? 110 : card.groupCount === 2 ? 65 : 30
+    const base = card.groupCount >= 3 ? 100 : card.groupCount === 2 ? 55 : 20
     return base + turnBonus
   }
   if (card.type === CardType.TREASURE) {
