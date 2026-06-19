@@ -87,23 +87,23 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
   {
     name: '양초 벌',
     description: 'Wax stinger bee',
-    healthOrDamage: 3,
-    attack: 2,
+    healthOrDamage: 5,
+    attack: 3,
     enemySpriteId: 'enemyBee',
     enemyPower: 7,
   },
   {
     name: '양초 사마귀',
     description: 'Candle mantis',
-    healthOrDamage: 3,
-    attack: 2,
+    healthOrDamage: 5,
+    attack: 3,
     enemySpriteId: 'enemyMantis',
     enemyPower: 8,
   },
   {
     name: '양초 박쥐',
     description: 'Cave candle bat',
-    healthOrDamage: 4,
+    healthOrDamage: 7,
     attack: 3,
     enemySpriteId: 'enemyBat',
     enemyPower: 9,
@@ -111,7 +111,7 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
   {
     name: '양초 고슴도치',
     description: 'Prickled candle hedgehog',
-    healthOrDamage: 5,
+    healthOrDamage: 8,
     attack: 3,
     enemySpriteId: 'enemyHedgehog',
     enemyPower: 10,
@@ -119,7 +119,7 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
   {
     name: '양초 도마뱀',
     description: 'Waxscale lizard',
-    healthOrDamage: 5,
+    healthOrDamage: 7,
     attack: 4,
     enemySpriteId: 'enemyLizard',
     enemyPower: 11,
@@ -127,7 +127,7 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
   {
     name: '양초 너구리',
     description: 'Ash-striped raccoon',
-    healthOrDamage: 8,
+    healthOrDamage: 9,
     attack: 4,
     enemySpriteId: 'enemyRaccoon',
     enemyPower: 12,
@@ -135,7 +135,7 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
   {
     name: '양초 풍뎅이',
     description: 'Armored candle beetle',
-    healthOrDamage: 6,
+    healthOrDamage: 11,
     attack: 5,
     enemySpriteId: 'enemyBeetle',
     enemyPower: 13,
@@ -143,7 +143,7 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
   {
     name: '양초 전갈',
     description: 'Stinging candle scorpion',
-    healthOrDamage: 6,
+    healthOrDamage: 10,
     attack: 5,
     enemySpriteId: 'enemyScorpion',
     enemyPower: 14,
@@ -151,7 +151,7 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
   {
     name: '양초 담비',
     description: 'Swift candle marten',
-    healthOrDamage: 8,
+    healthOrDamage: 14,
     attack: 7,
     enemySpriteId: 'enemyMarten',
     enemyPower: 15,
@@ -159,7 +159,7 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
   {
     name: '양초 오소리',
     description: 'Fierce candle badger',
-    healthOrDamage: 7,
+    healthOrDamage: 13,
     attack: 8,
     enemySpriteId: 'enemyBadger',
     enemyPower: 16,
@@ -167,7 +167,7 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
   {
     name: '양초 나무늘보',
     description: 'Hardy candle sloth',
-    healthOrDamage: 15,
+    healthOrDamage: 18,
     attack: 4,
     enemySpriteId: 'enemySloth',
     enemyPower: 17,
@@ -175,7 +175,7 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
   {
     name: '양초 자칼',
     description: 'Savage candle jackal',
-    healthOrDamage: 7,
+    healthOrDamage: 10,
     attack: 12,
     enemySpriteId: 'enemyJackal',
     enemyPower: 18,

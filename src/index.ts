@@ -2031,27 +2031,32 @@ function scoreInflationJitter(): number {
  * pays out. Trap > Treasure for the same width because stepping on / clearing
  * a trap involves real risk; treasure pickup is a quiet gain.
  *
- *  - Enemy: strength-based — `HP * 12 + ATK * 20`. baseHealth / getDamage()
- *    already include the 2-/3-cell width bonus (Card.getNormalEnemyGroupStats),
- *    so we don't double-count width.
- *  - Mimic (isSpecialEnemy): flat strength + drop-count bonus so a wide / fat
- *    mimic still pays clearly more than a regular enemy of the same span.
+ *  - 일반 적: 강함 랭킹(enemyPower)에만 1차식으로 연동 — `BASE + RANK * enemyPower`.
+ *    불빛을 HP/ATK 수치와 분리해, 기본 체력 버프나 100HP/1ATK 같은 특이 스탯 적을
+ *    추가해도 불빛은 랭크 순서대로 유지된다(랭크만 부여하면 됨). enemyPower가 높을수록
+ *    (=후반 배치) 항상 더 준다. 그룹은 칸 수만큼 곱하되 25% 감산.
+ *  - Mimic/괴물꽃(isSpecialEnemy): 기존 강함(HP·ATK) 기반 불빛량을 그대로 유지한다.
  *  - Trap: small flat per width (1/2/3 = 30 / 65 / 110).
  *  - Treasure: smaller flat per width (1/2/3 = 18 / 40 / 75).
  *
  * Caller multiplies the result by `getTurnScoreMultiplier()` via createScoreLog.
  */
+// 일반 적 불빛 = ENEMY_LIGHT_BASE + ENEMY_LIGHT_PER_RANK × enemyPower(1~18+).
+// 두 상수만 만지면 곡선 전체를 조절할 수 있다(초반 ↑·후반 ↓는 PER_RANK를 낮추면 됨).
+const ENEMY_LIGHT_BASE = 22
+const ENEMY_LIGHT_PER_RANK = 13
 function scoreForCardRemoval(card: Card): number {
   if (card.type === CardType.ENEMY) {
-    const hp = Math.max(0, card.baseHealth)
-    const atk = Math.max(0, card.getDamage())
-    const strength = hp * 12 + atk * 20
-    const specialBonus = card.isSpecialEnemy ? 60 + card.defeatDropCount * 20 : 0
-    // 그룹은 총합 스탯 기준에서 25% 감산 — 단일보다 확실히 높되 배수 구조를 희석한다.
-    if (card.groupCount > 1 && !card.isSpecialEnemy) {
-      return Math.round(strength * 0.75)
+    // 특수 적(미믹/괴물꽃 등)은 기존 강함 기반 불빛량을 그대로 유지한다.
+    if (card.isSpecialEnemy) {
+      const hp = Math.max(0, card.baseHealth)
+      const atk = Math.max(0, card.getDamage())
+      return hp * 12 + atk * 20 + 60 + card.defeatDropCount * 20
     }
-    return strength + specialBonus
+    const rankLight = ENEMY_LIGHT_BASE + Math.max(1, card.enemyPower) * ENEMY_LIGHT_PER_RANK
+    // 그룹은 칸 수만큼 곱하되 25% 감산 — 단일보다 확실히 높되 배수 구조를 희석한다.
+    if (card.groupCount > 1) return Math.round(rankLight * card.groupCount * 0.75)
+    return rankLight
   }
   if (card.type === CardType.TRAP) {
     if (card.groupCount >= 3) return 110
