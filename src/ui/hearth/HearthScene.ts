@@ -1,5 +1,5 @@
 import { HEARTH_STYLES } from './HearthStyles'
-import { SpriteUrls } from '../Sprites'
+import { SpriteUrls, spriteForHearthStation } from '../Sprites'
 
 export interface HearthHandlers {
   /** 출발 버튼 클릭 — 직업 선택/런 시작으로 연결한다. */
@@ -72,6 +72,8 @@ export class HearthScene {
         </div>
       </div>
     `
+    // 커튼 위에 반투명하게 깔리는 대문(hearth_bg_002)을 변수로 주입한다.
+    overlay.style.setProperty('--hearth-door', `url('${SpriteUrls.hearth.door}')`)
     document.body.appendChild(overlay)
     this.overlay = overlay
 
@@ -201,10 +203,14 @@ export class HearthScene {
     for (let i = 0; i < 9; i++) {
       const name = STATION_NAMES[i]
       const desc = STATION_DESC[name] ?? ''
+      // 칸 인스펙터 일러스트는 row-major index+1로 hearth_001~009와 1:1 매핑한다.
+      // 아직 파일이 없는 칸은 undefined → CSS 플레이스홀더로 폴백한다.
+      const art = spriteForHearthStation(`hearth_00${i + 1}`)
+      const artAttr = art ? ` data-inspect-art="${art}"` : ''
       if (i === ADVENTURE_INDEX) {
         cells.push(
           `<button class="hearth-cell hearth-cell--adventure" data-hearth-station="adventure" type="button" aria-label="모험 시작"` +
-            ` data-inspect-title="${name}" data-inspect-tag="개방" data-inspect-desc="${desc}" data-inspect-art="${SpriteUrls.background}">` +
+            ` data-inspect-title="${name}" data-inspect-tag="개방" data-inspect-desc="${desc}"${artAttr}>` +
             `<span class="hearth-flame" aria-hidden="true"></span>` +
             `<span class="hearth-cell__label">${name}</span>` +
             `</button>`
@@ -212,7 +218,7 @@ export class HearthScene {
       } else {
         cells.push(
           `<div class="hearth-cell hearth-cell--locked" aria-label="${name} · 잠김"` +
-            ` data-inspect-title="${name}" data-inspect-tag="잠김" data-inspect-desc="${desc}">` +
+            ` data-inspect-title="${name}" data-inspect-tag="잠김" data-inspect-desc="${desc}"${artAttr}>` +
             lock +
             `<span class="hearth-cell__name">${name}</span>` +
             `</div>`

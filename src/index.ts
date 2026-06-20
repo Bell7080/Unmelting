@@ -97,6 +97,36 @@ document.body.style.backgroundPosition = 'center, center top, center'
 document.body.style.backgroundRepeat = 'no-repeat'
 document.body.style.backgroundAttachment = 'fixed'
 
+// 인게임 전체화면 배경(hearth_bg_001) — 레일 배경(body) 위에 흐릿하게(blur) 디졸브로 겹치는
+// 두 번째 배경 레이어. z-index:-1로 body 배경 위, 게임 UI(#app, z=auto) 아래에 깔린다.
+const ingameBackdrop = document.createElement('div')
+ingameBackdrop.id = 'ingame-backdrop'
+ingameBackdrop.setAttribute('aria-hidden', 'true')
+ingameBackdrop.style.backgroundImage = `url('${SpriteUrls.hearth.backdrop}')`
+document.body.insertBefore(ingameBackdrop, document.body.firstChild)
+// 다음 프레임에 dissolve-in(은은하게 떠오른다).
+requestAnimationFrame(() => ingameBackdrop.classList.add('is-in'))
+
+const ingameBackdropStyle = document.createElement('style')
+ingameBackdropStyle.textContent = `
+#ingame-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  /* 레일 배경과 이중으로 겹치도록 흐릿하게 깐다. */
+  filter: blur(7px) saturate(0.9) brightness(0.78);
+  transform: scale(1.06);
+  opacity: 0;
+  transition: opacity 1.6s ease;
+}
+#ingame-backdrop.is-in { opacity: 0.42; }
+`
+document.head.appendChild(ingameBackdropStyle)
+
 const gameState = new GameState()
 const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()

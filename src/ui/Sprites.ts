@@ -155,6 +155,11 @@ import pack002Url from '../assets/sprites/pack_002.webp'
 import pack003Url from '../assets/sprites/pack_003.webp'
 import free001Url from '../assets/sprites/free_001.webp'
 import free002Url from '../assets/sprites/free_002.webp'
+import hearthBackdropUrl from '../assets/sprites/hearth_bg_001.webp'
+import hearthDoorUrl from '../assets/sprites/hearth_bg_002.webp'
+import questMajorUrl from '../assets/sprites/quest_001.webp'
+import questMediumUrl from '../assets/sprites/quest_002.webp'
+import questMinorUrl from '../assets/sprites/quest_003.webp'
 import trial001Url from '../assets/sprites/trial_001.webp'
 import trial004Url from '../assets/sprites/trial_004.webp'
 import trial007Url from '../assets/sprites/trial_007.webp'
@@ -338,6 +343,19 @@ export const SpriteUrls = {
     '004': trial004Url,
     '007': trial007Url,
   } satisfies Record<'001' | '004' | '007', string>,
+  /** 거점 전용 일러스트. */
+  hearth: {
+    /** 인게임 전체화면 배경(hearth_bg_001) — 레일 배경 위에 디졸브로 흐릿하게 겹친다. */
+    backdrop: hearthBackdropUrl,
+    /** 거점 오로라 커튼 위에 반투명하게 깔리는 대문(hearth_bg_002). */
+    door: hearthDoorUrl,
+  } as const,
+  /** 의뢰(퀘스트) 딱지 일러스트 — 등급별(메인/중간/소형). */
+  questTickets: {
+    major: questMajorUrl,
+    medium: questMediumUrl,
+    minor: questMinorUrl,
+  } satisfies Record<'major' | 'medium' | 'minor', string>,
 }
 
 const NORMAL_ENEMY_VARIANTS = [SpriteUrls.enemyMouse, SpriteUrls.enemyFrog]
@@ -494,6 +512,18 @@ const eventIllustrationGlob = import.meta.glob<{ default: string }>(
 /** 이벤트 일러스트. illu(예: 'event_000','event_001')에 해당하는 파일이 없으면 undefined. */
 export function spriteForEvent(illu: string): string | undefined {
   return eventIllustrationGlob[`../assets/sprites/${illu}.webp`]?.default
+}
+
+// 거점 스테이션 칸 인스펙터 일러스트: hearth_001~009(row-major index+1). 글롭으로 묶어
+// 파일이 추가되면 자동 연동되고, 없으면 undefined → CSS 플레이스홀더로 폴백한다.
+// (hearth_bg_* 는 'hearth_0'으로 시작하지 않아 자연히 제외된다.)
+const hearthStationGlob = import.meta.glob<{ default: string }>(
+  '../assets/sprites/hearth_0*.webp',
+  { eager: true }
+)
+/** 거점 스테이션 칸 일러스트. name 예: 'hearth_008'. 파일 없으면 undefined. */
+export function spriteForHearthStation(name: string): string | undefined {
+  return hearthStationGlob[`../assets/sprites/${name}.webp`]?.default
 }
 
 // recipe_001.webp 가 추가되면 자동으로 사용된다. 없으면 팩 커버로 fallback.

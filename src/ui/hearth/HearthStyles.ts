@@ -172,6 +172,22 @@ export const HEARTH_STYLES = `
   animation: none !important;
   filter: saturate(0.8) hue-rotate(135deg) brightness(0.66);
 }
+/* 반투명 대문(hearth_bg_002) — 두 커튼 절반에 좌/우로 나눠 깔아 열릴 때 문이 갈라지게 한다.
+   배경 그라디언트 위에 얹되 opacity로 은은하게 비치도록 한다(커튼 hue-rotate는 ::before로 상속되지 않음). */
+#hearth-overlay .hearth-curtain::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: var(--hearth-door, none);
+  /* 커튼 한 짝(폭 54%)에서 문 전체가 셸 폭을 채우도록 가로를 약 1.85배로 키운다. */
+  background-size: 185% 100%;
+  background-repeat: no-repeat;
+  opacity: 0.5;
+  mix-blend-mode: screen;
+}
+#hearth-overlay .job-rail-curtain--left.hearth-curtain::before { background-position: left center; }
+#hearth-overlay .job-rail-curtain--right.hearth-curtain::before { background-position: right center; }
 #hearth-overlay .hearth-curtain::after {
   content: '';
   position: absolute;

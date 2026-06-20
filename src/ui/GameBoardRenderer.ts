@@ -793,7 +793,7 @@ export class GameBoardRenderer {
         (q) => `
           <li class="quest-ticket quest-ticket--${q.tier}" data-quest="${q.name}"
               data-inspect-title="${q.name}" data-inspect-tag="${tierLabel[q.tier]} 의뢰 · ${q.cur}/${q.goal}"
-              data-inspect-desc="세부 목표와 보상은 준비 중입니다.">
+              data-inspect-desc="세부 목표와 보상은 준비 중입니다." data-inspect-art="${SpriteUrls.questTickets[q.tier]}">
             <span class="quest-ticket-name">${q.name}</span>
             <span class="quest-ticket-count">${q.cur}/${q.goal}</span>
           </li>`
