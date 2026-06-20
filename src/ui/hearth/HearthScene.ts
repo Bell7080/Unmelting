@@ -1,4 +1,5 @@
 import { HEARTH_STYLES } from './HearthStyles'
+import { SpriteUrls } from '../Sprites'
 
 export interface HearthHandlers {
   /** 출발 버튼 클릭 — 직업 선택/런 시작으로 연결한다. */
@@ -152,6 +153,9 @@ export class HearthScene {
     tagEl.textContent = tag
     tagEl.style.display = tag ? '' : 'none'
     insp.querySelector<HTMLElement>('.hearth-inspector-desc')!.textContent = desc
+    // 일러스트: data-inspect-art가 있으면 실제 이미지로, 없으면 CSS 플레이스홀더로 되돌린다.
+    const artUrl = source.dataset.inspectArt
+    insp.querySelector<HTMLElement>('.hearth-inspector-art')!.style.backgroundImage = artUrl ? `url('${artUrl}')` : ''
     insp.classList.add('is-shown')
   }
 
@@ -200,7 +204,7 @@ export class HearthScene {
       if (i === ADVENTURE_INDEX) {
         cells.push(
           `<button class="hearth-cell hearth-cell--adventure" data-hearth-station="adventure" type="button" aria-label="모험 시작"` +
-            ` data-inspect-title="${name}" data-inspect-tag="개방" data-inspect-desc="${desc}">` +
+            ` data-inspect-title="${name}" data-inspect-tag="개방" data-inspect-desc="${desc}" data-inspect-art="${SpriteUrls.background}">` +
             `<span class="hearth-flame" aria-hidden="true"></span>` +
             `<span class="hearth-cell__label">${name}</span>` +
             `</button>`
@@ -224,11 +228,10 @@ export class HearthScene {
     const insp = this.inspector
     if (!rail || !insp) return
     const r = rail.getBoundingClientRect()
-    const rightMargin = Math.max(12, window.innerWidth * 0.02)
-    // 가로: 가장 우측 칸의 절반(≈레일 폭의 5/6 지점)부터 화면 우측 끝까지만 침범한다.
+    // 가로: 가장 우측 칸의 절반(≈레일 폭의 5/6 지점)부터 화면 우측 끝까지(여백 0).
     // 세로: 레일이 아니라 화면 위아래 끝(뷰포트 전체 높이)을 다 채운다.
     const left = r.left + r.width * 0.82
-    const right = window.innerWidth - rightMargin
+    const right = window.innerWidth
     insp.style.left = `${left}px`
     insp.style.top = `0px`
     insp.style.width = `${Math.max(200, right - left)}px`
