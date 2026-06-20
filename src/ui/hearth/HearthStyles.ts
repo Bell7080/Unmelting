@@ -425,7 +425,8 @@ body.hearth-lobby #ingame-backdrop.is-out {
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 36%, #000 100%);
   mask-image: linear-gradient(90deg, transparent 0, #000 36%, #000 100%);
 }
-/* 일러스트 — 상단 정렬, 패널의 76%를 채워 하단부까지 크게 드러난다. */
+/* 일러스트 — 상단 정렬, 패널의 76%를 채운다. 최하단부는 가파른 마스크로 자연스럽게
+   투명 처리해 하드 컷 라인을 없앤다. */
 .hearth-inspector-art {
   position: absolute;
   left: 0;
@@ -438,15 +439,21 @@ body.hearth-lobby #ingame-backdrop.is-out {
     linear-gradient(160deg, rgba(44, 30, 56, 0.95), rgba(12, 8, 18, 0.98));
   background-size: cover;
   background-position: center top;
+  -webkit-mask-image: linear-gradient(180deg, #000 84%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 84%, transparent 100%);
 }
-/* 검은 그라데이션 스크림 — 패널 최상단(투명)부터 최하단(완전 불투명)까지 끝과 끝으로
-   당긴 단순 선형. 위에서 아래로 고르게 짙어지며 일러스트 하단부를 자연스럽게 가린다. */
+/* 검은 그라데이션 스크림 — 상단부는 길게 투명(일러스트 노출), 중간은 완만하게 짙어지고
+   하단은 완전 불투명. 대략 0/0/25/50/100/100 곡선으로 자연스럽게 가린다. */
 .hearth-inspector-grad {
   position: absolute;
   inset: 0;
   background: linear-gradient(
     180deg,
     transparent 0%,
+    transparent 20%,
+    rgba(5, 3, 12, 0.25) 40%,
+    rgba(5, 3, 12, 0.5) 60%,
+    rgba(5, 3, 12, 1) 80%,
     rgba(5, 3, 12, 1) 100%
   );
 }

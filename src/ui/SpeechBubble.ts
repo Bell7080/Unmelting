@@ -217,6 +217,10 @@ export class SpeechBubble {
   private state: 'hidden' | 'entering' | 'visible' | 'exiting' = 'hidden'
   private typewriterTimer = 0
   private autoDismissTimer = 0
+  // 지연 표시(setTimeout) 핸들 — dismiss/mute에서 취소할 수 있게 보관한다.
+  private pendingShowTimer = 0
+  // 음소거 상태(예: 거점 로비). true면 어떤 show도 표시되지 않는다.
+  private muted = false
   // 현재 타이핑 중인 전체 텍스트 — completeTyping()에서 즉시 완성할 때 사용
   private pendingText = ''
   // 다음에 렌더할 글자 인덱스. completeTyping()이 이미 출력된 글자를 다시 그리지 않고
@@ -266,11 +270,31 @@ export class SpeechBubble {
   }
 
   show(text: string, delayMs = 0): void {
-    if (delayMs > 0) { setTimeout(() => this._showNow(text), delayMs) }
+    if (this.muted) return
+    // 이전 지연 표시가 남아 있으면 취소(중복/유령 표시 방지).
+    clearTimeout(this.pendingShowTimer)
+    this.pendingShowTimer = 0
+    if (delayMs > 0) { this.pendingShowTimer = window.setTimeout(() => { this.pendingShowTimer = 0; this._showNow(text) }, delayMs) }
     else              { this._showNow(text) }
   }
 
+  /**
+   * 음소거 토글. true면 진행 중인 대사를 거두고 이후 show를 무시한다(거점 로비 등에서
+   * 인게임 시작 대사가 새지 않게 한다). 보류 중인 지연 표시 타이머도 함께 취소한다.
+   */
+  setMuted(muted: boolean): void {
+    this.muted = muted
+    if (muted) {
+      clearTimeout(this.pendingShowTimer)
+      this.pendingShowTimer = 0
+      this.dismiss()
+    }
+  }
+
   dismiss(): void {
+    // 보류 중인 지연 표시는 상태와 무관하게 항상 취소한다(hidden이어도 유령 표시 방지).
+    clearTimeout(this.pendingShowTimer)
+    this.pendingShowTimer = 0
     if (this.state === 'hidden' || this.state === 'exiting') return
     clearTimeout(this.typewriterTimer)
     clearTimeout(this.autoDismissTimer)
@@ -316,6 +340,7 @@ export class SpeechBubble {
   }
 
   private _showNow(text: string): void {
+    if (this.muted) return
     clearTimeout(this.typewriterTimer)
     clearTimeout(this.autoDismissTimer)
     this._removeListeners()

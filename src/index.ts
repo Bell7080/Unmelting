@@ -290,8 +290,9 @@ function syncRunModifiersToSpawner(): void {
 function enterHearth(): void {
   // 갓 게임을 켠 상태: 적·직업·유물 잔여 0. 빈 레일을 배경으로 거점 오버레이를 띄운다.
   resetForNewRun()
-  // 부팅 시 startGame이 띄운 시작 대사('역경 아래…')가 로비로 새지 않게 즉시 거둔다.
-  speechBubble.dismiss()
+  // 거점 로비 동안엔 플레이어 말풍선을 음소거한다. 보류 중인 지연 대사(시작 대사 등)도
+  // 함께 취소돼 대문 열림 중에 인게임 대사가 새는 것을 막는다. startGame 시작 시 해제된다.
+  speechBubble.setMuted(true)
   inputLocked = true // 거점 동안 뒤쪽 보드 입력 잠금(입력은 거점 오버레이가 가짐)
   gameActive = false
   // 아직 캐릭터를 고르지 않았으므로 플레이어 존을 숨긴다(레이어는 유지, visibility만 off).
@@ -2400,6 +2401,8 @@ function resetForNewRun(): void {
 
 async function startGame(): Promise<void> {
   resetForNewRun()
+  // 런이 실제로 시작되므로 거점 로비에서 걸어 둔 말풍선 음소거를 해제한다(시작 대사 등 정상 출력).
+  speechBubble.setMuted(false)
   const poolSnapshot = runCardPool.snapshot()
   // 메타 사당 해금(영구) + 런 카드풀(임시) 이중 구조를 플레이 로그로 명시한다.
   recordNotice(`카드 풀 초기화: 메타해금 ${poolSnapshot.unlocked.length} / 잠김 ${poolSnapshot.locked.length} / 금지 ${poolSnapshot.banned.length}`, 'info')
