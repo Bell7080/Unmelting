@@ -439,14 +439,14 @@ body.hearth-lobby #ingame-backdrop.is-out {
   background-size: cover;
   background-position: center top;
 }
-/* 하단 어둠(검은 그라데이션 스크림) — 상단 50%는 투명, 거기서 바닥까지 단순 선형으로
-   완전 불투명까지 깐다. 일러스트 하단부를 자연스럽게 가린다. */
+/* 검은 그라데이션 스크림 — 패널 최상단(투명)부터 최하단(완전 불투명)까지 끝과 끝으로
+   당긴 단순 선형. 위에서 아래로 고르게 짙어지며 일러스트 하단부를 자연스럽게 가린다. */
 .hearth-inspector-grad {
   position: absolute;
   inset: 0;
   background: linear-gradient(
     180deg,
-    transparent 50%,
+    transparent 0%,
     rgba(5, 3, 12, 1) 100%
   );
 }
