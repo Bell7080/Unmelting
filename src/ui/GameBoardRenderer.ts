@@ -784,10 +784,14 @@ export class GameBoardRenderer {
       { tier: 'minor', name: '사소한 의뢰', cur: 0, goal: 1 },
       { tier: 'minor', name: '사소한 의뢰', cur: 0, goal: 1 },
     ]
+    // 등급 라벨 — 인스펙터 태그에 중요도+진행도를 함께 노출한다.
+    const tierLabel: Record<'major' | 'medium' | 'minor', string> = { major: '중요', medium: '적당', minor: '사소' }
     const tickets = quests
       .map(
         (q) => `
-          <li class="quest-ticket quest-ticket--${q.tier}" data-quest="${q.name}">
+          <li class="quest-ticket quest-ticket--${q.tier}" data-quest="${q.name}"
+              data-inspect-title="${q.name}" data-inspect-tag="${tierLabel[q.tier]} 의뢰 · ${q.cur}/${q.goal}"
+              data-inspect-desc="세부 목표와 보상은 준비 중입니다.">
             <span class="quest-ticket-name">${q.name}</span>
             <span class="quest-ticket-count">${q.cur}/${q.goal}</span>
           </li>`

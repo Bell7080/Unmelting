@@ -300,10 +300,92 @@ body.hearth-lobby .left-panel .score-panel-total {
 body.hearth-lobby .left-panel .score-log-list {
   display: none;
 }
-/* 우측 손패/콤보게이지/확률은 오른쪽 밖으로(이 자리에 인스펙터가 들어갈 예정). */
+/* 우측 손패/콤보게이지/확률은 오른쪽 밖으로(이 자리에 인스펙터가 들어간다). */
 body.hearth-lobby .hand-column {
   transform: translateX(135%);
   opacity: 0;
   pointer-events: none;
+}
+
+/* ── 우측 인스펙터(정보창) ──────────────────────────────────────────────
+   평소 비움(여백의 미). 인스펙터블(칸/딱지) hover 시 스르륵 떠오르고 떼면 사라진다.
+   직업 카드 문법 참고: 상단 일러스트 + 하단 노란 제목/구분선/태그/설명.
+   좌측 경계는 투명도 그라데이션 마스크로 흐려 자연스럽게 떠 있게 한다. */
+#hearth-inspector {
+  position: fixed;
+  right: clamp(16px, 5vw, 84px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 142;
+  width: clamp(200px, 21vw, 264px);
+  pointer-events: none;
+}
+.hearth-inspector-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 215, 120, 0.24);
+  border-left: 0;
+  background: linear-gradient(180deg, rgba(26, 18, 38, 0.96), rgba(8, 5, 14, 0.98));
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 232, 168, 0.12);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 10%, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 10%, #000 100%);
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.26s ease, transform 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+#hearth-inspector.is-shown .hearth-inspector-card {
+  opacity: 1;
+  transform: translateY(0);
+}
+/* 임시 일러스트 플레이스홀더(실제 아트는 background-image로 교체). */
+.hearth-inspector-art {
+  position: relative;
+  height: clamp(130px, 21vh, 210px);
+  background:
+    radial-gradient(circle at 54% 38%, rgba(255, 232, 168, 0.12), transparent 60%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 9px),
+    linear-gradient(180deg, rgba(40, 28, 52, 0.92), rgba(12, 8, 18, 0.96));
+}
+.hearth-inspector-art::after {
+  /* 일러스트 하단을 본문으로 자연스럽게 녹인다(직업 카드 scrim 문법). */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 38%, rgba(8, 5, 14, 0.86) 86%, rgba(8, 5, 14, 0.98) 100%);
+}
+.hearth-inspector-body {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(4px, 0.8vh, 8px);
+  /* 좌측 패딩은 마스크 페이드(좌 10%)보다 넓게 잡아 제목/설명이 흐려지지 않게 한다. */
+  padding: clamp(10px, 1.5vh, 15px) clamp(12px, 1vw, 18px) clamp(13px, 1.8vh, 18px) clamp(22px, 2.2vw, 30px);
+}
+.hearth-inspector-title {
+  font-family: 'OkDanDan', Georgia, serif;
+  font-weight: 900;
+  font-size: clamp(17px, 2.4vh, 25px);
+  line-height: 1.14;
+  color: #ffe7a8;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 18px rgba(244, 164, 96, 0.24);
+}
+.hearth-inspector-divider {
+  width: clamp(26px, 2.6vw, 48px);
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(255, 215, 120, 0.8), rgba(255, 215, 120, 0.05));
+}
+.hearth-inspector-tags {
+  font-family: 'OkDanDan', Georgia, serif;
+  font-weight: 800;
+  font-size: clamp(11px, 1.5vh, 14px);
+  color: rgba(248, 206, 120, 0.95);
+}
+.hearth-inspector-desc {
+  font-family: 'OkDanDan', Georgia, serif;
+  font-size: clamp(11px, 1.4vh, 14px);
+  line-height: 1.5;
+  color: rgba(206, 192, 170, 0.8);
 }
 `

@@ -17,15 +17,32 @@ const STATION_NAMES = [
 /** 하단 중앙 = 모험. 현 단계는 이 칸만 점등·상호작용한다. */
 const ADVENTURE_INDEX = 7
 
+/** 우측 인스펙터에 띄울 각 스테이션의 한 줄 설명(§12-3 역할 요약). */
+const STATION_DESC: Record<string, string> = {
+  암시장: '턴이 갱신될 때마다 바뀌는 정해진 품목을 메타 화폐로 사들인다.',
+  타로: '운명을 점친다. 어두운 거점에 드는 한 줄기 다른 빛.',
+  도박장: '메타 코인을 걸어 유희를, 혹은 한탕을 노린다.',
+  길드: '업적을 관리하고, 업적으로 새 동행 등을 해금한다.',
+  '잿빛 굴레': '엔드리스 모드. 200층 진엔딩을 클리어하면 열린다.',
+  서고: '전적과 기록을 보관하고, 그 기록을 바탕으로 영구 효과를 얻는다.',
+  무역: '손패·유물 잠금·다음 판 계승 등을 메타 화폐로 영구 해금한다.',
+  모험: '어둠으로 떠난다. 동행과 난이도를 정한 뒤 출발한다.',
+  만찬: '모험 직전의 일회성 버프. 방문마다 무료 만찬이 한 번 차려진다.',
+}
+
 /**
  * 거점(촛대) 화면. `/시작`에서 진입하며 인게임 빈 레일을 배경으로 재사용한다.
  * 거대한 오로라 커튼이 열리며 폐저택풍 배경이 드러나고, 하단 중앙 '모험' 칸이
  * 화륵 점등된다. 모험을 누르면 로비 위로 검은 모험 셔터가 내려오고, 모험 자리의
  * '출발' 버튼을 누르면 호스트의 onStart(직업 선택/런 시작)가 돈다.
  * 나머지 8칸은 이름을 달고 어둡게 잠긴 상태로 1차 노출한다(해금은 추후 단계).
+ *
+ * 우측 인스펙터: 평소 비어 있고, `[data-inspect-title]` 요소(스테이션 칸·퀘스트 딱지)에
+ * 마우스를 올리면 스르륵 떠올라 일러스트+제목/태그/설명을 보여 주고, 떼면 사라진다.
  */
 export class HearthScene {
   private overlay: HTMLElement | null = null
+  private inspector: HTMLElement | null = null
   private resizeListener: (() => void) | null = null
   private handlers: HearthHandlers | null = null
   /** 모험 칸 1회만 셔터를 내린다. */
@@ -57,11 +74,33 @@ export class HearthScene {
     document.body.appendChild(overlay)
     this.overlay = overlay
 
+    // 우측 인스펙터(정보창) — 평소 비움, hover 시 떠오른다.
+    const inspector = document.createElement('div')
+    inspector.id = 'hearth-inspector'
+    inspector.setAttribute('aria-hidden', 'true')
+    inspector.innerHTML = `
+      <div class="hearth-inspector-card">
+        <div class="hearth-inspector-art" aria-hidden="true"></div>
+        <div class="hearth-inspector-body">
+          <div class="hearth-inspector-title"></div>
+          <div class="hearth-inspector-divider" aria-hidden="true"></div>
+          <div class="hearth-inspector-tags"></div>
+          <div class="hearth-inspector-desc"></div>
+        </div>
+      </div>
+    `
+    document.body.appendChild(inspector)
+    this.inspector = inspector
+
     this.alignToRail()
     const onResize = (): void => this.alignToRail()
     this.resizeListener = onResize
     window.addEventListener('resize', onResize)
     window.addEventListener('scroll', onResize, true)
+
+    // 인스펙터블(칸/딱지) hover 위임 — document 레벨이라 좌측 패널의 퀘스트 딱지도 잡는다.
+    document.addEventListener('pointerover', this.onPointerOver)
+    document.addEventListener('pointerout', this.onPointerOut)
 
     overlay.addEventListener('click', (e) => {
       const t = e.target as HTMLElement
@@ -86,10 +125,44 @@ export class HearthScene {
     }, 820 + 940)
   }
 
+  /** 인스펙터블에 들어오면 정보창을 채워 띄운다. */
+  private onPointerOver = (e: PointerEvent): void => {
+    const t = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-inspect-title]')
+    if (t) this.showInspector(t)
+  }
+
+  /** 인스펙터블을 벗어나면 숨긴다(다른 인스펙터블로 옮겨가는 중이면 유지). */
+  private onPointerOut = (e: PointerEvent): void => {
+    const from = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-inspect-title]')
+    if (!from) return
+    const to = (e.relatedTarget as HTMLElement | null)?.closest?.('[data-inspect-title]')
+    if (to) return
+    this.hideInspector()
+  }
+
+  private showInspector(source: HTMLElement): void {
+    const insp = this.inspector
+    if (!insp) return
+    const title = source.dataset.inspectTitle ?? ''
+    const tag = source.dataset.inspectTag ?? ''
+    const desc = source.dataset.inspectDesc ?? ''
+    insp.querySelector<HTMLElement>('.hearth-inspector-title')!.textContent = title
+    const tagEl = insp.querySelector<HTMLElement>('.hearth-inspector-tags')!
+    tagEl.textContent = tag
+    tagEl.style.display = tag ? '' : 'none'
+    insp.querySelector<HTMLElement>('.hearth-inspector-desc')!.textContent = desc
+    insp.classList.add('is-shown')
+  }
+
+  private hideInspector(): void {
+    this.inspector?.classList.remove('is-shown')
+  }
+
   /** 모험 선택 → 로비 위로 검은 모험 셔터가 내려오고, 모험 자리에 출발 버튼이 드러난다. */
   private descendShutter(): void {
     if (this.shuttered) return
     this.shuttered = true
+    this.hideInspector()
     this.overlay?.classList.add('is-shuttering')
     // 셔터 하강이 끝난 뒤 출발 버튼을 띄운다(셔터 transition과 동기).
     window.setTimeout(() => this.overlay?.classList.add('is-shutter-rest'), 680)
@@ -112,6 +185,7 @@ export class HearthScene {
    *   6 무역 / 7 모험(하단 중앙) / 8 만찬
    * 현 단계는 `모험`(index 7)만 점등·상호작용하고, 나머지는 이름을 단 채
    * 어둡게 잠긴 칸으로 노출한다(초기 해금 상태). 해금은 추후 단계.
+   * 각 칸은 `data-inspect-*`로 우측 인스펙터 hover 정보를 제공한다.
    */
   private renderCells(): string {
     const lock =
@@ -120,18 +194,22 @@ export class HearthScene {
       `<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`
     const cells: string[] = []
     for (let i = 0; i < 9; i++) {
+      const name = STATION_NAMES[i]
+      const desc = STATION_DESC[name] ?? ''
       if (i === ADVENTURE_INDEX) {
         cells.push(
-          `<button class="hearth-cell hearth-cell--adventure" data-hearth-station="adventure" type="button" aria-label="모험 시작">` +
+          `<button class="hearth-cell hearth-cell--adventure" data-hearth-station="adventure" type="button" aria-label="모험 시작"` +
+            ` data-inspect-title="${name}" data-inspect-tag="개방" data-inspect-desc="${desc}">` +
             `<span class="hearth-flame" aria-hidden="true"></span>` +
-            `<span class="hearth-cell__label">모험</span>` +
+            `<span class="hearth-cell__label">${name}</span>` +
             `</button>`
         )
       } else {
         cells.push(
-          `<div class="hearth-cell hearth-cell--locked" aria-label="${STATION_NAMES[i]} · 잠김">` +
+          `<div class="hearth-cell hearth-cell--locked" aria-label="${name} · 잠김"` +
+            ` data-inspect-title="${name}" data-inspect-tag="잠김" data-inspect-desc="${desc}">` +
             lock +
-            `<span class="hearth-cell__name">${STATION_NAMES[i]}</span>` +
+            `<span class="hearth-cell__name">${name}</span>` +
             `</div>`
         )
       }
@@ -157,6 +235,10 @@ export class HearthScene {
       window.removeEventListener('scroll', this.resizeListener, true)
       this.resizeListener = null
     }
+    document.removeEventListener('pointerover', this.onPointerOver)
+    document.removeEventListener('pointerout', this.onPointerOut)
+    this.inspector?.remove()
+    this.inspector = null
     this.overlay?.remove()
     this.overlay = null
     this.handlers = null
