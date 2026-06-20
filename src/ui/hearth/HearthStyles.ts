@@ -360,26 +360,26 @@ body.hearth-lobby .hand-column {
 .hearth-inspector-title {
   font-family: 'OkDanDan', Georgia, serif;
   font-weight: 900;
-  font-size: clamp(30px, 4.4vh, 46px);
+  font-size: clamp(24px, 3.4vh, 36px);
   line-height: 1.12;
   color: #ffe7a8;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.92), 0 0 22px rgba(244, 164, 96, 0.28);
 }
 .hearth-inspector-divider {
-  width: clamp(34px, 3.4vw, 62px);
-  height: 3px;
+  width: clamp(30px, 3vw, 54px);
+  height: 2px;
   border-radius: 2px;
   background: linear-gradient(90deg, rgba(255, 215, 120, 0.8), rgba(255, 215, 120, 0.05));
 }
 .hearth-inspector-tags {
   font-family: 'OkDanDan', Georgia, serif;
   font-weight: 800;
-  font-size: clamp(18px, 2.4vh, 26px);
+  font-size: clamp(15px, 2vh, 19px);
   color: rgba(248, 206, 120, 0.96);
 }
 .hearth-inspector-desc {
   font-family: 'OkDanDan', Georgia, serif;
-  font-size: clamp(16px, 2.1vh, 23px);
+  font-size: clamp(14px, 1.8vh, 18px);
   line-height: 1.45;
   color: rgba(214, 200, 178, 0.86);
 }
