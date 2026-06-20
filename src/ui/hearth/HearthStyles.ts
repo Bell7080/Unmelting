@@ -452,17 +452,19 @@ body.hearth-lobby #ingame-backdrop.is-out {
 }
 /* 텍스트 레이어 — 하단 정렬이되 큰 하단 패딩으로 그라데이션 상단부(어둠이 막 짙어지는 곳)에
    올려 배치한다. 마스크/배경 없음(글자는 투명화 영향 X). */
+/* 텍스트 블록을 패널 세로 50% 지점(그라데이션 시작선)에 앵커하고, 작은 상단 패딩으로
+   중앙에서 살짝 아래(≈55%)에 제목이 오게 한다. 마스크/배경 없음(글자 또렷). */
 .hearth-inspector-body {
   position: absolute;
   left: 0;
   right: 0;
+  top: 50%;
   bottom: 0;
-  min-height: 55%;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: clamp(6px, 1.1vh, 12px);
-  padding: clamp(24px, 5vh, 70px) clamp(18px, 1.6vw, 28px) clamp(58px, 14vh, 150px) clamp(46px, 4.5vw, 66px);
+  padding: clamp(10px, 4vh, 44px) clamp(18px, 1.6vw, 28px) clamp(20px, 3vh, 40px) clamp(46px, 4.5vw, 66px);
 }
 .hearth-inspector-title {
   font-family: 'OkDanDan', Georgia, serif;
