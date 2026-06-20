@@ -442,19 +442,19 @@ body.hearth-lobby #ingame-backdrop.is-out {
   -webkit-mask-image: linear-gradient(180deg, #000 84%, transparent 100%);
   mask-image: linear-gradient(180deg, #000 84%, transparent 100%);
 }
-/* 검은 그라데이션 스크림 — 상단부는 길게 투명(일러스트 노출), 중간은 완만하게 짙어지고
-   하단은 완전 불투명. 대략 0/0/25/50/100/100 곡선으로 자연스럽게 가린다. */
+/* 검은 그라데이션 스크림 — 더 높은 범위(0/25/50/75/100/100)로 일찍 짙어지고, 색은
+   상단의 옅은 남색에서 하단으로 갈수록 거의 완전한 어둠(near-black)으로 수렴한다. */
 .hearth-inspector-grad {
   position: absolute;
   inset: 0;
   background: linear-gradient(
     180deg,
-    transparent 0%,
-    transparent 20%,
-    rgba(5, 3, 12, 0.25) 40%,
-    rgba(5, 3, 12, 0.5) 60%,
-    rgba(5, 3, 12, 1) 80%,
-    rgba(5, 3, 12, 1) 100%
+    rgba(8, 5, 16, 0) 0%,
+    rgba(7, 4, 14, 0.25) 20%,
+    rgba(5, 3, 10, 0.5) 40%,
+    rgba(3, 2, 6, 0.75) 60%,
+    rgba(1, 1, 3, 1) 80%,
+    rgba(0, 0, 1, 1) 100%
   );
 }
 /* 텍스트 레이어 — 하단 정렬이되 큰 하단 패딩으로 그라데이션 상단부(어둠이 막 짙어지는 곳)에
@@ -471,7 +471,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
   flex-direction: column;
   justify-content: flex-start;
   gap: clamp(6px, 1.1vh, 12px);
-  padding: clamp(10px, 4vh, 44px) clamp(18px, 1.6vw, 28px) clamp(20px, 3vh, 40px) clamp(46px, 4.5vw, 66px);
+  padding: clamp(10px, 4vh, 44px) clamp(18px, 1.6vw, 28px) clamp(20px, 3vh, 40px) clamp(62px, 6vw, 92px);
 }
 .hearth-inspector-title {
   font-family: 'OkDanDan', Georgia, serif;
