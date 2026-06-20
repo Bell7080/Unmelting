@@ -345,8 +345,9 @@ body.hearth-lobby .hand-column {
   transform: translateY(0);
 }
 /* 풀 일러스트(패널 전체 배경). 실제 아트는 background-image로 교체.
-   마스크: 좌측 42%까지 서서히 페이드(일러스트+하단 암막 모두 포함).
-   ::after: 일러스트 하단 37.5%를 검은 레이어로 덮어 텍스트 영역과 자연스럽게 이어지도록 한다. */
+   마스크: 좌측 42%까지 서서히 페이드.
+   배경 포지션을 center top으로 두어 일러스트 상단부를 우선 표시하고,
+   하단 body 그라데이션에 가려지는 아랫부분은 자연히 숨겨진다. */
 .hearth-inspector-art {
   position: absolute;
   inset: 0;
@@ -355,33 +356,33 @@ body.hearth-lobby .hand-column {
     repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 9px),
     linear-gradient(160deg, rgba(44, 30, 56, 0.95), rgba(12, 8, 18, 0.98));
   background-size: cover;
-  background-position: center;
+  background-position: center top;
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
   mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
 }
-/* 일러스트 하단 37.5% 암막 — 텍스트 스크림과 경계 없이 이어진다. */
-.hearth-inspector-art::after {
-  content: '';
-  position: absolute;
-  left: 0; right: 0; bottom: 0;
-  height: 37.5%;
-  background: linear-gradient(180deg, transparent 0%, rgba(3, 2, 7, 0.88) 55%, rgb(3, 2, 7) 100%);
-  pointer-events: none;
-}
-/* 하단 스크림 — 일러스트와 같은 좌측 페이드 마스크를 공유해 경계선을 없앤다. */
+/* 하단 스크림 — body 단일 그라데이션으로 통일(이중 페이드 제거).
+   순수 검정 대신 게임 팔레트(남보라 인디고)로 오로라 톤을 유지한다.
+   좌측 페이드 마스크를 일러스트와 공유해 경계선을 없앤다. */
 .hearth-inspector-body {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  /* 하단부터 약 3/4를 차지하는 강한 검은 그라데이션 위에 밝은 글씨를 올린다. */
   min-height: 75%;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   gap: clamp(6px, 1.1vh, 12px);
   padding: clamp(24px, 5vh, 70px) clamp(18px, 1.6vw, 28px) clamp(34px, 5vh, 56px) clamp(46px, 4.5vw, 66px);
-  background: linear-gradient(180deg, transparent 0%, rgba(6, 4, 11, 0.4) 14%, rgba(5, 3, 10, 0.85) 40%, rgba(3, 2, 7, 1) 100%);
+  /* transparent → 남보라 → 인디고-블랙: 단일 곡선으로 이중 페이드 없이 깔끔하게. */
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(12, 7, 24, 0.36) 16%,
+    rgba(14, 8, 28, 0.78) 38%,
+    rgba(12, 7, 26, 0.96) 60%,
+    rgba(10, 6, 22, 1) 100%
+  );
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
   mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
 }
