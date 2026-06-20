@@ -306,6 +306,14 @@ export class CardSpawner {
     this.goldenChestWeight = 0
   }
 
+  /** 다시 시작 시 스폰 시리얼·페이싱 쿨다운까지 비워 새 런 첫 스폰 타이밍을 동일하게 한다. */
+  resetSpawnState(): void {
+    this.spawnSerial = 0
+    this.sporeCooldownCards = 0
+    this.starlightCooldownCards = 0
+    this.starlightMissStreak = 0
+  }
+
   /** Spawn one random card per lane for the current turn refill (배치 → 쿨다운 commit). */
   spawnCardsForTurn(): Card[] {
     const cards: Card[] = []
@@ -475,7 +483,9 @@ export class CardSpawner {
     // Spores on cooldown are treated as weight 0; the slot is silently folded into
     // the rest of the distribution so the total chance of non-spore cards increases.
     const sporeCooling = this.sporeCooldownCards > 0
-    const sporeTrap = isOpening || sporeCooling ? 0 : buckets.sporeTrap
+    // 포자는 20층 이후부터만 등장한다(그 전에는 가중치 0).
+    const sporeLocked = this.progressionTurn < 20
+    const sporeTrap = isOpening || sporeCooling || sporeLocked ? 0 : buckets.sporeTrap
     // 대기칸 초기 배치에서는 꽃을 절반 가중치로 허용한다(전방칸은 여전히 0).
     const flower = options.openingBoard
       ? 0

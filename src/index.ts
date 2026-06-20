@@ -2308,6 +2308,15 @@ async function startGame(): Promise<void> {
     if (gameState.character.hasRelic('blood-pack')) void applyBloodPackHit(amount)
   }
   cardSpawner.resetRelicModifiers()
+  cardSpawner.resetSpawnState()
+  // 비게임플레이(BGM)만 제외하고 잔여 상태를 모두 비운다: 체인 UID, 팩 세션, 디버그 이벤트, 말풍선.
+  chainEventCounter = 0
+  activePackSession = null
+  boardRenderer.closePackPicker()
+  debugForcedEventId = null
+  speechBubble.dismiss()
+  bossBubble.dismiss()
+  eventDemonBubble.dismiss()
   // 시련 영속 modifier(적 HP/공격력·함정 피해·보물 배율)도 런마다 비운다.
   // resetRelicModifiers는 유물/직업 보정만 지우므로, 여기서 runModifiers를 초기화하고
   // 스폰어에 0을 동기화하지 않으면 이전 런의 시련 버프가 다음 런 적/함정에 남는다.
