@@ -232,20 +232,18 @@ export const HEARTH_STYLES = `
 }
 #hearth-overlay .job-rail-curtain--left.hearth-curtain {
   background-image:
-    radial-gradient(ellipse at 38% 28%, rgba(100, 200, 190, 0.1), transparent 55%),
-    linear-gradient(160deg, rgba(22, 12, 38, 0.5) 0%, rgba(8, 5, 14, 0.66) 100%),
+    linear-gradient(160deg, rgba(5, 3, 9, 0.46) 0%, rgba(2, 1, 4, 0.64) 100%),
     var(--hearth-door, none);
-  background-size: auto, auto, 185% 100%;
-  background-position: center, center, left center;
+  background-size: auto, 185% 100%;
+  background-position: center, left center;
   background-repeat: no-repeat;
 }
 #hearth-overlay .job-rail-curtain--right.hearth-curtain {
   background-image:
-    radial-gradient(ellipse at 62% 28%, rgba(100, 200, 190, 0.1), transparent 55%),
-    linear-gradient(160deg, rgba(8, 5, 14, 0.66) 0%, rgba(22, 12, 38, 0.5) 100%),
+    linear-gradient(160deg, rgba(2, 1, 4, 0.64) 0%, rgba(5, 3, 9, 0.46) 100%),
     var(--hearth-door, none);
-  background-size: auto, auto, 185% 100%;
-  background-position: center, center, right center;
+  background-size: auto, 185% 100%;
+  background-position: center, right center;
   background-repeat: no-repeat;
 }
 #hearth-overlay .hearth-curtain::after {
@@ -253,13 +251,13 @@ export const HEARTH_STYLES = `
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(120% 60% at 50% 30%, rgba(120, 210, 200, 0.16), transparent 60%);
+  background: radial-gradient(120% 60% at 50% 30%, rgba(120, 210, 200, 0.08), transparent 60%);
   mix-blend-mode: screen;
   animation: hearth-aurora 3.6s ease-in-out infinite;
 }
 @keyframes hearth-aurora {
-  0%, 100% { opacity: 0.35; transform: translateY(-4%); }
-  50%      { opacity: 0.7;  transform: translateY(4%); }
+  0%, 100% { opacity: 0.22; transform: translateY(-4%); }
+  50%      { opacity: 0.42; transform: translateY(4%); }
 }
 #hearth-overlay.is-opening .job-rail-curtain--left.hearth-curtain {
   animation: job-curtain-open-left 1.45s cubic-bezier(0.22, 0.78, 0.28, 1) forwards !important;
@@ -356,10 +354,7 @@ export const HEARTH_STYLES = `
 .hand-column {
   transition: transform 0.52s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.42s ease;
 }
-/* 플레이어 카드는 슬라이드 없이 그냥 비운다(캐릭터 미선택). */
-body.hearth-lobby .player-zone {
-  visibility: hidden;
-}
+/* 플레이어 카드는 로비에서도 그대로 노출한다(캐릭터 미선택 상태의 기본 카드). */
 /* 불씨 게이지: 상단 밖으로 올려 숨김 → 출발 시 위에서 내려온다(translateX(-50%) 유지). */
 body.hearth-lobby .ember-hud {
   transform: translate(-50%, -180%);
@@ -430,13 +425,13 @@ body.hearth-lobby #ingame-backdrop.is-out {
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 36%, #000 100%);
   mask-image: linear-gradient(90deg, transparent 0, #000 36%, #000 100%);
 }
-/* 일러스트 — 하단 68%에 배치. 상단은 grad가 덮고 텍스트가 올라간다(상하 반전 구성). */
+/* 일러스트 — 상단 정렬, 패널의 76%를 채워 하단부까지 크게 드러난다. */
 .hearth-inspector-art {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
-  height: 68%;
+  top: 0;
+  height: 76%;
   background:
     radial-gradient(circle at 54% 32%, rgba(255, 232, 168, 0.12), transparent 58%),
     repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 9px),
@@ -444,32 +439,33 @@ body.hearth-lobby #ingame-backdrop.is-out {
   background-size: cover;
   background-position: center top;
 }
-/* 어둠 그라데이션(역방향) — 상단은 짙은 남보라-블랙으로 채워 텍스트를 받치고,
-   하단 절반은 투명해 일러스트를 노출한다. art 위(z 우선)에 얹는다. */
+/* 하단 어둠 — 길고 완만한 단일 램프로 깔아 경계선을 없앤다. 완전 솔리드(#000)까지
+   가지 않고 최대 0.88에서 멈춰 '검은 레이어'가 도드라지지 않게 한다. */
 .hearth-inspector-grad {
   position: absolute;
   inset: 0;
   background: linear-gradient(
     180deg,
-    rgba(5, 3, 12, 1) 0%,
-    rgba(5, 3, 12, 0.92) 22%,
-    rgba(5, 3, 12, 0.5) 34%,
+    transparent 0%,
     transparent 46%,
-    transparent 100%
+    rgba(6, 4, 14, 0.3) 62%,
+    rgba(6, 4, 14, 0.64) 80%,
+    rgba(6, 4, 14, 0.88) 100%
   );
 }
-/* 텍스트 레이어 — 상단 정렬(위에서부터 배치). 마스크/배경 없음(글자는 투명화 영향 X). */
+/* 텍스트 레이어 — 하단 정렬이되 큰 하단 패딩으로 그라데이션 상단부(어둠이 막 짙어지는 곳)에
+   올려 배치한다. 마스크/배경 없음(글자는 투명화 영향 X). */
 .hearth-inspector-body {
   position: absolute;
   left: 0;
   right: 0;
-  top: 0;
-  min-height: 50%;
+  bottom: 0;
+  min-height: 55%;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: flex-end;
   gap: clamp(6px, 1.1vh, 12px);
-  padding: clamp(24px, 5vh, 70px) clamp(18px, 1.6vw, 28px) clamp(34px, 5vh, 56px) clamp(46px, 4.5vw, 66px);
+  padding: clamp(24px, 5vh, 70px) clamp(18px, 1.6vw, 28px) clamp(58px, 14vh, 150px) clamp(46px, 4.5vw, 66px);
 }
 .hearth-inspector-title {
   font-family: 'OkDanDan', Georgia, serif;

@@ -50,12 +50,15 @@ export class HearthScene {
   private shuttered = false
   /** 출발 1회만 런으로 넘어간다. */
   private departing = false
+  /** 대문이 열리기 전(고정 인트로 연출) 동안엔 hover 인스펙터를 막는다. */
+  private interactive = false
 
   enter(handlers: HearthHandlers): void {
     this.injectStyles()
     this.handlers = handlers
     this.shuttered = false
     this.departing = false
+    this.interactive = false
 
     const overlay = document.createElement('div')
     overlay.id = 'hearth-overlay'
@@ -129,6 +132,8 @@ export class HearthScene {
     window.setTimeout(() => this.overlay?.classList.add('is-opening'), 1700)
     window.setTimeout(() => {
       this.overlay?.querySelector<HTMLElement>('[data-hearth-station="adventure"]')?.classList.add('is-ignited')
+      // 대문이 다 열리고 모험이 점등된 뒤에야 hover 인스펙터를 허용한다(플레이어블 시작).
+      this.interactive = true
     }, 1700 + 1500)
   }
 
@@ -148,6 +153,8 @@ export class HearthScene {
   }
 
   private showInspector(source: HTMLElement): void {
+    // 인트로(대문 열림) 동안엔 막는다 — 플레이어블 상태에서만 정보창을 띄운다.
+    if (!this.interactive) return
     const insp = this.inspector
     if (!insp) return
     const title = source.dataset.inspectTitle ?? ''
@@ -226,9 +233,9 @@ export class HearthScene {
             `</button>`
         )
       } else {
+        // 잠긴 칸은 hover 인스펙터를 띄우지 않는다(data-inspect-* 생략). 일러스트만 깐다.
         cells.push(
-          `<div class="hearth-cell hearth-cell--locked${artClass}" aria-label="${name} · 잠김"` +
-            ` data-inspect-title="${name}" data-inspect-tag="잠김" data-inspect-desc="${desc}"${artAttr}${artStyle}>` +
+          `<div class="hearth-cell hearth-cell--locked${artClass}" aria-label="${name} · 잠김"${artStyle}>` +
             lock +
             `<span class="hearth-cell__name">${name}</span>` +
             `</div>`

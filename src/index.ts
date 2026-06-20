@@ -290,6 +290,8 @@ function syncRunModifiersToSpawner(): void {
 function enterHearth(): void {
   // 갓 게임을 켠 상태: 적·직업·유물 잔여 0. 빈 레일을 배경으로 거점 오버레이를 띄운다.
   resetForNewRun()
+  // 부팅 시 startGame이 띄운 시작 대사('역경 아래…')가 로비로 새지 않게 즉시 거둔다.
+  speechBubble.dismiss()
   inputLocked = true // 거점 동안 뒤쪽 보드 입력 잠금(입력은 거점 오버레이가 가짐)
   gameActive = false
   // 아직 캐릭터를 고르지 않았으므로 플레이어 존을 숨긴다(레이어는 유지, visibility만 off).
