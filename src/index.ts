@@ -4276,8 +4276,9 @@ function showGameOver(): void {
   `
   document.body.appendChild(overlay)
   document.getElementById('restart-btn')?.addEventListener('click', () => {
-    overlay.remove()
-    void startGame()
+    // 다시 시작은 새로고침과 동일하게 처리한다 — 언락 카드/드롭 풀/tier 보정 등 모든
+    // 런·메타 모듈 상태를 한 번에 완전 초기화해 잔여 상태가 새 런에 새지 않게 한다.
+    window.location.reload()
   })
 }
 
