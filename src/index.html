@@ -59,6 +59,12 @@
         box-sizing: border-box;
       }
 
+      /* 거점→인게임 전환에서 body 배경(이미지)을 끄는 순간 흰 바탕이 비치지 않도록
+         html에 어두운 바탕색을 깔아 둔다(검은 화면 페이드의 기반색). */
+      html {
+        background-color: #07040e;
+      }
+
       body {
         font-family: var(--font-family-primary);
         font-size: var(--font-size-base);

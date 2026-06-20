@@ -76,8 +76,10 @@ export const HEARTH_STYLES = `
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* 글자를 칸 하단 쪽으로 내린다(일러스트가 위로 더 드러나게). */
+  justify-content: flex-end;
   gap: clamp(4px, 0.8vh, 8px);
+  padding-bottom: clamp(8px, 1.8vh, 18px);
   border: 1px dashed var(--color-border-soft, #4a3a2a);
   background:
     repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.015) 0 6px, transparent 6px 12px);
@@ -137,8 +139,10 @@ export const HEARTH_STYLES = `
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* 글자를 칸 하단 쪽으로 내린다(촛불/일러스트가 위로 더 드러나게). */
+  justify-content: flex-end;
   gap: 8px;
+  padding-bottom: clamp(8px, 1.8vh, 18px);
   cursor: pointer;
   appearance: none;
   border: 1px solid var(--color-border-warm, #8b6f47);
@@ -229,7 +233,7 @@ export const HEARTH_STYLES = `
 #hearth-overlay .job-rail-curtain--left.hearth-curtain {
   background-image:
     radial-gradient(ellipse at 38% 28%, rgba(100, 200, 190, 0.1), transparent 55%),
-    linear-gradient(160deg, rgba(22, 12, 38, 0.78) 0%, rgba(8, 5, 14, 0.92) 100%),
+    linear-gradient(160deg, rgba(22, 12, 38, 0.5) 0%, rgba(8, 5, 14, 0.66) 100%),
     var(--hearth-door, none);
   background-size: auto, auto, 185% 100%;
   background-position: center, center, left center;
@@ -238,7 +242,7 @@ export const HEARTH_STYLES = `
 #hearth-overlay .job-rail-curtain--right.hearth-curtain {
   background-image:
     radial-gradient(ellipse at 62% 28%, rgba(100, 200, 190, 0.1), transparent 55%),
-    linear-gradient(160deg, rgba(8, 5, 14, 0.92) 0%, rgba(22, 12, 38, 0.78) 100%),
+    linear-gradient(160deg, rgba(8, 5, 14, 0.66) 0%, rgba(22, 12, 38, 0.5) 100%),
     var(--hearth-door, none);
   background-size: auto, auto, 185% 100%;
   background-position: center, center, right center;
@@ -426,12 +430,12 @@ body.hearth-lobby #ingame-backdrop.is-out {
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 36%, #000 100%);
   mask-image: linear-gradient(90deg, transparent 0, #000 36%, #000 100%);
 }
-/* 일러스트 — 상단 68%에 배치(이전 50%보다 크게). 하단은 grad가 덮는다. */
+/* 일러스트 — 하단 68%에 배치. 상단은 grad가 덮고 텍스트가 올라간다(상하 반전 구성). */
 .hearth-inspector-art {
   position: absolute;
   left: 0;
   right: 0;
-  top: 0;
+  bottom: 0;
   height: 68%;
   background:
     radial-gradient(circle at 54% 32%, rgba(255, 232, 168, 0.12), transparent 58%),
@@ -440,30 +444,30 @@ body.hearth-lobby #ingame-backdrop.is-out {
   background-size: cover;
   background-position: center top;
 }
-/* 어둠 그라데이션 — 상단 절반은 투명(일러스트 노출), 하단은 더 짙은 남보라-블랙으로 채운다.
-   art 위(z 우선)에 얹혀 일러스트 하단을 자연스럽게 어둠으로 녹인다. */
+/* 어둠 그라데이션(역방향) — 상단은 짙은 남보라-블랙으로 채워 텍스트를 받치고,
+   하단 절반은 투명해 일러스트를 노출한다. art 위(z 우선)에 얹는다. */
 .hearth-inspector-grad {
   position: absolute;
   inset: 0;
   background: linear-gradient(
     180deg,
-    transparent 0%,
-    transparent 44%,
-    rgba(5, 3, 12, 0.5) 56%,
-    rgba(5, 3, 12, 0.92) 68%,
-    rgba(5, 3, 12, 1) 78%
+    rgba(5, 3, 12, 1) 0%,
+    rgba(5, 3, 12, 0.92) 22%,
+    rgba(5, 3, 12, 0.5) 34%,
+    transparent 46%,
+    transparent 100%
   );
 }
-/* 텍스트 레이어 — 마스크/배경 없음(글자는 좌측 투명화 영향을 받지 않는다). */
+/* 텍스트 레이어 — 상단 정렬(위에서부터 배치). 마스크/배경 없음(글자는 투명화 영향 X). */
 .hearth-inspector-body {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+  top: 0;
   min-height: 50%;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: clamp(6px, 1.1vh, 12px);
   padding: clamp(24px, 5vh, 70px) clamp(18px, 1.6vw, 28px) clamp(34px, 5vh, 56px) clamp(46px, 4.5vw, 66px);
 }
