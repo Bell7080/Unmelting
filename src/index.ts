@@ -2323,6 +2323,14 @@ async function startGame(): Promise<void> {
   turnManager.setTurnMode('normal_turn')
   bossController.reset()
   clearChainTimeline()
+  // 런 카드 풀(해금팩/삭제팩으로 바뀐 단일 해금·밴)과 확률팩 tier 보정을 메타 기준으로 되돌려,
+  // 새로고침과 동일하게 언락 카드/드롭 풀까지 완전 초기화한다.
+  runCardPool.reset(HAND_CARD_IDS, metaUnlockedCardIds)
+  DropSystem.setAllowedPool(runCardPool.snapshot().unlocked)
+  DropSystem.setTier1CardBoosts(gameState.enhancements.tier1CardBoosts)
+  DropSystem.setTier1JobPoolBoosts(gameState.enhancements.tier1JobPoolBoosts)
+  boardRenderer.setLockedCardIds([...runCardPool.snapshot().locked, ...runCardPool.snapshot().banned])
+  boardRenderer.setLockedRecipeIds(RECIPES.filter((r) => r.runLocked).map((r) => r.id))
   eventSpawnCtrl.reset()
   pendingEventDoor = false
   finalAscentStarlightRuleActive = false
@@ -4276,9 +4284,10 @@ function showGameOver(): void {
   `
   document.body.appendChild(overlay)
   document.getElementById('restart-btn')?.addEventListener('click', () => {
-    // 다시 시작은 새로고침과 동일하게 처리한다 — 언락 카드/드롭 풀/tier 보정 등 모든
-    // 런·메타 모듈 상태를 한 번에 완전 초기화해 잔여 상태가 새 런에 새지 않게 한다.
-    window.location.reload()
+    // 새로고침 대신 startGame()으로 초기화한다(추후 로비 시스템 연동 대비). startGame이
+    // 카드 풀/드롭 풀/도감 잠금까지 메타 기준으로 되돌려 새로고침과 같은 완전 초기화를 만든다.
+    overlay.remove()
+    void startGame()
   })
 }
 
