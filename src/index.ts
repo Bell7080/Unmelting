@@ -263,6 +263,8 @@ function enterHearth(): void {
   resetForNewRun()
   inputLocked = true // 거점 동안 뒤쪽 보드 입력 잠금(입력은 거점 오버레이가 가짐)
   gameActive = false
+  // 아직 캐릭터를 고르지 않았으므로 플레이어 존을 숨긴다(레이어는 유지, visibility만 off).
+  document.body.classList.add('hearth-lobby')
   render()
   hearthScene.enter({
     // 출발 버튼 → startGame이 다시 초기화 + 직업 선택 + 보드 채움을 수행한다.
@@ -2367,6 +2369,8 @@ function resetForNewRun(): void {
 
 async function startGame(): Promise<void> {
   resetForNewRun()
+  // 런이 시작되면 캐릭터가 정해지므로 거점 숨김을 해제해 플레이어 존을 되살린다.
+  document.body.classList.remove('hearth-lobby')
   const poolSnapshot = runCardPool.snapshot()
   // 메타 사당 해금(영구) + 런 카드풀(임시) 이중 구조를 플레이 로그로 명시한다.
   recordNotice(`카드 풀 초기화: 메타해금 ${poolSnapshot.unlocked.length} / 잠김 ${poolSnapshot.locked.length} / 금지 ${poolSnapshot.banned.length}`, 'info')

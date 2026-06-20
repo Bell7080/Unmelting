@@ -251,4 +251,12 @@ export const HEARTH_STYLES = `
   transform: scale(0.96);
   filter: brightness(1.1);
 }
+
+/* ── 거점 동안 플레이어 캐릭터/컨트롤 숨김 ──────────────────────────────
+   아직 캐릭터를 고르지 않았으므로 보드 레이어는 살려두되 플레이어 존만 끈다.
+   display:none이 아니라 visibility로 레이아웃을 유지해, 거점이 정렬하는
+   레일 rect가 흔들리지 않게 한다(캐릭터는 설정 레이어에서 선택 시 등장). */
+body.hearth-lobby .player-zone {
+  visibility: hidden;
+}
 `
