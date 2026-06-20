@@ -225,12 +225,12 @@ export class HearthScene {
     if (!rail || !insp) return
     const r = rail.getBoundingClientRect()
     const rightMargin = Math.max(12, window.innerWidth * 0.02)
-    // 레일 가로 중앙(우측 절반의 시작)부터 화면 우측 끝까지.
-    const left = r.left + r.width * 0.5
+    // 가장 우측 칸의 절반(≈레일 폭의 5/6 지점)부터 화면 우측 끝까지만 침범한다.
+    const left = r.left + r.width * 0.82
     const right = window.innerWidth - rightMargin
     insp.style.left = `${left}px`
     insp.style.top = `${r.top}px`
-    insp.style.width = `${Math.max(220, right - left)}px`
+    insp.style.width = `${Math.max(200, right - left)}px`
     insp.style.height = `${r.height}px`
   }
 

@@ -316,17 +316,13 @@ body.hearth-lobby .hand-column {
   pointer-events: none;
 }
 .hearth-inspector-card {
-  display: flex;
-  flex-direction: column;
+  position: relative;
   width: 100%;
   height: 100%;
   overflow: hidden;
-  border-radius: 0 16px 16px 0;
-  border: 0;
-  background: linear-gradient(180deg, rgba(26, 18, 38, 0.94), rgba(8, 5, 14, 0.97));
-  box-shadow: -10px 0 44px rgba(0, 0, 0, 0.5);
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 48px, #000 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 48px, #000 100%);
+  /* 카드 경계감 제거: 라운드/보더/그림자 없음. 좌측만 마스크로 녹여 레일 위에 자연스럽게 얹힌다. */
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 40px, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 40px, #000 100%);
   opacity: 0;
   transform: translateY(14px);
   transition: opacity 0.28s ease, transform 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
@@ -335,29 +331,29 @@ body.hearth-lobby .hand-column {
   opacity: 1;
   transform: translateY(0);
 }
-/* 임시 일러스트 플레이스홀더(실제 아트는 background-image로 교체). 상단 절반 이상 차지. */
+/* 풀 일러스트(패널 전체 배경). 실제 아트는 background-image로 교체. */
 .hearth-inspector-art {
-  position: relative;
-  flex: 0 0 52%;
-  background:
-    radial-gradient(circle at 56% 36%, rgba(255, 232, 168, 0.12), transparent 60%),
-    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 9px),
-    linear-gradient(180deg, rgba(40, 28, 52, 0.92), rgba(12, 8, 18, 0.96));
-}
-.hearth-inspector-art::after {
-  /* 일러스트 하단을 본문으로 자연스럽게 녹인다(직업 카드 scrim 문법). */
-  content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, transparent 38%, rgba(8, 5, 14, 0.86) 86%, rgba(8, 5, 14, 0.98) 100%);
+  background:
+    radial-gradient(circle at 54% 32%, rgba(255, 232, 168, 0.12), transparent 58%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 9px),
+    linear-gradient(160deg, rgba(44, 30, 56, 0.95), rgba(12, 8, 18, 0.98));
+  background-size: cover;
+  background-position: center;
 }
+/* 하단부를 어둡게 죽이는 그라데이션 위에 밝은 글씨를 올린다(직업 카드 scrim 문법). */
 .hearth-inspector-body {
-  flex: 1 1 auto;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
-  gap: clamp(5px, 1vh, 10px);
-  /* 좌측 패딩은 마스크 페이드(좌 48px)보다 넓게 잡아 제목/설명이 흐려지지 않게 한다. */
-  padding: clamp(12px, 1.8vh, 18px) clamp(16px, 1.4vw, 24px) clamp(16px, 2.2vh, 24px) clamp(56px, 5.5vw, 78px);
+  gap: clamp(5px, 1vh, 9px);
+  /* 위쪽 큰 패딩 = 그라데이션이 자연스럽게 시작되는 여유. 좌측 패딩은 마스크(40px)보다 넓게. */
+  padding: clamp(48px, 9vh, 96px) clamp(16px, 1.4vw, 24px) clamp(16px, 2.2vh, 24px) clamp(46px, 4.5vw, 66px);
+  background: linear-gradient(180deg, transparent 0%, rgba(8, 5, 14, 0.5) 30%, rgba(6, 4, 11, 0.9) 72%, rgba(5, 3, 10, 0.97) 100%);
 }
 .hearth-inspector-title {
   font-family: 'OkDanDan', Georgia, serif;
