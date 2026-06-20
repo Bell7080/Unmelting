@@ -320,9 +320,6 @@ body.hearth-lobby .hand-column {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  /* 카드 경계감 제거: 라운드/보더/그림자 없음. 좌측만 마스크로 녹여 레일 위에 자연스럽게 얹힌다. */
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 40px, #000 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 40px, #000 100%);
   opacity: 0;
   transform: translateY(14px);
   transition: opacity 0.28s ease, transform 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
@@ -331,7 +328,10 @@ body.hearth-lobby .hand-column {
   opacity: 1;
   transform: translateY(0);
 }
-/* 풀 일러스트(패널 전체 배경). 실제 아트는 background-image로 교체. */
+/* 풀 일러스트(패널 전체 배경). 실제 아트는 background-image로 교체.
+   좌측으로 갈수록 투명해지는 마스크는 일러스트에만 건다(하단 검정 설명 그라데이션은
+   .hearth-inspector-body가 따로 깔리므로 영향 없음). 투명 범위를 넓게 잡아 좌측 약
+   42%까지 서서히 녹여 레일 위에 자연스럽게 얹힌다. */
 .hearth-inspector-art {
   position: absolute;
   inset: 0;
@@ -341,6 +341,8 @@ body.hearth-lobby .hand-column {
     linear-gradient(160deg, rgba(44, 30, 56, 0.95), rgba(12, 8, 18, 0.98));
   background-size: cover;
   background-position: center;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
 }
 /* 하단부를 어둡게 죽이는 그라데이션 위에 밝은 글씨를 올린다(직업 카드 scrim 문법). */
 .hearth-inspector-body {
@@ -348,14 +350,14 @@ body.hearth-lobby .hand-column {
   left: 0;
   right: 0;
   bottom: 0;
-  /* 하단부터 약 절반을 차지하는 강한 검은 그라데이션 위에 밝은 글씨를 올린다. */
-  min-height: 50%;
+  /* 하단부터 약 3/4를 차지하는 강한 검은 그라데이션 위에 밝은 글씨를 올린다. */
+  min-height: 75%;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   gap: clamp(6px, 1.1vh, 12px);
-  padding: clamp(24px, 5vh, 70px) clamp(18px, 1.6vw, 28px) clamp(20px, 2.8vh, 32px) clamp(46px, 4.5vw, 66px);
-  background: linear-gradient(180deg, transparent 0%, rgba(6, 4, 11, 0.45) 18%, rgba(5, 3, 10, 0.88) 46%, rgba(3, 2, 7, 1) 100%);
+  padding: clamp(24px, 5vh, 70px) clamp(18px, 1.6vw, 28px) clamp(34px, 5vh, 56px) clamp(46px, 4.5vw, 66px);
+  background: linear-gradient(180deg, transparent 0%, rgba(6, 4, 11, 0.4) 14%, rgba(5, 3, 10, 0.85) 40%, rgba(3, 2, 7, 1) 100%);
 }
 .hearth-inspector-title {
   font-family: 'OkDanDan', Georgia, serif;
