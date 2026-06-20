@@ -149,6 +149,14 @@ export class BossEventController {
     private readonly inject: BossInjected,
   ) {}
 
+  /** 런 리셋(게임오버 후 다시 시작) 시 보스 진행 상태를 비운다. 죽음이 보스전 도중
+   *  발생했어도 다음 런에서 잔여 eventState/rewardState가 새 게임을 보스로 오인하지 않게 한다. */
+  reset(): void {
+    this.eventState = null
+    this.rewardState = null
+    this.postPhaseHandLocked = false
+  }
+
   // ---- 공개 흐름 메서드 -------------------------------------------------------
 
   /** 30F 보스 이벤트 실행. closeShopAndResume 제단 EXIT 분기에서 호출한다. */

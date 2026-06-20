@@ -2308,6 +2308,21 @@ async function startGame(): Promise<void> {
     if (gameState.character.hasRelic('blood-pack')) void applyBloodPackHit(amount)
   }
   cardSpawner.resetRelicModifiers()
+  // 시련 영속 modifier(적 HP/공격력·함정 피해·보물 배율)도 런마다 비운다.
+  // resetRelicModifiers는 유물/직업 보정만 지우므로, 여기서 runModifiers를 초기화하고
+  // 스폰어에 0을 동기화하지 않으면 이전 런의 시련 버프가 다음 런 적/함정에 남는다.
+  runModifiers.enemyHpBonus = 0
+  runModifiers.enemyDamageBonus = 0
+  runModifiers.trapDamageBonus = 0
+  runModifiers.treasureSpawnScale = 1
+  syncRunModifiersToSpawner()
+  // 보스/제단 게이트·시련·턴 모드·보스 컨트롤러 상태도 새 런을 위해 초기화한다.
+  altarBossPending = false
+  altarBossDefeated = false
+  trialPending = false
+  turnManager.setTurnMode('normal_turn')
+  bossController.reset()
+  clearChainTimeline()
   eventSpawnCtrl.reset()
   pendingEventDoor = false
   finalAscentStarlightRuleActive = false
@@ -3510,6 +3525,8 @@ async function runSimulatedEnemyPhase(): Promise<void> {
   // 동일하게 하강·리필(+재그룹/개화/폭탄 점화)을 돌려 빈 레일을 메운다. 턴 카운터는 올리지 않는다.
   if (!gameState.isGameOver) {
     await runPreparationRefreshAfterFieldEffects()
+    // 족쇄/레바테인의 시뮬레이션 1턴 흐름도 실제 턴처럼 포자 번식 카운트다운을 진행시킨다.
+    await resolvePostDropSporeSpread()
   }
 }
 
