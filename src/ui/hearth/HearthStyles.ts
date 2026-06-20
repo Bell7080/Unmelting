@@ -276,7 +276,6 @@ export const HEARTH_STYLES = `
 .ember-hud,
 .left-panel .turn-brand,
 .left-panel .score-panel-total,
-.left-panel .score-log-list,
 .hand-column {
   transition: transform 0.52s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.42s ease;
 }
@@ -290,13 +289,16 @@ body.hearth-lobby .ember-hud {
   opacity: 0;
   pointer-events: none;
 }
-/* 좌측 런 UI(턴/불빛/로그)는 왼쪽 밖으로, 화폐만 남긴다. */
+/* 좌측 런 UI(턴/불빛)는 왼쪽 밖으로, 화폐만 남긴다. */
 body.hearth-lobby .left-panel .turn-brand,
-body.hearth-lobby .left-panel .score-panel-total,
-body.hearth-lobby .left-panel .score-log-list {
+body.hearth-lobby .left-panel .score-panel-total {
   transform: translateX(-135%);
   opacity: 0;
   pointer-events: none;
+}
+/* 로그는 거점에서 흐름에서 제거(display)해 그 자리에 퀘스트 딱지가 정확히 들어오게 한다. */
+body.hearth-lobby .left-panel .score-log-list {
+  display: none;
 }
 /* 우측 손패/콤보게이지/확률은 오른쪽 밖으로(이 자리에 인스펙터가 들어갈 예정). */
 body.hearth-lobby .hand-column {

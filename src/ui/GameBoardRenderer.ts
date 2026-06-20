@@ -765,7 +765,39 @@ export class GameBoardRenderer {
         <section class="score-log-list" aria-label="Action history">
           ${logs}
         </section>
+        ${this.renderLobbyQuests()}
       </aside>
+    `
+  }
+
+  /**
+   * 거점 좌측 패널의 퀘스트(의뢰) 딱지 — 로그 자리에 노출된다(런에서는 CSS로 숨김).
+   * 현재는 정적 전시 + 보상 미지급. 등급(중요한/적당한/사소한)은 색으로 중요도를 표현하고,
+   * 세부(목표/보상/기한)는 추후 우측 인스펙터(hover)로 띄운다. 배치/규칙은 기획서 §12-5.
+   * `<details>`로 화살표 접기/펼치기를 네이티브 처리한다(의뢰가 많아지면 접어 둘 수 있게).
+   */
+  private renderLobbyQuests(): string {
+    const quests: { tier: 'major' | 'medium' | 'minor'; name: string; cur: number; goal: number }[] = [
+      { tier: 'major', name: '중요한 의뢰', cur: 0, goal: 100 },
+      { tier: 'medium', name: '적당한 의뢰', cur: 0, goal: 10 },
+      { tier: 'minor', name: '사소한 의뢰', cur: 0, goal: 1 },
+      { tier: 'minor', name: '사소한 의뢰', cur: 0, goal: 1 },
+      { tier: 'minor', name: '사소한 의뢰', cur: 0, goal: 1 },
+    ]
+    const tickets = quests
+      .map(
+        (q) => `
+          <li class="quest-ticket quest-ticket--${q.tier}" data-quest="${q.name}">
+            <span class="quest-ticket-name">${q.name}</span>
+            <span class="quest-ticket-count">${q.cur}/${q.goal}</span>
+          </li>`
+      )
+      .join('')
+    return `
+      <details class="quest-list" open aria-label="의뢰">
+        <summary class="quest-list-head"><span class="quest-list-title">의뢰</span><span class="quest-arrow" aria-hidden="true"></span></summary>
+        <ul class="quest-tickets">${tickets}</ul>
+      </details>
     `
   }
 
