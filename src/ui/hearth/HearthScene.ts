@@ -225,13 +225,14 @@ export class HearthScene {
     if (!rail || !insp) return
     const r = rail.getBoundingClientRect()
     const rightMargin = Math.max(12, window.innerWidth * 0.02)
-    // 가장 우측 칸의 절반(≈레일 폭의 5/6 지점)부터 화면 우측 끝까지만 침범한다.
+    // 가로: 가장 우측 칸의 절반(≈레일 폭의 5/6 지점)부터 화면 우측 끝까지만 침범한다.
+    // 세로: 레일이 아니라 화면 위아래 끝(뷰포트 전체 높이)을 다 채운다.
     const left = r.left + r.width * 0.82
     const right = window.innerWidth - rightMargin
     insp.style.left = `${left}px`
-    insp.style.top = `${r.top}px`
+    insp.style.top = `0px`
     insp.style.width = `${Math.max(200, right - left)}px`
-    insp.style.height = `${r.height}px`
+    insp.style.height = `${window.innerHeight}px`
   }
 
   /** 상점/직업 선택과 동일하게 셸을 실제 레일 rect에 고정한다. */
