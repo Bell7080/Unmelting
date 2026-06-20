@@ -348,14 +348,14 @@ body.hearth-lobby .hand-column {
   left: 0;
   right: 0;
   bottom: 0;
-  /* 하단부터 약 1/3을 차지하는 강한 검은 그라데이션 위에 밝은 글씨를 올린다. */
-  min-height: 34%;
+  /* 하단부터 약 절반을 차지하는 강한 검은 그라데이션 위에 밝은 글씨를 올린다. */
+  min-height: 50%;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   gap: clamp(6px, 1.1vh, 12px);
   padding: clamp(24px, 5vh, 70px) clamp(18px, 1.6vw, 28px) clamp(20px, 2.8vh, 32px) clamp(46px, 4.5vw, 66px);
-  background: linear-gradient(180deg, transparent 0%, rgba(6, 4, 11, 0.55) 24%, rgba(5, 3, 10, 0.92) 60%, rgba(3, 2, 7, 1) 100%);
+  background: linear-gradient(180deg, transparent 0%, rgba(6, 4, 11, 0.45) 18%, rgba(5, 3, 10, 0.88) 46%, rgba(3, 2, 7, 1) 100%);
 }
 .hearth-inspector-title {
   font-family: 'OkDanDan', Georgia, serif;
