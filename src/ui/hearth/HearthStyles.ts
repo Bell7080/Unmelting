@@ -329,9 +329,8 @@ body.hearth-lobby .hand-column {
   transform: translateY(0);
 }
 /* 풀 일러스트(패널 전체 배경). 실제 아트는 background-image로 교체.
-   좌측으로 갈수록 투명해지는 마스크는 일러스트에만 건다(하단 검정 설명 그라데이션은
-   .hearth-inspector-body가 따로 깔리므로 영향 없음). 투명 범위를 넓게 잡아 좌측 약
-   42%까지 서서히 녹여 레일 위에 자연스럽게 얹힌다. */
+   마스크: 좌측 42%까지 서서히 페이드(일러스트+하단 암막 모두 포함).
+   ::after: 일러스트 하단 37.5%를 검은 레이어로 덮어 텍스트 영역과 자연스럽게 이어지도록 한다. */
 .hearth-inspector-art {
   position: absolute;
   inset: 0;
@@ -344,7 +343,16 @@ body.hearth-lobby .hand-column {
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
   mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
 }
-/* 하단부를 어둡게 죽이는 그라데이션 위에 밝은 글씨를 올린다(직업 카드 scrim 문법). */
+/* 일러스트 하단 37.5% 암막 — 텍스트 스크림과 경계 없이 이어진다. */
+.hearth-inspector-art::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 37.5%;
+  background: linear-gradient(180deg, transparent 0%, rgba(3, 2, 7, 0.88) 55%, rgb(3, 2, 7) 100%);
+  pointer-events: none;
+}
+/* 하단 스크림 — 일러스트와 같은 좌측 페이드 마스크를 공유해 경계선을 없앤다. */
 .hearth-inspector-body {
   position: absolute;
   left: 0;
@@ -358,6 +366,8 @@ body.hearth-lobby .hand-column {
   gap: clamp(6px, 1.1vh, 12px);
   padding: clamp(24px, 5vh, 70px) clamp(18px, 1.6vw, 28px) clamp(34px, 5vh, 56px) clamp(46px, 4.5vw, 66px);
   background: linear-gradient(180deg, transparent 0%, rgba(6, 4, 11, 0.4) 14%, rgba(5, 3, 10, 0.85) 40%, rgba(3, 2, 7, 1) 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
 }
 .hearth-inspector-title {
   font-family: 'OkDanDan', Georgia, serif;
