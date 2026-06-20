@@ -21,7 +21,6 @@ export interface JobDef {
   // Numeric effects applied at run start:
   healthBonus: number
   damageBonus: number
-  coinBonus: number
   spawnEnemy: number
   spawnTreasure: number
   spawnFlower: number
@@ -108,7 +107,6 @@ export const JOBS: JobDef[] = [
     flavor: '아무것도 가지지 못했지만 아무것도 잃지 않은 자.',
     healthBonus: 0,
     damageBonus: 0,
-    coinBonus: 0,
     spawnEnemy: 0,
     spawnTreasure: 0,
     spawnFlower: 0,
@@ -128,7 +126,6 @@ export const JOBS: JobDef[] = [
     flavor: '노력과 결실은 반비례하는 법.',
     healthBonus: 5,
     damageBonus: 0,
-    coinBonus: 0,
     spawnEnemy: 15,
     spawnTreasure: 0,
     spawnFlower: 0,
@@ -148,7 +145,6 @@ export const JOBS: JobDef[] = [
     flavor: '지식을 탐구하고 빛을 찾으리.',
     healthBonus: -5,
     damageBonus: 1,
-    coinBonus: 0,
     spawnEnemy: 10,
     spawnTreasure: 0,
     spawnFlower: 0,
@@ -168,7 +164,6 @@ export const JOBS: JobDef[] = [
     flavor: '인간의 탐욕은 그 끝을 모르고.',
     healthBonus: -10,
     damageBonus: 0,
-    coinBonus: 0,
     spawnEnemy: 0,
     spawnTreasure: 5,
     spawnFlower: 0,
@@ -188,7 +183,6 @@ export const JOBS: JobDef[] = [
     flavor: '세상의 빛이 꺼진다 할지라도.',
     healthBonus: 0,
     damageBonus: 0,
-    coinBonus: 0,
     spawnEnemy: 0,
     spawnTreasure: 0,
     spawnFlower: 10,
@@ -208,7 +202,6 @@ export const JOBS: JobDef[] = [
     flavor: '혼란과 절망 속에서 드디어 웃는구나.',
     healthBonus: 0,
     damageBonus: 0,
-    coinBonus: 0,
     spawnEnemy: -10,
     spawnTreasure: 10,
     spawnFlower: 0,
@@ -229,7 +222,6 @@ export const JOBS: JobDef[] = [
     flavor: '위태로운 시련 앞에 선 죄수여, 빛을 밝혀라.',
     healthBonus: 10,
     damageBonus: 0,
-    coinBonus: 0,
     spawnEnemy: 15,
     spawnTreasure: 0,
     spawnFlower: 0,

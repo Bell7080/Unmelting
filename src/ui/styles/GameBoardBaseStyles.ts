@@ -124,7 +124,7 @@ export const GAME_BOARD_BASE_STYLES = `
    a region without separating it from the rest of the candlelit room. */
 .score-panel {
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto 1fr;
   gap: 10px;
   min-height: 0;
   padding: 12px;

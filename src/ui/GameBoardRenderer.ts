@@ -281,6 +281,8 @@ export class GameBoardRenderer {
    *  their own last rendered value so full re-renders can still count from
    *  the previous visible number instead of jumping straight to the model. */
   private displayedHudCounters = new Map<string, number>()
+  /** 현재 렌더된 보스의 최대 HP. boss-hp 카운터 롤링 중 막대 폭을 다시 계산할 때 쓴다. */
+  private bossHpMax = 1
   /** In-flight counter rolls keyed by stable element identity ('score',
    *  'coin', `hud:<key>`). The roll lifetime can span re-renders: each
    *  render's innerHTML wipe orphans the previous span, and this map is what
@@ -717,14 +719,21 @@ export class GameBoardRenderer {
     // final target before animateRenderedResourceCounters resumes the roll.
     const activeScoreAnim = this.activeCounterAnimations.get('score')
     const activeCoinAnim = this.activeCounterAnimations.get('coin')
+    // Safety net: roll from the previously displayed value on ANY real change,
+    // not only when a caller remembered to bump the pulse key. 불빛/화폐를 바꾸는
+    // 새 경로가 펄스키 갱신을 빠뜨려도 숫자가 스냅하지 않고 굴러가게 한다. 스파클/팝
+    // 클래스는 펄스키 게이트(scoreIncreasing 등)에 그대로 두므로 무관한 렌더에서
+    // 유령 롤링/팝이 생기지 않는다(직전 렌더 끝에서 displayed=score로 맞춰지기 때문).
+    const scoreNeedsRoll = this.hasRendered && this.displayedScoreValue !== scorePanel.score
+    const coinNeedsRoll = this.hasRendered && this.displayedCoinValue !== scorePanel.coins
     const renderedScore = activeScoreAnim
       ? this.computeActiveCounterValue(activeScoreAnim)
-      : scoreCounting
+      : scoreNeedsRoll
         ? this.displayedScoreValue
         : scorePanel.score
     const renderedCoins = activeCoinAnim
       ? this.computeActiveCounterValue(activeCoinAnim)
-      : coinCounting
+      : coinNeedsRoll
         ? this.displayedCoinValue
         : scorePanel.coins
     this.previousScorePulseKey = scorePanel.scorePulseKey
@@ -753,10 +762,48 @@ export class GameBoardRenderer {
             ${renderedCoins.toLocaleString()} $
           </div>
         </section>
-        <section class="score-log-list" aria-label="Action history">
-          ${logs}
-        </section>
+        <div class="left-swap">
+          <section class="score-log-list" aria-label="Action history">
+            ${logs}
+          </section>
+          ${this.renderLobbyQuests()}
+        </div>
       </aside>
+    `
+  }
+
+  /**
+   * 거점 좌측 패널의 퀘스트(의뢰) 딱지 — 로그 자리에 노출된다(런에서는 CSS로 숨김).
+   * 현재는 정적 전시 + 보상 미지급. 등급(중요한/적당한/사소한)은 색으로 중요도를 표현하고,
+   * 세부(목표/보상/기한)는 추후 우측 인스펙터(hover)로 띄운다. 배치/규칙은 기획서 §12-5.
+   * `<details>`로 화살표 접기/펼치기를 네이티브 처리한다(의뢰가 많아지면 접어 둘 수 있게).
+   */
+  private renderLobbyQuests(): string {
+    const quests: { tier: 'major' | 'medium' | 'minor'; name: string; cur: number; goal: number }[] = [
+      { tier: 'major', name: '중요한 의뢰', cur: 0, goal: 100 },
+      { tier: 'medium', name: '적당한 의뢰', cur: 0, goal: 10 },
+      { tier: 'minor', name: '사소한 의뢰', cur: 0, goal: 1 },
+      { tier: 'minor', name: '사소한 의뢰', cur: 0, goal: 1 },
+      { tier: 'minor', name: '사소한 의뢰', cur: 0, goal: 1 },
+    ]
+    // 등급 라벨 — 인스펙터 태그에 중요도+진행도를 함께 노출한다.
+    const tierLabel: Record<'major' | 'medium' | 'minor', string> = { major: '중요', medium: '적당', minor: '사소' }
+    const tickets = quests
+      .map(
+        (q) => `
+          <li class="quest-ticket quest-ticket--${q.tier}" data-quest="${q.name}"
+              data-inspect-title="${q.name}" data-inspect-tag="${tierLabel[q.tier]} 의뢰 · ${q.cur}/${q.goal}"
+              data-inspect-desc="세부 목표와 보상은 준비 중입니다.">
+            <span class="quest-ticket-name">${q.name}</span>
+            <span class="quest-ticket-count">${q.cur}/${q.goal}</span>
+          </li>`
+      )
+      .join('')
+    return `
+      <details class="quest-list" open aria-label="의뢰">
+        <summary class="quest-list-head"><span class="quest-list-title">의뢰</span><span class="quest-arrow" aria-hidden="true"></span></summary>
+        <ul class="quest-tickets">${tickets}</ul>
+      </details>
     `
   }
 
@@ -975,8 +1022,8 @@ export class GameBoardRenderer {
     } else if (card.type === CardType.TREASURE && card.treasureKind === 'starlight') {
       // 90~100층 별빛은 손패 보상이 아닌 턴 열쇠임을 카드 자체에서 즉시 읽히게 한다.
       stats = `<div class="card-stats group-note treasure-group-note starlight-note">${sparkleIcon()}<span>턴 +1</span></div>`
-    } else if (card.type === CardType.TREASURE && (card.groupCount > 1 || card.treasureKind === 'goldenChest')) {
-      // 보스 보상 카드는 개별 효과 설명을, 일반/황금 상자는 실제 드롭 수를 표시한다.
+    } else if (card.type === CardType.TREASURE) {
+      // 일반·황금 상자 모두 1/2/3칸 동일하게 실제 드롭 수를 라벨로 표시한다(보스 보상은 효과 설명).
       const safeSpan = Math.min(3, Math.max(1, card.groupCount))
       let dropCount: number
       if (card.treasureKind === 'goldenChest') {
@@ -1049,7 +1096,12 @@ export class GameBoardRenderer {
     const sprite = spriteForCard(card)
     const hp = card.getHealth()
     const maxHp = card.enemyHealthTotal || card.baseHealth || hp
-    const hpPct = Math.max(0, Math.min(100, (hp / Math.max(1, maxHp)) * 100))
+    // 보스 HP 막대도 플레이어 HP처럼 롤링 중인 표시값으로 폭을 잡아, 숫자가
+    // 띠리링 깎이는 동안 막대가 한 번에 스냅하지 않도록 한다. maxHp는
+    // syncHudCounterLinkedVisuals가 매 프레임 막대 폭을 다시 계산할 때 쓰므로 저장한다.
+    this.bossHpMax = Math.max(1, maxHp)
+    const visualHp = this.hudCounterVisibleStartValue('boss-hp', hp)
+    const hpPct = Math.max(0, Math.min(100, (visualHp / this.bossHpMax) * 100))
     const atk = card.getDamage()
     // waxKnight의 밀랍 방패는 플레이어 HP 영역처럼 HP 게이지 좌상단에 붙여
     // 체력/방패를 같은 시선 흐름에서 읽게 한다.
@@ -2827,7 +2879,6 @@ export class GameBoardRenderer {
     }
     if (job.healthBonus > 0) tasks.push(this.animateResourceTrail(origin, this.findResourceTrailTarget('health'), 1, 'health-gain'))
     if (job.damageBonus > 0) tasks.push(this.animateResourceTrail(origin, this.findResourceTrailTarget('attack'), 1, 'attack-gain'))
-    if (job.coinBonus > 0) tasks.push(this.animateResourceTrail(origin, this.findResourceTrailTarget('coin'), 1, 'treasure-gain'))
 
     if (tasks.length > 0) {
       ghost.classList.add('is-emitting')
@@ -5289,7 +5340,7 @@ export class GameBoardRenderer {
       <div class="ember-hud" aria-label="Ember status">
         <div class="ember-hud-inner">
           <div class="ember-line">
-            <span class="ember-icon">${flameIcon()}</span>
+            <span class="ember-icon ember-flame ember-flame--${tier}" aria-hidden="true"><i class="ember-flame-body"></i></span>
             <div class="ember-bar">
               <div class="ember-bar-fill ember-tier-${tier}" style="width: ${pct}%"></div>
               <div class="ember-atk1-line" style="left: ${atk1LinePct.toFixed(1)}%" title="이 아래로 내려가면 적 공격력 +1, 적이 먼저 공격합니다" aria-hidden="true"></div>
@@ -6369,6 +6420,15 @@ export class GameBoardRenderer {
     await this.animateResourceTrail(sourceRect, turnBrand, 1, 'starlight')
   }
 
+  /** 100턴 초과분 별빛 소멸 연출: 수집(턴 +1)하지 않고 그 자리에서 빛으로 흩어져 사라진다.
+   *  fireStarlightToTurn과 달리 턴 브랜드로 가는 트레일이 없다(턴을 올리지 않으므로). */
+  async dissolveStarlight(sourceRect: DOMRect): Promise<void> {
+    const cx = sourceRect.left + sourceRect.width / 2
+    const cy = sourceRect.top + sourceRect.height / 2
+    SquareBurst.playAt(cx, cy, 'starlight', { count: 20, spread: 130, duration: 520 })
+    await new Promise((r) => window.setTimeout(r, 320))
+  }
+
   /** Find a hand slot element by index for burst placement. */
   findHandSlotElement(slotIndex: number): HTMLElement | null {
     return this.boardElement.querySelector<HTMLElement>(
@@ -7324,6 +7384,12 @@ export class GameBoardRenderer {
    *  displayed value so decreases (HP damage, ember decay, gauge spend) drain
    *  one visible step at a time instead of snapping their bars/ticks. */
   private syncHudCounterLinkedVisuals(key: string, value: number): void {
+    // 보스 HP 막대는 캐릭터가 아니라 필드 보스 카드 소유라 character 가드보다 먼저 처리한다.
+    if (key === 'boss-hp') {
+      const fill = this.boardElement.querySelector<HTMLElement>('.boss-face-hpbar-fill')
+      if (fill) fill.style.width = `${Math.max(0, Math.min(100, (value / this.bossHpMax) * 100))}%`
+      return
+    }
     const character = this.currentGameState?.getCharacter()
     if (!character) return
     if (key === 'health' || key === 'maxHealth') {

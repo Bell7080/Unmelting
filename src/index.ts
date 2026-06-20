@@ -62,11 +62,7 @@ import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
-import { SceneManager } from '@ui/scenes/SceneManager'
-import { LobbyScene } from '@ui/scenes/LobbyScene'
-import { CharacterSelectScene } from '@ui/scenes/CharacterSelectScene'
-import { RunSetupScene } from '@ui/scenes/RunSetupScene'
-import type { RunConfig } from '@ui/scenes/Scene'
+import { HearthScene } from '@ui/hearth/HearthScene'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
 import { BgmManager } from '@/audio/BgmManager'
@@ -111,9 +107,8 @@ let pendingEventDoor = false
 // 디버그 전용: 이벤트N 커맨드로 스폰된 칸이 클릭될 때 강제 사용할 이벤트 ID.
 let debugForcedEventId: EventId | null = null
 const boardRenderer = new GameBoardRenderer('game-board')
-// 런 시작 전 프론트엔드 흐름(로비→캐릭터→난이도/룰)을 거는 씬 전환기.
-// 기본 부팅은 여전히 직행 인게임이며, `/시작` 명령에서만 깨어난다.
-const sceneManager = new SceneManager(app)
+// 거점(촛대) 화면. 기본 부팅은 여전히 직행 인게임이며, `/시작` 명령에서만 깨어난다.
+const hearthScene = new HearthScene()
 // 배경음: 3트랙을 무작위 순서로 크로스페이드 연결, 첫 입력에서 자동재생.
 const bgm = new BgmManager([bgm001Url, bgm002Url, bgm003Url])
 const speechBubble = new SpeechBubble({ anchor: '.player-card', offsetX: 150, tail: 'bottom-left', fontSize: 22 })
@@ -259,24 +254,41 @@ function syncRunModifiersToSpawner(): void {
   })
 }
 /**
- * 런 시작 전 흐름에서 고른 설정을 게임에 반영한다. startGame() 직전에 호출한다.
- * M1은 골격만 — characterId만 기록하고 difficulty/rules는 아직 no-op(시각 스텁)이다.
- * TODO(M4): difficulty를 runModifiers(적 HP/공격력·함정·보물 배율)로, rules 토글을
- *   runCardPool.ban/초반 손패(character.addHandCard)에 연결. 반복 진입 시 runModifiers를
- *   기본값으로 먼저 리셋해 난이도 누적을 막는다.
+ * 거점(촛대) 진입: 빈 레일을 배경으로 거점 화면을 띄운다.
+ * 현재 테스트 런 상태를 깨끗이 비우고 빈 보드를 렌더한 뒤 거점 오버레이를 마운트한다.
+ * 모험 칸 클릭은 상점 셔터 하강까지만 연결한다(이후 모험 설정 페이지는 추후 단계).
  */
-function applyRunConfig(cfg: RunConfig): void {
-  void cfg.characterId // Character는 현재 고정('녹지 않는 소녀'). M3에서 GameState로 연결.
-  void cfg.difficulty
-  void cfg.rules
+function enterHearth(): void {
+  // 갓 게임을 켠 상태: 적·직업·유물 잔여 0. 빈 레일을 배경으로 거점 오버레이를 띄운다.
+  resetForNewRun()
+  inputLocked = true // 거점 동안 뒤쪽 보드 입력 잠금(입력은 거점 오버레이가 가짐)
+  gameActive = false
+  // 아직 캐릭터를 고르지 않았으므로 플레이어 존을 숨긴다(레이어는 유지, visibility만 off).
+  document.body.classList.add('hearth-lobby')
+  render()
+  hearthScene.enter({
+    // 출발 버튼 → startGame이 다시 초기화 + 직업 선택 + 보드 채움을 수행한다.
+    onStart: () => { void startGame() },
+  })
 }
 /** effectKind 서술자를 런타임 apply()로 변환. runModifiers는 여기에 스코프돼 있으므로 index에서 해석한다. */
 function applyTrialEffect(kind: TrialEffectKind): void {
   switch (kind.type) {
-    case 'enemy-stat-bonus':
+    case 'enemy-stat-bonus': {
       runModifiers.enemyHpBonus += kind.hpBonus
       runModifiers.enemyDamageBonus += kind.atkBonus
+      // 함정 시련과 동일하게, 이미 필드에 있는 적도 즉시 보너스를 받는다(이후 스폰 적과
+      // 동일 취급). 합체 적은 한 인스턴스가 여러 칸을 점유하므로 Card 단위로 1회만 적용한다.
+      const seenEnemies = new Set<Card>()
+      for (const lane of gameState.lanes)
+        for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+          const c = lane.getCardAtDistance(d)
+          if (!c || seenEnemies.has(c)) continue
+          seenEnemies.add(c)
+          c.applyTrialEnemyStatBonus(kind.atkBonus, kind.hpBonus)
+        }
       break
+    }
     case 'trap-damage-bonus':
       runModifiers.trapDamageBonus += kind.value
       // 이미 필드에 있는 함정 카드도 즉시 보너스 갱신해 피해 수치 표기를 맞춘다.
@@ -1521,6 +1533,7 @@ async function handleShopPackPick(detail: ShopPackPickDetail): Promise<void> {
   const picked = activePackSession.items.find((it) => it.id === detail.itemId)
   if (!picked) return
   const beforeResources = snapshotPlayerResources()
+  const beforeCoins = coins
   await picked.apply()
   // unlock-pack/delete-pack 선택 후 runCardPool이 바뀌므로 드롭 풀 및 도감 잠금 표시를 재동기화한다.
   const poolSnap = runCardPool.snapshot()
@@ -1535,6 +1548,15 @@ async function handleShopPackPick(detail: ShopPackPickDetail): Promise<void> {
   // Most pack effects mutate character stats; play the standard player-gain
   // trail so HP/방패/공격력 등 변화에 카드/숫자 피드백이 같이 따라온다.
   await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
+  // '동전 한 닢' 등 화폐 아이템은 playPlayerGainTrails가 다루지 않으므로(coin 미포함)
+  // 단독 코인 카드/수당과 같은 펄스키+트레일+지갑 버스트 문법으로 별도 라우팅한다.
+  // applyBlindFaithCoins는 apply() 내부에서 이미 처리됐으므로 여기서 재호출하지 않는다.
+  const pickedCoinGain = coins - beforeCoins
+  if (pickedCoinGain > 0) {
+    coinPulseKey++
+    recordCoinGain(picked.title, pickedCoinGain)
+    await playResourceTrail({ kind: 'chain' }, 'coin', pickedCoinGain)
+  }
   // 자원팩 등 게이지 아이템 선택 시 게이지가 가득 찼으면 보상 효과를 즉시 발동한다.
   await resolveFullCandleGaugeEffects({ kind: 'chain' })
   render()
@@ -1964,6 +1986,11 @@ async function runPreparationRefreshAfterFieldEffects(
   for (const t of startedEventDoors) boardRenderer.popEventBadge(t.cardId)
   if (blooms.length > 0) await boardRenderer.animateFlowerBlooms(blooms)
   if (movedAny) await wait(120)
+  // 최종 등반: 손패/조합 효과가 별빛을 전방으로 떨어뜨렸다면 즉시 수집한다. 그렇지 않으면
+  // 전방이 별빛로만 막혀 클릭할 카드가 없고 손패만으론 턴이 오르지 않아 교착될 수 있다.
+  // (별빛은 클릭 수집이 없는 전방-도달 자동 수집 규칙이다.) 턴 100 도달 시 보스 게이트는
+  // 일반 행동 종료 경로 maybeRunMilestoneEventsAfterTurn가 이어받으므로 여기선 수집/턴+1까지만 한다.
+  if (finalAscentStarlightRuleActive) await sweepFrontStarlights()
 }
 
 function createItemGainLogs(itemNames: string[]): ActivityLogDraft[] {
@@ -2005,39 +2032,60 @@ function scoreInflationJitter(): number {
  * pays out. Trap > Treasure for the same width because stepping on / clearing
  * a trap involves real risk; treasure pickup is a quiet gain.
  *
- *  - Enemy: strength-based — `HP * 12 + ATK * 20`. baseHealth / getDamage()
- *    already include the 2-/3-cell width bonus (Card.getNormalEnemyGroupStats),
- *    so we don't double-count width.
- *  - Mimic (isSpecialEnemy): flat strength + drop-count bonus so a wide / fat
- *    mimic still pays clearly more than a regular enemy of the same span.
+ *  - 일반 적: 강함 랭킹(enemyPower)에만 1차식으로 연동 — `BASE + RANK * enemyPower`.
+ *    불빛을 HP/ATK 수치와 분리해, 기본 체력 버프나 100HP/1ATK 같은 특이 스탯 적을
+ *    추가해도 불빛은 랭크 순서대로 유지된다(랭크만 부여하면 됨). enemyPower가 높을수록
+ *    (=후반 배치) 항상 더 준다. 그룹은 칸 수만큼 곱하되 25% 감산.
+ *  - Mimic/괴물꽃(isSpecialEnemy): 기존 강함(HP·ATK) 기반 불빛량을 그대로 유지한다.
  *  - Trap: small flat per width (1/2/3 = 30 / 65 / 110).
  *  - Treasure: smaller flat per width (1/2/3 = 18 / 40 / 75).
  *
  * Caller multiplies the result by `getTurnScoreMultiplier()` via createScoreLog.
  */
+// 일반 적 불빛 = ENEMY_LIGHT_BASE + ENEMY_LIGHT_PER_RANK × enemyPower(1~18+), 전 랭크 단일 공식.
+// HP/ATK와 분리돼 체력 버프·특이 스탯 적(100HP/1ATK 등)에도 랭크 순서대로 유지된다.
+// BASE는 초반(랭크 1) 값을 현재(≈32)와 맞추고, PER_RANK는 후반 상승폭을 조절한다(낮을수록 완만).
+const ENEMY_LIGHT_BASE = 17
+const ENEMY_LIGHT_PER_RANK = 6
 function scoreForCardRemoval(card: Card): number {
   if (card.type === CardType.ENEMY) {
-    const hp = Math.max(0, card.baseHealth)
-    const atk = Math.max(0, card.getDamage())
-    const strength = hp * 12 + atk * 20
-    const specialBonus = card.isSpecialEnemy ? 60 + card.defeatDropCount * 20 : 0
-    // 그룹은 총합 스탯 기준에서 25% 감산 — 단일보다 확실히 높되 배수 구조를 희석한다.
-    if (card.groupCount > 1 && !card.isSpecialEnemy) {
-      return Math.round(strength * 0.75)
-    }
-    return strength + specialBonus
+    // 일반/특수(미믹·괴물꽃) 모두 강함수치(enemyPower) 단일 랭킹식으로 통일한다.
+    // 미믹은 단계마다 2/4/6/8…, 합체 적/미믹/괴물꽃은 칸 수 배율로 불빛이 자연스럽게 오른다.
+    const rankLight = ENEMY_LIGHT_BASE + Math.max(1, card.enemyPower) * ENEMY_LIGHT_PER_RANK
+    // 그룹은 칸 수만큼 곱하되 25% 감산 — 단일보다 확실히 높되 배수 구조를 희석한다.
+    if (card.groupCount > 1) return Math.round(rankLight * card.groupCount * 0.75)
+    return rankLight
   }
+  // 함정/보물은 강함수치가 없으므로, 경과 턴(층)만큼 기본 불빛에 더해 인플레이션을 따라가게 한다.
+  // 예) 함정 기본 30 → 10턴이면 40. (이후 createScoreLog의 턴 배율·지터는 동일하게 위에 곱해진다.)
+  const turnBonus = Math.max(0, gameState.getCurrentTurn())
   if (card.type === CardType.TRAP) {
-    if (card.groupCount >= 3) return 110
-    if (card.groupCount === 2) return 65
-    return 30
+    const span = card.groupCount >= 3 ? 3 : card.groupCount === 2 ? 2 : 1
+    // 종류별 기본 불빛: 거미줄 20/50/80, 포자 10/20/30, 폭탄 50(합체 없음).
+    const base =
+      card.trapKind === 'spore'
+        ? [10, 20, 30][span - 1]
+        : card.trapKind === 'bomb'
+          ? 50
+          : [20, 50, 80][span - 1]
+    return base + turnBonus
   }
   if (card.type === CardType.TREASURE) {
-    // 황금 상자는 일반 상자보다 불빛 2배.
+    // 황금 상자는 일반 상자보다 불빛 2배. (기존 18/40/75 · 36/80/150에서 전체 2배 상향)
     const isGolden = card.treasureKind === 'goldenChest'
-    if (card.groupCount >= 3) return isGolden ? 150 : 75
-    if (card.groupCount === 2) return isGolden ? 80 : 40
-    return isGolden ? 36 : 18
+    const base =
+      card.groupCount >= 3
+        ? isGolden
+          ? 300
+          : 150
+        : card.groupCount === 2
+          ? isGolden
+            ? 160
+            : 80
+          : isGolden
+            ? 72
+            : 36
+    return base + turnBonus
   }
   if (card.type === CardType.FLOWER) {
     return 24 + Math.max(1, card.flowerValue) * 12
@@ -2250,7 +2298,12 @@ function fillBoardAtStart(): void {
 }
 
 /** Runs now begin with an empty hand; first cards must come from play rewards. */
-async function startGame(): Promise<void> {
+/**
+ * 새 런/거점 진입 공통 초기화 — 적·직업·유물·시련·체인 등 이전 런 잔여를 모두 비운다.
+ * 거점(enterHearth)은 이 위에 빈 레일만 노출하고, startGame은 이어서 직업 선택과 보드 채움을 한다.
+ * 갓 게임을 켠 상태를 보장하려 직업/유물 스폰 보정·runModifiers·카드풀까지 메타 기준으로 되돌린다.
+ */
+function resetForNewRun(): void {
   gameActive = true
   inputLocked = false
   chain = HandSystem.newChain()
@@ -2261,6 +2314,38 @@ async function startGame(): Promise<void> {
     if (gameState.character.hasRelic('blood-pack')) void applyBloodPackHit(amount)
   }
   cardSpawner.resetRelicModifiers()
+  cardSpawner.resetSpawnState()
+  // 비게임플레이(BGM)만 제외하고 잔여 상태를 모두 비운다: 체인 UID, 팩 세션, 디버그 이벤트, 말풍선.
+  chainEventCounter = 0
+  activePackSession = null
+  boardRenderer.closePackPicker()
+  debugForcedEventId = null
+  speechBubble.dismiss()
+  bossBubble.dismiss()
+  eventDemonBubble.dismiss()
+  // 시련 영속 modifier(적 HP/공격력·함정 피해·보물 배율)도 런마다 비운다.
+  // resetRelicModifiers는 유물/직업 보정만 지우므로, 여기서 runModifiers를 초기화하고
+  // 스폰어에 0을 동기화하지 않으면 이전 런의 시련 버프가 다음 런 적/함정에 남는다.
+  runModifiers.enemyHpBonus = 0
+  runModifiers.enemyDamageBonus = 0
+  runModifiers.trapDamageBonus = 0
+  runModifiers.treasureSpawnScale = 1
+  syncRunModifiersToSpawner()
+  // 보스/제단 게이트·시련·턴 모드·보스 컨트롤러 상태도 새 런을 위해 초기화한다.
+  altarBossPending = false
+  altarBossDefeated = false
+  trialPending = false
+  turnManager.setTurnMode('normal_turn')
+  bossController.reset()
+  clearChainTimeline()
+  // 런 카드 풀(해금팩/삭제팩으로 바뀐 단일 해금·밴)과 확률팩 tier 보정을 메타 기준으로 되돌려,
+  // 새로고침과 동일하게 언락 카드/드롭 풀까지 완전 초기화한다.
+  runCardPool.reset(HAND_CARD_IDS, metaUnlockedCardIds)
+  DropSystem.setAllowedPool(runCardPool.snapshot().unlocked)
+  DropSystem.setTier1CardBoosts(gameState.enhancements.tier1CardBoosts)
+  DropSystem.setTier1JobPoolBoosts(gameState.enhancements.tier1JobPoolBoosts)
+  boardRenderer.setLockedCardIds([...runCardPool.snapshot().locked, ...runCardPool.snapshot().banned])
+  boardRenderer.setLockedRecipeIds(RECIPES.filter((r) => r.runLocked).map((r) => r.id))
   eventSpawnCtrl.reset()
   pendingEventDoor = false
   finalAscentStarlightRuleActive = false
@@ -2280,11 +2365,18 @@ async function startGame(): Promise<void> {
   syncSpawnerTier()
   boardRenderer.setHandTargetingMode(null)
   boardRenderer.clearSelection()
+}
+
+async function startGame(): Promise<void> {
+  resetForNewRun()
   const poolSnapshot = runCardPool.snapshot()
   // 메타 사당 해금(영구) + 런 카드풀(임시) 이중 구조를 플레이 로그로 명시한다.
   recordNotice(`카드 풀 초기화: 메타해금 ${poolSnapshot.unlocked.length} / 잠김 ${poolSnapshot.locked.length} / 금지 ${poolSnapshot.banned.length}`, 'info')
   // 시작 직업 선택은 빈 레일 위의 암막 안에서 진행한다. 선택 전 3×3 스폰을 노출하지 않기 위함이다.
   render()
+  // 거점→런: 로비 상태(off-screen)로 렌더된 런 패널/불씨 HUD를 다음 프레임에 해제해
+  // 슬라이드 인 시킨다. 거점 미진입(기본 부팅)이면 클래스가 없어 즉시 정상 표시된다.
+  requestAnimationFrame(() => document.body.classList.remove('hearth-lobby'))
 
   // 직업 선택 오버레이 — 플레이어 대사 전에 한 번만 선택한다.
   // 선택 카드는 화면 중앙으로 남고, 암막이 닫힌 동안 실제 3×3 레일을 준비한다.
@@ -2300,7 +2392,6 @@ async function startGame(): Promise<void> {
       c.health = Math.min(c.health, c.maxHealth)
     }
     if (chosenJob.damageBonus > 0) c.applyDamageBoost(chosenJob.damageBonus)
-    if (chosenJob.coinBonus > 0) coins += chosenJob.coinBonus
     // 불빛 배율: 백분율을 scoreMultiplier 곱셈으로 누적한다.
     if (chosenJob.scorePct !== 0) {
       gameState.enhancements.scoreMultiplier *= (1 + chosenJob.scorePct / 100)
@@ -2635,17 +2726,10 @@ function setupDevCommandPalette(): void {
       setHint(`디버그: 랜덤 손패 ${added}장 지급`)
       return
     }
-    // 런 시작 전 프론트엔드 흐름 진입. 보드를 숨기고 로비→캐릭터→난이도/룰을 거친 뒤
-    // 출발 시 설정 적용 후 기존 인게임으로 재진입한다(취소/ESC는 보드로 복귀).
+    // 거점(촛대) 진입. 빈 레일을 배경으로 거점 화면을 띄운다.
     if (/^(시작|start)$/i.test(token)) {
       close()
-      sceneManager.start(
-        [new LobbyScene(), new CharacterSelectScene(), new RunSetupScene()],
-        {
-          onComplete: (cfg) => { applyRunConfig(cfg); void startGame() },
-          onCancel: () => {},
-        }
-      )
+      enterHearth()
       return
     }
     setHint('알 수 없는 명령어입니다. /시작, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /악마소환, /악마소환준비')
@@ -3464,6 +3548,8 @@ async function runSimulatedEnemyPhase(): Promise<void> {
   // 동일하게 하강·리필(+재그룹/개화/폭탄 점화)을 돌려 빈 레일을 메운다. 턴 카운터는 올리지 않는다.
   if (!gameState.isGameOver) {
     await runPreparationRefreshAfterFieldEffects()
+    // 족쇄/레바테인의 시뮬레이션 1턴 흐름도 실제 턴처럼 포자 번식 카운트다운을 진행시킨다.
+    await resolvePostDropSporeSpread()
   }
 }
 
@@ -3567,10 +3653,19 @@ async function sweepFrontStarlights(): Promise<void> {
   // 사라져도 좌표를 잃지 않게 한다.
   const shots = swept.map((s) => ({ rect: boardRenderer.getCardRect(s.cardId) }))
   for (const shot of shots) {
-    if (shot.rect) await boardRenderer.fireStarlightToTurn(shot.rect)
-    gameState.nextTurn()
-    render()
-    await wait(140)
+    // 한 번의 sweep에서 여러 별빛을 먹어 100턴을 넘기는 경우(손패 콤보 등): 100에 도달한
+    // 뒤의 잔여 별빛은 수집(턴 +1)하지 않고 그 자리에서 소멸시켜 런 턴을 정확히 100으로
+    // 고정한다. 100턴 도달 = 최종 보스 진입 트리거이므로 초과 진행을 만들지 않는다.
+    if (gameState.getCurrentTurn() < RUN_TARGET_TURNS) {
+      if (shot.rect) await boardRenderer.fireStarlightToTurn(shot.rect)
+      gameState.nextTurn()
+      render()
+      await wait(140)
+    } else {
+      if (shot.rect) await boardRenderer.dissolveStarlight(shot.rect)
+      render()
+      await wait(100)
+    }
   }
   // 별빛 제거로 빈칸이 생겼으면 즉시 정리/보충
   const moved = compactAndRefillAllLanes()
@@ -3780,11 +3875,15 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
   // 종료: 소비된 칸을 메우고 일반 진행으로 복귀한다.
   compactAndRefillAllLanes()
   gameState.regroupAllRows()
+  trackFieldEnemyEncounters()
   turnManager.armFrontBombs()
   // 이벤트는 턴을 올리지 않으므로 포자·성장·시듦 틱은 건너뛴다.
   // 씨앗 개화는 위치 기반 트리거(전방 도달)이므로 이벤트 후에도 처리한다.
   const blooms = turnManager.bloomFrontSeeds(cardSpawner)
+  // 리필로 새 이벤트 문이 전방에 도달했다면 일반 턴과 동일하게 즉시 카운트다운 뱃지를 띄운다.
+  const startedEventDoors = turnManager.startFrontEventDoorArrivals()
   render()
+  for (const t of startedEventDoors) boardRenderer.popEventBadge(t.cardId)
   if (blooms.length > 0) await boardRenderer.animateFlowerBlooms(blooms)
   inputLocked = false
 }
@@ -3965,8 +4064,10 @@ async function handleCardAction(e: Event): Promise<void> {
       // below happens as the destination burst lands, not after a separate pause.
       const theme = flowerRewardTheme(card.flowerKind)
       if (result.flowerReward?.kind === 'score') {
+        // 캐모마일 불빛은 특수 적처럼 20층 단위로 30/60/90/120…씩 오른다(tier×30).
+        const chamomileTier = Math.floor(gameState.getCurrentTurn() / 20) + 1
         pushActivityLogsInDisplayOrder([
-          createScoreLog(`${card.name} 수확`, 70 + result.flowerReward.amount * 26, 'score'),
+          createScoreLog(`${card.name} 수확`, 30 * chamomileTier, 'score'),
         ])
         rewardFeedbacks.push(
           playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1, theme)
@@ -4198,6 +4299,8 @@ function showGameOver(): void {
   `
   document.body.appendChild(overlay)
   document.getElementById('restart-btn')?.addEventListener('click', () => {
+    // 새로고침 대신 startGame()으로 초기화한다(추후 로비 시스템 연동 대비). startGame이
+    // 카드 풀/드롭 풀/도감 잠금까지 메타 기준으로 되돌려 새로고침과 같은 완전 초기화를 만든다.
     overlay.remove()
     void startGame()
   })

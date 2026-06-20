@@ -363,12 +363,6 @@ export class TurnManager {
     return spreads
   }
 
-  /** Tick infectious spores, spread ready colonies, and reset their timer. */
-  applySporeSpread(): SporeSpread[] {
-    this.tickSporeCountdowns()
-    return this.spreadReadySpores()
-  }
-
   /** Orthogonal-only spore candidates; no long-range spread after all sides are infected. */
   private collectSporeTargets(
     laneIndex: number,

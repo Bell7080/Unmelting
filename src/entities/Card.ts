@@ -259,6 +259,27 @@ export class Card {
     return this.health - before
   }
 
+  /** 적 스탯 시련('광란' 등)을 이미 필드에 있는 일반 적에게 소급 적용한다.
+   *  스폰 시 baseDamage/baseHealth에 구워지는 보너스(generateEnemy)와 동일하게 맞추되,
+   *  합체 적은 구성 칸 수(groupCount)만큼 누적해 "이후 스폰됐다면 받았을 양"과 일치시킨다.
+   *  구성 합계(enemyXxxTotal)에 더한 뒤 표시 스탯을 재유도하며, 이미 입은 피해는 보존한다.
+   *  보스/특수 적(미믹 등)은 함정 시련처럼 보너스를 받지 않는다. */
+  applyTrialEnemyStatBonus(atkBonus: number, hpBonus: number): void {
+    if (this.type !== CardType.ENEMY || this.isSpecialEnemy) return
+    const factor = Math.max(1, this.groupCount)
+    const atk = Math.max(0, atkBonus) * factor
+    const hp = Math.max(0, hpBonus) * factor
+    if (atk === 0 && hp === 0) return
+    const existingDamage = Math.max(0, this.getCurrentMaxHealth() - this.health)
+    this.enemyDamageTotal += atk
+    this.enemyHealthTotal += hp
+    const grouped = this.getNormalEnemyGroupStats(this.groupCount)
+    const newMaxHealth = grouped ? grouped.health : this.enemyHealthTotal
+    this.baseDamage = grouped ? grouped.damage : this.enemyDamageTotal
+    this.baseHealth = newMaxHealth
+    this.health = Math.max(1, newMaxHealth - existingDamage)
+  }
+
   /** Apply the wax '굳음' status, keeping the longest remaining duration. */
   freeze(turns: number): void {
     this.frozenTurns = Math.max(this.frozenTurns, Math.max(0, turns))

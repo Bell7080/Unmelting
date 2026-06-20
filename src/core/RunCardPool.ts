@@ -60,4 +60,16 @@ export class RunCardPool {
       banned: [...this.banned],
     }
   }
+
+  /** 다시 시작 시 메타 해금 상태로 되돌린다 — 런 내 단일 해금/밴을 모두 비운다. */
+  reset(allCards: readonly HandCardId[], metaUnlocked: readonly HandCardId[]): void {
+    this.unlocked.clear()
+    this.locked.clear()
+    this.banned.clear()
+    const meta = new Set(metaUnlocked)
+    for (const id of allCards) {
+      if (meta.has(id)) this.unlocked.add(id)
+      else this.locked.add(id)
+    }
+  }
 }

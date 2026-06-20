@@ -244,9 +244,132 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
 .ember-icon {
   display: inline-flex;
   align-items: center;
-  color: var(--color-flame);
-  font-size: 18px;
-  filter: drop-shadow(0 0 8px rgba(255, 215, 120, 0.7));
+  justify-content: center;
+  width: 16px;
+  height: 20px;
+}
+
+/* ── 거점 퀘스트 딱지(좌측 패널 로그 자리) ────────────────────────────────
+   평소(런)에는 숨기고 거점(body.hearth-lobby)에서만 노출한다. 등급명+카운터만
+   보여 주는 미니멀 라벨이며, 색으로 중요도를 표현한다(세부는 추후 우측 인스펙터). */
+/* 로그↔퀘스트는 같은 슬롯(.left-swap)에서 좌측으로 밀고 당기며 교차 슬라이드한다(묶음 관리).
+   기본(런)은 로그가 들어와 있고 퀘스트는 좌측 밖. 거점(body.hearth-lobby)에서 서로 바뀐다.
+   둘 다 절대배치로 같은 자리를 공유해 '사라짐'이 아니라 '밀려 들어가고 나오는' 느낌을 준다. */
+.left-swap { position: relative; min-height: 0; }
+.left-swap > .score-log-list,
+.left-swap > .quest-list {
+  position: absolute;
+  inset: 0;
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.4s ease;
+}
+.left-swap > .quest-list { transform: translateX(-140%); opacity: 0; pointer-events: none; }
+.left-swap > .score-log-list { transform: translateX(0); opacity: 1; }
+body.hearth-lobby .left-swap > .quest-list { transform: translateX(0); opacity: 1; pointer-events: auto; }
+body.hearth-lobby .left-swap > .score-log-list { transform: translateX(-140%); opacity: 0; pointer-events: none; }
+.quest-list-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+  font-family: 'OkDanDan', Georgia, serif;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: rgba(255, 215, 120, 0.78);
+  padding: 2px 2px 6px;
+}
+.quest-list-head::-webkit-details-marker { display: none; }
+.quest-arrow {
+  width: 0;
+  height: 0;
+  margin-left: auto;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid rgba(255, 215, 120, 0.7);
+  transition: transform 0.2s ease;
+}
+.quest-list[open] .quest-arrow { transform: rotate(180deg); }
+.quest-tickets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.quest-ticket {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 9px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  border-left-width: 3px;
+  font-family: 'OkDanDan', Georgia, serif;
+  font-size: 12px;
+  cursor: default;
+  transition: transform 0.14s ease, box-shadow 0.2s ease;
+}
+.quest-ticket:hover { transform: translateX(2px); }
+.quest-ticket-name { font-weight: 800; }
+.quest-ticket-count { font-weight: 800; opacity: 0.85; font-variant-numeric: tabular-nums; }
+/* 등급 색: 중요한=밀랍 황금빛(발광/엠보싱) → 적당한=바랜 청동 → 사소한=탁한 회색 */
+.quest-ticket--major {
+  color: #ffe7a8;
+  border-color: rgba(255, 215, 120, 0.55);
+  background: linear-gradient(180deg, rgba(86, 62, 24, 0.55), rgba(40, 28, 12, 0.5));
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.22), 0 0 12px rgba(244, 164, 96, 0.25);
+  text-shadow: 0 0 8px rgba(244, 164, 96, 0.35);
+}
+.quest-ticket--medium {
+  color: #d8c39a;
+  border-color: rgba(150, 120, 80, 0.5);
+  background: linear-gradient(180deg, rgba(54, 44, 30, 0.5), rgba(30, 24, 16, 0.5));
+}
+.quest-ticket--minor {
+  color: rgba(190, 185, 178, 0.7);
+  border-color: rgba(120, 116, 110, 0.4);
+  background: linear-gradient(180deg, rgba(36, 34, 38, 0.5), rgba(22, 20, 24, 0.5));
+}
+/* 모험 칸과 같은 말랑한 촛불을 불씨 게이지 아이콘으로 사용한다.
+   불씨 티어가 높을수록(잘 탈수록) 붉고 진하게, 낮을수록 노랗고 희미하게 변한다. */
+.ember-flame-body {
+  display: block;
+  width: 13px;
+  height: 18px;
+  border-radius: 50% 50% 50% 50% / 62% 62% 40% 40%;
+  background: radial-gradient(ellipse at 50% 72%, #fff3c4 0%, #ffc861 30%, #f0822e 64%, rgba(150, 50, 12, 0.25) 100%);
+  filter: drop-shadow(0 0 6px rgba(244, 140, 60, 0.7));
+  opacity: 0.9;
+  animation: ember-flame-flicker 1.7s ease-in-out infinite;
+  transition: filter 0.5s ease, opacity 0.5s ease, background 0.5s ease;
+}
+.ember-flame--bright .ember-flame-body {
+  background: radial-gradient(ellipse at 50% 72%, #fff0c0 0%, #ffb347 26%, #f0431e 60%, rgba(150, 20, 10, 0.3) 100%);
+  filter: drop-shadow(0 0 9px rgba(255, 70, 30, 0.85));
+  opacity: 1;
+}
+.ember-flame--dim .ember-flame-body {
+  background: radial-gradient(ellipse at 50% 72%, #fff3c4 0%, #ffc861 30%, #f0822e 64%, rgba(150, 50, 12, 0.25) 100%);
+  filter: drop-shadow(0 0 7px rgba(244, 140, 60, 0.75));
+  opacity: 0.92;
+}
+.ember-flame--flickering .ember-flame-body {
+  background: radial-gradient(ellipse at 50% 70%, #fff7d2 0%, #ffd778 36%, #f0a93e 70%, rgba(160, 90, 20, 0.2) 100%);
+  filter: drop-shadow(0 0 5px rgba(255, 200, 110, 0.62));
+  opacity: 0.8;
+}
+.ember-flame--extinguished .ember-flame-body {
+  background: radial-gradient(ellipse at 50% 68%, #fff8d8 0%, #ffe199 44%, #e8c25a 80%, rgba(180, 150, 60, 0.15) 100%);
+  filter: drop-shadow(0 0 4px rgba(255, 225, 150, 0.5));
+  opacity: 0.55;
+}
+@keyframes ember-flame-flicker {
+  0%, 100% { transform: scale(1) skewX(0deg); }
+  35% { transform: scale(1.08, 0.94) skewX(3deg); }
+  68% { transform: scale(0.94, 1.07) skewX(-3deg); }
 }
 .ember-bar {
   position: relative;

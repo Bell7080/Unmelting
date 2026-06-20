@@ -149,6 +149,14 @@ export class BossEventController {
     private readonly inject: BossInjected,
   ) {}
 
+  /** 런 리셋(게임오버 후 다시 시작) 시 보스 진행 상태를 비운다. 죽음이 보스전 도중
+   *  발생했어도 다음 런에서 잔여 eventState/rewardState가 새 게임을 보스로 오인하지 않게 한다. */
+  reset(): void {
+    this.eventState = null
+    this.rewardState = null
+    this.postPhaseHandLocked = false
+  }
+
   // ---- 공개 흐름 메서드 -------------------------------------------------------
 
   /** 30F 보스 이벤트 실행. closeShopAndResume 제단 EXIT 분기에서 호출한다. */
@@ -587,8 +595,16 @@ export class BossEventController {
       character.heal(character.maxHealth)
       character.gainEmber(character.emberMax)
       this.inject.recordNotice('회복의 봉인함: 체력 풀 회복 / 불씨 가득', 'win')
-      void this.br.animateResourceTrailFromCard(card.id, 'health', 1, 'health-gain')
-      void this.br.animateResourceTrailFromCard(card.id, 'ember', 1, 'gauge-gain')
+      // 트레일 착탄에 맞춰 체력/불씨 숫자가 굴러가도록 트레일을 기다린 뒤 카운터를
+      // 굴린다(이전엔 void로 흘려보내 뒤따르는 render()에서야 늦게 굴렀다).
+      await Promise.all([
+        this.br.animateResourceTrailFromCard(card.id, 'health', 1, 'health-gain'),
+        this.br.animateResourceTrailFromCard(card.id, 'ember', 1, 'gauge-gain'),
+      ])
+      this.br.playHudCounterFeedback('health', character.health)
+      this.br.playHudCounterFeedback('maxHealth', character.maxHealth)
+      this.br.playHudCounterFeedback('ember', character.ember)
+      this.br.playHudCounterFeedback('emberMax', character.emberMax)
     } else if (card.id === 'boss-reward-bounty') {
       const amount = 1 + Math.floor(Math.random() * 5)
       for (let i = 0; i < amount; i++) {

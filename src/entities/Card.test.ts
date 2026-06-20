@@ -105,6 +105,51 @@ describe('Card enemy grouping health', () => {
   })
 })
 
+describe('Card trial enemy stat bonus (retroactive)', () => {
+  it('adds the trial bonus to a single field enemy like a fresh spawn', () => {
+    const enemy = new Card('enemy', CardType.ENEMY, '양초 생쥐', 'normal', 2, 1)
+
+    enemy.applyTrialEnemyStatBonus(1, 2)
+
+    expect(enemy.getDamage()).toBe(2) // 1 + 1
+    expect(enemy.getHealth()).toBe(4) // 2 + 2
+  })
+
+  it('preserves damage already dealt when buffing HP', () => {
+    const enemy = new Card('enemy', CardType.ENEMY, '양초 생쥐', 'normal', 2, 1)
+    enemy.takeDamage(1)
+
+    enemy.applyTrialEnemyStatBonus(0, 2)
+
+    // max HP 2→4, but the 1 damage already taken stays → 3/4
+    expect(enemy.getHealth()).toBe(3)
+    expect(enemy.getDamage()).toBe(1)
+  })
+
+  it('scales the bonus by group size so a merged colony matches per-member spawns', () => {
+    const left = new Card('left', CardType.ENEMY, '양초 생쥐', 'normal', 2, 1)
+    const right = new Card('right', CardType.ENEMY, '양초 개구리', 'normal', 1, 2)
+    left.merge(right) // 2-group: HP 5 / DMG 5
+
+    left.applyTrialEnemyStatBonus(1, 1) // ×groupCount(2) → +2/+2
+
+    expect(left.getHealth()).toBe(7)
+    expect(left.getDamage()).toBe(7)
+  })
+
+  it('ignores special enemies and bosses', () => {
+    const mimic = new Card('mimic', CardType.ENEMY, '미믹', 'test', 3, 2, {
+      isSpecialEnemy: true,
+      defeatDropCount: 1,
+    })
+
+    mimic.applyTrialEnemyStatBonus(5, 5)
+
+    expect(mimic.getHealth()).toBe(3)
+    expect(mimic.getDamage()).toBe(2)
+  })
+})
+
 describe('Card grouped traps and treasures', () => {
   it('uses requested trap damage by width', () => {
     const first = new Card('trap-1', CardType.TRAP, '양초 거미줄', 'Deals 2 damage', 0, 2)
