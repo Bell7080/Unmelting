@@ -476,15 +476,17 @@ export class CardSpawner {
     const enemyWeight = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy + this.jobSpawnAdjust.enemy)
     // 직업 trap 보정은 webTrap에 반영한다(일반 함정 비중을 증감). openingBoard에는 적용하지 않는다.
     const isOpening = options.openingBoard || options.openingBoardWaiting
+    // 포자는 20층 이후부터만 등장한다. 그 전에는 포자 가중치를 0으로 버리지 않고 거미줄로
+    // 흡수해, 20층 경계에서 전체 함정 비율이 급변하지 않게 한다(0 처리는 적/보물로 재분배됨).
+    const sporeLocked = this.progressionTurn < 20
+    const sporeToWeb = sporeLocked && !isOpening ? buckets.sporeTrap : 0
     const webTrap = options.openingBoard
       ? buckets.webTrap + buckets.bombTrap + buckets.sporeTrap
-      : Math.max(0, buckets.webTrap + (isOpening ? 0 : this.jobSpawnAdjust.trap))
+      : Math.max(0, buckets.webTrap + (isOpening ? 0 : this.jobSpawnAdjust.trap)) + sporeToWeb
     const bombTrap = isOpening ? 0 : buckets.bombTrap
     // Spores on cooldown are treated as weight 0; the slot is silently folded into
     // the rest of the distribution so the total chance of non-spore cards increases.
     const sporeCooling = this.sporeCooldownCards > 0
-    // 포자는 20층 이후부터만 등장한다(그 전에는 가중치 0).
-    const sporeLocked = this.progressionTurn < 20
     const sporeTrap = isOpening || sporeCooling || sporeLocked ? 0 : buckets.sporeTrap
     // 대기칸 초기 배치에서는 꽃을 절반 가중치로 허용한다(전방칸은 여전히 0).
     const flower = options.openingBoard
