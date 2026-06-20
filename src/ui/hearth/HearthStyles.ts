@@ -94,6 +94,39 @@ export const HEARTH_STYLES = `
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
 }
 
+/* 일러스트가 있는 스테이션 칸(hearth_007~009 → 무역/모험/만찬).
+   --cell-art(url)을 칸 배경 최하단에 깔고 그 위에 어둠 그라데이션을 얹어
+   레일 칸 톤(어둡고 따뜻)을 유지하면서 일러스트가 은은히 비치게 한다. */
+.hearth-cell--has-art {
+  background-image:
+    linear-gradient(to bottom, rgba(8, 5, 20, 0.46) 0%, rgba(10, 6, 24, 0.82) 100%),
+    var(--cell-art, none);
+  background-size: cover;
+  background-position: center top;
+}
+/* 잠긴 칸 + 일러스트: 해치 패턴을 일러스트 위에 유지하고 더 어둡게 덮는다. */
+.hearth-cell--locked.hearth-cell--has-art {
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.012) 0 6px, transparent 6px 12px),
+    linear-gradient(to bottom, rgba(8, 5, 20, 0.56) 0%, rgba(10, 6, 24, 0.84) 100%),
+    var(--cell-art, none);
+  background-size: auto, cover, cover;
+  background-position: center, center top, center top;
+}
+/* 모험 칸 + 일러스트: 점등 전엔 어둡게, 점등(is-ignited) 시 덮개를 옅혀 일러스트를 밝힌다. */
+.hearth-cell--adventure.hearth-cell--has-art {
+  background-image:
+    linear-gradient(to bottom, rgba(8, 5, 20, 0.5) 0%, rgba(10, 6, 24, 0.82) 100%),
+    var(--cell-art, none);
+  background-size: cover;
+  background-position: center top;
+}
+.hearth-cell--adventure.hearth-cell--has-art.is-ignited {
+  background-image:
+    linear-gradient(to bottom, rgba(8, 5, 20, 0.28) 0%, rgba(10, 6, 24, 0.62) 100%),
+    var(--cell-art, none);
+}
+
 /* 모험 칸 — 평소 희미, 점등(is-ignited) 시 화륵. 활성 레일 칸의 따뜻한 테두리/발광 문법. */
 .hearth-cell--adventure {
   display: flex;
@@ -166,28 +199,32 @@ export const HEARTH_STYLES = `
 /* ── 오로라 커튼 ─────────────────────────────────────────────────────
    job-rail-curtain(그라디언트 + 열림 키프레임)을 재사용한다.
    자동 close-in 애니메이션만 제거해 '닫힌 채로 시작'하고, is-opening에서
-   거대한 문을 열듯 좌우로 갈라진다. hue-rotate로 칙칙한 오로라빛을 입힌다. */
+   거대한 문을 열듯 좌우로 갈라진다.
+   대문(hearth_bg_002)은 ::before 없이 각 커튼 background-image 스택 최하단에 직접 깐다.
+   왼쪽 커튼은 문의 왼쪽 절반, 오른쪽 커튼은 오른쪽 절반을 보여 열릴 때 문이 갈라진다.
+   커튼 하나의 폭(~54%)에서 전체 문이 셸 폭을 채우도록 background-size 185%로 조정. */
 #hearth-overlay .hearth-curtain {
   z-index: 5;
   animation: none !important;
-  filter: saturate(0.8) hue-rotate(135deg) brightness(0.66);
 }
-/* 반투명 대문(hearth_bg_002) — 두 커튼 절반에 좌/우로 나눠 깔아 열릴 때 문이 갈라지게 한다.
-   배경 그라디언트 위에 얹되 opacity로 은은하게 비치도록 한다(커튼 hue-rotate는 ::before로 상속되지 않음). */
-#hearth-overlay .hearth-curtain::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image: var(--hearth-door, none);
-  /* 커튼 한 짝(폭 54%)에서 문 전체가 셸 폭을 채우도록 가로를 약 1.85배로 키운다. */
-  background-size: 185% 100%;
+#hearth-overlay .job-rail-curtain--left.hearth-curtain {
+  background-image:
+    radial-gradient(ellipse at 38% 28%, rgba(100, 200, 190, 0.1), transparent 55%),
+    linear-gradient(160deg, rgba(22, 12, 38, 0.78) 0%, rgba(8, 5, 14, 0.92) 100%),
+    var(--hearth-door, none);
+  background-size: auto, auto, 185% 100%;
+  background-position: center, center, left center;
   background-repeat: no-repeat;
-  opacity: 0.5;
-  mix-blend-mode: screen;
 }
-#hearth-overlay .job-rail-curtain--left.hearth-curtain::before { background-position: left center; }
-#hearth-overlay .job-rail-curtain--right.hearth-curtain::before { background-position: right center; }
+#hearth-overlay .job-rail-curtain--right.hearth-curtain {
+  background-image:
+    radial-gradient(ellipse at 62% 28%, rgba(100, 200, 190, 0.1), transparent 55%),
+    linear-gradient(160deg, rgba(8, 5, 14, 0.92) 0%, rgba(22, 12, 38, 0.78) 100%),
+    var(--hearth-door, none);
+  background-size: auto, auto, 185% 100%;
+  background-position: center, center, right center;
+  background-repeat: no-repeat;
+}
 #hearth-overlay .hearth-curtain::after {
   content: '';
   position: absolute;
@@ -319,6 +356,22 @@ body.hearth-lobby .hand-column {
   opacity: 0;
   pointer-events: none;
 }
+/* 로비 배경: hearth_bg_001(ingame-backdrop)만 보이게 한다.
+   body의 레일 배경(background_001)은 끄고 backdrop은 선명하게(블러 약화) 채운다.
+   출발 시 backdrop을 is-out으로 페이드아웃 → 검은 화면 → body 배경 페이드인(겹치지 않음). */
+body.hearth-lobby {
+  background-image: none !important;
+}
+body.hearth-lobby #ingame-backdrop {
+  opacity: 1 !important;
+  filter: blur(2px) saturate(0.95) brightness(0.86) !important;
+  transform: scale(1.02) !important;
+  transition: opacity 0.5s ease, filter 1.6s ease, transform 1.6s ease !important;
+}
+/* 출발 시 backdrop 페이드아웃(검은 배경 노출) — 그 뒤 body 배경이 페이드인된다. */
+body.hearth-lobby #ingame-backdrop.is-out {
+  opacity: 0 !important;
+}
 
 /* ── 우측 인스펙터(정보창) ──────────────────────────────────────────────
    평소 비움(여백의 미). 인스펙터블(칸/딱지) hover 시 스르륵 떠오르고 떼면 사라진다.
@@ -331,6 +384,9 @@ body.hearth-lobby .hand-column {
   z-index: 142;
   pointer-events: none;
 }
+/* 카드 레벨 마스크로 art+body를 하나의 합성 이미지로 클립한다.
+   이로써 art와 body 각각에 마스크가 걸리던 이중-페이드(좌측 과투명) 문제를 해소한다.
+   카드 배경(aurora dark)이 일러스트 없는 하단 절반을 채운다. */
 .hearth-inspector-card {
   position: relative;
   width: 100%;
@@ -339,30 +395,32 @@ body.hearth-lobby .hand-column {
   opacity: 0;
   transform: translateY(14px);
   transition: opacity 0.28s ease, transform 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
+  background: rgba(10, 6, 22, 1);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
 }
 #hearth-inspector.is-shown .hearth-inspector-card {
   opacity: 1;
   transform: translateY(0);
 }
-/* 풀 일러스트(패널 전체 배경). 실제 아트는 background-image로 교체.
-   마스크: 좌측 42%까지 서서히 페이드.
-   배경 포지션을 center top으로 두어 일러스트 상단부를 우선 표시하고,
-   하단 body 그라데이션에 가려지는 아랫부분은 자연히 숨겨진다. */
+/* 일러스트 — 상단 50%에만 배치. 하단은 카드 배경(aurora dark)이 채운다.
+   마스크는 카드 레벨에서 일괄 처리하므로 여기서는 제거. */
 .hearth-inspector-art {
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 50%;
   background:
     radial-gradient(circle at 54% 32%, rgba(255, 232, 168, 0.12), transparent 58%),
     repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 9px),
     linear-gradient(160deg, rgba(44, 30, 56, 0.95), rgba(12, 8, 18, 0.98));
   background-size: cover;
   background-position: center top;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
 }
-/* 하단 스크림 — body 단일 그라데이션으로 통일(이중 페이드 제거).
-   순수 검정 대신 게임 팔레트(남보라 인디고)로 오로라 톤을 유지한다.
-   좌측 페이드 마스크를 일러스트와 공유해 경계선을 없앤다. */
+/* 하단 스크림 — art 끝(카드 50% 지점)에서 빠르게 솔리드로 변하는 가파른 그라데이션.
+   body가 카드 25% 지점부터 시작하므로 내부 기준 33%가 art 끝에 해당한다.
+   마스크 없음 — 카드 레벨에서 일괄 처리. */
 .hearth-inspector-body {
   position: absolute;
   left: 0;
@@ -374,17 +432,14 @@ body.hearth-lobby .hand-column {
   justify-content: flex-end;
   gap: clamp(6px, 1.1vh, 12px);
   padding: clamp(24px, 5vh, 70px) clamp(18px, 1.6vw, 28px) clamp(34px, 5vh, 56px) clamp(46px, 4.5vw, 66px);
-  /* transparent → 남보라 → 인디고-블랙: 단일 곡선으로 이중 페이드 없이 깔끔하게. */
   background: linear-gradient(
     180deg,
     transparent 0%,
-    rgba(12, 7, 24, 0.36) 16%,
-    rgba(14, 8, 28, 0.78) 38%,
-    rgba(12, 7, 26, 0.96) 60%,
-    rgba(10, 6, 22, 1) 100%
+    rgba(10, 6, 22, 0.5) 20%,
+    rgba(10, 6, 22, 0.9) 34%,
+    rgba(10, 6, 22, 0.99) 46%,
+    rgba(10, 6, 22, 1) 58%
   );
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
 }
 .hearth-inspector-title {
   font-family: 'OkDanDan', Georgia, serif;

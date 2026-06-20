@@ -180,6 +180,10 @@ export class HearthScene {
     if (this.departing) return
     this.departing = true
     this.overlay?.querySelector<HTMLElement>('[data-hearth-depart]')?.classList.add('is-pressed')
+    // 로비 배경(hearth_bg_001)을 페이드아웃해 검은 화면을 만든 뒤, 런이 시작되며
+    // body의 원래 배경(background_001)이 페이드인된다(두 배경이 겹치지 않게 분리).
+    document.getElementById('ingame-backdrop')?.classList.add('is-out')
+    await this.wait(520)
     void this.handlers?.onStart()
     await this.wait(480)
     this.exit()
@@ -207,18 +211,21 @@ export class HearthScene {
       // 아직 파일이 없는 칸은 undefined → CSS 플레이스홀더로 폴백한다.
       const art = spriteForHearthStation(`hearth_00${i + 1}`)
       const artAttr = art ? ` data-inspect-art="${art}"` : ''
+      // 일러스트가 있으면 칸 배경으로도 직접 깐다(--cell-art) + has-art 클래스로 오버레이 톤 적용.
+      const artClass = art ? ' hearth-cell--has-art' : ''
+      const artStyle = art ? ` style="--cell-art: url('${art}')"` : ''
       if (i === ADVENTURE_INDEX) {
         cells.push(
-          `<button class="hearth-cell hearth-cell--adventure" data-hearth-station="adventure" type="button" aria-label="모험 시작"` +
-            ` data-inspect-title="${name}" data-inspect-tag="개방" data-inspect-desc="${desc}"${artAttr}>` +
+          `<button class="hearth-cell hearth-cell--adventure${artClass}" data-hearth-station="adventure" type="button" aria-label="모험 시작"` +
+            ` data-inspect-title="${name}" data-inspect-tag="개방" data-inspect-desc="${desc}"${artAttr}${artStyle}>` +
             `<span class="hearth-flame" aria-hidden="true"></span>` +
             `<span class="hearth-cell__label">${name}</span>` +
             `</button>`
         )
       } else {
         cells.push(
-          `<div class="hearth-cell hearth-cell--locked" aria-label="${name} · 잠김"` +
-            ` data-inspect-title="${name}" data-inspect-tag="잠김" data-inspect-desc="${desc}"${artAttr}>` +
+          `<div class="hearth-cell hearth-cell--locked${artClass}" aria-label="${name} · 잠김"` +
+            ` data-inspect-title="${name}" data-inspect-tag="잠김" data-inspect-desc="${desc}"${artAttr}${artStyle}>` +
             lock +
             `<span class="hearth-cell__name">${name}</span>` +
             `</div>`
@@ -264,6 +271,8 @@ export class HearthScene {
     }
     document.removeEventListener('pointerover', this.onPointerOver)
     document.removeEventListener('pointerout', this.onPointerOut)
+    // 로비 backdrop 페이드아웃 상태 해제(런 중에는 index.ts 기본 backdrop 규칙으로 복귀).
+    document.getElementById('ingame-backdrop')?.classList.remove('is-out')
     this.inspector?.remove()
     this.inspector = null
     this.overlay?.remove()
