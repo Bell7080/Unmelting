@@ -259,20 +259,14 @@ function syncRunModifiersToSpawner(): void {
  * 모험 칸 클릭은 상점 셔터 하강까지만 연결한다(이후 모험 설정 페이지는 추후 단계).
  */
 function enterHearth(): void {
+  // 갓 게임을 켠 상태: 적·직업·유물 잔여 0. 빈 레일을 배경으로 거점 오버레이를 띄운다.
+  resetForNewRun()
+  inputLocked = true // 거점 동안 뒤쪽 보드 입력 잠금(입력은 거점 오버레이가 가짐)
   gameActive = false
-  inputLocked = true
-  gameState.reset()
-  score = 0
-  coins = 0
-  activityLogs = []
-  cardSpawner.resetSpawnState()
-  boardRenderer.resetShutter()
   render()
   hearthScene.enter({
-    onAdventure: async () => {
-      // 모험 클릭 → 상점 셔터가 빈 레일 위로 내려온다. 설정 페이지는 다음 단계.
-      await boardRenderer.playShopTransition()
-    },
+    // 출발 버튼 → startGame이 다시 초기화 + 직업 선택 + 보드 채움을 수행한다.
+    onStart: () => { void startGame() },
   })
 }
 /** effectKind 서술자를 런타임 apply()로 변환. runModifiers는 여기에 스코프돼 있으므로 index에서 해석한다. */
@@ -2302,7 +2296,12 @@ function fillBoardAtStart(): void {
 }
 
 /** Runs now begin with an empty hand; first cards must come from play rewards. */
-async function startGame(): Promise<void> {
+/**
+ * 새 런/거점 진입 공통 초기화 — 적·직업·유물·시련·체인 등 이전 런 잔여를 모두 비운다.
+ * 거점(enterHearth)은 이 위에 빈 레일만 노출하고, startGame은 이어서 직업 선택과 보드 채움을 한다.
+ * 갓 게임을 켠 상태를 보장하려 직업/유물 스폰 보정·runModifiers·카드풀까지 메타 기준으로 되돌린다.
+ */
+function resetForNewRun(): void {
   gameActive = true
   inputLocked = false
   chain = HandSystem.newChain()
@@ -2364,6 +2363,10 @@ async function startGame(): Promise<void> {
   syncSpawnerTier()
   boardRenderer.setHandTargetingMode(null)
   boardRenderer.clearSelection()
+}
+
+async function startGame(): Promise<void> {
+  resetForNewRun()
   const poolSnapshot = runCardPool.snapshot()
   // 메타 사당 해금(영구) + 런 카드풀(임시) 이중 구조를 플레이 로그로 명시한다.
   recordNotice(`카드 풀 초기화: 메타해금 ${poolSnapshot.unlocked.length} / 잠김 ${poolSnapshot.locked.length} / 금지 ${poolSnapshot.banned.length}`, 'info')
