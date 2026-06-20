@@ -60,14 +60,18 @@ export const HEARTH_STYLES = `
   padding: clamp(10px, 1.6vw, 16px);
 }
 
+/* 일반 레일 칸(.cell) 문법을 그대로 빌린다 — 둥근 모서리, 점선 테두리, 옅은 배경. */
 .hearth-cell {
   position: relative;
   border-radius: 10px;
+  border: 1px dashed var(--color-border-soft, #4a3a2a);
+  background: rgba(255, 255, 255, 0.015);
+  transition: transform 0.18s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   min-height: 0;
   min-width: 0;
 }
 
-/* 잠긴 칸 — 실제 .cell.empty 문법(점선 + 45° 해치)을 그대로 따르되 더 어둡고 자물쇠를 단다. */
+/* 잠긴 칸 — 실제 .cell.empty 문법(점선 + 45° 해치)을 그대로 따른다(자물쇠만 추가). */
 .hearth-cell--locked {
   display: flex;
   flex-direction: column;
@@ -76,8 +80,8 @@ export const HEARTH_STYLES = `
   gap: clamp(4px, 0.8vh, 8px);
   border: 1px dashed var(--color-border-soft, #4a3a2a);
   background:
-    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.012) 0 6px, transparent 6px 12px);
-  box-shadow: inset 0 0 28px rgba(0, 0, 0, 0.55);
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.015) 0 6px, transparent 6px 12px);
+  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.4);
   color: rgba(220, 206, 184, 0.34);
   font-family: 'OkDanDan', Georgia, serif;
 }
@@ -127,7 +131,8 @@ export const HEARTH_STYLES = `
     var(--cell-art, none);
 }
 
-/* 모험 칸 — 평소 희미, 점등(is-ignited) 시 화륵. 활성 레일 칸의 따뜻한 테두리/발광 문법. */
+/* 모험 칸 — 평소 희미, 점등(is-ignited) 시 화륵. 채워진 레일 칸(.cell.card) 문법을 빌린다:
+   따뜻한 실선 테두리 + #1c1424 슬랩 + 상단 하이라이트/하단 그림자/리프트/깊이 그림자 스택. */
 .hearth-cell--adventure {
   display: flex;
   flex-direction: column;
@@ -137,14 +142,28 @@ export const HEARTH_STYLES = `
   cursor: pointer;
   appearance: none;
   border: 1px solid var(--color-border-warm, #8b6f47);
-  background: rgba(28, 20, 36, 0.6);
+  background: #1c1424;
   color: rgba(255, 236, 188, 0.5);
   font-family: 'OkDanDan', Georgia, serif;
+  isolation: isolate;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.18),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.45),
+    0 4px 10px rgba(0, 0, 0, 0.55),
+    0 14px 24px rgba(0, 0, 0, 0.45);
   opacity: 0.5;
   transition: opacity 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease, transform 0.18s ease;
 }
+/* 활성 칸 hover 글로우(.cell.is-active:hover)를 따른다. */
 .hearth-cell--adventure:hover {
   transform: translateY(-2px);
+  border-color: var(--color-flame-warm, #f4a460);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.28),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.45),
+    0 4px 10px rgba(0, 0, 0, 0.55),
+    0 14px 24px rgba(0, 0, 0, 0.45),
+    0 0 18px rgba(244, 164, 96, 0.36);
 }
 .hearth-cell__label {
   font-size: clamp(15px, 2.4vh, 26px);
@@ -384,9 +403,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
   z-index: 142;
   pointer-events: none;
 }
-/* 카드 레벨 마스크로 art+body를 하나의 합성 이미지로 클립한다.
-   이로써 art와 body 각각에 마스크가 걸리던 이중-페이드(좌측 과투명) 문제를 해소한다.
-   카드 배경(aurora dark)이 일러스트 없는 하단 절반을 채운다. */
+/* 카드 자체는 마스크/배경 없이 클립 컨테이너 역할만 한다(텍스트는 마스크 영향 X). */
 .hearth-inspector-card {
   position: relative;
   width: 100%;
@@ -395,22 +412,27 @@ body.hearth-lobby #ingame-backdrop.is-out {
   opacity: 0;
   transform: translateY(14px);
   transition: opacity 0.28s ease, transform 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
-  background: rgba(10, 6, 22, 1);
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 42%, #000 100%);
 }
 #hearth-inspector.is-shown .hearth-inspector-card {
   opacity: 1;
   transform: translateY(0);
 }
-/* 일러스트 — 상단 50%에만 배치. 하단은 카드 배경(aurora dark)이 채운다.
-   마스크는 카드 레벨에서 일괄 처리하므로 여기서는 제거. */
+/* 배경 스크림(일러스트 + 어둠 그라데이션)만 좌측 페이드 마스크를 받는다.
+   art와 grad를 한 부모(scrim)에서 합성 후 단일 마스크로 클립 → 이중-페이드 없음.
+   좌측 페이드는 36%까지로 이전(42%)보다 살짝 덜하게 줄였다. */
+.hearth-inspector-scrim {
+  position: absolute;
+  inset: 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 36%, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 36%, #000 100%);
+}
+/* 일러스트 — 상단 68%에 배치(이전 50%보다 크게). 하단은 grad가 덮는다. */
 .hearth-inspector-art {
   position: absolute;
   left: 0;
   right: 0;
   top: 0;
-  height: 50%;
+  height: 68%;
   background:
     radial-gradient(circle at 54% 32%, rgba(255, 232, 168, 0.12), transparent 58%),
     repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 9px),
@@ -418,28 +440,32 @@ body.hearth-lobby #ingame-backdrop.is-out {
   background-size: cover;
   background-position: center top;
 }
-/* 하단 스크림 — art 끝(카드 50% 지점)에서 빠르게 솔리드로 변하는 가파른 그라데이션.
-   body가 카드 25% 지점부터 시작하므로 내부 기준 33%가 art 끝에 해당한다.
-   마스크 없음 — 카드 레벨에서 일괄 처리. */
+/* 어둠 그라데이션 — 상단 절반은 투명(일러스트 노출), 하단은 더 짙은 남보라-블랙으로 채운다.
+   art 위(z 우선)에 얹혀 일러스트 하단을 자연스럽게 어둠으로 녹인다. */
+.hearth-inspector-grad {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 44%,
+    rgba(5, 3, 12, 0.5) 56%,
+    rgba(5, 3, 12, 0.92) 68%,
+    rgba(5, 3, 12, 1) 78%
+  );
+}
+/* 텍스트 레이어 — 마스크/배경 없음(글자는 좌측 투명화 영향을 받지 않는다). */
 .hearth-inspector-body {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  min-height: 75%;
+  min-height: 50%;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   gap: clamp(6px, 1.1vh, 12px);
   padding: clamp(24px, 5vh, 70px) clamp(18px, 1.6vw, 28px) clamp(34px, 5vh, 56px) clamp(46px, 4.5vw, 66px);
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgba(10, 6, 22, 0.5) 20%,
-    rgba(10, 6, 22, 0.9) 34%,
-    rgba(10, 6, 22, 0.99) 46%,
-    rgba(10, 6, 22, 1) 58%
-  );
 }
 .hearth-inspector-title {
   font-family: 'OkDanDan', Georgia, serif;

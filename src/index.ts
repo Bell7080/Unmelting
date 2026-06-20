@@ -97,15 +97,15 @@ document.body.style.backgroundPosition = 'center, center top, center'
 document.body.style.backgroundRepeat = 'no-repeat'
 document.body.style.backgroundAttachment = 'fixed'
 
-// 인게임 전체화면 배경(hearth_bg_001) — 레일 배경(body) 위에 흐릿하게(blur) 디졸브로 겹치는
-// 두 번째 배경 레이어. z-index:-1로 body 배경 위, 게임 UI(#app, z=auto) 아래에 깔린다.
+// 로비 전용 배경(hearth_bg_001) — 거점에서만 노출되는 풀스크린 레이어.
+// 인게임에서는 숨겨(opacity 0) body의 게임 배경(background_001)과 겹치지 않게 한다.
+// 거점 진입 시 HearthStyles의 body.hearth-lobby 규칙이 이 레이어만 띄우고,
+// 출발 시 is-out으로 페이드아웃해 검은 화면을 거쳐 게임 배경으로 넘긴다.
 const ingameBackdrop = document.createElement('div')
 ingameBackdrop.id = 'ingame-backdrop'
 ingameBackdrop.setAttribute('aria-hidden', 'true')
 ingameBackdrop.style.backgroundImage = `url('${SpriteUrls.hearth.backdrop}')`
 document.body.insertBefore(ingameBackdrop, document.body.firstChild)
-// 다음 프레임에 dissolve-in(은은하게 떠오른다).
-requestAnimationFrame(() => ingameBackdrop.classList.add('is-in'))
 
 const ingameBackdropStyle = document.createElement('style')
 ingameBackdropStyle.textContent = `
@@ -117,13 +117,12 @@ ingameBackdropStyle.textContent = `
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  /* 레일 배경과 이중으로 겹치도록 흐릿하게 깐다. */
   filter: blur(7px) saturate(0.9) brightness(0.78);
   transform: scale(1.06);
+  /* 인게임 기본값: 완전히 숨김(게임 배경만 보이게 이중 노출 제거). 거점에서만 떠오른다. */
   opacity: 0;
   transition: opacity 1.6s ease;
 }
-#ingame-backdrop.is-in { opacity: 0.42; }
 `
 document.head.appendChild(ingameBackdropStyle)
 

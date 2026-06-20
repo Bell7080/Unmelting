@@ -83,7 +83,10 @@ export class HearthScene {
     inspector.setAttribute('aria-hidden', 'true')
     inspector.innerHTML = `
       <div class="hearth-inspector-card">
-        <div class="hearth-inspector-art" aria-hidden="true"></div>
+        <div class="hearth-inspector-scrim" aria-hidden="true">
+          <div class="hearth-inspector-art"></div>
+          <div class="hearth-inspector-grad"></div>
+        </div>
         <div class="hearth-inspector-body">
           <div class="hearth-inspector-title"></div>
           <div class="hearth-inspector-divider" aria-hidden="true"></div>
