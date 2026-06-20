@@ -252,8 +252,20 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
 /* ── 거점 퀘스트 딱지(좌측 패널 로그 자리) ────────────────────────────────
    평소(런)에는 숨기고 거점(body.hearth-lobby)에서만 노출한다. 등급명+카운터만
    보여 주는 미니멀 라벨이며, 색으로 중요도를 표현한다(세부는 추후 우측 인스펙터). */
-.quest-list { display: none; margin-top: 6px; }
-body.hearth-lobby .quest-list { display: block; }
+/* 로그↔퀘스트는 같은 슬롯(.left-swap)에서 좌측으로 밀고 당기며 교차 슬라이드한다(묶음 관리).
+   기본(런)은 로그가 들어와 있고 퀘스트는 좌측 밖. 거점(body.hearth-lobby)에서 서로 바뀐다.
+   둘 다 절대배치로 같은 자리를 공유해 '사라짐'이 아니라 '밀려 들어가고 나오는' 느낌을 준다. */
+.left-swap { position: relative; min-height: 0; }
+.left-swap > .score-log-list,
+.left-swap > .quest-list {
+  position: absolute;
+  inset: 0;
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.4s ease;
+}
+.left-swap > .quest-list { transform: translateX(-140%); opacity: 0; pointer-events: none; }
+.left-swap > .score-log-list { transform: translateX(0); opacity: 1; }
+body.hearth-lobby .left-swap > .quest-list { transform: translateX(0); opacity: 1; pointer-events: auto; }
+body.hearth-lobby .left-swap > .score-log-list { transform: translateX(-140%); opacity: 0; pointer-events: none; }
 .quest-list-head {
   display: flex;
   align-items: center;

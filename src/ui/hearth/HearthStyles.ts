@@ -186,10 +186,10 @@ export const HEARTH_STYLES = `
   50%      { opacity: 0.7;  transform: translateY(4%); }
 }
 #hearth-overlay.is-opening .job-rail-curtain--left.hearth-curtain {
-  animation: job-curtain-open-left 0.94s cubic-bezier(0.18, 0.82, 0.25, 1) forwards !important;
+  animation: job-curtain-open-left 1.45s cubic-bezier(0.22, 0.78, 0.28, 1) forwards !important;
 }
 #hearth-overlay.is-opening .job-rail-curtain--right.hearth-curtain {
-  animation: job-curtain-open-right 0.94s cubic-bezier(0.18, 0.82, 0.25, 1) forwards !important;
+  animation: job-curtain-open-right 1.45s cubic-bezier(0.22, 0.78, 0.28, 1) forwards !important;
 }
 
 /* ── 검은 모험 셔터 ───────────────────────────────────────────────────
@@ -262,7 +262,8 @@ export const HEARTH_STYLES = `
   background: #000;
   opacity: 1;
   pointer-events: none;
-  transition: opacity 0.85s ease;
+  /* 더 은은하게(천천히) 떠오른다. 커튼 로직은 이 페이드가 끝난 뒤에 시작된다(HearthScene 타이밍). */
+  transition: opacity 1.3s ease;
 }
 #hearth-fade.is-out {
   opacity: 0;
@@ -296,10 +297,6 @@ body.hearth-lobby .left-panel .score-panel-total {
   opacity: 0;
   pointer-events: none;
 }
-/* 로그는 거점에서 흐름에서 제거(display)해 그 자리에 퀘스트 딱지가 정확히 들어오게 한다. */
-body.hearth-lobby .left-panel .score-log-list {
-  display: none;
-}
 /* 우측 손패/콤보게이지/확률은 오른쪽 밖으로(이 자리에 인스펙터가 들어간다). */
 body.hearth-lobby .hand-column {
   transform: translateX(135%);
@@ -311,40 +308,39 @@ body.hearth-lobby .hand-column {
    평소 비움(여백의 미). 인스펙터블(칸/딱지) hover 시 스르륵 떠오르고 떼면 사라진다.
    직업 카드 문법 참고: 상단 일러스트 + 하단 노란 제목/구분선/태그/설명.
    좌측 경계는 투명도 그라데이션 마스크로 흐려 자연스럽게 떠 있게 한다. */
+/* 카드로 분리하지 않고 우측 전체를 쓴다. 위치/크기는 JS(alignInspector)가 레일 우측
+   절반~화면 우측 끝으로 맞춘다(레일 우측을 일부 침범). 좌측 경계는 마스크로 흐려 녹인다. */
 #hearth-inspector {
   position: fixed;
-  right: clamp(16px, 5vw, 84px);
-  top: 50%;
-  transform: translateY(-50%);
   z-index: 142;
-  width: clamp(200px, 21vw, 264px);
   pointer-events: none;
 }
 .hearth-inspector-card {
   display: flex;
   flex-direction: column;
-  border-radius: 16px;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
-  border: 1px solid rgba(255, 215, 120, 0.24);
-  border-left: 0;
-  background: linear-gradient(180deg, rgba(26, 18, 38, 0.96), rgba(8, 5, 14, 0.98));
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 232, 168, 0.12);
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 10%, #000 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 10%, #000 100%);
+  border-radius: 0 16px 16px 0;
+  border: 0;
+  background: linear-gradient(180deg, rgba(26, 18, 38, 0.94), rgba(8, 5, 14, 0.97));
+  box-shadow: -10px 0 44px rgba(0, 0, 0, 0.5);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 48px, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 48px, #000 100%);
   opacity: 0;
-  transform: translateY(16px);
-  transition: opacity 0.26s ease, transform 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
+  transform: translateY(14px);
+  transition: opacity 0.28s ease, transform 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 #hearth-inspector.is-shown .hearth-inspector-card {
   opacity: 1;
   transform: translateY(0);
 }
-/* 임시 일러스트 플레이스홀더(실제 아트는 background-image로 교체). */
+/* 임시 일러스트 플레이스홀더(실제 아트는 background-image로 교체). 상단 절반 이상 차지. */
 .hearth-inspector-art {
   position: relative;
-  height: clamp(130px, 21vh, 210px);
+  flex: 0 0 52%;
   background:
-    radial-gradient(circle at 54% 38%, rgba(255, 232, 168, 0.12), transparent 60%),
+    radial-gradient(circle at 56% 36%, rgba(255, 232, 168, 0.12), transparent 60%),
     repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 9px),
     linear-gradient(180deg, rgba(40, 28, 52, 0.92), rgba(12, 8, 18, 0.96));
 }
@@ -356,11 +352,12 @@ body.hearth-lobby .hand-column {
   background: linear-gradient(180deg, transparent 38%, rgba(8, 5, 14, 0.86) 86%, rgba(8, 5, 14, 0.98) 100%);
 }
 .hearth-inspector-body {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: clamp(4px, 0.8vh, 8px);
-  /* 좌측 패딩은 마스크 페이드(좌 10%)보다 넓게 잡아 제목/설명이 흐려지지 않게 한다. */
-  padding: clamp(10px, 1.5vh, 15px) clamp(12px, 1vw, 18px) clamp(13px, 1.8vh, 18px) clamp(22px, 2.2vw, 30px);
+  gap: clamp(5px, 1vh, 10px);
+  /* 좌측 패딩은 마스크 페이드(좌 48px)보다 넓게 잡아 제목/설명이 흐려지지 않게 한다. */
+  padding: clamp(12px, 1.8vh, 18px) clamp(16px, 1.4vw, 24px) clamp(16px, 2.2vh, 24px) clamp(56px, 5.5vw, 78px);
 }
 .hearth-inspector-title {
   font-family: 'OkDanDan', Georgia, serif;

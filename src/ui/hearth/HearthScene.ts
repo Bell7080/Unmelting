@@ -93,7 +93,8 @@ export class HearthScene {
     this.inspector = inspector
 
     this.alignToRail()
-    const onResize = (): void => this.alignToRail()
+    this.alignInspector()
+    const onResize = (): void => { this.alignToRail(); this.alignInspector() }
     this.resizeListener = onResize
     window.addEventListener('resize', onResize)
     window.addEventListener('scroll', onResize, true)
@@ -111,18 +112,18 @@ export class HearthScene {
       if (t.closest('[data-hearth-station="adventure"]')) this.descendShutter()
     })
 
-    // /시작: 검은 화면에서 천천히 페이드인(타이틀 직후 게임 진입 연출).
+    // /시작: 검은 화면에서 은은하게(천천히) 페이드인(타이틀 직후 게임 진입 연출).
     const fade = document.createElement('div')
     fade.id = 'hearth-fade'
     document.body.appendChild(fade)
     requestAnimationFrame(() => fade.classList.add('is-out'))
-    window.setTimeout(() => fade.remove(), 1000)
+    window.setTimeout(() => fade.remove(), 1500)
 
-    // 페이드인이 끝난 뒤: 거대한 문 열림(커튼) → 레일 공개 → 모험 칸 점등 순서.
-    window.setTimeout(() => overlay.classList.add('is-opening'), 820)
+    // 페이드인이 끝난 뒤에야 커튼 로직 시작: 조금 더 닫혀 있다가 천천히 열린다 → 모험 점등.
+    window.setTimeout(() => this.overlay?.classList.add('is-opening'), 1700)
     window.setTimeout(() => {
-      overlay.querySelector<HTMLElement>('[data-hearth-station="adventure"]')?.classList.add('is-ignited')
-    }, 820 + 940)
+      this.overlay?.querySelector<HTMLElement>('[data-hearth-station="adventure"]')?.classList.add('is-ignited')
+    }, 1700 + 1500)
   }
 
   /** 인스펙터블에 들어오면 정보창을 채워 띄운다. */
@@ -215,6 +216,22 @@ export class HearthScene {
       }
     }
     return cells.join('')
+  }
+
+  /** 인스펙터를 우측 전체로 펼친다 — 레일 우측 절반부터 화면 우측 끝까지(레일을 일부 침범). */
+  private alignInspector(): void {
+    const rail = document.querySelector<HTMLElement>('#game-board .rail')
+    const insp = this.inspector
+    if (!rail || !insp) return
+    const r = rail.getBoundingClientRect()
+    const rightMargin = Math.max(12, window.innerWidth * 0.02)
+    // 레일 가로 중앙(우측 절반의 시작)부터 화면 우측 끝까지.
+    const left = r.left + r.width * 0.5
+    const right = window.innerWidth - rightMargin
+    insp.style.left = `${left}px`
+    insp.style.top = `${r.top}px`
+    insp.style.width = `${Math.max(220, right - left)}px`
+    insp.style.height = `${r.height}px`
   }
 
   /** 상점/직업 선택과 동일하게 셸을 실제 레일 rect에 고정한다. */

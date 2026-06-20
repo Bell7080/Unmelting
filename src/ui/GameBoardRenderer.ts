@@ -762,10 +762,12 @@ export class GameBoardRenderer {
             ${renderedCoins.toLocaleString()} $
           </div>
         </section>
-        <section class="score-log-list" aria-label="Action history">
-          ${logs}
-        </section>
-        ${this.renderLobbyQuests()}
+        <div class="left-swap">
+          <section class="score-log-list" aria-label="Action history">
+            ${logs}
+          </section>
+          ${this.renderLobbyQuests()}
+        </div>
       </aside>
     `
   }
