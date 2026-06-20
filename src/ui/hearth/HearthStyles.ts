@@ -348,37 +348,39 @@ body.hearth-lobby .hand-column {
   left: 0;
   right: 0;
   bottom: 0;
+  /* 하단부터 약 1/3을 차지하는 강한 검은 그라데이션 위에 밝은 글씨를 올린다. */
+  min-height: 34%;
   display: flex;
   flex-direction: column;
-  gap: clamp(5px, 1vh, 9px);
-  /* 위쪽 큰 패딩 = 그라데이션이 자연스럽게 시작되는 여유. 좌측 패딩은 마스크(40px)보다 넓게. */
-  padding: clamp(48px, 9vh, 96px) clamp(16px, 1.4vw, 24px) clamp(16px, 2.2vh, 24px) clamp(46px, 4.5vw, 66px);
-  background: linear-gradient(180deg, transparent 0%, rgba(8, 5, 14, 0.5) 30%, rgba(6, 4, 11, 0.9) 72%, rgba(5, 3, 10, 0.97) 100%);
+  justify-content: flex-end;
+  gap: clamp(6px, 1.1vh, 12px);
+  padding: clamp(24px, 5vh, 70px) clamp(18px, 1.6vw, 28px) clamp(20px, 2.8vh, 32px) clamp(46px, 4.5vw, 66px);
+  background: linear-gradient(180deg, transparent 0%, rgba(6, 4, 11, 0.55) 24%, rgba(5, 3, 10, 0.92) 60%, rgba(3, 2, 7, 1) 100%);
 }
 .hearth-inspector-title {
   font-family: 'OkDanDan', Georgia, serif;
   font-weight: 900;
-  font-size: clamp(17px, 2.4vh, 25px);
-  line-height: 1.14;
+  font-size: clamp(30px, 4.4vh, 46px);
+  line-height: 1.12;
   color: #ffe7a8;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 18px rgba(244, 164, 96, 0.24);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.92), 0 0 22px rgba(244, 164, 96, 0.28);
 }
 .hearth-inspector-divider {
-  width: clamp(26px, 2.6vw, 48px);
-  height: 2px;
+  width: clamp(34px, 3.4vw, 62px);
+  height: 3px;
   border-radius: 2px;
   background: linear-gradient(90deg, rgba(255, 215, 120, 0.8), rgba(255, 215, 120, 0.05));
 }
 .hearth-inspector-tags {
   font-family: 'OkDanDan', Georgia, serif;
   font-weight: 800;
-  font-size: clamp(11px, 1.5vh, 14px);
-  color: rgba(248, 206, 120, 0.95);
+  font-size: clamp(18px, 2.4vh, 26px);
+  color: rgba(248, 206, 120, 0.96);
 }
 .hearth-inspector-desc {
   font-family: 'OkDanDan', Georgia, serif;
-  font-size: clamp(11px, 1.4vh, 14px);
-  line-height: 1.5;
-  color: rgba(206, 192, 170, 0.8);
+  font-size: clamp(16px, 2.1vh, 23px);
+  line-height: 1.45;
+  color: rgba(214, 200, 178, 0.86);
 }
 `
