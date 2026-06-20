@@ -72,11 +72,18 @@ export class HearthScene {
       if (t.closest('[data-hearth-station="adventure"]')) this.descendShutter()
     })
 
-    // 거대한 문 열림(커튼) → 레일 공개 → 모험 칸 점등 순서.
-    window.setTimeout(() => overlay.classList.add('is-opening'), 320)
+    // /시작: 검은 화면에서 천천히 페이드인(타이틀 직후 게임 진입 연출).
+    const fade = document.createElement('div')
+    fade.id = 'hearth-fade'
+    document.body.appendChild(fade)
+    requestAnimationFrame(() => fade.classList.add('is-out'))
+    window.setTimeout(() => fade.remove(), 1000)
+
+    // 페이드인이 끝난 뒤: 거대한 문 열림(커튼) → 레일 공개 → 모험 칸 점등 순서.
+    window.setTimeout(() => overlay.classList.add('is-opening'), 820)
     window.setTimeout(() => {
       overlay.querySelector<HTMLElement>('[data-hearth-station="adventure"]')?.classList.add('is-ignited')
-    }, 320 + 940)
+    }, 820 + 940)
   }
 
   /** 모험 선택 → 로비 위로 검은 모험 셔터가 내려오고, 모험 자리에 출발 버튼이 드러난다. */

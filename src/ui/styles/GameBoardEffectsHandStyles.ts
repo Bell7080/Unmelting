@@ -244,9 +244,47 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
 .ember-icon {
   display: inline-flex;
   align-items: center;
-  color: var(--color-flame);
-  font-size: 18px;
-  filter: drop-shadow(0 0 8px rgba(255, 215, 120, 0.7));
+  justify-content: center;
+  width: 16px;
+  height: 20px;
+}
+/* 모험 칸과 같은 말랑한 촛불을 불씨 게이지 아이콘으로 사용한다.
+   불씨 티어가 높을수록(잘 탈수록) 붉고 진하게, 낮을수록 노랗고 희미하게 변한다. */
+.ember-flame-body {
+  display: block;
+  width: 13px;
+  height: 18px;
+  border-radius: 50% 50% 50% 50% / 62% 62% 40% 40%;
+  background: radial-gradient(ellipse at 50% 72%, #fff3c4 0%, #ffc861 30%, #f0822e 64%, rgba(150, 50, 12, 0.25) 100%);
+  filter: drop-shadow(0 0 6px rgba(244, 140, 60, 0.7));
+  opacity: 0.9;
+  animation: ember-flame-flicker 1.7s ease-in-out infinite;
+  transition: filter 0.5s ease, opacity 0.5s ease, background 0.5s ease;
+}
+.ember-flame--bright .ember-flame-body {
+  background: radial-gradient(ellipse at 50% 72%, #fff0c0 0%, #ffb347 26%, #f0431e 60%, rgba(150, 20, 10, 0.3) 100%);
+  filter: drop-shadow(0 0 9px rgba(255, 70, 30, 0.85));
+  opacity: 1;
+}
+.ember-flame--dim .ember-flame-body {
+  background: radial-gradient(ellipse at 50% 72%, #fff3c4 0%, #ffc861 30%, #f0822e 64%, rgba(150, 50, 12, 0.25) 100%);
+  filter: drop-shadow(0 0 7px rgba(244, 140, 60, 0.75));
+  opacity: 0.92;
+}
+.ember-flame--flickering .ember-flame-body {
+  background: radial-gradient(ellipse at 50% 70%, #fff7d2 0%, #ffd778 36%, #f0a93e 70%, rgba(160, 90, 20, 0.2) 100%);
+  filter: drop-shadow(0 0 5px rgba(255, 200, 110, 0.62));
+  opacity: 0.8;
+}
+.ember-flame--extinguished .ember-flame-body {
+  background: radial-gradient(ellipse at 50% 68%, #fff8d8 0%, #ffe199 44%, #e8c25a 80%, rgba(180, 150, 60, 0.15) 100%);
+  filter: drop-shadow(0 0 4px rgba(255, 225, 150, 0.5));
+  opacity: 0.55;
+}
+@keyframes ember-flame-flicker {
+  0%, 100% { transform: scale(1) skewX(0deg); }
+  35% { transform: scale(1.08, 0.94) skewX(3deg); }
+  68% { transform: scale(0.94, 1.07) skewX(-3deg); }
 }
 .ember-bar {
   position: relative;

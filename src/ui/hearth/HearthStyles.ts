@@ -252,11 +252,56 @@ export const HEARTH_STYLES = `
   filter: brightness(1.1);
 }
 
-/* ── 거점 동안 플레이어 캐릭터/컨트롤 숨김 ──────────────────────────────
-   아직 캐릭터를 고르지 않았으므로 보드 레이어는 살려두되 플레이어 존만 끈다.
-   display:none이 아니라 visibility로 레이아웃을 유지해, 거점이 정렬하는
-   레일 rect가 흔들리지 않게 한다(캐릭터는 설정 레이어에서 선택 시 등장). */
+/* ── /시작 검은 화면 페이드인 ───────────────────────────────────────────
+   타이틀 직후 게임 진입처럼 검은 화면에서 천천히 떠오른다. 전체 화면을 덮고
+   페이드아웃되며 닫힌 커튼의 거점을 드러낸 뒤 제거된다. */
+#hearth-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  background: #000;
+  opacity: 1;
+  pointer-events: none;
+  transition: opacity 0.85s ease;
+}
+#hearth-fade.is-out {
+  opacity: 0;
+}
+
+/* ── 거점 동안 런 전용 패널 숨김 + 출발 시 슬라이드 전환 ─────────────────
+   아직 캐릭터를 고르지 않았으므로 보드 레이어는 살려두되 런 UI만 끈다.
+   전환이 재생되도록 transition은 클래스 밖(상시)에 두고, hearth-lobby가 off-state만
+   준다. startGame이 로비 상태로 렌더 후 다음 프레임에 클래스를 떼면 슬라이드 인.
+   화폐(.coin-panel-total)는 끄지 않아 거점↔런 공유 앵커로 남는다. */
+.ember-hud,
+.left-panel .turn-brand,
+.left-panel .score-panel-total,
+.left-panel .score-log-list,
+.hand-column {
+  transition: transform 0.52s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.42s ease;
+}
+/* 플레이어 카드는 슬라이드 없이 그냥 비운다(캐릭터 미선택). */
 body.hearth-lobby .player-zone {
   visibility: hidden;
+}
+/* 불씨 게이지: 상단 밖으로 올려 숨김 → 출발 시 위에서 내려온다(translateX(-50%) 유지). */
+body.hearth-lobby .ember-hud {
+  transform: translate(-50%, -180%);
+  opacity: 0;
+  pointer-events: none;
+}
+/* 좌측 런 UI(턴/불빛/로그)는 왼쪽 밖으로, 화폐만 남긴다. */
+body.hearth-lobby .left-panel .turn-brand,
+body.hearth-lobby .left-panel .score-panel-total,
+body.hearth-lobby .left-panel .score-log-list {
+  transform: translateX(-135%);
+  opacity: 0;
+  pointer-events: none;
+}
+/* 우측 손패/콤보게이지/확률은 오른쪽 밖으로(이 자리에 인스펙터가 들어갈 예정). */
+body.hearth-lobby .hand-column {
+  transform: translateX(135%);
+  opacity: 0;
+  pointer-events: none;
 }
 `

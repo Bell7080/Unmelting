@@ -5302,7 +5302,7 @@ export class GameBoardRenderer {
       <div class="ember-hud" aria-label="Ember status">
         <div class="ember-hud-inner">
           <div class="ember-line">
-            <span class="ember-icon">${flameIcon()}</span>
+            <span class="ember-icon ember-flame ember-flame--${tier}" aria-hidden="true"><i class="ember-flame-body"></i></span>
             <div class="ember-bar">
               <div class="ember-bar-fill ember-tier-${tier}" style="width: ${pct}%"></div>
               <div class="ember-atk1-line" style="left: ${atk1LinePct.toFixed(1)}%" title="이 아래로 내려가면 적 공격력 +1, 적이 먼저 공격합니다" aria-hidden="true"></div>

@@ -2369,13 +2369,14 @@ function resetForNewRun(): void {
 
 async function startGame(): Promise<void> {
   resetForNewRun()
-  // 런이 시작되면 캐릭터가 정해지므로 거점 숨김을 해제해 플레이어 존을 되살린다.
-  document.body.classList.remove('hearth-lobby')
   const poolSnapshot = runCardPool.snapshot()
   // 메타 사당 해금(영구) + 런 카드풀(임시) 이중 구조를 플레이 로그로 명시한다.
   recordNotice(`카드 풀 초기화: 메타해금 ${poolSnapshot.unlocked.length} / 잠김 ${poolSnapshot.locked.length} / 금지 ${poolSnapshot.banned.length}`, 'info')
   // 시작 직업 선택은 빈 레일 위의 암막 안에서 진행한다. 선택 전 3×3 스폰을 노출하지 않기 위함이다.
   render()
+  // 거점→런: 로비 상태(off-screen)로 렌더된 런 패널/불씨 HUD를 다음 프레임에 해제해
+  // 슬라이드 인 시킨다. 거점 미진입(기본 부팅)이면 클래스가 없어 즉시 정상 표시된다.
+  requestAnimationFrame(() => document.body.classList.remove('hearth-lobby'))
 
   // 직업 선택 오버레이 — 플레이어 대사 전에 한 번만 선택한다.
   // 선택 카드는 화면 중앙으로 남고, 암막이 닫힌 동안 실제 3×3 레일을 준비한다.
