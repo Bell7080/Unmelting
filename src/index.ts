@@ -231,18 +231,16 @@ function companionInDanger(): boolean {
   return lowHp || lowEmber
 }
 
-/** 프로필을 만졌을 때 — 말하는 중이면 항의(분노 비례), 아니면 상황/연타 반응 + 방치 마무리 예약. */
+/** 프로필을 만졌을 때 — 상황/연타 반응 + 방치 마무리 예약. 스킵은 플레이어 자유라 항의는 없다. */
 function onProfileTouched(): void {
   if (!gameActive || inputLocked) return
   const now = Date.now()
-  const interrupting = enaSpeaking && speechBubble.isShowing
   const danger = companionInDanger()
-  const line = companion.onProfileTouch(now, { danger, interrupting })
-  // 항의/위급은 읽는 중에도 끼어들도록 높은 중요도, 평범한 반응은 낮은 중요도.
+  const line = companion.onProfileTouch(now, { danger })
+  // 위급은 읽는 중에도 끼어들도록 높은 중요도, 평범한 반응은 낮은 중요도.
   // (연타 throttle로 null이면 이번 클릭엔 침묵.)
   if (line) {
-    const importance = interrupting || danger ? BARK_IMPORTANCE.urgent : BARK_IMPORTANCE.touch
-    sayEnaBark(line, { importance })
+    sayEnaBark(line, { importance: danger ? BARK_IMPORTANCE.urgent : BARK_IMPORTANCE.touch })
   }
   clearTimeout(companionIdleTimer)
   companionIdleTimer = window.setTimeout(() => {

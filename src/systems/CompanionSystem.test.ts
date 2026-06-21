@@ -33,11 +33,10 @@ describe('CompanionSystem', () => {
     expect(c.onSettle()).toBeNull()
   })
 
-  it('첫 터치는 항상 비어있지 않은 문자열로 응답하고, onInterrupt도 그렇다', () => {
+  it('첫 터치는 항상 비어있지 않은 문자열로 응답한다', () => {
     // 새 인스턴스의 첫 터치(streak 1)는 throttle을 통과한다.
     expect(new CompanionSystem().onProfileTouch(Date.now(), { danger: false })!.length).toBeGreaterThan(0)
     expect(new CompanionSystem().onProfileTouch(Date.now(), { danger: true })!.length).toBeGreaterThan(0)
-    expect(new CompanionSystem().onInterrupt().length).toBeGreaterThan(0)
   })
 
   it('연타 throttle: 빠른 연타는 일부만 응답한다(전부 응답하지 않음)', () => {

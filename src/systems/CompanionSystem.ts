@@ -20,8 +20,6 @@ import type { HandCategory } from '@entities/HandCard'
 export interface CompanionContext {
   /** 체력/불씨가 위태로운 위급 상황인가. */
   danger: boolean
-  /** 그녀가 말하는 도중에 또 만졌는가(보채기) → 분노 섞인 항의로 응한다. */
-  interrupting?: boolean
 }
 
 /** 템플릿 대사: `{슬롯}` 자리를 slots의 값 중 하나로 랜덤 치환한 뒤 조사를 보정한다. */
@@ -34,7 +32,7 @@ export interface LineTemplate {
 export type Line = string | LineTemplate
 
 /** 프로필 터치/상태 반응 풀. */
-type TouchPoolId = 'calm' | 'annoyed' | 'exasperated' | 'urgent' | 'settle' | 'interrupt' | 'quiet'
+type TouchPoolId = 'calm' | 'annoyed' | 'exasperated' | 'urgent' | 'settle' | 'quiet'
 /** 게임 이벤트 상황 반응 풀. */
 type SituationPoolId = 'hit' | 'web' | 'treasure' | 'kill' | 'survive' | 'loot-match-ok' | 'loot-match-low'
 type PoolId = TouchPoolId | SituationPoolId
@@ -169,19 +167,6 @@ const POOLS: Record<PoolId, Line[]> = {
     },
     '자, 정신 차리고 — 앞으로 가자!',
   ],
-  // 말하는 중에 또 만졌을 때(보채기 항의) — 분노에 따라 톤이 세진다.
-  interrupt: [
-    {
-      template: '아, 잠깐! 내 말 {상태}!',
-      slots: { 상태: ['안 끝났어', '아직 안 끝났다고'] },
-    },
-    '{강조}끝까지 들어{종결}',
-    {
-      template: '중요한 얘기라고! {재촉2}',
-      slots: { 재촉2: ['끊지 마', '좀 들어줘', '진지하게!'] },
-    },
-    '말 자르지 마, 치사하게…!',
-  ],
   // 스킵이 누적돼 과묵해질 때(가끔) — 삐침이 아니라 배려의 톤.
   quiet: [
     '내가 이야기하는 게 거슬렸구나…? 알았어, 조용히 할게.',
@@ -300,17 +285,16 @@ const POOL_INTENSITY: Record<TouchPoolId, Intensity> = {
   exasperated: 'urgent',
   urgent: 'urgent',
   settle: 'soft',
-  interrupt: 'urgent',
   quiet: 'soft',
 }
 
 /** 상황 바크별 기본 발화 확률 + 말투. 너무 수다스럽지 않게 낮게 둔다. */
 const SITUATION: Record<SituationId, { chance: number; intensity: Intensity }> = {
-  hit: { chance: 0.4, intensity: 'normal' },
-  web: { chance: 0.55, intensity: 'normal' },
-  treasure: { chance: 0.4, intensity: 'normal' },
-  kill: { chance: 0.2, intensity: 'normal' },
-  survive: { chance: 0.22, intensity: 'normal' },
+  hit: { chance: 0.3, intensity: 'normal' },
+  web: { chance: 0.35, intensity: 'normal' },
+  treasure: { chance: 0.3, intensity: 'normal' },
+  kill: { chance: 0.15, intensity: 'normal' },
+  survive: { chance: 0.18, intensity: 'normal' },
 }
 
 const STREAK_RESET_MS = 4000
@@ -350,10 +334,6 @@ export class CompanionSystem {
     this.touchStreak += 1
     this.lastTouchAt = now
     if (!this.shouldVoiceTouch()) return null
-    if (ctx.interrupting) {
-      // 말하는 중에 또 만짐 → 분노가 쌓일수록 더 강하게 항의한다.
-      return this.pickFrom('interrupt', POOLS.interrupt, this.touchStreak >= 3 ? 'urgent' : 'normal')
-    }
     if (ctx.danger) return this.pickPool('urgent')
     const pool: TouchPoolId =
       this.touchStreak >= 6 ? 'exasperated' : this.touchStreak >= 3 ? 'annoyed' : 'calm'
@@ -373,11 +353,6 @@ export class CompanionSystem {
     if (this.touchStreak === 0) return null
     this.touchStreak = 0
     return this.pickPool('settle')
-  }
-
-  /** 말하는 중에 스킵/빨리감기로 끊겼을 때(분노 비례). */
-  onInterrupt(): string {
-    return this.pickFrom('interrupt', POOLS.interrupt, this.touchStreak >= 3 ? 'urgent' : 'normal')
   }
 
   /**
@@ -450,10 +425,11 @@ export class CompanionSystem {
 
   /**
    * 월드 바크 사이 최소 턴 간격. 수다 수치가 높을수록 짧아진다(자주 말함).
-   * 기본 수치(1.0)에서 5턴, 수다(1.8)면 ~3턴, 과묵(0.2)이면 최대 10턴까지 벌어진다.
+   * 기본 수치(1.0)에서 8턴, 수다(1.8)면 ~4턴, 과묵(0.2)이면 최대 16턴까지 벌어진다.
+   * (수다스러워 게임에 방해되지 않도록 기본을 넉넉히 띄웠다.)
    */
   private minTurnGap(): number {
-    return Math.min(10, Math.max(2, Math.round(5 / this.chattiness())))
+    return Math.min(16, Math.max(3, Math.round(8 / this.chattiness())))
   }
 
   /** 터치/상태 풀(기본 긴급도 사용)에서 한 줄 고른다. */
