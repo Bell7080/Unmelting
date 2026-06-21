@@ -2519,7 +2519,7 @@ function setupDevCommandPalette(): void {
       <span class="dev-command-prefix">/</span>
       <input class="dev-command-input" type="text" spellcheck="false" autocomplete="off" />
       <button class="dev-command-close" aria-label="닫기">✕</button>
-      <div class="dev-command-hint">예시: /시작, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비</div>
+      <div class="dev-command-hint">예시: /시작, /부자, /상점, /제단, /시련, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비</div>
     </div>
     <button class="dev-command-run">실행</button>
   `
@@ -2766,7 +2766,39 @@ function setupDevCommandPalette(): void {
       enterHearth()
       return
     }
-    setHint('알 수 없는 명령어입니다. /시작, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /악마소환, /악마소환준비')
+    // 디버그: 즉시 부유 — 불빛/화폐를 대량 지급한다.
+    if (/^(부자|rich)$/i.test(token)) {
+      score += 100_000_000
+      coins += 1_000_000
+      render()
+      setHint('디버그: 불빛 +100,000,000 / 화폐 +1,000,000$')
+      return
+    }
+    // 디버그: 상점/제단을 셔터 연출과 함께 즉시 연다(일반 방문과 동일 흐름).
+    if (/^상점$/.test(token)) {
+      if (inputLocked || shopOpen || gameState.isGameOver) { setHint('지금은 상점을 열 수 없습니다.'); return }
+      close()
+      await openShopOverlay('shop')
+      return
+    }
+    if (/^제단$/.test(token)) {
+      if (inputLocked || shopOpen || gameState.isGameOver) { setHint('지금은 제단을 열 수 없습니다.'); return }
+      close()
+      await openShopOverlay('altar')
+      return
+    }
+    // 디버그: 강제 시련을 셔터 연출과 함께 즉시 연다.
+    if (/^시련$/.test(token)) {
+      if (inputLocked || shopOpen || gameState.isGameOver) { setHint('지금은 시련을 열 수 없습니다.'); return }
+      close()
+      inputLocked = true
+      await boardRenderer.playShopTransition()
+      await openTrialOverlayForced()
+      inputLocked = false
+      render()
+      return
+    }
+    setHint('알 수 없는 명령어입니다. /시작, /부자, /상점, /제단, /시련, /25turn, /공격력7, /체력40, /1000불빛, /10$, /악마소환')
   }
 
   // 닫기 버튼 (shell 우상단 ✕)

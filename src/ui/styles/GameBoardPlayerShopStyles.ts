@@ -343,6 +343,11 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   height: auto !important;
   /* 패널 높이를 넘지 않도록 보정 */
   max-height: 98% !important;
+  /* 제단 유물 width/max-width 캡(특이도 0,0,3,0)이 시련 카드에 걸려 좌측 정렬되던
+     문제 차단 — 셀 폭을 그대로 채운다. */
+  max-width: none !important;
+  min-width: 0 !important;
+  justify-self: stretch !important;
   flex: none !important;
   transition: scale 0.18s ease, box-shadow 0.22s ease, filter 0.18s ease;
 }
@@ -1973,6 +1978,11 @@ body.is-shift-detail .shop-relic-effect .shift-only { display: inline; }
     height: 100% !important;
     aspect-ratio: auto !important;
     max-height: 100% !important;
+    /* 제단(data-shop-mode=altar) 유물 max-width 캡이 특이도(0,0,3,0)로 시련 카드에도
+       걸려 셀보다 좁게 잘리고 좌측 정렬되던 버그 차단 — 셀을 꽉 채우게 한다. */
+    max-width: none !important;
+    min-width: 0 !important;
+    justify-self: stretch !important;
   }
   /* EXIT button: moved inside the content-bundle (bottom: 6px) so overflow:hidden
      doesn't clip it. Right-aligned so it clears the pack cards. */
@@ -1999,18 +2009,18 @@ body.is-shift-detail .shop-relic-effect .shift-only { display: inline; }
     flex: 1 1 0;
     width: auto;
     min-width: 64px;
-    max-width: 144px;
+    max-width: 158px;
   }
   .shop-shell[data-shop-mode="altar"] .shop-artifact-layer .shop-relic-card {
     /* 베이스 altar width:clamp를 풀어 flex 균등 분배에 맡긴다(카드 간격 어긋남 방지). */
     width: auto;
-    max-width: 163px;
+    max-width: 179px;
   }
   .shop-free-card {
     flex: 1 1 0;
     width: auto;
     min-width: 72px;
-    max-width: 120px;
+    max-width: 132px;
   }
   /* 무료카드 부채꼴(회전+겹침)을 모바일에선 펴서 좁은 컬럼에 나란히 정렬한다. */
   .shop-free-layer { gap: clamp(8px, 1.6vw, 14px); }
@@ -2023,7 +2033,7 @@ body.is-shift-detail .shop-relic-effect .shift-only { display: inline; }
     flex: 1 1 0;
     width: auto;
     min-width: 54px;
-    max-width: 100px;
+    max-width: 110px;
   }
   /* Price label: shorter droop so it stays inside the overflow:hidden shell bounds. */
   .shop-price-label {
@@ -2055,8 +2065,8 @@ body.is-shift-detail .shop-relic-effect .shift-only { display: inline; }
      제약을 해제하며, 셸 패딩/풋터 여백을 줄여 레일 안에 풋터까지 들어오게 한다. */
   .shop-pack-picker-cards {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    /* 개봉 시 3장이 레일을 꽉 채워 과하게 컸다. ~60%로 깡 축소해 중앙에 작게 모은다. */
-    max-width: 60%;
+    /* 개봉 시 3장이 레일을 꽉 채워 과하게 컸다. ~54%로 깡 축소해 중앙에 작게 모은다. */
+    max-width: 54%;
     gap: clamp(5px, 0.9vw, 11px);
   }
   .shop-pack-pick-card {
