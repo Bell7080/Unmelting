@@ -2551,6 +2551,20 @@ function setupDevCommandPalette(): void {
   mobileBtn.setAttribute('aria-label', '커멘드 팔레트 열기')
   document.body.appendChild(mobileBtn)
 
+  // 모바일 전용 새로고침 버튼 (최하단). 아이콘은 작게, 터치 범위는 크게.
+  const refreshBtn = document.createElement('button')
+  refreshBtn.className = 'dev-refresh-mobile-btn'
+  refreshBtn.setAttribute('aria-label', '새로고침')
+  // 플랫 inline-SVG 원형 화살표(단색 stroke, currentColor) — Icons.ts 스타일 유지.
+  refreshBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+         stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <path d="M21 3v6h-6" />
+    </svg>`
+  refreshBtn.addEventListener('click', () => window.location.reload())
+  document.body.appendChild(refreshBtn)
+
   const style = document.createElement('style')
   style.textContent = `
     .dev-command-palette { position: fixed; inset: 0 auto auto 0; width: 100%; z-index: 140; pointer-events: none; opacity: 0; transform: translateY(-8px); transition: opacity .14s ease, transform .14s ease; }
@@ -2563,12 +2577,15 @@ function setupDevCommandPalette(): void {
     .dev-command-hint { grid-area: hint; color: rgba(232,214,180,.78); font-size: 12px; }
     .dev-command-run { display: none; margin: 6px auto 0; width: min(760px, calc(100% - 24px)); padding: 8px 0; border: 1px solid rgba(255,215,120,.35); border-radius: 10px; background: rgba(38,26,48,.92); color: rgba(255,215,120,.92); font: 900 14px/1 'OkDanDan', Georgia, serif; cursor: pointer; letter-spacing: .04em; }
     .dev-command-mobile-btn { display: none; position: fixed; top: calc(8px + env(safe-area-inset-top)); left: calc(8px + env(safe-area-inset-left)); width: 34px; height: 34px; border-radius: 9px; border: 1px solid rgba(255,215,120,.38); background: rgba(18,12,24,.88); color: rgba(255,215,120,.9); font: 900 17px/1 'OkDanDan', Georgia, serif; cursor: pointer; z-index: 141; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.5); }
-    /* 보이는 크기(34px)는 유지하되, 투명 ::before로 히트 영역만 확장한다. 노치 쪽(상/좌)보다
-       화면 안쪽(우/하)으로 더 넓혀 엄지로 근처를 눌러도 들어가게 한다. iPhone 사이드 잘림 보완. */
-    .dev-command-mobile-btn::before { content: ''; position: absolute; top: -12px; left: -12px; right: -30px; bottom: -30px; }
+    .dev-refresh-mobile-btn { display: none; position: fixed; bottom: calc(8px + env(safe-area-inset-bottom)); left: calc(8px + env(safe-area-inset-left)); width: 34px; height: 34px; border-radius: 9px; border: 1px solid rgba(255,215,120,.38); background: rgba(18,12,24,.88); color: rgba(255,215,120,.9); cursor: pointer; z-index: 141; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.5); padding: 0; }
+    /* 보이는 크기(34px)는 유지하되, 투명 ::before로 히트 영역만 크게 + 대칭으로 확장한다.
+       엄지로 버튼 근처 어디를 눌러도 들어가게 한다(iPhone 사이드 잘림 보완). */
+    .dev-command-mobile-btn::before,
+    .dev-refresh-mobile-btn::before { content: ''; position: absolute; inset: -46px; }
     @media (hover: none) and (pointer: coarse) {
       .dev-command-run { display: block; }
       .dev-command-mobile-btn { display: flex; }
+      .dev-refresh-mobile-btn { display: flex; }
     }
   `
   document.head.appendChild(style)
