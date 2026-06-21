@@ -188,6 +188,10 @@ const COMPANION_IDLE_MS = 2600
 let currentBarkSituation: SituationId | null = null
 let currentBarkImportance = 0
 let barkShownAt = 0
+// 이 시각 전까지는 스킵(닫기)을 막는다 — 출력/빨리감기 직후 더블클릭으로 바로 넘어가는 것 방지.
+let barkSkipLockUntil = 0
+// 출력(또는 빨리감기) 이후 스킵을 잠그는 유예 시간. 고정 대사처럼 살짝의 딜레이를 준다.
+const BARK_SKIP_GRACE_MS = 600
 // 이 시간 넘게 떠 있었으면 "읽었다"로 본다(이후 스킵은 학습 신호로 치지 않음).
 let companionHeardTimer = 0
 const COMPANION_READ_MS = 1500
@@ -212,6 +216,8 @@ function sayEnaBark(
   currentBarkImportance = importance
   currentBarkSituation = opts.situation ?? null
   barkShownAt = Date.now()
+  // 출력 직후 잠깐은 스킵 불가(고정 대사 같은 살짝의 딜레이). 긴 줄은 빨리감기 시점에 다시 잠근다.
+  barkSkipLockUntil = barkShownAt + BARK_SKIP_GRACE_MS
   speechBubble.show(line)
   const situation = currentBarkSituation
   if (situation) {
@@ -3156,9 +3162,13 @@ document.addEventListener('mousedown', (e) => {
   const onProfile = (e.target as HTMLElement | null)?.closest('.player-card')
   if (speechBubble.isTyping) {
     speechBubble.completeTyping() // 1단계: 빨리감기(타이핑 즉시 완성 = 읽는 행위)
+    // 빨리감겨 전체가 막 떴으므로, 출력 직후처럼 잠깐은 스킵을 막는다(더블클릭 즉시 스킵 방지).
+    barkSkipLockUntil = Date.now() + BARK_SKIP_GRACE_MS
     return
   }
   if (!speechBubble.isShowing || onProfile) return
+  // 출력/빨리감기 직후 유예 동안엔 스킵(닫기)을 무시한다 — 고정 대사처럼 살짝의 딜레이.
+  if (Date.now() < barkSkipLockUntil) return
   // 2단계: 카드가 아닌 곳을 눌러 스킵. 단, '안 읽고 빨리 따닥 넘긴' 경우만 학습 스킵으로 본다.
   const skippedUnread = currentBarkSituation !== null && Date.now() - barkShownAt < COMPANION_READ_MS
   if (skippedUnread) {
