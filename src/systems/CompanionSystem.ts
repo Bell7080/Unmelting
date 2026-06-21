@@ -4,10 +4,11 @@
  * 학습 전 규칙 기반 스캐폴딩이지만, "패턴"이 아니라 "자아"처럼 보이게 하기 위해
  * 내부 상태(연타 횟수·마지막 터치 시각)와 호출 시점의 상황(위기 여부)을 함께 본다.
  *
- * 대사는 LLM 생성이 아니라 "사전 작성"이며, 두 형태를 같은 풀에 섞어 등록한다:
- *   1) 완성된 문장 문자열
- *   2) 템플릿({슬롯}+값 풀) — 조각 몇 개로 수십 변형을 조합한다.
- * 한국어 조사는 `{단어}[은/는]` 처럼 적으면 앞 글자 받침에 맞춰 자동 보정한다.
+ * 대사는 LLM 생성이 아니라 "사전 작성"이며, 세 겹으로 변주를 만든다:
+ *   1) 완성 문장 / 템플릿({슬롯}+값 풀)을 같은 풀에 섞어 등록
+ *   2) 말투 변조 토큰({강조}{종결}{재촉})을 긴급도(intensity)에 맞춰 치환
+ *   3) `{단어}[은/는]` 조사 토큰을 앞 글자 받침에 맞춰 자동 보정
+ * → "가짜 LLM": 즉흥 생성은 못 하지만, 작성한 커버리지 안에서 풍부하게 살아 보인다.
  *
  * 추후 이 자리에 관찰(state)·정책·보상 학습이 끼워진다 — 그때도 정책은
  * "언제/어느 줄을/어떤 말투로"만 고르고 단어를 새로 짓지는 않는다.
@@ -31,6 +32,11 @@ export type Line = string | LineTemplate
 
 /** 대사 풀 식별자(연속 반복 회피 추적 + 외부 확장에 쓰인다). */
 type PoolId = 'calm' | 'annoyed' | 'exasperated' | 'urgent' | 'settle' | 'interrupt'
+
+/** 말투 강도 — 같은 내용도 종결부호/강조어를 달리해 톤을 바꾼다. */
+export type Intensity = 'soft' | 'normal' | 'urgent'
+
+// ── 조사 보정 ────────────────────────────────────────────────
 
 /**
  * 한 글자에 한글 종성(받침)이 있는지. 한글 음절 영역만 검사하고, 한글이 아니면 false.
@@ -68,25 +74,39 @@ export function resolveKoreanParticles(text: string): string {
   })
 }
 
-/** 템플릿을 한 번 렌더한다: 슬롯 랜덤 치환 → 조사 보정. */
-function renderTemplate(t: LineTemplate): string {
-  // 슬롯 이름은 한글이 올 수 있으므로 \w가 아니라 } 직전까지를 잡는다.
-  const filled = t.template.replace(/\{([^}]+)\}/g, (_m, name: string) => {
-    const pool = t.slots[name]
-    if (!pool || pool.length === 0) return ''
-    return pool[Math.floor(Math.random() * pool.length)]
+// ── 말투 변조 ────────────────────────────────────────────────
+
+/** 긴급도별 변조 토큰 값. 같은 강도 안에서도 랜덤으로 골라 변주를 더한다. */
+const TONE: Record<Intensity, Record<'강조' | '종결' | '재촉', readonly string[]>> = {
+  soft: { 강조: [''], 종결: ['…', '.'], 재촉: [''] },
+  normal: { 강조: [''], 종결: ['!', '.'], 재촉: [''] },
+  urgent: { 강조: ['얼른 ', '빨리 ', '당장 '], 종결: ['!', '!!'], 재촉: [' 빨리!', ' 어서!', ''] },
+}
+const TONE_TOKENS = new Set(['강조', '종결', '재촉'])
+
+function randOf(arr: readonly string[]): string {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
+
+/** 한 줄(문자열/템플릿)을 긴급도에 맞춰 렌더한다: 변조/슬롯 치환 → 조사 보정. */
+function renderLine(line: Line, intensity: Intensity): string {
+  const template = typeof line === 'string' ? line : line.template
+  const slots: Record<string, readonly string[]> = typeof line === 'string' ? {} : line.slots
+  const tone = TONE[intensity]
+  // 슬롯/변조 토큰은 한글이 올 수 있으므로 \w가 아니라 } 직전까지를 잡는다.
+  const filled = template.replace(/\{([^}]+)\}/g, (_m, name: string) => {
+    if (TONE_TOKENS.has(name)) return randOf(tone[name as '강조' | '종결' | '재촉'])
+    const pool = slots[name]
+    return pool && pool.length > 0 ? randOf(pool) : ''
   })
   return resolveKoreanParticles(filled)
 }
 
-/** 한 줄(문자열/템플릿)을 실제 출력 문자열로 만든다. */
-function renderLine(line: Line): string {
-  return typeof line === 'string' ? line : renderTemplate(line)
-}
+// ── 대사 풀 ──────────────────────────────────────────────────
 
 /**
- * 에나의 대사 풀. 완성 문장과 템플릿을 섞어 둔다. 가변 배열이라 추후 성장/해금 층이
- * addLines로 풀을 넓힐 수 있다.
+ * 에나의 대사 풀. 완성 문장·템플릿·변조 토큰을 섞어 둔다. 가변 배열이라 추후
+ * 성장/해금 층이 addLines로 풀을 넓힐 수 있다.
  */
 const POOLS: Record<PoolId, Line[]> = {
   // 가볍게 한두 번 만졌을 때 — 템플릿 하나로 감탄×동작×느낌 조합을 낸다.
@@ -110,30 +130,40 @@ const POOLS: Record<PoolId, Line[]> = {
     '왜 이렇게 자꾸 건드려…?',
     '에잇, 모험에 집중해야지!',
   ],
-  // 너무 많이 만질 때(6회~)
+  // 너무 많이 만질 때(6회~) — 변조 토큰으로 강하게.
   exasperated: [
-    '그만! 진짜 그만 좀!',
+    '{강조}그만 좀 만져{종결}{재촉}',
     '계속 만지면… 나 삐진다?',
     '으으, 알았으니까 이제 모험하자!',
   ],
-  // 위급한데 만졌을 때 — 연타 강도와 무관하게 우선한다
+  // 위급한데 만졌을 때 — 연타 강도와 무관하게 우선한다.
   urgent: [
     '지금 장난칠 때야?!',
-    '위험하다고! 앞에 집중해!',
+    '{강조}앞에 집중해{종결}{재촉}',
     '나중에! 지금은 위급하잖아!',
   ],
-  // 연타하다가 손을 뗐을 때
+  // 연타하다가 손을 뗐을 때 — 부드럽게.
   settle: [
-    '…어라, 이제 끝났어?',
+    '{강조}이제 끝났어{종결}',
     '휴, 드디어 조용하네.',
     '자, 정신 차리고 — 앞으로 가자!',
   ],
-  // 말하는 중에 빨리감기/스킵으로 끊겼을 때
+  // 말하는 중에 빨리감기/스킵으로 끊겼을 때.
   interrupt: [
     '아, 잠깐! 내 말 안 끝났어!',
     '중요한 얘기라고! 끝까지 들어!',
     '말 자르지 마, 치사하게…!',
   ],
+}
+
+/** 풀별 기본 말투 강도. 상황(=어느 풀)이 곧 긴급도를 정한다. */
+const POOL_INTENSITY: Record<PoolId, Intensity> = {
+  calm: 'normal',
+  annoyed: 'normal',
+  exasperated: 'urgent',
+  urgent: 'urgent',
+  settle: 'soft',
+  interrupt: 'urgent',
 }
 
 /** 직전 터치로부터 이 시간이 지나면 연타 횟수를 0으로 되돌린다. */
@@ -174,14 +204,15 @@ export class CompanionSystem {
     POOLS[pool].push(...lines)
   }
 
-  /** 풀에서 직전과 다른 항목을 골라 렌더한다(템플릿이면 슬롯이 매번 달라져 변주가 더 커진다). */
+  /** 풀에서 직전과 다른 항목을 골라 긴급도에 맞춰 렌더한다(템플릿/변조로 매번 변주된다). */
   private pick(pool: PoolId): string {
     const lines = POOLS[pool]
-    if (lines.length <= 1) return renderLine(lines[0])
+    const intensity = POOL_INTENSITY[pool]
+    if (lines.length <= 1) return renderLine(lines[0], intensity)
     const prev = this.lastPick.get(pool)
     let idx = Math.floor(Math.random() * lines.length)
     if (idx === prev) idx = (idx + 1) % lines.length
     this.lastPick.set(pool, idx)
-    return renderLine(lines[idx])
+    return renderLine(lines[idx], intensity)
   }
 }
