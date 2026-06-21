@@ -296,6 +296,9 @@ function applyClutch(plan: ClutchPlan): void {
   boardRenderer.refreshChainBanner(buildChainHints())
   recordNotice(`에나의 의지 — ${detail}`, 'info')
   render()
+  // 플레이어 카드 들썩 + 블라스트(종류별 팔레트).
+  const clutchTheme = plan.kind === 'shield' ? 'shield-gain' : plan.kind === 'ember' ? 'ember-gain' : 'health-gain'
+  void boardRenderer.animateClutchOnPlayer(clutchTheme)
   // 거의 확정 대사 + 자원 트레일(같은 beat). 클러치는 최상위 중요도라 다른 대사가 떠 있어도 끼어든다.
   sayEnaBark(plan.line, { importance: BARK_IMPORTANCE.clutch })
   void playPlayerGainTrails({ kind: 'center' }, before)
@@ -995,7 +998,35 @@ async function tryResolveAuthoritySurvive(): Promise<boolean> {
 async function tryResolveSurvivalRelics(): Promise<boolean> {
   if (await tryResolveAuthoritySurvive()) return true
   if (await tryResolveHopeRevive()) return true
+  // 최후의 수단: 다른 부활 수단이 모두 실패한 진짜 죽음 직전, 아주 드물게 에나가 각성한다.
+  if (await tryResolveCompanionAwaken()) return true
   return false
+}
+
+/**
+ * 에나의 각성(최후의 의지). 다른 부활 수단이 전부 실패한 사망 직전에만, 런당 한 번,
+ * 아주 드물게 발동한다. 화려한 연출과 함께 체력 전체 회복 + 공격력 +1로 되살린다.
+ */
+async function tryResolveCompanionAwaken(): Promise<boolean> {
+  const character = gameState.character
+  if (character.isAlive()) return false
+  if (!companion.tryAwaken()) return false
+  await boardRenderer.animateClutchOnPlayer('attack-gain', true)
+  character.fullHeal()
+  character.applyDamageBoost(1)
+  gameState.isGameOver = false
+  gameState.gameOverReason = ''
+  recordNotice('에나의 각성! 체력 전체 회복 · 공격력 +1', 'info')
+  chainTimeline.push({
+    kind: 'will',
+    name: '에나의 각성',
+    flavor: '죽음의 문턱에서 — 체력 전체 회복 · 공격력 +1',
+    uid: nextChainUid(),
+  })
+  boardRenderer.refreshChainBanner(buildChainHints())
+  render()
+  sayEnaBark(companion.awakenLine(), { importance: BARK_IMPORTANCE.clutch })
+  return true
 }
 
 async function tryResolveHopeRevive(): Promise<boolean> {
@@ -1144,6 +1175,31 @@ async function applyWaterBucketExtraDamage(card: Card, distance: number): Promis
   const dmg = Math.max(1, Math.floor(gameState.character.damage * 0.5) + 1)
   const newHealth = card.takeDamage(dmg)
   recordRelicActivation('water-bucket', `추가 피해 ${dmg}`)
+  await boardRenderer.animateDamageNumbersById([{ cardId: card.id, amount: dmg }])
+  if (newHealth <= 0) {
+    const base = scoreForCardRemoval(card)
+    if (base > 0) {
+      pushActivityLogsInDisplayOrder([createScoreLog(scoreLabelForCard(card), base, 'enemy')])
+      await playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1)
+    }
+    if (card.isSpecialEnemy) await applyPadlockMimicBonus(card)
+    await boardRenderer.animateCardConsumeByIds([{ cardId: card.id, type: CardType.ENEMY }], {
+      suppressBurstIds: new Set([card.id]),
+    })
+    gameState.removeCardFromRow(card, distance)
+    await onEnemiesDefeated(1)
+  }
+}
+
+/** 소소한 클러치 — 급소: 살아남은 적에게 가끔 추가 피해(공격력 + 2). */
+async function applyCompanionCrit(card: Card, distance: number): Promise<void> {
+  if (!companionWorldCanSpeak() || card.health <= 0) return
+  if (!companion.rollMinorClutch('crit')) return
+  const dmg = Math.max(1, gameState.character.damage + 2)
+  const newHealth = card.takeDamage(dmg)
+  recordNotice(`에나의 의지 — 급소! 추가 피해 ${dmg}`, 'info')
+  void boardRenderer.animateClutchOnPlayer('attack-gain')
+  sayEnaBark(companion.minorClutchLine('crit'), { importance: BARK_IMPORTANCE.clutch })
   await boardRenderer.animateDamageNumbersById([{ cardId: card.id, amount: dmg }])
   if (newHealth <= 0) {
     const base = scoreForCardRemoval(card)
@@ -2496,6 +2552,8 @@ function resetForNewRun(): void {
   inputLocked = false
   chain = HandSystem.newChain()
   pendingHandTarget = null
+  // 동료(에나)의 런 한정 상태(의지/각성/턴 흐름) 초기화. 학습 가중치는 런 간 유지.
+  companion.resetForRun()
   gameState.reset()
   // 헌혈팩 콜백: reset 이후 새 character 인스턴스에 설정해야 한다
   gameState.character.onHealGain = (amount) => {
@@ -3983,6 +4041,11 @@ async function resolvePostDropSporeSpread(): Promise<void> {
   // TurnManager already regroups newly adjacent front-row spores before this
   // render, so the shutter/open-turn view cannot show separate matching spores.
   recordNotice(`포자 번식: ${spreadCount}칸 감염`, 'hurt')
+  // 동료(에나) 포자 번식 반응.
+  if (spreadCount > 0 && companionWorldCanSpeak()) {
+    const bark = companion.reactSituation('spore', gameState.getCurrentTurn())
+    if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: 'spore' })
+  }
   render()
 }
 
@@ -4053,9 +4116,25 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
       })
     }
   }
+  // 폭탄 폭발 반응 바크.
+  if (bombExplosions.length > 0 && companionWorldCanSpeak()) {
+    const bark = companion.reactSituation('bomb', gameState.getCurrentTurn())
+    if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: 'bomb' })
+  }
   // 클러치 예산('에나의 의지') 충전: 이번 페이즈 역경(피해/불씨 고갈)에 비례.
   if (totalDamage > 0) companion.gainWill(totalDamage, gameState.character.maxHealth)
   if (gameState.character.ember <= 1) companion.gainWillFlat(15)
+  // 소소한 클러치 — 회피: 가장 큰 피격 1대를 무효(되돌림)한다.
+  if (totalDamage > 0 && companionWorldCanSpeak() && companion.rollMinorClutch('dodge')) {
+    const maxHit = hits.reduce((m, h) => Math.max(m, h.damage), 0)
+    if (maxHit > 0) {
+      gameState.character.heal(maxHit)
+      recordNotice(`에나의 의지 — 회피! 피해 ${maxHit} 무효`, 'info')
+      void boardRenderer.animateClutchOnPlayer('health-gain')
+      sayEnaBark(companion.minorClutchLine('dodge'), { importance: BARK_IMPORTANCE.clutch })
+      render()
+    }
+  }
   // 품격있는 대처: 피격 연출 뒤 나를 때린 적들에게 반격.
   await applyDignifiedRetaliation(hits)
   // 변칙: 이 페이즈에서 잃은 체력 10마다 불씨 +1.
@@ -4407,6 +4486,15 @@ async function handleCardAction(e: Event): Promise<void> {
     applyAnomalyHealthLoss()
     // 소중한 머리: 함정 피해로 체력 절반 이하 시 전체 회복.
     await applyPreciousHeadCheck()
+    // 소소한 클러치 — 함정 무시: 가끔 함정 피해를 통째로 되돌린다.
+    if (companionWorldCanSpeak() && companion.rollMinorClutch('trap')) {
+      const healed = gameState.character.heal(result.damageTaken)
+      if (healed > 0) {
+        recordNotice(`에나의 의지 — 함정 무시! 피해 ${healed} 되돌림`, 'info')
+        void boardRenderer.animateClutchOnPlayer('health-gain')
+        sayEnaBark(companion.minorClutchLine('trap'), { importance: BARK_IMPORTANCE.clutch })
+      }
+    }
   }
   // 함정 무시 (도적/함정의 대가): "무시" 텍스트 + 트랩 지터. 유물 보유 시 발동 로그도 기록.
   if (result.trapIgnored) {
@@ -4453,6 +4541,24 @@ async function handleCardAction(e: Event): Promise<void> {
     await applyChanceExtraHit(card, distance)
     // 물양동이: 25% 확률로 1 추가 피해 (찬스로 처치된 경우 이미 제거되므로 health 확인).
     await applyWaterBucketExtraDamage(card, distance)
+    // 소소한 클러치 — 급소: 살아남은 적에게 가끔 추가 피해.
+    await applyCompanionCrit(card, distance)
+  }
+
+  // 소소한 클러치 — 보물 추가 보상: 상자를 열 때 가끔 손패 1장을 덤으로.
+  if (
+    result.cardRemoved &&
+    card.type === CardType.TREASURE &&
+    companionWorldCanSpeak() &&
+    companion.rollMinorClutch('treasure')
+  ) {
+    const drop = DropSystem.generateDrop('treasure')
+    if (gameState.character.addHandCard(drop)) {
+      recordNotice('에나의 의지 — 덤! 손패 +1', 'info')
+      void boardRenderer.animateClutchOnPlayer('treasure-gain')
+      sayEnaBark(companion.minorClutchLine('treasure'), { importance: BARK_IMPORTANCE.clutch })
+      render()
+    }
   }
 
   // 동료(에나) 행동 반응 — 손패 한줄평(획득 카드) 우선, 없으면 카드 종류별 상황 바크.

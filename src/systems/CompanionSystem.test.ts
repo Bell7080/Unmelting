@@ -88,6 +88,25 @@ describe('CompanionSystem', () => {
     expect(plan!.kind).toBe('ember')
   })
 
+  it('각성은 런당 한 번뿐이고 resetForRun으로 다시 가능해진다', () => {
+    const c = new CompanionSystem()
+    let fired = false
+    for (let i = 0; i < 2000 && !fired; i++) fired = c.tryAwaken()
+    expect(fired).toBe(true)
+    expect(c.tryAwaken()).toBe(false)
+    c.resetForRun()
+    let again = false
+    for (let i = 0; i < 2000 && !again; i++) again = c.tryAwaken()
+    expect(again).toBe(true)
+  })
+
+  it('소소한 클러치 대사가 깨끗하게 나온다', () => {
+    const c = new CompanionSystem()
+    for (const k of ['crit', 'dodge', 'trap', 'treasure'] as const) {
+      expect(c.minorClutchLine(k)).not.toMatch(/[{}[\]]/)
+    }
+  })
+
   it('직업 인사/손패 사용 한줄평이 깨끗한 문자열로 나온다', () => {
     const c = new CompanionSystem()
     expect(c.onJobSelect('knight')).not.toMatch(/[{}[\]]/)

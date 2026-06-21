@@ -6297,6 +6297,66 @@ export class GameBoardRenderer {
     })
   }
 
+  /**
+   * 에나의 클러치 피드백: 플레이어 카드를 들썩이며 블라스트를 터뜨린다.
+   * strong(각성)은 카드를 크게 쾅 내려앉히고 금빛 섬광 + 다단 블라스트를 추가한다.
+   */
+  animateClutchOnPlayer(theme: BurstTheme = 'health-gain', strong = false): Promise<void> {
+    const card = this.boardElement.querySelector<HTMLElement>('.player-card')
+    if (!card) return Promise.resolve()
+    if (!strong) {
+      // 소소한/일반 클러치: 카드 살짝 들썩 + 단발 블라스트.
+      card.animate(
+        [
+          { transform: 'translateY(0) scale(1)', filter: 'brightness(1)' },
+          { transform: 'translateY(-9px) scale(1.06)', filter: 'brightness(1.25)', offset: 0.35 },
+          { transform: 'translateY(0) scale(1)', filter: 'brightness(1)' },
+        ],
+        { duration: 480, easing: 'cubic-bezier(0.22,0.92,0.36,1)' }
+      )
+      SquareBurst.playOn(card, theme, { count: 16, spread: 92, duration: 620 })
+      return new Promise((resolve) => window.setTimeout(resolve, 480))
+    }
+    // 각성: 금빛 섬광 + 카드 쾅 내려앉기 + 팡팡팡 다단 블라스트.
+    const overlay = document.createElement('div')
+    overlay.setAttribute('aria-hidden', 'true')
+    overlay.style.cssText =
+      'position:fixed;inset:0;z-index:285;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 60%, rgba(255,214,120,0.34), rgba(8,5,14,0.72) 60%, rgba(8,5,14,0.86));'
+    document.body.appendChild(overlay)
+    overlay.animate([{ opacity: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 0 }], {
+      duration: 1500,
+      easing: 'ease-in-out',
+      fill: 'forwards',
+    })
+    card.animate(
+      [
+        { transform: 'translateY(-26px) scale(1.16)', filter: 'brightness(1.7) drop-shadow(0 0 26px rgba(255,210,110,0.9))', offset: 0 },
+        { transform: 'translateY(8px) scale(0.97)', filter: 'brightness(1.3) drop-shadow(0 0 18px rgba(255,190,90,0.7))', offset: 0.42 },
+        { transform: 'translateY(0) scale(1)', filter: 'brightness(1)', offset: 1 },
+      ],
+      { duration: 1100, easing: 'cubic-bezier(0.2,0.9,0.2,1)', fill: 'forwards' }
+    )
+    return new Promise((resolve) => {
+      const rect = card.getBoundingClientRect()
+      const cx = rect.left + rect.width / 2
+      const cy = rect.top + rect.height / 2
+      for (let i = 0; i < 5; i += 1) {
+        window.setTimeout(() => {
+          SquareBurst.playAt(cx, cy, i % 2 === 0 ? 'score' : 'attack-gain', {
+            count: 18 + i * 3,
+            spread: 110 + i * 22,
+            duration: 720,
+            size: [8, 20],
+          })
+        }, 200 + i * 150)
+      }
+      window.setTimeout(() => {
+        overlay.remove()
+        resolve()
+      }, 1500)
+    })
+  }
+
   /** 유물 파괴 공통 연출(희망/권위와 같은 톤이되 더 가볍다). 강도로 규모를 나눈다:
    *  1 = 제자리에서 짧게 흔들다 회색으로 타들어가며 사라짐(정말 간단한 파괴),
    *  2 = 유물을 살짝 중앙으로 띄워 떨다 터지는 간결 연출(생사엔 큰 지장 없는 효과).

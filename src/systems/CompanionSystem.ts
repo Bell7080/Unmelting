@@ -35,18 +35,21 @@ export type Line = string | LineTemplate
 type TouchPoolId = 'calm' | 'annoyed' | 'exasperated' | 'urgent' | 'settle' | 'quiet'
 /** 게임 이벤트 상황 반응 풀. */
 type SituationPoolId =
-  | 'hit' | 'web' | 'treasure' | 'kill' | 'survive' | 'flower' | 'event'
+  | 'hit' | 'web' | 'treasure' | 'kill' | 'survive' | 'flower' | 'event' | 'spore' | 'bomb'
   | 'loot-match-ok' | 'loot-match-low'
 type PoolId = TouchPoolId | SituationPoolId
 
 /** 확률+턴 간격+학습 가중치로 다스리는 게임 이벤트 종류. */
-export type SituationId = 'hit' | 'web' | 'treasure' | 'kill' | 'survive' | 'flower' | 'event'
+export type SituationId =
+  | 'hit' | 'web' | 'treasure' | 'kill' | 'survive' | 'flower' | 'event' | 'spore' | 'bomb'
 
 /** 말투 강도 — 같은 내용도 종결부호/강조어를 달리해 톤을 바꾼다. */
 export type Intensity = 'soft' | 'normal' | 'urgent'
 
-/** 클러치(에나의 의지) 종류 — 위기에 실제 게임플레이 지원을 한다. */
+/** 큰 클러치(에나의 의지) 종류 — 위기에 의지를 소모해 지원한다. */
 export type ClutchKind = 'heal' | 'shield' | 'ember'
+/** 소소한 일상 클러치 — 평범한 행동에 가끔 끼어드는 작은 지원. */
+export type MinorClutchKind = 'crit' | 'dodge' | 'trap' | 'treasure'
 /** 클러치 1회 계획: 효과 종류/수치 + 거의 확정 대사 + 체인 배너 설명. */
 export interface ClutchPlan {
   kind: ClutchKind
@@ -267,6 +270,18 @@ const POOLS: Record<PoolId, Line[]> = {
     '저 너머에 뭔가 있어.',
     '선택의 갈림길이네.',
   ],
+  // 포자가 퍼질 때.
+  spore: [
+    '으, 포자가 번지고 있어…',
+    '저거 퍼지면 골치 아파 — 빨리 정리하자.',
+    '포자는 질색이야…',
+  ],
+  // 폭탄이 터졌을 때.
+  bomb: [
+    '쾅?! 깜짝이야…',
+    '폭탄은 정말 질색이야!',
+    '으, 귀 아파…',
+  ],
   'loot-match-ok': [
     '불씨 게이지는 아직 충분하네, 나중에 써도 되겠어… 그치?',
     '성냥이다. 급하진 않으니 아껴두자.',
@@ -358,6 +373,8 @@ const SITUATION: Record<SituationId, { chance: number; intensity: Intensity }> =
   flower: { chance: 0.3, intensity: 'normal' },
   // 이벤트 문은 드물게 등장하므로 떴을 때는 비교적 자주 반응한다.
   event: { chance: 0.6, intensity: 'normal' },
+  spore: { chance: 0.4, intensity: 'normal' },
+  bomb: { chance: 0.55, intensity: 'normal' },
 }
 
 const STREAK_RESET_MS = 4000
@@ -381,6 +398,24 @@ const CLUTCH_LINES: Record<ClutchKind, string[]> = {
   ember: ['불씨가 꺼지면 안 돼 — 자, 성냥!', '내가 챙겨뒀어, 어서 불을 켜!', '이걸로 버티자!'],
 }
 
+/** 소소한 일상 클러치 발동 확률(낮게 — 가끔 깜짝 지원). */
+const MINOR_CLUTCH_CHANCE: Record<MinorClutchKind, number> = {
+  crit: 0.06,
+  dodge: 0.05,
+  trap: 0.12,
+  treasure: 0.15,
+}
+const MINOR_CLUTCH_LINES: Record<MinorClutchKind, string[]> = {
+  crit: ['급소!', '여기야!', '한 방 먹였지?'],
+  dodge: ['안 맞아!', '피했어!', '어딜!'],
+  trap: ['이 정도쯤이야!', '내가 막았어!', '괜찮아, 안 아파!'],
+  treasure: ['덤이야!', '하나 더 챙겼어!', '운이 좋네!'],
+}
+
+/** 각성(최후의 의지) — 진짜 죽음 직전, 아주 드물게 터지는 클라이맥스. */
+const AWAKEN_CHANCE = 0.12
+const AWAKEN_LINES = ['이대로 끝낼 순 없어!!', '아직이야 — 일어나!', '내 모든 걸 걸어서라도!']
+
 export class CompanionSystem {
   private touchStreak = 0
   private lastTouchAt = 0
@@ -400,11 +435,15 @@ export class CompanionSystem {
     survive: 1,
     flower: 1,
     event: 1,
+    spore: 1,
+    bomb: 1,
   }
   /** 누적 스킵 횟수 — 과묵 안내 대사 타이밍에 쓴다. */
   private skipCount = 0
   /** 클러치 예산('에나의 의지'). 역경으로 차고 발동 시 0이 된다. */
   private will = 0
+  /** 각성은 런당 한 번뿐. 새 런에서 resetForRun으로 풀린다. */
+  private awakened = false
 
   /**
    * 프로필을 만졌을 때. 연타 강도(streak)에 따라 calm→annoyed→exasperated로 반응한다.
@@ -540,6 +579,40 @@ export class CompanionSystem {
   onJobSelect(jobId: string): string {
     const lines = JOB_LINES[jobId] ?? JOB_GENERIC
     return this.pickFrom(`job:${jobId}`, lines, 'normal')
+  }
+
+  /** 소소한 일상 클러치가 이번 행동에 발동하는지(낮은 확률). */
+  rollMinorClutch(kind: MinorClutchKind): boolean {
+    return Math.random() < MINOR_CLUTCH_CHANCE[kind]
+  }
+
+  /** 소소한 클러치 대사 한 줄. */
+  minorClutchLine(kind: MinorClutchKind): string {
+    return this.pickFrom(`minor:${kind}`, MINOR_CLUTCH_LINES[kind], 'urgent')
+  }
+
+  /**
+   * 각성: 진짜 죽음 직전(다른 부활 수단이 모두 실패했을 때 호출)에만, 런당 한 번,
+   * 아주 드물게 터진다. true면 호출부가 풀 회복 + 공격력 +1 + 화려한 연출을 한다.
+   */
+  tryAwaken(): boolean {
+    if (this.awakened) return false
+    if (Math.random() >= AWAKEN_CHANCE) return false
+    this.awakened = true
+    return true
+  }
+
+  /** 각성 대사 한 줄. */
+  awakenLine(): string {
+    return this.pickFrom('awaken', AWAKEN_LINES, 'urgent')
+  }
+
+  /** 새 런 시작 시 런 한정 상태(의지/각성/턴 흐름)를 초기화한다. 학습 가중치는 유지. */
+  resetForRun(): void {
+    this.will = 0
+    this.awakened = false
+    this.lastWorldBarkTurn = -999
+    this.touchStreak = 0
   }
 
   /** 추후 성장/해금 층이 대사 풀을 넓히는 확장 지점(가짜 학습이 아니라 데이터 주입 seam). */
