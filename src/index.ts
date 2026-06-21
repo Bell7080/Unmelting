@@ -1209,7 +1209,8 @@ async function applyCompanionCrit(card: Card, distance: number): Promise<void> {
   void boardRenderer.animateClutchOnPlayer('attack-gain')
   showClutchChain('crit', `급소 추가 타격 ${dmg}`)
   sayEnaBark(companion.minorClutchLine('crit'), { importance: BARK_IMPORTANCE.clutch })
-  await boardRenderer.animateDamageNumbersById([{ cardId: card.id, amount: dmg }])
+  // 급소 피해는 레바테인 스타일 특수 폰트로 한 번 더(일반 -1 뒤에 -2가 황금빛으로).
+  await boardRenderer.animateCritDamageOnCard(card.id, dmg)
   if (newHealth <= 0) {
     const base = scoreForCardRemoval(card)
     if (base > 0) {

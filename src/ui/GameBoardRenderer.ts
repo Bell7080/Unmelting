@@ -5919,6 +5919,14 @@ export class GameBoardRenderer {
     ])
   }
 
+  /** 급소(클러치) 전용: 대상 카드 위에 레바테인 스타일 대형 황금 피해 수치를 띄운다. */
+  animateCritDamageOnCard(cardId: string, amount: number): Promise<void> {
+    const el = this.findCardElement(cardId)
+    if (!el || amount <= 0) return Promise.resolve()
+    const rect = el.getBoundingClientRect()
+    return this.animateBigDamageNumberAt(rect.left + rect.width / 2, rect.top + rect.height / 2, amount)
+  }
+
   /** 레바테인 전용 대형 피해 수치(기본 damage-float보다 크고 황금빛). */
   private animateBigDamageNumberAt(x: number, y: number, amount: number): Promise<void> {
     if (amount <= 0) return Promise.resolve()
@@ -6344,8 +6352,8 @@ export class GameBoardRenderer {
     el.id = 'clutch-banner-styles'
     el.textContent = `
 .clutch-banner { position: fixed; z-index: 9998; pointer-events: none; text-align: center; will-change: transform, opacity, filter; }
-.clutch-banner-title { font-weight: 800; font-size: 22px; color: rgba(255, 238, 196, 0.98); letter-spacing: 1px; white-space: nowrap; text-shadow: 0 0 14px rgba(255, 200, 90, 0.55), 0 2px 6px rgba(0, 0, 0, 0.82); }
-.clutch-banner-desc { margin-top: 3px; font-size: 15px; font-weight: 600; color: rgba(255, 224, 170, 0.92); white-space: nowrap; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85); }
+.clutch-banner-title { font-weight: 800; font-size: 29px; color: rgba(255, 240, 200, 0.99); letter-spacing: 1.5px; white-space: nowrap; text-shadow: 0 0 18px rgba(255, 200, 90, 0.62), 0 3px 8px rgba(0, 0, 0, 0.85); }
+.clutch-banner-desc { margin-top: 4px; font-size: 18px; font-weight: 700; color: rgba(255, 226, 172, 0.95); white-space: nowrap; text-shadow: 0 0 10px rgba(255, 190, 80, 0.4), 0 2px 5px rgba(0, 0, 0, 0.88); }
 `
     document.head.appendChild(el)
   }
@@ -6365,17 +6373,21 @@ export class GameBoardRenderer {
     host.innerHTML =
       `<div class="clutch-banner-title">『 ${title} 』</div>` +
       `<div class="clutch-banner-desc">${description}</div>`
+    // 플레이어 카드 중단에 앵커를 두고, 살짝 아래에서 솟아올라 카드 위로 떠오르게 한다.
     host.style.left = `${rect.left + rect.width / 2}px`
-    host.style.top = `${rect.top - 10}px`
+    host.style.top = `${rect.top + rect.height * 0.5}px`
     document.body.appendChild(host)
     const anim = host.animate(
       [
-        { opacity: 0, transform: 'translate(-50%, -86%) scale(0.84)', filter: 'blur(0px)' },
-        { opacity: 1, transform: 'translate(-50%, -100%) scale(1)', filter: 'blur(0px)', offset: 0.07 },
-        { opacity: 1, transform: 'translate(-50%, -100%) scale(1)', filter: 'blur(0px)', offset: 0.62 },
-        { opacity: 0, transform: 'translate(-50%, -122%) scale(1.02)', filter: 'blur(2.6px)', offset: 1 },
+        { opacity: 0, transform: 'translate(-50%, 24px) scale(0.82)', filter: 'blur(0px)' },
+        { opacity: 1, transform: 'translate(-50%, -72px) scale(1.07)', filter: 'blur(0px)', offset: 0.14 },
+        { opacity: 1, transform: 'translate(-50%, -86px) scale(1.0)', filter: 'blur(0px)', offset: 0.26 },
+        // 가장 뚜렷한 구간 — 살짝 부유하며 체류.
+        { opacity: 1, transform: 'translate(-50%, -95px) scale(1.0)', filter: 'blur(0px)', offset: 0.5 },
+        { opacity: 1, transform: 'translate(-50%, -84px) scale(1.0)', filter: 'blur(0px)', offset: 0.68 },
+        { opacity: 0, transform: 'translate(-50%, -122px) scale(1.03)', filter: 'blur(2.8px)', offset: 1 },
       ],
-      { duration: 3600, easing: 'cubic-bezier(0.2, 0.8, 0.25, 1)', fill: 'forwards' }
+      { duration: 3900, easing: 'cubic-bezier(0.2, 0.8, 0.25, 1)', fill: 'forwards' }
     )
     anim.onfinish = () => host.remove()
   }
