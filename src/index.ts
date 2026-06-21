@@ -193,7 +193,7 @@ let companionHeardTimer = 0
 const COMPANION_READ_MS = 1500
 
 /** 바크 중요도: 손패 한줄평<일반 반응<상황<위급/항의. 읽는 중엔 더 높은 것만 끼어든다. */
-const BARK_IMPORTANCE = { loot: 0, touch: 1, situation: 2, urgent: 3 } as const
+const BARK_IMPORTANCE = { loot: 0, touch: 1, situation: 2, urgent: 3, clutch: 4 } as const
 
 /**
  * 에나의 한마디를 player 말풍선으로 띄운다.
@@ -291,8 +291,8 @@ function applyClutch(plan: ClutchPlan): void {
   boardRenderer.refreshChainBanner(buildChainHints())
   recordNotice(`에나의 의지 — ${detail}`, 'info')
   render()
-  // 거의 확정 대사 + 자원 트레일(같은 beat).
-  sayEnaBark(plan.line, { importance: BARK_IMPORTANCE.urgent })
+  // 거의 확정 대사 + 자원 트레일(같은 beat). 클러치는 최상위 중요도라 다른 대사가 떠 있어도 끼어든다.
+  sayEnaBark(plan.line, { importance: BARK_IMPORTANCE.clutch })
   void playPlayerGainTrails({ kind: 'center' }, before)
 }
 
