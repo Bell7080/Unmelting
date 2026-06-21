@@ -80,6 +80,25 @@ app.innerHTML = `
 
 CursorFX.init()
 
+// 모바일(터치) 주소창 숨김 best-effort: 첫 사용자 제스처에서 전체화면을 시도한다.
+// - Android 크롬: 즉시 브라우저 주소창이 사라진다(전체화면 진입).
+// - iOS 사파리: 요소 Fullscreen API 미지원이라 request가 없어 조용히 no-op이며,
+//   '홈 화면에 추가'(apple-mobile-web-app-capable) 경로로만 주소창 없는 실행이 된다.
+// 데스크탑(정밀 포인터)에서는 의도치 않은 전체화면을 막기 위해 동작하지 않는다.
+function enableImmersiveFullscreenOnFirstTap(): void {
+  if (!window.matchMedia('(hover: none) and (pointer: coarse)').matches) return
+  const root = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => unknown }
+  const request = root.requestFullscreen?.bind(root) ?? root.webkitRequestFullscreen?.bind(root)
+  if (!request) return
+  const onFirstGesture = (): void => {
+    if (document.fullscreenElement) return
+    // 권한 거부/미지원은 게임 흐름에 영향 주지 않도록 조용히 무시한다.
+    Promise.resolve(request()).catch(() => {})
+  }
+  document.addEventListener('pointerdown', onFirstGesture, { once: true })
+}
+enableImmersiveFullscreenOnFirstTap()
+
 FontManager.initializeDefaults()
 FontManager.loadCustomFont({
   family: 'OkDanDan',
