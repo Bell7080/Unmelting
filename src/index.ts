@@ -62,7 +62,7 @@ import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
-import { CompanionSystem } from '@systems/CompanionSystem'
+import { CompanionSystem, type SituationId } from '@systems/CompanionSystem'
 import { HearthScene } from '@ui/hearth/HearthScene'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
@@ -179,16 +179,48 @@ let inputLocked = false
 // 학습 전 규칙 기반 스캐폴딩. 플레이어 프로필(.player-card) 터치에 횟수·시간·현재 상황으로
 // 반응한다(패턴이 아니라 자아처럼). 설계: Ena_Companion_AI_Design.md
 const companion = new CompanionSystem()
-// 현재 player 말풍선이 에나 본인의 대사(바크)인지 — 스킵 항의를 그녀 대사에만 한정한다.
+// 현재 player 말풍선이 에나 본인의 대사(바크)인지.
 let enaSpeaking = false
 // 연타 후 손을 떼면 '…이제 끝났어?'를 띄우기 위한 방치 타이머.
 let companionIdleTimer = 0
 const COMPANION_IDLE_MS = 2600
+// 현재 떠 있는 바크의 학습 대상 상황(없으면 null) / 중요도 / 등장 시각.
+let currentBarkSituation: SituationId | null = null
+let currentBarkImportance = 0
+let barkShownAt = 0
+// 이 시간 넘게 떠 있었으면 "읽었다"로 본다(이후 스킵은 학습 신호로 치지 않음).
+let companionHeardTimer = 0
+const COMPANION_READ_MS = 1500
 
-/** 에나의 한마디를 player 말풍선으로 띄운다(스킵 항의 판정용 발화 플래그를 세운다). */
-function sayEnaBark(line: string): void {
+/** 바크 중요도: 손패 한줄평<일반 반응<상황<위급/항의. 읽는 중엔 더 높은 것만 끼어든다. */
+const BARK_IMPORTANCE = { loot: 0, touch: 1, situation: 2, urgent: 3 } as const
+
+/**
+ * 에나의 한마디를 player 말풍선으로 띄운다.
+ * - 읽는 중(타이핑)에는 더 낮거나 같은 중요도가 끼어들어 덮어쓰지 못하게 한다.
+ * - 상황 바크는 읽기 임계 시간 뒤까지 살아있으면 '읽음'으로 학습(더 말하게)한다.
+ */
+function sayEnaBark(
+  line: string,
+  opts: { importance?: number; situation?: SituationId | null } = {}
+): void {
+  const importance = opts.importance ?? BARK_IMPORTANCE.touch
+  if (enaSpeaking && speechBubble.isTyping && importance <= currentBarkImportance) return
+  clearTimeout(companionHeardTimer)
+  companionHeardTimer = 0
   enaSpeaking = true
+  currentBarkImportance = importance
+  currentBarkSituation = opts.situation ?? null
+  barkShownAt = Date.now()
   speechBubble.show(line)
+  const situation = currentBarkSituation
+  if (situation) {
+    companionHeardTimer = window.setTimeout(() => {
+      companion.recordHeard(situation)
+      companionHeardTimer = 0
+      currentBarkSituation = null // 읽힘으로 정산됐으니 더는 스킵 대상이 아니다.
+    }, COMPANION_READ_MS)
+  }
 }
 
 /** 체력/불씨가 위태로운 위급 상황인지 — 위급할 때 만지면 에나가 "지금 장난칠 때야?" 한다. */
@@ -199,15 +231,21 @@ function companionInDanger(): boolean {
   return lowHp || lowEmber
 }
 
-/** 프로필을 만졌을 때 — 상황/연타에 맞춰 반응하고, 손을 떼면 마무리 대사를 예약한다. */
+/** 프로필을 만졌을 때 — 말하는 중이면 항의(분노 비례), 아니면 상황/연타 반응 + 방치 마무리 예약. */
 function onProfileTouched(): void {
   if (!gameActive || inputLocked) return
-  sayEnaBark(companion.onProfileTouch(Date.now(), { danger: companionInDanger() }))
+  const now = Date.now()
+  const interrupting = enaSpeaking && speechBubble.isShowing
+  const danger = companionInDanger()
+  const line = companion.onProfileTouch(now, { danger, interrupting })
+  // 항의/위급은 읽는 중에도 끼어들도록 높은 중요도, 평범한 반응은 낮은 중요도.
+  const importance = interrupting || danger ? BARK_IMPORTANCE.urgent : BARK_IMPORTANCE.touch
+  sayEnaBark(line, { importance })
   clearTimeout(companionIdleTimer)
   companionIdleTimer = window.setTimeout(() => {
     if (!gameActive || inputLocked) return
-    const line = companion.onSettle()
-    if (line) sayEnaBark(line)
+    const settle = companion.onSettle()
+    if (settle) sayEnaBark(settle, { importance: BARK_IMPORTANCE.touch })
   }, COMPANION_IDLE_MS)
 }
 
@@ -3067,16 +3105,32 @@ document.addEventListener('itemAction', (e: Event) => {
   void handleHandSlotClick(detail.itemIndex)
 })
 
-// 마우스 클릭 시 진행 중인 대사(타이핑)를 즉시 완성한다
+// 대사 빨리감기/스킵 2단계: 1번째 클릭=빨리감기(읽기), 그 다음 클릭=스킵(닫기).
+// 보스/이벤트 대사는 흐름 보호를 위해 기존대로 빨리감기만 한다.
 document.addEventListener('mousedown', (e) => {
-  // 에나가 자기 대사를 타이핑하는 중에 다른 곳을 눌러 빨리감기/스킵하면 항의한다.
-  // (프로필 자체를 다시 누르는 건 '터치'로 처리하므로 여기선 제외한다.)
-  const onProfile = (e.target as HTMLElement | null)?.closest('.player-card')
-  const interruptingEna = enaSpeaking && speechBubble.isTyping && !onProfile
   bossBubble.completeTyping()
-  speechBubble.completeTyping()
   eventDemonBubble.completeTyping()
-  if (interruptingEna && gameActive && !inputLocked) sayEnaBark(companion.onInterrupt())
+  const onProfile = (e.target as HTMLElement | null)?.closest('.player-card')
+  if (speechBubble.isTyping) {
+    speechBubble.completeTyping() // 1단계: 빨리감기(타이핑 즉시 완성 = 읽는 행위)
+    return
+  }
+  if (!speechBubble.isShowing || onProfile) return
+  // 2단계: 카드가 아닌 곳을 눌러 스킵. 단, '안 읽고 빨리 따닥 넘긴' 경우만 학습 스킵으로 본다.
+  const skippedUnread = currentBarkSituation !== null && Date.now() - barkShownAt < COMPANION_READ_MS
+  if (skippedUnread) {
+    companion.recordSkip(currentBarkSituation!)
+    clearTimeout(companionHeardTimer)
+    companionHeardTimer = 0
+    const remark = companion.maybeQuietRemark()
+    currentBarkSituation = null
+    speechBubble.dismiss()
+    // 과묵 안내 대사는 스킵 직후 조용히 한 번(낮은 중요도).
+    if (remark && companionWorldCanSpeak()) sayEnaBark(remark, { importance: BARK_IMPORTANCE.touch })
+    return
+  }
+  currentBarkSituation = null
+  speechBubble.dismiss()
 })
 
 document.addEventListener('chainReset', () => {
@@ -3924,8 +3978,14 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   }
   // 동료(에나) 피격 반응 — 확률+쿨다운으로 강약 조절(위급하면 더 다급한 말투).
   if (totalDamage > 0 && companionWorldCanSpeak()) {
-    const line = companion.reactSituation('hit', Date.now(), companionInDanger() ? 'urgent' : undefined)
-    if (line) sayEnaBark(line)
+    const danger = companionInDanger()
+    const line = companion.reactSituation('hit', Date.now(), danger ? 'urgent' : undefined)
+    if (line) {
+      sayEnaBark(line, {
+        importance: danger ? BARK_IMPORTANCE.urgent : BARK_IMPORTANCE.situation,
+        situation: 'hit',
+      })
+    }
   }
   // 품격있는 대처: 피격 연출 뒤 나를 때린 적들에게 반격.
   await applyDignifiedRetaliation(hits)
@@ -4328,26 +4388,28 @@ async function handleCardAction(e: Event): Promise<void> {
   // 확률+쿨다운으로 한 행동에 한 번만, 너무 수다스럽지 않게 강약을 준다.
   if (companionWorldCanSpeak()) {
     const now = Date.now()
-    let bark: string | null = null
+    // 손패 한줄평(획득 카드) 우선 — 학습 대상이 아니라 낮은 중요도.
     const gainedId = result.itemGainedIds?.[0]
+    let loot: string | null = null
     if (gainedId) {
       const def = getHandCardDef(gainedId as HandCardId)
-      bark = companion.onAcquireCard(gainedId, def.category, now, {
+      loot = companion.onAcquireCard(gainedId, def.category, now, {
         emberSufficient: gameState.character.ember >= 4,
       })
     }
-    if (!bark) {
-      if (card.type === CardType.TRAP && card.trapKind === 'web' && result.cardRemoved) {
-        bark = companion.reactSituation('web', now)
-      } else if (card.type === CardType.TREASURE && result.cardRemoved) {
-        bark = companion.reactSituation('treasure', now)
-      } else if (card.type === CardType.ENEMY) {
-        bark = result.cardRemoved
-          ? companion.reactSituation('kill', now)
-          : companion.reactSituation('survive', now)
+    if (loot) {
+      sayEnaBark(loot, { importance: BARK_IMPORTANCE.loot })
+    } else {
+      // 카드 종류별 상황 바크 — 스킵/읽음 학습 대상이라 situation을 함께 넘긴다.
+      let sit: SituationId | null = null
+      if (card.type === CardType.TRAP && card.trapKind === 'web' && result.cardRemoved) sit = 'web'
+      else if (card.type === CardType.TREASURE && result.cardRemoved) sit = 'treasure'
+      else if (card.type === CardType.ENEMY) sit = result.cardRemoved ? 'kill' : 'survive'
+      if (sit) {
+        const bark = companion.reactSituation(sit, now)
+        if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: sit })
       }
     }
-    if (bark) sayEnaBark(bark)
   }
 
   // Board action resets the chain so combos do not bleed across turns.

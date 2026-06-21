@@ -2,25 +2,26 @@
  * CompanionSystem - 동료 캐릭터(에나)의 반응 레이어 씨앗.
  *
  * 학습 전 규칙 기반 스캐폴딩이지만, "패턴"이 아니라 "자아"처럼 보이게 하기 위해
- * 내부 상태(연타 횟수·마지막 발화 시각)와 호출 시점의 상황을 함께 본다.
+ * 내부 상태(연타·발화 시각·상황별 학습 가중치)와 호출 시점의 상황을 함께 본다.
  *
- * 대사는 LLM 생성이 아니라 "사전 작성"이며, 세 겹으로 변주를 만든다:
- *   1) 완성 문장 / 템플릿({슬롯}+값 풀)을 같은 풀에 섞어 등록
+ * 대사는 LLM 생성이 아니라 "사전 작성"이며, 세 겹으로 변주를 만든다(B안 = 가짜 LLM):
+ *   1) 완성 문장 / 템플릿({슬롯}+값 풀)을 같은 풀에 섞어 등록 → 조각 몇 개로 수십 조합
  *   2) 말투 변조 토큰({강조}{종결}{재촉})을 긴급도(intensity)에 맞춰 치환
  *   3) `{단어}[은/는]` 조사 토큰을 앞 글자 받침에 맞춰 자동 보정
- * → "가짜 LLM": 즉흥 생성은 못 하지만, 작성한 커버리지 안에서 풍부하게 살아 보인다.
  *
- * 상황 바크(피격/거미줄/보물/처치 등)는 매번 터지면 시끄러우므로 확률 + 쿨다운으로
- * 강약을 조절한다(이것이 추후 학습으로 옮길 "침묵의 절제" 자리다).
+ * 상황 바크(피격/거미줄/보물/처치 등)는 매번 터지면 시끄러우므로 확률+쿨다운으로 줄이고,
+ * 플레이어가 스킵한 상황은 가중치를 낮춰 점점 덜 말한다(가짜 RL: 스킵=부정 보상).
  * (설계: Ena_Companion_AI_Design.md)
  */
 
 import type { HandCategory } from '@entities/HandCard'
 
-/** 반응을 고를 때 함께 보는, 호출 시점의 게임 상황. 필드는 점차 늘려간다. */
+/** 반응을 고를 때 함께 보는, 호출 시점의 게임 상황. */
 export interface CompanionContext {
-  /** 체력/불씨가 위태로운 위급 상황인가. true면 장난에 응할 여유가 없다. */
+  /** 체력/불씨가 위태로운 위급 상황인가. */
   danger: boolean
+  /** 그녀가 말하는 도중에 또 만졌는가(보채기) → 분노 섞인 항의로 응한다. */
+  interrupting?: boolean
 }
 
 /** 템플릿 대사: `{슬롯}` 자리를 slots의 값 중 하나로 랜덤 치환한 뒤 조사를 보정한다. */
@@ -32,13 +33,13 @@ export interface LineTemplate {
 /** 풀에 등록 가능한 한 줄 — 완성 문자열이거나 템플릿. */
 export type Line = string | LineTemplate
 
-/** 프로필 터치/상태 반응 풀(기본 긴급도가 풀로 정해진다). */
-type TouchPoolId = 'calm' | 'annoyed' | 'exasperated' | 'urgent' | 'settle' | 'interrupt'
-/** 게임 이벤트 상황 반응 풀(긴급도는 상황 설정/호출자가 정한다). */
+/** 프로필 터치/상태 반응 풀. */
+type TouchPoolId = 'calm' | 'annoyed' | 'exasperated' | 'urgent' | 'settle' | 'interrupt' | 'quiet'
+/** 게임 이벤트 상황 반응 풀. */
 type SituationPoolId = 'hit' | 'web' | 'treasure' | 'kill' | 'survive' | 'loot-match-ok' | 'loot-match-low'
 type PoolId = TouchPoolId | SituationPoolId
 
-/** 확률+쿨다운으로 강약을 조절하는 게임 이벤트 종류. */
+/** 확률+쿨다운+학습 가중치로 다스리는 게임 이벤트 종류. */
 export type SituationId = 'hit' | 'web' | 'treasure' | 'kill' | 'survive'
 
 /** 말투 강도 — 같은 내용도 종결부호/강조어를 달리해 톤을 바꾼다. */
@@ -46,10 +47,6 @@ export type Intensity = 'soft' | 'normal' | 'urgent'
 
 // ── 조사 보정 ────────────────────────────────────────────────
 
-/**
- * 한 글자에 한글 종성(받침)이 있는지. 한글 음절 영역만 검사하고, 한글이 아니면 false.
- * (음절코드 - 0xAC00) % 28 === 0 이면 받침 없음.
- */
 function hasFinalConsonant(ch?: string): boolean {
   if (!ch) return false
   const code = ch.charCodeAt(0)
@@ -57,7 +54,6 @@ function hasFinalConsonant(ch?: string): boolean {
   return (code - 0xac00) % 28 !== 0
 }
 
-/** 종성이 ㄹ(받침 인덱스 8)인지 — '(으)로' 보정에 쓴다. */
 function finalIsRieul(ch?: string): boolean {
   if (!ch) return false
   const code = ch.charCodeAt(0)
@@ -69,7 +65,6 @@ function finalIsRieul(ch?: string): boolean {
  * `앞글자[A/B]` 조사 토큰을 받침 유무로 해석한다.
  *   - 일반쌍: 받침 있으면 A, 없으면 B (을/를, 은/는, 이/가, 과/와, 아/야 …)
  *   - '으로/로' 특수쌍: 받침 없거나 ㄹ받침이면 '로', 그 외엔 '으로'
- * 앞 글자가 한글이 아니거나 문자열 시작이면 "받침 없음"으로 본다.
  */
 export function resolveKoreanParticles(text: string): string {
   return text.replace(/(.)?\[([^\]/]+)\/([^\]]+)\]/g, (_m, prev: string | undefined, a: string, b: string) => {
@@ -84,7 +79,6 @@ export function resolveKoreanParticles(text: string): string {
 
 // ── 말투 변조 ────────────────────────────────────────────────
 
-/** 긴급도별 변조 토큰 값. 같은 강도 안에서도 랜덤으로 골라 변주를 더한다. */
 const TONE: Record<Intensity, Record<'강조' | '종결' | '재촉', readonly string[]>> = {
   soft: { 강조: [''], 종결: ['…', '.'], 재촉: [''] },
   normal: { 강조: [''], 종결: ['!', '.'], 재촉: [''] },
@@ -101,7 +95,6 @@ function renderLine(line: Line, intensity: Intensity): string {
   const template = typeof line === 'string' ? line : line.template
   const slots: Record<string, readonly string[]> = typeof line === 'string' ? {} : line.slots
   const tone = TONE[intensity]
-  // 슬롯/변조 토큰은 한글이 올 수 있으므로 \w가 아니라 } 직전까지를 잡는다.
   const filled = template.replace(/\{([^}]+)\}/g, (_m, name: string) => {
     if (TONE_TOKENS.has(name)) return randOf(tone[name as '강조' | '종결' | '재촉'])
     const pool = slots[name]
@@ -110,102 +103,153 @@ function renderLine(line: Line, intensity: Intensity): string {
   return resolveKoreanParticles(filled)
 }
 
-// ── 대사 풀 ──────────────────────────────────────────────────
+// ── 대사 백과사전(B안 템플릿으로 광범위하게) ──────────────────────
 
-/**
- * 에나의 대사 풀. 완성 문장·템플릿·변조 토큰을 섞어 둔다. 가변 배열이라 추후
- * 성장/해금 층이 addLines로 풀을 넓힐 수 있다.
- */
 const POOLS: Record<PoolId, Line[]> = {
-  // 가볍게 한두 번 만졌을 때 — 템플릿 하나로 감탄×동작×느낌 조합을 낸다.
+  // 가볍게 한두 번 만졌을 때.
   calm: [
     {
       template: '{감탄} 왜 {동작}! {느낌}!',
       slots: {
-        감탄: ['응?', '꺄', '엣'],
-        동작: ['만져', '건드려', '콕콕 찌르지'],
-        느낌: ['간지러워', '부끄럽잖아', '놀랐잖아'],
+        감탄: ['응?', '꺄', '엣', '에구', '우왓'],
+        동작: ['만져', '건드려', '콕콕 찌르지', '쿡쿡 찌르지', '톡톡 치지'],
+        느낌: ['간지러워', '부끄럽잖아', '놀랐잖아', '깜짝이야', '당황스럽잖아'],
       },
     },
-    '거기 누르지 마… 부끄럽잖아.',
+    {
+      template: '{머뭇} 거기 누르지 마… {이유}.',
+      slots: { 머뭇: ['음…', '저기', '에…'], 이유: ['부끄럽잖아', '간지럽잖아', '쑥스럽단 말야'] },
+    },
+    '갑자기 그러면 놀라지!',
+    '히익, 차가운 손!',
   ],
-  // 자꾸 만질 때(3회~) — 조사 보정 템플릿 예시 포함.
+  // 자꾸 만질 때(3회~).
   annoyed: [
     {
-      template: '{대상}[은/는] 그만 만지고, {목표}[을/를] 봐!',
-      slots: { 대상: ['나', '얼굴'], 목표: ['앞', '적', '불씨'] },
+      template: '{대상}[은/는] 그만 만지고, {목표}[을/를] {행동}!',
+      slots: {
+        대상: ['나', '얼굴', '머리'],
+        목표: ['앞', '적', '불씨', '길'],
+        행동: ['봐', '신경 써', '살펴', '챙겨'],
+      },
     },
-    '왜 이렇게 자꾸 건드려…?',
+    {
+      template: '{빈도} 만지지 좀 마…',
+      slots: { 빈도: ['자꾸', '계속', '또'] },
+    },
     '에잇, 모험에 집중해야지!',
+    '왜 이렇게 손이 근질거려?',
   ],
-  // 너무 많이 만질 때(6회~) — 변조 토큰으로 강하게.
+  // 너무 많이 만질 때(6회~).
   exasperated: [
     '{강조}그만 좀 만져{종결}{재촉}',
-    '계속 만지면… 나 삐진다?',
+    {
+      template: '계속 만지면… {위협}?',
+      slots: { 위협: ['나 삐진다', '화낼 거야', '모른 척할 거야'] },
+    },
     '으으, 알았으니까 이제 모험하자!',
+    '진짜 너무하네!',
   ],
-  // 위급한데 만졌을 때 — 연타 강도와 무관하게 우선한다.
+  // 위급한데 만졌을 때.
   urgent: [
-    '지금 장난칠 때야?!',
+    {
+      template: '지금 {상황}[이/가] 위급한데 장난이야?!',
+      slots: { 상황: ['상황', '앞', '불씨'] },
+    },
     '{강조}앞에 집중해{종결}{재촉}',
     '나중에! 지금은 위급하잖아!',
+    '한눈팔 때가 아니라고!',
   ],
-  // 연타하다가 손을 뗐을 때 — 부드럽게.
+  // 연타하다 손을 뗐을 때.
   settle: [
     '{강조}이제 끝났어{종결}',
-    '휴, 드디어 조용하네.',
+    {
+      template: '휴, {표현}.',
+      slots: { 표현: ['드디어 조용하네', '한숨 돌렸다', '이제 좀 살겠다'] },
+    },
     '자, 정신 차리고 — 앞으로 가자!',
   ],
-  // 말하는 중에 빨리감기/스킵으로 끊겼을 때.
+  // 말하는 중에 또 만졌을 때(보채기 항의) — 분노에 따라 톤이 세진다.
   interrupt: [
-    '아, 잠깐! 내 말 안 끝났어!',
-    '중요한 얘기라고! 끝까지 들어!',
+    {
+      template: '아, 잠깐! 내 말 {상태}!',
+      slots: { 상태: ['안 끝났어', '아직 안 끝났다고'] },
+    },
+    '{강조}끝까지 들어{종결}',
+    {
+      template: '중요한 얘기라고! {재촉2}',
+      slots: { 재촉2: ['끊지 마', '좀 들어줘', '진지하게!'] },
+    },
     '말 자르지 마, 치사하게…!',
+  ],
+  // 스킵이 누적돼 과묵해질 때(가끔) — 삐침이 아니라 배려의 톤.
+  quiet: [
+    '내가 이야기하는 게 거슬렸구나…? 알았어, 조용히 할게.',
+    '음… 말이 너무 많았나 봐. 좀 과묵해질게.',
+    '신경 쓰이게 했다면 미안. 중요할 때만 말할게.',
   ],
 
   // ── 게임 이벤트 상황 반응 ──
-  // 적에게 맞았을 때.
   hit: [
-    '아얏! 아파…',
-    '윽… 방심했어.',
+    {
+      template: '{비명}! {느낌}…',
+      slots: { 비명: ['아얏', '으악', '윽', '아야'], 느낌: ['아파', '따가워', '방심했어', '깜짝이야'] },
+    },
     '{강조}조심하라니까{종결}',
     '맞기 싫어…!',
+    '이 정도쯤이야!',
   ],
-  // 거미줄을 밟았을 때.
   web: [
-    '윽! 거미줄은 싫은데…',
-    '으, 끈적끈적해…',
-    '{강조}거미줄은 질색이야{종결}',
+    {
+      template: '{비명}! 거미줄은 {감정}…',
+      slots: { 비명: ['으', '윽', '으윽'], 감정: ['싫은데', '질색이야', '끔찍해'] },
+    },
+    {
+      template: '으, {표현}…',
+      slots: { 표현: ['끈적끈적해', '달라붙어', '찝찝해'] },
+    },
+    '거미줄은 딱 질색!',
+    '이런 거 정말 싫어…',
   ],
-  // 보물을 먹었을 때.
   treasure: [
-    '오, 좋은 거 들었다!',
-    '{강조}이게 웬 행운이야{종결}',
-    '반짝이는 거 좋아!',
-    '히히, 챙겨두자.',
+    {
+      template: '{감탄}, {표현}!',
+      slots: {
+        감탄: ['오', '우와', '히히', '오오'],
+        표현: ['좋은 거 들었다', '이게 웬 행운이야', '반짝이는 거다', '운수 좋은걸'],
+      },
+    },
+    '{강조}챙겨두자{종결}',
+    '보물은 언제 봐도 좋아!',
+    '안에 뭐가 있을까?',
   ],
-  // 적을 처치했을 때.
   kill: [
-    '좋았어, 하나 처리!',
+    {
+      template: '{감탄}, {표현}!',
+      slots: { 감탄: ['좋아', '아싸', '옳지', '후훗'], 표현: ['하나 처리', '잡았다', '해치웠어', '정리 완료'] },
+    },
     '{강조}덤비지 말랬지{종결}',
-    '아싸, 잡았다!',
     '이런 건 식은 죽 먹기지.',
+    '다음은 누구야?',
   ],
-  // 공격했는데 적이 살아남았을 때.
   survive: [
-    '어라, 단단한데…?',
+    {
+      template: '{놀람}, {표현}…?',
+      slots: { 놀람: ['어라', '흠', '으음'], 표현: ['단단한데', '질긴데', '멀쩡하네'] },
+    },
     '한 번 더 쳐야겠어!',
     '아직 안 죽었어, 조심해.',
+    '제법인걸…?',
   ],
-  // 성냥 획득 + 불씨가 충분할 때.
   'loot-match-ok': [
     '불씨 게이지는 아직 충분하네, 나중에 써도 되겠어… 그치?',
     '성냥이다. 급하진 않으니 아껴두자.',
+    '불씨는 넉넉하니까, 잘 챙겨두자.',
   ],
-  // 성냥 획득 + 불씨가 부족할 때.
   'loot-match-low': [
     '마침 성냥이야! {강조}얼른 불씨를 채우자{종결}',
     '오, 성냥! 지금 딱 필요했는데.',
+    '불씨가 위태로웠는데 — 다행이다!',
   ],
 }
 
@@ -214,22 +258,42 @@ const POOLS: Record<PoolId, Line[]> = {
  * 덕분에 카드를 새로 추가해도 "하나하나 등록" 없이 즉시 한줄평이 붙는다.
  */
 const CATEGORY_COMMENTS: Record<HandCategory, Line[]> = {
-  attack: ['공격 카드네, 적을 혼내주자!', '이걸로 한 방 먹이면 되겠어.'],
-  recovery: ['회복 카드다, 다치면 쓰자.', '든든한걸, 챙겨두자.'],
-  tool: ['오, 쓸모 있어 보여.', '도구는 많을수록 좋지.'],
-  control: ['요건 잘 쓰면 판을 바꾸겠는걸.', '영리하게 써먹자.'],
+  attack: [
+    { template: '공격 카드네, {대상}[을/를] 혼내주자!', slots: { 대상: ['적', '저 녀석'] } },
+    '이걸로 한 방 먹이면 되겠어.',
+    '싸울 준비 됐어!',
+  ],
+  recovery: ['회복 카드다, 다치면 쓰자.', '든든한걸, 챙겨두자.', '이거면 좀 버틸 수 있겠어.'],
+  tool: ['오, 쓸모 있어 보여.', '도구는 많을수록 좋지.', '요긴하게 쓰자.'],
+  control: ['요건 잘 쓰면 판을 바꾸겠는걸.', '영리하게 써먹자.', '타이밍 맞춰 쓰면 좋겠어.'],
 }
 
-/**
- * 손패 id별 전용 한줄평(옵션). 특별히 살려 주고 싶은 카드만 여기에 추가하면 되고,
- * 없는 카드는 CATEGORY_COMMENTS로 자동 폴백한다. (성냥은 불씨 상태에 따라 onAcquireCard가
- * 별도 처리하므로 여기 넣지 않는다.)
- */
+/** 손패 id별 전용 한줄평. 없는 카드는 CATEGORY_COMMENTS로 자동 폴백한다. */
 const CARD_COMMENTS: Record<string, Line[]> = {
-  // 예) wax: ['밀랍이다. 굳혀버리자!'],  ← id만 알면 이렇게 한 줄 추가
+  wax: [
+    {
+      template: '밀랍이다! {대상}[을/를] {동작}{종결}',
+      slots: { 대상: ['적', '저 녀석', '앞의 함정'], 동작: ['꽁꽁 굳혀버리자', '멈춰 세우자', '묶어둬야지'] },
+    },
+    '끈적한 밀랍… 시간을 벌 수 있어.',
+  ],
+  chitin: [
+    {
+      template: '키틴이네. {표현}!',
+      slots: { 표현: ['함정은 내가 치울게', '저런 건 치워버리자', '길을 터줄게'] },
+    },
+    '함정 따위 무섭지 않아.',
+  ],
+  candle: [
+    {
+      template: '양초다! {표현}.',
+      slots: { 표현: ['방패로 막자', '든든하게 버티자', '몸을 지키자'] },
+    },
+    '불빛이 우릴 지켜줄 거야.',
+  ],
 }
 
-/** 터치/상태 반응 풀의 기본 말투 강도. 상황(=어느 풀)이 곧 긴급도를 정한다. */
+/** 터치/상태 반응 풀의 기본 말투 강도. */
 const POOL_INTENSITY: Record<TouchPoolId, Intensity> = {
   calm: 'normal',
   annoyed: 'normal',
@@ -237,39 +301,58 @@ const POOL_INTENSITY: Record<TouchPoolId, Intensity> = {
   urgent: 'urgent',
   settle: 'soft',
   interrupt: 'urgent',
+  quiet: 'soft',
 }
 
-/** 상황 바크별 발화 확률 + 기본 말투. 너무 수다스럽지 않게 1 미만으로 둔다. */
+/** 상황 바크별 기본 발화 확률 + 말투. 너무 수다스럽지 않게 낮게 둔다. */
 const SITUATION: Record<SituationId, { chance: number; intensity: Intensity }> = {
-  hit: { chance: 0.5, intensity: 'normal' },
-  web: { chance: 0.7, intensity: 'normal' },
-  treasure: { chance: 0.5, intensity: 'normal' },
-  kill: { chance: 0.4, intensity: 'normal' },
-  survive: { chance: 0.35, intensity: 'normal' },
+  hit: { chance: 0.4, intensity: 'normal' },
+  web: { chance: 0.55, intensity: 'normal' },
+  treasure: { chance: 0.4, intensity: 'normal' },
+  kill: { chance: 0.2, intensity: 'normal' },
+  survive: { chance: 0.22, intensity: 'normal' },
 }
 
-/** 직전 터치로부터 이 시간이 지나면 연타 횟수를 0으로 되돌린다. */
 const STREAK_RESET_MS = 4000
 /** 상황 바크 사이 최소 간격 — 한 턴에 여러 이벤트가 터져도 한 번만 말하게 한다. */
-const SITUATION_COOLDOWN_MS = 3000
-/** 손패 획득 한줄평 발화 확률. */
-const LOOT_COMMENT_CHANCE = 0.5
+const SITUATION_COOLDOWN_MS = 4500
+const LOOT_COMMENT_CHANCE = 0.45
+/** 학습 가중치 하한 — 아무리 스킵해도 침묵이 아니라 '과묵'에서 멈춘다. */
+const SITUATION_WEIGHT_FLOOR = 0.2
+/** 학습 가중치 상한 — 대사를 잘 봐 주는 플레이어에겐 더 수다스러워진다. */
+const SITUATION_WEIGHT_MAX = 1.8
 
 export class CompanionSystem {
-  /** 짧은 시간 내 연속 터치 횟수 — 반응 강도를 끌어올린다. */
   private touchStreak = 0
   private lastTouchAt = 0
   /** 마지막으로 무언가 말한 시각 — 상황 바크 쿨다운 기준. */
   private lastSpokeAt = 0
   /** 풀별 직전 선택 인덱스 — 같은 줄이 연속으로 나오지 않게 한다. */
   private readonly lastPick = new Map<string, number>()
+  /**
+   * 상황별 학습 가중치(0.15~1). 스킵하면 내려가 덜 말하고, 평가될 때마다 천천히 회복한다.
+   * = 가짜 RL: "스킵 = 이 상황은 덜 중요하다"는 신호를 누적한다.
+   */
+  private readonly situationWeight: Record<SituationId, number> = {
+    hit: 1,
+    web: 1,
+    treasure: 1,
+    kill: 1,
+    survive: 1,
+  }
+  /** 누적 스킵 횟수 — 과묵 안내 대사 타이밍에 쓴다. */
+  private skipCount = 0
 
-  /** 프로필을 만졌을 때. 위급하면 우선 꾸짖고, 아니면 연타 강도에 따라 반응한다. */
+  /** 프로필을 만졌을 때. 보채면 항의(분노 비례), 위급하면 꾸짖음, 아니면 연타 강도별 반응. */
   onProfileTouch(now: number, ctx: CompanionContext): string {
     if (now - this.lastTouchAt > STREAK_RESET_MS) this.touchStreak = 0
     this.touchStreak += 1
     this.lastTouchAt = now
-    this.lastSpokeAt = now // 플레이어가 부른 발화도 쿨다운 시계를 갱신한다.
+    this.lastSpokeAt = now
+    if (ctx.interrupting) {
+      // 말하는 중에 또 만짐 → 분노가 쌓일수록 더 강하게 항의한다.
+      return this.pickFrom('interrupt', POOLS.interrupt, this.touchStreak >= 3 ? 'urgent' : 'normal')
+    }
     if (ctx.danger) return this.pickPool('urgent')
     const pool: TouchPoolId =
       this.touchStreak >= 6 ? 'exasperated' : this.touchStreak >= 3 ? 'annoyed' : 'calm'
@@ -283,25 +366,42 @@ export class CompanionSystem {
     return this.pickPool('settle')
   }
 
-  /** 말하는 중에 스킵/빨리감기로 끊겼을 때. */
+  /** 말하는 중에 스킵/빨리감기로 끊겼을 때(분노 비례). */
   onInterrupt(): string {
-    return this.pickPool('interrupt')
+    return this.pickFrom('interrupt', POOLS.interrupt, this.touchStreak >= 3 ? 'urgent' : 'normal')
   }
 
   /**
-   * 게임 이벤트 상황 반응. 확률에 걸리고 쿨다운이 지났을 때만 한 줄을 돌려주고,
-   * 아니면 null(침묵). intensityOverride로 위급 피격 등을 더 다급하게 만들 수 있다.
+   * 게임 이벤트 상황 반응. 학습 가중치를 천천히 회복시키고, (기본확률×가중치)에 걸리고
+   * 쿨다운이 지났을 때만 한 줄을 돌려준다. 아니면 null(침묵).
    */
   reactSituation(id: SituationId, now: number, intensityOverride?: Intensity): string | null {
-    if (!this.passSpeakGate(now, SITUATION[id].chance)) return null
+    const chance = Math.min(0.95, SITUATION[id].chance * this.situationWeight[id])
+    if (!this.passSpeakGate(now, chance)) return null
     this.lastSpokeAt = now
     return this.pickFrom(id, POOLS[id], intensityOverride ?? SITUATION[id].intensity)
   }
 
-  /**
-   * 손패 획득 한줄평. 우선순위: 성냥(불씨 상태별) → id 전용(CARD_COMMENTS) → 카테고리 폴백.
-   * 덕분에 모든 손패가 최소 카테고리 대사를 갖고, 특별한 카드만 전용 대사를 더하면 된다.
-   */
+  /** 플레이어가 안 읽고 빨리 넘긴 상황 → 다음부터 덜 말한다(가짜 RL 부정 보상). */
+  recordSkip(id: SituationId): void {
+    this.skipCount += 1
+    this.situationWeight[id] = Math.max(SITUATION_WEIGHT_FLOOR, this.situationWeight[id] * 0.7)
+  }
+
+  /** 플레이어가 대사를 끝까지 봐 준 상황 → 점점 더 수다스러워진다(긍정 보상). */
+  recordHeard(id: SituationId): void {
+    this.situationWeight[id] = Math.min(SITUATION_WEIGHT_MAX, this.situationWeight[id] * 1.08)
+  }
+
+  /** 스킵이 누적됐을 때 가끔 '조용히 할게'류로 과묵해짐을 알린다(드물게). */
+  maybeQuietRemark(): string | null {
+    if (this.skipCount === 3 || (this.skipCount > 3 && this.skipCount % 6 === 0)) {
+      return this.pickFrom('quiet', POOLS.quiet, 'soft')
+    }
+    return null
+  }
+
+  /** 손패 획득 한줄평. 성냥(불씨 상태별) → id 전용 → 카테고리 폴백 순. */
   onAcquireCard(
     cardId: string,
     category: HandCategory,

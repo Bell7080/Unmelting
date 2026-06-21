@@ -333,6 +333,11 @@ export class SpeechBubble {
     return this.state === 'visible' && this.typewriterTimer !== 0
   }
 
+  /** 버블이 화면에 떠 있는지(등장/표시 중). 빨리감기→스킵 2단계 판정에 쓴다. */
+  get isShowing(): boolean {
+    return this.state === 'entering' || this.state === 'visible'
+  }
+
   /** DOM에서 완전히 제거. 재사용하지 않을 때 호출. */
   destroy(): void {
     this.dismiss()
