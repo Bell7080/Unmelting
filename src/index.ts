@@ -62,6 +62,7 @@ import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
+import { CompanionSystem } from '@systems/CompanionSystem'
 import { HearthScene } from '@ui/hearth/HearthScene'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
@@ -173,6 +174,48 @@ const eventDemonBubble = new SpeechBubble({
 })
 let gameActive = true
 let inputLocked = false
+
+// ── 동료(에나) 반응 레이어 씨앗 ──────────────────────────────
+// 학습 전 규칙 기반 스캐폴딩. 플레이어 프로필(.player-card) 터치에 횟수·시간·현재 상황으로
+// 반응한다(패턴이 아니라 자아처럼). 설계: Ena_Companion_AI_Design.md
+const companion = new CompanionSystem()
+// 현재 player 말풍선이 에나 본인의 대사(바크)인지 — 스킵 항의를 그녀 대사에만 한정한다.
+let enaSpeaking = false
+// 연타 후 손을 떼면 '…이제 끝났어?'를 띄우기 위한 방치 타이머.
+let companionIdleTimer = 0
+const COMPANION_IDLE_MS = 2600
+
+/** 에나의 한마디를 player 말풍선으로 띄운다(스킵 항의 판정용 발화 플래그를 세운다). */
+function sayEnaBark(line: string): void {
+  enaSpeaking = true
+  speechBubble.show(line)
+}
+
+/** 체력/불씨가 위태로운 위급 상황인지 — 위급할 때 만지면 에나가 "지금 장난칠 때야?" 한다. */
+function companionInDanger(): boolean {
+  const c = gameState.character
+  const lowHp = c.maxHealth > 0 && c.health / c.maxHealth <= 0.3
+  const lowEmber = c.ember <= 1
+  return lowHp || lowEmber
+}
+
+/** 프로필을 만졌을 때 — 상황/연타에 맞춰 반응하고, 손을 떼면 마무리 대사를 예약한다. */
+function onProfileTouched(): void {
+  if (!gameActive || inputLocked) return
+  sayEnaBark(companion.onProfileTouch(Date.now(), { danger: companionInDanger() }))
+  clearTimeout(companionIdleTimer)
+  companionIdleTimer = window.setTimeout(() => {
+    if (!gameActive || inputLocked) return
+    const line = companion.onSettle()
+    if (line) sayEnaBark(line)
+  }, COMPANION_IDLE_MS)
+}
+
+// 보드는 재렌더로 .player-card를 다시 그리므로, 안정적인 #game-board에 위임 청취한다.
+document.getElementById('game-board')?.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement | null)?.closest('.player-card')) onProfileTouched()
+})
+
 let chain: ChainState = HandSystem.newChain()
 /**
  * UI-side timeline of chain events. Mirrors `chain.sequence` for the cards
@@ -2478,6 +2521,8 @@ async function startGame(): Promise<void> {
   }
 
   // 1턴 시작 대사: 암막이 완전히 걷힌 뒤 살짝 딜레이 후 캐릭터 말풍선 등장
+  // (에나 바크가 아니라 연출 대사이므로 스킵 항의 대상에서 제외한다.)
+  enaSpeaking = false
   speechBubble.show('역경 아래, 작은 불빛을 밝혀야만 해.', 800)
 }
 
@@ -3018,10 +3063,15 @@ document.addEventListener('itemAction', (e: Event) => {
 })
 
 // 마우스 클릭 시 진행 중인 대사(타이핑)를 즉시 완성한다
-document.addEventListener('mousedown', () => {
+document.addEventListener('mousedown', (e) => {
+  // 에나가 자기 대사를 타이핑하는 중에 다른 곳을 눌러 빨리감기/스킵하면 항의한다.
+  // (프로필 자체를 다시 누르는 건 '터치'로 처리하므로 여기선 제외한다.)
+  const onProfile = (e.target as HTMLElement | null)?.closest('.player-card')
+  const interruptingEna = enaSpeaking && speechBubble.isTyping && !onProfile
   bossBubble.completeTyping()
   speechBubble.completeTyping()
   eventDemonBubble.completeTyping()
+  if (interruptingEna && gameActive && !inputLocked) sayEnaBark(companion.onInterrupt())
 })
 
 document.addEventListener('chainReset', () => {
@@ -3677,7 +3727,7 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
       const ember = gameState.character.ember
       recordNotice(`불씨가 사그라들었다 (${ember}/${gameState.character.emberMax})`, 'hurt')
       // 불씨가 dim→flickering 경계(4) 직전에 플레이어에게 경고 대사를 띄운다
-      if (ember === 4) speechBubble.show('불씨가 약해지고 있어. . .')
+      if (ember === 4) { enaSpeaking = false; speechBubble.show('불씨가 약해지고 있어. . .') }
       // 고품격 뗄감: 불씨가 완전히 꺼지면 가득 채우고 유물 파괴.
       if (ember <= 0 && gameState.character.hasRelic('premium-firewood')) {
         const beforeResources = snapshotPlayerResources()
