@@ -48,27 +48,25 @@ describe('CompanionSystem', () => {
     }
   })
 
-  it('상황 바크는 발화 직후 쿨다운 안에서는 침묵한다', () => {
+  it('상황 바크는 한 턴에 예산만큼만(기본 1회) 나오고 턴이 바뀌면 다시 가능하다', () => {
     const c = new CompanionSystem()
-    // 확률 때문에 성공할 때까지 시간을 충분히 벌리며 시도한다.
+    // 같은 턴에서 확률 통과할 때까지 시도 → 성공 시 그 턴 예산 소진.
     let first: string | null = null
-    let t = 100000
-    for (let i = 0; i < 500 && first === null; i++) {
-      first = c.reactSituation('web', t)
-      if (first === null) t += 10000
-    }
+    for (let i = 0; i < 500 && first === null; i++) first = c.reactSituation('web', 7)
     expect(first).not.toBeNull()
-    // 방금 말했으므로 같은 시각 재호출은 쿨다운으로 침묵.
-    expect(c.reactSituation('web', t)).toBeNull()
+    // 같은 턴 재호출은 예산 소진으로 침묵.
+    expect(c.reactSituation('web', 7)).toBeNull()
+    // 턴이 바뀌면 다시 가능(확률 통과 시).
+    let next: string | null = null
+    for (let i = 0; i < 500 && next === null; i++) next = c.reactSituation('web', 8)
+    expect(next).not.toBeNull()
   })
 
   it('전용 대사가 없는 손패는 카테고리 폴백 한줄평을 깨끗하게 돌려준다', () => {
     const c = new CompanionSystem()
     let line: string | null = null
-    let t = 100000
-    for (let i = 0; i < 500 && line === null; i++) {
-      line = c.onAcquireCard('unknown-card', 'attack', t)
-      if (line === null) t += 10000
+    for (let turn = 0; turn < 500 && line === null; turn++) {
+      line = c.onAcquireCard('unknown-card', 'attack', turn)
     }
     expect(line).not.toBeNull()
     expect(line!).not.toMatch(/[{}[\]]/)

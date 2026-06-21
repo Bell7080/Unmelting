@@ -314,8 +314,6 @@ const SITUATION: Record<SituationId, { chance: number; intensity: Intensity }> =
 }
 
 const STREAK_RESET_MS = 4000
-/** 상황 바크 사이 최소 간격 — 한 턴에 여러 이벤트가 터져도 한 번만 말하게 한다. */
-const SITUATION_COOLDOWN_MS = 4500
 const LOOT_COMMENT_CHANCE = 0.45
 /** 학습 가중치 하한 — 아무리 스킵해도 침묵이 아니라 '과묵'에서 멈춘다. */
 const SITUATION_WEIGHT_FLOOR = 0.2
@@ -325,8 +323,9 @@ const SITUATION_WEIGHT_MAX = 1.8
 export class CompanionSystem {
   private touchStreak = 0
   private lastTouchAt = 0
-  /** 마지막으로 무언가 말한 시각 — 상황 바크 쿨다운 기준. */
-  private lastSpokeAt = 0
+  /** 현재 턴 번호와 이번 턴에 낸 월드 바크 수 — 시간(쿨타임)이 아니라 턴으로 빈도를 다스린다. */
+  private lastTurn = -1
+  private barksThisTurn = 0
   /** 풀별 직전 선택 인덱스 — 같은 줄이 연속으로 나오지 않게 한다. */
   private readonly lastPick = new Map<string, number>()
   /**
@@ -348,7 +347,6 @@ export class CompanionSystem {
     if (now - this.lastTouchAt > STREAK_RESET_MS) this.touchStreak = 0
     this.touchStreak += 1
     this.lastTouchAt = now
-    this.lastSpokeAt = now
     if (ctx.interrupting) {
       // 말하는 중에 또 만짐 → 분노가 쌓일수록 더 강하게 항의한다.
       return this.pickFrom('interrupt', POOLS.interrupt, this.touchStreak >= 3 ? 'urgent' : 'normal')
@@ -372,13 +370,22 @@ export class CompanionSystem {
   }
 
   /**
-   * 게임 이벤트 상황 반응. 학습 가중치를 천천히 회복시키고, (기본확률×가중치)에 걸리고
-   * 쿨다운이 지났을 때만 한 줄을 돌려준다. 아니면 null(침묵).
+   * 게임 이벤트 상황 반응. 시간 쿨다운이 아니라 **턴당 발화 예산**으로 빈도를 다스린다:
+   * 한 턴에 maxBarksPerTurn(수다 수치로 커짐)까지만, (기본확률×학습 가중치)에 걸렸을 때만.
+   * important(위급 등)는 턴 예산을 우회해 항상 말할 기회를 가진다.
    */
-  reactSituation(id: SituationId, now: number, intensityOverride?: Intensity): string | null {
-    const chance = Math.min(0.95, SITUATION[id].chance * this.situationWeight[id])
-    if (!this.passSpeakGate(now, chance)) return null
-    this.lastSpokeAt = now
+  reactSituation(
+    id: SituationId,
+    turn: number,
+    intensityOverride?: Intensity,
+    important = false
+  ): string | null {
+    this.beginTurnIfNeeded(turn)
+    if (!important && this.barksThisTurn >= this.maxBarksPerTurn()) return null
+    let chance = Math.min(0.95, SITUATION[id].chance * this.situationWeight[id])
+    if (important) chance = Math.max(chance, 0.7)
+    if (Math.random() >= chance) return null
+    this.barksThisTurn += 1
     return this.pickFrom(id, POOLS[id], intensityOverride ?? SITUATION[id].intensity)
   }
 
@@ -405,11 +412,13 @@ export class CompanionSystem {
   onAcquireCard(
     cardId: string,
     category: HandCategory,
-    now: number,
+    turn: number,
     ctx?: { emberSufficient?: boolean }
   ): string | null {
-    if (!this.passSpeakGate(now, LOOT_COMMENT_CHANCE)) return null
-    this.lastSpokeAt = now
+    this.beginTurnIfNeeded(turn)
+    if (this.barksThisTurn >= this.maxBarksPerTurn()) return null
+    if (Math.random() >= LOOT_COMMENT_CHANCE) return null
+    this.barksThisTurn += 1
     if (cardId === 'match') {
       const key: PoolId = (ctx?.emberSufficient ?? true) ? 'loot-match-ok' : 'loot-match-low'
       return this.pickFrom(key, POOLS[key], 'normal')
@@ -424,10 +433,23 @@ export class CompanionSystem {
     POOLS[pool].push(...lines)
   }
 
-  /** 쿨다운이 지났고 확률에 걸렸는지 — 상황 바크의 강약 게이트. */
-  private passSpeakGate(now: number, chance: number): boolean {
-    if (now - this.lastSpokeAt < SITUATION_COOLDOWN_MS) return false
-    return Math.random() < chance
+  /** 턴이 바뀌면 이번 턴 발화 예산을 리셋한다. */
+  private beginTurnIfNeeded(turn: number): void {
+    if (turn !== this.lastTurn) {
+      this.lastTurn = turn
+      this.barksThisTurn = 0
+    }
+  }
+
+  /** 전반적 수다 수치(상황 가중치 평균). 잘 들어주면 오르고 스킵하면 내려간다. */
+  private chattiness(): number {
+    const w = this.situationWeight
+    return (w.hit + w.web + w.treasure + w.kill + w.survive) / 5
+  }
+
+  /** 한 턴에 허용하는 월드 바크 수 — 수다스러운 플레이어에겐 2까지 늘어난다. */
+  private maxBarksPerTurn(): number {
+    return this.chattiness() >= 1.4 ? 2 : 1
   }
 
   /** 터치/상태 풀(기본 긴급도 사용)에서 한 줄 고른다. */

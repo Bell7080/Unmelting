@@ -3979,7 +3979,7 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   // 동료(에나) 피격 반응 — 확률+쿨다운으로 강약 조절(위급하면 더 다급한 말투).
   if (totalDamage > 0 && companionWorldCanSpeak()) {
     const danger = companionInDanger()
-    const line = companion.reactSituation('hit', Date.now(), danger ? 'urgent' : undefined)
+    const line = companion.reactSituation('hit', gameState.getCurrentTurn(), danger ? 'urgent' : undefined, danger)
     if (line) {
       sayEnaBark(line, {
         importance: danger ? BARK_IMPORTANCE.urgent : BARK_IMPORTANCE.situation,
@@ -4387,13 +4387,13 @@ async function handleCardAction(e: Event): Promise<void> {
   // 동료(에나) 행동 반응 — 손패 한줄평(획득 카드) 우선, 없으면 카드 종류별 상황 바크.
   // 확률+쿨다운으로 한 행동에 한 번만, 너무 수다스럽지 않게 강약을 준다.
   if (companionWorldCanSpeak()) {
-    const now = Date.now()
+    const turn = gameState.getCurrentTurn()
     // 손패 한줄평(획득 카드) 우선 — 학습 대상이 아니라 낮은 중요도.
     const gainedId = result.itemGainedIds?.[0]
     let loot: string | null = null
     if (gainedId) {
       const def = getHandCardDef(gainedId as HandCardId)
-      loot = companion.onAcquireCard(gainedId, def.category, now, {
+      loot = companion.onAcquireCard(gainedId, def.category, turn, {
         emberSufficient: gameState.character.ember >= 4,
       })
     }
@@ -4406,7 +4406,7 @@ async function handleCardAction(e: Event): Promise<void> {
       else if (card.type === CardType.TREASURE && result.cardRemoved) sit = 'treasure'
       else if (card.type === CardType.ENEMY) sit = result.cardRemoved ? 'kill' : 'survive'
       if (sit) {
-        const bark = companion.reactSituation(sit, now)
+        const bark = companion.reactSituation(sit, turn)
         if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: sit })
       }
     }
