@@ -260,9 +260,26 @@ function companionWorldCanSpeak(): boolean {
   return gameActive && !shopOpen && !gameState.bossBattleActive && !gameState.isGameOver
 }
 
+/** 클러치 종류별 전용 체인 제목(플레이어 카드 위 배너). */
+const CLUTCH_TITLES: Record<string, string> = {
+  crit: '모험의 긍지',
+  dodge: '날렵한 몸놀림',
+  trap: '굳건한 의지',
+  treasure: '행운의 손길',
+  heal: '포기를 모르는 마음',
+  shield: '수호의 결의',
+  ember: '꺼지지 않는 불씨',
+  awaken: '에나의 각성',
+}
+
+/** 클러치 발동 시 플레이어 카드 위에 『 제목 』 + 효과 배너를 띄운다. */
+function showClutchChain(kind: string, desc: string): void {
+  boardRenderer.showClutchBanner(CLUTCH_TITLES[kind] ?? '에나의 의지', desc)
+}
+
 /**
  * 클러치(에나의 의지) 평가 + 실행. 위기에 '의지'가 가득 차면 보통 강도의 실제 지원을 하고,
- * 특별 체인 '에나의 의지'를 하단에 띄우며 거의 확정으로 대사를 친다.
+ * 클러치 전용 체인을 플레이어 카드 위에 띄우며 거의 확정으로 대사를 친다.
  */
 function tryCompanionClutch(): void {
   if (!companionWorldCanSpeak()) return
@@ -291,14 +308,12 @@ function applyClutch(plan: ClutchPlan): void {
     const drop = DropSystem.makeCard('match')
     detail = c.addHandCard(drop) ? '성냥 +1' : '손패가 가득 참'
   }
-  // 특별 체인 '에나의 의지'를 하단 배너에 추가한다(다음 보드 행동에서 정리됨).
-  chainTimeline.push({ kind: 'will', name: '에나의 의지', flavor: `${plan.flavor} · ${detail}`, uid: nextChainUid() })
-  boardRenderer.refreshChainBanner(buildChainHints())
   recordNotice(`에나의 의지 — ${detail}`, 'info')
   render()
-  // 플레이어 카드 들썩 + 블라스트(종류별 팔레트).
+  // 플레이어 카드 들썩 + 블라스트(종류별 팔레트) + 전용 체인 배너.
   const clutchTheme = plan.kind === 'shield' ? 'shield-gain' : plan.kind === 'ember' ? 'ember-gain' : 'health-gain'
   void boardRenderer.animateClutchOnPlayer(clutchTheme)
+  showClutchChain(plan.kind, detail)
   // 거의 확정 대사 + 자원 트레일(같은 beat). 클러치는 최상위 중요도라 다른 대사가 떠 있어도 끼어든다.
   sayEnaBark(plan.line, { importance: BARK_IMPORTANCE.clutch })
   void playPlayerGainTrails({ kind: 'center' }, before)
@@ -322,7 +337,6 @@ type ChainTimelineEvent =
   | { kind: 'recipe'; recipeId: string; name: string; flavor: string; uid: string }
   | { kind: 'gauge'; mode: CandleMode; name: string; flavor: string; uid: string }
   | { kind: 'relic'; relicId: RelicId; name: string; flavor: string; uid: string }
-  | { kind: 'will'; name: string; flavor: string; uid: string }
 let chainTimeline: ChainTimelineEvent[] = []
 let chainEventCounter = 0
 function nextChainUid(): string {
@@ -1017,14 +1031,8 @@ async function tryResolveCompanionAwaken(): Promise<boolean> {
   gameState.isGameOver = false
   gameState.gameOverReason = ''
   recordNotice('에나의 각성! 체력 전체 회복 · 공격력 +1', 'info')
-  chainTimeline.push({
-    kind: 'will',
-    name: '에나의 각성',
-    flavor: '죽음의 문턱에서 — 체력 전체 회복 · 공격력 +1',
-    uid: nextChainUid(),
-  })
-  boardRenderer.refreshChainBanner(buildChainHints())
   render()
+  showClutchChain('awaken', '체력 전체 회복 · 공격력 +1')
   sayEnaBark(companion.awakenLine(), { importance: BARK_IMPORTANCE.clutch })
   return true
 }
@@ -1199,6 +1207,7 @@ async function applyCompanionCrit(card: Card, distance: number): Promise<void> {
   const newHealth = card.takeDamage(dmg)
   recordNotice(`에나의 의지 — 급소! 추가 피해 ${dmg}`, 'info')
   void boardRenderer.animateClutchOnPlayer('attack-gain')
+  showClutchChain('crit', `급소 추가 타격 ${dmg}`)
   sayEnaBark(companion.minorClutchLine('crit'), { importance: BARK_IMPORTANCE.clutch })
   await boardRenderer.animateDamageNumbersById([{ cardId: card.id, amount: dmg }])
   if (newHealth <= 0) {
@@ -4131,6 +4140,7 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
       gameState.character.heal(maxHit)
       recordNotice(`에나의 의지 — 회피! 피해 ${maxHit} 무효`, 'info')
       void boardRenderer.animateClutchOnPlayer('health-gain')
+      showClutchChain('dodge', `피해 ${maxHit} 무효`)
       sayEnaBark(companion.minorClutchLine('dodge'), { importance: BARK_IMPORTANCE.clutch })
       render()
     }
@@ -4492,6 +4502,7 @@ async function handleCardAction(e: Event): Promise<void> {
       if (healed > 0) {
         recordNotice(`에나의 의지 — 함정 무시! 피해 ${healed} 되돌림`, 'info')
         void boardRenderer.animateClutchOnPlayer('health-gain')
+        showClutchChain('trap', `함정 피해 ${healed} 무효`)
         sayEnaBark(companion.minorClutchLine('trap'), { importance: BARK_IMPORTANCE.clutch })
       }
     }
@@ -4556,6 +4567,7 @@ async function handleCardAction(e: Event): Promise<void> {
     if (gameState.character.addHandCard(drop)) {
       recordNotice('에나의 의지 — 덤! 손패 +1', 'info')
       void boardRenderer.animateClutchOnPlayer('treasure-gain')
+      showClutchChain('treasure', '손패 +1')
       sayEnaBark(companion.minorClutchLine('treasure'), { importance: BARK_IMPORTANCE.clutch })
       render()
     }

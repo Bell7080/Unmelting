@@ -195,18 +195,7 @@ export interface ChainEventRelic extends ChainEventBase {
   name: string
   flavor: string
 }
-/** 동료(에나)의 클러치 지원 — 특별 체인 '에나의 의지'로 표시한다. */
-export interface ChainEventWill extends ChainEventBase {
-  kind: 'will'
-  name: string
-  flavor: string
-}
-export type ChainEvent =
-  | ChainEventCard
-  | ChainEventRecipe
-  | ChainEventGauge
-  | ChainEventRelic
-  | ChainEventWill
+export type ChainEvent = ChainEventCard | ChainEventRecipe | ChainEventGauge | ChainEventRelic
 
 export interface ChainHints {
   events: ChainEvent[]
@@ -5471,14 +5460,6 @@ export class GameBoardRenderer {
             <span class="chain-event-name">${ev.name}</span>
           </span>
         `)
-      } else if (ev.kind === 'will') {
-        // 에나의 클러치 — 따뜻한 의지 체인. 유물 체인 스타일을 따르되 불빛 다이아 표식을 쓴다.
-        parts.push(`
-          <span class="chain-event chain-event-relic chain-event-will ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
-            <span class="chain-event-mark chain-event-mark--sparkle">${sparkleIcon()}</span>
-            <span class="chain-event-copy"><span class="chain-event-name">${ev.name}</span><span class="chain-event-flavor">${ev.flavor}</span></span>
-          </span>
-        `)
       } else {
         parts.push(`
           <span class="chain-event chain-event-relic ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
@@ -6355,6 +6336,48 @@ export class GameBoardRenderer {
         resolve()
       }, 1500)
     })
+  }
+
+  private ensureClutchBannerStyles(): void {
+    if (document.getElementById('clutch-banner-styles')) return
+    const el = document.createElement('style')
+    el.id = 'clutch-banner-styles'
+    el.textContent = `
+.clutch-banner { position: fixed; z-index: 9998; pointer-events: none; text-align: center; will-change: transform, opacity, filter; }
+.clutch-banner-title { font-weight: 800; font-size: 22px; color: rgba(255, 238, 196, 0.98); letter-spacing: 1px; white-space: nowrap; text-shadow: 0 0 14px rgba(255, 200, 90, 0.55), 0 2px 6px rgba(0, 0, 0, 0.82); }
+.clutch-banner-desc { margin-top: 3px; font-size: 15px; font-weight: 600; color: rgba(255, 224, 170, 0.92); white-space: nowrap; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85); }
+`
+    document.head.appendChild(el)
+  }
+
+  /**
+   * 클러치 전용 체인 배너: 플레이어 카드 위에 『 제목 』 + 효과 설명을 띄우고,
+   * 충분히 머문 뒤 흐려지듯 천천히 위로 사라진다.
+   */
+  showClutchBanner(title: string, description: string): void {
+    this.ensureClutchBannerStyles()
+    const card = this.boardElement.querySelector<HTMLElement>('.player-card')
+    if (!card) return
+    const rect = card.getBoundingClientRect()
+    const host = document.createElement('div')
+    host.className = 'clutch-banner'
+    host.setAttribute('aria-hidden', 'true')
+    host.innerHTML =
+      `<div class="clutch-banner-title">『 ${title} 』</div>` +
+      `<div class="clutch-banner-desc">${description}</div>`
+    host.style.left = `${rect.left + rect.width / 2}px`
+    host.style.top = `${rect.top - 10}px`
+    document.body.appendChild(host)
+    const anim = host.animate(
+      [
+        { opacity: 0, transform: 'translate(-50%, -86%) scale(0.84)', filter: 'blur(0px)' },
+        { opacity: 1, transform: 'translate(-50%, -100%) scale(1)', filter: 'blur(0px)', offset: 0.07 },
+        { opacity: 1, transform: 'translate(-50%, -100%) scale(1)', filter: 'blur(0px)', offset: 0.62 },
+        { opacity: 0, transform: 'translate(-50%, -122%) scale(1.02)', filter: 'blur(2.6px)', offset: 1 },
+      ],
+      { duration: 3600, easing: 'cubic-bezier(0.2, 0.8, 0.25, 1)', fill: 'forwards' }
+    )
+    anim.onfinish = () => host.remove()
   }
 
   /** 유물 파괴 공통 연출(희망/권위와 같은 톤이되 더 가볍다). 강도로 규모를 나눈다:
