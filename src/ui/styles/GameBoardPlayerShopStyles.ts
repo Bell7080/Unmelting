@@ -1965,8 +1965,9 @@ body.is-shift-detail .shop-relic-effect .shift-only { display: inline; }
   }
   /* Tighter gap between top/bottom rows to save vertical space. */
   .shop-content-bundle { gap: clamp(4px, 0.6vh, 8px); }
-  /* Restore bottom-row 2-column layout (820px breakpoint collapses it to 1 column). */
-  .shop-bottom-row { grid-template-columns: 3fr 7fr; }
+  /* Restore bottom-row 2-column layout (820px breakpoint collapses it to 1 column).
+     무료(좌)·팩(우) 과밀을 줄이려 무료 컬럼에 약간 더 폭을 준다. */
+  .shop-bottom-row { grid-template-columns: 3.4fr 6.6fr; }
   /* Layer padding/gap: reduced for compact mobile layout. */
   .shop-layer {
     padding: clamp(3px, 0.4vh, 6px) clamp(4px, 0.5vw, 8px);
@@ -1981,13 +1982,22 @@ body.is-shift-detail .shop-relic-effect .shift-only { display: inline; }
     max-width: 120px;
   }
   .shop-shell[data-shop-mode="altar"] .shop-artifact-layer .shop-relic-card {
+    /* 베이스 altar width:clamp를 풀어 flex 균등 분배에 맡긴다(카드 간격 어긋남 방지). */
+    width: auto;
     max-width: 136px;
   }
   .shop-free-card {
     flex: 1 1 0;
     width: auto;
-    min-width: 76px;
-    max-width: 112px;
+    min-width: 72px;
+    max-width: 100px;
+  }
+  /* 무료카드 부채꼴(회전+겹침)을 모바일에선 펴서 좁은 컬럼에 나란히 정렬한다. */
+  .shop-free-layer { gap: clamp(8px, 1.6vw, 14px); }
+  .shop-free-layer > .shop-relic-card:nth-child(1),
+  .shop-free-layer > .shop-relic-card:nth-child(2) {
+    transform: none;
+    rotate: 0deg;
   }
   .shop-pack-card {
     flex: 1 1 0;
@@ -2033,15 +2043,17 @@ body.is-shift-detail .shop-relic-effect .shift-only { display: inline; }
     scale: 1.06;
     z-index: 7;
   }
-  .shop-free-layer > .shop-relic-card:nth-child(1).is-touch-active {
-    transform: translateX(clamp(12px, 1vw, 18px)) rotate(0deg);
-  }
+  /* 무료카드는 모바일에서 평면 정렬이므로 탭 시에도 부채꼴 오프셋 없이 스케일만 강조한다. */
+  .shop-free-layer > .shop-relic-card:nth-child(1).is-touch-active,
   .shop-free-layer > .shop-relic-card:nth-child(2).is-touch-active {
-    transform: translateX(clamp(-12px, -1vw, -18px)) rotate(0deg);
+    transform: none;
   }
   .shop-pack-pick-card.is-touch-active {
     scale: 1.04;
     box-shadow: none;
+  }
+  .shop-pack-card.is-touch-active {
+    scale: 1.05;
   }
   .shop-reroll-btn.is-touch-active {
     transform: translateY(-2px) scale(1.02);

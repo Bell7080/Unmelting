@@ -164,6 +164,8 @@ export function attachShopTouchHighlight(shopOverlay: HTMLElement): void {
   const TOUCHABLE = [
     '[data-shop-buy-kind]',
     '[data-trial-pick]',    // forced trial cards use a different data attr
+    '.shop-relic-card',     // 상점/제단 유물·무료 카드(부채꼴) 탭 피드백
+    '.shop-pack-card',      // 카드팩 슬롯
     '.shop-pack-pick-card',
     '.shop-reroll-btn',
     '[data-shop-close]',
