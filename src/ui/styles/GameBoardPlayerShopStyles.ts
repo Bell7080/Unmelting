@@ -1959,12 +1959,14 @@ body.is-shift-detail .shop-relic-effect .shift-only { display: inline; }
      카드를 셀 전체(1/3 폭 × 레일 높이 100%)로 늘려 레일을 꽉 채운다(앞면은
      position:absolute inset:0이라 그대로 따라 채워짐). 데스크탑은 기존 3/4 유지. */
   .shop-shell--trial .shop-content-bundle {
-    inset: clamp(4px, 0.6vh, 8px) clamp(4px, 0.5vw, 8px) !important;
+    inset: clamp(4px, 0.6vh, 8px) clamp(2px, 0.3vw, 5px) !important;
   }
   .shop-shell--trial .shop-trial-layer {
     align-items: stretch !important;
-    padding: clamp(4px, 0.6vh, 8px) clamp(4px, 0.5vw, 6px) !important;
-    gap: clamp(6px, 1vw, 10px) !important;
+    /* 가로도 꽉 채우도록 좌우 padding과 카드 사이 gap을 최소화해 3장이 레일을
+       거의 맞붙어 타일링되게 한다(세로는 이미 height:100%로 가득 참). */
+    padding: clamp(3px, 0.4vh, 6px) clamp(2px, 0.3vw, 4px) !important;
+    gap: clamp(3px, 0.5vw, 6px) !important;
   }
   .shop-shell--trial .shop-trial-card {
     width: 100% !important;
@@ -1997,18 +1999,18 @@ body.is-shift-detail .shop-relic-effect .shift-only { display: inline; }
     flex: 1 1 0;
     width: auto;
     min-width: 64px;
-    max-width: 120px;
+    max-width: 144px;
   }
   .shop-shell[data-shop-mode="altar"] .shop-artifact-layer .shop-relic-card {
     /* 베이스 altar width:clamp를 풀어 flex 균등 분배에 맡긴다(카드 간격 어긋남 방지). */
     width: auto;
-    max-width: 136px;
+    max-width: 163px;
   }
   .shop-free-card {
     flex: 1 1 0;
     width: auto;
     min-width: 72px;
-    max-width: 100px;
+    max-width: 120px;
   }
   /* 무료카드 부채꼴(회전+겹침)을 모바일에선 펴서 좁은 컬럼에 나란히 정렬한다. */
   .shop-free-layer { gap: clamp(8px, 1.6vw, 14px); }
@@ -2053,8 +2055,9 @@ body.is-shift-detail .shop-relic-effect .shift-only { display: inline; }
      제약을 해제하며, 셸 패딩/풋터 여백을 줄여 레일 안에 풋터까지 들어오게 한다. */
   .shop-pack-picker-cards {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    max-width: 100%;
-    gap: clamp(6px, 1vw, 12px);
+    /* 개봉 시 3장이 레일을 꽉 채워 과하게 컸다. ~60%로 깡 축소해 중앙에 작게 모은다. */
+    max-width: 60%;
+    gap: clamp(5px, 0.9vw, 11px);
   }
   .shop-pack-pick-card {
     min-height: 0;

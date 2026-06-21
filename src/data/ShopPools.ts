@@ -51,7 +51,7 @@ export const SHOP_PACK_POOLS: Record<ShopPackKind, Omit<ShopPackPoolItem, 'apply
   'chance-pack': [],
   'resource-pack': [
     // 제단 전용 자원팩 — basic2_001~007을 순서대로 쓰고, 동전만 기존 basic_011을 재사용한다.
-    { id: 'altar-clothes-thick',  illu: 'basic2_001', theme: 'resource', title: '두꺼운 의복', effect: '최대체력 +5',              rarity: 'common',    weight: 20 },
+    { id: 'altar-clothes-thick',  illu: 'basic2_001', theme: 'resource', title: '두꺼운 의복', effect: '최대체력 +5',              rarity: 'epic',      weight: 3  },
     { id: 'altar-heating',        illu: 'basic2_002', theme: 'resource', title: '가열',        effect: '공격력 +1',                rarity: 'legendary', weight: 1  },
     { id: 'altar-backpack-large', illu: 'basic2_003', theme: 'resource', title: '큰 배낭',     effect: '최대 손패 +2',             rarity: 'common',    weight: 20 },
     { id: 'altar-matchbox',       illu: 'basic2_004', theme: 'resource', title: '성냥갑',      effect: '불씨 한도 +2',            rarity: 'rare',      weight: 15 },
