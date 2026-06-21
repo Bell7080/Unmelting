@@ -34,11 +34,13 @@ export type Line = string | LineTemplate
 /** 프로필 터치/상태 반응 풀. */
 type TouchPoolId = 'calm' | 'annoyed' | 'exasperated' | 'urgent' | 'settle' | 'quiet'
 /** 게임 이벤트 상황 반응 풀. */
-type SituationPoolId = 'hit' | 'web' | 'treasure' | 'kill' | 'survive' | 'loot-match-ok' | 'loot-match-low'
+type SituationPoolId =
+  | 'hit' | 'web' | 'treasure' | 'kill' | 'survive' | 'flower' | 'event'
+  | 'loot-match-ok' | 'loot-match-low'
 type PoolId = TouchPoolId | SituationPoolId
 
-/** 확률+쿨다운+학습 가중치로 다스리는 게임 이벤트 종류. */
-export type SituationId = 'hit' | 'web' | 'treasure' | 'kill' | 'survive'
+/** 확률+턴 간격+학습 가중치로 다스리는 게임 이벤트 종류. */
+export type SituationId = 'hit' | 'web' | 'treasure' | 'kill' | 'survive' | 'flower' | 'event'
 
 /** 말투 강도 — 같은 내용도 종결부호/강조어를 달리해 톤을 바꾼다. */
 export type Intensity = 'soft' | 'normal' | 'urgent'
@@ -247,6 +249,24 @@ const POOLS: Record<PoolId, Line[]> = {
     '아직 안 죽었어, 조심해.',
     '제법인걸…?',
   ],
+  // 꽃을 주웠을 때.
+  flower: [
+    {
+      template: '{감탄}, 꽃이다! {표현}.',
+      slots: { 감탄: ['와', '오', '어머'], 표현: ['향기가 좋아', '예쁘다', '기운이 나네'] },
+    },
+    '꽃을 줍는 순간만큼은 평화롭네.',
+    '이런 게 모험의 즐거움이지.',
+  ],
+  // 이벤트 문이 나타났을 때.
+  event: [
+    {
+      template: '문이…? {표현}.',
+      slots: { 표현: ['뭐가 있으려나', '들어가 볼까', '조심해야겠어'] },
+    },
+    '저 너머에 뭔가 있어.',
+    '선택의 갈림길이네.',
+  ],
   'loot-match-ok': [
     '불씨 게이지는 아직 충분하네, 나중에 써도 되겠어… 그치?',
     '성냥이다. 급하진 않으니 아껴두자.',
@@ -273,6 +293,25 @@ const CATEGORY_COMMENTS: Record<HandCategory, Line[]> = {
   tool: ['오, 쓸모 있어 보여.', '도구는 많을수록 좋지.', '요긴하게 쓰자.'],
   control: ['요건 잘 쓰면 판을 바꾸겠는걸.', '영리하게 써먹자.', '타이밍 맞춰 쓰면 좋겠어.'],
 }
+
+/** 손패를 '사용'했을 때의 카테고리별 폴백 한마디(획득 한줄평과 톤이 다르다). */
+const USE_COMMENTS: Record<HandCategory, Line[]> = {
+  attack: ['받아라!', '이걸로 한 방!', '맞고 정신 차려!'],
+  recovery: ['후… 좀 낫다.', '이제 좀 버틸 만해.', '회복!'],
+  tool: ['요건 이렇게 쓰는 거야.', '제때 써야 빛나지.', '쓸 만하네!'],
+  control: ['판을 흔들어 볼까?', '이렇게 하면 되지?', '영리하게!'],
+}
+
+/** 직업별 시작 인사(없으면 공용). 시작 한 번뿐이라 빈도 제한 없이 늘 나온다. */
+const JOB_LINES: Record<string, Line[]> = {
+  knight: ['기사구나! 방패는 내가 거들게.', '튼튼해 보여 — 함께라면 든든하겠어.'],
+  mage: ['마법사라니 멋져! 불씨는 내게 맡겨.', '지혜로운 선택이야. 잘 부탁해.'],
+}
+const JOB_GENERIC: Line[] = [
+  '역경 아래, 작은 불빛을 밝혀야만 해.',
+  '준비됐어? 함께 가보자.',
+  '어떤 길이든, 내가 곁에 있을게.',
+]
 
 /** 손패 id별 전용 한줄평. 없는 카드는 CATEGORY_COMMENTS로 자동 폴백한다. */
 const CARD_COMMENTS: Record<string, Line[]> = {
@@ -316,6 +355,9 @@ const SITUATION: Record<SituationId, { chance: number; intensity: Intensity }> =
   treasure: { chance: 0.3, intensity: 'normal' },
   kill: { chance: 0.15, intensity: 'normal' },
   survive: { chance: 0.18, intensity: 'normal' },
+  flower: { chance: 0.3, intensity: 'normal' },
+  // 이벤트 문은 드물게 등장하므로 떴을 때는 비교적 자주 반응한다.
+  event: { chance: 0.6, intensity: 'normal' },
 }
 
 const STREAK_RESET_MS = 4000
@@ -356,6 +398,8 @@ export class CompanionSystem {
     treasure: 1,
     kill: 1,
     survive: 1,
+    flower: 1,
+    event: 1,
   }
   /** 누적 스킵 횟수 — 과묵 안내 대사 타이밍에 쓴다. */
   private skipCount = 0
@@ -482,6 +526,22 @@ export class CompanionSystem {
     return null
   }
 
+  /** 손패 '사용' 한줄평. 같은 턴 간격을 공유해 너무 수다스럽지 않게 가끔만 능력을 언급한다. */
+  onUseCard(cardId: string, category: HandCategory, turn: number): string | null {
+    if (turn - this.lastWorldBarkTurn < this.minTurnGap()) return null
+    if (Math.random() >= LOOT_COMMENT_CHANCE) return null
+    this.lastWorldBarkTurn = turn
+    const bespoke = CARD_COMMENTS[cardId]
+    if (bespoke) return this.pickFrom(`use:${cardId}`, bespoke, 'normal')
+    return this.pickFrom(`use-cat:${category}`, USE_COMMENTS[category], 'normal')
+  }
+
+  /** 직업 선택 직후의 시작 인사. 시작 한 번뿐이라 빈도 제한 없이 늘 나온다. */
+  onJobSelect(jobId: string): string {
+    const lines = JOB_LINES[jobId] ?? JOB_GENERIC
+    return this.pickFrom(`job:${jobId}`, lines, 'normal')
+  }
+
   /** 추후 성장/해금 층이 대사 풀을 넓히는 확장 지점(가짜 학습이 아니라 데이터 주입 seam). */
   addLines(pool: PoolId, lines: Line[]): void {
     POOLS[pool].push(...lines)
@@ -489,8 +549,8 @@ export class CompanionSystem {
 
   /** 전반적 수다 수치(상황 가중치 평균). 잘 들어주면 오르고 스킵하면 내려간다. */
   private chattiness(): number {
-    const w = this.situationWeight
-    return (w.hit + w.web + w.treasure + w.kill + w.survive) / 5
+    const vals = Object.values(this.situationWeight)
+    return vals.reduce((sum, v) => sum + v, 0) / vals.length
   }
 
   /**

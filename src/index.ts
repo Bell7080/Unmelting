@@ -2432,7 +2432,14 @@ function compactAndRefillAllLanes(): boolean {
     }
     return cardSpawner.spawnCardForRefill()
   })
-  if (doorInjected) pendingEventDoor = false
+  if (doorInjected) {
+    pendingEventDoor = false
+    // 동료(에나) 이벤트 문 등장 반응.
+    if (companionWorldCanSpeak()) {
+      const bark = companion.reactSituation('event', gameState.getCurrentTurn())
+      if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: 'event' })
+    }
+  }
   return result
 }
 
@@ -2611,10 +2618,12 @@ async function startGame(): Promise<void> {
     await boardRenderer.playJobCurtainOpen()
   }
 
-  // 1턴 시작 대사: 암막이 완전히 걷힌 뒤 살짝 딜레이 후 캐릭터 말풍선 등장
-  // (에나 바크가 아니라 연출 대사이므로 스킵 항의 대상에서 제외한다.)
+  // 1턴 시작 대사: 암막이 완전히 걷힌 뒤 살짝 딜레이 후 등장. 직업을 고른 경우 그에 맞는 인사.
   enaSpeaking = false
-  speechBubble.show('역경 아래, 작은 불빛을 밝혀야만 해.', 800)
+  const opening = chosenJob
+    ? companion.onJobSelect(chosenJob.id)
+    : '역경 아래, 작은 불빛을 밝혀야만 해.'
+  speechBubble.show(opening, 800)
 }
 
 function buildChainHints() {
@@ -3310,6 +3319,11 @@ async function applyHandSingle(
   }
   // 정직: 손패 1장 사용으로 집계(합체 카드도 슬롯 1장이므로 1로 센다).
   applyHonestyHandUse(1)
+  // 동료(에나) 손패 사용 한줄평 — 가끔 그 카드의 능력에 대해 한마디.
+  if (usedDef && companionWorldCanSpeak()) {
+    const bark = companion.onUseCard(usedDef.id, usedDef.category, gameState.getCurrentTurn())
+    if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.loot })
+  }
   // 보스는 디버프 면역 규칙을 따른다. 밀랍 계열 사용 시 보스에게 굳음 스택이 남아있다면
   // 즉시 저항 연출을 띄우고 해제해, "저항 후 즉시 무효" 감각을 일관되게 유지한다.
   await resolveBossDebuffImmunityOnWaxUse(usedDef?.id ?? null)
@@ -4461,6 +4475,7 @@ async function handleCardAction(e: Event): Promise<void> {
       let sit: SituationId | null = null
       if (card.type === CardType.TRAP && card.trapKind === 'web' && result.cardRemoved) sit = 'web'
       else if (card.type === CardType.TREASURE && result.cardRemoved) sit = 'treasure'
+      else if (card.type === CardType.FLOWER && result.cardRemoved) sit = 'flower'
       else if (card.type === CardType.ENEMY) sit = result.cardRemoved ? 'kill' : 'survive'
       if (sit) {
         const bark = companion.reactSituation(sit, turn)

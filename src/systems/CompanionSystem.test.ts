@@ -88,6 +88,16 @@ describe('CompanionSystem', () => {
     expect(plan!.kind).toBe('ember')
   })
 
+  it('직업 인사/손패 사용 한줄평이 깨끗한 문자열로 나온다', () => {
+    const c = new CompanionSystem()
+    expect(c.onJobSelect('knight')).not.toMatch(/[{}[\]]/)
+    expect(c.onJobSelect('unknown-job').length).toBeGreaterThan(0) // 폴백
+    let use: string | null = null
+    for (let turn = 0; turn < 500 && use === null; turn++) use = c.onUseCard('wax', 'control', turn)
+    expect(use).not.toBeNull()
+    expect(use!).not.toMatch(/[{}[\]]/)
+  })
+
   it('전용 대사가 없는 손패는 카테고리 폴백 한줄평을 깨끗하게 돌려준다', () => {
     const c = new CompanionSystem()
     let line: string | null = null
