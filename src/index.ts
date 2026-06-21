@@ -4483,7 +4483,26 @@ async function handleCardAction(e: Event): Promise<void> {
       boardRenderer.animateDamageNumbersById(diffFieldHealthLosses(beforeActionHealth))
     )
   }
-  if (result.damageTaken && result.damageTaken > 0) {
+  // 소소한 클러치 — 함정 무시: 가끔 함정 피해를 '진짜로' 무시한다(되돌림이 아니라 무시).
+  // 렌더 전에 모델을 행동 직전 체력/방패로 복구해 HP가 닳아 보이지 않게 하고, "무시" 연출을 띄운다.
+  let companionTrapIgnored = false
+  if (
+    card.type === CardType.TRAP &&
+    result.damageTaken &&
+    result.damageTaken > 0 &&
+    !result.trapIgnored &&
+    companionWorldCanSpeak() &&
+    companion.rollMinorClutch('trap')
+  ) {
+    gameState.character.health = Math.min(
+      gameState.character.maxHealth,
+      gameState.character.health + result.damageTaken
+    )
+    gameState.character.shield = beforeActionResources.shield
+    companionTrapIgnored = true
+  }
+
+  if (result.damageTaken && result.damageTaken > 0 && !companionTrapIgnored) {
     // Trap penalties are already applied by ActionSystem; render immediately so
     // the HP counter starts rolling on the same beat as the trap impact.
     render()
@@ -4497,23 +4516,19 @@ async function handleCardAction(e: Event): Promise<void> {
     applyAnomalyHealthLoss()
     // 소중한 머리: 함정 피해로 체력 절반 이하 시 전체 회복.
     await applyPreciousHeadCheck()
-    // 소소한 클러치 — 함정 무시: 가끔 함정 피해를 통째로 되돌린다.
-    if (companionWorldCanSpeak() && companion.rollMinorClutch('trap')) {
-      const healed = gameState.character.heal(result.damageTaken)
-      if (healed > 0) {
-        recordNotice(`에나의 의지 — 함정 무시! 피해 ${healed} 되돌림`, 'info')
-        void boardRenderer.animateClutchOnPlayer('health-gain')
-        showClutchChain('trap', `함정 피해 ${healed} 무효`)
-        sayEnaBark(companion.minorClutchLine('trap'), { importance: BARK_IMPORTANCE.clutch })
-      }
-    }
   }
-  // 함정 무시 (도적/함정의 대가): "무시" 텍스트 + 트랩 지터. 유물 보유 시 발동 로그도 기록.
-  if (result.trapIgnored) {
+  // 함정 무시: 도적/함정의 대가(유물) 또는 에나의 클러치 → "무시" 텍스트 + 트랩 지터.
+  if (result.trapIgnored || companionTrapIgnored) {
     sameBeatAnimations.push(boardRenderer.playTrapIgnoreResist(card.id))
-    if (gameState.character.hasRelic('trap-master')) {
+    if (result.trapIgnored && gameState.character.hasRelic('trap-master')) {
       recordRelicActivation('trap-master', '함정 무시')
     }
+  }
+  if (companionTrapIgnored) {
+    recordNotice('에나의 의지 — 함정 무시!', 'info')
+    void boardRenderer.animateClutchOnPlayer('health-gain')
+    showClutchChain('trap', '함정 피해 무시')
+    sayEnaBark(companion.minorClutchLine('trap'), { importance: BARK_IMPORTANCE.clutch })
   }
   // 달콤한 유혹: 함정 제거 시 기본 불빛의 30% 추가 획득. 무효화 시 미발동.
   if (result.cardRemoved && card.type === CardType.TRAP && !result.trapIgnored && gameState.character.hasRelic('sweet-temptation')) {
