@@ -2046,6 +2046,29 @@ body.is-shift-detail .shop-relic-effect .shift-only { display: inline; }
   /* Neutralize translation offsets sized for full-viewport width. */
   .shop-pack-layer { transform: none; }
   .shop-free-layer { transform: none; }
+
+  /* 카드팩 개봉(피커): 데스크탑용 minmax(177px,1fr) 최소폭 + aspect-ratio 3/4가
+     좁은 레일에서 가로·세로로 넘쳐 하단 풋터(재뽑기/패스)가 잘렸다.
+     셀이 레일에 맞게 줄도록 minmax(0,1fr)로 풀고, 카드 min-height/컬럼 max-width
+     제약을 해제하며, 셸 패딩/풋터 여백을 줄여 레일 안에 풋터까지 들어오게 한다. */
+  .shop-pack-picker-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    max-width: 100%;
+    gap: clamp(6px, 1vw, 12px);
+  }
+  .shop-pack-pick-card {
+    min-height: 0;
+  }
+  .shop-pack-picker-shell {
+    padding: clamp(18px, 3vh, 38px) clamp(8px, 1.2vw, 14px) clamp(6px, 1vh, 10px);
+    gap: clamp(4px, 0.8vh, 10px);
+  }
+  .shop-pack-picker-head { top: clamp(8px, 1.4vh, 18px); }
+  .shop-pack-picker-footer { margin-top: clamp(6px, 1.4vh, 16px); }
+  .shop-pack-picker-reroll-btn {
+    width: clamp(64px, 7.6vw, 86px);
+    height: clamp(52px, 7vh, 72px);
+  }
 }
 
 /* Gated on (hover: none) so PC hover rules are completely unaffected. */
