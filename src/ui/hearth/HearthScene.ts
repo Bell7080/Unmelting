@@ -1,5 +1,6 @@
 import { HEARTH_STYLES } from './HearthStyles'
 import { SpriteUrls, spriteForHearthStation } from '../Sprites'
+import { isTouchDevice } from '../MobileTouchManager'
 
 export interface HearthHandlers {
   /** 출발 버튼 클릭 — 직업 선택/런 시작으로 연결한다. */
@@ -52,6 +53,10 @@ export class HearthScene {
   private departing = false
   /** 대문이 열리기 전(고정 인트로 연출) 동안엔 hover 인스펙터를 막는다. */
   private interactive = false
+  /** 터치 기기: hover 대신 탭으로 인스펙터를 토글한다. */
+  private touchMode = false
+  /** 현재 인스펙터를 띄운 소스 요소(터치 탭 토글 판정용). */
+  private inspectSource: HTMLElement | null = null
 
   enter(handlers: HearthHandlers): void {
     this.injectStyles()
@@ -108,9 +113,15 @@ export class HearthScene {
     window.addEventListener('resize', onResize)
     window.addEventListener('scroll', onResize, true)
 
-    // 인스펙터블(칸/딱지) hover 위임 — document 레벨이라 좌측 패널의 퀘스트 딱지도 잡는다.
-    document.addEventListener('pointerover', this.onPointerOver)
-    document.addEventListener('pointerout', this.onPointerOut)
+    // 인스펙터블(칸/딱지) 위임 — document 레벨이라 좌측 패널의 퀘스트 딱지도 잡는다.
+    // 터치 기기엔 hover가 없으므로 탭 토글(capture 단계)로 대체한다.
+    this.touchMode = isTouchDevice()
+    if (this.touchMode) {
+      document.addEventListener('click', this.onTap, true)
+    } else {
+      document.addEventListener('pointerover', this.onPointerOver)
+      document.addEventListener('pointerout', this.onPointerOut)
+    }
 
     overlay.addEventListener('click', (e) => {
       const t = e.target as HTMLElement
@@ -152,6 +163,23 @@ export class HearthScene {
     this.hideInspector()
   }
 
+  /**
+   * 터치 탭 토글(capture 단계).
+   *   - 인스펙터블 첫 탭: 정보 표시 + 이 탭의 칸 동작(모험 셔터 등)은 막는다.
+   *   - 같은 칸 두 번째 탭: 정보 닫고 칸 동작은 진행시킨다.
+   *   - 빈 곳 탭: 정보 닫기.
+   */
+  private onTap = (e: MouseEvent): void => {
+    if (!this.interactive) return
+    const el = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-inspect-title]') ?? null
+    if (!el) { this.hideInspector(); return }
+    if (this.inspectSource === el) { this.hideInspector(); return }
+    this.showInspector(el)
+    this.inspectSource = el
+    // 첫 탭은 정보 표시 전용 — 칸의 click 동작(overlay 핸들러)으로 전파되지 않게 막는다.
+    e.stopPropagation()
+  }
+
   private showInspector(source: HTMLElement): void {
     // 인트로(대문 열림) 동안엔 막는다 — 플레이어블 상태에서만 정보창을 띄운다.
     if (!this.interactive) return
@@ -173,6 +201,7 @@ export class HearthScene {
 
   private hideInspector(): void {
     this.inspector?.classList.remove('is-shown')
+    this.inspectSource = null
   }
 
   /** 모험 선택 → 로비 위로 검은 모험 셔터가 내려오고, 모험 자리에 출발 버튼이 드러난다. */
@@ -281,6 +310,7 @@ export class HearthScene {
     }
     document.removeEventListener('pointerover', this.onPointerOver)
     document.removeEventListener('pointerout', this.onPointerOut)
+    document.removeEventListener('click', this.onTap, true)
     // 로비 backdrop 페이드아웃 상태 해제(런 중에는 index.ts 기본 backdrop 규칙으로 복귀).
     document.getElementById('ingame-backdrop')?.classList.remove('is-out')
     this.inspector?.remove()
