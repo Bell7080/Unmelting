@@ -211,6 +211,11 @@ function onProfileTouched(): void {
   }, COMPANION_IDLE_MS)
 }
 
+/** 월드 이벤트 바크가 떠도 되는 상황인지 — 상점/보스/게임오버 중엔 침묵한다. */
+function companionWorldCanSpeak(): boolean {
+  return gameActive && !shopOpen && !gameState.bossBattleActive && !gameState.isGameOver
+}
+
 // 보드는 재렌더로 .player-card를 다시 그리므로, 안정적인 #game-board에 위임 청취한다.
 document.getElementById('game-board')?.addEventListener('click', (e) => {
   if ((e.target as HTMLElement | null)?.closest('.player-card')) onProfileTouched()
@@ -3917,6 +3922,11 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
       totalDamage
     )
   }
+  // 동료(에나) 피격 반응 — 확률+쿨다운으로 강약 조절(위급하면 더 다급한 말투).
+  if (totalDamage > 0 && companionWorldCanSpeak()) {
+    const line = companion.reactSituation('hit', Date.now(), companionInDanger() ? 'urgent' : undefined)
+    if (line) sayEnaBark(line)
+  }
   // 품격있는 대처: 피격 연출 뒤 나를 때린 적들에게 반격.
   await applyDignifiedRetaliation(hits)
   // 변칙: 이 페이즈에서 잃은 체력 10마다 불씨 +1.
@@ -4312,6 +4322,32 @@ async function handleCardAction(e: Event): Promise<void> {
     await applyChanceExtraHit(card, distance)
     // 물양동이: 25% 확률로 1 추가 피해 (찬스로 처치된 경우 이미 제거되므로 health 확인).
     await applyWaterBucketExtraDamage(card, distance)
+  }
+
+  // 동료(에나) 행동 반응 — 손패 한줄평(획득 카드) 우선, 없으면 카드 종류별 상황 바크.
+  // 확률+쿨다운으로 한 행동에 한 번만, 너무 수다스럽지 않게 강약을 준다.
+  if (companionWorldCanSpeak()) {
+    const now = Date.now()
+    let bark: string | null = null
+    const gainedId = result.itemGainedIds?.[0]
+    if (gainedId) {
+      const def = getHandCardDef(gainedId as HandCardId)
+      bark = companion.onAcquireCard(gainedId, def.category, now, {
+        emberSufficient: gameState.character.ember >= 4,
+      })
+    }
+    if (!bark) {
+      if (card.type === CardType.TRAP && card.trapKind === 'web' && result.cardRemoved) {
+        bark = companion.reactSituation('web', now)
+      } else if (card.type === CardType.TREASURE && result.cardRemoved) {
+        bark = companion.reactSituation('treasure', now)
+      } else if (card.type === CardType.ENEMY) {
+        bark = result.cardRemoved
+          ? companion.reactSituation('kill', now)
+          : companion.reactSituation('survive', now)
+      }
+    }
+    if (bark) sayEnaBark(bark)
   }
 
   // Board action resets the chain so combos do not bleed across turns.

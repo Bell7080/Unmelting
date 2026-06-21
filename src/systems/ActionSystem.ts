@@ -41,6 +41,8 @@ export interface ActionResult {
   damageTaken?: number
   /** Names of hand cards picked up by the action (for log copy). */
   itemGainedNames?: string[]
+  /** Def ids of hand cards picked up (for companion loot commentary). */
+  itemGainedIds?: string[]
   /** Hand cards that did not fit because the hand was full (for overflow UI). */
   overflow?: HandCard[]
   /** Flower rewards that live outside Character, such as light and currency. */
@@ -86,19 +88,21 @@ export class ActionSystem {
     character: Character,
     count: number,
     source: 'enemy-kill' | 'treasure' = 'enemy-kill'
-  ): { gainedNames: string[]; overflow: HandCard[] } {
+  ): { gainedNames: string[]; gainedIds: string[]; overflow: HandCard[] } {
     const gainedNames: string[] = []
+    const gainedIds: string[] = []
     const overflow: HandCard[] = []
     for (let i = 0; i < count; i++) {
       const drop = DropSystem.generateDrop(source)
       const def = getHandCardDef(drop.defId)
       if (character.addHandCard(drop)) {
         gainedNames.push(def.name)
+        gainedIds.push(drop.defId)
       } else {
         overflow.push(drop)
       }
     }
-    return { gainedNames, overflow }
+    return { gainedNames, gainedIds, overflow }
   }
 
   /**
@@ -117,7 +121,7 @@ export class ActionSystem {
 
     if (newHealth <= 0) {
       const dropCount = card.defeatDropCount
-      const { gainedNames, overflow } = ActionSystem.awardDrops(character, dropCount, 'enemy-kill')
+      const { gainedNames, gainedIds, overflow } = ActionSystem.awardDrops(character, dropCount, 'enemy-kill')
       const summary =
         gainedNames.length === 0
           ? '손패가 가득 차 잃음'
@@ -129,6 +133,7 @@ export class ActionSystem {
         message: `${card.name} 처치! ${summary}`,
         damageDealt: playerDamage,
         itemGainedNames: gainedNames,
+        itemGainedIds: gainedIds,
         overflow,
         cardRemoved: true,
       }
@@ -227,7 +232,7 @@ export class ActionSystem {
     const safeSpan = Math.max(1, Math.min(3, card.groupCount))
     const dropTable = card.treasureKind === 'goldenChest' ? GOLDEN_TREASURE_DROPS_BY_SPAN : TREASURE_DROPS_BY_SPAN
     const drops = dropTable[safeSpan]
-    const { gainedNames, overflow } = ActionSystem.awardDrops(character, drops, 'treasure')
+    const { gainedNames, gainedIds, overflow } = ActionSystem.awardDrops(character, drops, 'treasure')
     const summary =
       gainedNames.length === 0
         ? '손패가 가득 차 잃음'
@@ -238,6 +243,7 @@ export class ActionSystem {
       success: true,
       message: `${card.name} 획득: ${summary}`,
       itemGainedNames: gainedNames,
+      itemGainedIds: gainedIds,
       overflow,
       cardRemoved: true,
     }
