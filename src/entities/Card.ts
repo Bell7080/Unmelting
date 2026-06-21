@@ -112,7 +112,8 @@ export function flowerDescription(kind: FlowerKind): string {
 }
 
 export class Card {
-  /** 폭탄 기본 폭발 피해. 시련 '역경' 보너스(trapDamageBonus)가 여기에 더해진다. */
+  /** 폭탄 기본 폭발 피해. 런 단위 함정 피해 보너스(시련 '역경'·유물)는
+   *  character.trapDamageBonus로 일원화되어 피해 적용/표기 호출부에서 더해진다. */
   static readonly BOMB_DAMAGE = 5
   id: string
   type: CardType
@@ -133,8 +134,6 @@ export class Card {
   enemyPower: number
   /** Trap subtype and behavior state for web/bomb/spore rules. */
   trapKind: TrapKind
-  /** 시련 '역경' 누적 함정 피해 보너스. 거미줄/포자/폭탄 모든 함정 피해에 더해진다. */
-  trapDamageBonus: number = 0
   isBombArmed: boolean
   sporeTurnsUntilSpread: number
   // True for exactly one applySporeSpread cycle after a spawned spore first enters
@@ -336,29 +335,30 @@ export class Card {
     return Math.min(0.85, 0.1 + maturity * maturity * 0.08)
   }
 
-  /** Return trap damage for the current trap width and subtype. */
+  /** Return BASE trap damage for the current trap width and subtype.
+   *  런 단위 함정 피해 보너스(시련 '역경'·유물)는 여기 더하지 않는다 — 모든 함정이
+   *  동일하게 받도록 character.trapDamageBonus로 일원화해 피해를 적용/표기하는
+   *  호출부(ActionSystem.evadeTrap, 폭탄 처리, 카드 라벨)에서 한 번만 더한다.
+   *  이렇게 하면 카드별 보너스 주입이 필요 없어 추후 추가되는 함정도 자동 적용된다. */
   getTrapDamagePenalty(): number {
     if (this.type !== CardType.TRAP) return 0
     // 폭탄은 밟음 피해가 없다(폭발은 effectiveTrapDamage/TurnManager가 따로 처리).
     if (this.trapKind === 'bomb') return 0
-    // 시련 '역경'의 함정 피해 보너스는 거미줄/포자 모든 변형에 더한다(즉사 999 칸은 제외).
-    const bonus = this.trapDamageBonus
     if (this.trapKind === 'spore') {
-      if (this.groupCount >= 3) return 5 + bonus
-      if (this.groupCount === 2) return 3 + bonus
-      return 1 + bonus
+      if (this.groupCount >= 3) return 5
+      if (this.groupCount === 2) return 3
+      return 1
     }
     if (this.groupCount >= 3) return 999
-    if (this.groupCount === 2) return 5 + bonus
-    return this.baseDamage + bonus
+    if (this.groupCount === 2) return 5
+    return this.baseDamage
   }
 
-  /** 함정이 실제로 가하는/표기할 피해를 하나의 수치로 돌려준다(보너스 합산 포함).
-   *  거미줄·포자 등은 밟음 피해와 동일하고, 폭탄은 폭발 피해(5+보너스)를 따른다.
-   *  필드 표기와 폭탄 폭발(TurnManager)이 같은 값을 쓰도록 함정을 한 종류로 묶는다. */
+  /** 함정이 가하는/표기할 BASE 피해(런 보너스 제외). 거미줄·포자는 밟음 피해와 같고,
+   *  폭탄은 폭발 기본 피해를 따른다. 런 보너스는 호출부에서 character.trapDamageBonus를 더한다. */
   effectiveTrapDamage(): number {
     if (this.type !== CardType.TRAP) return 0
-    if (this.trapKind === 'bomb') return Card.BOMB_DAMAGE + this.trapDamageBonus
+    if (this.trapKind === 'bomb') return Card.BOMB_DAMAGE
     return this.getTrapDamagePenalty()
   }
 

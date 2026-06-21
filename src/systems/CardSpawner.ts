@@ -217,7 +217,6 @@ export class CardSpawner {
    *  spawn/적 스탯/함정 피해 모두 다음 스폰부터 즉시 반영된다. */
   private trialEnemyHpBonus: number = 0
   private trialEnemyAtkBonus: number = 0
-  private trialTrapDamageBonus: number = 0
   private trialTreasureSpawnScale: number = 1
   /** 90F boss+trial 이후에는 별빛만 턴을 올리는 최종 등반 규칙을 켠다. */
   private finalAscentActive: boolean = false
@@ -249,22 +248,16 @@ export class CardSpawner {
     this.currentTier = tier
   }
 
-  /** 시련 효과 주입. index.ts의 runModifiers에서 호출되어 누적 상태와 동기화된다. */
+  /** 시련 효과 주입. index.ts의 runModifiers에서 호출되어 누적 상태와 동기화된다.
+   *  함정 피해 보너스는 character.trapDamageBonus로 일원화되어 여기서 다루지 않는다. */
   setTrialModifiers(mods: {
     enemyHpBonus: number
     enemyAtkBonus: number
-    trapDamageBonus: number
     treasureSpawnScale: number
   }): void {
     this.trialEnemyHpBonus = Math.max(0, mods.enemyHpBonus)
     this.trialEnemyAtkBonus = Math.max(0, mods.enemyAtkBonus)
-    this.trialTrapDamageBonus = Math.max(0, mods.trapDamageBonus)
     this.trialTreasureSpawnScale = Math.max(0, mods.treasureSpawnScale)
-  }
-
-  /** 전염된 포자 생성 시 시련 보너스를 물려주기 위해 TurnManager가 참조한다. */
-  getTrialTrapDamageBonus(): number {
-    return this.trialTrapDamageBonus
   }
 
   /** Sync the completed game turn so enemy pools unlock at 1/11/21. */
@@ -589,8 +582,8 @@ export class CardSpawner {
   }
 
   /** Spawn the current one-lane trap; wider traps are produced by row grouping.
-   *  시련 '역경' 누적 함정 피해 보너스는 trapDamageBonus로 실어, 거미줄/포자/폭탄
-   *  모든 함정 피해(고정치 포함)에 일관되게 더해진다. */
+   *  런 단위 함정 피해 보너스(시련 '역경'·유물)는 character.trapDamageBonus로 일원화되어
+   *  피해 계산 시점에 더해지므로 카드별 주입이 필요 없다. */
   private generateTrap(options: { trapKind?: TrapKind } = {}): Card {
     // Trap kind is usually selected by weighted buckets; the random fallback is
     // kept for targeted debug calls and future systems that request any trap.
@@ -608,7 +601,6 @@ export class CardSpawner {
       definition.healthOrDamage ?? 2,
       { trapKind: definition.trapKind }
     )
-    trap.trapDamageBonus = this.trialTrapDamageBonus
     return trap
   }
 

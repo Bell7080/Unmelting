@@ -241,8 +241,8 @@ export class TurnManager {
       seen.add(card)
       if (!card.isBombArmed || card.isFrozen()) continue
 
-      // 폭탄 폭발 피해 = 기본 5 + 시련 '역경' 보너스. 함정 표기와 같은 값을 쓴다.
-      const bombDamage = card.effectiveTrapDamage()
+      // 폭탄 폭발 피해 = 기본 5 + 런 함정 피해 보너스(시련 '역경'·유물). 함정 표기와 같은 값.
+      const bombDamage = card.effectiveTrapDamage() + this.gameState.character.trapDamageBonus
       // Bomb splash hurts neighboring enemies but does not delete non-enemy cells.
       // 사망한 적은 즉시 row에서 제거해야 미믹 등 특수 적이 0HP로 잔존하지 않는다.
       const adjacentCardIds: string[] = []
@@ -318,8 +318,8 @@ export class TurnManager {
   }
 
   /** Infect from spores whose countdown already reached 0, then reset them to 2.
-   *  trialTrapDamageBonus: 시련 '역경' 보너스 — CardSpawner.getTrialTrapDamageBonus()로 전달한다. */
-  spreadReadySpores(trialTrapDamageBonus = 0): SporeSpread[] {
+   *  함정 피해 보너스는 character.trapDamageBonus로 일원화되어 전염 포자에 따로 주입하지 않는다. */
+  spreadReadySpores(): SporeSpread[] {
     const spreads: SporeSpread[] = []
 
     // Countdown and infection are deliberately split: the UI renders the 0턴
@@ -345,8 +345,6 @@ export class TurnManager {
         )
         // 감염된 포자는 새 2턴 주기를 받으며 이번 spread snapshot에는 포함되지 않는다.
         spore.sporeTurnsUntilSpread = 2
-        // 시련 '역경' 함정 피해 보너스를 전염 포자에도 물려준다.
-        spore.trapDamageBonus = trialTrapDamageBonus
         this.gameState.lanes[target.laneIndex].setCardAtDistance(target.distance, spore)
         infected.push(target)
       }

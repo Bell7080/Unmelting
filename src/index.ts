@@ -297,7 +297,6 @@ function syncRunModifiersToSpawner(): void {
   cardSpawner.setTrialModifiers({
     enemyHpBonus: runModifiers.enemyHpBonus,
     enemyAtkBonus: runModifiers.enemyDamageBonus,
-    trapDamageBonus: runModifiers.trapDamageBonus,
     treasureSpawnScale: runModifiers.treasureSpawnScale,
   })
 }
@@ -342,12 +341,9 @@ function applyTrialEffect(kind: TrialEffectKind): void {
     }
     case 'trap-damage-bonus':
       runModifiers.trapDamageBonus += kind.value
-      // 이미 필드에 있는 함정 카드도 즉시 보너스 갱신해 피해 수치 표기를 맞춘다.
-      for (const lane of gameState.lanes)
-        for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
-          const c = lane.getCardAtDistance(d)
-          if (c?.type === CardType.TRAP) c.trapDamageBonus = runModifiers.trapDamageBonus
-        }
+      // 함정 피해 보너스는 character.trapDamageBonus(전역)에 누적한다. 모든 함정(현재 필드/
+      // 이후 스폰/전염/그룹/추후 추가 종류)이 피해 계산 시점에 자동으로 받는다 — 카드별 주입 불필요.
+      gameState.character.trapDamageBonus += kind.value
       break
     case 'treasure-spawn-scale':
       runModifiers.treasureSpawnScale = Math.max(0, runModifiers.treasureSpawnScale * kind.factor)
@@ -3801,7 +3797,7 @@ async function resolvePostDropSporeSpread(): Promise<void> {
     if (hasReadySpore) await wait(420)
   }
 
-  const sporeSpreads = turnManager.spreadReadySpores(cardSpawner.getTrialTrapDamageBonus())
+  const sporeSpreads = turnManager.spreadReadySpores()
   if (sporeSpreads.length === 0) {
     // 감염 대상이 없어도 준비된 포자는 0턴 시도 후 2턴으로 돌아가므로 뱃지를 갱신한다.
     if (hasReadySpore) render()
