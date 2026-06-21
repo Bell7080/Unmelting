@@ -33,33 +33,46 @@ describe('CompanionSystem', () => {
     expect(c.onSettle()).toBeNull()
   })
 
-  it('모든 반응 진입점이 비어있지 않은 문자열을 돌려준다', () => {
-    const c = new CompanionSystem()
-    expect(c.onProfileTouch(Date.now(), { danger: false }).length).toBeGreaterThan(0)
-    expect(c.onProfileTouch(Date.now(), { danger: true }).length).toBeGreaterThan(0)
-    expect(c.onInterrupt().length).toBeGreaterThan(0)
+  it('첫 터치는 항상 비어있지 않은 문자열로 응답하고, onInterrupt도 그렇다', () => {
+    // 새 인스턴스의 첫 터치(streak 1)는 throttle을 통과한다.
+    expect(new CompanionSystem().onProfileTouch(Date.now(), { danger: false })!.length).toBeGreaterThan(0)
+    expect(new CompanionSystem().onProfileTouch(Date.now(), { danger: true })!.length).toBeGreaterThan(0)
+    expect(new CompanionSystem().onInterrupt().length).toBeGreaterThan(0)
   })
 
-  it('템플릿 슬롯에 미치환 자국({}, []) 없이 렌더된다', () => {
+  it('연타 throttle: 빠른 연타는 일부만 응답한다(전부 응답하지 않음)', () => {
     const c = new CompanionSystem()
-    for (let i = 0; i < 50; i++) {
+    let voiced = 0
+    const now = Date.now()
+    for (let i = 0; i < 60; i++) if (c.onProfileTouch(now, { danger: false })) voiced += 1
+    // 60연타 중 일부만 — 첫 한두 번 + 낮은 확률. 전부(60) 응답하지 않는다.
+    expect(voiced).toBeLessThan(30)
+  })
+
+  it('터치 응답 문자열에 미치환 자국({}, []) 없이 렌더된다', () => {
+    const c = new CompanionSystem()
+    for (let i = 0; i < 80; i++) {
       const line = c.onProfileTouch(Date.now(), { danger: false })
-      expect(line).not.toMatch(/[{}[\]]/)
+      if (line) expect(line).not.toMatch(/[{}[\]]/)
     }
   })
 
-  it('상황 바크는 한 턴에 예산만큼만(기본 1회) 나오고 턴이 바뀌면 다시 가능하다', () => {
+  it('상황 바크는 턴 간격을 두고 나온다(직후 턴은 침묵, 충분히 지나면 다시 가능)', () => {
     const c = new CompanionSystem()
-    // 같은 턴에서 확률 통과할 때까지 시도 → 성공 시 그 턴 예산 소진.
-    let first: string | null = null
-    for (let i = 0; i < 500 && first === null; i++) first = c.reactSituation('web', 7)
-    expect(first).not.toBeNull()
-    // 같은 턴 재호출은 예산 소진으로 침묵.
-    expect(c.reactSituation('web', 7)).toBeNull()
-    // 턴이 바뀌면 다시 가능(확률 통과 시).
-    let next: string | null = null
-    for (let i = 0; i < 500 && next === null; i++) next = c.reactSituation('web', 8)
-    expect(next).not.toBeNull()
+    // 확률 통과로 처음 말한 턴을 찾는다(턴마다 시도).
+    let spokeTurn = -1
+    for (let turn = 0; turn < 2000 && spokeTurn < 0; turn++) {
+      if (c.reactSituation('web', turn)) spokeTurn = turn
+    }
+    expect(spokeTurn).toBeGreaterThanOrEqual(0)
+    // 바로 다음 턴은 간격 때문에 침묵.
+    expect(c.reactSituation('web', spokeTurn + 1)).toBeNull()
+    // 최대 간격(10턴) 이상 지나면 다시 가능(확률 통과 시).
+    let later: string | null = null
+    for (let turn = spokeTurn + 10; turn < spokeTurn + 400 && later === null; turn++) {
+      later = c.reactSituation('web', turn)
+    }
+    expect(later).not.toBeNull()
   })
 
   it('전용 대사가 없는 손패는 카테고리 폴백 한줄평을 깨끗하게 돌려준다', () => {

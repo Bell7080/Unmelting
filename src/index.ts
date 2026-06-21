@@ -239,8 +239,11 @@ function onProfileTouched(): void {
   const danger = companionInDanger()
   const line = companion.onProfileTouch(now, { danger, interrupting })
   // 항의/위급은 읽는 중에도 끼어들도록 높은 중요도, 평범한 반응은 낮은 중요도.
-  const importance = interrupting || danger ? BARK_IMPORTANCE.urgent : BARK_IMPORTANCE.touch
-  sayEnaBark(line, { importance })
+  // (연타 throttle로 null이면 이번 클릭엔 침묵.)
+  if (line) {
+    const importance = interrupting || danger ? BARK_IMPORTANCE.urgent : BARK_IMPORTANCE.touch
+    sayEnaBark(line, { importance })
+  }
   clearTimeout(companionIdleTimer)
   companionIdleTimer = window.setTimeout(() => {
     if (!gameActive || inputLocked) return

@@ -323,9 +323,8 @@ const SITUATION_WEIGHT_MAX = 1.8
 export class CompanionSystem {
   private touchStreak = 0
   private lastTouchAt = 0
-  /** 현재 턴 번호와 이번 턴에 낸 월드 바크 수 — 시간(쿨타임)이 아니라 턴으로 빈도를 다스린다. */
-  private lastTurn = -1
-  private barksThisTurn = 0
+  /** 마지막으로 월드 바크를 낸 턴 — 시간(쿨타임)이 아니라 '턴 간격'으로 빈도를 다스린다. */
+  private lastWorldBarkTurn = -999
   /** 풀별 직전 선택 인덱스 — 같은 줄이 연속으로 나오지 않게 한다. */
   private readonly lastPick = new Map<string, number>()
   /**
@@ -342,11 +341,15 @@ export class CompanionSystem {
   /** 누적 스킵 횟수 — 과묵 안내 대사 타이밍에 쓴다. */
   private skipCount = 0
 
-  /** 프로필을 만졌을 때. 보채면 항의(분노 비례), 위급하면 꾸짖음, 아니면 연타 강도별 반응. */
-  onProfileTouch(now: number, ctx: CompanionContext): string {
+  /**
+   * 프로필을 만졌을 때. 한참 만에 만지면 꼭 반응하지만, 빠른 연타엔 일일이 대꾸하지 않고
+   * 점점 드물게 응한다(장난 연타 대응). null이면 이번 클릭엔 침묵.
+   */
+  onProfileTouch(now: number, ctx: CompanionContext): string | null {
     if (now - this.lastTouchAt > STREAK_RESET_MS) this.touchStreak = 0
     this.touchStreak += 1
     this.lastTouchAt = now
+    if (!this.shouldVoiceTouch()) return null
     if (ctx.interrupting) {
       // 말하는 중에 또 만짐 → 분노가 쌓일수록 더 강하게 항의한다.
       return this.pickFrom('interrupt', POOLS.interrupt, this.touchStreak >= 3 ? 'urgent' : 'normal')
@@ -355,6 +358,14 @@ export class CompanionSystem {
     const pool: TouchPoolId =
       this.touchStreak >= 6 ? 'exasperated' : this.touchStreak >= 3 ? 'annoyed' : 'calm'
     return this.pickPool(pool)
+  }
+
+  /** 연타할수록 응답 확률을 떨어뜨린다(첫 터치는 항상, 그 뒤로 0.3→0.2→0.1). */
+  private shouldVoiceTouch(): boolean {
+    const s = this.touchStreak
+    if (s <= 1) return true
+    const chance = s <= 3 ? 0.3 : s <= 7 ? 0.2 : 0.1
+    return Math.random() < chance
   }
 
   /** 연타 뒤 손을 뗐을 때(방치). 만진 적이 있을 때만 마무리 대사를 돌려준다. */
@@ -370,9 +381,9 @@ export class CompanionSystem {
   }
 
   /**
-   * 게임 이벤트 상황 반응. 시간 쿨다운이 아니라 **턴당 발화 예산**으로 빈도를 다스린다:
-   * 한 턴에 maxBarksPerTurn(수다 수치로 커짐)까지만, (기본확률×학습 가중치)에 걸렸을 때만.
-   * important(위급 등)는 턴 예산을 우회해 항상 말할 기회를 가진다.
+   * 게임 이벤트 상황 반응. 시간 쿨다운이 아니라 **턴 간격**으로 빈도를 다스린다:
+   * 직전 발화로부터 minTurnGap(수다 수치가 높을수록 짧음)턴이 지났고, (기본확률×학습
+   * 가중치)에 걸렸을 때만. important(위급 등)는 간격을 우회해 경고 기회를 보장한다.
    */
   reactSituation(
     id: SituationId,
@@ -380,12 +391,11 @@ export class CompanionSystem {
     intensityOverride?: Intensity,
     important = false
   ): string | null {
-    this.beginTurnIfNeeded(turn)
-    if (!important && this.barksThisTurn >= this.maxBarksPerTurn()) return null
+    if (!important && turn - this.lastWorldBarkTurn < this.minTurnGap()) return null
     let chance = Math.min(0.95, SITUATION[id].chance * this.situationWeight[id])
     if (important) chance = Math.max(chance, 0.7)
     if (Math.random() >= chance) return null
-    this.barksThisTurn += 1
+    this.lastWorldBarkTurn = turn
     return this.pickFrom(id, POOLS[id], intensityOverride ?? SITUATION[id].intensity)
   }
 
@@ -415,10 +425,9 @@ export class CompanionSystem {
     turn: number,
     ctx?: { emberSufficient?: boolean }
   ): string | null {
-    this.beginTurnIfNeeded(turn)
-    if (this.barksThisTurn >= this.maxBarksPerTurn()) return null
+    if (turn - this.lastWorldBarkTurn < this.minTurnGap()) return null
     if (Math.random() >= LOOT_COMMENT_CHANCE) return null
-    this.barksThisTurn += 1
+    this.lastWorldBarkTurn = turn
     if (cardId === 'match') {
       const key: PoolId = (ctx?.emberSufficient ?? true) ? 'loot-match-ok' : 'loot-match-low'
       return this.pickFrom(key, POOLS[key], 'normal')
@@ -433,23 +442,18 @@ export class CompanionSystem {
     POOLS[pool].push(...lines)
   }
 
-  /** 턴이 바뀌면 이번 턴 발화 예산을 리셋한다. */
-  private beginTurnIfNeeded(turn: number): void {
-    if (turn !== this.lastTurn) {
-      this.lastTurn = turn
-      this.barksThisTurn = 0
-    }
-  }
-
   /** 전반적 수다 수치(상황 가중치 평균). 잘 들어주면 오르고 스킵하면 내려간다. */
   private chattiness(): number {
     const w = this.situationWeight
     return (w.hit + w.web + w.treasure + w.kill + w.survive) / 5
   }
 
-  /** 한 턴에 허용하는 월드 바크 수 — 수다스러운 플레이어에겐 2까지 늘어난다. */
-  private maxBarksPerTurn(): number {
-    return this.chattiness() >= 1.4 ? 2 : 1
+  /**
+   * 월드 바크 사이 최소 턴 간격. 수다 수치가 높을수록 짧아진다(자주 말함).
+   * 기본 수치(1.0)에서 5턴, 수다(1.8)면 ~3턴, 과묵(0.2)이면 최대 10턴까지 벌어진다.
+   */
+  private minTurnGap(): number {
+    return Math.min(10, Math.max(2, Math.round(5 / this.chattiness())))
   }
 
   /** 터치/상태 풀(기본 긴급도 사용)에서 한 줄 고른다. */
