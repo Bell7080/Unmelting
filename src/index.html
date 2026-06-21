@@ -63,6 +63,10 @@
          html에 어두운 바탕색을 깔아 둔다(검은 화면 페이드의 기반색). */
       html {
         background-color: #07040e;
+        /* 고정 100vh 게임 — 페이지 자체는 스크롤되지 않는다. 보스 격파 연출처럼
+           transform scale/버스트가 뷰포트 밖으로 잠깐 번질 때 body 스크롤바가
+           생겼다 사라지며 화면이 튀던 문제를 전역 클리핑으로 차단한다. */
+        overflow: hidden;
       }
 
       body {
@@ -74,6 +78,8 @@
         background-attachment: fixed;
         line-height: 1.5;
         min-height: 100vh;
+        /* 위 html과 동일 의도: 연출 중 일시적 오버플로로 페이지 스크롤바가 생기지 않게 한다. */
+        overflow: hidden;
         /* 모바일에서 더블탭 zoom 지연(300ms tap delay) 제거 + 카드 클릭 즉시 반응.
            터치 디바이스 전용으로 동작하며 마우스 클릭에는 변화 없음. */
         touch-action: manipulation;
