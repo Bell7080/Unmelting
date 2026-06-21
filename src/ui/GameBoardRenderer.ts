@@ -195,7 +195,18 @@ export interface ChainEventRelic extends ChainEventBase {
   name: string
   flavor: string
 }
-export type ChainEvent = ChainEventCard | ChainEventRecipe | ChainEventGauge | ChainEventRelic
+/** 동료(에나)의 클러치 지원 — 특별 체인 '에나의 의지'로 표시한다. */
+export interface ChainEventWill extends ChainEventBase {
+  kind: 'will'
+  name: string
+  flavor: string
+}
+export type ChainEvent =
+  | ChainEventCard
+  | ChainEventRecipe
+  | ChainEventGauge
+  | ChainEventRelic
+  | ChainEventWill
 
 export interface ChainHints {
   events: ChainEvent[]
@@ -5458,6 +5469,14 @@ export class GameBoardRenderer {
           <span class="chain-event chain-event-gauge ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
             <span class="chain-event-mark chain-event-mark--sparkle">${sparkleIcon()}</span>
             <span class="chain-event-name">${ev.name}</span>
+          </span>
+        `)
+      } else if (ev.kind === 'will') {
+        // 에나의 클러치 — 따뜻한 의지 체인. 유물 체인 스타일을 따르되 촛불 표식을 쓴다.
+        parts.push(`
+          <span class="chain-event chain-event-relic chain-event-will ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
+            <span class="chain-event-mark">${candleIcon()}</span>
+            <span class="chain-event-copy"><span class="chain-event-name">${ev.name}</span><span class="chain-event-flavor">${ev.flavor}</span></span>
           </span>
         `)
       } else {

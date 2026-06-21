@@ -62,7 +62,7 @@ import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
-import { CompanionSystem, type SituationId } from '@systems/CompanionSystem'
+import { CompanionSystem, type SituationId, type ClutchPlan } from '@systems/CompanionSystem'
 import { HearthScene } from '@ui/hearth/HearthScene'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
@@ -255,6 +255,47 @@ function companionWorldCanSpeak(): boolean {
   return gameActive && !shopOpen && !gameState.bossBattleActive && !gameState.isGameOver
 }
 
+/**
+ * 클러치(에나의 의지) 평가 + 실행. 위기에 '의지'가 가득 차면 보통 강도의 실제 지원을 하고,
+ * 특별 체인 '에나의 의지'를 하단에 띄우며 거의 확정으로 대사를 친다.
+ */
+function tryCompanionClutch(): void {
+  if (!companionWorldCanSpeak()) return
+  const c = gameState.character
+  const plan = companion.evaluateClutch({
+    hp: c.health,
+    maxHp: c.maxHealth,
+    hpRatio: c.maxHealth > 0 ? c.health / c.maxHealth : 1,
+    emberLow: c.ember <= 1,
+  })
+  if (plan) applyClutch(plan)
+}
+
+/** 클러치 효과를 실제로 적용하고 연출(체인 배너·대사·트레일·로그)을 함께 낸다. */
+function applyClutch(plan: ClutchPlan): void {
+  const c = gameState.character
+  const before = snapshotPlayerResources()
+  let detail = ''
+  if (plan.kind === 'heal') {
+    const healed = c.heal(plan.amount)
+    detail = `체력 +${healed}`
+  } else if (plan.kind === 'shield') {
+    const shielded = c.addShield(plan.amount)
+    detail = `방패 +${shielded}`
+  } else if (plan.kind === 'ember') {
+    const drop = DropSystem.makeCard('match')
+    detail = c.addHandCard(drop) ? '성냥 +1' : '손패가 가득 참'
+  }
+  // 특별 체인 '에나의 의지'를 하단 배너에 추가한다(다음 보드 행동에서 정리됨).
+  chainTimeline.push({ kind: 'will', name: '에나의 의지', flavor: `${plan.flavor} · ${detail}`, uid: nextChainUid() })
+  boardRenderer.refreshChainBanner(buildChainHints())
+  recordNotice(`에나의 의지 — ${detail}`, 'info')
+  render()
+  // 거의 확정 대사 + 자원 트레일(같은 beat).
+  sayEnaBark(plan.line, { importance: BARK_IMPORTANCE.urgent })
+  void playPlayerGainTrails({ kind: 'center' }, before)
+}
+
 // 보드는 재렌더로 .player-card를 다시 그리므로, 안정적인 #game-board에 위임 청취한다.
 document.getElementById('game-board')?.addEventListener('click', (e) => {
   if ((e.target as HTMLElement | null)?.closest('.player-card')) onProfileTouched()
@@ -273,6 +314,7 @@ type ChainTimelineEvent =
   | { kind: 'recipe'; recipeId: string; name: string; flavor: string; uid: string }
   | { kind: 'gauge'; mode: CandleMode; name: string; flavor: string; uid: string }
   | { kind: 'relic'; relicId: RelicId; name: string; flavor: string; uid: string }
+  | { kind: 'will'; name: string; flavor: string; uid: string }
 let chainTimeline: ChainTimelineEvent[] = []
 let chainEventCounter = 0
 function nextChainUid(): string {
@@ -3988,12 +4030,17 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
       })
     }
   }
+  // 클러치 예산('에나의 의지') 충전: 이번 페이즈 역경(피해/불씨 고갈)에 비례.
+  if (totalDamage > 0) companion.gainWill(totalDamage, gameState.character.maxHealth)
+  if (gameState.character.ember <= 1) companion.gainWillFlat(15)
   // 품격있는 대처: 피격 연출 뒤 나를 때린 적들에게 반격.
   await applyDignifiedRetaliation(hits)
   // 변칙: 이 페이즈에서 잃은 체력 10마다 불씨 +1.
   applyAnomalyHealthLoss()
   // 소중한 머리: 체력이 절반 이하이면 전체 회복 후 파괴.
   await applyPreciousHeadCheck()
+  // 동료(에나) 클러치: 위기에 의지가 가득 찼으면 실제 지원 + '에나의 의지' 체인.
+  tryCompanionClutch()
   if (gameState.isGameOver || gameState.character.authoritySurvivePending) {
     const authorityFired = gameState.character.authoritySurvivePending
     if (await tryResolveSurvivalRelics()) {

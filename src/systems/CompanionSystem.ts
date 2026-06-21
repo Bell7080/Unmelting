@@ -43,6 +43,23 @@ export type SituationId = 'hit' | 'web' | 'treasure' | 'kill' | 'survive'
 /** 말투 강도 — 같은 내용도 종결부호/강조어를 달리해 톤을 바꾼다. */
 export type Intensity = 'soft' | 'normal' | 'urgent'
 
+/** 클러치(에나의 의지) 종류 — 위기에 실제 게임플레이 지원을 한다. */
+export type ClutchKind = 'heal' | 'shield' | 'ember'
+/** 클러치 1회 계획: 효과 종류/수치 + 거의 확정 대사 + 체인 배너 설명. */
+export interface ClutchPlan {
+  kind: ClutchKind
+  amount: number
+  line: string
+  flavor: string
+}
+/** 클러치 판단에 필요한 현재 상태 스냅샷. */
+export interface ClutchContext {
+  hp: number
+  maxHp: number
+  hpRatio: number
+  emberLow: boolean
+}
+
 // ── 조사 보정 ────────────────────────────────────────────────
 
 function hasFinalConsonant(ch?: string): boolean {
@@ -86,6 +103,10 @@ const TONE_TOKENS = new Set(['강조', '종결', '재촉'])
 
 function randOf(arr: readonly string[]): string {
   return arr[Math.floor(Math.random() * arr.length)]
+}
+
+function clampInt(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, Math.round(v)))
 }
 
 /** 한 줄(문자열/템플릿)을 긴급도에 맞춰 렌더한다: 변조/슬롯 치환 → 조사 보정. */
@@ -304,6 +325,20 @@ const SITUATION_WEIGHT_FLOOR = 0.2
 /** 학습 가중치 상한 — 대사를 잘 봐 주는 플레이어에겐 더 수다스러워진다. */
 const SITUATION_WEIGHT_MAX = 1.8
 
+/** 클러치 예산('의지') 최대치 — 역경(피해)으로 차고, 발동 시 0으로 비운다. */
+const WILL_MAX = 100
+/**
+ * 클러치 효과 '보통' 강도 배율. 추후 "플레이어가 역경을 얼마나 겪는지"를 RL로 분석해
+ * 이 배율을 조정한다(지금은 테스트라 1.0 고정 = 보통).
+ */
+const CLUTCH_STRENGTH = 1.0
+/** 클러치 종류별 거의 확정으로 나오는 대사. */
+const CLUTCH_LINES: Record<ClutchKind, string[]> = {
+  heal: ['아직 끝낼 수 없어!', '내가… 지켜줄게!', '포기하긴 일러!'],
+  shield: ['이건 내가 막을게!', '여기서 쓰러질 순 없어!', '버텨 — 방패를 들어!'],
+  ember: ['불씨가 꺼지면 안 돼 — 자, 성냥!', '내가 챙겨뒀어, 어서 불을 켜!', '이걸로 버티자!'],
+}
+
 export class CompanionSystem {
   private touchStreak = 0
   private lastTouchAt = 0
@@ -324,6 +359,8 @@ export class CompanionSystem {
   }
   /** 누적 스킵 횟수 — 과묵 안내 대사 타이밍에 쓴다. */
   private skipCount = 0
+  /** 클러치 예산('에나의 의지'). 역경으로 차고 발동 시 0이 된다. */
+  private will = 0
 
   /**
    * 프로필을 만졌을 때. 한참 만에 만지면 꼭 반응하지만, 빠른 연타엔 일일이 대꾸하지 않고
@@ -410,6 +447,48 @@ export class CompanionSystem {
     const bespoke = CARD_COMMENTS[cardId]
     if (bespoke) return this.pickFrom(`card:${cardId}`, bespoke, 'normal')
     return this.pickFrom(`cat:${category}`, CATEGORY_COMMENTS[category], 'normal')
+  }
+
+  // ── 클러치(에나의 의지): 대사만이 아니라 실제 서포팅 ──────────
+
+  /** 피해를 입은 만큼 '의지'를 쌓는다(역경에 비례). 클러치 예산의 충전. */
+  gainWill(damage: number, maxHp: number): void {
+    if (damage <= 0 || maxHp <= 0) return
+    this.will = Math.min(WILL_MAX, this.will + Math.round((damage / maxHp) * 60) + 5)
+  }
+
+  /** 피해 외 지속 역경(불씨 고갈 등)으로도 의지를 조금 쌓는다. */
+  gainWillFlat(amount: number): void {
+    if (amount <= 0) return
+    this.will = Math.min(WILL_MAX, this.will + amount)
+  }
+
+  /** 현재 의지 게이지(0~100). UI 표기/디버그용. */
+  getWill(): number {
+    return this.will
+  }
+
+  /**
+   * 의지가 가득 찼고 위기일 때, '보통' 강도의 클러치 한 번을 계획해 돌려준다(아니면 null).
+   * 우선순위: 체력 위기(회복/방패) > 불씨 위기(성냥). 발동 시 의지를 0으로 비운다.
+   * 정책은 '언제/어떤 종류'만 정하고 위력(수치)은 상한 고정이라 밸런스를 깨지 않는다.
+   */
+  evaluateClutch(ctx: ClutchContext): ClutchPlan | null {
+    if (this.will < WILL_MAX) return null
+    if (ctx.hp > 0 && ctx.hpRatio <= 0.4) {
+      this.will = 0
+      if (Math.random() < 0.5) {
+        const amount = clampInt(ctx.maxHp * 0.3 * CLUTCH_STRENGTH, 4, 12)
+        return { kind: 'heal', amount, line: this.pickFrom('clutch-heal', CLUTCH_LINES.heal, 'urgent'), flavor: '위기의 순간, 의지로 버텼다' }
+      }
+      const amount = clampInt(ctx.maxHp * 0.25 * CLUTCH_STRENGTH, 3, 10)
+      return { kind: 'shield', amount, line: this.pickFrom('clutch-shield', CLUTCH_LINES.shield, 'urgent'), flavor: '위기의 순간, 방패를 들어올렸다' }
+    }
+    if (ctx.emberLow) {
+      this.will = 0
+      return { kind: 'ember', amount: 1, line: this.pickFrom('clutch-ember', CLUTCH_LINES.ember, 'urgent'), flavor: '불씨가 꺼지기 전에' }
+    }
+    return null
   }
 
   /** 추후 성장/해금 층이 대사 풀을 넓히는 확장 지점(가짜 학습이 아니라 데이터 주입 seam). */

@@ -74,6 +74,29 @@ describe('CompanionSystem', () => {
     expect(later).not.toBeNull()
   })
 
+  it('클러치: 의지가 가득 차고 체력 위기일 때만 보통 강도 지원을 계획하고 소진된다', () => {
+    const c = new CompanionSystem()
+    // 의지 0 → 발동 안 함.
+    expect(c.evaluateClutch({ hp: 3, maxHp: 20, hpRatio: 0.15, emberLow: false })).toBeNull()
+    c.gainWillFlat(100)
+    const plan = c.evaluateClutch({ hp: 3, maxHp: 20, hpRatio: 0.15, emberLow: false })
+    expect(plan).not.toBeNull()
+    expect(['heal', 'shield']).toContain(plan!.kind)
+    // 위력은 상한 고정(보통 강도) — 폭주하지 않는다.
+    expect(plan!.amount).toBeGreaterThanOrEqual(3)
+    expect(plan!.amount).toBeLessThanOrEqual(12)
+    expect(plan!.line.length).toBeGreaterThan(0)
+    // 발동 후 의지 소진 → 다시 발동 안 함.
+    expect(c.evaluateClutch({ hp: 3, maxHp: 20, hpRatio: 0.15, emberLow: false })).toBeNull()
+  })
+
+  it('클러치: 체력은 멀쩡하고 불씨만 위태로우면 성냥 클러치', () => {
+    const c = new CompanionSystem()
+    c.gainWillFlat(100)
+    const plan = c.evaluateClutch({ hp: 18, maxHp: 20, hpRatio: 0.9, emberLow: true })
+    expect(plan!.kind).toBe('ember')
+  })
+
   it('전용 대사가 없는 손패는 카테고리 폴백 한줄평을 깨끗하게 돌려준다', () => {
     const c = new CompanionSystem()
     let line: string | null = null
