@@ -6373,19 +6373,19 @@ export class GameBoardRenderer {
     host.innerHTML =
       `<div class="clutch-banner-title">『 ${title} 』</div>` +
       `<div class="clutch-banner-desc">${description}</div>`
-    // 플레이어 카드 중단에 앵커를 두고, 살짝 아래에서 솟아올라 카드 위로 떠오르게 한다.
+    // 플레이어 카드 위(중하단 → 상단)에서 솟아오르되, 카드 위쪽 말풍선 영역까지는 올라가지 않는다.
     host.style.left = `${rect.left + rect.width / 2}px`
-    host.style.top = `${rect.top + rect.height * 0.5}px`
+    host.style.top = `${rect.top}px`
     document.body.appendChild(host)
     const anim = host.animate(
       [
-        { opacity: 0, transform: 'translate(-50%, 24px) scale(0.82)', filter: 'blur(0px)' },
-        { opacity: 1, transform: 'translate(-50%, -72px) scale(1.07)', filter: 'blur(0px)', offset: 0.14 },
-        { opacity: 1, transform: 'translate(-50%, -86px) scale(1.0)', filter: 'blur(0px)', offset: 0.26 },
-        // 가장 뚜렷한 구간 — 살짝 부유하며 체류.
-        { opacity: 1, transform: 'translate(-50%, -95px) scale(1.0)', filter: 'blur(0px)', offset: 0.5 },
-        { opacity: 1, transform: 'translate(-50%, -84px) scale(1.0)', filter: 'blur(0px)', offset: 0.68 },
-        { opacity: 0, transform: 'translate(-50%, -122px) scale(1.03)', filter: 'blur(2.8px)', offset: 1 },
+        { opacity: 0, transform: 'translate(-50%, 46px) scale(0.82)', filter: 'blur(0px)' },
+        { opacity: 1, transform: 'translate(-50%, 2px) scale(1.06)', filter: 'blur(0px)', offset: 0.16 },
+        { opacity: 1, transform: 'translate(-50%, -8px) scale(1.0)', filter: 'blur(0px)', offset: 0.28 },
+        // 가장 뚜렷한 구간 — 카드 상단에 걸친 채 살짝 부유하며 체류(말풍선과는 겹치지 않음).
+        { opacity: 1, transform: 'translate(-50%, -14px) scale(1.0)', filter: 'blur(0px)', offset: 0.52 },
+        { opacity: 1, transform: 'translate(-50%, -4px) scale(1.0)', filter: 'blur(0px)', offset: 0.68 },
+        { opacity: 0, transform: 'translate(-50%, -30px) scale(1.03)', filter: 'blur(2.6px)', offset: 1 },
       ],
       { duration: 3900, easing: 'cubic-bezier(0.2, 0.8, 0.25, 1)', fill: 'forwards' }
     )
