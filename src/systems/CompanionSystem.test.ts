@@ -39,15 +39,6 @@ describe('CompanionSystem', () => {
     expect(new CompanionSystem().onProfileTouch(Date.now(), { danger: true })!.length).toBeGreaterThan(0)
   })
 
-  it('연타 throttle: 빠른 연타는 일부만 응답한다(전부 응답하지 않음)', () => {
-    const c = new CompanionSystem()
-    let voiced = 0
-    const now = Date.now()
-    for (let i = 0; i < 60; i++) if (c.onProfileTouch(now, { danger: false })) voiced += 1
-    // 60연타 중 일부만 — 첫 한두 번 + 낮은 확률. 전부(60) 응답하지 않는다.
-    expect(voiced).toBeLessThan(30)
-  })
-
   it('터치 응답 문자열에 미치환 자국({}, []) 없이 렌더된다', () => {
     const c = new CompanionSystem()
     for (let i = 0; i < 80; i++) {

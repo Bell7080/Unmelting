@@ -363,26 +363,17 @@ export class CompanionSystem {
   private will = 0
 
   /**
-   * 프로필을 만졌을 때. 한참 만에 만지면 꼭 반응하지만, 빠른 연타엔 일일이 대꾸하지 않고
-   * 점점 드물게 응한다(장난 연타 대응). null이면 이번 클릭엔 침묵.
+   * 프로필을 만졌을 때. 연타 강도(streak)에 따라 calm→annoyed→exasperated로 반응한다.
+   * 중복 출력 방지(이미 대사가 나오는 중엔 무시)는 호출부(UI)가 담당한다.
    */
-  onProfileTouch(now: number, ctx: CompanionContext): string | null {
+  onProfileTouch(now: number, ctx: CompanionContext): string {
     if (now - this.lastTouchAt > STREAK_RESET_MS) this.touchStreak = 0
     this.touchStreak += 1
     this.lastTouchAt = now
-    if (!this.shouldVoiceTouch()) return null
     if (ctx.danger) return this.pickPool('urgent')
     const pool: TouchPoolId =
       this.touchStreak >= 6 ? 'exasperated' : this.touchStreak >= 3 ? 'annoyed' : 'calm'
     return this.pickPool(pool)
-  }
-
-  /** 연타할수록 응답 확률을 떨어뜨린다(첫 터치는 항상, 그 뒤로 0.3→0.2→0.1). */
-  private shouldVoiceTouch(): boolean {
-    const s = this.touchStreak
-    if (s <= 1) return true
-    const chance = s <= 3 ? 0.3 : s <= 7 ? 0.2 : 0.1
-    return Math.random() < chance
   }
 
   /** 연타 뒤 손을 뗐을 때(방치). 만진 적이 있을 때만 마무리 대사를 돌려준다. */

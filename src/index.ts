@@ -240,14 +240,13 @@ function companionInDanger(): boolean {
 /** 프로필을 만졌을 때 — 상황/연타 반응 + 방치 마무리 예약. 스킵은 플레이어 자유라 항의는 없다. */
 function onProfileTouched(): void {
   if (!gameActive || inputLocked) return
+  // 이미 대사가 출력 중(타이핑)이면 새 대사를 띄우지 않는다 — 중복 출력 방지(먹통 느낌 없게).
+  if (speechBubble.isTyping) return
   const now = Date.now()
   const danger = companionInDanger()
   const line = companion.onProfileTouch(now, { danger })
   // 위급은 읽는 중에도 끼어들도록 높은 중요도, 평범한 반응은 낮은 중요도.
-  // (연타 throttle로 null이면 이번 클릭엔 침묵.)
-  if (line) {
-    sayEnaBark(line, { importance: danger ? BARK_IMPORTANCE.urgent : BARK_IMPORTANCE.touch })
-  }
+  sayEnaBark(line, { importance: danger ? BARK_IMPORTANCE.urgent : BARK_IMPORTANCE.touch })
   clearTimeout(companionIdleTimer)
   companionIdleTimer = window.setTimeout(() => {
     if (!gameActive || inputLocked) return
