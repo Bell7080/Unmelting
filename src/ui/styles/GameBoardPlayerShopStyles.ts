@@ -1954,17 +1954,22 @@ body.is-shift-detail .shop-relic-effect .shift-only { display: inline; }
     max-width: none;
     min-width: 0;
   }
-  /* 시련 3택은 좁은 모바일 레일에서 카드 폭(레일/3)이 binding이다. 낭비되는
-     inset/gap/padding을 최소화해 카드 폭을 가능한 최대로 확보하고, 세로 캡(98%)을
-     풀어 남는 세로 공간을 카드가 더 쓰게 한다. */
+  /* 시련 3택은 좁은 모바일 레일에서 카드 폭(레일/3)이 binding이라, 3/4 비율로 두면
+     높이가 폭에 묶여 레일 세로에 큰 여백이 생긴다. 모바일 한정으로 비율 캡을 풀고
+     카드를 셀 전체(1/3 폭 × 레일 높이 100%)로 늘려 레일을 꽉 채운다(앞면은
+     position:absolute inset:0이라 그대로 따라 채워짐). 데스크탑은 기존 3/4 유지. */
   .shop-shell--trial .shop-content-bundle {
     inset: clamp(4px, 0.6vh, 8px) clamp(4px, 0.5vw, 8px) !important;
   }
   .shop-shell--trial .shop-trial-layer {
+    align-items: stretch !important;
     padding: clamp(4px, 0.6vh, 8px) clamp(4px, 0.5vw, 6px) !important;
-    gap: clamp(5px, 0.9vw, 9px) !important;
+    gap: clamp(6px, 1vw, 10px) !important;
   }
   .shop-shell--trial .shop-trial-card {
+    width: 100% !important;
+    height: 100% !important;
+    aspect-ratio: auto !important;
     max-height: 100% !important;
   }
   /* EXIT button: moved inside the content-bundle (bottom: 6px) so overflow:hidden
