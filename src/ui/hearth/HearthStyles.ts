@@ -233,7 +233,10 @@ export const HEARTH_STYLES = `
     inset 0 0 30px rgba(244, 164, 96, 0.2),
     0 0 34px rgba(244, 164, 96, 0.3),
     0 0 0 1px rgba(220, 170, 70, 0.3);
-  animation: hearth-ignite 0.66s cubic-bezier(0.2, 0.84, 0.3, 1) both;
+  /* fill을 backwards로 둔다. both/forwards면 끝난 점등 애니메이션이 transform:scale(1)을
+     계속 고정해 hover 팝(translateY+scale)을 덮어버린다(개방 칸은 안 겪는 문제). 최종 키프레임이
+     기본값(scale1/brightness1)이라 고정할 이득이 없어 hover만 되살린다. */
+  animation: hearth-ignite 0.66s cubic-bezier(0.2, 0.84, 0.3, 1) backwards;
 }
 @keyframes hearth-ignite {
   0%   { transform: scale(0.9); filter: brightness(0.5); }
