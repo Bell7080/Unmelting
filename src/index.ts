@@ -63,7 +63,7 @@ import { candleIcon } from '@ui/Icons'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
 import { CompanionSystem, type SituationId, type ClutchPlan } from '@systems/CompanionSystem'
-import { loadDisposition, saveDisposition } from '@systems/EnaDisposition'
+import { loadDisposition, saveDisposition, BASE_DISPOSITION } from '@systems/EnaDisposition'
 import { assessThreats } from '@systems/CompanionForesight'
 import { HearthScene } from '@ui/hearth/HearthScene'
 import { playDialogueLine } from '@ui/DialoguePlayer'
@@ -198,6 +198,9 @@ function adaptCompanionToRunOutcome(won: boolean): void {
   const adapted = companion.adaptToOutcome({ died: !won, floorReached: gameState.getCurrentTurn() })
   saveDisposition(adapted)
 }
+
+// 경험(성향) 패널이 현재 에나 성향과 학습된 기본 토대를 읽어 성좌 시각화를 그릴 수 있게 연결한다.
+boardRenderer.setExperienceDataProvider(() => ({ disp: companion.getDisposition(), base: BASE_DISPOSITION }))
 // 현재 player 말풍선이 에나 본인의 대사(바크)인지.
 let enaSpeaking = false
 // 연타 후 손을 떼면 '…이제 끝났어?'를 띄우기 위한 방치 타이머.

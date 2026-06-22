@@ -203,3 +203,17 @@ export function bookIcon(): string {
     ].join(''),
   )
 }
+
+/** 경험(성향) — 불빛을 머금은 다이아. 경험 탭 런처/패널 타이틀에 쓴다. */
+export function experienceIcon(): string {
+  return svg(
+    [
+      // 바깥 다이아 윤곽.
+      stroke('M12 2.4 L 20.6 12 L 12 21.6 L 3.4 12 Z', 1.4),
+      // 안쪽 불빛 코어.
+      fill('M12 7 L 16 12 L 12 17 L 8 12 Z'),
+      // 네 방향 빛줄기.
+      stroke('M12 2.4 L 12 7 M12 17 L 12 21.6 M3.4 12 L 8 12 M16 12 L 20.6 12', 1),
+    ].join(''),
+  )
+}

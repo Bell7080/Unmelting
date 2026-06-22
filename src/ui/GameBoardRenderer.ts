@@ -46,6 +46,7 @@ import { initTouchBody, attachHandCardTouch, attachShopTouchHighlight, initLongP
 import {
   bookIcon,
   candleIcon,
+  experienceIcon,
   flameIcon,
   heartIcon,
   pouchIcon,
@@ -53,6 +54,7 @@ import {
   sparkleIcon,
   swordIcon,
 } from '@ui/Icons'
+import type { EnaDisposition } from '@systems/EnaDisposition'
 import { atkDmgHtml, hpDmgHtml, rangeDmgHtml } from '@ui/DamageDisplay'
 
 export interface CardActionDetail {
@@ -1179,6 +1181,10 @@ export class GameBoardRenderer {
           <button class="compendium-btn compendium-btn-floating" type="button" data-open-compendium aria-label="도감 열기">
             <span class="compendium-btn-icon" aria-hidden="true">${bookIcon()}</span>
             <span class="compendium-btn-label">도감</span>
+          </button>
+          <button class="compendium-btn compendium-btn-floating" type="button" data-open-experience aria-label="경험 열기">
+            <span class="compendium-btn-icon" aria-hidden="true">${experienceIcon()}</span>
+            <span class="compendium-btn-label">경험</span>
           </button>
         </div>
         ${this.renderPlayer(character)}
@@ -4589,6 +4595,123 @@ export class GameBoardRenderer {
     this.attachCompendiumRecipeFloat(host)
   }
 
+  /** 경험 패널이 현재 성향/기본 토대를 읽어올 공급자. index.ts가 동료 시스템을 연결한다. */
+  private experienceDataProvider?: () => { disp: EnaDisposition; base: EnaDisposition }
+
+  setExperienceDataProvider(fn: () => { disp: EnaDisposition; base: EnaDisposition }): void {
+    this.experienceDataProvider = fn
+  }
+
+  /** 경험(성향) 패널을 연다 — 에나의 현재 성향을 다이아 성좌(레이더)로 시각화한다.
+   *  disp=현재 성향, base=학습된 기본 토대(드리프트 점선으로 표시). 읽기 전용 브라우저. */
+  openExperience(disp: EnaDisposition, base: EnaDisposition): void {
+    let host = document.getElementById('experience-overlay') as HTMLElement | null
+    if (!host) {
+      host = document.createElement('div')
+      host.id = 'experience-overlay'
+      host.className = 'experience-overlay'
+      document.body.appendChild(host)
+      host.addEventListener('click', (e) => {
+        const t = e.target as HTMLElement
+        if (t.dataset.experienceClose !== undefined || t === host) this.closeExperience()
+      })
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && host?.classList.contains('is-open')) this.closeExperience()
+      })
+    }
+    host.innerHTML = this.renderExperience(disp, base)
+    host.classList.add('is-open')
+  }
+
+  private closeExperience(): void {
+    document.getElementById('experience-overlay')?.classList.remove('is-open')
+  }
+
+  /** 성향 → 플레이어가 읽는 5개 '성좌 축'(0~1)으로 압축한다. */
+  private experienceAxes(disp: EnaDisposition): { key: string; value: number; desc: string }[] {
+    const norm = (v: number, lo: number, hi: number) => Math.max(0, Math.min(1, (v - lo) / (hi - lo)))
+    const sc = disp.situationChance
+    const chat = (sc.hit + sc.web + sc.treasure + sc.kill + sc.survive + sc.flower + sc.event + sc.spore + sc.bomb) / 9
+    const mc = disp.minorClutchChance
+    const minor = (mc.crit + mc.dodge + mc.trap + mc.treasure) / 4
+    const guard = (norm(disp.clutchStrength, 0.6, 1.6) + norm(disp.willGainPerDamage, 30, 100) + norm(disp.clutchHpThreshold, 0.2, 0.6)) / 3
+    return [
+      { key: '수다', value: norm(chat, 0.12, 0.62), desc: '곁에서 말 거는 빈도' },
+      { key: '예지', value: norm(disp.predictBaseChance, 0.02, 0.95), desc: '위협을 미리 읽어 도구를 건넴' },
+      { key: '수호', value: guard, desc: '위기에 회복·방패로 지켜냄' },
+      { key: '온정', value: norm(minor, 0.02, 0.6), desc: '덤으로 슬쩍 건네는 선물' },
+      { key: '불굴', value: norm(disp.awakenChance, 0.02, 0.4), desc: '쓰러지기 직전 다시 일어섬' },
+    ]
+  }
+
+  private renderExperience(disp: EnaDisposition, base: EnaDisposition): string {
+    const axes = this.experienceAxes(disp)
+    const baseAxes = this.experienceAxes(base)
+    const n = axes.length
+    const cx = 50
+    const cy = 50
+    const R = 40
+    const angle = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / n
+    const pt = (i: number, v: number) => [cx + R * v * Math.cos(angle(i)), cy + R * v * Math.sin(angle(i))]
+    const poly = (vals: number[]) => vals.map((v, i) => pt(i, v).map((c) => c.toFixed(2)).join(',')).join(' ')
+    const ring = (level: number) => poly(axes.map(() => level))
+
+    // 다이아 성좌 격자: 동심 링 3겹 + 중심에서 각 축으로 뻗는 살.
+    const grid = [0.33, 0.66, 1].map((lv) => `<polygon class="exp-ring" points="${ring(lv)}"/>`).join('')
+    const spokes = axes.map((_, i) => { const [x, y] = pt(i, 1); return `<line class="exp-spoke" x1="${cx}" y1="${cy}" x2="${x.toFixed(2)}" y2="${y.toFixed(2)}"/>` }).join('')
+    // 기본 토대(드리프트 비교용) 점선 + 현재 성향 채움.
+    const basePoly = `<polygon class="exp-base" points="${poly(baseAxes.map((a) => a.value))}"/>`
+    const curPoly = `<polygon class="exp-current" points="${poly(axes.map((a) => a.value))}"/>`
+    // 각 축 현재값 위치에 작은 다이아 노드.
+    const nodes = axes.map((a, i) => {
+      const [x, y] = pt(i, a.value)
+      const s = 1.7
+      return `<polygon class="exp-node" points="${x.toFixed(2)},${(y - s).toFixed(2)} ${(x + s).toFixed(2)},${y.toFixed(2)} ${x.toFixed(2)},${(y + s).toFixed(2)} ${(x - s).toFixed(2)},${y.toFixed(2)}"/>`
+    }).join('')
+
+    const svg = `<svg class="experience-radar" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${grid}${spokes}${basePoly}${curPoly}${nodes}</svg>`
+
+    // 축 이름표는 HTML로 림 바깥에 배치(텍스트 왜곡 방지).
+    const labels = axes.map((a, i) => {
+      const lx = cx + 49 * Math.cos(angle(i))
+      const ly = cy + 49 * Math.sin(angle(i))
+      const pct = Math.round(a.value * 100)
+      return `<div class="exp-axis-label" style="left:${lx.toFixed(1)}%;top:${ly.toFixed(1)}%"><span class="exp-axis-name">${a.key}</span><span class="exp-axis-pct">${pct}</span></div>`
+    }).join('')
+
+    const legend = axes.map((a, i) => {
+      const pct = Math.round(a.value * 100)
+      const basePct = Math.round(baseAxes[i].value * 100)
+      const drift = pct - basePct
+      const driftTag = drift === 0 ? '' : `<span class="exp-drift ${drift > 0 ? 'up' : 'down'}">${drift > 0 ? '+' : ''}${drift}</span>`
+      return `
+        <li class="exp-legend-row">
+          <span class="exp-legend-name">${a.key}</span>
+          <span class="exp-legend-bar"><span class="exp-legend-fill" style="width:${pct}%"></span></span>
+          <span class="exp-legend-val">${pct}%${driftTag}</span>
+          <span class="exp-legend-desc">${a.desc}</span>
+        </li>`
+    }).join('')
+
+    return `
+      <div class="experience-modal" role="dialog" aria-label="경험">
+        <header class="experience-header">
+          <h2 class="experience-title"><span class="experience-title-icon">${experienceIcon()}</span>경험</h2>
+          <button class="experience-close" data-experience-close type="button" aria-label="닫기">✕</button>
+        </header>
+        <section class="experience-body">
+          <div class="experience-constellation">
+            ${svg}
+            ${labels}
+            <div class="experience-core" aria-hidden="true"><span class="experience-core-icon">${experienceIcon()}</span><span class="experience-core-name">에나</span></div>
+          </div>
+          <ul class="experience-legend">${legend}</ul>
+        </section>
+        <footer class="experience-footer">함께한 모험으로 빚어진 에나의 성향 · 점선은 학습된 기본 토대, 채움은 지금의 너에게 맞춰진 모습</footer>
+      </div>
+    `
+  }
+
   private renderCompendium(activeTab: string): string {
     const tabs: { id: string; label: string }[] = [
       { id: 'enemies', label: '적' },
@@ -5571,6 +5694,15 @@ export class GameBoardRenderer {
       ?.addEventListener('click', (e) => {
         e.stopPropagation()
         this.openCompendium()
+      })
+
+    // 경험(성향) 패널 — 공급자가 연결돼 있으면 현재 성향/기본 토대를 읽어 성좌 시각화를 연다.
+    this.boardElement
+      .querySelector<HTMLElement>('[data-open-experience]')
+      ?.addEventListener('click', (e) => {
+        e.stopPropagation()
+        const data = this.experienceDataProvider?.()
+        if (data) this.openExperience(data.disp, data.base)
       })
   }
 
