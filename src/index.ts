@@ -68,6 +68,7 @@ import { HearthScene } from '@ui/hearth/HearthScene'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
 import { BgmManager } from '@/audio/BgmManager'
+import { enaRuntimeObserver, shopKindToPurchaseId } from '@/rl/EnaRuntimeObserver'
 import bgm001Url from './assets/audio/bgm_001.mp3'
 import bgm002Url from './assets/audio/bgm_002.mp3'
 import bgm003Url from './assets/audio/bgm_003.mp3'
@@ -148,6 +149,12 @@ ingameBackdropStyle.textContent = `
 document.head.appendChild(ingameBackdropStyle)
 
 const gameState = new GameState()
+// 에나 런타임 관측: 모든 endGame 호출을 한 곳에서 기록해 사망/클리어 결과를 플레이 로그에 누적한다.
+const originalEndGame = gameState.endGame.bind(gameState)
+gameState.endGame = (reason: string): void => {
+  originalEndGame(reason)
+  enaRuntimeObserver.recordRunEnd(gameState, reason.includes('clear') || reason.includes('win'), reason)
+}
 const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
 // 이벤트 문 PRD 컨트롤러 — 일반 스폰 버킷과 독립된 확률로 이벤트 칸을 생성한다.
@@ -1787,6 +1794,7 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
   applyLuxuryScoreSpend(cost)
   // 구매 직후 같은 팩 가격을 초기 가격만큼 올려 다음 표기/차감에 반영한다.
   shopPackBuys[kind] = (shopPackBuys[kind] ?? 0) + 1
+  enaRuntimeObserver.recordShopPurchase(gameState, shopKindToPurchaseId(kind))
   // Keep picker title synchronized with the shared pack label table.
   const title = SHOP_PACK_LABELS[kind].title
   const items = rollPackItems(kind)
@@ -2005,6 +2013,7 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     render()
     return
   }
+  enaRuntimeObserver.recordShopPurchase(gameState, `relic:${detail.relicId}`)
   // Pay the light price. We DO log the deduction — pure number-pulse on the
   // light panel is too easy to miss, so the activity log row makes the spend concrete.
   const def = getRelicDef(detail.relicId)
@@ -3422,6 +3431,10 @@ async function applyHandSingle(
     inputLocked = false
     render()
     return
+  }
+  if (usedDef) {
+    enaRuntimeObserver.recordHandDecision(gameState, usedDef.id, result.message)
+    if (gameState.bossBattleActive) enaRuntimeObserver.recordBossDecision(gameState, `hand:${usedDef.id}:${result.message}`)
   }
   // 정직: 손패 1장 사용으로 집계(합체 카드도 슬롯 1장이므로 1로 센다).
   applyHonestyHandUse(1)
