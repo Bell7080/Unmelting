@@ -176,7 +176,8 @@ export const HEARTH_STYLES = `
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
 }
 
-/* 임시: 전 칸 개방 — 채워진 레일 칸(.cell.card) 톤의 스타일리시한 점등 칸. */
+/* 개방(언락) 칸 — 잠긴 칸과 분명히 구분되도록 따뜻한 황금 불빛이 은은히 깃든 점등 칸.
+   모험 칸의 화륵 점등보다는 가라앉되, '빛나는 부분'이 빠져 보이지 않게 상시 글로우를 둔다. */
 .hearth-cell--open {
   display: flex;
   flex-direction: column;
@@ -185,17 +186,27 @@ export const HEARTH_STYLES = `
   gap: 8px;
   padding-bottom: clamp(8px, 1.8vh, 18px);
   cursor: pointer;
-  border: 1px solid var(--color-border-warm, #8b6f47);
+  border: 1px solid var(--color-flame-warm, #f4a460);
   background: #1c1424;
-  color: rgba(255, 240, 200, 0.96);
+  color: rgba(255, 244, 210, 0.98);
   font-family: 'OkDanDan', Georgia, serif;
   isolation: isolate;
   box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.22),
-    inset 0 -10px 18px rgba(0, 0, 0, 0.45),
-    0 4px 10px rgba(0, 0, 0, 0.55),
-    0 12px 22px rgba(0, 0, 0, 0.45);
+    inset 0 1px 0 rgba(255, 232, 168, 0.3),
+    inset 0 0 28px rgba(244, 164, 96, 0.14),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.42),
+    0 4px 10px rgba(0, 0, 0, 0.5),
+    0 0 22px rgba(244, 164, 96, 0.3),
+    0 12px 22px rgba(0, 0, 0, 0.42);
+  animation: hearth-open-breathe 3.6s ease-in-out infinite;
 }
+@keyframes hearth-open-breathe {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255,232,168,0.3), inset 0 0 28px rgba(244,164,96,0.12), inset 0 -10px 18px rgba(0,0,0,0.42), 0 4px 10px rgba(0,0,0,0.5), 0 0 18px rgba(244,164,96,0.24), 0 12px 22px rgba(0,0,0,0.42); }
+  50%      { box-shadow: inset 0 1px 0 rgba(255,232,168,0.36), inset 0 0 32px rgba(244,164,96,0.18), inset 0 -10px 18px rgba(0,0,0,0.42), 0 4px 10px rgba(0,0,0,0.5), 0 0 30px rgba(255,184,104,0.4), 0 12px 22px rgba(0,0,0,0.42); }
+}
+/* hover 시엔 상시 글로우 애니메이션을 멈춰 hover 박스섀도(팝 글로우)가 그대로 적용되게 한다. */
+.hearth-cell--open:hover,
+.hearth-cell--open:focus-visible { animation: none; }
 .hearth-cell--open.hearth-cell--has-art {
   background-image:
     linear-gradient(to bottom, rgba(8, 5, 20, 0.32) 0%, rgba(10, 6, 24, 0.64) 100%),

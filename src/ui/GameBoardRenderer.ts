@@ -1179,13 +1179,13 @@ export class GameBoardRenderer {
     return `
       <div class="player-zone" aria-label="Player controls and relic plan">
         <div class="utility-layer utility-layer-left" aria-label="Utility buttons">
-          <button class="compendium-btn compendium-btn-floating" type="button" data-open-compendium aria-label="도감 열기">
-            <span class="compendium-btn-icon" aria-hidden="true">${bookIcon()}</span>
-            <span class="compendium-btn-label">도감</span>
-          </button>
           <button class="compendium-btn compendium-btn-floating" type="button" data-open-experience aria-label="경험 열기">
             <span class="compendium-btn-icon" aria-hidden="true">${experienceIcon()}</span>
             <span class="compendium-btn-label">경험</span>
+          </button>
+          <button class="compendium-btn compendium-btn-floating" type="button" data-open-compendium aria-label="도감 열기">
+            <span class="compendium-btn-icon" aria-hidden="true">${bookIcon()}</span>
+            <span class="compendium-btn-label">도감</span>
           </button>
         </div>
         ${this.renderPlayer(character)}
