@@ -1,20 +1,40 @@
 /**
- * CompanionSystem - 동료 캐릭터(에나)의 반응 레이어 씨앗.
+ * CompanionSystem - 동료 캐릭터(에나)의 반응 "엔진".
  *
- * 학습 전 규칙 기반 스캐폴딩이지만, "패턴"이 아니라 "자아"처럼 보이게 하기 위해
- * 내부 상태(연타·발화 시각·상황별 학습 가중치)와 호출 시점의 상황을 함께 본다.
+ * "무엇을 말하는가"(대사 데이터)는 src/data/CompanionLines.ts가 갖고,
+ * 이 파일은 "언제/어떻게 고르는가"(빈도·연타·학습·클러치 판단)만 담당한다.
  *
- * 대사는 LLM 생성이 아니라 "사전 작성"이며, 세 겹으로 변주를 만든다(B안 = 가짜 LLM):
- *   1) 완성 문장 / 템플릿({슬롯}+값 풀)을 같은 풀에 섞어 등록 → 조각 몇 개로 수십 조합
- *   2) 말투 변조 토큰({강조}{종결}{재촉})을 긴급도(intensity)에 맞춰 치환
+ * 대사는 LLM 생성이 아니라 사전 작성이며, 세 겹으로 변주한다(B안 = 가짜 LLM):
+ *   1) 완성 문장 / 템플릿({슬롯}+값 풀) 조합
+ *   2) 말투 변조 토큰({강조}{종결}{재촉})을 긴급도에 맞춰 치환
  *   3) `{단어}[은/는]` 조사 토큰을 앞 글자 받침에 맞춰 자동 보정
- *
- * 상황 바크(피격/거미줄/보물/처치 등)는 매번 터지면 시끄러우므로 확률+쿨다운으로 줄이고,
- * 플레이어가 스킵한 상황은 가중치를 낮춰 점점 덜 말한다(가짜 RL: 스킵=부정 보상).
  * (설계: Ena_Companion_AI_Design.md)
  */
 
+import {
+  POOLS,
+  CATEGORY_COMMENTS,
+  CARD_COMMENTS,
+  USE_COMMENTS,
+  JOB_LINES,
+  JOB_GENERIC,
+  CLUTCH_LINES,
+  MINOR_CLUTCH_LINES,
+  AWAKEN_LINES,
+} from '@data/CompanionLines'
+import type {
+  Line,
+  LineTemplate,
+  PoolId,
+  TouchPoolId,
+  SituationId,
+  ClutchKind,
+  MinorClutchKind,
+} from '@data/CompanionLines'
 import type { HandCategory } from '@entities/HandCard'
+
+// 대사 데이터 쪽 타입을 그대로 다시 노출해 기존 import 경로(@systems/CompanionSystem)를 유지한다.
+export type { Line, LineTemplate, SituationId, ClutchKind, MinorClutchKind }
 
 /** 반응을 고를 때 함께 보는, 호출 시점의 게임 상황. */
 export interface CompanionContext {
@@ -22,34 +42,9 @@ export interface CompanionContext {
   danger: boolean
 }
 
-/** 템플릿 대사: `{슬롯}` 자리를 slots의 값 중 하나로 랜덤 치환한 뒤 조사를 보정한다. */
-export interface LineTemplate {
-  template: string
-  slots: Record<string, readonly string[]>
-}
-
-/** 풀에 등록 가능한 한 줄 — 완성 문자열이거나 템플릿. */
-export type Line = string | LineTemplate
-
-/** 프로필 터치/상태 반응 풀. */
-type TouchPoolId = 'calm' | 'annoyed' | 'exasperated' | 'urgent' | 'settle' | 'quiet'
-/** 게임 이벤트 상황 반응 풀. */
-type SituationPoolId =
-  | 'hit' | 'web' | 'treasure' | 'kill' | 'survive' | 'flower' | 'event' | 'spore' | 'bomb'
-  | 'loot-match-ok' | 'loot-match-low'
-type PoolId = TouchPoolId | SituationPoolId
-
-/** 확률+턴 간격+학습 가중치로 다스리는 게임 이벤트 종류. */
-export type SituationId =
-  | 'hit' | 'web' | 'treasure' | 'kill' | 'survive' | 'flower' | 'event' | 'spore' | 'bomb'
-
 /** 말투 강도 — 같은 내용도 종결부호/강조어를 달리해 톤을 바꾼다. */
 export type Intensity = 'soft' | 'normal' | 'urgent'
 
-/** 큰 클러치(에나의 의지) 종류 — 위기에 의지를 소모해 지원한다. */
-export type ClutchKind = 'heal' | 'shield' | 'ember'
-/** 소소한 일상 클러치 — 평범한 행동에 가끔 끼어드는 작은 지원. */
-export type MinorClutchKind = 'crit' | 'dodge' | 'trap' | 'treasure'
 /** 클러치 1회 계획: 효과 종류/수치 + 거의 확정 대사 + 체인 배너 설명. */
 export interface ClutchPlan {
   kind: ClutchKind
@@ -102,7 +97,7 @@ export function resolveKoreanParticles(text: string): string {
 const TONE: Record<Intensity, Record<'강조' | '종결' | '재촉', readonly string[]>> = {
   soft: { 강조: [''], 종결: ['…', '.'], 재촉: [''] },
   normal: { 강조: [''], 종결: ['!', '.'], 재촉: [''] },
-  urgent: { 강조: ['얼른 ', '빨리 ', '당장 '], 종결: ['!', '!!'], 재촉: [' 빨리!', ' 어서!', ''] },
+  urgent: { 강조: ['얼른 ', '어서 ', '당장 '], 종결: ['!', '!!'], 재촉: [' 어서!', ' 서둘러!', ''] },
 }
 const TONE_TOKENS = new Set(['강조', '종결', '재촉'])
 
@@ -127,231 +122,7 @@ function renderLine(line: Line, intensity: Intensity): string {
   return resolveKoreanParticles(filled)
 }
 
-// ── 대사 백과사전(B안 템플릿으로 광범위하게) ──────────────────────
-
-const POOLS: Record<PoolId, Line[]> = {
-  // 가볍게 한두 번 만졌을 때.
-  calm: [
-    {
-      template: '{감탄} 왜 {동작}! {느낌}!',
-      slots: {
-        감탄: ['응?', '꺄', '엣', '에구', '우왓'],
-        동작: ['만져', '건드려', '콕콕 찌르지', '쿡쿡 찌르지', '톡톡 치지'],
-        느낌: ['간지러워', '부끄럽잖아', '놀랐잖아', '깜짝이야', '당황스럽잖아'],
-      },
-    },
-    {
-      template: '{머뭇} 거기 누르지 마… {이유}.',
-      slots: { 머뭇: ['음…', '저기', '에…'], 이유: ['부끄럽잖아', '간지럽잖아', '쑥스럽단 말야'] },
-    },
-    '갑자기 그러면 놀라지!',
-    '히익, 차가운 손!',
-  ],
-  // 자꾸 만질 때(3회~).
-  annoyed: [
-    {
-      template: '{대상}[은/는] 그만 만지고, {목표}[을/를] {행동}!',
-      slots: {
-        대상: ['나', '얼굴', '머리'],
-        목표: ['앞', '적', '불씨', '길'],
-        행동: ['봐', '신경 써', '살펴', '챙겨'],
-      },
-    },
-    {
-      template: '{빈도} 만지지 좀 마…',
-      slots: { 빈도: ['자꾸', '계속', '또'] },
-    },
-    '에잇, 모험에 집중해야지!',
-    '왜 이렇게 손이 근질거려?',
-  ],
-  // 너무 많이 만질 때(6회~).
-  exasperated: [
-    '{강조}그만 좀 만져{종결}{재촉}',
-    {
-      template: '계속 만지면… {위협}?',
-      slots: { 위협: ['나 삐진다', '화낼 거야', '모른 척할 거야'] },
-    },
-    '으으, 알았으니까 이제 모험하자!',
-    '진짜 너무하네!',
-  ],
-  // 위급한데 만졌을 때.
-  urgent: [
-    {
-      template: '지금 {상황}[이/가] 위급한데 장난이야?!',
-      slots: { 상황: ['상황', '앞', '불씨'] },
-    },
-    '{강조}앞에 집중해{종결}{재촉}',
-    '나중에! 지금은 위급하잖아!',
-    '한눈팔 때가 아니라고!',
-  ],
-  // 연타하다 손을 뗐을 때.
-  settle: [
-    '{강조}이제 끝났어{종결}',
-    {
-      template: '휴, {표현}.',
-      slots: { 표현: ['드디어 조용하네', '한숨 돌렸다', '이제 좀 살겠다'] },
-    },
-    '자, 정신 차리고 — 앞으로 가자!',
-  ],
-  // 스킵이 누적돼 과묵해질 때(가끔) — 삐침이 아니라 배려의 톤.
-  quiet: [
-    '내가 이야기하는 게 거슬렸구나…? 알았어, 조용히 할게.',
-    '음… 말이 너무 많았나 봐. 좀 과묵해질게.',
-    '신경 쓰이게 했다면 미안. 중요할 때만 말할게.',
-  ],
-
-  // ── 게임 이벤트 상황 반응 ──
-  hit: [
-    {
-      template: '{비명}! {느낌}…',
-      slots: { 비명: ['아얏', '으악', '윽', '아야'], 느낌: ['아파', '따가워', '방심했어', '깜짝이야'] },
-    },
-    '{강조}조심하라니까{종결}',
-    '맞기 싫어…!',
-    '이 정도쯤이야!',
-  ],
-  web: [
-    {
-      template: '{비명}! 거미줄은 {감정}…',
-      slots: { 비명: ['으', '윽', '으윽'], 감정: ['싫은데', '질색이야', '끔찍해'] },
-    },
-    {
-      template: '으, {표현}…',
-      slots: { 표현: ['끈적끈적해', '달라붙어', '찝찝해'] },
-    },
-    '거미줄은 딱 질색!',
-    '이런 거 정말 싫어…',
-  ],
-  treasure: [
-    {
-      template: '{감탄}, {표현}!',
-      slots: {
-        감탄: ['오', '우와', '히히', '오오'],
-        표현: ['좋은 거 들었다', '이게 웬 행운이야', '반짝이는 거다', '운수 좋은걸'],
-      },
-    },
-    '{강조}챙겨두자{종결}',
-    '보물은 언제 봐도 좋아!',
-    '안에 뭐가 있을까?',
-  ],
-  kill: [
-    {
-      template: '{감탄}, {표현}!',
-      slots: { 감탄: ['좋아', '아싸', '옳지', '후훗'], 표현: ['하나 처리', '잡았다', '해치웠어', '정리 완료'] },
-    },
-    '{강조}덤비지 말랬지{종결}',
-    '이런 건 식은 죽 먹기지.',
-    '다음은 누구야?',
-  ],
-  survive: [
-    {
-      template: '{놀람}, {표현}…?',
-      slots: { 놀람: ['어라', '흠', '으음'], 표현: ['단단한데', '질긴데', '멀쩡하네'] },
-    },
-    '한 번 더 쳐야겠어!',
-    '아직 안 죽었어, 조심해.',
-    '제법인걸…?',
-  ],
-  // 꽃을 주웠을 때.
-  flower: [
-    {
-      template: '{감탄}, 꽃이다! {표현}.',
-      slots: { 감탄: ['와', '오', '어머'], 표현: ['향기가 좋아', '예쁘다', '기운이 나네'] },
-    },
-    '꽃을 줍는 순간만큼은 평화롭네.',
-    '이런 게 모험의 즐거움이지.',
-  ],
-  // 이벤트 문이 나타났을 때.
-  event: [
-    {
-      template: '문이…? {표현}.',
-      slots: { 표현: ['뭐가 있으려나', '들어가 볼까', '조심해야겠어'] },
-    },
-    '저 너머에 뭔가 있어.',
-    '선택의 갈림길이네.',
-  ],
-  // 포자가 퍼질 때.
-  spore: [
-    '으, 포자가 번지고 있어…',
-    '저거 퍼지면 골치 아파 — 빨리 정리하자.',
-    '포자는 질색이야…',
-  ],
-  // 폭탄이 터졌을 때.
-  bomb: [
-    '쾅?! 깜짝이야…',
-    '폭탄은 정말 질색이야!',
-    '으, 귀 아파…',
-  ],
-  'loot-match-ok': [
-    '불씨 게이지는 아직 충분하네, 나중에 써도 되겠어… 그치?',
-    '성냥이다. 급하진 않으니 아껴두자.',
-    '불씨는 넉넉하니까, 잘 챙겨두자.',
-  ],
-  'loot-match-low': [
-    '마침 성냥이야! {강조}얼른 불씨를 채우자{종결}',
-    '오, 성냥! 지금 딱 필요했는데.',
-    '불씨가 위태로웠는데 — 다행이다!',
-  ],
-}
-
-/**
- * 카드 카테고리별 폴백 한줄평 — 전용 대사가 없는 손패는 모두 자기 카테고리 대사를 쓴다.
- * 덕분에 카드를 새로 추가해도 "하나하나 등록" 없이 즉시 한줄평이 붙는다.
- */
-const CATEGORY_COMMENTS: Record<HandCategory, Line[]> = {
-  attack: [
-    { template: '공격 카드네, {대상}[을/를] 혼내주자!', slots: { 대상: ['적', '저 녀석'] } },
-    '이걸로 한 방 먹이면 되겠어.',
-    '싸울 준비 됐어!',
-  ],
-  recovery: ['회복 카드다, 다치면 쓰자.', '든든한걸, 챙겨두자.', '이거면 좀 버틸 수 있겠어.'],
-  tool: ['오, 쓸모 있어 보여.', '도구는 많을수록 좋지.', '요긴하게 쓰자.'],
-  control: ['요건 잘 쓰면 판을 바꾸겠는걸.', '영리하게 써먹자.', '타이밍 맞춰 쓰면 좋겠어.'],
-}
-
-/** 손패를 '사용'했을 때의 카테고리별 폴백 한마디(획득 한줄평과 톤이 다르다). */
-const USE_COMMENTS: Record<HandCategory, Line[]> = {
-  attack: ['받아라!', '이걸로 한 방!', '맞고 정신 차려!'],
-  recovery: ['후… 좀 낫다.', '이제 좀 버틸 만해.', '회복!'],
-  tool: ['요건 이렇게 쓰는 거야.', '제때 써야 빛나지.', '쓸 만하네!'],
-  control: ['판을 흔들어 볼까?', '이렇게 하면 되지?', '영리하게!'],
-}
-
-/** 직업별 시작 인사(없으면 공용). 시작 한 번뿐이라 빈도 제한 없이 늘 나온다. */
-const JOB_LINES: Record<string, Line[]> = {
-  knight: ['기사구나! 방패는 내가 거들게.', '튼튼해 보여 — 함께라면 든든하겠어.'],
-  mage: ['마법사라니 멋져! 불씨는 내게 맡겨.', '지혜로운 선택이야. 잘 부탁해.'],
-}
-const JOB_GENERIC: Line[] = [
-  '역경 아래, 작은 불빛을 밝혀야만 해.',
-  '준비됐어? 함께 가보자.',
-  '어떤 길이든, 내가 곁에 있을게.',
-]
-
-/** 손패 id별 전용 한줄평. 없는 카드는 CATEGORY_COMMENTS로 자동 폴백한다. */
-const CARD_COMMENTS: Record<string, Line[]> = {
-  wax: [
-    {
-      template: '밀랍이다! {대상}[을/를] {동작}{종결}',
-      slots: { 대상: ['적', '저 녀석', '앞의 함정'], 동작: ['꽁꽁 굳혀버리자', '멈춰 세우자', '묶어둬야지'] },
-    },
-    '끈적한 밀랍… 시간을 벌 수 있어.',
-  ],
-  chitin: [
-    {
-      template: '키틴이네. {표현}!',
-      slots: { 표현: ['함정은 내가 치울게', '저런 건 치워버리자', '길을 터줄게'] },
-    },
-    '함정 따위 무섭지 않아.',
-  ],
-  candle: [
-    {
-      template: '양초다! {표현}.',
-      slots: { 표현: ['방패로 막자', '든든하게 버티자', '몸을 지키자'] },
-    },
-    '불빛이 우릴 지켜줄 거야.',
-  ],
-}
+// ── 튜닝(빈도·강도) ──────────────────────────────────────────
 
 /** 터치/상태 반응 풀의 기본 말투 강도. */
 const POOL_INTENSITY: Record<TouchPoolId, Intensity> = {
@@ -386,18 +157,8 @@ const SITUATION_WEIGHT_MAX = 1.8
 
 /** 클러치 예산('의지') 최대치 — 역경(피해)으로 차고, 발동 시 0으로 비운다. */
 const WILL_MAX = 100
-/**
- * 클러치 효과 '보통' 강도 배율. 추후 "플레이어가 역경을 얼마나 겪는지"를 RL로 분석해
- * 이 배율을 조정한다(지금은 테스트라 1.0 고정 = 보통).
- */
+/** 클러치 효과 '보통' 강도 배율. 추후 역경 분석 RL로 조정(지금은 1.0 고정). */
 const CLUTCH_STRENGTH = 1.0
-/** 클러치 종류별 거의 확정으로 나오는 대사. */
-const CLUTCH_LINES: Record<ClutchKind, string[]> = {
-  heal: ['아직 끝낼 수 없어!', '내가… 지켜줄게!', '포기하긴 일러!'],
-  shield: ['이건 내가 막을게!', '여기서 쓰러질 순 없어!', '버텨 — 방패를 들어!'],
-  ember: ['불씨가 꺼지면 안 돼 — 자, 성냥!', '내가 챙겨뒀어, 어서 불을 켜!', '이걸로 버티자!'],
-}
-
 /** 소소한 일상 클러치 발동 확률(낮게 — 가끔 깜짝 지원). */
 const MINOR_CLUTCH_CHANCE: Record<MinorClutchKind, number> = {
   crit: 0.06,
@@ -405,18 +166,11 @@ const MINOR_CLUTCH_CHANCE: Record<MinorClutchKind, number> = {
   trap: 0.12,
   treasure: 0.15,
 }
-const MINOR_CLUTCH_LINES: Record<MinorClutchKind, string[]> = {
-  crit: ['급소!', '여기야!', '한 방 먹였지?'],
-  dodge: ['안 맞아!', '피했어!', '어딜!'],
-  trap: ['이 정도쯤이야!', '내가 막았어!', '괜찮아, 안 아파!'],
-  treasure: ['덤이야!', '하나 더 챙겼어!', '운이 좋네!'],
-}
-
 /** 각성(최후의 의지) — 진짜 죽음 직전, 아주 드물게 터지는 클라이맥스. */
 const AWAKEN_CHANCE = 0.12
-const AWAKEN_LINES = ['이대로 끝낼 순 없어!!', '아직이야 — 일어나!', '내 모든 걸 걸어서라도!']
 
 export class CompanionSystem {
+  /** 짧은 시간 내 연속 터치 횟수 — 반응 강도를 끌어올린다. */
   private touchStreak = 0
   private lastTouchAt = 0
   /** 마지막으로 월드 바크를 낸 턴 — 시간(쿨타임)이 아니라 '턴 간격'으로 빈도를 다스린다. */
@@ -424,7 +178,7 @@ export class CompanionSystem {
   /** 풀별 직전 선택 인덱스 — 같은 줄이 연속으로 나오지 않게 한다. */
   private readonly lastPick = new Map<string, number>()
   /**
-   * 상황별 학습 가중치(0.15~1). 스킵하면 내려가 덜 말하고, 평가될 때마다 천천히 회복한다.
+   * 상황별 학습 가중치(0.2~1.8). 스킵하면 내려가 덜 말하고, 끝까지 읽어주면 올라가 더 말한다.
    * = 가짜 RL: "스킵 = 이 상황은 덜 중요하다"는 신호를 누적한다.
    */
   private readonly situationWeight: Record<SituationId, number> = {
@@ -467,9 +221,9 @@ export class CompanionSystem {
   }
 
   /**
-   * 게임 이벤트 상황 반응. 시간 쿨다운이 아니라 **턴 간격**으로 빈도를 다스린다:
-   * 직전 발화로부터 minTurnGap(수다 수치가 높을수록 짧음)턴이 지났고, (기본확률×학습
-   * 가중치)에 걸렸을 때만. important(위급 등)는 간격을 우회해 경고 기회를 보장한다.
+   * 게임 이벤트 상황 반응. 시간 쿨다운이 아니라 턴 간격으로 빈도를 다스린다:
+   * 직전 발화로부터 minTurnGap턴이 지났고, (기본확률×학습 가중치)에 걸렸을 때만.
+   * important(위급 등)는 간격을 우회해 경고 기회를 보장한다.
    */
   reactSituation(
     id: SituationId,
@@ -523,6 +277,22 @@ export class CompanionSystem {
     return this.pickFrom(`cat:${category}`, CATEGORY_COMMENTS[category], 'normal')
   }
 
+  /** 손패 '사용' 한줄평. 같은 턴 간격을 공유해 가끔만 능력을 언급한다. */
+  onUseCard(cardId: string, category: HandCategory, turn: number): string | null {
+    if (turn - this.lastWorldBarkTurn < this.minTurnGap()) return null
+    if (Math.random() >= LOOT_COMMENT_CHANCE) return null
+    this.lastWorldBarkTurn = turn
+    const bespoke = CARD_COMMENTS[cardId]
+    if (bespoke) return this.pickFrom(`use:${cardId}`, bespoke, 'normal')
+    return this.pickFrom(`use-cat:${category}`, USE_COMMENTS[category], 'normal')
+  }
+
+  /** 직업 선택 직후의 시작 인사. 시작 한 번뿐이라 빈도 제한 없이 늘 나온다. */
+  onJobSelect(jobId: string): string {
+    const lines = JOB_LINES[jobId] ?? JOB_GENERIC
+    return this.pickFrom(`job:${jobId}`, lines, 'normal')
+  }
+
   // ── 클러치(에나의 의지): 대사만이 아니라 실제 서포팅 ──────────
 
   /** 피해를 입은 만큼 '의지'를 쌓는다(역경에 비례). 클러치 예산의 충전. */
@@ -545,7 +315,6 @@ export class CompanionSystem {
   /**
    * 의지가 가득 찼고 위기일 때, '보통' 강도의 클러치 한 번을 계획해 돌려준다(아니면 null).
    * 우선순위: 체력 위기(회복/방패) > 불씨 위기(성냥). 발동 시 의지를 0으로 비운다.
-   * 정책은 '언제/어떤 종류'만 정하고 위력(수치)은 상한 고정이라 밸런스를 깨지 않는다.
    */
   evaluateClutch(ctx: ClutchContext): ClutchPlan | null {
     if (this.will < WILL_MAX) return null
@@ -563,22 +332,6 @@ export class CompanionSystem {
       return { kind: 'ember', amount: 1, line: this.pickFrom('clutch-ember', CLUTCH_LINES.ember, 'urgent'), flavor: '불씨가 꺼지기 전에' }
     }
     return null
-  }
-
-  /** 손패 '사용' 한줄평. 같은 턴 간격을 공유해 너무 수다스럽지 않게 가끔만 능력을 언급한다. */
-  onUseCard(cardId: string, category: HandCategory, turn: number): string | null {
-    if (turn - this.lastWorldBarkTurn < this.minTurnGap()) return null
-    if (Math.random() >= LOOT_COMMENT_CHANCE) return null
-    this.lastWorldBarkTurn = turn
-    const bespoke = CARD_COMMENTS[cardId]
-    if (bespoke) return this.pickFrom(`use:${cardId}`, bespoke, 'normal')
-    return this.pickFrom(`use-cat:${category}`, USE_COMMENTS[category], 'normal')
-  }
-
-  /** 직업 선택 직후의 시작 인사. 시작 한 번뿐이라 빈도 제한 없이 늘 나온다. */
-  onJobSelect(jobId: string): string {
-    const lines = JOB_LINES[jobId] ?? JOB_GENERIC
-    return this.pickFrom(`job:${jobId}`, lines, 'normal')
   }
 
   /** 소소한 일상 클러치가 이번 행동에 발동하는지(낮은 확률). */
@@ -629,7 +382,6 @@ export class CompanionSystem {
   /**
    * 월드 바크 사이 최소 턴 간격. 수다 수치가 높을수록 짧아진다(자주 말함).
    * 기본 수치(1.0)에서 8턴, 수다(1.8)면 ~4턴, 과묵(0.2)이면 최대 16턴까지 벌어진다.
-   * (수다스러워 게임에 방해되지 않도록 기본을 넉넉히 띄웠다.)
    */
   private minTurnGap(): number {
     return Math.min(16, Math.max(3, Math.round(8 / this.chattiness())))
