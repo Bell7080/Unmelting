@@ -144,7 +144,6 @@ const POOL_INTENSITY: Record<TouchPoolId, Intensity> = {
   annoyed: 'normal',
   exasperated: 'urgent',
   urgent: 'urgent',
-  settle: 'soft',
   quiet: 'soft',
 }
 
@@ -191,6 +190,8 @@ export class CompanionSystem {
   private lastWorldBarkTurn = -999
   /** 풀별 직전 선택 인덱스 — 같은 줄이 연속으로 나오지 않게 한다. */
   private readonly lastPick = new Map<string, number>()
+  /** 풀별 최근 선택 이력 — 넓은 풀에서는 같은 대사가 여러 번 사이클 뒤에나 돌아오게 한다. */
+  private readonly recentPickHistory = new Map<string, number[]>()
   /**
    * 상황별 학습 가중치(0.2~1.8). 스킵하면 내려가 덜 말하고, 끝까지 읽어주면 올라가 더 말한다.
    * = 가짜 RL: "스킵 = 이 상황은 덜 중요하다"는 신호를 누적한다.
@@ -234,11 +235,11 @@ export class CompanionSystem {
     return this.pickPool(pool)
   }
 
-  /** 연타 뒤 손을 뗐을 때(방치). 만진 적이 있을 때만 마무리 대사를 돌려준다. */
+  /** 연타 뒤 손을 뗐을 때(방치). 클릭 멈춤 자체에는 반응하지 않고 내부 연타 상태만 정리한다. */
   onSettle(): string | null {
     if (this.touchStreak === 0) return null
     this.touchStreak = 0
-    return this.pickPool('settle')
+    return null
   }
 
   /**
@@ -454,13 +455,20 @@ export class CompanionSystem {
     return this.pickFrom(pool, POOLS[pool], POOL_INTENSITY[pool])
   }
 
-  /** 주어진 줄 목록에서 직전과 다른 항목을 골라 긴급도에 맞춰 렌더한다. */
+  /** 주어진 줄 목록에서 최근에 나오지 않은 항목을 골라 긴급도에 맞춰 렌더한다. */
   private pickFrom(key: string, lines: Line[], intensity: Intensity): string {
     if (lines.length <= 1) return renderLine(lines[0], intensity)
-    const prev = this.lastPick.get(key)
+    const recent = this.recentPickHistory.get(key) ?? []
+    const avoid = new Set(recent)
     let idx = Math.floor(Math.random() * lines.length)
-    if (idx === prev) idx = (idx + 1) % lines.length
+    // 플레이어 카드처럼 자주 누르는 풀은 최근 3개(또는 풀 절반)를 피해서 체감 다양성을 올린다.
+    if (avoid.has(idx)) {
+      const candidates = lines.map((_, i) => i).filter((i) => !avoid.has(i))
+      idx = candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : (this.lastPick.get(key) ?? idx)
+    }
     this.lastPick.set(key, idx)
+    const windowSize = Math.min(3, Math.max(1, lines.length - 1), Math.floor(lines.length / 2))
+    this.recentPickHistory.set(key, [...recent, idx].slice(-windowSize))
     return renderLine(lines[idx], intensity)
   }
 }
