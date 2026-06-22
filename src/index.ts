@@ -4043,10 +4043,15 @@ async function tickFrontEventDoors(): Promise<void> {
     // 사라진 뒤 즉시 레일을 정리/보충해 빈칸이 다음 턴까지 남지 않게 한다.
     compactAndRefillAllLanes()
     gameState.regroupAllRows()
+    // 문 위에 있던 씨앗/별빛이 전방으로 내려왔다면 일반 턴 정비와 동일하게 발화/수집한다.
+    // (문 닫힘 정리에서 이 처리를 빠뜨리면 씨앗이 개화하지 않고 별빛 턴 +1도 누락된다.)
+    const blooms = turnManager.bloomFrontSeeds(cardSpawner)
     turnManager.armFrontBombs()
     const startedEventDoors = turnManager.startFrontEventDoorArrivals()
     render()
+    if (blooms.length > 0) await boardRenderer.animateFlowerBlooms(blooms)
     for (const t of startedEventDoors) boardRenderer.popEventBadge(t.cardId)
+    await sweepFrontStarlights()
   }
 }
 
