@@ -1207,12 +1207,47 @@ export class BossEventController {
     )
   }
 
+  /** 생존 소환 적이 플레이어를 친다. 굳은(밀랍) 적은 이번 공격을 거르고 굳음 1턴 소모.
+   *  label='선공'(불씨 부족 선공) / '반격'(평상시). 플레이어 사망 처리 시 true 반환. */
+  private async summonedEnemiesStrike(label: '선공' | '반격'): Promise<boolean> {
+    const character = this.gs.character
+    const alive = this.getAliveSummonedCards()
+    // 굳은 적은 공격하지 못하고 굳음만 1턴 줄어든다(밀랍이 실제로 효과를 낸다).
+    for (const e of alive) if (e.isFrozen()) e.tickFrozen()
+    const attackers = alive.filter((e) => !e.isFrozen())
+    if (attackers.length === 0) {
+      this.inject.render()
+      return false
+    }
+    const hits = attackers.map((e, idx) => ({ cardId: e.id, cardName: e.name, laneIndex: idx, damage: e.getDamage() }))
+    for (const e of attackers) character.takeDamage(e.getDamage())
+    const totalDmg = attackers.reduce((s, e) => s + e.getDamage(), 0)
+    await this.br.animateEnemyAttacks(hits)
+    await this.br.animatePlayerDamageImpact(totalDmg)
+    this.inject.recordNotice(`소환 적들의 ${label}! -${totalDmg}`, 'hurt')
+    this.inject.render()
+    if (!character.isAlive() || character.authoritySurvivePending) {
+      await this.inject.handlePlayerDeath()
+      return true
+    }
+    this.inject.applyAnomalyHealthLoss()
+    await this.inject.applyPreciousHeadCheck()
+    await this.retaliateGracefulResponse(attackers.map((e) => e.id))
+    return false
+  }
+
   /** 소환된 적 클릭 처리. 일반 턴 흐름(리필/상점/제단/합산)을 타지 않도록 컨트롤러가 직접 처리한다. */
   async handleSummonedEnemyClick(card: Card): Promise<void> {
     if (!this.eventState || !this.isSummonedEnemy(card)) return
     const state = this.eventState
     const character = this.gs.character
     this.inject.setInputLocked(true)
+
+    // 불씨 부족(꺼져감/꺼졌다 티어) → 소환 적이 먼저 친다(선공). 굳은 적은 제외.
+    const firstStrike = this.tm.isEnemyFirstStrike()
+    if (firstStrike) {
+      if (await this.summonedEnemiesStrike('선공')) return
+    }
 
     // 플레이어 공격 + 데미지 적용
     await this.br.animatePlayerAttack(card)
@@ -1236,26 +1271,9 @@ export class BossEventController {
     this.br.setBossAttackCountdown(displayValue)
     this.inject.render()
 
-    // 생존 소환 적 반격 — 일반 레일과 동일한 적 반격 타이밍으로 적용
-    const aliveEnemies = this.getAliveSummonedCards()
-    if (aliveEnemies.length > 0) {
-      const hits = aliveEnemies.map((e, idx) => ({
-        cardId: e.id, cardName: e.name, laneIndex: idx, damage: e.getDamage(),
-      }))
-      for (const e of aliveEnemies) character.takeDamage(e.getDamage())
-      const totalDmg = aliveEnemies.reduce((s, e) => s + e.getDamage(), 0)
-      await this.br.animateEnemyAttacks(hits)
-      await this.br.animatePlayerDamageImpact(totalDmg)
-      this.inject.recordNotice(`소환 적들의 반격! -${totalDmg}`, 'hurt')
-      this.inject.render()
-      if (!character.isAlive() || character.authoritySurvivePending) {
-        await this.inject.handlePlayerDeath()
-        return
-      }
-      this.inject.applyAnomalyHealthLoss()
-      await this.inject.applyPreciousHeadCheck()
-      // 품격있는 대처: 나를 때린 소환 적들에게 각 1 반격.
-      await this.retaliateGracefulResponse(aliveEnemies.map((e) => e.id))
+    // 생존 소환 적 반격 — 선공으로 이미 친 턴이면 생략(이중 타격 방지). 굳은 적은 거른다.
+    if (!firstStrike) {
+      if (await this.summonedEnemiesStrike('반격')) return
     }
 
     // 3턴 주기 도달 + 소환 적 생존 → 보스가 후방에서 공격한다.
