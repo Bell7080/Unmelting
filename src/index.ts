@@ -63,6 +63,7 @@ import { candleIcon } from '@ui/Icons'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
 import { CompanionSystem, type SituationId, type ClutchPlan } from '@systems/CompanionSystem'
+import { loadDisposition, saveDisposition } from '@systems/EnaDisposition'
 import { assessThreats } from '@systems/CompanionForesight'
 import { HearthScene } from '@ui/hearth/HearthScene'
 import { playDialogueLine } from '@ui/DialoguePlayer'
@@ -153,7 +154,10 @@ const gameState = new GameState()
 const originalEndGame = gameState.endGame.bind(gameState)
 gameState.endGame = (reason: string): void => {
   originalEndGame(reason)
-  enaRuntimeObserver.recordRunEnd(gameState, reason.includes('clear') || reason.includes('win'), reason)
+  const won = reason.includes('clear') || reason.includes('win')
+  enaRuntimeObserver.recordRunEnd(gameState, won, reason)
+  // per-player 성향 온라인 적응: 런 결과로 에나의 성향을 미세조정하고 저장(세션 넘어 유지).
+  adaptCompanionToRunOutcome(won)
 }
 const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
@@ -186,7 +190,14 @@ let inputLocked = false
 // ── 동료(에나) 반응 레이어 씨앗 ──────────────────────────────
 // 학습 전 규칙 기반 스캐폴딩. 플레이어 프로필(.player-card) 터치에 횟수·시간·현재 상황으로
 // 반응한다(패턴이 아니라 자아처럼). 설계: Ena_Companion_AI_Design.md
-const companion = new CompanionSystem()
+// 저장된 per-player 성향을 불러와 에나를 깨운다(없으면 기본 성향). 런 종료마다 적응·저장된다.
+const companion = new CompanionSystem(loadDisposition())
+
+/** 런 종료 결과로 에나 성향을 온라인 적응시키고 저장한다. endGame 후크에서 호출(함수 선언이라 호이스팅). */
+function adaptCompanionToRunOutcome(won: boolean): void {
+  const adapted = companion.adaptToOutcome({ died: !won, floorReached: gameState.getCurrentTurn() })
+  saveDisposition(adapted)
+}
 // 현재 player 말풍선이 에나 본인의 대사(바크)인지.
 let enaSpeaking = false
 // 연타 후 손을 떼면 '…이제 끝났어?'를 띄우기 위한 방치 타이머.

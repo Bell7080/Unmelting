@@ -39,7 +39,7 @@ import type {
   MinorClutchKind,
 } from '@data/CompanionLines'
 import type { HandCategory } from '@entities/HandCard'
-import { defaultDisposition, type EnaDisposition } from './EnaDisposition'
+import { defaultDisposition, cloneDisposition, clampDisposition, type EnaDisposition } from './EnaDisposition'
 
 // 대사 데이터 쪽 타입을 그대로 다시 노출해 기존 import 경로(@systems/CompanionSystem)를 유지한다.
 export type { Line, LineTemplate, SituationId, ClutchKind, MinorClutchKind }
@@ -66,6 +66,14 @@ export interface ClutchContext {
   maxHp: number
   hpRatio: number
   emberLow: boolean
+}
+
+/** 런 종료 신호 — per-player 성향 온라인 적응의 입력. */
+export interface RunOutcome {
+  /** 사망으로 끝났는가(아니면 클리어/도달). */
+  died: boolean
+  /** 도달한 층(≈ 턴). 깊이 살아남았는지 판단에 쓴다. */
+  floorReached: number
 }
 
 // ── 조사 보정 ────────────────────────────────────────────────
@@ -169,8 +177,8 @@ const WILL_MAX = 100
 
 export class CompanionSystem {
   /** 성향 파라미터(임의값 그릇). 기본값은 기존 상수와 동일해 도입만으로 동작이 변하지 않는다.
-   *  학습/온라인 적응은 이 객체의 숫자만 안전 경계 안에서 움직인다. */
-  private readonly disp: EnaDisposition
+   *  런-내 빠른 학습(situationWeight/predictiveWeight)이 런 종료 시 이 느린 성향으로 소화된다. */
+  private disp: EnaDisposition
 
   constructor(disposition: EnaDisposition = defaultDisposition()) {
     this.disp = disposition
@@ -420,6 +428,39 @@ export class CompanionSystem {
   /** 건넨 대비 카드를 기한 내 안 썼다 → 불필요했다(덜 대비). */
   recordPredictionWasted(): void {
     this.predictiveWeight = Math.max(this.disp.weightFloor, this.predictiveWeight * this.disp.predictDownDecay)
+  }
+
+  /**
+   * 런 종료 시 per-player 성향을 실제 플레이 신호로 미세조정한다(전부 안전 경계 안 bounded nudge).
+   * - 런-내 빠른 학습(수다/예측 가중치)을 느린 영구 성향에 소화시켜 세션 넘어 남긴다.
+   * - 사망이면 다음 런에 더 적극적으로 돕고(방어/예측/깜짝지원↑), 깊이 살아남았으면 과보호를 살짝 완화.
+   * 갱신된 성향을 돌려주어 호출부가 저장(saveDisposition)하게 한다.
+   */
+  adaptToOutcome(outcome: RunOutcome): EnaDisposition {
+    const d = cloneDisposition(this.disp)
+    // 1) 수다 성향 영속화: 이번 런 동안 학습된 chattiness(스킵=싫음/열람=좋음)를 기본 발화확률·턴 간격에 반영.
+    const chatDelta = (this.chattiness() - 1) * 0.04
+    for (const id of Object.keys(d.situationChance) as SituationId[]) d.situationChance[id] *= 1 + chatDelta
+    d.minTurnGapBase *= 1 - chatDelta * 0.5
+    // 2) 예측 성향 영속화: 건넨 대비가 유용했는지(predictiveWeight)를 기본 예측 게이트에 반영.
+    d.predictBaseChance *= 1 + (this.predictiveWeight - 1) * 0.04
+    // 3) 방어 성향: 사망이면 더 적극 지원, 깊이(≥60층) 살아남았으면 과보호 완화(기본값 쪽으로 약하게).
+    if (outcome.died) {
+      d.willGainPerDamage *= 1.05
+      d.clutchHpThreshold += 0.015
+      d.clutchStrength *= 1.03
+      d.predictBaseChance *= 1.04
+      for (const k of Object.keys(d.minorClutchChance) as MinorClutchKind[]) d.minorClutchChance[k] *= 1.05
+    } else if (outcome.floorReached >= 60) {
+      d.willGainPerDamage *= 0.99
+      d.clutchStrength *= 0.99
+      for (const k of Object.keys(d.minorClutchChance) as MinorClutchKind[]) d.minorClutchChance[k] *= 0.99
+    }
+    this.disp = clampDisposition(d)
+    // 빠른 런-내 학습은 느린 성향으로 소화됐으니 1로 초기화해 다음 런에서 이중 반영을 막는다.
+    for (const id of Object.keys(this.situationWeight) as SituationId[]) this.situationWeight[id] = 1
+    this.predictiveWeight = 1
+    return this.disp
   }
 
   /** 새 런 시작 시 런 한정 상태(의지/각성/턴 흐름)를 초기화한다. 학습 가중치는 유지. */

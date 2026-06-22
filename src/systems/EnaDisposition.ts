@@ -177,3 +177,31 @@ export function dispositionFromJSON(raw: unknown): EnaDisposition {
   }
   return clampDisposition(merged)
 }
+
+// ── 영구 저장(per-player) ─────────────────────────────────────────────────
+// 플레이어별로 적응된 성향을 세션 넘어 유지한다. 브라우저 외 환경(테스트/SSR)에서는
+// localStorage가 없을 수 있어 안전하게 무시한다. (import 주위가 아니라 저장 접근만 보호)
+
+const STORAGE_KEY = 'ena-disposition-v1'
+
+/** 저장된 per-player 성향을 불러온다. 없거나 손상됐으면 기본 성향. */
+export function loadDisposition(key: string = STORAGE_KEY): EnaDisposition {
+  if (typeof localStorage === 'undefined') return defaultDisposition()
+  const raw = localStorage.getItem(key)
+  if (!raw) return defaultDisposition()
+  try {
+    return dispositionFromJSON(JSON.parse(raw))
+  } catch {
+    return defaultDisposition()
+  }
+}
+
+/** 적응된 성향을 클램프 후 저장한다. 저장 실패(용량/프라이빗 모드)는 조용히 무시한다. */
+export function saveDisposition(d: EnaDisposition, key: string = STORAGE_KEY): void {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(key, JSON.stringify(clampDisposition(d)))
+  } catch {
+    /* 저장 실패는 게임 진행을 막지 않는다. */
+  }
+}
