@@ -39,6 +39,7 @@ import type {
   MinorClutchKind,
 } from '@data/CompanionLines'
 import type { HandCategory } from '@entities/HandCard'
+import { defaultDisposition, type EnaDisposition } from './EnaDisposition'
 
 // 대사 데이터 쪽 타입을 그대로 다시 노출해 기존 import 경로(@systems/CompanionSystem)를 유지한다.
 export type { Line, LineTemplate, SituationId, ClutchKind, MinorClutchKind }
@@ -163,27 +164,23 @@ const SITUATION: Record<SituationId, { chance: number; intensity: Intensity }> =
 }
 
 const STREAK_RESET_MS = 4000
-const LOOT_COMMENT_CHANCE = 0.45
-/** 학습 가중치 하한 — 아무리 스킵해도 침묵이 아니라 '과묵'에서 멈춘다. */
-const SITUATION_WEIGHT_FLOOR = 0.2
-/** 학습 가중치 상한 — 대사를 잘 봐 주는 플레이어에겐 더 수다스러워진다. */
-const SITUATION_WEIGHT_MAX = 1.8
-
-/** 클러치 예산('의지') 최대치 — 역경(피해)으로 차고, 발동 시 0으로 비운다. */
+/** 클러치 예산('의지') 최대치 — 역경(피해)으로 차고, 발동 시 0으로 비운다(구조 상한이라 성향과 분리). */
 const WILL_MAX = 100
-/** 클러치 효과 '보통' 강도 배율. 추후 역경 분석 RL로 조정(지금은 1.0 고정). */
-const CLUTCH_STRENGTH = 1.0
-/** 소소한 일상 클러치 발동 확률(낮게 — 가끔 깜짝 지원). */
-const MINOR_CLUTCH_CHANCE: Record<MinorClutchKind, number> = {
-  crit: 0.06,
-  dodge: 0.05,
-  trap: 0.12,
-  treasure: 0.15,
-}
-/** 각성(최후의 의지) — 진짜 죽음 직전, 아주 드물게 터지는 클라이맥스. */
-const AWAKEN_CHANCE = 0.12
 
 export class CompanionSystem {
+  /** 성향 파라미터(임의값 그릇). 기본값은 기존 상수와 동일해 도입만으로 동작이 변하지 않는다.
+   *  학습/온라인 적응은 이 객체의 숫자만 안전 경계 안에서 움직인다. */
+  private readonly disp: EnaDisposition
+
+  constructor(disposition: EnaDisposition = defaultDisposition()) {
+    this.disp = disposition
+  }
+
+  /** 현재 성향 파라미터(저장/적응/디버그용). */
+  getDisposition(): EnaDisposition {
+    return this.disp
+  }
+
   /** 짧은 시간 내 연속 터치 횟수 — 반응 강도를 끌어올린다. */
   private touchStreak = 0
   private lastTouchAt = 0
@@ -258,7 +255,7 @@ export class CompanionSystem {
     name?: string
   ): string | null {
     if (!important && turn - this.lastWorldBarkTurn < this.minTurnGap()) return null
-    let chance = Math.min(0.95, SITUATION[id].chance * this.situationWeight[id])
+    let chance = Math.min(0.95, this.disp.situationChance[id] * this.situationWeight[id])
     if (important) chance = Math.max(chance, 0.7)
     if (Math.random() >= chance) return null
     this.lastWorldBarkTurn = turn
@@ -278,12 +275,12 @@ export class CompanionSystem {
   /** 플레이어가 안 읽고 빨리 넘긴 상황 → 다음부터 덜 말한다(가짜 RL 부정 보상). */
   recordSkip(id: SituationId): void {
     this.skipCount += 1
-    this.situationWeight[id] = Math.max(SITUATION_WEIGHT_FLOOR, this.situationWeight[id] * 0.7)
+    this.situationWeight[id] = Math.max(this.disp.weightFloor, this.situationWeight[id] * this.disp.skipDecay)
   }
 
   /** 플레이어가 대사를 끝까지 봐 준 상황 → 점점 더 수다스러워진다(긍정 보상). */
   recordHeard(id: SituationId): void {
-    this.situationWeight[id] = Math.min(SITUATION_WEIGHT_MAX, this.situationWeight[id] * 1.08)
+    this.situationWeight[id] = Math.min(this.disp.weightMax, this.situationWeight[id] * this.disp.heardGrowth)
   }
 
   /** 스킵이 누적됐을 때 가끔 '조용히 할게'류로 과묵해짐을 알린다(드물게). */
@@ -302,7 +299,7 @@ export class CompanionSystem {
     ctx?: { emberSufficient?: boolean }
   ): string | null {
     if (turn - this.lastWorldBarkTurn < this.minTurnGap()) return null
-    if (Math.random() >= LOOT_COMMENT_CHANCE) return null
+    if (Math.random() >= this.disp.lootCommentChance) return null
     this.lastWorldBarkTurn = turn
     if (cardId === 'match') {
       const key: PoolId = (ctx?.emberSufficient ?? true) ? 'loot-match-ok' : 'loot-match-low'
@@ -316,7 +313,7 @@ export class CompanionSystem {
   /** 손패 '사용' 한줄평. 같은 턴 간격을 공유해 가끔만 능력을 언급한다. */
   onUseCard(cardId: string, category: HandCategory, turn: number): string | null {
     if (turn - this.lastWorldBarkTurn < this.minTurnGap()) return null
-    if (Math.random() >= LOOT_COMMENT_CHANCE) return null
+    if (Math.random() >= this.disp.lootCommentChance) return null
     this.lastWorldBarkTurn = turn
     const bespoke = USE_CARD_COMMENTS[cardId]
     if (bespoke) return this.pickFrom(`use:${cardId}`, bespoke, 'normal')
@@ -334,7 +331,7 @@ export class CompanionSystem {
   /** 피해를 입은 만큼 '의지'를 쌓는다(역경에 비례). 클러치 예산의 충전. */
   gainWill(damage: number, maxHp: number): void {
     if (damage <= 0 || maxHp <= 0) return
-    this.will = Math.min(WILL_MAX, this.will + Math.round((damage / maxHp) * 60) + 5)
+    this.will = Math.min(WILL_MAX, this.will + Math.round((damage / maxHp) * this.disp.willGainPerDamage) + this.disp.willGainFlatBonus)
   }
 
   /** 피해 외 지속 역경(불씨 고갈 등)으로도 의지를 조금 쌓는다. */
@@ -354,13 +351,13 @@ export class CompanionSystem {
    */
   evaluateClutch(ctx: ClutchContext): ClutchPlan | null {
     if (this.will < WILL_MAX) return null
-    if (ctx.hp > 0 && ctx.hpRatio <= 0.4) {
+    if (ctx.hp > 0 && ctx.hpRatio <= this.disp.clutchHpThreshold) {
       this.will = 0
-      if (Math.random() < 0.5) {
-        const amount = clampInt(ctx.maxHp * 0.3 * CLUTCH_STRENGTH, 4, 12)
+      if (Math.random() < this.disp.clutchHealVsShield) {
+        const amount = clampInt(ctx.maxHp * this.disp.clutchHealRatio * this.disp.clutchStrength, 4, 12)
         return { kind: 'heal', amount, line: this.pickFrom('clutch-heal', CLUTCH_LINES.heal, 'urgent'), flavor: '위기의 순간, 의지로 버텼다' }
       }
-      const amount = clampInt(ctx.maxHp * 0.25 * CLUTCH_STRENGTH, 3, 10)
+      const amount = clampInt(ctx.maxHp * this.disp.clutchShieldRatio * this.disp.clutchStrength, 3, 10)
       return { kind: 'shield', amount, line: this.pickFrom('clutch-shield', CLUTCH_LINES.shield, 'urgent'), flavor: '위기의 순간, 방패를 들어올렸다' }
     }
     if (ctx.emberLow) {
@@ -372,7 +369,7 @@ export class CompanionSystem {
 
   /** 소소한 일상 클러치가 이번 행동에 발동하는지(낮은 확률). */
   rollMinorClutch(kind: MinorClutchKind): boolean {
-    return Math.random() < MINOR_CLUTCH_CHANCE[kind]
+    return Math.random() < this.disp.minorClutchChance[kind]
   }
 
   /** 소소한 클러치 대사 한 줄. */
@@ -386,7 +383,7 @@ export class CompanionSystem {
    */
   tryAwaken(): boolean {
     if (this.awakened) return false
-    if (Math.random() >= AWAKEN_CHANCE) return false
+    if (Math.random() >= this.disp.awakenChance) return false
     this.awakened = true
     return true
   }
@@ -404,8 +401,8 @@ export class CompanionSystem {
    */
   evaluateWebPrediction(recommend: boolean, hasCleanup: boolean, turn: number): boolean {
     if (hasCleanup || !recommend) return false
-    if (turn - this.lastPredictTurn < 6) return false
-    if (Math.random() >= Math.min(0.95, 0.5 * this.predictiveWeight)) return false
+    if (turn - this.lastPredictTurn < this.disp.predictCooldown) return false
+    if (Math.random() >= Math.min(0.95, this.disp.predictBaseChance * this.predictiveWeight)) return false
     this.lastPredictTurn = turn
     return true
   }
@@ -417,12 +414,12 @@ export class CompanionSystem {
 
   /** 건넨 대비 카드를 플레이어가 곧 썼다 → 예측이 유용했다(더 적극적으로 대비). */
   recordPredictionUsed(): void {
-    this.predictiveWeight = Math.min(SITUATION_WEIGHT_MAX, this.predictiveWeight * 1.15)
+    this.predictiveWeight = Math.min(this.disp.weightMax, this.predictiveWeight * this.disp.predictUpGrowth)
   }
 
   /** 건넨 대비 카드를 기한 내 안 썼다 → 불필요했다(덜 대비). */
   recordPredictionWasted(): void {
-    this.predictiveWeight = Math.max(SITUATION_WEIGHT_FLOOR, this.predictiveWeight * 0.7)
+    this.predictiveWeight = Math.max(this.disp.weightFloor, this.predictiveWeight * this.disp.predictDownDecay)
   }
 
   /** 새 런 시작 시 런 한정 상태(의지/각성/턴 흐름)를 초기화한다. 학습 가중치는 유지. */
@@ -450,7 +447,10 @@ export class CompanionSystem {
    * 기본 수치(1.0)에서 8턴, 수다(1.8)면 ~4턴, 과묵(0.2)이면 최대 16턴까지 벌어진다.
    */
   private minTurnGap(): number {
-    return Math.min(16, Math.max(3, Math.round(8 / this.chattiness())))
+    return Math.min(
+      this.disp.minTurnGapMax,
+      Math.max(this.disp.minTurnGapMin, Math.round(this.disp.minTurnGapBase / this.chattiness()))
+    )
   }
 
   /** 터치/상태 풀(기본 긴급도 사용)에서 한 줄 고른다. */
