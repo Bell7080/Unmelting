@@ -179,24 +179,27 @@ export function dispositionFromJSON(raw: unknown): EnaDisposition {
 }
 
 // ── 학습된 기본 토대(시뮬 산출) ───────────────────────────────────────────
-// EnaDispositionFitter.fit({ seed:1, lambda:6, iterations:120, evalSeeds:60 })가 동료 개입을 켠
-// 시뮬에서 찾은 게임플레이 도움 노브의 효율적 배분(생존점수 40→94). 시뮬이 실게임보다 어려워
-// (유물/직업 미모델) 그대로 쓰면 과보호가 되므로, 검증된 기본값으로 0.5 블렌드해 sim-to-real
-// 갭을 보정한다. 시뮬이 실제로 굴린 노브만 반영(미모델 dodge/trap 깜짝지원·취향 노브는 기본 유지).
-// 이 값은 학습 산출물 스냅샷(동봉 가중치)이며, 라이브 토대로 쓰이고 그 위에서 per-player가 개인화한다.
+// EnaDispositionFitter.fit({ lambda:12, iterations:120, evalSeeds:50, seed:1,
+//   playerPolicies:[교사 휴리스틱, 학습된 정책망] })가 동료 개입을 켠 시뮬에서 찾은
+// 게임플레이 도움 노브의 효율적 배분. 시뮬 플레이어를 '교사 + 딥 정책망' 두 종으로 둬,
+// 숙련도가 다른 플레이어에게 두루 좋은(robust) 토대를 찾는다. 학습 구조가 의미 있음:
+// 클러치/각성은 상향, 거미줄 예측·깜짝지원은 저가치라 하향. 시뮬이 실게임보다 어려워
+// (유물/직업 미모델) 그대로 쓰면 과보호가 되므로 검증된 기본값으로 0.5 블렌드해 sim-to-real
+// 갭을 보정한다. 시뮬이 굴린 노브만 반영(미모델 dodge/trap 깜짝지원·취향 노브는 기본 유지).
+// 학습 산출물 스냅샷(동봉 가중치)이며, 라이브 토대로 쓰이고 그 위에서 per-player가 개인화한다.
 const SIM_FITTED = {
-  clutchHpThreshold: 0.569,
-  clutchHealVsShield: 0.453,
-  clutchHealRatio: 0.421,
-  clutchShieldRatio: 0.417,
-  clutchStrength: 1.265,
-  willGainPerDamage: 67.17,
-  willGainFlatBonus: 15,
-  awakenChance: 0.224,
-  predictBaseChance: 0.198,
+  clutchHpThreshold: 0.596,
+  clutchHealVsShield: 0.504,
+  clutchHealRatio: 0.368,
+  clutchShieldRatio: 0.368,
+  clutchStrength: 1.36,
+  willGainPerDamage: 86.6,
+  willGainFlatBonus: 9.6,
+  awakenChance: 0.321,
+  predictBaseChance: 0.02,
   predictCooldown: 20,
-  minorClutchCrit: 0.171,
-  minorClutchTreasure: 0.02,
+  minorClutchCrit: 0.041,
+  minorClutchTreasure: 0.055,
 } as const
 
 const SIM_TO_REAL_BLEND = 0.5

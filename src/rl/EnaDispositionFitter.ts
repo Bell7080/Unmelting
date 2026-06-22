@@ -11,13 +11,17 @@
  * 그 위에서 per-player 적응이 개인화한다.
  */
 
-import { EnaTrainingSimulation, EnaRandom } from './EnaTrainingSimulation'
+import { EnaTrainingSimulation, EnaRandom, type EnaPolicy } from './EnaTrainingSimulation'
+import { EnaTrainer, policyFromNetwork, type EnaTrainConfig } from './EnaTrainer'
 import {
   defaultDisposition,
   cloneDisposition,
   clampDisposition,
   type EnaDisposition,
 } from '@systems/EnaDisposition'
+
+/** 기본 시뮬 플레이어 = 교사 휴리스틱 정책. 피팅은 이 위에 학습된 정책망을 더해 다양화한다. */
+const TEACHER_PLAYER: EnaPolicy = EnaTrainingSimulation.teacherPolicy
 
 /** 시뮬로 맞추는 '게임플레이 도움' 노브와 각 탐색 범위. 취향(수다) 노브는 제외한다. */
 const FIT_RANGES: { key: keyof EnaDisposition; lo: number; hi: number }[] = [
@@ -44,6 +48,8 @@ export interface FitConfig {
   /** 섭동 크기(각 노브 범위 대비 비율). */
   stepScale: number
   seed: number
+  /** 시뮬 플레이어 정책 풀. 여러 개면 모두에게 두루 좋은(robust) 성향을 찾는다. 기본=교사. */
+  playerPolicies: EnaPolicy[]
 }
 
 export const DEFAULT_FIT_CONFIG: FitConfig = {
@@ -52,6 +58,7 @@ export const DEFAULT_FIT_CONFIG: FitConfig = {
   lambda: 6,
   stepScale: 0.18,
   seed: 1,
+  playerPolicies: [TEACHER_PLAYER],
 }
 
 export interface FitResult {
@@ -62,14 +69,20 @@ export interface FitResult {
   fittedFitness: number
 }
 
-/** 시뮬 플레이어(교사 정책)가 이 성향의 동료와 함께 얼마나 깊이 가는지 — 생존+보스 깊이 점수. */
-export function survivalScore(disp: EnaDisposition, seeds: number[]): number {
+/** 시뮬 플레이어가 이 성향의 동료와 함께 얼마나 깊이 가는지 — 생존+보스 깊이 점수(여러 정책 평균). */
+export function survivalScore(
+  disp: EnaDisposition,
+  seeds: number[],
+  policies: EnaPolicy[] = [TEACHER_PLAYER]
+): number {
   let total = 0
-  for (const seed of seeds) {
-    const r = new EnaTrainingSimulation(seed, disp).runEpisode()
-    total += r.survivedTurns + r.bossesCleared * 15 + (r.won ? 40 : 0)
+  for (const policy of policies) {
+    for (const seed of seeds) {
+      const r = new EnaTrainingSimulation(seed, disp).runEpisode(policy)
+      total += r.survivedTurns + r.bossesCleared * 15 + (r.won ? 40 : 0)
+    }
   }
-  return total / seeds.length
+  return total / (seeds.length * policies.length)
 }
 
 /** 과보호 비용 — 게임플레이 도움 노브가 얼마나 관대한지의 정규화 합(0=인색, 큼=과보호). */
@@ -88,8 +101,13 @@ export function helpCost(disp: EnaDisposition): number {
 }
 
 /** 정규화 목적함수: 생존 점수 − λ·과보호 비용. 효율적 도움 배분을 찾게 한다. */
-export function dispositionFitness(disp: EnaDisposition, seeds: number[], lambda: number): number {
-  return survivalScore(disp, seeds) - lambda * helpCost(disp)
+export function dispositionFitness(
+  disp: EnaDisposition,
+  seeds: number[],
+  lambda: number,
+  policies: EnaPolicy[] = [TEACHER_PLAYER]
+): number {
+  return survivalScore(disp, seeds, policies) - lambda * helpCost(disp)
 }
 
 /** 게임플레이 노브 일부에 가우시안 섭동을 가한 후보 성향을 만든다(취향 노브는 불변). */
@@ -113,15 +131,16 @@ export class EnaDispositionFitter {
     const cfg = { ...DEFAULT_FIT_CONFIG, ...config }
     const rng = new EnaRandom(cfg.seed)
     const seeds = Array.from({ length: cfg.evalSeeds }, (_, i) => 3000 + i * 7)
+    const policies = cfg.playerPolicies
 
     let best = clampDisposition(defaultDisposition())
-    const baselineScore = survivalScore(best, seeds)
+    const baselineScore = survivalScore(best, seeds, policies)
     let bestFit = baselineScore - cfg.lambda * helpCost(best)
     const baselineFitness = bestFit
 
     for (let i = 0; i < cfg.iterations; i++) {
       const cand = perturb(best, rng, cfg.stepScale)
-      const fit = dispositionFitness(cand, seeds, cfg.lambda)
+      const fit = dispositionFitness(cand, seeds, cfg.lambda, policies)
       if (fit > bestFit) {
         best = cand
         bestFit = fit
@@ -132,9 +151,15 @@ export class EnaDispositionFitter {
       disposition: best,
       baselineScore,
       baselineFitness,
-      fittedScore: survivalScore(best, seeds),
+      fittedScore: survivalScore(best, seeds, policies),
       fittedFitness: bestFit,
     }
+  }
+
+  /** 정책망을 학습해 시뮬 플레이어(그리디 추론) 하나를 만든다. 피팅 루프에 '학습된 플레이어'를 넣는다. */
+  static makeLearnedPlayer(trainConfig: Partial<EnaTrainConfig> = {}): EnaPolicy {
+    const { network } = EnaTrainer.train(trainConfig)
+    return policyFromNetwork(network, true)
   }
 }
 
