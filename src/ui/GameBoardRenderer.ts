@@ -3876,7 +3876,7 @@ export class GameBoardRenderer {
 
   /** 함정 무시(도적/함정의 대가) 판정 성공 시 함정 카드를 잠깐 흔들고
    *  "무시" 글자를 플레이어 카드 위에 띄워 피해가 없음을 시각적으로 확인시킨다. */
-  async playTrapIgnoreResist(trapCardId: string): Promise<void> {
+  async playTrapIgnoreResist(trapCardId: string, avoidedDamage?: number): Promise<void> {
     const trapTile = this.findCardElement(trapCardId)
     const playerCard = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
     if (trapTile) {
@@ -3884,10 +3884,31 @@ export class GameBoardRenderer {
     }
     if (playerCard) {
       const rect = playerCard.getBoundingClientRect()
-      void this.spawnFieldFloatText(rect.left + rect.width / 2, rect.top + rect.height * 0.3, '무시')
+      // 회피: 방패 아이콘 + 막아낸 수치(없으면 '회피'만). 재화 아이콘을 그대로 쓴다.
+      const label = avoidedDamage && avoidedDamage > 0 ? `회피 ${avoidedDamage}` : '회피'
+      void this.spawnFieldFloatHtml(
+        rect.left + rect.width / 2,
+        rect.top + rect.height * 0.3,
+        `${shieldIcon()}<span>${label}</span>`,
+        'damage-float--evade'
+      )
     }
     await new Promise((r) => window.setTimeout(r, 460))
     if (trapTile) trapTile.classList.remove('is-trap-ignored')
+  }
+
+  /** 사소한 반격(품격있는 대처 등): 검 아이콘 + 반격 수치를 플레이어 카드 위에 띄운다. */
+  spawnRetaliationFloat(amount: number): void {
+    if (amount <= 0) return
+    const playerCard = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
+    if (!playerCard) return
+    const rect = playerCard.getBoundingClientRect()
+    void this.spawnFieldFloatHtml(
+      rect.left + rect.width / 2,
+      rect.top + rect.height * 0.18,
+      `${swordIcon()}<span>반격 ${amount}</span>`,
+      'damage-float--retaliate'
+    )
   }
 
   /** 보스가 굳음(밀랍 freeze) 상태일 때 가격을 시도하면 데미지 대신 "저항" 글자를
@@ -3911,6 +3932,22 @@ export class GameBoardRenderer {
     el.style.left = `${x}px`
     el.style.top = `${y}px`
     document.body.appendChild(el)
+    return this.runFieldFloatAnim(el)
+  }
+
+  /** 아이콘이 들어가는 부유 라벨(반격/회피 등 사소한 행동 수치). 재화 아이콘 그대로 사용한다. */
+  spawnFieldFloatHtml(x: number, y: number, html: string, extraClass = ''): Promise<void> {
+    const el = document.createElement('div')
+    el.className = `damage-float damage-float--text damage-float--icon ${extraClass}`.trim()
+    el.innerHTML = html
+    el.style.left = `${x}px`
+    el.style.top = `${y}px`
+    document.body.appendChild(el)
+    return this.runFieldFloatAnim(el)
+  }
+
+  /** 부유 라벨 공통 상승·페이드 애니메이션. */
+  private runFieldFloatAnim(el: HTMLElement): Promise<void> {
     const anim = el.animate(
       [
         { transform: 'translate(-50%, -20%) scale(0.78)', opacity: 0, filter: 'brightness(1.2)' },

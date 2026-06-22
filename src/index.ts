@@ -1032,6 +1032,8 @@ async function applyDignifiedRetaliation(hits: EnemyHit[]): Promise<void> {
   if (damaged.length === 0) return
   const dmgForLog = Math.max(1, Math.floor(gameState.character.damage * 0.3) + 1)
   recordRelicActivation('graceful-response', `반격 피해 ${dmgForLog} (${damaged.length}체)`)
+  // 사소한 반격도 검 아이콘 + 수치로 즉시 보여 준다.
+  boardRenderer.spawnRetaliationFloat(dmgForLog)
   await boardRenderer.animateDamageNumbersById(damaged)
   if (killedIds.length > 0) {
     await boardRenderer.animateCardConsumeByIds(
@@ -4584,9 +4586,10 @@ async function handleCardAction(e: Event): Promise<void> {
     // 소중한 머리: 함정 피해로 체력 절반 이하 시 전체 회복.
     await applyPreciousHeadCheck()
   }
-  // 함정 무시: 도적/함정의 대가(유물) 또는 에나의 클러치 → "무시" 텍스트 + 트랩 지터.
+  // 함정 무시: 도적/함정의 대가(유물) 또는 에나의 클러치 → 방패 아이콘 + 막아낸 수치 + 트랩 지터.
   if (result.trapIgnored || companionTrapIgnored) {
-    sameBeatAnimations.push(boardRenderer.playTrapIgnoreResist(card.id))
+    const avoided = card.type === CardType.TRAP ? card.effectiveTrapDamage() + gameState.character.trapDamageBonus : 0
+    sameBeatAnimations.push(boardRenderer.playTrapIgnoreResist(card.id, avoided))
     if (result.trapIgnored && gameState.character.hasRelic('trap-master')) {
       recordRelicActivation('trap-master', '함정 무시')
     }

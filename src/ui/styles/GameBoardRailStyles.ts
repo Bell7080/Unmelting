@@ -1437,6 +1437,18 @@ export const GAME_BOARD_RAIL_STYLES = `
   color: #e4eaf4;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.75), 0 0 12px rgba(228, 234, 244, 0.55);
 }
+/* 사소한 행동(반격/회피) 부유 라벨 — 재화 아이콘 + 수치를 한 줄로. */
+.damage-float--icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 900;
+}
+.damage-float--icon .icon { width: 16px; height: 16px; }
+.damage-float--evade { color: #d2e2f6; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.78), 0 0 12px rgba(178, 208, 255, 0.6); }
+.damage-float--evade .icon { color: #d2e2f6; filter: drop-shadow(0 0 5px rgba(178, 208, 255, 0.6)); }
+.damage-float--retaliate { color: #ffd9a0; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8), 0 0 12px rgba(255, 180, 110, 0.62); }
+.damage-float--retaliate .icon { color: #ffd9a0; filter: drop-shadow(0 0 5px rgba(255, 180, 110, 0.62)); }
 
 /* 보스 보상 칸 획득: 일반 보물칸 처치(is-consuming)의 확대 페이드 위에 가벼운
    회전·shake·blur를 한 비트 더 얹어 묵직한 획득감을 준다. */
