@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { CompanionSystem } from './CompanionSystem'
-import { defaultDisposition, cloneDisposition, loadDisposition, saveDisposition } from './EnaDisposition'
+import { defaultDisposition, cloneDisposition, loadDisposition, saveDisposition, BASE_DISPOSITION } from './EnaDisposition'
 
 describe('에나 온라인 per-player 적응', () => {
   it('사망으로 끝나면 다음 런에 더 적극적으로 돕도록 방어/지원 성향이 오른다', () => {
@@ -65,8 +65,10 @@ describe('성향 영구 저장(per-player)', () => {
     expect(loaded.predictBaseChance).toBe(0.7)
   })
 
-  it('localStorage가 없는 환경에서도 안전하게 기본 성향을 돌려준다', () => {
-    expect(loadDisposition().awakenChance).toBe(0.12)
+  it('localStorage가 없으면 학습된 기본 토대(BASE_DISPOSITION)의 복제를 돌려준다', () => {
+    const loaded = loadDisposition()
+    expect(loaded.awakenChance).toBe(BASE_DISPOSITION.awakenChance)
+    expect(loaded).not.toBe(BASE_DISPOSITION) // 복제라 라이브가 원본을 변형하지 않는다
     saveDisposition(defaultDisposition()) // throw 없이 무시
   })
 })

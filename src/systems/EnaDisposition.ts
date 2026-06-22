@@ -178,21 +178,66 @@ export function dispositionFromJSON(raw: unknown): EnaDisposition {
   return clampDisposition(merged)
 }
 
+// ── 학습된 기본 토대(시뮬 산출) ───────────────────────────────────────────
+// EnaDispositionFitter.fit({ seed:1, lambda:6, iterations:120, evalSeeds:60 })가 동료 개입을 켠
+// 시뮬에서 찾은 게임플레이 도움 노브의 효율적 배분(생존점수 40→94). 시뮬이 실게임보다 어려워
+// (유물/직업 미모델) 그대로 쓰면 과보호가 되므로, 검증된 기본값으로 0.5 블렌드해 sim-to-real
+// 갭을 보정한다. 시뮬이 실제로 굴린 노브만 반영(미모델 dodge/trap 깜짝지원·취향 노브는 기본 유지).
+// 이 값은 학습 산출물 스냅샷(동봉 가중치)이며, 라이브 토대로 쓰이고 그 위에서 per-player가 개인화한다.
+const SIM_FITTED = {
+  clutchHpThreshold: 0.569,
+  clutchHealVsShield: 0.453,
+  clutchHealRatio: 0.421,
+  clutchShieldRatio: 0.417,
+  clutchStrength: 1.265,
+  willGainPerDamage: 67.17,
+  willGainFlatBonus: 15,
+  awakenChance: 0.224,
+  predictBaseChance: 0.198,
+  predictCooldown: 20,
+  minorClutchCrit: 0.171,
+  minorClutchTreasure: 0.02,
+} as const
+
+const SIM_TO_REAL_BLEND = 0.5
+
+/** 학습된 기본 토대 성향. 기본값→시뮬 산출값으로 0.5 블렌드(시뮬 미반영 노브는 기본 유지) 후 클램프. */
+export const BASE_DISPOSITION: EnaDisposition = buildBaseDisposition()
+
+function buildBaseDisposition(): EnaDisposition {
+  const d = defaultDisposition()
+  const a = SIM_TO_REAL_BLEND
+  const lerp = (from: number, to: number) => from + (to - from) * a
+  d.clutchHpThreshold = lerp(d.clutchHpThreshold, SIM_FITTED.clutchHpThreshold)
+  d.clutchHealVsShield = lerp(d.clutchHealVsShield, SIM_FITTED.clutchHealVsShield)
+  d.clutchHealRatio = lerp(d.clutchHealRatio, SIM_FITTED.clutchHealRatio)
+  d.clutchShieldRatio = lerp(d.clutchShieldRatio, SIM_FITTED.clutchShieldRatio)
+  d.clutchStrength = lerp(d.clutchStrength, SIM_FITTED.clutchStrength)
+  d.willGainPerDamage = lerp(d.willGainPerDamage, SIM_FITTED.willGainPerDamage)
+  d.willGainFlatBonus = lerp(d.willGainFlatBonus, SIM_FITTED.willGainFlatBonus)
+  d.awakenChance = lerp(d.awakenChance, SIM_FITTED.awakenChance)
+  d.predictBaseChance = lerp(d.predictBaseChance, SIM_FITTED.predictBaseChance)
+  d.predictCooldown = lerp(d.predictCooldown, SIM_FITTED.predictCooldown)
+  d.minorClutchChance.crit = lerp(d.minorClutchChance.crit, SIM_FITTED.minorClutchCrit)
+  d.minorClutchChance.treasure = lerp(d.minorClutchChance.treasure, SIM_FITTED.minorClutchTreasure)
+  return clampDisposition(d)
+}
+
 // ── 영구 저장(per-player) ─────────────────────────────────────────────────
 // 플레이어별로 적응된 성향을 세션 넘어 유지한다. 브라우저 외 환경(테스트/SSR)에서는
 // localStorage가 없을 수 있어 안전하게 무시한다. (import 주위가 아니라 저장 접근만 보호)
 
 const STORAGE_KEY = 'ena-disposition-v1'
 
-/** 저장된 per-player 성향을 불러온다. 없거나 손상됐으면 기본 성향. */
+/** 저장된 per-player 성향을 불러온다. 없으면 학습된 기본 토대(BASE_DISPOSITION)에서 시작한다. */
 export function loadDisposition(key: string = STORAGE_KEY): EnaDisposition {
-  if (typeof localStorage === 'undefined') return defaultDisposition()
+  if (typeof localStorage === 'undefined') return cloneDisposition(BASE_DISPOSITION)
   const raw = localStorage.getItem(key)
-  if (!raw) return defaultDisposition()
+  if (!raw) return cloneDisposition(BASE_DISPOSITION)
   try {
     return dispositionFromJSON(JSON.parse(raw))
   } catch {
-    return defaultDisposition()
+    return cloneDisposition(BASE_DISPOSITION)
   }
 }
 

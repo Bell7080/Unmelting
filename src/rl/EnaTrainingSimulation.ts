@@ -17,6 +17,7 @@ import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { EmberSystem, type EmberTier } from '@systems/EmberSystem'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
 import { buildEnaKnowledgeBase, type EnaKnowledgeBase, type EnaHandCardTactic } from './EnaKnowledgeAdapter'
+import type { EnaDisposition } from '@systems/EnaDisposition'
 
 /** 시뮬레이터의 현재 국면. 전투 외 의사결정도 같은 정책망이 고르게 한다. */
 export type EnaSimPhase = 'field' | 'shop' | 'event' | 'boss' | 'done'
@@ -247,9 +248,17 @@ export class EnaTrainingSimulation {
   private shieldRegen = 0
   private done = false
 
-  constructor(seed: number = 1) {
+  // 동료(에나) 개입 — 성향(disposition)이 주어졌을 때만 활성. 미지정 시 순수 플레이어 시뮬(기존 동작 유지).
+  private readonly companion?: EnaDisposition
+  /** 클러치 예산('의지'). 피해로 차고, 위기에 클러치를 터뜨리면 0으로 비운다. */
+  private will = 0
+  /** 각성(최후의 의지)은 런당 1회. */
+  private companionAwakened = false
+
+  constructor(seed: number = 1, disposition?: EnaDisposition) {
     this.rng = new EnaRandom(seed)
     this.knowledge = buildEnaKnowledgeBase()
+    this.companion = disposition
     this.reset()
   }
 
@@ -278,6 +287,8 @@ export class EnaTrainingSimulation {
     this.bossesCleared = 0
     this.eventRisk = 0
     this.shieldRegen = 0
+    this.will = 0
+    this.companionAwakened = false
     this.done = false
     // 실게임은 직업/유물/레시피로 초반 화력을 보강한다. 그 성장원을 개별 모델링하지 않는 대신
     // 시작 공격력 2로 그 보정을 압축한다(거치지 않은 power source의 prior). 시작 손패는 공격/제어/회복 1장씩.
@@ -679,6 +690,8 @@ export class EnaTrainingSimulation {
       // 처치 시 불빛/경제는 후반일수록 커진다(선형 보정).
       this.coins += Math.max(1, Math.round(card.value * lightMultiplier(this.turn)))
       if (this.rng.next() < 0.3) this.drawCard()
+      // 동료 깜짝 지원(치명타): 가끔 보너스 손패 1장.
+      if (this.companion && this.rng.next() < this.companion.minorClutchChance.crit) this.drawCard()
       return source === 'ember' ? 3.2 : 2.3
     }
     // 적중(미처치)도 콤보 게이지(촛불)를 조금 채운다 — 실게임처럼 공격력 성장의 동력을 만든다.
@@ -725,6 +738,16 @@ export class EnaTrainingSimulation {
     const blocked = Math.min(this.shield, amount)
     this.shield -= blocked
     this.hp -= amount - blocked
+    // 동료: 역경(피해)에 비례해 '의지'를 쌓는다(클러치 예산).
+    if (this.companion && this.maxHp > 0) {
+      this.will = Math.min(100, this.will + Math.round((amount / this.maxHp) * this.companion.willGainPerDamage) + this.companion.willGainFlatBonus)
+      // 각성: 진짜 죽음 직전에 런당 1회, 드물게 — 풀 회복 + 공격력 +1로 버틴다.
+      if (this.hp <= 0 && !this.companionAwakened && this.rng.next() < this.companion.awakenChance) {
+        this.companionAwakened = true
+        this.hp = this.maxHp
+        this.attack += 1
+      }
+    }
   }
 
   private spendCoins(amount: number): void {
@@ -743,6 +766,8 @@ export class EnaTrainingSimulation {
     this.coins += Math.max(1, Math.round(card.value * lightMultiplier(this.turn)))
     if (this.rng.next() < 0.35) this.drawCard()
     if (this.rng.next() < 0.2) this.shield += 3
+    // 동료 깜짝 지원(보물): 가끔 보너스 손패 1장.
+    if (this.companion && this.rng.next() < this.companion.minorClutchChance.treasure) this.drawCard()
   }
 
   private applyFlower(card: EnaSimCard): void {
@@ -792,6 +817,27 @@ export class EnaTrainingSimulation {
     if (slot >= 0 && slot < this.hand.length) this.hand.splice(slot, 1)
   }
 
+  /** 동료(에나) 개입: 위기 클러치(회복/방패/불씨) + 거미줄 예측 대비(청소 건네기). 성향이 있을 때만. */
+  private companionInterventions(): void {
+    const d = this.companion
+    if (!d || this.done) return
+    if (this.will >= 100 && this.hp > 0 && this.hp / this.maxHp <= d.clutchHpThreshold) {
+      this.will = 0
+      if (this.rng.next() < d.clutchHealVsShield) {
+        this.hp = Math.min(this.maxHp, this.hp + clampInt(this.maxHp * d.clutchHealRatio * d.clutchStrength, 4, 12))
+      } else {
+        this.shield += clampInt(this.maxHp * d.clutchShieldRatio * d.clutchStrength, 3, 10)
+      }
+    } else if (this.will >= 100 && this.ember <= 3) {
+      this.will = 0
+      this.ember = Math.min(this.emberMax, this.ember + 1)
+    }
+    // 1칸 거미줄이 둘 이상 모이면 합쳐지기 전에 청소를 건넨다(이미 청소/키틴 보유면 생략).
+    if (this.webThreatCount() >= 2 && !this.hand.some((s) => s.id === 'sweep' || s.id === 'chitin')) {
+      if (this.rng.next() < Math.min(0.95, d.predictBaseChance)) this.drawCard('sweep')
+    }
+  }
+
   // ── 턴 진행 ──────────────────────────────────────────────────────────────
 
   private advanceFieldTurn(): void {
@@ -799,6 +845,8 @@ export class EnaTrainingSimulation {
     if (this.shieldRegen > 0) this.shield += this.shieldRegen
     // 1) 전방에 남은 위험이 턴 종료 피해를 준다(낮은 티어는 반격감 강화).
     this.resolveFrontHazards()
+    // 1.5) 동료 개입 — 이번 턴 피해로 쌓인 의지로 위기 클러치, 거미줄 예측 대비를 시도한다.
+    this.companionInterventions()
     // 2) 포자 전염 / 꽃 성장·시듦.
     this.spreadSpores()
     this.growAndWiltFlowers()
@@ -1412,6 +1460,10 @@ function bossPolicy(snapshot: EnaGameSnapshot): number {
 
 function actionIndexOf(kind: EnaSimActionKind, arg: number): number {
   return ENA_ACTION_SPACE.findIndex((action) => action.kind === kind && action.arg === arg)
+}
+
+function clampInt(value: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, Math.round(value)))
 }
 
 function emberDamage(attack: number, merged: boolean): number {
