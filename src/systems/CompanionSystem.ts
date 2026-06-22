@@ -21,7 +21,12 @@ import {
   CLUTCH_LINES,
   MINOR_CLUTCH_LINES,
   AWAKEN_LINES,
+  ENEMY_LINES,
+  RELIC_LINES,
+  RELIC_RARITY_LINES,
+  GENERIC_BUY_LINES,
 } from '@data/CompanionLines'
+import type { CardRarity } from '@data/ShopPools'
 import type {
   Line,
   LineTemplate,
@@ -107,6 +112,14 @@ function randOf(arr: readonly string[]): string {
 
 function clampInt(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, Math.round(v)))
+}
+
+/** 적 이름에서 핵심 낱말('양초 거미'→'거미')을 찾아 전용 반응 풀을 돌려준다(없으면 null). */
+function matchEnemyKeyword(name: string): { key: string; lines: Line[] } | null {
+  for (const key of Object.keys(ENEMY_LINES)) {
+    if (name.includes(key)) return { key, lines: ENEMY_LINES[key] }
+  }
+  return null
 }
 
 /** 한 줄(문자열/템플릿)을 긴급도에 맞춰 렌더한다: 변조/슬롯 치환 → 조사 보정. */
@@ -229,14 +242,25 @@ export class CompanionSystem {
     id: SituationId,
     turn: number,
     intensityOverride?: Intensity,
-    important = false
+    important = false,
+    name?: string
   ): string | null {
     if (!important && turn - this.lastWorldBarkTurn < this.minTurnGap()) return null
     let chance = Math.min(0.95, SITUATION[id].chance * this.situationWeight[id])
     if (important) chance = Math.max(chance, 0.7)
     if (Math.random() >= chance) return null
     this.lastWorldBarkTurn = turn
-    return this.pickFrom(id, POOLS[id], intensityOverride ?? SITUATION[id].intensity)
+    const intensity = intensityOverride ?? SITUATION[id].intensity
+    // 적 이름이 주어지면 핵심 키워드('거미' 등) 전용 반응을 우선한다(수식어는 무시).
+    const kw = name ? matchEnemyKeyword(name) : null
+    if (kw) return this.pickFrom(`enemy:${kw.key}`, kw.lines, intensity)
+    return this.pickFrom(id, POOLS[id], intensity)
+  }
+
+  /** 상점 유물 구매 감상평. id 전용 → 등급별 → 공용 폴백. 구매는 드무니 늘 한마디 한다. */
+  onBuyRelic(id: string, rarity: CardRarity): string {
+    const lines = RELIC_LINES[id] ?? RELIC_RARITY_LINES[rarity] ?? GENERIC_BUY_LINES
+    return this.pickFrom(`buy:${id in RELIC_LINES ? id : rarity}`, lines, 'normal')
   }
 
   /** 플레이어가 안 읽고 빨리 넘긴 상황 → 다음부터 덜 말한다(가짜 RL 부정 보상). */

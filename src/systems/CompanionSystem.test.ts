@@ -100,6 +100,29 @@ describe('CompanionSystem', () => {
     expect(again).toBe(true)
   })
 
+  it("적 이름의 수식어를 무시하고 핵심 키워드로 반응한다('양초 거미'→거미)", () => {
+    const c = new CompanionSystem()
+    let line: string | null = null
+    // important=true로 게이트를 우회해 확률 통과를 빠르게 만든다.
+    for (let turn = 0; turn < 300 && line === null; turn++) {
+      line = c.reactSituation('kill', turn, 'normal', true, '양초 거미')
+    }
+    expect(line).not.toBeNull()
+    expect(line!).toContain('거미')
+  })
+
+  it('유물 구매 감상평: 사치품은 전용, 미등록은 등급 폴백으로 깨끗하게 나온다', () => {
+    const c = new CompanionSystem()
+    const luxury = c.onBuyRelic('luxury', 'common')
+    expect(luxury.length).toBeGreaterThan(0)
+    expect(luxury).not.toMatch(/[{}[\]]/)
+    const ring = c.onBuyRelic('annabella-ring', 'rare')
+    expect(ring).toContain('반지')
+    const fallback = c.onBuyRelic('unknown-relic', 'legendary')
+    expect(fallback.length).toBeGreaterThan(0)
+    expect(fallback).not.toMatch(/[{}[\]]/)
+  })
+
   it('소소한 클러치 대사가 깨끗하게 나온다', () => {
     const c = new CompanionSystem()
     for (const k of ['crit', 'dodge', 'trap', 'treasure'] as const) {
