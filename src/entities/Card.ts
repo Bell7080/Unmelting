@@ -279,9 +279,9 @@ export class Card {
     this.health = Math.max(1, newMaxHealth - existingDamage)
   }
 
-  /** Apply the wax '굳음' status, keeping the longest remaining duration. */
+  /** Apply the wax '굳음' status. 여러 번 쓰면 남은 턴에 누적된다(상한 9턴). */
   freeze(turns: number): void {
-    this.frozenTurns = Math.max(this.frozenTurns, Math.max(0, turns))
+    this.frozenTurns = Math.min(9, Math.max(0, this.frozenTurns) + Math.max(0, turns))
   }
 
   /** Tick one turn of wax '굳음'. Returns true when the status remains active. */

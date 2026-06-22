@@ -23,6 +23,7 @@ import type { HandCard } from '@entities/HandCard'
 import { getRelicDef, relicDrawWeight, RELIC_IDS, type RelicId } from '@data/Relics'
 import { sampleWithoutReplacement } from '@core/Sampling'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
+import { EmberSystem } from '@systems/EmberSystem'
 
 type WaxKnightCardEffect = 'shield' | 'heal' | 'strike'
 type BossPage = 1 | 2 | 3
@@ -333,14 +334,9 @@ export class BossEventController {
     if (!this.eventState || this.eventState.card !== card) return
     const state = this.eventState
     const character = this.gs.character
-    const shouldTickFreezeAfterBeat = card.isFrozen()
-
-    if (card.isFrozen()) {
-      await this.br.playBossFreezeResist(card.id)
-      this.inject.recordNotice('보스가 굳어 있어 공격이 통하지 않는다', 'info')
-      if (shouldTickFreezeAfterBeat) card.tickFrozen()
-      return
-    }
+    // 보스가 굳어 있으면 플레이어 공격은 정상으로 들어가되, 이번 보스 반격/특수행동은 건너뛴다.
+    // (즉사만 면역, 굳음은 적용 — 굳음은 이 beat 끝에 1턴 소모한다.)
+    const bossFrozen = card.isFrozen()
 
     // 직접 타격은 턴을 갱신하는 행위이므로 체인을 끊는다(카드 사용과 달리).
     this.inject.clearChainTimeline()
@@ -385,7 +381,11 @@ export class BossEventController {
       return
     }
 
-    if (turnMod === 0) {
+    if (turnMod === 0 && bossFrozen) {
+      // 굳음 중 — 보스는 반격도 특수행동(소환/소각/페이지)도 하지 못한다.
+      this.inject.recordNotice('보스가 굳어 반격하지 못한다', 'info')
+      this.inject.render()
+    } else if (turnMod === 0) {
       if (state.def.specialEnemyKind === 'waxWitch') {
         // 100F 페이지 능력은 해금 뒤 사라지지 않는다.
         if (state.witchPage === 1) {
@@ -459,6 +459,8 @@ export class BossEventController {
       }
     }
 
+    // 보스 턴이 한 번 지났으니 굳음을 1턴 소모한다(필드 적과 동일한 감각).
+    if (bossFrozen) card.tickFrozen()
     // 반격이 끝났으면 카운터를 다음 주기 초기값으로 복구한다.
     if (turnMod === 0) {
       this.br.setBossAttackCountdown(state.def.attackInterval)
@@ -508,6 +510,14 @@ export class BossEventController {
       // HP 10 손실 보상 손패 지급
       await this.consumeHandGiftThresholds(state.card.id)
       if (state.card.getHealth() <= 0) { await this.handleDefeated(); return }
+
+      // 굳어 있으면 이 가상 턴의 보스 반격/특수행동을 건너뛰고 굳음을 1턴 소모한다.
+      if (state.card.isFrozen()) {
+        if (lvTurnMod === 0) this.inject.recordNotice('보스가 굳어 반격하지 못한다', 'info')
+        state.card.tickFrozen()
+        this.inject.render()
+        continue
+      }
 
       if (lvTurnMod === 0) {
         if (state.def.specialEnemyKind === 'waxArmy') {
@@ -1119,6 +1129,8 @@ export class BossEventController {
     // 이 적들은 컨트롤러가 직접 처리하므로 regroup/리필/턴 흐름을 타지 않는다.
     // 90F 보스답게 60~90층대 적 풀(인덱스 12~17: 풍뎅이/전갈/담비/오소리/나무늘보/자칼)에서 소환한다.
     const pool = ENEMY_DEFINITIONS.slice(12, 18)
+    // 불씨 티어 공격력 보너스를 소환 적에게도 적용한다(필드 일반 적과 동일 — 불씨 부족 시 더 위협적).
+    const emberAtk = EmberSystem.getEnemyStatBonus(this.tm.getEmberTier()).atk
     for (let i = 0; i < 3; i++) {
       const enemyDef = pool[Math.floor(Math.random() * pool.length)]
       const enemy = new Card(
@@ -1130,6 +1142,7 @@ export class BossEventController {
         enemyDef.attack ?? 1,
         { enemySpriteId: enemyDef.enemySpriteId, enemyPower: enemyDef.enemyPower },
       )
+      enemy.emberAtkBonus = emberAtk
       this.gs.lanes[i].setCardAtDistance(0, enemy)
       state.summonedEnemyIds.add(enemy.id)
     }
@@ -1161,6 +1174,7 @@ export class BossEventController {
 
     // 최종 보스 소환수는 90F 후기 적 풀을 기반으로 HP+10/ATK+3 버프를 받은 독립 개체다.
     const pool = ENEMY_DEFINITIONS.slice(12, 18)
+    const emberAtk = EmberSystem.getEnemyStatBonus(this.tm.getEmberTier()).atk
     for (let i = 0; i < 3; i++) {
       const enemyDef = pool[Math.floor(Math.random() * pool.length)]
       const enemy = new Card(
@@ -1172,6 +1186,7 @@ export class BossEventController {
         (enemyDef.attack ?? 1) + 3,
         { enemySpriteId: enemyDef.enemySpriteId, enemyPower: (enemyDef.enemyPower ?? 0) + 100 },
       )
+      enemy.emberAtkBonus = emberAtk
       this.gs.lanes[i].setCardAtDistance(0, enemy)
       state.summonedEnemyIds.add(enemy.id)
     }

@@ -1254,16 +1254,14 @@ export class HandSystem {
     return false
   }
 
-  /** Apply wax hardening to a selected front card. */
+  /** Apply wax hardening to a selected front card. 보스도 굳힐 수 있다(즉사는 면역이나 굳음은 적용). */
   private static freezeTarget(target: HandTarget | undefined, turns: number): string {
     if (!target) return '굳힐 대상 없음'
-    // 보스는 디버프(굳음) 면역이므로 손패 밀랍으로는 상태를 고정하지 않는다.
-    if (target.card.type === CardType.BOSS) return `${target.card.name} 저항`
     target.card.freeze(turns)
     return `${target.card.name} ${turns}턴 굳음`
   }
 
-  /** Apply wax hardening to every front card with a turn timer. */
+  /** Apply wax hardening to every front card with a turn timer(보스 포함). */
   private static freezeFrontCards(gs: GameState, turns: number): string {
     const seen = new Set<Card>()
     let count = 0
@@ -1271,8 +1269,6 @@ export class HandSystem {
       const card = lane.getCardAtDistance(0)
       if (!card || seen.has(card)) continue
       if (!HandSystem.isTurnTimerCard(card)) continue
-      // 보스는 즉사/디버프 면역 기획: 전방 전체 굳음에도 포함하지 않는다.
-      if (card.type === CardType.BOSS) continue
       seen.add(card)
       card.freeze(turns)
       count++

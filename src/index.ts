@@ -3467,9 +3467,7 @@ async function applyHandSingle(
     companion.recordPredictionUsed()
     pendingPrediction = null
   }
-  // 보스는 디버프 면역 규칙을 따른다. 밀랍 계열 사용 시 보스에게 굳음 스택이 남아있다면
-  // 즉시 저항 연출을 띄우고 해제해, "저항 후 즉시 무효" 감각을 일관되게 유지한다.
-  await resolveBossDebuffImmunityOnWaxUse(usedDef?.id ?? null)
+  // 보스도 밀랍 굳음을 적용받는다(즉사만 면역). 굳음 중에는 보스가 반격/특수행동을 못 한다.
   // Reveal the used hand card near screen center, then dissolve it with its
   // category burst. This makes the hand action read like a card being played
   // instead of a slot-local pop.
@@ -3899,19 +3897,6 @@ async function applyHandSingle(
   setTimeout(() => {
     inputLocked = false
   }, 320)
-}
-
-/** Boss debuff immunity: wax attempts are resisted immediately, and legacy
- *  frozen stacks (if any) are cleared on that same beat so no carry-over freeze remains. */
-async function resolveBossDebuffImmunityOnWaxUse(usedDefId: string | null): Promise<void> {
-  if (!bossController.eventState) return
-  if (usedDefId !== 'wax') return
-  const boss = bossController.eventState.card
-  const hadFrozen = boss.isFrozen()
-  // 면역 대상은 스택 수와 무관하게 즉시 정리한다.
-  if (hadFrozen) boss.clearFrozen()
-  await boardRenderer.playBossFreezeResist(boss.id)
-  recordNotice('보스가 디버프를 저항하며 굳음을 즉시 떨쳐냈다', 'info')
 }
 
 /** 레바테인 전용: 적 공격/폭탄/꽃/보물 처리를 1회 실행하되 실제 턴 카운터를 올리지 않는다. */

@@ -5,6 +5,27 @@ import { Card, CardType } from './Card'
  * Regression tests for merged enemies, which now sum member strength plus
  * lane-width bonuses while preserving damage already dealt before later merges.
  */
+describe('Card wax 굳음 stacking', () => {
+  it('밀랍을 여러 번 쓰면 굳음 턴이 누적된다(상한 9)', () => {
+    const enemy = new Card('e', CardType.ENEMY, '양초 거미', 'spider', 3, 1)
+    enemy.freeze(2)
+    expect(enemy.frozenTurns).toBe(2)
+    enemy.freeze(3)
+    expect(enemy.frozenTurns).toBe(5) // 누적(기존 max 동작이면 3에서 멈췄을 것)
+    enemy.freeze(9)
+    expect(enemy.frozenTurns).toBe(9) // 상한 9
+  })
+
+  it('tickFrozen은 1턴씩 줄이고 0에서 비활성', () => {
+    const enemy = new Card('e', CardType.ENEMY, '양초 거미', 'spider', 3, 1)
+    enemy.freeze(2)
+    expect(enemy.tickFrozen()).toBe(true)
+    expect(enemy.frozenTurns).toBe(1)
+    expect(enemy.tickFrozen()).toBe(false)
+    expect(enemy.isFrozen()).toBe(false)
+  })
+})
+
 describe('Card enemy grouping health', () => {
   it('turns two normal enemies into a member-scaled 2-lane group', () => {
     const left = new Card('left', CardType.ENEMY, '양초 생쥐', 'Small candle mouse', 2, 1)

@@ -1203,6 +1203,40 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   pointer-events: none;
   animation: wax-harden-shimmer 1.6s ease-in-out infinite alternate;
 }
+/* 굳음 표기 — 칸 가운데에 큰 글자로(좌상단 딱지 혼잡 회피). 밀랍/얼음 톤 + 미세 일렁임. */
+.frozen-center-badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 12px;
+  border-radius: 12px;
+  color: #20283a;
+  background: linear-gradient(180deg, rgba(238, 244, 252, 0.94), rgba(206, 220, 238, 0.9));
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  font-size: clamp(15px, 2.2vh, 19px);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  line-height: 1.05;
+  text-align: center;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.45),
+    0 0 14px rgba(216, 232, 248, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+  animation: wax-harden-shimmer 1.6s ease-in-out infinite alternate;
+}
+.frozen-center-turns {
+  font-size: clamp(11px, 1.5vh, 13px);
+  font-weight: 800;
+  color: #3a4a66;
+}
 .frozen-badge {
   position: absolute;
   top: 6px;

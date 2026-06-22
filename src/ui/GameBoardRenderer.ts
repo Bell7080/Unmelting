@@ -1044,8 +1044,9 @@ export class GameBoardRenderer {
     const firstStrikeBadge = this.firstStrikeActive && card.type === CardType.ENEMY
       ? `<div class="first-strike-card-badge" aria-label="선공: 이 적이 먼저 공격합니다">선공</div>`
       : ''
+    // 굳음 표기는 좌상단(이미 포자/성장/이벤트 딱지로 붐빔) 대신 칸 가운데에 큰 글자로 보여 준다.
     const frozenBadge = card.isFrozen()
-      ? `<div class="frozen-badge">굳음 ${card.frozenTurns}</div>`
+      ? `<div class="frozen-center-badge" aria-label="굳음 ${card.frozenTurns}턴">굳음<span class="frozen-center-turns">· ${card.frozenTurns}턴</span></div>`
       : ''
     const trapBadge =
       card.type === CardType.TRAP && card.trapKind === 'bomb' && card.isBombArmed
@@ -3857,7 +3858,9 @@ export class GameBoardRenderer {
     })
   }
   getBossAttackCountdownText(): string {
-    return this.bossAttackCountdown == null ? '3턴' : `${this.bossAttackCountdown}턴`
+    const n = this.bossAttackCountdown == null ? 3 : this.bossAttackCountdown
+    // 임박(0턴)일수록 더 위협적으로 — 0이면 '공격!' 강조.
+    return n <= 0 ? '공격!' : `반격 ${n}턴`
   }
 
   /** 보스 보상 카드 클릭 시 일반 보물칸 처치 그라마를 그대로 재사용해 흔들+확대 사라짐.

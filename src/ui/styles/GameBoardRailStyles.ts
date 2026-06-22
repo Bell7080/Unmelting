@@ -1012,26 +1012,28 @@ export const GAME_BOARD_RAIL_STYLES = `
    N이 적을수록 더 위험하다는 인상을 주기 위해 살짝 펄스 한다. */
 .boss-face-badge {
   position: absolute;
-  top: 6px;
-  left: 8px;
-  z-index: 6;
-  padding: 3px 10px;
-  border-radius: 999px;
+  top: 8px;
+  left: 10px;
+  z-index: 7;
+  padding: 6px 16px;
+  border-radius: 12px;
   color: #fff;
-  background: linear-gradient(180deg, rgba(196, 64, 48, 0.96), rgba(120, 22, 22, 0.96));
-  border: 1px solid rgba(255, 138, 116, 0.72);
-  font-size: 12px;
+  background: linear-gradient(180deg, rgba(214, 72, 52, 0.98), rgba(120, 18, 18, 0.98));
+  border: 1.5px solid rgba(255, 158, 132, 0.85);
+  font-size: clamp(16px, 2.4vh, 22px);
   font-weight: 900;
-  letter-spacing: 0.08em;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
+  letter-spacing: 0.06em;
+  text-transform: none;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.85);
   box-shadow:
-    inset 0 1px 0 rgba(255, 196, 168, 0.32),
-    0 0 10px rgba(196, 64, 48, 0.5);
-  animation: boss-badge-pulse 1.3s ease-in-out infinite;
+    inset 0 1px 0 rgba(255, 200, 172, 0.4),
+    0 3px 10px rgba(0, 0, 0, 0.55),
+    0 0 18px rgba(214, 72, 52, 0.62);
+  animation: boss-badge-pulse 1.15s ease-in-out infinite;
 }
 @keyframes boss-badge-pulse {
-  0%, 100% { box-shadow: inset 0 1px 0 rgba(255, 196, 168, 0.3), 0 0 8px rgba(196, 64, 48, 0.42); }
-  50%      { box-shadow: inset 0 1px 0 rgba(255, 196, 168, 0.42), 0 0 16px rgba(255, 96, 80, 0.7); }
+  0%, 100% { transform: scale(1); box-shadow: inset 0 1px 0 rgba(255, 200, 172, 0.38), 0 3px 10px rgba(0,0,0,0.55), 0 0 14px rgba(214, 72, 52, 0.5); }
+  50%      { transform: scale(1.06); box-shadow: inset 0 1px 0 rgba(255, 200, 172, 0.5), 0 3px 12px rgba(0,0,0,0.6), 0 0 26px rgba(255, 104, 84, 0.85); }
 }
 /* 보스 방패 칩 — 플레이어처럼 HP 게이지 위 좌측에 놓되, 3×3 보스 크기에 맞춰 더 크게 읽힌다. */
 .boss-face-shield-chip {
