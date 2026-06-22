@@ -395,11 +395,11 @@ export class CompanionSystem {
   // ── 예측 대비: 위협을 미리 읽고 대비 도구를 건넨다 ──────────
 
   /**
-   * 거미줄 누적 예측. 위협(분리된 거미줄 수)이 충분하고, 청소 수단이 손에 없고,
-   * 예측 간격/학습 가중치 게이트를 통과하면 true(호출부가 키틴을 건넨다).
+   * 예측 대비 발동 여부. 위협 추정(CompanionForesight)이 청소를 권하고, 청소 수단이 손에
+   * 없고, 예측 간격/학습 가중치 게이트를 통과하면 true(호출부가 청소 카드를 건넨다).
    */
-  evaluateWebPrediction(webThreats: number, hasCleanup: boolean, turn: number): boolean {
-    if (hasCleanup || webThreats < 2) return false
+  evaluateWebPrediction(recommend: boolean, hasCleanup: boolean, turn: number): boolean {
+    if (hasCleanup || !recommend) return false
     if (turn - this.lastPredictTurn < 6) return false
     if (Math.random() >= Math.min(0.95, 0.5 * this.predictiveWeight)) return false
     this.lastPredictTurn = turn

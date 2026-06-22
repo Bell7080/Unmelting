@@ -63,6 +63,7 @@ import { candleIcon } from '@ui/Icons'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
 import { CompanionSystem, type SituationId, type ClutchPlan } from '@systems/CompanionSystem'
+import { assessThreats } from '@systems/CompanionForesight'
 import { HearthScene } from '@ui/hearth/HearthScene'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
@@ -273,23 +274,13 @@ const CLUTCH_TITLES: Record<string, string> = {
   predict: '앞을 내다보는 눈',
 }
 
+/** 청소 수단 손패 후보 — 방향성을 열어둔다(청소=1칸 거미줄 전체, 키틴=함정 1장). */
+const CLEANUP_CARD_IDS: readonly HandCardId[] = ['sweep', 'chitin'] as unknown as HandCardId[]
+
 /** 예측 대비로 건넨 카드를 플레이어가 기한 내 쓰는지 추적(RL 신호). */
-let pendingPrediction: { cardId: string; deadlineTurn: number } | null = null
+let pendingPrediction: { cardIds: readonly string[]; deadlineTurn: number } | null = null
 
-/** 보드의 분리된 거미줄(웹 함정) 위협 수 — 여럿이면 합쳐져 큰 피해가 될 수 있다. */
-function countWebThreats(): number {
-  const seen = new Set<Card>()
-  for (const lane of gameState.lanes) {
-    for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
-      const card = lane.getCardAtDistance(d)
-      if (!card || seen.has(card)) continue
-      if (card.type === CardType.TRAP && card.trapKind === 'web') seen.add(card)
-    }
-  }
-  return seen.size
-}
-
-/** 예측 대비: 위협을 미리 읽고 대비 카드를 건넨다. 턴 정비 후(플레이어 차례 직전) 호출. */
+/** 예측 대비: 위협 추정(그릇)을 미리 읽고 대비 카드를 건넨다. 플레이어 차례 직전 호출. */
 async function tryCompanionPrediction(): Promise<void> {
   const turn = gameState.getCurrentTurn()
   // RL: 건넨 대비 카드를 기한 내 안 썼으면 '불필요'로 학습(덜 주게).
@@ -298,16 +289,17 @@ async function tryCompanionPrediction(): Promise<void> {
     pendingPrediction = null
   }
   if (!companionWorldCanSpeak() || gameState.bossBattleActive || pendingPrediction) return
-  const hasCleanup = gameState.character.hand.some((c) => c.defId === 'chitin')
-  if (!companion.evaluateWebPrediction(countWebThreats(), hasCleanup, turn)) return
-  // 키틴(전방 함정 제거)을 건넨다.
-  const drop = DropSystem.makeCard('chitin' as HandCardId)
+  const report = assessThreats(gameState.lanes, gameState.character)
+  const hasCleanup = gameState.character.hand.some((c) => CLEANUP_CARD_IDS.includes(c.defId))
+  if (!companion.evaluateWebPrediction(report.recommendCleanup, hasCleanup, turn)) return
+  // 청소(1칸 거미줄 전체 제거)를 건넨다 — 누적 방지에 가장 알맞다.
+  const drop = DropSystem.makeCard('sweep' as HandCardId)
   if (!gameState.character.addHandCard(drop)) return // 손패 가득 — 다음 기회에
-  pendingPrediction = { cardId: 'chitin', deadlineTurn: turn + 3 }
-  recordNotice('에나의 의지 — 거미줄을 대비해 키틴을 건넸다', 'info')
+  pendingPrediction = { cardIds: CLEANUP_CARD_IDS, deadlineTurn: turn + 3 }
+  recordNotice('에나의 의지 — 거미줄을 대비해 청소를 건넸다', 'info')
   render()
   void boardRenderer.animateClutchOnPlayer('hand-control')
-  showClutchChain('predict', '거미줄 대비 · 키틴')
+  showClutchChain('predict', report.webLethal ? '거미줄 대비 · 청소 (위험!)' : '거미줄 대비 · 청소')
   sayEnaBark(companion.predictLine('web'), { importance: BARK_IMPORTANCE.clutch })
   await playResourceTrail({ kind: 'chain' }, 'hand', 1)
 }
@@ -3438,11 +3430,11 @@ async function applyHandSingle(
     const bark = companion.onUseCard(usedDef.id, usedDef.category, gameState.getCurrentTurn())
     if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.loot })
   }
-  // 예측 대비 RL: 건넨 대비 카드를 기한 내 썼다 → 유용했다(더 적극적으로 대비).
+  // 예측 대비 RL: 건넨 대비 카드(청소/키틴 등)를 기한 내 썼다 → 유용했다(더 적극적으로 대비).
   if (
     usedDef &&
     pendingPrediction &&
-    usedDef.id === pendingPrediction.cardId &&
+    pendingPrediction.cardIds.includes(usedDef.id) &&
     gameState.getCurrentTurn() <= pendingPrediction.deadlineTurn
   ) {
     companion.recordPredictionUsed()
