@@ -25,6 +25,7 @@ import {
   RELIC_LINES,
   RELIC_RARITY_LINES,
   GENERIC_BUY_LINES,
+  PREDICT_LINES,
 } from '@data/CompanionLines'
 import type { CardRarity } from '@data/ShopPools'
 import type {
@@ -211,6 +212,13 @@ export class CompanionSystem {
   private will = 0
   /** 각성은 런당 한 번뿐. 새 런에서 resetForRun으로 풀린다. */
   private awakened = false
+  /** 마지막 예측 대비 발동 턴(예측 남발 방지). */
+  private lastPredictTurn = -999
+  /**
+   * 예측 대비 학습 가중치(0.2~1.8). 건넨 대비 카드를 플레이어가 곧 쓰면(유용) 오르고,
+   * 기한 내 안 쓰면(불필요) 내려간다. = 가짜 RL: "이 대비가 도움이 됐나"를 누적.
+   */
+  private predictiveWeight = 1
 
   /**
    * 프로필을 만졌을 때. 연타 강도(streak)에 따라 calm→annoyed→exasperated로 반응한다.
@@ -384,11 +392,41 @@ export class CompanionSystem {
     return this.pickFrom('awaken', AWAKEN_LINES, 'urgent')
   }
 
+  // ── 예측 대비: 위협을 미리 읽고 대비 도구를 건넨다 ──────────
+
+  /**
+   * 거미줄 누적 예측. 위협(분리된 거미줄 수)이 충분하고, 청소 수단이 손에 없고,
+   * 예측 간격/학습 가중치 게이트를 통과하면 true(호출부가 키틴을 건넨다).
+   */
+  evaluateWebPrediction(webThreats: number, hasCleanup: boolean, turn: number): boolean {
+    if (hasCleanup || webThreats < 2) return false
+    if (turn - this.lastPredictTurn < 6) return false
+    if (Math.random() >= Math.min(0.95, 0.5 * this.predictiveWeight)) return false
+    this.lastPredictTurn = turn
+    return true
+  }
+
+  /** 예측 대비 대사 한 줄(상황 키별). */
+  predictLine(kind: string): string {
+    return this.pickFrom(`predict:${kind}`, PREDICT_LINES[kind], 'normal')
+  }
+
+  /** 건넨 대비 카드를 플레이어가 곧 썼다 → 예측이 유용했다(더 적극적으로 대비). */
+  recordPredictionUsed(): void {
+    this.predictiveWeight = Math.min(SITUATION_WEIGHT_MAX, this.predictiveWeight * 1.15)
+  }
+
+  /** 건넨 대비 카드를 기한 내 안 썼다 → 불필요했다(덜 대비). */
+  recordPredictionWasted(): void {
+    this.predictiveWeight = Math.max(SITUATION_WEIGHT_FLOOR, this.predictiveWeight * 0.7)
+  }
+
   /** 새 런 시작 시 런 한정 상태(의지/각성/턴 흐름)를 초기화한다. 학습 가중치는 유지. */
   resetForRun(): void {
     this.will = 0
     this.awakened = false
     this.lastWorldBarkTurn = -999
+    this.lastPredictTurn = -999
     this.touchStreak = 0
   }
 

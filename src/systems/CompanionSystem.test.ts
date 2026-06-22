@@ -123,6 +123,20 @@ describe('CompanionSystem', () => {
     expect(fallback).not.toMatch(/[{}[\]]/)
   })
 
+  it('예측 대비: 청소 수단 없고 거미줄 위협이 충분할 때만 발동하며 간격을 둔다', () => {
+    const c = new CompanionSystem()
+    expect(c.evaluateWebPrediction(1, false, 100)).toBe(false) // 위협 적음
+    expect(c.evaluateWebPrediction(3, true, 100)).toBe(false) // 이미 청소 수단 보유
+    let firedTurn = -1
+    for (let t = 200; t < 800 && firedTurn < 0; t++) {
+      if (c.evaluateWebPrediction(3, false, t)) firedTurn = t
+    }
+    expect(firedTurn).toBeGreaterThan(0)
+    // 방금 발동 → 근접 턴은 간격 때문에 발동 안 함.
+    expect(c.evaluateWebPrediction(3, false, firedTurn + 1)).toBe(false)
+    expect(c.predictLine('web')).not.toMatch(/[{}[\]]/)
+  })
+
   it('소소한 클러치 대사가 깨끗하게 나온다', () => {
     const c = new CompanionSystem()
     for (const k of ['crit', 'dodge', 'trap', 'treasure'] as const) {

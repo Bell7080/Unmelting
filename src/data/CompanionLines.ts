@@ -304,3 +304,14 @@ export const RELIC_RARITY_LINES: Partial<Record<CardRarity, Line[]>> = {
 }
 
 export const GENERIC_BUY_LINES: Line[] = ['좋은 선택이야.', '잘 골랐어.', '챙겨두자.']
+
+// ── 예측 대비(앞을 내다보고 미리 도구를 건넨다) ──────────────
+
+export const PREDICT_LINES: Record<string, Line[]> = {
+  // 1칸 거미줄이 모여 큰 거미줄이 되기 전에 청소 카드를 건넨다.
+  web: [
+    '거미줄이 모이고 있어 — 이걸로 치워두렴.',
+    '곧 거미줄이 커질지도 몰라. 미리 준비해.',
+    '저 거미줄, 그냥 두면 위험해. 키틴을 받으렴.',
+  ],
+}

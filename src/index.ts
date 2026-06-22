@@ -270,6 +270,46 @@ const CLUTCH_TITLES: Record<string, string> = {
   shield: '수호의 결의',
   ember: '꺼지지 않는 불씨',
   awaken: '에나의 각성',
+  predict: '앞을 내다보는 눈',
+}
+
+/** 예측 대비로 건넨 카드를 플레이어가 기한 내 쓰는지 추적(RL 신호). */
+let pendingPrediction: { cardId: string; deadlineTurn: number } | null = null
+
+/** 보드의 분리된 거미줄(웹 함정) 위협 수 — 여럿이면 합쳐져 큰 피해가 될 수 있다. */
+function countWebThreats(): number {
+  const seen = new Set<Card>()
+  for (const lane of gameState.lanes) {
+    for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+      const card = lane.getCardAtDistance(d)
+      if (!card || seen.has(card)) continue
+      if (card.type === CardType.TRAP && card.trapKind === 'web') seen.add(card)
+    }
+  }
+  return seen.size
+}
+
+/** 예측 대비: 위협을 미리 읽고 대비 카드를 건넨다. 턴 정비 후(플레이어 차례 직전) 호출. */
+async function tryCompanionPrediction(): Promise<void> {
+  const turn = gameState.getCurrentTurn()
+  // RL: 건넨 대비 카드를 기한 내 안 썼으면 '불필요'로 학습(덜 주게).
+  if (pendingPrediction && turn > pendingPrediction.deadlineTurn) {
+    companion.recordPredictionWasted()
+    pendingPrediction = null
+  }
+  if (!companionWorldCanSpeak() || gameState.bossBattleActive || pendingPrediction) return
+  const hasCleanup = gameState.character.hand.some((c) => c.defId === 'chitin')
+  if (!companion.evaluateWebPrediction(countWebThreats(), hasCleanup, turn)) return
+  // 키틴(전방 함정 제거)을 건넨다.
+  const drop = DropSystem.makeCard('chitin' as HandCardId)
+  if (!gameState.character.addHandCard(drop)) return // 손패 가득 — 다음 기회에
+  pendingPrediction = { cardId: 'chitin', deadlineTurn: turn + 3 }
+  recordNotice('에나의 의지 — 거미줄을 대비해 키틴을 건넸다', 'info')
+  render()
+  void boardRenderer.animateClutchOnPlayer('hand-control')
+  showClutchChain('predict', '거미줄 대비 · 키틴')
+  sayEnaBark(companion.predictLine('web'), { importance: BARK_IMPORTANCE.clutch })
+  await playResourceTrail({ kind: 'chain' }, 'hand', 1)
 }
 
 /** 클러치 발동 시 플레이어 카드 위에 『 제목 』 + 효과 배너를 띄운다. */
@@ -2569,6 +2609,7 @@ function resetForNewRun(): void {
   pendingHandTarget = null
   // 동료(에나)의 런 한정 상태(의지/각성/턴 흐름) 초기화. 학습 가중치는 런 간 유지.
   companion.resetForRun()
+  pendingPrediction = null
   gameState.reset()
   // 헌혈팩 콜백: reset 이후 새 character 인스턴스에 설정해야 한다
   gameState.character.onHealGain = (amount) => {
@@ -3397,6 +3438,16 @@ async function applyHandSingle(
     const bark = companion.onUseCard(usedDef.id, usedDef.category, gameState.getCurrentTurn())
     if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.loot })
   }
+  // 예측 대비 RL: 건넨 대비 카드를 기한 내 썼다 → 유용했다(더 적극적으로 대비).
+  if (
+    usedDef &&
+    pendingPrediction &&
+    usedDef.id === pendingPrediction.cardId &&
+    gameState.getCurrentTurn() <= pendingPrediction.deadlineTurn
+  ) {
+    companion.recordPredictionUsed()
+    pendingPrediction = null
+  }
   // 보스는 디버프 면역 규칙을 따른다. 밀랍 계열 사용 시 보스에게 굳음 스택이 남아있다면
   // 즉시 저항 연출을 띄우고 해제해, "저항 후 즉시 무효" 감각을 일관되게 유지한다.
   await resolveBossDebuffImmunityOnWaxUse(usedDef?.id ?? null)
@@ -3968,6 +4019,8 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
   if (blooms.length > 0) await boardRenderer.animateFlowerBlooms(blooms)
   await sweepFrontStarlights()
   await tickFrontEventDoors()
+  // 보드 정비가 끝나 플레이어 차례 직전 — 위협을 미리 읽어 대비 카드를 건넨다.
+  if (advanceTurn) await tryCompanionPrediction()
 }
 
 /** 전방 이벤트 문의 2턴 카운트다운을 진행한다. 도달 즉시 뱃지 '슈룩' 등장,
