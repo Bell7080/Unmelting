@@ -176,6 +176,54 @@ export const HEARTH_STYLES = `
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
 }
 
+/* 임시: 전 칸 개방 — 채워진 레일 칸(.cell.card) 톤의 스타일리시한 점등 칸. */
+.hearth-cell--open {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-bottom: clamp(8px, 1.8vh, 18px);
+  cursor: pointer;
+  border: 1px solid var(--color-border-warm, #8b6f47);
+  background: #1c1424;
+  color: rgba(255, 240, 200, 0.96);
+  font-family: 'OkDanDan', Georgia, serif;
+  isolation: isolate;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.22),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.45),
+    0 4px 10px rgba(0, 0, 0, 0.55),
+    0 12px 22px rgba(0, 0, 0, 0.45);
+}
+.hearth-cell--open.hearth-cell--has-art {
+  background-image:
+    linear-gradient(to bottom, rgba(8, 5, 20, 0.32) 0%, rgba(10, 6, 24, 0.64) 100%),
+    var(--cell-art, none);
+  background-size: cover;
+  background-position: center top;
+}
+/* 통통 튀어나오는 hover(개방 칸 + 모험 공통) — 오버슈트 easing으로 '뽈롱'. */
+.hearth-cell--open,
+.hearth-cell--adventure {
+  transition-property: transform, box-shadow, border-color, opacity;
+  transition-duration: 0.3s, 0.22s, 0.22s, 0.5s;
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.5, 1), ease, ease, ease;
+}
+.hearth-cell--open:hover,
+.hearth-cell--open:focus-visible,
+.hearth-cell--adventure:hover {
+  transform: translateY(-7px) scale(1.07);
+  border-color: var(--color-flame, #ffd778);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.32),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.4),
+    0 12px 24px rgba(0, 0, 0, 0.5),
+    0 0 28px rgba(244, 164, 96, 0.52);
+  outline: none;
+  z-index: 3;
+}
+
 .hearth-cell--adventure.is-ignited {
   opacity: 1;
   color: rgba(255, 240, 200, 0.98);

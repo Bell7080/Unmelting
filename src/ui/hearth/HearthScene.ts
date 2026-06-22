@@ -238,10 +238,6 @@ export class HearthScene {
    * 각 칸은 `data-inspect-*`로 우측 인스펙터 hover 정보를 제공한다.
    */
   private renderCells(): string {
-    const lock =
-      `<svg class="hearth-cell__lock" viewBox="0 0 24 24" fill="none" aria-hidden="true" ` +
-      `stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">` +
-      `<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`
     const cells: string[] = []
     for (let i = 0; i < 9; i++) {
       const name = STATION_NAMES[i]
@@ -253,20 +249,21 @@ export class HearthScene {
       // 일러스트가 있으면 칸 배경으로도 직접 깐다(--cell-art) + has-art 클래스로 오버레이 톤 적용.
       const artClass = art ? ' hearth-cell--has-art' : ''
       const artStyle = art ? ` style="--cell-art: url('${art}')"` : ''
+      const inspectAttr = ` data-inspect-title="${name}" data-inspect-tag="개방" data-inspect-desc="${desc}"${artAttr}`
       if (i === ADVENTURE_INDEX) {
+        // 모험 칸 — 유일한 상호작용 칸(셔터/출발). 가운데 불씨(촛불)는 빼고 일러스트로만 점등한다.
         cells.push(
           `<button class="hearth-cell hearth-cell--adventure${artClass}" data-hearth-station="adventure" type="button" aria-label="모험 시작"` +
-            ` data-inspect-title="${name}" data-inspect-tag="개방" data-inspect-desc="${desc}"${artAttr}${artStyle}>` +
-            `<span class="hearth-flame" aria-hidden="true"></span>` +
+            `${inspectAttr}${artStyle}>` +
             `<span class="hearth-cell__label">${name}</span>` +
             `</button>`
         )
       } else {
-        // 잠긴 칸은 hover 인스펙터를 띄우지 않는다(data-inspect-* 생략). 일러스트만 깐다.
+        // 임시: 나머지 칸도 모두 개방(스타일리시 점등 + hover 인스펙터). 해금 게이팅은 추후.
         cells.push(
-          `<div class="hearth-cell hearth-cell--locked${artClass}" aria-label="${name} · 잠김"${artStyle}>` +
-            lock +
-            `<span class="hearth-cell__name">${name}</span>` +
+          `<div class="hearth-cell hearth-cell--open${artClass}" tabindex="0" aria-label="${name}"` +
+            `${inspectAttr}${artStyle}>` +
+            `<span class="hearth-cell__label">${name}</span>` +
             `</div>`
         )
       }

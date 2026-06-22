@@ -6352,6 +6352,7 @@ export class GameBoardRenderer {
     el.id = 'clutch-banner-styles'
     el.textContent = `
 .clutch-banner { position: fixed; z-index: 9998; pointer-events: none; text-align: center; will-change: transform, opacity, filter; }
+.clutch-banner-backdrop { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 150%; height: 230%; z-index: -1; filter: blur(4px); background: radial-gradient(ellipse at center, rgba(8, 5, 14, 0.82) 0%, rgba(8, 5, 14, 0.5) 42%, rgba(8, 5, 14, 0) 72%); }
 .clutch-banner-title { font-weight: 800; font-size: 29px; color: rgba(255, 240, 200, 0.99); letter-spacing: 1.5px; white-space: nowrap; text-shadow: 0 0 18px rgba(255, 200, 90, 0.62), 0 3px 8px rgba(0, 0, 0, 0.85); }
 .clutch-banner-desc { margin-top: 4px; font-size: 18px; font-weight: 700; color: rgba(255, 226, 172, 0.95); white-space: nowrap; text-shadow: 0 0 10px rgba(255, 190, 80, 0.4), 0 2px 5px rgba(0, 0, 0, 0.88); }
 `
@@ -6371,6 +6372,7 @@ export class GameBoardRenderer {
     host.className = 'clutch-banner'
     host.setAttribute('aria-hidden', 'true')
     host.innerHTML =
+      `<div class="clutch-banner-backdrop"></div>` +
       `<div class="clutch-banner-title">『 ${title} 』</div>` +
       `<div class="clutch-banner-desc">${description}</div>`
     // 플레이어 카드 위(중하단 → 상단)에서 솟아오르되, 카드 위쪽 말풍선 영역까지는 올라가지 않는다.
@@ -6380,14 +6382,15 @@ export class GameBoardRenderer {
     const anim = host.animate(
       [
         { opacity: 0, transform: 'translate(-50%, 46px) scale(0.82)', filter: 'blur(0px)' },
-        { opacity: 1, transform: 'translate(-50%, 2px) scale(1.06)', filter: 'blur(0px)', offset: 0.16 },
-        { opacity: 1, transform: 'translate(-50%, -8px) scale(1.0)', filter: 'blur(0px)', offset: 0.28 },
-        // 가장 뚜렷한 구간 — 카드 상단에 걸친 채 살짝 부유하며 체류(말풍선과는 겹치지 않음).
-        { opacity: 1, transform: 'translate(-50%, -14px) scale(1.0)', filter: 'blur(0px)', offset: 0.52 },
-        { opacity: 1, transform: 'translate(-50%, -4px) scale(1.0)', filter: 'blur(0px)', offset: 0.68 },
-        { opacity: 0, transform: 'translate(-50%, -30px) scale(1.03)', filter: 'blur(2.6px)', offset: 1 },
+        { opacity: 1, transform: 'translate(-50%, 2px) scale(1.06)', filter: 'blur(0px)', offset: 0.1 },
+        { opacity: 1, transform: 'translate(-50%, -8px) scale(1.0)', filter: 'blur(0px)', offset: 0.18 },
+        // 가장 뚜렷한 구간 — 카드 상단에 걸친 채 오래 부유하며 체류(말풍선과는 겹치지 않음).
+        { opacity: 1, transform: 'translate(-50%, -14px) scale(1.0)', filter: 'blur(0px)', offset: 0.46 },
+        { opacity: 1, transform: 'translate(-50%, -4px) scale(1.0)', filter: 'blur(0px)', offset: 0.72 },
+        { opacity: 1, transform: 'translate(-50%, -12px) scale(1.0)', filter: 'blur(0px)', offset: 0.84 },
+        { opacity: 0, transform: 'translate(-50%, -34px) scale(1.03)', filter: 'blur(2.6px)', offset: 1 },
       ],
-      { duration: 3900, easing: 'cubic-bezier(0.2, 0.8, 0.25, 1)', fill: 'forwards' }
+      { duration: 5200, easing: 'cubic-bezier(0.2, 0.8, 0.25, 1)', fill: 'forwards' }
     )
     anim.onfinish = () => host.remove()
   }
