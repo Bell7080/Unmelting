@@ -24,13 +24,13 @@ describe('resolveKoreanParticles', () => {
 })
 
 describe('CompanionSystem', () => {
-  it('터치 전에는 onSettle이 null, 터치 후에는 마무리 대사를 돌려준다', () => {
+  it('onSettle은 클릭 멈춤 대사를 내지 않고 연타 상태만 정리한다', () => {
     const c = new CompanionSystem()
     expect(c.onSettle()).toBeNull()
     c.onProfileTouch(Date.now(), { danger: false })
-    expect(typeof c.onSettle()).toBe('string')
-    // 정산했으니 다시 null.
     expect(c.onSettle()).toBeNull()
+    // 연타 상태가 정리되어 다음 터치가 과한 반응으로 이어지지 않는다.
+    expect(c.onProfileTouch(Date.now() + 1, { danger: false })).not.toContain('그만')
   })
 
   it('첫 터치는 항상 비어있지 않은 문자열로 응답한다', () => {
