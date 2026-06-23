@@ -207,6 +207,14 @@ export const HEARTH_STYLES = `
 /* hover 시엔 상시 글로우 애니메이션을 멈춰 hover 박스섀도(팝 글로우)가 그대로 적용되게 한다. */
 .hearth-cell--open:hover,
 .hearth-cell--open:focus-visible { animation: none; }
+.hearth-cell--open.is-ignited {
+  animation: hearth-open-ignite 0.72s cubic-bezier(0.2, 0.84, 0.3, 1) backwards, hearth-open-breathe 3.6s ease-in-out 0.72s infinite;
+}
+@keyframes hearth-open-ignite {
+  0%   { transform: scale(0.92); filter: brightness(0.52) saturate(0.78); }
+  42%  { transform: scale(1.04); filter: brightness(1.45) saturate(1.12); box-shadow: 0 0 54px rgba(255, 200, 110, 0.54), inset 0 0 38px rgba(255, 200, 110, 0.32); }
+  100% { transform: scale(1); filter: brightness(1) saturate(1); }
+}
 .hearth-cell--open.hearth-cell--has-art {
   background-image:
     linear-gradient(to bottom, rgba(8, 5, 20, 0.32) 0%, rgba(10, 6, 24, 0.64) 100%),

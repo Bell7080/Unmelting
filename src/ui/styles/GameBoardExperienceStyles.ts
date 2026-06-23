@@ -1,7 +1,7 @@
 /**
  * 경험(성향) 패널 — 에나의 성향을 '다이아 성좌(레이더)'로 보여주는 읽기 전용 오버레이.
- * 도감 모달의 박스 톤이 아니라 인게임 불빛 패널 감각: 어둡고 반투명한 배경 위에
- * 투명발광 황금빛 테두리/글로우를 세련되게 얹는다(이벤트 씬 톤 참고).
+ * 도감 모달의 박스 톤이 아니라 화면 위 어두운 반투명 레이어에
+ * 다이아 불빛 노드와 얇은 성좌 라인을 올린다.
  */
 export const GAME_BOARD_EXPERIENCE_STYLES = `
 .experience-overlay {
@@ -10,7 +10,7 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   display: none;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(120% 90% at 50% 35%, rgba(20, 13, 6, 0.62), rgba(6, 4, 10, 0.86));
+  background: radial-gradient(120% 90% at 50% 35%, rgba(12, 10, 18, 0.5), rgba(2, 2, 6, 0.72));
   backdrop-filter: blur(5px);
   z-index: 240;
   padding: 24px;
@@ -18,7 +18,7 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
 .experience-overlay.is-open { display: flex; }
 .experience-modal {
   position: relative;
-  width: min(560px, 96vw);
+  width: min(680px, 96vw);
   max-height: 92vh;
   display: grid;
   grid-template-rows: auto 1fr auto;
@@ -27,23 +27,23 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
     radial-gradient(140% 70% at 50% -8%, rgba(255, 196, 110, 0.16), transparent 62%),
     linear-gradient(180deg, rgba(26, 19, 12, 0.82), rgba(12, 9, 14, 0.88));
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 210, 130, 0.3);
-  border-radius: 20px;
+  border: 0;
+  border-radius: 24px;
   box-shadow:
     0 30px 70px rgba(0, 0, 0, 0.6),
     0 0 46px rgba(244, 178, 86, 0.22),
-    inset 0 1px 0 rgba(255, 236, 188, 0.26),
-    inset 0 0 60px rgba(244, 164, 96, 0.05);
+    inset 0 1px 0 rgba(255, 236, 188, 0.08),
+    inset 0 0 70px rgba(244, 164, 96, 0.04);
   overflow: hidden;
   color: #fde6c4;
 }
-/* 테두리 안쪽에 은은한 황금 발광 선을 한 겹 더(불빛 패널 느낌). */
+/* 화면 위에 뜬 어두운 레이어처럼 읽히게 외곽 테두리 대신 내부 광원만 둔다. */
 .experience-modal::before {
   content: '';
   position: absolute;
-  inset: 5px;
-  border-radius: 15px;
-  border: 1px solid rgba(255, 210, 130, 0.1);
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(80% 38% at 50% 0%, rgba(255, 211, 130, 0.12), transparent 72%);
   pointer-events: none;
 }
 .experience-header {
@@ -51,7 +51,7 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   align-items: center;
   justify-content: space-between;
   padding: 15px 22px;
-  border-bottom: 1px solid rgba(255, 210, 130, 0.16);
+  border-bottom: 0;
 }
 .experience-title {
   display: flex;
@@ -99,7 +99,7 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
 /* ── 성좌(레이더) ─────────────────────────────────────────── */
 .experience-constellation {
   position: relative;
-  width: min(360px, 76vw);
+  width: min(430px, 80vw);
   aspect-ratio: 1 / 1;
   margin-top: 6px;
   filter: drop-shadow(0 0 18px rgba(244, 178, 86, 0.14));
@@ -111,27 +111,29 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   height: 100%;
   overflow: visible;
 }
-.exp-ring { fill: none; stroke: rgba(255, 220, 160, 0.12); stroke-width: 0.35; }
-.exp-spoke { stroke: rgba(255, 220, 160, 0.1); stroke-width: 0.3; }
+.exp-ring { fill: none; stroke: rgba(255, 220, 160, 0.045); stroke-width: 0.28; }
+.exp-spoke { stroke: rgba(255, 220, 160, 0.04); stroke-width: 0.24; }
 .exp-base {
   fill: none;
-  stroke: rgba(255, 200, 120, 0.5);
-  stroke-width: 0.5;
-  stroke-dasharray: 1.6 1.4;
+  stroke: rgba(30, 24, 32, 0.62);
+  stroke-width: 0.42;
+  stroke-dasharray: 1.2 2.4;
   stroke-linejoin: round;
 }
 .exp-current {
-  fill: rgba(255, 196, 110, 0.18);
-  stroke: #ffd887;
-  stroke-width: 0.85;
+  fill: rgba(255, 196, 110, 0.055);
+  stroke: rgba(255, 255, 255, 0.74);
+  stroke-width: 0.48;
   stroke-linejoin: round;
-  filter: drop-shadow(0 0 5px rgba(255, 204, 120, 0.7));
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.42)) drop-shadow(0 0 10px rgba(255, 204, 120, 0.24));
+  animation: exp-line-glow 2.8s ease-in-out infinite;
 }
 .exp-node {
-  fill: #fff3c4;
-  stroke: rgba(196, 132, 46, 0.7);
-  stroke-width: 0.3;
-  filter: drop-shadow(0 0 4px rgba(255, 220, 140, 0.95));
+  fill: #fff4c8;
+  stroke: rgba(255, 210, 130, 0.72);
+  stroke-width: 0.22;
+  filter: drop-shadow(0 0 5px rgba(255, 220, 140, 0.96)) drop-shadow(0 0 12px rgba(244, 178, 86, 0.38));
+  animation: exp-node-pulse 2.4s ease-in-out infinite;
 }
 .exp-axis-label {
   position: absolute;
@@ -189,9 +191,8 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   gap: 4px 10px;
   padding: 9px 13px;
   background: linear-gradient(180deg, rgba(255, 210, 130, 0.05), rgba(8, 6, 12, 0.36));
-  border: 1px solid rgba(255, 210, 130, 0.14);
-  border-left: 2px solid rgba(255, 196, 110, 0.5);
-  border-radius: 10px;
+  border: 0;
+  border-radius: 12px;
 }
 .exp-legend-name { grid-area: name; font-size: 13px; font-weight: 800; color: #ffdf9e; letter-spacing: 0.06em; }
 .exp-legend-bar {
@@ -217,10 +218,18 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
 .exp-legend-desc { grid-area: desc; font-size: 11px; color: rgba(255, 233, 196, 0.52); letter-spacing: 0.02em; }
 .experience-footer {
   padding: 12px 22px;
-  border-top: 1px solid rgba(255, 210, 130, 0.16);
+  border-top: 0;
   font-size: 11px;
   color: rgba(255, 233, 196, 0.5);
   text-align: center;
   letter-spacing: 0.02em;
+}
+@keyframes exp-node-pulse {
+  0%, 100% { opacity: 0.86; }
+  50% { opacity: 1; }
+}
+@keyframes exp-line-glow {
+  0%, 100% { opacity: 0.72; }
+  50% { opacity: 1; }
 }
 `
