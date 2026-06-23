@@ -4644,7 +4644,7 @@ export class GameBoardRenderer {
     // 수다 축은 저장 성향에 런-내 읽음/스킵 보상을 함께 반영해 경험 탭에서 즉시 오르내리게 한다.
     const liveChat = chat * (learning?.chattiness ?? 1)
     const mc = disp.minorClutchChance
-    const minor = (mc.crit + mc.dodge + mc.trap + mc.treasure) / 4
+    const minor = (mc.crit + mc.dodge + mc.counter + mc.trap + mc.treasure) / 5
     const guard = (norm(disp.clutchStrength, 0.6, 1.6) + norm(disp.willGainPerDamage, 30, 100) + norm(disp.clutchHpThreshold, 0.2, 0.6)) / 3
     return [
       { key: '수다', value: norm(liveChat, 0.12, 0.62), desc: '곁에서 말 거는 빈도' },

@@ -172,7 +172,7 @@ const DROP_POOL: { id: HandCardId; weight: number }[] = HAND_CARD_IDS
   .filter((id) => HAND_CARD_DEFINITIONS[id].dropSource === 'any')
   .map((id) => ({ id, weight: HAND_CARD_DEFINITIONS[id].dropWeight ?? 1 }))
 
-const FEATURE_SCALARS = 30
+const FEATURE_SCALARS = 34
 const FEATURE_PER_CELL = 14
 const FEATURE_PER_HAND = 9
 const FEATURE_COUNT = FEATURE_SCALARS + FEATURE_PER_CELL * ROWS * LANES + FEATURE_PER_HAND * HAND_MAX
@@ -363,6 +363,10 @@ export class EnaTrainingSimulation {
       this.bossPage / 3,
       EmberSystem.isEnemyFirstStrike(tier) ? 1 : 0,
       this.webThreatCount() / 3,
+      this.imminentWebThreatCount() / 3,
+      this.readySporeThreatCount() / 3,
+      this.strongEnemyThreatCount() / 3,
+      this.tripleOpportunityCount() / 3,
     ]
     for (let row = 0; row < ROWS; row++) {
       for (let lane = 0; lane < LANES; lane++) features.push(...this.encodeCard(this.board[row][lane], row))
@@ -832,9 +836,10 @@ export class EnaTrainingSimulation {
       this.will = 0
       this.ember = Math.min(this.emberMax, this.ember + 1)
     }
-    // 1칸 거미줄이 둘 이상 모이면 합쳐지기 전에 청소를 건넨다(이미 청소/키틴 보유면 생략).
-    if (this.webThreatCount() >= 2 && !this.hand.some((s) => s.id === 'sweep' || s.id === 'chitin')) {
-      if (this.rng.next() < Math.min(0.95, d.predictBaseChance)) this.drawCard('sweep')
+    // 예지 지원: 실제 전방 진입 위협/포자/강적/레시피·트리플 후보를 해금 손패 안에서 고른다.
+    if (this.rng.next() < Math.min(0.95, d.predictBaseChance)) {
+      const aid = this.predictiveAidCard()
+      if (aid && !this.hand.some((s) => s.id === aid)) this.drawCard(aid)
     }
   }
 
@@ -902,7 +907,14 @@ export class EnaTrainingSimulation {
         card.frozen--
         continue
       }
-      if (card.type === CardType.ENEMY) this.takeDamage(card.atk + (firstStrike ? 1 : 0))
+      if (card.type === CardType.ENEMY) {
+        this.takeDamage(card.atk + (firstStrike ? 1 : 0))
+        // 에나 반격은 회피와 달리 피해를 받은 뒤 현재 공격력만큼 되친다.
+        if (this.companion && this.rng.next() < this.companion.minorClutchChance.counter) {
+          card.hp -= this.attack
+          if (card.hp <= 0) this.removeCardReference(card)
+        }
+      }
       else if (card.type === CardType.FLOWER && card.flowerKind === 'oleander') this.shield += card.value
     }
   }
@@ -1218,8 +1230,41 @@ export class EnaTrainingSimulation {
   }
 
   private webThreatCount(): number {
-    // 합쳐지기 전 1칸 거미줄 수(CompanionForesight와 같은 위협 정의).
+    // 합쳐지기 전 전방 1칸 거미줄 수(오지급 방지를 위해 런타임 예지와 같이 전방/임박 위주로 본다).
     return this.uniqueFrontCards().filter((c) => c.type === CardType.TRAP && c.trapKind === 'web' && c.group === 1).length
+  }
+
+  private imminentWebThreatCount(): number {
+    let count = 0
+    for (let row = 0; row <= 1; row++) for (const c of new Set(this.board[row].filter(Boolean) as EnaSimCard[])) if (c.type === CardType.TRAP && c.trapKind === 'web' && c.group === 1) count++
+    return count
+  }
+
+  private readySporeThreatCount(): number {
+    let count = 0
+    for (const row of this.board) for (const c of new Set(row.filter(Boolean) as EnaSimCard[])) if (c.type === CardType.TRAP && c.trapKind === 'spore' && c.sporeTimer <= 1) count++
+    return count
+  }
+
+  private strongEnemyThreatCount(): number {
+    return this.board.slice(0, 2).flat().filter((c) => c?.type === CardType.ENEMY && (c.group >= 2 || c.hp > this.attack + 1)).length
+  }
+
+  private tripleOpportunityCount(): number {
+    const counts = new Map<HandCardId, number>()
+    for (const s of this.hand) if (!s.merged) counts.set(s.id, (counts.get(s.id) ?? 0) + 1)
+    return [...counts.values()].filter((n) => n >= 2).length
+  }
+
+  private predictiveAidCard(): HandCardId | null {
+    const frontHasTwoWeb = this.uniqueFrontCards().some((c) => c.type === CardType.TRAP && c.trapKind === 'web' && c.group >= 2)
+    if (frontHasTwoWeb && this.imminentWebThreatCount() > 0) return 'chitin'
+    if (this.imminentWebThreatCount() >= 2) return 'sweep'
+    if (this.readySporeThreatCount() > 0) return 'holy-water'
+    if (this.strongEnemyThreatCount() > 0) return 'ember'
+    const pair = this.hand.find((s) => !s.merged && this.hand.filter((x) => !x.merged && x.id === s.id).length === 2)
+    if (pair) return pair.id
+    return null
   }
 
   private toughestEnemyLane(): number {
@@ -1250,6 +1295,14 @@ export class EnaTrainingSimulation {
       }
     }
     return best
+  }
+
+  private removeCardReference(target: EnaSimCard): void {
+    for (let row = 0; row < ROWS; row++) {
+      for (let lane = 0; lane < LANES; lane++) {
+        if (this.board[row][lane] === target) this.board[row][lane] = null
+      }
+    }
   }
 
   private uniqueFrontCards(): EnaSimCard[] {
@@ -1339,7 +1392,7 @@ export class EnaTrainingSimulation {
     if (snapshot.phase === 'event') return `이벤트: 위험 ${snapshot.eventRisk}, HP ${snapshot.hp}+방패 ${snapshot.shield}, 불씨 ${tier} → ${action.kind}`
     const target = action.kind === 'clickLane' ? snapshot.board[0][action.arg] : null
     if (target?.type === CardType.ENEMY) return `${snapshot.turn}층(불씨 ${tier}): 공격력 ${snapshot.attack}, 불씨 피해 ${projectedDamage}, 전방 ${target.group}칸 적 HP ${target.hp}/ATK ${target.atk}, 위협 ${frontThreat} → ${action.kind}`
-    if (snapshot.webThreat >= 2) return `불씨 ${tier}: 1칸 거미줄 ${snapshot.webThreat}개가 합쳐지기 전 청소 권장 → ${action.kind}`
+    if (snapshot.webThreat >= 2) return `불씨 ${tier}: 전방 1칸 거미줄 ${snapshot.webThreat}개가 합쳐지기 전 청소 권장 → ${action.kind}`
     return `${snapshot.turn}층: HP ${snapshot.hp}, 불씨 ${snapshot.ember}(${tier}), 보스까지 ${snapshot.turnsToBoss}턴 → ${action.kind}`
   }
 

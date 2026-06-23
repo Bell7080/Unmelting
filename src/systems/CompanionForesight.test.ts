@@ -1,31 +1,38 @@
-import { describe, it, expect } from 'vitest'
-import { assessThreats } from './CompanionForesight'
-import { Lane } from '@entities/Lane'
+import { describe, expect, it } from 'vitest'
+import { GameState } from '@core/GameState'
 import { Card, CardType } from '@entities/Card'
-import { Character } from '@entities/Character'
+import type { HandCardId } from '@entities/HandCard'
+import { assessThreats } from './CompanionForesight'
 
-/** 지정한 1칸 거미줄 배치로 레인 3개를 만든다(distance 0행에 채움). */
-function lanesWithWebs(count: number): Lane[] {
-  const lanes = [new Lane('l0', 0), new Lane('l1', 1), new Lane('l2', 2)]
-  for (let i = 0; i < count; i++) {
-    const web = new Card(`web-${i}`, CardType.TRAP, '양초 거미줄', 'web', 1, 1, { trapKind: 'web' })
-    lanes[i].setCardAtDistance(0, web)
-  }
-  return lanes
+/** 작은 보드 세팅 도우미: 예지 테스트가 위협 배치만 드러내게 한다. */
+function web(id: string, group = 1): Card {
+  const card = new Card(id, CardType.TRAP, '양초 거미줄', 'test', 0, 1, { trapKind: 'web' })
+  card.groupCount = group
+  return card
 }
 
-describe('assessThreats (예측 대비 그릇)', () => {
-  it('1칸 거미줄이 둘 이상이면 청소를 권고한다', () => {
-    const character = new Character()
-    expect(assessThreats(lanesWithWebs(0), character).recommendCleanup).toBe(false)
-    expect(assessThreats(lanesWithWebs(1), character).recommendCleanup).toBe(false)
-    expect(assessThreats(lanesWithWebs(2), character).recommendCleanup).toBe(true)
+describe('CompanionForesight', () => {
+  it('does not recommend broom for distant single webs that cannot drop immediately', () => {
+    const gs = new GameState()
+    gs.lanes[0].setCardAtDistance(2, web('far-a'))
+    gs.lanes[2].setCardAtDistance(2, web('far-b'))
+
+    const report = assessThreats(gs.lanes, gs.character, { unlockedCardIds: ['sweep', 'chitin'] as HandCardId[] })
+
+    expect(report.hasImminentWebDrop).toBe(false)
+    expect(report.recommendedCardId).toBeNull()
   })
 
-  it('거미줄 3개는 합쳐지면 치명적(현재 체력 초과)으로 본다', () => {
-    const character = new Character()
-    const report = assessThreats(lanesWithWebs(3), character)
-    expect(report.webCount).toBe(3)
+  it('prefers chitin when a front 2-web can become a 3-web next drop', () => {
+    const gs = new GameState()
+    const merged = web('front-2', 2)
+    gs.lanes[0].setCardAtDistance(0, merged)
+    gs.lanes[1].setCardAtDistance(0, merged)
+    gs.lanes[2].setCardAtDistance(1, web('incoming'))
+
+    const report = assessThreats(gs.lanes, gs.character, { unlockedCardIds: ['sweep', 'chitin'] as HandCardId[] })
+
     expect(report.webLethal).toBe(true)
+    expect(report.recommendedCardId).toBe('chitin')
   })
 })

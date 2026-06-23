@@ -290,6 +290,7 @@ function companionWorldCanSpeak(): boolean {
 const CLUTCH_TITLES: Record<string, string> = {
   crit: '모험의 긍지',
   dodge: '날렵한 몸놀림',
+  counter: '맞서는 용기',
   trap: '굳건한 의지',
   treasure: '행운의 손길',
   heal: '포기를 모르는 마음',
@@ -314,18 +315,25 @@ async function tryCompanionPrediction(): Promise<void> {
     pendingPrediction = null
   }
   if (!companionWorldCanSpeak() || gameState.bossBattleActive || pendingPrediction) return
-  const report = assessThreats(gameState.lanes, gameState.character)
+  const report = assessThreats(gameState.lanes, gameState.character, {
+    unlockedCardIds: runCardPool.snapshot().unlocked,
+    unlockedRecipeIds: gameState.unlockedRecipeIds,
+  })
+  const suggested = report.recommendedCardId
+  const hasSuggested = suggested ? gameState.character.hand.some((c) => c.defId === suggested) : false
   const hasCleanup = gameState.character.hand.some((c) => CLEANUP_CARD_IDS.includes(c.defId))
-  if (!companion.evaluateWebPrediction(report.recommendCleanup, hasCleanup, turn)) return
-  // 청소(1칸 거미줄 전체 제거)를 건넨다 — 누적 방지에 가장 알맞다.
-  const drop = DropSystem.makeCard('sweep' as HandCardId)
+  // 거미줄 예측은 실제 전방 진입 가능성이 있을 때만 통과시켜 1칸 web 오판 빗자루 지급을 줄인다.
+  const needsPrediction = !!suggested && (report.recommendCleanup ? !hasCleanup : !hasSuggested)
+  if (!suggested || !companion.evaluateWebPrediction(needsPrediction, false, turn)) return
+  // 판 분석 결과가 고른 해금 손패를 건넨다. 함정 외 공격/포자/레시피/트리플 보조도 이 경로를 공유한다.
+  const drop = DropSystem.makeCard(suggested)
   if (!gameState.character.addHandCard(drop)) return // 손패 가득 — 다음 기회에
-  pendingPrediction = { cardIds: CLEANUP_CARD_IDS, deadlineTurn: turn + 3 }
-  recordNotice('에나의 의지 — 거미줄을 대비해 청소를 건넸다', 'info')
+  pendingPrediction = { cardIds: [suggested], deadlineTurn: turn + 3 }
+  recordNotice(`에나의 의지 — ${getHandCardDef(suggested).name} 지원: ${report.recommendationReason}`, 'info')
   render()
   void boardRenderer.animateClutchOnPlayer('hand-control')
-  showClutchChain('predict', report.webLethal ? '거미줄 대비 · 청소 (위험!)' : '거미줄 대비 · 청소')
-  sayEnaBark(companion.predictLine('web'), { importance: BARK_IMPORTANCE.clutch })
+  showClutchChain('predict', report.webLethal ? `${getHandCardDef(suggested).name} 지원 (위험!)` : `${getHandCardDef(suggested).name} 지원`)
+  sayEnaBark(companion.predictLine(report.recommendCleanup ? 'web' : 'spore'), { importance: BARK_IMPORTANCE.clutch })
   await playResourceTrail({ kind: 'chain' }, 'hand', 1)
 }
 
@@ -4214,6 +4222,31 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
       void boardRenderer.animateClutchOnPlayer('health-gain')
       showClutchChain('dodge', `피해 ${maxHit} 무효`)
       sayEnaBark(companion.minorClutchLine('dodge'), { importance: BARK_IMPORTANCE.clutch })
+      render()
+    }
+  }
+
+  // 소소한 클러치 — 반격: 회피와 달리 피해는 받은 뒤, 공격력 기반으로 공격자를 되친다.
+  if (totalDamage > 0 && companionWorldCanSpeak() && companion.rollMinorClutch('counter')) {
+    const attackerIds = [...new Set(hits.filter((h) => h.damage > 0).map((h) => h.cardId))]
+    const counterDamage = Math.max(1, gameState.character.damage)
+    const damaged: { cardId: string; amount: number }[] = []
+    const killedIds: string[] = []
+    for (const id of attackerIds) {
+      const hit = gameState.damageEnemyById(id, counterDamage)
+      if (!hit) continue
+      damaged.push({ cardId: hit.cardId, amount: hit.amount })
+      if (hit.defeated) killedIds.push(hit.cardId)
+    }
+    if (damaged.length > 0) {
+      recordNotice(`에나의 의지 — 반격! 피해 ${counterDamage}`, 'info')
+      showClutchChain('counter', `반격 피해 ${counterDamage}`)
+      sayEnaBark(companion.minorClutchLine('counter'), { importance: BARK_IMPORTANCE.clutch })
+      await boardRenderer.animateDamageNumbersById(damaged)
+      if (killedIds.length > 0) {
+        await boardRenderer.animateCardConsumeByIds(killedIds.map((cardId) => ({ cardId, type: CardType.ENEMY })), { suppressBurstIds: new Set(killedIds) })
+        await onEnemiesDefeated(killedIds.length)
+      }
       render()
     }
   }

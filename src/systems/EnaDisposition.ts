@@ -77,6 +77,7 @@ export const DEFAULT_DISPOSITION: EnaDisposition = {
   minorClutchChance: {
     crit: 0.06,
     dodge: 0.05,
+    counter: 0.04,
     trap: 0.12,
     treasure: 0.15,
   },
@@ -199,6 +200,7 @@ const SIM_FITTED = {
   predictBaseChance: 0.02,
   predictCooldown: 20,
   minorClutchCrit: 0.041,
+  minorClutchCounter: 0.05,
   minorClutchTreasure: 0.055,
 } as const
 
@@ -222,6 +224,7 @@ function buildBaseDisposition(): EnaDisposition {
   d.predictBaseChance = lerp(d.predictBaseChance, SIM_FITTED.predictBaseChance)
   d.predictCooldown = lerp(d.predictCooldown, SIM_FITTED.predictCooldown)
   d.minorClutchChance.crit = lerp(d.minorClutchChance.crit, SIM_FITTED.minorClutchCrit)
+  d.minorClutchChance.counter = lerp(d.minorClutchChance.counter, SIM_FITTED.minorClutchCounter)
   d.minorClutchChance.treasure = lerp(d.minorClutchChance.treasure, SIM_FITTED.minorClutchTreasure)
   return clampDisposition(d)
 }
