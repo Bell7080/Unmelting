@@ -1192,7 +1192,9 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   100% { transform: scale(1); filter: brightness(1) saturate(1); }
 }
 .cell.card.is-frozen .card-face::after,
-.cell.card.is-wax-zero-pending .card-face::after {
+.cell.card.is-wax-zero-pending .card-face::after,
+.cell.card.type-boss.is-frozen .boss-face::after,
+.cell.card.type-boss.is-wax-zero-pending .boss-face::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -1240,6 +1242,17 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   font-size: clamp(12px, 1.7vh, 15px);
   color: rgba(220, 234, 248, 0.92);
   letter-spacing: 0.06em;
+}
+
+/* 보스는 전용 boss-face를 쓰므로 굳음 문구를 보스 일러스트 중앙에 더 크게 고정한다. */
+.boss-frozen-center-badge {
+  z-index: 12;
+}
+.cell.card.type-boss .boss-frozen-center-badge .frozen-center-title {
+  font-size: clamp(32px, 6vh, 54px);
+}
+.cell.card.type-boss .boss-frozen-center-badge .frozen-center-turns {
+  font-size: clamp(14px, 2.2vh, 20px);
 }
 .cell.card.is-wax-zero-pending .frozen-center-badge {
   animation: wax-zero-hold 0.36s cubic-bezier(0.18, 0.9, 0.24, 1) both;

@@ -1118,8 +1118,13 @@ export class GameBoardRenderer {
            </span>
          </span>`
       : ''
+    // 보스는 일반 card-face를 우회하므로 굳음 중앙 표기를 boss-face 내부에도 직접 넣는다.
+    const frozenBadge = card.isFrozen()
+      ? `<div class="frozen-center-badge boss-frozen-center-badge" aria-label="굳음 ${card.frozenTurns}턴"><span class="frozen-center-title">굳음</span><span class="frozen-center-turns">${card.frozenTurns}턴</span></div>`
+      : ''
     return `
       <article class="boss-face" style="--boss-art: url('${sprite}');">
+        ${frozenBadge}
         <div class="boss-face-art" aria-hidden="true"></div>
         <div class="boss-face-overlay" aria-hidden="true"></div>
         <div class="boss-face-badge" aria-label="다음 공격 카운트" data-boss-attack-countdown>${this.getBossAttackCountdownText()}</div>
