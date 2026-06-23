@@ -87,6 +87,25 @@ describe('HandSystem broad hand effects', () => {
     expect(spore.isFrozen()).toBe(true)
   })
 
+  it('lets 밀랍 target and freeze a front-row boss card', () => {
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+    const boss = new Card('boss-front', CardType.BOSS, '양초 백작', 'test boss', 60, 5, {
+      specialEnemyKind: 'waxArmy',
+    })
+    gameState.lanes[0].setCardAtDistance(0, boss)
+    gameState.character.addHandCard(DropSystem.makeCard('wax'))
+
+    const result = HandSystem.useSingle(gameState, chain, 0, {
+      laneIndex: 0,
+      distance: 0,
+      card: boss,
+    })
+
+    expect(result.success).toBe(true)
+    expect(boss.frozenTurns).toBe(1)
+  })
+
   it('makes triple 밀랍 freeze every front-row turn timer card', () => {
     const gameState = new GameState()
     const chain = HandSystem.newChain()
