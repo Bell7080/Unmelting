@@ -176,8 +176,8 @@ export const HEARTH_STYLES = `
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
 }
 
-/* 개방(언락) 칸 — 잠긴 칸과 분명히 구분되도록 따뜻한 황금 불빛이 은은히 깃든 점등 칸.
-   모험 칸의 화륵 점등보다는 가라앉되, '빛나는 부분'이 빠져 보이지 않게 상시 글로우를 둔다. */
+/* 개방(언락) 칸 — 모험 칸과 같은 흐름으로 시작은 어둡게 잠겨 있다가
+   JS가 is-ignited를 붙이는 순간부터 따뜻한 황금 불빛이 켜진다. */
 .hearth-cell--open {
   display: flex;
   flex-direction: column;
@@ -188,17 +188,16 @@ export const HEARTH_STYLES = `
   cursor: pointer;
   border: 1px solid var(--color-flame-warm, #f4a460);
   background: #1c1424;
-  color: rgba(255, 244, 210, 0.98);
+  color: rgba(255, 236, 188, 0.5);
   font-family: 'OkDanDan', Georgia, serif;
   isolation: isolate;
   box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.3),
-    inset 0 0 28px rgba(244, 164, 96, 0.14),
-    inset 0 -10px 18px rgba(0, 0, 0, 0.42),
-    0 4px 10px rgba(0, 0, 0, 0.5),
-    0 0 22px rgba(244, 164, 96, 0.3),
-    0 12px 22px rgba(0, 0, 0, 0.42);
-  animation: hearth-open-breathe 3.6s ease-in-out infinite;
+    inset 0 1px 0 rgba(255, 232, 168, 0.16),
+    inset 0 0 16px rgba(244, 164, 96, 0.04),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.46),
+    0 4px 10px rgba(0, 0, 0, 0.54),
+    0 12px 22px rgba(0, 0, 0, 0.44);
+  opacity: 0.5;
 }
 @keyframes hearth-open-breathe {
   0%, 100% { box-shadow: inset 0 1px 0 rgba(255,232,168,0.3), inset 0 0 28px rgba(244,164,96,0.12), inset 0 -10px 18px rgba(0,0,0,0.42), 0 4px 10px rgba(0,0,0,0.5), 0 0 18px rgba(244,164,96,0.24), 0 12px 22px rgba(0,0,0,0.42); }
@@ -208,6 +207,9 @@ export const HEARTH_STYLES = `
 .hearth-cell--open:hover,
 .hearth-cell--open:focus-visible { animation: none; }
 .hearth-cell--open.is-ignited {
+  color: rgba(255, 244, 210, 0.98);
+  opacity: 1;
+  /* 점등 완료 후에만 숨쉬기 글로우를 시작해 모험 칸과 동일하게 '어둠→점등'을 읽히게 한다. */
   animation: hearth-open-ignite 0.72s cubic-bezier(0.2, 0.84, 0.3, 1) backwards, hearth-open-breathe 3.6s ease-in-out 0.72s infinite;
 }
 @keyframes hearth-open-ignite {
@@ -217,10 +219,15 @@ export const HEARTH_STYLES = `
 }
 .hearth-cell--open.hearth-cell--has-art {
   background-image:
-    linear-gradient(to bottom, rgba(8, 5, 20, 0.32) 0%, rgba(10, 6, 24, 0.64) 100%),
+    linear-gradient(to bottom, rgba(8, 5, 20, 0.5) 0%, rgba(10, 6, 24, 0.82) 100%),
     var(--cell-art, none);
   background-size: cover;
   background-position: center top;
+}
+.hearth-cell--open.hearth-cell--has-art.is-ignited {
+  background-image:
+    linear-gradient(to bottom, rgba(8, 5, 20, 0.28) 0%, rgba(10, 6, 24, 0.62) 100%),
+    var(--cell-art, none);
 }
 /* 통통 튀어나오는 hover(개방 칸 + 모험 공통) — 오버슈트 easing으로 '뽈롱'. */
 .hearth-cell--open,
