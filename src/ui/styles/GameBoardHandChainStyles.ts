@@ -1191,19 +1191,26 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   42% { transform: scale(1.045); filter: brightness(1.36) saturate(0.72); }
   100% { transform: scale(1); filter: brightness(1) saturate(1); }
 }
-.cell.card.is-frozen .card-face::after {
+.cell.card.is-frozen .card-face::after,
+.cell.card.is-wax-zero-pending .card-face::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.34), rgba(232, 238, 246, 0.08)),
-    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.22) 0 4px, transparent 4px 12px);
+    linear-gradient(180deg,
+      rgba(238, 244, 252, 0.48) 0%,
+      rgba(228, 236, 248, 0.33) 54%,
+      rgba(228, 236, 248, 0.12) 76%,
+      rgba(228, 236, 248, 0) 100%),
+    repeating-linear-gradient(45deg,
+      rgba(255, 255, 255, 0.18) 0 4px,
+      transparent 4px 12px);
   mix-blend-mode: screen;
   pointer-events: none;
   animation: wax-harden-shimmer 1.6s ease-in-out infinite alternate;
 }
-/* 굳음 표기 — 칸 가운데에 큰 글자로(좌상단 딱지 혼잡 회피). 밀랍/얼음 톤 + 미세 일렁임. */
+/* 굳음 표기 — 배지 판을 제거하고 중앙 큰 글자 + 하단 턴수만 남긴다. */
 .frozen-center-badge {
   position: absolute;
   left: 50%;
@@ -1213,29 +1220,33 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  padding: 5px 12px;
-  border-radius: 12px;
-  color: #20283a;
-  background: linear-gradient(180deg, rgba(238, 244, 252, 0.94), rgba(206, 220, 238, 0.9));
-  border: 1px solid rgba(255, 255, 255, 0.78);
-  font-size: clamp(15px, 2.2vh, 19px);
+  gap: 2px;
+  color: rgba(238, 246, 255, 0.96);
   font-weight: 900;
-  letter-spacing: 0.06em;
-  line-height: 1.05;
+  line-height: 0.95;
   text-align: center;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
-  box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.45),
-    0 0 14px rgba(216, 232, 248, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  text-shadow:
+    0 2px 4px rgba(11, 15, 24, 0.96),
+    0 0 12px rgba(192, 220, 246, 0.78),
+    0 0 22px rgba(120, 152, 196, 0.5);
   pointer-events: none;
   animation: wax-harden-shimmer 1.6s ease-in-out infinite alternate;
 }
+.frozen-center-title {
+  font-size: clamp(24px, 4.2vh, 36px);
+  letter-spacing: 0.12em;
+}
 .frozen-center-turns {
-  font-size: clamp(11px, 1.5vh, 13px);
-  font-weight: 800;
-  color: #3a4a66;
+  font-size: clamp(12px, 1.7vh, 15px);
+  color: rgba(220, 234, 248, 0.92);
+  letter-spacing: 0.06em;
+}
+.cell.card.is-wax-zero-pending .frozen-center-badge {
+  animation: wax-zero-hold 0.36s cubic-bezier(0.18, 0.9, 0.24, 1) both;
+}
+@keyframes wax-zero-hold {
+  0% { opacity: 0.78; transform: translate(-50%, -50%) scale(0.96); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1.04); }
 }
 .frozen-badge {
   position: absolute;

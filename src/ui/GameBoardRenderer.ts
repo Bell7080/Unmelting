@@ -1044,9 +1044,9 @@ export class GameBoardRenderer {
     const firstStrikeBadge = this.firstStrikeActive && card.type === CardType.ENEMY
       ? `<div class="first-strike-card-badge" aria-label="선공: 이 적이 먼저 공격합니다">선공</div>`
       : ''
-    // 굳음 표기는 좌상단(이미 포자/성장/이벤트 딱지로 붐빔) 대신 칸 가운데에 큰 글자로 보여 준다.
+    // 굳음 표기는 별도 배지 판 없이 글자만 띄워 카드 일러스트와 HP바를 덜 가린다.
     const frozenBadge = card.isFrozen()
-      ? `<div class="frozen-center-badge" aria-label="굳음 ${card.frozenTurns}턴">굳음<span class="frozen-center-turns">· ${card.frozenTurns}턴</span></div>`
+      ? `<div class="frozen-center-badge" aria-label="굳음 ${card.frozenTurns}턴"><span class="frozen-center-title">굳음</span><span class="frozen-center-turns">${card.frozenTurns}턴</span></div>`
       : ''
     const trapBadge =
       card.type === CardType.TRAP && card.trapKind === 'bomb' && card.isBombArmed
@@ -6125,17 +6125,38 @@ export class GameBoardRenderer {
     })
   }
 
-  /** Wax release effect: wider, softer shards as hardened wax cracks open. */
+  /** Wax release effect: show a readable 0-turn beat first, then crack the hardened wax open. */
   animateWaxThawByIds(cardIds: string[]): Promise<void> {
     if (cardIds.length === 0) return Promise.resolve()
+    const targets: HTMLElement[] = []
     for (const cardId of cardIds) {
       const target = this.findCardElement(cardId)
       if (!target) continue
-      SquareBurst.playOn(target, 'wax-freeze', { count: 14, spread: 180, duration: 760 })
-      target.classList.add('is-wax-thawing')
-      window.setTimeout(() => target.classList.remove('is-wax-thawing'), 620)
+      targets.push(target)
+      target.classList.add('is-wax-zero-pending')
+      // 해동 직전에는 포자 0턴처럼 남은 턴을 먼저 0으로 고쳐 보여 준다.
+      let badge = target.querySelector<HTMLElement>('.frozen-center-badge')
+      if (!badge) {
+        badge = document.createElement('div')
+        badge.className = 'frozen-center-badge'
+        target.appendChild(badge)
+      }
+      badge.setAttribute('aria-label', '굳음 0턴')
+      badge.innerHTML = '<span class="frozen-center-title">굳음</span><span class="frozen-center-turns">0턴</span>'
     }
-    return new Promise((resolve) => window.setTimeout(resolve, 620))
+    if (targets.length === 0) return Promise.resolve()
+
+    return new Promise((resolve) => {
+      window.setTimeout(() => {
+        for (const target of targets) {
+          SquareBurst.playOn(target, 'wax-freeze', { count: 14, spread: 180, duration: 760 })
+          target.classList.remove('is-wax-zero-pending')
+          target.classList.add('is-wax-thawing')
+          window.setTimeout(() => target.classList.remove('is-wax-thawing'), 620)
+        }
+        window.setTimeout(resolve, 620)
+      }, 360)
+    })
   }
 
   /** Generic effect dispatch — used by index.ts to fire bursts on events. */
