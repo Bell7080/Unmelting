@@ -4691,8 +4691,8 @@ export class GameBoardRenderer {
         <li class="exp-legend-row">
           <span class="exp-legend-name">${a.key}</span>
           <span class="exp-legend-bar"><span class="exp-legend-fill" style="width:${pct}%"></span></span>
-          <span class="exp-legend-val">${pct}%${driftTag}</span>
-          <span class="exp-legend-desc">${a.desc}</span>
+          <span class="exp-legend-val"><span class="exp-legend-current">현재 ${pct}%</span>${driftTag}</span>
+          <span class="exp-legend-desc">${a.desc} · 기본 ${basePct}% → 변경 ${pct}%</span>
         </li>`
     }).join('')
 

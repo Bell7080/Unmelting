@@ -25,7 +25,7 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   /* 어둡고 반투명한 유리 + 상단에서 번지는 황금 불빛. */
   background:
     radial-gradient(140% 70% at 50% -8%, rgba(255, 196, 110, 0.16), transparent 62%),
-    linear-gradient(180deg, rgba(26, 19, 12, 0.82), rgba(12, 9, 14, 0.88));
+    linear-gradient(180deg, rgba(26, 19, 12, 0.64), rgba(12, 9, 14, 0.72));
   backdrop-filter: blur(10px);
   border: 0;
   border-radius: 24px;
@@ -111,27 +111,27 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   height: 100%;
   overflow: visible;
 }
-.exp-ring { fill: none; stroke: rgba(255, 220, 160, 0.045); stroke-width: 0.28; }
-.exp-spoke { stroke: rgba(255, 220, 160, 0.04); stroke-width: 0.24; }
+.exp-ring { fill: none; stroke: rgba(255, 220, 160, 0.018); stroke-width: 0.16; }
+.exp-spoke { stroke: rgba(255, 220, 160, 0.022); stroke-width: 0.13; }
 .exp-base {
   fill: none;
-  stroke: rgba(30, 24, 32, 0.62);
-  stroke-width: 0.42;
+  stroke: rgba(255, 210, 150, 0.20);
+  stroke-width: 0.26;
   stroke-dasharray: 1.2 2.4;
   stroke-linejoin: round;
 }
 .exp-current {
-  fill: rgba(255, 196, 110, 0.055);
-  stroke: rgba(255, 255, 255, 0.74);
-  stroke-width: 0.48;
+  fill: rgba(255, 196, 110, 0.032);
+  stroke: rgba(255, 246, 220, 0.58);
+  stroke-width: 0.30;
   stroke-linejoin: round;
   filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.42)) drop-shadow(0 0 10px rgba(255, 204, 120, 0.24));
   animation: exp-line-glow 2.8s ease-in-out infinite;
 }
 .exp-node {
   fill: #fff4c8;
-  stroke: rgba(255, 210, 130, 0.72);
-  stroke-width: 0.22;
+  stroke: rgba(255, 210, 130, 0.58);
+  stroke-width: 0.14;
   filter: drop-shadow(0 0 5px rgba(255, 220, 140, 0.96)) drop-shadow(0 0 12px rgba(244, 178, 86, 0.38));
   animation: exp-node-pulse 2.4s ease-in-out infinite;
 }
@@ -190,7 +190,7 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   align-items: center;
   gap: 4px 10px;
   padding: 9px 13px;
-  background: linear-gradient(180deg, rgba(255, 210, 130, 0.05), rgba(8, 6, 12, 0.36));
+  background: linear-gradient(180deg, rgba(255, 210, 130, 0.032), rgba(8, 6, 12, 0.24));
   border: 0;
   border-radius: 12px;
 }
