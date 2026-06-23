@@ -329,7 +329,8 @@ async function tryCompanionPrediction(): Promise<void> {
   if (!suggested) return
   if (!companion.evaluateWebPrediction(needsPrediction, false, turn)) {
     // 후반부 고점 에나라면 터졌을 예측 지원을 지금은 말로만 비춰, 초반 미숙함을 드러낸다.
-    if (needsPrediction && report.recommendCleanup) {
+    // 실패 회고 대사는 '눈앞에 보였다' 수준이 아니라 실제 피해/즉사 후보를 놓쳤을 때만 낸다.
+    if (needsPrediction && shouldSayMissedWebPrediction(report, gameState.character.health)) {
       const missed = companion.missedPotentialLine('web', turn)
       if (missed) sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'web' })
     }
@@ -347,6 +348,15 @@ async function tryCompanionPrediction(): Promise<void> {
   sayEnaBark(companion.predictLine(predictLineKind), { importance: BARK_IMPORTANCE.clutch })
   // 지원 카드는 이미 손패에 들어갔으므로 트레일 실패가 입력 잠금 해제를 막지 않게 연출만 분리한다.
   void playResourceTrail({ kind: 'chain' }, 'hand', 1)
+}
+
+
+/** 거미줄 예측 실패 회고는 임박 피해가 큰 경우로 좁혀, 단순 함정 발견 대사처럼 보이지 않게 한다. */
+function shouldSayMissedWebPrediction(report: ReturnType<typeof assessThreats>, currentHealth: number): boolean {
+  if (!report.recommendCleanup || !report.hasImminentWebDrop) return false
+  if (report.webLethal) return true
+  // 현재 체력의 절반 이상을 잃을 병합 위협일 때만 '고점이면 막았을' 아쉬움으로 취급한다.
+  return report.potentialWebDamage > 0 && report.potentialWebDamage >= Math.max(2, Math.ceil(currentHealth * 0.5))
 }
 
 /** 클러치 발동 시 플레이어 카드 위에 『 제목 』 + 효과 배너를 띄운다. */
