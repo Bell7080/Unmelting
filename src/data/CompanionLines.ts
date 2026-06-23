@@ -47,7 +47,7 @@ export type SituationId = 'hit' | 'web' | 'treasure' | 'kill' | 'survive' | 'flo
 /** 큰 클러치(에나의 의지) 종류. */
 export type ClutchKind = 'heal' | 'shield' | 'ember'
 /** 소소한 일상 클러치 종류. */
-export type MinorClutchKind = 'crit' | 'dodge' | 'trap' | 'treasure'
+export type MinorClutchKind = 'crit' | 'dodge' | 'counter' | 'trap' | 'treasure'
 
 // ── 프로필 터치 / 상황 반응 ──────────────────────────────────
 
@@ -552,6 +552,10 @@ export const MINOR_CLUTCH_LINES: Record<MinorClutchKind, Line[]> = {
   dodge: [
     { template: '{회피}! {안도}', slots: { 회피: ['피했어', '안 맞아', '스쳤어'], 안도: ['휴, 괜찮아!', '발끝만 옮기면 돼!', '심장이 조금 뛰었어!'] } },
     '안 맞아!', '피했어!', '어림없어!', '휴, 스쳤을 뿐이야!', '발끝만 살짝 옮기면 돼!',
+  ],
+  counter: [
+    { template: '{반격}! {기세}', slots: { 반격: ['되받아쳤어', '물러서지 않아', '맞섰어'], 기세: ['우리 공격도 보여주자!', '아파도 앞으로 가자!', '이번엔 우리 차례야!'] } },
+    '되받아쳤어!', '맞아도 물러서지 않아.', '이번엔 우리 차례야!', '우리 공격도 보여주자!',
   ],
   trap: [
     { template: '{함정}[은/는] {처리}. {안심}', slots: { 함정: ['함정', '가시', '발밑'], 처리: ['내가 먼저 봤어', '살짝 비켜냈어', '이번엔 막았어'], 안심: ['괜찮아!', '안 다쳤어!', '다음 칸도 볼게!'] } },
