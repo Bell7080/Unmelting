@@ -1,6 +1,7 @@
 import { HEARTH_STYLES } from './HearthStyles'
 import { SpriteUrls, spriteForHearthStation } from '../Sprites'
 import { isTouchDevice } from '../MobileTouchManager'
+import { SquareBurst } from '../SquareBurst'
 
 export interface HearthHandlers {
   /** 출발 버튼 클릭 — 직업 선택/런 시작으로 연결한다. */
@@ -18,6 +19,15 @@ const STATION_NAMES = [
 ] as const
 /** 하단 중앙 = 모험. 나머지 칸도 임시 잠금 해제 상태로 점등해 로비 전체를 테스트한다. */
 const ADVENTURE_INDEX = 7
+
+/** 모험 셔터 안에서 고를 수 있는 동행 목록. 해강 외 슬롯은 추후 캐릭터 설계 연결용 임시 자리다. */
+const HEARTH_CHARACTERS = [
+  { id: 'haegang', name: '해강', role: '녹지 않는 소녀', desc: '검은 셔터 너머 첫 모험을 함께 시작하는 기본 동행.', art: SpriteUrls.player },
+  { id: 'ember', name: '빈 동행 I', role: '추후 해금', desc: '새 캐릭터 설계가 들어올 때 연결할 임시 프로필 칸.', art: SpriteUrls.player },
+  { id: 'wax', name: '빈 동행 II', role: '추후 해금', desc: '업적·길드 해금과 이어질 캐릭터 자리.', art: SpriteUrls.player },
+  { id: 'ash', name: '빈 동행 III', role: '추후 해금', desc: '서고 기록 또는 엔드리스 보상과 연결할 예비 칸.', art: SpriteUrls.player },
+  { id: 'candle', name: '빈 동행 IV', role: '추후 해금', desc: '추후 프로필 배경/능력치를 대체할 수 있는 얇은 카드.', art: SpriteUrls.player },
+] as const
 
 /** 우측 인스펙터에 띄울 각 스테이션의 한 줄 설명(§12-3 역할 요약). */
 const STATION_DESC: Record<string, string> = {
@@ -57,6 +67,10 @@ export class HearthScene {
   private touchMode = false
   /** 현재 인스펙터를 띄운 소스 요소(터치 탭 토글 판정용). */
   private inspectSource: HTMLElement | null = null
+  /** 셔터 내부 캐릭터 선택 인덱스. 선택 전에는 카드 스트립과 큰 배경을 동기화한다. */
+  private selectedCharacterIndex = 0
+  /** 캐릭터 확정 후 출발 버튼을 다시 띄워 중복 선택 애니메이션을 막는다. */
+  private characterConfirmed = false
 
   enter(handlers: HearthHandlers): void {
     this.injectStyles()
@@ -76,7 +90,17 @@ export class HearthScene {
         <div class="job-rail-curtain job-rail-curtain--left hearth-curtain" aria-hidden="true"></div>
         <div class="job-rail-curtain job-rail-curtain--right hearth-curtain" aria-hidden="true"></div>
         <div class="hearth-shutter" aria-hidden="true">
-          <button class="hearth-depart" type="button" data-hearth-depart>출발</button>
+          <button class="hearth-back" type="button" data-hearth-back>뒤로가기</button>
+          <div class="hearth-character-stage" aria-live="polite">
+            <div class="hearth-character-bg" style="--character-art: url('${HEARTH_CHARACTERS[0].art}')" aria-hidden="true"></div>
+            <div class="hearth-character-copy">
+              <span class="hearth-character-kicker">동행 선택</span>
+              <strong>${HEARTH_CHARACTERS[0].name}</strong>
+              <small>${HEARTH_CHARACTERS[0].desc}</small>
+            </div>
+          </div>
+          <button class="hearth-depart" type="button" data-hearth-select>선택</button>
+          <div class="hearth-character-strip" role="listbox" aria-label="캐릭터 선택">${this.renderCharacterCards()}</div>
         </div>
       </div>
     `
@@ -125,6 +149,19 @@ export class HearthScene {
 
     overlay.addEventListener('click', (e) => {
       const t = e.target as HTMLElement
+      if (t.closest('[data-hearth-back]')) {
+        this.raiseShutter()
+        return
+      }
+      const characterCard = t.closest<HTMLElement>('[data-hearth-character]')
+      if (characterCard) {
+        this.selectCharacter(Number(characterCard.dataset.hearthCharacter ?? 0))
+        return
+      }
+      if (t.closest('[data-hearth-select]')) {
+        void this.confirmCharacter()
+        return
+      }
       if (t.closest('[data-hearth-depart]')) {
         void this.depart()
         return
@@ -212,9 +249,97 @@ export class HearthScene {
     if (this.shuttered) return
     this.shuttered = true
     this.hideInspector()
+    this.selectedCharacterIndex = 0
+    this.characterConfirmed = false
     this.overlay?.classList.add('is-shuttering')
+    const departButton = this.overlay?.querySelector<HTMLElement>('.hearth-depart')
+    if (departButton) {
+      departButton.textContent = '선택'
+      departButton.removeAttribute('data-hearth-depart')
+      departButton.setAttribute('data-hearth-select', '')
+    }
+    this.selectCharacter(0)
     // 셔터 하강이 끝난 뒤 출발 버튼을 띄운다(셔터 transition과 동기).
     window.setTimeout(() => this.overlay?.classList.add('is-shutter-rest'), 680)
+  }
+
+
+  /** 뒤로가기 → 검은 셔터를 다시 올리고 로비 9칸 상호작용으로 돌아간다. */
+  private raiseShutter(): void {
+    if (!this.shuttered || this.departing) return
+    this.shuttered = false
+    this.characterConfirmed = false
+    this.overlay?.classList.remove('is-shuttering', 'is-shutter-rest', 'is-character-confirmed')
+  }
+
+  /** 얇은 프로필 카드 목록을 직업 선택 카드처럼 현재 선택 중심으로 갱신한다. */
+  private selectCharacter(index: number): void {
+    const clamped = Math.max(0, Math.min(HEARTH_CHARACTERS.length - 1, index))
+    this.selectedCharacterIndex = clamped
+    const character = HEARTH_CHARACTERS[clamped]
+    const root = this.overlay
+    if (!root) return
+    root.querySelectorAll<HTMLElement>('[data-hearth-character]').forEach((card) => {
+      const active = Number(card.dataset.hearthCharacter ?? -1) === clamped
+      card.classList.toggle('is-selected', active)
+      card.setAttribute('aria-selected', active ? 'true' : 'false')
+    })
+    const bg = root.querySelector<HTMLElement>('.hearth-character-bg')
+    bg?.style.setProperty('--character-art', `url('${character.art}')`)
+    root.querySelector<HTMLElement>('.hearth-character-copy strong')!.textContent = character.name
+    root.querySelector<HTMLElement>('.hearth-character-copy small')!.textContent = character.desc
+  }
+
+  /** 캐릭터 확정 → 카드/버튼 하강, 큰 배경이 빛으로 접힌 뒤 플레이어 카드 위치에 꽂힌다. */
+  private async confirmCharacter(): Promise<void> {
+    if (this.characterConfirmed || this.departing) return
+    this.characterConfirmed = true
+    const root = this.overlay
+    const stage = root?.querySelector<HTMLElement>('.hearth-character-stage')
+    const target = document.querySelector<HTMLElement>('.player-card')
+    if (!root || !stage) return
+    const character = HEARTH_CHARACTERS[this.selectedCharacterIndex]
+    root.classList.add('is-character-confirming')
+    await this.wait(360)
+    const rect = stage.getBoundingClientRect()
+    const orb = document.createElement('div')
+    orb.className = 'hearth-character-orb'
+    orb.style.left = `${rect.left + rect.width / 2 - 9}px`
+    orb.style.top = `${rect.top + rect.height / 2 - 9}px`
+    document.body.appendChild(orb)
+    const dest = target?.getBoundingClientRect()
+    const dx = dest ? dest.left + dest.width / 2 - (rect.left + rect.width / 2) : 0
+    const dy = dest ? dest.top + dest.height / 2 - (rect.top + rect.height / 2) : 120
+    orb.style.setProperty('--orb-dx', `${dx}px`)
+    orb.style.setProperty('--orb-dy', `${dy}px`)
+    orb.classList.add('is-flying')
+    await this.wait(620)
+    if (target) {
+      target.querySelector<HTMLElement>('.player-art')?.style.setProperty('background-image', `url('${character.art}')`)
+      SquareBurst.playOn(target, 'score', { count: 34, spread: 180, duration: 720, size: [10, 24] })
+      target.classList.add('hearth-character-installed')
+      window.setTimeout(() => target.classList.remove('hearth-character-installed'), 760)
+    }
+    orb.remove()
+    root.classList.remove('is-character-confirming')
+    root.classList.add('is-character-confirmed')
+    const departButton = root.querySelector<HTMLElement>('.hearth-depart')
+    if (departButton) {
+      departButton.textContent = '출발'
+      departButton.removeAttribute('data-hearth-select')
+      departButton.setAttribute('data-hearth-depart', '')
+    }
+  }
+
+  /** 셔터 하단에 놓이는 임시 캐릭터 프로필 카드. 실제 캐릭터 데이터 연동 전까지 UI 흐름만 보장한다. */
+  private renderCharacterCards(): string {
+    return HEARTH_CHARACTERS.map((character, index) => `
+      <button class="hearth-character-card ${index === 0 ? 'is-selected' : ''}" type="button" role="option" aria-selected="${index === 0 ? 'true' : 'false'}" data-hearth-character="${index}">
+        <span class="hearth-character-thumb" style="--character-art: url('${character.art}')" aria-hidden="true"></span>
+        <span class="hearth-character-name">${character.name}</span>
+        <span class="hearth-character-role">${character.role}</span>
+      </button>
+    `).join('')
   }
 
   /** 출발 → 직업 선택/런 시작. 직업 오버레이(z=200)가 검은 셔터 위로 떠 이음새를 가린 뒤 허브를 걷는다. */
