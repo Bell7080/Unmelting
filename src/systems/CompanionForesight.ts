@@ -27,6 +27,8 @@ export interface ThreatReport {
   strongEnemyIncoming: boolean
   /** 함정 제거를 넘어 공격/포자/레시피/트리플까지 본 최종 추천 손패. */
   recommendedCardId: HandCardId | null
+  /** 대사/로그가 추천 성격을 구분하도록 남기는 큰 분류. */
+  recommendationKind: 'cleanup' | 'spore' | 'attack' | 'triple' | 'recipe' | null
   /** 추천을 택한 이유. 로그/학습 trace에서 사람이 읽기 쉽게 남긴다. */
   recommendationReason: string
   /** 현재 손패 순서/체인에서 보조 카드까지 포함해 몇 장 안에 조합각이 열리는지. */
@@ -78,6 +80,40 @@ function hasHand(character: Character, ids: readonly HandCardId[]): boolean {
   return character.hand.some((card) => ids.includes(card.defId))
 }
 
+/** 에나가 직접 줄 수 있는 주요 공격 손패의 즉시 피해를 현재 공격력 기준으로 보수 계산한다. */
+function estimatedSingleTargetDamage(id: HandCardId, character: Character): number | null {
+  const atk = character.damage
+  switch (id) {
+    case 'ember':
+      return atk + 1
+    case 'bonfire':
+      return Math.floor(atk)
+    case 'sword-and-shield':
+      return Math.floor(0.5 * atk) + 1
+    case 'slash':
+      return Math.floor(2 * atk) + 2
+    case 'fire-arrow':
+      // 무작위 피해 카드는 최소치가 낮아 확정 킬 계산에는 쓰지 않는다.
+      return null
+    default:
+      return null
+  }
+}
+
+/** 필드/전방 필터를 만족하고, 지금 손에 없으며, 가장 깔끔하게 처치 가능한 공격 손패를 고른다. */
+function bestKillSupport(strongEnemy: { card: Card; distance: number } | undefined, character: Character, unlocked: Set<HandCardId>): { id: HandCardId; damage: number } | null {
+  if (!strongEnemy) return null
+  const candidates: HandCardId[] = ['ember', 'bonfire', 'sword-and-shield', 'slash'] as HandCardId[]
+  const viable = candidates
+    .filter((id) => canUse(id, unlocked) && !hasHand(character, [id]))
+    .filter((id) => HAND_CARD_DEFINITIONS[id].targeting.base.zone === 'field' || strongEnemy.distance === 0)
+    .map((id) => ({ id, damage: estimatedSingleTargetDamage(id, character) }))
+    .filter((plan): plan is { id: HandCardId; damage: number } => plan.damage !== null && plan.damage >= strongEnemy.card.getHealth())
+    // 과잉 피해가 가장 적은 카드부터 추천해, '딱 맞는 도움'처럼 느껴지게 한다.
+    .sort((a, b) => (a.damage - strongEnemy.card.getHealth()) - (b.damage - strongEnemy.card.getHealth()))
+  return viable[0] ?? null
+}
+
 /** 현재 체인과 앞으로 누를 손패 순서를 합쳐 레시피 충족까지 필요한 장수를 계산한다. */
 function cardsUntilRecipe(recipe: (typeof RECIPES)[number], chain: readonly HandCardId[], orderedHand: readonly HandCard[], candidate: HandCardId, lookahead: number): number | null {
   const counts = new Map<HandCardId, number>()
@@ -124,6 +160,7 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
   const recommendChitin = canUse('chitin' as HandCardId, unlocked) && (frontTwoWeb || webCells.some(({ card, distance }) => distance === 0 && card.groupCount >= 2))
   const sporeReady = cells.some(({ card, distance }) => card.type === CardType.TRAP && card.trapKind === 'spore' && (distance === 0 || card.sporeTurnsUntilSpread <= 1))
   const strongEnemy = cells.find(({ card, distance }) => card.type === CardType.ENEMY && distance <= 1 && (card.groupCount >= 2 || card.health > character.damage + 1))
+  const killSupport = bestKillSupport(strongEnemy, character, unlocked)
   const lookahead = options.lookaheadCards ?? 4
   const chainSequence = options.chainSequence ?? []
   const firedRecipeIds = options.firedRecipeIds ?? new Set<string>()
@@ -147,28 +184,35 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
 
   let recommendedCardId: HandCardId | null = null
   let recommendationReason = ''
+  let recommendationKind: ThreatReport['recommendationKind'] = null
   let playableInCards: number | undefined
   if (!hasHand(character, ['chitin' as HandCardId]) && recommendChitin) {
     recommendedCardId = 'chitin' as HandCardId
+    recommendationKind = 'cleanup'
     recommendationReason = frontTwoWeb && incomingOneWebs > 0 ? '전방 2칸 거미줄에 1칸 거미줄이 합류해 3칸 위협이 될 수 있음' : '전방 병합 거미줄은 키틴으로 직접 제거 가능'
   } else if (!hasHand(character, ['sweep' as HandCardId, 'chitin' as HandCardId]) && recommendSweep) {
     recommendedCardId = 'sweep' as HandCardId
+    recommendationKind = 'cleanup'
     recommendationReason = '1칸 거미줄들이 다음 전방에서 병합될 가능성이 높음'
   } else if (sporeReady && canUse('holy-water' as HandCardId, unlocked) && !hasHand(character, ['holy-water' as HandCardId])) {
     recommendedCardId = 'holy-water' as HandCardId
+    recommendationKind = 'spore'
     recommendationReason = '포자 전염 카운트가 가까워 필드 정화 가치가 높음'
-  } else if (strongEnemy && canUse('ember' as HandCardId, unlocked) && !hasHand(character, ['ember' as HandCardId])) {
-    recommendedCardId = 'ember' as HandCardId
-    recommendationReason = '전방/대기라인 강적을 단일 고화력 손패로 끊을 필요가 있음'
+  } else if (killSupport) {
+    recommendedCardId = killSupport.id
+    recommendationKind = 'attack'
+    recommendationReason = `전방/대기라인 강적을 피해 ${killSupport.damage} 손패로 처치 가능`
   } else if (tripleNeed) {
     recommendedCardId = tripleNeed.id
     playableInCards = tripleNeed.turns
+    recommendationKind = 'triple'
     recommendationReason = `현재 손패 순서대로 ${tripleNeed.turns}장 안에 트리플 완성 가능`
   } else if (recipeNeed) {
     recommendedCardId = recipeNeed.ingredient
     playableInCards = recipeNeed.turns
+    recommendationKind = 'recipe'
     recommendationReason = `${recipeNeed.recipe.name} 레시피가 현재 체인/손패 순서에서 ${recipeNeed.turns}장 안에 발동 가능`
   }
 
-  return { webCount, potentialWebDamage, webLethal, recommendCleanup: recommendSweep || recommendChitin, strongEnemyIncoming: !!strongEnemy, recommendedCardId, recommendationReason, hasImminentWebDrop, playableInCards }
+  return { webCount, potentialWebDamage, webLethal, recommendCleanup: recommendSweep || recommendChitin, strongEnemyIncoming: !!strongEnemy, recommendedCardId, recommendationKind, recommendationReason, hasImminentWebDrop, playableInCards }
 }

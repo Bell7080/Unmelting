@@ -343,8 +343,10 @@ async function tryCompanionPrediction(): Promise<void> {
   render()
   void boardRenderer.animateClutchOnPlayer('hand-control')
   showClutchChain('predict', report.webLethal ? `${getHandCardDef(suggested).name} 지원 (위험!)` : `${getHandCardDef(suggested).name} 지원`)
-  sayEnaBark(companion.predictLine(report.recommendCleanup ? 'web' : 'spore'), { importance: BARK_IMPORTANCE.clutch })
-  await playResourceTrail({ kind: 'chain' }, 'hand', 1)
+  const predictLineKind = report.recommendationKind === 'cleanup' ? 'web' : report.recommendationKind ?? 'support'
+  sayEnaBark(companion.predictLine(predictLineKind), { importance: BARK_IMPORTANCE.clutch })
+  // 지원 카드는 이미 손패에 들어갔으므로 트레일 실패가 입력 잠금 해제를 막지 않게 연출만 분리한다.
+  void playResourceTrail({ kind: 'chain' }, 'hand', 1)
 }
 
 /** 클러치 발동 시 플레이어 카드 위에 『 제목 』 + 효과 배너를 띄운다. */
