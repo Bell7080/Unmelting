@@ -69,6 +69,15 @@ export interface ClutchContext {
 }
 
 /** 런 종료 신호 — per-player 성향 온라인 적응의 입력. */
+export interface EnaLearningSnapshot {
+  /** 런 안에서 바로 움직이는 수다 가중치 평균. 경험 탭의 실시간 수다 표시용이다. */
+  chattiness: number
+  /** 예측 대비가 이번 런에서 유용했는지 보는 단기 가중치. */
+  predictiveWeight: number
+  /** 상황별 단기 수다 가중치 복사본. */
+  situationWeight: Record<SituationId, number>
+}
+
 export interface RunOutcome {
   /** 사망으로 끝났는가(아니면 클리어/도달). */
   died: boolean
@@ -187,6 +196,15 @@ export class CompanionSystem {
   /** 현재 성향 파라미터(저장/적응/디버그용). */
   getDisposition(): EnaDisposition {
     return this.disp
+  }
+
+  /** 경험 탭이 런-내 학습까지 볼 수 있도록 단기 가중치를 읽기 전용 스냅샷으로 제공한다. */
+  getLearningSnapshot(): EnaLearningSnapshot {
+    return {
+      chattiness: this.chattiness(),
+      predictiveWeight: this.predictiveWeight,
+      situationWeight: { ...this.situationWeight },
+    }
   }
 
   /** 짧은 시간 내 연속 터치 횟수 — 반응 강도를 끌어올린다. */

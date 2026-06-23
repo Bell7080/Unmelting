@@ -55,6 +55,7 @@ import {
   swordIcon,
 } from '@ui/Icons'
 import type { EnaDisposition } from '@systems/EnaDisposition'
+import type { EnaLearningSnapshot } from '@systems/CompanionSystem'
 import { atkDmgHtml, hpDmgHtml, rangeDmgHtml } from '@ui/DamageDisplay'
 
 export interface CardActionDetail {
@@ -4604,15 +4605,15 @@ export class GameBoardRenderer {
   }
 
   /** 경험 패널이 현재 성향/기본 토대를 읽어올 공급자. index.ts가 동료 시스템을 연결한다. */
-  private experienceDataProvider?: () => { disp: EnaDisposition; base: EnaDisposition }
+  private experienceDataProvider?: () => { disp: EnaDisposition; base: EnaDisposition; learning?: EnaLearningSnapshot }
 
-  setExperienceDataProvider(fn: () => { disp: EnaDisposition; base: EnaDisposition }): void {
+  setExperienceDataProvider(fn: () => { disp: EnaDisposition; base: EnaDisposition; learning?: EnaLearningSnapshot }): void {
     this.experienceDataProvider = fn
   }
 
   /** 경험(성향) 패널을 연다 — 에나의 현재 성향을 불빛 성좌(레이더)로 시각화한다.
    *  disp=현재 성향, base=학습된 기본 토대(드리프트 점선으로 표시). 읽기 전용 브라우저. */
-  openExperience(disp: EnaDisposition, base: EnaDisposition): void {
+  openExperience(disp: EnaDisposition, base: EnaDisposition, learning?: EnaLearningSnapshot): void {
     let host = document.getElementById('experience-overlay') as HTMLElement | null
     if (!host) {
       host = document.createElement('div')
@@ -4627,7 +4628,7 @@ export class GameBoardRenderer {
         if (e.key === 'Escape' && host?.classList.contains('is-open')) this.closeExperience()
       })
     }
-    host.innerHTML = this.renderExperience(disp, base)
+    host.innerHTML = this.renderExperience(disp, base, learning)
     host.classList.add('is-open')
   }
 
@@ -4636,15 +4637,17 @@ export class GameBoardRenderer {
   }
 
   /** 성향 → 플레이어가 읽는 5개 '성좌 축'(0~1)으로 압축한다. */
-  private experienceAxes(disp: EnaDisposition): { key: string; value: number; desc: string }[] {
+  private experienceAxes(disp: EnaDisposition, learning?: EnaLearningSnapshot): { key: string; value: number; desc: string }[] {
     const norm = (v: number, lo: number, hi: number) => Math.max(0, Math.min(1, (v - lo) / (hi - lo)))
     const sc = disp.situationChance
     const chat = (sc.hit + sc.web + sc.treasure + sc.kill + sc.survive + sc.flower + sc.event + sc.spore + sc.bomb) / 9
+    // 수다 축은 저장 성향에 런-내 읽음/스킵 보상을 함께 반영해 경험 탭에서 즉시 오르내리게 한다.
+    const liveChat = chat * (learning?.chattiness ?? 1)
     const mc = disp.minorClutchChance
     const minor = (mc.crit + mc.dodge + mc.trap + mc.treasure) / 4
     const guard = (norm(disp.clutchStrength, 0.6, 1.6) + norm(disp.willGainPerDamage, 30, 100) + norm(disp.clutchHpThreshold, 0.2, 0.6)) / 3
     return [
-      { key: '수다', value: norm(chat, 0.12, 0.62), desc: '곁에서 말 거는 빈도' },
+      { key: '수다', value: norm(liveChat, 0.12, 0.62), desc: '곁에서 말 거는 빈도' },
       { key: '예지', value: norm(disp.predictBaseChance, 0.02, 0.95), desc: '위협을 미리 읽어 도구를 건넴' },
       { key: '수호', value: guard, desc: '위기에 회복·방패로 지켜냄' },
       { key: '온정', value: norm(minor, 0.02, 0.6), desc: '덤으로 슬쩍 건네는 선물' },
@@ -4652,8 +4655,8 @@ export class GameBoardRenderer {
     ]
   }
 
-  private renderExperience(disp: EnaDisposition, base: EnaDisposition): string {
-    const axes = this.experienceAxes(disp)
+  private renderExperience(disp: EnaDisposition, base: EnaDisposition, learning?: EnaLearningSnapshot): string {
+    const axes = this.experienceAxes(disp, learning)
     const baseAxes = this.experienceAxes(base)
     const n = axes.length
     const cx = 50
@@ -5715,7 +5718,7 @@ export class GameBoardRenderer {
       ?.addEventListener('click', (e) => {
         e.stopPropagation()
         const data = this.experienceDataProvider?.()
-        if (data) this.openExperience(data.disp, data.base)
+        if (data) this.openExperience(data.disp, data.base, data.learning)
       })
   }
 

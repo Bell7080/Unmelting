@@ -331,10 +331,21 @@ export const CATEGORY_COMMENTS: Record<HandCategory, Line[]> = {
 }
 
 /** 손패별 전용 대사는 고정 한 줄 반복을 피하려고 이름/감각/행동/기분 슬롯을 섞어 만든다. */
-function handCardLines(name: string, mood: readonly string[], action: readonly string[], cute: readonly string[]): Line[] {
+function handCardLines(
+  name: string,
+  mood: readonly string[],
+  action: readonly string[],
+  cute: readonly string[],
+  fixed: readonly string[] = []
+): Line[] {
+  const fixedLines = fixed.length > 0 ? fixed : [`${name}, 잘 기억해둘게.`, `${name}[은/는] 지금 손에 있어도 든든해.`]
   return [
+    // 고정 문장을 먼저 섞어 카드 정체성이 선명한 한줄평도 나오게 한다.
+    ...fixedLines,
+    // 슬롯은 한 문장 안에서 역할이 맞는 단어끼리만 결합해 어색한 합성을 막는다.
     { template: `${name}[은/는] {감각}. {행동}`, slots: { 감각: mood, 행동: action } },
-    { template: `{애교}. ${name}[을/를] {마무리}`, slots: { 애교: cute, 마무리: action } },
+    { template: `{애교}. ${name}[은/는] {감각}`, slots: { 애교: cute, 감각: mood } },
+    { template: `${name}[을/를] {보관}. {마음}`, slots: { 보관: ['잘 챙겨두자', '필요한 때까지 아껴두자', '손 닿는 곳에 둬두자'], 마음: cute } },
   ]
 }
 
@@ -377,10 +388,20 @@ export const CARD_COMMENTS: Record<string, Line[]> = {
 
 
 /** 손패 사용 대사는 획득 감상과 분리해, 실제 행동 순간의 효과/마무리 감정이 나오게 한다. */
-function handCardUseLines(name: string, cast: readonly string[], result: readonly string[], cute: readonly string[]): Line[] {
+function handCardUseLines(
+  name: string,
+  cast: readonly string[],
+  result: readonly string[],
+  cute: readonly string[],
+  fixed: readonly string[] = []
+): Line[] {
+  const fixedLines = fixed.length > 0 ? fixed : [`${name}, 지금이야.`, `${name}[이/가] 제몫을 해줬어.`]
   return [
+    // 행동 순간에는 고정 반응과 변칙 템플릿을 함께 둬 반복과 이상 조합을 동시에 줄인다.
+    ...fixedLines,
     { template: `${name}[을/를] {사용}. {결과}`, slots: { 사용: cast, 결과: result } },
-    { template: `{반응}. ${name}[이/가] {결과}`, slots: { 반응: cute, 결과: result } },
+    { template: `{반응}. {결과}`, slots: { 반응: cute, 결과: result } },
+    { template: `${name}[이/가] {결과} {다음}`, slots: { 결과: result, 다음: ['이제 다음 칸을 보자.', '숨을 놓치지 말자.', '조금 더 버틸 수 있어.'] } },
   ]
 }
 
