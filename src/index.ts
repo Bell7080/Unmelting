@@ -318,6 +318,8 @@ async function tryCompanionPrediction(): Promise<void> {
   const report = assessThreats(gameState.lanes, gameState.character, {
     unlockedCardIds: runCardPool.snapshot().unlocked,
     unlockedRecipeIds: gameState.unlockedRecipeIds,
+    chainSequence: chain.sequence,
+    firedRecipeIds: chain.firedRecipeIds,
   })
   const suggested = report.recommendedCardId
   const hasSuggested = suggested ? gameState.character.hand.some((c) => c.defId === suggested) : false

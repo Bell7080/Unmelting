@@ -4645,7 +4645,13 @@ export class GameBoardRenderer {
     const liveChat = chat * (learning?.chattiness ?? 1)
     const mc = disp.minorClutchChance
     const minor = (mc.crit + mc.dodge + mc.counter + mc.trap + mc.treasure) / 5
-    const guard = (norm(disp.clutchStrength, 0.6, 1.6) + norm(disp.willGainPerDamage, 30, 100) + norm(disp.clutchHpThreshold, 0.2, 0.6)) / 3
+    // 수호 축은 실제 동작값을 바꾸지 않고 경험 탭 표기만 완화한다. 방패/보호 계열은 2스탯당 1.5배 정도로 보이게 환산해 과도한 상승감을 줄인다.
+    const protectionDisplayScale = 0.75
+    const guard = (
+      norm(disp.clutchStrength, 0.6, 1.6) +
+      norm(disp.willGainPerDamage, 30, 100) +
+      norm(disp.clutchHpThreshold, 0.2, 0.6)
+    ) / 3 * protectionDisplayScale
     return [
       { key: '수다', value: norm(liveChat, 0.12, 0.62), desc: '곁에서 말 거는 빈도' },
       { key: '예지', value: norm(disp.predictBaseChance, 0.02, 0.95), desc: '위협을 미리 읽어 도구를 건넴' },
