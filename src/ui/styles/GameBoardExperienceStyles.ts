@@ -1,7 +1,7 @@
 /**
- * 경험(성향) 패널 — 에나의 성향을 '다이아 성좌(레이더)'로 보여주는 읽기 전용 오버레이.
+ * 경험(성향) 패널 — 에나의 성향을 불빛 성좌(레이더)로 보여주는 읽기 전용 오버레이.
  * 도감 모달의 박스 톤이 아니라 화면 위 어두운 반투명 레이어에
- * 다이아 불빛 노드와 얇은 성좌 라인을 올린다.
+ * 불빛 다이아 노드와 얇은 뉴럴 성좌 라인을 올린다.
  */
 export const GAME_BOARD_EXPERIENCE_STYLES = `
 .experience-overlay {
@@ -10,7 +10,9 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   display: none;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(120% 90% at 50% 35%, rgba(12, 10, 18, 0.5), rgba(2, 2, 6, 0.72));
+  background:
+    radial-gradient(90% 70% at 50% 36%, rgba(255, 198, 104, 0.08), transparent 52%),
+    radial-gradient(120% 90% at 50% 35%, rgba(16, 13, 28, 0.58), rgba(2, 2, 6, 0.76));
   backdrop-filter: blur(5px);
   z-index: 240;
   padding: 24px;
@@ -24,8 +26,9 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   grid-template-rows: auto 1fr auto;
   /* 어둡고 반투명한 유리 + 상단에서 번지는 황금 불빛. */
   background:
-    radial-gradient(140% 70% at 50% -8%, rgba(255, 196, 110, 0.16), transparent 62%),
-    linear-gradient(180deg, rgba(26, 19, 12, 0.64), rgba(12, 9, 14, 0.72));
+    radial-gradient(115% 58% at 50% -6%, rgba(255, 206, 126, 0.18), transparent 64%),
+    radial-gradient(90% 75% at 50% 44%, rgba(73, 58, 118, 0.13), transparent 66%),
+    linear-gradient(180deg, rgba(28, 20, 14, 0.68), rgba(10, 8, 16, 0.76));
   backdrop-filter: blur(10px);
   border: 0;
   border-radius: 24px;
@@ -43,7 +46,9 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: radial-gradient(80% 38% at 50% 0%, rgba(255, 211, 130, 0.12), transparent 72%);
+  background:
+    linear-gradient(125deg, transparent 0 28%, rgba(255, 218, 150, 0.035) 28.4% 29%, transparent 29.4% 52%, rgba(126, 108, 190, 0.045) 52.4% 53%, transparent 53.4%),
+    radial-gradient(80% 38% at 50% 0%, rgba(255, 211, 130, 0.12), transparent 72%);
   pointer-events: none;
 }
 .experience-header {
@@ -104,6 +109,20 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   margin-top: 6px;
   filter: drop-shadow(0 0 18px rgba(244, 178, 86, 0.14));
 }
+.experience-constellation::before {
+  content: '';
+  position: absolute;
+  inset: 9%;
+  border-radius: 50%;
+  /* 희미한 우주/뉴럴 먼지층으로 레이더가 빈 도형처럼 보이지 않게 한다. */
+  background:
+    radial-gradient(circle at 25% 30%, rgba(255, 230, 170, 0.20) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 72% 24%, rgba(182, 168, 255, 0.16) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 66% 78%, rgba(255, 196, 110, 0.17) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 34% 70%, rgba(255, 244, 210, 0.13) 0 1px, transparent 1.8px);
+  box-shadow: inset 0 0 40px rgba(255, 198, 104, 0.035);
+  pointer-events: none;
+}
 .experience-radar {
   position: absolute;
   inset: 0;
@@ -111,8 +130,8 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   height: 100%;
   overflow: visible;
 }
-.exp-ring { fill: none; stroke: rgba(255, 220, 160, 0.018); stroke-width: 0.16; }
-.exp-spoke { stroke: rgba(255, 220, 160, 0.022); stroke-width: 0.13; }
+.exp-ring { fill: rgba(255, 205, 126, 0.006); stroke: rgba(255, 220, 160, 0.052); stroke-width: 0.18; }
+.exp-spoke { stroke: rgba(186, 165, 255, 0.09); stroke-width: 0.14; }
 .exp-base {
   fill: none;
   stroke: rgba(255, 210, 150, 0.20);
@@ -121,8 +140,8 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   stroke-linejoin: round;
 }
 .exp-current {
-  fill: rgba(255, 196, 110, 0.032);
-  stroke: rgba(255, 246, 220, 0.58);
+  fill: rgba(255, 196, 110, 0.05);
+  stroke: rgba(255, 246, 220, 0.66);
   stroke-width: 0.30;
   stroke-linejoin: round;
   filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.42)) drop-shadow(0 0 10px rgba(255, 204, 120, 0.24));
@@ -130,8 +149,8 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
 }
 .exp-node {
   fill: #fff4c8;
-  stroke: rgba(255, 210, 130, 0.58);
-  stroke-width: 0.14;
+  stroke: rgba(255, 210, 130, 0.72);
+  stroke-width: 0.16;
   filter: drop-shadow(0 0 5px rgba(255, 220, 140, 0.96)) drop-shadow(0 0 12px rgba(244, 178, 86, 0.38));
   animation: exp-node-pulse 2.4s ease-in-out infinite;
 }
@@ -208,7 +227,7 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: 999px;
-  background: linear-gradient(90deg, #c8842e, #ffd887);
+  background: linear-gradient(90deg, #9b6ee8 0%, #c8842e 34%, #ffd887 100%);
   box-shadow: 0 0 8px rgba(255, 204, 120, 0.6);
 }
 .exp-legend-val { grid-area: val; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #fde6c4; }
