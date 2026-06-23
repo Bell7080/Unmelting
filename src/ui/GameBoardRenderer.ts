@@ -3859,8 +3859,8 @@ export class GameBoardRenderer {
   }
   getBossAttackCountdownText(): string {
     const n = this.bossAttackCountdown == null ? 3 : this.bossAttackCountdown
-    // 임박(0턴)일수록 더 위협적으로 — 0이면 '공격!' 강조.
-    return n <= 0 ? '공격!' : `반격 ${n}턴`
+    // 좌상단 배지는 카드의 다른 턴 표기와 맞춰 명령형 문구 없이 숫자만 읽히게 한다.
+    return `${Math.max(0, n)}턴`
   }
 
   /** 보스 보상 카드 클릭 시 일반 보물칸 처치 그라마를 그대로 재사용해 흔들+확대 사라짐.

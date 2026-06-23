@@ -1015,25 +1015,31 @@ export const GAME_BOARD_RAIL_STYLES = `
   top: 8px;
   left: 10px;
   z-index: 7;
-  padding: 6px 16px;
-  border-radius: 12px;
-  color: #fff;
-  background: linear-gradient(180deg, rgba(214, 72, 52, 0.98), rgba(120, 18, 18, 0.98));
-  border: 1.5px solid rgba(255, 158, 132, 0.85);
-  font-size: clamp(16px, 2.4vh, 22px);
+  min-width: 48px;
+  padding: 4px 12px 5px;
+  border-radius: 999px;
+  color: rgba(255, 242, 214, 0.98);
+  background:
+    linear-gradient(180deg, rgba(88, 35, 24, 0.96), rgba(54, 18, 19, 0.98)),
+    radial-gradient(circle at 50% 0%, rgba(255, 200, 128, 0.28), transparent 72%);
+  border: 1px solid rgba(255, 186, 118, 0.78);
+  font-size: clamp(14px, 2vh, 18px);
   font-weight: 900;
-  letter-spacing: 0.06em;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-align: center;
   text-transform: none;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.85);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.86);
   box-shadow:
-    inset 0 1px 0 rgba(255, 200, 172, 0.4),
-    0 3px 10px rgba(0, 0, 0, 0.55),
-    0 0 18px rgba(214, 72, 52, 0.62);
-  animation: boss-badge-pulse 1.15s ease-in-out infinite;
+    inset 0 1px 0 rgba(255, 220, 170, 0.32),
+    inset 0 -7px 12px rgba(62, 14, 17, 0.36),
+    0 3px 10px rgba(0, 0, 0, 0.48),
+    0 0 14px rgba(214, 72, 52, 0.42);
+  animation: boss-badge-pulse 1.35s ease-in-out infinite;
 }
 @keyframes boss-badge-pulse {
-  0%, 100% { transform: scale(1); box-shadow: inset 0 1px 0 rgba(255, 200, 172, 0.38), 0 3px 10px rgba(0,0,0,0.55), 0 0 14px rgba(214, 72, 52, 0.5); }
-  50%      { transform: scale(1.06); box-shadow: inset 0 1px 0 rgba(255, 200, 172, 0.5), 0 3px 12px rgba(0,0,0,0.6), 0 0 26px rgba(255, 104, 84, 0.85); }
+  0%, 100% { transform: scale(1); box-shadow: inset 0 1px 0 rgba(255, 220, 170, 0.3), inset 0 -7px 12px rgba(62,14,17,0.34), 0 3px 10px rgba(0,0,0,0.48), 0 0 12px rgba(214,72,52,0.36); }
+  50%      { transform: scale(1.04); box-shadow: inset 0 1px 0 rgba(255, 220, 170, 0.42), inset 0 -7px 12px rgba(62,14,17,0.4), 0 3px 12px rgba(0,0,0,0.54), 0 0 20px rgba(255,104,84,0.68); }
 }
 /* 보스 방패 칩 — 플레이어처럼 HP 게이지 위 좌측에 놓되, 3×3 보스 크기에 맞춰 더 크게 읽힌다. */
 .boss-face-shield-chip {
