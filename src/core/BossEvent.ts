@@ -357,15 +357,19 @@ export class BossEventController {
       : Math.min(rawDamage - blocked, card.getHealth())
     if (dealt > 0) card.takeDamage(dealt)
     if (blocked > 0) this.inject.recordNotice(`밀랍 방패가 피해 ${blocked}를 막았다`, 'info')
-    state.turn += 1
+    // 굳은 보스에게도 직접 공격 행동 비용은 적용한다.
+    // 다만 밀랍 로직처럼 보스 반격 주기(state.turn)만 멈춰 카운트다운이 줄지 않게 한다.
+    let turnMod = state.turn % state.def.attackInterval
     this.tm.tickEmberDecay()
-
-    // 카운터: 0이면 이번 턴에 반격 — 0을 잠깐 보여 준 뒤 공격한다.
-    const turnMod = state.turn % state.def.attackInterval
-    const displayValue = turnMod === 0 ? 0 : state.def.attackInterval - turnMod
-    this.br.setBossAttackCountdown(displayValue)
-    if (turnMod === 0) {
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 220))
+    if (!bossFrozen) {
+      state.turn += 1
+      // 카운터: 0이면 이번 턴에 반격 — 0을 잠깐 보여 준 뒤 공격한다.
+      turnMod = state.turn % state.def.attackInterval
+      const displayValue = turnMod === 0 ? 0 : state.def.attackInterval - turnMod
+      this.br.setBossAttackCountdown(displayValue)
+      if (turnMod === 0) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 220))
+      }
     }
     await this.br.animateDamageNumbersById(dealt > 0 ? [{ cardId: card.id, amount: dealt }] : [])
     // 플레이어가 보스를 직접 공격했으므로 공격 시 발동 유물(훌륭한 대화수단)을 판정한다.
@@ -381,9 +385,10 @@ export class BossEventController {
       return
     }
 
-    if (turnMod === 0 && bossFrozen) {
-      // 굳음 중 — 보스는 반격도 특수행동(소환/소각/페이지)도 하지 못한다.
-      this.inject.recordNotice('보스가 굳어 반격하지 못한다', 'info')
+    if (bossFrozen) {
+      // 굳음 중 — 행동 비용은 냈지만 보스 반격 주기는 줄이지 않고 밀랍 지속시간만 1턴 소모한다.
+      this.inject.recordNotice('보스가 굳어 반격 주기가 멈췄다', 'info')
+      card.tickFrozen()
       this.inject.render()
     } else if (turnMod === 0) {
       if (state.def.specialEnemyKind === 'waxWitch') {
@@ -459,8 +464,6 @@ export class BossEventController {
       }
     }
 
-    // 보스 턴이 한 번 지났으니 굳음을 1턴 소모한다(필드 적과 동일한 감각).
-    if (bossFrozen) card.tickFrozen()
     // 반격이 끝났으면 카운터를 다음 주기 초기값으로 복구한다.
     if (turnMod === 0) {
       this.br.setBossAttackCountdown(state.def.attackInterval)
