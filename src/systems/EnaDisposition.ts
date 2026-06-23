@@ -21,6 +21,10 @@ export interface EnaDisposition {
   minorClutchChance: Record<MinorClutchKind, number>
   /** 각성(최후의 의지) 발동 확률. */
   awakenChance: number
+  /** 역경/클라이맥스에서 소소한 클러치 확률 상한을 일시적으로 여는 배율. */
+  clutchAdversityBoost: number
+  /** 플레이어가 에나 말을 들어준 유대가 극적 개입으로 번질 확률 보정. */
+  bondClimaxChance: number
 
   /** 예측 대비 기본 게이트 확률(×predictiveWeight). 거미줄 청소를 미리 건네는 적극성. */
   predictBaseChance: number
@@ -82,6 +86,8 @@ export const DEFAULT_DISPOSITION: EnaDisposition = {
     treasure: 0.15,
   },
   awakenChance: 0.12,
+  clutchAdversityBoost: 1.0,
+  bondClimaxChance: 0.08,
   predictBaseChance: 0.5,
   predictCooldown: 6,
   clutchHpThreshold: 0.4,
@@ -144,6 +150,8 @@ export function clampDisposition(d: EnaDisposition): EnaDisposition {
   }
   out.lootCommentChance = clamp(out.lootCommentChance, PROB)
   out.awakenChance = clamp(out.awakenChance, { lo: 0.02, hi: 0.4 })
+  out.clutchAdversityBoost = clamp(out.clutchAdversityBoost, { lo: 0.6, hi: 2.4 })
+  out.bondClimaxChance = clamp(out.bondClimaxChance, { lo: 0, hi: 0.25 })
   out.predictBaseChance = clamp(out.predictBaseChance, PROB)
   out.predictCooldown = clamp(out.predictCooldown, { lo: 2, hi: 20 })
   out.clutchHpThreshold = clamp(out.clutchHpThreshold, { lo: 0.2, hi: 0.6 })
@@ -202,6 +210,8 @@ const SIM_FITTED = {
   minorClutchCrit: 0.041,
   minorClutchCounter: 0.05,
   minorClutchTreasure: 0.055,
+  clutchAdversityBoost: 1.45,
+  bondClimaxChance: 0.11,
 } as const
 
 const SIM_TO_REAL_BLEND = 0.5
@@ -221,6 +231,8 @@ function buildBaseDisposition(): EnaDisposition {
   d.willGainPerDamage = lerp(d.willGainPerDamage, SIM_FITTED.willGainPerDamage)
   d.willGainFlatBonus = lerp(d.willGainFlatBonus, SIM_FITTED.willGainFlatBonus)
   d.awakenChance = lerp(d.awakenChance, SIM_FITTED.awakenChance)
+  d.clutchAdversityBoost = lerp(d.clutchAdversityBoost, SIM_FITTED.clutchAdversityBoost)
+  d.bondClimaxChance = lerp(d.bondClimaxChance, SIM_FITTED.bondClimaxChance)
   d.predictBaseChance = lerp(d.predictBaseChance, SIM_FITTED.predictBaseChance)
   d.predictCooldown = lerp(d.predictCooldown, SIM_FITTED.predictCooldown)
   d.minorClutchChance.crit = lerp(d.minorClutchChance.crit, SIM_FITTED.minorClutchCrit)

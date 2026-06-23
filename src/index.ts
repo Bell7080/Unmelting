@@ -1292,7 +1292,7 @@ async function applyWaterBucketExtraDamage(card: Card, distance: number): Promis
 /** 소소한 클러치 — 급소: 살아남은 적에게 가끔 추가 피해(공격력 + 2). */
 async function applyCompanionCrit(card: Card, distance: number): Promise<void> {
   if (!companionWorldCanSpeak() || card.health <= 0) return
-  if (!companion.rollMinorClutch('crit')) return
+  if (!companion.rollMinorClutch('crit', { adversity: card.enemyPower >= 6 || card.getHealth() > gameState.character.damage * 2, bond: true })) return
   const dmg = Math.max(1, gameState.character.damage + 2)
   const newHealth = card.takeDamage(dmg)
   recordNotice(`에나의 의지 — 급소! 추가 피해 ${dmg}`, 'info')
@@ -4239,7 +4239,7 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   if (totalDamage > 0) companion.gainWill(totalDamage, gameState.character.maxHealth)
   if (gameState.character.ember <= 1) companion.gainWillFlat(15)
   // 소소한 클러치 — 회피: 가장 큰 피격 1대를 무효(되돌림)한다.
-  if (totalDamage > 0 && companionWorldCanSpeak() && companion.rollMinorClutch('dodge')) {
+  if (totalDamage > 0 && companionWorldCanSpeak() && companion.rollMinorClutch('dodge', { adversity: gameState.character.health <= Math.max(1, gameState.character.maxHealth * 0.35), bond: true })) {
     const maxHit = hits.reduce((m, h) => Math.max(m, h.damage), 0)
     if (maxHit > 0) {
       gameState.character.heal(maxHit)
@@ -4252,7 +4252,7 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   }
 
   // 소소한 클러치 — 반격: 회피와 달리 피해는 받은 뒤, 공격력 기반으로 공격자를 되친다.
-  if (totalDamage > 0 && companionWorldCanSpeak() && companion.rollMinorClutch('counter')) {
+  if (totalDamage > 0 && companionWorldCanSpeak() && companion.rollMinorClutch('counter', { adversity: totalDamage >= Math.max(3, gameState.character.maxHealth * 0.25), bond: true })) {
     const attackerIds = [...new Set(hits.filter((h) => h.damage > 0).map((h) => h.cardId))]
     const counterDamage = Math.max(1, gameState.character.damage)
     const damaged: { cardId: string; amount: number }[] = []
@@ -4621,7 +4621,7 @@ async function handleCardAction(e: Event): Promise<void> {
     result.damageTaken > 0 &&
     !result.trapIgnored &&
     companionWorldCanSpeak() &&
-    companion.rollMinorClutch('trap')
+    companion.rollMinorClutch('trap', { adversity: result.damageTaken >= Math.max(3, gameState.character.maxHealth * 0.25), bond: true })
   ) {
     gameState.character.health = Math.min(
       gameState.character.maxHealth,
@@ -4702,19 +4702,21 @@ async function handleCardAction(e: Event): Promise<void> {
   }
 
   // 소소한 클러치 — 보물 추가 보상: 상자를 열 때 가끔 손패 1장을 덤으로.
-  if (
-    result.cardRemoved &&
-    card.type === CardType.TREASURE &&
-    companionWorldCanSpeak() &&
-    companion.rollMinorClutch('treasure')
-  ) {
-    const drop = DropSystem.generateDrop('treasure')
-    if (gameState.character.addHandCard(drop)) {
-      recordNotice('에나의 의지 — 덤! 손패 +1', 'info')
-      void boardRenderer.animateClutchOnPlayer('treasure-gain')
-      showClutchChain('treasure', '손패 +1')
-      sayEnaBark(companion.minorClutchLine('treasure'), { importance: BARK_IMPORTANCE.clutch })
-      render()
+  if (result.cardRemoved && card.type === CardType.TREASURE && companionWorldCanSpeak()) {
+    const treasureClutch = companion.rollMinorClutch('treasure', { adversity: !result.itemGainedIds?.length, bond: true })
+    if (treasureClutch) {
+      const drop = DropSystem.generateDrop('treasure')
+      if (gameState.character.addHandCard(drop)) {
+        recordNotice('에나의 의지 — 덤! 손패 +1', 'info')
+        void boardRenderer.animateClutchOnPlayer('treasure-gain')
+        showClutchChain('treasure', '손패 +1')
+        sayEnaBark(companion.minorClutchLine('treasure'), { importance: BARK_IMPORTANCE.clutch })
+        render()
+      }
+    } else if (!result.itemGainedIds?.length) {
+      // 보물에서도 '찾지 못한 가능성'을 말로만 비춰, 초기 미숙함을 거미줄 밖으로 확장한다.
+      const missed = companion.missedPotentialLine('treasure', gameState.getCurrentTurn())
+      if (missed) sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'treasure' })
     }
   }
 

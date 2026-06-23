@@ -68,6 +68,14 @@ export interface ClutchContext {
   emberLow: boolean
 }
 
+/** 소소한 클러치 판정에 붙는 맥락. 역경/유대가 클라이맥스 상한을 임시로 연다. */
+export interface MinorClutchContext {
+  /** 죽음 직전·강적·보상 실패처럼 평소보다 극적인 순간인가. */
+  adversity?: boolean
+  /** 플레이어와의 유대가 개입을 밀어주는 상황인가(대사를 들어준 정도 등). */
+  bond?: boolean
+}
+
 /** 런 종료 신호 — per-player 성향 온라인 적응의 입력. */
 export interface EnaLearningSnapshot {
   /** 런 안에서 바로 움직이는 수다 가중치 평균. 경험 탭의 실시간 수다 표시용이다. */
@@ -395,9 +403,18 @@ export class CompanionSystem {
     return null
   }
 
-  /** 소소한 일상 클러치가 이번 행동에 발동하는지(낮은 확률). */
-  rollMinorClutch(kind: MinorClutchKind): boolean {
-    return Math.random() < this.disp.minorClutchChance[kind]
+  /**
+   * 소소한 일상 클러치 판정. 기본은 낮은 확률이지만, 치명적/극적 맥락에서는
+   * clutchAdversityBoost와 유대(chattiness)를 곱해 일시적으로 상한을 연다.
+   */
+  rollMinorClutch(kind: MinorClutchKind, ctx: MinorClutchContext = {}): boolean {
+    let chance = this.disp.minorClutchChance[kind]
+    if (ctx.adversity) chance *= this.disp.clutchAdversityBoost
+    if (ctx.bond) chance += this.disp.bondClimaxChance * Math.max(0, this.chattiness() - 0.8)
+    if (chance <= 0) return false
+    if (chance >= 1) return true
+    const cap = ctx.adversity || ctx.bond ? 0.45 : 0.22
+    return Math.random() < Math.min(cap, chance)
   }
 
   /** 소소한 클러치 대사 한 줄. */
@@ -444,7 +461,7 @@ export class CompanionSystem {
    * 후반부 고점 에나라면 개입했을 법한 위협을 지금은 놓치는 연출.
    * 실제 효과는 주지 않고, 플레이어에게 '알고 있었지만 아직 부족하다'는 신호만 남긴다.
    */
-  missedPotentialLine(kind: 'web' | 'shield', turn: number): string | null {
+  missedPotentialLine(kind: 'web' | 'shield' | 'treasure', turn: number): string | null {
     if (turn - this.lastMissedPotentialTurn < this.minTurnGap()) return null
     if (Math.random() >= 0.45) return null
     this.lastMissedPotentialTurn = turn

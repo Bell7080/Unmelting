@@ -4652,12 +4652,17 @@ export class GameBoardRenderer {
       norm(disp.willGainPerDamage, 30, 100) +
       norm(disp.clutchHpThreshold, 0.2, 0.6)
     ) / 3 * protectionDisplayScale
+    const grit = (
+      norm(disp.awakenChance, 0.02, 0.4) * 0.55 +
+      norm(disp.clutchAdversityBoost, 0.6, 2.4) * 0.3 +
+      norm(disp.bondClimaxChance, 0, 0.25) * 0.15
+    )
     return [
       { key: '수다', value: norm(liveChat, 0.12, 0.62), desc: '곁에서 말 거는 빈도' },
       { key: '예지', value: norm(disp.predictBaseChance, 0.02, 0.95), desc: '위협을 미리 읽어 도구를 건넴' },
       { key: '수호', value: guard, desc: '위기에 회복·방패로 지켜냄' },
       { key: '온정', value: norm(minor, 0.02, 0.6), desc: '덤으로 슬쩍 건네는 선물' },
-      { key: '불굴', value: norm(disp.awakenChance, 0.02, 0.4), desc: '쓰러지기 직전 다시 일어섬' },
+      { key: '불굴', value: grit, desc: '역경·유대로 한계를 잠깐 넘김' },
     ]
   }
 
