@@ -16,7 +16,7 @@ const STATION_NAMES = [
   '길드', '잿빛 굴레', '서고',
   '무역', '모험', '만찬',
 ] as const
-/** 하단 중앙 = 모험. 현 단계는 이 칸만 점등·상호작용한다. */
+/** 하단 중앙 = 모험. 나머지 칸도 임시 잠금 해제 상태로 점등해 로비 전체를 테스트한다. */
 const ADVENTURE_INDEX = 7
 
 /** 우측 인스펙터에 띄울 각 스테이션의 한 줄 설명(§12-3 역할 요약). */
@@ -142,7 +142,10 @@ export class HearthScene {
     // 페이드인이 끝난 뒤에야 커튼 로직 시작: 조금 더 닫혀 있다가 천천히 열린다 → 모험 점등.
     window.setTimeout(() => this.overlay?.classList.add('is-opening'), 1700)
     window.setTimeout(() => {
-      this.overlay?.querySelector<HTMLElement>('[data-hearth-station="adventure"]')?.classList.add('is-ignited')
+      this.overlay?.querySelectorAll<HTMLElement>('.hearth-cell--open, [data-hearth-station="adventure"]').forEach((cell, idx) => {
+        // 임시 전면 개방 상태에서도 모든 칸이 모험처럼 같은 beat로 점등되도록 순차 발화한다.
+        window.setTimeout(() => cell.classList.add('is-ignited'), idx * 55)
+      })
       // 대문이 다 열리고 모험이 점등된 뒤에야 hover 인스펙터를 허용한다(플레이어블 시작).
       this.interactive = true
     }, 1700 + 1500)
@@ -233,8 +236,8 @@ export class HearthScene {
    * 기획서 `Unmelting_Game_Concept.md` §12(거점 화면)에 확정 명시돼 있다.
    *   0 암시장 / 1 타로 / 2 도박장 / 3 길드 / 4 잿빛 굴레(중앙) / 5 서고
    *   6 무역 / 7 모험(하단 중앙) / 8 만찬
-   * 현 단계는 `모험`(index 7)만 점등·상호작용하고, 나머지는 이름을 단 채
-   * 어둡게 잠긴 칸으로 노출한다(초기 해금 상태). 해금은 추후 단계.
+   * 현 단계는 임시 해금 상태로 9칸 모두 점등·인스펙터 접근이 가능하다.
+   * 모험(index 7)만 셔터/출발 동작을 갖고, 나머지는 정보 확인용 칸이다.
    * 각 칸은 `data-inspect-*`로 우측 인스펙터 hover 정보를 제공한다.
    */
   private renderCells(): string {
