@@ -23,6 +23,8 @@ export interface ThreatReport {
   webLethal: boolean
   /** 합쳐지기 전에 청소/키틴으로 미리 치우는 게 이로운가. */
   recommendCleanup: boolean
+  /** 전방/대기 1칸 안의 강적 존재. 에나 미숙 대사와 방어 대비 판단에 쓴다. */
+  strongEnemyIncoming: boolean
   /** 함정 제거를 넘어 공격/포자/레시피/트리플까지 본 최종 추천 손패. */
   recommendedCardId: HandCardId | null
   /** 추천을 택한 이유. 로그/학습 trace에서 사람이 읽기 쉽게 남긴다. */
@@ -168,5 +170,5 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
     recommendationReason = `${recipeNeed.recipe.name} 레시피가 현재 체인/손패 순서에서 ${recipeNeed.turns}장 안에 발동 가능`
   }
 
-  return { webCount, potentialWebDamage, webLethal, recommendCleanup: recommendSweep || recommendChitin, recommendedCardId, recommendationReason, hasImminentWebDrop, playableInCards }
+  return { webCount, potentialWebDamage, webLethal, recommendCleanup: recommendSweep || recommendChitin, strongEnemyIncoming: !!strongEnemy, recommendedCardId, recommendationReason, hasImminentWebDrop, playableInCards }
 }

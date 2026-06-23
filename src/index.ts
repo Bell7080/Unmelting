@@ -326,7 +326,15 @@ async function tryCompanionPrediction(): Promise<void> {
   const hasCleanup = gameState.character.hand.some((c) => CLEANUP_CARD_IDS.includes(c.defId))
   // 거미줄 예측은 실제 전방 진입 가능성이 있을 때만 통과시켜 1칸 web 오판 빗자루 지급을 줄인다.
   const needsPrediction = !!suggested && (report.recommendCleanup ? !hasCleanup : !hasSuggested)
-  if (!suggested || !companion.evaluateWebPrediction(needsPrediction, false, turn)) return
+  if (!suggested) return
+  if (!companion.evaluateWebPrediction(needsPrediction, false, turn)) {
+    // 후반부 고점 에나라면 터졌을 예측 지원을 지금은 말로만 비춰, 초반 미숙함을 드러낸다.
+    if (needsPrediction && report.recommendCleanup) {
+      const missed = companion.missedPotentialLine('web', turn)
+      if (missed) sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'web' })
+    }
+    return
+  }
   // 판 분석 결과가 고른 해금 손패를 건넨다. 함정 외 공격/포자/레시피/트리플 보조도 이 경로를 공유한다.
   const drop = DropSystem.makeCard(suggested)
   if (!gameState.character.addHandCard(drop)) return // 손패 가득 — 다음 기회에
@@ -357,7 +365,22 @@ function tryCompanionClutch(): void {
     hpRatio: c.maxHealth > 0 ? c.health / c.maxHealth : 1,
     emberLow: c.ember <= 1,
   })
-  if (plan) applyClutch(plan)
+  if (plan) {
+    applyClutch(plan)
+    return
+  }
+  const turn = gameState.getCurrentTurn()
+  const report = assessThreats(gameState.lanes, c, {
+    unlockedCardIds: runCardPool.snapshot().unlocked,
+    unlockedRecipeIds: gameState.unlockedRecipeIds,
+    chainSequence: chain.sequence,
+    firedRecipeIds: chain.firedRecipeIds,
+  })
+  // 강적을 보고도 아직 방패를 크게 못 올리는 초반 에나의 '말뿐인 도움'을 낮은 빈도로 표현한다.
+  if (report.strongEnemyIncoming) {
+    const missed = companion.missedPotentialLine('shield', turn)
+    if (missed) sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'hit' })
+  }
 }
 
 /** 클러치 효과를 실제로 적용하고 연출(체인 배너·대사·트레일·로그)을 함께 낸다. */

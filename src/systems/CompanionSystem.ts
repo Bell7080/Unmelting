@@ -241,6 +241,8 @@ export class CompanionSystem {
   private awakened = false
   /** 마지막 예측 대비 발동 턴(예측 남발 방지). */
   private lastPredictTurn = -999
+  /** 후반부라면 도왔을 상황을 초반부에는 말로만 비추는 미숙 대사 쿨다운. */
+  private lastMissedPotentialTurn = -999
   /**
    * 예측 대비 학습 가중치(0.2~1.8). 건넨 대비 카드를 플레이어가 곧 쓰면(유용) 오르고,
    * 기한 내 안 쓰면(불필요) 내려간다. = 가짜 RL: "이 대비가 도움이 됐나"를 누적.
@@ -438,6 +440,17 @@ export class CompanionSystem {
     return this.pickFrom(`predict:${kind}`, PREDICT_LINES[kind], 'normal')
   }
 
+  /**
+   * 후반부 고점 에나라면 개입했을 법한 위협을 지금은 놓치는 연출.
+   * 실제 효과는 주지 않고, 플레이어에게 '알고 있었지만 아직 부족하다'는 신호만 남긴다.
+   */
+  missedPotentialLine(kind: 'web' | 'shield', turn: number): string | null {
+    if (turn - this.lastMissedPotentialTurn < this.minTurnGap()) return null
+    if (Math.random() >= 0.45) return null
+    this.lastMissedPotentialTurn = turn
+    return this.pickFrom(`predict:miss-${kind}`, PREDICT_LINES[`miss-${kind}`], kind === 'shield' ? 'urgent' : 'normal')
+  }
+
   /** 건넨 대비 카드를 플레이어가 곧 썼다 → 예측이 유용했다(더 적극적으로 대비). */
   recordPredictionUsed(): void {
     this.predictiveWeight = Math.min(this.disp.weightMax, this.predictiveWeight * this.disp.predictUpGrowth)
@@ -487,6 +500,7 @@ export class CompanionSystem {
     this.awakened = false
     this.lastWorldBarkTurn = -999
     this.lastPredictTurn = -999
+    this.lastMissedPotentialTurn = -999
     this.touchStreak = 0
   }
 
