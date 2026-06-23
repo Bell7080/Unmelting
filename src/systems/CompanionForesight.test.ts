@@ -76,4 +76,35 @@ describe('CompanionForesight', () => {
     expect(report.playableInCards).toBe(4)
   })
 
+  it('chooses the least-overkill unlocked attack card that can finish a strong enemy', () => {
+    const gs = new GameState()
+    gs.character.damage = 2
+    const merged = new Card('merged-enemy', CardType.ENEMY, '합체 적', 'test', 3, 4)
+    merged.groupCount = 2
+    gs.lanes[1].setCardAtDistance(0, merged)
+
+    const report = assessThreats(gs.lanes, gs.character, {
+      unlockedCardIds: ['ember', 'bonfire', 'sword-and-shield'] as HandCardId[],
+    })
+
+    expect(report.recommendedCardId).toBe('ember')
+    expect(report.recommendationKind).toBe('attack')
+    expect(report.recommendationReason).toContain('피해 3')
+  })
+
+  it('can recommend front-only attack support such as sword-and-shield when it is the clean answer', () => {
+    const gs = new GameState()
+    gs.character.damage = 4
+    const front = new Card('front-enemy', CardType.ENEMY, '앞 적', 'test', 3, 4)
+    front.groupCount = 2
+    gs.lanes[1].setCardAtDistance(0, front)
+
+    const report = assessThreats(gs.lanes, gs.character, {
+      unlockedCardIds: ['sword-and-shield', 'slash'] as HandCardId[],
+    })
+
+    expect(report.recommendedCardId).toBe('sword-and-shield')
+    expect(report.recommendationKind).toBe('attack')
+  })
+
 })
