@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { GameState } from '@core/GameState'
 import { Card, CardType } from '@entities/Card'
 import type { HandCardId } from '@entities/HandCard'
+import { DropSystem } from './DropSystem'
 import { assessThreats } from './CompanionForesight'
 
 /** 작은 보드 세팅 도우미: 예지 테스트가 위협 배치만 드러내게 한다. */
@@ -35,4 +36,44 @@ describe('CompanionForesight', () => {
     expect(report.webLethal).toBe(true)
     expect(report.recommendedCardId).toBe('chitin')
   })
+
+  it('recommends recipe support only when current chain and hand order can fire it soon', () => {
+    const gs = new GameState()
+    gs.lanes[1].setCardAtDistance(0, new Card('enemy', CardType.ENEMY, '적', 'test', 5, 1))
+    gs.character.addHandCard(DropSystem.makeCard('ember'))
+
+    const ready = assessThreats(gs.lanes, gs.character, {
+      unlockedCardIds: ['candle'] as HandCardId[],
+      chainSequence: [],
+      lookaheadCards: 2,
+    })
+
+    expect(ready.recommendedCardId).toBe('candle')
+    expect(ready.playableInCards).toBe(2)
+    expect(ready.recommendationReason).toContain('2장 안에 발동 가능')
+
+    const tooFar = assessThreats(gs.lanes, gs.character, {
+      unlockedCardIds: ['candle'] as HandCardId[],
+      chainSequence: [],
+      lookaheadCards: 1,
+    })
+
+    expect(tooFar.recommendedCardId).toBeNull()
+  })
+
+  it('reports how many ordered hand cards are needed before triple support pays off', () => {
+    const gs = new GameState()
+    gs.character.addHandCard(DropSystem.makeCard('match'))
+    gs.character.addHandCard(DropSystem.makeCard('ember'))
+    gs.character.addHandCard(DropSystem.makeCard('match'))
+
+    const report = assessThreats(gs.lanes, gs.character, {
+      unlockedCardIds: ['match'] as HandCardId[],
+      lookaheadCards: 4,
+    })
+
+    expect(report.recommendedCardId).toBe('match')
+    expect(report.playableInCards).toBe(4)
+  })
+
 })
