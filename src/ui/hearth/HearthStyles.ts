@@ -576,4 +576,71 @@ body.hearth-lobby #ingame-backdrop.is-out {
   line-height: 1.45;
   color: rgba(214, 200, 178, 0.86);
 }
+/* ── 모험 셔터: 캐릭터 선택 → 출발 단계 ───────────────────────────────
+   직업 선택의 카드 넘김 감각을 로비 셔터 하단에 맞춘 얇은 프로필 카드 UI. */
+.hearth-back {
+  grid-column: 1; grid-row: 3; align-self: end; justify-self: start;
+  margin: 0 0 clamp(10px, 1.6vh, 18px) clamp(10px, 1.6vw, 18px);
+  padding: 9px 14px; border-radius: 999px;
+  border: 1px solid rgba(255, 222, 140, 0.42);
+  background: rgba(18, 12, 24, 0.72); color: rgba(255, 236, 188, 0.9);
+  font: 800 13px/1 'OkDanDan', Georgia, serif; letter-spacing: 0.08em;
+  opacity: 0; transform: translateX(-10px); pointer-events: none;
+  transition: opacity 0.28s ease, transform 0.28s ease, border-color 0.18s ease;
+}
+#hearth-overlay.is-shutter-rest .hearth-back { opacity: 1; transform: translateX(0); pointer-events: auto; }
+.hearth-back:hover { border-color: var(--color-flame, #ffd778); }
+.hearth-character-stage {
+  grid-column: 1 / 4; grid-row: 1 / 4; position: relative; overflow: hidden;
+  opacity: 0; transform: translateY(14px); pointer-events: none;
+  transition: opacity 0.38s ease, transform 0.38s cubic-bezier(0.2, 0.8, 0.3, 1), filter 0.34s ease;
+}
+#hearth-overlay.is-shutter-rest .hearth-character-stage { opacity: 1; transform: translateY(0); }
+.hearth-character-bg {
+  position: absolute; inset: -4% -2% 20%;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.08), rgba(0,0,0,0.72)),
+    radial-gradient(circle at 50% 42%, rgba(255, 215, 120, 0.18), transparent 38%),
+    var(--character-art, none);
+  background-size: cover; background-position: center 20%;
+  filter: saturate(0.9) brightness(0.72); opacity: 0.72;
+  transition: background-image 0.24s ease, filter 0.24s ease, opacity 0.24s ease;
+}
+.hearth-character-copy { position: absolute; left: 7%; right: 7%; top: 10%; color: #ffe7a8; text-shadow: 0 2px 14px rgba(0,0,0,0.9); font-family: 'OkDanDan', Georgia, serif; }
+.hearth-character-kicker { display: block; color: rgba(248, 206, 120, 0.88); font-size: clamp(13px, 1.8vh, 17px); letter-spacing: 0.18em; margin-bottom: 8px; }
+.hearth-character-copy strong { display: block; font-size: clamp(32px, 6vh, 64px); letter-spacing: 0.08em; }
+.hearth-character-copy small { display: block; max-width: 28em; margin-top: 8px; color: rgba(225, 210, 188, 0.86); font-size: clamp(13px, 1.8vh, 18px); line-height: 1.45; }
+.hearth-character-strip {
+  grid-column: 1 / 4; grid-row: 3; align-self: end; justify-self: center;
+  display: flex; gap: clamp(6px, 1vw, 12px); max-width: 92%; padding-bottom: clamp(8px, 1.4vh, 16px);
+  opacity: 0; transform: translateY(16px); pointer-events: none;
+  transition: opacity 0.32s ease, transform 0.32s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+#hearth-overlay.is-shutter-rest .hearth-character-strip { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.hearth-character-card {
+  width: clamp(82px, 10vw, 132px); height: clamp(38px, 6.2vh, 58px);
+  display: grid; grid-template-columns: 34% 1fr; grid-template-rows: 1fr 1fr; column-gap: 8px; align-items: center;
+  border-radius: 10px; border: 1px solid rgba(139,111,71,0.64);
+  background: linear-gradient(180deg, rgba(42, 28, 42, 0.92), rgba(18, 12, 24, 0.96));
+  color: rgba(235, 218, 190, 0.82); cursor: pointer; font-family: 'OkDanDan', Georgia, serif;
+  box-shadow: inset 0 1px 0 rgba(255,232,168,0.12), 0 8px 18px rgba(0,0,0,0.42);
+  transition: transform 0.2s cubic-bezier(0.34,1.56,0.5,1), border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.hearth-character-card:hover, .hearth-character-card.is-selected { transform: translateY(-7px); border-color: var(--color-flame, #ffd778); box-shadow: inset 0 1px 0 rgba(255,232,168,0.24), 0 12px 24px rgba(0,0,0,0.5), 0 0 24px rgba(244,164,96,0.36); }
+.hearth-character-thumb { grid-row: 1 / 3; width: 100%; height: 100%; border-radius: 8px 0 0 8px; background-image: var(--character-art, none); background-size: cover; background-position: center; opacity: 0.86; }
+.hearth-character-name { align-self: end; font-size: clamp(12px, 1.7vh, 16px); font-weight: 900; color: #ffe7a8; }
+.hearth-character-role { align-self: start; font-size: clamp(10px, 1.35vh, 12px); color: rgba(214,200,178,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#hearth-overlay.is-character-confirming .hearth-character-strip,
+#hearth-overlay.is-character-confirming .hearth-depart { transform: translateY(110%); opacity: 0; pointer-events: none; }
+#hearth-overlay.is-character-confirming .hearth-character-stage { filter: brightness(1.85) saturate(1.2); transform: scale(0.08); opacity: 0; transition: transform 0.34s cubic-bezier(0.28, 0.78, 0.34, 1), opacity 0.34s ease, filter 0.34s ease; }
+#hearth-overlay.is-character-confirmed .hearth-character-stage,
+#hearth-overlay.is-character-confirmed .hearth-character-strip,
+#hearth-overlay.is-character-confirmed .hearth-back { display: none; }
+#hearth-overlay.is-character-confirmed .hearth-depart { grid-row: 3; opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+.hearth-character-orb { position: fixed; z-index: 260; width: 18px; height: 18px; border-radius: 50%; pointer-events: none; background: #fff3bd; box-shadow: 0 0 22px #ffd778, 0 0 56px rgba(244,164,96,0.72); }
+.hearth-character-orb.is-flying { animation: hearth-character-orb-flight 0.6s cubic-bezier(0.18,0.78,0.22,1) forwards; }
+@keyframes hearth-character-orb-flight { to { transform: translate(var(--orb-dx), var(--orb-dy)) scale(0.45); opacity: 0.82; } }
+.player-card.hearth-character-installed { animation: hearth-character-installed 0.72s cubic-bezier(0.2,0.8,0.3,1); }
+@keyframes hearth-character-installed { 0% { filter: brightness(1.7); transform: translateY(-3px) scale(1.03); } 100% { filter: brightness(1); transform: none; } }
+
 `
