@@ -1362,7 +1362,6 @@ export class BossEventController {
     }
     if (damaged.length === 0) return false
     this.inject.recordNotice(`품격있는 대처: 반격 피해 1 (${damaged.length}체)`, 'info')
-    this.br.spawnRetaliationFloat(1)
     await this.br.animateDamageNumbersById(damaged)
     if (bossHit) this.br.playHudCounterFeedback('boss-hp', Math.max(0, state.card.getHealth()))
     for (const card of killedSummons) await this.defeatSummonedEnemy(card)
