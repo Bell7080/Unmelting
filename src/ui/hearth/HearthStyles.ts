@@ -375,7 +375,8 @@ export const HEARTH_STYLES = `
   transition: background 0.48s ease 0.66s, backdrop-filter 0.48s ease 0.66s;
 }
 #hearth-overlay.is-shuttering .hearth-shutter { transform: translateY(0); pointer-events: auto; }
-#hearth-overlay.is-shutter-rest .hearth-shutter::before { background: rgba(4, 2, 8, 0.42); backdrop-filter: blur(5px); }
+/* 상세 화면 veil은 배경이 죽었다는 느낌만 나도록 아주 약하게 둔다. */
+#hearth-overlay.is-shutter-rest .hearth-shutter::before { background: rgba(4, 2, 8, 0.12); backdrop-filter: blur(0.35px); }
 .hearth-back {
   position: absolute; left: clamp(10px, 1.6vw, 18px); bottom: clamp(10px, 1.6vh, 18px); z-index: 8;
   padding: 9px 14px; border-radius: 999px; border: 1px solid rgba(255,222,140,0.42);
@@ -484,8 +485,9 @@ body.hearth-lobby {
 }
 body.hearth-lobby #ingame-backdrop {
   opacity: 1 !important;
-  filter: blur(2px) saturate(0.95) brightness(0.86) !important;
-  transform: scale(1.02) !important;
+  /* 첫 거점 방문 배경은 흐림 없이 원본 일러스트를 보여 준다. */
+  filter: blur(0) saturate(0.98) brightness(0.96) !important;
+  transform: scale(1) !important;
   transition: opacity 0.5s ease, filter 1.6s ease, transform 1.6s ease !important;
 }
 /* 출발 시 backdrop 페이드아웃(검은 배경 노출) — 그 뒤 body 배경이 페이드인된다. */
@@ -682,6 +684,12 @@ body.hearth-lobby #ingame-backdrop.is-out {
   background-size: cover;
   background-position: center;
 }
+
+#hearth-overlay.is-trade-mode.is-shutter-rest .hearth-shutter::before {
+  /* 공통 셔터 veil을 무역에서는 꺼서 hearth_bg_004가 선명하게 남도록 한다. */
+  background: transparent;
+  backdrop-filter: none;
+}
 #hearth-overlay.is-trade-mode .hearth-character-stage,
 #hearth-overlay.is-trade-mode .hearth-character-strip,
 #hearth-overlay.is-trade-mode .hearth-depart {
@@ -695,7 +703,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
   display: grid;
   grid-template-columns: minmax(150px, 20%) minmax(0, 80%);
   gap: clamp(12px, 2vw, 28px);
-  padding: clamp(18px, 3vh, 34px) clamp(14px, 2vw, 28px) clamp(64px, 9vh, 94px);
+  padding: clamp(18px, 3vh, 34px) clamp(14px, 2vw, 28px) clamp(56px, 8vh, 84px);
   opacity: 0;
   pointer-events: none;
 }
@@ -730,8 +738,11 @@ body.hearth-lobby #ingame-backdrop.is-out {
   color: rgba(255, 238, 196, 0.82);
   font: 900 clamp(21px, 3.4vh, 34px)/1 'OkDanDan', Georgia, serif;
   letter-spacing: 0.18em;
-  text-align: left;
+  text-align: center;
   padding: 0 clamp(10px, 1.5vw, 18px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   box-shadow: none;
   text-shadow: 0 8px 16px rgba(0, 0, 0, 0.78), 0 0 14px rgba(244, 164, 96, 0.2);
@@ -772,7 +783,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
 }
 .hearth-trade-tab:hover span,
 .hearth-trade-tab.is-active span {
-  transform: translateX(8px) translateY(-2px) scale(1.035);
+  transform: translateY(-2px) scale(1.035);
 }
 .hearth-trade-tab:hover span::before,
 .hearth-trade-tab.is-active span::before {
@@ -785,7 +796,10 @@ body.hearth-lobby #ingame-backdrop.is-out {
   min-height: 0;
   overflow-x: auto;
   overflow-y: visible;
-  padding: clamp(18px, 5vh, 72px) clamp(10px, 1.4vw, 18px) clamp(30px, 7vh, 82px);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: clamp(24px, 5vh, 72px) clamp(10px, 1.4vw, 18px) clamp(46px, 8vh, 92px);
   scrollbar-width: thin;
   scrollbar-color: rgba(244, 164, 96, 0.72) transparent;
 }
@@ -798,7 +812,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
   gap: clamp(16px, 2.4vw, 30px);
   align-items: center;
   min-width: max-content;
-  padding: clamp(12px, 2vh, 22px) clamp(18px, 3vw, 46px) clamp(20px, 4vh, 42px) 2px;
+  padding: clamp(18px, 3vh, 30px) clamp(18px, 3vw, 46px) clamp(28px, 5vh, 50px) 2px;
 }
 .hearth-trade-pack {
   flex: 0 0 clamp(142px, 17vw, 210px);
@@ -865,9 +879,9 @@ body.hearth-lobby #ingame-backdrop.is-out {
 #hearth-overlay:not(.is-dinner-mode) .hearth-dinner-stage { display: none; }
 .hearth-dinner-stage { grid-column: 1 / 4; grid-row: 1 / 4; position: relative; overflow: hidden; z-index: 6; opacity: 0; pointer-events: none; }
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-stage { opacity: 1; pointer-events: auto; transition: opacity 0.28s ease; }
-.hearth-dinner-bg { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,2,7,0.42), rgba(2,1,4,0.82)), var(--hearth-dinner-bg, none), radial-gradient(circle at 50% 42%, rgba(150,28,34,0.2), transparent 56%); background-size: cover; background-position: center; opacity: 0; filter: saturate(0.9) brightness(0.58); transition: opacity 0.52s ease 0.18s, filter 0.52s ease 0.18s; }
-#hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-bg { opacity: 1; filter: saturate(0.96) brightness(0.68); }
-#hearth-overlay.is-dinner-opened .hearth-dinner-bg { filter: saturate(0.78) brightness(0.36) blur(1.2px); }
+.hearth-dinner-bg { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,2,7,0.18), rgba(2,1,4,0.28)), var(--hearth-dinner-bg, none), radial-gradient(circle at 50% 42%, rgba(150,28,34,0.12), transparent 56%); background-size: cover; background-position: center; opacity: 0; filter: saturate(0.96) brightness(0.82); transition: opacity 0.52s ease 0.18s, filter 0.52s ease 0.18s; }
+#hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-bg { opacity: 1; filter: saturate(0.98) brightness(0.84); }
+#hearth-overlay.is-dinner-opened .hearth-dinner-bg { filter: saturate(0.94) brightness(0.74) blur(0.35px); }
 #hearth-overlay.is-dinner-after .hearth-dinner-bg { filter: saturate(0.92) brightness(0.72); }
 .hearth-dinner-curtain { display: none; position: absolute; top: 0; bottom: 0; width: 54%; z-index: 3; background: repeating-linear-gradient(90deg, rgba(70,8,18,0.98) 0 18px, rgba(24,2,10,0.98) 18px 34px), linear-gradient(180deg, #2a0610, #070207); box-shadow: inset 0 0 34px rgba(0,0,0,0.72), 0 0 28px rgba(0,0,0,0.56); transition: transform 0.92s cubic-bezier(0.2,0.84,0.3,1) 0.08s; }
 .hearth-dinner-curtain--left { left: 0; }
