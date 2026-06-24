@@ -808,4 +808,51 @@ body.hearth-lobby #ingame-backdrop.is-out {
 @keyframes hearth-trade-pack-rise { to { opacity: 1; transform: translateY(0); } }
 @keyframes hearth-trade-pack-leave { to { opacity: 0; transform: translateY(-48px); } }
 
+/* ── 만찬 셔터 임시 화면 ──────────────────────────────────────────────
+   검붉은 커튼 → hearth_bg_005 페이드인 → 무료 팩 레일 → 3단계 카드 선택 흐름.
+   실제 버프 데이터 연결 전까지 단색 임시 일러스트를 카드 안에 채운다. */
+#hearth-overlay.is-dinner-mode .hearth-shutter {
+  background: linear-gradient(180deg, rgba(5, 2, 6, 0.82), rgba(2, 1, 4, 0.94));
+}
+#hearth-overlay.is-dinner-mode .hearth-character-stage,
+#hearth-overlay.is-dinner-mode .hearth-character-strip,
+#hearth-overlay.is-dinner-mode .hearth-depart,
+#hearth-overlay.is-dinner-mode .hearth-trade-stage { display: none; }
+#hearth-overlay:not(.is-dinner-mode) .hearth-dinner-stage { display: none; }
+.hearth-dinner-stage { grid-column: 1 / 4; grid-row: 1 / 4; position: relative; overflow: hidden; z-index: 6; opacity: 0; pointer-events: none; }
+#hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-stage { opacity: 1; pointer-events: auto; transition: opacity 0.28s ease; }
+.hearth-dinner-bg { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(12,3,8,0.18), rgba(4,1,5,0.72)), var(--hearth-dinner-bg, none), radial-gradient(circle at 50% 42%, rgba(150,28,34,0.28), transparent 56%); background-size: cover; background-position: center; opacity: 0; filter: saturate(0.92) brightness(0.78); transition: opacity 0.72s ease 0.34s, filter 0.72s ease 0.34s; }
+#hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-bg { opacity: 1; filter: saturate(1) brightness(0.9); }
+.hearth-dinner-curtain { position: absolute; top: 0; bottom: 0; width: 54%; z-index: 3; background: repeating-linear-gradient(90deg, rgba(70,8,18,0.98) 0 18px, rgba(24,2,10,0.98) 18px 34px), linear-gradient(180deg, #2a0610, #070207); box-shadow: inset 0 0 34px rgba(0,0,0,0.72), 0 0 28px rgba(0,0,0,0.56); transition: transform 0.92s cubic-bezier(0.2,0.84,0.3,1) 0.08s; }
+.hearth-dinner-curtain--left { left: 0; }
+.hearth-dinner-curtain--right { right: 0; }
+#hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-curtain--left { transform: translateX(-96%); }
+#hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-curtain--right { transform: translateX(96%); }
+.hearth-dinner-rail { position: absolute; left: 6%; right: 6%; top: 42%; display: flex; gap: clamp(12px, 2vw, 24px); overflow-x: auto; padding: 14px 10px 22px; z-index: 4; opacity: 0; transform: translateY(26px); scrollbar-width: thin; scrollbar-color: rgba(244,164,96,0.64) rgba(20,8,14,0.4); transition: opacity 0.38s ease 0.98s, transform 0.38s cubic-bezier(0.2,0.84,0.3,1) 0.98s, filter 0.3s ease, brightness 0.3s ease; }
+#hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-rail { opacity: 1; transform: translateY(0); }
+#hearth-overlay.is-dinner-opened .hearth-dinner-rail { filter: blur(3px) brightness(0.5); pointer-events: none; }
+.hearth-dinner-pack { flex: 0 0 clamp(132px, 18vw, 190px); min-height: clamp(170px, 29vh, 250px); border-radius: 16px; border: 1px solid rgba(215,166,88,0.46); background: linear-gradient(180deg, rgba(42,24,34,0.88), rgba(14,8,16,0.96)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; padding: 12px; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,232,168,0.16), 0 18px 34px rgba(0,0,0,0.52); }
+.hearth-dinner-pack.is-locked { opacity: 0.46; cursor: default; }
+.hearth-dinner-pack-art { flex: 1; border-radius: 12px; border: 1px dashed rgba(255,222,140,0.22); background: radial-gradient(circle at 50% 38%, rgba(255,232,168,0.14), transparent 54%), linear-gradient(150deg, rgba(110,30,42,0.5), rgba(24,12,26,0.94)); }
+.hearth-dinner-pack strong { font-size: clamp(18px, 2.4vh, 24px); letter-spacing: 0.1em; }
+.hearth-dinner-pack small { color: rgba(220,204,178,0.72); font-size: clamp(12px, 1.65vh, 15px); }
+.hearth-dinner-choices { position: absolute; left: 8%; right: 8%; top: 10%; z-index: 5; display: flex; justify-content: center; gap: clamp(12px, 2.2vw, 28px); pointer-events: none; }
+#hearth-overlay.is-dinner-opened .hearth-dinner-choices { pointer-events: auto; }
+.hearth-dinner-choice { width: clamp(126px, 17vw, 190px); min-height: clamp(178px, 32vh, 270px); border-radius: 16px; border: 1px solid rgba(215,166,88,0.58); background: linear-gradient(180deg, rgba(44,28,38,0.96), rgba(13,8,16,0.98)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; padding: 12px; display: flex; flex-direction: column; justify-content: flex-end; gap: 7px; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,232,168,0.2), 0 20px 40px rgba(0,0,0,0.62); transition: transform 0.2s cubic-bezier(0.34,1.56,0.5,1), box-shadow 0.18s ease; }
+.hearth-dinner-choice:hover { transform: translateY(-8px) scale(1.04); box-shadow: inset 0 1px 0 rgba(255,232,168,0.26), 0 26px 48px rgba(0,0,0,0.68), 0 0 28px rgba(244,164,96,0.34); }
+.hearth-dinner-choice-art { flex: 1; border-radius: 12px; background: radial-gradient(circle at 52% 38%, rgba(255,236,188,0.24), transparent 34%), linear-gradient(145deg, var(--food-color, #7e2630), rgba(20,10,22,0.94)); border: 1px solid rgba(255,222,140,0.18); }
+.hearth-dinner-choice strong { font-size: clamp(18px,2.4vh,24px); letter-spacing: 0.08em; }
+.hearth-dinner-choice small { color: rgba(255,226,178,0.78); font-size: clamp(12px,1.7vh,15px); }
+.hearth-dinner-picked { position: absolute; left: 50%; bottom: 8%; z-index: 6; transform: translateX(-50%); width: clamp(136px, 18vw, 200px); min-height: clamp(130px, 22vh, 184px); pointer-events: none; }
+.hearth-dinner-plate-card { width: 100%; height: 100%; border-radius: 15px; border: 1px solid rgba(255,215,120,0.58); background: linear-gradient(180deg, rgba(44,28,38,0.94), rgba(14,8,16,0.98)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; box-shadow: inset 0 1px 0 rgba(255,232,168,0.2), 0 16px 34px rgba(0,0,0,0.62), 0 0 22px rgba(244,164,96,0.24); }
+.hearth-dinner-plate-card span { flex: 1; min-height: 74px; border-radius: 11px; background: radial-gradient(circle at 50% 44%, rgba(255,236,188,0.24), transparent 38%), linear-gradient(145deg, var(--food-color, #7e2630), rgba(22,10,24,0.94)); }
+.hearth-dinner-plate-card strong { font-size: clamp(16px,2.1vh,22px); }
+.hearth-dinner-plate-card small { color: rgba(220,204,178,0.74); font-size: clamp(11px,1.45vh,13px); line-height: 1.25; }
+#hearth-overlay.is-dinner-finalizing .hearth-dinner-choices { opacity: 0; transform: translateY(-24px); transition: opacity 0.28s ease, transform 0.28s ease; pointer-events: none; }
+#hearth-overlay.is-dinner-finalizing .hearth-dinner-picked { animation: hearth-dinner-final-hover 0.72s ease-in-out both; }
+@keyframes hearth-dinner-final-hover { 0% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) translateY(-24px) scale(1.16); } 100% { transform: translateX(-50%) translateY(-16px) scale(1.08); } }
+.hearth-dinner-orb { position: fixed; z-index: 260; width: 20px; height: 20px; border-radius: 50%; pointer-events: none; background: #ffe7a8; box-shadow: 0 0 22px #ffd778, 0 0 58px rgba(244,164,96,0.76); }
+.hearth-dinner-orb.is-flying { animation: hearth-dinner-orb-flight 0.64s cubic-bezier(0.18,0.78,0.22,1) forwards; }
+@keyframes hearth-dinner-orb-flight { to { transform: translate(var(--orb-dx), var(--orb-dy)) scale(0.38); opacity: 0.84; } }
+
 `

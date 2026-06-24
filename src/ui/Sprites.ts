@@ -160,6 +160,7 @@ import hearthBackdropUrl from '../assets/sprites/hearth_bg_001.webp'
 import hearthDoorUrl from '../assets/sprites/hearth_bg_002.webp'
 import hearthAdventureUrl from '../assets/sprites/hearth_bg_003.webp'
 import hearthTradeUrl from '../assets/sprites/hearth_bg_004.webp'
+import hearthDinnerUrl from '../assets/sprites/hearth_bg_005.webp'
 import questMajorUrl from '../assets/sprites/quest_001.webp'
 import questMediumUrl from '../assets/sprites/quest_002.webp'
 import questMinorUrl from '../assets/sprites/quest_003.webp'
@@ -358,6 +359,8 @@ export const SpriteUrls = {
     adventure: hearthAdventureUrl,
     /** 무역 셔터 내부 배경(hearth_bg_004). */
     trade: hearthTradeUrl,
+    /** 만찬 셔터 내부 배경(hearth_bg_005). */
+    dinner: hearthDinnerUrl,
   } as const,
   /** 의뢰(퀘스트) 딱지 일러스트 — 등급별(메인/중간/소형). */
   questTickets: {
