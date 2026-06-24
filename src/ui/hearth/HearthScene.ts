@@ -644,9 +644,10 @@ export class HearthScene {
   }
 
 
-  /** 무역 좌측 탭 라벨은 실제 데이터 연결 전까지 1번~8번 임시 문구를 쓴다. */
+  /** 무역 좌측 탭 라벨은 실제 데이터 연결 전까지 1번~6번 임시 문구를 쓴다. */
   private renderTradeTabs(): string {
-    return Array.from({ length: 8 }, (_, index) => `
+    // 하단 뒤로가기와 겹치던 7·8번 임시 탭은 실제 데이터가 붙기 전까지 숨긴다.
+    return Array.from({ length: 6 }, (_, index) => `
       <button class="hearth-trade-tab ${index === 0 ? 'is-active' : ''}" type="button" role="tab" aria-selected="${index === 0 ? 'true' : 'false'}" data-hearth-trade-tab="${index}">
         <span data-shadow-text="${index + 1}번">${index + 1}번</span>
       </button>
@@ -666,7 +667,8 @@ export class HearthScene {
 
   /** 탭 클릭 시 우측 카드팩 자리만 갈아 끼워 추후 실제 상품 매핑 지점을 고정한다. */
   private selectTradeTab(index: number): void {
-    this.selectedTradeTab = Math.max(0, Math.min(7, index))
+    // 현재 노출하는 임시 탭 수에 맞춰 선택 범위를 제한한다.
+    this.selectedTradeTab = Math.max(0, Math.min(5, index))
     const root = this.overlay
     if (!root) return
     root.querySelectorAll<HTMLElement>('[data-hearth-trade-tab]').forEach((tab) => {
