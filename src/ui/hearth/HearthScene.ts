@@ -17,7 +17,8 @@ const STATION_NAMES = [
   '길드', '잿빛 굴레', '서고',
   '무역', '모험', '만찬',
 ] as const
-/** 하단 중앙 = 모험. 나머지 칸도 임시 잠금 해제 상태로 점등해 로비 전체를 테스트한다. */
+/** 하단 좌측 = 무역, 하단 중앙 = 모험. 둘 다 셔터형 상세 화면을 가진다. */
+const TRADE_INDEX = 6
 const ADVENTURE_INDEX = 7
 
 /** 마지막으로 본 모험 동행을 다음 거점 진입에도 복원하기 위한 로컬 저장 키. */
@@ -76,6 +77,8 @@ export class HearthScene {
   private characterConfirmed = false
   /** 커버플로우 드래그 시작 X 좌표. 좌우 한 바퀴 순환 입력을 판정한다. */
   private dragStartX: number | null = null
+  /** 현재 무역 화면에서 선택된 임시 탭. */
+  private selectedTradeTab = 0
 
   enter(handlers: HearthHandlers): void {
     this.injectStyles()
@@ -96,6 +99,12 @@ export class HearthScene {
         <div class="job-rail-curtain job-rail-curtain--right hearth-curtain" aria-hidden="true"></div>
         <div class="hearth-shutter" aria-hidden="true">
           <button class="hearth-back" type="button" data-hearth-back>뒤로가기</button>
+          <div class="hearth-trade-stage" aria-label="무역 임시 화면">
+            <aside class="hearth-trade-tabs" role="tablist" aria-label="무역 분류">${this.renderTradeTabs()}</aside>
+            <section class="hearth-trade-pack-area" aria-live="polite">
+              <div class="hearth-trade-pack-grid">${this.renderTradePacks(0)}</div>
+            </section>
+          </div>
           <div class="hearth-character-stage" aria-live="polite">
             <div class="hearth-adventure-backdrop" aria-hidden="true"></div>
             <div class="hearth-showcase-card" aria-hidden="true">
@@ -116,6 +125,7 @@ export class HearthScene {
     // 커튼 대문과 모험 셔터 배경을 CSS 변수로 주입해 검은 슬랩 대신 실제 거점 배경을 쓴다.
     overlay.style.setProperty('--hearth-door', `url('${SpriteUrls.hearth.door}')`)
     overlay.style.setProperty('--hearth-adventure-bg', `url('${SpriteUrls.hearth.adventure}')`)
+    overlay.style.setProperty('--hearth-trade-bg', `url('${SpriteUrls.hearth.trade}')`)
     document.body.appendChild(overlay)
     this.overlay = overlay
 
@@ -171,6 +181,11 @@ export class HearthScene {
         this.selectCharacter(Number(characterCard.dataset.hearthCharacter ?? 0), 'click')
         return
       }
+      const tradeTab = t.closest<HTMLElement>('[data-hearth-trade-tab]')
+      if (tradeTab) {
+        this.selectTradeTab(Number(tradeTab.dataset.hearthTradeTab ?? 0))
+        return
+      }
       if (t.closest('[data-hearth-select]')) {
         void this.confirmCharacter()
         return
@@ -179,6 +194,7 @@ export class HearthScene {
         void this.depart()
         return
       }
+      if (t.closest('[data-hearth-station="trade"]')) this.descendTradeShutter()
       if (t.closest('[data-hearth-station="adventure"]')) this.descendShutter()
     })
 
@@ -264,7 +280,8 @@ export class HearthScene {
     this.hideInspector()
     this.selectedCharacterIndex = this.readLastCharacterIndex()
     this.characterConfirmed = false
-    this.overlay?.classList.add('is-shuttering')
+    this.overlay?.classList.remove('is-trade-mode', 'is-trade-leaving')
+    this.overlay?.classList.add('is-shuttering', 'is-adventure-mode')
     const departButton = this.overlay?.querySelector<HTMLElement>('.hearth-depart')
     if (departButton) {
       departButton.textContent = '선택'
@@ -277,12 +294,33 @@ export class HearthScene {
   }
 
 
+  /** 무역 선택 → hearth_bg_004 셔터가 내려오고 좌측 탭/우측 임시 카드팩 그리드를 보여 준다. */
+  private descendTradeShutter(): void {
+    if (this.shuttered) return
+    this.shuttered = true
+    this.hideInspector()
+    this.selectedTradeTab = 0
+    this.overlay?.classList.remove('is-adventure-mode', 'is-trade-leaving')
+    this.overlay?.classList.add('is-shuttering', 'is-trade-mode')
+    this.selectTradeTab(0)
+    // 셔터가 충분히 닫힌 뒤 라벨과 카드팩을 좌측/하단에서 순차 진입시킨다.
+    window.setTimeout(() => this.overlay?.classList.add('is-shutter-rest'), 680)
+  }
+
+
   /** 뒤로가기 → 검은 셔터를 다시 올리고 로비 9칸 상호작용으로 돌아간다. */
   private raiseShutter(): void {
     if (!this.shuttered || this.departing) return
     this.shuttered = false
     this.characterConfirmed = false
-    this.overlay?.classList.remove('is-shuttering', 'is-shutter-rest', 'is-character-confirmed')
+    const root = this.overlay
+    if (root?.classList.contains('is-trade-mode')) {
+      // 무역 퇴장은 카드팩 상승 → 좌측 패널 슬라이드아웃 → 셔터 상승 순서를 CSS로 읽히게 한다.
+      root.classList.add('is-trade-leaving')
+      window.setTimeout(() => root.classList.remove('is-shuttering', 'is-shutter-rest', 'is-trade-mode', 'is-trade-leaving'), 420)
+      return
+    }
+    root?.classList.remove('is-shuttering', 'is-shutter-rest', 'is-character-confirmed', 'is-adventure-mode')
   }
 
   /** 얇은 프로필 카드 목록을 직업 선택 카드처럼 현재 선택 중심으로 갱신한다. */
@@ -395,6 +433,44 @@ export class HearthScene {
     }
   }
 
+
+  /** 무역 좌측 탭 라벨은 실제 데이터 연결 전까지 1번~8번 임시 문구를 쓴다. */
+  private renderTradeTabs(): string {
+    return Array.from({ length: 8 }, (_, index) => `
+      <button class="hearth-trade-tab ${index === 0 ? 'is-active' : ''}" type="button" role="tab" aria-selected="${index === 0 ? 'true' : 'false'}" data-hearth-trade-tab="${index}">
+        <span>${index + 1}번</span>
+      </button>
+    `).join('')
+  }
+
+  /** 각 무역 탭은 비어 있는 임시 카드팩 5개를 가진다. */
+  private renderTradePacks(tabIndex: number): string {
+    return Array.from({ length: 5 }, (_, index) => `
+      <article class="hearth-trade-pack" style="--pack-order:${index}">
+        <div class="hearth-trade-pack-art" aria-hidden="true"></div>
+        <strong>${tabIndex + 1}-${index + 1}</strong>
+        <small>빈 카드팩</small>
+      </article>
+    `).join('')
+  }
+
+  /** 탭 클릭 시 우측 카드팩 자리만 갈아 끼워 추후 실제 상품 매핑 지점을 고정한다. */
+  private selectTradeTab(index: number): void {
+    this.selectedTradeTab = Math.max(0, Math.min(7, index))
+    const root = this.overlay
+    if (!root) return
+    root.querySelectorAll<HTMLElement>('[data-hearth-trade-tab]').forEach((tab) => {
+      const active = Number(tab.dataset.hearthTradeTab ?? -1) === this.selectedTradeTab
+      tab.classList.toggle('is-active', active)
+      tab.setAttribute('aria-selected', active ? 'true' : 'false')
+    })
+    const grid = root.querySelector<HTMLElement>('.hearth-trade-pack-grid')
+    if (grid) {
+      grid.innerHTML = this.renderTradePacks(this.selectedTradeTab)
+      grid.animate([{ opacity: 0, transform: 'translateY(18px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 260, easing: 'ease-out' })
+    }
+  }
+
   /** 셔터 하단의 캐릭터 슬롯은 텍스트 없이 일러스트만 보여 선택 흐름이 깨끗하게 읽히게 한다. */
   private renderCharacterCards(): string {
     return HEARTH_CHARACTERS.map((character, index) => `
@@ -440,8 +516,16 @@ export class HearthScene {
       const artClass = art ? ' hearth-cell--has-art' : ''
       const artStyle = art ? ` style="--cell-art: url('${art}')"` : ''
       const inspectAttr = ` data-inspect-title="${name}" data-inspect-tag="개방" data-inspect-desc="${desc}"${artAttr}`
-      if (i === ADVENTURE_INDEX) {
-        // 모험 칸 — 유일한 상호작용 칸(셔터/출발). 가운데 불씨(촛불)는 빼고 일러스트로만 점등한다.
+      if (i === TRADE_INDEX) {
+        // 무역 칸 — 메타 해금/계승 UI의 임시 셔터 화면으로 진입한다.
+        cells.push(
+          `<button class="hearth-cell hearth-cell--open${artClass}" data-hearth-station="trade" type="button" aria-label="무역"` +
+            `${inspectAttr}${artStyle}>` +
+            `<span class="hearth-cell__label">${name}</span>` +
+            `</button>`
+        )
+      } else if (i === ADVENTURE_INDEX) {
+        // 모험 칸 — 셔터/캐릭터 선택/출발 동작을 갖는다. 가운데 불씨(촛불)는 빼고 일러스트로만 점등한다.
         cells.push(
           `<button class="hearth-cell hearth-cell--adventure${artClass}" data-hearth-station="adventure" type="button" aria-label="모험 시작"` +
             `${inspectAttr}${artStyle}>` +
