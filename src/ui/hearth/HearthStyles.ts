@@ -853,7 +853,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
 @keyframes hearth-trade-pack-leave { to { opacity: 0; transform: translateY(-48px); } }
 
 /* ── 만찬 셔터 임시 화면 ──────────────────────────────────────────────
-   검붉은 커튼 → hearth_bg_005 페이드인 → 무료 팩 레일 → 3단계 카드 선택 흐름.
+   hearth_bg_005 즉시 페이드인 → 무료 팩 레일 → 강한 암전 선택 → 완료 후 검은 커튼/006 일러스트 대사.
    실제 버프 데이터 연결 전까지 단색 임시 일러스트를 카드 안에 채운다. */
 #hearth-overlay.is-dinner-mode .hearth-shutter {
   background: linear-gradient(180deg, rgba(5, 2, 6, 0.82), rgba(2, 1, 4, 0.94));
@@ -865,16 +865,19 @@ body.hearth-lobby #ingame-backdrop.is-out {
 #hearth-overlay:not(.is-dinner-mode) .hearth-dinner-stage { display: none; }
 .hearth-dinner-stage { grid-column: 1 / 4; grid-row: 1 / 4; position: relative; overflow: hidden; z-index: 6; opacity: 0; pointer-events: none; }
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-stage { opacity: 1; pointer-events: auto; transition: opacity 0.28s ease; }
-.hearth-dinner-bg { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(12,3,8,0.18), rgba(4,1,5,0.72)), var(--hearth-dinner-bg, none), radial-gradient(circle at 50% 42%, rgba(150,28,34,0.28), transparent 56%); background-size: cover; background-position: center; opacity: 0; filter: saturate(0.92) brightness(0.78); transition: opacity 0.72s ease 0.34s, filter 0.72s ease 0.34s; }
-#hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-bg { opacity: 1; filter: saturate(1) brightness(0.9); }
-.hearth-dinner-curtain { position: absolute; top: 0; bottom: 0; width: 54%; z-index: 3; background: repeating-linear-gradient(90deg, rgba(70,8,18,0.98) 0 18px, rgba(24,2,10,0.98) 18px 34px), linear-gradient(180deg, #2a0610, #070207); box-shadow: inset 0 0 34px rgba(0,0,0,0.72), 0 0 28px rgba(0,0,0,0.56); transition: transform 0.92s cubic-bezier(0.2,0.84,0.3,1) 0.08s; }
+.hearth-dinner-bg { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,2,7,0.42), rgba(2,1,4,0.82)), var(--hearth-dinner-bg, none), radial-gradient(circle at 50% 42%, rgba(150,28,34,0.2), transparent 56%); background-size: cover; background-position: center; opacity: 0; filter: saturate(0.9) brightness(0.58); transition: opacity 0.52s ease 0.18s, filter 0.52s ease 0.18s; }
+#hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-bg { opacity: 1; filter: saturate(0.96) brightness(0.68); }
+#hearth-overlay.is-dinner-opened .hearth-dinner-bg { filter: saturate(0.78) brightness(0.36) blur(1.2px); }
+#hearth-overlay.is-dinner-after .hearth-dinner-bg { filter: saturate(0.92) brightness(0.72); }
+.hearth-dinner-curtain { display: none; position: absolute; top: 0; bottom: 0; width: 54%; z-index: 3; background: repeating-linear-gradient(90deg, rgba(70,8,18,0.98) 0 18px, rgba(24,2,10,0.98) 18px 34px), linear-gradient(180deg, #2a0610, #070207); box-shadow: inset 0 0 34px rgba(0,0,0,0.72), 0 0 28px rgba(0,0,0,0.56); transition: transform 0.92s cubic-bezier(0.2,0.84,0.3,1) 0.08s; }
 .hearth-dinner-curtain--left { left: 0; }
 .hearth-dinner-curtain--right { right: 0; }
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-curtain--left { transform: translateX(-96%); }
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-curtain--right { transform: translateX(96%); }
-.hearth-dinner-rail { position: absolute; left: 6%; right: 6%; top: 42%; display: flex; gap: clamp(12px, 2vw, 24px); overflow-x: auto; padding: 14px 10px 22px; z-index: 4; opacity: 0; transform: translateY(26px); scrollbar-width: thin; scrollbar-color: rgba(244,164,96,0.64) rgba(20,8,14,0.4); transition: opacity 0.38s ease 0.98s, transform 0.38s cubic-bezier(0.2,0.84,0.3,1) 0.98s, filter 0.3s ease, brightness 0.3s ease; }
-#hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-rail { opacity: 1; transform: translateY(0); }
-#hearth-overlay.is-dinner-opened .hearth-dinner-rail { filter: blur(3px) brightness(0.5); pointer-events: none; }
+.hearth-dinner-rail { position: absolute; left: 6%; right: 6%; top: 50%; display: flex; justify-content: center; gap: clamp(12px, 2vw, 24px); overflow-x: auto; padding: 14px 10px 22px; z-index: 4; opacity: 0; transform: translateY(-50%) translateY(26px); scrollbar-width: thin; scrollbar-color: rgba(244,164,96,0.64) rgba(20,8,14,0.4); transition: opacity 0.38s ease 0.98s, transform 0.38s cubic-bezier(0.2,0.84,0.3,1) 0.98s, filter 0.3s ease, brightness 0.3s ease; }
+#hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-rail { opacity: 1; transform: translateY(-50%); }
+#hearth-overlay.is-dinner-opened .hearth-dinner-rail { filter: blur(5px) brightness(0.22); opacity: 0.3; pointer-events: none; }
+#hearth-overlay.is-dinner-finalizing .hearth-dinner-rail { opacity: 0; transform: translateY(-50%) scale(0.94); transition: opacity 0.34s ease, transform 0.34s ease; }
 .hearth-dinner-pack { flex: 0 0 clamp(132px, 18vw, 190px); min-height: clamp(170px, 29vh, 250px); border-radius: 16px; border: 1px solid rgba(215,166,88,0.46); background: linear-gradient(180deg, rgba(42,24,34,0.88), rgba(14,8,16,0.96)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; padding: 12px; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,232,168,0.16), 0 18px 34px rgba(0,0,0,0.52); }
 .hearth-dinner-pack.is-locked { opacity: 0.46; cursor: default; }
 .hearth-dinner-pack-art { flex: 1; border-radius: 12px; border: 1px dashed rgba(255,222,140,0.22); background: radial-gradient(circle at 50% 38%, rgba(255,232,168,0.14), transparent 54%), linear-gradient(150deg, rgba(110,30,42,0.5), rgba(24,12,26,0.94)); }
@@ -894,6 +897,28 @@ body.hearth-lobby #ingame-backdrop.is-out {
 .hearth-dinner-plate-card small { color: rgba(220,204,178,0.74); font-size: clamp(11px,1.45vh,13px); line-height: 1.25; }
 #hearth-overlay.is-dinner-finalizing .hearth-dinner-choices { opacity: 0; transform: translateY(-24px); transition: opacity 0.28s ease, transform 0.28s ease; pointer-events: none; }
 #hearth-overlay.is-dinner-finalizing .hearth-dinner-picked { animation: hearth-dinner-final-hover 0.72s ease-in-out both; }
+#hearth-overlay.is-dinner-closing .hearth-dinner-picked { opacity: 0; filter: blur(6px); transition: opacity 0.36s ease, filter 0.36s ease; }
+.hearth-dinner-final-curtain { position: absolute; top: 0; bottom: 0; width: 52%; z-index: 8; background: linear-gradient(180deg, #030204, #000 58%, #050306); box-shadow: inset 0 0 42px rgba(0,0,0,0.9), 0 0 34px rgba(0,0,0,0.7); opacity: 0; pointer-events: none; }
+.hearth-dinner-final-curtain--left { left: 0; transform: translateX(-104%); }
+.hearth-dinner-final-curtain--right { right: 0; transform: translateX(104%); }
+#hearth-overlay.is-dinner-closing .hearth-dinner-final-curtain--left,
+#hearth-overlay.is-dinner-after .hearth-dinner-final-curtain--left { animation: hearth-dinner-black-close-left 0.78s cubic-bezier(0.16,0.84,0.24,1) forwards; }
+#hearth-overlay.is-dinner-closing .hearth-dinner-final-curtain--right,
+#hearth-overlay.is-dinner-after .hearth-dinner-final-curtain--right { animation: hearth-dinner-black-close-right 0.78s cubic-bezier(0.16,0.84,0.24,1) forwards; }
+.hearth-dinner-illustration { position: absolute; inset: 8% 9% 18%; z-index: 9; background: var(--hearth-dinner-host, none) center/cover no-repeat; border: 1px solid rgba(255,215,120,0.28); border-radius: 18px; box-shadow: inset 0 0 80px rgba(0,0,0,0.42), 0 26px 68px rgba(0,0,0,0.68); clip-path: inset(0 50% 0 50%); opacity: 0; pointer-events: none; }
+#hearth-overlay.is-dinner-after .hearth-dinner-illustration { animation: hearth-dinner-illu-open 0.86s 0.78s cubic-bezier(0.18,0.82,0.25,1) forwards; }
+.hearth-dinner-dialogue { position: absolute; left: 10%; right: 10%; bottom: 6%; z-index: 10; min-height: 54px; padding: 16px 22px; border: 1px solid rgba(255,215,120,0.42); border-radius: 18px; background: linear-gradient(180deg, rgba(25,16,24,0.92), rgba(8,5,10,0.96)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; font-size: clamp(16px, 2.2vh, 22px); line-height: 1.45; text-align: center; letter-spacing: 0.03em; box-shadow: inset 0 1px 0 rgba(255,232,168,0.14), 0 18px 42px rgba(0,0,0,0.62); opacity: 0; transform: translateY(16px); pointer-events: none; }
+#hearth-overlay.is-dinner-after .hearth-dinner-dialogue { animation: hearth-dinner-dialogue-in 0.36s 1.42s ease-out forwards; }
+#hearth-overlay.is-dinner-after .hearth-dinner-rail,
+#hearth-overlay.is-dinner-after .hearth-dinner-choices,
+#hearth-overlay.is-dinner-after .hearth-dinner-picked { display: none; }
+.hearth-dinner-relic-card { width: 54px; min-height: 74px; border-radius: 10px; border: 1px solid rgba(255,215,120,0.5); background: linear-gradient(180deg, rgba(54,36,42,0.96), rgba(12,8,14,0.98)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; font-size: 10px; padding: 5px; box-shadow: inset 0 1px 0 rgba(255,232,168,0.18), 0 0 18px rgba(244,164,96,0.35); }
+.hearth-dinner-relic-card span { display: block; height: 30px; border-radius: 7px; margin-bottom: 4px; background: radial-gradient(circle at 50% 38%, rgba(255,236,188,0.28), transparent 42%), linear-gradient(145deg, #7e2630, rgba(22,10,24,0.94)); }
+.hearth-dinner-relic-card strong, .hearth-dinner-relic-card small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@keyframes hearth-dinner-black-close-left { to { transform: translateX(0); opacity: 1; } }
+@keyframes hearth-dinner-black-close-right { to { transform: translateX(0); opacity: 1; } }
+@keyframes hearth-dinner-illu-open { 0% { clip-path: inset(0 50% 0 50%); opacity: 0; } 100% { clip-path: inset(0 0 0 0); opacity: 1; } }
+@keyframes hearth-dinner-dialogue-in { to { opacity: 1; transform: translateY(0); } }
 @keyframes hearth-dinner-final-hover { 0% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) translateY(-24px) scale(1.16); } 100% { transform: translateX(-50%) translateY(-16px) scale(1.08); } }
 .hearth-dinner-orb { position: fixed; z-index: 260; width: 20px; height: 20px; border-radius: 50%; pointer-events: none; background: #ffe7a8; box-shadow: 0 0 22px #ffd778, 0 0 58px rgba(244,164,96,0.76); }
 .hearth-dinner-orb.is-flying { animation: hearth-dinner-orb-flight 0.64s cubic-bezier(0.18,0.78,0.22,1) forwards; }

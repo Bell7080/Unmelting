@@ -24,6 +24,8 @@ const DINNER_INDEX = 8
 
 /** 마지막으로 본 모험 동행을 다음 거점 진입에도 복원하기 위한 로컬 저장 키. */
 const HEARTH_LAST_CHARACTER_KEY = 'unmelting.hearth.lastCharacterIndex'
+const DINNER_DONE_LINE = '하하, 식사는 만족스러우셨나요? 다음 만찬도 기대해주세요.'
+const DINNER_ALREADY_LINE = '음? 오늘은 이미 식사를 하시지 않았나요?'
 
 /** 모험 셔터 안에서 고를 수 있는 동행 목록. 3~4번은 아직 일러스트가 없는 잠금 카드로 유지한다. */
 const HEARTH_CHARACTERS = [
@@ -84,6 +86,8 @@ export class HearthScene {
   private dinnerStep = 0
   /** 무료 만찬에서 고른 음식/스탯을 임시로 보관해 완성 카드 문구를 만든다. */
   private dinnerChoices: string[] = []
+  /** 만찬 완료 후에는 런이 시작될 때까지 닫힌 일러스트/대사 화면으로 재입장한다. */
+  private dinnerConsumed = false
 
   enter(handlers: HearthHandlers): void {
     this.injectStyles()
@@ -91,6 +95,7 @@ export class HearthScene {
     this.shuttered = false
     this.departing = false
     this.interactive = false
+    this.dinnerConsumed = this.hasDinnerRelicInInventory()
 
     const overlay = document.createElement('div')
     overlay.id = 'hearth-overlay'
@@ -114,6 +119,10 @@ export class HearthScene {
             <div class="hearth-dinner-curtain hearth-dinner-curtain--left" aria-hidden="true"></div>
             <div class="hearth-dinner-curtain hearth-dinner-curtain--right" aria-hidden="true"></div>
             <div class="hearth-dinner-bg" aria-hidden="true"></div>
+            <div class="hearth-dinner-final-curtain hearth-dinner-final-curtain--left" aria-hidden="true"></div>
+            <div class="hearth-dinner-final-curtain hearth-dinner-final-curtain--right" aria-hidden="true"></div>
+            <div class="hearth-dinner-illustration" aria-hidden="true"></div>
+            <div class="hearth-dinner-dialogue" aria-live="polite"></div>
             <div class="hearth-dinner-rail">${this.renderDinnerPacks()}</div>
             <div class="hearth-dinner-picked" aria-live="polite"></div>
             <div class="hearth-dinner-choices" aria-live="polite"></div>
@@ -140,6 +149,7 @@ export class HearthScene {
     overlay.style.setProperty('--hearth-adventure-bg', `url('${SpriteUrls.hearth.adventure}')`)
     overlay.style.setProperty('--hearth-trade-bg', `url('${SpriteUrls.hearth.trade}')`)
     overlay.style.setProperty('--hearth-dinner-bg', `url('${SpriteUrls.hearth.dinner}')`)
+    overlay.style.setProperty('--hearth-dinner-host', `url('${SpriteUrls.hearth.dinnerHost}')`)
     document.body.appendChild(overlay)
     this.overlay = overlay
 
@@ -337,11 +347,12 @@ export class HearthScene {
     if (this.shuttered) return
     this.shuttered = true
     this.hideInspector()
-    this.dinnerStep = 0
+    this.dinnerStep = this.dinnerConsumed ? 5 : 0
     this.dinnerChoices = []
     this.overlay?.classList.remove('is-adventure-mode', 'is-trade-mode', 'is-trade-leaving')
     this.overlay?.classList.add('is-shuttering', 'is-dinner-mode')
     this.resetDinnerStage()
+    if (this.dinnerConsumed) this.showDinnerAfterScene(DINNER_ALREADY_LINE)
     // 커튼이 먼저 닫힌 뒤 배경 레이어가 페이드인하도록 셔터 안정 클래스를 늦게 붙인다.
     window.setTimeout(() => this.overlay?.classList.add('is-shutter-rest'), 680)
   }
@@ -349,18 +360,20 @@ export class HearthScene {
   /** 만찬 팩 레일/선택지를 초기 상태로 되돌려 뒤로가기 후 재진입도 같은 흐름을 보장한다. */
   private resetDinnerStage(): void {
     const root = this.overlay
-    root?.classList.remove('is-dinner-opened', 'is-dinner-finalizing')
+    root?.classList.remove('is-dinner-opened', 'is-dinner-finalizing', 'is-dinner-closing', 'is-dinner-after')
     const rail = root?.querySelector<HTMLElement>('.hearth-dinner-rail')
     const picked = root?.querySelector<HTMLElement>('.hearth-dinner-picked')
     const choices = root?.querySelector<HTMLElement>('.hearth-dinner-choices')
+    const dialogue = root?.querySelector<HTMLElement>('.hearth-dinner-dialogue')
     if (rail) rail.innerHTML = this.renderDinnerPacks()
     if (picked) picked.innerHTML = ''
     if (choices) choices.innerHTML = ''
+    if (dialogue) dialogue.textContent = ''
   }
 
   /** 무료 팩 클릭 → 레일을 은은하게 어둡고 흐리게 만들고 1단계 음식 3택을 띄운다. */
   private openDinnerPack(): void {
-    if (this.dinnerStep !== 0) return
+    if (this.dinnerConsumed || this.dinnerStep !== 0) return
     this.dinnerStep = 1
     this.overlay?.classList.add('is-dinner-opened')
     this.renderDinnerChoices()
@@ -451,7 +464,7 @@ export class HearthScene {
     root.classList.add('is-dinner-finalizing')
     SquareBurst.playOn(plate, 'score', { count: 42, spread: 210, duration: 760, size: [10, 26] })
     await this.wait(720)
-    const target = document.querySelector<HTMLElement>('.relic-stack') ?? document.querySelector<HTMLElement>('.player-card')
+    const target = document.querySelector<HTMLElement>('.relic-stack') ?? document.querySelector<HTMLElement>('.relic-layer')
     const source = plate.getBoundingClientRect()
     const dest = target?.getBoundingClientRect()
     const orb = document.createElement('div')
@@ -463,8 +476,39 @@ export class HearthScene {
     document.body.appendChild(orb)
     orb.classList.add('is-flying')
     await this.wait(660)
-    if (target) SquareBurst.playOn(target, 'score', { count: 28, spread: 150, duration: 620, size: [8, 18] })
+    if (target) {
+      this.addDinnerRelicCard(target)
+      SquareBurst.playOn(target, 'score', { count: 28, spread: 150, duration: 620, size: [8, 18] })
+    }
     orb.remove()
+    // 완료 여부는 별도 저장소가 아니라 실제 인벤토리 DOM의 만찬 유물 카드 존재로 판정한다.
+    this.dinnerConsumed = this.hasDinnerRelicInInventory()
+    root.classList.add('is-dinner-closing')
+    await this.wait(820)
+    this.showDinnerAfterScene(DINNER_DONE_LINE)
+  }
+
+  /** 완성 음식은 실제 유물 시스템 연결 전까지 거점 유물 팬에 작은 카드로 보관한다. */
+  private addDinnerRelicCard(target: HTMLElement): void {
+    const card = document.createElement('div')
+    card.className = 'hearth-dinner-relic-card'
+    // 재진입 판정은 스타일 클래스가 아니라 이 데이터 표식을 기준으로 삼는다.
+    card.dataset.hearthDinnerRelic = 'true'
+    card.innerHTML = `<span></span><strong>만찬</strong><small>${this.dinnerChoices.join(' · ')}</small>`
+    target.appendChild(card)
+  }
+
+  /** 완료/재방문 화면은 검은 커튼을 닫은 뒤 006 일러스트를 중앙에서 좌우로 열어 고정 대사를 남긴다. */
+  private showDinnerAfterScene(line: string): void {
+    const root = this.overlay
+    if (!root) return
+    root.classList.add('is-dinner-after')
+    root.querySelector<HTMLElement>('.hearth-dinner-dialogue')!.textContent = line
+  }
+
+  /** 만찬 사용 여부는 저장값이 아니라 현재 유물 인벤토리에 꽂힌 만찬 카드로만 판단한다. */
+  private hasDinnerRelicInInventory(): boolean {
+    return Boolean(document.querySelector('[data-hearth-dinner-relic="true"]'))
   }
 
 
@@ -475,8 +519,8 @@ export class HearthScene {
     this.characterConfirmed = false
     const root = this.overlay
     if (root?.classList.contains('is-dinner-mode')) {
-      root.classList.remove('is-shuttering', 'is-shutter-rest', 'is-dinner-mode', 'is-dinner-opened', 'is-dinner-finalizing')
-      this.dinnerStep = 0
+      root.classList.remove('is-shuttering', 'is-shutter-rest', 'is-dinner-mode', 'is-dinner-opened', 'is-dinner-finalizing', 'is-dinner-closing', 'is-dinner-after')
+      this.dinnerStep = this.dinnerConsumed ? 5 : 0
       this.dinnerChoices = []
       return
     }
