@@ -669,14 +669,14 @@ body.hearth-lobby #ingame-backdrop.is-out {
 @keyframes hearth-character-installed { 0% { filter: brightness(1.7); transform: translateY(-3px) scale(1.03); } 100% { filter: brightness(1); transform: none; } }
 
 /* ── 무역 셔터 임시 화면 ──────────────────────────────────────────────
-   hearth_bg_004를 셔터 배경으로 쓰고, 좌측 2 : 우측 8 비율의 메타 상점 뼈대를 둔다.
-   좌측 라벨은 이벤트 선택지의 반투명 행 버튼 톤을 빌리고, 우측은 추후 실제 카드팩이
-   들어갈 빈 팩 5개를 탭별로 매핑한다. */
+   hearth_bg_004 원본 배경 위에 좌측 2 : 우측 8 비율의 메타 상점 뼈대를 둔다.
+   좌측은 글자/그림자/발광만 쓰는 라벨, 우측은 추후 실제 카드팩이 들어갈
+   가로 슬라이드 레일과 떠 있는 듯한 하단 타원 그림자를 탭별로 매핑한다. */
 #hearth-overlay.is-trade-mode .hearth-shutter {
   grid-template-columns: minmax(120px, 20%) minmax(0, 80%);
   grid-template-rows: 1fr;
+  /* 무역은 배경 감상을 우선해 별도 암전/블러 veil 없이 원본 일러스트를 그대로 노출한다. */
   background:
-    linear-gradient(180deg, rgba(5, 3, 10, 0.34), rgba(2, 1, 5, 0.76)),
     var(--hearth-trade-bg, none),
     linear-gradient(180deg, #0b0910 0%, #060409 100%);
   background-size: cover;
@@ -693,9 +693,9 @@ body.hearth-lobby #ingame-backdrop.is-out {
   position: relative;
   z-index: 7;
   display: grid;
-  grid-template-columns: minmax(128px, 20%) minmax(0, 80%);
-  gap: clamp(10px, 1.8vw, 22px);
-  padding: clamp(18px, 3vh, 34px) clamp(14px, 2vw, 28px) clamp(56px, 8vh, 82px);
+  grid-template-columns: minmax(150px, 20%) minmax(0, 80%);
+  gap: clamp(12px, 2vw, 28px);
+  padding: clamp(18px, 3vh, 34px) clamp(14px, 2vw, 28px) clamp(64px, 9vh, 94px);
   opacity: 0;
   pointer-events: none;
 }
@@ -709,7 +709,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
 .hearth-trade-tabs {
   min-height: 0;
   overflow-y: auto;
-  padding: 4px 8px 4px 2px;
+  padding: 4px 10px 4px 4px;
   display: flex;
   flex-direction: column;
   gap: clamp(7px, 1.2vh, 12px);
@@ -724,21 +724,39 @@ body.hearth-lobby #ingame-backdrop.is-out {
 .hearth-trade-tabs::-webkit-scrollbar-track { background: rgba(20, 16, 28, 0.18); border-radius: 999px; }
 .hearth-trade-tabs::-webkit-scrollbar-thumb { background: linear-gradient(180deg, rgba(255, 215, 120, 0.55), rgba(150, 86, 38, 0.72)); border-radius: 999px; }
 .hearth-trade-tab {
-  min-height: clamp(42px, 7vh, 64px);
-  border-radius: 13px;
-  border: 1px solid rgba(255, 222, 140, 0.24);
-  background: linear-gradient(90deg, rgba(32, 22, 34, 0.18), rgba(18, 12, 24, 0.42));
-  color: rgba(255, 236, 188, 0.78);
-  font: 900 clamp(14px, 2vh, 19px)/1 'OkDanDan', Georgia, serif;
-  letter-spacing: 0.16em;
+  min-height: clamp(48px, 7.8vh, 74px);
+  border: 0;
+  background: transparent;
+  color: rgba(255, 238, 196, 0.82);
+  font: 900 clamp(21px, 3.4vh, 34px)/1 'OkDanDan', Georgia, serif;
+  letter-spacing: 0.18em;
   text-align: left;
-  padding: 0 clamp(12px, 1.6vw, 20px);
+  padding: 0 clamp(10px, 1.5vw, 18px);
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.1), 0 10px 22px rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(2px);
+  box-shadow: none;
+  text-shadow: 0 8px 16px rgba(0, 0, 0, 0.78), 0 0 14px rgba(244, 164, 96, 0.2);
   transform: translateX(-18px);
   opacity: 0;
   animation: hearth-trade-label-in 0.42s cubic-bezier(0.2, 0.84, 0.3, 1) both;
+  transition: transform 0.18s ease, color 0.18s ease, text-shadow 0.18s ease, filter 0.18s ease;
+}
+/* 라벨 자체만 남기고 뒤 그림자는 텍스트 계층으로 만든다. */
+.hearth-trade-tab span {
+  position: relative;
+  display: inline-block;
+  transition: transform 0.18s ease;
+}
+.hearth-trade-tab span::before {
+  content: attr(data-shadow-text);
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  color: rgba(0, 0, 0, 0.68);
+  transform: translate(8px, 12px) scale(1.04);
+  filter: blur(3px);
+  opacity: 0.62;
+  pointer-events: none;
+  transition: transform 0.18s ease, opacity 0.18s ease, filter 0.18s ease;
 }
 .hearth-trade-tab:nth-child(1) { animation-delay: 0.74s; }
 .hearth-trade-tab:nth-child(2) { animation-delay: 0.79s; }
@@ -748,35 +766,47 @@ body.hearth-lobby #ingame-backdrop.is-out {
 .hearth-trade-tab:nth-child(n+6) { animation-delay: 0.99s; }
 .hearth-trade-tab:hover,
 .hearth-trade-tab.is-active {
-  border-color: rgba(255, 215, 120, 0.62);
-  color: #ffe7a8;
-  background: linear-gradient(90deg, rgba(72, 42, 28, 0.34), rgba(18, 12, 24, 0.5));
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.24), 0 12px 28px rgba(0, 0, 0, 0.34), 0 0 22px rgba(244, 164, 96, 0.2);
+  color: #fff0ba;
+  filter: brightness(1.08);
+  text-shadow: 0 12px 18px rgba(0, 0, 0, 0.9), 0 0 10px rgba(255, 231, 168, 0.78), 0 0 30px rgba(244, 164, 96, 0.5);
+}
+.hearth-trade-tab:hover span,
+.hearth-trade-tab.is-active span {
+  transform: translateX(8px) translateY(-2px) scale(1.035);
+}
+.hearth-trade-tab:hover span::before,
+.hearth-trade-tab.is-active span::before {
+  transform: translate(14px, 18px) scale(1.1);
+  opacity: 0.94;
+  filter: blur(4px);
 }
 @keyframes hearth-trade-label-in { to { transform: translateX(0); opacity: 1; } }
 .hearth-trade-pack-area {
   min-height: 0;
-  overflow-y: auto;
-  padding: clamp(4px, 1vh, 10px) clamp(10px, 1.4vw, 18px) clamp(18px, 3vh, 34px);
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: clamp(18px, 5vh, 72px) clamp(10px, 1.4vw, 18px) clamp(30px, 7vh, 82px);
   scrollbar-width: thin;
   scrollbar-color: rgba(244, 164, 96, 0.72) transparent;
 }
-.hearth-trade-pack-area::-webkit-scrollbar { width: 8px; }
+.hearth-trade-pack-area::-webkit-scrollbar { height: 8px; }
 .hearth-trade-pack-area::-webkit-scrollbar-track { background: transparent; }
 .hearth-trade-pack-area::-webkit-scrollbar-thumb { background: linear-gradient(180deg, rgba(255, 215, 120, 0.5), rgba(150, 86, 38, 0.62)); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
 .hearth-trade-pack-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(clamp(126px, 16vw, 188px), 1fr));
-  gap: clamp(12px, 2vw, 24px);
-  align-content: start;
-  padding-right: 2px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: clamp(16px, 2.4vw, 30px);
+  align-items: center;
+  min-width: max-content;
+  padding: clamp(12px, 2vh, 22px) clamp(18px, 3vw, 46px) clamp(20px, 4vh, 42px) 2px;
 }
 .hearth-trade-pack {
-  min-height: clamp(170px, 30vh, 260px);
+  flex: 0 0 clamp(142px, 17vw, 210px);
+  min-height: clamp(184px, 32vh, 276px);
   border-radius: 16px;
   border: 1px solid rgba(200, 152, 60, 0.42);
   background: linear-gradient(180deg, rgba(36, 24, 38, 0.72), rgba(14, 9, 18, 0.86));
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.16), inset 0 -14px 24px rgba(0, 0, 0, 0.42), 0 20px 38px rgba(0, 0, 0, 0.46);
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.16), inset 0 -14px 24px rgba(0, 0, 0, 0.42), 0 18px 28px rgba(0, 0, 0, 0.38);
   padding: clamp(10px, 1.6vh, 16px);
   display: flex;
   flex-direction: column;
@@ -785,6 +815,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
   color: rgba(255, 236, 188, 0.9);
   font-family: 'OkDanDan', Georgia, serif;
   opacity: 0;
+  position: relative;
   transform: translateY(44px);
   animation: hearth-trade-pack-rise 0.48s cubic-bezier(0.2, 0.84, 0.3, 1) forwards;
   animation-delay: calc(0.86s + var(--pack-order, 0) * 0.06s);
@@ -792,6 +823,19 @@ body.hearth-lobby #ingame-backdrop.is-out {
 #hearth-overlay.is-trade-leaving .hearth-trade-pack {
   animation: hearth-trade-pack-leave 0.28s ease-in forwards;
   animation-delay: calc(var(--pack-order, 0) * 0.035s);
+}
+.hearth-trade-pack::after {
+  content: '';
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: clamp(-28px, -4vh, -18px);
+  height: clamp(18px, 3.8vh, 32px);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.56), rgba(0, 0, 0, 0.22) 48%, transparent 72%);
+  filter: blur(4px);
+  z-index: -1;
+  pointer-events: none;
 }
 .hearth-trade-pack-art {
   flex: 1;

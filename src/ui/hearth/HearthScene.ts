@@ -604,7 +604,7 @@ export class HearthScene {
   private renderTradeTabs(): string {
     return Array.from({ length: 8 }, (_, index) => `
       <button class="hearth-trade-tab ${index === 0 ? 'is-active' : ''}" type="button" role="tab" aria-selected="${index === 0 ? 'true' : 'false'}" data-hearth-trade-tab="${index}">
-        <span>${index + 1}번</span>
+        <span data-shadow-text="${index + 1}번">${index + 1}번</span>
       </button>
     `).join('')
   }
