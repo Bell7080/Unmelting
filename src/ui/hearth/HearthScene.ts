@@ -395,13 +395,11 @@ export class HearthScene {
     }
   }
 
-  /** 셔터 하단에 놓이는 임시 캐릭터 프로필 카드. 실제 캐릭터 데이터 연동 전까지 UI 흐름만 보장한다. */
+  /** 셔터 하단의 캐릭터 슬롯은 텍스트 없이 일러스트만 보여 선택 흐름이 깨끗하게 읽히게 한다. */
   private renderCharacterCards(): string {
     return HEARTH_CHARACTERS.map((character, index) => `
-      <button class="hearth-character-card ${index === 0 ? 'is-selected' : ''}" type="button" role="option" aria-selected="${index === 0 ? 'true' : 'false'}" data-hearth-character="${index}">
+      <button class="hearth-character-card ${index === 0 ? 'is-selected' : ''}" type="button" role="option" aria-label="${character.name}" aria-selected="${index === 0 ? 'true' : 'false'}" data-hearth-character="${index}">
         <span class="hearth-character-thumb ${character.lockedArt ? 'is-empty' : ''}" ${character.lockedArt ? '' : `style="--character-art: url('${character.art}')"`} aria-hidden="true"></span>
-        <span class="hearth-character-name">${character.name}</span>
-        <span class="hearth-character-role">${character.role}</span>
       </button>
     `).join('')
   }
