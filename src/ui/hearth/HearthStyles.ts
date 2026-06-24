@@ -343,65 +343,90 @@ export const HEARTH_STYLES = `
   animation: job-curtain-open-right 1.45s cubic-bezier(0.22, 0.78, 0.28, 1) forwards !important;
 }
 
-/* ── 검은 모험 셔터 ───────────────────────────────────────────────────
-   상점 셔터 문법을 변형 — 로비 위로 위에서 내려온다. 본체는 검은 슬랩(가로 슬랫
-   질감), 하단 중앙 칸(모험 자리)에 '출발' 버튼이 들어간다. */
+/* ── 모험 셔터 ─────────────────────────────────────────────────────
+   셔터 자체는 hearth_bg_003을 배경으로 쓰고, 하강 완료 후 배경 흐림/어둠 →
+   좌측 소개·우측 플레이어 카드·하단 커버플로우가 순차적으로 열린다. */
 .hearth-shutter {
   position: absolute;
   inset: 0;
   z-index: 6;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, 1fr);
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  grid-template-rows: 1fr auto;
   background:
-    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 26px),
+    linear-gradient(180deg, rgba(5, 3, 10, 0.62), rgba(2, 1, 5, 0.9)),
+    var(--hearth-adventure-bg, none),
     linear-gradient(180deg, #0b0910 0%, #060409 100%);
+  background-size: cover;
+  background-position: center;
   border-bottom: 2px solid rgba(255, 215, 120, 0.16);
-  box-shadow:
-    inset 0 -40px 70px rgba(0, 0, 0, 0.6),
-    0 18px 40px rgba(0, 0, 0, 0.7);
+  box-shadow: inset 0 -40px 70px rgba(0,0,0,0.6), 0 18px 40px rgba(0,0,0,0.7);
   transform: translateY(-101%);
   transition: transform 0.66s cubic-bezier(0.22, 0.61, 0.36, 1);
   pointer-events: none;
 }
-#hearth-overlay.is-shuttering .hearth-shutter {
-  transform: translateY(0);
-  pointer-events: auto;
-}
-
-/* 출발 버튼 — 셔터 그리드의 하단 중앙(모험 자리). 셔터가 다 내려온 뒤 드러난다. */
-.hearth-depart {
-  grid-column: 2;
-  grid-row: 3;
-  align-self: center;
-  justify-self: center;
-  padding: clamp(10px, 1.7vh, 16px) clamp(22px, 3vw, 42px);
-  border-radius: 999px;
-  border: 1px solid rgba(255, 222, 140, 0.7);
-  background: linear-gradient(180deg, var(--color-flame, #ffd778), var(--color-flame-warm, #f4a460));
-  color: #2a1b14;
-  font: 900 clamp(16px, 2.3vh, 23px)/1 'OkDanDan', Georgia, serif;
-  letter-spacing: 0.14em;
-  cursor: pointer;
-  opacity: 0;
-  transform: translateY(10px) scale(0.94);
-  box-shadow: 0 10px 26px rgba(244, 164, 96, 0.4), 0 0 0 1px rgba(220, 170, 70, 0.3);
-  transition: opacity 0.32s ease, transform 0.32s ease, box-shadow 0.18s ease;
+.hearth-shutter::before {
+  content: '';
+  position: absolute;
+  inset: 0;
   pointer-events: none;
+  background: rgba(4, 2, 8, 0.1);
+  backdrop-filter: blur(0px);
+  transition: background 0.48s ease 0.66s, backdrop-filter 0.48s ease 0.66s;
 }
-#hearth-overlay.is-shutter-rest .hearth-depart {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-  pointer-events: auto;
+#hearth-overlay.is-shuttering .hearth-shutter { transform: translateY(0); pointer-events: auto; }
+#hearth-overlay.is-shutter-rest .hearth-shutter::before { background: rgba(4, 2, 8, 0.42); backdrop-filter: blur(5px); }
+.hearth-back {
+  position: absolute; left: clamp(10px, 1.6vw, 18px); bottom: clamp(10px, 1.6vh, 18px); z-index: 8;
+  padding: 9px 14px; border-radius: 999px; border: 1px solid rgba(255,222,140,0.42);
+  background: rgba(18,12,24,0.72); color: rgba(255,236,188,0.9);
+  font: 800 13px/1 'OkDanDan', Georgia, serif; letter-spacing: 0.08em;
+  opacity: 0; transform: translateX(-10px); pointer-events: none;
+  transition: opacity 0.28s ease 0.78s, transform 0.28s ease 0.78s, border-color 0.18s ease;
 }
-.hearth-depart:hover {
-  transform: translateY(-2px) scale(1.04);
-  box-shadow: 0 14px 32px rgba(244, 164, 96, 0.52);
+#hearth-overlay.is-shutter-rest .hearth-back { opacity: 1; transform: translateX(0); pointer-events: auto; }
+.hearth-back:hover { border-color: var(--color-flame, #ffd778); }
+.hearth-character-stage { grid-column: 1 / 3; grid-row: 1 / 3; position: relative; overflow: hidden; pointer-events: none; }
+.hearth-adventure-backdrop { position: absolute; inset: 0; background: radial-gradient(circle at 66% 42%, rgba(255,215,120,0.1), transparent 34%); }
+.hearth-showcase-card {
+  position: absolute; right: clamp(28px, 7vw, 96px); top: clamp(24px, 6vh, 70px); bottom: clamp(96px, 17vh, 150px);
+  aspect-ratio: 3 / 4; border-radius: 14px; overflow: hidden; isolation: isolate;
+  border: 1px solid var(--color-flame-warm, #f4a460); background: #14101c;
+  box-shadow: inset 0 1px 0 rgba(255,232,168,0.32), inset 0 -10px 22px rgba(0,0,0,0.55), 0 34px 80px rgba(0,0,0,0.88), 0 0 46px rgba(244,164,96,0.22);
+  opacity: 0; transform: translateX(18%); transition: opacity 0.42s ease 0.94s, transform 0.48s cubic-bezier(0.2,0.84,0.3,1) 0.94s;
 }
-.hearth-depart.is-pressed {
-  transform: scale(0.96);
-  filter: brightness(1.1);
-}
+#hearth-overlay.is-shutter-rest .hearth-showcase-card { opacity: 1; transform: translateX(0); }
+.hearth-showcase-art { position: absolute; inset: 0; background-image: var(--character-art, none); background-size: cover; background-position: center 22%; filter: saturate(1.06) contrast(1.04); z-index: 0; }
+.hearth-showcase-art.is-empty { background: linear-gradient(160deg, #4a4a4f, #202027); filter: none; }
+.hearth-showcase-overlay { position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(20,16,28,0) 32%, rgba(20,16,28,0.55) 65%, rgba(8,5,14,0.94) 100%), radial-gradient(120% 60% at 50% 0%, rgba(244,164,96,0.1), transparent 70%); }
+.hearth-character-copy { position: absolute; left: clamp(34px, 7%, 74px); top: clamp(42px, 14vh, 120px); width: min(38%, 440px); z-index: 3; color: #ffe7a8; text-shadow: 0 2px 14px rgba(0,0,0,0.9); font-family: 'OkDanDan', Georgia, serif; opacity: 0; transform: translateY(12px); transition: opacity 0.36s ease 0.86s, transform 0.36s ease 0.86s; }
+#hearth-overlay.is-shutter-rest .hearth-character-copy { opacity: 1; transform: translateY(0); }
+.hearth-character-kicker { display: block; color: rgba(248,206,120,0.88); font-size: clamp(13px,1.8vh,17px); letter-spacing: 0.18em; margin-bottom: 8px; }
+.hearth-character-copy strong { display: block; font-size: clamp(32px,6vh,64px); letter-spacing: 0.08em; }
+.hearth-character-copy small { display: block; margin-top: 8px; color: rgba(225,210,188,0.86); font-size: clamp(13px,1.8vh,18px); line-height: 1.45; }
+.hearth-character-strip { grid-column: 1 / 3; grid-row: 2; align-self: end; justify-self: center; position: relative; z-index: 7; width: min(94%, 760px); height: clamp(112px, 18vh, 170px); margin-bottom: clamp(12px, 2vh, 24px); opacity: 0; transform: translateY(18px); pointer-events: none; transition: opacity 0.34s ease 1.02s, transform 0.34s cubic-bezier(0.2,0.8,0.3,1) 1.02s; touch-action: pan-y; }
+#hearth-overlay.is-shutter-rest .hearth-character-strip { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.hearth-character-card { position: absolute; left: 50%; top: 50%; width: clamp(92px, 13vw, 138px); height: clamp(106px, 17vh, 158px); display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; padding: 8px; border-radius: 14px; border: 1px solid rgba(139,111,71,0.64); background: linear-gradient(180deg, rgba(42,28,42,0.92), rgba(18,12,24,0.96)); color: rgba(235,218,190,0.82); cursor: pointer; font-family: 'OkDanDan', Georgia, serif; box-shadow: inset 0 1px 0 rgba(255,232,168,0.12), 0 14px 30px rgba(0,0,0,0.62); transform: translate(-50%, -50%) translateX(calc(var(--slot) * clamp(86px, 12vw, 128px))) scale(var(--card-scale, 1)); filter: brightness(var(--card-brightness, 1)); opacity: var(--card-opacity, 1); transition: transform 0.42s cubic-bezier(0.2,0.84,0.3,1), filter 0.42s ease, opacity 0.42s ease, border-color 0.18s ease, box-shadow 0.18s ease; }
+.hearth-character-card.is-selected { border-color: var(--color-flame,#ffd778); box-shadow: inset 0 1px 0 rgba(255,232,168,0.24), 0 20px 42px rgba(0,0,0,0.74), 0 0 28px rgba(244,164,96,0.36); }
+.hearth-character-card:hover { border-color: var(--color-flame,#ffd778); }
+.hearth-character-thumb { position: absolute; inset: 7px 7px 38px; border-radius: 10px; background-image: var(--character-art, none); background-size: cover; background-position: center; opacity: 0.9; }
+.hearth-character-thumb.is-empty { background: linear-gradient(160deg, #505055, #232329); opacity: 0.82; }
+.hearth-character-thumb::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(180deg, transparent 38%, rgba(9,5,14,0.86)); }
+.hearth-character-name { position: relative; font-size: clamp(12px,1.7vh,16px); font-weight: 900; color: #ffe7a8; z-index: 1; }
+.hearth-character-role { position: relative; font-size: clamp(10px,1.35vh,12px); color: rgba(214,200,178,0.7); z-index: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hearth-depart { grid-column: 1 / 3; grid-row: 2; align-self: end; justify-self: center; z-index: 9; margin-bottom: clamp(154px, 22vh, 214px); padding: clamp(10px,1.7vh,16px) clamp(22px,3vw,42px); border-radius: 999px; border: 1px solid rgba(255,222,140,0.7); background: linear-gradient(180deg, var(--color-flame,#ffd778), var(--color-flame-warm,#f4a460)); color: #2a1b14; font: 900 clamp(16px,2.3vh,23px)/1 'OkDanDan', Georgia, serif; letter-spacing: 0.14em; cursor: pointer; opacity: 0; transform: translateY(10px) scale(0.94); box-shadow: 0 10px 26px rgba(244,164,96,0.4), 0 0 0 1px rgba(220,170,70,0.3); transition: opacity 0.32s ease 1.14s, transform 0.32s ease 1.14s, box-shadow 0.18s ease; pointer-events: none; }
+#hearth-overlay.is-shutter-rest .hearth-depart { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+.hearth-depart:hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 14px 32px rgba(244,164,96,0.52); }
+.hearth-depart.is-pressed { transform: scale(0.96); filter: brightness(1.1); }
+#hearth-overlay.is-character-confirming .hearth-character-strip, #hearth-overlay.is-character-confirming .hearth-depart { transform: translateY(110%); opacity: 0; pointer-events: none; }
+#hearth-overlay.is-character-confirming .hearth-showcase-card { filter: brightness(1.85) saturate(1.2); transform: scale(0.08); opacity: 0; transition: transform 0.34s cubic-bezier(0.28,0.78,0.34,1), opacity 0.34s ease, filter 0.34s ease; }
+#hearth-overlay.is-character-confirmed .hearth-character-stage, #hearth-overlay.is-character-confirmed .hearth-character-strip, #hearth-overlay.is-character-confirmed .hearth-back { display: none; }
+#hearth-overlay.is-character-confirmed .hearth-depart { grid-row: 2; margin-bottom: clamp(24px, 5vh, 44px); opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+.hearth-character-orb { position: fixed; z-index: 260; width: 18px; height: 18px; border-radius: 50%; pointer-events: none; background: #fff3bd; box-shadow: 0 0 22px #ffd778, 0 0 56px rgba(244,164,96,0.72); }
+.hearth-character-orb.is-flying { animation: hearth-character-orb-flight 0.6s cubic-bezier(0.18,0.78,0.22,1) forwards; }
+@keyframes hearth-character-orb-flight { to { transform: translate(var(--orb-dx), var(--orb-dy)) scale(0.45); opacity: 0.82; } }
+.player-card.hearth-character-installed { animation: hearth-character-installed 0.72s cubic-bezier(0.2,0.8,0.3,1); }
+@keyframes hearth-character-installed { 0% { filter: brightness(1.7); transform: translateY(-3px) scale(1.03); } 100% { filter: brightness(1); transform: none; } }
 
 /* ── /시작 검은 화면 페이드인 ───────────────────────────────────────────
    타이틀 직후 게임 진입처럼 검은 화면에서 천천히 떠오른다. 전체 화면을 덮고
