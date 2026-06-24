@@ -31,6 +31,7 @@ import boss001Url from '../assets/sprites/boss_001.webp'
 import boss002Url from '../assets/sprites/boss_002.webp'
 import boss003Url from '../assets/sprites/boss_003.webp'
 import boss004Url from '../assets/sprites/boss_004.webp'
+import player000Url from '../assets/sprites/player_000.webp'
 import playerUrl from '../assets/sprites/player_001.webp'
 import enemy001Url from '../assets/sprites/enemy_001.webp'
 import enemy002Url from '../assets/sprites/enemy_002.webp'
@@ -157,6 +158,7 @@ import free001Url from '../assets/sprites/free_001.webp'
 import free002Url from '../assets/sprites/free_002.webp'
 import hearthBackdropUrl from '../assets/sprites/hearth_bg_001.webp'
 import hearthDoorUrl from '../assets/sprites/hearth_bg_002.webp'
+import hearthAdventureUrl from '../assets/sprites/hearth_bg_003.webp'
 import questMajorUrl from '../assets/sprites/quest_001.webp'
 import questMediumUrl from '../assets/sprites/quest_002.webp'
 import questMinorUrl from '../assets/sprites/quest_003.webp'
@@ -187,6 +189,8 @@ export const SpriteUrls = {
   /** 100층 보스(녹지 않는 마녀) 일러스트. */
   boss100: boss004Url,
   player: playerUrl,
+  /** 튜토리얼 플레이어(새싹 병아리) 일러스트. */
+  playerTutorial: player000Url,
   // 사용자 지정 매핑: enemy_001~018을 타입 안전한 EnemySpriteId 키와 1:1로 연결한다.
   enemyChitin: enemy001Url,
   enemyMoth: enemy002Url,
@@ -349,6 +353,8 @@ export const SpriteUrls = {
     backdrop: hearthBackdropUrl,
     /** 거점 오로라 커튼 위에 반투명하게 깔리는 대문(hearth_bg_002). */
     door: hearthDoorUrl,
+    /** 모험 셔터 내부 배경(hearth_bg_003). */
+    adventure: hearthAdventureUrl,
   } as const,
   /** 의뢰(퀘스트) 딱지 일러스트 — 등급별(메인/중간/소형). */
   questTickets: {
