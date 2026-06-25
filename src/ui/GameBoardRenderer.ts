@@ -826,7 +826,31 @@ export class GameBoardRenderer {
     for (let distance = LANE_DISTANCE_COUNT - 1; distance >= 0; distance--) {
       rows.push(this.renderRow(lanes, distance))
     }
-    return rows.join('')
+    // Top-edge hints mirror the current back-row refill cards, so players can
+    // read what will descend next without adding new icons or breaking theme.
+    return `${this.renderRailIncomingHints(lanes)}${rows.join('')}`
+  }
+
+  /** Render subtle per-lane glow lines inside the rail's upper boundary. */
+  private renderRailIncomingHints(lanes: Lane[]): string {
+    const topDistance = LANE_DISTANCE_COUNT - 1
+    const hints = lanes
+      .map((lane, laneIndex) => {
+        const card = lane.getCardAtDistance(topDistance)
+        const kind = card ? this.incomingHintKind(card) : 'empty'
+        return `<span class="rail-next-hint rail-next-hint--${kind}" data-lane="${laneIndex}" aria-hidden="true"></span>`
+      })
+      .join('')
+    return `<div class="rail-next-hints" aria-hidden="true">${hints}</div>`
+  }
+
+  /** Map card type to the existing rail palette used by card accent strips. */
+  private incomingHintKind(card: Card): 'enemy' | 'trap' | 'treasure' | 'flower' | 'empty' {
+    if (card.type === CardType.ENEMY) return 'enemy'
+    if (card.type === CardType.TRAP) return 'trap'
+    if (card.type === CardType.TREASURE) return 'treasure'
+    if (card.type === CardType.FLOWER) return 'flower'
+    return 'empty'
   }
 
   private renderRow(lanes: Lane[], distance: number): string {
