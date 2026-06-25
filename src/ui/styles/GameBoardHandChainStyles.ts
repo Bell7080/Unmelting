@@ -416,6 +416,14 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 .hand-slot.hand-card:focus-within .hand-card-preview::before {
   animation: hand-preview-back-flip 0.62s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
 }
+/* Stable previews win even while :hover still matches after a board refresh;
+   this closes the cascade hole that let the card-back flip replay. */
+.hand-slot.hand-card.is-preview-open .hand-card-preview::before,
+.hand-slot.hand-card .hand-card-preview.is-preview-stable::before {
+  animation: none;
+  opacity: 0;
+  transform: rotateY(-102deg);
+}
 .hand-slot.hand-card.is-arming-target .hand-card-preview::before {
   opacity: 0;
   transform: rotateY(-102deg);
@@ -460,7 +468,8 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   gap: 7px;
   animation: recipe-preview-slide 0.28s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
 }
-.hand-slot.hand-card.is-recipe-ready.is-preview-open .hand-recipe-preview {
+.hand-slot.hand-card.is-recipe-ready.is-preview-open .hand-recipe-preview,
+.hand-slot.hand-card.is-recipe-ready .hand-recipe-preview.is-preview-stable {
   display: grid;
   gap: 7px;
   animation: none;

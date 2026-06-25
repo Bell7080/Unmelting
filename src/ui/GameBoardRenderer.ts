@@ -413,9 +413,11 @@ export class GameBoardRenderer {
       const idx = slot ? parseInt(slot.dataset.slotIndex ?? '-1', 10) : -1
       if (idx === this.hoveredHandSlotIndex) return
       if (this.hoveredHandSlotIndex !== null) {
-        this.boardElement
+        const previousSlot = this.boardElement
           .querySelector<HTMLElement>(`.hand-slot[data-slot-index="${this.hoveredHandSlotIndex}"]`)
-          ?.classList.remove('is-preview-open')
+        // Stable-preview classes are only valid while the cursor is on the
+        // same card; clear them before letting a different slot play its first flip.
+        this.clearStableHandPreviewClasses(previousSlot)
       }
       this.hoveredHandSlotIndex = idx >= 0 ? idx : null
       // is-preview-open은 여기서 추가하지 않는다 — :hover CSS가 첫 플립을 자연스럽게 처리
@@ -423,9 +425,10 @@ export class GameBoardRenderer {
 
     this.boardElement.addEventListener('mouseleave', () => {
       if (this.hoveredHandSlotIndex !== null) {
-        this.boardElement
+        const slot = this.boardElement
           .querySelector<HTMLElement>(`.hand-slot[data-slot-index="${this.hoveredHandSlotIndex}"]`)
-          ?.classList.remove('is-preview-open')
+        // Leaving the hand column returns the preview to normal hidden CSS state.
+        this.clearStableHandPreviewClasses(slot)
         this.hoveredHandSlotIndex = null
       }
     }, { passive: true })
@@ -599,8 +602,11 @@ export class GameBoardRenderer {
     // 이미 열린 카드가 다른 새로고침/애니메이션의 영향을 받지 않게 고정한다.
     if (!handDomPreserved) {
       this.restoreStableHandPreview(stableHandPreview)
-      this.restoreHandHoverState()
     }
+    // Whether the hand DOM was preserved or rebuilt, freeze the currently
+    // hovered preview in its already-open pose so board/effect refreshes cannot
+    // restart the back-to-front flip animation.
+    this.restoreHandHoverState()
 
     this.syncBodyVignette(scorePanel.vignetteIntensity ?? 0)
     this.injectStyles()
@@ -5764,7 +5770,9 @@ export class GameBoardRenderer {
     const handUid = slot?.dataset.handUid
     if (!slot || !preview || !handUid) return null
 
-    // cloneNode(false)가 아니라 실제 노드를 분리해 같은 hover 카드의 flip 상태를 이어받는다.
+    // 리렌더 직전부터 열린 상태 클래스를 박아 두면 노드를 잠깐 떼었다가
+    // 되심는 브라우저 레이아웃 타이밍에서도 :hover 애니메이션이 재시작되지 않는다.
+    this.markStableHandPreview(slot)
     const recipePreview = slot.querySelector<HTMLElement>(':scope > .hand-recipe-preview')
     return {
       slotIndex: this.hoveredHandSlotIndex,
@@ -5784,6 +5792,9 @@ export class GameBoardRenderer {
 
     const freshPreview = slot.querySelector<HTMLElement>(':scope > .hand-card-preview')
     if (freshPreview) freshPreview.replaceWith(snapshot.preview)
+    // Re-apply after replacement because a fresh slot may not carry the stable
+    // classes captured from the old DOM tree.
+    this.markStableHandPreview(slot)
 
     const freshRecipePreview = slot.querySelector<HTMLElement>(':scope > .hand-recipe-preview')
     if (snapshot.recipePreview && freshRecipePreview) {
@@ -5803,10 +5814,30 @@ export class GameBoardRenderer {
       `.hand-slot[data-slot-index="${this.hoveredHandSlotIndex}"]`
     )
     if (slot?.classList.contains('hand-card')) {
-      slot.classList.add('is-preview-open')
+      this.markStableHandPreview(slot)
     } else {
       this.hoveredHandSlotIndex = null
     }
+  }
+
+  /** Hover previews are read-only surfaces; this helper pins the current card
+   *  to the open pose until the pointer leaves or moves to another hand slot. */
+  private markStableHandPreview(slot: HTMLElement): void {
+    slot.classList.add('is-preview-open')
+    slot.querySelector<HTMLElement>(':scope > .hand-card-preview')
+      ?.classList.add('is-preview-stable')
+    slot.querySelector<HTMLElement>(':scope > .hand-recipe-preview')
+      ?.classList.add('is-preview-stable')
+  }
+
+  /** Remove all JS-applied preview-freeze classes from a slot. */
+  private clearStableHandPreviewClasses(slot: HTMLElement | null | undefined): void {
+    if (!slot) return
+    slot.classList.remove('is-preview-open')
+    slot.querySelector<HTMLElement>(':scope > .hand-card-preview')
+      ?.classList.remove('is-preview-stable')
+    slot.querySelector<HTMLElement>(':scope > .hand-recipe-preview')
+      ?.classList.remove('is-preview-stable')
   }
 
   private handleCardClick(_el: HTMLElement, laneIndex: number, distance: number): void {
