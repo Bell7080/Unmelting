@@ -246,6 +246,8 @@ export interface ScorePanelState {
   vignetteIntensity?: number
   chainHints?: ChainHints
   pendingHandTarget?: HandTargetingMode | null
+  /** 실제 다음 리필 카드 예고용. index가 laneIndex와 일치한다. */
+  refillPreviewCards?: readonly (Card | null)[]
 }
 
 /** Tracks one in-flight number roll so a re-render can resume it on the new
@@ -563,7 +565,7 @@ export class GameBoardRenderer {
         </aside>
         <main class="stage">
           <section class="rail ${this.shopShutterLocked ? 'is-shop-shuttered' : ''}" aria-label="Card rail">
-            ${this.renderRail(lanes)}
+            ${this.renderRail(lanes, scorePanel.refillPreviewCards)}
             ${this.shopShutterLocked ? this.renderShopShutter(true, lanes) : ''}
           </section>
 
@@ -821,12 +823,37 @@ export class GameBoardRenderer {
     `
   }
 
-  private renderRail(lanes: Lane[]): string {
+  private renderRail(lanes: Lane[], refillPreviewCards: readonly (Card | null)[] = []): string {
     const rows: string[] = []
     for (let distance = LANE_DISTANCE_COUNT - 1; distance >= 0; distance--) {
       rows.push(this.renderRow(lanes, distance))
     }
-    return rows.join('')
+    // Top-edge hints mirror the queued refill cards, so players can read the
+    // next off-screen spawn without adding new icons or breaking theme.
+    return `${this.renderRailIncomingHints(lanes, refillPreviewCards)}${rows.join('')}`
+  }
+
+  /** Render subtle per-lane glow lines inside the rail's upper boundary. */
+  private renderRailIncomingHints(lanes: Lane[], refillPreviewCards: readonly (Card | null)[]): string {
+    const hints = lanes
+      .map((_lane, laneIndex) => {
+        const card = refillPreviewCards[laneIndex] ?? null
+        const kind = card ? this.incomingHintKind(card) : 'empty'
+        return `<span class="rail-next-hint rail-next-hint--${kind}" data-lane="${laneIndex}" aria-hidden="true"></span>`
+      })
+      .join('')
+    return `<div class="rail-next-hints" aria-hidden="true">${hints}</div>`
+  }
+
+  /** Map card type to the existing rail palette used by card accent strips. */
+  private incomingHintKind(card: Card): 'enemy' | 'trap' | 'treasure' | 'flower' | 'special' | 'empty' {
+    if (card.type === CardType.EVENT) return 'special'
+    if (card.type === CardType.TREASURE && card.treasureKind === 'starlight') return 'special'
+    if (card.type === CardType.ENEMY) return 'enemy'
+    if (card.type === CardType.TRAP) return 'trap'
+    if (card.type === CardType.TREASURE) return 'treasure'
+    if (card.type === CardType.FLOWER) return 'flower'
+    return 'empty'
   }
 
   private renderRow(lanes: Lane[], distance: number): string {
