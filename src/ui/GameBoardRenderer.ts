@@ -4652,11 +4652,14 @@ export class GameBoardRenderer {
       norm(disp.willGainPerDamage, 30, 100) +
       norm(disp.clutchHpThreshold, 0.2, 0.6)
     ) / 3 * protectionDisplayScale
+    // 불굴은 각성/역경 보정이 초반부터 높게 보이지 않도록 표시만 절반으로 낮춘다.
+    // 실제 각성·클러치 동작값은 유지해 밸런스와 RL 피팅 결과를 건드리지 않는다.
+    const gritDisplayScale = 0.5
     const grit = (
       norm(disp.awakenChance, 0.02, 0.4) * 0.55 +
       norm(disp.clutchAdversityBoost, 0.6, 2.4) * 0.3 +
       norm(disp.bondClimaxChance, 0, 0.25) * 0.15
-    )
+    ) * gritDisplayScale
     return [
       { key: '수다', value: norm(liveChat, 0.12, 0.62), desc: '곁에서 말 거는 빈도' },
       { key: '예지', value: norm(disp.predictBaseChance, 0.02, 0.95), desc: '위협을 미리 읽어 도구를 건넴' },
