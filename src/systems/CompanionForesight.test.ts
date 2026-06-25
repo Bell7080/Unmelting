@@ -107,4 +107,21 @@ describe('CompanionForesight', () => {
     expect(report.recommendationKind).toBe('attack')
   })
 
+
+  it('recommends defensive tempo when a front strong enemy cannot be killed cleanly', () => {
+    const gs = new GameState()
+    gs.character.damage = 2
+    const brute = new Card('brute', CardType.ENEMY, '큰 적', 'test', 12, 5)
+    brute.groupCount = 2
+    gs.lanes[1].setCardAtDistance(0, brute)
+
+    const report = assessThreats(gs.lanes, gs.character, {
+      unlockedCardIds: ['ember', 'wax', 'sword-and-shield'] as HandCardId[],
+    })
+
+    expect(report.recommendedCardId).toBe('wax')
+    expect(report.recommendationKind).toBe('defense')
+    expect(report.recommendationReason).toContain('반격 타이밍')
+  })
+
 })
