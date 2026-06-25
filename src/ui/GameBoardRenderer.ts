@@ -4645,8 +4645,8 @@ export class GameBoardRenderer {
     const liveChat = chat * (learning?.chattiness ?? 1)
     const mc = disp.minorClutchChance
     const minor = (mc.crit + mc.dodge + mc.counter + mc.trap + mc.treasure) / 5
-    // 수호 축은 실제 동작값을 바꾸지 않고 경험 탭 표기만 완화한다. 방패/보호 계열은 2스탯당 1.5배 정도로 보이게 환산해 과도한 상승감을 줄인다.
-    const protectionDisplayScale = 0.75
+    // 수호 축은 실제 동작값을 바꾸지 않고 경험 탭 표기만 완화한다. 방패/보호 계열은 실제 동작값의 절반으로 표시해 피격 빈도 때문에 수호만 과도하게 커 보이는 일을 줄인다.
+    const protectionDisplayScale = 0.5
     const guard = (
       norm(disp.clutchStrength, 0.6, 1.6) +
       norm(disp.willGainPerDamage, 30, 100) +

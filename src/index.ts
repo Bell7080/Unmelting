@@ -286,6 +286,19 @@ function companionWorldCanSpeak(): boolean {
   return gameActive && !shopOpen && !gameState.bossBattleActive && !gameState.isGameOver
 }
 
+/** 적 공격 판정 직전에 회피 클러치를 굴린다. 체력 되돌림이 아니라 피해 적용 전 무효화라 타이밍이 자연스럽다. */
+function tryCompanionIncomingDodge(incomingDamage: number): boolean {
+  if (incomingDamage <= 0 || !companionWorldCanSpeak()) return false
+  const projectedHealth = gameState.character.health - incomingDamage
+  const adversity = projectedHealth <= Math.max(1, gameState.character.maxHealth * 0.35)
+  if (!companion.rollMinorClutch('dodge', { adversity, bond: true })) return false
+  recordNotice(`에나의 의지 — 회피! 피해 ${incomingDamage} 무효`, 'info')
+  void boardRenderer.animateClutchOnPlayer('health-gain')
+  showClutchChain('dodge', `피해 ${incomingDamage} 무효`)
+  sayEnaBark(companion.minorClutchLine('dodge'), { importance: BARK_IMPORTANCE.clutch })
+  return true
+}
+
 /** 클러치 종류별 전용 체인 제목(플레이어 카드 위 배너). */
 const CLUTCH_TITLES: Record<string, string> = {
   crit: '모험의 긍지',
@@ -305,7 +318,12 @@ const CLUTCH_TITLES: Record<string, string> = {
 const CLEANUP_CARD_IDS: readonly HandCardId[] = ['sweep', 'chitin'] as unknown as HandCardId[]
 
 /** 예측 대비로 건넨 카드를 플레이어가 기한 내 쓰는지 추적(RL 신호). */
-let pendingPrediction: { cardIds: readonly string[]; deadlineTurn: number } | null = null
+let pendingPrediction: {
+  cardIds: readonly string[]
+  issuedTurn: number
+  deadlineTurn: number
+  kind: string
+} | null = null
 
 /** 예측 대비: 위협 추정(그릇)을 미리 읽고 대비 카드를 건넨다. 플레이어 차례 직전 호출. */
 async function tryCompanionPrediction(): Promise<void> {
@@ -340,7 +358,7 @@ async function tryCompanionPrediction(): Promise<void> {
   // 판 분석 결과가 고른 해금 손패를 건넨다. 함정 외 공격/포자/레시피/트리플 보조도 이 경로를 공유한다.
   const drop = DropSystem.makeCard(suggested)
   if (!gameState.character.addHandCard(drop)) return // 손패 가득 — 다음 기회에
-  pendingPrediction = { cardIds: [suggested], deadlineTurn: turn + 3 }
+  pendingPrediction = { cardIds: [suggested], issuedTurn: turn, deadlineTurn: turn + 3, kind: report.recommendationKind ?? 'support' }
   recordNotice(`에나의 의지 — ${getHandCardDef(suggested).name} 지원: ${report.recommendationReason}`, 'info')
   render()
   void boardRenderer.animateClutchOnPlayer('hand-control')
@@ -3511,14 +3529,19 @@ async function applyHandSingle(
     const bark = companion.onUseCard(usedDef.id, usedDef.category, gameState.getCurrentTurn())
     if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.loot })
   }
-  // 예측 대비 RL: 건넨 대비 카드(청소/키틴 등)를 기한 내 썼다 → 유용했다(더 적극적으로 대비).
+  // 예측 대비 RL: 에나가 건넨 손패가 '곧바로/위기 타이밍에' 실제 효과를 냈는지 점수화한다.
   if (
     usedDef &&
     pendingPrediction &&
     pendingPrediction.cardIds.includes(usedDef.id) &&
     gameState.getCurrentTurn() <= pendingPrediction.deadlineTurn
   ) {
-    companion.recordPredictionUsed()
+    const turnsHeld = Math.max(0, gameState.getCurrentTurn() - pendingPrediction.issuedTurn)
+    const removedHazards = result.removedFieldCards.filter((c) => c.type === CardType.TRAP).length
+    const immediateTimingBonus = turnsHeld === 0 ? 0.35 : turnsHeld === 1 ? 0.2 : 0
+    const cleanupImpactBonus = usedDef.id === 'sweep' || usedDef.id === 'chitin' ? Math.min(0.45, removedHazards * 0.15) : 0
+    const crisisTimingBonus = pendingPrediction.kind === 'cleanup' && removedHazards > 0 ? 0.25 : 0
+    companion.recordPredictionOutcome(0.75 + immediateTimingBonus + cleanupImpactBonus + crisisTimingBonus)
     pendingPrediction = null
   }
   // 보스도 밀랍 굳음을 적용받는다(즉사만 면역). 굳음 중에는 보스가 반격/특수행동을 못 한다.
@@ -3956,7 +3979,7 @@ async function applyHandSingle(
 /** 레바테인 전용: 적 공격/폭탄/꽃/보물 처리를 1회 실행하되 실제 턴 카운터를 올리지 않는다. */
 async function runSimulatedEnemyPhase(): Promise<void> {
   const beforeTrapHealth = snapshotFieldHealthState()
-  const hits = turnManager.runEnemyPhase()
+  const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => tryCompanionIncomingDodge(damage) })
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
   const bombExplosions = turnManager.applyBombExplosions()
   const flowerChanges = turnManager.applyFlowerGrowthAndWilt(cardSpawner)
@@ -4182,7 +4205,7 @@ async function resolvePostDropSporeSpread(): Promise<void> {
 
 async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true): Promise<void> {
   const beforeTrapHealth = snapshotFieldHealthState()
-  const hits = turnManager.runEnemyPhase()
+  const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => tryCompanionIncomingDodge(damage) })
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
   const bombExplosions = turnManager.applyBombExplosions()
   const flowerChanges = turnManager.applyFlowerGrowthAndWilt(cardSpawner)
@@ -4255,18 +4278,7 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   // 클러치 예산('에나의 의지') 충전: 이번 페이즈 역경(피해/불씨 고갈)에 비례.
   if (totalDamage > 0) companion.gainWill(totalDamage, gameState.character.maxHealth)
   if (gameState.character.ember <= 1) companion.gainWillFlat(15)
-  // 소소한 클러치 — 회피: 가장 큰 피격 1대를 무효(되돌림)한다.
-  if (totalDamage > 0 && companionWorldCanSpeak() && companion.rollMinorClutch('dodge', { adversity: gameState.character.health <= Math.max(1, gameState.character.maxHealth * 0.35), bond: true })) {
-    const maxHit = hits.reduce((m, h) => Math.max(m, h.damage), 0)
-    if (maxHit > 0) {
-      gameState.character.heal(maxHit)
-      recordNotice(`에나의 의지 — 회피! 피해 ${maxHit} 무효`, 'info')
-      void boardRenderer.animateClutchOnPlayer('health-gain')
-      showClutchChain('dodge', `피해 ${maxHit} 무효`)
-      sayEnaBark(companion.minorClutchLine('dodge'), { importance: BARK_IMPORTANCE.clutch })
-      render()
-    }
-  }
+  // 회피 클러치는 TurnManager.runEnemyPhase의 공격 판정 순간에 처리된다.
 
   // 소소한 클러치 — 반격: 회피와 달리 피해는 받은 뒤, 공격력 기반으로 공격자를 되친다.
   if (totalDamage > 0 && companionWorldCanSpeak() && companion.rollMinorClutch('counter', { adversity: totalDamage >= Math.max(3, gameState.character.maxHealth * 0.25), bond: true })) {
@@ -4514,16 +4526,18 @@ async function handleCardAction(e: Event): Promise<void> {
   inputLocked = true
 
   if (turnManager.isEnemyFirstStrike()) {
-    const hits = turnManager.runEnemyPhase()
+    const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => tryCompanionIncomingDodge(damage) })
     if (hits.length > 0) {
       await boardRenderer.animateEnemyAttacks(hits)
       const dmg = hits.reduce((acc, h) => acc + h.damage, 0)
-      recordNotice(`불씨가 흔들려 적이 먼저 공격! -${dmg}`, 'hurt')
-      render()
-      await boardRenderer.animateDamageImpactOnElement(
-        document.querySelector<HTMLElement>('.player-card'),
-        dmg
-      )
+      if (dmg > 0) {
+        recordNotice(`불씨가 흔들려 적이 먼저 공격! -${dmg}`, 'hurt')
+        render()
+        await boardRenderer.animateDamageImpactOnElement(
+          document.querySelector<HTMLElement>('.player-card'),
+          dmg
+        )
+      }
       // 품격있는 대처: 먼저 때린 적들에게 반격(플레이어가 살아남았을 때만 동작).
       await applyDignifiedRetaliation(hits)
       // 변칙: 선공으로 잃은 체력 10마다 불씨 +1.

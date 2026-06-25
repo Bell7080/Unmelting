@@ -26,6 +26,8 @@ export interface EnemyHit {
   cardId: string
   cardName: string
   damage: number
+  /** 에나 회피 등으로 공격 순간 무효화되면 피해 적용 없이 공격 연출만 남긴다. */
+  dodged?: boolean
 }
 
 export interface TreasureChange {
@@ -123,7 +125,7 @@ export class TurnManager {
    * Active-row enemies that are still alive strike the player.
    * Returns a per-strike log so the UI can surface what happened.
    */
-  runEnemyPhase(): EnemyHit[] {
+  runEnemyPhase(options: { shouldDodge?: (incoming: { laneIndex: number; card: Card; damage: number }) => boolean } = {}): EnemyHit[] {
     const hits: EnemyHit[] = []
     const seen = new Set<Card>()
     const character = this.gameState.character
@@ -134,8 +136,15 @@ export class TurnManager {
       if (seen.has(card)) continue
       seen.add(card)
 
+      const incomingDamage = card.getDamage()
+      // 회피 클러치는 체력을 되돌리지 않고 공격 판정 순간에 피해 적용 자체를 건너뛴다.
+      if (options.shouldDodge?.({ laneIndex: i, card, damage: incomingDamage })) {
+        hits.push({ laneIndex: i, cardId: card.id, cardName: card.name, damage: 0, dodged: true })
+        continue
+      }
+
       // Record actual damage so the UI and death check match state.
-      const damage = character.takeDamage(card.getDamage())
+      const damage = character.takeDamage(incomingDamage)
       hits.push({ laneIndex: i, cardId: card.id, cardName: card.name, damage })
 
       if (!character.isAlive()) {

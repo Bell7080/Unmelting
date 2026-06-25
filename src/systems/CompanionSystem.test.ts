@@ -145,6 +145,14 @@ describe('CompanionSystem', () => {
     expect(c.predictLine('web')).not.toMatch(/[{}[\]]/)
   })
 
+  it('예측 대비 결과 점수에 따라 predictiveWeight를 올리거나 낮춘다', () => {
+    const c = new CompanionSystem()
+    c.recordPredictionOutcome(1.4)
+    expect(c.getLearningSnapshot().predictiveWeight).toBeGreaterThan(1)
+    c.recordPredictionOutcome(0)
+    expect(c.getLearningSnapshot().predictiveWeight).toBeLessThan(1.4)
+  })
+
   it('소소한 클러치 대사가 깨끗하게 나온다', () => {
     const c = new CompanionSystem()
     for (const k of ['crit', 'dodge', 'trap', 'treasure'] as const) {
