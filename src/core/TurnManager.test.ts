@@ -314,6 +314,20 @@ describe('TurnManager treasure volatility', () => {
     expect(hits[0]?.damage).toBe(groupedEnemy?.getDamage())
   })
 
+  it('can dodge an enemy strike before damage is applied', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const enemy = new Card('enemy-dodge', CardType.ENEMY, '회피 시험 적', 'test', 4, 1)
+    gameState.lanes[0].setCardAtDistance(0, enemy)
+    const beforeHp = gameState.character.health
+
+    // 에나 회피처럼 공격 판정 순간에 true를 돌려주면 체력 차감 자체를 건너뛴다.
+    const hits = turnManager.runEnemyPhase({ shouldDodge: () => true })
+
+    expect(hits).toEqual([{ laneIndex: 0, cardId: enemy.id, cardName: enemy.name, damage: 0, dodged: true }])
+    expect(gameState.character.health).toBe(beforeHp)
+  })
+
   it('reports a quiet marigold progress beat on the non-growth turn', () => {
     const gameState = new GameState()
     const turnManager = new TurnManager(gameState)

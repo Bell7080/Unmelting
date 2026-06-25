@@ -478,14 +478,27 @@ export class CompanionSystem {
     return this.pickFrom(`predict:miss-${kind}`, PREDICT_LINES[`miss-${kind}`], kind === 'shield' ? 'urgent' : 'normal')
   }
 
+  /** 건넨 대비가 실제 플레이에 얼마나 도움 됐는지 반영한다. 1보다 크면 더 믿고, 작으면 덜 믿는다. */
+  recordPredictionOutcome(helpScore: number): void {
+    const score = Math.max(0, Math.min(1.6, helpScore))
+    if (score >= 1) {
+      // 위기 직후 사용·거미줄 다수 제거처럼 '타이밍이 맞았다'는 신호는 성장을 조금 더 준다.
+      this.predictiveWeight = Math.min(this.disp.weightMax, this.predictiveWeight * (1 + (this.disp.predictUpGrowth - 1) * score))
+      return
+    }
+    // 늦게 쓰거나 효과가 작으면 완전 낭비보다는 약한 감쇠로 기록한다.
+    const decay = 1 - (1 - this.disp.predictDownDecay) * (1 - score)
+    this.predictiveWeight = Math.max(this.disp.weightFloor, this.predictiveWeight * decay)
+  }
+
   /** 건넨 대비 카드를 플레이어가 곧 썼다 → 예측이 유용했다(더 적극적으로 대비). */
   recordPredictionUsed(): void {
-    this.predictiveWeight = Math.min(this.disp.weightMax, this.predictiveWeight * this.disp.predictUpGrowth)
+    this.recordPredictionOutcome(1)
   }
 
   /** 건넨 대비 카드를 기한 내 안 썼다 → 불필요했다(덜 대비). */
   recordPredictionWasted(): void {
-    this.predictiveWeight = Math.max(this.disp.weightFloor, this.predictiveWeight * this.disp.predictDownDecay)
+    this.recordPredictionOutcome(0)
   }
 
   /**
