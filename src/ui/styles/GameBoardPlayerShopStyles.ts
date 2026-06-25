@@ -1351,6 +1351,8 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   color: rgba(255, 244, 210, 0.94);
   line-height: 1.32;
   font-size: var(--font-size-sm);
+  /* 커스텀 만찬 유물은 선택지별 스탯을 줄 단위로 보여 준다. */
+  white-space: pre-line;
 }
 /* 유물 카드 desc-dyn: 도감·손패 미리보기와 동일한 display 토글 방식.
    수식 부분([dyn:기본|수식] 토큰)만 desc-dyn으로 감싸 surrounding text는 그대로 유지한다. */
