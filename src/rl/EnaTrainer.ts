@@ -11,12 +11,12 @@ import {
   EnaTrainingSimulation,
   ENA_ACTION_SPACE,
   EnaRandom,
+  ENA_FEATURE_COUNT,
   type EnaObservation,
   type EnaPolicy,
 } from './EnaTrainingSimulation'
 import { EnaPolicyNetwork } from './EnaPolicyNetwork'
 
-const FEATURE_DIM = 246
 const ACTION_DIM = ENA_ACTION_SPACE.length
 
 /** 학습 하이퍼파라미터. 테스트는 작게, 실제 사전학습은 크게 돌린다. */
@@ -165,7 +165,7 @@ export class EnaTrainer {
   static train(config: Partial<EnaTrainConfig> = {}): EnaTrainResult {
     const cfg = { ...DEFAULT_TRAIN_CONFIG, ...config }
     const rng = new EnaRandom(cfg.seed)
-    const net = new EnaPolicyNetwork(FEATURE_DIM, cfg.hidden, ACTION_DIM, new EnaRandom(cfg.seed + 1))
+    const net = new EnaPolicyNetwork(ENA_FEATURE_COUNT, cfg.hidden, ACTION_DIM, new EnaRandom(cfg.seed + 1))
     const evalSeeds = Array.from({ length: 40 }, (_, i) => 5000 + i * 7)
 
     const random = EnaTrainer.evaluate(policyFromNetwork(net, true), evalSeeds)

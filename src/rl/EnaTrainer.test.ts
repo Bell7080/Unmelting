@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { EnaTrainer, policyFromNetwork, legalMaskOf } from './EnaTrainer'
-import { EnaTrainingSimulation } from './EnaTrainingSimulation'
+import { ENA_ACTION_SPACE, EnaRandom, EnaTrainingSimulation } from './EnaTrainingSimulation'
 
 describe('EnaTrainer', () => {
   it('관측의 합법 행동을 길이 21 마스크로 정확히 변환한다', () => {
@@ -8,6 +8,17 @@ describe('EnaTrainer', () => {
     const mask = legalMaskOf(obs)
     expect(mask).toHaveLength(21)
     expect(mask.filter(Boolean).length).toBe(obs.legalActions.length)
+  })
+
+
+  it('교사 휴리스틱 임계값을 config로 바꿔 탐험 없는 정책을 만들 수 있다', () => {
+    const sim = new EnaTrainingSimulation(2)
+    const obs = sim.reset()
+    const strictPolicy = EnaTrainingSimulation.configuredTeacherPolicy({ explorationRate: 0, emberRefillThreshold: -1 })
+    const actionIndex = strictPolicy(obs, new EnaRandom(99))
+
+    expect(actionIndex).toBeGreaterThanOrEqual(0)
+    expect(ENA_ACTION_SPACE[actionIndex]).toBeDefined()
   })
 
   it('학습이 실제로 일어난다: BC+REINFORCE 후 무작위 초기망보다 좋아진다', () => {

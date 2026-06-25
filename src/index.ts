@@ -70,6 +70,7 @@ import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
 import { BgmManager } from '@/audio/BgmManager'
 import { enaRuntimeObserver, shopKindToPurchaseId } from '@/rl/EnaRuntimeObserver'
+import { createBrowserEnaAutonomousLearner } from '@/rl/EnaAutonomousLearner'
 import bgm001Url from './assets/audio/bgm_001.mp3'
 import bgm002Url from './assets/audio/bgm_002.mp3'
 import bgm003Url from './assets/audio/bgm_003.mp3'
@@ -150,12 +151,16 @@ ingameBackdropStyle.textContent = `
 document.head.appendChild(ingameBackdropStyle)
 
 const gameState = new GameState()
+// 에나가 실제 런 로그를 플레이어에게 보이지 않는 자기반성으로 저장하는 내부 학습기.
+const enaAutonomousLearner = createBrowserEnaAutonomousLearner()
 // 에나 런타임 관측: 모든 endGame 호출을 한 곳에서 기록해 사망/클리어 결과를 플레이 로그에 누적한다.
 const originalEndGame = gameState.endGame.bind(gameState)
 gameState.endGame = (reason: string): void => {
   originalEndGame(reason)
   const won = reason.includes('clear') || reason.includes('win')
   enaRuntimeObserver.recordRunEnd(gameState, won, reason)
+  // 에나 혼자 보는 자기학습: 디버그 리포트 노출 없이 실제 런 로그를 다음 판단 재료로 압축한다.
+  enaAutonomousLearner.learnAfterRun(enaRuntimeObserver.getMemory(), enaRuntimeObserver.getEvents())
   // per-player 성향 온라인 적응: 런 결과로 에나의 성향을 미세조정하고 저장(세션 넘어 유지).
   adaptCompanionToRunOutcome(won)
 }
@@ -2825,6 +2830,13 @@ async function startGame(): Promise<void> {
     ? companion.onJobSelect(chosenJob.id)
     : '역경 아래, 작은 불빛을 밝혀야만 해.'
   speechBubble.show(opening, 800)
+  const memoryLine = enaAutonomousLearner.recallLineForNewRun()
+  if (memoryLine) {
+    // 시작 인사를 덮지 않도록 한 박자 뒤, 플레이어가 보는 자연스러운 회상으로만 보여준다.
+    window.setTimeout(() => {
+      if (companionWorldCanSpeak()) sayEnaBark(memoryLine, { importance: BARK_IMPORTANCE.situation })
+    }, 2200)
+  }
 }
 
 function buildChainHints() {

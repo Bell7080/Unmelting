@@ -175,7 +175,7 @@ const DROP_POOL: { id: HandCardId; weight: number }[] = HAND_CARD_IDS
 const FEATURE_SCALARS = 34
 const FEATURE_PER_CELL = 14
 const FEATURE_PER_HAND = 9
-const FEATURE_COUNT = FEATURE_SCALARS + FEATURE_PER_CELL * ROWS * LANES + FEATURE_PER_HAND * HAND_MAX
+export const ENA_FEATURE_COUNT = FEATURE_SCALARS + FEATURE_PER_CELL * ROWS * LANES + FEATURE_PER_HAND * HAND_MAX
 
 /** 모든 행동 인덱스를 고정해 신경망 출력 차원을 안정화한다. */
 export const ENA_ACTION_SPACE: EnaSimAction[] = [
@@ -192,6 +192,47 @@ export const ENA_ACTION_SPACE: EnaSimAction[] = [
   { kind: 'eventSafe', arg: -1 },
   { kind: 'eventGreedy', arg: -1 },
 ]
+
+
+/** 휴리스틱 교사 정책의 임계값. RL 워밍업 규칙을 코드 곳곳의 매직 넘버가 아니라 실험 가능한 계약으로 둔다. */
+export interface EnaHeuristicPolicyConfig {
+  explorationRate: number
+  emberRefillThreshold: number
+  lowHpRecoveryThreshold: number
+  safeRewardHpThreshold: number
+  safeEventHpThreshold: number
+  webCleanupThreshold: number
+  shopCriticalHpThreshold: number
+  shopCriticalEmberThreshold: number
+  shopResourceCost: number
+  shopUpgradeCost: number
+  shopRemoveCost: number
+  attackGrowthTarget: number
+  eventGreedySafetyMargin: number
+  eventGreedyBossWindow: number
+  bossEmergencyCountdown: number
+  bossEmergencyEffectiveHp: number
+}
+
+/** 기본 교사 설정은 현재 밸런스 기준값이며, 테스트/오프라인 실험에서 부분 오버라이드한다. */
+export const DEFAULT_ENA_HEURISTIC_POLICY_CONFIG: EnaHeuristicPolicyConfig = {
+  explorationRate: 0.1,
+  emberRefillThreshold: 6,
+  lowHpRecoveryThreshold: 6,
+  safeRewardHpThreshold: 8,
+  safeEventHpThreshold: 10,
+  webCleanupThreshold: 2,
+  shopCriticalHpThreshold: 8,
+  shopCriticalEmberThreshold: 4,
+  shopResourceCost: 2,
+  shopUpgradeCost: 4,
+  shopRemoveCost: 1,
+  attackGrowthTarget: 5,
+  eventGreedySafetyMargin: 6,
+  eventGreedyBossWindow: 12,
+  bossEmergencyCountdown: 1,
+  bossEmergencyEffectiveHp: 8,
+}
 
 /** 재현 가능한 셀프플레이가 필요해서 Math.random 대신 작은 LCG를 사용한다. */
 export class EnaRandom {
@@ -328,7 +369,7 @@ export class EnaTrainingSimulation {
     return { observation: this.observe(), reward, done: this.done }
   }
 
-  /** 고정 길이 숫자 입력: 스칼라 30 + 9칸×14 + 손패 10×9 = FEATURE_COUNT. */
+  /** 고정 길이 숫자 입력: 스칼라 34 + 9칸×14 + 손패 10×9 = ENA_FEATURE_COUNT. */
   observe(): EnaObservation {
     const legalActions = ENA_ACTION_SPACE.filter((action) => this.isLegal(action))
     const tier = EmberSystem.getTier(this.ember)
@@ -372,8 +413,8 @@ export class EnaTrainingSimulation {
       for (let lane = 0; lane < LANES; lane++) features.push(...this.encodeCard(this.board[row][lane], row))
     }
     for (let slot = 0; slot < HAND_MAX; slot++) features.push(...this.encodeHand(this.hand[slot]))
-    // FEATURE_COUNT가 깨지면 학습 모델 입출력 계약이 흔들리므로 즉시 드러나게 한다.
-    if (features.length !== FEATURE_COUNT) throw new Error(`Ena feature size mismatch: ${features.length} != ${FEATURE_COUNT}`)
+    // 관측 차원이 깨지면 학습 모델 입출력 계약이 흔들리므로 즉시 드러나게 한다.
+    if (features.length !== ENA_FEATURE_COUNT) throw new Error(`Ena feature size mismatch: ${features.length} != ${ENA_FEATURE_COUNT}`)
     return { features, legalActions, snapshot: this.snapshot() }
   }
 
@@ -428,15 +469,33 @@ export class EnaTrainingSimulation {
   static teacherPolicy(observation: EnaObservation, rng: EnaRandom): number {
     const legal = observation.legalActions
     if (legal.length === 0) return actionIndexOf('wait', -1)
-    if (rng.next() < 0.1) {
+    if (rng.next() < DEFAULT_ENA_HEURISTIC_POLICY_CONFIG.explorationRate) {
       const pick = legal[rng.int(legal.length)]
       return ENA_ACTION_SPACE.findIndex((a) => a.kind === pick.kind && a.arg === pick.arg)
     }
     const { snapshot } = observation
-    if (snapshot.phase === 'shop') return shopPolicy(snapshot, legal)
-    if (snapshot.phase === 'event') return eventPolicy(snapshot)
-    if (snapshot.phase === 'boss') return bossPolicy(snapshot)
-    return fieldPolicy(snapshot)
+    if (snapshot.phase === 'shop') return shopPolicy(snapshot, legal, DEFAULT_ENA_HEURISTIC_POLICY_CONFIG)
+    if (snapshot.phase === 'event') return eventPolicy(snapshot, DEFAULT_ENA_HEURISTIC_POLICY_CONFIG)
+    if (snapshot.phase === 'boss') return bossPolicy(snapshot, DEFAULT_ENA_HEURISTIC_POLICY_CONFIG)
+    return fieldPolicy(snapshot, DEFAULT_ENA_HEURISTIC_POLICY_CONFIG)
+  }
+
+  /** 기본 휴리스틱에서 일부 임계값만 바꾼 교사 정책을 만든다. 실험은 이 경로로 하드코딩 없이 분기한다. */
+  static configuredTeacherPolicy(config: Partial<EnaHeuristicPolicyConfig>): EnaPolicy {
+    const cfg = { ...DEFAULT_ENA_HEURISTIC_POLICY_CONFIG, ...config }
+    return (observation: EnaObservation, rng: EnaRandom): number => {
+      const legal = observation.legalActions
+      if (legal.length === 0) return actionIndexOf('wait', -1)
+      if (rng.next() < cfg.explorationRate) {
+        const pick = legal[rng.int(legal.length)]
+        return ENA_ACTION_SPACE.findIndex((a) => a.kind === pick.kind && a.arg === pick.arg)
+      }
+      const { snapshot } = observation
+      if (snapshot.phase === 'shop') return shopPolicy(snapshot, legal, cfg)
+      if (snapshot.phase === 'event') return eventPolicy(snapshot, cfg)
+      if (snapshot.phase === 'boss') return bossPolicy(snapshot, cfg)
+      return fieldPolicy(snapshot, cfg)
+    }
   }
 
   // ── 행동 적용 ────────────────────────────────────────────────────────────
@@ -1435,12 +1494,12 @@ export class EnaTrainingSimulation {
 
 // ── 휴리스틱 교사 정책(국면별) ───────────────────────────────────────────────
 
-function fieldPolicy(snapshot: EnaGameSnapshot): number {
+function fieldPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): number {
   const front = snapshot.board[0]
   const findHand = (pred: (id: HandCardId) => boolean) => snapshot.hand.findIndex((s) => pred(s.id))
 
   // 0) 불씨 관리가 생존의 핵심: 불씨가 낮으면 적·함정 스폰이 폭증한다. 성냥으로 미리 밝힌다.
-  if (snapshot.ember <= 6) {
+  if (snapshot.ember <= cfg.emberRefillThreshold) {
     const match = findHand((id) => id === 'match')
     if (match >= 0) return actionIndexOf('useHand', match)
   }
@@ -1452,12 +1511,12 @@ function fieldPolicy(snapshot: EnaGameSnapshot): number {
     if (cleaner >= 0) return actionIndexOf('useHand', cleaner)
   }
   // 2) 위급하면 회복/방패 손패.
-  if (snapshot.hp <= 6) {
+  if (snapshot.hp <= cfg.lowHpRecoveryThreshold) {
     const heal = findHand((id) => HAND_CARD_DEFINITIONS[id].category === 'recovery')
     if (heal >= 0) return actionIndexOf('useHand', heal)
   }
   // 3) 거미줄 2개+면 청소로 합체 차단.
-  if (snapshot.webThreat >= 2) {
+  if (snapshot.webThreat >= cfg.webCleanupThreshold) {
     const sweep = findHand((id) => id === 'sweep' || id === 'chitin')
     if (sweep >= 0) return actionIndexOf('useHand', sweep)
   }
@@ -1472,13 +1531,13 @@ function fieldPolicy(snapshot: EnaGameSnapshot): number {
   }
   // 5) 보상(보물/개화한 꽃)은 클릭 수확.
   const rewardLane = front.findIndex((c) => (c?.type === CardType.TREASURE && c.treasureKind !== 'starlight') || (c?.type === CardType.FLOWER && c.flowerKind !== 'seed'))
-  if (rewardLane >= 0 && snapshot.hp > 8) return actionIndexOf('clickLane', rewardLane)
+  if (rewardLane >= 0 && snapshot.hp > cfg.safeRewardHpThreshold) return actionIndexOf('clickLane', rewardLane)
   // 6) 잡을 수 있는 적은 맨손 공격(불씨 손패 아껴 보스 대비).
   const killLane = front.findIndex((c) => c?.type === CardType.ENEMY && c.hp <= snapshot.attack)
   if (killLane >= 0) return actionIndexOf('clickLane', killLane)
   // 7) 이벤트 문은 여유 있을 때 진입.
   const eventLane = front.findIndex((c) => c?.type === CardType.EVENT)
-  if (eventLane >= 0 && snapshot.hp > 10) return actionIndexOf('clickLane', eventLane)
+  if (eventLane >= 0 && snapshot.hp > cfg.safeEventHpThreshold) return actionIndexOf('clickLane', eventLane)
   // 8) 남은 적이라도 친다. 아니면 클릭 가능한 칸을 친다.
   const enemyLane = front.findIndex((c) => c?.type === CardType.ENEMY)
   if (enemyLane >= 0) return actionIndexOf('clickLane', enemyLane)
@@ -1487,25 +1546,25 @@ function fieldPolicy(snapshot: EnaGameSnapshot): number {
   return actionIndexOf('wait', -1)
 }
 
-function shopPolicy(snapshot: EnaGameSnapshot, legal: EnaSimAction[]): number {
+function shopPolicy(snapshot: EnaGameSnapshot, legal: EnaSimAction[], cfg: EnaHeuristicPolicyConfig): number {
   const canBuy = (kind: EnaSimActionKind) => legal.some((a) => a.kind === kind)
   // 생존 우선: 위급하거나 불씨가 낮으면 자원(회복+불씨)부터.
-  if ((snapshot.hp <= 8 || snapshot.ember <= 4) && snapshot.coins >= 2 && canBuy('shopResource')) return actionIndexOf('shopResource', -1)
+  if ((snapshot.hp <= cfg.shopCriticalHpThreshold || snapshot.ember <= cfg.shopCriticalEmberThreshold) && snapshot.coins >= cfg.shopResourceCost && canBuy('shopResource')) return actionIndexOf('shopResource', -1)
   // 공격력 성장: 보스 등반의 핵심. 여유 있으면 매 상점마다 공격력을 키운다.
-  if (snapshot.attack < 5 && snapshot.coins >= 4 && canBuy('shopUpgrade')) return actionIndexOf('shopUpgrade', -1)
-  if (snapshot.coins >= 2 && canBuy('shopResource')) return actionIndexOf('shopResource', -1)
-  if (snapshot.coins >= 1 && canBuy('shopRemove')) return actionIndexOf('shopRemove', -1)
+  if (snapshot.attack < cfg.attackGrowthTarget && snapshot.coins >= cfg.shopUpgradeCost && canBuy('shopUpgrade')) return actionIndexOf('shopUpgrade', -1)
+  if (snapshot.coins >= cfg.shopResourceCost && canBuy('shopResource')) return actionIndexOf('shopResource', -1)
+  if (snapshot.coins >= cfg.shopRemoveCost && canBuy('shopRemove')) return actionIndexOf('shopRemove', -1)
   return actionIndexOf('shopExit', -1)
 }
 
-function eventPolicy(snapshot: EnaGameSnapshot): number {
-  const canSurviveGreed = snapshot.hp + snapshot.shield - snapshot.eventRisk > 6
-  return canSurviveGreed && snapshot.turnsToBoss <= 12 ? actionIndexOf('eventGreedy', -1) : actionIndexOf('eventSafe', -1)
+function eventPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): number {
+  const canSurviveGreed = snapshot.hp + snapshot.shield - snapshot.eventRisk > cfg.eventGreedySafetyMargin
+  return canSurviveGreed && snapshot.turnsToBoss <= cfg.eventGreedyBossWindow ? actionIndexOf('eventGreedy', -1) : actionIndexOf('eventSafe', -1)
 }
 
-function bossPolicy(snapshot: EnaGameSnapshot): number {
+function bossPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): number {
   // 위급 + 회복 손패면 회복.
-  if (snapshot.bossAttackCountdown <= 1 && snapshot.hp + snapshot.shield <= 8) {
+  if (snapshot.bossAttackCountdown <= cfg.bossEmergencyCountdown && snapshot.hp + snapshot.shield <= cfg.bossEmergencyEffectiveHp) {
     const heal = snapshot.hand.findIndex((s) => HAND_CARD_DEFINITIONS[s.id].category === 'recovery')
     if (heal >= 0) return actionIndexOf('useHand', heal)
   }
