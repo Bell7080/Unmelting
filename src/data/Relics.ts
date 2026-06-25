@@ -47,6 +47,17 @@ export type RelicId =
   | 'wax-harmony'
   | 'trap-master'
   | 'demon-doll'
+  | 'last-supper'
+
+
+/** Runtime-customized relic face/effect. Hearth dinner uses this so one real relic id can
+ *  display the exact ingredients and stat lines the player assembled in the lobby. */
+export interface CustomRelicProfile {
+  name: string
+  effect: string
+  flavor: string
+  stats: Partial<{ maxHealth: number; emberMax: number; handMax: number; scorePct: number; damage: number }>
+}
 
 /** Immutable relic rules used by gameplay and presentation. */
 export interface RelicDefinition {
@@ -414,6 +425,16 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '함정 무시 확률 15% 증가',
     flavor: '모든 덫을 꿰뚫는 발걸음.',
     basePrice: 1400,
+  },
+  // 거점 만찬에서 만들어지는 실제 유물 카드. 상점 추첨에는 섞지 않는다.
+  'last-supper': {
+    id: 'last-supper',
+    name: '최후의 만찬',
+    rarity: 'unique',
+    effect: '선택한 음식 재료 3종의 스탯 적용',
+    flavor: '만찬 탭에서 직접 조합한 한 접시. 카드 이름·효과·설명은 선택 재료로 결정된다.',
+    basePrice: 0,
+    weight: 0,
   },
   // 악마 이벤트 보스 전용 보상 유물. 자해 20마다 불빛 배율 +10%, 공격력 +1.
   'demon-doll': {

@@ -1285,6 +1285,9 @@ export class GameBoardRenderer {
    *  lifts this card above its siblings rather than opening a separate layer. */
   private renderRelicMiniCard(id: RelicId, index: number, total: number): string {
     const def = getRelicDef(id)
+    const profile = this.currentGameState?.getCharacter().customRelicProfiles[id]
+    const title = profile?.name ?? def.name
+    const effect = profile?.effect ?? def.effect
     const center = (total - 1) / 2
     const offset = index - center
     // 카드가 늘어도 ±18°/±54px 범위 안에서 균등 분포 — n≤6은 기존 스텝(7°/22px)과 동일.
@@ -1299,8 +1302,8 @@ export class GameBoardRenderer {
                data-owned-relic="${def.id}"
                style="--relic-i:${index}; --relic-x:${spread}px; --relic-rot:${rotate}deg; --relic-y:${lift}px;"
                tabindex="0"
-               title="${def.name}: ${def.effect}"
-               aria-label="${def.name}: ${def.effect}">
+               title="${title}: ${effect}"
+               aria-label="${title}: ${effect}">
         ${this.relicPreviewFace(def.id)}
       </article>
     `
@@ -1477,6 +1480,10 @@ export class GameBoardRenderer {
     const def = getRelicDef(id)
     const enh = this.currentGameState?.enhancements
     const char = this.currentGameState?.getCharacter()
+    const profile = char?.customRelicProfiles[id]
+    const title = profile?.name ?? def.name
+    const effect = profile?.effect ?? def.effect
+    const flavor = profile?.flavor ?? def.flavor
     // 유물별 런타임 누적치를 카드 하단 칩으로 표기한다.
     let bonusChip = ''
     if (id === 'luxury' && enh) {
@@ -1500,10 +1507,10 @@ export class GameBoardRenderer {
       <article class="relic-preview-card" aria-hidden="true">
         <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
         <div class="shop-relic-body">
-          <h3 class="shop-relic-title">${def.name}</h3>
-          <p class="shop-relic-effect">${this.relicEffectHtml(this.relicDynamicEffect(id, def.effect, true), def.spawnEffect, this.currentSpawnWeightCtx, true)}</p>
+          <h3 class="shop-relic-title">${title}</h3>
+          <p class="shop-relic-effect">${this.relicEffectHtml(this.relicDynamicEffect(id, effect, true), def.spawnEffect, this.currentSpawnWeightCtx, true)}</p>
           ${bonusChip}
-          <p class="shop-relic-flavor">${def.flavor}</p>
+          <p class="shop-relic-flavor">${flavor}</p>
         </div>
       </article>
     `

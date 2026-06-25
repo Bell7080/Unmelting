@@ -285,6 +285,8 @@ export const SpriteUrls = {
     'wax-harmony': relic036Url,
     'trap-master': relic037Url,
     'demon-doll': relic038Url,
+    // 만찬은 별도 아트가 들어오기 전까지 음식/인형 톤이 가까운 038 유물 아트를 임시 사용한다.
+    'last-supper': relic038Url,
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,

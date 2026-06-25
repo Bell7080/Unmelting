@@ -8,7 +8,7 @@
  */
 
 import { HandCard } from './HandCard'
-import type { RelicId } from '@data/Relics'
+import type { CustomRelicProfile, RelicId } from '@data/Relics'
 
 /** Full hand-gauge payoff selected by the player from the hand UI. */
 export type CandleMode = 'max-health' | 'attack' | 'ember' | 'draw'
@@ -48,6 +48,8 @@ export class Character {
   relics: RelicId[]
   /** One-shot relics that should never reappear after being consumed. */
   bannedRelics: RelicId[]
+  /** Runtime relic card overrides keyed by real relic id; currently used by custom hearth dinners. */
+  customRelicProfiles: Partial<Record<RelicId, CustomRelicProfile>>
   /** 변칙 유물용 누적 피해(10 잃을 때마다 발동). takeDamage가 더하고 외부가 소비한다. */
   relicDamageTaken: number = 0
   /** 권위: 치명타를 체력 1에서 막아냈음을 표시한다. 외부가 연출/파괴 후 false로 소비한다.
@@ -77,6 +79,7 @@ export class Character {
     this.handMax = Character.HAND_MAX
     this.relics = []
     this.bannedRelics = []
+    this.customRelicProfiles = {}
   }
 
   takeDamage(amount: number): number {
@@ -324,6 +327,7 @@ export class Character {
     this.handMax = Character.HAND_MAX
     this.relics = []
     this.bannedRelics = []
+    this.customRelicProfiles = {}
     this.shield = 0
     this.relicDamageTaken = 0
     this.authoritySurvivePending = false
