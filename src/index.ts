@@ -607,7 +607,8 @@ function enterHearth(): void {
     onDinnerRelicCreate: async (profile) => {
       pendingDinnerRelicProfile = profile
       gameState.character.customRelicProfiles['last-supper'] = profile
-      if (gameState.character.addRelic('last-supper')) await applyRelicPurchaseEffect('last-supper')
+      // 로비에서는 카드만 실제 인벤토리에 꽂고, 스탯 효과는 startGame 재지급 때 한 번 발동한다.
+      gameState.character.addRelic('last-supper')
       render()
     },
   })

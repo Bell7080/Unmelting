@@ -491,8 +491,14 @@ export class HearthScene {
     root.classList.add('is-dinner-finalizing')
     SquareBurst.playOn(plate, 'score', { count: 42, spread: 210, duration: 760, size: [10, 26] })
     await this.wait(720)
-    const target = document.querySelector<HTMLElement>('.relic-stack') ?? document.querySelector<HTMLElement>('.relic-layer') ?? document.querySelector<HTMLElement>('.player-zone')
     const source = plate.getBoundingClientRect()
+    // 실제 유물 지급은 index/GameState가 담당한다. 먼저 인벤토리를 렌더해 목적지를
+    // 확보한 뒤, 빛 구슬이 캐릭터 카드가 아니라 보유 유물 카드 안쪽으로 꽂히게 한다.
+    await this.handlers?.onDinnerRelicCreate?.(this.buildDinnerRelicProfile())
+    await this.wait(40)
+    const target = document.querySelector<HTMLElement>('.relic-mini-card[data-owned-relic="last-supper"]')
+      ?? document.querySelector<HTMLElement>('.relic-stack')
+      ?? document.querySelector<HTMLElement>('.relic-layer')
     const dest = target?.getBoundingClientRect()
     const orb = document.createElement('div')
     orb.className = 'hearth-dinner-orb'
@@ -503,11 +509,7 @@ export class HearthScene {
     document.body.appendChild(orb)
     orb.classList.add('is-flying')
     await this.wait(660)
-    // 실제 유물 지급은 index/GameState가 담당한다. DOM 더미 카드를 직접 붙이지 않아
-    // GameBoardRenderer의 보유 유물 팬, hover 미리보기, 도감 정의를 그대로 사용한다.
-    await this.handlers?.onDinnerRelicCreate?.(this.buildDinnerRelicProfile())
-    const arrivedTarget = document.querySelector<HTMLElement>('.relic-stack') ?? document.querySelector<HTMLElement>('.relic-layer') ?? target
-    if (arrivedTarget) SquareBurst.playOn(arrivedTarget, 'score', { count: 28, spread: 150, duration: 620, size: [8, 18] })
+    if (target) SquareBurst.playOn(target, 'score', { count: 28, spread: 150, duration: 620, size: [8, 18] })
     orb.remove()
     // 완료 여부는 별도 저장소가 아니라 실제 인벤토리 DOM의 만찬 유물 카드 존재로 판정한다.
     this.dinnerConsumed = this.hasDinnerRelicInInventory()
