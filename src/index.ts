@@ -2365,7 +2365,7 @@ async function runPreparationRefreshAfterFieldEffects(
       if (lane.getCardAtDistance(topDistance)) continue
       // 보스 전투 중에는 레일 최상단 리필을 억제해 보스 격리 공간을 유지한다
       if (gameState.bossBattleActive) continue
-      lane.setCardAtDistance(topDistance, cardSpawner.spawnCardForRefill())
+      lane.setCardAtDistance(topDistance, cardSpawner.spawnCardForRefill(laneIndex))
       filled = true
     }
     if (filled) {
@@ -2650,12 +2650,12 @@ function compactAndRefillAllLanes(): boolean {
   // effects cannot leave half-empty rails after a single maintenance pass.
   // 보류 이벤트 문은 laneIndex에 묶지 않고 첫 빈 슬롯에 주입해 유실을 막는다.
   let doorInjected = false
-  const result = gameState.compactAndRefillRails((_laneIndex) => {
+  const result = gameState.compactAndRefillRails((laneIndex) => {
     if (pendingEventDoor && !doorInjected) {
       doorInjected = true
       return cardSpawner.generateEventDoor()
     }
-    return cardSpawner.spawnCardForRefill()
+    return cardSpawner.spawnCardForRefill(laneIndex)
   })
   if (doorInjected) {
     pendingEventDoor = false
@@ -2908,6 +2908,10 @@ function render(): void {
     vignetteIntensity: EmberSystem.getVignetteIntensity(tier),
     chainHints: buildChainHints(),
     pendingHandTarget,
+    // 레일 상단 예고선은 화면 밖에서 다음에 실제로 들어올 리필 카드를 미리 보여준다.
+    refillPreviewCards: gameActive && !gameState.bossBattleActive && !gameState.isGameOver
+      ? cardSpawner.peekNextRefillCards(gameState.lanes.length)
+      : [],
   })
 }
 

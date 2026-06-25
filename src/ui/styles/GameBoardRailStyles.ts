@@ -43,7 +43,7 @@ export const GAME_BOARD_RAIL_STYLES = `
   position: absolute;
   left: clamp(10px, 1.6vh, 14px);
   right: clamp(10px, 1.6vh, 14px);
-  top: clamp(7px, 1vh, 10px);
+  top: clamp(4px, 0.7vh, 7px);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: clamp(6px, 1vw, 10px);
