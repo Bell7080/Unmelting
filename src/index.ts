@@ -45,7 +45,7 @@ import { CandleMode } from '@entities/Character'
 import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS, HAND_CARD_DEFINITIONS } from '@data/HandCards'
 import { RECIPES } from '@data/Recipes'
-import { getRelicDef, relicDrawWeight, RELIC_IDS, type RelicId } from '@data/Relics'
+import { getRelicDef, relicDrawWeight, RELIC_IDS, type CustomRelicProfile, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
 import { COMBO_TRIGGER_DELAY_MS, GAUGE_TRIGGER_DELAY_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
 import {
@@ -175,6 +175,8 @@ let debugForcedEventId: EventId | null = null
 const boardRenderer = new GameBoardRenderer('game-board')
 // 거점(촛대) 화면. 기본 부팅은 여전히 직행 인게임이며, `/시작` 명령에서만 깨어난다.
 const hearthScene = new HearthScene()
+// 거점 만찬은 런 시작 reset을 건너뛰어야 하므로, 실제 유물 지급 의도를 별도 플래그로 보존한다.
+let pendingDinnerRelicProfile: CustomRelicProfile | null = null
 // 배경음: 3트랙을 무작위 순서로 크로스페이드 연결, 첫 입력에서 자동재생.
 const bgm = new BgmManager([bgm001Url, bgm002Url, bgm003Url])
 const speechBubble = new SpeechBubble({ anchor: '.player-card', offsetX: 150, tail: 'bottom-left', fontSize: 22 })
@@ -588,6 +590,7 @@ function syncRunModifiersToSpawner(): void {
  */
 function enterHearth(): void {
   // 갓 게임을 켠 상태: 적·직업·유물 잔여 0. 빈 레일을 배경으로 거점 오버레이를 띄운다.
+  pendingDinnerRelicProfile = null
   resetForNewRun()
   // 거점 로비 동안엔 플레이어 말풍선을 음소거한다. 보류 중인 지연 대사(시작 대사 등)도
   // 함께 취소돼 대문 열림 중에 인게임 대사가 새는 것을 막는다. startGame 시작 시 해제된다.
@@ -600,6 +603,14 @@ function enterHearth(): void {
   hearthScene.enter({
     // 출발 버튼 → startGame이 다시 초기화 + 직업 선택 + 보드 채움을 수행한다.
     onStart: () => { void startGame() },
+    // 만찬 완료 즉시 Character.relics에 실제 RelicId를 넣고 렌더러의 유물 팬으로 보여 준다.
+    onDinnerRelicCreate: async (profile) => {
+      pendingDinnerRelicProfile = profile
+      gameState.character.customRelicProfiles['last-supper'] = profile
+      // 로비에서는 카드만 실제 인벤토리에 꽂고, 스탯 효과는 startGame 재지급 때 한 번 발동한다.
+      gameState.character.addRelic('last-supper')
+      render()
+    },
   })
 }
 /** effectKind 서술자를 런타임 apply()로 변환. runModifiers는 여기에 스코프돼 있으므로 index에서 해석한다. */
@@ -1582,6 +1593,17 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
   if (id === 'trap-master') {
     // 함정 15% 무효화 확률 (ActionSystem이 character.trapIgnoreChance를 읽는다).
     gameState.character.trapIgnoreChance += 0.15
+  }
+  if (id === 'last-supper') {
+    const beforeResources = snapshotPlayerResources()
+    const stats = gameState.character.customRelicProfiles['last-supper']?.stats ?? {}
+    // 만찬 유물은 유저가 고른 3개 재료의 누적 스탯을 그대로 적용한다.
+    if (stats.maxHealth) gameState.character.increaseMaxHealth(stats.maxHealth)
+    if (stats.emberMax) gameState.character.increaseEmberMax(stats.emberMax)
+    if (stats.handMax) gameState.character.increaseHandMax(stats.handMax)
+    if (stats.damage) gameState.character.applyDamageBoost(stats.damage)
+    if (stats.scorePct) gameState.enhancements.scoreMultiplier *= (1 + stats.scorePct / 100)
+    await playPlayerGainTrails({ kind: 'center' }, beforeResources)
   }
   // chivalry, luxury: 구매 즉발 효과 없음 — 각각 매 3턴 트리거 / 불빛 소비 시 트리거.
 }
@@ -2762,9 +2784,17 @@ function resetForNewRun(): void {
 }
 
 async function startGame(): Promise<void> {
+  const dinnerRelicProfile = pendingDinnerRelicProfile
   resetForNewRun()
+  pendingDinnerRelicProfile = dinnerRelicProfile
   // 런이 실제로 시작되므로 거점 로비에서 걸어 둔 말풍선 음소거를 해제한다(시작 대사 등 정상 출력).
   speechBubble.setMuted(false)
+  // resetForNewRun이 거점 미리보기 유물을 지우므로, 만찬에서 만든 실제 유물은 런 시작 직후 재지급한다.
+  if (pendingDinnerRelicProfile) {
+    gameState.character.customRelicProfiles['last-supper'] = pendingDinnerRelicProfile
+    if (gameState.character.addRelic('last-supper')) await applyRelicPurchaseEffect('last-supper')
+  }
+  pendingDinnerRelicProfile = null
   const poolSnapshot = runCardPool.snapshot()
   // 메타 사당 해금(영구) + 런 카드풀(임시) 이중 구조를 플레이 로그로 명시한다.
   recordNotice(`카드 풀 초기화: 메타해금 ${poolSnapshot.unlocked.length} / 잠김 ${poolSnapshot.locked.length} / 금지 ${poolSnapshot.banned.length}`, 'info')

@@ -2,10 +2,13 @@ import { HEARTH_STYLES } from './HearthStyles'
 import { SpriteUrls, spriteForHearthStation } from '../Sprites'
 import { isTouchDevice } from '../MobileTouchManager'
 import { SquareBurst } from '../SquareBurst'
+import type { CustomRelicProfile } from '@data/Relics'
 
 export interface HearthHandlers {
   /** 출발 버튼 클릭 — 직업 선택/런 시작으로 연결한다. */
   onStart: () => void | Promise<void>
+  /** 만찬 완성 카드가 실제 런 유물 인벤토리에 꽂히도록 호스트 게임 상태에 지급한다. */
+  onDinnerRelicCreate?: (profile: CustomRelicProfile) => void | Promise<void>
 }
 
 /**
@@ -26,6 +29,25 @@ const DINNER_INDEX = 8
 const HEARTH_LAST_CHARACTER_KEY = 'unmelting.hearth.lastCharacterIndex'
 const DINNER_DONE_LINE = '하하, 식사는 만족스러우셨나요? 다음 만찬도 기대해주세요.'
 const DINNER_ALREADY_LINE = '음? 오늘은 이미 식사를 하시지 않았나요?'
+
+type DinnerStatKey = 'maxHealth' | 'emberMax' | 'handMax' | 'scorePct' | 'damage'
+interface DinnerChoice {
+  title: string
+  stat: string
+  color: string
+  kind: 'food' | 'sauce' | 'topping'
+  /** 이름 조합용 짧은 표기. 예: '묽은 소스' 선택 시 카드명은 '묽은 양파 감자'. */
+  namePart?: string
+  stats: Partial<Record<DinnerStatKey, number>>
+}
+
+const DINNER_STAT_LABELS: Record<DinnerStatKey, string> = {
+  maxHealth: '최대체력',
+  emberMax: '불씨 한도',
+  handMax: '손패 한도',
+  scorePct: '불빛 획득량',
+  damage: '공격력',
+}
 
 /** 모험 셔터 안에서 고를 수 있는 동행 목록. 3~4번은 아직 일러스트가 없는 잠금 카드로 유지한다. */
 const HEARTH_CHARACTERS = [
@@ -84,8 +106,8 @@ export class HearthScene {
   private selectedTradeTab = 0
   /** 만찬 선택 흐름 단계: 0=팩 레일, 1=메인 음식, 2~3=추가 스탯, 4=완성 연출. */
   private dinnerStep = 0
-  /** 무료 만찬에서 고른 음식/스탯을 임시로 보관해 완성 카드 문구를 만든다. */
-  private dinnerChoices: string[] = []
+  /** 무료 만찬에서 고른 음식/스탯을 임시로 보관해 완성 유물 프로필을 만든다. */
+  private dinnerChoices: DinnerChoice[] = []
   /** 만찬 완료 후에는 런이 시작될 때까지 닫힌 일러스트/대사 화면으로 재입장한다. */
   private dinnerConsumed = false
 
@@ -384,7 +406,7 @@ export class HearthScene {
     if (this.dinnerStep < 1 || this.dinnerStep > 3) return
     const options = this.getDinnerOptions()
     const picked = options[index] ?? options[0]
-    this.dinnerChoices.push(picked.title)
+    this.dinnerChoices.push(picked)
     this.moveDinnerPickToPlate(picked)
     if (this.dinnerStep === 1) {
       this.dinnerStep = 2
@@ -415,16 +437,21 @@ export class HearthScene {
   }
 
   /** 현재 단계에 맞는 임시 만찬 선택지 풀을 반환한다. */
-  private getDinnerOptions(): Array<{ title: string; stat: string; color: string }> {
+  private getDinnerOptions(): DinnerChoice[] {
     if (this.dinnerStep === 1) return [
-      { title: '치킨', stat: '체력 +5', color: '#8f3d2f' },
-      { title: '머핀', stat: '불빛 획득량 +10%', color: '#8b6a35' },
-      { title: '파스타', stat: '손패 한도 +2', color: '#7b7240' },
+      { title: '감자', stat: '최대체력 +3', color: '#8b6a35', kind: 'food', stats: { maxHealth: 3 } },
+      { title: '치킨', stat: '공격력 +1', color: '#8f3d2f', kind: 'food', stats: { damage: 1 } },
+      { title: '파스타', stat: '손패 한도 +1', color: '#7b7240', kind: 'food', stats: { handMax: 1 } },
+    ]
+    if (this.dinnerStep === 2) return [
+      { title: '묽은 소스', stat: '불씨 한도 +1', color: '#6f4d39', kind: 'sauce', namePart: '묽은', stats: { emberMax: 1 } },
+      { title: '따뜻한 소스', stat: '최대체력 +3', color: '#7e2630', kind: 'sauce', namePart: '따뜻한', stats: { maxHealth: 3 } },
+      { title: '촛불 소스', stat: '불빛 획득량 +5%', color: '#9a6b2f', kind: 'sauce', namePart: '촛불', stats: { scorePct: 5 } },
     ]
     return [
-      { title: '따뜻한 소스', stat: '체력 +3', color: '#7e2630' },
-      { title: '촛불 향신료', stat: '불빛 획득량 +5%', color: '#9a6b2f' },
-      { title: '불씨 가니시', stat: '불씨 한도 +1', color: '#5f445f' },
+      { title: '양파', stat: '손패 한도 +2', color: '#d6c8a2', kind: 'topping', stats: { handMax: 2 } },
+      { title: '불씨 가니시', stat: '불씨 한도 +1', color: '#5f445f', kind: 'topping', stats: { emberMax: 1 } },
+      { title: '허브', stat: '불빛 획득량 +5%', color: '#5f744a', kind: 'topping', stats: { scorePct: 5 } },
     ]
   }
 
@@ -442,10 +469,10 @@ export class HearthScene {
   }
 
   /** 선택된 카드는 하단 중앙 접시 카드로 축소 복제해 누적 선택을 보여 준다. */
-  private moveDinnerPickToPlate(picked: { title: string; stat: string; color: string }): void {
+  private moveDinnerPickToPlate(picked: DinnerChoice): void {
     const plate = this.overlay?.querySelector<HTMLElement>('.hearth-dinner-picked')
     if (!plate) return
-    plate.innerHTML = `<div class="hearth-dinner-plate-card" style="--food-color:${picked.color}"><span></span><strong>${this.dinnerChoices[0] ?? picked.title}</strong><small>${this.dinnerChoices.join(' · ')}</small></div>`
+    plate.innerHTML = `<div class="hearth-dinner-plate-card" style="--food-color:${picked.color}"><span></span><strong>${this.dinnerChoices[0]?.title ?? picked.title}</strong><small>${this.dinnerChoices.map((choice) => choice.title).join(' · ')}</small></div>`
     plate.animate([{ transform: 'translate(-50%, 18px) scale(0.9)', opacity: 0 }, { transform: 'translate(-50%, 0) scale(1)', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(0.2,0.84,0.3,1)' })
   }
 
@@ -464,8 +491,14 @@ export class HearthScene {
     root.classList.add('is-dinner-finalizing')
     SquareBurst.playOn(plate, 'score', { count: 42, spread: 210, duration: 760, size: [10, 26] })
     await this.wait(720)
-    const target = document.querySelector<HTMLElement>('.relic-stack') ?? document.querySelector<HTMLElement>('.relic-layer')
     const source = plate.getBoundingClientRect()
+    // 실제 유물 지급은 index/GameState가 담당한다. 먼저 인벤토리를 렌더해 목적지를
+    // 확보한 뒤, 빛 구슬이 캐릭터 카드가 아니라 보유 유물 카드 안쪽으로 꽂히게 한다.
+    await this.handlers?.onDinnerRelicCreate?.(this.buildDinnerRelicProfile())
+    await this.wait(40)
+    const target = document.querySelector<HTMLElement>('.relic-mini-card[data-owned-relic="last-supper"]')
+      ?? document.querySelector<HTMLElement>('.relic-stack')
+      ?? document.querySelector<HTMLElement>('.relic-layer')
     const dest = target?.getBoundingClientRect()
     const orb = document.createElement('div')
     orb.className = 'hearth-dinner-orb'
@@ -476,10 +509,7 @@ export class HearthScene {
     document.body.appendChild(orb)
     orb.classList.add('is-flying')
     await this.wait(660)
-    if (target) {
-      this.addDinnerRelicCard(target)
-      SquareBurst.playOn(target, 'score', { count: 28, spread: 150, duration: 620, size: [8, 18] })
-    }
+    if (target) SquareBurst.playOn(target, 'score', { count: 28, spread: 150, duration: 620, size: [8, 18] })
     orb.remove()
     // 완료 여부는 별도 저장소가 아니라 실제 인벤토리 DOM의 만찬 유물 카드 존재로 판정한다.
     this.dinnerConsumed = this.hasDinnerRelicInInventory()
@@ -488,14 +518,28 @@ export class HearthScene {
     this.showDinnerAfterScene(DINNER_DONE_LINE)
   }
 
-  /** 완성 음식은 실제 유물 시스템 연결 전까지 거점 유물 팬에 작은 카드로 보관한다. */
-  private addDinnerRelicCard(target: HTMLElement): void {
-    const card = document.createElement('div')
-    card.className = 'hearth-dinner-relic-card'
-    // 재진입 판정은 스타일 클래스가 아니라 이 데이터 표식을 기준으로 삼는다.
-    card.dataset.hearthDinnerRelic = 'true'
-    card.innerHTML = `<span></span><strong>만찬</strong><small>${this.dinnerChoices.join(' · ')}</small>`
-    target.appendChild(card)
+
+  /** 선택한 음식/소스/토핑을 실제 유물 카드의 이름·효과·하단 설명으로 변환한다. */
+  private buildDinnerRelicProfile(): CustomRelicProfile {
+    const food = this.dinnerChoices.find((choice) => choice.kind === 'food') ?? this.dinnerChoices[0]
+    const sauce = this.dinnerChoices.find((choice) => choice.kind === 'sauce')
+    const topping = this.dinnerChoices.find((choice) => choice.kind === 'topping')
+    const stats: CustomRelicProfile['stats'] = {}
+    for (const choice of this.dinnerChoices) {
+      for (const [key, value] of Object.entries(choice.stats) as Array<[DinnerStatKey, number]>) {
+        stats[key] = (stats[key] ?? 0) + value
+      }
+    }
+    const effect = (Object.entries(stats) as Array<[DinnerStatKey, number]>)
+      .map(([key, value]) => `${DINNER_STAT_LABELS[key]} +${value}${key === 'scorePct' ? '%' : ''}`)
+      .join('\n')
+    const prefix = [sauce?.namePart ?? sauce?.title, topping?.namePart ?? topping?.title].filter(Boolean).join(' ')
+    return {
+      name: `${prefix ? `${prefix} ` : ''}${food?.title ?? '만찬'}`,
+      effect,
+      flavor: this.dinnerChoices.map((choice) => choice.title).join(' + '),
+      stats,
+    }
   }
 
   /** 완료/재방문 화면은 검은 커튼을 닫은 뒤 006 일러스트를 중앙에서 좌우로 열어 고정 대사를 남긴다. */
@@ -508,7 +552,7 @@ export class HearthScene {
 
   /** 만찬 사용 여부는 저장값이 아니라 현재 유물 인벤토리에 꽂힌 만찬 카드로만 판단한다. */
   private hasDinnerRelicInInventory(): boolean {
-    return Boolean(document.querySelector('[data-hearth-dinner-relic="true"]'))
+    return Boolean(document.querySelector('[data-owned-relic="last-supper"]'))
   }
 
 
