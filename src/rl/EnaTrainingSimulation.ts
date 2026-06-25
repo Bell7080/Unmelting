@@ -880,6 +880,16 @@ export class EnaTrainingSimulation {
     if (slot >= 0 && slot < this.hand.length) this.hand.splice(slot, 1)
   }
 
+  /** 소소한 회피 클러치는 피해 적용 직전에 굴려 런타임의 incoming-damage 타이밍과 맞춘다. */
+  private companionDodges(amount: number, adversity: boolean): boolean {
+    const d = this.companion
+    if (!d || amount <= 0) return false
+    let chance = d.minorClutchChance.dodge
+    if (adversity) chance *= d.clutchAdversityBoost
+    chance = Math.min(adversity ? 0.45 : 0.22, chance)
+    return this.rng.next() < chance
+  }
+
   /** 동료(에나) 개입: 회복/방패뿐 아니라 위험별 손패 보급까지 같은 의지 예산에서 다룬다. */
   private companionInterventions(): void {
     const d = this.companion
@@ -973,7 +983,10 @@ export class EnaTrainingSimulation {
         continue
       }
       if (card.type === CardType.ENEMY) {
-        this.takeDamage(card.atk + (firstStrike ? 1 : 0))
+        const incoming = card.atk + (firstStrike ? 1 : 0)
+        const adversity = this.hp + this.shield - incoming <= Math.max(1, this.maxHp * 0.35)
+        if (this.companionDodges(incoming, adversity)) continue
+        this.takeDamage(incoming)
         // 에나 반격은 회피와 달리 피해를 받은 뒤 현재 공격력만큼 되친다.
         if (this.companion && this.rng.next() < this.companion.minorClutchChance.counter) {
           card.hp -= this.attack
@@ -1105,7 +1118,8 @@ export class EnaTrainingSimulation {
     this.bossAttackCountdown--
     const profile = BOSS_PROFILES[this.bossFloor]
     if (this.bossAttackCountdown <= 0 && this.bossHp > 0) {
-      this.takeDamage(profile.attack)
+      const adversity = this.hp + this.shield - profile.attack <= Math.max(1, this.maxHp * 0.35)
+      if (!this.companionDodges(profile.attack, adversity)) this.takeDamage(profile.attack)
       this.applyBossBehavior(profile)
       this.bossAttackCountdown = profile.interval
     }
@@ -1326,10 +1340,24 @@ export class EnaTrainingSimulation {
     if (frontHasTwoWeb && this.imminentWebThreatCount() > 0) return 'chitin'
     if (this.imminentWebThreatCount() >= 2) return 'sweep'
     if (this.readySporeThreatCount() > 0) return 'holy-water'
-    if (this.strongEnemyThreatCount() > 0) return 'ember'
+    const strongEnemy = this.board.slice(0, 2).flat().find((c) => c?.type === CardType.ENEMY && (c.group >= 2 || c.hp > this.attack + 1))
+    if (strongEnemy) return this.bestPredictiveAttackAid(strongEnemy) ?? (this.board[0].includes(strongEnemy) ? 'wax' : 'ember')
     const pair = this.hand.find((s) => !s.merged && this.hand.filter((x) => !x.merged && x.id === s.id).length === 2)
     if (pair) return pair.id
     return null
+  }
+
+  /** 강적 지원은 무조건 불씨가 아니라 현재 공격력에서 과잉 피해가 가장 적은 손패를 고른다. */
+  private bestPredictiveAttackAid(enemy: EnaSimCard): HandCardId | null {
+    const candidates: { id: HandCardId; damage: number }[] = [
+      { id: 'ember', damage: emberDamage(this.attack, false) },
+      { id: 'bonfire', damage: Math.floor(this.attack) },
+      { id: 'sword-and-shield', damage: Math.floor(this.attack * 0.5) + 1 },
+      { id: 'slash', damage: Math.floor(this.attack * 2) + 2 },
+    ]
+    return candidates
+      .filter((c) => c.damage >= enemy.hp && !this.hand.some((s) => s.id === c.id))
+      .sort((a, b) => (a.damage - enemy.hp) - (b.damage - enemy.hp))[0]?.id ?? null
   }
 
   private toughestEnemyLane(): number {

@@ -28,7 +28,7 @@ export interface ThreatReport {
   /** 함정 제거를 넘어 공격/포자/레시피/트리플까지 본 최종 추천 손패. */
   recommendedCardId: HandCardId | null
   /** 대사/로그가 추천 성격을 구분하도록 남기는 큰 분류. */
-  recommendationKind: 'cleanup' | 'spore' | 'attack' | 'triple' | 'recipe' | null
+  recommendationKind: 'cleanup' | 'spore' | 'attack' | 'defense' | 'triple' | 'recipe' | null
   /** 추천을 택한 이유. 로그/학습 trace에서 사람이 읽기 쉽게 남긴다. */
   recommendationReason: string
   /** 현재 손패 순서/체인에서 보조 카드까지 포함해 몇 장 안에 조합각이 열리는지. */
@@ -161,6 +161,13 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
   const sporeReady = cells.some(({ card, distance }) => card.type === CardType.TRAP && card.trapKind === 'spore' && (distance === 0 || card.sporeTurnsUntilSpread <= 1))
   const strongEnemy = cells.find(({ card, distance }) => card.type === CardType.ENEMY && distance <= 1 && (card.groupCount >= 2 || card.health > character.damage + 1))
   const killSupport = bestKillSupport(strongEnemy, character, unlocked)
+  // 처치각이 없을 때도 맞기 전 행동력이 필요하다. 전방 강적은 밀랍으로 공격 턴을 벌고,
+  // 밀랍이 없으면 검과 방패로 피해와 방패를 동시에 확보한다.
+  const defensiveSupport = strongEnemy && !killSupport && !hasHand(character, ['wax' as HandCardId, 'sword-and-shield' as HandCardId])
+    ? (strongEnemy.distance === 0 && canUse('wax' as HandCardId, unlocked)
+        ? 'wax' as HandCardId
+        : (strongEnemy.distance === 0 && canUse('sword-and-shield' as HandCardId, unlocked) ? 'sword-and-shield' as HandCardId : null))
+    : null
   const lookahead = options.lookaheadCards ?? 4
   const chainSequence = options.chainSequence ?? []
   const firedRecipeIds = options.firedRecipeIds ?? new Set<string>()
@@ -202,6 +209,12 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
     recommendedCardId = killSupport.id
     recommendationKind = 'attack'
     recommendationReason = `전방/대기라인 강적을 피해 ${killSupport.damage} 손패로 처치 가능`
+  } else if (defensiveSupport) {
+    recommendedCardId = defensiveSupport
+    recommendationKind = 'defense'
+    recommendationReason = defensiveSupport === 'wax'
+      ? '처치가 어려운 전방 강적의 반격 타이밍을 밀랍으로 늦출 수 있음'
+      : '처치가 어려운 전방 강적에게 피해를 주며 방패를 확보할 수 있음'
   } else if (tripleNeed) {
     recommendedCardId = tripleNeed.id
     playableInCards = tripleNeed.turns
