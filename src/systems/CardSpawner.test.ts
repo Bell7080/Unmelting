@@ -66,6 +66,21 @@ describe('CardSpawner final ascent starlight', () => {
   })
 })
 
+describe('CardSpawner refill preview queue', () => {
+  it('uses the previewed lane card as the next real refill', () => {
+    const spawner = new CardSpawner()
+    // Constant enemy rolls make the assertion about object identity, not RNG shape.
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+
+    const preview = spawner.peekNextRefillCards(3)
+    const spawned = spawner.spawnCardForRefill(1)
+
+    expect(spawned).toBe(preview[1])
+    expect(spawned.type).toBe(CardType.ENEMY)
+    vi.restoreAllMocks()
+  })
+})
+
 describe('EmberSystem spawn weights', () => {
   it('raises ordinary trap odds while preserving former bomb and spore odds', () => {
     const brightBuckets = EmberSystem.getSpawnBuckets('bright')
