@@ -821,10 +821,11 @@ export class EnaTrainingSimulation {
     if (slot >= 0 && slot < this.hand.length) this.hand.splice(slot, 1)
   }
 
-  /** 동료(에나) 개입: 위기 클러치(회복/방패/불씨) + 거미줄 예측 대비(청소 건네기). 성향이 있을 때만. */
+  /** 동료(에나) 개입: 회복/방패뿐 아니라 위험별 손패 보급까지 같은 의지 예산에서 다룬다. */
   private companionInterventions(): void {
     const d = this.companion
     if (!d || this.done) return
+    const aid = this.predictiveAidCard()
     if (this.will >= 100 && this.hp > 0 && this.hp / this.maxHp <= d.clutchHpThreshold) {
       this.will = 0
       if (this.rng.next() < d.clutchHealVsShield) {
@@ -833,13 +834,18 @@ export class EnaTrainingSimulation {
         this.shield += clampInt(this.maxHp * d.clutchShieldRatio * d.clutchStrength, 3, 10)
       }
     } else if (this.will >= 100 && this.ember <= 3) {
+      // 런타임과 동일하게 즉시 게이지를 올리지 않고 성냥을 건네, 플레이어 손패 의사결정을 보존한다.
       this.will = 0
-      this.ember = Math.min(this.emberMax, this.ember + 1)
+      this.drawCard('match')
+    } else if (this.will >= 100 && aid && !this.hand.some((s) => s.id === aid)) {
+      // 위험 대비 RL 경험: 거미줄/포자/강적/트리플 각에 맞는 손패 보급도 큰 클러치로 학습한다.
+      this.will = 0
+      this.drawCard(aid)
     }
-    // 예지 지원: 실제 전방 진입 위협/포자/강적/레시피·트리플 후보를 해금 손패 안에서 고른다.
+    // 소소한 예지 지원은 큰 의지를 쓰지 않는 낮은 빈도 보조로 유지한다.
     if (this.rng.next() < Math.min(0.95, d.predictBaseChance)) {
-      const aid = this.predictiveAidCard()
-      if (aid && !this.hand.some((s) => s.id === aid)) this.drawCard(aid)
+      const minorAid = aid ?? this.predictiveAidCard()
+      if (minorAid && !this.hand.some((s) => s.id === minorAid)) this.drawCard(minorAid)
     }
   }
 

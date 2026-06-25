@@ -45,7 +45,7 @@ export type PoolId = TouchPoolId | SituationPoolId
 export type SituationId = 'hit' | 'web' | 'treasure' | 'kill' | 'survive' | 'flower' | 'event' | 'spore' | 'bomb'
 
 /** 큰 클러치(에나의 의지) 종류. */
-export type ClutchKind = 'heal' | 'shield' | 'ember'
+export type ClutchKind = 'heal' | 'shield' | 'ember' | 'hand'
 /** 소소한 일상 클러치 종류. */
 export type MinorClutchKind = 'crit' | 'dodge' | 'counter' | 'trap' | 'treasure'
 
@@ -541,6 +541,10 @@ export const CLUTCH_LINES: Record<ClutchKind, Line[]> = {
   ember: [
     { template: '{불씨}[이/가] {상태}. {행동}', slots: { 불씨: ['불씨', '작은 불', '마지막 빛'], 상태: ['꺼지면 안 돼', '아직 살아 있어', '흔들리고 있어'], 행동: ['내가 다시 붙일게!', '성냥을 받아줘!', '숨으로 감싸자!'] } },
     '불씨가 꺼지면 안 돼. 자, 성냥!', '내가 챙겨뒀어. 어서 불을.', '이 빛은 지켜야 해!', '작아도 아직 살아 있는 불이야!', '꺼지지 마… 내가 다시 붙일게!',
+  ],
+  hand: [
+    { template: '{위험}[이/가] {다가옴}. {손패}', slots: { 위험: ['앞길', '저 기척', '지금 상황'], 다가옴: ['위험해 보여', '조금 꼬였어', '곧 버거워질 것 같아'], 손패: ['이 손패를 받아줘!', '내가 하나 건네줄게!', '이걸로 길을 열자!'] } },
+    '이 손패를 받아줘. 지금이면 도움이 될 거야!', '내가 하나 챙겨뒀어. 같이 넘기자!', '이번엔 이걸 써 보자. 길이 보일 거야!',
   ],
 }
 

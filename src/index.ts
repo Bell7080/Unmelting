@@ -296,6 +296,7 @@ const CLUTCH_TITLES: Record<string, string> = {
   heal: '포기를 모르는 마음',
   shield: '수호의 결의',
   ember: '꺼지지 않는 불씨',
+  hand: '건네는 손패',
   awaken: '에나의 각성',
   predict: '앞을 내다보는 눈',
 }
@@ -371,16 +372,6 @@ function showClutchChain(kind: string, desc: string): void {
 function tryCompanionClutch(): void {
   if (!companionWorldCanSpeak()) return
   const c = gameState.character
-  const plan = companion.evaluateClutch({
-    hp: c.health,
-    maxHp: c.maxHealth,
-    hpRatio: c.maxHealth > 0 ? c.health / c.maxHealth : 1,
-    emberLow: c.ember <= 1,
-  })
-  if (plan) {
-    applyClutch(plan)
-    return
-  }
   const turn = gameState.getCurrentTurn()
   const report = assessThreats(gameState.lanes, c, {
     unlockedCardIds: runCardPool.snapshot().unlocked,
@@ -388,6 +379,18 @@ function tryCompanionClutch(): void {
     chainSequence: chain.sequence,
     firedRecipeIds: chain.firedRecipeIds,
   })
+  const plan = companion.evaluateClutch({
+    hp: c.health,
+    maxHp: c.maxHealth,
+    hpRatio: c.maxHealth > 0 ? c.health / c.maxHealth : 1,
+    emberLow: c.ember <= 1,
+    supportCardId: report.recommendedCardId,
+    supportReason: report.recommendationReason,
+  })
+  if (plan) {
+    applyClutch(plan)
+    return
+  }
   // 강적을 보고도 아직 방패를 크게 못 올리는 초반 에나의 '말뿐인 도움'을 낮은 빈도로 표현한다.
   if (report.strongEnemyIncoming) {
     const missed = companion.missedPotentialLine('shield', turn)
@@ -406,14 +409,16 @@ function applyClutch(plan: ClutchPlan): void {
   } else if (plan.kind === 'shield') {
     const shielded = c.addShield(plan.amount)
     detail = `방패 +${shielded}`
-  } else if (plan.kind === 'ember') {
-    const drop = DropSystem.makeCard('match')
-    detail = c.addHandCard(drop) ? '성냥 +1' : '손패가 가득 참'
+  } else if (plan.kind === 'ember' || plan.kind === 'hand') {
+    // 에나가 직접 손패를 건네는 클러치. 불씨 위기면 성냥, 예지 위기면 추천 손패를 준다.
+    const cardId = plan.cardId ?? 'match'
+    const drop = DropSystem.makeCard(cardId)
+    detail = c.addHandCard(drop) ? `${getHandCardDef(cardId).name} +1` : '손패가 가득 참'
   }
   recordNotice(`에나의 의지 — ${detail}`, 'info')
   render()
   // 플레이어 카드 들썩 + 블라스트(종류별 팔레트) + 전용 체인 배너.
-  const clutchTheme = plan.kind === 'shield' ? 'shield-gain' : plan.kind === 'ember' ? 'ember-gain' : 'health-gain'
+  const clutchTheme = plan.kind === 'shield' ? 'shield-gain' : (plan.kind === 'ember' || plan.kind === 'hand') ? 'ember-gain' : 'health-gain'
   void boardRenderer.animateClutchOnPlayer(clutchTheme)
   showClutchChain(plan.kind, detail)
   // 거의 확정 대사 + 자원 트레일(같은 beat). 클러치는 최상위 중요도라 다른 대사가 떠 있어도 끼어든다.
