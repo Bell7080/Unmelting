@@ -38,7 +38,7 @@ import type {
   ClutchKind,
   MinorClutchKind,
 } from '@data/CompanionLines'
-import type { HandCategory } from '@entities/HandCard'
+import type { HandCategory, HandCardId } from '@entities/HandCard'
 import { defaultDisposition, cloneDisposition, clampDisposition, type EnaDisposition } from './EnaDisposition'
 
 // 대사 데이터 쪽 타입을 그대로 다시 노출해 기존 import 경로(@systems/CompanionSystem)를 유지한다.
@@ -59,6 +59,8 @@ export interface ClutchPlan {
   amount: number
   line: string
   flavor: string
+  /** 손패 보급 클러치일 때 실제로 건넬 카드. 런타임과 시뮬의 지원 어휘를 맞춘다. */
+  cardId?: HandCardId
 }
 /** 클러치 판단에 필요한 현재 상태 스냅샷. */
 export interface ClutchContext {
@@ -66,6 +68,10 @@ export interface ClutchContext {
   maxHp: number
   hpRatio: number
   emberLow: boolean
+  /** 위험 예지/조합각 등으로 지금 건네면 좋은 손패. 없으면 회복·방패·성냥만 본다. */
+  supportCardId?: HandCardId | null
+  /** 사람이 읽는 로그/배너용 지원 이유. */
+  supportReason?: string
 }
 
 /** 소소한 클러치 판정에 붙는 맥락. 역경/유대가 클라이맥스 상한을 임시로 연다. */
@@ -383,7 +389,7 @@ export class CompanionSystem {
 
   /**
    * 의지가 가득 찼고 위기일 때, '보통' 강도의 클러치 한 번을 계획해 돌려준다(아니면 null).
-   * 우선순위: 체력 위기(회복/방패) > 불씨 위기(성냥). 발동 시 의지를 0으로 비운다.
+   * 우선순위: 체력 위기(회복/방패) > 불씨 위기(성냥) > 예지 손패 보급. 발동 시 의지를 0으로 비운다.
    */
   evaluateClutch(ctx: ClutchContext): ClutchPlan | null {
     if (this.will < WILL_MAX) return null
@@ -398,7 +404,11 @@ export class CompanionSystem {
     }
     if (ctx.emberLow) {
       this.will = 0
-      return { kind: 'ember', amount: 1, line: this.pickFrom('clutch-ember', CLUTCH_LINES.ember, 'urgent'), flavor: '불씨가 꺼지기 전에' }
+      return { kind: 'ember', amount: 1, cardId: 'match' as HandCardId, line: this.pickFrom('clutch-ember', CLUTCH_LINES.ember, 'urgent'), flavor: '불씨가 꺼지기 전에' }
+    }
+    if (ctx.supportCardId) {
+      this.will = 0
+      return { kind: 'hand', amount: 1, cardId: ctx.supportCardId, line: this.pickFrom('clutch-hand', CLUTCH_LINES.hand, 'urgent'), flavor: ctx.supportReason || '위험을 넘길 손패를 건넸다' }
     }
     return null
   }

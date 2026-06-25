@@ -88,6 +88,14 @@ describe('CompanionSystem', () => {
     expect(plan!.kind).toBe('ember')
   })
 
+  it('클러치: 체력과 불씨가 안전하면 예지 손패를 직접 건네는 지원도 계획한다', () => {
+    const c = new CompanionSystem()
+    c.gainWillFlat(100)
+    const plan = c.evaluateClutch({ hp: 18, maxHp: 20, hpRatio: 0.9, emberLow: false, supportCardId: 'chitin', supportReason: '거미줄 대비' })
+    expect(plan!.kind).toBe('hand')
+    expect(plan!.cardId).toBe('chitin')
+  })
+
   it('각성은 런당 한 번뿐이고 resetForRun으로 다시 가능해진다', () => {
     const c = new CompanionSystem()
     let fired = false
