@@ -43,6 +43,7 @@ npm run build
 - 불빛 턴 보정은 완만한 선형식(1 + 턴×0.015)으로 유지해 90턴대 경제 폭증을 제한한다.
 - 손패 공격 카드 기본 피해 공식: **불씨** 단일 = 공격력×1.0+1, 트리플 = 공격력×3.0+5. 강화팩 보너스는 별도 합산. 도감/손패 미리보기 기본값은 합산 피해 수치; Shift 누름 중에만 수식(검 아이콘+상수)으로 전환.
 - Shift 자세히보기: 생성자에서 `is-shift-detail` 초기 클리어 후 keydown/keyup·window.blur·boardElement mousemove(e.shiftKey 확인) 로 클래스 잔류를 방지. 도감 chip은 `display:none↔inline-block`으로 전환(phantom-width 방지); 손패 미리보기는 opacity 0.18s 페이드. `.codex-chip-body`로 label+value를 단일 flex item으로 묶어 두 칸 분리 레이아웃 방지.
+- 손패 hover 미리보기는 읽기용 고정 표면이다. 같은 손패 UID 위에 커서가 머무는 동안 레일 하강/HUD/효과 리렌더가 발생해도 기존 미리보기 DOM을 되심어 flip·새로고침 애니메이션을 재실행하지 않는다.
 - 사치품 유물 최대 공격력 보너스 +3. 붉은 포션은 직접 공격·손패·체인 포함 모든 처치에 적용된다.
 - 샹들리에는 기본 해금(runLocked: false). 자원팩 갑옷 장착 방패 +5. 시련 '역경' 적용 시 기존 함정 카드에도 즉시 피해 보너스 반영.
 - 유물/팩/무료카드 희귀도는 `ShopPools` 공통 팔레트(common~legendary) 사용. 상점/제단 유물은 등급별 발광을 유지한다.

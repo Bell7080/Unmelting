@@ -541,6 +541,10 @@ export class GameBoardRenderer {
     const prevHandEl = this.boardElement.querySelector<HTMLElement>('.hand-column')
     const prevHandPanelEl = prevHandEl?.querySelector<HTMLElement>('.hand-panel')
     const prevHandPanelHtml = prevHandPanelEl ? prevHandPanelEl.outerHTML : ''
+    // Hover preview is a reading surface, not part of board refresh feedback.
+    // Keep the exact open preview DOM so rail drops, HUD ticks, or effect
+    // re-renders do not replay its flip/refresh while the cursor stays put.
+    const stableHandPreview = this.captureStableHandPreview()
     const newHandHtml = this.renderHand(character, scorePanel)
 
     this.boardElement.innerHTML = `
@@ -591,9 +595,10 @@ export class GameBoardRenderer {
       }
     }
 
-    // DOM이 교체된 경우에만 hover 미리보기 클래스를 복원한다.
-    // 기존 DOM이 그대로 재사용됐다면 :hover와 is-preview-open 모두 유지되므로 불필요하다.
+    // DOM이 교체된 경우에도 같은 손패 위에 있다면 기존 미리보기 노드를 되심어
+    // 이미 열린 카드가 다른 새로고침/애니메이션의 영향을 받지 않게 고정한다.
     if (!handDomPreserved) {
+      this.restoreStableHandPreview(stableHandPreview)
       this.restoreHandHoverState()
     }
 
@@ -5740,6 +5745,54 @@ export class GameBoardRenderer {
     this.boardElement.querySelectorAll<HTMLElement>('.relic-mini-card').forEach((card) => {
       card.classList.toggle('is-pinned', card.dataset.ownedRelic === this.pinnedRelicId)
     })
+  }
+
+
+  /** 현재 hover 중인 손패 미리보기 DOM을 보존하기 위한 스냅샷.
+   *  HTML 문자열이 아니라 실제 노드를 들고 있어 CSS 애니메이션 진행 상태까지 유지한다. */
+  private captureStableHandPreview(): {
+    slotIndex: number
+    handUid: string
+    preview: HTMLElement
+    recipePreview: HTMLElement | null
+  } | null {
+    if (this.hoveredHandSlotIndex === null) return null
+    const slot = this.boardElement.querySelector<HTMLElement>(
+      `.hand-slot.hand-card[data-slot-index="${this.hoveredHandSlotIndex}"]`
+    )
+    const preview = slot?.querySelector<HTMLElement>(':scope > .hand-card-preview')
+    const handUid = slot?.dataset.handUid
+    if (!slot || !preview || !handUid) return null
+
+    // cloneNode(false)가 아니라 실제 노드를 분리해 같은 hover 카드의 flip 상태를 이어받는다.
+    const recipePreview = slot.querySelector<HTMLElement>(':scope > .hand-recipe-preview')
+    return {
+      slotIndex: this.hoveredHandSlotIndex,
+      handUid,
+      preview,
+      recipePreview,
+    }
+  }
+
+  /** 리렌더 후 같은 UID의 손패 슬롯에 기존 미리보기 DOM을 되돌려 놓는다. */
+  private restoreStableHandPreview(snapshot: ReturnType<GameBoardRenderer['captureStableHandPreview']>): void {
+    if (!snapshot) return
+    const slot = this.boardElement.querySelector<HTMLElement>(
+      `.hand-slot.hand-card[data-slot-index="${snapshot.slotIndex}"][data-hand-uid="${snapshot.handUid}"]`
+    )
+    if (!slot) return
+
+    const freshPreview = slot.querySelector<HTMLElement>(':scope > .hand-card-preview')
+    if (freshPreview) freshPreview.replaceWith(snapshot.preview)
+
+    const freshRecipePreview = slot.querySelector<HTMLElement>(':scope > .hand-recipe-preview')
+    if (snapshot.recipePreview && freshRecipePreview) {
+      freshRecipePreview.replaceWith(snapshot.recipePreview)
+    } else if (!snapshot.recipePreview && freshRecipePreview) {
+      freshRecipePreview.remove()
+    } else if (snapshot.recipePreview) {
+      slot.appendChild(snapshot.recipePreview)
+    }
   }
 
   /** DOM 교체 후 손패 hover 미리보기를 복원한다.
