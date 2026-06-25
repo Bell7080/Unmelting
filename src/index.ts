@@ -2830,6 +2830,13 @@ async function startGame(): Promise<void> {
     ? companion.onJobSelect(chosenJob.id)
     : '역경 아래, 작은 불빛을 밝혀야만 해.'
   speechBubble.show(opening, 800)
+  const memoryLine = enaAutonomousLearner.recallLineForNewRun()
+  if (memoryLine) {
+    // 시작 인사를 덮지 않도록 한 박자 뒤, 플레이어가 보는 자연스러운 회상으로만 보여준다.
+    window.setTimeout(() => {
+      if (companionWorldCanSpeak()) sayEnaBark(memoryLine, { importance: BARK_IMPORTANCE.situation })
+    }, 2200)
+  }
 }
 
 function buildChainHints() {

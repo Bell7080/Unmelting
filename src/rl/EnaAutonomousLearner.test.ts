@@ -44,6 +44,20 @@ describe('EnaAutonomousLearner', () => {
     expect(saved.reflections).toHaveLength(1)
   })
 
+
+
+  it('저장된 자기반성을 새 런의 자연스러운 기억 대사로 바꾼다', () => {
+    const storage = new MemoryStorage()
+    const learner = new EnaAutonomousLearner(storage)
+    learner.learnAfterRun(makeMemory(), events, '2026-06-25T00:00:00.000Z')
+
+    const line = learner.recallLineForNewRun(true)
+
+    expect(line).toContain('지난번')
+    expect(line).toContain('이번')
+    expect(line).not.toContain('레일')
+  })
+
   it('저장소가 없어도 런 종료 학습은 조용히 계산만 하고 실패하지 않는다', () => {
     const learner = new EnaAutonomousLearner(undefined)
     const reflection = learner.learnAfterRun(makeMemory(), events)

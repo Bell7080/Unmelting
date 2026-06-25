@@ -5,6 +5,8 @@
  * 요약해 다음 런의 성향/정책 연결에 쓸 수 있는 사적인 기억으로 저장한다.
  */
 
+import type { HandCardId } from '@entities/HandCard'
+import { getHandCardDef } from '@data/HandCards'
 import type { EnaPlayLogMemory } from './EnaEffectProbe'
 import type { EnaRuntimeEvent } from './EnaRuntimeObserver'
 import { EnaPolicyStore, type EnaPolicyStorage } from './EnaPolicyStore'
@@ -50,7 +52,7 @@ export function buildRuntimePreferenceSignals(memory: EnaPlayLogMemory, events: 
   for (const [id, count] of shopCounts) signals.push({ kind: 'shop', id, reward: Math.min(2, count * 0.25), confidence: Math.min(1, count / 4) })
 
   const dangerEvents = events.filter((event) => event.frameSummary.includes('위협'))
-  if (dangerEvents.length > 0) signals.push({ kind: 'danger', id: 'rail-threat', reward: dangerEvents.length * -0.1, confidence: Math.min(1, dangerEvents.length / 8) })
+  if (dangerEvents.length > 0) signals.push({ kind: 'danger', id: 'immediate-threat', reward: dangerEvents.length * -0.1, confidence: Math.min(1, dangerEvents.length / 8) })
   return signals.slice(0, 24)
 }
 
@@ -66,7 +68,7 @@ export function summarizeSelfReflection(memory: EnaPlayLogMemory, events: readon
   if (bestHand && bestHand.reward > 0) lessons.push(`${bestHand.id} 사용은 생존에 도움이 된 편이라 가치 평가를 올린다.`)
   const riskyHand = signals.filter((s) => s.kind === 'hand').sort((a, b) => a.reward - b.reward)[0]
   if (riskyHand && riskyHand.reward < 0) lessons.push(`${riskyHand.id} 사용 뒤 결과가 나빴으니 과신하지 않는다.`)
-  if (signals.some((s) => s.kind === 'danger')) lessons.push('레일 위협 문장이 반복되면 예지/클러치 판단을 더 신중히 한다.')
+  if (signals.some((s) => s.kind === 'danger')) lessons.push('위험한 기척이 반복되면 예지와 도움을 더 신중히 한다.')
   if (lessons.length === 0) lessons.push('아직 뚜렷한 교훈이 없어 기존 성향을 유지한다.')
 
   return {
@@ -94,6 +96,27 @@ export class EnaAutonomousLearner {
     const reflection = summarizeSelfReflection(memory, events, hasStoredPolicy)
     this.saveReflection(reflection, now)
     return reflection
+  }
+
+  /** 새 런 시작 때 에나가 자연스럽게 꺼낼 수 있는 기억 한 줄. 없으면 침묵한다. */
+  recallLineForNewRun(force = false): string | null {
+    const state = this.loadState()
+    const last = state.reflections[state.reflections.length - 1]
+    if (!last) return null
+    // 매번 말하면 기억이 디버그처럼 느껴지므로, 필요할 때만 드문 회상을 허용한다.
+    if (!force && Math.random() > 0.55) return null
+    const danger = last.preferenceSignals.find((signal) => signal.kind === 'danger')
+    if (danger && last.lastOutcome === 'defeated') return '지난번엔 위협을 늦게 봤어. 이번엔 먼저 살필게.'
+
+    const bestHand = last.preferenceSignals
+      .filter((signal) => signal.kind === 'hand' && signal.reward > 0)
+      .sort((a, b) => b.reward - a.reward)[0]
+    if (bestHand) return `전에 ${handName(bestHand.id)} 덕분에 오래 버텼어. 그런 기회는 기억해 둘게.`
+
+    const shop = last.preferenceSignals.find((signal) => signal.kind === 'shop')
+    if (shop) return shop.id.includes('resource') ? '너는 자원이 흔들릴 때 상점을 잘 써. 이번에도 불씨부터 볼게.' : '지난 선택들도 기억하고 있어. 이번엔 더 조용히 살펴볼게.'
+
+    return last.lastOutcome === 'survived' ? '지난 여정의 리듬은 남아 있어. 이번에도 그 흐름을 따라가 보자.' : '지난 실패는 잊지 않았어. 이번엔 조금 더 먼저 볼게.'
   }
 
   loadState(): EnaAutonomousLearningState {
@@ -124,4 +147,11 @@ export class EnaAutonomousLearner {
 export function createBrowserEnaAutonomousLearner(): EnaAutonomousLearner {
   const storage = typeof globalThis === 'undefined' ? undefined : (globalThis as { localStorage?: EnaPolicyStorage }).localStorage
   return new EnaAutonomousLearner(storage)
+}
+
+
+function handName(id: string): string {
+  // preference signal의 id는 실제 손패 ID에서 오지만, 저장값 변조에 대비해 원문 fallback을 둔다.
+  const def = getHandCardDef(id as HandCardId)
+  return def?.name ?? id
 }
