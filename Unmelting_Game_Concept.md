@@ -81,8 +81,8 @@
 ## 9-1) 에나 RL/딥러닝 학습 시뮬레이션
 - 구현 위치: `src/rl/EnaTrainingSimulation.ts`.
 - 목적: 실제 렌더링·애니메이션·턴 딜레이 없이 3×3 보드, HP/방패/불씨/손패성 자원, 적/함정/보상/꽃 위협, 손패 위치 사용, 상점/이벤트 선택, 30층 보스 준비와 실제 데이터 정의 기반 손패·유물·시련·직업·이벤트 연계를 빠르게 반복 학습한다.
-- 출력: 120차원 관측 벡터 + 25개 고정 행동 인덱스 + `(state, action, reward, nextState, done)` 전이 샘플 + `analyzeDecision()` 전략 문장 + `EnaKnowledgeAdapter` 자동 전술 리포트 + `EnaEffectProbe` 실제 HandSystem 검증/플레이 로그 튜닝 + `EnaRuntimeObserver` 실시간 런 관측/시각 프레임. 외부 DQN/PPO 학습기는 `collectDataset()` 또는 `EnaPolicy` 교체로 연결한다.
-- 기본 교사 정책은 클러치 생존(치명 함정/저체력 방패), 불씨 부족 시 성냥 보급, 예측 대비(전방 위협 우선 손패 보급), 손패 보존/사용 위치, 트리플 대기 가치, 레시피/유물 시너지, 해금/확률/레시피/무료카드 상점 선택, 플레이 로그 보정, 보스 버스트 준비, 2~3수 뒤 레일 위험을 함께 판단한다.
+- 출력: 250차원 관측 벡터(스칼라 34 + 9칸×14 + 손패 10×9) + 21개 고정 행동 인덱스 + `(state, action, reward, nextState, done)` 전이 샘플 + `analyzeDecision()` 전략 문장 + `EnaKnowledgeAdapter` 자동 전술 리포트 + `EnaEffectProbe` 실제 HandSystem 검증/플레이 로그 튜닝 + `EnaRuntimeObserver` 실시간 런 관측/시각 프레임. 외부 DQN/PPO 학습기는 `collectDataset()` 또는 `EnaPolicy` 교체로 연결하며, 학습된 순수 TS 정책망은 `EnaPolicyStore`가 feature/action 계약을 검증한 뒤 저장·복원한다.
+- 기본 교사 정책은 클러치 생존(치명 함정/저체력 방패), 불씨 부족 시 성냥 보급, 예측 대비(전방 위협 우선 손패 보급), 손패 보존/사용 위치, 트리플 대기 가치, 레시피/유물 시너지, 해금/확률/레시피/무료카드 상점 선택, 플레이 로그 보정, 보스 버스트 준비, 2~3수 뒤 레일 위험을 함께 판단한다. 교사 정책 임계값은 `DEFAULT_ENA_HEURISTIC_POLICY_CONFIG`로 분리해 실험별 오버라이드가 가능하다.
 - 에나의 예측 손패 보급은 건넨 손패가 즉시/위기 타이밍에 쓰였는지, 청소 손패가 실제로 거미줄·함정을 얼마나 제거했는지를 `predictiveWeight`에 반영한다. 경험 탭 수호 축은 실제 동작값을 바꾸지 않고 표기만 0.5배로 완화한다.
 
 ## 10) UI 스타일 가이드 (실무 요약)
