@@ -1247,6 +1247,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
   border-radius: 12px;
   border: 1px dashed rgba(255,222,140,0.24);
   background:
+    var(--pack-art, none) center / cover no-repeat,
     radial-gradient(circle at 44% 36%, rgba(255,232,168,0.18), transparent 52%),
     repeating-linear-gradient(135deg, rgba(255,255,255,0.022) 0 2px, transparent 2px 10px),
     linear-gradient(148deg, rgba(110,30,42,0.56), rgba(22,10,26,0.97));

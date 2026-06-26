@@ -1,5 +1,5 @@
 import { HEARTH_STYLES } from './HearthStyles'
-import { SpriteUrls, spriteForHearthStation, spriteForDinner } from '../Sprites'
+import { SpriteUrls, spriteForHearthStation, spriteForDinner, spriteForDinnerPack } from '../Sprites'
 import { isTouchDevice } from '../MobileTouchManager'
 import { SquareBurst } from '../SquareBurst'
 import type { CustomRelicProfile } from '@data/Relics'
@@ -543,22 +543,23 @@ export class HearthScene {
     setTimeout(() => orb.remove(), 750)
   }
 
-  /** 만찬 레일: 이름(상단) → 정사각 일러스트 → 가격(하단) 구조의 4종 팩. */
+  /** 만찬 레일: 이름(상단) → 정사각 일러스트(dinner_NNN) → 가격(하단) 구조의 4종 팩. */
   private renderDinnerPacks(): string {
     const packs = [
-      { name: '무료 간식', price: '무료', free: true },
-      { name: '값싼 음식', price: '$5', free: false },
-      { name: '만족스러운 한끼', price: '$10', free: false },
-      { name: '호화로운 식사', price: '$30', free: false },
+      { name: '무료 간식',      price: '무료',  free: true,  sprite: spriteForDinnerPack('001') },
+      { name: '가벼운 한끼',    price: '$5',    free: false, sprite: spriteForDinnerPack('002') },
+      { name: '만족스러운 식사', price: '$10',  free: false, sprite: spriteForDinnerPack('003') },
+      { name: '호화로운 만찬',  price: '$30',   free: false, sprite: spriteForDinnerPack('004') },
     ]
     return packs.map((pack) => {
       const tag = pack.free ? 'button' : 'article'
       const attrs = pack.free
         ? `class="hearth-dinner-pack" type="button" data-hearth-dinner-pack`
         : `class="hearth-dinner-pack is-locked"`
+      const artStyle = pack.sprite ? `style="--pack-art:url('${pack.sprite}')"` : ''
       return `<${tag} ${attrs}>
         <span class="hearth-dinner-pack-name">${pack.name}</span>
-        <span class="hearth-dinner-pack-art" aria-hidden="true"></span>
+        <span class="hearth-dinner-pack-art" aria-hidden="true" ${artStyle}></span>
         <span class="hearth-dinner-pack-price">${pack.price}</span>
       </${tag}>`
     }).join('')

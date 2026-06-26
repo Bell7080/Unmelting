@@ -556,6 +556,16 @@ export function spriteForDinner(kind: string, num: string): string | undefined {
   return dinnerGlob[`../assets/sprites/dinner/${kind}/${kind}_${num}.webp`]?.default
 }
 
+// 만찬 팩 표지 일러스트: sprites/dinner/dinner_NNN.webp (dinner 폴더 직속).
+const dinnerPackGlob = import.meta.glob<{ default: string }>(
+  '../assets/sprites/dinner/dinner_*.webp',
+  { eager: true },
+)
+/** 만찬 팩 표지 스프라이트. num: '001'~'004'. */
+export function spriteForDinnerPack(num: string): string | undefined {
+  return dinnerPackGlob[`../assets/sprites/dinner/dinner_${num}.webp`]?.default
+}
+
 // recipe_001.webp 가 추가되면 자동으로 사용된다. 없으면 팩 커버로 fallback.
 const recipeGlob = import.meta.glob('../assets/sprites/recipe_*.webp', {
   eager: true, import: 'default',
