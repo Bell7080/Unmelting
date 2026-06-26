@@ -162,6 +162,7 @@ import hearthAdventureUrl from '../assets/sprites/hearth_bg_003.webp'
 import hearthTradeUrl from '../assets/sprites/hearth_bg_004.webp'
 import hearthDinnerUrl from '../assets/sprites/hearth_bg_005.webp'
 import hearthDinnerHostUrl from '../assets/sprites/hearth_006.webp'
+import hearthDinnerAfterUrl from '../assets/sprites/hearth_bg_006.webp'
 import questMajorUrl from '../assets/sprites/quest_001.webp'
 import questMediumUrl from '../assets/sprites/quest_002.webp'
 import questMinorUrl from '../assets/sprites/quest_003.webp'
@@ -366,6 +367,8 @@ export const SpriteUrls = {
     dinner: hearthDinnerUrl,
     /** 만찬 완료 후 중앙에서 열리는 주인 일러스트(hearth_006). */
     dinnerHost: hearthDinnerHostUrl,
+    /** 만찬 이후 재방문/완료 상태 배경(hearth_bg_006). */
+    dinnerAfter: hearthDinnerAfterUrl,
   } as const,
   /** 의뢰(퀘스트) 딱지 일러스트 — 등급별(메인/중간/소형). */
   questTickets: {
@@ -541,6 +544,29 @@ const hearthStationGlob = import.meta.glob<{ default: string }>(
 /** 거점 스테이션 칸 일러스트. name 예: 'hearth_008'. 파일 없으면 undefined. */
 export function spriteForHearthStation(name: string): string | undefined {
   return hearthStationGlob[`../assets/sprites/${name}.webp`]?.default
+}
+
+// 만찬 선택지 일러스트: sprites/dinner/<category>/<category>_NNN.webp 구조.
+// 파일을 추가하면 자동 연동되고, 없으면 undefined → CSS 그라디언트 폴백.
+const dinnerGlob = import.meta.glob<{ default: string }>(
+  '../assets/sprites/dinner/**/*.webp',
+  { eager: true },
+)
+/** 만찬 선택지 스프라이트.
+ * kind: 'main' | 'sauce' | 'topping', num: '001' 형식.
+ * 예: spriteForDinner('sauce', '002') → dinner/sauce/sauce_002.webp */
+export function spriteForDinner(kind: string, num: string): string | undefined {
+  return dinnerGlob[`../assets/sprites/dinner/${kind}/${kind}_${num}.webp`]?.default
+}
+
+// 만찬 팩 표지 일러스트: sprites/dinner/dinner_NNN.webp (dinner 폴더 직속).
+const dinnerPackGlob = import.meta.glob<{ default: string }>(
+  '../assets/sprites/dinner/dinner_*.webp',
+  { eager: true },
+)
+/** 만찬 팩 표지 스프라이트. num: '001'~'004'. */
+export function spriteForDinnerPack(num: string): string | undefined {
+  return dinnerPackGlob[`../assets/sprites/dinner/dinner_${num}.webp`]?.default
 }
 
 // recipe_001.webp 가 추가되면 자동으로 사용된다. 없으면 팩 커버로 fallback.

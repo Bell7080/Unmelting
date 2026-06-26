@@ -56,7 +56,9 @@ export interface CustomRelicProfile {
   name: string
   effect: string
   flavor: string
-  stats: Partial<{ maxHealth: number; emberMax: number; handMax: number; scorePct: number; damage: number }>
+  /** 커스텀 일러스트 URL — 설정 시 기본 스프라이트를 대체한다(만찬 유물에서 메인 음식 아트 사용). */
+  art?: string
+  stats: Partial<{ maxHealth: number; emberMax: number; handMax: number; scorePct: number; damage: number; shopDiscount: number; startScore: number }>
 }
 
 /** Immutable relic rules used by gameplay and presentation. */
