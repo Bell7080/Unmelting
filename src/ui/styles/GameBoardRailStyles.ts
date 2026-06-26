@@ -37,6 +37,68 @@ export const GAME_BOARD_RAIL_STYLES = `
   pointer-events: none;
 }
 
+/* 다음 하강 예고선 — 레일 상단 안쪽에만 얇게 얹어, 새 아이콘 없이
+   기존 카드 타입 팔레트(적/함정/보물/꽃)를 미리 읽게 한다. */
+.rail-next-hints {
+  position: absolute;
+  left: calc(clamp(10px, 1.6vh, 14px) + 4%);
+  right: calc(clamp(10px, 1.6vh, 14px) + 4%);
+  top: clamp(2px, 0.45vh, 5px);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(6px, 1vw, 10px);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.rail-next-hint {
+  height: 3px;
+  width: 92%;
+  justify-self: center;
+  border-radius: 999px;
+  opacity: 0;
+  transform: translateY(-1px) scaleX(0.78);
+}
+
+.rail-next-hint--enemy,
+.rail-next-hint--trap,
+.rail-next-hint--treasure,
+.rail-next-hint--flower,
+.rail-next-hint--special {
+  opacity: 0.74;
+  animation: rail-next-hint-breathe 2.35s ease-in-out infinite;
+}
+
+.rail-next-hint--enemy {
+  background: linear-gradient(90deg, rgba(168, 58, 58, 0), rgba(168, 58, 58, 0.92) 30%, rgba(90, 24, 24, 0.82) 72%, rgba(90, 24, 24, 0));
+  box-shadow: 0 0 8px rgba(168, 58, 58, 0.5), 0 0 18px rgba(168, 58, 58, 0.18);
+}
+
+.rail-next-hint--trap {
+  background: linear-gradient(90deg, rgba(92, 63, 122, 0), rgba(92, 63, 122, 0.94) 30%, rgba(70, 112, 170, 0.68) 72%, rgba(70, 112, 170, 0));
+  box-shadow: 0 0 8px rgba(92, 63, 122, 0.52), 0 0 18px rgba(70, 112, 170, 0.2);
+}
+
+.rail-next-hint--treasure {
+  background: linear-gradient(90deg, rgba(255, 215, 120, 0), rgba(255, 215, 120, 0.94) 28%, rgba(201, 161, 58, 0.9) 74%, rgba(201, 161, 58, 0));
+  box-shadow: 0 0 8px rgba(255, 215, 120, 0.46), 0 0 18px rgba(201, 161, 58, 0.2);
+}
+
+.rail-next-hint--flower {
+  background: linear-gradient(90deg, rgba(82, 205, 112, 0), rgba(82, 205, 112, 0.94) 30%, rgba(36, 142, 86, 0.72) 74%, rgba(36, 142, 86, 0));
+  box-shadow: 0 0 8px rgba(82, 205, 112, 0.48), 0 0 18px rgba(36, 142, 86, 0.24);
+}
+
+.rail-next-hint--special {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.96) 30%, rgba(210, 226, 255, 0.82) 74%, rgba(210, 226, 255, 0));
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.48), 0 0 18px rgba(210, 226, 255, 0.22);
+}
+
+@keyframes rail-next-hint-breathe {
+  0%, 100% { opacity: 0.52; transform: translateY(-1px) scaleX(0.74); filter: brightness(0.94); }
+  50% { opacity: 0.86; transform: translateY(0) scaleX(0.9); filter: brightness(1.14); }
+}
+
 .rail-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
