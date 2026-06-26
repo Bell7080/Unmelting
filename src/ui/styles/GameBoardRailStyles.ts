@@ -85,8 +85,8 @@ export const GAME_BOARD_RAIL_STYLES = `
 }
 
 .rail-next-hint--flower {
-  background: linear-gradient(90deg, rgba(120, 196, 92, 0), rgba(120, 196, 92, 0.92) 30%, rgba(229, 180, 76, 0.58) 74%, rgba(229, 180, 76, 0));
-  box-shadow: 0 0 8px rgba(120, 196, 92, 0.44), 0 0 18px rgba(120, 196, 92, 0.2);
+  background: linear-gradient(90deg, rgba(82, 205, 112, 0), rgba(82, 205, 112, 0.94) 30%, rgba(36, 142, 86, 0.72) 74%, rgba(36, 142, 86, 0));
+  box-shadow: 0 0 8px rgba(82, 205, 112, 0.48), 0 0 18px rgba(36, 142, 86, 0.24);
 }
 
 .rail-next-hint--special {
