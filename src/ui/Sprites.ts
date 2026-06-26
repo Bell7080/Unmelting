@@ -27,6 +27,11 @@ import shopVeilBgUrl from '../assets/sprites/background_002.webp'
 import shopPickerBgUrl from '../assets/sprites/background_003.webp'
 import altarVeilBgUrl from '../assets/sprites/background_004.webp'
 import trialVeilBgUrl from '../assets/sprites/background_005.webp'
+// Zone backgrounds (006-009) — 실제 아트로 교체 예정인 플레이스홀더
+import zoneBg1Url from '../assets/sprites/background_006.webp'
+import zoneBg2Url from '../assets/sprites/background_007.webp'
+import zoneBg3Url from '../assets/sprites/background_008.webp'
+import zoneBg4Url from '../assets/sprites/background_009.webp'
 import boss001Url from '../assets/sprites/boss_001.webp'
 import boss002Url from '../assets/sprites/boss_002.webp'
 import boss003Url from '../assets/sprites/boss_003.webp'
@@ -184,6 +189,8 @@ export const SpriteUrls = {
   altarVeilBg: altarVeilBgUrl,
   /** Trial (시련) overlay backdrop. */
   trialVeilBg: trialVeilBgUrl,
+  /** 구역 배경 1~4 (background_006~009). 구역 전환 커튼 및 인게임 배경으로 사용. */
+  zoneBg: [zoneBg1Url, zoneBg2Url, zoneBg3Url, zoneBg4Url] as readonly string[],
   /** 30층 보스(양초 백작) 일러스트. */
   boss: boss001Url,
   /** 60층 보스(불씨 기사단장) 일러스트. */
