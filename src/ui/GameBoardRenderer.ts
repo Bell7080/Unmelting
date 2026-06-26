@@ -1353,7 +1353,8 @@ export class GameBoardRenderer {
     // atkDmgHtml 등으로 미리 조립된 HTML은 \x00 접두사로 표시 → escapeHtml 건너뜀
     if (effect.charCodeAt(0) === 0) return effect.slice(1).replace(/불빛/g, '✦')
 
-    let t = escapeHtml(effect).replace(/불빛/g, '✦')
+    // \n은 줄 구분 효과(만찬 유물 스탯 3줄 등) → <br>로 변환
+    let t = escapeHtml(effect).replace(/불빛/g, '✦').replace(/\n/g, '<br>')
 
     // {{spawn}} 치환: 밝음 티어 기준 확률 변화량
     if (spawnEffect && ctx && ctx.total > 0) {
@@ -1528,9 +1529,11 @@ export class GameBoardRenderer {
       const nextGain = enh.ambitionCurrentGain + 25
       bonusChip = `<p class="shop-relic-bonus-chip">처치 <strong>${enh.ambitionKillCount}</strong>/8 · 다음 <strong>+${nextGain}</strong>✦</p>`
     }
+    // 커스텀 프로필의 art(만찬 유물 등)가 있으면 기본 스프라이트 대신 사용
+    const artUrl = profile?.art ?? spriteForRelic(def.id)
     return `
       <article class="relic-preview-card" aria-hidden="true">
-        <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
+        <div class="shop-relic-art" style="background-image: url('${artUrl}')" aria-hidden="true"></div>
         <div class="shop-relic-body">
           <h3 class="shop-relic-title">${title}</h3>
           <p class="shop-relic-effect">${this.relicEffectHtml(this.relicDynamicEffect(id, effect, true), def.spawnEffect, this.currentSpawnWeightCtx, true)}</p>

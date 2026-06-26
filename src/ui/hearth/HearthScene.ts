@@ -801,6 +801,8 @@ export class HearthScene {
       name: `${prefix ? `${prefix} ` : ''}${food?.title ?? '만찬'}`,
       effect,
       flavor: this.dinnerChoices.map((choice) => choice.title).join(' + '),
+      // 인벤토리 유물 카드 일러스트로 메인 음식 스프라이트를 그대로 사용
+      art: food?.sprite,
       stats,
     }
   }
