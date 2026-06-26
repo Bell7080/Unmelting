@@ -324,7 +324,7 @@ export class HearthScene {
       }
       const dinnerPack = t.closest<HTMLElement>('[data-hearth-dinner-pack]')
       if (dinnerPack) {
-        this.openDinnerPack()
+        void this.openDinnerPack(dinnerPack)
         return
       }
       const dinnerChoice = t.closest<HTMLElement>('[data-hearth-dinner-choice]')
@@ -487,10 +487,30 @@ export class HearthScene {
     if (dialogue) dialogue.textContent = ''
   }
 
-  /** 무료 팩 클릭 → 레일을 은은하게 어둡고 흐리게 만들고 1단계 음식 3택을 띄운다. */
-  private openDinnerPack(): void {
+  /** 무료 팩 클릭 → 블라스트 후 코스 카드 역순 퇴장 → 검은 오버레이 → 1단계 선택지 등장. */
+  private async openDinnerPack(packEl: HTMLElement): Promise<void> {
     if (this.dinnerConsumed || this.dinnerStep !== 0) return
+    // 중복 클릭 방지 — 아직 step=0인 상태에서 step=1로 즉시 잠금
     this.dinnerStep = 1
+
+    // 선택한 팩에서 먹음직스러운 블라스트 발사
+    SquareBurst.playOn(packEl, 'score', { count: 32, spread: 150, duration: 520, size: [7, 22] })
+    await this.wait(130)
+
+    // 레일의 모든 팩 카드를 등장 역순(우→좌)으로 퇴장시킨다
+    const rail = this.overlay?.querySelector<HTMLElement>('.hearth-dinner-rail')
+    const packs = rail ? [...rail.querySelectorAll<HTMLElement>('.hearth-dinner-pack')] : []
+    ;[...packs].reverse().forEach((pack, i) => {
+      pack.animate([
+        { transform: 'translateY(0) scale(1)', opacity: 1 },
+        { transform: 'translateY(-22px) scale(1.07)', opacity: 0.82, offset: 0.28 },
+        { transform: 'translateY(-56px) scale(0.74)', opacity: 0 },
+      ], { duration: 360, delay: i * 68, easing: 'cubic-bezier(0.42,0,0.82,0.36)', fill: 'forwards' })
+    })
+    // 마지막 카드가 퇴장 완료할 때까지 대기
+    await this.wait(packs.length * 68 + 320)
+
+    // 검은 오버레이 상승 → 선택지 등장
     this.overlay?.classList.add('is-dinner-opened')
     this.renderDinnerChoices()
   }

@@ -1183,7 +1183,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-stage { opacity: 1; pointer-events: auto; transition: opacity 0.28s ease; }
 .hearth-dinner-bg { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,2,7,0.18), rgba(2,1,4,0.28)), var(--hearth-dinner-bg, none), radial-gradient(circle at 50% 42%, rgba(150,28,34,0.12), transparent 56%); background-size: cover; background-position: center; opacity: 0; filter: saturate(0.96) brightness(0.82); transition: opacity 0.52s ease 0.18s, filter 0.52s ease 0.18s; }
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-bg { opacity: 1; filter: saturate(0.98) brightness(0.84); }
-#hearth-overlay.is-dinner-opened .hearth-dinner-bg { filter: saturate(0.94) brightness(0.74) blur(0.35px); }
+#hearth-overlay.is-dinner-opened .hearth-dinner-bg { filter: saturate(0.88) brightness(0.62) blur(0.5px); transition: filter 0.44s ease 0.1s; }
 #hearth-overlay.is-dinner-after .hearth-dinner-bg { filter: saturate(0.92) brightness(0.72); }
 .hearth-dinner-curtain { display: none; position: absolute; top: 0; bottom: 0; width: 54%; z-index: 3; background: repeating-linear-gradient(90deg, rgba(70,8,18,0.98) 0 18px, rgba(24,2,10,0.98) 18px 34px), linear-gradient(180deg, #2a0610, #070207); box-shadow: inset 0 0 34px rgba(0,0,0,0.72), 0 0 28px rgba(0,0,0,0.56); transition: transform 0.92s cubic-bezier(0.2,0.84,0.3,1) 0.08s; }
 .hearth-dinner-curtain--left { left: 0; }
@@ -1201,7 +1201,8 @@ body.hearth-lobby #ingame-backdrop.is-out {
   transition: opacity 0.38s ease 0.98s, transform 0.38s cubic-bezier(0.2,0.84,0.3,1) 0.98s, filter 0.3s ease;
 }
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-rail { opacity: 1; transform: translateY(-50%); }
-#hearth-overlay.is-dinner-opened .hearth-dinner-rail { filter: blur(5px) brightness(0.22); opacity: 0.3; pointer-events: none; }
+/* WAAPI가 팩 카드를 역순으로 퇴장시킨 뒤 레일 자체도 숨긴다 */
+#hearth-overlay.is-dinner-opened .hearth-dinner-rail { opacity: 0; pointer-events: none; transition: opacity 0.18s ease; }
 #hearth-overlay.is-dinner-finalizing .hearth-dinner-rail { opacity: 0; transform: translateY(-50%) scale(0.94); transition: opacity 0.34s ease, transform 0.34s ease; }
 /* 팩 오픈/최종 공개 공용 오버레이 — z5(선택지 z6 아래)로 레일만 덮는다 */
 .hearth-dinner-resolve-overlay {
@@ -1210,8 +1211,8 @@ body.hearth-lobby #ingame-backdrop.is-out {
   opacity: 0; pointer-events: none;
   transition: opacity 0.44s ease;
 }
-/* 팩을 까면 레일 전체에 반투명 어둠 — 선택지(z6)는 그 위에 뜬다 */
-#hearth-overlay.is-dinner-opened .hearth-dinner-resolve-overlay { opacity: 0.56; }
+/* 팩 퇴장이 끝난 뒤 검은 오버레이가 올라오고 선택지가 그 위에 뜬다 */
+#hearth-overlay.is-dinner-opened .hearth-dinner-resolve-overlay { opacity: 0.72; transition: opacity 0.38s ease 0.12s; }
 #hearth-overlay.is-dinner-finalizing .hearth-dinner-resolve-overlay { opacity: 1; }
 /* 만찬 팩 카드: 컨테이너는 투명, 이름·가격은 텍스트만 부유, 일러스트가 시각 중심 */
 .hearth-dinner-pack {
