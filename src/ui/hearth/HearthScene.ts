@@ -505,19 +505,19 @@ export class HearthScene {
   /** 현재 단계에 맞는 만찬 선택지 풀. sprite는 dinner_<kind>_NNN 파일을 glob으로 로드한다. */
   private getDinnerOptions(): DinnerChoice[] {
     if (this.dinnerStep === 1) return [
-      { title: '감자', stat: '최대체력 +3', color: '#8b6a35', kind: 'food', sprite: spriteForDinner('dinner_main_001'), stats: { maxHealth: 3 } },
-      { title: '치킨', stat: '공격력 +1', color: '#8f3d2f', kind: 'food', sprite: spriteForDinner('dinner_main_002'), stats: { damage: 1 } },
-      { title: '파스타', stat: '손패 한도 +1', color: '#7b7240', kind: 'food', sprite: spriteForDinner('dinner_main_003'), stats: { handMax: 1 } },
+      { title: '감자', stat: '최대체력 +3', color: '#8b6a35', kind: 'food', sprite: spriteForDinner('main', '001'), stats: { maxHealth: 3 } },
+      { title: '치킨', stat: '공격력 +1', color: '#8f3d2f', kind: 'food', sprite: spriteForDinner('main', '002'), stats: { damage: 1 } },
+      { title: '파스타', stat: '손패 한도 +1', color: '#7b7240', kind: 'food', sprite: spriteForDinner('main', '003'), stats: { handMax: 1 } },
     ]
     if (this.dinnerStep === 2) return [
-      { title: '묽은 소스', stat: '불씨 한도 +1', color: '#6f4d39', kind: 'sauce', namePart: '묽은', sprite: spriteForDinner('dinner_sauce_001'), stats: { emberMax: 1 } },
-      { title: '따뜻한 소스', stat: '최대체력 +3', color: '#7e2630', kind: 'sauce', namePart: '따뜻한', sprite: spriteForDinner('dinner_sauce_002'), stats: { maxHealth: 3 } },
-      { title: '촛불 소스', stat: '불빛 획득량 +5%', color: '#9a6b2f', kind: 'sauce', namePart: '촛불', sprite: spriteForDinner('dinner_sauce_003'), stats: { scorePct: 5 } },
+      { title: '묽은 소스', stat: '불씨 한도 +1', color: '#6f4d39', kind: 'sauce', namePart: '묽은', sprite: spriteForDinner('sauce', '001'), stats: { emberMax: 1 } },
+      { title: '따뜻한 소스', stat: '최대체력 +3', color: '#7e2630', kind: 'sauce', namePart: '따뜻한', sprite: spriteForDinner('sauce', '002'), stats: { maxHealth: 3 } },
+      { title: '촛불 소스', stat: '불빛 획득량 +5%', color: '#9a6b2f', kind: 'sauce', namePart: '촛불', sprite: spriteForDinner('sauce', '003'), stats: { scorePct: 5 } },
     ]
     return [
-      { title: '양파', stat: '손패 한도 +2', color: '#d6c8a2', kind: 'topping', sprite: spriteForDinner('dinner_topping_001'), stats: { handMax: 2 } },
-      { title: '불씨 가니시', stat: '불씨 한도 +1', color: '#5f445f', kind: 'topping', sprite: spriteForDinner('dinner_topping_002'), stats: { emberMax: 1 } },
-      { title: '허브', stat: '불빛 획득량 +5%', color: '#5f744a', kind: 'topping', sprite: spriteForDinner('dinner_topping_003'), stats: { scorePct: 5 } },
+      { title: '양파', stat: '손패 한도 +2', color: '#d6c8a2', kind: 'topping', sprite: spriteForDinner('topping', '001'), stats: { handMax: 2 } },
+      { title: '불씨 가니시', stat: '불씨 한도 +1', color: '#5f445f', kind: 'topping', sprite: spriteForDinner('topping', '002'), stats: { emberMax: 1 } },
+      { title: '허브', stat: '불빛 획득량 +5%', color: '#5f744a', kind: 'topping', sprite: spriteForDinner('topping', '003'), stats: { scorePct: 5 } },
     ]
   }
 
