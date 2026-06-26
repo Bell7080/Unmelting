@@ -603,67 +603,276 @@ body.hearth-lobby #ingame-backdrop.is-out {
   line-height: 1.45;
   color: rgba(214, 200, 178, 0.86);
 }
-/* ── 모험 셔터: 캐릭터 선택 → 출발 단계 ───────────────────────────────
-   직업 선택의 카드 넘김 감각을 로비 셔터 하단에 맞춘 얇은 프로필 카드 UI. */
-.hearth-back {
-  grid-column: 1; grid-row: 3; align-self: end; justify-self: start;
-  margin: 0 0 clamp(10px, 1.6vh, 18px) clamp(10px, 1.6vw, 18px);
-  padding: 9px 14px; border-radius: 999px;
-  border: 1px solid rgba(255, 222, 140, 0.42);
-  background: rgba(18, 12, 24, 0.72); color: rgba(255, 236, 188, 0.9);
-  font: 800 13px/1 'OkDanDan', Georgia, serif; letter-spacing: 0.08em;
-  opacity: 0; transform: translateX(-10px); pointer-events: none;
-  transition: opacity 0.28s ease, transform 0.28s ease, border-color 0.18s ease;
-}
-#hearth-overlay.is-shutter-rest .hearth-back { opacity: 1; transform: translateX(0); pointer-events: auto; }
-.hearth-back:hover { border-color: var(--color-flame, #ffd778); }
+/* ── 모험 셔터: 캐릭터 선택 coverflow ────────────────────────────────
+   직업 선택(JobSelectStyles)과 동일한 coverflow 문법을 로비 셔터 하단에 적용.
+   세로 포트레이트 카드 + 좌우 화살표 + 드래그 순환. */
+
+/* character stage override — 애니메이션 진입 */
 .hearth-character-stage {
   grid-column: 1 / 4; grid-row: 1 / 4; position: relative; overflow: hidden;
   opacity: 0; transform: translateY(14px); pointer-events: none;
   transition: opacity 0.38s ease, transform 0.38s cubic-bezier(0.2, 0.8, 0.3, 1), filter 0.34s ease;
 }
 #hearth-overlay.is-shutter-rest .hearth-character-stage { opacity: 1; transform: translateY(0); }
-.hearth-character-bg {
-  position: absolute; inset: -4% -2% 20%;
-  background:
-    linear-gradient(180deg, rgba(0,0,0,0.08), rgba(0,0,0,0.72)),
-    radial-gradient(circle at 50% 42%, rgba(255, 215, 120, 0.18), transparent 38%),
-    var(--character-art, none);
-  background-size: cover; background-position: center 20%;
-  filter: saturate(0.9) brightness(0.72); opacity: 0.72;
-  transition: background-image 0.24s ease, filter 0.24s ease, opacity 0.24s ease;
+
+/* copy text override — 위치 정밀 조정 */
+.hearth-character-copy {
+  position: absolute; left: 7%; right: 7%; top: 10%;
+  color: #ffe7a8; text-shadow: 0 2px 14px rgba(0,0,0,0.9); font-family: 'OkDanDan', Georgia, serif;
 }
-.hearth-character-copy { position: absolute; left: 7%; right: 7%; top: 10%; color: #ffe7a8; text-shadow: 0 2px 14px rgba(0,0,0,0.9); font-family: 'OkDanDan', Georgia, serif; }
 .hearth-character-kicker { display: block; color: rgba(248, 206, 120, 0.88); font-size: clamp(13px, 1.8vh, 17px); letter-spacing: 0.18em; margin-bottom: 8px; }
 .hearth-character-copy strong { display: block; font-size: clamp(32px, 6vh, 64px); letter-spacing: 0.08em; }
 .hearth-character-copy small { display: block; max-width: 28em; margin-top: 8px; color: rgba(225, 210, 188, 0.86); font-size: clamp(13px, 1.8vh, 18px); line-height: 1.45; }
+
+/* depart button — 카루셀 위에 올라오도록 margin-bottom 갱신 */
+.hearth-depart { margin-bottom: clamp(192px, 32vh, 248px); }
+
+/* ── 캐릭터 캐러셀 컨테이너 ────────────────────────────────────────── */
+.hearth-character-carousel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: clamp(172px, 28vh, 228px);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translateY(18px);
+  pointer-events: none;
+  transition: opacity 0.32s ease 1.02s, transform 0.32s cubic-bezier(0.2, 0.8, 0.3, 1) 1.02s;
+}
+#hearth-overlay.is-shutter-rest .hearth-character-carousel {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* ── 캐러셀 스트립: coverflow 뷰포트 ──────────────────────────────── */
 .hearth-character-strip {
-  grid-column: 1 / 4; grid-row: 3; align-self: end; justify-self: center;
-  display: flex; gap: clamp(6px, 1vw, 12px); max-width: 92%; padding-bottom: clamp(8px, 1.4vh, 16px);
-  opacity: 0; transform: translateY(16px); pointer-events: none;
-  transition: opacity 0.32s ease, transform 0.32s cubic-bezier(0.2, 0.8, 0.3, 1);
+  position: relative;
+  width: 100%;
+  height: 100%;
+  perspective: 1600px;
+  touch-action: pan-y;
+  cursor: grab;
+  overflow: visible;
 }
-#hearth-overlay.is-shutter-rest .hearth-character-strip { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.hearth-character-strip:active { cursor: grabbing; }
+
+/* ── 가로 직사각형 캐릭터 카드 ──────────────────────────────────────
+   landscape 3:2 비율 — 일러스트 풀 커버 + 하단 스크림 + 잠금 오버레이.
+   transform/opacity/filter/z-index는 JS가 인라인으로 제어한다. */
 .hearth-character-card {
-  width: clamp(82px, 10vw, 132px); height: clamp(38px, 6.2vh, 58px);
-  display: grid; grid-template-columns: 34% 1fr; grid-template-rows: 1fr 1fr; column-gap: 8px; align-items: center;
-  border-radius: 10px; border: 1px solid rgba(139,111,71,0.64);
-  background: linear-gradient(180deg, rgba(42, 28, 42, 0.92), rgba(18, 12, 24, 0.96));
-  color: rgba(235, 218, 190, 0.82); cursor: pointer; font-family: 'OkDanDan', Georgia, serif;
-  box-shadow: inset 0 1px 0 rgba(255,232,168,0.12), 0 8px 18px rgba(0,0,0,0.42);
-  transition: transform 0.2s cubic-bezier(0.34,1.56,0.5,1), border-color 0.18s ease, box-shadow 0.18s ease;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  height: min(72%, 168px);
+  aspect-ratio: 3 / 2;
+  cursor: pointer;
+  padding: 0;
+  border: 1px solid rgba(255, 215, 120, 0.24);
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(22, 14, 34, 0.98) 0%, rgba(7, 4, 12, 0.99) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.1),
+    0 14px 36px rgba(0, 0, 0, 0.68),
+    0 4px 12px rgba(0, 0, 0, 0.5);
+  transform-style: preserve-3d;
+  transition:
+    transform 0.42s cubic-bezier(0.2, 0.84, 0.3, 1),
+    opacity 0.42s ease,
+    filter 0.42s ease,
+    box-shadow 0.28s ease,
+    border-color 0.28s ease;
+  will-change: transform, opacity, filter;
+  display: block;
+  text-align: left;
 }
-.hearth-character-card:hover, .hearth-character-card.is-selected { transform: translateY(-7px); border-color: var(--color-flame, #ffd778); box-shadow: inset 0 1px 0 rgba(255,232,168,0.24), 0 12px 24px rgba(0,0,0,0.5), 0 0 24px rgba(244,164,96,0.36); }
-.hearth-character-thumb { grid-row: 1 / 3; width: 100%; height: 100%; border-radius: 8px 0 0 8px; background-image: var(--character-art, none); background-size: cover; background-position: center; opacity: 0.86; }
-.hearth-character-name { align-self: end; font-size: clamp(12px, 1.7vh, 16px); font-weight: 900; color: #ffe7a8; }
-.hearth-character-role { align-self: start; font-size: clamp(10px, 1.35vh, 12px); color: rgba(214,200,178,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#hearth-overlay.is-character-confirming .hearth-character-strip,
-#hearth-overlay.is-character-confirming .hearth-depart { transform: translateY(110%); opacity: 0; pointer-events: none; }
-#hearth-overlay.is-character-confirming .hearth-character-stage { filter: brightness(1.85) saturate(1.2); transform: scale(0.08); opacity: 0; transition: transform 0.34s cubic-bezier(0.28, 0.78, 0.34, 1), opacity 0.34s ease, filter 0.34s ease; }
+/* 드래그 중엔 easing 없이 즉시 추적 */
+.hearth-character-strip:active .hearth-character-card { transition: none; }
+
+/* 가운데(is-selected) 카드 — 가장 밝고 강한 발광 */
+.hearth-character-card.is-selected {
+  border-color: rgba(255, 222, 140, 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.22),
+    0 28px 62px rgba(0, 0, 0, 0.84),
+    0 0 0 1px rgba(220, 170, 70, 0.28),
+    0 0 42px rgba(244, 164, 96, 0.22);
+}
+.hearth-character-card.is-selected:hover:not(.is-locked) {
+  border-color: rgba(255, 222, 140, 0.92);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.3),
+    0 32px 68px rgba(0, 0, 0, 0.9),
+    0 0 0 1px rgba(220, 170, 70, 0.48),
+    0 0 54px rgba(244, 164, 96, 0.34);
+}
+.hearth-character-card.is-locked { cursor: not-allowed; }
+.hearth-character-card.is-denied { animation: hearth-char-deny 0.42s ease; }
+@keyframes hearth-char-deny {
+  0%, 100% { margin-left: 0; }
+  22% { margin-left: -8px; }
+  55% { margin-left: 7px; }
+  82% { margin-left: -4px; }
+}
+
+/* ── 일러스트 ──────────────────────────────────────────────────────── */
+.hearth-character-art {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+.hearth-character-art.is-empty {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 232, 168, 0.07), transparent 62%),
+    repeating-linear-gradient(135deg, rgba(255,255,255,0.016) 0 2px, transparent 2px 9px),
+    linear-gradient(180deg, rgba(30, 20, 42, 0.94), rgba(9, 6, 15, 0.97));
+}
+
+/* 광택 스윕 — 선택된 카드 hover 시만 */
+.hearth-character-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 36%, rgba(255, 240, 200, 0.15) 50%, transparent 64%);
+  transform: translateX(-120%);
+  transition: transform 0.62s ease;
+}
+.hearth-character-card.is-selected:hover:not(.is-locked) .hearth-character-sheen {
+  transform: translateX(120%);
+}
+
+/* ── 잠금 오버레이 ──────────────────────────────────────────────────── */
+.hearth-character-lock {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  z-index: 4;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.66);
+  color: rgba(220, 206, 184, 0.66);
+}
+.hearth-char-lock-icon {
+  width: clamp(22px, 3.4vh, 36px);
+  height: clamp(22px, 3.4vh, 36px);
+  filter: drop-shadow(0 3px 8px rgba(0,0,0,0.72));
+}
+.hearth-character-lock span {
+  font-family: 'OkDanDan', Georgia, serif;
+  font-size: clamp(9px, 1.2vh, 13px);
+  letter-spacing: 0.14em;
+}
+
+/* ── 하단 스크림 + 텍스트 ───────────────────────────────────────────── */
+.hearth-character-scrim {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2px, 0.4vh, 4px);
+  padding: clamp(18px, 3vh, 34px) clamp(9px, 0.8vw, 15px) clamp(7px, 1.2vh, 12px);
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(7, 4, 12, 0.5) 26%,
+    rgba(5, 3, 9, 0.9) 64%,
+    rgba(4, 2, 8, 0.98) 100%);
+}
+.hearth-character-name {
+  font-family: 'OkDanDan', Georgia, serif;
+  font-size: clamp(12px, 1.8vh, 20px);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  line-height: 1.12;
+  color: rgba(255, 238, 196, 0.98);
+  text-shadow: 0 2px 7px rgba(0,0,0,0.95), 0 0 14px rgba(244,164,96,0.16);
+}
+.hearth-character-divider {
+  width: clamp(20px, 2vw, 36px);
+  height: 1.5px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(255, 215, 120, 0.7), rgba(255, 215, 120, 0.04));
+  margin: clamp(1px, 0.3vh, 3px) 0;
+}
+.hearth-character-role {
+  font-family: 'OkDanDan', Georgia, serif;
+  font-size: clamp(9px, 1.15vh, 12px);
+  color: rgba(192, 176, 154, 0.7);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── 화살표 버튼 ────────────────────────────────────────────────────── */
+.hearth-char-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(34px, 3.6vw, 50px);
+  height: clamp(34px, 3.6vw, 50px);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 215, 120, 0.24);
+  background: rgba(9, 5, 16, 0.64);
+  color: rgba(255, 232, 168, 0.88);
+  cursor: pointer;
+  opacity: 0.2;
+  transition: opacity 0.24s ease, background 0.2s ease, border-color 0.2s ease, transform 0.18s ease;
+  backdrop-filter: blur(3px);
+}
+.hearth-char-nav--left  { left: clamp(4px, 1.2vw, 20px); }
+.hearth-char-nav--right { right: clamp(4px, 1.2vw, 20px); }
+.hearth-char-nav > svg { width: 52%; height: 52%; }
+.hearth-character-carousel:hover .hearth-char-nav { opacity: 0.52; }
+.hearth-char-nav:hover {
+  opacity: 1 !important;
+  background: rgba(22, 12, 30, 0.9);
+  border-color: rgba(255, 222, 140, 0.66);
+  transform: translateY(-50%) scale(1.1);
+}
+
+/* ── 확정/확인 상태 ──────────────────────────────────────────────────── */
+#hearth-overlay.is-character-confirming .hearth-character-carousel,
+#hearth-overlay.is-character-confirming .hearth-depart {
+  transform: translateY(110%);
+  opacity: 0;
+  pointer-events: none;
+}
+#hearth-overlay.is-character-confirming .hearth-character-stage {
+  filter: brightness(1.85) saturate(1.2);
+  transform: scale(0.08);
+  opacity: 0;
+  transition: transform 0.34s cubic-bezier(0.28, 0.78, 0.34, 1), opacity 0.34s ease, filter 0.34s ease;
+}
 #hearth-overlay.is-character-confirmed .hearth-character-stage,
-#hearth-overlay.is-character-confirmed .hearth-character-strip,
+#hearth-overlay.is-character-confirmed .hearth-character-carousel,
 #hearth-overlay.is-character-confirmed .hearth-back { display: none; }
-#hearth-overlay.is-character-confirmed .hearth-depart { grid-row: 3; opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+#hearth-overlay.is-character-confirmed .hearth-depart {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin: 0;
+  opacity: 1;
+  /* 그리드 배치에서 벗어나 셔터 중앙으로 이동한다 */
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+/* ── orb / 설치 애니메이션 ──────────────────────────────────────────── */
 .hearth-character-orb { position: fixed; z-index: 260; width: 18px; height: 18px; border-radius: 50%; pointer-events: none; background: #fff3bd; box-shadow: 0 0 22px #ffd778, 0 0 56px rgba(244,164,96,0.72); }
 .hearth-character-orb.is-flying { animation: hearth-character-orb-flight 0.6s cubic-bezier(0.18,0.78,0.22,1) forwards; }
 @keyframes hearth-character-orb-flight { to { transform: translate(var(--orb-dx), var(--orb-dy)) scale(0.45); opacity: 0.82; } }
