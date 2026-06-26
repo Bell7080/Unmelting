@@ -538,7 +538,11 @@ export class HearthScene {
     const picked = this.dinnerCurrentOptions[index] ?? this.dinnerCurrentOptions[0]
     this.dinnerChoices.push(picked)
     if (choiceEl) {
-      SquareBurst.playOn(choiceEl, 'score', { count: 20, spread: 120, duration: 420, size: [6, 16] })
+      // getBoundingClientRect를 즉시 읽어 DOM 교체 전에 좌표를 확보한다
+      const r = choiceEl.getBoundingClientRect()
+      SquareBurst.playAt(r.left + r.width / 2, r.top + r.height / 2, 'treasure-gain', {
+        count: 32, spread: 150, duration: 500, size: [7, 22],
+      })
     }
     // 선택한 카드를 레일 하단 미니카드로 즉시 추가
     this.addDinnerPick(picked)
@@ -686,7 +690,7 @@ export class HearthScene {
     const stepLabel = stepLabels[this.dinnerStep] ?? ''
     const options = this.getDinnerOptions()
     this.dinnerCurrentOptions = options
-    const cards = options.map((option, index) => `
+    const cardHtml = options.map((option, index) => `
       <button class="hearth-dinner-choice" type="button"
         data-hearth-dinner-choice="${index}"
         data-rarity="${option.rarity}"
@@ -698,17 +702,37 @@ export class HearthScene {
           <small>${option.stat}</small>
         </footer>
       </button>`).join('')
-    choices.innerHTML = `
-      <header class="hearth-dinner-choices-header">
-        <h2 class="hearth-dinner-choices-pack">무료 간식</h2>
-        <p class="hearth-dinner-choices-step">${stepLabel} ${this.dinnerStep} / 3</p>
-      </header>
-      <div class="hearth-dinner-choices-row">${cards}</div>`
-    const row = choices.querySelector<HTMLElement>('.hearth-dinner-choices-row')
-    if (row) row.animate(
-      [{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'translateY(0)' }],
-      { duration: 300, easing: 'cubic-bezier(0.22,0.86,0.22,1)', delay: 60 },
-    )
+
+    // 헤더가 이미 있으면 텍스트만 실시간 교체 — 사라졌다 나오는 flickering 방지
+    const existingHeader = choices.querySelector<HTMLElement>('.hearth-dinner-choices-header')
+    if (existingHeader) {
+      const stepEl = existingHeader.querySelector<HTMLElement>('.hearth-dinner-choices-step')
+      if (stepEl) stepEl.textContent = `${stepLabel} ${this.dinnerStep} / 3`
+      let row = choices.querySelector<HTMLElement>('.hearth-dinner-choices-row')
+      if (!row) {
+        row = document.createElement('div')
+        row.className = 'hearth-dinner-choices-row'
+        choices.appendChild(row)
+      }
+      row.innerHTML = cardHtml
+      row.animate(
+        [{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'translateY(0)' }],
+        { duration: 300, easing: 'cubic-bezier(0.22,0.86,0.22,1)', delay: 60 },
+      )
+    } else {
+      // 첫 렌더 — 전체 구조 초기화
+      choices.innerHTML = `
+        <header class="hearth-dinner-choices-header">
+          <h2 class="hearth-dinner-choices-pack">무료 간식</h2>
+          <p class="hearth-dinner-choices-step">${stepLabel} ${this.dinnerStep} / 3</p>
+        </header>
+        <div class="hearth-dinner-choices-row">${cardHtml}</div>`
+      const row = choices.querySelector<HTMLElement>('.hearth-dinner-choices-row')
+      if (row) row.animate(
+        [{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'translateY(0)' }],
+        { duration: 300, easing: 'cubic-bezier(0.22,0.86,0.22,1)', delay: 60 },
+      )
+    }
   }
 
   /** 3장 선택 완료 — 미니카드 상단 부상→합성 블라스트→유물 공개 카드→인벤토리 꽂힘→after 씬 순으로 진행한다. */

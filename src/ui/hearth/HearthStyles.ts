@@ -1215,8 +1215,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
   opacity: 0; pointer-events: none;
   transition: opacity 0.44s ease;
 }
-/* finalizing·after 전환 시에는 균일한 완전 암전으로 덮는다 */
-#hearth-overlay.is-dinner-finalizing .hearth-dinner-resolve-overlay,
+/* closing 시에만 솔리드 블랙 커튼 사용 — finalizing은 배경을 살린다 */
 #hearth-overlay.is-dinner-closing .hearth-dinner-resolve-overlay {
   background: rgba(4,2,8,0.98);
 }
@@ -1225,7 +1224,8 @@ body.hearth-lobby #ingame-backdrop.is-out {
 #hearth-overlay.is-dinner-dimming .hearth-dinner-resolve-overlay { opacity: 0.72; transition: opacity 0.46s ease; }
 /* ② dimming 완료 후 is-dinner-opened로 교체 → 선택지 등장 */
 #hearth-overlay.is-dinner-opened .hearth-dinner-resolve-overlay { opacity: 0.72; transition: opacity 0.22s ease; }
-#hearth-overlay.is-dinner-finalizing .hearth-dinner-resolve-overlay { opacity: 1; }
+/* finalizing: 배경을 유지한 채 살짝만 더 어둡게 — 합성 연출은 z-index가 높아 배경 위에서 보인다 */
+#hearth-overlay.is-dinner-finalizing .hearth-dinner-resolve-overlay { opacity: 0.82; transition: opacity 0.28s ease; }
 /* 만찬 팩 카드: 컨테이너는 투명, 이름·가격은 텍스트만 부유, 일러스트가 시각 중심 */
 .hearth-dinner-pack {
   flex: 0 0 clamp(118px, 16vw, 168px);
@@ -1460,9 +1460,9 @@ body.hearth-lobby #ingame-backdrop.is-out {
 #hearth-overlay.is-dinner-after .hearth-dinner-illustration { display: none !important; }
 .hearth-dinner-dialogue { position: absolute; left: 10%; right: 10%; bottom: 6%; z-index: 10; min-height: 54px; padding: 16px 22px; border: 1px solid rgba(255,215,120,0.42); border-radius: 18px; background: linear-gradient(180deg, rgba(25,16,24,0.92), rgba(8,5,10,0.96)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; font-size: clamp(16px, 2.2vh, 22px); line-height: 1.45; text-align: center; letter-spacing: 0.03em; box-shadow: inset 0 1px 0 rgba(255,232,168,0.14), 0 18px 42px rgba(0,0,0,0.62); opacity: 0; transform: translateY(16px); pointer-events: none; }
 #hearth-overlay.is-dinner-after .hearth-dinner-dialogue { display: none !important; }
-/* after 상태: 어두운 overlay 페이드아웃, bg를 bg004(수상한 사람)로 교체 */
-#hearth-overlay.is-dinner-after .hearth-dinner-resolve-overlay { opacity: 0 !important; transition: opacity 0.56s ease 0.1s !important; }
-#hearth-overlay.is-dinner-after .hearth-dinner-bg { background-image: var(--hearth-dinner-after-bg) !important; }
+/* after 상태: overlay 스르륵 페이드아웃 후 hearth_006 배경 노출 */
+#hearth-overlay.is-dinner-after .hearth-dinner-resolve-overlay { opacity: 0 !important; transition: opacity 0.72s ease !important; }
+#hearth-overlay.is-dinner-after .hearth-dinner-bg { background-image: var(--hearth-dinner-after-bg) !important; transition: filter 0.72s ease; }
 #hearth-overlay.is-dinner-after .hearth-dinner-rail,
 #hearth-overlay.is-dinner-after .hearth-dinner-choices,
 #hearth-overlay.is-dinner-after .hearth-dinner-picks,
