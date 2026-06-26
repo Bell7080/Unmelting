@@ -30,7 +30,7 @@ const HEARTH_LAST_CHARACTER_KEY = 'unmelting.hearth.lastCharacterIndex'
 const DINNER_DONE_LINE = '하하, 식사는 만족스러우셨나요? 다음 만찬도 기대해주세요.'
 const DINNER_ALREADY_LINE = '음? 오늘은 이미 식사를 하시지 않았나요?'
 
-type DinnerStatKey = 'maxHealth' | 'emberMax' | 'handMax' | 'scorePct' | 'damage'
+type DinnerStatKey = 'maxHealth' | 'emberMax' | 'handMax' | 'scorePct' | 'damage' | 'shopDiscount' | 'startScore'
 type DinnerRarity = 'common' | 'rare' | 'epic'
 
 interface DinnerChoice {
@@ -39,11 +39,23 @@ interface DinnerChoice {
   color: string
   kind: 'food' | 'sauce' | 'topping'
   rarity: DinnerRarity
-  /** dinner_main/sauce/topping_NNN 스프라이트 URL (spriteForDinner로 로드). */
   sprite?: string
-  /** 이름 조합용 짧은 표기. 예: '묽은 소스' 선택 시 카드명은 '묽은 양파 감자'. */
+  /** 유물 이름 조합용. "소금 소스" → namePart "소금"으로 '소금 치즈 감자' 완성. */
   namePart?: string
   stats: Partial<Record<DinnerStatKey, number>>
+}
+
+/** 식재료 정의. values는 등급별 명시 수치(없는 등급은 해당 등급으로 출현 불가). */
+interface DinnerBaseItem {
+  title: string
+  color: string
+  kind: 'food' | 'sauce' | 'topping'
+  sprite?: string
+  namePart?: string
+  stat: DinnerStatKey
+  values: Partial<Record<DinnerRarity, number>>
+  /** 베이스 가중치(10)에 더해지는 풀 선출 추가 가중치. */
+  weightBonus: number
 }
 
 const DINNER_STAT_LABELS: Record<DinnerStatKey, string> = {
@@ -52,13 +64,43 @@ const DINNER_STAT_LABELS: Record<DinnerStatKey, string> = {
   handMax: '손패 한도',
   scorePct: '불빛 획득량',
   damage: '공격력',
+  shopDiscount: '상점 할인',
+  startScore: '시작 불빛',
 }
+/** % 접미사를 붙이는 스탯 키 */
+const DINNER_STAT_PCT = new Set<DinnerStatKey>(['scorePct', 'shopDiscount'])
 
-/** 가중치: 커먼 10 / 레어 5 / 에픽 1 */
+/** 풀 선출 가중치: 커먼 10 / 레어 5 / 에픽 1 */
 const DINNER_RARITY_WEIGHTS: Record<DinnerRarity, number> = { common: 10, rare: 5, epic: 1 }
-/** 스탯 배율: 커먼 ×1 / 레어 ×2 / 에픽 ×3 */
-const DINNER_RARITY_MULT: Record<DinnerRarity, number> = { common: 1, rare: 2, epic: 3 }
 const DINNER_RARITY_LABEL: Record<DinnerRarity, string> = { common: '커먼', rare: '레어', epic: '에픽' }
+
+// ── 만찬 식재료 풀 (메인 / 소스 / 재료 각 6종) ──────────────────────────
+// 001 체계는 각 카테고리에서 가장 많이 뜨도록 weightBonus +5.
+// 005·006은 레어/에픽만 등장한다(values에 common 없음).
+const DINNER_MAINS: DinnerBaseItem[] = [
+  { title: '감자',   color: '#8b6a35', kind: 'food', sprite: spriteForDinner('main','001'), stat: 'maxHealth',    values: { common:1, rare:2, epic:3 }, weightBonus:5 },
+  { title: '호밀빵', color: '#6b4c2a', kind: 'food', sprite: spriteForDinner('main','002'), stat: 'scorePct',     values: { common:2, rare:4, epic:6 }, weightBonus:0 },
+  { title: '비스킷', color: '#c4a46a', kind: 'food', sprite: spriteForDinner('main','003'), stat: 'shopDiscount', values: { common:1, rare:2, epic:3 }, weightBonus:0 },
+  { title: '콩고기', color: '#5c4a3a', kind: 'food', sprite: spriteForDinner('main','004'), stat: 'startScore',   values: { common:100, rare:200, epic:300 }, weightBonus:0 },
+  { title: '옥수수', color: '#d4a832', kind: 'food', sprite: spriteForDinner('main','005'), stat: 'handMax',      values: { rare:1, epic:2 }, weightBonus:0 },
+  { title: '귀리죽', color: '#9e8a6a', kind: 'food', sprite: spriteForDinner('main','006'), stat: 'emberMax',     values: { rare:1, epic:2 }, weightBonus:0 },
+]
+const DINNER_SAUCES: DinnerBaseItem[] = [
+  { title: '소금 소스',   color: '#c0b8a0', kind: 'sauce', namePart: '소금',   sprite: spriteForDinner('sauce','001'), stat: 'maxHealth',    values: { common:1, rare:2, epic:3 }, weightBonus:5 },
+  { title: '거친 소스',   color: '#6b5840', kind: 'sauce', namePart: '거친',   sprite: spriteForDinner('sauce','002'), stat: 'scorePct',     values: { common:2, rare:4, epic:6 }, weightBonus:0 },
+  { title: '짭짤한 소스', color: '#9a7850', kind: 'sauce', namePart: '짭짤한', sprite: spriteForDinner('sauce','003'), stat: 'shopDiscount', values: { common:1, rare:2, epic:3 }, weightBonus:0 },
+  { title: '기름진 소스', color: '#b89040', kind: 'sauce', namePart: '기름진', sprite: spriteForDinner('sauce','004'), stat: 'startScore',   values: { common:100, rare:200, epic:300 }, weightBonus:0 },
+  { title: '후추 소스',   color: '#3a3030', kind: 'sauce', namePart: '후추',   sprite: spriteForDinner('sauce','005'), stat: 'handMax',      values: { rare:1, epic:2 }, weightBonus:0 },
+  { title: '묽은 소스',   color: '#7090a0', kind: 'sauce', namePart: '묽은',   sprite: spriteForDinner('sauce','006'), stat: 'emberMax',     values: { rare:1, epic:2 }, weightBonus:0 },
+]
+const DINNER_TOPPINGS: DinnerBaseItem[] = [
+  { title: '치즈',     color: '#e0c050', kind: 'topping', sprite: spriteForDinner('topping','001'), stat: 'maxHealth',    values: { common:1, rare:2, epic:3 }, weightBonus:5 },
+  { title: '건포도',   color: '#6a3840', kind: 'topping', sprite: spriteForDinner('topping','002'), stat: 'scorePct',     values: { common:2, rare:4, epic:6 }, weightBonus:0 },
+  { title: '콩',      color: '#6a8040', kind: 'topping', sprite: spriteForDinner('topping','003'), stat: 'shopDiscount', values: { common:1, rare:2, epic:3 }, weightBonus:0 },
+  { title: '양파',    color: '#d4c8a0', kind: 'topping', sprite: spriteForDinner('topping','004'), stat: 'startScore',   values: { common:100, rare:200, epic:300 }, weightBonus:0 },
+  { title: '허브',    color: '#5a7050', kind: 'topping', sprite: spriteForDinner('topping','005'), stat: 'handMax',      values: { rare:1, epic:2 }, weightBonus:0 },
+  { title: '마른 버섯', color: '#8a7060', kind: 'topping', sprite: spriteForDinner('topping','006'), stat: 'emberMax',     values: { rare:1, epic:2 }, weightBonus:0 },
+]
 
 /** 모험 셔터 안에서 고를 수 있는 동행 목록. 3~4번은 잠금 회색 빈 슬롯. */
 const HEARTH_CHARACTERS = [
@@ -467,13 +509,12 @@ export class HearthScene {
   }
 
   /** 선택된 카드에서 빛 구슬을 발사한다.
-   * 만찬 중엔 last-supper 유물이 아직 없으므로 최종 카드가 나타날 hearth-dinner-picked 위치를 목적지로 쓴다. */
+   * 인게임 relic-stack으로 날아가 "유물에 스탯이 쌓인다"는 시각적 피드백을 준다.
+   * relic-stack 미존재 시(로비 초기화 전) hearth-dinner-picked를 폴백으로 사용한다. */
   private shootDinnerOrbFromChoice(source: HTMLElement): void {
     const srcRect = source.getBoundingClientRect()
-    // hearth-dinner-picked(opacity:0이지만 위치는 확정됨)를 우선 목적지로 사용
-    const target = this.overlay?.querySelector<HTMLElement>('.hearth-dinner-picked')
-      ?? document.querySelector<HTMLElement>('.relic-mini-card[data-owned-relic="last-supper"]')
-      ?? document.querySelector<HTMLElement>('.relic-stack')
+    const target = document.querySelector<HTMLElement>('.relic-stack')
+      ?? this.overlay?.querySelector<HTMLElement>('.hearth-dinner-picked')
     const dstRect = target?.getBoundingClientRect()
     const orb = document.createElement('div')
     orb.className = 'hearth-dinner-orb'
@@ -513,13 +554,25 @@ export class HearthScene {
 
   /** 가중치 기반 만찬 등급 추첨. 커먼 10 / 레어 5 / 에픽 1. */
   private rollDinnerRarity(): DinnerRarity {
-    const total = (Object.values(DINNER_RARITY_WEIGHTS) as number[]).reduce((a, b) => a + b, 0)
+    const allowed: DinnerRarity[] = ['common', 'rare', 'epic']
+    const total = allowed.reduce((s, r) => s + DINNER_RARITY_WEIGHTS[r], 0)
     let r = Math.random() * total
-    for (const [rarity, weight] of Object.entries(DINNER_RARITY_WEIGHTS) as [DinnerRarity, number][]) {
-      r -= weight
+    for (const rarity of allowed) {
+      r -= DINNER_RARITY_WEIGHTS[rarity]
       if (r <= 0) return rarity
     }
     return 'common'
+  }
+
+  /** 허용 등급 목록 내에서 가중치 추첨한다. 005·006처럼 등급 제한 아이템에 사용. */
+  private rollDinnerRarityFrom(allowed: DinnerRarity[]): DinnerRarity {
+    const total = allowed.reduce((s, r) => s + DINNER_RARITY_WEIGHTS[r], 0)
+    let r = Math.random() * total
+    for (const rarity of allowed) {
+      r -= DINNER_RARITY_WEIGHTS[rarity]
+      if (r <= 0) return rarity
+    }
+    return allowed[allowed.length - 1]
   }
 
   /** stats 맵을 "불빛 획득량 +10%" 형태의 단일 문자열로 변환한다. */
@@ -527,69 +580,74 @@ export class HearthScene {
     return (Object.entries(stats) as [DinnerStatKey, number][])
       .map(([key, val]) => {
         const label = DINNER_STAT_LABELS[key]
-        return key === 'scorePct' ? `${label} +${val}%` : `${label} +${val}`
+        return DINNER_STAT_PCT.has(key) ? `${label} +${val}%` : `${label} +${val}`
       })
       .join(', ')
   }
 
-  /** 현재 단계에 맞는 만찬 선택지 풀. 각 카드마다 등급을 독립 추첨해 스탯에 배율을 적용한다. */
-  private getDinnerOptions(): DinnerChoice[] {
-    const withRarity = (
-      base: Omit<DinnerChoice, 'rarity' | 'stat'> & { stats: Partial<Record<DinnerStatKey, number>> },
-    ): DinnerChoice => {
-      const rarity = this.rollDinnerRarity()
-      const mult = DINNER_RARITY_MULT[rarity]
-      const scaledStats: Partial<Record<DinnerStatKey, number>> = {}
-      for (const [k, v] of Object.entries(base.stats) as [DinnerStatKey, number][]) {
-        scaledStats[k] = v * mult
+  /** 가중치 비례로 count장을 비복원 추출한다. */
+  private pickDinnerPool(items: DinnerBaseItem[], count: number): DinnerBaseItem[] {
+    const pool = [...items]
+    const selected: DinnerBaseItem[] = []
+    while (selected.length < count && pool.length > 0) {
+      const total = pool.reduce((s, item) => s + 10 + item.weightBonus, 0)
+      let r = Math.random() * total
+      for (let i = 0; i < pool.length; i++) {
+        r -= 10 + pool[i].weightBonus
+        if (r <= 0) { selected.push(pool.splice(i, 1)[0]); break }
       }
-      return { ...base, rarity, stats: scaledStats, stat: this.buildStatString(scaledStats) }
     }
-
-    if (this.dinnerStep === 1) return [
-      withRarity({ title: '감자', color: '#8b6a35', kind: 'food', sprite: spriteForDinner('main', '001'), stats: { maxHealth: 3 } }),
-      withRarity({ title: '치킨', color: '#8f3d2f', kind: 'food', sprite: spriteForDinner('main', '002'), stats: { damage: 1 } }),
-      withRarity({ title: '파스타', color: '#7b7240', kind: 'food', sprite: spriteForDinner('main', '003'), stats: { handMax: 1 } }),
-    ]
-    if (this.dinnerStep === 2) return [
-      withRarity({ title: '묽은 소스', color: '#6f4d39', kind: 'sauce', namePart: '묽은', sprite: spriteForDinner('sauce', '001'), stats: { emberMax: 1 } }),
-      withRarity({ title: '따뜻한 소스', color: '#7e2630', kind: 'sauce', namePart: '따뜻한', sprite: spriteForDinner('sauce', '002'), stats: { maxHealth: 3 } }),
-      withRarity({ title: '촛불 소스', color: '#9a6b2f', kind: 'sauce', namePart: '촛불', sprite: spriteForDinner('sauce', '003'), stats: { scorePct: 5 } }),
-    ]
-    return [
-      withRarity({ title: '양파', color: '#d6c8a2', kind: 'topping', sprite: spriteForDinner('topping', '001'), stats: { handMax: 2 } }),
-      withRarity({ title: '불씨 가니시', color: '#5f445f', kind: 'topping', sprite: spriteForDinner('topping', '002'), stats: { emberMax: 1 } }),
-      withRarity({ title: '허브', color: '#5f744a', kind: 'topping', sprite: spriteForDinner('topping', '003'), stats: { scorePct: 5 } }),
-    ]
+    return selected
   }
 
-  /** 선택지를 그린다: 전체 공유 헤더(팩·단계) + 3장 카드 행. */
+  /** 현재 단계에 맞는 만찬 선택지 3장을 가중치 추출 후 등급 추첨해 반환한다. */
+  private getDinnerOptions(): DinnerChoice[] {
+    const pool = this.dinnerStep === 1 ? DINNER_MAINS
+      : this.dinnerStep === 2 ? DINNER_SAUCES
+      : DINNER_TOPPINGS
+    return this.pickDinnerPool(pool, 3).map(item => {
+      const allowedRarities = Object.keys(item.values) as DinnerRarity[]
+      const rarity = allowedRarities.length === (Object.keys(DINNER_RARITY_WEIGHTS) as DinnerRarity[]).length
+        ? this.rollDinnerRarity()
+        : this.rollDinnerRarityFrom(allowedRarities)
+      const val = item.values[rarity] ?? 0
+      const stats: Partial<Record<DinnerStatKey, number>> = { [item.stat]: val }
+      return { title: item.title, color: item.color, kind: item.kind, rarity,
+        sprite: item.sprite, namePart: item.namePart, stats, stat: this.buildStatString(stats) }
+    })
+  }
+
+  /** 선택지를 그린다: 인게임 카드팩 피커와 같은 구조(상단 헤더 + 3장 그리드). */
   private renderDinnerChoices(): void {
     const choices = this.overlay?.querySelector<HTMLElement>('.hearth-dinner-choices')
     if (!choices) return
+    // pickDinnerChoice()가 inline pointer-events:none을 설정하므로 렌더 시 초기화.
+    choices.style.pointerEvents = ''
     const stepLabels: Record<number, string> = { 1: '메인', 2: '소스', 3: '재료' }
     const stepLabel = stepLabels[this.dinnerStep] ?? ''
-    const packLabel = '무료 간식'
     const cards = this.getDinnerOptions().map((option, index) => `
       <button class="hearth-dinner-choice" type="button"
         data-hearth-dinner-choice="${index}"
         data-rarity="${option.rarity}"
         style="--food-color:${option.color};${option.sprite ? `--dinner-art:url('${option.sprite}')` : ''}">
-        <span class="hearth-dinner-choice-rarity">${DINNER_RARITY_LABEL[option.rarity]}</span>
         <span class="hearth-dinner-choice-art" aria-hidden="true"></span>
         <footer class="hearth-dinner-choice-footer">
+          <span class="hearth-dinner-choice-rarity">${DINNER_RARITY_LABEL[option.rarity]}</span>
           <strong>${option.title}</strong>
           <small>${option.stat}</small>
         </footer>
       </button>`).join('')
     choices.innerHTML = `
-      <div class="hearth-dinner-choices-header">
-        <span class="hearth-dinner-choices-pack">${packLabel}</span>
-        <span class="hearth-dinner-choices-step">${stepLabel} ${this.dinnerStep}/3</span>
-      </div>
+      <header class="hearth-dinner-choices-header">
+        <h2 class="hearth-dinner-choices-pack">무료 간식</h2>
+        <p class="hearth-dinner-choices-step">${stepLabel} ${this.dinnerStep} / 3</p>
+      </header>
       <div class="hearth-dinner-choices-row">${cards}</div>`
     const row = choices.querySelector<HTMLElement>('.hearth-dinner-choices-row')
-    if (row) row.animate([{ opacity: 0, transform: 'translateY(-12px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 280, easing: 'ease-out' })
+    if (row) row.animate(
+      [{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'translateY(0)' }],
+      { duration: 300, easing: 'cubic-bezier(0.22,0.86,0.22,1)', delay: 60 },
+    )
   }
 
   /** 3번 선택이 끝나면 오버레이를 덮고 완성 유물 카드를 카드팩처럼 공개한다. */
@@ -604,18 +662,23 @@ export class HearthScene {
     const profile = this.buildDinnerRelicProfile()
     await this.handlers?.onDinnerRelicCreate?.(profile)
     await this.wait(40)
-    const firstChoice = this.dinnerChoices[0]
-    picked.innerHTML = `<div class="hearth-dinner-plate-card" style="--food-color:${firstChoice?.color ?? '#7e2630'}">
-      <span></span>
-      <strong>${profile.name}</strong>
-      <small>${profile.effect}</small>
+    // 완성 카드 일러스트는 메인(food) 스프라이트를 따른다
+    const food = this.dinnerChoices.find((c) => c.kind === 'food') ?? this.dinnerChoices[0]
+    const artStyle = food?.sprite ? `;--dinner-art:url('${food.sprite}')` : ''
+    picked.innerHTML = `<div class="hearth-dinner-plate-card" style="--food-color:${food?.color ?? '#7e2630'}${artStyle}">
+      <span class="hearth-dinner-plate-art" aria-hidden="true"></span>
+      <div class="hearth-dinner-plate-body">
+        <strong>${profile.name}</strong>
+        <small>${profile.effect.replace(/\n/g, ' · ')}</small>
+      </div>
     </div>`
     // 카드팩 공개: 하단에서 슈슈슉 등장
+    // 카드팩 공개: 아래에서 중앙으로 슈슈슉 등장
     picked.getAnimations().forEach((a) => a.cancel())
     picked.animate(
       [
-        { transform: 'translate(-50%, 90px)', opacity: 0 },
-        { transform: 'translate(-50%, 0)', opacity: 1 },
+        { transform: 'translate(-50%, calc(-50% + 60px))', opacity: 0 },
+        { transform: 'translate(-50%, -50%)', opacity: 1 },
       ],
       { duration: 520, easing: 'cubic-bezier(0.18,0.84,0.28,1)', fill: 'forwards' },
     )
@@ -624,12 +687,11 @@ export class HearthScene {
     await this.wait(1400)
     this.dinnerConsumed = this.hasDinnerRelicInInventory()
     root.classList.add('is-dinner-closing')
-    // WAAPI로 카드 페이드아웃 (CSS closing 전환 대신 직접 제어)
     picked.getAnimations().forEach((a) => a.cancel())
     picked.animate(
       [
-        { transform: 'translate(-50%, 0)', opacity: 1, filter: 'blur(0px)' },
-        { transform: 'translate(-50%, 0)', opacity: 0, filter: 'blur(6px)' },
+        { transform: 'translate(-50%, -50%)', opacity: 1, filter: 'blur(0px)' },
+        { transform: 'translate(-50%, -50%)', opacity: 0, filter: 'blur(6px)' },
       ],
       { duration: 360, easing: 'ease', fill: 'forwards' },
     )
@@ -649,9 +711,7 @@ export class HearthScene {
         stats[key] = (stats[key] ?? 0) + value
       }
     }
-    const effect = (Object.entries(stats) as Array<[DinnerStatKey, number]>)
-      .map(([key, value]) => `${DINNER_STAT_LABELS[key]} +${value}${key === 'scorePct' ? '%' : ''}`)
-      .join('\n')
+    const effect = this.buildStatString(stats as Partial<Record<DinnerStatKey, number>>)
     const prefix = [sauce?.namePart ?? sauce?.title, topping?.namePart ?? topping?.title].filter(Boolean).join(' ')
     return {
       name: `${prefix ? `${prefix} ` : ''}${food?.title ?? '만찬'}`,

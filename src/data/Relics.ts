@@ -56,7 +56,7 @@ export interface CustomRelicProfile {
   name: string
   effect: string
   flavor: string
-  stats: Partial<{ maxHealth: number; emberMax: number; handMax: number; scorePct: number; damage: number }>
+  stats: Partial<{ maxHealth: number; emberMax: number; handMax: number; scorePct: number; damage: number; shopDiscount: number; startScore: number }>
 }
 
 /** Immutable relic rules used by gameplay and presentation. */
