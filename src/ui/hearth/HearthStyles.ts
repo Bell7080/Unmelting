@@ -186,14 +186,14 @@ export const HEARTH_STYLES = `
   gap: 8px;
   padding-bottom: clamp(8px, 1.8vh, 18px);
   cursor: pointer;
-  border: 1px solid var(--color-flame-warm, #f4a460);
+  /* 모험 칸과 같이 어두운 테두리에서 시작해 is-ignited 시 밝아진다 */
+  border: 1px solid var(--color-border-warm, #8b6f47);
   background: #1c1424;
   color: rgba(255, 236, 188, 0.5);
   font-family: 'OkDanDan', Georgia, serif;
   isolation: isolate;
   box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.16),
-    inset 0 0 16px rgba(244, 164, 96, 0.04),
+    inset 0 1px 0 rgba(255, 232, 168, 0.08),
     inset 0 -10px 18px rgba(0, 0, 0, 0.46),
     0 4px 10px rgba(0, 0, 0, 0.54),
     0 12px 22px rgba(0, 0, 0, 0.44);
@@ -209,7 +209,7 @@ export const HEARTH_STYLES = `
 .hearth-cell--open.is-ignited {
   color: rgba(255, 244, 210, 0.98);
   opacity: 1;
-  /* 점등 완료 후에만 숨쉬기 글로우를 시작해 모험 칸과 동일하게 '어둠→점등'을 읽히게 한다. */
+  border-color: var(--color-flame, #ffd778);
   animation: hearth-open-ignite 0.72s cubic-bezier(0.2, 0.84, 0.3, 1) backwards, hearth-open-breathe 3.6s ease-in-out 0.72s infinite;
 }
 @keyframes hearth-open-ignite {
@@ -379,14 +379,17 @@ export const HEARTH_STYLES = `
 #hearth-overlay.is-shutter-rest .hearth-shutter::before { background: rgba(4, 2, 8, 0.12); backdrop-filter: blur(0.35px); }
 .hearth-back {
   position: absolute; left: clamp(10px, 1.6vw, 18px); bottom: clamp(10px, 1.6vh, 18px); z-index: 8;
-  padding: 9px 14px; border-radius: 999px; border: 1px solid rgba(255,222,140,0.42);
-  background: rgba(18,12,24,0.72); color: rgba(255,236,188,0.9);
-  font: 800 13px/1 'OkDanDan', Georgia, serif; letter-spacing: 0.08em;
+  display: flex; align-items: center; justify-content: center;
+  width: clamp(36px, 4.4vh, 50px); height: clamp(36px, 4.4vh, 50px);
+  border-radius: 50%; border: 1px solid rgba(255, 222, 140, 0.34);
+  background: rgba(11, 6, 18, 0.7); color: rgba(255, 232, 168, 0.9);
+  backdrop-filter: blur(4px);
   opacity: 0; transform: translateX(-10px); pointer-events: none;
-  transition: opacity 0.28s ease 0.78s, transform 0.28s ease 0.78s, border-color 0.18s ease;
+  transition: opacity 0.28s ease 0.78s, transform 0.28s ease 0.78s, border-color 0.18s ease, background 0.18s ease;
 }
+.hearth-back > svg { width: 52%; height: 52%; }
 #hearth-overlay.is-shutter-rest .hearth-back { opacity: 1; transform: translateX(0); pointer-events: auto; }
-.hearth-back:hover { border-color: var(--color-flame, #ffd778); }
+.hearth-back:hover { border-color: var(--color-flame, #ffd778); background: rgba(22, 12, 32, 0.9); }
 .hearth-character-stage { grid-column: 1 / 3; grid-row: 1 / 3; position: relative; overflow: hidden; pointer-events: none; }
 .hearth-adventure-backdrop { position: absolute; inset: 0; background: radial-gradient(circle at 66% 42%, rgba(255,215,120,0.1), transparent 34%); }
 .hearth-showcase-card {
@@ -419,10 +422,6 @@ export const HEARTH_STYLES = `
 #hearth-overlay.is-shutter-rest .hearth-depart { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
 .hearth-depart:hover { transform: translateY(-2px) scale(1.03); border-color: rgba(220,172,80,0.78); box-shadow: inset 0 1px 0 rgba(255,228,160,0.32), inset 0 -4px 8px rgba(0,0,0,0.55), 0 12px 26px rgba(0,0,0,0.68), 0 0 24px rgba(220,140,40,0.32); filter: brightness(1.08); }
 .hearth-depart.is-pressed { transform: scale(0.96); filter: brightness(1.1); }
-#hearth-overlay.is-character-confirming .hearth-character-strip, #hearth-overlay.is-character-confirming .hearth-depart { transform: translateY(110%); opacity: 0; pointer-events: none; }
-#hearth-overlay.is-character-confirming .hearth-showcase-card { filter: brightness(1.85) saturate(1.2); transform: scale(0.08); opacity: 0; transition: transform 0.34s cubic-bezier(0.28,0.78,0.34,1), opacity 0.34s ease, filter 0.34s ease; }
-#hearth-overlay.is-character-confirmed .hearth-character-stage, #hearth-overlay.is-character-confirmed .hearth-character-strip, #hearth-overlay.is-character-confirmed .hearth-back { display: none; }
-#hearth-overlay.is-character-confirmed .hearth-depart { grid-row: 2; margin-bottom: clamp(24px, 5vh, 44px); opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
 .hearth-character-orb { position: fixed; z-index: 260; width: 18px; height: 18px; border-radius: 50%; pointer-events: none; background: #fff3bd; box-shadow: 0 0 22px #ffd778, 0 0 56px rgba(244,164,96,0.72); }
 .hearth-character-orb.is-flying { animation: hearth-character-orb-flight 0.6s cubic-bezier(0.18,0.78,0.22,1) forwards; }
 @keyframes hearth-character-orb-flight { to { transform: translate(var(--orb-dx), var(--orb-dy)) scale(0.45); opacity: 0.82; } }
@@ -603,67 +602,339 @@ body.hearth-lobby #ingame-backdrop.is-out {
   line-height: 1.45;
   color: rgba(214, 200, 178, 0.86);
 }
-/* ── 모험 셔터: 캐릭터 선택 → 출발 단계 ───────────────────────────────
-   직업 선택의 카드 넘김 감각을 로비 셔터 하단에 맞춘 얇은 프로필 카드 UI. */
-.hearth-back {
-  grid-column: 1; grid-row: 3; align-self: end; justify-self: start;
-  margin: 0 0 clamp(10px, 1.6vh, 18px) clamp(10px, 1.6vw, 18px);
-  padding: 9px 14px; border-radius: 999px;
-  border: 1px solid rgba(255, 222, 140, 0.42);
-  background: rgba(18, 12, 24, 0.72); color: rgba(255, 236, 188, 0.9);
-  font: 800 13px/1 'OkDanDan', Georgia, serif; letter-spacing: 0.08em;
-  opacity: 0; transform: translateX(-10px); pointer-events: none;
-  transition: opacity 0.28s ease, transform 0.28s ease, border-color 0.18s ease;
-}
-#hearth-overlay.is-shutter-rest .hearth-back { opacity: 1; transform: translateX(0); pointer-events: auto; }
-.hearth-back:hover { border-color: var(--color-flame, #ffd778); }
+/* ── 모험 셔터: 캐릭터 선택 coverflow ────────────────────────────────
+   직업 선택(JobSelectStyles)과 동일한 coverflow 문법을 로비 셔터 하단에 적용.
+   세로 포트레이트 카드 + 좌우 화살표 + 드래그 순환. */
+
+/* character stage override — 애니메이션 진입 */
 .hearth-character-stage {
   grid-column: 1 / 4; grid-row: 1 / 4; position: relative; overflow: hidden;
   opacity: 0; transform: translateY(14px); pointer-events: none;
   transition: opacity 0.38s ease, transform 0.38s cubic-bezier(0.2, 0.8, 0.3, 1), filter 0.34s ease;
 }
 #hearth-overlay.is-shutter-rest .hearth-character-stage { opacity: 1; transform: translateY(0); }
-.hearth-character-bg {
-  position: absolute; inset: -4% -2% 20%;
-  background:
-    linear-gradient(180deg, rgba(0,0,0,0.08), rgba(0,0,0,0.72)),
-    radial-gradient(circle at 50% 42%, rgba(255, 215, 120, 0.18), transparent 38%),
-    var(--character-art, none);
-  background-size: cover; background-position: center 20%;
-  filter: saturate(0.9) brightness(0.72); opacity: 0.72;
-  transition: background-image 0.24s ease, filter 0.24s ease, opacity 0.24s ease;
+
+/* copy text override — 위치 정밀 조정 */
+.hearth-character-copy {
+  position: absolute; left: 7%; right: 7%; top: 10%;
+  color: #ffe7a8; text-shadow: 0 2px 14px rgba(0,0,0,0.9); font-family: 'OkDanDan', Georgia, serif;
 }
-.hearth-character-copy { position: absolute; left: 7%; right: 7%; top: 10%; color: #ffe7a8; text-shadow: 0 2px 14px rgba(0,0,0,0.9); font-family: 'OkDanDan', Georgia, serif; }
 .hearth-character-kicker { display: block; color: rgba(248, 206, 120, 0.88); font-size: clamp(13px, 1.8vh, 17px); letter-spacing: 0.18em; margin-bottom: 8px; }
 .hearth-character-copy strong { display: block; font-size: clamp(32px, 6vh, 64px); letter-spacing: 0.08em; }
 .hearth-character-copy small { display: block; max-width: 28em; margin-top: 8px; color: rgba(225, 210, 188, 0.86); font-size: clamp(13px, 1.8vh, 18px); line-height: 1.45; }
+
+/* depart button — 모험 모드에서는 확정 전까지 숨김; is-character-confirmed가 중앙에 표시 */
+.hearth-depart { margin-bottom: clamp(152px, 24vh, 200px); }
+#hearth-overlay.is-adventure-mode:not(.is-character-confirmed) .hearth-depart {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(10px) scale(0.94) !important;
+  transition: none !important;
+}
+
+/* ── 캐릭터 캐러셀 컨테이너 ────────────────────────────────────────── */
+.hearth-character-carousel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: clamp(136px, 21vh, 172px);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translateY(18px);
+  pointer-events: none;
+  transition: opacity 0.32s ease 1.02s, transform 0.32s cubic-bezier(0.2, 0.8, 0.3, 1) 1.02s;
+}
+#hearth-overlay.is-shutter-rest .hearth-character-carousel {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* ── 캐러셀 스트립: coverflow 뷰포트 ──────────────────────────────── */
 .hearth-character-strip {
-  grid-column: 1 / 4; grid-row: 3; align-self: end; justify-self: center;
-  display: flex; gap: clamp(6px, 1vw, 12px); max-width: 92%; padding-bottom: clamp(8px, 1.4vh, 16px);
-  opacity: 0; transform: translateY(16px); pointer-events: none;
-  transition: opacity 0.32s ease, transform 0.32s cubic-bezier(0.2, 0.8, 0.3, 1);
+  position: relative;
+  width: 100%;
+  height: 100%;
+  perspective: 1600px;
+  touch-action: pan-y;
+  cursor: grab;
+  overflow: visible;
 }
-#hearth-overlay.is-shutter-rest .hearth-character-strip { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.hearth-character-strip:active { cursor: grabbing; }
+
+/* ── 가로 얇은 띠 캐릭터 카드 ──────────────────────────────────────
+   height:width = 1:3 비율(매우 얇은 가로 직사각형) — 일러스트 중앙 포커싱.
+   transform/opacity/filter/z-index는 JS가 인라인으로 제어한다. */
 .hearth-character-card {
-  width: clamp(82px, 10vw, 132px); height: clamp(38px, 6.2vh, 58px);
-  display: grid; grid-template-columns: 34% 1fr; grid-template-rows: 1fr 1fr; column-gap: 8px; align-items: center;
-  border-radius: 10px; border: 1px solid rgba(139,111,71,0.64);
-  background: linear-gradient(180deg, rgba(42, 28, 42, 0.92), rgba(18, 12, 24, 0.96));
-  color: rgba(235, 218, 190, 0.82); cursor: pointer; font-family: 'OkDanDan', Georgia, serif;
-  box-shadow: inset 0 1px 0 rgba(255,232,168,0.12), 0 8px 18px rgba(0,0,0,0.42);
-  transition: transform 0.2s cubic-bezier(0.34,1.56,0.5,1), border-color 0.18s ease, box-shadow 0.18s ease;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  height: min(70%, 104px);
+  aspect-ratio: 3 / 1;
+  cursor: pointer;
+  padding: 0;
+  border: 1px solid rgba(255, 215, 120, 0.24);
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(22, 14, 34, 0.98) 0%, rgba(7, 4, 12, 0.99) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.1),
+    0 14px 36px rgba(0, 0, 0, 0.68),
+    0 4px 12px rgba(0, 0, 0, 0.5);
+  transform-style: preserve-3d;
+  transition:
+    transform 0.42s cubic-bezier(0.2, 0.84, 0.3, 1),
+    opacity 0.42s ease,
+    filter 0.42s ease,
+    box-shadow 0.28s ease,
+    border-color 0.28s ease;
+  will-change: transform, opacity, filter;
+  display: block;
+  text-align: left;
 }
-.hearth-character-card:hover, .hearth-character-card.is-selected { transform: translateY(-7px); border-color: var(--color-flame, #ffd778); box-shadow: inset 0 1px 0 rgba(255,232,168,0.24), 0 12px 24px rgba(0,0,0,0.5), 0 0 24px rgba(244,164,96,0.36); }
-.hearth-character-thumb { grid-row: 1 / 3; width: 100%; height: 100%; border-radius: 8px 0 0 8px; background-image: var(--character-art, none); background-size: cover; background-position: center; opacity: 0.86; }
-.hearth-character-name { align-self: end; font-size: clamp(12px, 1.7vh, 16px); font-weight: 900; color: #ffe7a8; }
-.hearth-character-role { align-self: start; font-size: clamp(10px, 1.35vh, 12px); color: rgba(214,200,178,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#hearth-overlay.is-character-confirming .hearth-character-strip,
-#hearth-overlay.is-character-confirming .hearth-depart { transform: translateY(110%); opacity: 0; pointer-events: none; }
-#hearth-overlay.is-character-confirming .hearth-character-stage { filter: brightness(1.85) saturate(1.2); transform: scale(0.08); opacity: 0; transition: transform 0.34s cubic-bezier(0.28, 0.78, 0.34, 1), opacity 0.34s ease, filter 0.34s ease; }
+/* 드래그 중엔 easing 없이 즉시 추적 */
+.hearth-character-strip:active .hearth-character-card { transition: none; }
+
+/* 가운데(is-selected) 카드 — 숨쉬는 발광 */
+.hearth-character-card.is-selected {
+  border-color: rgba(255, 222, 140, 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.22),
+    0 14px 36px rgba(0, 0, 0, 0.68),
+    0 0 0 1px rgba(220, 170, 70, 0.28),
+    0 0 32px rgba(244, 164, 96, 0.22);
+  animation: hearth-card-breathe 2.6s ease-in-out infinite;
+}
+@keyframes hearth-card-breathe {
+  0%, 100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 232, 168, 0.18),
+      0 14px 36px rgba(0, 0, 0, 0.68),
+      0 0 0 1px rgba(220, 170, 70, 0.24),
+      0 0 28px rgba(244, 164, 96, 0.2);
+    border-color: rgba(255, 222, 140, 0.56);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 232, 168, 0.38),
+      0 18px 44px rgba(0, 0, 0, 0.74),
+      0 0 0 1px rgba(220, 170, 70, 0.56),
+      0 0 60px rgba(244, 164, 96, 0.52),
+      0 0 90px rgba(255, 200, 100, 0.22);
+    border-color: rgba(255, 222, 140, 0.96);
+  }
+}
+/* 드래그·거부·확정 상태에서는 발광 애니메이션 정지 */
+.hearth-character-strip:active .hearth-character-card.is-selected,
+.hearth-character-card.is-selected.is-denied,
+#hearth-overlay.is-character-confirming .hearth-character-card.is-selected,
+#hearth-overlay.is-character-confirmed .hearth-character-card.is-selected { animation: none; }
+
+.hearth-character-card.is-selected:hover:not(.is-locked) {
+  border-color: rgba(255, 222, 140, 0.92);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 168, 0.3),
+    0 20px 52px rgba(0, 0, 0, 0.82),
+    0 0 0 1px rgba(220, 170, 70, 0.48),
+    0 0 62px rgba(244, 164, 96, 0.38);
+}
+.hearth-character-card.is-locked { cursor: not-allowed; }
+.hearth-character-card.is-denied { animation: hearth-char-deny 0.42s ease; }
+@keyframes hearth-char-deny {
+  0%, 100% { margin-left: 0; }
+  22% { margin-left: -8px; }
+  55% { margin-left: 7px; }
+  82% { margin-left: -4px; }
+}
+
+/* ── 일러스트 ──────────────────────────────────────────────────────── */
+.hearth-character-art {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 30%;
+  background-repeat: no-repeat;
+}
+.hearth-character-art.is-empty {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 232, 168, 0.07), transparent 62%),
+    repeating-linear-gradient(135deg, rgba(255,255,255,0.016) 0 2px, transparent 2px 9px),
+    linear-gradient(180deg, rgba(30, 20, 42, 0.94), rgba(9, 6, 15, 0.97));
+}
+
+/* 광택 스윕 — 선택된 카드 hover 시만 */
+.hearth-character-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 36%, rgba(255, 240, 200, 0.15) 50%, transparent 64%);
+  transform: translateX(-120%);
+  transition: transform 0.62s ease;
+}
+.hearth-character-card.is-selected:hover:not(.is-locked) .hearth-character-sheen {
+  transform: translateX(120%);
+}
+
+/* ── 잠금 오버레이 ──────────────────────────────────────────────────── */
+.hearth-character-lock {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  z-index: 4;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.66);
+  color: rgba(220, 206, 184, 0.66);
+}
+.hearth-char-lock-icon {
+  width: clamp(22px, 3.4vh, 36px);
+  height: clamp(22px, 3.4vh, 36px);
+  filter: drop-shadow(0 3px 8px rgba(0,0,0,0.72));
+}
+.hearth-character-lock span {
+  display: none;
+}
+
+/* ── 하단 스크림 + 텍스트 ───────────────────────────────────────────── */
+/* 얇은 가로 카드(3:1)에서는 일러스트만 노출 — 텍스트 영역 전체 숨김 */
+.hearth-character-scrim {
+  display: none;
+}
+.hearth-character-name {
+  font-family: 'OkDanDan', Georgia, serif;
+  font-size: clamp(12px, 1.8vh, 20px);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  line-height: 1.12;
+  color: rgba(255, 238, 196, 0.98);
+  text-shadow: 0 2px 7px rgba(0,0,0,0.95), 0 0 14px rgba(244,164,96,0.16);
+}
+.hearth-character-divider {
+  width: clamp(20px, 2vw, 36px);
+  height: 1.5px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(255, 215, 120, 0.7), rgba(255, 215, 120, 0.04));
+  margin: clamp(1px, 0.3vh, 3px) 0;
+}
+/* role + tagline 한 줄 — job-card__traits 톤 */
+.hearth-character-meta {
+  display: flex;
+  gap: clamp(4px, 0.6vw, 8px);
+  align-items: baseline;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.hearth-character-role {
+  font-family: 'OkDanDan', Georgia, serif;
+  font-size: clamp(9px, 1.15vh, 12px);
+  color: rgba(206, 188, 160, 0.82);
+  line-height: 1.4;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* job-card__flavor 톤 — role 뒤 중점 구분 후 설명 */
+.hearth-character-tagline {
+  font-family: 'OkDanDan', Georgia, serif;
+  font-size: clamp(8px, 1.05vh, 10px);
+  color: rgba(244, 200, 120, 0.54);
+  letter-spacing: 0.05em;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hearth-character-tagline::before {
+  content: '· ';
+  color: rgba(255, 215, 120, 0.32);
+}
+/* showcase 우측 대형 카드 — 이름 아래 부제 */
+.hearth-character-copy-tagline {
+  display: block;
+  font-style: normal;
+  font-family: 'OkDanDan', Georgia, serif;
+  font-size: clamp(13px, 1.8vh, 18px);
+  color: rgba(248, 206, 120, 0.72);
+  letter-spacing: 0.1em;
+  margin-top: 4px;
+}
+
+/* ── 화살표 버튼 — 캐릭터 카드 바로 좌우에 붙는 작은 원형 버튼 ─────── */
+.hearth-char-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 215, 120, 0.22);
+  background: rgba(9, 5, 16, 0.72);
+  color: rgba(255, 232, 168, 0.84);
+  cursor: pointer;
+  opacity: 0.28;
+  transition: opacity 0.22s ease, background 0.18s ease, border-color 0.18s ease, transform 0.16s ease;
+  backdrop-filter: blur(2px);
+}
+/* 카드 중심(50%)에서 카드 반폭(~90px) 만큼 안쪽에 배치 */
+.hearth-char-nav--left  { left: calc(50% - clamp(100px, 13vw, 138px)); }
+.hearth-char-nav--right { right: calc(50% - clamp(100px, 13vw, 138px)); }
+.hearth-char-nav > svg { width: 55%; height: 55%; }
+.hearth-character-carousel:hover .hearth-char-nav { opacity: 0.48; }
+.hearth-char-nav:hover {
+  opacity: 1 !important;
+  background: rgba(22, 12, 30, 0.9);
+  border-color: rgba(255, 222, 140, 0.6);
+  transform: translateY(-50%) scale(1.12);
+}
+/* 캐릭터 선택 화살표는 모험 셔터에서만 표시 */
+#hearth-overlay:not(.is-adventure-mode) .hearth-char-nav { display: none; }
+
+/* ── 확정/확인 상태 ──────────────────────────────────────────────────── */
+
+/* 캐러셀: 아래로 퇴장 — 진입 딜레이(1.02s)를 0으로 덮어 즉시 슬라이드아웃 */
+#hearth-overlay.is-character-confirming .hearth-character-carousel {
+  transform: translateY(110%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.24s ease 0s, transform 0.32s cubic-bezier(0.3, 0.8, 0.4, 1) 0s;
+}
+/* 카피 텍스트: 위로 역퇴장 (아래서 들어왔으므로 반대 방향) */
+#hearth-overlay.is-character-confirming .hearth-character-copy {
+  transform: translateY(-14px);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.26s ease 0s, opacity 0.22s ease 0s;
+}
+/* 쇼케이스 카드: JS WAAPI가 직접 제어 — CSS transition 해제 후 z-index 올림 */
+#hearth-overlay.is-character-confirming .hearth-showcase-card {
+  transition: none !important;
+  z-index: 12;
+}
+/* 확정 후: stage/carousel 숨기고 뒤로가기(back)는 유지해 재선택 진입 허용 */
 #hearth-overlay.is-character-confirmed .hearth-character-stage,
-#hearth-overlay.is-character-confirmed .hearth-character-strip,
-#hearth-overlay.is-character-confirmed .hearth-back { display: none; }
-#hearth-overlay.is-character-confirmed .hearth-depart { grid-row: 3; opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+#hearth-overlay.is-character-confirmed .hearth-character-carousel { display: none; }
+#hearth-overlay.is-character-confirmed .hearth-depart {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin: 0;
+  opacity: 1;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  /* 확정 후 재등장은 딜레이 없이 바로 */
+  transition: opacity 0.36s ease 0s, transform 0.36s cubic-bezier(0.2, 0.84, 0.3, 1) 0s, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+/* ── orb / 설치 애니메이션 ──────────────────────────────────────────── */
 .hearth-character-orb { position: fixed; z-index: 260; width: 18px; height: 18px; border-radius: 50%; pointer-events: none; background: #fff3bd; box-shadow: 0 0 22px #ffd778, 0 0 56px rgba(244,164,96,0.72); }
 .hearth-character-orb.is-flying { animation: hearth-character-orb-flight 0.6s cubic-bezier(0.18,0.78,0.22,1) forwards; }
 @keyframes hearth-character-orb-flight { to { transform: translate(var(--orb-dx), var(--orb-dy)) scale(0.45); opacity: 0.82; } }
@@ -794,25 +1065,55 @@ body.hearth-lobby #ingame-backdrop.is-out {
 @keyframes hearth-trade-label-in { to { transform: translateX(0); opacity: 1; } }
 .hearth-trade-pack-area {
   min-height: 0;
-  overflow-x: auto;
-  overflow-y: visible;
   height: 100%;
   display: flex;
   align-items: center;
-  padding: clamp(24px, 5vh, 72px) clamp(10px, 1.4vw, 18px) clamp(46px, 8vh, 92px);
-  scrollbar-width: thin;
-  scrollbar-color: rgba(244, 164, 96, 0.72) transparent;
+  gap: clamp(8px, 1vw, 14px);
+  padding: clamp(24px, 5vh, 72px) clamp(8px, 1vw, 12px) clamp(46px, 8vh, 92px);
 }
-.hearth-trade-pack-area::-webkit-scrollbar { height: 8px; }
-.hearth-trade-pack-area::-webkit-scrollbar-track { background: transparent; }
-.hearth-trade-pack-area::-webkit-scrollbar-thumb { background: linear-gradient(180deg, rgba(255, 215, 120, 0.5), rgba(150, 86, 38, 0.62)); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+/* 팩 목록은 뷰포트 안에서 스크롤, 스크롤바는 숨김 */
+.hearth-trade-pack-viewport {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-width: none;
+  display: flex;
+  align-items: center;
+}
+.hearth-trade-pack-viewport::-webkit-scrollbar { display: none; }
 .hearth-trade-pack-grid {
   display: flex;
   flex-wrap: nowrap;
   gap: clamp(16px, 2.4vw, 30px);
   align-items: center;
   min-width: max-content;
-  padding: clamp(18px, 3vh, 30px) clamp(18px, 3vw, 46px) clamp(28px, 5vh, 50px) 2px;
+  padding: clamp(18px, 3vh, 30px) clamp(10px, 1.5vw, 20px) clamp(28px, 5vh, 50px);
+}
+/* 무역 팩 영역 전용 화살표 — 팩 뷰포트 양옆에 고정 */
+.hearth-trade-nav {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(36px, 4vh, 50px);
+  height: clamp(36px, 4vh, 50px);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 215, 120, 0.3);
+  background: rgba(9, 5, 16, 0.72);
+  color: rgba(255, 232, 168, 0.9);
+  cursor: pointer;
+  opacity: 0.64;
+  transition: opacity 0.22s ease, background 0.2s ease, border-color 0.2s ease, transform 0.18s ease;
+  backdrop-filter: blur(3px);
+}
+.hearth-trade-nav > svg { width: 52%; height: 52%; }
+.hearth-trade-nav:hover {
+  opacity: 1;
+  background: rgba(22, 12, 32, 0.9);
+  border-color: rgba(255, 222, 140, 0.72);
+  transform: scale(1.1);
 }
 .hearth-trade-pack {
   flex: 0 0 clamp(142px, 17vw, 210px);
@@ -877,55 +1178,344 @@ body.hearth-lobby #ingame-backdrop.is-out {
 #hearth-overlay.is-dinner-mode .hearth-depart,
 #hearth-overlay.is-dinner-mode .hearth-trade-stage { display: none; }
 #hearth-overlay:not(.is-dinner-mode) .hearth-dinner-stage { display: none; }
-.hearth-dinner-stage { grid-column: 1 / 4; grid-row: 1 / 4; position: relative; overflow: hidden; z-index: 6; opacity: 0; pointer-events: none; }
+/* 셸(overflow:hidden)이 외부 클립을 담당하므로 stage는 visible — 하단 그림자 컷 방지 */
+.hearth-dinner-stage { grid-column: 1 / 4; grid-row: 1 / 4; position: relative; overflow: visible; z-index: 6; opacity: 0; pointer-events: none; }
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-stage { opacity: 1; pointer-events: auto; transition: opacity 0.28s ease; }
 .hearth-dinner-bg { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,2,7,0.18), rgba(2,1,4,0.28)), var(--hearth-dinner-bg, none), radial-gradient(circle at 50% 42%, rgba(150,28,34,0.12), transparent 56%); background-size: cover; background-position: center; opacity: 0; filter: saturate(0.96) brightness(0.82); transition: opacity 0.52s ease 0.18s, filter 0.52s ease 0.18s; }
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-bg { opacity: 1; filter: saturate(0.98) brightness(0.84); }
-#hearth-overlay.is-dinner-opened .hearth-dinner-bg { filter: saturate(0.94) brightness(0.74) blur(0.35px); }
+#hearth-overlay.is-dinner-opened .hearth-dinner-bg { filter: saturate(0.88) brightness(0.62) blur(0.5px); transition: filter 0.44s ease 0.1s; }
 #hearth-overlay.is-dinner-after .hearth-dinner-bg { filter: saturate(0.92) brightness(0.72); }
 .hearth-dinner-curtain { display: none; position: absolute; top: 0; bottom: 0; width: 54%; z-index: 3; background: repeating-linear-gradient(90deg, rgba(70,8,18,0.98) 0 18px, rgba(24,2,10,0.98) 18px 34px), linear-gradient(180deg, #2a0610, #070207); box-shadow: inset 0 0 34px rgba(0,0,0,0.72), 0 0 28px rgba(0,0,0,0.56); transition: transform 0.92s cubic-bezier(0.2,0.84,0.3,1) 0.08s; }
 .hearth-dinner-curtain--left { left: 0; }
 .hearth-dinner-curtain--right { right: 0; }
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-curtain--left { transform: translateX(-96%); }
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-curtain--right { transform: translateX(96%); }
-.hearth-dinner-rail { position: absolute; left: 6%; right: 6%; top: 50%; display: flex; justify-content: center; gap: clamp(12px, 2vw, 24px); overflow-x: auto; padding: 14px 10px 22px; z-index: 4; opacity: 0; transform: translateY(-50%) translateY(26px); scrollbar-width: thin; scrollbar-color: rgba(244,164,96,0.64) rgba(20,8,14,0.4); transition: opacity 0.38s ease 0.98s, transform 0.38s cubic-bezier(0.2,0.84,0.3,1) 0.98s, filter 0.3s ease, brightness 0.3s ease; }
+/* 4팩을 1:1:1:1 그리드로 균등 배치, overflow visible로 그림자 컷 방지 */
+.hearth-dinner-rail {
+  position: absolute; left: 4%; right: 4%; top: 50%;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: clamp(10px,1.6vw,20px);
+  overflow: visible;
+  padding: 20px 6px 32px; z-index: 4; opacity: 0;
+  transform: translateY(-50%) translateY(26px);
+  transition: opacity 0.38s ease 0.98s, transform 0.38s cubic-bezier(0.2,0.84,0.3,1) 0.98s, filter 0.3s ease;
+}
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-rail { opacity: 1; transform: translateY(-50%); }
-#hearth-overlay.is-dinner-opened .hearth-dinner-rail { filter: blur(5px) brightness(0.22); opacity: 0.3; pointer-events: none; }
+/* WAAPI가 팩 카드를 역순으로 퇴장시킨 뒤 레일 자체도 숨긴다 */
+#hearth-overlay.is-dinner-opened .hearth-dinner-rail { opacity: 0; pointer-events: none; transition: opacity 0.18s ease; }
 #hearth-overlay.is-dinner-finalizing .hearth-dinner-rail { opacity: 0; transform: translateY(-50%) scale(0.94); transition: opacity 0.34s ease, transform 0.34s ease; }
-.hearth-dinner-pack { flex: 0 0 clamp(132px, 18vw, 190px); min-height: clamp(170px, 29vh, 250px); border-radius: 16px; border: 1px solid rgba(215,166,88,0.46); background: linear-gradient(180deg, rgba(42,24,34,0.88), rgba(14,8,16,0.96)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; padding: 12px; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,232,168,0.16), 0 18px 34px rgba(0,0,0,0.52); }
-.hearth-dinner-pack.is-locked { opacity: 0.46; cursor: default; }
-.hearth-dinner-pack-art { flex: 1; border-radius: 12px; border: 1px dashed rgba(255,222,140,0.22); background: radial-gradient(circle at 50% 38%, rgba(255,232,168,0.14), transparent 54%), linear-gradient(150deg, rgba(110,30,42,0.5), rgba(24,12,26,0.94)); }
-.hearth-dinner-pack strong { font-size: clamp(18px, 2.4vh, 24px); letter-spacing: 0.1em; }
-.hearth-dinner-pack small { color: rgba(220,204,178,0.72); font-size: clamp(12px, 1.65vh, 15px); }
-.hearth-dinner-choices { position: absolute; left: 8%; right: 8%; top: 10%; z-index: 5; display: flex; justify-content: center; gap: clamp(12px, 2.2vw, 28px); pointer-events: none; }
+/* 팩 오픈/최종 공개 공용 오버레이 — z5(선택지 z6 아래)로 레일만 덮는다 */
+.hearth-dinner-resolve-overlay {
+  position: absolute; inset: 0; z-index: 5;
+  /* 비네팅: 중앙은 지금 수준, 사이드로 갈수록 짙게 */
+  background: radial-gradient(ellipse 72% 68% at 50% 50%,
+    rgba(4,2,8,0.38) 0%,
+    rgba(4,2,8,0.72) 58%,
+    rgba(4,2,8,0.96) 100%);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.44s ease;
+}
+/* finalizing·after 전환 시에는 균일한 완전 암전으로 덮는다 */
+#hearth-overlay.is-dinner-finalizing .hearth-dinner-resolve-overlay,
+#hearth-overlay.is-dinner-closing .hearth-dinner-resolve-overlay {
+  background: rgba(4,2,8,0.98);
+}
+/* ① 팩 퇴장 직후 중간 단계: 배경 노출 후 오버레이만 서서히 어둡게 (선택지 아직 숨김) */
+#hearth-overlay.is-dinner-dimming .hearth-dinner-rail { opacity: 0; pointer-events: none; }
+#hearth-overlay.is-dinner-dimming .hearth-dinner-resolve-overlay { opacity: 0.72; transition: opacity 0.46s ease; }
+/* ② dimming 완료 후 is-dinner-opened로 교체 → 선택지 등장 */
+#hearth-overlay.is-dinner-opened .hearth-dinner-resolve-overlay { opacity: 0.72; transition: opacity 0.22s ease; }
+#hearth-overlay.is-dinner-finalizing .hearth-dinner-resolve-overlay { opacity: 1; }
+/* 만찬 팩 카드: 컨테이너는 투명, 이름·가격은 텍스트만 부유, 일러스트가 시각 중심 */
+.hearth-dinner-pack {
+  flex: 0 0 clamp(118px, 16vw, 168px);
+  border-radius: 18px;
+  border: none;
+  background: transparent;
+  color: #ffe7a8;
+  font-family: 'OkDanDan', Georgia, serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: clamp(9px,1.4vh,13px) clamp(8px,1.1vw,11px);
+  cursor: pointer;
+  transition: transform 0.22s cubic-bezier(0.34,1.56,0.5,1);
+}
+.hearth-dinner-pack:not(.is-locked):hover {
+  transform: translateY(-9px) scale(1.05);
+}
+.hearth-dinner-pack.is-locked { opacity: 0.42; cursor: default; filter: saturate(0.7); }
+.hearth-dinner-pack-name {
+  font-size: clamp(11px,1.5vh,15px);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-align: center;
+  color: rgba(255,236,188,0.96);
+  margin-bottom: clamp(6px,0.9vh,10px);
+  text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+}
+.hearth-dinner-pack-art {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  border: 1px dashed rgba(255,222,140,0.24);
+  background:
+    var(--pack-art, none) center / cover no-repeat,
+    radial-gradient(circle at 44% 36%, rgba(255,232,168,0.18), transparent 52%),
+    repeating-linear-gradient(135deg, rgba(255,255,255,0.022) 0 2px, transparent 2px 10px),
+    linear-gradient(148deg, rgba(110,30,42,0.56), rgba(22,10,26,0.97));
+  flex-shrink: 0;
+  box-shadow: 0 14px 36px rgba(0,0,0,0.72), 0 0 22px rgba(244,164,96,0.1);
+}
+.hearth-dinner-pack-price {
+  font-size: clamp(14px,1.9vh,20px);
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-align: center;
+  margin-top: clamp(6px,0.9vh,10px);
+  color: rgba(255,215,120,0.92);
+  text-shadow: 0 0 16px rgba(244,164,96,0.42);
+}
+/* ── 만찬 선택지 — 인게임 카드팩 피커 스타일 ───────────────────────── */
+/* 전체 오버레이 채움, 셸이 flex-column으로 카드를 세로 중앙에 배치 */
+.hearth-dinner-choices {
+  position: absolute; inset: 0;
+  z-index: 6; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: clamp(10px, 1.6vh, 18px);
+  padding: clamp(56px,8vh,80px) clamp(10px,1.4vw,18px) clamp(10px,1.4vh,14px);
+  pointer-events: none;
+}
 #hearth-overlay.is-dinner-opened .hearth-dinner-choices { pointer-events: auto; }
-.hearth-dinner-choice { width: clamp(126px, 17vw, 190px); min-height: clamp(178px, 32vh, 270px); border-radius: 16px; border: 1px solid rgba(215,166,88,0.58); background: linear-gradient(180deg, rgba(44,28,38,0.96), rgba(13,8,16,0.98)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; padding: 12px; display: flex; flex-direction: column; justify-content: flex-end; gap: 7px; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,232,168,0.2), 0 20px 40px rgba(0,0,0,0.62); transition: transform 0.2s cubic-bezier(0.34,1.56,0.5,1), box-shadow 0.18s ease; }
-.hearth-dinner-choice:hover { transform: translateY(-8px) scale(1.04); box-shadow: inset 0 1px 0 rgba(255,232,168,0.26), 0 26px 48px rgba(0,0,0,0.68), 0 0 28px rgba(244,164,96,0.34); }
-.hearth-dinner-choice-art { flex: 1; border-radius: 12px; background: radial-gradient(circle at 52% 38%, rgba(255,236,188,0.24), transparent 34%), linear-gradient(145deg, var(--food-color, #7e2630), rgba(20,10,22,0.94)); border: 1px solid rgba(255,222,140,0.18); }
-.hearth-dinner-choice strong { font-size: clamp(18px,2.4vh,24px); letter-spacing: 0.08em; }
-.hearth-dinner-choice small { color: rgba(255,226,178,0.78); font-size: clamp(12px,1.7vh,15px); }
-.hearth-dinner-picked { position: absolute; left: 50%; bottom: 8%; z-index: 6; transform: translateX(-50%); width: clamp(136px, 18vw, 200px); min-height: clamp(130px, 22vh, 184px); pointer-events: none; }
-.hearth-dinner-plate-card { width: 100%; height: 100%; border-radius: 15px; border: 1px solid rgba(255,215,120,0.58); background: linear-gradient(180deg, rgba(44,28,38,0.94), rgba(14,8,16,0.98)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; box-shadow: inset 0 1px 0 rgba(255,232,168,0.2), 0 16px 34px rgba(0,0,0,0.62), 0 0 22px rgba(244,164,96,0.24); }
-.hearth-dinner-plate-card span { flex: 1; min-height: 74px; border-radius: 11px; background: radial-gradient(circle at 50% 44%, rgba(255,236,188,0.24), transparent 38%), linear-gradient(145deg, var(--food-color, #7e2630), rgba(22,10,24,0.94)); }
-.hearth-dinner-plate-card strong { font-size: clamp(16px,2.1vh,22px); }
-.hearth-dinner-plate-card small { color: rgba(220,204,178,0.74); font-size: clamp(11px,1.45vh,13px); line-height: 1.25; }
-#hearth-overlay.is-dinner-finalizing .hearth-dinner-choices { opacity: 0; transform: translateY(-24px); transition: opacity 0.28s ease, transform 0.28s ease; pointer-events: none; }
-#hearth-overlay.is-dinner-finalizing .hearth-dinner-picked { animation: hearth-dinner-final-hover 0.72s ease-in-out both; }
-#hearth-overlay.is-dinner-closing .hearth-dinner-picked { opacity: 0; filter: blur(6px); transition: opacity 0.36s ease, filter 0.36s ease; }
+/* 상단 고정 헤더 — 인게임 shop-pack-picker-head 구조 참고 */
+.hearth-dinner-choices-header {
+  position: absolute; top: clamp(18px,2.4vh,28px);
+  text-align: center; margin: 0;
+  color: rgba(255,232,168,0.96); font-family: 'OkDanDan', Georgia, serif;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.85);
+  animation: hearth-dinner-head-in 0.32s ease 0.1s both;
+}
+@keyframes hearth-dinner-head-in { 0% { opacity:0; transform:translateY(-6px); } 100% { opacity:1; transform:translateY(0); } }
+.hearth-dinner-choices-pack {
+  display: block; margin: 0;
+  font-size: clamp(18px,2.2vh,24px); letter-spacing: 0.08em; font-weight: 900;
+}
+.hearth-dinner-choices-step {
+  display: block; margin: 4px 0 0;
+  font-size: clamp(13px,1.4vh,15px);
+  color: rgba(232,214,180,0.82); letter-spacing: 0.04em;
+}
+/* 3장 카드 그리드 — shop-pack-picker-cards 참고 */
+.hearth-dinner-choices-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(clamp(140px,16vw,188px), 1fr));
+  gap: clamp(8px,1.2vw,16px);
+  width: 100%; max-width: clamp(460px,66vw,760px);
+}
+/* 선택 카드 — shop-pack-pick-card 스타일 기반, 촛불 테마 유지 */
+.hearth-dinner-choice {
+  position: relative; padding: 0;
+  border-radius: 14px;
+  border: 1.5px solid rgba(200,152,60,0.52);
+  background: linear-gradient(180deg, rgba(18,8,26,0.99) 0%, rgba(28,12,34,0.97) 40%, rgba(10,5,14,0.99) 100%);
+  color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif;
+  display: flex; flex-direction: column;
+  overflow: hidden; cursor: pointer;
+  min-height: clamp(200px,34vh,300px); aspect-ratio: 3 / 4;
+  box-shadow: inset 0 1px 0 rgba(255,232,168,0.16), 0 16px 42px rgba(0,0,0,0.72);
+  transition: transform 0.22s cubic-bezier(0.34,1.56,0.5,1), box-shadow 0.22s ease, border-color 0.2s ease;
+}
+.hearth-dinner-choice:hover {
+  transform: translateY(-8px) scale(1.03);
+  box-shadow: inset 0 1px 0 rgba(255,232,168,0.24), 0 28px 56px rgba(0,0,0,0.82), 0 0 32px rgba(244,164,96,0.28);
+}
+/* 등급별 테두리/발광 */
+.hearth-dinner-choice[data-rarity="common"] { border-color: rgba(184,168,138,0.5); }
+.hearth-dinner-choice[data-rarity="rare"]   { border-color: rgba(100,178,218,0.7); box-shadow: inset 0 1px 0 rgba(160,220,255,0.12), 0 16px 42px rgba(0,0,0,0.72), 0 0 16px rgba(80,160,220,0.2); }
+.hearth-dinner-choice[data-rarity="epic"]   { border-color: rgba(192,100,220,0.8); box-shadow: inset 0 1px 0 rgba(220,160,255,0.16), 0 16px 42px rgba(0,0,0,0.72), 0 0 24px rgba(160,60,220,0.36); }
+.hearth-dinner-choice[data-rarity="rare"]:hover  { border-color: rgba(130,210,255,0.9); box-shadow: inset 0 1px 0 rgba(160,220,255,0.2), 0 28px 56px rgba(0,0,0,0.82), 0 0 36px rgba(80,160,220,0.44); }
+.hearth-dinner-choice[data-rarity="epic"]:hover  { border-color: rgba(220,130,255,0.92); box-shadow: inset 0 1px 0 rgba(220,160,255,0.26), 0 28px 56px rgba(0,0,0,0.82), 0 0 48px rgba(160,60,220,0.58); }
+/* 일러스트 영역 */
+.hearth-dinner-choice-art {
+  flex: 1; min-height: 0;
+  background:
+    var(--dinner-art, none) center/cover no-repeat,
+    radial-gradient(circle at 52% 38%, rgba(255,236,188,0.16), transparent 38%),
+    linear-gradient(145deg, var(--food-color,#7e2630), rgba(16,7,18,0.97));
+}
+/* 하단 푸터: 등급뱃지 + 이름 + 스탯 */
+.hearth-dinner-choice-footer {
+  padding: clamp(8px,1.2vh,12px) clamp(10px,1.4vw,14px);
+  border-top: 1px solid rgba(255,215,120,0.1);
+  background: linear-gradient(0deg, rgba(0,0,0,0.38), transparent);
+  display: flex; flex-direction: column; gap: 3px; flex-shrink: 0;
+}
+.hearth-dinner-choice-rarity {
+  display: block;
+  font-size: clamp(9px,1.1vh,11px); font-weight: 900; letter-spacing: 0.1em;
+  padding: 0; margin-bottom: 1px;
+}
+.hearth-dinner-choice[data-rarity="common"] .hearth-dinner-choice-rarity { color: rgba(200,184,148,0.78); }
+.hearth-dinner-choice[data-rarity="rare"]   .hearth-dinner-choice-rarity { color: rgba(130,200,255,0.9); text-shadow: 0 0 6px rgba(80,160,220,0.6); }
+.hearth-dinner-choice[data-rarity="epic"]   .hearth-dinner-choice-rarity { color: rgba(210,150,255,0.95); text-shadow: 0 0 8px rgba(160,60,220,0.7); }
+.hearth-dinner-choice-footer strong { font-size: clamp(14px,1.9vh,20px); letter-spacing: 0.06em; display: block; }
+.hearth-dinner-choice-footer small { color: rgba(220,206,172,0.78); font-size: clamp(10px,1.3vh,13px); display: block; line-height: 1.3; }
+.hearth-dinner-choice[data-rarity="rare"] .hearth-dinner-choice-footer small { color: rgba(140,210,255,0.88); }
+.hearth-dinner-choice[data-rarity="epic"] .hearth-dinner-choice-footer small { color: rgba(210,150,255,0.92); }
+/* 최종 완성 유물 카드 — finalizing 오버레이(z6) 위에서 카드팩처럼 등장 */
+.hearth-dinner-picked {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 7;
+  width: clamp(148px,20vw,210px);
+  aspect-ratio: 3 / 4;
+  pointer-events: none;
+  opacity: 0;
+}
+.hearth-dinner-plate-card {
+  width: 100%; height: 100%;
+  border-radius: 18px;
+  border: 1.5px solid rgba(255,215,120,0.66);
+  background: linear-gradient(180deg, rgba(18,9,26,0.99) 0%, rgba(34,18,40,0.97) 38%, rgba(10,6,14,0.99) 100%);
+  color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif;
+  padding: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255,232,168,0.26),
+    inset 0 -1px 0 rgba(244,164,96,0.14),
+    0 0 56px rgba(244,164,96,0.28),
+    0 0 18px rgba(0,0,0,0.72);
+}
+.hearth-dinner-plate-art {
+  flex: 1; min-height: 0;
+  background:
+    var(--dinner-art, none) center/cover no-repeat,
+    radial-gradient(circle at 50% 44%, rgba(255,236,188,0.28), transparent 42%),
+    linear-gradient(145deg, var(--food-color,#7e2630), rgba(16,7,18,0.98));
+}
+.hearth-dinner-plate-body {
+  padding: 10px 12px 12px; flex-shrink: 0;
+  border-top: 1px solid rgba(255,215,120,0.16);
+  background: linear-gradient(0deg, rgba(0,0,0,0.36), transparent);
+}
+.hearth-dinner-plate-body strong { font-size: clamp(13px,1.8vh,19px); letter-spacing: 0.06em; display: block; }
+.hearth-dinner-plate-body small { color: rgba(220,204,178,0.76); font-size: clamp(10px,1.3vh,13px); display: block; line-height: 1.3; margin-top: 3px; }
+/* 선택한 3장 미니카드 — 레일 하단 중앙에 수평으로 쌓인다(z7, 선택지 패널 위) */
+.hearth-dinner-picks {
+  position: absolute;
+  bottom: clamp(10px, 2vh, 18px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: row;
+  gap: clamp(6px, 1vw, 10px);
+  z-index: 7;
+  pointer-events: none;
+  align-items: flex-end;
+}
+.hearth-dinner-pick-slot {
+  width: clamp(52px, 6.5vw, 70px);
+  aspect-ratio: 3 / 4;
+  border-radius: 8px;
+  border: 1px solid rgba(255,215,120,0.52);
+  background:
+    var(--dinner-art, none) center / cover no-repeat,
+    radial-gradient(circle at 50% 36%, rgba(255,236,188,0.22), transparent 42%),
+    linear-gradient(160deg, var(--food-color, #7e2630), rgba(12,6,14,0.97));
+  box-shadow: 0 0 14px rgba(244,164,96,0.28), inset 0 1px 0 rgba(255,232,168,0.14);
+  position: relative; overflow: hidden;
+  opacity: 0; /* WAAPI pop-in이 fill:forwards로 1로 올린다 */
+}
+.hearth-dinner-pick-slot[data-rarity="rare"] {
+  border-color: rgba(96,176,255,0.64);
+  box-shadow: 0 0 16px rgba(80,168,255,0.32), inset 0 1px 0 rgba(140,210,255,0.18);
+}
+.hearth-dinner-pick-slot[data-rarity="epic"] {
+  border-color: rgba(188,128,255,0.68);
+  box-shadow: 0 0 18px rgba(180,100,255,0.38), inset 0 1px 0 rgba(210,150,255,0.22);
+}
+.hearth-dinner-pick-slot-label {
+  position: absolute; bottom: 2px; left: 0; right: 0;
+  text-align: center;
+  font-size: clamp(7px, 0.85vw, 9px);
+  color: rgba(255,231,168,0.82);
+  font-family: 'OkDanDan', Georgia, serif;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 0 2px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.88);
+}
+/* finalizing 시 choices 페이드아웃 */
+#hearth-overlay.is-dinner-finalizing .hearth-dinner-choices { opacity: 0; transition: opacity 0.28s ease; pointer-events: none; }
+/* 뒤로가기 버튼은 finalizing·opened(코스 선택 중) 동안 숨긴다 — after에서는 다시 표시 */
+#hearth-overlay.is-dinner-finalizing .hearth-back,
+#hearth-overlay.is-dinner-opened .hearth-back { opacity: 0 !important; pointer-events: none !important; transition: none !important; }
 .hearth-dinner-final-curtain { position: absolute; top: 0; bottom: 0; width: 52%; z-index: 8; background: linear-gradient(180deg, #030204, #000 58%, #050306); box-shadow: inset 0 0 42px rgba(0,0,0,0.9), 0 0 34px rgba(0,0,0,0.7); opacity: 0; pointer-events: none; }
 .hearth-dinner-final-curtain--left { left: 0; transform: translateX(-104%); }
 .hearth-dinner-final-curtain--right { right: 0; transform: translateX(104%); }
-#hearth-overlay.is-dinner-closing .hearth-dinner-final-curtain--left,
-#hearth-overlay.is-dinner-after .hearth-dinner-final-curtain--left { animation: hearth-dinner-black-close-left 0.78s cubic-bezier(0.16,0.84,0.24,1) forwards; }
-#hearth-overlay.is-dinner-closing .hearth-dinner-final-curtain--right,
-#hearth-overlay.is-dinner-after .hearth-dinner-final-curtain--right { animation: hearth-dinner-black-close-right 0.78s cubic-bezier(0.16,0.84,0.24,1) forwards; }
+/* is-dinner-closing만 검은 커튼 닫힘 — is-dinner-after는 bg 교체로 전환 */
+#hearth-overlay.is-dinner-closing .hearth-dinner-final-curtain--left { animation: hearth-dinner-black-close-left 0.78s cubic-bezier(0.16,0.84,0.24,1) forwards; }
+#hearth-overlay.is-dinner-closing .hearth-dinner-final-curtain--right { animation: hearth-dinner-black-close-right 0.78s cubic-bezier(0.16,0.84,0.24,1) forwards; }
 .hearth-dinner-illustration { position: absolute; inset: 8% 9% 18%; z-index: 9; background: var(--hearth-dinner-host, none) center/cover no-repeat; border: 1px solid rgba(255,215,120,0.28); border-radius: 18px; box-shadow: inset 0 0 80px rgba(0,0,0,0.42), 0 26px 68px rgba(0,0,0,0.68); clip-path: inset(0 50% 0 50%); opacity: 0; pointer-events: none; }
-#hearth-overlay.is-dinner-after .hearth-dinner-illustration { animation: hearth-dinner-illu-open 0.86s 0.78s cubic-bezier(0.18,0.82,0.25,1) forwards; }
+/* after 상태에서 구 일러스트/대사 레이어 숨김 — bg 교체 + SpeechBubble이 담당 */
+#hearth-overlay.is-dinner-after .hearth-dinner-illustration { display: none !important; }
 .hearth-dinner-dialogue { position: absolute; left: 10%; right: 10%; bottom: 6%; z-index: 10; min-height: 54px; padding: 16px 22px; border: 1px solid rgba(255,215,120,0.42); border-radius: 18px; background: linear-gradient(180deg, rgba(25,16,24,0.92), rgba(8,5,10,0.96)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; font-size: clamp(16px, 2.2vh, 22px); line-height: 1.45; text-align: center; letter-spacing: 0.03em; box-shadow: inset 0 1px 0 rgba(255,232,168,0.14), 0 18px 42px rgba(0,0,0,0.62); opacity: 0; transform: translateY(16px); pointer-events: none; }
-#hearth-overlay.is-dinner-after .hearth-dinner-dialogue { animation: hearth-dinner-dialogue-in 0.36s 1.42s ease-out forwards; }
+#hearth-overlay.is-dinner-after .hearth-dinner-dialogue { display: none !important; }
+/* after 상태: 어두운 overlay 페이드아웃, bg를 bg004(수상한 사람)로 교체 */
+#hearth-overlay.is-dinner-after .hearth-dinner-resolve-overlay { opacity: 0 !important; transition: opacity 0.56s ease 0.1s !important; }
+#hearth-overlay.is-dinner-after .hearth-dinner-bg { background-image: var(--hearth-dinner-after-bg) !important; }
 #hearth-overlay.is-dinner-after .hearth-dinner-rail,
 #hearth-overlay.is-dinner-after .hearth-dinner-choices,
+#hearth-overlay.is-dinner-after .hearth-dinner-picks,
 #hearth-overlay.is-dinner-after .hearth-dinner-picked { display: none; }
+/* NPC 말풍선 앵커 — 캐릭터 상반신 위치에 고정; tail:'top' 버블이 앵커 아래(화면 하단)에 배치된다 */
+.hearth-dinner-npc-anchor {
+  position: absolute; left: 50%; top: 38%; width: 1px; height: 1px;
+  transform: translateX(-50%); pointer-events: none; z-index: 11;
+}
+/* 합성 완료 유물 공개 카드 — 뷰포트 고정, 합성점 중앙 정렬 */
+.hearth-dinner-reveal-relic {
+  position: fixed; z-index: 290; width: 170px;
+  display: flex; flex-direction: column;
+  border-radius: 14px; border: 1.5px solid rgba(255,215,120,0.72);
+  background: linear-gradient(180deg, rgba(44,28,36,0.98), rgba(10,6,12,0.99));
+  box-shadow: 0 0 52px rgba(244,164,96,0.44), 0 24px 58px rgba(0,0,0,0.84), inset 0 1px 0 rgba(255,232,168,0.18);
+  overflow: hidden; pointer-events: none;
+  transform: translate(-50%,-50%) scale(0.18); opacity: 0;
+}
+.hearth-dinner-reveal-art {
+  width: 100%; aspect-ratio: 4/3; flex-shrink: 0;
+  background: var(--reveal-art, none) center / cover no-repeat,
+    radial-gradient(circle at 50% 38%, rgba(255,236,188,0.22), transparent 42%),
+    linear-gradient(145deg, #7e2630, rgba(18,8,20,0.96));
+}
+.hearth-dinner-reveal-body {
+  padding: 10px 12px 12px; flex-shrink: 0;
+  border-top: 1px solid rgba(255,215,120,0.18);
+  background: linear-gradient(0deg, rgba(0,0,0,0.44), transparent);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.hearth-dinner-reveal-name {
+  display: block; font-family: 'OkDanDan', Georgia, serif;
+  font-size: clamp(12px,1.6vh,16px); color: #ffe7a8;
+  letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hearth-dinner-reveal-stats { display: flex; flex-direction: column; gap: 2px; }
+.hearth-dinner-reveal-stats span {
+  display: block; font-family: 'OkDanDan', Georgia, serif;
+  font-size: clamp(9px,1.1vh,11px); color: rgba(220,204,178,0.84); line-height: 1.38;
+}
+/* 만찬 칸 Free 배지 — 점등 완료 후 초록 형광으로 반짝이게 */
+.hearth-cell__dinner-free {
+  position: absolute; top: 6px; right: 8px; z-index: 2;
+  font-family: 'OkDanDan', Georgia, serif; font-size: clamp(11px,1.4vw,15px); font-weight: 700;
+  color: #39ff14; letter-spacing: 0.1em; pointer-events: none;
+  text-shadow: 0 0 8px rgba(57,255,20,0.9), 0 0 18px rgba(57,255,20,0.58), 0 0 34px rgba(57,255,20,0.28);
+  animation: dinner-free-pulse 1.6s ease-in-out infinite;
+}
+@keyframes dinner-free-pulse {
+  0%,100% { opacity: 1; text-shadow: 0 0 8px rgba(57,255,20,0.9), 0 0 18px rgba(57,255,20,0.58), 0 0 34px rgba(57,255,20,0.28); }
+  50% { opacity: 0.62; text-shadow: 0 0 4px rgba(57,255,20,0.5), 0 0 10px rgba(57,255,20,0.34), 0 0 18px rgba(57,255,20,0.16); }
+}
 .hearth-dinner-relic-card { width: 54px; min-height: 74px; border-radius: 10px; border: 1px solid rgba(255,215,120,0.5); background: linear-gradient(180deg, rgba(54,36,42,0.96), rgba(12,8,14,0.98)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; font-size: 10px; padding: 5px; box-shadow: inset 0 1px 0 rgba(255,232,168,0.18), 0 0 18px rgba(244,164,96,0.35); }
 .hearth-dinner-relic-card span { display: block; height: 30px; border-radius: 7px; margin-bottom: 4px; background: radial-gradient(circle at 50% 38%, rgba(255,236,188,0.28), transparent 42%), linear-gradient(145deg, #7e2630, rgba(22,10,24,0.94)); }
 .hearth-dinner-relic-card strong, .hearth-dinner-relic-card small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -933,7 +1523,6 @@ body.hearth-lobby #ingame-backdrop.is-out {
 @keyframes hearth-dinner-black-close-right { to { transform: translateX(0); opacity: 1; } }
 @keyframes hearth-dinner-illu-open { 0% { clip-path: inset(0 50% 0 50%); opacity: 0; } 100% { clip-path: inset(0 0 0 0); opacity: 1; } }
 @keyframes hearth-dinner-dialogue-in { to { opacity: 1; transform: translateY(0); } }
-@keyframes hearth-dinner-final-hover { 0% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) translateY(-24px) scale(1.16); } 100% { transform: translateX(-50%) translateY(-16px) scale(1.08); } }
 .hearth-dinner-orb { position: fixed; z-index: 260; width: 20px; height: 20px; border-radius: 50%; pointer-events: none; background: #ffe7a8; box-shadow: 0 0 22px #ffd778, 0 0 58px rgba(244,164,96,0.76); }
 .hearth-dinner-orb.is-flying { animation: hearth-dinner-orb-flight 0.64s cubic-bezier(0.18,0.78,0.22,1) forwards; }
 @keyframes hearth-dinner-orb-flight { to { transform: translate(var(--orb-dx), var(--orb-dy)) scale(0.38); opacity: 0.84; } }
