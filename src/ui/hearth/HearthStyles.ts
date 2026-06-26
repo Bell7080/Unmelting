@@ -836,14 +836,45 @@ body.hearth-lobby #ingame-backdrop.is-out {
   background: linear-gradient(90deg, rgba(255, 215, 120, 0.7), rgba(255, 215, 120, 0.04));
   margin: clamp(1px, 0.3vh, 3px) 0;
 }
+/* role + tagline 한 줄 — job-card__traits 톤 */
+.hearth-character-meta {
+  display: flex;
+  gap: clamp(4px, 0.6vw, 8px);
+  align-items: baseline;
+  white-space: nowrap;
+  overflow: hidden;
+}
 .hearth-character-role {
   font-family: 'OkDanDan', Georgia, serif;
   font-size: clamp(9px, 1.15vh, 12px);
-  color: rgba(192, 176, 154, 0.7);
+  color: rgba(206, 188, 160, 0.82);
   line-height: 1.4;
   white-space: nowrap;
+  flex-shrink: 0;
+}
+/* job-card__flavor 톤 — role 뒤 중점 구분 후 설명 */
+.hearth-character-tagline {
+  font-family: 'OkDanDan', Georgia, serif;
+  font-size: clamp(8px, 1.05vh, 10px);
+  color: rgba(244, 200, 120, 0.54);
+  letter-spacing: 0.05em;
+  line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.hearth-character-tagline::before {
+  content: '· ';
+  color: rgba(255, 215, 120, 0.32);
+}
+/* showcase 우측 대형 카드 — 이름 아래 부제 */
+.hearth-character-copy-tagline {
+  display: block;
+  font-style: normal;
+  font-family: 'OkDanDan', Georgia, serif;
+  font-size: clamp(13px, 1.8vh, 18px);
+  color: rgba(248, 206, 120, 0.72);
+  letter-spacing: 0.1em;
+  margin-top: 4px;
 }
 
 /* ── 화살표 버튼 ────────────────────────────────────────────────────── */

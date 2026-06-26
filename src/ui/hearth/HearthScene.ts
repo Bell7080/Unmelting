@@ -51,10 +51,10 @@ const DINNER_STAT_LABELS: Record<DinnerStatKey, string> = {
 
 /** 모험 셔터 안에서 고를 수 있는 동행 목록. 3~4번은 잠금 회색 빈 슬롯. */
 const HEARTH_CHARACTERS = [
-  { id: 'sprout-chick', name: '새싹 병아리', role: '튜토리얼', desc: '첫 모험을 천천히 익히도록 돕는 작고 따뜻한 시작 동행.', art: SpriteUrls.playerTutorial, lockedArt: false, locked: false },
-  { id: 'ena', name: '에나', role: '녹지 않는 소녀', desc: '검은 셔터 너머 첫 모험을 함께 시작하는 기본 동행.', art: SpriteUrls.player, lockedArt: false, locked: false },
-  { id: 'slot-3', name: '???', role: '추후 해금', desc: '', art: '', lockedArt: true, locked: true },
-  { id: 'slot-4', name: '???', role: '추후 해금', desc: '', art: '', lockedArt: true, locked: true },
+  { id: 'sprout-chick', name: '새싹 병아리', role: '튜토리얼', tagline: '지식에 대한 갈망', desc: '모험을 떠나기 전, 최고의 선택.', art: SpriteUrls.playerTutorial, lockedArt: false, locked: false },
+  { id: 'ena', name: '에나', role: '녹지 않는 소녀', tagline: '', desc: '검은 셔터 너머 첫 모험을 함께 시작하는 기본 동행.', art: SpriteUrls.player, lockedArt: false, locked: false },
+  { id: 'slot-3', name: '???', role: '추후 해금', tagline: '', desc: '', art: '', lockedArt: true, locked: true },
+  { id: 'slot-4', name: '???', role: '추후 해금', tagline: '', desc: '', art: '', lockedArt: true, locked: true },
 ] as const
 
 /** 우측 인스펙터에 띄울 각 스테이션의 한 줄 설명(§12-3 역할 요약). */
@@ -155,8 +155,9 @@ export class HearthScene {
               <div class="hearth-showcase-overlay"></div>
             </div>
             <div class="hearth-character-copy">
-              <span class="hearth-character-kicker">동행 선택</span>
+              <span class="hearth-character-kicker">${HEARTH_CHARACTERS[0].role}</span>
               <strong>${HEARTH_CHARACTERS[0].name}</strong>
+              ${HEARTH_CHARACTERS[0].tagline ? `<em class="hearth-character-copy-tagline">${HEARTH_CHARACTERS[0].tagline}</em>` : ''}
               <small>${HEARTH_CHARACTERS[0].desc}</small>
             </div>
           </div>
@@ -634,7 +635,10 @@ export class HearthScene {
       art?.style.setProperty('--character-art', `url('${character.art}')`)
       art?.classList.remove('is-empty')
     }
+    root.querySelector<HTMLElement>('.hearth-character-kicker')!.textContent = character.role
     root.querySelector<HTMLElement>('.hearth-character-copy strong')!.textContent = character.name
+    const taglineEl = root.querySelector<HTMLElement>('.hearth-character-copy-tagline')
+    if (taglineEl) taglineEl.textContent = character.tagline
     root.querySelector<HTMLElement>('.hearth-character-copy small')!.textContent = character.desc
     root.querySelector<HTMLElement>('.hearth-character-copy')?.animate([
       { opacity: 0, transform: 'translateX(-18px)' },
@@ -802,7 +806,10 @@ export class HearthScene {
         <div class="hearth-character-scrim">
           <div class="hearth-character-name">${character.name}</div>
           <div class="hearth-character-divider" aria-hidden="true"></div>
-          <div class="hearth-character-role">${character.role}</div>
+          <div class="hearth-character-meta">
+            <span class="hearth-character-role">${character.role}</span>
+            ${character.tagline ? `<span class="hearth-character-tagline">${character.tagline}</span>` : ''}
+          </div>
         </div>
       </button>
     `).join('')
