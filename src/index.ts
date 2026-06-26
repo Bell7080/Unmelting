@@ -170,6 +170,9 @@ const cardSpawner = new CardSpawner()
 const eventSpawnCtrl = new EventSpawnController()
 // 레인이 가득 차 주입 못 한 이벤트 문을 다음 리필까지 보류한다.
 let pendingEventDoor = false
+// 이벤트 문 보류 상태의 예고선 전용 더미 카드. 실제 스폰은 generateEventDoor()가 담당하므로
+// 렌더러가 흰색 special 라인을 고르는 데 필요한 타입 정보만 안정적으로 제공한다.
+const pendingEventDoorPreviewCard = new Card('event-door-preview', CardType.EVENT, '이벤트', 'preview only')
 // 디버그 전용: 이벤트N 커맨드로 스폰된 칸이 클릭될 때 강제 사용할 이벤트 ID.
 let debugForcedEventId: EventId | null = null
 const boardRenderer = new GameBoardRenderer('game-board')
@@ -2365,7 +2368,7 @@ async function runPreparationRefreshAfterFieldEffects(
       if (lane.getCardAtDistance(topDistance)) continue
       // 보스 전투 중에는 레일 최상단 리필을 억제해 보스 격리 공간을 유지한다
       if (gameState.bossBattleActive) continue
-      lane.setCardAtDistance(topDistance, cardSpawner.spawnCardForRefill())
+      lane.setCardAtDistance(topDistance, cardSpawner.spawnCardForRefill(laneIndex))
       filled = true
     }
     if (filled) {
@@ -2650,12 +2653,12 @@ function compactAndRefillAllLanes(): boolean {
   // effects cannot leave half-empty rails after a single maintenance pass.
   // 보류 이벤트 문은 laneIndex에 묶지 않고 첫 빈 슬롯에 주입해 유실을 막는다.
   let doorInjected = false
-  const result = gameState.compactAndRefillRails((_laneIndex) => {
+  const result = gameState.compactAndRefillRails((laneIndex) => {
     if (pendingEventDoor && !doorInjected) {
       doorInjected = true
       return cardSpawner.generateEventDoor()
     }
-    return cardSpawner.spawnCardForRefill()
+    return cardSpawner.spawnCardForRefill(laneIndex)
   })
   if (doorInjected) {
     pendingEventDoor = false
@@ -2908,7 +2911,22 @@ function render(): void {
     vignetteIntensity: EmberSystem.getVignetteIntensity(tier),
     chainHints: buildChainHints(),
     pendingHandTarget,
+    // 레일 상단 예고선은 화면 밖에서 다음에 실제로 들어올 리필 카드를 미리 보여준다.
+    refillPreviewCards: buildRailRefillPreviewCards(),
   })
+}
+
+/** Build the same lane order that refill will use, including a pending event door override. */
+function buildRailRefillPreviewCards(): (Card | null)[] {
+  if (!gameActive || gameState.bossBattleActive || gameState.isGameOver) return []
+  const preview = cardSpawner.peekNextRefillCards(gameState.lanes.length)
+  if (!pendingEventDoor) return preview
+
+  const topDistance = LANE_DISTANCE_COUNT - 1
+  const firstRefillLane = gameState.lanes.findIndex((lane) => !lane.getCardAtDistance(topDistance))
+  // 이벤트 문은 일반 리필보다 먼저 첫 빈 최상단 칸에 주입되므로 흰색 예고선을 우선 표시한다.
+  if (firstRefillLane >= 0) preview[firstRefillLane] = pendingEventDoorPreviewCard
+  return preview
 }
 
 /** Register slash-command debug palette. Opens with `/` like Minecraft chat.

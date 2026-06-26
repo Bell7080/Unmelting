@@ -242,9 +242,12 @@ export class CardSpawner {
   private starlightCooldownCards: number = 0
   /** 별빛 미등장 칸 수(최소 간격 이후 기준). 등장 시 0으로 리셋. */
   private starlightMissStreak: number = 0
+  /** 레일 상단 예고선용 실제 다음 리필 카드. lane별로 미리 뽑고, 실제 리필 때 같은 카드를 소비한다. */
+  private refillPreviewQueue = new Map<number, Card>()
 
   /** Update the active ember tier so the next spawn run uses the matching weights. */
   setTier(tier: EmberTier): void {
+    // 이미 예고선에 노출된 카드는 실제 리필까지 유지해 턴 갱신으로 예고가 흔들리지 않게 한다.
     this.currentTier = tier
   }
 
@@ -255,44 +258,69 @@ export class CardSpawner {
     enemyAtkBonus: number
     treasureSpawnScale: number
   }): void {
-    this.trialEnemyHpBonus = Math.max(0, mods.enemyHpBonus)
-    this.trialEnemyAtkBonus = Math.max(0, mods.enemyAtkBonus)
-    this.trialTreasureSpawnScale = Math.max(0, mods.treasureSpawnScale)
+    const nextEnemyHpBonus = Math.max(0, mods.enemyHpBonus)
+    const nextEnemyAtkBonus = Math.max(0, mods.enemyAtkBonus)
+    const nextTreasureSpawnScale = Math.max(0, mods.treasureSpawnScale)
+    if (
+      this.trialEnemyHpBonus !== nextEnemyHpBonus ||
+      this.trialEnemyAtkBonus !== nextEnemyAtkBonus ||
+      this.trialTreasureSpawnScale !== nextTreasureSpawnScale
+    ) {
+      this.clearRefillPreviewQueue()
+    }
+    this.trialEnemyHpBonus = nextEnemyHpBonus
+    this.trialEnemyAtkBonus = nextEnemyAtkBonus
+    this.trialTreasureSpawnScale = nextTreasureSpawnScale
   }
 
   /** Sync the completed game turn so enemy pools unlock at 1/11/21. */
   setProgressionTurn(turn: number): void {
-    this.progressionTurn = Math.max(1, turn)
+    const nextTurn = Math.max(1, turn)
+    // 턴 경계에서 적 풀만 바뀌어도 이미 보인 예고는 유지한다(소비 후 새 규칙으로 다시 뽑힘).
+    this.progressionTurn = nextTurn
   }
 
   /** Toggle the 90~100F starlight-key refill rule after the 90F forced trial. */
   setFinalAscentActive(active: boolean): void {
+    if (this.finalAscentActive !== active) this.clearRefillPreviewQueue()
     this.finalAscentActive = active
   }
 
   /** 유물 구매/런 리셋 시 스폰 가중치 보정을 delta 값만큼 누적한다. */
   adjustRelicSpawn(type: 'enemy' | 'treasure' | 'spore' | 'flower', delta: number): void {
+    if (delta !== 0) this.clearRefillPreviewQueue()
     this.relicSpawnAdjust[type] += delta
   }
 
   /** 직업 선택 시 스폰 가중치를 설정한다. 런 리셋마다 resetRelicModifiers에서 함께 초기화된다. */
   setJobSpawnAdjust(enemy: number, trap: number, treasure: number, flower: number): void {
+    if (
+      this.jobSpawnAdjust.enemy !== enemy ||
+      this.jobSpawnAdjust.trap !== trap ||
+      this.jobSpawnAdjust.treasure !== treasure ||
+      this.jobSpawnAdjust.flower !== flower
+    ) {
+      this.clearRefillPreviewQueue()
+    }
     this.jobSpawnAdjust = { enemy, trap, treasure, flower }
   }
 
   /** 황금 열쇠 유물 장착 시 황금 상자 대체 가중치를 설정한다.
    *  goldenChestWeight / effectiveTreasureWeight 비율로 황금 상자가 등장한다. */
   adjustGoldenChestWeight(weight: number): void {
+    if (weight !== 0) this.clearRefillPreviewQueue()
     this.goldenChestWeight += weight
   }
 
   /** 에나벨라의 펜던트: 적 스폰 시 HP 보너스를 delta만큼 누적한다. */
   adjustRelicEnemyHpBonus(delta: number): void {
+    if (delta !== 0) this.clearRefillPreviewQueue()
     this.relicEnemyHpBonus += delta
   }
 
   /** 런 시작 시 유물/직업 modifiers를 초기화한다. */
   resetRelicModifiers(): void {
+    this.clearRefillPreviewQueue()
     this.relicSpawnAdjust = { enemy: 0, treasure: 0, spore: 0, flower: 0 }
     this.jobSpawnAdjust = { enemy: 0, trap: 0, treasure: 0, flower: 0 }
     this.relicEnemyHpBonus = 0
@@ -301,6 +329,7 @@ export class CardSpawner {
 
   /** 다시 시작 시 스폰 시리얼·페이싱 쿨다운까지 비워 새 런 첫 스폰 타이밍을 동일하게 한다. */
   resetSpawnState(): void {
+    this.clearRefillPreviewQueue()
     this.spawnSerial = 0
     this.sporeCooldownCards = 0
     this.starlightCooldownCards = 0
@@ -376,10 +405,39 @@ export class CardSpawner {
   }
 
   /** Spawn a single fresh card for rail-maintenance refills (직접 배치 → 쿨다운 commit). */
-  spawnCardForRefill(): Card {
+  spawnCardForRefill(laneIndex?: number): Card {
+    if (laneIndex != null) {
+      const previewed = this.refillPreviewQueue.get(laneIndex)
+      if (previewed) {
+        // 예고선이 보여준 카드를 그대로 배치해 UI 예고와 실제 스폰을 일치시킨다.
+        this.refillPreviewQueue.delete(laneIndex)
+        return previewed
+      }
+    }
     const card = this.generateRandomCard()
     this.commitSpawnCooldowns(card)
     return card
+  }
+
+  /** Return the actual next refill cards for each lane, generating them once if needed. */
+  peekNextRefillCards(laneCount: number = 3): (Card | null)[] {
+    const cards: (Card | null)[] = []
+    for (let laneIndex = 0; laneIndex < laneCount; laneIndex++) {
+      let card = this.refillPreviewQueue.get(laneIndex)
+      if (!card) {
+        // 미리 뽑은 순간 쿨다운을 commit해서 lane 0→2 실제 스폰 순서와 같은 다음 카드열을 고정한다.
+        card = this.generateRandomCard()
+        this.commitSpawnCooldowns(card)
+        this.refillPreviewQueue.set(laneIndex, card)
+      }
+      cards.push(card)
+    }
+    return cards
+  }
+
+  /** Clear queued preview cards whenever spawn rules change before they are consumed. */
+  clearRefillPreviewQueue(): void {
+    this.refillPreviewQueue.clear()
   }
 
   /**

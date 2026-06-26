@@ -5,8 +5,8 @@ describe('EnaTrainingSimulation', () => {
   it('딥러닝 입력 벡터와 행동 공간 크기를 고정한다', () => {
     const sim = new EnaTrainingSimulation(7)
     const observation = sim.reset()
-    // 스칼라 34 + 9칸×14 + 손패 10×9 = 250.
-    expect(observation.features).toHaveLength(250)
+    // 스칼라 34 + 예고 3칸×6 + 9칸×14 + 손패 10×9 = 268.
+    expect(observation.features).toHaveLength(268)
     // clickLane×3 + useHand×10 + wait + 상점×5 + 이벤트×2 = 21.
     expect(ENA_ACTION_SPACE).toHaveLength(21)
     expect(observation.legalActions.length).toBeGreaterThan(0)
@@ -15,7 +15,7 @@ describe('EnaTrainingSimulation', () => {
   it('교사 정책으로 100층 한 호의 국면/손패/보스 판단 학습 샘플을 생성한다', () => {
     const dataset = EnaTrainingSimulation.collectDataset(3, 11)
     expect(dataset.length).toBeGreaterThan(20)
-    expect(dataset.every((sample) => sample.state.length === 250 && sample.nextState.length === 250)).toBe(true)
+    expect(dataset.every((sample) => sample.state.length === 268 && sample.nextState.length === 268)).toBe(true)
     expect(dataset.every((sample) => sample.actionIndex >= 0 && sample.actionIndex < ENA_ACTION_SPACE.length)).toBe(true)
   })
 
