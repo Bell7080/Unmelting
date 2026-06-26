@@ -49,13 +49,12 @@ const DINNER_STAT_LABELS: Record<DinnerStatKey, string> = {
   damage: '공격력',
 }
 
-/** 모험 셔터 안에서 고를 수 있는 동행 목록. 3~4번은 아직 일러스트가 없는 잠금 카드로 유지한다. */
+/** 모험 셔터 안에서 고를 수 있는 동행 목록. 3~4번은 잠금 회색 빈 슬롯. */
 const HEARTH_CHARACTERS = [
-  { id: 'sprout-chick', name: '새싹 병아리', role: '튜토리얼', desc: '첫 모험을 천천히 익히도록 돕는 작고 따뜻한 시작 동행.', art: SpriteUrls.playerTutorial, lockedArt: false },
-  { id: 'haegang', name: '해강', role: '녹지 않는 소녀', desc: '검은 셔터 너머 첫 모험을 함께 시작하는 기본 동행.', art: SpriteUrls.player, lockedArt: false },
-  { id: 'ember', name: '빈 동행 I', role: '추후 해금', desc: '새 캐릭터 설계가 들어올 때 연결할 임시 프로필 칸.', art: SpriteUrls.player, lockedArt: false },
-  { id: 'ash', name: '빈 동행 II', role: '추후 해금', desc: '아직 초상화가 비어 있는 회색 카드 슬롯.', art: '', lockedArt: true },
-  { id: 'candle', name: '빈 동행 III', role: '추후 해금', desc: '아직 초상화가 비어 있는 회색 카드 슬롯.', art: '', lockedArt: true },
+  { id: 'sprout-chick', name: '새싹 병아리', role: '튜토리얼', desc: '첫 모험을 천천히 익히도록 돕는 작고 따뜻한 시작 동행.', art: SpriteUrls.playerTutorial, lockedArt: false, locked: false },
+  { id: 'ena', name: '에나', role: '녹지 않는 소녀', desc: '검은 셔터 너머 첫 모험을 함께 시작하는 기본 동행.', art: SpriteUrls.player, lockedArt: false, locked: false },
+  { id: 'slot-3', name: '???', role: '추후 해금', desc: '', art: '', lockedArt: true, locked: true },
+  { id: 'slot-4', name: '???', role: '추후 해금', desc: '', art: '', lockedArt: true, locked: true },
 ] as const
 
 /** 우측 인스펙터에 띄울 각 스테이션의 한 줄 설명(§12-3 역할 요약). */
@@ -162,7 +161,11 @@ export class HearthScene {
             </div>
           </div>
           <button class="hearth-depart" type="button" data-hearth-select>선택</button>
-          <div class="hearth-character-strip" role="listbox" aria-label="캐릭터 선택">${this.renderCharacterCards()}</div>
+          <div class="hearth-character-carousel">
+            <button class="hearth-char-nav hearth-char-nav--left" type="button" data-hearth-char-nav="left" aria-label="이전" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 L8 12 L15 19"/></svg></button>
+            <div class="hearth-character-strip" role="listbox" aria-label="캐릭터 선택">${this.renderCharacterCards()}</div>
+            <button class="hearth-char-nav hearth-char-nav--right" type="button" data-hearth-char-nav="right" aria-label="다음" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5 L16 12 L9 19"/></svg></button>
+          </div>
         </div>
       </div>
     `
@@ -220,6 +223,12 @@ export class HearthScene {
       const t = e.target as HTMLElement
       if (t.closest('[data-hearth-back]')) {
         this.raiseShutter()
+        return
+      }
+      const charNav = t.closest<HTMLElement>('[data-hearth-char-nav]')
+      if (charNav) {
+        const dir = charNav.dataset.hearthCharNav as 'left' | 'right'
+        this.selectCharacter(this.selectedCharacterIndex + (dir === 'left' ? -1 : 1), dir)
         return
       }
       const characterCard = t.closest<HTMLElement>('[data-hearth-character]')
@@ -577,33 +586,57 @@ export class HearthScene {
     root?.classList.remove('is-shuttering', 'is-shutter-rest', 'is-character-confirmed', 'is-adventure-mode')
   }
 
-  /** 얇은 프로필 카드 목록을 직업 선택 카드처럼 현재 선택 중심으로 갱신한다. */
+  /** 직업 선택 coverflow와 같은 방식으로 모든 카드에 직접 인라인 transform을 적용한다. */
+  private layoutCharacterCards(): void {
+    const root = this.overlay
+    if (!root) return
+    const cards = [...root.querySelectorAll<HTMLElement>('[data-hearth-character]')]
+    const n = cards.length
+    if (n === 0) return
+    const cardW = cards[0].offsetWidth || 170
+    const stepPx = cardW * 0.62
+    const VISIBLE = 2
+    const center = this.selectedCharacterIndex
+    cards.forEach((card) => {
+      const i = Number(card.dataset.hearthCharacter ?? -1)
+      let off = ((i - center) % n + n) % n
+      if (off > n / 2) off -= n
+      const a = Math.abs(off)
+      const visible = a <= VISIBLE + 0.6
+      const scale = Math.max(0.56, 1 - a * 0.16)
+      const opac = visible ? Math.max(0.12, 1 - a * 0.32) : 0
+      const bright = Math.max(0.36, 1 - a * 0.25)
+      const sat = Math.max(0.44, 1 - a * 0.15)
+      card.classList.toggle('is-selected', i === center)
+      card.setAttribute('aria-selected', i === center ? 'true' : 'false')
+      card.style.transform =
+        `translate(-50%, -50%) translateX(${off * stepPx}px) scale(${scale}) rotateY(${off * -7}deg)`
+      card.style.opacity = String(opac)
+      card.style.zIndex = String(100 - Math.round(a * 10))
+      card.style.filter = `brightness(${bright}) saturate(${sat})`
+      card.style.pointerEvents = visible && opac > 0.12 ? 'auto' : 'none'
+    })
+  }
+
+  /** 선택 인덱스를 갱신하고 coverflow 레이아웃·쇼케이스 카드를 동기화한다. */
   private selectCharacter(index: number, direction: 'left' | 'right' | 'click' = 'click'): void {
-    const wrapped = (index + HEARTH_CHARACTERS.length) % HEARTH_CHARACTERS.length
+    const wrapped = ((index % HEARTH_CHARACTERS.length) + HEARTH_CHARACTERS.length) % HEARTH_CHARACTERS.length
     this.selectedCharacterIndex = wrapped
     this.writeLastCharacterIndex(wrapped)
     const character = HEARTH_CHARACTERS[wrapped]
     const root = this.overlay
     if (!root) return
-    root.dataset.characterDirection = direction
-    root.querySelectorAll<HTMLElement>('[data-hearth-character]').forEach((card) => {
-      const cardIndex = Number(card.dataset.hearthCharacter ?? -1)
-      const offset = this.circularOffset(cardIndex, wrapped)
-      const active = cardIndex === wrapped
-      card.classList.toggle('is-selected', active)
-      card.setAttribute('aria-selected', active ? 'true' : 'false')
-      const depth = Math.abs(offset)
-      card.style.setProperty('--slot', String(offset))
-      card.style.setProperty('--card-scale', String(Math.max(0.66, 1 - depth * 0.14)))
-      card.style.setProperty('--card-brightness', String(Math.max(0.62, 1 - depth * 0.16)))
-      card.style.setProperty('--card-opacity', String(Math.max(0.58, 1 - depth * 0.18)))
-      card.style.zIndex = String(20 - depth)
-    })
+
+    this.layoutCharacterCards()
+
     const art = root.querySelector<HTMLElement>('.hearth-showcase-art')
-    if (character.lockedArt) art?.style.removeProperty('--character-art')
-    else art?.style.setProperty('--character-art', `url('${character.art}')`)
-    art?.classList.toggle('is-empty', character.lockedArt)
-    // 텍스트/일러스트 전환은 CSS 키프레임을 재시작해 동시에 페이드·슬라이드한다.
+    if (character.lockedArt) {
+      art?.style.removeProperty('--character-art')
+      art?.classList.add('is-empty')
+    } else {
+      art?.style.setProperty('--character-art', `url('${character.art}')`)
+      art?.classList.remove('is-empty')
+    }
     root.querySelector<HTMLElement>('.hearth-character-copy strong')!.textContent = character.name
     root.querySelector<HTMLElement>('.hearth-character-copy small')!.textContent = character.desc
     root.querySelector<HTMLElement>('.hearth-character-copy')?.animate([
@@ -629,14 +662,6 @@ export class HearthScene {
     this.selectCharacter(this.selectedCharacterIndex + (delta < 0 ? 1 : -1), delta < 0 ? 'left' : 'right')
   }
 
-  private circularOffset(index: number, center: number): number {
-    const total = HEARTH_CHARACTERS.length
-    let offset = index - center
-    if (offset > total / 2) offset -= total
-    if (offset < -total / 2) offset += total
-    return offset
-  }
-
   private readLastCharacterIndex(): number {
     const value = Number(window.localStorage.getItem(HEARTH_LAST_CHARACTER_KEY) ?? 0)
     return Number.isFinite(value) ? Math.max(0, Math.min(HEARTH_CHARACTERS.length - 1, value)) : 0
@@ -649,12 +674,21 @@ export class HearthScene {
   /** 캐릭터 확정 → 카드/버튼 하강, 큰 배경이 빛으로 접힌 뒤 플레이어 카드 위치에 꽂힌다. */
   private async confirmCharacter(): Promise<void> {
     if (this.characterConfirmed || this.departing) return
+    const character = HEARTH_CHARACTERS[this.selectedCharacterIndex]
+    if (character.locked) {
+      // 잠긴 캐릭터 — 카드를 흔들어 피드백만 준다
+      const card = this.overlay?.querySelector<HTMLElement>('.hearth-character-card.is-selected')
+      if (card) {
+        card.classList.add('is-denied')
+        window.setTimeout(() => card?.classList.remove('is-denied'), 420)
+      }
+      return
+    }
     this.characterConfirmed = true
     const root = this.overlay
     const stage = root?.querySelector<HTMLElement>('.hearth-character-stage')
     const target = document.querySelector<HTMLElement>('.player-card')
     if (!root || !stage) return
-    const character = HEARTH_CHARACTERS[this.selectedCharacterIndex]
     root.classList.add('is-character-confirming')
     await this.wait(360)
     const rect = stage.getBoundingClientRect()
@@ -727,11 +761,27 @@ export class HearthScene {
     }
   }
 
-  /** 셔터 하단의 캐릭터 슬롯은 텍스트 없이 일러스트만 보여 선택 흐름이 깨끗하게 읽히게 한다. */
+  /** 직업 선택 문법의 세로 포트레이트 카드 — 일러스트 풀 커버 + 하단 스크림 + 잠금 오버레이. */
   private renderCharacterCards(): string {
+    const lockIcon = `<svg class="hearth-char-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+    </svg>`
     return HEARTH_CHARACTERS.map((character, index) => `
-      <button class="hearth-character-card ${index === 0 ? 'is-selected' : ''}" type="button" role="option" aria-label="${character.name}" aria-selected="${index === 0 ? 'true' : 'false'}" data-hearth-character="${index}">
-        <span class="hearth-character-thumb ${character.lockedArt ? 'is-empty' : ''}" ${character.lockedArt ? '' : `style="--character-art: url('${character.art}')"`} aria-hidden="true"></span>
+      <button class="hearth-character-card${index === 0 ? ' is-selected' : ''}${character.locked ? ' is-locked' : ''}"
+              type="button" role="option"
+              aria-label="${character.name}" aria-selected="${index === 0 ? 'true' : 'false'}"
+              ${character.locked ? 'aria-disabled="true"' : ''}
+              data-hearth-character="${index}">
+        <div class="hearth-character-art${character.lockedArt ? ' is-empty' : ''}"
+             ${!character.lockedArt && character.art ? `style="background-image:url('${character.art}')"` : ''}
+             aria-hidden="true"></div>
+        <div class="hearth-character-sheen" aria-hidden="true"></div>
+        ${character.locked ? `<div class="hearth-character-lock">${lockIcon}<span>추후 해금</span></div>` : ''}
+        <div class="hearth-character-scrim">
+          <div class="hearth-character-name">${character.name}</div>
+          <div class="hearth-character-divider" aria-hidden="true"></div>
+          <div class="hearth-character-role">${character.role}</div>
+        </div>
       </button>
     `).join('')
   }
