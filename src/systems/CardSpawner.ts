@@ -247,7 +247,7 @@ export class CardSpawner {
 
   /** Update the active ember tier so the next spawn run uses the matching weights. */
   setTier(tier: EmberTier): void {
-    if (this.currentTier !== tier) this.clearRefillPreviewQueue()
+    // 이미 예고선에 노출된 카드는 실제 리필까지 유지해 턴 갱신으로 예고가 흔들리지 않게 한다.
     this.currentTier = tier
   }
 
@@ -276,7 +276,7 @@ export class CardSpawner {
   /** Sync the completed game turn so enemy pools unlock at 1/11/21. */
   setProgressionTurn(turn: number): void {
     const nextTurn = Math.max(1, turn)
-    if (this.progressionTurn !== nextTurn) this.clearRefillPreviewQueue()
+    // 턴 경계에서 적 풀만 바뀌어도 이미 보인 예고는 유지한다(소비 후 새 규칙으로 다시 뽑힘).
     this.progressionTurn = nextTurn
   }
 

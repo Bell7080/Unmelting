@@ -79,6 +79,18 @@ describe('CardSpawner refill preview queue', () => {
     expect(spawned.type).toBe(CardType.ENEMY)
     vi.restoreAllMocks()
   })
+
+  it('keeps an already exposed preview stable across turn-sync refreshes', () => {
+    const spawner = new CardSpawner()
+    // Force predictable enemy previews; object identity proves the queue was not cleared.
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+
+    const preview = spawner.peekNextRefillCards(3)
+    spawner.setProgressionTurn(12)
+
+    expect(spawner.peekNextRefillCards(3)[0]).toBe(preview[0])
+    vi.restoreAllMocks()
+  })
 })
 
 describe('EmberSystem spawn weights', () => {
