@@ -846,7 +846,9 @@ export class GameBoardRenderer {
   }
 
   /** Map card type to the existing rail palette used by card accent strips. */
-  private incomingHintKind(card: Card): 'enemy' | 'trap' | 'treasure' | 'flower' | 'empty' {
+  private incomingHintKind(card: Card): 'enemy' | 'trap' | 'treasure' | 'flower' | 'special' | 'empty' {
+    if (card.type === CardType.EVENT) return 'special'
+    if (card.type === CardType.TREASURE && card.treasureKind === 'starlight') return 'special'
     if (card.type === CardType.ENEMY) return 'enemy'
     if (card.type === CardType.TRAP) return 'trap'
     if (card.type === CardType.TREASURE) return 'treasure'

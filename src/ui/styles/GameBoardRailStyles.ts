@@ -61,7 +61,8 @@ export const GAME_BOARD_RAIL_STYLES = `
 .rail-next-hint--enemy,
 .rail-next-hint--trap,
 .rail-next-hint--treasure,
-.rail-next-hint--flower {
+.rail-next-hint--flower,
+.rail-next-hint--special {
   opacity: 0.74;
   animation: rail-next-hint-breathe 2.35s ease-in-out infinite;
 }
@@ -84,6 +85,11 @@ export const GAME_BOARD_RAIL_STYLES = `
 .rail-next-hint--flower {
   background: linear-gradient(90deg, transparent, rgba(120, 196, 92, 0.92) 30%, rgba(229, 180, 76, 0.58) 74%, transparent);
   box-shadow: 0 0 8px rgba(120, 196, 92, 0.44), 0 0 18px rgba(120, 196, 92, 0.2);
+}
+
+.rail-next-hint--special {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.96) 30%, rgba(210, 226, 255, 0.82) 74%, transparent);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.48), 0 0 18px rgba(210, 226, 255, 0.22);
 }
 
 @keyframes rail-next-hint-breathe {

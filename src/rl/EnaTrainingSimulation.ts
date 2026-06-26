@@ -127,6 +127,8 @@ interface EnaGameSnapshot {
   bossPage: number
   eventRisk: number
   webThreat: number
+  /** 에나가 보는 레일 상단 예고선: 다음에 실제 리필될 lane별 카드 정보. */
+  incomingRefill: (EnaSimCard | null)[]
   board: (EnaSimCard | null)[][]
 }
 
@@ -173,9 +175,10 @@ const DROP_POOL: { id: HandCardId; weight: number }[] = HAND_CARD_IDS
   .map((id) => ({ id, weight: HAND_CARD_DEFINITIONS[id].dropWeight ?? 1 }))
 
 const FEATURE_SCALARS = 34
+const FEATURE_PER_INCOMING = 6
 const FEATURE_PER_CELL = 14
 const FEATURE_PER_HAND = 9
-export const ENA_FEATURE_COUNT = FEATURE_SCALARS + FEATURE_PER_CELL * ROWS * LANES + FEATURE_PER_HAND * HAND_MAX
+export const ENA_FEATURE_COUNT = FEATURE_SCALARS + FEATURE_PER_INCOMING * LANES + FEATURE_PER_CELL * ROWS * LANES + FEATURE_PER_HAND * HAND_MAX
 
 /** 모든 행동 인덱스를 고정해 신경망 출력 차원을 안정화한다. */
 export const ENA_ACTION_SPACE: EnaSimAction[] = [
@@ -261,6 +264,8 @@ export class EnaTrainingSimulation {
   private readonly rng: EnaRandom
   private readonly knowledge: EnaKnowledgeBase
   private board: (EnaSimCard | null)[][] = []
+  /** 학습세계의 예고선 큐. observe()에서 미리 뽑고 compactColumns()가 같은 카드를 소비한다. */
+  private incomingRefillQueue: (EnaSimCard | null)[] = Array<EnaSimCard | null>(LANES).fill(null)
   private phase: EnaSimPhase = 'field'
   private hp = STARTING_HP
   private maxHp = STARTING_HP
@@ -306,6 +311,7 @@ export class EnaTrainingSimulation {
   /** 새 에피소드 시작. 초기 보드는 실제 시작처럼 전방엔 꽃 없이, 대기칸엔 꽃 절반 가중치로 채운다. */
   reset(): EnaObservation {
     this.board = Array.from({ length: ROWS }, () => Array<EnaSimCard | null>(LANES).fill(null))
+    this.incomingRefillQueue = Array<EnaSimCard | null>(LANES).fill(null)
     this.phase = 'field'
     this.hp = this.maxHp = STARTING_HP
     this.shield = 0
@@ -369,7 +375,7 @@ export class EnaTrainingSimulation {
     return { observation: this.observe(), reward, done: this.done }
   }
 
-  /** 고정 길이 숫자 입력: 스칼라 34 + 9칸×14 + 손패 10×9 = ENA_FEATURE_COUNT. */
+  /** 고정 길이 숫자 입력: 스칼라 34 + 예고 3칸×6 + 9칸×14 + 손패 10×9 = ENA_FEATURE_COUNT. */
   observe(): EnaObservation {
     const legalActions = ENA_ACTION_SPACE.filter((action) => this.isLegal(action))
     const tier = EmberSystem.getTier(this.ember)
@@ -409,6 +415,7 @@ export class EnaTrainingSimulation {
       this.strongEnemyThreatCount() / 3,
       this.tripleOpportunityCount() / 3,
     ]
+    for (let lane = 0; lane < LANES; lane++) features.push(...this.encodeIncomingCard(this.peekIncomingRefillCard(lane)))
     for (let row = 0; row < ROWS; row++) {
       for (let lane = 0; lane < LANES; lane++) features.push(...this.encodeCard(this.board[row][lane], row))
     }
@@ -1109,7 +1116,7 @@ export class EnaTrainingSimulation {
         const card = this.board[row][lane]
         if (card) column.push(card)
       }
-      while (column.length < ROWS) column.push(this.spawnCard('waiting'))
+      while (column.length < ROWS) column.push(this.consumeIncomingRefillCard(lane))
       for (let row = 0; row < ROWS; row++) this.board[row][lane] = column[row]
     }
   }
@@ -1165,6 +1172,7 @@ export class EnaTrainingSimulation {
     if (this.bossFloor === 90) {
       // 90F 격파 직후 90~100 별빛 등반 발동.
       this.finalAscent = true
+      this.clearIncomingRefillQueue()
     }
     this.bossFloor = 0
     this.bossHp = this.bossMaxHp = 0
@@ -1191,6 +1199,31 @@ export class EnaTrainingSimulation {
   }
 
   // ── 스폰 ────────────────────────────────────────────────────────────────
+
+  /** lane별 예고선이 본 카드를 그대로 소비해 학습 관측과 실제 리필을 일치시킨다. */
+  private consumeIncomingRefillCard(lane: number): EnaSimCard {
+    const queued = this.incomingRefillQueue[lane]
+    if (queued) {
+      this.incomingRefillQueue[lane] = null
+      return queued
+    }
+    return this.spawnCard('waiting')
+  }
+
+  /** observe()가 부르는 실제 다음 리필 카드. 없으면 미리 뽑아 예고선 큐에 고정한다. */
+  private peekIncomingRefillCard(lane: number): EnaSimCard {
+    let queued = this.incomingRefillQueue[lane]
+    if (!queued) {
+      queued = this.spawnCard('waiting')
+      this.incomingRefillQueue[lane] = queued
+    }
+    return queued
+  }
+
+  /** 스폰 규칙이 크게 바뀌면 오래된 예고를 버려 에나 관측을 현재 규칙에 맞춘다. */
+  private clearIncomingRefillQueue(): void {
+    this.incomingRefillQueue = Array<EnaSimCard | null>(LANES).fill(null)
+  }
 
   /** 불씨 티어 스폰 버킷(실제 EmberSystem)으로 카드를 뽑는다. 최종 등반에선 별빛을 섞는다. */
   private spawnCard(zone: 'front' | 'waiting'): EnaSimCard {
@@ -1430,6 +1463,21 @@ export class EnaTrainingSimulation {
     ]
   }
 
+  /** Encode the top-rail preview line that Ena can use for broader next-turn planning. */
+  private encodeIncomingCard(card: EnaSimCard | null): number[] {
+    if (!card) return [0, 0, 0, 0, 0, 0]
+    const isSpecial = card.type === CardType.EVENT || card.treasureKind === 'starlight'
+    const isThreat = card.type === CardType.ENEMY || card.type === CardType.TRAP
+    return [
+      card.type === CardType.ENEMY ? 1 : 0,
+      card.type === CardType.TRAP ? 1 : 0,
+      card.type === CardType.TREASURE && card.treasureKind !== 'starlight' ? 1 : 0,
+      card.type === CardType.FLOWER ? 1 : 0,
+      isSpecial ? 1 : 0,
+      isThreat ? 1 : 0,
+    ]
+  }
+
   private encodeHand(slot: EnaHandSlot | undefined): number[] {
     if (!slot) return [0, 0, 0, 0, 0, 0, 0, 0, 0]
     const def = HAND_CARD_DEFINITIONS[slot.id]
@@ -1515,6 +1563,10 @@ export class EnaTrainingSimulation {
       bossPage: this.bossPage,
       eventRisk: this.eventRisk,
       webThreat: this.webThreatCount(),
+      incomingRefill: this.incomingRefillQueue.map((card, lane) => {
+        const queued = card ?? this.peekIncomingRefillCard(lane)
+        return queued ? { ...queued } : null
+      }),
       board: this.board.map((row) => row.map((card) => (card ? { ...card } : null))),
     }
   }
@@ -1524,6 +1576,8 @@ export class EnaTrainingSimulation {
 
 function fieldPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): number {
   const front = snapshot.board[0]
+  const incomingThreatCount = snapshot.incomingRefill.filter((c) => c?.type === CardType.ENEMY || c?.type === CardType.TRAP).length
+  const incomingSpecialLane = snapshot.incomingRefill.findIndex((c) => c?.type === CardType.EVENT || c?.treasureKind === 'starlight')
   const findHand = (pred: (id: HandCardId) => boolean) => snapshot.hand.findIndex((s) => pred(s.id))
 
   // 0) 불씨 관리가 생존의 핵심: 불씨가 낮으면 적·함정 스폰이 폭증한다. 성냥으로 미리 밝힌다.
@@ -1548,6 +1602,11 @@ function fieldPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): 
     const sweep = findHand((id) => id === 'sweep' || id === 'chitin')
     if (sweep >= 0) return actionIndexOf('useHand', sweep)
   }
+  // 3.5) 예고선에 위협이 많이 보이면 다음 하강 전에 광역/정리 손패를 아껴두지 않고 선제 사용한다.
+  if (incomingThreatCount >= 2 && snapshot.hp <= cfg.safeRewardHpThreshold + 2) {
+    const stabilizer = findHand((id) => id === 'sweep' || id === 'wax' || id === 'chitin')
+    if (stabilizer >= 0) return actionIndexOf('useHand', stabilizer)
+  }
   // 4) 강한 적(2칸+ 또는 공격력 초과)은 불씨 공격 손패로 처리.
   const dangerLane = front.findIndex((c) => c?.type === CardType.ENEMY && (c.group >= 2 || c.hp > snapshot.attack))
   if (dangerLane >= 0) {
@@ -1566,6 +1625,13 @@ function fieldPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): 
   // 7) 이벤트 문은 여유 있을 때 진입.
   const eventLane = front.findIndex((c) => c?.type === CardType.EVENT)
   if (eventLane >= 0 && snapshot.hp > cfg.safeEventHpThreshold) return actionIndexOf('clickLane', eventLane)
+  // 7.5) 흰색 예고(이벤트/별빛)가 보이면 해당 레인의 전방 안전 칸을 우선 비워 다음 기회를 당긴다.
+  if (incomingSpecialLane >= 0) {
+    const frontCard = front[incomingSpecialLane]
+    if (frontCard && frontCard.type !== CardType.ENEMY && frontCard.type !== CardType.TRAP) {
+      return actionIndexOf('clickLane', incomingSpecialLane)
+    }
+  }
   // 8) 남은 적이라도 친다. 아니면 클릭 가능한 칸을 친다.
   const enemyLane = front.findIndex((c) => c?.type === CardType.ENEMY)
   if (enemyLane >= 0) return actionIndexOf('clickLane', enemyLane)
