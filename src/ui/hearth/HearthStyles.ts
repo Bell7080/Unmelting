@@ -1443,9 +1443,9 @@ body.hearth-lobby #ingame-backdrop.is-out {
 }
 /* finalizing 시 choices 페이드아웃 */
 #hearth-overlay.is-dinner-finalizing .hearth-dinner-choices { opacity: 0; transition: opacity 0.28s ease; pointer-events: none; }
-/* 뒤로가기 버튼은 finalizing·after 동안 숨긴다 */
+/* 뒤로가기 버튼은 finalizing·opened(코스 선택 중) 동안 숨긴다 — after에서는 다시 표시 */
 #hearth-overlay.is-dinner-finalizing .hearth-back,
-#hearth-overlay.is-dinner-after .hearth-back { opacity: 0 !important; pointer-events: none !important; transition: none !important; }
+#hearth-overlay.is-dinner-opened .hearth-back { opacity: 0 !important; pointer-events: none !important; transition: none !important; }
 .hearth-dinner-final-curtain { position: absolute; top: 0; bottom: 0; width: 52%; z-index: 8; background: linear-gradient(180deg, #030204, #000 58%, #050306); box-shadow: inset 0 0 42px rgba(0,0,0,0.9), 0 0 34px rgba(0,0,0,0.7); opacity: 0; pointer-events: none; }
 .hearth-dinner-final-curtain--left { left: 0; transform: translateX(-104%); }
 .hearth-dinner-final-curtain--right { right: 0; transform: translateX(104%); }
@@ -1464,9 +1464,9 @@ body.hearth-lobby #ingame-backdrop.is-out {
 #hearth-overlay.is-dinner-after .hearth-dinner-choices,
 #hearth-overlay.is-dinner-after .hearth-dinner-picks,
 #hearth-overlay.is-dinner-after .hearth-dinner-picked { display: none; }
-/* NPC 말풍선 앵커 — after 화면에서 수상한 사람 위쪽 영역에 SpeechBubble을 붙인다 */
+/* NPC 말풍선 앵커 — 캐릭터 상반신 위치에 고정; tail:'top' 버블이 앵커 아래(화면 하단)에 배치된다 */
 .hearth-dinner-npc-anchor {
-  position: absolute; left: 50%; bottom: 42%; width: 1px; height: 1px;
+  position: absolute; left: 50%; top: 38%; width: 1px; height: 1px;
   transform: translateX(-50%); pointer-events: none; z-index: 11;
 }
 /* 합성 완료 유물 공개 카드 — 뷰포트 고정, 합성점 중앙 정렬 */

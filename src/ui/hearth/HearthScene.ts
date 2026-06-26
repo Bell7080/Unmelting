@@ -248,8 +248,8 @@ export class HearthScene {
     overlay.style.setProperty('--hearth-trade-bg', `url('${SpriteUrls.hearth.trade}')`)
     overlay.style.setProperty('--hearth-dinner-bg', `url('${SpriteUrls.hearth.dinner}')`)
     overlay.style.setProperty('--hearth-dinner-host', `url('${SpriteUrls.hearth.dinnerHost}')`)
-    // after 화면(수상한 사람 NPC) 배경 — bg004(무역 배경)을 재사용
-    overlay.style.setProperty('--hearth-dinner-after-bg', `url('${SpriteUrls.hearth.trade}')`)
+    // after 화면(만찬 완료/재방문) 배경 — hearth_bg_006 전용 일러스트
+    overlay.style.setProperty('--hearth-dinner-after-bg', `url('${SpriteUrls.hearth.dinnerAfter}')`)
     document.body.appendChild(overlay)
     this.overlay = overlay
 
@@ -841,7 +841,7 @@ export class HearthScene {
     const npcLine = line ?? DINNER_DONE_LINE
     this.dinnerBubble = new SpeechBubble({
       anchor: '.hearth-dinner-npc-anchor',
-      tail: 'bottom',
+      tail: 'top',
       theme: 'neutral',
       autoDismissMs: 0,
       fontSize: 18,
