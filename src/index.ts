@@ -66,6 +66,7 @@ import { CompanionSystem, type SituationId, type ClutchPlan } from '@systems/Com
 import { loadDisposition, saveDisposition, BASE_DISPOSITION } from '@systems/EnaDisposition'
 import { assessThreats } from '@systems/CompanionForesight'
 import { HearthScene } from '@ui/hearth/HearthScene'
+import { ZoneCurtain, ZONE_LIST } from '@ui/ZoneCurtain'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
 import { BgmManager } from '@/audio/BgmManager'
@@ -178,6 +179,16 @@ let debugForcedEventId: EventId | null = null
 const boardRenderer = new GameBoardRenderer('game-board')
 // 거점(촛대) 화면. 기본 부팅은 여전히 직행 인게임이며, `/시작` 명령에서만 깨어난다.
 const hearthScene = new HearthScene()
+// 구역 전환 커튼 — 1F 시작과 30/60/90F 보스 시련 종료 후 상단에서 슬라이드 인/아웃.
+const zoneCurtain = new ZoneCurtain()
+
+/** body 배경 이미지의 스프라이트 레이어만 교체한다(그라디언트 오버레이는 유지). */
+function setZoneBackground(bgUrl: string): void {
+  document.body.style.backgroundImage =
+    `linear-gradient(180deg, rgba(20, 16, 28, 0.55), rgba(8, 5, 14, 0.86)),` +
+    `radial-gradient(ellipse at top, rgba(244, 164, 96, 0.18), transparent 65%),` +
+    `url('${bgUrl}')`
+}
 // 거점 만찬은 런 시작 reset을 건너뛰어야 하므로, 실제 유물 지급 의도를 별도 플래그로 보존한다.
 let pendingDinnerRelicProfile: CustomRelicProfile | null = null
 // 배경음: 3트랙을 무작위 순서로 크로스페이드 연결, 첫 입력에서 자동재생.
@@ -2212,10 +2223,16 @@ async function closeShopAndResume(): Promise<void> {
       recordNotice('100층 보스 격파 — 잿빛 굴레가 풀렸다', 'win')
     } else if (gameState.getCurrentTurn() === 90) {
       await bossController.run90F()
+      // 90F 시련 종료 → 구역 4 (더욱 깊은 숲) 전환
+      await zoneCurtain.show(ZONE_LIST[3], () => setZoneBackground(ZONE_LIST[3].bgUrl))
     } else if (gameState.getCurrentTurn() === 60) {
       await bossController.run60F()
+      // 60F 시련 종료 → 구역 3 (어두운 숲) 전환
+      await zoneCurtain.show(ZONE_LIST[2], () => setZoneBackground(ZONE_LIST[2].bgUrl))
     } else {
       await bossController.run30F()
+      // 30F 시련 종료 → 구역 2 (정원 풀밭) 전환
+      await zoneCurtain.show(ZONE_LIST[1], () => setZoneBackground(ZONE_LIST[1].bgUrl))
     }
     inputLocked = false
     render()
@@ -2856,6 +2873,9 @@ async function startGame(): Promise<void> {
     await boardRenderer.animateJobCardToHud(chosenJob)
     await boardRenderer.playJobCurtainOpen()
   }
+
+  // 1구역 커튼: 레일이 열린 직후 상단에서 슬라이드 인/아웃하며 구역 이름을 알린다.
+  void zoneCurtain.show(ZONE_LIST[0], () => setZoneBackground(ZONE_LIST[0].bgUrl))
 
   // 1턴 시작 대사: 암막이 완전히 걷힌 뒤 살짝 딜레이 후 등장. 직업을 고른 경우 그에 맞는 인사.
   enaSpeaking = false
