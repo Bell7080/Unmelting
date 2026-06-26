@@ -186,14 +186,14 @@ export const HEARTH_STYLES = `
   gap: 8px;
   padding-bottom: clamp(8px, 1.8vh, 18px);
   cursor: pointer;
-  border: 1px solid var(--color-flame-warm, #f4a460);
+  /* 모험 칸과 같이 어두운 테두리에서 시작해 is-ignited 시 밝아진다 */
+  border: 1px solid var(--color-border-warm, #8b6f47);
   background: #1c1424;
   color: rgba(255, 236, 188, 0.5);
   font-family: 'OkDanDan', Georgia, serif;
   isolation: isolate;
   box-shadow:
-    inset 0 1px 0 rgba(255, 232, 168, 0.16),
-    inset 0 0 16px rgba(244, 164, 96, 0.04),
+    inset 0 1px 0 rgba(255, 232, 168, 0.08),
     inset 0 -10px 18px rgba(0, 0, 0, 0.46),
     0 4px 10px rgba(0, 0, 0, 0.54),
     0 12px 22px rgba(0, 0, 0, 0.44);
@@ -209,7 +209,7 @@ export const HEARTH_STYLES = `
 .hearth-cell--open.is-ignited {
   color: rgba(255, 244, 210, 0.98);
   opacity: 1;
-  /* 점등 완료 후에만 숨쉬기 글로우를 시작해 모험 칸과 동일하게 '어둠→점등'을 읽히게 한다. */
+  border-color: var(--color-flame, #ffd778);
   animation: hearth-open-ignite 0.72s cubic-bezier(0.2, 0.84, 0.3, 1) backwards, hearth-open-breathe 3.6s ease-in-out 0.72s infinite;
 }
 @keyframes hearth-open-ignite {
