@@ -1190,16 +1190,33 @@ body.hearth-lobby #ingame-backdrop.is-out {
 .hearth-dinner-curtain--right { right: 0; }
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-curtain--left { transform: translateX(-96%); }
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-curtain--right { transform: translateX(96%); }
-.hearth-dinner-rail { position: absolute; left: 6%; right: 6%; top: 50%; display: flex; justify-content: center; gap: clamp(12px, 2vw, 24px); overflow-x: auto; padding: 14px 10px 22px; z-index: 4; opacity: 0; transform: translateY(-50%) translateY(26px); scrollbar-width: thin; scrollbar-color: rgba(244,164,96,0.64) rgba(20,8,14,0.4); transition: opacity 0.38s ease 0.98s, transform 0.38s cubic-bezier(0.2,0.84,0.3,1) 0.98s, filter 0.3s ease, brightness 0.3s ease; }
+/* 4팩을 1:1:1:1 그리드로 균등 배치, overflow visible로 그림자 컷 방지 */
+.hearth-dinner-rail {
+  position: absolute; left: 4%; right: 4%; top: 50%;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: clamp(10px,1.6vw,20px);
+  overflow: visible;
+  padding: 20px 6px 32px; z-index: 4; opacity: 0;
+  transform: translateY(-50%) translateY(26px);
+  transition: opacity 0.38s ease 0.98s, transform 0.38s cubic-bezier(0.2,0.84,0.3,1) 0.98s, filter 0.3s ease;
+}
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-rail { opacity: 1; transform: translateY(-50%); }
 #hearth-overlay.is-dinner-opened .hearth-dinner-rail { filter: blur(5px) brightness(0.22); opacity: 0.3; pointer-events: none; }
 #hearth-overlay.is-dinner-finalizing .hearth-dinner-rail { opacity: 0; transform: translateY(-50%) scale(0.94); transition: opacity 0.34s ease, transform 0.34s ease; }
-/* 만찬 팩 카드: 이름(상단) → 정사각 일러스트 → 가격(하단) */
+/* 최종 선택 완료 후 검은 반투명 오버레이 — 선택지 위를 덮고 카드 공개 배경이 된다 */
+.hearth-dinner-resolve-overlay {
+  position: absolute; inset: 0; z-index: 6;
+  background: rgba(4,2,8,0.86);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.44s ease;
+}
+#hearth-overlay.is-dinner-finalizing .hearth-dinner-resolve-overlay { opacity: 1; }
+/* 만찬 팩 카드: 컨테이너는 투명, 이름·가격은 텍스트만 부유, 일러스트가 시각 중심 */
 .hearth-dinner-pack {
   flex: 0 0 clamp(118px, 16vw, 168px);
   border-radius: 18px;
-  border: 1px solid rgba(215,166,88,0.46);
-  background: linear-gradient(180deg, rgba(42,24,34,0.94), rgba(14,8,16,0.98));
+  border: none;
+  background: transparent;
   color: #ffe7a8;
   font-family: 'OkDanDan', Georgia, serif;
   display: flex;
@@ -1207,13 +1224,10 @@ body.hearth-lobby #ingame-backdrop.is-out {
   align-items: center;
   padding: clamp(9px,1.4vh,13px) clamp(8px,1.1vw,11px);
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255,232,168,0.16), 0 20px 40px rgba(0,0,0,0.62);
-  transition: transform 0.22s cubic-bezier(0.34,1.56,0.5,1), box-shadow 0.22s ease, border-color 0.2s ease;
+  transition: transform 0.22s cubic-bezier(0.34,1.56,0.5,1);
 }
 .hearth-dinner-pack:not(.is-locked):hover {
   transform: translateY(-9px) scale(1.05);
-  border-color: rgba(244,164,96,0.82);
-  box-shadow: inset 0 1px 0 rgba(255,232,168,0.24), 0 28px 52px rgba(0,0,0,0.76), 0 0 34px rgba(244,164,96,0.32);
 }
 .hearth-dinner-pack.is-locked { opacity: 0.42; cursor: default; filter: saturate(0.7); }
 .hearth-dinner-pack-name {
@@ -1235,6 +1249,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
     repeating-linear-gradient(135deg, rgba(255,255,255,0.022) 0 2px, transparent 2px 10px),
     linear-gradient(148deg, rgba(110,30,42,0.56), rgba(22,10,26,0.97));
   flex-shrink: 0;
+  box-shadow: 0 14px 36px rgba(0,0,0,0.72), 0 0 22px rgba(244,164,96,0.1);
 }
 .hearth-dinner-pack-price {
   font-size: clamp(14px,1.9vh,20px);
@@ -1304,14 +1319,15 @@ body.hearth-lobby #ingame-backdrop.is-out {
 }
 .hearth-dinner-choice-footer strong { font-size: clamp(14px,1.95vh,21px); letter-spacing: 0.06em; display: block; }
 .hearth-dinner-choice-footer small { color: rgba(255,226,178,0.82); font-size: clamp(11px,1.5vh,14px); display: block; }
-/* 완성 접시 카드 — 온전한 유물 카드 모양, 레일 바깥으로 나가도 허용 */
+/* 최종 완성 유물 카드 — finalizing 오버레이(z6) 위에서 카드팩처럼 등장 */
 .hearth-dinner-picked {
   position: absolute; left: 50%; bottom: 3%;
   transform: translateX(-50%);
-  z-index: 6;
+  z-index: 7;
   width: clamp(148px,20vw,210px);
   aspect-ratio: 3 / 4;
   pointer-events: none;
+  opacity: 0;
 }
 .hearth-dinner-plate-card {
   width: 100%; height: 100%;
@@ -1336,8 +1352,9 @@ body.hearth-lobby #ingame-backdrop.is-out {
 .hearth-dinner-plate-card strong { font-size: clamp(14px,1.95vh,21px); letter-spacing: 0.06em; }
 .hearth-dinner-plate-card small { color: rgba(220,204,178,0.76); font-size: clamp(11px,1.45vh,14px); line-height: 1.3; }
 #hearth-overlay.is-dinner-finalizing .hearth-dinner-choices { opacity: 0; transform: translateY(-24px); transition: opacity 0.28s ease, transform 0.28s ease; pointer-events: none; }
-#hearth-overlay.is-dinner-finalizing .hearth-dinner-picked { animation: hearth-dinner-final-hover 0.72s ease-in-out both; }
-#hearth-overlay.is-dinner-closing .hearth-dinner-picked { opacity: 0; filter: blur(6px); transition: opacity 0.36s ease, filter 0.36s ease; }
+/* 뒤로가기 버튼은 finalizing·after 동안 숨긴다 */
+#hearth-overlay.is-dinner-finalizing .hearth-back,
+#hearth-overlay.is-dinner-after .hearth-back { opacity: 0 !important; pointer-events: none !important; transition: none !important; }
 .hearth-dinner-final-curtain { position: absolute; top: 0; bottom: 0; width: 52%; z-index: 8; background: linear-gradient(180deg, #030204, #000 58%, #050306); box-shadow: inset 0 0 42px rgba(0,0,0,0.9), 0 0 34px rgba(0,0,0,0.7); opacity: 0; pointer-events: none; }
 .hearth-dinner-final-curtain--left { left: 0; transform: translateX(-104%); }
 .hearth-dinner-final-curtain--right { right: 0; transform: translateX(104%); }
@@ -1359,7 +1376,6 @@ body.hearth-lobby #ingame-backdrop.is-out {
 @keyframes hearth-dinner-black-close-right { to { transform: translateX(0); opacity: 1; } }
 @keyframes hearth-dinner-illu-open { 0% { clip-path: inset(0 50% 0 50%); opacity: 0; } 100% { clip-path: inset(0 0 0 0); opacity: 1; } }
 @keyframes hearth-dinner-dialogue-in { to { opacity: 1; transform: translateY(0); } }
-@keyframes hearth-dinner-final-hover { 0% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) translateY(-24px) scale(1.16); } 100% { transform: translateX(-50%) translateY(-16px) scale(1.08); } }
 .hearth-dinner-orb { position: fixed; z-index: 260; width: 20px; height: 20px; border-radius: 50%; pointer-events: none; background: #ffe7a8; box-shadow: 0 0 22px #ffd778, 0 0 58px rgba(244,164,96,0.76); }
 .hearth-dinner-orb.is-flying { animation: hearth-dinner-orb-flight 0.64s cubic-bezier(0.18,0.78,0.22,1) forwards; }
 @keyframes hearth-dinner-orb-flight { to { transform: translate(var(--orb-dx), var(--orb-dy)) scale(0.38); opacity: 0.84; } }

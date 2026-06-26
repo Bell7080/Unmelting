@@ -155,6 +155,7 @@ export class HearthScene {
             <div class="hearth-dinner-illustration" aria-hidden="true"></div>
             <div class="hearth-dinner-dialogue" aria-live="polite"></div>
             <div class="hearth-dinner-rail">${this.renderDinnerPacks()}</div>
+            <div class="hearth-dinner-resolve-overlay" aria-hidden="true"></div>
             <div class="hearth-dinner-picked" aria-live="polite"></div>
             <div class="hearth-dinner-choices" aria-live="polite"></div>
           </div>
@@ -425,16 +426,26 @@ export class HearthScene {
   /** 만찬 카드 선택은 음식 1회 + 추가 스탯 2회, 총 3단계를 순서대로 진행한다. */
   private async pickDinnerChoice(index: number): Promise<void> {
     if (this.dinnerStep < 1 || this.dinnerStep > 3) return
+    const choicesEl = this.overlay?.querySelector<HTMLElement>('.hearth-dinner-choices')
+    if (!choicesEl) return
+    // 입력 잠금 — 버스트 딜레이 동안 중복 선택을 막는다.
+    choicesEl.style.pointerEvents = 'none'
+    const choiceEl = choicesEl.querySelector<HTMLElement>(`[data-hearth-dinner-choice="${index}"]`)
     const options = this.getDinnerOptions()
     const picked = options[index] ?? options[0]
     this.dinnerChoices.push(picked)
-    this.moveDinnerPickToPlate(picked)
+    // 선택 딜레이 후 사각 블라스트 + 유물 방향 빛 구슬 발사
+    await this.wait(120)
+    if (choiceEl) {
+      SquareBurst.playOn(choiceEl, 'score', { count: 28, spread: 160, duration: 560, size: [8, 22] })
+      this.shootDinnerOrbFromChoice(choiceEl)
+    }
+    await this.wait(480)
     if (this.dinnerStep === 1) {
       this.dinnerStep = 2
       this.renderDinnerChoices()
       return
     }
-    this.flashDinnerStatIntoPlate()
     if (this.dinnerStep === 2) {
       this.dinnerStep = 3
       this.renderDinnerChoices()
@@ -442,6 +453,28 @@ export class HearthScene {
     }
     this.dinnerStep = 4
     await this.finishDinner()
+  }
+
+  /** 선택된 카드에서 유물 인벤토리 방향으로 빛 구슬을 발사한다. */
+  private shootDinnerOrbFromChoice(source: HTMLElement): void {
+    const srcRect = source.getBoundingClientRect()
+    const target = document.querySelector<HTMLElement>('.relic-mini-card[data-owned-relic="last-supper"]')
+      ?? document.querySelector<HTMLElement>('.relic-stack')
+      ?? document.querySelector<HTMLElement>('.relic-layer')
+    const dstRect = target?.getBoundingClientRect()
+    const orb = document.createElement('div')
+    orb.className = 'hearth-dinner-orb'
+    orb.style.left = `${srcRect.left + srcRect.width / 2 - 10}px`
+    orb.style.top = `${srcRect.top + srcRect.height / 2 - 10}px`
+    orb.style.setProperty('--orb-dx', `${dstRect ? dstRect.left + dstRect.width / 2 - (srcRect.left + srcRect.width / 2) : 160}px`)
+    orb.style.setProperty('--orb-dy', `${dstRect ? dstRect.top + dstRect.height / 2 - (srcRect.top + srcRect.height / 2) : 100}px`)
+    document.body.appendChild(orb)
+    requestAnimationFrame(() => orb.classList.add('is-flying'))
+    // 구슬 도착 후 목적지 버스트, 구슬 제거
+    setTimeout(() => {
+      if (target) SquareBurst.playOn(target, 'score', { count: 18, spread: 100, duration: 440, size: [6, 14] })
+      orb.remove()
+    }, 680)
   }
 
   /** 만찬 레일: 이름(상단) → 정사각 일러스트 → 가격(하단) 구조의 4종 팩. */
@@ -508,52 +541,47 @@ export class HearthScene {
     choices.animate([{ opacity: 0, transform: 'translateY(-14px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 280, easing: 'ease-out' })
   }
 
-  /** 선택된 카드는 하단 중앙 접시 카드로 축소 복제해 누적 선택을 보여 준다. */
-  private moveDinnerPickToPlate(picked: DinnerChoice): void {
-    const plate = this.overlay?.querySelector<HTMLElement>('.hearth-dinner-picked')
-    if (!plate) return
-    plate.innerHTML = `<div class="hearth-dinner-plate-card" style="--food-color:${picked.color}"><span></span><strong>${this.dinnerChoices[0]?.title ?? picked.title}</strong><small>${this.dinnerChoices.map((choice) => choice.title).join(' · ')}</small></div>`
-    plate.animate([{ transform: 'translate(-50%, 18px) scale(0.9)', opacity: 0 }, { transform: 'translate(-50%, 0) scale(1)', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(0.2,0.84,0.3,1)' })
-  }
-
-  /** 추가 스탯은 불빛처럼 하단 음식 카드에 꽂히는 사각 블라스트로 피드백한다. */
-  private flashDinnerStatIntoPlate(): void {
-    const plate = this.overlay?.querySelector<HTMLElement>('.hearth-dinner-picked')
-    if (!plate) return
-    SquareBurst.playOn(plate, 'score', { count: 22, spread: 130, duration: 520, size: [8, 18] })
-  }
-
-  /** 완성 만찬은 중앙에서 체류 후 빛 구슬이 되어 유물 인벤토리 방향으로 날아간다. */
+  /** 3번 선택이 끝나면 오버레이를 덮고 완성 유물 카드를 카드팩처럼 공개한다. */
   private async finishDinner(): Promise<void> {
     const root = this.overlay
-    const plate = root?.querySelector<HTMLElement>('.hearth-dinner-picked')
-    if (!root || !plate) return
+    const picked = root?.querySelector<HTMLElement>('.hearth-dinner-picked')
+    if (!root || !picked) return
+    // 검은 반투명 오버레이 페이드인
     root.classList.add('is-dinner-finalizing')
-    SquareBurst.playOn(plate, 'score', { count: 42, spread: 210, duration: 760, size: [10, 26] })
-    await this.wait(720)
-    const source = plate.getBoundingClientRect()
-    // 실제 유물 지급은 index/GameState가 담당한다. 먼저 인벤토리를 렌더해 목적지를
-    // 확보한 뒤, 빛 구슬이 캐릭터 카드가 아니라 보유 유물 카드 안쪽으로 꽂히게 한다.
-    await this.handlers?.onDinnerRelicCreate?.(this.buildDinnerRelicProfile())
+    await this.wait(420)
+    // 유물 지급 후 카드 내용 구성
+    const profile = this.buildDinnerRelicProfile()
+    await this.handlers?.onDinnerRelicCreate?.(profile)
     await this.wait(40)
-    const target = document.querySelector<HTMLElement>('.relic-mini-card[data-owned-relic="last-supper"]')
-      ?? document.querySelector<HTMLElement>('.relic-stack')
-      ?? document.querySelector<HTMLElement>('.relic-layer')
-    const dest = target?.getBoundingClientRect()
-    const orb = document.createElement('div')
-    orb.className = 'hearth-dinner-orb'
-    orb.style.left = `${source.left + source.width / 2 - 10}px`
-    orb.style.top = `${source.top + source.height / 2 - 10}px`
-    orb.style.setProperty('--orb-dx', `${dest ? dest.left + dest.width / 2 - (source.left + source.width / 2) : 180}px`)
-    orb.style.setProperty('--orb-dy', `${dest ? dest.top + dest.height / 2 - (source.top + source.height / 2) : 120}px`)
-    document.body.appendChild(orb)
-    orb.classList.add('is-flying')
-    await this.wait(660)
-    if (target) SquareBurst.playOn(target, 'score', { count: 28, spread: 150, duration: 620, size: [8, 18] })
-    orb.remove()
-    // 완료 여부는 별도 저장소가 아니라 실제 인벤토리 DOM의 만찬 유물 카드 존재로 판정한다.
+    const firstChoice = this.dinnerChoices[0]
+    picked.innerHTML = `<div class="hearth-dinner-plate-card" style="--food-color:${firstChoice?.color ?? '#7e2630'}">
+      <span></span>
+      <strong>${profile.name}</strong>
+      <small>${profile.effect}</small>
+    </div>`
+    // 카드팩 공개: 하단에서 슈슈슉 등장
+    picked.getAnimations().forEach((a) => a.cancel())
+    picked.animate(
+      [
+        { transform: 'translate(-50%, 90px)', opacity: 0 },
+        { transform: 'translate(-50%, 0)', opacity: 1 },
+      ],
+      { duration: 520, easing: 'cubic-bezier(0.18,0.84,0.28,1)', fill: 'forwards' },
+    )
+    await this.wait(360)
+    SquareBurst.playOn(picked, 'score', { count: 38, spread: 190, duration: 720, size: [10, 24] })
+    await this.wait(1400)
     this.dinnerConsumed = this.hasDinnerRelicInInventory()
     root.classList.add('is-dinner-closing')
+    // WAAPI로 카드 페이드아웃 (CSS closing 전환 대신 직접 제어)
+    picked.getAnimations().forEach((a) => a.cancel())
+    picked.animate(
+      [
+        { transform: 'translate(-50%, 0)', opacity: 1, filter: 'blur(0px)' },
+        { transform: 'translate(-50%, 0)', opacity: 0, filter: 'blur(6px)' },
+      ],
+      { duration: 360, easing: 'ease', fill: 'forwards' },
+    )
     await this.wait(820)
     this.showDinnerAfterScene(DINNER_DONE_LINE)
   }
