@@ -1299,13 +1299,14 @@ body.hearth-lobby #ingame-backdrop.is-out {
   flex: 0 0 clamp(128px,18vw,192px);
   min-height: clamp(210px,38vh,320px);
   border-radius: 18px;
-  border: 1px solid rgba(215,166,88,0.56);
+  border: 1.5px solid rgba(215,166,88,0.56);
   background: linear-gradient(180deg, rgba(16,9,22,0.99) 0%, rgba(30,16,34,0.97) 42%, rgba(10,6,14,0.99) 100%);
   color: #ffe7a8;
   font-family: 'OkDanDan', Georgia, serif;
   padding: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
   overflow: hidden;
   cursor: pointer;
   box-shadow: inset 0 1px 0 rgba(255,232,168,0.18), 0 24px 52px rgba(0,0,0,0.74);
@@ -1313,8 +1314,34 @@ body.hearth-lobby #ingame-backdrop.is-out {
 }
 .hearth-dinner-choice:hover {
   transform: translateY(-10px) scale(1.04);
-  border-color: rgba(244,164,96,0.82);
   box-shadow: inset 0 1px 0 rgba(255,232,168,0.26), 0 32px 62px rgba(0,0,0,0.84), 0 0 40px rgba(244,164,96,0.38);
+}
+/* 등급별 테두리/발광 */
+.hearth-dinner-choice[data-rarity="common"] { border-color: rgba(184,168,138,0.54); }
+.hearth-dinner-choice[data-rarity="rare"]   { border-color: rgba(100,178,218,0.72); box-shadow: inset 0 1px 0 rgba(160,220,255,0.14), 0 24px 52px rgba(0,0,0,0.74), 0 0 18px rgba(80,160,220,0.22); }
+.hearth-dinner-choice[data-rarity="epic"]   { border-color: rgba(192,100,220,0.82); box-shadow: inset 0 1px 0 rgba(220,160,255,0.18), 0 24px 52px rgba(0,0,0,0.74), 0 0 26px rgba(160,60,220,0.38); }
+.hearth-dinner-choice[data-rarity="common"]:hover { border-color: rgba(210,192,158,0.82); }
+.hearth-dinner-choice[data-rarity="rare"]:hover   { border-color: rgba(130,210,255,0.92); box-shadow: inset 0 1px 0 rgba(160,220,255,0.22), 0 32px 62px rgba(0,0,0,0.84), 0 0 38px rgba(80,160,220,0.48); }
+.hearth-dinner-choice[data-rarity="epic"]:hover   { border-color: rgba(220,130,255,0.95); box-shadow: inset 0 1px 0 rgba(220,160,255,0.28), 0 32px 62px rgba(0,0,0,0.84), 0 0 52px rgba(160,60,220,0.62); }
+/* 등급 뱃지 — 카드 상단 좌측 */
+.hearth-dinner-choice-rarity {
+  position: absolute; top: 10px; left: 10px;
+  font-size: clamp(10px,1.3vh,12px); font-weight: 900; letter-spacing: 0.08em;
+  font-family: 'OkDanDan', Georgia, serif;
+  padding: 2px 8px; border-radius: 6px;
+  pointer-events: none; z-index: 2;
+}
+.hearth-dinner-choice[data-rarity="common"] .hearth-dinner-choice-rarity {
+  color: rgba(210,192,152,0.9); background: rgba(0,0,0,0.46);
+  border: 1px solid rgba(184,168,138,0.4);
+}
+.hearth-dinner-choice[data-rarity="rare"] .hearth-dinner-choice-rarity {
+  color: rgba(140,210,255,0.96); background: rgba(10,20,40,0.62);
+  border: 1px solid rgba(100,178,218,0.52); text-shadow: 0 0 8px rgba(80,160,220,0.7);
+}
+.hearth-dinner-choice[data-rarity="epic"] .hearth-dinner-choice-rarity {
+  color: rgba(220,160,255,0.98); background: rgba(20,8,30,0.68);
+  border: 1px solid rgba(192,100,220,0.6); text-shadow: 0 0 10px rgba(160,60,220,0.8);
 }
 /* 일러스트 영역 — 스프라이트(--dinner-art)가 있으면 위에 올리고, 없으면 색 그라디언트 폴백 */
 .hearth-dinner-choice-art {
@@ -1333,6 +1360,9 @@ body.hearth-lobby #ingame-backdrop.is-out {
 }
 .hearth-dinner-choice-footer strong { font-size: clamp(14px,1.95vh,21px); letter-spacing: 0.06em; display: block; }
 .hearth-dinner-choice-footer small { color: rgba(255,226,178,0.82); font-size: clamp(11px,1.5vh,14px); display: block; }
+/* 레어/에픽 스탯 문자열은 색으로 강조 */
+.hearth-dinner-choice[data-rarity="rare"] .hearth-dinner-choice-footer small { color: rgba(140,210,255,0.9); }
+.hearth-dinner-choice[data-rarity="epic"] .hearth-dinner-choice-footer small { color: rgba(220,160,255,0.95); }
 /* 최종 완성 유물 카드 — finalizing 오버레이(z6) 위에서 카드팩처럼 등장 */
 .hearth-dinner-picked {
   position: absolute; left: 50%; bottom: 3%;
