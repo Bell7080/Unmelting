@@ -1386,6 +1386,50 @@ body.hearth-lobby #ingame-backdrop.is-out {
 }
 .hearth-dinner-plate-body strong { font-size: clamp(13px,1.8vh,19px); letter-spacing: 0.06em; display: block; }
 .hearth-dinner-plate-body small { color: rgba(220,204,178,0.76); font-size: clamp(10px,1.3vh,13px); display: block; line-height: 1.3; margin-top: 3px; }
+/* 선택한 3장 미니카드 — 레일 하단 중앙에 수평으로 쌓인다(z7, 선택지 패널 위) */
+.hearth-dinner-picks {
+  position: absolute;
+  bottom: clamp(10px, 2vh, 18px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: row;
+  gap: clamp(6px, 1vw, 10px);
+  z-index: 7;
+  pointer-events: none;
+  align-items: flex-end;
+}
+.hearth-dinner-pick-slot {
+  width: clamp(52px, 6.5vw, 70px);
+  aspect-ratio: 3 / 4;
+  border-radius: 8px;
+  border: 1px solid rgba(255,215,120,0.52);
+  background:
+    var(--dinner-art, none) center / cover no-repeat,
+    radial-gradient(circle at 50% 36%, rgba(255,236,188,0.22), transparent 42%),
+    linear-gradient(160deg, var(--food-color, #7e2630), rgba(12,6,14,0.97));
+  box-shadow: 0 0 14px rgba(244,164,96,0.28), inset 0 1px 0 rgba(255,232,168,0.14);
+  position: relative; overflow: hidden;
+  opacity: 0; /* WAAPI pop-in이 fill:forwards로 1로 올린다 */
+}
+.hearth-dinner-pick-slot[data-rarity="rare"] {
+  border-color: rgba(96,176,255,0.64);
+  box-shadow: 0 0 16px rgba(80,168,255,0.32), inset 0 1px 0 rgba(140,210,255,0.18);
+}
+.hearth-dinner-pick-slot[data-rarity="epic"] {
+  border-color: rgba(188,128,255,0.68);
+  box-shadow: 0 0 18px rgba(180,100,255,0.38), inset 0 1px 0 rgba(210,150,255,0.22);
+}
+.hearth-dinner-pick-slot-label {
+  position: absolute; bottom: 2px; left: 0; right: 0;
+  text-align: center;
+  font-size: clamp(7px, 0.85vw, 9px);
+  color: rgba(255,231,168,0.82);
+  font-family: 'OkDanDan', Georgia, serif;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 0 2px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.88);
+}
 /* finalizing 시 choices 페이드아웃 */
 #hearth-overlay.is-dinner-finalizing .hearth-dinner-choices { opacity: 0; transition: opacity 0.28s ease; pointer-events: none; }
 /* 뒤로가기 버튼은 finalizing·after 동안 숨긴다 */
@@ -1404,6 +1448,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
 #hearth-overlay.is-dinner-after .hearth-dinner-dialogue { animation: hearth-dinner-dialogue-in 0.36s 1.42s ease-out forwards; }
 #hearth-overlay.is-dinner-after .hearth-dinner-rail,
 #hearth-overlay.is-dinner-after .hearth-dinner-choices,
+#hearth-overlay.is-dinner-after .hearth-dinner-picks,
 #hearth-overlay.is-dinner-after .hearth-dinner-picked { display: none; }
 .hearth-dinner-relic-card { width: 54px; min-height: 74px; border-radius: 10px; border: 1px solid rgba(255,215,120,0.5); background: linear-gradient(180deg, rgba(54,36,42,0.96), rgba(12,8,14,0.98)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; font-size: 10px; padding: 5px; box-shadow: inset 0 1px 0 rgba(255,232,168,0.18), 0 0 18px rgba(244,164,96,0.35); }
 .hearth-dinner-relic-card span { display: block; height: 30px; border-radius: 7px; margin-bottom: 4px; background: radial-gradient(circle at 50% 38%, rgba(255,236,188,0.28), transparent 42%), linear-gradient(145deg, #7e2630, rgba(22,10,24,0.94)); }

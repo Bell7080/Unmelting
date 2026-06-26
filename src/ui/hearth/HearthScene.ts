@@ -162,6 +162,8 @@ export class HearthScene {
   private dinnerChoices: DinnerChoice[] = []
   /** 만찬 완료 후에는 런이 시작될 때까지 닫힌 일러스트/대사 화면으로 재입장한다. */
   private dinnerConsumed = false
+  /** renderDinnerChoices()가 뽑아 표시한 선택지 배열 — pickDinnerChoice()가 캐시를 재사용한다. */
+  private dinnerCurrentOptions: DinnerChoice[] = []
 
   enter(handlers: HearthHandlers): void {
     this.injectStyles()
@@ -209,6 +211,7 @@ export class HearthScene {
             <div class="hearth-dinner-dialogue" aria-live="polite"></div>
             <div class="hearth-dinner-rail">${this.renderDinnerPacks()}</div>
             <div class="hearth-dinner-resolve-overlay" aria-hidden="true"></div>
+            <div class="hearth-dinner-picks" aria-hidden="true"></div>
             <div class="hearth-dinner-picked" aria-live="polite"></div>
             <div class="hearth-dinner-choices" aria-live="polite"></div>
           </div>
@@ -459,10 +462,12 @@ export class HearthScene {
     const root = this.overlay
     root?.classList.remove('is-dinner-opened', 'is-dinner-finalizing', 'is-dinner-closing', 'is-dinner-after')
     const rail = root?.querySelector<HTMLElement>('.hearth-dinner-rail')
+    const picks = root?.querySelector<HTMLElement>('.hearth-dinner-picks')
     const picked = root?.querySelector<HTMLElement>('.hearth-dinner-picked')
     const choices = root?.querySelector<HTMLElement>('.hearth-dinner-choices')
     const dialogue = root?.querySelector<HTMLElement>('.hearth-dinner-dialogue')
     if (rail) rail.innerHTML = this.renderDinnerPacks()
+    if (picks) picks.innerHTML = ''
     if (picked) picked.innerHTML = ''
     if (choices) choices.innerHTML = ''
     if (dialogue) dialogue.textContent = ''
@@ -481,19 +486,18 @@ export class HearthScene {
     if (this.dinnerStep < 1 || this.dinnerStep > 3) return
     const choicesEl = this.overlay?.querySelector<HTMLElement>('.hearth-dinner-choices')
     if (!choicesEl) return
-    // 입력 잠금 — 버스트 딜레이 동안 중복 선택을 막는다.
+    // 입력 잠금 — 중복 선택 방지.
     choicesEl.style.pointerEvents = 'none'
     const choiceEl = choicesEl.querySelector<HTMLElement>(`[data-hearth-dinner-choice="${index}"]`)
-    const options = this.getDinnerOptions()
-    const picked = options[index] ?? options[0]
+    // renderDinnerChoices()가 캐시한 배열을 재사용해 무작위 재추첨을 막는다.
+    const picked = this.dinnerCurrentOptions[index] ?? this.dinnerCurrentOptions[0]
     this.dinnerChoices.push(picked)
-    // 선택 딜레이 후 사각 블라스트 + 유물 방향 빛 구슬 발사
-    await this.wait(120)
     if (choiceEl) {
-      SquareBurst.playOn(choiceEl, 'score', { count: 28, spread: 160, duration: 560, size: [8, 22] })
-      this.shootDinnerOrbFromChoice(choiceEl)
+      SquareBurst.playOn(choiceEl, 'score', { count: 20, spread: 120, duration: 420, size: [6, 16] })
     }
-    await this.wait(480)
+    // 선택한 카드를 레일 하단 미니카드로 즉시 추가
+    this.addDinnerPick(picked)
+    await this.wait(300)
     if (this.dinnerStep === 1) {
       this.dinnerStep = 2
       this.renderDinnerChoices()
@@ -508,27 +512,35 @@ export class HearthScene {
     await this.finishDinner()
   }
 
-  /** 선택된 카드에서 빛 구슬을 발사한다.
-   * 인게임 relic-stack으로 날아가 "유물에 스탯이 쌓인다"는 시각적 피드백을 준다.
-   * relic-stack 미존재 시(로비 초기화 전) hearth-dinner-picked를 폴백으로 사용한다. */
-  private shootDinnerOrbFromChoice(source: HTMLElement): void {
-    const srcRect = source.getBoundingClientRect()
-    const target = document.querySelector<HTMLElement>('.relic-stack')
-      ?? this.overlay?.querySelector<HTMLElement>('.hearth-dinner-picked')
-    const dstRect = target?.getBoundingClientRect()
+  /** 선택한 음식/소스/재료 카드를 레일 하단에 미니카드로 추가하고 팝인 연출을 재생한다. */
+  private addDinnerPick(choice: DinnerChoice): void {
+    const picksEl = this.overlay?.querySelector<HTMLElement>('.hearth-dinner-picks')
+    if (!picksEl) return
+    const slot = document.createElement('div')
+    slot.className = 'hearth-dinner-pick-slot'
+    slot.setAttribute('data-rarity', choice.rarity)
+    if (choice.sprite) slot.style.setProperty('--dinner-art', `url('${choice.sprite}')`)
+    slot.style.setProperty('--food-color', choice.color)
+    slot.innerHTML = `<span class="hearth-dinner-pick-slot-label">${choice.title}</span>`
+    picksEl.appendChild(slot)
+    slot.animate([
+      { transform: 'scale(0.3) translateY(18px)', opacity: 0 },
+      { transform: 'scale(1.1) translateY(-3px)', opacity: 1, offset: 0.72 },
+      { transform: 'scale(1) translateY(0)', opacity: 1 },
+    ], { duration: 380, easing: 'cubic-bezier(0.18,0.84,0.28,1)', fill: 'forwards' })
+  }
+
+  /** 유물 인벤토리 카드로 빛 구슬을 발사한다. from/to는 viewport 좌표 중심점. */
+  private shootOrbToRelic(fromX: number, fromY: number, toX: number, toY: number): void {
     const orb = document.createElement('div')
     orb.className = 'hearth-dinner-orb'
-    orb.style.left = `${srcRect.left + srcRect.width / 2 - 10}px`
-    orb.style.top = `${srcRect.top + srcRect.height / 2 - 10}px`
-    orb.style.setProperty('--orb-dx', `${dstRect ? dstRect.left + dstRect.width / 2 - (srcRect.left + srcRect.width / 2) : 0}px`)
-    orb.style.setProperty('--orb-dy', `${dstRect ? dstRect.top + dstRect.height / 2 - (srcRect.top + srcRect.height / 2) : 80}px`)
+    orb.style.left = `${fromX - 10}px`
+    orb.style.top = `${fromY - 10}px`
+    orb.style.setProperty('--orb-dx', `${toX - fromX}px`)
+    orb.style.setProperty('--orb-dy', `${toY - fromY}px`)
     document.body.appendChild(orb)
     requestAnimationFrame(() => orb.classList.add('is-flying'))
-    // 구슬 도착 — picked에 작은 반짝임 후 제거
-    setTimeout(() => {
-      if (target) SquareBurst.playOn(target, 'score', { count: 14, spread: 80, duration: 380, size: [5, 12] })
-      orb.remove()
-    }, 680)
+    setTimeout(() => orb.remove(), 750)
   }
 
   /** 만찬 레일: 이름(상단) → 정사각 일러스트 → 가격(하단) 구조의 4종 팩. */
@@ -617,7 +629,8 @@ export class HearthScene {
     })
   }
 
-  /** 선택지를 그린다: 인게임 카드팩 피커와 같은 구조(상단 헤더 + 3장 그리드). */
+  /** 선택지를 그린다: 인게임 카드팩 피커와 같은 구조(상단 헤더 + 3장 그리드).
+   * 뽑은 배열을 dinnerCurrentOptions에 캐시해 pickDinnerChoice()가 동일 배열을 사용하게 한다. */
   private renderDinnerChoices(): void {
     const choices = this.overlay?.querySelector<HTMLElement>('.hearth-dinner-choices')
     if (!choices) return
@@ -625,7 +638,9 @@ export class HearthScene {
     choices.style.pointerEvents = ''
     const stepLabels: Record<number, string> = { 1: '메인', 2: '소스', 3: '재료' }
     const stepLabel = stepLabels[this.dinnerStep] ?? ''
-    const cards = this.getDinnerOptions().map((option, index) => `
+    const options = this.getDinnerOptions()
+    this.dinnerCurrentOptions = options
+    const cards = options.map((option, index) => `
       <button class="hearth-dinner-choice" type="button"
         data-hearth-dinner-choice="${index}"
         data-rarity="${option.rarity}"
@@ -650,51 +665,63 @@ export class HearthScene {
     )
   }
 
-  /** 3번 선택이 끝나면 오버레이를 덮고 완성 유물 카드를 카드팩처럼 공개한다. */
+  /** 3장 선택 완료 — 미니카드 3장을 중앙으로 합친 뒤 블라스트 → 빛 구슬 → 유물 인벤토리 꽂힘 순으로 진행한다. */
   private async finishDinner(): Promise<void> {
     const root = this.overlay
-    const picked = root?.querySelector<HTMLElement>('.hearth-dinner-picked')
-    if (!root || !picked) return
-    // 검은 반투명 오버레이 페이드인
+    if (!root) return
+
+    // 선택지 패널 페이드아웃 + 어두운 오버레이 풀 불투명
     root.classList.add('is-dinner-finalizing')
-    await this.wait(420)
-    // 유물 지급 후 카드 내용 구성
+    await this.wait(300)
+
     const profile = this.buildDinnerRelicProfile()
     await this.handlers?.onDinnerRelicCreate?.(profile)
-    await this.wait(40)
-    // 완성 카드 일러스트는 메인(food) 스프라이트를 따른다
-    const food = this.dinnerChoices.find((c) => c.kind === 'food') ?? this.dinnerChoices[0]
-    const artStyle = food?.sprite ? `;--dinner-art:url('${food.sprite}')` : ''
-    picked.innerHTML = `<div class="hearth-dinner-plate-card" style="--food-color:${food?.color ?? '#7e2630'}${artStyle}">
-      <span class="hearth-dinner-plate-art" aria-hidden="true"></span>
-      <div class="hearth-dinner-plate-body">
-        <strong>${profile.name}</strong>
-        <small>${profile.effect.replace(/\n/g, ' · ')}</small>
-      </div>
-    </div>`
-    // 카드팩 공개: 하단에서 슈슈슉 등장
-    // 카드팩 공개: 아래에서 중앙으로 슈슈슉 등장
-    picked.getAnimations().forEach((a) => a.cancel())
-    picked.animate(
-      [
-        { transform: 'translate(-50%, calc(-50% + 60px))', opacity: 0 },
-        { transform: 'translate(-50%, -50%)', opacity: 1 },
-      ],
-      { duration: 520, easing: 'cubic-bezier(0.18,0.84,0.28,1)', fill: 'forwards' },
-    )
-    await this.wait(360)
-    SquareBurst.playOn(picked, 'score', { count: 38, spread: 190, duration: 720, size: [10, 24] })
-    await this.wait(1400)
+    await this.wait(80)
+
+    // 3장 미니카드를 중앙 합성점으로 날려 보낸다
+    const picksEl = root.querySelector<HTMLElement>('.hearth-dinner-picks')
+    const slots = picksEl ? [...picksEl.querySelectorAll<HTMLElement>('.hearth-dinner-pick-slot')] : []
+    let mergeX = window.innerWidth / 2
+    let mergeY = window.innerHeight * 0.72
+
+    if (slots.length > 0 && picksEl) {
+      const picksRect = picksEl.getBoundingClientRect()
+      mergeX = picksRect.left + picksRect.width / 2
+      mergeY = picksRect.top + picksRect.height / 2
+
+      slots.forEach((slot) => {
+        const r = slot.getBoundingClientRect()
+        const dx = mergeX - (r.left + r.width / 2)
+        const dy = mergeY - (r.top + r.height / 2)
+        slot.getAnimations().forEach((a) => a.cancel())
+        slot.animate([
+          { transform: 'translate(0,0) scale(1)', opacity: 1 },
+          { transform: `translate(${dx}px,${dy}px) scale(0.1)`, opacity: 0 },
+        ], { duration: 480, easing: 'cubic-bezier(0.4,0,0.8,0.4)', fill: 'forwards' })
+      })
+      await this.wait(440)
+    }
+
+    // 합성 블라스트 — width/height 0인 앵커 div를 뷰포트 합성점에 배치
+    const burstHost = document.createElement('div')
+    burstHost.style.cssText = `position:fixed;left:${mergeX}px;top:${mergeY}px;z-index:280;pointer-events:none;width:0;height:0;`
+    document.body.appendChild(burstHost)
+    SquareBurst.playOn(burstHost, 'score', { count: 36, spread: 170, duration: 660, size: [8, 22] })
+    await this.wait(180)
+    burstHost.remove()
+
+    // 유물 인벤토리 카드로 빛 구슬 발사
+    const relicCard = document.querySelector<HTMLElement>('.relic-mini-card[data-owned-relic="last-supper"]')
+    if (relicCard) {
+      const relicRect = relicCard.getBoundingClientRect()
+      this.shootOrbToRelic(mergeX, mergeY, relicRect.left + relicRect.width / 2, relicRect.top + relicRect.height / 2)
+      await this.wait(680)
+      SquareBurst.playOn(relicCard, 'score', { count: 22, spread: 84, duration: 460, size: [5, 13] })
+    }
+    await this.wait(520)
+
     this.dinnerConsumed = this.hasDinnerRelicInInventory()
     root.classList.add('is-dinner-closing')
-    picked.getAnimations().forEach((a) => a.cancel())
-    picked.animate(
-      [
-        { transform: 'translate(-50%, -50%)', opacity: 1, filter: 'blur(0px)' },
-        { transform: 'translate(-50%, -50%)', opacity: 0, filter: 'blur(6px)' },
-      ],
-      { duration: 360, easing: 'ease', fill: 'forwards' },
-    )
     await this.wait(820)
     this.showDinnerAfterScene(DINNER_DONE_LINE)
   }
@@ -761,6 +788,8 @@ export class HearthScene {
       root.classList.remove('is-shuttering', 'is-shutter-rest', 'is-dinner-mode', 'is-dinner-opened', 'is-dinner-finalizing', 'is-dinner-closing', 'is-dinner-after')
       this.dinnerStep = this.dinnerConsumed ? 5 : 0
       this.dinnerChoices = []
+      this.dinnerCurrentOptions = []
+      root.querySelector<HTMLElement>('.hearth-dinner-picks')?.replaceChildren()
       return
     }
     if (root?.classList.contains('is-trade-mode')) {
