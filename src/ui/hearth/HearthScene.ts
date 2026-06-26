@@ -824,7 +824,10 @@ export class HearthScene {
         stats[key] = (stats[key] ?? 0) + value
       }
     }
-    const effect = this.buildStatString(stats as Partial<Record<DinnerStatKey, number>>)
+    // 고른 순서대로 선택지별로 1줄씩 표기 — 같은 스탯이 중복돼도 합산하지 않고 분리한다
+    const effect = this.dinnerChoices
+      .map((c) => this.buildStatString(c.stats as Partial<Record<DinnerStatKey, number>>))
+      .join('\n')
     const prefix = [sauce?.namePart ?? sauce?.title, topping?.namePart ?? topping?.title].filter(Boolean).join(' ')
     return {
       name: `${prefix ? `${prefix} ` : ''}${food?.title ?? '만찬'}`,
