@@ -455,24 +455,26 @@ export class HearthScene {
     await this.finishDinner()
   }
 
-  /** 선택된 카드에서 유물 인벤토리 방향으로 빛 구슬을 발사한다. */
+  /** 선택된 카드에서 빛 구슬을 발사한다.
+   * 만찬 중엔 last-supper 유물이 아직 없으므로 최종 카드가 나타날 hearth-dinner-picked 위치를 목적지로 쓴다. */
   private shootDinnerOrbFromChoice(source: HTMLElement): void {
     const srcRect = source.getBoundingClientRect()
-    const target = document.querySelector<HTMLElement>('.relic-mini-card[data-owned-relic="last-supper"]')
+    // hearth-dinner-picked(opacity:0이지만 위치는 확정됨)를 우선 목적지로 사용
+    const target = this.overlay?.querySelector<HTMLElement>('.hearth-dinner-picked')
+      ?? document.querySelector<HTMLElement>('.relic-mini-card[data-owned-relic="last-supper"]')
       ?? document.querySelector<HTMLElement>('.relic-stack')
-      ?? document.querySelector<HTMLElement>('.relic-layer')
     const dstRect = target?.getBoundingClientRect()
     const orb = document.createElement('div')
     orb.className = 'hearth-dinner-orb'
     orb.style.left = `${srcRect.left + srcRect.width / 2 - 10}px`
     orb.style.top = `${srcRect.top + srcRect.height / 2 - 10}px`
-    orb.style.setProperty('--orb-dx', `${dstRect ? dstRect.left + dstRect.width / 2 - (srcRect.left + srcRect.width / 2) : 160}px`)
-    orb.style.setProperty('--orb-dy', `${dstRect ? dstRect.top + dstRect.height / 2 - (srcRect.top + srcRect.height / 2) : 100}px`)
+    orb.style.setProperty('--orb-dx', `${dstRect ? dstRect.left + dstRect.width / 2 - (srcRect.left + srcRect.width / 2) : 0}px`)
+    orb.style.setProperty('--orb-dy', `${dstRect ? dstRect.top + dstRect.height / 2 - (srcRect.top + srcRect.height / 2) : 80}px`)
     document.body.appendChild(orb)
     requestAnimationFrame(() => orb.classList.add('is-flying'))
-    // 구슬 도착 후 목적지 버스트, 구슬 제거
+    // 구슬 도착 — picked에 작은 반짝임 후 제거
     setTimeout(() => {
-      if (target) SquareBurst.playOn(target, 'score', { count: 18, spread: 100, duration: 440, size: [6, 14] })
+      if (target) SquareBurst.playOn(target, 'score', { count: 14, spread: 80, duration: 380, size: [5, 12] })
       orb.remove()
     }, 680)
   }
@@ -517,28 +519,29 @@ export class HearthScene {
     ]
   }
 
-  /** 선택지 카드를 카드팩 픽커 스타일로 그린다: 헤더(팩·슬롯) → 일러스트 → 푸터(이름·스탯). */
+  /** 선택지를 그린다: 전체 공유 헤더(팩·단계) + 3장 카드 행. */
   private renderDinnerChoices(): void {
     const choices = this.overlay?.querySelector<HTMLElement>('.hearth-dinner-choices')
     if (!choices) return
     const stepLabels: Record<number, string> = { 1: '메인', 2: '소스', 3: '재료' }
     const stepLabel = stepLabels[this.dinnerStep] ?? ''
-    // 현재 선택 중인 팩 이름 — 추후 실제 선택 팩으로 교체한다.
     const packLabel = '무료 간식'
-    choices.innerHTML = this.getDinnerOptions().map((option, index) => `
+    const cards = this.getDinnerOptions().map((option, index) => `
       <button class="hearth-dinner-choice" type="button" data-hearth-dinner-choice="${index}" style="--food-color:${option.color}">
-        <header class="hearth-dinner-choice-header">
-          <span class="hearth-dinner-choice-pack">${packLabel}</span>
-          <span class="hearth-dinner-choice-slot">${stepLabel} ${this.dinnerStep}/3</span>
-        </header>
         <span class="hearth-dinner-choice-art" aria-hidden="true"></span>
         <footer class="hearth-dinner-choice-footer">
           <strong>${option.title}</strong>
           <small>${option.stat}</small>
         </footer>
-      </button>
-    `).join('')
-    choices.animate([{ opacity: 0, transform: 'translateY(-14px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 280, easing: 'ease-out' })
+      </button>`).join('')
+    choices.innerHTML = `
+      <div class="hearth-dinner-choices-header">
+        <span class="hearth-dinner-choices-pack">${packLabel}</span>
+        <span class="hearth-dinner-choices-step">${stepLabel} ${this.dinnerStep}/3</span>
+      </div>
+      <div class="hearth-dinner-choices-row">${cards}</div>`
+    const row = choices.querySelector<HTMLElement>('.hearth-dinner-choices-row')
+    if (row) row.animate([{ opacity: 0, transform: 'translateY(-12px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 280, easing: 'ease-out' })
   }
 
   /** 3번 선택이 끝나면 오버레이를 덮고 완성 유물 카드를 카드팩처럼 공개한다. */

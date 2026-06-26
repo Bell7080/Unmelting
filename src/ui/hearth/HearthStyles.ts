@@ -1203,13 +1203,15 @@ body.hearth-lobby #ingame-backdrop.is-out {
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-rail { opacity: 1; transform: translateY(-50%); }
 #hearth-overlay.is-dinner-opened .hearth-dinner-rail { filter: blur(5px) brightness(0.22); opacity: 0.3; pointer-events: none; }
 #hearth-overlay.is-dinner-finalizing .hearth-dinner-rail { opacity: 0; transform: translateY(-50%) scale(0.94); transition: opacity 0.34s ease, transform 0.34s ease; }
-/* 최종 선택 완료 후 검은 반투명 오버레이 — 선택지 위를 덮고 카드 공개 배경이 된다 */
+/* 팩 오픈/최종 공개 공용 오버레이 — z5(선택지 z6 아래)로 레일만 덮는다 */
 .hearth-dinner-resolve-overlay {
-  position: absolute; inset: 0; z-index: 6;
-  background: rgba(4,2,8,0.86);
+  position: absolute; inset: 0; z-index: 5;
+  background: rgba(4,2,8,0.88);
   opacity: 0; pointer-events: none;
   transition: opacity 0.44s ease;
 }
+/* 팩을 까면 레일 전체에 반투명 어둠 — 선택지(z6)는 그 위에 뜬다 */
+#hearth-overlay.is-dinner-opened .hearth-dinner-resolve-overlay { opacity: 0.56; }
 #hearth-overlay.is-dinner-finalizing .hearth-dinner-resolve-overlay { opacity: 1; }
 /* 만찬 팩 카드: 컨테이너는 투명, 이름·가격은 텍스트만 부유, 일러스트가 시각 중심 */
 .hearth-dinner-pack {
@@ -1260,13 +1262,39 @@ body.hearth-lobby #ingame-backdrop.is-out {
   color: rgba(255,215,120,0.92);
   text-shadow: 0 0 16px rgba(244,164,96,0.42);
 }
-/* 만찬 선택지 — 카드팩 선택창 문법으로 재설계 */
+/* 만찬 선택지 컨테이너 — 세로 중앙 flex-column: 공유 헤더 + 카드 행 */
 .hearth-dinner-choices {
-  position: absolute; left: 5%; right: 5%; top: 4%;
-  z-index: 5; display: flex; justify-content: center;
-  gap: clamp(14px,2.4vw,30px); pointer-events: none; align-items: flex-start;
+  position: absolute; left: 5%; right: 5%;
+  top: 50%; transform: translateY(-52%);
+  z-index: 6; display: flex; flex-direction: column;
+  align-items: center; gap: clamp(12px,1.8vh,20px);
+  pointer-events: none;
 }
 #hearth-overlay.is-dinner-opened .hearth-dinner-choices { pointer-events: auto; }
+/* 3장 전체 상단 공유 헤더 — 팩 이름 · 단계 표시 */
+.hearth-dinner-choices-header {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: clamp(6px,1vh,10px) clamp(18px,2.6vw,28px);
+  border: 1px solid rgba(255,215,120,0.22);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255,215,120,0.1), rgba(4,2,8,0.6));
+  backdrop-filter: blur(2px);
+}
+.hearth-dinner-choices-pack {
+  font-size: clamp(11px,1.5vh,14px); font-weight: 900;
+  color: rgba(248,206,120,0.9); letter-spacing: 0.1em;
+  font-family: 'OkDanDan', Georgia, serif;
+}
+.hearth-dinner-choices-step {
+  font-size: clamp(11px,1.4vh,14px);
+  color: rgba(200,188,168,0.84); letter-spacing: 0.05em;
+  font-family: 'OkDanDan', Georgia, serif;
+}
+/* 3장 카드 가로 행 */
+.hearth-dinner-choices-row {
+  display: flex; justify-content: center; align-items: flex-start;
+  gap: clamp(14px,2.4vw,30px);
+}
 .hearth-dinner-choice {
   flex: 0 0 clamp(128px,18vw,192px);
   min-height: clamp(210px,38vh,320px);
@@ -1287,21 +1315,6 @@ body.hearth-lobby #ingame-backdrop.is-out {
   transform: translateY(-10px) scale(1.04);
   border-color: rgba(244,164,96,0.82);
   box-shadow: inset 0 1px 0 rgba(255,232,168,0.26), 0 32px 62px rgba(0,0,0,0.84), 0 0 40px rgba(244,164,96,0.38);
-}
-/* 상단 헤더: 팩 이름 + 슬롯 번호 */
-.hearth-dinner-choice-header {
-  padding: clamp(8px,1.2vh,12px) clamp(10px,1.4vw,14px);
-  border-bottom: 1px solid rgba(255,215,120,0.14);
-  background: linear-gradient(180deg, rgba(255,215,120,0.08), transparent);
-  display: flex; flex-direction: column; gap: 3px; flex-shrink: 0;
-}
-.hearth-dinner-choice-pack {
-  font-size: clamp(10px,1.3vh,13px); font-weight: 900;
-  color: rgba(248,206,120,0.8); letter-spacing: 0.1em;
-}
-.hearth-dinner-choice-slot {
-  font-size: clamp(11px,1.4vh,14px);
-  color: rgba(200,188,168,0.84); letter-spacing: 0.05em;
 }
 /* 일러스트 영역 */
 .hearth-dinner-choice-art {
@@ -1351,7 +1364,8 @@ body.hearth-lobby #ingame-backdrop.is-out {
 }
 .hearth-dinner-plate-card strong { font-size: clamp(14px,1.95vh,21px); letter-spacing: 0.06em; }
 .hearth-dinner-plate-card small { color: rgba(220,204,178,0.76); font-size: clamp(11px,1.45vh,14px); line-height: 1.3; }
-#hearth-overlay.is-dinner-finalizing .hearth-dinner-choices { opacity: 0; transform: translateY(-24px); transition: opacity 0.28s ease, transform 0.28s ease; pointer-events: none; }
+/* finalizing 시 opacity만 fade — transform 재지정 시 기본 translateY(-52%)가 덮어쓰여 위치 튀는 문제 방지 */
+#hearth-overlay.is-dinner-finalizing .hearth-dinner-choices { opacity: 0; transition: opacity 0.28s ease; pointer-events: none; }
 /* 뒤로가기 버튼은 finalizing·after 동안 숨긴다 */
 #hearth-overlay.is-dinner-finalizing .hearth-back,
 #hearth-overlay.is-dinner-after .hearth-back { opacity: 0 !important; pointer-events: none !important; transition: none !important; }
