@@ -1467,10 +1467,38 @@ body.hearth-lobby #ingame-backdrop.is-out {
 #hearth-overlay.is-dinner-after .hearth-dinner-choices,
 #hearth-overlay.is-dinner-after .hearth-dinner-picks,
 #hearth-overlay.is-dinner-after .hearth-dinner-picked { display: none; }
-/* NPC 말풍선 앵커 — 캐릭터 상반신 위치에 고정; tail:'top' 버블이 앵커 아래(화면 하단)에 배치된다 */
+/* NPC 말풍선 앵커 — SpeechBubble이 제거된 뒤에도 구조 유지 */
 .hearth-dinner-npc-anchor {
   position: absolute; left: 50%; top: 38%; width: 1px; height: 1px;
   transform: translateX(-50%); pointer-events: none; z-index: 11;
+}
+/* is-dinner-after 하단 인사 캡션 바 */
+.hearth-dinner-after-caption {
+  position: absolute; left: 50%; bottom: 14%; z-index: 12;
+  transform: translateX(-50%) translateY(8px);
+  white-space: nowrap;
+  background: rgba(7, 4, 14, 0.84);
+  border: 1px solid rgba(210, 162, 68, 0.52);
+  border-radius: 8px;
+  padding: 11px 30px;
+  font-family: 'OkDanDan', Georgia, serif;
+  font-size: clamp(14px, 1.9vh, 18px);
+  color: rgba(255, 238, 192, 0.94);
+  letter-spacing: 0.04em;
+  text-align: center;
+  box-shadow:
+    0 0 28px rgba(0,0,0,0.72),
+    inset 0 1px 0 rgba(255,232,168,0.10),
+    0 4px 18px rgba(200,140,40,0.18);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.38s ease 0.1s, transform 0.38s ease 0.1s;
+}
+.hearth-dinner-after-caption.is-visible {
+  opacity: 1; transform: translateX(-50%) translateY(0);
+}
+/* is-dinner-after 뒤로가기 버튼 — finalizing이 제거되므로 기존 hearth-back으로 충분 */
+#hearth-overlay.is-dinner-after.is-shutter-rest .hearth-back {
+  opacity: 1 !important; transform: translateX(0) !important; pointer-events: auto !important;
 }
 /* 합성 완료 유물 공개 카드 — 뷰포트 고정, 합성점 중앙 정렬 */
 .hearth-dinner-reveal-relic {
