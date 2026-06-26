@@ -135,7 +135,15 @@ export class HearthScene {
           <div class="hearth-trade-stage" aria-label="무역 임시 화면">
             <aside class="hearth-trade-tabs" role="tablist" aria-label="무역 분류">${this.renderTradeTabs()}</aside>
             <section class="hearth-trade-pack-area" aria-live="polite">
-              <div class="hearth-trade-pack-grid">${this.renderTradePacks(0)}</div>
+              <button class="hearth-trade-nav hearth-trade-nav--left" type="button" data-hearth-trade-nav="left" aria-label="이전">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 L8 12 L15 19"/></svg>
+              </button>
+              <div class="hearth-trade-pack-viewport">
+                <div class="hearth-trade-pack-grid">${this.renderTradePacks(0)}</div>
+              </div>
+              <button class="hearth-trade-nav hearth-trade-nav--right" type="button" data-hearth-trade-nav="right" aria-label="다음">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5 L16 12 L9 19"/></svg>
+              </button>
             </section>
           </div>
           <div class="hearth-dinner-stage" aria-label="만찬 임시 화면">
@@ -232,6 +240,11 @@ export class HearthScene {
       if (charNav) {
         const dir = charNav.dataset.hearthCharNav as 'left' | 'right'
         this.selectCharacter(this.selectedCharacterIndex + (dir === 'left' ? -1 : 1), dir)
+        return
+      }
+      const tradeNav = t.closest<HTMLElement>('[data-hearth-trade-nav]')
+      if (tradeNav) {
+        this.scrollTradePacks(tradeNav.dataset.hearthTradeNav as 'left' | 'right')
         return
       }
       const characterCard = t.closest<HTMLElement>('[data-hearth-character]')
@@ -431,17 +444,25 @@ export class HearthScene {
     await this.finishDinner()
   }
 
-  /** 만찬 레일은 무료 팩 하나와 추후 가격대별 잠금 팩 자리만 노출한다. */
+  /** 만찬 레일: 이름(상단) → 정사각 일러스트 → 가격(하단) 구조의 4종 팩. */
   private renderDinnerPacks(): string {
-    return `
-      <button class="hearth-dinner-pack" type="button" data-hearth-dinner-pack>
+    const packs = [
+      { name: '무료 간식', price: '무료', free: true },
+      { name: '값싼 음식', price: '$5', free: false },
+      { name: '만족스러운 한끼', price: '$10', free: false },
+      { name: '호화로운 식사', price: '$30', free: false },
+    ]
+    return packs.map((pack) => {
+      const tag = pack.free ? 'button' : 'article'
+      const attrs = pack.free
+        ? `class="hearth-dinner-pack" type="button" data-hearth-dinner-pack`
+        : `class="hearth-dinner-pack is-locked"`
+      return `<${tag} ${attrs}>
+        <span class="hearth-dinner-pack-name">${pack.name}</span>
         <span class="hearth-dinner-pack-art" aria-hidden="true"></span>
-        <strong>무료</strong><small>빈 만찬 카드팩</small>
-      </button>
-      <article class="hearth-dinner-pack is-locked"><span class="hearth-dinner-pack-art"></span><strong>1$</strong><small>준비 중</small></article>
-      <article class="hearth-dinner-pack is-locked"><span class="hearth-dinner-pack-art"></span><strong>3$</strong><small>준비 중</small></article>
-      <article class="hearth-dinner-pack is-locked"><span class="hearth-dinner-pack-art"></span><strong>5$</strong><small>준비 중</small></article>
-    `
+        <span class="hearth-dinner-pack-price">${pack.price}</span>
+      </${tag}>`
+    }).join('')
   }
 
   /** 현재 단계에 맞는 임시 만찬 선택지 풀을 반환한다. */
@@ -463,17 +484,28 @@ export class HearthScene {
     ]
   }
 
-  /** 상단 3장 선택지를 카드팩/상점 카드 문법에 맞춰 다시 그린다. */
+  /** 선택지 카드를 카드팩 픽커 스타일로 그린다: 헤더(팩·슬롯) → 일러스트 → 푸터(이름·스탯). */
   private renderDinnerChoices(): void {
     const choices = this.overlay?.querySelector<HTMLElement>('.hearth-dinner-choices')
     if (!choices) return
+    const stepLabels: Record<number, string> = { 1: '메인', 2: '소스', 3: '재료' }
+    const stepLabel = stepLabels[this.dinnerStep] ?? ''
+    // 현재 선택 중인 팩 이름 — 추후 실제 선택 팩으로 교체한다.
+    const packLabel = '무료 간식'
     choices.innerHTML = this.getDinnerOptions().map((option, index) => `
       <button class="hearth-dinner-choice" type="button" data-hearth-dinner-choice="${index}" style="--food-color:${option.color}">
+        <header class="hearth-dinner-choice-header">
+          <span class="hearth-dinner-choice-pack">${packLabel}</span>
+          <span class="hearth-dinner-choice-slot">${stepLabel} ${this.dinnerStep}/3</span>
+        </header>
         <span class="hearth-dinner-choice-art" aria-hidden="true"></span>
-        <strong>${option.title}</strong><small>${option.stat}</small>
+        <footer class="hearth-dinner-choice-footer">
+          <strong>${option.title}</strong>
+          <small>${option.stat}</small>
+        </footer>
       </button>
     `).join('')
-    choices.animate([{ opacity: 0, transform: 'translateY(-18px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 260, easing: 'ease-out' })
+    choices.animate([{ opacity: 0, transform: 'translateY(-14px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 280, easing: 'ease-out' })
   }
 
   /** 선택된 카드는 하단 중앙 접시 카드로 축소 복제해 누적 선택을 보여 준다. */
@@ -802,7 +834,17 @@ export class HearthScene {
     if (grid) {
       grid.innerHTML = this.renderTradePacks(this.selectedTradeTab)
       grid.animate([{ opacity: 0, transform: 'translateY(18px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 260, easing: 'ease-out' })
+      // 탭 전환 시 뷰포트를 왼쪽으로 되돌린다.
+      root.querySelector<HTMLElement>('.hearth-trade-pack-viewport')?.scrollTo({ left: 0, behavior: 'instant' })
     }
+  }
+
+  /** 무역 팩 뷰포트를 화살표로 좌우 스크롤한다. */
+  private scrollTradePacks(dir: 'left' | 'right'): void {
+    const viewport = this.overlay?.querySelector<HTMLElement>('.hearth-trade-pack-viewport')
+    if (!viewport) return
+    const packW = viewport.querySelector<HTMLElement>('.hearth-trade-pack')?.offsetWidth ?? 200
+    viewport.scrollBy({ left: (packW + 28) * (dir === 'right' ? 1 : -1), behavior: 'smooth' })
   }
 
   /** 직업 선택 문법의 세로 포트레이트 카드 — 일러스트 풀 커버 + 하단 스크림 + 잠금 오버레이. */

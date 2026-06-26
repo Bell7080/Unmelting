@@ -895,6 +895,8 @@ body.hearth-lobby #ingame-backdrop.is-out {
   border-color: rgba(255, 222, 140, 0.66);
   transform: translateY(-50%) scale(1.1);
 }
+/* 캐릭터 선택 화살표는 모험 셔터에서만 표시 */
+#hearth-overlay:not(.is-adventure-mode) .hearth-char-nav { display: none; }
 
 /* ── 확정/확인 상태 ──────────────────────────────────────────────────── */
 
@@ -1063,25 +1065,55 @@ body.hearth-lobby #ingame-backdrop.is-out {
 @keyframes hearth-trade-label-in { to { transform: translateX(0); opacity: 1; } }
 .hearth-trade-pack-area {
   min-height: 0;
-  overflow-x: auto;
-  overflow-y: visible;
   height: 100%;
   display: flex;
   align-items: center;
-  padding: clamp(24px, 5vh, 72px) clamp(10px, 1.4vw, 18px) clamp(46px, 8vh, 92px);
-  scrollbar-width: thin;
-  scrollbar-color: rgba(244, 164, 96, 0.72) transparent;
+  gap: clamp(8px, 1vw, 14px);
+  padding: clamp(24px, 5vh, 72px) clamp(8px, 1vw, 12px) clamp(46px, 8vh, 92px);
 }
-.hearth-trade-pack-area::-webkit-scrollbar { height: 8px; }
-.hearth-trade-pack-area::-webkit-scrollbar-track { background: transparent; }
-.hearth-trade-pack-area::-webkit-scrollbar-thumb { background: linear-gradient(180deg, rgba(255, 215, 120, 0.5), rgba(150, 86, 38, 0.62)); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+/* 팩 목록은 뷰포트 안에서 스크롤, 스크롤바는 숨김 */
+.hearth-trade-pack-viewport {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-width: none;
+  display: flex;
+  align-items: center;
+}
+.hearth-trade-pack-viewport::-webkit-scrollbar { display: none; }
 .hearth-trade-pack-grid {
   display: flex;
   flex-wrap: nowrap;
   gap: clamp(16px, 2.4vw, 30px);
   align-items: center;
   min-width: max-content;
-  padding: clamp(18px, 3vh, 30px) clamp(18px, 3vw, 46px) clamp(28px, 5vh, 50px) 2px;
+  padding: clamp(18px, 3vh, 30px) clamp(10px, 1.5vw, 20px) clamp(28px, 5vh, 50px);
+}
+/* 무역 팩 영역 전용 화살표 — 팩 뷰포트 양옆에 고정 */
+.hearth-trade-nav {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(36px, 4vh, 50px);
+  height: clamp(36px, 4vh, 50px);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 215, 120, 0.3);
+  background: rgba(9, 5, 16, 0.72);
+  color: rgba(255, 232, 168, 0.9);
+  cursor: pointer;
+  opacity: 0.64;
+  transition: opacity 0.22s ease, background 0.2s ease, border-color 0.2s ease, transform 0.18s ease;
+  backdrop-filter: blur(3px);
+}
+.hearth-trade-nav > svg { width: 52%; height: 52%; }
+.hearth-trade-nav:hover {
+  opacity: 1;
+  background: rgba(22, 12, 32, 0.9);
+  border-color: rgba(255, 222, 140, 0.72);
+  transform: scale(1.1);
 }
 .hearth-trade-pack {
   flex: 0 0 clamp(142px, 17vw, 210px);
@@ -1146,7 +1178,8 @@ body.hearth-lobby #ingame-backdrop.is-out {
 #hearth-overlay.is-dinner-mode .hearth-depart,
 #hearth-overlay.is-dinner-mode .hearth-trade-stage { display: none; }
 #hearth-overlay:not(.is-dinner-mode) .hearth-dinner-stage { display: none; }
-.hearth-dinner-stage { grid-column: 1 / 4; grid-row: 1 / 4; position: relative; overflow: hidden; z-index: 6; opacity: 0; pointer-events: none; }
+/* 셸(overflow:hidden)이 외부 클립을 담당하므로 stage는 visible — 하단 그림자 컷 방지 */
+.hearth-dinner-stage { grid-column: 1 / 4; grid-row: 1 / 4; position: relative; overflow: visible; z-index: 6; opacity: 0; pointer-events: none; }
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-stage { opacity: 1; pointer-events: auto; transition: opacity 0.28s ease; }
 .hearth-dinner-bg { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,2,7,0.18), rgba(2,1,4,0.28)), var(--hearth-dinner-bg, none), radial-gradient(circle at 50% 42%, rgba(150,28,34,0.12), transparent 56%); background-size: cover; background-position: center; opacity: 0; filter: saturate(0.96) brightness(0.82); transition: opacity 0.52s ease 0.18s, filter 0.52s ease 0.18s; }
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-bg { opacity: 1; filter: saturate(0.98) brightness(0.84); }
@@ -1161,23 +1194,147 @@ body.hearth-lobby #ingame-backdrop.is-out {
 #hearth-overlay.is-dinner-mode.is-shutter-rest .hearth-dinner-rail { opacity: 1; transform: translateY(-50%); }
 #hearth-overlay.is-dinner-opened .hearth-dinner-rail { filter: blur(5px) brightness(0.22); opacity: 0.3; pointer-events: none; }
 #hearth-overlay.is-dinner-finalizing .hearth-dinner-rail { opacity: 0; transform: translateY(-50%) scale(0.94); transition: opacity 0.34s ease, transform 0.34s ease; }
-.hearth-dinner-pack { flex: 0 0 clamp(132px, 18vw, 190px); min-height: clamp(170px, 29vh, 250px); border-radius: 16px; border: 1px solid rgba(215,166,88,0.46); background: linear-gradient(180deg, rgba(42,24,34,0.88), rgba(14,8,16,0.96)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; padding: 12px; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,232,168,0.16), 0 18px 34px rgba(0,0,0,0.52); }
-.hearth-dinner-pack.is-locked { opacity: 0.46; cursor: default; }
-.hearth-dinner-pack-art { flex: 1; border-radius: 12px; border: 1px dashed rgba(255,222,140,0.22); background: radial-gradient(circle at 50% 38%, rgba(255,232,168,0.14), transparent 54%), linear-gradient(150deg, rgba(110,30,42,0.5), rgba(24,12,26,0.94)); }
-.hearth-dinner-pack strong { font-size: clamp(18px, 2.4vh, 24px); letter-spacing: 0.1em; }
-.hearth-dinner-pack small { color: rgba(220,204,178,0.72); font-size: clamp(12px, 1.65vh, 15px); }
-.hearth-dinner-choices { position: absolute; left: 8%; right: 8%; top: 10%; z-index: 5; display: flex; justify-content: center; gap: clamp(12px, 2.2vw, 28px); pointer-events: none; }
+/* 만찬 팩 카드: 이름(상단) → 정사각 일러스트 → 가격(하단) */
+.hearth-dinner-pack {
+  flex: 0 0 clamp(118px, 16vw, 168px);
+  border-radius: 18px;
+  border: 1px solid rgba(215,166,88,0.46);
+  background: linear-gradient(180deg, rgba(42,24,34,0.94), rgba(14,8,16,0.98));
+  color: #ffe7a8;
+  font-family: 'OkDanDan', Georgia, serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: clamp(9px,1.4vh,13px) clamp(8px,1.1vw,11px);
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,232,168,0.16), 0 20px 40px rgba(0,0,0,0.62);
+  transition: transform 0.22s cubic-bezier(0.34,1.56,0.5,1), box-shadow 0.22s ease, border-color 0.2s ease;
+}
+.hearth-dinner-pack:not(.is-locked):hover {
+  transform: translateY(-9px) scale(1.05);
+  border-color: rgba(244,164,96,0.82);
+  box-shadow: inset 0 1px 0 rgba(255,232,168,0.24), 0 28px 52px rgba(0,0,0,0.76), 0 0 34px rgba(244,164,96,0.32);
+}
+.hearth-dinner-pack.is-locked { opacity: 0.42; cursor: default; filter: saturate(0.7); }
+.hearth-dinner-pack-name {
+  font-size: clamp(11px,1.5vh,15px);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-align: center;
+  color: rgba(255,236,188,0.96);
+  margin-bottom: clamp(6px,0.9vh,10px);
+  text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+}
+.hearth-dinner-pack-art {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  border: 1px dashed rgba(255,222,140,0.24);
+  background:
+    radial-gradient(circle at 44% 36%, rgba(255,232,168,0.18), transparent 52%),
+    repeating-linear-gradient(135deg, rgba(255,255,255,0.022) 0 2px, transparent 2px 10px),
+    linear-gradient(148deg, rgba(110,30,42,0.56), rgba(22,10,26,0.97));
+  flex-shrink: 0;
+}
+.hearth-dinner-pack-price {
+  font-size: clamp(14px,1.9vh,20px);
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-align: center;
+  margin-top: clamp(6px,0.9vh,10px);
+  color: rgba(255,215,120,0.92);
+  text-shadow: 0 0 16px rgba(244,164,96,0.42);
+}
+/* 만찬 선택지 — 카드팩 선택창 문법으로 재설계 */
+.hearth-dinner-choices {
+  position: absolute; left: 5%; right: 5%; top: 4%;
+  z-index: 5; display: flex; justify-content: center;
+  gap: clamp(14px,2.4vw,30px); pointer-events: none; align-items: flex-start;
+}
 #hearth-overlay.is-dinner-opened .hearth-dinner-choices { pointer-events: auto; }
-.hearth-dinner-choice { width: clamp(126px, 17vw, 190px); min-height: clamp(178px, 32vh, 270px); border-radius: 16px; border: 1px solid rgba(215,166,88,0.58); background: linear-gradient(180deg, rgba(44,28,38,0.96), rgba(13,8,16,0.98)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; padding: 12px; display: flex; flex-direction: column; justify-content: flex-end; gap: 7px; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,232,168,0.2), 0 20px 40px rgba(0,0,0,0.62); transition: transform 0.2s cubic-bezier(0.34,1.56,0.5,1), box-shadow 0.18s ease; }
-.hearth-dinner-choice:hover { transform: translateY(-8px) scale(1.04); box-shadow: inset 0 1px 0 rgba(255,232,168,0.26), 0 26px 48px rgba(0,0,0,0.68), 0 0 28px rgba(244,164,96,0.34); }
-.hearth-dinner-choice-art { flex: 1; border-radius: 12px; background: radial-gradient(circle at 52% 38%, rgba(255,236,188,0.24), transparent 34%), linear-gradient(145deg, var(--food-color, #7e2630), rgba(20,10,22,0.94)); border: 1px solid rgba(255,222,140,0.18); }
-.hearth-dinner-choice strong { font-size: clamp(18px,2.4vh,24px); letter-spacing: 0.08em; }
-.hearth-dinner-choice small { color: rgba(255,226,178,0.78); font-size: clamp(12px,1.7vh,15px); }
-.hearth-dinner-picked { position: absolute; left: 50%; bottom: 8%; z-index: 6; transform: translateX(-50%); width: clamp(136px, 18vw, 200px); min-height: clamp(130px, 22vh, 184px); pointer-events: none; }
-.hearth-dinner-plate-card { width: 100%; height: 100%; border-radius: 15px; border: 1px solid rgba(255,215,120,0.58); background: linear-gradient(180deg, rgba(44,28,38,0.94), rgba(14,8,16,0.98)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; box-shadow: inset 0 1px 0 rgba(255,232,168,0.2), 0 16px 34px rgba(0,0,0,0.62), 0 0 22px rgba(244,164,96,0.24); }
-.hearth-dinner-plate-card span { flex: 1; min-height: 74px; border-radius: 11px; background: radial-gradient(circle at 50% 44%, rgba(255,236,188,0.24), transparent 38%), linear-gradient(145deg, var(--food-color, #7e2630), rgba(22,10,24,0.94)); }
-.hearth-dinner-plate-card strong { font-size: clamp(16px,2.1vh,22px); }
-.hearth-dinner-plate-card small { color: rgba(220,204,178,0.74); font-size: clamp(11px,1.45vh,13px); line-height: 1.25; }
+.hearth-dinner-choice {
+  flex: 0 0 clamp(128px,18vw,192px);
+  min-height: clamp(210px,38vh,320px);
+  border-radius: 18px;
+  border: 1px solid rgba(215,166,88,0.56);
+  background: linear-gradient(180deg, rgba(16,9,22,0.99) 0%, rgba(30,16,34,0.97) 42%, rgba(10,6,14,0.99) 100%);
+  color: #ffe7a8;
+  font-family: 'OkDanDan', Georgia, serif;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,232,168,0.18), 0 24px 52px rgba(0,0,0,0.74);
+  transition: transform 0.22s cubic-bezier(0.34,1.56,0.5,1), box-shadow 0.22s ease, border-color 0.2s ease;
+}
+.hearth-dinner-choice:hover {
+  transform: translateY(-10px) scale(1.04);
+  border-color: rgba(244,164,96,0.82);
+  box-shadow: inset 0 1px 0 rgba(255,232,168,0.26), 0 32px 62px rgba(0,0,0,0.84), 0 0 40px rgba(244,164,96,0.38);
+}
+/* 상단 헤더: 팩 이름 + 슬롯 번호 */
+.hearth-dinner-choice-header {
+  padding: clamp(8px,1.2vh,12px) clamp(10px,1.4vw,14px);
+  border-bottom: 1px solid rgba(255,215,120,0.14);
+  background: linear-gradient(180deg, rgba(255,215,120,0.08), transparent);
+  display: flex; flex-direction: column; gap: 3px; flex-shrink: 0;
+}
+.hearth-dinner-choice-pack {
+  font-size: clamp(10px,1.3vh,13px); font-weight: 900;
+  color: rgba(248,206,120,0.8); letter-spacing: 0.1em;
+}
+.hearth-dinner-choice-slot {
+  font-size: clamp(11px,1.4vh,14px);
+  color: rgba(200,188,168,0.84); letter-spacing: 0.05em;
+}
+/* 일러스트 영역 */
+.hearth-dinner-choice-art {
+  flex: 1; min-height: 0;
+  background:
+    radial-gradient(circle at 52% 38%, rgba(255,236,188,0.28), transparent 38%),
+    linear-gradient(145deg, var(--food-color,#7e2630), rgba(16,7,18,0.97));
+}
+/* 하단 푸터: 이름 + 스탯 */
+.hearth-dinner-choice-footer {
+  padding: clamp(8px,1.2vh,12px) clamp(10px,1.4vw,14px);
+  border-top: 1px solid rgba(255,215,120,0.12);
+  background: linear-gradient(0deg, rgba(0,0,0,0.3), transparent);
+  display: flex; flex-direction: column; gap: 4px; flex-shrink: 0;
+}
+.hearth-dinner-choice-footer strong { font-size: clamp(14px,1.95vh,21px); letter-spacing: 0.06em; display: block; }
+.hearth-dinner-choice-footer small { color: rgba(255,226,178,0.82); font-size: clamp(11px,1.5vh,14px); display: block; }
+/* 완성 접시 카드 — 온전한 유물 카드 모양, 레일 바깥으로 나가도 허용 */
+.hearth-dinner-picked {
+  position: absolute; left: 50%; bottom: 3%;
+  transform: translateX(-50%);
+  z-index: 6;
+  width: clamp(148px,20vw,210px);
+  aspect-ratio: 3 / 4;
+  pointer-events: none;
+}
+.hearth-dinner-plate-card {
+  width: 100%; height: 100%;
+  border-radius: 18px;
+  border: 1px solid rgba(255,215,120,0.66);
+  background: linear-gradient(180deg, rgba(18,9,26,0.99) 0%, rgba(34,18,40,0.97) 38%, rgba(10,6,14,0.99) 100%);
+  color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif;
+  padding: 10px;
+  display: flex; flex-direction: column; gap: 7px; overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255,232,168,0.26),
+    inset 0 -1px 0 rgba(244,164,96,0.14),
+    0 -4px 32px rgba(0,0,0,0.42),
+    0 0 34px rgba(244,164,96,0.3);
+}
+.hearth-dinner-plate-card span {
+  flex: 1; min-height: 0; border-radius: 12px;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(255,236,188,0.28), transparent 42%),
+    linear-gradient(145deg, var(--food-color,#7e2630), rgba(16,7,18,0.98));
+}
+.hearth-dinner-plate-card strong { font-size: clamp(14px,1.95vh,21px); letter-spacing: 0.06em; }
+.hearth-dinner-plate-card small { color: rgba(220,204,178,0.76); font-size: clamp(11px,1.45vh,14px); line-height: 1.3; }
 #hearth-overlay.is-dinner-finalizing .hearth-dinner-choices { opacity: 0; transform: translateY(-24px); transition: opacity 0.28s ease, transform 0.28s ease; pointer-events: none; }
 #hearth-overlay.is-dinner-finalizing .hearth-dinner-picked { animation: hearth-dinner-final-hover 0.72s ease-in-out both; }
 #hearth-overlay.is-dinner-closing .hearth-dinner-picked { opacity: 0; filter: blur(6px); transition: opacity 0.36s ease, filter 0.36s ease; }
