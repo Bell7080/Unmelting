@@ -689,10 +689,8 @@ export class HearthScene {
     root.classList.add('is-dinner-finalizing')
     await this.wait(350)
 
-    // Phase B: 유물 프로필 생성 + 호스트 지급
+    // Phase B: 유물 프로필 빌드만 — 지급은 카드가 인벤토리에 꽂힐 때(Phase G)까지 미룬다
     const profile = this.buildDinnerRelicProfile()
-    await this.handlers?.onDinnerRelicCreate?.(profile)
-    await this.wait(100)
 
     // 합성점 = 화면 중앙 상단 35%
     const mergeX = window.innerWidth / 2
@@ -756,7 +754,10 @@ export class HearthScene {
     // Phase F: 체류 딜레이
     await this.wait(1300)
 
-    // Phase G: 유물 인벤토리 카드로 날아가기
+    // Phase G: 유물 지급 → 인벤토리 DOM 렌더 대기 → 꽂힘 비행
+    await this.handlers?.onDinnerRelicCreate?.(profile)
+    // 호스트가 DOM을 재렌더하도록 두 프레임 양보 후 카드 위치를 읽는다
+    await new Promise<void>((r) => requestAnimationFrame(() => { requestAnimationFrame(() => r()) }))
     const relicCard = document.querySelector<HTMLElement>('.relic-mini-card[data-owned-relic="last-supper"]')
     if (relicCard) {
       const rr = relicCard.getBoundingClientRect()
