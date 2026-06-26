@@ -2,6 +2,7 @@ import { HEARTH_STYLES } from './HearthStyles'
 import { SpriteUrls, spriteForHearthStation, spriteForDinner, spriteForDinnerPack } from '../Sprites'
 import { isTouchDevice } from '../MobileTouchManager'
 import { SquareBurst } from '../SquareBurst'
+import { SpeechBubble } from '../SpeechBubble'
 import type { CustomRelicProfile } from '@data/Relics'
 
 export interface HearthHandlers {
@@ -9,6 +10,8 @@ export interface HearthHandlers {
   onStart: () => void | Promise<void>
   /** 만찬 완성 카드가 실제 런 유물 인벤토리에 꽂히도록 호스트 게임 상태에 지급한다. */
   onDinnerRelicCreate?: (profile: CustomRelicProfile) => void | Promise<void>
+  /** 현재 런 턴을 반환 — 재방문 메시지에서 N턴 표기에 사용한다. */
+  getCurrentTurn?: () => number
 }
 
 /**
@@ -28,7 +31,6 @@ const DINNER_INDEX = 8
 /** 마지막으로 본 모험 동행을 다음 거점 진입에도 복원하기 위한 로컬 저장 키. */
 const HEARTH_LAST_CHARACTER_KEY = 'unmelting.hearth.lastCharacterIndex'
 const DINNER_DONE_LINE = '하하, 식사는 만족스러우셨나요? 다음 만찬도 기대해주세요.'
-const DINNER_ALREADY_LINE = '음? 오늘은 이미 식사를 하시지 않았나요?'
 
 type DinnerStatKey = 'maxHealth' | 'emberMax' | 'handMax' | 'scorePct' | 'damage' | 'shopDiscount' | 'startScore'
 type DinnerRarity = 'common' | 'rare' | 'epic'
@@ -164,6 +166,8 @@ export class HearthScene {
   private dinnerConsumed = false
   /** renderDinnerChoices()가 뽑아 표시한 선택지 배열 — pickDinnerChoice()가 캐시를 재사용한다. */
   private dinnerCurrentOptions: DinnerChoice[] = []
+  /** 현재 표시 중인 만찬 NPC 말풍선. raiseShutter/exit 시 파괴한다. */
+  private dinnerBubble: SpeechBubble | null = null
 
   enter(handlers: HearthHandlers): void {
     this.injectStyles()
@@ -209,6 +213,7 @@ export class HearthScene {
             <div class="hearth-dinner-final-curtain hearth-dinner-final-curtain--right" aria-hidden="true"></div>
             <div class="hearth-dinner-illustration" aria-hidden="true"></div>
             <div class="hearth-dinner-dialogue" aria-live="polite"></div>
+            <div class="hearth-dinner-npc-anchor" aria-hidden="true"></div>
             <div class="hearth-dinner-rail">${this.renderDinnerPacks()}</div>
             <div class="hearth-dinner-resolve-overlay" aria-hidden="true"></div>
             <div class="hearth-dinner-picks" aria-hidden="true"></div>
@@ -243,6 +248,8 @@ export class HearthScene {
     overlay.style.setProperty('--hearth-trade-bg', `url('${SpriteUrls.hearth.trade}')`)
     overlay.style.setProperty('--hearth-dinner-bg', `url('${SpriteUrls.hearth.dinner}')`)
     overlay.style.setProperty('--hearth-dinner-host', `url('${SpriteUrls.hearth.dinnerHost}')`)
+    // after 화면(수상한 사람 NPC) 배경 — bg004(무역 배경)을 재사용
+    overlay.style.setProperty('--hearth-dinner-after-bg', `url('${SpriteUrls.hearth.trade}')`)
     document.body.appendChild(overlay)
     this.overlay = overlay
 
@@ -452,13 +459,20 @@ export class HearthScene {
     this.overlay?.classList.remove('is-adventure-mode', 'is-trade-mode', 'is-trade-leaving')
     this.overlay?.classList.add('is-shuttering', 'is-dinner-mode')
     this.resetDinnerStage()
-    if (this.dinnerConsumed) this.showDinnerAfterScene(DINNER_ALREADY_LINE)
+    if (this.dinnerConsumed) {
+      // 재방문 — bg004로 전환 후 현재 턴 기반 메시지 표시
+      const currentTurn = this.handlers?.getCurrentTurn?.() ?? 0
+      const revisitLine = `음? 이미 한 번 식사를 하시지 않았나요?\n${currentTurn + 50}턴 이후 방문해주세요.`
+      void this.showDinnerAfterScene(revisitLine)
+    }
     // 커튼이 먼저 닫힌 뒤 배경 레이어가 페이드인하도록 셔터 안정 클래스를 늦게 붙인다.
     window.setTimeout(() => this.overlay?.classList.add('is-shutter-rest'), 680)
   }
 
   /** 만찬 팩 레일/선택지를 초기 상태로 되돌려 뒤로가기 후 재진입도 같은 흐름을 보장한다. */
   private resetDinnerStage(): void {
+    this.dinnerBubble?.destroy()
+    this.dinnerBubble = null
     const root = this.overlay
     root?.classList.remove('is-dinner-opened', 'is-dinner-finalizing', 'is-dinner-closing', 'is-dinner-after')
     const rail = root?.querySelector<HTMLElement>('.hearth-dinner-rail')
@@ -588,14 +602,14 @@ export class HearthScene {
     return allowed[allowed.length - 1]
   }
 
-  /** stats 맵을 "불빛 획득량 +10%" 형태의 단일 문자열로 변환한다. */
+  /** stats 맵을 "불씨 한도 +1\n시작 불빛 +200" 형태로 변환한다. 공개 카드에서 줄 분리 표기. */
   private buildStatString(stats: Partial<Record<DinnerStatKey, number>>): string {
     return (Object.entries(stats) as [DinnerStatKey, number][])
       .map(([key, val]) => {
         const label = DINNER_STAT_LABELS[key]
         return DINNER_STAT_PCT.has(key) ? `${label} +${val}%` : `${label} +${val}`
       })
-      .join(', ')
+      .join('\n')
   }
 
   /** 가중치 비례로 count장을 비복원 추출한다. */
@@ -666,65 +680,107 @@ export class HearthScene {
     )
   }
 
-  /** 3장 선택 완료 — 미니카드 3장을 중앙으로 합친 뒤 블라스트 → 빛 구슬 → 유물 인벤토리 꽂힘 순으로 진행한다. */
+  /** 3장 선택 완료 — 미니카드 상단 부상→합성 블라스트→유물 공개 카드→인벤토리 꽂힘→after 씬 순으로 진행한다. */
   private async finishDinner(): Promise<void> {
     const root = this.overlay
     if (!root) return
 
-    // 선택지 패널 페이드아웃 + 어두운 오버레이 풀 불투명
+    // Phase A: 선택지 패널 페이드아웃
     root.classList.add('is-dinner-finalizing')
-    await this.wait(300)
+    await this.wait(350)
 
+    // Phase B: 유물 프로필 생성 + 호스트 지급
     const profile = this.buildDinnerRelicProfile()
     await this.handlers?.onDinnerRelicCreate?.(profile)
-    await this.wait(80)
+    await this.wait(100)
 
-    // 3장 미니카드를 중앙 합성점으로 날려 보낸다
+    // 합성점 = 화면 중앙 상단 35%
+    const mergeX = window.innerWidth / 2
+    const mergeY = window.innerHeight * 0.35
+
+    // Phase C: 미니카드 3장이 상단으로 상승+확대 후 합성점에 수렴·소멸
     const picksEl = root.querySelector<HTMLElement>('.hearth-dinner-picks')
     const slots = picksEl ? [...picksEl.querySelectorAll<HTMLElement>('.hearth-dinner-pick-slot')] : []
-    let mergeX = window.innerWidth / 2
-    let mergeY = window.innerHeight * 0.72
-
-    if (slots.length > 0 && picksEl) {
-      const picksRect = picksEl.getBoundingClientRect()
-      mergeX = picksRect.left + picksRect.width / 2
-      mergeY = picksRect.top + picksRect.height / 2
-
-      slots.forEach((slot) => {
+    if (slots.length > 0) {
+      // 상단 집결 지점(확대 단계) — 카드별로 좌우 펼쳐 드라마틱한 상승
+      const spreadX = [-130, 0, 130]
+      const stageY = window.innerHeight * 0.28
+      slots.forEach((slot, idx) => {
         const r = slot.getBoundingClientRect()
-        const dx = mergeX - (r.left + r.width / 2)
-        const dy = mergeY - (r.top + r.height / 2)
+        const cx = r.left + r.width / 2
+        const cy = r.top + r.height / 2
+        const stageDX = mergeX + (spreadX[idx] ?? 0) - cx
+        const stageDY = stageY - cy
+        const finalDX = mergeX - cx
+        const finalDY = mergeY - cy
         slot.getAnimations().forEach((a) => a.cancel())
         slot.animate([
           { transform: 'translate(0,0) scale(1)', opacity: 1 },
-          { transform: `translate(${dx}px,${dy}px) scale(0.1)`, opacity: 0 },
-        ], { duration: 480, easing: 'cubic-bezier(0.4,0,0.8,0.4)', fill: 'forwards' })
+          { transform: `translate(${stageDX}px,${stageDY}px) scale(2.2)`, opacity: 1, offset: 0.48 },
+          { transform: `translate(${finalDX}px,${finalDY}px) scale(0.12)`, opacity: 0 },
+        ], { duration: 900, easing: 'cubic-bezier(0.3,0,0.7,1)', fill: 'forwards' })
       })
-      await this.wait(440)
+      await this.wait(860)
     }
 
-    // 합성 블라스트 — width/height 0인 앵커 div를 뷰포트 합성점에 배치
-    const burstHost = document.createElement('div')
-    burstHost.style.cssText = `position:fixed;left:${mergeX}px;top:${mergeY}px;z-index:280;pointer-events:none;width:0;height:0;`
-    document.body.appendChild(burstHost)
-    SquareBurst.playOn(burstHost, 'score', { count: 36, spread: 170, duration: 660, size: [8, 22] })
-    await this.wait(180)
-    burstHost.remove()
+    // Phase D: 합성점 블라스트
+    const burstHostA = document.createElement('div')
+    burstHostA.style.cssText = `position:fixed;left:${mergeX}px;top:${mergeY}px;z-index:280;pointer-events:none;width:0;height:0;`
+    document.body.appendChild(burstHostA)
+    SquareBurst.playOn(burstHostA, 'score', { count: 44, spread: 190, duration: 720, size: [8, 26] })
+    await this.wait(220)
+    burstHostA.remove()
 
-    // 유물 인벤토리 카드로 빛 구슬 발사
+    // Phase E: 유물 공개 카드 팝인 — 메인 음식 일러스트 사용
+    const foodChoice = this.dinnerChoices.find((c) => c.kind === 'food') ?? this.dinnerChoices[0]
+    const revealCard = document.createElement('div')
+    revealCard.className = 'hearth-dinner-reveal-relic'
+    revealCard.style.left = `${mergeX}px`
+    revealCard.style.top = `${mergeY}px`
+    if (foodChoice?.sprite) revealCard.style.setProperty('--reveal-art', `url('${foodChoice.sprite}')`)
+    // 효과 문자열을 줄 단위로 분리해 각각 <span>으로 표기
+    const statLines = profile.effect.split('\n').map((l) => `<span>${l}</span>`).join('')
+    revealCard.innerHTML = `
+      <div class="hearth-dinner-reveal-art" aria-hidden="true"></div>
+      <div class="hearth-dinner-reveal-body">
+        <strong class="hearth-dinner-reveal-name">${profile.name}</strong>
+        <div class="hearth-dinner-reveal-stats">${statLines}</div>
+      </div>`
+    document.body.appendChild(revealCard)
+    revealCard.animate([
+      { transform: 'translate(-50%,-50%) scale(0.18)', opacity: 0 },
+      { transform: 'translate(-50%,-50%) scale(1.08)', opacity: 1, offset: 0.68 },
+      { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 },
+    ], { duration: 500, easing: 'cubic-bezier(0.18,0.84,0.28,1)', fill: 'forwards' })
+
+    // Phase F: 체류 딜레이
+    await this.wait(1300)
+
+    // Phase G: 유물 인벤토리 카드로 날아가기
     const relicCard = document.querySelector<HTMLElement>('.relic-mini-card[data-owned-relic="last-supper"]')
     if (relicCard) {
-      const relicRect = relicCard.getBoundingClientRect()
-      this.shootOrbToRelic(mergeX, mergeY, relicRect.left + relicRect.width / 2, relicRect.top + relicRect.height / 2)
-      await this.wait(680)
-      SquareBurst.playOn(relicCard, 'score', { count: 22, spread: 84, duration: 460, size: [5, 13] })
+      const rr = relicCard.getBoundingClientRect()
+      const toX = rr.left + rr.width / 2
+      const toY = rr.top + rr.height / 2
+      const dx = toX - mergeX
+      const dy = toY - mergeY
+      revealCard.animate([
+        { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 },
+        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.18)`, opacity: 0.55 },
+      ], { duration: 620, easing: 'cubic-bezier(0.4,0,0.8,0.4)', fill: 'forwards' })
+      await this.wait(580)
+      // Phase H: 인벤토리 꽂힘 블라스트
+      SquareBurst.playOn(relicCard, 'score', { count: 26, spread: 90, duration: 520, size: [5, 14] })
+    } else {
+      // 인벤토리 카드가 DOM에 없을 때(아직 미노출) — 빛 구슬로 대체
+      this.shootOrbToRelic(mergeX, mergeY, window.innerWidth * 0.88, window.innerHeight * 0.5)
+      await this.wait(700)
     }
-    await this.wait(520)
+    revealCard.remove()
+    await this.wait(380)
 
     this.dinnerConsumed = this.hasDinnerRelicInInventory()
-    root.classList.add('is-dinner-closing')
-    await this.wait(820)
-    this.showDinnerAfterScene(DINNER_DONE_LINE)
+    await this.showDinnerAfterScene()
   }
 
 
@@ -749,12 +805,26 @@ export class HearthScene {
     }
   }
 
-  /** 완료/재방문 화면은 검은 커튼을 닫은 뒤 006 일러스트를 중앙에서 좌우로 열어 고정 대사를 남긴다. */
-  private showDinnerAfterScene(line: string): void {
+  /** bg004(수상한 사람) 전환 후 SpeechBubble로 NPC 대사를 표시한다. line 미전달 시 DINNER_DONE_LINE 사용. */
+  private async showDinnerAfterScene(line?: string): Promise<void> {
     const root = this.overlay
     if (!root) return
+    // 기존 버블 파괴 후 is-dinner-after 추가 → CSS가 bg를 bg004로 교체 + resolve-overlay 페이드아웃
+    this.dinnerBubble?.destroy()
+    this.dinnerBubble = null
     root.classList.add('is-dinner-after')
-    root.querySelector<HTMLElement>('.hearth-dinner-dialogue')!.textContent = line
+    // resolve-overlay 트랜지션이 끝날 때까지 짧게 대기
+    await this.wait(600)
+    const npcLine = line ?? DINNER_DONE_LINE
+    this.dinnerBubble = new SpeechBubble({
+      anchor: '.hearth-dinner-npc-anchor',
+      tail: 'bottom',
+      theme: 'neutral',
+      autoDismissMs: 0,
+      fontSize: 18,
+      maxWidth: 360,
+    })
+    this.dinnerBubble.show(npcLine)
   }
 
   /** 만찬 사용 여부는 저장값이 아니라 현재 유물 인벤토리에 꽂힌 만찬 카드로만 판단한다. */
@@ -786,6 +856,8 @@ export class HearthScene {
     this.shuttered = false
     this.characterConfirmed = false
     if (root?.classList.contains('is-dinner-mode')) {
+      this.dinnerBubble?.destroy()
+      this.dinnerBubble = null
       root.classList.remove('is-shuttering', 'is-shutter-rest', 'is-dinner-mode', 'is-dinner-opened', 'is-dinner-finalizing', 'is-dinner-closing', 'is-dinner-after')
       this.dinnerStep = this.dinnerConsumed ? 5 : 0
       this.dinnerChoices = []
@@ -1090,10 +1162,15 @@ export class HearthScene {
         )
       } else if (i === DINNER_INDEX) {
         // 만찬 칸 — 무료 만찬 카드팩/3단계 음식 커스텀 임시 플로우로 진입한다.
+        // 만찬 유물 미보유 시 Free 배지 표시(점등 완료 이후 초록 형광)
+        const freeBadge = !this.dinnerConsumed
+          ? `<span class="hearth-cell__dinner-free" aria-hidden="true">Free</span>`
+          : ''
         cells.push(
           `<button class="hearth-cell hearth-cell--open${artClass}" data-hearth-station="dinner" type="button" aria-label="만찬"` +
             `${inspectAttr}${artStyle}>` +
             `<span class="hearth-cell__label">${name}</span>` +
+            freeBadge +
             `</button>`
         )
       } else if (i === ADVENTURE_INDEX) {
@@ -1156,6 +1233,8 @@ export class HearthScene {
     document.removeEventListener('click', this.onTap, true)
     // 로비 backdrop 페이드아웃 상태 해제(런 중에는 index.ts 기본 backdrop 규칙으로 복귀).
     document.getElementById('ingame-backdrop')?.classList.remove('is-out')
+    this.dinnerBubble?.destroy()
+    this.dinnerBubble = null
     this.inspector?.remove()
     this.inspector = null
     this.overlay?.remove()

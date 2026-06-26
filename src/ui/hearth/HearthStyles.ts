@@ -1439,18 +1439,70 @@ body.hearth-lobby #ingame-backdrop.is-out {
 .hearth-dinner-final-curtain { position: absolute; top: 0; bottom: 0; width: 52%; z-index: 8; background: linear-gradient(180deg, #030204, #000 58%, #050306); box-shadow: inset 0 0 42px rgba(0,0,0,0.9), 0 0 34px rgba(0,0,0,0.7); opacity: 0; pointer-events: none; }
 .hearth-dinner-final-curtain--left { left: 0; transform: translateX(-104%); }
 .hearth-dinner-final-curtain--right { right: 0; transform: translateX(104%); }
-#hearth-overlay.is-dinner-closing .hearth-dinner-final-curtain--left,
-#hearth-overlay.is-dinner-after .hearth-dinner-final-curtain--left { animation: hearth-dinner-black-close-left 0.78s cubic-bezier(0.16,0.84,0.24,1) forwards; }
-#hearth-overlay.is-dinner-closing .hearth-dinner-final-curtain--right,
-#hearth-overlay.is-dinner-after .hearth-dinner-final-curtain--right { animation: hearth-dinner-black-close-right 0.78s cubic-bezier(0.16,0.84,0.24,1) forwards; }
+/* is-dinner-closing만 검은 커튼 닫힘 — is-dinner-after는 bg 교체로 전환 */
+#hearth-overlay.is-dinner-closing .hearth-dinner-final-curtain--left { animation: hearth-dinner-black-close-left 0.78s cubic-bezier(0.16,0.84,0.24,1) forwards; }
+#hearth-overlay.is-dinner-closing .hearth-dinner-final-curtain--right { animation: hearth-dinner-black-close-right 0.78s cubic-bezier(0.16,0.84,0.24,1) forwards; }
 .hearth-dinner-illustration { position: absolute; inset: 8% 9% 18%; z-index: 9; background: var(--hearth-dinner-host, none) center/cover no-repeat; border: 1px solid rgba(255,215,120,0.28); border-radius: 18px; box-shadow: inset 0 0 80px rgba(0,0,0,0.42), 0 26px 68px rgba(0,0,0,0.68); clip-path: inset(0 50% 0 50%); opacity: 0; pointer-events: none; }
-#hearth-overlay.is-dinner-after .hearth-dinner-illustration { animation: hearth-dinner-illu-open 0.86s 0.78s cubic-bezier(0.18,0.82,0.25,1) forwards; }
+/* after 상태에서 구 일러스트/대사 레이어 숨김 — bg 교체 + SpeechBubble이 담당 */
+#hearth-overlay.is-dinner-after .hearth-dinner-illustration { display: none !important; }
 .hearth-dinner-dialogue { position: absolute; left: 10%; right: 10%; bottom: 6%; z-index: 10; min-height: 54px; padding: 16px 22px; border: 1px solid rgba(255,215,120,0.42); border-radius: 18px; background: linear-gradient(180deg, rgba(25,16,24,0.92), rgba(8,5,10,0.96)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; font-size: clamp(16px, 2.2vh, 22px); line-height: 1.45; text-align: center; letter-spacing: 0.03em; box-shadow: inset 0 1px 0 rgba(255,232,168,0.14), 0 18px 42px rgba(0,0,0,0.62); opacity: 0; transform: translateY(16px); pointer-events: none; }
-#hearth-overlay.is-dinner-after .hearth-dinner-dialogue { animation: hearth-dinner-dialogue-in 0.36s 1.42s ease-out forwards; }
+#hearth-overlay.is-dinner-after .hearth-dinner-dialogue { display: none !important; }
+/* after 상태: 어두운 overlay 페이드아웃, bg를 bg004(수상한 사람)로 교체 */
+#hearth-overlay.is-dinner-after .hearth-dinner-resolve-overlay { opacity: 0 !important; transition: opacity 0.56s ease 0.1s !important; }
+#hearth-overlay.is-dinner-after .hearth-dinner-bg { background-image: var(--hearth-dinner-after-bg) !important; }
 #hearth-overlay.is-dinner-after .hearth-dinner-rail,
 #hearth-overlay.is-dinner-after .hearth-dinner-choices,
 #hearth-overlay.is-dinner-after .hearth-dinner-picks,
 #hearth-overlay.is-dinner-after .hearth-dinner-picked { display: none; }
+/* NPC 말풍선 앵커 — after 화면에서 수상한 사람 위쪽 영역에 SpeechBubble을 붙인다 */
+.hearth-dinner-npc-anchor {
+  position: absolute; left: 50%; bottom: 42%; width: 1px; height: 1px;
+  transform: translateX(-50%); pointer-events: none; z-index: 11;
+}
+/* 합성 완료 유물 공개 카드 — 뷰포트 고정, 합성점 중앙 정렬 */
+.hearth-dinner-reveal-relic {
+  position: fixed; z-index: 290; width: 170px;
+  display: flex; flex-direction: column;
+  border-radius: 14px; border: 1.5px solid rgba(255,215,120,0.72);
+  background: linear-gradient(180deg, rgba(44,28,36,0.98), rgba(10,6,12,0.99));
+  box-shadow: 0 0 52px rgba(244,164,96,0.44), 0 24px 58px rgba(0,0,0,0.84), inset 0 1px 0 rgba(255,232,168,0.18);
+  overflow: hidden; pointer-events: none;
+  transform: translate(-50%,-50%) scale(0.18); opacity: 0;
+}
+.hearth-dinner-reveal-art {
+  width: 100%; aspect-ratio: 4/3; flex-shrink: 0;
+  background: var(--reveal-art, none) center / cover no-repeat,
+    radial-gradient(circle at 50% 38%, rgba(255,236,188,0.22), transparent 42%),
+    linear-gradient(145deg, #7e2630, rgba(18,8,20,0.96));
+}
+.hearth-dinner-reveal-body {
+  padding: 10px 12px 12px; flex-shrink: 0;
+  border-top: 1px solid rgba(255,215,120,0.18);
+  background: linear-gradient(0deg, rgba(0,0,0,0.44), transparent);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.hearth-dinner-reveal-name {
+  display: block; font-family: 'OkDanDan', Georgia, serif;
+  font-size: clamp(12px,1.6vh,16px); color: #ffe7a8;
+  letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hearth-dinner-reveal-stats { display: flex; flex-direction: column; gap: 2px; }
+.hearth-dinner-reveal-stats span {
+  display: block; font-family: 'OkDanDan', Georgia, serif;
+  font-size: clamp(9px,1.1vh,11px); color: rgba(220,204,178,0.84); line-height: 1.38;
+}
+/* 만찬 칸 Free 배지 — 점등 완료 후 초록 형광으로 반짝이게 */
+.hearth-cell__dinner-free {
+  position: absolute; top: 6px; right: 8px; z-index: 2;
+  font-family: 'OkDanDan', Georgia, serif; font-size: clamp(11px,1.4vw,15px); font-weight: 700;
+  color: #39ff14; letter-spacing: 0.1em; pointer-events: none;
+  text-shadow: 0 0 8px rgba(57,255,20,0.9), 0 0 18px rgba(57,255,20,0.58), 0 0 34px rgba(57,255,20,0.28);
+  animation: dinner-free-pulse 1.6s ease-in-out infinite;
+}
+@keyframes dinner-free-pulse {
+  0%,100% { opacity: 1; text-shadow: 0 0 8px rgba(57,255,20,0.9), 0 0 18px rgba(57,255,20,0.58), 0 0 34px rgba(57,255,20,0.28); }
+  50% { opacity: 0.62; text-shadow: 0 0 4px rgba(57,255,20,0.5), 0 0 10px rgba(57,255,20,0.34), 0 0 18px rgba(57,255,20,0.16); }
+}
 .hearth-dinner-relic-card { width: 54px; min-height: 74px; border-radius: 10px; border: 1px solid rgba(255,215,120,0.5); background: linear-gradient(180deg, rgba(54,36,42,0.96), rgba(12,8,14,0.98)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; font-size: 10px; padding: 5px; box-shadow: inset 0 1px 0 rgba(255,232,168,0.18), 0 0 18px rgba(244,164,96,0.35); }
 .hearth-dinner-relic-card span { display: block; height: 30px; border-radius: 7px; margin-bottom: 4px; background: radial-gradient(circle at 50% 38%, rgba(255,236,188,0.28), transparent 42%), linear-gradient(145deg, #7e2630, rgba(22,10,24,0.94)); }
 .hearth-dinner-relic-card strong, .hearth-dinner-relic-card small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
