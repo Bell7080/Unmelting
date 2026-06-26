@@ -219,6 +219,7 @@ export class HearthScene {
             <div class="hearth-dinner-picks" aria-hidden="true"></div>
             <div class="hearth-dinner-picked" aria-live="polite"></div>
             <div class="hearth-dinner-choices" aria-live="polite"></div>
+            <div class="hearth-dinner-after-caption" aria-live="polite"></div>
           </div>
           <div class="hearth-character-stage" aria-live="polite">
             <div class="hearth-adventure-backdrop" aria-hidden="true"></div>
@@ -480,11 +481,13 @@ export class HearthScene {
     const picked = root?.querySelector<HTMLElement>('.hearth-dinner-picked')
     const choices = root?.querySelector<HTMLElement>('.hearth-dinner-choices')
     const dialogue = root?.querySelector<HTMLElement>('.hearth-dinner-dialogue')
+    const afterCaption = root?.querySelector<HTMLElement>('.hearth-dinner-after-caption')
     if (rail) rail.innerHTML = this.renderDinnerPacks()
     if (picks) picks.innerHTML = ''
     if (picked) picked.innerHTML = ''
     if (choices) choices.innerHTML = ''
     if (dialogue) dialogue.textContent = ''
+    if (afterCaption) { afterCaption.textContent = ''; afterCaption.classList.remove('is-visible') }
   }
 
   /** 무료 팩 클릭 → 블라스트 후 코스 카드 역순 퇴장 → 검은 오버레이 → 1단계 선택지 등장. */
@@ -839,26 +842,22 @@ export class HearthScene {
     }
   }
 
-  /** bg004(수상한 사람) 전환 후 SpeechBubble로 NPC 대사를 표시한다. line 미전달 시 DINNER_DONE_LINE 사용. */
+  /** hearth_006 배경 전환 후 하단 캡션 바로 NPC 대사를 표시한다. line 미전달 시 DINNER_DONE_LINE 사용. */
   private async showDinnerAfterScene(line?: string): Promise<void> {
     const root = this.overlay
     if (!root) return
-    // 기존 버블 파괴 후 is-dinner-after 추가 → CSS가 bg를 bg004로 교체 + resolve-overlay 페이드아웃
+    // finalizing/closing 클래스를 제거해 뒤로가기 버튼이 다시 나타나게 한다
     this.dinnerBubble?.destroy()
     this.dinnerBubble = null
+    root.classList.remove('is-dinner-finalizing', 'is-dinner-closing', 'is-dinner-opened')
     root.classList.add('is-dinner-after')
     // resolve-overlay 트랜지션이 끝날 때까지 짧게 대기
     await this.wait(600)
-    const npcLine = line ?? DINNER_DONE_LINE
-    this.dinnerBubble = new SpeechBubble({
-      anchor: '.hearth-dinner-npc-anchor',
-      tail: 'top',
-      theme: 'neutral',
-      autoDismissMs: 0,
-      fontSize: 18,
-      maxWidth: 360,
-    })
-    this.dinnerBubble.show(npcLine)
+    const caption = root.querySelector<HTMLElement>('.hearth-dinner-after-caption')
+    if (caption) {
+      caption.textContent = line ?? DINNER_DONE_LINE
+      caption.classList.add('is-visible')
+    }
   }
 
   /** 만찬 사용 여부는 저장값이 아니라 현재 유물 인벤토리에 꽂힌 만찬 카드로만 판단한다. */
