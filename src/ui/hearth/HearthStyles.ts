@@ -1207,9 +1207,18 @@ body.hearth-lobby #ingame-backdrop.is-out {
 /* 팩 오픈/최종 공개 공용 오버레이 — z5(선택지 z6 아래)로 레일만 덮는다 */
 .hearth-dinner-resolve-overlay {
   position: absolute; inset: 0; z-index: 5;
-  background: rgba(4,2,8,0.88);
+  /* 비네팅: 중앙은 지금 수준, 사이드로 갈수록 짙게 */
+  background: radial-gradient(ellipse 72% 68% at 50% 50%,
+    rgba(4,2,8,0.38) 0%,
+    rgba(4,2,8,0.72) 58%,
+    rgba(4,2,8,0.96) 100%);
   opacity: 0; pointer-events: none;
   transition: opacity 0.44s ease;
+}
+/* finalizing·after 전환 시에는 균일한 완전 암전으로 덮는다 */
+#hearth-overlay.is-dinner-finalizing .hearth-dinner-resolve-overlay,
+#hearth-overlay.is-dinner-closing .hearth-dinner-resolve-overlay {
+  background: rgba(4,2,8,0.98);
 }
 /* 팩 퇴장이 끝난 뒤 검은 오버레이가 올라오고 선택지가 그 위에 뜬다 */
 #hearth-overlay.is-dinner-opened .hearth-dinner-resolve-overlay { opacity: 0.72; transition: opacity 0.38s ease 0.12s; }
