@@ -1316,11 +1316,12 @@ body.hearth-lobby #ingame-backdrop.is-out {
   border-color: rgba(244,164,96,0.82);
   box-shadow: inset 0 1px 0 rgba(255,232,168,0.26), 0 32px 62px rgba(0,0,0,0.84), 0 0 40px rgba(244,164,96,0.38);
 }
-/* 일러스트 영역 */
+/* 일러스트 영역 — 스프라이트(--dinner-art)가 있으면 위에 올리고, 없으면 색 그라디언트 폴백 */
 .hearth-dinner-choice-art {
   flex: 1; min-height: 0;
   background:
-    radial-gradient(circle at 52% 38%, rgba(255,236,188,0.28), transparent 38%),
+    var(--dinner-art, none) center/cover no-repeat,
+    radial-gradient(circle at 52% 38%, rgba(255,236,188,0.18), transparent 38%),
     linear-gradient(145deg, var(--food-color,#7e2630), rgba(16,7,18,0.97));
 }
 /* 하단 푸터: 이름 + 스탯 */

@@ -543,6 +543,17 @@ export function spriteForHearthStation(name: string): string | undefined {
   return hearthStationGlob[`../assets/sprites/${name}.webp`]?.default
 }
 
+// 만찬 선택지 일러스트: dinner_main/sauce/topping + 001~NNN.
+// 파일을 추가하면 자동 연동되고, 없으면 undefined → CSS 그라디언트 폴백.
+const dinnerGlob = import.meta.glob<{ default: string }>(
+  '../assets/sprites/dinner_*.webp',
+  { eager: true },
+)
+/** 만찬 선택지 스프라이트. name 예: 'dinner_main_001'. 파일 없으면 undefined. */
+export function spriteForDinner(name: string): string | undefined {
+  return dinnerGlob[`../assets/sprites/${name}.webp`]?.default
+}
+
 // recipe_001.webp 가 추가되면 자동으로 사용된다. 없으면 팩 커버로 fallback.
 const recipeGlob = import.meta.glob('../assets/sprites/recipe_*.webp', {
   eager: true, import: 'default',
