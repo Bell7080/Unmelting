@@ -52,7 +52,7 @@ const DINNER_STAT_LABELS: Record<DinnerStatKey, string> = {
 /** 모험 셔터 안에서 고를 수 있는 동행 목록. 3~4번은 잠금 회색 빈 슬롯. */
 const HEARTH_CHARACTERS = [
   { id: 'sprout-chick', name: '새싹 병아리', role: '튜토리얼', tagline: '지식에 대한 갈망', desc: '모험을 떠나기 전, 최고의 선택.', art: SpriteUrls.playerTutorial, lockedArt: false, locked: false },
-  { id: 'ena', name: '에나', role: '녹지 않는 소녀', tagline: '', desc: '검은 셔터 너머 첫 모험을 함께 시작하는 기본 동행.', art: SpriteUrls.player, lockedArt: false, locked: false },
+  { id: 'ena', name: '에나', role: '첫 번째 동반자', tagline: '몰락한 귀족', desc: '녹지 않는 소녀가 무대 위에 올랐다.', art: SpriteUrls.player, lockedArt: false, locked: false },
   { id: 'slot-3', name: '???', role: '추후 해금', tagline: '', desc: '', art: '', lockedArt: true, locked: true },
   { id: 'slot-4', name: '???', role: '추후 해금', tagline: '', desc: '', art: '', lockedArt: true, locked: true },
 ] as const
@@ -129,7 +129,9 @@ export class HearthScene {
         <div class="job-rail-curtain job-rail-curtain--left hearth-curtain" aria-hidden="true"></div>
         <div class="job-rail-curtain job-rail-curtain--right hearth-curtain" aria-hidden="true"></div>
         <div class="hearth-shutter" aria-hidden="true">
-          <button class="hearth-back" type="button" data-hearth-back>뒤로가기</button>
+          <button class="hearth-back" type="button" data-hearth-back aria-label="뒤로가기">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 L8 12 L15 19"/></svg>
+          </button>
           <div class="hearth-trade-stage" aria-label="무역 임시 화면">
             <aside class="hearth-trade-tabs" role="tablist" aria-label="무역 분류">${this.renderTradeTabs()}</aside>
             <section class="hearth-trade-pack-area" aria-live="polite">
@@ -565,9 +567,25 @@ export class HearthScene {
   /** 뒤로가기 → 검은 셔터를 다시 올리고 로비 9칸 상호작용으로 돌아간다. */
   private raiseShutter(): void {
     if (!this.shuttered || this.departing) return
+    const root = this.overlay
+
+    // 캐릭터 확정 후 뒤로가기: 선택 화면으로 복귀 (셔터는 그대로 유지)
+    if (root?.classList.contains('is-character-confirmed')) {
+      this.characterConfirmed = false
+      // WAAPI 취소 → showcase가 CSS 제어(is-shutter-rest)로 즉시 복원
+      const showcase = root.querySelector<HTMLElement>('.hearth-showcase-card')
+      showcase?.getAnimations().forEach((a) => a.cancel())
+      // 캐러셀 재진입 딜레이(1.02s)를 건너뛰고 즉시 표시
+      const carousel = root.querySelector<HTMLElement>('.hearth-character-carousel')
+      if (carousel) carousel.style.transition = 'none'
+      root.classList.remove('is-character-confirmed', 'is-character-confirming')
+      requestAnimationFrame(() => carousel?.style.removeProperty('transition'))
+      this.selectCharacter(this.selectedCharacterIndex)
+      return
+    }
+
     this.shuttered = false
     this.characterConfirmed = false
-    const root = this.overlay
     if (root?.classList.contains('is-dinner-mode')) {
       root.classList.remove('is-shuttering', 'is-shutter-rest', 'is-dinner-mode', 'is-dinner-opened', 'is-dinner-finalizing', 'is-dinner-closing', 'is-dinner-after')
       this.dinnerStep = this.dinnerConsumed ? 5 : 0

@@ -379,14 +379,17 @@ export const HEARTH_STYLES = `
 #hearth-overlay.is-shutter-rest .hearth-shutter::before { background: rgba(4, 2, 8, 0.12); backdrop-filter: blur(0.35px); }
 .hearth-back {
   position: absolute; left: clamp(10px, 1.6vw, 18px); bottom: clamp(10px, 1.6vh, 18px); z-index: 8;
-  padding: 9px 14px; border-radius: 999px; border: 1px solid rgba(255,222,140,0.42);
-  background: rgba(18,12,24,0.72); color: rgba(255,236,188,0.9);
-  font: 800 13px/1 'OkDanDan', Georgia, serif; letter-spacing: 0.08em;
+  display: flex; align-items: center; justify-content: center;
+  width: clamp(36px, 4.4vh, 50px); height: clamp(36px, 4.4vh, 50px);
+  border-radius: 50%; border: 1px solid rgba(255, 222, 140, 0.34);
+  background: rgba(11, 6, 18, 0.7); color: rgba(255, 232, 168, 0.9);
+  backdrop-filter: blur(4px);
   opacity: 0; transform: translateX(-10px); pointer-events: none;
-  transition: opacity 0.28s ease 0.78s, transform 0.28s ease 0.78s, border-color 0.18s ease;
+  transition: opacity 0.28s ease 0.78s, transform 0.28s ease 0.78s, border-color 0.18s ease, background 0.18s ease;
 }
+.hearth-back > svg { width: 52%; height: 52%; }
 #hearth-overlay.is-shutter-rest .hearth-back { opacity: 1; transform: translateX(0); pointer-events: auto; }
-.hearth-back:hover { border-color: var(--color-flame, #ffd778); }
+.hearth-back:hover { border-color: var(--color-flame, #ffd778); background: rgba(22, 12, 32, 0.9); }
 .hearth-character-stage { grid-column: 1 / 3; grid-row: 1 / 3; position: relative; overflow: hidden; pointer-events: none; }
 .hearth-adventure-backdrop { position: absolute; inset: 0; background: radial-gradient(circle at 66% 42%, rgba(255,215,120,0.1), transparent 34%); }
 .hearth-showcase-card {
@@ -419,10 +422,6 @@ export const HEARTH_STYLES = `
 #hearth-overlay.is-shutter-rest .hearth-depart { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
 .hearth-depart:hover { transform: translateY(-2px) scale(1.03); border-color: rgba(220,172,80,0.78); box-shadow: inset 0 1px 0 rgba(255,228,160,0.32), inset 0 -4px 8px rgba(0,0,0,0.55), 0 12px 26px rgba(0,0,0,0.68), 0 0 24px rgba(220,140,40,0.32); filter: brightness(1.08); }
 .hearth-depart.is-pressed { transform: scale(0.96); filter: brightness(1.1); }
-#hearth-overlay.is-character-confirming .hearth-character-strip, #hearth-overlay.is-character-confirming .hearth-depart { transform: translateY(110%); opacity: 0; pointer-events: none; }
-#hearth-overlay.is-character-confirming .hearth-showcase-card { filter: brightness(1.85) saturate(1.2); transform: scale(0.08); opacity: 0; transition: transform 0.34s cubic-bezier(0.28,0.78,0.34,1), opacity 0.34s ease, filter 0.34s ease; }
-#hearth-overlay.is-character-confirmed .hearth-character-stage, #hearth-overlay.is-character-confirmed .hearth-character-strip, #hearth-overlay.is-character-confirmed .hearth-back { display: none; }
-#hearth-overlay.is-character-confirmed .hearth-depart { grid-row: 2; margin-bottom: clamp(24px, 5vh, 44px); opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
 .hearth-character-orb { position: fixed; z-index: 260; width: 18px; height: 18px; border-radius: 50%; pointer-events: none; background: #fff3bd; box-shadow: 0 0 22px #ffd778, 0 0 56px rgba(244,164,96,0.72); }
 .hearth-character-orb.is-flying { animation: hearth-character-orb-flight 0.6s cubic-bezier(0.18,0.78,0.22,1) forwards; }
 @keyframes hearth-character-orb-flight { to { transform: translate(var(--orb-dx), var(--orb-dy)) scale(0.45); opacity: 0.82; } }
@@ -801,24 +800,13 @@ body.hearth-lobby #ingame-backdrop.is-out {
   filter: drop-shadow(0 3px 8px rgba(0,0,0,0.72));
 }
 .hearth-character-lock span {
-  font-family: 'OkDanDan', Georgia, serif;
-  font-size: clamp(9px, 1.2vh, 13px);
-  letter-spacing: 0.14em;
+  display: none;
 }
 
 /* ── 하단 스크림 + 텍스트 ───────────────────────────────────────────── */
+/* 얇은 가로 카드(3:1)에서는 일러스트만 노출 — 텍스트 영역 전체 숨김 */
 .hearth-character-scrim {
-  position: absolute;
-  left: 0; right: 0; bottom: 0;
-  display: flex;
-  flex-direction: column;
-  gap: clamp(1px, 0.3vh, 3px);
-  padding: clamp(14px, 2.2vh, 24px) clamp(10px, 0.9vw, 16px) clamp(5px, 0.9vh, 9px);
-  background: linear-gradient(180deg,
-    transparent 0%,
-    rgba(7, 4, 12, 0.5) 26%,
-    rgba(5, 3, 9, 0.9) 64%,
-    rgba(4, 2, 8, 0.98) 100%);
+  display: none;
 }
 .hearth-character-name {
   font-family: 'OkDanDan', Georgia, serif;
@@ -910,11 +898,12 @@ body.hearth-lobby #ingame-backdrop.is-out {
 
 /* ── 확정/확인 상태 ──────────────────────────────────────────────────── */
 
-/* 캐러셀: 아래로 퇴장 */
+/* 캐러셀: 아래로 퇴장 — 진입 딜레이(1.02s)를 0으로 덮어 즉시 슬라이드아웃 */
 #hearth-overlay.is-character-confirming .hearth-character-carousel {
   transform: translateY(110%);
   opacity: 0;
   pointer-events: none;
+  transition: opacity 0.24s ease 0s, transform 0.32s cubic-bezier(0.3, 0.8, 0.4, 1) 0s;
 }
 /* 카피 텍스트: 위로 역퇴장 (아래서 들어왔으므로 반대 방향) */
 #hearth-overlay.is-character-confirming .hearth-character-copy {
@@ -928,9 +917,9 @@ body.hearth-lobby #ingame-backdrop.is-out {
   transition: none !important;
   z-index: 12;
 }
+/* 확정 후: stage/carousel 숨기고 뒤로가기(back)는 유지해 재선택 진입 허용 */
 #hearth-overlay.is-character-confirmed .hearth-character-stage,
-#hearth-overlay.is-character-confirmed .hearth-character-carousel,
-#hearth-overlay.is-character-confirmed .hearth-back { display: none; }
+#hearth-overlay.is-character-confirmed .hearth-character-carousel { display: none; }
 #hearth-overlay.is-character-confirmed .hearth-depart {
   position: absolute;
   top: 50%;
