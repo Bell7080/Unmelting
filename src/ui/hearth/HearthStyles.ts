@@ -624,8 +624,14 @@ body.hearth-lobby #ingame-backdrop.is-out {
 .hearth-character-copy strong { display: block; font-size: clamp(32px, 6vh, 64px); letter-spacing: 0.08em; }
 .hearth-character-copy small { display: block; max-width: 28em; margin-top: 8px; color: rgba(225, 210, 188, 0.86); font-size: clamp(13px, 1.8vh, 18px); line-height: 1.45; }
 
-/* depart button — 카루셀 위에 올라오도록 margin-bottom 갱신 */
-.hearth-depart { margin-bottom: clamp(192px, 32vh, 248px); }
+/* depart button — 모험 모드에서는 확정 전까지 숨김; is-character-confirmed가 중앙에 표시 */
+.hearth-depart { margin-bottom: clamp(152px, 24vh, 200px); }
+#hearth-overlay.is-adventure-mode:not(.is-character-confirmed) .hearth-depart {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(10px) scale(0.94) !important;
+  transition: none !important;
+}
 
 /* ── 캐릭터 캐러셀 컨테이너 ────────────────────────────────────────── */
 .hearth-character-carousel {
@@ -633,7 +639,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
   bottom: 0;
   left: 0;
   right: 0;
-  height: clamp(172px, 28vh, 228px);
+  height: clamp(136px, 21vh, 172px);
   z-index: 7;
   display: flex;
   align-items: center;
@@ -661,16 +667,16 @@ body.hearth-lobby #ingame-backdrop.is-out {
 }
 .hearth-character-strip:active { cursor: grabbing; }
 
-/* ── 가로 직사각형 캐릭터 카드 ──────────────────────────────────────
-   landscape 3:2 비율 — 일러스트 풀 커버 + 하단 스크림 + 잠금 오버레이.
+/* ── 가로 얇은 띠 캐릭터 카드 ──────────────────────────────────────
+   height:width = 1:3 비율(매우 얇은 가로 직사각형) — 일러스트 중앙 포커싱.
    transform/opacity/filter/z-index는 JS가 인라인으로 제어한다. */
 .hearth-character-card {
   position: absolute;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  height: min(72%, 168px);
-  aspect-ratio: 3 / 2;
+  height: min(70%, 104px);
+  aspect-ratio: 3 / 1;
   cursor: pointer;
   padding: 0;
   border: 1px solid rgba(255, 215, 120, 0.24);
@@ -695,22 +701,48 @@ body.hearth-lobby #ingame-backdrop.is-out {
 /* 드래그 중엔 easing 없이 즉시 추적 */
 .hearth-character-strip:active .hearth-character-card { transition: none; }
 
-/* 가운데(is-selected) 카드 — 가장 밝고 강한 발광 */
+/* 가운데(is-selected) 카드 — 숨쉬는 발광 */
 .hearth-character-card.is-selected {
   border-color: rgba(255, 222, 140, 0.62);
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.22),
-    0 28px 62px rgba(0, 0, 0, 0.84),
+    0 14px 36px rgba(0, 0, 0, 0.68),
     0 0 0 1px rgba(220, 170, 70, 0.28),
-    0 0 42px rgba(244, 164, 96, 0.22);
+    0 0 32px rgba(244, 164, 96, 0.22);
+  animation: hearth-card-breathe 2.6s ease-in-out infinite;
 }
+@keyframes hearth-card-breathe {
+  0%, 100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 232, 168, 0.18),
+      0 14px 36px rgba(0, 0, 0, 0.68),
+      0 0 0 1px rgba(220, 170, 70, 0.24),
+      0 0 28px rgba(244, 164, 96, 0.2);
+    border-color: rgba(255, 222, 140, 0.56);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 232, 168, 0.38),
+      0 18px 44px rgba(0, 0, 0, 0.74),
+      0 0 0 1px rgba(220, 170, 70, 0.56),
+      0 0 60px rgba(244, 164, 96, 0.52),
+      0 0 90px rgba(255, 200, 100, 0.22);
+    border-color: rgba(255, 222, 140, 0.96);
+  }
+}
+/* 드래그·거부·확정 상태에서는 발광 애니메이션 정지 */
+.hearth-character-strip:active .hearth-character-card.is-selected,
+.hearth-character-card.is-selected.is-denied,
+#hearth-overlay.is-character-confirming .hearth-character-card.is-selected,
+#hearth-overlay.is-character-confirmed .hearth-character-card.is-selected { animation: none; }
+
 .hearth-character-card.is-selected:hover:not(.is-locked) {
   border-color: rgba(255, 222, 140, 0.92);
   box-shadow:
     inset 0 1px 0 rgba(255, 232, 168, 0.3),
-    0 32px 68px rgba(0, 0, 0, 0.9),
+    0 20px 52px rgba(0, 0, 0, 0.82),
     0 0 0 1px rgba(220, 170, 70, 0.48),
-    0 0 54px rgba(244, 164, 96, 0.34);
+    0 0 62px rgba(244, 164, 96, 0.38);
 }
 .hearth-character-card.is-locked { cursor: not-allowed; }
 .hearth-character-card.is-denied { animation: hearth-char-deny 0.42s ease; }
@@ -726,7 +758,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
   position: absolute;
   inset: 0;
   background-size: cover;
-  background-position: center top;
+  background-position: center 30%;
   background-repeat: no-repeat;
 }
 .hearth-character-art.is-empty {
@@ -780,8 +812,8 @@ body.hearth-lobby #ingame-backdrop.is-out {
   left: 0; right: 0; bottom: 0;
   display: flex;
   flex-direction: column;
-  gap: clamp(2px, 0.4vh, 4px);
-  padding: clamp(18px, 3vh, 34px) clamp(9px, 0.8vw, 15px) clamp(7px, 1.2vh, 12px);
+  gap: clamp(1px, 0.3vh, 3px);
+  padding: clamp(14px, 2.2vh, 24px) clamp(10px, 0.9vw, 16px) clamp(5px, 0.9vh, 9px);
   background: linear-gradient(180deg,
     transparent 0%,
     rgba(7, 4, 12, 0.5) 26%,
@@ -846,17 +878,24 @@ body.hearth-lobby #ingame-backdrop.is-out {
 }
 
 /* ── 확정/확인 상태 ──────────────────────────────────────────────────── */
-#hearth-overlay.is-character-confirming .hearth-character-carousel,
-#hearth-overlay.is-character-confirming .hearth-depart {
+
+/* 캐러셀: 아래로 퇴장 */
+#hearth-overlay.is-character-confirming .hearth-character-carousel {
   transform: translateY(110%);
   opacity: 0;
   pointer-events: none;
 }
-#hearth-overlay.is-character-confirming .hearth-character-stage {
-  filter: brightness(1.85) saturate(1.2);
-  transform: scale(0.08);
+/* 카피 텍스트: 위로 역퇴장 (아래서 들어왔으므로 반대 방향) */
+#hearth-overlay.is-character-confirming .hearth-character-copy {
+  transform: translateY(-14px);
   opacity: 0;
-  transition: transform 0.34s cubic-bezier(0.28, 0.78, 0.34, 1), opacity 0.34s ease, filter 0.34s ease;
+  pointer-events: none;
+  transition: transform 0.26s ease 0s, opacity 0.22s ease 0s;
+}
+/* 쇼케이스 카드: JS WAAPI가 직접 제어 — CSS transition 해제 후 z-index 올림 */
+#hearth-overlay.is-character-confirming .hearth-showcase-card {
+  transition: none !important;
+  z-index: 12;
 }
 #hearth-overlay.is-character-confirmed .hearth-character-stage,
 #hearth-overlay.is-character-confirmed .hearth-character-carousel,
@@ -867,9 +906,10 @@ body.hearth-lobby #ingame-backdrop.is-out {
   left: 50%;
   margin: 0;
   opacity: 1;
-  /* 그리드 배치에서 벗어나 셔터 중앙으로 이동한다 */
   transform: translate(-50%, -50%);
   pointer-events: auto;
+  /* 확정 후 재등장은 딜레이 없이 바로 */
+  transition: opacity 0.36s ease 0s, transform 0.36s cubic-bezier(0.2, 0.84, 0.3, 1) 0s, box-shadow 0.18s ease, border-color 0.18s ease;
 }
 
 /* ── orb / 설치 애니메이션 ──────────────────────────────────────────── */

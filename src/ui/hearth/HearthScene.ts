@@ -160,7 +160,7 @@ export class HearthScene {
               <small>${HEARTH_CHARACTERS[0].desc}</small>
             </div>
           </div>
-          <button class="hearth-depart" type="button" data-hearth-select>선택</button>
+          <button class="hearth-depart" type="button" data-hearth-depart>출발</button>
           <div class="hearth-character-carousel">
             <button class="hearth-char-nav hearth-char-nav--left" type="button" data-hearth-char-nav="left" aria-label="이전" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 L8 12 L15 19"/></svg></button>
             <div class="hearth-character-strip" role="listbox" aria-label="캐릭터 선택">${this.renderCharacterCards()}</div>
@@ -233,7 +233,13 @@ export class HearthScene {
       }
       const characterCard = t.closest<HTMLElement>('[data-hearth-character]')
       if (characterCard) {
-        this.selectCharacter(Number(characterCard.dataset.hearthCharacter ?? 0), 'click')
+        const idx = Number(characterCard.dataset.hearthCharacter ?? 0)
+        if (idx === this.selectedCharacterIndex && !this.characterConfirmed) {
+          // 이미 포커싱된 카드를 다시 누르면 확정
+          void this.confirmCharacter()
+        } else {
+          this.selectCharacter(idx, 'click')
+        }
         return
       }
       const dinnerPack = t.closest<HTMLElement>('[data-hearth-dinner-pack]')
@@ -249,10 +255,6 @@ export class HearthScene {
       const tradeTab = t.closest<HTMLElement>('[data-hearth-trade-tab]')
       if (tradeTab) {
         this.selectTradeTab(Number(tradeTab.dataset.hearthTradeTab ?? 0))
-        return
-      }
-      if (t.closest('[data-hearth-select]')) {
-        void this.confirmCharacter()
         return
       }
       if (t.closest('[data-hearth-depart]')) {
@@ -348,12 +350,6 @@ export class HearthScene {
     this.characterConfirmed = false
     this.overlay?.classList.remove('is-trade-mode', 'is-trade-leaving', 'is-dinner-mode', 'is-dinner-opened')
     this.overlay?.classList.add('is-shuttering', 'is-adventure-mode')
-    const departButton = this.overlay?.querySelector<HTMLElement>('.hearth-depart')
-    if (departButton) {
-      departButton.textContent = '선택'
-      departButton.removeAttribute('data-hearth-depart')
-      departButton.setAttribute('data-hearth-select', '')
-    }
     this.selectCharacter(this.selectedCharacterIndex)
     // 셔터 하강이 끝난 뒤 배경→우측 카드/좌측 소개→하단 슬라이드/선택 버튼 순서로 띄운다.
     window.setTimeout(() => this.overlay?.classList.add('is-shutter-rest'), 680)
@@ -593,8 +589,9 @@ export class HearthScene {
     const cards = [...root.querySelectorAll<HTMLElement>('[data-hearth-character]')]
     const n = cards.length
     if (n === 0) return
-    const cardW = cards[0].offsetWidth || 170
-    const stepPx = cardW * 0.62
+    const cardW = cards[0].offsetWidth || 260
+    // 가로 얇은 카드는 너비가 넓으므로 step 비율을 줄여 coverflow 겹침을 유지한다
+    const stepPx = cardW * 0.46
     const VISIBLE = 2
     const center = this.selectedCharacterIndex
     cards.forEach((card) => {
@@ -671,12 +668,11 @@ export class HearthScene {
     window.localStorage.setItem(HEARTH_LAST_CHARACTER_KEY, String(index))
   }
 
-  /** 캐릭터 확정 → 카드/버튼 하강, 큰 배경이 빛으로 접힌 뒤 플레이어 카드 위치에 꽂힌다. */
+  /** 캐릭터 확정 — 캐러셀·카피 역방향 퇴장 후 우측 쇼케이스 카드가 중앙으로 이동·체류·빛이 되어 날아간다. */
   private async confirmCharacter(): Promise<void> {
     if (this.characterConfirmed || this.departing) return
     const character = HEARTH_CHARACTERS[this.selectedCharacterIndex]
     if (character.locked) {
-      // 잠긴 캐릭터 — 카드를 흔들어 피드백만 준다
       const card = this.overlay?.querySelector<HTMLElement>('.hearth-character-card.is-selected')
       if (card) {
         card.classList.add('is-denied')
@@ -686,24 +682,56 @@ export class HearthScene {
     }
     this.characterConfirmed = true
     const root = this.overlay
-    const stage = root?.querySelector<HTMLElement>('.hearth-character-stage')
+    const showcase = root?.querySelector<HTMLElement>('.hearth-showcase-card')
+    const shell = root?.querySelector<HTMLElement>('.hearth-shell')
     const target = document.querySelector<HTMLElement>('.player-card')
-    if (!root || !stage) return
+    if (!root || !showcase || !shell) return
+
+    // 1. 캐러셀·카피 텍스트 역방향 퇴장 (CSS transition이 처리)
     root.classList.add('is-character-confirming')
-    await this.wait(360)
-    const rect = stage.getBoundingClientRect()
+    await this.wait(300)
+
+    // 2. 쇼케이스 카드를 쉘 중앙으로 부드럽게 이동 (WAAPI — CSS transition은 confirming 상태에서 비활성)
+    const shellRect = shell.getBoundingClientRect()
+    const srcRect = showcase.getBoundingClientRect()
+    const dx = shellRect.left + shellRect.width / 2 - (srcRect.left + srcRect.width / 2)
+    const dy = shellRect.top + shellRect.height / 2 - (srcRect.top + srcRect.height / 2)
+    showcase.animate(
+      [
+        { transform: 'translateX(0) translateY(0) scale(1)', easing: 'cubic-bezier(0.2, 0.84, 0.3, 1)' },
+        { transform: `translateX(${dx}px) translateY(${dy - 10}px) scale(1.07)` },
+      ],
+      { duration: 680, fill: 'forwards' }
+    )
+
+    // 중앙 체류 딜레이
+    await this.wait(980)
+
+    // 3. 빛이 되어 사라짐
+    const orbX = shellRect.left + shellRect.width / 2
+    const orbY = shellRect.top + shellRect.height / 2 - 10
+    showcase.animate(
+      [
+        { filter: 'brightness(1)', opacity: 1, transform: `translateX(${dx}px) translateY(${dy - 10}px) scale(1.07)` },
+        { filter: 'brightness(3.5) saturate(0.4)', opacity: 0.88, transform: `translateX(${dx}px) translateY(${dy - 10}px) scale(1.12)` },
+        { filter: 'brightness(8) saturate(0)', opacity: 0, transform: `translateX(${dx}px) translateY(${dy - 10}px) scale(1.26)` },
+      ],
+      { duration: 400, easing: 'ease-in', fill: 'forwards' }
+    )
+    await this.wait(120)
+
+    // 4. 빛 구슬이 플레이어 카드로 날아간다
+    const dest = target?.getBoundingClientRect()
     const orb = document.createElement('div')
     orb.className = 'hearth-character-orb'
-    orb.style.left = `${rect.left + rect.width / 2 - 9}px`
-    orb.style.top = `${rect.top + rect.height / 2 - 9}px`
+    orb.style.left = `${orbX - 9}px`
+    orb.style.top = `${orbY - 9}px`
+    orb.style.setProperty('--orb-dx', `${dest ? dest.left + dest.width / 2 - orbX : 0}px`)
+    orb.style.setProperty('--orb-dy', `${dest ? dest.top + dest.height / 2 - orbY : 120}px`)
     document.body.appendChild(orb)
-    const dest = target?.getBoundingClientRect()
-    const dx = dest ? dest.left + dest.width / 2 - (rect.left + rect.width / 2) : 0
-    const dy = dest ? dest.top + dest.height / 2 - (rect.top + rect.height / 2) : 120
-    orb.style.setProperty('--orb-dx', `${dx}px`)
-    orb.style.setProperty('--orb-dy', `${dy}px`)
     orb.classList.add('is-flying')
-    await this.wait(620)
+    await this.wait(640)
+
     if (target) {
       if (!character.lockedArt) target.querySelector<HTMLElement>('.player-art')?.style.setProperty('background-image', `url('${character.art}')`)
       SquareBurst.playOn(target, 'score', { count: 34, spread: 180, duration: 720, size: [10, 24] })
@@ -713,12 +741,6 @@ export class HearthScene {
     orb.remove()
     root.classList.remove('is-character-confirming')
     root.classList.add('is-character-confirmed')
-    const departButton = root.querySelector<HTMLElement>('.hearth-depart')
-    if (departButton) {
-      departButton.textContent = '출발'
-      departButton.removeAttribute('data-hearth-select')
-      departButton.setAttribute('data-hearth-depart', '')
-    }
   }
 
 
