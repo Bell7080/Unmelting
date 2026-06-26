@@ -1220,8 +1220,11 @@ body.hearth-lobby #ingame-backdrop.is-out {
 #hearth-overlay.is-dinner-closing .hearth-dinner-resolve-overlay {
   background: rgba(4,2,8,0.98);
 }
-/* 팩 퇴장이 끝난 뒤 검은 오버레이가 올라오고 선택지가 그 위에 뜬다 */
-#hearth-overlay.is-dinner-opened .hearth-dinner-resolve-overlay { opacity: 0.72; transition: opacity 0.38s ease 0.12s; }
+/* ① 팩 퇴장 직후 중간 단계: 배경 노출 후 오버레이만 서서히 어둡게 (선택지 아직 숨김) */
+#hearth-overlay.is-dinner-dimming .hearth-dinner-rail { opacity: 0; pointer-events: none; }
+#hearth-overlay.is-dinner-dimming .hearth-dinner-resolve-overlay { opacity: 0.72; transition: opacity 0.46s ease; }
+/* ② dimming 완료 후 is-dinner-opened로 교체 → 선택지 등장 */
+#hearth-overlay.is-dinner-opened .hearth-dinner-resolve-overlay { opacity: 0.72; transition: opacity 0.22s ease; }
 #hearth-overlay.is-dinner-finalizing .hearth-dinner-resolve-overlay { opacity: 1; }
 /* 만찬 팩 카드: 컨테이너는 투명, 이름·가격은 텍스트만 부유, 일러스트가 시각 중심 */
 .hearth-dinner-pack {

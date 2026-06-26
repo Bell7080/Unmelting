@@ -510,7 +510,15 @@ export class HearthScene {
     // 마지막 카드가 퇴장 완료할 때까지 대기
     await this.wait(packs.length * 68 + 320)
 
-    // 검은 오버레이 상승 → 선택지 등장
+    // [1] 빈 배경을 충분히 노출
+    await this.wait(500)
+
+    // [2] 오버레이만 서서히 어둡게 (선택지 아직 미표시)
+    this.overlay?.classList.add('is-dinner-dimming')
+
+    // [3] 어두운 화면을 충분히 체류한 뒤 선택지 등장
+    await this.wait(860)
+    this.overlay?.classList.remove('is-dinner-dimming')
     this.overlay?.classList.add('is-dinner-opened')
     this.renderDinnerChoices()
   }
