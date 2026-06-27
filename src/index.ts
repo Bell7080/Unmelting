@@ -1731,12 +1731,20 @@ async function openShopOverlay(mode: 'shop' | 'altar'): Promise<void> {
 }
 
 async function maybeOpenShopAfterTurn(): Promise<boolean> {
-  // 보스 전투/최종 별빛 등반 중에는 10/30턴 상점·제단을 재트리거하지 않는다.
+  // 보스 전투/최종 별빛 등반 중에는 상점·제단을 재트리거하지 않는다.
   if (gameState.bossBattleActive || finalAscentStarlightRuleActive) return false
-  if (gameState.getCurrentTurn() === 0 || gameState.getCurrentTurn() % 10 !== 0) return false
-  // Every 30 turns swaps to altar mode; this is the first phase of the
-  // 100-turn run loop (10 shop, 20 shop, 30 altar ...).
-  await openShopOverlay(gameState.getCurrentTurn() % 30 === 0 ? 'altar' : 'shop')
+  const turn = gameState.getCurrentTurn()
+  if (turn === 0) return false
+
+  if (gameState.tutorialMode) {
+    // 튜토리얼: 5턴·15턴 일반 상점, 30턴 제단(보스 게이트).
+    if (turn !== 5 && turn !== 15 && turn % 30 !== 0) return false
+    await openShopOverlay(turn % 30 === 0 ? 'altar' : 'shop')
+    return true
+  }
+
+  if (turn % 10 !== 0) return false
+  await openShopOverlay(turn % 30 === 0 ? 'altar' : 'shop')
   return true
 }
 
@@ -2234,16 +2242,24 @@ async function pickAltarRelicFree(relicId: RelicId): Promise<void> {
 }
 
 /**
- * 튜토리얼 레인 확장: 기존 레인 넛지 → 새 레인 추가 + 보드 채움 → 셔터 내리기 애니메이션.
- * 10턴 상점 후 1→2, 20턴 상점 후 2→3.
+ * 튜토리얼 레인 확장 강제 씬.
+ * 1) 기존 레인 넛지  2) 빈 레인 셔터 강하  3) 딜레이  4) 카드 보급 렌더
+ * 상점 셔터가 올라간 직후, 입력이 잠긴 상태에서 실행된다.
  */
 async function expandTutorialRail(): Promise<void> {
-  // 1. 기존 레인 살짝 흔들기
+  // 1. 기존 레인들이 살짝 흔들리며 공간을 여는 느낌
   await boardRenderer.animateRailNudge()
 
-  // 2. 새 레인 추가 + 카드 보급
+  // 2. 빈 레인 추가 → 렌더 → 셔터 강하 애니메이션
   gameState.addLane()
   const newLaneIndex = gameState.lanes.length - 1
+  render()
+  await boardRenderer.animateNewLaneIn(newLaneIndex)
+
+  // 3. 빈 레인이 자리 잡은 뒤 짧은 정적
+  await wait(380)
+
+  // 4. 카드 보급 — 상단(dist=2)부터 차례로 채움
   const newLane = gameState.lanes[newLaneIndex]
   for (let dist = LANE_DISTANCE_COUNT - 1; dist >= 0; dist--) {
     const strict = dist === 0
@@ -2253,9 +2269,8 @@ async function expandTutorialRail(): Promise<void> {
   }
   turnManager.armFrontBombs()
   render()
-
-  // 3. 새 레인 셔터처럼 내리기
-  await boardRenderer.animateNewLaneIn(newLaneIndex)
+  // 카드가 보급되는 시각적 여운
+  await wait(300)
 }
 
 async function closeShopAndResume(): Promise<void> {
@@ -2304,12 +2319,14 @@ async function closeShopAndResume(): Promise<void> {
     render()
     return
   }
-  // 튜토리얼: 10턴(2레인)·20턴(3레인) 상점 종료 후 레인을 확장한다.
+  await boardRenderer.playShopResumeTransition()
+
+  // 튜토리얼: 셔터가 완전히 열린 직후 레인 확장 강제 씬을 재생한다.
+  // 입력은 씬 종료까지 잠근다.
   if (gameState.tutorialMode && gameState.lanes.length < 3) {
     await expandTutorialRail()
   }
 
-  await boardRenderer.playShopResumeTransition()
   inputLocked = false
   render()
 }
@@ -2897,8 +2914,15 @@ async function startGame(characterIndex = -1): Promise<void> {
 
   // 캐릭터 0(병아리)은 직업 선택 없이 튜토리얼 1-레인으로 시작한다.
   const isTutorial = characterIndex === 0
+  boardRenderer.tutorialPlayerArtUrl = null  // 이전 런 잔여 초기화
   if (isTutorial) {
     gameState.initTutorialMode(1)
+    // 병아리 전용 스탯: 체력 10, 공격력 1 (기본값 그대로)
+    gameState.character.maxHealth = 10
+    gameState.character.health = 10
+    gameState.character.damage = 1
+    // 인게임 플레이어 카드에 병아리 아트 표시
+    boardRenderer.tutorialPlayerArtUrl = SpriteUrls.playerTutorial
     render()
   }
 

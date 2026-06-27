@@ -266,6 +266,8 @@ interface CounterAnimationState {
 
 export class GameBoardRenderer {
   private boardElement: HTMLElement
+  /** 튜토리얼에서 병아리 아트를 인게임 플레이어 카드에 표시하기 위해 재정의. null=기본(에나). */
+  tutorialPlayerArtUrl: string | null = null
   private selected: { laneIndex: number; distance: number } | null = null
   private currentGameState: GameState | null = null
   /** 현재 런에서 잠긴 손패 카드 ID 집합. 도감에서 해금 여부 표시에 사용한다. */
@@ -1602,7 +1604,7 @@ export class GameBoardRenderer {
     return `
       <div class="player-row">
         <div class="player-card">
-          <div class="player-art" style="background-image: url('${SpriteUrls.player}')" aria-hidden="true"></div>
+          <div class="player-art" style="background-image: url('${this.tutorialPlayerArtUrl ?? SpriteUrls.player}')" aria-hidden="true"></div>
           <div class="player-overlay" aria-hidden="true"></div>
           <div class="player-content">
             <div class="player-stats">
@@ -8794,12 +8796,15 @@ export class GameBoardRenderer {
     ).finished
   }
 
-  /** render() 호출 이후: 새로 추가된 레인의 칸들을 위에서 아래로 차례로 내린다. */
+  /**
+   * render() 호출 이후: 새로 추가된 레인 전체가 상단에서 셔터처럼 내려온다.
+   * clip-path(inset)로 각 칸을 위에서부터 열어 stage overflow:hidden을 피한다.
+   * dist=2(상단) → 1 → 0(전방) 순으로 80ms 스태거.
+   */
   async animateNewLaneIn(newLaneIndex: number): Promise<void> {
     const rail = this.boardElement.querySelector<HTMLElement>('.rail')
     if (!rail) return
 
-    // dist=2(상단)부터 0(전방)까지 차례로 — 위에서 내려오는 셔터 순서
     const anims: Promise<void>[] = []
     for (let dist = 2; dist >= 0; dist--) {
       const cell = rail.querySelector<HTMLElement>(
@@ -8807,22 +8812,16 @@ export class GameBoardRenderer {
       )
       if (!cell) continue
       const delay = (2 - dist) * 80
+      // inset(0 0 100% 0) = 셀 상단 가장자리만 보임 → inset(0 0 0% 0) = 전체 공개
+      // 위에서 아래로 열리는 셔터 효과
       anims.push(
         cell.animate(
           [
-            { transform: 'translateY(-120%)', opacity: '0', filter: 'blur(3px)' },
-            { transform: 'translateY(0)',    opacity: '1', filter: 'blur(0px)' },
+            { clipPath: 'inset(0 0 100% 0 round 8px)', opacity: '0.6' },
+            { clipPath: 'inset(0 0 0%   0 round 8px)', opacity: '1'   },
           ],
-          { duration: 480, delay, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'backwards' }
+          { duration: 420, delay, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'backwards' }
         ).finished.then(() => undefined)
-      )
-    }
-    // 힌트 바도 함께 페이드인
-    const hint = rail.querySelector<HTMLElement>(`[data-lane="${newLaneIndex}"]`)
-    if (hint && !hint.dataset['distance']) {
-      hint.animate(
-        [{ opacity: '0' }, { opacity: '1' }],
-        { duration: 400, easing: 'ease-out', fill: 'backwards' }
       )
     }
     await Promise.all(anims)

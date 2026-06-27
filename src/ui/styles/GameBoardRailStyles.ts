@@ -3,11 +3,14 @@
  * Split from GameBoardRenderer so renderer logic stays navigable.
  */
 export const GAME_BOARD_RAIL_STYLES = `
-/* ---------- Rail (3x3) ---------- */
+/* ---------- Rail (3x3 → 1~3 lanes in tutorial) ---------- */
 .rail {
   display: grid;
   grid-template-rows: repeat(3, minmax(0, 1fr));
   --lane-count: 3;
+  /* 레인 수에 맞춰 너비 조정: 1레인=1/3, 2레인=2/3, 3레인=100% */
+  width: calc(var(--lane-count) / 3 * 100%);
+  justify-self: center;
   gap: clamp(6px, 1vh, 10px);
   padding: clamp(10px, 1.6vh, 14px);
   /* Stays simple — a translucent dark slab so the page-level art reads
