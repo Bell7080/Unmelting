@@ -2804,6 +2804,8 @@ function resetForNewRun(): void {
 }
 
 async function startGame(): Promise<void> {
+  // 거점에서 출발할 때만 구역 커튼을 표시한다. 부팅 직행·재시작은 스킵.
+  const showZoneCurtain = document.body.classList.contains('hearth-lobby')
   const dinnerRelicProfile = pendingDinnerRelicProfile
   resetForNewRun()
   pendingDinnerRelicProfile = dinnerRelicProfile
@@ -2874,8 +2876,10 @@ async function startGame(): Promise<void> {
     await boardRenderer.playJobCurtainOpen()
   }
 
-  // 1구역 커튼: 레일이 열린 직후 상단에서 슬라이드 인/아웃하며 구역 이름을 알린다.
-  void zoneCurtain.show(ZONE_LIST[0], () => setZoneBackground(ZONE_LIST[0].bgUrl))
+  // 1구역 커튼: 거점에서 출발한 경우만 표시 (부팅 직행·재시작은 스킵).
+  if (showZoneCurtain) {
+    void zoneCurtain.show(ZONE_LIST[0], () => setZoneBackground(ZONE_LIST[0].bgUrl))
+  }
 
   // 1턴 시작 대사: 암막이 완전히 걷힌 뒤 살짝 딜레이 후 등장. 직업을 고른 경우 그에 맞는 인사.
   enaSpeaking = false
