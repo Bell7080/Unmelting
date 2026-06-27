@@ -118,7 +118,10 @@ export class ZoneCurtain {
 
     this.titleEl.textContent = zone.title
 
-    // ── 1. 슬라이드 다운 (스르륵 내려옴) ──────────────────────────────────
+    // ── 1. 배경 교체 + 슬라이드 다운 동시 시작 ────────────────────────────
+    // bg crossfade(0.6s)와 커튼 강하(0.58s)가 함께 진행되어,
+    // 커튼이 완전히 내려왔을 때 배경이 이미 자연스럽게 전환돼 있다.
+    onBodyReady?.()
     await this.el.animate(
       [
         { transform: 'translateY(-100%)' },
@@ -134,10 +137,7 @@ export class ZoneCurtain {
     // ── 2. 제목 노출 홀드 ─────────────────────────────────────────────────
     await new Promise<void>((r) => setTimeout(r, 1400))
 
-    // ── 3. 배경 교체 — 커튼 상승 직전에 시작해 크로스페이드와 타이밍을 맞춘다 ──
-    onBodyReady?.()
-
-    // ── 4. 슬라이드 업 (스르륵 올라감) ───────────────────────────────────
+    // ── 3. 슬라이드 업 (스르륵 올라감) ───────────────────────────────────
     await this.el.animate(
       [
         { transform: 'translateY(0)' },
