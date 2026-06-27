@@ -182,12 +182,34 @@ const hearthScene = new HearthScene()
 // 구역 전환 커튼 — 1F 시작과 30/60/90F 보스 시련 종료 후 상단에서 슬라이드 인/아웃.
 const zoneCurtain = new ZoneCurtain()
 
-/** body 배경 이미지의 스프라이트 레이어만 교체한다(그라디언트 오버레이는 유지). */
+const BG_GRADIENTS =
+  `linear-gradient(180deg, rgba(20, 16, 28, 0.55), rgba(8, 5, 14, 0.86)),` +
+  `radial-gradient(ellipse at top, rgba(244, 164, 96, 0.18), transparent 65%),`
+
+/**
+ * body 배경을 새 구역 이미지로 교체한다.
+ * background-image는 CSS transition이 불가하므로, 현재 배경을 임시 div로 덮어두고
+ * body를 새 배경으로 교체한 뒤 임시 div를 opacity 페이드아웃으로 걷어낸다.
+ */
 function setZoneBackground(bgUrl: string): void {
-  document.body.style.backgroundImage =
-    `linear-gradient(180deg, rgba(20, 16, 28, 0.55), rgba(8, 5, 14, 0.86)),` +
-    `radial-gradient(ellipse at top, rgba(244, 164, 96, 0.18), transparent 65%),` +
-    `url('${bgUrl}')`
+  const prev = document.body.style.backgroundImage
+  if (prev.includes('url(')) {
+    const fade = document.createElement('div')
+    fade.setAttribute('aria-hidden', 'true')
+    fade.style.cssText =
+      'position:fixed;inset:0;z-index:-1;pointer-events:none;' +
+      `background-image:${prev};` +
+      'background-size:cover,cover,cover;' +
+      'background-position:center,center top,center;' +
+      'background-repeat:no-repeat;' +
+      'background-attachment:fixed;' +
+      'opacity:1;transition:opacity 0.9s ease;'
+    document.body.appendChild(fade)
+    // 두 프레임 뒤에 페이드 시작 — 새 body 배경이 페인트된 뒤에 fade-out해야 시각적 공백이 없다.
+    requestAnimationFrame(() => requestAnimationFrame(() => { fade.style.opacity = '0' }))
+    setTimeout(() => fade.remove(), 960)
+  }
+  document.body.style.backgroundImage = `${BG_GRADIENTS}url('${bgUrl}')`
 }
 // 거점 만찬은 런 시작 reset을 건너뛰어야 하므로, 실제 유물 지급 의도를 별도 플래그로 보존한다.
 let pendingDinnerRelicProfile: CustomRelicProfile | null = null

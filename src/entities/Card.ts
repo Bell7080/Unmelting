@@ -136,10 +136,6 @@ export class Card {
   trapKind: TrapKind
   isBombArmed: boolean
   sporeTurnsUntilSpread: number
-  // True for exactly one applySporeSpread cycle after a spawned spore first enters
-  // the 3×3 rail. The snapshot skips these cards so the turn count starts from the
-  // NEXT turn, giving the player the full 2-turn warning from first appearance.
-  justEnteredRail: boolean
   /** Special-enemy family; monster flowers merge only with each other. */
   specialEnemyKind: SpecialEnemyKind | null
   /** waxKnight 전용 UI 수치: 보스 컨트롤러가 방패 상태를 렌더러에 전달한다. */
@@ -187,7 +183,6 @@ export class Card {
     this.trapKind = options.trapKind ?? 'web'
     this.isBombArmed = false
     this.sporeTurnsUntilSpread = this.trapKind === 'spore' ? 2 : 0
-    this.justEnteredRail = false
     this.specialEnemyKind = options.specialEnemyKind ?? null
     this.treasureKind = options.treasureKind ?? 'chest'
     this.bossShield = 0

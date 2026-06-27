@@ -555,11 +555,7 @@ export class CardSpawner {
     if (roll < enemyWeight + webTrap) return this.generateTrap({ trapKind: 'web' })
     if (roll < enemyWeight + webTrap + bombTrap) return this.generateTrap({ trapKind: 'bomb' })
     if (roll < enemyWeight + webTrap + bombTrap + sporeTrap) {
-      const spore = this.generateTrap({ trapKind: 'spore' })
-      // Flag the spore so applySporeSpread skips the birth-turn tick; turn counting
-      // starts from the NEXT turn so the player sees a full 2-turn warning.
-      spore.justEnteredRail = true
-      return spore
+      return this.generateTrap({ trapKind: 'spore' })
     }
     if (roll < enemyWeight + webTrap + bombTrap + sporeTrap + treasure) {
       return this.generateTreasure()

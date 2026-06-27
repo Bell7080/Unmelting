@@ -312,11 +312,6 @@ export class TurnManager {
     const ticks: SporeCountdownTick[] = []
 
     for (const { card, laneIndex, distance } of this.collectSporeCountdownSources()) {
-      if (card.justEnteredRail) {
-        // 막 3×3 레일에 들어온 포자는 이번 호출에서 2턴 표기를 보존한다.
-        card.justEnteredRail = false
-        continue
-      }
       if (card.isFrozen()) continue
 
       card.sporeTurnsUntilSpread = Math.max(0, card.sporeTurnsUntilSpread - 1)
@@ -335,7 +330,7 @@ export class TurnManager {
     // badge between these phases, while this snapshot prevents newborn spores
     // from acting during the same spread pass.
     for (const { card, laneIndex, distance } of this.collectSporeCountdownSources()) {
-      if (card.isFrozen() || card.justEnteredRail || card.sporeTurnsUntilSpread > 0) continue
+      if (card.isFrozen() || card.sporeTurnsUntilSpread > 0) continue
 
       const candidates = this.collectSporeTargets(laneIndex, distance, card)
       const infected: { laneIndex: number; distance: number }[] = []

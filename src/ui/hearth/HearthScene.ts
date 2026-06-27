@@ -715,9 +715,10 @@ export class HearthScene {
         choices.appendChild(row)
       }
       row.innerHTML = cardHtml
+      // fill:'backwards'로 delay 구간에도 시작 keyframe을 유지해 새 카드가 순간 노출되는 플래시를 막는다.
       row.animate(
         [{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'translateY(0)' }],
-        { duration: 300, easing: 'cubic-bezier(0.22,0.86,0.22,1)', delay: 60 },
+        { duration: 300, easing: 'cubic-bezier(0.22,0.86,0.22,1)', delay: 60, fill: 'backwards' },
       )
     } else {
       // 첫 렌더 — 전체 구조 초기화
@@ -730,7 +731,7 @@ export class HearthScene {
       const row = choices.querySelector<HTMLElement>('.hearth-dinner-choices-row')
       if (row) row.animate(
         [{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'translateY(0)' }],
-        { duration: 300, easing: 'cubic-bezier(0.22,0.86,0.22,1)', delay: 60 },
+        { duration: 300, easing: 'cubic-bezier(0.22,0.86,0.22,1)', delay: 60, fill: 'backwards' },
       )
     }
   }
