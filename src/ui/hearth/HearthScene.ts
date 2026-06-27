@@ -363,6 +363,11 @@ export class HearthScene {
       })
       // 대문이 다 열리고 모험이 점등된 뒤에야 hover 인스펙터를 허용한다(플레이어블 시작).
       this.interactive = true
+      // 만찬 칸(DOM 순서 index 8) 점등(8×55=440ms) + 애니메이션(720ms) + 여운 후 Free 배지 드롭 인.
+      // dinnerConsumed이면 DOM에 배지 요소 자체가 없으므로 querySelector가 null을 반환해 안전하다.
+      window.setTimeout(() => {
+        this.overlay?.querySelector<HTMLElement>('.hearth-cell__dinner-free')?.classList.add('is-active')
+      }, 8 * 55 + 720 + 200)
     }, 1700 + 1500)
   }
 

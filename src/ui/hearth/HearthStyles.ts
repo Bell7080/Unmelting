@@ -1532,17 +1532,31 @@ body.hearth-lobby #ingame-backdrop.is-out {
   display: block; font-family: 'OkDanDan', Georgia, serif;
   font-size: clamp(9px,1.1vh,11px); color: rgba(220,204,178,0.84); line-height: 1.38;
 }
-/* 만찬 칸 Free 배지 — 점등 완료 후 초록 형광으로 반짝이게 */
+/* 만찬 칸 Free 배지 — 칸 점등 완료 후 is-active로 드롭 인 → 형광 점멸 */
 .hearth-cell__dinner-free {
-  position: absolute; top: 6px; right: 8px; z-index: 2;
-  font-family: 'OkDanDan', Georgia, serif; font-size: clamp(11px,1.4vw,15px); font-weight: 700;
-  color: #39ff14; letter-spacing: 0.1em; pointer-events: none;
-  text-shadow: 0 0 8px rgba(57,255,20,0.9), 0 0 18px rgba(57,255,20,0.58), 0 0 34px rgba(57,255,20,0.28);
-  animation: dinner-free-pulse 1.6s ease-in-out infinite;
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 2; pointer-events: none; opacity: 0;
+  font-family: 'OkDanDan', Georgia, serif; font-size: clamp(24px, 3.2vw, 32px); font-weight: 800;
+  color: #39ff14; letter-spacing: 0.16em;
+  text-shadow: 0 0 10px rgba(57,255,20,0.95), 0 0 24px rgba(57,255,20,0.62), 0 0 46px rgba(57,255,20,0.30);
+}
+.hearth-cell__dinner-free.is-active {
+  /* drop 완료 후 forwards로 최종 위치 고정, pulse가 opacity만 이어받는다 */
+  animation:
+    dinner-free-drop 0.54s ease-out forwards,
+    dinner-free-pulse 2.2s ease-in-out 0.64s infinite;
+}
+@keyframes dinner-free-drop {
+  0%   { transform: translate(-50%, -130%) scale(0.80); opacity: 0; }
+  12%  { opacity: 1; }
+  50%  { transform: translate(-50%, -42%) scale(1.12); }
+  66%  { transform: translate(-50%, -58%) scale(0.96); }
+  80%  { transform: translate(-50%, -45%) scale(1.04); }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 }
 @keyframes dinner-free-pulse {
-  0%,100% { opacity: 1; text-shadow: 0 0 8px rgba(57,255,20,0.9), 0 0 18px rgba(57,255,20,0.58), 0 0 34px rgba(57,255,20,0.28); }
-  50% { opacity: 0.62; text-shadow: 0 0 4px rgba(57,255,20,0.5), 0 0 10px rgba(57,255,20,0.34), 0 0 18px rgba(57,255,20,0.16); }
+  0%, 100% { opacity: 1;   text-shadow: 0 0 10px rgba(57,255,20,0.95), 0 0 24px rgba(57,255,20,0.62), 0 0 46px rgba(57,255,20,0.30); }
+  50%       { opacity: 0.48; text-shadow: 0 0 5px rgba(57,255,20,0.55), 0 0 12px rgba(57,255,20,0.36), 0 0 22px rgba(57,255,20,0.16); }
 }
 .hearth-dinner-relic-card { width: 54px; min-height: 74px; border-radius: 10px; border: 1px solid rgba(255,215,120,0.5); background: linear-gradient(180deg, rgba(54,36,42,0.96), rgba(12,8,14,0.98)); color: #ffe7a8; font-family: 'OkDanDan', Georgia, serif; font-size: 10px; padding: 5px; box-shadow: inset 0 1px 0 rgba(255,232,168,0.18), 0 0 18px rgba(244,164,96,0.35); }
 .hearth-dinner-relic-card span { display: block; height: 30px; border-radius: 7px; margin-bottom: 4px; background: radial-gradient(circle at 50% 38%, rgba(255,236,188,0.28), transparent 42%), linear-gradient(145deg, #7e2630, rgba(22,10,24,0.94)); }
