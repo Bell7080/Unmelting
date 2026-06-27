@@ -199,8 +199,9 @@ function setZoneBackground(bgUrl: string): void {
   // 즉시 body 배경을 새 이미지로 교체 (커튼이 덮고 있는 상태에서 invisible swap)
   document.body.style.backgroundImage = `${BG_GRADIENTS}url('${bgUrl}')`
   if (!prev.includes('url(')) return
-  // 구 배경을 z-index:-1 임시 div로 유지하다가 fade-out하면서 새 배경을 드러낸다.
-  // 커튼 상승(0.52s)과 페이드(0.6s)가 겹치므로 커튼이 올라가며 배경이 스르륵 나타난다.
+  // 구 배경을 z-index:-1 임시 div로 덮어 두다가 2초에 걸쳐 fade-out해 새 배경을 드러낸다.
+  // onBodyReady() → 커튼 슬라이드 다운(0.58s) 과 동시에 시작되므로,
+  // 커튼이 완전히 내려왔을 때 배경이 이미 절반 이상 전환된 상태다.
   const fade = document.createElement('div')
   fade.setAttribute('aria-hidden', 'true')
   fade.style.cssText =
@@ -210,11 +211,10 @@ function setZoneBackground(bgUrl: string): void {
     'background-position:center,center top,center;' +
     'background-repeat:no-repeat;' +
     'background-attachment:fixed;' +
-    'opacity:1;transition:opacity 0.6s ease-in;'
+    'opacity:1;transition:opacity 2s ease-in-out;'
   document.body.appendChild(fade)
-  // 한 프레임 뒤에 페이드 시작 — 새 body 배경이 먼저 렌더된 뒤 old bg 오버레이를 걷어낸다.
   requestAnimationFrame(() => { fade.style.opacity = '0' })
-  setTimeout(() => fade.remove(), 660)
+  setTimeout(() => fade.remove(), 2100)
 }
 // 거점 만찬은 런 시작 reset을 건너뛰어야 하므로, 실제 유물 지급 의도를 별도 플래그로 보존한다.
 let pendingDinnerRelicProfile: CustomRelicProfile | null = null
