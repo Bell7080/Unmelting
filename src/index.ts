@@ -1797,8 +1797,8 @@ async function maybeOpenShopAfterTurn(): Promise<boolean> {
   if (turn === 0) return false
 
   if (gameState.tutorialMode) {
-    // 튜토리얼: 6턴·15턴 일반 상점만. 30턴 제단/보스는 내지 않는다.
-    if (turn !== 6 && turn !== 15) return false
+    // 튜토리얼: 5턴·15턴 일반 상점만. 30턴 제단/보스는 내지 않는다.
+    if (turn !== 5 && turn !== 15) return false
     await openShopOverlay('shop')
     return true
   }
@@ -2410,8 +2410,8 @@ async function closeShopAndResume(): Promise<void> {
     await expandTutorialRail()
   }
 
-  // 튜토리얼 5턴 상점 종료 후: 새싹의 따스함 연출 + 촛농 트리플 합성 안내.
-  if (gameState.tutorialMode && tutorialStep === 'treasure-done') {
+  // 튜토리얼 5턴 상점 종료 후: 간단한 격려 대사 (web2 제거 → 보물 순서 안내).
+  if (gameState.tutorialMode && tutorialStep === 'web2-ready') {
     await runTutorialShopGiftSequence()
   }
 
