@@ -1362,6 +1362,24 @@ body.hearth-lobby #ingame-backdrop.is-out {
 .hearth-dinner-choice-footer small { color: rgba(220,206,172,0.78); font-size: clamp(10px,1.3vh,13px); display: block; line-height: 1.3; }
 .hearth-dinner-choice[data-rarity="rare"] .hearth-dinner-choice-footer small { color: rgba(140,210,255,0.88); }
 .hearth-dinner-choice[data-rarity="epic"] .hearth-dinner-choice-footer small { color: rgba(210,150,255,0.92); }
+/* 모바일: 만찬 선택 카드 3종 축소 — 세로가 좁은 기기에서 카드가 화면을 넘지 않도록 */
+@media (max-width: 600px), (max-height: 700px) {
+  .hearth-dinner-choices-row {
+    grid-template-columns: repeat(3, minmax(88px, 1fr));
+    gap: 6px;
+    max-width: 100%;
+  }
+  .hearth-dinner-choice {
+    min-height: clamp(130px, 22vh, 180px);
+    border-radius: 10px;
+  }
+  .hearth-dinner-choice-footer {
+    padding: 6px 6px 8px;
+  }
+  .hearth-dinner-choice-footer strong { font-size: 12px; }
+  .hearth-dinner-choice-footer small  { font-size: 10px; }
+  .hearth-dinner-choice-rarity        { font-size: 9px; }
+}
 /* 최종 완성 유물 카드 — finalizing 오버레이(z6) 위에서 카드팩처럼 등장 */
 .hearth-dinner-picked {
   position: absolute; left: 50%; top: 50%;

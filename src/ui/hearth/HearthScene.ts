@@ -719,12 +719,17 @@ export class HearthScene {
         row.className = 'hearth-dinner-choices-row'
         choices.appendChild(row)
       }
+      // 이전 단계 row 애니메이션이 아직 끝나지 않았을 수 있으므로 취소 후 교체해
+      // 두 애니메이션이 합성되어 새 카드가 순간 opacity:1로 노출되는 플래시를 막는다.
+      for (const a of row.getAnimations()) a.cancel()
+      row.style.opacity = '0'
       row.innerHTML = cardHtml
-      // fill:'backwards'로 delay 구간에도 시작 keyframe을 유지해 새 카드가 순간 노출되는 플래시를 막는다.
       row.animate(
         [{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'translateY(0)' }],
         { duration: 300, easing: 'cubic-bezier(0.22,0.86,0.22,1)', delay: 60, fill: 'backwards' },
       )
+      // 애니메이션이 끝나면 인라인 opacity를 회수해 CSS 기본값(1)으로 복귀한다.
+      window.setTimeout(() => { row.style.opacity = '' }, 60 + 300 + 16)
     } else {
       // 첫 렌더 — 전체 구조 초기화
       choices.innerHTML = `
