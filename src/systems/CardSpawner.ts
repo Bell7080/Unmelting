@@ -454,16 +454,17 @@ export class CardSpawner {
     this.tutorialRefillQueue = [...cards]
   }
 
-  /** 튜토리얼 전용: 이름으로 특정 적 카드를 생성한다. */
-  makeTutorialEnemy(name: string): Card {
+  /** 튜토리얼 전용: 이름으로 특정 적 카드를 생성한다. hpOverride로 HP를 강제 설정할 수 있다. */
+  makeTutorialEnemy(name: string, hpOverride?: number): Card {
     const def = ENEMY_DEFINITIONS.find(d => d.name === name) ?? ENEMY_DEFINITIONS[0]
     this.spawnSerial++
+    const hp = hpOverride ?? def.healthOrDamage ?? 1
     const card = new Card(
       `tutorial-enemy-${this.spawnSerial}`,
       CardType.ENEMY,
       def.name,
       def.description,
-      def.healthOrDamage ?? 1,
+      hp,
       def.attack ?? 1,
       { enemySpriteId: def.enemySpriteId, enemyPower: def.enemyPower }
     )

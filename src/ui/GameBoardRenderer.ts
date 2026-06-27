@@ -68,6 +68,9 @@ export interface CardActionDetail {
 export interface ItemActionDetail {
   itemIndex: number
   shiftKey?: boolean
+  /** 클릭 좌표 — 튜토리얼 잠금 메시지 위치에 사용. */
+  clientX?: number
+  clientY?: number
 }
 
 export type ShopPackKind = 'basic-pack' | 'recipe-pack' | 'unlock-pack' | 'chance-pack' | 'resource-pack' | 'delete-pack'
@@ -355,6 +358,10 @@ export class GameBoardRenderer {
   private hoveredHandSlotIndex: number | null = null
   /** 유물 효과 텍스트 {{spawn}} 치환에 쓰는 현재 실효 스폰 가중치. render() 마다 갱신. */
   private currentSpawnWeightCtx: SpawnWeightContext | undefined = undefined
+  /** 튜토리얼 스포트라이트: 강조할 보드 카드 ID (null = 없음). */
+  private tutorialSpotlightCardId: string | null = null
+  /** 튜토리얼 스포트라이트: 강조할 손패 슬롯 인덱스 (null = 없음). */
+  private tutorialSpotlightHandSlot: number | null = null
 
   constructor(containerId: string = 'game-board') {
     const container = document.getElementById(containerId)
@@ -412,7 +419,7 @@ export class GameBoardRenderer {
       e.stopPropagation()
       const itemIndex = parseInt(btn.dataset.itemIndex ?? '-1', 10)
       document.dispatchEvent(new CustomEvent<ItemActionDetail>('itemAction', {
-        detail: { itemIndex, shiftKey: e.shiftKey },
+        detail: { itemIndex, shiftKey: e.shiftKey, clientX: e.clientX, clientY: e.clientY },
       }))
     })
 
@@ -503,6 +510,28 @@ export class GameBoardRenderer {
   setHandTargetingMode(mode: HandTargetingMode | null): void {
     this.handTargetingMode = mode
     this.clearSelection()
+  }
+
+  /** 튜토리얼 스포트라이트 설정. render() 후에도 유지된다. null 전달 시 해제. */
+  setTutorialSpotlight(cardId: string | null, handSlot: number | null): void {
+    this.tutorialSpotlightCardId = cardId
+    this.tutorialSpotlightHandSlot = handSlot
+    this._applyTutorialSpotlight()
+  }
+
+  /** render() 끝에서 호출 — 현재 DOM에 spotlight 클래스를 재적용한다. */
+  private _applyTutorialSpotlight(): void {
+    this.boardElement.querySelectorAll('.tutorial-spotlight').forEach(el => {
+      el.classList.remove('tutorial-spotlight')
+    })
+    if (this.tutorialSpotlightCardId) {
+      const cell = this.boardElement.querySelector(`.cell.card[data-card-id="${this.tutorialSpotlightCardId}"]`)
+      cell?.classList.add('tutorial-spotlight')
+    }
+    if (this.tutorialSpotlightHandSlot !== null) {
+      const slot = this.boardElement.querySelector(`.hand-slot[data-slot-index="${this.tutorialSpotlightHandSlot}"]`)
+      slot?.classList.add('tutorial-spotlight')
+    }
   }
 
   render(gameState: GameState, scorePanel: ScorePanelState): void {
@@ -8740,6 +8769,8 @@ export class GameBoardRenderer {
     })
     this.previousHandUids = handUids
     this.hasRendered = true
+    // 튜토리얼 스포트라이트: DOM 교체 후 재적용해 렌더마다 클래스가 유지되게 한다.
+    this._applyTutorialSpotlight()
   }
 
   /** Newly larger spans get a short sticky merge pulse after movement settles. */

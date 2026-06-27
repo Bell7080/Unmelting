@@ -554,6 +554,34 @@ let freeCoinCardClaimed = false
 /** 튜토리얼 상점: 현재 방문에서 이미 공개된 팩 목록. 팩 구매 시 다음 팩이 추가된다. */
 let tutorialRevealedPacks: ShopPackKind[] = []
 
+// ── 튜토리얼 디렉터 상태 ──
+type TutorialStep =
+  | 'init'          // 보드 채워지기 전
+  | 'kitin-spotted' // 키틴벌레 강조 + 첫 대사
+  | 'kitin-dead'    // 키틴벌레 처치됨, 두더지 등장 전
+  | 'mole-spotted'  // 두더지 강조 + 대사
+  | 'mole-fight-1'  // 두더지 1타 후 (불씨 잠금 유지)
+  | 'ember-unlocked'// 두더지 2타 후 불씨 잠금 해제
+  | 'mole-dead'     // 두더지 처치됨
+  | 'web1-spotted'  // 거미줄1 강조 + 대사
+  | 'web1-stepped'  // 거미줄1 밟음, 키틴 잠금 해제 직전
+  | 'web2-ready'    // 키틴 잠금 해제, 거미줄2 대기
+  | 'web2-cleared'  // 키틴으로 거미줄2 제거
+  | 'treasure-ready'// "잘 했어" 대사 완료
+  | 'treasure-done' // 보물상자 2촛농 획득, 상점 직전
+  | 'shop-done'     // 상점 완료, 새싹의 따스함 연출
+  | 'complete'      // 튜토리얼 감독 완료
+
+let tutorialStep: TutorialStep = 'init'
+let tutorialLockedSlots: Set<number> = new Set()
+let tutorialMoleHits = 0
+let tutorialEmberSlot = -1
+let tutorialChitinSlot = -1
+let tutorialKitinCardId: string | null = null
+let tutorialMoleCardId: string | null = null
+let tutorialWeb1CardId: string | null = null
+let tutorialWeb2CardId: string | null = null
+
 // 공용 무료카드(선물 상자)는 방문마다 하나의 랜덤 효과로 고정한다.
 type ShopFreeGiftKind = 'score-300' | 'coin-1' | 'health-5' | 'gauge-3' | 'ember-3' | 'hand-2'
 
@@ -1721,6 +1749,10 @@ async function openShopOverlay(mode: 'shop' | 'altar'): Promise<void> {
   shopOpen = true
   inputLocked = true
   currentShopOffers = rollShopOffers()
+  // 튜토리얼 5턴 상점: 생명선 단일 고정, 가격은 현재 불빛보다 조금 저렴하게 설정한다.
+  if (gameState.tutorialMode && gameState.getCurrentTurn() === 5) {
+    currentShopOffers = [{ relicId: 'lifeline', price: Math.max(1, Math.floor(score * 0.82)) }]
+  }
   altarRelicPicked = false
   shopRerollCount = 0
   shopPackBuys = Object.fromEntries(
@@ -2376,6 +2408,11 @@ async function closeShopAndResume(): Promise<void> {
     await expandTutorialRail()
   }
 
+  // 튜토리얼 5턴 상점 종료 후: 새싹의 따스함 연출 + 촛농 트리플 합성 안내.
+  if (gameState.tutorialMode && tutorialStep === 'treasure-done') {
+    await runTutorialShopGiftSequence()
+  }
+
   inputLocked = false
   render()
 }
@@ -2872,32 +2909,172 @@ function fillTutorialBoardScripted(): void {
   syncSpawnerTier()
   const lane = gameState.lanes[0]
   if (!lane) return
-  lane.setCardAtDistance(0, cardSpawner.makeTutorialEnemy('양초 키틴벌레'))
-  lane.setCardAtDistance(1, cardSpawner.makeTutorialEnemy('양초 두더지'))
-  lane.setCardAtDistance(2, cardSpawner.makeTutorialWebTrap())
+
+  const kitin = cardSpawner.makeTutorialEnemy('양초 키틴벌레')
+  // 두더지 HP = 4: 직접 공격 2회(각 1피해) + 불씨(2피해) = 0. 대사에선 "5"라고 말하지만 실제는 4.
+  const mole = cardSpawner.makeTutorialEnemy('양초 두더지', 4)
+  const web1 = cardSpawner.makeTutorialWebTrap()
+  const web2 = cardSpawner.makeTutorialWebTrap()
+  const treasure = cardSpawner.makeTutorialTreasure()
+
+  // 카드 UID를 디렉터 훅이 참조할 수 있도록 기록한다.
+  tutorialKitinCardId = kitin.id
+  tutorialMoleCardId = mole.id
+  tutorialWeb1CardId = web1.id
+  tutorialWeb2CardId = web2.id
+  tutorialStep = 'init'
+  tutorialLockedSlots = new Set()
+  tutorialMoleHits = 0
+  tutorialEmberSlot = -1
+  tutorialChitinSlot = -1
+
+  lane.setCardAtDistance(0, kitin)
+  lane.setCardAtDistance(1, mole)
+  lane.setCardAtDistance(2, web1)
   gameState.regroupAllRows()
   trackFieldEnemyEncounters()
-  // 플레이어가 앞 두 적을 처치하면 거미물(거미줄) → 보물상자 순으로 리필된다.
-  cardSpawner.setTutorialRefillQueue([
-    cardSpawner.makeTutorialWebTrap(),
-    cardSpawner.makeTutorialTreasure(),
-  ])
+  // 키틴벌레/두더지 처치 시 거미물(거미줄2) → 보물상자 순으로 리필된다.
+  cardSpawner.setTutorialRefillQueue([web2, treasure])
 }
 
-/** 튜토리얼 전용 처치 드랍: 키틴벌레→불씨 +1 확정, 두더지→키틴 손패 드랍. */
+/** 튜토리얼 전용 처치 드랍 + 디렉터 대사/스포트라이트 처리. */
 async function applyTutorialEnemyDrop(card: Card): Promise<void> {
   const character = gameState.character
-  if (card.name === '양초 키틴벌레') {
-    character.gainEmber(1)
-    render()
-    await playResourceTrail({ kind: 'chain' }, 'ember', 1)
-  } else if (card.name === '양초 두더지') {
-    const chitin = DropSystem.makeCard('chitin')
-    if (character.addHandCard(chitin)) {
+  if (card.id === tutorialKitinCardId) {
+    // 불씨 게이지가 아닌 불씨 손패 카드를 지급한다 — 이후 두더지에게 쓸 무기.
+    const ember = DropSystem.makeCard('ember')
+    if (character.addHandCard(ember)) {
+      tutorialEmberSlot = character.hand.indexOf(ember)
+      tutorialLockedSlots.add(tutorialEmberSlot)  // 두더지 2타 전까지 잠금
       render()
       await playResourceTrail({ kind: 'chain' }, 'hand', 1)
     }
+    // 키틴벌레 칸 강조 해제 + "후훗" 대사
+    boardRenderer.setTutorialSpotlight(null, null)
+    tutorialStep = 'kitin-dead'
+    await wait(300)
+    enaSpeaking = false
+    speechBubble.show('후훗, 약한 녀석.', 100)
+    await speechBubble.waitForDismiss()
+    // 두더지 등장 대사는 cleanup(레인 전진) 이후 afterTurnTutorialDirector에서 처리
+  } else if (card.id === tutorialMoleCardId) {
+    // 키틴 손패 드랍 — 두번째 거미줄 제거용, 처음엔 잠금.
+    const chitin = DropSystem.makeCard('chitin')
+    if (character.addHandCard(chitin)) {
+      tutorialChitinSlot = character.hand.indexOf(chitin)
+      tutorialLockedSlots.add(tutorialChitinSlot)
+      render()
+      await playResourceTrail({ kind: 'chain' }, 'hand', 1)
+    }
+    boardRenderer.setTutorialSpotlight(null, null)
+    tutorialStep = 'mole-dead'
+    // 거미줄1 등장 대사는 cleanup 이후 afterTurnTutorialDirector에서 처리
   }
+}
+
+/** 잠긴 손패 슬롯을 클릭했을 때 클릭 위치 부근에 짧은 거절 메시지를 띄운다. */
+function showTutorialLockMessage(x: number, y: number): void {
+  document.querySelectorAll<HTMLElement>('.tutorial-lock-msg').forEach(e => e.remove())
+  const msg = document.createElement('div')
+  msg.className = 'tutorial-lock-msg'
+  msg.textContent = '아직 사용할 때가 아니야'
+  msg.style.left = `${x}px`
+  msg.style.top = `${y - 40}px`
+  document.body.appendChild(msg)
+  window.setTimeout(() => msg.remove(), 1800)
+}
+
+/** 레인 전진(cleanup) 이후 실행되는 튜토리얼 디렉터 훅.
+ *  새 카드가 전방에 도달했을 때 대사/강조를 타이밍에 맞게 출력한다. */
+async function afterTurnTutorialDirector(): Promise<void> {
+  const lane = gameState.lanes[0]
+  if (!lane) return
+  const frontCard = lane.getCardAtDistance(0)
+
+  if (tutorialStep === 'kitin-dead') {
+    // 두더지가 전방으로 이동했는지 확인
+    if (frontCard?.id === tutorialMoleCardId) {
+      tutorialStep = 'mole-spotted'
+      boardRenderer.setTutorialSpotlight(tutorialMoleCardId, null)
+      render()
+      await wait(400)
+      enaSpeaking = false
+      speechBubble.show('뭐? 체력이 5라고? 강적이야...!', 100)
+      await speechBubble.waitForDismiss()
+      speechBubble.show('그래도 한번 싸워보자!', 100)
+      await speechBubble.waitForDismiss()
+    }
+  } else if (tutorialStep === 'mole-dead') {
+    // 거미줄1이 전방에 도달했는지 확인
+    if (frontCard?.id === tutorialWeb1CardId) {
+      tutorialStep = 'web1-spotted'
+      boardRenderer.setTutorialSpotlight(tutorialWeb1CardId, null)
+      render()
+      await wait(300)
+      enaSpeaking = false
+      speechBubble.show('윽... 거미줄이잖아? 밟기 싫은걸. . .', 100)
+      await speechBubble.waitForDismiss()
+    }
+  } else if (tutorialStep === 'web1-stepped') {
+    // 거미줄1 밟은 후 — 키틴 잠금 해제, 거미줄2를 키틴으로 없애라고 안내
+    tutorialStep = 'web2-ready'
+    tutorialLockedSlots.delete(tutorialChitinSlot)
+    boardRenderer.setTutorialSpotlight(null, tutorialChitinSlot)
+    render()
+    await wait(300)
+    enaSpeaking = false
+    speechBubble.show('으... 역시 싫어. 이번 거미줄은 키틴을 이용하자.', 100)
+    await speechBubble.waitForDismiss()
+  }
+}
+
+/** 손패 사용(applyHandSingle) 이후 실행되는 튜토리얼 디렉터 훅. */
+async function afterHandTutorialDirector(): Promise<void> {
+  if (tutorialStep === 'web2-cleared') {
+    tutorialStep = 'treasure-ready'
+    boardRenderer.setTutorialSpotlight(null, null)
+    render()
+    await wait(400)
+    enaSpeaking = false
+    speechBubble.show('헤헤, 잘 했어.', 100)
+    await speechBubble.waitForDismiss()
+  }
+}
+
+/** 튜토리얼 상점 종료 후: 새싹의 따스함 연출 + 촛농 1장 추가 + 트리플 자동 합성. */
+async function runTutorialShopGiftSequence(): Promise<void> {
+  tutorialStep = 'shop-done'
+  await wait(700)
+  enaSpeaking = false
+  speechBubble.show('지금 손패에 촛농이 두 장이나 있잖아? 내가 한장 더 줄게!', 100)
+  await speechBubble.waitForDismiss()
+
+  // "새싹의 따스함" — 의지 클러치 연출로 촛농 1장 보급
+  void boardRenderer.animateClutchOnPlayer('item-gain')
+  showClutchChain('supply', '새싹의 따스함')
+  await wait(500)
+
+  const character = gameState.character
+  const waxDrop = DropSystem.makeCard('wax-drop')
+  if (character.addHandCard(waxDrop)) {
+    render()
+    await playResourceTrail({ kind: 'chain' }, 'hand', 1)
+  }
+
+  // 손패에 촛농이 3장 모였으면 자동 합성이 발동된다.
+  await wait(500)
+  const merges = HandSystem.runAutoMerges(character)
+  if (merges.length > 0) {
+    render()
+    await wait(1180)
+    enaSpeaking = false
+    speechBubble.show('오! 손패 세 장이 모여서 합쳐졌어! 효과가 강화됐는걸?', 100)
+    await speechBubble.waitForDismiss()
+  }
+
+  tutorialStep = 'complete'
+  boardRenderer.setTutorialSpotlight(null, null)
+  render()
 }
 
 /** Runs now begin with an empty hand; first cards must come from play rewards. */
@@ -3062,6 +3239,14 @@ async function startGame(characterIndex = -1): Promise<void> {
     turnManager.armFrontBombs()
     render()
     await boardRenderer.playJobCurtainOpen()
+    // 커튼이 열린 직후 키틴벌레를 강조하고 첫 조우 대사를 출력한다.
+    await wait(500)
+    boardRenderer.setTutorialSpotlight(tutorialKitinCardId, null)
+    render()
+    enaSpeaking = false
+    speechBubble.show('키틴벌레야! 내가 처리할게!', 100)
+    await speechBubble.waitForDismiss()
+    tutorialStep = 'kitin-spotted'
   }
 
   // 1구역 커튼: 직업 선택 직후 항상 표시한다.
@@ -3634,7 +3819,7 @@ document.addEventListener('cardAction', (e: Event) => {
 document.addEventListener('itemAction', (e: Event) => {
   if (!inputLocked) speechBubble.dismiss()
   const detail = (e as CustomEvent<ItemActionDetail>).detail
-  void handleHandSlotClick(detail.itemIndex)
+  void handleHandSlotClick(detail.itemIndex, detail.clientX, detail.clientY)
 })
 
 // 대사 빨리감기/스킵 2단계: 1번째 클릭=빨리감기(읽기), 그 다음 클릭=스킵(닫기).
@@ -3717,10 +3902,17 @@ document.addEventListener('shopClose', () => {
 })
 
 /** Click on a hand slot. Plain click = use single (or arm targeting). */
-async function handleHandSlotClick(slotIndex: number): Promise<void> {
+async function handleHandSlotClick(slotIndex: number, clientX?: number, clientY?: number): Promise<void> {
   if (!gameActive || inputLocked) return
   // 보스 격파 후 보상·시련 단계 동안 손패 사용 차단(사용자 요청).
   if (bossController.postPhaseHandLocked) return
+
+  // 튜토리얼: 잠긴 손패 슬롯 클릭 시 거절 메시지 출력
+  if (gameState.tutorialMode && tutorialLockedSlots.has(slotIndex)) {
+    showTutorialLockMessage(clientX ?? window.innerWidth / 2, clientY ?? window.innerHeight / 2)
+    return
+  }
+
   const character = gameState.character
   const card = character.hand[slotIndex]
   if (!card) return
@@ -3745,6 +3937,8 @@ async function handleHandSlotClick(slotIndex: number): Promise<void> {
   await applyHandSingle(slotIndex)
   // 대상 미지정 손패(폭죽 등)가 보스 HP를 0으로 만들었을 수 있으니 같은 격파 흐름으로 합류한다.
   await bossController.applyPostHandEffect()
+  // 튜토리얼: 손패 사용 후 디렉터 훅 실행
+  if (gameState.tutorialMode) await afterHandTutorialDirector()
 }
 
 /** Broad clears get the opening-board mercy rule: the freshly rebuilt front
@@ -3935,6 +4129,11 @@ async function applyHandSingle(
     await applyWaxCrowTreasureGains(
       result.removedFieldCards.filter((removed) => removed.type === CardType.TREASURE).length
     )
+    // 튜토리얼: 키틴으로 거미줄2를 제거했으면 web2-cleared로 전환 → afterHandTutorialDirector에서 대사.
+    if (gameState.tutorialMode && tutorialStep === 'web2-ready' &&
+        result.removedFieldCards.some((c) => c.cardId === tutorialWeb2CardId)) {
+      tutorialStep = 'web2-cleared'
+    }
   }
 
   // 모닥불: 첫 타격으로 적이 처치됐을 때 즉시 체력을 회복한다.
@@ -4602,6 +4801,7 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
 
   await runCleanupPhase(advanceTurn)
   await resolvePostDropSporeSpread()
+  if (gameState.tutorialMode) await afterTurnTutorialDirector()
 
   if (await maybeRunMilestoneEventsAfterTurn()) return
   if (await maybeOpenShopAfterTurn()) return
@@ -4766,6 +4966,7 @@ async function handleCardAction(e: Event): Promise<void> {
     await applyHandSingle(armed.slotIndex, { laneIndex, distance, card })
     // 손패 효과로 BOSS HP가 0이 됐다면 같은 격파 흐름으로 합류한다.
     await bossController.applyPostHandEffect()
+    if (gameState.tutorialMode) await afterHandTutorialDirector()
     return
   }
 
@@ -4837,7 +5038,29 @@ async function handleCardAction(e: Event): Promise<void> {
   }
   const beforeActionHealth = snapshotFieldHealthState()
   const beforeActionResources = snapshotPlayerResources()
+  // 튜토리얼: 보물상자 드랍을 2×촛농으로 강제 대체하기 위해 현재 손패 UID를 미리 스냅샷한다.
+  const tutorialTreasureHandUidsBefore = (gameState.tutorialMode && card.type === CardType.TREASURE)
+    ? new Set(gameState.character.hand.map(c => c.uid))
+    : null
   const result = ActionSystem.executeAction(gameState.getCharacter(), lane, card, actionType)
+
+  // 튜토리얼: 보물상자를 열면 랜덤 드랍 대신 촛농 2장을 강제 지급한다.
+  if (tutorialTreasureHandUidsBefore && result.success && result.cardRemoved) {
+    // executeAction이 추가한 아이템을 역순으로 제거한다.
+    for (let i = gameState.character.hand.length - 1; i >= 0; i--) {
+      if (!tutorialTreasureHandUidsBefore.has(gameState.character.hand[i].uid)) {
+        gameState.character.removeHandCardAt(i)
+      }
+    }
+    const wd1 = DropSystem.makeCard('wax-drop')
+    const wd2 = DropSystem.makeCard('wax-drop')
+    gameState.character.addHandCard(wd1)
+    gameState.character.addHandCard(wd2)
+    result.itemGainedNames = ['촛농', '촛농']
+    result.itemGainedIds = ['wax-drop', 'wax-drop']
+    tutorialStep = 'treasure-done'
+  }
+
   // Hand-card rewards are staged visually: first the freshly gained cards
   // drop into the hand, then any resulting triple synthesis resolves after
   // that landing beat instead of appearing as an already-merged card.
@@ -4975,6 +5198,11 @@ async function handleCardAction(e: Event): Promise<void> {
     void playResourceTrail({ kind: 'chain' }, 'score', 1)
     burstScoreGain()
   }
+  // 튜토리얼: 거미줄1을 밟았으면 web1-stepped로 전환(afterTurnTutorialDirector에서 키틴 안내).
+  if (gameState.tutorialMode && result.cardRemoved && card.type === CardType.TRAP &&
+      card.id === tutorialWeb1CardId && tutorialStep === 'web1-spotted') {
+    tutorialStep = 'web1-stepped'
+  }
 
   if (result.cardRemoved) {
     // Damage/reward math has already happened in the model; all visible beats
@@ -5008,6 +5236,23 @@ async function handleCardAction(e: Event): Promise<void> {
     await applyWaterBucketExtraDamage(card, distance)
     // 소소한 클러치 — 급소: 살아남은 적에게 가끔 추가 피해.
     await applyCompanionCrit(card, distance)
+    // 튜토리얼: 두더지 공격 횟수 카운트 → 2타 후 불씨 잠금 해제
+    if (gameState.tutorialMode && card.id === tutorialMoleCardId &&
+        (tutorialStep === 'mole-spotted' || tutorialStep === 'mole-fight-1')) {
+      tutorialMoleHits++
+      if (tutorialMoleHits === 1) {
+        tutorialStep = 'mole-fight-1'
+      } else if (tutorialMoleHits >= 2) {
+        tutorialStep = 'ember-unlocked'
+        tutorialLockedSlots.delete(tutorialEmberSlot)
+        boardRenderer.setTutorialSpotlight(null, tutorialEmberSlot)
+        render()
+        await wait(200)
+        enaSpeaking = false
+        speechBubble.show('지금이라면 이 불씨로 녀석을 혼내줄 수 있어!', 100)
+        await speechBubble.waitForDismiss()
+      }
+    }
   }
 
   // 소소한 클러치 — 보물 추가 보상: 상자를 열 때 가끔 손패 1장을 덤으로.
@@ -5160,6 +5405,7 @@ async function handleCardAction(e: Event): Promise<void> {
     }
     await runCleanupPhase(shouldAdvanceTurnForAction())
     await resolvePostDropSporeSpread()
+    if (gameState.tutorialMode) await afterTurnTutorialDirector()
     if (await maybeRunMilestoneEventsAfterTurn()) return
     if (await maybeOpenShopAfterTurn()) return
     setTimeout(() => {

@@ -336,4 +336,40 @@ export const GAME_BOARD_BASE_STYLES = `
 /* (legacy stage-header / stage-main rules removed — title now lives in
    .brand inside .left-panel and Turn is rendered as a fixed top overlay) */
 
+/* ── Tutorial spotlight: 황금빛 맥동 테두리로 카드/손패 슬롯을 강조 ── */
+@keyframes tutorial-pulse {
+  from { box-shadow: 0 0 0 2px #f0c060, 0 0 10px 4px rgba(240,192,96,0.55); }
+  to   { box-shadow: 0 0 0 4px #f0c060, 0 0 22px 9px rgba(240,192,96,0.85); }
+}
+
+.tutorial-spotlight {
+  animation: tutorial-pulse 0.9s ease-in-out infinite alternate;
+  position: relative;
+  z-index: 5;
+  border-radius: 6px;
+}
+
+/* 튜토리얼 잠금 메시지 — 클릭 위치 부근에 뜨다가 위로 사라짐 */
+@keyframes tutorial-lock-fade {
+  0%   { opacity: 1;   transform: translateX(-50%) translateY(0);     }
+  70%  { opacity: 0.7; transform: translateX(-50%) translateY(-10px);  }
+  100% { opacity: 0;   transform: translateX(-50%) translateY(-22px);  }
+}
+
+.tutorial-lock-msg {
+  position: fixed;
+  transform: translateX(-50%);
+  background: rgba(18, 10, 4, 0.88);
+  color: #f0c060;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(240,192,96,0.55);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  z-index: 9999;
+  white-space: nowrap;
+  animation: tutorial-lock-fade 1.7s ease-out forwards;
+}
+
 `
