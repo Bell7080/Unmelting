@@ -133,6 +133,12 @@ export interface ShopStateView {
   basicPackCost: number
   /** 제단 4팩처럼 기본 3팩과 매핑이 다른 경우에도 각 팩 가격을 독립 갱신한다. */
   packCosts?: Partial<Record<ShopPackKind, number>>
+  /** 튜토리얼 전용: 이 팩 종류들만 pack-layer에 렌더한다(undefined = 전체 렌더). */
+  tutorialVisiblePacks?: ShopPackKind[]
+  /** 튜토리얼 전용: 리롤 버튼을 숨긴다(shop mode에서). */
+  tutorialHideReroll?: boolean
+  /** 튜토리얼 전용: 무료카드 영역을 렌더하지 않는다. */
+  tutorialHideFreecards?: boolean
 }
 export interface ForcedTrialCardView {
   id: string
@@ -2499,27 +2505,41 @@ export class GameBoardRenderer {
           <section class="shop-row shop-top-row" aria-label="유물 상점">
             <div class="shop-layer shop-reroll-zone" aria-hidden="true"></div>
             <div class="shop-layer shop-artifact-layer">
-              ${shop.mode === 'altar' ? '' : `<div class="shop-reroll-card-anchor">${this.renderShopRerollButton(shop.rerollCost, shop.coins)}</div>`}
+              ${(shop.mode === 'altar' || shop.tutorialHideReroll) ? '' : `<div class="shop-reroll-card-anchor">${this.renderShopRerollButton(shop.rerollCost, shop.coins)}</div>`}
               ${cards}
             </div>
           </section>
           <section class="shop-row shop-bottom-row" aria-label="카드 및 카드팩">
             <div class="shop-layer shop-free-layer">
-              ${this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel, shop.freeCardDescription ?? '1$', 'free-card')}
-              ${shop.mode === 'altar' ? this.renderShopFreeCard(!!shop.freeCoinCardClaimed, '수당', '3$', 'free-coin-card') : ''}
+              ${shop.tutorialHideFreecards ? '' : [
+                this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel, shop.freeCardDescription ?? '1$', 'free-card'),
+                shop.mode === 'altar' ? this.renderShopFreeCard(!!shop.freeCoinCardClaimed, '수당', '3$', 'free-coin-card') : '',
+              ].join('')}
             </div>
             <div class="shop-layer shop-pack-layer">
-              ${shop.mode === 'altar'
-                ? [
-                    this.renderShopPackCard('resource-pack', '자원팩', '체력·손패·불씨 한도 영구 상향', shop.packCosts?.['resource-pack'] ?? 500, score, 'resource', 0),
-                    this.renderShopPackCard('chance-pack', '확률팩', '특정 카드 1차 드롭 우선도 부여', shop.packCosts?.['chance-pack'] ?? 500, score, 'upgrade', 1),
-                    this.renderShopPackCard('delete-pack', '삭제팩', '카드 제거 · 드롭 집중도 상향', shop.packCosts?.['delete-pack'] ?? 500, score, 'unlock', 2),
-                  ].join('')
-                : [
-                    this.renderShopPackCard('basic-pack', basicPackLabel.title, 'HP·불씨·게이지 즉시 보충', shop.packCosts?.['basic-pack'] ?? shop.basicPackCost, score, 'resource', 0),
-                    this.renderShopPackCard('recipe-pack', recipePackLabel.title, '조합식 해금 · 덱 심도 확장', shop.packCosts?.['recipe-pack'] ?? 400, score, 'upgrade', 1),
-                    this.renderShopPackCard('unlock-pack', unlockPackLabel.title, '잠긴 손패 해금 · 드롭 풀 확대', shop.packCosts?.['unlock-pack'] ?? 400, score, 'unlock', 2),
-                  ].join('')}
+              ${(() => {
+                if (shop.mode === 'altar') {
+                  const altarAll: Array<[ShopPackKind, string, string, number, 'resource' | 'upgrade' | 'unlock', number]> = [
+                    ['resource-pack', '자원팩', '체력·손패·불씨 한도 영구 상향', shop.packCosts?.['resource-pack'] ?? 500, 'resource', 0],
+                    ['chance-pack', '확률팩', '특정 카드 1차 드롭 우선도 부여', shop.packCosts?.['chance-pack'] ?? 500, 'upgrade', 1],
+                    ['delete-pack', '삭제팩', '카드 제거 · 드롭 집중도 상향', shop.packCosts?.['delete-pack'] ?? 500, 'unlock', 2],
+                  ]
+                  const visible = shop.tutorialVisiblePacks !== undefined
+                    ? altarAll.filter(([k]) => (shop.tutorialVisiblePacks as ShopPackKind[]).includes(k))
+                    : altarAll
+                  return visible.map(([k, t, d, c, th, n]) => this.renderShopPackCard(k, t, d, c, score, th, n)).join('')
+                } else {
+                  const shopAll: Array<[ShopPackKind, string, string, number, 'resource' | 'upgrade' | 'unlock', number]> = [
+                    ['basic-pack', basicPackLabel.title, 'HP·불씨·게이지 즉시 보충', shop.packCosts?.['basic-pack'] ?? shop.basicPackCost, 'resource', 0],
+                    ['recipe-pack', recipePackLabel.title, '조합식 해금 · 덱 심도 확장', shop.packCosts?.['recipe-pack'] ?? 400, 'upgrade', 1],
+                    ['unlock-pack', unlockPackLabel.title, '잠긴 손패 해금 · 드롭 풀 확대', shop.packCosts?.['unlock-pack'] ?? 400, 'unlock', 2],
+                  ]
+                  const visible = shop.tutorialVisiblePacks !== undefined
+                    ? shopAll.filter(([k]) => (shop.tutorialVisiblePacks as ShopPackKind[]).includes(k))
+                    : shopAll
+                  return visible.map(([k, t, d, c, th, n]) => this.renderShopPackCard(k, t, d, c, score, th, n)).join('')
+                }
+              })()}
             </div>
           </section>
           <button class="shop-close-btn" type="button" data-shop-close aria-label="상점 나가기">EXIT</button>
@@ -8825,6 +8845,35 @@ export class GameBoardRenderer {
       )
     }
     await Promise.all(anims)
+  }
+
+  /** 튜토리얼 상점: 다음 팩 타일을 pack-layer에 슬라이드 인해 추가한다.
+   *  팩 피커가 닫힌 뒤 호출해 기존 DOM을 재빌드하지 않고 카드 1장만 주입한다. */
+  tutorialAppendPackToShop(
+    kind: ShopPackKind,
+    title: string,
+    desc: string,
+    cost: number,
+    score: number,
+    theme: 'resource' | 'upgrade' | 'unlock',
+    nth: number
+  ): void {
+    const layer = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-pack-layer')
+    if (!layer) return
+    const html = this.renderShopPackCard(kind, title, desc, cost, score, theme, nth)
+    const tmp = document.createElement('div')
+    tmp.innerHTML = html.trim()
+    const card = tmp.firstElementChild as HTMLElement | null
+    if (!card) return
+    layer.appendChild(card)
+    // 기존 pack-layer 위치 보정 transform이 카드 슬라이드를 가리므로 WAAPI로 처리한다.
+    card.animate(
+      [
+        { opacity: '0', transform: 'translateX(-28px) scale(0.93)' },
+        { opacity: '1', transform: 'translateX(0) scale(1)' },
+      ],
+      { duration: 400, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'forwards' }
+    )
   }
 }
 

@@ -456,7 +456,16 @@ export const HEARTH_STYLES = `
 .hand-column {
   transition: transform 0.52s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.42s ease;
 }
-/* 플레이어 카드는 로비에서도 그대로 노출한다(캐릭터 미선택 상태의 기본 카드). */
+/* HP/ATK: 항상 transition 적용 → 로비에서 opacity 0, 인게임 진입 시 페이드인. */
+.hp-column,
+.atk-stat {
+  transition: opacity 0.6s ease;
+}
+/* 플레이어 카드는 로비에서도 그대로 노출하되, 스탯 수치는 인게임 진입 전까지 숨긴다. */
+body.hearth-lobby .hp-column,
+body.hearth-lobby .atk-stat {
+  opacity: 0;
+}
 /* 불씨 게이지: 상단 밖으로 올려 숨김 → 출발 시 위에서 내려온다(translateX(-50%) 유지). */
 body.hearth-lobby .ember-hud {
   transform: translate(-50%, -180%);

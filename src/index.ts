@@ -162,9 +162,11 @@ gameState.endGame = (reason: string): void => {
   const won = reason.includes('clear') || reason.includes('win')
   enaRuntimeObserver.recordRunEnd(gameState, won, reason)
   // 에나 혼자 보는 자기학습: 디버그 리포트 노출 없이 실제 런 로그를 다음 판단 재료로 압축한다.
-  enaAutonomousLearner.learnAfterRun(enaRuntimeObserver.getMemory(), enaRuntimeObserver.getEvents())
+  if (!gameState.tutorialMode) {
+    enaAutonomousLearner.learnAfterRun(enaRuntimeObserver.getMemory(), enaRuntimeObserver.getEvents())
+  }
   // per-player 성향 온라인 적응: 런 결과로 에나의 성향을 미세조정하고 저장(세션 넘어 유지).
-  adaptCompanionToRunOutcome(won)
+  if (!gameState.tutorialMode) adaptCompanionToRunOutcome(won)
 }
 const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
@@ -549,6 +551,8 @@ let shopPackBuys: Record<ShopPackKind, number> = Object.fromEntries(
 let shopRerollInProgress = false
 let freeCardClaimed = false
 let freeCoinCardClaimed = false
+/** 튜토리얼 상점: 현재 방문에서 이미 공개된 팩 목록. 팩 구매 시 다음 팩이 추가된다. */
+let tutorialRevealedPacks: ShopPackKind[] = []
 
 // 공용 무료카드(선물 상자)는 방문마다 하나의 랜덤 효과로 고정한다.
 type ShopFreeGiftKind = 'score-300' | 'coin-1' | 'health-5' | 'gauge-3' | 'ember-3' | 'hand-2'
@@ -1525,7 +1529,7 @@ function currentShopPackCost(kind: ShopPackKind): number {
  *  Reroll cost is denominated in coins (화폐) — the renderer reads `coins`
  *  to decide whether the reroll button is affordable. */
 function buildShopStateView(): ShopStateView {
-  return {
+  const base: ShopStateView = {
     mode: currentShopMode,
     relicOffers: currentShopOffers,
     freeCardClaimed,
@@ -1538,6 +1542,21 @@ function buildShopStateView(): ShopStateView {
       SHOP_PACK_KINDS.map((kind) => [kind, currentShopPackCost(kind)])
     ) as Partial<Record<ShopPackKind, number>>,
   }
+  // 튜토리얼 상점: 턴 단계별로 노출 요소를 제한한다.
+  if (gameState.tutorialMode) {
+    const turn = gameState.getCurrentTurn()
+    if (turn === 5) {
+      // 1-레인: 유물 1개만, 리롤/무료카드/팩 없음.
+      return { ...base, relicOffers: currentShopOffers.slice(0, 1), tutorialHideReroll: true, tutorialHideFreecards: true, tutorialVisiblePacks: [] }
+    }
+    if (turn === 15) {
+      // 2-레인: 유물 1개 + 해금팩(구매 시 자원팩 등장), 리롤/무료카드 없음.
+      return { ...base, relicOffers: currentShopOffers.slice(0, 1), tutorialHideReroll: true, tutorialHideFreecards: true, tutorialVisiblePacks: [...tutorialRevealedPacks] }
+    }
+    // 30턴 제단: 유물 3개 무료 1택 + 순차 팩 공개(무료카드 없음).
+    return { ...base, tutorialHideFreecards: true, tutorialVisiblePacks: [...tutorialRevealedPacks] }
+  }
+  return base
 }
 
 /** Immediate stat effects for relics whose benefit is granted on purchase. */
@@ -1711,6 +1730,13 @@ async function openShopOverlay(mode: 'shop' | 'altar'): Promise<void> {
   freeCardClaimed = false
   // 제단 수당도 방문 단위 무료 보상이므로 30/60/90턴마다 다시 활성화한다.
   freeCoinCardClaimed = false
+  // 튜토리얼 팩 공개 초기화: 턴별 첫 팩만 노출하고 구매 시 순차 공개한다.
+  if (gameState.tutorialMode) {
+    const turn = gameState.getCurrentTurn()
+    if (turn === 5) tutorialRevealedPacks = []
+    else if (turn === 15) tutorialRevealedPacks = ['unlock-pack']
+    else tutorialRevealedPacks = ['delete-pack']  // turn 30 altar
+  }
   // 방문 시작 시 선물 상자의 효과를 현재 등록된 n종 중 하나로 확정한다.
   freeGiftKind = SHOP_FREE_GIFT_KINDS[Math.floor(Math.random() * SHOP_FREE_GIFT_KINDS.length)]
   activePackSession = null
@@ -1962,7 +1988,7 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
   applyLuxuryScoreSpend(cost)
   // 구매 직후 같은 팩 가격을 초기 가격만큼 올려 다음 표기/차감에 반영한다.
   shopPackBuys[kind] = (shopPackBuys[kind] ?? 0) + 1
-  enaRuntimeObserver.recordShopPurchase(gameState, shopKindToPurchaseId(kind))
+  if (!gameState.tutorialMode) enaRuntimeObserver.recordShopPurchase(gameState, shopKindToPurchaseId(kind))
   // Keep picker title synchronized with the shared pack label table.
   const title = SHOP_PACK_LABELS[kind].title
   const items = rollPackItems(kind)
@@ -2029,6 +2055,29 @@ async function handleShopPackPick(detail: ShopPackPickDetail): Promise<void> {
   await resolveFullCandleGaugeEffects({ kind: 'chain' })
   render()
   boardRenderer.openShop(buildShopStateView(), score, gameState.character)
+  // 튜토리얼: 팩 구매 후 다음 팩을 슬라이드 인해 공개한다.
+  if (gameState.tutorialMode) maybeRevealNextTutorialPack(detail.packKind)
+}
+
+/** 튜토리얼 상점: 방금 구매한 팩 종류에 따라 다음 팩 타일을 슬라이드 인한다.
+ *  turn 15: unlock-pack 구매 → resource-pack 등장.
+ *  turn 30: delete-pack 구매 → chance-pack, chance-pack 구매 → resource-pack. */
+function maybeRevealNextTutorialPack(boughtKind: ShopPackKind): void {
+  const turn = gameState.getCurrentTurn()
+  const packCosts = Object.fromEntries(
+    SHOP_PACK_KINDS.map((k) => [k, currentShopPackCost(k)])
+  ) as Record<ShopPackKind, number>
+
+  if (turn === 15 && boughtKind === 'unlock-pack' && !tutorialRevealedPacks.includes('resource-pack')) {
+    tutorialRevealedPacks.push('resource-pack')
+    boardRenderer.tutorialAppendPackToShop('resource-pack', '자원팩', '체력·손패·불씨 한도 영구 상향', packCosts['resource-pack'], score, 'resource', 1)
+  } else if (turn % 30 === 0 && boughtKind === 'delete-pack' && !tutorialRevealedPacks.includes('chance-pack')) {
+    tutorialRevealedPacks.push('chance-pack')
+    boardRenderer.tutorialAppendPackToShop('chance-pack', '확률팩', '특정 카드 1차 드롭 우선도 부여', packCosts['chance-pack'], score, 'upgrade', 1)
+  } else if (turn % 30 === 0 && boughtKind === 'chance-pack' && !tutorialRevealedPacks.includes('resource-pack')) {
+    tutorialRevealedPacks.push('resource-pack')
+    boardRenderer.tutorialAppendPackToShop('resource-pack', '자원팩', '체력·손패·불씨 한도 영구 상향', packCosts['resource-pack'], score, 'resource', 2)
+  }
 }
 
 /** 팩 피커 재뽑기: 1+횟수$ 차감 후 같은 팩 종류로 새 3장을 뽑아 피커를 갱신한다. */
@@ -2189,7 +2238,7 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     render()
     return
   }
-  enaRuntimeObserver.recordShopPurchase(gameState, `relic:${detail.relicId}`)
+  if (!gameState.tutorialMode) enaRuntimeObserver.recordShopPurchase(gameState, `relic:${detail.relicId}`)
   // Pay the light price. We DO log the deduction — pure number-pulse on the
   // light panel is too easy to miss, so the activity log row makes the spend concrete.
   const def = getRelicDef(detail.relicId)
@@ -2989,7 +3038,8 @@ async function startGame(characterIndex = -1): Promise<void> {
     ? companion.onJobSelect(chosenJob.id)
     : '역경 아래, 작은 불빛을 밝혀야만 해.'
   speechBubble.show(opening, 800)
-  const memoryLine = enaAutonomousLearner.recallLineForNewRun()
+  // 튜토리얼에서는 에나 자기학습 회상을 띄우지 않는다.
+  const memoryLine = gameState.tutorialMode ? null : enaAutonomousLearner.recallLineForNewRun()
   if (memoryLine) {
     // 시작 인사를 덮지 않도록 한 박자 뒤, 플레이어가 보는 자연스러운 회상으로만 보여준다.
     window.setTimeout(() => {
@@ -3706,7 +3756,7 @@ async function applyHandSingle(
     render()
     return
   }
-  if (usedDef) {
+  if (usedDef && !gameState.tutorialMode) {
     enaRuntimeObserver.recordHandDecision(gameState, usedDef.id, result.message)
     if (gameState.bossBattleActive) enaRuntimeObserver.recordBossDecision(gameState, `hand:${usedDef.id}:${result.message}`)
   }
