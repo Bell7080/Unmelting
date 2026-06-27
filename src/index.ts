@@ -3050,7 +3050,7 @@ async function runTutorialShopGiftSequence(): Promise<void> {
   await speechBubble.waitForDismiss()
 
   // "새싹의 따스함" — 의지 클러치 연출로 촛농 1장 보급
-  void boardRenderer.animateClutchOnPlayer('item-gain')
+  void boardRenderer.animateClutchOnPlayer('hand-recovery')
   showClutchChain('supply', '새싹의 따스함')
   await wait(500)
 
