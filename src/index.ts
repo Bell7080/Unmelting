@@ -556,23 +556,34 @@ let tutorialRevealedPacks: ShopPackKind[] = []
 
 // ── 튜토리얼 디렉터 상태 ──
 type TutorialStep =
-  | 'init'           // 보드 채워지기 전
-  | 'kitin-spotted'  // 키틴벌레 강조 + 첫 대사
-  | 'kitin-dead'     // 키틴벌레 처치됨, 두더지 등장 전
-  | 'mole-spotted'   // 두더지 강조 + 대사
-  | 'mole-fight-1'   // 두더지 1타 후 (불씨 잠금 유지)
-  | 'ember-unlocked' // 두더지 2타 후 불씨 잠금 해제
-  | 'mole-final-hit' // 불씨 사용 후, 두더지 HP=1 최후 클릭 대기
-  | 'mole-dead'      // 두더지 처치됨
-  | 'web1-spotted'   // 거미줄1 강조 + 대사
-  | 'web1-stepped'   // 거미줄1 밟음, 키틴 잠금 해제 직전
-  | 'web2-ready'     // 키틴 잠금 해제, 거미줄2 대기
-  | 'web2-cleared'   // 키틴으로 거미줄2 제거
-  | 'treasure-ready' // "잘 했어" 대사 완료
-  | 'treasure-done'  // 보물상자1 2촛농 획득, 상점 직전 · 상점 직후 두 번째 상자 대기
-  | 'box-opened'     // 두 번째 상자 촛농×1 획득, 트리플 합성 대기
-  | 'shop-done'      // 트리플 합성 연출 완료
-  | 'complete'       // 튜토리얼 감독 완료
+  // Phase 1: 기초 (T1~T7)
+  | 'init'              // 보드 채워지기 전
+  | 'kitin-spotted'     // 키틴벌레 강조 + 첫 대사
+  | 'kitin-dead'        // 키틴벌레 처치됨, 두더지 등장 전
+  | 'mole-spotted'      // 두더지 강조 + 대사
+  | 'mole-fight-1'      // 두더지 1타 후 (불씨 잠금 유지)
+  | 'ember-unlocked'    // 두더지 2타 후 불씨 잠금 해제
+  | 'mole-final-hit'    // 불씨 사용 후, 두더지 HP=1 최후 클릭 대기
+  | 'mole-dead'         // 두더지 처치됨
+  | 'web1-spotted'      // 거미줄1 강조 + 대사
+  | 'web1-stepped'      // 거미줄1 밟음, 키틴 잠금 해제 직전
+  | 'web2-ready'        // 키틴 잠금 해제, 거미줄2 대기
+  | 'web2-cleared'      // 키틴으로 거미줄2 제거
+  | 'treasure-ready'    // "잘 했어" 대사 완료
+  | 'treasure-done'     // 보물상자1 2촛농 획득, 상점 직전 · 상점 직후 두 번째 상자 대기
+  | 'box-opened'        // 두 번째 상자 촛농×1 획득, 트리플 합성 대기
+  // Phase 2: 중급 + 레시피 (T8~T15)
+  | 'phase2-start'      // 트리플 합성 후 키틴 선물, Phase 2 거미줄 대기
+  | 'phase2-web-cleared'// Phase 2 거미줄 제거 완료, 거미 등장 준비
+  | 'spider-dead'       // 거미 처치, 밀랍 수령
+  | 'bomb-spotted'      // 폭탄 전방 도달
+  | 'spore-spotted'     // 포자 전방 도달
+  | 'combo-ready'       // T13 상자 열림, 합성촛농으로 콤보 게이지 교습 준비
+  | 'combo-taught'      // 콤보 게이지 교습 완료
+  | 'jackal-ready'      // 자칼 전방 도달 (거미줄14 뒤)
+  | 'phase2-complete'   // T15 보물상자 열림, T15 상점 진입 전
+  // 공통 종료
+  | 'complete'          // 튜토리얼 감독 종료
 
 let tutorialStep: TutorialStep = 'init'
 let tutorialLockedSlots: Set<number> = new Set()
@@ -583,6 +594,20 @@ let tutorialKitinCardId: string | null = null
 let tutorialMoleCardId: string | null = null
 let tutorialWeb1CardId: string | null = null
 let tutorialWeb2CardId: string | null = null
+// Phase 2 카드 ID 추적
+let tutorialPhase2WebCardId: string | null = null
+let tutorialBox2CardId: string | null = null      // 상점 직후 상자 → 촛농×1
+let tutorialSpiderCardId: string | null = null    // 거미 → 밀랍
+let tutorialMouse2CardId: string | null = null    // 두 번째 생쥐 → 양초
+let tutorialBombCardId: string | null = null      // 폭탄
+let tutorialSporeCardId: string | null = null     // 포자
+let tutorialSporeKitinCardId: string | null = null // 포자 감염 키틴벌레 (HP=2)
+let tutorialBox3CardId: string | null = null      // T13 상자 → 촛농+combo-ready
+let tutorialWeb14CardId: string | null = null     // T14 거미줄 (자칼 앞)
+let tutorialJackalCardId: string | null = null    // 자칼 → 레시피 교습
+let tutorialTreasure15CardId: string | null = null// T15 보물상자 → phase2-complete
+// 콤보 게이지 교습 — 첫 달성 시 1회만 대사 출력
+let tutorialComboGaugeTaught = false
 
 // 공용 무료카드(선물 상자)는 방문마다 하나의 랜덤 효과로 고정한다.
 type ShopFreeGiftKind = 'score-300' | 'coin-1' | 'health-5' | 'gauge-3' | 'ember-3' | 'hand-2'
@@ -2921,24 +2946,55 @@ function fillTutorialBoardScripted(): void {
   // 두 번째 상자: 상점 직후 열어 촛농 1장 → 트리플 합성으로 자연스럽게 학습한다.
   const treasure2 = cardSpawner.makeTutorialTreasure()
 
+  // Phase 2 카드: 트리플 합성 이후 등장 순서대로 배치한다.
+  const phase2Web = cardSpawner.makeTutorialWebTrap()    // Phase 2 첫 거미줄
+  const box2 = cardSpawner.makeTutorialTreasure()        // 상점 직후 상자 → 촛농×1
+  const spider = cardSpawner.makeTutorialEnemy('양초 거미')
+  const mouse1 = cardSpawner.makeTutorialEnemy('양초 생쥐', 1)
+  const mouse2 = cardSpawner.makeTutorialEnemy('양초 생쥐', 1) // → 양초 드랍
+  const bomb = cardSpawner.makeTutorialBombTrap()
+  const spore = cardSpawner.makeTutorialSporeTrap()
+  const sporeKitin = cardSpawner.makeTutorialEnemy('양초 키틴벌레', 2) // 포자 감염 재현
+  const box3 = cardSpawner.makeTutorialTreasure()        // T13 상자 → 촛농+combo-ready
+  const web14 = cardSpawner.makeTutorialWebTrap()        // T14 자칼 앞 거미줄
+  const jackal = cardSpawner.makeTutorialEnemy('양초 자칼')
+  const treasure15 = cardSpawner.makeTutorialTreasure()  // T15 보물상자 → phase2-complete
+
   // 카드 UID를 디렉터 훅이 참조할 수 있도록 기록한다.
   tutorialKitinCardId = kitin.id
   tutorialMoleCardId = mole.id
   tutorialWeb1CardId = web1.id
   tutorialWeb2CardId = web2.id
+  tutorialPhase2WebCardId = phase2Web.id
+  tutorialBox2CardId = box2.id
+  tutorialSpiderCardId = spider.id
+  tutorialMouse2CardId = mouse2.id
+  tutorialBombCardId = bomb.id
+  tutorialSporeCardId = spore.id
+  tutorialSporeKitinCardId = sporeKitin.id
+  tutorialBox3CardId = box3.id
+  tutorialWeb14CardId = web14.id
+  tutorialJackalCardId = jackal.id
+  tutorialTreasure15CardId = treasure15.id
   tutorialStep = 'init'
   tutorialLockedSlots = new Set()
   tutorialMoleHits = 0
   tutorialEmberSlot = -1
   tutorialChitinSlot = -1
+  tutorialComboGaugeTaught = false
 
   lane.setCardAtDistance(0, kitin)
   lane.setCardAtDistance(1, mole)
   lane.setCardAtDistance(2, web1)
   gameState.regroupAllRows()
   trackFieldEnemyEncounters()
-  // 거미물(거미줄2) → 보물상자1 → 보물상자2 순으로 리필된다.
-  cardSpawner.setTutorialRefillQueue([web2, treasure1, treasure2])
+  // Phase 1 + Phase 2 리필 큐: 소모 순서대로 나열한다.
+  cardSpawner.setTutorialRefillQueue([
+    web2, treasure1, treasure2,
+    phase2Web, box2, spider, mouse1, mouse2,
+    bomb, spore, sporeKitin,
+    box3, web14, jackal, treasure15,
+  ])
 }
 
 /** 튜토리얼 전용 처치 드랍 + 디렉터 대사/스포트라이트 처리. */
@@ -2973,6 +3029,31 @@ async function applyTutorialEnemyDrop(card: Card): Promise<void> {
     boardRenderer.setTutorialSpotlight(null, null)
     tutorialStep = 'mole-dead'
     // 거미줄1 등장 대사는 cleanup 이후 afterTurnTutorialDirector에서 처리
+  } else if (card.id === tutorialSpiderCardId) {
+    // 거미 처치: 밀랍을 지급하고 굳히기 사용법을 안내한다.
+    const wax = DropSystem.makeCard('wax')
+    if (character.addHandCard(wax)) {
+      render()
+      await playResourceTrail({ kind: 'chain' }, 'hand', 1)
+    }
+    boardRenderer.setTutorialSpotlight(null, null)
+    tutorialStep = 'spider-dead'
+    await wait(300)
+    enaSpeaking = false
+    speechBubble.show('밀랍! 적을 굳혀서 움직임을 막을 수 있어.', 100)
+    await speechBubble.waitForDismiss()
+  } else if (card.id === tutorialMouse2CardId) {
+    // 두 번째 생쥐 처치: 양초를 지급하고 불씨 부족 시 쓰라고 안내한다.
+    const candle = DropSystem.makeCard('candle')
+    if (character.addHandCard(candle)) {
+      render()
+      await playResourceTrail({ kind: 'chain' }, 'hand', 1)
+    }
+    boardRenderer.setTutorialSpotlight(null, null)
+    await wait(300)
+    enaSpeaking = false
+    speechBubble.show('양초! 불씨가 부족할 때 쓰면 돼.', 100)
+    await speechBubble.waitForDismiss()
   }
 }
 
@@ -3029,6 +3110,87 @@ async function afterTurnTutorialDirector(): Promise<void> {
     enaSpeaking = false
     speechBubble.show('으... 역시 싫어. 이번 거미줄은 키틴을 이용하자.', 100)
     await speechBubble.waitForDismiss()
+  } else if (tutorialStep === 'phase2-start') {
+    // Phase 2 거미줄이 전방에 왔는지 확인
+    if (frontCard?.id === tutorialPhase2WebCardId) {
+      boardRenderer.setTutorialSpotlight(tutorialPhase2WebCardId, null)
+      render()
+      await wait(300)
+      enaSpeaking = false
+      speechBubble.show('또 거미줄이야! 아까처럼 키틴으로 없애봐.', 100)
+      await speechBubble.waitForDismiss()
+    }
+  } else if (tutorialStep === 'phase2-web-cleared') {
+    // 거미가 전방에 도달했을 때 대사
+    if (frontCard?.id === tutorialSpiderCardId) {
+      boardRenderer.setTutorialSpotlight(tutorialSpiderCardId, null)
+      render()
+      await wait(300)
+      enaSpeaking = false
+      speechBubble.show('거미야! 체력은 낮지만 조심해.', 100)
+      await speechBubble.waitForDismiss()
+    }
+  } else if (tutorialStep === 'spider-dead') {
+    // 거미 처치 후 — 폭탄 또는 포자가 전방에 도달했는지 확인
+    if (frontCard?.id === tutorialBombCardId) {
+      tutorialStep = 'bomb-spotted'
+      boardRenderer.setTutorialSpotlight(tutorialBombCardId, null)
+      render()
+      await wait(300)
+      enaSpeaking = false
+      speechBubble.show('폭탄이야! 밟으면 크게 다쳐. 빨리 처리해!', 100)
+      await speechBubble.waitForDismiss()
+    } else if (frontCard?.id === tutorialSporeCardId) {
+      tutorialStep = 'spore-spotted'
+      boardRenderer.setTutorialSpotlight(tutorialSporeCardId, null)
+      render()
+      await wait(300)
+      enaSpeaking = false
+      speechBubble.show('포자야. 방치하면 뒤에 있는 적한테 전염돼!', 100)
+      await speechBubble.waitForDismiss()
+    }
+  } else if (tutorialStep === 'bomb-spotted') {
+    // 폭탄 처치 후 포자가 전방에 왔는지 확인
+    if (frontCard?.id === tutorialSporeCardId) {
+      tutorialStep = 'spore-spotted'
+      boardRenderer.setTutorialSpotlight(tutorialSporeCardId, null)
+      render()
+      await wait(300)
+      enaSpeaking = false
+      speechBubble.show('포자야. 주의해! 방치하면 전염돼.', 100)
+      await speechBubble.waitForDismiss()
+    }
+  } else if (tutorialStep === 'spore-spotted') {
+    // 포자 처치 후 — 포자 감염 키틴(HP=2)이 전방에 도달했는지 확인
+    if (frontCard?.id === tutorialSporeKitinCardId && frontCard.health >= 2) {
+      boardRenderer.setTutorialSpotlight(null, null)
+      render()
+      await wait(300)
+      enaSpeaking = false
+      speechBubble.show('포자에 감염된 키틴벌레야. 체력이 더 높아졌어!', 100)
+      await speechBubble.waitForDismiss()
+    }
+  } else if (tutorialStep === 'combo-taught') {
+    // 콤보 게이지 교습 완료 후 web14가 전방에 도달했는지 확인
+    if (frontCard?.id === tutorialWeb14CardId) {
+      tutorialStep = 'jackal-ready'
+      boardRenderer.setTutorialSpotlight(tutorialWeb14CardId, null)
+      render()
+      await wait(300)
+      enaSpeaking = false
+      speechBubble.show('또 거미줄이야. 그리고 뒤에 뭔가 강해 보이는 게 있어...', 100)
+      await speechBubble.waitForDismiss()
+    }
+  } else if (tutorialStep === 'jackal-ready') {
+    // 거미줄 제거 후 자칼이 전방에 도달했는지 확인
+    if (frontCard?.id === tutorialJackalCardId) {
+      boardRenderer.setTutorialSpotlight(null, null)
+      render()
+      await wait(300)
+      enaSpeaking = false
+      speechBubble.show('자칼이야! 촛농이랑 양초를 같이 써봐 — 레시피를 터뜨릴 수 있어!', 100)
+      await speechBubble.waitForDismiss()
+    }
   }
 }
 
@@ -3054,6 +3216,18 @@ async function afterHandTutorialDirector(): Promise<void> {
     enaSpeaking = false
     speechBubble.show('헤헤, 잘 했어.', 100)
     await speechBubble.waitForDismiss()
+  } else if (tutorialStep === 'combo-ready' && !tutorialComboGaugeTaught) {
+    // 합성촛농 사용 후 콤보 게이지가 임계 이상인지 확인
+    const gauge = gameState.character.candle
+    const maxGauge = gameState.character.candleMax
+    if (gauge >= maxGauge || gauge >= 7) {
+      tutorialComboGaugeTaught = true
+      tutorialStep = 'combo-taught'
+      await wait(400)
+      enaSpeaking = false
+      speechBubble.show('콤보 게이지가 가득 찼어! 이게 완전 양초의 힘이야!', 100)
+      await speechBubble.waitForDismiss()
+    }
   }
 }
 
@@ -4127,6 +4301,11 @@ async function applyHandSingle(
         result.removedFieldCards.some((c) => c.cardId === tutorialWeb2CardId)) {
       tutorialStep = 'web2-cleared'
     }
+    // 튜토리얼: Phase 2 거미줄 제거 시 phase2-web-cleared로 전환.
+    if (gameState.tutorialMode && tutorialStep === 'phase2-start' &&
+        result.removedFieldCards.some((c) => c.cardId === tutorialPhase2WebCardId)) {
+      tutorialStep = 'phase2-web-cleared'
+    }
   }
 
   // 모닥불: 첫 타격으로 적이 처치됐을 때 즉시 체력을 회복한다.
@@ -5058,18 +5237,38 @@ async function handleCardAction(e: Event): Promise<void> {
       result.itemGainedIds = ['wax-drop', 'wax-drop']
       tutorialStep = 'treasure-done'
     } else if (card.type === CardType.TREASURE && tutorialStep === 'treasure-done') {
-      // 두 번째 보물상자: 촛농 1장으로 강제 대체 → 트리플 합성 유도.
+      // 두 번째 보물상자(treasure2): 촛농 1장으로 강제 대체 → 트리플 합성 유도.
       removeAddedHandCards()
       const wd = DropSystem.makeCard('wax-drop')
       gameState.character.addHandCard(wd)
       result.itemGainedNames = ['촛농']
       result.itemGainedIds = ['wax-drop']
       tutorialStep = 'box-opened'
+    } else if (card.type === CardType.TREASURE && card.id === tutorialBox2CardId) {
+      // box2(상점 직후 상자): 촛농 1장으로 강제 대체.
+      removeAddedHandCards()
+      const wd = DropSystem.makeCard('wax-drop')
+      gameState.character.addHandCard(wd)
+      result.itemGainedNames = ['촛농']
+      result.itemGainedIds = ['wax-drop']
+    } else if (card.type === CardType.TREASURE && card.id === tutorialBox3CardId) {
+      // box3(T13 상자): 촛농 1장 → 합성촛농 유도 후 콤보 게이지 교습.
+      removeAddedHandCards()
+      const wd = DropSystem.makeCard('wax-drop')
+      gameState.character.addHandCard(wd)
+      result.itemGainedNames = ['촛농']
+      result.itemGainedIds = ['wax-drop']
+      tutorialStep = 'combo-ready'
+    } else if (card.type === CardType.TREASURE && card.id === tutorialTreasure15CardId) {
+      // T15 보물상자: 드랍은 그대로 유지, 단계만 전환.
+      tutorialStep = 'phase2-complete'
     } else if (
       card.type === CardType.ENEMY &&
-      (card.id === tutorialKitinCardId || card.id === tutorialMoleCardId)
+      (card.id === tutorialKitinCardId || card.id === tutorialMoleCardId ||
+       card.id === tutorialSpiderCardId || card.id === tutorialMouse2CardId ||
+       card.id === tutorialJackalCardId)
     ) {
-      // 키틴벌레/두더지: 지정 드랍(applyTutorialEnemyDrop)이 있으므로 랜덤 드랍 제거.
+      // 지정 드랍(applyTutorialEnemyDrop)이 있는 적: 랜덤 드랍 제거.
       removeAddedHandCards()
       result.itemGainedNames = []
       result.itemGainedIds = []
@@ -5345,12 +5544,20 @@ async function handleCardAction(e: Event): Promise<void> {
       for (const m of merges) recordNotice(m, 'melt')
       render()
       await wait(980)
-      // 튜토리얼: 두 번째 상자에서 트리플 합성이 발동됐다면 학습 대사를 보여준다.
+      // 튜토리얼: 두 번째 상자에서 트리플 합성이 발동됐다면 학습 대사 + 키틴 선물.
       if (gameState.tutorialMode && tutorialStep === 'box-opened') {
-        tutorialStep = 'shop-done'
         enaSpeaking = false
         speechBubble.show('오! 손패 세 장이 모여서 합쳐졌어! 효과가 강화됐는걸?', 100)
         await speechBubble.waitForDismiss()
+        // Phase 2 진입을 위해 키틴 선물 — 다음 거미줄에 쓰도록 안내한다.
+        const chitinGift = DropSystem.makeCard('chitin')
+        if (gameState.character.addHandCard(chitinGift)) {
+          render()
+          await playResourceTrail({ kind: 'chain' }, 'hand', 1)
+        }
+        speechBubble.show('자, 키틴도 한 장 더 줄게. 다음 거미줄에 써봐!', 100)
+        await speechBubble.waitForDismiss()
+        tutorialStep = 'phase2-start'
       }
     }
   }

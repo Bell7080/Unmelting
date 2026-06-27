@@ -498,6 +498,26 @@ export class CardSpawner {
     )
   }
 
+  /** 튜토리얼 전용: 폭탄(bomb) 함정 카드를 생성한다. */
+  makeTutorialBombTrap(): Card {
+    const def = TRAP_DEFINITIONS.find(d => d.trapKind === 'bomb') ?? TRAP_DEFINITIONS[1]
+    this.spawnSerial++
+    return new Card(
+      `tutorial-bomb-${this.spawnSerial}`,
+      CardType.TRAP, def.name, def.description, 0, def.healthOrDamage ?? 3, { trapKind: 'bomb' }
+    )
+  }
+
+  /** 튜토리얼 전용: 포자(spore) 함정 카드를 생성한다. */
+  makeTutorialSporeTrap(): Card {
+    const def = TRAP_DEFINITIONS.find(d => d.trapKind === 'spore') ?? TRAP_DEFINITIONS[2]
+    this.spawnSerial++
+    return new Card(
+      `tutorial-spore-${this.spawnSerial}`,
+      CardType.TRAP, def.name, def.description, def.healthOrDamage ?? 1, 0, { trapKind: 'spore' }
+    )
+  }
+
   /** Clear queued preview cards whenever spawn rules change before they are consumed. */
   clearRefillPreviewQueue(): void {
     this.refillPreviewQueue.clear()
