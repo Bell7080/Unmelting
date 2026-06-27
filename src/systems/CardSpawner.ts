@@ -244,6 +244,8 @@ export class CardSpawner {
   private starlightMissStreak: number = 0
   /** 레일 상단 예고선용 실제 다음 리필 카드. lane별로 미리 뽑고, 실제 리필 때 같은 카드를 소비한다. */
   private refillPreviewQueue = new Map<number, Card>()
+  /** 튜토리얼 전용 스크립티드 리필 큐 — 비어 있으면 정상 랜덤 스폰으로 전환된다. */
+  private tutorialRefillQueue: Card[] = []
 
   /** Update the active ember tier so the next spawn run uses the matching weights. */
   setTier(tier: EmberTier): void {
@@ -334,6 +336,7 @@ export class CardSpawner {
     this.sporeCooldownCards = 0
     this.starlightCooldownCards = 0
     this.starlightMissStreak = 0
+    this.tutorialRefillQueue = []
   }
 
   /** Spawn one random card per lane for the current turn refill (배치 → 쿨다운 commit). */
@@ -406,6 +409,12 @@ export class CardSpawner {
 
   /** Spawn a single fresh card for rail-maintenance refills (직접 배치 → 쿨다운 commit). */
   spawnCardForRefill(laneIndex?: number): Card {
+    // 튜토리얼 스크립티드 큐가 남아 있으면 우선 소비한다.
+    if (this.tutorialRefillQueue.length > 0) {
+      const card = this.tutorialRefillQueue.shift()!
+      this.commitSpawnCooldowns(card)
+      return card
+    }
     if (laneIndex != null) {
       const previewed = this.refillPreviewQueue.get(laneIndex)
       if (previewed) {
@@ -423,6 +432,11 @@ export class CardSpawner {
   peekNextRefillCards(laneCount: number = 3): (Card | null)[] {
     const cards: (Card | null)[] = []
     for (let laneIndex = 0; laneIndex < laneCount; laneIndex++) {
+      // 튜토리얼 스크립티드 큐가 남아 있으면 해당 인덱스 카드를 peek만 한다(소비 없음).
+      if (laneIndex < this.tutorialRefillQueue.length) {
+        cards.push(this.tutorialRefillQueue[laneIndex])
+        continue
+      }
       let card = this.refillPreviewQueue.get(laneIndex)
       if (!card) {
         // 미리 뽑은 순간 쿨다운을 commit해서 lane 0→2 실제 스폰 순서와 같은 다음 카드열을 고정한다.
@@ -433,6 +447,54 @@ export class CardSpawner {
       cards.push(card)
     }
     return cards
+  }
+
+  /** 튜토리얼 전용 스크립티드 리필 큐를 설정한다. resetSpawnState()에서 자동으로 비워진다. */
+  setTutorialRefillQueue(cards: Card[]): void {
+    this.tutorialRefillQueue = [...cards]
+  }
+
+  /** 튜토리얼 전용: 이름으로 특정 적 카드를 생성한다. */
+  makeTutorialEnemy(name: string): Card {
+    const def = ENEMY_DEFINITIONS.find(d => d.name === name) ?? ENEMY_DEFINITIONS[0]
+    this.spawnSerial++
+    const card = new Card(
+      `tutorial-enemy-${this.spawnSerial}`,
+      CardType.ENEMY,
+      def.name,
+      def.description,
+      def.healthOrDamage ?? 1,
+      def.attack ?? 1,
+      { enemySpriteId: def.enemySpriteId, enemyPower: def.enemyPower }
+    )
+    return card
+  }
+
+  /** 튜토리얼 전용: 거미줄(web) 함정 카드를 생성한다. */
+  makeTutorialWebTrap(): Card {
+    const def = TRAP_DEFINITIONS.find(d => d.trapKind === 'web') ?? TRAP_DEFINITIONS[0]
+    this.spawnSerial++
+    return new Card(
+      `tutorial-trap-${this.spawnSerial}`,
+      CardType.TRAP,
+      def.name,
+      def.description,
+      0,
+      def.healthOrDamage ?? 1,
+      { trapKind: 'web' }
+    )
+  }
+
+  /** 튜토리얼 전용: 작은 상자(treasure) 카드를 생성한다. */
+  makeTutorialTreasure(): Card {
+    const def = TREASURE_DEFINITIONS[0]
+    this.spawnSerial++
+    return new Card(
+      `tutorial-treasure-${this.spawnSerial}`,
+      CardType.TREASURE,
+      def.name,
+      def.description
+    )
   }
 
   /** Clear queued preview cards whenever spawn rules change before they are consumed. */

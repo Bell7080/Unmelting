@@ -336,9 +336,9 @@ function onProfileTouched(): void {
   }, COMPANION_IDLE_MS)
 }
 
-/** 월드 이벤트 바크가 떠도 되는 상황인지 — 상점/보스/게임오버 중엔 침묵한다. */
+/** 월드 이벤트 바크가 떠도 되는 상황인지 — 상점/보스/게임오버/튜토리얼 중엔 침묵한다. */
 function companionWorldCanSpeak(): boolean {
-  return gameActive && !shopOpen && !gameState.bossBattleActive && !gameState.isGameOver
+  return gameActive && !shopOpen && !gameState.bossBattleActive && !gameState.isGameOver && !gameState.tutorialMode
 }
 
 /** 적 공격 판정 직전에 회피 클러치를 굴린다. 체력 되돌림이 아니라 피해 적용 전 무효화라 타이밍이 자연스럽다. */
@@ -2867,6 +2867,39 @@ function fillBoardAtStart(): void {
   trackFieldEnemyEncounters()
 }
 
+/** 튜토리얼 1-레인 초기 보드: 앞 키틴벌레 → 중 두더지 → 뒤 거미줄. 이후 리필 큐: 거미줄(거미물) → 보물상자. */
+function fillTutorialBoardScripted(): void {
+  syncSpawnerTier()
+  const lane = gameState.lanes[0]
+  if (!lane) return
+  lane.setCardAtDistance(0, cardSpawner.makeTutorialEnemy('양초 키틴벌레'))
+  lane.setCardAtDistance(1, cardSpawner.makeTutorialEnemy('양초 두더지'))
+  lane.setCardAtDistance(2, cardSpawner.makeTutorialWebTrap())
+  gameState.regroupAllRows()
+  trackFieldEnemyEncounters()
+  // 플레이어가 앞 두 적을 처치하면 거미물(거미줄) → 보물상자 순으로 리필된다.
+  cardSpawner.setTutorialRefillQueue([
+    cardSpawner.makeTutorialWebTrap(),
+    cardSpawner.makeTutorialTreasure(),
+  ])
+}
+
+/** 튜토리얼 전용 처치 드랍: 키틴벌레→불씨 +1 확정, 두더지→키틴 손패 드랍. */
+async function applyTutorialEnemyDrop(card: Card): Promise<void> {
+  const character = gameState.character
+  if (card.name === '양초 키틴벌레') {
+    character.gainEmber(1)
+    render()
+    await playResourceTrail({ kind: 'chain' }, 'ember', 1)
+  } else if (card.name === '양초 두더지') {
+    const chitin = DropSystem.makeCard('chitin')
+    if (character.addHandCard(chitin)) {
+      render()
+      await playResourceTrail({ kind: 'chain' }, 'hand', 1)
+    }
+  }
+}
+
 /** Runs now begin with an empty hand; first cards must come from play rewards. */
 /**
  * 새 런/거점 진입 공통 초기화 — 적·직업·유물·시련·체인 등 이전 런 잔여를 모두 비운다.
@@ -3021,8 +3054,11 @@ async function startGame(characterIndex = -1): Promise<void> {
     await boardRenderer.animateJobCardToHud(chosenJob)
     await boardRenderer.playJobCurtainOpen()
   } else if (isTutorial) {
-    // 튜토리얼: 직업 없이 보드를 채우고 암막을 걷는다.
-    fillBoardAtStart()
+    // 튜토리얼: 대사를 먼저 보여주고, 플레이어가 스킵하거나 대사가 끝난 뒤 레일을 채운다.
+    enaSpeaking = false
+    speechBubble.show('좋아, 우리는 할 수 있어!', 200)
+    await speechBubble.waitForDismiss()
+    fillTutorialBoardScripted()
     turnManager.armFrontBombs()
     render()
     await boardRenderer.playJobCurtainOpen()
@@ -3032,19 +3068,21 @@ async function startGame(characterIndex = -1): Promise<void> {
   // enterHearth()는 startGame()을 직접 호출하지 않으므로 로비 진입 자체에는 이 커튼이 나오지 않는다.
   void zoneCurtain.show(ZONE_LIST[0], () => setZoneBackground(ZONE_LIST[0].bgUrl))
 
-  // 1턴 시작 대사: 암막이 완전히 걷힌 뒤 살짝 딜레이 후 등장. 직업을 고른 경우 그에 맞는 인사.
-  enaSpeaking = false
-  const opening = chosenJob
-    ? companion.onJobSelect(chosenJob.id)
-    : '역경 아래, 작은 불빛을 밝혀야만 해.'
-  speechBubble.show(opening, 800)
-  // 튜토리얼에서는 에나 자기학습 회상을 띄우지 않는다.
-  const memoryLine = gameState.tutorialMode ? null : enaAutonomousLearner.recallLineForNewRun()
-  if (memoryLine) {
-    // 시작 인사를 덮지 않도록 한 박자 뒤, 플레이어가 보는 자연스러운 회상으로만 보여준다.
-    window.setTimeout(() => {
-      if (companionWorldCanSpeak()) sayEnaBark(memoryLine, { importance: BARK_IMPORTANCE.situation })
-    }, 2200)
+  // 1턴 시작 대사: 암막이 완전히 걷힌 뒤 살짝 딜레이 후 등장. 튜토리얼은 위에서 이미 보여줬으므로 건너뛴다.
+  if (!isTutorial) {
+    enaSpeaking = false
+    const opening = chosenJob
+      ? companion.onJobSelect(chosenJob.id)
+      : '역경 아래, 작은 불빛을 밝혀야만 해.'
+    speechBubble.show(opening, 800)
+    // 에나 자기학습 회상 — 직업 선택 런에서만 띄운다(튜토리얼 제외).
+    const memoryLine = enaAutonomousLearner.recallLineForNewRun()
+    if (memoryLine) {
+      // 시작 인사를 덮지 않도록 한 박자 뒤, 플레이어가 보는 자연스러운 회상으로만 보여준다.
+      window.setTimeout(() => {
+        if (companionWorldCanSpeak()) sayEnaBark(memoryLine, { importance: BARK_IMPORTANCE.situation })
+      }, 2200)
+    }
   }
 }
 
@@ -4959,6 +4997,8 @@ async function handleCardAction(e: Event): Promise<void> {
     // 자물쇠: 미믹 처치 시 불빛 +25% + 손패 +1.
     if (card.isSpecialEnemy) await applyPadlockMimicBonus(card)
     await onEnemiesDefeated(1)
+    // 튜토리얼 전용: 키틴벌레 처치→불씨 +1, 두더지 처치→키틴 손패 확정 드랍.
+    if (gameState.tutorialMode) await applyTutorialEnemyDrop(card)
   }
 
   // 찬스: 적이 살아있을 때만 15% 확률 추가 타격.

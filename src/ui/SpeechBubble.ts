@@ -228,6 +228,8 @@ export class SpeechBubble {
   private typeCursor = 0
   private enterListener: ((e: Event) => void) | null = null
   private exitListener: ((e: Event) => void) | null = null
+  // waitForDismiss() 호출자가 등록한 콜백들 — dismiss 완료 시 일괄 호출.
+  private dismissCallbacks: Array<() => void> = []
 
   constructor(config: SpeechBubbleConfig = {}) {
     this.config = {
@@ -308,6 +310,8 @@ export class SpeechBubble {
       this.bubble.classList.remove('is-exiting')
       this.textEl.innerHTML = ''
       this.state = 'hidden'
+      const cbs = this.dismissCallbacks.splice(0)
+      for (const cb of cbs) cb()
     }
     this.bubble.addEventListener('animationend', this.exitListener)
   }
@@ -336,6 +340,12 @@ export class SpeechBubble {
   /** 버블이 화면에 떠 있는지(등장/표시 중). 빨리감기→스킵 2단계 판정에 쓴다. */
   get isShowing(): boolean {
     return this.state === 'entering' || this.state === 'visible'
+  }
+
+  /** 버블이 완전히 사라질 때까지 기다린다. 이미 숨겨진 상태면 즉시 해결된다. */
+  waitForDismiss(): Promise<void> {
+    if (this.state === 'hidden') return Promise.resolve()
+    return new Promise<void>((resolve) => { this.dismissCallbacks.push(resolve) })
   }
 
   /** DOM에서 완전히 제거. 재사용하지 않을 때 호출. */
