@@ -1541,17 +1541,17 @@ body.hearth-lobby #ingame-backdrop.is-out {
   text-shadow: 0 0 10px rgba(57,255,20,0.95), 0 0 24px rgba(57,255,20,0.62), 0 0 46px rgba(57,255,20,0.30);
 }
 .hearth-cell__dinner-free.is-active {
-  /* drop 완료 후 forwards로 최종 위치 고정, pulse가 opacity만 이어받는다 */
+  /* stamp 완료 후 forwards로 최종 크기 고정, pulse가 opacity만 이어받는다 */
   animation:
-    dinner-free-drop 0.54s ease-out forwards,
-    dinner-free-pulse 2.2s ease-in-out 0.64s infinite;
+    dinner-free-stamp 0.52s cubic-bezier(0.22, 0.86, 0.22, 1) forwards,
+    dinner-free-pulse 2.2s ease-in-out 0.60s infinite;
 }
-@keyframes dinner-free-drop {
-  0%   { transform: translate(-50%, -130%) scale(0.80); opacity: 0; }
-  12%  { opacity: 1; }
-  50%  { transform: translate(-50%, -42%) scale(1.12); }
-  66%  { transform: translate(-50%, -58%) scale(0.96); }
-  80%  { transform: translate(-50%, -45%) scale(1.04); }
+@keyframes dinner-free-stamp {
+  0%   { transform: translate(-50%, -50%) scale(2.2); opacity: 0;
+         text-shadow: 0 0 40px rgba(57,255,20,1), 0 0 80px rgba(57,255,20,0.7); }
+  45%  { transform: translate(-50%, -50%) scale(0.92); opacity: 1;
+         text-shadow: 0 0 18px rgba(57,255,20,0.95), 0 0 38px rgba(57,255,20,0.6); }
+  70%  { transform: translate(-50%, -50%) scale(1.06); }
   100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 }
 @keyframes dinner-free-pulse {
