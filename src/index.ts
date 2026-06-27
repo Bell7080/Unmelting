@@ -3479,7 +3479,6 @@ document.addEventListener('cardAction', (e: Event) => {
 })
 
 document.addEventListener('itemAction', (e: Event) => {
-  sfx.playClick()
   if (!inputLocked) speechBubble.dismiss()
   const detail = (e as CustomEvent<ItemActionDetail>).detail
   void handleHandSlotClick(detail.itemIndex)
@@ -3488,6 +3487,8 @@ document.addEventListener('itemAction', (e: Event) => {
 // 대사 빨리감기/스킵 2단계: 1번째 클릭=빨리감기(읽기), 그 다음 클릭=스킵(닫기).
 // 보스/이벤트 대사는 흐름 보호를 위해 기존대로 빨리감기만 한다.
 document.addEventListener('mousedown', (e) => {
+  // 모든 마우스 클릭에 클릭음 재생(우클릭 제외).
+  if (e.button === 0) sfx.playClick()
   bossBubble.completeTyping()
   eventDemonBubble.completeTyping()
   const onProfile = (e.target as HTMLElement | null)?.closest('.player-card')
