@@ -57,6 +57,7 @@ import {
 import type { EnaDisposition } from '@systems/EnaDisposition'
 import type { EnaLearningSnapshot } from '@systems/CompanionSystem'
 import { atkDmgHtml, hpDmgHtml, rangeDmgHtml } from '@ui/DamageDisplay'
+import { sfx } from '@/audio/SfxManager'
 
 export interface CardActionDetail {
   laneIndex: number
@@ -6032,6 +6033,7 @@ export class GameBoardRenderer {
   animatePlayerDamageImpact(amount: number): Promise<void> {
     const playerCard = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
     if (!playerCard || amount <= 0) return this.animateDamageFlash()
+    sfx.playAttack()
     return this.animateDamageImpactOnElement(playerCard, amount)
   }
 
@@ -6069,6 +6071,8 @@ export class GameBoardRenderer {
 
   /** Float damage numbers for card-id keyed model diffs. */
   animateDamageNumbersById(damages: { cardId: string; amount: number }[]): Promise<void> {
+    // 실제 피해가 1건 이상일 때만 타격음을 한 번 재생한다(중복 방지).
+    if (damages.some(({ amount }) => amount > 0)) sfx.playAttack()
     return Promise.all(
       damages.map(({ cardId, amount }) => {
         const target = this.findCardElement(cardId)

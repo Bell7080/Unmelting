@@ -70,6 +70,7 @@ import { ZoneCurtain, ZONE_LIST } from '@ui/ZoneCurtain'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
 import { BgmManager } from '@/audio/BgmManager'
+import { sfx } from '@/audio/SfxManager'
 import { enaRuntimeObserver, shopKindToPurchaseId } from '@/rl/EnaRuntimeObserver'
 import { createBrowserEnaAutonomousLearner } from '@/rl/EnaAutonomousLearner'
 import bgm001Url from './assets/audio/bgm_001.mp3'
@@ -3478,6 +3479,7 @@ document.addEventListener('cardAction', (e: Event) => {
 })
 
 document.addEventListener('itemAction', (e: Event) => {
+  sfx.playClick()
   if (!inputLocked) speechBubble.dismiss()
   const detail = (e as CustomEvent<ItemActionDetail>).detail
   void handleHandSlotClick(detail.itemIndex)
@@ -5117,4 +5119,7 @@ document.head.appendChild(globalStyle)
 setupDevCommandPalette()
 // 게임 부팅 후 첫 사용자 입력에서 배경음 루프를 켠다(브라우저 자동재생 정책).
 bgm.armAutoplay()
+// 첫 입력에서 효과음 컨텍스트도 함께 연다.
+const unlockSfx = () => { void sfx.unlock(); window.removeEventListener('pointerdown', unlockSfx, true) }
+window.addEventListener('pointerdown', unlockSfx, true)
 void startGame()
