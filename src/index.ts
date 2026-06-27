@@ -1986,6 +1986,14 @@ async function handleShopPackPick(detail: ShopPackPickDetail): Promise<void> {
   )
   activePackSession = null
   boardRenderer.closePackPicker()
+  // 맛보기: 해금팩 첫 구매 시 선택한 카드 1장을 손패에 직접 지급한다.
+  if (detail.packKind === 'unlock-pack' && (shopPackBuys['unlock-pack'] ?? 0) <= 1) {
+    const tasteId = detail.itemId.startsWith('unlock-') ? (detail.itemId.slice(7) as HandCardId) : null
+    if (tasteId && gameState.character.addHandCard(DropSystem.makeCard(tasteId))) {
+      render()
+      await boardRenderer.animateResourceTrailFromCenter('hand', 1, 'hand-recovery')
+    }
+  }
   // Most pack effects mutate character stats; play the standard player-gain
   // trail so HP/방패/공격력 등 변화에 카드/숫자 피드백이 같이 따라온다.
   await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
