@@ -648,7 +648,8 @@ function enterHearth(): void {
   render()
   hearthScene.enter({
     // 출발 버튼 → startGame이 다시 초기화 + 직업 선택 + 보드 채움을 수행한다.
-    onStart: () => { void startGame() },
+    // 캐릭터 0(병아리)은 튜토리얼 런으로 진입한다.
+    onStart: () => { void startGame(hearthScene.getSelectedCharacterIndex()) },
     // 만찬 완료 즉시 Character.relics에 실제 RelicId를 넣고 렌더러의 유물 팬으로 보여 준다.
     onDinnerRelicCreate: async (profile) => {
       pendingDinnerRelicProfile = profile
@@ -2232,6 +2233,31 @@ async function pickAltarRelicFree(relicId: RelicId): Promise<void> {
   boardRenderer.openShop(buildShopStateView(), score, gameState.character)
 }
 
+/**
+ * 튜토리얼 레인 확장: 기존 레인 넛지 → 새 레인 추가 + 보드 채움 → 셔터 내리기 애니메이션.
+ * 10턴 상점 후 1→2, 20턴 상점 후 2→3.
+ */
+async function expandTutorialRail(): Promise<void> {
+  // 1. 기존 레인 살짝 흔들기
+  await boardRenderer.animateRailNudge()
+
+  // 2. 새 레인 추가 + 카드 보급
+  gameState.addLane()
+  const newLaneIndex = gameState.lanes.length - 1
+  const newLane = gameState.lanes[newLaneIndex]
+  for (let dist = LANE_DISTANCE_COUNT - 1; dist >= 0; dist--) {
+    const strict = dist === 0
+    const isWaiting = dist > 0
+    const [card] = cardSpawner.spawnCardsForOpeningRow(1, strict, isWaiting)
+    if (card) newLane.setCardAtDistance(dist, card)
+  }
+  turnManager.armFrontBombs()
+  render()
+
+  // 3. 새 레인 셔터처럼 내리기
+  await boardRenderer.animateNewLaneIn(newLaneIndex)
+}
+
 async function closeShopAndResume(): Promise<void> {
   if (!shopOpen) return
   shopOpen = false
@@ -2278,6 +2304,11 @@ async function closeShopAndResume(): Promise<void> {
     render()
     return
   }
+  // 튜토리얼: 10턴(2레인)·20턴(3레인) 상점 종료 후 레인을 확장한다.
+  if (gameState.tutorialMode && gameState.lanes.length < 3) {
+    await expandTutorialRail()
+  }
+
   await boardRenderer.playShopResumeTransition()
   inputLocked = false
   render()
@@ -2843,7 +2874,7 @@ function resetForNewRun(): void {
   boardRenderer.clearSelection()
 }
 
-async function startGame(): Promise<void> {
+async function startGame(characterIndex = -1): Promise<void> {
   const dinnerRelicProfile = pendingDinnerRelicProfile
   resetForNewRun()
   pendingDinnerRelicProfile = dinnerRelicProfile
@@ -2864,9 +2895,15 @@ async function startGame(): Promise<void> {
   // 슬라이드 인 시킨다. 거점 미진입(기본 부팅)이면 클래스가 없어 즉시 정상 표시된다.
   requestAnimationFrame(() => document.body.classList.remove('hearth-lobby'))
 
-  // 직업 선택 오버레이 — 플레이어 대사 전에 한 번만 선택한다.
-  // 선택 카드는 화면 중앙으로 남고, 암막이 닫힌 동안 실제 3×3 레일을 준비한다.
-  const chosenJobId = await boardRenderer.openJobSelect(JOBS)
+  // 캐릭터 0(병아리)은 직업 선택 없이 튜토리얼 1-레인으로 시작한다.
+  const isTutorial = characterIndex === 0
+  if (isTutorial) {
+    gameState.initTutorialMode(1)
+    render()
+  }
+
+  // 직업 선택 오버레이 — 튜토리얼이면 건너뛴다.
+  const chosenJobId = isTutorial ? null : await boardRenderer.openJobSelect(JOBS)
   const chosenJob = JOBS.find((j) => j.id === chosenJobId)
   if (chosenJob) {
     const c = gameState.character
@@ -2907,10 +2944,14 @@ async function startGame(): Promise<void> {
     // 닫힌 암막 뒤에서 최초 보드를 채워, 레일 공개가 직업 선택의 후속 연출처럼 이어지게 한다.
     fillBoardAtStart()
     turnManager.armFrontBombs()
-    // render()가 스폰 확률 패널/체력/공격력/화폐 카운터를 새 값으로 굴린다.
     render()
-    // 중앙 고스트 카드가 적용된 능력을 HUD로 블라스트하며 소멸한다.
     await boardRenderer.animateJobCardToHud(chosenJob)
+    await boardRenderer.playJobCurtainOpen()
+  } else if (isTutorial) {
+    // 튜토리얼: 직업 없이 보드를 채우고 암막을 걷는다.
+    fillBoardAtStart()
+    turnManager.armFrontBombs()
+    render()
     await boardRenderer.playJobCurtainOpen()
   }
 

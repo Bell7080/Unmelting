@@ -7,6 +7,7 @@ export const GAME_BOARD_RAIL_STYLES = `
 .rail {
   display: grid;
   grid-template-rows: repeat(3, minmax(0, 1fr));
+  --lane-count: 3;
   gap: clamp(6px, 1vh, 10px);
   padding: clamp(10px, 1.6vh, 14px);
   /* Stays simple — a translucent dark slab so the page-level art reads
@@ -45,7 +46,7 @@ export const GAME_BOARD_RAIL_STYLES = `
   right: calc(clamp(10px, 1.6vh, 14px) + 4%);
   top: clamp(2px, 0.45vh, 5px);
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--lane-count, 3), minmax(0, 1fr));
   gap: clamp(6px, 1vw, 10px);
   z-index: 2;
   pointer-events: none;
@@ -101,7 +102,7 @@ export const GAME_BOARD_RAIL_STYLES = `
 
 .rail-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--lane-count, 3), minmax(0, 1fr));
   gap: clamp(6px, 1vw, 10px);
   position: relative;
   z-index: 1;

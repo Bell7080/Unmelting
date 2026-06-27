@@ -1031,6 +1031,11 @@ export class HearthScene {
     window.localStorage.setItem(HEARTH_LAST_CHARACTER_KEY, String(index))
   }
 
+  /** 마지막으로 선택·확정한 캐릭터 인덱스 (0 = 튜토리얼 병아리). */
+  getSelectedCharacterIndex(): number {
+    return this.selectedCharacterIndex
+  }
+
   /** 캐릭터 확정 — 캐러셀·카피 역방향 퇴장 후 우측 쇼케이스 카드가 중앙으로 이동·체류·빛이 되어 날아간다. */
   private async confirmCharacter(): Promise<void> {
     if (this.characterConfirmed || this.departing) return

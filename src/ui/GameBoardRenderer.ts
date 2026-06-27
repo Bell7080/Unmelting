@@ -566,7 +566,7 @@ export class GameBoardRenderer {
           ${this.renderScorePanel(scorePanel)}
         </aside>
         <main class="stage">
-          <section class="rail ${this.shopShutterLocked ? 'is-shop-shuttered' : ''}" aria-label="Card rail">
+          <section class="rail ${this.shopShutterLocked ? 'is-shop-shuttered' : ''}" aria-label="Card rail" style="--lane-count:${lanes.length}">
             ${this.renderRail(lanes, scorePanel.refillPreviewCards)}
             ${this.shopShutterLocked ? this.renderShopShutter(true, lanes) : ''}
           </section>
@@ -8774,6 +8774,58 @@ export class GameBoardRenderer {
     style.id = 'game-board-styles'
     style.textContent = GAME_BOARD_STYLES
     document.head.appendChild(style)
+  }
+
+  /**
+   * 튜토리얼 레인 확장 애니메이션.
+   * Phase 1: 기존 레인 전체를 살짝 옆으로 밀어 공간을 여는 느낌.
+   * Phase 2(render 후 호출): 새 레인의 칸들이 상단에서 셔터처럼 내려온다.
+   */
+  async animateRailNudge(): Promise<void> {
+    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
+    if (!rail) return
+    await rail.animate(
+      [
+        { transform: 'translateX(0) scale(1)' },
+        { transform: 'translateX(16px) scale(0.98)' },
+        { transform: 'translateX(0) scale(1)' },
+      ],
+      { duration: 300, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' }
+    ).finished
+  }
+
+  /** render() 호출 이후: 새로 추가된 레인의 칸들을 위에서 아래로 차례로 내린다. */
+  async animateNewLaneIn(newLaneIndex: number): Promise<void> {
+    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
+    if (!rail) return
+
+    // dist=2(상단)부터 0(전방)까지 차례로 — 위에서 내려오는 셔터 순서
+    const anims: Promise<void>[] = []
+    for (let dist = 2; dist >= 0; dist--) {
+      const cell = rail.querySelector<HTMLElement>(
+        `[data-lane="${newLaneIndex}"][data-distance="${dist}"]`
+      )
+      if (!cell) continue
+      const delay = (2 - dist) * 80
+      anims.push(
+        cell.animate(
+          [
+            { transform: 'translateY(-120%)', opacity: '0', filter: 'blur(3px)' },
+            { transform: 'translateY(0)',    opacity: '1', filter: 'blur(0px)' },
+          ],
+          { duration: 480, delay, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'backwards' }
+        ).finished.then(() => undefined)
+      )
+    }
+    // 힌트 바도 함께 페이드인
+    const hint = rail.querySelector<HTMLElement>(`[data-lane="${newLaneIndex}"]`)
+    if (hint && !hint.dataset['distance']) {
+      hint.animate(
+        [{ opacity: '0' }, { opacity: '1' }],
+        { duration: 400, easing: 'ease-out', fill: 'backwards' }
+      )
+    }
+    await Promise.all(anims)
   }
 }
 

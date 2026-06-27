@@ -27,6 +27,9 @@ export class GameState {
   /** 해금팩으로 해금된 레시피 ID 집합. runLocked 레시피는 여기 있을 때만 발동한다. */
   unlockedRecipeIds = new Set<string>()
 
+  /** 튜토리얼 모드에서 1→2→3 레인으로 점진 확장. 일반 런에서는 항상 false. */
+  tutorialMode = false
+
   constructor() {
     this.character = new Character()
     this.lanes = [new Lane('lane-0', 0), new Lane('lane-1', 1), new Lane('lane-2', 2)]
@@ -34,6 +37,21 @@ export class GameState {
     this.isGameOver = false
     this.gameOverReason = ''
     this.enhancements = makeDefaultEnhancements()
+  }
+
+  /** 튜토리얼 모드: 지정 레인 수로 시작한다(reset()도 이 수를 유지). */
+  initTutorialMode(startingLaneCount: number): void {
+    this.tutorialMode = true
+    this.lanes = Array.from(
+      { length: startingLaneCount },
+      (_, i) => new Lane(`lane-${i}`, i)
+    )
+  }
+
+  /** 레인을 1개 추가한다(튜토리얼 확장용). */
+  addLane(): void {
+    const i = this.lanes.length
+    this.lanes.push(new Lane(`lane-${i}`, i))
   }
 
   getCharacter(): Character {
@@ -277,7 +295,13 @@ export class GameState {
 
   reset(): void {
     this.character.reset()
-    this.lanes.forEach((lane) => lane.clear())
+    // 튜토리얼 모드라면 레인 수를 1로 복원한다(런 재시작 시 처음부터 다시).
+    if (this.tutorialMode) {
+      this.lanes = [new Lane('lane-0', 0)]
+    } else {
+      this.lanes.forEach((lane) => lane.clear())
+    }
+    this.tutorialMode = false
     this.currentTurn = 0
     this.isGameOver = false
     this.gameOverReason = ''
