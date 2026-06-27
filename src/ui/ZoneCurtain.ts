@@ -26,18 +26,30 @@ const CURTAIN_CSS = `
   top: 0;
   left: 0;
   right: 0;
-  height: 110px;
+  /* 하단 그라데이션 여유를 포함한 높이 — 실제 불투명 구역은 상단 ~60% */
+  height: 200px;
   z-index: 50;
   pointer-events: none;
-  overflow: hidden;
-  transform: translateY(-100%);
+  /* 하단으로 갈수록 투명해지는 그라데이션 커튼 */
+  background: linear-gradient(
+    to bottom,
+    rgba(8, 5, 14, 0.97) 0%,
+    rgba(8, 5, 14, 0.95) 45%,
+    rgba(8, 5, 14, 0.72) 68%,
+    rgba(8, 5, 14, 0.30) 85%,
+    transparent 100%
+  );
   will-change: transform;
-  background: rgba(8, 5, 14, 0.96);
-  box-shadow: 0 1px 0 rgba(210, 168, 55, 0.20), 0 3px 16px rgba(0, 0, 0, 0.7);
+  /* 초기 위치: 화면 위로 완전히 숨김 */
+  transform: translateY(-100%);
 }
 .zone-curtain-inner {
   position: absolute;
-  inset: 0;
+  /* 텍스트/선은 상단 불투명 구역 안에 배치 */
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 62%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -58,7 +70,7 @@ const CURTAIN_CSS = `
 }
 .zone-curtain-title {
   font-family: 'OkDanDan', 'Georgia', 'Times New Roman', serif;
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
   color: rgba(248, 222, 124, 0.97);
   letter-spacing: 0.28em;
@@ -95,9 +107,10 @@ export class ZoneCurtain {
   }
 
   /**
-   * 커튼을 내리고(제목 노출) → onBodyReady 콜백 실행 → 다시 올린다.
-   * onBodyReady는 커튼이 완전히 내려온 직후 호출되며, 이 시점에 body 배경을 교체하면
-   * 커튼이 올라갈 때 새 배경이 자연스럽게 드러난다.
+   * 커튼을 내리고(제목 노출) → 배경 교체 → 올린다.
+   *
+   * onBodyReady는 커튼이 올라가기 직전에 호출된다. 이 타이밍에 배경을 교체하면
+   * 크로스페이드가 커튼 상승과 겹쳐서 배경이 자연스럽게 페이드인된다.
    */
   async show(zone: ZoneInfo, onBodyReady?: () => void): Promise<void> {
     if (this.running) return
@@ -105,26 +118,37 @@ export class ZoneCurtain {
 
     this.titleEl.textContent = zone.title
 
-    // 초기 위치 확정을 위해 reflow를 강제한다.
-    void this.el.offsetHeight
+    // ── 1. 슬라이드 다운 (스르륵 내려옴) ──────────────────────────────────
+    await this.el.animate(
+      [
+        { transform: 'translateY(-100%)' },
+        { transform: 'translateY(0)' },
+      ],
+      {
+        duration: 580,
+        easing: 'cubic-bezier(0.16, 1, 0.3, 1)', // ease-out spring
+        fill: 'forwards',
+      }
+    ).finished
 
-    // 슬라이드 인 (ease-out)
-    this.el.style.transition = 'transform 0.52s cubic-bezier(0.22, 0.86, 0.22, 1)'
-    this.el.style.transform = 'translateY(0)'
-    await new Promise<void>((r) => setTimeout(r, 540))
+    // ── 2. 제목 노출 홀드 ─────────────────────────────────────────────────
+    await new Promise<void>((r) => setTimeout(r, 1400))
 
-    // 커튼이 완전히 내려온 뒤 body 배경 교체
+    // ── 3. 배경 교체 — 커튼 상승 직전에 시작해 크로스페이드와 타이밍을 맞춘다 ──
     onBodyReady?.()
 
-    await new Promise<void>((r) => setTimeout(r, 1600))
-
-    // 슬라이드 아웃 (ease-in)
-    this.el.style.transition = 'transform 0.44s cubic-bezier(0.64, 0, 0.78, 0)'
-    this.el.style.transform = 'translateY(-100%)'
-    await new Promise<void>((r) => setTimeout(r, 460))
-
-    // 다음 show() 호출 시 순간이동하지 않도록 트랜지션 정리
-    this.el.style.transition = ''
+    // ── 4. 슬라이드 업 (스르륵 올라감) ───────────────────────────────────
+    await this.el.animate(
+      [
+        { transform: 'translateY(0)' },
+        { transform: 'translateY(-100%)' },
+      ],
+      {
+        duration: 520,
+        easing: 'cubic-bezier(0.55, 0, 0.9, 0.4)', // ease-in
+        fill: 'forwards',
+      }
+    ).finished
 
     this.running = false
   }

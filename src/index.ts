@@ -187,29 +187,34 @@ const BG_GRADIENTS =
   `radial-gradient(ellipse at top, rgba(244, 164, 96, 0.18), transparent 65%),`
 
 /**
- * body 배경을 새 구역 이미지로 교체한다.
+ * body 배경을 새 구역 이미지로 교체하고 크로스페이드를 재생한다.
  * background-image는 CSS transition이 불가하므로, 현재 배경을 임시 div로 덮어두고
  * body를 새 배경으로 교체한 뒤 임시 div를 opacity 페이드아웃으로 걷어낸다.
+ *
+ * onBodyReady가 커튼 상승 직전에 이 함수를 호출하므로, 페이드 아웃(0.6s)이
+ * 커튼 슬라이드업(0.52s)과 겹쳐 배경이 자연스럽게 드러난다.
  */
 function setZoneBackground(bgUrl: string): void {
   const prev = document.body.style.backgroundImage
-  if (prev.includes('url(')) {
-    const fade = document.createElement('div')
-    fade.setAttribute('aria-hidden', 'true')
-    fade.style.cssText =
-      'position:fixed;inset:0;z-index:-1;pointer-events:none;' +
-      `background-image:${prev};` +
-      'background-size:cover,cover,cover;' +
-      'background-position:center,center top,center;' +
-      'background-repeat:no-repeat;' +
-      'background-attachment:fixed;' +
-      'opacity:1;transition:opacity 0.9s ease;'
-    document.body.appendChild(fade)
-    // 두 프레임 뒤에 페이드 시작 — 새 body 배경이 페인트된 뒤에 fade-out해야 시각적 공백이 없다.
-    requestAnimationFrame(() => requestAnimationFrame(() => { fade.style.opacity = '0' }))
-    setTimeout(() => fade.remove(), 960)
-  }
+  // 즉시 body 배경을 새 이미지로 교체 (커튼이 덮고 있는 상태에서 invisible swap)
   document.body.style.backgroundImage = `${BG_GRADIENTS}url('${bgUrl}')`
+  if (!prev.includes('url(')) return
+  // 구 배경을 z-index:-1 임시 div로 유지하다가 fade-out하면서 새 배경을 드러낸다.
+  // 커튼 상승(0.52s)과 페이드(0.6s)가 겹치므로 커튼이 올라가며 배경이 스르륵 나타난다.
+  const fade = document.createElement('div')
+  fade.setAttribute('aria-hidden', 'true')
+  fade.style.cssText =
+    'position:fixed;inset:0;z-index:-1;pointer-events:none;' +
+    `background-image:${prev};` +
+    'background-size:cover,cover,cover;' +
+    'background-position:center,center top,center;' +
+    'background-repeat:no-repeat;' +
+    'background-attachment:fixed;' +
+    'opacity:1;transition:opacity 0.6s ease-in;'
+  document.body.appendChild(fade)
+  // 한 프레임 뒤에 페이드 시작 — 새 body 배경이 먼저 렌더된 뒤 old bg 오버레이를 걷어낸다.
+  requestAnimationFrame(() => { fade.style.opacity = '0' })
+  setTimeout(() => fade.remove(), 660)
 }
 // 거점 만찬은 런 시작 reset을 건너뛰어야 하므로, 실제 유물 지급 의도를 별도 플래그로 보존한다.
 let pendingDinnerRelicProfile: CustomRelicProfile | null = null
