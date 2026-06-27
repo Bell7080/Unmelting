@@ -205,7 +205,7 @@ function setZoneBackground(bgUrl: string): void {
   const fade = document.createElement('div')
   fade.setAttribute('aria-hidden', 'true')
   fade.style.cssText =
-    'position:fixed;inset:0;z-index:0;pointer-events:none;' +
+    'position:fixed;inset:0;z-index:-1;pointer-events:none;' +
     `background-image:${prev};` +
     'background-size:cover,cover,cover;' +
     'background-position:center,center top,center;' +
