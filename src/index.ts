@@ -556,21 +556,23 @@ let tutorialRevealedPacks: ShopPackKind[] = []
 
 // ── 튜토리얼 디렉터 상태 ──
 type TutorialStep =
-  | 'init'          // 보드 채워지기 전
-  | 'kitin-spotted' // 키틴벌레 강조 + 첫 대사
-  | 'kitin-dead'    // 키틴벌레 처치됨, 두더지 등장 전
-  | 'mole-spotted'  // 두더지 강조 + 대사
-  | 'mole-fight-1'  // 두더지 1타 후 (불씨 잠금 유지)
-  | 'ember-unlocked'// 두더지 2타 후 불씨 잠금 해제
-  | 'mole-dead'     // 두더지 처치됨
-  | 'web1-spotted'  // 거미줄1 강조 + 대사
-  | 'web1-stepped'  // 거미줄1 밟음, 키틴 잠금 해제 직전
-  | 'web2-ready'    // 키틴 잠금 해제, 거미줄2 대기
-  | 'web2-cleared'  // 키틴으로 거미줄2 제거
-  | 'treasure-ready'// "잘 했어" 대사 완료
-  | 'treasure-done' // 보물상자 2촛농 획득, 상점 직전
-  | 'shop-done'     // 상점 완료, 새싹의 따스함 연출
-  | 'complete'      // 튜토리얼 감독 완료
+  | 'init'           // 보드 채워지기 전
+  | 'kitin-spotted'  // 키틴벌레 강조 + 첫 대사
+  | 'kitin-dead'     // 키틴벌레 처치됨, 두더지 등장 전
+  | 'mole-spotted'   // 두더지 강조 + 대사
+  | 'mole-fight-1'   // 두더지 1타 후 (불씨 잠금 유지)
+  | 'ember-unlocked' // 두더지 2타 후 불씨 잠금 해제
+  | 'mole-final-hit' // 불씨 사용 후, 두더지 HP=1 최후 클릭 대기
+  | 'mole-dead'      // 두더지 처치됨
+  | 'web1-spotted'   // 거미줄1 강조 + 대사
+  | 'web1-stepped'   // 거미줄1 밟음, 키틴 잠금 해제 직전
+  | 'web2-ready'     // 키틴 잠금 해제, 거미줄2 대기
+  | 'web2-cleared'   // 키틴으로 거미줄2 제거
+  | 'treasure-ready' // "잘 했어" 대사 완료
+  | 'treasure-done'  // 보물상자1 2촛농 획득, 상점 직전 · 상점 직후 두 번째 상자 대기
+  | 'box-opened'     // 두 번째 상자 촛농×1 획득, 트리플 합성 대기
+  | 'shop-done'      // 트리플 합성 연출 완료
+  | 'complete'       // 튜토리얼 감독 완료
 
 let tutorialStep: TutorialStep = 'init'
 let tutorialLockedSlots: Set<number> = new Set()
@@ -1795,9 +1797,9 @@ async function maybeOpenShopAfterTurn(): Promise<boolean> {
   if (turn === 0) return false
 
   if (gameState.tutorialMode) {
-    // 튜토리얼: 5턴·15턴 일반 상점, 30턴 제단(보스 게이트).
-    if (turn !== 5 && turn !== 15 && turn % 30 !== 0) return false
-    await openShopOverlay(turn % 30 === 0 ? 'altar' : 'shop')
+    // 튜토리얼: 6턴·15턴 일반 상점만. 30턴 제단/보스는 내지 않는다.
+    if (turn !== 6 && turn !== 15) return false
+    await openShopOverlay('shop')
     return true
   }
 
@@ -2911,11 +2913,13 @@ function fillTutorialBoardScripted(): void {
   if (!lane) return
 
   const kitin = cardSpawner.makeTutorialEnemy('양초 키틴벌레')
-  // 두더지 HP = 4: 직접 공격 2회(각 1피해) + 불씨(2피해) = 0. 대사에선 "5"라고 말하지만 실제는 4.
-  const mole = cardSpawner.makeTutorialEnemy('양초 두더지', 4)
+  // 두더지 HP=5: 직접 공격 2회(각 1피해) + 불씨(2피해) → HP=1 → 최후 직접 공격 1회.
+  const mole = cardSpawner.makeTutorialEnemy('양초 두더지')
   const web1 = cardSpawner.makeTutorialWebTrap()
   const web2 = cardSpawner.makeTutorialWebTrap()
-  const treasure = cardSpawner.makeTutorialTreasure()
+  const treasure1 = cardSpawner.makeTutorialTreasure()
+  // 두 번째 상자: 상점 직후 열어 촛농 1장 → 트리플 합성으로 자연스럽게 학습한다.
+  const treasure2 = cardSpawner.makeTutorialTreasure()
 
   // 카드 UID를 디렉터 훅이 참조할 수 있도록 기록한다.
   tutorialKitinCardId = kitin.id
@@ -2933,8 +2937,8 @@ function fillTutorialBoardScripted(): void {
   lane.setCardAtDistance(2, web1)
   gameState.regroupAllRows()
   trackFieldEnemyEncounters()
-  // 키틴벌레/두더지 처치 시 거미물(거미줄2) → 보물상자 순으로 리필된다.
-  cardSpawner.setTutorialRefillQueue([web2, treasure])
+  // 거미물(거미줄2) → 보물상자1 → 보물상자2 순으로 리필된다.
+  cardSpawner.setTutorialRefillQueue([web2, treasure1, treasure2])
 }
 
 /** 튜토리얼 전용 처치 드랍 + 디렉터 대사/스포트라이트 처리. */
@@ -3030,7 +3034,19 @@ async function afterTurnTutorialDirector(): Promise<void> {
 
 /** 손패 사용(applyHandSingle) 이후 실행되는 튜토리얼 디렉터 훅. */
 async function afterHandTutorialDirector(): Promise<void> {
-  if (tutorialStep === 'web2-cleared') {
+  if (tutorialStep === 'ember-unlocked') {
+    // 불씨를 써서 두더지 HP=1이 됐다면 최후 클릭을 안내한다.
+    const lane = gameState.lanes[0]
+    if (lane?.getCardAtDistance(0)?.id === tutorialMoleCardId) {
+      tutorialStep = 'mole-final-hit'
+      boardRenderer.setTutorialSpotlight(tutorialMoleCardId, null)
+      render()
+      await wait(300)
+      enaSpeaking = false
+      speechBubble.show('마지막 일격! 한 번만 더 공격하면 돼!', 100)
+      await speechBubble.waitForDismiss()
+    }
+  } else if (tutorialStep === 'web2-cleared') {
     tutorialStep = 'treasure-ready'
     boardRenderer.setTutorialSpotlight(null, null)
     render()
@@ -3041,38 +3057,15 @@ async function afterHandTutorialDirector(): Promise<void> {
   }
 }
 
-/** 튜토리얼 상점 종료 후: 새싹의 따스함 연출 + 촛농 1장 추가 + 트리플 자동 합성. */
+/** 튜토리얼 상점 종료 후: 간단한 격려 대사만 출력한다.
+ *  촛농 선물은 이후 두 번째 상자를 자연스럽게 열어 얻고,
+ *  트리플 합성도 그 상자에서 발동한다. */
 async function runTutorialShopGiftSequence(): Promise<void> {
-  tutorialStep = 'shop-done'
-  await wait(700)
+  // tutorialStep은 'treasure-done'을 유지해 다음 상자 override가 작동하게 한다.
+  await wait(600)
   enaSpeaking = false
-  speechBubble.show('지금 손패에 촛농이 두 장이나 있잖아? 내가 한장 더 줄게!', 100)
+  speechBubble.show('좋아, 상점은 어때? 이제 계속 나아가자!', 100)
   await speechBubble.waitForDismiss()
-
-  // "새싹의 따스함" — 의지 클러치 연출로 촛농 1장 보급
-  void boardRenderer.animateClutchOnPlayer('hand-recovery')
-  showClutchChain('supply', '새싹의 따스함')
-  await wait(500)
-
-  const character = gameState.character
-  const waxDrop = DropSystem.makeCard('wax-drop')
-  if (character.addHandCard(waxDrop)) {
-    render()
-    await playResourceTrail({ kind: 'chain' }, 'hand', 1)
-  }
-
-  // 손패에 촛농이 3장 모였으면 자동 합성이 발동된다.
-  await wait(500)
-  const merges = HandSystem.runAutoMerges(character)
-  if (merges.length > 0) {
-    render()
-    await wait(1180)
-    enaSpeaking = false
-    speechBubble.show('오! 손패 세 장이 모여서 합쳐졌어! 효과가 강화됐는걸?', 100)
-    await speechBubble.waitForDismiss()
-  }
-
-  tutorialStep = 'complete'
   boardRenderer.setTutorialSpotlight(null, null)
   render()
 }
@@ -5038,27 +5031,49 @@ async function handleCardAction(e: Event): Promise<void> {
   }
   const beforeActionHealth = snapshotFieldHealthState()
   const beforeActionResources = snapshotPlayerResources()
-  // 튜토리얼: 보물상자 드랍을 2×촛농으로 강제 대체하기 위해 현재 손패 UID를 미리 스냅샷한다.
-  const tutorialTreasureHandUidsBefore = (gameState.tutorialMode && card.type === CardType.TREASURE)
+  // 튜토리얼: 보물상자/키틴벌레/두더지 드랍 조작을 위해 사전에 손패 UID를 스냅샷한다.
+  const tutorialPreActionHandUids = gameState.tutorialMode
     ? new Set(gameState.character.hand.map(c => c.uid))
     : null
   const result = ActionSystem.executeAction(gameState.getCharacter(), lane, card, actionType)
 
-  // 튜토리얼: 보물상자를 열면 랜덤 드랍 대신 촛농 2장을 강제 지급한다.
-  if (tutorialTreasureHandUidsBefore && result.success && result.cardRemoved) {
-    // executeAction이 추가한 아이템을 역순으로 제거한다.
-    for (let i = gameState.character.hand.length - 1; i >= 0; i--) {
-      if (!tutorialTreasureHandUidsBefore.has(gameState.character.hand[i].uid)) {
-        gameState.character.removeHandCardAt(i)
+  if (tutorialPreActionHandUids && result.success && result.cardRemoved) {
+    // executeAction이 추가한 랜덤 아이템을 역순으로 제거하는 공통 헬퍼.
+    const removeAddedHandCards = () => {
+      for (let i = gameState.character.hand.length - 1; i >= 0; i--) {
+        if (!tutorialPreActionHandUids.has(gameState.character.hand[i].uid)) {
+          gameState.character.removeHandCardAt(i)
+        }
       }
     }
-    const wd1 = DropSystem.makeCard('wax-drop')
-    const wd2 = DropSystem.makeCard('wax-drop')
-    gameState.character.addHandCard(wd1)
-    gameState.character.addHandCard(wd2)
-    result.itemGainedNames = ['촛농', '촛농']
-    result.itemGainedIds = ['wax-drop', 'wax-drop']
-    tutorialStep = 'treasure-done'
+
+    if (card.type === CardType.TREASURE && tutorialStep === 'treasure-ready') {
+      // 첫 번째 보물상자: 촛농 2장으로 강제 대체.
+      removeAddedHandCards()
+      const wd1 = DropSystem.makeCard('wax-drop')
+      const wd2 = DropSystem.makeCard('wax-drop')
+      gameState.character.addHandCard(wd1)
+      gameState.character.addHandCard(wd2)
+      result.itemGainedNames = ['촛농', '촛농']
+      result.itemGainedIds = ['wax-drop', 'wax-drop']
+      tutorialStep = 'treasure-done'
+    } else if (card.type === CardType.TREASURE && tutorialStep === 'treasure-done') {
+      // 두 번째 보물상자: 촛농 1장으로 강제 대체 → 트리플 합성 유도.
+      removeAddedHandCards()
+      const wd = DropSystem.makeCard('wax-drop')
+      gameState.character.addHandCard(wd)
+      result.itemGainedNames = ['촛농']
+      result.itemGainedIds = ['wax-drop']
+      tutorialStep = 'box-opened'
+    } else if (
+      card.type === CardType.ENEMY &&
+      (card.id === tutorialKitinCardId || card.id === tutorialMoleCardId)
+    ) {
+      // 키틴벌레/두더지: 지정 드랍(applyTutorialEnemyDrop)이 있으므로 랜덤 드랍 제거.
+      removeAddedHandCards()
+      result.itemGainedNames = []
+      result.itemGainedIds = []
+    }
   }
 
   // Hand-card rewards are staged visually: first the freshly gained cards
@@ -5330,6 +5345,13 @@ async function handleCardAction(e: Event): Promise<void> {
       for (const m of merges) recordNotice(m, 'melt')
       render()
       await wait(980)
+      // 튜토리얼: 두 번째 상자에서 트리플 합성이 발동됐다면 학습 대사를 보여준다.
+      if (gameState.tutorialMode && tutorialStep === 'box-opened') {
+        tutorialStep = 'shop-done'
+        enaSpeaking = false
+        speechBubble.show('오! 손패 세 장이 모여서 합쳐졌어! 효과가 강화됐는걸?', 100)
+        await speechBubble.waitForDismiss()
+      }
     }
   }
 
