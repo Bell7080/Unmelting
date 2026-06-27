@@ -1,10 +1,19 @@
 /**
  * 일회성 효과음 매니저.
- * BgmManager와 같은 AudioContext를 공유하지 않고 독립 컨텍스트를 사용한다.
- * 브라우저 자동재생 정책상 첫 사용자 입력 후 unlock() 을 한 번 호출해야 한다.
+ * 브라우저 자동재생 정책상 첫 사용자 입력 후 unlock()을 한 번 호출해야 한다.
+ *
+ * 모든 재생은 `playbackRate`를 ±6% 범위에서 무작위로 흔들어 반복 청각 피로를 줄인다.
+ * 적이 플레이어를 공격할 때는 음정을 낮게(0.72~0.84) 설정해 피격감을 구분한다.
  */
 import clickUrl from '../assets/audio/sfx_click.mp3'
 import attackUrl from '../assets/audio/sfx_attack.mp3'
+
+interface PlayOptions {
+  /** playbackRate 범위 [min, max]. 기본 [0.94, 1.06]. */
+  rateRange?: [number, number]
+  /** 재생 전 대기 시간(ms). */
+  delayMs?: number
+}
 
 export class SfxManager {
   private ctx: AudioContext | null = null
@@ -20,7 +29,6 @@ export class SfxManager {
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
     if (!Ctor) return
     this.ctx = new Ctor()
-    // 미리 두 버퍼를 로드해 두면 첫 재생 지연이 없다.
     void this.load('click', clickUrl)
     void this.load('attack', attackUrl)
   }
@@ -29,12 +37,19 @@ export class SfxManager {
     this.volume = Math.max(0, Math.min(1, value))
   }
 
+  /** 클릭음 — 25ms 딜레이로 즉발감을 살짝 죽인다. */
   playClick(): void {
-    void this.play('click', clickUrl)
+    void this.play('click', clickUrl, { delayMs: 25 })
   }
 
+  /** 플레이어가 적을 공격할 때 타격음. */
   playAttack(): void {
     void this.play('attack', attackUrl)
+  }
+
+  /** 적이 플레이어를 공격할 때 타격음 — 낮은 음정으로 피격감을 구분한다. */
+  playPlayerHit(): void {
+    void this.play('attack', attackUrl, { rateRange: [0.72, 0.84] })
   }
 
   private async load(key: string, url: string): Promise<AudioBuffer | null> {
@@ -61,7 +76,9 @@ export class SfxManager {
     return task
   }
 
-  private async play(key: string, url: string): Promise<void> {
+  private async play(key: string, url: string, opts: PlayOptions = {}): Promise<void> {
+    const { rateRange = [0.94, 1.06], delayMs = 0 } = opts
+    if (delayMs > 0) await new Promise<void>((r) => window.setTimeout(r, delayMs))
     if (!this.ctx) return
     if (this.ctx.state === 'suspended') {
       try { await this.ctx.resume() } catch { return }
@@ -73,6 +90,8 @@ export class SfxManager {
     gain.connect(this.ctx.destination)
     const src = this.ctx.createBufferSource()
     src.buffer = buf
+    // 매 재생마다 음정을 살짝 흔들어 단조로움을 줄인다.
+    src.playbackRate.value = rateRange[0] + Math.random() * (rateRange[1] - rateRange[0])
     src.connect(gain)
     src.onended = () => { src.disconnect(); gain.disconnect() }
     src.start()

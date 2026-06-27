@@ -6033,7 +6033,7 @@ export class GameBoardRenderer {
   animatePlayerDamageImpact(amount: number): Promise<void> {
     const playerCard = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
     if (!playerCard || amount <= 0) return this.animateDamageFlash()
-    sfx.playAttack()
+    sfx.playPlayerHit()
     return this.animateDamageImpactOnElement(playerCard, amount)
   }
 
