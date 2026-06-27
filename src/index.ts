@@ -204,14 +204,17 @@ function setZoneBackground(bgUrl: string): void {
   // Web Animations API를 사용한다.
   const fade = document.createElement('div')
   fade.setAttribute('aria-hidden', 'true')
+  // z-index: 0으로 step-8에 참여. html { background } 때문에 z-index: -1은 body 배경에 가려진다.
+  // body 첫 번째 자식으로 insertBefore → 같은 step-8 내 DOM 순서상 #app보다 먼저 그려져
+  // 게임 요소 아래에 위치한다(#app이 뒤에 있으므로 위에 그려짐).
   fade.style.cssText =
-    'position:fixed;inset:0;z-index:-1;pointer-events:none;' +
+    'position:fixed;inset:0;z-index:0;pointer-events:none;' +
     `background-image:${prev};` +
     'background-size:cover,cover,cover;' +
     'background-position:center,center top,center;' +
     'background-repeat:no-repeat;' +
     'background-attachment:fixed;'
-  document.body.appendChild(fade)
+  document.body.insertBefore(fade, document.body.firstElementChild)
   fade.animate(
     [{ opacity: 1 }, { opacity: 0 }],
     { duration: 2000, easing: 'ease-in-out', fill: 'forwards' }
