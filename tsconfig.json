@@ -26,16 +26,14 @@
     "sourceMap": true,
 
     /* Path mapping */
-    "ignoreDeprecations": "6.0",
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@core/*": ["src/core/*"],
-      "@systems/*": ["src/systems/*"],
-      "@entities/*": ["src/entities/*"],
-      "@ui/*": ["src/ui/*"],
-      "@data/*": ["src/data/*"],
-      "@utils/*": ["src/utils/*"]
+      "@/*": ["./src/*"],
+      "@core/*": ["./src/core/*"],
+      "@systems/*": ["./src/systems/*"],
+      "@entities/*": ["./src/entities/*"],
+      "@ui/*": ["./src/ui/*"],
+      "@data/*": ["./src/data/*"],
+      "@utils/*": ["./src/utils/*"]
     }
   },
   "include": ["src"],
