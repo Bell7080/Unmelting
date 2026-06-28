@@ -299,7 +299,13 @@ export class SpeechBubble {
     // 보류 중인 지연 표시는 상태와 무관하게 항상 취소한다(hidden이어도 유령 표시 방지).
     clearTimeout(this.pendingShowTimer)
     this.pendingShowTimer = 0
-    if (this.state === 'hidden' || this.state === 'exiting') return
+    if (this.state === 'hidden') {
+      // 지연 show가 취소됐을 때 waitForDismiss 대기자가 있으면 즉시 해결한다.
+      const cbs = this.dismissCallbacks.splice(0)
+      for (const cb of cbs) cb()
+      return
+    }
+    if (this.state === 'exiting') return
     clearTimeout(this.typewriterTimer)
     clearTimeout(this.autoDismissTimer)
     this._removeListeners()
@@ -355,9 +361,14 @@ export class SpeechBubble {
       : 0
   }
 
-  /** 버블이 완전히 사라질 때까지 기다린다. 이미 숨겨진 상태면 즉시 해결된다. */
+  /**
+   * 버블이 완전히 사라질 때까지 기다린다.
+   * 숨겨진 상태이고 보류 중인 지연 show도 없으면 즉시 해결된다.
+   * 지연 show(pendingShowTimer)가 예약된 경우에는 그 show가 끝나고 dismiss될 때까지 기다린다.
+   * 이로써 `show('text', 100); await waitForDismiss()` 패턴이 항상 순차적으로 동작한다.
+   */
   waitForDismiss(): Promise<void> {
-    if (this.state === 'hidden') return Promise.resolve()
+    if (this.state === 'hidden' && this.pendingShowTimer === 0) return Promise.resolve()
     return new Promise<void>((resolve) => { this.dismissCallbacks.push(resolve) })
   }
 
