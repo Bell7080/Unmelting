@@ -217,6 +217,8 @@ export class SpeechBubble {
   private state: 'hidden' | 'entering' | 'visible' | 'exiting' = 'hidden'
   private typewriterTimer = 0
   private autoDismissTimer = 0
+  // 버블이 fully-visible 상태가 된 시각(ms). 스킵 잠금 계산에 사용한다.
+  private visibleAt = 0
   // 지연 표시(setTimeout) 핸들 — dismiss/mute에서 취소할 수 있게 보관한다.
   private pendingShowTimer = 0
   // 음소거 상태(예: 거점 로비). true면 어떤 show도 표시되지 않는다.
@@ -342,6 +344,17 @@ export class SpeechBubble {
     return this.state === 'entering' || this.state === 'visible'
   }
 
+  /**
+   * 버블이 fully-visible 상태가 된 이후 경과 시간(ms).
+   * entering 중이거나 숨겨진 상태면 0을 반환한다.
+   * 스킵 허용 여부(최소 표시 시간 보장)를 판정하는 데 쓴다.
+   */
+  get visibleSinceMs(): number {
+    return this.state === 'visible' && this.visibleAt > 0
+      ? Date.now() - this.visibleAt
+      : 0
+  }
+
   /** 버블이 완전히 사라질 때까지 기다린다. 이미 숨겨진 상태면 즉시 해결된다. */
   waitForDismiss(): Promise<void> {
     if (this.state === 'hidden') return Promise.resolve()
@@ -361,6 +374,7 @@ export class SpeechBubble {
     this._removeListeners()
     this.bubble.classList.remove('is-entering', 'is-visible', 'is-exiting')
     this.textEl.innerHTML = ''
+    this.visibleAt = 0  // 새 버블 시작 — visible 시각을 초기화한다.
     this._updatePosition()
     this.state = 'entering'
     this.bubble.classList.add('is-entering')
@@ -370,6 +384,7 @@ export class SpeechBubble {
       this.bubble.classList.remove('is-entering')
       this.bubble.classList.add('is-visible')
       this.state = 'visible'
+      this.visibleAt = Date.now()  // 완전히 보이기 시작한 시각을 기록한다.
       this._typewrite(text)
     }
     this.bubble.addEventListener('animationend', this.enterListener)
