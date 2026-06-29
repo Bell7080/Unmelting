@@ -322,9 +322,13 @@ export class TurnManager {
   }
 
   /** Infect from spores whose countdown already reached 0, then reset them to 2.
+   *  튜토리얼 모드에서는 3턴 주기로 위(뒤)로만 전염한다.
    *  함정 피해 보너스는 character.trapDamageBonus로 일원화되어 전염 포자에 따로 주입하지 않는다. */
   spreadReadySpores(): SporeSpread[] {
     const spreads: SporeSpread[] = []
+    const isTutorial = this.gameState.tutorialMode
+    // 튜토리얼은 3턴, 실제 게임은 2턴 주기로 리셋한다.
+    const resetTurns = isTutorial ? 3 : 2
 
     // Countdown and infection are deliberately split: the UI renders the 0턴
     // badge between these phases, while this snapshot prevents newborn spores
@@ -342,17 +346,17 @@ export class TurnManager {
           `spore-${Date.now()}-${Math.random()}`,
           CardType.TRAP,
           '감염 포자',
-          'Deals 1/3/5 damage and spreads every 3 turns upward',
+          'Deals 1/3/5 damage and spreads every 2 turns',
           0,
           1,
           { trapKind: 'spore' }
         )
-        // 새로 생긴 포자는 3턴 뒤 다시 위로 전염된다.
-        spore.sporeTurnsUntilSpread = 3
+        // 감염된 포자는 새 주기를 받으며 이번 spread snapshot에는 포함되지 않는다.
+        spore.sporeTurnsUntilSpread = resetTurns
         this.gameState.lanes[target.laneIndex].setCardAtDistance(target.distance, spore)
         infected.push(target)
       }
-      card.sporeTurnsUntilSpread = 3
+      card.sporeTurnsUntilSpread = resetTurns
       if (infected.length > 0) {
         spreads.push({ sourceLane: laneIndex, sourceDistance: distance, infected })
       }
@@ -365,22 +369,46 @@ export class TurnManager {
     return spreads
   }
 
-  /** 포자는 뒤(distance+1)에 있는 카드 한 칸으로만 전염된다. */
+  /** 튜토리얼이면 위(뒤, distance+1)로만 전염, 실제 게임은 4방향 직교 전염. */
   private collectSporeTargets(
     laneIndex: number,
     distance: number,
     source: Card
   ): { laneIndex: number; distance: number }[] {
     const targets: { laneIndex: number; distance: number }[] = []
-    const behind = { laneIndex, distance: distance + 1 }
-    if (behind.distance >= LANE_DISTANCE_COUNT) return targets
-    const lane = this.gameState.lanes[behind.laneIndex]
-    if (!lane) return targets
-    const existing = lane.getCardAtDistance(behind.distance)
-    if (!existing || existing === source) return targets
-    if (existing.groupCount > 1) return targets
-    if (existing.type === CardType.TRAP && existing.trapKind === 'spore') return targets
-    targets.push(behind)
+
+    if (this.gameState.tutorialMode) {
+      // 튜토리얼 전용: 위(뒤) 한 칸으로만 전염한다.
+      const behind = { laneIndex, distance: distance + 1 }
+      if (behind.distance >= LANE_DISTANCE_COUNT) return targets
+      const existing = this.gameState.lanes[laneIndex].getCardAtDistance(behind.distance)
+      if (!existing || existing === source) return targets
+      if (existing.groupCount > 1) return targets
+      if (existing.type === CardType.TRAP && existing.trapKind === 'spore') return targets
+      targets.push(behind)
+      return targets
+    }
+
+    // 일반 게임: 4방향 직교 전염.
+    const offsets = [
+      { laneIndex: laneIndex - 1, distance },
+      { laneIndex: laneIndex + 1, distance },
+      { laneIndex, distance: distance - 1 },
+      { laneIndex, distance: distance + 1 },
+    ]
+    for (const target of offsets) {
+      const lane = this.gameState.lanes[target.laneIndex]
+      if (!lane || target.distance < 0 || target.distance >= LANE_DISTANCE_COUNT) continue
+      const existing = lane.getCardAtDistance(target.distance)
+      // Infection converts an actual neighboring card; transient holes wait
+      // until gravity/refill has placed a card there, avoiding phantom spores.
+      if (!existing || existing === source) continue
+      // Do not partially overwrite a multi-lane card; wait for a single-cell
+      // neighbor so infection cannot leave stale shared-card references behind.
+      if (existing && existing.groupCount > 1) continue
+      if (existing?.type === CardType.TRAP && existing.trapKind === 'spore') continue
+      targets.push(target)
+    }
     return targets
   }
 

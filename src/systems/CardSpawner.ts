@@ -508,14 +508,17 @@ export class CardSpawner {
     )
   }
 
-  /** 튜토리얼 전용: 포자(spore) 함정 카드를 생성한다. */
+  /** 튜토리얼 전용: 포자(spore) 함정 카드를 생성한다.
+   *  튜토리얼에서는 3턴 주기(일반 게임 2턴)로 위 방향 전염을 보여준다. */
   makeTutorialSporeTrap(): Card {
     const def = TRAP_DEFINITIONS.find(d => d.trapKind === 'spore') ?? TRAP_DEFINITIONS[2]
     this.spawnSerial++
-    return new Card(
+    const card = new Card(
       `tutorial-spore-${this.spawnSerial}`,
       CardType.TRAP, def.name, def.description, def.healthOrDamage ?? 1, 0, { trapKind: 'spore' }
     )
+    card.sporeTurnsUntilSpread = 3
+    return card
   }
 
   /** Clear queued preview cards whenever spawn rules change before they are consumed. */
