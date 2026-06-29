@@ -603,6 +603,9 @@ let tutorialJackalCardId: string | null = null    // 자칼 → 레시피 교습
 let tutorialTreasure15CardId: string | null = null// T15 보물상자 → phase2-complete
 // 생쥐 처치 후 받은 밀랍 손패의 슬롯 인덱스 (−1 = 미배정)
 let tutorialWaxSlot = -1
+// 자칼 레시피(양초 스매쉬)까지 보존할 촛농·양초 슬롯 인덱스
+let tutorialWaxDropSlot = -1
+let tutorialCandleSlot = -1
 // T5 상점에서 유물 구매 전까지 EXIT 버튼을 숨긴다.
 let tutorialT5RelicBought = false
 
@@ -2985,6 +2988,8 @@ function fillTutorialBoardScripted(): void {
   tutorialEmberSlot = -1
   tutorialChitinSlot = -1
   tutorialWaxSlot = -1
+  tutorialWaxDropSlot = -1
+  tutorialCandleSlot = -1
   tutorialT5RelicBought = false
 
   lane.setCardAtDistance(0, kitin)
@@ -3044,9 +3049,10 @@ async function applyTutorialEnemyDrop(card: Card): Promise<void> {
     boardRenderer.setTutorialSpotlight(null, null)
     tutorialStep = 'spider-dead'
   } else if (card.id === tutorialMouse2CardId) {
-    // 두 번째 생쥐 처치: 양초를 지급하고 불씨 부족 시 쓰라고 안내한다.
+    // 두 번째 생쥐 처치: 양초 지급 후 자칼 레시피까지 촛농·양초를 잠근다.
     const candle = DropSystem.makeCard('candle')
     if (character.addHandCard(candle)) {
+      tutorialCandleSlot = character.hand.indexOf(candle)
       render()
       await playResourceTrail({ kind: 'chain' }, 'hand', 1)
     }
@@ -3055,6 +3061,14 @@ async function applyTutorialEnemyDrop(card: Card): Promise<void> {
     enaSpeaking = false
     speechBubble.show('양초야. 방패를 굳건히 다져주는 카드야!', 100)
     await speechBubble.waitForDismiss()
+    // 합성 촛농 우선으로 슬롯을 찾아 자칼 앞까지 잠근다.
+    const wdIdx = (() => {
+      const m = character.hand.findIndex(c => c.defId === 'wax-drop' && c.merged)
+      return m >= 0 ? m : character.hand.findIndex(c => c.defId === 'wax-drop')
+    })()
+    if (wdIdx >= 0) { tutorialWaxDropSlot = wdIdx; tutorialLockedSlots.add(wdIdx) }
+    if (tutorialCandleSlot >= 0) tutorialLockedSlots.add(tutorialCandleSlot)
+    render()
   }
 }
 
@@ -3098,6 +3112,13 @@ function getTutorialBoardBlockMessage(card: Card): string | null {
     boardRenderer.setTutorialSpotlight(tutorialMouse2CardId, tutorialWaxSlot)
     render()
     return '밀랍으로 먼저 굳혀봐! 그래야 안전해.'
+  }
+  // jackal-ready: 촛농+양초 레시피를 써야 하므로 직접 공격 차단
+  if (tutorialStep === 'jackal-ready' && card.id === tutorialJackalCardId) {
+    const primarySlot = tutorialWaxDropSlot >= 0 ? tutorialWaxDropSlot : tutorialCandleSlot
+    boardRenderer.setTutorialSpotlight(tutorialJackalCardId, primarySlot >= 0 ? primarySlot : null)
+    render()
+    return '촛농이랑 양초를 같이 써야 해! 레시피를 터뜨릴 수 있어.'
   }
   return null
 }
@@ -3217,7 +3238,20 @@ async function afterTurnTutorialDirector(): Promise<void> {
     // 포자 처리 후 자칼이 전방에 도달했는지 확인
     if (frontCard?.id === tutorialJackalCardId) {
       tutorialStep = 'jackal-ready'
-      boardRenderer.setTutorialSpotlight(null, null)
+      // 손패에서 촛농·양초 슬롯을 동적으로 재확인 (이전 턴 손패 변동 반영)
+      const wdIdx = (() => {
+        const m = gameState.character.hand.findIndex(c => c.defId === 'wax-drop' && c.merged)
+        return m >= 0 ? m : gameState.character.hand.findIndex(c => c.defId === 'wax-drop')
+      })()
+      const cdIdx = gameState.character.hand.findIndex(c => c.defId === 'candle')
+      if (wdIdx >= 0) tutorialWaxDropSlot = wdIdx
+      if (cdIdx >= 0) tutorialCandleSlot = cdIdx
+      // 촛농·양초만 남기고 나머지 슬롯을 잠근다.
+      tutorialLockedSlots.clear()
+      for (let i = 0; i < gameState.character.hand.length; i++) {
+        if (i !== tutorialWaxDropSlot && i !== tutorialCandleSlot) tutorialLockedSlots.add(i)
+      }
+      boardRenderer.setTutorialSpotlight(tutorialJackalCardId, tutorialWaxDropSlot >= 0 ? tutorialWaxDropSlot : null)
       render()
       await wait(300)
       enaSpeaking = false
@@ -3262,6 +3296,27 @@ async function afterHandTutorialDirector(): Promise<void> {
       enaSpeaking = false
       speechBubble.show('굳혔어! 반격 걱정 없이 처치해봐.', 100)
       await speechBubble.waitForDismiss()
+    }
+  } else if (tutorialStep === 'jackal-ready') {
+    // 레시피(양초 스매쉬)가 발동해 자칼이 처치됐는지 확인
+    const lane = gameState.lanes[0]
+    const front = lane?.getCardAtDistance(0)
+    if (!front || front.id !== tutorialJackalCardId) {
+      // 자칼 처치 완료 — 모든 잠금 해제
+      tutorialLockedSlots.clear()
+      boardRenderer.setTutorialSpotlight(null, null)
+      render()
+    } else {
+      // 첫 번째 재료 사용 후 — 남은 재료 슬롯으로 스포트라이트·잠금 갱신
+      const wdIdx = gameState.character.hand.findIndex(c => c.defId === 'wax-drop')
+      const cdIdx = gameState.character.hand.findIndex(c => c.defId === 'candle')
+      const primarySlot = wdIdx >= 0 ? wdIdx : cdIdx
+      tutorialLockedSlots.clear()
+      for (let i = 0; i < gameState.character.hand.length; i++) {
+        if (i !== wdIdx && i !== cdIdx) tutorialLockedSlots.add(i)
+      }
+      boardRenderer.setTutorialSpotlight(tutorialJackalCardId, primarySlot >= 0 ? primarySlot : null)
+      render()
     }
   }
 }
@@ -4768,9 +4823,10 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
     await applyTurnStartRelics()
   }
 
-  // 이벤트 문 독립 PRD 롤: 실제 턴 전진 시에만, 보스·최종등반 중엔 중단.
+  // 이벤트 문 독립 PRD 롤: 실제 턴 전진 시에만, 보스·최종등반·튜토리얼 중엔 중단.
   // 당장 주입 못 해도 pendingEventDoor=true로 보류하면 다음 빈 슬롯에 자동 주입된다.
   if (advanceTurn && !gameState.bossBattleActive && !finalAscentStarlightRuleActive &&
+      !gameState.tutorialMode &&
       eventSpawnCtrl.rollForTurn(gameState.getCurrentTurn())) {
     pendingEventDoor = true
   }
