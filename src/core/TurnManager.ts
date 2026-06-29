@@ -342,17 +342,17 @@ export class TurnManager {
           `spore-${Date.now()}-${Math.random()}`,
           CardType.TRAP,
           '감염 포자',
-          'Deals 1/3/5 damage and spreads every 2 turns',
+          'Deals 1/3/5 damage and spreads every 3 turns upward',
           0,
           1,
           { trapKind: 'spore' }
         )
-        // 감염된 포자는 새 2턴 주기를 받으며 이번 spread snapshot에는 포함되지 않는다.
-        spore.sporeTurnsUntilSpread = 2
+        // 새로 생긴 포자는 3턴 뒤 다시 위로 전염된다.
+        spore.sporeTurnsUntilSpread = 3
         this.gameState.lanes[target.laneIndex].setCardAtDistance(target.distance, spore)
         infected.push(target)
       }
-      card.sporeTurnsUntilSpread = 2
+      card.sporeTurnsUntilSpread = 3
       if (infected.length > 0) {
         spreads.push({ sourceLane: laneIndex, sourceDistance: distance, infected })
       }
@@ -365,32 +365,22 @@ export class TurnManager {
     return spreads
   }
 
-  /** Orthogonal-only spore candidates; no long-range spread after all sides are infected. */
+  /** 포자는 뒤(distance+1)에 있는 카드 한 칸으로만 전염된다. */
   private collectSporeTargets(
     laneIndex: number,
     distance: number,
     source: Card
   ): { laneIndex: number; distance: number }[] {
     const targets: { laneIndex: number; distance: number }[] = []
-    const offsets = [
-      { laneIndex: laneIndex - 1, distance },
-      { laneIndex: laneIndex + 1, distance },
-      { laneIndex, distance: distance - 1 },
-      { laneIndex, distance: distance + 1 },
-    ]
-    for (const target of offsets) {
-      const lane = this.gameState.lanes[target.laneIndex]
-      if (!lane || target.distance < 0 || target.distance >= LANE_DISTANCE_COUNT) continue
-      const existing = lane.getCardAtDistance(target.distance)
-      // Infection converts an actual neighboring card; transient holes wait
-      // until gravity/refill has placed a card there, avoiding phantom spores.
-      if (!existing || existing === source) continue
-      // Do not partially overwrite a multi-lane card; wait for a single-cell
-      // neighbor so infection cannot leave stale shared-card references behind.
-      if (existing && existing.groupCount > 1) continue
-      if (existing?.type === CardType.TRAP && existing.trapKind === 'spore') continue
-      targets.push(target)
-    }
+    const behind = { laneIndex, distance: distance + 1 }
+    if (behind.distance >= LANE_DISTANCE_COUNT) return targets
+    const lane = this.gameState.lanes[behind.laneIndex]
+    if (!lane) return targets
+    const existing = lane.getCardAtDistance(behind.distance)
+    if (!existing || existing === source) return targets
+    if (existing.groupCount > 1) return targets
+    if (existing.type === CardType.TRAP && existing.trapKind === 'spore') return targets
+    targets.push(behind)
     return targets
   }
 

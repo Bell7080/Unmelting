@@ -364,6 +364,7 @@ const CLUTCH_TITLES: Record<string, string> = {
   hand: '건네는 손패',
   awaken: '에나의 각성',
   predict: '앞을 내다보는 눈',
+  'tutorial-gift': '새싹의 따스함',
 }
 
 /** 청소 수단 손패 후보 — 방향성을 열어둔다(청소=1칸 거미줄 전체, 키틴=함정 1장). */
@@ -598,7 +599,7 @@ let tutorialSpiderCardId: string | null = null    // 거미 → 밀랍
 let tutorialMouse2CardId: string | null = null    // 두 번째 생쥐 → 양초
 let tutorialBombCardId: string | null = null      // 폭탄
 let tutorialSporeCardId: string | null = null     // 포자
-let tutorialSporeKitinCardId: string | null = null // 포자 감염 키틴벌레 (HP=2)
+let tutorialSporeKitinCardId: string | null = null // 포자 뒤 키틴벌레 (1/1, 포자 전염 시연)
 let tutorialBox3CardId: string | null = null      // T13 상자 → 촛농+combo-ready
 let tutorialWeb14CardId: string | null = null     // T14 거미줄 (자칼 앞)
 let tutorialJackalCardId: string | null = null    // 자칼 → 레시피 교습
@@ -1812,6 +1813,13 @@ async function openShopOverlay(mode: 'shop' | 'altar'): Promise<void> {
   render()
   await boardRenderer.playShopTransition()
   boardRenderer.openShop(buildShopStateView(), score, gameState.character)
+  // T5 튜토리얼: 셔터가 완전히 내려온 뒤 상점 안내 대사를 보여 준다.
+  // waitForDismiss 없이 show만 해서 플레이어가 상점을 살피는 동안 대사가 자연스럽게 소멸하게 한다.
+  if (gameState.tutorialMode && gameState.getCurrentTurn() === 5) {
+    await wait(500)
+    enaSpeaking = false
+    speechBubble.show('유물을 구매하자!', 0)
+  }
 }
 
 async function maybeOpenShopAfterTurn(): Promise<boolean> {
@@ -2955,11 +2963,10 @@ function fillTutorialBoardScripted(): void {
   const phase2Web = cardSpawner.makeTutorialWebTrap()    // Phase 2 첫 거미줄
   const box2 = cardSpawner.makeTutorialTreasure()        // 상점 직후 상자 → 촛농×1
   const spider = cardSpawner.makeTutorialEnemy('양초 거미')
-  const mouse1 = cardSpawner.makeTutorialEnemy('양초 생쥐', 1)
-  const mouse2 = cardSpawner.makeTutorialEnemy('양초 생쥐', 1) // → 양초 드랍
+  const mouse2 = cardSpawner.makeTutorialEnemy('양초 생쥐') // 2/1 → 양초 드랍
   const bomb = cardSpawner.makeTutorialBombTrap()
   const spore = cardSpawner.makeTutorialSporeTrap()
-  const sporeKitin = cardSpawner.makeTutorialEnemy('양초 키틴벌레', 2) // 포자 감염 재현
+  const sporeKitin = cardSpawner.makeTutorialEnemy('양초 키틴벌레') // 포자 전염 시연용 1/1
   const box3 = cardSpawner.makeTutorialTreasure()        // T13 상자 → 촛농+combo-ready
   const web14 = cardSpawner.makeTutorialWebTrap()        // T14 자칼 앞 거미줄
   const jackal = cardSpawner.makeTutorialEnemy('양초 자칼')
@@ -2997,7 +3004,7 @@ function fillTutorialBoardScripted(): void {
   // Phase 1 + Phase 2 리필 큐: 소모 순서대로 나열한다.
   cardSpawner.setTutorialRefillQueue([
     web2, treasure1, treasure2,
-    phase2Web, box2, spider, mouse1, mouse2,
+    phase2Web, box2, spider, mouse2,
     bomb, spore, sporeKitin,
     box3, web14, jackal, treasure15,
   ])
@@ -3058,7 +3065,7 @@ async function applyTutorialEnemyDrop(card: Card): Promise<void> {
     boardRenderer.setTutorialSpotlight(null, null)
     await wait(300)
     enaSpeaking = false
-    speechBubble.show('양초! 불씨가 부족할 때 쓰면 돼.', 100)
+    speechBubble.show('양초야. 방패를 굳건히 다져주는 카드야!', 100)
     await speechBubble.waitForDismiss()
   }
 }
@@ -3095,6 +3102,14 @@ async function afterTurnTutorialDirector(): Promise<void> {
       speechBubble.show('그래도 한번 싸워보자!', 100)
       await speechBubble.waitForDismiss()
     }
+  } else if (tutorialStep === 'ember-unlocked') {
+    // 두더지 2타 후 반격이 끝난 직후 — 불씨 손패 사용 안내를 보여 준다.
+    if (frontCard?.id === tutorialMoleCardId) {
+      await wait(400)
+      enaSpeaking = false
+      speechBubble.show('지금이라면 이 불씨로 녀석을 혼내줄 수 있어!', 100)
+      await speechBubble.waitForDismiss()
+    }
   } else if (tutorialStep === 'mole-dead') {
     // 거미줄1이 전방에 도달했는지 확인
     if (frontCard?.id === tutorialWeb1CardId) {
@@ -3107,14 +3122,9 @@ async function afterTurnTutorialDirector(): Promise<void> {
       await speechBubble.waitForDismiss()
     }
   } else if (tutorialStep === 'web1-stepped') {
-    // 거미줄1 밟은 후: 바로 T5 상점이 열리므로 상점 안내 대사만 보여 준다.
-    // 키틴 잠금 해제와 거미줄2 안내는 상점 종료 후 runTutorialShopGiftSequence에서 처리한다.
+    // 거미줄1 밟은 후: 단계만 전환하고 상점 안내 대사는 셔터가 내려온 뒤 openShopOverlay에서 보여 준다.
     tutorialStep = 'web2-ready'
     render()
-    await wait(400)
-    enaSpeaking = false
-    speechBubble.show('잠깐, 상점이 열렸어! 유물을 하나 골라봐.', 100)
-    await speechBubble.waitForDismiss()
   } else if (tutorialStep === 'phase2-start') {
     // Phase 2 거미줄이 전방에 왔는지 확인
     if (frontCard?.id === tutorialPhase2WebCardId) {
@@ -3163,16 +3173,6 @@ async function afterTurnTutorialDirector(): Promise<void> {
       await wait(300)
       enaSpeaking = false
       speechBubble.show('포자야. 주의해! 방치하면 전염돼.', 100)
-      await speechBubble.waitForDismiss()
-    }
-  } else if (tutorialStep === 'spore-spotted') {
-    // 포자 처치 후 — 포자 감염 키틴(HP=2)이 전방에 도달했는지 확인
-    if (frontCard?.id === tutorialSporeKitinCardId && frontCard.health >= 2) {
-      boardRenderer.setTutorialSpotlight(null, null)
-      render()
-      await wait(300)
-      enaSpeaking = false
-      speechBubble.show('포자에 감염된 키틴벌레야. 체력이 더 높아졌어!', 100)
       await speechBubble.waitForDismiss()
     }
   } else if (tutorialStep === 'combo-taught') {
@@ -5276,9 +5276,9 @@ async function handleCardAction(e: Event): Promise<void> {
       card.type === CardType.ENEMY &&
       (card.id === tutorialKitinCardId || card.id === tutorialMoleCardId ||
        card.id === tutorialSpiderCardId || card.id === tutorialMouse2CardId ||
-       card.id === tutorialJackalCardId)
+       card.id === tutorialSporeKitinCardId || card.id === tutorialJackalCardId)
     ) {
-      // 지정 드랍(applyTutorialEnemyDrop)이 있는 적: 랜덤 드랍 제거.
+      // 지정 드랍(applyTutorialEnemyDrop)이 있는 적 또는 랜덤 드랍 없는 시연용 적.
       removeAddedHandCards()
       result.itemGainedNames = []
       result.itemGainedIds = []
@@ -5467,14 +5467,11 @@ async function handleCardAction(e: Event): Promise<void> {
       if (tutorialMoleHits === 1) {
         tutorialStep = 'mole-fight-1'
       } else if (tutorialMoleHits >= 2) {
+        // 잠금 해제만 처리하고 대사는 두더지가 반격한 뒤 afterTurnTutorialDirector에서 보여 준다.
         tutorialStep = 'ember-unlocked'
         tutorialLockedSlots.delete(tutorialEmberSlot)
         boardRenderer.setTutorialSpotlight(null, tutorialEmberSlot)
         render()
-        await wait(200)
-        enaSpeaking = false
-        speechBubble.show('지금이라면 이 불씨로 녀석을 혼내줄 수 있어!', 100)
-        await speechBubble.waitForDismiss()
       }
     }
   }
@@ -5559,10 +5556,12 @@ async function handleCardAction(e: Event): Promise<void> {
         enaSpeaking = false
         speechBubble.show('오! 손패 세 장이 모여서 합쳐졌어! 효과가 강화됐는걸?', 100)
         await speechBubble.waitForDismiss()
-        // Phase 2 진입을 위해 키틴 선물 — 다음 거미줄에 쓰도록 안내한다.
+        // Phase 2 진입을 위해 키틴 선물 — 클러치 체인 배너와 함께 전달한다.
         const chitinGift = DropSystem.makeCard('chitin')
         if (gameState.character.addHandCard(chitinGift)) {
           render()
+          void boardRenderer.animateClutchOnPlayer('hand-control')
+          showClutchChain('tutorial-gift', '키틴 지원')
           await playResourceTrail({ kind: 'chain' }, 'hand', 1)
         }
         speechBubble.show('자, 키틴도 한 장 더 줄게. 다음 거미줄에 써봐!', 100)

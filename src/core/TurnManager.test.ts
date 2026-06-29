@@ -157,29 +157,31 @@ describe('TurnManager treasure volatility', () => {
     const spore = new Card('spore', CardType.TRAP, '감염 포자', 'test', 0, 1, { trapKind: 'spore' })
     const victim = new Card('victim', CardType.TREASURE, '작은 상자', 'test')
     spore.sporeTurnsUntilSpread = 1
+    // 포자는 위(distance+1)로만 전염 — spore at 1, victim at 2
     gameState.lanes[1].setCardAtDistance(1, spore)
-    gameState.lanes[1].setCardAtDistance(0, victim)
+    gameState.lanes[1].setCardAtDistance(2, victim)
     vi.spyOn(Math, 'random').mockReturnValue(0)
 
     const ticks = turnManager.tickSporeCountdowns()
 
-    // UI가 이 중간 상태를 렌더링해 2→1→0을 보여준 뒤 spreadReadySpores가 2로 리셋한다.
+    // UI가 이 중간 상태를 렌더링해 표시한 뒤 spreadReadySpores가 3으로 리셋한다.
     expect(ticks).toEqual([{ laneIndex: 1, distance: 1, turnsUntilSpread: 0 }])
     expect(spore.sporeTurnsUntilSpread).toBe(0)
     const spreads = turnManager.spreadReadySpores()
 
     expect(spreads).toHaveLength(1)
-    expect(spore.sporeTurnsUntilSpread).toBe(2)
+    expect(spore.sporeTurnsUntilSpread).toBe(3)
   })
 
-  it('spreads a ready spore into one orthogonal neighboring cell', () => {
+  it('spreads a ready spore upward into the cell behind it', () => {
     const gameState = new GameState()
     const turnManager = new TurnManager(gameState)
     const spore = new Card('spore', CardType.TRAP, '감염 포자', 'test', 0, 1, { trapKind: 'spore' })
     const victim = new Card('victim', CardType.TREASURE, '작은 상자', 'test')
     spore.sporeTurnsUntilSpread = 1
+    // 포자는 뒤(distance+1)로만 전염 — spore at 1, victim at 2
     gameState.lanes[1].setCardAtDistance(1, spore)
-    gameState.lanes[1].setCardAtDistance(0, victim)
+    gameState.lanes[1].setCardAtDistance(2, victim)
     vi.spyOn(Math, 'random').mockReturnValue(0)
 
     turnManager.tickSporeCountdowns()
@@ -190,31 +192,32 @@ describe('TurnManager treasure volatility', () => {
       : null
 
     expect(spreads).toHaveLength(1)
+    expect(infected).toEqual({ laneIndex: 1, distance: 2 })
     expect(infectedCard?.type).toBe(CardType.TRAP)
     expect(infectedCard?.trapKind).toBe('spore')
-    expect(infectedCard?.sporeTurnsUntilSpread).toBe(2)
-    expect(spore.sporeTurnsUntilSpread).toBe(2)
+    expect(infectedCard?.sporeTurnsUntilSpread).toBe(3)
+    expect(spore.sporeTurnsUntilSpread).toBe(3)
   })
 
-  it('regroups newly adjacent front-row spores after the spread pass', () => {
+  it('does not spread sideways or downward — only upward', () => {
     const gameState = new GameState()
     const turnManager = new TurnManager(gameState)
     const spore = new Card('spore', CardType.TRAP, '감염 포자', 'test', 0, 1, { trapKind: 'spore' })
     spore.sporeTurnsUntilSpread = 1
     gameState.lanes[0].setCardAtDistance(0, spore)
+    // 옆 레인과 아래(distance-1이지만 distance=0이라 없음)에 카드를 배치해도 전염하지 않는다.
     gameState.lanes[1].setCardAtDistance(
       0,
-      new Card('victim', CardType.TREASURE, '작은 상자', 'test')
+      new Card('side-victim', CardType.TREASURE, '작은 상자', 'test')
     )
     vi.spyOn(Math, 'random').mockReturnValue(0)
 
     turnManager.tickSporeCountdowns()
-    turnManager.spreadReadySpores()
+    const spreads = turnManager.spreadReadySpores()
 
-    // Spore spreading is a post-drop event; regroup here so the next rendered
-    // player decision sees one 2-lane colony rather than two separate spores.
-    expect(gameState.lanes[0].getCardAtDistance(0)).toBe(gameState.lanes[1].getCardAtDistance(0))
-    expect(gameState.lanes[0].getCardAtDistance(0)?.groupCount).toBe(2)
+    // spore at distance 0 → upward would be distance 1 (empty), so no spread.
+    expect(spreads).toHaveLength(0)
+    expect(spore.sporeTurnsUntilSpread).toBe(3)
   })
 
   it('does not tick newly infected spores again during the same spread pass', () => {
@@ -223,8 +226,9 @@ describe('TurnManager treasure volatility', () => {
     const spore = new Card('spore', CardType.TRAP, '감염 포자', 'test', 0, 1, { trapKind: 'spore' })
     spore.sporeTurnsUntilSpread = 1
     gameState.lanes[0].setCardAtDistance(0, spore)
-    gameState.lanes[1].setCardAtDistance(
-      0,
+    // victim at distance 1 (upward from spore at distance 0)
+    gameState.lanes[0].setCardAtDistance(
+      1,
       new Card('victim', CardType.TREASURE, '작은 상자', 'test')
     )
     vi.spyOn(Math, 'random').mockReturnValue(0)
@@ -236,9 +240,9 @@ describe('TurnManager treasure volatility', () => {
       ? gameState.lanes[infected.laneIndex].getCardAtDistance(infected.distance)
       : null
 
-    expect(infected).toEqual({ laneIndex: 1, distance: 0 })
+    expect(infected).toEqual({ laneIndex: 0, distance: 1 })
     expect(infectedCard?.trapKind).toBe('spore')
-    expect(infectedCard?.sporeTurnsUntilSpread).toBe(2)
+    expect(infectedCard?.sporeTurnsUntilSpread).toBe(3)
   })
 
   it('does not spread into a transient empty neighbor before rail gravity refills it', () => {
@@ -253,7 +257,7 @@ describe('TurnManager treasure volatility', () => {
 
     expect(spreads).toHaveLength(0)
     expect(gameState.lanes[1].getCardAtDistance(0)).toBeNull()
-    expect(spore.sporeTurnsUntilSpread).toBe(2)
+    expect(spore.sporeTurnsUntilSpread).toBe(3)
   })
 
   it('lets enemies attack before rail gravity pulls the next enemy into a cleared front slot', () => {

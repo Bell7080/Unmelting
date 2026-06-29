@@ -182,7 +182,7 @@ export class Card {
     this.enemyPower = options.enemyPower ?? 0
     this.trapKind = options.trapKind ?? 'web'
     this.isBombArmed = false
-    this.sporeTurnsUntilSpread = this.trapKind === 'spore' ? 2 : 0
+    this.sporeTurnsUntilSpread = this.trapKind === 'spore' ? 3 : 0
     this.specialEnemyKind = options.specialEnemyKind ?? null
     this.treasureKind = options.treasureKind ?? 'chest'
     this.bossShield = 0
