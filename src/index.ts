@@ -3058,16 +3058,48 @@ async function applyTutorialEnemyDrop(card: Card): Promise<void> {
   }
 }
 
-/** 잠긴 손패 슬롯을 클릭했을 때 클릭 위치 부근에 짧은 거절 메시지를 띄운다. */
-function showTutorialLockMessage(x: number, y: number): void {
+/** 잠긴 손패 슬롯 또는 차단된 보드 클릭 시 클릭 위치 부근에 짧은 거절 메시지를 띄운다. */
+function showTutorialLockMessage(x: number, y: number, text = '아직 사용할 때가 아니야'): void {
   document.querySelectorAll<HTMLElement>('.tutorial-lock-msg').forEach(e => e.remove())
   const msg = document.createElement('div')
   msg.className = 'tutorial-lock-msg'
-  msg.textContent = '아직 사용할 때가 아니야'
+  msg.textContent = text
   msg.style.left = `${x}px`
   msg.style.top = `${y - 40}px`
   document.body.appendChild(msg)
   window.setTimeout(() => msg.remove(), 1800)
+}
+
+/**
+ * 튜토리얼 단계별로 보드 카드 직접 클릭을 차단한다.
+ * 차단 시 거절 메시지를 반환하고(null이면 허용) 필요한 손패 슬롯에 스포트라이트를 복원한다.
+ */
+function getTutorialBoardBlockMessage(card: Card): string | null {
+  // ember-unlocked: 불씨를 사용해야 하므로 두더지 직접 공격 차단
+  if (tutorialStep === 'ember-unlocked' && card.id === tutorialMoleCardId) {
+    boardRenderer.setTutorialSpotlight(tutorialMoleCardId, tutorialEmberSlot)
+    render()
+    return '불씨를 써봐! 한 번에 2 피해를 줄 수 있어.'
+  }
+  // web2-ready: 키틴으로 거미줄을 제거해야 하므로 직접 밟기 차단
+  if (tutorialStep === 'web2-ready' && card.id === tutorialWeb2CardId) {
+    boardRenderer.setTutorialSpotlight(tutorialWeb2CardId, tutorialChitinSlot)
+    render()
+    return '직접 밟지 마! 키틴을 사용해야지.'
+  }
+  // phase2-start: Phase 2 거미줄도 키틴으로 제거
+  if (tutorialStep === 'phase2-start' && card.id === tutorialPhase2WebCardId) {
+    boardRenderer.setTutorialSpotlight(tutorialPhase2WebCardId, tutorialChitinSlot)
+    render()
+    return '키틴을 써야 해! 아까처럼 거미줄을 없애봐.'
+  }
+  // mouse-wax: 생쥐는 밀랍으로 굳혀야 하므로 직접 공격 차단
+  if (tutorialStep === 'mouse-wax' && card.id === tutorialMouse2CardId) {
+    boardRenderer.setTutorialSpotlight(tutorialMouse2CardId, tutorialWaxSlot)
+    render()
+    return '밀랍으로 먼저 굳혀봐! 그래야 안전해.'
+  }
+  return null
 }
 
 /** 레인 전진(cleanup) 이후 실행되는 튜토리얼 디렉터 훅.
@@ -5152,6 +5184,22 @@ async function handleCardAction(e: Event): Promise<void> {
 
   if (distance !== 0) return
 
+  // 튜토리얼: 특정 단계에서 보드 카드 직접 클릭을 차단하고 올바른 손패 사용을 유도한다.
+  if (gameState.tutorialMode) {
+    const blockMsg = getTutorialBoardBlockMessage(card)
+    if (blockMsg) {
+      // 해당 카드 요소의 중심으로 메시지 위치를 잡는다.
+      const cardEl = document.querySelector<HTMLElement>(
+        `[data-lane="${laneIndex}"][data-distance="${distance}"]`
+      )
+      const rect = cardEl?.getBoundingClientRect()
+      const cx = rect ? rect.left + rect.width / 2 : window.innerWidth / 2
+      const cy = rect ? rect.top + rect.height / 2 : window.innerHeight * 0.35
+      showTutorialLockMessage(cx, cy, blockMsg)
+      return
+    }
+  }
+
   // 보스 카드(5번째 카드 종류) 클릭은 일반 적 흐름이 아니라 별도 가상 턴 처리.
   if (card.type === CardType.BOSS && bossController.eventState && bossController.eventState.card === card) {
     await bossController.handleClick(card)
@@ -5542,6 +5590,7 @@ async function handleCardAction(e: Event): Promise<void> {
         // Phase 2 진입을 위해 키틴 선물 — 클러치 체인 배너와 함께 전달한다.
         const chitinGift = DropSystem.makeCard('chitin')
         if (gameState.character.addHandCard(chitinGift)) {
+          tutorialChitinSlot = gameState.character.hand.indexOf(chitinGift)
           render()
           void boardRenderer.animateClutchOnPlayer('hand-control')
           showClutchChain('tutorial-gift', '키틴 지원')
