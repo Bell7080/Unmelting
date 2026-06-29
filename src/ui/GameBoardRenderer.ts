@@ -120,6 +120,8 @@ export interface ShopPackPickerView {
   rerollCost?: number
   /** 현재 보유 화폐 (재뽑기 버튼 활성화 판정에 사용). */
   coins?: number
+  /** 튜토리얼 전용: 넘기기+재뽑기 푸터를 완전히 숨긴다. */
+  tutorialHidePackControls?: boolean
 }
 export interface ShopStateView {
   /** Normal 10/20/... shop vs 30/60/... altar variant. */
@@ -142,6 +144,8 @@ export interface ShopStateView {
   tutorialHideReroll?: boolean
   /** 튜토리얼 전용: 무료카드 영역을 렌더하지 않는다. */
   tutorialHideFreecards?: boolean
+  /** 튜토리얼 전용: EXIT 버튼을 숨긴다(구매 완료 전 강제). */
+  tutorialHideExit?: boolean
 }
 export interface ForcedTrialCardView {
   id: string
@@ -2366,6 +2370,7 @@ export class GameBoardRenderer {
   </svg>`
 
   private buildPackPickerFooterHtml(view: ShopPackPickerView): string {
+    if (view.tutorialHidePackControls) return ''
     const rerollAffordable = view.rerollCost != null && (view.coins ?? 0) >= view.rerollCost
     const rerollBtn = view.rerollCost != null
       ? `<button type="button"
@@ -2571,7 +2576,7 @@ export class GameBoardRenderer {
               })()}
             </div>
           </section>
-          <button class="shop-close-btn" type="button" data-shop-close aria-label="상점 나가기">EXIT</button>
+          <button class="shop-close-btn" type="button" data-shop-close aria-label="상점 나가기"${shop.tutorialHideExit ? ' style="display:none"' : ''}>EXIT</button>
         </div>
       </div>
     `
