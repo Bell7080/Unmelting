@@ -605,6 +605,8 @@ let tutorialJackalCardId: string | null = null    // 자칼 → 레시피 교습
 let tutorialTreasure15CardId: string | null = null// T15 보물상자 → phase2-complete
 // 콤보 게이지 교습 — 첫 달성 시 1회만 대사 출력
 let tutorialComboGaugeTaught = false
+// T5 상점에서 유물 구매 전까지 EXIT 버튼을 숨긴다.
+let tutorialT5RelicBought = false
 
 // 공용 무료카드(선물 상자)는 방문마다 하나의 랜덤 효과로 고정한다.
 type ShopFreeGiftKind = 'score-300' | 'coin-1' | 'health-5' | 'gauge-3' | 'ember-3' | 'hand-2'
@@ -1598,8 +1600,8 @@ function buildShopStateView(): ShopStateView {
   if (gameState.tutorialMode) {
     const turn = gameState.getCurrentTurn()
     if (turn === 5) {
-      // 1-레인: 유물 1개만, 리롤/무료카드/팩 없음.
-      return { ...base, relicOffers: currentShopOffers.slice(0, 1), tutorialHideReroll: true, tutorialHideFreecards: true, tutorialVisiblePacks: [] }
+      // 1-레인: 유물 1개만, 리롤/무료카드/팩 없음. 유물 구매 전까지 EXIT 숨김.
+      return { ...base, relicOffers: currentShopOffers.slice(0, 1), tutorialHideReroll: true, tutorialHideFreecards: true, tutorialVisiblePacks: [], tutorialHideExit: !tutorialT5RelicBought }
     }
     if (turn === 15) {
       // 2-레인: 유물 1개 + 해금팩(구매 시 자원팩 등장), 리롤/무료카드 없음.
@@ -2319,6 +2321,13 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     Math.min(9, Math.max(1, Math.ceil(offer.price / 200)))
   )
   offer.purchased = true
+  // T5 튜토리얼: 첫 유물 구매 직후 EXIT 버튼을 DOM에서 바로 노출한다.
+  // openShop은 이미 열린 상점을 refreshOpenShopInPlace로 갱신해 버튼을 재렌더하지 않으므로
+  // 직접 style을 지워서 보여준다.
+  if (gameState.tutorialMode && gameState.getCurrentTurn() === 5) {
+    tutorialT5RelicBought = true
+    document.querySelector<HTMLElement>('#shop-overlay .shop-close-btn')?.style.removeProperty('display')
+  }
   await applyRelicPurchaseEffect(detail.relicId)
   boardRenderer.prepareRelicArrivalFromShop(detail.relicId)
   render()
@@ -2426,13 +2435,12 @@ async function closeShopAndResume(): Promise<void> {
   }
   await boardRenderer.playShopResumeTransition()
 
-  // 튜토리얼: 셔터가 완전히 열린 직후 레인 확장 강제 씬을 재생한다.
-  // 입력은 씬 종료까지 잠근다.
-  if (gameState.tutorialMode && gameState.lanes.length < 3) {
+  // 튜토리얼: T15 상점 종료 후 레인을 1→2로 확장한다(T5는 확장하지 않는다).
+  if (gameState.tutorialMode && gameState.getCurrentTurn() === 15 && gameState.lanes.length < 2) {
     await expandTutorialRail()
   }
 
-  // 튜토리얼 5턴 상점 종료 후: 간단한 격려 대사 (web2 제거 → 보물 순서 안내).
+  // 튜토리얼 T5 상점 종료 후: 유물 칭찬 대사 + 키틴 잠금 해제 + 거미줄2 안내.
   if (gameState.tutorialMode && tutorialStep === 'web2-ready') {
     await runTutorialShopGiftSequence()
   }
@@ -2979,6 +2987,7 @@ function fillTutorialBoardScripted(): void {
   tutorialEmberSlot = -1
   tutorialChitinSlot = -1
   tutorialComboGaugeTaught = false
+  tutorialT5RelicBought = false
 
   lane.setCardAtDistance(0, kitin)
   lane.setCardAtDistance(1, mole)
@@ -3098,14 +3107,13 @@ async function afterTurnTutorialDirector(): Promise<void> {
       await speechBubble.waitForDismiss()
     }
   } else if (tutorialStep === 'web1-stepped') {
-    // 거미줄1 밟은 후 — 키틴 잠금 해제, 거미줄2를 키틴으로 없애라고 안내
+    // 거미줄1 밟은 후: 바로 T5 상점이 열리므로 상점 안내 대사만 보여 준다.
+    // 키틴 잠금 해제와 거미줄2 안내는 상점 종료 후 runTutorialShopGiftSequence에서 처리한다.
     tutorialStep = 'web2-ready'
-    tutorialLockedSlots.delete(tutorialChitinSlot)
-    boardRenderer.setTutorialSpotlight(null, tutorialChitinSlot)
     render()
-    await wait(300)
+    await wait(400)
     enaSpeaking = false
-    speechBubble.show('으... 역시 싫어. 이번 거미줄은 키틴을 이용하자.', 100)
+    speechBubble.show('잠깐, 상점이 열렸어! 유물을 하나 골라봐.', 100)
     await speechBubble.waitForDismiss()
   } else if (tutorialStep === 'phase2-start') {
     // Phase 2 거미줄이 전방에 왔는지 확인
@@ -3232,10 +3240,17 @@ async function afterHandTutorialDirector(): Promise<void> {
  *  촛농 선물은 이후 두 번째 상자를 자연스럽게 열어 얻고,
  *  트리플 합성도 그 상자에서 발동한다. */
 async function runTutorialShopGiftSequence(): Promise<void> {
-  // tutorialStep은 'treasure-done'을 유지해 다음 상자 override가 작동하게 한다.
   await wait(600)
   enaSpeaking = false
-  speechBubble.show('좋아, 상점은 어때? 이제 계속 나아가자!', 100)
+  speechBubble.show('잘 골랐어! 유물은 런 내내 효과를 줘.', 100)
+  await speechBubble.waitForDismiss()
+  // T5 상점 후: 키틴 잠금 해제 + 거미줄2 사용 안내
+  tutorialLockedSlots.delete(tutorialChitinSlot)
+  boardRenderer.setTutorialSpotlight(null, tutorialChitinSlot)
+  render()
+  await wait(300)
+  enaSpeaking = false
+  speechBubble.show('으... 역시 싫어. 이번 거미줄은 키틴을 이용하자.', 100)
   await speechBubble.waitForDismiss()
   boardRenderer.setTutorialSpotlight(null, null)
   render()
