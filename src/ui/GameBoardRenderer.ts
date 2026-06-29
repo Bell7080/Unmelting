@@ -1130,17 +1130,14 @@ export class GameBoardRenderer {
       // 90~100층 별빛은 손패 보상이 아닌 턴 열쇠임을 카드 자체에서 즉시 읽히게 한다.
       stats = `<div class="card-stats group-note treasure-group-note starlight-note">${sparkleIcon()}<span>턴 +1</span></div>`
     } else if (card.type === CardType.TREASURE) {
-      // 일반·황금 상자 모두 1/2/3칸 동일하게 실제 드롭 수를 라벨로 표시한다(보스 보상은 효과 설명).
+      // 일반·황금 상자: 드롭 범위를 라벨로 표시한다(보스 보상은 효과 설명).
       const safeSpan = Math.min(3, Math.max(1, card.groupCount))
-      let dropCount: number
-      if (card.treasureKind === 'goldenChest') {
-        dropCount = [3, 8, 15][safeSpan - 1]
-      } else {
-        dropCount = ({ 1: 1, 2: 3, 3: 5 } as Record<number, number>)[safeSpan] ?? safeSpan
-      }
+      const CHEST_RANGES:   [number, number][] = [[1,2],[2,4],[3,6]]
+      const GOLDEN_RANGES:  [number, number][] = [[2,3],[4,6],[6,9]]
+      const [rMin, rMax] = (card.treasureKind === 'goldenChest' ? GOLDEN_RANGES : CHEST_RANGES)[safeSpan - 1]
       const treasureNote = card.id.startsWith('boss-reward-')
         ? escapeHtml(card.description)
-        : `손패 ${dropCount}장`
+        : `손패 ${rMin}~${rMax}장`
       stats = `<div class="card-stats group-note treasure-group-note">${sparkleIcon()}<span>${treasureNote}</span></div>`
     }
 
@@ -5092,8 +5089,8 @@ export class GameBoardRenderer {
     const disappearPct = hasCeremony ? 40 : 50
     const mimicPct = 10
 
-    // 일반 상자: 드롭 수 1/3/5, 기본 50% 사라짐 + 10% 미믹화.
-    const CHEST_DROPS = [1, 3, 5] as const
+    // 일반 상자: 1칸 1~2, 2칸 2~4, 3칸 3~6장 범위 랜덤 드롭. 50% 사라짐 + 10% 미믹화.
+    const CHEST_RANGES:  [number, number][] = [[1,2],[2,4],[3,6]]
     const chestSpec: Array<{ span: 1 | 2 | 3; name: string; sprite: string }> = [
       { span: 1, name: '작은 상자',  sprite: SpriteUrls.chestSmall  },
       { span: 2, name: '적당한 상자', sprite: SpriteUrls.chestMedium },
@@ -5102,13 +5099,14 @@ export class GameBoardRenderer {
     const normalTiles = chestSpec
       .map((c) => {
         const known = seen.has(c.name)
+        const [rMin, rMax] = CHEST_RANGES[c.span - 1]
         return this.codexTile({
           art: { kind: 'sprite', url: c.sprite },
           name: known ? c.name : '???',
           tag: `${c.span}칸`,
           chips: known
             ? [
-                { label: '드롭 ', value: `손패 ${CHEST_DROPS[c.span - 1]}장`, tone: 'gold' },
+                { label: '드롭 ', value: `손패 ${rMin}~${rMax}장`, tone: 'gold' },
                 { label: '사라짐 ', value: `${disappearPct}%`, tone: 'plain' },
                 { label: '미믹화 ', value: `${mimicPct}%`, tone: 'spore' },
               ]
@@ -5118,8 +5116,8 @@ export class GameBoardRenderer {
       })
       .join('')
 
-    // 황금 상자: 드롭 수 3/8/15, 50% 사라짐, 미믹화 없음 (황금 열쇠 유물 필요).
-    const GOLDEN_DROPS = [3, 8, 15] as const
+    // 황금 상자: 1칸 2~3, 2칸 4~6, 3칸 6~9장 범위 랜덤 드롭. 50% 사라짐, 미믹화 없음.
+    const GOLDEN_RANGES: [number, number][] = [[2,3],[4,6],[6,9]]
     const goldenSpec: Array<{ span: 1 | 2 | 3; name: string }> = [
       { span: 1, name: '황금 상자'       },
       { span: 2, name: '적당한 황금 상자' },
@@ -5128,13 +5126,14 @@ export class GameBoardRenderer {
     const goldenTiles = goldenSpec
       .map((c) => {
         const known = seen.has(c.name)
+        const [gMin, gMax] = GOLDEN_RANGES[c.span - 1]
         return this.codexTile({
           art: { kind: 'sprite', url: SpriteUrls.chestGolden },
           name: known ? c.name : '???',
           tag: `${c.span}칸`,
           chips: known
             ? [
-                { label: '드롭 ', value: `손패 ${GOLDEN_DROPS[c.span - 1]}장`, tone: 'gold' },
+                { label: '드롭 ', value: `손패 ${gMin}~${gMax}장`, tone: 'gold' },
                 { label: '사라짐 ', value: '50%', tone: 'plain' },
                 { label: '불빛 ', value: '×2', tone: 'gold' },
               ]

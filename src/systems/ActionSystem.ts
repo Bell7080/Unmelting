@@ -20,18 +20,17 @@ export enum ActionType {
   TAKE_FLOWER = 'flower',
 }
 
-const TREASURE_DROPS_BY_SPAN: Record<number, number> = {
-  // Chest reward counts intentionally scale 1/3/5 instead of one item per lane.
-  1: 1,
-  2: 3,
-  3: 5,
+// [min, max] inclusive range — actual drop count is randomised each open.
+const TREASURE_DROPS_BY_SPAN: Record<number, [number, number]> = {
+  1: [1, 2],
+  2: [2, 4],
+  3: [3, 6],
 }
 
-const GOLDEN_TREASURE_DROPS_BY_SPAN: Record<number, number> = {
-  // 황금 상자는 일반 상자보다 훨씬 많은 카드를 보상한다(1/8/15).
-  1: 3,
-  2: 8,
-  3: 15,
+const GOLDEN_TREASURE_DROPS_BY_SPAN: Record<number, [number, number]> = {
+  1: [2, 3],
+  2: [4, 6],
+  3: [6, 9],
 }
 
 export interface ActionResult {
@@ -231,7 +230,8 @@ export class ActionSystem {
     }
     const safeSpan = Math.max(1, Math.min(3, card.groupCount))
     const dropTable = card.treasureKind === 'goldenChest' ? GOLDEN_TREASURE_DROPS_BY_SPAN : TREASURE_DROPS_BY_SPAN
-    const drops = dropTable[safeSpan]
+    const [dropMin, dropMax] = dropTable[safeSpan]
+    const drops = dropMin + Math.floor(Math.random() * (dropMax - dropMin + 1))
     const { gainedNames, gainedIds, overflow } = ActionSystem.awardDrops(character, drops, 'treasure')
     const summary =
       gainedNames.length === 0
