@@ -30,7 +30,7 @@ import type {
 import { spriteForCard, spriteForHandCard, spriteForRelic, spriteForBasicPackItem, spriteForJob, spriteForEvent, SpriteUrls, recipeSprite001 } from '@ui/Sprites'
 import type { EventDefinition } from '@data/Events'
 import { CandleMode, Character } from '@entities/Character'
-import { HandCardId, HandCategory, HandEffectTargeting } from '@entities/HandCard'
+import { HandCardId, HandCategory, HandEffectTargeting, JobTag } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
 import type { EmberTier, SpawnWeights } from '@systems/EmberSystem'
 import { EmberSystem } from '@systems/EmberSystem'
@@ -109,6 +109,8 @@ export interface ShopPackItemView {
   typeLabel?: string
   /** 레시피 재료 n+n 표기. 레시피 관련 아이템에만 설정한다. */
   recipeNote?: string
+  /** 실제 손패 카드에 대응하는 항목이면 설정 — 카테고리/직업 태그 오버레이 표시용. */
+  handCardId?: HandCardId
 }
 export interface ShopPackPickerView {
   packKind: ShopPackKind
@@ -1669,6 +1671,26 @@ export class GameBoardRenderer {
     return `hand-cat-${cat}`
   }
 
+  private categoryLabel(cat: HandCategory): string {
+    return cat === 'recovery' ? '회복' : cat === 'tool' ? '도구' : cat === 'control' ? '컨트롤' : '공격'
+  }
+
+  private jobTagLabel(tag: JobTag): string {
+    return tag === 'knight' ? '기사' : '마법사'
+  }
+
+  /** 손패 카드 1장의 상단 태그 목록(카테고리 + 직업 태그) — 도감/미리보기/상점 팩 카드가 공유한다. */
+  private handCardTagLabels(id: HandCardId): string[] {
+    const def = getHandCardDef(id)
+    return [this.categoryLabel(def.category), ...(def.jobTags ?? []).map((t) => this.jobTagLabel(t))]
+  }
+
+  /** 카드 아트 좌상단에 겹쳐 보이는 태그 뱃지 오버레이. codex-tile-tag* 스타일을 공유한다. */
+  private tagsOverlayHtml(tags: string[]): string {
+    if (tags.length === 0) return ''
+    return `<div class="codex-tile-tags" aria-hidden="true">${tags.map((t) => `<span class="codex-tile-tag">${t}</span>`).join('')}</div>`
+  }
+
   /** Shared card face used by hover previews and the compendium. It accepts
    *  arbitrary art so field-card codex entries can follow the exact hand-card
    *  frame without scaling the original sprite data. */
@@ -1680,13 +1702,17 @@ export class GameBoardRenderer {
     badge?: string
     /** 다중 뱃지 — badge보다 우선 적용된다. */
     badges?: string[]
+    /** 아트 좌상단 오버레이 태그(카테고리/직업 등). */
+    tags?: string[]
   }): string {
     const badgeList = opts.badges ?? (opts.badge ? [opts.badge] : [])
     const badgeHtml = badgeList.map(b => `<span class="common-card-badge">${b}</span>`).join('')
+    const tagsOverlay = this.tagsOverlayHtml(opts.tags ?? [])
     return `
       <article class="common-card-face ${opts.extraClass ?? ''}" style="--hand-card-art: url('${opts.artUrl}'); --hand-card-back: url('${SpriteUrls.cardBack}');">
         <div class="common-card-art" aria-hidden="true">
           <img src="${opts.artUrl}" alt="" loading="lazy" />
+          ${tagsOverlay}
         </div>
         <div class="common-card-body">
           <header class="common-card-title-row">
@@ -1705,7 +1731,9 @@ export class GameBoardRenderer {
     description: string,
     merged = false,
     extraClass = '',
-    badge?: string
+    badge?: string,
+    /** 레시피 재료 미니 카드처럼 44px급 축소본에서는 태그 오버레이를 생략한다. */
+    showTags = true
   ): string {
     const def = getHandCardDef(defId)
     // 텍스트가 시각적으로 3줄 이상이 될 때 폰트를 살짝 줄인다.
@@ -1719,6 +1747,7 @@ export class GameBoardRenderer {
       description,
       extraClass: [extraClass, longClass].filter(Boolean).join(' '),
       badge,
+      tags: showTags ? this.handCardTagLabels(defId) : [],
     })
   }
 
@@ -1748,9 +1777,7 @@ export class GameBoardRenderer {
     extraClass?: string
   }): string {
     const tagList = opts.tags ?? (opts.tag ? [opts.tag] : [])
-    const tagsOverlay = tagList.length
-      ? `<div class="codex-tile-tags" aria-hidden="true">${tagList.map(t => `<span class="codex-tile-tag">${t}</span>`).join('')}</div>`
-      : ''
+    const tagsOverlay = this.tagsOverlayHtml(tagList)
     const artHtml =
       opts.art.kind === 'sprite'
         ? `<div class="codex-tile-art" style="background-image: url('${opts.art.url}');" aria-hidden="true">${tagsOverlay}</div>`
@@ -2331,6 +2358,8 @@ export class GameBoardRenderer {
       const recipeNoteLine = item.recipeNote
         ? `<p class="shop-pack-recipe-note">${item.recipeNote}</p>`
         : ''
+      // 실제 손패 카드 항목이면 카테고리/직업 태그를 희귀도 뱃지 아래에 겹쳐 보여준다.
+      const tagsOverlay = item.handCardId ? this.tagsOverlayHtml(this.handCardTagLabels(item.handCardId)) : ''
       return `
         <article class="shop-pack-pick-card pack-theme-${item.theme} ${rarityClass}"
                  data-pack-pick="${item.id}"
@@ -2343,6 +2372,7 @@ export class GameBoardRenderer {
             <div class="shop-pack-pick-front">
               <div class="shop-pack-pick-art" style="background-image:url('${artUrl}');" aria-hidden="true">
                 <div class="shop-pack-pick-rarity-badge ${rarityClass}">${item.rarity}</div>
+                ${tagsOverlay}
               </div>
               <div class="shop-pack-pick-body">
                 <header class="shop-pack-pick-card-head">
@@ -5231,10 +5261,7 @@ export class GameBoardRenderer {
       return this.codexTile({
         art: { kind: 'sprite', url: spriteForHandCard(def.id) },
         name: locked ? '???' : def.name,
-        tags: locked ? ['잠김'] : [
-          def.category === 'recovery' ? '회복' : def.category === 'tool' ? '도구' : def.category === 'control' ? '컨트롤' : '공격',
-          ...((def.jobTags ?? []).map(t => t === 'knight' ? '기사' : '마법사')),
-        ],
+        tags: locked ? ['잠김'] : this.handCardTagLabels(def.id),
         rarityClass: RARITY_CLASS_BY_TIER[HAND_CARD_RARITY[id]],
         chips: locked ? [] : [
           { label: '', value: singleDesc, tone: 'plain' },
@@ -5478,7 +5505,9 @@ export class GameBoardRenderer {
             def.id,
             def.description,
             false,
-            `compendium-recipe-mini ${this.categoryClass(def.category)}`
+            `compendium-recipe-mini ${this.categoryClass(def.category)}`,
+            undefined,
+            false
           )
         )
       })

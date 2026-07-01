@@ -941,6 +941,8 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
 .shop-pack-pick-rarity-badge.rarity-epic      { color: rgba(225, 65, 245, 0.9); }
 .shop-pack-pick-rarity-badge.rarity-unique    { color: rgba(255, 210, 80, 0.9); }
 .shop-pack-pick-rarity-badge.rarity-legendary { color: rgba(255, 140, 60, 0.9); }
+/* 손패 카테고리/직업 태그 — 희귀도 배지 바로 아래로 내려 겹치지 않게 한다. */
+.shop-pack-pick-art .codex-tile-tags { top: 26px; }
 /* 레시피 재료 n+n 표기 */
 .shop-pack-recipe-note {
   font-size: 11px;

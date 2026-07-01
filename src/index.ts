@@ -2005,6 +2005,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
         rarity: HAND_CARD_RARITY[id],
         spriteUrl: spriteForHandCard(id),
         typeLabel: '확률',
+        handCardId: id,
         apply: () => {
           gameState.enhancements.tier1CardBoosts[id] = (gameState.enhancements.tier1CardBoosts[id] ?? 0) + boostToAdd
           DropSystem.setTier1CardBoosts(gameState.enhancements.tier1CardBoosts)
@@ -2044,6 +2045,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
         rarity: HAND_CARD_RARITY['key'],
         spriteUrl: spriteForHandCard('key'),
         typeLabel: '손패',
+        handCardId: 'key' as const,
         apply: () => { runCardPool.unlockForRun('key') },
       }]
     }
@@ -2063,6 +2065,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
         rarity: HAND_CARD_RARITY[id],
         spriteUrl: spriteForHandCard(id),
         typeLabel: '손패',
+        handCardId: id,
         apply: () => {
           if (isBanned) runCardPool.unban(id)
           else runCardPool.unlockForRun(id)
@@ -2086,6 +2089,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
         rarity: HAND_CARD_RARITY[id],
         spriteUrl: spriteForHandCard(id),
         typeLabel: '삭제',
+        handCardId: id,
         apply: () => { runCardPool.ban(id) },
       }
     })
@@ -2124,7 +2128,7 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
     // T15 튜토리얼: 넘기기·재뽑기 숨김 (선택만 가능).
     tutorialHidePackControls: isTutorial15,
     // spriteUrl 포함: enhance/unlock/delete 팩은 카드별 일러스트가 있어야 식별 가능하다.
-    items: items.map(({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote }) => ({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote })),
+    items: items.map(({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote, handCardId }) => ({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote, handCardId })),
     rerollCost: 1 + (activePackSession?.rerollCount ?? 0),
     coins,
   }
@@ -2219,7 +2223,7 @@ async function handleShopPackReroll(packKind: ShopPackKind): Promise<void> {
     packKind,
     title: SHOP_PACK_LABELS[packKind].title,
     passable: packKind === 'delete-pack' || packKind === 'unlock-pack' || packKind === 'recipe-pack' || packKind === 'chance-pack',
-    items: activePackSession.items.map(({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote }) => ({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote })),
+    items: activePackSession.items.map(({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote, handCardId }) => ({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote, handCardId })),
     rerollCost: 1 + activePackSession.rerollCount,
     coins,
   }
