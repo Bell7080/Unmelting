@@ -15,7 +15,7 @@
  */
 
 import { GameState } from '@core/GameState'
-import { Card, CardType } from '@entities/Card'
+import { Card, CardType, type FlowerKind } from '@entities/Card'
 import { Character } from '@entities/Character'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { HandCard, HandCardId, HandCardDefinition, HandEffectTargeting } from '@entities/HandCard'
@@ -44,6 +44,15 @@ export interface FiredRecipe {
 export interface RemovedFieldCard {
   cardId: string
   type: CardType
+}
+
+/** 정원 가위로 실제 수확된 꽃 1장 — 체력/방패/게이지는 이미 캐릭터에 반영된 뒤의
+ *  통지값이며, 캐모마일(불빛)/금잔화(코인)만 index.ts가 이어서 지급한다. */
+export interface FlowerHarvestRecord {
+  cardId: string
+  name: string
+  kind: Exclude<FlowerKind, 'seed'>
+  amount: number
 }
 
 export interface HandUseResult {
@@ -82,6 +91,9 @@ export interface HandUseResult {
   bonfireHealOnKill?: number
   /** 검은 양초: 사용 시 악마 보스 피해 카운터를 증가시킬 양. 보스가 없을 때는 무시한다. */
   blackCandleCounterGain?: number
+  /** 정원 가위: 실제로 수확된 꽃 목록. index.ts는 이 카드들을 removedFieldCards의
+   *  일반 불빛 계산에서 제외하고, 캐모마일/금잔화만 따로 불빛/코인을 지급한다. */
+  flowerHarvests?: FlowerHarvestRecord[]
 }
 
 export interface RecipeFireResult {
@@ -122,6 +134,37 @@ export class HandSystem {
   static greedCoinSelfDamage(): number { return Math.floor(Math.random() * 4) + 2 }
   /** 탐욕의 동전 불빛 base값(30층 1칸 적 처치의 약 절반). index.ts가 인플레이션을 적용한다. */
   static readonly GREED_COIN_LIGHT_BASE = 36
+
+  /** 정원 가위 수확 기록 임시 버퍼 — applyGardenScissors*가 채우고, useSingle()이
+   *  같은 동기 호출 안에서 즉시 비워 HandUseResult.flowerHarvests로 전달한다. */
+  private static pendingFlowerHarvests: FlowerHarvestRecord[] = []
+
+  /** ActionSystem.takeFlower와 동일한 종류별 보상을 캐릭터에 직접 반영한다.
+   *  캐모마일(불빛)/금잔화(코인)는 캐릭터 상태가 아니므로 여기서 반영할 수 없어
+   *  기록만 남기고, index.ts가 flowerHarvests를 읽어 지급한다. */
+  private static harvestFlowerReward(character: Character, card: Card): void {
+    if (card.type !== CardType.FLOWER || card.flowerKind === 'seed') return
+    const amount = Math.max(1, card.flowerValue)
+    switch (card.flowerKind) {
+      case 'redRose':
+        character.heal(amount)
+        break
+      case 'oleander':
+        character.addShield(amount)
+        break
+      case 'lavender':
+        character.gainCandle(amount)
+        break
+    }
+    HandSystem.pendingFlowerHarvests.push({ cardId: card.id, name: card.name, kind: card.flowerKind, amount })
+  }
+
+  /** pendingFlowerHarvests를 비우고 반환한다. useSingle()이 정원 가위 사용 직후 1회만 호출한다. */
+  private static drainPendingFlowerHarvests(): FlowerHarvestRecord[] {
+    const out = HandSystem.pendingFlowerHarvests
+    HandSystem.pendingFlowerHarvests = []
+    return out
+  }
 
   /** Build a fresh empty chain. */
   static newChain(): ChainState {
@@ -284,6 +327,8 @@ export class HandSystem {
       blackCandleCounterGain: card.defId === 'black-candle'
         ? (card.merged ? 6 : 2)
         : undefined,
+      // 정원 가위: 실제 수확된 꽃 기록 — 캐모마일/금잔화 불빛·코인 지급은 index.ts가 이어받는다.
+      flowerHarvests: card.defId === 'garden-scissors' ? HandSystem.drainPendingFlowerHarvests() : undefined,
     }
   }
 
@@ -1460,8 +1505,9 @@ export class HandSystem {
     return { removedFieldCards, targetKilled: !after.has(target.card.id) }
   }
 
-  /** 정원 가위 단일: 꽃은 ActionSystem.takeFlower와 동일하게 처리하고, 괴물꽃은 즉사시킨다.
-   *  단순히 보상을 계산하지 않고 index.ts가 실제 보상 처리를 담당하도록 제거만 수행한다. */
+  /** 정원 가위 단일: 꽃은 ActionSystem.takeFlower와 동일한 종류별 보상을 적용하고,
+   *  괴물꽃은 즉사시킨다. 캐모마일/금잔화 몫은 pendingFlowerHarvests에 기록해
+   *  index.ts가 useSingle() 반환값(flowerHarvests)으로 이어받아 지급한다. */
   static applyGardenScissorsSingle(
     gs: GameState,
     target: HandTarget | undefined
@@ -1470,6 +1516,7 @@ export class HandSystem {
     const card = target.card
     if (card.type === CardType.FLOWER && card.flowerKind !== 'seed') {
       gs.removeCardFromRow(card, target.distance)
+      HandSystem.harvestFlowerReward(gs.character, card)
       return `${card.name} 즉시 수확`
     }
     if (card.type === CardType.ENEMY && card.specialEnemyKind === 'monsterFlower') {
@@ -1479,8 +1526,7 @@ export class HandSystem {
     return '꽃이나 괴물꽃 대상 필요'
   }
 
-  /** 정원 가위 트리플: 필드 전체 꽃을 수확하고 괴물꽃을 즉사시킨다.
-   *  수확 보상(불빛/체력 등)은 index.ts가 removedFieldCards를 확인해 처리한다. */
+  /** 정원 가위 트리플: 필드 전체 꽃을 종류별 보상과 함께 수확하고 괴물꽃을 즉사시킨다. */
   static applyGardenScissorsAll(gs: GameState): string {
     const seen = new Set<Card>()
     let harvested = 0
@@ -1492,6 +1538,7 @@ export class HandSystem {
         seen.add(card)
         if (card.type === CardType.FLOWER && card.flowerKind !== 'seed') {
           gs.removeCardFromRow(card, d)
+          HandSystem.harvestFlowerReward(gs.character, card)
           harvested++
         } else if (card.type === CardType.ENEMY && card.specialEnemyKind === 'monsterFlower') {
           gs.removeCardFromRow(card, d)

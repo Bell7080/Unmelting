@@ -4538,12 +4538,35 @@ async function applyHandSingle(
     await playResourceTrail({ kind: 'center' }, 'hand', 1)
   }
 
+  // 정원 가위로 수확된 꽃: 체력/방패/게이지는 HandSystem이 이미 반영했으므로
+  // (playPlayerGainTrails가 위에서 이미 그 변화를 태웠다) 여기서는 캐릭터 상태가
+  // 아닌 캐모마일(불빛)·금잔화(코인)만 ActionSystem.takeFlower와 동일하게 지급한다.
+  const flowerHarvestIds = new Set((result.flowerHarvests ?? []).map((h) => h.cardId))
+  for (const harvest of result.flowerHarvests ?? []) {
+    const theme = flowerRewardTheme(harvest.kind)
+    if (harvest.kind === 'chamomile') {
+      const chamomileTier = Math.floor(gameState.getCurrentTurn() / 20) + 1
+      pushActivityLogsInDisplayOrder([createScoreLog(`${harvest.name} 수확`, 30 * chamomileTier, 'score')])
+      await playResourceTrail({ kind: 'card', cardId: harvest.cardId }, 'score', 1, theme)
+    } else if (harvest.kind === 'marigold') {
+      coins += harvest.amount
+      coinPulseKey++
+      applyBlindFaithCoins(harvest.amount)
+      recordCoinGain(`${harvest.name} 수확`, harvest.amount)
+      await playResourceTrail({ kind: 'card', cardId: harvest.cardId }, 'coin', harvest.amount, theme)
+    }
+  }
+
   // Light for any field cards the hand-card effect just removed (kill / clear
   // / grab). Same strength formula as direct clicks, so 손패 사용 도 "직접
   // 타격" 과 동일한 점수 룰을 따른다.
   // 청소(단일)는 불빛 없음 규칙으로 점수를 부여하지 않는다.
+  // 정원 가위로 수확된 꽃은 위에서 이미 종류별 보상을 지급했으므로 일반 불빛 계산에서 제외한다.
   if (!result.suppressScoreForRemovedCards) {
-    await awardScoreForRemovedCards(result.removedFieldCards, beforeSingleCards)
+    await awardScoreForRemovedCards(
+      result.removedFieldCards.filter((r) => !flowerHarvestIds.has(r.cardId)),
+      beforeSingleCards
+    )
   }
 
   // Animate removals caused by the single hand card while the old board DOM is
