@@ -3005,20 +3005,26 @@ function trackFieldEnemyEncounters(): void {
 
 function fillBoardAtStart(): void {
   syncSpawnerTier()
-  for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
-    // 전방 라인(distance 0)은 2칸 병합도 막아 즉시 2/3-lane 벽이 서지 않게 한다.
-    // 후방 라인은 3칸 병합만 막아 ■ㅁ■ 고정 패턴을 피한다.
-    const strict = distance === 0
-    const isWaiting = distance > 0
-    const cards = cardSpawner.spawnCardsForOpeningRow(gameState.lanes.length, strict, isWaiting)
-    for (let i = 0; i < gameState.lanes.length; i++) {
-      const lane = gameState.lanes[i]
-      const card = cards[i]
-      if (lane && card) {
-        lane.setCardAtDistance(distance, card)
-      }
-    }
+
+  // 최전방(distance 0): 적/거미줄/보물 각 1종 고정, 레인 순서만 무작위.
+  const frontCards = cardSpawner.spawnFixedOpeningFrontRow(gameState.lanes.length)
+  for (let i = 0; i < gameState.lanes.length; i++) {
+    gameState.lanes[i]?.setCardAtDistance(0, frontCards[i])
   }
+
+  // 대기 라인(distance 1, 2): 기존 가중치 스폰(3칸 병합만 금지) + 꽃·폭탄 각 1개 이상 보장.
+  const waitingRows: Card[][] = []
+  for (let distance = 1; distance < LANE_DISTANCE_COUNT; distance++) {
+    waitingRows.push(cardSpawner.spawnCardsForOpeningRow(gameState.lanes.length, false, true))
+  }
+  cardSpawner.ensureWaitingRowsHaveFlowerAndBomb(waitingRows)
+  waitingRows.forEach((row, idx) => {
+    const distance = idx + 1
+    for (let i = 0; i < gameState.lanes.length; i++) {
+      gameState.lanes[i]?.setCardAtDistance(distance, row[i])
+    }
+  })
+
   gameState.regroupAllRows()
   trackFieldEnemyEncounters()
 }

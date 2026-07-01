@@ -407,6 +407,50 @@ export class CardSpawner {
     return cards
   }
 
+  /** 최전방(전방 행) 고정 스폰: 적/거미줄/보물 각 1종을 레인 순서만 무작위로 배치한다. */
+  spawnFixedOpeningFrontRow(laneCount: number = 3): Card[] {
+    const factories: (() => Card)[] = [
+      () => this.generateEnemy(),
+      () => this.generateTrap({ trapKind: 'web' }),
+      () => this.generateTreasure(),
+    ]
+    const cards: Card[] = []
+    for (let i = 0; i < laneCount; i++) {
+      cards.push(factories[i % factories.length]())
+    }
+    for (let i = cards.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[cards[i], cards[j]] = [cards[j], cards[i]]
+    }
+    cards.forEach((c) => this.commitSpawnCooldowns(c))
+    return cards
+  }
+
+  /** 대기 라인(전방 제외 나머지 행) 전체에 꽃·폭탄이 각각 최소 1개는 등장하도록 강제한다.
+   *  이미 하나라도 있으면 그대로 두고, 없을 때만 무작위 칸 하나를 교체한다. */
+  ensureWaitingRowsHaveFlowerAndBomb(rows: Card[][]): void {
+    const hasFlower = rows.some((row) => row.some((c) => c.type === CardType.FLOWER))
+    const hasBomb = rows.some((row) => row.some((c) => c.type === CardType.TRAP && c.trapKind === 'bomb'))
+    if (hasFlower && hasBomb) return
+
+    const slots: Array<{ row: number; lane: number }> = []
+    for (let r = 0; r < rows.length; r++) {
+      for (let l = 0; l < rows[r].length; l++) slots.push({ row: r, lane: l })
+    }
+    const used = new Set<string>()
+    const replaceRandomSlot = (factory: () => Card) => {
+      const candidates = slots.filter((s) => !used.has(`${s.row}-${s.lane}`))
+      const pick = candidates[Math.floor(Math.random() * candidates.length)]
+      used.add(`${pick.row}-${pick.lane}`)
+      const card = factory()
+      this.commitSpawnCooldowns(card)
+      rows[pick.row][pick.lane] = card
+    }
+
+    if (!hasFlower) replaceRandomSlot(() => this.generateFlowerSeed())
+    if (!hasBomb) replaceRandomSlot(() => this.generateTrap({ trapKind: 'bomb' }))
+  }
+
   /** Spawn a single fresh card for rail-maintenance refills (직접 배치 → 쿨다운 commit). */
   spawnCardForRefill(laneIndex?: number): Card {
     // 튜토리얼 스크립티드 큐가 남아 있으면 우선 소비한다.
