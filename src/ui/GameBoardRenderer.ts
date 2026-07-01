@@ -1068,6 +1068,11 @@ export class GameBoardRenderer {
     }
     if (rule.filter === 'turn-timer') return this.isTurnTimerHandTarget(card)
     if (rule.filter === 'hazard') return card.type === CardType.TRAP || card.isFrozen()
+    if (rule.filter === 'flower') return card.type === CardType.FLOWER && card.flowerKind !== 'seed'
+    if (rule.filter === 'flower-or-monsterflower') {
+      if (card.type === CardType.FLOWER) return true
+      return card.type === CardType.ENEMY && card.specialEnemyKind === 'monsterFlower'
+    }
     if (rule.filter === 'any') return true
     return false
   }
