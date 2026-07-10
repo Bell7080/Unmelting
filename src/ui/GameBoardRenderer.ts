@@ -2148,7 +2148,7 @@ export class GameBoardRenderer {
     `
   }
 
-  /** Free card tile (Balatro voucher slot). Centered inside its bottom-left
+  /** Free card tile (voucher-style slot). Centered inside its bottom-left
    *  layer, fixed-size relic-card style. */
   private renderShopFreeCard(claimed: boolean, label: string, description: string, kind: 'free-card' | 'free-coin-card' = 'free-card'): string {
     const stateClass = claimed ? 'is-purchased' : 'is-affordable'

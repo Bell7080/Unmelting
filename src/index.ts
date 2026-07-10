@@ -3759,7 +3759,7 @@ function buildRailRefillPreviewCards(): (Card | null)[] {
   return preview
 }
 
-/** Register slash-command debug palette. Opens with `/` like Minecraft chat.
+/** Register slash-command debug palette. Opens with the `/` key.
  *  모바일에서는 좌상단 버튼으로 트리거한다. */
 function setupDevCommandPalette(): void {
   if (!ENABLE_DEV_COMMAND_PALETTE) return

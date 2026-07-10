@@ -4,7 +4,8 @@
  * Ember (불씨) is the game's external time. It wanes by 1 every
  * active ember-decay cadence turn. As ember falls the world darkens:
  * spawn weights shift, enemies gain stat bonuses, and the screen
- * vignette deepens (Darkest Dungeon torch & sanity feel).
+ * vignette deepens — a fading-torchlight dread beat that fits the
+ * cozy dark-fantasy theme.
  *
  * Ember 0 does NOT end the game. Instead the field becomes the most
  * brutal tier — enemies/traps are stronger and treasures stop spawning.
