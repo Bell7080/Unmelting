@@ -43,7 +43,7 @@ const FIT_RANGES: { key: keyof EnaDisposition; lo: number; hi: number }[] = [
 const MINOR_KEYS = ['crit', 'dodge', 'trap', 'treasure'] as const
 
 /** HandCardAdvisor 기대 HP 환산의 역할 가중(청소/처치/방어/자원/회복)도 피팅 대상으로 노출한다.
- *  동봉된 SIM_FITTED에는 아직 미반영 — 구조만 열어 두고, 재피팅 실행 시 함께 탐색된다. */
+ *  동봉된 SIM_FITTED에 함께 반영되어 있으며, 재피팅 실행 시 같은 범위에서 다시 탐색된다. */
 export const SUPPORT_ROLE_KEYS = ['cleanup', 'attack', 'defense', 'resource', 'recovery'] as const satisfies readonly (keyof SupportRoleWeights)[]
 
 export interface FitConfig {

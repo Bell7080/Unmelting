@@ -212,29 +212,32 @@ export function dispositionFromJSON(raw: unknown): EnaDisposition {
 
 // ── 학습된 기본 토대(시뮬 산출) ───────────────────────────────────────────
 // EnaDispositionFitter.fit({ lambda:12, iterations:120, evalSeeds:50, seed:1,
-//   playerPolicies:[교사 휴리스틱, 학습된 정책망] })가 동료 개입을 켠 시뮬에서 찾은
-// 게임플레이 도움 노브의 효율적 배분. 시뮬 플레이어를 '교사 + 딥 정책망' 두 종으로 둬,
-// 숙련도가 다른 플레이어에게 두루 좋은(robust) 토대를 찾는다. 학습 구조가 의미 있음:
-// 클러치/각성은 상향, 거미줄 예측·깜짝지원은 저가치라 하향. 시뮬이 실게임보다 어려워
-// (유물/직업 미모델) 그대로 쓰면 과보호가 되므로 검증된 기본값으로 0.5 블렌드해 sim-to-real
-// 갭을 보정한다. 시뮬이 굴린 노브만 반영(미모델 dodge/trap 깜짝지원·취향 노브는 기본 유지).
+//   playerPolicies:[교사 휴리스틱, 학습된 정책망] })가 2026-07 정합화된 시뮬(재화 분리·
+// 실제 팩/드롭/시련·advisor 공유)에서 찾은 게임플레이 도움 노브의 효율적 배분.
+// 시뮬 플레이어를 '교사 + 딥 정책망' 두 종으로 둬 숙련도가 다른 플레이어에게 두루 좋은
+// (robust) 토대를 찾는다. 학습 구조가 의미 있음: 상시 관대함(강한 클러치/각성/빠른 의지
+// 충전)은 저효율이라 절제하고, 치명 피해를 직접 지우는 회피 클러치와 자원/회복 역할 가중을
+// 상향, 예측 재발동 간격은 길게. held-out 500시드×2정책 검증에서 원본 산출은 기존 토대보다
+// 평균 생존 턴이 유의하게 높았다(28.9 vs 27.2). 시뮬이 실게임보다 어려워(유물/직업 미모델)
+// 그대로 쓰면 성향이 극단화되므로 검증된 기본값으로 0.5 블렌드해 sim-to-real 갭을 보정한다.
+// 시뮬이 굴린 노브만 반영(시뮬 미모델 trap/ember/cleanse 깜짝지원·현 피터가 탐색하지 않는
+// counter/adversityBoost/bondClimax·취향 노브는 기본 유지).
 // 학습 산출물 스냅샷(동봉 가중치)이며, 라이브 토대로 쓰이고 그 위에서 per-player가 개인화한다.
 const SIM_FITTED = {
-  clutchHpThreshold: 0.596,
-  clutchHealVsShield: 0.504,
-  clutchHealRatio: 0.368,
-  clutchShieldRatio: 0.368,
-  clutchStrength: 1.36,
-  willGainPerDamage: 86.6,
-  willGainFlatBonus: 9.6,
-  awakenChance: 0.321,
-  predictBaseChance: 0.02,
-  predictCooldown: 20,
-  minorClutchCrit: 0.041,
-  minorClutchCounter: 0.05,
-  minorClutchTreasure: 0.055,
-  clutchAdversityBoost: 1.45,
-  bondClimaxChance: 0.11,
+  clutchHpThreshold: 0.2,
+  clutchHealVsShield: 0.282,
+  clutchHealRatio: 0.444,
+  clutchShieldRatio: 0.45,
+  clutchStrength: 0.6,
+  willGainPerDamage: 30,
+  willGainFlatBonus: 0.86,
+  awakenChance: 0.02,
+  predictBaseChance: 0.447,
+  predictCooldown: 19.9,
+  minorClutchCrit: 0.053,
+  minorClutchDodge: 0.46,
+  minorClutchTreasure: 0.117,
+  supportRoleWeights: { cleanup: 1.26, attack: 0.5, defense: 1.2, resource: 1.94, recovery: 2 },
 } as const
 
 const SIM_TO_REAL_BLEND = 0.5
@@ -254,13 +257,16 @@ function buildBaseDisposition(): EnaDisposition {
   d.willGainPerDamage = lerp(d.willGainPerDamage, SIM_FITTED.willGainPerDamage)
   d.willGainFlatBonus = lerp(d.willGainFlatBonus, SIM_FITTED.willGainFlatBonus)
   d.awakenChance = lerp(d.awakenChance, SIM_FITTED.awakenChance)
-  d.clutchAdversityBoost = lerp(d.clutchAdversityBoost, SIM_FITTED.clutchAdversityBoost)
-  d.bondClimaxChance = lerp(d.bondClimaxChance, SIM_FITTED.bondClimaxChance)
   d.predictBaseChance = lerp(d.predictBaseChance, SIM_FITTED.predictBaseChance)
   d.predictCooldown = lerp(d.predictCooldown, SIM_FITTED.predictCooldown)
   d.minorClutchChance.crit = lerp(d.minorClutchChance.crit, SIM_FITTED.minorClutchCrit)
-  d.minorClutchChance.counter = lerp(d.minorClutchChance.counter, SIM_FITTED.minorClutchCounter)
+  d.minorClutchChance.dodge = lerp(d.minorClutchChance.dodge, SIM_FITTED.minorClutchDodge)
   d.minorClutchChance.treasure = lerp(d.minorClutchChance.treasure, SIM_FITTED.minorClutchTreasure)
+  // 지원 역할 가중도 같은 규칙으로 블렌드 — advisor 기대 HP 환산에 곱해진다.
+  const w = d.supportRoleWeights!
+  for (const k of Object.keys(SIM_FITTED.supportRoleWeights) as (keyof SupportRoleWeights)[]) {
+    w[k] = lerp(w[k], SIM_FITTED.supportRoleWeights[k])
+  }
   return clampDisposition(d)
 }
 
