@@ -5498,6 +5498,10 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
   render()
   for (const t of startedEventDoors) boardRenderer.popEventBadge(t.cardId)
   if (blooms.length > 0) await boardRenderer.animateFlowerBlooms(blooms)
+  // 90F 이전에 예약된 문(pendingEventDoor)은 최종 등반 레일에도 주입될 수 있어, 문 소비 후
+  // 별빛이 전방으로 내려올 수 있다. 문 닫힘(만료)·정화 클러치 정리와 동일하게 즉시 수집까지
+  // 마쳐야 별빛이 전방을 막은 채 다음 행동을 기다리는 교착을 막는다(별빛 없으면 no-op).
+  await sweepFrontStarlights()
   inputLocked = false
 }
 

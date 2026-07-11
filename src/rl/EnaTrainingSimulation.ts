@@ -5,7 +5,8 @@
  * 3×3 전투 · 개별 손패(트리플 합성 포함) · 거미줄 병합/포자 전염/씨앗 개화 · 이벤트 문 ·
  * 불씨 티어 스폰 압박 · 10/20/30 상점·제단(불빛/화폐 재화 분리, 실제 6종 팩·ShopPricing 공유 가격,
  * 런 카드 풀 해금/밴·확률팩 T1 부스트를 DropSystem 2단계 추첨으로 반영) ·
- * 30/60/90/100F 실제 보스 · 90~100F 별빛 등반까지
+ * 30/60/90/100F 실제 보스(30/60/90F 격파 후 실제 TRIAL_DEFINITIONS 강제 시련 1개 적용) ·
+ * 90~100F 별빛 등반까지
  * 한 호(arc)로 굴려, 외부 학습기가 (state, action, reward, nextState, done)으로 소비하게 한다.
  *
  * 목표: "플레이어가 진짜 하는 게임을 에나 혼자서 미리 모험하며 준비한다"는 느낌의 그릇.
@@ -16,6 +17,7 @@
 import { CardType, type FlowerKind, type TrapKind } from '@entities/Card'
 import type { HandCardId, HandCardDefinition, HandCardDropSource } from '@entities/HandCard'
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
+import { TRIAL_DEFINITIONS } from '@data/Trials'
 import { HAND_CARD_RARITY, type CardRarity } from '@data/ShopPools'
 import { EmberSystem, type EmberTier } from '@systems/EmberSystem'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
@@ -146,6 +148,8 @@ interface EnaGameSnapshot {
   bossAttackCountdown: number
   bossPage: number
   eventRisk: number
+  /** 강제 시련 '역경' 등으로 누적된 전역 함정 피해 보너스 — 정책의 실효 함정 피해 계산용. */
+  trapDamageBonus: number
   /** 다음 전방에서 실제 인접 병합될 1칸 거미줄 수(런타임 예지와 공유 판정). */
   webThreat: number
   /** 에나가 보는 레일 상단 예고선: 다음에 실제 리필될 lane별 카드 정보. */
@@ -355,6 +359,13 @@ export class EnaTrainingSimulation {
   private eventRisk = 0
   /** 유물로 얻는 턴당 방패 재생. 실게임 유물 경제(상점·제단마다 1개 획득)를 압축한 영구 성장. */
   private shieldRegen = 0
+  // 강제 시련(30/60/90F 보스 격파 후 3택 1선택) 누적 — 실게임 runModifiers와 같은 축.
+  private trialEnemyHpBonus = 0
+  private trialEnemyAtkBonus = 0
+  /** 실게임은 character.trapDamageBonus로 일원화 — 모든 함정 피해 계산에 전역 합산된다. */
+  private trialTrapDamageBonus = 0
+  /** 시련 '가난' 보물상자 스폰 가중치 배율(누적 곱). */
+  private trialTreasureScale = 1
   private done = false
 
   // 동료(에나) 개입 — 성향(disposition)이 주어졌을 때만 활성. 미지정 시 순수 플레이어 시뮬(기존 동작 유지).
@@ -417,6 +428,10 @@ export class EnaTrainingSimulation {
     this.bossesCleared = 0
     this.eventRisk = 0
     this.shieldRegen = 0
+    this.trialEnemyHpBonus = 0
+    this.trialEnemyAtkBonus = 0
+    this.trialTrapDamageBonus = 0
+    this.trialTreasureScale = 1
     this.will = 0
     this.companionAwakened = false
     this.done = false
@@ -632,7 +647,7 @@ export class EnaTrainingSimulation {
       }
       if (card.type === CardType.TRAP) {
         // 맨손으로 함정을 밟아 치움 — 피해를 그대로 받되 처리 불빛은 지급(실게임 규칙).
-        this.takeDamage(trapDamage(card))
+        this.takeDamage(trapDamage(card, this.trialTrapDamageBonus))
         this.gainLight(this.trapClearLightBase(card))
         this.board[0][action.arg] = null
         return -0.6
@@ -696,7 +711,7 @@ export class EnaTrainingSimulation {
     const lane = this.worstTrapLane(maxSpan, id === 'sweep')
     if (lane < 0) return -0.6
     const card = this.board[0][lane]!
-    const removedDamage = trapDamage(card)
+    const removedDamage = trapDamage(card, this.trialTrapDamageBonus)
     this.gainLight(this.trapClearLightBase(card)) // 함정 처리도 불빛을 지급(실게임 근사)
     this.board[0][lane] = null
     if (id === 'sweep' && !merged) {
@@ -1244,6 +1259,8 @@ export class EnaTrainingSimulation {
         continue
       }
       if (card.type === CardType.ENEMY) {
+        // 선공 티어는 실게임에서 '적 페이즈가 플레이어 행동보다 먼저'인 순서 역전이다.
+        // 시뮬은 행동 후 일괄 처리 구조라 순서를 뒤집는 대신 +1 피해로 그 압박을 근사한다.
         const incoming = card.atk + (firstStrike ? 1 : 0)
         const adversity = this.hp + this.shield - incoming <= Math.max(1, this.maxHp * 0.35)
         if (this.companionDodges(incoming, adversity)) continue
@@ -1428,6 +1445,8 @@ export class EnaTrainingSimulation {
       this.phase = 'done'
       return
     }
+    // 30/60/90F 격파 직후 강제 시련(실게임: 보상 → 시련 3택 → 셔터 상승 순서).
+    this.applyForcedTrial()
     if (this.bossFloor === 90) {
       // 90F 격파 직후 90~100 별빛 등반 발동.
       this.finalAscent = true
@@ -1438,6 +1457,29 @@ export class EnaTrainingSimulation {
     this.bossPage = 0
     this.phase = 'field'
     this.dropAndRefill()
+  }
+
+  /** 실게임 강제 시련(index.ts FORCED_TRIAL_CARDS = TRIAL_DEFINITIONS 파생)을 그대로 읽어 적용한다.
+   *  실게임은 플레이어가 3택 중 1개를 고르지만, 시뮬은 그 선택을 랜덤 1개로 압축한다(근사). */
+  private applyForcedTrial(): void {
+    const kind = this.rng.pick(TRIAL_DEFINITIONS).effectKind
+    if (kind.type === 'enemy-stat-bonus') {
+      this.trialEnemyHpBonus += kind.hpBonus
+      this.trialEnemyAtkBonus += kind.atkBonus
+      // 실게임 applyTrialEffect와 동일하게 이미 필드에 있는 적에게도 소급 적용한다.
+      // 합체 적은 구성 칸 수(group)만큼 누적해 "이후 스폰됐다면 받았을 양"과 맞춘다.
+      for (const card of new Set(this.board.flat().filter((c): c is EnaSimCard => !!c))) {
+        if (card.type !== CardType.ENEMY) continue
+        card.hp += kind.hpBonus * Math.max(1, card.group)
+        card.atk += kind.atkBonus * Math.max(1, card.group)
+      }
+    } else if (kind.type === 'trap-damage-bonus') {
+      this.trialTrapDamageBonus += kind.value
+    } else {
+      this.trialTreasureScale = Math.max(0, this.trialTreasureScale * kind.factor)
+    }
+    // 스폰/스탯 규칙이 바뀌었으니 예고 큐를 현행화한다(실게임 setTrialModifiers의 preview 클리어와 동일).
+    this.clearIncomingRefillQueue()
   }
 
   private enterBoss(floor: number): void {
@@ -1496,26 +1538,28 @@ export class EnaTrainingSimulation {
     const tier = EmberSystem.getTier(this.ember)
     const b = EmberSystem.getSpawnBuckets(tier)
     const flowerWeight = zone === 'front' ? 0 : b.flower * 0.5
-    const total = b.enemy + b.webTrap + b.bombTrap + b.sporeTrap + b.treasure + flowerWeight
+    // 시련 '가난'은 보물 가중치를 배율로 깎되, 실게임 CardSpawner처럼 최소 1을 보장한다.
+    const treasureWeight = Math.max(1, b.treasure * this.trialTreasureScale)
+    const total = b.enemy + b.webTrap + b.bombTrap + b.sporeTrap + treasureWeight + flowerWeight
     let roll = this.rng.next() * total
     if ((roll -= b.enemy) < 0) return this.spawnEnemy(tier)
     if ((roll -= b.webTrap) < 0) return this.spawnTrap('web')
     if ((roll -= b.bombTrap) < 0) return this.spawnTrap('bomb')
     if ((roll -= b.sporeTrap) < 0) return this.spawnTrap('spore')
-    if ((roll -= b.treasure) < 0) return { type: CardType.TREASURE, hp: 0, atk: 0, group: 1, treasureKind: 'normal', value: 1 + this.rng.int(3), growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+    if ((roll -= treasureWeight) < 0) return { type: CardType.TREASURE, hp: 0, atk: 0, group: 1, treasureKind: 'normal', value: 1 + this.rng.int(3), growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
     // 꽃은 씨앗으로 등장해 전방 도달 시 개화한다.
     return { type: CardType.FLOWER, hp: 0, atk: 0, group: 1, flowerKind: 'seed', value: 1 + this.rng.int(4), growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
   }
 
-  /** 진행 턴 밴드에 따른 실제 적 풀에서 HP/ATK를 가져오고, 티어 공격 보너스를 더한다. */
+  /** 진행 턴 밴드에 따른 실제 적 풀에서 HP/ATK를 가져오고, 티어·시련(광란) 보너스를 더한다. */
   private spawnEnemy(tier: EmberTier): EnaSimCard {
     const pool = activeEnemyBand(this.turn)
     const def = this.rng.pick(pool)
     const bonus = EmberSystem.getEnemyStatBonus(tier)
     return {
       type: CardType.ENEMY,
-      hp: (def.healthOrDamage ?? 1) + bonus.hp,
-      atk: (def.attack ?? 1) + bonus.atk,
+      hp: (def.healthOrDamage ?? 1) + bonus.hp + this.trialEnemyHpBonus,
+      atk: (def.attack ?? 1) + bonus.atk + this.trialEnemyAtkBonus,
       group: 1,
       value: (def.enemyPower ?? 1),
       growth: 0,
@@ -1610,7 +1654,7 @@ export class EnaTrainingSimulation {
   }
 
   private estimateFrontThreat(): number {
-    return this.uniqueFrontCards().reduce((sum, card) => sum + (card.type === CardType.ENEMY ? card.atk : card.type === CardType.TRAP ? trapDamage(card) : 0), 0)
+    return this.uniqueFrontCards().reduce((sum, card) => sum + (card.type === CardType.ENEMY ? card.atk : card.type === CardType.TRAP ? trapDamage(card, this.trialTrapDamageBonus) : 0), 0)
   }
 
   private webThreatCount(): number {
@@ -1683,8 +1727,15 @@ export class EnaTrainingSimulation {
         frontWideWebSpan,
         webMerge: this.imminentWebMerge(),
         fieldOneWebCount: this.fieldOneWebCount(),
+        // 시련 '역경' 누적치 — 런타임 assessThreats의 character.trapDamageBonus 전달과 동일 축.
+        // handSingleBonus는 전달하지 않는다: 실게임 강화팩이 제거되어(enhancements.singleBonus
+        // 작성자 없음) 런타임 입력도 항상 빈 값이라, 생략이 실효값 0으로 동일하다.
+        trapDamageBonus: this.trialTrapDamageBonus,
         sporeReady: this.readySporeThreatCount() > 0,
         // 실효값: 시뮬 카드의 실제 공격력과 굳음 잔여 턴으로 반격 임박도를 채운다.
+        // attackInTurns는 런타임 예지와 동일 규칙(전방 비굳음=0 즉시, 굳음=잔여 턴, 대기=1).
+        // 선공 티어(꺼져감/꺼짐)는 적 페이즈가 행동보다 먼저 오지만 전방 임박도는 이미
+        // 최대(0)라 별도 인코딩이 없다 — 런타임 assessThreats도 같은 값을 쓴다.
         strongEnemy: strongEnemy
           ? {
               health: strongEnemy.hp,
@@ -1734,7 +1785,7 @@ export class EnaTrainingSimulation {
       if (card?.type !== CardType.TRAP) continue
       if (card.group > maxSpan) continue
       if (webOnly && card.trapKind !== 'web') continue
-      const dmg = trapDamage(card)
+      const dmg = trapDamage(card, this.trialTrapDamageBonus)
       if (dmg > bestDmg) {
         best = lane
         bestDmg = dmg
@@ -1772,7 +1823,8 @@ export class EnaTrainingSimulation {
       card.type === CardType.FLOWER ? 1 : 0,
       card.type === CardType.EVENT ? 1 : 0,
       card.hp / 30,
-      (card.atk || trapDamage(card)) / 30,
+      // 함정 칸의 위협 축은 시련 보너스가 붙은 실효 피해로 관측한다(적은 atk 그대로).
+      (card.atk || trapDamage(card, this.trialTrapDamageBonus)) / 30,
       card.group / 3,
       row / (ROWS - 1),
       card.value / 5,
@@ -1887,6 +1939,7 @@ export class EnaTrainingSimulation {
       bossAttackCountdown: this.bossAttackCountdown,
       bossPage: this.bossPage,
       eventRisk: this.eventRisk,
+      trapDamageBonus: this.trialTrapDamageBonus,
       webThreat: this.webThreatCount(),
       incomingRefill: this.incomingRefillQueue.map((card, lane) => {
         const queued = card ?? this.peekIncomingRefillCard(lane)
@@ -1911,8 +1964,8 @@ function fieldPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): 
     if (match >= 0) return actionIndexOf('useHand', match)
   }
 
-  // 1) 치명적 함정은 키틴/청소로 먼저 치운다.
-  const lethalTrapLane = front.findIndex((c) => c?.type === CardType.TRAP && trapDamage(c) > snapshot.hp + snapshot.shield)
+  // 1) 치명적 함정은 키틴/청소로 먼저 치운다(시련 보너스 포함 실효 피해 기준).
+  const lethalTrapLane = front.findIndex((c) => c?.type === CardType.TRAP && trapDamage(c, snapshot.trapDamageBonus) > snapshot.hp + snapshot.shield)
   if (lethalTrapLane >= 0) {
     const cleaner = findHand((id) => id === 'chitin' || id === 'sweep' || id === 'holy-water')
     if (cleaner >= 0) return actionIndexOf('useHand', cleaner)
@@ -2019,12 +2072,13 @@ function emberDamage(attack: number, merged: boolean): number {
   return merged ? attack * 3 + 5 : attack * 1 + 1
 }
 
-function trapDamage(card: EnaSimCard): number {
+/** 함정 실효 피해. bonus는 시련 '역경' 등 전역 함정 피해 보너스(실게임 character.trapDamageBonus). */
+function trapDamage(card: EnaSimCard, bonus: number = 0): number {
   if (card.type !== CardType.TRAP) return 0
-  if (card.trapKind === 'bomb') return 5
-  if (card.trapKind === 'spore') return card.group >= 3 ? 5 : card.group === 2 ? 3 : 1
-  // web: 1칸=1, 2칸=5, 3칸=즉사(학습용 큰 수).
-  return card.group >= 3 ? 999 : card.group === 2 ? 5 : 1
+  if (card.trapKind === 'bomb') return 5 + bonus
+  if (card.trapKind === 'spore') return (card.group >= 3 ? 5 : card.group === 2 ? 3 : 1) + bonus
+  // web: 1칸=1, 2칸=5, 3칸=즉사(학습용 큰 수 — 보너스와 무관하게 이미 최상위 위협).
+  return card.group >= 3 ? 999 : (card.group === 2 ? 5 : 1) + bonus
 }
 
 function tierIndex(tier: EmberTier): number {
