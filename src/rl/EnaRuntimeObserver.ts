@@ -49,6 +49,13 @@ export class EnaRuntimeObserver {
   private currentRunId = `run-${Date.now()}`
   private usedHandCards: Partial<Record<HandCardId, number>> = {}
   private shopPurchases: string[] = []
+  /** 이번 런에서 마지막으로 플레이어를 다치게 한 원천(적/보스/함정/폭탄 이름). 사망 원인 회상용. */
+  private lastDamageSource: string | null = null
+
+  /** 플레이어가 피해를 받은 순간의 원천 이름을 기록한다. 사망 시 마지막 값이 원인으로 남는다. */
+  noteDamageSource(name: string): void {
+    if (name) this.lastDamageSource = name
+  }
 
   /** 손패 사용 순간: 실제 플레이어 선택과 화면 프레임을 함께 저장한다. */
   recordHandDecision(gs: GameState, defId: HandCardId, detail: string): void {
@@ -77,12 +84,14 @@ export class EnaRuntimeObserver {
       usedHandCards: this.usedHandCards,
       shopPurchases: this.shopPurchases,
       deathReason: survived ? undefined : reason,
+      deathSource: survived ? undefined : this.lastDamageSource ?? undefined,
     }
     this.memory.append(entry)
     this.pushEvent(gs, 'run-end', `${survived ? 'survived' : 'defeated'}:${reason}`)
     this.currentRunId = `run-${Date.now()}-${this.memory.all().length}`
     this.usedHandCards = {}
     this.shopPurchases = []
+    this.lastDamageSource = null
   }
 
   getMemory(): EnaPlayLogMemory {

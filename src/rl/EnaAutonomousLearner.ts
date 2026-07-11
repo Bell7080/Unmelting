@@ -7,11 +7,24 @@
 
 import type { HandCardId } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
+import { resolveKoreanParticles } from '@systems/CompanionSystem'
 import type { EnaPlayLogMemory } from './EnaEffectProbe'
 import type { EnaRuntimeEvent } from './EnaRuntimeObserver'
 import { EnaPolicyStore, type EnaPolicyStorage } from './EnaPolicyStore'
 
 export const ENA_SELF_LEARNING_STORAGE_KEY = 'unmelting.ena.self-learning.v1'
+
+/** 구조화 런 기억 1건 — 도달 층/사망 원인 같은 구체 사실 회상의 재료. */
+export interface EnaRunMemory {
+  outcome: 'died' | 'cleared' | 'retired'
+  floor: number
+  cause?: string
+  note?: string
+  runIndex: number
+}
+
+/** 최근 몇 개의 구조화 기억만 유지한다(회상은 최신 기억 위주라 길게 쌓을 필요가 없다). */
+const MAX_RUN_MEMORIES = 12
 
 export interface EnaRuntimePreferenceSignal {
   kind: 'hand' | 'shop' | 'danger'
@@ -33,6 +46,12 @@ export interface EnaAutonomousLearningState {
   version: 1
   updatedAt: string
   reflections: EnaSelfReflection[]
+  /** 플레이어와의 누적 유대(0~1). CompanionSystem이 세션 간 복원한다. version 1 유지 — 누락 시 0으로 병합. */
+  bond?: number
+  /** 구체 회상용 구조화 기억(최근 12개). 누락 시 빈 배열로 병합. */
+  memories?: EnaRunMemory[]
+  /** 직전 회상 키 — 같은 기억/문형이 연속 반복되지 않게 한다. */
+  lastRecallKey?: string
 }
 
 /** 런 로그를 손패/상점/위험 선호 신호로 압축한다. 실제 플레이에서 나온 결과만 사용한다. */
@@ -90,21 +109,49 @@ export class EnaAutonomousLearner {
     this.policyStore = policyStore
   }
 
-  /** 실제 런 종료 후 호출된다. 저장 정책을 확인하고, 런 로그 자기반성만 조용히 누적한다. */
+  /** 실제 런 종료 후 호출된다. 저장 정책을 확인하고, 런 로그 자기반성과 구조화 기억을 조용히 누적한다. */
   learnAfterRun(memory: EnaPlayLogMemory, events: readonly EnaRuntimeEvent[], now: string = new Date().toISOString()): EnaSelfReflection {
     const hasStoredPolicy = this.policyStore.load() !== undefined
     const reflection = summarizeSelfReflection(memory, events, hasStoredPolicy)
-    this.saveReflection(reflection, now)
+    this.saveReflection(reflection, now, buildRunMemory(memory))
     return reflection
   }
 
-  /** 새 런 시작 때 에나가 자연스럽게 꺼낼 수 있는 기억 한 줄. 없으면 침묵한다. */
-  recallLineForNewRun(force = false): string | null {
+  /** 저장된 누적 유대(0~1). 없거나 손상됐으면 0. */
+  loadBond(): number {
+    const bond = this.loadState().bond
+    return typeof bond === 'number' && Number.isFinite(bond) ? Math.max(0, Math.min(1, bond)) : 0
+  }
+
+  /** 누적 유대를 기존 자기학습 저장에 함께 남긴다(별도 키를 만들지 않는다). */
+  saveBond(bond: number): void {
+    if (!this.storage) return
+    const state = this.loadState()
+    state.bond = Math.max(0, Math.min(1, bond))
+    this.storage.setItem(ENA_SELF_LEARNING_STORAGE_KEY, JSON.stringify(state))
+  }
+
+  /**
+   * 새 런 시작 때 에나가 자연스럽게 꺼낼 수 있는 기억 한 줄. 없으면 침묵한다.
+   * bondBonus(0~0.15)는 유대가 깊을수록 회상을 조금 더 자주 허용한다.
+   */
+  recallLineForNewRun(force = false, bondBonus = 0): string | null {
     const state = this.loadState()
     const last = state.reflections[state.reflections.length - 1]
-    if (!last) return null
+    const memories = state.memories ?? []
+    if (!last && memories.length === 0) return null
     // 매번 말하면 기억이 디버그처럼 느껴지므로, 필요할 때만 드문 회상을 허용한다.
-    if (!force && Math.random() > 0.55) return null
+    const chance = 0.45 + Math.max(0, Math.min(0.15, bondBonus))
+    if (!force && Math.random() >= chance) return null
+
+    // 구체 기억이 있으면 사실 기반 문장을 우선한다(직전 회상 키와 겹치지 않는 것만).
+    const fact = pickFactRecall(memories, state.lastRecallKey)
+    if (fact) {
+      this.saveRecallKey(state, fact.key)
+      return fact.line
+    }
+    if (!last) return null
+
     const danger = last.preferenceSignals.find((signal) => signal.kind === 'danger')
     if (danger && last.lastOutcome === 'defeated') return '지난번엔 위협을 늦게 봤어. 이번엔 먼저 살필게.'
 
@@ -132,15 +179,67 @@ export class EnaAutonomousLearner {
     }
   }
 
-  private saveReflection(reflection: EnaSelfReflection, now: string): void {
+  private saveReflection(reflection: EnaSelfReflection, now: string, runMemory: EnaRunMemory | null): void {
     if (!this.storage) return
     const state = this.loadState()
     state.updatedAt = now
     state.reflections.push(reflection)
     // 장기 저장은 최근 흐름만 있으면 충분하므로 너무 큰 localStorage 사용을 피한다.
     if (state.reflections.length > 20) state.reflections.splice(0, state.reflections.length - 20)
+    if (runMemory) {
+      state.memories = [...(state.memories ?? []), runMemory].slice(-MAX_RUN_MEMORIES)
+    }
     this.storage.setItem(ENA_SELF_LEARNING_STORAGE_KEY, JSON.stringify(state))
   }
+
+  private saveRecallKey(state: EnaAutonomousLearningState, key: string): void {
+    if (!this.storage) return
+    state.lastRecallKey = key
+    this.storage.setItem(ENA_SELF_LEARNING_STORAGE_KEY, JSON.stringify(state))
+  }
+}
+
+/** 마지막 런 로그를 구조화 기억 1건으로 요약한다. 로그가 없으면 null. */
+function buildRunMemory(memory: EnaPlayLogMemory): EnaRunMemory | null {
+  const entries = memory.all()
+  const last = entries[entries.length - 1]
+  if (!last) return null
+  return {
+    outcome: last.survived ? 'cleared' : 'died',
+    floor: last.turnReached,
+    cause: last.deathSource,
+    runIndex: entries.length,
+  }
+}
+
+/**
+ * 최신 구조화 기억에서 사실 기반 회상 후보를 만들고, 직전 회상 키와 다른 하나를 고른다.
+ * 모든 문형은 '지난(번)' + '이번'을 담아 회고→기약의 톤을 유지한다.
+ */
+function pickFactRecall(
+  memories: readonly EnaRunMemory[],
+  lastRecallKey: string | undefined
+): { key: string; line: string } | null {
+  const m = memories[memories.length - 1]
+  if (!m) return null
+  const options: Array<{ key: string; line: string }> = []
+  if (m.outcome === 'cleared') {
+    options.push({ key: `${m.runIndex}:clear-a`, line: '지난번 여정은 끝까지 닿았지. 이번에도 그 빛까지 가 보자.' })
+    options.push({ key: `${m.runIndex}:clear-b`, line: `지난번엔 ${m.floor}층의 빛을 봤어. 이번 길도 곁에서 볼게.` })
+  } else {
+    options.push({ key: `${m.runIndex}:floor-a`, line: `지난번엔 ${m.floor}층에서 멈췄지. 이번엔 더 가 보자.` })
+    if (m.floor >= 60) {
+      options.push({ key: `${m.runIndex}:floor-b`, line: `지난번엔 ${m.floor}층까지 갔어. 그 길, 이번에도 기억하고 있어.` })
+    }
+    if (m.cause) {
+      options.push({ key: `${m.runIndex}:cause-a`, line: resolveKoreanParticles(`지난번 ${m.cause}[은/는] 이제 요령을 알 것 같아. 이번엔 덜 아플 거야.`) })
+      options.push({ key: `${m.runIndex}:cause-b`, line: resolveKoreanParticles(`${m.floor}층의 ${m.cause}[을/를] 지난번엔 못 넘었지. 이번엔 먼저 준비하자.`) })
+    }
+  }
+  const fresh = options.filter((option) => option.key !== lastRecallKey)
+  const pool = fresh.length > 0 ? fresh : options
+  if (pool.length === 0) return null
+  return pool[Math.floor(Math.random() * pool.length)]
 }
 
 /** 브라우저 localStorage가 없을 수 있는 테스트/SSR 환경에서 안전하게 learner를 만든다. */

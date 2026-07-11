@@ -33,6 +33,8 @@ export interface EnaPlayLogEntry {
   usedHandCards: Partial<Record<HandCardId, number>>
   shopPurchases: string[]
   deathReason?: string
+  /** 마지막 피해 원천 카드/보스 이름 — 사망 원인 회상 대사에 쓴다. */
+  deathSource?: string
 }
 
 export interface EnaTuningAdjustment {

@@ -127,6 +127,12 @@ export interface BossInjected {
   applyRelicPurchaseEffect: (id: RelicId) => Promise<void>
   /** 플레이어 체력 0 처리 — Hope 유물 부활 시 true, 실제 패배 시 false + 게임오버 화면 */
   handlePlayerDeath: () => Promise<boolean>
+  /** 동반자(에나) 보스 전용 대사 훅 — 일반 월드 바크가 침묵하는 보스전에서 등장 순간만 알린다(선택적). */
+  onBossIntro?: (bossName: string) => void
+  /** 보스 국면 전환(페이지/후방 소환) 순간. phaseKey로 호출부가 이벤트당 1회 발화를 보장한다. */
+  onBossPhase?: (bossName: string, phaseKey: string) => void
+  /** 보스 격파 연출이 끝나고 레일이 정리된 직후. */
+  onBossKill?: (bossName: string) => void
 }
 
 // ---- Controller ------------------------------------------------------------
@@ -812,6 +818,9 @@ export class BossEventController {
       await this.performSummonToBack()
     }
 
+    // 인트로/타이틀이 모두 끝난 뒤 에나의 보스 등장 한마디(보스·플레이어 대사와 겹치지 않는 시점).
+    this.inject.onBossIntro?.(def.name)
+
     this.inject.setInputLocked(false)
 
     // 격파 대기
@@ -994,6 +1003,7 @@ export class BossEventController {
         this.inject.render()
         await this.playIntroLine('boss',   '그래, 정말 이 세계는 이제 다 끝났네.', 3100)
         await this.playIntroLine('player', '같잖은 말장난을...', 2500)
+        this.inject.onBossPhase?.(state.def.name, 'witch-page-2')
         this.inject.setInputLocked(false)
         return true
       }
@@ -1009,6 +1019,7 @@ export class BossEventController {
       await this.playIntroLine('boss',   '이제 너도 그만 사라져.', 2500)
       await this.playIntroLine('player', '. . .', 3300)
       await this.performWitchSummonToBack()
+      this.inject.onBossPhase?.(state.def.name, 'witch-page-3')
       this.inject.setInputLocked(false)
       return true
     }
@@ -1109,6 +1120,8 @@ export class BossEventController {
   /** 3턴 트리거 시 조각사를 후방으로 이동시키고 dist-0에 적을 소환한다. */
   private async handleSculptorPhaseShift(): Promise<void> {
     await this.performSummonToBack()
+    // 반복 트리거지만 phaseKey가 같아 호출부 중복 방지로 첫 후퇴에서만 발화된다.
+    this.inject.onBossPhase?.(this.eventState!.def.name, 'sculptor-back')
     this.inject.setInputLocked(false)
   }
 
@@ -1442,6 +1455,7 @@ export class BossEventController {
     for (const text of lines) {
       await this.playIntroLine('boss', text, 2200)
     }
+    this.inject.onBossPhase?.(state.def.name, 'demon-page-2')
     this.inject.setInputLocked(false)
     return true
   }
@@ -1577,6 +1591,8 @@ export class BossEventController {
     this.gs.bossBattleActive = false
     this.br.setBossAttackCountdown(null)
     this.inject.render()
+    // 격파 연출·레일 정리가 끝난 시점 — 에나의 격파 한마디가 컷신 대사를 덮지 않는다.
+    this.inject.onBossKill?.(state.def.name)
     state.defeated?.()
   }
 

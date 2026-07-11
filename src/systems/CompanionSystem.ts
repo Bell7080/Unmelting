@@ -27,6 +27,14 @@ import {
   RELIC_RARITY_LINES,
   GENERIC_BUY_LINES,
   PREDICT_LINES,
+  BOSS_INTRO_LINES,
+  BOSS_PHASE_LINES,
+  BOSS_KILL_LINES,
+  DEATH_LINES,
+  CLEAR_LINES,
+  TRIAL_LINES,
+  STARLIGHT_LINES,
+  PACK_LINES,
 } from '@data/CompanionLines'
 import type { CardRarity } from '@data/ShopPools'
 import type {
@@ -37,6 +45,7 @@ import type {
   SituationId,
   ClutchKind,
   MinorClutchKind,
+  PackLineKind,
 } from '@data/CompanionLines'
 import type { HandCategory, HandCardId } from '@entities/HandCard'
 import {
@@ -47,7 +56,7 @@ import {
 } from './EnaDisposition'
 
 // 대사 데이터 쪽 타입을 그대로 다시 노출해 기존 import 경로(@systems/CompanionSystem)를 유지한다.
-export type { Line, LineTemplate, SituationId, ClutchKind, MinorClutchKind }
+export type { Line, LineTemplate, SituationId, ClutchKind, MinorClutchKind, PackLineKind }
 
 /** 반응을 고를 때 함께 보는, 호출 시점의 게임 상황. */
 export interface CompanionContext {
@@ -83,7 +92,7 @@ export interface ClutchContext {
 export interface MinorClutchContext {
   /** 죽음 직전·강적·보상 실패처럼 평소보다 극적인 순간인가. */
   adversity?: boolean
-  /** 플레이어와의 유대가 개입을 밀어주는 상황인가(대사를 들어준 정도 등). */
+  /** 유대 보정 강제 오버라이드. 생략하면 누적 bond(≥0.35)에서 자동 파생된다. */
   bond?: boolean
 }
 
@@ -203,6 +212,25 @@ const STREAK_RESET_MS = 4000
 /** 클러치 예산('의지') 최대치 — 역경(피해)으로 차고, 발동 시 0으로 비운다(구조 상한이라 성향과 분리). */
 const WILL_MAX = 100
 
+// ── 지속 감정 상태(mood/bond) 튜닝 ──────────────────────────
+/** mood 자연 회복 속도 — 매 턴 0으로 이만큼 수렴한다. */
+const MOOD_RECOVERY_PER_TURN = 0.02
+/** 상황별 mood 변화량. 대사 발화 여부와 무관하게 상황 자체가 기분을 흔든다.
+ *  hit은 gainWill의 피해 비례 하락이 담당하므로 여기서 이중 반영하지 않는다. */
+const MOOD_SHIFT: Record<SituationId, number> = {
+  hit: 0,
+  web: -0.05,
+  treasure: 0.08,
+  kill: 0.06,
+  survive: -0.02,
+  flower: 0.05,
+  event: 0.02,
+  spore: -0.05,
+  bomb: -0.08,
+}
+/** 이 유대치 이상이면 소소한 클러치의 유대 보정이 자동으로 켜진다(과거 bond:true 하드코딩 대체). */
+const BOND_CLUTCH_THRESHOLD = 0.35
+
 export class CompanionSystem {
   /** 성향 파라미터(임의값 그릇). 기본값은 기존 상수와 동일해 도입만으로 동작이 변하지 않는다.
    *  런-내 빠른 학습(situationWeight/predictiveWeight)이 런 종료 시 이 느린 성향으로 소화된다. */
@@ -226,6 +254,12 @@ export class CompanionSystem {
     }
   }
 
+  /** 런 내 지속 기분(-1~1). 피해·위협에 내려가고 처치·보물·레시피·보스 격파에 올라가며 턴마다 0으로 회복한다. */
+  private mood = 0
+  /** mood 자연 회복을 마지막으로 정산한 턴 — 턴을 아는 기존 훅이 지나갈 때 lazy하게 정산한다. */
+  private lastMoodTurn = 0
+  /** 런을 넘는 유대(0~1). 대사 열람·클러치 발동·런 종료로만 천천히 오르고 절대 내려가지 않는다. */
+  private bond = 0
   /** 짧은 시간 내 연속 터치 횟수 — 반응 강도를 끌어올린다. */
   private touchStreak = 0
   private lastTouchAt = 0
@@ -268,6 +302,42 @@ export class CompanionSystem {
    */
   private predictiveWeight = 1
 
+  // ── 지속 감정 상태(mood/bond) ──────────────────────────────
+
+  /** 현재 기분(-1~1). UI/디버그와 말투 보정에서 읽는다. */
+  getMood(): number {
+    return this.mood
+  }
+
+  /** 누적 유대(0~1). 회상 확률 가산 등 호출부 파생값에 쓴다. */
+  getBond(): number {
+    return this.bond
+  }
+
+  /** 저장소에서 복원한 유대를 주입한다(런을 넘는 영속값). */
+  setBond(value: number): void {
+    this.bond = Math.max(0, Math.min(1, value))
+  }
+
+  /** 외부 이벤트(보스 격파/레시피 발동 등)가 기분을 직접 흔들 때 쓴다. */
+  noteMoodShift(delta: number): void {
+    this.mood = Math.max(-1, Math.min(1, this.mood + delta))
+  }
+
+  /** 턴 경과에 따른 기분 자연 회복(턴당 0.02씩 0으로). 턴을 아는 기존 훅이 지나갈 때 호출된다. */
+  syncMoodToTurn(turn: number): void {
+    if (turn <= this.lastMoodTurn) return
+    const recovery = (turn - this.lastMoodTurn) * MOOD_RECOVERY_PER_TURN
+    this.lastMoodTurn = turn
+    if (this.mood > 0) this.mood = Math.max(0, this.mood - recovery)
+    else if (this.mood < 0) this.mood = Math.min(0, this.mood + recovery)
+  }
+
+  /** 유대는 느린 단조 성장만 한다 — 하락 경로를 두지 않는다. */
+  private gainBond(amount: number): void {
+    this.bond = Math.min(1, this.bond + Math.max(0, amount))
+  }
+
   /**
    * 프로필을 만졌을 때. 연타 강도(streak)에 따라 calm→annoyed→exasperated로 반응한다.
    * 중복 출력 방지(이미 대사가 나오는 중엔 무시)는 호출부(UI)가 담당한다.
@@ -301,6 +371,9 @@ export class CompanionSystem {
     important = false,
     name?: string
   ): string | null {
+    // 상황 자체는 발화 여부와 무관하게 기분을 흔든다(자연 회복 정산 → 상황 변화 반영).
+    this.syncMoodToTurn(turn)
+    this.noteMoodShift(MOOD_SHIFT[id])
     if (!important && turn - this.lastWorldBarkTurn < this.minTurnGap()) return null
     let chance = Math.min(0.95, this.disp.situationChance[id] * this.situationWeight[id])
     if (important) chance = Math.max(chance, 0.7)
@@ -325,9 +398,10 @@ export class CompanionSystem {
     this.situationWeight[id] = Math.max(this.disp.weightFloor, this.situationWeight[id] * this.disp.skipDecay)
   }
 
-  /** 플레이어가 대사를 끝까지 봐 준 상황 → 점점 더 수다스러워진다(긍정 보상). */
+  /** 플레이어가 대사를 끝까지 봐 준 상황 → 점점 더 수다스러워지고, 유대가 아주 조금 오른다. */
   recordHeard(id: SituationId): void {
     this.situationWeight[id] = Math.min(this.disp.weightMax, this.situationWeight[id] * this.disp.heardGrowth)
+    this.gainBond(0.002)
   }
 
   /** 스킵이 누적됐을 때 가끔 '조용히 할게'류로 과묵해짐을 알린다(드물게). */
@@ -345,6 +419,7 @@ export class CompanionSystem {
     turn: number,
     ctx?: { emberSufficient?: boolean }
   ): string | null {
+    this.syncMoodToTurn(turn)
     if (turn - this.lastWorldBarkTurn < this.minTurnGap()) return null
     if (Math.random() >= this.disp.lootCommentChance) return null
     this.lastWorldBarkTurn = turn
@@ -359,6 +434,7 @@ export class CompanionSystem {
 
   /** 손패 '사용' 한줄평. 같은 턴 간격을 공유해 가끔만 능력을 언급한다. */
   onUseCard(cardId: string, category: HandCategory, turn: number): string | null {
+    this.syncMoodToTurn(turn)
     if (turn - this.lastWorldBarkTurn < this.minTurnGap()) return null
     if (Math.random() >= this.disp.lootCommentChance) return null
     this.lastWorldBarkTurn = turn
@@ -375,10 +451,11 @@ export class CompanionSystem {
 
   // ── 클러치(에나의 의지): 대사만이 아니라 실제 서포팅 ──────────
 
-  /** 피해를 입은 만큼 '의지'를 쌓는다(역경에 비례). 클러치 예산의 충전. */
+  /** 피해를 입은 만큼 '의지'를 쌓는다(역경에 비례). 클러치 예산의 충전 + 기분 하락(피해 비례 소량). */
   gainWill(damage: number, maxHp: number): void {
     if (damage <= 0 || maxHp <= 0) return
     this.will = Math.min(WILL_MAX, this.will + Math.round((damage / maxHp) * this.disp.willGainPerDamage) + this.disp.willGainFlatBonus)
+    this.noteMoodShift(-Math.min(0.25, (damage / maxHp) * 0.5))
   }
 
   /** 피해 외 지속 역경(불씨 고갈 등)으로도 의지를 조금 쌓는다. */
@@ -400,6 +477,7 @@ export class CompanionSystem {
     if (this.will < WILL_MAX) return null
     if (ctx.hp > 0 && ctx.hpRatio <= this.disp.clutchHpThreshold) {
       this.will = 0
+      this.gainBond(0.005) // 함께 위기를 넘긴 큰 클러치는 유대를 조금 더 올린다.
       if (Math.random() < this.disp.clutchHealVsShield) {
         const amount = clampInt(ctx.maxHp * this.disp.clutchHealRatio * this.disp.clutchStrength, 4, 12)
         return { kind: 'heal', amount, line: this.pickFrom('clutch-heal', CLUTCH_LINES.heal, 'urgent'), flavor: '위기의 순간, 의지로 버텼다' }
@@ -409,10 +487,12 @@ export class CompanionSystem {
     }
     if (ctx.emberLow) {
       this.will = 0
+      this.gainBond(0.005)
       return { kind: 'ember', amount: 1, cardId: 'match' as HandCardId, line: this.pickFrom('clutch-ember', CLUTCH_LINES.ember, 'urgent'), flavor: '불씨가 꺼지기 전에' }
     }
     if (ctx.supportCardId) {
       this.will = 0
+      this.gainBond(0.005)
       return { kind: 'hand', amount: 1, cardId: ctx.supportCardId, line: this.pickFrom('clutch-hand', CLUTCH_LINES.hand, 'urgent'), flavor: ctx.supportReason || '위험을 넘길 손패를 건넸다' }
     }
     return null
@@ -423,13 +503,16 @@ export class CompanionSystem {
    * clutchAdversityBoost와 유대(chattiness)를 곱해 일시적으로 상한을 연다.
    */
   rollMinorClutch(kind: MinorClutchKind, ctx: MinorClutchContext = {}): boolean {
+    // 호출부가 명시하지 않으면 누적 유대에서 파생한다(과거 bond:true 하드코딩 대체).
+    const bonded = ctx.bond ?? this.bond >= BOND_CLUTCH_THRESHOLD
     let chance = this.disp.minorClutchChance[kind]
     if (ctx.adversity) chance *= this.disp.clutchAdversityBoost
-    if (ctx.bond) chance += this.disp.bondClimaxChance * Math.max(0, this.chattiness() - 0.8)
+    if (bonded) chance += this.disp.bondClimaxChance * Math.max(0, this.chattiness() - 0.8)
     if (chance <= 0) return false
-    if (chance >= 1) return true
-    const cap = ctx.adversity || ctx.bond ? 0.45 : 0.22
-    return Math.random() < Math.min(cap, chance)
+    const cap = ctx.adversity || bonded ? 0.45 : 0.22
+    const fired = chance >= 1 || Math.random() < Math.min(cap, chance)
+    if (fired) this.gainBond(0.003) // 소소한 개입도 함께한 기억으로 유대에 남는다.
+    return fired
   }
 
   /** 소소한 클러치 대사 한 줄. */
@@ -445,12 +528,59 @@ export class CompanionSystem {
     if (this.awakened) return false
     if (Math.random() >= this.disp.awakenChance) return false
     this.awakened = true
+    this.gainBond(0.01) // 죽음 직전을 함께 넘긴 각성은 가장 큰 유대 신호다.
     return true
   }
 
   /** 각성 대사 한 줄. */
   awakenLine(): string {
     return this.pickFrom('awaken', AWAKEN_LINES, 'urgent')
+  }
+
+  // ── 침묵 구간 전용 대사(보스/종막/시련/팩/별빛) ─────────────────
+  // 일반 월드 바크 게이트(companionWorldCanSpeak) 밖에서 호출부가 이벤트당 1회만 띄운다.
+
+  /** 보스 등장 — 위압감으로 기분이 살짝 가라앉은 채 각오를 말한다. */
+  bossIntroLine(): string {
+    this.noteMoodShift(-0.1)
+    return this.pickFrom('boss-intro', BOSS_INTRO_LINES, 'normal')
+  }
+
+  /** 보스 국면 전환/위기 — 흐름이 바뀌는 순간의 경계 한마디. */
+  bossPhaseLine(): string {
+    return this.pickFrom('boss-phase', BOSS_PHASE_LINES, 'urgent')
+  }
+
+  /** 보스 격파 — 큰 승리는 기분을 크게 끌어올린다. */
+  bossKillLine(): string {
+    this.noteMoodShift(0.3)
+    return this.pickFrom('boss-kill', BOSS_KILL_LINES, 'normal')
+  }
+
+  /** 게임오버 — 슬프지만 다음 런을 기약한다. */
+  deathLine(): string {
+    return this.pickFrom('death', DEATH_LINES, 'soft')
+  }
+
+  /** 100층 클리어. */
+  clearLine(): string {
+    this.noteMoodShift(0.5)
+    return this.pickFrom('clear', CLEAR_LINES, 'normal')
+  }
+
+  /** 강제 시련 선택 직후의 각오. */
+  trialLine(): string {
+    return this.pickFrom('trial', TRIAL_LINES, 'normal')
+  }
+
+  /** 별빛 획득(최종 등반) — 반복 이벤트라 호출부가 확률 게이트를 건다. */
+  starlightLine(): string {
+    return this.pickFrom('starlight', STARLIGHT_LINES, 'soft')
+  }
+
+  /** 카드팩 구매 감상 — 팩 종류별 실제 효과에 맞는 풀에서만 고른다. */
+  packLine(kind: PackLineKind): string {
+    return this.pickFrom(`pack:${kind}`, PACK_LINES[kind] ?? GENERIC_BUY_LINES, 'normal')
   }
 
   // ── 예측 대비: 위협을 미리 읽고 대비 도구를 건넨다 ──────────
@@ -538,10 +668,12 @@ export class CompanionSystem {
     // 빠른 런-내 학습은 느린 성향으로 소화됐으니 1로 초기화해 다음 런에서 이중 반영을 막는다.
     for (const id of Object.keys(this.situationWeight) as SituationId[]) this.situationWeight[id] = 1
     this.predictiveWeight = 1
+    // 한 런을 끝까지 함께한 것 자체가 유대다 — 클리어가 조금 더 크다.
+    this.gainBond(outcome.died ? 0.004 : 0.01)
     return this.disp
   }
 
-  /** 새 런 시작 시 런 한정 상태(의지/각성/턴 흐름)를 초기화한다. 학습 가중치는 유지. */
+  /** 새 런 시작 시 런 한정 상태(의지/각성/턴 흐름/기분)를 초기화한다. 학습 가중치·유대는 유지. */
   resetForRun(): void {
     this.will = 0
     this.awakened = false
@@ -549,6 +681,8 @@ export class CompanionSystem {
     this.lastPredictTurn = -999
     this.lastMissedPotentialTurn = -999
     this.touchStreak = 0
+    this.mood = 0
+    this.lastMoodTurn = 0
   }
 
   /** 추후 성장/해금 층이 대사 풀을 넓히는 확장 지점(가짜 학습이 아니라 데이터 주입 seam). */
@@ -578,8 +712,17 @@ export class CompanionSystem {
     return this.pickFrom(pool, POOLS[pool], POOL_INTENSITY[pool])
   }
 
+  /** 현재 기분이 말투 토큰 선택을 보정한다 — 저기분은 차분/짧은 종결, 고기분은 밝은 종결. 위급 경고는 그대로 둔다. */
+  private moodAdjustedIntensity(intensity: Intensity): Intensity {
+    if (intensity === 'urgent') return 'urgent'
+    if (this.mood <= -0.35) return 'soft'
+    if (this.mood >= 0.5) return 'normal'
+    return intensity
+  }
+
   /** 주어진 줄 목록에서 최근에 나오지 않은 항목과 완성 문장을 골라 긴급도에 맞춰 렌더한다. */
-  private pickFrom(key: string, lines: Line[], intensity: Intensity): string {
+  private pickFrom(key: string, lines: Line[], baseIntensity: Intensity): string {
+    const intensity = this.moodAdjustedIntensity(baseIntensity)
     if (lines.length <= 1) return this.rememberRendered(key, renderLine(lines[0], intensity))
     const recent = this.recentPickHistory.get(key) ?? []
     const avoid = new Set(recent)
