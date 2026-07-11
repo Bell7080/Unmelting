@@ -30,4 +30,13 @@ describe('EnaRuntimeObserver', () => {
     expect(observer.getMemory().all()[0].usedHandCards.ember).toBe(1)
     expect(observer.getMemory().all()[0].shopPurchases).toContain('pack:unlock-pack')
   })
+
+  it('팩 내부 선택(확률/해금/삭제)의 상세 정보를 이벤트에 함께 보관한다', () => {
+    const gs = new GameState()
+    const observer = new EnaRuntimeObserver()
+    observer.recordShopPurchase(gs, 'pick:chance-pack', { itemId: 'chance-ember', handCardId: 'ember', boostAdded: 13 })
+    const event = observer.getEvents()[0]
+    expect(event.detail).toBe('pick:chance-pack')
+    expect(event.purchaseDetail).toEqual({ itemId: 'chance-ember', handCardId: 'ember', boostAdded: 13 })
+  })
 })

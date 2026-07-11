@@ -27,11 +27,20 @@ export interface EnaVisualFrame {
   summary: string
 }
 
+/** 상점 구매의 상세 선택 정보 — 확률팩(대상 카드+부스트)/해금팩(카드)/삭제팩(카드) 등. */
+export interface EnaShopPurchaseDetail {
+  itemId?: string
+  handCardId?: string
+  boostAdded?: number
+}
+
 export interface EnaRuntimeEvent {
   kind: 'hand' | 'shop' | 'boss' | 'run-end'
   turn: number
   detail: string
   frameSummary: string
+  /** 상점 이벤트에서만 채워지는 선택 상세. 문자열 라벨(detail)은 기존 학습 로직 호환용으로 유지한다. */
+  purchaseDetail?: EnaShopPurchaseDetail
 }
 
 export class EnaRuntimeObserver {
@@ -47,10 +56,11 @@ export class EnaRuntimeObserver {
     this.pushEvent(gs, 'hand', `${getHandCardDef(defId).name}: ${detail}`)
   }
 
-  /** 상점/제단 구매 순간: 해금팩/확률팩/레시피팩/무료카드 등 선택 습관을 누적한다. */
-  recordShopPurchase(gs: GameState, purchaseId: string): void {
+  /** 상점/제단 구매 순간: 해금팩/확률팩/레시피팩/무료카드 등 선택 습관을 누적한다.
+   *  detail이 있으면(팩 내부 선택) 어떤 카드에 어떤 부스트가 붙었는지까지 이벤트에 보관한다. */
+  recordShopPurchase(gs: GameState, purchaseId: string, detail?: EnaShopPurchaseDetail): void {
     this.shopPurchases.push(purchaseId)
-    this.pushEvent(gs, 'shop', purchaseId)
+    this.pushEvent(gs, 'shop', purchaseId, detail)
   }
 
   /** 보스전 선택 순간: 공격/손패/버스트 판단을 프레임과 함께 남긴다. */
@@ -93,9 +103,9 @@ export class EnaRuntimeObserver {
     return { turn: gs.getCurrentTurn(), hp: gs.character.health, shield: gs.character.shield, ember: gs.character.ember, hand, board, shop: shop ? [...shop] : undefined, lookahead, recipeHints, summary }
   }
 
-  private pushEvent(gs: GameState, kind: EnaRuntimeEvent['kind'], detail: string): void {
+  private pushEvent(gs: GameState, kind: EnaRuntimeEvent['kind'], detail: string, purchaseDetail?: EnaShopPurchaseDetail): void {
     const frame = this.describeFrame(gs)
-    this.events.push({ kind, turn: gs.getCurrentTurn(), detail, frameSummary: frame.summary })
+    this.events.push({ kind, turn: gs.getCurrentTurn(), detail, frameSummary: frame.summary, purchaseDetail })
     // 장시간 런에서 메모리가 무한히 커지지 않도록 최근 이벤트만 유지한다.
     if (this.events.length > 400) this.events.splice(0, this.events.length - 400)
   }

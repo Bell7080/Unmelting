@@ -3,10 +3,10 @@ import { EnaTrainer, policyFromNetwork, legalMaskOf } from './EnaTrainer'
 import { ENA_ACTION_SPACE, EnaRandom, EnaTrainingSimulation } from './EnaTrainingSimulation'
 
 describe('EnaTrainer', () => {
-  it('관측의 합법 행동을 길이 21 마스크로 정확히 변환한다', () => {
+  it('관측의 합법 행동을 길이 25 마스크로 정확히 변환한다', () => {
     const obs = new EnaTrainingSimulation(2).reset()
     const mask = legalMaskOf(obs)
-    expect(mask).toHaveLength(21)
+    expect(mask).toHaveLength(25)
     expect(mask.filter(Boolean).length).toBe(obs.legalActions.length)
   })
 

@@ -47,6 +47,7 @@ import { getHandCardDef, HAND_CARD_IDS, HAND_CARD_DEFINITIONS } from '@data/Hand
 import { RECIPES } from '@data/Recipes'
 import { getRelicDef, relicDrawWeight, RELIC_IDS, type CustomRelicProfile, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
+import { altarPackBaseCost, packCostWithRepeats, regularShopPackBaseCost } from '@core/ShopPricing'
 import { COMBO_TRIGGER_DELAY_MS, GAUGE_TRIGGER_DELAY_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
 import {
   sampleWeightedWithoutReplacement,
@@ -1565,11 +1566,8 @@ async function openTrialOverlay(): Promise<void> {
 /** Pack cost source of truth. UI 표기와 실제 차감이 갈라지지 않도록 구매 처리도 이 함수만 사용한다.
  *  카드팩은 유물과 달리 고정 시작가에 방문 내 구매 횟수만 누적한다. */
 function altarBasePackCost(): number {
-  const turn = gameState.getCurrentTurn()
-  // 30/60/90층 제단 팩은 층별 고정 시작가를 사용해 UI 표기와 차감을 정확히 맞춘다.
-  if (turn >= 90) return 2500
-  if (turn >= 60) return 1500
-  return 500
+  // 30/60/90층 제단 팩 층별 시작가 공식은 ShopPricing(공유 모듈)이 단일 출처다.
+  return altarPackBaseCost(gameState.getCurrentTurn())
 }
 
 function baseShopPackCost(kind: ShopPackKind): number {
@@ -1577,11 +1575,9 @@ function baseShopPackCost(kind: ShopPackKind): number {
   switch (kind) {
     case 'basic-pack':
     case 'recipe-pack':
-    case 'unlock-pack': {
+    case 'unlock-pack':
       // 일반 상점 3팩 공통 시작가: 10층 120에서 10층마다 +40 (20F 160, 40F 240 …).
-      const turn = gameState.getCurrentTurn()
-      return Math.max(120, 80 + turn * 4)
-    }
+      return regularShopPackBaseCost(gameState.getCurrentTurn())
     // 제단 전용 팩이 일반 상점에서 호출되면 안전한 기본값으로 막는다.
     default: return altarBasePackCost()
   }
@@ -1590,7 +1586,7 @@ function baseShopPackCost(kind: ShopPackKind): number {
 function currentShopPackCost(kind: ShopPackKind): number {
   const base = baseShopPackCost(kind)
   // 각 팩은 구매할 때마다 자기 초기 가격만큼 증가한다(예: 1500→3000→4500).
-  const raw = base * ((shopPackBuys[kind] ?? 0) + 1)
+  const raw = packCostWithRepeats(base, shopPackBuys[kind] ?? 0)
   const discountFactor = 1 - Math.min(0.8, gameState.enhancements.shopDiscountPct / 100)
   return Math.max(1, Math.round(raw * discountFactor))
 }
@@ -2147,7 +2143,21 @@ async function handleShopPackPick(detail: ShopPackPickDetail): Promise<void> {
   if (!picked) return
   const beforeResources = snapshotPlayerResources()
   const beforeCoins = coins
+  // 확률팩 부스트 상세 기록용: apply 전후 T1 부스트 차이로 실제 추가량을 얻는다.
+  const boostBefore = picked.handCardId ? (gameState.enhancements.tier1CardBoosts[picked.handCardId] ?? 0) : 0
   await picked.apply()
+  // 에나 관측: 팩에서 실제로 고른 카드/부스트를 상세 기록해 런 후 학습 신호로 쓴다.
+  if (
+    !gameState.tutorialMode &&
+    (detail.packKind === 'chance-pack' || detail.packKind === 'unlock-pack' || detail.packKind === 'delete-pack')
+  ) {
+    const boostAfter = picked.handCardId ? (gameState.enhancements.tier1CardBoosts[picked.handCardId] ?? 0) : 0
+    enaRuntimeObserver.recordShopPurchase(gameState, `pick:${detail.packKind}`, {
+      itemId: detail.itemId,
+      handCardId: picked.handCardId,
+      boostAdded: boostAfter > boostBefore ? boostAfter - boostBefore : undefined,
+    })
+  }
   // unlock-pack/delete-pack 선택 후 runCardPool이 바뀌므로 드롭 풀 및 도감 잠금 표시를 재동기화한다.
   const poolSnap = runCardPool.snapshot()
   DropSystem.setAllowedPool(poolSnap.unlocked)

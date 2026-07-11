@@ -46,18 +46,34 @@ export class DropSystem {
     DropSystem.tier1JobPoolBoosts = boosts
   }
 
-  /** Build a single random hand card using 2-tier selection:
+  /** Build a single random hand card using 2-tier selection.
+   *  실제 추첨 로직은 순수 함수 drawIdFromPool에 있으며, 여기서는 자신의 정적 상태
+   *  (allowedIds/tier1CardBoosts/tier1JobPoolBoosts)를 그대로 넘긴다. */
+  static generateDrop(source: HandCardDropSource = 'enemy-kill'): HandCard {
+    const allowed = DropSystem.allowedIds
+      ? [...DropSystem.allowedIds]
+      : (Object.keys(HAND_CARD_DEFINITIONS) as HandCardId[])
+    const id = DropSystem.drawIdFromPool(allowed, source, DropSystem.tier1CardBoosts, DropSystem.tier1JobPoolBoosts)
+    return DropSystem.makeCard(id)
+  }
+
+  /** 순수 2단계 추첨 — RL 시뮬레이터 등 외부에서도 같은 확률 구조를 공유하기 위한 정적 함수.
    *  1단계: 등급 항목 + 개별 카드 부스트 항목 + 직업 태그 그룹 항목을 합쳐 뽑는다.
    *    - 등급이 선택되면 → 2단계로 해당 등급 내에서 카드를 뽑는다.
    *    - 개별 카드가 선택되면 → 해당 카드를 즉시 반환한다.
    *    - 직업 태그 그룹이 선택되면 → 해당 태그 카드들 내에서 T2를 돌린다.
    *  2단계: 선택된 등급/그룹 내에서 dropWeight 가중치로 카드를 선택한다. */
-  static generateDrop(source: HandCardDropSource = 'enemy-kill'): HandCard {
+  static drawIdFromPool(
+    poolIdsInput: readonly HandCardId[],
+    source: HandCardDropSource,
+    cardBoosts: Partial<Record<string, number>>,
+    jobBoosts: Partial<Record<string, number>>,
+    rng: () => number = Math.random,
+  ): HandCardId {
     const all = Object.values(HAND_CARD_DEFINITIONS)
     const sourcePool = all.filter((d) => d.dropSource === 'any' || d.dropSource === source)
-    const defs = DropSystem.allowedIds
-      ? sourcePool.filter((d) => DropSystem.allowedIds!.has(d.id))
-      : sourcePool
+    const allowed = new Set(poolIdsInput)
+    const defs = sourcePool.filter((d) => allowed.has(d.id))
     const pool = defs.length > 0 ? defs : sourcePool
     const poolIds = new Set(pool.map(d => d.id))
 
@@ -70,12 +86,12 @@ export class DropSystem {
     for (const def of pool) existingRarities.add(HAND_CARD_RARITY[def.id] ?? 'common')
 
     const tier1: Tier1Entry[] = Array.from(existingRarities).map(r => ({ kind: 'rarity', rarity: r, weight: RARITY_WEIGHTS[r] }))
-    for (const [id, boost] of Object.entries(DropSystem.tier1CardBoosts)) {
+    for (const [id, boost] of Object.entries(cardBoosts)) {
       if (boost && boost > 0 && poolIds.has(id as HandCardId)) {
         tier1.push({ kind: 'card', id: id as HandCardId, weight: boost })
       }
     }
-    for (const [tag, weight] of Object.entries(DropSystem.tier1JobPoolBoosts)) {
+    for (const [tag, weight] of Object.entries(jobBoosts)) {
       // 직업 태그 풀에 해당 카드가 1장이라도 있을 때만 항목 추가
       if (weight && weight > 0 && pool.some(d => (d.jobTags as readonly string[] | undefined)?.includes(tag))) {
         tier1.push({ kind: 'job-pool', tag, weight })
@@ -83,37 +99,37 @@ export class DropSystem {
     }
 
     const tier1Total = tier1.reduce((s, e) => s + e.weight, 0)
-    let tier1Roll = Math.random() * tier1Total
+    let tier1Roll = rng() * tier1Total
     let selected: Tier1Entry = tier1[0]
     for (const entry of tier1) {
       tier1Roll -= entry.weight
       if (tier1Roll <= 0) { selected = entry; break }
     }
 
-    if (selected.kind === 'card') return DropSystem.makeCard(selected.id)
+    if (selected.kind === 'card') return selected.id
 
     if (selected.kind === 'job-pool') {
       // 직업 태그 그룹 당첨: 해당 태그 카드들 내에서 dropWeight T2
       const tagPool = pool.filter(d => (d.jobTags as readonly string[] | undefined)?.includes(selected.tag))
       const tagDefs = tagPool.length > 0 ? tagPool : pool
       const total = tagDefs.reduce((s, d) => s + (d.dropWeight ?? 1), 0)
-      let roll = Math.random() * total
+      let roll = rng() * total
       for (const def of tagDefs) {
         roll -= (def.dropWeight ?? 1)
-        if (roll <= 0) return DropSystem.makeCard(def.id)
+        if (roll <= 0) return def.id
       }
-      return DropSystem.makeCard(tagDefs[0].id)
+      return tagDefs[0].id
     }
 
     // 2단계: 선택된 등급 내에서 dropWeight 가중치로 카드를 선택한다.
     const tierPool = pool.filter((d) => (HAND_CARD_RARITY[d.id] ?? 'common') === selected.rarity)
     const total = tierPool.reduce((sum, d) => sum + (d.dropWeight ?? 1), 0)
-    let roll = Math.random() * total
+    let roll = rng() * total
     for (const def of tierPool) {
       roll -= (def.dropWeight ?? 1)
-      if (roll <= 0) return DropSystem.makeCard(def.id)
+      if (roll <= 0) return def.id
     }
-    return DropSystem.makeCard(tierPool[0].id)
+    return tierPool[0].id
   }
 
   /** Build a fresh hand card instance for a known definition id. */

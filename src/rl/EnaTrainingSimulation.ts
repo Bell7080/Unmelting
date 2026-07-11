@@ -3,7 +3,9 @@
  *
  * UI/애니메이션/턴 딜레이만 제거하고, 플레이어가 실제로 겪는 100층 등반을 그대로 모델링한다.
  * 3×3 전투 · 개별 손패(트리플 합성 포함) · 거미줄 병합/포자 전염/씨앗 개화 · 이벤트 문 ·
- * 불씨 티어 스폰 압박 · 10/20/30 상점·제단 · 30/60/90/100F 실제 보스 · 90~100F 별빛 등반까지
+ * 불씨 티어 스폰 압박 · 10/20/30 상점·제단(불빛/화폐 재화 분리, 실제 6종 팩·ShopPricing 공유 가격,
+ * 런 카드 풀 해금/밴·확률팩 T1 부스트를 DropSystem 2단계 추첨으로 반영) ·
+ * 30/60/90/100F 실제 보스 · 90~100F 별빛 등반까지
  * 한 호(arc)로 굴려, 외부 학습기가 (state, action, reward, nextState, done)으로 소비하게 한다.
  *
  * 목표: "플레이어가 진짜 하는 게임을 에나 혼자서 미리 모험하며 준비한다"는 느낌의 그릇.
@@ -12,10 +14,13 @@
  */
 
 import { CardType, type FlowerKind, type TrapKind } from '@entities/Card'
-import type { HandCardId, HandCardDefinition } from '@entities/HandCard'
+import type { HandCardId, HandCardDefinition, HandCardDropSource } from '@entities/HandCard'
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
+import { HAND_CARD_RARITY, type CardRarity } from '@data/ShopPools'
 import { EmberSystem, type EmberTier } from '@systems/EmberSystem'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
+import { DropSystem } from '@systems/DropSystem'
+import { altarPackBaseCost, packCostWithRepeats, regularShopPackBaseCost } from '@core/ShopPricing'
 import { buildEnaKnowledgeBase, type EnaKnowledgeBase, type EnaHandCardTactic } from './EnaKnowledgeAdapter'
 import type { EnaDisposition } from '@systems/EnaDisposition'
 
@@ -48,15 +53,20 @@ export interface EnaHandSlot {
   merged: boolean
 }
 
-/** 손패/상점/이벤트/보스까지 포괄하는 고정 행동. lane/slot이 없는 행동은 -1을 쓴다. */
+/** 손패/상점/이벤트/보스까지 포괄하는 고정 행동. lane/slot이 없는 행동은 -1을 쓴다.
+ *  상점 행동은 실제 상점/제단 콘텐츠(무료카드·유물·6종 팩·EXIT)와 1:1로 맞춘다. */
 export type EnaSimActionKind =
   | 'clickLane'
   | 'useHand'
   | 'wait'
-  | 'shopResource'
-  | 'shopUpgrade'
-  | 'shopRemove'
-  | 'shopReroll'
+  | 'shopFree'
+  | 'shopRelic'
+  | 'shopBasicPack'
+  | 'shopRecipePack'
+  | 'shopUnlockPack'
+  | 'shopChancePack'
+  | 'shopDeletePack'
+  | 'shopResourcePack'
   | 'shopExit'
   | 'eventSafe'
   | 'eventGreedy'
@@ -110,10 +120,18 @@ interface EnaGameSnapshot {
   ember: number
   emberMax: number
   emberTier: EmberTier
+  /** 불빛(score) — 팩/유물 구매 재화. */
+  light: number
+  /** 화폐($) — 보물 동전/보스 현상금 등 희소 재화. */
   coins: number
   attack: number
   combo: number
   comboMax: number
+  /** 런 카드 풀 상태 요약 — 상점 팩 판단에 쓴다. */
+  lockedCount: number
+  unlockedCount: number
+  chanceBoostTotal: number
+  recipeTripleBonus: number
   hand: EnaHandSlot[]
   turn: number
   turnsToShop: number
@@ -169,28 +187,44 @@ const BOSS_PROFILES: Record<number, BossProfile> = {
   100: { name: '녹지 않는 마녀', maxHp: 210, attack: 15, interval: 2, handGiftStep: 10, behavior: 'witch', pages: [140, 70, 0] },
 }
 
-/** 일반 드롭 풀(보스/보물 전용 제외). 실제 dropWeight를 그대로 사용한다. */
-const DROP_POOL: { id: HandCardId; weight: number }[] = HAND_CARD_IDS
-  .filter((id) => HAND_CARD_DEFINITIONS[id].dropSource === 'any')
-  .map((id) => ({ id, weight: HAND_CARD_DEFINITIONS[id].dropWeight ?? 1 }))
+/** 시뮬 상점이 다루는 실제 팩 종류(가격 반복 누적 추적용). */
+type EnaSimPackKind = 'basic-pack' | 'recipe-pack' | 'unlock-pack' | 'chance-pack' | 'delete-pack' | 'resource-pack'
 
-const FEATURE_SCALARS = 34
+/** 확률팩 T1 부스트(실게임 index.ts rollPackItems의 RARITY_BOOST와 동일). */
+const CHANCE_PACK_RARITY_BOOST: Record<CardRarity, number> = { common: 18, rare: 14, epic: 8, unique: 5, legendary: 5 }
+
+/** 삭제팩으로 풀을 깎아도 최소한 남겨 두는 카드 수(런 붕괴 방지). */
+const MIN_POOL_AFTER_DELETE = 5
+
+/** 실게임 createScoreLog의 기본 불빛 상향 배율(지터 0.88~1.12는 평균 1로 근사). */
+const BASE_LIGHT_GAIN_MULTIPLIER = 1.4
+
+/** 실게임 scoreForCardRemoval의 일반 적 불빛 1차식 상수. */
+const ENEMY_LIGHT_BASE = 17
+const ENEMY_LIGHT_PER_RANK = 6
+
+const FEATURE_SCALARS = 38
 const FEATURE_PER_INCOMING = 6
 const FEATURE_PER_CELL = 14
 const FEATURE_PER_HAND = 9
 export const ENA_FEATURE_COUNT = FEATURE_SCALARS + FEATURE_PER_INCOMING * LANES + FEATURE_PER_CELL * ROWS * LANES + FEATURE_PER_HAND * HAND_MAX
 
-/** 모든 행동 인덱스를 고정해 신경망 출력 차원을 안정화한다. */
+/** 모든 행동 인덱스를 고정해 신경망 출력 차원을 안정화한다.
+ *  = 레인 3 + 손패 10 + 대기 1 + 상점 9 + 이벤트 2 = 25. */
 export const ENA_ACTION_SPACE: EnaSimAction[] = [
   { kind: 'clickLane', arg: 0 },
   { kind: 'clickLane', arg: 1 },
   { kind: 'clickLane', arg: 2 },
   ...Array.from({ length: HAND_MAX }, (_, slot) => ({ kind: 'useHand' as const, arg: slot })),
   { kind: 'wait', arg: -1 },
-  { kind: 'shopResource', arg: -1 },
-  { kind: 'shopUpgrade', arg: -1 },
-  { kind: 'shopRemove', arg: -1 },
-  { kind: 'shopReroll', arg: -1 },
+  { kind: 'shopFree', arg: -1 },
+  { kind: 'shopRelic', arg: -1 },
+  { kind: 'shopBasicPack', arg: -1 },
+  { kind: 'shopRecipePack', arg: -1 },
+  { kind: 'shopUnlockPack', arg: -1 },
+  { kind: 'shopChancePack', arg: -1 },
+  { kind: 'shopDeletePack', arg: -1 },
+  { kind: 'shopResourcePack', arg: -1 },
   { kind: 'shopExit', arg: -1 },
   { kind: 'eventSafe', arg: -1 },
   { kind: 'eventGreedy', arg: -1 },
@@ -207,9 +241,12 @@ export interface EnaHeuristicPolicyConfig {
   webCleanupThreshold: number
   shopCriticalHpThreshold: number
   shopCriticalEmberThreshold: number
-  shopResourceCost: number
-  shopUpgradeCost: number
-  shopRemoveCost: number
+  /** 잠긴 카드가 이만큼 남아 있으면 해금팩을 우선 구매한다. */
+  unlockPackLockedThreshold: number
+  /** 확률팩 누적 부스트가 이 값을 넘으면 더 사지 않는다. */
+  chanceBoostCap: number
+  /** 삭제팩은 해금 풀이 이 크기보다 클 때만 산다(풀 고갈 방지). */
+  deletePackPoolFloor: number
   attackGrowthTarget: number
   eventGreedySafetyMargin: number
   eventGreedyBossWindow: number
@@ -227,14 +264,14 @@ export const DEFAULT_ENA_HEURISTIC_POLICY_CONFIG: EnaHeuristicPolicyConfig = {
   webCleanupThreshold: 2,
   shopCriticalHpThreshold: 8,
   shopCriticalEmberThreshold: 4,
-  shopResourceCost: 2,
-  shopUpgradeCost: 4,
-  shopRemoveCost: 1,
+  unlockPackLockedThreshold: 8,
+  chanceBoostCap: 40,
+  deletePackPoolFloor: 14,
   attackGrowthTarget: 5,
   eventGreedySafetyMargin: 6,
   eventGreedyBossWindow: 12,
   bossEmergencyCountdown: 1,
-  bossEmergencyEffectiveHp: 8,
+  bossEmergencyEffectiveHp: 12,
 }
 
 /** 재현 가능한 셀프플레이가 필요해서 Math.random 대신 작은 LCG를 사용한다. */
@@ -273,14 +310,37 @@ export class EnaTrainingSimulation {
   private ember = STARTING_EMBER
   private emberMax = EMBER_MAX
   private emberDecayCountdown = EMBER_DECAY_TURNS
+  /** 불씨 소모 주기 — 자원팩 '두꺼운 심지'로 늘어난다. */
+  private emberDecayTurns = EMBER_DECAY_TURNS
+  /** 불빛(score): 팩/유물 구매 재화. 화폐(coins)와 분리해 실제 경제와 맞춘다. */
+  private light = 0
   private coins = 0
+  /** 랜턴 등 영구 불빛 배율(실게임 enhancements.scoreMultiplier). */
+  private scoreMultiplier = 1
   private attack = 1
   private combo = 0
   private comboMax = CANDLE_MAX
+  /** 최대 손패 수 — 자원팩 '큰 배낭'으로 +2. 관측/행동은 앞 HAND_MAX칸만 다룬다. */
+  private handMax = HAND_MAX
   private hand: EnaHandSlot[] = []
+  /** 조합팩 근사: 레시피 해금의 화력 기대값을 트리플 위력 영구 보너스로 압축. */
+  private recipeTripleBonus = 0
+  // 런 카드 풀: 실게임 RunCardPool과 같은 해금/잠금/밴 3분할 + 확률팩 T1 부스트.
+  private unlockedPool = new Set<HandCardId>()
+  private lockedPool = new Set<HandCardId>()
+  private bannedPool = new Set<HandCardId>()
+  private tier1CardBoosts: Partial<Record<string, number>> = {}
   private turn = 0
   private shopMode: 'shop' | 'altar' = 'shop'
   private shopActionsLeft = 0
+  /** 방문 내 동일 팩 반복 구매 누적(가격 상승) — 방문 진입 시 초기화. */
+  private shopPackBuysThisVisit: Partial<Record<EnaSimPackKind, number>> = {}
+  /** 방문당 무료카드 사용 가능 횟수(상점 1, 제단 2 — 두 번째는 수당 3$). */
+  private shopFreeUsesLeft = 0
+  /** 방문당 유물 획득 가능 횟수(상점 불빛 구매 최대 3, 제단 무료 1픽). */
+  private shopRelicBuysLeft = 0
+  /** 이번 step에서 수집한 별빛 수 — 순간 보상 shaping에 쓴다. */
+  private starlightsThisStep = 0
   private finalAscent = false
   private bossFloor = 0
   private bossHp = 0
@@ -317,14 +377,34 @@ export class EnaTrainingSimulation {
     this.shield = 0
     this.ember = this.emberMax = EMBER_MAX
     this.emberDecayCountdown = EMBER_DECAY_TURNS
+    this.emberDecayTurns = EMBER_DECAY_TURNS
+    this.light = 0
     this.coins = 0
+    this.scoreMultiplier = 1
     this.attack = 1
     this.combo = 0
     this.comboMax = CANDLE_MAX
+    this.handMax = HAND_MAX
     this.hand = []
+    this.recipeTripleBonus = 0
+    // 런 카드 풀 초기화: 실게임 메타 해금과 같은 기준(runLocked=false ∩ 일반 드롭 'any').
+    this.unlockedPool = new Set(HAND_CARD_IDS.filter((id) => {
+      const def = HAND_CARD_DEFINITIONS[id]
+      return !def.runLocked && def.dropSource === 'any'
+    }))
+    this.lockedPool = new Set(HAND_CARD_IDS.filter((id) => {
+      const def = HAND_CARD_DEFINITIONS[id]
+      return def.runLocked && def.dropSource !== 'boss'
+    }))
+    this.bannedPool = new Set()
+    this.tier1CardBoosts = {}
     this.turn = 0
     this.shopMode = 'shop'
     this.shopActionsLeft = 0
+    this.shopPackBuysThisVisit = {}
+    this.shopFreeUsesLeft = 0
+    this.shopRelicBuysLeft = 0
+    this.starlightsThisStep = 0
     this.finalAscent = false
     this.bossFloor = 0
     this.bossHp = this.bossMaxHp = 0
@@ -357,6 +437,7 @@ export class EnaTrainingSimulation {
   /** 현재 상태에서 행동 하나를 적용하고 보상/다음 관측을 돌려준다. */
   step(actionIndex: number): { observation: EnaObservation; reward: number; done: boolean } {
     if (this.done) return { observation: this.observe(), reward: 0, done: true }
+    this.starlightsThisStep = 0
     const beforeHp = this.hp
     const beforeBossHp = this.bossHp
     const beforeBosses = this.bossesCleared
@@ -375,7 +456,7 @@ export class EnaTrainingSimulation {
     return { observation: this.observe(), reward, done: this.done }
   }
 
-  /** 고정 길이 숫자 입력: 스칼라 34 + 예고 3칸×6 + 9칸×14 + 손패 10×9 = ENA_FEATURE_COUNT. */
+  /** 고정 길이 숫자 입력: 스칼라 38 + 예고 3칸×6 + 9칸×14 + 손패 10×9 = ENA_FEATURE_COUNT. */
   observe(): EnaObservation {
     const legalActions = ENA_ACTION_SPACE.filter((action) => this.isLegal(action))
     const tier = EmberSystem.getTier(this.ember)
@@ -390,7 +471,8 @@ export class EnaTrainingSimulation {
       this.ember / this.emberMax,
       this.emberMax / 20,
       tierIndex(tier) / 3,
-      this.coins / 40,
+      this.light / 3000,
+      this.coins / 10,
       this.attack / 12,
       this.combo / this.comboMax,
       this.hand.length / HAND_MAX,
@@ -414,6 +496,10 @@ export class EnaTrainingSimulation {
       this.readySporeThreatCount() / 3,
       this.strongEnemyThreatCount() / 3,
       this.tripleOpportunityCount() / 3,
+      // 런 카드 풀/경제 성장 상태 — 상점 팩 가치 판단용.
+      this.lockedPool.size / 20,
+      this.totalChanceBoost() / 60,
+      this.scoreMultiplier / 3,
     ]
     for (let lane = 0; lane < LANES; lane++) features.push(...this.encodeIncomingCard(this.peekIncomingRefillCard(lane)))
     for (let row = 0; row < ROWS; row++) {
@@ -542,8 +628,9 @@ export class EnaTrainingSimulation {
         return 0.4
       }
       if (card.type === CardType.TRAP) {
-        // 맨손으로 함정을 밟아 치움 — 피해를 그대로 받는다(비효율 학습 신호).
+        // 맨손으로 함정을 밟아 치움 — 피해를 그대로 받되 처리 불빛은 지급(실게임 규칙).
         this.takeDamage(trapDamage(card))
+        this.gainLight(this.trapClearLightBase(card))
         this.board[0][action.arg] = null
         return -0.6
       }
@@ -574,7 +661,8 @@ export class EnaTrainingSimulation {
   }
 
   private resolveAttackCard(def: HandCardDefinition, merged: boolean): number {
-    const dmg = emberDamage(this.attack, merged)
+    // 조합팩 근사 보너스는 트리플에만 붙는다(레시피=합성 강화 압축).
+    const dmg = emberDamage(this.attack, merged) + (merged ? this.recipeTripleBonus : 0)
     const targeting = merged ? def.targeting.triple : def.targeting.base
     const hitAll = targeting.selection === 'all'
     const lanes = hitAll ? [0, 1, 2] : [this.toughestEnemyLane()]
@@ -606,6 +694,7 @@ export class EnaTrainingSimulation {
     if (lane < 0) return -0.6
     const card = this.board[0][lane]!
     const removedDamage = trapDamage(card)
+    this.gainLight(this.trapClearLightBase(card)) // 함정 처리도 불빛을 지급(실게임 근사)
     this.board[0][lane] = null
     if (id === 'sweep' && !merged) {
       // 청소 단일은 1칸 거미줄 전체만 치우는 무점수 정리. 같은 행의 다른 1칸 web도 정리한다.
@@ -657,50 +746,167 @@ export class EnaTrainingSimulation {
       this.board[0][lane] = null
       return 1.4
     }
-    // 기타 도구: 가벼운 경제/준비 이득.
-    this.coins += 1
+    // 기타 도구: 가벼운 불빛 이득(화폐는 보물/보스 등 실제 원천만 유지).
+    this.gainLight(20)
     return 0.3
   }
 
   private applyShopAction(action: EnaSimAction): number {
-    // 상점은 방문 단위로 행동 수가 제한된다(EXIT로 일반 턴 복귀).
-    switch (action.kind) {
-      case 'shopResource':
-        // 자원팩 감각: 불씨 보충 + 약간의 회복(실게임 자원팩 heal 3/5)을 함께 준다.
-        this.spendCoins(2)
-        this.ember = Math.min(this.emberMax, this.ember + 3)
-        this.hp = Math.min(this.maxHp, this.hp + 4)
-        this.drawCard('match')
-        this.shopActionsLeft--
-        return this.ember <= 3 || this.hp <= 8 ? 2.5 : 1
-      case 'shopUpgrade':
-        this.spendCoins(4)
-        this.attack++
-        this.shopActionsLeft--
-        return this.turnsToBoss() <= 10 ? 3 : 1.5
-      case 'shopRemove':
-        this.spendCoins(1)
-        this.drawCard('chitin')
-        this.shopActionsLeft--
-        return 1.2
-      case 'shopReroll':
-        this.spendCoins(1)
-        this.shopActionsLeft--
-        return 0.2
-      case 'shopExit': {
-        // 제단 EXIT가 30/60/90F 보스 게이트로 이어진다(실게임 흐름). 아직 안 잡은 차례면 보스 진입.
-        const bossIndex = BOSS_FLOORS.indexOf(this.turn)
-        if (bossIndex >= 0 && this.bossesCleared === bossIndex) {
-          this.enterBoss(this.turn)
-        } else {
-          this.phase = 'field'
-          this.dropAndRefill()
-        }
-        return 0.1
+    if (action.kind === 'shopExit') {
+      // 제단 EXIT가 30/60/90F 보스 게이트로 이어진다(실게임 흐름). 아직 안 잡은 차례면 보스 진입.
+      const bossIndex = BOSS_FLOORS.indexOf(this.turn)
+      if (bossIndex >= 0 && this.bossesCleared === bossIndex) {
+        this.enterBoss(this.turn)
+      } else {
+        this.phase = 'field'
+        this.dropAndRefill()
       }
+      return 0.1
+    }
+    this.shopActionsLeft--
+    switch (action.kind) {
+      case 'shopFree': return this.useShopFreeCard()
+      case 'shopRelic': {
+        // 상점 유물은 불빛 구매, 제단 유물은 무료 1픽(실게임 규칙).
+        if (this.shopMode === 'shop') this.spendLight(this.relicCost())
+        this.shopRelicBuysLeft--
+        this.grantRelic(this.shopMode === 'altar')
+        return this.turnsToBoss() <= 10 ? 2.5 : 1.5
+      }
+      case 'shopBasicPack': return this.buyBasicPack()
+      case 'shopRecipePack': return this.buyRecipePack()
+      case 'shopUnlockPack': return this.buyUnlockPack()
+      case 'shopChancePack': return this.buyChancePack()
+      case 'shopDeletePack': return this.buyDeletePack()
+      case 'shopResourcePack': return this.buyResourcePack()
       default:
         return -2
     }
+  }
+
+  // ── 상점 콘텐츠(실제 6종 팩·무료카드·유물) ─────────────────────────────────
+
+  /** 방문 내 반복 구매 누적을 반영한 현재 팩 가격(ShopPricing 공유 공식). */
+  private packCost(kind: EnaSimPackKind): number {
+    const base = this.shopMode === 'altar' ? altarPackBaseCost(this.turn) : regularShopPackBaseCost(this.turn)
+    return packCostWithRepeats(base, this.shopPackBuysThisVisit[kind] ?? 0)
+  }
+
+  /** 상점 유물 가격 근사: 실제 오퍼는 3장 개별가라 플레이어는 보통 저가 카드를 고를 수 있다.
+   *  평균 basePrice의 0.75배로 "3장 중 살 만한 것" 기대가를 압축한다. */
+  private relicCost(): number {
+    return Math.round(this.knowledge.economy.averageRelicBasePrice * 0.75)
+  }
+
+  private payPack(kind: EnaSimPackKind): void {
+    this.spendLight(this.packCost(kind))
+    this.shopPackBuysThisVisit[kind] = (this.shopPackBuysThisVisit[kind] ?? 0) + 1
+  }
+
+  /** 무료카드: 선물 상자(6종 랜덤). 제단 두 번째 장은 수당 3$ 고정(실게임 free_002). */
+  private useShopFreeCard(): number {
+    this.shopFreeUsesLeft--
+    if (this.shopMode === 'altar' && this.shopFreeUsesLeft === 0) {
+      this.coins += 3
+      return 1
+    }
+    switch (this.rng.int(6)) {
+      case 0: this.light += Math.round(300 * this.scoreMultiplier); break // ✦300(고정 불빛 — 턴 배율 미적용)
+      case 1: this.coins += 1; break
+      case 2: this.hp = Math.min(this.maxHp, this.hp + 5); break
+      case 3: this.gainCombo(3); break
+      case 4: this.ember = Math.min(this.emberMax, this.ember + 3); break
+      default: this.drawCard(); this.drawCard(); break
+    }
+    return 1
+  }
+
+  /** 자원팩(basic): 실게임 BASIC_PACK_POOL 근사. 실제 팩은 3택이라
+   *  "지금 필요한 것을 고르는" 플레이어 선택을 필요 우선순위로 압축한다. */
+  private buyBasicPack(): number {
+    this.payPack('basic-pack')
+    const needHeal = this.maxHp - this.hp >= 5
+    const needEmber = this.emberMax - this.ember >= 2
+    if (needHeal) this.hp = Math.min(this.maxHp, this.hp + 5)
+    else if (needEmber) this.ember = Math.min(this.emberMax, this.ember + 2)
+    else if (this.shield < 5) this.shield += 5
+    else this.gainCombo(2)
+    return needHeal || needEmber ? 2 : 0.8
+  }
+
+  /** 조합팩: 시뮬에는 레시피 실행 모델이 없어 정직한 근사 — 트리플 위력 영구 +2. */
+  private buyRecipePack(): number {
+    this.payPack('recipe-pack')
+    this.recipeTripleBonus += 2
+    return 1
+  }
+
+  /** 해금팩: 잠긴 카드(없으면 밴 해제) 중 지식 가치가 높은 1종 해금 + 그 카드 1장 지급.
+   *  실게임 맛보기(첫 구매 1장)를 매 구매 1장으로 압축한다. */
+  private buyUnlockPack(): number {
+    this.payPack('unlock-pack')
+    const pickFrom = this.lockedPool.size > 0 ? this.lockedPool : this.bannedPool
+    const best = [...pickFrom].sort((a, b) => this.cardWorth(b) - this.cardWorth(a))[0]
+    if (!best) return -1
+    this.lockedPool.delete(best)
+    this.bannedPool.delete(best)
+    this.unlockedPool.add(best)
+    this.drawCard(best)
+    return 1.5
+  }
+
+  /** 확률팩: 해금 풀에서 가치 높은 카드 1종에 등급별 T1 부스트 누적(실게임 RARITY_BOOST). */
+  private buyChancePack(): number {
+    this.payPack('chance-pack')
+    const target = [...this.unlockedPool]
+      .filter((id) => (HAND_CARD_DEFINITIONS[id].dropWeight ?? 0) > 0)
+      .sort((a, b) => this.cardWorth(b) - this.cardWorth(a))[0]
+    if (!target) return -1
+    const rarity = HAND_CARD_RARITY[target] ?? 'common'
+    this.tier1CardBoosts[target] = (this.tier1CardBoosts[target] ?? 0) + CHANCE_PACK_RARITY_BOOST[rarity]
+    return 1.2
+  }
+
+  /** 삭제팩: 해금 풀에서 가치가 가장 낮은 카드 1종을 밴해 드롭 질을 올린다. */
+  private buyDeletePack(): number {
+    this.payPack('delete-pack')
+    const worst = [...this.unlockedPool].sort((a, b) => this.cardWorth(a) - this.cardWorth(b))[0]
+    if (!worst) return -1
+    this.unlockedPool.delete(worst)
+    this.bannedPool.add(worst)
+    delete this.tier1CardBoosts[worst]
+    return 1
+  }
+
+  /** 제단 자원팩: 실제 8종 풀을 weight 기반 1택으로 압축 적용(피커 3택 근사). */
+  private buyResourcePack(): number {
+    this.payPack('resource-pack')
+    // weight: 의복3/가열1/배낭20/성냥갑15/심지3/조커1/랜턴10/동전1 (ShopPools 동일).
+    const entries: { weight: number; apply: () => void }[] = [
+      { weight: 3, apply: () => { this.maxHp += 5; this.hp += 5 } },
+      { weight: 1, apply: () => { this.attack += 1 } },
+      // 큰 배낭: 관측 10칸 초과분은 트리플 합성 대기 버퍼로만 동작(행동은 앞 10칸).
+      { weight: 20, apply: () => { this.handMax = Math.min(HAND_MAX + 2, this.handMax + 2) } },
+      { weight: 15, apply: () => { this.emberMax += 2 } },
+      { weight: 3, apply: () => { this.emberDecayTurns += 1 } },
+      { weight: 1, apply: () => { this.comboMax = Math.max(8, this.comboMax - 1) } },
+      { weight: 10, apply: () => { this.scoreMultiplier *= 1.10 } },
+      { weight: 1, apply: () => { this.coins += 1 } },
+    ]
+    const total = entries.reduce((sum, e) => sum + e.weight, 0)
+    let roll = this.rng.next() * total
+    for (const entry of entries) {
+      roll -= entry.weight
+      if (roll <= 0) { entry.apply(); break }
+    }
+    return 1.5
+  }
+
+  /** 지식 어댑터 기반 카드 종합 가치 — 해금/확률/삭제팩의 대상 선택에 쓴다. */
+  private cardWorth(id: HandCardId): number {
+    const tactic = this.knowledge.handCards[id]
+    if (!tactic) return 0
+    return tactic.fieldValue + tactic.bossValue + tactic.synergyValue * 0.3 - tactic.liability
   }
 
   private applyEventAction(action: EnaSimAction): number {
@@ -726,7 +932,8 @@ export class EnaTrainingSimulation {
       if (!held) return -1
       const def = HAND_CARD_DEFINITIONS[held.id]
       if (def.category === 'attack') {
-        const reward = this.damageBoss(emberDamage(this.attack, held.merged), 'ember')
+        const dmg = emberDamage(this.attack, held.merged) + (held.merged ? this.recipeTripleBonus : 0)
+        const reward = this.damageBoss(dmg, 'ember')
         this.consumeHand(action.arg)
         return reward
       }
@@ -757,8 +964,9 @@ export class EnaTrainingSimulation {
       this.board[0][lane] = null
       // 처치 콤보(촛불): 폭이 큰 무리를 잡을수록 더 채운다 → 공격력 성장 동력.
       this.gainCombo((source === 'ember' ? 4 : 2) + (card.group - 1))
-      // 처치 시 불빛/경제는 후반일수록 커진다(선형 보정).
-      this.coins += Math.max(1, Math.round(card.value * lightMultiplier(this.turn)))
+      // 처치 불빛: 실게임 scoreForCardRemoval 근사 — 랭크(enemyPower) 1차식 + 그룹 25% 감산 배수.
+      const rankLight = ENEMY_LIGHT_BASE + Math.max(1, card.value) * ENEMY_LIGHT_PER_RANK
+      this.gainLight(card.group > 1 ? rankLight * card.group * 0.75 : rankLight)
       if (this.rng.next() < 0.3) this.drawCard()
       // 동료 깜짝 지원(치명타): 가끔 보너스 손패 1장.
       if (this.companion && this.rng.next() < this.companion.minorClutchChance.crit) this.drawCard()
@@ -820,8 +1028,26 @@ export class EnaTrainingSimulation {
     }
   }
 
-  private spendCoins(amount: number): void {
-    this.coins = Math.max(0, this.coins - amount)
+  /** 실게임 createScoreLog 근사: 기본값 × (1+턴×0.015) × scoreMultiplier × 1.4(지터 평균 1). */
+  private gainLight(base: number): number {
+    const amount = Math.max(1, Math.round(base * lightMultiplier(this.turn) * this.scoreMultiplier * BASE_LIGHT_GAIN_MULTIPLIER))
+    this.light += amount
+    return amount
+  }
+
+  private spendLight(amount: number): void {
+    this.light = Math.max(0, this.light - amount)
+  }
+
+  /** 함정 처리 불빛(실게임: 거미줄 20/50/80, 포자 10/20/30, 폭탄 50 + 턴 보너스). */
+  private trapClearLightBase(card: EnaSimCard): number {
+    const span = Math.min(3, Math.max(1, card.group))
+    const base = card.trapKind === 'spore'
+      ? [10, 20, 30][span - 1]
+      : card.trapKind === 'bomb'
+        ? 50
+        : [20, 50, 80][span - 1]
+    return base + this.turn
   }
 
   private gainCombo(amount: number): void {
@@ -833,8 +1059,12 @@ export class EnaTrainingSimulation {
   }
 
   private applyTreasure(card: EnaSimCard): void {
-    this.coins += Math.max(1, Math.round(card.value * lightMultiplier(this.turn)))
-    if (this.rng.next() < 0.35) this.drawCard()
+    // 보물 불빛: 일반 상자 기본 36 + 턴 보너스(실게임 근사, 시뮬 보물은 1칸 고정).
+    this.gainLight(36 + this.turn + card.value * 4)
+    // 보물상자 전용 손패 풀(동전 포함 실제 dropSource 'treasure') 보너스 드롭.
+    if (this.rng.next() < 0.35) this.drawCard(undefined, 'treasure')
+    // 화폐는 보물 동전에서만 낮은 확률로 나온다(실게임 희소 재화 유지).
+    if (this.rng.next() < 0.15) this.coins += 1
     if (this.rng.next() < 0.2) this.shield += 3
     // 동료 깜짝 지원(보물): 가끔 보너스 손패 1장.
     if (this.companion && this.rng.next() < this.companion.minorClutchChance.treasure) this.drawCard()
@@ -842,32 +1072,33 @@ export class EnaTrainingSimulation {
 
   private applyFlower(card: EnaSimCard): void {
     const v = card.value
+    // 수확 불빛(실게임 24 + 가치×12) + 꽃 종류별 즉시 효과.
+    this.gainLight(24 + v * 12)
     if (card.flowerKind === 'redRose') this.hp = Math.min(this.maxHp, this.hp + v)
-    else if (card.flowerKind === 'marigold') this.coins += v
     else if (card.flowerKind === 'oleander') this.shield += v
     else if (card.flowerKind === 'lavender') this.gainCombo(v)
-    else this.coins += v
+    else if (card.flowerKind === 'marigold') this.gainLight(24 + v * 12) // 금잔화: 불빛 보너스 꽃
   }
 
   // ── 손패 관리(트리플 합성 포함) ────────────────────────────────────────────
 
-  /** 손패에 카드를 더한다. 지정 id가 없으면 드롭 풀에서 가중 추첨. 손패가 가득 차면 실패. */
-  private drawCard(id?: HandCardId): boolean {
-    if (this.hand.length >= HAND_MAX) return false
-    const drawn = id ?? this.weightedDrawId()
+  /** 손패에 카드를 더한다. 지정 id가 없으면 런 카드 풀에서 실제 2단계 추첨. 손패가 가득 차면 실패. */
+  private drawCard(id?: HandCardId, source: HandCardDropSource = 'enemy-kill'): boolean {
+    if (this.hand.length >= this.handMax) return false
+    const drawn = id ?? this.drawPoolId(source)
     this.hand.push({ id: drawn, merged: false })
     this.autoMergeHand()
     return true
   }
 
-  private weightedDrawId(): HandCardId {
-    const total = DROP_POOL.reduce((sum, e) => sum + e.weight, 0)
-    let roll = this.rng.next() * total
-    for (const entry of DROP_POOL) {
-      roll -= entry.weight
-      if (roll <= 0) return entry.id
-    }
-    return DROP_POOL[0].id
+  /** 실게임 DropSystem과 같은 2단계(등급 T1→dropWeight T2) 추첨을 런 풀/확률팩 부스트째로 공유한다. */
+  private drawPoolId(source: HandCardDropSource): HandCardId {
+    return DropSystem.drawIdFromPool([...this.unlockedPool], source, this.tier1CardBoosts, {}, () => this.rng.next())
+  }
+
+  /** 확률팩 누적 부스트 총량 — 관측/상점 판단용. */
+  private totalChanceBoost(): number {
+    return Object.values(this.tier1CardBoosts).reduce<number>((sum, v) => sum + (v ?? 0), 0)
   }
 
   /** 같은 카드 3장이 연속이면 트리플로 합성한다(실게임 자동 합성 규칙). */
@@ -941,7 +1172,7 @@ export class EnaTrainingSimulation {
     if (!this.finalAscent) {
       this.turn++
       if (--this.emberDecayCountdown <= 0) {
-        this.emberDecayCountdown = EMBER_DECAY_TURNS
+        this.emberDecayCountdown = this.emberDecayTurns
         this.ember = Math.max(0, this.ember - 1)
       }
     }
@@ -959,24 +1190,38 @@ export class EnaTrainingSimulation {
     if (this.turn > 0 && this.turn % SHOP_INTERVAL === 0 && this.turn < RUN_TARGET_TURNS) {
       this.phase = 'shop'
       this.shopMode = this.turn % ALTAR_INTERVAL === 0 ? 'altar' : 'shop'
-      this.shopActionsLeft = this.shopMode === 'altar' ? 4 : 3
-      // 상점·제단마다 유물 1개 획득(실게임 핵심 성장원). 제단은 더 강한 보정.
-      this.grantRelic(this.shopMode === 'altar')
+      // 방문 단위 상태: 팩 반복가/무료카드/유물 한도. 유물은 이제 자동 지급이 아니라 shopRelic 행동.
+      this.shopPackBuysThisVisit = {}
+      this.shopFreeUsesLeft = this.shopMode === 'altar' ? 2 : 1
+      this.shopRelicBuysLeft = this.shopMode === 'altar' ? 1 : 3
+      this.shopActionsLeft = 12 // 정책 버그로 방문이 무한히 길어지지 않게 하는 상한
       return true
     }
     return false
   }
 
-  /** 유물 획득을 영구 스탯 성장으로 압축한다(개별 유물 효과 대신 등반 파워커브 prior). */
+  /** 유물 획득을 영구 스탯 성장으로 압축한다(개별 유물 효과 대신 등반 파워커브 prior).
+   *  실제 상점/제단은 3장 중 1택이므로 무작위 2후보 중 현재 필요에 더 맞는 쪽을 고른다. */
   private grantRelic(strong: boolean): void {
     const scale = strong ? 2 : 1
-    switch (this.rng.int(5)) {
-      case 0: this.maxHp += 4 * scale; this.hp += 4 * scale; break          // 활력
-      case 1: this.attack += scale; break                                   // 예기
-      case 2: this.emberMax += 2; this.ember = Math.min(this.emberMax, this.ember + 3 * scale); break // 불씨
-      case 3: this.shieldRegen += scale; break                              // 방벽(턴당 방패)
-      default: this.comboMax = Math.max(8, this.comboMax - 2 * scale); break // 촛불(멜트 가속)
+    const apply = (roll: number): void => {
+      switch (roll) {
+        case 0: this.maxHp += 4 * scale; this.hp += 4 * scale; break          // 활력
+        case 1: this.attack += scale; break                                   // 예기
+        case 2: this.emberMax += 2; this.ember = Math.min(this.emberMax, this.ember + 3 * scale); break // 불씨
+        case 3: this.shieldRegen += scale; break                              // 방벽(턴당 방패)
+        default: this.comboMax = Math.max(8, this.comboMax - 2 * scale); break // 촛불(멜트 가속)
+      }
     }
+    const need = (roll: number): number => {
+      if (roll === 1) return this.attack < 6 ? 3 : 1            // 공격력은 보스 등반 핵심
+      if (roll === 0) return this.maxHp - this.hp >= 6 ? 2.5 : 1.5
+      if (roll === 2) return this.ember <= 4 ? 2 : 1
+      return 1.2
+    }
+    const a = this.rng.int(5)
+    const b = this.rng.int(5)
+    apply(need(a) >= need(b) ? a : b)
   }
 
   /** 턴 종료 시 전방의 적만 능동 공격한다. 함정(거미줄/포자/폭탄)은 '밟았을 때'(클릭) 피해라
@@ -1074,7 +1319,10 @@ export class EnaTrainingSimulation {
       const card = this.board[0][lane]
       if (card?.type === CardType.TREASURE && card.treasureKind === 'starlight') {
         this.board[0][lane] = null
-        if (this.turn < RUN_TARGET_TURNS) this.turn++
+        if (this.turn < RUN_TARGET_TURNS) {
+          this.turn++
+          this.starlightsThisStep++ // 별빛 획득 순간 보상 shaping용
+        }
       }
     }
     // 별빛 제거로 빈칸이 생기면 정리/리필 후 새로 도달한 씨앗도 개화.
@@ -1132,7 +1380,7 @@ export class EnaTrainingSimulation {
     }
     // 불씨는 보스전에도 천천히 줄어 시간 압박을 유지한다.
     if (--this.emberDecayCountdown <= 0) {
-      this.emberDecayCountdown = EMBER_DECAY_TURNS
+      this.emberDecayCountdown = this.emberDecayTurns
       this.ember = Math.max(0, this.ember - 1)
     }
   }
@@ -1162,7 +1410,9 @@ export class EnaTrainingSimulation {
   /** 보스 격파 — 보상 후 일반 등반 복귀(100F는 클리어로 종료). 페이지 전환은 checkBossProgress가 담당. */
   private defeatBoss(): void {
     this.bossesCleared++
-    this.coins += 5
+    // 실게임 보스 보상: 현상금 1~3$ + 전리품 유물 + 손패.
+    this.coins += 1 + this.rng.int(3)
+    this.grantRelic(true)
     this.drawCard()
     if (this.bossFloor === 100) {
       this.done = true
@@ -1296,8 +1546,21 @@ export class EnaTrainingSimulation {
   private isLegal(action: EnaSimAction): boolean {
     if (this.phase === 'shop') {
       if (action.kind === 'shopExit') return true
-      if (['shopResource', 'shopUpgrade', 'shopRemove', 'shopReroll'].includes(action.kind)) return this.shopActionsLeft > 0
-      return false
+      if (this.shopActionsLeft <= 0) return false
+      // 팩/유물 합법성은 재화(불빛)와 모드(상점 3팩 / 제단 3팩)로 결정 — 실게임 노출 규칙.
+      switch (action.kind) {
+        case 'shopFree': return this.shopFreeUsesLeft > 0
+        case 'shopRelic': return this.shopRelicBuysLeft > 0 && (this.shopMode === 'altar' || this.light >= this.relicCost())
+        case 'shopBasicPack': return this.shopMode === 'shop' && this.light >= this.packCost('basic-pack')
+        case 'shopRecipePack': return this.shopMode === 'shop' && this.light >= this.packCost('recipe-pack')
+        case 'shopUnlockPack':
+          return this.shopMode === 'shop' && this.lockedPool.size + this.bannedPool.size > 0 && this.light >= this.packCost('unlock-pack')
+        case 'shopChancePack': return this.shopMode === 'altar' && this.light >= this.packCost('chance-pack')
+        case 'shopDeletePack':
+          return this.shopMode === 'altar' && this.unlockedPool.size > MIN_POOL_AFTER_DELETE && this.light >= this.packCost('delete-pack')
+        case 'shopResourcePack': return this.shopMode === 'altar' && this.light >= this.packCost('resource-pack')
+        default: return false
+      }
     }
     if (this.phase === 'event') return action.kind === 'eventSafe' || action.kind === 'eventGreedy'
     if (this.phase === 'boss') {
@@ -1316,7 +1579,7 @@ export class EnaTrainingSimulation {
     if (!this.done) return 0
     if (this.hp <= 0) return -15 // 사망은 큰 음의 종단 보상
     if (this.bossesCleared >= BOSS_FLOORS.length) return 40 // 최종 보스까지 격파 = 완전한 모험
-    return this.bossesCleared * 6 // 도달 깊이에 비례한 부분 보상
+    return 0 // 도달 깊이는 shaping의 보스 +8만으로 계상(이중 계상 제거)
   }
 
   private shapeReward(beforeHp: number, beforeBossHp: number, beforeBosses: number): number {
@@ -1326,7 +1589,7 @@ export class EnaTrainingSimulation {
     reward += this.ember <= 3 && this.phase === 'field' ? -0.4 : 0
     reward += this.phase === 'boss' && this.bossHp < beforeBossHp ? (beforeBossHp - this.bossHp) * 0.06 : 0
     reward += this.bossesCleared > beforeBosses ? 8 : 0 // 보스 격파마다 굵은 보상
-    reward += this.finalAscent ? 0.05 : 0
+    reward += this.starlightsThisStep * 0.6 // 별빛은 구간 상주 보상 대신 획득 순간에만 보상
     return reward
   }
 
@@ -1529,7 +1792,7 @@ export class EnaTrainingSimulation {
     if (snapshot.phase === 'boss') {
       return `${snapshot.bossFloor}층 보스 ${BOSS_PROFILES[snapshot.bossFloor]?.name}: 공격력 ${snapshot.attack}, 불씨 피해 ${projectedDamage}, 콤보 ${snapshot.combo}/${snapshot.comboMax}, 준비값 ${bossPlanValue.toFixed(1)} → ${action.kind}`
     }
-    if (snapshot.phase === 'shop') return `${snapshot.shopMode === 'altar' ? '제단' : '상점'}: 보스까지 ${snapshot.turnsToBoss}턴, 불씨 ${snapshot.ember}, 코인 ${snapshot.coins} → ${action.kind}`
+    if (snapshot.phase === 'shop') return `${snapshot.shopMode === 'altar' ? '제단' : '상점'}: 보스까지 ${snapshot.turnsToBoss}턴, 불씨 ${snapshot.ember}, 불빛 ${snapshot.light}, 화폐 ${snapshot.coins} → ${action.kind}`
     if (snapshot.phase === 'event') return `이벤트: 위험 ${snapshot.eventRisk}, HP ${snapshot.hp}+방패 ${snapshot.shield}, 불씨 ${tier} → ${action.kind}`
     const target = action.kind === 'clickLane' ? snapshot.board[0][action.arg] : null
     if (target?.type === CardType.ENEMY) return `${snapshot.turn}층(불씨 ${tier}): 공격력 ${snapshot.attack}, 불씨 피해 ${projectedDamage}, 전방 ${target.group}칸 적 HP ${target.hp}/ATK ${target.atk}, 위협 ${frontThreat} → ${action.kind}`
@@ -1546,10 +1809,15 @@ export class EnaTrainingSimulation {
       ember: this.ember,
       emberMax: this.emberMax,
       emberTier: EmberSystem.getTier(this.ember),
+      light: this.light,
       coins: this.coins,
       attack: this.attack,
       combo: this.combo,
       comboMax: this.comboMax,
+      lockedCount: this.lockedPool.size,
+      unlockedCount: this.unlockedPool.size,
+      chanceBoostTotal: this.totalChanceBoost(),
+      recipeTripleBonus: this.recipeTripleBonus,
       hand: this.hand.map((s) => ({ ...s })),
       turn: this.turn,
       turnsToShop: this.turnsToShop(),
@@ -1592,8 +1860,8 @@ function fieldPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): 
     const cleaner = findHand((id) => id === 'chitin' || id === 'sweep' || id === 'holy-water')
     if (cleaner >= 0) return actionIndexOf('useHand', cleaner)
   }
-  // 2) 위급하면 회복/방패 손패.
-  if (snapshot.hp <= cfg.lowHpRecoveryThreshold) {
+  // 2) 위급하거나 보스 직전이면 회복/방패 손패로 미리 체력을 채운다.
+  if (snapshot.hp <= cfg.lowHpRecoveryThreshold || (snapshot.turnsToBoss <= 3 && snapshot.hp <= snapshot.maxHp - 4)) {
     const heal = findHand((id) => HAND_CARD_DEFINITIONS[id].category === 'recovery')
     if (heal >= 0) return actionIndexOf('useHand', heal)
   }
@@ -1642,12 +1910,23 @@ function fieldPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): 
 
 function shopPolicy(snapshot: EnaGameSnapshot, legal: EnaSimAction[], cfg: EnaHeuristicPolicyConfig): number {
   const canBuy = (kind: EnaSimActionKind) => legal.some((a) => a.kind === kind)
-  // 생존 우선: 위급하거나 불씨가 낮으면 자원(회복+불씨)부터.
-  if ((snapshot.hp <= cfg.shopCriticalHpThreshold || snapshot.ember <= cfg.shopCriticalEmberThreshold) && snapshot.coins >= cfg.shopResourceCost && canBuy('shopResource')) return actionIndexOf('shopResource', -1)
-  // 공격력 성장: 보스 등반의 핵심. 여유 있으면 매 상점마다 공격력을 키운다.
-  if (snapshot.attack < cfg.attackGrowthTarget && snapshot.coins >= cfg.shopUpgradeCost && canBuy('shopUpgrade')) return actionIndexOf('shopUpgrade', -1)
-  if (snapshot.coins >= cfg.shopResourceCost && canBuy('shopResource')) return actionIndexOf('shopResource', -1)
-  if (snapshot.coins >= cfg.shopRemoveCost && canBuy('shopRemove')) return actionIndexOf('shopRemove', -1)
+  // 0) 무료카드는 비용이 없으니 항상 먼저 받는다(제단 수당 포함).
+  if (canBuy('shopFree')) return actionIndexOf('shopFree', -1)
+  // 1) 유물은 영구 성장 — 제단 무료 1픽/상점 불빛 구매 모두 최우선.
+  if (canBuy('shopRelic')) return actionIndexOf('shopRelic', -1)
+  if (snapshot.shopMode === 'altar') {
+    // 제단: 자원팩(영구 스탯) → 확률팩(핵심 카드 부스트) → 삭제팩(풀 정리) 순.
+    if (canBuy('shopResourcePack')) return actionIndexOf('shopResourcePack', -1)
+    if (canBuy('shopChancePack') && snapshot.chanceBoostTotal < cfg.chanceBoostCap) return actionIndexOf('shopChancePack', -1)
+    if (canBuy('shopDeletePack') && snapshot.unlockedCount > cfg.deletePackPoolFloor) return actionIndexOf('shopDeletePack', -1)
+    return actionIndexOf('shopExit', -1)
+  }
+  // 상점: 위급하면 즉시 자원팩, 잠긴 카드가 많으면 해금팩, 화력이 모자라면 조합팩(트리플 강화).
+  if ((snapshot.hp <= cfg.shopCriticalHpThreshold || snapshot.ember <= cfg.shopCriticalEmberThreshold) && canBuy('shopBasicPack')) return actionIndexOf('shopBasicPack', -1)
+  if (snapshot.lockedCount >= cfg.unlockPackLockedThreshold && canBuy('shopUnlockPack')) return actionIndexOf('shopUnlockPack', -1)
+  if (snapshot.attack < cfg.attackGrowthTarget && canBuy('shopRecipePack')) return actionIndexOf('shopRecipePack', -1)
+  if (canBuy('shopUnlockPack')) return actionIndexOf('shopUnlockPack', -1)
+  if (canBuy('shopBasicPack')) return actionIndexOf('shopBasicPack', -1)
   return actionIndexOf('shopExit', -1)
 }
 

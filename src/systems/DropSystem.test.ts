@@ -26,3 +26,35 @@ describe('DropSystem source pools', () => {
     expect(seen.has('greed-coin')).toBe(false)
   })
 })
+
+/** 순수 2단계 추첨(drawIdFromPool)은 RL 시뮬이 실게임과 같은 확률 구조를 쓰는 통로다. */
+describe('DropSystem.drawIdFromPool', () => {
+  it('허용 풀에 든 카드만 반환한다(잠금/밴 카드는 절대 새지 않음)', () => {
+    const pool = ['ember', 'candle', 'match'] as const
+    for (let i = 0; i < 300; i++) {
+      const id = DropSystem.drawIdFromPool(pool, 'enemy-kill', {}, {})
+      expect(pool).toContain(id)
+    }
+  })
+
+  it('풀이 1장이면 그 카드가 확정 반환된다', () => {
+    expect(DropSystem.drawIdFromPool(['ember'], 'enemy-kill', {}, {}, () => 0.5)).toBe('ember')
+  })
+
+  it('확률팩 T1 개별 카드 부스트가 해당 카드 당첨 비중을 지배적으로 키운다', () => {
+    let boosted = 0
+    for (let i = 0; i < 400; i++) {
+      const id = DropSystem.drawIdFromPool(['ember', 'candle', 'wax-drop'], 'enemy-kill', { ember: 100000 }, {})
+      if (id === 'ember') boosted++
+    }
+    expect(boosted).toBeGreaterThan(390)
+  })
+
+  it('주입된 rng만 사용해 결정론적으로 재현된다', () => {
+    const seq = [0.1, 0.7, 0.3]
+    const makeRng = () => { let i = 0; return () => seq[i++ % seq.length] }
+    const a = DropSystem.drawIdFromPool(['ember', 'candle', 'match', 'key'], 'enemy-kill', {}, {}, makeRng())
+    const b = DropSystem.drawIdFromPool(['ember', 'candle', 'match', 'key'], 'enemy-kill', {}, {}, makeRng())
+    expect(a).toBe(b)
+  })
+})

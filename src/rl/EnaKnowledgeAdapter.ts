@@ -13,6 +13,7 @@ import { TRIAL_DEFINITIONS } from '@data/Trials'
 import { JOBS } from '@data/Jobs'
 import { EVENT_DEFINITIONS } from '@data/Events'
 import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
+import { altarPackBaseCost, regularShopPackBaseCost } from '@core/ShopPricing'
 import type { HandCardDefinition, HandCardId, HandEffectTargeting } from '@entities/HandCard'
 import type { RelicId } from '@data/Relics'
 
@@ -203,15 +204,15 @@ function describeTiming(def: HandCardDefinition, bossValue: number, tripleValue:
 
 function analyzeEconomy(): EnaEconomyModel {
   const averageRelicBasePrice = RELIC_IDS.reduce((sum, id) => sum + RELIC_DEFINITIONS[id].basePrice, 0) / RELIC_IDS.length
-  // 일반 상점 3팩은 공통 시작가 — 10층 120에서 10층마다 +40(index.ts baseShopPackCost와 동기 유지).
+  // 팩 가격은 실게임과 같은 ShopPricing 공유 함수에서 산출한다(하드코딩 중복 제거).
   const packBaseCosts = {
-    'basic-pack': 120,
-    'recipe-pack': 120,
-    'unlock-pack': 120,
-    'shop-pack-per-10f': 40,
-    'altar-30': 500,
-    'altar-60': 1500,
-    'altar-90': 2500,
+    'basic-pack': regularShopPackBaseCost(10),
+    'recipe-pack': regularShopPackBaseCost(10),
+    'unlock-pack': regularShopPackBaseCost(10),
+    'shop-pack-per-10f': regularShopPackBaseCost(20) - regularShopPackBaseCost(10),
+    'altar-30': altarPackBaseCost(30),
+    'altar-60': altarPackBaseCost(60),
+    'altar-90': altarPackBaseCost(90),
     'resource-pack-weighted-options': SHOP_PACK_POOLS['resource-pack'].length,
   }
   return {
@@ -221,9 +222,9 @@ function analyzeEconomy(): EnaEconomyModel {
     packBaseCosts,
     averageRelicBasePrice: round1(averageRelicBasePrice),
     altarInflationRatio: {
-      '30F': round1(500 / averageRelicBasePrice),
-      '60F': round1(1500 / averageRelicBasePrice),
-      '90F': round1(2500 / averageRelicBasePrice),
+      '30F': round1(altarPackBaseCost(30) / averageRelicBasePrice),
+      '60F': round1(altarPackBaseCost(60) / averageRelicBasePrice),
+      '90F': round1(altarPackBaseCost(90) / averageRelicBasePrice),
     },
     baselineClimbTurn: 30,
   }
