@@ -1987,7 +1987,7 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     })
     if (chancePool.length === 0) return []
     // 등급별 부스트 가중치 — 커먼에 가까울수록 더 큰 폭 조정
-    const RARITY_BOOST: Record<string, number> = { common: 5, rare: 3, epic: 2, unique: 1, legendary: 1 }
+    const RARITY_BOOST: Record<string, number> = { common: 18, rare: 14, epic: 8, unique: 5, legendary: 5 }
     // 확률을 2자리까지 표기하되 불필요한 끝자리 0 제거
     const fmt = (p: number) => String(parseFloat((p * 100).toFixed(2)))
     const drawIds = sampleWithoutReplacement(chancePool, Math.min(3, chancePool.length))
@@ -2287,12 +2287,12 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     } else {
       if (freeCoinCardClaimed) return
       freeCoinCardClaimed = true
-      coins += 3
+      coins += 1
       coinPulseKey++
-      applyBlindFaithCoins(3)
-      // 제단 수당은 경제 밸런스 완화 후 3$만 지급한다. source burst도 코인 톤
+      applyBlindFaithCoins(1)
+      // 제단 수당은 경제 밸런스 조정 후 1$만 지급한다. source burst도 코인 톤
       // (treasure-gain)으로 발사해 불빛 입자가 같이 뜨는 시각 혼선을 제거.
-      await boardRenderer.consumeFreeCardAndRouteReward('free-coin-card', 'coin', 3, 'treasure-gain')
+      await boardRenderer.consumeFreeCardAndRouteReward('free-coin-card', 'coin', 1, 'treasure-gain')
     }
     boardRenderer.playScoreGainFeedback(score, scorePulseKey)
     boardRenderer.playCoinGainFeedback(coins, coinPulseKey)

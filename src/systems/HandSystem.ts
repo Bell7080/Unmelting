@@ -683,7 +683,7 @@ export class HandSystem {
       case 'firework':
         return HandSystem.distributeDamageAmongEnemies(gs, Math.floor(c.damage) + 2 + bonus)
       case 'book-of-flames':
-        return HandSystem.applyBookOfFlames(gs, target, 0, 1)
+        return HandSystem.applyBookOfFlames(gs, target, c.damage, 1)
       case 'fire-arrow': {
         // 1 ~ floor(1.0×공)+3 범위 무작위 피해
         const max = Math.max(1, Math.floor(c.damage) + 3 + bonus)
@@ -818,8 +818,8 @@ export class HandSystem {
       case 'firework':
         return HandSystem.distributeDamageAmongEnemies(gs, Math.floor(3 * c.damage) + 10 + bonus)
       case 'book-of-flames':
-        // 단일의 2배(피해 2n) + 스택 2배 속도(+2/사용). bonus(강화팩) 미반영 — book-of-flames는 고유 누적만 사용.
-        return HandSystem.applyBookOfFlames(gs, target, 0, 2, 2)
+        // 단일 공식의 2배 피해 + 스택 2배 속도(+2/사용). bonus(강화팩) 미반영 — book-of-flames는 고유 누적만 사용.
+        return HandSystem.applyBookOfFlames(gs, target, c.damage, 2, 2)
       case 'fire-arrow': {
         // 5 ~ floor(3.0×공) 범위 무작위 피해
         const maxDmg = Math.max(5, Math.floor(3 * c.damage) + bonus)
@@ -1105,22 +1105,21 @@ export class HandSystem {
     return `폭죽: 적들에게 피해 ${total} 분배${defeated > 0 ? ` · ${defeated}체 처치` : ''}`
   }
 
-  /** 화염의 서: (base + 누적 n) 피해를 선택 적에게 입히고, n을 increment만큼 영구 증가시킨다. */
-  /** base + n × multiplier 피해 후 n += increment.
-   *  단일: base=0, inc=1, mul=1 → 피해 n.
-   *  트리플: base=0, inc=2, mul=2 → 피해 2n (단일의 2배, 스택도 2배 속도). */
+  /** 화염의 서: 공격력 비례 성장 공격. 누적 스택 n 기준 단일 피해 = floor((0.5+0.25n)×공) + (1+n).
+   *  단일: inc=1, mul=1. 트리플: inc=2, mul=2 → 단일 공식의 2배 피해 + 스택 2배 속도.
+   *  표시 수치는 GameBoardRenderer.enhancedHandCardDescription과 같은 식을 유지해야 한다. */
   private static applyBookOfFlames(
     gs: GameState,
     target: HandTarget | undefined,
-    base: number,
+    atk: number,
     increment: number,
     multiplier = 1
   ): string {
     const n = gs.enhancements.bookOfFlamesBonus ?? 0
-    const amount = base + n * multiplier
+    const amount = Math.floor((0.5 + 0.25 * n) * atk * multiplier) + (1 + n) * multiplier
     const result = HandSystem.damageTargetEnemy(gs, target, amount)
     gs.enhancements.bookOfFlamesBonus = n + increment
-    return `${result} · 화염의 서 피해 영구 +${increment}(누적 ${gs.enhancements.bookOfFlamesBonus})`
+    return `${result} · 화염의 서 성장 +${increment}(누적 ${gs.enhancements.bookOfFlamesBonus})`
   }
 
   /** 검은 양초: book-of-flames와 동일하게 base 피해 후 누적 보너스를 increment만큼 증가. */

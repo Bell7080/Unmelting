@@ -1837,12 +1837,16 @@ export class GameBoardRenderer {
   private enhancedHandCardDescription(id: HandCardId, merged: boolean): string {
     const def = getHandCardDef(id)
     const enhancements = this.currentGameState?.enhancements
-    // 화염의 서는 bookOfFlamesBonus가 0이어도 항상 현재 누적값으로 동적 표시한다.
+    // 화염의 서는 누적 스택 n과 현재 공격력으로 실제 피해를 동적 표시한다.
+    // 공식은 HandSystem.applyBookOfFlames와 동일하게 유지: floor((0.5+0.25n)×공×mul) + (1+n)×mul.
     if (id === 'book-of-flames') {
       const n = enhancements?.bookOfFlamesBonus ?? 0
+      const atk = this.currentGameState?.getCharacter().damage ?? 1
+      const single = Math.floor((0.5 + 0.25 * n) * atk) + (1 + n)
+      const triple = Math.floor((0.5 + 0.25 * n) * atk * 2) + (1 + n) * 2
       return merged
-        ? `필드 선택 적 1장 피해 ${2 * n}<br>화염의 서 피해 2 증가`
-        : `필드 선택 적 1장 피해 ${n}<br>화염의 서 피해 1 증가`
+        ? `필드 선택 적 1장 피해 ${triple}<br>사용 시 영구 +0.5공+2`
+        : `필드 선택 적 1장 피해 ${single}<br>사용 시 영구 +0.25공+1`
     }
     // 검은 양초: book-of-flames와 동일하게 blackCandleBonus를 읽어 실시간 피해 표시.
     if (id === 'black-candle') {
@@ -2579,7 +2583,7 @@ export class GameBoardRenderer {
             <div class="shop-layer shop-free-layer">
               ${shop.tutorialHideFreecards ? '' : [
                 this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel, shop.freeCardDescription ?? '1$', 'free-card'),
-                shop.mode === 'altar' ? this.renderShopFreeCard(!!shop.freeCoinCardClaimed, '수당', '3$', 'free-coin-card') : '',
+                shop.mode === 'altar' ? this.renderShopFreeCard(!!shop.freeCoinCardClaimed, '수당', '1$', 'free-coin-card') : '',
               ].join('')}
             </div>
             <div class="shop-layer shop-pack-layer">

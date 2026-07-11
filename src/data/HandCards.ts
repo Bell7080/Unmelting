@@ -171,7 +171,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     description: '+1$',
     tripleDescription: '+5$',
     targeting: { base: selfOne, triple: { ...selfOne, countLimit: 5 } },
-    dropWeight: 10,
+    dropWeight: 5,
     dropSource: 'treasure',
     metaRequired: false,
     runLocked: false,
@@ -204,7 +204,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropWeight: 7,
     dropSource: 'any',
     metaRequired: false,
-    runLocked: false,
+    runLocked: true, // 해금팩으로만 입수
   },
   // 레바테인: 사용 전 N회 적 행동을 먼저 실행(턴 카운터 비소모), 이후 선택 적의 최대 체력 %를 피해로 입힌다.
   // 보스 전투 중에는 공격 주기 카운터를 N 증가시켜 주기 도달 시 보스 행동이 즉시 발동한다.
@@ -221,7 +221,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropWeight: 1,
     dropSource: 'any',
     metaRequired: false,
-    runLocked: false,
+    runLocked: true, // 해금팩으로만 입수 — 해금 시 1장 지급이 사실상 확정 수급 루트
     jobTags: ['knight', 'mage'] satisfies ReadonlyArray<JobTag>,
   },
   // 폭죽: 필드의 적들에게 총 피해를 무작위로 쪼개 분배한다(대상 지정 없음).
@@ -238,17 +238,18 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropWeight: 6,
     dropSource: 'any',
     metaRequired: false,
-    runLocked: false,
+    runLocked: true, // 해금팩으로만 입수
     jobTags: ['mage'] satisfies ReadonlyArray<JobTag>,
   },
-  // 화염의 서: 쓸수록 영구히 강해지는 누적 공격(n). 단일 +1, 트리플 +2씩 영구 증가.
+  // 화염의 서: 쓸수록 영구히 강해지는 누적 공격. 기본 (0.5공+1), 사용마다 (0.25공+1)씩 영구 증가.
+  // 트리플은 단일 공식의 2배 피해 + 누적 2배 속도(+2스택).
   // 설명의 피해 수치는 GameBoardRenderer.enhancedHandCardDescription이 bookOfFlamesBonus를 읽어 동적 표시한다.
   'book-of-flames': {
     id: 'book-of-flames',
     name: '화염의 서',
     category: 'attack',
-    description: '필드 선택 적 1장 피해 0<br>화염의 서 피해 1 증가',
-    tripleDescription: '필드 선택 적 1장 피해 0<br>화염의 서 피해 2 증가',
+    description: '필드 선택 적 1장 (0.5공+1)피해<br>사용 시 영구 +0.25공+1',
+    tripleDescription: '필드 선택 적 1장 (1.0공+2)피해<br>사용 시 영구 +0.5공+2',
     targeting: {
       base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
@@ -273,7 +274,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropWeight: 8,
     dropSource: 'any',
     metaRequired: false,
-    runLocked: false,
+    runLocked: true, // 해금팩으로만 입수
     jobTags: ['mage'] satisfies ReadonlyArray<JobTag>,
   },
   // 방패 밀치기: 현재 방패 수치를 그대로 피해로 전환한다. 트리플은 방패를 먼저 얻은 뒤 3배로 때린다.
@@ -304,7 +305,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropWeight: 8,
     dropSource: 'any',
     metaRequired: false,
-    runLocked: false,
+    runLocked: true, // 해금팩으로만 입수
     jobTags: ['knight'] satisfies ReadonlyArray<JobTag>,
   },
   // 청소: 필드의 1칸 거미줄만 대상으로 제거한다. 2·3칸 거미줄에는 효과 없음.
@@ -338,7 +339,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropWeight: 6,
     dropSource: 'any',
     metaRequired: false,
-    runLocked: false,
+    runLocked: true, // 해금팩으로만 입수
   },
   // 샹들리에: 필드 전체 적에게 피해. 처치 발생 시 약 200ms 딜레이 후 동일 라운드를 다시 실행한다.
   // 반복은 한번에 더해 계산하지 않고 매번 독립적으로 재실행하는 빠른 연속 실행이다.
@@ -372,7 +373,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropWeight: 6,
     dropSource: 'any',
     metaRequired: false,
-    runLocked: false,
+    runLocked: true, // 해금팩으로만 입수
   },
   // 주전자: 전방 선택 적에게 필드 적 수만큼 반복 타격한다.
   // 반복 타격은 한번에 계산하지 않고 200ms 딜레이로 순차 실행하는 빠른 연속 타격이다.
@@ -419,7 +420,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropWeight: 4,
     dropSource: 'any',
     metaRequired: false,
-    runLocked: false,
+    runLocked: true, // 해금팩으로만 입수
   },
   // 참격: 전방 단일 적 피해. 트리플은 즉사(보스 면역).
   slash: {

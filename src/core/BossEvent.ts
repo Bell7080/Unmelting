@@ -619,7 +619,7 @@ export class BossEventController {
       this.br.playHudCounterFeedback('ember', character.ember)
       this.br.playHudCounterFeedback('emberMax', character.emberMax)
     } else if (card.id === 'boss-reward-bounty') {
-      const amount = 1 + Math.floor(Math.random() * 5)
+      const amount = 1 + Math.floor(Math.random() * 3)
       for (let i = 0; i < amount; i++) {
         // 현상금은 한 덩어리 합산이 아니라 코인 트레일 1개가 닿을 때마다
         // 지갑을 +1씩 굴려 “띠리리릭” 증가 리듬이 보이게 한다.
@@ -1590,7 +1590,7 @@ export class BossEventController {
     } else {
       healCard   = new Card('boss-reward-heal',   CardType.TREASURE, '점화액',  '체력 / 불씨 회복')
       chestCard  = new Card('boss-reward-chest',  CardType.TREASURE, '전리품',  '유물 획득')
-      bountyCard = new Card('boss-reward-bounty', CardType.TREASURE, '현상금',  '1~5$')
+      bountyCard = new Card('boss-reward-bounty', CardType.TREASURE, '현상금',  '1~3$')
     }
     for (const c of [healCard, chestCard, bountyCard]) c.groupCount = 3
     for (let lane = 0; lane < 3; lane++) {
