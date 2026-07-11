@@ -203,10 +203,12 @@ function describeTiming(def: HandCardDefinition, bossValue: number, tripleValue:
 
 function analyzeEconomy(): EnaEconomyModel {
   const averageRelicBasePrice = RELIC_IDS.reduce((sum, id) => sum + RELIC_DEFINITIONS[id].basePrice, 0) / RELIC_IDS.length
+  // 일반 상점 3팩은 공통 시작가 — 10층 120에서 10층마다 +40(index.ts baseShopPackCost와 동기 유지).
   const packBaseCosts = {
     'basic-pack': 120,
-    'recipe-pack': 400,
-    'unlock-pack': 400,
+    'recipe-pack': 120,
+    'unlock-pack': 120,
+    'shop-pack-per-10f': 40,
     'altar-30': 500,
     'altar-60': 1500,
     'altar-90': 2500,

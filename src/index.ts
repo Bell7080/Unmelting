@@ -1574,9 +1574,13 @@ function altarBasePackCost(): number {
 function baseShopPackCost(kind: ShopPackKind): number {
   if (currentShopMode === 'altar') return altarBasePackCost()
   switch (kind) {
-    case 'basic-pack': return 120
-    case 'recipe-pack': return 400
-    case 'unlock-pack': return 400
+    case 'basic-pack':
+    case 'recipe-pack':
+    case 'unlock-pack': {
+      // 일반 상점 3팩 공통 시작가: 10층 120에서 10층마다 +40 (20F 160, 40F 240 …).
+      const turn = gameState.getCurrentTurn()
+      return Math.max(120, 80 + turn * 4)
+    }
     // 제단 전용 팩이 일반 상점에서 호출되면 안전한 기본값으로 막는다.
     default: return altarBasePackCost()
   }
