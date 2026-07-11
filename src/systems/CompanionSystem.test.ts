@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { CompanionSystem, resolveKoreanParticles } from './CompanionSystem'
 
 describe('resolveKoreanParticles', () => {
@@ -20,6 +20,21 @@ describe('resolveKoreanParticles', () => {
     expect(resolveKoreanParticles('나[은/는] 앞[을/를] 봐')).toBe('나는 앞을 봐')
     // 앞 글자가 한글이 아니면 받침 없음으로 본다.
     expect(resolveKoreanParticles('A[은/는]')).toBe('A는')
+  })
+
+  it("'이었/였'·'이라/라'는 일반쌍 규칙(받침→앞항)을 그대로 따른다", () => {
+    expect(resolveKoreanParticles('별[이었/였]다')).toBe('별이었다') // ㄹ 받침도 일반쌍은 앞항
+    expect(resolveKoreanParticles('마녀[이었/였]다')).toBe('마녀였다')
+    expect(resolveKoreanParticles('보물[이라/라]니')).toBe('보물이라니')
+    expect(resolveKoreanParticles('마녀[이라/라]니')).toBe('마녀라니')
+  })
+
+  it("'으니/니'는 으로/로 계열: 받침 없거나 ㄹ 받침이면 '니'", () => {
+    expect(resolveKoreanParticles('있[으니/니]')).toBe('있으니') // 받침
+    expect(resolveKoreanParticles('왔[으니/니]')).toBe('왔으니')
+    expect(resolveKoreanParticles('보내[으니/니]')).toBe('보내니') // 받침 없음
+    // ㄹ 받침은 뒤항을 따른다(어간 ㄹ 탈락 표기는 작성 단계 책임).
+    expect(resolveKoreanParticles('가[으니/니]')).toBe('가니')
   })
 })
 
@@ -155,9 +170,9 @@ describe('CompanionSystem', () => {
     expect(c.getLearningSnapshot().predictiveWeight).toBeLessThan(1.4)
   })
 
-  it('소소한 클러치 대사가 깨끗하게 나온다', () => {
+  it('소소한 클러치 대사가 깨끗하게 나온다(신설 ember/cleanse 포함)', () => {
     const c = new CompanionSystem()
-    for (const k of ['crit', 'dodge', 'trap', 'treasure'] as const) {
+    for (const k of ['crit', 'dodge', 'trap', 'treasure', 'ember', 'cleanse'] as const) {
       expect(c.minorClutchLine(k)).not.toMatch(/[{}[\]]/)
     }
   })
@@ -180,5 +195,50 @@ describe('CompanionSystem', () => {
     }
     expect(line).not.toBeNull()
     expect(line!).not.toMatch(/[{}[\]]/)
+  })
+})
+
+describe('CompanionSystem 콜백(최근 사건 되짚기)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('최근 3턴 내 같은 적에게 맞은 뒤 처치하면 그 적을 지목한 콜백이 나온다', () => {
+    const c = new CompanionSystem()
+    // random=0: 발화 확률·콜백 확률(0.25)·풀 선택이 모두 결정적으로 통과한다.
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    c.reactSituation('hit', 10, undefined, true, '양초 거미')
+    const line = c.reactSituation('kill', 12, undefined, true, '양초 거미')
+    expect(line).toContain('양초 거미')
+  })
+
+  it('다른 적을 처치하거나 기억이 오래됐으면 복수 콜백이 나오지 않는다', () => {
+    const c = new CompanionSystem()
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    c.reactSituation('hit', 10, undefined, true, '양초 거미')
+    expect(c.reactSituation('kill', 12, undefined, true, '양초 박쥐')).not.toContain('양초 박쥐가 준 만큼')
+    const stale = new CompanionSystem()
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    stale.reactSituation('hit', 10, undefined, true, '양초 거미')
+    expect(stale.reactSituation('kill', 20, undefined, true, '양초 거미')).not.toContain('양초 거미')
+  })
+
+  it('직전 턴에 이어 또 맞으면 연속 피격 콜백이 나온다', () => {
+    const c = new CompanionSystem()
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    c.reactSituation('hit', 10, undefined, true)
+    const line = c.reactSituation('hit', 11, undefined, true)
+    expect(line).toContain('연달아')
+  })
+
+  it('최근 클러치 뒤 보물은 도와준 보람 콜백이 나오고, 새 런 리셋 후에는 나오지 않는다', () => {
+    const c = new CompanionSystem()
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    c.recordRecentEvent('clutch', 10)
+    expect(c.reactSituation('treasure', 12, undefined, true)).toContain('보람')
+    // resetForRun이 링버퍼를 비워 지난 런의 기억이 새 런으로 새지 않는다.
+    c.recordRecentEvent('clutch', 10)
+    c.resetForRun()
+    expect(c.reactSituation('treasure', 12, undefined, true)).not.toContain('보람')
   })
 })

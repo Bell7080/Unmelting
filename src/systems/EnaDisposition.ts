@@ -84,6 +84,9 @@ export const DEFAULT_DISPOSITION: EnaDisposition = {
     counter: 0.04,
     trap: 0.12,
     treasure: 0.15,
+    // 신설 2종은 낮은 기본 확률로 시작한다(불씨 꺼짐 구원 / 포자 전염 정화).
+    ember: 0.04,
+    cleanse: 0.04,
   },
   awakenChance: 0.12,
   clutchAdversityBoost: 1.0,

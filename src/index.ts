@@ -374,6 +374,8 @@ const CLUTCH_TITLES: Record<string, string> = {
   counter: '맞서는 용기',
   trap: '굳건한 의지',
   treasure: '행운의 손길',
+  'ember-save': '되살린 불씨',
+  cleanse: '맑게 씻는 손',
   heal: '포기를 모르는 마음',
   shield: '수호의 결의',
   ember: '꺼지지 않는 불씨',
@@ -5063,6 +5065,22 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
         render()
         await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
       }
+      // 소소한 클러치 — 불씨 수호: 게이지가 완전히 꺼지는 순간 에나가 몰래 한 칸을 살린다.
+      // 고품격 뗄감이 있으면 유물의 완전 회복이 우선이므로 개입하지 않는다.
+      if (
+        gameState.character.ember <= 0 &&
+        !gameState.tutorialMode &&
+        companionWorldCanSpeak() &&
+        companion.rollMinorClutch('ember', { adversity: true })
+      ) {
+        gameState.character.ember = 1
+        syncSpawnerTier()
+        recordNotice('에나의 의지 — 불씨 수호! 불씨 +1', 'info')
+        void boardRenderer.animateClutchOnPlayer('ember-gain')
+        showClutchChain('ember-save', '꺼지려는 불씨 +1')
+        sayEnaBark(companion.minorClutchLine('ember'), { importance: BARK_IMPORTANCE.clutch })
+        render()
+      }
       // 불씨 하락으로 필드 적의 공격력이 오르면, 적 카드가 붉게 확대되며
       // 잔상을 남기는 위험 연출을 띄운다(HP는 불변, 공격력만 동적 반영).
       const empoweredIds = syncFieldEnemyEmberBonus()
@@ -5199,6 +5217,24 @@ async function resolvePostDropSporeSpread(): Promise<void> {
     if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: 'spore' })
   }
   render()
+  // 소소한 클러치 — 정화: 전염이 2칸 이상 번진 순간, 방금 번진 포자 1장을 걷어낸다.
+  if (spreadCount >= 2 && companionWorldCanSpeak()) {
+    // 병합 군집이 아닌 새 1칸 포자만 대상으로 골라 정확히 '1장'만 제거한다. 대상 확보 후에만
+    // 확률을 굴려 '도왔다는 기억만 남고 아무 일도 없는' 헛발동을 막는다.
+    const target = sporeSpreads
+      .flatMap((spread) => spread.infected)
+      .map((pos) => ({ pos, card: gameState.lanes[pos.laneIndex].getCardAtDistance(pos.distance) }))
+      .find((entry) => entry.card?.type === CardType.TRAP && entry.card.trapKind === 'spore' && entry.card.groupCount === 1)
+    if (target?.card && companion.rollMinorClutch('cleanse', { adversity: spreadCount >= 3 })) {
+      recordNotice('에나의 의지 — 정화! 번진 포자 1장 제거', 'info')
+      showClutchChain('cleanse', '번진 포자 1장 제거')
+      sayEnaBark(companion.minorClutchLine('cleanse'), { importance: BARK_IMPORTANCE.clutch })
+      // 방금 render()로 DOM에 오른 포자를 소멸 연출 후 모델에서 제거한다.
+      await boardRenderer.animateCardConsumeByIds([{ cardId: target.card.id, type: CardType.TRAP }])
+      gameState.removeCardFromRow(target.card, target.pos.distance)
+      render()
+    }
+  }
 }
 
 async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true): Promise<void> {
@@ -5249,9 +5285,9 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   if (eventAnimations.length > 0) await Promise.all(eventAnimations)
 
   const totalDamage = hits.reduce((acc, h) => acc + h.damage, 0)
+  // 이번 beat에서 가장 아프게 때린 적 — 사망 원인 회상과 콜백('아까 그 적') 기억에 함께 쓴다.
+  const biggestHit = totalDamage > 0 ? [...hits].sort((a, b) => b.damage - a.damage)[0] : undefined
   if (totalDamage > 0) {
-    // 사망 원인 회상용: 이번 beat에서 가장 아프게 때린 적 이름을 마지막 피해 원천으로 남긴다.
-    const biggestHit = [...hits].sort((a, b) => b.damage - a.damage)[0]
     if (biggestHit) enaRuntimeObserver.noteDamageSource(biggestHit.cardName)
     recordNotice(`적 공격! -${totalDamage}`, 'hurt')
     render()
@@ -5272,7 +5308,8 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   // 동료(에나) 피격 반응 — 확률+쿨다운으로 강약 조절(위급하면 더 다급한 말투).
   if (totalDamage > 0 && !counterClutchFires && companionWorldCanSpeak()) {
     const danger = companionInDanger()
-    const line = companion.reactSituation('hit', gameState.getCurrentTurn(), danger ? 'urgent' : undefined, danger)
+    // 적 이름은 대사 풀 선택이 아니라 최근 사건 기록(복수 콜백 재료)에만 쓰인다.
+    const line = companion.reactSituation('hit', gameState.getCurrentTurn(), danger ? 'urgent' : undefined, danger, biggestHit?.cardName)
     if (line) {
       sayEnaBark(line, {
         importance: danger ? BARK_IMPORTANCE.urgent : BARK_IMPORTANCE.situation,

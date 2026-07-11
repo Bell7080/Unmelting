@@ -3,7 +3,7 @@ import { GameState } from '@core/GameState'
 import { Card, CardType } from '@entities/Card'
 import type { HandCardId } from '@entities/HandCard'
 import { DropSystem } from './DropSystem'
-import { assessThreats } from './CompanionForesight'
+import { assessThreats, estimateImminentWebMergeFromCells } from './CompanionForesight'
 
 /** 작은 보드 세팅 도우미: 예지 테스트가 위협 배치만 드러내게 한다. */
 function web(id: string, group = 1): Card {
@@ -11,6 +11,30 @@ function web(id: string, group = 1): Card {
   card.groupCount = group
   return card
 }
+
+describe('estimateImminentWebMergeFromCells (런타임·시뮬 공유 병합 판정)', () => {
+  it('레인 인접한 서로 다른 거미줄만 병합 군집으로 세고, 떨어진 거미줄은 무시한다', () => {
+    // 시뮬처럼 임의 객체를 key로 써도 같은 판정이 나온다(보드 표현 독립).
+    const a = { id: 'a' }
+    const b = { id: 'b' }
+    expect(estimateImminentWebMergeFromCells([{ key: a, groupCount: 1 }, { key: b, groupCount: 1 }, null]))
+      .toEqual({ mergedSize: 2, mergingOneWebs: 2 })
+    // 가운데가 비면 병합각이 없다.
+    expect(estimateImminentWebMergeFromCells([{ key: a, groupCount: 1 }, null, { key: b, groupCount: 1 }]))
+      .toEqual({ mergedSize: 0, mergingOneWebs: 0 })
+  })
+
+  it('여러 레인에 걸친 병합 카드(같은 key)는 한 장으로 세고, 홀로면 새 병합이 아니다', () => {
+    const merged = { id: 'merged-2' }
+    const single = { id: 'single' }
+    // 2칸 병합 카드 혼자는 이미 병합된 상태라 새 병합이 아니다.
+    expect(estimateImminentWebMergeFromCells([{ key: merged, groupCount: 2 }, { key: merged, groupCount: 2 }, null]))
+      .toEqual({ mergedSize: 0, mergingOneWebs: 0 })
+    // 2칸 + 인접 1칸이면 3칸 병합 후보(1칸 참여 수 1).
+    expect(estimateImminentWebMergeFromCells([{ key: merged, groupCount: 2 }, { key: merged, groupCount: 2 }, { key: single, groupCount: 1 }]))
+      .toEqual({ mergedSize: 3, mergingOneWebs: 1 })
+  })
+})
 
 describe('CompanionForesight', () => {
   it('does not recommend broom for distant single webs that cannot drop immediately', () => {

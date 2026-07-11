@@ -37,6 +37,7 @@ import {
   TRIAL_LINES,
   STARLIGHT_LINES,
   PACK_LINES,
+  CALLBACK_LINES,
 } from '@data/CompanionLines'
 import type { CardRarity } from '@data/ShopPools'
 import type {
@@ -48,6 +49,7 @@ import type {
   ClutchKind,
   MinorClutchKind,
   PackLineKind,
+  CallbackKind,
 } from '@data/CompanionLines'
 import type { HandCategory, HandCardId } from '@entities/HandCard'
 import {
@@ -58,7 +60,14 @@ import {
 } from './EnaDisposition'
 
 // 대사 데이터 쪽 타입을 그대로 다시 노출해 기존 import 경로(@systems/CompanionSystem)를 유지한다.
-export type { Line, LineTemplate, SituationId, ClutchKind, MinorClutchKind, PackLineKind }
+export type { Line, LineTemplate, SituationId, ClutchKind, MinorClutchKind, PackLineKind, CallbackKind }
+
+/** 콜백 대사의 재료가 되는 최근 사건 한 건(링버퍼 항목). */
+export interface RecentCompanionEvent {
+  kind: 'hit' | 'kill' | 'web' | 'treasure' | 'clutch'
+  enemyName?: string
+  turn: number
+}
 
 /** 반응을 고를 때 함께 보는, 호출 시점의 게임 상황. */
 export interface CompanionContext {
@@ -131,17 +140,20 @@ function finalIsRieul(ch?: string): boolean {
   return (code - 0xac00) % 28 === 8
 }
 
+/** ㄹ 받침이 뒤항을 따르는 특수쌍('서울로', '기니'). 일반쌍 규칙보다 먼저 검사한다. */
+const RIEUL_DROP_PAIRS = new Set(['으로/로', '으니/니'])
+
 /**
  * `앞글자[A/B]` 조사 토큰을 받침 유무로 해석한다.
- *   - 일반쌍: 받침 있으면 A, 없으면 B (을/를, 은/는, 이/가, 과/와, 아/야 …)
- *   - '으로/로' 특수쌍: 받침 없거나 ㄹ받침이면 '로', 그 외엔 '으로'
+ *   - 일반쌍: 받침 있으면 A, 없으면 B (을/를, 은/는, 이/가, 과/와, 아/야, 이었/였, 이라/라 …)
+ *   - '으로/로'·'으니/니' 특수쌍: 받침 없거나 ㄹ받침이면 뒤항(로/니), 그 외엔 앞항(으로/으니)
  */
 export function resolveKoreanParticles(text: string): string {
   return text.replace(/(.)?\[([^\]/]+)\/([^\]]+)\]/g, (_m, prev: string | undefined, a: string, b: string) => {
     const base = prev ?? ''
-    if (a === '으로' && b === '로') {
-      const useRo = !hasFinalConsonant(prev) || finalIsRieul(prev)
-      return base + (useRo ? '로' : '으로')
+    if (RIEUL_DROP_PAIRS.has(`${a}/${b}`)) {
+      const useShort = !hasFinalConsonant(prev) || finalIsRieul(prev)
+      return base + (useShort ? b : a)
     }
     return base + (hasFinalConsonant(prev) ? a : b)
   })
@@ -172,8 +184,9 @@ function matchEnemyKeyword(name: string): { key: string; lines: Line[] } | null 
   return null
 }
 
-/** 한 줄(문자열/템플릿)을 긴급도에 맞춰 렌더한다: 변조/슬롯 치환 → 조사 보정. */
-function renderLine(line: Line, intensity: Intensity): string {
+/** 한 줄(문자열/템플릿)을 긴급도에 맞춰 렌더한다: 변조/슬롯 치환 → 조사 보정.
+ *  데이터 품질 테스트가 같은 경로를 검사할 수 있게 export한다. */
+export function renderLine(line: Line, intensity: Intensity): string {
   const template = typeof line === 'string' ? line : line.template
   const slots: Record<string, readonly string[]> = typeof line === 'string' ? {} : line.slots
   const tone = TONE[intensity]
@@ -183,6 +196,38 @@ function renderLine(line: Line, intensity: Intensity): string {
     return pool && pool.length > 0 ? randOf(pool) : ''
   })
   return resolveKoreanParticles(filled)
+}
+
+/**
+ * 데이터 품질 검사용: 한 줄이 만들 수 있는 완성 문장을 결정적으로 나열한다.
+ * 각 토큰 자리(같은 이름이라도 자리마다 독립)를 혼합 기수로 순회해 슬롯×말투 조합을 빠짐없이 덮고,
+ * 조합 폭발은 cap으로 제한한다(현재 대사 데이터는 cap 안에 전부 들어온다).
+ */
+export function enumerateLineRenders(line: Line, intensity: Intensity, cap = 4000): string[] {
+  const template = typeof line === 'string' ? line : line.template
+  const slots: Record<string, readonly string[]> = typeof line === 'string' ? {} : line.slots
+  const tone = TONE[intensity]
+  const tokenPattern = /\{([^}]+)\}/g
+  const choicesPerToken: readonly string[][] = []
+  for (const match of template.matchAll(tokenPattern)) {
+    const name = match[1]
+    const pool = TONE_TOKENS.has(name) ? tone[name as '강조' | '종결' | '재촉'] : slots[name]
+    ;(choicesPerToken as string[][]).push(pool && pool.length > 0 ? [...pool] : [''])
+  }
+  const total = Math.min(cap, choicesPerToken.reduce((product, pool) => product * pool.length, 1))
+  const out: string[] = []
+  for (let combo = 0; combo < total; combo++) {
+    let radix = combo
+    let cursor = 0
+    const filled = template.replace(tokenPattern, () => {
+      const pool = choicesPerToken[cursor++]
+      const pick = pool[radix % pool.length]
+      radix = Math.floor(radix / pool.length)
+      return pick
+    })
+    out.push(resolveKoreanParticles(filled))
+  }
+  return out
 }
 
 // ── 튜닝(빈도·강도) ──────────────────────────────────────────
@@ -213,6 +258,14 @@ const SITUATION: Record<SituationId, { chance: number; intensity: Intensity }> =
 const STREAK_RESET_MS = 4000
 /** 클러치 예산('의지') 최대치 — 역경(피해)으로 차고, 발동 시 0으로 비운다(구조 상한이라 성향과 분리). */
 const WILL_MAX = 100
+/** 최근 사건 링버퍼 크기 — 콜백 대사가 되짚는 기억의 폭. */
+const RECENT_EVENT_MAX = 8
+/** 상황 바크가 일반 풀 대신 콜백 대사를 우선할 확률(문맥이 있을 때만). */
+const CALLBACK_CHANCE = 0.25
+/** kill 콜백이 인정하는 '아까 맞았다' 기억의 턴 폭. */
+const CALLBACK_HIT_MEMORY_TURNS = 3
+/** treasure 콜백이 인정하는 '방금 도와줬다' 기억의 턴 폭. */
+const CALLBACK_CLUTCH_MEMORY_TURNS = 5
 
 // ── 지속 감정 상태(mood/bond) 튜닝 ──────────────────────────
 /** mood 자연 회복 속도 — 매 턴 0으로 이만큼 수렴한다. */
@@ -290,6 +343,8 @@ export class CompanionSystem {
   }
   /** 누적 스킵 횟수 — 과묵 안내 대사 타이밍에 쓴다. */
   private skipCount = 0
+  /** 최근 사건 링버퍼(최대 8건) — 직전 사건을 되짚는 콜백 대사의 재료. 새 런에서 비운다. */
+  private readonly recentEvents: RecentCompanionEvent[] = []
   /** 클러치 예산('에나의 의지'). 역경으로 차고 발동 시 0이 된다. */
   private will = 0
   /** 각성은 런당 한 번뿐. 새 런에서 resetForRun으로 풀린다. */
@@ -376,16 +431,51 @@ export class CompanionSystem {
     // 상황 자체는 발화 여부와 무관하게 기분을 흔든다(자연 회복 정산 → 상황 변화 반영).
     this.syncMoodToTurn(turn)
     this.noteMoodShift(MOOD_SHIFT[id])
+    // 콜백 문맥은 이번 사건을 기록하기 전의 버퍼로 판정한다(자기 자신과의 비교 방지).
+    const callbackKind = this.callbackContext(id, turn, name)
+    if (id === 'hit' || id === 'kill' || id === 'web' || id === 'treasure') this.recordRecentEvent(id, turn, name)
     if (!important && turn - this.lastWorldBarkTurn < this.minTurnGap()) return null
     let chance = Math.min(0.95, this.disp.situationChance[id] * this.situationWeight[id])
     if (important) chance = Math.max(chance, 0.7)
     if (Math.random() >= chance) return null
     this.lastWorldBarkTurn = turn
     const intensity = intensityOverride ?? SITUATION[id].intensity
-    // 적 이름이 주어지면 핵심 키워드('거미' 등) 전용 반응을 우선한다(수식어는 무시).
-    const kw = name ? matchEnemyKeyword(name) : null
+    // 직전 사건을 기억하는 콜백 대사를 낮은 확률로 우선해 '함께 겪는 중' 감각을 준다.
+    if (callbackKind && Math.random() < CALLBACK_CHANCE) return this.callbackLine(callbackKind, name)
+    // 적 이름이 주어지면 처치/생존 반응만 핵심 키워드('거미' 등) 전용 풀을 우선한다(수식어는 무시).
+    const kw = (id === 'kill' || id === 'survive') && name ? matchEnemyKeyword(name) : null
     if (kw) return this.pickFrom(`enemy:${kw.key}`, kw.lines, intensity)
     return this.pickFrom(id, POOLS[id], intensity)
+  }
+
+  /** 최근 사건을 링버퍼에 남긴다(최대 8건). 상황 바크와 클러치가 자동으로 부르고, 호출부가 직접 남겨도 된다. */
+  recordRecentEvent(kind: RecentCompanionEvent['kind'], turn: number, enemyName?: string): void {
+    this.recentEvents.push({ kind, enemyName, turn })
+    if (this.recentEvents.length > RECENT_EVENT_MAX) this.recentEvents.shift()
+  }
+
+  /** 지금 상황이 버퍼 속 직전 사건과 이어지는가(복수/연속 피격/도움 뒤 보상)를 판정한다. */
+  private callbackContext(id: SituationId, turn: number, name?: string): CallbackKind | null {
+    if (id === 'kill' && name) {
+      const payback = this.recentEvents.some(
+        (e) => e.kind === 'hit' && e.enemyName === name && turn - e.turn <= CALLBACK_HIT_MEMORY_TURNS
+      )
+      if (payback) return 'kill'
+    }
+    if (id === 'hit' && this.recentEvents.some((e) => e.kind === 'hit' && turn - e.turn === 1)) return 'hit'
+    if (id === 'treasure' && this.recentEvents.some((e) => e.kind === 'clutch' && turn - e.turn <= CALLBACK_CLUTCH_MEMORY_TURNS)) {
+      return 'treasure'
+    }
+    return null
+  }
+
+  /** 콜백 대사 한 줄. kill 콜백은 {적} 슬롯을 실제 적 이름으로 바꿔 방금 그 상대를 지목한다. */
+  private callbackLine(kind: CallbackKind, enemyName?: string): string {
+    const lines = CALLBACK_LINES[kind].map((line): Line => {
+      const base: LineTemplate = typeof line === 'string' ? { template: line, slots: {} } : line
+      return enemyName ? { template: base.template, slots: { ...base.slots, 적: [enemyName] } } : base
+    })
+    return this.pickFrom(`callback:${kind}`, lines, 'normal')
   }
 
   /** 상점 유물 구매 감상평. id 전용 → 등급별 → 공용 폴백. 구매는 드무니 늘 한마디 한다. */
@@ -480,6 +570,7 @@ export class CompanionSystem {
     if (ctx.hp > 0 && ctx.hpRatio <= this.disp.clutchHpThreshold) {
       this.will = 0
       this.gainBond(0.005) // 함께 위기를 넘긴 큰 클러치는 유대를 조금 더 올린다.
+      this.recordRecentEvent('clutch', this.lastMoodTurn) // 콜백 대사('아까 도와준 보람') 재료.
       if (Math.random() < this.disp.clutchHealVsShield) {
         const amount = clampInt(ctx.maxHp * this.disp.clutchHealRatio * this.disp.clutchStrength, 4, 12)
         return { kind: 'heal', amount, line: this.pickFrom('clutch-heal', CLUTCH_LINES.heal, 'urgent'), flavor: '위기의 순간, 의지로 버텼다' }
@@ -490,11 +581,13 @@ export class CompanionSystem {
     if (ctx.emberLow) {
       this.will = 0
       this.gainBond(0.005)
+      this.recordRecentEvent('clutch', this.lastMoodTurn)
       return { kind: 'ember', amount: 1, cardId: 'match' as HandCardId, line: this.pickFrom('clutch-ember', CLUTCH_LINES.ember, 'urgent'), flavor: '불씨가 꺼지기 전에' }
     }
     if (ctx.supportCardId) {
       this.will = 0
       this.gainBond(0.005)
+      this.recordRecentEvent('clutch', this.lastMoodTurn)
       return { kind: 'hand', amount: 1, cardId: ctx.supportCardId, line: this.pickFrom('clutch-hand', CLUTCH_LINES.hand, 'urgent'), flavor: ctx.supportReason || '위험을 넘길 손패를 건넸다' }
     }
     return null
@@ -513,7 +606,11 @@ export class CompanionSystem {
     if (chance <= 0) return false
     const cap = ctx.adversity || bonded ? 0.45 : 0.22
     const fired = chance >= 1 || Math.random() < Math.min(cap, chance)
-    if (fired) this.gainBond(0.003) // 소소한 개입도 함께한 기억으로 유대에 남는다.
+    if (fired) {
+      this.gainBond(0.003) // 소소한 개입도 함께한 기억으로 유대에 남는다.
+      // 콜백 대사('아까 도와준 보람') 재료 — 턴은 mood 정산이 추적한 현재 턴을 쓴다.
+      this.recordRecentEvent('clutch', this.lastMoodTurn)
+    }
     return fired
   }
 
@@ -684,7 +781,7 @@ export class CompanionSystem {
     return this.disp
   }
 
-  /** 새 런 시작 시 런 한정 상태(의지/각성/턴 흐름/기분)를 초기화한다. 학습 가중치·유대는 유지. */
+  /** 새 런 시작 시 런 한정 상태(의지/각성/턴 흐름/기분/최근 사건)를 초기화한다. 학습 가중치·유대는 유지. */
   resetForRun(): void {
     this.will = 0
     this.awakened = false
@@ -694,6 +791,8 @@ export class CompanionSystem {
     this.touchStreak = 0
     this.mood = 0
     this.lastMoodTurn = 0
+    // 지난 런의 사건을 되짚는 콜백이 새 런에서 새지 않게 링버퍼를 비운다.
+    this.recentEvents.length = 0
   }
 
   /** 추후 성장/해금 층이 대사 풀을 넓히는 확장 지점(가짜 학습이 아니라 데이터 주입 seam). */

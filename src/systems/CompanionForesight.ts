@@ -57,36 +57,63 @@ function mergedWebDamage(webCount: number): number {
   return webCount
 }
 
+/** 레인별 '다음 전방' 거미줄 요약. 보드 표현이 달라도(런타임 Lane/헤드리스 시뮬) 이 형태로
+ *  변환해 넘기면 같은 병합 판정을 공유한다. key는 같은 병합 카드가 여러 레인에 걸칠 때
+ *  동일해야 하는 카드 식별자(보통 카드 객체 참조)다. */
+export interface NextFrontWebCell {
+  key: unknown
+  /** 이 카드가 차지한 칸 수(1=단일 거미줄). */
+  groupCount: number
+}
+
+export interface ImminentWebMergeEstimate {
+  /** 다음 전방에서 실제 병합될 군집의 합산 칸 수(병합각 없으면 0). */
+  mergedSize: number
+  /** 그 군집에 참여하는 1칸 거미줄 수 — 빗자루(1칸 전용) 추천 근거. */
+  mergingOneWebs: number
+}
+
 /**
- * 다음 전방 행에서 실제로 이어질 수 있는(레인 인접) 거미줄 병합 군집을 추정한다.
+ * 병합 판정의 핵심(순수 함수): 레인 순서대로 놓인 '다음 전방' 거미줄 배열에서
+ * 서로 다른 카드 2장 이상이 인접한 군집만 '새 병합'으로 세고, 가장 큰 군집을 돌려준다.
  * 떨어져 있는 거미줄은 합쳐질 수 없으므로 병합 피해로 세지 않는다 — 단순 '발견'만으로
- * 에나의 예지/미숙 대사가 나가는 오발동을 막는 근거 값이다.
+ * 에나의 예지/미숙 대사가 나가는 오발동을 막는 근거 값이며, 런타임과 학습 시뮬이 공유한다.
  */
-function estimateImminentWebMerge(lanes: readonly Lane[]): { mergedSize: number; mergingOneWebs: number } {
-  // 레인별 '다음 전방' 카드: 전방(0)이 차 있으면 그 카드(낙하 봉쇄), 비어 있으면 낙하 예정(1) 카드.
-  const nextFrontWeb = lanes.map((lane) => {
-    const candidate = lane.getCardAtDistance(0) ?? lane.getCardAtDistance(1)
-    return candidate && candidate.type === CardType.TRAP && candidate.trapKind === 'web' ? candidate : null
-  })
-  let best = { mergedSize: 0, mergingOneWebs: 0 }
-  let cluster = new Set<Card>()
+export function estimateImminentWebMergeFromCells(
+  nextFrontWebs: readonly (NextFrontWebCell | null)[]
+): ImminentWebMergeEstimate {
+  let best: ImminentWebMergeEstimate = { mergedSize: 0, mergingOneWebs: 0 }
+  let cluster = new Map<unknown, number>()
   const flush = () => {
     // 서로 다른 거미줄 카드 2장 이상이 인접해야 '새 병합'이 일어난다(전방의 인접 동종은 이미 병합돼 한 카드다).
     if (cluster.size >= 2) {
-      const cards = [...cluster]
-      const mergedSize = cards.reduce((sum, card) => sum + Math.max(1, card.groupCount), 0)
+      const groups = [...cluster.values()]
+      const mergedSize = groups.reduce((sum, group) => sum + Math.max(1, group), 0)
       if (mergedSize > best.mergedSize) {
-        best = { mergedSize, mergingOneWebs: cards.filter((card) => card.groupCount === 1).length }
+        best = { mergedSize, mergingOneWebs: groups.filter((group) => group === 1).length }
       }
     }
-    cluster = new Set<Card>()
+    cluster = new Map()
   }
-  for (const web of nextFrontWeb) {
-    if (web) cluster.add(web)
+  for (const cell of nextFrontWebs) {
+    if (cell) cluster.set(cell.key, cell.groupCount)
     else flush()
   }
   flush()
   return best
+}
+
+/** 런타임 Lane 보드용 어댑터: 레인별 '다음 전방' 카드(전방(0)이 차 있으면 그 카드(낙하 봉쇄),
+ *  비어 있으면 낙하 예정(1) 카드)를 뽑아 공유 병합 판정에 넘긴다. */
+function estimateImminentWebMerge(lanes: readonly Lane[]): ImminentWebMergeEstimate {
+  return estimateImminentWebMergeFromCells(
+    lanes.map((lane) => {
+      const candidate = lane.getCardAtDistance(0) ?? lane.getCardAtDistance(1)
+      return candidate && candidate.type === CardType.TRAP && candidate.trapKind === 'web'
+        ? { key: candidate, groupCount: candidate.groupCount }
+        : null
+    })
+  )
 }
 
 /** 같은 Card 객체가 여러 칸에 걸친 병합 카드일 수 있어 한 번만 센다. */

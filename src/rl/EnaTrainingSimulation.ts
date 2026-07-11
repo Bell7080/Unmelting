@@ -22,6 +22,7 @@ import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
 import { DropSystem } from '@systems/DropSystem'
 import { altarPackBaseCost, packCostWithRepeats, regularShopPackBaseCost } from '@core/ShopPricing'
 import { buildEnaKnowledgeBase, type EnaKnowledgeBase, type EnaHandCardTactic } from './EnaKnowledgeAdapter'
+import { estimateImminentWebMergeFromCells, type ImminentWebMergeEstimate } from '@systems/CompanionForesight'
 import type { EnaDisposition } from '@systems/EnaDisposition'
 
 /** 시뮬레이터의 현재 국면. 전투 외 의사결정도 같은 정책망이 고르게 한다. */
@@ -144,6 +145,7 @@ interface EnaGameSnapshot {
   bossAttackCountdown: number
   bossPage: number
   eventRisk: number
+  /** 다음 전방에서 실제 인접 병합될 1칸 거미줄 수(런타임 예지와 공유 판정). */
   webThreat: number
   /** 에나가 보는 레일 상단 예고선: 다음에 실제 리필될 lane별 카드 정보. */
   incomingRefill: (EnaSimCard | null)[]
@@ -1605,8 +1607,21 @@ export class EnaTrainingSimulation {
   }
 
   private webThreatCount(): number {
-    // 합쳐지기 전 전방 1칸 거미줄 수(오지급 방지를 위해 런타임 예지와 같이 전방/임박 위주로 본다).
-    return this.uniqueFrontCards().filter((c) => c.type === CardType.TRAP && c.trapKind === 'web' && c.group === 1).length
+    // 런타임 예지(CompanionForesight)와 같은 병합 판정을 공유: 다음 전방에서 실제로
+    // 인접 병합될 1칸 거미줄 수만 위협으로 센다(흩어진 발견은 세지 않는다).
+    return this.imminentWebMerge().mergingOneWebs
+  }
+
+  /** 시뮬 보드 → 레인별 '다음 전방' 거미줄 셀 어댑터. 전방이 차 있으면 그 카드, 비면 낙하 예정(1행) 카드. */
+  private imminentWebMerge(): ImminentWebMergeEstimate {
+    return estimateImminentWebMergeFromCells(
+      this.board[0].map((front, lane) => {
+        const candidate = front ?? this.board[1][lane]
+        return candidate && candidate.type === CardType.TRAP && candidate.trapKind === 'web'
+          ? { key: candidate, groupCount: candidate.group }
+          : null
+      })
+    )
   }
 
   private imminentWebThreatCount(): number {
@@ -1632,9 +1647,10 @@ export class EnaTrainingSimulation {
   }
 
   private predictiveAidCard(): HandCardId | null {
+    // 거미줄 지원은 런타임 예지와 같은 기준: 전방 2칸+ 거미줄은 키틴, 인접 병합될 1칸 2장+는 빗자루.
     const frontHasTwoWeb = this.uniqueFrontCards().some((c) => c.type === CardType.TRAP && c.trapKind === 'web' && c.group >= 2)
-    if (frontHasTwoWeb && this.imminentWebThreatCount() > 0) return 'chitin'
-    if (this.imminentWebThreatCount() >= 2) return 'sweep'
+    if (frontHasTwoWeb) return 'chitin'
+    if (this.imminentWebMerge().mergingOneWebs >= 2) return 'sweep'
     if (this.readySporeThreatCount() > 0) return 'holy-water'
     const strongEnemy = this.board.slice(0, 2).flat().find((c) => c?.type === CardType.ENEMY && (c.group >= 2 || c.hp > this.attack + 1))
     if (strongEnemy) return this.bestPredictiveAttackAid(strongEnemy) ?? (this.board[0].includes(strongEnemy) ? 'wax' : 'ember')
