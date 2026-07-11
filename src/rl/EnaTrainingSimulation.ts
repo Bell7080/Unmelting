@@ -23,6 +23,7 @@ import { DropSystem } from '@systems/DropSystem'
 import { altarPackBaseCost, packCostWithRepeats, regularShopPackBaseCost } from '@core/ShopPricing'
 import { buildEnaKnowledgeBase, type EnaKnowledgeBase, type EnaHandCardTactic } from './EnaKnowledgeAdapter'
 import { estimateImminentWebMergeFromCells, type ImminentWebMergeEstimate } from '@systems/CompanionForesight'
+import { bestSupportCard } from '@systems/HandCardAdvisor'
 import type { EnaDisposition } from '@systems/EnaDisposition'
 
 /** 시뮬레이터의 현재 국면. 전투 외 의사결정도 같은 정책망이 고르게 한다. */
@@ -1647,29 +1648,31 @@ export class EnaTrainingSimulation {
   }
 
   private predictiveAidCard(): HandCardId | null {
-    // 거미줄 지원은 런타임 예지와 같은 기준: 전방 2칸+ 거미줄은 키틴, 인접 병합될 1칸 2장+는 빗자루.
-    const frontHasTwoWeb = this.uniqueFrontCards().some((c) => c.type === CardType.TRAP && c.trapKind === 'web' && c.group >= 2)
-    if (frontHasTwoWeb) return 'chitin'
-    if (this.imminentWebMerge().mergingOneWebs >= 2) return 'sweep'
-    if (this.readySporeThreatCount() > 0) return 'holy-water'
+    // 지원 카드는 런타임 예지와 같은 범용 스코어러(HandCardAdvisor)를 공유한다 —
+    // 하드코딩 목록 대신 해금 풀 안에서 targeting/damageProfile/synergyTags로 고른다.
+    const frontWideWebSpan = Math.max(0, ...this.uniqueFrontCards().filter((c) => c.type === CardType.TRAP && c.trapKind === 'web').map((c) => c.group))
     const strongEnemy = this.board.slice(0, 2).flat().find((c) => c?.type === CardType.ENEMY && (c.group >= 2 || c.hp > this.attack + 1))
-    if (strongEnemy) return this.bestPredictiveAttackAid(strongEnemy) ?? (this.board[0].includes(strongEnemy) ? 'wax' : 'ember')
+    const support = bestSupportCard(
+      {
+        playerAttack: this.attack,
+        playerHealth: this.hp,
+        playerMaxHealth: this.maxHp,
+        playerShield: this.shield,
+        emberLow: this.ember <= 3,
+        frontWideWebSpan,
+        webMerge: this.imminentWebMerge(),
+        sporeReady: this.readySporeThreatCount() > 0,
+        strongEnemy: strongEnemy ? { health: strongEnemy.hp, atFront: this.board[0].includes(strongEnemy) } : undefined,
+        // 처치각이 없는 비전방 강적에도 미리 피해를 쌓는 경험을 학습한다(기존 ember 폴백 계승).
+        allowChipDamage: true,
+        heldCardIds: this.hand.map((slot) => slot.id),
+      },
+      [...this.unlockedPool]
+    )
+    if (support) return support.cardId
     const pair = this.hand.find((s) => !s.merged && this.hand.filter((x) => !x.merged && x.id === s.id).length === 2)
     if (pair) return pair.id
     return null
-  }
-
-  /** 강적 지원은 무조건 불씨가 아니라 현재 공격력에서 과잉 피해가 가장 적은 손패를 고른다. */
-  private bestPredictiveAttackAid(enemy: EnaSimCard): HandCardId | null {
-    const candidates: { id: HandCardId; damage: number }[] = [
-      { id: 'ember', damage: emberDamage(this.attack, false) },
-      { id: 'bonfire', damage: Math.floor(this.attack) },
-      { id: 'sword-and-shield', damage: Math.floor(this.attack * 0.5) + 1 },
-      { id: 'slash', damage: Math.floor(this.attack * 2) + 2 },
-    ]
-    return candidates
-      .filter((c) => c.damage >= enemy.hp && !this.hand.some((s) => s.id === c.id))
-      .sort((a, b) => (a.damage - enemy.hp) - (b.damage - enemy.hp))[0]?.id ?? null
   }
 
   private toughestEnemyLane(): number {

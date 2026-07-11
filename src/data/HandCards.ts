@@ -42,6 +42,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   'wax-drop': {
     id: 'wax-drop',
     name: '촛농',
+    synergyTags: ['wax', 'heal'],
     category: 'recovery',
     description: '체력 +1',
     tripleDescription: '체력 +5',
@@ -54,6 +55,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   candle: {
     id: 'candle',
     name: '양초',
+    synergyTags: ['wax', 'shield'],
     category: 'recovery',
     description: '방패 +1',
     tripleDescription: '방패 +5',
@@ -68,6 +70,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'ember',
     name: '불씨',
     category: 'attack',
+    synergyTags: ['flame'],
+    // 피해 근사 — HandSystem: 단일 공+1, 트리플 3공+5.
+    damageProfile: { base: { atkMult: 1, flat: 1 }, triple: { atkMult: 3, flat: 5 }, deterministic: true },
     description: '필드 선택 적 1장 (1.0공+1)피해',
     tripleDescription: '필드 선택 적 1장 (3.0공+5)피해',
     targeting: {
@@ -82,6 +87,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   key: {
     id: 'key',
     name: '열쇠',
+    synergyTags: ['tool', 'treasure'],
     category: 'tool',
     description: '필드 랜덤 보물상자 1장 획득',
     tripleDescription: '필드 모든 보물상자 획득',
@@ -97,6 +103,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   wax: {
     id: 'wax',
     name: '밀랍',
+    synergyTags: ['wax'],
     category: 'control',
     description: '전방 선택 턴 타이머 카드 1장 1턴 굳음',
     tripleDescription: '전방 모든 턴 타이머 카드 3턴 굳음',
@@ -112,6 +119,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   match: {
     id: 'match',
     name: '성냥',
+    synergyTags: ['flame', 'tool'],
     category: 'tool',
     description: '불씨 게이지 +1',
     tripleDescription: '불씨 게이지 +5',
@@ -124,6 +132,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   'holy-water': {
     id: 'holy-water',
     name: '성수',
+    synergyTags: ['holy', 'clean'],
     category: 'control',
     description: '필드 랜덤 포자 2장 제거',
     tripleDescription: '필드 전체 포자 제거',
@@ -140,6 +149,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   chitin: {
     id: 'chitin',
     name: '키틴',
+    synergyTags: ['tool', 'clean'],
     category: 'control',
     description: '전방 2칸 이하 함정 1장 제거',
     tripleDescription: '전방 3칸 이하 함정 1장 제거',
@@ -155,6 +165,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   card: {
     id: 'card',
     name: '카드',
+    synergyTags: ['tool'],
     category: 'tool',
     description: '콤보 게이지 +1',
     tripleDescription: '콤보 게이지 +7',
@@ -167,6 +178,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   coin: {
     id: 'coin',
     name: '동전',
+    synergyTags: ['coin'],
     category: 'tool',
     description: '+1$',
     tripleDescription: '+5$',
@@ -182,6 +194,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   'greed-coin': {
     id: 'greed-coin',
     name: '탐욕의 동전',
+    synergyTags: ['coin', 'sacrifice'],
     category: 'tool',
     description: '소량의 불빛 · 자해 2~5',
     tripleDescription: '소량의 불빛 · 자해 2~5',
@@ -195,6 +208,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'sacrifice-candle',
     name: '제물 양초',
     category: 'attack',
+    synergyTags: ['flame', 'wax', 'sacrifice'],
+    // 피해 근사 — HandSystem: 단일 floor(1.5공)+3, 트리플 floor(5공)+10(자해는 liability로 별도 감점).
+    damageProfile: { base: { atkMult: 1.5, flat: 3 }, triple: { atkMult: 5, flat: 10 }, deterministic: true },
     description: '자해 2 · 필드 선택 적 1장 (1.5공+3)피해',
     tripleDescription: '자해 5 · 필드 선택 적 1장 (5.0공+10)피해',
     targeting: {
@@ -211,6 +227,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   levatein: {
     id: 'levatein',
     name: '레바테인',
+    synergyTags: ['blade', 'flame'],
     category: 'attack',
     description: '즉시 2턴 흐름<br>필드 선택 적 1장 적HP30%+10피해',
     tripleDescription: '즉시 1턴 흐름<br>필드 선택 적 1장 적HP45%+15피해',
@@ -229,6 +246,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'firework',
     name: '폭죽',
     category: 'attack',
+    synergyTags: ['flame'],
+    // 무작위 분산 피해 — 단일 대상 확정 처치 계산에는 쓰지 않는다.
+    damageProfile: { base: { atkMult: 1, flat: 2 }, triple: { atkMult: 3, flat: 10 }, deterministic: false },
     description: '필드 랜덤 적 전체 (1.0공+2)피해 분산',
     tripleDescription: '필드 랜덤 적 전체 (3.0공+10)피해 분산',
     targeting: {
@@ -248,6 +268,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'book-of-flames',
     name: '화염의 서',
     category: 'attack',
+    synergyTags: ['flame', 'tome'],
+    // 피해 근사 — HandSystem 기본식만(누적 스택 보너스는 보수적으로 제외).
+    damageProfile: { base: { atkMult: 0.5, flat: 1 }, triple: { atkMult: 1, flat: 2 }, deterministic: true },
     description: '필드 선택 적 1장 (0.5공+1)피해<br>사용 시 영구 +0.25공+1',
     tripleDescription: '필드 선택 적 1장 (1.0공+2)피해<br>사용 시 영구 +0.5공+2',
     targeting: {
@@ -265,6 +288,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'fire-arrow',
     name: '불화살',
     category: 'attack',
+    synergyTags: ['flame', 'blade'],
+    // 무작위 피해(최소 1) — 확정 처치 계산에는 쓰지 않는다.
+    damageProfile: { base: { atkMult: 1, flat: 3 }, triple: { atkMult: 3, flat: 0 }, deterministic: false },
     description: '전방 선택 적 1장 1~(1.0공+3)피해',
     tripleDescription: '전방 선택 적 1장 5~(3.0공)피해',
     targeting: {
@@ -281,6 +307,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   'shield-bash': {
     id: 'shield-bash',
     name: '방패 밀치기',
+    synergyTags: ['shield', 'blade'],
     category: 'attack',
     description: '전방 선택 적 1장 방패 수치만큼 피해',
     tripleDescription: '방패 +3 · 전방 선택 적 1장 방패 수치×3 피해',
@@ -298,6 +325,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   'sacrifice-shield': {
     id: 'sacrifice-shield',
     name: '희생 방패',
+    synergyTags: ['shield', 'sacrifice'],
     category: 'recovery',
     description: '자해 1 · 방패 +2',
     tripleDescription: '자해 2 · 방패 +7',
@@ -313,6 +341,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   'sweep': {
     id: 'sweep',
     name: '청소',
+    synergyTags: ['clean', 'tool'],
     category: 'control',
     description: '필드 1칸 거미줄 전체 제거 · 불빛 없음',
     tripleDescription: '필드 1칸 거미줄 전체 제거 · 불빛 획득',
@@ -329,6 +358,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   'hand-mirror': {
     id: 'hand-mirror',
     name: '손거울',
+    synergyTags: ['tool'],
     category: 'attack',
     description: '전방 선택 적 1장: 그 적의 공격력만큼 피해',
     tripleDescription: '전방 선택 적 1장: 그 적의 공격력만큼 피해 · 이전 손패 복제',
@@ -347,6 +377,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'chandelier',
     name: '샹들리에',
     category: 'attack',
+    synergyTags: ['flame'],
+    // 피해 근사 — HandSystem: 단일 floor(1.5공), 트리플 floor(3공)(처치 시 반복은 보수적으로 제외).
+    damageProfile: { base: { atkMult: 1.5, flat: 0 }, triple: { atkMult: 3, flat: 0 }, deterministic: true },
     description: '필드 전체 적 (1.5공)피해 · 처치 시 반복',
     tripleDescription: '필드 전체 적 (3.0공)피해 · 처치 시 반복',
     targeting: {
@@ -364,6 +397,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'bonfire',
     name: '모닥불',
     category: 'attack',
+    synergyTags: ['flame', 'heal'],
+    // 피해 근사 — HandSystem: 단일 floor(공), 트리플 floor(3공)+3.
+    damageProfile: { base: { atkMult: 1, flat: 0 }, triple: { atkMult: 3, flat: 3 }, deterministic: true },
     description: '필드 선택 적 1장 (1.0공)피해 · 처치 시 체력 +3',
     tripleDescription: '필드 선택 적 1장 (3.0공+3)피해 · 처치 시 체력 +5',
     targeting: {
@@ -381,6 +417,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'teapot',
     name: '주전자',
     category: 'attack',
+    synergyTags: ['tool', 'tea'],
+    // 피해 근사 — 첫 타격만(× 적 수 반복은 보수적으로 제외).
+    damageProfile: { base: { atkMult: 1.5, flat: 0 }, triple: { atkMult: 3, flat: 0 }, deterministic: true },
     description: '전방 선택 적 1장 (1.5공)피해 × 필드 적 수',
     tripleDescription: '전방 선택 적 1장 (3.0공)피해 × 필드 적 수 × 3',
     targeting: {
@@ -396,6 +435,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   teacup: {
     id: 'teacup',
     name: '찻잔',
+    synergyTags: ['heal', 'tea'],
     category: 'recovery',
     description: '필드 적 수만큼 체력 회복',
     tripleDescription: '필드 적 수 × 3만큼 체력 회복',
@@ -410,6 +450,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   'top-hat': {
     id: 'top-hat',
     name: '신사모',
+    synergyTags: ['tool'],
     category: 'control',
     description: '전방 1칸 선택 카드 레인 맨 뒤로 이동',
     tripleDescription: '전방 1칸 선택 카드 보물상자 변환 후 레인 맨 뒤로 이동',
@@ -427,6 +468,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'slash',
     name: '참격',
     category: 'attack',
+    synergyTags: ['blade'],
+    // 피해 근사 — 단일 floor(2공)+2. 트리플 즉사는 수치화하지 않고 단일식으로 보수 유지.
+    damageProfile: { base: { atkMult: 2, flat: 2 }, triple: { atkMult: 2, flat: 2 }, deterministic: true },
     description: '전방 선택 적 1장 (2.0공+2)피해',
     tripleDescription: '전방 선택 적 1장 즉사 (보스 면역)',
     targeting: {
@@ -443,6 +487,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   shackles: {
     id: 'shackles',
     name: '족쇄',
+    synergyTags: ['shield', 'tool'],
     category: 'recovery',
     description: '방패 +4 · 즉시 1턴 흐름',
     tripleDescription: '방패 +5 · 체력 +5 · 즉시 1턴 흐름',
@@ -456,6 +501,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   'candle-tome': {
     id: 'candle-tome',
     name: '양초의 서',
+    synergyTags: ['wax', 'shield', 'tome'],
     category: 'recovery',
     description: '필드 적 수만큼 방패 획득',
     tripleDescription: '필드 전체 적 (1.0공)피해 · 적 수×3 방패 획득',
@@ -471,6 +517,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'sword-and-shield',
     name: '검과 방패',
     category: 'attack',
+    synergyTags: ['blade', 'shield'],
+    // 피해 근사 — HandSystem: 단일 floor(0.5공)+1, 트리플 floor(2공)+3.
+    damageProfile: { base: { atkMult: 0.5, flat: 1 }, triple: { atkMult: 2, flat: 3 }, deterministic: true },
     description: '전방 선택 적 1장 (0.5공+1)피해 · 방패 +1',
     tripleDescription: '전방 선택 적 1장 (2.0공+3)피해 · 방패 +4',
     targeting: {
@@ -487,6 +536,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   'watering-can': {
     id: 'watering-can',
     name: '물뿌리개',
+    synergyTags: ['flower', 'tool'],
     category: 'tool',
     description: '꽃 1턴 성장 (시들지 않음)',
     tripleDescription: '꽃 4턴 성장 (시들지 않음)',
@@ -503,6 +553,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   'garden-scissors': {
     id: 'garden-scissors',
     name: '정원 가위',
+    synergyTags: ['flower', 'blade'],
     category: 'tool',
     description: '전방 꽃 즉시 수확 · 전방 괴물꽃 즉사',
     tripleDescription: '필드 전체 꽃 수확 · 필드 전체 괴물꽃 즉사',
@@ -519,6 +570,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   'ritual-candle': {
     id: 'ritual-candle',
     name: '의식 양초',
+    synergyTags: ['wax', 'sacrifice', 'draw'],
     category: 'tool',
     description: '자해 2 · 랜덤 손패 +1',
     tripleDescription: '랜덤 손패 +3',
@@ -533,6 +585,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     id: 'black-candle',
     name: '검은 양초',
     category: 'attack',
+    synergyTags: ['wax', 'sacrifice'],
+    // 피해 근사 — 기본치만(사용 누적 +2/+6은 보수적으로 제외).
+    damageProfile: { base: { atkMult: 0, flat: 2 }, triple: { atkMult: 0, flat: 6 }, deterministic: true },
     description: '자해 2 · 필드 선택 적 1장 피해 2<br>검은 양초 피해 +2 · 손패로 돌아옴',
     tripleDescription: '자해 4 · 필드 선택 적 1장 피해 6<br>검은 양초 피해 +6 · 손패로 돌아옴',
     targeting: {

@@ -79,6 +79,9 @@ export interface RelicDefinition {
    *  렌더러가 현 시점 실제 확률 변화량(%)으로 치환할 때 사용한다.
    *  'spore'/'flower'는 포자·꽃 스폰 가중치 보정에 사용한다. */
   spawnEffect?: { type: 'enemy' | 'treasure' | 'spore' | 'flower'; delta: number }
+  /** 시너지 태그 — 손패 synergyTags와 겹치면 에나 판단/학습이 자동 가점한다.
+   *  (예: 'flame' 태그 유물이 데이터에 들어오면 화염 손패 평가가 코드 수정 없이 올라간다.) */
+  synergyTags?: readonly string[]
 }
 
 /** 유물 상점 등장 가중치의 등급별 기본값. 개별 유물의 weight가 우선한다.

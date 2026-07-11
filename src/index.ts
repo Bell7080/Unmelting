@@ -385,9 +385,6 @@ const CLUTCH_TITLES: Record<string, string> = {
   'tutorial-gift': '새싹의 따스함',
 }
 
-/** 청소 수단 손패 후보 — 방향성을 열어둔다(청소=1칸 거미줄 전체, 키틴=함정 1장). */
-const CLEANUP_CARD_IDS: readonly HandCardId[] = ['sweep', 'chitin'] as unknown as HandCardId[]
-
 /** 예측 대비로 건넨 카드를 플레이어가 기한 내 쓰는지 추적(RL 신호). */
 let pendingPrediction: {
   cardIds: readonly string[]
@@ -412,10 +409,10 @@ async function tryCompanionPrediction(): Promise<void> {
     firedRecipeIds: chain.firedRecipeIds,
   })
   const suggested = report.recommendedCardId
+  // HandCardAdvisor가 보유 손패의 같은 역할(청소류 포함)까지 보고 추천을 접으므로,
+  // 여기서는 같은 카드 중복 지급만 추가로 막으면 된다(하드코딩 청소 목록 제거).
   const hasSuggested = suggested ? gameState.character.hand.some((c) => c.defId === suggested) : false
-  const hasCleanup = gameState.character.hand.some((c) => CLEANUP_CARD_IDS.includes(c.defId))
-  // 거미줄 예측은 실제 전방 진입 가능성이 있을 때만 통과시켜 1칸 web 오판 빗자루 지급을 줄인다.
-  const needsPrediction = !!suggested && (report.recommendCleanup ? !hasCleanup : !hasSuggested)
+  const needsPrediction = !!suggested && !hasSuggested
   if (!suggested) return
   if (!companion.evaluateWebPrediction(needsPrediction, false, turn)) {
     // 후반부 고점 에나라면 터졌을 예측 지원을 지금은 말로만 비춰, 초반 미숙함을 드러낸다.
@@ -435,7 +432,8 @@ async function tryCompanionPrediction(): Promise<void> {
   void boardRenderer.animateClutchOnPlayer('hand-control')
   showClutchChain('predict', report.webLethal ? `${getHandCardDef(suggested).name} 지원 (위험!)` : `${getHandCardDef(suggested).name} 지원`)
   const predictLineKind = report.recommendationKind === 'cleanup' ? 'web' : report.recommendationKind ?? 'support'
-  sayEnaBark(companion.predictLine(predictLineKind), { importance: BARK_IMPORTANCE.clutch })
+  // '왜 이 카드인지' 짧은 구(HandCardAdvisor reason)를 대사 {이유} 슬롯에 섞는다.
+  sayEnaBark(companion.predictLine(predictLineKind, report.recommendationShortReason), { importance: BARK_IMPORTANCE.clutch })
   // 지원 카드는 이미 손패에 들어갔으므로 트레일 실패가 입력 잠금 해제를 막지 않게 연출만 분리한다.
   void playResourceTrail({ kind: 'chain' }, 'hand', 1)
 }
@@ -475,6 +473,7 @@ function tryCompanionClutch(): void {
     emberLow: c.ember <= 1,
     supportCardId: report.recommendedCardId,
     supportReason: report.recommendationReason,
+    supportShortReason: report.recommendationShortReason,
   })
   if (plan) {
     applyClutch(plan)

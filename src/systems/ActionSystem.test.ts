@@ -41,19 +41,19 @@ describe('ActionSystem rewards', () => {
     expect(character.hand).toHaveLength(5)
   })
 
-  it('drops five hand cards from a three-lane treasure chest', () => {
+  it('drops the span-3 range minimum from a three-lane treasure chest', () => {
     const character = new Character()
     const lane = new Lane('lane-0', 0)
     const treasure = new Card('treasure-test', CardType.TREASURE, '큰 상자', '3 item reward chest')
-    // Treasure rewards follow the configured 1/3/5 reward table.
+    // 보물 드랍은 폭별 [min,max] 범위 랜덤(3칸 = 3~6장). Math.random=0이면 최소치 3장.
     treasure.groupCount = 3
     vi.spyOn(Math, 'random').mockReturnValue(0)
 
     const result = ActionSystem.executeAction(character, lane, treasure, ActionType.TAKE_TREASURE)
 
     expect(result.cardRemoved).toBe(true)
-    expect(result.itemGainedNames).toHaveLength(5)
-    expect(character.hand).toHaveLength(5)
+    expect(result.itemGainedNames).toHaveLength(3)
+    expect(character.hand).toHaveLength(3)
   })
 
   it('does not let a click collect starlight; it is auto-swept at the front row instead', () => {

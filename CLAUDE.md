@@ -51,6 +51,7 @@ npm run build
 - 사치품 유물 최대 공격력 보너스 +3. 붉은 포션은 직접 공격·손패·체인 포함 모든 처치에 적용된다.
 - 샹들리에는 기본 해금(runLocked: false). 자원팩 갑옷 장착 방패 +5. 시련 '역경' 적용 시 기존 함정 카드에도 즉시 피해 보너스 반영.
 - 유물/팩/무료카드 희귀도는 `ShopPools` 공통 팔레트(common~legendary) 사용. 상점/제단 유물은 등급별 발광을 유지한다.
+- 에나 지원 카드 판단은 `src/systems/HandCardAdvisor.ts` 범용 스코어러가 담당한다. 새 손패/유물은 데이터 테이블(HandCards/Relics)에 `synergyTags`(+공격 카드는 `damageProfile`)를 달아 등록하면 에나 판단(HandCardAdvisor)·지식(EnaKnowledgeAdapter)·시뮬 학습에 자동 반영된다 — 에나 지원 카드를 코드에 하드코딩하지 말 것. `damageProfile`은 HandSystem 실제 공식의 보수 근사이므로 공식 변경 시 함께 갱신한다.
 
 ## UI/UX 규칙
 - 이모지 신규 추가 금지. `src/ui/Icons.ts`의 플랫 SVG 스타일 유지. 경험 아이콘은 불빛/재화에 쓰는 네 꼭짓점 반짝 다이아로 통일한다.

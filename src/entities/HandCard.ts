@@ -90,6 +90,16 @@ export interface HandCardTargetingTable {
   triple: HandEffectTargeting
 }
 
+/** 즉시 피해 근사 파라미터: floor(atkMult×공격력)+flat.
+ *  실제 실행 공식은 HandSystem이 소유하며, 이 테이블은 에나 판단(HandCardAdvisor)용
+ *  보수 근사다 — HandSystem 공식이 바뀌면 함께 갱신한다. */
+export interface HandDamageProfile {
+  base: { atkMult: number; flat: number }
+  triple: { atkMult: number; flat: number }
+  /** false면 무작위/조건부 피해라 확정 처치 계산에 쓰지 않는다. */
+  deterministic: boolean
+}
+
 export interface HandCardDefinition {
   id: HandCardId
   name: string
@@ -109,6 +119,11 @@ export interface HandCardDefinition {
   runLocked: boolean
   /** 직업 태그 — 기사/마법사 전용 카드임을 표기한다. */
   jobTags?: ReadonlyArray<JobTag>
+  /** 시너지 태그(예: 'flame','shield','holy') — 카드↔레시피↔유물 태그 겹침을
+   *  에나 판단(HandCardAdvisor)·지식(EnaKnowledgeAdapter)이 자동 가점으로 읽는다. */
+  synergyTags?: readonly string[]
+  /** 단일 대상 즉시 피해 근사(확정 킬 계산용). 없으면 피해 카드로 보지 않는다. */
+  damageProfile?: HandDamageProfile
 }
 
 export interface HandCard {

@@ -218,7 +218,7 @@ export class ActionSystem {
     }
   }
 
-  /** Open a treasure. Reward count scales 1/3/5 by group width. */
+  /** Open a treasure. Reward count rolls within the per-span [min,max] drop range. */
   private static takeTreasure(character: Character, _lane: Lane, card: Card): ActionResult {
     if (card.type !== CardType.TREASURE) {
       return { success: false, message: 'Not a treasure', cardRemoved: false }

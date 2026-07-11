@@ -124,7 +124,7 @@ function analyzeHandCard(id: HandCardId): EnaHandCardTactic {
   const fieldValue = baseFieldValue(def) + textScore(fullText, ATTACK_WORDS, 1.5) + textScore(fullText, CONTROL_WORDS, 1.2) + textScore(fullText, RECOVERY_WORDS, 0.9) + textScore(fullText, ECONOMY_WORDS, 0.8)
   const bossValue = baseBossValue(def, fullText) + recipeIds.filter((recipeId) => recipeId.includes('fire') || recipeId.includes('hot') || recipeId.includes('fuse')).length * 0.6
   const tripleValue = tripleDeltaValue(def.targeting.base, def.targeting.triple, def.description, def.tripleDescription)
-  const synergyValue = recipeSynergy + relicSynergy + jobSynergy + eventSynergy
+  const synergyValue = recipeSynergy + relicSynergy + jobSynergy + eventSynergy + tagSynergyValue(def)
   const liability = textScore(fullText, LIABILITY_WORDS, 1) + (def.dropSource === 'boss' ? 2 : 0) + (def.runLocked ? 0.4 : 0)
   const usePosition = describePosition(def)
   const timing = describeTiming(def, bossValue, tripleValue, liability)
@@ -255,6 +255,30 @@ function makeGlobalSynergyNotes(handCards: Record<HandCardId, EnaHandCardTactic>
     `트리플 대기 가치가 큰 손패: ${bestTriple}`,
     `불빛 보정은 30F ${economy.lightTurnMultiplierAt30.toFixed(2)}배, 60F ${economy.lightTurnMultiplierAt60.toFixed(2)}배, 90F ${economy.lightTurnMultiplierAt90.toFixed(2)}배`,
   ]
+}
+
+/** 두 태그 목록의 겹침 수. 태그가 없는 쪽이 있으면 0. */
+export function synergyTagOverlap(a: readonly string[] | undefined, b: readonly string[] | undefined): number {
+  if (!a || !b || a.length === 0 || b.length === 0) return 0
+  return a.filter((tag) => b.includes(tag)).length
+}
+
+/** 태그 기반 연계 가치: 카드↔같은 레시피 재료 카드↔태그 달린 유물의 synergyTags 겹침을 읽는다.
+ *  새 유물이 데이터에 태그만 달고 들어와도 에나 지식/학습에 자동 반영되는 통로다. */
+function tagSynergyValue(def: HandCardDefinition): number {
+  const tags = def.synergyTags
+  if (!tags || tags.length === 0) return 0
+  // 같은 레시피에 함께 들어가는 다른 재료 카드와의 태그 겹침 — 조합 성향 보정.
+  const recipeMateOverlap = RECIPES
+    .filter((recipe) => (recipe.ingredients[def.id] ?? 0) > 0)
+    .flatMap((recipe) => Object.keys(recipe.ingredients).filter((id) => id !== def.id))
+    .reduce((sum, mateId) => sum + synergyTagOverlap(tags, HAND_CARD_DEFINITIONS[mateId as HandCardId]?.synergyTags), 0)
+  // 태그를 선언한 유물과의 겹침 — 등장 가중치가 높은 유물일수록 실제 연계 확률이 높다.
+  const relicOverlap = RELIC_IDS.reduce((sum, relicId) => {
+    const overlap = synergyTagOverlap(tags, RELIC_DEFINITIONS[relicId].synergyTags)
+    return sum + (overlap > 0 ? overlap * (0.3 + relicDrawWeight(relicId) * 0.05) : 0)
+  }, 0)
+  return recipeMateOverlap * 0.3 + relicOverlap
 }
 
 function recipeValue(recipeId: string): number {

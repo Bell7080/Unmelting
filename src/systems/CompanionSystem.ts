@@ -97,6 +97,8 @@ export interface ClutchContext {
   supportCardId?: HandCardId | null
   /** 사람이 읽는 로그/배너용 지원 이유. */
   supportReason?: string
+  /** 대사 {이유} 슬롯에 섞는 짧은 명사구(HandCardAdvisor reason). */
+  supportShortReason?: string | null
 }
 
 /** 소소한 클러치 판정에 붙는 맥락. 역경/유대가 클라이맥스 상한을 임시로 연다. */
@@ -185,10 +187,11 @@ function matchEnemyKeyword(name: string): { key: string; lines: Line[] } | null 
 }
 
 /** 한 줄(문자열/템플릿)을 긴급도에 맞춰 렌더한다: 변조/슬롯 치환 → 조사 보정.
- *  데이터 품질 테스트가 같은 경로를 검사할 수 있게 export한다. */
-export function renderLine(line: Line, intensity: Intensity): string {
+ *  데이터 품질 테스트가 같은 경로를 검사할 수 있게 export한다.
+ *  extraSlots는 데이터의 기본 슬롯 풀을 런타임 값(예: 지원 이유 구)으로 덮는다. */
+export function renderLine(line: Line, intensity: Intensity, extraSlots?: Record<string, readonly string[]>): string {
   const template = typeof line === 'string' ? line : line.template
-  const slots: Record<string, readonly string[]> = typeof line === 'string' ? {} : line.slots
+  const slots: Record<string, readonly string[]> = { ...(typeof line === 'string' ? {} : line.slots), ...(extraSlots ?? {}) }
   const tone = TONE[intensity]
   const filled = template.replace(/\{([^}]+)\}/g, (_m, name: string) => {
     if (TONE_TOKENS.has(name)) return randOf(tone[name as '강조' | '종결' | '재촉'])
@@ -588,7 +591,8 @@ export class CompanionSystem {
       this.will = 0
       this.gainBond(0.005)
       this.recordRecentEvent('clutch', this.lastMoodTurn)
-      return { kind: 'hand', amount: 1, cardId: ctx.supportCardId, line: this.pickFrom('clutch-hand', CLUTCH_LINES.hand, 'urgent'), flavor: ctx.supportReason || '위험을 넘길 손패를 건넸다' }
+      // '왜 이 카드인지' 이유 구가 오면 대사에 자연스럽게 섞는다({이유} 슬롯 줄 우선).
+      return { kind: 'hand', amount: 1, cardId: ctx.supportCardId, line: this.pickWithReason('clutch-hand', CLUTCH_LINES.hand, 'urgent', ctx.supportShortReason), flavor: ctx.supportReason || '위험을 넘길 손패를 건넸다' }
     }
     return null
   }
@@ -705,9 +709,20 @@ export class CompanionSystem {
     return true
   }
 
-  /** 예측 대비 대사 한 줄(상황 키별). */
-  predictLine(kind: string): string {
-    return this.pickFrom(`predict:${kind}`, PREDICT_LINES[kind], 'normal')
+  /** 예측 대비 대사 한 줄(상황 키별). reason이 오면 '왜 이 카드인지' 구를 {이유} 슬롯에 섞는다.
+   *  전용 풀이 없는 새 지원 분류(ember/recovery 등)는 support 풀로 폴백한다. */
+  predictLine(kind: string, reason?: string | null): string {
+    const pool = PREDICT_LINES[kind] ?? PREDICT_LINES.support
+    return this.pickWithReason(`predict:${kind}`, pool, 'normal', reason)
+  }
+
+  /** {이유} 슬롯이 있는 줄이 풀에 있고 이유 구가 준비됐으면 그 줄에 이유를 주입한다. */
+  private pickWithReason(key: string, lines: Line[], intensity: Intensity, reason?: string | null): string {
+    const reasonLines = reason ? lines.filter((line) => typeof line !== 'string' && '이유' in line.slots) : []
+    if (reason && reasonLines.length > 0) {
+      return this.pickFrom(`${key}:reason`, reasonLines, intensity, { 이유: [reason] })
+    }
+    return this.pickFrom(key, lines, intensity)
   }
 
   /**
@@ -831,19 +846,19 @@ export class CompanionSystem {
   }
 
   /** 주어진 줄 목록에서 최근에 나오지 않은 항목과 완성 문장을 골라 긴급도에 맞춰 렌더한다. */
-  private pickFrom(key: string, lines: Line[], baseIntensity: Intensity): string {
+  private pickFrom(key: string, lines: Line[], baseIntensity: Intensity, extraSlots?: Record<string, readonly string[]>): string {
     const intensity = this.moodAdjustedIntensity(baseIntensity)
-    if (lines.length <= 1) return this.rememberRendered(key, renderLine(lines[0], intensity))
+    if (lines.length <= 1) return this.rememberRendered(key, renderLine(lines[0], intensity, extraSlots))
     const recent = this.recentPickHistory.get(key) ?? []
     const avoid = new Set(recent)
     const candidates = lines.map((_, i) => i).filter((i) => !avoid.has(i))
     let idx = candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : Math.floor(Math.random() * lines.length)
-    let rendered = renderLine(lines[idx], intensity)
+    let rendered = renderLine(lines[idx], intensity, extraSlots)
     const recentRendered = this.recentRenderedHistory.get(key) ?? []
     // 템플릿 슬롯 조합까지 포함해 직전 완성 문장과 겹치면 몇 번 더 굴려 체감 반복을 줄인다.
     for (let attempt = 0; attempt < 6 && recentRendered.includes(rendered); attempt++) {
       idx = candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : Math.floor(Math.random() * lines.length)
-      rendered = renderLine(lines[idx], intensity)
+      rendered = renderLine(lines[idx], intensity, extraSlots)
     }
     this.lastPick.set(key, idx)
     const windowSize = Math.min(3, Math.max(1, lines.length - 1), Math.floor(lines.length / 2))

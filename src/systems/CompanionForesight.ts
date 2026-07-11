@@ -13,6 +13,8 @@ import type { Character } from '@entities/Character'
 import type { HandCard, HandCardId } from '@entities/HandCard'
 import { HAND_CARD_DEFINITIONS } from '@data/HandCards'
 import { RECIPES } from '@data/Recipes'
+import { RELIC_DEFINITIONS } from '@data/Relics'
+import { bestSupportCard, type SupportFit } from './HandCardAdvisor'
 
 export interface ThreatReport {
   /** 합쳐지기 전 청소 가능한 1칸 거미줄 수. */
@@ -27,10 +29,12 @@ export interface ThreatReport {
   strongEnemyIncoming: boolean
   /** 함정 제거를 넘어 공격/포자/레시피/트리플까지 본 최종 추천 손패. */
   recommendedCardId: HandCardId | null
-  /** 대사/로그가 추천 성격을 구분하도록 남기는 큰 분류. */
-  recommendationKind: 'cleanup' | 'spore' | 'attack' | 'defense' | 'triple' | 'recipe' | null
+  /** 대사/로그가 추천 성격을 구분하도록 남기는 큰 분류(위협 지원은 HandCardAdvisor fit 공유). */
+  recommendationKind: SupportFit | 'triple' | 'recipe' | null
   /** 추천을 택한 이유. 로그/학습 trace에서 사람이 읽기 쉽게 남긴다. */
   recommendationReason: string
+  /** 대사 슬롯에 섞는 짧은 명사구('왜 이 카드인지'). 위협 지원 추천에서만 채워진다. */
+  recommendationShortReason?: string
   /** 현재 손패 순서/체인에서 보조 카드까지 포함해 몇 장 안에 조합각이 열리는지. */
   playableInCards?: number
   /** 빗자루 오지급 방지를 위해 실제 전방 진입 가능성이 있는지 별도로 드러낸다. */
@@ -139,38 +143,9 @@ function hasHand(character: Character, ids: readonly HandCardId[]): boolean {
   return character.hand.some((card) => ids.includes(card.defId))
 }
 
-/** 에나가 직접 줄 수 있는 주요 공격 손패의 즉시 피해를 현재 공격력 기준으로 보수 계산한다. */
-function estimatedSingleTargetDamage(id: HandCardId, character: Character): number | null {
-  const atk = character.damage
-  switch (id) {
-    case 'ember':
-      return atk + 1
-    case 'bonfire':
-      return Math.floor(atk)
-    case 'sword-and-shield':
-      return Math.floor(0.5 * atk) + 1
-    case 'slash':
-      return Math.floor(2 * atk) + 2
-    case 'fire-arrow':
-      // 무작위 피해 카드는 최소치가 낮아 확정 킬 계산에는 쓰지 않는다.
-      return null
-    default:
-      return null
-  }
-}
-
-/** 필드/전방 필터를 만족하고, 지금 손에 없으며, 가장 깔끔하게 처치 가능한 공격 손패를 고른다. */
-function bestKillSupport(strongEnemy: { card: Card; distance: number } | undefined, character: Character, unlocked: Set<HandCardId>): { id: HandCardId; damage: number } | null {
-  if (!strongEnemy) return null
-  const candidates: HandCardId[] = ['ember', 'bonfire', 'sword-and-shield', 'slash'] as HandCardId[]
-  const viable = candidates
-    .filter((id) => canUse(id, unlocked) && !hasHand(character, [id]))
-    .filter((id) => HAND_CARD_DEFINITIONS[id].targeting.base.zone === 'field' || strongEnemy.distance === 0)
-    .map((id) => ({ id, damage: estimatedSingleTargetDamage(id, character) }))
-    .filter((plan): plan is { id: HandCardId; damage: number } => plan.damage !== null && plan.damage >= strongEnemy.card.getHealth())
-    // 과잉 피해가 가장 적은 카드부터 추천해, '딱 맞는 도움'처럼 느껴지게 한다.
-    .sort((a, b) => (a.damage - strongEnemy.card.getHealth()) - (b.damage - strongEnemy.card.getHealth()))
-  return viable[0] ?? null
+/** 보유 유물의 synergyTags를 평탄화한다 — 태그가 달린 유물이 데이터에 들어오면 자동 가점된다. */
+function ownedRelicTags(character: Character): string[] {
+  return character.relics.flatMap((id) => [...(RELIC_DEFINITIONS[id]?.synergyTags ?? [])])
 }
 
 /** 현재 체인과 앞으로 누를 손패 순서를 합쳐 레시피 충족까지 필요한 장수를 계산한다. */
@@ -214,20 +189,27 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
   const webMerge = estimateImminentWebMerge(lanes)
   const potentialWebDamage = mergedWebDamage(webMerge.mergedSize)
   const webLethal = potentialWebDamage >= character.health
-  // 빗자루는 1칸 거미줄 전용이라, 인접해서 실제 병합될 1칸 web이 2장 이상일 때만 추천한다.
-  const recommendSweep = hasImminentWebDrop && webMerge.mergingOneWebs >= 2 && canUse('sweep' as HandCardId, unlocked)
-  // 2칸 전방 거미줄 + 곧 내려올 1칸은 3칸 즉사 후보라 키틴(특히 트리플 대기)을 우선한다.
-  const recommendChitin = canUse('chitin' as HandCardId, unlocked) && (frontTwoWeb || webCells.some(({ card, distance }) => distance === 0 && card.groupCount >= 2))
   const sporeReady = cells.some(({ card, distance }) => card.type === CardType.TRAP && card.trapKind === 'spore' && (distance === 0 || card.sporeTurnsUntilSpread <= 1))
   const strongEnemy = cells.find(({ card, distance }) => card.type === CardType.ENEMY && distance <= 1 && (card.groupCount >= 2 || card.health > character.damage + 1))
-  const killSupport = bestKillSupport(strongEnemy, character, unlocked)
-  // 처치각이 없을 때도 맞기 전 행동력이 필요하다. 전방 강적은 밀랍으로 공격 턴을 벌고,
-  // 밀랍이 없으면 검과 방패로 피해와 방패를 동시에 확보한다.
-  const defensiveSupport = strongEnemy && !killSupport && !hasHand(character, ['wax' as HandCardId, 'sword-and-shield' as HandCardId])
-    ? (strongEnemy.distance === 0 && canUse('wax' as HandCardId, unlocked)
-        ? 'wax' as HandCardId
-        : (strongEnemy.distance === 0 && canUse('sword-and-shield' as HandCardId, unlocked) ? 'sword-and-shield' as HandCardId : null))
-    : null
+  // 위협 지원 카드는 전 손패 범용 스코어러(HandCardAdvisor)가 데이터 주도로 고른다.
+  const frontWideWebSpan = Math.max(0, ...webCells.filter(({ distance }) => distance === 0).map(({ card }) => card.groupCount))
+  const support = bestSupportCard(
+    {
+      playerAttack: character.damage,
+      playerHealth: character.health,
+      playerMaxHealth: character.maxHealth,
+      playerShield: character.shield,
+      emberLow: character.ember <= 1,
+      // 청소 추천은 실제 낙하/병합 가능성이 있을 때만(1칸 web 오판 빗자루 방지).
+      frontWideWebSpan: frontTwoWeb || frontWideWebSpan >= 2 ? frontWideWebSpan : 0,
+      webMerge: hasImminentWebDrop ? webMerge : { mergedSize: 0, mergingOneWebs: 0 },
+      sporeReady,
+      strongEnemy: strongEnemy ? { health: strongEnemy.card.getHealth(), atFront: strongEnemy.distance === 0 } : undefined,
+      heldCardIds: character.hand.map((card) => card.defId),
+      ownedRelicTags: ownedRelicTags(character),
+    },
+    [...unlocked]
+  )
   const lookahead = options.lookaheadCards ?? 4
   const chainSequence = options.chainSequence ?? []
   const firedRecipeIds = options.firedRecipeIds ?? new Set<string>()
@@ -251,31 +233,15 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
 
   let recommendedCardId: HandCardId | null = null
   let recommendationReason = ''
+  let recommendationShortReason: string | undefined
   let recommendationKind: ThreatReport['recommendationKind'] = null
   let playableInCards: number | undefined
-  if (!hasHand(character, ['chitin' as HandCardId]) && recommendChitin) {
-    recommendedCardId = 'chitin' as HandCardId
-    recommendationKind = 'cleanup'
-    // '3칸 합류' 근거는 인접 병합 군집이 실제로 3칸 이상일 때만 주장한다.
-    recommendationReason = webMerge.mergedSize >= 3 ? '전방 2칸 거미줄에 1칸 거미줄이 합류해 3칸 위협이 될 수 있음' : '전방 병합 거미줄은 키틴으로 직접 제거 가능'
-  } else if (!hasHand(character, ['sweep' as HandCardId, 'chitin' as HandCardId]) && recommendSweep) {
-    recommendedCardId = 'sweep' as HandCardId
-    recommendationKind = 'cleanup'
-    recommendationReason = '1칸 거미줄들이 다음 전방에서 병합될 가능성이 높음'
-  } else if (sporeReady && canUse('holy-water' as HandCardId, unlocked) && !hasHand(character, ['holy-water' as HandCardId])) {
-    recommendedCardId = 'holy-water' as HandCardId
-    recommendationKind = 'spore'
-    recommendationReason = '포자 전염 카운트가 가까워 필드 정화 가치가 높음'
-  } else if (killSupport) {
-    recommendedCardId = killSupport.id
-    recommendationKind = 'attack'
-    recommendationReason = `전방/대기라인 강적을 피해 ${killSupport.damage} 손패로 처치 가능`
-  } else if (defensiveSupport) {
-    recommendedCardId = defensiveSupport
-    recommendationKind = 'defense'
-    recommendationReason = defensiveSupport === 'wax'
-      ? '처치가 어려운 전방 강적의 반격 타이밍을 밀랍으로 늦출 수 있음'
-      : '처치가 어려운 전방 강적에게 피해를 주며 방패를 확보할 수 있음'
+  if (support) {
+    // 청소/포자/처치/방어/불씨/회복 지원은 전부 범용 스코어러 결과를 그대로 쓴다.
+    recommendedCardId = support.cardId
+    recommendationKind = support.fit
+    recommendationReason = support.detail
+    recommendationShortReason = support.reason
   } else if (tripleNeed) {
     recommendedCardId = tripleNeed.id
     playableInCards = tripleNeed.turns
@@ -288,5 +254,5 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
     recommendationReason = `${recipeNeed.recipe.name} 레시피가 현재 체인/손패 순서에서 ${recipeNeed.turns}장 안에 발동 가능`
   }
 
-  return { webCount, potentialWebDamage, webLethal, recommendCleanup: recommendSweep || recommendChitin, strongEnemyIncoming: !!strongEnemy, recommendedCardId, recommendationKind, recommendationReason, hasImminentWebDrop, playableInCards }
+  return { webCount, potentialWebDamage, webLethal, recommendCleanup: support?.fit === 'cleanup', strongEnemyIncoming: !!strongEnemy, recommendedCardId, recommendationKind, recommendationReason, recommendationShortReason, hasImminentWebDrop, playableInCards }
 }
