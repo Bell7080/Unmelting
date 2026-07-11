@@ -436,7 +436,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropWeight: 5,
     dropSource: 'any',
     metaRequired: false,
-    runLocked: false,
+    runLocked: true, // 해금팩으로만 입수
     jobTags: ['knight'] satisfies ReadonlyArray<JobTag>,
   },
   // 족쇄: 방패를 얻고 즉시 1턴 흐름을 실행한다(레바테인 simulatedBattlePhases 방식 재사용).

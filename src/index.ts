@@ -2832,9 +2832,9 @@ function scoreLabelForCard(card: Card): string {
   return `${card.name} 획득`
 }
 
-/** 플레이어 기본 불빛 획득량 전체 상향 배율(약 +0.2x). 카드 처리/수확 등 행동 기반 불빛에만
+/** 플레이어 기본 불빛 획득량 전체 상향 배율(약 +0.4x). 카드 처리/수확 등 행동 기반 불빛에만
  *  적용되며, gainFixedLight(별빛 랜턴 등 고정 유물 보너스)에는 적용하지 않는다. */
-const BASE_LIGHT_GAIN_MULTIPLIER = 1.25
+const BASE_LIGHT_GAIN_MULTIPLIER = 1.4
 
 function createScoreLog(
   label: string,
