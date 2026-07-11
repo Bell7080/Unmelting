@@ -429,6 +429,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 }
 /* 무료카드 2장은 보유 유물 부채꼴과 같은 톤으로 겹쳐 배치한다.
    (좌/우 오프셋 + 반대 각도) */
+/* hover 펴짐/복귀·소모 퇴장에서 기울기 변화가 스냅 없이 이어지도록 transform 채널도 전이한다. */
+.shop-free-layer > .shop-relic-card {
+  transition: transform 0.22s ease, scale 0.18s ease, box-shadow 0.22s ease, filter 0.16s ease;
+}
 .shop-free-layer > .shop-relic-card:nth-child(1) {
   transform: translateX(clamp(12px, 1vw, 18px)) rotate(-7deg);
   z-index: 2;
@@ -605,11 +609,16 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 
 .shop-free-card.is-consumed {
   pointer-events: none;
+  /* 퇴장은 transform(부채꼴 기울기/오프셋)을 덮어쓰지 않고 독립 translate/scale 채널로만
+     떠오르며 사라진다 — 소모 순간 기울어진 카드가 갑자기 바로 서는 스냅 제거. */
+  translate: 0 -30px;
+  scale: 0.86;
+  transition: translate 0.24s ease, scale 0.24s ease, transform 0.24s ease;
   animation: shop-free-card-consumed 0.24s ease forwards;
 }
 @keyframes shop-free-card-consumed {
-  from { opacity: 1; transform: translateY(0) scale(1); filter: saturate(1); }
-  to { opacity: 0; transform: translateY(-30px) scale(0.86); filter: saturate(0.7) brightness(1.1); }
+  from { opacity: 1; filter: saturate(1); }
+  to { opacity: 0; filter: saturate(0.7) brightness(1.1); }
 }
 
 /* Pack tile — FULL illustration with centered title/effect overlay. This is
