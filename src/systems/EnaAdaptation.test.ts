@@ -15,10 +15,21 @@ describe('에나 온라인 per-player 적응', () => {
 
   it('깊이 살아남으면 과보호를 살짝 완화한다', () => {
     const c = new CompanionSystem(defaultDisposition())
+    // 평균회귀는 기본 토대 방향으로 끌므로, 사망 반복으로 토대 위로 올려둔 뒤 완화를 검증한다.
+    for (let i = 0; i < 10; i++) c.adaptToOutcome({ died: true, floorReached: 5 })
     const before = cloneDisposition(c.getDisposition())
     const after = c.adaptToOutcome({ died: false, floorReached: 72 })
     expect(after.willGainPerDamage).toBeLessThan(before.willGainPerDamage)
     expect(after.clutchStrength).toBeLessThan(before.clutchStrength)
+  })
+
+  it('사망이 반복돼도 평균회귀로 상한에 영구히 눌러붙지 않는다', () => {
+    const c = new CompanionSystem(defaultDisposition())
+    for (let i = 0; i < 50; i++) c.adaptToOutcome({ died: true, floorReached: 5 })
+    const saturated = c.getDisposition().willGainPerDamage
+    // 무난한 생존 런이 이어지면 성향이 기본 토대 방향으로 회복된다.
+    for (let i = 0; i < 30; i++) c.adaptToOutcome({ died: false, floorReached: 40 })
+    expect(c.getDisposition().willGainPerDamage).toBeLessThan(saturated)
   })
 
   it('런-내 수다 학습(열람)을 영구 성향(발화확률)으로 소화한다', () => {

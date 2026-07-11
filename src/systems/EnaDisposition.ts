@@ -241,11 +241,41 @@ function buildBaseDisposition(): EnaDisposition {
   return clampDisposition(d)
 }
 
+/**
+ * 성향을 기본 토대(BASE_DISPOSITION) 방향으로 rate만큼 완만히 되돌린다(평균회귀).
+ * 로그라이크 특성상 사망 상향(×1.05대)이 생존 완화(×0.99)보다 잦아 성향이 클램프 상한/하한에
+ * 눌러붙는 편향이 생기므로, 런마다 소량 회귀시켜 장기적으로 개인화가 중간 지대에 머물게 한다.
+ */
+export function revertDispositionTowardBase(d: EnaDisposition, rate: number): EnaDisposition {
+  const out = cloneDisposition(d)
+  const base = BASE_DISPOSITION as unknown as Record<string, unknown>
+  const target = out as unknown as Record<string, unknown>
+  for (const [k, baseValue] of Object.entries(base)) {
+    const current = target[k]
+    if (typeof baseValue === 'number' && typeof current === 'number') {
+      target[k] = current + (baseValue - current) * rate
+    } else if (baseValue && current && typeof baseValue === 'object' && typeof current === 'object') {
+      // situationChance/minorClutchChance 같은 중첩 수치 맵도 같은 비율로 회귀.
+      const baseMap = baseValue as Record<string, number>
+      const currentMap = current as Record<string, number>
+      for (const kk of Object.keys(baseMap)) {
+        if (typeof baseMap[kk] === 'number' && typeof currentMap[kk] === 'number') {
+          currentMap[kk] = currentMap[kk] + (baseMap[kk] - currentMap[kk]) * rate
+        }
+      }
+    }
+  }
+  return out
+}
+
 // ── 영구 저장(per-player) ─────────────────────────────────────────────────
 // 플레이어별로 적응된 성향을 세션 넘어 유지한다. 브라우저 외 환경(테스트/SSR)에서는
 // localStorage가 없을 수 있어 안전하게 무시한다. (import 주위가 아니라 저장 접근만 보호)
 
 const STORAGE_KEY = 'ena-disposition-v1'
+// EnaPolicyStore처럼 payload 자체에 스키마 버전을 남겨, 키 이름만으로는 못 잡는
+// 구조 변경(필드 의미 변화 등)을 로드 시점에 거를 수 있게 한다.
+const DISPOSITION_SCHEMA_VERSION = 1
 
 /** 저장된 per-player 성향을 불러온다. 없으면 학습된 기본 토대(BASE_DISPOSITION)에서 시작한다. */
 export function loadDisposition(key: string = STORAGE_KEY): EnaDisposition {
@@ -253,17 +283,27 @@ export function loadDisposition(key: string = STORAGE_KEY): EnaDisposition {
   const raw = localStorage.getItem(key)
   if (!raw) return cloneDisposition(BASE_DISPOSITION)
   try {
-    return dispositionFromJSON(JSON.parse(raw))
+    const parsed: unknown = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object' && 'version' in parsed) {
+      const envelope = parsed as { version: unknown; disposition?: unknown }
+      if (envelope.version !== DISPOSITION_SCHEMA_VERSION) return cloneDisposition(BASE_DISPOSITION)
+      return dispositionFromJSON(envelope.disposition)
+    }
+    // 레거시(버전 봉투 없는 평면 저장본)는 v1로 간주해 그대로 병합한다.
+    return dispositionFromJSON(parsed)
   } catch {
     return cloneDisposition(BASE_DISPOSITION)
   }
 }
 
-/** 적응된 성향을 클램프 후 저장한다. 저장 실패(용량/프라이빗 모드)는 조용히 무시한다. */
+/** 적응된 성향을 클램프 후 버전 봉투에 담아 저장한다. 저장 실패(용량/프라이빗 모드)는 조용히 무시한다. */
 export function saveDisposition(d: EnaDisposition, key: string = STORAGE_KEY): void {
   if (typeof localStorage === 'undefined') return
   try {
-    localStorage.setItem(key, JSON.stringify(clampDisposition(d)))
+    localStorage.setItem(
+      key,
+      JSON.stringify({ version: DISPOSITION_SCHEMA_VERSION, disposition: clampDisposition(d) })
+    )
   } catch {
     /* 저장 실패는 게임 진행을 막지 않는다. */
   }

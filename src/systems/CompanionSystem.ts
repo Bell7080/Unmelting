@@ -39,7 +39,12 @@ import type {
   MinorClutchKind,
 } from '@data/CompanionLines'
 import type { HandCategory, HandCardId } from '@entities/HandCard'
-import { defaultDisposition, cloneDisposition, clampDisposition, type EnaDisposition } from './EnaDisposition'
+import {
+  defaultDisposition,
+  clampDisposition,
+  revertDispositionTowardBase,
+  type EnaDisposition,
+} from './EnaDisposition'
 
 // 대사 데이터 쪽 타입을 그대로 다시 노출해 기존 import 경로(@systems/CompanionSystem)를 유지한다.
 export type { Line, LineTemplate, SituationId, ClutchKind, MinorClutchKind }
@@ -508,7 +513,9 @@ export class CompanionSystem {
    * 갱신된 성향을 돌려주어 호출부가 저장(saveDisposition)하게 한다.
    */
   adaptToOutcome(outcome: RunOutcome): EnaDisposition {
-    const d = cloneDisposition(this.disp)
+    // 0) 평균회귀: 사망 상향이 생존 완화보다 잦아 상·하한에 눌러붙는 장기 편향을 막기 위해
+    //    매 런 5%씩 기본 토대 방향으로 되돌린 뒤 이번 런의 신호를 얹는다.
+    const d = revertDispositionTowardBase(this.disp, 0.05)
     // 1) 수다 성향 영속화: 이번 런 동안 학습된 chattiness(스킵=싫음/열람=좋음)를 기본 발화확률·턴 간격에 반영.
     const chatDelta = (this.chattiness() - 1) * 0.04
     for (const id of Object.keys(d.situationChance) as SituationId[]) d.situationChance[id] *= 1 + chatDelta

@@ -5197,8 +5197,17 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
       totalDamage
     )
   }
+  // 반격 클러치 판정을 먼저 굴려 같은 피격 beat에서 '아픔' 바크와 '반격' 대사가 동시에
+  // 나오는 감정 모순을 막는다 — 반격이 뜨면 그 대사가 이 beat의 감정을 대표한다.
+  const counterClutchFires =
+    totalDamage > 0 &&
+    companionWorldCanSpeak() &&
+    companion.rollMinorClutch('counter', {
+      adversity: totalDamage >= Math.max(3, gameState.character.maxHealth * 0.25),
+      bond: true,
+    })
   // 동료(에나) 피격 반응 — 확률+쿨다운으로 강약 조절(위급하면 더 다급한 말투).
-  if (totalDamage > 0 && companionWorldCanSpeak()) {
+  if (totalDamage > 0 && !counterClutchFires && companionWorldCanSpeak()) {
     const danger = companionInDanger()
     const line = companion.reactSituation('hit', gameState.getCurrentTurn(), danger ? 'urgent' : undefined, danger)
     if (line) {
@@ -5219,7 +5228,7 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   // 회피 클러치는 TurnManager.runEnemyPhase의 공격 판정 순간에 처리된다.
 
   // 소소한 클러치 — 반격: 회피와 달리 피해는 받은 뒤, 공격력 기반으로 공격자를 되친다.
-  if (totalDamage > 0 && companionWorldCanSpeak() && companion.rollMinorClutch('counter', { adversity: totalDamage >= Math.max(3, gameState.character.maxHealth * 0.25), bond: true })) {
+  if (counterClutchFires) {
     const attackerIds = [...new Set(hits.filter((h) => h.damage > 0).map((h) => h.cardId))]
     const counterDamage = Math.max(1, gameState.character.damage)
     const damaged: { cardId: string; amount: number }[] = []
