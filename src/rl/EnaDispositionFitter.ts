@@ -17,7 +17,9 @@ import {
   defaultDisposition,
   cloneDisposition,
   clampDisposition,
+  SUPPORT_ROLE_WEIGHT_BOUND,
   type EnaDisposition,
+  type SupportRoleWeights,
 } from '@systems/EnaDisposition'
 
 /** 기본 시뮬 플레이어 = 교사 휴리스틱 정책. 피팅은 이 위에 학습된 정책망을 더해 다양화한다. */
@@ -39,6 +41,10 @@ const FIT_RANGES: { key: keyof EnaDisposition; lo: number; hi: number }[] = [
 
 /** 깜짝지원 확률(중첩 레코드)도 같은 범위로 탐색한다. */
 const MINOR_KEYS = ['crit', 'dodge', 'trap', 'treasure'] as const
+
+/** HandCardAdvisor 기대 HP 환산의 역할 가중(청소/처치/방어/자원/회복)도 피팅 대상으로 노출한다.
+ *  동봉된 SIM_FITTED에는 아직 미반영 — 구조만 열어 두고, 재피팅 실행 시 함께 탐색된다. */
+export const SUPPORT_ROLE_KEYS = ['cleanup', 'attack', 'defense', 'resource', 'recovery'] as const satisfies readonly (keyof SupportRoleWeights)[]
 
 export interface FitConfig {
   iterations: number
@@ -121,6 +127,12 @@ function perturb(base: EnaDisposition, rng: EnaRandom, stepScale: number): EnaDi
   for (const k of MINOR_KEYS) {
     if (rng.next() < 0.5) continue
     d.minorClutchChance[k] += gaussian(rng) * (0.95 - 0.02) * stepScale
+  }
+  // 역할 가중 섭동: 시뮬 예지/클러치가 advisor를 공유하므로 이 노브도 생존 점수에 반영된다.
+  d.supportRoleWeights = d.supportRoleWeights ?? { cleanup: 1, attack: 1, defense: 1, resource: 1, recovery: 1 }
+  for (const k of SUPPORT_ROLE_KEYS) {
+    if (rng.next() < 0.5) continue
+    d.supportRoleWeights[k] += gaussian(rng) * (SUPPORT_ROLE_WEIGHT_BOUND.hi - SUPPORT_ROLE_WEIGHT_BOUND.lo) * stepScale
   }
   return clampDisposition(d)
 }

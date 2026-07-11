@@ -47,6 +47,27 @@ describe('EnaDisposition', () => {
     expect(loaded.lootCommentChance).toBe(0.45) // 누락 → 기본
   })
 
+  it('supportRoleWeights는 기본 1.0으로 시작하고 저장 병합·클램프를 지원한다', () => {
+    // 기본값 = 전 역할 1.0(도입 무변화 보장).
+    expect(DEFAULT_DISPOSITION.supportRoleWeights).toEqual({ cleanup: 1, attack: 1, defense: 1, resource: 1, recovery: 1 })
+    // 깊은 복제 — 가중 변형이 원본에 새지 않는다.
+    const a = defaultDisposition()
+    const b = cloneDisposition(a)
+    b.supportRoleWeights!.attack = 1.7
+    expect(a.supportRoleWeights!.attack).toBe(1)
+    // 클램프 — 역할 가중은 0.5~2 안에 가둔다.
+    const wild = defaultDisposition()
+    wild.supportRoleWeights = { cleanup: 9, attack: 0, defense: 1, resource: 1, recovery: 1 }
+    const safe = clampDisposition(wild)
+    expect(safe.supportRoleWeights!.cleanup).toBe(2)
+    expect(safe.supportRoleWeights!.attack).toBe(0.5)
+    // 저장 병합 — 구버전 저장본(가중 없음)은 기본 1.0으로 채워지고, 부분 저장본은 병합된다.
+    expect(dispositionFromJSON({}).supportRoleWeights).toEqual(DEFAULT_DISPOSITION.supportRoleWeights)
+    const partial = dispositionFromJSON({ supportRoleWeights: { attack: 1.4 } })
+    expect(partial.supportRoleWeights!.attack).toBeCloseTo(1.4)
+    expect(partial.supportRoleWeights!.cleanup).toBe(1)
+  })
+
   it('주입한 성향이 실제로 CompanionSystem 동작을 바꾼다(배선 검증)', () => {
     const never = defaultDisposition()
     never.minorClutchChance.crit = 0

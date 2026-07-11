@@ -14,7 +14,7 @@ import type { HandCard, HandCardId } from '@entities/HandCard'
 import { HAND_CARD_DEFINITIONS } from '@data/HandCards'
 import { RECIPES } from '@data/Recipes'
 import { RELIC_DEFINITIONS } from '@data/Relics'
-import { bestSupportCard, type SupportFit } from './HandCardAdvisor'
+import { bestSupportCard, type IncomingRefillSummary, type SupportFit, type SupportRoleWeights } from './HandCardAdvisor'
 
 export interface ThreatReport {
   /** 합쳐지기 전 청소 가능한 1칸 거미줄 수. */
@@ -52,6 +52,32 @@ export interface ForesightOptions {
   firedRecipeIds?: ReadonlySet<string>
   /** 보조각으로 인정할 최대 손패 진행 수. 너무 먼 조합은 자연스럽지 않아 제외한다. */
   lookaheadCards?: number
+  /** 레일 예고선이 보여 주는 다음 리필 카드(CardSpawner.peekNextRefillCards). 시간 축 보정에 쓴다. */
+  incomingRefill?: readonly (Card | null)[]
+  /** 강화팩 단일 flat 피해 보너스(gameState.enhancements.singleBonus) — 실효 처치 계산용. */
+  handSingleBonus?: Readonly<Partial<Record<HandCardId, number>>>
+  /** RL 피팅 역할 가중(EnaDisposition.supportRoleWeights). */
+  supportRoleWeights?: SupportRoleWeights
+}
+
+/** 예고 카드 배열 → 위협 종류 요약. 런타임 Card와 시뮬 카드가 같은 형태로 환산된다. */
+function summarizeIncomingRefill(cards: readonly (Card | null)[] | undefined): IncomingRefillSummary | undefined {
+  if (!cards) return undefined
+  return {
+    webs: cards.filter((c) => c?.type === CardType.TRAP && c.trapKind === 'web').length,
+    spores: cards.filter((c) => c?.type === CardType.TRAP && c.trapKind === 'spore').length,
+    enemies: cards.filter((c) => c?.type === CardType.ENEMY).length,
+  }
+}
+
+/** 비합체 보유 장수 맵 — 트리플 완성각(정확히 2장) 판단의 근거로 advisor에 넘긴다. */
+function heldCardCounts(character: Character): Partial<Record<HandCardId, number>> {
+  const counts: Partial<Record<HandCardId, number>> = {}
+  for (const card of character.hand) {
+    if (card.merged) continue
+    counts[card.defId] = (counts[card.defId] ?? 0) + 1
+  }
+  return counts
 }
 
 /** 합쳐졌을 때 칸 수별 거미줄 추정 피해. 3칸 이상은 '즉사'급으로 크게 본다. */
@@ -203,10 +229,26 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
       // 청소 추천은 실제 낙하/병합 가능성이 있을 때만(1칸 web 오판 빗자루 방지).
       frontWideWebSpan: frontTwoWeb || frontWideWebSpan >= 2 ? frontWideWebSpan : 0,
       webMerge: hasImminentWebDrop ? webMerge : { mergedSize: 0, mergingOneWebs: 0 },
+      // 필드 오염(1칸 거미줄 다수)은 병합각 없이도 광역 청소 근거가 된다.
+      fieldOneWebCount: webCount,
+      // 실효값 원칙: 시련/유물의 런 단위 함정 피해 보너스를 환산에 반영한다.
+      trapDamageBonus: character.trapDamageBonus,
       sporeReady,
-      strongEnemy: strongEnemy ? { health: strongEnemy.card.getHealth(), atFront: strongEnemy.distance === 0 } : undefined,
+      strongEnemy: strongEnemy
+        ? {
+            health: strongEnemy.card.getHealth(),
+            atFront: strongEnemy.distance === 0,
+            // 실효 공격력(불씨 티어 보너스 포함) + 반격 임박 턴(전방 비굳음=0, 굳음=잔여 턴, 대기=1).
+            attack: strongEnemy.card.getDamage(),
+            attackInTurns: strongEnemy.distance === 0 ? (strongEnemy.card.isFrozen() ? strongEnemy.card.frozenTurns : 0) : 1,
+          }
+        : undefined,
       heldCardIds: character.hand.map((card) => card.defId),
+      heldCardCounts: heldCardCounts(character),
+      handSingleBonus: options.handSingleBonus,
+      incomingRefill: summarizeIncomingRefill(options.incomingRefill),
       ownedRelicTags: ownedRelicTags(character),
+      supportRoleWeights: options.supportRoleWeights,
     },
     [...unlocked]
   )

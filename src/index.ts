@@ -65,7 +65,7 @@ import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 
 import { SpeechBubble } from '@ui/SpeechBubble'
 import { CompanionSystem, type SituationId, type ClutchPlan } from '@systems/CompanionSystem'
 import { loadDisposition, saveDisposition, BASE_DISPOSITION } from '@systems/EnaDisposition'
-import { assessThreats } from '@systems/CompanionForesight'
+import { assessThreats, type ForesightOptions } from '@systems/CompanionForesight'
 import { HearthScene } from '@ui/hearth/HearthScene'
 import { ZoneCurtain, ZONE_LIST } from '@ui/ZoneCurtain'
 import { playDialogueLine } from '@ui/DialoguePlayer'
@@ -393,6 +393,20 @@ let pendingPrediction: {
   kind: string
 } | null = null
 
+/** 예지/클러치가 공유하는 위협 추정 입력 — 레일 예고 큐·강화팩 실효값·역할 가중을 함께 전달한다. */
+function companionForesightOptions(): ForesightOptions {
+  return {
+    unlockedCardIds: runCardPool.snapshot().unlocked,
+    unlockedRecipeIds: gameState.unlockedRecipeIds,
+    chainSequence: chain.sequence,
+    firedRecipeIds: chain.firedRecipeIds,
+    // 예고선과 같은 실제 다음 리필 큐(peek은 소비하지 않음) — 시간 축 보정 입력.
+    incomingRefill: cardSpawner.peekNextRefillCards(gameState.lanes.length),
+    handSingleBonus: gameState.enhancements.singleBonus,
+    supportRoleWeights: companion.getSupportRoleWeights(),
+  }
+}
+
 /** 예측 대비: 위협 추정(그릇)을 미리 읽고 대비 카드를 건넨다. 플레이어 차례 직전 호출. */
 async function tryCompanionPrediction(): Promise<void> {
   const turn = gameState.getCurrentTurn()
@@ -402,17 +416,15 @@ async function tryCompanionPrediction(): Promise<void> {
     pendingPrediction = null
   }
   if (!companionWorldCanSpeak() || gameState.bossBattleActive || pendingPrediction) return
-  const report = assessThreats(gameState.lanes, gameState.character, {
-    unlockedCardIds: runCardPool.snapshot().unlocked,
-    unlockedRecipeIds: gameState.unlockedRecipeIds,
-    chainSequence: chain.sequence,
-    firedRecipeIds: chain.firedRecipeIds,
-  })
+  const report = assessThreats(gameState.lanes, gameState.character, companionForesightOptions())
   const suggested = report.recommendedCardId
   // HandCardAdvisor가 보유 손패의 같은 역할(청소류 포함)까지 보고 추천을 접으므로,
-  // 여기서는 같은 카드 중복 지급만 추가로 막으면 된다(하드코딩 청소 목록 제거).
-  const hasSuggested = suggested ? gameState.character.hand.some((c) => c.defId === suggested) : false
-  const needsPrediction = !!suggested && !hasSuggested
+  // 여기서는 같은 카드 중복 지급만 추가로 막으면 된다. 단, 비합체 2장 보유 카드는
+  // 3장째가 즉시 트리플로 완성되므로(트리플 보조 추천 경로) 지급을 허용한다.
+  const heldNonMerged = suggested
+    ? gameState.character.hand.filter((c) => c.defId === suggested && !c.merged).length
+    : 0
+  const needsPrediction = !!suggested && (heldNonMerged === 0 || heldNonMerged === 2)
   if (!suggested) return
   if (!companion.evaluateWebPrediction(needsPrediction, false, turn)) {
     // 후반부 고점 에나라면 터졌을 예측 지원을 지금은 말로만 비춰, 초반 미숙함을 드러낸다.
@@ -424,8 +436,9 @@ async function tryCompanionPrediction(): Promise<void> {
     return
   }
   // 판 분석 결과가 고른 해금 손패를 건넨다. 함정 외 공격/포자/레시피/트리플 보조도 이 경로를 공유한다.
+  // enqueueDrop = 일반 획득과 같은 정리(addHandCard 후 트리플 자동 합성 검사) — 3장째 지급도 즉시 합성된다.
   const drop = DropSystem.makeCard(suggested)
-  if (!gameState.character.addHandCard(drop)) return // 손패 가득 — 다음 기회에
+  if (!HandSystem.enqueueDrop(gameState.character, drop)) return // 손패 가득 — 다음 기회에
   pendingPrediction = { cardIds: [suggested], issuedTurn: turn, deadlineTurn: turn + 3, kind: report.recommendationKind ?? 'support' }
   recordNotice(`에나의 의지 — ${getHandCardDef(suggested).name} 지원: ${report.recommendationReason}`, 'info')
   render()
@@ -460,12 +473,7 @@ function tryCompanionClutch(): void {
   if (!companionWorldCanSpeak()) return
   const c = gameState.character
   const turn = gameState.getCurrentTurn()
-  const report = assessThreats(gameState.lanes, c, {
-    unlockedCardIds: runCardPool.snapshot().unlocked,
-    unlockedRecipeIds: gameState.unlockedRecipeIds,
-    chainSequence: chain.sequence,
-    firedRecipeIds: chain.firedRecipeIds,
-  })
+  const report = assessThreats(gameState.lanes, c, companionForesightOptions())
   const plan = companion.evaluateClutch({
     hp: c.health,
     maxHp: c.maxHealth,
@@ -503,9 +511,10 @@ function applyClutch(plan: ClutchPlan): void {
     detail = `방패 +${shielded}`
   } else if (plan.kind === 'ember' || plan.kind === 'hand') {
     // 에나가 직접 손패를 건네는 클러치. 불씨 위기면 성냥, 예지 위기면 추천 손패를 준다.
+    // enqueueDrop = 일반 획득과 같은 정리 경로 — 같은 카드 3장째 보급도 즉시 트리플로 합성된다.
     const cardId = plan.cardId ?? 'match'
     const drop = DropSystem.makeCard(cardId)
-    detail = c.addHandCard(drop) ? `${getHandCardDef(cardId).name} +1` : '손패가 가득 참'
+    detail = HandSystem.enqueueDrop(c, drop) ? `${getHandCardDef(cardId).name} +1` : '손패가 가득 참'
   }
   recordNotice(`에나의 의지 — ${detail}`, 'info')
   render()
@@ -1410,7 +1419,8 @@ async function applyTurnStartRelics(): Promise<void> {
         if (roll <= 0) { picked = id; break }
       }
       const drop = DropSystem.makeCard(picked)
-      const added = character.addHandCard(drop)
+      // enqueueDrop = 획득 공통 정리 — 기사도 지급이 3장째면 즉시 트리플로 합성한다.
+      const added = HandSystem.enqueueDrop(character, drop)
       if (added) {
         const name = HAND_CARD_DEFINITIONS[picked].name
         recordRelicActivation('chivalry', `${name} 획득`)
@@ -1535,8 +1545,9 @@ async function applyPadlockMimicBonus(card: Card): Promise<void> {
   await playResourceTrail({ kind: 'chain' }, 'score', 1)
   burstScoreGain()
   // 손패 +1
+  // enqueueDrop = 획득 공통 정리 — 자물쇠 보너스가 3장째면 즉시 트리플로 합성한다.
   const drop = DropSystem.generateDrop('enemy-kill')
-  const added = gameState.character.addHandCard(drop)
+  const added = HandSystem.enqueueDrop(gameState.character, drop)
   if (added) {
     const dropDef = getHandCardDef(drop.defId)
     pushActivityLogsInDisplayOrder(createItemGainLogs([dropDef.name]))
@@ -2212,9 +2223,10 @@ async function handleShopPackPick(detail: ShopPackPickDetail): Promise<void> {
   activePackSession = null
   boardRenderer.closePackPicker()
   // 맛보기: 해금팩 첫 구매 시 선택한 카드 1장을 손패에 직접 지급한다.
+  // enqueueDrop = 일반 획득과 같은 정리 경로 — 이미 2장 든 카드의 맛보기도 즉시 트리플로 합성된다.
   if (detail.packKind === 'unlock-pack' && (shopPackBuys['unlock-pack'] ?? 0) <= 1) {
     const tasteId = detail.itemId.startsWith('unlock-') ? (detail.itemId.slice(7) as HandCardId) : null
-    if (tasteId && gameState.character.addHandCard(DropSystem.makeCard(tasteId))) {
+    if (tasteId && HandSystem.enqueueDrop(gameState.character, DropSystem.makeCard(tasteId))) {
       render()
       await boardRenderer.animateResourceTrailFromCenter('hand', 1, 'hand-recovery')
     }
@@ -2337,7 +2349,8 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
       } else {
         for (let i = 0; i < freeGift.amount; i += 1) {
           // 해금되지 않았거나 삭제팩으로 밴된 카드가 섞이지 않도록 드롭 풀(unlocked) 기준으로 뽑는다.
-          gameState.character.addHandCard(DropSystem.generateDrop())
+          // enqueueDrop = 획득 공통 정리 — 상점 경로엔 지연 합성 스캔이 없어 3장째를 여기서 합성한다.
+          HandSystem.enqueueDrop(gameState.character, DropSystem.generateDrop())
         }
         // 손패 보상은 손패 스택 목적지로 날려 카드 획득 흐름과 같은 언어를 사용한다.
         await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'hand', freeGift.amount, 'hand-control')
@@ -5079,6 +5092,8 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
         showClutchChain('ember-save', '꺼지려는 불씨 +1')
         sayEnaBark(companion.minorClutchLine('ember'), { importance: BARK_IMPORTANCE.clutch })
         render()
+        // 불씨 수치 피드백을 다른 불씨 획득(변칙 등)과 같은 HUD 카운터 beat로 맞춘다.
+        boardRenderer.playHudCounterFeedback('ember', gameState.character.ember)
       }
       // 불씨 하락으로 필드 적의 공격력이 오르면, 적 카드가 붉게 확대되며
       // 잔상을 남기는 위험 연출을 띄운다(HP는 불변, 공격력만 동적 반영).
@@ -5232,6 +5247,17 @@ async function resolvePostDropSporeSpread(): Promise<void> {
       await boardRenderer.animateCardConsumeByIds([{ cardId: target.card.id, type: CardType.TRAP }])
       gameState.removeCardFromRow(target.card, target.pos.distance)
       render()
+      // 정화는 일반 cleanup 이후에 실행되므로, 이벤트 문 닫힘 정리와 동일하게 즉시
+      // 하강·리필·재그룹까지 돌려 빈칸이 다음 턴까지 남지 않게 한다(모델/렌더 동기화).
+      compactAndRefillAllLanes()
+      gameState.regroupAllRows()
+      const cleanseBlooms = turnManager.bloomFrontSeeds(cardSpawner)
+      turnManager.armFrontBombs()
+      const cleanseDoors = turnManager.startFrontEventDoorArrivals()
+      render()
+      if (cleanseBlooms.length > 0) await boardRenderer.animateFlowerBlooms(cleanseBlooms)
+      for (const t of cleanseDoors) boardRenderer.popEventBadge(t.cardId)
+      await sweepFrontStarlights()
     }
   }
 }
@@ -5497,7 +5523,8 @@ function applyEventChoice(def: EventDefinition, index: number): string[] {
   if (effect.kind === 'randomHand') {
     let added = 0
     for (const drop of DropSystem.generateDrops(effect.count)) {
-      if (character.addHandCard(drop)) added++
+      // enqueueDrop = 획득 공통 정리 — 이벤트 보상도 3장째면 즉시 트리플로 합성한다.
+      if (HandSystem.enqueueDrop(character, drop)) added++
     }
     recordNotice(`이벤트: ${choice.label} — 랜덤 손패 +${added}`, 'info')
     return ['hand']
@@ -5883,6 +5910,8 @@ async function handleCardAction(e: Event): Promise<void> {
   if (result.cardRemoved && card.type === CardType.TREASURE && companionWorldCanSpeak()) {
     const treasureClutch = companion.rollMinorClutch('treasure', { adversity: !result.itemGainedIds?.length })
     if (treasureClutch) {
+      // 덤 1장은 아래 '획득 후 지연 합성 스캔'(gainedHandCardCount 분기)이 함께 정리한다 —
+      // 상자가 빈손이면(손패 가득) 이 add도 실패하므로 스캔 누락 케이스는 없다.
       const drop = DropSystem.generateDrop('treasure')
       if (gameState.character.addHandCard(drop)) {
         recordNotice('에나의 의지 — 덤! 손패 +1', 'info')

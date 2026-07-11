@@ -10,6 +10,9 @@
  */
 
 import type { SituationId, MinorClutchKind } from '@data/CompanionLines'
+import type { SupportRoleWeights } from './HandCardAdvisor'
+
+export type { SupportRoleWeights }
 
 /** 학습/적응으로 움직일 수 있는 에나의 성향 파라미터 전체. 모두 해석 가능한 단일 의미를 갖는다. */
 export interface EnaDisposition {
@@ -62,6 +65,10 @@ export interface EnaDisposition {
   minTurnGapBase: number
   minTurnGapMin: number
   minTurnGapMax: number
+
+  /** HandCardAdvisor 기대 HP 환산의 역할별 가중(청소/처치/방어/자원/회복). 1.0 = 무변화.
+   *  optional: 구버전 저장본에는 없고, 로드 시 기본 1.0으로 병합된다. */
+  supportRoleWeights?: SupportRoleWeights
 }
 
 /** 기존 CompanionSystem 하드코딩 상수와 1:1로 같은 기본 성향(도입 시 무변화 보장). */
@@ -109,6 +116,8 @@ export const DEFAULT_DISPOSITION: EnaDisposition = {
   minTurnGapBase: 8,
   minTurnGapMin: 3,
   minTurnGapMax: 16,
+  // 지원 판단 역할 가중은 1.0에서 시작한다(도입 무변화 보장) — 피팅이 이 위에서 움직인다.
+  supportRoleWeights: { cleanup: 1, attack: 1, defense: 1, resource: 1, recovery: 1 },
 }
 
 /** 각 파라미터의 안전 경계 — 적응/피팅이 여기를 절대 못 벗어나게 막아 라이브 동작을 보호한다. */
@@ -120,6 +129,8 @@ interface Bound {
 const PROB: Bound = { lo: 0.02, hi: 0.95 }
 const RATE_DOWN: Bound = { lo: 0.5, hi: 0.95 }
 const RATE_UP: Bound = { lo: 1.02, hi: 1.5 }
+/** 지원 역할 가중 안전 경계 — 피터(EnaDispositionFitter)도 같은 범위에서 탐색한다. */
+export const SUPPORT_ROLE_WEIGHT_BOUND = { lo: 0.5, hi: 2 } as const
 
 /** 성향의 깊은 복제(기본값을 변형해 쓰기 시작할 때 원본 보호). */
 export function cloneDisposition(d: EnaDisposition): EnaDisposition {
@@ -127,6 +138,7 @@ export function cloneDisposition(d: EnaDisposition): EnaDisposition {
     ...d,
     situationChance: { ...d.situationChance },
     minorClutchChance: { ...d.minorClutchChance },
+    supportRoleWeights: d.supportRoleWeights ? { ...d.supportRoleWeights } : undefined,
   }
 }
 
@@ -173,6 +185,12 @@ export function clampDisposition(d: EnaDisposition): EnaDisposition {
   out.minTurnGapBase = clamp(out.minTurnGapBase, { lo: 4, hi: 14 })
   out.minTurnGapMin = clamp(out.minTurnGapMin, { lo: 2, hi: 6 })
   out.minTurnGapMax = clamp(out.minTurnGapMax, { lo: 10, hi: 24 })
+  if (out.supportRoleWeights) {
+    // 역할 가중은 0.5~2배 — 어느 역할도 완전히 끄거나 폭주시키지 못하게 막는다.
+    for (const k of Object.keys(out.supportRoleWeights) as (keyof SupportRoleWeights)[]) {
+      out.supportRoleWeights[k] = clamp(out.supportRoleWeights[k], SUPPORT_ROLE_WEIGHT_BOUND)
+    }
+  }
   return out
 }
 
@@ -186,6 +204,8 @@ export function dispositionFromJSON(raw: unknown): EnaDisposition {
     ...r,
     situationChance: { ...base.situationChance, ...(r.situationChance ?? {}) },
     minorClutchChance: { ...base.minorClutchChance, ...(r.minorClutchChance ?? {}) },
+    // 구버전 저장본(가중 없음)도 기본 1.0으로 채워 스키마 진화에 안전하게 병합한다.
+    supportRoleWeights: { ...base.supportRoleWeights!, ...(r.supportRoleWeights ?? {}) },
   }
   return clampDisposition(merged)
 }

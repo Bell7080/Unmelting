@@ -1147,7 +1147,7 @@ export class EnaTrainingSimulation {
       // 런타임과 동일하게 즉시 게이지를 올리지 않고 성냥을 건네, 플레이어 손패 의사결정을 보존한다.
       this.will = 0
       this.drawCard('match')
-    } else if (this.will >= 100 && aid && !this.hand.some((s) => s.id === aid)) {
+    } else if (this.will >= 100 && aid && this.canHandOutAid(aid)) {
       // 위험 대비 RL 경험: 거미줄/포자/강적/트리플 각에 맞는 손패 보급도 큰 클러치로 학습한다.
       this.will = 0
       this.drawCard(aid)
@@ -1155,8 +1155,14 @@ export class EnaTrainingSimulation {
     // 소소한 예지 지원은 큰 의지를 쓰지 않는 낮은 빈도 보조로 유지한다.
     if (this.rng.next() < Math.min(0.95, d.predictBaseChance)) {
       const minorAid = aid ?? this.predictiveAidCard()
-      if (minorAid && !this.hand.some((s) => s.id === minorAid)) this.drawCard(minorAid)
+      if (minorAid && this.canHandOutAid(minorAid)) this.drawCard(minorAid)
     }
+  }
+
+  /** 지원 카드 중복 지급 방지 — 단, 비합체 2장 보유는 3장째가 트리플로 완성되므로 허용한다(런타임 동일 규칙). */
+  private canHandOutAid(aid: HandCardId): boolean {
+    const count = this.hand.filter((s) => !s.merged && s.id === aid).length
+    return count === 0 || count === 2
   }
 
   // ── 턴 진행 ──────────────────────────────────────────────────────────────
@@ -1647,11 +1653,26 @@ export class EnaTrainingSimulation {
     return [...counts.values()].filter((n) => n >= 2).length
   }
 
+  /** 필드 전체의 1칸 거미줄 수 — 병합각 없이도 '많이 널렸으면' 광역 청소 근거(런타임 webCount와 동형). */
+  private fieldOneWebCount(): number {
+    let count = 0
+    for (const row of this.board) for (const c of new Set(row.filter(Boolean) as EnaSimCard[])) if (c.type === CardType.TRAP && c.trapKind === 'web' && c.group === 1) count++
+    return count
+  }
+
+  /** 비합체 보유 장수 맵 — advisor 트리플 완성각(정확히 2장) 판단과 공유한다. */
+  private heldCardCounts(): Partial<Record<HandCardId, number>> {
+    const counts: Partial<Record<HandCardId, number>> = {}
+    for (const s of this.hand) if (!s.merged) counts[s.id] = (counts[s.id] ?? 0) + 1
+    return counts
+  }
+
   private predictiveAidCard(): HandCardId | null {
     // 지원 카드는 런타임 예지와 같은 범용 스코어러(HandCardAdvisor)를 공유한다 —
     // 하드코딩 목록 대신 해금 풀 안에서 targeting/damageProfile/synergyTags로 고른다.
     const frontWideWebSpan = Math.max(0, ...this.uniqueFrontCards().filter((c) => c.type === CardType.TRAP && c.trapKind === 'web').map((c) => c.group))
     const strongEnemy = this.board.slice(0, 2).flat().find((c) => c?.type === CardType.ENEMY && (c.group >= 2 || c.hp > this.attack + 1))
+    const strongEnemyAtFront = !!strongEnemy && this.board[0].includes(strongEnemy)
     const support = bestSupportCard(
       {
         playerAttack: this.attack,
@@ -1661,11 +1682,28 @@ export class EnaTrainingSimulation {
         emberLow: this.ember <= 3,
         frontWideWebSpan,
         webMerge: this.imminentWebMerge(),
+        fieldOneWebCount: this.fieldOneWebCount(),
         sporeReady: this.readySporeThreatCount() > 0,
-        strongEnemy: strongEnemy ? { health: strongEnemy.hp, atFront: this.board[0].includes(strongEnemy) } : undefined,
+        // 실효값: 시뮬 카드의 실제 공격력과 굳음 잔여 턴으로 반격 임박도를 채운다.
+        strongEnemy: strongEnemy
+          ? {
+              health: strongEnemy.hp,
+              atFront: strongEnemyAtFront,
+              attack: strongEnemy.atk,
+              attackInTurns: strongEnemyAtFront ? strongEnemy.frozen : 1,
+            }
+          : undefined,
         // 처치각이 없는 비전방 강적에도 미리 피해를 쌓는 경험을 학습한다(기존 ember 폴백 계승).
         allowChipDamage: true,
         heldCardIds: this.hand.map((slot) => slot.id),
+        heldCardCounts: this.heldCardCounts(),
+        // 시간 축: 레일 예고 큐(관측 incomingRefill과 동일 데이터)의 같은 위협 도착을 보정에 쓴다.
+        incomingRefill: {
+          webs: this.incomingRefillQueue.filter((c) => c?.type === CardType.TRAP && c.trapKind === 'web').length,
+          spores: this.incomingRefillQueue.filter((c) => c?.type === CardType.TRAP && c.trapKind === 'spore').length,
+          enemies: this.incomingRefillQueue.filter((c) => c?.type === CardType.ENEMY).length,
+        },
+        supportRoleWeights: this.companion?.supportRoleWeights,
       },
       [...this.unlockedPool]
     )

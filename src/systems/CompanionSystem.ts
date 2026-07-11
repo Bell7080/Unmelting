@@ -57,6 +57,7 @@ import {
   clampDisposition,
   revertDispositionTowardBase,
   type EnaDisposition,
+  type SupportRoleWeights,
 } from './EnaDisposition'
 
 // 대사 데이터 쪽 타입을 그대로 다시 노출해 기존 import 경로(@systems/CompanionSystem)를 유지한다.
@@ -301,6 +302,11 @@ export class CompanionSystem {
   /** 현재 성향 파라미터(저장/적응/디버그용). */
   getDisposition(): EnaDisposition {
     return this.disp
+  }
+
+  /** 지원 판단 역할 가중 — 예지/클러치가 HandCardAdvisor 환산값에 곱해 읽는다(없으면 1.0 취급). */
+  getSupportRoleWeights(): SupportRoleWeights | undefined {
+    return this.disp.supportRoleWeights
   }
 
   /** 경험 탭이 런-내 학습까지 볼 수 있도록 단기 가중치를 읽기 전용 스냅샷으로 제공한다. */

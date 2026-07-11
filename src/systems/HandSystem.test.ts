@@ -9,6 +9,19 @@ function countChainEntries(chain: ReturnType<typeof HandSystem.newChain>, defId:
   return chain.sequence.filter((id) => id === defId).length
 }
 
+describe('HandSystem.enqueueDrop (획득 공통 정리 경로)', () => {
+  it('같은 카드 3장째가 들어오면 즉시 트리플로 합성한다 — 에나 클러치/예지 보급이 공유하는 경로', () => {
+    const gameState = new GameState()
+    gameState.character.addHandCard(DropSystem.makeCard('ember'))
+    gameState.character.addHandCard(DropSystem.makeCard('ember'))
+
+    expect(HandSystem.enqueueDrop(gameState.character, DropSystem.makeCard('ember'))).toBe(true)
+
+    expect(gameState.character.hand).toHaveLength(1)
+    expect(gameState.character.hand[0]).toMatchObject({ defId: 'ember', merged: true })
+  })
+})
+
 describe('HandSystem combo-count cards', () => {
   it('records a normal 카드 as one played card plus one explicit gauge count', () => {
     const gameState = new GameState()
