@@ -131,7 +131,7 @@ export interface ShopStateView {
   relicOffers: ShopOfferView[]
   freeCardClaimed: boolean
   freeCoinCardClaimed?: boolean
-  /** 선물 상자 랜덤 결과 문구(예: ✦300 / 1$). */
+  /** 무료 카드 랜덤 결과 문구(예: ✦300 / 1$). */
   freeCardDescription?: string
   /** Reroll cost is paid from coins (화폐, $), not score (불빛). */
   rerollCost: number
@@ -2553,7 +2553,8 @@ export class GameBoardRenderer {
     const basicPackLabel = SHOP_PACK_LABELS['basic-pack']
     const recipePackLabel = SHOP_PACK_LABELS['recipe-pack']
     const unlockPackLabel = SHOP_PACK_LABELS['unlock-pack']
-    const freeCardLabel = shop.mode === 'altar' ? '제단의 무료 축복' : '무료 카드'
+    // 무료카드 타이틀은 상점/제단 공통 '무료 카드'로 통일한다.
+    const freeCardLabel = '무료 카드'
     // New layered layout:
     //   .rail-shutter   — original 9-panel wax shutter (in .rail), closes
     //                     sequentially first.
@@ -2583,7 +2584,7 @@ export class GameBoardRenderer {
             <div class="shop-layer shop-free-layer">
               ${shop.tutorialHideFreecards ? '' : [
                 this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel, shop.freeCardDescription ?? '1$', 'free-card'),
-                shop.mode === 'altar' ? this.renderShopFreeCard(!!shop.freeCoinCardClaimed, '수당', '1$', 'free-coin-card') : '',
+                shop.mode === 'altar' ? this.renderShopFreeCard(!!shop.freeCoinCardClaimed, '동전 한 닢', '1$', 'free-coin-card') : '',
               ].join('')}
             </div>
             <div class="shop-layer shop-pack-layer">

@@ -344,7 +344,7 @@ export const SpriteUrls = {
   } as const,
   /** Free-card dedicated artwork. */
   freeCard: free001Url,
-  /** Altar coin free-card artwork (수당). */
+  /** Altar coin free-card artwork (동전 한 닢). */
   freeCoinCard: free002Url,
   /** Boss reward illustrations: heal / chest / bounty. */
   rewards: {

@@ -619,17 +619,18 @@ let tutorialCandleSlot = -1
 // T15 상점에서 조각칼+해금팩+자원팩 모두 구매 전까지 EXIT 버튼을 숨긴다.
 let tutorialT15AllBought = false
 
-// 공용 무료카드(선물 상자)는 방문마다 하나의 랜덤 효과로 고정한다.
+// 공용 무료카드('무료 카드')는 방문마다 하나의 랜덤 효과로 고정한다.
 type ShopFreeGiftKind = 'score-300' | 'coin-1' | 'health-5' | 'gauge-3' | 'ember-3' | 'hand-2'
 
-/** 선물 상자 보상 표기 소스. 항목을 추가해도 랜덤 추첨 주석/개수가 자동으로 따라간다. */
+/** 무료 카드 보상 표기 소스. 항목을 추가해도 랜덤 추첨 주석/개수가 자동으로 따라간다.
+ *  표기 양식: 스탯류는 명사형 `+N`, 불빛/화폐는 아이콘·단위 표기(✦300, 1$)를 유지한다. */
 const SHOP_FREE_GIFT_REWARDS: Record<ShopFreeGiftKind, { description: string; amount: number }> = {
   'score-300': { description: '✦300', amount: 300 },
   'coin-1': { description: '1$', amount: 1 },
-  'health-5': { description: '체력 5', amount: 5 },
+  'health-5': { description: '체력 +5', amount: 5 },
   'gauge-3': { description: '콤보 게이지 +3', amount: 3 },
   'ember-3': { description: '불씨 게이지 +3', amount: 3 },
-  'hand-2': { description: '랜덤 손패 2', amount: 2 },
+  'hand-2': { description: '랜덤 손패 +2', amount: 2 },
 }
 const SHOP_FREE_GIFT_KINDS = Object.keys(SHOP_FREE_GIFT_REWARDS) as ShopFreeGiftKind[]
 let freeGiftKind: ShopFreeGiftKind = 'coin-1'
@@ -1801,7 +1802,7 @@ async function openShopOverlay(mode: 'shop' | 'altar'): Promise<void> {
   ) as Record<ShopPackKind, number>
   shopRerollInProgress = false
   freeCardClaimed = false
-  // 제단 수당도 방문 단위 무료 보상이므로 30/60/90턴마다 다시 활성화한다.
+  // 제단 동전 한 닢도 방문 단위 무료 보상이므로 30/60/90턴마다 다시 활성화한다.
   freeCoinCardClaimed = false
   // 튜토리얼 팩 공개 초기화: 턴별 첫 팩만 노출하고 구매 시 순차 공개한다.
   if (gameState.tutorialMode) {
@@ -1816,7 +1817,7 @@ async function openShopOverlay(mode: 'shop' | 'altar'): Promise<void> {
     }
     else tutorialRevealedPacks = ['delete-pack']  // turn 30 altar
   }
-  // 방문 시작 시 선물 상자의 효과를 현재 등록된 n종 중 하나로 확정한다.
+  // 방문 시작 시 무료 카드의 효과를 현재 등록된 n종 중 하나로 확정한다.
   freeGiftKind = SHOP_FREE_GIFT_KINDS[Math.floor(Math.random() * SHOP_FREE_GIFT_KINDS.length)]
   activePackSession = null
   // The shutter is a hard turn break: cut the chain before the shop overlay
@@ -2169,7 +2170,7 @@ async function handleShopPackPick(detail: ShopPackPickDetail): Promise<void> {
   // trail so HP/방패/공격력 등 변화에 카드/숫자 피드백이 같이 따라온다.
   await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
   // '동전 한 닢' 등 화폐 아이템은 playPlayerGainTrails가 다루지 않으므로(coin 미포함)
-  // 단독 코인 카드/수당과 같은 펄스키+트레일+지갑 버스트 문법으로 별도 라우팅한다.
+  // 단독 코인 카드/동전 한 닢과 같은 펄스키+트레일+지갑 버스트 문법으로 별도 라우팅한다.
   // applyBlindFaithCoins는 apply() 내부에서 이미 처리됐으므로 여기서 재호출하지 않는다.
   const pickedCoinGain = coins - beforeCoins
   if (pickedCoinGain > 0) {
@@ -2251,11 +2252,11 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
     if (detail.kind === 'free-card') {
       if (freeCardClaimed) return
       freeCardClaimed = true
-      // 선물 상자는 사용 즉시 소모되며, 실제 보상량과 트레일 입력을 같은 데이터에서 읽는다.
+      // 무료 카드는 사용 즉시 소모되며, 실제 보상량과 트레일 입력을 같은 데이터에서 읽는다.
       const freeGift = SHOP_FREE_GIFT_REWARDS[freeGiftKind]
       if (freeGiftKind === 'score-300') {
         // 불빛 보상도 글로벌 불빛 획득량 보너스(scoreMultiplier)를 공통 적용한다.
-        gainFixedLight('선물 상자', freeGift.amount)
+        gainFixedLight('무료 카드', freeGift.amount)
         // 불빛 보상은 무료카드에서 불빛 패널로 직접 날려 기존 획득 문법을 유지한다.
         await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'score', freeGift.amount, 'score')
       } else if (freeGiftKind === 'coin-1') {
@@ -2294,7 +2295,7 @@ async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
       coins += 1
       coinPulseKey++
       applyBlindFaithCoins(1)
-      // 제단 수당은 경제 밸런스 조정 후 1$만 지급한다. source burst도 코인 톤
+      // 제단 동전 한 닢은 경제 밸런스 조정 후 1$만 지급한다. source burst도 코인 톤
       // (treasure-gain)으로 발사해 불빛 입자가 같이 뜨는 시각 혼선을 제거.
       await boardRenderer.consumeFreeCardAndRouteReward('free-coin-card', 'coin', 1, 'treasure-gain')
     }
@@ -4136,7 +4137,7 @@ function recordNotice(_message: string, _kind: NoticeLogKind = 'info'): void {
 }
 
 /** 상점/제단과 보스 보상·시련 단계에서는 체인 로그를 노출하지 않는다.
- *  - 상점: 유물 구매·선물 상자 등은 전투 콤보가 아니라 체인이 뜰 자리가 아니다.
+ *  - 상점: 유물 구매·무료 카드 등은 전투 콤보가 아니라 체인이 뜰 자리가 아니다.
  *  - 보스 보상: 손패 사용 차단(postPhaseHandLocked)과 함께 체인도 끊는다. */
 function chainRecordingSuppressed(): boolean {
   return shopOpen || bossController.postPhaseHandLocked

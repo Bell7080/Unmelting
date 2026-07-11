@@ -232,12 +232,12 @@ function analyzeEconomy(): EnaEconomyModel {
 function analyzeShopKnowledge(): EnaShopKnowledge {
   // 무료카드는 index.ts의 현재 보상 후보와 같은 의미를 학습 prior로 노출한다.
   const freeGiftRewards = {
-    light: '불빛 300',
+    light: '✦300',
     coin: '1$',
-    heal: '체력 5',
-    combo: '콤보 게이지 3',
-    ember: '불씨 게이지 3',
-    hand: '랜덤 손패 2',
+    heal: '체력 +5',
+    combo: '콤보 게이지 +3',
+    ember: '불씨 게이지 +3',
+    hand: '랜덤 손패 +2',
   }
   return {
     packLabels: Object.fromEntries(Object.entries(SHOP_PACK_LABELS).map(([kind, label]) => [kind, `${label.title}/${label.effect}`])),
