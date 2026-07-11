@@ -830,19 +830,20 @@ const bossController = new BossEventController(
       return false
     },
     // 동반자(에나) 보스 전용 대사 — 일반 월드 바크가 침묵하는 보스전에서 등장/국면/격파 순간만 말한다.
-    onBossIntro: () => {
+    // 보스 이름을 넘기면 이름을 아는 전용 대사가 해당 보스에게만 가끔 섞인다.
+    onBossIntro: (name) => {
       announcedBossPhases.clear()
       if (gameState.tutorialMode) return
-      sayEnaBark(companion.bossIntroLine(), { importance: BARK_IMPORTANCE.situation })
+      sayEnaBark(companion.bossIntroLine(name), { importance: BARK_IMPORTANCE.situation })
     },
     onBossPhase: (_name, phaseKey) => {
       if (gameState.tutorialMode || announcedBossPhases.has(phaseKey)) return
       announcedBossPhases.add(phaseKey)
       sayEnaBark(companion.bossPhaseLine(), { importance: BARK_IMPORTANCE.urgent })
     },
-    onBossKill: () => {
+    onBossKill: (name) => {
       if (gameState.tutorialMode) return
-      sayEnaBark(companion.bossKillLine(), { importance: BARK_IMPORTANCE.clutch })
+      sayEnaBark(companion.bossKillLine(name), { importance: BARK_IMPORTANCE.clutch })
     },
   }
 )
