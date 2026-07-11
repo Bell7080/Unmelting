@@ -28,8 +28,10 @@ import {
   GENERIC_BUY_LINES,
   PREDICT_LINES,
   BOSS_INTRO_LINES,
+  BOSS_INTRO_BY_NAME,
   BOSS_PHASE_LINES,
   BOSS_KILL_LINES,
+  BOSS_KILL_BY_NAME,
   DEATH_LINES,
   CLEAR_LINES,
   TRIAL_LINES,
@@ -540,9 +542,14 @@ export class CompanionSystem {
   // ── 침묵 구간 전용 대사(보스/종막/시련/팩/별빛) ─────────────────
   // 일반 월드 바크 게이트(companionWorldCanSpeak) 밖에서 호출부가 이벤트당 1회만 띄운다.
 
-  /** 보스 등장 — 위압감으로 기분이 살짝 가라앉은 채 각오를 말한다. */
-  bossIntroLine(): string {
+  /** 보스 등장 — 위압감으로 기분이 살짝 가라앉은 채 각오를 말한다.
+   *  보스 이름 전용 풀이 있으면 가끔 그쪽을 골라, 이름을 아는 대사가 엉뚱한 보스에게 새지 않게 한다. */
+  bossIntroLine(bossName?: string): string {
     this.noteMoodShift(-0.1)
+    const specific = bossName ? BOSS_INTRO_BY_NAME[bossName] : undefined
+    if (specific && specific.length > 0 && Math.random() < 0.45) {
+      return this.pickFrom(`boss-intro:${bossName}`, specific, 'normal')
+    }
     return this.pickFrom('boss-intro', BOSS_INTRO_LINES, 'normal')
   }
 
@@ -551,9 +558,13 @@ export class CompanionSystem {
     return this.pickFrom('boss-phase', BOSS_PHASE_LINES, 'urgent')
   }
 
-  /** 보스 격파 — 큰 승리는 기분을 크게 끌어올린다. */
-  bossKillLine(): string {
+  /** 보스 격파 — 큰 승리는 기분을 크게 끌어올린다. 이름 전용 격파 대사도 가끔 섞는다. */
+  bossKillLine(bossName?: string): string {
     this.noteMoodShift(0.3)
+    const specific = bossName ? BOSS_KILL_BY_NAME[bossName] : undefined
+    if (specific && specific.length > 0 && Math.random() < 0.5) {
+      return this.pickFrom(`boss-kill:${bossName}`, specific, 'normal')
+    }
     return this.pickFrom('boss-kill', BOSS_KILL_LINES, 'normal')
   }
 

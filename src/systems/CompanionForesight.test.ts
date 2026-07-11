@@ -24,6 +24,33 @@ describe('CompanionForesight', () => {
     expect(report.recommendedCardId).toBeNull()
   })
 
+  it('does not read scattered non-adjacent webs as a merge threat (발견만으로 미숙/예지 오발동 금지)', () => {
+    const gs = new GameState()
+    // 레인 0 전방 + 레인 2 낙하 예정: 임박하긴 하지만 서로 붙어 있지 않아 병합될 수 없다.
+    gs.lanes[0].setCardAtDistance(0, web('front-a'))
+    gs.lanes[2].setCardAtDistance(1, web('incoming-c'))
+
+    const report = assessThreats(gs.lanes, gs.character, { unlockedCardIds: ['sweep', 'chitin'] as HandCardId[] })
+
+    expect(report.hasImminentWebDrop).toBe(true)
+    expect(report.potentialWebDamage).toBe(0) // 병합각 없음 → 미숙 대사 게이트(체력 50%/즉사)도 통과 불가
+    expect(report.webLethal).toBe(false)
+    expect(report.recommendCleanup).toBe(false)
+  })
+
+  it('recommends sweep only when adjacent one-webs can actually merge next drop', () => {
+    const gs = new GameState()
+    gs.lanes[0].setCardAtDistance(0, web('front-a'))
+    gs.lanes[1].setCardAtDistance(1, web('incoming-b'))
+
+    const report = assessThreats(gs.lanes, gs.character, { unlockedCardIds: ['sweep'] as HandCardId[] })
+
+    expect(report.potentialWebDamage).toBe(5) // 인접 1칸 2장 → 2칸 병합(피해 5) 후보
+    expect(report.recommendCleanup).toBe(true)
+    expect(report.recommendedCardId).toBe('sweep')
+    expect(report.recommendationKind).toBe('cleanup')
+  })
+
   it('prefers chitin when a front 2-web can become a 3-web next drop', () => {
     const gs = new GameState()
     const merged = web('front-2', 2)

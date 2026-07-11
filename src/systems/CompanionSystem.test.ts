@@ -110,13 +110,15 @@ describe('CompanionSystem', () => {
 
   it("적 이름의 수식어를 무시하고 핵심 키워드로 반응한다('양초 거미'→거미)", () => {
     const c = new CompanionSystem()
-    let line: string | null = null
-    // important=true로 게이트를 우회해 확률 통과를 빠르게 만든다.
-    for (let turn = 0; turn < 300 && line === null; turn++) {
-      line = c.reactSituation('kill', turn, 'normal', true, '양초 거미')
+    // 거미 전용 풀에는 '거미' 낱말이 없는 문장도 있어, 한 줄이 아니라 여러 줄을 표집해
+    // 전용 풀 선택을 확인한다(important=true로 게이트 우회, 확률 flake 방지).
+    const lines: string[] = []
+    for (let turn = 0; turn < 600 && lines.length < 12; turn++) {
+      const line = c.reactSituation('kill', turn, 'normal', true, '양초 거미')
+      if (line) lines.push(line)
     }
-    expect(line).not.toBeNull()
-    expect(line!).toContain('거미')
+    expect(lines.length).toBeGreaterThan(0)
+    expect(lines.some((line) => line.includes('거미'))).toBe(true)
   })
 
   it('유물 구매 감상평: 사치품은 전용, 미등록은 등급 폴백으로 깨끗하게 나온다', () => {

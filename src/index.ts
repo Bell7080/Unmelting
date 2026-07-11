@@ -478,8 +478,12 @@ function tryCompanionClutch(): void {
     applyClutch(plan)
     return
   }
-  // 강적을 보고도 아직 방패를 크게 못 올리는 초반 에나의 '말뿐인 도움'을 낮은 빈도로 표현한다.
-  if (report.strongEnemyIncoming) {
+  // 강적 미숙 대사는 '마주침'만으로는 내지 않는다 — 고점 에나라면 실제로 건넸을
+  // 공격/방어 지원각(해금 카드·플레이어 미보유)이 있는데 의지 예산이 모자라 클러치가
+  // 못 뜬 경우에만 낮은 빈도로 아쉬움을 표현한다(단순 조우 오발동 방지).
+  const hadInterventionAngle =
+    report.recommendationKind === 'attack' || report.recommendationKind === 'defense'
+  if (report.strongEnemyIncoming && hadInterventionAngle) {
     const missed = companion.missedPotentialLine('shield', turn)
     if (missed) sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'hit' })
   }
@@ -5850,8 +5854,10 @@ async function handleCardAction(e: Event): Promise<void> {
         sayEnaBark(companion.minorClutchLine('treasure'), { importance: BARK_IMPORTANCE.clutch })
         render()
       }
-    } else if (!result.itemGainedIds?.length) {
+    } else if (!result.itemGainedIds?.length && !result.overflow?.length) {
       // 보물에서도 '찾지 못한 가능성'을 말로만 비춰, 초기 미숙함을 거미줄 밖으로 확장한다.
+      // 단, 손패가 가득 차 보상을 잃은 경우는 탐색 실패가 아니므로(카드는 실제로 있었다)
+      // 진짜 빈손일 때만 발화해 '가득 찬 손패에 미안해하는' 오발동을 막는다.
       const missed = companion.missedPotentialLine('treasure', gameState.getCurrentTurn())
       if (missed) sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'treasure' })
     }
