@@ -9,6 +9,7 @@ import {
   bestSupportCard,
   estimateHandCardDamage,
   rankSupportCards,
+  RECIPE_SUPPORT_DISCOUNT,
   WEB_FIELD_CLUTTER_THRESHOLD,
   type SupportSituation,
 } from './HandCardAdvisor'
@@ -215,6 +216,83 @@ describe('HandCardAdvisor 역할 가중(RL 피팅 노출)', () => {
       pool
     )
     expect(cleanupFocused?.cardId).toBe('sweep') // 처치 가치를 깎고 청소를 키우면 결론이 뒤집힌다
+  })
+})
+
+describe('HandCardAdvisor 레시피 완성각', () => {
+  it('할인 상수는 직접 효과가 항상 이기도록 1 미만으로 유지된다', () => {
+    expect(RECIPE_SUPPORT_DISCOUNT).toBeGreaterThanOrEqual(0.5)
+    expect(RECIPE_SUPPORT_DISCOUNT).toBeLessThanOrEqual(0.6)
+  })
+
+  it('불씨 부족 + 샹들리에 보유면 성냥 가치가 밝은 천장 완성각 가산으로 오른다', () => {
+    const situation: SupportSituation = { ...base, emberLow: true }
+    const plain = rankSupportCards(situation, ['match'] as HandCardId[])[0]
+    const withChandelier = rankSupportCards(
+      { ...situation, heldCardIds: ['chandelier'] as HandCardId[], heldCardCounts: { chandelier: 1 } },
+      ['match'] as HandCardId[]
+    )[0]
+    expect(withChandelier.score).toBeGreaterThan(plain.score)
+    // 직접 효과(불씨 보충)가 여전히 대표 근거 — 레시피는 가산으로만 얹힌다.
+    expect(withChandelier.fit).toBe('ember')
+  })
+
+  it('직접 효과 카드가 해금돼 있으면 레시피 경로(할인)보다 우선한다', () => {
+    // 양초 보유 → 촛농이 양초 스매쉬(전방 랜덤 적 처치)의 마지막 재료. 직접 처치각인 불씨가 이겨야 한다.
+    const situation: SupportSituation = {
+      ...base,
+      strongEnemy: { health: 3, atFront: true, attack: 12, attackInTurns: 0 },
+      heldCardIds: ['candle'] as HandCardId[],
+      heldCardCounts: { candle: 1 },
+    }
+    const rankings = rankSupportCards(situation, ['ember', 'wax-drop'] as HandCardId[])
+    expect(rankings[0].cardId).toBe('ember')
+    expect(rankings[0].fit).toBe('attack')
+    // 레시피 완성각 카드도 순위에는 오르되, 이름이 이유 구에 드러난다.
+    const recipePath = rankings.find((r) => r.cardId === 'wax-drop')
+    expect(recipePath?.fit).toBe('attack')
+    expect(recipePath?.reason).toContain('양초 스매쉬')
+  })
+
+  it('해금 안 된(runLocked) 레시피는 가산하지 않는다', () => {
+    const situation: SupportSituation = {
+      ...base,
+      emberLow: true,
+      heldCardIds: ['book-of-flames'] as HandCardId[],
+      heldCardCounts: { 'book-of-flames': 1 },
+    }
+    const locked = rankSupportCards(situation, ['match'] as HandCardId[])[0]
+    const unlocked = rankSupportCards(
+      { ...situation, unlockedRecipeIds: new Set(['flame-infusion']) },
+      ['match'] as HandCardId[]
+    )[0]
+    const plain = rankSupportCards({ ...base, emberLow: true }, ['match'] as HandCardId[])[0]
+    expect(locked.score).toBe(plain.score)
+    expect(unlocked.score).toBeGreaterThan(locked.score)
+  })
+
+  it('저체력이면 회복 레시피 완성각(대접)이 단독 근거로도 추천된다', () => {
+    // 촛농 보유가 직접 회복 지원(같은 역할)을 접게 하지만, 찻잔은 대접(체력 3 회복) 완성각으로 추천된다.
+    const situation: SupportSituation = {
+      ...base,
+      playerHealth: 6,
+      heldCardIds: ['wax-drop'] as HandCardId[],
+      heldCardCounts: { 'wax-drop': 1 },
+    }
+    const pick = bestSupportCard(situation, ['teacup'] as HandCardId[])
+    expect(pick?.cardId).toBe('teacup')
+    expect(pick?.fit).toBe('recovery')
+    expect(pick?.reason).toContain('대접')
+  })
+
+  it('필요와 맞지 않는 완성각(generic)은 단독 추천 근거가 되지 못한다', () => {
+    // 따뜻함(촛농 획득)은 지금 필요 축이 없으면 후보를 홀로 밀어올리지 않는다 — 순서 기반 recipe 보조 경로 보존.
+    const situation: SupportSituation = {
+      ...base,
+      heldCardIds: ['ember'] as HandCardId[],
+      heldCardCounts: { ember: 1 },
+    }
+    expect(bestSupportCard(situation, ['candle'] as HandCardId[])).toBeNull()
   })
 })
 

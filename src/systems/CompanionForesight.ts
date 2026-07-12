@@ -249,6 +249,8 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
       incomingRefill: summarizeIncomingRefill(options.incomingRefill),
       ownedRelicTags: ownedRelicTags(character),
       supportRoleWeights: options.supportRoleWeights,
+      // 레시피 완성각: 런타임은 gameState.unlockedRecipeIds가 그대로 흘러온다(기본 레시피는 항상 활성).
+      unlockedRecipeIds: options.unlockedRecipeIds,
     },
     [...unlocked]
   )

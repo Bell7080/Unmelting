@@ -1755,6 +1755,8 @@ export class EnaTrainingSimulation {
           enemies: this.incomingRefillQueue.filter((c) => c?.type === CardType.ENEMY).length,
         },
         supportRoleWeights: this.companion?.supportRoleWeights,
+        // unlockedRecipeIds는 생략: 시뮬에는 레시피 해금 모델이 없다(조합팩은 트리플 위력 근사).
+        // 기본 해금 레시피의 완성각 가산은 advisor가 손패 장수만으로 동일하게 계산한다.
       },
       [...this.unlockedPool]
     )

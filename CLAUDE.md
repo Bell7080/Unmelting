@@ -51,7 +51,7 @@ npm run build
 - 사치품 유물 최대 공격력 보너스 +3. 붉은 포션은 직접 공격·손패·체인 포함 모든 처치에 적용된다.
 - 샹들리에는 기본 해금(runLocked: false). 자원팩 갑옷 장착 방패 +5. 시련 '역경' 적용 시 기존 함정 카드에도 즉시 피해 보너스 반영.
 - 유물/팩/무료카드 희귀도는 `ShopPools` 공통 팔레트(common~legendary) 사용. 상점/제단 유물은 등급별 발광을 유지한다.
-- 에나 지원 카드 판단은 `src/systems/HandCardAdvisor.ts` 범용 스코어러가 "기대 HP 절약/자원 가치" 환산으로 계산한다(청소=임박 병합 실효 피해×확률·3칸 즉사 후보는 최상위 고정·1칸 웹 `WEB_FIELD_CLUTTER_THRESHOLD`장 이상이면 병합각 없어도 광역 청소, 처치=실효 공격력×반격 임박도, 방어=흡수 기대 피해, 성냥=불씨 소멸 스폰 압박 비용, 회복=저체력 비선형; 고정 서열은 동점 ε 타이브레이크로만). 레일 예고 큐(같은 위협 추가 도착)·트리플 완성각(비합체 2장 보유 지급 허용+가점)·`EnaDisposition.supportRoleWeights`(청소/처치/방어/자원/회복 피팅 가중, 기본 1.0) 보정을 받는다. 새 손패/유물은 데이터 테이블(HandCards/Relics)에 `synergyTags`(+공격 카드는 `damageProfile`)를 달아 등록하면 에나 판단(HandCardAdvisor)·지식(EnaKnowledgeAdapter)·시뮬 학습에 자동 반영된다 — 에나 지원 카드를 코드에 하드코딩하지 말 것. `damageProfile`은 HandSystem 실제 공식의 보수 근사이므로 공식 변경 시 함께 갱신한다.
+- 에나 지원 카드 판단은 `src/systems/HandCardAdvisor.ts` 범용 스코어러가 "기대 HP 절약/자원 가치" 환산으로 계산한다(청소=임박 병합 실효 피해×확률·3칸 즉사 후보는 최상위 고정·1칸 웹 `WEB_FIELD_CLUTTER_THRESHOLD`장 이상이면 병합각 없어도 광역 청소, 처치=실효 공격력×반격 임박도, 방어=흡수 기대 피해, 성냥=불씨 소멸 스폰 압박 비용, 회복=저체력 비선형; 고정 서열은 동점 ε 타이브레이크로만). 레일 예고 큐(같은 위협 추가 도착)·트리플 완성각(비합체 2장 보유 지급 허용+가점)·`EnaDisposition.supportRoleWeights`(청소/처치/방어/자원/회복 피팅 가중, 기본 1.0) 보정을 받는다. 후보가 보유 손패의 마지막 재료가 되어 해금 레시피(`unlockedRecipeIds` 스냅샷)를 완성하면 효과를 같은 축(불씨/회복/피해/청소)으로 보수 매핑해 `RECIPE_SUPPORT_DISCOUNT`(0.55) 할인 가산한다 — 직접 효과 카드가 항상 레시피 경로보다 우선하고, 필요와 안 맞는 완성각은 단독 추천 근거가 못 된다. 새 손패/유물은 데이터 테이블(HandCards/Relics)에 `synergyTags`(+공격 카드는 `damageProfile`)를 달아 등록하면 에나 판단(HandCardAdvisor)·지식(EnaKnowledgeAdapter)·시뮬 학습에 자동 반영된다 — 에나 지원 카드를 코드에 하드코딩하지 말 것. `damageProfile`은 HandSystem 실제 공식의 보수 근사이므로 공식 변경 시 함께 갱신한다.
 
 ## UI/UX 규칙
 - 이모지 신규 추가 금지. `src/ui/Icons.ts`의 플랫 SVG 스타일 유지. 경험 아이콘은 불빛/재화에 쓰는 네 꼭짓점 반짝 다이아로 통일한다.

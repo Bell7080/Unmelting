@@ -10,10 +10,16 @@
  * 청소=임박 병합 피해×성사 확률(즉사 후보는 최상위 고정), 처치=대상 공격력×반격 임박도,
  * 방어=흡수 기대 피해, 성냥=불씨 소멸 스폰 압박 비용, 회복=사망 확률 감소(저체력 비선형).
  * 기존 고정 서열은 동점 타이브레이크(ε)로만 남긴다.
+ *
+ * 레시피 완성각: 후보 카드가 보유 손패의 '마지막 재료'가 되어 해금 레시피를 완성하면,
+ * 완성 효과를 같은 환산 축(불씨/회복/피해/청소)으로 보수 매핑해 RECIPE_SUPPORT_DISCOUNT 할인 가산한다.
+ * 간접 경로라 같은 필요를 채우는 깡 카드(직접 효과)가 있으면 항상 그쪽이 이긴다.
  */
 
 import { HAND_CARD_DEFINITIONS } from '@data/HandCards'
 import type { HandCardDefinition, HandCardId } from '@entities/HandCard'
+import { RECIPES } from '@data/Recipes'
+import type { RecipeEffectKind } from '@data/Recipes'
 import { getEnaHandCardTactic } from '@/rl/EnaKnowledgeAdapter'
 
 /** 지원 근거의 큰 분류 — 대사/로그가 추천 성격을 구분하는 데 쓴다. */
@@ -94,6 +100,9 @@ export interface SupportSituation {
   ownedRelicTags?: readonly string[]
   /** RL 피팅 역할 가중(EnaDisposition.supportRoleWeights). 생략/1.0 = 무변화. */
   supportRoleWeights?: SupportRoleWeights
+  /** 이번 런에서 발동 가능한 해금 레시피 ID(runLocked 해제분). 기본 해금 레시피는 항상 본다.
+   *  런타임은 CompanionForesight가 gameState.unlockedRecipeIds로 채우고, 시뮬은 레시피 해금 모델이 없어 생략한다. */
+  unlockedRecipeIds?: ReadonlySet<string>
 }
 
 export interface SupportRanking {
@@ -119,6 +128,11 @@ const KILL_TEMPO_VALUE = 2
 const TREASURE_VALUE = 3
 /** 1칸 거미줄이 '많이 널렸다'고 보는 기준 — 병합각 없이도 광역 청소를 여는 문턱. */
 export const WEB_FIELD_CLUTTER_THRESHOLD = 4
+/** 레시피 완성각 가산의 할인 상수 — 건넨 뒤 체인으로 발동해야 실현되는 지연/순서 리스크를 반영해,
+ *  같은 필요를 채우는 깡 카드(직접 효과)가 있으면 항상 그쪽이 이기도록 레시피 환산값을 깎는다. */
+export const RECIPE_SUPPORT_DISCOUNT = 0.55
+/** 필요 축에 매핑되지 않는 레시피 효과(재화/드로우/보물 변환 등)의 소량 고정 가산(할인 전). */
+const RECIPE_GENERIC_VALUE = 2
 
 /** 기존 고정 서열의 잔재 — 환산값이 같을 때만 순서를 가르는 ε 타이브레이크. */
 const FIT_TIEBREAK: Record<SupportFit, number> = {
@@ -393,6 +407,114 @@ function isHandoutBlocked(situation: SupportSituation, heldSet: ReadonlySet<Hand
   return !(situation.heldCardCounts && count === 2)
 }
 
+// ── 레시피 완성각 ──────────────────────────────────────────────────────────
+/** 받침 유무로 '와/과'를 붙인다 — reason 구가 대사 슬롯에 그대로 들어가므로 조사만 맞춘다. */
+function withJosaWaGwa(word: string): string {
+  const code = word.charCodeAt(word.length - 1)
+  if (code < 0xac00 || code > 0xd7a3) return `${word}와`
+  return (code - 0xac00) % 28 === 0 ? `${word}와` : `${word}과`
+}
+
+type RecipeAxis = 'ember' | 'recovery' | 'attack' | 'cleanup' | 'generic'
+
+/** 레시피 효과 id → 기존 환산 축 보수 매핑. 실제 효과 구현은 HandSystem 소유 — 여기서는
+ *  '어느 필요를 채우는가'만 근사하며, 매핑에 없는 새 효과는 generic 소량 가산으로 떨어진다. */
+function recipeEffectAxis(effect: RecipeEffectKind): RecipeAxis {
+  if (effect.startsWith('gain-ember')) return 'ember'
+  if (effect.startsWith('heal-')) return 'recovery'
+  // clear-* 는 함정을 포함한 광역 제거라 청소 축으로 본다(적 제거 겸용은 보수적으로 청소만 계상).
+  if (effect === 'clear-all-field-traps' || effect === 'convert-random-hazard-to-treasure') return 'cleanup'
+  if (effect === 'clear-front-cards' || effect === 'clear-all-field-cards') return 'cleanup'
+  if (effect.startsWith('damage-') || effect.startsWith('destroy-') || effect.endsWith('-atk') || effect === 'hot-water-maxhp') return 'attack'
+  return 'generic'
+}
+
+interface RecipeAxisValue {
+  fit: SupportFit
+  /** 할인 전 기대 가치(기존 직접 근거와 같은 환산식의 보수 근사). */
+  value: number
+  /** 필요 축과 맞아 단독 추천 근거가 될 수 있는가 — generic/필요 불일치는 직접 근거에 얹기만 한다. */
+  standalone: boolean
+}
+
+/** 완성 레시피 효과의 기대 가치: 현재 필요(불씨/저체력/강적/거미줄)와 맞을 때만 축 환산값을 쓰고,
+ *  아니면 완성 자체의 범용 가치를 소량 고정으로 남긴다. 발동까지의 순서 리스크는 할인 상수가 흡수한다. */
+function recipeAxisValue(axis: RecipeAxis, situation: SupportSituation): RecipeAxisValue {
+  switch (axis) {
+    case 'ember':
+      if (situation.emberLow) return { fit: 'ember', value: EMBER_PRESSURE_VALUE, standalone: true }
+      break
+    case 'recovery': {
+      const ratio = situation.playerMaxHealth > 0 ? situation.playerHealth / situation.playerMaxHealth : 1
+      if (ratio <= 0.45) {
+        return { fit: 'recovery', value: situation.playerMaxHealth * (1 - ratio) * (1 - ratio) * 0.6, standalone: true }
+      }
+      break
+    }
+    case 'attack': {
+      const enemy = situation.strongEnemy
+      if (enemy) return { fit: 'attack', value: strongEnemyAttack(enemy) * enemyImminence(enemy), standalone: true }
+      break
+    }
+    case 'cleanup': {
+      const trapBonus = Math.max(0, situation.trapDamageBonus ?? 0)
+      const merge = situation.webMerge
+      if ((merge?.mergingOneWebs ?? 0) >= 2 || (situation.frontWideWebSpan ?? 0) >= 2) {
+        const value = (merge?.mergedSize ?? 0) >= 3 ? LETHAL_PREVENT_VALUE : effectiveWebDamage(2, trapBonus) * WEB_MERGE_CHANCE
+        return { fit: 'cleanup', value, standalone: true }
+      }
+      const clutter = situation.fieldOneWebCount ?? 0
+      if (clutter >= WEB_FIELD_CLUTTER_THRESHOLD) {
+        return { fit: 'cleanup', value: clutter * effectiveWebDamage(1, trapBonus) * 0.8, standalone: true }
+      }
+      break
+    }
+  }
+  return { fit: 'treasure', value: RECIPE_GENERIC_VALUE, standalone: false }
+}
+
+interface RecipeSupportBonus {
+  fit: SupportFit
+  /** 할인·역할 가중 적용 후 최종 가산치. */
+  score: number
+  reason: string
+  detail: string
+  standalone: boolean
+}
+
+/** 후보 카드가 '마지막 재료'가 되어 보유 손패와 함께 해금 레시피를 완성하는 경우의 가산.
+ *  멀티셋 완성만 본다(체인/손패 순서 실현성은 미검사 — 그 리스크는 RECIPE_SUPPORT_DISCOUNT가 흡수). */
+function recipeCompletionBonus(def: HandCardDefinition, situation: SupportSituation, heldSet: ReadonlySet<HandCardId>): RecipeSupportBonus | null {
+  let best: RecipeSupportBonus | null = null
+  for (const recipe of RECIPES) {
+    // 해금 판정: runLocked 레시피는 unlockedRecipeIds에 있을 때만, 기본 레시피는 항상 활성.
+    if (recipe.runLocked && !situation.unlockedRecipeIds?.has(recipe.id)) continue
+    const needSelf = recipe.ingredients[def.id]
+    if (!needSelf) continue
+    // 이 카드 1장이 마지막 재료가 되는 경우만 완성각(이미 충족·2장 이상 부족은 제외).
+    if (heldCountOf(situation, heldSet, def.id) !== needSelf - 1) continue
+    const othersReady = Object.entries(recipe.ingredients)
+      .every(([id, need]) => id === def.id || heldCountOf(situation, heldSet, id as HandCardId) >= (need ?? 0))
+    if (!othersReady) continue
+    const axis = recipeAxisValue(recipeEffectAxis(recipe.effect), situation)
+    const weight = situation.supportRoleWeights?.[FIT_ROLE[axis.fit]] ?? 1
+    const score = axis.value * RECIPE_SUPPORT_DISCOUNT * weight
+    if (best && best.score >= score) continue
+    const partners = Object.keys(recipe.ingredients)
+      .filter((id) => id !== def.id)
+      .map((id) => HAND_CARD_DEFINITIONS[id as HandCardId]?.name ?? id)
+    const lead = partners.length > 0 ? `${withJosaWaGwa(partners.join('·'))} ` : ''
+    best = {
+      fit: axis.fit,
+      score,
+      standalone: axis.standalone,
+      reason: `${lead}${recipe.name} 완성각`,
+      detail: `${recipe.name} 레시피(${recipe.flavor})가 이 손패로 완성 가능`,
+    }
+  }
+  return best
+}
+
 /**
  * 상황에 맞는 지원 손패 순위표. 해금 풀 안에서만 고르며, 플레이어가 이미 든 카드와
  * 같은 역할을 이미 보유한 근거는 제외한다(단, 정확히 2장 보유 카드는 트리플 완성각으로 허용+가점).
@@ -416,13 +538,17 @@ export function rankSupportCards(situation: SupportSituation, unlockedCardIds: r
     const def = HAND_CARD_DEFINITIONS[id]
     if (!def || isHandoutBlocked(situation, heldSet, id)) continue
     const plan = bestFitFor(def, situation, killAvailable, holds)
-    if (!plan) continue
+    // 레시피 완성각: 이 카드가 마지막 재료면 완성 효과의 필요 적합 가치를 할인해 가산한다.
+    // 필요와 맞는(standalone) 완성각만 단독 추천 근거가 될 수 있고, 직접 효과보다는 항상 낮게 친다.
+    const recipeBonus = recipeCompletionBonus(def, situation, heldSet)
+    if (!plan && !recipeBonus?.standalone) continue
+    const primary = plan && (!recipeBonus?.standalone || plan.fitScore >= recipeBonus.score) ? plan : recipeBonus!
     const tactic = getEnaHandCardTactic(id)
     const tagBonus = tagOverlapCount(def.synergyTags, situation.ownedRelicTags) * 1.2
     // 기회비용: 플레이어가 이미 2장 든 카드는 3장째가 즉시 트리플로 완성되므로 대기 가치를 가점.
     const tripleBonus = heldCountOf(situation, heldSet, id) === 2 ? tactic.tripleValue * 0.8 : 0
-    const score = plan.fitScore + tactic.fieldValue * 0.15 + tactic.synergyValue * 0.05 + tagBonus + tripleBonus - tactic.liability * 1.5
-    rankings.push({ cardId: id, score, fit: plan.fit, reason: plan.reason, detail: plan.detail })
+    const score = (plan?.fitScore ?? 0) + (recipeBonus?.score ?? 0) + tactic.fieldValue * 0.15 + tactic.synergyValue * 0.05 + tagBonus + tripleBonus - tactic.liability * 1.5
+    rankings.push({ cardId: id, score, fit: primary.fit, reason: primary.reason, detail: primary.detail })
   }
   return rankings.sort((a, b) => b.score - a.score)
 }
