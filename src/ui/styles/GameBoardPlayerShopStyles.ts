@@ -950,8 +950,22 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
 .shop-pack-pick-rarity-badge.rarity-epic      { color: rgba(225, 65, 245, 0.9); }
 .shop-pack-pick-rarity-badge.rarity-unique    { color: rgba(255, 210, 80, 0.9); }
 .shop-pack-pick-rarity-badge.rarity-legendary { color: rgba(255, 140, 60, 0.9); }
-/* 손패 카테고리/직업 태그 — 희귀도 배지 바로 아래로 내려 겹치지 않게 한다. */
-.shop-pack-pick-art .codex-tile-tags { top: 26px; }
+/* 좌상단 라벨 기둥 — 희귀도 배지(위치·양식 불변)가 먼저, 손패 태그가 그 아래로 흐른다.
+   고정 top 오프셋 대신 flex column이라 배지 실제 높이와 무관하게 절대 겹치지 않는다. */
+.shop-pack-pick-corner {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  pointer-events: none;
+}
+/* 기둥 안에서는 절대 배치를 풀어 문서 흐름(위→아래)으로 쌓는다. 다른 화면의 태그 위치는 불변. */
+.shop-pack-pick-corner .shop-pack-pick-rarity-badge { position: static; }
+.shop-pack-pick-corner .codex-tile-tags { position: static; }
 /* 레시피 재료 n+n 표기 */
 .shop-pack-recipe-note {
   font-size: 11px;

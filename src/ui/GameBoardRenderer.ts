@@ -56,6 +56,7 @@ import {
 } from '@ui/Icons'
 import type { EnaDisposition } from '@systems/EnaDisposition'
 import type { EnaLearningSnapshot } from '@systems/CompanionSystem'
+import { experienceAxes } from '@ui/ExperienceAxes'
 import { atkDmgHtml, hpDmgHtml, rangeDmgHtml } from '@ui/DamageDisplay'
 import { sfx } from '@/audio/SfxManager'
 
@@ -1839,14 +1840,19 @@ export class GameBoardRenderer {
     const enhancements = this.currentGameState?.enhancements
     // 화염의 서는 누적 스택 n과 현재 공격력으로 실제 피해를 동적 표시한다.
     // 공식은 HandSystem.applyBookOfFlames와 동일하게 유지: floor((0.5+0.25n)×공×mul) + (1+n)×mul.
+    // 다른 ATK 카드처럼 기본은 합산 수치(__s), Shift 중엔 현재 스택 반영 수식(__d)으로 전환한다.
     if (id === 'book-of-flames') {
       const n = enhancements?.bookOfFlamesBonus ?? 0
       const atk = this.currentGameState?.getCharacter().damage ?? 1
-      const single = Math.floor((0.5 + 0.25 * n) * atk) + (1 + n)
-      const triple = Math.floor((0.5 + 0.25 * n) * atk * 2) + (1 + n) * 2
-      return merged
-        ? `필드 선택 적 1장 피해 ${triple}<br>사용 시 영구 +0.5공+2`
-        : `필드 선택 적 1장 피해 ${single}<br>사용 시 영구 +0.25공+1`
+      // 단일 mult=(0.5+0.25n)/가산 1+n, 트리플은 정확히 2배 — atkDmgHtml의 floor(mult×공)+가산과 같은 값.
+      const dmg = merged
+        ? atkDmgHtml(atk, 1 + 0.5 * n, 2 + 2 * n)
+        : atkDmgHtml(atk, 0.5 + 0.25 * n, 1 + n)
+      // 성장 줄도 같은 관례: 기본은 현재 공격력 기준 합산 성장량, Shift 중엔 수식.
+      const growTotal = merged ? Math.floor(0.5 * atk) + 2 : Math.floor(0.25 * atk) + 1
+      const growFormula = merged ? `(0.5${swordIcon()}+2)` : `(0.25${swordIcon()}+1)`
+      const grow = `사용 시 영구 +<span class="desc-dyn"><span class="desc-dyn__s">${growTotal}</span><span class="desc-dyn__d">${growFormula}</span></span>`
+      return `필드 선택 적 1장 ${dmg}<br>${grow}`
     }
     // 검은 양초: book-of-flames와 동일하게 blackCandleBonus를 읽어 실시간 피해 표시.
     if (id === 'black-candle') {
@@ -2367,7 +2373,8 @@ export class GameBoardRenderer {
       const recipeNoteLine = item.recipeNote
         ? `<p class="shop-pack-recipe-note">${item.recipeNote}</p>`
         : ''
-      // 실제 손패 카드 항목이면 카테고리/직업 태그를 희귀도 뱃지 아래에 겹쳐 보여준다.
+      // 실제 손패 카드 항목이면 카테고리/직업 태그를 희귀도 뱃지 아래에 보여준다.
+      // 뱃지와 태그를 한 기둥(.shop-pack-pick-corner)으로 묶어 뱃지 높이와 무관하게 겹침을 막는다.
       const tagsOverlay = item.handCardId ? this.tagsOverlayHtml(this.handCardTagLabels(item.handCardId)) : ''
       return `
         <article class="shop-pack-pick-card pack-theme-${item.theme} ${rarityClass}"
@@ -2380,8 +2387,10 @@ export class GameBoardRenderer {
             <div class="shop-pack-pick-back" aria-hidden="true"></div>
             <div class="shop-pack-pick-front">
               <div class="shop-pack-pick-art" style="background-image:url('${artUrl}');" aria-hidden="true">
-                <div class="shop-pack-pick-rarity-badge ${rarityClass}">${item.rarity}</div>
-                ${tagsOverlay}
+                <div class="shop-pack-pick-corner">
+                  <div class="shop-pack-pick-rarity-badge ${rarityClass}">${item.rarity}</div>
+                  ${tagsOverlay}
+                </div>
               </div>
               <div class="shop-pack-pick-body">
                 <header class="shop-pack-pick-card-head">
@@ -4804,37 +4813,10 @@ export class GameBoardRenderer {
     document.getElementById('experience-overlay')?.classList.remove('is-open')
   }
 
-  /** 성향 → 플레이어가 읽는 5개 '성좌 축'(0~1)으로 압축한다. */
+  /** 성향 → 플레이어가 읽는 5개 '성좌 축'(0~1)으로 압축한다.
+   *  계산·축별 표기 감쇠(예지/수호/불굴)는 순수 모듈 ExperienceAxes로 분리 — 동작값 불변 테스트 대상. */
   private experienceAxes(disp: EnaDisposition, learning?: EnaLearningSnapshot): { key: string; value: number; desc: string }[] {
-    const norm = (v: number, lo: number, hi: number) => Math.max(0, Math.min(1, (v - lo) / (hi - lo)))
-    const sc = disp.situationChance
-    const chat = (sc.hit + sc.web + sc.treasure + sc.kill + sc.survive + sc.flower + sc.event + sc.spore + sc.bomb) / 9
-    // 수다 축은 저장 성향에 런-내 읽음/스킵 보상을 함께 반영해 경험 탭에서 즉시 오르내리게 한다.
-    const liveChat = chat * (learning?.chattiness ?? 1)
-    const mc = disp.minorClutchChance
-    const minor = (mc.crit + mc.dodge + mc.counter + mc.trap + mc.treasure) / 5
-    // 수호 축은 실제 동작값을 바꾸지 않고 경험 탭 표기만 완화한다. 방패/보호 계열은 실제 동작값의 절반으로 표시해 피격 빈도 때문에 수호만 과도하게 커 보이는 일을 줄인다.
-    const protectionDisplayScale = 0.5
-    const guard = (
-      norm(disp.clutchStrength, 0.6, 1.6) +
-      norm(disp.willGainPerDamage, 30, 100) +
-      norm(disp.clutchHpThreshold, 0.2, 0.6)
-    ) / 3 * protectionDisplayScale
-    // 불굴은 각성/역경 보정이 초반부터 높게 보이지 않도록 표시만 절반으로 낮춘다.
-    // 실제 각성·클러치 동작값은 유지해 밸런스와 RL 피팅 결과를 건드리지 않는다.
-    const gritDisplayScale = 0.5
-    const grit = (
-      norm(disp.awakenChance, 0.02, 0.4) * 0.55 +
-      norm(disp.clutchAdversityBoost, 0.6, 2.4) * 0.3 +
-      norm(disp.bondClimaxChance, 0, 0.25) * 0.15
-    ) * gritDisplayScale
-    return [
-      { key: '수다', value: norm(liveChat, 0.12, 0.62), desc: '곁에서 말 거는 빈도' },
-      { key: '예지', value: norm(disp.predictBaseChance, 0.02, 0.95), desc: '위협을 미리 읽어 도구를 건넴' },
-      { key: '수호', value: guard, desc: '위기에 회복·방패로 지켜냄' },
-      { key: '온정', value: norm(minor, 0.02, 0.6), desc: '덤으로 슬쩍 건네는 선물' },
-      { key: '불굴', value: grit, desc: '역경·유대로 한계를 잠깐 넘김' },
-    ]
+    return experienceAxes(disp, learning)
   }
 
   private renderExperience(disp: EnaDisposition, base: EnaDisposition, learning?: EnaLearningSnapshot): string {
@@ -5264,6 +5246,7 @@ export class GameBoardRenderer {
       const ATK_CARDS: ReadonlySet<HandCardId> = new Set([
         'ember', 'sacrifice-candle', 'levatein', 'firework', 'fire-arrow',
         'chandelier', 'bonfire', 'teapot', 'slash', 'candle-tome', 'sword-and-shield',
+        'book-of-flames', // 피해/성장 줄 모두 desc-dyn 수식 전환을 쓰므로 span 보존 필요
       ])
       const toChip = ATK_CARDS.has(def.id) ? chipDescAtk : chipDesc
       const singleDesc = toChip(this.enhancedHandCardDescription(def.id, false))
