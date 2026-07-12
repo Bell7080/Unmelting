@@ -4814,7 +4814,7 @@ export class GameBoardRenderer {
   }
 
   /** 성향 → 플레이어가 읽는 5개 '성좌 축'(0~1)으로 압축한다.
-   *  계산·축별 표기 감쇠(예지/수호/불굴)는 순수 모듈 ExperienceAxes로 분리 — 동작값 불변 테스트 대상. */
+   *  계산·개입 축 ROOKIE→BASE 진행도 리매핑은 순수 모듈 ExperienceAxes로 분리 — 동작값 불변 테스트 대상. */
   private experienceAxes(disp: EnaDisposition, learning?: EnaLearningSnapshot): { key: string; value: number; desc: string }[] {
     return experienceAxes(disp, learning)
   }
