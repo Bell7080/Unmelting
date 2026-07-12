@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { CompanionSystem } from './CompanionSystem'
-import { defaultDisposition, cloneDisposition, loadDisposition, saveDisposition, BASE_DISPOSITION } from './EnaDisposition'
+import {
+  defaultDisposition,
+  cloneDisposition,
+  loadDisposition,
+  saveDisposition,
+  growthAnchorDisposition,
+  BASE_DISPOSITION,
+  ROOKIE_DISPOSITION,
+} from './EnaDisposition'
 
 describe('에나 온라인 per-player 적응', () => {
   it('사망으로 끝나면 다음 런에 더 적극적으로 돕도록 방어/지원 성향이 오른다', () => {
@@ -76,10 +84,19 @@ describe('성향 영구 저장(per-player)', () => {
     expect(loaded.predictBaseChance).toBe(0.7)
   })
 
-  it('localStorage가 없으면 학습된 기본 토대(BASE_DISPOSITION)의 복제를 돌려준다', () => {
+  it('저장본이 없으면(신규 플레이어) growth=0 앵커(ROOKIE 근방)에서 시작한다', () => {
     const loaded = loadDisposition()
-    expect(loaded.awakenChance).toBe(BASE_DISPOSITION.awakenChance)
-    expect(loaded).not.toBe(BASE_DISPOSITION) // 복제라 라이브가 원본을 변형하지 않는다
+    expect(loaded).toEqual(ROOKIE_DISPOSITION) // growth 0 → 앵커 = ROOKIE
+    expect(loaded).not.toBe(ROOKIE_DISPOSITION) // 복제라 라이브가 원본을 변형하지 않는다
+    // 대사 성향은 초보라도 BASE와 같다('입만 있는 동반자').
+    expect(loaded.situationChance).toEqual(BASE_DISPOSITION.situationChance)
+    expect(loaded.lootCommentChance).toBe(BASE_DISPOSITION.lootCommentChance)
     saveDisposition(defaultDisposition()) // throw 없이 무시
+  })
+
+  it('저장본이 없어도 성장이 쌓였으면(fallbackGrowth) 앵커 성향에서 시작한다', () => {
+    const loaded = loadDisposition(undefined, 1)
+    expect(loaded).toEqual(growthAnchorDisposition(1)) // growth 1 → 앵커 = BASE
+    expect(loaded.awakenChance).toBe(BASE_DISPOSITION.awakenChance)
   })
 })

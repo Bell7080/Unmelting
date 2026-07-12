@@ -270,14 +270,105 @@ function buildBaseDisposition(): EnaDisposition {
   return clampDisposition(d)
 }
 
+// ── 성장 곡선(초보 동반자 → 베테랑) ──────────────────────────────────────
+// 초기 에나는 '입만 있는 동반자'다: 대사 성향은 그대로 두고, 기계적 개입(클러치/예지 보급/
+// 각성/지원 판단 가중)만 클램프 하한 근처로 낮춘다. 로그라이트 커리큘럼상 초반 죽음(10층→20층…)
+// 을 에나가 구해버리면 안 되기 때문이다. 성장(growth 0→1)이 쌓이면 앵커가 BASE로 이동한다.
+
+/** 초보 에나 성향 — 개입 노브만 안전 경계 하한 근처, 대사 노브는 BASE와 동일. */
+export const ROOKIE_DISPOSITION: EnaDisposition = buildRookieDisposition()
+
+function buildRookieDisposition(): EnaDisposition {
+  const d = cloneDisposition(BASE_DISPOSITION)
+  // 소소한 클러치 전종 — 거의 발동하지 않는 하한(PROB.lo)으로.
+  for (const k of Object.keys(d.minorClutchChance) as MinorClutchKind[]) {
+    d.minorClutchChance[k] = PROB.lo
+  }
+  // 죽음 직전 구원(각성)도 초기에는 거의 없다.
+  d.awakenChance = 0.02
+  d.clutchAdversityBoost = 0.6
+  d.bondClimaxChance = 0
+  // 예지 보급: 게이트 확률 하한 + 재발동 간격 상한 → 사실상 침묵.
+  d.predictBaseChance = PROB.lo
+  d.predictCooldown = 20
+  // 큰 의지 클러치: 충전이 느리고, 문턱이 좁고, 효과도 최소.
+  d.clutchHpThreshold = 0.2
+  d.clutchHealRatio = 0.15
+  d.clutchShieldRatio = 0.1
+  d.clutchStrength = 0.6
+  d.willGainPerDamage = 30
+  d.willGainFlatBonus = 0
+  // 지원 카드 판단 가중도 하한 — 개입 판단 자체가 소극적이다.
+  d.supportRoleWeights = { cleanup: 0.5, attack: 0.5, defense: 0.5, resource: 0.5, recovery: 0.5 }
+  return clampDisposition(d)
+}
+
+/** 성장 입력 — 누적 런 수(EnaAutonomousLearner 저장)와 유대(CompanionSystem). */
+export interface EnaGrowthInput {
+  runCount: number
+  bond: number
+}
+
+/** 성장 곡선 튜닝 상수 — computeEnaGrowth 하나만 바꾸면 성장 속도가 통째로 조정된다. */
+export const ENA_GROWTH_TUNING = {
+  /** 런 성분의 완만한 포화 스케일(1-exp(-runCount/scale)). 6이면 ~15런에서 0.92. */
+  runScale: 6,
+  /** 런 성분 비중. */
+  runWeight: 0.75,
+  /** 유대 성분 비중(runWeight + bondWeight = 1). */
+  bondWeight: 0.25,
+} as const
+
 /**
- * 성향을 기본 토대(BASE_DISPOSITION) 방향으로 rate만큼 완만히 되돌린다(평균회귀).
+ * 에나 성장值(0~1) 계산 — 초보(0)→베테랑(1) 앵커 보간의 유일한 입력.
+ * 완만한 1-exp 곡선으로 런 ~15회 + bond 고점에서 0.9 근방에 도달한다.
+ * 주의: 추후 메타 상점 해금형으로 바꿀 때도 이 함수 하나만 교체하면 되도록
+ * 성장 판정을 전부 여기에 모은다(호출부는 growth 숫자만 소비).
+ */
+export function computeEnaGrowth({ runCount, bond }: EnaGrowthInput): number {
+  const runPart = 1 - Math.exp(-Math.max(0, runCount) / ENA_GROWTH_TUNING.runScale)
+  const bondPart = Math.max(0, Math.min(1, bond))
+  const g = ENA_GROWTH_TUNING.runWeight * runPart + ENA_GROWTH_TUNING.bondWeight * bondPart
+  return Math.max(0, Math.min(1, g))
+}
+
+/** 성장 앵커 성향 — ROOKIE→BASE를 growth로 선형 보간한다(평균회귀 목표/신규 폴백 공용). */
+export function growthAnchorDisposition(growth: number): EnaDisposition {
+  const t = Math.max(0, Math.min(1, growth))
+  const out = cloneDisposition(ROOKIE_DISPOSITION)
+  const base = BASE_DISPOSITION as unknown as Record<string, unknown>
+  const target = out as unknown as Record<string, unknown>
+  for (const [k, baseValue] of Object.entries(base)) {
+    const current = target[k]
+    if (typeof baseValue === 'number' && typeof current === 'number') {
+      target[k] = current + (baseValue - current) * t
+    } else if (baseValue && current && typeof baseValue === 'object' && typeof current === 'object') {
+      // minorClutchChance/supportRoleWeights 같은 중첩 수치 맵도 같은 비율로 보간.
+      const baseMap = baseValue as Record<string, number>
+      const currentMap = current as Record<string, number>
+      for (const kk of Object.keys(baseMap)) {
+        if (typeof baseMap[kk] === 'number' && typeof currentMap[kk] === 'number') {
+          currentMap[kk] = currentMap[kk] + (baseMap[kk] - currentMap[kk]) * t
+        }
+      }
+    }
+  }
+  return clampDisposition(out)
+}
+
+/**
+ * 성향을 앵커(기본은 BASE_DISPOSITION, 성장 시스템은 growthAnchorDisposition(growth)) 방향으로
+ * rate만큼 완만히 되돌린다(평균회귀).
  * 로그라이크 특성상 사망 상향(×1.05대)이 생존 완화(×0.99)보다 잦아 성향이 클램프 상한/하한에
  * 눌러붙는 편향이 생기므로, 런마다 소량 회귀시켜 장기적으로 개인화가 중간 지대에 머물게 한다.
  */
-export function revertDispositionTowardBase(d: EnaDisposition, rate: number): EnaDisposition {
+export function revertDispositionTowardBase(
+  d: EnaDisposition,
+  rate: number,
+  anchor: EnaDisposition = BASE_DISPOSITION
+): EnaDisposition {
   const out = cloneDisposition(d)
-  const base = BASE_DISPOSITION as unknown as Record<string, unknown>
+  const base = anchor as unknown as Record<string, unknown>
   const target = out as unknown as Record<string, unknown>
   for (const [k, baseValue] of Object.entries(base)) {
     const current = target[k]
@@ -306,22 +397,28 @@ const STORAGE_KEY = 'ena-disposition-v1'
 // 구조 변경(필드 의미 변화 등)을 로드 시점에 거를 수 있게 한다.
 const DISPOSITION_SCHEMA_VERSION = 1
 
-/** 저장된 per-player 성향을 불러온다. 없으면 학습된 기본 토대(BASE_DISPOSITION)에서 시작한다. */
-export function loadDisposition(key: string = STORAGE_KEY): EnaDisposition {
-  if (typeof localStorage === 'undefined') return cloneDisposition(BASE_DISPOSITION)
+/**
+ * 저장된 per-player 성향을 불러온다.
+ * 저장본이 없으면(신규 플레이어) BASE가 아니라 fallbackGrowth 앵커에서 시작한다 —
+ * growth 0이면 ROOKIE 근방('입만 있는 동반자'). 기존 저장본은 병합 관례 그대로 로드해
+ * 급격한 하향 없이 유지하고, 성장은 평균회귀 앵커 이동으로만 반영한다.
+ */
+export function loadDisposition(key: string = STORAGE_KEY, fallbackGrowth = 0): EnaDisposition {
+  const fallback = (): EnaDisposition => growthAnchorDisposition(fallbackGrowth)
+  if (typeof localStorage === 'undefined') return fallback()
   const raw = localStorage.getItem(key)
-  if (!raw) return cloneDisposition(BASE_DISPOSITION)
+  if (!raw) return fallback()
   try {
     const parsed: unknown = JSON.parse(raw)
     if (parsed && typeof parsed === 'object' && 'version' in parsed) {
       const envelope = parsed as { version: unknown; disposition?: unknown }
-      if (envelope.version !== DISPOSITION_SCHEMA_VERSION) return cloneDisposition(BASE_DISPOSITION)
+      if (envelope.version !== DISPOSITION_SCHEMA_VERSION) return fallback()
       return dispositionFromJSON(envelope.disposition)
     }
     // 레거시(버전 봉투 없는 평면 저장본)는 v1로 간주해 그대로 병합한다.
     return dispositionFromJSON(parsed)
   } catch {
-    return cloneDisposition(BASE_DISPOSITION)
+    return fallback()
   }
 }
 

@@ -63,8 +63,9 @@ import { FontManager } from '@ui/FontManager'
 import { candleIcon } from '@ui/Icons'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
+import { BarkSequencer } from '@ui/BarkSequencer'
 import { CompanionSystem, type SituationId, type ClutchPlan } from '@systems/CompanionSystem'
-import { loadDisposition, saveDisposition, BASE_DISPOSITION } from '@systems/EnaDisposition'
+import { loadDisposition, saveDisposition, computeEnaGrowth, BASE_DISPOSITION } from '@systems/EnaDisposition'
 import { assessThreats, type ForesightOptions } from '@systems/CompanionForesight'
 import { HearthScene } from '@ui/hearth/HearthScene'
 import { ZoneCurtain, ZONE_LIST } from '@ui/ZoneCurtain'
@@ -256,13 +257,23 @@ let inputLocked = false
 // ── 동료(에나) 반응 레이어 씨앗 ──────────────────────────────
 // 학습 전 규칙 기반 스캐폴딩. 플레이어 프로필(.player-card) 터치에 횟수·시간·현재 상황으로
 // 반응한다(패턴이 아니라 자아처럼). 설계: Ena_Companion_AI_Design.md
-// 저장된 per-player 성향을 불러와 에나를 깨운다(없으면 기본 성향). 런 종료마다 적응·저장된다.
-const companion = new CompanionSystem(loadDisposition())
+// 에나 성장(초보 동반자→베테랑): 누적 런 수(자기학습 저장)와 유대로 growth(0~1)를 계산해
+// 신규 폴백 성향과 평균회귀 앵커를 결정한다. 신규 플레이어는 growth 0 → ROOKIE 근방에서 시작.
+const initialEnaGrowth = computeEnaGrowth({
+  runCount: enaAutonomousLearner.loadRunCount(),
+  bond: enaAutonomousLearner.loadBond(),
+})
+// 저장된 per-player 성향을 불러와 에나를 깨운다(없으면 성장 앵커 성향). 런 종료마다 적응·저장된다.
+const companion = new CompanionSystem(loadDisposition(undefined, initialEnaGrowth), initialEnaGrowth)
 // 유대(bond)는 성향과 별개로 자기학습 저장(unmelting.ena.self-learning.v1)에서 복원한다.
 companion.setBond(enaAutonomousLearner.loadBond())
 
 /** 런 종료 결과로 에나 성향을 온라인 적응시키고 저장한다. endGame 후크에서 호출(함수 선언이라 호이스팅). */
 function adaptCompanionToRunOutcome(won: boolean): void {
+  // 이번 런이 방금 자기학습 저장에 쌓였으므로 성장值를 갱신해 앵커를 옮긴 뒤 적응한다.
+  companion.setGrowth(
+    computeEnaGrowth({ runCount: enaAutonomousLearner.loadRunCount(), bond: companion.getBond() })
+  )
   const adapted = companion.adaptToOutcome({ died: !won, floorReached: gameState.getCurrentTurn() })
   saveDisposition(adapted)
 }
@@ -292,25 +303,50 @@ const COMPANION_READ_MS = 1500
 /** 바크 중요도: 손패 한줄평<일반 반응<상황<위급/항의. 읽는 중엔 더 높은 것만 끼어든다. */
 const BARK_IMPORTANCE = { loot: 0, touch: 1, situation: 2, urgent: 3, clutch: 4 } as const
 
-/**
- * 에나의 한마디를 player 말풍선으로 띄운다.
- * - 읽는 중(타이핑)에는 더 낮거나 같은 중요도가 끼어들어 덮어쓰지 못하게 한다.
- * - 상황 바크는 읽기 임계 시간 뒤까지 살아있으면 '읽음'으로 학습(더 말하게)한다.
- */
-function sayEnaBark(
-  line: string,
-  opts: { importance?: number; situation?: SituationId | null } = {}
-): void {
-  const importance = opts.importance ?? BARK_IMPORTANCE.touch
-  if (enaSpeaking && speechBubble.isTyping && importance <= currentBarkImportance) return
+// 비긴급 바크의 순차 출력 큐 — 시작 인사+회상처럼 연달아 온 바크가 서로를 즉시 덮지 않게,
+// 표시 중 바크의 최소 노출 시간(대사 길이 비례 1.5~3초)이 지난 뒤 이어서 보여준다.
+const barkSequencer = new BarkSequencer<SituationId>()
+let barkQueueTimer = 0
+
+/** 큐 드레인 예약 — 현재 바크의 최소 노출이 끝나는 시점에 다음 바크를 꺼낸다(이미 예약돼 있으면 무시). */
+function scheduleBarkQueueDrain(): void {
+  if (barkQueueTimer !== 0) return
+  barkQueueTimer = window.setTimeout(() => {
+    barkQueueTimer = 0
+    if (barkSequencer.pending === 0) return
+    if (!gameActive) {
+      barkSequencer.clear()
+      return
+    }
+    // urgent가 중간에 끼어들어 노출 기준이 뒤로 밀렸으면 남은 시간만큼 재예약한다.
+    if (barkSequencer.nextDelayMs() > 30) {
+      scheduleBarkQueueDrain()
+      return
+    }
+    const next = barkSequencer.shift()
+    if (!next) return
+    displayEnaBarkNow(next.line, next.importance, next.situation)
+    if (barkSequencer.pending > 0) scheduleBarkQueueDrain()
+  }, barkSequencer.nextDelayMs())
+}
+
+/** 바크 큐/드레인 타이머 정리 — 새 런 시작 등 흐름이 끊기는 지점에서 잔여 대사가 새지 않게 한다. */
+function clearBarkQueue(): void {
+  barkSequencer.clear()
+  clearTimeout(barkQueueTimer)
+  barkQueueTimer = 0
+}
+
+/** 바크를 지금 즉시 말풍선에 띄우고 학습/노출 추적 상태를 갱신한다(큐 판단은 sayEnaBark가 담당). */
+function displayEnaBarkNow(line: string, importance: number, situation: SituationId | null): void {
   clearTimeout(companionHeardTimer)
   companionHeardTimer = 0
   enaSpeaking = true
   currentBarkImportance = importance
-  currentBarkSituation = opts.situation ?? null
+  currentBarkSituation = situation
   barkShownAt = Date.now()
+  barkSequencer.noteDisplayed(line)
   speechBubble.show(line)
-  const situation = currentBarkSituation
   if (situation) {
     companionHeardTimer = window.setTimeout(() => {
       companion.recordHeard(situation)
@@ -318,6 +354,32 @@ function sayEnaBark(
       currentBarkSituation = null // 읽힘으로 정산됐으니 더는 스킵 대상이 아니다.
     }, COMPANION_READ_MS)
   }
+}
+
+/**
+ * 에나의 한마디를 player 말풍선으로 띄운다.
+ * - urgent/클러치급은 기존 규칙 유지: 큐를 건너뛰고 즉시 교체(더 높은 중요도 타이핑 중에만 양보).
+ * - 그 외에는 표시 중 바크가 최소 노출 시간을 채우도록 짧은 큐(상한 3, 초과분은 낮은 중요도부터
+ *   드롭)를 타고 순차 출력된다 — 시작 인사와 회상이 서로를 덮지 않는 근거.
+ * - 상황 바크는 읽기 임계 시간 뒤까지 살아있으면 '읽음'으로 학습(더 말하게)한다.
+ */
+function sayEnaBark(
+  line: string,
+  opts: { importance?: number; situation?: SituationId | null } = {}
+): void {
+  const importance = opts.importance ?? BARK_IMPORTANCE.touch
+  const situation = opts.situation ?? null
+  if (importance >= BARK_IMPORTANCE.urgent) {
+    if (enaSpeaking && speechBubble.isTyping && importance <= currentBarkImportance) return
+    displayEnaBarkNow(line, importance, situation)
+    return
+  }
+  if (barkSequencer.busy(enaSpeaking && speechBubble.isShowing)) {
+    barkSequencer.enqueue({ line, importance, situation })
+    scheduleBarkQueueDrain()
+    return
+  }
+  displayEnaBarkNow(line, importance, situation)
 }
 
 /** 체력/불씨가 위태로운 위급 상황인지 — 위급할 때 만지면 에나가 "지금 장난칠 때야?" 한다. */
@@ -3759,19 +3821,22 @@ async function startGame(characterIndex = -1): Promise<void> {
 
   // 1턴 시작 대사: 암막이 완전히 걷힌 뒤 살짝 딜레이 후 등장. 튜토리얼은 위에서 이미 보여줬으므로 건너뛴다.
   if (!isTutorial) {
-    enaSpeaking = false
     const opening = chosenJob
       ? companion.onJobSelect(chosenJob.id)
       : '역경 아래, 작은 불빛을 밝혀야만 해.'
-    speechBubble.show(opening, 800)
     // 에나 자기학습 회상 — 직업 선택 런에서만 띄운다(튜토리얼 제외). 유대가 깊을수록 조금 더 자주(최대 +0.15).
     const memoryLine = enaAutonomousLearner.recallLineForNewRun(false, companion.getBond() * 0.15)
-    if (memoryLine) {
-      // 시작 인사를 덮지 않도록 한 박자 뒤, 플레이어가 보는 자연스러운 회상으로만 보여준다.
-      window.setTimeout(() => {
-        if (companionWorldCanSpeak()) sayEnaBark(memoryLine, { importance: BARK_IMPORTANCE.situation })
-      }, 2200)
-    }
+    // 인사와 회상을 같은 순차 큐(sayEnaBark→BarkSequencer)에 태운다: 인사가 먼저 뜨고,
+    // 회상은 인사의 최소 노출 시간이 지난 뒤 이어서 나온다(뜨자마자 교체되는 충돌 제거).
+    window.setTimeout(() => {
+      if (!gameActive) return
+      clearBarkQueue()
+      enaSpeaking = false // 직전 런의 잔여 바크 상태와 무관하게 새 런 인사를 확정 표시한다.
+      sayEnaBark(opening, { importance: BARK_IMPORTANCE.situation })
+      if (memoryLine && companionWorldCanSpeak()) {
+        sayEnaBark(memoryLine, { importance: BARK_IMPORTANCE.situation })
+      }
+    }, 800)
   }
 }
 

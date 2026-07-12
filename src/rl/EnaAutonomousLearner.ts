@@ -48,6 +48,8 @@ export interface EnaAutonomousLearningState {
   reflections: EnaSelfReflection[]
   /** 플레이어와의 누적 유대(0~1). CompanionSystem이 세션 간 복원한다. version 1 유지 — 누락 시 0으로 병합. */
   bond?: number
+  /** 누적 완주 런 수 — 에나 성장 곡선(computeEnaGrowth)의 입력. version 1 유지 — 누락 시 reflections 길이로 폴백. */
+  totalRuns?: number
   /** 구체 회상용 구조화 기억(최근 12개). 누락 시 빈 배열로 병합. */
   memories?: EnaRunMemory[]
   /** 직전 회상 키 — 같은 기억/문형이 연속 반복되지 않게 한다. */
@@ -117,6 +119,11 @@ export class EnaAutonomousLearner {
     return reflection
   }
 
+  /** 누적 완주 런 수 — 에나 성장 곡선의 입력. 구버전 저장본은 reflections 길이(최근 20 상한)로 폴백. */
+  loadRunCount(): number {
+    return runCountOf(this.loadState())
+  }
+
   /** 저장된 누적 유대(0~1). 없거나 손상됐으면 0. */
   loadBond(): number {
     const bond = this.loadState().bond
@@ -182,6 +189,8 @@ export class EnaAutonomousLearner {
   private saveReflection(reflection: EnaSelfReflection, now: string, runMemory: EnaRunMemory | null): void {
     if (!this.storage) return
     const state = this.loadState()
+    // 성장 곡선용 누적 런 수 — reflections는 20개로 잘리므로 별도 카운터로 계속 센다.
+    state.totalRuns = runCountOf(state) + 1
     state.updatedAt = now
     state.reflections.push(reflection)
     // 장기 저장은 최근 흐름만 있으면 충분하므로 너무 큰 localStorage 사용을 피한다.
@@ -197,6 +206,13 @@ export class EnaAutonomousLearner {
     state.lastRecallKey = key
     this.storage.setItem(ENA_SELF_LEARNING_STORAGE_KEY, JSON.stringify(state))
   }
+}
+
+/** 저장 상태의 누적 런 수. totalRuns가 없는 구버전 저장본은 reflections 길이로 폴백한다. */
+function runCountOf(state: EnaAutonomousLearningState): number {
+  const total = state.totalRuns
+  if (typeof total === 'number' && Number.isFinite(total) && total >= 0) return Math.floor(total)
+  return state.reflections.length
 }
 
 /** 마지막 런 로그를 구조화 기억 1건으로 요약한다. 로그가 없으면 null. */

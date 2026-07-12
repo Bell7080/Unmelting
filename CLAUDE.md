@@ -133,3 +133,5 @@ npm run build
 - 2026-05-21 업데이트: 강제 시련 카드는 데이터 테이블(FORCED_TRIAL_CARDS)로 관리하며, 선택 시 즉시 런 modifier를 적용하고 EXIT는 선택 이후에만 허용한다.
 
 - 2026-05-30 업데이트: 60F 보스 `불씨 기사단장`은 숨은 정체가 레온하르트이며, 플레이어 응답 대사만 이를 암시한다. 3×3 구조, boss_002, 좌→우 느린 진입 후 쿵 착지, 저택의 방패 타이틀, 3턴마다 기사단장의 손패 2장을 사용한다. 방패 획득 시 플레이어처럼 HP 게이지 좌상단의 큰 방패 아이콘 안에 수치를 표시한다.
+
+- 에나 성장 곡선: 신규 플레이어는 ROOKIE_DISPOSITION(개입 노브만 하한, 대사는 BASE 동일)에서 시작하고, `computeEnaGrowth({runCount,bond})`(EnaDisposition.ts, 1-exp 곡선, ~15런+고bond≈0.9, 메타 상점 해금형 전환 시 이 함수만 교체) 성장值가 평균회귀 앵커를 ROOKIE→BASE로 옮긴다. runCount는 EnaAutonomousLearner `totalRuns`, 초보일수록 미숙 대사 확률 가점(0.45→0.70). 비긴급 에나 바크는 `BarkSequencer`(ui) 순차 큐(최소 노출 1.5~3초, 상한 3, 낮은 중요도부터 드롭)로 출력되고 urgent/클러치는 즉시 교체를 유지한다.

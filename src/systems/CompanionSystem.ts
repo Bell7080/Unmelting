@@ -56,6 +56,7 @@ import {
   defaultDisposition,
   clampDisposition,
   revertDispositionTowardBase,
+  growthAnchorDisposition,
   type EnaDisposition,
   type SupportRoleWeights,
 } from './EnaDisposition'
@@ -289,19 +290,38 @@ const MOOD_SHIFT: Record<SituationId, number> = {
 }
 /** 이 유대치 이상이면 소소한 클러치의 유대 보정이 자동으로 켜진다(과거 bond:true 하드코딩 대체). */
 const BOND_CLUTCH_THRESHOLD = 0.35
+/** 미숙(놓친 개입) 대사 기본 확률(베테랑, growth=1) — 기존 0.45 유지. */
+const MISSED_POTENTIAL_BASE_CHANCE = 0.45
+/** growth=0 초보일 때 미숙 대사에 더해지는 가점(0.45→0.70). */
+const MISSED_POTENTIAL_ROOKIE_BONUS = 0.25
 
 export class CompanionSystem {
   /** 성향 파라미터(임의값 그릇). 기본값은 기존 상수와 동일해 도입만으로 동작이 변하지 않는다.
    *  런-내 빠른 학습(situationWeight/predictiveWeight)이 런 종료 시 이 느린 성향으로 소화된다. */
   private disp: EnaDisposition
 
-  constructor(disposition: EnaDisposition = defaultDisposition()) {
+  /** 성장值(0~1). 평균회귀 앵커(ROOKIE→BASE)와 미숙 대사 빈도를 결정한다.
+   *  기본 1(베테랑) = 기존 동작 보존 — 실제 성장 연동은 호출부(index.ts)가 setGrowth로 주입한다. */
+  private growth = 1
+
+  constructor(disposition: EnaDisposition = defaultDisposition(), growth = 1) {
+    this.growth = Math.max(0, Math.min(1, growth))
     this.disp = disposition
   }
 
   /** 현재 성향 파라미터(저장/적응/디버그용). */
   getDisposition(): EnaDisposition {
     return this.disp
+  }
+
+  /** 현재 성장值(0~1). 경험 탭 등 추후 UI가 초보→베테랑 진행도를 읽는 조회 API. */
+  getGrowth(): number {
+    return this.growth
+  }
+
+  /** 성장值 주입 — 런 수/유대에서 계산한 computeEnaGrowth 결과를 호출부가 넣는다. */
+  setGrowth(growth: number): void {
+    this.growth = Math.max(0, Math.min(1, growth))
   }
 
   /** 지원 판단 역할 가중 — 예지/클러치가 HandCardAdvisor 환산값에 곱해 읽는다(없으면 1.0 취급). */
@@ -737,7 +757,10 @@ export class CompanionSystem {
    */
   missedPotentialLine(kind: 'web' | 'shield' | 'treasure', turn: number): string | null {
     if (turn - this.lastMissedPotentialTurn < this.minTurnGap()) return null
-    if (Math.random() >= 0.45) return null
+    // 성장이 낮은 초보 에나일수록 '알지만 아직 못 돕는' 아쉬움을 더 자주 낸다.
+    // 게이트(실제 개입 기회 조건)는 호출부가 그대로 유지하고 여기서는 확률만 보정한다.
+    const chance = MISSED_POTENTIAL_BASE_CHANCE + (1 - this.growth) * MISSED_POTENTIAL_ROOKIE_BONUS
+    if (Math.random() >= chance) return null
     this.lastMissedPotentialTurn = turn
     return this.pickFrom(`predict:miss-${kind}`, PREDICT_LINES[`miss-${kind}`], kind === 'shield' ? 'urgent' : 'normal')
   }
@@ -773,8 +796,9 @@ export class CompanionSystem {
    */
   adaptToOutcome(outcome: RunOutcome): EnaDisposition {
     // 0) 평균회귀: 사망 상향이 생존 완화보다 잦아 상·하한에 눌러붙는 장기 편향을 막기 위해
-    //    매 런 5%씩 기본 토대 방향으로 되돌린 뒤 이번 런의 신호를 얹는다.
-    const d = revertDispositionTowardBase(this.disp, 0.05)
+    //    매 런 5%씩 성장 앵커(ROOKIE→BASE 보간) 방향으로 되돌린 뒤 이번 런의 신호를 얹는다.
+    //    성장이 쌓일수록 앵커가 BASE로 이동해 개입 성향이 자연히 상향 회귀한다.
+    const d = revertDispositionTowardBase(this.disp, 0.05, growthAnchorDisposition(this.growth))
     // 1) 수다 성향 영속화: 이번 런 동안 학습된 chattiness(스킵=싫음/열람=좋음)를 기본 발화확률·턴 간격에 반영.
     const chatDelta = (this.chattiness() - 1) * 0.04
     for (const id of Object.keys(d.situationChance) as SituationId[]) d.situationChance[id] *= 1 + chatDelta
