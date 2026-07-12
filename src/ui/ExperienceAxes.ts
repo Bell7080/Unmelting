@@ -29,8 +29,9 @@ const norm = (v: number, lo: number, hi: number) => clamp01((v - lo) / (hi - lo)
  * 그래서 개인화 적응으로 동작값이 움직이면 표기가 즉시 같이 움직인다.
  * √ 압축은 작은 신규 값은 세워 주고 상한 근처 값은 눌러, 옛 클램프 상한에 포화된
  * 저장본이 100%에 붙는 과표시를 막는다(특화 없는 자연 상단 ≈ 63~70%).
- * - interventionStart 0.7: 신규(growth 0). √ 압축으로 이미 서 있는 ROOKIE 원시값을
- *   살짝 눌러 예지 ~16%·불굴 ~10% 대역에 둔다.
+ * - interventionStart 0.56: 신규(growth 0). ROOKIE 개입 바닥을 ~55%로 올려(안정감) 원시값이
+ *   커진 만큼 이 배율을 낮춰 신규 육각형 크기를 이전과 같게 유지한다(예지 ~16%). 위기 배율을
+ *   실효화(adversityBoost 0.8→1.2)한 불굴만 그 증폭분이 역경 축에 정직하게 반영돼 ~13%로 오른다.
  * - interventionEnd 1.0: 성장 완료(growth 1). 압축 정규화 원시값 그대로 — BASE 예지 ≈ 49%.
  *   start < end라 성장 앵커 경로(원시값·배율 동시 상승)의 단조 증가가 자동 보장된다.
  * - chatStart 0.4: 수다 축 신규 배율. 성향 자체는 BASE와 같지만 초보 동반자의
@@ -39,7 +40,7 @@ const norm = (v: number, lo: number, hi: number) => clamp01((v - lo) / (hi - lo)
  * import해 검증한다(여기서 앵커 수치를 하드코딩하지 않는 이유).
  */
 export const EXPERIENCE_AXIS_DISPLAY_BOOST = {
-  interventionStart: 0.7,
+  interventionStart: 0.56,
   interventionEnd: 1.0,
   chatStart: 0.4,
 } as const

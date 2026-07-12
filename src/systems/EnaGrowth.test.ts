@@ -173,15 +173,15 @@ describe('드라마 점수와 성장 점프 게이트', () => {
 })
 
 describe('ROOKIE_DISPOSITION (미숙하지만 가끔은 나서는 동반자)', () => {
-  it('소소한 클러치/각성은 BASE의 35~45% 수준 — 0이 아니라 가끔', () => {
+  it('소소한 클러치/각성은 BASE의 ~55% 수준 — 최소한의 안정감은 주되 앞지르지 않음', () => {
     for (const k of Object.keys(ROOKIE_DISPOSITION.minorClutchChance) as Array<
       keyof typeof ROOKIE_DISPOSITION.minorClutchChance
     >) {
       const ratio = ROOKIE_DISPOSITION.minorClutchChance[k] / BASE_DISPOSITION.minorClutchChance[k]
-      expect(ratio).toBeGreaterThanOrEqual(0.3)
-      expect(ratio).toBeLessThanOrEqual(0.5)
+      expect(ratio).toBeGreaterThanOrEqual(0.45)
+      expect(ratio).toBeLessThanOrEqual(0.65)
     }
-    expect(ROOKIE_DISPOSITION.awakenChance).toBeCloseTo(BASE_DISPOSITION.awakenChance * 0.4, 5)
+    expect(ROOKIE_DISPOSITION.awakenChance).toBeCloseTo(BASE_DISPOSITION.awakenChance * 0.55, 5)
     // 예지 보급은 낮되 0은 아니다.
     expect(ROOKIE_DISPOSITION.predictBaseChance).toBeGreaterThanOrEqual(0.1)
     expect(ROOKIE_DISPOSITION.predictBaseChance).toBeLessThan(BASE_DISPOSITION.predictBaseChance)

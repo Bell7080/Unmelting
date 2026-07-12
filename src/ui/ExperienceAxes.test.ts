@@ -36,15 +36,18 @@ describe('ExperienceAxes', () => {
   it('신규(ROOKIE, growth 0) 개입 축은 서로 다른 값으로 자연 비율 순서를 유지한다', () => {
     const disp = cloneDisposition(ROOKIE_DISPOSITION)
     const v = Object.fromEntries(INTERVENTION_AXES.map((k) => [k, axisValue(disp, k, 0)]))
-    // ROOKIE 원시 비율 순서: 예지 > 수호 > 온정 > 불굴 — 균일 클램프가 아니라 축별 고유값.
+    // ROOKIE 원시 비율: 예지 > 수호 > (온정 ≈ 불굴) — 균일 클램프가 아니라 축별 고유값.
+    // 위기 배율 실효화(adversityBoost 1.2)로 온정·불굴은 서로 비슷한 대역에 놓인다.
     expect(v['예지']).toBeGreaterThan(v['수호'])
     expect(v['수호']).toBeGreaterThan(v['온정'])
-    expect(v['온정']).toBeGreaterThan(v['불굴'])
+    expect(v['수호']).toBeGreaterThan(v['불굴'])
+    // 온정·불굴은 비슷하되 어느 쪽도 서로 붙어 있지(균일 클램프) 않다.
+    expect(Math.abs(v['온정'] - v['불굴'])).toBeLessThan(0.03)
     // 캘리브레이션 대역 — ROOKIE 재피팅으로 어긋나면 여기서 잡는다.
     expect(v['예지']).toBeGreaterThanOrEqual(0.15)
     expect(v['예지']).toBeLessThanOrEqual(0.2)
-    expect(v['불굴']).toBeGreaterThanOrEqual(0.06)
-    expect(v['불굴']).toBeLessThanOrEqual(0.1)
+    expect(v['불굴']).toBeGreaterThanOrEqual(0.09)
+    expect(v['불굴']).toBeLessThanOrEqual(0.14)
   })
 
   it('성장 완료(BASE, growth 1) 개입 축은 원시값×end 배율로 상한 대역에 안착한다', () => {

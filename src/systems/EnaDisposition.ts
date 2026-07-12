@@ -362,10 +362,11 @@ function buildBaseDisposition(): EnaDisposition {
 // 초반 죽음(10층→20층…)을 에나가 앞질러 구해버리면 안 되기 때문이다.
 // 성장(growth 0→1)은 '의미 있는 모험량'(누적 xp)+유대로만 차오르고, 앵커를 BASE로 옮긴다.
 
-/** 초보 개입 배율 — 소소한 클러치/각성을 BASE의 35~45% 수준(중간 0.4)으로 남긴다. */
-const ROOKIE_INTERVENTION_FACTOR = 0.4
-/** 초보 예지 보급 게이트 — 낮되 0은 아니게(드물게 미리 건네는 순간을 허용). */
-const ROOKIE_PREDICT_CHANCE = 0.12
+/** 초보 개입 배율 — 소소한 클러치/각성을 BASE의 ~55%로 남긴다. '최소한의 안정감'은 주되
+ *  초반 커리큘럼을 앞지르지 않는 선. 다른 개입 축(예지/수호)도 아래에서 같은 비율로 상향한다. */
+const ROOKIE_INTERVENTION_FACTOR = 0.55
+/** 초보 예지 보급 게이트 — 낮되 '가끔 미리 건네는' 안정감이 느껴질 만큼(다른 축과 같은 비율 상향). */
+const ROOKIE_PREDICT_CHANCE = 0.18
 
 /** 초보 에나 성향 — 개입 노브만 낮추고(가끔은 발동), 대사 노브는 BASE와 동일. */
 export const ROOKIE_DISPOSITION: EnaDisposition = buildRookieDisposition()
@@ -376,22 +377,25 @@ function buildRookieDisposition(): EnaDisposition {
   for (const k of Object.keys(d.minorClutchChance) as MinorClutchKind[]) {
     d.minorClutchChance[k] = d.minorClutchChance[k] * ROOKIE_INTERVENTION_FACTOR
   }
-  // 죽음 직전 구원(각성)도 같은 배율 — 드물지만 이야깃거리가 될 만큼은 남긴다.
+  // 죽음 직전 구원(각성)도 같은 배율 — 드물지만 위기에서 '화려한' 한 방으로 남긴다.
   d.awakenChance = d.awakenChance * ROOKIE_INTERVENTION_FACTOR
-  d.clutchAdversityBoost = 0.8
+  // 위기 배율 — '극단적일수록 화려한 도움'이 실제로 성립하도록 1.0(중립=부스트 0)을 넘겨 준다.
+  // (0.8이던 옛 값은 위기에 오히려 개입이 줄었고, 1.0은 루키 확률이 전부 0.22 캡 아래라
+  //  캡 차이도 안 물려 사실상 무보정이다. 1.2면 위기에서 확률이 실제로 ~20% 증폭된다.)
+  d.clutchAdversityBoost = 1.2
   d.bondClimaxChance = 0
-  // 예지 보급: 확률 낮음 + 재발동 간격 김 → 드물게만 미리 대비를 건넨다.
+  // 예지 보급: 확률 낮음 + 다소 긴 재발동 간격 → 가끔 미리 대비를 건넨다.
   d.predictBaseChance = ROOKIE_PREDICT_CHANCE
-  d.predictCooldown = 18
-  // 큰 의지 클러치: 충전이 느리고 효과도 약하지만, 발동 자체는 가능하다.
-  d.clutchHpThreshold = 0.25
-  d.clutchHealRatio = 0.2
-  d.clutchShieldRatio = 0.15
-  d.clutchStrength = 0.7
-  d.willGainPerDamage = BASE_DISPOSITION.willGainPerDamage * 0.75
-  d.willGainFlatBonus = 1
-  // 지원 카드 판단 가중은 소극적이되 발동했을 때 무의미하지 않을 중간값.
-  d.supportRoleWeights = { cleanup: 0.7, attack: 0.7, defense: 0.7, resource: 0.7, recovery: 0.7 }
+  d.predictCooldown = 16
+  // 큰 의지 클러치: 충전·효과가 BASE보다 약하지만 '최소한의 안정감'이 느껴질 만큼은 남긴다.
+  d.clutchHpThreshold = 0.27
+  d.clutchHealRatio = 0.24
+  d.clutchShieldRatio = 0.18
+  d.clutchStrength = 0.75
+  d.willGainPerDamage = BASE_DISPOSITION.willGainPerDamage * 0.85
+  d.willGainFlatBonus = 1.4
+  // 지원 카드 판단 가중은 소극적이되 발동 시 무의미하지 않을 중간값(다른 축과 같은 비율로 상향).
+  d.supportRoleWeights = { cleanup: 0.78, attack: 0.78, defense: 0.78, resource: 0.78, recovery: 0.78 }
   return clampDisposition(d)
 }
 
