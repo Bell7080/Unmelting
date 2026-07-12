@@ -382,6 +382,12 @@ export class CompanionSystem {
   private lastPredictTurn = -999
   /** 후반부라면 도왔을 상황을 초반부에는 말로만 비추는 미숙 대사 쿨다운. */
   private lastMissedPotentialTurn = -999
+  /** 런 내 상호작용(대사 끝까지 열람) 수 — 모험 xp '유의미한 플레이' 축의 소량 성분. */
+  private runInteractionCount = 0
+  /** 런 내 클러치 발동 수(회피/반격/큰 클러치/각성) — 드라마 '에나 도움의 실효' 신호. */
+  private runClutchCount = 0
+  /** 런 내 '건넨 대비가 제때 쓰였다'(helpScore ≥ 1) 수 — 드라마 '에나 도움의 실효' 신호. */
+  private runTimelyPredictionCount = 0
   /**
    * 예측 대비 학습 가중치(0.2~1.8). 건넨 대비 카드를 플레이어가 곧 쓰면(유용) 오르고,
    * 기한 내 안 쓰면(불필요) 내려간다. = 가짜 RL: "이 대비가 도움이 됐나"를 누적.
@@ -479,6 +485,7 @@ export class CompanionSystem {
 
   /** 최근 사건을 링버퍼에 남긴다(최대 8건). 상황 바크와 클러치가 자동으로 부르고, 호출부가 직접 남겨도 된다. */
   recordRecentEvent(kind: RecentCompanionEvent['kind'], turn: number, enemyName?: string): void {
+    if (kind === 'clutch') this.runClutchCount += 1 // 드라마 '에나 도움의 실효' 신호 재료.
     this.recentEvents.push({ kind, enemyName, turn })
     if (this.recentEvents.length > RECENT_EVENT_MAX) this.recentEvents.shift()
   }
@@ -522,7 +529,21 @@ export class CompanionSystem {
   /** 플레이어가 대사를 끝까지 봐 준 상황 → 점점 더 수다스러워지고, 유대가 아주 조금 오른다. */
   recordHeard(id: SituationId): void {
     this.situationWeight[id] = Math.min(this.disp.weightMax, this.situationWeight[id] * this.disp.heardGrowth)
+    this.runInteractionCount += 1 // 모험 xp '유의미한 플레이' 축 재료.
     this.gainBond(0.002)
+  }
+
+  /** 런 내 상호작용/클러치/제때 예측 카운트 — 런 종료 시 모험 xp·드라마 신호 입력으로 읽는다. */
+  getRunInteractionCount(): number {
+    return this.runInteractionCount
+  }
+
+  getRunClutchCount(): number {
+    return this.runClutchCount
+  }
+
+  getRunTimelyPredictionCount(): number {
+    return this.runTimelyPredictionCount
   }
 
   /** 스킵이 누적됐을 때 가끔 '조용히 할게'류로 과묵해짐을 알린다(드물게). */
@@ -657,6 +678,7 @@ export class CompanionSystem {
     if (this.awakened) return false
     if (Math.random() >= this.disp.awakenChance) return false
     this.awakened = true
+    this.runClutchCount += 1 // 죽음 직전 역전 — 드라마 '에나 도움의 실효' 신호.
     this.gainBond(0.01) // 죽음 직전을 함께 넘긴 각성은 가장 큰 유대 신호다.
     return true
   }
@@ -769,6 +791,7 @@ export class CompanionSystem {
   recordPredictionOutcome(helpScore: number): void {
     const score = Math.max(0, Math.min(1.6, helpScore))
     if (score >= 1) {
+      this.runTimelyPredictionCount += 1 // 드라마 '에나 도움의 실효' 신호 재료.
       // 위기 직후 사용·거미줄 다수 제거처럼 '타이밍이 맞았다'는 신호는 성장을 조금 더 준다.
       this.predictiveWeight = Math.min(this.disp.weightMax, this.predictiveWeight * (1 + (this.disp.predictUpGrowth - 1) * score))
       return
@@ -836,6 +859,10 @@ export class CompanionSystem {
     this.touchStreak = 0
     this.mood = 0
     this.lastMoodTurn = 0
+    // 런 단위 성장/드라마 신호 카운트도 새 런에서 비운다.
+    this.runInteractionCount = 0
+    this.runClutchCount = 0
+    this.runTimelyPredictionCount = 0
     // 지난 런의 사건을 되짚는 콜백이 새 런에서 새지 않게 링버퍼를 비운다.
     this.recentEvents.length = 0
   }

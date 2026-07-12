@@ -479,6 +479,8 @@ async function tryCompanionPrediction(): Promise<void> {
   }
   if (!companionWorldCanSpeak() || gameState.bossBattleActive || pendingPrediction) return
   const report = assessThreats(gameState.lanes, gameState.character, companionForesightOptions())
+  // 드라마 '위기감' 신호: 즉사 후보 병합 위협을 실제로 마주한 턴을 센다(계열 캡이 과대 계상을 막는다).
+  if (report.webLethal) runDramaSignals.lethalThreatsFaced += 1
   const suggested = report.recommendedCardId
   // HandCardAdvisor가 보유 손패의 같은 역할(청소류 포함)까지 보고 추천을 접으므로,
   // 여기서는 같은 카드 중복 지급만 추가로 막으면 된다. 단, 비합체 2장 보유 카드는

@@ -7,8 +7,10 @@
 
 import type { HandCardId } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
+import { RELIC_DEFINITIONS, type RelicId } from '@data/Relics'
 import { resolveKoreanParticles } from '@systems/CompanionSystem'
-import type { EnaPlayLogMemory } from './EnaEffectProbe'
+import { computeRunAdventureXp, type EnaRunDramaSignals } from '@systems/EnaDisposition'
+import type { EnaPlayLogMemory, EnaPlayLogEntry } from './EnaEffectProbe'
 import type { EnaRuntimeEvent } from './EnaRuntimeObserver'
 import { EnaPolicyStore, type EnaPolicyStorage } from './EnaPolicyStore'
 
@@ -48,8 +50,14 @@ export interface EnaAutonomousLearningState {
   reflections: EnaSelfReflection[]
   /** 플레이어와의 누적 유대(0~1). CompanionSystem이 세션 간 복원한다. version 1 유지 — 누락 시 0으로 병합. */
   bond?: number
-  /** 누적 완주 런 수 — 에나 성장 곡선(computeEnaGrowth)의 입력. version 1 유지 — 누락 시 reflections 길이로 폴백. */
+  /** 누적 완주 런 수(참고용 병행 유지). version 1 유지 — 누락 시 reflections 길이로 폴백. */
   totalRuns?: number
+  /** 누적 모험 xp — 에나 성장 곡선(computeEnaGrowth)의 주 입력. 누락(구버전) 시 totalRuns×보수 계수로 1회 이전. */
+  adventureXp?: number
+  /** 지금까지의 최고 도달 층 — 기록 경신(점프 자격) 판정용. */
+  bestFloor?: number
+  /** 이미 겪은 '첫 경험' 키 집합 — 첫 경험 xp의 1회성 보장. */
+  experienced?: string[]
   /** 구체 회상용 구조화 기억(최근 12개). 누락 시 빈 배열로 병합. */
   memories?: EnaRunMemory[]
   /** 직전 회상 키 — 같은 기억/문형이 연속 반복되지 않게 한다. */
@@ -119,9 +127,50 @@ export class EnaAutonomousLearner {
     return reflection
   }
 
-  /** 누적 완주 런 수 — 에나 성장 곡선의 입력. 구버전 저장본은 reflections 길이(최근 20 상한)로 폴백. */
+  /** 누적 완주 런 수(참고용). 구버전 저장본은 reflections 길이(최근 20 상한)로 폴백. */
   loadRunCount(): number {
     return runCountOf(this.loadState())
+  }
+
+  /** 누적 모험 xp — 성장 곡선의 주 입력. 구버전 저장본(totalRuns만 있음)은 보수 계수로 환산해 읽는다. */
+  loadAdventureXp(): number {
+    return adventureXpOf(this.loadState())
+  }
+
+  /**
+   * 런 1회의 모험 xp를 계산·누적한다(성장의 유일한 적립 경로). 첫 경험 키는 저장된 집합으로
+   * 걸러 1회성만 인정하고, 최고 기록(bestFloor)도 여기서 갱신한다. 반환: 이번 런에 적립된 xp.
+   * 구버전 저장본은 첫 적립 시점에 totalRuns×보수 계수 이전값 위에 이어 쌓는다(1회 이전 확정).
+   */
+  accrueAdventureXp(run: {
+    floorReached: number
+    cleared: boolean
+    decisions?: number
+    progressTurns?: number
+    experienceKeys?: readonly string[]
+    drama?: EnaRunDramaSignals
+  }): number {
+    const state = this.loadState()
+    const previousBestFloor = typeof state.bestFloor === 'number' && state.bestFloor > 0 ? state.bestFloor : 0
+    const experienced = new Set(state.experienced ?? [])
+    // 카테고리 1회성: 'rare-relic' 같은 무접미 키는 카테고리 자체가 키다.
+    const firstExperiences = [...new Set(run.experienceKeys ?? [])].filter((key) => !experienced.has(key))
+    const xp = computeRunAdventureXp({
+      floorReached: run.floorReached,
+      cleared: run.cleared,
+      decisions: run.decisions,
+      progressTurns: run.progressTurns,
+      previousBestFloor,
+      firstExperiences,
+      drama: run.drama,
+    })
+    if (!this.storage) return xp
+    for (const key of firstExperiences) experienced.add(key)
+    state.adventureXp = adventureXpOf(state) + xp
+    state.bestFloor = Math.max(previousBestFloor, Math.max(0, run.floorReached))
+    state.experienced = [...experienced]
+    this.storage.setItem(ENA_SELF_LEARNING_STORAGE_KEY, JSON.stringify(state))
+    return xp
   }
 
   /** 저장된 누적 유대(0~1). 없거나 손상됐으면 0. */
@@ -213,6 +262,60 @@ function runCountOf(state: EnaAutonomousLearningState): number {
   const total = state.totalRuns
   if (typeof total === 'number' && Number.isFinite(total) && total >= 0) return Math.floor(total)
   return state.reflections.length
+}
+
+/** 구 저장본(런 수만 있음) → 모험 xp 1회 이전 보수 계수. 층 기록이 없어 얕은 런 가정으로 낮게 잡는다. */
+export const LEGACY_XP_PER_RUN = 12
+
+/** 저장 상태의 누적 모험 xp. adventureXp가 없는 구버전 저장본은 totalRuns×보수 계수로 환산한다. */
+function adventureXpOf(state: EnaAutonomousLearningState): number {
+  const xp = state.adventureXp
+  if (typeof xp === 'number' && Number.isFinite(xp) && xp >= 0) return xp
+  return runCountOf(state) * LEGACY_XP_PER_RUN
+}
+
+/** 희귀(rare) 이상으로 치는 유물 등급 — '희귀 유물 첫 획득' 판정. */
+const RARE_PLUS_RARITIES = new Set(['rare', 'epic', 'unique', 'legendary'])
+
+/**
+ * 이번 런 로그에서 '처음 겪는 경험' 후보 키를 도출한다(1회성 필터는 accrueAdventureXp의 저장 집합).
+ * 층/클리어와 상점 구매 로그처럼 이미 관측되는 사실에서만 만든다 — 별도 런타임 배선 불필요.
+ */
+export function deriveRunExperienceKeys(run: {
+  floorReached: number
+  cleared: boolean
+  shopPurchases: readonly string[]
+}): string[] {
+  const keys = new Set<string>()
+  // 보스 격파: 해당 보스 층을 '지나야'(전투 승리 후 진행) 격파로 친다. 클리어는 100F 격파.
+  if (run.floorReached > 30 || run.cleared) keys.add('boss-kill:30')
+  if (run.floorReached > 60 || run.cleared) keys.add('boss-kill:60')
+  if (run.floorReached > 90 || run.cleared) keys.add('boss-kill:90')
+  if (run.cleared) keys.add('boss-kill:100')
+  // 제단(30턴)·별빛 등반(90층 이후) 도달.
+  if (run.floorReached >= 30) keys.add('altar')
+  if (run.floorReached >= 91 || run.cleared) keys.add('starlight')
+  for (const purchase of run.shopPurchases) {
+    if (purchase.startsWith('relic:')) {
+      const def = RELIC_DEFINITIONS[purchase.slice('relic:'.length) as RelicId]
+      if (def && RARE_PLUS_RARITIES.has(def.rarity)) keys.add('rare-relic')
+    }
+    // 해금팩 사용(팩 구매/픽) — 새 카드 첫 해금 경험.
+    if (purchase === 'pack:unlock-pack' || purchase === 'pick:unlock-pack') keys.add('card-unlock')
+  }
+  return [...keys]
+}
+
+/**
+ * '새로운 체계적 시도' 신호 — 과거 런들에서 한 번도 안 쓰던 카드를 이번 런에 유의미하게(2회+)
+ * 사용한 종 수. 한 번 실험만으로는 새 전략으로 치지 않는다(드라마 novelty 계열 입력).
+ */
+export function countNovelCardUses(entries: readonly EnaPlayLogEntry[]): number {
+  const last = entries[entries.length - 1]
+  if (!last) return 0
+  const seen = new Set<string>()
+  for (const entry of entries.slice(0, -1)) for (const id of Object.keys(entry.usedHandCards)) seen.add(id)
+  return Object.entries(last.usedHandCards).filter(([id, uses]) => !seen.has(id) && (uses ?? 0) >= 2).length
 }
 
 /** 마지막 런 로그를 구조화 기억 1건으로 요약한다. 로그가 없으면 null. */

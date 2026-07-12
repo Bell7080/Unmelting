@@ -271,64 +271,225 @@ function buildBaseDisposition(): EnaDisposition {
 }
 
 // ── 성장 곡선(초보 동반자 → 베테랑) ──────────────────────────────────────
-// 초기 에나는 '입만 있는 동반자'다: 대사 성향은 그대로 두고, 기계적 개입(클러치/예지 보급/
-// 각성/지원 판단 가중)만 클램프 하한 근처로 낮춘다. 로그라이트 커리큘럼상 초반 죽음(10층→20층…)
-// 을 에나가 구해버리면 안 되기 때문이다. 성장(growth 0→1)이 쌓이면 앵커가 BASE로 이동한다.
+// 초기 에나는 '입은 살아 있는 미숙한 동반자'다: 대사 성향은 그대로 두고, 기계적 개입만
+// BASE보다 확연히 낮춘다(전무가 아니라 '가끔' — 돌발성 재미는 남긴다). 로그라이트 커리큘럼상
+// 초반 죽음(10층→20층…)을 에나가 앞질러 구해버리면 안 되기 때문이다.
+// 성장(growth 0→1)은 '의미 있는 모험량'(누적 xp)+유대로만 차오르고, 앵커를 BASE로 옮긴다.
 
-/** 초보 에나 성향 — 개입 노브만 안전 경계 하한 근처, 대사 노브는 BASE와 동일. */
+/** 초보 에나 성향 — 개입 노브만 낮추고(가끔은 발동), 대사 노브는 BASE와 동일. */
 export const ROOKIE_DISPOSITION: EnaDisposition = buildRookieDisposition()
+
+/** 초보 개입 배율 — 소소한 클러치/각성을 BASE의 35~45% 수준(중간 0.4)으로 남긴다. */
+const ROOKIE_INTERVENTION_FACTOR = 0.4
+/** 초보 예지 보급 게이트 — 낮되 0은 아니게(드물게 미리 건네는 순간을 허용). */
+const ROOKIE_PREDICT_CHANCE = 0.12
 
 function buildRookieDisposition(): EnaDisposition {
   const d = cloneDisposition(BASE_DISPOSITION)
-  // 소소한 클러치 전종 — 거의 발동하지 않는 하한(PROB.lo)으로.
+  // 소소한 클러치 전종 — BASE의 40%. 초반 커리큘럼을 앞지르지 않는 선에서 '가끔' 터진다.
   for (const k of Object.keys(d.minorClutchChance) as MinorClutchKind[]) {
-    d.minorClutchChance[k] = PROB.lo
+    d.minorClutchChance[k] = d.minorClutchChance[k] * ROOKIE_INTERVENTION_FACTOR
   }
-  // 죽음 직전 구원(각성)도 초기에는 거의 없다.
-  d.awakenChance = 0.02
-  d.clutchAdversityBoost = 0.6
+  // 죽음 직전 구원(각성)도 같은 배율 — 드물지만 이야깃거리가 될 만큼은 남긴다.
+  d.awakenChance = d.awakenChance * ROOKIE_INTERVENTION_FACTOR
+  d.clutchAdversityBoost = 0.8
   d.bondClimaxChance = 0
-  // 예지 보급: 게이트 확률 하한 + 재발동 간격 상한 → 사실상 침묵.
-  d.predictBaseChance = PROB.lo
-  d.predictCooldown = 20
-  // 큰 의지 클러치: 충전이 느리고, 문턱이 좁고, 효과도 최소.
-  d.clutchHpThreshold = 0.2
-  d.clutchHealRatio = 0.15
-  d.clutchShieldRatio = 0.1
-  d.clutchStrength = 0.6
-  d.willGainPerDamage = 30
-  d.willGainFlatBonus = 0
-  // 지원 카드 판단 가중도 하한 — 개입 판단 자체가 소극적이다.
-  d.supportRoleWeights = { cleanup: 0.5, attack: 0.5, defense: 0.5, resource: 0.5, recovery: 0.5 }
+  // 예지 보급: 확률 낮음 + 재발동 간격 김 → 드물게만 미리 대비를 건넨다.
+  d.predictBaseChance = ROOKIE_PREDICT_CHANCE
+  d.predictCooldown = 18
+  // 큰 의지 클러치: 충전이 느리고 효과도 약하지만, 발동 자체는 가능하다.
+  d.clutchHpThreshold = 0.25
+  d.clutchHealRatio = 0.2
+  d.clutchShieldRatio = 0.15
+  d.clutchStrength = 0.7
+  d.willGainPerDamage = BASE_DISPOSITION.willGainPerDamage * 0.75
+  d.willGainFlatBonus = 1
+  // 지원 카드 판단 가중은 소극적이되 발동했을 때 무의미하지 않을 중간값.
+  d.supportRoleWeights = { cleanup: 0.7, attack: 0.7, defense: 0.7, resource: 0.7, recovery: 0.7 }
   return clampDisposition(d)
 }
 
-/** 성장 입력 — 누적 런 수(EnaAutonomousLearner 저장)와 유대(CompanionSystem). */
+/** 성장 입력 — 누적 모험 xp(EnaAutonomousLearner 저장)와 유대(CompanionSystem). */
 export interface EnaGrowthInput {
-  runCount: number
+  adventureXp: number
   bond: number
 }
 
-/** 성장 곡선 튜닝 상수 — computeEnaGrowth 하나만 바꾸면 성장 속도가 통째로 조정된다. */
+/** 성장 곡선 튜닝 상수 — 이 블록과 아래 xp/드라마 테이블만 바꾸면 성장 속도가 통째로 조정된다. */
 export const ENA_GROWTH_TUNING = {
-  /** 런 성분의 완만한 포화 스케일(1-exp(-runCount/scale)). 6이면 ~15런에서 0.92. */
-  runScale: 6,
-  /** 런 성분 비중. */
-  runWeight: 0.75,
-  /** 유대 성분 비중(runWeight + bondWeight = 1). */
+  /** xp 성분의 완만한 포화 스케일(1-exp(-xp/scale)). 500이면 얕은 런(10층≈14xp)당 약 +2%p. */
+  xpScale: 500,
+  /** xp 성분 비중. */
+  xpWeight: 0.75,
+  /** 유대 성분 비중(xpWeight + bondWeight = 1). */
   bondWeight: 0.25,
 } as const
 
 /**
+ * 런 1회의 모험 xp 튜닝 — 4축(런 완료/층 등반/유의미한 플레이/플레이 시간) 가중과 축별 상한,
+ * 첫 경험 가산, 희귀 점프 상한·조건을 전부 상수로 명시한다.
+ * 축별 상한(cap) 때문에 어느 한 축만 파서는(예: 얕은 층에서 행동만 반복) 수렴에 못 간다.
+ */
+export const ENA_RUN_XP_TUNING = {
+  /** 축1 — 런 완료 자체의 소량 기본치(자살런도 아주 조금은 인정). */
+  perRunBase: 2,
+  /** 축2 — 층 등반(주 축): 층당 xp + 깊이 구간 가점 + 클리어 가점, 축 상한. */
+  perFloor: 1,
+  depthBonuses: [
+    { floor: 30, xp: 5 },
+    { floor: 60, xp: 10 },
+    { floor: 90, xp: 15 },
+  ],
+  clearBonus: 15,
+  floorAxisCap: 90,
+  /** 축3 — 유의미한 플레이: 실제 의사결정(손패 사용/구매/이벤트 선택/대사 열람) 1건당 xp, 축 상한. */
+  perDecision: 0.2,
+  decisionAxisCap: 8,
+  /** 축4 — 순수 플레이 시간: 진행 턴 수 기반 근사(방치는 턴이 안 오르므로 부풀릴 수 없다), 축 상한. */
+  perProgressTurn: 0.1,
+  playtimeAxisCap: 8,
+  /** 일반 런 총상한 — 초반 기준 최대 약 +6%p. 매판 성장은 소폭·잔여분 비례 감쇠를 유지한다. */
+  normalRunXpCap: 40,
+  /** 첫 경험 가산 — 키의 카테고리(콜론 앞)별 1회성 소량 xp. 일상 반복 획득은 축3에 이미
+   *  포함되므로 여기서는 '처음 겪는' 발견만 계상한다(이중 계상 금지, 첫 경험 필터는 학습기 저장). */
+  firstExperienceXp: {
+    'boss-kill': 5, // 보스 첫 격파 — 점프는 자동이 아니라 아래 드라마 게이트로만 열린다.
+    'rare-relic': 5, // 희귀(rare) 등급 이상 유물 첫 획득.
+    altar: 4, // 첫 제단 방문(30턴 도달).
+    starlight: 4, // 첫 별빛(90층 이후 등반 진입).
+    'card-unlock': 3, // 새 카드 첫 해금(해금팩 첫 사용).
+  } as Record<string, number>,
+  firstExperienceRunCap: 15,
+  /** 희귀 점프 — 자격(기록 대폭 경신/보스 층 도달) + 드라마 점수 문턱을 함께 넘어야 1회 가산. */
+  jumpBonusXp: 40,
+  /** 점프 포함 런 xp 총상한 — 초반 기준 최대 약 +9.5%p(5~10%p급 점프의 상한). */
+  jumpRunXpCap: 65,
+  /** '대폭 경신' 판정 — 종전 최고 기록보다 이만큼(층) 이상 더 가야 자격 인정(첫 런은 제외). */
+  recordBreakMargin: 10,
+  /** 보스 층 — 이 층 이상 도달한 런은 보스전을 치렀으므로 점프 자격 후보. */
+  bossFloors: [30, 60, 90, 100],
+} as const
+
+// ── 모험의 질(드라마) 점수 — 점프 게이트 ─────────────────────────────────
+// '놀랍고 재밌는 모험이었나'를 관측 가능한 신호 4계열로 산출한다. 첫 보스라도 싱겁게(무피해
+// 속전) 이기면 점프가 없고, 이전에 본 보스라도 유의미한 고전 끝의 격파면 점프가 열린다.
+
+/** 런 1회의 드라마 신호 — 전부 관측 로그/기존 추적치에서 나오는 값이다. */
+export interface EnaRunDramaSignals {
+  /** 계열1 위기감: 저체력(≤30%) 구간 체류 횟수 / 즉사 후보 위협 대면 / 불씨 고갈(≤1) 위기. */
+  lowHpMoments?: number
+  lethalThreatsFaced?: number
+  emberCrises?: number
+  /** 계열2 에나 도움의 실효: 죽음·큰 피해를 실제 막은 클러치 수 / 건넨 지원 손패가
+   *  즉시·위기 타이밍에 실제 사용된 수(recordPredictionOutcome ≥ 1 신호 재사용). */
+  effectiveClutches?: number
+  timelyPredictions?: number
+  /** 계열3 고전: 같은 위협에 소모한 추가 턴 / 피해 누적 후 회복 반복 / 최저 체력비→회복 폭(0~1). */
+  grindTurns?: number
+  recoveries?: number
+  comebackDepth?: number
+  /** 계열4 새로운 체계적 시도: 과거 런에서 안 쓰던 카드·레시피를 이번 런에 유의미하게(2회+) 사용. */
+  novelCardsUsed?: number
+}
+
+/** 드라마 점수 가중/캡 — 계열별 상한으로 한 계열 과대 계상을 막고, 문턱을 명시한다. */
+export const ENA_RUN_DRAMA_TUNING = {
+  peril: { perLowHpMoment: 1.5, perLethalThreat: 2, perEmberCrisis: 1.5, cap: 8 },
+  aid: { perEffectiveClutch: 3, perTimelyPrediction: 2, cap: 8 },
+  struggle: { perGrindTurn: 0.5, perRecovery: 1, comebackScale: 6, cap: 8 },
+  novelty: { perNovelCard: 2, cap: 6 },
+  /** 이 점수 이상이어야 점프 허용 — 최소 두 계열 이상이 실제로 기여해야 닿는 높이. */
+  jumpThreshold: 12,
+} as const
+
+/** 드라마 점수(0~30) — 계열별 캡 후 합산. */
+export function computeRunDramaScore(s: EnaRunDramaSignals): number {
+  const T = ENA_RUN_DRAMA_TUNING
+  const n = (v: number | undefined) => Math.max(0, v ?? 0)
+  const peril = Math.min(
+    T.peril.cap,
+    n(s.lowHpMoments) * T.peril.perLowHpMoment +
+      n(s.lethalThreatsFaced) * T.peril.perLethalThreat +
+      n(s.emberCrises) * T.peril.perEmberCrisis
+  )
+  const aid = Math.min(
+    T.aid.cap,
+    n(s.effectiveClutches) * T.aid.perEffectiveClutch + n(s.timelyPredictions) * T.aid.perTimelyPrediction
+  )
+  const struggle = Math.min(
+    T.struggle.cap,
+    n(s.grindTurns) * T.struggle.perGrindTurn +
+      n(s.recoveries) * T.struggle.perRecovery +
+      Math.min(1, n(s.comebackDepth)) * T.struggle.comebackScale
+  )
+  const novelty = Math.min(T.novelty.cap, n(s.novelCardsUsed) * T.novelty.perNovelCard)
+  return peril + aid + struggle + novelty
+}
+
+/** 런 1회의 모험 xp 입력. */
+export interface EnaRunXpInput {
+  floorReached: number
+  cleared?: boolean
+  /** 유의미한 의사결정 수(손패 사용/상점·제단 구매/이벤트 선택/대사 열람 등). */
+  decisions?: number
+  /** 진행 턴 수 — 순수 플레이 시간의 방치 방지 근사. */
+  progressTurns?: number
+  /** 이전까지의 최고 도달 층 — 기록 경신 자격 판정용. */
+  previousBestFloor?: number
+  /** 이번 런에서 처음 겪은 경험 키('boss-kill:30', 'rare-relic' 등 — 첫 경험 필터는 학습기 책임). */
+  firstExperiences?: readonly string[]
+  /** 모험의 질 신호 — 점프 게이트 입력. */
+  drama?: EnaRunDramaSignals
+}
+
+/**
+ * 이번 런이 희귀 성장 점프 대상인가 — 자격(기록 대폭 경신 또는 보스 층 도달)이 있어도
+ * 드라마 점수가 문턱을 넘어야만 열린다. 첫 격파 자동 점프는 없다.
+ */
+export function isGrowthJumpRun(run: EnaRunXpInput): boolean {
+  if (computeRunDramaScore(run.drama ?? {}) < ENA_RUN_DRAMA_TUNING.jumpThreshold) return false
+  const prev = run.previousBestFloor ?? 0
+  const recordBreak = prev > 0 && run.floorReached >= prev + ENA_RUN_XP_TUNING.recordBreakMargin
+  const bossFought = ENA_RUN_XP_TUNING.bossFloors.some((boss) => run.floorReached >= boss)
+  return recordBreak || bossFought
+}
+
+/**
+ * 런 1회의 '의미 있는 모험량' xp — 4축 합산(각 축 상한) 후 일반 런 총상한으로 자르고,
+ * 첫 경험 소량 가산을 얹은 뒤, 드라마 게이트를 통과한 점프 런만 jumpBonusXp를 더한다.
+ */
+export function computeRunAdventureXp(run: EnaRunXpInput): number {
+  const T = ENA_RUN_XP_TUNING
+  const floor = Math.max(0, run.floorReached)
+  // 축2: 층 등반(주 축).
+  let floorXp = floor * T.perFloor
+  for (const bonus of T.depthBonuses) if (floor >= bonus.floor) floorXp += bonus.xp
+  if (run.cleared) floorXp += T.clearBonus
+  floorXp = Math.min(T.floorAxisCap, floorXp)
+  // 축3·축4: 유의미한 플레이 / 진행 턴 기반 플레이 시간.
+  const decisionXp = Math.min(T.decisionAxisCap, Math.max(0, run.decisions ?? 0) * T.perDecision)
+  const timeXp = Math.min(T.playtimeAxisCap, Math.max(0, run.progressTurns ?? 0) * T.perProgressTurn)
+  let xp = Math.min(T.normalRunXpCap, T.perRunBase + floorXp + decisionXp + timeXp)
+  // 첫 경험 가산 — 카테고리별 1회성 소량(키 필터는 학습기 저장 집합이 담당).
+  let firstXp = 0
+  for (const key of run.firstExperiences ?? []) firstXp += T.firstExperienceXp[key.split(':')[0]] ?? 0
+  xp += Math.min(T.firstExperienceRunCap, firstXp)
+  // 희귀 점프 — 자격 + 드라마 문턱을 함께 넘은 런만.
+  if (isGrowthJumpRun(run)) xp = Math.min(T.jumpRunXpCap, xp + T.jumpBonusXp)
+  return xp
+}
+
+/**
  * 에나 성장值(0~1) 계산 — 초보(0)→베테랑(1) 앵커 보간의 유일한 입력.
- * 완만한 1-exp 곡선으로 런 ~15회 + bond 고점에서 0.9 근방에 도달한다.
+ * 런 횟수가 아니라 누적 모험 xp를 쓰므로 얕은 자살런 반복으로는 차지 않고,
+ * 1-exp 곡선이라 매판 상승분은 잔여분에 비례해 자연 감쇠한다.
  * 주의: 추후 메타 상점 해금형으로 바꿀 때도 이 함수 하나만 교체하면 되도록
  * 성장 판정을 전부 여기에 모은다(호출부는 growth 숫자만 소비).
  */
-export function computeEnaGrowth({ runCount, bond }: EnaGrowthInput): number {
-  const runPart = 1 - Math.exp(-Math.max(0, runCount) / ENA_GROWTH_TUNING.runScale)
+export function computeEnaGrowth({ adventureXp, bond }: EnaGrowthInput): number {
+  const xpPart = 1 - Math.exp(-Math.max(0, adventureXp) / ENA_GROWTH_TUNING.xpScale)
   const bondPart = Math.max(0, Math.min(1, bond))
-  const g = ENA_GROWTH_TUNING.runWeight * runPart + ENA_GROWTH_TUNING.bondWeight * bondPart
+  const g = ENA_GROWTH_TUNING.xpWeight * xpPart + ENA_GROWTH_TUNING.bondWeight * bondPart
   return Math.max(0, Math.min(1, g))
 }
 
