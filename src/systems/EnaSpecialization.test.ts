@@ -160,7 +160,7 @@ describe('축 특화 초과 성장 — 평형 상승과 표시 추종', () => {
     const liftedAnchor = specializedAnchorDisposition(growthAnchorDisposition(1), { grit: 1 })
     expect(d.awakenChance).toBeGreaterThan(BASE_DISPOSITION.awakenChance * 4)
     expect(d.awakenChance).toBeCloseTo(liftedAnchor.awakenChance, 3)
-    expect(gritDisplay(d)).toBeGreaterThan(0.2) // 표시도 기존 평형(~19.7%)을 넘는다
+    expect(gritDisplay(d)).toBeGreaterThan(0.35) // 표시도 기존 평형(≈30%)을 넘는다
     // 특화 0 대조군: 같은 반복에도 기존 평형(BASE 앵커) 그대로.
     const c0 = new CompanionSystem(cloneDisposition(BASE_DISPOSITION), 1)
     for (let i = 0; i < 200; i++) c0.adaptToOutcome({ died: false, floorReached: 30 })
@@ -190,17 +190,25 @@ describe('축 특화 초과 성장 — 평형 상승과 표시 추종', () => {
     expect(loadDisposition(undefined, 1).awakenChance).toBeCloseTo(0.4, 10)
   })
 
-  it('불굴 표시가 기존 평형(~20%)을 넘어 spec에 단조로 자라고, spec=1 앵커는 ~90%에 닿는다', () => {
+  it('불굴 표시가 베테랑 평형(≈30%)을 넘어 spec에 단조로 자라고, 90%대는 특화 확장 값에서만 나온다', () => {
     const base = growthAnchorDisposition(1)
     const before = gritDisplay(base)
-    expect(before).toBeLessThan(0.2) // 기존 베테랑 평형 표시(~19.7%)
+    expect(before).toBeLessThan(0.35) // 기존 베테랑 평형 표시(≈30%)
     const at = (grit: number) => gritDisplay(specializedAnchorDisposition(base, { grit }))
     expect(at(0.25)).toBeGreaterThan(before)
     expect(at(0.5)).toBeGreaterThan(at(0.25))
     expect(at(1)).toBeGreaterThan(at(0.5))
-    // spec=1 이론 앵커: awaken 0.3255/adversity 2.33/bondClimax 0.227 → raw 0.867 × 1.05 ≈ 91%.
-    expect(at(1)).toBeGreaterThanOrEqual(0.9)
+    // spec=1 이론 앵커(awaken 0.3255/adversity 2.33/bondClimax 0.227) → 평형 표시 ≈ 64%.
+    // 특화 실효 상한 정규화라 무특화 옛 상한 포화(≈69%)와 같은 자연 상단 대역에 머문다.
+    expect(at(1)).toBeGreaterThan(0.6)
     expect(at(1)).toBeLessThanOrEqual(1) // clamp01 — 표시 100% 상한은 유지
+    // 90%대 표시는 특화 확장 상한까지 실제로 자란 동작값에서만 도달한다.
+    const maxed = cloneDisposition(base)
+    maxed.awakenChance = 0.8
+    maxed.clutchAdversityBoost = 4.8
+    maxed.bondClimaxChance = 0.5
+    expect(gritDisplay(clampDisposition(maxed, { grit: 1 }))).toBeGreaterThanOrEqual(0.9)
+    expect(gritDisplay(clampDisposition(maxed))).toBeLessThan(0.7) // 무특화는 자연 상단 유지
   })
 
   it('CompanionSystem이 런 내 온정/피해 견딤 신호를 세고 resetForRun으로 비운다', () => {

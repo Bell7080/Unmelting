@@ -3,6 +3,7 @@ import { EXPERIENCE_AXIS_DISPLAY_BOOST, experienceAxes } from '@ui/ExperienceAxe
 import {
   BASE_DISPOSITION,
   ROOKIE_DISPOSITION,
+  clampDisposition,
   cloneDisposition,
   growthAnchorDisposition,
 } from '@systems/EnaDisposition'
@@ -49,7 +50,7 @@ describe('ExperienceAxes', () => {
   it('성장 완료(BASE, growth 1) 개입 축은 원시값×end 배율로 상한 대역에 안착한다', () => {
     const disp = cloneDisposition(BASE_DISPOSITION)
     const predict = axisValue(disp, '예지', 1)
-    // BASE 예지 원시값(~0.49) × end(1.05) ≈ 51% — 기존 표기 상한 감각(~45~55%) 대역.
+    // BASE 예지 √압축 원시값(√0.24 ≈ 0.49) × end(1.0) ≈ 49% — 기존 표기 상한 감각(~45~55%) 대역.
     expect(predict).toBeGreaterThanOrEqual(0.45)
     expect(predict).toBeLessThanOrEqual(0.55)
     // 성장 완료에도 축별 고유 비율은 유지된다(예지가 가장 길다).
@@ -87,6 +88,40 @@ describe('ExperienceAxes', () => {
     for (const key of ['수호', '온정', '불굴'] as const) {
       expect(axisValue(disp, key, 0), key).toBeCloseTo(axisValue(untouched, key, 0), 10)
     }
+  })
+
+  it('옛 클램프 상한에 포화된 저장본(특화 없음)은 어느 성장 단계에서도 100%가 아니라 자연 상단에 머문다', () => {
+    // 이전 밸런스 시절 사망 반복 적응으로 노브가 안전 상한에 눌러붙은 저장본 재현 —
+    // 정규화 분모가 특화 실효 상한(기존 hi×2)이라 무특화 값은 원시 ~0.4-0.5에서 멈춘다.
+    const d = cloneDisposition(BASE_DISPOSITION)
+    d.predictBaseChance = 0.95
+    d.clutchStrength = 1.6
+    d.willGainPerDamage = 100
+    d.clutchHpThreshold = 0.6
+    d.awakenChance = 0.4
+    d.clutchAdversityBoost = 2.4
+    d.bondClimaxChance = 0.25
+    const saturated = clampDisposition(d) // 특화 없는 로드 경로(dispositionFromJSON)와 같은 클램프
+    for (const growth of [0, 0.5, 1]) {
+      for (const key of INTERVENTION_AXES) {
+        expect(axisValue(saturated, key, growth), `${key} @${growth}`).toBeLessThanOrEqual(0.71)
+      }
+    }
+    // 버그 재현 축: 수호가 100%로 붙지 않고 자연 상단(≈63%)에 머문다.
+    expect(axisValue(saturated, '수호', 1)).toBeGreaterThan(0.55)
+    expect(axisValue(saturated, '수호', 1)).toBeLessThan(0.7)
+  })
+
+  it('특화 확장 상한까지 실제로 자란 축만 90%대 표시에 도달한다', () => {
+    const d = cloneDisposition(BASE_DISPOSITION)
+    d.awakenChance = 0.8 // 기존 상한 0.4의 grit 특화 확장 상한(×2)
+    d.clutchAdversityBoost = 4.8
+    d.bondClimaxChance = 0.5
+    const gritMax = clampDisposition(d, { grit: 1 })
+    expect(axisValue(gritMax, '불굴', 1)).toBeGreaterThanOrEqual(0.9)
+    // 같은 값이라도 특화가 없으면 기존 안전 상한으로 잘려 자연 상단에 머문다.
+    const clipped = clampDisposition(d)
+    expect(axisValue(clipped, '불굴', 1)).toBeLessThan(0.7)
   })
 
   it('수다 축은 신규(growth 0)에 낮게 시작해 성장하면 원시 표기를 회복한다', () => {

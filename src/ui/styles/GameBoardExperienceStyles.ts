@@ -163,6 +163,9 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   gap: 1px;
   pointer-events: none;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+  /* 우측 림 라벨(left ~97%)은 shrink-to-fit 가용 폭이 몇 px뿐이라 CJK가 한 글자씩
+     세로로 꺾인다 — 라벨은 항상 한 줄 고정. */
+  white-space: nowrap;
 }
 .exp-axis-name {
   font-size: 13px;

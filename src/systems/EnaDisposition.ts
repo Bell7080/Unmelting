@@ -638,7 +638,8 @@ export function revertDispositionTowardBase(
 // ── 축 특화 초과 성장(앵커 상향 + 런 신호 적립) ──────────────────────────
 
 /** 특화 1일 때 앵커가 확장 상한 방향으로 끌려가는 비율 — 평형점(평균회귀 목적지)을 실제로 올린다.
- *  0.35 기준 grit 특화 1의 앵커는 경험 탭 '불굴' 표시 ~91%에 대응한다(장기 목표 90% 도달 가능). */
+ *  0.35 기준 grit 특화 1의 앵커는 경험 탭 '불굴' 표시 ≈64%(특화 실효 상한 √정규화 기준)에
+ *  대응하고, 90%대 표시는 확장 상한 근처까지 실제로 자란 동작값에서만 나온다. */
 export const SPECIALIZATION_ANCHOR_LIFT = 0.35
 
 /**
@@ -749,7 +750,8 @@ export function accumulateSpecialization(
 // 플레이어별로 적응된 성향을 세션 넘어 유지한다. 브라우저 외 환경(테스트/SSR)에서는
 // localStorage가 없을 수 있어 안전하게 무시한다. (import 주위가 아니라 저장 접근만 보호)
 
-const STORAGE_KEY = 'ena-disposition-v1'
+/** per-player 성향 저장 키 — `/리셋`(에나 경험 초기화) 등 외부 정리 경로가 import해 쓴다. */
+export const ENA_DISPOSITION_STORAGE_KEY = 'ena-disposition-v1'
 // EnaPolicyStore처럼 payload 자체에 스키마 버전을 남겨, 키 이름만으로는 못 잡는
 // 구조 변경(필드 의미 변화 등)을 로드 시점에 거를 수 있게 한다.
 const DISPOSITION_SCHEMA_VERSION = 1
@@ -761,7 +763,7 @@ const DISPOSITION_SCHEMA_VERSION = 1
  * 급격한 하향 없이 유지하고, 성장은 평균회귀 앵커 이동으로만 반영한다.
  */
 export function loadDisposition(
-  key: string = STORAGE_KEY,
+  key: string = ENA_DISPOSITION_STORAGE_KEY,
   fallbackGrowth = 0,
   specialization?: Partial<EnaSpecialization>
 ): EnaDisposition {
@@ -787,7 +789,7 @@ export function loadDisposition(
  *  specialization을 주면 특화 확장 상한을 넘지 않는 초과값이 저장 시점에 잘리지 않는다. */
 export function saveDisposition(
   d: EnaDisposition,
-  key: string = STORAGE_KEY,
+  key: string = ENA_DISPOSITION_STORAGE_KEY,
   specialization?: Partial<EnaSpecialization>
 ): void {
   if (typeof localStorage === 'undefined') return

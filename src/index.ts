@@ -70,6 +70,7 @@ import {
   saveDisposition,
   computeEnaGrowth,
   BASE_DISPOSITION,
+  ENA_DISPOSITION_STORAGE_KEY,
   type EnaRunDramaSignals,
 } from '@systems/EnaDisposition'
 import { assessThreats, type ForesightOptions } from '@systems/CompanionForesight'
@@ -84,7 +85,9 @@ import {
   createBrowserEnaAutonomousLearner,
   deriveRunExperienceKeys,
   countNovelCardUses,
+  ENA_SELF_LEARNING_STORAGE_KEY,
 } from '@/rl/EnaAutonomousLearner'
+import { ENA_POLICY_STORAGE_KEY } from '@/rl/EnaPolicyStore'
 import bgm001Url from './assets/audio/bgm_001.mp3'
 import bgm002Url from './assets/audio/bgm_002.mp3'
 import bgm003Url from './assets/audio/bgm_003.mp3'
@@ -3986,7 +3989,7 @@ function setupDevCommandPalette(): void {
       <span class="dev-command-prefix">/</span>
       <input class="dev-command-input" type="text" spellcheck="false" autocomplete="off" />
       <button class="dev-command-close" aria-label="닫기">✕</button>
-      <div class="dev-command-hint">예시: /시작, /부자, /상점, /제단, /시련, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비</div>
+      <div class="dev-command-hint">예시: /시작, /리셋, /부자, /상점, /제단, /시련, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비</div>
     </div>
     <button class="dev-command-run">실행</button>
   `
@@ -4058,7 +4061,7 @@ function setupDevCommandPalette(): void {
   const open = (): void => {
     opened = true
     host.classList.add('is-open')
-    setHint('예시: /시작, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비, /랜덤유물, /랜덤손패')
+    setHint('예시: /시작, /리셋, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비, /랜덤유물, /랜덤손패')
     input.value = ''
     window.setTimeout(() => input.focus(), 0)
   }
@@ -4253,6 +4256,17 @@ function setupDevCommandPalette(): void {
       enterHearth()
       return
     }
+    // 에나 경험 초기화: 성향/자기학습(유대·모험 xp·특화·기억)/정책망 저장을 전부 지운다.
+    // 부팅 시점에 로드된 성향·growth·특화를 신규(ROOKIE) 상태로 되돌리려면 재부팅이 필요해,
+    // 확인 문구를 잠깐 보여 준 뒤 새로 시작한다.
+    if (/^(리셋|reset)$/i.test(token)) {
+      for (const storageKey of [ENA_DISPOSITION_STORAGE_KEY, ENA_SELF_LEARNING_STORAGE_KEY, ENA_POLICY_STORAGE_KEY]) {
+        localStorage.removeItem(storageKey)
+      }
+      setHint('에나의 경험을 초기화했습니다. 새 동반자와 함께 다시 시작합니다…')
+      window.setTimeout(() => window.location.reload(), 700)
+      return
+    }
     // 디버그: 즉시 부유 — 불빛/화폐를 대량 지급한다.
     if (/^(부자|rich)$/i.test(token)) {
       score += 100_000_000
@@ -4285,7 +4299,7 @@ function setupDevCommandPalette(): void {
       render()
       return
     }
-    setHint('알 수 없는 명령어입니다. /시작, /부자, /상점, /제단, /시련, /25turn, /공격력7, /체력40, /1000불빛, /10$, /악마소환')
+    setHint('알 수 없는 명령어입니다. /시작, /리셋, /부자, /상점, /제단, /시련, /25turn, /공격력7, /체력40, /1000불빛, /10$, /악마소환')
   }
 
   // 닫기 버튼 (shell 우상단 ✕)
