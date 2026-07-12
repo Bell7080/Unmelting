@@ -276,13 +276,13 @@ function buildBaseDisposition(): EnaDisposition {
 // 초반 죽음(10층→20층…)을 에나가 앞질러 구해버리면 안 되기 때문이다.
 // 성장(growth 0→1)은 '의미 있는 모험량'(누적 xp)+유대로만 차오르고, 앵커를 BASE로 옮긴다.
 
-/** 초보 에나 성향 — 개입 노브만 낮추고(가끔은 발동), 대사 노브는 BASE와 동일. */
-export const ROOKIE_DISPOSITION: EnaDisposition = buildRookieDisposition()
-
 /** 초보 개입 배율 — 소소한 클러치/각성을 BASE의 35~45% 수준(중간 0.4)으로 남긴다. */
 const ROOKIE_INTERVENTION_FACTOR = 0.4
 /** 초보 예지 보급 게이트 — 낮되 0은 아니게(드물게 미리 건네는 순간을 허용). */
 const ROOKIE_PREDICT_CHANCE = 0.12
+
+/** 초보 에나 성향 — 개입 노브만 낮추고(가끔은 발동), 대사 노브는 BASE와 동일. */
+export const ROOKIE_DISPOSITION: EnaDisposition = buildRookieDisposition()
 
 function buildRookieDisposition(): EnaDisposition {
   const d = cloneDisposition(BASE_DISPOSITION)
