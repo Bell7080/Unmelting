@@ -337,11 +337,12 @@ function adaptCompanionToRunOutcome(won: boolean): void {
   saveDisposition(adapted)
 }
 
-// 경험(성향) 패널이 현재 에나 성향과 학습된 기본 토대를 읽어 성좌 시각화를 그릴 수 있게 연결한다.
+// 경험(성향) 패널이 현재 에나 성향/기본 토대/성장值(표기 배율용)를 읽어 성좌 시각화를 그릴 수 있게 연결한다.
 boardRenderer.setExperienceDataProvider(() => ({
   disp: companion.getDisposition(),
   base: BASE_DISPOSITION,
   learning: companion.getLearningSnapshot(),
+  growth: companion.getGrowth(),
 }))
 // 현재 player 말풍선이 에나 본인의 대사(바크)인지.
 let enaSpeaking = false

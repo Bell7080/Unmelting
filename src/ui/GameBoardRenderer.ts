@@ -4781,16 +4781,16 @@ export class GameBoardRenderer {
     this.attachCompendiumRecipeFloat(host)
   }
 
-  /** 경험 패널이 현재 성향/기본 토대를 읽어올 공급자. index.ts가 동료 시스템을 연결한다. */
-  private experienceDataProvider?: () => { disp: EnaDisposition; base: EnaDisposition; learning?: EnaLearningSnapshot }
+  /** 경험 패널이 현재 성향/기본 토대/성장值를 읽어올 공급자. index.ts가 동료 시스템을 연결한다. */
+  private experienceDataProvider?: () => { disp: EnaDisposition; base: EnaDisposition; learning?: EnaLearningSnapshot; growth?: number }
 
-  setExperienceDataProvider(fn: () => { disp: EnaDisposition; base: EnaDisposition; learning?: EnaLearningSnapshot }): void {
+  setExperienceDataProvider(fn: () => { disp: EnaDisposition; base: EnaDisposition; learning?: EnaLearningSnapshot; growth?: number }): void {
     this.experienceDataProvider = fn
   }
 
   /** 경험(성향) 패널을 연다 — 에나의 현재 성향을 불빛 성좌(레이더)로 시각화한다.
-   *  disp=현재 성향, base=학습된 기본 토대(드리프트 점선으로 표시). 읽기 전용 브라우저. */
-  openExperience(disp: EnaDisposition, base: EnaDisposition, learning?: EnaLearningSnapshot): void {
+   *  disp=현재 성향, base=학습된 기본 토대(드리프트 점선으로 표시), growth=표기 배율용 성장值. 읽기 전용 브라우저. */
+  openExperience(disp: EnaDisposition, base: EnaDisposition, learning?: EnaLearningSnapshot, growth?: number): void {
     let host = document.getElementById('experience-overlay') as HTMLElement | null
     if (!host) {
       host = document.createElement('div')
@@ -4805,7 +4805,7 @@ export class GameBoardRenderer {
         if (e.key === 'Escape' && host?.classList.contains('is-open')) this.closeExperience()
       })
     }
-    host.innerHTML = this.renderExperience(disp, base, learning)
+    host.innerHTML = this.renderExperience(disp, base, learning, growth)
     host.classList.add('is-open')
   }
 
@@ -4814,13 +4814,14 @@ export class GameBoardRenderer {
   }
 
   /** 성향 → 플레이어가 읽는 5개 '성좌 축'(0~1)으로 압축한다.
-   *  계산·개입 축 ROOKIE→BASE 진행도 리매핑은 순수 모듈 ExperienceAxes로 분리 — 동작값 불변 테스트 대상. */
-  private experienceAxes(disp: EnaDisposition, learning?: EnaLearningSnapshot): { key: string; value: number; desc: string }[] {
-    return experienceAxes(disp, learning)
+   *  계산·성장 단계 공통 표기 배율은 순수 모듈 ExperienceAxes로 분리 — 동작값 불변 테스트 대상. */
+  private experienceAxes(disp: EnaDisposition, learning?: EnaLearningSnapshot, growth?: number): { key: string; value: number; desc: string }[] {
+    return experienceAxes(disp, learning, growth)
   }
 
-  private renderExperience(disp: EnaDisposition, base: EnaDisposition, learning?: EnaLearningSnapshot): string {
-    const axes = this.experienceAxes(disp, learning)
+  private renderExperience(disp: EnaDisposition, base: EnaDisposition, learning?: EnaLearningSnapshot, growth?: number): string {
+    const axes = this.experienceAxes(disp, learning, growth)
+    // 기본 토대 점선은 성장 완료(growth 1) 표기 기준 — 초보 성좌가 다가갈 목표 모양으로 읽힌다.
     const baseAxes = this.experienceAxes(base)
     const n = axes.length
     const cx = 50
@@ -5884,7 +5885,7 @@ export class GameBoardRenderer {
       ?.addEventListener('click', (e) => {
         e.stopPropagation()
         const data = this.experienceDataProvider?.()
-        if (data) this.openExperience(data.disp, data.base, data.learning)
+        if (data) this.openExperience(data.disp, data.base, data.learning, data.growth)
       })
   }
 
