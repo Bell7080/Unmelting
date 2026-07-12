@@ -9,7 +9,15 @@ import type { HandCardId } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
 import { RELIC_DEFINITIONS, type RelicId } from '@data/Relics'
 import { resolveKoreanParticles } from '@systems/CompanionSystem'
-import { computeRunAdventureXp, type EnaRunDramaSignals } from '@systems/EnaDisposition'
+import {
+  accumulateSpecialization,
+  computeRunAdventureXp,
+  normalizeSpecialization,
+  type EnaRunDramaSignals,
+  type EnaRunSpecializationSignals,
+  type EnaSpecialization,
+  type EnaSpecializationAxis,
+} from '@systems/EnaDisposition'
 import type { EnaPlayLogMemory, EnaPlayLogEntry } from './EnaEffectProbe'
 import type { EnaRuntimeEvent } from './EnaRuntimeObserver'
 import { EnaPolicyStore, type EnaPolicyStorage } from './EnaPolicyStore'
@@ -58,6 +66,9 @@ export interface EnaAutonomousLearningState {
   bestFloor?: number
   /** 이미 겪은 '첫 경험' 키 집합 — 첫 경험 xp의 1회성 보장. */
   experienced?: string[]
+  /** 축 특화 점수(0~1, 단조) — 특정 축을 일관되게 먹인 플레이가 안전 상한을 넘겨 자라는 근거.
+   *  version 1 유지 — 누락(구버전) 시 전 축 0으로 병합. */
+  specialization?: Partial<Record<EnaSpecializationAxis, number>>
   /** 구체 회상용 구조화 기억(최근 12개). 누락 시 빈 배열로 병합. */
   memories?: EnaRunMemory[]
   /** 직전 회상 키 — 같은 기억/문형이 연속 반복되지 않게 한다. */
@@ -171,6 +182,25 @@ export class EnaAutonomousLearner {
     state.experienced = [...experienced]
     this.storage.setItem(ENA_SELF_LEARNING_STORAGE_KEY, JSON.stringify(state))
     return xp
+  }
+
+  /** 저장된 축 특화(0~1). 구버전 저장본/손상 값은 전 축 0으로 병합한다. */
+  loadSpecialization(): EnaSpecialization {
+    return normalizeSpecialization(this.loadState().specialization)
+  }
+
+  /**
+   * 런 1회의 행동 신호로 축 특화를 소량 적립·영속한다(단조, 축별 캡·총 캡·얕은 런 감쇠는
+   * ENA_SPECIALIZATION_TUNING). 반환: 적립 후 특화 — 호출부가 CompanionSystem에 즉시 주입한다.
+   */
+  accrueSpecialization(signals: EnaRunSpecializationSignals): EnaSpecialization {
+    const state = this.loadState()
+    const next = accumulateSpecialization(state.specialization, signals)
+    if (this.storage) {
+      state.specialization = next
+      this.storage.setItem(ENA_SELF_LEARNING_STORAGE_KEY, JSON.stringify(state))
+    }
+    return next
   }
 
   /** 저장된 누적 유대(0~1). 없거나 손상됐으면 0. */

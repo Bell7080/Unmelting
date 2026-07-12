@@ -57,7 +57,11 @@ import {
   clampDisposition,
   revertDispositionTowardBase,
   growthAnchorDisposition,
+  specializedAnchorDisposition,
+  normalizeSpecialization,
+  zeroSpecialization,
   type EnaDisposition,
+  type EnaSpecialization,
   type SupportRoleWeights,
 } from './EnaDisposition'
 
@@ -324,6 +328,19 @@ export class CompanionSystem {
     this.growth = Math.max(0, Math.min(1, growth))
   }
 
+  /** 축 특화(0~1, EnaAutonomousLearner 영속). 기본 0 = 기존 안전 상한/앵커 그대로. */
+  private specialization: EnaSpecialization = zeroSpecialization()
+
+  /** 축 특화 주입 — 런 종료 적립(accrueSpecialization) 결과를 호출부가 넣는다. */
+  setSpecialization(specialization: Partial<EnaSpecialization>): void {
+    this.specialization = normalizeSpecialization(specialization)
+  }
+
+  /** 현재 축 특화(경험 탭/디버그 조회용 읽기 스냅샷). */
+  getSpecialization(): EnaSpecialization {
+    return { ...this.specialization }
+  }
+
   /** 지원 판단 역할 가중 — 예지/클러치가 HandCardAdvisor 환산값에 곱해 읽는다(없으면 1.0 취급). */
   getSupportRoleWeights(): SupportRoleWeights | undefined {
     return this.disp.supportRoleWeights
@@ -388,6 +405,10 @@ export class CompanionSystem {
   private runClutchCount = 0
   /** 런 내 '건넨 대비가 제때 쓰였다'(helpScore ≥ 1) 수 — 드라마 '에나 도움의 실효' 신호. */
   private runTimelyPredictionCount = 0
+  /** 런 내 온정 신호(소소한 클러치 발동 + 보물 상호작용) 수 — 온정 축 특화 적립 재료. */
+  private runWarmthSignalCount = 0
+  /** 런 누적 (받은 피해/최대체력) 합 — '피해를 견디며 등반' 불굴 축 특화 적립 재료. */
+  private runDamageTakenRatio = 0
   /**
    * 예측 대비 학습 가중치(0.2~1.8). 건넨 대비 카드를 플레이어가 곧 쓰면(유용) 오르고,
    * 기한 내 안 쓰면(불필요) 내려간다. = 가짜 RL: "이 대비가 도움이 됐나"를 누적.
@@ -486,6 +507,7 @@ export class CompanionSystem {
   /** 최근 사건을 링버퍼에 남긴다(최대 8건). 상황 바크와 클러치가 자동으로 부르고, 호출부가 직접 남겨도 된다. */
   recordRecentEvent(kind: RecentCompanionEvent['kind'], turn: number, enemyName?: string): void {
     if (kind === 'clutch') this.runClutchCount += 1 // 드라마 '에나 도움의 실효' 신호 재료.
+    if (kind === 'treasure') this.runWarmthSignalCount += 1 // 온정 축 특화 신호 재료.
     this.recentEvents.push({ kind, enemyName, turn })
     if (this.recentEvents.length > RECENT_EVENT_MAX) this.recentEvents.shift()
   }
@@ -546,6 +568,16 @@ export class CompanionSystem {
     return this.runTimelyPredictionCount
   }
 
+  /** 런 내 온정 신호(소소한 클러치/보물) 수 — 런 종료 시 온정 축 특화 적립 입력. */
+  getRunWarmthSignalCount(): number {
+    return this.runWarmthSignalCount
+  }
+
+  /** 런 누적 (받은 피해/최대체력) 합 — 런 종료 시 불굴 축 특화 적립 입력. */
+  getRunDamageTakenRatio(): number {
+    return this.runDamageTakenRatio
+  }
+
   /** 스킵이 누적됐을 때 가끔 '조용히 할게'류로 과묵해짐을 알린다(드물게). */
   maybeQuietRemark(): string | null {
     if (this.skipCount === 3 || (this.skipCount > 3 && this.skipCount % 6 === 0)) {
@@ -596,6 +628,7 @@ export class CompanionSystem {
   /** 피해를 입은 만큼 '의지'를 쌓는다(역경에 비례). 클러치 예산의 충전 + 기분 하락(피해 비례 소량). */
   gainWill(damage: number, maxHp: number): void {
     if (damage <= 0 || maxHp <= 0) return
+    this.runDamageTakenRatio += damage / maxHp // 불굴 축 특화 신호(견딘 피해량) 재료.
     this.will = Math.min(WILL_MAX, this.will + Math.round((damage / maxHp) * this.disp.willGainPerDamage) + this.disp.willGainFlatBonus)
     this.noteMoodShift(-Math.min(0.25, (damage / maxHp) * 0.5))
   }
@@ -659,6 +692,7 @@ export class CompanionSystem {
     const fired = chance >= 1 || Math.random() < Math.min(cap, chance)
     if (fired) {
       this.gainBond(0.003) // 소소한 개입도 함께한 기억으로 유대에 남는다.
+      this.runWarmthSignalCount += 1 // 온정 축 특화 신호 재료.
       // 콜백 대사('아까 도와준 보람') 재료 — 턴은 mood 정산이 추적한 현재 턴을 쓴다.
       this.recordRecentEvent('clutch', this.lastMoodTurn)
     }
@@ -821,7 +855,9 @@ export class CompanionSystem {
     // 0) 평균회귀: 사망 상향이 생존 완화보다 잦아 상·하한에 눌러붙는 장기 편향을 막기 위해
     //    매 런 5%씩 성장 앵커(ROOKIE→BASE 보간) 방향으로 되돌린 뒤 이번 런의 신호를 얹는다.
     //    성장이 쌓일수록 앵커가 BASE로 이동해 개입 성향이 자연히 상향 회귀한다.
-    const d = revertDispositionTowardBase(this.disp, 0.05, growthAnchorDisposition(this.growth))
+    //    축 특화가 쌓인 축은 앵커가 확장 상한 쪽으로 소폭 상향돼 평형점 자체가 올라간다(특화 0=기존 동일).
+    const anchor = specializedAnchorDisposition(growthAnchorDisposition(this.growth), this.specialization)
+    const d = revertDispositionTowardBase(this.disp, 0.05, anchor)
     // 1) 수다 성향 영속화: 이번 런 동안 학습된 chattiness(스킵=싫음/열람=좋음)를 기본 발화확률·턴 간격에 반영.
     const chatDelta = (this.chattiness() - 1) * 0.04
     for (const id of Object.keys(d.situationChance) as SituationId[]) d.situationChance[id] *= 1 + chatDelta
@@ -840,7 +876,7 @@ export class CompanionSystem {
       d.clutchStrength *= 0.99
       for (const k of Object.keys(d.minorClutchChance) as MinorClutchKind[]) d.minorClutchChance[k] *= 0.99
     }
-    this.disp = clampDisposition(d)
+    this.disp = clampDisposition(d, this.specialization)
     // 빠른 런-내 학습은 느린 성향으로 소화됐으니 1로 초기화해 다음 런에서 이중 반영을 막는다.
     for (const id of Object.keys(this.situationWeight) as SituationId[]) this.situationWeight[id] = 1
     this.predictiveWeight = 1
@@ -859,10 +895,12 @@ export class CompanionSystem {
     this.touchStreak = 0
     this.mood = 0
     this.lastMoodTurn = 0
-    // 런 단위 성장/드라마 신호 카운트도 새 런에서 비운다.
+    // 런 단위 성장/드라마/특화 신호 카운트도 새 런에서 비운다.
     this.runInteractionCount = 0
     this.runClutchCount = 0
     this.runTimelyPredictionCount = 0
+    this.runWarmthSignalCount = 0
+    this.runDamageTakenRatio = 0
     // 지난 런의 사건을 되짚는 콜백이 새 런에서 새지 않게 링버퍼를 비운다.
     this.recentEvents.length = 0
   }

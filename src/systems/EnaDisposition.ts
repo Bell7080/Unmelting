@@ -132,6 +132,82 @@ const RATE_UP: Bound = { lo: 1.02, hi: 1.5 }
 /** 지원 역할 가중 안전 경계 — 피터(EnaDispositionFitter)도 같은 범위에서 탐색한다. */
 export const SUPPORT_ROLE_WEIGHT_BOUND = { lo: 0.5, hi: 2 } as const
 
+// ── 축 특화(플레이 스타일이 먹인 축만 안전 상한을 넘어 자라는 초과 성장) ────────
+// 구매/해금 없이, 플레이어의 실제 플레이가 특정 개입 축(예지/수호/온정/불굴)을 일관되게
+// 먹이면 그 축의 안전 상한(hi)만 아주 찔끔씩 확장된다. 특화 0이면 기존 동작과 완전히 같다.
+
+/** 개입 축 4종 — ExperienceAxes의 예지/수호/온정/불굴 축과 1:1 대응한다. */
+export type EnaSpecializationAxis = 'predict' | 'protection' | 'minor' | 'grit'
+
+/** 축별 특화 점수(0~1). 단조 증가만 하며 EnaAutonomousLearner 저장(version 1)에 영속된다. */
+export type EnaSpecialization = Record<EnaSpecializationAxis, number>
+
+const SPECIALIZATION_AXES: readonly EnaSpecializationAxis[] = ['predict', 'protection', 'minor', 'grit']
+
+/** 특화 0 인스턴스 — 신규/무저장 플레이어의 시작점(기존 동작 보존). */
+export function zeroSpecialization(): EnaSpecialization {
+  return { predict: 0, protection: 0, minor: 0, grit: 0 }
+}
+
+/** 부분/손상 저장본을 0~1 특화로 안전 병합한다(비정상 값은 0 취급). */
+export function normalizeSpecialization(raw?: Partial<EnaSpecialization> | null): EnaSpecialization {
+  const out = zeroSpecialization()
+  if (!raw || typeof raw !== 'object') return out
+  for (const axis of SPECIALIZATION_AXES) {
+    const v = raw[axis]
+    if (typeof v === 'number' && Number.isFinite(v)) out[axis] = Math.max(0, Math.min(1, v))
+  }
+  return out
+}
+
+/** 특화 1(만렙)일 때 상한 확장 배율 — hi × (1 + spec × MAX_EXTENSION), 1.0이면 최대 2배. */
+export const SPECIALIZATION_MAX_EXTENSION = 1.0
+
+/** 특화 축의 안전 경계 상한만 확장한다(하한은 그대로 — 하락 방향 안전은 유지). */
+function extendHi(b: Bound, spec: number): Bound {
+  const s = Math.max(0, Math.min(1, spec))
+  if (s <= 0) return b
+  return { lo: b.lo, hi: b.hi * (1 + s * SPECIALIZATION_MAX_EXTENSION) }
+}
+
+// 특화 대상 노브의 안전 경계 — clampDisposition과 앵커 상향(specializedAnchorDisposition)이 공유한다.
+const AWAKEN_BOUND: Bound = { lo: 0.02, hi: 0.4 }
+const ADVERSITY_BOOST_BOUND: Bound = { lo: 0.6, hi: 2.4 }
+const BOND_CLIMAX_BOUND: Bound = { lo: 0, hi: 0.25 }
+const CLUTCH_HP_THRESHOLD_BOUND: Bound = { lo: 0.2, hi: 0.6 }
+const CLUTCH_STRENGTH_BOUND: Bound = { lo: 0.6, hi: 1.6 }
+const WILL_GAIN_BOUND: Bound = { lo: 30, hi: 100 }
+
+/** 특화 축이 확장하는 스칼라 노브 — ExperienceAxes의 원시 축 계산과 같은 노브 묶음이다.
+ *  (온정 축의 minorClutchChance는 중첩 맵이라 별도 처리; 확률 노브가 1을 넘으면 '사실상 항상'이며
+ *  rollMinorClutch의 런타임 발동 캡(0.22/0.45)이 별도 안전선으로 남는다.) */
+type SpecializedScalarKnob =
+  | 'predictBaseChance'
+  | 'clutchStrength'
+  | 'willGainPerDamage'
+  | 'clutchHpThreshold'
+  | 'awakenChance'
+  | 'clutchAdversityBoost'
+  | 'bondClimaxChance'
+
+const SPECIALIZED_SCALAR_KNOBS: Record<
+  EnaSpecializationAxis,
+  ReadonlyArray<{ key: SpecializedScalarKnob; bound: Bound }>
+> = {
+  predict: [{ key: 'predictBaseChance', bound: PROB }],
+  protection: [
+    { key: 'clutchStrength', bound: CLUTCH_STRENGTH_BOUND },
+    { key: 'willGainPerDamage', bound: WILL_GAIN_BOUND },
+    { key: 'clutchHpThreshold', bound: CLUTCH_HP_THRESHOLD_BOUND },
+  ],
+  minor: [],
+  grit: [
+    { key: 'awakenChance', bound: AWAKEN_BOUND },
+    { key: 'clutchAdversityBoost', bound: ADVERSITY_BOOST_BOUND },
+    { key: 'bondClimaxChance', bound: BOND_CLIMAX_BOUND },
+  ],
+}
+
 /** 성향의 깊은 복제(기본값을 변형해 쓰기 시작할 때 원본 보호). */
 export function cloneDisposition(d: EnaDisposition): EnaDisposition {
   return {
@@ -154,27 +230,33 @@ function clamp(v: number, b: Bound): number {
 /**
  * 모든 파라미터를 안전 경계로 클램프한다. 저장본을 불러오거나 적응으로 값을 옮긴 뒤 호출해
  * 라이브 동작이 절대 비정상 범위(예: 항상 말하거나 절대 클러치 안 함)로 가지 않게 한다.
+ * specialization을 주면 특화 축에 대응하는 노브들의 상한만 확장된다(특화 0이면 기존과 동일).
  */
-export function clampDisposition(d: EnaDisposition): EnaDisposition {
+export function clampDisposition(
+  d: EnaDisposition,
+  specialization?: Partial<EnaSpecialization>
+): EnaDisposition {
+  const s = normalizeSpecialization(specialization)
   const out = cloneDisposition(d)
   for (const k of Object.keys(out.situationChance) as SituationId[]) {
     out.situationChance[k] = clamp(out.situationChance[k], PROB)
   }
+  // 온정 특화는 소소한 클러치 전종의 상한을 함께 연다(발동 자체는 rollMinorClutch 캡이 보호).
+  const minorBound = extendHi(PROB, s.minor)
   for (const k of Object.keys(out.minorClutchChance) as MinorClutchKind[]) {
-    out.minorClutchChance[k] = clamp(out.minorClutchChance[k], PROB)
+    out.minorClutchChance[k] = clamp(out.minorClutchChance[k], minorBound)
   }
   out.lootCommentChance = clamp(out.lootCommentChance, PROB)
-  out.awakenChance = clamp(out.awakenChance, { lo: 0.02, hi: 0.4 })
-  out.clutchAdversityBoost = clamp(out.clutchAdversityBoost, { lo: 0.6, hi: 2.4 })
-  out.bondClimaxChance = clamp(out.bondClimaxChance, { lo: 0, hi: 0.25 })
-  out.predictBaseChance = clamp(out.predictBaseChance, PROB)
+  // 특화 대상 스칼라 노브 — 축 특화만큼 hi가 확장된 경계로 클램프한다.
+  for (const axis of SPECIALIZATION_AXES) {
+    for (const { key, bound } of SPECIALIZED_SCALAR_KNOBS[axis]) {
+      out[key] = clamp(out[key], extendHi(bound, s[axis]))
+    }
+  }
   out.predictCooldown = clamp(out.predictCooldown, { lo: 2, hi: 20 })
-  out.clutchHpThreshold = clamp(out.clutchHpThreshold, { lo: 0.2, hi: 0.6 })
   out.clutchHealVsShield = clamp(out.clutchHealVsShield, { lo: 0, hi: 1 })
   out.clutchHealRatio = clamp(out.clutchHealRatio, { lo: 0.15, hi: 0.5 })
   out.clutchShieldRatio = clamp(out.clutchShieldRatio, { lo: 0.1, hi: 0.45 })
-  out.clutchStrength = clamp(out.clutchStrength, { lo: 0.6, hi: 1.6 })
-  out.willGainPerDamage = clamp(out.willGainPerDamage, { lo: 30, hi: 100 })
   out.willGainFlatBonus = clamp(out.willGainFlatBonus, { lo: 0, hi: 15 })
   out.weightFloor = clamp(out.weightFloor, { lo: 0.1, hi: 0.5 })
   out.weightMax = clamp(out.weightMax, { lo: 1.2, hi: 2.5 })
@@ -194,8 +276,12 @@ export function clampDisposition(d: EnaDisposition): EnaDisposition {
   return out
 }
 
-/** 저장본 → 성향 병합. 누락 필드는 기본값으로 채워 스키마 진화에도 안전하게 불러온다. */
-export function dispositionFromJSON(raw: unknown): EnaDisposition {
+/** 저장본 → 성향 병합. 누락 필드는 기본값으로 채워 스키마 진화에도 안전하게 불러온다.
+ *  specialization을 주면 특화 확장 상한을 유지한 채 병합한다(안 주면 기존 안전 상한으로 잘린다). */
+export function dispositionFromJSON(
+  raw: unknown,
+  specialization?: Partial<EnaSpecialization>
+): EnaDisposition {
   const base = defaultDisposition()
   if (!raw || typeof raw !== 'object') return base
   const r = raw as Partial<EnaDisposition>
@@ -207,7 +293,7 @@ export function dispositionFromJSON(raw: unknown): EnaDisposition {
     // 구버전 저장본(가중 없음)도 기본 1.0으로 채워 스키마 진화에 안전하게 병합한다.
     supportRoleWeights: { ...base.supportRoleWeights!, ...(r.supportRoleWeights ?? {}) },
   }
-  return clampDisposition(merged)
+  return clampDisposition(merged, specialization)
 }
 
 // ── 학습된 기본 토대(시뮬 산출) ───────────────────────────────────────────
@@ -549,6 +635,116 @@ export function revertDispositionTowardBase(
   return out
 }
 
+// ── 축 특화 초과 성장(앵커 상향 + 런 신호 적립) ──────────────────────────
+
+/** 특화 1일 때 앵커가 확장 상한 방향으로 끌려가는 비율 — 평형점(평균회귀 목적지)을 실제로 올린다.
+ *  0.35 기준 grit 특화 1의 앵커는 경험 탭 '불굴' 표시 ~91%에 대응한다(장기 목표 90% 도달 가능). */
+export const SPECIALIZATION_ANCHOR_LIFT = 0.35
+
+/**
+ * 평균회귀 앵커를 특화 축 방향으로 소폭 상향한다. 특화가 없으면 입력 앵커와 완전히 같아
+ * (클램프 재적용은 멱등) 기존 회귀 동작이 보존된다. adaptToOutcome이 매 런 호출한다.
+ */
+export function specializedAnchorDisposition(
+  anchor: EnaDisposition,
+  specialization?: Partial<EnaSpecialization>
+): EnaDisposition {
+  const s = normalizeSpecialization(specialization)
+  const out = cloneDisposition(anchor)
+  for (const axis of SPECIALIZATION_AXES) {
+    const spec = s[axis]
+    if (spec <= 0) continue
+    const lift = spec * SPECIALIZATION_ANCHOR_LIFT
+    for (const { key, bound } of SPECIALIZED_SCALAR_KNOBS[axis]) {
+      const target = extendHi(bound, spec).hi
+      if (target > out[key]) out[key] += (target - out[key]) * lift
+    }
+    if (axis === 'minor') {
+      const target = extendHi(PROB, spec).hi
+      for (const k of Object.keys(out.minorClutchChance) as MinorClutchKind[]) {
+        if (target > out.minorClutchChance[k]) {
+          out.minorClutchChance[k] += (target - out.minorClutchChance[k]) * lift
+        }
+      }
+    }
+  }
+  return clampDisposition(out, s)
+}
+
+/**
+ * 런 1회의 특화 적립 튜닝 — 런당 적립은 아주 작게(축별 최대 2%p), 얕은 자살런 신호는 깊이
+ * 감쇠로 미미하게, 총합은 runTotalCap으로 다시 자른다. 적립은 (1-현재 특화) 비례로 완만 포화.
+ */
+export const ENA_SPECIALIZATION_TUNING = {
+  /** 예지 — 건넨 대비가 제때 쓰인 수(recordPredictionOutcome ≥1) 1건당. */
+  perTimelyPrediction: 0.006,
+  /** 수호 — 클러치 발동 목격 수(회피/반격/큰 클러치/각성 포함) 1건당. */
+  perEffectiveClutch: 0.006,
+  /** 온정 — 소소한 클러치 발동/보물 상호작용 1건당. */
+  perWarmthInteraction: 0.0035,
+  /** 불굴 — 런 누적 (받은 피해/최대체력) 1.0당. 깊이 계수와 곱해 '견디며 등반'만 인정한다. */
+  gritPerDamageRatio: 0.008,
+  /** 불굴 깊이 계수 분모 — min(1, 층/60). 얕은 층 탱킹은 거의 안 쌓인다. */
+  gritDepthScale: 60,
+  /** 예지/수호/온정 공통 얕은 런 감쇠 분모 — min(1, 층/40). */
+  depthAttenuationFloor: 40,
+  /** 축별 런당 적립 상한. */
+  axisRunCap: 0.02,
+  /** 런당 총 적립 상한(초과 시 축별 비례 축소). */
+  runTotalCap: 0.04,
+} as const
+
+/** 런 1회의 특화 신호 — 전부 기존 드라마/관측 카운터에서 나온다(새 계측 없음). */
+export interface EnaRunSpecializationSignals {
+  floorReached: number
+  timelyPredictions?: number
+  effectiveClutches?: number
+  warmthInteractions?: number
+  damageTakenRatio?: number
+}
+
+/** 이번 런이 각 축에 얹는 적립분(0 이상, 하락 없음) — 축별 캡·잔여분 포화·총 캡을 모두 적용한 값. */
+export function computeRunSpecializationGain(
+  current: Partial<EnaSpecialization> | undefined,
+  signals: EnaRunSpecializationSignals
+): EnaSpecialization {
+  const T = ENA_SPECIALIZATION_TUNING
+  const cur = normalizeSpecialization(current)
+  const floor = Math.max(0, signals.floorReached)
+  const depth = Math.min(1, floor / T.depthAttenuationFloor)
+  const n = (v: number | undefined) => Math.max(0, v ?? 0)
+  const raw: EnaSpecialization = {
+    predict: n(signals.timelyPredictions) * T.perTimelyPrediction * depth,
+    protection: n(signals.effectiveClutches) * T.perEffectiveClutch * depth,
+    minor: n(signals.warmthInteractions) * T.perWarmthInteraction * depth,
+    grit: n(signals.damageTakenRatio) * T.gritPerDamageRatio * Math.min(1, floor / T.gritDepthScale),
+  }
+  const gains = zeroSpecialization()
+  let total = 0
+  for (const axis of SPECIALIZATION_AXES) {
+    // 완만 포화: 특화가 찰수록 같은 신호의 적립이 잔여분에 비례해 줄어든다(1을 절대 못 넘음).
+    gains[axis] = Math.min(T.axisRunCap, raw[axis]) * (1 - cur[axis])
+    total += gains[axis]
+  }
+  if (total > T.runTotalCap) {
+    const scale = T.runTotalCap / total
+    for (const axis of SPECIALIZATION_AXES) gains[axis] *= scale
+  }
+  return gains
+}
+
+/** 현재 특화 + 이번 런 적립 — 단조 증가(하락 없음), 각 축 0~1. */
+export function accumulateSpecialization(
+  current: Partial<EnaSpecialization> | undefined,
+  signals: EnaRunSpecializationSignals
+): EnaSpecialization {
+  const cur = normalizeSpecialization(current)
+  const gains = computeRunSpecializationGain(cur, signals)
+  const out = zeroSpecialization()
+  for (const axis of SPECIALIZATION_AXES) out[axis] = Math.min(1, cur[axis] + gains[axis])
+  return out
+}
+
 // ── 영구 저장(per-player) ─────────────────────────────────────────────────
 // 플레이어별로 적응된 성향을 세션 넘어 유지한다. 브라우저 외 환경(테스트/SSR)에서는
 // localStorage가 없을 수 있어 안전하게 무시한다. (import 주위가 아니라 저장 접근만 보호)
@@ -564,7 +760,11 @@ const DISPOSITION_SCHEMA_VERSION = 1
  * growth 0이면 ROOKIE 근방('입만 있는 동반자'). 기존 저장본은 병합 관례 그대로 로드해
  * 급격한 하향 없이 유지하고, 성장은 평균회귀 앵커 이동으로만 반영한다.
  */
-export function loadDisposition(key: string = STORAGE_KEY, fallbackGrowth = 0): EnaDisposition {
+export function loadDisposition(
+  key: string = STORAGE_KEY,
+  fallbackGrowth = 0,
+  specialization?: Partial<EnaSpecialization>
+): EnaDisposition {
   const fallback = (): EnaDisposition => growthAnchorDisposition(fallbackGrowth)
   if (typeof localStorage === 'undefined') return fallback()
   const raw = localStorage.getItem(key)
@@ -574,22 +774,30 @@ export function loadDisposition(key: string = STORAGE_KEY, fallbackGrowth = 0): 
     if (parsed && typeof parsed === 'object' && 'version' in parsed) {
       const envelope = parsed as { version: unknown; disposition?: unknown }
       if (envelope.version !== DISPOSITION_SCHEMA_VERSION) return fallback()
-      return dispositionFromJSON(envelope.disposition)
+      return dispositionFromJSON(envelope.disposition, specialization)
     }
     // 레거시(버전 봉투 없는 평면 저장본)는 v1로 간주해 그대로 병합한다.
-    return dispositionFromJSON(parsed)
+    return dispositionFromJSON(parsed, specialization)
   } catch {
     return fallback()
   }
 }
 
-/** 적응된 성향을 클램프 후 버전 봉투에 담아 저장한다. 저장 실패(용량/프라이빗 모드)는 조용히 무시한다. */
-export function saveDisposition(d: EnaDisposition, key: string = STORAGE_KEY): void {
+/** 적응된 성향을 클램프 후 버전 봉투에 담아 저장한다. 저장 실패(용량/프라이빗 모드)는 조용히 무시한다.
+ *  specialization을 주면 특화 확장 상한을 넘지 않는 초과값이 저장 시점에 잘리지 않는다. */
+export function saveDisposition(
+  d: EnaDisposition,
+  key: string = STORAGE_KEY,
+  specialization?: Partial<EnaSpecialization>
+): void {
   if (typeof localStorage === 'undefined') return
   try {
     localStorage.setItem(
       key,
-      JSON.stringify({ version: DISPOSITION_SCHEMA_VERSION, disposition: clampDisposition(d) })
+      JSON.stringify({
+        version: DISPOSITION_SCHEMA_VERSION,
+        disposition: clampDisposition(d, specialization),
+      })
     )
   } catch {
     /* 저장 실패는 게임 진행을 막지 않는다. */

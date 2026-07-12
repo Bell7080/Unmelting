@@ -274,8 +274,14 @@ const initialEnaGrowth = computeEnaGrowth({
   adventureXp: enaAutonomousLearner.loadAdventureXp(),
   bond: enaAutonomousLearner.loadBond(),
 })
+// 축 특화(자기학습 저장 영속)를 먼저 복원해, 특화 확장 상한을 넘는 저장 성향이 로드에서 잘리지 않게 한다.
+const initialEnaSpecialization = enaAutonomousLearner.loadSpecialization()
 // 저장된 per-player 성향을 불러와 에나를 깨운다(없으면 성장 앵커 성향). 런 종료마다 적응·저장된다.
-const companion = new CompanionSystem(loadDisposition(undefined, initialEnaGrowth), initialEnaGrowth)
+const companion = new CompanionSystem(
+  loadDisposition(undefined, initialEnaGrowth, initialEnaSpecialization),
+  initialEnaGrowth
+)
+companion.setSpecialization(initialEnaSpecialization)
 // 유대(bond)는 성향과 별개로 자기학습 저장(unmelting.ena.self-learning.v1)에서 복원한다.
 companion.setBond(enaAutonomousLearner.loadBond())
 
@@ -333,8 +339,17 @@ function adaptCompanionToRunOutcome(won: boolean): void {
   companion.setGrowth(
     computeEnaGrowth({ adventureXp: enaAutonomousLearner.loadAdventureXp(), bond: companion.getBond() })
   )
+  // 축 특화 적립: 이번 런이 실제로 먹인 축(제때 예측/클러치/온정/피해 견딤×깊이)만 아주 소량 자란다.
+  const specialization = enaAutonomousLearner.accrueSpecialization({
+    floorReached: floor,
+    timelyPredictions: companion.getRunTimelyPredictionCount(),
+    effectiveClutches: companion.getRunClutchCount(),
+    warmthInteractions: companion.getRunWarmthSignalCount(),
+    damageTakenRatio: companion.getRunDamageTakenRatio(),
+  })
+  companion.setSpecialization(specialization)
   const adapted = companion.adaptToOutcome({ died: !won, floorReached: floor })
-  saveDisposition(adapted)
+  saveDisposition(adapted, undefined, specialization)
 }
 
 // 경험(성향) 패널이 현재 에나 성향/기본 토대/성장值(표기 배율용)를 읽어 성좌 시각화를 그릴 수 있게 연결한다.
