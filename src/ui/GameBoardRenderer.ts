@@ -56,7 +56,7 @@ import {
 } from '@ui/Icons'
 import type { EnaDisposition } from '@systems/EnaDisposition'
 import type { EnaLearningSnapshot } from '@systems/CompanionSystem'
-import { experienceAxes } from '@ui/ExperienceAxes'
+import { baselineConstellationAxes, experienceAxes } from '@ui/ExperienceAxes'
 import { atkDmgHtml, hpDmgHtml, rangeDmgHtml } from '@ui/DamageDisplay'
 import { sfx } from '@/audio/SfxManager'
 
@@ -4781,16 +4781,16 @@ export class GameBoardRenderer {
     this.attachCompendiumRecipeFloat(host)
   }
 
-  /** 경험 패널이 현재 성향/기본 토대/성장值를 읽어올 공급자. index.ts가 동료 시스템을 연결한다. */
-  private experienceDataProvider?: () => { disp: EnaDisposition; base: EnaDisposition; learning?: EnaLearningSnapshot; growth?: number }
+  /** 경험 패널이 현재 성향/성장值를 읽어올 공급자. index.ts가 동료 시스템을 연결한다. */
+  private experienceDataProvider?: () => { disp: EnaDisposition; learning?: EnaLearningSnapshot; growth?: number }
 
-  setExperienceDataProvider(fn: () => { disp: EnaDisposition; base: EnaDisposition; learning?: EnaLearningSnapshot; growth?: number }): void {
+  setExperienceDataProvider(fn: () => { disp: EnaDisposition; learning?: EnaLearningSnapshot; growth?: number }): void {
     this.experienceDataProvider = fn
   }
 
   /** 경험(성향) 패널을 연다 — 에나의 현재 성향을 불빛 성좌(레이더)로 시각화한다.
-   *  disp=현재 성향, base=학습된 기본 토대(드리프트 점선으로 표시), growth=표기 배율용 성장值. 읽기 전용 브라우저. */
-  openExperience(disp: EnaDisposition, base: EnaDisposition, learning?: EnaLearningSnapshot, growth?: number): void {
+   *  disp=현재 성향, growth=표기 배율용 성장值. 점선 기준은 초보 시작 모양(baselineConstellationAxes) 고정. 읽기 전용 브라우저. */
+  openExperience(disp: EnaDisposition, learning?: EnaLearningSnapshot, growth?: number): void {
     let host = document.getElementById('experience-overlay') as HTMLElement | null
     if (!host) {
       host = document.createElement('div')
@@ -4805,7 +4805,7 @@ export class GameBoardRenderer {
         if (e.key === 'Escape' && host?.classList.contains('is-open')) this.closeExperience()
       })
     }
-    host.innerHTML = this.renderExperience(disp, base, learning, growth)
+    host.innerHTML = this.renderExperience(disp, learning, growth)
     host.classList.add('is-open')
   }
 
@@ -4819,10 +4819,11 @@ export class GameBoardRenderer {
     return experienceAxes(disp, learning, growth)
   }
 
-  private renderExperience(disp: EnaDisposition, base: EnaDisposition, learning?: EnaLearningSnapshot, growth?: number): string {
+  private renderExperience(disp: EnaDisposition, learning?: EnaLearningSnapshot, growth?: number): string {
     const axes = this.experienceAxes(disp, learning, growth)
-    // 기본 토대 점선은 성장 완료(growth 1) 표기 기준 — 초보 성좌가 다가갈 목표 모양으로 읽힌다.
-    const baseAxes = this.experienceAxes(base)
+    // 기준 점선은 초보 에나 시작 모양(ROOKIE, growth 0) 고정 — 신규/리셋 직후엔 실선과 겹치고,
+    // 성장하면 실선이 점선을 넘어 자라 "시작점 대비 성장"으로 읽힌다.
+    const baseAxes = baselineConstellationAxes()
     const n = axes.length
     const cx = 50
     const cy = 50
@@ -4835,7 +4836,7 @@ export class GameBoardRenderer {
     // 불빛 성좌 격자: 동심 링 3겹 + 중심에서 각 축으로 뻗는 살.
     const grid = [0.33, 0.66, 1].map((lv) => `<polygon class="exp-ring" points="${ring(lv)}"/>`).join('')
     const spokes = axes.map((_, i) => { const [x, y] = pt(i, 1); return `<line class="exp-spoke" x1="${cx}" y1="${cy}" x2="${x.toFixed(2)}" y2="${y.toFixed(2)}"/>` }).join('')
-    // 기본 토대(드리프트 비교용) 점선 + 현재 성향 채움.
+    // 시작 기준(성장 비교용) 점선 + 현재 성향 채움.
     const basePoly = `<polygon class="exp-base" points="${poly(baseAxes.map((a) => a.value))}"/>`
     const curPoly = `<polygon class="exp-current" points="${poly(axes.map((a) => a.value))}"/>`
     // 각 축 현재값 위치에도 경험 메인 아이콘과 같은 네 꼭짓점 반짝임을 둔다.
@@ -4870,7 +4871,7 @@ export class GameBoardRenderer {
           <span class="exp-legend-name">${a.key}</span>
           <span class="exp-legend-bar"><span class="exp-legend-fill" style="width:${pct}%"></span></span>
           <span class="exp-legend-val"><span class="exp-legend-current">현재 ${pct}%</span>${driftTag}</span>
-          <span class="exp-legend-desc">${a.desc} · 기본 ${basePct}% → 변경 ${pct}%</span>
+          <span class="exp-legend-desc">${a.desc} · 시작 ${basePct}% → 현재 ${pct}%</span>
         </li>`
     }).join('')
 
@@ -4888,7 +4889,7 @@ export class GameBoardRenderer {
           </div>
           <ul class="experience-legend">${legend}</ul>
         </section>
-        <footer class="experience-footer">함께한 모험으로 빚어진 에나의 성향 · 점선은 학습된 기본 토대, 채움은 지금의 너에게 맞춰진 모습</footer>
+        <footer class="experience-footer">함께한 모험으로 빚어진 에나의 성향 · 점선은 처음 함께하던 날의 시작점, 채움은 지금의 너에게 맞춰진 모습</footer>
       </div>
     `
   }
@@ -5885,7 +5886,7 @@ export class GameBoardRenderer {
       ?.addEventListener('click', (e) => {
         e.stopPropagation()
         const data = this.experienceDataProvider?.()
-        if (data) this.openExperience(data.disp, data.base, data.learning, data.growth)
+        if (data) this.openExperience(data.disp, data.learning, data.growth)
       })
   }
 

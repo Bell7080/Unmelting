@@ -69,7 +69,6 @@ import {
   loadDisposition,
   saveDisposition,
   computeEnaGrowth,
-  BASE_DISPOSITION,
   ENA_DISPOSITION_STORAGE_KEY,
   type EnaRunDramaSignals,
 } from '@systems/EnaDisposition'
@@ -355,10 +354,10 @@ function adaptCompanionToRunOutcome(won: boolean): void {
   saveDisposition(adapted, undefined, specialization)
 }
 
-// 경험(성향) 패널이 현재 에나 성향/기본 토대/성장值(표기 배율용)를 읽어 성좌 시각화를 그릴 수 있게 연결한다.
+// 경험(성향) 패널이 현재 에나 성향/성장值(표기 배율용)를 읽어 성좌 시각화를 그릴 수 있게 연결한다.
+// 점선 기준 별자리는 렌더러가 초보 시작 모양(ROOKIE, growth 0)으로 자체 앵커한다.
 boardRenderer.setExperienceDataProvider(() => ({
   disp: companion.getDisposition(),
-  base: BASE_DISPOSITION,
   learning: companion.getLearningSnapshot(),
   growth: companion.getGrowth(),
 }))

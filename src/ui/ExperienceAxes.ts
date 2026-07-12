@@ -6,7 +6,7 @@
  * 여기서 얻은 0~1 값을 그리기만 한다.
  */
 
-import { SPECIALIZATION_MAX_EXTENSION } from '@systems/EnaDisposition'
+import { ROOKIE_DISPOSITION, SPECIALIZATION_MAX_EXTENSION } from '@systems/EnaDisposition'
 import type { EnaDisposition } from '@systems/EnaDisposition'
 import type { EnaLearningSnapshot } from '@systems/CompanionSystem'
 
@@ -107,4 +107,13 @@ export function experienceAxes(
     { key: '온정', value: iv(rawMinor(disp)), desc: '덤으로 슬쩍 건네는 선물' },
     { key: '불굴', value: iv(rawGrit(disp)), desc: '역경·유대로 한계를 잠깐 넘김' },
   ]
+}
+
+/**
+ * 경험 탭 점선 '기준 별자리' — 초보 에나의 시작 모양(ROOKIE_DISPOSITION, growth 0, 특화 0).
+ * BASE(성장 완료) 앵커로 그리면 신규/리셋 직후 실측이 기준선보다 낮아 "감소"로 읽히므로,
+ * 시작점에 앵커해 신규는 실선≈점선으로 겹치고 성장하면 실선이 점선을 넘어 자라게 한다.
+ */
+export function baselineConstellationAxes(): ExperienceAxis[] {
+  return experienceAxes(ROOKIE_DISPOSITION, undefined, 0)
 }

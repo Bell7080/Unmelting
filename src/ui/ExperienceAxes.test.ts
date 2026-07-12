@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { EXPERIENCE_AXIS_DISPLAY_BOOST, experienceAxes } from '@ui/ExperienceAxes'
+import { EXPERIENCE_AXIS_DISPLAY_BOOST, baselineConstellationAxes, experienceAxes } from '@ui/ExperienceAxes'
 import {
   BASE_DISPOSITION,
   ROOKIE_DISPOSITION,
@@ -122,6 +122,20 @@ describe('ExperienceAxes', () => {
     // 같은 값이라도 특화가 없으면 기존 안전 상한으로 잘려 자연 상단에 머문다.
     const clipped = clampDisposition(d)
     expect(axisValue(clipped, '불굴', 1)).toBeLessThan(0.7)
+  })
+
+  it('점선 기준 별자리는 초보 시작 모양(ROOKIE, growth 0) 표시값과 일치한다', () => {
+    // 신규/리셋 직후 실선≈점선이 겹쳐 보이고, 성장하면 실선이 점선을 넘어 자라야 한다.
+    const baseline = baselineConstellationAxes()
+    const rookie = experienceAxes(cloneDisposition(ROOKIE_DISPOSITION), undefined, 0)
+    expect(baseline.map((a) => a.key)).toEqual(rookie.map((a) => a.key))
+    baseline.forEach((a, i) => expect(a.value, a.key).toBeCloseTo(rookie[i].value, 10))
+    // BASE(성장 완료) 앵커가 아님을 고정 — 옛 기준선으로 회귀하면 여기서 잡는다.
+    const veteran = experienceAxes(cloneDisposition(BASE_DISPOSITION), undefined, 1)
+    for (const key of INTERVENTION_AXES) {
+      const b = baseline.find((a) => a.key === key)!.value
+      expect(b, key).toBeLessThan(veteran.find((a) => a.key === key)!.value)
+    }
   })
 
   it('수다 축은 신규(growth 0)에 낮게 시작해 성장하면 원시 표기를 회복한다', () => {
