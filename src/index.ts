@@ -65,7 +65,13 @@ import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 
 import { SpeechBubble } from '@ui/SpeechBubble'
 import { BarkSequencer } from '@ui/BarkSequencer'
 import { CompanionSystem, type SituationId, type ClutchPlan } from '@systems/CompanionSystem'
-import { loadDisposition, saveDisposition, computeEnaGrowth, BASE_DISPOSITION } from '@systems/EnaDisposition'
+import {
+  loadDisposition,
+  saveDisposition,
+  computeEnaGrowth,
+  BASE_DISPOSITION,
+  type EnaRunDramaSignals,
+} from '@systems/EnaDisposition'
 import { assessThreats, type ForesightOptions } from '@systems/CompanionForesight'
 import { HearthScene } from '@ui/hearth/HearthScene'
 import { ZoneCurtain, ZONE_LIST } from '@ui/ZoneCurtain'
@@ -74,7 +80,11 @@ import { EventSpawnController } from '@systems/EventSpawn'
 import { BgmManager } from '@/audio/BgmManager'
 import { sfx } from '@/audio/SfxManager'
 import { enaRuntimeObserver, shopKindToPurchaseId } from '@/rl/EnaRuntimeObserver'
-import { createBrowserEnaAutonomousLearner } from '@/rl/EnaAutonomousLearner'
+import {
+  createBrowserEnaAutonomousLearner,
+  deriveRunExperienceKeys,
+  countNovelCardUses,
+} from '@/rl/EnaAutonomousLearner'
 import bgm001Url from './assets/audio/bgm_001.mp3'
 import bgm002Url from './assets/audio/bgm_002.mp3'
 import bgm003Url from './assets/audio/bgm_003.mp3'
@@ -257,10 +267,11 @@ let inputLocked = false
 // ── 동료(에나) 반응 레이어 씨앗 ──────────────────────────────
 // 학습 전 규칙 기반 스캐폴딩. 플레이어 프로필(.player-card) 터치에 횟수·시간·현재 상황으로
 // 반응한다(패턴이 아니라 자아처럼). 설계: Ena_Companion_AI_Design.md
-// 에나 성장(초보 동반자→베테랑): 누적 런 수(자기학습 저장)와 유대로 growth(0~1)를 계산해
-// 신규 폴백 성향과 평균회귀 앵커를 결정한다. 신규 플레이어는 growth 0 → ROOKIE 근방에서 시작.
+// 에나 성장(초보 동반자→베테랑): 누적 모험 xp(자기학습 저장, 층·플레이 기반)와 유대로
+// growth(0~1)를 계산해 신규 폴백 성향과 평균회귀 앵커를 결정한다. 신규 플레이어는 growth 0
+// → ROOKIE 근방에서 시작하며, 자살런 반복으로는 xp가 거의 쌓이지 않는다.
 const initialEnaGrowth = computeEnaGrowth({
-  runCount: enaAutonomousLearner.loadRunCount(),
+  adventureXp: enaAutonomousLearner.loadAdventureXp(),
   bond: enaAutonomousLearner.loadBond(),
 })
 // 저장된 per-player 성향을 불러와 에나를 깨운다(없으면 성장 앵커 성향). 런 종료마다 적응·저장된다.
@@ -268,13 +279,61 @@ const companion = new CompanionSystem(loadDisposition(undefined, initialEnaGrowt
 // 유대(bond)는 성향과 별개로 자기학습 저장(unmelting.ena.self-learning.v1)에서 복원한다.
 companion.setBond(enaAutonomousLearner.loadBond())
 
-/** 런 종료 결과로 에나 성향을 온라인 적응시키고 저장한다. endGame 후크에서 호출(함수 선언이라 호이스팅). */
+// 런 단위 드라마(모험의 질) 신호 — 성장 점프 게이트 입력. 피격/위협 beat에서 채우고 새 런에 비운다.
+const runDramaSignals = {
+  lowHpMoments: 0,
+  emberCrises: 0,
+  lethalThreatsFaced: 0,
+  /** 이번 런 최저 체력 비율 — 컴백 폭(최저→최종) 계산용. */
+  lowestHpRatio: 1,
+}
+
+function resetRunDramaSignals(): void {
+  runDramaSignals.lowHpMoments = 0
+  runDramaSignals.emberCrises = 0
+  runDramaSignals.lethalThreatsFaced = 0
+  runDramaSignals.lowestHpRatio = 1
+}
+
+/** 런 종료 결과로 모험 xp를 적립하고 성장 앵커를 옮긴 뒤, 에나 성향을 온라인 적응시키고 저장한다. */
 function adaptCompanionToRunOutcome(won: boolean): void {
-  // 이번 런이 방금 자기학습 저장에 쌓였으므로 성장值를 갱신해 앵커를 옮긴 뒤 적응한다.
+  const floor = gameState.getCurrentTurn()
+  const c = gameState.character
+  // 이번 런 로그(endGame에서 방금 recordRunEnd로 확정됨)에서 의사결정·새 시도 신호를 집계한다.
+  const entries = enaRuntimeObserver.getMemory().all()
+  const lastRun = entries[entries.length - 1]
+  const handUses = lastRun
+    ? Object.values(lastRun.usedHandCards).reduce((sum: number, n) => sum + (n ?? 0), 0)
+    : 0
+  const decisions = handUses + (lastRun?.shopPurchases.length ?? 0) + companion.getRunInteractionCount()
+  const finalHpRatio = c.maxHealth > 0 ? Math.max(0, c.health) / c.maxHealth : 0
+  const drama: EnaRunDramaSignals = {
+    lowHpMoments: runDramaSignals.lowHpMoments,
+    emberCrises: runDramaSignals.emberCrises,
+    lethalThreatsFaced: runDramaSignals.lethalThreatsFaced,
+    effectiveClutches: companion.getRunClutchCount(),
+    timelyPredictions: companion.getRunTimelyPredictionCount(),
+    // 컴백 폭: 최저 체력비에서 런 종료 체력비까지 회복한 깊이(사망 런은 자연히 0에 가깝다).
+    comebackDepth: Math.max(0, finalHpRatio - runDramaSignals.lowestHpRatio),
+    novelCardsUsed: countNovelCardUses(entries),
+  }
+  // 모험 xp 적립(층·의사결정·진행 턴 + 첫 경험 + 드라마 게이트 점프) 후 성장 앵커 갱신.
+  enaAutonomousLearner.accrueAdventureXp({
+    floorReached: floor,
+    cleared: won,
+    decisions,
+    progressTurns: floor,
+    experienceKeys: deriveRunExperienceKeys({
+      floorReached: floor,
+      cleared: won,
+      shopPurchases: lastRun?.shopPurchases ?? [],
+    }),
+    drama,
+  })
   companion.setGrowth(
-    computeEnaGrowth({ runCount: enaAutonomousLearner.loadRunCount(), bond: companion.getBond() })
+    computeEnaGrowth({ adventureXp: enaAutonomousLearner.loadAdventureXp(), bond: companion.getBond() })
   )
-  const adapted = companion.adaptToOutcome({ died: !won, floorReached: gameState.getCurrentTurn() })
+  const adapted = companion.adaptToOutcome({ died: !won, floorReached: floor })
   saveDisposition(adapted)
 }
 
@@ -3658,6 +3717,7 @@ function resetForNewRun(): void {
   pendingHandTarget = null
   // 동료(에나)의 런 한정 상태(의지/각성/턴 흐름) 초기화. 학습 가중치는 런 간 유지.
   companion.resetForRun()
+  resetRunDramaSignals() // 성장 점프 게이트 입력(드라마 신호)도 런 단위로 비운다.
   pendingPrediction = null
   gameState.reset()
   // 헌혈팩 콜백: reset 이후 새 character 인스턴스에 설정해야 한다
@@ -5417,6 +5477,16 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   // 클러치 예산('에나의 의지') 충전: 이번 페이즈 역경(피해/불씨 고갈)에 비례.
   if (totalDamage > 0) companion.gainWill(totalDamage, gameState.character.maxHealth)
   if (gameState.character.ember <= 1) companion.gainWillFlat(15)
+  // 드라마(모험의 질) 신호: 저체력 체류·불씨 고갈 위기·최저 체력비를 같은 역경 beat에서 기록한다.
+  {
+    const hpRatio =
+      gameState.character.maxHealth > 0
+        ? Math.max(0, gameState.character.health) / gameState.character.maxHealth
+        : 0
+    if (hpRatio > 0 && hpRatio <= 0.3) runDramaSignals.lowHpMoments += 1
+    if (gameState.character.ember <= 1) runDramaSignals.emberCrises += 1
+    runDramaSignals.lowestHpRatio = Math.min(runDramaSignals.lowestHpRatio, hpRatio)
+  }
   // 회피 클러치는 TurnManager.runEnemyPhase의 공격 판정 순간에 처리된다.
 
   // 소소한 클러치 — 반격: 회피와 달리 피해는 받은 뒤, 공격력 기반으로 공격자를 되친다.
