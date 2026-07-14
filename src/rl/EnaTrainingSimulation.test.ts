@@ -40,7 +40,12 @@ describe('EnaTrainingSimulation', () => {
     let deepestTurn = 0
     let trialAppliedAfterBoss = false
     const phases = new Set<string>()
-    for (let seed = 0; seed < 30; seed++) {
+    // 약한 교사 정책의 30F 격파는 본래 드문 사건(~1%)이고, 유물/카드가 추가될 때마다
+    // EnaKnowledgeAdapter의 텍스트/평균가 기반 지식이 흔들려 시드별 궤적이 이동한다.
+    // 특정 30시드에 의존하지 않도록 넉넉한 표본으로 "격파가 가능함(그래디언트 존재)"만 확인한다.
+    // (에피소드는 대부분 30F 벽에서 끝나 매우 짧아 수백 시드도 1초 미만이다.)
+    const SEED_COUNT = 600
+    for (let seed = 0; seed < SEED_COUNT; seed++) {
       const sim = new EnaTrainingSimulation(seed * 13 + 1)
       const result = sim.runEpisode()
       bossesCleared = Math.max(bossesCleared, result.bossesCleared)
@@ -59,7 +64,7 @@ describe('EnaTrainingSimulation', () => {
     expect(phases.has('boss')).toBe(true)
     // 약한 교사 정책으로도 일부 시드는 30F 보스를 넘겨 등반이 이어진다(학습 그래디언트 존재).
     expect(bossesCleared).toBeGreaterThan(0)
-    expect(deepestTurn).toBeGreaterThan(30)
+    expect(deepestTurn).toBeGreaterThan(30) // 보스 격파 시에만 런 턴이 30을 넘어간다.
     expect(trialAppliedAfterBoss).toBe(true)
   })
 

@@ -37,12 +37,13 @@ import { CardSpawner } from '@systems/CardSpawner'
 import { ActionSystem, ActionType } from '@systems/ActionSystem'
 import { DropSystem } from '@systems/DropSystem'
 import { HandSystem, ChainState } from '@systems/HandSystem'
+import { runTagReactions } from '@systems/TagReactions'
 import { EmberSystem } from '@systems/EmberSystem'
 import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT, Lane } from '@entities/Lane'
 import { pickEventForDoor, getEventDef, EVENT_IDS, type EventId, type EventDefinition, type EventDialogueLine } from '@data/Events'
 import { CandleMode } from '@entities/Character'
-import { HandCardId, HandCategory } from '@entities/HandCard'
+import { HandCardId, HandCategory, type HandCardDefinition } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS, HAND_CARD_DEFINITIONS } from '@data/HandCards'
 import { RECIPES } from '@data/Recipes'
 import { getRelicDef, relicDrawWeight, RELIC_IDS, type CustomRelicProfile, type RelicId } from '@data/Relics'
@@ -1369,6 +1370,27 @@ function applyHonestyHandUse(count: number): void {
     recordRelicActivation('honesty', `불빛 +${gained}`)
     void playResourceTrail({ kind: 'chain' }, 'score', 1)
     burstScoreGain()
+  }
+}
+
+/** 태그 반응형 유물 디스패처: 사용한 손패의 시너지 태그에 반응하는 유물 효과를
+ *  TagReactions 데이터로부터 발동한다. 새 태그 반응형 유물은 index.ts 수정 없이
+ *  Relics.ts 정의 + TAG_REACTIONS 항목 추가만으로 여기서 자동 처리된다. */
+function applyHandCardUseRelics(def: HandCardDefinition, merged: boolean): void {
+  const tags = def.synergyTags
+  if (!tags || tags.length === 0) return
+  const outcomes = runTagReactions('handCardUsed', {
+    character: gameState.character,
+    tags,
+    merged,
+  })
+  for (const outcome of outcomes) {
+    recordRelicActivation(outcome.relicId, outcome.message)
+    // 자원 변화는 이미 Character에 반영됐고, 여기서는 HUD 카운터 펄스만 재생한다.
+    if (outcome.feedback === 'ember') boardRenderer.playHudCounterFeedback('ember', gameState.character.ember)
+    else if (outcome.feedback === 'candle') boardRenderer.playHudCounterFeedback('candle', gameState.character.candle)
+    else if (outcome.feedback === 'shield') boardRenderer.playHudCounterFeedback('shield', gameState.character.shield)
+    else if (outcome.feedback === 'health') boardRenderer.playHudCounterFeedback('health', gameState.character.health)
   }
 }
 
@@ -4652,6 +4674,8 @@ async function applyHandSingle(
   }
   // 정직: 손패 1장 사용으로 집계(합체 카드도 슬롯 1장이므로 1로 센다).
   applyHonestyHandUse(1)
+  // 태그 반응형 유물: 사용한 손패의 시너지 태그에 반응하는 유물 효과를 데이터 주도로 발동한다.
+  if (usedDef) applyHandCardUseRelics(usedDef, usedCard?.merged === true)
   // 동료(에나) 손패 사용 한줄평 — 가끔 그 카드의 능력에 대해 한마디.
   if (usedDef && companionWorldCanSpeak()) {
     const bark = companion.onUseCard(usedDef.id, usedDef.category, gameState.getCurrentTurn())

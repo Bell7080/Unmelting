@@ -6,6 +6,7 @@
  */
 
 import type { CardRarity } from '@data/ShopPools'
+import type { SynergyTag } from './Tags'
 
 /** Stable id used for save/run state and shop offer generation. */
 export type RelicId =
@@ -48,6 +49,9 @@ export type RelicId =
   | 'trap-master'
   | 'demon-doll'
   | 'last-supper'
+  // 태그 반응형 유물(TagReactions 프레임워크로 효과 발동 — index.ts 하드코딩 불필요).
+  | 'ember-heart'
+  | 'whetstone'
 
 
 /** Runtime-customized relic face/effect. Hearth dinner uses this so one real relic id can
@@ -79,9 +83,10 @@ export interface RelicDefinition {
    *  렌더러가 현 시점 실제 확률 변화량(%)으로 치환할 때 사용한다.
    *  'spore'/'flower'는 포자·꽃 스폰 가중치 보정에 사용한다. */
   spawnEffect?: { type: 'enemy' | 'treasure' | 'spore' | 'flower'; delta: number }
-  /** 시너지 태그 — 손패 synergyTags와 겹치면 에나 판단/학습이 자동 가점한다.
+  /** 시너지 태그 — 손패 synergyTags와 겹치면 에나 판단/학습이 자동 가점하고,
+   *  TagReactions 반응형 유물의 발동 조건(anyTag)이 된다. 값은 Tags.ts SYNERGY_TAGS 등록분만.
    *  (예: 'flame' 태그 유물이 데이터에 들어오면 화염 손패 평가가 코드 수정 없이 올라간다.) */
-  synergyTags?: readonly string[]
+  synergyTags?: readonly SynergyTag[]
 }
 
 /** 유물 상점 등장 가중치의 등급별 기본값. 개별 유물의 weight가 우선한다.
@@ -450,6 +455,27 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '인형 안에는 뭔가 남아 있다 — 고통마다 조금씩 강해진다.',
     basePrice: 0,   // 상점 미등장 — 이벤트 보스 보상 전용
     weight: 0,
+  },
+  // --- 태그 반응형 유물(TagReactions 프레임워크 예시) ---
+  // 효과 로직은 index.ts 하드코딩이 아니라 src/systems/TagReactions.ts 데이터로만 정의된다.
+  // 새 태그 반응형 유물은 여기 정의 + TAG_REACTIONS 항목만 추가하면 된다.
+  'ember-heart': {
+    id: 'ember-heart',
+    name: '불씨 심장',
+    rarity: 'rare',
+    effect: '불씨 손패 사용 시 불씨 게이지 +1',
+    flavor: '불의 곁에 두면 스스로도 조금씩 달아오르는 붉은 심지.',
+    basePrice: 780,
+    synergyTags: ['flame'],
+  },
+  whetstone: {
+    id: 'whetstone',
+    name: '숫돌',
+    rarity: 'rare',
+    effect: '칼날 손패 사용 시 방패 +1',
+    flavor: '날을 세울수록 손에 익는 단단한 돌.',
+    basePrice: 780,
+    synergyTags: ['blade'],
   },
 }
 

@@ -6,6 +6,8 @@
  * such as "3-" remains documentation-only notation outside the code.
  */
 
+import type { SynergyTag } from '../data/Tags'
+
 export type HandCategory = 'recovery' | 'tool' | 'control' | 'attack'
 
 /** 직업별 전용 태그 — 도감·호버 미리보기에 카테고리 뱃지 옆에 표시한다. */
@@ -119,9 +121,10 @@ export interface HandCardDefinition {
   runLocked: boolean
   /** 직업 태그 — 기사/마법사 전용 카드임을 표기한다. */
   jobTags?: ReadonlyArray<JobTag>
-  /** 시너지 태그(예: 'flame','shield','holy') — 카드↔레시피↔유물 태그 겹침을
-   *  에나 판단(HandCardAdvisor)·지식(EnaKnowledgeAdapter)이 자동 가점으로 읽는다. */
-  synergyTags?: readonly string[]
+  /** 시너지 태그(예: 'flame','shield','sacrifice') — 카드↔레시피↔유물 태그 겹침을
+   *  에나 판단(HandCardAdvisor)·지식(EnaKnowledgeAdapter)·유물 반응(TagReactions)이 읽는다.
+   *  값은 반드시 src/data/Tags.ts SYNERGY_TAGS에 등록된 것이어야 하며, 카드당 1~5개. */
+  synergyTags?: readonly SynergyTag[]
   /** 단일 대상 즉시 피해 근사(확정 킬 계산용). 없으면 피해 카드로 보지 않는다. */
   damageProfile?: HandDamageProfile
 }
