@@ -51,6 +51,8 @@ export interface TagReactionOutcome {
   message: string
   /** 변화한 자원의 HUD 피드백 종류(없으면 배너만). */
   feedback?: 'ember' | 'shield' | 'health' | 'candle'
+  /** 지정 시 이 파편 손패 1장을 손에 지급한다(사용 기반 생성기). index.ts가 enqueueDrop 처리. */
+  grantCard?: HandCardId
 }
 
 /** 하나의 태그 반응 규칙(데이터). */
@@ -69,19 +71,18 @@ export interface TagReaction {
  */
 export const TAG_REACTIONS: readonly TagReaction[] = [
   {
-    // 불씨 심장: 불씨 태그 손패를 쓸 때마다 불씨 게이지 +1 — 화염 덱의 경제 지속.
-    relicId: 'ember-heart',
+    // 망치(커먼 씨앗): 칼날 손패를 쓸 때마다 25% 확률로 칼날 파편 1장 — 사용 기반 생성기.
+    relicId: 'hammer',
     trigger: 'handCardUsed',
-    anyTag: ['flame'],
-    apply: (ctx) => {
-      const gained = ctx.character.gainEmber(1)
-      if (gained <= 0) return null
-      return { relicId: 'ember-heart', message: `불씨 +${gained}`, feedback: 'ember' }
+    anyTag: ['blade'],
+    apply: () => {
+      if (Math.random() >= 0.25) return null
+      return { relicId: 'hammer', message: '칼날 파편 +1', grantCard: 'blade-shard' }
     },
   },
   {
-    // 연마(레어 페이오프 엔진): 칼날 손패를 쓸 때마다 이번 런 모든 칼날 손패의 피해를 영구 +1.
-    // 참격/검과방패/불화살은 물론 숫돌이 흘리는 칼날 파편까지 함께 커지는 눈덩이 — 칼날 씨앗의 증폭기.
+    // 연마(에픽 증폭 엔진): 칼날 손패를 쓸 때마다 이번 런 모든 칼날 손패의 피해를 영구 +1.
+    // 참격/검과방패/불화살은 물론 숫돌·망치가 흘리는 칼날 파편까지 함께 커지는 눈덩이.
     relicId: 'sharpening',
     trigger: 'handCardUsed',
     anyTag: ['blade'],

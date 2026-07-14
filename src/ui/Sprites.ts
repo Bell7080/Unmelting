@@ -296,9 +296,9 @@ export const SpriteUrls = {
     // 만찬은 별도 아트가 들어오기 전까지 음식/인형 톤이 가까운 038 유물 아트를 임시 사용한다.
     'last-supper': relic038Url,
     // 태그 반응형 유물 — 전용 아트 전까지 테마가 가까운 기존 아트를 임시 사용한다.
-    'ember-heart': relic019Url, // 고품격 뗄감(불) 톤
-    whetstone: relic004Url,     // 조각칼(칼날) 톤
-    sharpening: relic021Url,    // 도끼(칼날) 톤 임시 재사용
+    whetstone: relic004Url,  // 조각칼(칼날) 톤 임시 재사용
+    hammer: relic019Url,     // 망치 전용 아트 전까지 임시 재사용
+    sharpening: relic021Url, // 도끼(칼날) 톤 임시 재사용
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,

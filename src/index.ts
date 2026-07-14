@@ -1409,6 +1409,13 @@ function applyHandCardUseRelics(def: HandCardDefinition, merged: boolean): void 
     merged,
   })
   for (const outcome of outcomes) {
+    // 파편 지급형(사용 기반 생성기): enqueueDrop = 일반 획득과 같은 정리 경로(손패 가득이면 무시).
+    if (outcome.grantCard) {
+      if (!HandSystem.enqueueDrop(gameState.character, DropSystem.makeCard(outcome.grantCard))) continue
+      recordRelicActivation(outcome.relicId, outcome.message)
+      render()
+      continue
+    }
     recordRelicActivation(outcome.relicId, outcome.message)
     // 자원 변화는 이미 Character에 반영됐고, 여기서는 HUD 카운터 펄스만 재생한다.
     if (outcome.feedback === 'ember') boardRenderer.playHudCounterFeedback('ember', gameState.character.ember)

@@ -50,8 +50,8 @@ export type RelicId =
   | 'demon-doll'
   | 'last-supper'
   // 태그 반응형 유물(TagReactions 프레임워크로 효과 발동 — index.ts 하드코딩 불필요).
-  | 'ember-heart'
   | 'whetstone'
+  | 'hammer'
   | 'sharpening'
 
 
@@ -457,19 +457,12 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     basePrice: 0,   // 상점 미등장 — 이벤트 보스 보상 전용
     weight: 0,
   },
-  // --- 태그 반응형 유물(TagReactions 프레임워크 예시) ---
+  // --- 태그 반응형 유물(TagReactions 프레임워크) ---
   // 효과 로직은 index.ts 하드코딩이 아니라 src/systems/TagReactions.ts 데이터로만 정의된다.
-  // 새 태그 반응형 유물은 여기 정의 + TAG_REACTIONS 항목만 추가하면 된다.
-  'ember-heart': {
-    id: 'ember-heart',
-    name: '불씨 심장',
-    rarity: 'rare',
-    effect: '불씨 손패 사용 시 불씨 게이지 +1',
-    flavor: '불의 곁에 두면 스스로도 조금씩 달아오르는 붉은 심지.',
-    basePrice: 780,
-    synergyTags: ['flame'],
-  },
-  // 커먼 "눈덩이 씨앗" — 처치마다 칼날 파편을 흘려 칼날 빌드를 시작하게 한다.
+  // 새 태그 반응형 유물은 여기 정의 + TAG_REACTIONS/생성기 항목만 추가하면 된다.
+  //
+  // [칼날(blade) 시너지 패밀리] 커먼 씨앗 2종(처치/사용) → 에픽 증폭 1종.
+  // 숫돌(커먼): 처치마다 칼날 파편을 흘려 칼날 빌드를 시작하게 한다.
   whetstone: {
     id: 'whetstone',
     name: '숫돌',
@@ -479,14 +472,24 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     basePrice: 520,
     synergyTags: ['blade'],
   },
-  // 레어 페이오프 엔진 — 칼날 씨앗(숫돌/파편)을 눈덩이로 키우는 증폭기.
+  // 망치(커먼): 칼날 손패를 쓸 때마다 낮은 확률로 파편이 떨어지는 사용 기반 씨앗.
+  hammer: {
+    id: 'hammer',
+    name: '망치',
+    rarity: 'common',
+    effect: '칼날 손패 사용 시 25% 확률로 칼날 파편 1장 획득',
+    flavor: '두드릴 때마다 튀는 불똥 같은 쇳조각 — 쓸수록 씨앗이 흩어진다.',
+    basePrice: 520,
+    synergyTags: ['blade'],
+  },
+  // 연마(에픽 증폭): 칼날 씨앗(숫돌/망치/파편)을 눈덩이로 키우는 페이오프 엔진.
   sharpening: {
     id: 'sharpening',
     name: '연마',
-    rarity: 'rare',
+    rarity: 'epic',
     effect: '칼날 손패 사용 시 모든 칼날 손패 피해 영구 +1',
     flavor: '벨수록 손에 붙는 날 — 한 번 벼릴 때마다 모든 칼이 더 깊이 파고든다.',
-    basePrice: 820,
+    basePrice: 1050,
     synergyTags: ['blade'],
   },
 }

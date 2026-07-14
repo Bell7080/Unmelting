@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Character } from '../entities/Character'
 import { getRelicDef } from '../data/Relics'
 import { HAND_CARD_DEFINITIONS } from '../data/HandCards'
@@ -10,38 +10,39 @@ function ctx(c: Character, tags: SynergyTag[], enh = makeDefaultEnhancements()) 
   return { character: c, enhancements: enh, tags, merged: false }
 }
 
+afterEach(() => { vi.restoreAllMocks() })
+
 describe('TagReactions(태그 반응 뼈대)', () => {
-  it('보유 유물 + 매칭 태그면 발동해 상태를 바꾼다', () => {
+  it('보유 유물 + 매칭 태그면 발동한다(연마)', () => {
     const c = new Character()
-    c.addRelic('ember-heart')
-    c.ember = 0
-    const out = runTagReactions('handCardUsed', ctx(c, ['flame']))
+    c.addRelic('sharpening')
+    const enh = makeDefaultEnhancements()
+    const out = runTagReactions('handCardUsed', ctx(c, ['blade'], enh))
     expect(out).toHaveLength(1)
-    expect(out[0].relicId).toBe('ember-heart')
-    expect(out[0].feedback).toBe('ember')
-    expect(c.ember).toBe(1)
+    expect(out[0].relicId).toBe('sharpening')
+    expect(enh.singleBonus['slash']).toBe(1)
   })
 
-  it('유물 미보유면 발동하지 않고 상태도 그대로다', () => {
+  it('유물 미보유면 발동하지 않고 강화치도 그대로다', () => {
     const c = new Character()
-    c.ember = 0
-    const out = runTagReactions('handCardUsed', ctx(c, ['flame']))
+    const enh = makeDefaultEnhancements()
+    const out = runTagReactions('handCardUsed', ctx(c, ['blade'], enh))
     expect(out).toHaveLength(0)
-    expect(c.ember).toBe(0)
+    expect(enh.singleBonus['slash'] ?? 0).toBe(0)
   })
 
   it('보유해도 태그가 안 맞으면 발동하지 않는다', () => {
     const c = new Character()
-    c.addRelic('ember-heart')
-    c.ember = 0
-    const out = runTagReactions('handCardUsed', ctx(c, ['shield']))
+    c.addRelic('sharpening')
+    const enh = makeDefaultEnhancements()
+    const out = runTagReactions('handCardUsed', ctx(c, ['shield'], enh))
     expect(out).toHaveLength(0)
-    expect(c.ember).toBe(0)
+    expect(enh.singleBonus['slash'] ?? 0).toBe(0)
   })
 
   it('태그가 비면 아무 반응도 실행하지 않는다', () => {
     const c = new Character()
-    c.addRelic('ember-heart')
+    c.addRelic('sharpening')
     const out = runTagReactions('handCardUsed', ctx(c, []))
     expect(out).toHaveLength(0)
   })
@@ -53,7 +54,6 @@ describe('TagReactions(태그 반응 뼈대)', () => {
     const bladeIds = handCardIdsWithTag('blade')
     expect(bladeIds.length).toBeGreaterThanOrEqual(5)
 
-    // 칼날 손패 2회 사용 → 모든 칼날 손패 강화 +2 누적.
     runTagReactions('handCardUsed', ctx(c, ['blade'], enh))
     runTagReactions('handCardUsed', ctx(c, ['blade'], enh))
 
@@ -65,11 +65,18 @@ describe('TagReactions(태그 반응 뼈대)', () => {
     expect(bladeIds).toContain('blade-shard')
   })
 
-  it('연마 미보유 시 칼날 손패를 써도 강화치가 오르지 않는다', () => {
+  it('망치: 칼날 손패 사용 시 25% 판정에 성공하면 칼날 파편을 지급하고, 실패하면 지급하지 않는다', () => {
     const c = new Character()
-    const enh = makeDefaultEnhancements()
-    runTagReactions('handCardUsed', ctx(c, ['blade'], enh))
-    expect(enh.singleBonus['slash'] ?? 0).toBe(0)
+    c.addRelic('hammer')
+
+    vi.spyOn(Math, 'random').mockReturnValue(0.1) // < 0.25 → 성공
+    const hit = runTagReactions('handCardUsed', ctx(c, ['blade']))
+    expect(hit).toHaveLength(1)
+    expect(hit[0].grantCard).toBe('blade-shard')
+
+    vi.spyOn(Math, 'random').mockReturnValue(0.9) // >= 0.25 → 실패
+    const miss = runTagReactions('handCardUsed', ctx(c, ['blade']))
+    expect(miss).toHaveLength(0)
   })
 
   it('모든 반응의 relicId는 실제 유물이고, anyTag가 그 유물 synergyTags와 일치한다', () => {
