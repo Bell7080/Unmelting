@@ -36,7 +36,7 @@ export interface BossDef {
   maxHp: number
   attack: number
   attackInterval: number
-  /** HP를 이 값만큼 잃을 때마다 플레이어에게 손패 1장 지급(30/60/90/100F 공통). */
+  /** HP를 이 값만큼(15) 잃을 때마다 플레이어에게 손패 1장 지급(30/60/90/100F 공통). */
   handGiftStep: number
   /** 보스 손패 효과(방패/체력/피해) 공통 수치. waxKnight/waxWitch가 사용한다. */
   handCardAmount: number
@@ -87,7 +87,7 @@ export interface BossEventState {
   summonedEnemyIds: Set<string>
   /** waxKnight/waxWitch 전용: 다음 피해를 먼저 흡수하는 밀랍 방패량 */
   bossShield: number
-  /** waxWitch 전용: 현재 HP 페이지(210~141 / 140~71 / 70~0). */
+  /** waxWitch 전용: 현재 HP 페이지(270~181 / 180~91 / 90~0). */
   witchPage: BossPage
   /** waxWitch 1페이지: (미사용 — 공격주기 소각으로 전환됨) */
   nextWitchHandBurnAt: number
@@ -172,10 +172,10 @@ export class BossEventController {
     // 플레이어의 격앙된 응답("네 저택이라고…?")이 이 빼앗긴 과거를 암시한다.
     const def: BossDef = {
       name: '양초 백작',
-      maxHp: 45,
-      attack: 3,
+      maxHp: 50,
+      attack: 4,
       attackInterval: 2,
-      handGiftStep: 10,
+      handGiftStep: 15,
       handCardAmount: 0,   // 30F는 전용 손패 효과를 쓰지 않는다(탐욕 살포로 대체).
       specialEnemyKind: 'waxArmy',
       groupCount: 3,
@@ -204,11 +204,11 @@ export class BossEventController {
     // 응답으로만 그 정체를 암시한다.
     const def: BossDef = {
       name: '불씨 기사단장',
-      maxHp: 60,
-      attack: 5,
+      maxHp: 80,
+      attack: 7,
       attackInterval: 2,
-      // 보스 체력 10 손실마다 손패 1장 지급(30/60/90/100F 공통).
-      handGiftStep: 10,
+      // 보스 체력 15 손실마다 손패 1장 지급(30/60/90/100F 공통).
+      handGiftStep: 15,
       handCardAmount: 3,
       specialEnemyKind: 'waxKnight',
       groupCount: 3,
@@ -235,11 +235,11 @@ export class BossEventController {
     // ("제피르의 꼭두각시")이 그 복선을 미리 깐다.
     const def: BossDef = {
       name: '밀랍 조각사',
-      maxHp: 100,
-      attack: 7,
+      maxHp: 130,
+      attack: 10,
       attackInterval: 3,
-      // 보스 체력 10 손실마다 손패 1장 지급(30/60/90/100F 공통).
-      handGiftStep: 10,
+      // 보스 체력 15 손실마다 손패 1장 지급(30/60/90/100F 공통).
+      handGiftStep: 15,
       handCardAmount: 0,   // 조각사는 전용 손패 효과를 쓰지 않는다.
       specialEnemyKind: 'waxSculptor',
       groupCount: 2,
@@ -265,11 +265,11 @@ export class BossEventController {
     // 3×3 타일은 양초 백작과 같은 CSS 확장 규칙을 쓰고, 3페이지에서만 2×3 후방 대기형으로 변한다.
     const def: BossDef = {
       name: '녹지 않는 마녀',
-      maxHp: 210,
+      maxHp: 270,
       attack: 15,
       attackInterval: 2,
-      // 보스 체력 10 손실마다 손패 1장 지급(30/60/90/100F 공통).
-      handGiftStep: 10,
+      // 보스 체력 15 손실마다 손패 1장 지급(30/60/90/100F 공통).
+      handGiftStep: 15,
       handCardAmount: 5,
       specialEnemyKind: 'waxWitch',
       groupCount: 3,
@@ -294,7 +294,7 @@ export class BossEventController {
   /** 악마 소환 레시피 발동 시 이벤트 보스 전투 — index.ts가 커튼을 닫은 뒤 호출한다. */
   async runDemonSummon(): Promise<void> {
     const turnCount = this.gs.getCurrentTurn()
-    const maxHp = 100 + turnCount
+    const maxHp = 130 + turnCount
     const attack = 3 + Math.floor(turnCount / 10)
     const spriteUrl = spriteForEventBoss('eventboss_001') ?? this.sprites.boss
     const def: BossDef = {
@@ -302,7 +302,7 @@ export class BossEventController {
       maxHp,
       attack,
       attackInterval: 2,
-      handGiftStep: 10,
+      handGiftStep: 15,
       handCardAmount: 0,
       specialEnemyKind: 'waxDemon',
       groupCount: 3,
@@ -398,11 +398,9 @@ export class BossEventController {
       this.inject.render()
     } else if (turnMod === 0) {
       if (state.def.specialEnemyKind === 'waxWitch') {
-        // 100F 페이지 능력은 해금 뒤 사라지지 않는다.
-        if (state.witchPage === 1) {
-          // 1페이지: 공격주기마다 손패 2장 소각
-          await this.burnRandomHandCardsFromWitch(card.id, 2)
-        }
+        // 100F 페이지 능력은 해금 뒤에도 유지된다 — 상위 페이지는 하위 페이지 능력을 함께 발동한다.
+        // 1페이지 능력(공격주기마다 손패 2장 소각)은 2·3페이지에서도 계속 실행한다.
+        await this.burnRandomHandCardsFromWitch(card.id, 2)
         if (state.witchPage >= 2) {
           if (await this.resolveWaxWitchPageTwoTurn(card.id)) return
           if (!this.gs.character.isAlive() || this.gs.character.authoritySurvivePending) {
@@ -546,6 +544,8 @@ export class BossEventController {
           // handleSculptorPhaseShift 대신 내부 로직만 호출 (setInputLocked는 호출부가 관리)
           await this.performSummonToBack()
         } else if (state.def.specialEnemyKind === 'waxWitch') {
+          // 1페이지 능력(손패 2장 소각)은 모든 페이지에서 매 공격주기마다 유지된다.
+          await this.burnRandomHandCardsFromWitch(state.card.id, 2)
           if (state.witchPage >= 2) {
             if (await this.resolveWaxWitchPageTwoTurn(state.card.id)) return
           } else {
@@ -915,13 +915,13 @@ export class BossEventController {
     await this.br.animateBossScatterToHandSlots(bossCardId, slotIndices)
   }
   /** 보스 페이지 HP 하한 — 경계를 넘는 피해를 깎기 전에 버려 HP바가 깜빡이지 않게 한다.
-   *  waxWitch: 1P→140, 2P→70, 3P→0. waxDemon: 1P→nextDemonPageAt, 2P→0. */
+   *  waxWitch: 1P→180, 2P→90, 3P→0. waxDemon: 1P→nextDemonPageAt, 2P→0. */
   private waxWitchPageFloor(): number {
     const state = this.eventState
     if (!state) return 0
     if (state.def.specialEnemyKind === 'waxWitch') {
-      if (state.witchPage === 1) return 140
-      if (state.witchPage === 2) return 70
+      if (state.witchPage === 1) return 180
+      if (state.witchPage === 2) return 90
       return 0
     }
     if (state.def.specialEnemyKind === 'waxDemon' && state.demonPage === 1) {
@@ -994,9 +994,9 @@ export class BossEventController {
     const hp = state.card.getHealth()
 
     if (state.witchPage === 1) {
-      if (hp <= 140) {
-        // 페이지 경계는 초과 피해를 버리고 정확히 140에서 멈춘다.
-        if (state.card.health < 140) state.card.health = 140
+      if (hp <= 180) {
+        // 페이지 경계는 초과 피해를 버리고 정확히 180에서 멈춘다.
+        if (state.card.health < 180) state.card.health = 180
         state.witchPage = 2
         state.turn = 0
         this.br.setBossAttackCountdown(state.def.attackInterval)
@@ -1009,9 +1009,9 @@ export class BossEventController {
       }
     }
 
-    if (state.witchPage === 2 && hp <= 70) {
-      // 페이지 경계는 초과 피해를 버리고 정확히 70에서 멈춘 뒤 즉시 3페이지 소환을 연다.
-      if (state.card.health < 70) state.card.health = 70
+    if (state.witchPage === 2 && hp <= 90) {
+      // 페이지 경계는 초과 피해를 버리고 정확히 90에서 멈춘 뒤 즉시 3페이지 소환을 연다.
+      if (state.card.health < 90) state.card.health = 90
       state.witchPage = 3
       state.turn = 0
       this.br.setBossAttackCountdown(state.def.attackInterval)

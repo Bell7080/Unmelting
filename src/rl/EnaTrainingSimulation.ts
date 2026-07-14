@@ -179,7 +179,7 @@ interface BossProfile {
   maxHp: number
   attack: number
   interval: number
-  /** HP를 이 값만큼 잃을 때마다 손패 1장 지급(실게임 공통 10). */
+  /** HP를 이 값만큼 잃을 때마다 손패 1장 지급(실게임 공통 15). */
   handGiftStep: number
   /** 공격 주기마다 쓰는 고유 패턴. */
   behavior: 'greed' | 'knightHand' | 'summon' | 'witch'
@@ -188,10 +188,10 @@ interface BossProfile {
 }
 
 const BOSS_PROFILES: Record<number, BossProfile> = {
-  30: { name: '양초 백작', maxHp: 45, attack: 3, interval: 2, handGiftStep: 10, behavior: 'greed' },
-  60: { name: '불씨 기사단장', maxHp: 60, attack: 5, interval: 2, handGiftStep: 10, behavior: 'knightHand' },
-  90: { name: '밀랍 조각사', maxHp: 100, attack: 7, interval: 3, handGiftStep: 10, behavior: 'summon' },
-  100: { name: '녹지 않는 마녀', maxHp: 210, attack: 15, interval: 2, handGiftStep: 10, behavior: 'witch', pages: [140, 70, 0] },
+  30: { name: '양초 백작', maxHp: 50, attack: 4, interval: 2, handGiftStep: 15, behavior: 'greed' },
+  60: { name: '불씨 기사단장', maxHp: 80, attack: 7, interval: 2, handGiftStep: 15, behavior: 'knightHand' },
+  90: { name: '밀랍 조각사', maxHp: 130, attack: 10, interval: 3, handGiftStep: 15, behavior: 'summon' },
+  100: { name: '녹지 않는 마녀', maxHp: 270, attack: 15, interval: 2, handGiftStep: 15, behavior: 'witch', pages: [180, 90, 0] },
 }
 
 /** 시뮬 상점이 다루는 실제 팩 종류(가격 반복 누적 추적용). */
@@ -1426,8 +1426,8 @@ export class EnaTrainingSimulation {
         this.bossHp = Math.min(this.bossMaxHp, this.bossHp + 4)
         break
       case 'witch':
-        // 마녀: 손패 1장 소각 + 강화 소환 피해.
-        if (this.hand.length > 0) this.consumeHand(this.hand.length - 1)
+        // 마녀: 손패 2장 소각(페이지와 무관하게 매 공격주기 유지) + 강화 소환 피해.
+        for (let n = 0; n < 2 && this.hand.length > 0; n++) this.consumeHand(this.hand.length - 1)
         this.takeDamage(3)
         break
     }

@@ -1262,11 +1262,11 @@ export class GameBoardRenderer {
     `
   }
 
-  /** 보스 HP바 페이지 경계선. 100F 마녀: 140/70, 악마: 65% 임계. */
+  /** 보스 HP바 페이지 경계선. 100F 마녀: 180/90, 악마: 65% 임계. */
   private renderBossHpPhaseMarkers(card: Card, maxHp: number): string {
     let thresholds: number[] = []
-    if (card.specialEnemyKind === 'waxWitch' && maxHp === 210) {
-      thresholds = [140, 70]
+    if (card.specialEnemyKind === 'waxWitch' && maxHp === 270) {
+      thresholds = [180, 90]
     } else if (card.specialEnemyKind === 'waxDemon') {
       thresholds = [Math.ceil(maxHp * 0.65)]
     }
