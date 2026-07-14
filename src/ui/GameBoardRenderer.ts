@@ -1898,7 +1898,7 @@ export class GameBoardRenderer {
     }
     if (id === 'chandelier') {
       const b = merged ? (enhancements?.tripleBonus['chandelier'] ?? 0) : (enhancements?.singleBonus['chandelier'] ?? 0)
-      const dmg = merged ? atkDmgHtml(atk, 3, 0, b) : atkDmgHtml(atk, 1.5, 0, b)
+      const dmg = merged ? atkDmgHtml(atk, 1, 2, b) : atkDmgHtml(atk, 0.5, 1, b)
       return `필드 전체 적 ${dmg} · 처치 시 반복`
     }
     if (id === 'bonfire') {

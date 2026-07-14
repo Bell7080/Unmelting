@@ -705,7 +705,7 @@ export class HandSystem {
         return HandSystem.damageTargetEnemyByAtk(gs, target, bonus)
       case 'chandelier':
         // 처치 발생 시 index.ts가 200ms 딜레이로 동일 라운드를 반복 실행한다(chandelierRepeat 참조).
-        return HandSystem.damageEnemies(gs, 'field', Math.floor(1.5 * c.damage) + bonus)
+        return HandSystem.damageEnemies(gs, 'field', Math.floor(0.5 * c.damage) + 1 + bonus)
       case 'bonfire':
         // 처치 발생 시 회복은 index.ts가 bonfireHealOnKill로 처리한다.
         return HandSystem.damageTargetEnemy(gs, target, Math.floor(c.damage) + bonus)
@@ -844,7 +844,7 @@ export class HandSystem {
         return HandSystem.damageTargetEnemyByAtk(gs, target, bonus)
       case 'chandelier':
         // 처치 발생 시 index.ts가 200ms 딜레이로 동일 라운드를 반복 실행한다(chandelierRepeat 참조).
-        return HandSystem.damageEnemies(gs, 'field', Math.floor(3 * c.damage) + bonus)
+        return HandSystem.damageEnemies(gs, 'field', Math.floor(1 * c.damage) + 2 + bonus)
       case 'bonfire':
         // 처치 발생 시 회복은 index.ts가 bonfireHealOnKill로 처리한다.
         return HandSystem.damageTargetEnemy(gs, target, Math.floor(3 * c.damage) + 3 + bonus)

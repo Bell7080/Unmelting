@@ -378,10 +378,10 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     name: '샹들리에',
     category: 'attack',
     synergyTags: ['flame'],
-    // 피해 근사 — HandSystem: 단일 floor(1.5공), 트리플 floor(3공)(처치 시 반복은 보수적으로 제외).
-    damageProfile: { base: { atkMult: 1.5, flat: 0 }, triple: { atkMult: 3, flat: 0 }, deterministic: true },
-    description: '필드 전체 적 (1.5공)피해 · 처치 시 반복',
-    tripleDescription: '필드 전체 적 (3.0공)피해 · 처치 시 반복',
+    // 피해 근사 — HandSystem: 단일 floor(0.5공)+1, 트리플 floor(1공)+2(처치 시 반복은 보수적으로 제외).
+    damageProfile: { base: { atkMult: 0.5, flat: 1 }, triple: { atkMult: 1, flat: 2 }, deterministic: true },
+    description: '필드 전체 적 (0.5공+1)피해 · 처치 시 반복',
+    tripleDescription: '필드 전체 적 (1.0공+2)피해 · 처치 시 반복',
     targeting: {
       base: { selection: 'all', zone: 'field', filter: 'enemy', countLimit: null },
       triple: { selection: 'all', zone: 'field', filter: 'enemy', countLimit: null },
