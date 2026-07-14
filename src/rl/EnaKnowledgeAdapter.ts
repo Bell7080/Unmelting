@@ -112,9 +112,13 @@ function analyzeHandCard(id: HandCardId): EnaHandCardTactic {
   const def = HAND_CARD_DEFINITIONS[id]
   const fullText = `${def.description} ${def.tripleDescription}`
   const recipeIds = RECIPES.filter((recipe) => (recipe.ingredients[id] ?? 0) > 0).map((recipe) => recipe.id)
-  const relicIds = RELIC_IDS.filter((relicId) => mentionsAny(RELIC_DEFINITIONS[relicId].effect, [def.name, categoryKorean(def.category), id]))
   const recipeSynergy = recipeIds.reduce((sum, recipeId) => sum + recipeValue(recipeId), 0)
-  const relicSynergy = relicIds.reduce((sum, relicId) => sum + relicDrawWeight(relicId) * 0.15 + RELIC_DEFINITIONS[relicId].basePrice / 2000, 0)
+  // 유물↔카드 연계는 효과 텍스트의 우연한 이름/카테고리 일치가 아니라, 공유 시너지 태그로만
+  // 판단한다. 태그 없는 유물이 풀에 추가돼도 카드 지식이 흔들리지 않아 RL 시드가 안정된다
+  // (텍스트 매칭 기반 스푸리어스 연계 제거). 연계 가치는 tagSynergyValue의 relicOverlap가 담당한다.
+  const relicIds = RELIC_IDS.filter(
+    (relicId) => synergyTagOverlap(def.synergyTags, RELIC_DEFINITIONS[relicId].synergyTags) > 0,
+  )
   const jobSynergy = JOBS.reduce((sum, job) => sum + (def.jobTags?.some((tag) => job.id.includes(tag)) ? 2 : 0), 0)
   const eventSynergy = Object.values(EVENT_DEFINITIONS).reduce((sum, event) => {
     const choices = event.choices.filter((choice) => choice.requiresHand === id || choice.effectLines.some((line) => line.includes(def.name)))
@@ -124,7 +128,7 @@ function analyzeHandCard(id: HandCardId): EnaHandCardTactic {
   const fieldValue = baseFieldValue(def) + textScore(fullText, ATTACK_WORDS, 1.5) + textScore(fullText, CONTROL_WORDS, 1.2) + textScore(fullText, RECOVERY_WORDS, 0.9) + textScore(fullText, ECONOMY_WORDS, 0.8)
   const bossValue = baseBossValue(def, fullText) + recipeIds.filter((recipeId) => recipeId.includes('fire') || recipeId.includes('hot') || recipeId.includes('fuse')).length * 0.6
   const tripleValue = tripleDeltaValue(def.targeting.base, def.targeting.triple, def.description, def.tripleDescription)
-  const synergyValue = recipeSynergy + relicSynergy + jobSynergy + eventSynergy + tagSynergyValue(def)
+  const synergyValue = recipeSynergy + jobSynergy + eventSynergy + tagSynergyValue(def)
   const liability = textScore(fullText, LIABILITY_WORDS, 1) + (def.dropSource === 'boss' ? 2 : 0) + (def.runLocked ? 0.4 : 0)
   const usePosition = describePosition(def)
   const timing = describeTiming(def, bossValue, tripleValue, liability)
@@ -296,10 +300,6 @@ function lightTurnMultiplier(turn: number): number {
   return 1 + turn * 0.015
 }
 
-function mentionsAny(text: string, words: readonly string[]): boolean {
-  return words.some((word) => word.length > 0 && text.includes(word))
-}
-
 function textScore(text: string, words: readonly string[], weight: number): number {
   return words.reduce((sum, word) => sum + (text.includes(word) ? weight : 0), 0)
 }
@@ -307,15 +307,6 @@ function textScore(text: string, words: readonly string[], weight: number): numb
 function maxNumber(text: string): number {
   const nums = [...text.matchAll(/\d+(?:\.\d+)?/g)].map((match) => Number(match[0]))
   return nums.length > 0 ? Math.max(...nums) : 0
-}
-
-function categoryKorean(category: HandCardDefinition['category']): string {
-  switch (category) {
-    case 'attack': return '공격'
-    case 'control': return '제어'
-    case 'recovery': return '회복'
-    case 'tool': return '도구'
-  }
 }
 
 function filterKorean(filter: HandEffectTargeting['filter']): string {
