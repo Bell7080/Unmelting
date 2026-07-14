@@ -13,6 +13,7 @@
 import type { Character } from '../entities/Character'
 import type { RelicId } from '../data/Relics'
 import type { SynergyTag } from '../data/Tags'
+import type { HandCardId } from '../entities/HandCard'
 
 /** 태그 반응이 걸리는 시점. 필요할 때 확장한다(예: 'enemyKilled', 'turnStart'). */
 export type TagReactionTrigger = 'handCardUsed'
@@ -61,17 +62,25 @@ export const TAG_REACTIONS: readonly TagReaction[] = [
       return { relicId: 'ember-heart', message: `불씨 +${gained}`, feedback: 'ember' }
     },
   },
-  {
-    // 숫돌: 칼날 태그 손패를 쓸 때마다 방패 +1 — 공격이 곧 방어 템포가 되는 기사 덱 지원.
-    relicId: 'whetstone',
-    trigger: 'handCardUsed',
-    anyTag: ['blade'],
-    apply: (ctx) => {
-      const shielded = ctx.character.addShield(1)
-      if (shielded <= 0) return null
-      return { relicId: 'whetstone', message: `방패 +${shielded}`, feedback: 'shield' }
-    },
-  },
+]
+
+/**
+ * 파편 생성기 유물 — "눈덩이 씨앗". 적 처치 시 태그가 달린 파편 손패를 손에 흘려 넣어,
+ * 혼자선 미미하지만 해당 태그 빌드를 시작하게 만든다(예: 숫돌 → 칼날 파편). 같은 생성기를
+ * 여럿 보유하면 지급량이 배수로 늘어난다(중복 스택). index.ts의 처치 디스패처가 소비한다.
+ * 새 생성기 = 여기 한 줄 + 파편 카드(HandCards) + 유물(Relics) 정의로 끝난다.
+ */
+export interface ShardGenerator {
+  relicId: RelicId
+  /** 처치 시 지급하는 파편 손패 id. */
+  shard: HandCardId
+  /** 처치 1회당 지급 수(기본 1). */
+  perKill: number
+}
+
+export const SHARD_GENERATORS: readonly ShardGenerator[] = [
+  // 숫돌(커먼): 처치마다 칼날 파편 1장 — 칼날 빌드의 시발점.
+  { relicId: 'whetstone', shard: 'blade-shard', perKill: 1 },
 ]
 
 /**

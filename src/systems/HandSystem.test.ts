@@ -119,6 +119,20 @@ describe('HandSystem broad hand effects', () => {
     expect(boss.frozenTurns).toBe(1)
   })
 
+  it('칼날 파편은 필드 랜덤 적 1장에게 1피해를 준다(생성기 시너지 씨앗)', () => {
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+    const enemy = new Card('e1', CardType.ENEMY, '적', 'test', 5, 1, {})
+    gameState.lanes[0].setCardAtDistance(0, enemy)
+    gameState.character.addHandCard(DropSystem.makeCard('blade-shard'))
+
+    // selection 'random'이라 대상 클릭 없이 사용된다(적이 1체면 그 적이 피해를 받는다).
+    const result = HandSystem.useSingle(gameState, chain, 0)
+
+    expect(result.success).toBe(true)
+    expect(enemy.getHealth()).toBe(4)
+  })
+
   it('makes triple 밀랍 freeze every front-row turn timer card', () => {
     const gameState = new GameState()
     const chain = HandSystem.newChain()

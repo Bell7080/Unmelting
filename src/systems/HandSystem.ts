@@ -694,6 +694,9 @@ export class HandSystem {
         const damage = Math.max(0, c.shield) + bonus
         return HandSystem.damageTargetEnemy(gs, target, damage)
       }
+      case 'blade-shard':
+        // 랜덤 단일 적 1피해(+강화). distributeDamage(1)이 1점을 무작위 1체에 넣는다.
+        return HandSystem.distributeDamageAmongEnemies(gs, 1 + bonus)
       case 'sacrifice-shield': {
         // 자해는 selfDamageFor에서 처리. 방패 획득만 여기서 적용.
         const shielded = c.addShield(2 + bonus)
@@ -832,6 +835,9 @@ export class HandSystem {
         const damage = Math.max(0, c.shield) * (3 + bonus)
         return `방패 +3 · ${HandSystem.damageTargetEnemy(gs, target, damage)}`
       }
+      case 'blade-shard':
+        // 트리플: 3피해를 무작위로 분산.
+        return HandSystem.distributeDamageAmongEnemies(gs, 3 + bonus)
       case 'sacrifice-shield': {
         // 자해는 selfDamageFor에서 처리. 방패 획득만 여기서 적용.
         const shielded = c.addShield(7 + bonus)

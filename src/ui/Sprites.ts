@@ -326,6 +326,7 @@ export const SpriteUrls = {
     teacup: handCard024Url,
     'top-hat': handCard025Url,
     slash: handCard026Url,
+    'blade-shard': handCard026Url, // 전용 아트 전까지 참격(칼날) 아트 임시 재사용
     shackles: handCard027Url,
     // 신규 손패 — 전용 아트 연동 완료.
     'candle-tome': handCard028Url,

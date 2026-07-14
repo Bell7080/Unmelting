@@ -37,7 +37,7 @@ import { CardSpawner } from '@systems/CardSpawner'
 import { ActionSystem, ActionType } from '@systems/ActionSystem'
 import { DropSystem } from '@systems/DropSystem'
 import { HandSystem, ChainState } from '@systems/HandSystem'
-import { runTagReactions } from '@systems/TagReactions'
+import { runTagReactions, SHARD_GENERATORS } from '@systems/TagReactions'
 import { EmberSystem } from '@systems/EmberSystem'
 import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT, Lane } from '@entities/Lane'
@@ -1344,6 +1344,29 @@ async function onEnemiesDefeated(count: number): Promise<void> {
   await applyRedPotionEnemyDefeats(count)
   applyInkQuillKills(count)
   applyAmbitionKills(count)
+  applyShardGenerators(count)
+}
+
+/** 파편 생성기 유물: 처치마다 태그 파편 손패를 지급한다(SHARD_GENERATORS 데이터 주도).
+ *  같은 생성기 유물을 여럿 보유하면 지급량이 배수로 늘어난다(중복 스택). */
+function applyShardGenerators(kills: number): void {
+  if (kills <= 0) return
+  const character = gameState.character
+  for (const gen of SHARD_GENERATORS) {
+    const copies = character.relics.filter((id) => id === gen.relicId).length
+    if (copies === 0) continue
+    const want = kills * gen.perKill * copies
+    let granted = 0
+    for (let i = 0; i < want; i++) {
+      // enqueueDrop = 일반 획득과 같은 정리 경로(손패 가득이면 중단). 3장째는 자동 트리플.
+      if (!HandSystem.enqueueDrop(character, DropSystem.makeCard(gen.shard))) break
+      granted++
+    }
+    if (granted > 0) {
+      recordRelicActivation(gen.relicId, `${getHandCardDef(gen.shard).name} +${granted}`)
+      render()
+    }
+  }
 }
 
 /** 야망: 적 8처치마다 불빛을 25씩 늘어나며(25→50→75…) 획득한다. 누적 보너스는 런 동안 유지. */

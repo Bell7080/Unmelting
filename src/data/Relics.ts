@@ -468,13 +468,14 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     basePrice: 780,
     synergyTags: ['flame'],
   },
+  // 커먼 "눈덩이 씨앗" — 처치마다 칼날 파편을 흘려 칼날 빌드를 시작하게 한다.
   whetstone: {
     id: 'whetstone',
     name: '숫돌',
-    rarity: 'rare',
-    effect: '칼날 손패 사용 시 방패 +1',
-    flavor: '날을 세울수록 손에 익는 단단한 돌.',
-    basePrice: 780,
+    rarity: 'common',
+    effect: '적 처치 시 칼날 파편 1장 획득',
+    flavor: '갈아낼수록 부스러기가 떨어진다 — 하나하나가 새 칼날의 씨앗이다.',
+    basePrice: 520,
     synergyTags: ['blade'],
   },
 }

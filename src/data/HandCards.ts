@@ -599,6 +599,26 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: false,
   },
+  // 칼날 파편: 생성기 유물(숫돌)이 처치마다 지급하는 시너지 씨앗. 혼자선 미미하지만
+  // 칼날 태그를 쌓아 칼날 빌드를 시작하게 한다. 일반 드롭/드로우 풀에는 절대 없다.
+  'blade-shard': {
+    id: 'blade-shard',
+    name: '칼날 파편',
+    category: 'attack',
+    synergyTags: ['blade'],
+    // 피해 = 랜덤 단일 적에게 1(+강화). 대상이 무작위라 확정 처치 계산엔 쓰지 않는다.
+    damageProfile: { base: { atkMult: 0, flat: 1 }, triple: { atkMult: 0, flat: 3 }, deterministic: false },
+    description: '필드 랜덤 적 1장 1피해',
+    tripleDescription: '필드 랜덤 적 3피해 분산',
+    targeting: {
+      base: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: 1 },
+      triple: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: null },
+    },
+    dropWeight: 0,      // 일반 드롭/드로우 풀 제외
+    dropSource: 'relic', // 생성기 유물 전용
+    metaRequired: false,
+    runLocked: false,
+  },
 }
 
 export const HAND_CARD_IDS: HandCardId[] = Object.keys(HAND_CARD_DEFINITIONS) as HandCardId[]
