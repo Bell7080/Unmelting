@@ -79,6 +79,12 @@ describe('TagReactions(태그 반응 뼈대)', () => {
     expect(miss).toHaveLength(0)
   })
 
+  it('handCardIdsWithTag는 태그별 손패를 반환한다(도서관 마도서 지급 풀 전제)', () => {
+    const tomeCards = handCardIdsWithTag('tome')
+    expect(tomeCards.length).toBeGreaterThan(0) // 도서관이 지급할 마도서가 존재해야 한다
+    expect(handCardIdsWithTag('blade')).toContain('slash')
+  })
+
   it('모든 반응의 relicId는 실제 유물이고, anyTag가 그 유물 synergyTags와 일치한다', () => {
     for (const r of TAG_REACTIONS) {
       const def = getRelicDef(r.relicId)

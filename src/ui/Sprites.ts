@@ -299,6 +299,9 @@ export const SpriteUrls = {
     whetstone: relic004Url,  // 조각칼(칼날) 톤 임시 재사용
     hammer: relic019Url,     // 망치 전용 아트 전까지 임시 재사용
     sharpening: relic021Url, // 도끼(칼날) 톤 임시 재사용
+    'overflow-wax': relic005Url, // 생명선(회복) 톤 임시 재사용
+    'thorn-shield': relic003Url, // 귀족의 품격(방패) 톤 임시 재사용
+    library: relic008Url,        // 잉크와 깃펜(서적) 톤 임시 재사용
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,

@@ -37,7 +37,7 @@ import { CardSpawner } from '@systems/CardSpawner'
 import { ActionSystem, ActionType } from '@systems/ActionSystem'
 import { DropSystem } from '@systems/DropSystem'
 import { HandSystem, ChainState } from '@systems/HandSystem'
-import { runTagReactions, SHARD_GENERATORS } from '@systems/TagReactions'
+import { runTagReactions, SHARD_GENERATORS, handCardIdsWithTag } from '@systems/TagReactions'
 import { EmberSystem } from '@systems/EmberSystem'
 import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT, Lane } from '@entities/Lane'
@@ -1337,6 +1337,27 @@ async function applyBloodPackHit(amount: number): Promise<void> {
   }
 }
 
+/** 가시 방패: 획득 방패 1당 전방 랜덤 적을 1씩 찌른다(방어=공격). 처치는 처치 후속을 이어받는다. */
+async function applyThornShieldHits(shieldGained: number): Promise<void> {
+  let hits = 0
+  let kills = 0
+  for (let i = 0; i < shieldGained; i++) {
+    const hit = gameState.damageRandomFrontEnemy(1)
+    if (!hit) break // 전방 적 없음
+    hits++
+    await boardRenderer.animateDamageNumbersById([{ cardId: hit.cardId, amount: hit.amount }])
+    if (hit.defeated) {
+      await boardRenderer.animateCardConsumeByIds([{ cardId: hit.cardId, type: CardType.ENEMY }], {
+        suppressBurstIds: new Set([hit.cardId]),
+      })
+      kills++
+    }
+  }
+  if (hits === 0) return // 전방 적이 없으면 조용히 종료
+  recordRelicActivation('thorn-shield', kills > 0 ? `전방 적 관통 (처치 ${kills})` : `전방 적 피해 ${hits}`)
+  if (kills > 0) await onEnemiesDefeated(kills)
+}
+
 /** 적 처치 시 처치 기반 유물을 한 번에 처리한다(붉은 포션 회복 + 잉크와 깃펜 카운트).
  *  blood-pack은 onHealGain 콜백으로 자동 발동되므로 별도 파라미터 불필요. */
 async function onEnemiesDefeated(count: number): Promise<void> {
@@ -1622,6 +1643,26 @@ async function applyTurnStartRelics(): Promise<void> {
         await playResourceTrail({ kind: 'chain' }, 'hand', 1)
       }
     }
+  }
+
+  // 도서관: 매 턴 카운트다운 -1(마도서 사용도 -1). 0에서 마도서 카드 지급 후 +4.
+  advanceLibrary(1)
+}
+
+/** 도서관: 카운트다운을 steps만큼 줄이고, 0 이하가 될 때마다 마도서(tome) 카드 1장을 지급 후 +4.
+ *  턴 진행과 마도서 사용이 같은 카운트다운을 공유해, 마도서를 굴릴수록 다음 책이 빨리 온다. */
+function advanceLibrary(steps: number): void {
+  const character = gameState.character
+  if (!character.hasRelic('library')) return
+  gameState.enhancements.libraryCountdown -= steps
+  const tomeIds = handCardIdsWithTag('tome')
+  while (gameState.enhancements.libraryCountdown <= 0) {
+    gameState.enhancements.libraryCountdown += 4
+    if (tomeIds.length === 0) break
+    const pick = tomeIds[Math.floor(Math.random() * tomeIds.length)]
+    if (!HandSystem.enqueueDrop(character, DropSystem.makeCard(pick))) break // 손패 가득
+    recordRelicActivation('library', `${getHandCardDef(pick).name} 획득`)
+    render()
   }
 }
 
@@ -3795,6 +3836,18 @@ function resetForNewRun(): void {
   gameState.character.onHealGain = (amount) => {
     if (gameState.character.hasRelic('blood-pack')) void applyBloodPackHit(amount)
   }
+  // 넘치는 촛농: 오버힐을 방패로 전환하고, 그 전환량을 '회복'으로도 집계해 헌혈팩까지 발동한다.
+  gameState.character.onHealOverflow = (overflow) => {
+    if (!gameState.character.hasRelic('overflow-wax')) return
+    const shielded = gameState.character.addShield(overflow) // addShield가 가시 방패도 연쇄 발동
+    recordRelicActivation('overflow-wax', `초과 회복 → 방패 +${shielded}`)
+    boardRenderer.playHudCounterFeedback('shield', gameState.character.shield)
+    if (gameState.character.hasRelic('blood-pack')) void applyBloodPackHit(overflow)
+  }
+  // 가시 방패: 방패를 얻을 때마다 획득량만큼 전방 랜덤 적을 1씩 찌른다.
+  gameState.character.onShieldGain = (amount) => {
+    if (gameState.character.hasRelic('thorn-shield')) void applyThornShieldHits(amount)
+  }
   cardSpawner.resetRelicModifiers()
   cardSpawner.resetSpawnState()
   // 비게임플레이(BGM)만 제외하고 잔여 상태를 모두 비운다: 체인 UID, 팩 세션, 디버그 이벤트, 말풍선.
@@ -4707,6 +4760,8 @@ async function applyHandSingle(
   applyHonestyHandUse(1)
   // 태그 반응형 유물: 사용한 손패의 시너지 태그에 반응하는 유물 효과를 데이터 주도로 발동한다.
   if (usedDef) applyHandCardUseRelics(usedDef, usedCard?.merged === true)
+  // 도서관: 마도서 태그 손패를 쓰면 다음 마도서까지의 카운트다운이 1 줄어든다(엔진 가속).
+  if (usedDef?.synergyTags?.includes('tome')) advanceLibrary(1)
   // 동료(에나) 손패 사용 한줄평 — 가끔 그 카드의 능력에 대해 한마디.
   if (usedDef && companionWorldCanSpeak()) {
     const bark = companion.onUseCard(usedDef.id, usedDef.category, gameState.getCurrentTurn())

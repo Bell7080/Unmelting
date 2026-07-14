@@ -42,8 +42,10 @@ export interface RunEnhancements {
   ambitionKillCount: number
   /** 야망 다음 발동 시 지급할 불빛량 (25→50→75…). */
   ambitionCurrentGain: number
+  /** 도서관 유물: 다음 마도서 카드 지급까지 남은 카운트(턴/마도서 사용마다 -1, 0에서 지급 후 +4). */
+  libraryCountdown: number
 }
 
 export function makeDefaultEnhancements(): RunEnhancements {
-  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, blackCandleBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, tier1CardBoosts: {}, tier1JobPoolBoosts: {}, inkQuillKillCount: 0, honestyHandUseCount: 0, ambitionKillCount: 0, ambitionCurrentGain: 0 }
+  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, blackCandleBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, tier1CardBoosts: {}, tier1JobPoolBoosts: {}, inkQuillKillCount: 0, honestyHandUseCount: 0, ambitionKillCount: 0, ambitionCurrentGain: 0, libraryCountdown: 4 }
 }

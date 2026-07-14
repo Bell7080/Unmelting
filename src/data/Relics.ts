@@ -53,6 +53,10 @@ export type RelicId =
   | 'whetstone'
   | 'hammer'
   | 'sharpening'
+  // 행동 수정자형 유물(자연 연계 시너지).
+  | 'overflow-wax'
+  | 'thorn-shield'
+  | 'library'
 
 
 /** Runtime-customized relic face/effect. Hearth dinner uses this so one real relic id can
@@ -491,6 +495,37 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '벨수록 손에 붙는 날 — 한 번 벼릴 때마다 모든 칼이 더 깊이 파고든다.',
     basePrice: 1050,
     synergyTags: ['blade'],
+  },
+  // [행동 수정자] 넘치는 촛농(레어): 풀피 초과 회복이 낭비되지 않고 방패로 전환된다.
+  // 전환량은 '회복'으로도 집계돼 헌혈팩(회복→전방 피해)까지 발동 — 붉은 포션과 3중 연계.
+  'overflow-wax': {
+    id: 'overflow-wax',
+    name: '넘치는 촛농',
+    rarity: 'rare',
+    effect: '최대치를 넘긴 회복량을 방패로 전환(회복으로도 집계)',
+    flavor: '가득 찬 잔을 넘어 흘러도, 촛농은 굳어 또 하나의 벽이 된다.',
+    basePrice: 820,
+    synergyTags: ['heal'],
+  },
+  // [행동 수정자] 가시 방패(에픽): 방패를 얻는 행위 자체가 압박이 된다(방어=공격).
+  'thorn-shield': {
+    id: 'thorn-shield',
+    name: '가시 방패',
+    rarity: 'epic',
+    effect: '방패 1 획득마다 전방 랜덤 적에게 피해 1',
+    flavor: '막기만 하던 방패에 날이 섰다.',
+    basePrice: 1080,
+    synergyTags: ['shield'],
+  },
+  // [행동 수정자] 도서관(유니크): 마도서 엔진. 마도서를 굴릴수록 다음 마도서가 빨리 온다.
+  library: {
+    id: 'library',
+    name: '도서관',
+    rarity: 'unique',
+    effect: '4턴마다 마도서 카드 획득 · 마도서 사용 시 남은 턴 -1',
+    flavor: '한 장을 읽어치울 때마다 다음 책장이 저절로 넘어간다.',
+    basePrice: 1200,
+    synergyTags: ['tome'],
   },
 }
 

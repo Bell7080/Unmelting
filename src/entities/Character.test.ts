@@ -76,4 +76,37 @@ describe('Character item effects', () => {
     expect(character.maxHealth).toBe(20)
     expect(character.health).toBe(20)
   })
+
+  it('오버힐이 발생하면 onHealOverflow를 초과분으로 호출한다(넘치는 촛농 훅)', () => {
+    const character = new Character() // 20/20 풀피
+    let overflow = 0
+    character.onHealOverflow = (o) => { overflow = o }
+
+    const gained = character.heal(5)
+
+    expect(gained).toBe(0)     // 풀피라 실제 회복 0
+    expect(overflow).toBe(5)   // 5 전부 오버플로우
+  })
+
+  it('일부만 차면 회복분만큼 채우고 나머지가 오버플로우다', () => {
+    const character = new Character()
+    character.takeDamage(2) // 18/20
+    let overflow = 0
+    character.onHealOverflow = (o) => { overflow = o }
+
+    const gained = character.heal(5) // 2 회복, 3 초과
+
+    expect(gained).toBe(2)
+    expect(overflow).toBe(3)
+  })
+
+  it('addShield는 onShieldGain을 획득량으로 호출한다(가시 방패 훅)', () => {
+    const character = new Character()
+    let shieldGain = 0
+    character.onShieldGain = (a) => { shieldGain = a }
+
+    character.addShield(3)
+
+    expect(shieldGain).toBe(3)
+  })
 })

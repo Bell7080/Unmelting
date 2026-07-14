@@ -125,6 +125,10 @@ export class Character {
 
   /** 헌혈팩 유물용: heal()로 실제 HP가 회복될 때마다 호출된다. 비동기 처리는 외부에서 담당. */
   onHealGain?: (amount: number) => void
+  /** 넘치는 촛농 유물용: 최대치를 넘겨 버려진 회복량(오버힐)이 있을 때 호출된다. */
+  onHealOverflow?: (overflow: number) => void
+  /** 가시 방패 유물용: addShield로 방패를 실제로 얻을 때마다 호출된다. */
+  onShieldGain?: (amount: number) => void
 
   heal(amount: number): number {
     const actualHeal = Math.max(0, amount)
@@ -132,6 +136,8 @@ export class Character {
     this.health = Math.min(this.maxHealth, this.health + actualHeal)
     const gained = this.health - before
     if (gained > 0) this.onHealGain?.(gained)
+    const overflow = actualHeal - gained
+    if (overflow > 0) this.onHealOverflow?.(overflow)
     return gained
   }
 
@@ -220,6 +226,7 @@ export class Character {
   addShield(amount: number): number {
     const actualShield = Math.max(0, amount)
     this.shield += actualShield
+    if (actualShield > 0) this.onShieldGain?.(actualShield)
     return actualShield
   }
 
