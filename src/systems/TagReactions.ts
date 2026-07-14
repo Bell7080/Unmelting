@@ -14,6 +14,8 @@ import type { Character } from '../entities/Character'
 import type { RelicId } from '../data/Relics'
 import type { SynergyTag } from '../data/Tags'
 import type { HandCardId } from '../entities/HandCard'
+import type { RunEnhancements } from '../core/RunEnhancements'
+import { HAND_CARD_DEFINITIONS } from '../data/HandCards'
 
 /** 태그 반응이 걸리는 시점. 필요할 때 확장한다(예: 'enemyKilled', 'turnStart'). */
 export type TagReactionTrigger = 'handCardUsed'
@@ -21,10 +23,25 @@ export type TagReactionTrigger = 'handCardUsed'
 /** 반응 발동 시 전달되는 상황. */
 export interface TagReactionContext {
   character: Character
+  /** 런 강화치 — 누적 엔진형 유물이 태그별 손패 강화를 쌓는 통로. */
+  enhancements: RunEnhancements
   /** 이번 이벤트로 관여한 태그(손패 사용이면 그 손패의 synergyTags). */
   tags: readonly SynergyTag[]
   /** 트리플(합체) 사용 여부. handCardUsed에서만 의미가 있다. */
   merged: boolean
+}
+
+/** 태그별 손패 id 목록(모듈 로드 시 1회 계산). 누적 엔진이 "이 태그 카드 전부"를 강화할 때 쓴다. */
+const CARD_IDS_BY_TAG: Partial<Record<SynergyTag, HandCardId[]>> = (() => {
+  const map: Partial<Record<SynergyTag, HandCardId[]>> = {}
+  for (const def of Object.values(HAND_CARD_DEFINITIONS)) {
+    for (const tag of def.synergyTags ?? []) (map[tag] ??= []).push(def.id)
+  }
+  return map
+})()
+
+export function handCardIdsWithTag(tag: SynergyTag): readonly HandCardId[] {
+  return CARD_IDS_BY_TAG[tag] ?? []
 }
 
 /** 반응이 실제로 무엇을 했는지 — index.ts가 자원 트레일/배너 연출로 옮긴다. */
@@ -60,6 +77,20 @@ export const TAG_REACTIONS: readonly TagReaction[] = [
       const gained = ctx.character.gainEmber(1)
       if (gained <= 0) return null
       return { relicId: 'ember-heart', message: `불씨 +${gained}`, feedback: 'ember' }
+    },
+  },
+  {
+    // 연마(레어 페이오프 엔진): 칼날 손패를 쓸 때마다 이번 런 모든 칼날 손패의 피해를 영구 +1.
+    // 참격/검과방패/불화살은 물론 숫돌이 흘리는 칼날 파편까지 함께 커지는 눈덩이 — 칼날 씨앗의 증폭기.
+    relicId: 'sharpening',
+    trigger: 'handCardUsed',
+    anyTag: ['blade'],
+    apply: (ctx) => {
+      for (const id of handCardIdsWithTag('blade')) {
+        ctx.enhancements.singleBonus[id] = (ctx.enhancements.singleBonus[id] ?? 0) + 1
+        ctx.enhancements.tripleBonus[id] = (ctx.enhancements.tripleBonus[id] ?? 0) + 1
+      }
+      return { relicId: 'sharpening', message: '칼날 벼림 (칼날 피해 +1)' }
     },
   },
 ]

@@ -133,6 +133,19 @@ describe('HandSystem broad hand effects', () => {
     expect(enemy.getHealth()).toBe(4)
   })
 
+  it('강화된 칼날 파편은 강화치만큼 더 큰 피해를 준다(연마 누적 연동)', () => {
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+    const enemy = new Card('e1', CardType.ENEMY, '적', 'test', 5, 1, {})
+    gameState.lanes[0].setCardAtDistance(0, enemy)
+    gameState.enhancements.singleBonus['blade-shard'] = 2 // 연마가 칼날 강화치를 +2 누적한 상태
+    gameState.character.addHandCard(DropSystem.makeCard('blade-shard'))
+
+    HandSystem.useSingle(gameState, chain, 0)
+
+    expect(enemy.getHealth()).toBe(2) // 1 + 2 = 3 피해
+  })
+
   it('makes triple 밀랍 freeze every front-row turn timer card', () => {
     const gameState = new GameState()
     const chain = HandSystem.newChain()

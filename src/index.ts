@@ -1404,6 +1404,7 @@ function applyHandCardUseRelics(def: HandCardDefinition, merged: boolean): void 
   if (!tags || tags.length === 0) return
   const outcomes = runTagReactions('handCardUsed', {
     character: gameState.character,
+    enhancements: gameState.enhancements,
     tags,
     merged,
   })

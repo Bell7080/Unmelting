@@ -52,6 +52,7 @@ export type RelicId =
   // 태그 반응형 유물(TagReactions 프레임워크로 효과 발동 — index.ts 하드코딩 불필요).
   | 'ember-heart'
   | 'whetstone'
+  | 'sharpening'
 
 
 /** Runtime-customized relic face/effect. Hearth dinner uses this so one real relic id can
@@ -476,6 +477,16 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '적 처치 시 칼날 파편 1장 획득',
     flavor: '갈아낼수록 부스러기가 떨어진다 — 하나하나가 새 칼날의 씨앗이다.',
     basePrice: 520,
+    synergyTags: ['blade'],
+  },
+  // 레어 페이오프 엔진 — 칼날 씨앗(숫돌/파편)을 눈덩이로 키우는 증폭기.
+  sharpening: {
+    id: 'sharpening',
+    name: '연마',
+    rarity: 'rare',
+    effect: '칼날 손패 사용 시 모든 칼날 손패 피해 영구 +1',
+    flavor: '벨수록 손에 붙는 날 — 한 번 벼릴 때마다 모든 칼이 더 깊이 파고든다.',
+    basePrice: 820,
     synergyTags: ['blade'],
   },
 }
