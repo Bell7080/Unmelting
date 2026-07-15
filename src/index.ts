@@ -3356,10 +3356,25 @@ function isOnboardingActive(): boolean {
   return onboardingRunActive
 }
 
-/** 최전방에서 만료된 온보딩 필드 카드를 제거하고 라인 정리/리필을 돌린다(그냥 싹 사라짐). */
+/** 온보딩 필드 카드 사라짐 블라스트 테마 — 종류별 팔레트. */
+function fieldBurstTheme(card: Card): BurstTheme {
+  if (card.trapKind === 'bush') return 'flower-wilt'       // 덤불 = 시드는 풀
+  if (card.treasureKind === 'junk') return 'treasure-gain' // 잡동사니 = 흩어지는 잡동
+  return 'vanish-smoke'                                    // 바위 = 흙먼지
+}
+
+/** 최전방에서 만료된 온보딩 필드 카드를 은은한 페이드+테마 블라스트로 지우고 라인 정리를 돌린다. */
 async function resolveExpiredOnboardingFields(): Promise<void> {
   const expired = turnManager.tickFieldExpiries()
   if (expired.length === 0) return
+  // 은은하게 흐려지며 사라지고, 종류에 맞는 블럭 블라스트가 터진다.
+  for (const { card } of expired) {
+    const cell = document.querySelector<HTMLElement>(`.cell.card[data-card-id="${card.id}"]`)
+    if (!cell) continue
+    cell.classList.add('field-expire-fade')
+    SquareBurst.playOn(cell, fieldBurstTheme(card), { count: 14, spread: 120, duration: 520 })
+  }
+  await wait(300)
   // 합체 카드는 tickFieldExpiries의 seen으로 이미 1회 취급됨 — 각 카드를 한 번씩 제거한다.
   for (const { card } of expired) gameState.removeCardFromRow(card, 0)
   render()

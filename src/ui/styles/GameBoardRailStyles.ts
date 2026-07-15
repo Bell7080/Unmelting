@@ -690,6 +690,15 @@ export const GAME_BOARD_RAIL_STYLES = `
   position: relative;
   z-index: 40;
 }
+/* 온보딩 필드 카드 만료: 은은하게 흐려지며 사라진다(테마 블라스트는 SquareBurst가 처리). */
+.cell.card.field-expire-fade {
+  animation: field-expire-fade 0.3s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes field-expire-fade {
+  to { opacity: 0; filter: blur(2.5px); transform: scale(0.9); }
+}
+
 /* ---- 사이즈 유형: boss-kind-waxArmy = 3x3 거대 적 ----
    active row의 grouped 3-cell이 .rail의 3 row를 모두 점유해 3x3 풀필드로 보인다.
    윗 두 row(dist-1, dist-2)는 보스 phase 동안 보스에 가려져야 하므로 숨긴다.
