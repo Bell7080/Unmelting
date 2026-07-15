@@ -93,6 +93,7 @@ export const HEARTH_STYLES = `
   opacity: 0.55;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
 }
+.hearth-cell-lock-icon { width: 100%; height: 100%; }
 .hearth-cell__name {
   font-size: clamp(11px, 1.6vh, 16px);
   font-weight: 800;

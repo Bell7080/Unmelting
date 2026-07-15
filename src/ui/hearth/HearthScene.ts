@@ -32,6 +32,8 @@ const DINNER_INDEX = 8
 
 /** 마지막으로 본 모험 동행을 다음 거점 진입에도 복원하기 위한 로컬 저장 키. */
 const HEARTH_LAST_CHARACTER_KEY = 'unmelting.hearth.lastCharacterIndex'
+/** 개발용 전체 개방 플래그 저장 키 — /개방 명령이 '1'로 세팅하면 모든 칸을 연다. */
+export const HEARTH_DEV_UNLOCK_KEY = 'unmelting.hearth.devUnlockAll'
 const DINNER_DONE_LINE = '하하, 식사는 만족스러우셨나요? 다음 만찬도 기대해주세요.'
 
 type DinnerStatKey = 'maxHealth' | 'emberMax' | 'handMax' | 'scorePct' | 'damage' | 'shopDiscount' | 'startScore'
@@ -180,6 +182,8 @@ export class HearthScene {
   private characterConfirmed = false
   /** 캐릭터 확정 뒤 출발 버튼 위에서 넘겨 고르는 시작 난이도 인덱스. */
   private selectedDifficultyIndex = 0
+  /** /개방 개발 명령으로 모든 칸을 강제 개방하는 플래그(로컬 저장 복원). */
+  private devUnlockAll = false
   /** 커버플로우 드래그 시작 X 좌표. 좌우 한 바퀴 순환 입력을 판정한다. */
   private dragStartX: number | null = null
   /** 드래그 대상 구분: 캐릭터 스트립 vs 난이도 스트립(같은 pointer 핸들러 공유). */
@@ -203,6 +207,8 @@ export class HearthScene {
     this.shuttered = false
     this.departing = false
     this.interactive = false
+    // /개방 개발 명령으로 세팅된 전체 개방 플래그를 복원한다(칸 게이팅에 반영).
+    this.devUnlockAll = window.localStorage.getItem(HEARTH_DEV_UNLOCK_KEY) === '1'
     // 난이도 선택 초기화(잠긴 난이도면 개방된 최고 난이도로 폴백) — 셔터 HTML 빌드 전에 확정한다.
     this.initDifficultySelection()
     this.dinnerConsumed = this.hasDinnerRelicInInventory()
@@ -411,7 +417,7 @@ export class HearthScene {
     // 페이드인이 끝난 뒤에야 커튼 로직 시작: 조금 더 닫혀 있다가 천천히 열린다 → 모험 점등.
     window.setTimeout(() => this.overlay?.classList.add('is-opening'), 1700)
     window.setTimeout(() => {
-      this.overlay?.querySelectorAll<HTMLElement>('.hearth-cell--open, [data-hearth-station="adventure"]').forEach((cell, idx) => {
+      this.overlay?.querySelectorAll<HTMLElement>('.hearth-cell--open, .hearth-cell--locked, [data-hearth-station="adventure"]').forEach((cell, idx) => {
         // 임시 전면 개방 상태에서도 모든 칸이 모험처럼 같은 beat로 점등되도록 순차 발화한다.
         window.setTimeout(() => cell.classList.add('is-ignited'), idx * 55)
       })
@@ -1385,7 +1391,23 @@ export class HearthScene {
    * 모험(index 7)만 셔터/출발 동작을 갖고, 나머지는 정보 확인용 칸이다.
    * 각 칸은 `data-inspect-*`로 우측 인스펙터 hover 정보를 제공한다.
    */
+  /** 칸 개방 여부. 모험은 항상, 무역은 새싹 병아리 졸업(isEasyUnlocked) 시, 나머지는 잠금.
+   *  /개방(devUnlockAll)이면 전부 개방. 나머지 시설은 추후 무역에서 해금한다. */
+  private cellUnlocked(i: number): boolean {
+    if (this.devUnlockAll) return true
+    if (i === ADVENTURE_INDEX) return true
+    if (i === TRADE_INDEX) return this.handlers?.isEasyUnlocked?.() ?? false
+    return false
+  }
+
+  /** 칸별 잠금 해제 조건 안내(인스펙터/잠금 오버레이 문구). */
+  private cellLockHint(i: number): string {
+    if (i === TRADE_INDEX) return '새싹 병아리 클리어 시 개방'
+    return '추후 무역에서 개방'
+  }
+
   private renderCells(): string {
+    const lockIcon = `<svg class="hearth-cell-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`
     const cells: string[] = []
     for (let i = 0; i < 9; i++) {
       const name = STATION_NAMES[i]
@@ -1397,6 +1419,20 @@ export class HearthScene {
       // 일러스트가 있으면 칸 배경으로도 직접 깐다(--cell-art) + has-art 클래스로 오버레이 톤 적용.
       const artClass = art ? ' hearth-cell--has-art' : ''
       const artStyle = art ? ` style="--cell-art: url('${art}')"` : ''
+      const unlocked = this.cellUnlocked(i)
+      // 잠긴 칸: 어둡게 잠금(자물쇠 오버레이) + 비상호작용. 인스펙터 태그도 개방/잠김 분기.
+      if (!unlocked) {
+        const hint = this.cellLockHint(i)
+        const lockInspect = ` data-inspect-title="${name}" data-inspect-tag="잠김" data-inspect-desc="${hint}"${artAttr}`
+        cells.push(
+          `<div class="hearth-cell hearth-cell--locked${artClass}" tabindex="0" aria-label="${name} (잠김)" aria-disabled="true"` +
+            `${lockInspect}${artStyle}>` +
+            `<span class="hearth-cell__lock" aria-hidden="true">${lockIcon}</span>` +
+            `<span class="hearth-cell__label">${name}</span>` +
+            `</div>`
+        )
+        continue
+      }
       const inspectAttr = ` data-inspect-title="${name}" data-inspect-tag="개방" data-inspect-desc="${desc}"${artAttr}`
       if (i === TRADE_INDEX) {
         // 무역 칸 — 메타 해금/계승 UI의 임시 셔터 화면으로 진입한다.
@@ -1428,7 +1464,6 @@ export class HearthScene {
             `</button>`
         )
       } else {
-        // 임시: 나머지 칸도 모두 개방(스타일리시 점등 + hover 인스펙터). 해금 게이팅은 추후.
         cells.push(
           `<div class="hearth-cell hearth-cell--open${artClass}" tabindex="0" aria-label="${name}"` +
             `${inspectAttr}${artStyle}>` +

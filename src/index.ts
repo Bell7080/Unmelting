@@ -74,7 +74,7 @@ import {
   type EnaRunDramaSignals,
 } from '@systems/EnaDisposition'
 import { assessThreats, type ForesightOptions } from '@systems/CompanionForesight'
-import { HearthScene, type HearthDifficulty } from '@ui/hearth/HearthScene'
+import { HearthScene, HEARTH_DEV_UNLOCK_KEY, type HearthDifficulty } from '@ui/hearth/HearthScene'
 import { ZoneCurtain, ZONE_LIST } from '@ui/ZoneCurtain'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
@@ -3260,6 +3260,9 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // 선택한 난이도가 온보딩 여부를 결정한다: 새싹 병아리 = 온보딩(30F 아크 + 필드 3종 + 양초 고양이),
   // 쉬움/보통 = 정규 스폰. 기본 부팅(difficulty=null=쉬움 테스트 필드)도 온보딩을 끈다.
   onboardingRunActive = difficulty === 'sprout'
+  // 온보딩 런에서는 아직 잠긴 메타 시스템(화폐 패널·상점 리롤 등)을 CSS로 숨긴다.
+  // 이 재화/기능은 새싹 병아리 클리어 후 무역에서 개방된다.
+  document.body.classList.toggle('onboarding-run', onboardingRunActive)
   pendingDinnerRelicProfile = dinnerRelicProfile
   // 런이 실제로 시작되므로 거점 로비에서 걸어 둔 말풍선 음소거를 해제한다(시작 대사 등 정상 출력).
   speechBubble.setMuted(false)
@@ -3278,9 +3281,12 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // 슬라이드 인 시킨다. 거점 미진입(기본 부팅)이면 클래스가 없어 즉시 정상 표시된다.
   requestAnimationFrame(() => document.body.classList.remove('hearth-lobby'))
 
-  // 직업 선택 오버레이.
-  const chosenJobId = await boardRenderer.openJobSelect(JOBS)
-  const chosenJob = JOBS.find((j) => j.id === chosenJobId)
+  // 직업 선택 오버레이 — 온보딩(새싹 병아리)에서는 직업 시스템을 숨긴다(무역 해금 후 개방 예정).
+  let chosenJob: (typeof JOBS)[number] | undefined
+  if (!isOnboardingActive()) {
+    const chosenJobId = await boardRenderer.openJobSelect(JOBS)
+    chosenJob = JOBS.find((j) => j.id === chosenJobId)
+  }
   if (chosenJob) {
     const c = gameState.character
     // 체력 보너스: 양수는 maxHealth 증가, 음수는 maxHealth와 현재 HP를 함께 깎는다.
@@ -3317,14 +3323,17 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
     }
     // 도적: 함정 무시 확률 적용.
     if (chosenJob.trapIgnoreChance) c.trapIgnoreChance += chosenJob.trapIgnoreChance
-    // 닫힌 암막 뒤에서 최초 보드를 채워, 레일 공개가 직업 선택의 후속 연출처럼 이어지게 한다.
-    // 온보딩(첫 경험)이면 잡동사니 필드로, 아니면 정상 오프닝으로 첫 보드를 채운다.
-    // 온보딩이면 1~10층 저확률 필드 스폰도 켠다(첫 필드 이후 부드러운 전환 + 과도 합체 완화).
-    cardSpawner.setOnboardingFieldSpawnChance(isOnboardingActive() ? 0.15 : 0)
-    if (isOnboardingActive()) fillOnboardingField()
-    else fillBoardAtStart()
-    turnManager.armFrontBombs()
-    render()
+  }
+  // 보드 채움은 직업 유무와 무관하게 항상 실행한다(온보딩은 직업 선택을 건너뛰므로 밖으로 뺐다).
+  // 온보딩(첫 경험)이면 잡동사니 필드로, 아니면 정상 오프닝으로 첫 보드를 채운다.
+  // 온보딩이면 1~10층 저확률 필드 스폰도 켠다(첫 필드 이후 부드러운 전환 + 과도 합체 완화).
+  cardSpawner.setOnboardingFieldSpawnChance(isOnboardingActive() ? 0.15 : 0)
+  if (isOnboardingActive()) fillOnboardingField()
+  else fillBoardAtStart()
+  turnManager.armFrontBombs()
+  render()
+  // 직업을 골랐을 때만 직업 카드 HUD 이동 + 직업 암막 커튼 열림 연출을 재생한다.
+  if (chosenJob) {
     await boardRenderer.animateJobCardToHud(chosenJob)
     await boardRenderer.playJobCurtainOpen()
   }
@@ -3458,7 +3467,9 @@ function setupDevCommandPalette(): void {
     .dev-command-input { grid-area: input; border: 0; outline: none; background: transparent; color: rgba(255,245,220,.98); font: 900 15px/1.3 'OkDanDan', Georgia, serif; }
     .dev-command-close { grid-area: close; background: none; border: none; color: rgba(255,215,120,.55); font-size: 14px; cursor: pointer; padding: 0 2px; align-self: center; line-height: 1; }
     .dev-command-close:hover { color: rgba(255,215,120,.9); }
-    .dev-command-hint { grid-area: hint; color: rgba(232,214,180,.78); font-size: 12px; }
+    .dev-command-hint { grid-area: hint; color: rgba(232,214,180,.78); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 12px; max-height: 96px; overflow-y: auto; }
+    .dev-cmd-item { white-space: nowrap; color: rgba(226,210,182,.72); }
+    .dev-cmd-item b { color: rgba(255,215,120,.94); font-weight: 900; margin-right: 3px; }
     .dev-command-run { display: none; margin: 6px auto 0; width: min(760px, calc(100% - 24px)); padding: 8px 0; border: 1px solid rgba(255,215,120,.35); border-radius: 10px; background: rgba(38,26,48,.92); color: rgba(255,215,120,.92); font: 900 14px/1 'OkDanDan', Georgia, serif; cursor: pointer; letter-spacing: .04em; }
     .dev-command-mobile-btn { display: none; position: fixed; bottom: calc(8px + env(safe-area-inset-bottom)); left: max(4px, env(safe-area-inset-left)); width: 34px; height: 34px; border-radius: 9px; border: 1px solid rgba(255,215,120,.38); background: rgba(18,12,24,.88); color: rgba(255,215,120,.9); font: 900 17px/1 'OkDanDan', Georgia, serif; cursor: pointer; z-index: 141; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.5); }
     .dev-refresh-mobile-btn { display: none; position: fixed; top: calc(8px + env(safe-area-inset-top)); left: max(4px, env(safe-area-inset-left)); width: 34px; height: 34px; border-radius: 9px; border: 1px solid rgba(255,215,120,.38); background: rgba(18,12,24,.88); color: rgba(255,215,120,.9); cursor: pointer; z-index: 141; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.5); padding: 0; }
@@ -3490,11 +3501,44 @@ function setupDevCommandPalette(): void {
     relicNameMap.set(getRelicDef(id).name.toLowerCase(), id)
   }
   const setHint = (msg: string): void => { hint.textContent = msg }
+  // 칠 수 있는 명령어 목록 — /를 치면 하단에 도움말로 뜨고, 입력 중엔 일치 항목만 좁혀 보여준다.
+  const DEV_COMMANDS: { name: string; desc: string }[] = [
+    { name: '시작', desc: '거점(로비) 진입' },
+    { name: '개방', desc: '거점 모든 칸 강제 개방' },
+    { name: '잠금', desc: '거점 개방 해제(모험/무역만)' },
+    { name: '리셋', desc: '에나 경험 초기화' },
+    { name: '부자', desc: '불빛/화폐 대량 지급' },
+    { name: '상점', desc: '상점 열기' },
+    { name: '제단', desc: '제단 열기' },
+    { name: '시련', desc: '강제 시련 열기' },
+    { name: '25turn', desc: 'N턴 이동(1~100)' },
+    { name: '공격력7', desc: '공격력 설정' },
+    { name: '체력40', desc: '체력 설정' },
+    { name: '1000불빛', desc: '불빛 N 지급' },
+    { name: '10$', desc: '화폐 N 지급' },
+    { name: '적', desc: '적 스폰' },
+    { name: '보물', desc: '보물 스폰' },
+    { name: '씨앗', desc: '씨앗 스폰' },
+    { name: '함정', desc: '함정 스폰' },
+    { name: '이벤트', desc: '이벤트 문 스폰' },
+    { name: '악마소환', desc: '악마 보스 소환' },
+    { name: '랜덤유물', desc: '랜덤 유물 지급' },
+    { name: '랜덤손패', desc: '랜덤 손패 지급' },
+  ]
+  const renderHelp = (raw: string): void => {
+    const q = raw.trim().replace(/^\/+/, '').toLowerCase()
+    // 숫자로 시작하면 수치형 명령(불빛/턴/$)이 후보이므로 전부 보여준다.
+    const matches = q && !/^\d/.test(q) ? DEV_COMMANDS.filter((c) => c.name.toLowerCase().includes(q)) : DEV_COMMANDS
+    const shown = matches.slice(0, 10)
+    hint.innerHTML = shown.length
+      ? shown.map((c) => `<span class="dev-cmd-item"><b>/${c.name}</b> ${c.desc}</span>`).join('')
+      : '일치하는 명령어가 없습니다.'
+  }
   const close = (): void => { opened = false; host.classList.remove('is-open'); input.value = '' }
   const open = (): void => {
     opened = true
     host.classList.add('is-open')
-    setHint('예시: /시작, /리셋, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비, /랜덤유물, /랜덤손패')
+    renderHelp('')
     input.value = ''
     window.setTimeout(() => input.focus(), 0)
   }
@@ -3689,6 +3733,28 @@ function setupDevCommandPalette(): void {
       enterHearth()
       return
     }
+    // 개발용: 거점의 모든 칸을 강제 개방한다(로컬 저장). 거점 화면이 떠 있으면 즉시 재구성한다.
+    if (/^(개방|unlock)$/i.test(token)) {
+      localStorage.setItem(HEARTH_DEV_UNLOCK_KEY, '1')
+      close()
+      if (document.getElementById('hearth-overlay')) {
+        hearthScene.exit()
+        enterHearth()
+      }
+      setHint('디버그: 거점 모든 칸 개방')
+      return
+    }
+    // 개발용: 거점 강제 개방을 해제해 실제 해금 조건(모험/무역만)으로 되돌린다.
+    if (/^(잠금|lock)$/i.test(token)) {
+      localStorage.removeItem(HEARTH_DEV_UNLOCK_KEY)
+      close()
+      if (document.getElementById('hearth-overlay')) {
+        hearthScene.exit()
+        enterHearth()
+      }
+      setHint('디버그: 거점 개방 해제(모험/무역만)')
+      return
+    }
     // 에나 경험 초기화: 성향/자기학습(유대·모험 xp·특화·기억)/정책망 저장을 전부 지운다.
     // 부팅 시점에 로드된 성향·growth·특화를 신규(ROOKIE) 상태로 되돌리려면 재부팅이 필요해,
     // 확인 문구를 잠깐 보여 준 뒤 새로 시작한다.
@@ -3761,6 +3827,8 @@ function setupDevCommandPalette(): void {
       close()
     }
   })
+  // 입력 중 실시간으로 일치하는 명령어 도움말을 좁혀 보여준다.
+  input.addEventListener('input', () => renderHelp(input.value))
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -5725,6 +5793,10 @@ globalStyle.textContent = `
   }
   /* 컴팩트 육각형 — 경험 모달보다 작게(정산 카드 폭에 맞춤). */
   .settlement-constellation { width: min(196px, 54vw); margin-top: 2px; }
+  /* ── 온보딩(새싹 병아리) 런: 아직 잠긴 메타 시스템을 숨긴다 ──
+     화폐 패널·상점 리롤은 새싹 병아리 클리어 후 무역에서 개방된다. */
+  body.onboarding-run .coin-panel-total { display: none !important; }
+  body.onboarding-run .shop-reroll-btn { display: none !important; }
 `
 document.head.appendChild(globalStyle)
 
