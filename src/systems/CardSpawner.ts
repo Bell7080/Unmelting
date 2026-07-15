@@ -791,7 +791,10 @@ export class CardSpawner {
     if (this.goldenChestWeight > 0 && Math.random() < this.goldenChestWeight) {
       return this.generateGoldenChest()
     }
-    const definition = TREASURE_DEFINITIONS[Math.floor(Math.random() * TREASURE_DEFINITIONS.length)]
+    // 일반 보물 스폰은 특수 treasureKind(잡동사니=junk 등)를 제외한 순수 상자에서만 뽑는다.
+    // (잡동사니는 온보딩 필드 전용이라 makeOnboardingFieldCard로만 등장해야 한다 — 일반 풀 유출 방지.)
+    const normalTreasures = TREASURE_DEFINITIONS.filter((d) => !d.treasureKind)
+    const definition = normalTreasures[Math.floor(Math.random() * normalTreasures.length)]
     this.spawnSerial++
     return new Card(
       `treasure-${this.spawnSerial}-${Math.random()}`,

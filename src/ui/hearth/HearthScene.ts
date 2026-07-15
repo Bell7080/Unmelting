@@ -121,14 +121,16 @@ interface DifficultyDef {
   name: string
   tagline: string
   desc: string
+  /** 카드 배경 일러스트 URL. 아직 없는 난이도는 빈 문자열 → CSS 플레이스홀더로 폴백한다. */
+  art: string
   /** 정적 잠금(보통=개발 중). 쉬움은 졸업 여부로 런타임 판정하므로 여기선 false. */
   devLocked?: boolean
 }
 /** 캐릭터 확정 후 출발 버튼 위에서 넘겨 고르는 난이도 목록(캐러셀 순서 = 배열 순서). */
 const HEARTH_DIFFICULTIES: readonly DifficultyDef[] = [
-  { key: 'sprout', name: '새싹 병아리', tagline: '온보딩 · 30층', desc: '짧은 첫 모험. 바위·덤불·잡동사니로 적·함정·보물의 기본기를 익힌다.' },
-  { key: 'easy', name: '쉬움', tagline: '정규 · 100층', desc: '진짜 등반이 시작된다. 새싹 병아리를 클리어하면 열린다.' },
-  { key: 'normal', name: '보통', tagline: '개발 중', desc: '더 매서운 굴레가 기다린다. 아직 준비되지 않았다.', devLocked: true },
+  { key: 'sprout', name: '새싹 병아리', tagline: '온보딩 · 30층', desc: '짧은 첫 모험. 바위·덤불·잡동사니로 적·함정·보물의 기본기를 익힌다.', art: SpriteUrls.difficultySprout },
+  { key: 'easy', name: '쉬움', tagline: '정규 · 100층', desc: '진짜 등반이 시작된다. 새싹 병아리를 클리어하면 열린다.', art: '' },
+  { key: 'normal', name: '보통', tagline: '개발 중', desc: '더 매서운 굴레가 기다린다. 아직 준비되지 않았다.', art: '', devLocked: true },
 ] as const
 
 /** 마지막으로 고른 시작 난이도 복원 키. */
@@ -263,6 +265,7 @@ export class HearthScene {
             </div>
           </div>
           <div class="hearth-difficulty" aria-label="난이도 선택" aria-hidden="true">
+            <span class="hearth-diff-kicker">난이도</span>
             <div class="hearth-diff-carousel">
               <button class="hearth-diff-nav hearth-diff-nav--left" type="button" data-hearth-diff-nav="left" aria-label="이전 난이도" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 L8 12 L15 19"/></svg></button>
               <div class="hearth-diff-strip" role="listbox" aria-label="시작 난이도">${this.renderDifficultyCards()}</div>
@@ -272,8 +275,9 @@ export class HearthScene {
               <strong class="hearth-diff-caption-name"></strong>
               <small class="hearth-diff-caption-desc"></small>
             </div>
+            <!-- 출발 버튼은 난이도 플렉스 컬럼의 마지막 자식 → 항상 카드/캡션 바로 아래에 온다. -->
+            <button class="hearth-depart" type="button" data-hearth-depart>출발</button>
           </div>
-          <button class="hearth-depart" type="button" data-hearth-depart>출발</button>
           <div class="hearth-character-carousel">
             <button class="hearth-char-nav hearth-char-nav--left" type="button" data-hearth-char-nav="left" aria-label="이전" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 L8 12 L15 19"/></svg></button>
             <div class="hearth-character-strip" role="listbox" aria-label="캐릭터 선택">${this.renderCharacterCards()}</div>
@@ -1255,9 +1259,9 @@ export class HearthScene {
     return false
   }
 
-  /** 캐릭터 확정 후 출발 버튼 위에 뜨는 난이도 카드 3장(캐릭터 카드와 같은 커버플로우 방식). */
+  /** 캐릭터 확정 후 출발 버튼 위에 뜨는 난이도 카드 3장(캐릭터 카드와 같은 커버플로우+일러스트 방식). */
   private renderDifficultyCards(): string {
-    const lockIcon = `<svg class="hearth-diff-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    const lockIcon = `<svg class="hearth-diff-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
     </svg>`
     return HEARTH_DIFFICULTIES.map((def, index) => {
@@ -1269,9 +1273,13 @@ export class HearthScene {
               aria-label="${def.name}" aria-selected="${selected ? 'true' : 'false'}"
               ${locked ? 'aria-disabled="true"' : ''}
               data-hearth-diff="${index}">
-        <span class="hearth-diff-card-name">${def.name}</span>
-        <span class="hearth-diff-card-tag">${def.tagline}</span>
-        ${locked ? `<span class="hearth-diff-lock">${lockIcon}</span>` : ''}
+        <div class="hearth-diff-art${def.art ? '' : ' is-empty'}" ${def.art ? `style="background-image:url('${def.art}')"` : ''} aria-hidden="true"></div>
+        <div class="hearth-diff-sheen" aria-hidden="true"></div>
+        <div class="hearth-diff-scrim">
+          <span class="hearth-diff-card-name">${def.name}</span>
+          <span class="hearth-diff-card-tag">${def.tagline}</span>
+        </div>
+        ${locked ? `<div class="hearth-diff-lock">${lockIcon}</div>` : ''}
       </button>`
     }).join('')
   }
@@ -1296,14 +1304,14 @@ export class HearthScene {
     const cards = [...root.querySelectorAll<HTMLElement>('[data-hearth-diff]')]
     const n = cards.length
     if (n === 0 || cards[0].offsetWidth === 0) return
-    const stepPx = cards[0].offsetWidth * 0.62
+    const stepPx = cards[0].offsetWidth * 0.82
     const center = this.selectedDifficultyIndex
     cards.forEach((card) => {
       const i = Number(card.dataset.hearthDiff ?? -1)
       const off = i - center // 3장 고정이라 순환 없이 선형 배치
       const a = Math.abs(off)
-      const scale = Math.max(0.72, 1 - a * 0.2)
-      const opac = a <= 1.6 ? Math.max(0.2, 1 - a * 0.42) : 0
+      const scale = Math.max(0.78, 1 - a * 0.16)
+      const opac = a <= 1.6 ? Math.max(0.22, 1 - a * 0.4) : 0
       const bright = Math.max(0.5, 1 - a * 0.28)
       card.classList.toggle('is-selected', i === center)
       card.setAttribute('aria-selected', i === center ? 'true' : 'false')
