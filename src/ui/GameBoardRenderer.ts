@@ -4837,11 +4837,11 @@ export class GameBoardRenderer {
     return experienceAxes(disp, learning, growth)
   }
 
-  private renderExperience(disp: EnaDisposition, learning?: EnaLearningSnapshot, growth?: number): string {
-    const axes = this.experienceAxes(disp, learning, growth)
-    // 기준 점선은 초보 에나 시작 모양(ROOKIE, growth 0) 고정 — 신규/리셋 직후엔 실선과 겹치고,
-    // 성장하면 실선이 점선을 넘어 자라 "시작점 대비 성장"으로 읽힌다.
-    const baseAxes = baselineConstellationAxes()
+  /**
+   * 성좌(레이더) SVG + 축 라벨 마크업을 만든다 — 경험 모달과 정산 화면이 공유한다.
+   * axes=현재 성향 축, baseAxes=시작 점선 기준. 순수 문자열 생성(부수효과 없음).
+   */
+  private buildConstellation(axes: { key: string; value: number; desc: string }[], baseAxes: { key: string; value: number; desc: string }[]): { svg: string; labels: string } {
     const n = axes.length
     const cx = 50
     const cy = 50
@@ -4878,6 +4878,31 @@ export class GameBoardRenderer {
       const pct = Math.round(a.value * 100)
       return `<div class="exp-axis-label" style="left:${lx.toFixed(1)}%;top:${ly.toFixed(1)}%"><span class="exp-axis-name">${a.key}</span><span class="exp-axis-pct">${pct}</span></div>`
     }).join('')
+    return { svg, labels }
+  }
+
+  /**
+   * 정산 화면용 컴팩트 성좌 — 모달 크롬 없이 육각형 + 축 라벨만 담은 작은 위젯.
+   * 새싹 병아리 클리어 정산에서 "에나의 경험이 자랐다"를 실제 육각형으로 보여 준다.
+   */
+  renderSettlementHexagon(disp: EnaDisposition, learning?: EnaLearningSnapshot, growth?: number): string {
+    const axes = this.experienceAxes(disp, learning, growth)
+    const baseAxes = baselineConstellationAxes()
+    const { svg, labels } = this.buildConstellation(axes, baseAxes)
+    return `
+      <div class="settlement-constellation experience-constellation">
+        ${svg}
+        ${labels}
+        <div class="experience-core" aria-hidden="true"><span class="experience-core-icon">${experienceIcon()}</span><span class="experience-core-name">에나</span></div>
+      </div>`
+  }
+
+  private renderExperience(disp: EnaDisposition, learning?: EnaLearningSnapshot, growth?: number): string {
+    const axes = this.experienceAxes(disp, learning, growth)
+    // 기준 점선은 초보 에나 시작 모양(ROOKIE, growth 0) 고정 — 신규/리셋 직후엔 실선과 겹치고,
+    // 성장하면 실선이 점선을 넘어 자라 "시작점 대비 성장"으로 읽힌다.
+    const baseAxes = baselineConstellationAxes()
+    const { svg, labels } = this.buildConstellation(axes, baseAxes)
 
     const legend = axes.map((a, i) => {
       const pct = Math.round(a.value * 100)

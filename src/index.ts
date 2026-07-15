@@ -6382,15 +6382,20 @@ function showGameOver(): void {
     const overlay = document.createElement('div')
     overlay.className = 'game-over-overlay'
     overlay.innerHTML = `
-      <div class="game-over-card">
+      <div class="game-over-card settlement-card">
         <div class="game-over-icon">${candleIcon()}</div>
         <h1>새싹 병아리 클리어!</h1>
-        <div class="settlement-stats">
-          <p>처치한 적 <strong>${gameState.runDefeatedEnemies}</strong></p>
-          <p>처리한 함정 <strong>${gameState.runClearedTraps}</strong></p>
-          <p>발견한 보물 <strong>${gameState.runOpenedTreasures}</strong></p>
-          <p>총 불빛 <strong>${score}</strong></p>
-          <p class="settlement-ena">에나의 경험이 한 뼘 자랐다. (육각형 표시 TODO)</p>
+        <div class="settlement-body">
+          <div class="settlement-stats">
+            <p>처치한 적 <strong>${gameState.runDefeatedEnemies}</strong></p>
+            <p>처리한 함정 <strong>${gameState.runClearedTraps}</strong></p>
+            <p>발견한 보물 <strong>${gameState.runOpenedTreasures}</strong></p>
+            <p>총 불빛 <strong>${score}</strong></p>
+          </div>
+          <div class="settlement-ena-panel">
+            <p class="settlement-ena">에나의 경험이 한 뼘 자랐다.</p>
+            ${boardRenderer.renderSettlementHexagon(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth())}
+          </div>
         </div>
         <button class="primary-btn" id="to-manor-btn">저택으로</button>
       </div>
@@ -6495,6 +6500,31 @@ globalStyle.textContent = `
     box-shadow: 0 6px 18px rgba(244, 164, 96, 0.4);
   }
   .primary-btn:active { transform: translateY(0); }
+  /* ── 새싹 병아리 클리어 정산 화면 ── */
+  .settlement-card { max-width: 460px; }
+  .settlement-body {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .settlement-stats { text-align: left; }
+  .settlement-card .settlement-stats p {
+    margin-bottom: 6px;
+    font-size: var(--font-size-base);
+    color: var(--color-text-muted);
+  }
+  .settlement-stats strong { color: var(--color-flame); font-weight: 700; }
+  .settlement-ena-panel { display: flex; flex-direction: column; align-items: center; }
+  .settlement-card .settlement-ena {
+    margin-bottom: 2px;
+    color: var(--color-flame-warm);
+    font-size: 13px;
+  }
+  /* 컴팩트 육각형 — 경험 모달보다 작게(정산 카드 폭에 맞춤). */
+  .settlement-constellation { width: min(196px, 54vw); margin-top: 2px; }
 `
 document.head.appendChild(globalStyle)
 
