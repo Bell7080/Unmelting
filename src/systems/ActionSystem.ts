@@ -27,6 +27,13 @@ const TREASURE_DROPS_BY_SPAN: Record<number, [number, number]> = {
   3: [3, 6],
 }
 
+// 온보딩 잡동사니: 축약형 보물 — 1칸 0~1, 2칸 1~2, 3칸 2~3장(가끔 빈다 = 보물 변동성 학습).
+const JUNK_TREASURE_DROPS_BY_SPAN: Record<number, [number, number]> = {
+  1: [0, 1],
+  2: [1, 2],
+  3: [2, 3],
+}
+
 const GOLDEN_TREASURE_DROPS_BY_SPAN: Record<number, [number, number]> = {
   1: [2, 3],
   2: [4, 6],
@@ -229,16 +236,21 @@ export class ActionSystem {
       return { success: false, message: '별빛은 자동으로 수집됩니다', cardRemoved: false }
     }
     const safeSpan = Math.max(1, Math.min(3, card.groupCount))
-    const dropTable = card.treasureKind === 'goldenChest' ? GOLDEN_TREASURE_DROPS_BY_SPAN : TREASURE_DROPS_BY_SPAN
+    const dropTable =
+      card.treasureKind === 'goldenChest' ? GOLDEN_TREASURE_DROPS_BY_SPAN
+      : card.treasureKind === 'junk' ? JUNK_TREASURE_DROPS_BY_SPAN
+      : TREASURE_DROPS_BY_SPAN
     const [dropMin, dropMax] = dropTable[safeSpan]
     const drops = dropMin + Math.floor(Math.random() * (dropMax - dropMin + 1))
     const { gainedNames, gainedIds, overflow } = ActionSystem.awardDrops(character, drops, 'treasure')
     const summary =
-      gainedNames.length === 0
-        ? '손패가 가득 차 잃음'
-        : drops === 1
-          ? gainedNames[0]
-          : `${gainedNames.length}개 (${gainedNames.join(', ')})`
+      drops === 0
+        ? '비어 있음'
+        : gainedNames.length === 0
+          ? '손패가 가득 차 잃음'
+          : drops === 1
+            ? gainedNames[0]
+            : `${gainedNames.length}개 (${gainedNames.join(', ')})`
     return {
       success: true,
       message: `${card.name} 획득: ${summary}`,
