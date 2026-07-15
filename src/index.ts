@@ -3931,6 +3931,8 @@ async function startGame(_characterIndex = -1): Promise<void> {
     if (chosenJob.trapIgnoreChance) c.trapIgnoreChance += chosenJob.trapIgnoreChance
     // 닫힌 암막 뒤에서 최초 보드를 채워, 레일 공개가 직업 선택의 후속 연출처럼 이어지게 한다.
     // 온보딩(첫 경험)이면 잡동사니 필드로, 아니면 정상 오프닝으로 첫 보드를 채운다.
+    // 온보딩이면 1~10층 저확률 필드 스폰도 켠다(첫 필드 이후 부드러운 전환 + 과도 합체 완화).
+    cardSpawner.setOnboardingFieldSpawnChance(isOnboardingActive() ? 0.15 : 0)
     if (isOnboardingActive()) fillOnboardingField()
     else fillBoardAtStart()
     turnManager.armFrontBombs()

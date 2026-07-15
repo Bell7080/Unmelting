@@ -235,6 +235,8 @@ export class CardSpawner {
   private spawnSerial: number = 0
   private currentTier: EmberTier = 'bright'
   private progressionTurn: number = 1
+  /** 온보딩 1~10층에서 필드 타입(바위/덤불/잡동사니)을 저확률로 섞는 확률(0=꺼짐). */
+  private onboardingFieldSpawnChance = 0
   /** 시련(보스 클리어 후 강제 선택) 효과로 누적되는 영속 modifier들.
    *  spawn/적 스탯/함정 피해 모두 다음 스폰부터 즉시 반영된다. */
   private trialEnemyHpBonus: number = 0
@@ -584,6 +586,11 @@ export class CardSpawner {
     return new Card(id, CardType.TREASURE, def.name, def.description, 0, 0, { treasureKind: 'junk' })
   }
 
+  /** 온보딩 필드 저확률 스폰을 켠다/끈다(1~10층에만 실제 적용). 0이면 정상 스폰만. */
+  setOnboardingFieldSpawnChance(chance: number): void {
+    this.onboardingFieldSpawnChance = Math.max(0, chance)
+  }
+
   /** 튜토리얼 전용: 폭탄(bomb) 함정 카드를 생성한다. */
   makeTutorialBombTrap(): Card {
     const def = TRAP_DEFINITIONS.find(d => d.trapKind === 'bomb') ?? TRAP_DEFINITIONS[1]
@@ -691,6 +698,14 @@ export class CardSpawner {
         return this.generateStarlight()
       }
       this.starlightMissStreak++
+    }
+
+    // 온보딩 1~10층: 낮은 확률로 필드 타입을 섞어 정상 적 과도 합체를 완화한다(일석이조).
+    if (!options.openingBoard && !options.openingBoardWaiting &&
+        this.onboardingFieldSpawnChance > 0 && this.progressionTurn <= 10 &&
+        Math.random() < this.onboardingFieldSpawnChance) {
+      const fieldKinds = ['rock', 'bush', 'junk'] as const
+      return this.makeOnboardingFieldCard(fieldKinds[Math.floor(Math.random() * fieldKinds.length)])
     }
 
     const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
