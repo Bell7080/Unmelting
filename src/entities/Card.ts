@@ -201,9 +201,12 @@ export class Card {
   /** Return proportional stats for a merged enemy group based on real members. */
   private getNormalEnemyGroupStats(groupCount: number): EnemyGroupStats | null {
     if (groupCount <= 1) return null
-    const bonus = enemyGroupBonus(groupCount)
+    // 온보딩 바위는 선형 합체: 칸수만큼 합산만 하고 일반 합체 보너스(+2/+3)는 미적용(HP=칸수),
+    // 이름도 '바위'로 유지한다. 반격 0이라 damage 합계도 0으로 남는다.
+    const isRock = this.enemySpriteId === 'enemyRock'
+    const bonus = isRock ? { hp: 0, damage: 0 } : enemyGroupBonus(groupCount)
     return {
-      name: groupCount >= 3 ? '양초 군단' : '양초 무리',
+      name: isRock ? '바위' : groupCount >= 3 ? '양초 군단' : '양초 무리',
       health: this.enemyHealthTotal + bonus.hp,
       damage: this.enemyDamageTotal + bonus.damage,
     }
