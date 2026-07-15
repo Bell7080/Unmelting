@@ -3350,8 +3350,10 @@ function fillBoardAtStart(): void {
 }
 
 /** 온보딩(첫 경험) 진행 중인지 — 첫 30F 졸업 전까지 true. 졸업 마킹은 R5에서 붙인다. */
+/** 이번 런이 새싹 병아리(온보딩)인지 — startGame에서 진입 방식(거점 vs 기본부팅)+졸업 여부로 정한다. */
+let onboardingRunActive = false
 function isOnboardingActive(): boolean {
-  return !enaAutonomousLearner.hasFirstSeen('onboarding-graduated')
+  return onboardingRunActive
 }
 
 /** 새싹 병아리 30F 클리어: 졸업 마킹(쉬움 개방) + 런 종료. 정산 화면은 showGameOver 분기가 렌더한다. */
@@ -3882,9 +3884,12 @@ function resetForNewRun(): void {
   boardRenderer.clearSelection()
 }
 
-async function startGame(_characterIndex = -1): Promise<void> {
+async function startGame(characterIndex = -1): Promise<void> {
   const dinnerRelicProfile = pendingDinnerRelicProfile
   resetForNewRun()
+  // 새싹 병아리(온보딩)는 거점(/시작) 진입(characterIndex>=0) + 미졸업일 때만 적용한다.
+  // 기본 부팅(-1=쉬움 테스트 필드)이나 졸업 후에는 온보딩을 끈다(정상 스폰).
+  onboardingRunActive = characterIndex >= 0 && !enaAutonomousLearner.hasFirstSeen('onboarding-graduated')
   pendingDinnerRelicProfile = dinnerRelicProfile
   // 런이 실제로 시작되므로 거점 로비에서 걸어 둔 말풍선 음소거를 해제한다(시작 대사 등 정상 출력).
   speechBubble.setMuted(false)
