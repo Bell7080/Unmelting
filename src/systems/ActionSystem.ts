@@ -9,7 +9,7 @@
 import { Character } from '@entities/Character'
 import { Card, CardType } from '@entities/Card'
 import { Lane } from '@entities/Lane'
-import { HandCard } from '@entities/HandCard'
+import { HandCard, type HandCardId } from '@entities/HandCard'
 import { DropSystem } from './DropSystem'
 import { getHandCardDef } from '@data/HandCards'
 
@@ -33,6 +33,9 @@ const JUNK_TREASURE_DROPS_BY_SPAN: Record<number, [number, number]> = {
   2: [1, 2],
   3: [2, 3],
 }
+
+// 온보딩 필드(바위/잡동사니) 드랍은 기본 손패로 한정한다(희귀/해금 카드 배제 → 초반 혼란 방지).
+const BASIC_ONBOARDING_DROP_IDS: readonly HandCardId[] = ['candle', 'wax-drop', 'ember', 'key', 'wax', 'chitin', 'match']
 
 const GOLDEN_TREASURE_DROPS_BY_SPAN: Record<number, [number, number]> = {
   1: [2, 3],
@@ -93,13 +96,17 @@ export class ActionSystem {
   private static awardDrops(
     character: Character,
     count: number,
-    source: 'enemy-kill' | 'treasure' = 'enemy-kill'
+    source: 'enemy-kill' | 'treasure' = 'enemy-kill',
+    restrictIds?: readonly HandCardId[]
   ): { gainedNames: string[]; gainedIds: string[]; overflow: HandCard[] } {
     const gainedNames: string[] = []
     const gainedIds: string[] = []
     const overflow: HandCard[] = []
     for (let i = 0; i < count; i++) {
-      const drop = DropSystem.generateDrop(source)
+      // 온보딩 필드 드랍은 기본 손패 세트에서만 균등 추첨한다(제한 없으면 기존 가중치 풀).
+      const drop = restrictIds && restrictIds.length > 0
+        ? DropSystem.makeCard(restrictIds[Math.floor(Math.random() * restrictIds.length)])
+        : DropSystem.generateDrop(source)
       const def = getHandCardDef(drop.defId)
       if (character.addHandCard(drop)) {
         gainedNames.push(def.name)
@@ -127,7 +134,8 @@ export class ActionSystem {
 
     if (newHealth <= 0) {
       const dropCount = card.defeatDropCount
-      const { gainedNames, gainedIds, overflow } = ActionSystem.awardDrops(character, dropCount, 'enemy-kill')
+      const { gainedNames, gainedIds, overflow } = ActionSystem.awardDrops(
+        character, dropCount, 'enemy-kill', card.isOnboardingField() ? BASIC_ONBOARDING_DROP_IDS : undefined)
       const summary =
         gainedNames.length === 0
           ? '손패가 가득 차 잃음'
@@ -242,7 +250,8 @@ export class ActionSystem {
       : TREASURE_DROPS_BY_SPAN
     const [dropMin, dropMax] = dropTable[safeSpan]
     const drops = dropMin + Math.floor(Math.random() * (dropMax - dropMin + 1))
-    const { gainedNames, gainedIds, overflow } = ActionSystem.awardDrops(character, drops, 'treasure')
+    const { gainedNames, gainedIds, overflow } = ActionSystem.awardDrops(
+      character, drops, 'treasure', card.isOnboardingField() ? BASIC_ONBOARDING_DROP_IDS : undefined)
     const summary =
       drops === 0
         ? '비어 있음'
