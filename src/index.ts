@@ -3356,6 +3356,17 @@ function isOnboardingActive(): boolean {
   return onboardingRunActive
 }
 
+/** 최전방에서 만료된 온보딩 필드 카드를 제거하고 라인 정리/리필을 돌린다(그냥 싹 사라짐). */
+async function resolveExpiredOnboardingFields(): Promise<void> {
+  const expired = turnManager.tickFieldExpiries()
+  if (expired.length === 0) return
+  // 합체 카드는 tickFieldExpiries의 seen으로 이미 1회 취급됨 — 각 카드를 한 번씩 제거한다.
+  for (const { card } of expired) gameState.removeCardFromRow(card, 0)
+  render()
+  // 사라진 자리를 하강·리필·재그룹으로 메운다.
+  await runPreparationRefreshAfterFieldEffects({ avoidFrontMergeOnFullRefill: true })
+}
+
 /** 새싹 병아리 30F 클리어: 졸업 마킹(쉬움 개방) + 런 종료. 정산 화면은 showGameOver 분기가 렌더한다. */
 async function runOnboardingClear(): Promise<void> {
   // 첫 30F 클리어 → 온보딩 졸업(다음 런부터 정상 스폰) + 쉬움 난이도 개방.
@@ -5429,9 +5440,8 @@ async function sweepFrontStarlights(): Promise<void> {
 }
 
 async function resolvePostDropSporeSpread(): Promise<void> {
-  // 온보딩 필드 카드(바위/덤불/잡동사니) 만료를 먼저 진행해 0턴 칸을 제거한다.
-  // 합체로 2턴 리셋된 칸은 유지되어 "박힌 칸"이 된다(약한 칸 방치 스톨 방지).
-  if (turnManager.tickFieldExpiries().length > 0) render()
+  // 온보딩 필드 만료 처리: 최전방 도달분만 카운트 → 제거 → 라인 정리(페이드+테마 블라스트는 B3).
+  await resolveExpiredOnboardingFields()
   // Spores are the only turn-timer event that intentionally waits for rail
   // gravity. This keeps enemy/chest/bomb/flower beats on the pre-drop board,
   // while still letting spores infect a real card that fell into a formerly

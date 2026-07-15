@@ -308,21 +308,18 @@ export class TurnManager {
    * 온보딩 필드 카드(바위/덤불/잡동사니) 만료를 1턴 진행하고 0에 도달한 칸을 제거한다.
    * 합체 카드는 하나로 취급(seen 중복 제거). 반환: 제거된 좌표(연출/도감 갱신용).
    */
-  tickFieldExpiries(): { laneIndex: number; distance: number }[] {
-    const removed: { laneIndex: number; distance: number }[] = []
+  tickFieldExpiries(): { laneIndex: number; card: Card }[] {
+    const expired: { laneIndex: number; card: Card }[] = []
     const seen = new Set<Card>()
+    // 최전방(dist 0)에 도달한 필드 카드만 만료를 카운트한다(뒤 칸은 앞줄에 닿을 때까지 대기).
+    // 제거·페이드·테마 블라스트·라인 정리는 호출부가 한다.
     for (let laneIndex = 0; laneIndex < this.gameState.lanes.length; laneIndex++) {
-      for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
-        const card = this.gameState.lanes[laneIndex].getCardAtDistance(distance)
-        if (!card || seen.has(card) || !card.isOnboardingField()) continue
-        seen.add(card)
-        if (card.tickFieldExpiry()) {
-          this.gameState.removeCardFromRow(card, distance)
-          removed.push({ laneIndex, distance })
-        }
-      }
+      const card = this.gameState.lanes[laneIndex].getCardAtDistance(0)
+      if (!card || seen.has(card) || !card.isOnboardingField()) continue
+      seen.add(card)
+      if (card.tickFieldExpiry()) expired.push({ laneIndex, card })
     }
-    return removed
+    return expired
   }
 
   /**
