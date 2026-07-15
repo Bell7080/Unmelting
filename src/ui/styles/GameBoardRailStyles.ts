@@ -698,11 +698,20 @@ export const GAME_BOARD_RAIL_STYLES = `
 @keyframes field-expire-fade {
   to { opacity: 0; filter: blur(2.5px); transform: scale(0.9); }
 }
-/* 온보딩 필드 만료 카운트다운 뱃지 — 종류별 색감(좌상단 frozen-badge 위치 상속). */
-.field-expiry-badge { color: #f4eede; }
-.field-expiry-rock { background: rgba(120, 112, 100, 0.9); }
-.field-expiry-bush { background: rgba(96, 140, 78, 0.9); }
-.field-expiry-junk { background: rgba(190, 158, 84, 0.9); }
+/* 온보딩 필드 만료 카운트다운 뱃지 — 포자/폭탄 뱃지와 같은 발광 텍스트 스타일 + 종류별 색감.
+   (frozen-badge의 좌상단 위치/폰트는 상속하고, 배경/테두리만 투명화해 글로우 텍스트로 만든다.) */
+.field-expiry-badge {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.92), 0 0 9px currentColor;
+  animation: trap-turn-label-glimmer 1.9s ease-in-out infinite;
+}
+.field-expiry-rock { color: rgba(232, 222, 206, 0.95); }  /* 바위 = 돌빛/밀랍 오프화이트 */
+.field-expiry-bush { color: rgba(185, 228, 138, 0.95); }  /* 덤불 = 잎빛(포자 연두보다 노란기) */
+.field-expiry-junk { color: rgba(238, 200, 118, 0.96); }  /* 잡동사니 = 잡동 금빛(꽃 호박색보다 짙게) */
 
 /* ---- 사이즈 유형: boss-kind-waxArmy = 3x3 거대 적 ----
    active row의 grouped 3-cell이 .rail의 3 row를 모두 점유해 3x3 풀필드로 보인다.

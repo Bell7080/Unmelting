@@ -241,6 +241,8 @@ export const SpriteUrls = {
     2: enemyWave001Url,
     3: enemyWave002Url,
   } satisfies Record<2 | 3, string>,
+  // TODO(art): 온보딩 잡동사니 전용 일러스트(chest_005~007)로 교체. 현재 임시 폴백.
+  junk: chest001Url,
   chestSmall: chest001Url,
   chestMedium: chest002Url,
   chestLarge: chest003Url,
@@ -476,6 +478,8 @@ export function spriteForCard(card: Card): string {
     if (card.specialEnemyKind === 'waxCat') return SpriteUrls.boss
     if (card.specialEnemyKind === 'waxArmy') return SpriteUrls.enemyWaves[3]
     if (card.isSpecialEnemy) return SpriteUrls.mimic
+    // 온보딩 바위는 합체해도 일반 wave 아트가 아니라 바위 아트를 유지한다(TODO: 1/2/3칸 전용 아트).
+    if (card.enemySpriteId === 'enemyRock') return SpriteUrls.enemyRock
     if (card.groupCount >= 3) return SpriteUrls.enemyWaves[3]
     if (card.groupCount === 2) return SpriteUrls.enemyWaves[2]
     return spriteForNormalEnemy(card)
@@ -497,6 +501,8 @@ export function spriteForCard(card: Card): string {
     if (card.id === 'boss-reward-demon-hand') return SpriteUrls.rewards.demonHand
     // 황금 상자는 크기에 무관하게 chest_004 하나로 처리한다.
     if (card.treasureKind === 'goldenChest') return SpriteUrls.chestGolden
+    // 온보딩 잡동사니는 chest 아트가 아니라 잡동사니 아트를 쓴다(TODO: 1/2/3칸 전용 아트).
+    if (card.treasureKind === 'junk') return SpriteUrls.junk
     if (card.groupCount >= 3) return SpriteUrls.chestLarge
     if (card.groupCount === 2) return SpriteUrls.chestMedium
     return SpriteUrls.chestSmall
