@@ -292,6 +292,9 @@ export class GameBoardRenderer {
   private lockedRecipeIds = new Set<string>()
   private hasRendered = false
   private previousCardIds = new Set<string>()
+  /** 온보딩 필드 만료 뱃지의 카드별 직전 표시 턴수. 값이 바뀐 렌더에만 팝(is-pop)을 1회 부여해
+      매 렌더 DOM 재생성으로 인한 연속 깜빡임을 막는다(갱신 턴에만 딱 한 번). */
+  private fieldExpiryLastShown = new Map<string, number>()
   /** Track the last score/coin pulse keys so the pop animation only re-fires
    *  when the value actually changes, not on every render. */
   private previousScorePulseKey = 0
@@ -1171,11 +1174,15 @@ export class GameBoardRenderer {
           ? `<div class="frozen-badge spore-badge">번식 ${card.sporeTurnsUntilSpread}턴</div>`
           : ''
     // 온보딩 필드 카드(바위/덤불/잡동사니) 만료 카운트다운 뱃지 — 좌상단, 종류별 색감(2→1→0).
-    const fieldExpiryBadge = card.isOnboardingField()
-      ? `<div class="frozen-badge field-expiry-badge field-expiry-${
-          card.enemySpriteId === 'enemyRock' ? 'rock' : card.trapKind === 'bush' ? 'bush' : 'junk'
-        }">${card.fieldExpiryTurns}턴</div>`
-      : ''
+    // 직전 렌더 대비 턴수가 실제로 바뀐 경우에만 is-pop을 부여해 갱신 턴에만 1회 확대 연출한다.
+    let fieldExpiryBadge = ''
+    if (card.isOnboardingField()) {
+      const kind = card.enemySpriteId === 'enemyRock' ? 'rock' : card.trapKind === 'bush' ? 'bush' : 'junk'
+      const prevShown = this.fieldExpiryLastShown.get(card.id)
+      const changed = prevShown !== undefined && prevShown !== card.fieldExpiryTurns
+      this.fieldExpiryLastShown.set(card.id, card.fieldExpiryTurns)
+      fieldExpiryBadge = `<div class="frozen-badge field-expiry-badge field-expiry-${kind}${changed ? ' is-pop' : ''}">${card.fieldExpiryTurns}턴</div>`
+    }
     // 꽃 성장 뱃지: 씨앗 제외, 다음 성장까지 남은 턴수를 포자 배지와 동일 방식으로 표시한다.
     const flowerGrowthBadge = card.type === CardType.FLOWER && card.flowerKind !== 'seed'
       ? `<div class="frozen-badge flower-growth-badge">성장 ${card.flowerKind === 'marigold' && card.flowerTurnsAlive % 2 === 1 ? 1 : card.flowerKind === 'marigold' ? 2 : 1}턴</div>`
@@ -8841,6 +8848,10 @@ export class GameBoardRenderer {
     })
     this.previousCardIds = ids
     this.previousGroupSpans = spans
+    // 사라진 필드 카드의 만료-표시 캐시를 정리해 맵이 무한정 커지지 않게 한다.
+    for (const cachedId of this.fieldExpiryLastShown.keys()) {
+      if (!ids.has(cachedId)) this.fieldExpiryLastShown.delete(cachedId)
+    }
     // Mirror the same snapshot pattern for hand cards.
     const handUids = new Set<string>()
     this.boardElement.querySelectorAll<HTMLElement>('.hand-slot[data-hand-uid]').forEach((el) => {

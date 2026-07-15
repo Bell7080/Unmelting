@@ -12,6 +12,8 @@ export interface HearthHandlers {
   onDinnerRelicCreate?: (profile: CustomRelicProfile) => void | Promise<void>
   /** 현재 런 턴을 반환 — 재방문 메시지에서 N턴 표기에 사용한다. */
   getCurrentTurn?: () => number
+  /** 쉬움(정규 100층) 난이도 개방 여부 — 새싹 병아리 첫 졸업으로 열린다. */
+  isEasyUnlocked?: () => boolean
 }
 
 /**

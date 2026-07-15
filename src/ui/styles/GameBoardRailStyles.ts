@@ -699,30 +699,35 @@ export const GAME_BOARD_RAIL_STYLES = `
   to { opacity: 0; filter: blur(2.5px); transform: scale(0.9); }
 }
 /* 온보딩 필드 만료 카운트다운 뱃지 — 종류별 테마색을 입힌 반투명 필.
-   (frozen-badge의 좌상단 위치/폰트는 상속하고, 배경을 어둡게 죽여 세련된 반투명 알약으로 만든다.
-    color=currentColor가 텍스트/테두리 액센트를 동시에 몰아 종류별 테마감을 준다.) */
-.field-expiry-badge {
+   frozen-badge와 같은 (0,1,0) 특이도로는 소스 뒤쪽의 .frozen-badge(하얀 밀랍 배경)에 밀려
+   하얗게 보였다 → .frozen-badge.field-expiry-* (0,2,0)로 올려 확실히 이긴다.
+   color=currentColor가 텍스트/테두리 액센트를 동시에 몰아 종류별 테마감을 준다. */
+.frozen-badge.field-expiry-badge {
   padding: 1px 7px;
   border-radius: 999px;
-  background: rgba(22, 17, 12, 0.5);
+  color: rgba(232, 222, 206, 0.96);
+  background: rgba(22, 17, 12, 0.52);
   border: 1px solid currentColor;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.46), inset 0 0 6px rgba(0, 0, 0, 0.26);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.88);
   -webkit-backdrop-filter: blur(1.5px);
   backdrop-filter: blur(1.5px);
   transform-origin: left center;
-  /* 최전방 도달·턴 감소로 뱃지 DOM이 새로 심길 때마다 살짝 확대되며 튀어나온다. */
-  animation: field-expiry-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
-.field-expiry-rock { color: rgba(232, 222, 206, 0.96); }  /* 바위 = 돌빛/밀랍 오프화이트 */
-.field-expiry-bush { color: rgba(185, 228, 138, 0.96); }  /* 덤불 = 잎빛(포자 연두보다 노란기) */
-.field-expiry-junk { color: rgba(238, 200, 118, 0.97); }  /* 잡동사니 = 잡동 금빛(꽃 호박색보다 짙게) */
+.frozen-badge.field-expiry-rock { color: rgba(232, 222, 206, 0.96); }  /* 바위 = 돌빛/밀랍 오프화이트 */
+.frozen-badge.field-expiry-bush { color: rgba(185, 228, 138, 0.96); }  /* 덤불 = 잎빛(포자 연두보다 노란기) */
+.frozen-badge.field-expiry-junk { color: rgba(238, 200, 118, 0.97); }  /* 잡동사니 = 잡동 금빛(꽃 호박색보다 짙게) */
 /* 대기칸(최전방 아님)에서는 아직 턴이 감소하지 않으므로 뱃지를 감춘다 — 최전방에서만 의미. */
 .rail-row:not(.dist-0) .field-expiry-badge { display: none; }
+/* 팝은 '숫자가 실제로 바뀐 렌더'에만 is-pop으로 1회 부여한다 — 매 렌더 DOM 재생성으로
+   인한 3~4회 연속 깜빡임을 막고, 갱신되는 턴에만 딱 한 번 확대되며 튀어나온다. */
+.frozen-badge.field-expiry-badge.is-pop {
+  animation: field-expiry-pop 0.34s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
 @keyframes field-expiry-pop {
-  0% { transform: scale(0.55); opacity: 0; }
-  62% { transform: scale(1.16); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+  0% { transform: scale(0.62); }
+  60% { transform: scale(1.18); }
+  100% { transform: scale(1); }
 }
 
 /* ---- 사이즈 유형: boss-kind-waxArmy = 3x3 거대 적 ----

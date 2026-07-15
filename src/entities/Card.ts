@@ -427,6 +427,11 @@ export class Card {
       if (this.trapKind === 'bomb' || other.trapKind === 'bomb') return false
       return this.trapKind === other.trapKind
     }
+    // 온보딩 바위는 바위끼리만 합쳐진다 — 거미 등 일반 적과 섞이면 안 된다.
+    // (덤불=trapKind·잡동사니=treasureKind는 각 분기에서 이미 동종만 허용된다.)
+    const rockA = this.enemySpriteId === 'enemyRock'
+    const rockB = other.enemySpriteId === 'enemyRock'
+    if (rockA || rockB) return rockA && rockB
     return true
   }
 
