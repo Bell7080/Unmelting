@@ -3341,71 +3341,6 @@ function fillBoardAtStart(): void {
   trackFieldEnemyEncounters()
 }
 
-/** 튜토리얼 1-레인 초기 보드: 앞 키틴벌레 → 중 두더지 → 뒤 거미줄. 이후 리필 큐: 거미줄(거미물) → 보물상자. */
-function fillTutorialBoardScripted(): void {
-  syncSpawnerTier()
-  const lane = gameState.lanes[0]
-  if (!lane) return
-
-  const kitin = cardSpawner.makeTutorialEnemy('양초 키틴벌레')
-  // 두더지 HP=5: 직접 공격 2회(각 1피해) + 불씨(2피해) → HP=1 → 최후 직접 공격 1회.
-  const mole = cardSpawner.makeTutorialEnemy('양초 두더지')
-  const web1 = cardSpawner.makeTutorialWebTrap()
-  const web2 = cardSpawner.makeTutorialWebTrap()
-  const treasure1 = cardSpawner.makeTutorialTreasure()
-  // 두 번째 상자: 상점 직후 열어 촛농 1장 → 트리플 합성으로 자연스럽게 학습한다.
-  const treasure2 = cardSpawner.makeTutorialTreasure()
-
-  // Phase 2 카드: 트리플 합성 이후 등장 순서대로 배치한다.
-  const phase2Web = cardSpawner.makeTutorialWebTrap()    // Phase 2 첫 거미줄
-  const spider = cardSpawner.makeTutorialEnemy('양초 거미')
-  const mouse2 = cardSpawner.makeTutorialEnemy('양초 생쥐') // 2/1 → 밀랍 강제 사용 → 양초 드랍
-  const bomb = cardSpawner.makeTutorialBombTrap()
-  const spore = cardSpawner.makeTutorialSporeTrap()
-  const sporeKitin = cardSpawner.makeTutorialEnemy('양초 키틴벌레') // 포자 전염 시연용 1/1
-  const jackal = cardSpawner.makeTutorialEnemy('양초 자칼')
-  const treasure15 = cardSpawner.makeTutorialTreasure()  // T15 보물상자 → phase2-complete
-
-  // 카드 UID를 디렉터 훅이 참조할 수 있도록 기록한다.
-  tutorialKitinCardId = kitin.id
-  tutorialMoleCardId = mole.id
-  tutorialWeb1CardId = web1.id
-  tutorialWeb2CardId = web2.id
-  tutorialPhase2WebCardId = phase2Web.id
-  tutorialSpiderCardId = spider.id
-  tutorialMouse2CardId = mouse2.id
-  tutorialBombCardId = bomb.id
-  tutorialSporeCardId = spore.id
-  tutorialSporeKitinCardId = sporeKitin.id
-  tutorialJackalCardId = jackal.id
-  tutorialTreasure15CardId = treasure15.id
-  tutorialStep = 'init'
-  tutorialLockedSlots = new Set()
-  tutorialMoleHits = 0
-  tutorialEmberSlot = -1
-  tutorialChitinSlot = -1
-  tutorialWaxSlot = -1
-  tutorialT5RelicBought = false
-  tutorialWaxDropSlot = -1
-  tutorialCandleSlot = -1
-  tutorialT15AllBought = false
-  tutorialMergedMoleCardId = null
-  tutorialLane1WebCardId = null
-
-  lane.setCardAtDistance(0, kitin)
-  lane.setCardAtDistance(1, mole)
-  lane.setCardAtDistance(2, web1)
-  gameState.regroupAllRows()
-  trackFieldEnemyEncounters()
-  // Phase 1 + Phase 2 리필 큐: 소모 순서대로 나열한다.
-  cardSpawner.setTutorialRefillQueue([
-    web2, treasure1, treasure2,
-    phase2Web, spider, mouse2,
-    bomb, spore, sporeKitin,
-    jackal, treasure15,
-  ])
-}
-
 /** 튜토리얼 전용 처치 드랍 + 디렉터 대사/스포트라이트 처리. */
 async function applyTutorialEnemyDrop(card: Card): Promise<void> {
   const character = gameState.character
@@ -3902,7 +3837,7 @@ function resetForNewRun(): void {
   boardRenderer.clearSelection()
 }
 
-async function startGame(characterIndex = -1): Promise<void> {
+async function startGame(_characterIndex = -1): Promise<void> {
   const dinnerRelicProfile = pendingDinnerRelicProfile
   resetForNewRun()
   pendingDinnerRelicProfile = dinnerRelicProfile
@@ -3923,22 +3858,11 @@ async function startGame(characterIndex = -1): Promise<void> {
   // 슬라이드 인 시킨다. 거점 미진입(기본 부팅)이면 클래스가 없어 즉시 정상 표시된다.
   requestAnimationFrame(() => document.body.classList.remove('hearth-lobby'))
 
-  // 캐릭터 0(병아리)은 직업 선택 없이 튜토리얼 1-레인으로 시작한다.
-  const isTutorial = characterIndex === 0
-  boardRenderer.tutorialPlayerArtUrl = null  // 이전 런 잔여 초기화
-  if (isTutorial) {
-    gameState.initTutorialMode(1)
-    // 병아리 전용 스탯: 체력 10, 공격력 1 (기본값 그대로)
-    gameState.character.maxHealth = 10
-    gameState.character.health = 10
-    gameState.character.damage = 1
-    // 인게임 플레이어 카드에 병아리 아트 표시
-    boardRenderer.tutorialPlayerArtUrl = SpriteUrls.playerTutorial
-    render()
-  }
+  // 온보딩은 특수 캐릭터가 아니라 first-experience 게이트로 처리한다(병아리 튜토리얼 폐기).
+  boardRenderer.tutorialPlayerArtUrl = null  // 이전 런 잔여 초기화(온보딩 캐릭터 아트 미사용)
 
-  // 직업 선택 오버레이 — 튜토리얼이면 건너뛴다.
-  const chosenJobId = isTutorial ? null : await boardRenderer.openJobSelect(JOBS)
+  // 직업 선택 오버레이.
+  const chosenJobId = await boardRenderer.openJobSelect(JOBS)
   const chosenJob = JOBS.find((j) => j.id === chosenJobId)
   if (chosenJob) {
     const c = gameState.character
@@ -3982,31 +3906,14 @@ async function startGame(characterIndex = -1): Promise<void> {
     render()
     await boardRenderer.animateJobCardToHud(chosenJob)
     await boardRenderer.playJobCurtainOpen()
-  } else if (isTutorial) {
-    // 튜토리얼: 대사를 먼저 보여주고, 플레이어가 스킵하거나 대사가 끝난 뒤 레일을 채운다.
-    enaSpeaking = false
-    speechBubble.show('좋아, 우리는 할 수 있어!', 200)
-    await speechBubble.waitForDismiss()
-    fillTutorialBoardScripted()
-    turnManager.armFrontBombs()
-    render()
-    await boardRenderer.playJobCurtainOpen()
-    // 커튼이 열린 직후 키틴벌레를 강조하고 첫 조우 대사를 출력한다.
-    await wait(500)
-    boardRenderer.setTutorialSpotlight(tutorialKitinCardId, null)
-    render()
-    enaSpeaking = false
-    speechBubble.show('키틴벌레야! 내가 처리할게!', 100)
-    await speechBubble.waitForDismiss()
-    tutorialStep = 'kitin-spotted'
   }
 
   // 1구역 커튼: 직업 선택 직후 항상 표시한다.
   // enterHearth()는 startGame()을 직접 호출하지 않으므로 로비 진입 자체에는 이 커튼이 나오지 않는다.
   void zoneCurtain.show(ZONE_LIST[0], () => setZoneBackground(ZONE_LIST[0].bgUrl))
 
-  // 1턴 시작 대사: 암막이 완전히 걷힌 뒤 살짝 딜레이 후 등장. 튜토리얼은 위에서 이미 보여줬으므로 건너뛴다.
-  if (!isTutorial) {
+  // 1턴 시작 대사: 암막이 완전히 걷힌 뒤 살짝 딜레이 후 등장.
+  {
     const opening = chosenJob
       ? companion.onJobSelect(chosenJob.id)
       : '역경 아래, 작은 불빛을 밝혀야만 해.'

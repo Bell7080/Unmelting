@@ -106,7 +106,7 @@ const DINNER_TOPPINGS: DinnerBaseItem[] = [
 
 /** 모험 셔터 안에서 고를 수 있는 동행 목록. 3~4번은 잠금 회색 빈 슬롯. */
 const HEARTH_CHARACTERS = [
-  { id: 'sprout-chick', name: '새싹 병아리', role: '튜토리얼', tagline: '지식에 대한 갈망', desc: '모험을 떠나기 전, 최고의 선택.', art: SpriteUrls.playerTutorial, lockedArt: false, locked: false },
+  // 병아리 튜토리얼 캐릭터 폐기: 에나(=녹지 않는 소녀)가 첫 시작 slot 0. 온보딩은 first-experience 게이트가 처리한다.
   { id: 'ena', name: '에나', role: '첫 번째 동반자', tagline: '몰락한 귀족', desc: '녹지 않는 소녀가 무대 위에 올랐다.', art: SpriteUrls.player, lockedArt: false, locked: false },
   { id: 'slot-3', name: '???', role: '추후 해금', tagline: '', desc: '', art: '', lockedArt: true, locked: true },
   { id: 'slot-4', name: '???', role: '추후 해금', tagline: '', desc: '', art: '', lockedArt: true, locked: true },
