@@ -34,6 +34,35 @@ describe('EnaAutonomousLearner', () => {
     expect(signals.some((signal) => signal.kind === 'danger')).toBe(true)
   })
 
+  it('first-seen을 최초 1회만 true로 신호하고 영구 저장한다', () => {
+    const storage = new MemoryStorage()
+    const learner = new EnaAutonomousLearner(storage)
+
+    expect(learner.hasFirstSeen('mouse')).toBe(false)
+    expect(learner.recordFirstSeen('mouse')).toBe(true) // 최초 → 바크 신호
+    expect(learner.recordFirstSeen('mouse')).toBe(false) // 재조우 → 침묵
+    expect(learner.hasFirstSeen('mouse')).toBe(true)
+
+    // 같은 storage의 새 학습기(런 재시작 프록시)도 이미 본 것으로 인식 → 바크 반복 안 함.
+    const reloaded = new EnaAutonomousLearner(storage)
+    expect(reloaded.hasFirstSeen('mouse')).toBe(true)
+    expect(reloaded.recordFirstSeen('mouse')).toBe(false)
+  })
+
+  it('first-seen 키는 모험 xp 성장을 오염시키지 않는다', () => {
+    const storage = new MemoryStorage()
+    const learner = new EnaAutonomousLearner(storage)
+    learner.recordFirstSeen('mouse')
+    learner.recordFirstSeen('web')
+    const before = learner.loadAdventureXp()
+    // 얕은 자살런 정산: first-seen 키가 섞여 있어도 xp는 첫 경험 카테고리로 계상되지 않는다.
+    learner.accrueAdventureXp({ floorReached: 2, cleared: false, experienceKeys: [] })
+    // first-seen 키가 experienced에 남아 있어야 한다(정산이 덮어쓰지 않음).
+    expect(learner.hasFirstSeen('mouse')).toBe(true)
+    expect(learner.hasFirstSeen('web')).toBe(true)
+    void before
+  })
+
   it('플레이어에게 보여주지 않는 자기반성을 저장한다', () => {
     const storage = new MemoryStorage()
     const learner = new EnaAutonomousLearner(storage)

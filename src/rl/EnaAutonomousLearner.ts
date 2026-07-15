@@ -24,6 +24,13 @@ import { EnaPolicyStore, type EnaPolicyStorage } from './EnaPolicyStore'
 
 export const ENA_SELF_LEARNING_STORAGE_KEY = 'unmelting.ena.self-learning.v1'
 
+/**
+ * 온보딩 first-seen 키 접두사. experienced 집합에 함께 저장되지만 카테고리('first-seen')가
+ * firstExperienceXp 맵에 없어 성장 xp 오염이 없다(카테고리 접두 규칙). accrueAdventureXp가
+ * 저장본을 로드-후-저장하므로 실시간으로 넣은 first-seen 키도 런 종료 정산에서 보존된다.
+ */
+export const FIRST_SEEN_KEY_PREFIX = 'first-seen:'
+
 /** 구조화 런 기억 1건 — 도달 층/사망 원인 같은 구체 사실 회상의 재료. */
 export interface EnaRunMemory {
   outcome: 'died' | 'cleared' | 'retired'
@@ -182,6 +189,28 @@ export class EnaAutonomousLearner {
     state.experienced = [...experienced]
     this.storage.setItem(ENA_SELF_LEARNING_STORAGE_KEY, JSON.stringify(state))
     return xp
+  }
+
+  /** 온보딩 id를 태어나서 처음 겪었는지(영구). 조우 순간 바크 게이트에 쓴다. */
+  hasFirstSeen(id: string): boolean {
+    return new Set(this.loadState().experienced ?? []).has(FIRST_SEEN_KEY_PREFIX + id)
+  }
+
+  /**
+   * 온보딩 id를 처음 겪은 그 순간 즉시 영속 기록한다(런 종료가 아니라 조우 시점 — 죽어서
+   * 재시작해도 같은 바크가 반복되지 않게 한다). 반환: 이번이 최초였으면 true(= 바크 발화 신호).
+   */
+  recordFirstSeen(id: string): boolean {
+    const key = FIRST_SEEN_KEY_PREFIX + id
+    const state = this.loadState()
+    const experienced = new Set(state.experienced ?? [])
+    if (experienced.has(key)) return false
+    // 저장 불가 환경(테스트/SSR)에서도 최초 신호는 준다 — 세션 내 반복은 호출부 인메모리 가드가 막는다.
+    if (!this.storage) return true
+    experienced.add(key)
+    state.experienced = [...experienced]
+    this.storage.setItem(ENA_SELF_LEARNING_STORAGE_KEY, JSON.stringify(state))
+    return true
   }
 
   /** 저장된 축 특화(0~1). 구버전 저장본/손상 값은 전 축 0으로 병합한다. */
