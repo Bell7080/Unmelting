@@ -1343,6 +1343,36 @@ body.hearth-lobby #ingame-backdrop.is-out {
 .hearth-trade-pack strong { font-size: clamp(18px, 2.5vh, 25px); letter-spacing: 0.08em; }
 .hearth-trade-pack small { color: rgba(214, 200, 178, 0.72); font-size: clamp(12px, 1.7vh, 15px); }
 @keyframes hearth-trade-pack-rise { to { opacity: 1; transform: translateY(0); } }
+
+/* 무역 1번 탭 임시 개방 카드 — 클릭 토글. 잠김=어둡게, 개방=따뜻한 금빛 테두리+발광. */
+.hearth-unlock-card { cursor: pointer; transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.14s ease; }
+.hearth-unlock-card:hover { transform: translateY(-3px); border-color: rgba(220, 172, 80, 0.7); }
+.hearth-unlock-card .hearth-unlock-art {
+  background:
+    radial-gradient(circle at 50% 40%, rgba(255, 224, 150, 0.16), transparent 56%),
+    linear-gradient(160deg, rgba(70, 52, 40, 0.5), rgba(22, 14, 10, 0.92));
+}
+.hearth-unlock-state {
+  align-self: flex-start;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: clamp(11px, 1.5vh, 13px);
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: rgba(214, 200, 178, 0.6);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(200, 152, 60, 0.28);
+}
+.hearth-unlock-card.is-unlocked {
+  border-color: var(--color-flame, #ffd778);
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.28), inset 0 -14px 24px rgba(0, 0, 0, 0.36), 0 18px 30px rgba(0, 0, 0, 0.4), 0 0 26px rgba(244, 164, 96, 0.34);
+}
+.hearth-unlock-card.is-unlocked .hearth-unlock-state {
+  color: #1c1424;
+  background: linear-gradient(180deg, #ffe08a, #d69a3a);
+  border-color: rgba(255, 228, 160, 0.6);
+}
+.hearth-unlock-card.is-unlocked .hearth-unlock-art { border-color: rgba(255, 222, 140, 0.5); }
 @keyframes hearth-trade-pack-leave { to { opacity: 0; transform: translateY(-48px); } }
 
 /* ── 만찬 셔터 임시 화면 ──────────────────────────────────────────────

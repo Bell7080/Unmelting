@@ -4,6 +4,7 @@ import { isTouchDevice } from '../MobileTouchManager'
 import { SquareBurst } from '../SquareBurst'
 import { SpeechBubble } from '../SpeechBubble'
 import type { CustomRelicProfile } from '@data/Relics'
+import { META_UNLOCKS, isMetaUnlocked, toggleMetaUnlock } from '@core/MetaUnlocks'
 
 export interface HearthHandlers {
   /** 출발 버튼 클릭 — 직업 선택/런 시작으로 연결한다. */
@@ -396,6 +397,11 @@ export class HearthScene {
       const tradeTab = t.closest<HTMLElement>('[data-hearth-trade-tab]')
       if (tradeTab) {
         this.selectTradeTab(Number(tradeTab.dataset.hearthTradeTab ?? 0))
+        return
+      }
+      const unlockCard = t.closest<HTMLElement>('[data-hearth-unlock]')
+      if (unlockCard) {
+        this.toggleUnlockCard(unlockCard)
         return
       }
       if (t.closest('[data-hearth-depart]')) {
@@ -1193,6 +1199,8 @@ export class HearthScene {
 
   /** 각 무역 탭은 비어 있는 임시 카드팩 5개를 가진다. */
   private renderTradePacks(tabIndex: number): string {
+    // 1번 탭: 임시 개방 버튼(직업 선택/상점 리롤/화폐 패널/만찬). 화폐 소비 구매는 추후 배선.
+    if (tabIndex === 0) return this.renderUnlockCards()
     return Array.from({ length: 5 }, (_, index) => `
       <article class="hearth-trade-pack" style="--pack-order:${index}">
         <div class="hearth-trade-pack-art" aria-hidden="true"></div>
@@ -1200,6 +1208,45 @@ export class HearthScene {
         <small>빈 카드팩</small>
       </article>
     `).join('')
+  }
+
+  /** 무역 1번 탭 임시 개방 카드 — 클릭으로 각 메타 시스템 개방/해제를 토글한다. */
+  private renderUnlockCards(): string {
+    return META_UNLOCKS.map((u, index) => {
+      const on = isMetaUnlocked(u.id)
+      return `
+      <article class="hearth-trade-pack hearth-unlock-card${on ? ' is-unlocked' : ''}" style="--pack-order:${index}"
+               role="button" tabindex="0" data-hearth-unlock="${u.id}" aria-pressed="${on ? 'true' : 'false'}">
+        <div class="hearth-trade-pack-art hearth-unlock-art" aria-hidden="true"></div>
+        <strong>${u.label}</strong>
+        <small>${u.desc}</small>
+        <span class="hearth-unlock-state">${on ? '개방됨' : '잠김'}</span>
+      </article>`
+    }).join('')
+  }
+
+  /** 임시 개방 카드 토글 — 메타 잠금 플래그를 뒤집고 카드 상태를 즉시 반영한다. */
+  private toggleUnlockCard(card: HTMLElement): void {
+    const id = card.dataset.hearthUnlock as (typeof META_UNLOCKS)[number]['id'] | undefined
+    if (!id) return
+    const on = toggleMetaUnlock(id)
+    card.classList.toggle('is-unlocked', on)
+    card.setAttribute('aria-pressed', on ? 'true' : 'false')
+    const state = card.querySelector<HTMLElement>('.hearth-unlock-state')
+    if (state) state.textContent = on ? '개방됨' : '잠김'
+    // 만찬 개방 상태가 바뀌면 뒤의 9칸(만찬 칸 잠금)도 즉시 동기화한다.
+    if (id === 'dinner') this.refreshCellLocks()
+    card.animate([{ transform: 'scale(0.96)' }, { transform: 'scale(1)' }], { duration: 180, easing: 'ease-out' })
+  }
+
+  /** 개방 상태 변화 시 9칸 그리드를 다시 그려 잠금/개방을 반영한다(무역 화면 뒤 배경). */
+  private refreshCellLocks(): void {
+    const grid = this.overlay?.querySelector<HTMLElement>('.hearth-grid')
+    if (!grid) return
+    grid.innerHTML = this.renderCells()
+    // 인트로 점등이 끝난 뒤의 갱신이므로 새로 그린 칸도 즉시 점등 상태로 둔다(무역 종료 후 어둡게 남지 않게).
+    grid.querySelectorAll<HTMLElement>('.hearth-cell--open, .hearth-cell--locked, [data-hearth-station="adventure"]')
+      .forEach((c) => c.classList.add('is-ignited'))
   }
 
   /** 탭 클릭 시 우측 카드팩 자리만 갈아 끼워 추후 실제 상품 매핑 지점을 고정한다. */
@@ -1397,12 +1444,14 @@ export class HearthScene {
     if (this.devUnlockAll) return true
     if (i === ADVENTURE_INDEX) return true
     if (i === TRADE_INDEX) return this.handlers?.isEasyUnlocked?.() ?? false
+    if (i === DINNER_INDEX) return isMetaUnlocked('dinner')
     return false
   }
 
   /** 칸별 잠금 해제 조건 안내(인스펙터/잠금 오버레이 문구). */
   private cellLockHint(i: number): string {
     if (i === TRADE_INDEX) return '새싹 병아리 클리어 시 개방'
+    if (i === DINNER_INDEX) return '무역에서 만찬 개방'
     return '추후 무역에서 개방'
   }
 

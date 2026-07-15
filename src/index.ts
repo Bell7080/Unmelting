@@ -75,6 +75,7 @@ import {
 } from '@systems/EnaDisposition'
 import { assessThreats, type ForesightOptions } from '@systems/CompanionForesight'
 import { HearthScene, HEARTH_DEV_UNLOCK_KEY, type HearthDifficulty } from '@ui/hearth/HearthScene'
+import { isMetaUnlocked } from '@core/MetaUnlocks'
 import { ZoneCurtain, ZONE_LIST } from '@ui/ZoneCurtain'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
@@ -3260,9 +3261,11 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // 선택한 난이도가 온보딩 여부를 결정한다: 새싹 병아리 = 온보딩(30F 아크 + 필드 3종 + 양초 고양이),
   // 쉬움/보통 = 정규 스폰. 기본 부팅(difficulty=null=쉬움 테스트 필드)도 온보딩을 끈다.
   onboardingRunActive = difficulty === 'sprout'
-  // 온보딩 런에서는 아직 잠긴 메타 시스템(화폐 패널·상점 리롤 등)을 CSS로 숨긴다.
-  // 이 재화/기능은 새싹 병아리 클리어 후 무역에서 개방된다.
+  // 온보딩 런 + 무역 미개방 시 메타 시스템(화폐 패널·상점 리롤)을 CSS로 숨긴다.
+  // 각 기능은 새싹 병아리 클리어 후 무역 1번 탭에서 개방된다(isMetaUnlocked).
   document.body.classList.toggle('onboarding-run', onboardingRunActive)
+  document.body.classList.toggle('meta-currency-locked', onboardingRunActive || !isMetaUnlocked('currency'))
+  document.body.classList.toggle('meta-reroll-locked', onboardingRunActive || !isMetaUnlocked('shopReroll'))
   pendingDinnerRelicProfile = dinnerRelicProfile
   // 런이 실제로 시작되므로 거점 로비에서 걸어 둔 말풍선 음소거를 해제한다(시작 대사 등 정상 출력).
   speechBubble.setMuted(false)
@@ -3281,9 +3284,9 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // 슬라이드 인 시킨다. 거점 미진입(기본 부팅)이면 클래스가 없어 즉시 정상 표시된다.
   requestAnimationFrame(() => document.body.classList.remove('hearth-lobby'))
 
-  // 직업 선택 오버레이 — 온보딩(새싹 병아리)에서는 직업 시스템을 숨긴다(무역 해금 후 개방 예정).
+  // 직업 선택 오버레이 — 온보딩(새싹 병아리)이거나 무역에서 아직 개방하지 않았으면 건너뛴다.
   let chosenJob: (typeof JOBS)[number] | undefined
-  if (!isOnboardingActive()) {
+  if (!isOnboardingActive() && isMetaUnlocked('jobSelect')) {
     const chosenJobId = await boardRenderer.openJobSelect(JOBS)
     chosenJob = JOBS.find((j) => j.id === chosenJobId)
   }
@@ -5793,10 +5796,10 @@ globalStyle.textContent = `
   }
   /* 컴팩트 육각형 — 경험 모달보다 작게(정산 카드 폭에 맞춤). */
   .settlement-constellation { width: min(196px, 54vw); margin-top: 2px; }
-  /* ── 온보딩(새싹 병아리) 런: 아직 잠긴 메타 시스템을 숨긴다 ──
-     화폐 패널·상점 리롤은 새싹 병아리 클리어 후 무역에서 개방된다. */
-  body.onboarding-run .coin-panel-total { display: none !important; }
-  body.onboarding-run .shop-reroll-btn { display: none !important; }
+  /* ── 메타 시스템 잠금: 온보딩 또는 무역 미개방 시 숨긴다 ──
+     화폐 패널·상점 리롤은 무역 1번 탭에서 개방된다(isMetaUnlocked). */
+  body.meta-currency-locked .coin-panel-total { display: none !important; }
+  body.meta-reroll-locked .shop-reroll-btn { display: none !important; }
 `
 document.head.appendChild(globalStyle)
 
