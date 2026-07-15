@@ -5120,7 +5120,7 @@ export class GameBoardRenderer {
       .map((span) => {
         const known = seen.has('덤불')
         return this.codexTile({
-          art: { kind: 'sprite', url: SpriteUrls.traps.bush },
+          art: { kind: 'sprite', url: SpriteUrls.trapGroups.bush[span] },
           name: known ? '덤불' : '???',
           tag: `${span}칸`,
           chips: known ? [{ icon: sword, value: bushDamage[span], tone: 'atk' }] : [],
@@ -5214,7 +5214,7 @@ export class GameBoardRenderer {
       .map((span) => {
         const known = seen.has('잡동사니')
         return this.codexTile({
-          art: { kind: 'sprite', url: SpriteUrls.chestSmall },
+          art: { kind: 'sprite', url: SpriteUrls.junkGroups[span] },
           name: known ? '잡동사니' : '???',
           tag: `${span}칸`,
           chips: known ? [{ label: '드롭 ', value: `손패 ${junkRanges[span]}장`, tone: 'gold' }] : [],

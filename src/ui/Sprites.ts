@@ -36,6 +36,7 @@ import boss001Url from '../assets/sprites/boss_001.webp'
 import boss002Url from '../assets/sprites/boss_002.webp'
 import boss003Url from '../assets/sprites/boss_003.webp'
 import boss004Url from '../assets/sprites/boss_004.webp'
+import boss005Url from '../assets/sprites/boss_005.webp'
 import player000Url from '../assets/sprites/player_000.webp'
 import playerUrl from '../assets/sprites/player_001.webp'
 import enemy001Url from '../assets/sprites/enemy_001.webp'
@@ -56,6 +57,9 @@ import enemy015Url from '../assets/sprites/enemy_015.webp'
 import enemy016Url from '../assets/sprites/enemy_016.webp'
 import enemy017Url from '../assets/sprites/enemy_017.webp'
 import enemy018Url from '../assets/sprites/enemy_018.webp'
+import enemy019Url from '../assets/sprites/enemy_019.webp'
+import enemy020Url from '../assets/sprites/enemy_020.webp'
+import enemy021Url from '../assets/sprites/enemy_021.webp'
 import mimic001Url from '../assets/sprites/mimic_001.webp'
 import enemyFlower001Url from '../assets/sprites/enemyflower_001.webp'
 import flower000Url from '../assets/sprites/flower_000.webp'
@@ -71,12 +75,18 @@ import trap004Url from '../assets/sprites/trap_004.webp'
 import trap007Url from '../assets/sprites/trap_007.webp'
 import trap008Url from '../assets/sprites/trap_008.webp'
 import trap009Url from '../assets/sprites/trap_009.webp'
+import trap010Url from '../assets/sprites/trap_010.webp'
+import trap011Url from '../assets/sprites/trap_011.webp'
+import trap012Url from '../assets/sprites/trap_012.webp'
 import enemyWave001Url from '../assets/sprites/enemywave_001.webp'
 import enemyWave002Url from '../assets/sprites/enemywave_002.webp'
 import chest001Url from '../assets/sprites/chest_001.webp'
 import chest002Url from '../assets/sprites/chest_002.webp'
 import chest003Url from '../assets/sprites/chest_003.webp'
 import chest004Url from '../assets/sprites/chest_004.webp'
+import chest005Url from '../assets/sprites/chest_005.webp'
+import chest006Url from '../assets/sprites/chest_006.webp'
+import chest007Url from '../assets/sprites/chest_007.webp'
 import reward001Url from '../assets/sprites/reward_001.webp'
 import reward002Url from '../assets/sprites/reward_002.webp'
 import reward003Url from '../assets/sprites/reward_003.webp'
@@ -199,6 +209,8 @@ export const SpriteUrls = {
   boss90: boss003Url,
   /** 100층 보스(녹지 않는 마녀) 일러스트. */
   boss100: boss004Url,
+  /** 새싹 병아리 30F 보스(양초 고양이) 일러스트. */
+  bossCat: boss005Url,
   player: playerUrl,
   /** 튜토리얼 플레이어(새싹 병아리) 일러스트. */
   playerTutorial: player000Url,
@@ -221,8 +233,9 @@ export const SpriteUrls = {
   enemyBadger: enemy016Url,
   enemySloth: enemy017Url,
   enemyJackal: enemy018Url,
-  // TODO(art): 바위 전용 일러스트로 교체(현재 임시 폴백). enemy_001 재사용.
-  enemyRock: enemy001Url,
+  // 바위 전용 일러스트: 1칸 대표 + 1/2/3칸 그룹.
+  enemyRock: enemy019Url,
+  rockGroups: { 1: enemy019Url, 2: enemy020Url, 3: enemy021Url } as Record<1 | 2 | 3, string>,
   // 미믹은 기존 enemy_003 대신 전용 mimic_001 일러스트를 사용한다.
   mimic: mimic001Url,
   monsterFlower: enemyFlower001Url,
@@ -230,19 +243,21 @@ export const SpriteUrls = {
     web: trap001Url,
     bomb: trap004Url,
     spore: trap007Url,
-    // TODO(art): 덤불 전용 일러스트(+1/2/3칸)로 교체. 현재는 임시 폴백.
-    bush: trap001Url,
+    // 덤불 1칸 대표(전 크기 아트는 trapGroups.bush).
+    bush: trap010Url,
   } satisfies Record<TrapKind, string>,
   trapGroups: {
     web: { 1: trap001Url, 2: trap002Url, 3: trap003Url },
     spore: { 1: trap007Url, 2: trap008Url, 3: trap009Url },
-  } satisfies Record<Extract<TrapKind, 'web' | 'spore'>, Record<1 | 2 | 3, string>>,
+    bush: { 1: trap010Url, 2: trap011Url, 3: trap012Url },
+  } satisfies Record<Extract<TrapKind, 'web' | 'spore' | 'bush'>, Record<1 | 2 | 3, string>>,
   enemyWaves: {
     2: enemyWave001Url,
     3: enemyWave002Url,
   } satisfies Record<2 | 3, string>,
-  // TODO(art): 온보딩 잡동사니 전용 일러스트(chest_005~007)로 교체. 현재 임시 폴백.
-  junk: chest001Url,
+  // 잡동사니 전용 일러스트: 1칸 대표 + 1/2/3칸 그룹.
+  junk: chest005Url,
+  junkGroups: { 1: chest005Url, 2: chest006Url, 3: chest007Url } as Record<1 | 2 | 3, string>,
   chestSmall: chest001Url,
   chestMedium: chest002Url,
   chestLarge: chest003Url,
@@ -474,19 +489,21 @@ export function spriteForCard(card: Card): string {
   }
   if (card.type === CardType.ENEMY) {
     if (card.specialEnemyKind === 'monsterFlower') return SpriteUrls.monsterFlower
-    // TODO(art): 양초 고양이 전용 보스 일러스트로 교체. 현재는 30F 보스 임시 폴백.
-    if (card.specialEnemyKind === 'waxCat') return SpriteUrls.boss
+    if (card.specialEnemyKind === 'waxCat') return SpriteUrls.bossCat
     if (card.specialEnemyKind === 'waxArmy') return SpriteUrls.enemyWaves[3]
     if (card.isSpecialEnemy) return SpriteUrls.mimic
-    // 온보딩 바위는 합체해도 일반 wave 아트가 아니라 바위 아트를 유지한다(TODO: 1/2/3칸 전용 아트).
-    if (card.enemySpriteId === 'enemyRock') return SpriteUrls.enemyRock
+    // 온보딩 바위는 칸수별 전용 아트(1/2/3칸)를 쓴다(일반 wave 아트 미사용).
+    if (card.enemySpriteId === 'enemyRock') {
+      const span = Math.max(1, Math.min(3, card.groupCount)) as 1 | 2 | 3
+      return SpriteUrls.rockGroups[span]
+    }
     if (card.groupCount >= 3) return SpriteUrls.enemyWaves[3]
     if (card.groupCount === 2) return SpriteUrls.enemyWaves[2]
     return spriteForNormalEnemy(card)
   }
   if (card.type === CardType.TRAP) {
-    // Webs and spores have dedicated 1/2/3-cell illustrations; bombs stay single-cell.
-    if (card.trapKind === 'web' || card.trapKind === 'spore') {
+    // Webs/spores/bushes have dedicated 1/2/3-cell illustrations; bombs stay single-cell.
+    if (card.trapKind === 'web' || card.trapKind === 'spore' || card.trapKind === 'bush') {
       const span = Math.max(1, Math.min(3, card.groupCount)) as 1 | 2 | 3
       return SpriteUrls.trapGroups[card.trapKind][span]
     }
@@ -501,8 +518,11 @@ export function spriteForCard(card: Card): string {
     if (card.id === 'boss-reward-demon-hand') return SpriteUrls.rewards.demonHand
     // 황금 상자는 크기에 무관하게 chest_004 하나로 처리한다.
     if (card.treasureKind === 'goldenChest') return SpriteUrls.chestGolden
-    // 온보딩 잡동사니는 chest 아트가 아니라 잡동사니 아트를 쓴다(TODO: 1/2/3칸 전용 아트).
-    if (card.treasureKind === 'junk') return SpriteUrls.junk
+    // 온보딩 잡동사니는 칸수별 전용 아트(1/2/3칸)를 쓴다(chest 아트 미사용).
+    if (card.treasureKind === 'junk') {
+      const span = Math.max(1, Math.min(3, card.groupCount)) as 1 | 2 | 3
+      return SpriteUrls.junkGroups[span]
+    }
     if (card.groupCount >= 3) return SpriteUrls.chestLarge
     if (card.groupCount === 2) return SpriteUrls.chestMedium
     return SpriteUrls.chestSmall
