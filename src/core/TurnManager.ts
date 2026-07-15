@@ -172,6 +172,7 @@ export class TurnManager {
         !card ||
         card.type !== CardType.TREASURE ||
         card.treasureKind === 'starlight' ||
+        card.treasureKind === 'junk' ||  // 온보딩 잡동사니는 소멸/미믹화 굴림 제외(만료 시스템이 처리)
         card.isFrozen()
       )
         continue

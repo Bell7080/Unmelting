@@ -1170,6 +1170,12 @@ export class GameBoardRenderer {
         : card.type === CardType.TRAP && card.trapKind === 'spore'
           ? `<div class="frozen-badge spore-badge">번식 ${card.sporeTurnsUntilSpread}턴</div>`
           : ''
+    // 온보딩 필드 카드(바위/덤불/잡동사니) 만료 카운트다운 뱃지 — 좌상단, 종류별 색감(2→1→0).
+    const fieldExpiryBadge = card.isOnboardingField()
+      ? `<div class="frozen-badge field-expiry-badge field-expiry-${
+          card.enemySpriteId === 'enemyRock' ? 'rock' : card.trapKind === 'bush' ? 'bush' : 'junk'
+        }">${card.fieldExpiryTurns}턴</div>`
+      : ''
     // 꽃 성장 뱃지: 씨앗 제외, 다음 성장까지 남은 턴수를 포자 배지와 동일 방식으로 표시한다.
     const flowerGrowthBadge = card.type === CardType.FLOWER && card.flowerKind !== 'seed'
       ? `<div class="frozen-badge flower-growth-badge">성장 ${card.flowerKind === 'marigold' && card.flowerTurnsAlive % 2 === 1 ? 1 : card.flowerKind === 'marigold' ? 2 : 1}턴</div>`
@@ -1196,6 +1202,7 @@ export class GameBoardRenderer {
       ${frozenBadge}
       ${trapBadge}
       ${flowerGrowthBadge}
+      ${fieldExpiryBadge}
       ${eventBadge}
       <div class="card-face">
         <div class="card-art" ${artStyle} aria-hidden="true"></div>

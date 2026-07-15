@@ -3367,6 +3367,8 @@ function fieldBurstTheme(card: Card): BurstTheme {
 async function resolveExpiredOnboardingFields(): Promise<void> {
   const expired = turnManager.tickFieldExpiries()
   if (expired.length === 0) return
+  render()          // 0턴 뱃지를 먼저 보여준다
+  await wait(420)   // 0턴에서 살짝 딜레이 후 사라짐(포자 0턴 표기와 같은 의도)
   // 은은하게 흐려지며 사라지고, 종류에 맞는 블럭 블라스트가 터진다.
   for (const { card } of expired) {
     const cell = document.querySelector<HTMLElement>(`.cell.card[data-card-id="${card.id}"]`)

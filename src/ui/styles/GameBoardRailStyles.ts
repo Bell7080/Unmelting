@@ -698,6 +698,11 @@ export const GAME_BOARD_RAIL_STYLES = `
 @keyframes field-expire-fade {
   to { opacity: 0; filter: blur(2.5px); transform: scale(0.9); }
 }
+/* 온보딩 필드 만료 카운트다운 뱃지 — 종류별 색감(좌상단 frozen-badge 위치 상속). */
+.field-expiry-badge { color: #f4eede; }
+.field-expiry-rock { background: rgba(120, 112, 100, 0.9); }
+.field-expiry-bush { background: rgba(96, 140, 78, 0.9); }
+.field-expiry-junk { background: rgba(190, 158, 84, 0.9); }
 
 /* ---- 사이즈 유형: boss-kind-waxArmy = 3x3 거대 적 ----
    active row의 grouped 3-cell이 .rail의 3 row를 모두 점유해 3x3 풀필드로 보인다.
