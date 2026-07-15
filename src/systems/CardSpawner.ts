@@ -15,6 +15,7 @@ import {
   type EnemySpriteId,
   type FlowerKind,
   type TrapKind,
+  type TreasureKind,
 } from '@entities/Card'
 import { EmberSystem, EmberTier, SpawnWeights } from './EmberSystem'
 
@@ -33,6 +34,8 @@ interface CardDefinition {
   enemyPower?: number
   /** Trap behavior bucket. */
   trapKind?: TrapKind
+  /** Treasure behavior bucket (온보딩 잡동사니 등 chest 외 종류 구분용). */
+  treasureKind?: TreasureKind
 }
 
 export const ENEMY_DEFINITIONS: CardDefinition[] = [
@@ -180,6 +183,15 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
     enemySpriteId: 'enemyJackal',
     enemyPower: 18,
   },
+  {
+    // 온보딩 축약형 적: 반격(attack 0) 없이 때려서 부수는 최약체. enemyPower 0으로 항상 최약.
+    name: '바위',
+    description: 'Inert wax boulder — break it to clear',
+    healthOrDamage: 2,
+    attack: 0,
+    enemySpriteId: 'enemyRock',
+    enemyPower: 0,
+  },
 ]
 
 export const TRAP_DEFINITIONS: CardDefinition[] = [
@@ -196,10 +208,19 @@ export const TRAP_DEFINITIONS: CardDefinition[] = [
     healthOrDamage: 1,
     trapKind: 'spore',
   },
+  {
+    // 온보딩 축약형 함정: 닿으면 소량 피해만 주는 소프트 함정(1/2/3칸 = 1/2/3 피해).
+    name: '덤불',
+    description: 'Soft bramble — 1 damage on contact',
+    healthOrDamage: 1,
+    trapKind: 'bush',
+  },
 ]
 
 export const TREASURE_DEFINITIONS: CardDefinition[] = [
   { name: '작은 상자', description: '1 item reward chest' },
+  // 온보딩 축약형 보물: 까면 손패 1장(1/2/3칸 = 1/2/3장)을 주는 무해한 필러.
+  { name: '잡동사니', description: 'Clutter — yields 1 hand card', treasureKind: 'junk' },
 ]
 
 export const MIMIC_BY_SPAN: Record<number, { health: number; attack: number; drops: number }> = {

@@ -15,10 +15,12 @@ export enum CardType {
   EVENT = 'event',
 }
 
-export type TrapKind = 'web' | 'bomb' | 'spore'
+// 'bush'(덤불)는 온보딩 축약형 함정 — 닿으면 소량 피해만 주는 소프트 함정.
+export type TrapKind = 'web' | 'bomb' | 'spore' | 'bush'
 export type FlowerKind = 'seed' | 'chamomile' | 'redRose' | 'marigold' | 'oleander' | 'lavender'
 export type SpecialEnemyKind = 'mimic' | 'monsterFlower' | 'waxArmy' | 'waxKnight' | 'waxSculptor' | 'waxWitch' | 'waxDemon'
-export type TreasureKind = 'chest' | 'goldenChest' | 'starlight'
+// 'junk'(잡동사니)는 온보딩 축약형 보물 — 까면 손패 1장을 주는 무해한 필러.
+export type TreasureKind = 'chest' | 'goldenChest' | 'starlight' | 'junk'
 
 export type EnemySpriteId =
   | 'enemyBee'
@@ -39,6 +41,8 @@ export type EnemySpriteId =
   | 'enemyChitin'
   | 'enemyBird'
   | 'enemyMole'
+  // '바위' — 온보딩 축약형 적. 반격 없이 플레이어가 때려서 부수는 최약체.
+  | 'enemyRock'
 
 export interface CardOptions {
   /** Special enemies stay as standalone threats and never merge with other cards. */

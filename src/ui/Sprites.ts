@@ -221,6 +221,8 @@ export const SpriteUrls = {
   enemyBadger: enemy016Url,
   enemySloth: enemy017Url,
   enemyJackal: enemy018Url,
+  // TODO(art): 바위 전용 일러스트로 교체(현재 임시 폴백). enemy_001 재사용.
+  enemyRock: enemy001Url,
   // 미믹은 기존 enemy_003 대신 전용 mimic_001 일러스트를 사용한다.
   mimic: mimic001Url,
   monsterFlower: enemyFlower001Url,
@@ -228,6 +230,8 @@ export const SpriteUrls = {
     web: trap001Url,
     bomb: trap004Url,
     spore: trap007Url,
+    // TODO(art): 덤불 전용 일러스트(+1/2/3칸)로 교체. 현재는 임시 폴백.
+    bush: trap001Url,
   } satisfies Record<TrapKind, string>,
   trapGroups: {
     web: { 1: trap001Url, 2: trap002Url, 3: trap003Url },
@@ -414,6 +418,8 @@ const ENEMY_SPRITES: Record<EnemySpriteId, string> = {
   enemyBadger: SpriteUrls.enemyBadger,
   enemySloth: SpriteUrls.enemySloth,
   enemyJackal: SpriteUrls.enemyJackal,
+  // TODO(art): 바위 전용 일러스트(enemy_019 등 + 1/2/3칸)로 교체. 현재는 임시 폴백.
+  enemyRock: SpriteUrls.enemyRock,
 }
 
 /** Stable cheap hash so a given card always maps to the same sprite variant. */
