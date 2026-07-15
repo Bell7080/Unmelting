@@ -563,6 +563,26 @@ export class CardSpawner {
     )
   }
 
+  /**
+   * 온보딩 축약형 필드 카드를 생성한다: 바위(적)·덤불(함정)·잡동사니(보물).
+   * 정의 테이블의 필드 타입 항목을 그대로 사용한다(별도 스탯 하드코딩 없음).
+   */
+  makeOnboardingFieldCard(kind: 'rock' | 'bush' | 'junk'): Card {
+    this.spawnSerial++
+    const id = `onboarding-field-${this.spawnSerial}`
+    if (kind === 'rock') {
+      const def = ENEMY_DEFINITIONS.find(d => d.enemySpriteId === 'enemyRock') ?? ENEMY_DEFINITIONS[0]
+      return new Card(id, CardType.ENEMY, def.name, def.description, def.healthOrDamage ?? 2, def.attack ?? 0,
+        { enemySpriteId: def.enemySpriteId, enemyPower: def.enemyPower })
+    }
+    if (kind === 'bush') {
+      const def = TRAP_DEFINITIONS.find(d => d.trapKind === 'bush') ?? TRAP_DEFINITIONS[0]
+      return new Card(id, CardType.TRAP, def.name, def.description, 0, def.healthOrDamage ?? 1, { trapKind: 'bush' })
+    }
+    const def = TREASURE_DEFINITIONS.find(d => d.treasureKind === 'junk') ?? TREASURE_DEFINITIONS[0]
+    return new Card(id, CardType.TREASURE, def.name, def.description, 0, 0, { treasureKind: 'junk' })
+  }
+
   /** 튜토리얼 전용: 폭탄(bomb) 함정 카드를 생성한다. */
   makeTutorialBombTrap(): Card {
     const def = TRAP_DEFINITIONS.find(d => d.trapKind === 'bomb') ?? TRAP_DEFINITIONS[1]

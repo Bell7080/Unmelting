@@ -3341,6 +3341,35 @@ function fillBoardAtStart(): void {
   trackFieldEnemyEncounters()
 }
 
+/** 온보딩(첫 경험) 진행 중인지 — 첫 30F 졸업 전까지 true. 졸업 마킹은 R5에서 붙인다. */
+function isOnboardingActive(): boolean {
+  return !enaAutonomousLearner.hasFirstSeen('onboarding-graduated')
+}
+
+/**
+ * 온보딩 첫 필드: 3×3을 바위/덤불/잡동사니로 꽉 채운다. 각 행을 3종의 무작위 순열로 배치해
+ * 가로 인접 동종이 없어 regroupAllRows가 합체하지 않는다("합체 안 된 채 스폰"). 진짜 위협은
+ * 이후 리필로 뒤에서 내려온다. 정상 오프닝(fillBoardAtStart) 대신 호출한다.
+ */
+function fillOnboardingField(): void {
+  syncSpawnerTier()
+  const laneCount = gameState.lanes.length
+  const kinds = ['rock', 'bush', 'junk'] as const
+  for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
+    // 행마다 3종 순열을 섞어 불규칙하게 쌓되, 서로 다른 종이라 가로 합체가 없다.
+    const row: Array<'rock' | 'bush' | 'junk'> = [...kinds]
+    for (let i = row.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[row[i], row[j]] = [row[j], row[i]]
+    }
+    for (let i = 0; i < laneCount; i++) {
+      gameState.lanes[i]?.setCardAtDistance(distance, cardSpawner.makeOnboardingFieldCard(row[i % row.length]))
+    }
+  }
+  gameState.regroupAllRows()
+  trackFieldEnemyEncounters()
+}
+
 /** 튜토리얼 전용 처치 드랍 + 디렉터 대사/스포트라이트 처리. */
 async function applyTutorialEnemyDrop(card: Card): Promise<void> {
   const character = gameState.character
@@ -3901,7 +3930,9 @@ async function startGame(_characterIndex = -1): Promise<void> {
     // 도적: 함정 무시 확률 적용.
     if (chosenJob.trapIgnoreChance) c.trapIgnoreChance += chosenJob.trapIgnoreChance
     // 닫힌 암막 뒤에서 최초 보드를 채워, 레일 공개가 직업 선택의 후속 연출처럼 이어지게 한다.
-    fillBoardAtStart()
+    // 온보딩(첫 경험)이면 잡동사니 필드로, 아니면 정상 오프닝으로 첫 보드를 채운다.
+    if (isOnboardingActive()) fillOnboardingField()
+    else fillBoardAtStart()
     turnManager.armFrontBombs()
     render()
     await boardRenderer.animateJobCardToHud(chosenJob)
