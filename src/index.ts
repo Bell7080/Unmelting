@@ -2042,7 +2042,12 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
   // 새싹 병아리(온보딩): 30층에서 양초 고양이 보스로 아크를 닫는다(제단/시련/보상 없이 종료).
   if (isOnboardingActive() && turn === 30 && !gameState.isGameOver) {
     turnManager.setTurnMode('boss_phase')
+    // 다른 보스처럼 등장 전 레일에 셔터(커튼)를 내린다 — 레일 영역만 덮으므로 손패는 그대로 쓸 수 있고,
+    // 보드를 커튼 위로 올려 양초 고양이가 셔터 앞에 착지해 보이게 한 뒤 전투를 진행한다.
+    await boardRenderer.closeDemonCurtain()
+    boardRenderer.elevateBoardAboveCurtain()
     await bossController.runOnboardingCat()
+    boardRenderer.removeDemonCurtain()   // 전투 종료 → 셔터 걷힘·보드 z-index 복원
     // 격파(생존)면 클리어 정산+졸업, 사망이면 runOnboardingCat 내부에서 게임오버 처리됨.
     if (!gameState.isGameOver && gameState.character.isAlive()) await runOnboardingClear()
     return true
@@ -3108,7 +3113,10 @@ function fieldBurstTheme(card: Card): BurstTheme {
 }
 
 /** 최전방에서 만료된 온보딩 필드 카드를 은은한 페이드+테마 블라스트로 지우고 라인 정리를 돌린다. */
-async function resolveExpiredOnboardingFields(): Promise<void> {
+/** 온보딩 필드 만료를 '레일 하강 전에' 처리한다: 최전방 필드 카드 턴 감소 → 0이면 페이드/블라스트/제거.
+ *  빈칸 리필은 호출부의 레일 하강(compactAndRefillAllLanes)이 이어서 메우므로, 막 내려온 카드는
+ *  이 감소를 겪지 않고 올바른 최대 턴수(2)로 시작한다(감소 → 하강 순서 보장). */
+async function tickOnboardingFieldsBeforeDrop(): Promise<void> {
   const expired = turnManager.tickFieldExpiries()
   render()          // 감소를 즉시 뱃지에 반영(턴 지나면 바로 갱신) — 만료가 없어도 갱신한다.
   if (expired.length === 0) return
@@ -3124,8 +3132,7 @@ async function resolveExpiredOnboardingFields(): Promise<void> {
   // 합체 카드는 tickFieldExpiries의 seen으로 이미 1회 취급됨 — 각 카드를 한 번씩 제거한다.
   for (const { card } of expired) gameState.removeCardFromRow(card, 0)
   render()
-  // 사라진 자리를 하강·리필·재그룹으로 메운다.
-  await runPreparationRefreshAfterFieldEffects({ avoidFrontMergeOnFullRefill: true })
+  // 리필은 여기서 하지 않는다 — 호출부의 레일 하강이 빈칸을 메운다.
 }
 
 /** 새싹 병아리 30F 클리어: 졸업 마킹(쉬움 개방) + 런 종료. 정산 화면은 showGameOver 분기가 렌더한다. */
@@ -4680,6 +4687,9 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
       eventSpawnCtrl.rollForTurn(gameState.getCurrentTurn())) {
     pendingEventDoor = true
   }
+  // 온보딩 필드(바위/덤불/잡동사니) 만료는 레일 하강 '직전'에 처리한다 — 최전방에서 살아남은
+  // 필드 카드만 턴을 깎고 0이면 제거한 뒤 하강시켜, 막 내려온 카드가 감소를 겪지 않게 한다.
+  if (advanceTurn && isOnboardingActive()) await tickOnboardingFieldsBeforeDrop()
   const moved = compactAndRefillAllLanes()
   render()
   if (moved) await wait(460)
@@ -4769,8 +4779,7 @@ async function sweepFrontStarlights(): Promise<void> {
 }
 
 async function resolvePostDropSporeSpread(): Promise<void> {
-  // 온보딩 필드 만료 처리: 최전방 도달분만 카운트 → 제거 → 라인 정리(페이드+테마 블라스트는 B3).
-  await resolveExpiredOnboardingFields()
+  // (온보딩 필드 만료는 레일 하강 전 runCleanupPhase에서 tickOnboardingFieldsBeforeDrop로 처리한다.)
   // Spores are the only turn-timer event that intentionally waits for rail
   // gravity. This keeps enemy/chest/bomb/flower beats on the pre-drop board,
   // while still letting spores infect a real card that fell into a formerly
