@@ -1144,7 +1144,11 @@ export class GameBoardRenderer {
       const safeSpan = Math.min(3, Math.max(1, card.groupCount))
       const CHEST_RANGES:   [number, number][] = [[1,2],[2,4],[3,6]]
       const GOLDEN_RANGES:  [number, number][] = [[2,3],[4,6],[6,9]]
-      const [rMin, rMax] = (card.treasureKind === 'goldenChest' ? GOLDEN_RANGES : CHEST_RANGES)[safeSpan - 1]
+      const JUNK_RANGES:    [number, number][] = [[0,1],[1,2],[2,3]]  // 온보딩 잡동사니
+      const rangeTable = card.treasureKind === 'goldenChest' ? GOLDEN_RANGES
+        : card.treasureKind === 'junk' ? JUNK_RANGES
+        : CHEST_RANGES
+      const [rMin, rMax] = rangeTable[safeSpan - 1]
       const treasureNote = card.id.startsWith('boss-reward-')
         ? escapeHtml(card.description)
         : `손패 ${rMin}~${rMax}장`
@@ -5197,8 +5201,8 @@ export class GameBoardRenderer {
       ? '황금 열쇠 유물 보유 중 · 보물상자의 10%가 황금 상자로 교체. 미믹화 없음.'
       : '황금 열쇠 유물 보유 시 등장. 미믹화 없음.'
 
-    // 온보딩 축약형 잡동사니를 보물 탭 최상단에 노출한다. (1/2/3칸 = 손패 1/2/3장)
-    const junkCards: Record<1 | 2 | 3, string> = { 1: '1', 2: '2', 3: '3' }
+    // 온보딩 축약형 잡동사니를 보물 탭 최상단에 노출한다. (1/2/3칸 = 손패 0~1/1~2/2~3장)
+    const junkRanges: Record<1 | 2 | 3, string> = { 1: '0~1', 2: '1~2', 3: '2~3' }
     const junkTiles = ([1, 2, 3] as const)
       .map((span) => {
         const known = seen.has('잡동사니')
@@ -5206,7 +5210,7 @@ export class GameBoardRenderer {
           art: { kind: 'sprite', url: SpriteUrls.chestSmall },
           name: known ? '잡동사니' : '???',
           tag: `${span}칸`,
-          chips: known ? [{ label: '드롭 ', value: `손패 ${junkCards[span]}장`, tone: 'gold' }] : [],
+          chips: known ? [{ label: '드롭 ', value: `손패 ${junkRanges[span]}장`, tone: 'gold' }] : [],
           note: known && span === 1 ? '까면 손패를 주는 무해한 필러. 온보딩 축약형.' : undefined,
           extraClass: known ? undefined : 'codex-tile--unknown',
         })
