@@ -37,7 +37,6 @@ import boss002Url from '../assets/sprites/boss_002.webp'
 import boss003Url from '../assets/sprites/boss_003.webp'
 import boss004Url from '../assets/sprites/boss_004.webp'
 import boss005Url from '../assets/sprites/boss_005.webp'
-import player000Url from '../assets/sprites/player_000.webp'
 import playerUrl from '../assets/sprites/player_001.webp'
 import enemy001Url from '../assets/sprites/enemy_001.webp'
 import enemy002Url from '../assets/sprites/enemy_002.webp'
@@ -212,8 +211,6 @@ export const SpriteUrls = {
   /** 새싹 병아리 30F 보스(양초 고양이) 일러스트. */
   bossCat: boss005Url,
   player: playerUrl,
-  /** 튜토리얼 플레이어(새싹 병아리) 일러스트. */
-  playerTutorial: player000Url,
   // 사용자 지정 매핑: enemy_001~018을 타입 안전한 EnemySpriteId 키와 1:1로 연결한다.
   enemyChitin: enemy001Url,
   enemyMoth: enemy002Url,

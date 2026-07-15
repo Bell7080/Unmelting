@@ -341,13 +341,11 @@ export class TurnManager {
   }
 
   /** Infect from spores whose countdown already reached 0, then reset them to 2.
-   *  튜토리얼 모드에서는 3턴 주기로 위(뒤)로만 전염한다.
    *  함정 피해 보너스는 character.trapDamageBonus로 일원화되어 전염 포자에 따로 주입하지 않는다. */
   spreadReadySpores(): SporeSpread[] {
     const spreads: SporeSpread[] = []
-    const isTutorial = this.gameState.tutorialMode
-    // 튜토리얼은 3턴, 실제 게임은 2턴 주기로 리셋한다.
-    const resetTurns = isTutorial ? 3 : 2
+    // 감염 포자는 2턴 주기로 리셋한다.
+    const resetTurns = 2
 
     // Countdown and infection are deliberately split: the UI renders the 0턴
     // badge between these phases, while this snapshot prevents newborn spores
@@ -388,7 +386,7 @@ export class TurnManager {
     return spreads
   }
 
-  /** 튜토리얼이면 위(뒤, distance+1)로만 전염, 실제 게임은 4방향 직교 전염. */
+  /** 4방향 직교로 인접 카드에 전염한다. */
   private collectSporeTargets(
     laneIndex: number,
     distance: number,
@@ -396,19 +394,7 @@ export class TurnManager {
   ): { laneIndex: number; distance: number }[] {
     const targets: { laneIndex: number; distance: number }[] = []
 
-    if (this.gameState.tutorialMode) {
-      // 튜토리얼 전용: 위(뒤) 한 칸으로만 전염한다.
-      const behind = { laneIndex, distance: distance + 1 }
-      if (behind.distance >= LANE_DISTANCE_COUNT) return targets
-      const existing = this.gameState.lanes[laneIndex].getCardAtDistance(behind.distance)
-      if (!existing || existing === source) return targets
-      if (existing.groupCount > 1) return targets
-      if (existing.type === CardType.TRAP && existing.trapKind === 'spore') return targets
-      targets.push(behind)
-      return targets
-    }
-
-    // 일반 게임: 4방향 직교 전염.
+    // 4방향 직교 전염.
     const offsets = [
       { laneIndex: laneIndex - 1, distance },
       { laneIndex: laneIndex + 1, distance },

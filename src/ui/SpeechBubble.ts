@@ -10,9 +10,9 @@
  *   const bossBubble = new SpeechBubble({ anchor: '.boss-tile', theme: 'boss', tail: 'top' })
  *   bossBubble.show('감히 나에게 맞서려 하느냐.')
  *
- *   // 튜토리얼 (꼬리 없음, UI 요소 옆)
- *   const tutorialBubble = new SpeechBubble({ anchor: '.turn-brand', tail: 'none', theme: 'neutral', autoDismissMs: 0 })
- *   tutorialBubble.show('카드를 클릭해 행동을 결정하세요.')
+ *   // 안내 힌트 (꼬리 없음, UI 요소 옆)
+ *   const hintBubble = new SpeechBubble({ anchor: '.turn-brand', tail: 'none', theme: 'neutral', autoDismissMs: 0 })
+ *   hintBubble.show('카드를 클릭해 행동을 결정하세요.')
  */
 
 export interface SpeechBubbleConfig {

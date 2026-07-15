@@ -123,8 +123,6 @@ export interface ShopPackPickerView {
   rerollCost?: number
   /** 현재 보유 화폐 (재뽑기 버튼 활성화 판정에 사용). */
   coins?: number
-  /** 튜토리얼 전용: 넘기기+재뽑기 푸터를 완전히 숨긴다. */
-  tutorialHidePackControls?: boolean
 }
 export interface ShopStateView {
   /** Normal 10/20/... shop vs 30/60/... altar variant. */
@@ -141,14 +139,6 @@ export interface ShopStateView {
   basicPackCost: number
   /** 제단 4팩처럼 기본 3팩과 매핑이 다른 경우에도 각 팩 가격을 독립 갱신한다. */
   packCosts?: Partial<Record<ShopPackKind, number>>
-  /** 튜토리얼 전용: 이 팩 종류들만 pack-layer에 렌더한다(undefined = 전체 렌더). */
-  tutorialVisiblePacks?: ShopPackKind[]
-  /** 튜토리얼 전용: 리롤 버튼을 숨긴다(shop mode에서). */
-  tutorialHideReroll?: boolean
-  /** 튜토리얼 전용: 무료카드 영역을 렌더하지 않는다. */
-  tutorialHideFreecards?: boolean
-  /** 튜토리얼 전용: EXIT 버튼을 숨긴다(구매 완료 전 강제). */
-  tutorialHideExit?: boolean
 }
 export interface ForcedTrialCardView {
   id: string
@@ -282,8 +272,6 @@ interface CounterAnimationState {
 
 export class GameBoardRenderer {
   private boardElement: HTMLElement
-  /** 튜토리얼에서 병아리 아트를 인게임 플레이어 카드에 표시하기 위해 재정의. null=기본(에나). */
-  tutorialPlayerArtUrl: string | null = null
   private selected: { laneIndex: number; distance: number } | null = null
   private currentGameState: GameState | null = null
   /** 현재 런에서 잠긴 손패 카드 ID 집합. 도감에서 해금 여부 표시에 사용한다. */
@@ -368,10 +356,6 @@ export class GameBoardRenderer {
   private hoveredHandSlotIndex: number | null = null
   /** 유물 효과 텍스트 {{spawn}} 치환에 쓰는 현재 실효 스폰 가중치. render() 마다 갱신. */
   private currentSpawnWeightCtx: SpawnWeightContext | undefined = undefined
-  /** 튜토리얼 스포트라이트: 강조할 보드 카드 ID (null = 없음). */
-  private tutorialSpotlightCardId: string | null = null
-  /** 튜토리얼 스포트라이트: 강조할 손패 슬롯 인덱스 (null = 없음). */
-  private tutorialSpotlightHandSlot: number | null = null
 
   constructor(containerId: string = 'game-board') {
     const container = document.getElementById(containerId)
@@ -522,27 +506,6 @@ export class GameBoardRenderer {
     this.clearSelection()
   }
 
-  /** 튜토리얼 스포트라이트 설정. render() 후에도 유지된다. null 전달 시 해제. */
-  setTutorialSpotlight(cardId: string | null, handSlot: number | null): void {
-    this.tutorialSpotlightCardId = cardId
-    this.tutorialSpotlightHandSlot = handSlot
-    this._applyTutorialSpotlight()
-  }
-
-  /** render() 끝에서 호출 — 현재 DOM에 spotlight 클래스를 재적용한다. */
-  private _applyTutorialSpotlight(): void {
-    this.boardElement.querySelectorAll('.tutorial-spotlight').forEach(el => {
-      el.classList.remove('tutorial-spotlight')
-    })
-    if (this.tutorialSpotlightCardId) {
-      const cell = this.boardElement.querySelector(`.cell.card[data-card-id="${this.tutorialSpotlightCardId}"]`)
-      cell?.classList.add('tutorial-spotlight')
-    }
-    if (this.tutorialSpotlightHandSlot !== null) {
-      const slot = this.boardElement.querySelector(`.hand-slot[data-slot-index="${this.tutorialSpotlightHandSlot}"]`)
-      slot?.classList.add('tutorial-spotlight')
-    }
-  }
 
   render(gameState: GameState, scorePanel: ScorePanelState): void {
     const previousRects = this.captureCardRects()
@@ -1666,7 +1629,7 @@ export class GameBoardRenderer {
     return `
       <div class="player-row">
         <div class="player-card">
-          <div class="player-art" style="background-image: url('${this.tutorialPlayerArtUrl ?? SpriteUrls.player}')" aria-hidden="true"></div>
+          <div class="player-art" style="background-image: url('${SpriteUrls.player}')" aria-hidden="true"></div>
           <div class="player-overlay" aria-hidden="true"></div>
           <div class="player-content">
             <div class="player-stats">
@@ -2433,7 +2396,6 @@ export class GameBoardRenderer {
   </svg>`
 
   private buildPackPickerFooterHtml(view: ShopPackPickerView): string {
-    if (view.tutorialHidePackControls) return ''
     const rerollAffordable = view.rerollCost != null && (view.coins ?? 0) >= view.rerollCost
     const rerollBtn = view.rerollCost != null
       ? `<button type="button"
@@ -2603,13 +2565,13 @@ export class GameBoardRenderer {
           <section class="shop-row shop-top-row" aria-label="유물 상점">
             <div class="shop-layer shop-reroll-zone" aria-hidden="true"></div>
             <div class="shop-layer shop-artifact-layer">
-              ${(shop.mode === 'altar' || shop.tutorialHideReroll) ? '' : `<div class="shop-reroll-card-anchor">${this.renderShopRerollButton(shop.rerollCost, shop.coins)}</div>`}
+              ${shop.mode === 'altar' ? '' : `<div class="shop-reroll-card-anchor">${this.renderShopRerollButton(shop.rerollCost, shop.coins)}</div>`}
               ${cards}
             </div>
           </section>
           <section class="shop-row shop-bottom-row" aria-label="카드 및 카드팩">
             <div class="shop-layer shop-free-layer">
-              ${shop.tutorialHideFreecards ? '' : [
+              ${[
                 this.renderShopFreeCard(shop.freeCardClaimed, freeCardLabel, shop.freeCardDescription ?? '1$', 'free-card'),
                 shop.mode === 'altar' ? this.renderShopFreeCard(!!shop.freeCoinCardClaimed, '동전 한 닢', '1$', 'free-coin-card') : '',
               ].join('')}
@@ -2622,25 +2584,19 @@ export class GameBoardRenderer {
                     ['chance-pack', '확률팩', '특정 카드 1차 드롭 우선도 부여', shop.packCosts?.['chance-pack'] ?? 500, 'upgrade', 1],
                     ['delete-pack', '삭제팩', '카드 제거 · 드롭 집중도 상향', shop.packCosts?.['delete-pack'] ?? 500, 'unlock', 2],
                   ]
-                  const visible = shop.tutorialVisiblePacks !== undefined
-                    ? altarAll.filter(([k]) => (shop.tutorialVisiblePacks as ShopPackKind[]).includes(k))
-                    : altarAll
-                  return visible.map(([k, t, d, c, th, n]) => this.renderShopPackCard(k, t, d, c, score, th, n)).join('')
+                  return altarAll.map(([k, t, d, c, th, n]) => this.renderShopPackCard(k, t, d, c, score, th, n)).join('')
                 } else {
                   const shopAll: Array<[ShopPackKind, string, string, number, 'resource' | 'upgrade' | 'unlock', number]> = [
                     ['basic-pack', basicPackLabel.title, 'HP·불씨·게이지 즉시 보충', shop.packCosts?.['basic-pack'] ?? shop.basicPackCost, 'resource', 0],
                     ['recipe-pack', recipePackLabel.title, '조합식 해금 · 덱 심도 확장', shop.packCosts?.['recipe-pack'] ?? 400, 'upgrade', 1],
                     ['unlock-pack', unlockPackLabel.title, '잠긴 손패 해금 · 드롭 풀 확대', shop.packCosts?.['unlock-pack'] ?? 400, 'unlock', 2],
                   ]
-                  const visible = shop.tutorialVisiblePacks !== undefined
-                    ? shopAll.filter(([k]) => (shop.tutorialVisiblePacks as ShopPackKind[]).includes(k))
-                    : shopAll
-                  return visible.map(([k, t, d, c, th, n]) => this.renderShopPackCard(k, t, d, c, score, th, n)).join('')
+                  return shopAll.map(([k, t, d, c, th, n]) => this.renderShopPackCard(k, t, d, c, score, th, n)).join('')
                 }
               })()}
             </div>
           </section>
-          <button class="shop-close-btn" type="button" data-shop-close aria-label="상점 나가기"${shop.tutorialHideExit ? ' style="display:none"' : ''}>EXIT</button>
+          <button class="shop-close-btn" type="button" data-shop-close aria-label="상점 나가기">EXIT</button>
         </div>
       </div>
     `
@@ -8885,8 +8841,6 @@ export class GameBoardRenderer {
     })
     this.previousHandUids = handUids
     this.hasRendered = true
-    // 튜토리얼 스포트라이트: DOM 교체 후 재적용해 렌더마다 클래스가 유지되게 한다.
-    this._applyTutorialSpotlight()
   }
 
   /** Newly larger spans get a short sticky merge pulse after movement settles. */
@@ -8945,83 +8899,6 @@ export class GameBoardRenderer {
     document.head.appendChild(style)
   }
 
-  /**
-   * 튜토리얼 레인 확장 애니메이션.
-   * Phase 1: 기존 레인 전체를 살짝 옆으로 밀어 공간을 여는 느낌.
-   * Phase 2(render 후 호출): 새 레인의 칸들이 상단에서 셔터처럼 내려온다.
-   */
-  async animateRailNudge(): Promise<void> {
-    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
-    if (!rail) return
-    await rail.animate(
-      [
-        { transform: 'translateX(0) scale(1)' },
-        { transform: 'translateX(16px) scale(0.98)' },
-        { transform: 'translateX(0) scale(1)' },
-      ],
-      { duration: 300, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' }
-    ).finished
-  }
-
-  /**
-   * render() 호출 이후: 새로 추가된 레인 전체가 상단에서 셔터처럼 내려온다.
-   * clip-path(inset)로 각 칸을 위에서부터 열어 stage overflow:hidden을 피한다.
-   * dist=2(상단) → 1 → 0(전방) 순으로 80ms 스태거.
-   */
-  async animateNewLaneIn(newLaneIndex: number): Promise<void> {
-    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
-    if (!rail) return
-
-    const anims: Promise<void>[] = []
-    for (let dist = 2; dist >= 0; dist--) {
-      const cell = rail.querySelector<HTMLElement>(
-        `[data-lane="${newLaneIndex}"][data-distance="${dist}"]`
-      )
-      if (!cell) continue
-      const delay = (2 - dist) * 80
-      // inset(0 0 100% 0) = 셀 상단 가장자리만 보임 → inset(0 0 0% 0) = 전체 공개
-      // 위에서 아래로 열리는 셔터 효과
-      anims.push(
-        cell.animate(
-          [
-            { clipPath: 'inset(0 0 100% 0 round 8px)', opacity: '0.6' },
-            { clipPath: 'inset(0 0 0%   0 round 8px)', opacity: '1'   },
-          ],
-          { duration: 420, delay, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'backwards' }
-        ).finished.then(() => undefined)
-      )
-    }
-    await Promise.all(anims)
-  }
-
-  /** 튜토리얼 상점: 다음 팩 타일을 pack-layer에 슬라이드 인해 추가한다.
-   *  팩 피커가 닫힌 뒤 호출해 기존 DOM을 재빌드하지 않고 카드 1장만 주입한다. */
-  tutorialAppendPackToShop(
-    kind: ShopPackKind,
-    title: string,
-    desc: string,
-    cost: number,
-    score: number,
-    theme: 'resource' | 'upgrade' | 'unlock',
-    nth: number
-  ): void {
-    const layer = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-pack-layer')
-    if (!layer) return
-    const html = this.renderShopPackCard(kind, title, desc, cost, score, theme, nth)
-    const tmp = document.createElement('div')
-    tmp.innerHTML = html.trim()
-    const card = tmp.firstElementChild as HTMLElement | null
-    if (!card) return
-    layer.appendChild(card)
-    // 기존 pack-layer 위치 보정 transform이 카드 슬라이드를 가리므로 WAAPI로 처리한다.
-    card.animate(
-      [
-        { opacity: '0', transform: 'translateX(-28px) scale(0.93)' },
-        { opacity: '1', transform: 'translateX(0) scale(1)' },
-      ],
-      { duration: 400, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'forwards' }
-    )
-  }
 }
 
 /** HTML 직접 삽입용 문자열 이스케이프(보스 인트로의 카드 이름 등에 사용). */

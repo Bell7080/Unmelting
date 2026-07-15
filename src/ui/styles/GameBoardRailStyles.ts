@@ -3,7 +3,7 @@
  * Split from GameBoardRenderer so renderer logic stays navigable.
  */
 export const GAME_BOARD_RAIL_STYLES = `
-/* ---------- Rail (3x3 → 1~3 lanes in tutorial) ---------- */
+/* ---------- Rail (3x3) ---------- */
 .rail {
   display: grid;
   grid-template-rows: repeat(3, minmax(0, 1fr));
