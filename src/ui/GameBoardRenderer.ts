@@ -1144,7 +1144,7 @@ export class GameBoardRenderer {
       const prevShown = this.fieldExpiryLastShown.get(card.id)
       const changed = prevShown !== undefined && prevShown !== card.fieldExpiryTurns
       this.fieldExpiryLastShown.set(card.id, card.fieldExpiryTurns)
-      fieldExpiryBadge = `<div class="frozen-badge field-expiry-badge field-expiry-${kind}${changed ? ' is-pop' : ''}">${card.fieldExpiryTurns}턴</div>`
+      fieldExpiryBadge = `<div class="field-expiry-badge field-expiry-${kind}${changed ? ' is-pop' : ''}">${card.fieldExpiryTurns}턴</div>`
     }
     // 꽃 성장 뱃지: 씨앗 제외, 다음 성장까지 남은 턴수를 포자 배지와 동일 방식으로 표시한다.
     const flowerGrowthBadge = card.type === CardType.FLOWER && card.flowerKind !== 'seed'
