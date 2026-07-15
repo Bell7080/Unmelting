@@ -182,7 +182,7 @@ interface BossProfile {
   /** HP를 이 값만큼 잃을 때마다 손패 1장 지급(실게임 공통 15). */
   handGiftStep: number
   /** 공격 주기마다 쓰는 고유 패턴. */
-  behavior: 'greed' | 'knightHand' | 'summon' | 'witch'
+  behavior: 'greed' | 'knightHand' | 'summon' | 'witch' | 'catSteal'
   /** waxWitch 페이지 경계(이 HP에서 멈춰 다음 페이지로). */
   pages?: number[]
 }
@@ -193,6 +193,15 @@ const BOSS_PROFILES: Record<number, BossProfile> = {
   90: { name: '밀랍 조각사', maxHp: 130, attack: 10, interval: 3, handGiftStep: 15, behavior: 'summon' },
   100: { name: '녹지 않는 마녀', maxHp: 270, attack: 15, interval: 2, handGiftStep: 15, behavior: 'witch', pages: [180, 90, 0] },
 }
+
+/** 시뮬 난이도. standard=정규 100층 아크, sprout=새싹 병아리 온보딩(30층 + 양초 고양이 보스). */
+export type EnaSimDifficulty = 'standard' | 'sprout'
+
+/** 새싹 병아리 아크: 30층에서 양초 고양이 격파 = 클리어(별빛/시련 없음). */
+const SPROUT_TARGET_TURNS = 30
+const SPROUT_BOSS_FLOORS: readonly number[] = [30]
+/** 30F 온보딩 보스 양초 고양이: HP40/ATK5, 2턴 주기, 공격 시 손패 1장 강탈(촛농/양초/불씨면 자가 사용=회복). */
+const SPROUT_BOSS_PROFILE: BossProfile = { name: '양초 고양이', maxHp: 40, attack: 5, interval: 2, handGiftStep: 15, behavior: 'catSteal' }
 
 /** 시뮬 상점이 다루는 실제 팩 종류(가격 반복 누적 추적용). */
 type EnaSimPackKind = 'basic-pack' | 'recipe-pack' | 'unlock-pack' | 'chance-pack' | 'delete-pack' | 'resource-pack'
@@ -375,11 +384,24 @@ export class EnaTrainingSimulation {
   /** 각성(최후의 의지)은 런당 1회. */
   private companionAwakened = false
 
-  constructor(seed: number = 1, disposition?: EnaDisposition) {
+  /** 난이도별 아크 길이/보스 층. 새싹 병아리는 짧은 30층 온보딩으로 분류된다. */
+  private readonly difficulty: EnaSimDifficulty
+  private readonly runTargetTurns: number
+  private readonly bossFloors: readonly number[]
+
+  constructor(seed: number = 1, disposition?: EnaDisposition, difficulty: EnaSimDifficulty = 'standard') {
     this.rng = new EnaRandom(seed)
     this.knowledge = buildEnaKnowledgeBase()
     this.companion = disposition
+    this.difficulty = difficulty
+    this.runTargetTurns = difficulty === 'sprout' ? SPROUT_TARGET_TURNS : RUN_TARGET_TURNS
+    this.bossFloors = difficulty === 'sprout' ? SPROUT_BOSS_FLOORS : BOSS_FLOORS
     this.reset()
+  }
+
+  /** 현재 난이도에 맞는 보스 스펙 — 새싹 병아리는 층과 무관하게 양초 고양이. */
+  private bossProfileFor(floor: number): BossProfile {
+    return this.difficulty === 'sprout' ? SPROUT_BOSS_PROFILE : BOSS_PROFILES[floor]
   }
 
   /** 새 에피소드 시작. 초기 보드는 실제 시작처럼 전방엔 꽃 없이, 대기칸엔 꽃 절반 가중치로 채운다. */
@@ -444,8 +466,11 @@ export class EnaTrainingSimulation {
     this.drawCard('candle')
     for (let row = 0; row < ROWS; row++) {
       for (let lane = 0; lane < LANES; lane++) {
-        // 전방행(row 0)만 꽃 제외, 대기행은 꽃 허용으로 실제 초기 배치를 흉내낸다.
-        this.board[row][lane] = this.spawnCard(row === 0 ? 'front' : 'waiting')
+        // 새싹 병아리 첫 보드는 실게임 fillOnboardingField처럼 3×3을 축약형 필드로 채운다.
+        // 그 외엔 전방행(row 0)만 꽃 제외, 대기행은 꽃 허용으로 실제 초기 배치를 흉내낸다.
+        this.board[row][lane] = this.difficulty === 'sprout'
+          ? this.spawnFieldCard()
+          : this.spawnCard(row === 0 ? 'front' : 'waiting')
       }
     }
     this.regroupFrontRow()
@@ -494,7 +519,7 @@ export class EnaTrainingSimulation {
       this.attack / 12,
       this.combo / this.comboMax,
       this.hand.length / HAND_MAX,
-      this.turn / RUN_TARGET_TURNS,
+      this.turn / this.runTargetTurns,
       this.turnsToShop() / SHOP_INTERVAL,
       this.turnsToBoss() / ALTAR_INTERVAL,
       this.finalAscent ? 1 : 0,
@@ -561,7 +586,7 @@ export class EnaTrainingSimulation {
     return {
       survivedTurns: this.turn,
       totalReward,
-      won: this.turn >= RUN_TARGET_TURNS && this.bossesCleared >= BOSS_FLOORS.length && this.hp > 0,
+      won: this.turn >= this.runTargetTurns && this.bossesCleared >= this.bossFloors.length && this.hp > 0,
       bossesCleared: this.bossesCleared,
       samples,
       trace,
@@ -772,7 +797,7 @@ export class EnaTrainingSimulation {
   private applyShopAction(action: EnaSimAction): number {
     if (action.kind === 'shopExit') {
       // 제단 EXIT가 30/60/90F 보스 게이트로 이어진다(실게임 흐름). 아직 안 잡은 차례면 보스 진입.
-      const bossIndex = BOSS_FLOORS.indexOf(this.turn)
+      const bossIndex = this.bossFloors.indexOf(this.turn)
       if (bossIndex >= 0 && this.bossesCleared === bossIndex) {
         this.enterBoss(this.turn)
       } else {
@@ -1003,7 +1028,7 @@ export class EnaTrainingSimulation {
     if (this.bossHp < floor) this.bossHp = floor // 페이지 경계 초과 피해 컷
     const dealt = before - this.bossHp
     this.bossDamageSinceGift += dealt
-    const profile = BOSS_PROFILES[this.bossFloor]
+    const profile = this.bossProfileFor(this.bossFloor)
     // HP 10 손실마다 손패 1장 지급(실게임 공통).
     while (this.bossDamageSinceGift >= profile.handGiftStep) {
       this.bossDamageSinceGift -= profile.handGiftStep
@@ -1017,7 +1042,7 @@ export class EnaTrainingSimulation {
   /** 보스 HP가 현재 페이지 경계에 닿으면 다음 페이지로 넘기거나 격파 처리한다.
    *  경계에서 HP를 그대로 유지(능력 누적)하며, 마지막 페이지(=0) 도달이 격파다. */
   private checkBossProgress(): void {
-    const profile = BOSS_PROFILES[this.bossFloor]
+    const profile = this.bossProfileFor(this.bossFloor)
     const floor = this.bossPageFloor()
     if (this.bossHp > floor) return
     this.bossHp = floor
@@ -1205,13 +1230,16 @@ export class EnaTrainingSimulation {
     // 5) 레일 하강·리필·정리, 씨앗 개화, 별빛 자동 수집(최종 등반).
     this.dropAndRefill()
     // 별빛 등반으로 100층에 도달하면 즉시 클리어가 아니라 100F 보스로 진입한다.
-    if (this.finalAscent && this.turn >= RUN_TARGET_TURNS && this.bossesCleared === 3) this.enterBoss(100)
+    if (this.finalAscent && this.turn >= this.runTargetTurns && this.bossesCleared === 3) this.enterBoss(100)
+    // 새싹 병아리: 30층 도달 = 양초 고양이 보스 직행(별빛 등반 없이 마지막 보스). 마일스톤 게이트가
+    // turn < runTargetTurns라 30층엔 상점이 열리지 않으므로, 여기서 최종 보스를 직접 연다.
+    if (this.difficulty === 'sprout' && this.phase === 'field' && this.turn >= this.runTargetTurns && this.bossesCleared === 0) this.enterBoss(30)
   }
 
   /** 상점/제단 진입 여부를 판정한다(최종 등반 중에는 열지 않는다). 진입 시 레일 리필을 건너뛴다. */
   private maybeEnterMilestone(): boolean {
     if (this.finalAscent) return false
-    if (this.turn > 0 && this.turn % SHOP_INTERVAL === 0 && this.turn < RUN_TARGET_TURNS) {
+    if (this.turn > 0 && this.turn % SHOP_INTERVAL === 0 && this.turn < this.runTargetTurns) {
       this.phase = 'shop'
       this.shopMode = this.turn % ALTAR_INTERVAL === 0 ? 'altar' : 'shop'
       // 방문 단위 상태: 팩 반복가/무료카드/유물 한도. 유물은 이제 자동 지급이 아니라 shopRelic 행동.
@@ -1345,7 +1373,7 @@ export class EnaTrainingSimulation {
       const card = this.board[0][lane]
       if (card?.type === CardType.TREASURE && card.treasureKind === 'starlight') {
         this.board[0][lane] = null
-        if (this.turn < RUN_TARGET_TURNS) {
+        if (this.turn < this.runTargetTurns) {
           this.turn++
           this.starlightsThisStep++ // 별빛 획득 순간 보상 shaping용
         }
@@ -1397,7 +1425,7 @@ export class EnaTrainingSimulation {
 
   private advanceBossTurn(): void {
     this.bossAttackCountdown--
-    const profile = BOSS_PROFILES[this.bossFloor]
+    const profile = this.bossProfileFor(this.bossFloor)
     if (this.bossAttackCountdown <= 0 && this.bossHp > 0) {
       const adversity = this.hp + this.shield - profile.attack <= Math.max(1, this.maxHp * 0.35)
       if (!this.companionDodges(profile.attack, adversity)) this.takeDamage(profile.attack)
@@ -1430,6 +1458,17 @@ export class EnaTrainingSimulation {
         for (let n = 0; n < 2 && this.hand.length > 0; n++) this.consumeHand(this.hand.length - 1)
         this.takeDamage(3)
         break
+      case 'catSteal':
+        // 양초 고양이: 공격과 함께 손패 1장을 강탈한다. 촛농/양초/불씨였다면 본인이 사용해 자가 회복.
+        if (this.hand.length > 0) {
+          const idx = this.rng.int(this.hand.length)
+          const stolen = this.hand[idx].id
+          this.consumeHand(idx)
+          if (stolen === 'wax-drop' || stolen === 'wax' || stolen === 'ember') {
+            this.bossHp = Math.min(this.bossMaxHp, this.bossHp + 4)
+          }
+        }
+        break
     }
   }
 
@@ -1441,6 +1480,12 @@ export class EnaTrainingSimulation {
     this.grantRelic(true)
     this.drawCard()
     if (this.bossFloor === 100) {
+      this.done = true
+      this.phase = 'done'
+      return
+    }
+    // 새싹 병아리: 30F 양초 고양이 격파 = 클리어(강제 시련·별빛 등반 없음).
+    if (this.difficulty === 'sprout') {
       this.done = true
       this.phase = 'done'
       return
@@ -1483,7 +1528,7 @@ export class EnaTrainingSimulation {
   }
 
   private enterBoss(floor: number): void {
-    const profile = BOSS_PROFILES[floor]
+    const profile = this.bossProfileFor(floor)
     this.phase = 'boss'
     this.bossFloor = floor
     this.bossHp = this.bossMaxHp = profile.maxHp
@@ -1494,7 +1539,7 @@ export class EnaTrainingSimulation {
   }
 
   private bossPageFloor(): number {
-    const profile = BOSS_PROFILES[this.bossFloor]
+    const profile = this.bossProfileFor(this.bossFloor)
     if (!profile?.pages) return 0
     return this.bossPage < profile.pages.length ? profile.pages[this.bossPage] : 0
   }
@@ -1526,8 +1571,18 @@ export class EnaTrainingSimulation {
     this.incomingRefillQueue = Array<EnaSimCard | null>(LANES).fill(null)
   }
 
-  /** 불씨 티어 스폰 버킷(실제 EmberSystem)으로 카드를 뽑는다. 최종 등반에선 별빛을 섞는다. */
+  /** 온보딩 축약형 필드 카드 — 바위(약한 적)·덤불(약한 함정)·잡동사니(소량 보물). 실게임 필드와 같은 결. */
+  private spawnFieldCard(): EnaSimCard {
+    const roll = this.rng.int(3)
+    if (roll === 0) return { type: CardType.ENEMY, hp: 1, atk: 0, group: 1, value: 1, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+    if (roll === 1) return { type: CardType.TRAP, hp: 0, atk: 0, group: 1, trapKind: 'bush', value: 0, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+    return { type: CardType.TREASURE, hp: 0, atk: 0, group: 1, treasureKind: 'normal', value: 1 + this.rng.int(2), growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+  }
+
+  /** 불씨 티어 스폰 버킷(실제 EmberSystem)으로 카드를 뽑는다. 최종 등반에선 별빛을 섞는다.
+   *  새싹 병아리 1~10층은 낮은 확률로 축약형 필드를 섞어 온보딩 감각을 학습에 반영한다. */
   private spawnCard(zone: 'front' | 'waiting'): EnaSimCard {
+    if (this.difficulty === 'sprout' && this.turn <= 10 && this.rng.next() < 0.15) return this.spawnFieldCard()
     if (this.finalAscent && zone === 'waiting' && this.rng.next() < 0.3) {
       return { type: CardType.TREASURE, hp: 0, atk: 0, group: 1, treasureKind: 'starlight', value: 0, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
     }
@@ -1631,7 +1686,7 @@ export class EnaTrainingSimulation {
   private terminalReward(): number {
     if (!this.done) return 0
     if (this.hp <= 0) return -15 // 사망은 큰 음의 종단 보상
-    if (this.bossesCleared >= BOSS_FLOORS.length) return 40 // 최종 보스까지 격파 = 완전한 모험
+    if (this.bossesCleared >= this.bossFloors.length) return 40 // 최종 보스까지 격파 = 완전한 모험
     return 0 // 도달 깊이는 shaping의 보스 +8만으로 계상(이중 계상 제거)
   }
 
@@ -1870,12 +1925,12 @@ export class EnaTrainingSimulation {
   }
 
   private turnsToShop(): number {
-    if (this.turn >= RUN_TARGET_TURNS) return 0
+    if (this.turn >= this.runTargetTurns) return 0
     return SHOP_INTERVAL - (this.turn % SHOP_INTERVAL)
   }
 
   private turnsToBoss(): number {
-    for (const floor of BOSS_FLOORS) if (floor > this.turn) return floor - this.turn
+    for (const floor of this.bossFloors) if (floor > this.turn) return floor - this.turn
     return 0
   }
 
@@ -1901,7 +1956,7 @@ export class EnaTrainingSimulation {
   private buildReason(snapshot: EnaGameSnapshot, action: EnaSimAction, projectedDamage: number, frontThreat: number, bossPlanValue: number): string {
     const tier = EmberSystem.tierLabel(snapshot.emberTier)
     if (snapshot.phase === 'boss') {
-      return `${snapshot.bossFloor}층 보스 ${BOSS_PROFILES[snapshot.bossFloor]?.name}: 공격력 ${snapshot.attack}, 불씨 피해 ${projectedDamage}, 콤보 ${snapshot.combo}/${snapshot.comboMax}, 준비값 ${bossPlanValue.toFixed(1)} → ${action.kind}`
+      return `${snapshot.bossFloor}층 보스 ${this.bossProfileFor(snapshot.bossFloor)?.name}: 공격력 ${snapshot.attack}, 불씨 피해 ${projectedDamage}, 콤보 ${snapshot.combo}/${snapshot.comboMax}, 준비값 ${bossPlanValue.toFixed(1)} → ${action.kind}`
     }
     if (snapshot.phase === 'shop') return `${snapshot.shopMode === 'altar' ? '제단' : '상점'}: 보스까지 ${snapshot.turnsToBoss}턴, 불씨 ${snapshot.ember}, 불빛 ${snapshot.light}, 화폐 ${snapshot.coins} → ${action.kind}`
     if (snapshot.phase === 'event') return `이벤트: 위험 ${snapshot.eventRisk}, HP ${snapshot.hp}+방패 ${snapshot.shield}, 불씨 ${tier} → ${action.kind}`
@@ -2079,6 +2134,8 @@ function trapDamage(card: EnaSimCard, bonus: number = 0): number {
   if (card.type !== CardType.TRAP) return 0
   if (card.trapKind === 'bomb') return 5 + bonus
   if (card.trapKind === 'spore') return (card.group >= 3 ? 5 : card.group === 2 ? 3 : 1) + bonus
+  // 온보딩 덤불(bush): 폭만큼 완만하게 1/2/3(즉사 없음) — 실게임 getTrapDamagePenalty와 동일.
+  if (card.trapKind === 'bush') return Math.min(3, Math.max(1, card.group)) + bonus
   // web: 1칸=1, 2칸=5, 3칸=즉사(학습용 큰 수 — 보너스와 무관하게 이미 최상위 위협).
   return card.group >= 3 ? 999 : (card.group === 2 ? 5 : 1) + bonus
 }

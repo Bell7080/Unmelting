@@ -14,6 +14,7 @@ import {
   ENA_FEATURE_COUNT,
   type EnaObservation,
   type EnaPolicy,
+  type EnaSimDifficulty,
 } from './EnaTrainingSimulation'
 import { EnaPolicyNetwork } from './EnaPolicyNetwork'
 
@@ -29,6 +30,8 @@ export interface EnaTrainConfig {
   rlLr: number
   gamma: number
   seed: number
+  /** 학습 아크 난이도. 'sprout'로 두면 새싹 병아리 30층 온보딩을 별도 헤드리스 사전학습으로 돌린다. */
+  difficulty: EnaSimDifficulty
 }
 
 export const DEFAULT_TRAIN_CONFIG: EnaTrainConfig = {
@@ -40,6 +43,7 @@ export const DEFAULT_TRAIN_CONFIG: EnaTrainConfig = {
   rlLr: 5e-4,
   gamma: 0.99,
   seed: 1,
+  difficulty: 'standard',
 }
 
 export interface EnaEvalMetrics {
@@ -98,10 +102,10 @@ function rollout(sim: EnaTrainingSimulation, policy: EnaPolicy, rng: EnaRandom):
 
 export class EnaTrainer {
   /** 교사 정책으로 BC 학습 데이터(각 스텝의 마스크/행동)를 모은다. */
-  static collectTeacherData(episodes: number, seed: number, rng: EnaRandom): Step[] {
+  static collectTeacherData(episodes: number, seed: number, rng: EnaRandom, difficulty: EnaSimDifficulty = 'standard'): Step[] {
     const data: Step[] = []
     for (let i = 0; i < episodes; i++) {
-      const sim = new EnaTrainingSimulation(seed + i)
+      const sim = new EnaTrainingSimulation(seed + i, undefined, difficulty)
       for (const s of rollout(sim, EnaTrainingSimulation.teacherPolicy, rng)) data.push(s)
     }
     return data
@@ -120,10 +124,10 @@ export class EnaTrainer {
   }
 
   /** REINFORCE: 망 자신의 표본 궤적과 정규화된 리턴(우위)으로 정책을 개선한다. */
-  static reinforce(net: EnaPolicyNetwork, episodes: number, seed: number, lr: number, gamma: number, rng: EnaRandom): void {
+  static reinforce(net: EnaPolicyNetwork, episodes: number, seed: number, lr: number, gamma: number, rng: EnaRandom, difficulty: EnaSimDifficulty = 'standard'): void {
     const samplePolicy = policyFromNetwork(net, false)
     for (let i = 0; i < episodes; i++) {
-      const sim = new EnaTrainingSimulation(seed + i * 101 + 7)
+      const sim = new EnaTrainingSimulation(seed + i * 101 + 7, undefined, difficulty)
       const steps = rollout(sim, samplePolicy, rng)
       if (steps.length === 0) continue
       // 할인 리턴 후 에피소드 단위 z-정규화로 분산을 줄인다(베이스라인 역할).
@@ -144,13 +148,13 @@ export class EnaTrainer {
   }
 
   /** 정책을 여러 시드로 그리디 평가해 평균 리턴/생존턴/보스/승률을 낸다. */
-  static evaluate(policy: EnaPolicy, seeds: number[]): EnaEvalMetrics {
+  static evaluate(policy: EnaPolicy, seeds: number[], difficulty: EnaSimDifficulty = 'standard'): EnaEvalMetrics {
     let ret = 0
     let turns = 0
     let bosses = 0
     let wins = 0
     for (const seed of seeds) {
-      const sim = new EnaTrainingSimulation(seed)
+      const sim = new EnaTrainingSimulation(seed, undefined, difficulty)
       const r = sim.runEpisode(policy)
       ret += r.totalReward
       turns += r.survivedTurns
@@ -168,13 +172,13 @@ export class EnaTrainer {
     const net = new EnaPolicyNetwork(ENA_FEATURE_COUNT, cfg.hidden, ACTION_DIM, new EnaRandom(cfg.seed + 1))
     const evalSeeds = Array.from({ length: 40 }, (_, i) => 5000 + i * 7)
 
-    const random = EnaTrainer.evaluate(policyFromNetwork(net, true), evalSeeds)
+    const random = EnaTrainer.evaluate(policyFromNetwork(net, true), evalSeeds, cfg.difficulty)
 
-    const teacherData = EnaTrainer.collectTeacherData(cfg.bcEpisodes, cfg.seed * 31 + 3, rng)
+    const teacherData = EnaTrainer.collectTeacherData(cfg.bcEpisodes, cfg.seed * 31 + 3, rng, cfg.difficulty)
     EnaTrainer.behaviorClone(net, teacherData, cfg.bcEpochs, cfg.bcLr, rng)
-    EnaTrainer.reinforce(net, cfg.rlEpisodes, cfg.seed * 53 + 11, cfg.rlLr, cfg.gamma, rng)
+    EnaTrainer.reinforce(net, cfg.rlEpisodes, cfg.seed * 53 + 11, cfg.rlLr, cfg.gamma, rng, cfg.difficulty)
 
-    const trained = EnaTrainer.evaluate(policyFromNetwork(net, true), evalSeeds)
+    const trained = EnaTrainer.evaluate(policyFromNetwork(net, true), evalSeeds, cfg.difficulty)
     return { network: net, random, trained }
   }
 }

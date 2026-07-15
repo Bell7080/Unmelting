@@ -68,6 +68,43 @@ describe('EnaTrainingSimulation', () => {
     expect(trialAppliedAfterBoss).toBe(true)
   })
 
+  it('새싹 병아리 난이도는 30층 양초 고양이 아크로 분류되고 클리어에 강제 시련이 없다', () => {
+    // 아크 길이/보스 층 분류가 온보딩 규격(30층 · 보스 [30])으로 잡히는지 확인.
+    const cfgProbe = new EnaTrainingSimulation(1, undefined, 'sprout') as unknown as {
+      runTargetTurns: number
+      bossFloors: readonly number[]
+    }
+    expect(cfgProbe.runTargetTurns).toBe(30)
+    expect([...cfgProbe.bossFloors]).toEqual([30])
+
+    let reachedBoss = false
+    let cleared = false
+    let deepest = 0
+    const SEED_COUNT = 400
+    for (let seed = 0; seed < SEED_COUNT; seed++) {
+      const sim = new EnaTrainingSimulation(seed * 7 + 3, undefined, 'sprout')
+      const result = sim.runEpisode()
+      deepest = Math.max(deepest, result.survivedTurns)
+      if (result.trace.some((line) => line.split(':')[1] === 'boss')) reachedBoss = true
+      // 온보딩은 30층을 넘지 않는다(별빛 등반/추가 보스 없음).
+      expect(result.survivedTurns).toBeLessThanOrEqual(30)
+      expect(result.bossesCleared).toBeLessThanOrEqual(1)
+      if (result.bossesCleared > 0) {
+        cleared = true
+        expect(result.won).toBe(true)
+        // 새싹 병아리 클리어에는 강제 시련이 붙지 않는다(정규 30/60/90F와 다른 지점).
+        const p = probe(sim)
+        expect(p.trialEnemyHpBonus).toBe(0)
+        expect(p.trialEnemyAtkBonus).toBe(0)
+        expect(p.trialTrapDamageBonus).toBe(0)
+        expect(p.trialTreasureScale).toBe(1)
+      }
+    }
+    expect(reachedBoss).toBe(true) // 양초 고양이 보스 국면에 도달한다.
+    expect(cleared).toBe(true) // 약한 교사 정책으로도 일부 시드는 30F를 클리어한다(가벼운 온보딩).
+    expect(deepest).toBeLessThanOrEqual(30)
+  })
+
   it('강제 시련은 실제 TRIAL_DEFINITIONS 수치 단위로 누적되고 필드 적에도 소급된다', () => {
     const sim = new EnaTrainingSimulation(5)
     sim.reset()
