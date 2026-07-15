@@ -184,10 +184,11 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
     enemyPower: 18,
   },
   {
-    // 온보딩 축약형 적: 반격(attack 0) 없이 때려서 부수는 최약체. enemyPower 0으로 항상 최약.
+    // 온보딩 축약형 적: 반격(attack 0) 없이 때려서 부수는 최약체. HP는 칸수 선형(1칸1·2칸2·3칸3),
+    // 일반 적 합체 보너스는 미적용(별도 배선). enemyPower 0으로 항상 최약.
     name: '바위',
     description: 'Inert wax boulder — break it to clear',
-    healthOrDamage: 2,
+    healthOrDamage: 1,
     attack: 0,
     enemySpriteId: 'enemyRock',
     enemyPower: 0,
@@ -572,7 +573,7 @@ export class CardSpawner {
     const id = `onboarding-field-${this.spawnSerial}`
     if (kind === 'rock') {
       const def = ENEMY_DEFINITIONS.find(d => d.enemySpriteId === 'enemyRock') ?? ENEMY_DEFINITIONS[0]
-      return new Card(id, CardType.ENEMY, def.name, def.description, def.healthOrDamage ?? 2, def.attack ?? 0,
+      return new Card(id, CardType.ENEMY, def.name, def.description, def.healthOrDamage ?? 1, def.attack ?? 0,
         { enemySpriteId: def.enemySpriteId, enemyPower: def.enemyPower })
     }
     if (kind === 'bush') {
