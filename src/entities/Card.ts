@@ -372,6 +372,10 @@ export class Card {
       if (this.groupCount === 2) return 3
       return 1
     }
+    if (this.trapKind === 'bush') {
+      // 온보딩 덤불: 소프트 함정 — 칸수만큼 소량 피해(1/2/3). 거미줄 즉사(999) 규칙 미적용.
+      return Math.min(3, Math.max(1, this.groupCount))
+    }
     if (this.groupCount >= 3) return 999
     if (this.groupCount === 2) return 5
     return this.baseDamage
