@@ -931,17 +931,131 @@ body.hearth-lobby #ingame-backdrop.is-out {
 /* 확정 후: stage/carousel 숨기고 뒤로가기(back)는 유지해 재선택 진입 허용 */
 #hearth-overlay.is-character-confirmed .hearth-character-stage,
 #hearth-overlay.is-character-confirmed .hearth-character-carousel { display: none; }
+/* 확정 후: 화면 중앙에 [난이도 선택]을 위, [출발]을 아래로 세로 정렬해 고정한다.
+   (예전엔 margin-bottom 잔재로 버튼이 애매하게 내려가 깨져 보였다 → 절대 오프셋으로 확정.) */
 #hearth-overlay.is-character-confirmed .hearth-depart {
   position: absolute;
   top: 50%;
   left: 50%;
   margin: 0;
   opacity: 1;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, calc(-50% + 78px));
   pointer-events: auto;
   /* 확정 후 재등장은 딜레이 없이 바로 */
-  transition: opacity 0.36s ease 0s, transform 0.36s cubic-bezier(0.2, 0.84, 0.3, 1) 0s, box-shadow 0.18s ease, border-color 0.18s ease;
+  transition: opacity 0.36s ease 0.12s, transform 0.36s cubic-bezier(0.2, 0.84, 0.3, 1) 0.12s, box-shadow 0.18s ease, border-color 0.18s ease;
 }
+#hearth-overlay.is-character-confirmed .hearth-depart.is-disabled {
+  opacity: 0.4;
+  filter: grayscale(0.55) brightness(0.82);
+  cursor: not-allowed;
+}
+
+/* ── 난이도 선택(확정 상태 전용) ──────────────────────────────────────
+   출발 버튼 위, 캐릭터 커버플로우와 같은 방식으로 3장을 넘겨 고른다. */
+.hearth-difficulty { display: none; }
+#hearth-overlay.is-character-confirmed .hearth-difficulty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(8px, 1.4vh, 14px);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(94%, 560px);
+  transform: translate(-50%, calc(-50% - 74px));
+  z-index: 9;
+  opacity: 0;
+  animation: hearth-diff-rise 0.4s cubic-bezier(0.2, 0.84, 0.3, 1) 0.16s forwards;
+  pointer-events: auto;
+}
+@keyframes hearth-diff-rise {
+  from { opacity: 0; transform: translate(-50%, calc(-50% - 58px)); }
+  to { opacity: 1; transform: translate(-50%, calc(-50% - 74px)); }
+}
+.hearth-diff-carousel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: clamp(60px, 9vh, 76px);
+}
+.hearth-diff-strip {
+  position: relative;
+  width: min(74%, 360px);
+  height: 100%;
+  perspective: 1000px;
+  touch-action: pan-y;
+  cursor: grab;
+}
+.hearth-diff-strip:active { cursor: grabbing; }
+.hearth-diff-card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: clamp(150px, 22vw, 208px);
+  height: clamp(52px, 8vh, 66px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 13px;
+  border: 1px solid rgba(200, 152, 60, 0.5);
+  background: linear-gradient(180deg, rgba(108, 62, 22, 0.94), rgba(30, 14, 6, 0.97));
+  color: rgba(255, 232, 168, 0.96);
+  font-family: 'OkDanDan', Georgia, serif;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 228, 160, 0.2), inset 0 -5px 12px rgba(0, 0, 0, 0.56), 0 12px 26px rgba(0, 0, 0, 0.6);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  overflow: hidden;
+}
+.hearth-diff-card.is-selected {
+  border-color: var(--color-flame, #ffd778);
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.32), inset 0 -5px 12px rgba(0, 0, 0, 0.5), 0 18px 40px rgba(0, 0, 0, 0.74), 0 0 30px rgba(244, 164, 96, 0.4);
+}
+.hearth-diff-card-name { font-size: clamp(15px, 2vh, 19px); font-weight: 900; letter-spacing: 0.05em; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
+.hearth-diff-card-tag { font-size: clamp(11px, 1.5vh, 13px); color: rgba(244, 206, 140, 0.82); letter-spacing: 0.04em; }
+.hearth-diff-card.is-locked { cursor: not-allowed; }
+.hearth-diff-card.is-locked .hearth-diff-card-name,
+.hearth-diff-card.is-locked .hearth-diff-card-tag { color: rgba(206, 196, 180, 0.5); }
+.hearth-diff-lock {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  color: rgba(232, 214, 176, 0.72);
+  display: inline-flex;
+}
+.hearth-diff-lock-icon { width: 14px; height: 14px; }
+.hearth-diff-card.is-denied { animation: hearth-char-deny 0.42s ease; }
+
+.hearth-diff-nav {
+  flex: 0 0 auto;
+  width: clamp(30px, 4vw, 40px);
+  height: clamp(30px, 4vw, 40px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 226, 158, 0.6);
+  cursor: pointer;
+  transition: color 0.16s ease, transform 0.16s ease;
+}
+.hearth-diff-nav:hover { color: rgba(255, 232, 168, 0.95); transform: scale(1.14); }
+.hearth-diff-nav svg { width: 60%; height: 60%; }
+
+.hearth-diff-caption {
+  text-align: center;
+  color: #ffe7a8;
+  font-family: 'OkDanDan', Georgia, serif;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
+  max-width: 30em;
+}
+.hearth-diff-caption-name { display: block; font-size: clamp(16px, 2.2vh, 21px); letter-spacing: 0.06em; }
+.hearth-diff-caption-desc { display: block; margin-top: 4px; font-size: clamp(12px, 1.6vh, 15px); color: rgba(225, 210, 188, 0.84); line-height: 1.4; }
+#hearth-overlay .hearth-difficulty.is-locked-pick .hearth-diff-caption-desc { color: rgba(226, 158, 120, 0.9); }
 
 /* ── orb / 설치 애니메이션 ──────────────────────────────────────────── */
 .hearth-character-orb { position: fixed; z-index: 260; width: 18px; height: 18px; border-radius: 50%; pointer-events: none; background: #fff3bd; box-shadow: 0 0 22px #ffd778, 0 0 56px rgba(244,164,96,0.72); }

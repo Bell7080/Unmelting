@@ -114,6 +114,26 @@ const HEARTH_CHARACTERS = [
   { id: 'slot-4', name: '???', role: '추후 해금', tagline: '', desc: '', art: '', lockedArt: true, locked: true },
 ] as const
 
+/** 시작 난이도. 새싹=온보딩(30층), 쉬움=정규 100층, 보통=개발 중. 출발 시 런에 전달된다. */
+export type HearthDifficulty = 'sprout' | 'easy' | 'normal'
+interface DifficultyDef {
+  key: HearthDifficulty
+  name: string
+  tagline: string
+  desc: string
+  /** 정적 잠금(보통=개발 중). 쉬움은 졸업 여부로 런타임 판정하므로 여기선 false. */
+  devLocked?: boolean
+}
+/** 캐릭터 확정 후 출발 버튼 위에서 넘겨 고르는 난이도 목록(캐러셀 순서 = 배열 순서). */
+const HEARTH_DIFFICULTIES: readonly DifficultyDef[] = [
+  { key: 'sprout', name: '새싹 병아리', tagline: '온보딩 · 30층', desc: '짧은 첫 모험. 바위·덤불·잡동사니로 적·함정·보물의 기본기를 익힌다.' },
+  { key: 'easy', name: '쉬움', tagline: '정규 · 100층', desc: '진짜 등반이 시작된다. 새싹 병아리를 클리어하면 열린다.' },
+  { key: 'normal', name: '보통', tagline: '개발 중', desc: '더 매서운 굴레가 기다린다. 아직 준비되지 않았다.', devLocked: true },
+] as const
+
+/** 마지막으로 고른 시작 난이도 복원 키. */
+const HEARTH_LAST_DIFFICULTY_KEY = 'unmelting.hearth.lastDifficulty'
+
 /** 우측 인스펙터에 띄울 각 스테이션의 한 줄 설명(§12-3 역할 요약). */
 const STATION_DESC: Record<string, string> = {
   암시장: '턴이 갱신될 때마다 바뀌는 정해진 품목을 메타 화폐로 사들인다.',
@@ -156,8 +176,12 @@ export class HearthScene {
   private selectedCharacterIndex = 0
   /** 캐릭터 확정 후 출발 버튼을 다시 띄워 중복 선택 애니메이션을 막는다. */
   private characterConfirmed = false
+  /** 캐릭터 확정 뒤 출발 버튼 위에서 넘겨 고르는 시작 난이도 인덱스. */
+  private selectedDifficultyIndex = 0
   /** 커버플로우 드래그 시작 X 좌표. 좌우 한 바퀴 순환 입력을 판정한다. */
   private dragStartX: number | null = null
+  /** 드래그 대상 구분: 캐릭터 스트립 vs 난이도 스트립(같은 pointer 핸들러 공유). */
+  private dragKind: 'character' | 'difficulty' | null = null
   /** 현재 무역 화면에서 선택된 임시 탭. */
   private selectedTradeTab = 0
   /** 만찬 선택 흐름 단계: 0=팩 레일, 1=메인 음식, 2~3=추가 스탯, 4=완성 연출. */
@@ -177,6 +201,8 @@ export class HearthScene {
     this.shuttered = false
     this.departing = false
     this.interactive = false
+    // 난이도 선택 초기화(잠긴 난이도면 개방된 최고 난이도로 폴백) — 셔터 HTML 빌드 전에 확정한다.
+    this.initDifficultySelection()
     this.dinnerConsumed = this.hasDinnerRelicInInventory()
 
     const overlay = document.createElement('div')
@@ -236,6 +262,17 @@ export class HearthScene {
               <small>${HEARTH_CHARACTERS[0].desc}</small>
             </div>
           </div>
+          <div class="hearth-difficulty" aria-label="난이도 선택" aria-hidden="true">
+            <div class="hearth-diff-carousel">
+              <button class="hearth-diff-nav hearth-diff-nav--left" type="button" data-hearth-diff-nav="left" aria-label="이전 난이도" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 L8 12 L15 19"/></svg></button>
+              <div class="hearth-diff-strip" role="listbox" aria-label="시작 난이도">${this.renderDifficultyCards()}</div>
+              <button class="hearth-diff-nav hearth-diff-nav--right" type="button" data-hearth-diff-nav="right" aria-label="다음 난이도" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5 L16 12 L9 19"/></svg></button>
+            </div>
+            <div class="hearth-diff-caption">
+              <strong class="hearth-diff-caption-name"></strong>
+              <small class="hearth-diff-caption-desc"></small>
+            </div>
+          </div>
           <button class="hearth-depart" type="button" data-hearth-depart>출발</button>
           <div class="hearth-character-carousel">
             <button class="hearth-char-nav hearth-char-nav--left" type="button" data-hearth-char-nav="left" aria-label="이전" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 L8 12 L15 19"/></svg></button>
@@ -279,7 +316,7 @@ export class HearthScene {
 
     this.alignToRail()
     this.alignInspector()
-    const onResize = (): void => { this.alignToRail(); this.alignInspector() }
+    const onResize = (): void => { this.alignToRail(); this.alignInspector(); this.layoutDifficultyCards() }
     this.resizeListener = onResize
     window.addEventListener('resize', onResize)
     window.addEventListener('scroll', onResize, true)
@@ -307,6 +344,17 @@ export class HearthScene {
       if (charNav) {
         const dir = charNav.dataset.hearthCharNav as 'left' | 'right'
         this.selectCharacter(this.selectedCharacterIndex + (dir === 'left' ? -1 : 1), dir)
+        return
+      }
+      const diffNav = t.closest<HTMLElement>('[data-hearth-diff-nav]')
+      if (diffNav) {
+        const dir = diffNav.dataset.hearthDiffNav as 'left' | 'right'
+        this.selectDifficulty(this.selectedDifficultyIndex + (dir === 'left' ? -1 : 1), dir)
+        return
+      }
+      const diffCard = t.closest<HTMLElement>('[data-hearth-diff]')
+      if (diffCard) {
+        this.selectDifficulty(Number(diffCard.dataset.hearthDiff ?? 0), 'click')
         return
       }
       const tradeNav = t.closest<HTMLElement>('[data-hearth-trade-nav]')
@@ -1012,16 +1060,23 @@ export class HearthScene {
   }
 
   private beginCharacterDrag(e: PointerEvent): void {
-    if (!(e.target as HTMLElement | null)?.closest('.hearth-character-strip')) return
-    this.dragStartX = e.clientX
+    const target = e.target as HTMLElement | null
+    if (target?.closest('.hearth-diff-strip')) { this.dragKind = 'difficulty'; this.dragStartX = e.clientX; return }
+    if (target?.closest('.hearth-character-strip')) { this.dragKind = 'character'; this.dragStartX = e.clientX; return }
   }
 
   private endCharacterDrag(e: PointerEvent): void {
     if (this.dragStartX === null) return
     const delta = e.clientX - this.dragStartX
+    const kind = this.dragKind
     this.dragStartX = null
+    this.dragKind = null
     if (Math.abs(delta) < 34) return
-    this.selectCharacter(this.selectedCharacterIndex + (delta < 0 ? 1 : -1), delta < 0 ? 'left' : 'right')
+    if (kind === 'difficulty') {
+      this.selectDifficulty(this.selectedDifficultyIndex + (delta < 0 ? 1 : -1), delta < 0 ? 'left' : 'right')
+    } else {
+      this.selectCharacter(this.selectedCharacterIndex + (delta < 0 ? 1 : -1), delta < 0 ? 'left' : 'right')
+    }
   }
 
   private readLastCharacterIndex(): number {
@@ -1111,6 +1166,8 @@ export class HearthScene {
     orb.remove()
     root.classList.remove('is-character-confirming')
     root.classList.add('is-character-confirmed')
+    // 난이도 선택은 확정 상태에서만 display되므로, 표시된 다음 프레임에 커버플로우/캡션을 심는다.
+    requestAnimationFrame(() => this.selectDifficulty(this.selectedDifficultyIndex))
   }
 
 
@@ -1191,9 +1248,115 @@ export class HearthScene {
     `).join('')
   }
 
+  /** 난이도 잠금 판정: 보통은 정적 개발 잠금, 쉬움은 새싹 병아리 졸업 여부로 런타임 판정. */
+  private isDifficultyLocked(def: DifficultyDef): boolean {
+    if (def.devLocked) return true
+    if (def.key === 'easy') return !(this.handlers?.isEasyUnlocked?.() ?? false)
+    return false
+  }
+
+  /** 캐릭터 확정 후 출발 버튼 위에 뜨는 난이도 카드 3장(캐릭터 카드와 같은 커버플로우 방식). */
+  private renderDifficultyCards(): string {
+    const lockIcon = `<svg class="hearth-diff-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+    </svg>`
+    return HEARTH_DIFFICULTIES.map((def, index) => {
+      const locked = this.isDifficultyLocked(def)
+      const selected = index === this.selectedDifficultyIndex
+      return `
+      <button class="hearth-diff-card diff-${def.key}${selected ? ' is-selected' : ''}${locked ? ' is-locked' : ''}"
+              type="button" role="option"
+              aria-label="${def.name}" aria-selected="${selected ? 'true' : 'false'}"
+              ${locked ? 'aria-disabled="true"' : ''}
+              data-hearth-diff="${index}">
+        <span class="hearth-diff-card-name">${def.name}</span>
+        <span class="hearth-diff-card-tag">${def.tagline}</span>
+        ${locked ? `<span class="hearth-diff-lock">${lockIcon}</span>` : ''}
+      </button>`
+    }).join('')
+  }
+
+  /** 저장된 마지막 난이도를 복원하되, 잠긴 난이도면 개방된 최고 난이도로 폴백한다. */
+  private initDifficultySelection(): void {
+    const saved = window.localStorage.getItem(HEARTH_LAST_DIFFICULTY_KEY)
+    let index = HEARTH_DIFFICULTIES.findIndex((d) => d.key === saved)
+    if (index < 0) index = this.isDifficultyLocked(HEARTH_DIFFICULTIES[1]) ? 0 : 1
+    // 복원된 난이도가 잠겨 있으면(예: 저장은 쉬움인데 아직 미졸업) 개방된 항목으로 내린다.
+    if (this.isDifficultyLocked(HEARTH_DIFFICULTIES[index])) {
+      const openIdx = HEARTH_DIFFICULTIES.map((d, i) => ({ d, i })).filter((x) => !this.isDifficultyLocked(x.d)).pop()
+      index = openIdx ? openIdx.i : 0
+    }
+    this.selectedDifficultyIndex = index
+  }
+
+  /** 난이도 커버플로우: 캐릭터 카드와 동일하게 인라인 transform으로 선택 카드를 중앙 확대한다. */
+  private layoutDifficultyCards(): void {
+    const root = this.overlay
+    if (!root) return
+    const cards = [...root.querySelectorAll<HTMLElement>('[data-hearth-diff]')]
+    const n = cards.length
+    if (n === 0 || cards[0].offsetWidth === 0) return
+    const stepPx = cards[0].offsetWidth * 0.62
+    const center = this.selectedDifficultyIndex
+    cards.forEach((card) => {
+      const i = Number(card.dataset.hearthDiff ?? -1)
+      const off = i - center // 3장 고정이라 순환 없이 선형 배치
+      const a = Math.abs(off)
+      const scale = Math.max(0.72, 1 - a * 0.2)
+      const opac = a <= 1.6 ? Math.max(0.2, 1 - a * 0.42) : 0
+      const bright = Math.max(0.5, 1 - a * 0.28)
+      card.classList.toggle('is-selected', i === center)
+      card.setAttribute('aria-selected', i === center ? 'true' : 'false')
+      card.style.transform = `translate(-50%, -50%) translateX(${off * stepPx}px) scale(${scale}) rotateY(${off * -8}deg)`
+      card.style.opacity = String(opac)
+      card.style.zIndex = String(50 - Math.round(a * 10))
+      card.style.filter = `brightness(${bright})`
+      card.style.pointerEvents = opac > 0.2 ? 'auto' : 'none'
+    })
+  }
+
+  /** 난이도 선택 갱신 — 커버플로우 재배치 + 하단 캡션(이름/설명/잠금) 동기화. */
+  private selectDifficulty(index: number, direction: 'left' | 'right' | 'click' = 'click'): void {
+    const clamped = Math.max(0, Math.min(HEARTH_DIFFICULTIES.length - 1, index))
+    this.selectedDifficultyIndex = clamped
+    const def = HEARTH_DIFFICULTIES[clamped]
+    window.localStorage.setItem(HEARTH_LAST_DIFFICULTY_KEY, def.key)
+    this.layoutDifficultyCards()
+    const root = this.overlay
+    if (!root) return
+    const locked = this.isDifficultyLocked(def)
+    const nameEl = root.querySelector<HTMLElement>('.hearth-diff-caption-name')
+    const descEl = root.querySelector<HTMLElement>('.hearth-diff-caption-desc')
+    if (nameEl) nameEl.textContent = def.name
+    if (descEl) descEl.textContent = locked ? `${def.desc} (잠김)` : def.desc
+    root.querySelector<HTMLElement>('.hearth-difficulty')?.classList.toggle('is-locked-pick', locked)
+    // 출발 버튼은 잠긴 난이도를 고르면 흐려져 클릭이 거부됨을 미리 알린다.
+    root.querySelector<HTMLElement>('[data-hearth-depart]')?.classList.toggle('is-disabled', locked)
+    root.querySelector<HTMLElement>('.hearth-diff-caption')?.animate([
+      { opacity: 0, transform: `translateX(${direction === 'right' ? '-' : ''}12px)` },
+      { opacity: 1, transform: 'translateX(0)' },
+    ], { duration: 240, easing: 'ease-out' })
+  }
+
+  /** 마지막으로 고른 시작 난이도 키(런 시작 시 온보딩/정규 분기를 결정한다). */
+  getSelectedDifficulty(): HearthDifficulty {
+    return HEARTH_DIFFICULTIES[this.selectedDifficultyIndex].key
+  }
+
   /** 출발 → 직업 선택/런 시작. 직업 오버레이(z=200)가 검은 셔터 위로 떠 이음새를 가린 뒤 허브를 걷는다. */
   private async depart(): Promise<void> {
     if (this.departing) return
+    // 잠긴 난이도(쉬움 미개방/보통 개발 중)로는 출발할 수 없다 — 카드와 버튼을 흔들어 거부를 알린다.
+    if (this.isDifficultyLocked(HEARTH_DIFFICULTIES[this.selectedDifficultyIndex])) {
+      const card = this.overlay?.querySelector<HTMLElement>('.hearth-diff-card.is-selected')
+      const btn = this.overlay?.querySelector<HTMLElement>('[data-hearth-depart]')
+      ;[card, btn].forEach((el) => {
+        if (!el) return
+        el.classList.add('is-denied')
+        window.setTimeout(() => el.classList.remove('is-denied'), 420)
+      })
+      return
+    }
     this.departing = true
     this.overlay?.querySelector<HTMLElement>('[data-hearth-depart]')?.classList.add('is-pressed')
     // 로비 배경(hearth_bg_001)을 페이드아웃해 검은 화면을 만든 뒤, 런이 시작되며

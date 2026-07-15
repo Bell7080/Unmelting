@@ -74,7 +74,7 @@ import {
   type EnaRunDramaSignals,
 } from '@systems/EnaDisposition'
 import { assessThreats, type ForesightOptions } from '@systems/CompanionForesight'
-import { HearthScene } from '@ui/hearth/HearthScene'
+import { HearthScene, type HearthDifficulty } from '@ui/hearth/HearthScene'
 import { ZoneCurtain, ZONE_LIST } from '@ui/ZoneCurtain'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
@@ -890,8 +890,10 @@ function enterHearth(): void {
   render()
   hearthScene.enter({
     // 출발 버튼 → startGame이 다시 초기화 + 직업 선택 + 보드 채움을 수행한다.
-    // 캐릭터 0(병아리)은 튜토리얼 런으로 진입한다.
-    onStart: () => { void startGame(hearthScene.getSelectedCharacterIndex()) },
+    // 선택한 난이도(새싹=온보딩/쉬움=정규)가 온보딩 여부를 결정한다.
+    onStart: () => { void startGame(hearthScene.getSelectedCharacterIndex(), hearthScene.getSelectedDifficulty()) },
+    // 쉬움(정규 100층)은 새싹 병아리를 한 번 졸업해야 열린다.
+    isEasyUnlocked: () => enaAutonomousLearner.hasFirstSeen('onboarding-graduated'),
     // 만찬 완료 즉시 Character.relics에 실제 RelicId를 넣고 렌더러의 유물 팬으로 보여 준다.
     onDinnerRelicCreate: async (profile) => {
       pendingDinnerRelicProfile = profile
@@ -3912,12 +3914,13 @@ function resetForNewRun(): void {
   boardRenderer.clearSelection()
 }
 
-async function startGame(characterIndex = -1): Promise<void> {
+async function startGame(characterIndex = -1, difficulty: HearthDifficulty | null = null): Promise<void> {
+  void characterIndex // 현재 캐릭터는 에나 단일이라 런 분기엔 미사용(추후 동행 해금 시 활용).
   const dinnerRelicProfile = pendingDinnerRelicProfile
   resetForNewRun()
-  // 새싹 병아리(온보딩)는 거점(/시작) 진입(characterIndex>=0) + 미졸업일 때만 적용한다.
-  // 기본 부팅(-1=쉬움 테스트 필드)이나 졸업 후에는 온보딩을 끈다(정상 스폰).
-  onboardingRunActive = characterIndex >= 0 && !enaAutonomousLearner.hasFirstSeen('onboarding-graduated')
+  // 선택한 난이도가 온보딩 여부를 결정한다: 새싹 병아리 = 온보딩(30F 아크 + 필드 3종 + 양초 고양이),
+  // 쉬움/보통 = 정규 스폰. 기본 부팅(difficulty=null=쉬움 테스트 필드)도 온보딩을 끈다.
+  onboardingRunActive = difficulty === 'sprout'
   pendingDinnerRelicProfile = dinnerRelicProfile
   // 런이 실제로 시작되므로 거점 로비에서 걸어 둔 말풍선 음소거를 해제한다(시작 대사 등 정상 출력).
   speechBubble.setMuted(false)
