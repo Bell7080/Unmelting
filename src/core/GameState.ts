@@ -24,6 +24,10 @@ export class GameState {
   encounteredCardNames = new Set<string>()
   /** 상점/제단이 열린 적 있는 팩 종류 집합. 도감 팩 탭의 미식별 마스킹에 사용한다. */
   encounteredPackKinds = new Set<string>()
+  /** 이번 런 정산용 카운터 — 플레이어가 처치한 적/처리한 함정/개봉한 보물 수. reset()에서 0으로. */
+  runDefeatedEnemies = 0
+  runClearedTraps = 0
+  runOpenedTreasures = 0
   /** 해금팩으로 해금된 레시피 ID 집합. runLocked 레시피는 여기 있을 때만 발동한다. */
   unlockedRecipeIds = new Set<string>()
 
@@ -311,5 +315,8 @@ export class GameState {
     this.encounteredCardNames = new Set()
     this.encounteredPackKinds = new Set()
     this.unlockedRecipeIds = new Set()
+    this.runDefeatedEnemies = 0
+    this.runClearedTraps = 0
+    this.runOpenedTreasures = 0
   }
 }

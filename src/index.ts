@@ -5889,6 +5889,13 @@ async function handleCardAction(e: Event): Promise<void> {
     : null
   const result = ActionSystem.executeAction(gameState.getCharacter(), lane, card, actionType)
 
+  // 정산용 런 카운터 — 플레이어 행동으로 제거된 적/함정/보물만 센다(만료 제거는 이 경로를 안 탄다).
+  if (result.cardRemoved) {
+    if (card.type === CardType.ENEMY) gameState.runDefeatedEnemies++
+    else if (card.type === CardType.TRAP) gameState.runClearedTraps++
+    else if (card.type === CardType.TREASURE) gameState.runOpenedTreasures++
+  }
+
   if (tutorialPreActionHandUids && result.success && result.cardRemoved) {
     // executeAction이 추가한 랜덤 아이템을 역순으로 제거하는 공통 헬퍼.
     const removeAddedHandCards = () => {
