@@ -1236,6 +1236,9 @@ export class HearthScene {
     if (state) state.textContent = on ? '개방됨' : '잠김'
     // 만찬 개방 상태가 바뀌면 뒤의 9칸(만찬 칸 잠금)도 즉시 동기화한다.
     if (id === 'dinner') this.refreshCellLocks()
+    // 거점에서도 보이는 패널(화폐/의뢰)은 body 잠금 클래스를 즉시 반영해 로비에서 바로 숨기고 켠다.
+    if (id === 'currency') document.body.classList.toggle('meta-currency-locked', !on)
+    if (id === 'quests') document.body.classList.toggle('meta-quests-locked', !on)
     card.animate([{ transform: 'scale(0.96)' }, { transform: 'scale(1)' }], { duration: 180, easing: 'ease-out' })
   }
 

@@ -814,6 +814,11 @@ function enterHearth(): void {
   gameActive = false
   // 아직 캐릭터를 고르지 않았으므로 플레이어 존을 숨긴다(레이어는 유지, visibility만 off).
   document.body.classList.add('hearth-lobby')
+  // 거점(로비)에서도 미개방 메타 패널(화폐/의뢰)을 숨긴다 — 무역 개방 상태(isMetaUnlocked)에 따른다.
+  document.body.classList.remove('onboarding-run')
+  document.body.classList.toggle('meta-currency-locked', !isMetaUnlocked('currency'))
+  document.body.classList.toggle('meta-reroll-locked', !isMetaUnlocked('shopReroll'))
+  document.body.classList.toggle('meta-quests-locked', !isMetaUnlocked('quests'))
   render()
   hearthScene.enter({
     // 출발 버튼 → startGame이 다시 초기화 + 직업 선택 + 보드 채움을 수행한다.
@@ -5796,10 +5801,12 @@ globalStyle.textContent = `
   }
   /* 컴팩트 육각형 — 경험 모달보다 작게(정산 카드 폭에 맞춤). */
   .settlement-constellation { width: min(196px, 54vw); margin-top: 2px; }
-  /* ── 메타 시스템 잠금: 온보딩 또는 무역 미개방 시 숨긴다 ──
-     화폐 패널·상점 리롤은 무역 1번 탭에서 개방된다(isMetaUnlocked). */
+  /* ── 메타 시스템 잠금: 온보딩 또는 무역 미개방 시 숨긴다(로비·인게임 공통) ──
+     화폐 패널·상점 리롤(유물/카드팩)·의뢰 시설은 무역 1번 탭에서 개방된다(isMetaUnlocked). */
   body.meta-currency-locked .coin-panel-total { display: none !important; }
-  body.meta-reroll-locked .shop-reroll-btn { display: none !important; }
+  body.meta-reroll-locked .shop-reroll-btn,
+  body.meta-reroll-locked .shop-pack-picker-reroll-btn { display: none !important; }
+  body.meta-quests-locked .quest-list { display: none !important; }
 `
 document.head.appendChild(globalStyle)
 

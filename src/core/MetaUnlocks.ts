@@ -3,16 +3,17 @@
  * 지금은 무역 1번 탭의 임시 버튼으로 토글하며, 추후 화폐 소비 구매로 대체한다.
  * (개별 localStorage 키로 저장 — JSON 파싱 없이 단순 '1' 플래그.)
  */
-export type MetaUnlockId = 'jobSelect' | 'shopReroll' | 'currency' | 'dinner'
+export type MetaUnlockId = 'jobSelect' | 'shopReroll' | 'currency' | 'dinner' | 'quests'
 
 const PREFIX = 'unmelting.meta.unlock.'
 
 /** 무역 1번 탭에 노출할 개방 항목(라벨/설명). */
 export const META_UNLOCKS: { id: MetaUnlockId; label: string; desc: string }[] = [
   { id: 'jobSelect', label: '직업 선택', desc: '런 시작 직업 3택' },
-  { id: 'shopReroll', label: '상점 리롤', desc: '유물/팩 재뽑기' },
+  { id: 'shopReroll', label: '상점 리롤', desc: '유물/카드팩 재뽑기' },
   { id: 'currency', label: '화폐 패널', desc: '메타 화폐($) HUD' },
   { id: 'dinner', label: '만찬', desc: '거점 만찬 시설' },
+  { id: 'quests', label: '의뢰', desc: '거점 좌측 의뢰 시설' },
 ]
 
 export function isMetaUnlocked(id: MetaUnlockId): boolean {
