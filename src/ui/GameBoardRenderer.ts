@@ -4959,7 +4959,12 @@ export class GameBoardRenderer {
         extraClass: known ? undefined : 'codex-tile--unknown',
       })
     }
-    const allEnemyTiles = ENEMY_DEFINITIONS.map(enemyTile).join('')
+    // 온보딩 축약형(바위)은 파일 번호와 무관하게 도감 최상단에 먼저 노출한다.
+    const orderedEnemies = [
+      ...ENEMY_DEFINITIONS.filter((d) => d.enemySpriteId === 'enemyRock'),
+      ...ENEMY_DEFINITIONS.filter((d) => d.enemySpriteId !== 'enemyRock'),
+    ]
+    const allEnemyTiles = orderedEnemies.map(enemyTile).join('')
 
     // 합쳐진 적: 해당 이름이 encounteredEnemyNames에 있으면 표시.
     const formationTile = (span: 2 | 3, name: string, sprite: string) => {
@@ -5098,7 +5103,25 @@ export class GameBoardRenderer {
       extraClass: bombKnown ? undefined : 'codex-tile--unknown',
     })
 
+    // 온보딩 축약형 덤불을 함정 탭 최상단에 노출한다. (1/2/3칸 = 피해 1/2/3, 합체명은 추후 배선)
+    const bushDamage: Record<1 | 2 | 3, string> = { 1: '1', 2: '2', 3: '3' }
+    const bushTiles = ([1, 2, 3] as const)
+      .map((span) => {
+        const known = seen.has('덤불')
+        return this.codexTile({
+          art: { kind: 'sprite', url: SpriteUrls.traps.bush },
+          name: known ? '덤불' : '???',
+          tag: `${span}칸`,
+          chips: known ? [{ icon: sword, value: bushDamage[span], tone: 'atk' }] : [],
+          note: known && span === 1 ? '닿으면 소량 피해만 주는 소프트 함정. 온보딩 축약형.' : undefined,
+          extraClass: known ? undefined : 'codex-tile--unknown',
+        })
+      })
+      .join('')
+
     return `
+      <h3 class="compendium-section">덤불</h3>
+      <div class="codex-tile-grid">${bushTiles}</div>
       <h3 class="compendium-section">거미줄</h3>
       <div class="codex-tile-grid">${webTiles}</div>
       <h3 class="compendium-section">폭탄</h3>
@@ -5174,7 +5197,25 @@ export class GameBoardRenderer {
       ? '황금 열쇠 유물 보유 중 · 보물상자의 10%가 황금 상자로 교체. 미믹화 없음.'
       : '황금 열쇠 유물 보유 시 등장. 미믹화 없음.'
 
+    // 온보딩 축약형 잡동사니를 보물 탭 최상단에 노출한다. (1/2/3칸 = 손패 1/2/3장)
+    const junkCards: Record<1 | 2 | 3, string> = { 1: '1', 2: '2', 3: '3' }
+    const junkTiles = ([1, 2, 3] as const)
+      .map((span) => {
+        const known = seen.has('잡동사니')
+        return this.codexTile({
+          art: { kind: 'sprite', url: SpriteUrls.chestSmall },
+          name: known ? '잡동사니' : '???',
+          tag: `${span}칸`,
+          chips: known ? [{ label: '드롭 ', value: `손패 ${junkCards[span]}장`, tone: 'gold' }] : [],
+          note: known && span === 1 ? '까면 손패를 주는 무해한 필러. 온보딩 축약형.' : undefined,
+          extraClass: known ? undefined : 'codex-tile--unknown',
+        })
+      })
+      .join('')
+
     return `
+      <h3 class="compendium-section">잡동사니</h3>
+      <div class="codex-tile-grid">${junkTiles}</div>
       <h3 class="compendium-section">일반 상자</h3>
       <div class="codex-tile-grid">${normalTiles}</div>
       <h3 class="compendium-section">황금 상자</h3>
