@@ -3366,8 +3366,8 @@ function fieldBurstTheme(card: Card): BurstTheme {
 /** 최전방에서 만료된 온보딩 필드 카드를 은은한 페이드+테마 블라스트로 지우고 라인 정리를 돌린다. */
 async function resolveExpiredOnboardingFields(): Promise<void> {
   const expired = turnManager.tickFieldExpiries()
+  render()          // 감소를 즉시 뱃지에 반영(턴 지나면 바로 갱신) — 만료가 없어도 갱신한다.
   if (expired.length === 0) return
-  render()          // 0턴 뱃지를 먼저 보여준다
   await wait(420)   // 0턴에서 살짝 딜레이 후 사라짐(포자 0턴 표기와 같은 의도)
   // 은은하게 흐려지며 사라지고, 종류에 맞는 블럭 블라스트가 터진다.
   for (const { card } of expired) {

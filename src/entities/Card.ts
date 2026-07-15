@@ -191,8 +191,8 @@ export class Card {
     this.sporeTurnsUntilSpread = this.trapKind === 'spore' ? 2 : 0
     this.specialEnemyKind = options.specialEnemyKind ?? null
     this.treasureKind = options.treasureKind ?? 'chest'
-    // 온보딩 필드 카드는 2턴 만료 카운트다운을 갖는다(합체 시 리셋).
-    this.fieldExpiryTurns = this.isOnboardingField() ? 2 : 0
+    // 온보딩 필드 카드는 종류별 만료 카운트다운을 갖는다(바위3/잡동2/덤불1, 합체 시 리셋).
+    this.fieldExpiryTurns = this.onboardingFieldMaxExpiry()
     this.bossShield = 0
     this.emberAtkBonus = 0
     this.flowerKind = options.flowerKind ?? 'seed'
@@ -202,9 +202,15 @@ export class Card {
     this.eventTurnsUntilClose = -1
   }
 
-  /** 온보딩 축약형 필드 카드(바위/덤불/잡동사니)인지 — 2턴 만료·합체 리셋 대상. */
+  /** 온보딩 축약형 필드 카드(바위/덤불/잡동사니)인지 — 만료·합체 리셋 대상. */
   isOnboardingField(): boolean {
     return this.enemySpriteId === 'enemyRock' || this.trapKind === 'bush' || this.treasureKind === 'junk'
+  }
+
+  /** 온보딩 필드 카드의 최대 만료 턴수 — 첫 접하는 유저 혼란 방지를 위해 종류 무관 균일 2턴. 비필드는 0. */
+  onboardingFieldMaxExpiry(): number {
+    if (this.isOnboardingField()) return 2
+    return 0
   }
 
   /** 필드 카드 만료를 1턴 진행. 반환: 만료(0 도달)면 true → 호출부가 칸을 제거한다. */
@@ -214,9 +220,9 @@ export class Card {
     return this.fieldExpiryTurns <= 0
   }
 
-  /** 합체 시 만료를 2턴으로 리셋한다(합체 턴은 미카운트). */
+  /** 합체 시 만료를 종류별 최대 턴수로 리셋한다(합체 턴은 미카운트). */
   resetFieldExpiry(): void {
-    if (this.isOnboardingField()) this.fieldExpiryTurns = 2
+    if (this.isOnboardingField()) this.fieldExpiryTurns = this.onboardingFieldMaxExpiry()
   }
 
   /** Return proportional stats for a merged enemy group based on real members. */
@@ -473,8 +479,8 @@ export class Card {
    */
   merge(other: Card): void {
     if (!this.canMergeWith(other)) return
-    // 온보딩 필드 카드는 합체 시 만료를 2턴으로 리셋한다(합체 턴 미카운트 → 박힌 칸).
-    if (this.isOnboardingField()) this.fieldExpiryTurns = 2
+    // 온보딩 필드 카드는 합체 시 만료를 최대 턴수로 리셋한다(합체 턴 미카운트 → 박힌 칸).
+    this.resetFieldExpiry()
 
     if (this.type === CardType.ENEMY && this.specialEnemyKind === 'mimic') {
       // Merged mimics sum their stats and gain the same width bonus as normal enemies.

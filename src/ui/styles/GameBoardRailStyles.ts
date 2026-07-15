@@ -698,20 +698,32 @@ export const GAME_BOARD_RAIL_STYLES = `
 @keyframes field-expire-fade {
   to { opacity: 0; filter: blur(2.5px); transform: scale(0.9); }
 }
-/* 온보딩 필드 만료 카운트다운 뱃지 — 포자/폭탄 뱃지와 같은 발광 텍스트 스타일 + 종류별 색감.
-   (frozen-badge의 좌상단 위치/폰트는 상속하고, 배경/테두리만 투명화해 글로우 텍스트로 만든다.) */
+/* 온보딩 필드 만료 카운트다운 뱃지 — 종류별 테마색을 입힌 반투명 필.
+   (frozen-badge의 좌상단 위치/폰트는 상속하고, 배경을 어둡게 죽여 세련된 반투명 알약으로 만든다.
+    color=currentColor가 텍스트/테두리 액센트를 동시에 몰아 종류별 테마감을 준다.) */
 .field-expiry-badge {
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.92), 0 0 9px currentColor;
-  animation: trap-turn-label-glimmer 1.9s ease-in-out infinite;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(22, 17, 12, 0.5);
+  border: 1px solid currentColor;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.46), inset 0 0 6px rgba(0, 0, 0, 0.26);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.88);
+  -webkit-backdrop-filter: blur(1.5px);
+  backdrop-filter: blur(1.5px);
+  transform-origin: left center;
+  /* 최전방 도달·턴 감소로 뱃지 DOM이 새로 심길 때마다 살짝 확대되며 튀어나온다. */
+  animation: field-expiry-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
-.field-expiry-rock { color: rgba(232, 222, 206, 0.95); }  /* 바위 = 돌빛/밀랍 오프화이트 */
-.field-expiry-bush { color: rgba(185, 228, 138, 0.95); }  /* 덤불 = 잎빛(포자 연두보다 노란기) */
-.field-expiry-junk { color: rgba(238, 200, 118, 0.96); }  /* 잡동사니 = 잡동 금빛(꽃 호박색보다 짙게) */
+.field-expiry-rock { color: rgba(232, 222, 206, 0.96); }  /* 바위 = 돌빛/밀랍 오프화이트 */
+.field-expiry-bush { color: rgba(185, 228, 138, 0.96); }  /* 덤불 = 잎빛(포자 연두보다 노란기) */
+.field-expiry-junk { color: rgba(238, 200, 118, 0.97); }  /* 잡동사니 = 잡동 금빛(꽃 호박색보다 짙게) */
+/* 대기칸(최전방 아님)에서는 아직 턴이 감소하지 않으므로 뱃지를 감춘다 — 최전방에서만 의미. */
+.rail-row:not(.dist-0) .field-expiry-badge { display: none; }
+@keyframes field-expiry-pop {
+  0% { transform: scale(0.55); opacity: 0; }
+  62% { transform: scale(1.16); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
 
 /* ---- 사이즈 유형: boss-kind-waxArmy = 3x3 거대 적 ----
    active row의 grouped 3-cell이 .rail의 3 row를 모두 점유해 3x3 풀필드로 보인다.
