@@ -476,6 +476,8 @@ export class BossEventController {
         // 30F 양초 백작: 특징 연출(탐욕의 손패 살포)을 먼저 보여준 뒤 보스가 타격한다.
         if (state.def.specialEnemyKind === 'waxArmy') {
           await this.scatterGreedCards(card.id)
+        } else if (state.def.specialEnemyKind === 'waxCat') {
+          await this.stealHandCard()
         }
         character.takeDamage(card.getDamage())
         await this.br.animateEnemyAttacks([
@@ -904,6 +906,25 @@ export class BossEventController {
   /** 30F 양초 백작 특징: 공격 주기마다 손패에 카드 2~4장을 흩뿌린다.
    *  2장=탐욕동전1+랜덤1, 3장=탐욕동전1~2+랜덤(합3), 4장=탐욕동전2+랜덤2.
    *  탐욕의 동전은 쓰면 자신을 다치게 하는 찌꺼기 카드라 손패를 갉아먹는다. */
+  /** 양초 고양이: 손패 1장을 강탈한다. 촛농/양초/불씨(밀랍·불)면 삼켜서 보스가 HP를 회복한다. */
+  private async stealHandCard(): Promise<void> {
+    const character = this.gs.character
+    if (character.hand.length === 0 || !this.eventState) return
+    const idx = Math.floor(Math.random() * character.hand.length)
+    const stolen = character.hand[idx]
+    const name = getHandCardDef(stolen.defId).name
+    const isWax = stolen.defId === 'ember' || stolen.defId === 'candle' || stolen.defId === 'wax-drop'
+    character.removeHandCardAt(idx)
+    this.inject.render()
+    if (isWax) {
+      const healed = this.eventState.card.healEnemyLike(5)
+      this.inject.recordNotice(`양초 고양이가 ${name}을(를) 삼켜 ${Math.max(0, healed)} 회복했다`, 'hurt')
+    } else {
+      this.inject.recordNotice(`양초 고양이가 ${name}을(를) 빼앗았다`, 'hurt')
+    }
+    this.inject.render()
+  }
+
   private async scatterGreedCards(bossCardId: string): Promise<void> {
     const character = this.gs.character
     const count = 2 + Math.floor(Math.random() * 3) // 2~4
