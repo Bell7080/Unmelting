@@ -2164,6 +2164,14 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
     await openShopOverlay('altar')
     return true
   }
+  // 새싹 병아리(온보딩): 30층에서 양초 고양이 보스로 아크를 닫는다(제단/시련/보상 없이 종료).
+  if (isOnboardingActive() && turn === 30 && !gameState.isGameOver) {
+    turnManager.setTurnMode('boss_phase')
+    await bossController.runOnboardingCat()
+    // 격파(생존)면 클리어 정산+졸업, 사망이면 runOnboardingCat 내부에서 게임오버 처리됨.
+    if (!gameState.isGameOver && gameState.character.isAlive()) await runOnboardingClear()
+    return true
+  }
   // After each altar visit (30, 60, 90), queue a dedicated boss gate.
   // 임시 동결: 제단 진입 안정화 전까지 30턴 보스 게이트를 열지 않는다.
   if (turn > 0 && turn % 30 === 0 && !altarBossDefeated) altarBossPending = false
@@ -3344,6 +3352,14 @@ function fillBoardAtStart(): void {
 /** 온보딩(첫 경험) 진행 중인지 — 첫 30F 졸업 전까지 true. 졸업 마킹은 R5에서 붙인다. */
 function isOnboardingActive(): boolean {
   return !enaAutonomousLearner.hasFirstSeen('onboarding-graduated')
+}
+
+/** 새싹 병아리 30F 클리어: 졸업 마킹(쉬움 개방) + 런 종료. 정산 화면은 showGameOver 분기가 렌더한다. */
+async function runOnboardingClear(): Promise<void> {
+  // 첫 30F 클리어 → 온보딩 졸업(다음 런부터 정상 스폰) + 쉬움 난이도 개방.
+  enaAutonomousLearner.recordFirstSeen('onboarding-graduated')
+  recordNotice('새싹 병아리 클리어! 쉬움 난이도가 개방되었다', 'win')
+  gameState.endGame('onboarding_clear_30')
 }
 
 /**
@@ -6326,6 +6342,32 @@ function finishTurn(): void {
 }
 
 function showGameOver(): void {
+  // 새싹 병아리 30F 클리어는 정산 화면(처치/함정/보물/불빛 + 저택으로 복귀)으로 닫는다.
+  if (gameState.gameOverReason === 'onboarding_clear_30') {
+    const overlay = document.createElement('div')
+    overlay.className = 'game-over-overlay'
+    overlay.innerHTML = `
+      <div class="game-over-card">
+        <div class="game-over-icon">${candleIcon()}</div>
+        <h1>새싹 병아리 클리어!</h1>
+        <div class="settlement-stats">
+          <p>처치한 적 <strong>${gameState.runDefeatedEnemies}</strong></p>
+          <p>처리한 함정 <strong>${gameState.runClearedTraps}</strong></p>
+          <p>발견한 보물 <strong>${gameState.runOpenedTreasures}</strong></p>
+          <p>총 불빛 <strong>${score}</strong></p>
+          <p class="settlement-ena">에나의 경험이 한 뼘 자랐다. (육각형 표시 TODO)</p>
+        </div>
+        <button class="primary-btn" id="to-manor-btn">저택으로</button>
+      </div>
+    `
+    document.body.appendChild(overlay)
+    document.getElementById('to-manor-btn')?.addEventListener('click', () => {
+      overlay.remove()
+      enterHearth()
+    })
+    return
+  }
+
   const reason =
     gameState.gameOverReason === 'character_defeated'
       ? '소녀의 심지가 꺼졌어요…'

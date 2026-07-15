@@ -860,6 +860,11 @@ export class BossEventController {
     this.inject.recordNotice('보스 처치! 레일 보상이 떨어진다', 'win')
     const bossKind = this.eventState!.def.specialEnemyKind
     this.eventState = null
+    // 새싹 병아리 온보딩 보스(양초 고양이)는 보상/시련 없이 종료한다 — 호출부가 클리어 정산을 잇는다.
+    if (bossKind === 'waxCat') {
+      this.tm.setTurnMode('normal_turn')
+      return
+    }
     await this.stageBossRewardChests(savedField, bossKind)
 
     this.tm.setTurnMode('normal_turn')
