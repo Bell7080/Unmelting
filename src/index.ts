@@ -5406,6 +5406,9 @@ async function sweepFrontStarlights(): Promise<void> {
 }
 
 async function resolvePostDropSporeSpread(): Promise<void> {
+  // 온보딩 필드 카드(바위/덤불/잡동사니) 만료를 먼저 진행해 0턴 칸을 제거한다.
+  // 합체로 2턴 리셋된 칸은 유지되어 "박힌 칸"이 된다(약한 칸 방치 스톨 방지).
+  if (turnManager.tickFieldExpiries().length > 0) render()
   // Spores are the only turn-timer event that intentionally waits for rail
   // gravity. This keeps enemy/chest/bomb/flower beats on the pre-drop board,
   // while still letting spores infect a real card that fell into a formerly

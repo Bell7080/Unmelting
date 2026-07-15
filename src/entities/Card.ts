@@ -140,6 +140,8 @@ export class Card {
   trapKind: TrapKind
   isBombArmed: boolean
   sporeTurnsUntilSpread: number
+  /** 온보딩 필드 카드(바위/덤불/잡동사니) 만료 카운트다운. 0이면 제거. 비필드는 0. */
+  fieldExpiryTurns: number
   /** Special-enemy family; monster flowers merge only with each other. */
   specialEnemyKind: SpecialEnemyKind | null
   /** waxKnight 전용 UI 수치: 보스 컨트롤러가 방패 상태를 렌더러에 전달한다. */
@@ -189,6 +191,8 @@ export class Card {
     this.sporeTurnsUntilSpread = this.trapKind === 'spore' ? 2 : 0
     this.specialEnemyKind = options.specialEnemyKind ?? null
     this.treasureKind = options.treasureKind ?? 'chest'
+    // 온보딩 필드 카드는 2턴 만료 카운트다운을 갖는다(합체 시 리셋).
+    this.fieldExpiryTurns = this.isOnboardingField() ? 2 : 0
     this.bossShield = 0
     this.emberAtkBonus = 0
     this.flowerKind = options.flowerKind ?? 'seed'
@@ -196,6 +200,23 @@ export class Card {
     this.flowerValue = this.type === CardType.FLOWER && this.flowerKind !== 'seed' ? 1 : 0
     // 문은 전방 도달 전까지 카운트다운을 시작하지 않는다(-1 = 미시작).
     this.eventTurnsUntilClose = -1
+  }
+
+  /** 온보딩 축약형 필드 카드(바위/덤불/잡동사니)인지 — 2턴 만료·합체 리셋 대상. */
+  isOnboardingField(): boolean {
+    return this.enemySpriteId === 'enemyRock' || this.trapKind === 'bush' || this.treasureKind === 'junk'
+  }
+
+  /** 필드 카드 만료를 1턴 진행. 반환: 만료(0 도달)면 true → 호출부가 칸을 제거한다. */
+  tickFieldExpiry(): boolean {
+    if (!this.isOnboardingField()) return false
+    this.fieldExpiryTurns = Math.max(0, this.fieldExpiryTurns - 1)
+    return this.fieldExpiryTurns <= 0
+  }
+
+  /** 합체 시 만료를 2턴으로 리셋한다(합체 턴은 미카운트). */
+  resetFieldExpiry(): void {
+    if (this.isOnboardingField()) this.fieldExpiryTurns = 2
   }
 
   /** Return proportional stats for a merged enemy group based on real members. */
@@ -448,6 +469,8 @@ export class Card {
    */
   merge(other: Card): void {
     if (!this.canMergeWith(other)) return
+    // 온보딩 필드 카드는 합체 시 만료를 2턴으로 리셋한다(합체 턴 미카운트 → 박힌 칸).
+    if (this.isOnboardingField()) this.fieldExpiryTurns = 2
 
     if (this.type === CardType.ENEMY && this.specialEnemyKind === 'mimic') {
       // Merged mimics sum their stats and gain the same width bonus as normal enemies.
