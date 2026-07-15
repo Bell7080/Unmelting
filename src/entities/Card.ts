@@ -18,7 +18,7 @@ export enum CardType {
 // 'bush'(덤불)는 온보딩 축약형 함정 — 닿으면 소량 피해만 주는 소프트 함정.
 export type TrapKind = 'web' | 'bomb' | 'spore' | 'bush'
 export type FlowerKind = 'seed' | 'chamomile' | 'redRose' | 'marigold' | 'oleander' | 'lavender'
-export type SpecialEnemyKind = 'mimic' | 'monsterFlower' | 'waxArmy' | 'waxKnight' | 'waxSculptor' | 'waxWitch' | 'waxDemon'
+export type SpecialEnemyKind = 'mimic' | 'monsterFlower' | 'waxArmy' | 'waxKnight' | 'waxSculptor' | 'waxWitch' | 'waxDemon' | 'waxCat'
 // 'junk'(잡동사니)는 온보딩 축약형 보물 — 까면 손패 1장을 주는 무해한 필러.
 export type TreasureKind = 'chest' | 'goldenChest' | 'starlight' | 'junk'
 

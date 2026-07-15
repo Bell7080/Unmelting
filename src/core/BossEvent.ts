@@ -41,7 +41,7 @@ export interface BossDef {
   /** 보스 손패 효과(방패/체력/피해) 공통 수치. waxKnight/waxWitch가 사용한다. */
   handCardAmount: number
   /** CSS boss-kind-* 마커 — Rail CSS 레이아웃과 연동 */
-  specialEnemyKind: 'waxArmy' | 'waxKnight' | 'waxSculptor' | 'waxWitch' | 'waxDemon'
+  specialEnemyKind: 'waxArmy' | 'waxKnight' | 'waxSculptor' | 'waxWitch' | 'waxDemon' | 'waxCat'
   /** Card.groupCount 표시값 (점수·뱃지용). 실제 점유 행 수와 별도. */
   groupCount: number
   /** lanes에 보스 카드 인스턴스를 실제로 박을 dist 행 수.
@@ -193,6 +193,33 @@ export class BossEventController {
         '그중 일부는 쓰면 자신을 다치게 하는 「탐욕의 동전」이다.',
       ].join('\n'),
       kicker: '탐욕의 대가',
+    }
+    await this.runBossEvent(def)
+  }
+
+  /** 새싹 병아리(온보딩) 30F 보스. 양초 고양이 — 손패를 강탈해 촛농/양초/불씨면 직접 쓴다. */
+  async runOnboardingCat(): Promise<void> {
+    const def: BossDef = {
+      name: '양초 고양이',
+      maxHp: 40,
+      attack: 5,
+      attackInterval: 2,
+      handGiftStep: 15,
+      handCardAmount: 0,   // 손패 강탈+사용으로 대체(전용 손패 효과 미사용)
+      specialEnemyKind: 'waxCat',
+      groupCount: 3,
+      occupiedDistRows: 1,   // waxArmy처럼 CSS가 dist-0을 3×3으로 확장한다
+      spriteUrl: this.sprites.boss,
+      appearAnimation: 'landing',
+      introBubble: '야옹— 여기까지 왔구나. 마지막 놀이 상대는 나야.',
+      playerResponseBubble: '고양이…? 방심하면 안 되겠어.',
+      introBubbleMs: 4000,
+      playerBubbleMs: 2600,
+      trait: [
+        '2턴마다 발톱을 휘둘러 손패 한 장을 빼앗는다.',
+        '빼앗은 게 촛농·양초·불씨라면 고양이가 직접 써 버린다.',
+      ].join('\n'),
+      kicker: '장난기 어린 발톱',
     }
     await this.runBossEvent(def)
   }

@@ -472,6 +472,8 @@ export function spriteForCard(card: Card): string {
   }
   if (card.type === CardType.ENEMY) {
     if (card.specialEnemyKind === 'monsterFlower') return SpriteUrls.monsterFlower
+    // TODO(art): 양초 고양이 전용 보스 일러스트로 교체. 현재는 30F 보스 임시 폴백.
+    if (card.specialEnemyKind === 'waxCat') return SpriteUrls.boss
     if (card.specialEnemyKind === 'waxArmy') return SpriteUrls.enemyWaves[3]
     if (card.isSpecialEnemy) return SpriteUrls.mimic
     if (card.groupCount >= 3) return SpriteUrls.enemyWaves[3]
