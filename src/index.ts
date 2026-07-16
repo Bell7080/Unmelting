@@ -819,6 +819,7 @@ function enterHearth(): void {
   document.body.classList.toggle('meta-currency-locked', !isMetaUnlocked('currency'))
   document.body.classList.toggle('meta-reroll-locked', !isMetaUnlocked('shopReroll'))
   document.body.classList.toggle('meta-quests-locked', !isMetaUnlocked('quests'))
+  document.body.classList.toggle('meta-freecard-locked', !isMetaUnlocked('freeCard'))
   render()
   hearthScene.enter({
     // 출발 버튼 → startGame이 다시 초기화 + 직업 선택 + 보드 채움을 수행한다.
@@ -2067,13 +2068,13 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
   // 새싹 병아리(온보딩): 30층에서 양초 고양이 보스로 아크를 닫는다(제단/시련/보상 없이 종료).
   if (isOnboardingActive() && turn === 30 && !gameState.isGameOver) {
     turnManager.setTurnMode('boss_phase')
-    // 등장 전 레일 위로 셔터를 위→아래로 내린다(커튼 아님). 셔터가 다 내려온 뒤 살짝 딜레이를 두고,
-    // 보드를 셔터 위로 올려 양초 고양이 착지 연출이 셔터 앞에서 보이게 한 뒤 전투를 진행한다.
-    await boardRenderer.closeBossShutter()
-    await wait(520)                        // 셔터 하강 후 살짝 딜레이(긴장) → 보스 등장
-    boardRenderer.elevateBoardAboveCurtain()
+    // 인게임 상점/제단과 '동일한' 밀랍 셔터로 등장 연출한다(playShopTransition/Resume 재사용):
+    // 셔터 하강 → 살짝 딜레이 → 양초 고양이 착지. 보스 타일(type-boss, z40)이 셔터(z35) 위로
+    // 강하하므로 셔터를 배경으로 등장 연출이 그대로 보인다. 전투 종료 후 셔터를 올린다.
+    await boardRenderer.playShopTransition()
+    await wait(520)
     await bossController.runOnboardingCat()
-    await boardRenderer.openBossShutter()  // 전투 종료 → 셔터 걷힘 + 보드 z-index 복원
+    await boardRenderer.playShopResumeTransition()
     // 격파(생존)면 클리어 정산+졸업, 사망이면 runOnboardingCat 내부에서 게임오버 처리됨.
     if (!gameState.isGameOver && gameState.character.isAlive()) await runOnboardingClear()
     return true
@@ -3297,6 +3298,7 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   document.body.classList.toggle('onboarding-run', onboardingRunActive)
   document.body.classList.toggle('meta-currency-locked', !testPlay && (onboardingRunActive || !isMetaUnlocked('currency')))
   document.body.classList.toggle('meta-reroll-locked', !testPlay && (onboardingRunActive || !isMetaUnlocked('shopReroll')))
+  document.body.classList.toggle('meta-freecard-locked', !testPlay && (onboardingRunActive || !isMetaUnlocked('freeCard')))
   // 새싹 병아리: 런 카드 풀을 커먼 등급만 남겨 재구성한다(레어 이상 손패 잠금 — 검과 방패 등).
   // resetForNewRun이 전체 풀로 세팅한 뒤이므로 여기서 커먼 부분집합으로 덮어 드롭·팩·레시피에 일괄 반영한다.
   if (onboardingRunActive) {
@@ -5843,6 +5845,10 @@ globalStyle.textContent = `
   body.meta-reroll-locked .shop-reroll-btn,
   body.meta-reroll-locked .shop-pack-picker-reroll-btn { display: none !important; }
   body.meta-quests-locked .quest-list { display: none !important; }
+  /* 무료 카드/수당 미개방: 상점 무료 레이어를 숨기고, 좌측 여백만큼 카드팩을 가운데로 옮긴다. */
+  body.meta-freecard-locked .shop-free-layer { display: none !important; }
+  body.meta-freecard-locked .shop-bottom-row { grid-template-columns: 1fr !important; }
+  body.meta-freecard-locked .shop-pack-layer { transform: translateY(clamp(-8px, -0.6vh, -4px)) !important; }
 `
 document.head.appendChild(globalStyle)
 

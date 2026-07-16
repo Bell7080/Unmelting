@@ -204,7 +204,7 @@ export class BossEventController {
       maxHp: 30,
       attack: 3,
       attackInterval: 2,
-      handGiftStep: 15,
+      handGiftStep: 5,   // 온보딩: 체력 5 감소마다 손패 1장(초보에게 넉넉히)
       handCardAmount: 0,   // 손패 강탈+사용으로 대체(전용 손패 효과 미사용)
       specialEnemyKind: 'waxCat',
       groupCount: 3,
@@ -919,6 +919,8 @@ export class BossEventController {
     const stolen = character.hand[idx]
     const name = getHandCardDef(stolen.defId).name
     const isWax = stolen.defId === 'ember' || stolen.defId === 'candle' || stolen.defId === 'wax-drop'
+    // 마녀 소각 연출 참고 — 카드를 제거하기 전에 강탈 애니메이션(고양이로 낚아챔)을 먼저 재생한다.
+    await this.br.animateBossStealHandSlot(this.eventState.card.id, idx)
     character.removeHandCardAt(idx)
     this.inject.render()
     if (isWax) {
