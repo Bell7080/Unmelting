@@ -1649,12 +1649,18 @@ export const STARLIGHT_LINES: Line[] = [
   '별빛을 쥘 때마다 끝이 한 층씩 성큼 와.',
 ]
 
-// ── 온보딩 필드 첫 조우 소개(바위/덤불/잡동사니) ──────────────
-// 처음 겪는 순간 딱 한 번, 무엇이고 어떻게 대하는지 짧게 알려준다(교육용). 여러 종류가
-// 한꺼번에 처음 나오면 CompanionSystem이 아래 절(FIELD_INTRO_BRIEF)을 합쳐 한 줄로 소개한다.
+// ── 첫 조우 소개(교육용 튜토리얼 바크) ──────────────────────
+// 처음 겪는 순간 딱 한 번, 무엇이고 어떻게 대하는지 짧게 알려준다. 보드 조우(필드/함정/문/별빛)는
+// 보드 스캔으로, 시스템 조우(보스/시련/상점/제단)는 각 흐름의 훅에서 first-seen 게이트로 발화한다.
+// 여러 보드 종류가 한꺼번에 처음 나오면 CompanionSystem이 아래 절(FIELD_INTRO_BRIEF)을 합쳐 한 줄로 소개한다.
 
 /** 온보딩 필드 카드 종류. */
 export type FieldIntroKind = 'rock' | 'bush' | 'junk'
+/** 보드에 등장해 눈으로 처음 보게 되는 조우 종류(필드 3종 + 위협/특수 카드). */
+export type BoardEncounterKind = FieldIntroKind | 'web' | 'bomb' | 'spore' | 'event-door' | 'starlight'
+/** 보드 밖 시스템 흐름의 첫 조우 종류. */
+export type SystemEncounterKind = 'boss' | 'trial' | 'shop' | 'altar'
+export type EncounterIntroKind = BoardEncounterKind | SystemEncounterKind
 
 /** 한 종류만 처음 나왔을 때의 소개(전체 문장). */
 export const FIELD_INTRO_LINES: Record<FieldIntroKind, Line[]> = {
@@ -1688,10 +1694,74 @@ export const FIELD_INTRO_COMBINED_LEAD: Line[] = [
 ]
 
 /** 합쳐 소개할 때 쓰는 종류별 짧은 절(조각). 순서와 무관하게 이어 붙여도 자연스럽게 끝난다. */
-export const FIELD_INTRO_BRIEF: Record<FieldIntroKind, string> = {
+export const FIELD_INTRO_BRIEF: Record<BoardEncounterKind, string> = {
   rock: '바위는 부수면 그만',
   bush: '덤불은 스치면 따끔',
   junk: '잡동사니는 뒤지면 한몫',
+  web: '거미줄은 커지기 전에 청소',
+  bomb: '폭탄은 숫자가 끝나기 전에 처리',
+  spore: '포자는 번지기 전에 제거',
+  'event-door': '문은 닫히기 전에 선택',
+  starlight: '별빛은 주울 때만 층이 올라',
+}
+
+/** 필드 3종 밖 첫 조우 전용 소개 풀 — 실제 규칙(병합/전염/카운트/턴 규칙)과 어긋나지 않게 쓴다. */
+export const ENCOUNTER_INTRO_LINES: Record<Exclude<EncounterIntroKind, FieldIntroKind>, Line[]> = {
+  web: [
+    '저 거미줄, 처음 보지? 하나면 따끔한 정도야. 그런데 서로 붙어서 커지면 정말 위험해져. 커지기 전에 치우자.',
+    '거미줄이야. 밟으면 아프고, 여러 장이 모이면 무서운 덫이 돼. 청소나 키틴으로 미리 걷어낼 수 있어.',
+    '끈적한 저거, 거미줄이야. 작을 때는 별거 아닌데 겹치면 목숨까지 노려. 일찍 정리하는 습관을 들이자.',
+  ],
+  bomb: [
+    '폭탄이야! 위에 적힌 숫자가 0이 되면 터져. 그 전에 부수거나, 터질 자리에서 떨어져 있자.',
+    '저 숫자는 심지야. 줄어들어서 끝나는 순간 터지니까, 미리 손을 쓰자.',
+    '폭탄은 급한 순서 1번이야. 카운트가 끝나기 전에 치우면 아무 일도 없어.',
+  ],
+  spore: [
+    '초록빛은 포자야. 가만두면 옆 칸으로 번져. 퍼지기 전에 제거하는 게 답이야.',
+    '포자는 병 같은 거야. 한 칸일 때 치우면 싸게 끝나. 성수가 있으면 더 편하고.',
+    '저 초록색, 예쁘다고 두면 안 돼. 시간이 지날수록 늘어나니까 빨리 걷어내자.',
+  ],
+  'event-door': [
+    '저건 이벤트 문이야. 앞줄에 오면 잠깐만 열려 있다가 닫혀. 들어가면 누군가의 이야기와 선택이 기다려.',
+    '처음 보는 문이지? 위협은 아니야. 대신 오래 기다려주지 않으니, 궁금하면 닫히기 전에 두드리자.',
+    '문이 나왔어. 들어갈지 말지는 우리 마음이야. 좋은 일도, 이상한 일도 있지만… 이야기는 언제나 남아.',
+  ],
+  starlight: [
+    '별빛이야! 여기서부터는 저 빛을 주울 때만 위로 올라가. 다른 일은 층을 올려주지 않아.',
+    '저 하얀 빛이 계단이야. 별빛을 모을 때마다 한 층씩 올라. 놓치지 말고 줍자.',
+    '이제 규칙이 바뀌었어. 별빛만이 층을 올려줘. 저 빛을 따라가면 끝이 보일 거야.',
+  ],
+  boss: [
+    '이 층의 주인, 보스야. 정해진 주기마다 반격해 오니까 그 박자를 세면서 싸우면 돼. 처음이라도 괜찮아, 같이 세자.',
+    '보스는 오래 버티고 세게 때려. 대신 급하게 몰아치지는 않아. 반격 차례를 읽으면서 한 턴씩 깎아내자.',
+    '첫 보스전이야. 무서워 보여도 규칙은 같아. 버티고, 치고, 반격 전에 숨 고르기.',
+  ],
+  trial: [
+    '시련은 이번 모험이 끝날 때까지 따라오는 약속이야. 셋 중에 우리가 제일 견딜 만한 걸 고르자.',
+    '보스를 넘으면 시련이 따라와. 길이 조금 무거워지는 대신, 우리는 더 단단해질 거야. 신중하게 고르자.',
+    '여기서 고른 조건은 되돌릴 수 없어. 지금 우리 손패와 유물에 제일 덜 아픈 쪽을 보자.',
+  ],
+  shop: [
+    '상점이야! 모아온 불빛으로 유물과 카드팩을 살 수 있어. 무료 카드는 공짜니까 꼭 챙기자.',
+    '처음 온 상점이네. 서두를 것 없어, 레일은 멈춰 있으니까. 무료 카드부터 받고 천천히 구경하자.',
+    '여기서는 불빛이 돈이야. 아껴온 만큼 고를 수 있어. 필요한 것부터, 예쁜 건 그다음.',
+  ],
+  altar: [
+    '여긴 제단이야. 유물은 다시 뽑을 수 없으니 한 번의 선택이 더 무거워. 무료 카드 두 장은 꼭 챙기자.',
+    '제단은 서른 턴마다 열리는 특별한 곳이야. 유물 한 점은 공짜로 골라 갈 수 있어. 눈을 크게 뜨자.',
+    '조용한 곳이지? 제단의 팩은 값이 세지만 그만큼 깊어. 지갑과 상의하면서 고르자.',
+  ],
+}
+
+/** 보드 조우 종류별 단독 소개 풀 — 필드 3종과 확장 조우를 한 표에서 찾게 한다. */
+export const BOARD_INTRO_LINES: Record<BoardEncounterKind, Line[]> = {
+  ...FIELD_INTRO_LINES,
+  web: ENCOUNTER_INTRO_LINES.web,
+  bomb: ENCOUNTER_INTRO_LINES.bomb,
+  spore: ENCOUNTER_INTRO_LINES.spore,
+  'event-door': ENCOUNTER_INTRO_LINES['event-door'],
+  starlight: ENCOUNTER_INTRO_LINES.starlight,
 }
 
 /** 카드팩 종류별 감상 풀 키 — GameBoardRenderer의 ShopPackKind와 같은 문자열을 쓴다. */

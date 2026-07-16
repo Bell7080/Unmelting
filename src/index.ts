@@ -64,7 +64,7 @@ import { FontManager } from '@ui/FontManager'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
 import { BarkSequencer } from '@ui/BarkSequencer'
-import { CompanionSystem, type SituationId, type ClutchPlan, type FieldIntroKind } from '@systems/CompanionSystem'
+import { CompanionSystem, type SituationId, type ClutchPlan, type BoardEncounterKind, type SystemEncounterKind } from '@systems/CompanionSystem'
 import {
   loadDisposition,
   saveDisposition,
@@ -922,7 +922,8 @@ const bossController = new BossEventController(
     // 보스 이름을 넘기면 이름을 아는 전용 대사가 해당 보스에게만 가끔 섞인다.
     onBossIntro: (name) => {
       announcedBossPhases.clear()
-      sayEnaBark(companion.bossIntroLine(name), { importance: BARK_IMPORTANCE.situation })
+      // 태어나서 첫 보스라면 분위기 대사 대신 교육형 소개를 한 번 우선한다.
+      sayEnaBark(encounterIntroLineOnce('boss') ?? companion.bossIntroLine(name), { importance: BARK_IMPORTANCE.situation })
     },
     onBossPhase: (_name, phaseKey) => {
       if (announcedBossPhases.has(phaseKey)) return
@@ -2038,6 +2039,10 @@ async function openShopOverlay(mode: 'shop' | 'altar'): Promise<void> {
   render()
   await boardRenderer.playShopTransition()
   boardRenderer.openShop(buildShopStateView(), score, gameState.character)
+  // 태어나서 첫 상점/제단이라면 무엇을 할 수 있는 곳인지 한 번 소개한다(팩 구매 대사처럼
+  // 침묵 구간 게이트를 의도적으로 우회해 직접 발화).
+  const shopIntro = encounterIntroLineOnce(mode === 'altar' ? 'altar' : 'shop')
+  if (shopIntro) sayEnaBark(shopIntro, { importance: BARK_IMPORTANCE.situation })
 }
 
 async function maybeOpenShopAfterTurn(): Promise<boolean> {
@@ -2677,7 +2682,8 @@ async function openTrialOverlayForced(): Promise<void> {
       picked = true
       pickedCard.apply()
       // 시련 각오 한마디 — 보스 격파 직후의 드문 이벤트라 확률 게이트 없이 1회 말한다.
-      sayEnaBark(companion.trialLine(), { importance: BARK_IMPORTANCE.situation })
+      // 태어나서 첫 시련이라면 각오 대신 '런 내내 지속되는 조건'이라는 교육형 소개를 우선한다.
+      sayEnaBark(encounterIntroLineOnce('trial') ?? companion.trialLine(), { importance: BARK_IMPORTANCE.situation })
       // 선택된 카드 자체에 burst 이펙트. 동일한 카드 위에서 효과가 "터지며 적용"되는
       // 시각 비트를 만든 뒤 자동으로 EXIT 시퀀스가 이어진다.
       const pickedEl = document.querySelector<HTMLElement>(`[data-trial-pick="${id}"]`)
@@ -3102,36 +3108,46 @@ function trackFieldEnemyEncounters(): void {
   }
 }
 
-/** 카드가 온보딩 필드 3종 중 무엇인지 판별한다(아니면 null). */
-function fieldIntroKindOf(card: Card): FieldIntroKind | null {
+/** 카드가 첫 조우 소개 대상 보드 종류 중 무엇인지 판별한다(아니면 null). */
+function boardIntroKindOf(card: Card): BoardEncounterKind | null {
   if (card.enemySpriteId === 'enemyRock') return 'rock'
   if (card.trapKind === 'bush') return 'bush'
+  if (card.trapKind === 'web') return 'web'
+  if (card.trapKind === 'bomb') return 'bomb'
+  if (card.trapKind === 'spore') return 'spore'
   if (card.treasureKind === 'junk') return 'junk'
+  if (card.treasureKind === 'starlight') return 'starlight'
+  if (card.type === CardType.EVENT) return 'event-door'
   return null
 }
 
+/** 첫 조우 영구 기록 키 — 필드 3종은 기존 저장본('field:*')과의 호환을 위해 접두사를 유지한다. */
+function firstSeenKeyOf(kind: BoardEncounterKind | SystemEncounterKind): string {
+  return kind === 'rock' || kind === 'bush' || kind === 'junk' ? `field:${kind}` : `encounter:${kind}`
+}
+
 /**
- * 보드에 새로 나타난 온보딩 필드(바위/덤불/잡동사니)를 태어나서 처음 겪는 순간 에나가 한 번
- * 소개하게 한다. 여러 종류가 한꺼번에 나와도 한 줄로 묶어 스팸을 막는다. 영구 first-seen 기록
- * (enaAutonomousLearner) 기반이라 죽어서 재시작해도 반복되지 않는다.
+ * 보드에 새로 나타난 첫 조우 대상(필드 3종 + 거미줄/폭탄/포자/이벤트 문/별빛)을 태어나서 처음
+ * 겪는 순간 에나가 한 번 소개하게 한다. 여러 종류가 한꺼번에 나와도 한 줄로 묶어 스팸을 막는다.
+ * 영구 first-seen 기록(enaAutonomousLearner) 기반이라 죽어서 재시작해도 반복되지 않는다.
  */
 function maybeIntroduceFields(): void {
   if (!companionWorldCanSpeak()) return
-  // 현재 보드에 놓인 필드 종류를 모은다.
-  const present = new Set<FieldIntroKind>()
+  // 현재 보드에 놓인 조우 종류를 모은다.
+  const present = new Set<BoardEncounterKind>()
   for (const lane of gameState.lanes) {
     for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
       const card = lane.getCardAtDistance(d)
-      const kind = card ? fieldIntroKindOf(card) : null
+      const kind = card ? boardIntroKindOf(card) : null
       if (kind) present.add(kind)
     }
   }
   if (present.size === 0) return
   // 영구·세션 이중 가드로 '처음 본 종류'만 남긴다. 영구 기록은 조우 시점에 즉시 남겨 재시작 반복을 막는다.
-  const fresh: FieldIntroKind[] = []
+  const fresh: BoardEncounterKind[] = []
   for (const kind of present) {
     if (sessionFieldsIntroduced.has(kind)) continue
-    if (!enaAutonomousLearner.recordFirstSeen(`field:${kind}`)) {
+    if (!enaAutonomousLearner.recordFirstSeen(firstSeenKeyOf(kind))) {
       sessionFieldsIntroduced.add(kind) // 이전 세션에서 이미 소개됨 — 세션 가드에도 반영.
       continue
     }
@@ -3140,6 +3156,20 @@ function maybeIntroduceFields(): void {
   }
   const line = companion.introduceFields(fresh)
   if (line) sayEnaBark(line, { importance: BARK_IMPORTANCE.situation })
+}
+
+/**
+ * 보드 밖 시스템 흐름(보스/시련/상점/제단)의 첫 조우 소개 한 줄. 태어나서 최초 1회만 돌려주고,
+ * 이후에는 null(호출부가 평소 대사로 폴백). 필드 소개와 같은 영구·세션 이중 가드를 쓴다.
+ */
+function encounterIntroLineOnce(kind: SystemEncounterKind): string | null {
+  if (sessionFieldsIntroduced.has(kind)) return null
+  if (!enaAutonomousLearner.recordFirstSeen(firstSeenKeyOf(kind))) {
+    sessionFieldsIntroduced.add(kind)
+    return null
+  }
+  sessionFieldsIntroduced.add(kind)
+  return companion.introduceEncounter(kind)
 }
 
 function fillBoardAtStart(): void {
@@ -3175,7 +3205,7 @@ let onboardingRunActive = false
 let runEnteredFromLobby = false
 /** 이번 런의 통산 기록이 이미 합산됐는지 — showGameOver 중복 호출로 이중 집계되는 것을 막는다. */
 let lifetimeRecorded = false
-/** 이번 세션에서 이미 소개한 필드 종류(rock/bush/junk). 영구 기록과 별개로 세션 내 중복 발화를 막는다. */
+/** 이번 세션에서 이미 소개한 첫 조우 종류(보드 조우 + 보스/시련/상점/제단). 영구 기록과 별개로 세션 내 중복 발화를 막는다. */
 const sessionFieldsIntroduced = new Set<string>()
 function isOnboardingActive(): boolean {
   return onboardingRunActive

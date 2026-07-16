@@ -38,7 +38,8 @@ import {
   STARLIGHT_LINES,
   PACK_LINES,
   CALLBACK_LINES,
-  FIELD_INTRO_LINES,
+  BOARD_INTRO_LINES,
+  ENCOUNTER_INTRO_LINES,
   FIELD_INTRO_COMBINED_LEAD,
   FIELD_INTRO_BRIEF,
 } from '@data/CompanionLines'
@@ -54,6 +55,8 @@ import type {
   PackLineKind,
   CallbackKind,
   FieldIntroKind,
+  BoardEncounterKind,
+  SystemEncounterKind,
 } from '@data/CompanionLines'
 import type { HandCategory, HandCardId } from '@entities/HandCard'
 import {
@@ -70,7 +73,7 @@ import {
 } from './EnaDisposition'
 
 // 대사 데이터 쪽 타입을 그대로 다시 노출해 기존 import 경로(@systems/CompanionSystem)를 유지한다.
-export type { Line, LineTemplate, SituationId, ClutchKind, MinorClutchKind, PackLineKind, CallbackKind, FieldIntroKind }
+export type { Line, LineTemplate, SituationId, ClutchKind, MinorClutchKind, PackLineKind, CallbackKind, FieldIntroKind, BoardEncounterKind, SystemEncounterKind }
 
 /** 콜백 대사의 재료가 되는 최근 사건 한 건(링버퍼 항목). */
 export interface RecentCompanionEvent {
@@ -777,20 +780,26 @@ export class CompanionSystem {
   }
 
   /**
-   * 온보딩 필드(바위/덤불/잡동사니) 첫 조우 소개. 호출부가 '이번에 처음 본 종류'만 걸러
-   * 넘긴다(영구 first-seen 기록 기반). 여러 종류가 한꺼번에 나오면 종류별 짧은 절을 한 줄로
-   * 합쳐 스팸 없이 한 번에 알려준다.
+   * 보드 조우(필드 3종 + 거미줄/폭탄/포자/이벤트 문/별빛) 첫 소개. 호출부가 '이번에 처음 본
+   * 종류'만 걸러 넘긴다(영구 first-seen 기록 기반). 여러 종류가 한꺼번에 나오면 종류별 짧은 절을
+   * 한 줄로 합쳐 스팸 없이 한 번에 알려준다.
    */
-  introduceFields(kinds: FieldIntroKind[]): string | null {
-    // 안정적인 순서(rock→bush→junk)로 정렬해 합친 문장이 조우 순서에 흔들리지 않게 한다.
-    const order: FieldIntroKind[] = ['rock', 'bush', 'junk']
+  introduceFields(kinds: BoardEncounterKind[]): string | null {
+    // 안정적인 순서로 정렬해 합친 문장이 조우 순서에 흔들리지 않게 한다.
+    const order: BoardEncounterKind[] = ['rock', 'bush', 'junk', 'web', 'bomb', 'spore', 'event-door', 'starlight']
     const fresh = order.filter((k) => kinds.includes(k))
     if (fresh.length === 0) return null
-    if (fresh.length === 1) return this.pickFrom(`field-intro:${fresh[0]}`, FIELD_INTRO_LINES[fresh[0]], 'normal')
+    if (fresh.length === 1) return this.pickFrom(`field-intro:${fresh[0]}`, BOARD_INTRO_LINES[fresh[0]], 'normal')
     // 여러 종류: 앞머리(변주) + 종류별 짧은 절을 이어 붙이고 마무리로 닫는다.
     const lead = this.pickFrom('field-intro:lead', FIELD_INTRO_COMBINED_LEAD, 'normal')
     const briefs = fresh.map((k) => FIELD_INTRO_BRIEF[k]).join(', ')
     return `${lead} ${briefs}. 천천히 살펴보자.`
+  }
+
+  /** 보드 밖 시스템 흐름(보스/시련/상점/제단) 첫 조우 소개 — 확률 게이트 없이 반드시 한 번 말한다.
+   *  first-seen 게이트(1회 보장)는 호출부(encounterIntroLineOnce)가 담당한다. */
+  introduceEncounter(kind: SystemEncounterKind): string {
+    return this.pickFrom(`encounter-intro:${kind}`, ENCOUNTER_INTRO_LINES[kind], 'normal')
   }
 
   /** 카드팩 구매 감상 — 팩 종류별 실제 효과에 맞는 풀에서만 고른다. */
