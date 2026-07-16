@@ -10,7 +10,8 @@
  * 한 호(arc)로 굴려, 외부 학습기가 (state, action, reward, nextState, done)으로 소비하게 한다.
  *
  * 목표: "플레이어가 진짜 하는 게임을 에나 혼자서 미리 모험하며 준비한다"는 느낌의 그릇.
- * 실제 데이터(EmberSystem 스폰 버킷·ENEMY_DEFINITIONS·HandCards·보스 스펙)를 직접 읽어
+ * 실제 데이터(EmberSystem 스폰 버킷·ENEMY_DEFINITIONS·HandCards damageProfile·BossSpecs·
+ * LightEconomy·ShopPools 확률팩 부스트·TagReactions 칼날 생성기)를 직접 읽어
  * 콘텐츠가 바뀌어도 시뮬과 실게임이 함께 움직이게 한다.
  */
 
@@ -18,10 +19,13 @@ import { CardType, type FlowerKind, type TrapKind } from '@entities/Card'
 import type { HandCardId, HandCardDefinition, HandCardDropSource } from '@entities/HandCard'
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { TRIAL_DEFINITIONS } from '@data/Trials'
-import { HAND_CARD_RARITY, type CardRarity } from '@data/ShopPools'
+import { HAND_CARD_RARITY, CHANCE_PACK_RARITY_BOOST } from '@data/ShopPools'
+import { BOSS_CORE_SPECS, ONBOARDING_CAT_SPEC, type BossCoreSpec } from '@data/BossSpecs'
+import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
 import { EmberSystem, type EmberTier } from '@systems/EmberSystem'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
 import { DropSystem } from '@systems/DropSystem'
+import { SHARD_GENERATORS } from '@systems/TagReactions'
 import { altarPackBaseCost, packCostWithRepeats, regularShopPackBaseCost } from '@core/ShopPricing'
 import { buildEnaKnowledgeBase, type EnaKnowledgeBase, type EnaHandCardTactic } from './EnaKnowledgeAdapter'
 import { estimateImminentWebMergeFromCells, type ImminentWebMergeEstimate } from '@systems/CompanionForesight'
@@ -173,7 +177,7 @@ const STARTING_EMBER = 10
 const EMBER_MAX = 10
 const BOSS_FLOORS = [30, 60, 90, 100]
 
-/** 실제 BossEvent.ts의 보스 스펙을 학습용으로 압축. 굳음 면역/손패 지급/페이지 규칙을 포함한다. */
+/** 시뮬 전용 보스 프로필 = BossSpecs 공유 스펙 + 행동 패턴. 수치는 단일 출처라 본편 밸런싱을 자동 추종한다. */
 interface BossProfile {
   name: string
   maxHp: number
@@ -187,37 +191,51 @@ interface BossProfile {
   pages?: number[]
 }
 
-const BOSS_PROFILES: Record<number, BossProfile> = {
-  30: { name: '양초 백작', maxHp: 50, attack: 4, interval: 2, handGiftStep: 15, behavior: 'greed' },
-  60: { name: '불씨 기사단장', maxHp: 80, attack: 7, interval: 2, handGiftStep: 15, behavior: 'knightHand' },
-  90: { name: '밀랍 조각사', maxHp: 130, attack: 10, interval: 3, handGiftStep: 15, behavior: 'summon' },
-  100: { name: '녹지 않는 마녀', maxHp: 270, attack: 15, interval: 2, handGiftStep: 15, behavior: 'witch', pages: [180, 90, 0] },
+function bossProfileFrom(spec: BossCoreSpec, behavior: BossProfile['behavior'], pages?: number[]): BossProfile {
+  return { name: spec.name, maxHp: spec.maxHp, attack: spec.attack, interval: spec.attackInterval, handGiftStep: spec.handGiftStep, behavior, pages }
 }
+
+const BOSS_PROFILES: Record<number, BossProfile> = {
+  30: bossProfileFrom(BOSS_CORE_SPECS[30], 'greed'),
+  60: bossProfileFrom(BOSS_CORE_SPECS[60], 'knightHand'),
+  90: bossProfileFrom(BOSS_CORE_SPECS[90], 'summon'),
+  // 마녀 페이지 경계: 실게임 270~181/180~91/90~0 → maxHp의 2/3·1/3·0으로 파생.
+  100: bossProfileFrom(BOSS_CORE_SPECS[100], 'witch', [
+    Math.round(BOSS_CORE_SPECS[100].maxHp * (2 / 3)),
+    Math.round(BOSS_CORE_SPECS[100].maxHp / 3),
+    0,
+  ]),
+}
+// 검은 양초 악마(waxDemon)는 악마 소환 '레시피 발동' 이벤트 보스다 — 시뮬에는 레시피 실행
+// 모델이 없어(조합팩=트리플 위력 근사) 진입 경로 자체가 없으므로 의도적으로 모델링하지 않는다.
+// 같은 이유로 악마 전용 보상 카드(검은 양초, dropSource 'boss')도 시뮬 풀에 등장하지 않는 것이 실게임과 일치한다.
 
 /** 시뮬 난이도. standard=정규 100층 아크, sprout=새싹 병아리 온보딩(30층 + 양초 고양이 보스). */
 export type EnaSimDifficulty = 'standard' | 'sprout'
 
+/** 런 시작 1회 스탯 주입(만찬 last-supper 유물) — 실게임 customRelicProfiles['last-supper'].stats와 같은 키. */
+export interface EnaSimStartBonus {
+  maxHealth?: number
+  damage?: number
+  emberMax?: number
+  handMax?: number
+  scorePct?: number
+}
+
 /** 새싹 병아리 아크: 30층에서 양초 고양이 격파 = 클리어(별빛/시련 없음). */
 const SPROUT_TARGET_TURNS = 30
 const SPROUT_BOSS_FLOORS: readonly number[] = [30]
-/** 30F 온보딩 보스 양초 고양이: HP30/ATK3, 2턴 주기, 공격 시 손패 1장 강탈(촛농/양초/불씨면 자가 사용=회복). */
-const SPROUT_BOSS_PROFILE: BossProfile = { name: '양초 고양이', maxHp: 30, attack: 3, interval: 2, handGiftStep: 5, behavior: 'catSteal' }
+/** 30F 온보딩 보스 양초 고양이: 공격 시 손패 1장 강탈(촛농/양초/불씨면 자가 사용=회복). */
+const SPROUT_BOSS_PROFILE: BossProfile = bossProfileFrom(ONBOARDING_CAT_SPEC, 'catSteal')
 
 /** 시뮬 상점이 다루는 실제 팩 종류(가격 반복 누적 추적용). */
 type EnaSimPackKind = 'basic-pack' | 'recipe-pack' | 'unlock-pack' | 'chance-pack' | 'delete-pack' | 'resource-pack'
 
-/** 확률팩 T1 부스트(실게임 index.ts rollPackItems의 RARITY_BOOST와 동일). */
-const CHANCE_PACK_RARITY_BOOST: Record<CardRarity, number> = { common: 18, rare: 14, epic: 8, unique: 5, legendary: 5 }
-
 /** 삭제팩으로 풀을 깎아도 최소한 남겨 두는 카드 수(런 붕괴 방지). */
 const MIN_POOL_AFTER_DELETE = 5
 
-/** 실게임 createScoreLog의 기본 불빛 상향 배율(지터 0.88~1.12는 평균 1로 근사). */
-const BASE_LIGHT_GAIN_MULTIPLIER = 1.4
-
-/** 실게임 scoreForCardRemoval의 일반 적 불빛 1차식 상수. */
-const ENEMY_LIGHT_BASE = 17
-const ENEMY_LIGHT_PER_RANK = 6
+/** 망치(칼날 손패 사용 시 파편) 발동 확률 — TagReactions의 hammer 규칙과 같은 값. */
+const BLADE_HAMMER_SHARD_CHANCE = 0.25
 
 const FEATURE_SCALARS = 38
 const FEATURE_PER_INCOMING = 6
@@ -365,9 +383,19 @@ export class EnaTrainingSimulation {
   private bossPage = 0
   private bossDamageSinceGift = 0
   private bossesCleared = 0
+  /** 보스 밀랍 굳음 잔여 턴 — 실게임 규칙: 반격 주기가 멈추고 반격/특수행동을 건너뛴다. */
+  private bossFrozenTurns = 0
+  /** 보스 밀랍 방패(기사단장/마녀) — 플레이어 피해를 먼저 흡수한다(실게임 bossShield). */
+  private bossShield = 0
   private eventRisk = 0
   /** 유물로 얻는 턴당 방패 재생. 실게임 유물 경제(상점·제단마다 1개 획득)를 압축한 영구 성장. */
   private shieldRegen = 0
+  // 칼날 빌드(태그 반응형 유물 근사): 숫돌=처치당 파편, 망치=사용 확률 파편, 연마=사용마다 칼날 피해 +1 누적.
+  // 발동 규칙 원본은 src/systems/TagReactions.ts — 시뮬은 유물 버킷(grantRelic)의 한 축으로 압축한다.
+  private shardPerKill = 0
+  private bladeUseShardChance = 0
+  private bladeSharpening = false
+  private bladeDamageBonus = 0
   // 강제 시련(30/60/90F 보스 격파 후 3택 1선택) 누적 — 실게임 runModifiers와 같은 축.
   private trialEnemyHpBonus = 0
   private trialEnemyAtkBonus = 0
@@ -389,11 +417,15 @@ export class EnaTrainingSimulation {
   private readonly runTargetTurns: number
   private readonly bossFloors: readonly number[]
 
-  constructor(seed: number = 1, disposition?: EnaDisposition, difficulty: EnaSimDifficulty = 'standard') {
+  /** 런 시작 1회 스탯 주입(만찬 last-supper 유물 축) — 실게임 customRelicProfiles.stats와 같은 키. */
+  private readonly startBonus?: EnaSimStartBonus
+
+  constructor(seed: number = 1, disposition?: EnaDisposition, difficulty: EnaSimDifficulty = 'standard', startBonus?: EnaSimStartBonus) {
     this.rng = new EnaRandom(seed)
     this.knowledge = buildEnaKnowledgeBase()
     this.companion = disposition
     this.difficulty = difficulty
+    this.startBonus = startBonus
     this.runTargetTurns = difficulty === 'sprout' ? SPROUT_TARGET_TURNS : RUN_TARGET_TURNS
     this.bossFloors = difficulty === 'sprout' ? SPROUT_BOSS_FLOORS : BOSS_FLOORS
     this.reset()
@@ -448,8 +480,14 @@ export class EnaTrainingSimulation {
     this.bossPage = 0
     this.bossDamageSinceGift = 0
     this.bossesCleared = 0
+    this.bossFrozenTurns = 0
+    this.bossShield = 0
     this.eventRisk = 0
     this.shieldRegen = 0
+    this.shardPerKill = 0
+    this.bladeUseShardChance = 0
+    this.bladeSharpening = false
+    this.bladeDamageBonus = 0
     this.trialEnemyHpBonus = 0
     this.trialEnemyAtkBonus = 0
     this.trialTrapDamageBonus = 0
@@ -461,6 +499,15 @@ export class EnaTrainingSimulation {
     // 시작 공격력 2로 그 보정을 압축한다(거치지 않은 power source의 prior). 시작 손패는 공격/제어/회복 1장씩.
     this.attack = 2
     this.grantRelic(false) // 시작 직업/유물 보정 1개(초반 발판).
+    // 만찬(last-supper) 시작 스탯 주입 — 실게임 applyRelicPurchaseEffect('last-supper')와 같은 축.
+    if (this.startBonus) {
+      const b = this.startBonus
+      if (b.maxHealth) { this.maxHp += b.maxHealth; this.hp += b.maxHealth }
+      if (b.damage) this.attack += b.damage
+      if (b.emberMax) { this.emberMax += b.emberMax; this.ember = this.emberMax }
+      if (b.handMax) this.handMax = Math.min(HAND_MAX + 2, this.handMax + b.handMax)
+      if (b.scorePct) this.scoreMultiplier *= 1 + b.scorePct / 100
+    }
     this.drawCard('ember')
     this.drawCard('chitin')
     this.drawCard('candle')
@@ -524,7 +571,7 @@ export class EnaTrainingSimulation {
       this.turnsToBoss() / ALTAR_INTERVAL,
       this.finalAscent ? 1 : 0,
       this.estimateFrontThreat() / 40,
-      lightMultiplier(this.turn) / 3,
+      lightTurnMultiplier(this.turn) / 3,
       this.knowledge.economy.averageRelicBasePrice / 2000,
       this.knowledge.trialPressure / 10,
       this.knowledge.eventPressure / 10,
@@ -699,13 +746,29 @@ export class EnaTrainingSimulation {
     } else {
       reward = this.resolveToolCard(held.id)
     }
+    // 태그 반응형 유물(망치/연마) — 칼날 손패 사용에 반응한다(강화는 다음 사용부터).
+    if (def.synergyTags?.includes('blade')) this.onBladeCardUsed()
     this.consumeHand(slot)
     return reward
   }
 
+  /** 칼날 손패 사용 반응(TagReactions의 hammer/sharpening 시뮬 축약). */
+  private onBladeCardUsed(): void {
+    if (this.bladeSharpening) this.bladeDamageBonus += 1
+    if (this.bladeUseShardChance > 0 && this.rng.next() < this.bladeUseShardChance) this.drawCard('blade-shard')
+  }
+
+  /** 손패 공격 카드 피해 — 카드별 실제 damageProfile(floor(atkMult×공격력)+flat)을 우선 쓰고,
+   *  프로필이 없으면 불씨 공식 폴백. 조합팩 트리플 보너스와 칼날(연마) 누적 보너스를 더한다. */
+  private attackCardDamage(def: HandCardDefinition, merged: boolean): number {
+    const profile = merged ? def.damageProfile?.triple : def.damageProfile?.base
+    const base = profile ? Math.max(1, Math.floor(this.attack * profile.atkMult) + profile.flat) : emberDamage(this.attack, merged)
+    const blade = def.synergyTags?.includes('blade') ? this.bladeDamageBonus : 0
+    return base + (merged ? this.recipeTripleBonus : 0) + blade
+  }
+
   private resolveAttackCard(def: HandCardDefinition, merged: boolean): number {
-    // 조합팩 근사 보너스는 트리플에만 붙는다(레시피=합성 강화 압축).
-    const dmg = emberDamage(this.attack, merged) + (merged ? this.recipeTripleBonus : 0)
+    const dmg = this.attackCardDamage(def, merged)
     const targeting = merged ? def.targeting.triple : def.targeting.base
     const hitAll = targeting.selection === 'all'
     const lanes = hitAll ? [0, 1, 2] : [this.toughestEnemyLane()]
@@ -723,7 +786,21 @@ export class EnaTrainingSimulation {
 
   private resolveControlCard(id: HandCardId, def: HandCardDefinition, merged: boolean): number {
     const targeting = merged ? def.targeting.triple : def.targeting.base
-    // 밀랍 계열: 전방의 가장 위협적인 적을 굳힌다(보스는 면역).
+    // 신사모: 전방 1칸(maxSpan 1) 카드를 레인 맨 뒤로 미룬다 — 지금 못 이기는 위협을 미뤄 시간을 산다.
+    // 실게임과 같은 예고선 갱신 감각으로, 미룬 카드가 그 레인의 다음 리필로 돌아온다.
+    if (id === 'top-hat') {
+      const lane = this.bestPostponeLane()
+      if (lane < 0) return -0.6
+      const card = this.board[0][lane]!
+      const delayed = card.type === CardType.ENEMY ? card.atk : trapDamage(card, this.trialTrapDamageBonus)
+      this.board[0][lane] = null
+      // 트리플은 보물상자로 바꾼 뒤 맨 뒤로 보낸다(실게임 tripleDescription).
+      this.incomingRefillQueue[lane] = merged
+        ? { type: CardType.TREASURE, hp: 0, atk: 0, group: 1, treasureKind: 'normal', value: 1 + this.rng.int(3), growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+        : card
+      return 0.8 + Math.min(2, delayed * 0.08)
+    }
+    // 밀랍 계열: 전방의 가장 위협적인 적을 굳힌다.
     if (id === 'wax') {
       const lane = this.toughestEnemyLane()
       const card = lane >= 0 ? this.board[0][lane] : null
@@ -975,7 +1052,8 @@ export class EnaTrainingSimulation {
       if (!held) return -1
       const def = HAND_CARD_DEFINITIONS[held.id]
       if (def.category === 'attack') {
-        const dmg = emberDamage(this.attack, held.merged) + (held.merged ? this.recipeTripleBonus : 0)
+        const dmg = this.attackCardDamage(def, held.merged)
+        if (def.synergyTags?.includes('blade')) this.onBladeCardUsed()
         const reward = this.damageBoss(dmg, 'ember')
         this.consumeHand(action.arg)
         return reward
@@ -986,9 +1064,15 @@ export class EnaTrainingSimulation {
         return reward
       }
       if (def.category === 'control') {
-        // 보스는 굳음 면역 — 밀랍/제어는 헛스윙이다.
+        if (held.id === 'wax') {
+          // 실게임 규칙: 보스도 밀랍에 굳는다(즉사만 면역) — 반격 주기가 멈추고 반격/특수행동을 건너뛴다.
+          this.bossFrozenTurns = Math.max(this.bossFrozenTurns, held.merged ? 3 : 1)
+          this.consumeHand(action.arg)
+          return 1
+        }
+        // 그 외 제어(함정 제거류)는 보스전에서 쓸 대상이 없다.
         this.consumeHand(action.arg)
-        return held.id === 'wax' ? -1 : -0.4
+        return -0.4
       }
       const reward = this.resolveToolCard(held.id)
       this.consumeHand(action.arg)
@@ -1007,9 +1091,11 @@ export class EnaTrainingSimulation {
       this.board[0][lane] = null
       // 처치 콤보(촛불): 폭이 큰 무리를 잡을수록 더 채운다 → 공격력 성장 동력.
       this.gainCombo((source === 'ember' ? 4 : 2) + (card.group - 1))
-      // 처치 불빛: 실게임 scoreForCardRemoval 근사 — 랭크(enemyPower) 1차식 + 그룹 25% 감산 배수.
+      // 처치 불빛: 실게임 scoreForCardRemoval와 같은 LightEconomy 공유식(랭크 1차식 + 그룹 감산 배수).
       const rankLight = ENEMY_LIGHT_BASE + Math.max(1, card.value) * ENEMY_LIGHT_PER_RANK
-      this.gainLight(card.group > 1 ? rankLight * card.group * 0.75 : rankLight)
+      this.gainLight(card.group > 1 ? rankLight * card.group * GROUP_LIGHT_DISCOUNT : rankLight)
+      // 파편 생성기(숫돌 — TagReactions.SHARD_GENERATORS): 처치마다 칼날 파편을 흘린다.
+      for (let n = 0; n < this.shardPerKill; n++) this.drawCard('blade-shard')
       if (this.rng.next() < 0.3) this.drawCard()
       // 동료 깜짝 지원(치명타): 가끔 보너스 손패 1장.
       if (this.companion && this.rng.next() < this.companion.minorClutchChance.crit) this.drawCard()
@@ -1022,8 +1108,11 @@ export class EnaTrainingSimulation {
   }
 
   private damageBoss(amount: number, source: 'basic' | 'ember'): number {
+    // 밀랍 방패(기사단장/마녀)가 피해를 먼저 흡수한다 — 실게임 bossShield 규칙.
+    const blocked = Math.min(this.bossShield, amount)
+    this.bossShield -= blocked
     const before = this.bossHp
-    this.bossHp -= amount
+    this.bossHp -= amount - blocked
     const floor = this.bossPageFloor()
     if (this.bossHp < floor) this.bossHp = floor // 페이지 경계 초과 피해 컷
     const dealt = before - this.bossHp
@@ -1071,9 +1160,9 @@ export class EnaTrainingSimulation {
     }
   }
 
-  /** 실게임 createScoreLog 근사: 기본값 × (1+턴×0.015) × scoreMultiplier × 1.4(지터 평균 1). */
+  /** 실게임 createScoreLog 근사: 기본값 × 턴 보정 × scoreMultiplier × 공통 상향(지터 평균 1 생략) — LightEconomy 공유식. */
   private gainLight(base: number): number {
-    const amount = Math.max(1, Math.round(base * lightMultiplier(this.turn) * this.scoreMultiplier * BASE_LIGHT_GAIN_MULTIPLIER))
+    const amount = Math.max(1, Math.round(base * lightTurnMultiplier(this.turn) * this.scoreMultiplier * BASE_LIGHT_GAIN_MULTIPLIER))
     this.light += amount
     return amount
   }
@@ -1262,17 +1351,25 @@ export class EnaTrainingSimulation {
         case 1: this.attack += scale; break                                   // 예기
         case 2: this.emberMax += 2; this.ember = Math.min(this.emberMax, this.ember + 3 * scale); break // 불씨
         case 3: this.shieldRegen += scale; break                              // 방벽(턴당 방패)
-        default: this.comboMax = Math.max(8, this.comboMax - 2 * scale); break // 촛불(멜트 가속)
+        case 4: this.comboMax = Math.max(8, this.comboMax - 2 * scale); break // 촛불(멜트 가속)
+        default:
+          // 칼날 엔진(숫돌/망치/연마 근사) — 씨앗 → 확률 생성 → 증폭 순으로 쌓인다.
+          if (this.shardPerKill === 0) this.shardPerKill = SHARD_GENERATORS[0]?.perKill ?? 1
+          else if (this.bladeUseShardChance === 0) this.bladeUseShardChance = BLADE_HAMMER_SHARD_CHANCE
+          else this.bladeSharpening = true
+          break
       }
     }
     const need = (roll: number): number => {
       if (roll === 1) return this.attack < 6 ? 3 : 1            // 공격력은 보스 등반 핵심
       if (roll === 0) return this.maxHp - this.hp >= 6 ? 2.5 : 1.5
       if (roll === 2) return this.ember <= 4 ? 2 : 1
+      // 칼날 엔진은 이미 씨앗이 있을 때(빌드 심화) 더 값지다.
+      if (roll === 5) return this.shardPerKill > 0 ? 1.4 : 1.1
       return 1.2
     }
-    const a = this.rng.int(5)
-    const b = this.rng.int(5)
+    const a = this.rng.int(6)
+    const b = this.rng.int(6)
     apply(need(a) >= need(b) ? a : b)
   }
 
@@ -1424,15 +1521,20 @@ export class EnaTrainingSimulation {
   }
 
   private advanceBossTurn(): void {
-    this.bossAttackCountdown--
     const profile = this.bossProfileFor(this.bossFloor)
-    if (this.bossAttackCountdown <= 0 && this.bossHp > 0) {
-      const adversity = this.hp + this.shield - profile.attack <= Math.max(1, this.maxHp * 0.35)
-      if (!this.companionDodges(profile.attack, adversity)) this.takeDamage(profile.attack)
-      this.applyBossBehavior(profile)
-      this.bossAttackCountdown = profile.interval
+    if (this.bossFrozenTurns > 0) {
+      // 굳은 보스: 반격 카운트다운이 줄지 않고 반격/특수행동을 건너뛴다 — 밀랍 지속만 1턴 소모(실게임 규칙).
+      this.bossFrozenTurns--
+    } else {
+      this.bossAttackCountdown--
+      if (this.bossAttackCountdown <= 0 && this.bossHp > 0) {
+        const adversity = this.hp + this.shield - profile.attack <= Math.max(1, this.maxHp * 0.35)
+        if (!this.companionDodges(profile.attack, adversity)) this.takeDamage(profile.attack)
+        this.applyBossBehavior(profile)
+        this.bossAttackCountdown = profile.interval
+      }
     }
-    // 불씨는 보스전에도 천천히 줄어 시간 압박을 유지한다.
+    // 불씨는 보스전에도(굳음과 무관하게) 천천히 줄어 시간 압박을 유지한다.
     if (--this.emberDecayCountdown <= 0) {
       this.emberDecayCountdown = this.emberDecayTurns
       this.ember = Math.max(0, this.ember - 1)
@@ -1446,7 +1548,8 @@ export class EnaTrainingSimulation {
         for (let n = 0; n < 2 + this.rng.int(3); n++) this.drawCard(this.rng.next() < 0.5 ? 'greed-coin' : 'coin')
         break
       case 'knightHand':
-        // 기사단장 손패 2장: 추가 피해.
+        // 기사단장 손패 2장(방패/회복/타격 혼합) 근사: 밀랍 방패를 두르고 추가 피해를 준다.
+        this.bossShield += 4
         this.takeDamage(2)
         break
       case 'summon':
@@ -1535,6 +1638,8 @@ export class EnaTrainingSimulation {
     this.bossAttackCountdown = profile.interval
     this.bossPage = 0
     this.bossDamageSinceGift = 0
+    this.bossFrozenTurns = 0
+    this.bossShield = 0
     if (floor === 100) this.finalAscent = false
   }
 
@@ -1819,6 +1924,23 @@ export class EnaTrainingSimulation {
     const pair = this.hand.find((s) => !s.merged && this.hand.filter((x) => !x.merged && x.id === s.id).length === 2)
     if (pair) return pair.id
     return null
+  }
+
+  /** 신사모가 미룰 전방 1칸 위협 — 폭 1의 적/함정 중 실효 위협이 가장 큰 레인. */
+  private bestPostponeLane(): number {
+    let best = -1
+    let bestThreat = 0
+    for (let lane = 0; lane < LANES; lane++) {
+      const card = this.board[0][lane]
+      if (!card || card.group > 1) continue
+      if (card.type !== CardType.ENEMY && card.type !== CardType.TRAP) continue
+      const threat = card.type === CardType.ENEMY ? card.atk + card.hp * 0.2 : trapDamage(card, this.trialTrapDamageBonus)
+      if (threat > bestThreat) {
+        best = lane
+        bestThreat = threat
+      }
+    }
+    return best
   }
 
   private toughestEnemyLane(): number {
@@ -2142,11 +2264,6 @@ function trapDamage(card: EnaSimCard, bonus: number = 0): number {
 
 function tierIndex(tier: EmberTier): number {
   return tier === 'bright' ? 0 : tier === 'dim' ? 1 : tier === 'flickering' ? 2 : 3
-}
-
-function lightMultiplier(turn: number): number {
-  // index.ts/EnaKnowledgeAdapter와 같은 선형 보정.
-  return 1 + turn * 0.015
 }
 
 /** 진행 턴 밴드별 실제 적 풀(CardSpawner.getActiveEnemyDefinitions와 동일 구간). */

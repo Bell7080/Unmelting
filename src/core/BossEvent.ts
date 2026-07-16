@@ -24,6 +24,7 @@ import { getRelicDef, relicDrawWeight, RELIC_IDS, type RelicId } from '@data/Rel
 import { sampleWithoutReplacement } from '@core/Sampling'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
 import { EmberSystem } from '@systems/EmberSystem'
+import { BOSS_CORE_SPECS, ONBOARDING_CAT_SPEC, demonSummonSpec } from '@data/BossSpecs'
 
 type WaxKnightCardEffect = 'shield' | 'heal' | 'strike'
 type BossPage = 1 | 2 | 3
@@ -171,11 +172,8 @@ export class BossEventController {
     // 세계관: 양초 백작이 "내 저택"이라 부르는 곳은 본래 주인공 에나가 살던 집이다.
     // 플레이어의 격앙된 응답("네 저택이라고…?")이 이 빼앗긴 과거를 암시한다.
     const def: BossDef = {
-      name: '양초 백작',
-      maxHp: 50,
-      attack: 4,
-      attackInterval: 2,
-      handGiftStep: 15,
+      // 전투 핵심 수치(HP/공격/주기/손패 지급)는 BossSpecs 단일 출처를 쓴다 — 시뮬과 공유.
+      ...BOSS_CORE_SPECS[30],
       handCardAmount: 0,   // 30F는 전용 손패 효과를 쓰지 않는다(탐욕 살포로 대체).
       specialEnemyKind: 'waxArmy',
       groupCount: 3,
@@ -200,11 +198,8 @@ export class BossEventController {
   /** 새싹 병아리(온보딩) 30F 보스. 양초 고양이 — 손패를 강탈해 촛농/양초/불씨면 직접 쓴다. */
   async runOnboardingCat(): Promise<void> {
     const def: BossDef = {
-      name: '양초 고양이',
-      maxHp: 30,
-      attack: 3,
-      attackInterval: 2,
-      handGiftStep: 5,   // 온보딩: 체력 5 감소마다 손패 1장(초보에게 넉넉히)
+      // 전투 핵심 수치는 BossSpecs 단일 출처(handGiftStep 5 = 초보에게 넉넉한 지급 포함).
+      ...ONBOARDING_CAT_SPEC,
       handCardAmount: 0,   // 손패 강탈+사용으로 대체(전용 손패 효과 미사용)
       specialEnemyKind: 'waxCat',
       groupCount: 3,
@@ -230,12 +225,8 @@ export class BossEventController {
     // 섬기던 기사다. "에나벨라님을… 위하여…"라는 인트로와 이를 알아채는 플레이어
     // 응답으로만 그 정체를 암시한다.
     const def: BossDef = {
-      name: '불씨 기사단장',
-      maxHp: 80,
-      attack: 7,
-      attackInterval: 2,
-      // 보스 체력 15 손실마다 손패 1장 지급(30/60/90/100F 공통).
-      handGiftStep: 15,
+      // 전투 핵심 수치는 BossSpecs 단일 출처(체력 15 손실마다 손패 1장 지급 공통 포함).
+      ...BOSS_CORE_SPECS[60],
       handCardAmount: 3,
       specialEnemyKind: 'waxKnight',
       groupCount: 3,
@@ -261,12 +252,8 @@ export class BossEventController {
     // 그를 빚어낸 조각가가 제피르였다는 사실이 추후 밝혀지며, 플레이어 응답
     // ("제피르의 꼭두각시")이 그 복선을 미리 깐다.
     const def: BossDef = {
-      name: '밀랍 조각사',
-      maxHp: 130,
-      attack: 10,
-      attackInterval: 3,
-      // 보스 체력 15 손실마다 손패 1장 지급(30/60/90/100F 공통).
-      handGiftStep: 15,
+      // 전투 핵심 수치는 BossSpecs 단일 출처를 쓴다 — 시뮬과 공유.
+      ...BOSS_CORE_SPECS[90],
       handCardAmount: 0,   // 조각사는 전용 손패 효과를 쓰지 않는다.
       specialEnemyKind: 'waxSculptor',
       groupCount: 2,
@@ -291,12 +278,8 @@ export class BossEventController {
     // 최종 보스는 앞선 30/60/90F 보스 메커니즘을 페이지별로 압축해 재사용한다.
     // 3×3 타일은 양초 백작과 같은 CSS 확장 규칙을 쓰고, 3페이지에서만 2×3 후방 대기형으로 변한다.
     const def: BossDef = {
-      name: '녹지 않는 마녀',
-      maxHp: 270,
-      attack: 15,
-      attackInterval: 2,
-      // 보스 체력 15 손실마다 손패 1장 지급(30/60/90/100F 공통).
-      handGiftStep: 15,
+      // 전투 핵심 수치는 BossSpecs 단일 출처를 쓴다 — 시뮬과 공유.
+      ...BOSS_CORE_SPECS[100],
       handCardAmount: 5,
       specialEnemyKind: 'waxWitch',
       groupCount: 3,
@@ -321,15 +304,10 @@ export class BossEventController {
   /** 악마 소환 레시피 발동 시 이벤트 보스 전투 — index.ts가 커튼을 닫은 뒤 호출한다. */
   async runDemonSummon(): Promise<void> {
     const turnCount = this.gs.getCurrentTurn()
-    const maxHp = 130 + turnCount
-    const attack = 3 + Math.floor(turnCount / 10)
     const spriteUrl = spriteForEventBoss('eventboss_001') ?? this.sprites.boss
     const def: BossDef = {
-      name: '검은 양초 악마',
-      maxHp,
-      attack,
-      attackInterval: 2,
-      handGiftStep: 15,
+      // 발동 턴 비례 성장 스펙은 BossSpecs 단일 출처를 쓴다.
+      ...demonSummonSpec(turnCount),
       handCardAmount: 0,
       specialEnemyKind: 'waxDemon',
       groupCount: 3,

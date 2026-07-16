@@ -49,12 +49,13 @@ import { RECIPES } from '@data/Recipes'
 import { getRelicDef, relicDrawWeight, RELIC_IDS, type CustomRelicProfile, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
 import { altarPackBaseCost, packCostWithRepeats, regularShopPackBaseCost } from '@core/ShopPricing'
+import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
 import { COMBO_TRIGGER_DELAY_MS, GAUGE_TRIGGER_DELAY_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
 import {
   sampleWeightedWithoutReplacement,
   sampleWithoutReplacement,
 } from '@core/Sampling'
-import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
+import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS, CHANCE_PACK_RARITY_BOOST } from '@data/ShopPools'
 import { BASIC_PACK_POOL } from '@data/BasicPackPool'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { JOBS } from '@data/Jobs'
@@ -2182,14 +2183,13 @@ function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
       return d && d.dropSource !== 'boss' && (d.dropWeight ?? 0) > 0
     })
     if (chancePool.length === 0) return []
-    // 등급별 부스트 가중치 — 커먼에 가까울수록 더 큰 폭 조정
-    const RARITY_BOOST: Record<string, number> = { common: 18, rare: 14, epic: 8, unique: 5, legendary: 5 }
     // 확률을 2자리까지 표기하되 불필요한 끝자리 0 제거
     const fmt = (p: number) => String(parseFloat((p * 100).toFixed(2)))
     const drawIds = sampleWithoutReplacement(chancePool, Math.min(3, chancePool.length))
     return drawIds.map((id) => {
       const def = getHandCardDef(id)
-      const boostToAdd = RARITY_BOOST[HAND_CARD_RARITY[id] ?? 'common'] ?? 1
+      // 등급별 부스트 폭은 학습 시뮬과 공유하는 ShopPools 단일 출처를 읽는다.
+      const boostToAdd = CHANCE_PACK_RARITY_BOOST[HAND_CARD_RARITY[id] ?? 'common'] ?? 1
       const { before, after } = DropSystem.computeDropProbability(
         id, chancePool, gameState.enhancements.tier1CardBoosts, boostToAdd,
       )
@@ -2835,9 +2835,8 @@ function createItemGainLogs(itemNames: string[]): ActivityLogDraft[] {
  *  - turn 90  : ×2.35
  */
 function getTurnScoreMultiplier(): number {
-  const turn = gameState.getCurrentTurn()
-  const base = 1 + Math.max(0, turn) * 0.015
-  return base * gameState.enhancements.scoreMultiplier
+  // 턴 인플레이션 선형식은 학습 시뮬과 공유하는 LightEconomy 단일 출처를 읽는다.
+  return lightTurnMultiplier(gameState.getCurrentTurn()) * gameState.enhancements.scoreMultiplier
 }
 
 /**
@@ -2868,16 +2867,14 @@ function scoreInflationJitter(): number {
  */
 // 일반 적 불빛 = ENEMY_LIGHT_BASE + ENEMY_LIGHT_PER_RANK × enemyPower(1~18+), 전 랭크 단일 공식.
 // HP/ATK와 분리돼 체력 버프·특이 스탯 적(100HP/1ATK 등)에도 랭크 순서대로 유지된다.
-// BASE는 초반(랭크 1) 값을 현재(≈32)와 맞추고, PER_RANK는 후반 상승폭을 조절한다(낮을수록 완만).
-const ENEMY_LIGHT_BASE = 17
-const ENEMY_LIGHT_PER_RANK = 6
+// 상수는 학습 시뮬과 공유하는 LightEconomy 단일 출처를 읽는다.
 function scoreForCardRemoval(card: Card): number {
   if (card.type === CardType.ENEMY) {
     // 일반/특수(미믹·괴물꽃) 모두 강함수치(enemyPower) 단일 랭킹식으로 통일한다.
     // 미믹은 단계마다 2/4/6/8…, 합체 적/미믹/괴물꽃은 칸 수 배율로 불빛이 자연스럽게 오른다.
     const rankLight = ENEMY_LIGHT_BASE + Math.max(1, card.enemyPower) * ENEMY_LIGHT_PER_RANK
-    // 그룹은 칸 수만큼 곱하되 25% 감산 — 단일보다 확실히 높되 배수 구조를 희석한다.
-    if (card.groupCount > 1) return Math.round(rankLight * card.groupCount * 0.75)
+    // 그룹은 칸 수만큼 곱하되 감산 배율로 희석 — 단일보다 확실히 높되 배수 구조를 누른다.
+    if (card.groupCount > 1) return Math.round(rankLight * card.groupCount * GROUP_LIGHT_DISCOUNT)
     return rankLight
   }
   // 함정/보물은 강함수치가 없으므로, 경과 턴(층)만큼 기본 불빛에 더해 인플레이션을 따라가게 한다.
@@ -2933,9 +2930,8 @@ function scoreLabelForCard(card: Card): string {
   return `${card.name} 획득`
 }
 
-/** 플레이어 기본 불빛 획득량 전체 상향 배율(약 +0.4x). 카드 처리/수확 등 행동 기반 불빛에만
- *  적용되며, gainFixedLight(별빛 랜턴 등 고정 유물 보너스)에는 적용하지 않는다. */
-const BASE_LIGHT_GAIN_MULTIPLIER = 1.4
+// 기본 불빛 상향 배율(BASE_LIGHT_GAIN_MULTIPLIER)은 행동 기반 불빛에만 적용되고
+// gainFixedLight(별빛 랜턴 등 고정 유물 보너스)에는 적용하지 않는다 — LightEconomy 공유값.
 
 function createScoreLog(
   label: string,

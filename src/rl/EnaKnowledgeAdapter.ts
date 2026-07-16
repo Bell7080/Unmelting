@@ -14,6 +14,7 @@ import { JOBS } from '@data/Jobs'
 import { EVENT_DEFINITIONS } from '@data/Events'
 import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS } from '@data/ShopPools'
 import { altarPackBaseCost, regularShopPackBaseCost } from '@core/ShopPricing'
+import { lightTurnMultiplier } from '@core/LightEconomy'
 import type { HandCardDefinition, HandCardId, HandEffectTargeting } from '@entities/HandCard'
 import type { RelicId } from '@data/Relics'
 
@@ -295,10 +296,7 @@ function trialPressureValue(text: string): number {
   return textScore(text, ['적', '함정', '+'], 0.7) - textScore(text, ['보물'], 0.4)
 }
 
-function lightTurnMultiplier(turn: number): number {
-  // index.ts의 현재 경제 보정과 같은 선형식: 1 + 턴×0.015.
-  return 1 + turn * 0.015
-}
+// 불빛 턴 인플레이션은 LightEconomy 단일 출처를 그대로 쓴다(복제 상수 제거).
 
 function textScore(text: string, words: readonly string[], weight: number): number {
   return words.reduce((sum, word) => sum + (text.includes(word) ? weight : 0), 0)

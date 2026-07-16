@@ -65,6 +65,12 @@ export const SHOP_PACK_POOLS: Record<ShopPackKind, Omit<ShopPackPoolItem, 'apply
   'delete-pack': [],
 }
 
+/** 확률팩 등급별 T1 부스트 폭 — 커먼에 가까울수록 크게 민다.
+ *  실게임(index.ts rollPackItems)과 학습 시뮬(EnaTrainingSimulation)이 같은 값을 읽는다. */
+export const CHANCE_PACK_RARITY_BOOST: Record<CardRarity, number> = {
+  common: 18, rare: 14, epic: 8, unique: 5, legendary: 5,
+}
+
 /** Shop pack UI copy source of truth.
  *  Keep names/effects centralized so shop tiles and pack picker titles never drift. */
 export const SHOP_PACK_LABELS: Record<ShopPackKind, { title: string; effect: string }> = {
