@@ -61,7 +61,6 @@ import { JOBS } from '@data/Jobs'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { CursorFX } from '@ui/CursorFX'
 import { FontManager } from '@ui/FontManager'
-import { candleIcon } from '@ui/Icons'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
 import { BarkSequencer } from '@ui/BarkSequencer'
@@ -5768,8 +5767,8 @@ function showGameOver(): void {
     overlay.className = 'game-over-overlay is-clear'
     overlay.innerHTML = `
       <div class="game-over-card settlement-card">
-        <div class="game-over-icon">${candleIcon()}</div>
-        <h1>새싹 병아리 클리어!</h1>
+        <h1 class="verdict-word verdict-unmelting">Unmelting</h1>
+        <p class="verdict-sub">새싹 병아리 클리어!</p>
         <div class="settlement-body">
           <div class="settlement-stats">
             <p>처치한 적 <strong>${gameState.runDefeatedEnemies}</strong></p>
@@ -5801,8 +5800,8 @@ function showGameOver(): void {
     const fromLobby = runEnteredFromLobby
     overlay.innerHTML = `
       <div class="game-over-card settlement-card">
-        <div class="game-over-icon">${candleIcon()}</div>
-        <h1>잿빛 굴레를 풀었다 — 100층 클리어!</h1>
+        <h1 class="verdict-word verdict-unmelting">Unmelting</h1>
+        <p class="verdict-sub">잿빛 굴레를 풀었다 — 100층 클리어!</p>
         <div class="settlement-body">
           <div class="settlement-stats">
             <p>처치한 적 <strong>${gameState.runDefeatedEnemies}</strong></p>
@@ -5846,8 +5845,8 @@ function showGameOver(): void {
   overlay.className = 'game-over-overlay is-clear'
   overlay.innerHTML = `
     <div class="game-over-card settlement-card death-card">
-      <div class="game-over-icon">${candleIcon()}</div>
-      <h1>${reason}</h1>
+      <h1 class="verdict-word verdict-melting">Melting</h1>
+      <p class="verdict-sub">${reason}</p>
       <p class="death-tip">${deathTip}</p>
       <div class="settlement-body">
         <div class="settlement-stats">
@@ -5916,13 +5915,45 @@ globalStyle.textContent = `
     gap: clamp(18px, 3.4vh, 34px);
     animation: clear-card-rise 0.8s cubic-bezier(0.2, 0.84, 0.3, 1) 0.18s both;
   }
-  .game-over-overlay.is-clear .game-over-icon { margin: 0; font-size: clamp(40px, 6vh, 60px); }
-  .game-over-overlay.is-clear h1 {
+  /* 판정 헤드라인: 촛불 아이콘 없이 'Melting / Unmelting' 한 단어로. 밀랍이 흐르는 느낌의
+     세로 그라디언트로 글자를 채우고(아래로 갈수록 옅어짐 = 녹아내림), drop-shadow로 발광한다.
+     text-shadow는 background-clip:text 투명 채움과 함께 렌더되지 않으므로 발광은 filter로 준다. */
+  .game-over-overlay.is-clear .verdict-word {
     margin: 0;
-    font-size: clamp(28px, 5vh, 46px);
-    letter-spacing: 0.04em;
-    text-shadow: 0 3px 22px rgba(0, 0, 0, 0.92);
+    font: italic 900 clamp(52px, 12.5vh, 118px)/0.96 Georgia, 'Times New Roman', serif;
+    letter-spacing: 0.015em;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
   }
+  /* 사망 = 소녀가 녹았다 → 차가운 남보라, 아래로 갈수록 투명하게 흘러내리는 밀랍. */
+  .game-over-overlay.is-clear .verdict-melting {
+    background-image: linear-gradient(178deg, #efe9ff 0%, #cabff0 38%, #9585cc 72%, rgba(118, 104, 168, 0.28) 100%);
+    animation: verdict-melting-glow 3.4s ease-in-out infinite;
+  }
+  /* 승리 = 끝내 녹지 않았다 → 따뜻한 촛불 금빛, 아래는 깊은 호박색으로 단단히. */
+  .game-over-overlay.is-clear .verdict-unmelting {
+    background-image: linear-gradient(178deg, #fff4d2 0%, #ffd472 44%, #f0a83a 80%, #d17f28 100%);
+    animation: verdict-unmelting-glow 3.4s ease-in-out infinite;
+  }
+  @keyframes verdict-melting-glow {
+    0%, 100% { filter: drop-shadow(0 0 16px rgba(150, 130, 224, 0.42)) drop-shadow(0 8px 30px rgba(14, 8, 30, 0.9)); }
+    50%      { filter: drop-shadow(0 0 30px rgba(168, 148, 240, 0.72)) drop-shadow(0 8px 30px rgba(14, 8, 30, 0.9)); }
+  }
+  @keyframes verdict-unmelting-glow {
+    0%, 100% { filter: drop-shadow(0 0 18px rgba(255, 190, 96, 0.46)) drop-shadow(0 8px 30px rgba(36, 18, 4, 0.86)); }
+    50%      { filter: drop-shadow(0 0 34px rgba(255, 206, 120, 0.78)) drop-shadow(0 8px 30px rgba(36, 18, 4, 0.86)); }
+  }
+  /* 한글 부제: 헤드라인 아래 작고 차분하게 — 무엇을 이뤘/잃었는지 한 줄로. */
+  .game-over-overlay.is-clear .verdict-sub {
+    margin: 0;
+    font-size: clamp(14px, 2.3vh, 20px);
+    letter-spacing: 0.03em;
+    color: rgba(222, 212, 240, 0.74);
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85);
+  }
+  .game-over-overlay.is-clear .death-card .verdict-sub { color: rgba(210, 200, 232, 0.72); }
   .game-over-overlay.is-clear .death-tip { margin: 0; }
   .game-over-overlay.is-clear .settlement-body { margin: 0; gap: clamp(26px, 3.4vw, 48px); align-items: center; }
   .game-over-overlay.is-clear .settlement-stats p { margin: 0 0 clamp(7px, 1.1vh, 11px); }
