@@ -330,6 +330,8 @@ export class GameBoardRenderer {
   private shopPeekButton: HTMLElement | null = null
   /** 악마 소환 레시피 발동 시 레일 위에 겹치는 커튼 오버레이. */
   private demonCurtainOverlay: HTMLElement | null = null
+  /** 보스 등장 전 레일 위로 위→아래로 내려오는 셔터 오버레이(온보딩 양초 고양이 등에 사용). */
+  private bossShutterOverlay: HTMLElement | null = null
   /** 현재 열린 상점 모드. 제단(altar) 유물은 무료라 가격 기반 affordable 판정을 건너뛴다. */
   private currentShopRenderMode: 'shop' | 'altar' = 'shop'
   /** Source rect for a just-bought shop relic; the next render uses it to
@@ -3697,6 +3699,68 @@ export class GameBoardRenderer {
 #demon-curtain-overlay.is-opening .job-rail-curtain--right {
   animation: job-curtain-open-right 0.92s cubic-bezier(0.18, 0.82, 0.25, 1) forwards;
 }
+`
+    document.head.appendChild(style)
+  }
+
+  /** 보스 등장 전 레일 위로 어두운 밀랍 셔터를 위→아래로 내린다(커튼=좌우와 달리 top-down).
+   *  보드를 셔터 위로 올려(elevateBoardAboveCurtain) 보스 착지 연출이 셔터 앞에서 보이게 한다. */
+  async closeBossShutter(): Promise<void> {
+    this.ensureBossShutterStyles()
+    const overlay = document.createElement('div')
+    overlay.id = 'boss-shutter-overlay'
+    const shell = document.createElement('div')
+    shell.className = 'boss-shutter-shell'
+    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
+    if (rail) {
+      const rect = rail.getBoundingClientRect()
+      shell.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;overflow:hidden;border-radius:14px;`
+    }
+    shell.innerHTML = `<div class="boss-shutter-panel" aria-hidden="true"></div>`
+    overlay.appendChild(shell)
+    document.body.appendChild(overlay)
+    this.bossShutterOverlay = overlay
+    // 다음 프레임에 is-down을 붙여 위→아래 슬라이드(쿠궁)를 재생한다.
+    await new Promise<void>((r) => requestAnimationFrame(() => r()))
+    overlay.classList.add('is-down')
+    await new Promise<void>((r) => window.setTimeout(r, 560))
+  }
+
+  /** 보스전 종료 후 셔터를 위로 걷어 올려 제거하고, 보드 승격(z-index)도 복원한다. */
+  async openBossShutter(): Promise<void> {
+    const overlay = this.bossShutterOverlay
+    if (overlay) {
+      overlay.classList.remove('is-down')
+      overlay.classList.add('is-up')
+      await new Promise<void>((r) => window.setTimeout(r, 520))
+      overlay.remove()
+      this.bossShutterOverlay = null
+    }
+    // 셔터가 사라진 뒤 elevateBoardAboveCurtain으로 올렸던 보드 z-index를 되돌린다.
+    this.boardElement.style.position = ''
+    this.boardElement.style.zIndex = ''
+    this.boardElement.style.isolation = ''
+  }
+
+  private ensureBossShutterStyles(): void {
+    if (document.getElementById('boss-shutter-styles')) return
+    const style = document.createElement('style')
+    style.id = 'boss-shutter-styles'
+    // 보드(elevateBoardAboveCurtain=z150)보다 낮은 z145 → 보스 착지가 셔터 앞에서 보인다.
+    style.textContent = `
+#boss-shutter-overlay { position: fixed; inset: 0; z-index: 145; pointer-events: none; }
+#boss-shutter-overlay .boss-shutter-panel {
+  position: absolute; inset: 0;
+  transform: translateY(-104%);
+  transition: transform 0.56s cubic-bezier(0.32, 0.9, 0.36, 1);
+  background:
+    repeating-linear-gradient(0deg, rgba(0,0,0,0.16) 0 2px, transparent 2px 12px),
+    linear-gradient(180deg, #3a281a 0%, #241610 55%, #140c08 100%);
+  box-shadow: inset 0 -16px 34px rgba(0,0,0,0.62), inset 0 2px 0 rgba(255,228,160,0.14), 0 12px 26px rgba(0,0,0,0.55);
+  border-bottom: 2px solid rgba(200,152,60,0.42);
+}
+#boss-shutter-overlay.is-down .boss-shutter-panel { transform: translateY(0); }
+#boss-shutter-overlay.is-up .boss-shutter-panel { transform: translateY(-104%); transition: transform 0.5s cubic-bezier(0.4, 0, 0.7, 0.4); }
 `
     document.head.appendChild(style)
   }

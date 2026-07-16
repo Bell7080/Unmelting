@@ -2067,12 +2067,13 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
   // 새싹 병아리(온보딩): 30층에서 양초 고양이 보스로 아크를 닫는다(제단/시련/보상 없이 종료).
   if (isOnboardingActive() && turn === 30 && !gameState.isGameOver) {
     turnManager.setTurnMode('boss_phase')
-    // 다른 보스처럼 등장 전 레일에 셔터(커튼)를 내린다 — 레일 영역만 덮으므로 손패는 그대로 쓸 수 있고,
-    // 보드를 커튼 위로 올려 양초 고양이가 셔터 앞에 착지해 보이게 한 뒤 전투를 진행한다.
-    await boardRenderer.closeDemonCurtain()
+    // 등장 전 레일 위로 셔터를 위→아래로 내린다(커튼 아님). 셔터가 다 내려온 뒤 살짝 딜레이를 두고,
+    // 보드를 셔터 위로 올려 양초 고양이 착지 연출이 셔터 앞에서 보이게 한 뒤 전투를 진행한다.
+    await boardRenderer.closeBossShutter()
+    await wait(520)                        // 셔터 하강 후 살짝 딜레이(긴장) → 보스 등장
     boardRenderer.elevateBoardAboveCurtain()
     await bossController.runOnboardingCat()
-    boardRenderer.removeDemonCurtain()   // 전투 종료 → 셔터 걷힘·보드 z-index 복원
+    await boardRenderer.openBossShutter()  // 전투 종료 → 셔터 걷힘 + 보드 z-index 복원
     // 격파(생존)면 클리어 정산+졸업, 사망이면 runOnboardingCat 내부에서 게임오버 처리됨.
     if (!gameState.isGameOver && gameState.character.isAlive()) await runOnboardingClear()
     return true
@@ -3173,11 +3174,13 @@ async function runOnboardingClear(): Promise<void> {
  * 가로 인접 동종이 없어 regroupAllRows가 합체하지 않는다("합체 안 된 채 스폰"). 진짜 위협은
  * 이후 리필로 뒤에서 내려온다. 정상 오프닝(fillBoardAtStart) 대신 호출한다.
  */
-function fillOnboardingField(): void {
+async function fillOnboardingField(): Promise<void> {
   syncSpawnerTier()
   const laneCount = gameState.lanes.length
   const kinds = ['rock', 'bush', 'junk'] as const
-  for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
+  // 뒤(위, dist-2)에서 앞(아래, dist-0)으로 '한 행씩' 천천히 스폰한다. 새 카드는 위에서 살짝
+  // 떨어지며(card-enter-soft) 등장하므로, 카드가 위에서 아래로 내려온다는 걸 유저가 배우게 된다.
+  for (let distance = LANE_DISTANCE_COUNT - 1; distance >= 0; distance--) {
     // 행마다 3종 순열을 섞어 불규칙하게 쌓되, 서로 다른 종이라 가로 합체가 없다.
     const row: Array<'rock' | 'bush' | 'junk'> = [...kinds]
     for (let i = row.length - 1; i > 0; i--) {
@@ -3187,9 +3190,11 @@ function fillOnboardingField(): void {
     for (let i = 0; i < laneCount; i++) {
       gameState.lanes[i]?.setCardAtDistance(distance, cardSpawner.makeOnboardingFieldCard(row[i % row.length]))
     }
+    gameState.regroupAllRows()
+    trackFieldEnemyEncounters()
+    render()
+    await wait(340)   // 한 행씩 천천히 — '위→아래' 순차 채움을 눈에 보이게 한다.
   }
-  gameState.regroupAllRows()
-  trackFieldEnemyEncounters()
 }
 
 /** Runs now begin with an empty hand; first cards must come from play rewards. */
@@ -3367,7 +3372,7 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // 온보딩(첫 경험)이면 잡동사니 필드로, 아니면 정상 오프닝으로 첫 보드를 채운다.
   // 온보딩이면 1~10층 저확률 필드 스폰도 켠다(첫 필드 이후 부드러운 전환 + 과도 합체 완화).
   cardSpawner.setOnboardingFieldSpawnChance(isOnboardingActive() ? 0.15 : 0)
-  if (isOnboardingActive()) fillOnboardingField()
+  if (isOnboardingActive()) await fillOnboardingField()
   else fillBoardAtStart()
   turnManager.armFrontBombs()
   render()
