@@ -959,20 +959,32 @@ body.hearth-lobby #ingame-backdrop.is-out {
   from { opacity: 0; transform: translate(-50%, calc(-50% + 14px)); }
   to { opacity: 1; transform: translate(-50%, -50%); }
 }
-/* 상단 소제목: 금박 라벨 + 좌우 실선. 화면 상단(헤더 위치)에 크게 고정해 단계 제목처럼 읽힌다. */
-.hearth-diff-kicker {
-  position: fixed;
-  top: clamp(28px, 6vh, 68px);
+/* 상단 소제목: 금박 라벨 + 좌우 실선. 셔터 직속(absolute)이라 난이도 블록의 transform과
+   무관하게 화면 상단(헤더 위치)에 크게 고정된다 — 난이도 확정 상태에서만 표시. */
+.hearth-diff-kicker { display: none; }
+#hearth-overlay.is-character-confirmed .hearth-diff-kicker {
+  display: flex;
+  position: absolute;
+  /* 셔터 패널 안쪽 헤드룸(약 50px)에 맞춰 상단에 붙인다 — 카드(z 30~50)와 겹쳐도 위에 그려지게
+     z를 올리고, 장식 라벨이라 클릭은 통과시킨다. */
+  top: clamp(8px, 1.6vh, 18px);
   left: 50%;
   transform: translateX(-50%);
-  display: flex;
+  z-index: 60;
+  pointer-events: none;
   align-items: center;
   gap: 14px;
-  color: rgba(248, 206, 120, 0.9);
+  color: rgba(248, 206, 120, 0.92);
   font-family: 'OkDanDan', Georgia, serif;
-  font-size: clamp(17px, 2.6vh, 24px);
+  font-size: clamp(16px, 2.4vh, 22px);
   letter-spacing: 0.34em;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  animation: hearth-diff-kicker-in 0.42s ease 0.18s forwards;
+}
+@keyframes hearth-diff-kicker-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 .hearth-diff-kicker::before, .hearth-diff-kicker::after {
   content: '';
@@ -1074,6 +1086,9 @@ body.hearth-lobby #ingame-backdrop.is-out {
 
 .hearth-diff-nav {
   flex: 0 0 auto;
+  /* 커진 사이드 카드(z 30~50)가 화살표 위까지 뻗어 클릭을 가로채지 않게 카드보다 위에 둔다. */
+  position: relative;
+  z-index: 60;
   width: clamp(32px, 4.2vw, 42px);
   height: clamp(32px, 4.2vw, 42px);
   display: flex;

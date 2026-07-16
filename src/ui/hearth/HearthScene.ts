@@ -273,8 +273,10 @@ export class HearthScene {
               <small>${HEARTH_CHARACTERS[0].desc}</small>
             </div>
           </div>
+          <!-- 킥커는 transform이 걸린 .hearth-difficulty 밖(셔터 직속)에 둔다 — 부모 transform이
+               fixed/absolute 기준을 바꿔 확대된 카드 뒤로 숨는 문제를 피해 화면 상단에 고정한다. -->
+          <span class="hearth-diff-kicker" aria-hidden="true">난이도</span>
           <div class="hearth-difficulty" aria-label="난이도 선택" aria-hidden="true">
-            <span class="hearth-diff-kicker">난이도</span>
             <div class="hearth-diff-carousel">
               <button class="hearth-diff-nav hearth-diff-nav--left" type="button" data-hearth-diff-nav="left" aria-label="이전 난이도" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 L8 12 L15 19"/></svg></button>
               <div class="hearth-diff-strip" role="listbox" aria-label="시작 난이도">${this.renderDifficultyCards()}</div>

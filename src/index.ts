@@ -5945,9 +5945,10 @@ globalStyle.textContent = `
      - 검은 오버레이가 조용히(0.9s) 페이드인. */
   .game-over-overlay.is-clear {
     animation: clear-veil-in 0.9s ease both;
+    /* 판정 화면은 뒤 게임이 어렴풋이만 남도록 전체적으로 짙게 깐다 — 글자 발광이 더 선다. */
     background:
-      radial-gradient(ellipse 92% 82% at 50% 44%, rgba(12, 8, 18, 0.30) 0%, rgba(7, 5, 13, 0.64) 52%, rgba(2, 1, 6, 0.92) 100%);
-    backdrop-filter: blur(7px);
+      radial-gradient(ellipse 92% 82% at 50% 44%, rgba(9, 6, 14, 0.62) 0%, rgba(5, 3, 10, 0.84) 50%, rgba(1, 0, 4, 0.97) 100%);
+    backdrop-filter: blur(9px);
     /* 내용이 뷰포트보다 길어지면 flex 중앙정렬이 위쪽(헤드라인)을 잘라먹는다 —
        스크롤을 허용하고 카드가 margin:auto로 '안전 중앙정렬'되게 해 제목이 잘리지 않게 한다. */
     overflow-y: auto;

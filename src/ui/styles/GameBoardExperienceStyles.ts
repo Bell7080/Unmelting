@@ -175,21 +175,22 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   color: #ffe9c4;
 }
 .exp-axis-pct { font-size: 11px; font-weight: 700; color: #ffce7e; display: inline-flex; align-items: center; gap: 3px; }
-/* 정산 화면 전용: 이번 런 상승분(%p) 칩 — 오른 축만 금빛으로 도드라진다. */
+/* 정산 화면 전용: 이번 런 상승분(%p) — 뱃지 대신 좌측 상단 불빛 수치와 같은
+   금색 발광 숫자로 크게 강조한다(오른 축만 표시된다). */
 .exp-axis-delta {
-  font-size: 10px;
+  font-size: 16px;
   font-weight: 900;
-  line-height: 1.5;
-  padding: 0 5px;
-  border-radius: 999px;
-  color: #2a1804;
-  background: linear-gradient(180deg, #ffd887, #f0a83a);
-  box-shadow: 0 0 10px rgba(255, 204, 120, 0.55);
+  line-height: 1;
+  color: var(--color-flame, #ffd778);
+  text-shadow:
+    0 0 8px rgba(255, 215, 120, 0.55),
+    0 0 18px rgba(244, 164, 96, 0.3);
+  font-variant-numeric: tabular-nums;
   animation: exp-delta-glow 2s ease-in-out infinite;
 }
 @keyframes exp-delta-glow {
-  0%, 100% { box-shadow: 0 0 8px rgba(255, 204, 120, 0.45); }
-  50% { box-shadow: 0 0 16px rgba(255, 214, 135, 0.85); }
+  0%, 100% { text-shadow: 0 0 8px rgba(255, 215, 120, 0.5), 0 0 16px rgba(244, 164, 96, 0.26); }
+  50% { text-shadow: 0 0 12px rgba(255, 224, 150, 0.95), 0 0 26px rgba(255, 196, 110, 0.55); }
 }
 /* 이번 런에 오른 축 꼭짓점 — 기본 반짝임보다 크고 밝게 맥동한다. */
 .exp-node.is-risen {
