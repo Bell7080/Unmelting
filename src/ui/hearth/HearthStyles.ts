@@ -932,26 +932,9 @@ body.hearth-lobby #ingame-backdrop.is-out {
 /* 확정 후: stage/carousel 숨기고 뒤로가기(back)는 유지해 재선택 진입 허용 */
 #hearth-overlay.is-character-confirmed .hearth-character-stage,
 #hearth-overlay.is-character-confirmed .hearth-character-carousel { display: none; }
-/* 확정 후: 난이도 선택은 화면 정중앙에 크게, 출발 버튼은 직전에 캐릭터를 확정한
-   클릭 지점(--hearth-depart-x/y, confirmCharacter가 선택 카드 중심을 기록)에 고정한다.
-   마우스를 옮기지 않고 [캐릭터 확정 → 출발]을 같은 자리에서 이어 누를 수 있는 배려. */
-#hearth-overlay.is-character-confirmed .hearth-depart {
-  position: fixed;
-  left: var(--hearth-depart-x, 50%);
-  top: var(--hearth-depart-y, 86vh);
-  margin: 0;
-  opacity: 1;
-  transform: translate(-50%, -50%);
-  pointer-events: auto;
-  transition: opacity 0.32s ease 0.16s, transform 0.16s ease, box-shadow 0.18s ease, border-color 0.18s ease, filter 0.16s ease;
-}
-#hearth-overlay.is-character-confirmed .hearth-depart:hover { transform: translate(-50%, -50%) translateY(-2px) scale(1.05); }
-#hearth-overlay.is-character-confirmed .hearth-depart.is-pressed { transform: translate(-50%, -50%) scale(0.96); }
-#hearth-overlay.is-character-confirmed .hearth-depart.is-disabled {
-  opacity: 0.42;
-  filter: grayscale(0.5) brightness(0.82);
-  cursor: not-allowed;
-}
+/* 확정 후: 별도 출발 버튼 없이 포커싱된 난이도 카드를 다시 누르면 출발한다(캐릭터 확정과
+   동일한 문법). 버튼 요소는 depart()의 거부 흔들림 앵커로만 남기고 화면에서 숨긴다. */
+#hearth-overlay.is-character-confirmed .hearth-depart { display: none; }
 
 /* ── 난이도 선택(확정 상태 전용) ──────────────────────────────────────
    출발 버튼 위, 캐릭터 커버플로우와 같은 결의 일러스트 카드 3장을 넣어 넘겨 고른다. */
@@ -976,20 +959,24 @@ body.hearth-lobby #ingame-backdrop.is-out {
   from { opacity: 0; transform: translate(-50%, calc(-50% + 14px)); }
   to { opacity: 1; transform: translate(-50%, -50%); }
 }
-/* 상단 소제목: 얇은 금박 라벨 + 좌우 실선으로 인게임 패널 톤을 맞춘다. */
+/* 상단 소제목: 금박 라벨 + 좌우 실선. 화면 상단(헤더 위치)에 크게 고정해 단계 제목처럼 읽힌다. */
 .hearth-diff-kicker {
+  position: fixed;
+  top: clamp(28px, 6vh, 68px);
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: rgba(248, 206, 120, 0.82);
+  gap: 14px;
+  color: rgba(248, 206, 120, 0.9);
   font-family: 'OkDanDan', Georgia, serif;
-  font-size: clamp(12px, 1.6vh, 15px);
+  font-size: clamp(17px, 2.6vh, 24px);
   letter-spacing: 0.34em;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
 }
 .hearth-diff-kicker::before, .hearth-diff-kicker::after {
   content: '';
-  width: clamp(26px, 6vw, 60px);
+  width: clamp(40px, 9vw, 96px);
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(220, 172, 80, 0.6), transparent);
 }
@@ -1112,6 +1099,21 @@ body.hearth-lobby #ingame-backdrop.is-out {
 .hearth-diff-caption-name { display: block; font-size: clamp(16px, 2.2vh, 21px); letter-spacing: 0.06em; }
 .hearth-diff-caption-desc { display: block; margin-top: 3px; font-size: clamp(12px, 1.6vh, 14px); color: rgba(225, 210, 188, 0.84); line-height: 1.4; }
 #hearth-overlay .hearth-difficulty.is-locked-pick .hearth-diff-caption-desc { color: rgba(226, 158, 120, 0.9); }
+/* 카드 재클릭 = 출발 안내 — 잠긴 난이도를 고른 동안에는 숨긴다. */
+.hearth-diff-caption-hint {
+  display: block;
+  margin-top: clamp(6px, 1.1vh, 10px);
+  font-size: clamp(12px, 1.5vh, 14px);
+  letter-spacing: 0.12em;
+  color: rgba(255, 226, 158, 0.78);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+  animation: hearth-diff-hint-pulse 2.4s ease-in-out infinite;
+}
+#hearth-overlay .hearth-difficulty.is-locked-pick .hearth-diff-caption-hint { visibility: hidden; }
+@keyframes hearth-diff-hint-pulse {
+  0%, 100% { opacity: 0.62; }
+  50% { opacity: 1; }
+}
 
 /* ── orb / 설치 애니메이션 ──────────────────────────────────────────── */
 .hearth-character-orb { position: fixed; z-index: 260; width: 18px; height: 18px; border-radius: 50%; pointer-events: none; background: #fff3bd; box-shadow: 0 0 22px #ffd778, 0 0 56px rgba(244,164,96,0.72); }

@@ -181,6 +181,8 @@ export class HearthScene {
   private selectedCharacterIndex = 0
   /** 캐릭터 확정 후 출발 버튼을 다시 띄워 중복 선택 애니메이션을 막는다. */
   private characterConfirmed = false
+  /** 확정 연출 세대 토큰 — 연출 도중 뒤로가기가 오면 증가해, 각 await 뒤 검사로 시퀀스를 중단한다. */
+  private confirmSeq = 0
   /** 캐릭터 확정 뒤 출발 버튼 위에서 넘겨 고르는 시작 난이도 인덱스. */
   private selectedDifficultyIndex = 0
   /** /개방 개발 명령으로 모든 칸을 강제 개방하는 플래그(로컬 저장 복원). */
@@ -281,9 +283,10 @@ export class HearthScene {
             <div class="hearth-diff-caption">
               <strong class="hearth-diff-caption-name"></strong>
               <small class="hearth-diff-caption-desc"></small>
+              <span class="hearth-diff-caption-hint">선택한 난이도를 다시 누르면 출발</span>
             </div>
-            <!-- 출발 버튼: 확정 상태에서는 직전에 캐릭터를 확정한 클릭 지점(--hearth-depart-x/y)에
-                 고정된다 — 마우스를 옮기지 않고 그대로 이어 누를 수 있다. -->
+            <!-- 별도 출발 버튼 없음: 포커싱된 난이도 카드를 다시 누르면 출발한다(캐릭터 확정과 동일 문법).
+                 버튼 요소는 depart()의 is-pressed/거부 흔들림 앵커로만 남기고 화면에서는 숨긴다. -->
             <button class="hearth-depart" type="button" data-hearth-depart>출발</button>
           </div>
           <div class="hearth-character-carousel">
@@ -366,7 +369,11 @@ export class HearthScene {
       }
       const diffCard = t.closest<HTMLElement>('[data-hearth-diff]')
       if (diffCard) {
-        this.selectDifficulty(Number(diffCard.dataset.hearthDiff ?? 0), 'click')
+        const idx = Number(diffCard.dataset.hearthDiff ?? 0)
+        // 캐릭터/직업 선택과 같은 문법: 이미 포커싱된 난이도 카드를 다시 누르면 곧장 출발한다.
+        // (잠긴 난이도는 depart가 카드를 흔들어 거부를 알린다.)
+        if (idx === this.selectedDifficultyIndex) void this.depart()
+        else this.selectDifficulty(idx, 'click')
         return
       }
       const tradeNav = t.closest<HTMLElement>('[data-hearth-trade-nav]')
@@ -973,9 +980,14 @@ export class HearthScene {
     if (!this.shuttered || this.departing) return
     const root = this.overlay
 
-    // 캐릭터 확정 후 뒤로가기: 선택 화면으로 복귀 (셔터는 그대로 유지)
-    if (root?.classList.contains('is-character-confirmed')) {
+    // 캐릭터 확정(진행 중인 흡수 연출 포함) 후 뒤로가기: 선택 화면으로 복귀 (셔터는 그대로 유지).
+    // 연출 도중 뒤로가기도 여기서 받는다 — 시퀀스를 무효화하지 않으면 fill:forwards로
+    // 투명해진 쇼케이스 카드가 '증발'한 채 남는다.
+    if (root?.classList.contains('is-character-confirmed') || root?.classList.contains('is-character-confirming')) {
+      this.confirmSeq++ // 진행 중인 확정 연출(각 await 뒤 토큰 검사)을 즉시 중단시킨다.
       this.characterConfirmed = false
+      // 날아가던 빛 구슬이 남아 있으면 제거한다.
+      document.querySelector('.hearth-character-orb')?.remove()
       // WAAPI 취소 → showcase가 CSS 제어(is-shutter-rest)로 즉시 복원
       const showcase = root.querySelector<HTMLElement>('.hearth-showcase-card')
       showcase?.getAnimations().forEach((a) => a.cancel())
@@ -1123,24 +1135,18 @@ export class HearthScene {
       return
     }
     this.characterConfirmed = true
+    // 뒤로가기(raiseShutter)가 토큰을 올리면 이후 await 지점에서 시퀀스를 조용히 중단한다.
+    const seq = ++this.confirmSeq
     const root = this.overlay
     const showcase = root?.querySelector<HTMLElement>('.hearth-showcase-card')
     const shell = root?.querySelector<HTMLElement>('.hearth-shell')
     const target = document.querySelector<HTMLElement>('.player-card')
     if (!root || !showcase || !shell) return
 
-    // 확정 클릭이 일어난 선택 카드의 화면 좌표를 기억해, 다음 레이어의 출발 버튼을
-    // 같은 자리에 띄운다 — 마우스를 옮기지 않고 그대로 이어 누를 수 있게 하는 배려.
-    const confirmedCard = root.querySelector<HTMLElement>('.hearth-character-card.is-selected')
-    const confirmedRect = confirmedCard?.getBoundingClientRect()
-    if (confirmedRect) {
-      root.style.setProperty('--hearth-depart-x', `${confirmedRect.left + confirmedRect.width / 2}px`)
-      root.style.setProperty('--hearth-depart-y', `${confirmedRect.top + confirmedRect.height / 2}px`)
-    }
-
     // 1. 캐러셀·카피 텍스트 역방향 퇴장 (CSS transition이 처리)
     root.classList.add('is-character-confirming')
     await this.wait(300)
+    if (seq !== this.confirmSeq) return
 
     // 2. 쇼케이스 카드를 쉘 중앙으로 부드럽게 이동 (WAAPI — CSS transition은 confirming 상태에서 비활성)
     const shellRect = shell.getBoundingClientRect()
@@ -1157,6 +1163,7 @@ export class HearthScene {
 
     // 중앙 체류 딜레이
     await this.wait(980)
+    if (seq !== this.confirmSeq) return
 
     // 3. 빛이 되어 사라짐
     const orbX = shellRect.left + shellRect.width / 2
@@ -1170,6 +1177,7 @@ export class HearthScene {
       { duration: 400, easing: 'ease-in', fill: 'forwards' }
     )
     await this.wait(120)
+    if (seq !== this.confirmSeq) return
 
     // 4. 빛 구슬이 플레이어 카드로 날아간다
     const dest = target?.getBoundingClientRect()
@@ -1182,6 +1190,10 @@ export class HearthScene {
     document.body.appendChild(orb)
     orb.classList.add('is-flying')
     await this.wait(640)
+    if (seq !== this.confirmSeq) {
+      orb.remove()
+      return
+    }
 
     if (target) {
       if (!character.lockedArt) target.querySelector<HTMLElement>('.player-art')?.style.setProperty('background-image', `url('${character.art}')`)
