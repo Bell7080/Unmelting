@@ -5760,29 +5760,51 @@ function showGameOver(): void {
     return
   }
 
-  const reason =
-    gameState.gameOverReason === 'character_defeated'
-      ? '소녀의 심지가 꺼졌어요…'
-      : gameState.gameOverReason === 'instant_death_trap'
-        ? '모든 길이 함정으로 막혔어요.'
-        : '게임 종료'
+  // 사망 화면도 클리어 창과 같은 결(정산 카드 + 에나 육각형)로, 검은 블러가 조용히 페이드인한다.
+  // 왜 죽었는지(제목) · 에나의 아쉬움(deathLine) · 육각형 변화 · 다음에 주의할 점(팁)을 함께 보여 준다.
+  const isTrap = gameState.gameOverReason === 'instant_death_trap'
+  const reason = gameState.gameOverReason === 'character_defeated'
+    ? '소녀의 심지가 꺼졌어요…'
+    : isTrap
+      ? '모든 길이 함정으로 막혔어요.'
+      : '게임 종료'
+  // 죽은 원인별 '다음에 주의' 한 줄 팁.
+  const deathTip = isTrap
+    ? '3칸으로 합쳐진 거미줄·함정은 즉사. 키틴으로 미리 청소하거나 합쳐지기 전에 처리하자.'
+    : '체력이 0이 되면 끝. 촛농(회복)·양초(방패)로 피해를 미리 막고, 강적은 합체 전에 끊자.'
+  const enaDeathLine = companion.deathLine()
+  const fromLobby = runEnteredFromLobby
 
   const overlay = document.createElement('div')
-  overlay.className = 'game-over-overlay'
+  overlay.className = 'game-over-overlay is-clear'
   overlay.innerHTML = `
-    <div class="game-over-card">
+    <div class="game-over-card settlement-card death-card">
       <div class="game-over-icon">${candleIcon()}</div>
       <h1>${reason}</h1>
-      <p>버틴 턴: <strong>${gameState.getCurrentTurn()}</strong></p>
-      <button class="primary-btn" id="restart-btn">다시 시작</button>
+      <p class="death-tip">${deathTip}</p>
+      <div class="settlement-body">
+        <div class="settlement-stats">
+          <p>도달 층 <strong>${gameState.getCurrentTurn()}</strong></p>
+          <p>처치한 적 <strong>${gameState.runDefeatedEnemies}</strong></p>
+          <p>처리한 함정 <strong>${gameState.runClearedTraps}</strong></p>
+          <p>발견한 보물 <strong>${gameState.runOpenedTreasures}</strong></p>
+          <p>총 불빛 <strong>${score}</strong></p>
+        </div>
+        <div class="settlement-ena-panel">
+          <p class="settlement-ena">${enaDeathLine}</p>
+          ${boardRenderer.renderSettlementHexagon(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth())}
+        </div>
+      </div>
+      <button class="primary-btn" id="restart-btn">${fromLobby ? '저택으로' : '다시 시작'}</button>
     </div>
   `
   document.body.appendChild(overlay)
   document.getElementById('restart-btn')?.addEventListener('click', () => {
-    // 새로고침 대신 startGame()으로 초기화한다(추후 로비 시스템 연동 대비). startGame이
-    // 카드 풀/드롭 풀/도감 잠금까지 메타 기준으로 되돌려 새로고침과 같은 완전 초기화를 만든다.
+    // 새로고침 대신 startGame()/거점으로 초기화한다. startGame이 카드/드롭/도감 잠금까지
+    // 메타 기준으로 되돌려 새로고침과 같은 완전 초기화를 만든다.
     overlay.remove()
-    void startGame()
+    if (fromLobby) enterHearth()
+    else void startGame()
   })
 }
 
@@ -5886,6 +5908,16 @@ globalStyle.textContent = `
   }
   /* 컴팩트 육각형 — 경험 모달보다 작게(정산 카드 폭에 맞춤). */
   .settlement-constellation { width: min(196px, 54vw); margin-top: 2px; }
+  /* 사망 정산 카드 — 클리어와 같은 레이아웃이되 차분한 남보라 톤 + '다음에 주의' 팁. */
+  .death-card h1 { color: rgba(198, 186, 230, 0.95); }
+  .death-card .game-over-icon { color: rgba(176, 166, 214, 0.9); filter: drop-shadow(0 0 12px rgba(150, 140, 200, 0.4)); }
+  .death-card .death-tip {
+    margin: 0 auto 16px;
+    max-width: 30em;
+    font-size: 13px;
+    line-height: 1.5;
+    color: rgba(226, 204, 168, 0.82);
+  }
   /* ── 메타 시스템 잠금: 온보딩 또는 무역 미개방 시 숨긴다(로비·인게임 공통) ──
      화폐 패널·상점 리롤(유물/카드팩)·의뢰 시설은 무역 1번 탭에서 개방된다(isMetaUnlocked). */
   body.meta-currency-locked .coin-panel-total { display: none !important; }
