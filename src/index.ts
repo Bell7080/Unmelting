@@ -65,7 +65,7 @@ import { candleIcon } from '@ui/Icons'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
 import { BarkSequencer } from '@ui/BarkSequencer'
-import { CompanionSystem, type SituationId, type ClutchPlan } from '@systems/CompanionSystem'
+import { CompanionSystem, type SituationId, type ClutchPlan, type FieldIntroKind } from '@systems/CompanionSystem'
 import {
   loadDisposition,
   saveDisposition,
@@ -89,6 +89,7 @@ import {
   ENA_SELF_LEARNING_STORAGE_KEY,
 } from '@/rl/EnaAutonomousLearner'
 import { ENA_POLICY_STORAGE_KEY } from '@/rl/EnaPolicyStore'
+import { createBrowserLifetimeRecordStore } from '@core/LifetimeRecord'
 import bgm001Url from './assets/audio/bgm_001.mp3'
 import bgm002Url from './assets/audio/bgm_002.mp3'
 import bgm003Url from './assets/audio/bgm_003.mp3'
@@ -171,6 +172,8 @@ document.head.appendChild(ingameBackdropStyle)
 const gameState = new GameState()
 // 에나가 실제 런 로그를 플레이어에게 보이지 않는 자기반성으로 저장하는 내부 학습기.
 const enaAutonomousLearner = createBrowserEnaAutonomousLearner()
+// 통산 기록(평생 리더보드) — 런 종료마다 showGameOver가 1회 합산한다. 표시 위치는 추후 결정.
+const lifetimeRecordStore = createBrowserLifetimeRecordStore()
 // 에나 런타임 관측: 모든 endGame 호출을 한 곳에서 기록해 사망/클리어 결과를 플레이 로그에 누적한다.
 const originalEndGame = gameState.endGame.bind(gameState)
 gameState.endGame = (reason: string): void => {
@@ -3100,6 +3103,46 @@ function trackFieldEnemyEncounters(): void {
   }
 }
 
+/** 카드가 온보딩 필드 3종 중 무엇인지 판별한다(아니면 null). */
+function fieldIntroKindOf(card: Card): FieldIntroKind | null {
+  if (card.enemySpriteId === 'enemyRock') return 'rock'
+  if (card.trapKind === 'bush') return 'bush'
+  if (card.treasureKind === 'junk') return 'junk'
+  return null
+}
+
+/**
+ * 보드에 새로 나타난 온보딩 필드(바위/덤불/잡동사니)를 태어나서 처음 겪는 순간 에나가 한 번
+ * 소개하게 한다. 여러 종류가 한꺼번에 나와도 한 줄로 묶어 스팸을 막는다. 영구 first-seen 기록
+ * (enaAutonomousLearner) 기반이라 죽어서 재시작해도 반복되지 않는다.
+ */
+function maybeIntroduceFields(): void {
+  if (!companionWorldCanSpeak()) return
+  // 현재 보드에 놓인 필드 종류를 모은다.
+  const present = new Set<FieldIntroKind>()
+  for (const lane of gameState.lanes) {
+    for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+      const card = lane.getCardAtDistance(d)
+      const kind = card ? fieldIntroKindOf(card) : null
+      if (kind) present.add(kind)
+    }
+  }
+  if (present.size === 0) return
+  // 영구·세션 이중 가드로 '처음 본 종류'만 남긴다. 영구 기록은 조우 시점에 즉시 남겨 재시작 반복을 막는다.
+  const fresh: FieldIntroKind[] = []
+  for (const kind of present) {
+    if (sessionFieldsIntroduced.has(kind)) continue
+    if (!enaAutonomousLearner.recordFirstSeen(`field:${kind}`)) {
+      sessionFieldsIntroduced.add(kind) // 이전 세션에서 이미 소개됨 — 세션 가드에도 반영.
+      continue
+    }
+    sessionFieldsIntroduced.add(kind)
+    fresh.push(kind)
+  }
+  const line = companion.introduceFields(fresh)
+  if (line) sayEnaBark(line, { importance: BARK_IMPORTANCE.situation })
+}
+
 function fillBoardAtStart(): void {
   syncSpawnerTier()
 
@@ -3131,6 +3174,10 @@ function fillBoardAtStart(): void {
 let onboardingRunActive = false
 /** 이번 런이 /시작 로비를 거쳐 들어왔는지(테스트 플레이=false). 클리어 창 버튼 분기에 쓴다. */
 let runEnteredFromLobby = false
+/** 이번 런의 통산 기록이 이미 합산됐는지 — showGameOver 중복 호출로 이중 집계되는 것을 막는다. */
+let lifetimeRecorded = false
+/** 이번 세션에서 이미 소개한 필드 종류(rock/bush/junk). 영구 기록과 별개로 세션 내 중복 발화를 막는다. */
+const sessionFieldsIntroduced = new Set<string>()
 function isOnboardingActive(): boolean {
   return onboardingRunActive
 }
@@ -3215,6 +3262,8 @@ function resetForNewRun(): void {
   // 동료(에나)의 런 한정 상태(의지/각성/턴 흐름) 초기화. 학습 가중치는 런 간 유지.
   companion.resetForRun()
   resetRunDramaSignals() // 성장 점프 게이트 입력(드라마 신호)도 런 단위로 비운다.
+  lifetimeRecorded = false // 통산 기록은 런당 1회 — 새 런에서 다시 열어 준다.
+  sessionFieldsIntroduced.clear() // 세션 내 필드 소개 중복 가드도 런마다 비운다(영구 기록은 유지).
   pendingPrediction = null
   gameState.reset()
   // 헌혈팩 콜백: reset 이후 새 character 인스턴스에 설정해야 한다
@@ -3409,6 +3458,8 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
       if (memoryLine && companionWorldCanSpeak()) {
         sayEnaBark(memoryLine, { importance: BARK_IMPORTANCE.situation })
       }
+      // 인사 뒤, 첫 보드에 놓인 온보딩 필드(바위/덤불/잡동사니)를 한 줄로 묶어 소개한다.
+      maybeIntroduceFields()
     }, 800)
   }
 }
@@ -4814,6 +4865,8 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
 
   gameState.regroupAllRows()
   trackFieldEnemyEncounters()
+  // 새로 내려온 온보딩 필드(바위/덤불/잡동사니)를 처음 겪는 순간 에나가 한 번 소개한다.
+  maybeIntroduceFields()
   const blooms = turnManager.bloomFrontSeeds(cardSpawner)
   turnManager.armFrontBombs()
   boardRenderer.clearSelection()
@@ -5695,6 +5748,20 @@ function finishTurn(): void {
 }
 
 function showGameOver(): void {
+  // 통산 기록에 이번 런을 1회 합산한다(클리어/사망 공통). 저장·집계만 하며 화면 표시는 추후 결정.
+  if (!lifetimeRecorded) {
+    lifetimeRecorded = true
+    const cleared = gameState.gameOverReason === 'onboarding_clear_30' || gameState.gameOverReason === 'run_clear_100_turns'
+    lifetimeRecordStore.recordRun({
+      outcome: cleared ? 'clear' : 'death',
+      floor: gameState.getCurrentTurn(),
+      kills: gameState.runDefeatedEnemies,
+      traps: gameState.runClearedTraps,
+      treasures: gameState.runOpenedTreasures,
+      light: score,
+    })
+  }
+
   // 새싹 병아리 30F 클리어는 정산 화면(처치/함정/보물/불빛 + 저택으로 복귀)으로 닫는다.
   if (gameState.gameOverReason === 'onboarding_clear_30') {
     const overlay = document.createElement('div')

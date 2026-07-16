@@ -54,6 +54,26 @@ describe('CompanionSystem', () => {
     expect(new CompanionSystem().onProfileTouch(Date.now(), { danger: true })!.length).toBeGreaterThan(0)
   })
 
+  it('필드 소개: 한 종류는 전체 문장, 여러 종류는 한 줄로 묶고, 빈 목록은 침묵한다', () => {
+    const c = new CompanionSystem()
+    // 빈 목록 → 발화 없음.
+    expect(c.introduceFields([])).toBeNull()
+    // 한 종류 → 비어있지 않은 소개 한 줄.
+    const single = c.introduceFields(['rock'])
+    expect(single && single.length).toBeGreaterThan(0)
+    expect(single).not.toMatch(/[{}[\]]/)
+    // 세 종류 동시 → 한 줄에 세 절을 모두 담아 스팸 없이 소개한다(사용자 핵심 요구: 동시 조우 배칭).
+    const combined = c.introduceFields(['junk', 'rock', 'bush'])!
+    expect(combined).toContain('바위')
+    expect(combined).toContain('덤불')
+    expect(combined).toContain('잡동사니')
+    // 순서는 조우 순서와 무관하게 rock→bush→junk로 안정된다.
+    expect(combined.indexOf('바위')).toBeLessThan(combined.indexOf('덤불'))
+    expect(combined.indexOf('덤불')).toBeLessThan(combined.indexOf('잡동사니'))
+    expect(combined).not.toMatch(/[{}[\]]/)
+    expect(combined).not.toContain('  ') // 이중 공백 없음.
+  })
+
   it('터치 응답 문자열에 미치환 자국({}, []) 없이 렌더된다', () => {
     const c = new CompanionSystem()
     for (let i = 0; i < 80; i++) {

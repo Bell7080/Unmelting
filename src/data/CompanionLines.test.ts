@@ -35,6 +35,8 @@ import {
   STARLIGHT_LINES,
   PACK_LINES,
   CALLBACK_LINES,
+  FIELD_INTRO_LINES,
+  FIELD_INTRO_COMBINED_LEAD,
   type Line,
 } from './CompanionLines'
 import { enumerateLineRenders, type Intensity } from '@systems/CompanionSystem'
@@ -73,6 +75,8 @@ function collectAllPools(): { pool: string; lines: Line[] }[] {
   out.push({ pool: 'starlight', lines: STARLIGHT_LINES })
   addRecord('pack', PACK_LINES)
   addRecord('callback', CALLBACK_LINES)
+  addRecord('field-intro', FIELD_INTRO_LINES)
+  out.push({ pool: 'field-intro:lead', lines: FIELD_INTRO_COMBINED_LEAD })
   return out
 }
 

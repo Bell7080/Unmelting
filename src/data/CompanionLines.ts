@@ -1245,6 +1245,46 @@ export const STARLIGHT_LINES: Line[] = [
   '손안에서 녹지 않는 빛은 처음이야.',
 ]
 
+// ── 온보딩 필드 첫 조우 소개(바위/덤불/잡동사니) ──────────────
+// 처음 겪는 순간 딱 한 번, 무엇이고 어떻게 대하는지 짧게 알려준다(교육용). 여러 종류가
+// 한꺼번에 처음 나오면 CompanionSystem이 아래 절(FIELD_INTRO_BRIEF)을 합쳐 한 줄로 소개한다.
+
+/** 온보딩 필드 카드 종류. */
+export type FieldIntroKind = 'rock' | 'bush' | 'junk'
+
+/** 한 종류만 처음 나왔을 때의 소개(전체 문장). */
+export const FIELD_INTRO_LINES: Record<FieldIntroKind, Line[]> = {
+  rock: [
+    '어, 바위네. 길은 막지만 위험하진 않아. 툭툭 쳐서 부수면 돼.',
+    '앞에 바위가 놓였어. 서두를 것 없어, 잠깐 두면 저절로 바스러지기도 하고.',
+    '바위야. 겁먹지 마, 공격해서 치우면 그만인 상대니까.',
+  ],
+  bush: [
+    '가시 덤불이야. 억지로 헤치면 따끔하니까, 급하지 않으면 시들 때까지 둬도 괜찮아.',
+    '앞에 덤불이 있어. 꼭 지나야 할 때만 건드리자, 스치면 조금 아프거든.',
+    '덤불이네. 무리해서 밀고 가면 따가워. 길이 열릴 때까지 기다려도 돼.',
+  ],
+  junk: [
+    '잡동사니 더미야. 뭐가 들었을지 몰라, 뒤져 보면 쓸 만한 게 나올지도.',
+    '어수선한 잡동사니네. 열어 보면 별거 아닐 수도, 뜻밖의 보물일 수도 있어.',
+    '잡동사니가 쌓였어. 시간 나면 살펴보자, 손해 볼 건 없으니까.',
+  ],
+}
+
+/** 여러 종류가 한꺼번에 처음 나왔을 때의 앞머리. */
+export const FIELD_INTRO_COMBINED_LEAD: Line[] = [
+  '낯선 것들이 한꺼번에 놓였네. 하나씩 짚어 줄게.',
+  '처음 보는 게 여럿이야. 겁내지 말고 차근차근 보자.',
+  '어? 새로운 것들이 한 번에 나왔어. 짧게 알려줄게.',
+]
+
+/** 합쳐 소개할 때 쓰는 종류별 짧은 절(조각). 순서와 무관하게 이어 붙여도 자연스럽게 끝난다. */
+export const FIELD_INTRO_BRIEF: Record<FieldIntroKind, string> = {
+  rock: '바위는 부수면 그만',
+  bush: '덤불은 스치면 따끔',
+  junk: '잡동사니는 뒤지면 한몫',
+}
+
 /** 카드팩 종류별 감상 풀 키 — GameBoardRenderer의 ShopPackKind와 같은 문자열을 쓴다. */
 export type PackLineKind =
   | 'basic-pack' | 'recipe-pack' | 'unlock-pack' | 'chance-pack' | 'resource-pack' | 'delete-pack'
