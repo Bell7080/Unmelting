@@ -1745,16 +1745,18 @@ function priceForRelic(id: RelicId): number {
 }
 
 /** Generate up to three unowned, unbanned relics + per-spawn score price. */
-/** 새싹 병아리(온보딩)에서만 노출하는 기본 유물 8종 — 초반 제작 스탯/보상 유물(도끼·곡괭이 등). */
+/** 새싹 병아리(온보딩) 전용 기본 유물 8종 — 게임을 처음 접하는 사람도 바로 이해하는 효과만.
+ *  스폰 확률·상자 소멸 같은 아직 안 배운 개념(곡괭이/개봉식)은 빼고, 체력·공격·회복·불빛·불씨·방패
+ *  같은 눈에 보이는 기본 개념을 가르치는 유물로 구성한다. */
 const ONBOARDING_RELIC_IDS: RelicId[] = [
-  'lifeline',        // 최대 체력 +5
-  'red-potion',      // 적 처치 시 체력 +1
-  'carving-knife',   // 공격력 +1
-  'axe',             // 불빛 획득량 +10%
-  'ambition',        // 적 8회 처치마다 불빛 +25
-  'pickaxe',         // 보물 상자 등장 확률 +
-  'chance',          // 직접 타격 15% 추가 타격
-  'opening-ceremony',// 보물 상자 생존 확률 +10%
+  'lifeline',      // 최대 체력 +5
+  'carving-knife', // 공격력 +1
+  'red-potion',    // 적 처치 시 체력 +1
+  'chance',        // 직접 타격 15% 확률로 한 번 더
+  'axe',           // 불빛 획득량 +10%
+  'ambition',      // 적 8회 처치마다 불빛 +25
+  'hourglass',     // 불씨 소모 주기 +1턴(불씨가 더 오래 간다)
+  'wax-crow',      // 보물 획득 시 방패 +1(방패 개념 학습)
 ]
 
 /** 온보딩 커먼 풀에서도 제외(잠금)하는 손패 — 물뿌리개는 초반에 혼란을 줘 뺀다. */
