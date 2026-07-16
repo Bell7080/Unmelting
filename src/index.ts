@@ -5825,15 +5825,60 @@ globalStyle.textContent = `
     padding: 16px;
   }
   @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-  /* 클리어 창(30/100층)은 보상/셔터 연출 없이 검은 블러가 '조용히' 오래 페이드인하고,
-     카드가 살짝 떠오른다 — 승리의 정적을 강조. */
-  .game-over-overlay.is-clear { animation: clear-veil-in 0.9s ease both; }
-  .game-over-overlay.is-clear .game-over-card { animation: clear-card-rise 0.8s cubic-bezier(0.2, 0.84, 0.3, 1) 0.18s both; }
-  @keyframes clear-veil-in {
-    from { opacity: 0; backdrop-filter: blur(0px); background: rgba(8, 5, 14, 0); }
-    to { opacity: 1; backdrop-filter: blur(6px); background: rgba(8, 5, 14, 0.82); }
+  /* 클리어/사망 창(.is-clear): 카드 박스 없이 '검은 비네트 블러 오버레이' 위에 글자만 얹는다.
+     - 비네트: 가장자리 어둡게 / 가운데는 조금 더 밝고 투명(뒤 게임이 흐릿하게 비침).
+     - 검은 오버레이가 조용히(0.9s) 페이드인. */
+  .game-over-overlay.is-clear {
+    animation: clear-veil-in 0.9s ease both;
+    background:
+      radial-gradient(ellipse 92% 82% at 50% 44%, rgba(12, 8, 18, 0.30) 0%, rgba(7, 5, 13, 0.64) 52%, rgba(2, 1, 6, 0.92) 100%);
+    backdrop-filter: blur(7px);
   }
-  @keyframes clear-card-rise { from { opacity: 0; transform: translateY(16px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes clear-veil-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes clear-card-rise { from { opacity: 0; transform: translateY(18px) scale(0.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  /* 카드 박스(배경/테두리/그림자) 제거 → 검은 오버레이 위 텍스트만. 가운데 크게, 요소별 여백 넉넉히. */
+  .game-over-overlay.is-clear .game-over-card {
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    max-width: min(780px, 94vw);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(18px, 3.4vh, 34px);
+    animation: clear-card-rise 0.8s cubic-bezier(0.2, 0.84, 0.3, 1) 0.18s both;
+  }
+  .game-over-overlay.is-clear .game-over-icon { margin: 0; font-size: clamp(40px, 6vh, 60px); }
+  .game-over-overlay.is-clear h1 {
+    margin: 0;
+    font-size: clamp(28px, 5vh, 46px);
+    letter-spacing: 0.04em;
+    text-shadow: 0 3px 22px rgba(0, 0, 0, 0.92);
+  }
+  .game-over-overlay.is-clear .death-tip { margin: 0; }
+  .game-over-overlay.is-clear .settlement-body { margin: 0; gap: clamp(26px, 3.4vw, 48px); align-items: center; }
+  .game-over-overlay.is-clear .settlement-stats p { margin: 0 0 clamp(7px, 1.1vh, 11px); }
+  .game-over-overlay.is-clear .settlement-ena { margin: 0 0 6px; }
+  /* 시작 액션: 버튼이 아니라 '발광 글자'. hover 시 커지고, 하단에 그림자와 함께 더 아래 배치. */
+  .game-over-overlay.is-clear .primary-btn {
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    margin-top: clamp(16px, 4vh, 40px);
+    color: rgba(255, 226, 158, 0.9);
+    font: 900 clamp(18px, 2.8vh, 26px)/1 'OkDanDan', Georgia, serif;
+    letter-spacing: 0.18em;
+    text-shadow: 0 3px 14px rgba(0, 0, 0, 0.9), 0 0 18px rgba(244, 164, 96, 0.28);
+    transition: transform 0.2s cubic-bezier(0.2, 0.84, 0.3, 1), color 0.2s ease, text-shadow 0.2s ease;
+  }
+  .game-over-overlay.is-clear .primary-btn:hover {
+    transform: scale(1.16);
+    color: rgba(255, 242, 196, 1);
+    text-shadow: 0 4px 18px rgba(0, 0, 0, 0.92), 0 0 30px rgba(255, 204, 120, 0.6);
+  }
+  .game-over-overlay.is-clear .primary-btn:active { transform: scale(1.06); }
   .game-over-card {
     text-align: center;
     background: linear-gradient(160deg, rgba(31, 24, 48, 0.95), rgba(20, 16, 28, 0.95));
