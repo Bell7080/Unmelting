@@ -1657,9 +1657,9 @@ export const STARLIGHT_LINES: Line[] = [
 /** 온보딩 필드 카드 종류. */
 export type FieldIntroKind = 'rock' | 'bush' | 'junk'
 /** 보드에 등장해 눈으로 처음 보게 되는 조우 종류(필드 3종 + 위협/특수 카드). */
-export type BoardEncounterKind = FieldIntroKind | 'web' | 'bomb' | 'spore' | 'event-door' | 'starlight'
-/** 보드 밖 시스템 흐름의 첫 조우 종류. */
-export type SystemEncounterKind = 'boss' | 'trial' | 'shop' | 'altar'
+export type BoardEncounterKind = FieldIntroKind | 'web' | 'bomb' | 'spore' | 'event-door' | 'starlight' | 'seed'
+/** 보드 밖 시스템 흐름/플레이어 행동의 첫 경험 종류. */
+export type SystemEncounterKind = 'boss' | 'trial' | 'shop' | 'altar' | 'triple' | 'combo' | 'recipe' | 'relic'
 export type EncounterIntroKind = BoardEncounterKind | SystemEncounterKind
 
 /** 한 종류만 처음 나왔을 때의 소개(전체 문장). */
@@ -1703,6 +1703,7 @@ export const FIELD_INTRO_BRIEF: Record<BoardEncounterKind, string> = {
   spore: '포자는 번지기 전에 제거',
   'event-door': '문은 닫히기 전에 선택',
   starlight: '별빛은 주울 때만 층이 올라',
+  seed: '씨앗은 앞줄에서 꽃으로',
 }
 
 /** 필드 3종 밖 첫 조우 전용 소개 풀 — 실제 규칙(병합/전염/카운트/턴 규칙)과 어긋나지 않게 쓴다. */
@@ -1731,6 +1732,31 @@ export const ENCOUNTER_INTRO_LINES: Record<Exclude<EncounterIntroKind, FieldIntr
     '별빛이야! 여기서부터는 저 빛을 주울 때만 위로 올라가. 다른 일은 층을 올려주지 않아.',
     '저 하얀 빛이 계단이야. 별빛을 모을 때마다 한 층씩 올라. 놓치지 말고 줍자.',
     '이제 규칙이 바뀌었어. 별빛만이 층을 올려줘. 저 빛을 따라가면 끝이 보일 거야.',
+  ],
+  seed: [
+    '저 초록 싹은 꽃씨야. 앞줄까지 내려오면 꽃으로 피어. 위협이 아니니 느긋하게 기다리자.',
+    '씨앗이 실려 왔네. 지금은 아무것도 안 하지만, 앞줄에 닿으면 꽃이 돼. 꽃은 좋은 것만 줘.',
+    '작은 씨앗이야. 밟지 말고 두면 꽃으로 피어나. 물뿌리개가 있으면 더 빨리 키울 수도 있어.',
+  ],
+  triple: [
+    '봤어? 같은 카드 세 장이 하나로 합쳐졌어. 트리플은 훨씬 강한 한 장이 돼 — 같은 카드를 모을 이유가 생겼지?',
+    '트리플 합성이야! 같은 손패 셋이 나란히 모이면 저절로 합쳐져서 위력이 확 올라. 기억해 두자.',
+    '같은 카드 셋이 만나면 이렇게 합쳐져. 셋을 모으면 완전히 다른 카드가 된다고 생각하면 돼.',
+  ],
+  combo: [
+    '콤보 게이지가 다 찼어! 가득 찰 때마다 고른 보상이 영구히 올라. 게이지를 눌러 보상 종류도 바꿀 수 있어.',
+    '촛불 게이지 만충이야. 손패를 쓸수록 차오르고, 다 차면 영구 성장이 하나 쌓여. 꾸준함이 보상받는 구조지.',
+    '게이지가 가득 찼네! 넘친 만큼은 다음 게이지로 이어지니까 아깝지 않아. 어떤 성장을 받을지 골라 보자.',
+  ],
+  recipe: [
+    '방금 그거, 레시피야! 손패를 조합식 순서대로 이어 쓰면 이런 추가 효과가 터져. 해금한 조합식은 도감에서 볼 수 있어.',
+    '레시피 발동이야. 정해진 카드 순서를 맞추면 보너스가 나와 — 조합팩으로 새 조합식도 열 수 있어.',
+    '조합 성공! 카드 순서가 조합식과 맞으면 레시피가 터져. 나도 조합각이 보이면 옆에서 알려줄게.',
+  ],
+  relic: [
+    '첫 유물이야! 유물은 쓰는 물건이 아니라, 지니고만 있어도 계속 효과를 내는 보물이야. 오른쪽 유물칸에서 언제든 볼 수 있어.',
+    '유물을 얻었네. 이번 모험 내내 알아서 일해 주는 물건이야. 부채꼴에 마우스를 올리면 효과가 보여.',
+    '이게 유물이야. 한 번 지니면 계속 도움을 줘. 모일수록 우리 길이 눈에 띄게 편해져.',
   ],
   boss: [
     '이 층의 주인, 보스야. 정해진 주기마다 반격해 오니까 그 박자를 세면서 싸우면 돼. 처음이라도 괜찮아, 같이 세자.',
@@ -1762,6 +1788,7 @@ export const BOARD_INTRO_LINES: Record<BoardEncounterKind, Line[]> = {
   spore: ENCOUNTER_INTRO_LINES.spore,
   'event-door': ENCOUNTER_INTRO_LINES['event-door'],
   starlight: ENCOUNTER_INTRO_LINES.starlight,
+  seed: ENCOUNTER_INTRO_LINES.seed,
 }
 
 /** 카드팩 종류별 감상 풀 키 — GameBoardRenderer의 ShopPackKind와 같은 문자열을 쓴다. */

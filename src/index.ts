@@ -632,9 +632,12 @@ function tryCompanionClutch(): void {
   // 강적 미숙 대사는 '마주침'만으로는 내지 않는다 — 고점 에나라면 실제로 건넸을
   // 공격/방어 지원각(해금 카드·플레이어 미보유)이 있는데 의지 예산이 모자라 클러치가
   // 못 뜬 경우에만 낮은 빈도로 아쉬움을 표현한다(단순 조우 오발동 방지).
+  // 여기에 '실제로 싸우는 중' 게이트를 더한다: 최근 2턴 안에 맞았거나 처치한 적이 없으면
+  // 아직 아무 일도 안 일어난 것이므로 "이 정도밖에 못 해…" 류의 사과가 나가지 않는다.
   const hadInterventionAngle =
     report.recommendationKind === 'attack' || report.recommendationKind === 'defense'
-  if (report.strongEnemyIncoming && hadInterventionAngle) {
+  const engagedRecently = companion.hasRecentEvent('hit', turn) || companion.hasRecentEvent('kill', turn)
+  if (report.strongEnemyIncoming && hadInterventionAngle && engagedRecently) {
     const missed = companion.missedPotentialLine('shield', turn)
     if (missed) sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'hit' })
   }
@@ -1857,8 +1860,10 @@ function buildShopStateView(): ShopStateView {
 async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
   // 동료(에나) 구매 감상평 — 상점/제단에서도 한마디(사치품엔 짓궂게, 가문 물건엔 반갑게).
   // companionWorldCanSpeak는 상점을 막으므로 여기선 가볍게 게이팅한다(.player-card HUD에 표시).
+  // 태어나서 첫 유물이라면 감상 대신 '지니면 계속 효과'라는 교육형 소개를 우선한다.
   if (gameActive && !gameState.isGameOver) {
-    sayEnaBark(companion.onBuyRelic(id, getRelicDef(id).rarity), { importance: BARK_IMPORTANCE.situation })
+    const relicIntro = encounterIntroLineOnce('relic')
+    sayEnaBark(relicIntro ?? companion.onBuyRelic(id, getRelicDef(id).rarity), { importance: BARK_IMPORTANCE.situation })
   }
   // 구매 즉시 스탯만 올리고 체인 로그에는 남기지 않는다. 트레일은 상점에서
   // 숨겨진 체인 배너 대신 화면 중앙에서 HUD로 날린다.
@@ -3118,6 +3123,8 @@ function boardIntroKindOf(card: Card): BoardEncounterKind | null {
   if (card.treasureKind === 'junk') return 'junk'
   if (card.treasureKind === 'starlight') return 'starlight'
   if (card.type === CardType.EVENT) return 'event-door'
+  // 씨앗만 소개 대상 — 핀 꽃은 일반 상황 반응(flower 풀)이 담당한다.
+  if (card.type === CardType.FLOWER && card.flowerKind === 'seed') return 'seed'
   return null
 }
 
@@ -3156,6 +3163,11 @@ function maybeIntroduceFields(): void {
   }
   const line = companion.introduceFields(fresh)
   if (line) sayEnaBark(line, { importance: BARK_IMPORTANCE.situation })
+  // 획득 경로(enqueueDrop)에서 조용히 합성된 첫 트리플도 이 스캔이 받아 소개한다.
+  if (gameState.character.hand.some((card) => card.merged)) {
+    const tripleIntro = encounterIntroLineOnce('triple')
+    if (tripleIntro) sayEnaBark(tripleIntro, { importance: BARK_IMPORTANCE.situation })
+  }
 }
 
 /**
@@ -4086,6 +4098,9 @@ async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promi
     const gauge = fireCandleGaugeEffect()
     if (!gauge) break
     recordNotice(`${gauge.name}: ${gauge.message}`, 'gauge')
+    // 태어나서 첫 게이지 만충 — 영구 성장/보상 선택 규칙을 그 자리에서 짧게 알려준다.
+    const comboIntro = encounterIntroLineOnce('combo')
+    if (comboIntro) sayEnaBark(comboIntro, { importance: BARK_IMPORTANCE.situation })
     // 상점/보스 보상 단계의 게이지 페이오프는 체인 로그에서 제외한다.
     if (!chainRecordingSuppressed()) {
       chainTimeline.push({
@@ -4249,6 +4264,9 @@ async function resolveDeferredHandMerges(): Promise<void> {
   await wait(500)
   const merges = HandSystem.runAutoMerges(gameState.character)
   if (merges.length === 0) return
+  // 태어나서 첫 트리플 합성 — 같은 카드 셋이 합쳐지는 규칙을 그 자리에서 짧게 알려준다.
+  const tripleIntro = encounterIntroLineOnce('triple')
+  if (tripleIntro) sayEnaBark(tripleIntro, { importance: BARK_IMPORTANCE.situation })
   // 합성 카드가 is-merged.is-entering으로 새로 렌더되어 수렴+버스트 연출이 온전히 재생된다.
   render()
   // 합성 연출(낙하 대기 620ms + 젤리/버스트)이 다음 렌더에 끊기지 않도록 충분히 기다린다.
@@ -4565,6 +4583,9 @@ async function applyHandSingle(
     if (recipeResult.firedRecipes.length === 0) break
     // 레시피 발동은 에나 기분을 살짝 끌어올린다(대사 없이 상태만).
     companion.noteMoodShift(0.05 * recipeResult.firedRecipes.length)
+    // 태어나서 첫 레시피 발동 — 조합식 규칙을 그 자리에서 짧게 알려준다.
+    const recipeIntro = encounterIntroLineOnce('recipe')
+    if (recipeIntro) sayEnaBark(recipeIntro, { importance: BARK_IMPORTANCE.situation })
     if ((recipeResult.coinsGained ?? 0) > 0) {
       // Recipe currency uses the same wallet/pulse language as single coin cards.
       const gainedCoins = recipeResult.coinsGained ?? 0

@@ -511,6 +511,11 @@ export class CompanionSystem {
     return this.pickFrom(id, POOLS[id], intensity)
   }
 
+  /** 최근 window턴 안에 해당 사건이 있었는가 — 미숙/사과 대사가 '실제로 겪는 중'일 때만 나가게 하는 게이트. */
+  hasRecentEvent(kind: RecentCompanionEvent['kind'], turn: number, window = 2): boolean {
+    return this.recentEvents.some((e) => e.kind === kind && turn - e.turn <= window)
+  }
+
   /** 최근 사건을 링버퍼에 남긴다(최대 8건). 상황 바크와 클러치가 자동으로 부르고, 호출부가 직접 남겨도 된다. */
   recordRecentEvent(kind: RecentCompanionEvent['kind'], turn: number, enemyName?: string): void {
     if (kind === 'clutch') this.runClutchCount += 1 // 드라마 '에나 도움의 실효' 신호 재료.
@@ -786,7 +791,7 @@ export class CompanionSystem {
    */
   introduceFields(kinds: BoardEncounterKind[]): string | null {
     // 안정적인 순서로 정렬해 합친 문장이 조우 순서에 흔들리지 않게 한다.
-    const order: BoardEncounterKind[] = ['rock', 'bush', 'junk', 'web', 'bomb', 'spore', 'event-door', 'starlight']
+    const order: BoardEncounterKind[] = ['rock', 'bush', 'junk', 'web', 'bomb', 'spore', 'event-door', 'starlight', 'seed']
     const fresh = order.filter((k) => kinds.includes(k))
     if (fresh.length === 0) return null
     if (fresh.length === 1) return this.pickFrom(`field-intro:${fresh[0]}`, BOARD_INTRO_LINES[fresh[0]], 'normal')
