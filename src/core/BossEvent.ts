@@ -860,8 +860,9 @@ export class BossEventController {
     this.inject.recordNotice('보스 처치! 레일 보상이 떨어진다', 'win')
     const bossKind = this.eventState!.def.specialEnemyKind
     this.eventState = null
-    // 새싹 병아리 온보딩 보스(양초 고양이)는 보상/시련 없이 종료한다 — 호출부가 클리어 정산을 잇는다.
-    if (bossKind === 'waxCat') {
+    // 30층(양초 고양이)·100층(녹지 않는 마녀)은 각 난이도의 '끝'이라 보상/시련을 내리지 않고 종료한다.
+    // 호출부가 곧바로 클리어 창(검은 블러 페이드인)을 띄운다 — 빈 셔터 위 보상 하강/셔터 상승 없이.
+    if (bossKind === 'waxCat' || bossKind === 'waxWitch') {
       this.tm.setTurnMode('normal_turn')
       return
     }

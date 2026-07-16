@@ -2074,7 +2074,8 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
     await boardRenderer.playShopTransition()
     await wait(520)
     await bossController.runOnboardingCat()
-    await boardRenderer.playShopResumeTransition()
+    // 30층은 여기가 끝 — 셔터를 올리거나 보상을 내리지 않는다. 셔터는 내려온 채 두고,
+    // 곧 runOnboardingClear → showGameOver의 검은 블러 클리어 창이 조용히 페이드인해 셔터를 덮는다.
     // 격파(생존)면 클리어 정산+졸업, 사망이면 runOnboardingCat 내부에서 게임오버 처리됨.
     if (!gameState.isGameOver && gameState.character.isAlive()) await runOnboardingClear()
     return true
@@ -3128,6 +3129,8 @@ function fillBoardAtStart(): void {
 /** 온보딩(첫 경험) 진행 중인지 — 첫 30F 졸업 전까지 true. 졸업 마킹은 R5에서 붙인다. */
 /** 이번 런이 새싹 병아리(온보딩)인지 — startGame에서 진입 방식(거점 vs 기본부팅)+졸업 여부로 정한다. */
 let onboardingRunActive = false
+/** 이번 런이 /시작 로비를 거쳐 들어왔는지(테스트 플레이=false). 클리어 창 버튼 분기에 쓴다. */
+let runEnteredFromLobby = false
 function isOnboardingActive(): boolean {
   return onboardingRunActive
 }
@@ -3295,6 +3298,7 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // 메타 게이팅을 전부 우회해 직업·화폐·리롤을 모두 개방한다(개발용 플레이그라운드).
   // 로비(무역)를 거친 런(difficulty!=null)만 실제 개방 상태(isMetaUnlocked)를 따른다.
   const testPlay = difficulty === null
+  runEnteredFromLobby = !testPlay
   document.body.classList.toggle('onboarding-run', onboardingRunActive)
   document.body.classList.toggle('meta-currency-locked', !testPlay && (onboardingRunActive || !isMetaUnlocked('currency')))
   document.body.classList.toggle('meta-reroll-locked', !testPlay && (onboardingRunActive || !isMetaUnlocked('shopReroll')))
@@ -5694,7 +5698,7 @@ function showGameOver(): void {
   // 새싹 병아리 30F 클리어는 정산 화면(처치/함정/보물/불빛 + 저택으로 복귀)으로 닫는다.
   if (gameState.gameOverReason === 'onboarding_clear_30') {
     const overlay = document.createElement('div')
-    overlay.className = 'game-over-overlay'
+    overlay.className = 'game-over-overlay is-clear'
     overlay.innerHTML = `
       <div class="game-over-card settlement-card">
         <div class="game-over-icon">${candleIcon()}</div>
@@ -5718,6 +5722,40 @@ function showGameOver(): void {
     document.getElementById('to-manor-btn')?.addEventListener('click', () => {
       overlay.remove()
       enterHearth()
+    })
+    return
+  }
+
+  // 100층 클리어(테스트 플레이/정규 공통): 30층과 같은 결의 클리어 창(스탯 + 에나 육각형).
+  // 셔터는 내려온 채 두고 이 검은 블러 오버레이가 조용히 페이드인해 덮는다.
+  if (gameState.gameOverReason === 'run_clear_100_turns') {
+    const overlay = document.createElement('div')
+    overlay.className = 'game-over-overlay is-clear'
+    const fromLobby = runEnteredFromLobby
+    overlay.innerHTML = `
+      <div class="game-over-card settlement-card">
+        <div class="game-over-icon">${candleIcon()}</div>
+        <h1>잿빛 굴레를 풀었다 — 100층 클리어!</h1>
+        <div class="settlement-body">
+          <div class="settlement-stats">
+            <p>처치한 적 <strong>${gameState.runDefeatedEnemies}</strong></p>
+            <p>처리한 함정 <strong>${gameState.runClearedTraps}</strong></p>
+            <p>발견한 보물 <strong>${gameState.runOpenedTreasures}</strong></p>
+            <p>총 불빛 <strong>${score}</strong></p>
+          </div>
+          <div class="settlement-ena-panel">
+            <p class="settlement-ena">에나와 끝까지 함께 올랐다.</p>
+            ${boardRenderer.renderSettlementHexagon(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth())}
+          </div>
+        </div>
+        <button class="primary-btn" id="clear-continue-btn">${fromLobby ? '저택으로' : '다시 시작'}</button>
+      </div>
+    `
+    document.body.appendChild(overlay)
+    document.getElementById('clear-continue-btn')?.addEventListener('click', () => {
+      overlay.remove()
+      if (fromLobby) enterHearth()
+      else void startGame()
     })
     return
   }
@@ -5765,6 +5803,15 @@ globalStyle.textContent = `
     padding: 16px;
   }
   @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  /* 클리어 창(30/100층)은 보상/셔터 연출 없이 검은 블러가 '조용히' 오래 페이드인하고,
+     카드가 살짝 떠오른다 — 승리의 정적을 강조. */
+  .game-over-overlay.is-clear { animation: clear-veil-in 0.9s ease both; }
+  .game-over-overlay.is-clear .game-over-card { animation: clear-card-rise 0.8s cubic-bezier(0.2, 0.84, 0.3, 1) 0.18s both; }
+  @keyframes clear-veil-in {
+    from { opacity: 0; backdrop-filter: blur(0px); background: rgba(8, 5, 14, 0); }
+    to { opacity: 1; backdrop-filter: blur(6px); background: rgba(8, 5, 14, 0.82); }
+  }
+  @keyframes clear-card-rise { from { opacity: 0; transform: translateY(16px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
   .game-over-card {
     text-align: center;
     background: linear-gradient(160deg, rgba(31, 24, 48, 0.95), rgba(20, 16, 28, 0.95));
