@@ -14,7 +14,8 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
     radial-gradient(90% 70% at 50% 36%, rgba(255, 198, 104, 0.08), transparent 52%),
     radial-gradient(120% 90% at 50% 35%, rgba(16, 13, 28, 0.58), rgba(2, 2, 6, 0.76));
   backdrop-filter: blur(5px);
-  z-index: 240;
+  /* 에나 말풍선(.sb-host, 9999)보다 위 — 열람 중 도착한 바크는 이 레이어 아래에 깔려 보이지 않는다. */
+  z-index: 10500;
   padding: 24px;
 }
 .experience-overlay.is-open { display: flex; }
@@ -173,7 +174,31 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   letter-spacing: 0.08em;
   color: #ffe9c4;
 }
-.exp-axis-pct { font-size: 11px; font-weight: 700; color: #ffce7e; }
+.exp-axis-pct { font-size: 11px; font-weight: 700; color: #ffce7e; display: inline-flex; align-items: center; gap: 3px; }
+/* 정산 화면 전용: 이번 런 상승분(%p) 칩 — 오른 축만 금빛으로 도드라진다. */
+.exp-axis-delta {
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.5;
+  padding: 0 5px;
+  border-radius: 999px;
+  color: #2a1804;
+  background: linear-gradient(180deg, #ffd887, #f0a83a);
+  box-shadow: 0 0 10px rgba(255, 204, 120, 0.55);
+  animation: exp-delta-glow 2s ease-in-out infinite;
+}
+@keyframes exp-delta-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 204, 120, 0.45); }
+  50% { box-shadow: 0 0 16px rgba(255, 214, 135, 0.85); }
+}
+/* 이번 런에 오른 축 꼭짓점 — 기본 반짝임보다 크고 밝게 맥동한다. */
+.exp-node.is-risen {
+  animation: exp-node-risen 1.6s ease-in-out infinite;
+}
+@keyframes exp-node-risen {
+  0%, 100% { opacity: 0.9; filter: drop-shadow(0 0 5px rgba(255, 220, 140, 0.96)) drop-shadow(0 0 12px rgba(244, 178, 86, 0.38)); }
+  50% { opacity: 1; filter: drop-shadow(0 0 9px rgba(255, 235, 170, 1)) drop-shadow(0 0 22px rgba(255, 196, 110, 0.75)); }
+}
 .experience-core {
   position: absolute;
   left: 50%;

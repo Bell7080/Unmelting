@@ -33,6 +33,7 @@ import {
   ShopStateView,
   type ResourceTrailTarget,
 } from '@ui/GameBoardRenderer'
+import { experienceAxes } from '@ui/ExperienceAxes'
 import { CardSpawner } from '@systems/CardSpawner'
 import { ActionSystem, ActionType } from '@systems/ActionSystem'
 import { DropSystem } from '@systems/DropSystem'
@@ -3203,6 +3204,8 @@ let runEnteredFromLobby = false
 let lifetimeRecorded = false
 /** 이번 세션에서 이미 소개한 첫 조우 종류(보드 조우 + 보스/시련/상점/제단). 영구 기록과 별개로 세션 내 중복 발화를 막는다. */
 const sessionFieldsIntroduced = new Set<string>()
+/** 런 시작 시점의 경험 축 값 — 정산 육각형이 '이번 런 상승분'을 계산하는 기준점. */
+let runStartAxisValues: number[] | null = null
 function isOnboardingActive(): boolean {
   return onboardingRunActive
 }
@@ -3286,6 +3289,8 @@ function resetForNewRun(): void {
   pendingHandTarget = null
   // 동료(에나)의 런 한정 상태(의지/각성/턴 흐름) 초기화. 학습 가중치는 런 간 유지.
   companion.resetForRun()
+  // 정산 육각형의 '이번 런 상승분' 기준점 — 런 시작 시점의 축 값을 캡처해 둔다.
+  runStartAxisValues = experienceAxes(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth()).map((a) => a.value)
   resetRunDramaSignals() // 성장 점프 게이트 입력(드라마 신호)도 런 단위로 비운다.
   lifetimeRecorded = false // 통산 기록은 런당 1회 — 새 런에서 다시 열어 준다.
   sessionFieldsIntroduced.clear() // 세션 내 필드 소개 중복 가드도 런마다 비운다(영구 기록은 유지).
@@ -5769,6 +5774,19 @@ async function handleCardAction(e: Event): Promise<void> {
 function finishTurn(): void {
   gameActive = false
   render()
+  // 종막 대사(사망/클리어 한마디)가 재생 중이면 말풍선이 닫힌 뒤에 정산 화면을 연다.
+  // 어떤 이유로든 말풍선이 닫히지 않아도 화면은 뜨도록 안전 상한을 함께 건다.
+  if (speechBubble.isShowing || speechBubble.isTyping) {
+    let opened = false
+    const openOnce = (): void => {
+      if (opened) return
+      opened = true
+      window.setTimeout(showGameOver, 300)
+    }
+    void speechBubble.waitForDismiss().then(openOnce)
+    window.setTimeout(openOnce, 9000)
+    return
+  }
   setTimeout(showGameOver, 300)
 }
 
@@ -5804,7 +5822,7 @@ function showGameOver(): void {
           </div>
           <div class="settlement-ena-panel">
             <p class="settlement-ena">에나의 경험이 한 뼘 자랐다.</p>
-            ${boardRenderer.renderSettlementHexagon(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth())}
+            ${boardRenderer.renderSettlementHexagon(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth(), runStartAxisValues ?? undefined)}
           </div>
         </div>
         <button class="primary-btn" id="to-manor-btn">저택으로</button>
@@ -5837,7 +5855,7 @@ function showGameOver(): void {
           </div>
           <div class="settlement-ena-panel">
             <p class="settlement-ena">에나와 끝까지 함께 올랐다.</p>
-            ${boardRenderer.renderSettlementHexagon(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth())}
+            ${boardRenderer.renderSettlementHexagon(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth(), runStartAxisValues ?? undefined)}
           </div>
         </div>
         <button class="primary-btn" id="clear-continue-btn">${fromLobby ? '저택으로' : '다시 시작'}</button>
@@ -5884,7 +5902,7 @@ function showGameOver(): void {
         </div>
         <div class="settlement-ena-panel">
           <p class="settlement-ena">${enaDeathLine}</p>
-          ${boardRenderer.renderSettlementHexagon(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth())}
+          ${boardRenderer.renderSettlementHexagon(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth(), runStartAxisValues ?? undefined)}
         </div>
       </div>
       <button class="primary-btn" id="restart-btn">${fromLobby ? '저택으로' : '다시 시작'}</button>
@@ -5925,6 +5943,10 @@ globalStyle.textContent = `
     background:
       radial-gradient(ellipse 92% 82% at 50% 44%, rgba(12, 8, 18, 0.30) 0%, rgba(7, 5, 13, 0.64) 52%, rgba(2, 1, 6, 0.92) 100%);
     backdrop-filter: blur(7px);
+    /* 내용이 뷰포트보다 길어지면 flex 중앙정렬이 위쪽(헤드라인)을 잘라먹는다 —
+       스크롤을 허용하고 카드가 margin:auto로 '안전 중앙정렬'되게 해 제목이 잘리지 않게 한다. */
+    overflow-y: auto;
+    padding: clamp(20px, 4vh, 40px) 16px;
   }
   @keyframes clear-veil-in { from { opacity: 0; } to { opacity: 1; } }
   @keyframes clear-card-rise { from { opacity: 0; transform: translateY(18px) scale(0.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -5940,14 +5962,20 @@ globalStyle.textContent = `
     align-items: center;
     gap: clamp(18px, 3.4vh, 34px);
     animation: clear-card-rise 0.8s cubic-bezier(0.2, 0.84, 0.3, 1) 0.18s both;
+    /* 오버플로 시에도 위/아래가 잘리지 않는 flex 중앙정렬(align-items:center 대체). */
+    margin: auto;
   }
   /* 판정 헤드라인: 촛불 아이콘 없이 'Melting / Unmelting' 한 단어로. 밀랍이 흐르는 느낌의
      세로 그라디언트로 글자를 채우고(아래로 갈수록 옅어짐 = 녹아내림), drop-shadow로 발광한다.
      text-shadow는 background-clip:text 투명 채움과 함께 렌더되지 않으므로 발광은 filter로 준다. */
   .game-over-overlay.is-clear .verdict-word {
     margin: 0;
-    font: italic 900 clamp(52px, 12.5vh, 118px)/0.96 Georgia, 'Times New Roman', serif;
+    /* 번들 폰트(OkDanDan)를 우선 적용 — Georgia는 미탑재 환경(리눅스/안드로이드)에서 시스템
+       serif로 떨어져 헤드라인 인상이 흔들린다. 이탤릭 900은 합성 기울임으로 유지된다. */
+    font: italic 900 clamp(52px, 12.5vh, 118px)/1.04 'OkDanDan', Georgia, 'Times New Roman', serif;
     letter-spacing: 0.015em;
+    /* 이탤릭 마지막 글자의 기울어진 획이 인라인 박스 밖으로 나가 잘리지 않게 소폭 여유를 준다. */
+    padding: 0 0.06em;
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent;
@@ -5984,25 +6012,39 @@ globalStyle.textContent = `
   .game-over-overlay.is-clear .settlement-body { margin: 0; gap: clamp(26px, 3.4vw, 48px); align-items: center; }
   .game-over-overlay.is-clear .settlement-stats p { margin: 0 0 clamp(7px, 1.1vh, 11px); }
   .game-over-overlay.is-clear .settlement-ena { margin: 0 0 6px; }
-  /* 시작 액션: 버튼이 아니라 '발광 글자'. hover 시 커지고, 하단에 그림자와 함께 더 아래 배치. */
+  /* 시작 액션: 버튼이 아니라 '발광 글자'. 크고 굵게, 촛불처럼 숨쉬는 맥동으로 시선을 끈다. */
   .game-over-overlay.is-clear .primary-btn {
     background: none;
     border: none;
     box-shadow: none;
     padding: 0;
     margin-top: clamp(16px, 4vh, 40px);
-    color: rgba(255, 226, 158, 0.9);
-    font: 900 clamp(18px, 2.8vh, 26px)/1 'OkDanDan', Georgia, serif;
-    letter-spacing: 0.18em;
-    text-shadow: 0 3px 14px rgba(0, 0, 0, 0.9), 0 0 18px rgba(244, 164, 96, 0.28);
-    transition: transform 0.2s cubic-bezier(0.2, 0.84, 0.3, 1), color 0.2s ease, text-shadow 0.2s ease;
+    color: rgba(255, 232, 170, 0.96);
+    font: 900 clamp(26px, 4.4vh, 42px)/1 'OkDanDan', Georgia, serif;
+    letter-spacing: 0.2em;
+    text-shadow: 0 3px 14px rgba(0, 0, 0, 0.9), 0 0 16px rgba(244, 164, 96, 0.32);
+    animation: restart-breathe 2.4s ease-in-out infinite;
+    will-change: transform, text-shadow;
+    transition: color 0.2s ease;
+  }
+  /* 숨쉬는 맥동 — 크기와 발광이 함께 차오르고 가라앉는다. */
+  @keyframes restart-breathe {
+    0%, 100% {
+      transform: scale(1);
+      text-shadow: 0 3px 14px rgba(0, 0, 0, 0.9), 0 0 14px rgba(244, 164, 96, 0.3);
+    }
+    50% {
+      transform: scale(1.08);
+      text-shadow: 0 4px 18px rgba(0, 0, 0, 0.92), 0 0 34px rgba(255, 206, 120, 0.85), 0 0 64px rgba(255, 190, 96, 0.4);
+    }
   }
   .game-over-overlay.is-clear .primary-btn:hover {
-    transform: scale(1.16);
-    color: rgba(255, 242, 196, 1);
-    text-shadow: 0 4px 18px rgba(0, 0, 0, 0.92), 0 0 30px rgba(255, 204, 120, 0.6);
+    animation: none;
+    transform: scale(1.18);
+    color: rgba(255, 244, 200, 1);
+    text-shadow: 0 4px 18px rgba(0, 0, 0, 0.92), 0 0 38px rgba(255, 210, 130, 0.9), 0 0 70px rgba(255, 190, 96, 0.5);
   }
-  .game-over-overlay.is-clear .primary-btn:active { transform: scale(1.06); }
+  .game-over-overlay.is-clear .primary-btn:active { animation: none; transform: scale(1.08); }
   .game-over-card {
     text-align: center;
     background: linear-gradient(160deg, rgba(31, 24, 48, 0.95), rgba(20, 16, 28, 0.95));
@@ -6077,6 +6119,14 @@ globalStyle.textContent = `
   }
   /* 컴팩트 육각형 — 경험 모달보다 작게(정산 카드 폭에 맞춤). */
   .settlement-constellation { width: min(196px, 54vw); margin-top: 2px; }
+  /* 육각형 아래 '이번 런 상승분' 한 줄 요약 — 오른 축 이름과 +%p를 그대로 읽어 준다. */
+  .settlement-growth-note {
+    margin: 8px 0 0;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: rgba(255, 224, 158, 0.88);
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+  }
   /* 사망 정산 카드 — 클리어와 같은 레이아웃이되 차분한 남보라 톤 + '다음에 주의' 팁. */
   .death-card h1 { color: rgba(198, 186, 230, 0.95); }
   .death-card .game-over-icon { color: rgba(176, 166, 214, 0.9); filter: drop-shadow(0 0 12px rgba(150, 140, 200, 0.4)); }

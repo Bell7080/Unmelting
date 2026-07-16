@@ -4796,8 +4796,9 @@ export class GameBoardRenderer {
   /**
    * 성좌(레이더) SVG + 축 라벨 마크업을 만든다 — 경험 모달과 정산 화면이 공유한다.
    * axes=현재 성향 축, baseAxes=시작 점선 기준. 순수 문자열 생성(부수효과 없음).
+   * deltas(%p)가 오면 오른 축 라벨에 +칩을 붙이고 그 꼭짓점을 더 밝게 맥동시킨다(정산 화면 전용).
    */
-  private buildConstellation(axes: { key: string; value: number; desc: string }[], baseAxes: { key: string; value: number; desc: string }[]): { svg: string; labels: string } {
+  private buildConstellation(axes: { key: string; value: number; desc: string }[], baseAxes: { key: string; value: number; desc: string }[], deltas?: number[]): { svg: string; labels: string } {
     const n = axes.length
     const cx = 50
     const cy = 50
@@ -4822,7 +4823,8 @@ export class GameBoardRenderer {
         [x, y - long], [x + short, y - short], [x + long, y], [x + short, y + short],
         [x, y + long], [x - short, y + short], [x - long, y], [x - short, y - short],
       ].map(([px, py]) => `${px.toFixed(2)},${py.toFixed(2)}`).join(' ')
-      return `<polygon class="exp-node" points="${points}"/>`
+      const risen = (deltas?.[i] ?? 0) >= 0.1
+      return `<polygon class="exp-node${risen ? ' is-risen' : ''}" points="${points}"/>`
     }).join('')
 
     const svg = `<svg class="experience-radar" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${grid}${spokes}${basePoly}${curPoly}${nodes}</svg>`
@@ -4832,7 +4834,10 @@ export class GameBoardRenderer {
       const lx = cx + 49 * Math.cos(angle(i))
       const ly = cy + 49 * Math.sin(angle(i))
       const pct = Math.round(a.value * 100)
-      return `<div class="exp-axis-label" style="left:${lx.toFixed(1)}%;top:${ly.toFixed(1)}%"><span class="exp-axis-name">${a.key}</span><span class="exp-axis-pct">${pct}</span></div>`
+      // 이번 런의 상승분(%p) 칩 — 0.1%p 미만의 미세 변화/하락은 정산 화면을 어지럽히지 않게 생략.
+      const d = deltas?.[i] ?? 0
+      const deltaChip = d >= 0.1 ? `<span class="exp-axis-delta">+${d.toFixed(1)}</span>` : ''
+      return `<div class="exp-axis-label" style="left:${lx.toFixed(1)}%;top:${ly.toFixed(1)}%"><span class="exp-axis-name">${a.key}</span><span class="exp-axis-pct">${pct}${deltaChip}</span></div>`
     }).join('')
     return { svg, labels }
   }
@@ -4841,16 +4846,31 @@ export class GameBoardRenderer {
    * 정산 화면용 컴팩트 성좌 — 모달 크롬 없이 육각형 + 축 라벨만 담은 작은 위젯.
    * 새싹 병아리 클리어 정산에서 "에나의 경험이 자랐다"를 실제 육각형으로 보여 준다.
    */
-  renderSettlementHexagon(disp: EnaDisposition, learning?: EnaLearningSnapshot, growth?: number): string {
+  renderSettlementHexagon(disp: EnaDisposition, learning?: EnaLearningSnapshot, growth?: number, prevAxisValues?: number[]): string {
     const axes = this.experienceAxes(disp, learning, growth)
     const baseAxes = baselineConstellationAxes()
-    const { svg, labels } = this.buildConstellation(axes, baseAxes)
+    // 런 시작 시점 축 값(prevAxisValues)이 오면 "이번 모험으로 얼마나 올랐나"를 %p로 계산해
+    // 오른 축 라벨에 +칩, 꼭짓점에 강조 맥동, 아래에 한 줄 요약을 붙인다.
+    const deltas = prevAxisValues && prevAxisValues.length === axes.length
+      ? axes.map((a, i) => (a.value - prevAxisValues[i]) * 100)
+      : undefined
+    const { svg, labels } = this.buildConstellation(axes, baseAxes, deltas)
+    const risen = deltas
+      ? axes.map((a, i) => ({ key: a.key, d: deltas[i] })).filter((r) => r.d >= 0.1)
+      : []
+    const growthNote = deltas
+      ? `<p class="settlement-growth-note">${
+          risen.length > 0
+            ? `이번 모험으로 ${risen.map((r) => `${r.key} +${r.d.toFixed(1)}`).join(' · ')}`
+            : '이번 모험은 마음속에 조용히 쌓였다'
+        }</p>`
+      : ''
     return `
       <div class="settlement-constellation experience-constellation">
         ${svg}
         ${labels}
         <div class="experience-core" aria-hidden="true"><span class="experience-core-icon">${experienceIcon()}</span><span class="experience-core-name">에나</span></div>
-      </div>`
+      </div>${growthNote}`
   }
 
   private renderExperience(disp: EnaDisposition, learning?: EnaLearningSnapshot, growth?: number): string {

@@ -12,7 +12,8 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
   justify-content: center;
   background: rgba(8, 5, 14, 0.78);
   backdrop-filter: blur(2px);
-  z-index: 240;
+  /* 에나 말풍선(.sb-host, 9999)보다 위 — 열람 중 도착한 바크는 이 레이어 아래에 깔려 보이지 않는다. */
+  z-index: 10500;
   padding: 24px;
 }
 .compendium-overlay.is-open { display: flex; }
