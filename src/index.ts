@@ -3891,14 +3891,18 @@ function setupDevCommandPalette(): void {
       setHint('디버그: 거점 개방 해제(모험/무역만)')
       return
     }
-    // 에나 경험 초기화: 성향/자기학습(유대·모험 xp·특화·기억)/정책망 저장을 전부 지운다.
-    // 부팅 시점에 로드된 성향·growth·특화를 신규(ROOKIE) 상태로 되돌리려면 재부팅이 필요해,
-    // 확인 문구를 잠깐 보여 준 뒤 새로 시작한다.
+    // 전체 진행 초기화: 에나 경험(성향/자기학습/정책망)뿐 아니라 통산 기록·메타 해금(무역)·
+    // 거점 기억(마지막 캐릭터/난이도·개발 개방)·첫 조우 기록까지 — 'unmelting.' 접두사 저장을
+    // 통째로 지워, 새 진행도 키가 추가돼도 리셋에서 빠지지 않게 한다(에나 성향 키만 구형
+    // 이름이라 별도 나열). 부팅 시점에 로드된 상태를 되돌리려면 재부팅이 필요하다.
     if (/^(리셋|reset)$/i.test(token)) {
-      for (const storageKey of [ENA_DISPOSITION_STORAGE_KEY, ENA_SELF_LEARNING_STORAGE_KEY, ENA_POLICY_STORAGE_KEY]) {
-        localStorage.removeItem(storageKey)
+      const doomed = new Set<string>([ENA_DISPOSITION_STORAGE_KEY, ENA_SELF_LEARNING_STORAGE_KEY, ENA_POLICY_STORAGE_KEY])
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key?.startsWith('unmelting.')) doomed.add(key)
       }
-      setHint('에나의 경험을 초기화했습니다. 새 동반자와 함께 다시 시작합니다…')
+      for (const storageKey of doomed) localStorage.removeItem(storageKey)
+      setHint('모든 진행(에나 경험·해금·통산 기록·거점 상태)을 초기화했습니다. 새로 시작합니다…')
       window.setTimeout(() => window.location.reload(), 700)
       return
     }
