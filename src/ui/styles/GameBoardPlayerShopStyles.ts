@@ -900,11 +900,6 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
   white-space: normal;
 }
-/* 기존 rarity 배지는 art 영역 좌상단 뱃지(.shop-pack-pick-rarity-badge)로 이동했으므로
-   이 클래스는 호환성 유지용으로만 남긴다. */
-.shop-pack-pick-card-rarity {
-  display: none;
-}
 .shop-pack-pick-card-effect {
   font-size: 15px;
   line-height: 1.4;

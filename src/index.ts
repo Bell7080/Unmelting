@@ -34,6 +34,7 @@ import {
   type ResourceTrailTarget,
 } from '@ui/GameBoardRenderer'
 import { experienceAxes } from '@ui/ExperienceAxes'
+import { GAME_OVER_GLOBAL_STYLES } from '@ui/styles/GameOverStyles'
 import { CardSpawner } from '@systems/CardSpawner'
 import { ActionSystem, ActionType } from '@systems/ActionSystem'
 import { DropSystem } from '@systems/DropSystem'
@@ -755,11 +756,8 @@ interface ShopPackPickItem extends ShopPackItemView {
   apply: () => Promise<void> | void
 }
 let activePackSession: ActivePackSession | null = null
-/** Run-length target and milestone placeholders for future boss/trial system. */
+/** Run-length target for the 100-floor arc. */
 const RUN_TARGET_TURNS = 100
-let altarBossPending = false
-let altarBossDefeated = false
-let trialPending = false
 /** 90F 보스+시련 후 활성화: 별빛 칸을 먹은 행동만 90~100층 턴을 올린다. */
 let finalAscentStarlightRuleActive = false
 /** 보스/시련의 영속 modifier: 이번 런 내내 스폰/스탯/함정 계산에 누적된다.
@@ -1799,15 +1797,6 @@ function rollShopOffers(excludeIds: string[] = []): ShopOfferView[] {
     .map(({ relicId }) => ({ relicId, price: priceForRelic(relicId) }))
 }
 
-/** 보스 흐름 외의 milestone 분기(maybeRunMilestoneEventsAfterTurn)에서 호출되는
- *  비상용 트라이얼 — 평소엔 사용되지 않지만 흐름이 살아 있을 때를 대비해 새 카드
- *  3종(광란/역경/가난) 정의를 그대로 사용한다. */
-async function openTrialOverlay(): Promise<void> {
-  inputLocked = true
-  await openTrialOverlayForced()
-  inputLocked = false
-}
-
 /** Pack cost source of truth. UI 표기와 실제 차감이 갈라지지 않도록 구매 처리도 이 함수만 사용한다.
  *  카드팩은 유물과 달리 고정 시작가에 방문 내 구매 횟수만 누적한다. */
 function altarBasePackCost(): number {
@@ -2092,27 +2081,6 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
     // 곧 runOnboardingClear → showGameOver의 검은 블러 클리어 창이 조용히 페이드인해 셔터를 덮는다.
     // 격파(생존)면 클리어 정산+졸업, 사망이면 runOnboardingCat 내부에서 게임오버 처리됨.
     if (!gameState.isGameOver && gameState.character.isAlive()) await runOnboardingClear()
-    return true
-  }
-  // After each altar visit (30, 60, 90), queue a dedicated boss gate.
-  // 임시 동결: 제단 진입 안정화 전까지 30턴 보스 게이트를 열지 않는다.
-  if (turn > 0 && turn % 30 === 0 && !altarBossDefeated) altarBossPending = false
-  if (altarBossPending) {
-    altarBossPending = false
-    altarBossDefeated = true
-    trialPending = true
-    turnManager.setTurnMode('boss_phase')
-    recordNotice(`제단의 수문장 출현: 보스(HP${50}/ATK5, 3턴 주기) 설계 토대 활성`, 'hurt')
-    // 현재는 프리뷰 단계이므로 즉시 일반 턴으로 되돌려 카운트 제외 규칙만 고정한다.
-    turnManager.setTurnMode('normal_turn')
-    render()
-    return true
-  }
-  if (trialPending) {
-    trialPending = false
-    await openTrialOverlay()
-    recordNotice(formatTrialSummary('시련 각인 완료'), 'info')
-    render()
     return true
   }
   return false
@@ -2700,13 +2668,7 @@ async function openTrialOverlayForced(): Promise<void> {
       recordNotice(formatTrialSummary(`시련 적용: ${pickedCard.title}`), 'info')
       window.setTimeout(() => void finalize(), 620)
     }
-    const onExit = (): void => {
-      // EXIT 버튼은 제거됐지만 호환성을 위해 핸들러는 남겨 둔다(강제 선택 시 무시).
-      if (!picked) return
-      void finalize()
-    }
     document.addEventListener('forcedTrialPick', onPick)
-    document.addEventListener('forcedTrialExit', onExit as EventListener)
   })
 }
 
@@ -3210,7 +3172,6 @@ function fillBoardAtStart(): void {
   trackFieldEnemyEncounters()
 }
 
-/** 온보딩(첫 경험) 진행 중인지 — 첫 30F 졸업 전까지 true. 졸업 마킹은 R5에서 붙인다. */
 /** 이번 런이 새싹 병아리(온보딩)인지 — startGame에서 진입 방식(거점 vs 기본부팅)+졸업 여부로 정한다. */
 let onboardingRunActive = false
 /** 이번 런이 /시작 로비를 거쳐 들어왔는지(테스트 플레이=false). 클리어 창 버튼 분기에 쓴다. */
@@ -3347,10 +3308,7 @@ function resetForNewRun(): void {
   runModifiers.trapDamageBonus = 0
   runModifiers.treasureSpawnScale = 1
   syncRunModifiersToSpawner()
-  // 보스/제단 게이트·시련·턴 모드·보스 컨트롤러 상태도 새 런을 위해 초기화한다.
-  altarBossPending = false
-  altarBossDefeated = false
-  trialPending = false
+  // 턴 모드·보스 컨트롤러 상태도 새 런을 위해 초기화한다.
   turnManager.setTurnMode('normal_turn')
   bossController.reset()
   clearChainTimeline()
@@ -5948,237 +5906,9 @@ function showGameOver(): void {
   })
 }
 
+// 게임오버/정산 오버레이 + 메타 잠금 전역 스타일은 GameOverStyles 모듈에서 1회 주입한다.
 const globalStyle = document.createElement('style')
-globalStyle.textContent = `
-  .game-over-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(8, 5, 14, 0.82);
-    backdrop-filter: blur(6px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    /* 콤보 게이지 휠(z-index 120)·셔터(470) 등 모든 보드 오버레이 위를 덮어야 패배 화면에서
-       콤보 버튼이 튀어나오지 않는다. */
-    z-index: 1000;
-    animation: fade-in 0.3s ease;
-    padding: 16px;
-  }
-  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-  /* 클리어/사망 창(.is-clear): 카드 박스 없이 '검은 비네트 블러 오버레이' 위에 글자만 얹는다.
-     - 비네트: 가장자리 어둡게 / 가운데는 조금 더 밝고 투명(뒤 게임이 흐릿하게 비침).
-     - 검은 오버레이가 조용히(0.9s) 페이드인. */
-  .game-over-overlay.is-clear {
-    animation: clear-veil-in 0.9s ease both;
-    /* 판정 화면은 뒤 게임이 어렴풋이만 남도록 전체적으로 짙게 깐다 — 글자 발광이 더 선다. */
-    background:
-      radial-gradient(ellipse 92% 82% at 50% 44%, rgba(9, 6, 14, 0.62) 0%, rgba(5, 3, 10, 0.84) 50%, rgba(1, 0, 4, 0.97) 100%);
-    backdrop-filter: blur(9px);
-    /* 내용이 뷰포트보다 길어지면 flex 중앙정렬이 위쪽(헤드라인)을 잘라먹는다 —
-       스크롤을 허용하고 카드가 margin:auto로 '안전 중앙정렬'되게 해 제목이 잘리지 않게 한다. */
-    overflow-y: auto;
-    padding: clamp(20px, 4vh, 40px) 16px;
-  }
-  @keyframes clear-veil-in { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes clear-card-rise { from { opacity: 0; transform: translateY(18px) scale(0.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
-  /* 카드 박스(배경/테두리/그림자) 제거 → 검은 오버레이 위 텍스트만. 가운데 크게, 요소별 여백 넉넉히. */
-  .game-over-overlay.is-clear .game-over-card {
-    background: none;
-    border: none;
-    box-shadow: none;
-    padding: 0;
-    max-width: min(780px, 94vw);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: clamp(18px, 3.4vh, 34px);
-    animation: clear-card-rise 0.8s cubic-bezier(0.2, 0.84, 0.3, 1) 0.18s both;
-    /* 오버플로 시에도 위/아래가 잘리지 않는 flex 중앙정렬(align-items:center 대체). */
-    margin: auto;
-  }
-  /* 판정 헤드라인: 촛불 아이콘 없이 'Melting / Unmelting' 한 단어로. 밀랍이 흐르는 느낌의
-     세로 그라디언트로 글자를 채우고(아래로 갈수록 옅어짐 = 녹아내림), drop-shadow로 발광한다.
-     text-shadow는 background-clip:text 투명 채움과 함께 렌더되지 않으므로 발광은 filter로 준다. */
-  .game-over-overlay.is-clear .verdict-word {
-    margin: 0;
-    /* 번들 폰트(OkDanDan)를 우선 적용 — Georgia는 미탑재 환경(리눅스/안드로이드)에서 시스템
-       serif로 떨어져 헤드라인 인상이 흔들린다. 이탤릭 900은 합성 기울임으로 유지된다. */
-    font: italic 900 clamp(52px, 12.5vh, 118px)/1.04 'OkDanDan', Georgia, 'Times New Roman', serif;
-    letter-spacing: 0.015em;
-    /* 이탤릭 마지막 글자의 기울어진 획이 인라인 박스 밖으로 나가 잘리지 않게 소폭 여유를 준다. */
-    padding: 0 0.06em;
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
-    -webkit-text-fill-color: transparent;
-  }
-  /* 사망 = 소녀가 녹았다 → 차가운 남보라, 아래로 갈수록 투명하게 흘러내리는 밀랍. */
-  .game-over-overlay.is-clear .verdict-melting {
-    background-image: linear-gradient(178deg, #efe9ff 0%, #cabff0 38%, #9585cc 72%, rgba(118, 104, 168, 0.28) 100%);
-    animation: verdict-melting-glow 3.4s ease-in-out infinite;
-  }
-  /* 승리 = 끝내 녹지 않았다 → 따뜻한 촛불 금빛, 아래는 깊은 호박색으로 단단히. */
-  .game-over-overlay.is-clear .verdict-unmelting {
-    background-image: linear-gradient(178deg, #fff4d2 0%, #ffd472 44%, #f0a83a 80%, #d17f28 100%);
-    animation: verdict-unmelting-glow 3.4s ease-in-out infinite;
-  }
-  @keyframes verdict-melting-glow {
-    0%, 100% { filter: drop-shadow(0 0 16px rgba(150, 130, 224, 0.42)) drop-shadow(0 8px 30px rgba(14, 8, 30, 0.9)); }
-    50%      { filter: drop-shadow(0 0 30px rgba(168, 148, 240, 0.72)) drop-shadow(0 8px 30px rgba(14, 8, 30, 0.9)); }
-  }
-  @keyframes verdict-unmelting-glow {
-    0%, 100% { filter: drop-shadow(0 0 18px rgba(255, 190, 96, 0.46)) drop-shadow(0 8px 30px rgba(36, 18, 4, 0.86)); }
-    50%      { filter: drop-shadow(0 0 34px rgba(255, 206, 120, 0.78)) drop-shadow(0 8px 30px rgba(36, 18, 4, 0.86)); }
-  }
-  /* 한글 부제: 헤드라인 아래 작고 차분하게 — 무엇을 이뤘/잃었는지 한 줄로. */
-  .game-over-overlay.is-clear .verdict-sub {
-    margin: 0;
-    font-size: clamp(14px, 2.3vh, 20px);
-    letter-spacing: 0.03em;
-    color: rgba(222, 212, 240, 0.74);
-    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85);
-  }
-  .game-over-overlay.is-clear .death-card .verdict-sub { color: rgba(210, 200, 232, 0.72); }
-  .game-over-overlay.is-clear .death-tip { margin: 0; }
-  .game-over-overlay.is-clear .settlement-body { margin: 0; gap: clamp(26px, 3.4vw, 48px); align-items: center; }
-  .game-over-overlay.is-clear .settlement-stats p { margin: 0 0 clamp(7px, 1.1vh, 11px); }
-  .game-over-overlay.is-clear .settlement-ena { margin: 0 0 6px; }
-  /* 시작 액션: 버튼이 아니라 '발광 글자'. 크고 굵게, 촛불처럼 숨쉬는 맥동으로 시선을 끈다. */
-  .game-over-overlay.is-clear .primary-btn {
-    background: none;
-    border: none;
-    box-shadow: none;
-    padding: 0;
-    margin-top: clamp(16px, 4vh, 40px);
-    color: rgba(255, 232, 170, 0.96);
-    font: 900 clamp(26px, 4.4vh, 42px)/1 'OkDanDan', Georgia, serif;
-    letter-spacing: 0.2em;
-    text-shadow: 0 3px 14px rgba(0, 0, 0, 0.9), 0 0 16px rgba(244, 164, 96, 0.32);
-    animation: restart-breathe 2.4s ease-in-out infinite;
-    will-change: transform, text-shadow;
-    transition: color 0.2s ease;
-  }
-  /* 숨쉬는 맥동 — 크기와 발광이 함께 차오르고 가라앉는다. */
-  @keyframes restart-breathe {
-    0%, 100% {
-      transform: scale(1);
-      text-shadow: 0 3px 14px rgba(0, 0, 0, 0.9), 0 0 14px rgba(244, 164, 96, 0.3);
-    }
-    50% {
-      transform: scale(1.08);
-      text-shadow: 0 4px 18px rgba(0, 0, 0, 0.92), 0 0 34px rgba(255, 206, 120, 0.85), 0 0 64px rgba(255, 190, 96, 0.4);
-    }
-  }
-  .game-over-overlay.is-clear .primary-btn:hover {
-    animation: none;
-    transform: scale(1.18);
-    color: rgba(255, 244, 200, 1);
-    text-shadow: 0 4px 18px rgba(0, 0, 0, 0.92), 0 0 38px rgba(255, 210, 130, 0.9), 0 0 70px rgba(255, 190, 96, 0.5);
-  }
-  .game-over-overlay.is-clear .primary-btn:active { animation: none; transform: scale(1.08); }
-  .game-over-card {
-    text-align: center;
-    background: linear-gradient(160deg, rgba(31, 24, 48, 0.95), rgba(20, 16, 28, 0.95));
-    padding: 28px 36px;
-    border: 1px solid var(--color-flame-warm);
-    border-radius: 16px;
-    box-shadow: 0 0 40px rgba(244, 164, 96, 0.2);
-    max-width: 360px;
-    width: 100%;
-  }
-  .game-over-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--color-flame);
-    font-size: 48px;
-    line-height: 1;
-    filter: drop-shadow(0 0 12px rgba(255, 215, 120, 0.5));
-    margin-bottom: 8px;
-  }
-  .game-over-icon .icon { width: 1em; height: 1em; }
-  .game-over-card h1 {
-    font-size: var(--font-size-lg);
-    color: var(--color-flame);
-    margin-bottom: 6px;
-    font-weight: 600;
-  }
-  .game-over-card p {
-    color: var(--color-text-muted);
-    font-size: var(--font-size-base);
-    margin-bottom: 20px;
-  }
-  .primary-btn {
-    padding: 10px 22px;
-    background: linear-gradient(180deg, var(--color-flame-warm), var(--color-flame-deep));
-    border: 1px solid var(--color-flame);
-    color: var(--color-text-dark);
-    font-weight: 700;
-    font-size: var(--font-size-base);
-    border-radius: 999px;
-    cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-    font-family: inherit;
-  }
-  .primary-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 18px rgba(244, 164, 96, 0.4);
-  }
-  .primary-btn:active { transform: translateY(0); }
-  /* ── 새싹 병아리 클리어 정산 화면 ── */
-  .settlement-card { max-width: 460px; }
-  .settlement-body {
-    display: flex;
-    gap: 20px;
-    align-items: center;
-    justify-content: center;
-    flex-wrap: wrap;
-    margin-bottom: 18px;
-  }
-  .settlement-stats { text-align: left; }
-  .settlement-card .settlement-stats p {
-    margin-bottom: 6px;
-    font-size: var(--font-size-base);
-    color: var(--color-text-muted);
-  }
-  .settlement-stats strong { color: var(--color-flame); font-weight: 700; }
-  .settlement-ena-panel { display: flex; flex-direction: column; align-items: center; }
-  .settlement-card .settlement-ena {
-    margin-bottom: 2px;
-    color: var(--color-flame-warm);
-    font-size: 13px;
-  }
-  /* 컴팩트 육각형 — 경험 모달보다 작게(정산 카드 폭에 맞춤). */
-  .settlement-constellation { width: min(196px, 54vw); margin-top: 2px; }
-  /* 육각형 아래 '이번 런 상승분' 한 줄 요약 — 오른 축 이름과 +%p를 그대로 읽어 준다. */
-  .settlement-growth-note {
-    margin: 8px 0 0;
-    font-size: 12px;
-    letter-spacing: 0.04em;
-    color: rgba(255, 224, 158, 0.88);
-    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
-  }
-  /* 사망 정산 카드 — 클리어와 같은 레이아웃이되 차분한 남보라 톤 + '다음에 주의' 팁. */
-  .death-card h1 { color: rgba(198, 186, 230, 0.95); }
-  .death-card .game-over-icon { color: rgba(176, 166, 214, 0.9); filter: drop-shadow(0 0 12px rgba(150, 140, 200, 0.4)); }
-  .death-card .death-tip {
-    margin: 0 auto 16px;
-    max-width: 30em;
-    font-size: 13px;
-    line-height: 1.5;
-    color: rgba(226, 204, 168, 0.82);
-  }
-  /* ── 메타 시스템 잠금: 온보딩 또는 무역 미개방 시 숨긴다(로비·인게임 공통) ──
-     화폐 패널·상점 리롤(유물/카드팩)·의뢰 시설은 무역 1번 탭에서 개방된다(isMetaUnlocked). */
-  body.meta-currency-locked .coin-panel-total { display: none !important; }
-  body.meta-reroll-locked .shop-reroll-btn,
-  body.meta-reroll-locked .shop-pack-picker-reroll-btn { display: none !important; }
-  body.meta-quests-locked .quest-list { display: none !important; }
-  /* 무료 카드/수당 미개방: 상점 무료 레이어를 숨기고, 좌측 여백만큼 카드팩을 가운데로 옮긴다. */
-  body.meta-freecard-locked .shop-free-layer { display: none !important; }
-  body.meta-freecard-locked .shop-bottom-row { grid-template-columns: 1fr !important; }
-  body.meta-freecard-locked .shop-pack-layer { transform: translateY(clamp(-8px, -0.6vh, -4px)) !important; }
-`
+globalStyle.textContent = GAME_OVER_GLOBAL_STYLES
 document.head.appendChild(globalStyle)
 
 setupDevCommandPalette()

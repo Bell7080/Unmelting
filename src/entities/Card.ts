@@ -228,12 +228,13 @@ export class Card {
   /** Return proportional stats for a merged enemy group based on real members. */
   private getNormalEnemyGroupStats(groupCount: number): EnemyGroupStats | null {
     if (groupCount <= 1) return null
-    // 온보딩 바위는 선형 합체: 칸수만큼 합산만 하고 일반 합체 보너스(+2/+3)는 미적용(HP=칸수),
-    // 이름도 '바위'로 유지한다. 반격 0이라 damage 합계도 0으로 남는다.
+    // 온보딩 바위는 선형 합체: 칸수만큼 합산만 하고 일반 합체 보너스(+2/+3)는 미적용(HP=칸수).
+    // 반격 0이라 damage 합계도 0으로 남는다.
     const isRock = this.enemySpriteId === 'enemyRock'
     const bonus = isRock ? { hp: 0, damage: 0 } : enemyGroupBonus(groupCount)
     return {
-      name: isRock ? '바위' : groupCount >= 3 ? '양초 군단' : '양초 무리',
+      // 온보딩 바위는 폭별 전용 이름(1칸 '바위'는 스폰 이름 그대로).
+      name: isRock ? (groupCount >= 3 ? '큰 바위' : '적당한 바위') : groupCount >= 3 ? '양초 군단' : '양초 무리',
       health: this.enemyHealthTotal + bonus.hp,
       damage: this.enemyDamageTotal + bonus.damage,
     }
@@ -456,6 +457,10 @@ export class Card {
           this.groupCount === 2
             ? 'Deals 3 damage and spreads twice'
             : 'Deals 5 damage and spreads three times'
+      } else if (this.trapKind === 'bush') {
+        // 온보딩 덤불: 거미줄 이름('촛농 거미집')이 새지 않게 폭별 전용 이름을 쓴다(피해 2/3).
+        this.name = this.groupCount === 2 ? '적당한 덤불' : '큰 덤불'
+        this.description = this.groupCount === 2 ? 'Deals 2 damage brush' : 'Deals 3 damage brush'
       } else {
         this.name = this.groupCount === 2 ? '촛농 거미집' : '밀랍 거미굴'
         this.description = this.groupCount === 2 ? 'Deals 5 damage' : 'Deals lethal damage'
@@ -468,6 +473,10 @@ export class Card {
         this.name = this.groupCount === 2 ? '적당한 황금 상자' : '대형 황금 상자'
         const drops = this.groupCount === 2 ? 8 : 15
         this.description = `${drops} item reward golden chest`
+      } else if (this.treasureKind === 'junk') {
+        // 온보딩 잡동사니: 상자 이름이 새지 않게 폭별 전용 이름(드롭은 1~2/2~3장 표).
+        this.name = this.groupCount === 2 ? '오래된 물건' : '방치된 가구'
+        this.description = this.groupCount === 2 ? 'Clutter — yields 1~2 hand cards' : 'Clutter — yields 2~3 hand cards'
       } else {
         this.name = this.groupCount === 2 ? '적당한 상자' : '큰 상자'
         const chestDrops = this.groupCount === 2 ? 3 : 5

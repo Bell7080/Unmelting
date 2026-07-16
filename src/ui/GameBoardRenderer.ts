@@ -1158,8 +1158,11 @@ export class GameBoardRenderer {
     // 보스 보상 카드는 3-wide span이어도 카드 자체 이름을 그대로 표시한다.
     // 함정은 합쳐질 때 Card가 도감과 동일한 이름(촛농 거미집/밀랍 거미굴, 번식 포자군/
     // 포자 군락)을 이미 갖고 있으므로 일반 라벨로 덮지 않고 card.name을 그대로 쓴다.
+    // 온보딩 바위/잡동사니도 Card가 폭별 전용 이름(적당한/큰 바위, 오래된 물건/방치된 가구)을
+    // 정하므로 일반 라벨('적 무리'/'적당한 상자')로 덮지 않는다.
     const groupName = span > 1 && !card.isSpecialEnemy && card.type !== CardType.TRAP &&
-      card.treasureKind !== 'starlight' && !card.id.startsWith('boss-reward-')
+      card.treasureKind !== 'starlight' && card.treasureKind !== 'junk' &&
+      card.enemySpriteId !== 'enemyRock' && !card.id.startsWith('boss-reward-')
       ? this.groupName(card.type, span)
       : card.name
 
@@ -3741,9 +3744,7 @@ export class GameBoardRenderer {
       const pick = target.closest<HTMLElement>('[data-trial-pick]')
       if (pick) {
         document.dispatchEvent(new CustomEvent('forcedTrialPick', { detail: { id: pick.dataset.trialPick } }))
-        return
       }
-      if (target.closest('[data-trial-exit]')) document.dispatchEvent(new CustomEvent('forcedTrialExit'))
     }
     // Mobile: wire touch-active highlight (idempotent — safe after shop→trial reuse).
     attachShopTouchHighlight(this.shopOverlayElement)
