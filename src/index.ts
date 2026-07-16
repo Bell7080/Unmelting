@@ -1745,8 +1745,20 @@ function priceForRelic(id: RelicId): number {
 }
 
 /** Generate up to three unowned, unbanned relics + per-spawn score price. */
-/** 새싹 병아리(온보딩)에서만 노출하는 기본 유물 — 초반 제작 스탯 유물(체력+5·공격력+1·처치 시 체력+1). */
-const ONBOARDING_RELIC_IDS: RelicId[] = ['lifeline', 'red-potion', 'carving-knife']
+/** 새싹 병아리(온보딩)에서만 노출하는 기본 유물 8종 — 초반 제작 스탯/보상 유물(도끼·곡괭이 등). */
+const ONBOARDING_RELIC_IDS: RelicId[] = [
+  'lifeline',        // 최대 체력 +5
+  'red-potion',      // 적 처치 시 체력 +1
+  'carving-knife',   // 공격력 +1
+  'axe',             // 불빛 획득량 +10%
+  'ambition',        // 적 8회 처치마다 불빛 +25
+  'pickaxe',         // 보물 상자 등장 확률 +
+  'chance',          // 직접 타격 15% 추가 타격
+  'opening-ceremony',// 보물 상자 생존 확률 +10%
+]
+
+/** 온보딩 커먼 풀에서도 제외(잠금)하는 손패 — 물뿌리개는 초반에 혼란을 줘 뺀다. */
+const ONBOARDING_BANNED_CARDS: HandCardId[] = ['watering-can']
 
 function rollShopOffers(excludeIds: string[] = []): ShopOfferView[] {
   const character = gameState.character
@@ -3281,7 +3293,9 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // 새싹 병아리: 런 카드 풀을 커먼 등급만 남겨 재구성한다(레어 이상 손패 잠금 — 검과 방패 등).
   // resetForNewRun이 전체 풀로 세팅한 뒤이므로 여기서 커먼 부분집합으로 덮어 드롭·팩·레시피에 일괄 반영한다.
   if (onboardingRunActive) {
-    const commonUnlocked = metaUnlockedCardIds.filter((id) => (HAND_CARD_RARITY[id] ?? 'common') === 'common')
+    const commonUnlocked = metaUnlockedCardIds.filter(
+      (id) => (HAND_CARD_RARITY[id] ?? 'common') === 'common' && !ONBOARDING_BANNED_CARDS.includes(id)
+    )
     runCardPool.reset(HAND_CARD_IDS, commonUnlocked)
     DropSystem.setAllowedPool(runCardPool.snapshot().unlocked)
     boardRenderer.setLockedCardIds([...runCardPool.snapshot().locked, ...runCardPool.snapshot().banned])
