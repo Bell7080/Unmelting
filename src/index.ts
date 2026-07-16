@@ -2616,6 +2616,9 @@ async function closeShopAndResume(): Promise<void> {
       await bossController.run100F()
       gameState.endGame('run_clear_100_turns')
       recordNotice('100층 보스 격파 — 잿빛 굴레가 풀렸다', 'win')
+      // 클리어 타이틀(Unmelting 정산 창)은 사망과 같은 finishTurn 경로로 연다 — endGame만으로는
+      // 아무도 showGameOver를 부르지 않아 격파 후 화면이 그대로 멈춰 있었다.
+      finishTurn()
     } else if (gameState.getCurrentTurn() === 90) {
       await bossController.run90F()
       // 90F 시련 종료 → 구역 4 (더욱 깊은 숲) 전환
@@ -3246,6 +3249,8 @@ async function runOnboardingClear(): Promise<void> {
   enaAutonomousLearner.recordFirstSeen('onboarding-graduated')
   recordNotice('새싹 병아리 클리어! 쉬움 난이도가 개방되었다', 'win')
   gameState.endGame('onboarding_clear_30')
+  // 클리어 타이틀은 사망과 같은 finishTurn 경로로 연다(에나 클리어 대사가 끝난 뒤 페이드인).
+  finishTurn()
 }
 
 /**
