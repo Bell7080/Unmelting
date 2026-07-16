@@ -485,6 +485,9 @@ export function spriteForCard(card: Card): string {
     if (card.specialEnemyKind === 'waxSculptor') return SpriteUrls.boss90
     if (card.specialEnemyKind === 'waxWitch') return SpriteUrls.boss100
     if (card.specialEnemyKind === 'waxDemon') return spriteForEventBoss('eventboss_001') ?? SpriteUrls.boss
+    // 새싹 병아리 30F 보스: 보스 카드도 waxCat 전용 일러스트(boss_005)로 라우팅한다.
+    // (이 분기가 없어 boss_001='양초 백작'로 폴백되던 버그 수정.)
+    if (card.specialEnemyKind === 'waxCat') return SpriteUrls.bossCat
     return SpriteUrls.boss
   }
   if (card.type === CardType.ENEMY) {

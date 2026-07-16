@@ -201,8 +201,8 @@ export class BossEventController {
   async runOnboardingCat(): Promise<void> {
     const def: BossDef = {
       name: '양초 고양이',
-      maxHp: 40,
-      attack: 5,
+      maxHp: 30,
+      attack: 3,
       attackInterval: 2,
       handGiftStep: 15,
       handCardAmount: 0,   // 손패 강탈+사용으로 대체(전용 손패 효과 미사용)

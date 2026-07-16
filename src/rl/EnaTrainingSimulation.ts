@@ -200,8 +200,8 @@ export type EnaSimDifficulty = 'standard' | 'sprout'
 /** 새싹 병아리 아크: 30층에서 양초 고양이 격파 = 클리어(별빛/시련 없음). */
 const SPROUT_TARGET_TURNS = 30
 const SPROUT_BOSS_FLOORS: readonly number[] = [30]
-/** 30F 온보딩 보스 양초 고양이: HP40/ATK5, 2턴 주기, 공격 시 손패 1장 강탈(촛농/양초/불씨면 자가 사용=회복). */
-const SPROUT_BOSS_PROFILE: BossProfile = { name: '양초 고양이', maxHp: 40, attack: 5, interval: 2, handGiftStep: 15, behavior: 'catSteal' }
+/** 30F 온보딩 보스 양초 고양이: HP30/ATK3, 2턴 주기, 공격 시 손패 1장 강탈(촛농/양초/불씨면 자가 사용=회복). */
+const SPROUT_BOSS_PROFILE: BossProfile = { name: '양초 고양이', maxHp: 30, attack: 3, interval: 2, handGiftStep: 15, behavior: 'catSteal' }
 
 /** 시뮬 상점이 다루는 실제 팩 종류(가격 반복 누적 추적용). */
 type EnaSimPackKind = 'basic-pack' | 'recipe-pack' | 'unlock-pack' | 'chance-pack' | 'delete-pack' | 'resource-pack'
