@@ -832,6 +832,8 @@ function enterHearth(): void {
     onStart: () => { void startGame(hearthScene.getSelectedCharacterIndex(), hearthScene.getSelectedDifficulty()) },
     // 쉬움(정규 100층)은 새싹 병아리를 한 번 졸업해야 열린다.
     isEasyUnlocked: () => enaAutonomousLearner.hasFirstSeen('onboarding-graduated'),
+    // 서고 모험일지 — 통산 기록을 그대로 읽어 보여 준다.
+    getLifetimeRecord: () => lifetimeRecordStore.load(),
     // 만찬 완료 즉시 Character.relics에 실제 RelicId를 넣고 렌더러의 유물 팬으로 보여 준다.
     onDinnerRelicCreate: async (profile) => {
       pendingDinnerRelicProfile = profile
@@ -3617,6 +3619,8 @@ function setupDevCommandPalette(): void {
     { name: '상점', desc: '상점 열기' },
     { name: '제단', desc: '제단 열기' },
     { name: '시련', desc: '강제 시련 열기' },
+    { name: '사망', desc: '즉시 사망(정산 화면 점검)' },
+    { name: '승리', desc: '즉시 100F 클리어(정산 화면 점검)' },
     { name: '25turn', desc: 'N턴 이동(1~100)' },
     { name: '공격력7', desc: '공격력 설정' },
     { name: '체력40', desc: '체력 설정' },
@@ -3895,6 +3899,21 @@ function setupDevCommandPalette(): void {
       if (inputLocked || shopOpen || gameState.isGameOver) { setHint('지금은 제단을 열 수 없습니다.'); return }
       close()
       await openShopOverlay('altar')
+      return
+    }
+    // 디버그: 즉시 사망/승리 — 정산 화면(모바일 포함) 점검용. 실제 종료 흐름과 같은 finishTurn을 탄다.
+    if (/^(사망|death)$/i.test(token)) {
+      if (gameState.isGameOver) { setHint('이미 게임이 끝났습니다.'); return }
+      close()
+      gameState.endGame('character_defeated')
+      finishTurn()
+      return
+    }
+    if (/^(승리|clear)$/i.test(token)) {
+      if (gameState.isGameOver) { setHint('이미 게임이 끝났습니다.'); return }
+      close()
+      gameState.endGame('run_clear_100_turns')
+      finishTurn()
       return
     }
     // 디버그: 강제 시련을 셔터 연출과 함께 즉시 연다.
@@ -5778,8 +5797,56 @@ function finishTurn(): void {
   setTimeout(showGameOver, 300)
 }
 
+/** 정산(클리어/사망) 오버레이 한 장의 재료 — 세 결말이 같은 골격을 공유한다. */
+interface SettlementOverlayOptions {
+  verdict: 'melting' | 'unmelting'
+  sub: string
+  /** 사망 전용 '다음에 주의' 한 줄 팁. */
+  tip?: string
+  statRows: { label: string; value: number }[]
+  enaLine: string
+  buttonLabel: string
+  onButton: () => void
+  /** 사망 톤 보정용 추가 카드 클래스. */
+  cardClass?: string
+}
+
+/** 정산 오버레이 매니저 — 판정 헤드라인/스탯/에나 육각형/시작 버튼 + 우측 하단 통산 기록을
+ *  한 골격으로 렌더한다. 세 결말(온보딩 클리어/100F 클리어/사망)은 재료만 다르다. */
+function openSettlementOverlay(o: SettlementOverlayOptions): void {
+  const lifetime = lifetimeRecordStore.load()
+  const overlay = document.createElement('div')
+  overlay.className = 'game-over-overlay is-clear'
+  overlay.innerHTML = `
+    <div class="game-over-card settlement-card${o.cardClass ? ` ${o.cardClass}` : ''}">
+      <h1 class="verdict-word verdict-${o.verdict}">${o.verdict === 'unmelting' ? 'Unmelting' : 'Melting'}</h1>
+      <p class="verdict-sub">${o.sub}</p>
+      ${o.tip ? `<p class="death-tip">${o.tip}</p>` : ''}
+      <div class="settlement-body">
+        <div class="settlement-stats">
+          ${o.statRows.map((row) => `<p>${row.label} <strong>${row.value}</strong></p>`).join('')}
+        </div>
+        <div class="settlement-ena-panel">
+          <p class="settlement-ena">${o.enaLine}</p>
+          ${boardRenderer.renderSettlementHexagon(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth(), runStartAxisValues ?? undefined)}
+        </div>
+      </div>
+      <button class="primary-btn" id="settlement-continue-btn">${o.buttonLabel}</button>
+    </div>
+    <aside class="settlement-lifetime" aria-label="통산 기록">
+      <span class="settlement-lifetime-main">통산 ${lifetime.totalRuns}회 모험 · 클리어 ${lifetime.clears} · 최고 ${lifetime.bestFloor}층</span>
+      <span class="settlement-lifetime-sub">처치 ${lifetime.totalKills} · 함정 ${lifetime.totalTraps} · 보물 ${lifetime.totalTreasures} · 불빛 ${lifetime.totalLight}</span>
+    </aside>
+  `
+  document.body.appendChild(overlay)
+  document.getElementById('settlement-continue-btn')?.addEventListener('click', () => {
+    overlay.remove()
+    o.onButton()
+  })
+}
+
 function showGameOver(): void {
-  // 통산 기록에 이번 런을 1회 합산한다(클리어/사망 공통). 저장·집계만 하며 화면 표시는 추후 결정.
+  // 통산 기록에 이번 런을 1회 합산한다(클리어/사망 공통) — 정산 우측 하단 표기의 원천.
   if (!lifetimeRecorded) {
     lifetimeRecorded = true
     const cleared = gameState.gameOverReason === 'onboarding_clear_30' || gameState.gameOverReason === 'run_clear_100_turns'
@@ -5793,116 +5860,63 @@ function showGameOver(): void {
     })
   }
 
-  // 새싹 병아리 30F 클리어는 정산 화면(처치/함정/보물/불빛 + 저택으로 복귀)으로 닫는다.
-  if (gameState.gameOverReason === 'onboarding_clear_30') {
-    const overlay = document.createElement('div')
-    overlay.className = 'game-over-overlay is-clear'
-    overlay.innerHTML = `
-      <div class="game-over-card settlement-card">
-        <h1 class="verdict-word verdict-unmelting">Unmelting</h1>
-        <p class="verdict-sub">새싹 병아리 클리어!</p>
-        <div class="settlement-body">
-          <div class="settlement-stats">
-            <p>처치한 적 <strong>${gameState.runDefeatedEnemies}</strong></p>
-            <p>처리한 함정 <strong>${gameState.runClearedTraps}</strong></p>
-            <p>발견한 보물 <strong>${gameState.runOpenedTreasures}</strong></p>
-            <p>총 불빛 <strong>${score}</strong></p>
-          </div>
-          <div class="settlement-ena-panel">
-            <p class="settlement-ena">에나의 경험이 한 뼘 자랐다.</p>
-            ${boardRenderer.renderSettlementHexagon(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth(), runStartAxisValues ?? undefined)}
-          </div>
-        </div>
-        <button class="primary-btn" id="to-manor-btn">저택으로</button>
-      </div>
-    `
-    document.body.appendChild(overlay)
-    document.getElementById('to-manor-btn')?.addEventListener('click', () => {
-      overlay.remove()
-      enterHearth()
-    })
-    return
-  }
-
-  // 100층 클리어(테스트 플레이/정규 공통): 30층과 같은 결의 클리어 창(스탯 + 에나 육각형).
-  // 셔터는 내려온 채 두고 이 검은 블러 오버레이가 조용히 페이드인해 덮는다.
-  if (gameState.gameOverReason === 'run_clear_100_turns') {
-    const overlay = document.createElement('div')
-    overlay.className = 'game-over-overlay is-clear'
-    const fromLobby = runEnteredFromLobby
-    overlay.innerHTML = `
-      <div class="game-over-card settlement-card">
-        <h1 class="verdict-word verdict-unmelting">Unmelting</h1>
-        <p class="verdict-sub">잿빛 굴레를 풀었다 — 100층 클리어!</p>
-        <div class="settlement-body">
-          <div class="settlement-stats">
-            <p>처치한 적 <strong>${gameState.runDefeatedEnemies}</strong></p>
-            <p>처리한 함정 <strong>${gameState.runClearedTraps}</strong></p>
-            <p>발견한 보물 <strong>${gameState.runOpenedTreasures}</strong></p>
-            <p>총 불빛 <strong>${score}</strong></p>
-          </div>
-          <div class="settlement-ena-panel">
-            <p class="settlement-ena">에나와 끝까지 함께 올랐다.</p>
-            ${boardRenderer.renderSettlementHexagon(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth(), runStartAxisValues ?? undefined)}
-          </div>
-        </div>
-        <button class="primary-btn" id="clear-continue-btn">${fromLobby ? '저택으로' : '다시 시작'}</button>
-      </div>
-    `
-    document.body.appendChild(overlay)
-    document.getElementById('clear-continue-btn')?.addEventListener('click', () => {
-      overlay.remove()
-      if (fromLobby) enterHearth()
-      else void startGame()
-    })
-    return
-  }
-
-  // 사망 화면도 클리어 창과 같은 결(정산 카드 + 에나 육각형)로, 검은 블러가 조용히 페이드인한다.
-  // 왜 죽었는지(제목) · 에나의 아쉬움(deathLine) · 육각형 변화 · 다음에 주의할 점(팁)을 함께 보여 준다.
-  const isTrap = gameState.gameOverReason === 'instant_death_trap'
-  const reason = gameState.gameOverReason === 'character_defeated'
-    ? '소녀의 심지가 꺼졌어요…'
-    : isTrap
-      ? '모든 길이 함정으로 막혔어요.'
-      : '게임 종료'
-  // 죽은 원인별 '다음에 주의' 한 줄 팁.
-  const deathTip = isTrap
-    ? '3칸으로 합쳐진 거미줄·함정은 즉사. 키틴으로 미리 청소하거나 합쳐지기 전에 처리하자.'
-    : '체력이 0이 되면 끝. 촛농(회복)·양초(방패)로 피해를 미리 막고, 강적은 합체 전에 끊자.'
-  const enaDeathLine = companion.deathLine()
+  const runStats = [
+    { label: '처치한 적', value: gameState.runDefeatedEnemies },
+    { label: '처리한 함정', value: gameState.runClearedTraps },
+    { label: '발견한 보물', value: gameState.runOpenedTreasures },
+    { label: '총 불빛', value: score },
+  ]
   const fromLobby = runEnteredFromLobby
-
-  const overlay = document.createElement('div')
-  overlay.className = 'game-over-overlay is-clear'
-  overlay.innerHTML = `
-    <div class="game-over-card settlement-card death-card">
-      <h1 class="verdict-word verdict-melting">Melting</h1>
-      <p class="verdict-sub">${reason}</p>
-      <p class="death-tip">${deathTip}</p>
-      <div class="settlement-body">
-        <div class="settlement-stats">
-          <p>도달 층 <strong>${gameState.getCurrentTurn()}</strong></p>
-          <p>처치한 적 <strong>${gameState.runDefeatedEnemies}</strong></p>
-          <p>처리한 함정 <strong>${gameState.runClearedTraps}</strong></p>
-          <p>발견한 보물 <strong>${gameState.runOpenedTreasures}</strong></p>
-          <p>총 불빛 <strong>${score}</strong></p>
-        </div>
-        <div class="settlement-ena-panel">
-          <p class="settlement-ena">${enaDeathLine}</p>
-          ${boardRenderer.renderSettlementHexagon(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth(), runStartAxisValues ?? undefined)}
-        </div>
-      </div>
-      <button class="primary-btn" id="restart-btn">${fromLobby ? '저택으로' : '다시 시작'}</button>
-    </div>
-  `
-  document.body.appendChild(overlay)
-  document.getElementById('restart-btn')?.addEventListener('click', () => {
-    // 새로고침 대신 startGame()/거점으로 초기화한다. startGame이 카드/드롭/도감 잠금까지
-    // 메타 기준으로 되돌려 새로고침과 같은 완전 초기화를 만든다.
-    overlay.remove()
+  // 새로고침 대신 startGame()/거점으로 초기화한다. startGame이 카드/드롭/도감 잠금까지
+  // 메타 기준으로 되돌려 새로고침과 같은 완전 초기화를 만든다.
+  const continueRun = (): void => {
     if (fromLobby) enterHearth()
     else void startGame()
+  }
+
+  // 새싹 병아리 30F 클리어는 저택 복귀로만 닫는다.
+  if (gameState.gameOverReason === 'onboarding_clear_30') {
+    openSettlementOverlay({
+      verdict: 'unmelting',
+      sub: '새싹 병아리 클리어!',
+      statRows: runStats,
+      enaLine: '에나의 경험이 한 뼘 자랐다.',
+      buttonLabel: '저택으로',
+      onButton: () => enterHearth(),
+    })
+    return
+  }
+
+  // 100층 클리어(테스트 플레이/정규 공통). 셔터는 내려온 채 검은 블러가 조용히 덮는다.
+  if (gameState.gameOverReason === 'run_clear_100_turns') {
+    openSettlementOverlay({
+      verdict: 'unmelting',
+      sub: '잿빛 굴레를 풀었다 — 100층 클리어!',
+      statRows: runStats,
+      enaLine: '에나와 끝까지 함께 올랐다.',
+      buttonLabel: fromLobby ? '저택으로' : '다시 시작',
+      onButton: continueRun,
+    })
+    return
+  }
+
+  // 사망: 왜 죽었는지(부제) · '다음에 주의' 팁 · 도달 층 스탯 · 에나의 아쉬움 한마디.
+  const isTrap = gameState.gameOverReason === 'instant_death_trap'
+  openSettlementOverlay({
+    verdict: 'melting',
+    sub: gameState.gameOverReason === 'character_defeated'
+      ? '소녀의 심지가 꺼졌어요…'
+      : isTrap
+        ? '모든 길이 함정으로 막혔어요.'
+        : '게임 종료',
+    tip: isTrap
+      ? '3칸으로 합쳐진 거미줄·함정은 즉사. 키틴으로 미리 청소하거나 합쳐지기 전에 처리하자.'
+      : '체력이 0이 되면 끝. 촛농(회복)·양초(방패)로 피해를 미리 막고, 강적은 합체 전에 끊자.',
+    statRows: [{ label: '도달 층', value: gameState.getCurrentTurn() }, ...runStats],
+    enaLine: companion.deathLine(),
+    buttonLabel: fromLobby ? '저택으로' : '다시 시작',
+    onButton: continueRun,
+    cardClass: 'death-card',
   })
 }
 

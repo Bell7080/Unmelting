@@ -203,6 +203,47 @@ export const GAME_OVER_GLOBAL_STYLES = `
   }
   /* 컴팩트 육각형 — 경험 모달보다 작게(정산 카드 폭에 맞춤). */
   .settlement-constellation { width: min(196px, 54vw); margin-top: 2px; }
+  /* 통산 기록 — 정산 오버레이 우측 하단에 낮은 존재감으로 상주(카드 흐름과 분리). */
+  .settlement-lifetime {
+    position: absolute;
+    right: clamp(14px, 2.6vw, 34px);
+    bottom: clamp(12px, 2.4vh, 28px);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+    text-align: right;
+    pointer-events: none;
+  }
+  .settlement-lifetime-main {
+    font-size: clamp(12px, 1.7vh, 15px);
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    color: rgba(255, 224, 158, 0.86);
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+  }
+  .settlement-lifetime-sub {
+    font-size: clamp(10px, 1.4vh, 12px);
+    letter-spacing: 0.04em;
+    color: rgba(222, 206, 180, 0.6);
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+  }
+  /* 모바일 세로 — 절대 배치 통산 기록이 카드 본문과 겹치므로 카드 아래로 흘려보내고,
+     vh 기반 헤드라인/버튼이 좁은 폭을 넘지 않게 vw 기준으로 줄인다. */
+  @media (max-width: 700px) {
+    /* column + justify-center는 내용이 넘칠 때 위쪽이 스크롤 불가로 잘린다 — flex-start로 두고
+       카드 margin:auto가 짧은 내용일 때만 중앙 정렬을 되살린다. */
+    .game-over-overlay.is-clear { flex-direction: column; justify-content: flex-start; }
+    .settlement-lifetime {
+      position: static;
+      align-items: center;
+      text-align: center;
+      margin: 16px auto 4px;
+    }
+    .game-over-overlay.is-clear .verdict-word { font-size: clamp(40px, 15vw, 64px); }
+    .game-over-overlay.is-clear .primary-btn { font-size: 24px; }
+    .settlement-constellation { width: min(164px, 46vw); }
+  }
   /* 육각형 아래 '이번 런 상승분' 한 줄 요약 — 오른 축 이름과 +%p를 그대로 읽어 준다. */
   .settlement-growth-note {
     margin: 8px 0 0;

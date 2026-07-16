@@ -4,6 +4,7 @@ import { isTouchDevice } from '../MobileTouchManager'
 import { SquareBurst } from '../SquareBurst'
 import { SpeechBubble } from '../SpeechBubble'
 import type { CustomRelicProfile } from '@data/Relics'
+import type { LifetimeRecord } from '@core/LifetimeRecord'
 import { META_UNLOCKS, isMetaUnlocked, toggleMetaUnlock } from '@core/MetaUnlocks'
 
 export interface HearthHandlers {
@@ -15,6 +16,8 @@ export interface HearthHandlers {
   getCurrentTurn?: () => number
   /** 쉬움(정규 100층) 난이도 개방 여부 — 새싹 병아리 첫 졸업으로 열린다. */
   isEasyUnlocked?: () => boolean
+  /** 서고 모험일지에 표시할 통산 기록을 읽는다. */
+  getLifetimeRecord?: () => LifetimeRecord
 }
 
 /**
@@ -27,6 +30,7 @@ const STATION_NAMES = [
   '무역', '모험', '만찬',
 ] as const
 /** 하단 좌측 = 무역, 하단 중앙 = 모험. 둘 다 셔터형 상세 화면을 가진다. */
+const LIBRARY_INDEX = 5
 const TRADE_INDEX = 6
 const ADVENTURE_INDEX = 7
 const DINNER_INDEX = 8
@@ -244,6 +248,13 @@ export class HearthScene {
               </button>
             </section>
           </div>
+          <div class="hearth-library-stage" aria-label="서고">
+            <div class="hearth-library-bg" aria-hidden="true"></div>
+            <header class="hearth-library-tabs" role="tablist" aria-label="서고 분류">
+              <button class="hearth-library-tab is-active" type="button" role="tab" aria-selected="true">모험일지</button>
+            </header>
+            <section class="hearth-library-journal" aria-live="polite"></section>
+          </div>
           <div class="hearth-dinner-stage" aria-label="만찬 임시 화면">
             <div class="hearth-dinner-curtain hearth-dinner-curtain--left" aria-hidden="true"></div>
             <div class="hearth-dinner-curtain hearth-dinner-curtain--right" aria-hidden="true"></div>
@@ -307,6 +318,9 @@ export class HearthScene {
     overlay.style.setProperty('--hearth-dinner-host', `url('${SpriteUrls.hearth.dinnerHost}')`)
     // after 화면(만찬 완료/재방문) 배경 — hearth_bg_006 전용 일러스트
     overlay.style.setProperty('--hearth-dinner-after-bg', `url('${SpriteUrls.hearth.dinnerAfter}')`)
+    // 서고 셔터 배경 — 전용 bg 일러스트가 아직 없어 서고 칸 아트(hearth_006)를 어둡게 깔아 쓴다.
+    const libraryArt = spriteForHearthStation('hearth_006')
+    if (libraryArt) overlay.style.setProperty('--hearth-library-bg', `url('${libraryArt}')`)
     document.body.appendChild(overlay)
     this.overlay = overlay
 
@@ -419,6 +433,7 @@ export class HearthScene {
         return
       }
       if (t.closest('[data-hearth-station="trade"]')) this.descendTradeShutter()
+      if (t.closest('[data-hearth-station="library"]')) this.descendLibraryShutter()
       if (t.closest('[data-hearth-station="dinner"]')) this.descendDinnerShutter()
       if (t.closest('[data-hearth-station="adventure"]')) this.descendShutter()
     })
@@ -510,7 +525,7 @@ export class HearthScene {
     this.hideInspector()
     this.selectedCharacterIndex = this.readLastCharacterIndex()
     this.characterConfirmed = false
-    this.overlay?.classList.remove('is-trade-mode', 'is-trade-leaving', 'is-dinner-mode', 'is-dinner-opened')
+    this.overlay?.classList.remove('is-trade-mode', 'is-trade-leaving', 'is-dinner-mode', 'is-dinner-opened', 'is-library-mode', 'is-library-leaving')
     this.overlay?.classList.add('is-shuttering', 'is-adventure-mode')
     this.selectCharacter(this.selectedCharacterIndex)
     // 셔터 하강이 끝난 뒤 배경→우측 카드/좌측 소개→하단 슬라이드/선택 버튼 순서로 띄운다.
@@ -524,11 +539,56 @@ export class HearthScene {
     this.shuttered = true
     this.hideInspector()
     this.selectedTradeTab = 0
-    this.overlay?.classList.remove('is-adventure-mode', 'is-trade-leaving', 'is-dinner-mode', 'is-dinner-opened')
+    this.overlay?.classList.remove('is-adventure-mode', 'is-trade-leaving', 'is-dinner-mode', 'is-dinner-opened', 'is-library-mode', 'is-library-leaving')
     this.overlay?.classList.add('is-shuttering', 'is-trade-mode')
     this.selectTradeTab(0)
     // 셔터가 충분히 닫힌 뒤 라벨과 카드팩을 좌측/하단에서 순차 진입시킨다.
     window.setTimeout(() => this.overlay?.classList.add('is-shutter-rest'), 680)
+  }
+
+  /** 서고 선택 → 도서관 배경 셔터가 내려오고 상단 '모험일지' 분류 아래 통산 기록을 펼친다. */
+  private descendLibraryShutter(): void {
+    if (this.shuttered) return
+    this.shuttered = true
+    this.hideInspector()
+    this.overlay?.classList.remove('is-adventure-mode', 'is-trade-mode', 'is-trade-leaving', 'is-dinner-mode', 'is-dinner-opened')
+    this.overlay?.classList.add('is-shuttering', 'is-library-mode')
+    this.renderLibraryJournal()
+    // 셔터가 충분히 닫힌 뒤 배경→탭→일지 행이 순차 진입한다(CSS 지연).
+    window.setTimeout(() => this.overlay?.classList.add('is-shutter-rest'), 680)
+  }
+
+  /** 모험일지 본문 — 통산 기록을 낡은 장부의 점선 원장 행으로 그린다. */
+  private renderLibraryJournal(): void {
+    const journal = this.overlay?.querySelector<HTMLElement>('.hearth-library-journal')
+    if (!journal) return
+    const rec = this.handlers?.getLifetimeRecord?.()
+    if (!rec || rec.totalRuns === 0) {
+      journal.innerHTML = `<p class="hearth-library-empty">아직 기록된 모험이 없다.<br>첫 모험을 마치면 이곳에 일지가 쌓인다.</p>`
+      return
+    }
+    const rows: { label: string; value: string }[] = [
+      { label: '통산 모험', value: `${rec.totalRuns}회` },
+      { label: '클리어 · 사망', value: `${rec.clears} · ${rec.deaths}` },
+      { label: '최고 도달', value: `${rec.bestFloor}층` },
+      { label: '처치한 적', value: `${rec.totalKills}` },
+      { label: '해체한 함정', value: `${rec.totalTraps}` },
+      { label: '거둔 보물', value: `${rec.totalTreasures}` },
+      { label: '모은 불빛', value: `${rec.totalLight.toLocaleString()}` },
+    ]
+    journal.innerHTML =
+      `<div class="hearth-library-ledger">` +
+      rows
+        .map(
+          (r, i) =>
+            `<div class="hearth-library-row" style="--row-index:${i}">` +
+            `<span class="hearth-library-row-label">${r.label}</span>` +
+            `<span class="hearth-library-row-leader" aria-hidden="true"></span>` +
+            `<span class="hearth-library-row-value">${r.value}</span>` +
+            `</div>`
+        )
+        .join('') +
+      `</div>`
   }
 
   /** 만찬 선택 → 검붉은 커튼을 친 뒤 hearth_bg_005 만찬 배경과 무료 팩 레일을 보여 준다. */
@@ -538,7 +598,7 @@ export class HearthScene {
     this.hideInspector()
     this.dinnerStep = this.dinnerConsumed ? 5 : 0
     this.dinnerChoices = []
-    this.overlay?.classList.remove('is-adventure-mode', 'is-trade-mode', 'is-trade-leaving')
+    this.overlay?.classList.remove('is-adventure-mode', 'is-trade-mode', 'is-trade-leaving', 'is-library-mode', 'is-library-leaving')
     this.overlay?.classList.add('is-shuttering', 'is-dinner-mode')
     this.resetDinnerStage()
     if (this.dinnerConsumed) {
@@ -1020,6 +1080,12 @@ export class HearthScene {
       window.setTimeout(() => root.classList.remove('is-shuttering', 'is-shutter-rest', 'is-trade-mode', 'is-trade-leaving'), 420)
       return
     }
+    if (root?.classList.contains('is-library-mode')) {
+      // 서고 퇴장 — 일지/탭이 먼저 사그라든 뒤 셔터가 오른다.
+      root.classList.add('is-library-leaving')
+      window.setTimeout(() => root.classList.remove('is-shuttering', 'is-shutter-rest', 'is-library-mode', 'is-library-leaving'), 420)
+      return
+    }
     root?.classList.remove('is-shuttering', 'is-shutter-rest', 'is-character-confirmed', 'is-adventure-mode')
   }
 
@@ -1474,6 +1540,8 @@ export class HearthScene {
   private cellUnlocked(i: number): boolean {
     if (this.devUnlockAll) return true
     if (i === ADVENTURE_INDEX) return true
+    // 서고는 기록 열람 전용이라 항상 개방한다(영구 효과 상점은 추후).
+    if (i === LIBRARY_INDEX) return true
     if (i === TRADE_INDEX) return this.handlers?.isEasyUnlocked?.() ?? false
     if (i === DINNER_INDEX) return isMetaUnlocked('dinner')
     return false
@@ -1514,7 +1582,15 @@ export class HearthScene {
         continue
       }
       const inspectAttr = ` data-inspect-title="${name}" data-inspect-tag="개방" data-inspect-desc="${desc}"${artAttr}`
-      if (i === TRADE_INDEX) {
+      if (i === LIBRARY_INDEX) {
+        // 서고 칸 — 모험일지(통산 기록) 셔터 화면으로 진입한다.
+        cells.push(
+          `<button class="hearth-cell hearth-cell--open${artClass}" data-hearth-station="library" type="button" aria-label="서고"` +
+            `${inspectAttr}${artStyle}>` +
+            `<span class="hearth-cell__label">${name}</span>` +
+            `</button>`
+        )
+      } else if (i === TRADE_INDEX) {
         // 무역 칸 — 메타 해금/계승 UI의 임시 셔터 화면으로 진입한다.
         cells.push(
           `<button class="hearth-cell hearth-cell--open${artClass}" data-hearth-station="trade" type="button" aria-label="무역"` +

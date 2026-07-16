@@ -92,6 +92,8 @@ export const HEARTH_STYLES = `
   height: clamp(16px, 2.4vh, 26px);
   opacity: 0.55;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+  /* 얕은 칸에서 위로 삐져나가도 이웃 칸의 클릭을 가로채지 않게 한다. */
+  pointer-events: none;
 }
 .hearth-cell-lock-icon { width: 100%; height: 100%; }
 .hearth-cell__name {
@@ -175,6 +177,15 @@ export const HEARTH_STYLES = `
   font-weight: 900;
   letter-spacing: 0.16em;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
+}
+/* 모바일 세로 화면 — 칸이 얕은데 vh 기반 클램프가 커져 자물쇠/라벨이 칸 위로 넘치는 것을 막는다. */
+@media (max-width: 700px) {
+  .hearth-cell__label { font-size: 13px; letter-spacing: 0.1em; }
+  .hearth-cell__lock { width: 13px; height: 13px; }
+  .hearth-cell--locked,
+  .hearth-cell--open,
+  .hearth-cell--adventure { gap: 3px; padding-bottom: 6px; }
+  .hearth-cell--locked { overflow: hidden; }
 }
 
 /* 개방(언락) 칸 — 모험 칸과 같은 흐름으로 시작은 어둡게 잠겨 있다가
@@ -391,6 +402,10 @@ export const HEARTH_STYLES = `
 .hearth-back > svg { width: 52%; height: 52%; }
 #hearth-overlay.is-shutter-rest .hearth-back { opacity: 1; transform: translateX(0); pointer-events: auto; }
 .hearth-back:hover { border-color: var(--color-flame, #ffd778); background: rgba(22, 12, 32, 0.9); }
+/* 모바일 — 얕은 셔터 안에서는 어느 구석이든 내용과 겹치므로, 셔터 바로 아래 빈 배경에 띄운다. */
+@media (max-width: 700px) {
+  .hearth-back { bottom: auto; top: calc(100% + 10px); left: 10px; width: 38px; height: 38px; }
+}
 .hearth-character-stage { grid-column: 1 / 3; grid-row: 1 / 3; position: relative; overflow: hidden; pointer-events: none; }
 .hearth-adventure-backdrop { position: absolute; inset: 0; background: radial-gradient(circle at 66% 42%, rgba(255,215,120,0.1), transparent 34%); }
 .hearth-showcase-card {
@@ -1392,6 +1407,150 @@ body.hearth-lobby #ingame-backdrop.is-out {
 }
 .hearth-unlock-card.is-unlocked .hearth-unlock-art { border-color: rgba(255, 222, 140, 0.5); }
 @keyframes hearth-trade-pack-leave { to { opacity: 0; transform: translateY(-48px); } }
+
+/* ── 서고 셔터 화면 ──────────────────────────────────────────────────
+   도서관 배경(서고 칸 아트 재사용)이 어둡게 깔린 뒤, 상단 '모험일지' 분류 탭과
+   낡은 장부풍 점선 원장 행이 순차 진입한다. 기록 열람 전용이라 상호작용은 뒤로가기뿐. */
+#hearth-overlay.is-library-mode .hearth-shutter {
+  background: linear-gradient(180deg, #0b0910 0%, #060409 100%);
+}
+#hearth-overlay.is-library-mode .hearth-character-stage,
+#hearth-overlay.is-library-mode .hearth-character-strip,
+#hearth-overlay.is-library-mode .hearth-depart { display: none; }
+#hearth-overlay:not(.is-library-mode) .hearth-library-stage { display: none; }
+.hearth-library-stage {
+  grid-column: 1 / 4;
+  grid-row: 1 / 4;
+  position: relative;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: clamp(14px, 2.4vh, 26px) clamp(14px, 3vw, 40px) clamp(20px, 3.6vh, 40px);
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+#hearth-overlay.is-library-mode.is-shutter-rest .hearth-library-stage {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.28s ease;
+}
+.hearth-library-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(6, 3, 10, 0.62), rgba(3, 1, 6, 0.86)),
+    var(--hearth-library-bg, none),
+    radial-gradient(circle at 50% 30%, rgba(120, 88, 40, 0.16), transparent 60%);
+  background-size: cover;
+  background-position: center 30%;
+  opacity: 0;
+  filter: saturate(0.9) brightness(0.78);
+  transition: opacity 0.52s ease 0.12s;
+}
+#hearth-overlay.is-library-mode.is-shutter-rest .hearth-library-bg { opacity: 1; }
+#hearth-overlay.is-library-leaving .hearth-library-bg { opacity: 0; transition-delay: 0.1s; }
+.hearth-library-tabs {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  gap: clamp(10px, 2vw, 22px);
+  transform: translateY(-140%);
+  transition: transform 0.42s cubic-bezier(0.2, 0.84, 0.3, 1) 0.16s;
+}
+#hearth-overlay.is-library-mode.is-shutter-rest .hearth-library-tabs { transform: translateY(0); }
+#hearth-overlay.is-library-leaving .hearth-library-tabs { transform: translateY(-140%); transition-delay: 0.08s; }
+.hearth-library-tab {
+  border: 0;
+  background: transparent;
+  color: rgba(255, 238, 196, 0.55);
+  font: 900 clamp(19px, 3vh, 30px)/1.2 'OkDanDan', Georgia, serif;
+  letter-spacing: 0.22em;
+  padding: clamp(6px, 1.2vh, 12px) clamp(12px, 2vw, 22px) clamp(8px, 1.4vh, 14px);
+  cursor: default;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
+}
+.hearth-library-tab.is-active {
+  color: var(--color-flame, #ffd778);
+  text-shadow: 0 0 18px rgba(255, 205, 112, 0.5), 0 2px 12px rgba(0, 0, 0, 0.9);
+  border-bottom: 2px solid rgba(255, 215, 120, 0.55);
+}
+.hearth-library-journal {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  min-height: 0;
+  width: min(560px, 92%);
+  margin-top: clamp(10px, 1.8vh, 20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 164, 96, 0.72) rgba(20, 16, 28, 0.18);
+}
+.hearth-library-ledger {
+  width: 100%;
+  margin: auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(6px, 1.2vh, 12px);
+  padding: clamp(12px, 2.2vh, 22px) clamp(18px, 3vw, 34px);
+  border-radius: 14px;
+  border: 1px solid rgba(200, 152, 60, 0.28);
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.014) 0 2px, transparent 2px 9px),
+    linear-gradient(165deg, rgba(38, 28, 22, 0.88), rgba(16, 10, 12, 0.94));
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.12), inset 0 -16px 26px rgba(0, 0, 0, 0.38), 0 22px 40px rgba(0, 0, 0, 0.5);
+}
+.hearth-library-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  opacity: 0;
+  transform: translateY(10px);
+}
+#hearth-overlay.is-library-mode.is-shutter-rest .hearth-library-row {
+  animation: hearth-library-row-in 0.38s cubic-bezier(0.2, 0.84, 0.3, 1) forwards;
+  animation-delay: calc(0.3s + var(--row-index, 0) * 0.07s);
+}
+@keyframes hearth-library-row-in { to { opacity: 1; transform: translateY(0); } }
+.hearth-library-row-label {
+  font: 700 clamp(14px, 2vh, 18px)/1.3 'OkDanDan', Georgia, serif;
+  color: rgba(222, 206, 180, 0.85);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.hearth-library-row-leader {
+  flex: 1;
+  border-bottom: 2px dotted rgba(200, 152, 60, 0.3);
+  transform: translateY(-4px);
+}
+.hearth-library-row-value {
+  font: 900 clamp(16px, 2.4vh, 22px)/1.3 'OkDanDan', Georgia, serif;
+  color: rgba(255, 224, 158, 0.94);
+  text-shadow: 0 0 12px rgba(255, 205, 112, 0.3), 0 1px 6px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+}
+.hearth-library-empty {
+  margin: auto;
+  text-align: center;
+  font: 600 clamp(14px, 2vh, 18px)/1.7 'OkDanDan', Georgia, serif;
+  color: rgba(214, 200, 178, 0.7);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+}
+/* 모바일 세로 — 셔터가 얕아 vh 기반 크기가 넘친다. 원장을 위에서부터 촘촘히 쌓아 7행이 보이게 한다. */
+@media (max-width: 700px) {
+  .hearth-library-stage { padding: 10px 12px 14px; }
+  .hearth-library-tab { font-size: 16px; letter-spacing: 0.14em; padding: 4px 10px 6px; }
+  .hearth-library-journal { margin-top: 6px; align-items: flex-start; }
+  .hearth-library-ledger { margin: 0; gap: 5px; padding: 10px 14px; }
+  .hearth-library-row-label { font-size: 12px; }
+  .hearth-library-row-value { font-size: 13px; }
+  .hearth-library-empty { font-size: 13px; }
+}
 
 /* ── 만찬 셔터 임시 화면 ──────────────────────────────────────────────
    hearth_bg_005 즉시 페이드인 → 무료 팩 레일 → 강한 암전 선택 → 완료 후 검은 커튼/006 일러스트 대사.

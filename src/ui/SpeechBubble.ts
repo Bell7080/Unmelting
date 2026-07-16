@@ -85,8 +85,14 @@ const CSS = `
   line-height: 1.58;
   color: var(--sb-text);
   white-space: nowrap;
+  /* 좁은 화면에서 shrink-to-fit으로 세로 한 글자씩 접히지 않게, 항상 본문 폭대로 잡고 상한에서만 줄바꿈. */
+  width: max-content;
+  max-width: min(82vw, 480px);
   transform-origin: center bottom;
   opacity: 0;
+}
+@media (max-width: 700px) {
+  .sb-bubble { font-size: 15px; padding: 10px 16px; }
 }
 
 /* 꼬리 위치에 맞게 팝인 scale 기준점을 고정 */
@@ -384,9 +390,12 @@ export class SpeechBubble {
     clearTimeout(this.autoDismissTimer)
     this._removeListeners()
     this.bubble.classList.remove('is-entering', 'is-visible', 'is-exiting')
-    this.textEl.innerHTML = ''
+    // 최종 문장을 잠시 채워 완성 폭을 측정한 상태로 위치/가장자리 클램프를 계산한다
+    // (타이핑 중 폭이 자라며 화면 밖으로 밀리는 것을 막는다). 측정 후 비우고 타이핑 시작.
+    this.textEl.textContent = text
     this.visibleAt = 0  // 새 버블 시작 — visible 시각을 초기화한다.
     this._updatePosition()
+    this.textEl.innerHTML = ''
     this.state = 'entering'
     this.bubble.classList.add('is-entering')
     this.enterListener = (e: Event) => {
@@ -460,6 +469,18 @@ export class SpeechBubble {
     } else {
       left = rect.left + rect.width / 2 + this.config.offsetX
       tx   = '-50%'
+    }
+
+    // 화면 좌우 가장자리 클램프 — 좁은 화면(모바일)에서 버블이 잘리거나 화면 밖으로
+    // 나가지 않게 실제 버블 폭 기준으로 좌측 고정 좌표로 보정해 그린다.
+    const bubbleW = this.bubble.offsetWidth
+    if (bubbleW > 0) {
+      const desired = tx === '0%' ? left : tx === '-100%' ? left - bubbleW : left - bubbleW / 2
+      const clamped = Math.min(Math.max(desired, 8), Math.max(8, window.innerWidth - bubbleW - 8))
+      if (Math.abs(clamped - desired) > 0.5) {
+        left = clamped
+        tx = '0%'
+      }
     }
 
     this.host.style.left = `${left}px`
