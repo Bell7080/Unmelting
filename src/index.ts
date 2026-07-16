@@ -3266,11 +3266,13 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // 선택한 난이도가 온보딩 여부를 결정한다: 새싹 병아리 = 온보딩(30F 아크 + 필드 3종 + 양초 고양이),
   // 쉬움/보통 = 정규 스폰. 기본 부팅(difficulty=null=쉬움 테스트 필드)도 온보딩을 끈다.
   onboardingRunActive = difficulty === 'sprout'
-  // 온보딩 런 + 무역 미개방 시 메타 시스템(화폐 패널·상점 리롤)을 CSS로 숨긴다.
-  // 각 기능은 새싹 병아리 클리어 후 무역 1번 탭에서 개방된다(isMetaUnlocked).
+  // 기본 부팅/게임오버 재시작(difficulty=null)은 '테스트 플레이'다 — /시작 로비를 거치지 않으므로
+  // 메타 게이팅을 전부 우회해 직업·화폐·리롤을 모두 개방한다(개발용 플레이그라운드).
+  // 로비(무역)를 거친 런(difficulty!=null)만 실제 개방 상태(isMetaUnlocked)를 따른다.
+  const testPlay = difficulty === null
   document.body.classList.toggle('onboarding-run', onboardingRunActive)
-  document.body.classList.toggle('meta-currency-locked', onboardingRunActive || !isMetaUnlocked('currency'))
-  document.body.classList.toggle('meta-reroll-locked', onboardingRunActive || !isMetaUnlocked('shopReroll'))
+  document.body.classList.toggle('meta-currency-locked', !testPlay && (onboardingRunActive || !isMetaUnlocked('currency')))
+  document.body.classList.toggle('meta-reroll-locked', !testPlay && (onboardingRunActive || !isMetaUnlocked('shopReroll')))
   pendingDinnerRelicProfile = dinnerRelicProfile
   // 런이 실제로 시작되므로 거점 로비에서 걸어 둔 말풍선 음소거를 해제한다(시작 대사 등 정상 출력).
   speechBubble.setMuted(false)
@@ -3289,9 +3291,9 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // 슬라이드 인 시킨다. 거점 미진입(기본 부팅)이면 클래스가 없어 즉시 정상 표시된다.
   requestAnimationFrame(() => document.body.classList.remove('hearth-lobby'))
 
-  // 직업 선택 오버레이 — 온보딩(새싹 병아리)이거나 무역에서 아직 개방하지 않았으면 건너뛴다.
+  // 직업 선택 오버레이 — 테스트 플레이는 항상, 로비 런은 온보딩 아님 + jobSelect 개방 시에만 노출.
   let chosenJob: (typeof JOBS)[number] | undefined
-  if (!isOnboardingActive() && isMetaUnlocked('jobSelect')) {
+  if (testPlay || (!isOnboardingActive() && isMetaUnlocked('jobSelect'))) {
     const chosenJobId = await boardRenderer.openJobSelect(JOBS)
     chosenJob = JOBS.find((j) => j.id === chosenJobId)
   }
