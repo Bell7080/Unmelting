@@ -932,21 +932,21 @@ body.hearth-lobby #ingame-backdrop.is-out {
 /* 확정 후: stage/carousel 숨기고 뒤로가기(back)는 유지해 재선택 진입 허용 */
 #hearth-overlay.is-character-confirmed .hearth-character-stage,
 #hearth-overlay.is-character-confirmed .hearth-character-carousel { display: none; }
-/* 확정 후: 화면 중앙에 [난이도 선택]을 위, [출발]을 아래로 세로 정렬해 고정한다.
-   출발 버튼은 난이도 블록 아래 top:calc(50%+N)에 앵커해(translateY 혼동 제거) 항상 보이게 한다. */
-/* 출발 버튼은 이제 .hearth-difficulty 플렉스 컬럼의 마지막 자식(인플로우)이라
-   난이도 카드/캡션 바로 아래에 항상 위치한다 — 별도 절대 오프셋/앵커가 필요 없다. */
+/* 확정 후: 난이도 선택은 화면 정중앙에 크게, 출발 버튼은 직전에 캐릭터를 확정한
+   클릭 지점(--hearth-depart-x/y, confirmCharacter가 선택 카드 중심을 기록)에 고정한다.
+   마우스를 옮기지 않고 [캐릭터 확정 → 출발]을 같은 자리에서 이어 누를 수 있는 배려. */
 #hearth-overlay.is-character-confirmed .hearth-depart {
-  position: static;
-  align-self: center;
-  margin: clamp(6px, 1.2vh, 14px) 0 0;
+  position: fixed;
+  left: var(--hearth-depart-x, 50%);
+  top: var(--hearth-depart-y, 86vh);
+  margin: 0;
   opacity: 1;
-  transform: none;
+  transform: translate(-50%, -50%);
   pointer-events: auto;
   transition: opacity 0.32s ease 0.16s, transform 0.16s ease, box-shadow 0.18s ease, border-color 0.18s ease, filter 0.16s ease;
 }
-#hearth-overlay.is-character-confirmed .hearth-depart:hover { transform: translateY(-2px) scale(1.03); }
-#hearth-overlay.is-character-confirmed .hearth-depart.is-pressed { transform: scale(0.96); }
+#hearth-overlay.is-character-confirmed .hearth-depart:hover { transform: translate(-50%, -50%) translateY(-2px) scale(1.05); }
+#hearth-overlay.is-character-confirmed .hearth-depart.is-pressed { transform: translate(-50%, -50%) scale(0.96); }
 #hearth-overlay.is-character-confirmed .hearth-depart.is-disabled {
   opacity: 0.42;
   filter: grayscale(0.5) brightness(0.82);
@@ -964,16 +964,17 @@ body.hearth-lobby #ingame-backdrop.is-out {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: min(96%, 620px);
-  transform: translate(-50%, calc(-50% - 16px));
+  /* 출발 버튼이 하단 고정으로 빠졌으므로 난이도 블록은 정중앙에 크게 자리한다. */
+  width: min(96%, 720px);
+  transform: translate(-50%, -50%);
   z-index: 9;
   opacity: 0;
   animation: hearth-diff-rise 0.42s cubic-bezier(0.2, 0.84, 0.3, 1) 0.18s forwards;
   pointer-events: auto;
 }
 @keyframes hearth-diff-rise {
-  from { opacity: 0; transform: translate(-50%, calc(-50% - 2px)); }
-  to { opacity: 1; transform: translate(-50%, calc(-50% - 16px)); }
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 14px)); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
 }
 /* 상단 소제목: 얇은 금박 라벨 + 좌우 실선으로 인게임 패널 톤을 맞춘다. */
 .hearth-diff-kicker {
@@ -998,11 +999,11 @@ body.hearth-lobby #ingame-backdrop.is-out {
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: clamp(184px, 30vh, 250px);
+  height: clamp(220px, 36vh, 312px);
 }
 .hearth-diff-strip {
   position: relative;
-  width: min(64%, 380px);
+  width: min(74%, 470px);
   height: 100%;
   perspective: 1100px;
   touch-action: pan-y;
@@ -1015,8 +1016,8 @@ body.hearth-lobby #ingame-backdrop.is-out {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: clamp(128px, 17.5vw, 172px);
-  height: clamp(178px, 29vh, 238px);
+  width: clamp(152px, 21vw, 212px);
+  height: clamp(212px, 35vh, 300px);
   border-radius: 15px;
   border: 1px solid rgba(200, 152, 60, 0.5);
   background: linear-gradient(180deg, rgba(60, 40, 22, 0.9), rgba(24, 14, 10, 0.96));
@@ -1062,8 +1063,8 @@ body.hearth-lobby #ingame-backdrop.is-out {
   gap: 1px;
   background: linear-gradient(180deg, transparent, rgba(8, 5, 14, 0.9) 66%);
 }
-.hearth-diff-card-name { font-size: clamp(15px, 2vh, 19px); font-weight: 900; letter-spacing: 0.05em; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95); }
-.hearth-diff-card-tag { font-size: clamp(10px, 1.4vh, 12px); color: rgba(244, 206, 140, 0.82); letter-spacing: 0.05em; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
+.hearth-diff-card-name { font-size: clamp(17px, 2.4vh, 23px); font-weight: 900; letter-spacing: 0.05em; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95); }
+.hearth-diff-card-tag { font-size: clamp(11px, 1.6vh, 14px); color: rgba(244, 206, 140, 0.82); letter-spacing: 0.05em; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
 .hearth-diff-card.is-selected {
   border-color: var(--color-flame, #ffd778);
   box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.3), inset 0 -6px 14px rgba(0, 0, 0, 0.5), 0 20px 44px rgba(0, 0, 0, 0.76), 0 0 34px rgba(244, 164, 96, 0.42);

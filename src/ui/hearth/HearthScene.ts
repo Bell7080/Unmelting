@@ -282,7 +282,8 @@ export class HearthScene {
               <strong class="hearth-diff-caption-name"></strong>
               <small class="hearth-diff-caption-desc"></small>
             </div>
-            <!-- 출발 버튼은 난이도 플렉스 컬럼의 마지막 자식 → 항상 카드/캡션 바로 아래에 온다. -->
+            <!-- 출발 버튼: 확정 상태에서는 직전에 캐릭터를 확정한 클릭 지점(--hearth-depart-x/y)에
+                 고정된다 — 마우스를 옮기지 않고 그대로 이어 누를 수 있다. -->
             <button class="hearth-depart" type="button" data-hearth-depart>출발</button>
           </div>
           <div class="hearth-character-carousel">
@@ -1128,6 +1129,15 @@ export class HearthScene {
     const target = document.querySelector<HTMLElement>('.player-card')
     if (!root || !showcase || !shell) return
 
+    // 확정 클릭이 일어난 선택 카드의 화면 좌표를 기억해, 다음 레이어의 출발 버튼을
+    // 같은 자리에 띄운다 — 마우스를 옮기지 않고 그대로 이어 누를 수 있게 하는 배려.
+    const confirmedCard = root.querySelector<HTMLElement>('.hearth-character-card.is-selected')
+    const confirmedRect = confirmedCard?.getBoundingClientRect()
+    if (confirmedRect) {
+      root.style.setProperty('--hearth-depart-x', `${confirmedRect.left + confirmedRect.width / 2}px`)
+      root.style.setProperty('--hearth-depart-y', `${confirmedRect.top + confirmedRect.height / 2}px`)
+    }
+
     // 1. 캐러셀·카피 텍스트 역방향 퇴장 (CSS transition이 처리)
     root.classList.add('is-character-confirming')
     await this.wait(300)
@@ -1364,7 +1374,9 @@ export class HearthScene {
     const center = this.selectedDifficultyIndex
     cards.forEach((card) => {
       const i = Number(card.dataset.hearthDiff ?? -1)
-      const off = i - center // 3장 고정이라 순환 없이 선형 배치
+      // 캐릭터 커버플로우와 같은 최단 경로 순환 배치 — 끝에서 한 번 더 넘기면 반대쪽이 이어진다.
+      let off = ((i - center) % n + n) % n
+      if (off > n / 2) off -= n
       const a = Math.abs(off)
       const scale = Math.max(0.78, 1 - a * 0.16)
       const opac = a <= 1.6 ? Math.max(0.22, 1 - a * 0.4) : 0
@@ -1381,9 +1393,11 @@ export class HearthScene {
 
   /** 난이도 선택 갱신 — 커버플로우 재배치 + 하단 캡션(이름/설명/잠금) 동기화. */
   private selectDifficulty(index: number, direction: 'left' | 'right' | 'click' = 'click'): void {
-    const clamped = Math.max(0, Math.min(HEARTH_DIFFICULTIES.length - 1, index))
-    this.selectedDifficultyIndex = clamped
-    const def = HEARTH_DIFFICULTIES[clamped]
+    // 캐릭터 선택과 같은 순환: 끝에서 계속 넘기면 처음으로 자연스럽게 이어진다.
+    const n = HEARTH_DIFFICULTIES.length
+    const wrapped = ((index % n) + n) % n
+    this.selectedDifficultyIndex = wrapped
+    const def = HEARTH_DIFFICULTIES[wrapped]
     window.localStorage.setItem(HEARTH_LAST_DIFFICULTY_KEY, def.key)
     this.layoutDifficultyCards()
     const root = this.overlay
