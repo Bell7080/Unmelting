@@ -1745,12 +1745,17 @@ function priceForRelic(id: RelicId): number {
 }
 
 /** Generate up to three unowned, unbanned relics + per-spawn score price. */
+/** 새싹 병아리(온보딩)에서만 노출하는 기본 유물 — 초반 제작 스탯 유물(체력+5·공격력+1·처치 시 체력+1). */
+const ONBOARDING_RELIC_IDS: RelicId[] = ['lifeline', 'red-potion', 'carving-knife']
+
 function rollShopOffers(excludeIds: string[] = []): ShopOfferView[] {
   const character = gameState.character
   // 제단도 상점과 동일하게 전체 유물 풀에서 3장을 뽑는다(상위 등급 제한 없음).
-  const sourcePool = RELIC_IDS.filter(
+  // 단, 온보딩은 초반 기본 유물만 노출한다(레어 이상 잠금).
+  let sourcePool = RELIC_IDS.filter(
     (id) => !character.hasRelic(id) && !character.bannedRelics.includes(id)
   )
+  if (isOnboardingActive()) sourcePool = sourcePool.filter((id) => ONBOARDING_RELIC_IDS.includes(id))
   // 리롤 시 현재 배치된 유물은 제외한다. 풀이 부족하면 제외 없이 폴백한다.
   const excludeSet = new Set(excludeIds)
   const filteredPool = excludeSet.size > 0
@@ -3273,6 +3278,14 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   document.body.classList.toggle('onboarding-run', onboardingRunActive)
   document.body.classList.toggle('meta-currency-locked', !testPlay && (onboardingRunActive || !isMetaUnlocked('currency')))
   document.body.classList.toggle('meta-reroll-locked', !testPlay && (onboardingRunActive || !isMetaUnlocked('shopReroll')))
+  // 새싹 병아리: 런 카드 풀을 커먼 등급만 남겨 재구성한다(레어 이상 손패 잠금 — 검과 방패 등).
+  // resetForNewRun이 전체 풀로 세팅한 뒤이므로 여기서 커먼 부분집합으로 덮어 드롭·팩·레시피에 일괄 반영한다.
+  if (onboardingRunActive) {
+    const commonUnlocked = metaUnlockedCardIds.filter((id) => (HAND_CARD_RARITY[id] ?? 'common') === 'common')
+    runCardPool.reset(HAND_CARD_IDS, commonUnlocked)
+    DropSystem.setAllowedPool(runCardPool.snapshot().unlocked)
+    boardRenderer.setLockedCardIds([...runCardPool.snapshot().locked, ...runCardPool.snapshot().banned])
+  }
   pendingDinnerRelicProfile = dinnerRelicProfile
   // 런이 실제로 시작되므로 거점 로비에서 걸어 둔 말풍선 음소거를 해제한다(시작 대사 등 정상 출력).
   speechBubble.setMuted(false)
