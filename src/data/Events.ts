@@ -317,6 +317,7 @@ const EVENT_003: EventDefinition = {
     { speaker: 'player', text: '. . .가위바위보?' },
     { speaker: 'npc', text: '격식 있는 승부지! 내 패의 수는 모두 펼쳐 보이겠네 — 허나 순서는 섞어 두었지.' },
     { speaker: 'npc', text: '나를 꺾어야 자네 몫이야. 비기면. . . 판돈 절반은 내 것이라네.' },
+    { speaker: 'npc', text: '매 판 내 기분을 말해 주지. 다만 예고한 패를 그대로 꺾는 건 시시한 일 — 그런 승리엔 절반만 주겠네.' },
     { speaker: 'npc', text: '도구를 원한다면 값을 치르게. 불빛이든, 피든, 무엇이든. 자, 승부를 시작하지.' },
   ],
   minigame: {
@@ -331,7 +332,7 @@ const EVENT_003: EventDefinition = {
     items: [
       { id: 'block', label: '차단', desc: '이번 판, 백작이 낼 수 있는 패 한 종류를 막는다(막힌 패에 ×표시)', costRes: 'light', costAmount: 90 },
       { id: 'double', label: '두배', desc: '이번 판, 따는 불빛도 잃는 불빛도 두 배', costRes: 'health', costAmount: 4 },
-      { id: 'ward', label: '부적', desc: '이번 판은 지거나 비겨도 불빛을 안 잃는다', costRes: 'hand', costAmount: 1 },
+      { id: 'ward', label: '보호', desc: '이번 판은 지거나 비겨도 불빛을 안 잃는다', costRes: 'hand', costAmount: 1 },
     ],
   },
   outro: [

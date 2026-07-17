@@ -3457,9 +3457,10 @@ export class GameBoardRenderer {
   // event_003 — 가위바위보 백작(벅샷 룰렛식 아이템 도박)
   // ─────────────────────────────────────────────────────────────────────────
   /**
-   * 백작 가위바위보 미니게임. 백작 덱은 조성만 공개되고 순서는 섞여 있어(탄창처럼) 카운팅으로
-   * 확률을 읽는다. 다양한 자원으로 아이템을 사서 다음 패를 엿보거나(돋보기) 버리고(입김), 판돈을
-   * 2배로 걸거나(숫돌) 손실을 막고(부적) 백작을 꾀어(미끼) 판을 유리하게 끈다. 비김은 레이크가
+   * 백작 가위바위보 미니게임. 백작 덱은 조성만 공개되고 순서는 숨겨져 카운팅으로 확률을 읽는다.
+   * 매 판 백작이 확률 선언("바위가 끌리는군 — 70%")을 치는데, 예고된 패를 꺾은 승리는 보상이
+   * 절반이라 예고를 따를지(안전·소득 적음) 거짓을 노릴지(위험·전액)가 실력이 된다. 아이템 3종 —
+   * 차단(패 한 종류 봉쇄)/두배(손익 2배)/보호(손실 무효) — 로 판을 조작하며, 비김은 레이크가
    * 있어 무손해 손이 없다. 불빛·자원 지불/보상은 모두 실제 HUD로 즉시 반영된다.
    */
   async runCountRps(
@@ -3505,6 +3506,11 @@ export class GameBoardRenderer {
     let spinning = false
     let doubleNext = false
     let wardNext = false
+    // 백작의 확률 선언 — '끌리는군(will)'은 표기 확률 그대로 그 패를, '안 내겠네(wont)'는
+    // 표기 확률로 그 패를 회피한다. 예고된 패를 꺾은 승리는 보상 절반(싱거운 승부).
+    let declHand: RpsHand | null = null
+    let declMode: 'will' | 'wont' = 'will'
+    let declProb = 0
     const usedItems = new Set<RpsItemId>()
     const itemById = new Map<RpsItemId, RpsItemDef>(cfg.items.map((it) => [it.id, it]))
 
@@ -3546,6 +3552,17 @@ export class GameBoardRenderer {
       else if (it.id === 'ward') wardNext = true
     }
 
+    // 매 판 백작의 확률 선언을 굴린다. 선언 패는 남은 장수 비례로 고르고,
+    // 표기 %는 실제 이행 확률과 정확히 일치시켜 계산 가능한 정보(실력 재료)로 만든다.
+    const rollDeclaration = (): void => {
+      const pool = [...deckQueue]
+      if (pool.length === 0) { declHand = null; return }
+      declHand = pool[Math.floor(Math.random() * pool.length)]
+      declMode = Math.random() < 0.7 ? 'will' : 'wont'
+      const opts = declMode === 'will' ? [0.55, 0.65, 0.75, 0.85] : [0.7, 0.8, 0.9]
+      declProb = opts[Math.floor(Math.random() * opts.length)]
+    }
+
     // 손 이미지 타일(정사각 둥근모서리 + 풀인 마스크). 파일 없으면 텍스트 라벨로 폴백한다.
     const handArt = (h: RpsHand): string => {
       const art = spriteForRps(h)
@@ -3574,7 +3591,6 @@ export class GameBoardRenderer {
       </button>`
     }).join('')
     const throwHtml = HANDS.map((h) => `<button class="mini-rps-throw" type="button" data-throw="${h}">${handArt(h)}<span class="rps-throw-name">${HAND_LABEL[h]}</span></button>`).join('')
-    const rakePct = Math.round(tieFrac * 100)
     content.innerHTML = `
       <div class="mini-rps-cardslot" data-state="empty" aria-hidden="true">
         <span class="cs-face">${handArt('rock')}${handArt('paper')}${handArt('scissors')}<span class="cs-empty">?</span></span>
@@ -3585,10 +3601,9 @@ export class GameBoardRenderer {
           <div class="mini-rps-deck">${deckHtml}</div>
           <div class="mini-rps-streak">연승 <b>x1.0</b></div>
         </div>
-        <div class="mini-rps-rule">패의 수는 공개·순서는 숨김 — 비기면 판돈의 ${rakePct}%는 백작 몫</div>
-        <div class="mini-rps-buffs" aria-live="polite"></div>
+        <div class="mini-rps-decl" aria-live="polite"></div>
         <div class="mini-rps-result"></div>
-        <div class="mini-rps-discard"></div>
+        <div class="mini-rps-aux"><span class="mini-rps-buffs" aria-live="polite"></span><span class="mini-rps-discard"></span></div>
         <div class="mini-rps-items">${itemHtml}</div>
         <div class="mini-rps-stakes">${stakeHtml}</div>
         <div class="mini-rps-throws">${throwHtml}</div>
@@ -3603,6 +3618,7 @@ export class GameBoardRenderer {
     const deckEls = new Map<RpsHand, HTMLElement>()
     panel.querySelectorAll<HTMLElement>('.mini-rps-deck-item').forEach((el) => deckEls.set(el.dataset.hand as RpsHand, el))
     const streakEl = panel.querySelector<HTMLElement>('.mini-rps-streak b')!
+    const declEl = panel.querySelector<HTMLElement>('.mini-rps-decl')!
     const buffsEl = panel.querySelector<HTMLElement>('.mini-rps-buffs')!
     const resultEl = panel.querySelector<HTMLElement>('.mini-rps-result')!
     const discardEl = panel.querySelector<HTMLElement>('.mini-rps-discard')!
@@ -3625,10 +3641,16 @@ export class GameBoardRenderer {
         for (const [h, el] of slotFaces) el.classList.toggle('is-shown', h === lastPlayed)
         slotTagEl.textContent = lastPlayed ? '백작이 낸 패' : ''
       }
+      // 백작 선언 — 대사와 표기 확률을 함께 보여 계산 재료로 삼는다.
+      declEl.textContent = declHand
+        ? (declMode === 'will'
+          ? `“이번 손은 ${HAND_LABEL[declHand]}가 끌리는군.” — ${HAND_LABEL[declHand]} ${Math.round(declProb * 100)}%`
+          : `“${HAND_LABEL[declHand]}는 내지 않겠네.” — 회피 ${Math.round(declProb * 100)}%`)
+        : ''
       const buffs: string[] = []
       if (blocked) buffs.push(`차단 · ${HAND_LABEL[blocked]} 봉쇄`)
       if (doubleNext) buffs.push('두배 · 이번 판 2배')
-      if (wardNext) buffs.push('부적 · 손실 무효')
+      if (wardNext) buffs.push('보호 · 손실 무효')
       buffsEl.textContent = buffs.join('   ·   ')
       buffsEl.classList.toggle('is-armed', buffs.length > 0)
       discardEl.textContent = discard.length ? `버린 패: ${discard.map((h) => HAND_LABEL[h]).join(' ')}` : ''
@@ -3658,6 +3680,7 @@ export class GameBoardRenderer {
       doubleNext = false
       wardNext = false
       usedItems.clear()
+      rollDeclaration()
       resultEl.className = 'mini-rps-result'
       resultEl.textContent = ''
       update()
@@ -3731,13 +3754,23 @@ export class GameBoardRenderer {
           busy = true
           const mult = doubleNext ? 2 : 1
           const ward = wardNext
-          // 차단된 패는 이번 판 낼 수 없다 — 큐 순서를 유지한 채 봉쇄되지 않은 첫 장을 뽑는다.
-          let drawIdx = 0
-          if (blocked) {
-            const idx = deckQueue.findIndex((h) => h !== blocked)
-            if (idx >= 0) drawIdx = idx
+          // 백작의 손 결정 — 차단된 패를 후보에서 빼고, 선언(will/wont)을 표기 확률 그대로 이행한다.
+          // 후보 배열은 남은 장수 비례라 카운팅이 그대로 확률 계산 재료가 된다.
+          const pickFrom = (pool: RpsHand[]): RpsHand => pool[Math.floor(Math.random() * pool.length)]
+          let candidates = deckQueue.filter((h) => h !== blocked)
+          if (candidates.length === 0) candidates = [...deckQueue]
+          let theirs: RpsHand
+          const declLive = declHand !== null && candidates.includes(declHand)
+          if (declLive && declMode === 'will') {
+            const rest = candidates.filter((h) => h !== declHand)
+            theirs = Math.random() < declProb || rest.length === 0 ? (declHand as RpsHand) : pickFrom(rest)
+          } else if (declLive && declMode === 'wont') {
+            const rest = candidates.filter((h) => h !== declHand)
+            theirs = Math.random() < declProb && rest.length > 0 ? pickFrom(rest) : pickFrom(candidates)
+          } else {
+            theirs = pickFrom(candidates)
           }
-          const theirs = deckQueue.splice(drawIdx, 1)[0] as RpsHand
+          deckQueue.splice(deckQueue.indexOf(theirs), 1)
           discard.push(theirs)
           b.classList.remove('is-pulse'); void b.offsetWidth; b.classList.add('is-pulse')
           update() // 스핀 동안 입력 잠금
@@ -3746,27 +3779,30 @@ export class GameBoardRenderer {
             const outcome: 'win' | 'lose' | 'tie' = mine === theirs ? 'tie' : beats(mine, theirs) ? 'win' : 'lose'
             const vs = `${HAND_LABEL[mine]} vs ${HAND_LABEL[theirs]}`
             if (outcome === 'win') {
-              const payout = Math.round(stake * streakMult(streak + 1) * mult)
+              // 예고('끌리는군')대로 낸 패를 꺾은 승리는 싱겁다 — 보상 절반.
+              // 예고를 무시하거나 거짓을 잡아낸 승리만 전액이라, 따라갈지 노릴지가 실력이 된다.
+              const tame = declMode === 'will' && declHand === theirs
+              const payout = Math.max(1, Math.round(stake * streakMult(streak + 1) * mult * (tame ? 0.5 : 1)))
               net += payout
               streak += 1
               sink.gainLight(payout)
               this.blastEventGain(resultEl.getBoundingClientRect(), 'light', 4)
               resultEl.className = 'mini-rps-result is-win'
-              resultEl.textContent = `${vs} — 승리! 불빛 +${payout.toLocaleString()}${mult > 1 ? ' (두배)' : ''}`
+              resultEl.textContent = `${vs} — 승리! 불빛 +${payout.toLocaleString()}${tame ? ' (예고된 승부 · 절반)' : ''}${mult > 1 ? ' (두배)' : ''}`
             } else if (outcome === 'lose') {
               const loss = ward ? 0 : stake * mult
               net -= loss
               streak = 0
               if (loss > 0) sink.gainLight(-loss)
               resultEl.className = 'mini-rps-result is-lose'
-              resultEl.textContent = ward ? `${vs} — 패배지만 부적이 막았다.` : `${vs} — 패배. 불빛 -${loss.toLocaleString()}${mult > 1 ? ' (두배)' : ''}`
+              resultEl.textContent = ward ? `${vs} — 패배지만 보호가 막았다.` : `${vs} — 패배. 불빛 -${loss.toLocaleString()}${mult > 1 ? ' (두배)' : ''}`
             } else {
               const rake = ward ? 0 : Math.round(stake * tieFrac)
               net -= rake
               streak = 0
               if (rake > 0) sink.gainLight(-rake)
               resultEl.className = 'mini-rps-result is-tie'
-              resultEl.textContent = ward ? `${vs} — 비김, 부적이 막았다.` : `${vs} — 비김. 백작 몫 -${rake.toLocaleString()}`
+              resultEl.textContent = ward ? `${vs} — 비김, 보호가 막았다.` : `${vs} — 비김. 백작 몫 -${rake.toLocaleString()}`
             }
             update()
             if (deckEmpty()) window.setTimeout(finish, 950)
@@ -4050,7 +4086,7 @@ export class GameBoardRenderer {
 /* 백작은 상단 카드 슬롯을 위해 컨트롤을 하단으로 모은다. 판 전체를 크게 쓰고
    배경 어둠은 더 옅게 깔아 일러스트가 잘 비치게 한다. */
 .mini-rps {
-  width: min(99%, 920px); gap: 13px; padding-bottom: 10px;
+  width: min(99%, 920px); gap: 8px; padding-bottom: 8px;
   background: radial-gradient(130% 140% at 50% 60%, rgba(6, 4, 12, 0.32) 0%, rgba(6, 4, 12, 0.13) 50%, rgba(6, 4, 12, 0) 80%);
 }
 .mini-exchange.is-in, .mini-rps.is-in { animation: event-line-in 0.34s ease both; }
@@ -4156,14 +4192,17 @@ export class GameBoardRenderer {
 .mini-rps-dot { color: rgba(180, 168, 148, 0.4); }
 .mini-rps-streak { font-size: 15px; color: rgba(210, 198, 178, 0.74); }
 .mini-rps-streak b { color: rgba(244, 206, 112, 0.96); font-size: 19px; font-weight: 900; }
-.mini-rps-rule { text-align: center; font-size: 13.5px; letter-spacing: 0.03em; color: rgba(224, 160, 120, 0.74); }
-.mini-rps-buffs { min-height: 20px; text-align: center; font-size: 15px; color: rgba(200, 190, 170, 0.5); }
+/* 백작의 확률 선언 — 대사 + 표기 % (계산 가능한 정보라 은은히 발광) */
+.mini-rps-decl { min-height: 24px; text-align: center; font-size: 17px; letter-spacing: 0.02em; color: rgba(222, 208, 252, 0.96); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85), 0 0 14px rgba(150, 130, 224, 0.4); }
+/* 버프·버린 패는 한 줄로 압축 — 세로 예산 확보(상단 덱/선언 줄이 레일 밖으로 밀리지 않게) */
+.mini-rps-aux { display: flex; justify-content: center; align-items: baseline; gap: 22px; min-height: 18px; flex-wrap: wrap; }
+.mini-rps-buffs { font-size: 14px; color: rgba(200, 190, 170, 0.5); }
 .mini-rps-buffs.is-armed { color: rgba(224, 212, 255, 0.98); text-shadow: 0 0 12px rgba(150, 130, 224, 0.6); }
-.mini-rps-result { min-height: 26px; text-align: center; font-size: 19px; font-weight: 800; }
+.mini-rps-result { min-height: 22px; text-align: center; font-size: 18px; font-weight: 800; }
 .mini-rps-result.is-win { color: rgba(154, 228, 162, 0.99); animation: mini-result-pop 0.4s ease; }
 .mini-rps-result.is-lose { color: rgba(230, 104, 86, 0.97); animation: mini-result-pop 0.4s ease; }
 .mini-rps-result.is-tie { color: rgba(214, 204, 184, 0.78); }
-.mini-rps-discard { min-height: 17px; text-align: center; font-size: 13.5px; color: rgba(188, 178, 158, 0.52); letter-spacing: 0.06em; }
+.mini-rps-discard { font-size: 13px; color: rgba(188, 178, 158, 0.52); letter-spacing: 0.06em; }
 
 /* 아이템 — 부채꼴(슬롯 회전) + 테두리 없이 폰트 위주. hover 시 발광+확대 */
 .mini-rps-items { display: flex; justify-content: center; align-items: flex-end; gap: 12px; padding-top: 4px; }
@@ -4196,7 +4235,7 @@ export class GameBoardRenderer {
 
 /* 던지기 — 손 이미지 타일. hover 시 발광 + 확대 + 흔들림 (더 크게) */
 .mini-rps-throws { display: flex; justify-content: center; gap: 28px; }
-.mini-rps-throw { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; width: clamp(104px, 14vw, 152px); padding: 0; cursor: pointer; border: none; background: none; font-family: inherit; transition: transform 0.16s, opacity 0.18s; }
+.mini-rps-throw { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; width: clamp(92px, 11vw, 118px); padding: 0; cursor: pointer; border: none; background: none; font-family: inherit; transition: transform 0.16s, opacity 0.18s; }
 /* hover 발광은 drop-shadow 대신 뒤쪽 radial 글로우 — 마스크 알파를 따라 그림자가 지며
    생기던 원형 경계를 없앤다(::before는 자식보다 먼저 칠해져 자연히 이미지 뒤에 깔림). */
 .mini-rps-throw::before {
