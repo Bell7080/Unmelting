@@ -79,6 +79,13 @@ export type EnaSimActionKind =
   | 'shopExit'
   | 'eventSafe'
   | 'eventGreedy'
+  /** 역발상/기교 플레이 — 미니언 협박(실패 노림) 집중, 백작 차단+거짓 노림. event_002/003 전용. */
+  | 'eventTrick'
+  /** 아무것도 하지 않고 물러나기 — 저자원/저체력에서 이벤트를 포기하는 선택. */
+  | 'eventBail'
+
+/** 이벤트 플레이 요약 강도 — 보수(safe)/공격(greedy)/역발상(trick). bail은 진입 없이 이탈. */
+type EnaEventPlayMode = 'safe' | 'greedy' | 'trick'
 
 export interface EnaSimAction {
   kind: EnaSimActionKind
@@ -153,6 +160,8 @@ interface EnaGameSnapshot {
   bossAttackCountdown: number
   bossPage: number
   eventRisk: number
+  /** 현재 이벤트 국면의 이벤트 id — 정책이 이벤트별 safe/greedy/trick/bail을 가른다. */
+  eventId: EventId
   /** 강제 시련 '역경' 등으로 누적된 전역 함정 피해 보너스 — 정책의 실효 함정 피해 계산용. */
   trapDamageBonus: number
   /** 다음 전방에서 실제 인접 병합될 1칸 거미줄 수(런타임 예지와 공유 판정). */
@@ -238,14 +247,14 @@ const MIN_POOL_AFTER_DELETE = 5
 /** 망치(칼날 손패 사용 시 파편) 발동 확률 — TagReactions의 hammer 규칙과 같은 값. */
 const BLADE_HAMMER_SHARD_CHANCE = 0.25
 
-const FEATURE_SCALARS = 38
+const FEATURE_SCALARS = 42
 const FEATURE_PER_INCOMING = 6
 const FEATURE_PER_CELL = 14
 const FEATURE_PER_HAND = 9
 export const ENA_FEATURE_COUNT = FEATURE_SCALARS + FEATURE_PER_INCOMING * LANES + FEATURE_PER_CELL * ROWS * LANES + FEATURE_PER_HAND * HAND_MAX
 
 /** 모든 행동 인덱스를 고정해 신경망 출력 차원을 안정화한다.
- *  = 레인 3 + 손패 10 + 대기 1 + 상점 9 + 이벤트 2 = 25. */
+ *  = 레인 3 + 손패 10 + 대기 1 + 상점 9 + 이벤트 4 = 27. */
 export const ENA_ACTION_SPACE: EnaSimAction[] = [
   { kind: 'clickLane', arg: 0 },
   { kind: 'clickLane', arg: 1 },
@@ -263,6 +272,8 @@ export const ENA_ACTION_SPACE: EnaSimAction[] = [
   { kind: 'shopExit', arg: -1 },
   { kind: 'eventSafe', arg: -1 },
   { kind: 'eventGreedy', arg: -1 },
+  { kind: 'eventTrick', arg: -1 },
+  { kind: 'eventBail', arg: -1 },
 ]
 
 
@@ -550,7 +561,7 @@ export class EnaTrainingSimulation {
     return { observation: this.observe(), reward, done: this.done }
   }
 
-  /** 고정 길이 숫자 입력: 스칼라 38 + 예고 3칸×6 + 9칸×14 + 손패 10×9 = ENA_FEATURE_COUNT. */
+  /** 고정 길이 숫자 입력: 스칼라 42 + 예고 3칸×6 + 9칸×14 + 손패 10×9 = ENA_FEATURE_COUNT. */
   observe(): EnaObservation {
     const legalActions = ENA_ACTION_SPACE.filter((action) => this.isLegal(action))
     const tier = EmberSystem.getTier(this.ember)
@@ -594,6 +605,12 @@ export class EnaTrainingSimulation {
       this.lockedPool.size / 20,
       this.totalChanceBoost() / 60,
       this.scoreMultiplier / 3,
+      // 이벤트 국면 디테일 — 어느 이벤트인지(one-hot)와 공격 플레이 위험 크기.
+      // 정책이 이벤트별로 다른 safe/greedy/trick/bail 판단을 학습할 수 있게 한다.
+      this.phase === 'event' && this.currentEventId === 'event_001' ? 1 : 0,
+      this.phase === 'event' && this.currentEventId === 'event_002' ? 1 : 0,
+      this.phase === 'event' && this.currentEventId === 'event_003' ? 1 : 0,
+      this.eventRisk / 10,
     ]
     for (let lane = 0; lane < LANES; lane++) features.push(...this.encodeIncomingCard(this.peekIncomingRefillCard(lane)))
     for (let row = 0; row < ROWS; row++) {
@@ -1057,14 +1074,19 @@ export class EnaTrainingSimulation {
    * "에나가 미리 겪어보는" 근사 플레이를 굴린다. safe=보수적 플레이 요약, greedy=공격적 요약.
    */
   private applyEventAction(action: EnaSimAction): number {
-    if (action.kind !== 'eventSafe' && action.kind !== 'eventGreedy') return -2
-    const greedy = action.kind === 'eventGreedy'
+    if (action.kind !== 'eventSafe' && action.kind !== 'eventGreedy' && action.kind !== 'eventTrick' && action.kind !== 'eventBail') return -2
+    // 물러나기 — 아무것도 얻지 않지만 잃지도 않는다. 저자원/저체력의 합리적 탈출을 학습한다.
+    if (action.kind === 'eventBail') {
+      this.phase = 'field'
+      return 0
+    }
+    const mode: EnaEventPlayMode = action.kind === 'eventTrick' ? 'trick' : action.kind === 'eventGreedy' ? 'greedy' : 'safe'
     const id = this.currentEventId
     const mg = EVENT_DEFINITIONS[id].minigame
     let reward: number
-    if (mg?.kind === 'minion-exchange') reward = this.playMinionExchangeEvent(greedy, mg)
-    else if (mg?.kind === 'count-rps') reward = this.playCountRpsEvent(greedy, mg)
-    else reward = this.playCandleDollEvent(greedy)
+    if (mg?.kind === 'minion-exchange') reward = this.playMinionExchangeEvent(mode, mg)
+    else if (mg?.kind === 'count-rps') reward = this.playCountRpsEvent(mode, mg)
+    else reward = this.playCandleDollEvent(mode !== 'safe')
     this.phase = 'field'
     return this.hp > 0 ? reward : -12
   }
@@ -1092,8 +1114,9 @@ export class EnaTrainingSimulation {
   }
 
   /** event_002 겁쟁이 미니언 — 돌깎기식 위험 흥정을 실제 config 수치로 굴린다.
-   *  safe=확률 높을 때만 탐욕형, greedy=기회 전부 사용 + 확률 낮으면 협박(실패 노림) 전환. */
-  private playMinionExchangeEvent(greedy: boolean, cfg: MinionExchangeConfig): number {
+   *  safe=확률 높을 때만 탐욕형, greedy=기회 전부 사용 + 확률 낮으면 협박(실패 노림) 전환,
+   *  trick=처음부터 협박에 집중해 실패 대박을 노린다(불안이 쌓일수록 유리해지는 역발상). */
+  private playMinionExchangeEvent(mode: EnaEventPlayMode, cfg: MinionExchangeConfig): number {
     const greedOffers = cfg.offers.filter((o) => o.aim === 'success')
     const failOffers = cfg.offers.filter((o) => o.aim === 'fail')
     let anxiety = 0
@@ -1101,9 +1124,11 @@ export class EnaTrainingSimulation {
     for (let t = 0; t < cfg.attempts; t++) {
       const chance = Math.max(cfg.minSuccess, Math.min(cfg.maxSuccess, cfg.baseSuccess - anxiety * cfg.anxietyStep))
       // 보수 전략은 확률이 무너지면 자리를 뜬다. 공격 전략은 낮은 확률을 협박으로 역이용한다.
+      // 역발상 전략은 협박만 굴린다 — 성공 확률이 낮을수록(불안이 클수록) 실패 대박이 잘 터진다.
       let offer: RiskOffer | undefined
-      if (chance >= 0.6) offer = greedOffers[this.rng.int(Math.max(1, greedOffers.length))]
-      else if (greedy && failOffers.length > 0) offer = failOffers[this.rng.int(failOffers.length)]
+      if (mode === 'trick') offer = failOffers.length > 0 ? failOffers[this.rng.int(failOffers.length)] : greedOffers[this.rng.int(Math.max(1, greedOffers.length))]
+      else if (chance >= 0.6) offer = greedOffers[this.rng.int(Math.max(1, greedOffers.length))]
+      else if (mode === 'greedy' && failOffers.length > 0) offer = failOffers[this.rng.int(failOffers.length)]
       else break
       if (!offer) break
       const success = this.rng.next() < chance
@@ -1124,35 +1149,41 @@ export class EnaTrainingSimulation {
   }
 
   /** event_003 가위바위보 백작 — 판돈/레이크/선언·절반 규칙을 실제 config 수치로 근사한다.
-   *  safe=소액 판돈으로 예고를 따라 몇 판(절반 보상·고승률), greedy=큰 판돈으로 거짓 노림(전액·저승률).
-   *  선언 이행 확률 풀·연승 배율은 런타임(runCountRps) 상수의 보수 근사 — 변경 시 함께 갱신. */
-  private playCountRpsEvent(greedy: boolean, cfg: CountRpsConfig): number {
+   *  safe=소액 판돈으로 예고를 따라 몇 판(절반 보상·고승률), greedy=큰 판돈으로 거짓 노림(전액·저승률),
+   *  trick=차단 아이템 값을 치르고 후보를 좁혀 거짓 노림 승률을 끌어올린다(전액+유물 각).
+   *  선언 이행 확률 풀·연승 배율·차단 비용 인플레는 런타임(runCountRps) 상수의 보수 근사 — 변경 시 함께 갱신. */
+  private playCountRpsEvent(mode: EnaEventPlayMode, cfg: CountRpsConfig): number {
     const stakeUnit = Math.max(1, Math.round(cfg.baseStake * (1 + this.turn * 0.02)))
-    const stake = stakeUnit * (greedy ? 2 : 1)
+    const stake = stakeUnit * (mode === 'safe' ? 1 : 2)
     const totalRounds = Object.values(cfg.deck).reduce((s, n) => s + n, 0)
-    const rounds = greedy ? totalRounds : Math.min(4, totalRounds)
+    const rounds = mode === 'safe' ? Math.min(4, totalRounds) : totalRounds
+    // 차단(불빛 비용, 층 인플레) — 역발상 플레이는 매 판 차단으로 후보를 좁힌다.
+    const blockItem = cfg.items.find((it) => it.id === 'block')
+    const blockCost = blockItem ? Math.max(1, Math.round(blockItem.costAmount * (1 + this.turn * 0.02))) : 0
     let net = 0
     let streak = 0
     for (let r = 0; r < rounds; r++) {
-      if (this.light + net < stake) break // 판돈 부족 시 물러남
+      const roundCost = stake + (mode === 'trick' ? blockCost : 0)
+      if (this.light + net < roundCost) break // 판돈/아이템 값 부족 시 물러남
       const declProb = 0.55 + this.rng.int(4) * 0.1 // will 풀(0.55/0.65/0.75/0.85) 근사
       const streakMult = Math.min(3, 1 + streak * 0.5)
-      if (greedy) {
-        // 거짓을 노린다 — 백작이 예고를 어길 때(1-declProb)의 절반쯤을 잡아 전액 승리.
-        const winP = (1 - declProb) * 0.5
-        if (this.rng.next() < winP) { net += Math.round(stake * streakMult); streak++ }
-        else if (this.rng.next() < 0.5) { net -= stake; streak = 0 }
-        else { net -= Math.round(stake * cfg.tieLossFraction); streak = 0 }
-      } else {
+      if (mode === 'safe') {
         // 예고를 따른다 — 고승률이지만 보상 절반(싱거운 승부).
         if (this.rng.next() < declProb) { net += Math.round(stake * streakMult * 0.5); streak++ }
         else if (this.rng.next() < 0.5) { net -= Math.round(stake * cfg.tieLossFraction); streak = 0 }
         else { net -= stake; streak = 0 }
+      } else {
+        // 거짓을 노린다 — greedy는 (1-declProb)의 절반쯤, trick은 차단으로 후보를 좁혀 대부분을 잡는다.
+        if (mode === 'trick') net -= blockCost
+        const winP = (1 - declProb) * (mode === 'trick' ? 0.9 : 0.5)
+        if (this.rng.next() < winP) { net += Math.round(stake * streakMult); streak++ }
+        else if (this.rng.next() < 0.5) { net -= stake; streak = 0 }
+        else { net -= Math.round(stake * cfg.tieLossFraction); streak = 0 }
       }
     }
     this.light = Math.max(0, this.light + net)
     // 완주 + 큰 순이익이면 유물 보상(실게임 relicWinMultiple 규칙).
-    if (greedy && net >= cfg.relicWinMultiple * stakeUnit) { this.grantRelic(false); return 4 + net / 120 }
+    if (mode !== 'safe' && net >= cfg.relicWinMultiple * stakeUnit) { this.grantRelic(false); return 4 + net / 120 }
     return net / 60
   }
 
@@ -1886,7 +1917,11 @@ export class EnaTrainingSimulation {
         default: return false
       }
     }
-    if (this.phase === 'event') return action.kind === 'eventSafe' || action.kind === 'eventGreedy'
+    if (this.phase === 'event') {
+      if (action.kind === 'eventSafe' || action.kind === 'eventGreedy' || action.kind === 'eventBail') return true
+      // 역발상(trick)은 협박/차단 구조가 있는 이벤트에서만 성립한다.
+      return action.kind === 'eventTrick' && this.currentEventId !== 'event_001'
+    }
     if (this.phase === 'boss') {
       if (action.kind === 'clickLane') return action.arg === 0 // 보스 직접 공격(대표 1행동)
       if (action.kind === 'useHand') return action.arg < this.hand.length
@@ -2229,6 +2264,7 @@ export class EnaTrainingSimulation {
       bossAttackCountdown: this.bossAttackCountdown,
       bossPage: this.bossPage,
       eventRisk: this.eventRisk,
+      eventId: this.currentEventId,
       trapDamageBonus: this.trialTrapDamageBonus,
       webThreat: this.webThreatCount(),
       incomingRefill: this.incomingRefillQueue.map((card, lane) => {
@@ -2331,7 +2367,14 @@ function shopPolicy(snapshot: EnaGameSnapshot, legal: EnaSimAction[], cfg: EnaHe
 }
 
 function eventPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): number {
-  const canSurviveGreed = snapshot.hp + snapshot.shield - snapshot.eventRisk > cfg.eventGreedySafetyMargin
+  const margin = snapshot.hp + snapshot.shield - snapshot.eventRisk
+  // 여력도 자원도 없으면 발을 뺀다 — 이벤트는 의무가 아니다.
+  if (margin <= 2 && snapshot.light < 60) return actionIndexOf('eventBail', -1)
+  // 백작: 불빛이 두둑하면 차단+거짓 노림(전액·유물 각)이 기대값이 가장 크다.
+  if (snapshot.eventId === 'event_003' && snapshot.light >= 400) return actionIndexOf('eventTrick', -1)
+  // 미니언: 체력 여력이 얇으면 협박 집중(성공 디메리트가 작고 실패=대박)으로 역발상.
+  if (snapshot.eventId === 'event_002' && margin <= cfg.eventGreedySafetyMargin) return actionIndexOf('eventTrick', -1)
+  const canSurviveGreed = margin > cfg.eventGreedySafetyMargin
   return canSurviveGreed && snapshot.turnsToBoss <= cfg.eventGreedyBossWindow ? actionIndexOf('eventGreedy', -1) : actionIndexOf('eventSafe', -1)
 }
 

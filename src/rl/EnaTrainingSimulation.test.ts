@@ -21,17 +21,17 @@ describe('EnaTrainingSimulation', () => {
   it('딥러닝 입력 벡터와 행동 공간 크기를 고정한다', () => {
     const sim = new EnaTrainingSimulation(7)
     const observation = sim.reset()
-    // 스칼라 38 + 예고 3칸×6 + 9칸×14 + 손패 10×9 = 272.
-    expect(observation.features).toHaveLength(272)
-    // clickLane×3 + useHand×10 + wait + 상점×9(무료/유물/6종 팩/EXIT) + 이벤트×2 = 25.
-    expect(ENA_ACTION_SPACE).toHaveLength(25)
+    // 스칼라 42(이벤트 one-hot 3 + 위험 1 포함) + 예고 3칸×6 + 9칸×14 + 손패 10×9 = 276.
+    expect(observation.features).toHaveLength(276)
+    // clickLane×3 + useHand×10 + wait + 상점×9(무료/유물/6종 팩/EXIT) + 이벤트×4(safe/greedy/trick/bail) = 27.
+    expect(ENA_ACTION_SPACE).toHaveLength(27)
     expect(observation.legalActions.length).toBeGreaterThan(0)
   })
 
   it('교사 정책으로 100층 한 호의 국면/손패/보스 판단 학습 샘플을 생성한다', () => {
     const dataset = EnaTrainingSimulation.collectDataset(3, 11)
     expect(dataset.length).toBeGreaterThan(20)
-    expect(dataset.every((sample) => sample.state.length === 272 && sample.nextState.length === 272)).toBe(true)
+    expect(dataset.every((sample) => sample.state.length === 276 && sample.nextState.length === 276)).toBe(true)
     expect(dataset.every((sample) => sample.actionIndex >= 0 && sample.actionIndex < ENA_ACTION_SPACE.length)).toBe(true)
   })
 
@@ -143,7 +143,7 @@ describe('EnaTrainingSimulation', () => {
     const observation = sim.observe()
     expect(observation.snapshot.trapDamageBonus).toBe(2)
     // 9칸 인코딩의 첫 칸(전방 0레인) 위협 축(atk/trap 피해)은 (1+2)/30이어야 한다.
-    const scalarCount = 38
+    const scalarCount = 42
     const incomingCount = 6 * 3
     const cellFeatures = observation.features.slice(scalarCount + incomingCount, scalarCount + incomingCount + 14)
     expect(cellFeatures[1]).toBe(1) // TRAP one-hot
