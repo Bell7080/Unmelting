@@ -3488,7 +3488,9 @@ export class GameBoardRenderer {
       const j = Math.floor(Math.random() * (i + 1))
       ;[deckQueue[i], deckQueue[j]] = [deckQueue[j], deckQueue[i]]
     }
-    const discard: RpsHand[] = []
+    // 판별 결과 기록 — 상단 별(노랑=승/빨강=패/회색=비김)로 도전 이력을 보여준다.
+    const totalRounds = deckQueue.length
+    const roundResults: ('win' | 'lose' | 'tie')[] = []
     let net = 0
     let streak = 0
     // 아이템으로 지불하는 자원의 로컬 미러(불빛은 avail()로 계산). 상한/가용 판정에 쓴다.
@@ -3541,15 +3543,39 @@ export class GameBoardRenderer {
       else if (it.costRes === 'shield') { sink.spendShield(c); mirror.shield -= c }
       else { sink.sellHand(c); mirror.hand -= c }
     }
+    // 차단은 픽커에서 손을 고른 순간 지불·발동한다(아래 픽커 핸들러). 나머지는 즉시 발동.
     const useItem = (it: RpsItemDef): void => {
       payItem(it)
       usedItems.add(it.id)
-      if (it.id === 'block') {
-        // 남은 종류 중 하나를 무작위로 봉쇄 — 백작은 이번 판 그 패를 내지 못한다(덱 ×표시).
-        const types = remainingTypes()
-        blocked = types[Math.floor(Math.random() * types.length)] ?? null
-      } else if (it.id === 'double') doubleNext = true
+      if (it.id === 'double') doubleNext = true
       else if (it.id === 'ward') wardNext = true
+    }
+
+    // 이번 판 백작이 각 손을 낼 종합 확률 — 선언(will/wont)·차단·남은 장수를 실제 추첨
+    // 로직과 동일한 식으로 합성한다. 표시가 곧 진실이라 순수 추리/EV 계산 재료가 된다.
+    const throwOdds = (): Record<RpsHand, number> => {
+      const odds: Record<RpsHand, number> = { rock: 0, paper: 0, scissors: 0 }
+      let candidates = deckQueue.filter((h) => h !== blocked)
+      if (candidates.length === 0) candidates = [...deckQueue]
+      const total = candidates.length
+      if (total === 0) return odds
+      const cnt = (h: RpsHand): number => candidates.filter((x) => x === h).length
+      const declLive = declHand !== null && cnt(declHand) > 0
+      const rest = declLive ? candidates.filter((h) => h !== declHand) : []
+      if (declLive && declMode === 'will') {
+        for (const h of HANDS) {
+          if (h === declHand) odds[h] = rest.length ? declProb : 1
+          else odds[h] = rest.length ? (1 - declProb) * (rest.filter((x) => x === h).length / rest.length) : 0
+        }
+      } else if (declLive && declMode === 'wont') {
+        for (const h of HANDS) {
+          const avoidPart = rest.length ? declProb * (rest.filter((x) => x === h).length / rest.length) : declProb * (cnt(h) / total)
+          odds[h] = (h === declHand ? 0 : avoidPart) + (1 - declProb) * (cnt(h) / total)
+        }
+      } else {
+        for (const h of HANDS) odds[h] = cnt(h) / total
+      }
+      return odds
     }
 
     // 매 판 백작의 확률 선언을 굴린다. 선언 패는 남은 장수 비례로 고르고,
@@ -3570,16 +3596,22 @@ export class GameBoardRenderer {
         ? `<span class="rps-hand-art" style="background-image:url('${art}')"></span>`
         : `<span class="rps-hand-text">${HAND_LABEL[h]}</span>`
     }
-    const deckHtml = HANDS.map((h) => `<span class="mini-rps-deck-item" data-hand="${h}">${HAND_LABEL[h]} <b>×${cfg.deck[h]}</b></span>`).join('<span class="mini-rps-dot">·</span>')
+    // 도전 별: 총 판수만큼 깔고 결과(승/패/비김)에 따라 노랑/빨강/회색으로 채운다.
+    const triesHtml = Array.from({ length: totalRounds }, () => `<span class="mini-rps-try">${sparkleIcon()}</span>`).join('')
     // 아이템은 부채꼴로 — 인덱스로 회전각을 계산해 손처럼 펼친다. hover 애니는 내부 버튼이 맡는다.
+    // 차단은 버튼 위로 손 선택 픽커가 떠서 원하는 패를 직접 봉쇄한다.
     const n = cfg.items.length
     const itemHtml = cfg.items.map((it, i) => {
       const angle = (i - (n - 1) / 2) * 10
+      const picker = it.id === 'block'
+        ? `<span class="rps-block-picker" hidden>${HANDS.map((h) => `<button class="rps-block-opt" type="button" data-hand="${h}">${HAND_LABEL[h]}</button>`).join('')}</span>`
+        : ''
       return `<span class="rps-item-slot" style="transform:rotate(${angle}deg)">
         <button class="mini-rps-item" type="button" data-item="${it.id}" title="${escapeHtml(it.desc)}">
           <span class="it-label">${escapeHtml(it.label)}</span>
           <span class="it-cost">${RES_LABEL[it.costRes]} ${itemCost(it).toLocaleString()}</span>
         </button>
+        ${picker}
       </span>`
     }).join('')
     // 판돈은 별(sparkle) 개수 + 수치로 스타일리시하게.
@@ -3598,12 +3630,13 @@ export class GameBoardRenderer {
       </div>
       <div class="mini-rps is-in">
         <div class="mini-rps-top">
-          <div class="mini-rps-deck">${deckHtml}</div>
+          <div class="mini-rps-tries">${triesHtml}</div>
           <div class="mini-rps-streak">연승 <b>x1.0</b></div>
         </div>
         <div class="mini-rps-decl" aria-live="polite"></div>
+        <div class="mini-rps-odds" aria-live="polite"></div>
         <div class="mini-rps-result"></div>
-        <div class="mini-rps-aux"><span class="mini-rps-buffs" aria-live="polite"></span><span class="mini-rps-discard"></span></div>
+        <div class="mini-rps-aux"><span class="mini-rps-buffs" aria-live="polite"></span></div>
         <div class="mini-rps-items">${itemHtml}</div>
         <div class="mini-rps-stakes">${stakeHtml}</div>
         <div class="mini-rps-throws">${throwHtml}</div>
@@ -3615,24 +3648,27 @@ export class GameBoardRenderer {
     slotEl.querySelectorAll<HTMLElement>('.cs-face .rps-hand-art, .cs-face .rps-hand-text').forEach((el, i) => slotFaces.set(HANDS[i], el))
     const slotTagEl = slotEl.querySelector<HTMLElement>('.cs-tag')!
     const panel = content.querySelector<HTMLElement>('.mini-rps')!
-    const deckEls = new Map<RpsHand, HTMLElement>()
-    panel.querySelectorAll<HTMLElement>('.mini-rps-deck-item').forEach((el) => deckEls.set(el.dataset.hand as RpsHand, el))
+    const tryEls = Array.from(panel.querySelectorAll<HTMLElement>('.mini-rps-try'))
     const streakEl = panel.querySelector<HTMLElement>('.mini-rps-streak b')!
     const declEl = panel.querySelector<HTMLElement>('.mini-rps-decl')!
+    const oddsEl = panel.querySelector<HTMLElement>('.mini-rps-odds')!
     const buffsEl = panel.querySelector<HTMLElement>('.mini-rps-buffs')!
     const resultEl = panel.querySelector<HTMLElement>('.mini-rps-result')!
-    const discardEl = panel.querySelector<HTMLElement>('.mini-rps-discard')!
     const itemEls = Array.from(panel.querySelectorAll<HTMLButtonElement>('.mini-rps-item'))
+    const blockPickerEl = panel.querySelector<HTMLElement>('.rps-block-picker')
+    const blockOptEls = Array.from(panel.querySelectorAll<HTMLButtonElement>('.rps-block-opt'))
     const stakeEls = Array.from(panel.querySelectorAll<HTMLButtonElement>('.mini-rps-stake'))
     const throwEls = Array.from(panel.querySelectorAll<HTMLButtonElement>('.mini-rps-throw'))
     const doneEl = panel.querySelector<HTMLButtonElement>('.mini-rps-done')!
 
     const update = (): void => {
-      for (const [h, el] of deckEls) {
-        el.querySelector('b')!.textContent = `×${deckCount(h)}`
-        // 차단된 패는 덱 표시 위에 ×표시로 봉쇄를 알린다.
-        el.classList.toggle('is-blocked', h === blocked)
-      }
+      // 도전 별 — 결과별 색을 채우고, 남은 판은 흐리게 둔다.
+      tryEls.forEach((el, i) => {
+        const r = roundResults[i]
+        el.classList.toggle('is-win', r === 'win')
+        el.classList.toggle('is-lose', r === 'lose')
+        el.classList.toggle('is-tie', r === 'tie')
+      })
       streakEl.textContent = `x${streakMult(streak).toFixed(1)}`
       // 상단 슬롯: 방금 낸 패 > 빈 슬롯. 손 이미지를 얼굴 부근에 크게 보여준다.
       // 슬롯머신 스핀 중에는 스핀 연출이 슬롯을 직접 제어하므로 건드리지 않는다.
@@ -3647,18 +3683,25 @@ export class GameBoardRenderer {
           ? `“이번 손은 ${HAND_LABEL[declHand]}가 끌리는군.” — ${HAND_LABEL[declHand]} ${Math.round(declProb * 100)}%`
           : `“${HAND_LABEL[declHand]}는 내지 않겠네.” — 회피 ${Math.round(declProb * 100)}%`)
         : ''
+      // 종합 확률 — 선언·차단·잔량이 합쳐진 이번 판 백작의 손 분포. 차단된 손은 ×로 표기.
+      const odds = throwOdds()
+      oddsEl.innerHTML = HANDS.map((h) =>
+        h === blocked
+          ? `<span class="odds-chip is-blocked">${HAND_LABEL[h]} <b>×</b></span>`
+          : `<span class="odds-chip">${HAND_LABEL[h]} <b>${Math.round(odds[h] * 100)}%</b></span>`
+      ).join('<span class="mini-rps-dot">·</span>')
       const buffs: string[] = []
-      if (blocked) buffs.push(`차단 · ${HAND_LABEL[blocked]} 봉쇄`)
       if (doubleNext) buffs.push('두배 · 이번 판 2배')
       if (wardNext) buffs.push('보호 · 손실 무효')
       buffsEl.textContent = buffs.join('   ·   ')
       buffsEl.classList.toggle('is-armed', buffs.length > 0)
-      discardEl.textContent = discard.length ? `버린 패: ${discard.map((h) => HAND_LABEL[h]).join(' ')}` : ''
       itemEls.forEach((b) => {
         const it = itemById.get(b.dataset.item as RpsItemId)!
         b.classList.toggle('is-disabled', !itemAffordable(it))
         b.classList.toggle('is-used', usedItems.has(it.id))
       })
+      // 차단 픽커 옵션은 실제 남아 있는 패만 활성화한다.
+      blockOptEls.forEach((b) => b.classList.toggle('is-disabled', deckCount(b.dataset.hand as RpsHand) === 0))
       const affordable = (m: number): boolean => stakeUnit * m <= avail()
       stakeEls.forEach((b) => {
         const m = Number(b.dataset.mult)
@@ -3680,6 +3723,7 @@ export class GameBoardRenderer {
       doubleNext = false
       wardNext = false
       usedItems.clear()
+      if (blockPickerEl) blockPickerEl.hidden = true
       rollDeclaration()
       resultEl.className = 'mini-rps-result'
       resultEl.textContent = ''
@@ -3729,10 +3773,30 @@ export class GameBoardRenderer {
           e.stopPropagation()
           const it = itemById.get(b.dataset.item as RpsItemId)
           if (!it || !itemAffordable(it)) return
+          // 차단은 즉시 발동 대신 손 선택 픽커를 연다(선택 시 지불·발동, 재클릭으로 취소).
+          if (it.id === 'block') {
+            if (blockPickerEl) blockPickerEl.hidden = !blockPickerEl.hidden
+            return
+          }
           useItem(it)
           const r = b.getBoundingClientRect()
           SquareBurst.playAt(r.left + r.width / 2, r.top + r.height / 2, 'starlight', { count: 8, spread: 80, duration: 420 })
           b.classList.remove('is-pulse'); void b.offsetWidth; b.classList.add('is-pulse')
+          update()
+        })
+      })
+      // 차단 픽커 — 원하는 손을 고르면 그 순간 값을 치르고 봉쇄한다.
+      blockOptEls.forEach((opt) => {
+        opt.addEventListener('click', (e) => {
+          e.stopPropagation()
+          const it = itemById.get('block')
+          if (!it || opt.classList.contains('is-disabled') || !itemAffordable(it)) return
+          payItem(it)
+          usedItems.add('block')
+          blocked = opt.dataset.hand as RpsHand
+          if (blockPickerEl) blockPickerEl.hidden = true
+          const r = opt.getBoundingClientRect()
+          SquareBurst.playAt(r.left + r.width / 2, r.top + r.height / 2, 'starlight', { count: 8, spread: 80, duration: 420 })
           update()
         })
       })
@@ -3771,12 +3835,12 @@ export class GameBoardRenderer {
             theirs = pickFrom(candidates)
           }
           deckQueue.splice(deckQueue.indexOf(theirs), 1)
-          discard.push(theirs)
           b.classList.remove('is-pulse'); void b.offsetWidth; b.classList.add('is-pulse')
           update() // 스핀 동안 입력 잠금
           // 슬롯머신 스핀 → 착지 뒤에 승패를 정산한다.
           spinReveal(theirs, () => {
             const outcome: 'win' | 'lose' | 'tie' = mine === theirs ? 'tie' : beats(mine, theirs) ? 'win' : 'lose'
+            roundResults.push(outcome) // 상단 도전 별 기록(노랑/빨강/회색)
             const vs = `${HAND_LABEL[mine]} vs ${HAND_LABEL[theirs]}`
             if (outcome === 'win') {
               // 예고('끌리는군')대로 낸 패를 꺾은 승리는 싱겁다 — 보상 절반.
@@ -4177,19 +4241,22 @@ export class GameBoardRenderer {
 .mini-rps-cardslot.is-tick .cs-face { filter: brightness(1.18); }
 .mini-rps-cardslot.is-impact { animation: rps-slot-impact 0.36s cubic-bezier(0.2, 0.8, 0.2, 1); }
 
-.mini-rps-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-.mini-rps-deck { font-size: 18px; display: inline-flex; align-items: baseline; gap: 9px; }
-.mini-rps-deck-item { position: relative; }
-.mini-rps-deck-item b { color: rgba(255, 232, 176, 0.97); font-weight: 900; font-size: 19px; }
-/* 차단된 패 — 덱 표시 위에 붉은 ×를 겹쳐 이번 판 봉쇄를 알린다 */
-.mini-rps-deck-item.is-blocked { opacity: 0.55; }
-.mini-rps-deck-item.is-blocked::after {
-  content: '×'; position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%);
-  font-size: 30px; font-weight: 900; color: rgba(236, 92, 68, 0.96);
-  text-shadow: 0 0 10px rgba(210, 54, 32, 0.65), 0 1px 4px rgba(0, 0, 0, 0.9);
-  pointer-events: none;
-}
+/* 상단 정보줄은 패널 flex에서 빼서 레일 좌·우 상단 코너에 고정 — 중앙 카드 슬롯과 같은 높이.
+   세로 예산을 차지하지 않아 아래 컨트롤들이 레일 밖으로 밀리지 않는다. */
+.mini-rps-top { position: absolute; left: 3.5%; right: 3.5%; top: 3.5%; display: flex; justify-content: space-between; align-items: center; z-index: 3; }
+/* 도전 별 — 총 판수를 깔아두고 결과별로 채운다: 노랑=승 / 빨강=패 / 회색=비김 / 흐림=남은 판 */
+.mini-rps-tries { display: inline-flex; gap: 6px; align-items: center; }
+.mini-rps-try { display: inline-flex; width: 18px; height: 18px; color: rgba(120, 108, 86, 0.32); transition: color 0.25s, filter 0.25s; }
+.mini-rps-try svg { width: 100%; height: 100%; }
+.mini-rps-try.is-win { color: rgba(255, 226, 150, 0.99); filter: drop-shadow(0 0 6px rgba(244, 206, 112, 0.8)); }
+.mini-rps-try.is-lose { color: rgba(236, 96, 72, 0.97); filter: drop-shadow(0 0 6px rgba(210, 54, 32, 0.65)); }
+.mini-rps-try.is-tie { color: rgba(178, 172, 158, 0.85); filter: drop-shadow(0 0 4px rgba(150, 144, 130, 0.4)); }
 .mini-rps-dot { color: rgba(180, 168, 148, 0.4); }
+/* 종합 확률 칩 — 선언·차단·잔량이 합쳐진 이번 판 백작의 손 분포(차단은 붉은 ×) */
+.mini-rps-odds { min-height: 22px; display: flex; justify-content: center; align-items: baseline; gap: 10px; font-size: 15px; color: rgba(214, 204, 184, 0.8); }
+.odds-chip b { color: rgba(255, 232, 176, 0.98); font-size: 18px; font-weight: 900; }
+.odds-chip.is-blocked { opacity: 0.6; }
+.odds-chip.is-blocked b { color: rgba(236, 92, 68, 0.96); text-shadow: 0 0 8px rgba(210, 54, 32, 0.55); }
 .mini-rps-streak { font-size: 15px; color: rgba(210, 198, 178, 0.74); }
 .mini-rps-streak b { color: rgba(244, 206, 112, 0.96); font-size: 19px; font-weight: 900; }
 /* 백작의 확률 선언 — 대사 + 표기 % (계산 가능한 정보라 은은히 발광) */
@@ -4202,11 +4269,26 @@ export class GameBoardRenderer {
 .mini-rps-result.is-win { color: rgba(154, 228, 162, 0.99); animation: mini-result-pop 0.4s ease; }
 .mini-rps-result.is-lose { color: rgba(230, 104, 86, 0.97); animation: mini-result-pop 0.4s ease; }
 .mini-rps-result.is-tie { color: rgba(214, 204, 184, 0.78); }
-.mini-rps-discard { font-size: 13px; color: rgba(188, 178, 158, 0.52); letter-spacing: 0.06em; }
 
 /* 아이템 — 부채꼴(슬롯 회전) + 테두리 없이 폰트 위주. hover 시 발광+확대 */
 .mini-rps-items { display: flex; justify-content: center; align-items: flex-end; gap: 12px; padding-top: 4px; }
-.rps-item-slot { transform-origin: center 170%; }
+.rps-item-slot { position: relative; transform-origin: center 170%; }
+/* 차단 픽커 — 차단 버튼 바로 위에 떠서 봉쇄할 손을 직접 고른다 */
+.rps-block-picker {
+  position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%);
+  display: flex; gap: 6px; padding: 5px 7px; border-radius: 10px;
+  background: rgba(20, 12, 24, 0.88); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.6);
+  z-index: 4;
+}
+.rps-block-picker[hidden] { display: none; }
+.rps-block-opt {
+  padding: 5px 12px; border-radius: 8px; cursor: pointer; border: none;
+  background: rgba(52, 30, 58, 0.6); font-family: inherit; font-size: 14px; font-weight: 900; letter-spacing: 0.04em;
+  color: rgba(240, 228, 252, 0.96); text-shadow: 0 1px 5px rgba(0, 0, 0, 0.85);
+  transition: transform 0.14s, background 0.16s, opacity 0.16s;
+}
+.rps-block-opt:hover { transform: translateY(-2px); background: rgba(84, 46, 92, 0.75); }
+.rps-block-opt.is-disabled { opacity: 0.3; pointer-events: none; }
 .mini-rps-item {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 5px 15px; cursor: pointer; border: none; background: none; font-family: inherit;
