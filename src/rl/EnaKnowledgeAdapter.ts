@@ -97,7 +97,7 @@ export function buildEnaKnowledgeBase(): EnaKnowledgeBase {
   const shop = analyzeShopKnowledge()
   const trialPressure = TRIAL_DEFINITIONS.reduce((sum, trial) => sum + trialPressureValue(trial.effect), 0)
   const jobProfiles = Object.fromEntries(JOBS.map((job) => [job.id, job.damageBonus * 2 + job.healthBonus * 0.1 + job.spawnTreasure * 0.03 - job.spawnEnemy * 0.02 - job.spawnTrap * 0.02]))
-  const eventPressure = Object.values(EVENT_DEFINITIONS).reduce((sum, event) => sum + event.choices.length * 0.4 + event.choices.filter((choice) => choice.requiresHand).length * 0.8, 0)
+  const eventPressure = Object.values(EVENT_DEFINITIONS).reduce((sum, event) => { const choices = event.choices ?? []; return sum + choices.length * 0.4 + choices.filter((choice) => choice.requiresHand).length * 0.8 }, 0)
   const globalSynergyNotes = makeGlobalSynergyNotes(handCards, economy)
 
   cachedKnowledge = { handCards, economy, shop, trialPressure, jobProfiles, eventPressure, globalSynergyNotes }
@@ -122,7 +122,7 @@ function analyzeHandCard(id: HandCardId): EnaHandCardTactic {
   )
   const jobSynergy = JOBS.reduce((sum, job) => sum + (def.jobTags?.some((tag) => job.id.includes(tag)) ? 2 : 0), 0)
   const eventSynergy = Object.values(EVENT_DEFINITIONS).reduce((sum, event) => {
-    const choices = event.choices.filter((choice) => choice.requiresHand === id || choice.effectLines.some((line) => line.includes(def.name)))
+    const choices = (event.choices ?? []).filter((choice) => choice.requiresHand === id || choice.effectLines.some((line) => line.includes(def.name)))
     return sum + choices.length * 1.5
   }, 0)
 

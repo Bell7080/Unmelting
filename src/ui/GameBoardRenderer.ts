@@ -28,7 +28,17 @@ import type {
   TreasureChange,
 } from '@core/TurnManager'
 import { spriteForCard, spriteForHandCard, spriteForRelic, spriteForBasicPackItem, spriteForJob, spriteForEvent, SpriteUrls, recipeSprite001 } from '@ui/Sprites'
-import type { EventDefinition } from '@data/Events'
+import type {
+  EventDefinition,
+  EventChoice,
+  MinionExchangeConfig,
+  CountRpsConfig,
+  ExchangeOffer,
+  EventMinigameSettlement,
+  EventResourceKind,
+  EventResourceSnapshot,
+  RpsHand,
+} from '@data/Events'
 import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandCategory, HandEffectTargeting, JobTag } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
@@ -3119,6 +3129,69 @@ export class GameBoardRenderer {
     onConsume: () => void,
     playDialogue: () => Promise<void>
   ): Promise<{ index: number; buttonRect: DOMRect }> {
+    // 공용 진입 셸(블라스트 → 커튼 → 문 소비 → 일러스트 → 대사)을 열고 콘텐츠 마운트를 받는다.
+    const content = await this.openEventScene(cardId, def.illu, onConsume, playDialogue)
+
+    // 위협 버튼(emphasis==='danger')은 행에서 빼서 하단 중앙에 단독 배치한다.
+    const choices = def.choices ?? []
+    const dangerIdx = choices.findIndex((c) => c.emphasis === 'danger')
+    const rowChoices = choices.map((c, i) => ({ c, i })).filter(({ i }) => i !== dangerIdx)
+    // 디메리트 텍스트(체력 감소/소모 등)를 붉은 span으로 마킹한다.
+    const DEMERIT_RE = /\s-\d|소모|손해|감소/
+    const renderEffectParts = (lines: readonly string[]): string =>
+      lines.join(' · ').split(' · ').map((p) => {
+        const cls = DEMERIT_RE.test(p) ? 'event-effect-part is-demerit' : 'event-effect-part'
+        return `<span class="${cls}">${escapeHtml(p.trim())}</span>`
+      }).join('<span class="event-effect-sep"> · </span>')
+
+    const choiceBtnHtml = (c: EventChoice, i: number, extraClass = ''): string => {
+      const themeClass = c.themeClass ? `event-choice--${c.themeClass}` : ''
+      return `
+      <button class="event-choice-btn ${themeClass} ${extraClass}" type="button" data-choice="${i}" data-choice-label="${escapeHtml(c.label)}">
+        <span class="event-choice-copy">
+          <span class="event-choice-label">${escapeHtml(c.label)}</span>
+          <span class="event-choice-divider-line" aria-hidden="true"></span>
+          <span class="event-choice-effects">${renderEffectParts(c.effectLines)}</span>
+        </span>
+      </button>`
+    }
+
+    // 대사 종료 후 하단 선택 버튼을 콘텐츠 마운트에 붙여 노출한다.
+    content.innerHTML = `
+      <div class="event-choices">
+        <div class="event-choices-row">
+          ${rowChoices.map(({ c, i }) => choiceBtnHtml(c, i)).join('')}
+        </div>
+        ${dangerIdx >= 0 ? choiceBtnHtml(choices[dangerIdx], dangerIdx, `event-burn-btn ${emberAvailable ? 'is-armed' : 'is-disabled'}`) : ''}
+      </div>`
+    const choicesEl = content.querySelector<HTMLElement>('.event-choices')!
+    choicesEl.classList.add('is-in')
+    return await new Promise<{ index: number; buttonRect: DOMRect }>((resolve) => {
+      choicesEl.querySelectorAll<HTMLButtonElement>('.event-choice-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation()
+          if (btn.classList.contains('is-disabled')) return
+          // 선택 직후에는 입력만 잠그고, 효과/마무리 대사가 끝난 뒤 별도 메서드로 버튼을 접는다.
+          choicesEl.classList.add('is-resolved')
+          btn.classList.add('is-selected')
+          const index = Number(btn.dataset.choice)
+          resolve({ index, buttonRect: btn.getBoundingClientRect() })
+        })
+      })
+    })
+  }
+
+  /**
+   * 이벤트 진입 공용 셸: 블라스트 → 암막커튼 닫힘 → onConsume(문 소비) → 일러스트 슬릿 공개 →
+   * 대사 진행까지 처리하고, 콘텐츠를 붙일 .event-entry-content 마운트를 돌려준다.
+   * choice형/미니게임형 모두 이 셸을 공유한다. 종료는 공용 closeEventEntry() 를 쓴다.
+   */
+  private async openEventScene(
+    cardId: string,
+    illu: string,
+    onConsume: () => void,
+    playDialogue: () => Promise<void>
+  ): Promise<HTMLElement> {
     this.ensureEventEntryStyles()
 
     // 1) 즉시 넓고 화려한 진입 블라스트(문 위치 기준). 별빛 톤 + 보물 톤 혼합.
@@ -3131,32 +3204,10 @@ export class GameBoardRenderer {
       SquareBurst.playAt(cx, cy, 'treasure-gain', { count: 20, spread: 180, duration: 560 })
     }
 
-    // 2) 레일 위에 암막커튼 + 콘텐츠 오버레이(.job-rail-curtain CSS/키프레임 재사용 → 마운트 시 자동 닫힘).
-    //    위협 버튼(emphasis==='danger')은 행에서 빼서 하단 중앙에 단독 배치한다.
-    const dangerIdx = def.choices.findIndex((c) => c.emphasis === 'danger')
-    const rowChoices = def.choices.map((c, i) => ({ c, i })).filter(({ i }) => i !== dangerIdx)
-    // 디메리트 텍스트(체력 감소/소모 등)를 붉은 span으로 마킹한다.
-    const DEMERIT_RE = /\s-\d|소모|손해|감소/
-    const renderEffectParts = (lines: readonly string[]): string =>
-      lines.join(' · ').split(' · ').map((p) => {
-        const cls = DEMERIT_RE.test(p) ? 'event-effect-part is-demerit' : 'event-effect-part'
-        return `<span class="${cls}">${escapeHtml(p.trim())}</span>`
-      }).join('<span class="event-effect-sep"> · </span>')
-
-    const choiceBtnHtml = (c: EventDefinition['choices'][number], i: number, extraClass = ''): string => {
-      const themeClass = c.themeClass ? `event-choice--${c.themeClass}` : ''
-      return `
-      <button class="event-choice-btn ${themeClass} ${extraClass}" type="button" data-choice="${i}" data-choice-label="${escapeHtml(c.label)}">
-        <span class="event-choice-copy">
-          <span class="event-choice-label">${escapeHtml(c.label)}</span>
-          <span class="event-choice-divider-line" aria-hidden="true"></span>
-          <span class="event-choice-effects">${renderEffectParts(c.effectLines)}</span>
-        </span>
-      </button>`
-    }
+    // 2) 레일 위에 암막커튼 + 빈 콘텐츠 마운트(.job-rail-curtain CSS/키프레임 재사용 → 자동 닫힘).
     const overlay = document.createElement('div')
     overlay.id = 'event-entry-overlay'
-    const art = spriteForEvent(def.illu)
+    const art = spriteForEvent(illu)
     overlay.innerHTML = `
       <div class="event-entry-shell">
         <div class="event-entry-illu${art ? '' : ' event-entry-illu--empty'}"
@@ -3164,14 +3215,7 @@ export class GameBoardRenderer {
         <div class="job-rail-curtain job-rail-curtain--left" aria-hidden="true"></div>
         <div class="job-rail-curtain job-rail-curtain--right" aria-hidden="true"></div>
         <div id="event-demon-anchor" class="event-dialogue-anchor event-dialogue-anchor--demon" aria-hidden="true"></div>
-        <div class="event-entry-content">
-          <div class="event-choices" hidden>
-            <div class="event-choices-row">
-              ${rowChoices.map(({ c, i }) => choiceBtnHtml(c, i)).join('')}
-            </div>
-            ${dangerIdx >= 0 ? choiceBtnHtml(def.choices[dangerIdx], dangerIdx, `event-burn-btn ${emberAvailable ? 'is-armed' : 'is-disabled'}`) : ''}
-          </div>
-        </div>
+        <div class="event-entry-content"></div>
       </div>`
     document.body.appendChild(overlay)
     this.eventEntryOverlayElement = overlay
@@ -3193,7 +3237,6 @@ export class GameBoardRenderer {
     window.addEventListener('scroll', alignToRail)
 
     // 3) 느린 이벤트 커튼이 충분히 닫힐 때까지 기다린 뒤 문을 소비한다.
-    //    선택지는 hidden 우선 CSS로 잠가 대사가 끝나기 전 버튼이 비치지 않게 한다.
     await new Promise((r) => window.setTimeout(r, 1320))
     onConsume()
     alignToRail()
@@ -3203,27 +3246,10 @@ export class GameBoardRenderer {
     overlay.querySelector<HTMLElement>('.event-entry-illu')?.classList.add('is-shown')
     await new Promise((r) => window.setTimeout(r, 760))
 
-    // 5) 대사 진행: 별도 대사창 없이 게임의 말풍선 시스템(다라라락 타이핑)으로 출력한다.
-    //    플레이어/악마 위치는 호출부가 말풍선 앵커로 잡아 처리한다.
+    // 5) 대사 진행: 게임의 말풍선 시스템(다라라락 타이핑)으로 출력한다.
     await playDialogue()
 
-    // 6) 대사 종료 후 하단 선택 버튼을 열고, 버튼 클릭을 기다려 resolve한다.
-    const choicesEl = overlay.querySelector<HTMLElement>('.event-choices')!
-    choicesEl.hidden = false
-    choicesEl.classList.add('is-in')
-    return await new Promise<{ index: number; buttonRect: DOMRect }>((resolve) => {
-      choicesEl.querySelectorAll<HTMLButtonElement>('.event-choice-btn').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation()
-          if (btn.classList.contains('is-disabled')) return
-          // 선택 직후에는 입력만 잠그고, 효과/마무리 대사가 끝난 뒤 별도 메서드로 버튼을 접는다.
-          choicesEl.classList.add('is-resolved')
-          btn.classList.add('is-selected')
-          const index = Number(btn.dataset.choice)
-          resolve({ index, buttonRect: btn.getBoundingClientRect() })
-        })
-      })
-    })
+    return overlay.querySelector<HTMLElement>('.event-entry-content')!
   }
 
   /** 선택이 실제 효과까지 끝난 뒤 버튼들이 커졌다가 슉 사라지는 마무리 연출. */
@@ -3268,6 +3294,341 @@ export class GameBoardRenderer {
     }
     this.eventEntryOverlayElement?.remove()
     this.eventEntryOverlayElement = null
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // event_002 — 겁쟁이 미니언의 저울(환전 최적화 미니게임)
+  // ─────────────────────────────────────────────────────────────────────────
+  /**
+   * 미니언 환전 미니게임. 스냅샷 위에서 임시 원장을 굴리며 교환을 반복하고, "거래 종료" 시
+   * 시작값 대비 순증감(settlement)을 돌려준다. 실제 자원 반영은 호출부(index.ts)가 담당한다.
+   */
+  async runMinionExchange(
+    cardId: string,
+    def: EventDefinition,
+    cfg: MinionExchangeConfig,
+    snap: EventResourceSnapshot,
+    onConsume: () => void,
+    playDialogue: () => Promise<void>
+  ): Promise<EventMinigameSettlement> {
+    this.ensureEventMinigameStyles()
+    const content = await this.openEventScene(cardId, def.illu, onConsume, playDialogue)
+
+    const RES_LABEL: Record<EventResourceKind, string> = {
+      light: '불빛', hand: '손패', candle: '게이지', health: '체력', shield: '방패',
+    }
+    // 임시 원장 — 시작 스냅샷을 복제해 교환할 때마다 갱신한다.
+    const led: Record<EventResourceKind, number> = {
+      light: snap.light, hand: snap.hand, candle: snap.candle, health: snap.health, shield: snap.shield,
+    }
+    let fear = 0
+    let combo = 0
+    const byId = new Map<string, ExchangeOffer>(cfg.offers.map((o) => [o.id, o]))
+
+    // 겁·콤보가 오를수록 받는 양(get)이 커진다. 큰 교환을 뒤로 미루는 순서 최적화가 실력.
+    const scale = (): number => (1 + fear * cfg.fearRateGain) * (1 + combo * cfg.comboStep)
+    const getAmount = (o: ExchangeOffer): number => Math.max(1, Math.round(o.get.baseAmount * scale()))
+
+    // 교환 가능 여부: 겁 상한 미도달 + 지불 자원 충분 + 받을 자원 상한 미초과. 체력은 5 아래로 못 판다.
+    const canTrade = (o: ExchangeOffer): boolean => {
+      if (fear >= cfg.fearCap) return false
+      if (o.give.res === 'health' && led.health - o.give.amount < 5) return false
+      if (led[o.give.res] < o.give.amount) return false
+      if (o.get.res === 'hand' && led.hand >= snap.handMax) return false
+      if (o.get.res === 'health' && led.health >= snap.maxHealth) return false
+      return true
+    }
+    const applyTrade = (o: ExchangeOffer): number => {
+      led[o.give.res] -= o.give.amount
+      const amt = getAmount(o)
+      if (o.get.res === 'health') led.health = Math.min(snap.maxHealth, led.health + amt)
+      else if (o.get.res === 'hand') led.hand = Math.min(snap.handMax, led.hand + amt)
+      else led[o.get.res] += amt
+      fear += cfg.fearPerTrade
+      combo += 1
+      return amt
+    }
+    const settle = (): EventMinigameSettlement => {
+      const handNet = led.hand - snap.hand
+      const lightDelta = led.light - snap.light
+      return {
+        lightDelta,
+        handAdd: Math.max(0, handNet),
+        handRemove: Math.max(0, -handNet),
+        candleDelta: led.candle - snap.candle,
+        healthDelta: led.health - snap.health,
+        shieldDelta: led.shield - snap.shield,
+        grantRelic: false,
+        summary: `겁쟁이 미니언 저울: 교환 ${combo}회 · 불빛 ${lightDelta >= 0 ? '+' : ''}${lightDelta.toLocaleString()}`,
+      }
+    }
+
+    // 패널 골격 — 원장 스트립 + 겁(별빛 pip)/흥정 콤보 미터 + 교환 버튼 + 종료.
+    const ledgerHtml = (['light', 'hand', 'candle', 'health', 'shield'] as EventResourceKind[])
+      .map((r) => `<span class="mini-ex-stat" data-res="${r}"><span class="mini-ex-stat-key">${RES_LABEL[r]}</span><b>${led[r].toLocaleString()}</b></span>`)
+      .join('')
+    const pipsHtml = Array.from({ length: cfg.fearCap }, () => `<span class="mini-fear-pip">${sparkleIcon()}</span>`).join('')
+    const offerHtml = cfg.offers.map((o) => `
+      <button class="mini-ex-offer" type="button" data-offer="${o.id}">
+        <span class="mini-ex-offer-label">${escapeHtml(o.label)}</span>
+        <span class="mini-ex-offer-trade">
+          <span class="mini-ex-give">${RES_LABEL[o.give.res]} ${o.give.amount}</span>
+          <span class="mini-ex-arrow" aria-hidden="true">→</span>
+          <span class="mini-ex-get">${RES_LABEL[o.get.res]} <b class="mini-ex-get-amt">+${getAmount(o)}</b></span>
+        </span>
+        <span class="mini-ex-offer-hint">${escapeHtml(o.hint)}</span>
+      </button>`).join('')
+    content.innerHTML = `
+      <div class="mini-exchange is-in">
+        <div class="mini-ex-ledger">${ledgerHtml}</div>
+        <div class="mini-ex-meters">
+          <div class="mini-fear"><span class="mini-meter-key">겁</span><span class="mini-fear-pips">${pipsHtml}</span></div>
+          <div class="mini-combo"><span class="mini-meter-key">흥정</span><b class="mini-combo-val">x1.00</b></div>
+        </div>
+        <div class="mini-ex-offers">${offerHtml}</div>
+        <button class="mini-ex-done" type="button">거래 종료</button>
+      </div>`
+
+    const panel = content.querySelector<HTMLElement>('.mini-exchange')!
+    const statEls = new Map<EventResourceKind, HTMLElement>()
+    panel.querySelectorAll<HTMLElement>('.mini-ex-stat').forEach((el) => statEls.set(el.dataset.res as EventResourceKind, el))
+    const pipEls = Array.from(panel.querySelectorAll<HTMLElement>('.mini-fear-pip'))
+    const comboEl = panel.querySelector<HTMLElement>('.mini-combo-val')!
+    const offerEls = Array.from(panel.querySelectorAll<HTMLButtonElement>('.mini-ex-offer'))
+    const doneEl = panel.querySelector<HTMLButtonElement>('.mini-ex-done')!
+
+    const update = (): void => {
+      for (const [r, el] of statEls) {
+        const b = el.querySelector('b')!
+        if (b.textContent !== led[r].toLocaleString()) {
+          b.textContent = led[r].toLocaleString()
+          el.classList.remove('is-bump'); void el.offsetWidth; el.classList.add('is-bump')
+        }
+      }
+      pipEls.forEach((p, i) => p.classList.toggle('is-lit', i < fear))
+      comboEl.textContent = `x${(1 + combo * cfg.comboStep).toFixed(2)}`
+      offerEls.forEach((btn) => {
+        const o = byId.get(btn.dataset.offer!)!
+        btn.querySelector('.mini-ex-get-amt')!.textContent = `+${getAmount(o)}`
+        btn.classList.toggle('is-disabled', !canTrade(o))
+      })
+      panel.classList.toggle('is-locked', fear >= cfg.fearCap)
+    }
+    update()
+
+    return await new Promise<EventMinigameSettlement>((resolve) => {
+      offerEls.forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation()
+          const o = byId.get(btn.dataset.offer!)
+          if (!o || !canTrade(o)) return
+          applyTrade(o)
+          const r = btn.getBoundingClientRect()
+          SquareBurst.playAt(r.left + r.width / 2, r.top + r.height / 2, 'starlight', { count: 10, spread: 90, duration: 460 })
+          btn.classList.remove('is-pulse'); void btn.offsetWidth; btn.classList.add('is-pulse')
+          update()
+        })
+      })
+      doneEl.addEventListener('click', (e) => { e.stopPropagation(); resolve(settle()) })
+    })
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // event_003 — 가위바위보 백작(덱 카운팅 + 베팅 미니게임)
+  // ─────────────────────────────────────────────────────────────────────────
+  /**
+   * 백작 가위바위보 미니게임. 앞면 유한 덱 + 격식 선언을 읽어 불빛을 걸고 연승 배율을 쌓는다.
+   * 언제든 물러나 이익을 지키며, 덱을 완전히 비우고 순이익이 크면 유물 보상을 준다.
+   */
+  async runCountRps(
+    cardId: string,
+    def: EventDefinition,
+    cfg: CountRpsConfig,
+    snap: EventResourceSnapshot,
+    onConsume: () => void,
+    playDialogue: () => Promise<void>
+  ): Promise<EventMinigameSettlement> {
+    this.ensureEventMinigameStyles()
+    const content = await this.openEventScene(cardId, def.illu, onConsume, playDialogue)
+
+    const HAND_LABEL: Record<RpsHand, string> = { rock: '바위', paper: '보', scissors: '가위' }
+    const HANDS: RpsHand[] = ['rock', 'paper', 'scissors']
+    const beats = (a: RpsHand, b: RpsHand): boolean =>
+      (a === 'rock' && b === 'scissors') || (a === 'scissors' && b === 'paper') || (a === 'paper' && b === 'rock')
+
+    const deck: Record<RpsHand, number> = { ...cfg.deck }
+    const discard: RpsHand[] = []
+    let net = 0
+    let streak = 0
+    let lastCount: RpsHand | null = null
+    let allowed: RpsHand[] = [...HANDS]
+    let declText = ''
+    const stakeUnit = Math.max(1, Math.round(cfg.baseStake * (1 + snap.floor * 0.02)))
+    const stakeMults = [1, 2, 4]
+    let selectedMult = 1
+    let busy = false
+
+    const remainingTypes = (): RpsHand[] => HANDS.filter((h) => deck[h] > 0)
+    const deckEmpty = (): boolean => HANDS.every((h) => deck[h] === 0)
+    const avail = (): number => snap.light + net
+    const streakMult = (s: number): number => Math.min(3, 1 + Math.max(0, s) * 0.5)
+
+    // 격식 선언: 백작이 스스로를 구속하는 규칙. legal 집합이 비지 않는 후보만 고른다.
+    const rollDeclaration = (): void => {
+      const types = remainingTypes()
+      const candidates: { text: string; allow: RpsHand[] }[] = []
+      // 정정당당(제약 없음)
+      candidates.push({ text: '이번엔 정정당당, 무엇이든 내겠네.', allow: [...types] })
+      if (types.length >= 2) {
+        // 같은 손 반복 금지
+        if (lastCount && types.includes(lastCount) && types.filter((t) => t !== lastCount).length >= 1) {
+          candidates.push({ text: `방금과 같은 손은 격식에 어긋나지 — ${HAND_LABEL[lastCount]}는 내지 않겠네.`, allow: types.filter((t) => t !== lastCount) })
+        }
+        // 특정 손 봉인
+        for (const t of types) {
+          const rest = types.filter((x) => x !== t)
+          if (rest.length >= 1) candidates.push({ text: `오늘 ${HAND_LABEL[t]}는 품위에 맞지 않아. 내지 않겠네.`, allow: rest })
+        }
+      }
+      // 제약이 있는 선언을 더 자주 노출해 읽는 재미를 준다.
+      const constrained = candidates.filter((c) => c.allow.length < types.length)
+      const pool = constrained.length > 0 && Math.random() < 0.72 ? constrained : candidates
+      const pick = pool[Math.floor(Math.random() * pool.length)]
+      allowed = pick.allow.filter((h) => deck[h] > 0)
+      if (allowed.length === 0) allowed = [...types]
+      declText = pick.text
+    }
+
+    const countThrow = (): RpsHand => {
+      // 합법 집합에서 남은 장수 비례로 뽑는다(적당한 운). 카운팅이 좁혀질수록 예측 가능해진다.
+      const pool: RpsHand[] = []
+      for (const h of allowed) for (let i = 0; i < deck[h]; i += 1) pool.push(h)
+      return pool[Math.floor(Math.random() * pool.length)] ?? allowed[0]
+    }
+    const settle = (): EventMinigameSettlement => {
+      const grantRelic = deckEmpty() && net >= cfg.relicWinMultiple * stakeUnit
+      return {
+        lightDelta: net, handAdd: 0, handRemove: 0, candleDelta: 0, healthDelta: 0, shieldDelta: 0,
+        grantRelic,
+        summary: `가위바위보 백작: 불빛 ${net >= 0 ? '+' : ''}${net.toLocaleString()}${grantRelic ? ' · 유물 획득' : ''}`,
+      }
+    }
+
+    const deckHtml = HANDS.map((h) => `<span class="mini-rps-deck-item" data-hand="${h}">${HAND_LABEL[h]} <b>×${deck[h]}</b></span>`).join('<span class="mini-rps-dot">·</span>')
+    const stakeHtml = stakeMults.map((m, i) => `<button class="mini-rps-stake" type="button" data-mult="${m}"><span class="mini-rps-stake-name">${['소', '중', '대'][i]}</span><span class="mini-rps-stake-amt">${(stakeUnit * m).toLocaleString()}</span></button>`).join('')
+    const throwHtml = HANDS.map((h) => `<button class="mini-rps-throw" type="button" data-throw="${h}">${HAND_LABEL[h]}</button>`).join('')
+    content.innerHTML = `
+      <div class="mini-rps is-in">
+        <div class="mini-rps-top">
+          <div class="mini-rps-deck">${deckHtml}</div>
+          <div class="mini-rps-purse"><span class="mini-rps-net">불빛 <b>+0</b></span><span class="mini-rps-streak">연승 <b>x1.0</b></span></div>
+        </div>
+        <div class="mini-rps-decl" aria-live="polite"></div>
+        <div class="mini-rps-result"></div>
+        <div class="mini-rps-discard"></div>
+        <div class="mini-rps-stakes">${stakeHtml}</div>
+        <div class="mini-rps-throws">${throwHtml}</div>
+        <button class="mini-rps-done" type="button">물러나기</button>
+      </div>`
+
+    const panel = content.querySelector<HTMLElement>('.mini-rps')!
+    const deckEls = new Map<RpsHand, HTMLElement>()
+    panel.querySelectorAll<HTMLElement>('.mini-rps-deck-item').forEach((el) => deckEls.set(el.dataset.hand as RpsHand, el))
+    const netEl = panel.querySelector<HTMLElement>('.mini-rps-net b')!
+    const streakEl = panel.querySelector<HTMLElement>('.mini-rps-streak b')!
+    const declEl = panel.querySelector<HTMLElement>('.mini-rps-decl')!
+    const resultEl = panel.querySelector<HTMLElement>('.mini-rps-result')!
+    const discardEl = panel.querySelector<HTMLElement>('.mini-rps-discard')!
+    const stakeEls = Array.from(panel.querySelectorAll<HTMLButtonElement>('.mini-rps-stake'))
+    const throwEls = Array.from(panel.querySelectorAll<HTMLButtonElement>('.mini-rps-throw'))
+    const doneEl = panel.querySelector<HTMLButtonElement>('.mini-rps-done')!
+
+    const update = (): void => {
+      for (const [h, el] of deckEls) el.querySelector('b')!.textContent = `×${deck[h]}`
+      netEl.textContent = `${net >= 0 ? '+' : ''}${net.toLocaleString()}`
+      netEl.parentElement!.classList.toggle('is-neg', net < 0)
+      streakEl.textContent = `x${streakMult(streak).toFixed(1)}`
+      declEl.textContent = declText ? `격식: ${declText}` : ''
+      discardEl.textContent = discard.length ? `버린 패: ${discard.map((h) => HAND_LABEL[h]).join(' ')}` : ''
+      const affordable = (m: number): boolean => stakeUnit * m <= avail()
+      stakeEls.forEach((b) => {
+        const m = Number(b.dataset.mult)
+        b.classList.toggle('is-disabled', busy || !affordable(m))
+        b.classList.toggle('is-selected', m === selectedMult)
+      })
+      // 선택 판돈이 감당 불가면 감당 가능한 최대 배율로 자동 하향.
+      if (!affordable(selectedMult)) {
+        const best = [...stakeMults].reverse().find((m) => affordable(m))
+        selectedMult = best ?? 0
+        stakeEls.forEach((b) => b.classList.toggle('is-selected', Number(b.dataset.mult) === selectedMult))
+      }
+      const canThrow = !busy && !deckEmpty() && selectedMult > 0 && avail() > 0
+      throwEls.forEach((b) => b.classList.toggle('is-disabled', !canThrow))
+    }
+
+    const beginRound = (): void => {
+      rollDeclaration()
+      busy = false
+      resultEl.className = 'mini-rps-result'
+      resultEl.textContent = ''
+      update()
+    }
+
+    return await new Promise<EventMinigameSettlement>((resolve) => {
+      const finish = (): void => resolve(settle())
+      stakeEls.forEach((b) => {
+        b.addEventListener('click', (e) => {
+          e.stopPropagation()
+          if (b.classList.contains('is-disabled')) return
+          selectedMult = Number(b.dataset.mult)
+          update()
+        })
+      })
+      throwEls.forEach((b) => {
+        b.addEventListener('click', (e) => {
+          e.stopPropagation()
+          if (b.classList.contains('is-disabled')) return
+          const mine = b.dataset.throw as RpsHand
+          const stake = stakeUnit * selectedMult
+          if (busy || deckEmpty() || stake > avail() || stake <= 0) return
+          busy = true
+          const theirs = countThrow()
+          deck[theirs] -= 1
+          discard.push(theirs)
+          lastCount = theirs
+          let outcome: 'win' | 'lose' | 'tie'
+          if (mine === theirs) outcome = 'tie'
+          else if (beats(mine, theirs)) outcome = 'win'
+          else outcome = 'lose'
+          if (outcome === 'win') {
+            const payout = Math.round(stake * streakMult(streak + 1))
+            net += payout
+            streak += 1
+            resultEl.className = 'mini-rps-result is-win'
+            resultEl.textContent = `${HAND_LABEL[mine]} vs ${HAND_LABEL[theirs]} — 승리! 불빛 +${payout.toLocaleString()}`
+            const rr = resultEl.getBoundingClientRect()
+            SquareBurst.playAt(rr.left + rr.width / 2, rr.top + rr.height / 2, 'score', { count: 14, spread: 130, duration: 560 })
+          } else if (outcome === 'lose') {
+            net -= stake
+            streak = 0
+            resultEl.className = 'mini-rps-result is-lose'
+            resultEl.textContent = `${HAND_LABEL[mine]} vs ${HAND_LABEL[theirs]} — 패배. 불빛 -${stake.toLocaleString()}`
+          } else {
+            resultEl.className = 'mini-rps-result is-tie'
+            resultEl.textContent = `${HAND_LABEL[mine]} vs ${HAND_LABEL[theirs]} — 비김.`
+          }
+          update()
+          if (deckEmpty()) {
+            // 덱 소진 → 자동 정산(완승 보너스 판정 포함).
+            window.setTimeout(finish, 900)
+          } else {
+            window.setTimeout(beginRound, 850)
+          }
+        })
+      })
+      doneEl.addEventListener('click', (e) => { e.stopPropagation(); if (!busy) finish() })
+      beginRound()
+    })
   }
 
   /** 전방 도달 시 이벤트 문 2턴 뱃지를 "슈룩" 팝인시킨다(슬라이드인 1회 재생). */
@@ -3516,6 +3877,133 @@ export class GameBoardRenderer {
   84%  { color: rgba(230, 60, 36, 0.90); text-shadow: 0 2px 14px rgba(0,0,0,0.9), 0 0 16px rgba(210, 48, 28, 0.36); }
   100% { color: rgba(218, 78, 44, 0.92); text-shadow: 0 2px 14px rgba(0,0,0,0.9), 0 0 14px rgba(200, 58, 28, 0.28); }
 }
+`
+    document.head.appendChild(style)
+  }
+
+  /** 이벤트 미니게임(미니언 저울 / 백작 가위바위보) 전용 스타일. 촛불·낡은 종이 톤 유지,
+   *  겁 게이지는 별빛(starlight) 다이아 pip 으로만 표현해 이모지 없이 스타일리시하게 채운다. */
+  private ensureEventMinigameStyles(): void {
+    if (document.getElementById('event-minigame-styles')) return
+    const style = document.createElement('style')
+    style.id = 'event-minigame-styles'
+    style.textContent = `
+/* 공통 패널 — 하단 중앙, 낡은 종이 위 어두운 판 + 따뜻한 금테 */
+.mini-exchange, .mini-rps {
+  width: min(96%, 720px);
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 16px 18px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(244, 206, 112, 0.24);
+  background: linear-gradient(180deg, rgba(8, 5, 14, 0.74) 0%, rgba(6, 4, 12, 0.9) 100%);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6), inset 0 0 40px rgba(0, 0, 0, 0.4);
+  font-family: 'OkDanDan', Georgia, serif;
+  color: rgba(255, 238, 200, 0.9);
+}
+.mini-exchange.is-in, .mini-rps.is-in { animation: event-line-in 0.34s ease both; }
+
+/* ── 미니언 저울 ── */
+.mini-ex-ledger {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px;
+  padding-bottom: 10px; border-bottom: 1px solid rgba(244, 206, 112, 0.14);
+}
+.mini-ex-stat { display: inline-flex; align-items: baseline; gap: 5px; font-size: 14px; }
+.mini-ex-stat-key { color: rgba(210, 198, 178, 0.66); font-size: 12px; letter-spacing: 0.04em; }
+.mini-ex-stat b { color: rgba(255, 232, 176, 0.96); font-size: 17px; font-weight: 900; }
+.mini-ex-stat.is-bump b { animation: mini-stat-bump 0.42s cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+.mini-ex-meters { display: flex; align-items: center; justify-content: center; gap: 26px; }
+.mini-meter-key { color: rgba(210, 198, 178, 0.7); font-size: 12px; letter-spacing: 0.1em; margin-right: 8px; }
+.mini-fear { display: inline-flex; align-items: center; }
+.mini-fear-pips { display: inline-flex; gap: 6px; }
+.mini-fear-pip { display: inline-flex; width: 17px; height: 17px; color: rgba(90, 96, 150, 0.42); transition: color 0.2s, filter 0.2s, transform 0.2s; }
+.mini-fear-pip svg { width: 100%; height: 100%; }
+.mini-fear-pip.is-lit {
+  color: rgba(224, 228, 255, 0.98);
+  filter: drop-shadow(0 0 6px rgba(123, 115, 216, 0.9)) drop-shadow(0 0 12px rgba(123, 115, 216, 0.5));
+  transform: scale(1.08);
+}
+.mini-combo { display: inline-flex; align-items: baseline; }
+.mini-combo-val { color: rgba(244, 206, 112, 0.95); font-size: 17px; font-weight: 900; }
+
+.mini-ex-offers { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mini-ex-offer {
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+  padding: 10px 14px; border-radius: 11px; cursor: pointer;
+  border: 1px solid rgba(244, 206, 112, 0.2);
+  background: linear-gradient(180deg, rgba(30, 22, 16, 0.5), rgba(14, 10, 8, 0.62));
+  font-family: inherit; color: inherit; text-align: left;
+  transition: transform 0.14s, border-color 0.18s, box-shadow 0.18s, opacity 0.18s;
+}
+.mini-ex-offer:hover { transform: translateY(-2px); border-color: rgba(255, 224, 150, 0.5); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5); }
+.mini-ex-offer-label { font-size: 16px; font-weight: 900; letter-spacing: 0.04em; color: rgba(255, 236, 190, 0.96); }
+.mini-ex-offer-trade { font-size: 14px; display: inline-flex; align-items: baseline; gap: 7px; }
+.mini-ex-give { color: rgba(216, 150, 130, 0.9); }
+.mini-ex-arrow { color: rgba(200, 188, 168, 0.6); }
+.mini-ex-get { color: rgba(210, 200, 180, 0.78); }
+.mini-ex-get b { color: rgba(140, 210, 150, 0.98); font-size: 16px; }
+.mini-ex-offer-hint { font-size: 11.5px; color: rgba(190, 180, 162, 0.56); letter-spacing: 0.03em; }
+.mini-ex-offer.is-disabled { opacity: 0.32; pointer-events: none; }
+.mini-ex-offer.is-pulse { animation: mini-offer-pulse 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+.mini-ex-done, .mini-rps-done {
+  align-self: center; margin-top: 4px;
+  padding: 9px 30px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(244, 206, 112, 0.4);
+  background: linear-gradient(180deg, rgba(52, 40, 20, 0.7), rgba(28, 20, 10, 0.8));
+  color: rgba(255, 232, 176, 0.94); font-family: inherit; font-size: 15px; font-weight: 800; letter-spacing: 0.06em;
+  transition: transform 0.14s, box-shadow 0.18s, border-color 0.18s;
+}
+.mini-ex-done:hover, .mini-rps-done:hover { transform: translateY(-2px); border-color: rgba(255, 224, 150, 0.7); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5); }
+.mini-exchange.is-locked .mini-ex-done { animation: mini-locked-glow 1.6s ease-in-out infinite; }
+
+/* ── 백작 가위바위보 ── */
+.mini-rps-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid rgba(244, 206, 112, 0.14); }
+.mini-rps-deck { font-size: 15px; display: inline-flex; align-items: baseline; gap: 8px; }
+.mini-rps-deck-item b { color: rgba(255, 232, 176, 0.96); font-weight: 900; }
+.mini-rps-dot { color: rgba(180, 168, 148, 0.4); }
+.mini-rps-purse { display: inline-flex; gap: 16px; font-size: 13px; color: rgba(210, 198, 178, 0.7); }
+.mini-rps-purse b { color: rgba(140, 210, 150, 0.98); font-size: 16px; font-weight: 900; }
+.mini-rps-net.is-neg b { color: rgba(224, 96, 78, 0.96); }
+.mini-rps-streak b { color: rgba(244, 206, 112, 0.95); }
+.mini-rps-decl {
+  min-height: 22px; text-align: center; font-size: 15px; letter-spacing: 0.02em;
+  color: rgba(214, 200, 250, 0.9); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+}
+.mini-rps-result { min-height: 20px; text-align: center; font-size: 15px; font-weight: 800; }
+.mini-rps-result.is-win { color: rgba(150, 224, 158, 0.98); animation: mini-result-pop 0.4s ease; }
+.mini-rps-result.is-lose { color: rgba(228, 100, 82, 0.96); animation: mini-result-pop 0.4s ease; }
+.mini-rps-result.is-tie { color: rgba(210, 200, 180, 0.72); }
+.mini-rps-discard { min-height: 16px; text-align: center; font-size: 12px; color: rgba(180, 170, 150, 0.55); letter-spacing: 0.06em; }
+.mini-rps-stakes { display: flex; justify-content: center; gap: 10px; }
+.mini-rps-stake {
+  display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 78px;
+  padding: 7px 14px; border-radius: 10px; cursor: pointer;
+  border: 1px solid rgba(244, 206, 112, 0.22);
+  background: linear-gradient(180deg, rgba(30, 22, 16, 0.5), rgba(14, 10, 8, 0.6));
+  color: rgba(255, 236, 190, 0.9); font-family: inherit;
+  transition: transform 0.14s, border-color 0.18s, box-shadow 0.18s, opacity 0.18s;
+}
+.mini-rps-stake:hover { transform: translateY(-2px); }
+.mini-rps-stake-name { font-size: 14px; font-weight: 900; letter-spacing: 0.06em; }
+.mini-rps-stake-amt { font-size: 12px; color: rgba(210, 200, 180, 0.72); }
+.mini-rps-stake.is-selected { border-color: rgba(255, 224, 150, 0.85); box-shadow: 0 0 16px rgba(244, 206, 112, 0.34), inset 0 0 12px rgba(244, 206, 112, 0.12); }
+.mini-rps-stake.is-disabled { opacity: 0.3; pointer-events: none; }
+.mini-rps-throws { display: flex; justify-content: center; gap: 12px; }
+.mini-rps-throw {
+  min-width: 96px; padding: 14px 0; border-radius: 12px; cursor: pointer;
+  border: 1px solid rgba(244, 206, 112, 0.28);
+  background: linear-gradient(180deg, rgba(40, 30, 18, 0.6), rgba(18, 12, 8, 0.72));
+  color: rgba(255, 238, 196, 0.96); font-family: inherit; font-size: 20px; font-weight: 900; letter-spacing: 0.08em;
+  transition: transform 0.14s, border-color 0.18s, box-shadow 0.18s, opacity 0.18s;
+}
+.mini-rps-throw:hover { transform: translateY(-3px); border-color: rgba(255, 224, 150, 0.7); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55); }
+.mini-rps-throw.is-disabled { opacity: 0.3; pointer-events: none; }
+
+@keyframes mini-stat-bump { 0% { transform: scale(1); } 45% { transform: scale(1.22); filter: brightness(1.35); } 100% { transform: scale(1); } }
+@keyframes mini-offer-pulse { 0% { transform: scale(1); } 42% { transform: scale(1.04); filter: brightness(1.2); } 100% { transform: scale(1); } }
+@keyframes mini-result-pop { 0% { transform: scale(0.9); opacity: 0.4; } 60% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
+@keyframes mini-locked-glow { 0%, 100% { box-shadow: 0 0 0 rgba(244, 206, 112, 0); } 50% { box-shadow: 0 0 18px rgba(244, 206, 112, 0.5); } }
 `
     document.head.appendChild(style)
   }
