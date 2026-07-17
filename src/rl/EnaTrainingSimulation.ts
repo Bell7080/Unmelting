@@ -247,10 +247,10 @@ const MIN_POOL_AFTER_DELETE = 5
 /** 망치(칼날 손패 사용 시 파편) 발동 확률 — TagReactions의 hammer 규칙과 같은 값. */
 const BLADE_HAMMER_SHARD_CHANCE = 0.25
 
-const FEATURE_SCALARS = 60
+const FEATURE_SCALARS = 62
 const FEATURE_PER_INCOMING = 6
 const FEATURE_PER_CELL = 14
-const FEATURE_PER_HAND = 12
+const FEATURE_PER_HAND = 13
 export const ENA_FEATURE_COUNT = FEATURE_SCALARS + FEATURE_PER_INCOMING * LANES + FEATURE_PER_CELL * ROWS * LANES + FEATURE_PER_HAND * HAND_MAX
 
 /** 모든 행동 인덱스를 고정해 신경망 출력 차원을 안정화한다.
@@ -561,7 +561,7 @@ export class EnaTrainingSimulation {
     return { observation: this.observe(), reward, done: this.done }
   }
 
-  /** 고정 길이 숫자 입력: 스칼라 60 + 예고 3칸×6 + 9칸×14 + 손패 10×12 = ENA_FEATURE_COUNT(324). */
+  /** 고정 길이 숫자 입력: 스칼라 62 + 예고 3칸×6 + 9칸×14 + 손패 10×13 = ENA_FEATURE_COUNT(336). */
   observe(): EnaObservation {
     const legalActions = ENA_ACTION_SPACE.filter((action) => this.isLegal(action))
     const tier = EmberSystem.getTier(this.ember)
@@ -638,6 +638,9 @@ export class EnaTrainingSimulation {
       // 유물 버킷 엔진 — 방패 재생과 칼날 파편 생산력.
       this.shieldRegen / 5,
       this.shardPerKill / 2 + this.bladeUseShardChance,
+      // 런 카드 풀 — 해금(드랍에 섞이는 카드 폭)과 밴(삭제팩으로 정리한 폭).
+      this.unlockedPool.size / 30,
+      this.bannedPool.size / 10,
     ]
     for (let lane = 0; lane < LANES; lane++) features.push(...this.encodeIncomingCard(this.peekIncomingRefillCard(lane)))
     for (let row = 0; row < ROWS; row++) {
@@ -2203,7 +2206,7 @@ export class EnaTrainingSimulation {
   }
 
   private encodeHand(slot: EnaHandSlot | undefined): number[] {
-    if (!slot) return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    if (!slot) return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     const def = HAND_CARD_DEFINITIONS[slot.id]
     const tactic = this.knowledge.handCards[slot.id]
     return [
@@ -2220,7 +2223,28 @@ export class EnaTrainingSimulation {
       tactic.synergyValue / 10,
       tactic.liability / 5,
       this.hand.filter((h) => h.id === slot.id).length / 3,
+      // 실제 사용 상황 — 지금 보드/자원에서 이 카드가 통하는 정도(0~1).
+      this.handSituationalValue(slot),
     ]
+  }
+
+  /** 손패의 '지금 쓸모' — 공격은 전방 처치각, 청소/제어는 전방 위협량, 회복은 잃은 체력,
+   *  도구는 불씨 결핍으로 환산한다. 정책이 "언제 어떤 카드를 꺼낼지"를 상황으로 배우게 한다. */
+  private handSituationalValue(slot: EnaHandSlot): number {
+    const def = HAND_CARD_DEFINITIONS[slot.id]
+    if (def.category === 'attack') {
+      const enemies = this.board[0].filter((c) => c?.type === CardType.ENEMY)
+      if (enemies.length === 0) return 0
+      const toughest = Math.max(...enemies.map((c) => c!.hp))
+      return Math.min(1, this.attackCardDamage(def, slot.merged) / Math.max(1, toughest))
+    }
+    if (def.category === 'control') {
+      const hazards = this.board[0].filter((c) => c?.type === CardType.TRAP).length + this.webThreatCount()
+      return Math.min(1, hazards / 3)
+    }
+    if (def.category === 'recovery') return 1 - this.hp / this.maxHp
+    // tool(성냥/랜턴류) — 불씨가 모자랄수록 값어치가 오른다.
+    return 1 - this.ember / this.emberMax
   }
 
   private turnsToShop(): number {

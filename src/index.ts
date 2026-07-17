@@ -68,6 +68,7 @@ import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 
 import { SpeechBubble } from '@ui/SpeechBubble'
 import { BarkSequencer } from '@ui/BarkSequencer'
 import { CompanionSystem, type SituationId, type ClutchPlan, type BoardEncounterKind, type SystemEncounterKind } from '@systems/CompanionSystem'
+import type { EventMinigameMoment } from '@data/CompanionLines'
 import {
   loadDisposition,
   saveDisposition,
@@ -4888,8 +4889,10 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
   }
 
   // 이벤트 문 독립 PRD 롤: 실제 턴 전진 시에만, 보스·최종등반 중엔 중단.
+  // 새싹 병아리(온보딩)는 무역탭 '이벤트' 개방 전까지 문 자체가 나오지 않는다.
   // 당장 주입 못 해도 pendingEventDoor=true로 보류하면 다음 빈 슬롯에 자동 주입된다.
   if (advanceTurn && !gameState.bossBattleActive && !finalAscentStarlightRuleActive &&
+      (!isOnboardingActive() || isMetaUnlocked('events')) &&
       eventSpawnCtrl.rollForTurn(gameState.getCurrentTurn())) {
     pendingEventDoor = true
   }
@@ -5248,7 +5251,11 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
   // 대사는 게임의 말풍선 시스템으로 출력한다. NPC 말풍선은 하단 배치/상단 꼬리로,
   // 클릭 시 타이핑 완료 또는 다음 줄 스킵이 가능하게 보스/플레이어 대사와 같은 촉감을 맞춘다.
   const playDialogue = async (lines: readonly EventDialogueLine[] = def.dialogue): Promise<void> => {
-    for (const ln of lines) await playEventDialogueLine(ln)
+    for (const ln of lines) {
+      // SKIP이 대사 도중 눌리면 다음 줄부터 건너뛴다(현재 줄은 클릭으로 넘긴다).
+      if (boardRenderer.wasEventIntroSkipped()) break
+      await playEventDialogueLine(ln)
+    }
     speechBubble.dismiss()
     eventDemonBubble.dismiss()
   }
@@ -5257,6 +5264,9 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
     lane.setCardAtDistance(0, null)
     render()
   }
+  // 한번 본 이벤트는 연출/대사를 SKIP 버튼으로 건너뛸 수 있다(unmelting. 접두사라 /리셋 대상).
+  const seenKey = `unmelting.seen.event.${def.id}`
+  const seenBefore = window.localStorage.getItem(seenKey) === '1'
   if (def.minigame) {
     // 미니게임형(미니언 저울/백작 가위바위보): 자원 스냅샷(시작값/상한)을 넘기고, 진행 중 각 액션은
     // 실시간 싱크로 실제 자원을 즉시 올리고 내린다(기존 HUD 트레일/카운터 피드백 재사용).
@@ -5268,16 +5278,25 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
       floor: gameState.getCurrentTurn(),
     }
     const sink = makeEventResourceSink()
+    // 에나의 미니게임 반응 — 결과가 찍히는 정확한 순간에 발화한다.
+    // 잭팟/유물처럼 큰 순간은 확정, 잔잔한 승패는 절반 확률로 떠들지 않게 조절.
+    const onMinigameMoment = (m: EventMinigameMoment): void => {
+      const always = m === 'minion-jackpot' || m === 'rps-relic' || m === 'rps-streak'
+      if (!always && Math.random() > 0.5) return
+      sayEnaBark(companion.eventMinigameLine(m), { importance: BARK_IMPORTANCE.situation })
+    }
     if (def.minigame.kind === 'minion-exchange') {
-      await boardRenderer.runMinionExchange(card.id, def, def.minigame, snap, sink, consumeDoor, playDialogue)
+      await boardRenderer.runMinionExchange(card.id, def, def.minigame, snap, sink, consumeDoor, playDialogue, onMinigameMoment, seenBefore)
     } else {
-      await boardRenderer.runCountRps(card.id, def, def.minigame, snap, sink, consumeDoor, playDialogue)
+      await boardRenderer.runCountRps(card.id, def, def.minigame, snap, sink, consumeDoor, playDialogue, onMinigameMoment, seenBefore)
     }
     // 미니게임 UI가 접혀 사라진 뒤(렌더러가 처리), 이벤트1처럼 마무리 대사 → 커튼 열기.
-    await playDialogue(def.outro ?? [])
+    // SKIP한 진입에서는 마무리 대사도 생략해 바로 레일로 복귀한다.
+    if (!boardRenderer.wasEventIntroSkipped()) await playDialogue(def.outro ?? [])
+    window.localStorage.setItem(seenKey, '1')
     await boardRenderer.closeEventEntry()
   } else {
-    const { index, buttonRect } = await boardRenderer.runEventEntry(card.id, def, emberAvailable, consumeDoor, playDialogue)
+    const { index, buttonRect } = await boardRenderer.runEventEntry(card.id, def, emberAvailable, consumeDoor, playDialogue, seenBefore)
     // 불태우기(combat) 선택 시: 소비될 손패 불씨를 model 제거 전에 소각 연출.
     const choiceEffect = def.choices?.[index]?.effect
     if (choiceEffect?.kind === 'combat') {
@@ -5289,7 +5308,9 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
     render()
     await boardRenderer.playEventGainBlast(buttonRect, targets)
     await boardRenderer.hideEventChoicesAfterSelection(index)
-    await playDialogue(def.choices?.[index]?.afterDialogue ?? [])
+    // SKIP한 진입에서는 선택 후 마무리 대사도 생략한다(효과/블라스트는 그대로).
+    if (!boardRenderer.wasEventIntroSkipped()) await playDialogue(def.choices?.[index]?.afterDialogue ?? [])
+    window.localStorage.setItem(seenKey, '1')
     // combat + 레시피 해금: 마무리 대사 직후 해금 카드 연출 → 도감으로 블라스트.
     if (choiceEffect?.kind === 'combat' && choiceEffect.unlocksRecipe) {
       const recipe = RECIPES.find((r) => r.id === choiceEffect.unlocksRecipe)

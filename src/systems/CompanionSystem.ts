@@ -37,6 +37,8 @@ import {
   TRIAL_LINES,
   STARLIGHT_LINES,
   PACK_LINES,
+  EVENT_MINIGAME_LINES,
+  type EventMinigameMoment,
   CALLBACK_LINES,
   BOARD_INTRO_LINES,
   ENCOUNTER_INTRO_LINES,
@@ -810,6 +812,12 @@ export class CompanionSystem {
   /** 카드팩 구매 감상 — 팩 종류별 실제 효과에 맞는 풀에서만 고른다. */
   packLine(kind: PackLineKind): string {
     return this.pickFrom(`pack:${kind}`, PACK_LINES[kind] ?? GENERIC_BUY_LINES, 'normal')
+  }
+
+  /** 이벤트 미니게임(미니언 흥정/백작 가위바위보) 순간 반응 — 결과 확정 타이밍에 직접 발화. */
+  eventMinigameLine(kind: EventMinigameMoment): string {
+    const softMoments: EventMinigameMoment[] = ['minion-sting', 'rps-lose', 'rps-tame']
+    return this.pickFrom(`minigame:${kind}`, EVENT_MINIGAME_LINES[kind], softMoments.includes(kind) ? 'soft' : 'normal')
   }
 
   // ── 예측 대비: 위협을 미리 읽고 대비 도구를 건넨다 ──────────

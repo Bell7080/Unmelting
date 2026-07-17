@@ -791,16 +791,26 @@ export class BossEventController {
       await this.br.playDemonFireAppearAnimation(bossCard.id)
     }
 
+    // 한번 만난 보스는 인트로 대사를 SKIP 버튼으로 건너뛸 수 있다(unmelting. 접두사라 /리셋 대상).
+    // 등장 애니/타이틀 오버레이는 짧고 정체성이라 유지 — 대사만 줄 사이에서 끊는다.
+    const seenKey = `unmelting.seen.boss.${def.specialEnemyKind}`
+    const seenBefore = window.localStorage.getItem(seenKey) === '1'
+    let introSkipRequested = false
+    const removeSkipButton = seenBefore ? this.br.showBossSkipButton(() => { introSkipRequested = true }) : null
+
     // 보스 대사 — introSequence가 있으면 멀티라인 클릭-스킵 순차 표시, 없으면 기존 2줄.
     if (def.introSequence && def.introSequence.length > 0) {
       for (const line of def.introSequence) {
+        if (introSkipRequested) break
         await this.playIntroLine(line.speaker, line.text, line.holdMs)
       }
-      await new Promise((r) => window.setTimeout(r, 160))
+      if (!introSkipRequested) await new Promise((r) => window.setTimeout(r, 160))
     } else {
-      await this.playIntroLine('boss',   def.introBubble,          def.introBubbleMs)
-      await this.playIntroLine('player', def.playerResponseBubble, def.playerBubbleMs)
+      if (!introSkipRequested) await this.playIntroLine('boss', def.introBubble, def.introBubbleMs)
+      if (!introSkipRequested) await this.playIntroLine('player', def.playerResponseBubble, def.playerBubbleMs)
     }
+    removeSkipButton?.()
+    window.localStorage.setItem(seenKey, '1')
 
     // 인트로 오버레이
     const introClosed = this.br.openBossIntroOverlay({
@@ -821,7 +831,7 @@ export class BossEventController {
 
     // waxSculptor: 타이틀 닫힌 직후 추가 도발 대사 → 초기 소환 연출 (input 여전히 잠김)
     if (def.specialEnemyKind === 'waxSculptor') {
-      await this.playIntroLine('boss', '고작… 실패작 주제에 내 걸작들의 상대가 되겠나?', 2800)
+      if (!introSkipRequested) await this.playIntroLine('boss', '고작… 실패작 주제에 내 걸작들의 상대가 되겠나?', 2800)
       await this.performSummonToBack()
     }
 

@@ -42,6 +42,7 @@ import type {
   RpsItemDef,
   RpsItemId,
 } from '@data/Events'
+import type { EventMinigameMoment } from '@data/CompanionLines'
 import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandCategory, HandEffectTargeting, JobTag } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
@@ -3115,6 +3116,34 @@ export class GameBoardRenderer {
   /** 이벤트 문 진입 레이어와 정렬 리스너. */
   private eventEntryOverlayElement: HTMLElement | null = null
   private eventEntryResizeListener: (() => void) | null = null
+  /** 기방문 이벤트 SKIP 버튼이 눌렸는지 — 연출/대사만 건너뛰고 본편은 그대로 연다. */
+  private eventIntroSkipped = false
+
+  /** 이번 이벤트 진입에서 SKIP이 눌렸는지(호출부가 마무리 대사 생략 판단에 쓴다). */
+  wasEventIntroSkipped(): boolean {
+    return this.eventIntroSkipped
+  }
+
+  /** 기방문 보스 인트로용 SKIP 버튼 — 레일 우하단에 띄우고 제거 함수를 돌려준다.
+   *  이벤트 셸과 같은 .event-skip-btn 스타일을 재사용한다(보스는 오버레이가 없어 fixed 배치). */
+  showBossSkipButton(onSkip: () => void): () => void {
+    this.ensureEventEntryStyles()
+    const btn = document.createElement('button')
+    btn.className = 'event-skip-btn'
+    btn.type = 'button'
+    btn.innerHTML = 'SKIP &gt;&gt;'
+    const rail = this.boardElement.querySelector<HTMLElement>('.rail')
+    const r = rail?.getBoundingClientRect()
+    btn.style.position = 'fixed'
+    btn.style.zIndex = '160'
+    if (r) {
+      btn.style.right = `${window.innerWidth - r.right + r.width * 0.03}px`
+      btn.style.top = `${r.bottom - 46}px`
+    }
+    btn.addEventListener('click', (e) => { e.stopPropagation(); onSkip(); btn.remove() })
+    document.body.appendChild(btn)
+    return () => btn.remove()
+  }
 
   /**
    * 이벤트 문 진입 연출 + 대사/선택 흐름.
@@ -3130,10 +3159,11 @@ export class GameBoardRenderer {
     def: EventDefinition,
     emberAvailable: boolean,
     onConsume: () => void,
-    playDialogue: () => Promise<void>
+    playDialogue: () => Promise<void>,
+    skippable = false
   ): Promise<{ index: number; buttonRect: DOMRect }> {
     // 공용 진입 셸(블라스트 → 커튼 → 문 소비 → 일러스트 → 대사)을 열고 콘텐츠 마운트를 받는다.
-    const content = await this.openEventScene(cardId, def.illu, onConsume, playDialogue)
+    const content = await this.openEventScene(cardId, def.illu, onConsume, playDialogue, skippable)
 
     // 위협 버튼(emphasis==='danger')은 행에서 빼서 하단 중앙에 단독 배치한다.
     const choices = def.choices ?? []
@@ -3193,9 +3223,11 @@ export class GameBoardRenderer {
     cardId: string,
     illu: string,
     onConsume: () => void,
-    playDialogue: () => Promise<void>
+    playDialogue: () => Promise<void>,
+    skippable = false
   ): Promise<HTMLElement> {
     this.ensureEventEntryStyles()
+    this.eventIntroSkipped = false
 
     // 1) 즉시 넓고 화려한 진입 블라스트(문 위치 기준). 별빛 톤 + 보물 톤 혼합.
     const doorEl = this.findCardElement(cardId)
@@ -3219,9 +3251,26 @@ export class GameBoardRenderer {
         <div class="job-rail-curtain job-rail-curtain--right" aria-hidden="true"></div>
         <div id="event-demon-anchor" class="event-dialogue-anchor event-dialogue-anchor--demon" aria-hidden="true"></div>
         <div class="event-entry-content"></div>
+        ${skippable ? '<button class="event-skip-btn" type="button">SKIP &gt;&gt;</button>' : ''}
       </div>`
     document.body.appendChild(overlay)
     this.eventEntryOverlayElement = overlay
+    // 기방문 이벤트 SKIP — 누르는 즉시 진입 대기가 끝나고 대사도 줄 사이에서 끊긴다.
+    const skipBtn = overlay.querySelector<HTMLButtonElement>('.event-skip-btn')
+    skipBtn?.addEventListener('click', (e) => {
+      e.stopPropagation()
+      this.eventIntroSkipped = true
+      skipBtn.remove()
+    })
+    // SKIP이 눌리면 남은 시간을 기다리지 않고 즉시 넘어가는 대기.
+    const skippableWait = (ms: number): Promise<void> => new Promise((resolve) => {
+      const startedAt = performance.now()
+      const tick = (): void => {
+        if (this.eventIntroSkipped || performance.now() - startedAt >= ms) resolve()
+        else window.setTimeout(tick, 60)
+      }
+      tick()
+    })
 
     // 상점/직업선택과 동일하게 레일 rect에 셸을 고정한다.
     const alignToRail = (): void => {
@@ -3239,19 +3288,21 @@ export class GameBoardRenderer {
     window.addEventListener('resize', alignToRail)
     window.addEventListener('scroll', alignToRail)
 
-    // 3) 느린 이벤트 커튼이 충분히 닫힐 때까지 기다린 뒤 문을 소비한다.
-    await new Promise((r) => window.setTimeout(r, 1320))
+    // 3) 느린 이벤트 커튼이 충분히 닫힐 때까지 기다린 뒤 문을 소비한다(SKIP 시 즉시).
+    await skippableWait(1320)
     onConsume()
     alignToRail()
 
     // 4) 커튼이 닫힌 뒤 한 박자 쉬고, 씬 일러스트를 세로 슬릿에서 좌우로 열어 공개한다.
-    await new Promise((r) => window.setTimeout(r, 260))
+    await skippableWait(260)
     overlay.querySelector<HTMLElement>('.event-entry-illu')?.classList.add('is-shown')
-    await new Promise((r) => window.setTimeout(r, 760))
+    await skippableWait(760)
 
-    // 5) 대사 진행: 게임의 말풍선 시스템(다라라락 타이핑)으로 출력한다.
-    await playDialogue()
+    // 5) 대사 진행: 게임의 말풍선 시스템(다라라락 타이핑)으로 출력한다. SKIP 시 생략.
+    if (!this.eventIntroSkipped) await playDialogue()
 
+    // 본편(선택지/미니게임) 진입 — 스킵 버튼은 여기서 역할이 끝난다.
+    overlay.querySelector<HTMLElement>('.event-skip-btn')?.remove()
     return overlay.querySelector<HTMLElement>('.event-entry-content')!
   }
 
@@ -3327,10 +3378,12 @@ export class GameBoardRenderer {
     snap: EventResourceSnapshot,
     sink: EventResourceSink,
     onConsume: () => void,
-    playDialogue: () => Promise<void>
+    playDialogue: () => Promise<void>,
+    onMoment?: (kind: EventMinigameMoment) => void,
+    skippable = false
   ): Promise<void> {
     this.ensureEventMinigameStyles()
-    const content = await this.openEventScene(cardId, def.illu, onConsume, playDialogue)
+    const content = await this.openEventScene(cardId, def.illu, onConsume, playDialogue, skippable)
     void snap
 
     const RES_LABEL: Record<EventResourceKind, string> = {
@@ -3443,6 +3496,8 @@ export class GameBoardRenderer {
           triesLeft -= 1
           resultEl.className = `mini-ex-result ${isAimed ? 'is-good' : 'is-bad'}`
           resultEl.textContent = `${success ? '성공' : '실패'} — ${outcomeText(branch, isAimed)}`
+          // 에나 반응 — 결과가 화면에 찍히는 바로 이 순간에 알린다.
+          onMoment?.(isAimed ? (o.aim === 'fail' ? 'minion-jackpot' : 'minion-good') : 'minion-sting')
           SquareBurst.playAt(r.left + r.width / 2, r.top + r.height / 2, isAimed ? 'starlight' : 'vanish-smoke', { count: 10, spread: 90, duration: 460 })
           btn.classList.remove('is-pulse'); void btn.offsetWidth; btn.classList.add('is-pulse')
           update()
@@ -3470,10 +3525,12 @@ export class GameBoardRenderer {
     snap: EventResourceSnapshot,
     sink: EventResourceSink,
     onConsume: () => void,
-    playDialogue: () => Promise<void>
+    playDialogue: () => Promise<void>,
+    onMoment?: (kind: EventMinigameMoment) => void,
+    skippable = false
   ): Promise<void> {
     this.ensureEventMinigameStyles()
-    const content = await this.openEventScene(cardId, def.illu, onConsume, playDialogue)
+    const content = await this.openEventScene(cardId, def.illu, onConsume, playDialogue, skippable)
 
     const HAND_LABEL: Record<RpsHand, string> = { rock: '바위', paper: '보', scissors: '가위' }
     const RES_LABEL: Record<EventResourceKind, string> = { light: '불빛', hand: '손패', candle: '콤보 게이지', health: '체력', shield: '방패' }
@@ -3763,6 +3820,7 @@ export class GameBoardRenderer {
         if (deckEmpty() && net >= cfg.relicWinMultiple * stakeUnit) {
           sink.grantRelic()
           void this.animateResourceTrail(resultEl.getBoundingClientRect(), this.findResourceTrailTarget('relic'), 4, 'treasure-gain')
+          onMoment?.('rps-relic')
         }
         panel.classList.add('is-closing')
         window.setTimeout(resolve, 340)
@@ -3852,6 +3910,8 @@ export class GameBoardRenderer {
               this.blastEventGain(resultEl.getBoundingClientRect(), 'light', 4)
               resultEl.className = 'mini-rps-result is-win'
               resultEl.textContent = `${vs} — 승리! 불빛 +${payout.toLocaleString()}${tame ? ' (예고된 승부 · 절반)' : ''}${mult > 1 ? ' (두배)' : ''}`
+              // 에나 반응 — 결과 확정 순간. 연승 3+는 흐름 대사를 우선한다.
+              onMoment?.(tame ? 'rps-tame' : streak >= 3 ? 'rps-streak' : 'rps-win')
             } else if (outcome === 'lose') {
               const loss = ward ? 0 : stake * mult
               net -= loss
@@ -3859,6 +3919,7 @@ export class GameBoardRenderer {
               if (loss > 0) sink.gainLight(-loss)
               resultEl.className = 'mini-rps-result is-lose'
               resultEl.textContent = ward ? `${vs} — 패배지만 보호가 막았다.` : `${vs} — 패배. 불빛 -${loss.toLocaleString()}${mult > 1 ? ' (두배)' : ''}`
+              onMoment?.('rps-lose')
             } else {
               const rake = ward ? 0 : Math.round(stake * tieFrac)
               net -= rake
@@ -3941,6 +4002,19 @@ export class GameBoardRenderer {
   position: absolute;
   width: 1px; height: 1px;
   pointer-events: none;
+}
+/* 기방문 이벤트 연출 스킵 — 레일 우하단의 조용한 글자 버튼 */
+.event-skip-btn {
+  position: absolute; right: 3%; bottom: 3.5%; z-index: 9;
+  border: none; background: none; cursor: pointer; padding: 6px 10px;
+  font-family: 'OkDanDan', Georgia, serif; font-size: 15px; font-weight: 900; letter-spacing: 0.14em;
+  color: rgba(255, 238, 200, 0.62);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+  transition: color 0.16s, text-shadow 0.16s, transform 0.14s;
+}
+.event-skip-btn:hover {
+  color: rgba(255, 248, 226, 1); transform: translateX(2px);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9), 0 0 14px rgba(255, 210, 120, 0.6);
 }
 .event-dialogue-anchor--demon { left: 50%; top: 74%; z-index: 7; }
 .event-entry-content {

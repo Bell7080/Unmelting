@@ -34,6 +34,7 @@ import {
   TRIAL_LINES,
   STARLIGHT_LINES,
   PACK_LINES,
+  EVENT_MINIGAME_LINES,
   CALLBACK_LINES,
   FIELD_INTRO_LINES,
   ENCOUNTER_INTRO_LINES,
@@ -75,6 +76,7 @@ function collectAllPools(): { pool: string; lines: Line[] }[] {
   out.push({ pool: 'trial', lines: TRIAL_LINES })
   out.push({ pool: 'starlight', lines: STARLIGHT_LINES })
   addRecord('pack', PACK_LINES)
+  addRecord('minigame', EVENT_MINIGAME_LINES)
   addRecord('callback', CALLBACK_LINES)
   addRecord('field-intro', FIELD_INTRO_LINES)
   addRecord('encounter-intro', ENCOUNTER_INTRO_LINES)
@@ -110,6 +112,8 @@ describe('CompanionLines 데이터 품질(전 풀 전수 렌더)', () => {
             if (rendered !== rendered.trim()) problems.push('앞뒤 공백')
             if (BROKEN_PUNCTUATION.test(rendered)) problems.push('문장부호 조합')
             if (rendered.trim().length > 0 && !VALID_ENDING.test(rendered.trim())) problems.push('종결 문자')
+            // 너무 긴 대사는 유저가 읽지 않는다 — 렌더 결과 기준 상한(강조/종결 토큰 여유 포함).
+            if (rendered.length > 56) problems.push(`길이 초과(${rendered.length})`)
             if (problems.length > 0) {
               failures.push(`[${pool}#${index}] "${rendered}" ← ${problems.join(', ')}`)
             }
