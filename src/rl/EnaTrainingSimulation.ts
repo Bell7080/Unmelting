@@ -247,10 +247,10 @@ const MIN_POOL_AFTER_DELETE = 5
 /** 망치(칼날 손패 사용 시 파편) 발동 확률 — TagReactions의 hammer 규칙과 같은 값. */
 const BLADE_HAMMER_SHARD_CHANCE = 0.25
 
-const FEATURE_SCALARS = 42
+const FEATURE_SCALARS = 60
 const FEATURE_PER_INCOMING = 6
 const FEATURE_PER_CELL = 14
-const FEATURE_PER_HAND = 9
+const FEATURE_PER_HAND = 12
 export const ENA_FEATURE_COUNT = FEATURE_SCALARS + FEATURE_PER_INCOMING * LANES + FEATURE_PER_CELL * ROWS * LANES + FEATURE_PER_HAND * HAND_MAX
 
 /** 모든 행동 인덱스를 고정해 신경망 출력 차원을 안정화한다.
@@ -561,10 +561,12 @@ export class EnaTrainingSimulation {
     return { observation: this.observe(), reward, done: this.done }
   }
 
-  /** 고정 길이 숫자 입력: 스칼라 42 + 예고 3칸×6 + 9칸×14 + 손패 10×9 = ENA_FEATURE_COUNT. */
+  /** 고정 길이 숫자 입력: 스칼라 60 + 예고 3칸×6 + 9칸×14 + 손패 10×12 = ENA_FEATURE_COUNT(324). */
   observe(): EnaObservation {
     const legalActions = ENA_ACTION_SPACE.filter((action) => this.isLegal(action))
     const tier = EmberSystem.getTier(this.ember)
+    // 지금 맞서는 보스의 행동 패턴 — 보스 국면에서만 유효(one-hot 재료).
+    const bossBehavior = this.phase === 'boss' && this.bossFloor > 0 ? this.bossProfileFor(this.bossFloor).behavior : null
     const features = [
       this.phase === 'field' ? 1 : 0,
       this.phase === 'shop' ? 1 : 0,
@@ -611,6 +613,31 @@ export class EnaTrainingSimulation {
       this.phase === 'event' && this.currentEventId === 'event_002' ? 1 : 0,
       this.phase === 'event' && this.currentEventId === 'event_003' ? 1 : 0,
       this.eventRisk / 10,
+      // ── 함께 모험하는 디테일 — 별빛 등반/보스 정체/상점 상태/시련 부담/유물 엔진을
+      //    전부 관측해, 에나가 플레이어와 같은 화면을 읽으며 판단하게 한다. ──
+      // 별빛 수집 진행(90→100층은 별빛으로만 턴이 오른다).
+      this.finalAscent ? Math.max(0, this.turn - 90) / 10 : 0,
+      // 지금 맞서는 보스의 정체(one-hot) — 패턴이 달라 준비물이 다르다.
+      bossBehavior === 'greed' ? 1 : 0, // 양초 백작(손패 살포)
+      bossBehavior === 'knightHand' ? 1 : 0, // 불씨 기사단장(밀랍 방패)
+      bossBehavior === 'summon' ? 1 : 0, // 밀랍 조각사(소환/은신)
+      bossBehavior === 'witch' ? 1 : 0, // 녹지 않는 마녀(손패 소각)
+      bossBehavior === 'catSteal' ? 1 : 0, // 양초 고양이(손패 강탈)
+      this.bossShield / 20, // 보스 밀랍 방패 잔량
+      this.bossFrozenTurns / 3, // 보스 밀랍 굳음(반격 정지) 잔여
+      this.bossesCleared / 4, // 런 진행(격파한 보스 수)
+      // 상점/제단 상태 — 무엇이 남았는지 보고 구매 순서를 계획한다.
+      this.phase === 'shop' && this.shopMode === 'altar' ? 1 : 0,
+      this.shopFreeUsesLeft / 2,
+      this.shopRelicBuysLeft / 3,
+      // 강제 시련 누적 부담 — 적 강화/함정 피해/보물 배율.
+      this.trialEnemyHpBonus / 5,
+      this.trialEnemyAtkBonus / 3,
+      this.trialTrapDamageBonus / 5,
+      this.trialTreasureScale / 2,
+      // 유물 버킷 엔진 — 방패 재생과 칼날 파편 생산력.
+      this.shieldRegen / 5,
+      this.shardPerKill / 2 + this.bladeUseShardChance,
     ]
     for (let lane = 0; lane < LANES; lane++) features.push(...this.encodeIncomingCard(this.peekIncomingRefillCard(lane)))
     for (let row = 0; row < ROWS; row++) {
@@ -2176,7 +2203,7 @@ export class EnaTrainingSimulation {
   }
 
   private encodeHand(slot: EnaHandSlot | undefined): number[] {
-    if (!slot) return [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    if (!slot) return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     const def = HAND_CARD_DEFINITIONS[slot.id]
     const tactic = this.knowledge.handCards[slot.id]
     return [
@@ -2189,6 +2216,10 @@ export class EnaTrainingSimulation {
       tactic.bossValue / 10,
       tactic.tripleValue / 5,
       slot.merged ? 1 : 0,
+      // 설명을 다 읽은 동반자의 카드 이해 — 시너지 가치/부채(위험 서술)와 트리플 진행도.
+      tactic.synergyValue / 10,
+      tactic.liability / 5,
+      this.hand.filter((h) => h.id === slot.id).length / 3,
     ]
   }
 
