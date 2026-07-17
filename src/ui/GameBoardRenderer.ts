@@ -4117,10 +4117,10 @@ export class GameBoardRenderer {
 .rps-hand-art {
   display: block; width: 100%; aspect-ratio: 1 / 1;
   background-size: cover; background-position: center;
-  /* 둥근 클립·drop-shadow를 빼고 마스크 페이드만 사용 — 반투명 가장자리에 그림자가
-     비치며 생기던 원형 경계(레이어 티)를 제거한다. 페이드도 더 길게 완만히. */
-  -webkit-mask-image: radial-gradient(circle at 50% 47%, #000 44%, rgba(0,0,0,0.62) 60%, rgba(0,0,0,0.22) 76%, transparent 90%);
-  mask-image: radial-gradient(circle at 50% 47%, #000 44%, rgba(0,0,0,0.62) 60%, rgba(0,0,0,0.22) 76%, transparent 90%);
+  /* 마스크를 엠블럼 원 가장자리(closest-side 기준 ~52%)에 딱 맞춰 조이고 짧게 페이드 —
+     엠블럼 밖 이미지 자체의 어두운 배경이 남아 비치던 경계를 잘라낸다. */
+  -webkit-mask-image: radial-gradient(circle closest-side at 50% 50%, #000 50%, rgba(0,0,0,0.45) 62%, transparent 74%);
+  mask-image: radial-gradient(circle closest-side at 50% 50%, #000 50%, rgba(0,0,0,0.45) 62%, transparent 74%);
 }
 .rps-hand-text { display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 1 / 1; font-size: 22px; font-weight: 900; color: rgba(255, 238, 196, 0.97); }
 
