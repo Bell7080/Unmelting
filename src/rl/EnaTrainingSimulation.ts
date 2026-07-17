@@ -2,7 +2,7 @@
  * EnaTrainingSimulation - 에나(플레이어 카드) RL/딥러닝용 헤드리스 가상 게임.
  *
  * UI/애니메이션/턴 딜레이만 제거하고, 플레이어가 실제로 겪는 100층 등반을 그대로 모델링한다.
- * 3×3 전투 · 개별 손패(트리플 합성 포함) · 거미줄 병합/포자 전염/씨앗 개화 · 이벤트 문 ·
+ * 3×3 전투 · 개별 손패(트리플 합성 포함) · 거미줄 병합/포자 전염/씨앗 개화 · 이벤트 문(3종 실데이터 플레이) ·
  * 불씨 티어 스폰 압박 · 10/20/30 상점·제단(불빛/화폐 재화 분리, 실제 6종 팩·ShopPricing 공유 가격,
  * 런 카드 풀 해금/밴·확률팩 T1 부스트를 DropSystem 2단계 추첨으로 반영) ·
  * 30/60/90/100F 실제 보스(30/60/90F 격파 후 실제 TRIAL_DEFINITIONS 강제 시련 1개 적용) ·
@@ -21,6 +21,7 @@ import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { TRIAL_DEFINITIONS } from '@data/Trials'
 import { HAND_CARD_RARITY, CHANCE_PACK_RARITY_BOOST } from '@data/ShopPools'
 import { BOSS_CORE_SPECS, ONBOARDING_CAT_SPEC, type BossCoreSpec } from '@data/BossSpecs'
+import { EVENT_DEFINITIONS, EVENT_IDS, type EventId, type RiskOffer, type MinionExchangeConfig, type CountRpsConfig } from '@data/Events'
 import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
 import { EmberSystem, type EmberTier } from '@systems/EmberSystem'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
@@ -388,6 +389,8 @@ export class EnaTrainingSimulation {
   /** 보스 밀랍 방패(기사단장/마녀) — 플레이어 피해를 먼저 흡수한다(실게임 bossShield). */
   private bossShield = 0
   private eventRisk = 0
+  /** 이번 문에서 진행할 실제 이벤트(event_001~003). 문 진입 시 균등 랜덤으로 정한다. */
+  private currentEventId: EventId = 'event_001'
   /** 유물로 얻는 턴당 방패 재생. 실게임 유물 경제(상점·제단마다 1개 획득)를 압축한 영구 성장. */
   private shieldRegen = 0
   // 칼날 빌드(태그 반응형 유물 근사): 숫돌=처치당 파편, 망치=사용 확률 파편, 연마=사용마다 칼날 피해 +1 누적.
@@ -483,6 +486,7 @@ export class EnaTrainingSimulation {
     this.bossFrozenTurns = 0
     this.bossShield = 0
     this.eventRisk = 0
+    this.currentEventId = 'event_001'
     this.shieldRegen = 0
     this.shardPerKill = 0
     this.bladeUseShardChance = 0
@@ -711,10 +715,12 @@ export class EnaTrainingSimulation {
         return 1.5
       }
       if (card.type === CardType.EVENT) {
-        // 문 진입 → 이벤트 국면. 닫히기 전에 들어가는 선택을 학습한다.
+        // 문 진입 → 이벤트 국면. 실게임 pickEventForDoor처럼 등록 이벤트 중 균등 랜덤으로 고르고,
+        // eventRisk에는 그 이벤트의 공격적 플레이 시 기대 체력 위험을 넣어 교사 정책 재료로 쓴다.
         this.board[0][action.arg] = null
         this.phase = 'event'
-        this.eventRisk = 2 + this.rng.int(5)
+        this.currentEventId = EVENT_IDS[this.rng.int(EVENT_IDS.length)]
+        this.eventRisk = this.estimateEventRisk(this.currentEventId)
         return 0.4
       }
       if (card.type === CardType.TRAP) {
@@ -1029,20 +1035,125 @@ export class EnaTrainingSimulation {
     return tactic.fieldValue + tactic.bossValue + tactic.synergyValue * 0.3 - tactic.liability
   }
 
+  /** 이벤트별 공격적(greedy) 플레이의 기대 체력 위험 — 교사 정책이 safe/greedy를 가를 재료. */
+  private estimateEventRisk(id: EventId): number {
+    if (id === 'event_001') {
+      // 붉은 양초의 최대체력 감소를 위험으로 본다(선택지 데이터에서 직접 읽음).
+      const red = EVENT_DEFINITIONS.event_001.choices?.find((c) => c.effect.kind === 'stat')
+      return red?.effect.kind === 'stat' ? Math.max(0, -(red.effect.maxHealth ?? 0)) : 5
+    }
+    const mg = EVENT_DEFINITIONS[id].minigame
+    if (mg?.kind === 'minion-exchange') {
+      // 흥정 실패 디메리트(체력)들 중 최댓값 × 기대 실패 횟수 근사.
+      const worst = Math.max(0, ...mg.offers.map((o) => Math.max(-(o.onSuccess.health ?? 0), -(o.onFail.health ?? 0))))
+      return Math.round(worst * 1.5)
+    }
+    // 백작: 체력 위험은 두배(체력 지불) 정도 — 손실은 주로 불빛이라 낮게 본다.
+    return 4
+  }
+
+  /**
+   * 이벤트 진행 — 실제 이벤트 데이터(EVENT_DEFINITIONS)의 수치를 단일 출처로 써서
+   * "에나가 미리 겪어보는" 근사 플레이를 굴린다. safe=보수적 플레이 요약, greedy=공격적 요약.
+   */
   private applyEventAction(action: EnaSimAction): number {
-    if (action.kind === 'eventSafe') {
-      this.hp = Math.min(this.maxHp, this.hp + 3)
-      this.phase = 'field'
-      return this.hp <= 8 ? 3 : 1
+    if (action.kind !== 'eventSafe' && action.kind !== 'eventGreedy') return -2
+    const greedy = action.kind === 'eventGreedy'
+    const id = this.currentEventId
+    const mg = EVENT_DEFINITIONS[id].minigame
+    let reward: number
+    if (mg?.kind === 'minion-exchange') reward = this.playMinionExchangeEvent(greedy, mg)
+    else if (mg?.kind === 'count-rps') reward = this.playCountRpsEvent(greedy, mg)
+    else reward = this.playCandleDollEvent(greedy)
+    this.phase = 'field'
+    return this.hp > 0 ? reward : -12
+  }
+
+  /** event_001 양초 악마 인형 — safe=푸른 양초(랜덤 손패), greedy=붉은 양초(최대체력↓/공격력↑).
+   *  불태우기(악마 소환)는 waxDemon 미모델 정책에 따라 시뮬에서 제외한다. */
+  private playCandleDollEvent(greedy: boolean): number {
+    const choices = EVENT_DEFINITIONS.event_001.choices ?? []
+    if (greedy) {
+      const red = choices.find((c) => c.effect.kind === 'stat')
+      if (red?.effect.kind === 'stat') {
+        const hpLoss = Math.max(0, -(red.effect.maxHealth ?? 0))
+        this.maxHp = Math.max(1, this.maxHp - hpLoss)
+        this.hp = Math.min(this.hp, this.maxHp)
+        this.attack += Math.max(0, red.effect.damage ?? 0)
+      }
+      // 공격력 영구 성장은 후반 가치가 크지만 저체력일수록 부담.
+      return this.hp <= 10 ? 0.5 : 2.5
     }
-    if (action.kind === 'eventGreedy') {
-      this.takeDamage(this.eventRisk)
-      this.coins += 3
-      this.drawCard()
-      this.phase = 'field'
-      return this.hp > 0 ? 2.5 - this.eventRisk * 0.2 : -12
+    const blue = choices.find((c) => c.effect.kind === 'randomHand')
+    const count = blue?.effect.kind === 'randomHand' ? blue.effect.count : 4
+    let added = 0
+    for (let i = 0; i < count; i++) if (this.drawCard()) added++
+    return 0.8 + added * 0.3
+  }
+
+  /** event_002 겁쟁이 미니언 — 돌깎기식 위험 흥정을 실제 config 수치로 굴린다.
+   *  safe=확률 높을 때만 탐욕형, greedy=기회 전부 사용 + 확률 낮으면 협박(실패 노림) 전환. */
+  private playMinionExchangeEvent(greedy: boolean, cfg: MinionExchangeConfig): number {
+    const greedOffers = cfg.offers.filter((o) => o.aim === 'success')
+    const failOffers = cfg.offers.filter((o) => o.aim === 'fail')
+    let anxiety = 0
+    let reward = 0
+    for (let t = 0; t < cfg.attempts; t++) {
+      const chance = Math.max(cfg.minSuccess, Math.min(cfg.maxSuccess, cfg.baseSuccess - anxiety * cfg.anxietyStep))
+      // 보수 전략은 확률이 무너지면 자리를 뜬다. 공격 전략은 낮은 확률을 협박으로 역이용한다.
+      let offer: RiskOffer | undefined
+      if (chance >= 0.6) offer = greedOffers[this.rng.int(Math.max(1, greedOffers.length))]
+      else if (greedy && failOffers.length > 0) offer = failOffers[this.rng.int(failOffers.length)]
+      else break
+      if (!offer) break
+      const success = this.rng.next() < chance
+      const branch = success ? offer.onSuccess : offer.onFail
+      const aimed = (success && offer.aim === 'success') || (!success && offer.aim === 'fail')
+      // 노린 결과의 불빛엔 불안 비례 리스크 프리미엄(실게임과 같은 식).
+      const lightRaw = branch.light ?? 0
+      const light = lightRaw > 0 && aimed ? Math.round(lightRaw * (1 + anxiety * cfg.riskPremium)) : lightRaw
+      this.light = Math.max(0, this.light + light)
+      if (branch.health) this.hp = Math.max(1, Math.min(this.maxHp, this.hp + branch.health))
+      if (branch.candle) this.combo = Math.max(0, this.combo + branch.candle)
+      if (branch.shield) this.shield += Math.max(0, branch.shield)
+      if (branch.hand && branch.hand > 0) for (let i = 0; i < branch.hand; i++) this.drawCard()
+      reward += light / 60 + (branch.health ?? 0) * 0.25 + (branch.shield ?? 0) * 0.15 + (branch.candle ?? 0) * 0.15 + (branch.hand ?? 0) * 0.4
+      anxiety = success ? anxiety + 1 : Math.max(0, anxiety - cfg.failRecovery)
     }
-    return -2
+    return reward
+  }
+
+  /** event_003 가위바위보 백작 — 판돈/레이크/선언·절반 규칙을 실제 config 수치로 근사한다.
+   *  safe=소액 판돈으로 예고를 따라 몇 판(절반 보상·고승률), greedy=큰 판돈으로 거짓 노림(전액·저승률).
+   *  선언 이행 확률 풀·연승 배율은 런타임(runCountRps) 상수의 보수 근사 — 변경 시 함께 갱신. */
+  private playCountRpsEvent(greedy: boolean, cfg: CountRpsConfig): number {
+    const stakeUnit = Math.max(1, Math.round(cfg.baseStake * (1 + this.turn * 0.02)))
+    const stake = stakeUnit * (greedy ? 2 : 1)
+    const totalRounds = Object.values(cfg.deck).reduce((s, n) => s + n, 0)
+    const rounds = greedy ? totalRounds : Math.min(4, totalRounds)
+    let net = 0
+    let streak = 0
+    for (let r = 0; r < rounds; r++) {
+      if (this.light + net < stake) break // 판돈 부족 시 물러남
+      const declProb = 0.55 + this.rng.int(4) * 0.1 // will 풀(0.55/0.65/0.75/0.85) 근사
+      const streakMult = Math.min(3, 1 + streak * 0.5)
+      if (greedy) {
+        // 거짓을 노린다 — 백작이 예고를 어길 때(1-declProb)의 절반쯤을 잡아 전액 승리.
+        const winP = (1 - declProb) * 0.5
+        if (this.rng.next() < winP) { net += Math.round(stake * streakMult); streak++ }
+        else if (this.rng.next() < 0.5) { net -= stake; streak = 0 }
+        else { net -= Math.round(stake * cfg.tieLossFraction); streak = 0 }
+      } else {
+        // 예고를 따른다 — 고승률이지만 보상 절반(싱거운 승부).
+        if (this.rng.next() < declProb) { net += Math.round(stake * streakMult * 0.5); streak++ }
+        else if (this.rng.next() < 0.5) { net -= Math.round(stake * cfg.tieLossFraction); streak = 0 }
+        else { net -= stake; streak = 0 }
+      }
+    }
+    this.light = Math.max(0, this.light + net)
+    // 완주 + 큰 순이익이면 유물 보상(실게임 relicWinMultiple 규칙).
+    if (greedy && net >= cfg.relicWinMultiple * stakeUnit) { this.grantRelic(false); return 4 + net / 120 }
+    return net / 60
   }
 
   private applyBossAction(action: EnaSimAction): number {
