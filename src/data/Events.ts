@@ -102,29 +102,50 @@ export interface EventResourceSink {
   grantRelic(): void
 }
 
-// ── event_002: 겁쟁이 미니언의 저울(환전 최적화) ─────────────────────────────
-/** 저울 교환 제안 1종. give 를 바쳐 get 을 받는다. get 은 겁/콤보 배율로 스케일된다. */
-export interface ExchangeOffer {
+// ── event_002: 겁쟁이 미니언의 아슬아슬 흥정(위험 관리) ──────────────────────
+/** 위험 흥정 결과: 각 자원 증감. 음수는 디메리트(체력/불빛 손실 등). */
+export interface RiskOutcome {
+  light?: number
+  health?: number
+  candle?: number
+  shield?: number
+  /** 랜덤 손패 지급(양수) / 제거(음수). */
+  hand?: number
+}
+
+/**
+ * 위험 흥정 제안 1종. 클릭하면 현재 성공 확률로 판정해 onSuccess/onFail 중 하나를 적용한다.
+ *  - aim 'success': 성공이 목표(성공=보상, 실패=디메리트). 성공 확률이 높을 때 굴린다.
+ *  - aim 'fail'   : 실패가 목표(역발상 — 실패=대박, 성공=푼돈). 성공 확률이 낮을 때 굴린다.
+ * 노린 결과(aim 쪽)의 불빛 보상은 불안(anxiety)에 비례한 리스크 프리미엄을 받는다.
+ */
+export interface RiskOffer {
   id: string
   label: string
-  give: { res: EventResourceKind; amount: number }
-  get: { res: EventResourceKind; baseAmount: number }
-  /** 짧은 설명(용도 힌트). */
   hint: string
+  aim: 'success' | 'fail'
+  onSuccess: RiskOutcome
+  onFail: RiskOutcome
 }
 
 export interface MinionExchangeConfig {
   kind: 'minion-exchange'
-  /** 겁 상한(별빛 pip 개수). 이 값에 도달하면 교환이 잠기고 정산만 가능하다. */
-  fearCap: number
-  /** 교환 1회당 겁 증가량. */
-  fearPerTrade: number
-  /** 겁 1당 환율 가산(예: 0.06 → 겁 만렙에서 +fearCap*0.06 배). */
-  fearRateGain: number
-  /** 흥정 콤보 1당 배율 가산(예: 0.08). 연속 교환마다 누적된다. */
-  comboStep: number
-  /** 고정 교환 메뉴. 진입 중 바뀌지 않아 순수 계획 퍼즐이 된다. */
-  offers: ExchangeOffer[]
+  /** 총 시도 횟수(로스트아크 돌깎기처럼 정해진 기회). 소진 시 자동 종료. */
+  attempts: number
+  /** 기본 성공 확률(0~1). */
+  baseSuccess: number
+  /** 불안 1당 성공 확률 감소량. */
+  anxietyStep: number
+  /** 실패 시 불안이 내려가는 양(→ 성공 확률 회복). */
+  failRecovery: number
+  /** 성공 확률 하한/상한(0~1). */
+  minSuccess: number
+  maxSuccess: number
+  /** 불안 표시 pip 수(시각). */
+  anxietyPips: number
+  /** 노린 결과의 불빛 보상이 불안에 비례해 커지는 리스크 프리미엄 계수(0이면 고정). */
+  riskPremium: number
+  offers: RiskOffer[]
 }
 
 // ── event_003: 가위바위보 백작(덱 카운팅 + 베팅) ────────────────────────────
@@ -215,9 +236,10 @@ const EVENT_001: EventDefinition = {
 }
 
 /**
- * event_002 — "겁쟁이 미니언의 저울".
- * 금을 끌어안은 겁 많은 미니언과의 환전 최적화. 밀수록(겁↑) 환율이 좋아지고, 연속 교환(흥정 콤보)이
- * 배율을 키운다. 겁 상한은 눈에 보이므로 순수 계산으로 최대 이득을 짜내는 실력 이벤트다.
+ * event_002 — "겁쟁이 미니언의 아슬아슬 흥정".
+ * 로스트아크 돌깎기식 위험 관리. 조를(성공할)수록 미니언이 불안해져 성공 확률이 내려가고,
+ * 실패하면 다시 진정해 확률이 회복된다. 탐욕형(성공=보상/실패=디메리트)과 협박(실패=대박)을
+ * 현재 성공 확률에 맞춰 갈아타는 리듬이 실력이다. 정해진 기회(attempts) 안에서 진행한다.
  */
 const EVENT_002: EventDefinition = {
   id: 'event_002',
@@ -226,22 +248,31 @@ const EVENT_002: EventDefinition = {
   dialogue: [
     { speaker: 'npc', text: '히익—! 가, 가까이 오지 마!' },
     { speaker: 'npc', text: '이건 내 거야. . . 전부 내가 모은 거란 말이야. . .' },
-    { speaker: 'player', text: '그 금, 어차피 다 못 쓰잖아.' },
-    { speaker: 'npc', text: '그, 그럼. . . 거래! 거래는 할게! 조금이면 돼, 조금이면. . .' },
-    { speaker: 'npc', text: '대신 빨리 끝내 줘. 오래 보고 있으면. . . 무서우니까.' },
+    { speaker: 'player', text: '그 금, 조금만 나눠 볼까.' },
+    { speaker: 'npc', text: '조, 조를수록. . . 난 더 무서워져. 손이 떨려서 자꾸 헛일을 한다고. . .' },
+    { speaker: 'npc', text: '그치만 너무 몰아세우면. . . 겁에 질려 다 흘려 버릴지도 몰라. . .' },
   ],
   minigame: {
     kind: 'minion-exchange',
-    fearCap: 6,
-    fearPerTrade: 1,
-    fearRateGain: 0.09,
-    comboStep: 0.1,
-    // 고정 메뉴 — 자원마다 성격이 다르다. 큰 교환을 겁·콤보가 높은 뒤로 미루는 순서 최적화가 실력.
+    attempts: 7,
+    baseSuccess: 0.9,
+    anxietyStep: 0.13,
+    failRecovery: 2,
+    minSuccess: 0.2,
+    maxSuccess: 0.92,
+    anxietyPips: 6,
+    riskPremium: 0.14,
+    // 탐욕형(aim success): 성공=보상, 실패=디메리트 — 성공 확률 높을 때.
+    // 협박(aim fail): 성공=푼돈, 실패=대박 — 성공 확률 낮을 때 굴려 실패보상을 노린다.
     offers: [
-      { id: 'hp-light', label: '피 담보', give: { res: 'health', amount: 5 }, get: { res: 'light', baseAmount: 80 }, hint: '체력을 밑천으로' },
-      { id: 'hand-light', label: '패 청산', give: { res: 'hand', amount: 1 }, get: { res: 'light', baseAmount: 70 }, hint: '남는 손패를 팔아' },
-      { id: 'light-shield', label: '방패 흥정', give: { res: 'light', amount: 100 }, get: { res: 'shield', baseAmount: 6 }, hint: '난구간 대비' },
-      { id: 'light-candle', label: '촛농 매입', give: { res: 'light', amount: 90 }, get: { res: 'candle', baseAmount: 3 }, hint: '만충 폭발각' },
+      { id: 'vault', label: '금고 뜯기', hint: '성공하면 큰 불빛, 실패하면 손을 물린다', aim: 'success',
+        onSuccess: { light: 70 }, onFail: { health: -5 } },
+      { id: 'shield', label: '방패 조르기', hint: '성공하면 방패, 실패하면 흘린 불빛', aim: 'success',
+        onSuccess: { shield: 8 }, onFail: { light: -30 } },
+      { id: 'wax', label: '촛농 훔치기', hint: '성공하면 게이지, 실패하면 소량 피해', aim: 'success',
+        onSuccess: { candle: 4 }, onFail: { health: -3 } },
+      { id: 'threat', label: '협박', hint: '기겁시켜야 하울을 흘린다 — 버티면 되레 물린다', aim: 'fail',
+        onSuccess: { health: -6 }, onFail: { light: 130, hand: 1 } },
     ],
   },
   outro: [

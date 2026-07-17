@@ -33,7 +33,8 @@ import type {
   EventChoice,
   MinionExchangeConfig,
   CountRpsConfig,
-  ExchangeOffer,
+  RiskOffer,
+  RiskOutcome,
   EventResourceSink,
   EventResourceKind,
   EventResourceSnapshot,
@@ -3310,11 +3311,12 @@ export class GameBoardRenderer {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // event_002 — 겁쟁이 미니언의 저울(환전 최적화 미니게임)
+  // event_002 — 겁쟁이 미니언의 아슬아슬 흥정(위험 관리 미니게임)
   // ─────────────────────────────────────────────────────────────────────────
   /**
-   * 미니언 환전 미니게임. 교환할 때마다 실제 자원(불빛/체력/게이지/방패/손패)을 즉시 올리고 내리며
-   * 기존 HUD 트레일/카운터 피드백을 쏜다(sink). 로컬 미러 led 는 상한/가용 판정에만 쓴다.
+   * 로스트아크 돌깎기식 위험 흥정. 정해진 기회 안에서, 조를(성공할)수록 불안이 올라 성공 확률이
+   * 내려가고, 실패하면 진정해 확률이 회복된다. 탐욕형(성공=보상/실패=디메리트)과 협박(실패=대박)을
+   * 현재 성공 확률에 맞춰 갈아타는 게 실력. 결과는 매번 실제 자원으로 즉시 반영된다(sink).
    */
   async runMinionExchange(
     cardId: string,
@@ -3327,106 +3329,113 @@ export class GameBoardRenderer {
   ): Promise<void> {
     this.ensureEventMinigameStyles()
     const content = await this.openEventScene(cardId, def.illu, onConsume, playDialogue)
+    void snap
 
     const RES_LABEL: Record<EventResourceKind, string> = {
       light: '불빛', hand: '손패', candle: '게이지', health: '체력', shield: '방패',
     }
-    // 실제 자원의 로컬 미러 — 이벤트 중엔 미니게임만 자원을 바꾸므로 실값과 동기 유지된다.
-    const led: Record<EventResourceKind, number> = {
-      light: snap.light, hand: snap.hand, candle: snap.candle, health: snap.health, shield: snap.shield,
-    }
-    let fear = 0
-    let combo = 0
-    const byId = new Map<string, ExchangeOffer>(cfg.offers.map((o) => [o.id, o]))
+    const FIELDS: EventResourceKind[] = ['light', 'health', 'candle', 'shield', 'hand']
+    const byId = new Map<string, RiskOffer>(cfg.offers.map((o) => [o.id, o]))
+    let anxiety = 0
+    let triesLeft = cfg.attempts
 
-    // 겁·콤보가 오를수록 받는 양(get)이 커진다. 큰 교환을 뒤로 미루는 순서 최적화가 실력.
-    const scale = (): number => (1 + fear * cfg.fearRateGain) * (1 + combo * cfg.comboStep)
-    const getAmount = (o: ExchangeOffer): number => Math.max(1, Math.round(o.get.baseAmount * scale()))
-
-    // 교환 가능 여부: 겁 상한 미도달 + 지불 자원 충분 + 받을 자원 상한 미초과. 체력은 5 아래로 못 판다.
-    const canTrade = (o: ExchangeOffer): boolean => {
-      if (fear >= cfg.fearCap) return false
-      if (o.give.res === 'health' && led.health - o.give.amount < 5) return false
-      if (led[o.give.res] < o.give.amount) return false
-      if (o.get.res === 'hand' && led.hand >= snap.handMax) return false
-      if (o.get.res === 'health' && led.health >= snap.maxHealth) return false
-      return true
+    const successChance = (): number =>
+      Math.max(cfg.minSuccess, Math.min(cfg.maxSuccess, cfg.baseSuccess - anxiety * cfg.anxietyStep))
+    // 노린 결과(aim 분기)의 양수 불빛에만 불안 비례 리스크 프리미엄을 얹는다.
+    const fieldVal = (b: RiskOutcome, res: EventResourceKind): number =>
+      res === 'light' ? (b.light ?? 0) : res === 'health' ? (b.health ?? 0)
+        : res === 'candle' ? (b.candle ?? 0) : res === 'shield' ? (b.shield ?? 0) : (b.hand ?? 0)
+    const shownVal = (res: EventResourceKind, raw: number, isAimed: boolean): number =>
+      res === 'light' && raw > 0 && isAimed ? Math.round(raw * (1 + anxiety * cfg.riskPremium)) : raw
+    const outcomeText = (b: RiskOutcome, isAimed: boolean): string => {
+      const parts = FIELDS.map((res) => {
+        const raw = fieldVal(b, res)
+        if (!raw) return ''
+        const v = shownVal(res, raw, isAimed)
+        return `${RES_LABEL[res]} ${v > 0 ? '+' : ''}${v}`
+      }).filter(Boolean)
+      return parts.join(' · ') || '—'
     }
-    // 자원을 실제로 즉시 반영한다(sink). 미러 led 도 같은 값으로 갱신한다.
-    const applyResource = (res: EventResourceKind, amount: number): void => {
-      led[res] += amount
-      if (res === 'light') sink.gainLight(amount)
-      else if (res === 'health') sink.changeHealth(amount)
-      else if (res === 'candle') sink.gainCandle(amount)
-      else if (res === 'shield') sink.gainShield(amount)
-      else if (res === 'hand') { if (amount >= 0) sink.buyHand(amount); else sink.sellHand(-amount) }
-    }
-    const applyTrade = (o: ExchangeOffer, btnRect: DOMRect): void => {
-      // 지불(소비) — 실시간 반영(카운터 하락).
-      applyResource(o.give.res, -o.give.amount)
-      // 획득 — 상한 클램프 후 실시간 반영 + 획득 HUD로 트레일 발사.
-      let g = getAmount(o)
-      if (o.get.res === 'health') g = Math.max(0, Math.min(g, snap.maxHealth - led.health))
-      if (o.get.res === 'hand') g = Math.max(0, Math.min(g, snap.handMax - led.hand))
-      applyResource(o.get.res, g)
-      this.blastEventGain(btnRect, o.get.res)
-      fear += cfg.fearPerTrade
-      combo += 1
+    // 결과 분기를 실제 자원으로 즉시 반영하고, 획득(양수)엔 해당 HUD로 트레일을 쏜다.
+    const applyOutcome = (b: RiskOutcome, isAimed: boolean, from: DOMRect): void => {
+      for (const res of FIELDS) {
+        const raw = fieldVal(b, res)
+        if (!raw) continue
+        const v = shownVal(res, raw, isAimed)
+        if (res === 'light') sink.gainLight(v)
+        else if (res === 'health') sink.changeHealth(v)
+        else if (res === 'candle') sink.gainCandle(v)
+        else if (res === 'shield') sink.gainShield(v)
+        else { if (v >= 0) sink.buyHand(v); else sink.sellHand(-v) }
+        if (v > 0) this.blastEventGain(from, res)
+      }
     }
 
-    // 패널 골격 — 겁(별빛 pip)/흥정 콤보 미터 + 교환 버튼 + 종료. 자원 수치는 실제 HUD가 보여준다.
-    const pipsHtml = Array.from({ length: cfg.fearCap }, () => `<span class="mini-fear-pip">${sparkleIcon()}</span>`).join('')
+    const pipsHtml = Array.from({ length: cfg.anxietyPips }, () => `<span class="mini-anx-pip">${sparkleIcon()}</span>`).join('')
     const offerHtml = cfg.offers.map((o) => `
-      <button class="mini-ex-offer" type="button" data-offer="${o.id}">
-        <span class="mini-ex-offer-label">${escapeHtml(o.label)}</span>
-        <span class="mini-ex-offer-trade">
-          <span class="mini-ex-give">${RES_LABEL[o.give.res]} ${o.give.amount}</span>
-          <span class="mini-ex-arrow" aria-hidden="true">→</span>
-          <span class="mini-ex-get">${RES_LABEL[o.get.res]} <b class="mini-ex-get-amt">+${getAmount(o)}</b></span>
+      <button class="mini-ex-offer${o.aim === 'fail' ? ' is-reckless' : ''}" type="button" data-offer="${o.id}">
+        <span class="mini-ex-offer-label">${escapeHtml(o.label)}${o.aim === 'fail' ? '<span class="mini-ex-aim-tag">실패 노림</span>' : ''}</span>
+        <span class="mini-ex-branches">
+          <span class="mini-ex-branch${o.aim === 'success' ? ' is-aim' : ''}"><em>성공</em> <span data-branch="success"></span></span>
+          <span class="mini-ex-branch${o.aim === 'fail' ? ' is-aim' : ''}"><em>실패</em> <span data-branch="fail"></span></span>
         </span>
         <span class="mini-ex-offer-hint">${escapeHtml(o.hint)}</span>
       </button>`).join('')
     content.innerHTML = `
       <div class="mini-exchange is-in">
-        <div class="mini-ex-meters">
-          <div class="mini-fear"><span class="mini-meter-key">겁</span><span class="mini-fear-pips">${pipsHtml}</span></div>
-          <div class="mini-combo"><span class="mini-meter-key">흥정</span><b class="mini-combo-val">x1.00</b></div>
+        <div class="mini-ex-head">
+          <div class="mini-ex-chance"><span class="mini-meter-key">성공 확률</span><b class="mini-ex-chance-val">–</b></div>
+          <div class="mini-ex-anx"><span class="mini-meter-key">불안</span><span class="mini-anx-pips">${pipsHtml}</span></div>
+          <div class="mini-ex-tries"><span class="mini-meter-key">남은 기회</span><b class="mini-ex-tries-val">${triesLeft}</b></div>
         </div>
+        <div class="mini-ex-result"></div>
         <div class="mini-ex-offers">${offerHtml}</div>
         <button class="mini-ex-done" type="button">거래 종료</button>
       </div>`
 
     const panel = content.querySelector<HTMLElement>('.mini-exchange')!
-    const pipEls = Array.from(panel.querySelectorAll<HTMLElement>('.mini-fear-pip'))
-    const comboEl = panel.querySelector<HTMLElement>('.mini-combo-val')!
+    const chanceEl = panel.querySelector<HTMLElement>('.mini-ex-chance-val')!
+    const pipEls = Array.from(panel.querySelectorAll<HTMLElement>('.mini-anx-pip'))
+    const triesEl = panel.querySelector<HTMLElement>('.mini-ex-tries-val')!
+    const resultEl = panel.querySelector<HTMLElement>('.mini-ex-result')!
     const offerEls = Array.from(panel.querySelectorAll<HTMLButtonElement>('.mini-ex-offer'))
     const doneEl = panel.querySelector<HTMLButtonElement>('.mini-ex-done')!
 
     const update = (): void => {
-      pipEls.forEach((p, i) => p.classList.toggle('is-lit', i < fear))
-      comboEl.textContent = `x${(1 + combo * cfg.comboStep).toFixed(2)}`
+      chanceEl.textContent = `${Math.round(successChance() * 100)}%`
+      pipEls.forEach((p, i) => p.classList.toggle('is-lit', i < Math.min(anxiety, cfg.anxietyPips)))
+      triesEl.textContent = String(triesLeft)
       offerEls.forEach((btn) => {
         const o = byId.get(btn.dataset.offer!)!
-        btn.querySelector('.mini-ex-get-amt')!.textContent = `+${getAmount(o)}`
-        btn.classList.toggle('is-disabled', !canTrade(o))
+        btn.querySelector('[data-branch="success"]')!.textContent = outcomeText(o.onSuccess, o.aim === 'success')
+        btn.querySelector('[data-branch="fail"]')!.textContent = outcomeText(o.onFail, o.aim === 'fail')
+        btn.classList.toggle('is-disabled', triesLeft <= 0)
       })
-      panel.classList.toggle('is-locked', fear >= cfg.fearCap)
     }
     update()
 
     await new Promise<void>((resolve) => {
-      // 종료: 패널을 부드럽게 접은 뒤 resolve → 호출부가 마무리 대사를 UI가 사라진 뒤 출력한다.
       const finish = (): void => { panel.classList.add('is-closing'); window.setTimeout(resolve, 340) }
       offerEls.forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation()
+          if (triesLeft <= 0) return
           const o = byId.get(btn.dataset.offer!)
-          if (!o || !canTrade(o)) return
+          if (!o) return
           const r = btn.getBoundingClientRect()
-          applyTrade(o, r)
-          SquareBurst.playAt(r.left + r.width / 2, r.top + r.height / 2, 'starlight', { count: 10, spread: 90, duration: 460 })
+          // 현재 성공 확률로 판정 → 노린 결과(aim)와 일치하면 '좋은' 결과.
+          const success = Math.random() < successChance()
+          const branch = success ? o.onSuccess : o.onFail
+          const isAimed = (success && o.aim === 'success') || (!success && o.aim === 'fail')
+          applyOutcome(branch, isAimed, r)
+          anxiety = success ? anxiety + 1 : Math.max(0, anxiety - cfg.failRecovery)
+          triesLeft -= 1
+          resultEl.className = `mini-ex-result ${isAimed ? 'is-good' : 'is-bad'}`
+          resultEl.textContent = `${success ? '성공' : '실패'} — ${outcomeText(branch, isAimed)}`
+          SquareBurst.playAt(r.left + r.width / 2, r.top + r.height / 2, isAimed ? 'starlight' : 'vanish-smoke', { count: 10, spread: 90, duration: 460 })
           btn.classList.remove('is-pulse'); void btn.offsetWidth; btn.classList.add('is-pulse')
           update()
+          if (triesLeft <= 0) window.setTimeout(finish, 1050)
         })
       })
       doneEl.addEventListener('click', (e) => { e.stopPropagation(); finish() })
@@ -3905,20 +3914,24 @@ export class GameBoardRenderer {
 /* 접히는 동안엔 입력을 막아, UI가 사라진 뒤 나오는 마무리 대사 클릭이 버튼에 가로채이지 않게 한다. */
 .mini-exchange.is-closing, .mini-rps.is-closing { pointer-events: none; animation: mini-panel-out 0.32s cubic-bezier(0.2, 0.72, 0.2, 1) forwards; }
 
-/* ── 미니언 저울 ── */
-.mini-ex-meters { display: flex; align-items: center; justify-content: center; gap: 26px; }
-.mini-meter-key { color: rgba(210, 198, 178, 0.7); font-size: 12px; letter-spacing: 0.1em; margin-right: 8px; }
-.mini-fear { display: inline-flex; align-items: center; }
-.mini-fear-pips { display: inline-flex; gap: 6px; }
-.mini-fear-pip { display: inline-flex; width: 17px; height: 17px; color: rgba(120, 126, 176, 0.5); transition: color 0.2s, filter 0.2s, transform 0.2s; }
-.mini-fear-pip svg { width: 100%; height: 100%; }
-.mini-fear-pip.is-lit {
-  color: rgba(224, 228, 255, 0.98);
-  filter: drop-shadow(0 0 6px rgba(123, 115, 216, 0.9)) drop-shadow(0 0 12px rgba(123, 115, 216, 0.5));
+/* ── 미니언 아슬아슬 흥정 ── */
+.mini-meter-key { color: rgba(210, 198, 178, 0.7); font-size: 12px; letter-spacing: 0.08em; margin-right: 7px; }
+.mini-ex-head { display: flex; align-items: center; justify-content: center; gap: 22px; flex-wrap: wrap; }
+.mini-ex-chance, .mini-ex-tries, .mini-ex-anx { display: inline-flex; align-items: center; }
+.mini-ex-chance-val { color: rgba(150, 220, 158, 0.99); font-size: 22px; font-weight: 900; letter-spacing: 0.02em; }
+.mini-ex-tries-val { color: rgba(255, 232, 176, 0.97); font-size: 18px; font-weight: 900; }
+/* 불안 pip — 위험을 뜻해 별빛 다이아를 호박~적색으로 발광시킨다(성공 시 채워짐) */
+.mini-anx-pips { display: inline-flex; gap: 5px; }
+.mini-anx-pip { display: inline-flex; width: 16px; height: 16px; color: rgba(150, 110, 96, 0.42); transition: color 0.2s, filter 0.2s, transform 0.2s; }
+.mini-anx-pip svg { width: 100%; height: 100%; }
+.mini-anx-pip.is-lit {
+  color: rgba(255, 176, 120, 0.98);
+  filter: drop-shadow(0 0 6px rgba(232, 120, 70, 0.9)) drop-shadow(0 0 12px rgba(220, 80, 50, 0.5));
   transform: scale(1.08);
 }
-.mini-combo { display: inline-flex; align-items: baseline; }
-.mini-combo-val { color: rgba(244, 206, 112, 0.95); font-size: 17px; font-weight: 900; }
+.mini-ex-result { min-height: 20px; text-align: center; font-size: 15px; font-weight: 800; }
+.mini-ex-result.is-good { color: rgba(154, 228, 162, 0.99); animation: mini-result-pop 0.4s ease; }
+.mini-ex-result.is-bad { color: rgba(230, 104, 86, 0.97); animation: mini-result-pop 0.4s ease; }
 
 .mini-ex-offers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 /* 버튼도 테두리 없이 아주 옅은 반투명 채움만 — hover 시 살짝 떠오르며 금빛으로 반응 */
@@ -3930,12 +3943,19 @@ export class GameBoardRenderer {
   transition: transform 0.14s, background 0.18s, opacity 0.18s;
 }
 .mini-ex-offer:hover { transform: translateY(-2px); background: rgba(40, 28, 16, 0.5); }
-.mini-ex-offer-label { font-size: 16px; font-weight: 900; letter-spacing: 0.04em; color: rgba(255, 236, 190, 0.97); }
-.mini-ex-offer-trade { font-size: 14px; display: inline-flex; align-items: baseline; gap: 7px; }
-.mini-ex-give { color: rgba(224, 156, 134, 0.92); }
-.mini-ex-arrow { color: rgba(200, 188, 168, 0.6); }
-.mini-ex-get { color: rgba(214, 204, 184, 0.82); }
-.mini-ex-get b { color: rgba(150, 220, 158, 0.99); font-size: 16px; }
+/* 협박(실패 노림)은 역발상 옵션 — 보랏빛 기운으로 구분 */
+.mini-ex-offer.is-reckless { background: rgba(30, 16, 30, 0.4); }
+.mini-ex-offer.is-reckless:hover { background: rgba(52, 26, 52, 0.54); }
+.mini-ex-offer-label { font-size: 16px; font-weight: 900; letter-spacing: 0.04em; color: rgba(255, 236, 190, 0.97); display: inline-flex; align-items: center; gap: 8px; }
+.mini-ex-aim-tag { font-size: 11px; font-weight: 800; letter-spacing: 0.04em; color: rgba(206, 156, 244, 0.95); }
+.mini-ex-branches { display: flex; gap: 14px; font-size: 13px; flex-wrap: wrap; }
+.mini-ex-branch { color: rgba(200, 190, 170, 0.62); }
+.mini-ex-branch em { font-style: normal; color: rgba(190, 178, 158, 0.62); font-size: 12px; margin-right: 2px; }
+/* 노린 분기(성공형=성공 / 협박=실패)를 강조 */
+.mini-ex-branch.is-aim { color: rgba(150, 220, 158, 0.98); }
+.mini-ex-branch.is-aim em { color: rgba(150, 220, 158, 0.8); }
+.mini-ex-offer.is-reckless .mini-ex-branch.is-aim { color: rgba(214, 168, 250, 0.98); }
+.mini-ex-offer.is-reckless .mini-ex-branch.is-aim em { color: rgba(214, 168, 250, 0.8); }
 .mini-ex-offer-hint { font-size: 11.5px; color: rgba(196, 186, 166, 0.6); letter-spacing: 0.03em; }
 .mini-ex-offer.is-disabled { opacity: 0.3; pointer-events: none; }
 .mini-ex-offer.is-pulse { animation: mini-offer-pulse 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
@@ -3949,7 +3969,6 @@ export class GameBoardRenderer {
   transition: transform 0.14s, background 0.18s, text-shadow 0.18s;
 }
 .mini-ex-done:hover, .mini-rps-done:hover { transform: translateY(-2px); background: rgba(64, 48, 22, 0.66); text-shadow: 0 1px 6px rgba(0,0,0,0.85), 0 0 16px rgba(255, 210, 120, 0.5); }
-.mini-exchange.is-locked .mini-ex-done { animation: mini-locked-glow 1.6s ease-in-out infinite; }
 
 /* ── 백작 가위바위보 ── */
 .mini-rps-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
@@ -3995,7 +4014,6 @@ export class GameBoardRenderer {
 
 @keyframes mini-offer-pulse { 0% { transform: scale(1); } 42% { transform: scale(1.04); filter: brightness(1.2); } 100% { transform: scale(1); } }
 @keyframes mini-result-pop { 0% { transform: scale(0.9); opacity: 0.4; } 60% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
-@keyframes mini-locked-glow { 0%, 100% { text-shadow: 0 1px 6px rgba(0,0,0,0.85); } 50% { text-shadow: 0 1px 6px rgba(0,0,0,0.85), 0 0 16px rgba(244, 206, 112, 0.7); } }
 @keyframes mini-panel-out { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(0.94) translateY(8px); filter: blur(3px); } }
 `
     document.head.appendChild(style)
