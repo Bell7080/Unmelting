@@ -3334,7 +3334,7 @@ export class GameBoardRenderer {
     void snap
 
     const RES_LABEL: Record<EventResourceKind, string> = {
-      light: '불빛', hand: '손패', candle: '게이지', health: '체력', shield: '방패',
+      light: '불빛', hand: '손패', candle: '콤보 게이지', health: '체력', shield: '방패',
     }
     const FIELDS: EventResourceKind[] = ['light', 'health', 'candle', 'shield', 'hand']
     const byId = new Map<string, RiskOffer>(cfg.offers.map((o) => [o.id, o]))
@@ -3475,7 +3475,7 @@ export class GameBoardRenderer {
     const content = await this.openEventScene(cardId, def.illu, onConsume, playDialogue)
 
     const HAND_LABEL: Record<RpsHand, string> = { rock: '바위', paper: '보', scissors: '가위' }
-    const RES_LABEL: Record<EventResourceKind, string> = { light: '불빛', hand: '손패', candle: '게이지', health: '체력', shield: '방패' }
+    const RES_LABEL: Record<EventResourceKind, string> = { light: '불빛', hand: '손패', candle: '콤보 게이지', health: '체력', shield: '방패' }
     const HANDS: RpsHand[] = ['rock', 'paper', 'scissors']
     const beats = (a: RpsHand, b: RpsHand): boolean =>
       (a === 'rock' && b === 'scissors') || (a === 'scissors' && b === 'paper') || (a === 'paper' && b === 'rock')
@@ -3500,7 +3500,7 @@ export class GameBoardRenderer {
     let selectedMult = 1
     let busy = false
     // 이번 판 한정 아이템 효과.
-    let revealed: RpsHand | null = null
+    let blocked: RpsHand | null = null
     let lastPlayed: RpsHand | null = null
     let spinning = false
     let doubleNext = false
@@ -3513,17 +3513,22 @@ export class GameBoardRenderer {
     const avail = (): number => snap.light + net
     const resLeft = (res: EventResourceKind): number => (res === 'light' ? avail() : mirror[res])
     const streakMult = (s: number): number => Math.min(3, 1 + Math.max(0, s) * 0.5)
-    const mostCommonType = (): RpsHand => HANDS.slice().sort((a, b) => deckCount(b) - deckCount(a))[0]
+    const remainingTypes = (): RpsHand[] => HANDS.filter((h) => deckCount(h) > 0)
+    // 불빛 비용은 판돈과 같은 층 인플레이션을 받는다(차단 등 정보 아이템 가치 보정).
+    const itemCost = (it: RpsItemDef): number =>
+      it.costRes === 'light' ? Math.max(1, Math.round(it.costAmount * (1 + snap.floor * 0.02))) : it.costAmount
 
     const itemAffordable = (it: RpsItemDef): boolean => {
       if (busy || deckEmpty() || usedItems.has(it.id)) return false
-      if (resLeft(it.costRes) < it.costAmount) return false
+      if (resLeft(it.costRes) < itemCost(it)) return false
       // 체력 지불은 5 아래로 못 내려간다(자살 방지).
-      if (it.costRes === 'health' && mirror.health - it.costAmount < 5) return false
+      if (it.costRes === 'health' && mirror.health - itemCost(it) < 5) return false
+      // 차단은 남은 패 종류가 2개 이상이어야 의미가 있다(마지막 한 종류는 못 막음).
+      if (it.id === 'block' && remainingTypes().length < 2) return false
       return true
     }
     const payItem = (it: RpsItemDef): void => {
-      const c = it.costAmount
+      const c = itemCost(it)
       if (it.costRes === 'light') { sink.gainLight(-c); net -= c }
       else if (it.costRes === 'health') { sink.changeHealth(-c); mirror.health -= c }
       else if (it.costRes === 'candle') { sink.gainCandle(-c); mirror.candle -= c }
@@ -3533,18 +3538,11 @@ export class GameBoardRenderer {
     const useItem = (it: RpsItemDef): void => {
       payItem(it)
       usedItems.add(it.id)
-      if (it.id === 'peek') revealed = deckQueue[0] ?? null
-      else if (it.id === 'bait') {
-        // 가장 많이 남은 손을 맨 앞으로 끌어와 예측 가능하게 만든다(순서만 조작, 개수 불변).
-        const t = mostCommonType()
-        const idx = deckQueue.indexOf(t)
-        if (idx >= 0) { deckQueue.splice(idx, 1); deckQueue.unshift(t) }
-        revealed = deckQueue[0] ?? null
-      } else if (it.id === 'eject') {
-        const gone = deckQueue.shift()
-        if (gone) discard.push(gone)
-        revealed = null
-      } else if (it.id === 'whet') doubleNext = true
+      if (it.id === 'block') {
+        // 남은 종류 중 하나를 무작위로 봉쇄 — 백작은 이번 판 그 패를 내지 못한다(덱 ×표시).
+        const types = remainingTypes()
+        blocked = types[Math.floor(Math.random() * types.length)] ?? null
+      } else if (it.id === 'double') doubleNext = true
       else if (it.id === 'ward') wardNext = true
     }
 
@@ -3563,7 +3561,7 @@ export class GameBoardRenderer {
       return `<span class="rps-item-slot" style="transform:rotate(${angle}deg)">
         <button class="mini-rps-item" type="button" data-item="${it.id}" title="${escapeHtml(it.desc)}">
           <span class="it-label">${escapeHtml(it.label)}</span>
-          <span class="it-cost">${RES_LABEL[it.costRes]} ${it.costAmount}</span>
+          <span class="it-cost">${RES_LABEL[it.costRes]} ${itemCost(it).toLocaleString()}</span>
         </button>
       </span>`
     }).join('')
@@ -3614,18 +3612,22 @@ export class GameBoardRenderer {
     const doneEl = panel.querySelector<HTMLButtonElement>('.mini-rps-done')!
 
     const update = (): void => {
-      for (const [h, el] of deckEls) el.querySelector('b')!.textContent = `×${deckCount(h)}`
+      for (const [h, el] of deckEls) {
+        el.querySelector('b')!.textContent = `×${deckCount(h)}`
+        // 차단된 패는 덱 표시 위에 ×표시로 봉쇄를 알린다.
+        el.classList.toggle('is-blocked', h === blocked)
+      }
       streakEl.textContent = `x${streakMult(streak).toFixed(1)}`
-      // 상단 슬롯: 엿본 패(peek/미끼) > 방금 낸 패 > 빈 슬롯. 손 이미지를 얼굴 부근에 크게 보여준다.
+      // 상단 슬롯: 방금 낸 패 > 빈 슬롯. 손 이미지를 얼굴 부근에 크게 보여준다.
       // 슬롯머신 스핀 중에는 스핀 연출이 슬롯을 직접 제어하므로 건드리지 않는다.
       if (!spinning) {
-        const shownHand = revealed ?? lastPlayed
-        slotEl.dataset.state = revealed ? 'peek' : lastPlayed ? 'played' : 'empty'
-        for (const [h, el] of slotFaces) el.classList.toggle('is-shown', h === shownHand)
-        slotTagEl.textContent = revealed ? '엿본 다음 패' : lastPlayed ? '백작이 낸 패' : ''
+        slotEl.dataset.state = lastPlayed ? 'played' : 'empty'
+        for (const [h, el] of slotFaces) el.classList.toggle('is-shown', h === lastPlayed)
+        slotTagEl.textContent = lastPlayed ? '백작이 낸 패' : ''
       }
       const buffs: string[] = []
-      if (doubleNext) buffs.push('갑절 · 이번 판 2배')
+      if (blocked) buffs.push(`차단 · ${HAND_LABEL[blocked]} 봉쇄`)
+      if (doubleNext) buffs.push('두배 · 이번 판 2배')
       if (wardNext) buffs.push('부적 · 손실 무효')
       buffsEl.textContent = buffs.join('   ·   ')
       buffsEl.classList.toggle('is-armed', buffs.length > 0)
@@ -3652,7 +3654,7 @@ export class GameBoardRenderer {
 
     const beginRound = (): void => {
       busy = false
-      revealed = null
+      blocked = null
       doubleNext = false
       wardNext = false
       usedItems.clear()
@@ -3709,8 +3711,6 @@ export class GameBoardRenderer {
           SquareBurst.playAt(r.left + r.width / 2, r.top + r.height / 2, 'starlight', { count: 8, spread: 80, duration: 420 })
           b.classList.remove('is-pulse'); void b.offsetWidth; b.classList.add('is-pulse')
           update()
-          // 입김으로 마지막 패까지 비웠다면 판 없이 종료.
-          if (deckEmpty()) window.setTimeout(finish, 700)
         })
       })
       stakeEls.forEach((b) => {
@@ -3731,7 +3731,13 @@ export class GameBoardRenderer {
           busy = true
           const mult = doubleNext ? 2 : 1
           const ward = wardNext
-          const theirs = deckQueue.shift() as RpsHand
+          // 차단된 패는 이번 판 낼 수 없다 — 큐 순서를 유지한 채 봉쇄되지 않은 첫 장을 뽑는다.
+          let drawIdx = 0
+          if (blocked) {
+            const idx = deckQueue.findIndex((h) => h !== blocked)
+            if (idx >= 0) drawIdx = idx
+          }
+          const theirs = deckQueue.splice(drawIdx, 1)[0] as RpsHand
           discard.push(theirs)
           b.classList.remove('is-pulse'); void b.offsetWidth; b.classList.add('is-pulse')
           update() // 스핀 동안 입력 잠금
@@ -3746,14 +3752,14 @@ export class GameBoardRenderer {
               sink.gainLight(payout)
               this.blastEventGain(resultEl.getBoundingClientRect(), 'light', 4)
               resultEl.className = 'mini-rps-result is-win'
-              resultEl.textContent = `${vs} — 승리! 불빛 +${payout.toLocaleString()}${mult > 1 ? ' (갑절 2배)' : ''}`
+              resultEl.textContent = `${vs} — 승리! 불빛 +${payout.toLocaleString()}${mult > 1 ? ' (두배)' : ''}`
             } else if (outcome === 'lose') {
               const loss = ward ? 0 : stake * mult
               net -= loss
               streak = 0
               if (loss > 0) sink.gainLight(-loss)
               resultEl.className = 'mini-rps-result is-lose'
-              resultEl.textContent = ward ? `${vs} — 패배지만 부적이 막았다.` : `${vs} — 패배. 불빛 -${loss.toLocaleString()}${mult > 1 ? ' (갑절 2배)' : ''}`
+              resultEl.textContent = ward ? `${vs} — 패배지만 부적이 막았다.` : `${vs} — 패배. 불빛 -${loss.toLocaleString()}${mult > 1 ? ' (두배)' : ''}`
             } else {
               const rake = ward ? 0 : Math.round(stake * tieFrac)
               net -= rake
@@ -4131,14 +4137,22 @@ export class GameBoardRenderer {
 .mini-rps-cardslot .cs-face > .is-shown { opacity: 1; }
 .mini-rps-cardslot .cs-empty { display: flex; align-items: center; justify-content: center; font-size: 58px; font-weight: 900; color: rgba(200, 190, 170, 0.28); }
 .mini-rps-cardslot[data-state="empty"] .cs-empty { opacity: 1; }
-.mini-rps-cardslot[data-state="peek"] .cs-face { filter: saturate(0.85) brightness(0.88); }
 .mini-rps-cardslot .cs-tag { display: block; margin-top: 3px; font-size: 13px; letter-spacing: 0.06em; color: rgba(220, 206, 252, 0.78); text-shadow: 0 1px 5px rgba(0, 0, 0, 0.85); }
 .mini-rps-cardslot.is-tick .cs-face { filter: brightness(1.18); }
 .mini-rps-cardslot.is-impact { animation: rps-slot-impact 0.36s cubic-bezier(0.2, 0.8, 0.2, 1); }
 
 .mini-rps-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
 .mini-rps-deck { font-size: 18px; display: inline-flex; align-items: baseline; gap: 9px; }
+.mini-rps-deck-item { position: relative; }
 .mini-rps-deck-item b { color: rgba(255, 232, 176, 0.97); font-weight: 900; font-size: 19px; }
+/* 차단된 패 — 덱 표시 위에 붉은 ×를 겹쳐 이번 판 봉쇄를 알린다 */
+.mini-rps-deck-item.is-blocked { opacity: 0.55; }
+.mini-rps-deck-item.is-blocked::after {
+  content: '×'; position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%);
+  font-size: 30px; font-weight: 900; color: rgba(236, 92, 68, 0.96);
+  text-shadow: 0 0 10px rgba(210, 54, 32, 0.65), 0 1px 4px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+}
 .mini-rps-dot { color: rgba(180, 168, 148, 0.4); }
 .mini-rps-streak { font-size: 15px; color: rgba(210, 198, 178, 0.74); }
 .mini-rps-streak b { color: rgba(244, 206, 112, 0.96); font-size: 19px; font-weight: 900; }

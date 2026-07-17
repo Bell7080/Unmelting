@@ -154,7 +154,7 @@ export interface MinionExchangeConfig {
 export type RpsHand = 'rock' | 'paper' | 'scissors'
 
 /** 벅샷 룰렛식 아이템 — 다양한 자원을 지불해 판을 유리하게 조작한다. 효과는 렌더러가 id로 분기. */
-export type RpsItemId = 'peek' | 'eject' | 'whet' | 'ward' | 'bait'
+export type RpsItemId = 'block' | 'double' | 'ward'
 export interface RpsItemDef {
   id: RpsItemId
   label: string
@@ -288,7 +288,7 @@ const EVENT_002: EventDefinition = {
         onSuccess: { light: 70 }, onFail: { health: -5 } },
       { id: 'shield', label: '방패 조르기', hint: '성공하면 방패, 실패하면 흘린 불빛', aim: 'success',
         onSuccess: { shield: 8 }, onFail: { light: -30 } },
-      { id: 'wax', label: '촛농 훔치기', hint: '성공하면 게이지, 실패하면 소량 피해', aim: 'success',
+      { id: 'wax', label: '촛농 훔치기', hint: '성공하면 콤보 게이지, 실패하면 소량 피해', aim: 'success',
         onSuccess: { candle: 4 }, onFail: { health: -3 } },
       { id: 'threat', label: '협박', hint: '기겁시켜야 하울을 흘린다 — 버티면 되레 물린다', aim: 'fail',
         onSuccess: { health: -6 }, onFail: { light: 130, hand: 1 } },
@@ -325,14 +325,13 @@ const EVENT_003: EventDefinition = {
     baseStake: 60,
     tieLossFraction: 0.5,
     relicWinMultiple: 6,
-    // 벅샷 룰렛식 도구 — 저마다 다른 자원으로 사고, 다음 패를 들추거나 판돈/손실을 조작한다.
+    // 벅샷 룰렛식 도구 — 저마다 다른 자원으로 사고, 백작의 선택지/판돈/손실을 조작한다.
     // 이름·설명은 처음 하는 플레이어도 효과를 바로 알 수 있게 쉬운 말로.
+    // 불빛 비용은 판돈과 같은 층 인플레이션(1 + 층×0.02)을 받는다.
     items: [
-      { id: 'peek', label: '엿보기', desc: '백작이 낼 다음 패를 미리 본다', costRes: 'light', costAmount: 45 },
-      { id: 'eject', label: '흩기', desc: '백작의 다음 패 한 장을 버린다', costRes: 'candle', costAmount: 2 },
-      { id: 'whet', label: '갑절', desc: '이번 판, 따는 불빛도 잃는 불빛도 두 배', costRes: 'health', costAmount: 4 },
-      { id: 'ward', label: '부적', desc: '이번 판은 지거나 비겨도 불빛을 안 잃는다', costRes: 'shield', costAmount: 5 },
-      { id: 'bait', label: '미끼', desc: '백작이 가장 많이 남은 패를 내도록 꾄다(그 패가 보인다)', costRes: 'hand', costAmount: 1 },
+      { id: 'block', label: '차단', desc: '이번 판, 백작이 낼 수 있는 패 한 종류를 막는다(막힌 패에 ×표시)', costRes: 'light', costAmount: 90 },
+      { id: 'double', label: '두배', desc: '이번 판, 따는 불빛도 잃는 불빛도 두 배', costRes: 'health', costAmount: 4 },
+      { id: 'ward', label: '부적', desc: '이번 판은 지거나 비겨도 불빛을 안 잃는다', costRes: 'hand', costAmount: 1 },
     ],
   },
   outro: [
