@@ -43,7 +43,7 @@ import { runTagReactions, SHARD_GENERATORS, handCardIdsWithTag } from '@systems/
 import { EmberSystem } from '@systems/EmberSystem'
 import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT, Lane } from '@entities/Lane'
-import { pickEventForDoor, getEventDef, EVENT_IDS, type EventId, type EventDefinition, type EventDialogueLine, type EventResourceSnapshot, type EventMinigameSettlement } from '@data/Events'
+import { pickEventForDoor, getEventDef, EVENT_IDS, type EventId, type EventDefinition, type EventDialogueLine, type EventResourceSnapshot, type EventResourceSink } from '@data/Events'
 import { CandleMode } from '@entities/Character'
 import { HandCardId, HandCategory, type HandCardDefinition } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS, HAND_CARD_DEFINITIONS } from '@data/HandCards'
@@ -5258,8 +5258,8 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
     render()
   }
   if (def.minigame) {
-    // 미니게임형(미니언 저울/백작 가위바위보): 자원 스냅샷을 넘겨 실력으로 굴린 뒤,
-    // 시작값 대비 정산 델타만 실제 자원에 반영한다.
+    // 미니게임형(미니언 저울/백작 가위바위보): 자원 스냅샷(시작값/상한)을 넘기고, 진행 중 각 액션은
+    // 실시간 싱크로 실제 자원을 즉시 올리고 내린다(기존 HUD 트레일/카운터 피드백 재사용).
     const c = gameState.character
     const snap: EventResourceSnapshot = {
       light: score, hand: c.hand.length, handMax: c.handMax,
@@ -5267,11 +5267,13 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
       health: c.health, maxHealth: c.maxHealth, shield: c.shield,
       floor: gameState.getCurrentTurn(),
     }
-    const settlement = def.minigame.kind === 'minion-exchange'
-      ? await boardRenderer.runMinionExchange(card.id, def, def.minigame, snap, consumeDoor, playDialogue)
-      : await boardRenderer.runCountRps(card.id, def, def.minigame, snap, consumeDoor, playDialogue)
-    await applyEventSettlement(settlement)
-    // 정산 후 마무리 대사 → 커튼 열기.
+    const sink = makeEventResourceSink()
+    if (def.minigame.kind === 'minion-exchange') {
+      await boardRenderer.runMinionExchange(card.id, def, def.minigame, snap, sink, consumeDoor, playDialogue)
+    } else {
+      await boardRenderer.runCountRps(card.id, def, def.minigame, snap, sink, consumeDoor, playDialogue)
+    }
+    // 미니게임 UI가 접혀 사라진 뒤(렌더러가 처리), 이벤트1처럼 마무리 대사 → 커튼 열기.
     await playDialogue(def.outro ?? [])
     await boardRenderer.closeEventEntry()
   } else {
@@ -5320,36 +5322,51 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
   inputLocked = false
 }
 
-/** 미니게임 정산 델타를 실제 자원에 반영하고 HUD 피드백을 준다. */
-async function applyEventSettlement(s: EventMinigameSettlement): Promise<void> {
+/** 미니게임이 실시간으로 자원을 올리고 내릴 때 쓰는 싱크. 각 메서드는 실제 상태를 즉시 바꾸고
+ *  기존 HUD 카운터 피드백 + 화면 갱신을 수행한다(버스트/트레일 연출은 렌더러가 쏜다). */
+function makeEventResourceSink(): EventResourceSink {
   const c = gameState.character
-  if (s.lightDelta !== 0) {
-    score = Math.max(0, score + s.lightDelta)
-    scorePulseKey++
-    if (s.lightDelta >= 0) boardRenderer.playScoreGainFeedback(score, scorePulseKey)
-    else boardRenderer.playScoreSpendFeedback(score, scorePulseKey)
+  return {
+    gainLight: (amount: number) => {
+      if (amount === 0) return
+      score = Math.max(0, score + amount)
+      scorePulseKey++
+      if (amount >= 0) boardRenderer.playScoreGainFeedback(score, scorePulseKey)
+      else boardRenderer.playScoreSpendFeedback(score, scorePulseKey)
+      render()
+    },
+    changeHealth: (amount: number) => {
+      if (amount === 0) return
+      // 방패/피해 유물 부수효과를 피하려 이벤트 거래 HP는 직접 클램프한다.
+      c.health = Math.max(1, Math.min(c.maxHealth, c.health + amount))
+      boardRenderer.playHudCounterFeedback('health', c.health)
+      render()
+    },
+    gainCandle: (amount: number) => {
+      if (amount === 0) return
+      if (amount > 0) c.gainCandle(amount)
+      else c.candle = Math.max(0, c.candle + amount)
+      boardRenderer.playHudCounterFeedback('candle', c.candle)
+      if (amount > 0 && c.isCandleFull()) void resolveFullCandleGaugeEffects({ kind: 'center' })
+      render()
+    },
+    gainShield: (amount: number) => {
+      if (amount <= 0) return
+      c.addShield(amount)
+      boardRenderer.playHudCounterFeedback('shield', c.shield)
+      render()
+    },
+    sellHand: (count: number) => {
+      // 판 손패는 오래된 것(앞쪽)부터 제거한다.
+      for (let i = 0; i < count && c.hand.length > 0; i += 1) c.removeHandCardAt(0)
+      render()
+    },
+    buyHand: (count: number) => {
+      for (let i = 0; i < count; i += 1) HandSystem.enqueueDrop(c, DropSystem.generateDrop())
+      render()
+    },
+    grantRelic: () => { grantRandomRelicReward(); render() },
   }
-  if (s.candleDelta !== 0) {
-    if (s.candleDelta > 0) c.gainCandle(s.candleDelta)
-    else c.candle = Math.max(0, c.candle + s.candleDelta)
-    boardRenderer.playHudCounterFeedback('candle', c.candle)
-  }
-  if (s.healthDelta !== 0) {
-    // 방패/피해 유물 부수효과를 피하려 HP는 직접 클램프한다(미니게임 원장이 이미 net을 계산).
-    c.health = Math.max(1, Math.min(c.maxHealth, c.health + s.healthDelta))
-    boardRenderer.playHudCounterFeedback('health', c.health)
-  }
-  if (s.shieldDelta > 0) {
-    c.addShield(s.shieldDelta)
-    boardRenderer.playHudCounterFeedback('shield', c.shield)
-  }
-  // 판 손패는 오래된 것(앞쪽)부터 제거하고, 매입 손패는 드롭 풀에서 지급한다.
-  for (let i = 0; i < s.handRemove && c.hand.length > 0; i += 1) c.removeHandCardAt(0)
-  for (let i = 0; i < s.handAdd; i += 1) HandSystem.enqueueDrop(c, DropSystem.generateDrop())
-  if (s.grantRelic) grantRandomRelicReward()
-  render()
-  if (s.candleDelta > 0 && c.isCandleFull()) await resolveFullCandleGaugeEffects({ kind: 'center' })
-  recordNotice(s.summary, s.lightDelta < 0 ? 'hurt' : 'info')
 }
 
 /** 등급 가중치로 미보유 유물 1개를 지급한다(백작 완승 보상 등). 성공 시 true. */

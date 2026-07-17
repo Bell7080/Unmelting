@@ -34,7 +34,7 @@ import type {
   MinionExchangeConfig,
   CountRpsConfig,
   ExchangeOffer,
-  EventMinigameSettlement,
+  EventResourceSink,
   EventResourceKind,
   EventResourceSnapshot,
   RpsHand,
@@ -3296,28 +3296,42 @@ export class GameBoardRenderer {
     this.eventEntryOverlayElement = null
   }
 
+  /** 미니게임 획득 트레일: 소스(버튼/결과) 위치에서 해당 HUD로 기존 자원 트레일을 쏜다. */
+  private blastEventGain(from: DOMRect, res: EventResourceKind, count = 3): void {
+    const map: Record<EventResourceKind, { target: ResourceTrailTarget; theme: BurstTheme }> = {
+      light: { target: 'score', theme: 'score' },
+      health: { target: 'health', theme: 'health-gain' },
+      candle: { target: 'gauge', theme: 'gauge-gain' },
+      shield: { target: 'shield', theme: 'shield-gain' },
+      hand: { target: 'hand', theme: 'hand-tool' },
+    }
+    const m = map[res]
+    void this.animateResourceTrail(from, this.findResourceTrailTarget(m.target), count, m.theme)
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // event_002 — 겁쟁이 미니언의 저울(환전 최적화 미니게임)
   // ─────────────────────────────────────────────────────────────────────────
   /**
-   * 미니언 환전 미니게임. 스냅샷 위에서 임시 원장을 굴리며 교환을 반복하고, "거래 종료" 시
-   * 시작값 대비 순증감(settlement)을 돌려준다. 실제 자원 반영은 호출부(index.ts)가 담당한다.
+   * 미니언 환전 미니게임. 교환할 때마다 실제 자원(불빛/체력/게이지/방패/손패)을 즉시 올리고 내리며
+   * 기존 HUD 트레일/카운터 피드백을 쏜다(sink). 로컬 미러 led 는 상한/가용 판정에만 쓴다.
    */
   async runMinionExchange(
     cardId: string,
     def: EventDefinition,
     cfg: MinionExchangeConfig,
     snap: EventResourceSnapshot,
+    sink: EventResourceSink,
     onConsume: () => void,
     playDialogue: () => Promise<void>
-  ): Promise<EventMinigameSettlement> {
+  ): Promise<void> {
     this.ensureEventMinigameStyles()
     const content = await this.openEventScene(cardId, def.illu, onConsume, playDialogue)
 
     const RES_LABEL: Record<EventResourceKind, string> = {
       light: '불빛', hand: '손패', candle: '게이지', health: '체력', shield: '방패',
     }
-    // 임시 원장 — 시작 스냅샷을 복제해 교환할 때마다 갱신한다.
+    // 실제 자원의 로컬 미러 — 이벤트 중엔 미니게임만 자원을 바꾸므로 실값과 동기 유지된다.
     const led: Record<EventResourceKind, number> = {
       light: snap.light, hand: snap.hand, candle: snap.candle, health: snap.health, shield: snap.shield,
     }
@@ -3338,35 +3352,29 @@ export class GameBoardRenderer {
       if (o.get.res === 'health' && led.health >= snap.maxHealth) return false
       return true
     }
-    const applyTrade = (o: ExchangeOffer): number => {
-      led[o.give.res] -= o.give.amount
-      const amt = getAmount(o)
-      if (o.get.res === 'health') led.health = Math.min(snap.maxHealth, led.health + amt)
-      else if (o.get.res === 'hand') led.hand = Math.min(snap.handMax, led.hand + amt)
-      else led[o.get.res] += amt
+    // 자원을 실제로 즉시 반영한다(sink). 미러 led 도 같은 값으로 갱신한다.
+    const applyResource = (res: EventResourceKind, amount: number): void => {
+      led[res] += amount
+      if (res === 'light') sink.gainLight(amount)
+      else if (res === 'health') sink.changeHealth(amount)
+      else if (res === 'candle') sink.gainCandle(amount)
+      else if (res === 'shield') sink.gainShield(amount)
+      else if (res === 'hand') { if (amount >= 0) sink.buyHand(amount); else sink.sellHand(-amount) }
+    }
+    const applyTrade = (o: ExchangeOffer, btnRect: DOMRect): void => {
+      // 지불(소비) — 실시간 반영(카운터 하락).
+      applyResource(o.give.res, -o.give.amount)
+      // 획득 — 상한 클램프 후 실시간 반영 + 획득 HUD로 트레일 발사.
+      let g = getAmount(o)
+      if (o.get.res === 'health') g = Math.max(0, Math.min(g, snap.maxHealth - led.health))
+      if (o.get.res === 'hand') g = Math.max(0, Math.min(g, snap.handMax - led.hand))
+      applyResource(o.get.res, g)
+      this.blastEventGain(btnRect, o.get.res)
       fear += cfg.fearPerTrade
       combo += 1
-      return amt
-    }
-    const settle = (): EventMinigameSettlement => {
-      const handNet = led.hand - snap.hand
-      const lightDelta = led.light - snap.light
-      return {
-        lightDelta,
-        handAdd: Math.max(0, handNet),
-        handRemove: Math.max(0, -handNet),
-        candleDelta: led.candle - snap.candle,
-        healthDelta: led.health - snap.health,
-        shieldDelta: led.shield - snap.shield,
-        grantRelic: false,
-        summary: `겁쟁이 미니언 저울: 교환 ${combo}회 · 불빛 ${lightDelta >= 0 ? '+' : ''}${lightDelta.toLocaleString()}`,
-      }
     }
 
-    // 패널 골격 — 원장 스트립 + 겁(별빛 pip)/흥정 콤보 미터 + 교환 버튼 + 종료.
-    const ledgerHtml = (['light', 'hand', 'candle', 'health', 'shield'] as EventResourceKind[])
-      .map((r) => `<span class="mini-ex-stat" data-res="${r}"><span class="mini-ex-stat-key">${RES_LABEL[r]}</span><b>${led[r].toLocaleString()}</b></span>`)
-      .join('')
+    // 패널 골격 — 겁(별빛 pip)/흥정 콤보 미터 + 교환 버튼 + 종료. 자원 수치는 실제 HUD가 보여준다.
     const pipsHtml = Array.from({ length: cfg.fearCap }, () => `<span class="mini-fear-pip">${sparkleIcon()}</span>`).join('')
     const offerHtml = cfg.offers.map((o) => `
       <button class="mini-ex-offer" type="button" data-offer="${o.id}">
@@ -3380,7 +3388,6 @@ export class GameBoardRenderer {
       </button>`).join('')
     content.innerHTML = `
       <div class="mini-exchange is-in">
-        <div class="mini-ex-ledger">${ledgerHtml}</div>
         <div class="mini-ex-meters">
           <div class="mini-fear"><span class="mini-meter-key">겁</span><span class="mini-fear-pips">${pipsHtml}</span></div>
           <div class="mini-combo"><span class="mini-meter-key">흥정</span><b class="mini-combo-val">x1.00</b></div>
@@ -3390,21 +3397,12 @@ export class GameBoardRenderer {
       </div>`
 
     const panel = content.querySelector<HTMLElement>('.mini-exchange')!
-    const statEls = new Map<EventResourceKind, HTMLElement>()
-    panel.querySelectorAll<HTMLElement>('.mini-ex-stat').forEach((el) => statEls.set(el.dataset.res as EventResourceKind, el))
     const pipEls = Array.from(panel.querySelectorAll<HTMLElement>('.mini-fear-pip'))
     const comboEl = panel.querySelector<HTMLElement>('.mini-combo-val')!
     const offerEls = Array.from(panel.querySelectorAll<HTMLButtonElement>('.mini-ex-offer'))
     const doneEl = panel.querySelector<HTMLButtonElement>('.mini-ex-done')!
 
     const update = (): void => {
-      for (const [r, el] of statEls) {
-        const b = el.querySelector('b')!
-        if (b.textContent !== led[r].toLocaleString()) {
-          b.textContent = led[r].toLocaleString()
-          el.classList.remove('is-bump'); void el.offsetWidth; el.classList.add('is-bump')
-        }
-      }
       pipEls.forEach((p, i) => p.classList.toggle('is-lit', i < fear))
       comboEl.textContent = `x${(1 + combo * cfg.comboStep).toFixed(2)}`
       offerEls.forEach((btn) => {
@@ -3416,20 +3414,22 @@ export class GameBoardRenderer {
     }
     update()
 
-    return await new Promise<EventMinigameSettlement>((resolve) => {
+    await new Promise<void>((resolve) => {
+      // 종료: 패널을 부드럽게 접은 뒤 resolve → 호출부가 마무리 대사를 UI가 사라진 뒤 출력한다.
+      const finish = (): void => { panel.classList.add('is-closing'); window.setTimeout(resolve, 340) }
       offerEls.forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation()
           const o = byId.get(btn.dataset.offer!)
           if (!o || !canTrade(o)) return
-          applyTrade(o)
           const r = btn.getBoundingClientRect()
+          applyTrade(o, r)
           SquareBurst.playAt(r.left + r.width / 2, r.top + r.height / 2, 'starlight', { count: 10, spread: 90, duration: 460 })
           btn.classList.remove('is-pulse'); void btn.offsetWidth; btn.classList.add('is-pulse')
           update()
         })
       })
-      doneEl.addEventListener('click', (e) => { e.stopPropagation(); resolve(settle()) })
+      doneEl.addEventListener('click', (e) => { e.stopPropagation(); finish() })
     })
   }
 
@@ -3437,17 +3437,19 @@ export class GameBoardRenderer {
   // event_003 — 가위바위보 백작(덱 카운팅 + 베팅 미니게임)
   // ─────────────────────────────────────────────────────────────────────────
   /**
-   * 백작 가위바위보 미니게임. 앞면 유한 덱 + 격식 선언을 읽어 불빛을 걸고 연승 배율을 쌓는다.
-   * 언제든 물러나 이익을 지키며, 덱을 완전히 비우고 순이익이 크면 유물 보상을 준다.
+   * 백작 가위바위보 미니게임. 앞면 유한 덱(카운팅) + 격식 선언(합법 손 제한)을 읽어 불빛을 걸고
+   * 연승 배율을 쌓는다. 비김도 판돈 일부를 백작이 가져가므로(tieLossFraction) 어떤 손도 무손해가
+   * 아니며, 카운팅으로 +EV 손을 골라야 이득이다. 불빛은 매 판 실제 HUD로 즉시 반영된다.
    */
   async runCountRps(
     cardId: string,
     def: EventDefinition,
     cfg: CountRpsConfig,
     snap: EventResourceSnapshot,
+    sink: EventResourceSink,
     onConsume: () => void,
     playDialogue: () => Promise<void>
-  ): Promise<EventMinigameSettlement> {
+  ): Promise<void> {
     this.ensureEventMinigameStyles()
     const content = await this.openEventScene(cardId, def.illu, onConsume, playDialogue)
 
@@ -3463,6 +3465,7 @@ export class GameBoardRenderer {
     let lastCount: RpsHand | null = null
     let allowed: RpsHand[] = [...HANDS]
     let declText = ''
+    const tieFrac = Math.max(0, Math.min(1, cfg.tieLossFraction))
     const stakeUnit = Math.max(1, Math.round(cfg.baseStake * (1 + snap.floor * 0.02)))
     const stakeMults = [1, 2, 4]
     let selectedMult = 1
@@ -3470,27 +3473,25 @@ export class GameBoardRenderer {
 
     const remainingTypes = (): RpsHand[] => HANDS.filter((h) => deck[h] > 0)
     const deckEmpty = (): boolean => HANDS.every((h) => deck[h] === 0)
+    // 실제 불빛 = 시작값 + 누적 net. 판돈 가용은 실제 불빛으로 판정한다.
     const avail = (): number => snap.light + net
     const streakMult = (s: number): number => Math.min(3, 1 + Math.max(0, s) * 0.5)
 
     // 격식 선언: 백작이 스스로를 구속하는 규칙. legal 집합이 비지 않는 후보만 고른다.
+    // (비김 페널티가 있어 손 제한이 있어도 '무손해 손'이 생기지 않는다.)
     const rollDeclaration = (): void => {
       const types = remainingTypes()
       const candidates: { text: string; allow: RpsHand[] }[] = []
-      // 정정당당(제약 없음)
       candidates.push({ text: '이번엔 정정당당, 무엇이든 내겠네.', allow: [...types] })
       if (types.length >= 2) {
-        // 같은 손 반복 금지
         if (lastCount && types.includes(lastCount) && types.filter((t) => t !== lastCount).length >= 1) {
           candidates.push({ text: `방금과 같은 손은 격식에 어긋나지 — ${HAND_LABEL[lastCount]}는 내지 않겠네.`, allow: types.filter((t) => t !== lastCount) })
         }
-        // 특정 손 봉인
         for (const t of types) {
           const rest = types.filter((x) => x !== t)
           if (rest.length >= 1) candidates.push({ text: `오늘 ${HAND_LABEL[t]}는 품위에 맞지 않아. 내지 않겠네.`, allow: rest })
         }
       }
-      // 제약이 있는 선언을 더 자주 노출해 읽는 재미를 준다.
       const constrained = candidates.filter((c) => c.allow.length < types.length)
       const pool = constrained.length > 0 && Math.random() < 0.72 ? constrained : candidates
       const pick = pool[Math.floor(Math.random() * pool.length)]
@@ -3505,24 +3506,18 @@ export class GameBoardRenderer {
       for (const h of allowed) for (let i = 0; i < deck[h]; i += 1) pool.push(h)
       return pool[Math.floor(Math.random() * pool.length)] ?? allowed[0]
     }
-    const settle = (): EventMinigameSettlement => {
-      const grantRelic = deckEmpty() && net >= cfg.relicWinMultiple * stakeUnit
-      return {
-        lightDelta: net, handAdd: 0, handRemove: 0, candleDelta: 0, healthDelta: 0, shieldDelta: 0,
-        grantRelic,
-        summary: `가위바위보 백작: 불빛 ${net >= 0 ? '+' : ''}${net.toLocaleString()}${grantRelic ? ' · 유물 획득' : ''}`,
-      }
-    }
 
     const deckHtml = HANDS.map((h) => `<span class="mini-rps-deck-item" data-hand="${h}">${HAND_LABEL[h]} <b>×${deck[h]}</b></span>`).join('<span class="mini-rps-dot">·</span>')
     const stakeHtml = stakeMults.map((m, i) => `<button class="mini-rps-stake" type="button" data-mult="${m}"><span class="mini-rps-stake-name">${['소', '중', '대'][i]}</span><span class="mini-rps-stake-amt">${(stakeUnit * m).toLocaleString()}</span></button>`).join('')
     const throwHtml = HANDS.map((h) => `<button class="mini-rps-throw" type="button" data-throw="${h}">${HAND_LABEL[h]}</button>`).join('')
+    const rakePct = Math.round(tieFrac * 100)
     content.innerHTML = `
       <div class="mini-rps is-in">
         <div class="mini-rps-top">
           <div class="mini-rps-deck">${deckHtml}</div>
-          <div class="mini-rps-purse"><span class="mini-rps-net">불빛 <b>+0</b></span><span class="mini-rps-streak">연승 <b>x1.0</b></span></div>
+          <div class="mini-rps-streak">연승 <b>x1.0</b></div>
         </div>
+        <div class="mini-rps-rule">비기면 판돈의 ${rakePct}%는 백작 몫 — 꺾어야 이긴다</div>
         <div class="mini-rps-decl" aria-live="polite"></div>
         <div class="mini-rps-result"></div>
         <div class="mini-rps-discard"></div>
@@ -3534,7 +3529,6 @@ export class GameBoardRenderer {
     const panel = content.querySelector<HTMLElement>('.mini-rps')!
     const deckEls = new Map<RpsHand, HTMLElement>()
     panel.querySelectorAll<HTMLElement>('.mini-rps-deck-item').forEach((el) => deckEls.set(el.dataset.hand as RpsHand, el))
-    const netEl = panel.querySelector<HTMLElement>('.mini-rps-net b')!
     const streakEl = panel.querySelector<HTMLElement>('.mini-rps-streak b')!
     const declEl = panel.querySelector<HTMLElement>('.mini-rps-decl')!
     const resultEl = panel.querySelector<HTMLElement>('.mini-rps-result')!
@@ -3545,8 +3539,6 @@ export class GameBoardRenderer {
 
     const update = (): void => {
       for (const [h, el] of deckEls) el.querySelector('b')!.textContent = `×${deck[h]}`
-      netEl.textContent = `${net >= 0 ? '+' : ''}${net.toLocaleString()}`
-      netEl.parentElement!.classList.toggle('is-neg', net < 0)
       streakEl.textContent = `x${streakMult(streak).toFixed(1)}`
       declEl.textContent = declText ? `격식: ${declText}` : ''
       discardEl.textContent = discard.length ? `버린 패: ${discard.map((h) => HAND_LABEL[h]).join(' ')}` : ''
@@ -3574,8 +3566,16 @@ export class GameBoardRenderer {
       update()
     }
 
-    return await new Promise<EventMinigameSettlement>((resolve) => {
-      const finish = (): void => resolve(settle())
+    await new Promise<void>((resolve) => {
+      // 종료: 완승 유물 판정 후 패널을 접고 resolve → 호출부가 마무리 대사를 UI가 사라진 뒤 출력.
+      const finish = (): void => {
+        if (deckEmpty() && net >= cfg.relicWinMultiple * stakeUnit) {
+          sink.grantRelic()
+          void this.animateResourceTrail(resultEl.getBoundingClientRect(), this.findResourceTrailTarget('relic'), 4, 'treasure-gain')
+        }
+        panel.classList.add('is-closing')
+        window.setTimeout(resolve, 340)
+      }
       stakeEls.forEach((b) => {
         b.addEventListener('click', (e) => {
           e.stopPropagation()
@@ -3604,26 +3604,28 @@ export class GameBoardRenderer {
             const payout = Math.round(stake * streakMult(streak + 1))
             net += payout
             streak += 1
+            sink.gainLight(payout) // 실시간 반영
+            this.blastEventGain(resultEl.getBoundingClientRect(), 'light', 4)
             resultEl.className = 'mini-rps-result is-win'
             resultEl.textContent = `${HAND_LABEL[mine]} vs ${HAND_LABEL[theirs]} — 승리! 불빛 +${payout.toLocaleString()}`
-            const rr = resultEl.getBoundingClientRect()
-            SquareBurst.playAt(rr.left + rr.width / 2, rr.top + rr.height / 2, 'score', { count: 14, spread: 130, duration: 560 })
           } else if (outcome === 'lose') {
             net -= stake
             streak = 0
+            sink.gainLight(-stake)
             resultEl.className = 'mini-rps-result is-lose'
             resultEl.textContent = `${HAND_LABEL[mine]} vs ${HAND_LABEL[theirs]} — 패배. 불빛 -${stake.toLocaleString()}`
           } else {
+            // 비김도 하우스 레이크만큼 손실 — '무손해 손'을 없애 카운팅 실력을 요구한다.
+            const rake = Math.round(stake * tieFrac)
+            net -= rake
+            streak = 0
+            if (rake > 0) sink.gainLight(-rake)
             resultEl.className = 'mini-rps-result is-tie'
-            resultEl.textContent = `${HAND_LABEL[mine]} vs ${HAND_LABEL[theirs]} — 비김.`
+            resultEl.textContent = `${HAND_LABEL[mine]} vs ${HAND_LABEL[theirs]} — 비김. 백작 몫 -${rake.toLocaleString()}`
           }
           update()
-          if (deckEmpty()) {
-            // 덱 소진 → 자동 정산(완승 보너스 판정 포함).
-            window.setTimeout(finish, 900)
-          } else {
-            window.setTimeout(beginRound, 850)
-          }
+          if (deckEmpty()) window.setTimeout(finish, 900)
+          else window.setTimeout(beginRound, 850)
         })
       })
       doneEl.addEventListener('click', (e) => { e.stopPropagation(); if (!busy) finish() })
@@ -3888,35 +3890,27 @@ export class GameBoardRenderer {
     const style = document.createElement('style')
     style.id = 'event-minigame-styles'
     style.textContent = `
-/* 공통 패널 — 하단 중앙, 낡은 종이 위 어두운 판 + 따뜻한 금테 */
+/* 공통 패널 — 테두리/박스 없이 은은한 방사형 어둠만 깔아 뒷배경과 경계를 허문다.
+   자원 수치는 별도 원장 없이 실제 HUD가 실시간으로 보여준다. */
 .mini-exchange, .mini-rps {
-  width: min(96%, 720px);
+  width: min(96%, 700px);
   display: flex; flex-direction: column; gap: 12px;
-  padding: 16px 18px 18px;
-  border-radius: 14px;
-  border: 1px solid rgba(244, 206, 112, 0.24);
-  background: linear-gradient(180deg, rgba(8, 5, 14, 0.74) 0%, rgba(6, 4, 12, 0.9) 100%);
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6), inset 0 0 40px rgba(0, 0, 0, 0.4);
+  padding: 14px 16px 16px;
+  background: radial-gradient(125% 135% at 50% 62%, rgba(6, 4, 12, 0.5) 0%, rgba(6, 4, 12, 0.22) 52%, rgba(6, 4, 12, 0) 82%);
   font-family: 'OkDanDan', Georgia, serif;
-  color: rgba(255, 238, 200, 0.9);
+  color: rgba(255, 238, 200, 0.92);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
 }
 .mini-exchange.is-in, .mini-rps.is-in { animation: event-line-in 0.34s ease both; }
+/* 접히는 동안엔 입력을 막아, UI가 사라진 뒤 나오는 마무리 대사 클릭이 버튼에 가로채이지 않게 한다. */
+.mini-exchange.is-closing, .mini-rps.is-closing { pointer-events: none; animation: mini-panel-out 0.32s cubic-bezier(0.2, 0.72, 0.2, 1) forwards; }
 
 /* ── 미니언 저울 ── */
-.mini-ex-ledger {
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px;
-  padding-bottom: 10px; border-bottom: 1px solid rgba(244, 206, 112, 0.14);
-}
-.mini-ex-stat { display: inline-flex; align-items: baseline; gap: 5px; font-size: 14px; }
-.mini-ex-stat-key { color: rgba(210, 198, 178, 0.66); font-size: 12px; letter-spacing: 0.04em; }
-.mini-ex-stat b { color: rgba(255, 232, 176, 0.96); font-size: 17px; font-weight: 900; }
-.mini-ex-stat.is-bump b { animation: mini-stat-bump 0.42s cubic-bezier(0.2, 0.8, 0.2, 1); }
-
 .mini-ex-meters { display: flex; align-items: center; justify-content: center; gap: 26px; }
 .mini-meter-key { color: rgba(210, 198, 178, 0.7); font-size: 12px; letter-spacing: 0.1em; margin-right: 8px; }
 .mini-fear { display: inline-flex; align-items: center; }
 .mini-fear-pips { display: inline-flex; gap: 6px; }
-.mini-fear-pip { display: inline-flex; width: 17px; height: 17px; color: rgba(90, 96, 150, 0.42); transition: color 0.2s, filter 0.2s, transform 0.2s; }
+.mini-fear-pip { display: inline-flex; width: 17px; height: 17px; color: rgba(120, 126, 176, 0.5); transition: color 0.2s, filter 0.2s, transform 0.2s; }
 .mini-fear-pip svg { width: 100%; height: 100%; }
 .mini-fear-pip.is-lit {
   color: rgba(224, 228, 255, 0.98);
@@ -3926,84 +3920,83 @@ export class GameBoardRenderer {
 .mini-combo { display: inline-flex; align-items: baseline; }
 .mini-combo-val { color: rgba(244, 206, 112, 0.95); font-size: 17px; font-weight: 900; }
 
-.mini-ex-offers { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mini-ex-offers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* 버튼도 테두리 없이 아주 옅은 반투명 채움만 — hover 시 살짝 떠오르며 금빛으로 반응 */
 .mini-ex-offer {
-  display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
-  padding: 10px 14px; border-radius: 11px; cursor: pointer;
-  border: 1px solid rgba(244, 206, 112, 0.2);
-  background: linear-gradient(180deg, rgba(30, 22, 16, 0.5), rgba(14, 10, 8, 0.62));
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  padding: 9px 14px; border-radius: 11px; cursor: pointer; border: none;
+  background: rgba(18, 12, 9, 0.34);
   font-family: inherit; color: inherit; text-align: left;
-  transition: transform 0.14s, border-color 0.18s, box-shadow 0.18s, opacity 0.18s;
+  transition: transform 0.14s, background 0.18s, opacity 0.18s;
 }
-.mini-ex-offer:hover { transform: translateY(-2px); border-color: rgba(255, 224, 150, 0.5); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5); }
-.mini-ex-offer-label { font-size: 16px; font-weight: 900; letter-spacing: 0.04em; color: rgba(255, 236, 190, 0.96); }
+.mini-ex-offer:hover { transform: translateY(-2px); background: rgba(40, 28, 16, 0.5); }
+.mini-ex-offer-label { font-size: 16px; font-weight: 900; letter-spacing: 0.04em; color: rgba(255, 236, 190, 0.97); }
 .mini-ex-offer-trade { font-size: 14px; display: inline-flex; align-items: baseline; gap: 7px; }
-.mini-ex-give { color: rgba(216, 150, 130, 0.9); }
+.mini-ex-give { color: rgba(224, 156, 134, 0.92); }
 .mini-ex-arrow { color: rgba(200, 188, 168, 0.6); }
-.mini-ex-get { color: rgba(210, 200, 180, 0.78); }
-.mini-ex-get b { color: rgba(140, 210, 150, 0.98); font-size: 16px; }
-.mini-ex-offer-hint { font-size: 11.5px; color: rgba(190, 180, 162, 0.56); letter-spacing: 0.03em; }
-.mini-ex-offer.is-disabled { opacity: 0.32; pointer-events: none; }
+.mini-ex-get { color: rgba(214, 204, 184, 0.82); }
+.mini-ex-get b { color: rgba(150, 220, 158, 0.99); font-size: 16px; }
+.mini-ex-offer-hint { font-size: 11.5px; color: rgba(196, 186, 166, 0.6); letter-spacing: 0.03em; }
+.mini-ex-offer.is-disabled { opacity: 0.3; pointer-events: none; }
 .mini-ex-offer.is-pulse { animation: mini-offer-pulse 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
 
 .mini-ex-done, .mini-rps-done {
-  align-self: center; margin-top: 4px;
-  padding: 9px 30px; border-radius: 999px; cursor: pointer;
-  border: 1px solid rgba(244, 206, 112, 0.4);
-  background: linear-gradient(180deg, rgba(52, 40, 20, 0.7), rgba(28, 20, 10, 0.8));
-  color: rgba(255, 232, 176, 0.94); font-family: inherit; font-size: 15px; font-weight: 800; letter-spacing: 0.06em;
-  transition: transform 0.14s, box-shadow 0.18s, border-color 0.18s;
+  align-self: center; margin-top: 2px;
+  padding: 8px 30px; border-radius: 999px; cursor: pointer; border: none;
+  background: rgba(46, 34, 16, 0.5);
+  color: rgba(255, 232, 176, 0.96); font-family: inherit; font-size: 15px; font-weight: 800; letter-spacing: 0.06em;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+  transition: transform 0.14s, background 0.18s, text-shadow 0.18s;
 }
-.mini-ex-done:hover, .mini-rps-done:hover { transform: translateY(-2px); border-color: rgba(255, 224, 150, 0.7); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5); }
+.mini-ex-done:hover, .mini-rps-done:hover { transform: translateY(-2px); background: rgba(64, 48, 22, 0.66); text-shadow: 0 1px 6px rgba(0,0,0,0.85), 0 0 16px rgba(255, 210, 120, 0.5); }
 .mini-exchange.is-locked .mini-ex-done { animation: mini-locked-glow 1.6s ease-in-out infinite; }
 
 /* ── 백작 가위바위보 ── */
-.mini-rps-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid rgba(244, 206, 112, 0.14); }
+.mini-rps-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
 .mini-rps-deck { font-size: 15px; display: inline-flex; align-items: baseline; gap: 8px; }
-.mini-rps-deck-item b { color: rgba(255, 232, 176, 0.96); font-weight: 900; }
+.mini-rps-deck-item b { color: rgba(255, 232, 176, 0.97); font-weight: 900; }
 .mini-rps-dot { color: rgba(180, 168, 148, 0.4); }
-.mini-rps-purse { display: inline-flex; gap: 16px; font-size: 13px; color: rgba(210, 198, 178, 0.7); }
-.mini-rps-purse b { color: rgba(140, 210, 150, 0.98); font-size: 16px; font-weight: 900; }
-.mini-rps-net.is-neg b { color: rgba(224, 96, 78, 0.96); }
-.mini-rps-streak b { color: rgba(244, 206, 112, 0.95); }
+.mini-rps-streak { font-size: 13px; color: rgba(210, 198, 178, 0.72); }
+.mini-rps-streak b { color: rgba(244, 206, 112, 0.96); font-size: 16px; font-weight: 900; }
+.mini-rps-rule { text-align: center; font-size: 12px; letter-spacing: 0.03em; color: rgba(224, 160, 120, 0.78); }
 .mini-rps-decl {
   min-height: 22px; text-align: center; font-size: 15px; letter-spacing: 0.02em;
-  color: rgba(214, 200, 250, 0.9); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+  color: rgba(220, 206, 252, 0.94);
 }
 .mini-rps-result { min-height: 20px; text-align: center; font-size: 15px; font-weight: 800; }
-.mini-rps-result.is-win { color: rgba(150, 224, 158, 0.98); animation: mini-result-pop 0.4s ease; }
-.mini-rps-result.is-lose { color: rgba(228, 100, 82, 0.96); animation: mini-result-pop 0.4s ease; }
-.mini-rps-result.is-tie { color: rgba(210, 200, 180, 0.72); }
-.mini-rps-discard { min-height: 16px; text-align: center; font-size: 12px; color: rgba(180, 170, 150, 0.55); letter-spacing: 0.06em; }
+.mini-rps-result.is-win { color: rgba(154, 228, 162, 0.99); animation: mini-result-pop 0.4s ease; }
+.mini-rps-result.is-lose { color: rgba(230, 104, 86, 0.97); animation: mini-result-pop 0.4s ease; }
+.mini-rps-result.is-tie { color: rgba(214, 204, 184, 0.78); }
+.mini-rps-discard { min-height: 16px; text-align: center; font-size: 12px; color: rgba(188, 178, 158, 0.58); letter-spacing: 0.06em; }
 .mini-rps-stakes { display: flex; justify-content: center; gap: 10px; }
 .mini-rps-stake {
   display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 78px;
-  padding: 7px 14px; border-radius: 10px; cursor: pointer;
-  border: 1px solid rgba(244, 206, 112, 0.22);
-  background: linear-gradient(180deg, rgba(30, 22, 16, 0.5), rgba(14, 10, 8, 0.6));
-  color: rgba(255, 236, 190, 0.9); font-family: inherit;
-  transition: transform 0.14s, border-color 0.18s, box-shadow 0.18s, opacity 0.18s;
+  padding: 6px 14px; border-radius: 10px; cursor: pointer; border: none;
+  background: rgba(18, 12, 9, 0.34);
+  color: rgba(255, 236, 190, 0.92); font-family: inherit;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+  transition: transform 0.14s, background 0.18s, box-shadow 0.18s, opacity 0.18s;
 }
-.mini-rps-stake:hover { transform: translateY(-2px); }
+.mini-rps-stake:hover { transform: translateY(-2px); background: rgba(40, 28, 16, 0.5); }
 .mini-rps-stake-name { font-size: 14px; font-weight: 900; letter-spacing: 0.06em; }
-.mini-rps-stake-amt { font-size: 12px; color: rgba(210, 200, 180, 0.72); }
-.mini-rps-stake.is-selected { border-color: rgba(255, 224, 150, 0.85); box-shadow: 0 0 16px rgba(244, 206, 112, 0.34), inset 0 0 12px rgba(244, 206, 112, 0.12); }
+.mini-rps-stake-amt { font-size: 12px; color: rgba(214, 204, 184, 0.76); }
+.mini-rps-stake.is-selected { background: rgba(60, 44, 20, 0.6); box-shadow: 0 0 16px rgba(244, 206, 112, 0.4), inset 0 0 12px rgba(244, 206, 112, 0.16); }
 .mini-rps-stake.is-disabled { opacity: 0.3; pointer-events: none; }
 .mini-rps-throws { display: flex; justify-content: center; gap: 12px; }
 .mini-rps-throw {
-  min-width: 96px; padding: 14px 0; border-radius: 12px; cursor: pointer;
-  border: 1px solid rgba(244, 206, 112, 0.28);
-  background: linear-gradient(180deg, rgba(40, 30, 18, 0.6), rgba(18, 12, 8, 0.72));
-  color: rgba(255, 238, 196, 0.96); font-family: inherit; font-size: 20px; font-weight: 900; letter-spacing: 0.08em;
-  transition: transform 0.14s, border-color 0.18s, box-shadow 0.18s, opacity 0.18s;
+  min-width: 96px; padding: 13px 0; border-radius: 12px; cursor: pointer; border: none;
+  background: rgba(24, 16, 10, 0.42);
+  color: rgba(255, 238, 196, 0.97); font-family: inherit; font-size: 20px; font-weight: 900; letter-spacing: 0.08em;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+  transition: transform 0.14s, background 0.18s, text-shadow 0.18s, opacity 0.18s;
 }
-.mini-rps-throw:hover { transform: translateY(-3px); border-color: rgba(255, 224, 150, 0.7); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55); }
+.mini-rps-throw:hover { transform: translateY(-3px); background: rgba(48, 34, 18, 0.6); text-shadow: 0 1px 6px rgba(0,0,0,0.85), 0 0 20px rgba(255, 210, 120, 0.55); }
 .mini-rps-throw.is-disabled { opacity: 0.3; pointer-events: none; }
 
-@keyframes mini-stat-bump { 0% { transform: scale(1); } 45% { transform: scale(1.22); filter: brightness(1.35); } 100% { transform: scale(1); } }
 @keyframes mini-offer-pulse { 0% { transform: scale(1); } 42% { transform: scale(1.04); filter: brightness(1.2); } 100% { transform: scale(1); } }
 @keyframes mini-result-pop { 0% { transform: scale(0.9); opacity: 0.4; } 60% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
-@keyframes mini-locked-glow { 0%, 100% { box-shadow: 0 0 0 rgba(244, 206, 112, 0); } 50% { box-shadow: 0 0 18px rgba(244, 206, 112, 0.5); } }
+@keyframes mini-locked-glow { 0%, 100% { text-shadow: 0 1px 6px rgba(0,0,0,0.85); } 50% { text-shadow: 0 1px 6px rgba(0,0,0,0.85), 0 0 16px rgba(244, 206, 112, 0.7); } }
+@keyframes mini-panel-out { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(0.94) translateY(8px); filter: blur(3px); } }
 `
     document.head.appendChild(style)
   }

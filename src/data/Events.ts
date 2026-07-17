@@ -80,26 +80,26 @@ export interface EventResourceSnapshot {
 }
 
 /**
- * 미니게임이 끝난 뒤 실제 자원에 반영할 순증감(정산 델타).
- * 미니게임 내부는 스냅샷 위에서 임시 원장으로 굴리고, 종료 시 이 델타만 넘긴다.
+ * 미니게임이 자원을 실시간으로 올리고 내릴 때 호출하는 싱크. index.ts 가 구현한다.
+ * 각 메서드는 실제 상태를 즉시 변경하고 HUD 카운터 피드백 + 화면 갱신까지 수행한다
+ * (버스트/트레일 연출은 렌더러가 직접 쏜다). 미니게임은 스냅샷을 로컬 미러로 들고
+ * 싱크와 같은 값을 병행 계산해 가용/상한을 판정한다.
  */
-export interface EventMinigameSettlement {
-  /** 불빛(score) 순증감. 음수 가능. */
-  lightDelta: number
-  /** 지급할 랜덤 손패 수. */
-  handAdd: number
-  /** 제거할 손패 수(오래된 것부터). */
-  handRemove: number
-  /** 콤보 게이지 순증감. */
-  candleDelta: number
-  /** 체력 순증감(음수 = 피해). */
-  healthDelta: number
-  /** 방패 순증감. */
-  shieldDelta: number
-  /** 유물 1개 지급 여부(백작 완승 보상 등). */
-  grantRelic: boolean
-  /** recordNotice용 한 줄 요약. */
-  summary: string
+export interface EventResourceSink {
+  /** 불빛(score) 증감. 음수면 소비 피드백. */
+  gainLight(amount: number): void
+  /** 체력 증감. 음수면 피해. */
+  changeHealth(amount: number): void
+  /** 콤보 게이지 증감. */
+  gainCandle(amount: number): void
+  /** 방패 증가. */
+  gainShield(amount: number): void
+  /** 손패 제거(오래된 것부터). */
+  sellHand(count: number): void
+  /** 랜덤 손패 지급. */
+  buyHand(count: number): void
+  /** 등급 가중치로 유물 1개 지급(백작 완승 보상 등). */
+  grantRelic(): void
 }
 
 // ── event_002: 겁쟁이 미니언의 저울(환전 최적화) ─────────────────────────────
@@ -136,6 +136,11 @@ export interface CountRpsConfig {
   deck: Record<RpsHand, number>
   /** 기본 판돈(층 보정은 런타임에서 곱한다). */
   baseStake: number
+  /**
+   * 비김 시 백작이 가져가는 판돈 비율(하우스 레이크). 0.5 = 절반 손실.
+   * 이 페널티가 있어야 어떤 손도 '무손해'가 아니며, 덱 카운팅+선언으로 +EV를 읽어야 이득이다.
+   */
+  tieLossFraction: number
   /** 완승(덱 소진) 시 유물 지급 기준 순이익(baseStake 배수). */
   relicWinMultiple: number
 }
@@ -260,12 +265,14 @@ const EVENT_003: EventDefinition = {
     { speaker: 'npc', text: '나는 이 홀의 주인. 심심풀이 승부를 즐기는 백작이라네.' },
     { speaker: 'player', text: '. . .가위바위보?' },
     { speaker: 'npc', text: '격식 있는 승부지! 내 패는 모두 펼쳐 보이겠네. 귀족은 속임수를 쓰지 않으니까.' },
+    { speaker: 'npc', text: '다만 규칙이 하나. 나를 꺾어야 자네 몫이야. 비기면. . . 판돈 절반은 내 것이라네.' },
     { speaker: 'npc', text: '자, 불빛을 걸게. 나를 읽어낼 수 있다면. . . 내 보물은 자네 것이야.' },
   ],
   minigame: {
     kind: 'count-rps',
     deck: { rock: 3, paper: 3, scissors: 3 },
     baseStake: 60,
+    tieLossFraction: 0.5,
     relicWinMultiple: 6,
   },
   outro: [
