@@ -206,7 +206,7 @@ export class BossEventController {
       occupiedDistRows: 1,   // waxArmy처럼 CSS가 dist-0을 3×3으로 확장한다
       spriteUrl: this.sprites.bossCat,   // 양초 고양이 전용 일러스트(boss_005)
       appearAnimation: 'landing',
-      introBubble: '야옹— 여기까지 왔구나. 마지막 놀이 상대는 나야.',
+      introBubble: '야옹… 여기까지 왔구나. 마지막 놀이 상대는 나야.',
       playerResponseBubble: '고양이…? 방심하면 안 되겠어.',
       introBubbleMs: 4000,
       playerBubbleMs: 2600,

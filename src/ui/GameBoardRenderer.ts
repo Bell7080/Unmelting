@@ -3737,8 +3737,8 @@ export class GameBoardRenderer {
       // 백작 선언 — 대사와 표기 확률을 함께 보여 계산 재료로 삼는다.
       declEl.textContent = declHand
         ? (declMode === 'will'
-          ? `“이번 손은 ${HAND_LABEL[declHand]}가 끌리는군.” — ${HAND_LABEL[declHand]} ${Math.round(declProb * 100)}%`
-          : `“${HAND_LABEL[declHand]}는 내지 않겠네.” — 회피 ${Math.round(declProb * 100)}%`)
+          ? `“이번 손은 ${HAND_LABEL[declHand]}가 끌리는군.” (${HAND_LABEL[declHand]} ${Math.round(declProb * 100)}%)`
+          : `“${HAND_LABEL[declHand]}는 내지 않겠네.” (회피 ${Math.round(declProb * 100)}%)`)
         : ''
       // 종합 확률 — 선언·차단·잔량이 합쳐진 이번 판 백작의 손 분포.
       // 글자 대신 손 엠블럼 이미지 + % 배지로, 던지기 타일과 같은 양식을 쓴다(차단은 붉은 ×).

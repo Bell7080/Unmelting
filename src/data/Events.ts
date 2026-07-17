@@ -7,8 +7,8 @@
  *    (event_000 은 레일 위 "문 칸" 전용이라 여기에는 들어가지 않는다).
  *  - 이벤트는 두 종류다:
  *      1) choice형: 대사 → 선택지 버튼(EventChoice). 효과는 index.ts applyEventChoice 가 적용한다.
- *      2) minigame형: 대사 → 인터랙티브 미니게임(GameBoardRenderer). 실력으로 자원을 굴린 뒤
- *         정산 델타(EventMinigameSettlement)를 index.ts 가 실제 자원에 반영한다.
+ *      2) minigame형: 대사 → 인터랙티브 미니게임(GameBoardRenderer). 각 액션마다
+ *         EventResourceSink(index.ts 구현)로 실제 자원을 실시간으로 올리고 내린다.
  *  - 새 이벤트를 추가할 때는 EventId 유니온과 EVENT_DEFINITIONS 두 곳을 갱신한다.
  *    minigame형이면 config(아래)와 렌더러/정산 배선을 함께 확장한다.
  */
@@ -265,10 +265,10 @@ const EVENT_002: EventDefinition = {
   illu: 'event_002',
   title: '겁쟁이 미니언',
   dialogue: [
-    { speaker: 'npc', text: '히익—! 가, 가까이 오지 마!' },
+    { speaker: 'npc', text: '히익…! 가, 가까이 오지 마!' },
     { speaker: 'npc', text: '이건 내 거야. . . 전부 내가 모은 거란 말이야. . .' },
     { speaker: 'player', text: '그 금, 조금만 나눠 볼까.' },
-    { speaker: 'npc', text: '조, 조를수록. . . 난 더 무서워져. 손이 떨려서 자꾸 헛일을 한다고. . .' },
+    { speaker: 'npc', text: '조, 조를수록. . . 무서워서 손이 떨린단 말이야. . .' },
     { speaker: 'npc', text: '그치만 너무 몰아세우면. . . 겁에 질려 다 흘려 버릴지도 몰라. . .' },
   ],
   minigame: {
@@ -290,7 +290,7 @@ const EVENT_002: EventDefinition = {
         onSuccess: { shield: 8 }, onFail: { light: -30 } },
       { id: 'wax', label: '촛농 훔치기', hint: '성공하면 콤보 게이지, 실패하면 소량 피해', aim: 'success',
         onSuccess: { candle: 4 }, onFail: { health: -3 } },
-      { id: 'threat', label: '협박', hint: '기겁시켜야 하울을 흘린다 — 버티면 되레 물린다', aim: 'fail',
+      { id: 'threat', label: '협박', hint: '기겁시켜야 금을 흘린다. 버티면 되레 물린다', aim: 'fail',
         onSuccess: { health: -6 }, onFail: { light: 130, hand: 1 } },
     ],
   },
@@ -315,10 +315,10 @@ const EVENT_003: EventDefinition = {
     { speaker: 'npc', text: '오호, 이런 곳에서 온기가 도는 손을 보다니.' },
     { speaker: 'npc', text: '나는 이 홀의 주인. 심심풀이 승부를 즐기는 백작이라네.' },
     { speaker: 'player', text: '. . .가위바위보?' },
-    { speaker: 'npc', text: '격식 있는 승부지! 내 패의 수는 모두 펼쳐 보이겠네 — 허나 순서는 섞어 두었지.' },
+    { speaker: 'npc', text: '격식 있는 승부지! 패의 수는 모두 보여 주겠네. 순서는 섞어 두었지만.' },
     { speaker: 'npc', text: '나를 꺾어야 자네 몫이야. 비기면. . . 판돈 절반은 내 것이라네.' },
-    { speaker: 'npc', text: '매 판 내 기분을 말해 주지. 다만 예고한 패를 그대로 꺾는 건 시시한 일 — 그런 승리엔 절반만 주겠네.' },
-    { speaker: 'npc', text: '도구를 원한다면 값을 치르게. 불빛이든, 피든, 무엇이든. 자, 승부를 시작하지.' },
+    { speaker: 'npc', text: '매 판 내 기분을 말해 주지. 예고한 패를 그대로 꺾으면… 절반만 주겠네.' },
+    { speaker: 'npc', text: '도구가 필요하면 값을 치르게. 불빛이든, 피든. 자, 시작하지.' },
   ],
   minigame: {
     kind: 'count-rps',
