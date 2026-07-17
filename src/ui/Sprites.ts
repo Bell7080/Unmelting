@@ -586,6 +586,18 @@ export function spriteForEvent(illu: string): string | undefined {
   return eventIllustrationGlob[`../assets/sprites/${illu}.webp`]?.default
 }
 
+// 가위바위보 백작 손 일러스트: rps_rock/paper/scissors.webp. 원형 엠블럼 손 그림을 파일명으로
+// 갈아끼운다(없으면 undefined → 텍스트 라벨로 폴백).
+const rpsHandGlob = import.meta.glob<{ default: string }>(
+  '../assets/sprites/rps_*.webp',
+  { eager: true }
+)
+
+/** 가위바위보 손 일러스트. hand='rock'|'paper'|'scissors'. 파일 없으면 undefined. */
+export function spriteForRps(hand: string): string | undefined {
+  return rpsHandGlob[`../assets/sprites/rps_${hand}.webp`]?.default
+}
+
 // 거점 스테이션 칸 인스펙터 일러스트: hearth_001~009(row-major index+1). 글롭으로 묶어
 // 파일이 추가되면 자동 연동되고, 없으면 undefined → CSS 플레이스홀더로 폴백한다.
 // (hearth_bg_* 는 'hearth_0'으로 시작하지 않아 자연히 제외된다.)

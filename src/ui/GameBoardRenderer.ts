@@ -27,7 +27,7 @@ import type {
   FlowerWilt,
   TreasureChange,
 } from '@core/TurnManager'
-import { spriteForCard, spriteForHandCard, spriteForRelic, spriteForBasicPackItem, spriteForJob, spriteForEvent, SpriteUrls, recipeSprite001 } from '@ui/Sprites'
+import { spriteForCard, spriteForHandCard, spriteForRelic, spriteForBasicPackItem, spriteForJob, spriteForEvent, spriteForRps, SpriteUrls, recipeSprite001 } from '@ui/Sprites'
 import type {
   EventDefinition,
   EventChoice,
@@ -39,6 +39,8 @@ import type {
   EventResourceKind,
   EventResourceSnapshot,
   RpsHand,
+  RpsItemDef,
+  RpsItemId,
 } from '@data/Events'
 import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandCategory, HandEffectTargeting, JobTag } from '@entities/HandCard'
@@ -3371,7 +3373,9 @@ export class GameBoardRenderer {
       }
     }
 
-    const pipsHtml = Array.from({ length: cfg.anxietyPips }, () => `<span class="mini-anx-pip">${sparkleIcon()}</span>`).join('')
+    // 불안(공포)은 오밀조밀한 작은 pip 미터로, 남은 기회는 큼직한 별 depletion으로 나눠 보여준다.
+    const anxPipsHtml = Array.from({ length: cfg.anxietyPips }, () => `<span class="mini-anx-pip">${sparkleIcon()}</span>`).join('')
+    const triesStarsHtml = Array.from({ length: cfg.attempts }, () => `<span class="mini-tries-star">${sparkleIcon()}</span>`).join('')
     const offerHtml = cfg.offers.map((o) => `
       <button class="mini-ex-offer${o.aim === 'fail' ? ' is-reckless' : ''}" type="button" data-offer="${o.id}">
         <span class="mini-ex-offer-label">${escapeHtml(o.label)}${o.aim === 'fail' ? '<span class="mini-ex-aim-tag">실패 노림</span>' : ''}</span>
@@ -3384,9 +3388,15 @@ export class GameBoardRenderer {
     content.innerHTML = `
       <div class="mini-exchange is-in">
         <div class="mini-ex-head">
-          <div class="mini-ex-chance"><span class="mini-meter-key">성공 확률</span><b class="mini-ex-chance-val">–</b></div>
-          <div class="mini-ex-anx"><span class="mini-meter-key">불안</span><span class="mini-anx-pips">${pipsHtml}</span></div>
-          <div class="mini-ex-tries"><span class="mini-meter-key">남은 기회</span><b class="mini-ex-tries-val">${triesLeft}</b></div>
+          <div class="mini-ex-gauge">
+            <span class="mini-meter-key">성공 확률</span>
+            <b class="mini-ex-chance-val">–</b>
+            <span class="mini-anx-pips" title="불안">${anxPipsHtml}</span>
+          </div>
+          <div class="mini-ex-tries">
+            <span class="mini-meter-key">남은 기회</span>
+            <span class="mini-ex-tries-stars">${triesStarsHtml}</span>
+          </div>
         </div>
         <div class="mini-ex-result"></div>
         <div class="mini-ex-offers">${offerHtml}</div>
@@ -3395,16 +3405,17 @@ export class GameBoardRenderer {
 
     const panel = content.querySelector<HTMLElement>('.mini-exchange')!
     const chanceEl = panel.querySelector<HTMLElement>('.mini-ex-chance-val')!
-    const pipEls = Array.from(panel.querySelectorAll<HTMLElement>('.mini-anx-pip'))
-    const triesEl = panel.querySelector<HTMLElement>('.mini-ex-tries-val')!
+    const anxPipEls = Array.from(panel.querySelectorAll<HTMLElement>('.mini-anx-pip'))
+    const triesStarEls = Array.from(panel.querySelectorAll<HTMLElement>('.mini-tries-star'))
     const resultEl = panel.querySelector<HTMLElement>('.mini-ex-result')!
     const offerEls = Array.from(panel.querySelectorAll<HTMLButtonElement>('.mini-ex-offer'))
     const doneEl = panel.querySelector<HTMLButtonElement>('.mini-ex-done')!
 
     const update = (): void => {
       chanceEl.textContent = `${Math.round(successChance() * 100)}%`
-      pipEls.forEach((p, i) => p.classList.toggle('is-lit', i < Math.min(anxiety, cfg.anxietyPips)))
-      triesEl.textContent = String(triesLeft)
+      anxPipEls.forEach((p, i) => p.classList.toggle('is-lit', i < Math.min(anxiety, cfg.anxietyPips)))
+      // 남은 기회 = 채워진 별(밝게), 소진분은 흐리게.
+      triesStarEls.forEach((s, i) => s.classList.toggle('is-lit', i < triesLeft))
       offerEls.forEach((btn) => {
         const o = byId.get(btn.dataset.offer!)!
         btn.querySelector('[data-branch="success"]')!.textContent = outcomeText(o.onSuccess, o.aim === 'success')
@@ -3443,12 +3454,13 @@ export class GameBoardRenderer {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // event_003 — 가위바위보 백작(덱 카운팅 + 베팅 미니게임)
+  // event_003 — 가위바위보 백작(벅샷 룰렛식 아이템 도박)
   // ─────────────────────────────────────────────────────────────────────────
   /**
-   * 백작 가위바위보 미니게임. 앞면 유한 덱(카운팅) + 격식 선언(합법 손 제한)을 읽어 불빛을 걸고
-   * 연승 배율을 쌓는다. 비김도 판돈 일부를 백작이 가져가므로(tieLossFraction) 어떤 손도 무손해가
-   * 아니며, 카운팅으로 +EV 손을 골라야 이득이다. 불빛은 매 판 실제 HUD로 즉시 반영된다.
+   * 백작 가위바위보 미니게임. 백작 덱은 조성만 공개되고 순서는 섞여 있어(탄창처럼) 카운팅으로
+   * 확률을 읽는다. 다양한 자원으로 아이템을 사서 다음 패를 엿보거나(돋보기) 버리고(입김), 판돈을
+   * 2배로 걸거나(숫돌) 손실을 막고(부적) 백작을 꾀어(미끼) 판을 유리하게 끈다. 비김은 레이크가
+   * 있어 무손해 손이 없다. 불빛·자원 지불/보상은 모두 실제 HUD로 즉시 반영된다.
    */
   async runCountRps(
     cardId: string,
@@ -3463,101 +3475,172 @@ export class GameBoardRenderer {
     const content = await this.openEventScene(cardId, def.illu, onConsume, playDialogue)
 
     const HAND_LABEL: Record<RpsHand, string> = { rock: '바위', paper: '보', scissors: '가위' }
+    const RES_LABEL: Record<EventResourceKind, string> = { light: '불빛', hand: '손패', candle: '게이지', health: '체력', shield: '방패' }
     const HANDS: RpsHand[] = ['rock', 'paper', 'scissors']
     const beats = (a: RpsHand, b: RpsHand): boolean =>
       (a === 'rock' && b === 'scissors') || (a === 'scissors' && b === 'paper') || (a === 'paper' && b === 'rock')
 
-    const deck: Record<RpsHand, number> = { ...cfg.deck }
+    // 백작 덱을 조성대로 만든 뒤 순서를 섞어 숨긴다(벅샷 탄창). 개수만 공개된다.
+    const deckQueue: RpsHand[] = []
+    for (const h of HANDS) for (let i = 0; i < cfg.deck[h]; i += 1) deckQueue.push(h)
+    for (let i = deckQueue.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[deckQueue[i], deckQueue[j]] = [deckQueue[j], deckQueue[i]]
+    }
     const discard: RpsHand[] = []
     let net = 0
     let streak = 0
-    let lastCount: RpsHand | null = null
-    let allowed: RpsHand[] = [...HANDS]
-    let declText = ''
+    // 아이템으로 지불하는 자원의 로컬 미러(불빛은 avail()로 계산). 상한/가용 판정에 쓴다.
+    const mirror: Record<EventResourceKind, number> = {
+      light: snap.light, health: snap.health, candle: snap.candle, shield: snap.shield, hand: snap.hand,
+    }
     const tieFrac = Math.max(0, Math.min(1, cfg.tieLossFraction))
     const stakeUnit = Math.max(1, Math.round(cfg.baseStake * (1 + snap.floor * 0.02)))
     const stakeMults = [1, 2, 4]
     let selectedMult = 1
     let busy = false
+    // 이번 판 한정 아이템 효과.
+    let revealed: RpsHand | null = null
+    let lastPlayed: RpsHand | null = null
+    let spinning = false
+    let doubleNext = false
+    let wardNext = false
+    const usedItems = new Set<RpsItemId>()
+    const itemById = new Map<RpsItemId, RpsItemDef>(cfg.items.map((it) => [it.id, it]))
 
-    const remainingTypes = (): RpsHand[] => HANDS.filter((h) => deck[h] > 0)
-    const deckEmpty = (): boolean => HANDS.every((h) => deck[h] === 0)
-    // 실제 불빛 = 시작값 + 누적 net. 판돈 가용은 실제 불빛으로 판정한다.
+    const deckCount = (h: RpsHand): number => deckQueue.filter((x) => x === h).length
+    const deckEmpty = (): boolean => deckQueue.length === 0
     const avail = (): number => snap.light + net
+    const resLeft = (res: EventResourceKind): number => (res === 'light' ? avail() : mirror[res])
     const streakMult = (s: number): number => Math.min(3, 1 + Math.max(0, s) * 0.5)
+    const mostCommonType = (): RpsHand => HANDS.slice().sort((a, b) => deckCount(b) - deckCount(a))[0]
 
-    // 격식 선언: 백작이 스스로를 구속하는 규칙. legal 집합이 비지 않는 후보만 고른다.
-    // (비김 페널티가 있어 손 제한이 있어도 '무손해 손'이 생기지 않는다.)
-    const rollDeclaration = (): void => {
-      const types = remainingTypes()
-      const candidates: { text: string; allow: RpsHand[] }[] = []
-      candidates.push({ text: '이번엔 정정당당, 무엇이든 내겠네.', allow: [...types] })
-      if (types.length >= 2) {
-        if (lastCount && types.includes(lastCount) && types.filter((t) => t !== lastCount).length >= 1) {
-          candidates.push({ text: `방금과 같은 손은 격식에 어긋나지 — ${HAND_LABEL[lastCount]}는 내지 않겠네.`, allow: types.filter((t) => t !== lastCount) })
-        }
-        for (const t of types) {
-          const rest = types.filter((x) => x !== t)
-          if (rest.length >= 1) candidates.push({ text: `오늘 ${HAND_LABEL[t]}는 품위에 맞지 않아. 내지 않겠네.`, allow: rest })
-        }
-      }
-      const constrained = candidates.filter((c) => c.allow.length < types.length)
-      const pool = constrained.length > 0 && Math.random() < 0.72 ? constrained : candidates
-      const pick = pool[Math.floor(Math.random() * pool.length)]
-      allowed = pick.allow.filter((h) => deck[h] > 0)
-      if (allowed.length === 0) allowed = [...types]
-      declText = pick.text
+    const itemAffordable = (it: RpsItemDef): boolean => {
+      if (busy || deckEmpty() || usedItems.has(it.id)) return false
+      if (resLeft(it.costRes) < it.costAmount) return false
+      // 체력 지불은 5 아래로 못 내려간다(자살 방지).
+      if (it.costRes === 'health' && mirror.health - it.costAmount < 5) return false
+      return true
+    }
+    const payItem = (it: RpsItemDef): void => {
+      const c = it.costAmount
+      if (it.costRes === 'light') { sink.gainLight(-c); net -= c }
+      else if (it.costRes === 'health') { sink.changeHealth(-c); mirror.health -= c }
+      else if (it.costRes === 'candle') { sink.gainCandle(-c); mirror.candle -= c }
+      else if (it.costRes === 'shield') { sink.spendShield(c); mirror.shield -= c }
+      else { sink.sellHand(c); mirror.hand -= c }
+    }
+    const useItem = (it: RpsItemDef): void => {
+      payItem(it)
+      usedItems.add(it.id)
+      if (it.id === 'peek') revealed = deckQueue[0] ?? null
+      else if (it.id === 'bait') {
+        // 가장 많이 남은 손을 맨 앞으로 끌어와 예측 가능하게 만든다(순서만 조작, 개수 불변).
+        const t = mostCommonType()
+        const idx = deckQueue.indexOf(t)
+        if (idx >= 0) { deckQueue.splice(idx, 1); deckQueue.unshift(t) }
+        revealed = deckQueue[0] ?? null
+      } else if (it.id === 'eject') {
+        const gone = deckQueue.shift()
+        if (gone) discard.push(gone)
+        revealed = null
+      } else if (it.id === 'whet') doubleNext = true
+      else if (it.id === 'ward') wardNext = true
     }
 
-    const countThrow = (): RpsHand => {
-      // 합법 집합에서 남은 장수 비례로 뽑는다(적당한 운). 카운팅이 좁혀질수록 예측 가능해진다.
-      const pool: RpsHand[] = []
-      for (const h of allowed) for (let i = 0; i < deck[h]; i += 1) pool.push(h)
-      return pool[Math.floor(Math.random() * pool.length)] ?? allowed[0]
+    // 손 이미지 타일(정사각 둥근모서리 + 풀인 마스크). 파일 없으면 텍스트 라벨로 폴백한다.
+    const handArt = (h: RpsHand): string => {
+      const art = spriteForRps(h)
+      return art
+        ? `<span class="rps-hand-art" style="background-image:url('${art}')"></span>`
+        : `<span class="rps-hand-text">${HAND_LABEL[h]}</span>`
     }
-
-    const deckHtml = HANDS.map((h) => `<span class="mini-rps-deck-item" data-hand="${h}">${HAND_LABEL[h]} <b>×${deck[h]}</b></span>`).join('<span class="mini-rps-dot">·</span>')
-    const stakeHtml = stakeMults.map((m, i) => `<button class="mini-rps-stake" type="button" data-mult="${m}"><span class="mini-rps-stake-name">${['소', '중', '대'][i]}</span><span class="mini-rps-stake-amt">${(stakeUnit * m).toLocaleString()}</span></button>`).join('')
-    const throwHtml = HANDS.map((h) => `<button class="mini-rps-throw" type="button" data-throw="${h}">${HAND_LABEL[h]}</button>`).join('')
+    const deckHtml = HANDS.map((h) => `<span class="mini-rps-deck-item" data-hand="${h}">${HAND_LABEL[h]} <b>×${cfg.deck[h]}</b></span>`).join('<span class="mini-rps-dot">·</span>')
+    // 아이템은 부채꼴로 — 인덱스로 회전각을 계산해 손처럼 펼친다. hover 애니는 내부 버튼이 맡는다.
+    const n = cfg.items.length
+    const itemHtml = cfg.items.map((it, i) => {
+      const angle = (i - (n - 1) / 2) * 10
+      return `<span class="rps-item-slot" style="transform:rotate(${angle}deg)">
+        <button class="mini-rps-item" type="button" data-item="${it.id}" title="${escapeHtml(it.desc)}">
+          <span class="it-label">${escapeHtml(it.label)}</span>
+          <span class="it-cost">${RES_LABEL[it.costRes]} ${it.costAmount}</span>
+        </button>
+      </span>`
+    }).join('')
+    // 판돈은 별(sparkle) 개수 + 수치로 스타일리시하게.
+    const stakeHtml = stakeMults.map((m, i) => {
+      const stars = Array.from({ length: i + 1 }, () => `<span class="stake-star">${sparkleIcon()}</span>`).join('')
+      return `<button class="mini-rps-stake" type="button" data-mult="${m}">
+        <span class="stake-stars">${stars}</span>
+        <span class="stake-amt">${(stakeUnit * m).toLocaleString()}</span>
+      </button>`
+    }).join('')
+    const throwHtml = HANDS.map((h) => `<button class="mini-rps-throw" type="button" data-throw="${h}">${handArt(h)}<span class="rps-throw-name">${HAND_LABEL[h]}</span></button>`).join('')
     const rakePct = Math.round(tieFrac * 100)
     content.innerHTML = `
+      <div class="mini-rps-cardslot" data-state="empty" aria-hidden="true">
+        <span class="cs-face">${handArt('rock')}${handArt('paper')}${handArt('scissors')}<span class="cs-empty">?</span></span>
+        <span class="cs-tag"></span>
+      </div>
       <div class="mini-rps is-in">
         <div class="mini-rps-top">
           <div class="mini-rps-deck">${deckHtml}</div>
           <div class="mini-rps-streak">연승 <b>x1.0</b></div>
         </div>
-        <div class="mini-rps-rule">비기면 판돈의 ${rakePct}%는 백작 몫 — 꺾어야 이긴다</div>
-        <div class="mini-rps-decl" aria-live="polite"></div>
+        <div class="mini-rps-rule">패의 수는 공개·순서는 숨김 — 비기면 판돈의 ${rakePct}%는 백작 몫</div>
+        <div class="mini-rps-buffs" aria-live="polite"></div>
         <div class="mini-rps-result"></div>
         <div class="mini-rps-discard"></div>
+        <div class="mini-rps-items">${itemHtml}</div>
         <div class="mini-rps-stakes">${stakeHtml}</div>
         <div class="mini-rps-throws">${throwHtml}</div>
         <button class="mini-rps-done" type="button">물러나기</button>
       </div>`
 
+    const slotEl = content.querySelector<HTMLElement>('.mini-rps-cardslot')!
+    const slotFaces = new Map<RpsHand, HTMLElement>()
+    slotEl.querySelectorAll<HTMLElement>('.cs-face .rps-hand-art, .cs-face .rps-hand-text').forEach((el, i) => slotFaces.set(HANDS[i], el))
+    const slotTagEl = slotEl.querySelector<HTMLElement>('.cs-tag')!
     const panel = content.querySelector<HTMLElement>('.mini-rps')!
     const deckEls = new Map<RpsHand, HTMLElement>()
     panel.querySelectorAll<HTMLElement>('.mini-rps-deck-item').forEach((el) => deckEls.set(el.dataset.hand as RpsHand, el))
     const streakEl = panel.querySelector<HTMLElement>('.mini-rps-streak b')!
-    const declEl = panel.querySelector<HTMLElement>('.mini-rps-decl')!
+    const buffsEl = panel.querySelector<HTMLElement>('.mini-rps-buffs')!
     const resultEl = panel.querySelector<HTMLElement>('.mini-rps-result')!
     const discardEl = panel.querySelector<HTMLElement>('.mini-rps-discard')!
+    const itemEls = Array.from(panel.querySelectorAll<HTMLButtonElement>('.mini-rps-item'))
     const stakeEls = Array.from(panel.querySelectorAll<HTMLButtonElement>('.mini-rps-stake'))
     const throwEls = Array.from(panel.querySelectorAll<HTMLButtonElement>('.mini-rps-throw'))
     const doneEl = panel.querySelector<HTMLButtonElement>('.mini-rps-done')!
 
     const update = (): void => {
-      for (const [h, el] of deckEls) el.querySelector('b')!.textContent = `×${deck[h]}`
+      for (const [h, el] of deckEls) el.querySelector('b')!.textContent = `×${deckCount(h)}`
       streakEl.textContent = `x${streakMult(streak).toFixed(1)}`
-      declEl.textContent = declText ? `격식: ${declText}` : ''
+      // 상단 슬롯: 엿본 패(peek/미끼) > 방금 낸 패 > 빈 슬롯. 손 이미지를 얼굴 부근에 크게 보여준다.
+      // 슬롯머신 스핀 중에는 스핀 연출이 슬롯을 직접 제어하므로 건드리지 않는다.
+      if (!spinning) {
+        const shownHand = revealed ?? lastPlayed
+        slotEl.dataset.state = revealed ? 'peek' : lastPlayed ? 'played' : 'empty'
+        for (const [h, el] of slotFaces) el.classList.toggle('is-shown', h === shownHand)
+        slotTagEl.textContent = revealed ? '엿본 다음 패' : lastPlayed ? '백작이 낸 패' : ''
+      }
+      const buffs: string[] = []
+      if (doubleNext) buffs.push('갑절 · 이번 판 2배')
+      if (wardNext) buffs.push('부적 · 손실 무효')
+      buffsEl.textContent = buffs.join('   ·   ')
+      buffsEl.classList.toggle('is-armed', buffs.length > 0)
       discardEl.textContent = discard.length ? `버린 패: ${discard.map((h) => HAND_LABEL[h]).join(' ')}` : ''
+      itemEls.forEach((b) => {
+        const it = itemById.get(b.dataset.item as RpsItemId)!
+        b.classList.toggle('is-disabled', !itemAffordable(it))
+        b.classList.toggle('is-used', usedItems.has(it.id))
+      })
       const affordable = (m: number): boolean => stakeUnit * m <= avail()
       stakeEls.forEach((b) => {
         const m = Number(b.dataset.mult)
         b.classList.toggle('is-disabled', busy || !affordable(m))
         b.classList.toggle('is-selected', m === selectedMult)
       })
-      // 선택 판돈이 감당 불가면 감당 가능한 최대 배율로 자동 하향.
       if (!affordable(selectedMult)) {
         const best = [...stakeMults].reverse().find((m) => affordable(m))
         selectedMult = best ?? 0
@@ -3568,11 +3651,42 @@ export class GameBoardRenderer {
     }
 
     const beginRound = (): void => {
-      rollDeclaration()
       busy = false
+      revealed = null
+      doubleNext = false
+      wardNext = false
+      usedItems.clear()
       resultEl.className = 'mini-rps-result'
       resultEl.textContent = ''
       update()
+    }
+
+    // 백작이 낼 때 슬롯머신처럼 세 장이 띠리리릭 돌다가 탕! 하고 착지한다.
+    const spinReveal = (final: RpsHand, done: () => void): void => {
+      spinning = true
+      slotEl.dataset.state = 'spin'
+      slotTagEl.textContent = '. . .'
+      const total = 11
+      let t = 0
+      const step = (): void => {
+        // 감속하며 무작위 손을 번갈아 보인다.
+        const rnd = HANDS[Math.floor(Math.random() * HANDS.length)]
+        for (const [h, el] of slotFaces) el.classList.toggle('is-shown', h === rnd)
+        slotEl.classList.remove('is-tick'); void slotEl.offsetWidth; slotEl.classList.add('is-tick')
+        t += 1
+        if (t < total) window.setTimeout(step, 45 + t * t * 2)
+        else {
+          // 착지 — 탕!
+          for (const [h, el] of slotFaces) el.classList.toggle('is-shown', h === final)
+          spinning = false
+          lastPlayed = final
+          slotEl.dataset.state = 'played'
+          slotTagEl.textContent = '백작이 낸 패'
+          slotEl.classList.remove('is-tick', 'is-impact'); void slotEl.offsetWidth; slotEl.classList.add('is-impact')
+          window.setTimeout(done, 300)
+        }
+      }
+      step()
     }
 
     await new Promise<void>((resolve) => {
@@ -3585,6 +3699,20 @@ export class GameBoardRenderer {
         panel.classList.add('is-closing')
         window.setTimeout(resolve, 340)
       }
+      itemEls.forEach((b) => {
+        b.addEventListener('click', (e) => {
+          e.stopPropagation()
+          const it = itemById.get(b.dataset.item as RpsItemId)
+          if (!it || !itemAffordable(it)) return
+          useItem(it)
+          const r = b.getBoundingClientRect()
+          SquareBurst.playAt(r.left + r.width / 2, r.top + r.height / 2, 'starlight', { count: 8, spread: 80, duration: 420 })
+          b.classList.remove('is-pulse'); void b.offsetWidth; b.classList.add('is-pulse')
+          update()
+          // 입김으로 마지막 패까지 비웠다면 판 없이 종료.
+          if (deckEmpty()) window.setTimeout(finish, 700)
+        })
+      })
       stakeEls.forEach((b) => {
         b.addEventListener('click', (e) => {
           e.stopPropagation()
@@ -3599,42 +3727,45 @@ export class GameBoardRenderer {
           if (b.classList.contains('is-disabled')) return
           const mine = b.dataset.throw as RpsHand
           const stake = stakeUnit * selectedMult
-          if (busy || deckEmpty() || stake > avail() || stake <= 0) return
+          if (busy || spinning || deckEmpty() || stake > avail() || stake <= 0) return
           busy = true
-          const theirs = countThrow()
-          deck[theirs] -= 1
+          const mult = doubleNext ? 2 : 1
+          const ward = wardNext
+          const theirs = deckQueue.shift() as RpsHand
           discard.push(theirs)
-          lastCount = theirs
-          let outcome: 'win' | 'lose' | 'tie'
-          if (mine === theirs) outcome = 'tie'
-          else if (beats(mine, theirs)) outcome = 'win'
-          else outcome = 'lose'
-          if (outcome === 'win') {
-            const payout = Math.round(stake * streakMult(streak + 1))
-            net += payout
-            streak += 1
-            sink.gainLight(payout) // 실시간 반영
-            this.blastEventGain(resultEl.getBoundingClientRect(), 'light', 4)
-            resultEl.className = 'mini-rps-result is-win'
-            resultEl.textContent = `${HAND_LABEL[mine]} vs ${HAND_LABEL[theirs]} — 승리! 불빛 +${payout.toLocaleString()}`
-          } else if (outcome === 'lose') {
-            net -= stake
-            streak = 0
-            sink.gainLight(-stake)
-            resultEl.className = 'mini-rps-result is-lose'
-            resultEl.textContent = `${HAND_LABEL[mine]} vs ${HAND_LABEL[theirs]} — 패배. 불빛 -${stake.toLocaleString()}`
-          } else {
-            // 비김도 하우스 레이크만큼 손실 — '무손해 손'을 없애 카운팅 실력을 요구한다.
-            const rake = Math.round(stake * tieFrac)
-            net -= rake
-            streak = 0
-            if (rake > 0) sink.gainLight(-rake)
-            resultEl.className = 'mini-rps-result is-tie'
-            resultEl.textContent = `${HAND_LABEL[mine]} vs ${HAND_LABEL[theirs]} — 비김. 백작 몫 -${rake.toLocaleString()}`
-          }
-          update()
-          if (deckEmpty()) window.setTimeout(finish, 900)
-          else window.setTimeout(beginRound, 850)
+          b.classList.remove('is-pulse'); void b.offsetWidth; b.classList.add('is-pulse')
+          update() // 스핀 동안 입력 잠금
+          // 슬롯머신 스핀 → 착지 뒤에 승패를 정산한다.
+          spinReveal(theirs, () => {
+            const outcome: 'win' | 'lose' | 'tie' = mine === theirs ? 'tie' : beats(mine, theirs) ? 'win' : 'lose'
+            const vs = `${HAND_LABEL[mine]} vs ${HAND_LABEL[theirs]}`
+            if (outcome === 'win') {
+              const payout = Math.round(stake * streakMult(streak + 1) * mult)
+              net += payout
+              streak += 1
+              sink.gainLight(payout)
+              this.blastEventGain(resultEl.getBoundingClientRect(), 'light', 4)
+              resultEl.className = 'mini-rps-result is-win'
+              resultEl.textContent = `${vs} — 승리! 불빛 +${payout.toLocaleString()}${mult > 1 ? ' (갑절 2배)' : ''}`
+            } else if (outcome === 'lose') {
+              const loss = ward ? 0 : stake * mult
+              net -= loss
+              streak = 0
+              if (loss > 0) sink.gainLight(-loss)
+              resultEl.className = 'mini-rps-result is-lose'
+              resultEl.textContent = ward ? `${vs} — 패배지만 부적이 막았다.` : `${vs} — 패배. 불빛 -${loss.toLocaleString()}${mult > 1 ? ' (갑절 2배)' : ''}`
+            } else {
+              const rake = ward ? 0 : Math.round(stake * tieFrac)
+              net -= rake
+              streak = 0
+              if (rake > 0) sink.gainLight(-rake)
+              resultEl.className = 'mini-rps-result is-tie'
+              resultEl.textContent = ward ? `${vs} — 비김, 부적이 막았다.` : `${vs} — 비김. 백작 몫 -${rake.toLocaleString()}`
+            }
+            update()
+            if (deckEmpty()) window.setTimeout(finish, 950)
+            else window.setTimeout(beginRound, 850)
+          })
         })
       })
       doneEl.addEventListener('click', (e) => { e.stopPropagation(); if (!busy) finish() })
@@ -3910,53 +4041,60 @@ export class GameBoardRenderer {
   color: rgba(255, 238, 200, 0.92);
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
 }
+/* 백작은 상단 카드 슬롯을 위해 컨트롤을 하단으로 모으고 행 간격을 촘촘히 */
+.mini-rps { gap: 9px; padding-bottom: 8px; }
 .mini-exchange.is-in, .mini-rps.is-in { animation: event-line-in 0.34s ease both; }
 /* 접히는 동안엔 입력을 막아, UI가 사라진 뒤 나오는 마무리 대사 클릭이 버튼에 가로채이지 않게 한다. */
 .mini-exchange.is-closing, .mini-rps.is-closing { pointer-events: none; animation: mini-panel-out 0.32s cubic-bezier(0.2, 0.72, 0.2, 1) forwards; }
 
 /* ── 미니언 아슬아슬 흥정 ── */
-.mini-meter-key { color: rgba(210, 198, 178, 0.7); font-size: 12px; letter-spacing: 0.08em; margin-right: 7px; }
-.mini-ex-head { display: flex; align-items: center; justify-content: center; gap: 22px; flex-wrap: wrap; }
-.mini-ex-chance, .mini-ex-tries, .mini-ex-anx { display: inline-flex; align-items: center; }
-.mini-ex-chance-val { color: rgba(150, 220, 158, 0.99); font-size: 22px; font-weight: 900; letter-spacing: 0.02em; }
-.mini-ex-tries-val { color: rgba(255, 232, 176, 0.97); font-size: 18px; font-weight: 900; }
-/* 불안 pip — 위험을 뜻해 별빛 다이아를 호박~적색으로 발광시킨다(성공 시 채워짐) */
-.mini-anx-pips { display: inline-flex; gap: 5px; }
-.mini-anx-pip { display: inline-flex; width: 16px; height: 16px; color: rgba(150, 110, 96, 0.42); transition: color 0.2s, filter 0.2s, transform 0.2s; }
+/* 미니언 패널은 조금 더 큼직하게(중요 수치 위주) */
+.mini-exchange { width: min(97%, 780px); gap: 16px; padding: 16px 24px 20px; }
+.mini-meter-key { color: rgba(210, 198, 178, 0.66); font-size: 13px; letter-spacing: 0.08em; margin-right: 9px; }
+.mini-ex-head { display: flex; align-items: center; justify-content: space-between; gap: 30px; flex-wrap: wrap; padding: 2px 6px; }
+.mini-ex-gauge { display: inline-flex; align-items: center; gap: 13px; flex-wrap: wrap; }
+.mini-ex-tries { display: inline-flex; align-items: center; }
+/* 성공 확률 — 가장 중요한 수치라 크게 */
+.mini-ex-chance-val { color: rgba(150, 224, 160, 0.99); font-size: 36px; font-weight: 900; letter-spacing: 0.01em; line-height: 1; text-shadow: 0 2px 10px rgba(0,0,0,0.85), 0 0 18px rgba(90, 190, 110, 0.28); }
+/* 불안 — 오밀조밀한 작은 pip 미터(확률과 연동, 채워질수록 위험) */
+.mini-anx-pips { display: inline-flex; gap: 3px; align-items: center; }
+.mini-anx-pip { display: inline-flex; width: 11px; height: 11px; color: rgba(150, 110, 96, 0.38); transition: color 0.2s, filter 0.2s; }
 .mini-anx-pip svg { width: 100%; height: 100%; }
-.mini-anx-pip.is-lit {
-  color: rgba(255, 176, 120, 0.98);
-  filter: drop-shadow(0 0 6px rgba(232, 120, 70, 0.9)) drop-shadow(0 0 12px rgba(220, 80, 50, 0.5));
-  transform: scale(1.08);
-}
-.mini-ex-result { min-height: 20px; text-align: center; font-size: 15px; font-weight: 800; }
+.mini-anx-pip.is-lit { color: rgba(255, 168, 110, 0.98); filter: drop-shadow(0 0 4px rgba(232, 120, 70, 0.9)); }
+/* 남은 기회 — 큼직한 별 depletion(쓸수록 흐려짐) */
+.mini-ex-tries-stars { display: inline-flex; gap: 6px; }
+.mini-tries-star { display: inline-flex; width: 19px; height: 19px; color: rgba(120, 108, 86, 0.32); transition: color 0.25s, filter 0.25s, transform 0.25s; }
+.mini-tries-star svg { width: 100%; height: 100%; }
+.mini-tries-star.is-lit { color: rgba(255, 226, 150, 0.99); filter: drop-shadow(0 0 6px rgba(244, 206, 112, 0.8)); }
+.mini-ex-result { min-height: 24px; text-align: center; font-size: 17px; font-weight: 800; }
 .mini-ex-result.is-good { color: rgba(154, 228, 162, 0.99); animation: mini-result-pop 0.4s ease; }
 .mini-ex-result.is-bad { color: rgba(230, 104, 86, 0.97); animation: mini-result-pop 0.4s ease; }
 
-.mini-ex-offers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-/* 버튼도 테두리 없이 아주 옅은 반투명 채움만 — hover 시 살짝 떠오르며 금빛으로 반응 */
+/* 옵션 탭 — 여백을 넉넉히 줘 번잡하지 않게 */
+.mini-ex-offers { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .mini-ex-offer {
-  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
-  padding: 9px 14px; border-radius: 11px; cursor: pointer; border: none;
-  background: rgba(18, 12, 9, 0.34);
+  display: flex; flex-direction: column; gap: 5px; align-items: flex-start;
+  padding: 14px 20px; border-radius: 13px; cursor: pointer; border: none;
+  background: rgba(18, 12, 9, 0.32);
   font-family: inherit; color: inherit; text-align: left;
   transition: transform 0.14s, background 0.18s, opacity 0.18s;
 }
-.mini-ex-offer:hover { transform: translateY(-2px); background: rgba(40, 28, 16, 0.5); }
+.mini-ex-offer:hover { transform: translateY(-2px); background: rgba(40, 28, 16, 0.48); }
 /* 협박(실패 노림)은 역발상 옵션 — 보랏빛 기운으로 구분 */
 .mini-ex-offer.is-reckless { background: rgba(30, 16, 30, 0.4); }
-.mini-ex-offer.is-reckless:hover { background: rgba(52, 26, 52, 0.54); }
-.mini-ex-offer-label { font-size: 16px; font-weight: 900; letter-spacing: 0.04em; color: rgba(255, 236, 190, 0.97); display: inline-flex; align-items: center; gap: 8px; }
+.mini-ex-offer.is-reckless:hover { background: rgba(52, 26, 52, 0.52); }
+.mini-ex-offer-label { font-size: 18px; font-weight: 900; letter-spacing: 0.04em; color: rgba(255, 236, 190, 0.97); display: inline-flex; align-items: center; gap: 8px; }
 .mini-ex-aim-tag { font-size: 11px; font-weight: 800; letter-spacing: 0.04em; color: rgba(206, 156, 244, 0.95); }
-.mini-ex-branches { display: flex; gap: 14px; font-size: 13px; flex-wrap: wrap; }
-.mini-ex-branch { color: rgba(200, 190, 170, 0.62); }
-.mini-ex-branch em { font-style: normal; color: rgba(190, 178, 158, 0.62); font-size: 12px; margin-right: 2px; }
-/* 노린 분기(성공형=성공 / 협박=실패)를 강조 */
-.mini-ex-branch.is-aim { color: rgba(150, 220, 158, 0.98); }
-.mini-ex-branch.is-aim em { color: rgba(150, 220, 158, 0.8); }
-.mini-ex-offer.is-reckless .mini-ex-branch.is-aim { color: rgba(214, 168, 250, 0.98); }
-.mini-ex-offer.is-reckless .mini-ex-branch.is-aim em { color: rgba(214, 168, 250, 0.8); }
-.mini-ex-offer-hint { font-size: 11.5px; color: rgba(196, 186, 166, 0.6); letter-spacing: 0.03em; }
+.mini-ex-branches { display: flex; gap: 20px; font-size: 14px; flex-wrap: wrap; margin-top: 2px; }
+.mini-ex-branch { color: rgba(198, 188, 168, 0.58); }
+.mini-ex-branch em { font-style: normal; color: rgba(188, 176, 156, 0.55); font-size: 12px; margin-right: 3px; }
+/* 노린 분기(성공형=성공 / 협박=실패)의 보상 수치를 가장 크고 밝게 */
+.mini-ex-branch.is-aim { color: rgba(150, 224, 160, 0.99); font-size: 17px; font-weight: 800; }
+.mini-ex-branch.is-aim em { color: rgba(150, 224, 160, 0.82); font-size: 12px; }
+.mini-ex-offer.is-reckless .mini-ex-branch.is-aim { color: rgba(216, 170, 250, 0.99); }
+.mini-ex-offer.is-reckless .mini-ex-branch.is-aim em { color: rgba(216, 170, 250, 0.82); }
+/* 하단 설명은 장식 — 작고 흐리게 */
+.mini-ex-offer-hint { font-size: 10.5px; color: rgba(176, 166, 148, 0.38); letter-spacing: 0.02em; margin-top: 1px; }
 .mini-ex-offer.is-disabled { opacity: 0.3; pointer-events: none; }
 .mini-ex-offer.is-pulse { animation: mini-offer-pulse 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
 
@@ -3971,50 +4109,85 @@ export class GameBoardRenderer {
 .mini-ex-done:hover, .mini-rps-done:hover { transform: translateY(-2px); background: rgba(64, 48, 22, 0.66); text-shadow: 0 1px 6px rgba(0,0,0,0.85), 0 0 16px rgba(255, 210, 120, 0.5); }
 
 /* ── 백작 가위바위보 ── */
+/* 공통 손 이미지 타일 — 정사각 둥근모서리, 테두리 없이 풀인 마스크(가장자리 페이드) + 그림자 */
+.rps-hand-art {
+  display: block; width: 100%; aspect-ratio: 1 / 1;
+  background-size: cover; background-position: center; border-radius: 22%;
+  -webkit-mask-image: radial-gradient(circle at 50% 47%, #000 56%, rgba(0,0,0,0.4) 76%, transparent 92%);
+  mask-image: radial-gradient(circle at 50% 47%, #000 56%, rgba(0,0,0,0.4) 76%, transparent 92%);
+  filter: drop-shadow(0 6px 15px rgba(0, 0, 0, 0.62));
+}
+.rps-hand-text { display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 1 / 1; font-size: 22px; font-weight: 900; color: rgba(255, 238, 196, 0.97); }
+
+/* 상단 슬롯 — 백작 얼굴 부근(가운데 상단). 레일 전체(content) 기준 절대배치라 아이템에 안 가린다. */
+.mini-rps-cardslot { position: absolute; left: 50%; top: 4%; transform: translateX(-50%); width: clamp(84px, 12%, 128px); text-align: center; pointer-events: none; z-index: 3; }
+.mini-rps-cardslot .cs-face { position: relative; display: block; width: 100%; aspect-ratio: 1 / 1; }
+.mini-rps-cardslot .cs-face > * { position: absolute; inset: 0; opacity: 0; transition: opacity 0.16s; }
+.mini-rps-cardslot .cs-face > .is-shown { opacity: 1; }
+.mini-rps-cardslot .cs-empty { display: flex; align-items: center; justify-content: center; font-size: 44px; font-weight: 900; color: rgba(200, 190, 170, 0.28); }
+.mini-rps-cardslot[data-state="empty"] .cs-empty { opacity: 1; }
+.mini-rps-cardslot[data-state="peek"] .cs-face { filter: saturate(0.85) brightness(0.88); }
+.mini-rps-cardslot .cs-tag { display: block; margin-top: 3px; font-size: 11px; letter-spacing: 0.06em; color: rgba(220, 206, 252, 0.72); text-shadow: 0 1px 5px rgba(0, 0, 0, 0.85); }
+.mini-rps-cardslot.is-tick .cs-face { filter: brightness(1.18); }
+.mini-rps-cardslot.is-impact { animation: rps-slot-impact 0.36s cubic-bezier(0.2, 0.8, 0.2, 1); }
+
 .mini-rps-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
 .mini-rps-deck { font-size: 15px; display: inline-flex; align-items: baseline; gap: 8px; }
 .mini-rps-deck-item b { color: rgba(255, 232, 176, 0.97); font-weight: 900; }
 .mini-rps-dot { color: rgba(180, 168, 148, 0.4); }
 .mini-rps-streak { font-size: 13px; color: rgba(210, 198, 178, 0.72); }
 .mini-rps-streak b { color: rgba(244, 206, 112, 0.96); font-size: 16px; font-weight: 900; }
-.mini-rps-rule { text-align: center; font-size: 12px; letter-spacing: 0.03em; color: rgba(224, 160, 120, 0.78); }
-.mini-rps-decl {
-  min-height: 22px; text-align: center; font-size: 15px; letter-spacing: 0.02em;
-  color: rgba(220, 206, 252, 0.94);
-}
-.mini-rps-result { min-height: 20px; text-align: center; font-size: 15px; font-weight: 800; }
+.mini-rps-rule { text-align: center; font-size: 12px; letter-spacing: 0.03em; color: rgba(224, 160, 120, 0.72); }
+.mini-rps-buffs { min-height: 18px; text-align: center; font-size: 13px; color: rgba(200, 190, 170, 0.5); }
+.mini-rps-buffs.is-armed { color: rgba(224, 212, 255, 0.98); text-shadow: 0 0 12px rgba(150, 130, 224, 0.6); }
+.mini-rps-result { min-height: 22px; text-align: center; font-size: 16px; font-weight: 800; }
 .mini-rps-result.is-win { color: rgba(154, 228, 162, 0.99); animation: mini-result-pop 0.4s ease; }
 .mini-rps-result.is-lose { color: rgba(230, 104, 86, 0.97); animation: mini-result-pop 0.4s ease; }
 .mini-rps-result.is-tie { color: rgba(214, 204, 184, 0.78); }
-.mini-rps-discard { min-height: 16px; text-align: center; font-size: 12px; color: rgba(188, 178, 158, 0.58); letter-spacing: 0.06em; }
-.mini-rps-stakes { display: flex; justify-content: center; gap: 10px; }
-.mini-rps-stake {
-  display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 78px;
-  padding: 6px 14px; border-radius: 10px; cursor: pointer; border: none;
-  background: rgba(18, 12, 9, 0.34);
-  color: rgba(255, 236, 190, 0.92); font-family: inherit;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
-  transition: transform 0.14s, background 0.18s, box-shadow 0.18s, opacity 0.18s;
+.mini-rps-discard { min-height: 16px; text-align: center; font-size: 12px; color: rgba(188, 178, 158, 0.5); letter-spacing: 0.06em; }
+
+/* 아이템 — 부채꼴(슬롯 회전) + 테두리 없이 폰트 위주. hover 시 발광+확대 */
+.mini-rps-items { display: flex; justify-content: center; align-items: flex-end; gap: 4px; padding-top: 4px; }
+.rps-item-slot { transform-origin: center 170%; }
+.mini-rps-item {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 4px 12px; cursor: pointer; border: none; background: none; font-family: inherit;
+  color: rgba(238, 226, 250, 0.95);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9), 0 1px 3px rgba(0, 0, 0, 0.95);
+  transition: transform 0.14s, color 0.18s, text-shadow 0.18s, opacity 0.18s;
 }
-.mini-rps-stake:hover { transform: translateY(-2px); background: rgba(40, 28, 16, 0.5); }
-.mini-rps-stake-name { font-size: 14px; font-weight: 900; letter-spacing: 0.06em; }
-.mini-rps-stake-amt { font-size: 12px; color: rgba(214, 204, 184, 0.76); }
-.mini-rps-stake.is-selected { background: rgba(60, 44, 20, 0.6); box-shadow: 0 0 16px rgba(244, 206, 112, 0.4), inset 0 0 12px rgba(244, 206, 112, 0.16); }
+.mini-rps-item .it-label { font-size: 15px; font-weight: 900; letter-spacing: 0.04em; }
+.mini-rps-item .it-cost { font-size: 11px; color: rgba(206, 172, 244, 0.82); }
+.mini-rps-item:hover { transform: translateY(-3px) scale(1.07); color: rgba(255, 246, 255, 1); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9), 0 0 16px rgba(190, 150, 240, 0.75); }
+.mini-rps-item.is-disabled { opacity: 0.26; pointer-events: none; }
+.mini-rps-item.is-used { opacity: 0.4; pointer-events: none; }
+.mini-rps-item.is-pulse { animation: mini-offer-pulse 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+/* 판돈 — 별 개수 + 수치, 폰트 위주 */
+.mini-rps-stakes { display: flex; justify-content: center; gap: 22px; }
+.mini-rps-stake { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 10px; cursor: pointer; border: none; background: none; font-family: inherit; transition: transform 0.14s, opacity 0.18s; }
+.mini-rps-stake .stake-stars { display: inline-flex; gap: 3px; }
+.mini-rps-stake .stake-star { display: inline-flex; width: 14px; height: 14px; color: rgba(160, 142, 96, 0.5); transition: color 0.18s, filter 0.18s; }
+.mini-rps-stake .stake-star svg { width: 100%; height: 100%; }
+.mini-rps-stake .stake-amt { font-size: 13px; font-weight: 800; color: rgba(230, 216, 180, 0.76); text-shadow: 0 1px 5px rgba(0, 0, 0, 0.85); }
+.mini-rps-stake:hover { transform: translateY(-2px); }
+.mini-rps-stake.is-selected .stake-star { color: rgba(255, 224, 150, 0.99); filter: drop-shadow(0 0 6px rgba(244, 206, 112, 0.85)); }
+.mini-rps-stake.is-selected .stake-amt { color: rgba(255, 236, 180, 0.99); }
 .mini-rps-stake.is-disabled { opacity: 0.3; pointer-events: none; }
-.mini-rps-throws { display: flex; justify-content: center; gap: 12px; }
-.mini-rps-throw {
-  min-width: 96px; padding: 13px 0; border-radius: 12px; cursor: pointer; border: none;
-  background: rgba(24, 16, 10, 0.42);
-  color: rgba(255, 238, 196, 0.97); font-family: inherit; font-size: 20px; font-weight: 900; letter-spacing: 0.08em;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
-  transition: transform 0.14s, background 0.18s, text-shadow 0.18s, opacity 0.18s;
-}
-.mini-rps-throw:hover { transform: translateY(-3px); background: rgba(48, 34, 18, 0.6); text-shadow: 0 1px 6px rgba(0,0,0,0.85), 0 0 20px rgba(255, 210, 120, 0.55); }
-.mini-rps-throw.is-disabled { opacity: 0.3; pointer-events: none; }
+
+/* 던지기 — 손 이미지 타일. hover 시 발광 + 확대 + 흔들림 */
+.mini-rps-throws { display: flex; justify-content: center; gap: 22px; }
+.mini-rps-throw { display: flex; flex-direction: column; align-items: center; gap: 3px; width: clamp(76px, 10vw, 106px); padding: 0; cursor: pointer; border: none; background: none; font-family: inherit; transition: transform 0.16s, filter 0.18s, opacity 0.18s; }
+.mini-rps-throw .rps-throw-name { font-size: 15px; font-weight: 900; letter-spacing: 0.06em; color: rgba(255, 238, 196, 0.9); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9); }
+.mini-rps-throw:hover { transform: translateY(-4px) scale(1.09); filter: drop-shadow(0 0 16px rgba(255, 210, 120, 0.6)); animation: rps-throw-wobble 0.5s ease-in-out; }
+.mini-rps-throw:hover .rps-throw-name { color: rgba(255, 248, 220, 1); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9), 0 0 14px rgba(255, 210, 120, 0.7); }
+.mini-rps-throw.is-disabled { opacity: 0.34; pointer-events: none; }
 
 @keyframes mini-offer-pulse { 0% { transform: scale(1); } 42% { transform: scale(1.04); filter: brightness(1.2); } 100% { transform: scale(1); } }
 @keyframes mini-result-pop { 0% { transform: scale(0.9); opacity: 0.4; } 60% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
 @keyframes mini-panel-out { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(0.94) translateY(8px); filter: blur(3px); } }
+@keyframes rps-slot-impact { 0% { transform: translateX(-50%) scale(1.2); filter: brightness(1.45); } 55% { transform: translateX(-50%) scale(0.97); } 100% { transform: translateX(-50%) scale(1); filter: brightness(1); } }
+@keyframes rps-throw-wobble { 0%, 100% { rotate: 0deg; } 25% { rotate: -5deg; } 75% { rotate: 5deg; } }
 `
     document.head.appendChild(style)
   }

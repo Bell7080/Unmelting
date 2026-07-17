@@ -94,6 +94,8 @@ export interface EventResourceSink {
   gainCandle(amount: number): void
   /** 방패 증가. */
   gainShield(amount: number): void
+  /** 방패 소비(0 아래로 내려가지 않음). */
+  spendShield(amount: number): void
   /** 손패 제거(오래된 것부터). */
   sellHand(count: number): void
   /** 랜덤 손패 지급. */
@@ -151,19 +153,36 @@ export interface MinionExchangeConfig {
 // ── event_003: 가위바위보 백작(덱 카운팅 + 베팅) ────────────────────────────
 export type RpsHand = 'rock' | 'paper' | 'scissors'
 
+/** 벅샷 룰렛식 아이템 — 다양한 자원을 지불해 판을 유리하게 조작한다. 효과는 렌더러가 id로 분기. */
+export type RpsItemId = 'peek' | 'eject' | 'whet' | 'ward' | 'bait'
+export interface RpsItemDef {
+  id: RpsItemId
+  label: string
+  /** 버튼 아래/툴팁 설명. */
+  desc: string
+  /** 지불 자원과 양. */
+  costRes: EventResourceKind
+  costAmount: number
+}
+
 export interface CountRpsConfig {
   kind: 'count-rps'
-  /** 앞면으로 공개되는 백작의 유한 덱 조성. */
+  /**
+   * 앞면으로 공개되는 백작의 유한 덱 조성. 조성(개수)은 공개되지만 **순서는 섞여 숨겨진다**
+   * (벅샷 룰렛의 탄창처럼). 카운팅으로 확률을 읽고, 아이템으로 순서를 들춘다.
+   */
   deck: Record<RpsHand, number>
   /** 기본 판돈(층 보정은 런타임에서 곱한다). */
   baseStake: number
   /**
    * 비김 시 백작이 가져가는 판돈 비율(하우스 레이크). 0.5 = 절반 손실.
-   * 이 페널티가 있어야 어떤 손도 '무손해'가 아니며, 덱 카운팅+선언으로 +EV를 읽어야 이득이다.
+   * 이 페널티가 있어야 어떤 손도 '무손해'가 아니며, 카운팅/아이템으로 +EV를 만들어야 이득이다.
    */
   tieLossFraction: number
   /** 완승(덱 소진) 시 유물 지급 기준 순이익(baseStake 배수). */
   relicWinMultiple: number
+  /** 구매 가능한 아이템 목록. */
+  items: RpsItemDef[]
 }
 
 export interface EventDefinition {
@@ -283,9 +302,10 @@ const EVENT_002: EventDefinition = {
 
 /**
  * event_003 — "가위바위보 백작".
- * 격식을 따지는 밀랍 귀족과의 가위바위보. 백작은 앞면이 보이는 유한 덱으로만 내고(카운팅), 매 판
- * 스스로를 구속하는 격식 선언을 한다(간파). 불빛을 판돈으로 걸고 연승 배율을 쌓되, 언제든 물러나
- * 이익을 지킨다. 운을 읽기·베팅 실력으로 뒤집는 대결형 이벤트다.
+ * 밀랍 귀족과의 벅샷 룰렛식 가위바위보. 백작의 덱은 조성(개수)만 공개되고 순서는 섞여 있어(탄창처럼)
+ * 카운팅으로 확률을 읽는다. 다양한 자원(불빛/게이지/체력/방패/손패)으로 아이템을 사서 다음 패를
+ * 엿보거나 버리고, 판돈을 2배로 걸거나 손실을 막으며 판을 유리하게 끌어간다. 비김은 레이크가 있어
+ * 어떤 손도 무손해가 아니다.
  */
 const EVENT_003: EventDefinition = {
   id: 'event_003',
@@ -295,9 +315,9 @@ const EVENT_003: EventDefinition = {
     { speaker: 'npc', text: '오호, 이런 곳에서 온기가 도는 손을 보다니.' },
     { speaker: 'npc', text: '나는 이 홀의 주인. 심심풀이 승부를 즐기는 백작이라네.' },
     { speaker: 'player', text: '. . .가위바위보?' },
-    { speaker: 'npc', text: '격식 있는 승부지! 내 패는 모두 펼쳐 보이겠네. 귀족은 속임수를 쓰지 않으니까.' },
-    { speaker: 'npc', text: '다만 규칙이 하나. 나를 꺾어야 자네 몫이야. 비기면. . . 판돈 절반은 내 것이라네.' },
-    { speaker: 'npc', text: '자, 불빛을 걸게. 나를 읽어낼 수 있다면. . . 내 보물은 자네 것이야.' },
+    { speaker: 'npc', text: '격식 있는 승부지! 내 패의 수는 모두 펼쳐 보이겠네 — 허나 순서는 섞어 두었지.' },
+    { speaker: 'npc', text: '나를 꺾어야 자네 몫이야. 비기면. . . 판돈 절반은 내 것이라네.' },
+    { speaker: 'npc', text: '도구를 원한다면 값을 치르게. 불빛이든, 피든, 무엇이든. 자, 승부를 시작하지.' },
   ],
   minigame: {
     kind: 'count-rps',
@@ -305,6 +325,15 @@ const EVENT_003: EventDefinition = {
     baseStake: 60,
     tieLossFraction: 0.5,
     relicWinMultiple: 6,
+    // 벅샷 룰렛식 도구 — 저마다 다른 자원으로 사고, 다음 패를 들추거나 판돈/손실을 조작한다.
+    // 이름·설명은 처음 하는 플레이어도 효과를 바로 알 수 있게 쉬운 말로.
+    items: [
+      { id: 'peek', label: '엿보기', desc: '백작이 낼 다음 패를 미리 본다', costRes: 'light', costAmount: 45 },
+      { id: 'eject', label: '흩기', desc: '백작의 다음 패 한 장을 버린다', costRes: 'candle', costAmount: 2 },
+      { id: 'whet', label: '갑절', desc: '이번 판, 따는 불빛도 잃는 불빛도 두 배', costRes: 'health', costAmount: 4 },
+      { id: 'ward', label: '부적', desc: '이번 판은 지거나 비겨도 불빛을 안 잃는다', costRes: 'shield', costAmount: 5 },
+      { id: 'bait', label: '미끼', desc: '백작이 가장 많이 남은 패를 내도록 꾄다(그 패가 보인다)', costRes: 'hand', costAmount: 1 },
+    ],
   },
   outro: [
     { speaker: 'npc', text: '. . .훌륭해. 오늘의 승부는 여기까지로 하지.' },

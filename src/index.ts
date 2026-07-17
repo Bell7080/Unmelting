@@ -5356,6 +5356,12 @@ function makeEventResourceSink(): EventResourceSink {
       boardRenderer.playHudCounterFeedback('shield', c.shield)
       render()
     },
+    spendShield: (amount: number) => {
+      if (amount <= 0) return
+      c.shield = Math.max(0, c.shield - amount)
+      boardRenderer.playHudCounterFeedback('shield', c.shield)
+      render()
+    },
     sellHand: (count: number) => {
       // 판 손패는 오래된 것(앞쪽)부터 제거한다.
       for (let i = 0; i < count && c.hand.length > 0; i += 1) c.removeHandCardAt(0)
