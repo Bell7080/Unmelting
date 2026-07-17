@@ -4041,8 +4041,12 @@ export class GameBoardRenderer {
   color: rgba(255, 238, 200, 0.92);
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
 }
-/* 백작은 상단 카드 슬롯을 위해 컨트롤을 하단으로 모으고 행 간격을 촘촘히 */
-.mini-rps { gap: 9px; padding-bottom: 8px; }
+/* 백작은 상단 카드 슬롯을 위해 컨트롤을 하단으로 모은다. 판 전체를 크게 쓰고
+   배경 어둠은 더 옅게 깔아 일러스트가 잘 비치게 한다. */
+.mini-rps {
+  width: min(99%, 920px); gap: 13px; padding-bottom: 10px;
+  background: radial-gradient(130% 140% at 50% 60%, rgba(6, 4, 12, 0.32) 0%, rgba(6, 4, 12, 0.13) 50%, rgba(6, 4, 12, 0) 80%);
+}
 .mini-exchange.is-in, .mini-rps.is-in { animation: event-line-in 0.34s ease both; }
 /* 접히는 동안엔 입력을 막아, UI가 사라진 뒤 나오는 마무리 대사 클릭이 버튼에 가로채이지 않게 한다. */
 .mini-exchange.is-closing, .mini-rps.is-closing { pointer-events: none; animation: mini-panel-out 0.32s cubic-bezier(0.2, 0.72, 0.2, 1) forwards; }
@@ -4112,52 +4116,53 @@ export class GameBoardRenderer {
 /* 공통 손 이미지 타일 — 정사각 둥근모서리, 테두리 없이 풀인 마스크(가장자리 페이드) + 그림자 */
 .rps-hand-art {
   display: block; width: 100%; aspect-ratio: 1 / 1;
-  background-size: cover; background-position: center; border-radius: 22%;
-  -webkit-mask-image: radial-gradient(circle at 50% 47%, #000 56%, rgba(0,0,0,0.4) 76%, transparent 92%);
-  mask-image: radial-gradient(circle at 50% 47%, #000 56%, rgba(0,0,0,0.4) 76%, transparent 92%);
-  filter: drop-shadow(0 6px 15px rgba(0, 0, 0, 0.62));
+  background-size: cover; background-position: center;
+  /* 둥근 클립·drop-shadow를 빼고 마스크 페이드만 사용 — 반투명 가장자리에 그림자가
+     비치며 생기던 원형 경계(레이어 티)를 제거한다. 페이드도 더 길게 완만히. */
+  -webkit-mask-image: radial-gradient(circle at 50% 47%, #000 44%, rgba(0,0,0,0.62) 60%, rgba(0,0,0,0.22) 76%, transparent 90%);
+  mask-image: radial-gradient(circle at 50% 47%, #000 44%, rgba(0,0,0,0.62) 60%, rgba(0,0,0,0.22) 76%, transparent 90%);
 }
 .rps-hand-text { display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 1 / 1; font-size: 22px; font-weight: 900; color: rgba(255, 238, 196, 0.97); }
 
 /* 상단 슬롯 — 백작 얼굴 부근(가운데 상단). 레일 전체(content) 기준 절대배치라 아이템에 안 가린다. */
-.mini-rps-cardslot { position: absolute; left: 50%; top: 4%; transform: translateX(-50%); width: clamp(84px, 12%, 128px); text-align: center; pointer-events: none; z-index: 3; }
+.mini-rps-cardslot { position: absolute; left: 50%; top: 3%; transform: translateX(-50%); width: clamp(122px, 17%, 184px); text-align: center; pointer-events: none; z-index: 3; }
 .mini-rps-cardslot .cs-face { position: relative; display: block; width: 100%; aspect-ratio: 1 / 1; }
 .mini-rps-cardslot .cs-face > * { position: absolute; inset: 0; opacity: 0; transition: opacity 0.16s; }
 .mini-rps-cardslot .cs-face > .is-shown { opacity: 1; }
-.mini-rps-cardslot .cs-empty { display: flex; align-items: center; justify-content: center; font-size: 44px; font-weight: 900; color: rgba(200, 190, 170, 0.28); }
+.mini-rps-cardslot .cs-empty { display: flex; align-items: center; justify-content: center; font-size: 58px; font-weight: 900; color: rgba(200, 190, 170, 0.28); }
 .mini-rps-cardslot[data-state="empty"] .cs-empty { opacity: 1; }
 .mini-rps-cardslot[data-state="peek"] .cs-face { filter: saturate(0.85) brightness(0.88); }
-.mini-rps-cardslot .cs-tag { display: block; margin-top: 3px; font-size: 11px; letter-spacing: 0.06em; color: rgba(220, 206, 252, 0.72); text-shadow: 0 1px 5px rgba(0, 0, 0, 0.85); }
+.mini-rps-cardslot .cs-tag { display: block; margin-top: 3px; font-size: 13px; letter-spacing: 0.06em; color: rgba(220, 206, 252, 0.78); text-shadow: 0 1px 5px rgba(0, 0, 0, 0.85); }
 .mini-rps-cardslot.is-tick .cs-face { filter: brightness(1.18); }
 .mini-rps-cardslot.is-impact { animation: rps-slot-impact 0.36s cubic-bezier(0.2, 0.8, 0.2, 1); }
 
 .mini-rps-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-.mini-rps-deck { font-size: 15px; display: inline-flex; align-items: baseline; gap: 8px; }
-.mini-rps-deck-item b { color: rgba(255, 232, 176, 0.97); font-weight: 900; }
+.mini-rps-deck { font-size: 18px; display: inline-flex; align-items: baseline; gap: 9px; }
+.mini-rps-deck-item b { color: rgba(255, 232, 176, 0.97); font-weight: 900; font-size: 19px; }
 .mini-rps-dot { color: rgba(180, 168, 148, 0.4); }
-.mini-rps-streak { font-size: 13px; color: rgba(210, 198, 178, 0.72); }
-.mini-rps-streak b { color: rgba(244, 206, 112, 0.96); font-size: 16px; font-weight: 900; }
-.mini-rps-rule { text-align: center; font-size: 12px; letter-spacing: 0.03em; color: rgba(224, 160, 120, 0.72); }
-.mini-rps-buffs { min-height: 18px; text-align: center; font-size: 13px; color: rgba(200, 190, 170, 0.5); }
+.mini-rps-streak { font-size: 15px; color: rgba(210, 198, 178, 0.74); }
+.mini-rps-streak b { color: rgba(244, 206, 112, 0.96); font-size: 19px; font-weight: 900; }
+.mini-rps-rule { text-align: center; font-size: 13.5px; letter-spacing: 0.03em; color: rgba(224, 160, 120, 0.74); }
+.mini-rps-buffs { min-height: 20px; text-align: center; font-size: 15px; color: rgba(200, 190, 170, 0.5); }
 .mini-rps-buffs.is-armed { color: rgba(224, 212, 255, 0.98); text-shadow: 0 0 12px rgba(150, 130, 224, 0.6); }
-.mini-rps-result { min-height: 22px; text-align: center; font-size: 16px; font-weight: 800; }
+.mini-rps-result { min-height: 26px; text-align: center; font-size: 19px; font-weight: 800; }
 .mini-rps-result.is-win { color: rgba(154, 228, 162, 0.99); animation: mini-result-pop 0.4s ease; }
 .mini-rps-result.is-lose { color: rgba(230, 104, 86, 0.97); animation: mini-result-pop 0.4s ease; }
 .mini-rps-result.is-tie { color: rgba(214, 204, 184, 0.78); }
-.mini-rps-discard { min-height: 16px; text-align: center; font-size: 12px; color: rgba(188, 178, 158, 0.5); letter-spacing: 0.06em; }
+.mini-rps-discard { min-height: 17px; text-align: center; font-size: 13.5px; color: rgba(188, 178, 158, 0.52); letter-spacing: 0.06em; }
 
 /* 아이템 — 부채꼴(슬롯 회전) + 테두리 없이 폰트 위주. hover 시 발광+확대 */
-.mini-rps-items { display: flex; justify-content: center; align-items: flex-end; gap: 4px; padding-top: 4px; }
+.mini-rps-items { display: flex; justify-content: center; align-items: flex-end; gap: 12px; padding-top: 4px; }
 .rps-item-slot { transform-origin: center 170%; }
 .mini-rps-item {
-  display: flex; flex-direction: column; align-items: center; gap: 1px;
-  padding: 4px 12px; cursor: pointer; border: none; background: none; font-family: inherit;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 5px 15px; cursor: pointer; border: none; background: none; font-family: inherit;
   color: rgba(238, 226, 250, 0.95);
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9), 0 1px 3px rgba(0, 0, 0, 0.95);
   transition: transform 0.14s, color 0.18s, text-shadow 0.18s, opacity 0.18s;
 }
-.mini-rps-item .it-label { font-size: 15px; font-weight: 900; letter-spacing: 0.04em; }
-.mini-rps-item .it-cost { font-size: 11px; color: rgba(206, 172, 244, 0.82); }
+.mini-rps-item .it-label { font-size: 18px; font-weight: 900; letter-spacing: 0.04em; }
+.mini-rps-item .it-cost { font-size: 12.5px; color: rgba(206, 172, 244, 0.84); }
 .mini-rps-item:hover { transform: translateY(-3px) scale(1.07); color: rgba(255, 246, 255, 1); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9), 0 0 16px rgba(190, 150, 240, 0.75); }
 .mini-rps-item.is-disabled { opacity: 0.26; pointer-events: none; }
 .mini-rps-item.is-used { opacity: 0.4; pointer-events: none; }
@@ -4167,19 +4172,29 @@ export class GameBoardRenderer {
 .mini-rps-stakes { display: flex; justify-content: center; gap: 22px; }
 .mini-rps-stake { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 10px; cursor: pointer; border: none; background: none; font-family: inherit; transition: transform 0.14s, opacity 0.18s; }
 .mini-rps-stake .stake-stars { display: inline-flex; gap: 3px; }
-.mini-rps-stake .stake-star { display: inline-flex; width: 14px; height: 14px; color: rgba(160, 142, 96, 0.5); transition: color 0.18s, filter 0.18s; }
+.mini-rps-stake .stake-star { display: inline-flex; width: 17px; height: 17px; color: rgba(160, 142, 96, 0.5); transition: color 0.18s, filter 0.18s; }
 .mini-rps-stake .stake-star svg { width: 100%; height: 100%; }
-.mini-rps-stake .stake-amt { font-size: 13px; font-weight: 800; color: rgba(230, 216, 180, 0.76); text-shadow: 0 1px 5px rgba(0, 0, 0, 0.85); }
+.mini-rps-stake .stake-amt { font-size: 15px; font-weight: 800; color: rgba(230, 216, 180, 0.78); text-shadow: 0 1px 5px rgba(0, 0, 0, 0.85); }
 .mini-rps-stake:hover { transform: translateY(-2px); }
 .mini-rps-stake.is-selected .stake-star { color: rgba(255, 224, 150, 0.99); filter: drop-shadow(0 0 6px rgba(244, 206, 112, 0.85)); }
 .mini-rps-stake.is-selected .stake-amt { color: rgba(255, 236, 180, 0.99); }
 .mini-rps-stake.is-disabled { opacity: 0.3; pointer-events: none; }
 
-/* 던지기 — 손 이미지 타일. hover 시 발광 + 확대 + 흔들림 */
-.mini-rps-throws { display: flex; justify-content: center; gap: 22px; }
-.mini-rps-throw { display: flex; flex-direction: column; align-items: center; gap: 3px; width: clamp(76px, 10vw, 106px); padding: 0; cursor: pointer; border: none; background: none; font-family: inherit; transition: transform 0.16s, filter 0.18s, opacity 0.18s; }
-.mini-rps-throw .rps-throw-name { font-size: 15px; font-weight: 900; letter-spacing: 0.06em; color: rgba(255, 238, 196, 0.9); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9); }
-.mini-rps-throw:hover { transform: translateY(-4px) scale(1.09); filter: drop-shadow(0 0 16px rgba(255, 210, 120, 0.6)); animation: rps-throw-wobble 0.5s ease-in-out; }
+/* 던지기 — 손 이미지 타일. hover 시 발광 + 확대 + 흔들림 (더 크게) */
+.mini-rps-throws { display: flex; justify-content: center; gap: 28px; }
+.mini-rps-throw { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; width: clamp(104px, 14vw, 152px); padding: 0; cursor: pointer; border: none; background: none; font-family: inherit; transition: transform 0.16s, opacity 0.18s; }
+/* hover 발광은 drop-shadow 대신 뒤쪽 radial 글로우 — 마스크 알파를 따라 그림자가 지며
+   생기던 원형 경계를 없앤다(::before는 자식보다 먼저 칠해져 자연히 이미지 뒤에 깔림). */
+.mini-rps-throw::before {
+  content: ''; position: absolute; left: -8%; right: -8%; top: -10%; height: 110%; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 214, 130, 0.28) 0%, rgba(255, 200, 110, 0.11) 46%, transparent 72%);
+  opacity: 0; transition: opacity 0.18s; pointer-events: none;
+}
+.mini-rps-throw .rps-hand-art { transition: filter 0.18s; }
+.mini-rps-throw .rps-throw-name { font-size: 17px; font-weight: 900; letter-spacing: 0.06em; color: rgba(255, 238, 196, 0.92); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9); }
+.mini-rps-throw:hover { transform: translateY(-4px) scale(1.09); animation: rps-throw-wobble 0.5s ease-in-out; }
+.mini-rps-throw:hover::before { opacity: 1; }
+.mini-rps-throw:hover .rps-hand-art { filter: brightness(1.16) saturate(1.05); }
 .mini-rps-throw:hover .rps-throw-name { color: rgba(255, 248, 220, 1); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9), 0 0 14px rgba(255, 210, 120, 0.7); }
 .mini-rps-throw.is-disabled { opacity: 0.34; pointer-events: none; }
 
