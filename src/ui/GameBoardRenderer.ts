@@ -3604,7 +3604,7 @@ export class GameBoardRenderer {
     const itemHtml = cfg.items.map((it, i) => {
       const angle = (i - (n - 1) / 2) * 10
       const picker = it.id === 'block'
-        ? `<span class="rps-block-picker" hidden>${HANDS.map((h) => `<button class="rps-block-opt" type="button" data-hand="${h}">${HAND_LABEL[h]}</button>`).join('')}</span>`
+        ? `<span class="rps-block-picker" hidden>${HANDS.map((h) => `<button class="rps-block-opt" type="button" data-hand="${h}" title="${HAND_LABEL[h]}">${handArt(h)}</button>`).join('')}</span>`
         : ''
       return `<span class="rps-item-slot" style="transform:rotate(${angle}deg)">
         <button class="mini-rps-item" type="button" data-item="${it.id}" title="${escapeHtml(it.desc)}">
@@ -3683,13 +3683,12 @@ export class GameBoardRenderer {
           ? `“이번 손은 ${HAND_LABEL[declHand]}가 끌리는군.” — ${HAND_LABEL[declHand]} ${Math.round(declProb * 100)}%`
           : `“${HAND_LABEL[declHand]}는 내지 않겠네.” — 회피 ${Math.round(declProb * 100)}%`)
         : ''
-      // 종합 확률 — 선언·차단·잔량이 합쳐진 이번 판 백작의 손 분포. 차단된 손은 ×로 표기.
+      // 종합 확률 — 선언·차단·잔량이 합쳐진 이번 판 백작의 손 분포.
+      // 글자 대신 손 엠블럼 이미지 + % 배지로, 던지기 타일과 같은 양식을 쓴다(차단은 붉은 ×).
       const odds = throwOdds()
       oddsEl.innerHTML = HANDS.map((h) =>
-        h === blocked
-          ? `<span class="odds-chip is-blocked">${HAND_LABEL[h]} <b>×</b></span>`
-          : `<span class="odds-chip">${HAND_LABEL[h]} <b>${Math.round(odds[h] * 100)}%</b></span>`
-      ).join('<span class="mini-rps-dot">·</span>')
+        `<span class="odds-chip${h === blocked ? ' is-blocked' : ''}" title="${HAND_LABEL[h]}">${handArt(h)}<b>${h === blocked ? '×' : `${Math.round(odds[h] * 100)}%`}</b></span>`
+      ).join('')
       const buffs: string[] = []
       if (doubleNext) buffs.push('두배 · 이번 판 2배')
       if (wardNext) buffs.push('보호 · 손실 무효')
@@ -4150,7 +4149,7 @@ export class GameBoardRenderer {
 /* 백작은 상단 카드 슬롯을 위해 컨트롤을 하단으로 모은다. 판 전체를 크게 쓰고
    배경 어둠은 더 옅게 깔아 일러스트가 잘 비치게 한다. */
 .mini-rps {
-  width: min(99%, 920px); gap: 8px; padding-bottom: 8px;
+  width: min(99%, 920px); gap: 6px; padding-bottom: 8px;
   background: radial-gradient(130% 140% at 50% 60%, rgba(6, 4, 12, 0.32) 0%, rgba(6, 4, 12, 0.13) 50%, rgba(6, 4, 12, 0) 80%);
 }
 .mini-exchange.is-in, .mini-rps.is-in { animation: event-line-in 0.34s ease both; }
@@ -4252,17 +4251,24 @@ export class GameBoardRenderer {
 .mini-rps-try.is-lose { color: rgba(236, 96, 72, 0.97); filter: drop-shadow(0 0 6px rgba(210, 54, 32, 0.65)); }
 .mini-rps-try.is-tie { color: rgba(178, 172, 158, 0.85); filter: drop-shadow(0 0 4px rgba(150, 144, 130, 0.4)); }
 .mini-rps-dot { color: rgba(180, 168, 148, 0.4); }
-/* 종합 확률 칩 — 선언·차단·잔량이 합쳐진 이번 판 백작의 손 분포(차단은 붉은 ×) */
-.mini-rps-odds { min-height: 22px; display: flex; justify-content: center; align-items: baseline; gap: 10px; font-size: 15px; color: rgba(214, 204, 184, 0.8); }
-.odds-chip b { color: rgba(255, 232, 176, 0.98); font-size: 18px; font-weight: 900; }
-.odds-chip.is-blocked { opacity: 0.6; }
-.odds-chip.is-blocked b { color: rgba(236, 92, 68, 0.96); text-shadow: 0 0 8px rgba(210, 54, 32, 0.55); }
+/* 종합 확률 칩 — 손 엠블럼 이미지 + % 배지(던지기 타일과 같은 양식). 차단은 흐린 엠블럼 + 붉은 × */
+.mini-rps-odds { min-height: 48px; display: flex; justify-content: center; align-items: flex-start; gap: 30px; }
+.odds-chip { position: relative; display: inline-flex; width: 48px; }
+.odds-chip .rps-hand-art, .odds-chip .rps-hand-text { width: 100%; }
+.odds-chip b {
+  position: absolute; left: 50%; bottom: -4px; transform: translateX(-50%);
+  font-size: 16px; font-weight: 900; color: rgba(255, 232, 176, 0.99);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+}
+.odds-chip.is-blocked .rps-hand-art { filter: grayscale(0.75) brightness(0.55); }
+.odds-chip.is-blocked b { font-size: 20px; color: rgba(236, 92, 68, 0.97); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.95), 0 0 10px rgba(210, 54, 32, 0.6); }
 .mini-rps-streak { font-size: 15px; color: rgba(210, 198, 178, 0.74); }
 .mini-rps-streak b { color: rgba(244, 206, 112, 0.96); font-size: 19px; font-weight: 900; }
 /* 백작의 확률 선언 — 대사 + 표기 % (계산 가능한 정보라 은은히 발광) */
 .mini-rps-decl { min-height: 24px; text-align: center; font-size: 17px; letter-spacing: 0.02em; color: rgba(222, 208, 252, 0.96); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85), 0 0 14px rgba(150, 130, 224, 0.4); }
 /* 버프·버린 패는 한 줄로 압축 — 세로 예산 확보(상단 덱/선언 줄이 레일 밖으로 밀리지 않게) */
-.mini-rps-aux { display: flex; justify-content: center; align-items: baseline; gap: 22px; min-height: 18px; flex-wrap: wrap; }
+.mini-rps-aux { display: flex; justify-content: center; align-items: baseline; gap: 22px; min-height: 14px; flex-wrap: wrap; }
 .mini-rps-buffs { font-size: 14px; color: rgba(200, 190, 170, 0.5); }
 .mini-rps-buffs.is-armed { color: rgba(224, 212, 255, 0.98); text-shadow: 0 0 12px rgba(150, 130, 224, 0.6); }
 .mini-rps-result { min-height: 22px; text-align: center; font-size: 18px; font-weight: 800; }
@@ -4271,7 +4277,7 @@ export class GameBoardRenderer {
 .mini-rps-result.is-tie { color: rgba(214, 204, 184, 0.78); }
 
 /* 아이템 — 부채꼴(슬롯 회전) + 테두리 없이 폰트 위주. hover 시 발광+확대 */
-.mini-rps-items { display: flex; justify-content: center; align-items: flex-end; gap: 12px; padding-top: 4px; }
+.mini-rps-items { display: flex; justify-content: center; align-items: flex-end; gap: 12px; }
 .rps-item-slot { position: relative; transform-origin: center 170%; }
 /* 차단 픽커 — 차단 버튼 바로 위에 떠서 봉쇄할 손을 직접 고른다 */
 .rps-block-picker {
@@ -4281,13 +4287,14 @@ export class GameBoardRenderer {
   z-index: 4;
 }
 .rps-block-picker[hidden] { display: none; }
+/* 픽커 옵션도 손 엠블럼 이미지 타일 — 던지기 타일과 같은 양식, hover 시 보랏빛 발광·확대 */
 .rps-block-opt {
-  padding: 5px 12px; border-radius: 8px; cursor: pointer; border: none;
-  background: rgba(52, 30, 58, 0.6); font-family: inherit; font-size: 14px; font-weight: 900; letter-spacing: 0.04em;
-  color: rgba(240, 228, 252, 0.96); text-shadow: 0 1px 5px rgba(0, 0, 0, 0.85);
-  transition: transform 0.14s, background 0.16s, opacity 0.16s;
+  width: 46px; padding: 1px; border-radius: 10px; cursor: pointer; border: none;
+  background: none; font-family: inherit;
+  transition: transform 0.14s, filter 0.16s, opacity 0.16s;
 }
-.rps-block-opt:hover { transform: translateY(-2px); background: rgba(84, 46, 92, 0.75); }
+.rps-block-opt .rps-hand-art, .rps-block-opt .rps-hand-text { width: 100%; }
+.rps-block-opt:hover { transform: translateY(-2px) scale(1.12); filter: drop-shadow(0 0 10px rgba(190, 150, 240, 0.8)); }
 .rps-block-opt.is-disabled { opacity: 0.3; pointer-events: none; }
 .mini-rps-item {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
@@ -4317,7 +4324,7 @@ export class GameBoardRenderer {
 
 /* 던지기 — 손 이미지 타일. hover 시 발광 + 확대 + 흔들림 (더 크게) */
 .mini-rps-throws { display: flex; justify-content: center; gap: 28px; }
-.mini-rps-throw { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; width: clamp(92px, 11vw, 118px); padding: 0; cursor: pointer; border: none; background: none; font-family: inherit; transition: transform 0.16s, opacity 0.18s; }
+.mini-rps-throw { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; width: clamp(90px, 10.5vw, 110px); padding: 0; cursor: pointer; border: none; background: none; font-family: inherit; transition: transform 0.16s, opacity 0.18s; }
 /* hover 발광은 drop-shadow 대신 뒤쪽 radial 글로우 — 마스크 알파를 따라 그림자가 지며
    생기던 원형 경계를 없앤다(::before는 자식보다 먼저 칠해져 자연히 이미지 뒤에 깔림). */
 .mini-rps-throw::before {
