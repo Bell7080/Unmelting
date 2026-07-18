@@ -27,7 +27,7 @@ import type {
   FlowerWilt,
   TreasureChange,
 } from '@core/TurnManager'
-import { spriteForCard, spriteForHandCard, spriteForRelic, spriteForJob, spriteForEvent, spriteForRps, SpriteUrls, recipeSprite001 } from '@ui/Sprites'
+import { spriteForCard, spriteForHandCard, spriteForRelic, spriteForEvent, spriteForRps, SpriteUrls, recipeSprite001 } from '@ui/Sprites'
 import type {
   EventDefinition,
   EventChoice,
@@ -70,6 +70,8 @@ import { escapeHtml } from '@ui/renderer/Html'
 import { CardFaceRenderer } from '@ui/renderer/CardFaceRenderer'
 import { CompendiumView } from '@ui/renderer/CompendiumView'
 import { ExperienceView } from '@ui/renderer/ExperienceView'
+import { ResourceTrailFx } from '@ui/renderer/ResourceTrailFx'
+import { JobSelectView } from '@ui/renderer/JobSelectView'
 import { sfx } from '@/audio/SfxManager'
 
 // 뷰 계약 타입은 renderer/RendererTypes.ts로 분리 — 기존 import 경로 호환을 위해 재수출한다.
@@ -105,7 +107,8 @@ interface CounterAnimationState {
 }
 
 export class GameBoardRenderer {
-  private boardElement: HTMLElement
+  /** 서브 렌더러 공유 — 보드 루트 요소. */
+  readonly boardElement: HTMLElement
   private selected: { laneIndex: number; distance: number } | null = null
   private currentGameState: GameState | null = null
   /** 현재 런에서 잠긴 손패 카드 ID 집합. 도감에서 해금 여부 표시에 사용한다. */
@@ -201,6 +204,10 @@ export class GameBoardRenderer {
   readonly experience = new ExperienceView()
   /** 도감 오버레이 뷰. */
   readonly compendium = new CompendiumView(this)
+  /** 자원 트레일/버스트 연출 엔진 — 서브 렌더러들과 공유한다. */
+  readonly trails = new ResourceTrailFx(this)
+  /** 시작 직업 선택 오버레이 뷰. */
+  readonly jobSelect = new JobSelectView(this)
 
   /** 서브 렌더러 공유 접근자 — 뷰 분리 후에도 렌더 상태의 단일 출처는 GameBoardRenderer다. */
   getGameState(): GameState | null { return this.currentGameState }
@@ -2121,345 +2128,19 @@ export class GameBoardRenderer {
     })
   }
 
-  /** 직업 선택 후 화면 중앙으로 날아간 카드 고스트 — 게임 진입 후 HUD 블라스트에 재사용. */
-  private jobFlightCard: HTMLElement | null = null
-  /** 레일 내부 직업 선택 암막. 선택 후 보드가 채워질 때까지 남겨 몰입 전환을 가린다. */
-  private jobSelectOverlayElement: HTMLElement | null = null
-  /** 창 크기 변화에도 직업 선택 암막이 레일 프레임에 붙어 있도록 유지하는 리스너. */
-  private jobSelectResizeListener: (() => void) | null = null
-
-  /** In-rail job-selection overlay shown once at game start.
-   *  Character-select grammar: trial/relic-card aspect (3/4) illustrated cards
-   *  (job_001~, wired via spriteForJob — empty placeholder until art exists),
-   *  with name/trait/stat/flavor on a bottom scrim. Unlocked jobs are sorted
-   *  ahead of locked ones; a one-card-at-a-time carousel handles overflow
-   *  (arrows + drag-to-fling). On pick: 비선택 카드는 어두워지고, 선택 카드는
-   *  빛나는 잔상과 함께 축소되어 화면 중앙으로 날아가고 타이틀은 페이드 아웃된다.
-   *  남은 고스트는 animateJobCardToHud가 HUD로 블라스트한다.
-   *  Resolves with the chosen job id when the player clicks a non-locked card. */
+  /** 시작 직업 선택(외부 index 계약) — 구현은 renderer/JobSelectView.ts로 이동, 얇은 위임만 유지. */
   openJobSelect(jobs: JobDef[]): Promise<string> {
-    this.clearJobSelectOverlay()
-    return new Promise<string>((resolve) => {
-      const lockIcon = `<svg class="job-card__lock-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="5" y="11" width="14" height="10" rx="2"/>
-        <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
-      </svg>`
-      // 좌우 넘김 화살표 — chevron. 평소엔 투명, overlay hover 시 은은히 드러난다.
-      const chevron = (dir: 'left' | 'right') => `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"
-          stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="${dir === 'left' ? 'M15 5 L8 12 L15 19' : 'M9 5 L16 12 L9 19'}"/>
-      </svg>`
-
-      // 잠긴 직업은 뒤로(열린 직업 우선). 동일 그룹 내 원래 순서는 안정 정렬로 유지된다.
-      const ordered = [...jobs].sort((a, b) => (a.locked ? 1 : 0) - (b.locked ? 1 : 0))
-
-      const overlay = document.createElement('div')
-      overlay.id = 'job-select-overlay'
-      overlay.setAttribute('role', 'dialog')
-      overlay.setAttribute('aria-label', '직업 선택')
-      overlay.innerHTML = `
-        <div class="job-select-rail-shell">
-          <div class="job-rail-curtain job-rail-curtain--left" aria-hidden="true"></div>
-          <div class="job-rail-curtain job-rail-curtain--right" aria-hidden="true"></div>
-          <div class="job-select-content-bundle">
-            <div class="job-select-header">
-              <span class="job-select-rule"></span>
-              <h2 class="job-select-title">직업 선택</h2>
-              <span class="job-select-rule"></span>
-            </div>
-            <div class="job-select-stage">
-              <button class="job-nav job-nav--left" type="button" data-job-nav="left" aria-label="이전">${chevron('left')}</button>
-              <div class="job-coverflow">
-                ${ordered.map((job) => {
-                  const art = spriteForJob(job.illu)
-                  return `
-                  <button class="job-card${job.locked ? ' job-card--locked' : ''}"
-                          data-job-id="${job.id}"
-                          ${job.locked ? 'aria-disabled="true"' : ''}
-                          type="button">
-                    <div class="job-card__art${art ? '' : ' job-card__art--empty'}"
-                         ${art ? `style="background-image:url('${art}')"` : ''} aria-hidden="true">
-                      ${art ? '' : `<div class="job-card__symbol">${job.symbolSvg}</div>`}
-                    </div>
-                    <div class="job-card__sheen" aria-hidden="true"></div>
-                    ${job.locked ? `<div class="job-card__lock">${lockIcon}<span class="job-card__lock-label">잠김</span></div>` : ''}
-                    <div class="job-card__scrim">
-                      <div class="job-card__name">${job.name}</div>
-                      <div class="job-card__divider" aria-hidden="true"></div>
-                      <div class="job-card__traits">${job.traits}</div>
-                      ${job.stats ? `<div class="job-card__stats">${job.stats}</div>` : ''}
-                      <div class="job-card__flavor">${job.flavor}</div>
-                    </div>
-                  </button>
-                `}).join('')}
-              </div>
-              <button class="job-nav job-nav--right" type="button" data-job-nav="right" aria-label="다음">${chevron('right')}</button>
-            </div>
-          </div>
-        </div>
-      `
-      document.body.appendChild(overlay)
-      this.jobSelectOverlayElement = overlay
-
-      // 상점처럼 body 레이어를 레일 rect에 고정해 HUD/손패는 살아 있고 선택 UI만 보드 안에 뜨게 한다.
-      const alignToRail = (): void => {
-        const rail = this.boardElement.querySelector<HTMLElement>('.rail')
-        const shell = overlay.querySelector<HTMLElement>('.job-select-rail-shell')
-        if (!rail || !shell) return
-        const rect = rail.getBoundingClientRect()
-        shell.style.left = `${rect.left}px`
-        shell.style.top = `${rect.top}px`
-        shell.style.width = `${rect.width}px`
-        shell.style.height = `${rect.height}px`
-      }
-      let relayoutJobCards = (): void => {}
-      const onShellResize = () => { alignToRail(); relayoutJobCards() }
-      this.jobSelectResizeListener = onShellResize
-      window.addEventListener('resize', onShellResize)
-      window.addEventListener('scroll', onShellResize)
-
-      // ── 커버플로우 캐러셀 ─────────────────────────────────────────
-      // 무한 루프(끝↔끝 연결), 가운데 카드일수록 크고 밝게/좌우로 갈수록 작고 어둡게.
-      // 화살표/드래그로 좌우 자유롭게 넘기고, 가운데 카드를 클릭하면 선택 확정된다.
-      const flow = overlay.querySelector<HTMLElement>('.job-coverflow')!
-      const leftBtn = overlay.querySelector<HTMLElement>('[data-job-nav="left"]')!
-      const rightBtn = overlay.querySelector<HTMLElement>('[data-job-nav="right"]')!
-      const cards = [...flow.querySelectorAll<HTMLElement>('.job-card')]
-      const n = cards.length
-      overlay.classList.toggle('has-overflow', n > 1)
-
-      let current = 0      // 가운데 인덱스(드래그 중에는 소수값)
-      let resolving = false
-
-      // 인접 카드 간 가로 간격(카드 폭 기준) — 포커처럼 살짝 겹치도록 0.56배.
-      const stepPx = () => (cards[0]?.offsetWidth || 200) * 0.56
-      // current 기준 i의 최단 부호 거리(무한 루프 wrap).
-      const wrapOff = (i: number) => {
-        let o = (((i - current) % n) + n) % n
-        if (o > n / 2) o -= n
-        return o
-      }
-      const VISIBLE = 2   // 가운데 + 좌우 2장 = 5장 노출(ㅁㅁㅁㅁㅁ)
-      const layout = () => {
-        const sp = stepPx()
-        for (let i = 0; i < n; i++) {
-          const off = wrapOff(i)
-          const a = Math.abs(off)
-          const card = cards[i]
-          const visible = a <= VISIBLE + 0.6
-          const scale = Math.max(0.6, 1 - a * 0.15)
-          const opacity = visible ? Math.max(0.16, 1 - a * 0.3) : 0
-          card.style.transform =
-            `translate(-50%, -50%) translateX(${off * sp}px) scale(${scale}) rotateY(${off * -7}deg)`
-          card.style.opacity = String(opacity)
-          card.style.zIndex = String(100 - Math.round(a * 10))
-          card.style.filter = `brightness(${Math.max(0.4, 1 - a * 0.22)}) saturate(${Math.max(0.5, 1 - a * 0.14)})`
-          card.style.pointerEvents = visible && opacity > 0.2 ? 'auto' : 'none'
-          card.classList.toggle('is-center', a < 0.5)
-        }
-      }
-      relayoutJobCards = layout
-      const settle = (next: number) => { flow.classList.remove('is-dragging'); current = next; layout() }
-      const go = (dir: number) => { if (!resolving) settle(Math.round(current) + dir) }
-
-      // ── 선택 확정: 가운데 카드 빛나는 잔상→축소, 고스트로 복제해 게임 진입까지 유지 ──
-      const confirmPick = (card: HTMLElement, job: JobDef) => {
-        if (resolving) return
-        resolving = true
-        teardown()
-        overlay.classList.add('is-resolving')
-        card.classList.add('job-card--selected')
-        window.setTimeout(() => {
-          // 복사본 대신 원본 카드를 body로 이동해 고스트로 활용한다.
-          // getBoundingClientRect() 로 현재 렌더 위치(scale 포함)를 캡처한 뒤
-          // inline fixed 좌표로 고정해 시각적 점프 없이 DOM 위치만 바꾼다.
-          const rect = card.getBoundingClientRect()
-          card.classList.remove('job-card--selected', 'is-center')
-          card.classList.add('job-flight-card')
-          card.style.position = 'fixed'
-          card.style.left = `${rect.left}px`
-          card.style.top = `${rect.top}px`
-          card.style.width = `${rect.width}px`
-          card.style.height = `${rect.height}px`
-          card.style.margin = '0'
-          card.style.zIndex = '210'
-          card.style.opacity = '1'
-          card.style.transform = 'none'
-          card.style.filter = 'none'
-          card.style.transition = 'none'
-          card.style.transformOrigin = 'center center'
-          card.style.pointerEvents = 'none'
-          document.body.appendChild(card)
-          this.jobFlightCard = card
-          // 선택 후에는 콘텐츠만 접고 암막은 유지한다. 호출부가 보드를 채운 뒤 playJobCurtainOpen()으로 걷는다.
-          overlay.classList.add('job-select--picked')
-          window.setTimeout(() => resolve(job.id), 360)
-        }, 440)
-      }
-
-      // ── 입력: 화살표 / 카드 클릭(가운데=선택, 측면=가운데로) / 드래그 / 키보드 ──
-      const onLeft = (e: Event) => { e.stopPropagation(); go(-1) }
-      const onRight = (e: Event) => { e.stopPropagation(); go(1) }
-      leftBtn.addEventListener('click', onLeft)
-      rightBtn.addEventListener('click', onRight)
-
-      let dragging = false
-      let moved = false
-      let startX = 0
-      let startCurrent = 0
-      let lastX = 0
-      let lastT = 0
-      let vel = 0
-      const onDown = (e: PointerEvent) => {
-        if (resolving) return
-        dragging = true; moved = false
-        startX = e.clientX; startCurrent = current
-        lastX = e.clientX; lastT = performance.now(); vel = 0
-        flow.classList.add('is-dragging')
-      }
-      const onMove = (e: PointerEvent) => {
-        if (!dragging) return
-        const dx = e.clientX - startX
-        if (Math.abs(dx) > 6) moved = true
-        current = startCurrent - dx / stepPx()
-        layout()
-        const now = performance.now()
-        const dt = now - lastT
-        if (dt > 0) vel = (e.clientX - lastX) / dt
-        lastX = e.clientX; lastT = now
-      }
-      const onUp = () => {
-        if (!dragging) return
-        dragging = false
-        // 플릭 속도가 빠르면 한두 칸 더 넘어가는 관성을 준다.
-        let landing = current
-        if (Math.abs(vel) > 0.45) landing += Math.sign(-vel) * (Math.abs(vel) > 1.1 ? 2 : 1)
-        settle(Math.round(landing))
-      }
-      const onCardClick = (e: MouseEvent) => {
-        if (resolving || moved) return
-        const card = (e.target as HTMLElement).closest<HTMLElement>('.job-card')
-        if (!card) return
-        const i = cards.indexOf(card)
-        if (i < 0) return
-        const off = wrapOff(i)
-        if (Math.round(off) !== 0) { settle(current + off); return }  // 측면 카드 → 가운데로
-        const job = ordered[i]
-        if (job.locked) {
-          card.classList.add('is-denied')
-          window.setTimeout(() => card.classList.remove('is-denied'), 420)
-          return
-        }
-        confirmPick(card, job)
-      }
-      const onKey = (e: KeyboardEvent) => {
-        if (resolving) return
-        if (e.key === 'ArrowLeft') go(-1)
-        else if (e.key === 'ArrowRight') go(1)
-        else if (e.key === 'Enter') {
-          const i = (((Math.round(current)) % n) + n) % n
-          if (!ordered[i].locked) confirmPick(cards[i], ordered[i])
-        }
-      }
-      const onResize = () => { alignToRail(); layout() }
-
-      flow.addEventListener('pointerdown', onDown)
-      window.addEventListener('pointermove', onMove)
-      window.addEventListener('pointerup', onUp)
-      flow.addEventListener('click', onCardClick)
-      window.addEventListener('keydown', onKey)
-      window.addEventListener('resize', onResize)
-
-      const teardown = () => {
-        leftBtn.removeEventListener('click', onLeft)
-        rightBtn.removeEventListener('click', onRight)
-        flow.removeEventListener('pointerdown', onDown)
-        window.removeEventListener('pointermove', onMove)
-        window.removeEventListener('pointerup', onUp)
-        flow.removeEventListener('click', onCardClick)
-        window.removeEventListener('keydown', onKey)
-        window.removeEventListener('resize', onResize)
-      }
-
-      alignToRail()
-      layout()
-      requestAnimationFrame(() => { alignToRail(); layout() })   // 폰트/레이아웃 안정 후 카드 폭 재반영
-    })
+    return this.jobSelect.openJobSelect(jobs)
   }
 
-  /** 게임 진입 직후, 화면 중앙에 남은 직업 고스트 카드가 능력에 맞는 HUD로 블라스트를
-   *  날린 뒤 사라진다(스폰 확률 패널 / 체력 / 공격력 / 화폐). 수치 롤은 render()의
-   *  자동 카운터가 담당하고, 여기서는 트레일/버스트와 카드 소멸 연출만 책임진다. */
-  async animateJobCardToHud(job: JobDef): Promise<void> {
-    const ghost = this.jobFlightCard
-    if (!ghost) return
-    const origin = ghost.getBoundingClientRect()
-
-    // 스폰 보정은 한 직업당 한 종류만 있으므로 우선순위로 단일 테마를 고른다.
-    let spawnTheme: BurstTheme | null = null
-    if (job.spawnEnemy > 0) spawnTheme = 'damage'
-    else if (job.spawnTreasure > 0) spawnTheme = 'treasure-gain'
-    else if (job.spawnFlower > 0) spawnTheme = 'flower-bloom'
-
-    const tasks: Promise<void>[] = []
-    if (spawnTheme) {
-      const panel = this.boardElement.querySelector<HTMLElement>('.spawn-prob-panel')
-      if (panel) tasks.push(this.animateResourceTrail(origin, panel, 1, spawnTheme))
-    }
-    if (job.healthBonus > 0) tasks.push(this.animateResourceTrail(origin, this.findResourceTrailTarget('health'), 1, 'health-gain'))
-    if (job.damageBonus > 0) tasks.push(this.animateResourceTrail(origin, this.findResourceTrailTarget('attack'), 1, 'attack-gain'))
-
-    if (tasks.length > 0) {
-      ghost.classList.add('is-emitting')
-      await Promise.all(tasks)
-    } else {
-      // 가지지 못한 자: 블라스트 없이 잠깐 머문 뒤 조용히 사라진다.
-      await new Promise<void>((r) => window.setTimeout(r, 240))
-    }
-
-    // 카드 소멸 — 중앙에서 연기 버스트 후 축소 페이드.
-    SquareBurst.playAt(
-      origin.left + origin.width / 2,
-      origin.top + origin.height / 2,
-      'vanish-smoke',
-      { count: 14, spread: 120, duration: 480 }
-    )
-    await ghost
-      .animate(
-        [
-          { opacity: 1, transform: 'scale(1)' },
-          { opacity: 0, transform: 'scale(0.72)' },
-        ],
-        { duration: 360, easing: 'ease', fill: 'forwards' }
-      )
-      .finished.catch(() => {})
-    ghost.remove()
-    this.jobFlightCard = null
+  /** 직업 고스트 카드 → HUD 블라스트 위임. */
+  animateJobCardToHud(job: JobDef): Promise<void> {
+    return this.jobSelect.animateJobCardToHud(job)
   }
 
-  /** 직업 선택 암막을 좌우로 걷어 새로 채워진 3×3 레일을 처음 공개한다. */
+  /** 직업 선택 암막 걷기 위임. */
   playJobCurtainOpen(): Promise<void> {
-    const overlay = this.jobSelectOverlayElement
-    if (!overlay) return Promise.resolve()
-    overlay.classList.add('job-select--opening')
-    return new Promise((resolve) => {
-      window.setTimeout(() => {
-        this.clearJobSelectOverlay()
-        resolve()
-      }, 780)
-    })
-  }
-
-  /** 직업 선택 레이어와 레일 정렬 리스너를 한 번에 치워 새 런/리셋 잔상을 막는다. */
-  private clearJobSelectOverlay(): void {
-    if (this.jobSelectResizeListener) {
-      window.removeEventListener('resize', this.jobSelectResizeListener)
-      window.removeEventListener('scroll', this.jobSelectResizeListener)
-      this.jobSelectResizeListener = null
-    }
-    this.jobSelectOverlayElement?.remove()
-    this.jobSelectOverlayElement = null
+    return this.jobSelect.playJobCurtainOpen()
   }
 
   /** 이벤트 문 진입 레이어와 정렬 리스너. */
@@ -2675,7 +2356,7 @@ export class GameBoardRenderer {
     }
     await Promise.all(
       targets.map((t) =>
-        this.animateResourceTrail(buttonRect, this.findResourceTrailTarget(t as ResourceTrailTarget), 3, themeByTarget[t] ?? 'score')
+        this.trails.animateResourceTrail(buttonRect, this.trails.findResourceTrailTarget(t as ResourceTrailTarget), 3, themeByTarget[t] ?? 'score')
       )
     )
   }
@@ -2709,7 +2390,7 @@ export class GameBoardRenderer {
       hand: { target: 'hand', theme: 'hand-tool' },
     }
     const m = map[res]
-    void this.animateResourceTrail(from, this.findResourceTrailTarget(m.target), count, m.theme)
+    void this.trails.animateResourceTrail(from, this.trails.findResourceTrailTarget(m.target), count, m.theme)
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -3168,7 +2849,7 @@ export class GameBoardRenderer {
       const finish = (): void => {
         if (deckEmpty() && net >= cfg.relicWinMultiple * stakeUnit) {
           sink.grantRelic()
-          void this.animateResourceTrail(resultEl.getBoundingClientRect(), this.findResourceTrailTarget('relic'), 4, 'treasure-gain')
+          void this.trails.animateResourceTrail(resultEl.getBoundingClientRect(), this.trails.findResourceTrailTarget('relic'), 4, 'treasure-gain')
           onMoment?.('rps-relic')
         }
         panel.classList.add('is-closing')
@@ -4163,9 +3844,9 @@ export class GameBoardRenderer {
 
   /** 새 런 시작 시 셔터 상태를 초기화한다. 보스전 중 게임오버 시 잠긴 상태가 잔류하는 걸 방지. */
   resetShutter(): void {
-    this.clearJobSelectOverlay()
-    this.jobFlightCard?.remove()
-    this.jobFlightCard = null
+    this.jobSelect.clearJobSelectOverlay()
+    this.jobSelect.jobFlightCard?.remove()
+    this.jobSelect.jobFlightCard = null
     this.shopShutterLocked = false
     this.shopShutterSnapshot = null
     document.querySelector<HTMLElement>('#game-board .rail-shutter')?.remove()
@@ -4496,7 +4177,7 @@ export class GameBoardRenderer {
       void this.spawnFieldFloatText(originX, originY - 24, meta.label)
       liveTile.classList.add('is-wax-knight-casting')
       // 카드별 사용 템포를 더 빠르게 — 트레일 입자 수와 퇴장/간격을 줄여 하나씩 처리되는 답답함을 줄인다.
-      if (destEl) await this.animateResourceTrail(new DOMRect(originX - 10, originY - 10, 20, 20), destEl, effect === 'strike' ? 4 : 3, meta.burst)
+      if (destEl) await this.trails.animateResourceTrail(new DOMRect(originX - 10, originY - 10, 20, 20), destEl, effect === 'strike' ? 4 : 3, meta.burst)
       liveTile.classList.remove('is-wax-knight-casting')
       await card.animate(
         [
@@ -4757,7 +4438,7 @@ export class GameBoardRenderer {
       SquareBurst.playAt(originX, originY, 'demon-vortex', { count: 20, spread: 160, duration: 480 })
       void this.spawnFieldFloatText(originX, originY - 24, `피해 ${counter}`)
       const playerEl = this.boardElement.querySelector<HTMLElement>('.player-card')
-      if (playerEl) await this.animateResourceTrail(new DOMRect(originX - 10, originY - 10, 20, 20), playerEl, 4, 'demon-vortex')
+      if (playerEl) await this.trails.animateResourceTrail(new DOMRect(originX - 10, originY - 10, 20, 20), playerEl, 4, 'demon-vortex')
       await card.animate(
         [
           { opacity: 1, filter: 'brightness(1.4)' },
@@ -4825,7 +4506,7 @@ export class GameBoardRenderer {
     if (isTrue) {
       void this.spawnFieldFloatText(originX, originY - 24, '진실 — 체력+10 공격+1')
       const atkEl = liveTile.querySelector<HTMLElement>('.boss-face-atk') ?? liveTile
-      await this.animateResourceTrail(new DOMRect(originX - 10, originY - 10, 20, 20), atkEl, 6, 'demon-vortex')
+      await this.trails.animateResourceTrail(new DOMRect(originX - 10, originY - 10, 20, 20), atkEl, 6, 'demon-vortex')
     } else {
       void this.spawnFieldFloatText(originX, originY - 24, '거짓 — 손패 파괴')
     }
@@ -6322,7 +6003,7 @@ export class GameBoardRenderer {
     // 원점 별빛 흩뿌림 — 카드가 빛으로 풀리는 출발 블라스트.
     SquareBurst.playAt(cx, cy, 'starlight', { count: 14, spread: 80, duration: 420 })
     // 트레일이 턴 브랜드에 닿으면 animateResourceTrail이 도착 버스트를 같은 beat에 찍는다.
-    await this.animateResourceTrail(sourceRect, turnBrand, 1, 'starlight')
+    await this.trails.animateResourceTrail(sourceRect, turnBrand, 1, 'starlight')
   }
 
   /** 100턴 초과분 별빛 소멸 연출: 수집(턴 +1)하지 않고 그 자리에서 빛으로 흩어져 사라진다.
@@ -6346,7 +6027,7 @@ export class GameBoardRenderer {
     const boss = this.findCardElement(cardId)
     const slot = this.findHandSlotElement(slotIndex)
     if (!boss || !slot) return
-    await this.animateResourceTrail(boss, slot, 3, theme)
+    await this.trails.animateResourceTrail(boss, slot, 3, theme)
     SquareBurst.playOn(slot, theme, { count: 18, spread: 125, duration: 520 })
     // 즉시 사라지지 않고 잿불에 닿은 듯 흔들→회색→검게 타오르며 사라진다.
     await slot.animate(
@@ -6581,7 +6262,7 @@ export class GameBoardRenderer {
         await new Promise((r) => window.setTimeout(r, i * 110))
         const slot = this.findHandSlotElement(slotIndex)
         if (!slot) return
-        await this.animateResourceTrail(boss, slot, 3, 'treasure-gain')
+        await this.trails.animateResourceTrail(boss, slot, 3, 'treasure-gain')
         await slot.animate(
           [
             { transform: 'scale(0.6)', opacity: 0.2 },
@@ -6615,10 +6296,8 @@ export class GameBoardRenderer {
   }
 
   /**
-   * Resource rewards are introduced by a short square-card trail from the
-   * concrete source (rail card / combo banner / played-card center) into the
-   * destination HUD. The trail lands before the normal counter/drop animation,
-   * so all reward types share one source-aware acquisition rule.
+   * 자원 트레일 공개 진입점(외부 index/BossEvent 계약) — 구현은
+   * renderer/ResourceTrailFx.ts로 이동, 얇은 위임만 유지한다.
    */
   animateResourceTrailFromCard(
     cardId: string,
@@ -6626,51 +6305,36 @@ export class GameBoardRenderer {
     count: number,
     theme: BurstTheme
   ): Promise<void> {
-    const source = this.findCardElement(cardId)
-    return this.animateResourceTrail(source, this.findResourceTrailTarget(target), count, theme)
+    return this.trails.animateResourceTrailFromCard(cardId, target, count, theme)
   }
 
-  /** Fly a resource trail from a captured card rect after the model was already cleaned up. */
   animateResourceTrailFromRect(
     source: DOMRect,
     target: ResourceTrailTarget,
     count: number,
     theme: BurstTheme
   ): Promise<void> {
-    return this.animateResourceTrail(source, this.findResourceTrailTarget(target), count, theme)
+    return this.trails.animateResourceTrailFromRect(source, target, count, theme)
   }
 
-  /** Fly a resource trail from the center-screen played-card impact point. */
   animateResourceTrailFromCenter(
     target: ResourceTrailTarget,
     count: number,
     theme: BurstTheme
   ): Promise<void> {
-    const center = new DOMRect(window.innerWidth / 2 - 8, window.innerHeight * 0.46 - 8, 16, 16)
-    return this.animateResourceTrail(center, this.findResourceTrailTarget(target), count, theme)
+    return this.trails.animateResourceTrailFromCenter(target, count, theme)
   }
 
-  /** Fly a square-card target blast from the played-card center toward an affected rail card. */
   animateTargetBlastFromCenterToCard(cardId: string, theme: BurstTheme): Promise<void> {
-    const center = new DOMRect(window.innerWidth / 2 - 8, window.innerHeight * 0.46 - 8, 16, 16)
-    return this.animateResourceTrail(center, this.findCardElement(cardId), 1, theme)
+    return this.trails.animateTargetBlastFromCenterToCard(cardId, theme)
   }
 
-  /** Fly a resource trail from the currently visible chain/combo banner. */
   animateResourceTrailFromChain(
     target: ResourceTrailTarget,
     count: number,
     theme: BurstTheme
   ): Promise<void> {
-    const chainSource =
-      document.querySelector<HTMLElement>('#chain-banner .chain-event:last-child') ??
-      document.querySelector<HTMLElement>('#chain-banner')
-    return this.animateResourceTrail(
-      chainSource,
-      this.findResourceTrailTarget(target),
-      count,
-      theme
-    )
+    return this.trails.animateResourceTrailFromChain(target, count, theme)
   }
 
   /** 제단 무료 유물 단일 픽 연출: 비선택 카드가 먼저 사그라들고, 이후 선택 카드도 순차적으로 사라진다.
@@ -6778,8 +6442,8 @@ export class GameBoardRenderer {
    *  팩 피커가 곧바로 열리기 전 비용 시각화 — await 없이 배경에서 재생된다. */
   fireScoreSpendTrailToTarget(target: HTMLElement | null, cost: number): void {
     if (!target) return
-    void this.animateResourceTrail(
-      this.findScorePulseAnchor(),
+    void this.trails.animateResourceTrail(
+      this.trails.findScorePulseAnchor(),
       target,
       Math.min(8, Math.max(1, Math.ceil(cost / 300))),
       'score'
@@ -6792,7 +6456,7 @@ export class GameBoardRenderer {
     const target = document.querySelector<HTMLElement>(
       `#shop-overlay .shop-relic-card[data-shop-buy="${relicId}"]`
     )
-    return this.animateResourceTrail(this.findScorePulseAnchor(), target, count, 'score')
+    return this.trails.animateResourceTrail(this.trails.findScorePulseAnchor(), target, count, 'score')
   }
 
   /** Count down spent light immediately so purchases share the same numeric
@@ -6814,8 +6478,8 @@ export class GameBoardRenderer {
   async playPackRerollFeedback(cost: number): Promise<void> {
     const btn = document.querySelector<HTMLElement>('.shop-pack-picker-reroll-btn')
     if (!btn) return
-    await this.animateResourceTrail(
-      this.findCoinPulseAnchor(),
+    await this.trails.animateResourceTrail(
+      this.trails.findCoinPulseAnchor(),
       btn,
       Math.max(1, Math.min(6, cost)),
       'score'
@@ -6840,7 +6504,7 @@ export class GameBoardRenderer {
     const card = document.querySelector<HTMLElement>(`#shop-overlay .shop-free-card[data-shop-buy-kind="${kind}"]`)
     if (!card) return
     await this.playShopPurchaseImpact(card, 'score')
-    await this.animateResourceTrail(card, this.findResourceTrailTarget(target), this.freeRewardTrailCount(target, amount), theme)
+    await this.trails.animateResourceTrail(card, this.trails.findResourceTrailTarget(target), this.freeRewardTrailCount(target, amount), theme)
     // 무료 카드 소모는 선택 순간 "사라짐"이 읽히도록 약간 긴 퇴장 타이밍을 사용한다.
     card.classList.add('is-consumed')
     window.setTimeout(() => card.remove(), 420)
@@ -6868,8 +6532,8 @@ export class GameBoardRenderer {
     if (!reroll) return
     // 진행 중임을 DOM에도 남겨 빠른 연타/터치 반복이 시각적으로 막힌다.
     reroll.classList.add('is-reroll-locked')
-    await this.animateResourceTrail(
-      this.findCoinPulseAnchor(),
+    await this.trails.animateResourceTrail(
+      this.trails.findCoinPulseAnchor(),
       reroll,
       Math.max(1, Math.min(6, cost)),
       'score'
@@ -6956,214 +6620,6 @@ export class GameBoardRenderer {
     const label = card.querySelector<HTMLElement>('.shop-price-label-text')
     if (label)
       label.textContent = offer.purchased ? '구매 완료' : `${offer.price.toLocaleString()}`
-  }
-
-  private findResourceTrailTarget(target: ResourceTrailTarget): HTMLElement | DOMRect | null {
-    if (target === 'score') return this.findScorePulseAnchor()
-    if (target === 'coin') return this.findCoinPulseAnchor()
-    if (target === 'health') {
-      return (
-        this.boardElement.querySelector<HTMLElement>('.hp-bar') ??
-        this.boardElement.querySelector<HTMLElement>('.player-card')
-      )
-    }
-    if (target === 'shield') {
-      return (
-        this.boardElement.querySelector<HTMLElement>('.player-shield-chip') ??
-        this.boardElement.querySelector<HTMLElement>('.hp-column') ??
-        this.boardElement.querySelector<HTMLElement>('.player-card')
-      )
-    }
-    if (target === 'ember') {
-      return (
-        this.boardElement.querySelector<HTMLElement>('.ember-bar') ??
-        this.boardElement.querySelector<HTMLElement>('.ember-hud')
-      )
-    }
-    if (target === 'gauge') return this.boardElement.querySelector<HTMLElement>('.candle-gauge')
-    if (target === 'attack') return this.boardElement.querySelector<HTMLElement>('.atk-stat')
-    if (target === 'relic') {
-      const latestRelic = this.boardElement.querySelector<HTMLElement>('.relic-mini-card:last-child')
-      // Boss/reward relic trails should land on the artifact fan, not on the
-      // light panel; fall back to the player card before the first relic exists.
-      return (
-        latestRelic ??
-        this.boardElement.querySelector<HTMLElement>('.relic-stack') ??
-        this.boardElement.querySelector<HTMLElement>('.player-card')
-      )
-    }
-    const handStack = this.boardElement.querySelector<HTMLElement>('.hand-stack')
-    if (handStack) {
-      const rect = handStack.getBoundingClientRect()
-      // Hand rewards aim just below the combo gauge, nudged down a little so
-      // the first visible card starts at the top edge instead of popping in mid-stack.
-      return new DOMRect(rect.left + rect.width / 2 - 8, rect.top + 22, 16, 16)
-    }
-    return this.boardElement.querySelector<HTMLElement>('.hand-panel')
-  }
-
-  private ensureResourceTrailStyles(): void {
-    if (document.getElementById('resource-trail-styles')) return
-    const style = document.createElement('style')
-    style.id = 'resource-trail-styles'
-    style.textContent = `
-.resource-trail-piece {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 230;
-  border-radius: 4px;
-  pointer-events: none;
-  background: var(--trail-color, rgba(255, 232, 168, 0.82));
-  box-shadow: 0 0 14px var(--trail-glow, rgba(255, 218, 132, 0.28));
-  will-change: transform, opacity, filter;
-}
-`
-    document.head.appendChild(style)
-  }
-
-  private trailColors(theme: BurstTheme): { color: string; glow: string } {
-    switch (theme) {
-      case 'score':
-      case 'treasure-gain':
-      case 'flower-chamomile':
-      case 'flower-marigold':
-        return { color: 'rgba(255, 224, 126, 0.86)', glow: 'rgba(255, 211, 92, 0.34)' }
-      case 'health-gain':
-      case 'flower-red-rose':
-        return { color: 'rgba(240, 106, 114, 0.8)', glow: 'rgba(255, 216, 201, 0.3)' }
-      case 'shield-gain':
-      case 'flower-oleander':
-        return { color: 'rgba(227, 184, 78, 0.78)', glow: 'rgba(255, 241, 184, 0.3)' }
-      case 'ember-gain':
-        return { color: 'rgba(255, 122, 44, 0.78)', glow: 'rgba(255, 240, 164, 0.3)' }
-      case 'gauge-gain':
-      case 'flower-lavender':
-        return { color: 'rgba(169, 150, 238, 0.76)', glow: 'rgba(238, 230, 255, 0.28)' }
-      case 'attack-gain':
-      case 'hand-attack':
-        return { color: 'rgba(214, 73, 47, 0.78)', glow: 'rgba(244, 195, 74, 0.28)' }
-      case 'hand-control':
-        return { color: 'rgba(95, 166, 216, 0.74)', glow: 'rgba(220, 238, 252, 0.26)' }
-      case 'hand-recovery':
-        return { color: 'rgba(126, 208, 145, 0.76)', glow: 'rgba(226, 247, 200, 0.24)' }
-      // 불씨 기사단장 카드 효과 — 촛농/양초/불씨 트레일 톤.
-      case 'boss-wax-drip':
-        return { color: 'rgba(217, 154, 58, 0.8)', glow: 'rgba(255, 230, 173, 0.3)' }
-      case 'boss-candle-flame':
-        return { color: 'rgba(242, 214, 80, 0.8)', glow: 'rgba(255, 248, 220, 0.3)' }
-      case 'boss-ember-spark':
-        return { color: 'rgba(255, 122, 44, 0.8)', glow: 'rgba(255, 217, 138, 0.3)' }
-      case 'starlight':
-        return { color: 'rgba(170, 166, 245, 0.84)', glow: 'rgba(224, 228, 255, 0.36)' }
-      default:
-        return { color: 'rgba(220, 162, 51, 0.78)', glow: 'rgba(255, 233, 164, 0.26)' }
-    }
-  }
-
-  private rectCenter(target: HTMLElement | DOMRect): { x: number; y: number } {
-    const rect = target instanceof HTMLElement ? target.getBoundingClientRect() : target
-    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-  }
-
-  private animateResourceTrail(
-    source: HTMLElement | DOMRect | null,
-    target: HTMLElement | DOMRect | null,
-    count: number,
-    theme: BurstTheme
-  ): Promise<void> {
-    if (!source || !target || count <= 0) return Promise.resolve()
-    this.ensureResourceTrailStyles()
-    const from = this.rectCenter(source)
-    const to = this.rectCenter(target)
-    const colors = this.trailColors(theme)
-    const launches: Promise<void>[] = []
-    for (let i = 0; i < count; i += 1) {
-      launches.push(
-        new Promise((resolve) => {
-          window.setTimeout(() => {
-            const finished: Promise<void>[] = []
-            const specs = [
-              { size: 24, lag: 0, alpha: 0.72 },
-              // Tighter lags keep the familiar triple-tail silhouette while
-              // reducing the small pause before the HUD number starts ticking.
-              { size: 17, lag: 30, alpha: 0.52 },
-              { size: 11, lag: 58, alpha: 0.36 },
-            ]
-            for (const spec of specs) {
-              finished.push(this.spawnResourceTrailPiece(from, to, colors, spec))
-            }
-            window.setTimeout(() => {
-              SquareBurst.playAt(to.x, to.y, theme, {
-                count: 12,
-                spread: 74,
-                duration: 420,
-                size: [6, 14],
-              })
-              // Resolve on impact, not after every tail particle fades. Callers
-              // can update counters/hand cards during this burst beat.
-              resolve()
-            }, 280)
-            // Trail pieces remove themselves asynchronously after the impact;
-            // keeping that cleanup separate prevents old sequential calculations.
-            void Promise.all(finished)
-          }, i * 95)
-        })
-      )
-    }
-    return Promise.all(launches).then(() => undefined)
-  }
-
-  private spawnResourceTrailPiece(
-    from: { x: number; y: number },
-    to: { x: number; y: number },
-    colors: { color: string; glow: string },
-    spec: { size: number; lag: number; alpha: number }
-  ): Promise<void> {
-    return new Promise((resolve) => {
-      window.setTimeout(() => {
-        const piece = document.createElement('div')
-        piece.className = 'resource-trail-piece'
-        piece.style.width = `${spec.size}px`
-        piece.style.height = `${Math.round(spec.size * 1.34)}px`
-        piece.style.setProperty('--trail-color', colors.color)
-        piece.style.setProperty('--trail-glow', colors.glow)
-        piece.style.opacity = `${spec.alpha}`
-        document.body.appendChild(piece)
-        const dx = to.x - from.x
-        const dy = to.y - from.y
-        const curve = Math.min(90, Math.max(34, Math.abs(dx) * 0.08 + Math.abs(dy) * 0.05))
-        const anim = piece.animate(
-          [
-            {
-              transform: `translate(${from.x - spec.size / 2}px, ${from.y - spec.size / 2}px) rotate(-8deg) scale(0.82)`,
-              opacity: 0,
-              filter: 'blur(0.2px)',
-            },
-            {
-              transform: `translate(${from.x + dx * 0.58 - spec.size / 2}px, ${from.y + dy * 0.58 - curve - spec.size / 2}px) rotate(10deg) scale(1)`,
-              opacity: spec.alpha,
-              filter: 'blur(0px)',
-              offset: 0.58,
-            },
-            {
-              transform: `translate(${to.x - spec.size / 2}px, ${to.y - spec.size / 2}px) rotate(2deg) scale(0.54)`,
-              opacity: 0,
-              filter: 'blur(0.8px)',
-            },
-          ],
-          { duration: 330, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)', fill: 'forwards' }
-        )
-        anim.onfinish = () => {
-          piece.remove()
-          resolve()
-        }
-        window.setTimeout(() => {
-          piece.remove()
-          resolve()
-        }, 500)
-      }, spec.lag)
-    })
   }
 
   /** Start count-up animations that were requested by renderScorePanel().
@@ -7365,7 +6821,7 @@ export class GameBoardRenderer {
     if (pulseKey === this.previousScorePulseKey && pulseKey === this.activeScorePulseKey) return
     this.rememberImmediateResourcePulse('score', targetScore, pulseKey)
     this.animateResourceCounter('.score-number', targetScore, '')
-    const anchor = this.findScorePulseAnchor()
+    const anchor = this.trails.findScorePulseAnchor()
     if (anchor) this.burstAtElement(anchor, 'score', { count: 22, spread: 170, duration: 640 })
   }
 
@@ -7376,7 +6832,7 @@ export class GameBoardRenderer {
     if (pulseKey === this.previousCoinPulseKey && pulseKey === this.activeCoinPulseKey) return
     this.rememberImmediateResourcePulse('coin', targetCoins, pulseKey)
     this.animateResourceCounter('.coin-number', targetCoins, ' $')
-    const anchor = this.findCoinPulseAnchor()
+    const anchor = this.trails.findCoinPulseAnchor()
     if (anchor) this.burstAtElement(anchor, 'score', { count: 22, spread: 170, duration: 640 })
   }
 
@@ -7431,23 +6887,6 @@ export class GameBoardRenderer {
     this.displayedCoinValue = targetValue
     this.activeCoinPulseKey = pulseKey
     this.activeCoinPulseUntil = pulseUntil
-  }
-
-  /** Find the score/log panel for score-pulse bursts. */
-  findScorePulseAnchor(): HTMLElement | null {
-    return (
-      this.boardElement.querySelector<HTMLElement>('.score-number') ??
-      this.boardElement.querySelector<HTMLElement>('.score-panel')
-    )
-  }
-
-  /** Find the coin number element for coin-pulse bursts. */
-  findCoinPulseAnchor(): HTMLElement | null {
-    return (
-      this.boardElement.querySelector<HTMLElement>('.coin-number') ??
-      this.boardElement.querySelector<HTMLElement>('.coin-panel-total') ??
-      this.boardElement.querySelector<HTMLElement>('.score-panel')
-    )
   }
 
   /**
