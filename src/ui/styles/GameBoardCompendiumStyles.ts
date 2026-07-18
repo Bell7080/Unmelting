@@ -16,11 +16,15 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
   z-index: 10500;
   padding: 24px;
 }
-.compendium-overlay.is-open { display: flex; animation: codex-overlay-fade 0.26s ease; }
-/* 열림/탭 전환 시 본문이 아래에서 스르륵 올라온다(등장 슬라이드 인). */
-.compendium-overlay.is-open .compendium-modal { animation: codex-modal-rise 0.34s cubic-bezier(0.2, 0.84, 0.3, 1); }
+.compendium-overlay.is-open { display: flex; animation: codex-overlay-fade 0.3s ease; }
+/* 열림/탭 전환 시 본문이 아래에서 올라와 살짝 넘쳤다가 안착한다(확실히 읽히는 슬라이드 인). */
+.compendium-overlay.is-open .compendium-modal { animation: codex-modal-rise 0.5s cubic-bezier(0.18, 0.9, 0.28, 1.08); }
 @keyframes codex-overlay-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes codex-modal-rise { from { opacity: 0; transform: translateY(26px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes codex-modal-rise {
+  from { opacity: 0; transform: translateY(72px) scale(0.96); }
+  60% { opacity: 1; }
+  to { opacity: 1; transform: none; }
+}
 .compendium-modal {
   width: min(880px, 96vw);
   height: 86vh;

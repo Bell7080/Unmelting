@@ -18,10 +18,14 @@ export const GAME_BOARD_EXPERIENCE_STYLES = `
   z-index: 10500;
   padding: 24px;
 }
-.experience-overlay.is-open { display: flex; animation: codex-overlay-fade 0.26s ease; }
-/* 도감과 같은 등장 문법: 본문이 아래에서 스르륵 올라온다. */
-.experience-overlay.is-open .experience-modal { animation: experience-modal-rise 0.34s cubic-bezier(0.2, 0.84, 0.3, 1); }
-@keyframes experience-modal-rise { from { opacity: 0; transform: translateY(26px) scale(0.985); } to { opacity: 1; transform: none; } }
+.experience-overlay.is-open { display: flex; animation: codex-overlay-fade 0.3s ease; }
+/* 도감과 같은 등장 문법: 본문이 아래에서 올라와 살짝 넘쳤다가 안착한다. */
+.experience-overlay.is-open .experience-modal { animation: experience-modal-rise 0.5s cubic-bezier(0.18, 0.9, 0.28, 1.08); }
+@keyframes experience-modal-rise {
+  from { opacity: 0; transform: translateY(72px) scale(0.96); }
+  60% { opacity: 1; }
+  to { opacity: 1; transform: none; }
+}
 .experience-modal {
   position: relative;
   width: min(680px, 96vw);
