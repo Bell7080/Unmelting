@@ -168,6 +168,9 @@ const lifetimeRecordStore = createBrowserLifetimeRecordStore()
 const originalEndGame = gameState.endGame.bind(gameState)
 gameState.endGame = (reason: string): void => {
   originalEndGame(reason)
+  // 첫 런을 '온전히'(승리/패배 정산까지) 마친 순간에만 첫 실행을 소비한다 — 중도 이탈 후
+  // 재부팅은 다시 첫 시작(새싹 직행 + 인트로)으로 이어진다.
+  localStorage.setItem(BOOT_FIRST_RUN_KEY, '1')
   const won = reason.includes('clear') || reason.includes('win')
   // 보스전 도중 쓰러졌다면 보스 이름을 마지막 피해 원천(=사망 원인 회상 재료)으로 남긴다.
   if (!won && gameState.bossBattleActive && bossController.eventState) {
@@ -212,11 +215,12 @@ const BG_GRADIENTS =
  * onBodyReady가 커튼 상승 직전에 이 함수를 호출하므로, 페이드 아웃(0.6s)이
  * 커튼 슬라이드업(0.52s)과 겹쳐 배경이 자연스럽게 드러난다.
  */
-function setZoneBackground(bgUrl: string): void {
+function setZoneBackground(bgUrl: string, instant = false): void {
   const prev = document.body.style.backgroundImage
   // 즉시 body 배경을 새 이미지로 교체 (커튼이 덮고 있는 상태에서 invisible swap)
   document.body.style.backgroundImage = `${BG_GRADIENTS}url('${bgUrl}')`
-  if (!prev.includes('url(')) return
+  // instant: 첫 실행 인트로처럼 어둠이 덮은 상태에서 완성된 배경을 깔 때 — 크로스페이드 생략.
+  if (instant || !prev.includes('url(')) return
   // 구 배경을 임시 div로 올려두고 Web Animations API로 2초 페이드아웃 → 새 배경 노출.
   // CSS transition + 단일 rAF는 브라우저가 두 변경을 배칭해 transition이 발동하지 않으므로
   // Web Animations API를 사용한다.
@@ -3594,6 +3598,7 @@ function prepareFirstRunIntro(): void {
       background: radial-gradient(circle at 50% 44%, rgba(4,3,8,0) calc(var(--veil-r) - 14%), rgba(4,3,8,0.985) var(--veil-r)); }
     body.first-run-intro .rail { opacity: 0; }
     body.first-run-intro.first-run-rail-in .rail { opacity: 1; animation: first-run-rail-drop .72s cubic-bezier(.2,.84,.3,1) both; transform-origin: 50% 0; }
+    body.first-run-intro.first-run-rail-done .rail { opacity: 1; }
     @keyframes first-run-rail-drop { from { transform: translateY(-44px) scaleX(.22); opacity: 0; } to { transform: none; opacity: 1; } }
     body.first-run-intro .player-row .player-card { opacity: 0; }
     body.first-run-intro.first-run-card-in .player-row .player-card { opacity: 1; }
@@ -3633,8 +3638,8 @@ function animateVeilReveal(veil: HTMLElement, duration: number): Promise<void> {
  *  하단 정위치 하강 → 레일 하강+좌우 확장. 이후 칸 드롭은 fillOnboardingField가 잇는다. */
 async function playFirstRunIntroBeats(): Promise<void> {
   const veil = document.getElementById('first-run-veil')
-  // 상단 구역 커튼 없이 배경만 즉시 세팅 — 어둠 아래에 깔린 배경을 방사 밝힘이 드러낸다.
-  setZoneBackground(ZONE_LIST[0].bgUrl)
+  // 상단 구역 커튼 없이 배경만 즉시 세팅(크로스페이드 없음) — 방사 밝힘이 완성된 배경을 드러낸다.
+  setZoneBackground(ZONE_LIST[0].bgUrl, true)
   await wait(300)
   if (veil) await animateVeilReveal(veil, 1150)
   const card = document.querySelector<HTMLElement>('.player-card')
@@ -3668,13 +3673,17 @@ async function playFirstRunIntroBeats(): Promise<void> {
   // 레일이 내려오며 좌우로 넓어진다 — 이어지는 칸 드롭(fillOnboardingField)의 무대가 된다.
   document.body.classList.add('first-run-rail-in')
   await wait(720)
+  // 애니메이션이 끝나면 정적 표시 클래스로 바꾼다 — 이후 재렌더가 새 .rail을 만들어도
+  // 드롭 연출이 반복 재생되지 않는다(화면이 계속 새로고침되는 듯한 체감 제거).
+  document.body.classList.remove('first-run-rail-in')
+  document.body.classList.add('first-run-rail-done')
 }
 
 /** 첫 실행 인트로 마무리: 좌우 패널/불씨 HUD 슬라이드 인 후 무대 장치를 정리한다. */
 function finishFirstRunIntro(): void {
   document.body.classList.add('first-run-ui-in')
   window.setTimeout(() => {
-    document.body.classList.remove('first-run-intro', 'first-run-card-in', 'first-run-rail-in', 'first-run-ui-in')
+    document.body.classList.remove('first-run-intro', 'first-run-card-in', 'first-run-rail-in', 'first-run-rail-done', 'first-run-ui-in')
     document.getElementById('first-run-veil')?.remove()
     document.getElementById('first-run-intro-style')?.remove()
   }, 940)
@@ -3728,22 +3737,33 @@ function showBootTitleGate(): Promise<() => void> {
   const spriteUrls = [
     SpriteUrls.player,
     SpriteUrls.cardBack,
+    // 첫 실행 인트로가 곧바로 드러내는 1구역 배경까지 게이트에서 미리 받는다.
+    ZONE_LIST[0].bgUrl,
+    SpriteUrls.difficultySprout,
     ...Array.from({ length: 9 }, (_, i) => spriteForHearthStation(`hearth_00${i + 1}`)),
   ].filter((u): u is string => Boolean(u))
   const tasks: Promise<unknown>[] = [document.fonts.ready, ...spriteUrls.map(preloadImage)]
 
   const stars = [...overlay.querySelectorAll<HTMLElement>('.boot-gauge-star')]
+  // 별 점등은 실제 완료 비율을 따르되, 즉시 완료(캐시)여도 순차 점등이 보이게 최소 간격을 둔다.
   let done = 0
-  const tick = (): void => {
-    done += 1
-    const lit = Math.round((done / tasks.length) * STAR_COUNT)
-    stars.forEach((s, i) => s.classList.toggle('is-lit', i < lit))
-  }
+  let litShown = 0
+  const tick = (): void => { done += 1 }
   return new Promise((resolve) => {
     // 개별 태스크가 8초를 넘겨도 게이트는 열린다(네트워크 지연 안전판).
     const capped = tasks.map((t) => Promise.race([t, wait(8000)]).then(tick))
-    void Promise.allSettled(capped).then(() => {
-      stars.forEach((s) => s.classList.add('is-lit'))
+    const allDone = Promise.allSettled(capped)
+    const pace = window.setInterval(() => {
+      const targetLit = Math.floor((done / tasks.length) * STAR_COUNT)
+      if (litShown < targetLit) {
+        litShown += 1
+        stars.forEach((s, i) => s.classList.toggle('is-lit', i < litShown))
+      }
+    }, 150)
+    void allDone.then(async () => {
+      // 남은 별이 진행률 페이싱을 마저 따라잡을 때까지 기다린 뒤 시작 문구로 전환한다.
+      while (litShown < STAR_COUNT) await wait(160)
+      window.clearInterval(pace)
       const hint = overlay.querySelector<HTMLElement>('.boot-title-hint')
       if (hint) hint.textContent = 'Click to Start'
       overlay.classList.add('is-ready')
@@ -3769,7 +3789,7 @@ async function bootGame(): Promise<void> {
   if (!localStorage.getItem(BOOT_FIRST_RUN_KEY)) {
     // 첫 실행: 로비를 건너뛰고 곧바로 새싹 병아리 온보딩으로 들어간다(사망/클리어 후 로비 복귀).
     // 게이트가 걷혀도 어둠이 이어지는 첫 연출(방사 밝힘→카드 안착→대사→레일→칸→UI)을 예약한다.
-    localStorage.setItem(BOOT_FIRST_RUN_KEY, '1')
+    // 마킹은 endGame(승리/패배 정산)에서만 하므로, 중도 이탈 후 재부팅은 다시 이 경로를 탄다.
     prepareFirstRunIntro()
     void startGame(0, 'sprout')
   } else {
