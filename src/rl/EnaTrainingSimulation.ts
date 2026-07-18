@@ -1866,7 +1866,8 @@ export class EnaTrainingSimulation {
       return { type: CardType.TREASURE, hp: 0, atk: 0, group: 1, treasureKind: 'starlight', value: 0, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
     }
     // 최종 등반이 아니고 일반 턴이면 가끔 이벤트 문이 대기칸에 등장한다(실게임 PRD 롤 감각).
-    if (!this.finalAscent && zone === 'waiting' && this.turn > 3 && this.rng.next() < 0.05) {
+    // 새싹 병아리에는 이벤트 문이 아예 없다(실게임 온보딩 게이트와 동일).
+    if (this.difficulty !== 'sprout' && !this.finalAscent && zone === 'waiting' && this.turn > 3 && this.rng.next() < 0.05) {
       return { type: CardType.EVENT, hp: 0, atk: 0, group: 1, value: 0, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
     }
     const tier = EmberSystem.getTier(this.ember)

@@ -2731,10 +2731,10 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
   }
 
   // 이벤트 문 독립 PRD 롤: 실제 턴 전진 시에만, 보스·최종등반 중엔 중단.
-  // 새싹 병아리(온보딩)는 무역탭 '이벤트' 개방 전까지 문 자체가 나오지 않는다.
+  // 새싹 병아리(온보딩)에서는 이벤트 문이 아예 나오지 않는다(정규 런부터 등장).
   // 당장 주입 못 해도 pendingEventDoor=true로 보류하면 다음 빈 슬롯에 자동 주입된다.
   if (advanceTurn && !gameState.bossBattleActive && !finalAscentStarlightRuleActive &&
-      (!isOnboardingActive() || isMetaUnlocked('events')) &&
+      !isOnboardingActive() &&
       eventSpawnCtrl.rollForTurn(gameState.getCurrentTurn())) {
     pendingEventDoor = true
   }
