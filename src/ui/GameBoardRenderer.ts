@@ -44,7 +44,7 @@ import type {
 } from '@data/Events'
 import type { EventMinigameMoment } from '@data/CompanionLines'
 import { CandleMode, Character } from '@entities/Character'
-import { HandCardId, HandCategory, HandEffectTargeting, JobTag } from '@entities/HandCard'
+import { HandCardId, HandEffectTargeting } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
 import { EmberSystem } from '@systems/EmberSystem'
 import { ENEMY_DEFINITIONS, MIMIC_BY_SPAN } from '@systems/CardSpawner'
@@ -70,7 +70,8 @@ import {
 import type { EnaDisposition } from '@systems/EnaDisposition'
 import type { EnaLearningSnapshot } from '@systems/CompanionSystem'
 import { baselineConstellationAxes, experienceAxes } from '@ui/ExperienceAxes'
-import { atkDmgHtml, hpDmgHtml, rangeDmgHtml } from '@ui/DamageDisplay'
+import { escapeHtml } from '@ui/renderer/Html'
+import { CardFaceRenderer } from '@ui/renderer/CardFaceRenderer'
 import { sfx } from '@/audio/SfxManager'
 
 // 뷰 계약 타입은 renderer/RendererTypes.ts로 분리 — 기존 import 경로 호환을 위해 재수출한다.
@@ -191,6 +192,12 @@ export class GameBoardRenderer {
   private hoveredHandSlotIndex: number | null = null
   /** 유물 효과 텍스트 {{spawn}} 치환에 쓰는 현재 실효 스폰 가중치. render() 마다 갱신. */
   private currentSpawnWeightCtx: SpawnWeightContext | undefined = undefined
+
+  /** 카드/유물 face HTML 빌더 — 서브 렌더러들과 공유한다. */
+  readonly faces = new CardFaceRenderer({
+    getGameState: () => this.currentGameState,
+    getSpawnWeightCtx: () => this.currentSpawnWeightCtx,
+  })
 
   constructor(containerId: string = 'game-board') {
     const container = document.getElementById(containerId)
@@ -1141,7 +1148,7 @@ export class GameBoardRenderer {
     const visualCandle = this.hudCounterVisibleStartValue('candle', candle)
     const candlePct = Math.max(0, Math.min(100, (visualCandle / candleMax) * 100))
     const currentMode = character.candleMode ?? 'attack'
-    const mode = this.candleModeMeta(currentMode)
+    const mode = this.faces.candleModeMeta(currentMode)
     const candleText = this.renderHudCounter('candle', candle)
     const candleMaxText = this.renderHudCounter('candleMax', candleMax)
     const ticks = Array.from({ length: candleMax }, (_, idx) => {
@@ -1155,7 +1162,7 @@ export class GameBoardRenderer {
     const allModes: CandleMode[] = ['attack', 'max-health', 'ember', 'draw']
     const listItems = allModes
       .map((m) => {
-        const meta = this.candleModeMeta(m)
+        const meta = this.faces.candleModeMeta(m)
         const isCurrent = m === currentMode ? 'is-current' : ''
         return `
           <button class="candle-mode-list-item ${isCurrent}"
@@ -1223,217 +1230,7 @@ export class GameBoardRenderer {
                tabindex="0"
                title="${title}: ${effect}"
                aria-label="${title}: ${effect}">
-        ${this.relicPreviewFace(def.id)}
-      </article>
-    `
-  }
-
-  /**
-   * 유물 효과 본문을 화면용 HTML로 변환한다.
-   *
-   * 변환 규칙:
-   * 1. `불빛` → ✦ 글리프 치환
-   * 2. `{{spawn}}` → 실제 확률 변화량(%) 치환. spawnEffect 있는 유물 전용.
-   *    - spawnEffect가 있으면 자동으로 shift-only 스폰 화살표 (밝음: N→M%) 추가
-   * 3. `[dyn:기본|수식]` → desc-dyn 구조 (수식 부분만 감싸기, 도감/손패 방식과 동일)
-   * 4. `[shift:텍스트]` → .shift-only span (기본 숨김, Shift 시 표시)
-   */
-  private relicEffectHtml(
-    effect: string,
-    spawnEffect?: { type: 'enemy' | 'treasure' | 'spore' | 'flower'; delta: number },
-    ctx?: SpawnWeightContext,
-    isOwned: boolean = false,
-  ): string {
-    // atkDmgHtml 등으로 미리 조립된 HTML은 \x00 접두사로 표시 → escapeHtml 건너뜀
-    if (effect.charCodeAt(0) === 0) return effect.slice(1).replace(/불빛/g, '✦')
-
-    // \n은 줄 구분 효과(만찬 유물 스탯 3줄 등) → <br>로 변환
-    let t = escapeHtml(effect).replace(/불빛/g, '✦').replace(/\n/g, '<br>')
-
-    // {{spawn}} 치환: 밝음 티어 기준 확률 변화량
-    if (spawnEffect && ctx && ctx.total > 0) {
-      const ctxVal = spawnEffect.type === 'enemy' ? ctx.enemy
-        : spawnEffect.type === 'treasure' ? ctx.treasure
-        : spawnEffect.type === 'flower' ? ctx.flower
-        : ctx.trap
-      let pctChange: number
-      let beforePct: number, afterPct: number
-      if (isOwned) {
-        const beforeVal = ctxVal - spawnEffect.delta
-        const beforeTotal = ctx.total - spawnEffect.delta
-        pctChange = beforeTotal > 0
-          ? Math.round((ctxVal / ctx.total - beforeVal / beforeTotal) * 100)
-          : 0
-        beforePct = beforeTotal > 0 ? Math.round(beforeVal / beforeTotal * 100) : 0
-        afterPct = ctx.total > 0 ? Math.round(ctxVal / ctx.total * 100) : 0
-      } else {
-        const newVal = Math.max(0, ctxVal + spawnEffect.delta)
-        const newTotal = Math.max(1, ctx.total + spawnEffect.delta)
-        pctChange = Math.round((newVal / newTotal - ctxVal / ctx.total) * 100)
-        beforePct = ctx.total > 0 ? Math.round(ctxVal / ctx.total * 100) : 0
-        afterPct = Math.round(newVal / newTotal * 100)
-      }
-      const sign = pctChange >= 0 ? '+' : ''
-      t = t.replace('{{spawn}}', `${sign}${pctChange}%`)
-      // spawn 유물은 자동으로 Shift 시 밝음 기준 before→after% 추가
-      t += `<span class="shift-only"> (밝음: ${beforePct}→${afterPct}%)</span>`
-    } else {
-      t = t.replace('{{spawn}}', '')
-    }
-
-    // [atk]를 먼저 치환해야 [dyn:...|([atk]×...)] 수식 안의 ] 가 [^\]]+ 패턴을 조기 종료시키지 않는다.
-    t = t.replace(/\[atk\]/g, swordIcon())
-
-    // [dyn:기본|수식] → 수식 부분만 desc-dyn으로 감싸기 (도감/손패 방식과 동일)
-    t = t.replace(/\[dyn:([^\|]+)\|([^\]]+)\]/g, (_, s, d) => {
-      return `<span class="desc-dyn"><span class="desc-dyn__s">${s}</span><span class="desc-dyn__d">${d}</span></span>`
-    })
-
-    // [shift:텍스트] → .shift-only span
-    t = t.replace(/\[shift:([^\]]+)\]/g, (_, x) => {
-      return `<span class="shift-only">${x}</span>`
-    })
-
-    return t
-  }
-
-  /** 런타임 상태에 따라 effect 문자열을 완성해 반환한다.
-   *  [dyn:기본|수식] / [shift:텍스트] 토큰을 실제 수치로 채워 넣는다.
-   *  상태 없이는 staticEffect를 그대로 반환한다. */
-  private relicDynamicEffect(id: RelicId, staticEffect: string, isOwned: boolean = false): string {
-    const enh = this.currentGameState?.enhancements
-    const char = this.currentGameState?.getCharacter()
-
-    // scoreMultiplier 영향 불빛 획득 유물: 합산 수치 표시 + Shift에 (기본+보너스) 분해
-    if (id === 'golden-squirrel' && enh) {
-      const base = 200; const actual = Math.round(base * enh.scoreMultiplier)
-      const bonus = actual - base
-      return bonus > 0
-        ? `5턴마다 불빛 [dyn:${actual}|(${base}+${bonus})] 획득`
-        : `5턴마다 불빛 ${actual} 획득`
-    }
-    if (id === 'blind-faith' && enh) {
-      const base = 50; const actual = Math.round(base * enh.scoreMultiplier)
-      const bonus = actual - base
-      return bonus > 0
-        ? `$1 획득마다 불빛 [dyn:${actual}|(${base}+${bonus})] 획득`
-        : `$1 획득마다 불빛 ${actual} 획득`
-    }
-    if (id === 'honesty' && enh) {
-      const base = 100; const actual = Math.round(base * enh.scoreMultiplier)
-      const bonus = actual - base
-      return bonus > 0
-        ? `손패 5장 사용마다 불빛 [dyn:${actual}|(${base}+${bonus})] 획득`
-        : `손패 5장 사용마다 불빛 ${actual} 획득`
-    }
-
-    // 모래시계: 현재 소모 주기 기준 before→after
-    if (id === 'hourglass' && char) {
-      const after = isOwned ? char.emberDecayTurns : char.emberDecayTurns + 1
-      const before = after - 1
-      return `${staticEffect}[shift: (${before}→${after})]`
-    }
-
-    // 할인 쿠폰: 현재 할인율 기준 before→after
-    if (id === 'discount-coupon' && enh) {
-      const before = isOwned ? enh.shopDiscountPct - 5 : enh.shopDiscountPct
-      const after = isOwned ? enh.shopDiscountPct : enh.shopDiscountPct + 5
-      return `${staticEffect}[shift: (${before}→${after}%)]`
-    }
-
-    // 도끼: 불빛 배율 before→after
-    if (id === 'axe' && enh) {
-      const before = isOwned
-        ? Math.round((enh.scoreMultiplier / 1.1 - 1) * 100)
-        : Math.round((enh.scoreMultiplier - 1) * 100)
-      const after = isOwned
-        ? Math.round((enh.scoreMultiplier - 1) * 100)
-        : Math.round((enh.scoreMultiplier * 1.1 - 1) * 100)
-      return `${staticEffect}[shift: (+${before}%→+${after}%)]`
-    }
-
-    // 함정의 대가: 함정 무시 확률 before→after
-    if (id === 'trap-master' && char) {
-      const before = isOwned
-        ? Math.round((char.trapIgnoreChance - 0.15) * 100)
-        : Math.round(char.trapIgnoreChance * 100)
-      const after = isOwned
-        ? Math.round(char.trapIgnoreChance * 100)
-        : Math.round((char.trapIgnoreChance + 0.15) * 100)
-      return `${staticEffect}[shift: (${before}→${after}%)]`
-    }
-
-    // 개봉식: 보물 사라짐 확률 50→40% (항상 고정, 중복 획득 불가)
-    if (id === 'opening-ceremony') {
-      return `${staticEffect}[shift: (50→40%)]`
-    }
-
-    // 황금 열쇠: 항상 0→10% (중복 획득 불가)
-    if (id === 'golden-key') {
-      return `${staticEffect}[shift: (0→10%)]`
-    }
-
-    // 달콤한 유혹: 함정 피해 보너스 + 불빛 before→after
-    if (id === 'sweet-temptation' && char) {
-      const dmgCurrent = char.trapDamageBonus
-      const dmgBefore = isOwned ? dmgCurrent - 1 : dmgCurrent
-      const dmgAfter = isOwned ? dmgCurrent : dmgCurrent + 1
-      return `함정 피해 [dyn:+1|(+${dmgBefore}→+${dmgAfter})] · 함정 처리 불빛 [dyn:+30%|(0→30%)]`
-    }
-
-    // 품격있는 대처 / 물양동이: atkDmgHtml과 동일한 Math.floor 공식으로 실시간 계산.
-    // \x00 접두사로 relicEffectHtml의 escapeHtml을 건너뛴다.
-    if (id === 'graceful-response' && char) {
-      return '\x00피해를 입힌 적에게 반격 ' + atkDmgHtml(char.damage, 0.3, 1)
-    }
-    if (id === 'water-bucket' && char) {
-      return '\x00직접 타격한 적 25% 확률 추가 ' + atkDmgHtml(char.damage, 0.5, 1)
-    }
-
-    return staticEffect
-  }
-
-  /** Owned relics reuse the shop card reading structure without the price tag.
-   *  Keeping the same art/body/title/effect/flavor class names lets inventory
-   *  cards scale up on hover with text legibility matching shop relic cards. */
-  private relicPreviewFace(id: RelicId): string {
-    const def = getRelicDef(id)
-    const enh = this.currentGameState?.enhancements
-    const char = this.currentGameState?.getCharacter()
-    const profile = char?.customRelicProfiles[id]
-    const title = profile?.name ?? def.name
-    const effect = profile?.effect ?? def.effect
-    const flavor = profile?.flavor ?? def.flavor
-    // 유물별 런타임 누적치를 카드 하단 칩으로 표기한다.
-    let bonusChip = ''
-    if (id === 'luxury' && enh) {
-      // 사치품: 불빛 소모치와 공격력 보너스를 별도 줄로 분리
-      const atkLabel = enh.luxuryBonusAtk >= 3 ? `공격력 +${enh.luxuryBonusAtk} (MAX)` : `공격력 +${enh.luxuryBonusAtk}`
-      bonusChip = `<p class="shop-relic-bonus-chip">불빛 소모치 <strong>${enh.luxuryScoreSpent}</strong></p><p class="shop-relic-bonus-chip">${atkLabel}</p>`
-    } else if (id === 'demon-doll' && enh) {
-      bonusChip = `<p class="shop-relic-bonus-chip">자해 <strong>${enh.demonDollSelfDamageAccum}</strong>/20 · 공격력 +<strong>${enh.demonDollBonusAtk}</strong></p>`
-    } else if (id === 'anomaly' && char) {
-      // 변칙: 5 손실마다 발동, 현재 누적치 표시
-      bonusChip = `<p class="shop-relic-bonus-chip">손실 누적 <strong>${char.relicDamageTaken}</strong>/5</p>`
-    } else if (id === 'ink-quill' && enh) {
-      bonusChip = `<p class="shop-relic-bonus-chip">처치 <strong>${enh.inkQuillKillCount}</strong>/5</p>`
-    } else if (id === 'honesty' && enh) {
-      bonusChip = `<p class="shop-relic-bonus-chip">사용 <strong>${enh.honestyHandUseCount}</strong>/5</p>`
-    } else if (id === 'ambition' && enh) {
-      const nextGain = enh.ambitionCurrentGain + 25
-      bonusChip = `<p class="shop-relic-bonus-chip">처치 <strong>${enh.ambitionKillCount}</strong>/8 · 다음 <strong>+${nextGain}</strong>✦</p>`
-    }
-    // 커스텀 프로필의 art(만찬 유물 등)가 있으면 기본 스프라이트 대신 사용
-    const artUrl = profile?.art ?? spriteForRelic(def.id)
-    return `
-      <article class="relic-preview-card" aria-hidden="true">
-        <div class="shop-relic-art" style="background-image: url('${artUrl}')" aria-hidden="true"></div>
-        <div class="shop-relic-body">
-          <h3 class="shop-relic-title">${title}</h3>
-          <p class="shop-relic-effect">${this.relicEffectHtml(this.relicDynamicEffect(id, effect, true), def.spawnEffect, this.currentSpawnWeightCtx, true)}</p>
-          ${bonusChip}
-          <p class="shop-relic-flavor">${flavor}</p>
-        </div>
+        ${this.faces.relicPreviewFace(def.id)}
       </article>
     `
   }
@@ -1492,287 +1289,9 @@ export class GameBoardRenderer {
     `
   }
 
-  private categoryClass(cat: HandCategory): string {
-    return `hand-cat-${cat}`
-  }
-
-  private categoryLabel(cat: HandCategory): string {
-    return cat === 'recovery' ? '회복' : cat === 'tool' ? '도구' : cat === 'control' ? '컨트롤' : '공격'
-  }
-
-  private jobTagLabel(tag: JobTag): string {
-    return tag === 'knight' ? '기사' : '마법사'
-  }
-
-  /** 손패 카드 1장의 상단 태그 목록(카테고리 + 직업 태그) — 도감/미리보기/상점 팩 카드가 공유한다. */
-  private handCardTagLabels(id: HandCardId): string[] {
-    const def = getHandCardDef(id)
-    return [this.categoryLabel(def.category), ...(def.jobTags ?? []).map((t) => this.jobTagLabel(t))]
-  }
-
-  /** 카드 아트 좌상단에 겹쳐 보이는 태그 뱃지 오버레이. codex-tile-tag* 스타일을 공유한다. */
-  private tagsOverlayHtml(tags: string[]): string {
-    if (tags.length === 0) return ''
-    return `<div class="codex-tile-tags" aria-hidden="true">${tags.map((t) => `<span class="codex-tile-tag">${t}</span>`).join('')}</div>`
-  }
-
-  /** Shared card face used by hover previews and the compendium. It accepts
-   *  arbitrary art so field-card codex entries can follow the exact hand-card
-   *  frame without scaling the original sprite data. */
-  private commonCardFace(opts: {
-    artUrl: string
-    name: string
-    description: string
-    extraClass?: string
-    badge?: string
-    /** 다중 뱃지 — badge보다 우선 적용된다. */
-    badges?: string[]
-    /** 아트 좌상단 오버레이 태그(카테고리/직업 등). */
-    tags?: string[]
-  }): string {
-    const badgeList = opts.badges ?? (opts.badge ? [opts.badge] : [])
-    const badgeHtml = badgeList.map(b => `<span class="common-card-badge">${b}</span>`).join('')
-    const tagsOverlay = this.tagsOverlayHtml(opts.tags ?? [])
-    return `
-      <article class="common-card-face ${opts.extraClass ?? ''}" style="--hand-card-art: url('${opts.artUrl}'); --hand-card-back: url('${SpriteUrls.cardBack}');">
-        <div class="common-card-art" aria-hidden="true">
-          <img src="${opts.artUrl}" alt="" loading="lazy" />
-          ${tagsOverlay}
-        </div>
-        <div class="common-card-body">
-          <header class="common-card-title-row">
-            <span class="common-card-name">${opts.name}</span>
-            ${badgeHtml}
-          </header>
-          <p class="common-card-desc">${opts.description}</p>
-        </div>
-      </article>
-    `
-  }
-  /** Hand-card convenience wrapper keeps merged-star naming in one place while
-   *  still delegating the actual visual frame to commonCardFace(). */
-  private handCardFace(
-    defId: HandCardId,
-    description: string,
-    merged = false,
-    extraClass = '',
-    badge?: string,
-    /** 레시피 재료 미니 카드처럼 44px급 축소본에서는 태그 오버레이를 생략한다. */
-    showTags = true
-  ): string {
-    const def = getHandCardDef(defId)
-    // 텍스트가 시각적으로 3줄 이상이 될 때 폰트를 살짝 줄인다.
-    // <br> 2개 이상이면 확실히 3줄, <br> 1개 + 긴 텍스트면 래핑으로 3줄 될 가능성이 있다.
-    const brCount = (description.match(/<br\s*\/?>/gi) ?? []).length
-    const strippedLen = description.replace(/<[^>]*>/g, '').length
-    const longClass = (brCount >= 2 || (brCount >= 1 && strippedLen >= 25)) ? 'is-long-desc' : ''
-    return this.commonCardFace({
-      artUrl: spriteForHandCard(defId),
-      name: `${def.name}${merged ? ' ★' : ''}`,
-      description,
-      extraClass: [extraClass, longClass].filter(Boolean).join(' '),
-      badge,
-      tags: showTags ? this.handCardTagLabels(defId) : [],
-    })
-  }
-
-  /**
-   * Normalized codex tile shared across the catalog tabs (enemies/traps/
-   * treasures/flowers/relics/terms). One tile communicates: art → name + tag →
-   * a small set of stat chips → optional one-line note + flavor. Keeps the
-   * warm-gold / dark-glass visual language consistent with the rail cards and
-   * the owned-relic fan.
-   */
-  private codexTile(opts: {
-    art: { kind: 'sprite'; url: string } | { kind: 'icon'; svg: string }
-    name: string
-    /** 단일 태그. tags가 제공되면 무시된다. */
-    tag?: string
-    /** 다중 태그 — 카테고리 뱃지 옆에 순서대로 표시. */
-    tags?: string[]
-    rarityClass?: string
-    chips?: Array<{
-      label?: string
-      value: string
-      icon?: string
-      tone?: 'hp' | 'atk' | 'gold' | 'shield' | 'spore' | 'bomb' | 'flower' | 'plain'
-    }>
-    note?: string
-    flavor?: string
-    extraClass?: string
-  }): string {
-    const tagList = opts.tags ?? (opts.tag ? [opts.tag] : [])
-    const tagsOverlay = this.tagsOverlayHtml(tagList)
-    const artHtml =
-      opts.art.kind === 'sprite'
-        ? `<div class="codex-tile-art" style="background-image: url('${opts.art.url}');" aria-hidden="true">${tagsOverlay}</div>`
-        : `<div class="codex-tile-art codex-tile-art--icon" aria-hidden="true">${opts.art.svg}${tagsOverlay}</div>`
-    const chipsHtml = (opts.chips ?? [])
-      .map((c) => {
-        const tone = c.tone && c.tone !== 'plain' ? `is-${c.tone}` : ''
-        const iconHtml = c.icon ?? ''
-        // label+value를 하나의 span으로 묶어 단일 flex item으로 만든다.
-        // 묶지 않으면 텍스트 노드와 desc-dyn span이 각각 별개의 flex item이 되어
-        // 두 칸으로 분리되는 레이아웃 버그가 발생한다.
-        const bodyHtml = `<span class="codex-chip-body">${c.label ? `<span class="codex-stat-key">${c.label}</span>` : ''}${c.value}</span>`
-        return `<span class="codex-stat-chip ${tone}">${iconHtml}${bodyHtml}</span>`
-      })
-      .join('')
-    const noteHtml = opts.note ? `<p class="codex-tile-note">${opts.note}</p>` : ''
-    const flavorHtml = opts.flavor ? `<p class="codex-tile-flavor">${opts.flavor}</p>` : ''
-    const chipsRow = chipsHtml ? `<div class="codex-tile-stats">${chipsHtml}</div>` : ''
-    const classes = ['codex-tile', opts.rarityClass ?? '', opts.extraClass ?? ''].filter(Boolean).join(' ')
-    return `
-      <article class="${classes}">
-        ${artHtml}
-        <header class="codex-tile-head">
-          <span class="codex-tile-name">${opts.name}</span>
-        </header>
-        ${chipsRow}
-        ${noteHtml}
-        ${flavorHtml}
-      </article>
-    `
-  }
-
-
-
-
-
-
-  /**
-   * 강화팩으로 누적된 singleBonus/tripleBonus를 반영한 설명 문자열을 반환한다.
-   * 보너스가 없으면 정적 def.description을 그대로 사용해 불필요한 재계산을 피한다.
-   */
-  /**
-   * 손패 설명문 반환. 강화 보너스가 0이면 HandCards.ts의 원본 문자열을 그대로 사용한다.
-   * 반환값은 미리보기 tooltip과 도감(renderCompendiumHand) 모두에 쓰이므로
-   * 여기서 스타일을 바꾸면 두 곳 모두 반영된다. 텍스트 규칙은 HandCards.ts 주석 참고.
-   */
-  /** 팩 피커 effect 문자열 생성 — rollPackItems에서 호출. */
-  public cardEffectHtml(id: HandCardId, merged = false): string {
-    return this.enhancedHandCardDescription(id, merged)
-  }
-
-  private enhancedHandCardDescription(id: HandCardId, merged: boolean): string {
-    const def = getHandCardDef(id)
-    const enhancements = this.currentGameState?.enhancements
-    // 화염의 서는 누적 스택 n과 현재 공격력으로 실제 피해를 동적 표시한다.
-    // 공식은 HandSystem.applyBookOfFlames와 동일하게 유지: floor((0.5+0.25n)×공×mul) + (1+n)×mul.
-    // 다른 ATK 카드처럼 기본은 합산 수치(__s), Shift 중엔 현재 스택 반영 수식(__d)으로 전환한다.
-    if (id === 'book-of-flames') {
-      const n = enhancements?.bookOfFlamesBonus ?? 0
-      const atk = this.currentGameState?.getCharacter().damage ?? 1
-      // 단일 mult=(0.5+0.25n)/가산 1+n, 트리플은 정확히 2배 — atkDmgHtml의 floor(mult×공)+가산과 같은 값.
-      const dmg = merged
-        ? atkDmgHtml(atk, 1 + 0.5 * n, 2 + 2 * n)
-        : atkDmgHtml(atk, 0.5 + 0.25 * n, 1 + n)
-      // 성장 줄도 같은 관례: 기본은 현재 공격력 기준 합산 성장량, Shift 중엔 수식.
-      const growTotal = merged ? Math.floor(0.5 * atk) + 2 : Math.floor(0.25 * atk) + 1
-      const growFormula = merged ? `(0.5${swordIcon()}+2)` : `(0.25${swordIcon()}+1)`
-      const grow = `사용 시 영구 +<span class="desc-dyn"><span class="desc-dyn__s">${growTotal}</span><span class="desc-dyn__d">${growFormula}</span></span>`
-      return `필드 선택 적 1장 ${dmg}<br>${grow}`
-    }
-    // 검은 양초: book-of-flames와 동일하게 blackCandleBonus를 읽어 실시간 피해 표시.
-    if (id === 'black-candle') {
-      const n = enhancements?.blackCandleBonus ?? 0
-      return merged
-        ? `자해 4 · 필드 선택 적 1장 피해 ${6 + n}<br>검은 양초 피해 +6 · 손패로 돌아옴`
-        : `자해 2 · 필드 선택 적 1장 피해 ${2 + n}<br>검은 양초 피해 +2 · 손패로 돌아옴`
-    }
-    // 불씨: 합산 수치가 기본 표시(__s). Shift 누름 중엔 공격력 수식(__d)으로 전환.
-    if (id === 'ember') {
-      const atk = this.currentGameState?.getCharacter().damage ?? 1
-      const emberBonus = merged
-        ? (enhancements?.tripleBonus['ember'] ?? 0)
-        : (enhancements?.singleBonus['ember'] ?? 0)
-      const total = merged ? 3 * atk + 5 + emberBonus : atk + 1 + emberBonus
-      const formula = merged ? `3.0${swordIcon()}+5` : `1.0${swordIcon()}+1`
-      const bonusSuffix = emberBonus > 0 ? `+${emberBonus}` : ''
-      return `필드 선택 적 1장 <span class="desc-dyn"><span class="desc-dyn__s">${total}피해</span><span class="desc-dyn__d">(${formula}${bonusSuffix})피해</span></span>`
-    }
-    // ATK 연동 공격 카드: 기본 합산 수치, Shift 수식 (DamageDisplay 매니저 사용)
-    const atk = this.currentGameState?.getCharacter().damage ?? 1
-    if (id === 'sacrifice-candle') {
-      const b = merged ? (enhancements?.tripleBonus['sacrifice-candle'] ?? 0) : (enhancements?.singleBonus['sacrifice-candle'] ?? 0)
-      const selfTag = merged ? '자해 5 · ' : '자해 2 · '
-      const dmg = merged ? atkDmgHtml(atk, 5, 10, b) : atkDmgHtml(atk, 1.5, 3, b)
-      return `${selfTag}필드 선택 적 1장 ${dmg}`
-    }
-    if (id === 'levatein') {
-      const b = merged ? (enhancements?.tripleBonus['levatein'] ?? 0) : (enhancements?.singleBonus['levatein'] ?? 0)
-      const turns = merged ? '즉시 1턴 흐름' : '즉시 2턴 흐름'
-      const dmg = merged ? hpDmgHtml(0.45, 15, b) : hpDmgHtml(0.3, 10, b)
-      return `${turns}<br>필드 선택 적 1장 ${dmg}`
-    }
-    if (id === 'firework') {
-      const b = merged ? (enhancements?.tripleBonus['firework'] ?? 0) : (enhancements?.singleBonus['firework'] ?? 0)
-      const dmg = merged ? atkDmgHtml(atk, 3, 10, b) : atkDmgHtml(atk, 1, 2, b)
-      return `필드 랜덤 적 전체 ${dmg} 분산`
-    }
-    if (id === 'fire-arrow') {
-      const b = merged ? (enhancements?.tripleBonus['fire-arrow'] ?? 0) : (enhancements?.singleBonus['fire-arrow'] ?? 0)
-      const dmg = merged ? rangeDmgHtml(atk, 5, 3, 0, b) : rangeDmgHtml(atk, 1, 1, 3, b)
-      return `전방 선택 적 1장 ${dmg}`
-    }
-    if (id === 'chandelier') {
-      const b = merged ? (enhancements?.tripleBonus['chandelier'] ?? 0) : (enhancements?.singleBonus['chandelier'] ?? 0)
-      const dmg = merged ? atkDmgHtml(atk, 1, 2, b) : atkDmgHtml(atk, 0.5, 1, b)
-      return `필드 전체 적 ${dmg} · 처치 시 반복`
-    }
-    if (id === 'bonfire') {
-      const b = merged ? (enhancements?.tripleBonus['bonfire'] ?? 0) : (enhancements?.singleBonus['bonfire'] ?? 0)
-      const healVal = merged ? 5 + b : 3 + b
-      const dmg = merged ? atkDmgHtml(atk, 3, 3, b) : atkDmgHtml(atk, 1, 0, b)
-      return `필드 선택 적 1장 ${dmg} · 처치 시 체력 +${healVal}`
-    }
-    if (id === 'teapot') {
-      const b = merged ? (enhancements?.tripleBonus['teapot'] ?? 0) : (enhancements?.singleBonus['teapot'] ?? 0)
-      const suffix = merged ? ' × 필드 적 수 × 3' : ' × 필드 적 수'
-      const dmg = merged ? atkDmgHtml(atk, 3, 0, b) : atkDmgHtml(atk, 1.5, 0, b)
-      return `전방 선택 적 1장 ${dmg}${suffix}`
-    }
-    if (id === 'slash') {
-      if (merged) return getHandCardDef(id).tripleDescription // 즉사 텍스트 그대로
-      const b = enhancements?.singleBonus['slash'] ?? 0
-      return `전방 선택 적 1장 ${atkDmgHtml(atk, 2, 2, b)}`
-    }
-    if (id === 'candle-tome') {
-      if (!merged) return getHandCardDef(id).description // 단일은 정적 텍스트
-      const b = enhancements?.tripleBonus['candle-tome'] ?? 0
-      return `필드 전체 적 ${atkDmgHtml(atk, 1, 0, b)} · 적 수×3 방패 획득`
-    }
-    if (id === 'sword-and-shield') {
-      const b = merged ? (enhancements?.tripleBonus['sword-and-shield'] ?? 0) : (enhancements?.singleBonus['sword-and-shield'] ?? 0)
-      const shieldVal = merged ? 4 + b : 1 + b
-      const dmg = merged ? atkDmgHtml(atk, 2, 3, b) : atkDmgHtml(atk, 0.5, 1, b)
-      return `전방 선택 적 1장 ${dmg} · 방패 +${shieldVal}`
-    }
-    const bonus = merged
-      ? (enhancements?.tripleBonus[id] ?? 0)
-      : (enhancements?.singleBonus[id] ?? 0)
-    if (bonus === 0) return merged ? def.tripleDescription : def.description
-    switch (id) {
-      case 'wax-drop': return merged ? `체력 +${5 + bonus}` : `체력 +${1 + bonus}`
-      case 'candle':   return merged ? `방패 +${5 + bonus}` : `방패 +${1 + bonus}`
-      case 'match':    return merged ? `불씨 게이지 +${5 + bonus}` : `불씨 게이지 +${1 + bonus}`
-      case 'card':     return merged ? `콤보 게이지 +${7 + bonus}` : `콤보 게이지 +${1 + bonus}`
-      case 'coin':     return merged ? `+${5 + bonus}$` : `+${1 + bonus}$`
-      default:         return merged ? def.tripleDescription : def.description
-    }
-  }
-  private candleModeMeta(mode: CandleMode): { label: string; effect: string; icon: string } {
-    switch (mode) {
-      case 'max-health':
-        return { label: '체력', effect: '최대 체력 +5', icon: heartIcon() }
-      case 'attack':
-        return { label: '공격', effect: '공격력 +1', icon: swordIcon() }
-      case 'ember':
-        return { label: '불씨', effect: '불씨 한도 +2', icon: flameIcon() }
-      case 'draw':
-        return { label: '손패', effect: '손패 최대 +2', icon: pouchIcon() }
-    }
-  }
+  /** 팩 피커 등 외부 호출 호환용 위임. */
+  public cardEffectHtml(id: HandCardId, merged = false): string { return this.faces.cardEffectHtml(id, merged) }
+  public recipeEffectHtml(r: Recipe): string { return this.faces.recipeEffectHtml(r) }
 
   /**
    * Render the 10-slot bottom-up hand stack. Slot 0 (model) is the bottom of
@@ -1815,7 +1334,7 @@ export class GameBoardRenderer {
               .map(
                 (recipe) => {
                   const recipeDef = RECIPES.find((r) => r.id === recipe.id)
-                  const flavorHtml = recipeDef ? this.recipeFlavorHtml(recipeDef) : recipe.flavor
+                  const flavorHtml = recipeDef ? this.faces.recipeFlavorHtml(recipeDef) : recipe.flavor
                   return `
                   <span class="hand-recipe-preview-row">
                     <strong>${recipe.name}</strong>
@@ -1836,7 +1355,7 @@ export class GameBoardRenderer {
       const classes = [
         'hand-slot',
         'hand-card',
-        this.categoryClass(def.category),
+        this.faces.categoryClass(def.category),
         RARITY_CLASS_BY_TIER[HAND_CARD_RARITY[card.defId] ?? 'common'],
         merged,
         isArming ? 'is-arming-target' : '',
@@ -1849,7 +1368,7 @@ export class GameBoardRenderer {
         .filter(Boolean)
         .join(' ')
       // 강화팩 보너스를 반영한 동적 설명을 사용해 손패 미리보기에서 강화 수치가 즉시 보이도록 한다.
-      const description = this.enhancedHandCardDescription(card.defId, card.merged === true)
+      const description = this.faces.enhancedHandCardDescription(card.defId, card.merged === true)
       // aria-label에는 HTML/SVG 태그 없이 텍스트만 삽입한다.
       const ariaDesc = description.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
       const handArt = spriteForHandCard(card.defId)
@@ -1881,7 +1400,7 @@ export class GameBoardRenderer {
             <span class="hand-card-name">${def.name}${card.merged ? ' ★' : ''}</span>
           </button>
           <div class="hand-card-preview" style="--hand-card-back: url('${SpriteUrls.cardBack}');" aria-hidden="true">
-            ${this.handCardFace(card.defId, description, card.merged)}
+            ${this.faces.handCardFace(card.defId, description, card.merged)}
             <span class="hand-shift-hint" aria-hidden="true">Shift 자세히 보기</span>
           </div>
           ${recipePreviewHtml}
@@ -2194,7 +1713,7 @@ export class GameBoardRenderer {
         : ''
       // 실제 손패 카드 항목이면 카테고리/직업 태그를 희귀도 뱃지 아래에 보여준다.
       // 뱃지와 태그를 한 기둥(.shop-pack-pick-corner)으로 묶어 뱃지 높이와 무관하게 겹침을 막는다.
-      const tagsOverlay = item.handCardId ? this.tagsOverlayHtml(this.handCardTagLabels(item.handCardId)) : ''
+      const tagsOverlay = item.handCardId ? this.faces.tagsOverlayHtml(this.faces.handCardTagLabels(item.handCardId)) : ''
       return `
         <article class="shop-pack-pick-card pack-theme-${item.theme} ${rarityClass}"
                  data-pack-pick="${item.id}"
@@ -2305,7 +1824,7 @@ export class GameBoardRenderer {
           <div class="shop-relic-art" style="background-image: url('${spriteForRelic(def.id)}')" aria-hidden="true"></div>
           <div class="shop-relic-body">
             <h3 class="shop-relic-title">${def.name}</h3>
-            <p class="shop-relic-effect">${this.relicEffectHtml(this.relicDynamicEffect(def.id, def.effect, false), def.spawnEffect, this.currentSpawnWeightCtx, false)}</p>
+            <p class="shop-relic-effect">${this.faces.relicEffectHtml(this.faces.relicDynamicEffect(def.id, def.effect, false), def.spawnEffect, this.currentSpawnWeightCtx, false)}</p>
             <p class="shop-relic-flavor">${def.flavor}</p>
           </div>
         </div>
@@ -5693,7 +5212,7 @@ export class GameBoardRenderer {
       const atk = def.attack ?? 1
       const spriteUrl = def.enemySpriteId ? SpriteUrls[def.enemySpriteId] : SpriteUrls.enemyMouse
       const known = encountered.has(def.name)
-      return this.codexTile({
+      return this.faces.codexTile({
         art: { kind: 'sprite', url: spriteUrl },
         name: known ? def.name : '???',
         tag: '1칸',
@@ -5714,7 +5233,7 @@ export class GameBoardRenderer {
     const formationTile = (span: 2 | 3, name: string, sprite: string) => {
       const bonus = span === 2 ? 2 : 3
       const known = encountered.has(name)
-      return this.codexTile({
+      return this.faces.codexTile({
         art: { kind: 'sprite', url: sprite },
         name: known ? name : '???',
         tag: `${span}칸`,
@@ -5732,7 +5251,7 @@ export class GameBoardRenderer {
     const mimicTiles = ([1, 2, 3] as const).map((span) => {
       const stats = MIMIC_BY_SPAN[span]
       const known = encountered.has('미믹')
-      return this.codexTile({
+      return this.faces.codexTile({
         art: { kind: 'sprite', url: SpriteUrls.mimic },
         name: known ? '미믹' : '???',
         tag: `${span}칸`,
@@ -5750,7 +5269,7 @@ export class GameBoardRenderer {
 
     // 괴물꽃 (꽃 탭에서 이동).
     const monsterFlowerKnown = encountered.has('괴물꽃')
-    const monsterFlowerTile = this.codexTile({
+    const monsterFlowerTile = this.faces.codexTile({
       art: { kind: 'sprite', url: SpriteUrls.monsterFlower },
       name: monsterFlowerKnown ? '괴물꽃' : '???',
       tag: '특수 적',
@@ -5764,7 +5283,7 @@ export class GameBoardRenderer {
     // 보스: 층별로 별도 타일을 유지해 처치/조우 진행도가 더 잘 읽히게 한다.
     const bossTile = (name: string, sprite: string, floor: string, hp: string, atk: string, note: string) => {
       const known = encountered.has(name)
-      return this.codexTile({
+      return this.faces.codexTile({
         art: { kind: 'sprite', url: sprite },
         name: known ? name : '???',
         tag: `${floor} 보스`,
@@ -5802,7 +5321,7 @@ export class GameBoardRenderer {
     const webTiles = ([1, 2, 3] as const)
       .map((span) => {
         const known = seen.has(webNames[span])
-        return this.codexTile({
+        return this.faces.codexTile({
           art: { kind: 'sprite', url: SpriteUrls.trapGroups.web[span] },
           name: known ? webNames[span] : '???',
           tag: `${span}칸`,
@@ -5817,7 +5336,7 @@ export class GameBoardRenderer {
     const sporeTiles = ([1, 2, 3] as const)
       .map((span) => {
         const known = seen.has(sporeNames[span])
-        return this.codexTile({
+        return this.faces.codexTile({
           art: { kind: 'sprite', url: SpriteUrls.trapGroups.spore[span] },
           name: known ? sporeNames[span] : '???',
           tag: `${span}칸`,
@@ -5833,7 +5352,7 @@ export class GameBoardRenderer {
       .join('')
 
     const bombKnown = seen.has('양초 폭탄')
-    const bombTile = this.codexTile({
+    const bombTile = this.faces.codexTile({
       art: { kind: 'sprite', url: SpriteUrls.traps.bomb },
       name: bombKnown ? '양초 폭탄' : '???',
       tag: '1칸',
@@ -5852,7 +5371,7 @@ export class GameBoardRenderer {
     const bushTiles = ([1, 2, 3] as const)
       .map((span) => {
         const known = seen.has('덤불')
-        return this.codexTile({
+        return this.faces.codexTile({
           art: { kind: 'sprite', url: SpriteUrls.trapGroups.bush[span] },
           name: known ? '덤불' : '???',
           tag: `${span}칸`,
@@ -5894,7 +5413,7 @@ export class GameBoardRenderer {
       .map((c) => {
         const known = seen.has(c.name)
         const [rMin, rMax] = CHEST_RANGES[c.span - 1]
-        return this.codexTile({
+        return this.faces.codexTile({
           art: { kind: 'sprite', url: c.sprite },
           name: known ? c.name : '???',
           tag: `${c.span}칸`,
@@ -5921,7 +5440,7 @@ export class GameBoardRenderer {
       .map((c) => {
         const known = seen.has(c.name)
         const [gMin, gMax] = GOLDEN_RANGES[c.span - 1]
-        return this.codexTile({
+        return this.faces.codexTile({
           art: { kind: 'sprite', url: SpriteUrls.chestGolden },
           name: known ? c.name : '???',
           tag: `${c.span}칸`,
@@ -5946,7 +5465,7 @@ export class GameBoardRenderer {
     const junkTiles = ([1, 2, 3] as const)
       .map((span) => {
         const known = seen.has('잡동사니')
-        return this.codexTile({
+        return this.faces.codexTile({
           art: { kind: 'sprite', url: SpriteUrls.junkGroups[span] },
           name: known ? '잡동사니' : '???',
           tag: `${span}칸`,
@@ -5985,7 +5504,7 @@ export class GameBoardRenderer {
     ]
 
     const seedKnown = seen.has(flowerDisplayName('seed'))
-    const seedTile = this.codexTile({
+    const seedTile = this.faces.codexTile({
       art: { kind: 'sprite', url: SpriteUrls.flowers.seed },
       name: seedKnown ? flowerDisplayName('seed') : '???',
       tag: '씨앗',
@@ -5998,7 +5517,7 @@ export class GameBoardRenderer {
       .map((s) => {
         const name = flowerDisplayName(s.kind)
         const known = seen.has(name)
-        return this.codexTile({
+        return this.faces.codexTile({
           art: { kind: 'sprite', url: SpriteUrls.flowers[s.kind] },
           name: known ? name : '???',
           tag: '버프칸',
@@ -6036,12 +5555,12 @@ export class GameBoardRenderer {
         'book-of-flames', // 피해/성장 줄 모두 desc-dyn 수식 전환을 쓰므로 span 보존 필요
       ])
       const toChip = ATK_CARDS.has(def.id) ? chipDescAtk : chipDesc
-      const singleDesc = toChip(this.enhancedHandCardDescription(def.id, false))
-      const tripleDesc = toChip(this.enhancedHandCardDescription(def.id, true))
-      return this.codexTile({
+      const singleDesc = toChip(this.faces.enhancedHandCardDescription(def.id, false))
+      const tripleDesc = toChip(this.faces.enhancedHandCardDescription(def.id, true))
+      return this.faces.codexTile({
         art: { kind: 'sprite', url: spriteForHandCard(def.id) },
         name: locked ? '???' : def.name,
-        tags: locked ? ['잠김'] : this.handCardTagLabels(def.id),
+        tags: locked ? ['잠김'] : this.faces.handCardTagLabels(def.id),
         rarityClass: RARITY_CLASS_BY_TIER[HAND_CARD_RARITY[id]],
         chips: locked ? [] : [
           { label: '', value: singleDesc, tone: 'plain' },
@@ -6071,7 +5590,7 @@ export class GameBoardRenderer {
       const itemArt =
         (item.illu ? spriteForBasicPackItem(item.illu) : undefined) ??
         SpriteUrls.packs[packKind]
-      return this.codexTile({
+      return this.faces.codexTile({
         art: { kind: 'sprite', url: itemArt },
         name: item.title,
         tag: rarityLabel[item.rarity],
@@ -6082,7 +5601,7 @@ export class GameBoardRenderer {
     }
 
     const noteTile = (packKind: ShopPackKind, name: string, effect: string, rarity: CardRarity): string =>
-      this.codexTile({
+      this.faces.codexTile({
         art: { kind: 'sprite', url: SpriteUrls.packs[packKind] },
         name,
         tag: '가변',
@@ -6102,14 +5621,14 @@ export class GameBoardRenderer {
       const known = seenPacks.has(packKind)
       const coverArt = SpriteUrls.packs[packKind]
       const coverCard = known
-        ? this.codexTile({
+        ? this.faces.codexTile({
             art: { kind: 'sprite', url: coverArt },
             name: label.title,
             tag: venue,
             chips: [{ value: theme, tone: 'gold' }],
             extraClass: 'codex-tile--relic codex-tile--packcover',
           })
-        : this.codexTile({
+        : this.faces.codexTile({
             art: { kind: 'sprite', url: coverArt },
             name: '???',
             tag: venue,
@@ -6150,12 +5669,12 @@ export class GameBoardRenderer {
     const cards = Object.values(RELIC_DEFINITIONS)
       .map((def) => {
         const isOwned = owned.has(def.id)
-        return this.codexTile({
+        return this.faces.codexTile({
           art: { kind: 'sprite', url: spriteForRelic(def.id) },
           name: def.name,
           tag: isOwned ? '보유 중' : '상점',
           rarityClass: RARITY_CLASS_BY_TIER[def.rarity],
-          chips: [{ value: this.relicEffectHtml(this.relicDynamicEffect(def.id, def.effect, isOwned), def.spawnEffect, this.currentSpawnWeightCtx, isOwned), tone: 'gold' }],
+          chips: [{ value: this.faces.relicEffectHtml(this.faces.relicDynamicEffect(def.id, def.effect, isOwned), def.spawnEffect, this.currentSpawnWeightCtx, isOwned), tone: 'gold' }],
           flavor: def.flavor,
           extraClass: ['codex-tile--relic', isOwned ? 'codex-tile--owned' : ''].filter(Boolean).join(' '),
         })
@@ -6247,7 +5766,7 @@ export class GameBoardRenderer {
     ]
     const cards = terms
       .map(([name, description]) =>
-        this.codexTile({
+        this.faces.codexTile({
           art: { kind: 'icon', svg: bookIcon() },
           name,
           tag: '용어',
@@ -6281,11 +5800,11 @@ export class GameBoardRenderer {
         const def = HAND_CARD_DEFINITIONS[id as HandCardId]
         if (!def) return []
         return Array.from({ length: n ?? 1 }, () =>
-          this.handCardFace(
+          this.faces.handCardFace(
             def.id,
             def.description,
             false,
-            `compendium-recipe-mini ${this.categoryClass(def.category)}`,
+            `compendium-recipe-mini ${this.faces.categoryClass(def.category)}`,
             undefined,
             false
           )
@@ -6299,7 +5818,7 @@ export class GameBoardRenderer {
         name: isLocked ? '???' : r.name,
         badge: `${r.totalCount}장`,
         categoryClass: `compendium-recipe-card${isLocked ? ' compendium-card--unknown' : ''}`,
-        stats: isLocked ? [] : [['효과', this.recipeFlavorHtml(r)]],
+        stats: isLocked ? [] : [['효과', this.faces.recipeFlavorHtml(r)]],
       })
     }).join('')
     return `
@@ -6309,34 +5828,6 @@ export class GameBoardRenderer {
       <h3 class="compendium-section">합성 (Synthesis)</h3>
       <div class="compendium-grid">${synthesisIntro}</div>
     `
-  }
-
-  /**
-   * ATK 연동 레시피의 효과 설명을 desc-dyn HTML로 반환한다.
-   * 기본: 합산 피해 수치. Shift: 공격력 배율 수식.
-   * enemy maxHP 기반(hot-water-maxhp)은 런타임에 알 수 없으므로 정적 텍스트로 반환.
-   */
-  /** 조합팩 피커 effect 문자열 생성 — rollPackItems에서 호출. */
-  public recipeEffectHtml(r: Recipe): string {
-    return this.recipeFlavorHtml(r)
-  }
-
-  private recipeFlavorHtml(r: Recipe): string {
-    const atk = this.currentGameState?.getCharacter().damage ?? 1
-    const bonus = this.currentGameState?.enhancements.recipeBonus[r.id] ?? 0
-    switch (r.effect) {
-      case 'ignite-atk':      return `필드 모든 적에게 ${atkDmgHtml(atk, 0.3, 1, bonus)}`
-      case 'hot-atk':         return `전방 모든 적에게 ${atkDmgHtml(atk, 0.5, 2, bonus)}`
-      case 'fuse-atk':        return `전방 모든 적에게 ${atkDmgHtml(atk, 1.5, 0, bonus)}`
-      case 'backfire-atk':    return `필드 모든 적에게 ${atkDmgHtml(atk, 1, 0, bonus)}`
-      case 'rage-atk':        return `전방 모든 적에게 ${atkDmgHtml(atk, 1, 3, bonus)}`
-      case 'flame-chain-atk': return `방패 +2 · 필드 적 전체 ${atkDmgHtml(atk, 1, 0, bonus)}`
-      case 'glass-shards-atk':return `필드 랜덤 적 전체 ${atkDmgHtml(atk, 0.5, 3, bonus)} 분산`
-      case 'fireworks-atk':   return `필드 랜덤 적 전체 ${atkDmgHtml(atk, 3, 3, bonus)} 분산`
-      case 'banquet-atk':     return `필드 랜덤 적 ${atkDmgHtml(atk, 1, 0, bonus)} × 공격력 횟수`
-      case 'hot-water-maxhp': return r.flavor  // 대상 적 최대체력 불명 → 정적 텍스트
-      default:                return r.flavor
-    }
   }
 
   /**
@@ -6538,7 +6029,7 @@ export class GameBoardRenderer {
         const demonClass = ev.recipeId === 'demon-summon' ? 'chain-event-recipe--demon' : ''
         // recipeFlavorHtml로 desc-dyn 스팬 포함 실시간 수치 렌더; 정의 없으면 정적 텍스트 폴백
         const recipeDef = RECIPES.find((r) => r.id === ev.recipeId)
-        const flavorHtml = recipeDef ? this.recipeFlavorHtml(recipeDef) : ev.flavor
+        const flavorHtml = recipeDef ? this.faces.recipeFlavorHtml(recipeDef) : ev.flavor
         parts.push(`
           <span class="chain-event chain-event-recipe ${demonClass} ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
             <span class="chain-event-mark">✦</span>
@@ -8142,7 +7633,7 @@ export class GameBoardRenderer {
     clone.style.top = `${pending.rect.top}px`
     clone.style.width = `${pending.rect.width}px`
     clone.style.height = `${pending.rect.height}px`
-    clone.innerHTML = this.relicPreviewFace(pending.relicId)
+    clone.innerHTML = this.faces.relicPreviewFace(pending.relicId)
     document.body.appendChild(clone)
     target.classList.add('is-arriving')
     // Hide the real destination until the clone snaps into place, then pop it
@@ -8360,7 +7851,7 @@ export class GameBoardRenderer {
     const title = card.querySelector<HTMLElement>('.shop-relic-title')
     if (title) title.textContent = def.name
     const effect = card.querySelector<HTMLElement>('.shop-relic-effect')
-    if (effect) effect.innerHTML = this.relicEffectHtml(this.relicDynamicEffect(def.id, def.effect, false), def.spawnEffect, this.currentSpawnWeightCtx, false)
+    if (effect) effect.innerHTML = this.faces.relicEffectHtml(this.faces.relicDynamicEffect(def.id, def.effect, false), def.spawnEffect, this.currentSpawnWeightCtx, false)
     const flavor = card.querySelector<HTMLElement>('.shop-relic-flavor')
     if (flavor) flavor.textContent = def.flavor
     const label = card.querySelector<HTMLElement>('.shop-price-label-text')
@@ -9668,9 +9159,4 @@ export class GameBoardRenderer {
     document.head.appendChild(style)
   }
 
-}
-
-/** HTML 직접 삽입용 문자열 이스케이프(보스 인트로의 카드 이름 등에 사용). */
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
 }
