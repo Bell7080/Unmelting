@@ -19,6 +19,8 @@
 import { GameState } from '@core/GameState'
 import { setupDevCommandPalette } from '@/app/DevCommandPalette'
 import { SettlementScreen } from '@/app/SettlementScreen'
+import { CompanionDirector, BARK_IMPORTANCE } from '@/app/CompanionDirector'
+import type { PlayerResourceSnapshot, ResourceTrailSource, TrailResourceKind } from '@/app/FeedbackTypes'
 import { TurnManager, type EnemyHit } from '@core/TurnManager'
 import { BossEventController } from '@core/BossEvent'
 import {
@@ -68,16 +70,12 @@ import { CursorFX } from '@ui/CursorFX'
 import { FontManager } from '@ui/FontManager'
 import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
-import { BarkSequencer } from '@ui/BarkSequencer'
-import { CompanionSystem, type SituationId, type ClutchPlan, type BoardEncounterKind, type SystemEncounterKind } from '@systems/CompanionSystem'
+import { CompanionSystem, type SituationId, type BoardEncounterKind, type SystemEncounterKind } from '@systems/CompanionSystem'
 import type { EventMinigameMoment } from '@data/CompanionLines'
 import {
   loadDisposition,
-  saveDisposition,
   computeEnaGrowth,
-  type EnaRunDramaSignals,
 } from '@systems/EnaDisposition'
-import { assessThreats, type ForesightOptions } from '@systems/CompanionForesight'
 import { HearthScene, type HearthDifficulty } from '@ui/hearth/HearthScene'
 import { isMetaUnlocked } from '@core/MetaUnlocks'
 import { ZoneCurtain, ZONE_LIST } from '@ui/ZoneCurtain'
@@ -88,8 +86,6 @@ import { sfx } from '@/audio/SfxManager'
 import { enaRuntimeObserver, shopKindToPurchaseId } from '@/rl/EnaRuntimeObserver'
 import {
   createBrowserEnaAutonomousLearner,
-  deriveRunExperienceKeys,
-  countNovelCardUses,
 } from '@/rl/EnaAutonomousLearner'
 import { createBrowserLifetimeRecordStore } from '@core/LifetimeRecord'
 import bgm001Url from './assets/audio/bgm_001.mp3'
@@ -189,11 +185,11 @@ gameState.endGame = (reason: string): void => {
   // 에나 혼자 보는 자기학습: 디버그 리포트 노출 없이 실제 런 로그를 다음 판단 재료로 압축한다.
   enaAutonomousLearner.learnAfterRun(enaRuntimeObserver.getMemory(), enaRuntimeObserver.getEvents())
   // per-player 성향 온라인 적응: 런 결과로 에나의 성향을 미세조정하고 저장(세션 넘어 유지).
-  adaptCompanionToRunOutcome(won)
+  companionDirector.adaptCompanionToRunOutcome(won)
   // 유대는 자기학습 저장에 함께 영속화한다(adapt에서 런 완료분이 오른 뒤 저장).
   enaAutonomousLearner.saveBond(companion.getBond())
   // 종막 대사: 게임오버/클리어 순간은 월드 바크 게이트(companionWorldCanSpeak)를 우회해 1회만 낸다.
-  sayEnaBark(won ? companion.clearLine() : companion.deathLine(), { importance: BARK_IMPORTANCE.clutch })
+  companionDirector.sayEnaBark(won ? companion.clearLine() : companion.deathLine(), { importance: BARK_IMPORTANCE.clutch })
 }
 const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
@@ -290,72 +286,6 @@ companion.setSpecialization(initialEnaSpecialization)
 // 유대(bond)는 성향과 별개로 자기학습 저장(unmelting.ena.self-learning.v1)에서 복원한다.
 companion.setBond(enaAutonomousLearner.loadBond())
 
-// 런 단위 드라마(모험의 질) 신호 — 성장 점프 게이트 입력. 피격/위협 beat에서 채우고 새 런에 비운다.
-const runDramaSignals = {
-  lowHpMoments: 0,
-  emberCrises: 0,
-  lethalThreatsFaced: 0,
-  /** 이번 런 최저 체력 비율 — 컴백 폭(최저→최종) 계산용. */
-  lowestHpRatio: 1,
-}
-
-function resetRunDramaSignals(): void {
-  runDramaSignals.lowHpMoments = 0
-  runDramaSignals.emberCrises = 0
-  runDramaSignals.lethalThreatsFaced = 0
-  runDramaSignals.lowestHpRatio = 1
-}
-
-/** 런 종료 결과로 모험 xp를 적립하고 성장 앵커를 옮긴 뒤, 에나 성향을 온라인 적응시키고 저장한다. */
-function adaptCompanionToRunOutcome(won: boolean): void {
-  const floor = gameState.getCurrentTurn()
-  const c = gameState.character
-  // 이번 런 로그(endGame에서 방금 recordRunEnd로 확정됨)에서 의사결정·새 시도 신호를 집계한다.
-  const entries = enaRuntimeObserver.getMemory().all()
-  const lastRun = entries[entries.length - 1]
-  const handUses = lastRun
-    ? Object.values(lastRun.usedHandCards).reduce((sum: number, n) => sum + (n ?? 0), 0)
-    : 0
-  const decisions = handUses + (lastRun?.shopPurchases.length ?? 0) + companion.getRunInteractionCount()
-  const finalHpRatio = c.maxHealth > 0 ? Math.max(0, c.health) / c.maxHealth : 0
-  const drama: EnaRunDramaSignals = {
-    lowHpMoments: runDramaSignals.lowHpMoments,
-    emberCrises: runDramaSignals.emberCrises,
-    lethalThreatsFaced: runDramaSignals.lethalThreatsFaced,
-    effectiveClutches: companion.getRunClutchCount(),
-    timelyPredictions: companion.getRunTimelyPredictionCount(),
-    // 컴백 폭: 최저 체력비에서 런 종료 체력비까지 회복한 깊이(사망 런은 자연히 0에 가깝다).
-    comebackDepth: Math.max(0, finalHpRatio - runDramaSignals.lowestHpRatio),
-    novelCardsUsed: countNovelCardUses(entries),
-  }
-  // 모험 xp 적립(층·의사결정·진행 턴 + 첫 경험 + 드라마 게이트 점프) 후 성장 앵커 갱신.
-  enaAutonomousLearner.accrueAdventureXp({
-    floorReached: floor,
-    cleared: won,
-    decisions,
-    progressTurns: floor,
-    experienceKeys: deriveRunExperienceKeys({
-      floorReached: floor,
-      cleared: won,
-      shopPurchases: lastRun?.shopPurchases ?? [],
-    }),
-    drama,
-  })
-  companion.setGrowth(
-    computeEnaGrowth({ adventureXp: enaAutonomousLearner.loadAdventureXp(), bond: companion.getBond() })
-  )
-  // 축 특화 적립: 이번 런이 실제로 먹인 축(제때 예측/클러치/온정/피해 견딤×깊이)만 아주 소량 자란다.
-  const specialization = enaAutonomousLearner.accrueSpecialization({
-    floorReached: floor,
-    timelyPredictions: companion.getRunTimelyPredictionCount(),
-    effectiveClutches: companion.getRunClutchCount(),
-    warmthInteractions: companion.getRunWarmthSignalCount(),
-    damageTakenRatio: companion.getRunDamageTakenRatio(),
-  })
-  companion.setSpecialization(specialization)
-  const adapted = companion.adaptToOutcome({ died: !won, floorReached: floor })
-  saveDisposition(adapted, undefined, specialization)
-}
 
 // 경험(성향) 패널이 현재 에나 성향/성장值(표기 배율용)를 읽어 성좌 시각화를 그릴 수 있게 연결한다.
 // 점선 기준 별자리는 렌더러가 초보 시작 모양(ROOKIE, growth 0)으로 자체 앵커한다.
@@ -364,318 +294,26 @@ boardRenderer.setExperienceDataProvider(() => ({
   learning: companion.getLearningSnapshot(),
   growth: companion.getGrowth(),
 }))
-// 현재 player 말풍선이 에나 본인의 대사(바크)인지.
-let enaSpeaking = false
-// 연타 후 손을 떼면 '…이제 끝났어?'를 띄우기 위한 방치 타이머.
-let companionIdleTimer = 0
-const COMPANION_IDLE_MS = 2600
-// 현재 떠 있는 바크의 학습 대상 상황(없으면 null) / 중요도 / 등장 시각.
-let currentBarkSituation: SituationId | null = null
-let currentBarkImportance = 0
-let barkShownAt = 0
-// 버블이 fully-visible 된 이후 이 시간이 지나야 스킵(닫기)이 허용된다.
-// SpeechBubble.visibleSinceMs 로 측정하므로 별도 타이머는 불필요.
-const SKIP_MIN_VISIBLE_MS = 1000
-// 이 시간 넘게 떠 있었으면 "읽었다"로 본다(이후 스킵은 학습 신호로 치지 않음).
-let companionHeardTimer = 0
-const COMPANION_READ_MS = 1500
 
-/** 바크 중요도: 손패 한줄평<일반 반응<상황<위급/항의. 읽는 중엔 더 높은 것만 끼어든다. */
-const BARK_IMPORTANCE = { loot: 0, touch: 1, situation: 2, urgent: 3, clutch: 4 } as const
-
-// 비긴급 바크의 순차 출력 큐 — 시작 인사+회상처럼 연달아 온 바크가 서로를 즉시 덮지 않게,
-// 표시 중 바크의 최소 노출 시간(대사 길이 비례 1.5~3초)이 지난 뒤 이어서 보여준다.
-const barkSequencer = new BarkSequencer<SituationId>()
-let barkQueueTimer = 0
-
-/** 큐 드레인 예약 — 현재 바크의 최소 노출이 끝나는 시점에 다음 바크를 꺼낸다(이미 예약돼 있으면 무시). */
-function scheduleBarkQueueDrain(): void {
-  if (barkQueueTimer !== 0) return
-  barkQueueTimer = window.setTimeout(() => {
-    barkQueueTimer = 0
-    if (barkSequencer.pending === 0) return
-    if (!gameActive) {
-      barkSequencer.clear()
-      return
-    }
-    // urgent가 중간에 끼어들어 노출 기준이 뒤로 밀렸으면 남은 시간만큼 재예약한다.
-    if (barkSequencer.nextDelayMs() > 30) {
-      scheduleBarkQueueDrain()
-      return
-    }
-    const next = barkSequencer.shift()
-    if (!next) return
-    displayEnaBarkNow(next.line, next.importance, next.situation)
-    if (barkSequencer.pending > 0) scheduleBarkQueueDrain()
-  }, barkSequencer.nextDelayMs())
-}
-
-/** 바크 큐/드레인 타이머 정리 — 새 런 시작 등 흐름이 끊기는 지점에서 잔여 대사가 새지 않게 한다. */
-function clearBarkQueue(): void {
-  barkSequencer.clear()
-  clearTimeout(barkQueueTimer)
-  barkQueueTimer = 0
-}
-
-/** 바크를 지금 즉시 말풍선에 띄우고 학습/노출 추적 상태를 갱신한다(큐 판단은 sayEnaBark가 담당). */
-function displayEnaBarkNow(line: string, importance: number, situation: SituationId | null): void {
-  clearTimeout(companionHeardTimer)
-  companionHeardTimer = 0
-  enaSpeaking = true
-  currentBarkImportance = importance
-  currentBarkSituation = situation
-  barkShownAt = Date.now()
-  barkSequencer.noteDisplayed(line)
-  speechBubble.show(line)
-  if (situation) {
-    companionHeardTimer = window.setTimeout(() => {
-      companion.recordHeard(situation)
-      companionHeardTimer = 0
-      currentBarkSituation = null // 읽힘으로 정산됐으니 더는 스킵 대상이 아니다.
-    }, COMPANION_READ_MS)
-  }
-}
-
-/**
- * 에나의 한마디를 player 말풍선으로 띄운다.
- * - urgent/클러치급은 기존 규칙 유지: 큐를 건너뛰고 즉시 교체(더 높은 중요도 타이핑 중에만 양보).
- * - 그 외에는 표시 중 바크가 최소 노출 시간을 채우도록 짧은 큐(상한 3, 초과분은 낮은 중요도부터
- *   드롭)를 타고 순차 출력된다 — 시작 인사와 회상이 서로를 덮지 않는 근거.
- * - 상황 바크는 읽기 임계 시간 뒤까지 살아있으면 '읽음'으로 학습(더 말하게)한다.
- */
-function sayEnaBark(
-  line: string,
-  opts: { importance?: number; situation?: SituationId | null } = {}
-): void {
-  const importance = opts.importance ?? BARK_IMPORTANCE.touch
-  const situation = opts.situation ?? null
-  if (importance >= BARK_IMPORTANCE.urgent) {
-    if (enaSpeaking && speechBubble.isTyping && importance <= currentBarkImportance) return
-    displayEnaBarkNow(line, importance, situation)
-    return
-  }
-  if (barkSequencer.busy(enaSpeaking && speechBubble.isShowing)) {
-    barkSequencer.enqueue({ line, importance, situation })
-    scheduleBarkQueueDrain()
-    return
-  }
-  displayEnaBarkNow(line, importance, situation)
-}
-
-/** 체력/불씨가 위태로운 위급 상황인지 — 위급할 때 만지면 에나가 "지금 장난칠 때야?" 한다. */
-function companionInDanger(): boolean {
-  const c = gameState.character
-  const lowHp = c.maxHealth > 0 && c.health / c.maxHealth <= 0.3
-  const lowEmber = c.ember <= 1
-  return lowHp || lowEmber
-}
-
-/** 프로필을 만졌을 때 — 상황/연타 반응 + 방치 마무리 예약. 스킵은 플레이어 자유라 항의는 없다. */
-function onProfileTouched(): void {
-  if (!gameActive || inputLocked) return
-  // 이미 대사가 출력 중(타이핑)이면 새 대사를 띄우지 않는다 — 중복 출력 방지(먹통 느낌 없게).
-  if (speechBubble.isTyping) return
-  const now = Date.now()
-  const danger = companionInDanger()
-  const line = companion.onProfileTouch(now, { danger })
-  // 위급은 읽는 중에도 끼어들도록 높은 중요도, 평범한 반응은 낮은 중요도.
-  sayEnaBark(line, { importance: danger ? BARK_IMPORTANCE.urgent : BARK_IMPORTANCE.touch })
-  clearTimeout(companionIdleTimer)
-  companionIdleTimer = window.setTimeout(() => {
-    if (!gameActive || inputLocked) return
-    const settle = companion.onSettle()
-    if (settle) sayEnaBark(settle, { importance: BARK_IMPORTANCE.touch })
-  }, COMPANION_IDLE_MS)
-}
-
-/** 일반 월드 바크가 떠도 되는 상황인지 — 상점/보스/게임오버 중엔 침묵한다.
- *  보스 전용 대사(등장/국면/격파)와 종막 대사(사망/클리어), 상점 구매평은 이 게이트를
- *  의도적으로 우회해 각 이벤트 지점에서 1회씩만 직접 발화한다. */
-function companionWorldCanSpeak(): boolean {
-  return gameActive && !shopOpen && !gameState.bossBattleActive && !gameState.isGameOver
-}
-
-/** 적 공격 판정 직전에 회피 클러치를 굴린다. 체력 되돌림이 아니라 피해 적용 전 무효화라 타이밍이 자연스럽다. */
-function tryCompanionIncomingDodge(incomingDamage: number): boolean {
-  if (incomingDamage <= 0 || !companionWorldCanSpeak()) return false
-  const projectedHealth = gameState.character.health - incomingDamage
-  const adversity = projectedHealth <= Math.max(1, gameState.character.maxHealth * 0.35)
-  // bond는 하드코딩하지 않는다 — CompanionSystem이 누적 유대(bond >= 0.35)에서 파생한다.
-  if (!companion.rollMinorClutch('dodge', { adversity })) return false
-  recordNotice(`에나의 의지 — 회피! 피해 ${incomingDamage} 무효`, 'info')
-  void boardRenderer.animateClutchOnPlayer('health-gain')
-  showClutchChain('dodge', `피해 ${incomingDamage} 무효`)
-  sayEnaBark(companion.minorClutchLine('dodge'), { importance: BARK_IMPORTANCE.clutch })
-  return true
-}
-
-/** 클러치 종류별 전용 체인 제목(플레이어 카드 위 배너). */
-const CLUTCH_TITLES: Record<string, string> = {
-  crit: '모험의 긍지',
-  dodge: '날렵한 몸놀림',
-  counter: '맞서는 용기',
-  trap: '굳건한 의지',
-  treasure: '행운의 손길',
-  'ember-save': '되살린 불씨',
-  cleanse: '맑게 씻는 손',
-  heal: '포기를 모르는 마음',
-  shield: '수호의 결의',
-  ember: '꺼지지 않는 불씨',
-  hand: '건네는 손패',
-  awaken: '에나의 각성',
-  predict: '앞을 내다보는 눈',
-}
-
-/** 예측 대비로 건넨 카드를 플레이어가 기한 내 쓰는지 추적(RL 신호). */
-let pendingPrediction: {
-  cardIds: readonly string[]
-  issuedTurn: number
-  deadlineTurn: number
-  kind: string
-} | null = null
-
-/** 예지/클러치가 공유하는 위협 추정 입력 — 레일 예고 큐·강화팩 실효값·역할 가중을 함께 전달한다. */
-function companionForesightOptions(): ForesightOptions {
-  return {
-    unlockedCardIds: runCardPool.snapshot().unlocked,
-    unlockedRecipeIds: gameState.unlockedRecipeIds,
-    chainSequence: chain.sequence,
-    firedRecipeIds: chain.firedRecipeIds,
-    // 예고선과 같은 실제 다음 리필 큐(peek은 소비하지 않음) — 시간 축 보정 입력.
-    incomingRefill: cardSpawner.peekNextRefillCards(gameState.lanes.length),
-    handSingleBonus: gameState.enhancements.singleBonus,
-    supportRoleWeights: companion.getSupportRoleWeights(),
-  }
-}
-
-/** 예측 대비: 위협 추정(그릇)을 미리 읽고 대비 카드를 건넨다. 플레이어 차례 직전 호출. */
-async function tryCompanionPrediction(): Promise<void> {
-  const turn = gameState.getCurrentTurn()
-  // RL: 건넨 대비 카드를 기한 내 안 썼으면 '불필요'로 학습(덜 주게).
-  if (pendingPrediction && turn > pendingPrediction.deadlineTurn) {
-    companion.recordPredictionWasted()
-    pendingPrediction = null
-  }
-  if (!companionWorldCanSpeak() || gameState.bossBattleActive || pendingPrediction) return
-  const report = assessThreats(gameState.lanes, gameState.character, companionForesightOptions())
-  // 드라마 '위기감' 신호: 즉사 후보 병합 위협을 실제로 마주한 턴을 센다(계열 캡이 과대 계상을 막는다).
-  if (report.webLethal) runDramaSignals.lethalThreatsFaced += 1
-  const suggested = report.recommendedCardId
-  // HandCardAdvisor가 보유 손패의 같은 역할(청소류 포함)까지 보고 추천을 접으므로,
-  // 여기서는 같은 카드 중복 지급만 추가로 막으면 된다. 단, 비합체 2장 보유 카드는
-  // 3장째가 즉시 트리플로 완성되므로(트리플 보조 추천 경로) 지급을 허용한다.
-  const heldNonMerged = suggested
-    ? gameState.character.hand.filter((c) => c.defId === suggested && !c.merged).length
-    : 0
-  const needsPrediction = !!suggested && (heldNonMerged === 0 || heldNonMerged === 2)
-  if (!suggested) return
-  if (!companion.evaluateWebPrediction(needsPrediction, false, turn)) {
-    // 후반부 고점 에나라면 터졌을 예측 지원을 지금은 말로만 비춰, 초반 미숙함을 드러낸다.
-    // 실패 회고 대사는 '눈앞에 보였다' 수준이 아니라 실제 피해/즉사 후보를 놓쳤을 때만 낸다.
-    if (needsPrediction && shouldSayMissedWebPrediction(report, gameState.character.health)) {
-      const missed = companion.missedPotentialLine('web', turn)
-      if (missed) sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'web' })
-    }
-    return
-  }
-  // 판 분석 결과가 고른 해금 손패를 건넨다. 함정 외 공격/포자/레시피/트리플 보조도 이 경로를 공유한다.
-  // enqueueDrop = 일반 획득과 같은 정리(addHandCard 후 트리플 자동 합성 검사) — 3장째 지급도 즉시 합성된다.
-  const drop = DropSystem.makeCard(suggested)
-  if (!HandSystem.enqueueDrop(gameState.character, drop)) return // 손패 가득 — 다음 기회에
-  pendingPrediction = { cardIds: [suggested], issuedTurn: turn, deadlineTurn: turn + 3, kind: report.recommendationKind ?? 'support' }
-  recordNotice(`에나의 의지 — ${getHandCardDef(suggested).name} 지원: ${report.recommendationReason}`, 'info')
-  render()
-  void boardRenderer.animateClutchOnPlayer('hand-control')
-  showClutchChain('predict', report.webLethal ? `${getHandCardDef(suggested).name} 지원 (위험!)` : `${getHandCardDef(suggested).name} 지원`)
-  const predictLineKind = report.recommendationKind === 'cleanup' ? 'web' : report.recommendationKind ?? 'support'
-  // '왜 이 카드인지' 짧은 구(HandCardAdvisor reason)를 대사 {이유} 슬롯에 섞는다.
-  sayEnaBark(companion.predictLine(predictLineKind, report.recommendationShortReason), { importance: BARK_IMPORTANCE.clutch })
-  // 지원 카드는 이미 손패에 들어갔으므로 트레일 실패가 입력 잠금 해제를 막지 않게 연출만 분리한다.
-  void playResourceTrail({ kind: 'chain' }, 'hand', 1)
-}
-
-
-/** 거미줄 예측 실패 회고는 임박 피해가 큰 경우로 좁혀, 단순 함정 발견 대사처럼 보이지 않게 한다. */
-function shouldSayMissedWebPrediction(report: ReturnType<typeof assessThreats>, currentHealth: number): boolean {
-  if (!report.recommendCleanup || !report.hasImminentWebDrop) return false
-  if (report.webLethal) return true
-  // 현재 체력의 절반 이상을 잃을 병합 위협일 때만 '고점이면 막았을' 아쉬움으로 취급한다.
-  return report.potentialWebDamage > 0 && report.potentialWebDamage >= Math.max(2, Math.ceil(currentHealth * 0.5))
-}
-
-/** 클러치 발동 시 플레이어 카드 위에 『 제목 』 + 효과 배너를 띄운다. */
-function showClutchChain(kind: string, desc: string): void {
-  boardRenderer.showClutchBanner(CLUTCH_TITLES[kind] ?? '에나의 의지', desc)
-}
-
-/**
- * 클러치(에나의 의지) 평가 + 실행. 위기에 '의지'가 가득 차면 보통 강도의 실제 지원을 하고,
- * 클러치 전용 체인을 플레이어 카드 위에 띄우며 거의 확정으로 대사를 친다.
- */
-function tryCompanionClutch(): void {
-  if (!companionWorldCanSpeak()) return
-  const c = gameState.character
-  const turn = gameState.getCurrentTurn()
-  const report = assessThreats(gameState.lanes, c, companionForesightOptions())
-  const plan = companion.evaluateClutch({
-    hp: c.health,
-    maxHp: c.maxHealth,
-    hpRatio: c.maxHealth > 0 ? c.health / c.maxHealth : 1,
-    emberLow: c.ember <= 1,
-    supportCardId: report.recommendedCardId,
-    supportReason: report.recommendationReason,
-    supportShortReason: report.recommendationShortReason,
-  })
-  if (plan) {
-    applyClutch(plan)
-    return
-  }
-  // 강적 미숙 대사는 '마주침'만으로는 내지 않는다 — 고점 에나라면 실제로 건넸을
-  // 공격/방어 지원각(해금 카드·플레이어 미보유)이 있는데 의지 예산이 모자라 클러치가
-  // 못 뜬 경우에만 낮은 빈도로 아쉬움을 표현한다(단순 조우 오발동 방지).
-  // 여기에 '실제로 싸우는 중' 게이트를 더한다: 최근 2턴 안에 맞았거나 처치한 적이 없으면
-  // 아직 아무 일도 안 일어난 것이므로 "이 정도밖에 못 해…" 류의 사과가 나가지 않는다.
-  const hadInterventionAngle =
-    report.recommendationKind === 'attack' || report.recommendationKind === 'defense'
-  const engagedRecently = companion.hasRecentEvent('hit', turn) || companion.hasRecentEvent('kill', turn)
-  if (report.strongEnemyIncoming && hadInterventionAngle && engagedRecently) {
-    const missed = companion.missedPotentialLine('shield', turn)
-    if (missed) sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'hit' })
-  }
-}
-
-/** 클러치 효과를 실제로 적용하고 연출(체인 배너·대사·트레일·로그)을 함께 낸다. */
-function applyClutch(plan: ClutchPlan): void {
-  const c = gameState.character
-  const before = snapshotPlayerResources()
-  let detail = ''
-  if (plan.kind === 'heal') {
-    const healed = c.heal(plan.amount)
-    detail = `체력 +${healed}`
-  } else if (plan.kind === 'shield') {
-    const shielded = c.addShield(plan.amount)
-    detail = `방패 +${shielded}`
-  } else if (plan.kind === 'ember' || plan.kind === 'hand') {
-    // 에나가 직접 손패를 건네는 클러치. 불씨 위기면 성냥, 예지 위기면 추천 손패를 준다.
-    // enqueueDrop = 일반 획득과 같은 정리 경로 — 같은 카드 3장째 보급도 즉시 트리플로 합성된다.
-    const cardId = plan.cardId ?? 'match'
-    const drop = DropSystem.makeCard(cardId)
-    detail = HandSystem.enqueueDrop(c, drop) ? `${getHandCardDef(cardId).name} +1` : '손패가 가득 참'
-  }
-  recordNotice(`에나의 의지 — ${detail}`, 'info')
-  render()
-  // 플레이어 카드 들썩 + 블라스트(종류별 팔레트) + 전용 체인 배너.
-  const clutchTheme = plan.kind === 'shield' ? 'shield-gain' : (plan.kind === 'ember' || plan.kind === 'hand') ? 'ember-gain' : 'health-gain'
-  void boardRenderer.animateClutchOnPlayer(clutchTheme)
-  showClutchChain(plan.kind, detail)
-  // 거의 확정 대사 + 자원 트레일(같은 beat). 클러치는 최상위 중요도라 다른 대사가 떠 있어도 끼어든다.
-  sayEnaBark(plan.line, { importance: BARK_IMPORTANCE.clutch })
-  void playPlayerGainTrails({ kind: 'center' }, before)
-}
+/** 에나 지휘 매니저 — 바크 큐/예측/클러치와 런 종료 성장 적응을 담당한다. */
+const companionDirector = new CompanionDirector({
+  gameState, companion, speechBubble, boardRenderer, cardSpawner,
+  enaAutonomousLearner,
+  getRunCardPool: () => runCardPool,
+  getChain: () => chain,
+  isGameActive: () => gameActive,
+  isInputLocked: () => inputLocked,
+  isShopOpen: () => shopOpen,
+  recordNotice,
+  render,
+  snapshotPlayerResources,
+  playResourceTrail,
+  playPlayerGainTrails,
+})
 
 // 보드는 재렌더로 .player-card를 다시 그리므로, 안정적인 #game-board에 위임 청취한다.
 document.getElementById('game-board')?.addEventListener('click', (e) => {
-  if ((e.target as HTMLElement | null)?.closest('.player-card')) onProfileTouched()
+  if ((e.target as HTMLElement | null)?.closest('.player-card')) companionDirector.onProfileTouched()
 })
 
 let chain: ChainState = HandSystem.newChain()
@@ -928,15 +566,15 @@ const bossController = new BossEventController(
     onBossIntro: (name) => {
       announcedBossPhases.clear()
       // 태어나서 첫 보스라면 분위기 대사 대신 교육형 소개를 한 번 우선한다.
-      sayEnaBark(encounterIntroLineOnce('boss') ?? companion.bossIntroLine(name), { importance: BARK_IMPORTANCE.situation })
+      companionDirector.sayEnaBark(encounterIntroLineOnce('boss') ?? companion.bossIntroLine(name), { importance: BARK_IMPORTANCE.situation })
     },
     onBossPhase: (_name, phaseKey) => {
       if (announcedBossPhases.has(phaseKey)) return
       announcedBossPhases.add(phaseKey)
-      sayEnaBark(companion.bossPhaseLine(), { importance: BARK_IMPORTANCE.urgent })
+      companionDirector.sayEnaBark(companion.bossPhaseLine(), { importance: BARK_IMPORTANCE.urgent })
     },
     onBossKill: (name) => {
-      sayEnaBark(companion.bossKillLine(name), { importance: BARK_IMPORTANCE.clutch })
+      companionDirector.sayEnaBark(companion.bossKillLine(name), { importance: BARK_IMPORTANCE.clutch })
     },
   }
 )
@@ -1063,16 +701,6 @@ function diffThawedCards(before: Map<string, FieldFreezeSnapshotEntry>): string[
 }
 
 
-interface PlayerResourceSnapshot {
-  health: number
-  maxHealth: number
-  shield: number
-  ember: number
-  candle: number
-  damage: number
-}
-
-type ResourceTrailSource = { kind: 'card'; cardId: string } | { kind: 'center' } | { kind: 'chain' }
 
 interface NumericResourceRule {
   target: ResourceTrailTarget
@@ -1081,10 +709,7 @@ interface NumericResourceRule {
 
 /** Single rules table for numeric reward destinations. Every caller only
  *  chooses a source; this table owns the destination HUD and default palette. */
-const NUMERIC_RESOURCE_TRAILS: Record<
-  'health' | 'shield' | 'ember' | 'gauge' | 'attack' | 'score' | 'coin' | 'hand',
-  NumericResourceRule
-> = {
+const NUMERIC_RESOURCE_TRAILS: Record<TrailResourceKind, NumericResourceRule> = {
   health: { target: 'health', theme: 'health-gain' },
   shield: { target: 'shield', theme: 'shield-gain' },
   ember: { target: 'ember', theme: 'ember-gain' },
@@ -1495,8 +1120,8 @@ async function tryResolveCompanionAwaken(): Promise<boolean> {
   gameState.gameOverReason = ''
   recordNotice('에나의 각성! 체력 전체 회복 · 공격력 +1', 'info')
   render()
-  showClutchChain('awaken', '체력 전체 회복 · 공격력 +1')
-  sayEnaBark(companion.awakenLine(), { importance: BARK_IMPORTANCE.clutch })
+  companionDirector.showClutchChain('awaken', '체력 전체 회복 · 공격력 +1')
+  companionDirector.sayEnaBark(companion.awakenLine(), { importance: BARK_IMPORTANCE.clutch })
   return true
 }
 
@@ -1685,14 +1310,14 @@ async function applyWaterBucketExtraDamage(card: Card, distance: number): Promis
 
 /** 소소한 클러치 — 급소: 살아남은 적에게 가끔 추가 피해(공격력 + 2). */
 async function applyCompanionCrit(card: Card, distance: number): Promise<void> {
-  if (!companionWorldCanSpeak() || card.health <= 0) return
+  if (!companionDirector.companionWorldCanSpeak() || card.health <= 0) return
   if (!companion.rollMinorClutch('crit', { adversity: card.enemyPower >= 6 || card.getHealth() > gameState.character.damage * 2 })) return
   const dmg = Math.max(1, gameState.character.damage + 2)
   const newHealth = card.takeDamage(dmg)
   recordNotice(`에나의 의지 — 급소! 추가 피해 ${dmg}`, 'info')
   void boardRenderer.animateClutchOnPlayer('attack-gain')
-  showClutchChain('crit', `급소 추가 타격 ${dmg}`)
-  sayEnaBark(companion.minorClutchLine('crit'), { importance: BARK_IMPORTANCE.clutch })
+  companionDirector.showClutchChain('crit', `급소 추가 타격 ${dmg}`)
+  companionDirector.sayEnaBark(companion.minorClutchLine('crit'), { importance: BARK_IMPORTANCE.clutch })
   // 급소 피해는 레바테인 스타일 특수 폰트로 한 번 더(일반 -1 뒤에 -2가 황금빛으로).
   await boardRenderer.animateCritDamageOnCard(card.id, dmg)
   if (newHealth <= 0) {
@@ -1854,7 +1479,7 @@ async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
   // 태어나서 첫 유물이라면 감상 대신 '지니면 계속 효과'라는 교육형 소개를 우선한다.
   if (gameActive && !gameState.isGameOver) {
     const relicIntro = encounterIntroLineOnce('relic')
-    sayEnaBark(relicIntro ?? companion.onBuyRelic(id, getRelicDef(id).rarity), { importance: BARK_IMPORTANCE.situation })
+    companionDirector.sayEnaBark(relicIntro ?? companion.onBuyRelic(id, getRelicDef(id).rarity), { importance: BARK_IMPORTANCE.situation })
   }
   // 구매 즉시 스탯만 올리고 체인 로그에는 남기지 않는다. 트레일은 상점에서
   // 숨겨진 체인 배너 대신 화면 중앙에서 HUD로 날린다.
@@ -2040,7 +1665,7 @@ async function openShopOverlay(mode: 'shop' | 'altar'): Promise<void> {
   // 태어나서 첫 상점/제단이라면 무엇을 할 수 있는 곳인지 한 번 소개한다(팩 구매 대사처럼
   // 침묵 구간 게이트를 의도적으로 우회해 직접 발화).
   const shopIntro = encounterIntroLineOnce(mode === 'altar' ? 'altar' : 'shop')
-  if (shopIntro) sayEnaBark(shopIntro, { importance: BARK_IMPORTANCE.situation })
+  if (shopIntro) companionDirector.sayEnaBark(shopIntro, { importance: BARK_IMPORTANCE.situation })
 }
 
 async function maybeOpenShopAfterTurn(): Promise<boolean> {
@@ -2267,7 +1892,7 @@ async function openPackPurchase(kind: ShopPackKind): Promise<void> {
   enaRuntimeObserver.recordShopPurchase(gameState, shopKindToPurchaseId(kind))
   // 팩 구매 감상 — 상점은 월드 바크 게이트 밖이므로 유물 구매평과 같은 가벼운 게이트 + 확률로만 말한다.
   if (gameActive && !gameState.isGameOver && Math.random() < 0.5) {
-    sayEnaBark(companion.packLine(kind), { importance: BARK_IMPORTANCE.situation })
+    companionDirector.sayEnaBark(companion.packLine(kind), { importance: BARK_IMPORTANCE.situation })
   }
   // Keep picker title synchronized with the shared pack label table.
   const title = SHOP_PACK_LABELS[kind].title
@@ -2662,7 +2287,7 @@ async function openTrialOverlayForced(): Promise<void> {
       pickedCard.apply()
       // 시련 각오 한마디 — 보스 격파 직후의 드문 이벤트라 확률 게이트 없이 1회 말한다.
       // 태어나서 첫 시련이라면 각오 대신 '런 내내 지속되는 조건'이라는 교육형 소개를 우선한다.
-      sayEnaBark(encounterIntroLineOnce('trial') ?? companion.trialLine(), { importance: BARK_IMPORTANCE.situation })
+      companionDirector.sayEnaBark(encounterIntroLineOnce('trial') ?? companion.trialLine(), { importance: BARK_IMPORTANCE.situation })
       // 선택된 카드 자체에 burst 이펙트. 동일한 카드 위에서 효과가 "터지며 적용"되는
       // 시각 비트를 만든 뒤 자동으로 EXIT 시퀀스가 이어진다.
       const pickedEl = document.querySelector<HTMLElement>(`[data-trial-pick="${id}"]`)
@@ -3047,9 +2672,9 @@ function compactAndRefillAllLanes(): boolean {
   if (doorInjected) {
     pendingEventDoor = false
     // 동료(에나) 이벤트 문 등장 반응.
-    if (companionWorldCanSpeak()) {
+    if (companionDirector.companionWorldCanSpeak()) {
       const bark = companion.reactSituation('event', gameState.getCurrentTurn())
-      if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: 'event' })
+      if (bark) companionDirector.sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: 'event' })
     }
   }
   return result
@@ -3103,7 +2728,7 @@ function firstSeenKeyOf(kind: BoardEncounterKind | SystemEncounterKind): string 
  * 영구 first-seen 기록(enaAutonomousLearner) 기반이라 죽어서 재시작해도 반복되지 않는다.
  */
 function maybeIntroduceFields(): void {
-  if (!companionWorldCanSpeak()) return
+  if (!companionDirector.companionWorldCanSpeak()) return
   // 현재 보드에 놓인 조우 종류를 모은다.
   const present = new Set<BoardEncounterKind>()
   for (const lane of gameState.lanes) {
@@ -3126,11 +2751,11 @@ function maybeIntroduceFields(): void {
     fresh.push(kind)
   }
   const line = companion.introduceFields(fresh)
-  if (line) sayEnaBark(line, { importance: BARK_IMPORTANCE.situation })
+  if (line) companionDirector.sayEnaBark(line, { importance: BARK_IMPORTANCE.situation })
   // 획득 경로(enqueueDrop)에서 조용히 합성된 첫 트리플도 이 스캔이 받아 소개한다.
   if (gameState.character.hand.some((card) => card.merged)) {
     const tripleIntro = encounterIntroLineOnce('triple')
-    if (tripleIntro) sayEnaBark(tripleIntro, { importance: BARK_IMPORTANCE.situation })
+    if (tripleIntro) companionDirector.sayEnaBark(tripleIntro, { importance: BARK_IMPORTANCE.situation })
   }
 }
 
@@ -3271,10 +2896,10 @@ function resetForNewRun(): void {
   companion.resetForRun()
   // 정산 육각형의 '이번 런 상승분' 기준점 — 런 시작 시점의 축 값을 캡처해 둔다.
   runStartAxisValues = experienceAxes(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth()).map((a) => a.value)
-  resetRunDramaSignals() // 성장 점프 게이트 입력(드라마 신호)도 런 단위로 비운다.
+  companionDirector.resetRunDramaSignals() // 성장 점프 게이트 입력(드라마 신호)도 런 단위로 비운다.
   lifetimeRecorded = false // 통산 기록은 런당 1회 — 새 런에서 다시 열어 준다.
   sessionFieldsIntroduced.clear() // 세션 내 필드 소개 중복 가드도 런마다 비운다(영구 기록은 유지).
-  pendingPrediction = null
+  companionDirector.pendingPrediction = null
   gameState.reset()
   // 헌혈팩 콜백: reset 이후 새 character 인스턴스에 설정해야 한다
   gameState.character.onHealGain = (amount) => {
@@ -3459,11 +3084,11 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
     // 회상은 인사의 최소 노출 시간이 지난 뒤 이어서 나온다(뜨자마자 교체되는 충돌 제거).
     window.setTimeout(() => {
       if (!gameActive) return
-      clearBarkQueue()
-      enaSpeaking = false // 직전 런의 잔여 바크 상태와 무관하게 새 런 인사를 확정 표시한다.
-      sayEnaBark(opening, { importance: BARK_IMPORTANCE.situation })
-      if (memoryLine && companionWorldCanSpeak()) {
-        sayEnaBark(memoryLine, { importance: BARK_IMPORTANCE.situation })
+      companionDirector.clearBarkQueue()
+      companionDirector.enaSpeaking = false // 직전 런의 잔여 바크 상태와 무관하게 새 런 인사를 확정 표시한다.
+      companionDirector.sayEnaBark(opening, { importance: BARK_IMPORTANCE.situation })
+      if (memoryLine && companionDirector.companionWorldCanSpeak()) {
+        companionDirector.sayEnaBark(memoryLine, { importance: BARK_IMPORTANCE.situation })
       }
       // 인사 뒤, 첫 보드에 놓인 온보딩 필드(바위/덤불/잡동사니)를 한 줄로 묶어 소개한다.
       maybeIntroduceFields()
@@ -3668,7 +3293,7 @@ async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promi
     recordNotice(`${gauge.name}: ${gauge.message}`, 'gauge')
     // 태어나서 첫 게이지 만충 — 영구 성장/보상 선택 규칙을 그 자리에서 짧게 알려준다.
     const comboIntro = encounterIntroLineOnce('combo')
-    if (comboIntro) sayEnaBark(comboIntro, { importance: BARK_IMPORTANCE.situation })
+    if (comboIntro) companionDirector.sayEnaBark(comboIntro, { importance: BARK_IMPORTANCE.situation })
     // 상점/보스 보상 단계의 게이지 페이오프는 체인 로그에서 제외한다.
     if (!chainRecordingSuppressed()) {
       chainTimeline.push({
@@ -3720,23 +3345,8 @@ document.addEventListener('mousedown', (e) => {
     return
   }
   if (!speechBubble.isShowing || onProfile) return
-  // 버블이 fully-visible 된 후 최소 1초가 지나야 스킵 허용 — 연타로 대사를 넘기는 것 방지.
-  if (speechBubble.visibleSinceMs < SKIP_MIN_VISIBLE_MS) return
-  // 2단계: 카드가 아닌 곳을 눌러 스킵. 단, '안 읽고 빨리 따닥 넘긴' 경우만 학습 스킵으로 본다.
-  const skippedUnread = currentBarkSituation !== null && Date.now() - barkShownAt < COMPANION_READ_MS
-  if (skippedUnread) {
-    companion.recordSkip(currentBarkSituation!)
-    clearTimeout(companionHeardTimer)
-    companionHeardTimer = 0
-    const remark = companion.maybeQuietRemark()
-    currentBarkSituation = null
-    speechBubble.dismiss()
-    // 과묵 안내 대사는 스킵 직후 조용히 한 번(낮은 중요도).
-    if (remark && companionWorldCanSpeak()) sayEnaBark(remark, { importance: BARK_IMPORTANCE.touch })
-    return
-  }
-  currentBarkSituation = null
-  speechBubble.dismiss()
+  // 2단계: 카드가 아닌 곳을 눌러 스킵 — 학습 판정/닫기는 디렉터가 담당한다.
+  companionDirector.handleBubbleSkip()
 })
 
 document.addEventListener('chainReset', () => {
@@ -3834,7 +3444,7 @@ async function resolveDeferredHandMerges(): Promise<void> {
   if (merges.length === 0) return
   // 태어나서 첫 트리플 합성 — 같은 카드 셋이 합쳐지는 규칙을 그 자리에서 짧게 알려준다.
   const tripleIntro = encounterIntroLineOnce('triple')
-  if (tripleIntro) sayEnaBark(tripleIntro, { importance: BARK_IMPORTANCE.situation })
+  if (tripleIntro) companionDirector.sayEnaBark(tripleIntro, { importance: BARK_IMPORTANCE.situation })
   // 합성 카드가 is-merged.is-entering으로 새로 렌더되어 수렴+버스트 연출이 온전히 재생된다.
   render()
   // 합성 연출(낙하 대기 620ms + 젤리/버스트)이 다음 렌더에 끊기지 않도록 충분히 기다린다.
@@ -3877,24 +3487,24 @@ async function applyHandSingle(
   // 도서관: 마도서 태그 손패를 쓰면 다음 마도서까지의 카운트다운이 1 줄어든다(엔진 가속).
   if (usedDef?.synergyTags?.includes('tome')) advanceLibrary(1)
   // 동료(에나) 손패 사용 한줄평 — 가끔 그 카드의 능력에 대해 한마디.
-  if (usedDef && companionWorldCanSpeak()) {
+  if (usedDef && companionDirector.companionWorldCanSpeak()) {
     const bark = companion.onUseCard(usedDef.id, usedDef.category, gameState.getCurrentTurn())
-    if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.loot })
+    if (bark) companionDirector.sayEnaBark(bark, { importance: BARK_IMPORTANCE.loot })
   }
   // 예측 대비 RL: 에나가 건넨 손패가 '곧바로/위기 타이밍에' 실제 효과를 냈는지 점수화한다.
   if (
     usedDef &&
-    pendingPrediction &&
-    pendingPrediction.cardIds.includes(usedDef.id) &&
-    gameState.getCurrentTurn() <= pendingPrediction.deadlineTurn
+    companionDirector.pendingPrediction &&
+    companionDirector.pendingPrediction.cardIds.includes(usedDef.id) &&
+    gameState.getCurrentTurn() <= companionDirector.pendingPrediction.deadlineTurn
   ) {
-    const turnsHeld = Math.max(0, gameState.getCurrentTurn() - pendingPrediction.issuedTurn)
+    const turnsHeld = Math.max(0, gameState.getCurrentTurn() - companionDirector.pendingPrediction.issuedTurn)
     const removedHazards = result.removedFieldCards.filter((c) => c.type === CardType.TRAP).length
     const immediateTimingBonus = turnsHeld === 0 ? 0.35 : turnsHeld === 1 ? 0.2 : 0
     const cleanupImpactBonus = usedDef.id === 'sweep' || usedDef.id === 'chitin' ? Math.min(0.45, removedHazards * 0.15) : 0
-    const crisisTimingBonus = pendingPrediction.kind === 'cleanup' && removedHazards > 0 ? 0.25 : 0
+    const crisisTimingBonus = companionDirector.pendingPrediction.kind === 'cleanup' && removedHazards > 0 ? 0.25 : 0
     companion.recordPredictionOutcome(0.75 + immediateTimingBonus + cleanupImpactBonus + crisisTimingBonus)
-    pendingPrediction = null
+    companionDirector.pendingPrediction = null
   }
   // 보스도 밀랍 굳음을 적용받는다(즉사만 면역). 굳음 중에는 보스가 반격/특수행동을 못 한다.
   // Reveal the used hand card near screen center, then dissolve it with its
@@ -4153,7 +3763,7 @@ async function applyHandSingle(
     companion.noteMoodShift(0.05 * recipeResult.firedRecipes.length)
     // 태어나서 첫 레시피 발동 — 조합식 규칙을 그 자리에서 짧게 알려준다.
     const recipeIntro = encounterIntroLineOnce('recipe')
-    if (recipeIntro) sayEnaBark(recipeIntro, { importance: BARK_IMPORTANCE.situation })
+    if (recipeIntro) companionDirector.sayEnaBark(recipeIntro, { importance: BARK_IMPORTANCE.situation })
     if ((recipeResult.coinsGained ?? 0) > 0) {
       // Recipe currency uses the same wallet/pulse language as single coin cards.
       const gainedCoins = recipeResult.coinsGained ?? 0
@@ -4359,7 +3969,7 @@ async function applyHandSingle(
 /** 레바테인 전용: 적 공격/폭탄/꽃/보물 처리를 1회 실행하되 실제 턴 카운터를 올리지 않는다. */
 async function runSimulatedEnemyPhase(): Promise<void> {
   const beforeTrapHealth = snapshotFieldHealthState()
-  const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => tryCompanionIncomingDodge(damage) })
+  const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => companionDirector.tryCompanionIncomingDodge(damage) })
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
   const bombExplosions = turnManager.applyBombExplosions()
   const flowerChanges = turnManager.applyFlowerGrowthAndWilt(cardSpawner)
@@ -4437,7 +4047,7 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
       const ember = gameState.character.ember
       recordNotice(`불씨가 사그라들었다 (${ember}/${gameState.character.emberMax})`, 'hurt')
       // 불씨가 dim→flickering 경계(4) 직전에 플레이어에게 경고 대사를 띄운다
-      if (ember === 4) { enaSpeaking = false; speechBubble.show('불씨가 약해지고 있어. . .') }
+      if (ember === 4) { companionDirector.enaSpeaking = false; speechBubble.show('불씨가 약해지고 있어. . .') }
       // 고품격 뗄감: 불씨가 완전히 꺼지면 가득 채우고 유물 파괴.
       if (ember <= 0 && gameState.character.hasRelic('premium-firewood')) {
         const beforeResources = snapshotPlayerResources()
@@ -4454,15 +4064,15 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
       // 고품격 뗄감이 있으면 유물의 완전 회복이 우선이므로 개입하지 않는다.
       if (
         gameState.character.ember <= 0 &&
-        companionWorldCanSpeak() &&
+        companionDirector.companionWorldCanSpeak() &&
         companion.rollMinorClutch('ember', { adversity: true })
       ) {
         gameState.character.ember = 1
         syncSpawnerTier()
         recordNotice('에나의 의지 — 불씨 수호! 불씨 +1', 'info')
         void boardRenderer.animateClutchOnPlayer('ember-gain')
-        showClutchChain('ember-save', '꺼지려는 불씨 +1')
-        sayEnaBark(companion.minorClutchLine('ember'), { importance: BARK_IMPORTANCE.clutch })
+        companionDirector.showClutchChain('ember-save', '꺼지려는 불씨 +1')
+        companionDirector.sayEnaBark(companion.minorClutchLine('ember'), { importance: BARK_IMPORTANCE.clutch })
         render()
         // 불씨 수치 피드백을 다른 불씨 획득(변칙 등)과 같은 HUD 카운터 beat로 맞춘다.
         boardRenderer.playHudCounterFeedback('ember', gameState.character.ember)
@@ -4505,7 +4115,7 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
   await sweepFrontStarlights()
   await tickFrontEventDoors()
   // 보드 정비가 끝나 플레이어 차례 직전 — 위협을 미리 읽어 대비 카드를 건넨다.
-  if (advanceTurn) await tryCompanionPrediction()
+  if (advanceTurn) await companionDirector.tryCompanionPrediction()
 }
 
 /** 전방 이벤트 문의 2턴 카운트다운을 진행한다. 도달 즉시 뱃지 '슈룩' 등장,
@@ -4542,7 +4152,7 @@ async function sweepFrontStarlights(): Promise<void> {
   if (swept.length === 0) return
   // 별빛 수집 한마디 — 등반 내내 반복되는 이벤트라 낮은 확률 게이트로 스팸을 막는다.
   if (gameActive && !gameState.isGameOver && Math.random() < 0.35) {
-    sayEnaBark(companion.starlightLine(), { importance: BARK_IMPORTANCE.touch })
+    companionDirector.sayEnaBark(companion.starlightLine(), { importance: BARK_IMPORTANCE.touch })
   }
   // 모델에서 제거됐지만 아직 render() 전이라 DOM에는 별빛이 남아 있다.
   // 모든 출발 rect를 먼저 확보한 뒤 순차 연출해, 첫 render로 다음 별빛 노드가
@@ -4605,13 +4215,13 @@ async function resolvePostDropSporeSpread(): Promise<void> {
   // render, so the shutter/open-turn view cannot show separate matching spores.
   recordNotice(`포자 번식: ${spreadCount}칸 감염`, 'hurt')
   // 동료(에나) 포자 번식 반응.
-  if (spreadCount > 0 && companionWorldCanSpeak()) {
+  if (spreadCount > 0 && companionDirector.companionWorldCanSpeak()) {
     const bark = companion.reactSituation('spore', gameState.getCurrentTurn())
-    if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: 'spore' })
+    if (bark) companionDirector.sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: 'spore' })
   }
   render()
   // 소소한 클러치 — 정화: 전염이 2칸 이상 번진 순간, 방금 번진 포자 1장을 걷어낸다.
-  if (spreadCount >= 2 && companionWorldCanSpeak()) {
+  if (spreadCount >= 2 && companionDirector.companionWorldCanSpeak()) {
     // 병합 군집이 아닌 새 1칸 포자만 대상으로 골라 정확히 '1장'만 제거한다. 대상 확보 후에만
     // 확률을 굴려 '도왔다는 기억만 남고 아무 일도 없는' 헛발동을 막는다.
     const target = sporeSpreads
@@ -4620,8 +4230,8 @@ async function resolvePostDropSporeSpread(): Promise<void> {
       .find((entry) => entry.card?.type === CardType.TRAP && entry.card.trapKind === 'spore' && entry.card.groupCount === 1)
     if (target?.card && companion.rollMinorClutch('cleanse', { adversity: spreadCount >= 3 })) {
       recordNotice('에나의 의지 — 정화! 번진 포자 1장 제거', 'info')
-      showClutchChain('cleanse', '번진 포자 1장 제거')
-      sayEnaBark(companion.minorClutchLine('cleanse'), { importance: BARK_IMPORTANCE.clutch })
+      companionDirector.showClutchChain('cleanse', '번진 포자 1장 제거')
+      companionDirector.sayEnaBark(companion.minorClutchLine('cleanse'), { importance: BARK_IMPORTANCE.clutch })
       // 방금 render()로 DOM에 오른 포자를 소멸 연출 후 모델에서 제거한다.
       await boardRenderer.animateCardConsumeByIds([{ cardId: target.card.id, type: CardType.TRAP }])
       gameState.removeCardFromRow(target.card, target.pos.distance)
@@ -4643,7 +4253,7 @@ async function resolvePostDropSporeSpread(): Promise<void> {
 
 async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true): Promise<void> {
   const beforeTrapHealth = snapshotFieldHealthState()
-  const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => tryCompanionIncomingDodge(damage) })
+  const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => companionDirector.tryCompanionIncomingDodge(damage) })
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
   const bombExplosions = turnManager.applyBombExplosions()
   const flowerChanges = turnManager.applyFlowerGrowthAndWilt(cardSpawner)
@@ -4705,26 +4315,26 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   // 나오는 감정 모순을 막는다 — 반격이 뜨면 그 대사가 이 beat의 감정을 대표한다.
   const counterClutchFires =
     totalDamage > 0 &&
-    companionWorldCanSpeak() &&
+    companionDirector.companionWorldCanSpeak() &&
     companion.rollMinorClutch('counter', {
       adversity: totalDamage >= Math.max(3, gameState.character.maxHealth * 0.25),
     })
   // 동료(에나) 피격 반응 — 확률+쿨다운으로 강약 조절(위급하면 더 다급한 말투).
-  if (totalDamage > 0 && !counterClutchFires && companionWorldCanSpeak()) {
-    const danger = companionInDanger()
+  if (totalDamage > 0 && !counterClutchFires && companionDirector.companionWorldCanSpeak()) {
+    const danger = companionDirector.companionInDanger()
     // 적 이름은 대사 풀 선택이 아니라 최근 사건 기록(복수 콜백 재료)에만 쓰인다.
     const line = companion.reactSituation('hit', gameState.getCurrentTurn(), danger ? 'urgent' : undefined, danger, biggestHit?.cardName)
     if (line) {
-      sayEnaBark(line, {
+      companionDirector.sayEnaBark(line, {
         importance: danger ? BARK_IMPORTANCE.urgent : BARK_IMPORTANCE.situation,
         situation: 'hit',
       })
     }
   }
   // 폭탄 폭발 반응 바크.
-  if (bombExplosions.length > 0 && companionWorldCanSpeak()) {
+  if (bombExplosions.length > 0 && companionDirector.companionWorldCanSpeak()) {
     const bark = companion.reactSituation('bomb', gameState.getCurrentTurn())
-    if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: 'bomb' })
+    if (bark) companionDirector.sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: 'bomb' })
   }
   // 클러치 예산('에나의 의지') 충전: 이번 페이즈 역경(피해/불씨 고갈)에 비례.
   if (totalDamage > 0) companion.gainWill(totalDamage, gameState.character.maxHealth)
@@ -4735,9 +4345,9 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
       gameState.character.maxHealth > 0
         ? Math.max(0, gameState.character.health) / gameState.character.maxHealth
         : 0
-    if (hpRatio > 0 && hpRatio <= 0.3) runDramaSignals.lowHpMoments += 1
-    if (gameState.character.ember <= 1) runDramaSignals.emberCrises += 1
-    runDramaSignals.lowestHpRatio = Math.min(runDramaSignals.lowestHpRatio, hpRatio)
+    if (hpRatio > 0 && hpRatio <= 0.3) companionDirector.runDramaSignals.lowHpMoments += 1
+    if (gameState.character.ember <= 1) companionDirector.runDramaSignals.emberCrises += 1
+    companionDirector.runDramaSignals.lowestHpRatio = Math.min(companionDirector.runDramaSignals.lowestHpRatio, hpRatio)
   }
   // 회피 클러치는 TurnManager.runEnemyPhase의 공격 판정 순간에 처리된다.
 
@@ -4755,8 +4365,8 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
     }
     if (damaged.length > 0) {
       recordNotice(`에나의 의지 — 반격! 피해 ${counterDamage}`, 'info')
-      showClutchChain('counter', `반격 피해 ${counterDamage}`)
-      sayEnaBark(companion.minorClutchLine('counter'), { importance: BARK_IMPORTANCE.clutch })
+      companionDirector.showClutchChain('counter', `반격 피해 ${counterDamage}`)
+      companionDirector.sayEnaBark(companion.minorClutchLine('counter'), { importance: BARK_IMPORTANCE.clutch })
       await boardRenderer.animateDamageNumbersById(damaged)
       if (killedIds.length > 0) {
         await boardRenderer.animateCardConsumeByIds(killedIds.map((cardId) => ({ cardId, type: CardType.ENEMY })), { suppressBurstIds: new Set(killedIds) })
@@ -4772,7 +4382,7 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   // 소중한 머리: 체력이 절반 이하이면 전체 회복 후 파괴.
   await applyPreciousHeadCheck()
   // 동료(에나) 클러치: 위기에 의지가 가득 찼으면 실제 지원 + '에나의 의지' 체인.
-  tryCompanionClutch()
+  companionDirector.tryCompanionClutch()
   if (gameState.isGameOver || gameState.character.authoritySurvivePending) {
     const authorityFired = gameState.character.authoritySurvivePending
     if (await tryResolveSurvivalRelics()) {
@@ -4873,7 +4483,7 @@ async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
     const onMinigameMoment = (m: EventMinigameMoment): void => {
       const always = m === 'minion-jackpot' || m === 'rps-relic' || m === 'rps-streak'
       if (!always && Math.random() > 0.5) return
-      sayEnaBark(companion.eventMinigameLine(m), { importance: BARK_IMPORTANCE.situation })
+      companionDirector.sayEnaBark(companion.eventMinigameLine(m), { importance: BARK_IMPORTANCE.situation })
     }
     if (def.minigame.kind === 'minion-exchange') {
       await boardRenderer.runMinionExchange(card.id, def, def.minigame, snap, sink, consumeDoor, playDialogue, onMinigameMoment, seenBefore)
@@ -5096,7 +4706,7 @@ async function handleCardAction(e: Event): Promise<void> {
   inputLocked = true
 
   if (turnManager.isEnemyFirstStrike()) {
-    const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => tryCompanionIncomingDodge(damage) })
+    const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => companionDirector.tryCompanionIncomingDodge(damage) })
     if (hits.length > 0) {
       await boardRenderer.animateEnemyAttacks(hits)
       const dmg = hits.reduce((acc, h) => acc + h.damage, 0)
@@ -5229,7 +4839,7 @@ async function handleCardAction(e: Event): Promise<void> {
     result.damageTaken &&
     result.damageTaken > 0 &&
     !result.trapIgnored &&
-    companionWorldCanSpeak() &&
+    companionDirector.companionWorldCanSpeak() &&
     companion.rollMinorClutch('trap', { adversity: result.damageTaken >= Math.max(3, gameState.character.maxHealth * 0.25) })
   ) {
     gameState.character.health = Math.min(
@@ -5267,8 +4877,8 @@ async function handleCardAction(e: Event): Promise<void> {
   if (companionTrapIgnored) {
     recordNotice('에나의 의지 — 함정 무시!', 'info')
     void boardRenderer.animateClutchOnPlayer('health-gain')
-    showClutchChain('trap', '함정 피해 무시')
-    sayEnaBark(companion.minorClutchLine('trap'), { importance: BARK_IMPORTANCE.clutch })
+    companionDirector.showClutchChain('trap', '함정 피해 무시')
+    companionDirector.sayEnaBark(companion.minorClutchLine('trap'), { importance: BARK_IMPORTANCE.clutch })
   }
   // 달콤한 유혹: 함정 제거 시 기본 불빛의 30% 추가 획득. 무효화 시 미발동.
   if (result.cardRemoved && card.type === CardType.TRAP && !result.trapIgnored && gameState.character.hasRelic('sweet-temptation')) {
@@ -5312,7 +4922,7 @@ async function handleCardAction(e: Event): Promise<void> {
   }
 
   // 소소한 클러치 — 보물 추가 보상: 상자를 열 때 가끔 손패 1장을 덤으로.
-  if (result.cardRemoved && card.type === CardType.TREASURE && companionWorldCanSpeak()) {
+  if (result.cardRemoved && card.type === CardType.TREASURE && companionDirector.companionWorldCanSpeak()) {
     const treasureClutch = companion.rollMinorClutch('treasure', { adversity: !result.itemGainedIds?.length })
     if (treasureClutch) {
       // 덤 1장은 아래 '획득 후 지연 합성 스캔'(gainedHandCardCount 분기)이 함께 정리한다 —
@@ -5321,8 +4931,8 @@ async function handleCardAction(e: Event): Promise<void> {
       if (gameState.character.addHandCard(drop)) {
         recordNotice('에나의 의지 — 덤! 손패 +1', 'info')
         void boardRenderer.animateClutchOnPlayer('treasure-gain')
-        showClutchChain('treasure', '손패 +1')
-        sayEnaBark(companion.minorClutchLine('treasure'), { importance: BARK_IMPORTANCE.clutch })
+        companionDirector.showClutchChain('treasure', '손패 +1')
+        companionDirector.sayEnaBark(companion.minorClutchLine('treasure'), { importance: BARK_IMPORTANCE.clutch })
         render()
       }
     } else if (!result.itemGainedIds?.length && !result.overflow?.length) {
@@ -5330,13 +4940,13 @@ async function handleCardAction(e: Event): Promise<void> {
       // 단, 손패가 가득 차 보상을 잃은 경우는 탐색 실패가 아니므로(카드는 실제로 있었다)
       // 진짜 빈손일 때만 발화해 '가득 찬 손패에 미안해하는' 오발동을 막는다.
       const missed = companion.missedPotentialLine('treasure', gameState.getCurrentTurn())
-      if (missed) sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'treasure' })
+      if (missed) companionDirector.sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'treasure' })
     }
   }
 
   // 동료(에나) 행동 반응 — 손패 한줄평(획득 카드) 우선, 없으면 카드 종류별 상황 바크.
   // 확률+쿨다운으로 한 행동에 한 번만, 너무 수다스럽지 않게 강약을 준다.
-  if (companionWorldCanSpeak()) {
+  if (companionDirector.companionWorldCanSpeak()) {
     const turn = gameState.getCurrentTurn()
     // 손패 한줄평(획득 카드) 우선 — 학습 대상이 아니라 낮은 중요도.
     const gainedId = result.itemGainedIds?.[0]
@@ -5348,7 +4958,7 @@ async function handleCardAction(e: Event): Promise<void> {
       })
     }
     if (loot) {
-      sayEnaBark(loot, { importance: BARK_IMPORTANCE.loot })
+      companionDirector.sayEnaBark(loot, { importance: BARK_IMPORTANCE.loot })
     } else {
       // 카드 종류별 상황 바크 — 스킵/읽음 학습 대상이라 situation을 함께 넘긴다.
       let sit: SituationId | null = null
@@ -5360,7 +4970,7 @@ async function handleCardAction(e: Event): Promise<void> {
         // 적이면 이름을 넘겨, 핵심 키워드('양초 거미'→'거미') 전용 반응을 우선하게 한다.
         const enemyName = card.type === CardType.ENEMY ? card.name : undefined
         const bark = companion.reactSituation(sit, turn, undefined, false, enemyName)
-        if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: sit })
+        if (bark) companionDirector.sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: sit })
       }
     }
   }
