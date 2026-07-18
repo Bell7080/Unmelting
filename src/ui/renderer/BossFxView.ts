@@ -214,13 +214,6 @@ export class BossFxView {
   }
 
 
-  /** 일반 적 카드에 사용하는 .damage-float(붉은 부유 숫자)을 카드 인스턴스
-   *  없이 임의 좌표에 띄우기 위한 public 래퍼. 보스 타일이 일반 적과 같은
-   *  데미지 글자 톤/모션을 그대로 받도록 한다. */
-  spawnFieldDamageNumber(x: number, y: number, amount: number): Promise<void> {
-    return this.host.animateDamageNumberAt(x, y, amount)
-  }
-
   /** 보스 좌상단 뱃지에 표시할 "N턴 뒤 공격" 카운트. null이면 마크업이 정적 텍스트로
    *  fallback 한다. index.ts의 보스 가상 턴 흐름이 매 턴마다 update한다. */
   private bossAttackCountdown: number | null = null

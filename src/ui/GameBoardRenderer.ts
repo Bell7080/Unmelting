@@ -2348,8 +2348,8 @@ export class GameBoardRenderer {
     ).then(() => undefined)
   }
 
-  /** Create the red ember-glow numeric hit text at viewport coordinates. (BossFxView 공유용 public) */
-  animateDamageNumberAt(x: number, y: number, amount: number): Promise<void> {
+  /** Create the red ember-glow numeric hit text at viewport coordinates. */
+  private animateDamageNumberAt(x: number, y: number, amount: number): Promise<void> {
     const el = document.createElement('div')
     el.className = 'damage-float'
     el.textContent = `-${amount}`
