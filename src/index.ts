@@ -67,8 +67,8 @@ import {
   loadDisposition,
   computeEnaGrowth,
 } from '@systems/EnaDisposition'
-import { HearthScene, type HearthDifficulty } from '@ui/hearth/HearthScene'
-import { isMetaUnlocked } from '@core/MetaUnlocks'
+import { HearthScene, HEARTH_DEV_UNLOCK_KEY, type HearthDifficulty } from '@ui/hearth/HearthScene'
+import { isMetaUnlocked, setMetaUnlocked, META_UNLOCKS } from '@core/MetaUnlocks'
 import { ZoneCurtain, ZONE_LIST } from '@ui/ZoneCurtain'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
@@ -3545,6 +3545,7 @@ if (ENABLE_DEV_COMMAND_PALETTE) {
     isInputLocked: () => inputLocked,
     setInputLocked: (v) => { inputLocked = v },
     isShopOpen: () => shopFlow.isOpen(),
+    startTestRun,
   })
 }
 // 게임 부팅 후 첫 사용자 입력에서 배경음 루프를 켠다(브라우저 자동재생 정책).
@@ -3552,4 +3553,66 @@ bgm.armAutoplay()
 // 첫 입력에서 효과음 컨텍스트도 함께 연다.
 const unlockSfx = () => { void sfx.unlock(); window.removeEventListener('pointerdown', unlockSfx, true) }
 window.addEventListener('pointerdown', unlockSfx, true)
-void startGame()
+
+/** 첫 실행(새싹 병아리 직행)을 이미 소비했는지 — unmelting. 접두사라 /리셋 시 첫 실행 상태로 돌아간다. */
+const BOOT_FIRST_RUN_KEY = 'unmelting.boot.firstRunStarted'
+
+/** 메타 전부 해금 + 거점 강제 개방 후 테스트 런 직행 — /테스트 명령과 ?test=1 부팅이 공유한다. */
+function startTestRun(): void {
+  for (const { id } of META_UNLOCKS) setMetaUnlocked(id, true)
+  localStorage.setItem(HEARTH_DEV_UNLOCK_KEY, '1')
+  if (document.getElementById('hearth-overlay')) hearthScene.exit()
+  void startGame()
+}
+
+/** 검은 타이틀 게이트: 폰트 로딩 안정화까지 대기 → '탭하여 시작' 1회 입력으로 해제한다.
+ *  이 탭이 오디오 언락·모바일 전체화면 첫 입력을 함께 흡수한다. 오버레이는 해제 후
+ *  페이드아웃되므로, 호출부가 곧바로 로비/런 DOM을 구성하면 첫 프레임부터 온전히 보인다. */
+function showBootTitleGate(): Promise<void> {
+  const style = document.createElement('style')
+  style.textContent = `
+    .boot-title-gate { position: fixed; inset: 0; z-index: 10600; background: #08060c; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; transition: opacity .42s ease; }
+    .boot-title-gate.is-leaving { opacity: 0; pointer-events: none; }
+    .boot-title-name { font: 900 34px/1.2 'OkDanDan', Georgia, serif; color: rgba(255,226,150,.92); letter-spacing: .12em; text-shadow: 0 0 22px rgba(255,190,90,.25); }
+    .boot-title-hint { font: 700 14px/1.4 'OkDanDan', Georgia, serif; color: rgba(232,214,180,.55); letter-spacing: .08em; }
+    .boot-title-gate.is-ready .boot-title-hint { color: rgba(255,226,150,.85); animation: boot-hint-pulse 1.6s ease-in-out infinite; }
+    @keyframes boot-hint-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+  `
+  document.head.appendChild(style)
+  const overlay = document.createElement('div')
+  overlay.className = 'boot-title-gate'
+  overlay.innerHTML = `
+    <div class="boot-title-name">Unmelting</div>
+    <div class="boot-title-hint">불러오는 중…</div>
+  `
+  document.body.appendChild(overlay)
+  return new Promise((resolve) => {
+    void document.fonts.ready.then(() => {
+      const hint = overlay.querySelector<HTMLElement>('.boot-title-hint')
+      if (hint) hint.textContent = '탭하여 시작'
+      overlay.classList.add('is-ready')
+      overlay.addEventListener('pointerdown', () => {
+        overlay.classList.add('is-leaving')
+        window.setTimeout(() => overlay.remove(), 480)
+        resolve()
+      }, { once: true })
+    })
+  })
+}
+
+/** 부팅 분기: ?test=1 → 테스트 직행 / 첫 실행 → 새싹 병아리 직행 / 이후 → 거점 로비. */
+async function bootGame(): Promise<void> {
+  if (new URLSearchParams(window.location.search).get('test') === '1') {
+    startTestRun()
+    return
+  }
+  await showBootTitleGate()
+  if (!localStorage.getItem(BOOT_FIRST_RUN_KEY)) {
+    // 첫 실행: 로비를 건너뛰고 곧바로 새싹 병아리 온보딩으로 들어간다(사망/클리어 후 로비 복귀).
+    localStorage.setItem(BOOT_FIRST_RUN_KEY, '1')
+    void startGame(0, 'sprout')
+    return
+  }
+  enterHearth()
+}
+void bootGame()

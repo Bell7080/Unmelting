@@ -1440,6 +1440,10 @@ export class HearthScene {
       const openIdx = HEARTH_DIFFICULTIES.map((d, i) => ({ d, i })).filter((x) => !this.isDifficultyLocked(x.d)).pop()
       index = openIdx ? openIdx.i : 0
     }
+    // 졸업 후에는 저장값이 새싹이어도 정규(쉬움)에 포커스해 다음 단계로 자연 유도한다.
+    if (HEARTH_DIFFICULTIES[index]?.key === 'sprout' && !this.isDifficultyLocked(HEARTH_DIFFICULTIES[1])) {
+      index = 1
+    }
     this.selectedDifficultyIndex = index
   }
 
