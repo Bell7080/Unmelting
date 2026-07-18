@@ -570,11 +570,11 @@ export class EventOverlayView {
     }
     // 도전 별: 총 판수만큼 깔고 결과(승/패/비김)에 따라 노랑/빨강/회색으로 채운다.
     const triesHtml = Array.from({ length: totalRounds }, () => `<span class="mini-rps-try">${sparkleIcon()}</span>`).join('')
-    // 아이템은 부채꼴로 — 인덱스로 회전각을 계산해 손처럼 펼친다. hover 애니는 내부 버튼이 맡는다.
-    // 차단은 버튼 위로 손 선택 픽커가 떠서 원하는 패를 직접 봉쇄한다.
+    // 아이템은 레일 좌측에 세로 부채꼴로 — 인덱스로 회전각을 계산해 살짝 펼친다.
+    // 차단은 버튼 옆으로 손 선택 픽커가 떠서 원하는 패를 직접 봉쇄한다.
     const n = cfg.items.length
     const itemHtml = cfg.items.map((it, i) => {
-      const angle = (i - (n - 1) / 2) * 10
+      const angle = (i - (n - 1) / 2) * 6
       const picker = it.id === 'block'
         ? `<span class="rps-block-picker" hidden>${HANDS.map((h) => `<button class="rps-block-opt" type="button" data-hand="${h}" title="${HAND_LABEL[h]}">${handArt(h)}</button>`).join('')}</span>`
         : ''
@@ -595,22 +595,23 @@ export class EventOverlayView {
       </button>`
     }).join('')
     const throwHtml = HANDS.map((h) => `<button class="mini-rps-throw" type="button" data-throw="${h}">${handArt(h)}<span class="rps-throw-name">${HAND_LABEL[h]}</span></button>`).join('')
+    // 컨트롤을 레일 전체에 넓게 분포한다: 상단 중앙 슬롯 아래 종합 확률·선언, 좌측 아이템,
+    // 우측 판돈, 하단 던지기. 판정 토스트는 중간 하단 여백(던지기 위)에 크게 떠오른다.
     content.innerHTML = `
-      <div class="mini-rps-cardslot" data-state="empty" aria-hidden="true">
-        <span class="cs-face">${handArt('rock')}${handArt('paper')}${handArt('scissors')}<span class="cs-empty">?</span></span>
+      <div class="mini-rps-cardslot" data-state="empty">
+        <span class="cs-face" aria-hidden="true">${handArt('rock')}${handArt('paper')}${handArt('scissors')}<span class="cs-empty">?</span></span>
         <span class="cs-tag"></span>
+        <div class="mini-rps-odds" aria-live="polite"></div>
+        <div class="mini-rps-decl" aria-live="polite"></div>
       </div>
       <div class="mini-rps is-in">
         <div class="mini-rps-top">
           <div class="mini-rps-tries">${triesHtml}</div>
           <div class="mini-rps-streak">연승 <b>x1.0</b></div>
         </div>
-        <div class="mini-rps-decl" aria-live="polite"></div>
-        <div class="mini-rps-odds" aria-live="polite"></div>
-        <div class="mini-rps-result"></div>
-        <div class="mini-rps-aux"><span class="mini-rps-buffs" aria-live="polite"></span></div>
         <div class="mini-rps-items">${itemHtml}</div>
         <div class="mini-rps-stakes">${stakeHtml}</div>
+        <div class="mini-rps-toasts" aria-live="polite"></div>
         <div class="mini-rps-throws">${throwHtml}</div>
         <button class="mini-rps-done" type="button">물러나기</button>
       </div>`
@@ -622,10 +623,9 @@ export class EventOverlayView {
     const panel = content.querySelector<HTMLElement>('.mini-rps')!
     const tryEls = Array.from(panel.querySelectorAll<HTMLElement>('.mini-rps-try'))
     const streakEl = panel.querySelector<HTMLElement>('.mini-rps-streak b')!
-    const declEl = panel.querySelector<HTMLElement>('.mini-rps-decl')!
-    const oddsEl = panel.querySelector<HTMLElement>('.mini-rps-odds')!
-    const buffsEl = panel.querySelector<HTMLElement>('.mini-rps-buffs')!
-    const resultEl = panel.querySelector<HTMLElement>('.mini-rps-result')!
+    const declEl = content.querySelector<HTMLElement>('.mini-rps-decl')!
+    const oddsEl = content.querySelector<HTMLElement>('.mini-rps-odds')!
+    const toastsEl = panel.querySelector<HTMLElement>('.mini-rps-toasts')!
     const itemEls = Array.from(panel.querySelectorAll<HTMLButtonElement>('.mini-rps-item'))
     const blockPickerEl = panel.querySelector<HTMLElement>('.rps-block-picker')
     const blockOptEls = Array.from(panel.querySelectorAll<HTMLButtonElement>('.rps-block-opt'))
@@ -661,15 +661,13 @@ export class EventOverlayView {
       oddsEl.innerHTML = HANDS.map((h) =>
         `<span class="odds-chip${h === blocked ? ' is-blocked' : ''}" title="${HAND_LABEL[h]}">${handArt(h)}<b>${h === blocked ? '×' : `${Math.round(odds[h] * 100)}%`}</b></span>`
       ).join('')
-      const buffs: string[] = []
-      if (doubleNext) buffs.push('두배 · 이번 판 2배')
-      if (wardNext) buffs.push('보호 · 손실 무효')
-      buffsEl.textContent = buffs.join('   ·   ')
-      buffsEl.classList.toggle('is-armed', buffs.length > 0)
+      // 아이템 장전 상태는 별도 줄 대신 버튼 자체 발광(is-armed)으로 보여준다.
       itemEls.forEach((b) => {
         const it = itemById.get(b.dataset.item as RpsItemId)!
-        b.classList.toggle('is-disabled', !itemAffordable(it))
-        b.classList.toggle('is-used', usedItems.has(it.id))
+        const armed = (it.id === 'double' && doubleNext) || (it.id === 'ward' && wardNext)
+        b.classList.toggle('is-armed', armed)
+        b.classList.toggle('is-disabled', !armed && !itemAffordable(it))
+        b.classList.toggle('is-used', !armed && usedItems.has(it.id))
       })
       // 차단 픽커 옵션은 실제 남아 있는 패만 활성화한다.
       blockOptEls.forEach((b) => b.classList.toggle('is-disabled', deckCount(b.dataset.hand as RpsHand) === 0))
@@ -688,6 +686,23 @@ export class EventOverlayView {
       throwEls.forEach((b) => b.classList.toggle('is-disabled', !canThrow))
     }
 
+    // 판정 토스트 — 중간 하단 여백에 크게 떠서 오래 머물다 스르륵 사라진다(체인 로그 톤).
+    // 생성 직후 rect를 돌려줘 획득 블라스트의 출발점으로 쓴다.
+    const RESULT_HEAD: Record<'win' | 'lose' | 'tie', string> = { win: '승리!', lose: '패배', tie: '비김' }
+    const pushToast = (kind: 'win' | 'lose' | 'tie', detail: string): DOMRect => {
+      const t = document.createElement('div')
+      t.className = `rps-toast is-${kind}`
+      t.innerHTML = `<b class="rps-toast-head">${RESULT_HEAD[kind]}</b><span class="rps-toast-detail">${escapeHtml(detail)}</span>`
+      toastsEl.appendChild(t)
+      while (toastsEl.children.length > 2) toastsEl.firstElementChild?.remove()
+      const rect = t.getBoundingClientRect()
+      window.setTimeout(() => {
+        t.classList.add('is-out')
+        window.setTimeout(() => t.remove(), 760)
+      }, 2600)
+      return rect
+    }
+
     const beginRound = (): void => {
       busy = false
       blocked = null
@@ -696,8 +711,6 @@ export class EventOverlayView {
       usedItems.clear()
       if (blockPickerEl) blockPickerEl.hidden = true
       rollDeclaration()
-      resultEl.className = 'mini-rps-result'
-      resultEl.textContent = ''
       update()
     }
 
@@ -734,7 +747,7 @@ export class EventOverlayView {
       const finish = (): void => {
         if (deckEmpty() && net >= cfg.relicWinMultiple * stakeUnit) {
           sink.grantRelic()
-          void this.host.trails.animateResourceTrail(resultEl.getBoundingClientRect(), this.host.trails.findResourceTrailTarget('relic'), 4, 'treasure-gain')
+          void this.host.trails.animateResourceTrail(slotEl.getBoundingClientRect(), this.host.trails.findResourceTrailTarget('relic'), 4, 'treasure-gain')
           onMoment?.('rps-relic')
         }
         panel.classList.add('is-closing')
@@ -822,9 +835,8 @@ export class EventOverlayView {
               net += payout
               streak += 1
               sink.gainLight(payout)
-              this.blastEventGain(resultEl.getBoundingClientRect(), 'light', 4)
-              resultEl.className = 'mini-rps-result is-win'
-              resultEl.textContent = `${vs} — 승리! 불빛 +${payout.toLocaleString()}${tame ? ' (예고된 승부 · 절반)' : ''}${mult > 1 ? ' (두배)' : ''}`
+              const rect = pushToast('win', `${vs} · 불빛 +${payout.toLocaleString()}${tame ? ' (예고된 승부 · 절반)' : ''}${mult > 1 ? ' (두배)' : ''}`)
+              this.blastEventGain(rect, 'light', 4)
               // 에나 반응 — 결과 확정 순간. 연승 3+는 흐름 대사를 우선한다.
               onMoment?.(tame ? 'rps-tame' : streak >= 3 ? 'rps-streak' : 'rps-win')
             } else if (outcome === 'lose') {
@@ -832,16 +844,14 @@ export class EventOverlayView {
               net -= loss
               streak = 0
               if (loss > 0) sink.gainLight(-loss)
-              resultEl.className = 'mini-rps-result is-lose'
-              resultEl.textContent = ward ? `${vs} — 패배지만 보호가 막았다.` : `${vs} — 패배. 불빛 -${loss.toLocaleString()}${mult > 1 ? ' (두배)' : ''}`
+              pushToast('lose', ward ? `${vs} · 보호가 손실을 막았다` : `${vs} · 불빛 -${loss.toLocaleString()}${mult > 1 ? ' (두배)' : ''}`)
               onMoment?.('rps-lose')
             } else {
               const rake = ward ? 0 : Math.round(stake * tieFrac)
               net -= rake
               streak = 0
               if (rake > 0) sink.gainLight(-rake)
-              resultEl.className = 'mini-rps-result is-tie'
-              resultEl.textContent = ward ? `${vs} — 비김, 보호가 막았다.` : `${vs} — 비김. 백작 몫 -${rake.toLocaleString()}`
+              pushToast('tie', ward ? `${vs} · 보호가 백작 몫을 막았다` : `${vs} · 백작 몫 -${rake.toLocaleString()}`)
             }
             update()
             if (deckEmpty()) window.setTimeout(finish, 950)
@@ -1135,11 +1145,14 @@ export class EventOverlayView {
   color: rgba(255, 238, 200, 0.92);
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
 }
-/* 백작은 상단 카드 슬롯을 위해 컨트롤을 하단으로 모은다. 판 전체를 크게 쓰고
-   배경 어둠은 더 옅게 깔아 일러스트가 잘 비치게 한다. */
+/* 백작은 컨트롤을 레일 전체에 넓게 분포한다: 상단 중앙 슬롯+확률·선언, 좌측 아이템 열,
+   우측 판돈 열, 하단 던지기, 우하단 물러나기. 패널은 레일을 꽉 채우고(flex:1) 판정 토스트가
+   중간 하단 여백을 차지한다. 배경 어둠은 옅게 깔아 일러스트가 잘 비치게 한다. */
 .mini-rps {
-  width: min(99%, 920px); gap: 6px; padding-bottom: 8px;
-  background: radial-gradient(130% 140% at 50% 60%, rgba(6, 4, 12, 0.32) 0%, rgba(6, 4, 12, 0.13) 50%, rgba(6, 4, 12, 0) 80%);
+  flex: 1 1 auto; min-height: 0; align-self: stretch; position: relative;
+  width: auto; max-width: none; justify-content: flex-end;
+  gap: 10px; padding-bottom: 4px;
+  background: radial-gradient(130% 140% at 50% 60%, rgba(6, 4, 12, 0.3) 0%, rgba(6, 4, 12, 0.12) 50%, rgba(6, 4, 12, 0) 80%);
 }
 .mini-exchange.is-in, .mini-rps.is-in { animation: event-line-in 0.34s ease both; }
 /* 접히는 동안엔 입력을 막아, UI가 사라진 뒤 나오는 마무리 대사 클릭이 버튼에 가로채이지 않게 한다. */
@@ -1218,67 +1231,90 @@ export class EventOverlayView {
 }
 .rps-hand-text { display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 1 / 1; font-size: 22px; font-weight: 900; color: rgba(255, 238, 196, 0.97); }
 
-/* 상단 슬롯 — 백작 얼굴 부근(가운데 상단). 레일 전체(content) 기준 절대배치라 아이템에 안 가린다. */
-.mini-rps-cardslot { position: absolute; left: 50%; top: 3%; transform: translateX(-50%); width: clamp(122px, 17%, 184px); text-align: center; pointer-events: none; z-index: 3; }
+/* 상단 슬롯 — 백작 얼굴 부근(가운데 상단). 레일 전체(content) 기준 절대배치라 아이템에 안 가린다.
+   종합 확률 칩과 확률 선언을 슬롯 바로 아래에 붙여 중앙 칩이 슬롯 뒤에 가려지던 문제를 없앤다. */
+.mini-rps-cardslot { position: absolute; left: 50%; top: 3%; transform: translateX(-50%); width: clamp(104px, 15%, 172px); text-align: center; pointer-events: none; z-index: 3; }
 .mini-rps-cardslot .cs-face { position: relative; display: block; width: 100%; aspect-ratio: 1 / 1; }
 .mini-rps-cardslot .cs-face > * { position: absolute; inset: 0; opacity: 0; transition: opacity 0.16s; }
 .mini-rps-cardslot .cs-face > .is-shown { opacity: 1; }
-.mini-rps-cardslot .cs-empty { display: flex; align-items: center; justify-content: center; font-size: 58px; font-weight: 900; color: rgba(200, 190, 170, 0.28); }
+.mini-rps-cardslot .cs-empty { display: flex; align-items: center; justify-content: center; font-size: 54px; font-weight: 900; color: rgba(200, 190, 170, 0.28); }
 .mini-rps-cardslot[data-state="empty"] .cs-empty { opacity: 1; }
-.mini-rps-cardslot .cs-tag { display: block; margin-top: 3px; font-size: 13px; letter-spacing: 0.06em; color: rgba(220, 206, 252, 0.78); text-shadow: 0 1px 5px rgba(0, 0, 0, 0.85); }
+.mini-rps-cardslot .cs-tag { display: block; margin-top: 2px; font-size: 14px; letter-spacing: 0.06em; color: rgba(220, 206, 252, 0.78); text-shadow: 0 1px 5px rgba(0, 0, 0, 0.85); }
 .mini-rps-cardslot.is-tick .cs-face { filter: brightness(1.18); }
 .mini-rps-cardslot.is-impact { animation: rps-slot-impact 0.36s cubic-bezier(0.2, 0.8, 0.2, 1); }
 
 /* 상단 정보줄은 패널 flex에서 빼서 레일 좌·우 상단 코너에 고정 — 중앙 카드 슬롯과 같은 높이.
    세로 예산을 차지하지 않아 아래 컨트롤들이 레일 밖으로 밀리지 않는다. */
-.mini-rps-top { position: absolute; left: 3.5%; right: 3.5%; top: 3.5%; display: flex; justify-content: space-between; align-items: center; z-index: 3; }
+.mini-rps-top { position: absolute; left: 2%; right: 2%; top: 3.5%; display: flex; justify-content: space-between; align-items: center; z-index: 3; }
 /* 도전 별 — 총 판수를 깔아두고 결과별로 채운다: 노랑=승 / 빨강=패 / 회색=비김 / 흐림=남은 판 */
-.mini-rps-tries { display: inline-flex; gap: 6px; align-items: center; }
-.mini-rps-try { display: inline-flex; width: 18px; height: 18px; color: rgba(120, 108, 86, 0.32); transition: color 0.25s, filter 0.25s; }
+.mini-rps-tries { display: inline-flex; gap: 7px; align-items: center; }
+.mini-rps-try { display: inline-flex; width: 20px; height: 20px; color: rgba(120, 108, 86, 0.32); transition: color 0.25s, filter 0.25s; }
 .mini-rps-try svg { width: 100%; height: 100%; }
 .mini-rps-try.is-win { color: rgba(255, 226, 150, 0.99); filter: drop-shadow(0 0 6px rgba(244, 206, 112, 0.8)); }
 .mini-rps-try.is-lose { color: rgba(236, 96, 72, 0.97); filter: drop-shadow(0 0 6px rgba(210, 54, 32, 0.65)); }
 .mini-rps-try.is-tie { color: rgba(178, 172, 158, 0.85); filter: drop-shadow(0 0 4px rgba(150, 144, 130, 0.4)); }
 .mini-rps-dot { color: rgba(180, 168, 148, 0.4); }
-/* 종합 확률 칩 — 손 엠블럼 이미지 + % 배지(던지기 타일과 같은 양식). 차단은 흐린 엠블럼 + 붉은 × */
-.mini-rps-odds { min-height: 48px; display: flex; justify-content: center; align-items: flex-start; gap: 30px; }
-.odds-chip { position: relative; display: inline-flex; width: 48px; }
+/* 종합 확률 칩 — 슬롯 아래 중앙, 슬롯 폭보다 넓게 탈출해 세 칩을 큼직하게 편다.
+   손 엠블럼 이미지 + % 배지(던지기 타일과 같은 양식). 차단은 흐린 엠블럼 + 붉은 × */
+.mini-rps-odds {
+  position: relative; left: 50%; transform: translateX(-50%); width: max-content;
+  margin-top: 10px; display: flex; align-items: flex-start; gap: 48px;
+}
+.odds-chip { position: relative; display: inline-flex; width: 60px; }
 .odds-chip .rps-hand-art, .odds-chip .rps-hand-text { width: 100%; }
 .odds-chip b {
-  position: absolute; left: 50%; bottom: -4px; transform: translateX(-50%);
-  font-size: 16px; font-weight: 900; color: rgba(255, 232, 176, 0.99);
+  position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%);
+  font-size: 20px; font-weight: 900; color: rgba(255, 232, 176, 0.99);
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 0, 0, 0.8);
   white-space: nowrap;
 }
 .odds-chip.is-blocked .rps-hand-art { filter: grayscale(0.75) brightness(0.55); }
-.odds-chip.is-blocked b { font-size: 20px; color: rgba(236, 92, 68, 0.97); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.95), 0 0 10px rgba(210, 54, 32, 0.6); }
-.mini-rps-streak { font-size: 15px; color: rgba(210, 198, 178, 0.74); }
-.mini-rps-streak b { color: rgba(244, 206, 112, 0.96); font-size: 19px; font-weight: 900; }
-/* 백작의 확률 선언 — 대사 + 표기 % (계산 가능한 정보라 은은히 발광) */
-.mini-rps-decl { min-height: 24px; text-align: center; font-size: 17px; letter-spacing: 0.02em; color: rgba(222, 208, 252, 0.96); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85), 0 0 14px rgba(150, 130, 224, 0.4); }
-/* 버프·버린 패는 한 줄로 압축 — 세로 예산 확보(상단 덱/선언 줄이 레일 밖으로 밀리지 않게) */
-.mini-rps-aux { display: flex; justify-content: center; align-items: baseline; gap: 22px; min-height: 14px; flex-wrap: wrap; }
-.mini-rps-buffs { font-size: 14px; color: rgba(200, 190, 170, 0.5); }
-.mini-rps-buffs.is-armed { color: rgba(224, 212, 255, 0.98); text-shadow: 0 0 12px rgba(150, 130, 224, 0.6); }
-.mini-rps-result { min-height: 22px; text-align: center; font-size: 18px; font-weight: 800; }
-.mini-rps-result.is-win { color: rgba(154, 228, 162, 0.99); animation: mini-result-pop 0.4s ease; }
-.mini-rps-result.is-lose { color: rgba(230, 104, 86, 0.97); animation: mini-result-pop 0.4s ease; }
-.mini-rps-result.is-tie { color: rgba(214, 204, 184, 0.78); }
+.odds-chip.is-blocked b { font-size: 25px; color: rgba(236, 92, 68, 0.97); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.95), 0 0 10px rgba(210, 54, 32, 0.6); }
+.mini-rps-streak { font-size: 17px; color: rgba(210, 198, 178, 0.74); }
+.mini-rps-streak b { color: rgba(244, 206, 112, 0.96); font-size: 23px; font-weight: 900; }
+/* 백작의 확률 선언 — 확률 칩 아래 중앙. 대사 + 표기 % (계산 가능한 정보라 은은히 발광) */
+.mini-rps-decl {
+  position: relative; left: 50%; transform: translateX(-50%); width: max-content; max-width: min(86vw, 620px);
+  margin-top: 14px; text-align: center; font-size: 20px; letter-spacing: 0.02em;
+  color: rgba(222, 208, 252, 0.98);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9), 0 0 16px rgba(150, 130, 224, 0.45);
+}
 
-/* 아이템 — 부채꼴(슬롯 회전) + 테두리 없이 폰트 위주. hover 시 발광+확대 */
-.mini-rps-items { display: flex; justify-content: center; align-items: flex-end; gap: 12px; }
-.rps-item-slot { position: relative; transform-origin: center 170%; }
-/* 차단 픽커 — 차단 버튼 바로 위에 떠서 봉쇄할 손을 직접 고른다 */
+/* 판정 토스트 레인 — 남는 세로 여백(중간 하단)을 전부 차지하고, 토스트를 바닥(던지기 위)에
+   쌓는다. 체인 로그처럼 오래 머물다 스르륵 사라진다. */
+.mini-rps-toasts {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 8px;
+  pointer-events: none; z-index: 5;
+}
+.rps-toast {
+  display: flex; align-items: baseline; gap: 14px; max-width: 72%;
+  animation: rps-toast-in 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.rps-toast-head { font-size: 30px; font-weight: 900; letter-spacing: 0.06em; line-height: 1; }
+.rps-toast.is-win .rps-toast-head { color: rgba(158, 232, 166, 1); text-shadow: 0 2px 10px rgba(0, 0, 0, 0.92), 0 0 24px rgba(90, 190, 110, 0.55); }
+.rps-toast.is-lose .rps-toast-head { color: rgba(238, 104, 84, 0.98); text-shadow: 0 2px 10px rgba(0, 0, 0, 0.92), 0 0 24px rgba(210, 54, 32, 0.5); }
+.rps-toast.is-tie .rps-toast-head { color: rgba(218, 208, 190, 0.92); text-shadow: 0 2px 10px rgba(0, 0, 0, 0.92); }
+.rps-toast-detail { font-size: 17px; font-weight: 800; color: rgba(242, 230, 202, 0.96); text-shadow: 0 1px 7px rgba(0, 0, 0, 0.92); }
+.rps-toast.is-out { animation: rps-toast-out 0.76s ease forwards; }
+
+/* 아이템 — 레일 좌측 세로 열(살짝 부채꼴). 테두리 없이 폰트 위주, hover 시 발광+확대 */
+.mini-rps-items {
+  position: absolute; left: 2%; top: 38%; transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 20px; z-index: 4;
+}
+.rps-item-slot { position: relative; transform-origin: left center; }
+/* 차단 픽커 — 차단 버튼 옆에 떠서 봉쇄할 손을 직접 고른다 */
 .rps-block-picker {
-  position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%);
-  display: flex; gap: 6px; padding: 5px 7px; border-radius: 10px;
+  position: absolute; left: calc(100% + 12px); top: 50%; transform: translateY(-50%);
+  display: flex; gap: 10px; padding: 6px 9px; border-radius: 12px;
   background: rgba(20, 12, 24, 0.88); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.6);
   z-index: 4;
 }
 .rps-block-picker[hidden] { display: none; }
 /* 픽커 옵션도 손 엠블럼 이미지 타일 — 던지기 타일과 같은 양식, hover 시 보랏빛 발광·확대 */
 .rps-block-opt {
-  width: 46px; padding: 1px; border-radius: 10px; cursor: pointer; border: none;
+  width: 58px; padding: 1px; border-radius: 10px; cursor: pointer; border: none;
   background: none; font-family: inherit;
   transition: transform 0.14s, filter 0.16s, opacity 0.16s;
 }
@@ -1286,34 +1322,45 @@ export class EventOverlayView {
 .rps-block-opt:hover { transform: translateY(-2px) scale(1.12); filter: drop-shadow(0 0 10px rgba(190, 150, 240, 0.8)); }
 .rps-block-opt.is-disabled { opacity: 0.3; pointer-events: none; }
 .mini-rps-item {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 5px 15px; cursor: pointer; border: none; background: none; font-family: inherit;
-  color: rgba(238, 226, 250, 0.95);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 6px 12px; cursor: pointer; border: none; background: none; font-family: inherit;
+  color: rgba(238, 226, 250, 0.95); text-align: left;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9), 0 1px 3px rgba(0, 0, 0, 0.95);
   transition: transform 0.14s, color 0.18s, text-shadow 0.18s, opacity 0.18s;
 }
-.mini-rps-item .it-label { font-size: 18px; font-weight: 900; letter-spacing: 0.04em; }
-.mini-rps-item .it-cost { font-size: 12.5px; color: rgba(206, 172, 244, 0.84); }
-.mini-rps-item:hover { transform: translateY(-3px) scale(1.07); color: rgba(255, 246, 255, 1); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9), 0 0 16px rgba(190, 150, 240, 0.75); }
+.mini-rps-item .it-label { font-size: 21px; font-weight: 900; letter-spacing: 0.04em; }
+.mini-rps-item .it-cost { font-size: 14px; color: rgba(206, 172, 244, 0.84); }
+.mini-rps-item:hover { transform: translateX(3px) scale(1.06); color: rgba(255, 246, 255, 1); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9), 0 0 16px rgba(190, 150, 240, 0.75); }
 .mini-rps-item.is-disabled { opacity: 0.26; pointer-events: none; }
 .mini-rps-item.is-used { opacity: 0.4; pointer-events: none; }
+/* 이번 판 장전된 아이템(두배/보호)은 흐려지지 않고 보랏빛으로 타오른다 */
+.mini-rps-item.is-armed { opacity: 1; pointer-events: none; color: rgba(236, 224, 255, 1); }
+.mini-rps-item.is-armed .it-label { text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9), 0 0 20px rgba(190, 150, 240, 0.95); }
+.mini-rps-item.is-armed .it-cost { visibility: hidden; }
+.mini-rps-item.is-armed::after { content: '이번 판 적용'; font-size: 12.5px; font-weight: 800; letter-spacing: 0.05em; color: rgba(216, 190, 255, 0.96); text-shadow: 0 0 12px rgba(150, 130, 224, 0.7); margin-top: -17px; }
 .mini-rps-item.is-pulse { animation: mini-offer-pulse 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
 
-/* 판돈 — 별 개수 + 수치, 폰트 위주 */
-.mini-rps-stakes { display: flex; justify-content: center; gap: 22px; }
-.mini-rps-stake { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 10px; cursor: pointer; border: none; background: none; font-family: inherit; transition: transform 0.14s, opacity 0.18s; }
-.mini-rps-stake .stake-stars { display: inline-flex; gap: 3px; }
-.mini-rps-stake .stake-star { display: inline-flex; width: 17px; height: 17px; color: rgba(160, 142, 96, 0.5); transition: color 0.18s, filter 0.18s; }
+/* 판돈 — 레일 우측 세로 열. 별 개수 + 수치, 폰트 위주 */
+.mini-rps-stakes {
+  position: absolute; right: 2%; top: 38%; transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: flex-end; gap: 16px; z-index: 4;
+}
+.mini-rps-stake { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; padding: 5px 12px; cursor: pointer; border: none; background: none; font-family: inherit; transition: transform 0.14s, opacity 0.18s; }
+.mini-rps-stake .stake-stars { display: inline-flex; gap: 4px; }
+.mini-rps-stake .stake-star { display: inline-flex; width: 20px; height: 20px; color: rgba(160, 142, 96, 0.5); transition: color 0.18s, filter 0.18s; }
 .mini-rps-stake .stake-star svg { width: 100%; height: 100%; }
-.mini-rps-stake .stake-amt { font-size: 15px; font-weight: 800; color: rgba(230, 216, 180, 0.78); text-shadow: 0 1px 5px rgba(0, 0, 0, 0.85); }
-.mini-rps-stake:hover { transform: translateY(-2px); }
+.mini-rps-stake .stake-amt { font-size: 18px; font-weight: 800; color: rgba(230, 216, 180, 0.78); text-shadow: 0 1px 5px rgba(0, 0, 0, 0.85); }
+.mini-rps-stake:hover { transform: translateX(-3px); }
 .mini-rps-stake.is-selected .stake-star { color: rgba(255, 224, 150, 0.99); filter: drop-shadow(0 0 6px rgba(244, 206, 112, 0.85)); }
-.mini-rps-stake.is-selected .stake-amt { color: rgba(255, 236, 180, 0.99); }
+.mini-rps-stake.is-selected .stake-amt { color: rgba(255, 236, 180, 0.99); font-size: 20px; }
 .mini-rps-stake.is-disabled { opacity: 0.3; pointer-events: none; }
 
-/* 던지기 — 손 이미지 타일. hover 시 발광 + 확대 + 흔들림 (더 크게) */
-.mini-rps-throws { display: flex; justify-content: center; gap: 28px; }
-.mini-rps-throw { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; width: clamp(90px, 10.5vw, 110px); padding: 0; cursor: pointer; border: none; background: none; font-family: inherit; transition: transform 0.16s, opacity 0.18s; }
+/* 물러나기 — 우상단 연승 아래 고정. 우하단은 가위 타일과 겹쳐서 위로 뺀다(중앙 세로 예산 절약) */
+.mini-rps .mini-rps-done { position: absolute; right: 2%; top: 11%; margin: 0; z-index: 6; }
+
+/* 던지기 — 손 이미지 타일. 넓은 간격으로 하단을 가로지른다. hover 시 발광 + 확대 + 흔들림 */
+.mini-rps-throws { display: flex; justify-content: center; gap: 52px; }
+.mini-rps-throw { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; width: clamp(96px, 11vw, 136px); padding: 0; cursor: pointer; border: none; background: none; font-family: inherit; transition: transform 0.16s, opacity 0.18s; }
 /* hover 발광은 drop-shadow 대신 뒤쪽 radial 글로우 — 마스크 알파를 따라 그림자가 지며
    생기던 원형 경계를 없앤다(::before는 자식보다 먼저 칠해져 자연히 이미지 뒤에 깔림). */
 .mini-rps-throw::before {
@@ -1322,7 +1369,7 @@ export class EventOverlayView {
   opacity: 0; transition: opacity 0.18s; pointer-events: none;
 }
 .mini-rps-throw .rps-hand-art { transition: filter 0.18s; }
-.mini-rps-throw .rps-throw-name { font-size: 17px; font-weight: 900; letter-spacing: 0.06em; color: rgba(255, 238, 196, 0.92); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9); }
+.mini-rps-throw .rps-throw-name { font-size: 19px; font-weight: 900; letter-spacing: 0.06em; color: rgba(255, 238, 196, 0.92); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9); }
 .mini-rps-throw:hover { transform: translateY(-4px) scale(1.09); animation: rps-throw-wobble 0.5s ease-in-out; }
 .mini-rps-throw:hover::before { opacity: 1; }
 .mini-rps-throw:hover .rps-hand-art { filter: brightness(1.16) saturate(1.05); }
@@ -1334,6 +1381,48 @@ export class EventOverlayView {
 @keyframes mini-panel-out { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(0.94) translateY(8px); filter: blur(3px); } }
 @keyframes rps-slot-impact { 0% { transform: translateX(-50%) scale(1.2); filter: brightness(1.45); } 55% { transform: translateX(-50%) scale(0.97); } 100% { transform: translateX(-50%) scale(1); filter: brightness(1); } }
 @keyframes rps-throw-wobble { 0%, 100% { rotate: 0deg; } 25% { rotate: -5deg; } 75% { rotate: 5deg; } }
+/* 토스트 등장(팡 떠오름)과 퇴장(스르륵 — 위로 스미며 흐려짐) */
+@keyframes rps-toast-in { 0% { opacity: 0; transform: translateY(14px) scale(0.92); } 60% { transform: translateY(-2px) scale(1.04); } 100% { opacity: 1; transform: none; } }
+@keyframes rps-toast-out { 0% { opacity: 1; } 100% { opacity: 0; transform: translateY(10px); filter: blur(3px); } }
+
+/* 낮은 화면 보정 — 상단 슬롯 열과 던지기 타일을 줄여 판정 토스트 레인(중간 하단 여백)을
+   확보한다. 높은 화면에서는 큰 사이즈가 그대로 살아난다. */
+@media (max-height: 880px) {
+  .mini-rps-cardslot { width: clamp(92px, 13%, 150px); }
+  .mini-rps-odds { margin-top: 8px; gap: 40px; }
+  .odds-chip { width: 52px; }
+  .odds-chip b { font-size: 17px; bottom: -5px; }
+  .odds-chip.is-blocked b { font-size: 21px; }
+  .mini-rps-decl { margin-top: 10px; font-size: 17px; }
+  .mini-rps-throw { width: clamp(88px, 10vw, 118px); }
+  .mini-rps-throw .rps-throw-name { font-size: 17px; }
+  .rps-toast-head { font-size: 26px; }
+  .rps-toast-detail { font-size: 15px; }
+}
+
+/* 모바일 보정 — 좌우 열/큰 타일을 줄여 좁은 레일에서도 겹치지 않게 한다 */
+@media (max-width: 700px) {
+  .mini-rps-cardslot { width: clamp(84px, 16%, 118px); }
+  .mini-rps-odds { gap: 24px; }
+  .odds-chip { width: 44px; }
+  .odds-chip b { font-size: 15px; }
+  .mini-rps-decl { font-size: 14px; max-width: 88vw; }
+  .mini-rps-items { gap: 8px; }
+  .mini-rps-item .it-label { font-size: 15px; }
+  .mini-rps-item .it-cost { font-size: 11px; }
+  .rps-block-opt { width: 42px; }
+  .mini-rps-stakes { gap: 8px; }
+  .mini-rps-stake .stake-star { width: 14px; height: 14px; }
+  .mini-rps-stake .stake-amt { font-size: 13px; }
+  .mini-rps-throws { gap: 20px; }
+  .mini-rps-throw { width: clamp(66px, 19vw, 92px); }
+  .mini-rps-throw .rps-throw-name { font-size: 14px; }
+  .rps-toast-head { font-size: 21px; }
+  .rps-toast-detail { font-size: 12.5px; }
+  .mini-rps-try { width: 14px; height: 14px; }
+  .mini-rps-streak { font-size: 13px; }
+  .mini-rps-streak b { font-size: 16px; }
+}
 `
     document.head.appendChild(style)
   }
