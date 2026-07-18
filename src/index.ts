@@ -1687,10 +1687,16 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // 온보딩(첫 경험)이면 잡동사니 필드로, 아니면 정상 오프닝으로 첫 보드를 채운다.
   // 온보딩이면 1~10층 저확률 필드 스폰도 켠다(첫 필드 이후 부드러운 전환 + 과도 합체 완화).
   cardSpawner.setOnboardingFieldSpawnChance(isOnboardingActive() ? 0.15 : 0)
+  // 첫 실행 인트로: 칸이 내려오기 전 무대 비트(방사 밝힘→카드 안착→오프닝 대사→레일 등장)를 재생한다.
+  const firstRunIntroActive = firstRunIntroPending
+  firstRunIntroPending = false
+  if (firstRunIntroActive) await playFirstRunIntroBeats()
   if (isOnboardingActive()) await fillOnboardingField()
   else fillBoardAtStart()
   turnManager.armFrontBombs()
   render()
+  // 칸 드롭까지 끝났으면 좌우 UI를 슬라이드 인시키며 인트로를 닫는다.
+  if (firstRunIntroActive) finishFirstRunIntro()
   // 직업을 골랐을 때만 직업 카드 HUD 이동 + 직업 암막 커튼 열림 연출을 재생한다.
   if (chosenJob) {
     await boardRenderer.animateJobCardToHud(chosenJob)
@@ -1699,7 +1705,8 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
 
   // 1구역 커튼: 직업 선택 직후 항상 표시한다.
   // enterHearth()는 startGame()을 직접 호출하지 않으므로 로비 진입 자체에는 이 커튼이 나오지 않는다.
-  void zoneCurtain.show(ZONE_LIST[0], () => setZoneBackground(ZONE_LIST[0].bgUrl))
+  // 첫 실행 인트로에서는 상단 커튼이 거슬리므로 생략한다(배경은 인트로가 이미 노출).
+  if (!firstRunIntroActive) void zoneCurtain.show(ZONE_LIST[0], () => setZoneBackground(ZONE_LIST[0].bgUrl))
 
   // 1턴 시작 대사: 암막이 완전히 걷힌 뒤 살짝 딜레이 후 등장.
   {
@@ -1712,11 +1719,14 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
     // 회상은 인사의 최소 노출 시간이 지난 뒤 이어서 나온다(뜨자마자 교체되는 충돌 제거).
     window.setTimeout(() => {
       if (!gameActive) return
-      companionDirector.clearBarkQueue()
-      companionDirector.enaSpeaking = false // 직전 런의 잔여 바크 상태와 무관하게 새 런 인사를 확정 표시한다.
-      companionDirector.sayEnaBark(opening, { importance: BARK_IMPORTANCE.situation })
-      if (memoryLine && companionDirector.companionWorldCanSpeak()) {
-        companionDirector.sayEnaBark(memoryLine, { importance: BARK_IMPORTANCE.situation })
+      // 첫 실행 인트로에서는 오프닝 한마디를 중앙 안착 대사로 이미 쳤으므로 재발화하지 않는다.
+      if (!firstRunIntroActive) {
+        companionDirector.clearBarkQueue()
+        companionDirector.enaSpeaking = false // 직전 런의 잔여 바크 상태와 무관하게 새 런 인사를 확정 표시한다.
+        companionDirector.sayEnaBark(opening, { importance: BARK_IMPORTANCE.situation })
+        if (memoryLine && companionDirector.companionWorldCanSpeak()) {
+          companionDirector.sayEnaBark(memoryLine, { importance: BARK_IMPORTANCE.situation })
+        }
       }
       // 인사 뒤, 첫 보드에 놓인 온보딩 필드(바위/덤불/잡동사니)를 한 줄로 묶어 소개한다.
       maybeIntroduceFields()
@@ -3570,6 +3580,106 @@ window.addEventListener('pointerdown', unlockSfx, true)
 /** 첫 실행(새싹 병아리 직행)을 이미 소비했는지 — unmelting. 접두사라 /리셋 시 첫 실행 상태로 돌아간다. */
 const BOOT_FIRST_RUN_KEY = 'unmelting.boot.firstRunStarted'
 
+/** 첫 실행 인트로 시네마틱 예약 — bootGame이 켜고 startGame 온보딩 경로가 1회 소비한다. */
+let firstRunIntroPending = false
+
+/** 첫 실행 인트로 무대 준비: 게이트 아래에 어둠(방사 베일)을 깔고 레일/카드/패널을 숨겨 둔다.
+ *  이 인트로 동안 상단 구역 커튼은 생략한다(배경은 방사 밝힘이 직접 드러낸다). */
+function prepareFirstRunIntro(): void {
+  firstRunIntroPending = true
+  const style = document.createElement('style')
+  style.id = 'first-run-intro-style'
+  style.textContent = `
+    #first-run-veil { position: fixed; inset: 0; z-index: 10590; pointer-events: auto; --veil-r: 0%;
+      background: radial-gradient(circle at 50% 44%, rgba(4,3,8,0) calc(var(--veil-r) - 14%), rgba(4,3,8,0.985) var(--veil-r)); }
+    body.first-run-intro .rail { opacity: 0; }
+    body.first-run-intro.first-run-rail-in .rail { opacity: 1; animation: first-run-rail-drop .72s cubic-bezier(.2,.84,.3,1) both; transform-origin: 50% 0; }
+    @keyframes first-run-rail-drop { from { transform: translateY(-44px) scaleX(.22); opacity: 0; } to { transform: none; opacity: 1; } }
+    body.first-run-intro .player-row .player-card { opacity: 0; }
+    body.first-run-intro.first-run-card-in .player-row .player-card { opacity: 1; }
+    body.first-run-intro .ember-hud { opacity: 0; transform: translateY(-18px); }
+    body.first-run-intro .left-panel { transform: translateX(-115%); opacity: 0; }
+    body.first-run-intro .hand-column { transform: translateX(115%); opacity: 0; }
+    body.first-run-intro.first-run-ui-in .ember-hud,
+    body.first-run-intro.first-run-ui-in .left-panel,
+    body.first-run-intro.first-run-ui-in .hand-column {
+      opacity: 1; transform: none;
+      transition: transform .62s cubic-bezier(.2,.84,.3,1), opacity .5s ease;
+    }
+  `
+  document.head.appendChild(style)
+  const veil = document.createElement('div')
+  veil.id = 'first-run-veil'
+  document.body.appendChild(veil)
+  document.body.classList.add('first-run-intro')
+}
+
+/** 방사 밝힘: 중앙에서 퍼지듯 베일 반경을 넓혀 배경을 노출한다(rAF로 CSS 변수 구동). */
+function animateVeilReveal(veil: HTMLElement, duration: number): Promise<void> {
+  return new Promise((resolve) => {
+    const start = performance.now()
+    const step = (now: number): void => {
+      const t = Math.min(1, (now - start) / duration)
+      const eased = 1 - Math.pow(1 - t, 2.2) // 초반 빠르게, 끝은 은은하게
+      veil.style.setProperty('--veil-r', `${(eased * 135).toFixed(1)}%`)
+      if (t < 1) requestAnimationFrame(step)
+      else resolve()
+    }
+    requestAnimationFrame(step)
+  })
+}
+
+/** 첫 실행 인트로 비트: 방사 밝힘(배경 노출) → 플레이어 카드 후웅 안착 → 오프닝 대사 →
+ *  하단 정위치 하강 → 레일 하강+좌우 확장. 이후 칸 드롭은 fillOnboardingField가 잇는다. */
+async function playFirstRunIntroBeats(): Promise<void> {
+  const veil = document.getElementById('first-run-veil')
+  // 상단 구역 커튼 없이 배경만 즉시 세팅 — 어둠 아래에 깔린 배경을 방사 밝힘이 드러낸다.
+  setZoneBackground(ZONE_LIST[0].bgUrl)
+  await wait(300)
+  if (veil) await animateVeilReveal(veil, 1150)
+  const card = document.querySelector<HTMLElement>('.player-card')
+  if (card) {
+    const rect = card.getBoundingClientRect()
+    const dx = window.innerWidth / 2 - (rect.left + rect.width / 2)
+    const dy = window.innerHeight * 0.44 - (rect.top + rect.height / 2)
+    document.body.classList.add('first-run-card-in')
+    // 하스스톤 하수인 놓듯: 위에서 크게 들어와 중앙에 쿵 안착.
+    const landing = card.animate(
+      [
+        { transform: `translate(${dx}px, ${dy - 130}px) scale(1.9)`, opacity: 0, filter: 'brightness(2)' },
+        { transform: `translate(${dx}px, ${dy + 8}px) scale(1.06)`, opacity: 1, filter: 'brightness(1.2)', offset: 0.7 },
+        { transform: `translate(${dx}px, ${dy}px) scale(1.14)`, filter: 'brightness(1)' },
+      ],
+      { duration: 780, easing: 'cubic-bezier(.22,.9,.3,1)' }
+    )
+    await landing.finished
+    // 안착 상태를 인라인으로 고정한 뒤(WAAPI fill 잔류 방지) 착지 임팩트를 터뜨린다.
+    card.style.transform = `translate(${dx}px, ${dy}px) scale(1.14)`
+    SquareBurst.playOn(card, 'score', { count: 26, spread: 170, duration: 640, size: [10, 22] })
+    // 중앙에서 오프닝 한마디 — 대사가 끝나면 하단 정위치로 내려간다.
+    await playDialogueLine(speechBubble, null, '역경 아래, 작은 불빛을 밝혀야만 해.', 2000, 260)
+    const settle = card.animate(
+      [{ transform: `translate(${dx}px, ${dy}px) scale(1.14)` }, { transform: 'translate(0, 0) scale(1)' }],
+      { duration: 640, easing: 'cubic-bezier(.2,.84,.3,1)' }
+    )
+    await settle.finished
+    card.style.removeProperty('transform')
+  }
+  // 레일이 내려오며 좌우로 넓어진다 — 이어지는 칸 드롭(fillOnboardingField)의 무대가 된다.
+  document.body.classList.add('first-run-rail-in')
+  await wait(720)
+}
+
+/** 첫 실행 인트로 마무리: 좌우 패널/불씨 HUD 슬라이드 인 후 무대 장치를 정리한다. */
+function finishFirstRunIntro(): void {
+  document.body.classList.add('first-run-ui-in')
+  window.setTimeout(() => {
+    document.body.classList.remove('first-run-intro', 'first-run-card-in', 'first-run-rail-in', 'first-run-ui-in')
+    document.getElementById('first-run-veil')?.remove()
+    document.getElementById('first-run-intro-style')?.remove()
+  }, 940)
+}
+
 /** 메타 전부 해금 + 거점 강제 개방 후 테스트 런 직행 — /테스트 명령과 ?test=1 부팅이 공유한다. */
 function startTestRun(): void {
   for (const { id } of META_UNLOCKS) setMetaUnlocked(id, true)
@@ -3658,7 +3768,9 @@ async function bootGame(): Promise<void> {
   // 장면(로비/런)을 게이트 아래에서 먼저 구성한 뒤 걷어야 커튼 연출이 첫 프레임부터 온전하다.
   if (!localStorage.getItem(BOOT_FIRST_RUN_KEY)) {
     // 첫 실행: 로비를 건너뛰고 곧바로 새싹 병아리 온보딩으로 들어간다(사망/클리어 후 로비 복귀).
+    // 게이트가 걷혀도 어둠이 이어지는 첫 연출(방사 밝힘→카드 안착→대사→레일→칸→UI)을 예약한다.
     localStorage.setItem(BOOT_FIRST_RUN_KEY, '1')
+    prepareFirstRunIntro()
     void startGame(0, 'sprout')
   } else {
     enterHearth()
