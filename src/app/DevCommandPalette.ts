@@ -45,6 +45,8 @@ export interface DevCommandPaletteDeps {
   isInputLocked(): boolean
   setInputLocked(locked: boolean): void
   isShopOpen(): boolean
+  /** 메타 전부 해금 + 테스트 런 직행(부팅 ?test=1과 동일 경로). */
+  startTestRun(): void
 }
 
 export function setupDevCommandPalette(deps: DevCommandPaletteDeps): void {
@@ -56,7 +58,7 @@ export function setupDevCommandPalette(deps: DevCommandPaletteDeps): void {
       <span class="dev-command-prefix">/</span>
       <input class="dev-command-input" type="text" spellcheck="false" autocomplete="off" />
       <button class="dev-command-close" aria-label="닫기">✕</button>
-      <div class="dev-command-hint">예시: /시작, /리셋, /부자, /상점, /제단, /시련, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비</div>
+      <div class="dev-command-hint">예시: /시작, /테스트, /리셋, /부자, /상점, /제단, /시련, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비</div>
     </div>
     <button class="dev-command-run">실행</button>
   `
@@ -129,6 +131,7 @@ export function setupDevCommandPalette(deps: DevCommandPaletteDeps): void {
   // 칠 수 있는 명령어 목록 — /를 치면 하단에 도움말로 뜨고, 입력 중엔 일치 항목만 좁혀 보여준다.
   const DEV_COMMANDS: { name: string; desc: string }[] = [
     { name: '시작', desc: '거점(로비) 진입' },
+    { name: '테스트', desc: '메타 전부 해금 + 테스트 런 직행' },
     { name: '개방', desc: '거점 모든 칸 강제 개방' },
     { name: '잠금', desc: '거점 개방 해제(모험/무역만)' },
     { name: '리셋', desc: '에나 경험 초기화' },
@@ -329,6 +332,13 @@ export function setupDevCommandPalette(deps: DevCommandPaletteDeps): void {
       }
       deps.render()
       setHint(`디버그: 랜덤 손패 ${added}장 지급`)
+      return
+    }
+    // 테스트 직행: 메타 전부 해금 후 곧바로 테스트 런을 연다(리로드 없이 즉시 점검).
+    if (/^(테스트|test)$/i.test(token)) {
+      if (deps.isShopOpen()) { setHint('상점/제단을 닫은 뒤 시도하세요.'); return }
+      close()
+      deps.startTestRun()
       return
     }
     // 거점(촛대) 진입. 빈 레일을 배경으로 거점 화면을 띄운다.

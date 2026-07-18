@@ -122,6 +122,55 @@ export const HEARTH_STYLES = `
   background-size: auto, cover, cover;
   background-position: center, center top, center top;
 }
+/* 잠금 칸 공통: 더 깊은 어둠으로 가라앉혀 개방 칸과의 대비를 키운다. */
+.hearth-cell--locked { filter: brightness(0.52) saturate(0.55); }
+/* 다음 해금 목표(무역): 다른 잠금 칸보다 살짝 밝고, 자물쇠에 온기 어린 맥동을 준다. */
+.hearth-cell--locked.hearth-cell--next-goal { filter: brightness(0.8) saturate(0.82); }
+.hearth-cell--next-goal .hearth-cell__lock {
+  opacity: 0.85;
+  color: rgba(248, 206, 120, 0.9);
+  animation: hearth-goal-lock-pulse 2.4s ease-in-out infinite;
+}
+@keyframes hearth-goal-lock-pulse {
+  0%, 100% { filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6)); }
+  50% { filter: drop-shadow(0 0 10px rgba(255, 200, 100, 0.65)); }
+}
+
+/* ── 무역 개방 축하(졸업 후 첫 로비 도착 1회) ─────────────────────────
+   대기: 개방 칸이지만 잠금 외형으로 눌러 둔다 → 발광 램프업+자물쇠 흔들림 → 팡! 개방. */
+.hearth-cell--unlock-pending {
+  filter: brightness(0.5) saturate(0.55);
+  pointer-events: none;
+}
+.hearth-cell--unlock-pending .hearth-cell__label { color: rgba(220, 206, 184, 0.4); }
+.hearth-cell--unlock-pending.is-unlock-celebrating {
+  animation: hearth-unlock-glow 1.15s ease forwards;
+}
+@keyframes hearth-unlock-glow {
+  0% { filter: brightness(0.5) saturate(0.55); box-shadow: none; }
+  100% { filter: brightness(1.05) saturate(1); box-shadow: 0 0 26px rgba(255, 200, 100, 0.55), inset 0 0 18px rgba(255, 200, 100, 0.25); }
+}
+.is-unlock-celebrating .hearth-cell__lock {
+  opacity: 0.95;
+  color: rgba(255, 220, 140, 0.95);
+  animation: hearth-lock-shake 0.42s ease-in-out 0.55s 1;
+}
+@keyframes hearth-lock-shake {
+  0%, 100% { transform: rotate(0); }
+  20% { transform: rotate(-14deg); }
+  40% { transform: rotate(11deg); }
+  60% { transform: rotate(-8deg); }
+  80% { transform: rotate(5deg); }
+}
+/* 팡! 이후: 자물쇠는 사라지고 짧은 밝기 번쩍임 뒤 일반 점등 상태로 안착한다. */
+.hearth-cell--open.is-unlock-opened .hearth-cell__lock { display: none; }
+.hearth-cell--open.is-unlock-opened {
+  animation: hearth-unlock-open-flash 0.6s ease;
+}
+@keyframes hearth-unlock-open-flash {
+  0% { filter: brightness(1.9) saturate(1.2); }
+  100% { filter: brightness(1) saturate(1); }
+}
 /* 모험 칸 + 일러스트: 점등 전엔 어둡게, 점등(is-ignited) 시 덮개를 옅혀 일러스트를 밝힌다. */
 .hearth-cell--adventure.hearth-cell--has-art {
   background-image:

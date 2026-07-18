@@ -287,7 +287,10 @@ export class EnaAutonomousLearner {
     if (!raw) return { version: 1, updatedAt: '', reflections: [] }
     try {
       const parsed = JSON.parse(raw) as EnaAutonomousLearningState
-      return parsed.version === 1 ? parsed : { version: 1, updatedAt: '', reflections: [] }
+      if (parsed.version !== 1) return { version: 1, updatedAt: '', reflections: [] }
+      // 부분 손상(수동 편집·기록 유실) 저장본이 부팅 전체를 죽이지 않게 필수 배열만 보정한다.
+      if (!Array.isArray(parsed.reflections)) parsed.reflections = []
+      return parsed
     } catch {
       // 손상된 자기학습 저장값은 버리고 새로 쌓는다. 플레이어에게 오류를 노출하지 않는다.
       return { version: 1, updatedAt: '', reflections: [] }

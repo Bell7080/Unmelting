@@ -847,7 +847,8 @@ export class CardSpawner {
     )
   }
 
-  /** Pick the flower produced when a seed reaches the active row. */
+  /** Pick the flower produced when a seed reaches the active row.
+   *  새싹 병아리(온보딩) 중에는 화폐($) 획득 전면 잠금 정책에 따라 코인 보상 꽃(마리골드)을 제외한다. */
   randomBloomKind(): Exclude<FlowerKind, 'seed'> {
     const kinds: Exclude<FlowerKind, 'seed'>[] = [
       'chamomile',
@@ -856,7 +857,8 @@ export class CardSpawner {
       'oleander',
       'lavender',
     ]
-    return kinds[Math.floor(Math.random() * kinds.length)]
+    const pool = this.onboardingFieldSpawnChance > 0 ? kinds.filter((k) => k !== 'marigold') : kinds
+    return pool[Math.floor(Math.random() * pool.length)]
   }
 
   /** 미믹·식인꽃처럼 고정/꽃값 기반 특수 적은 고층에서 일반 적보다 약해진다.

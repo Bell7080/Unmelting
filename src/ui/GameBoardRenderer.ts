@@ -409,7 +409,7 @@ export class GameBoardRenderer {
           ${this.renderScorePanel(scorePanel)}
         </aside>
         <main class="stage">
-          <section class="rail ${this.shopOverlay.shopShutterLocked ? 'is-shop-shuttered' : ''}" aria-label="Card rail" style="--lane-count:${lanes.length}">
+          <section class="rail ${this.shopOverlay.shopShutterLocked ? 'is-shop-shuttered' : ''} ${(scorePanel.pendingHandTarget ?? this.handTargetingMode) ? 'is-targeting' : ''}" aria-label="Card rail" style="--lane-count:${lanes.length}">
             ${this.renderRail(lanes, scorePanel.refillPreviewCards)}
             ${this.shopOverlay.shopShutterLocked ? this.shopOverlay.renderShopShutter(true, lanes) : ''}
           </section>
@@ -1793,6 +1793,8 @@ export class GameBoardRenderer {
       banner.setAttribute('aria-hidden', 'true')
       document.body.appendChild(banner)
     }
+    // 타겟팅 동안 칸이 잘 보이도록 배너/체인 토스트를 반투명 처리하는 전역 훅.
+    document.body.classList.toggle('is-hand-targeting', targeting !== null)
     if (targeting) {
       const def = getHandCardDef(targeting.defId)
       banner.innerHTML = `
