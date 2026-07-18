@@ -17,7 +17,14 @@
  */
 
 import { GameState } from '@core/GameState'
-import { TurnManager, type EnemyHit } from '@core/TurnManager'
+import { setupDevCommandPalette } from '@/app/DevCommandPalette'
+import { SettlementScreen } from '@/app/SettlementScreen'
+import { ShopFlowManager, ONBOARDING_BANNED_CARDS } from '@/app/ShopFlowManager'
+import { EventFlowManager } from '@/app/EventFlowManager'
+import { CompanionDirector, BARK_IMPORTANCE } from '@/app/CompanionDirector'
+import { RelicEffectsManager } from '@/app/RelicEffectsManager'
+import type { PlayerResourceSnapshot, ResourceTrailSource, TrailResourceKind } from '@/app/FeedbackTypes'
+import { TurnManager } from '@core/TurnManager'
 import { BossEventController } from '@core/BossEvent'
 import {
   GameBoardRenderer,
@@ -25,12 +32,8 @@ import {
   ItemActionDetail,
   ActivityLogEntry,
   ShopBuyDetail,
-  ShopOfferView,
-  ShopPackItemView,
   ShopPackKind,
   ShopPackPickDetail,
-  ShopPackPickerView,
-  ShopStateView,
   type ResourceTrailTarget,
 } from '@ui/GameBoardRenderer'
 import { experienceAxes } from '@ui/ExperienceAxes'
@@ -39,59 +42,42 @@ import { CardSpawner } from '@systems/CardSpawner'
 import { ActionSystem, ActionType } from '@systems/ActionSystem'
 import { DropSystem } from '@systems/DropSystem'
 import { HandSystem, ChainState } from '@systems/HandSystem'
-import { runTagReactions, SHARD_GENERATORS, handCardIdsWithTag } from '@systems/TagReactions'
 import { EmberSystem } from '@systems/EmberSystem'
 import { Card, CardType } from '@entities/Card'
-import { LANE_DISTANCE_COUNT, Lane } from '@entities/Lane'
-import { pickEventForDoor, getEventDef, EVENT_IDS, type EventId, type EventDefinition, type EventDialogueLine, type EventResourceSnapshot, type EventResourceSink } from '@data/Events'
+import { LANE_DISTANCE_COUNT } from '@entities/Lane'
+import { type EventId } from '@data/Events'
 import { CandleMode } from '@entities/Character'
-import { HandCardId, HandCategory, type HandCardDefinition } from '@entities/HandCard'
-import { getHandCardDef, HAND_CARD_IDS, HAND_CARD_DEFINITIONS } from '@data/HandCards'
+import { HandCardId, HandCategory } from '@entities/HandCard'
+import { getHandCardDef, HAND_CARD_IDS } from '@data/HandCards'
 import { RECIPES } from '@data/Recipes'
-import { getRelicDef, relicDrawWeight, RELIC_IDS, type CustomRelicProfile, type RelicId } from '@data/Relics'
+import { getRelicDef, type CustomRelicProfile, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
-import { altarPackBaseCost, packCostWithRepeats, regularShopPackBaseCost } from '@core/ShopPricing'
 import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
 import { COMBO_TRIGGER_DELAY_MS, GAUGE_TRIGGER_DELAY_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
-import {
-  sampleWeightedWithoutReplacement,
-  sampleWithoutReplacement,
-} from '@core/Sampling'
-import { HAND_CARD_RARITY, SHOP_PACK_LABELS, SHOP_PACK_POOLS, CHANCE_PACK_RARITY_BOOST } from '@data/ShopPools'
-import { BASIC_PACK_POOL } from '@data/BasicPackPool'
+import { HAND_CARD_RARITY } from '@data/ShopPools'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { JOBS } from '@data/Jobs'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { CursorFX } from '@ui/CursorFX'
 import { FontManager } from '@ui/FontManager'
-import { SpriteUrls, spriteForHandCard, spriteForBasicPackItem, recipeSprite001 } from '@ui/Sprites'
+import { SpriteUrls } from '@ui/Sprites'
 import { SpeechBubble } from '@ui/SpeechBubble'
-import { BarkSequencer } from '@ui/BarkSequencer'
-import { CompanionSystem, type SituationId, type ClutchPlan, type BoardEncounterKind, type SystemEncounterKind } from '@systems/CompanionSystem'
-import type { EventMinigameMoment } from '@data/CompanionLines'
+import { CompanionSystem, type SituationId, type BoardEncounterKind, type SystemEncounterKind } from '@systems/CompanionSystem'
 import {
   loadDisposition,
-  saveDisposition,
   computeEnaGrowth,
-  ENA_DISPOSITION_STORAGE_KEY,
-  type EnaRunDramaSignals,
 } from '@systems/EnaDisposition'
-import { assessThreats, type ForesightOptions } from '@systems/CompanionForesight'
-import { HearthScene, HEARTH_DEV_UNLOCK_KEY, type HearthDifficulty } from '@ui/hearth/HearthScene'
+import { HearthScene, type HearthDifficulty } from '@ui/hearth/HearthScene'
 import { isMetaUnlocked } from '@core/MetaUnlocks'
 import { ZoneCurtain, ZONE_LIST } from '@ui/ZoneCurtain'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
 import { BgmManager } from '@/audio/BgmManager'
 import { sfx } from '@/audio/SfxManager'
-import { enaRuntimeObserver, shopKindToPurchaseId } from '@/rl/EnaRuntimeObserver'
+import { enaRuntimeObserver } from '@/rl/EnaRuntimeObserver'
 import {
   createBrowserEnaAutonomousLearner,
-  deriveRunExperienceKeys,
-  countNovelCardUses,
-  ENA_SELF_LEARNING_STORAGE_KEY,
 } from '@/rl/EnaAutonomousLearner'
-import { ENA_POLICY_STORAGE_KEY } from '@/rl/EnaPolicyStore'
 import { createBrowserLifetimeRecordStore } from '@core/LifetimeRecord'
 import bgm001Url from './assets/audio/bgm_001.mp3'
 import bgm002Url from './assets/audio/bgm_002.mp3'
@@ -190,11 +176,11 @@ gameState.endGame = (reason: string): void => {
   // 에나 혼자 보는 자기학습: 디버그 리포트 노출 없이 실제 런 로그를 다음 판단 재료로 압축한다.
   enaAutonomousLearner.learnAfterRun(enaRuntimeObserver.getMemory(), enaRuntimeObserver.getEvents())
   // per-player 성향 온라인 적응: 런 결과로 에나의 성향을 미세조정하고 저장(세션 넘어 유지).
-  adaptCompanionToRunOutcome(won)
+  companionDirector.adaptCompanionToRunOutcome(won)
   // 유대는 자기학습 저장에 함께 영속화한다(adapt에서 런 완료분이 오른 뒤 저장).
   enaAutonomousLearner.saveBond(companion.getBond())
   // 종막 대사: 게임오버/클리어 순간은 월드 바크 게이트(companionWorldCanSpeak)를 우회해 1회만 낸다.
-  sayEnaBark(won ? companion.clearLine() : companion.deathLine(), { importance: BARK_IMPORTANCE.clutch })
+  companionDirector.sayEnaBark(won ? companion.clearLine() : companion.deathLine(), { importance: BARK_IMPORTANCE.clutch })
 }
 const turnManager = new TurnManager(gameState)
 const cardSpawner = new CardSpawner()
@@ -291,72 +277,6 @@ companion.setSpecialization(initialEnaSpecialization)
 // 유대(bond)는 성향과 별개로 자기학습 저장(unmelting.ena.self-learning.v1)에서 복원한다.
 companion.setBond(enaAutonomousLearner.loadBond())
 
-// 런 단위 드라마(모험의 질) 신호 — 성장 점프 게이트 입력. 피격/위협 beat에서 채우고 새 런에 비운다.
-const runDramaSignals = {
-  lowHpMoments: 0,
-  emberCrises: 0,
-  lethalThreatsFaced: 0,
-  /** 이번 런 최저 체력 비율 — 컴백 폭(최저→최종) 계산용. */
-  lowestHpRatio: 1,
-}
-
-function resetRunDramaSignals(): void {
-  runDramaSignals.lowHpMoments = 0
-  runDramaSignals.emberCrises = 0
-  runDramaSignals.lethalThreatsFaced = 0
-  runDramaSignals.lowestHpRatio = 1
-}
-
-/** 런 종료 결과로 모험 xp를 적립하고 성장 앵커를 옮긴 뒤, 에나 성향을 온라인 적응시키고 저장한다. */
-function adaptCompanionToRunOutcome(won: boolean): void {
-  const floor = gameState.getCurrentTurn()
-  const c = gameState.character
-  // 이번 런 로그(endGame에서 방금 recordRunEnd로 확정됨)에서 의사결정·새 시도 신호를 집계한다.
-  const entries = enaRuntimeObserver.getMemory().all()
-  const lastRun = entries[entries.length - 1]
-  const handUses = lastRun
-    ? Object.values(lastRun.usedHandCards).reduce((sum: number, n) => sum + (n ?? 0), 0)
-    : 0
-  const decisions = handUses + (lastRun?.shopPurchases.length ?? 0) + companion.getRunInteractionCount()
-  const finalHpRatio = c.maxHealth > 0 ? Math.max(0, c.health) / c.maxHealth : 0
-  const drama: EnaRunDramaSignals = {
-    lowHpMoments: runDramaSignals.lowHpMoments,
-    emberCrises: runDramaSignals.emberCrises,
-    lethalThreatsFaced: runDramaSignals.lethalThreatsFaced,
-    effectiveClutches: companion.getRunClutchCount(),
-    timelyPredictions: companion.getRunTimelyPredictionCount(),
-    // 컴백 폭: 최저 체력비에서 런 종료 체력비까지 회복한 깊이(사망 런은 자연히 0에 가깝다).
-    comebackDepth: Math.max(0, finalHpRatio - runDramaSignals.lowestHpRatio),
-    novelCardsUsed: countNovelCardUses(entries),
-  }
-  // 모험 xp 적립(층·의사결정·진행 턴 + 첫 경험 + 드라마 게이트 점프) 후 성장 앵커 갱신.
-  enaAutonomousLearner.accrueAdventureXp({
-    floorReached: floor,
-    cleared: won,
-    decisions,
-    progressTurns: floor,
-    experienceKeys: deriveRunExperienceKeys({
-      floorReached: floor,
-      cleared: won,
-      shopPurchases: lastRun?.shopPurchases ?? [],
-    }),
-    drama,
-  })
-  companion.setGrowth(
-    computeEnaGrowth({ adventureXp: enaAutonomousLearner.loadAdventureXp(), bond: companion.getBond() })
-  )
-  // 축 특화 적립: 이번 런이 실제로 먹인 축(제때 예측/클러치/온정/피해 견딤×깊이)만 아주 소량 자란다.
-  const specialization = enaAutonomousLearner.accrueSpecialization({
-    floorReached: floor,
-    timelyPredictions: companion.getRunTimelyPredictionCount(),
-    effectiveClutches: companion.getRunClutchCount(),
-    warmthInteractions: companion.getRunWarmthSignalCount(),
-    damageTakenRatio: companion.getRunDamageTakenRatio(),
-  })
-  companion.setSpecialization(specialization)
-  const adapted = companion.adaptToOutcome({ died: !won, floorReached: floor })
-  saveDisposition(adapted, undefined, specialization)
-}
 
 // 경험(성향) 패널이 현재 에나 성향/성장值(표기 배율용)를 읽어 성좌 시각화를 그릴 수 있게 연결한다.
 // 점선 기준 별자리는 렌더러가 초보 시작 모양(ROOKIE, growth 0)으로 자체 앵커한다.
@@ -365,318 +285,26 @@ boardRenderer.setExperienceDataProvider(() => ({
   learning: companion.getLearningSnapshot(),
   growth: companion.getGrowth(),
 }))
-// 현재 player 말풍선이 에나 본인의 대사(바크)인지.
-let enaSpeaking = false
-// 연타 후 손을 떼면 '…이제 끝났어?'를 띄우기 위한 방치 타이머.
-let companionIdleTimer = 0
-const COMPANION_IDLE_MS = 2600
-// 현재 떠 있는 바크의 학습 대상 상황(없으면 null) / 중요도 / 등장 시각.
-let currentBarkSituation: SituationId | null = null
-let currentBarkImportance = 0
-let barkShownAt = 0
-// 버블이 fully-visible 된 이후 이 시간이 지나야 스킵(닫기)이 허용된다.
-// SpeechBubble.visibleSinceMs 로 측정하므로 별도 타이머는 불필요.
-const SKIP_MIN_VISIBLE_MS = 1000
-// 이 시간 넘게 떠 있었으면 "읽었다"로 본다(이후 스킵은 학습 신호로 치지 않음).
-let companionHeardTimer = 0
-const COMPANION_READ_MS = 1500
 
-/** 바크 중요도: 손패 한줄평<일반 반응<상황<위급/항의. 읽는 중엔 더 높은 것만 끼어든다. */
-const BARK_IMPORTANCE = { loot: 0, touch: 1, situation: 2, urgent: 3, clutch: 4 } as const
-
-// 비긴급 바크의 순차 출력 큐 — 시작 인사+회상처럼 연달아 온 바크가 서로를 즉시 덮지 않게,
-// 표시 중 바크의 최소 노출 시간(대사 길이 비례 1.5~3초)이 지난 뒤 이어서 보여준다.
-const barkSequencer = new BarkSequencer<SituationId>()
-let barkQueueTimer = 0
-
-/** 큐 드레인 예약 — 현재 바크의 최소 노출이 끝나는 시점에 다음 바크를 꺼낸다(이미 예약돼 있으면 무시). */
-function scheduleBarkQueueDrain(): void {
-  if (barkQueueTimer !== 0) return
-  barkQueueTimer = window.setTimeout(() => {
-    barkQueueTimer = 0
-    if (barkSequencer.pending === 0) return
-    if (!gameActive) {
-      barkSequencer.clear()
-      return
-    }
-    // urgent가 중간에 끼어들어 노출 기준이 뒤로 밀렸으면 남은 시간만큼 재예약한다.
-    if (barkSequencer.nextDelayMs() > 30) {
-      scheduleBarkQueueDrain()
-      return
-    }
-    const next = barkSequencer.shift()
-    if (!next) return
-    displayEnaBarkNow(next.line, next.importance, next.situation)
-    if (barkSequencer.pending > 0) scheduleBarkQueueDrain()
-  }, barkSequencer.nextDelayMs())
-}
-
-/** 바크 큐/드레인 타이머 정리 — 새 런 시작 등 흐름이 끊기는 지점에서 잔여 대사가 새지 않게 한다. */
-function clearBarkQueue(): void {
-  barkSequencer.clear()
-  clearTimeout(barkQueueTimer)
-  barkQueueTimer = 0
-}
-
-/** 바크를 지금 즉시 말풍선에 띄우고 학습/노출 추적 상태를 갱신한다(큐 판단은 sayEnaBark가 담당). */
-function displayEnaBarkNow(line: string, importance: number, situation: SituationId | null): void {
-  clearTimeout(companionHeardTimer)
-  companionHeardTimer = 0
-  enaSpeaking = true
-  currentBarkImportance = importance
-  currentBarkSituation = situation
-  barkShownAt = Date.now()
-  barkSequencer.noteDisplayed(line)
-  speechBubble.show(line)
-  if (situation) {
-    companionHeardTimer = window.setTimeout(() => {
-      companion.recordHeard(situation)
-      companionHeardTimer = 0
-      currentBarkSituation = null // 읽힘으로 정산됐으니 더는 스킵 대상이 아니다.
-    }, COMPANION_READ_MS)
-  }
-}
-
-/**
- * 에나의 한마디를 player 말풍선으로 띄운다.
- * - urgent/클러치급은 기존 규칙 유지: 큐를 건너뛰고 즉시 교체(더 높은 중요도 타이핑 중에만 양보).
- * - 그 외에는 표시 중 바크가 최소 노출 시간을 채우도록 짧은 큐(상한 3, 초과분은 낮은 중요도부터
- *   드롭)를 타고 순차 출력된다 — 시작 인사와 회상이 서로를 덮지 않는 근거.
- * - 상황 바크는 읽기 임계 시간 뒤까지 살아있으면 '읽음'으로 학습(더 말하게)한다.
- */
-function sayEnaBark(
-  line: string,
-  opts: { importance?: number; situation?: SituationId | null } = {}
-): void {
-  const importance = opts.importance ?? BARK_IMPORTANCE.touch
-  const situation = opts.situation ?? null
-  if (importance >= BARK_IMPORTANCE.urgent) {
-    if (enaSpeaking && speechBubble.isTyping && importance <= currentBarkImportance) return
-    displayEnaBarkNow(line, importance, situation)
-    return
-  }
-  if (barkSequencer.busy(enaSpeaking && speechBubble.isShowing)) {
-    barkSequencer.enqueue({ line, importance, situation })
-    scheduleBarkQueueDrain()
-    return
-  }
-  displayEnaBarkNow(line, importance, situation)
-}
-
-/** 체력/불씨가 위태로운 위급 상황인지 — 위급할 때 만지면 에나가 "지금 장난칠 때야?" 한다. */
-function companionInDanger(): boolean {
-  const c = gameState.character
-  const lowHp = c.maxHealth > 0 && c.health / c.maxHealth <= 0.3
-  const lowEmber = c.ember <= 1
-  return lowHp || lowEmber
-}
-
-/** 프로필을 만졌을 때 — 상황/연타 반응 + 방치 마무리 예약. 스킵은 플레이어 자유라 항의는 없다. */
-function onProfileTouched(): void {
-  if (!gameActive || inputLocked) return
-  // 이미 대사가 출력 중(타이핑)이면 새 대사를 띄우지 않는다 — 중복 출력 방지(먹통 느낌 없게).
-  if (speechBubble.isTyping) return
-  const now = Date.now()
-  const danger = companionInDanger()
-  const line = companion.onProfileTouch(now, { danger })
-  // 위급은 읽는 중에도 끼어들도록 높은 중요도, 평범한 반응은 낮은 중요도.
-  sayEnaBark(line, { importance: danger ? BARK_IMPORTANCE.urgent : BARK_IMPORTANCE.touch })
-  clearTimeout(companionIdleTimer)
-  companionIdleTimer = window.setTimeout(() => {
-    if (!gameActive || inputLocked) return
-    const settle = companion.onSettle()
-    if (settle) sayEnaBark(settle, { importance: BARK_IMPORTANCE.touch })
-  }, COMPANION_IDLE_MS)
-}
-
-/** 일반 월드 바크가 떠도 되는 상황인지 — 상점/보스/게임오버 중엔 침묵한다.
- *  보스 전용 대사(등장/국면/격파)와 종막 대사(사망/클리어), 상점 구매평은 이 게이트를
- *  의도적으로 우회해 각 이벤트 지점에서 1회씩만 직접 발화한다. */
-function companionWorldCanSpeak(): boolean {
-  return gameActive && !shopOpen && !gameState.bossBattleActive && !gameState.isGameOver
-}
-
-/** 적 공격 판정 직전에 회피 클러치를 굴린다. 체력 되돌림이 아니라 피해 적용 전 무효화라 타이밍이 자연스럽다. */
-function tryCompanionIncomingDodge(incomingDamage: number): boolean {
-  if (incomingDamage <= 0 || !companionWorldCanSpeak()) return false
-  const projectedHealth = gameState.character.health - incomingDamage
-  const adversity = projectedHealth <= Math.max(1, gameState.character.maxHealth * 0.35)
-  // bond는 하드코딩하지 않는다 — CompanionSystem이 누적 유대(bond >= 0.35)에서 파생한다.
-  if (!companion.rollMinorClutch('dodge', { adversity })) return false
-  recordNotice(`에나의 의지 — 회피! 피해 ${incomingDamage} 무효`, 'info')
-  void boardRenderer.animateClutchOnPlayer('health-gain')
-  showClutchChain('dodge', `피해 ${incomingDamage} 무효`)
-  sayEnaBark(companion.minorClutchLine('dodge'), { importance: BARK_IMPORTANCE.clutch })
-  return true
-}
-
-/** 클러치 종류별 전용 체인 제목(플레이어 카드 위 배너). */
-const CLUTCH_TITLES: Record<string, string> = {
-  crit: '모험의 긍지',
-  dodge: '날렵한 몸놀림',
-  counter: '맞서는 용기',
-  trap: '굳건한 의지',
-  treasure: '행운의 손길',
-  'ember-save': '되살린 불씨',
-  cleanse: '맑게 씻는 손',
-  heal: '포기를 모르는 마음',
-  shield: '수호의 결의',
-  ember: '꺼지지 않는 불씨',
-  hand: '건네는 손패',
-  awaken: '에나의 각성',
-  predict: '앞을 내다보는 눈',
-}
-
-/** 예측 대비로 건넨 카드를 플레이어가 기한 내 쓰는지 추적(RL 신호). */
-let pendingPrediction: {
-  cardIds: readonly string[]
-  issuedTurn: number
-  deadlineTurn: number
-  kind: string
-} | null = null
-
-/** 예지/클러치가 공유하는 위협 추정 입력 — 레일 예고 큐·강화팩 실효값·역할 가중을 함께 전달한다. */
-function companionForesightOptions(): ForesightOptions {
-  return {
-    unlockedCardIds: runCardPool.snapshot().unlocked,
-    unlockedRecipeIds: gameState.unlockedRecipeIds,
-    chainSequence: chain.sequence,
-    firedRecipeIds: chain.firedRecipeIds,
-    // 예고선과 같은 실제 다음 리필 큐(peek은 소비하지 않음) — 시간 축 보정 입력.
-    incomingRefill: cardSpawner.peekNextRefillCards(gameState.lanes.length),
-    handSingleBonus: gameState.enhancements.singleBonus,
-    supportRoleWeights: companion.getSupportRoleWeights(),
-  }
-}
-
-/** 예측 대비: 위협 추정(그릇)을 미리 읽고 대비 카드를 건넨다. 플레이어 차례 직전 호출. */
-async function tryCompanionPrediction(): Promise<void> {
-  const turn = gameState.getCurrentTurn()
-  // RL: 건넨 대비 카드를 기한 내 안 썼으면 '불필요'로 학습(덜 주게).
-  if (pendingPrediction && turn > pendingPrediction.deadlineTurn) {
-    companion.recordPredictionWasted()
-    pendingPrediction = null
-  }
-  if (!companionWorldCanSpeak() || gameState.bossBattleActive || pendingPrediction) return
-  const report = assessThreats(gameState.lanes, gameState.character, companionForesightOptions())
-  // 드라마 '위기감' 신호: 즉사 후보 병합 위협을 실제로 마주한 턴을 센다(계열 캡이 과대 계상을 막는다).
-  if (report.webLethal) runDramaSignals.lethalThreatsFaced += 1
-  const suggested = report.recommendedCardId
-  // HandCardAdvisor가 보유 손패의 같은 역할(청소류 포함)까지 보고 추천을 접으므로,
-  // 여기서는 같은 카드 중복 지급만 추가로 막으면 된다. 단, 비합체 2장 보유 카드는
-  // 3장째가 즉시 트리플로 완성되므로(트리플 보조 추천 경로) 지급을 허용한다.
-  const heldNonMerged = suggested
-    ? gameState.character.hand.filter((c) => c.defId === suggested && !c.merged).length
-    : 0
-  const needsPrediction = !!suggested && (heldNonMerged === 0 || heldNonMerged === 2)
-  if (!suggested) return
-  if (!companion.evaluateWebPrediction(needsPrediction, false, turn)) {
-    // 후반부 고점 에나라면 터졌을 예측 지원을 지금은 말로만 비춰, 초반 미숙함을 드러낸다.
-    // 실패 회고 대사는 '눈앞에 보였다' 수준이 아니라 실제 피해/즉사 후보를 놓쳤을 때만 낸다.
-    if (needsPrediction && shouldSayMissedWebPrediction(report, gameState.character.health)) {
-      const missed = companion.missedPotentialLine('web', turn)
-      if (missed) sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'web' })
-    }
-    return
-  }
-  // 판 분석 결과가 고른 해금 손패를 건넨다. 함정 외 공격/포자/레시피/트리플 보조도 이 경로를 공유한다.
-  // enqueueDrop = 일반 획득과 같은 정리(addHandCard 후 트리플 자동 합성 검사) — 3장째 지급도 즉시 합성된다.
-  const drop = DropSystem.makeCard(suggested)
-  if (!HandSystem.enqueueDrop(gameState.character, drop)) return // 손패 가득 — 다음 기회에
-  pendingPrediction = { cardIds: [suggested], issuedTurn: turn, deadlineTurn: turn + 3, kind: report.recommendationKind ?? 'support' }
-  recordNotice(`에나의 의지 — ${getHandCardDef(suggested).name} 지원: ${report.recommendationReason}`, 'info')
-  render()
-  void boardRenderer.animateClutchOnPlayer('hand-control')
-  showClutchChain('predict', report.webLethal ? `${getHandCardDef(suggested).name} 지원 (위험!)` : `${getHandCardDef(suggested).name} 지원`)
-  const predictLineKind = report.recommendationKind === 'cleanup' ? 'web' : report.recommendationKind ?? 'support'
-  // '왜 이 카드인지' 짧은 구(HandCardAdvisor reason)를 대사 {이유} 슬롯에 섞는다.
-  sayEnaBark(companion.predictLine(predictLineKind, report.recommendationShortReason), { importance: BARK_IMPORTANCE.clutch })
-  // 지원 카드는 이미 손패에 들어갔으므로 트레일 실패가 입력 잠금 해제를 막지 않게 연출만 분리한다.
-  void playResourceTrail({ kind: 'chain' }, 'hand', 1)
-}
-
-
-/** 거미줄 예측 실패 회고는 임박 피해가 큰 경우로 좁혀, 단순 함정 발견 대사처럼 보이지 않게 한다. */
-function shouldSayMissedWebPrediction(report: ReturnType<typeof assessThreats>, currentHealth: number): boolean {
-  if (!report.recommendCleanup || !report.hasImminentWebDrop) return false
-  if (report.webLethal) return true
-  // 현재 체력의 절반 이상을 잃을 병합 위협일 때만 '고점이면 막았을' 아쉬움으로 취급한다.
-  return report.potentialWebDamage > 0 && report.potentialWebDamage >= Math.max(2, Math.ceil(currentHealth * 0.5))
-}
-
-/** 클러치 발동 시 플레이어 카드 위에 『 제목 』 + 효과 배너를 띄운다. */
-function showClutchChain(kind: string, desc: string): void {
-  boardRenderer.showClutchBanner(CLUTCH_TITLES[kind] ?? '에나의 의지', desc)
-}
-
-/**
- * 클러치(에나의 의지) 평가 + 실행. 위기에 '의지'가 가득 차면 보통 강도의 실제 지원을 하고,
- * 클러치 전용 체인을 플레이어 카드 위에 띄우며 거의 확정으로 대사를 친다.
- */
-function tryCompanionClutch(): void {
-  if (!companionWorldCanSpeak()) return
-  const c = gameState.character
-  const turn = gameState.getCurrentTurn()
-  const report = assessThreats(gameState.lanes, c, companionForesightOptions())
-  const plan = companion.evaluateClutch({
-    hp: c.health,
-    maxHp: c.maxHealth,
-    hpRatio: c.maxHealth > 0 ? c.health / c.maxHealth : 1,
-    emberLow: c.ember <= 1,
-    supportCardId: report.recommendedCardId,
-    supportReason: report.recommendationReason,
-    supportShortReason: report.recommendationShortReason,
-  })
-  if (plan) {
-    applyClutch(plan)
-    return
-  }
-  // 강적 미숙 대사는 '마주침'만으로는 내지 않는다 — 고점 에나라면 실제로 건넸을
-  // 공격/방어 지원각(해금 카드·플레이어 미보유)이 있는데 의지 예산이 모자라 클러치가
-  // 못 뜬 경우에만 낮은 빈도로 아쉬움을 표현한다(단순 조우 오발동 방지).
-  // 여기에 '실제로 싸우는 중' 게이트를 더한다: 최근 2턴 안에 맞았거나 처치한 적이 없으면
-  // 아직 아무 일도 안 일어난 것이므로 "이 정도밖에 못 해…" 류의 사과가 나가지 않는다.
-  const hadInterventionAngle =
-    report.recommendationKind === 'attack' || report.recommendationKind === 'defense'
-  const engagedRecently = companion.hasRecentEvent('hit', turn) || companion.hasRecentEvent('kill', turn)
-  if (report.strongEnemyIncoming && hadInterventionAngle && engagedRecently) {
-    const missed = companion.missedPotentialLine('shield', turn)
-    if (missed) sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'hit' })
-  }
-}
-
-/** 클러치 효과를 실제로 적용하고 연출(체인 배너·대사·트레일·로그)을 함께 낸다. */
-function applyClutch(plan: ClutchPlan): void {
-  const c = gameState.character
-  const before = snapshotPlayerResources()
-  let detail = ''
-  if (plan.kind === 'heal') {
-    const healed = c.heal(plan.amount)
-    detail = `체력 +${healed}`
-  } else if (plan.kind === 'shield') {
-    const shielded = c.addShield(plan.amount)
-    detail = `방패 +${shielded}`
-  } else if (plan.kind === 'ember' || plan.kind === 'hand') {
-    // 에나가 직접 손패를 건네는 클러치. 불씨 위기면 성냥, 예지 위기면 추천 손패를 준다.
-    // enqueueDrop = 일반 획득과 같은 정리 경로 — 같은 카드 3장째 보급도 즉시 트리플로 합성된다.
-    const cardId = plan.cardId ?? 'match'
-    const drop = DropSystem.makeCard(cardId)
-    detail = HandSystem.enqueueDrop(c, drop) ? `${getHandCardDef(cardId).name} +1` : '손패가 가득 참'
-  }
-  recordNotice(`에나의 의지 — ${detail}`, 'info')
-  render()
-  // 플레이어 카드 들썩 + 블라스트(종류별 팔레트) + 전용 체인 배너.
-  const clutchTheme = plan.kind === 'shield' ? 'shield-gain' : (plan.kind === 'ember' || plan.kind === 'hand') ? 'ember-gain' : 'health-gain'
-  void boardRenderer.animateClutchOnPlayer(clutchTheme)
-  showClutchChain(plan.kind, detail)
-  // 거의 확정 대사 + 자원 트레일(같은 beat). 클러치는 최상위 중요도라 다른 대사가 떠 있어도 끼어든다.
-  sayEnaBark(plan.line, { importance: BARK_IMPORTANCE.clutch })
-  void playPlayerGainTrails({ kind: 'center' }, before)
-}
+/** 에나 지휘 매니저 — 바크 큐/예측/클러치와 런 종료 성장 적응을 담당한다. */
+const companionDirector: CompanionDirector = new CompanionDirector({
+  gameState, companion, speechBubble, boardRenderer, cardSpawner,
+  enaAutonomousLearner,
+  getRunCardPool: () => runCardPool,
+  getChain: () => chain,
+  isGameActive: () => gameActive,
+  isInputLocked: () => inputLocked,
+  isShopOpen: () => shopFlow.isOpen(),
+  recordNotice,
+  render,
+  snapshotPlayerResources,
+  playResourceTrail,
+  playPlayerGainTrails,
+})
 
 // 보드는 재렌더로 .player-card를 다시 그리므로, 안정적인 #game-board에 위임 청취한다.
 document.getElementById('game-board')?.addEventListener('click', (e) => {
-  if ((e.target as HTMLElement | null)?.closest('.player-card')) onProfileTouched()
+  if ((e.target as HTMLElement | null)?.closest('.player-card')) companionDirector.onProfileTouched()
 })
 
 let chain: ChainState = HandSystem.newChain()
@@ -712,51 +340,6 @@ let scorePulseKey = 0
 let coinPulseKey = 0
 let nextActivityLogId = 1
 let activityLogs: ActivityLogEntry[] = []
-let shopOpen = false
-let currentShopOffers: ShopOfferView[] = []
-/** 제단(30턴) 무료 유물은 1회 단일 픽이다. 한 번 고르면 다시 못 고르게 잠근다. */
-let altarRelicPicked = false
-let shopRerollCount = 0
-const SHOP_PACK_KINDS: readonly ShopPackKind[] = ['basic-pack', 'recipe-pack', 'unlock-pack', 'chance-pack', 'resource-pack', 'delete-pack']
-/** 방문 내 카드팩별 구매 횟수. 가격은 각 팩의 초기 가격을 매 구매마다 한 번 더 얹는다. */
-let shopPackBuys: Record<ShopPackKind, number> = Object.fromEntries(
-  SHOP_PACK_KINDS.map((kind) => [kind, 0])
-) as Record<ShopPackKind, number>
-/** 리롤 연타로 유물 DOM/상태가 엇갈리지 않도록 비동기 리롤 동안 입력을 잠근다. */
-let shopRerollInProgress = false
-let freeCardClaimed = false
-let freeCoinCardClaimed = false
-
-// 공용 무료카드('무료 카드')는 방문마다 하나의 랜덤 효과로 고정한다.
-type ShopFreeGiftKind = 'score-300' | 'coin-1' | 'health-5' | 'gauge-3' | 'ember-3' | 'hand-2'
-
-/** 무료 카드 보상 표기 소스. 항목을 추가해도 랜덤 추첨 주석/개수가 자동으로 따라간다.
- *  표기 양식: 스탯류는 명사형 `+N`, 불빛/화폐는 아이콘·단위 표기(✦300, 1$)를 유지한다. */
-const SHOP_FREE_GIFT_REWARDS: Record<ShopFreeGiftKind, { description: string; amount: number }> = {
-  'score-300': { description: '✦300', amount: 300 },
-  'coin-1': { description: '1$', amount: 1 },
-  'health-5': { description: '체력 +5', amount: 5 },
-  'gauge-3': { description: '콤보 게이지 +3', amount: 3 },
-  'ember-3': { description: '불씨 게이지 +3', amount: 3 },
-  'hand-2': { description: '랜덤 손패 +2', amount: 2 },
-}
-const SHOP_FREE_GIFT_KINDS = Object.keys(SHOP_FREE_GIFT_REWARDS) as ShopFreeGiftKind[]
-let freeGiftKind: ShopFreeGiftKind = 'coin-1'
-let currentShopMode: 'shop' | 'altar' = 'shop'
-/** Active pack-picker session. Holds the rolled items + the pack kind so the
- *  shopPackPick handler can look the picked item up and apply its effect. */
-interface ActivePackSession {
-  kind: ShopPackKind
-  items: ShopPackPickItem[]
-  /** 세션 내 재뽑기 횟수. 비용은 1 + rerollCount$ */
-  rerollCount: number
-}
-interface ShopPackPickItem extends ShopPackItemView {
-  /** Applied when the player picks this card. Coins/score may be mutated
-   *  through closures, hence the void return + async wrapper. */
-  apply: () => Promise<void> | void
-}
-let activePackSession: ActivePackSession | null = null
 /** Run-length target for the 100-floor arc. */
 const RUN_TARGET_TURNS = 100
 /** 90F 보스+시련 후 활성화: 별빛 칸을 먹은 행동만 90~100층 턴을 올린다. */
@@ -901,21 +484,21 @@ boardRenderer.setLockedRecipeIds(RECIPES.filter((r) => r.runLocked).map((r) => r
 const announcedBossPhases = new Set<string>()
 
 // 보스 이벤트 컨트롤러 — 보스별 스탯/흐름/보상/시련을 모두 관리한다.
-const bossController = new BossEventController(
+const bossController: BossEventController = new BossEventController(
   gameState, turnManager, boardRenderer, bossBubble, speechBubble, runCardPool, SpriteUrls,
   {
     setInputLocked: (v) => { inputLocked = v },
-    addOneCoin: () => { coins += 1; coinPulseKey++; boardRenderer.playCoinGainFeedback(coins, coinPulseKey); applyBlindFaithCoins(1) },
+    addOneCoin: () => { coins += 1; coinPulseKey++; boardRenderer.playCoinGainFeedback(coins, coinPulseKey); relicEffects.applyBlindFaithCoins(1) },
     render: () => render(),
     clearChainTimeline: () => { HandSystem.resetChain(chain); clearChainTimeline(); boardRenderer.refreshChainBanner(buildChainHints()) },
     recordNotice: (msg, kind) => recordNotice(msg, kind),
-    applyAnomalyHealthLoss: () => applyAnomalyHealthLoss(),
-    applyPreciousHeadCheck: () => applyPreciousHeadCheck(),
-    applyPlayerAttackRelics: () => applyGreatNegotiationOnAttack(),
-    openTrialOverlayForced: () => openTrialOverlayForced(),
-    applyRelicPurchaseEffect: (id) => applyRelicPurchaseEffect(id),
+    applyAnomalyHealthLoss: () => relicEffects.applyAnomalyHealthLoss(),
+    applyPreciousHeadCheck: () => relicEffects.applyPreciousHeadCheck(),
+    applyPlayerAttackRelics: () => relicEffects.applyGreatNegotiationOnAttack(),
+    openTrialOverlayForced: () => shopFlow.openTrialOverlayForced(),
+    applyRelicPurchaseEffect: (id) => relicEffects.applyRelicPurchaseEffect(id),
     handlePlayerDeath: async () => {
-      if (await tryResolveSurvivalRelics()) {
+      if (await relicEffects.tryResolveSurvivalRelics()) {
         // 권위/희망이 보스전 도중 살려냈다면 입력을 풀어 전투를 계속 잇게 한다.
         inputLocked = false
         return true
@@ -929,15 +512,15 @@ const bossController = new BossEventController(
     onBossIntro: (name) => {
       announcedBossPhases.clear()
       // 태어나서 첫 보스라면 분위기 대사 대신 교육형 소개를 한 번 우선한다.
-      sayEnaBark(encounterIntroLineOnce('boss') ?? companion.bossIntroLine(name), { importance: BARK_IMPORTANCE.situation })
+      companionDirector.sayEnaBark(encounterIntroLineOnce('boss') ?? companion.bossIntroLine(name), { importance: BARK_IMPORTANCE.situation })
     },
     onBossPhase: (_name, phaseKey) => {
       if (announcedBossPhases.has(phaseKey)) return
       announcedBossPhases.add(phaseKey)
-      sayEnaBark(companion.bossPhaseLine(), { importance: BARK_IMPORTANCE.urgent })
+      companionDirector.sayEnaBark(companion.bossPhaseLine(), { importance: BARK_IMPORTANCE.urgent })
     },
     onBossKill: (name) => {
-      sayEnaBark(companion.bossKillLine(name), { importance: BARK_IMPORTANCE.clutch })
+      companionDirector.sayEnaBark(companion.bossKillLine(name), { importance: BARK_IMPORTANCE.clutch })
     },
   }
 )
@@ -1064,16 +647,6 @@ function diffThawedCards(before: Map<string, FieldFreezeSnapshotEntry>): string[
 }
 
 
-interface PlayerResourceSnapshot {
-  health: number
-  maxHealth: number
-  shield: number
-  ember: number
-  candle: number
-  damage: number
-}
-
-type ResourceTrailSource = { kind: 'card'; cardId: string } | { kind: 'center' } | { kind: 'chain' }
 
 interface NumericResourceRule {
   target: ResourceTrailTarget
@@ -1082,10 +655,7 @@ interface NumericResourceRule {
 
 /** Single rules table for numeric reward destinations. Every caller only
  *  chooses a source; this table owns the destination HUD and default palette. */
-const NUMERIC_RESOURCE_TRAILS: Record<
-  'health' | 'shield' | 'ember' | 'gauge' | 'attack' | 'score' | 'coin' | 'hand',
-  NumericResourceRule
-> = {
+const NUMERIC_RESOURCE_TRAILS: Record<TrailResourceKind, NumericResourceRule> = {
   health: { target: 'health', theme: 'health-gain' },
   shield: { target: 'shield', theme: 'shield-gain' },
   ember: { target: 'ember', theme: 'ember-gain' },
@@ -1240,809 +810,66 @@ async function playPlayerGainTrails(
   )
 }
 
-/** Heal 1 HP per defeated enemy; Blood Pack reacts via onHealGain callback. */
-async function applyRedPotionEnemyDefeats(count: number): Promise<void> {
-  if (count <= 0 || !gameState.character.hasRelic('red-potion')) return
-  for (let i = 0; i < count; i++) {
-    const beforeResources = snapshotPlayerResources()
-    const healed = gameState.character.heal(1)
-    if (healed <= 0) continue
-    recordRelicActivation('red-potion', `체력 +${healed}`)
-    await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
-  }
-}
-
-/** Shield from Wax Crow when treasure cards are actually acquired. */
-async function applyWaxCrowTreasureGains(count: number): Promise<void> {
-  if (count <= 0 || !gameState.character.hasRelic('wax-crow')) return
-  const beforeResources = snapshotPlayerResources()
-  const shielded = gameState.character.addShield(count)
-  if (shielded <= 0) return
-  recordRelicActivation('wax-crow', `방패 +${shielded}`)
-  await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
-}
-
-/** 헌혈팩: 회복량만큼 전방 랜덤 적 1장에게 피해. onHealGain 콜백에서 호출된다. */
-async function applyBloodPackHit(amount: number): Promise<void> {
-  const hit = gameState.damageRandomFrontEnemy(amount)
-  if (!hit) {
-    recordRelicActivation('blood-pack', '전방 적 없음')
-    return
-  }
-  recordRelicActivation('blood-pack', `전방 랜덤 적 피해 ${hit.amount}`)
-  await boardRenderer.animateDamageNumbersById([{ cardId: hit.cardId, amount: hit.amount }])
-  if (hit.defeated) {
-    await boardRenderer.animateCardConsumeByIds([{ cardId: hit.cardId, type: CardType.ENEMY }], {
-      suppressBurstIds: new Set([hit.cardId]),
-    })
-    await onEnemiesDefeated(1)
-  }
-}
-
-/** 가시 방패: 획득 방패 1당 전방 랜덤 적을 1씩 찌른다(방어=공격). 처치는 처치 후속을 이어받는다. */
-async function applyThornShieldHits(shieldGained: number): Promise<void> {
-  let hits = 0
-  let kills = 0
-  for (let i = 0; i < shieldGained; i++) {
-    const hit = gameState.damageRandomFrontEnemy(1)
-    if (!hit) break // 전방 적 없음
-    hits++
-    await boardRenderer.animateDamageNumbersById([{ cardId: hit.cardId, amount: hit.amount }])
-    if (hit.defeated) {
-      await boardRenderer.animateCardConsumeByIds([{ cardId: hit.cardId, type: CardType.ENEMY }], {
-        suppressBurstIds: new Set([hit.cardId]),
-      })
-      kills++
-    }
-  }
-  if (hits === 0) return // 전방 적이 없으면 조용히 종료
-  recordRelicActivation('thorn-shield', kills > 0 ? `전방 적 관통 (처치 ${kills})` : `전방 적 피해 ${hits}`)
-  if (kills > 0) await onEnemiesDefeated(kills)
-}
-
-/** 적 처치 시 처치 기반 유물을 한 번에 처리한다(붉은 포션 회복 + 잉크와 깃펜 카운트).
- *  blood-pack은 onHealGain 콜백으로 자동 발동되므로 별도 파라미터 불필요. */
-async function onEnemiesDefeated(count: number): Promise<void> {
-  if (count <= 0) return
-  await applyRedPotionEnemyDefeats(count)
-  applyInkQuillKills(count)
-  applyAmbitionKills(count)
-  applyShardGenerators(count)
-}
-
-/** 파편 생성기 유물: 처치마다 태그 파편 손패를 지급한다(SHARD_GENERATORS 데이터 주도).
- *  같은 생성기 유물을 여럿 보유하면 지급량이 배수로 늘어난다(중복 스택). */
-function applyShardGenerators(kills: number): void {
-  if (kills <= 0) return
-  const character = gameState.character
-  for (const gen of SHARD_GENERATORS) {
-    const copies = character.relics.filter((id) => id === gen.relicId).length
-    if (copies === 0) continue
-    const want = kills * gen.perKill * copies
-    let granted = 0
-    for (let i = 0; i < want; i++) {
-      // enqueueDrop = 일반 획득과 같은 정리 경로(손패 가득이면 중단). 3장째는 자동 트리플.
-      if (!HandSystem.enqueueDrop(character, DropSystem.makeCard(gen.shard))) break
-      granted++
-    }
-    if (granted > 0) {
-      recordRelicActivation(gen.relicId, `${getHandCardDef(gen.shard).name} +${granted}`)
-      render()
-    }
-  }
-}
-
-/** 야망: 적 8처치마다 불빛을 25씩 늘어나며(25→50→75…) 획득한다. 누적 보너스는 런 동안 유지. */
-function applyAmbitionKills(count: number): void {
-  if (count <= 0 || !gameState.character.hasRelic('ambition')) return
-  gameState.enhancements.ambitionKillCount += count
-  while (gameState.enhancements.ambitionKillCount >= 8) {
-    gameState.enhancements.ambitionKillCount -= 8
-    gameState.enhancements.ambitionCurrentGain += 25
-    const gained = gainFixedLight('야망', gameState.enhancements.ambitionCurrentGain)
-    recordRelicActivation('ambition', `불빛 +${gained}`)
-    void playResourceTrail({ kind: 'chain' }, 'score', 1)
-    burstScoreGain()
-  }
-}
-
-/** 정직: 손패 5장 사용마다 불빛 100 획득. 사용 수는 런 동안 누적. */
-function applyHonestyHandUse(count: number): void {
-  if (count <= 0 || !gameState.character.hasRelic('honesty')) return
-  gameState.enhancements.honestyHandUseCount += count
-  while (gameState.enhancements.honestyHandUseCount >= 5) {
-    gameState.enhancements.honestyHandUseCount -= 5
-    const gained = gainFixedLight('정직', 100)
-    recordRelicActivation('honesty', `불빛 +${gained}`)
-    void playResourceTrail({ kind: 'chain' }, 'score', 1)
-    burstScoreGain()
-  }
-}
-
-/** 태그 반응형 유물 디스패처: 사용한 손패의 시너지 태그에 반응하는 유물 효과를
- *  TagReactions 데이터로부터 발동한다. 새 태그 반응형 유물은 index.ts 수정 없이
- *  Relics.ts 정의 + TAG_REACTIONS 항목 추가만으로 여기서 자동 처리된다. */
-function applyHandCardUseRelics(def: HandCardDefinition, merged: boolean): void {
-  const tags = def.synergyTags
-  if (!tags || tags.length === 0) return
-  const outcomes = runTagReactions('handCardUsed', {
-    character: gameState.character,
-    enhancements: gameState.enhancements,
-    tags,
-    merged,
-  })
-  for (const outcome of outcomes) {
-    // 파편 지급형(사용 기반 생성기): enqueueDrop = 일반 획득과 같은 정리 경로(손패 가득이면 무시).
-    if (outcome.grantCard) {
-      if (!HandSystem.enqueueDrop(gameState.character, DropSystem.makeCard(outcome.grantCard))) continue
-      recordRelicActivation(outcome.relicId, outcome.message)
-      render()
-      continue
-    }
-    recordRelicActivation(outcome.relicId, outcome.message)
-    // 자원 변화는 이미 Character에 반영됐고, 여기서는 HUD 카운터 펄스만 재생한다.
-    if (outcome.feedback === 'ember') boardRenderer.playHudCounterFeedback('ember', gameState.character.ember)
-    else if (outcome.feedback === 'candle') boardRenderer.playHudCounterFeedback('candle', gameState.character.candle)
-    else if (outcome.feedback === 'shield') boardRenderer.playHudCounterFeedback('shield', gameState.character.shield)
-    else if (outcome.feedback === 'health') boardRenderer.playHudCounterFeedback('health', gameState.character.health)
-  }
-}
-
-/** 변칙: 플레이어가 체력을 5 잃을 때마다 불씨 게이지 +1. 누적 피해는 Character가 보관한다.
- *  미보유 시 누적을 비워, 나중에 획득해도 이전 피해가 소급 발동하지 않게 한다. */
-function applyAnomalyHealthLoss(): void {
-  const character = gameState.character
-  if (!character.hasRelic('anomaly')) { character.relicDamageTaken = 0; return }
-  while (character.relicDamageTaken >= 5) {
-    character.relicDamageTaken -= 5
-    character.gainEmber(1)
-    boardRenderer.playHudCounterFeedback('ember', character.ember)
-    recordRelicActivation('anomaly', '불씨 +1')
-  }
-}
-
-/** 맹신: 1$ 획득마다 불빛 50 획득(코인 1당 +50). 코인 획득 지점마다 amount로 호출한다. */
-function applyBlindFaithCoins(amount: number): void {
-  if (amount <= 0 || !gameState.character.hasRelic('blind-faith')) return
-  const gained = gainFixedLight('맹신', 50 * amount)
-  recordRelicActivation('blind-faith', `불빛 +${gained}`)
-  void playResourceTrail({ kind: 'chain' }, 'score', 1)
-  burstScoreGain()
-}
-
-/** 잉크와 깃펜: 적 5처치마다 콤보 게이지 +1. 처치 수는 런 동안 누적한다.
- *  채워진 게이지는 액션 종료 시 resolveFullCandleGaugeEffects가 정산한다. */
-function applyInkQuillKills(count: number): void {
-  if (count <= 0 || !gameState.character.hasRelic('ink-quill')) return
-  gameState.enhancements.inkQuillKillCount += count
-  while (gameState.enhancements.inkQuillKillCount >= 5) {
-    gameState.enhancements.inkQuillKillCount -= 5
-    gameState.character.gainCandle(1)
-    boardRenderer.playHudCounterFeedback('candle', gameState.character.candle)
-    recordRelicActivation('ink-quill', '콤보 게이지 +1')
-  }
-}
-
-/** 품격있는 대처: 나에게 피해를 입힌 적들에게 각각 피해 1로 반격한다.
- *  적 페이즈(runEnemyPhase) 직후, 플레이어 피격 연출이 끝난 뒤 호출한다. */
-async function applyDignifiedRetaliation(hits: EnemyHit[]): Promise<void> {
-  if (gameState.isGameOver || !gameState.character.hasRelic('graceful-response')) return
-  // 실제로 피해를 입힌 적만(방패로 0이면 제외), 다중 레인 점유 적은 cardId로 중복 제거.
-  const attackerIds = [...new Set(hits.filter((h) => h.damage > 0).map((h) => h.cardId))]
-  if (attackerIds.length === 0) return
-  const damaged: { cardId: string; amount: number }[] = []
-  const killedIds: string[] = []
-  // 반격 피해: Math.floor(공격력 × 0.3) + 1 — atkDmgHtml과 동일한 공식
-  const dmg = Math.max(1, Math.floor(gameState.character.damage * 0.3) + 1)
-  for (const id of attackerIds) {
-    const hit = gameState.damageEnemyById(id, dmg)
-    if (!hit) continue
-    damaged.push({ cardId: hit.cardId, amount: hit.amount })
-    if (hit.defeated) killedIds.push(hit.cardId)
-  }
-  if (damaged.length === 0) return
-  const dmgForLog = Math.max(1, Math.floor(gameState.character.damage * 0.3) + 1)
-  recordRelicActivation('graceful-response', `반격 피해 ${dmgForLog} (${damaged.length}체)`)
-  await boardRenderer.animateDamageNumbersById(damaged)
-  if (killedIds.length > 0) {
-    await boardRenderer.animateCardConsumeByIds(
-      killedIds.map((cardId) => ({ cardId, type: CardType.ENEMY })),
-      { suppressBurstIds: new Set(killedIds) }
-    )
-    await onEnemiesDefeated(killedIds.length)
-  }
-}
-
-/** Hope is a one-shot revive: show its bespoke relic burst, remove itself,
- *  ban future offers, clear the rail, then hand control back to the player. */
-/** 권위: 치명적 피해를 단 한 번 체력 1로 버틴다(필드는 그대로). 발동 후 다시 등장하지 않게 밴한다.
- *  희망처럼 화면 중앙 연출 + 체력 게이지 확대 + 붉은빛을 보여 준 뒤 유물을 파괴한다. */
-async function tryResolveAuthoritySurvive(): Promise<boolean> {
-  const character = gameState.character
-  // takeDamage가 체력을 1에서 멈추고 세운 pending 플래그로만 발동한다(0→부활이 아니라 1에서 정지).
-  if (!character.authoritySurvivePending) return false
-  character.authoritySurvivePending = false
-  await boardRenderer.animateAuthoritySurvive('authority')
-  character.removeRelic('authority', true)
-  character.health = Math.max(1, character.health)
-  gameState.isGameOver = false
-  gameState.gameOverReason = ''
-  recordRelicActivation('authority', '체력 1로 생존')
-  render()
-  return true
-}
-
-/** 사망(치명타) 처리 순서: 권위(체력 1로 생존, 필드 유지) → 희망(체력 10 부활, 필드 제거). */
-async function tryResolveSurvivalRelics(): Promise<boolean> {
-  if (await tryResolveAuthoritySurvive()) return true
-  if (await tryResolveHopeRevive()) return true
-  // 최후의 수단: 다른 부활 수단이 모두 실패한 진짜 죽음 직전, 아주 드물게 에나가 각성한다.
-  if (await tryResolveCompanionAwaken()) return true
-  return false
-}
-
-/**
- * 에나의 각성(최후의 의지). 다른 부활 수단이 전부 실패한 사망 직전에만, 런당 한 번,
- * 아주 드물게 발동한다. 화려한 연출과 함께 체력 전체 회복 + 공격력 +1로 되살린다.
- */
-async function tryResolveCompanionAwaken(): Promise<boolean> {
-  const character = gameState.character
-  if (character.isAlive()) return false
-  if (!companion.tryAwaken()) return false
-  await boardRenderer.animateClutchOnPlayer('attack-gain', true)
-  character.fullHeal()
-  character.applyDamageBoost(1)
-  gameState.isGameOver = false
-  gameState.gameOverReason = ''
-  recordNotice('에나의 각성! 체력 전체 회복 · 공격력 +1', 'info')
-  render()
-  showClutchChain('awaken', '체력 전체 회복 · 공격력 +1')
-  sayEnaBark(companion.awakenLine(), { importance: BARK_IMPORTANCE.clutch })
-  return true
-}
-
-async function tryResolveHopeRevive(): Promise<boolean> {
-  const character = gameState.character
-  if (character.isAlive() || !character.hasRelic('hope')) return false
-  const beforeResources = snapshotPlayerResources()
-  const fieldCards = snapshotFieldCardPayloads()
-
-  // The relic must still be present in the owned fan while this plays, so the
-  // one-shot removal happens after the centered shake/white-pop beat.
-  await boardRenderer.animateHopeRelicRevive('hope')
-  character.removeRelic('hope', true)
-
-  // Hope is a full field-cleanup relic: first mark every visible card from the
-  // center, then let the stale DOM cards burst/fade before the model is cleared.
-  await playHandTargetBlasts(
-    fieldCards.map((card) => card.cardId),
-    'score'
-  )
-  await boardRenderer.animateCardConsumeByIds(fieldCards)
-
-  gameState.clearField()
-  character.maxHealth = Math.max(character.maxHealth, 10)
-  character.health = 10
-  gameState.isGameOver = false
-  gameState.gameOverReason = ''
-  recordRelicActivation('hope', '체력 10으로 부활, 필드 제거')
-  render()
-  await playPlayerGainTrails({ kind: 'center' }, beforeResources)
-  await runPreparationRefreshAfterFieldEffects({ avoidFrontMergeOnFullRefill: true })
-  return true
-}
-
-/** 고정 불빛 획득 공통 경로. 턴 배율(getTurnScoreMultiplier)은 적용하지 않되, 자원팩 등이
- *  올리는 글로벌 불빛 획득량 보너스(enhancements.scoreMultiplier)는 모든 불빛 획득에 반영한다.
- *  야망/맹신/정직/별빛 랜턴/무료카드 등 고정 불빛 획득이 모두 이 함수를 거친다. */
-function gainFixedLight(label: string, baseValue: number, kind: ActivityLogEntry['kind'] = 'score'): number {
-  if (baseValue <= 0) return 0
-  const amount = Math.max(0, Math.round(baseValue * gameState.enhancements.scoreMultiplier))
-  if (amount <= 0) return 0
-  score += amount
-  scorePulseKey++
-  pushActivityLogsInDisplayOrder([{ label, scoreDelta: amount, kind }])
-  return amount
-}
-
-/** 매 턴 발동하는 유물 효과를 한 곳에서 처리한다. */
-async function applyTurnStartRelics(): Promise<void> {
-  const character = gameState.character
-  const turn = gameState.getCurrentTurn()
-
-  // 별빛 랜턴: 5턴마다 불빛 200 (턴 배율 없음).
-  if (character.hasRelic('golden-squirrel') && turn !== 0 && turn % 5 === 0) {
-    const gained = gainFixedLight('별빛 랜턴', 200)
-    recordRelicActivation('golden-squirrel', `불빛 +${gained}`)
-    await playResourceTrail({ kind: 'chain' }, 'score', 1)
-    burstScoreGain()
-  }
-
-  // 에나벨라의 반지: 최하단 손패 → 최상단 이동.
-  if (character.hasRelic('annabella-ring') && character.hand.length > 1) {
-    character.hand.push(character.hand.shift()!)
-    render()
-  }
-
-  // 기사도: 4턴마다 knight 태그 손패 중 dropWeight 기반 랜덤 1장 지급.
-  if (character.hasRelic('chivalry') && turn !== 0 && turn % 4 === 0) {
-    const knightPool = HAND_CARD_IDS.filter((id) => HAND_CARD_DEFINITIONS[id].jobTags?.includes('knight'))
-    if (knightPool.length > 0) {
-      const total = knightPool.reduce((s, id) => s + (HAND_CARD_DEFINITIONS[id].dropWeight ?? 1), 0)
-      let roll = Math.random() * total
-      let picked = knightPool[0]
-      for (const id of knightPool) {
-        roll -= HAND_CARD_DEFINITIONS[id].dropWeight ?? 1
-        if (roll <= 0) { picked = id; break }
-      }
-      const drop = DropSystem.makeCard(picked)
-      // enqueueDrop = 획득 공통 정리 — 기사도 지급이 3장째면 즉시 트리플로 합성한다.
-      const added = HandSystem.enqueueDrop(character, drop)
-      if (added) {
-        const name = HAND_CARD_DEFINITIONS[picked].name
-        recordRelicActivation('chivalry', `${name} 획득`)
-        render()
-        await playResourceTrail({ kind: 'chain' }, 'hand', 1)
-      }
-    }
-  }
-
-  // 도서관: 매 턴 카운트다운 -1(마도서 사용도 -1). 0에서 마도서 카드 지급 후 +4.
-  advanceLibrary(1)
-}
-
-/** 도서관: 카운트다운을 steps만큼 줄이고, 0 이하가 될 때마다 마도서(tome) 카드 1장을 지급 후 +4.
- *  턴 진행과 마도서 사용이 같은 카운트다운을 공유해, 마도서를 굴릴수록 다음 책이 빨리 온다. */
-function advanceLibrary(steps: number): void {
-  const character = gameState.character
-  if (!character.hasRelic('library')) return
-  gameState.enhancements.libraryCountdown -= steps
-  const tomeIds = handCardIdsWithTag('tome')
-  while (gameState.enhancements.libraryCountdown <= 0) {
-    gameState.enhancements.libraryCountdown += 4
-    if (tomeIds.length === 0) break
-    const pick = tomeIds[Math.floor(Math.random() * tomeIds.length)]
-    if (!HandSystem.enqueueDrop(character, DropSystem.makeCard(pick))) break // 손패 가득
-    recordRelicActivation('library', `${getHandCardDef(pick).name} 획득`)
-    render()
-  }
-}
-
-/** 소중한 머리: 체력이 최대치의 절반 이하로 감소하면 전체 회복 후 파괴.
- *  fullHeal()이 onHealGain 콜백을 발동해 blood-pack을 자동 처리한다. */
-async function applyPreciousHeadCheck(): Promise<void> {
-  const character = gameState.character
-  if (!character.hasRelic('precious-head')) return
-  if (character.health <= 0 || character.health > character.maxHealth / 2) return
-  const beforeResources = snapshotPlayerResources()
-  // 파괴 연출(강도 2)을 먼저 보여 준 뒤 회복/파괴를 확정한다.
-  await boardRenderer.animateRelicDestroy('precious-head', 2)
-  character.fullHeal()
-  character.removeRelic('precious-head', true)
-  recordRelicActivation('precious-head', '체력 전체 회복 (발동 후 파괴)')
-  render()
-  await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
-}
-
-/** 훌륭한 대화수단: 플레이어가 적을 공격할 때마다 2.5% 확률로 파괴, 공격력 +2 환원. */
-async function applyGreatNegotiationOnAttack(): Promise<void> {
-  const character = gameState.character
-  if (!character.hasRelic('great-negotiation') || Math.random() >= 0.025) return
-  // 파괴 연출(강도 1: 정말 간단한 소각)을 유물이 부채에 남아 있는 동안 먼저 재생한다.
-  await boardRenderer.animateRelicDestroy('great-negotiation', 1)
-  character.damage = Math.max(1, character.damage - 2)
-  character.removeRelic('great-negotiation', true)
-  recordRelicActivation('great-negotiation', '파괴! 공격력 -2 환원')
-  render()
-}
-
-/** 찬스: 적 타격 후 15% 확률로 추가 타격. 빠른 따닥 느낌으로 짧게 처리. */
-async function applyChanceExtraHit(card: Card, distance: number): Promise<void> {
-  if (!gameState.character.hasRelic('chance') || Math.random() >= 0.15) return
-  if (card.health <= 0) return
-  const char = gameState.character
-  // 빠른 추가 타격 — 공격 애니메이션 없이 피해 숫자만 즉시 표시.
-  const newHealth = card.takeDamage(char.damage)
-  recordRelicActivation('chance', `추가 타격 ${char.damage}`)
-  await boardRenderer.animateDamageNumbersById([{ cardId: card.id, amount: char.damage }])
-  if (newHealth <= 0) {
-    const base = scoreForCardRemoval(card)
-    if (base > 0) {
-      pushActivityLogsInDisplayOrder([createScoreLog(scoreLabelForCard(card), base, 'enemy')])
-      await playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1)
-    }
-    if (card.isSpecialEnemy) await applyPadlockMimicBonus(card)
-    await boardRenderer.animateCardConsumeByIds([{ cardId: card.id, type: CardType.ENEMY }], {
-      suppressBurstIds: new Set([card.id]),
-    })
-    gameState.removeCardFromRow(card, distance)
-    await onEnemiesDefeated(1)
-  }
-}
-
-/** 물양동이: 타격한 적 25% 확률로 추가 피해(공격력 × 0.5 + 1, 최소 1). */
-async function applyWaterBucketExtraDamage(card: Card, distance: number): Promise<void> {
-  if (!gameState.character.hasRelic('water-bucket') || Math.random() >= 0.25) return
-  if (card.health <= 0) return
-  // atkDmgHtml과 동일한 공식
-  const dmg = Math.max(1, Math.floor(gameState.character.damage * 0.5) + 1)
-  const newHealth = card.takeDamage(dmg)
-  recordRelicActivation('water-bucket', `추가 피해 ${dmg}`)
-  await boardRenderer.animateDamageNumbersById([{ cardId: card.id, amount: dmg }])
-  if (newHealth <= 0) {
-    const base = scoreForCardRemoval(card)
-    if (base > 0) {
-      pushActivityLogsInDisplayOrder([createScoreLog(scoreLabelForCard(card), base, 'enemy')])
-      await playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1)
-    }
-    if (card.isSpecialEnemy) await applyPadlockMimicBonus(card)
-    await boardRenderer.animateCardConsumeByIds([{ cardId: card.id, type: CardType.ENEMY }], {
-      suppressBurstIds: new Set([card.id]),
-    })
-    gameState.removeCardFromRow(card, distance)
-    await onEnemiesDefeated(1)
-  }
-}
-
-/** 소소한 클러치 — 급소: 살아남은 적에게 가끔 추가 피해(공격력 + 2). */
-async function applyCompanionCrit(card: Card, distance: number): Promise<void> {
-  if (!companionWorldCanSpeak() || card.health <= 0) return
-  if (!companion.rollMinorClutch('crit', { adversity: card.enemyPower >= 6 || card.getHealth() > gameState.character.damage * 2 })) return
-  const dmg = Math.max(1, gameState.character.damage + 2)
-  const newHealth = card.takeDamage(dmg)
-  recordNotice(`에나의 의지 — 급소! 추가 피해 ${dmg}`, 'info')
-  void boardRenderer.animateClutchOnPlayer('attack-gain')
-  showClutchChain('crit', `급소 추가 타격 ${dmg}`)
-  sayEnaBark(companion.minorClutchLine('crit'), { importance: BARK_IMPORTANCE.clutch })
-  // 급소 피해는 레바테인 스타일 특수 폰트로 한 번 더(일반 -1 뒤에 -2가 황금빛으로).
-  await boardRenderer.animateCritDamageOnCard(card.id, dmg)
-  if (newHealth <= 0) {
-    const base = scoreForCardRemoval(card)
-    if (base > 0) {
-      pushActivityLogsInDisplayOrder([createScoreLog(scoreLabelForCard(card), base, 'enemy')])
-      await playResourceTrail({ kind: 'card', cardId: card.id }, 'score', 1)
-    }
-    if (card.isSpecialEnemy) await applyPadlockMimicBonus(card)
-    await boardRenderer.animateCardConsumeByIds([{ cardId: card.id, type: CardType.ENEMY }], {
-      suppressBurstIds: new Set([card.id]),
-    })
-    gameState.removeCardFromRow(card, distance)
-    await onEnemiesDefeated(1)
-  }
-}
-
-/** 자물쇠: 미믹 처치 시 불빛 +25% + 손패 +1. */
-async function applyPadlockMimicBonus(card: Card): Promise<void> {
-  if (!gameState.character.hasRelic('padlock')) return
-  // 불빛 +25% (미믹 기본 점수 기준, 턴 배율 없이 고정 지급)
-  const baseScore = scoreForCardRemoval(card)
-  const bonusLight = Math.max(1, Math.ceil(baseScore * 0.25))
-  const gained = gainFixedLight('자물쇠 · 미믹 불빛', bonusLight)
-  recordRelicActivation('padlock', `미믹 불빛 +${gained}`)
-  await playResourceTrail({ kind: 'chain' }, 'score', 1)
-  burstScoreGain()
-  // 손패 +1
-  // enqueueDrop = 획득 공통 정리 — 자물쇠 보너스가 3장째면 즉시 트리플로 합성한다.
-  const drop = DropSystem.generateDrop('enemy-kill')
-  const added = HandSystem.enqueueDrop(gameState.character, drop)
-  if (added) {
-    const dropDef = getHandCardDef(drop.defId)
-    pushActivityLogsInDisplayOrder(createItemGainLogs([dropDef.name]))
-    render()
-    await playResourceTrail({ kind: 'chain' }, 'hand', 1)
-  }
-}
+/** 유물 발동/처리 매니저 — 처치·생존·구매·턴 시작 유물 효과를 위임한다. 상태(score/gameActive)는 index가 소유. */
+const relicEffects = new RelicEffectsManager({
+  gameState, boardRenderer, cardSpawner, companion, companionDirector,
+  isGameActive: () => gameActive,
+  addScore: (amount) => { score += amount; scorePulseKey++ },
+  recordNotice,
+  recordRelicActivation,
+  render,
+  pushActivityLogsInDisplayOrder,
+  createScoreLog,
+  createItemGainLogs,
+  scoreForCardRemoval,
+  scoreLabelForCard,
+  snapshotPlayerResources,
+  playResourceTrail,
+  playPlayerGainTrails,
+  playHandTargetBlasts,
+  snapshotFieldCardPayloads,
+  burstScoreGain,
+  runPreparationRefreshAfterFieldEffects,
+  encounterIntroLineOnce,
+})
 
 /** 상점 가격(불빛) 인플레이션 배수.
  *  첫 상점인 10층은 초기 자본(불빛 ~500-700)에 맞춰 살짝 더 싸게 ×0.8로 낮춘다.
  *  20층부터는 기존 곡선(1 + (turn-10)*0.02)을 그대로 유지한다.
  *  (예: 20층 ≈1.2배, 30층 ≈1.4배, 60층 ≈2배, 90층 ≈2.6배) */
-function getShopPriceMultiplier(): number {
-  const turn = gameState.getCurrentTurn()
-  if (turn <= 10) return 0.8
-  return 1 + Math.max(0, turn - 10) * 0.02
-}
+/** 상점/제단/강제 시련 흐름 매니저 — 방문 상태와 구매/픽 핸들링을 담당한다. */
+const shopFlow: ShopFlowManager = new ShopFlowManager({
+  gameState, boardRenderer, companion, companionDirector, relicEffects, turnManager, bossController, runCardPool,
+  resources: {
+    get score() { return score }, set score(v) { score = v },
+    get coins() { return coins }, set coins(v) { coins = v },
+    get scorePulseKey() { return scorePulseKey }, set scorePulseKey(v) { scorePulseKey = v },
+    get coinPulseKey() { return coinPulseKey }, set coinPulseKey(v) { coinPulseKey = v },
+  },
+  forcedTrialCards: FORCED_TRIAL_CARDS,
+  getChain: () => chain,
+  clearChainTimeline,
+  setInputLocked: (v) => { inputLocked = v },
+  render,
+  recordNotice,
+  wait,
+  encounterIntroLineOnce,
+  isOnboardingActive,
+  snapshotPlayerResources,
+  playPlayerGainTrails,
+  playResourceTrail,
+  resolveFullCandleGaugeEffects,
+  pushActivityLogsInDisplayOrder,
+  activateFinalAscentStarlightRule,
+  formatTrialSummary,
+  isGameActive: () => gameActive,
+  recordCoinGain,
+  finishTurn,
+  runTargetTurns: RUN_TARGET_TURNS,
+  showZoneCurtain: (zoneIndex) => zoneCurtain.show(ZONE_LIST[zoneIndex], () => setZoneBackground(ZONE_LIST[zoneIndex].bgUrl)),
+  cardSpawner,
+})
 
-/** basePrice는 Relics.ts 정의에서 읽는다. 실제 식은 -76~+104 비대칭 지터를 만들어 비원형 가격을 낸다.
- *  후반 인플레이션 배수를 곱해 고층에서 불빛 가격이 가팔라지게 한다.
- *  할인 쿠폰 등 shopDiscountPct가 0 초과이면 해당 비율만큼 추가 인하한다. */
-function priceForRelic(id: RelicId): number {
-  const base = getRelicDef(id).basePrice
-  const jitter = Math.floor((Math.random() - 0.42) * 180)
-  const raw = Math.max(120, Math.round((base + jitter) * getShopPriceMultiplier()))
-  const discountFactor = 1 - Math.min(0.8, gameState.enhancements.shopDiscountPct / 100)
-  return Math.max(120, Math.round(raw * discountFactor))
-}
-
-/** Generate up to three unowned, unbanned relics + per-spawn score price. */
-/** 새싹 병아리(온보딩) 전용 기본 유물 8종 — 게임을 처음 접하는 사람도 바로 이해하는 효과만.
- *  스폰 확률·상자 소멸 같은 아직 안 배운 개념(곡괭이/개봉식)은 빼고, 체력·공격·회복·불빛·불씨·방패
- *  같은 눈에 보이는 기본 개념을 가르치는 유물로 구성한다. */
-const ONBOARDING_RELIC_IDS: RelicId[] = [
-  'lifeline',      // 최대 체력 +5
-  'carving-knife', // 공격력 +1
-  'red-potion',    // 적 처치 시 체력 +1
-  'chance',        // 직접 타격 15% 확률로 한 번 더
-  'axe',           // 불빛 획득량 +10%
-  'ambition',      // 적 8회 처치마다 불빛 +25
-  'hourglass',     // 불씨 소모 주기 +1턴(불씨가 더 오래 간다)
-  'wax-crow',      // 보물 획득 시 방패 +1(방패 개념 학습)
-]
-
-/** 온보딩 커먼 풀에서도 제외(잠금)하는 손패 — 물뿌리개는 초반에 혼란을 줘 뺀다. */
-const ONBOARDING_BANNED_CARDS: HandCardId[] = ['watering-can']
-
-function rollShopOffers(excludeIds: string[] = []): ShopOfferView[] {
-  const character = gameState.character
-  // 제단도 상점과 동일하게 전체 유물 풀에서 3장을 뽑는다(상위 등급 제한 없음).
-  // 단, 온보딩은 초반 기본 유물만 노출한다(레어 이상 잠금).
-  let sourcePool = RELIC_IDS.filter(
-    (id) => !character.hasRelic(id) && !character.bannedRelics.includes(id)
-  )
-  if (isOnboardingActive()) sourcePool = sourcePool.filter((id) => ONBOARDING_RELIC_IDS.includes(id))
-  // 리롤 시 현재 배치된 유물은 제외한다. 풀이 부족하면 제외 없이 폴백한다.
-  const excludeSet = new Set(excludeIds)
-  const filteredPool = excludeSet.size > 0
-    ? sourcePool.filter((id) => !excludeSet.has(id))
-    : sourcePool
-  const effectivePool = filteredPool.length >= 3 ? filteredPool : sourcePool
-  // 등급 기본 가중치(common 자주, legendary 드물게)에 유물별 지정 weight를 더해 적용한다.
-  const weightedPool = effectivePool.flatMap((relicId) => {
-    const weight = relicDrawWeight(relicId)
-    return Array.from({ length: weight }, () => relicId)
-  })
-  return weightedPool
-    .map((relicId) => ({ relicId, sort: Math.random() }))
-    .sort((a, b) => a.sort - b.sort)
-    // 실제 노출 3장은 항상 중복 없이 보이도록 정규화한다.
-    .filter((entry, i, arr) => arr.findIndex((v) => v.relicId === entry.relicId) === i)
-    .slice(0, 3)
-    .map(({ relicId }) => ({ relicId, price: priceForRelic(relicId) }))
-}
-
-/** Pack cost source of truth. UI 표기와 실제 차감이 갈라지지 않도록 구매 처리도 이 함수만 사용한다.
- *  카드팩은 유물과 달리 고정 시작가에 방문 내 구매 횟수만 누적한다. */
-function altarBasePackCost(): number {
-  // 30/60/90층 제단 팩 층별 시작가 공식은 ShopPricing(공유 모듈)이 단일 출처다.
-  return altarPackBaseCost(gameState.getCurrentTurn())
-}
-
-function baseShopPackCost(kind: ShopPackKind): number {
-  if (currentShopMode === 'altar') return altarBasePackCost()
-  switch (kind) {
-    case 'basic-pack':
-    case 'recipe-pack':
-    case 'unlock-pack':
-      // 일반 상점 3팩 공통 시작가: 10층 120에서 10층마다 +40 (20F 160, 40F 240 …).
-      return regularShopPackBaseCost(gameState.getCurrentTurn())
-    // 제단 전용 팩이 일반 상점에서 호출되면 안전한 기본값으로 막는다.
-    default: return altarBasePackCost()
-  }
-}
-
-function currentShopPackCost(kind: ShopPackKind): number {
-  const base = baseShopPackCost(kind)
-  // 각 팩은 구매할 때마다 자기 초기 가격만큼 증가한다(예: 1500→3000→4500).
-  const raw = packCostWithRepeats(base, shopPackBuys[kind] ?? 0)
-  const discountFactor = 1 - Math.min(0.8, gameState.enhancements.shopDiscountPct / 100)
-  return Math.max(1, Math.round(raw * discountFactor))
-}
-
-/** Build the renderer-facing split-shop state with visit-local pack costs.
- *  Reroll cost is denominated in coins (화폐) — the renderer reads `coins`
- *  to decide whether the reroll button is affordable. */
-function buildShopStateView(): ShopStateView {
-  const base: ShopStateView = {
-    mode: currentShopMode,
-    relicOffers: currentShopOffers,
-    freeCardClaimed,
-    freeCoinCardClaimed,
-    freeCardDescription: SHOP_FREE_GIFT_REWARDS[freeGiftKind].description,
-    rerollCost: 1 + shopRerollCount,
-    coins,
-    basicPackCost: currentShopPackCost('basic-pack'),
-    packCosts: Object.fromEntries(
-      SHOP_PACK_KINDS.map((kind) => [kind, currentShopPackCost(kind)])
-    ) as Partial<Record<ShopPackKind, number>>,
-  }
-  return base
-}
-
-/** Immediate stat effects for relics whose benefit is granted on purchase. */
-async function applyRelicPurchaseEffect(id: RelicId): Promise<void> {
-  // 동료(에나) 구매 감상평 — 상점/제단에서도 한마디(사치품엔 짓궂게, 가문 물건엔 반갑게).
-  // companionWorldCanSpeak는 상점을 막으므로 여기선 가볍게 게이팅한다(.player-card HUD에 표시).
-  // 태어나서 첫 유물이라면 감상 대신 '지니면 계속 효과'라는 교육형 소개를 우선한다.
-  if (gameActive && !gameState.isGameOver) {
-    const relicIntro = encounterIntroLineOnce('relic')
-    sayEnaBark(relicIntro ?? companion.onBuyRelic(id, getRelicDef(id).rarity), { importance: BARK_IMPORTANCE.situation })
-  }
-  // 구매 즉시 스탯만 올리고 체인 로그에는 남기지 않는다. 트레일은 상점에서
-  // 숨겨진 체인 배너 대신 화면 중앙에서 HUD로 날린다.
-  if (id === 'carving-knife') {
-    const beforeResources = snapshotPlayerResources()
-    gameState.character.applyDamageBoost(1)
-    await playPlayerGainTrails({ kind: 'center' }, beforeResources)
-    return
-  }
-  if (id === 'lifeline') {
-    const beforeResources = snapshotPlayerResources()
-    // increaseMaxHealth가 onHealGain 콜백으로 blood-pack을 자동 처리한다.
-    gameState.character.increaseMaxHealth(5)
-    await playPlayerGainTrails({ kind: 'center' }, beforeResources)
-  }
-  if (id === 'first-candle') {
-    const beforeResources = snapshotPlayerResources()
-    // 첫 양초: 최대 체력 +5 / 공격력 +1 / 불씨 한도 +2 / 최대 손패 +2 / 콤보 한도 -1.
-    // 손패·콤보 한도는 수치 트레일이 없으므로 체력/불씨/공격력만 중앙 트레일로 보인다.
-    // increaseMaxHealth가 onHealGain 콜백으로 blood-pack을 자동 처리한다.
-    gameState.character.increaseMaxHealth(5)
-    gameState.character.applyDamageBoost(1)
-    gameState.character.increaseEmberMax(2)
-    gameState.character.increaseHandMax(2)
-    gameState.character.decreaseCandleMax(1)
-    await playPlayerGainTrails({ kind: 'center' }, beforeResources)
-  }
-  if (id === 'hegemony') {
-    const beforeResources = snapshotPlayerResources()
-    // 패도: 최대 체력 -15(제 살 깎기) + 공격력 +2. 구매 가능 여부는 relicPurchaseBlocked가 막는다.
-    gameState.character.spendMaxHealth(15)
-    gameState.character.applyDamageBoost(2)
-    render()
-    await playPlayerGainTrails({ kind: 'center' }, beforeResources)
-  }
-  if (id === 'hourglass') {
-    // 불씨 소모 주기 +1턴.
-    const beforeResources = snapshotPlayerResources()
-    gameState.character.increaseEmberDecayTurns(1)
-    await playPlayerGainTrails({ kind: 'center' }, beforeResources)
-  }
-  if (id === 'great-negotiation') {
-    // 공격력 +2. 매 턴 파괴 확률은 applyTurnStartRelics에서 처리.
-    const beforeResources = snapshotPlayerResources()
-    gameState.character.applyDamageBoost(2)
-    await playPlayerGainTrails({ kind: 'center' }, beforeResources)
-  }
-  if (id === 'pickaxe') {
-    // 보물 스폰 가중치 +5.
-    cardSpawner.adjustRelicSpawn('treasure', 5)
-  }
-  if (id === 'axe') {
-    // 불빛 획득량 +10% (글로벌 scoreMultiplier에 누적).
-    gameState.enhancements.scoreMultiplier *= 1.10
-  }
-  if (id === 'annabella-pendant') {
-    const beforeResources = snapshotPlayerResources()
-    // 공격력 +2 + 적 스폰 HP +3 + 적 스폰 가중치 +5.
-    gameState.character.applyDamageBoost(2)
-    cardSpawner.adjustRelicSpawn('enemy', 5)
-    cardSpawner.adjustRelicEnemyHpBonus(3)
-    await playPlayerGainTrails({ kind: 'center' }, beforeResources)
-  }
-  if (id === 'padlock') {
-    // 보물 스폰 가중치 -5.
-    cardSpawner.adjustRelicSpawn('treasure', -5)
-  }
-  if (id === 'charred-paper') {
-    // 적 스폰 가중치 -5.
-    cardSpawner.adjustRelicSpawn('enemy', -5)
-  }
-  if (id === 'golden-key') {
-    // 보물 스폰 중 10% 확률로 황금 상자로 대체한다.
-    cardSpawner.adjustGoldenChestWeight(0.1)
-  }
-  if (id === 'sweet-temptation') {
-    // 함정 피해 +1 (ActionSystem이 character.trapDamageBonus를 읽는다).
-    gameState.character.trapDamageBonus += 1
-  }
-  if (id === 'discount-coupon') {
-    // 상점 품목 5% 할인 (priceForRelic / currentShopPackCost에서 참조).
-    gameState.enhancements.shopDiscountPct += 5
-  }
-  if (id === 'sanitizer') {
-    // 포자 스폰 가중치 -2 (spawnEffect.delta와 동기화).
-    cardSpawner.adjustRelicSpawn('spore', -2)
-  }
-  if (id === 'wax-harmony') {
-    // 꽃 스폰 가중치 +2 (spawnEffect.delta와 동기화).
-    cardSpawner.adjustRelicSpawn('flower', 2)
-  }
-  if (id === 'trap-master') {
-    // 함정 15% 무효화 확률 (ActionSystem이 character.trapIgnoreChance를 읽는다).
-    gameState.character.trapIgnoreChance += 0.15
-  }
-  if (id === 'last-supper') {
-    const beforeResources = snapshotPlayerResources()
-    const stats = gameState.character.customRelicProfiles['last-supper']?.stats ?? {}
-    // 만찬 유물은 유저가 고른 3개 재료의 누적 스탯을 그대로 적용한다.
-    if (stats.maxHealth) gameState.character.increaseMaxHealth(stats.maxHealth)
-    if (stats.emberMax) gameState.character.increaseEmberMax(stats.emberMax)
-    if (stats.handMax) gameState.character.increaseHandMax(stats.handMax)
-    if (stats.damage) gameState.character.applyDamageBoost(stats.damage)
-    if (stats.scorePct) gameState.enhancements.scoreMultiplier *= (1 + stats.scorePct / 100)
-    await playPlayerGainTrails({ kind: 'center' }, beforeResources)
-  }
-  // chivalry, luxury: 구매 즉발 효과 없음 — 각각 매 3턴 트리거 / 불빛 소비 시 트리거.
-}
-
-/** 일부 유물은 불빛 가격 외 추가 구매 조건이 있다(패도: 최대 체력 16 이상). 충족 못 하면 true. */
-function relicPurchaseBlocked(id: RelicId): boolean {
-  // spendMaxHealth는 최대 체력이 1 미만이 되지 않게 막으므로, -15 후 최소 1이 남는 16 이상이어야 한다.
-  if (id === 'hegemony') return gameState.character.maxHealth < 16
-  return false
-}
-
-/** 악마 인형 유물: 자해 20마다 불빛 획득량 +10% · 공격력 +1. */
-function applyDemonDollSelfDamage(amount: number): void {
-  if (!gameState.character.hasRelic('demon-doll') || amount <= 0) return
-  const enhancements = gameState.enhancements
-  enhancements.demonDollSelfDamageAccum += amount
-  const gained = Math.floor(enhancements.demonDollSelfDamageAccum / 20)
-  if (gained <= 0) return
-  enhancements.demonDollSelfDamageAccum %= 20
-  enhancements.demonDollBonusAtk += gained
-  for (let i = 0; i < gained; i++) {
-    enhancements.scoreMultiplier *= 1.10
-    gameState.character.applyDamageBoost(1)
-  }
-  recordRelicActivation('demon-doll', `자해 20 누적 → 불빛 +10%, 공격력 +${gained} (누적 +${enhancements.demonDollBonusAtk})`)
-}
-
-/** 사치품 유물: 불빛 소비량 누적 후 2000마다 공격력 +1 처리. 최대 누적 공격력 +3. */
-function applyLuxuryScoreSpend(amount: number): void {
-  if (!gameState.character.hasRelic('luxury') || amount <= 0) return
-  const enhancements = gameState.enhancements
-  const maxBonus = 3
-  if (enhancements.luxuryBonusAtk >= maxBonus) return // 이미 최대치
-  enhancements.luxuryScoreSpent += amount
-  const potential = Math.floor(enhancements.luxuryScoreSpent / 2000)
-  if (potential <= 0) return
-  enhancements.luxuryScoreSpent %= 2000
-  const gained = Math.min(potential, maxBonus - enhancements.luxuryBonusAtk)
-  if (gained <= 0) return
-  enhancements.luxuryBonusAtk += gained
-  gameState.character.applyDamageBoost(gained)
-  recordRelicActivation('luxury', `불빛 2000 소비 → 공격력 +${gained} (누적 +${enhancements.luxuryBonusAtk})`)
-}
-
-/** 상점/제단 오버레이를 연다. 셔터를 내리고 방문 단위 상태를 초기화한 뒤 본문을 노출한다.
- *  10/20턴 상점, 30/60/90턴 제단, 100F 보스 직전 마지막 제단이 모두 이 경로를 공유한다. */
-async function openShopOverlay(mode: 'shop' | 'altar'): Promise<void> {
-  currentShopMode = mode
-  shopOpen = true
-  inputLocked = true
-  currentShopOffers = rollShopOffers()
-  altarRelicPicked = false
-  shopRerollCount = 0
-  shopPackBuys = Object.fromEntries(
-    SHOP_PACK_KINDS.map((kind) => [kind, 0])
-  ) as Record<ShopPackKind, number>
-  shopRerollInProgress = false
-  freeCardClaimed = false
-  // 제단 동전 한 닢도 방문 단위 무료 보상이므로 30/60/90턴마다 다시 활성화한다.
-  freeCoinCardClaimed = false
-  // 방문 시작 시 무료 카드의 효과를 현재 등록된 n종 중 하나로 확정한다.
-  freeGiftKind = SHOP_FREE_GIFT_KINDS[Math.floor(Math.random() * SHOP_FREE_GIFT_KINDS.length)]
-  activePackSession = null
-  // The shutter is a hard turn break: cut the chain before the shop overlay
-  // appears so the floating chain text never hangs above the shop tab.
-  HandSystem.resetChain(chain)
-  clearChainTimeline()
-  // 상점/제단 방문 시 해당 모드의 팩 종류를 발견 처리한다.
-  const packsByMode: Record<'shop' | 'altar', string[]> = {
-    shop:  ['basic-pack', 'recipe-pack', 'unlock-pack'],
-    altar: ['resource-pack', 'delete-pack', 'chance-pack'],
-  }
-  for (const k of packsByMode[mode]) gameState.encounteredPackKinds.add(k)
-  recordNotice(mode === 'altar' ? '레일이 멈추고 제단이 열렸다' : '레일이 멈추고 상점이 열렸다', 'info')
-  render()
-  await boardRenderer.playShopTransition()
-  boardRenderer.openShop(buildShopStateView(), score, gameState.character)
-  // 태어나서 첫 상점/제단이라면 무엇을 할 수 있는 곳인지 한 번 소개한다(팩 구매 대사처럼
-  // 침묵 구간 게이트를 의도적으로 우회해 직접 발화).
-  const shopIntro = encounterIntroLineOnce(mode === 'altar' ? 'altar' : 'shop')
-  if (shopIntro) sayEnaBark(shopIntro, { importance: BARK_IMPORTANCE.situation })
-}
 
 async function maybeOpenShopAfterTurn(): Promise<boolean> {
   // 보스 전투/최종 별빛 등반 중에는 상점·제단을 재트리거하지 않는다.
@@ -2051,7 +878,7 @@ async function maybeOpenShopAfterTurn(): Promise<boolean> {
   if (turn === 0) return false
 
   if (turn % 10 !== 0) return false
-  await openShopOverlay(turn % 30 === 0 ? 'altar' : 'shop')
+  await shopFlow.openShopOverlay(turn % 30 === 0 ? 'altar' : 'shop')
   return true
 }
 
@@ -2068,7 +895,7 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
     // 격파→보상→시련 흐름은 closeShopAndResume의 100F 분기와 runBossEvent가 그대로 잇는다.
     finalAscentStarlightRuleActive = false
     syncFinalAscentRuleToSpawner()
-    await openShopOverlay('altar')
+    await shopFlow.openShopOverlay('altar')
     return true
   }
   // 새싹 병아리(온보딩): 30층에서 양초 고양이 보스로 아크를 닫는다(제단/시련/보상 없이 종료).
@@ -2089,591 +916,6 @@ async function maybeRunMilestoneEventsAfterTurn(): Promise<boolean> {
   return false
 }
 
-/** 레시피 재료를 "양초 + 불씨" / "성냥 ×2" 형식의 한 줄 문자열로 변환한다. */
-function buildRecipeNote(ingredients: Partial<Record<HandCardId, number>>): string {
-  return Object.entries(ingredients)
-    .filter(([, n]) => n && n > 0)
-    .map(([id, n]) => n === 1
-      ? getHandCardDef(id as HandCardId).name
-      : `${getHandCardDef(id as HandCardId).name} ×${n}`)
-    .join(' + ')
-}
-
-/** Build the random "3-card" contents for a pack the player just bought.
- *  Each entry carries an `apply` closure so the pick handler stays small. */
-function rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
-  const character = gameState.character
-  if (kind === 'basic-pack') {
-    // 자원팩 — BasicPackPool.ts 에서 테이블 관리, 항목별 weight 사용.
-    return sampleWeightedWithoutReplacement(
-      BASIC_PACK_POOL.map((entry) => ({
-        ...entry,
-        theme: 'resource' as const,
-        spriteUrl: spriteForBasicPackItem(entry.illu),
-        apply: () => {
-          switch (entry.id) {
-            case 'basic_001': character.heal(3);        return
-            case 'basic_002': character.gainEmber(1);   return
-            case 'basic_003': character.gainCandle(1);  return
-            case 'basic_004': character.heal(5);        return
-            case 'basic_005': character.gainEmber(2);   return
-            case 'basic_006': character.gainCandle(2);  return
-            case 'basic_007': character.heal(10);       return
-            case 'basic_008': character.gainEmber(3);   return
-            case 'basic_009': character.gainCandle(3);  return
-            case 'basic_010': character.addShield(5);   return
-            case 'basic_011': coins += 1; applyBlindFaithCoins(1); return
-          }
-        },
-      })),
-      3
-    )
-  }
-  if (kind === 'recipe-pack') {
-    // 조합팩 — runLocked 레시피 중 재료가 이미 해금된 항목만 제시한다.
-    const { unlocked } = runCardPool.snapshot()
-    const lockedRecipes = RECIPES.filter((r) =>
-      r.runLocked &&
-      !r.eventOnly &&
-      !gameState.unlockedRecipeIds.has(r.id) &&
-      Object.keys(r.ingredients).every((id) => unlocked.includes(id as HandCardId))
-    )
-    if (lockedRecipes.length === 0) return []
-    return sampleWithoutReplacement(lockedRecipes, Math.min(3, lockedRecipes.length)).map((r) => ({
-      id: `recipe-${r.id}`,
-      theme: 'unlock' as const,
-      title: r.name,
-      effect: boardRenderer.recipeEffectHtml(r),
-      rarity: 'rare' as const,
-      spriteUrl: recipeSprite001 ?? SpriteUrls.packs['recipe-pack'],
-      typeLabel: '레시피',
-      recipeNote: buildRecipeNote(r.ingredients),
-      apply: () => { gameState.unlockedRecipeIds.add(r.id) },
-    }))
-  }
-  if (kind === 'chance-pack') {
-    // 확률팩 — 해금된 일반 드롭 풀 카드 중 3장 제시, 선택 시 T1 개별 카드 가중치 영구 추가.
-    const { unlocked } = runCardPool.snapshot()
-    // boss 전용·dropWeight 0 카드(검은 양초 등 이벤트 아이템) 제외
-    const chancePool = unlocked.filter(id => {
-      const d = HAND_CARD_DEFINITIONS[id]
-      return d && d.dropSource !== 'boss' && (d.dropWeight ?? 0) > 0
-    })
-    if (chancePool.length === 0) return []
-    // 확률을 2자리까지 표기하되 불필요한 끝자리 0 제거
-    const fmt = (p: number) => String(parseFloat((p * 100).toFixed(2)))
-    const drawIds = sampleWithoutReplacement(chancePool, Math.min(3, chancePool.length))
-    return drawIds.map((id) => {
-      const def = getHandCardDef(id)
-      // 등급별 부스트 폭은 학습 시뮬과 공유하는 ShopPools 단일 출처를 읽는다.
-      const boostToAdd = CHANCE_PACK_RARITY_BOOST[HAND_CARD_RARITY[id] ?? 'common'] ?? 1
-      const { before, after } = DropSystem.computeDropProbability(
-        id, chancePool, gameState.enhancements.tier1CardBoosts, boostToAdd,
-      )
-      return {
-        id: `chance-${id}`,
-        theme: 'unlock' as const,
-        title: def.name,
-        effect: `등장 확률 ${fmt(before)}% → ${fmt(after)}%`,
-        rarity: HAND_CARD_RARITY[id],
-        spriteUrl: spriteForHandCard(id),
-        typeLabel: '확률',
-        handCardId: id,
-        apply: () => {
-          gameState.enhancements.tier1CardBoosts[id] = (gameState.enhancements.tier1CardBoosts[id] ?? 0) + boostToAdd
-          DropSystem.setTier1CardBoosts(gameState.enhancements.tier1CardBoosts)
-        },
-      }
-    })
-  }
-  if (kind === 'resource-pack') {
-    // 제단 자원팩 — 30층마다 고정 가격으로 열리는 영구 보정 풀이며 항목별 weight를 따른다.
-    const rawPool = SHOP_PACK_POOLS['resource-pack'].map((entry) => ({
-      ...entry,
-      spriteUrl: entry.illu ? spriteForBasicPackItem(entry.illu) : undefined,
-      apply: () => {
-        switch (entry.id) {
-          case 'altar-clothes-thick':  character.increaseMaxHealth(5);                 return
-          case 'altar-heating':        character.applyDamageBoost(1);                  return
-          case 'altar-backpack-large': character.increaseHandMax(2);                   return
-          case 'altar-matchbox':       character.increaseEmberMax(2);                  return
-          case 'altar-wick-thick':     character.increaseEmberDecayTurns(1);           return
-          case 'altar-joker-card':     character.decreaseCandleMax(1);                 return
-          case 'altar-lantern':        gameState.enhancements.scoreMultiplier *= 1.10; return
-          case 'altar-one-coin':       coins += 1; applyBlindFaithCoins(1);            return
-        }
-      },
-    }))
-    return sampleWeightedWithoutReplacement(rawPool, Math.min(3, rawPool.length))
-  }
-  if (kind === 'unlock-pack') {
-    // 해금팩 — 런에서 잠긴 카드(runLocked) + 삭제팩으로 밴된 카드를 해금한다.
-    // 보스 전용 찌꺼기 카드(탐욕의 동전 등)는 제외한다.
-    const { locked, banned } = runCardPool.snapshot()
-    const cardPool = [...locked, ...banned].filter((id) => getHandCardDef(id).dropSource !== 'boss')
-    if (cardPool.length === 0) return []
-    return sampleWithoutReplacement(cardPool, Math.min(3, cardPool.length)).map((id) => {
-      const def = getHandCardDef(id)
-      const isBanned = banned.includes(id)
-      return {
-        id: `unlock-${id}`,
-        theme: 'unlock' as const,
-        title: def.name,
-        effect: isBanned ? `[재해금] ${boardRenderer.cardEffectHtml(id)}` : boardRenderer.cardEffectHtml(id),
-        rarity: HAND_CARD_RARITY[id],
-        spriteUrl: spriteForHandCard(id),
-        typeLabel: '손패',
-        handCardId: id,
-        apply: () => {
-          if (isBanned) runCardPool.unban(id)
-          else runCardPool.unlockForRun(id)
-        },
-      }
-    })
-  }
-  if (kind === 'delete-pack') {
-    // 풀 = 현재 해금된 카드 중 이벤트 보스 전용(검은 양초 등) 제외
-    const { unlocked } = runCardPool.snapshot()
-    const deletePool = unlocked.filter(id => getHandCardDef(id).dropSource !== 'boss')
-    if (deletePool.length === 0) return []
-    const drawIds = sampleWithoutReplacement(deletePool, Math.min(3, deletePool.length))
-    return drawIds.map((id) => {
-      const def = getHandCardDef(id)
-      return {
-        id: `delete-${id}`,
-        theme: 'unlock' as const,
-        title: def.name,
-        effect: `앞으로 ${def.name} 등장 금지`,
-        rarity: HAND_CARD_RARITY[id],
-        spriteUrl: spriteForHandCard(id),
-        typeLabel: '삭제',
-        handCardId: id,
-        apply: () => { runCardPool.ban(id) },
-      }
-    })
-  }
-  return []
-}
-/** Open the pack picker for the just-clicked pack tile. Deducts the price
- *  if the player can afford it, otherwise no-op. */
-async function openPackPurchase(kind: ShopPackKind): Promise<void> {
-  const cost = currentShopPackCost(kind)
-  if (score < cost) return
-  score = Math.max(0, score - cost)
-  scorePulseKey++
-  // 사치품: 불빛 소비 추적 (2000마다 공격력 +1).
-  applyLuxuryScoreSpend(cost)
-  // 구매 직후 같은 팩 가격을 초기 가격만큼 올려 다음 표기/차감에 반영한다.
-  shopPackBuys[kind] = (shopPackBuys[kind] ?? 0) + 1
-  enaRuntimeObserver.recordShopPurchase(gameState, shopKindToPurchaseId(kind))
-  // 팩 구매 감상 — 상점은 월드 바크 게이트 밖이므로 유물 구매평과 같은 가벼운 게이트 + 확률로만 말한다.
-  if (gameActive && !gameState.isGameOver && Math.random() < 0.5) {
-    sayEnaBark(companion.packLine(kind), { importance: BARK_IMPORTANCE.situation })
-  }
-  // Keep picker title synchronized with the shared pack label table.
-  const title = SHOP_PACK_LABELS[kind].title
-  const items = rollPackItems(kind)
-  activePackSession = { kind, items, rerollCount: 0 }
-  // Spend feedback before the picker so the score panel ticks down on click.
-  const packTile = document.querySelector<HTMLElement>(`#shop-overlay .shop-pack-card[data-shop-buy-kind="${kind}"]`)
-  if (packTile) await boardRenderer.playShopPurchaseImpact(packTile, "score")
-  boardRenderer.playScoreSpendFeedback(score, scorePulseKey)
-  // 불빛 → 팩 타일 트레일 (피커 열림과 동시에 배경 재생)
-  boardRenderer.fireScoreSpendTrailToTarget(packTile, cost)
-  boardRenderer.openShop(buildShopStateView(), score, gameState.character)
-  const view: ShopPackPickerView = {
-    packKind: kind,
-    title,
-    // 삭제팩·해금팩·조합팩·확률팩은 선택을 강제하지 않고 넘기기 버튼으로 패스 가능하다.
-    passable: kind === 'delete-pack' || kind === 'unlock-pack' || kind === 'recipe-pack' || kind === 'chance-pack',
-    // spriteUrl 포함: enhance/unlock/delete 팩은 카드별 일러스트가 있어야 식별 가능하다.
-    items: items.map(({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote, handCardId }) => ({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote, handCardId })),
-    rerollCost: 1 + (activePackSession?.rerollCount ?? 0),
-    coins,
-  }
-  boardRenderer.openPackPicker(view)
-}
-
-/** Apply the player's pick from an active pack session, then close the picker. */
-async function handleShopPackPick(detail: ShopPackPickDetail): Promise<void> {
-  if (!activePackSession || activePackSession.kind !== detail.packKind) return
-  const picked = activePackSession.items.find((it) => it.id === detail.itemId)
-  if (!picked) return
-  const beforeResources = snapshotPlayerResources()
-  const beforeCoins = coins
-  // 확률팩 부스트 상세 기록용: apply 전후 T1 부스트 차이로 실제 추가량을 얻는다.
-  const boostBefore = picked.handCardId ? (gameState.enhancements.tier1CardBoosts[picked.handCardId] ?? 0) : 0
-  await picked.apply()
-  // 에나 관측: 팩에서 실제로 고른 카드/부스트를 상세 기록해 런 후 학습 신호로 쓴다.
-  if (
-    detail.packKind === 'chance-pack' || detail.packKind === 'unlock-pack' || detail.packKind === 'delete-pack'
-  ) {
-    const boostAfter = picked.handCardId ? (gameState.enhancements.tier1CardBoosts[picked.handCardId] ?? 0) : 0
-    enaRuntimeObserver.recordShopPurchase(gameState, `pick:${detail.packKind}`, {
-      itemId: detail.itemId,
-      handCardId: picked.handCardId,
-      boostAdded: boostAfter > boostBefore ? boostAfter - boostBefore : undefined,
-    })
-  }
-  // unlock-pack/delete-pack 선택 후 runCardPool이 바뀌므로 드롭 풀 및 도감 잠금 표시를 재동기화한다.
-  const poolSnap = runCardPool.snapshot()
-  DropSystem.setAllowedPool(poolSnap.unlocked)
-  boardRenderer.setLockedCardIds([...poolSnap.locked, ...poolSnap.banned])
-  // runLocked 레시피 잠금도 재동기화한다.
-  boardRenderer.setLockedRecipeIds(
-    RECIPES.filter((r) => r.runLocked && !gameState.unlockedRecipeIds.has(r.id)).map((r) => r.id)
-  )
-  activePackSession = null
-  boardRenderer.closePackPicker()
-  // 맛보기: 해금팩 첫 구매 시 선택한 카드 1장을 손패에 직접 지급한다.
-  // enqueueDrop = 일반 획득과 같은 정리 경로 — 이미 2장 든 카드의 맛보기도 즉시 트리플로 합성된다.
-  if (detail.packKind === 'unlock-pack' && (shopPackBuys['unlock-pack'] ?? 0) <= 1) {
-    const tasteId = detail.itemId.startsWith('unlock-') ? (detail.itemId.slice(7) as HandCardId) : null
-    if (tasteId && HandSystem.enqueueDrop(gameState.character, DropSystem.makeCard(tasteId))) {
-      render()
-      await boardRenderer.animateResourceTrailFromCenter('hand', 1, 'hand-recovery')
-    }
-  }
-  // Most pack effects mutate character stats; play the standard player-gain
-  // trail so HP/방패/공격력 등 변화에 카드/숫자 피드백이 같이 따라온다.
-  await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
-  // '동전 한 닢' 등 화폐 아이템은 playPlayerGainTrails가 다루지 않으므로(coin 미포함)
-  // 단독 코인 카드/동전 한 닢과 같은 펄스키+트레일+지갑 버스트 문법으로 별도 라우팅한다.
-  // applyBlindFaithCoins는 apply() 내부에서 이미 처리됐으므로 여기서 재호출하지 않는다.
-  const pickedCoinGain = coins - beforeCoins
-  if (pickedCoinGain > 0) {
-    coinPulseKey++
-    recordCoinGain(picked.title, pickedCoinGain)
-    await playResourceTrail({ kind: 'chain' }, 'coin', pickedCoinGain)
-  }
-  // 자원팩 등 게이지 아이템 선택 시 게이지가 가득 찼으면 보상 효과를 즉시 발동한다.
-  await resolveFullCandleGaugeEffects({ kind: 'chain' })
-  render()
-  boardRenderer.openShop(buildShopStateView(), score, gameState.character)
-}
-
-/** 팩 피커 재뽑기: 1+횟수$ 차감 후 같은 팩 종류로 새 3장을 뽑아 피커를 갱신한다. */
-async function handleShopPackReroll(packKind: ShopPackKind): Promise<void> {
-  if (!activePackSession || activePackSession.kind !== packKind) return
-  const cost = 1 + activePackSession.rerollCount
-  if (coins < cost) return
-  coins -= cost
-  coinPulseKey++
-  applyBlindFaithCoins(-cost)
-  boardRenderer.playCoinSpendFeedback(coins, coinPulseKey)
-  await boardRenderer.playPackRerollFeedback(cost)
-  activePackSession.rerollCount++
-  activePackSession.items = rollPackItems(packKind)
-  const newView: ShopPackPickerView = {
-    packKind,
-    title: SHOP_PACK_LABELS[packKind].title,
-    passable: packKind === 'delete-pack' || packKind === 'unlock-pack' || packKind === 'recipe-pack' || packKind === 'chance-pack',
-    items: activePackSession.items.map(({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote, handCardId }) => ({ id, title, effect, theme, rarity, spriteUrl, typeLabel, recipeNote, handCardId })),
-    rerollCost: 1 + activePackSession.rerollCount,
-    coins,
-  }
-  boardRenderer.refreshPackPickerCards(newView)
-}
-
-async function handleShopBuy(detail: ShopBuyDetail): Promise<void> {
-  if (!shopOpen) return
-  if (
-    detail.kind !== 'relic' &&
-    detail.kind !== 'free-card' &&
-    detail.kind !== 'free-coin-card' &&
-    detail.kind !== 'reroll' &&
-    detail.kind !== 'basic-pack' &&
-    detail.kind !== 'recipe-pack' &&
-    detail.kind !== 'unlock-pack' &&
-    detail.kind !== 'chance-pack' && detail.kind !== 'resource-pack' && detail.kind !== 'delete-pack'
-  )
-    return
-  if (detail.kind === 'free-card' || detail.kind === 'free-coin-card') {
-    if (detail.kind === 'free-card') {
-      if (freeCardClaimed) return
-      freeCardClaimed = true
-      // 무료 카드는 사용 즉시 소모되며, 실제 보상량과 트레일 입력을 같은 데이터에서 읽는다.
-      const freeGift = SHOP_FREE_GIFT_REWARDS[freeGiftKind]
-      if (freeGiftKind === 'score-300') {
-        // 불빛 보상도 글로벌 불빛 획득량 보너스(scoreMultiplier)를 공통 적용한다.
-        gainFixedLight('무료 카드', freeGift.amount)
-        // 불빛 보상은 무료카드에서 불빛 패널로 직접 날려 기존 획득 문법을 유지한다.
-        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'score', freeGift.amount, 'score')
-      } else if (freeGiftKind === 'coin-1') {
-        coins += freeGift.amount
-        coinPulseKey++
-        applyBlindFaithCoins(freeGift.amount)
-        // 화폐 보상은 코인 톤 burst(treasure-gain)로 발사 — 불빛(score) burst가
-        // 같이 뜨던 버그 수정. 보상 종류에 맞는 입자 색감만 보이도록 한다.
-        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'coin', freeGift.amount, 'treasure-gain')
-      } else if (freeGiftKind === 'health-5') {
-        gameState.character.heal(freeGift.amount)
-        // 체력 보상은 HP 바로 꽂혀야 피드백이 정확히 읽힌다.
-        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'health', freeGift.amount, 'health-gain')
-      } else if (freeGiftKind === 'gauge-3') {
-        gameState.character.gainCandle(freeGift.amount)
-        // 게이지 보상은 캔들 게이지 목적지로 분기한다.
-        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'gauge', freeGift.amount, 'gauge-gain')
-        // 트레일 직후 게이지 카운터를 즉시 반영하고, 가득 찼을 경우 보상 효과까지 처리한다.
-        boardRenderer.playHudCounterFeedback('candle', gameState.character.candle)
-        await resolveFullCandleGaugeEffects({ kind: 'center' })
-      } else if (freeGiftKind === 'ember-3') {
-        gameState.character.gainEmber(freeGift.amount)
-        // 불씨 보상은 상단 ember HUD로 직접 날린다.
-        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'ember', freeGift.amount, 'score')
-      } else {
-        for (let i = 0; i < freeGift.amount; i += 1) {
-          // 해금되지 않았거나 삭제팩으로 밴된 카드가 섞이지 않도록 드롭 풀(unlocked) 기준으로 뽑는다.
-          // enqueueDrop = 획득 공통 정리 — 상점 경로엔 지연 합성 스캔이 없어 3장째를 여기서 합성한다.
-          HandSystem.enqueueDrop(gameState.character, DropSystem.generateDrop())
-        }
-        // 손패 보상은 손패 스택 목적지로 날려 카드 획득 흐름과 같은 언어를 사용한다.
-        await boardRenderer.consumeFreeCardAndRouteReward('free-card', 'hand', freeGift.amount, 'hand-control')
-      }
-    } else {
-      if (freeCoinCardClaimed) return
-      freeCoinCardClaimed = true
-      coins += 1
-      coinPulseKey++
-      applyBlindFaithCoins(1)
-      // 제단 동전 한 닢은 경제 밸런스 조정 후 1$만 지급한다. source burst도 코인 톤
-      // (treasure-gain)으로 발사해 불빛 입자가 같이 뜨는 시각 혼선을 제거.
-      await boardRenderer.consumeFreeCardAndRouteReward('free-coin-card', 'coin', 1, 'treasure-gain')
-    }
-    boardRenderer.playScoreGainFeedback(score, scorePulseKey)
-    boardRenderer.playCoinGainFeedback(coins, coinPulseKey)
-    render()
-    boardRenderer.openShop(buildShopStateView(), score, gameState.character)
-    return
-  }
-  if (
-    detail.kind === 'basic-pack' || detail.kind === 'recipe-pack' || detail.kind === 'unlock-pack' ||
-    detail.kind === 'chance-pack' || detail.kind === 'resource-pack' || detail.kind === 'delete-pack'
-  ) {
-    await openPackPurchase(detail.kind)
-    return
-  }
-  if (detail.kind === 'reroll') {
-    if (shopRerollInProgress) return
-    shopRerollInProgress = true
-    try {
-      const rerollCost = 1 + shopRerollCount
-      // Reroll is paid in 화폐(coins) now, not 불빛(score).
-      if (coins < rerollCost) return
-      coins = Math.max(0, coins - rerollCost)
-      coinPulseKey++
-      shopRerollCount += 1
-      // Resolve the new offer slate BEFORE the flip so we can swap the
-      // relic content mid-flip (180° back-face moment). Purchased slots
-      // stay frozen so EXIT does not resurrect cards into bought gaps.
-      // 현재 배치된 비구매 유물은 리롤 결과에서 제외한다(풀이 부족하면 자동 폴백).
-      const currentRelicIds = currentShopOffers
-        .filter((e) => !e.purchased)
-        .map((e) => e.relicId)
-      const freshOffers = rollShopOffers(currentRelicIds)
-      let freshIndex = 0
-      const nextOffers = currentShopOffers.map((entry) => {
-        if (entry.purchased) return entry
-        const next = freshOffers[freshIndex]
-        freshIndex += 1
-        return next ?? entry
-      })
-      const rerollBtn = document.querySelector<HTMLElement>('#shop-overlay .shop-reroll-btn')
-      // 애니메이션이 시작되기 전부터 버튼을 비활성처럼 보여 연타 피드백을 차단한다.
-      rerollBtn?.classList.add('is-reroll-locked')
-      if (rerollBtn) await boardRenderer.playShopPurchaseImpact(rerollBtn, "score")
-      boardRenderer.playCoinSpendFeedback(coins, coinPulseKey)
-      // Commit the new offers BEFORE running the flip so any incidental
-      // re-render (e.g. openShop's refresh path) sees the fresh data,
-      // matching what the mid-flip swap puts on screen.
-      currentShopOffers = nextOffers
-      await boardRenderer.playShopRerollFeedback(rerollCost, nextOffers, score, gameState.character)
-      boardRenderer.openShop(buildShopStateView(), score, gameState.character)
-    } finally {
-      // 어떤 애니메이션 경로로 끝나도 다음 리롤은 완료 후에만 다시 열린다.
-      document.querySelector<HTMLElement>('#shop-overlay .shop-reroll-btn')?.classList.remove('is-reroll-locked')
-      shopRerollInProgress = false
-    }
-    return
-  }
-  if (!detail.relicId) return
-  const offer = currentShopOffers.find((entry) => entry.relicId === detail.relicId)
-  if (!offer || offer.purchased) return
-  // 불빛 가격 외 추가 구매 조건(패도 최대 체력 등) 미충족 시 자원 부족처럼 막는다(상점·제단 공통).
-  if (relicPurchaseBlocked(detail.relicId)) { boardRenderer.openShop(buildShopStateView(), score, gameState.character); return }
-  // 제단: 유물은 무료 단일 픽 — 가격 없이 1장만 획득하고 나머지는 사그라들며 사라진다.
-  if (currentShopMode === 'altar') {
-    await pickAltarRelicFree(detail.relicId)
-    return
-  }
-  if (score < offer.price) { boardRenderer.openShop(buildShopStateView(), score, gameState.character); return }
-  if (!gameState.character.addRelic(detail.relicId)) {
-    render()
-    return
-  }
-  enaRuntimeObserver.recordShopPurchase(gameState, `relic:${detail.relicId}`)
-  // Pay the light price. We DO log the deduction — pure number-pulse on the
-  // light panel is too easy to miss, so the activity log row makes the spend concrete.
-  const def = getRelicDef(detail.relicId)
-  score = Math.max(0, score - offer.price)
-  scorePulseKey++
-  // 사치품: 불빛 소비 추적 (2000마다 공격력 +1).
-  applyLuxuryScoreSpend(offer.price)
-  pushActivityLogsInDisplayOrder([
-    {
-      label: `유물 구매: ${def.name}`,
-      scoreDelta: -offer.price,
-      kind: 'score' as const,
-    },
-  ])
-  // Spend feedback reverses the usual gain trail: 불빛 leaves the left panel
-  // and lands on the clicked relic card before that card turns purchased.
-  const relicCard = document.querySelector<HTMLElement>(`#shop-overlay .shop-relic-card[data-shop-buy="${detail.relicId}"]`)
-  if (relicCard) await boardRenderer.playShopPurchaseImpact(relicCard, "score")
-  boardRenderer.playScoreSpendFeedback(score, scorePulseKey)
-  await boardRenderer.animateShopPurchaseTrailToRelic(
-    detail.relicId,
-    Math.min(9, Math.max(1, Math.ceil(offer.price / 200)))
-  )
-  offer.purchased = true
-  await applyRelicPurchaseEffect(detail.relicId)
-  boardRenderer.prepareRelicArrivalFromShop(detail.relicId)
-  render()
-  await boardRenderer.animatePreparedRelicArrival()
-  boardRenderer.openShop(buildShopStateView(), score, gameState.character)
-}
-
-/** 제단 무료 유물 단일 픽: 선택 1장만 무료로 획득하고, 비선택 2장은 불씨가 사그라들듯
- *  사라진다. 픽 후에는 제단 유물 레이어를 비워 재선택을 막는다. */
-async function pickAltarRelicFree(relicId: RelicId): Promise<void> {
-  if (altarRelicPicked) return
-  if (!gameState.character.addRelic(relicId)) { render(); return }
-  altarRelicPicked = true
-  const def = getRelicDef(relicId)
-  pushActivityLogsInDisplayOrder([{ label: `제단 유물: ${def.name}`, kind: 'item-gain' as const }])
-  // 선택 1장은 살짝 떠오르고, 나머지 2장은 ember 버스트와 함께 사그라든다.
-  await boardRenderer.resolveAltarRelicPick(relicId)
-  // 즉발 효과(조각칼/첫 양초 등) 적용 후 보유 유물 부채꼴로 이동.
-  await applyRelicPurchaseEffect(relicId)
-  boardRenderer.prepareRelicArrivalFromShop(relicId)
-  // 픽이 끝나면 유물 오퍼를 비워 재렌더 시 제단 유물 카드가 사라지게 한다.
-  currentShopOffers = []
-  render()
-  await boardRenderer.animatePreparedRelicArrival()
-  boardRenderer.openShop(buildShopStateView(), score, gameState.character)
-}
-
-async function closeShopAndResume(): Promise<void> {
-  if (!shopOpen) return
-  shopOpen = false
-  currentShopOffers = []
-  // EXIT while a pack picker is mid-open just drops the picker; the cost has
-  // already been spent so the unused roll simply burns. Clearing the session
-  // prevents stale picks from firing after the next shop opens.
-  if (activePackSession) {
-    activePackSession = null
-    boardRenderer.closePackPicker()
-  }
-  // Exit beat: cards bounce down then swoosh upward in random staggered
-  // order WITHOUT covering the candle gauge (clipped by the shell). Only
-  // after the cards have fully left do we tear down the overlay and
-  // raise the shutter so the player can resume the turn.
-  await boardRenderer.playShopExitAnimation()
-  boardRenderer.closeShop()
-  // 제단 EXIT는 셔터를 올리지 않고 곧장 보스 게이트로 이어간다.
-  // 30/60/90턴 제단은 각 층 보스 전투로 분기하고, 보상/시련 구조는 공통 컨트롤러가 재사용한다.
-  if (currentShopMode === 'altar') {
-    await boardRenderer.playAltarBossGateTransition()
-    turnManager.setTurnMode('boss_phase')
-    recordNotice('셔터 레일이 흔들리며 보스가 강림한다', 'hurt')
-    if (gameState.getCurrentTurn() >= RUN_TARGET_TURNS) {
-      // 100F 최종 보스: 격파 후 runBossEvent가 보상/시련까지 잇고, 돌아오면 런 클리어로 닫는다.
-      recordNotice('100층 최종 보스가 잿빛 굴레를 드리운다', 'hurt')
-      await bossController.run100F()
-      gameState.endGame('run_clear_100_turns')
-      recordNotice('100층 보스 격파 — 잿빛 굴레가 풀렸다', 'win')
-      // 클리어 타이틀(Unmelting 정산 창)은 사망과 같은 finishTurn 경로로 연다 — endGame만으로는
-      // 아무도 showGameOver를 부르지 않아 격파 후 화면이 그대로 멈춰 있었다.
-      finishTurn()
-    } else if (gameState.getCurrentTurn() === 90) {
-      await bossController.run90F()
-      // 90F 시련 종료 → 구역 4 (더욱 깊은 숲) 전환
-      await zoneCurtain.show(ZONE_LIST[3], () => setZoneBackground(ZONE_LIST[3].bgUrl))
-    } else if (gameState.getCurrentTurn() === 60) {
-      await bossController.run60F()
-      // 60F 시련 종료 → 구역 3 (어두운 숲) 전환
-      await zoneCurtain.show(ZONE_LIST[2], () => setZoneBackground(ZONE_LIST[2].bgUrl))
-    } else {
-      await bossController.run30F()
-      // 30F 시련 종료 → 구역 2 (정원 풀밭) 전환
-      await zoneCurtain.show(ZONE_LIST[1], () => setZoneBackground(ZONE_LIST[1].bgUrl))
-    }
-    inputLocked = false
-    render()
-    return
-  }
-  await boardRenderer.playShopResumeTransition()
-
-  inputLocked = false
-  render()
-}
-/** Forced trial after boss: 베일이 레일 크기로 내려옴 → 카드들이 한 박자 늦게
- *  떨어진다. 선택 시 자동 EXIT 흐름(카드 회수 → 레이어 회수 → 셔터 상승).
- *  진동 없이 바로 열도록 변경 — quake가 셔터를 들썩여 보여 제거. */
-async function openTrialOverlayForced(): Promise<void> {
-  boardRenderer.openForcedTrialShopFlow(
-    FORCED_TRIAL_CARDS.map(({ id, title, effect, spriteUrl }) => {
-      // 시련 {{trial-spawn}} 토큰을 현 시점 실효 확률 변화량으로 치환한다.
-      const resolvedEffect = effect.replace('{{trial-spawn}}', () => {
-        const def = TRIAL_DEFINITIONS.find((d) => d.id === id)
-        if (def?.effectKind.type === 'treasure-spawn-scale') {
-          const pct = cardSpawner.trialScaleToPct(def.effectKind.factor)
-          return `${pct >= 0 ? '+' : ''}${pct}%`
-        }
-        return ''
-      })
-      return { id, title, effect: resolvedEffect, spriteUrl }
-    })
-  )
-  await new Promise<void>((resolve) => {
-    let picked = false
-    const finalize = async (): Promise<void> => {
-      document.removeEventListener('forcedTrialPick', onPick)
-      // playShopExitAnimation: 카드들이 위로 빠진다 → closeShop: 레이어 회수
-      // → playShopResumeTransition: 셔터 상승. 상점 EXIT와 완전히 같은 비트.
-      await boardRenderer.playShopExitAnimation()
-      boardRenderer.closeShop()
-      await boardRenderer.playShopResumeTransition()
-      if (gameState.getCurrentTurn() === 90) {
-        // 셔터가 완전히 열린 뒤 짧은 정적을 두고, 화면 연출과 함께 최종 등반 규칙을 켠다.
-        await wait(320)
-        activateFinalAscentStarlightRule()
-        await boardRenderer.playFinalAscentRuleAwakening()
-      }
-      // 시련 종료 직전 손패 차단 해제 → 일반 turn 입력 가능.
-      bossController.postPhaseHandLocked = false
-      resolve()
-    }
-    const onPick = (event: Event): void => {
-      const custom = event as CustomEvent<{ id?: string }>
-      const id = custom.detail?.id
-      const pickedCard = FORCED_TRIAL_CARDS.find((card) => card.id === id)
-      if (!pickedCard || picked) return
-      picked = true
-      pickedCard.apply()
-      // 시련 각오 한마디 — 보스 격파 직후의 드문 이벤트라 확률 게이트 없이 1회 말한다.
-      // 태어나서 첫 시련이라면 각오 대신 '런 내내 지속되는 조건'이라는 교육형 소개를 우선한다.
-      sayEnaBark(encounterIntroLineOnce('trial') ?? companion.trialLine(), { importance: BARK_IMPORTANCE.situation })
-      // 선택된 카드 자체에 burst 이펙트. 동일한 카드 위에서 효과가 "터지며 적용"되는
-      // 시각 비트를 만든 뒤 자동으로 EXIT 시퀀스가 이어진다.
-      const pickedEl = document.querySelector<HTMLElement>(`[data-trial-pick="${id}"]`)
-      if (pickedEl) SquareBurst.playOn(pickedEl, 'score', { count: 18, spread: 140, duration: 620 })
-      recordNotice(formatTrialSummary(`시련 적용: ${pickedCard.title}`), 'info')
-      window.setTimeout(() => void finalize(), 620)
-    }
-    document.addEventListener('forcedTrialPick', onPick)
-  })
-}
 
 /**
  * Preparation refresh used after hand/combo field removals. It compacts lanes,
@@ -3048,9 +1290,9 @@ function compactAndRefillAllLanes(): boolean {
   if (doorInjected) {
     pendingEventDoor = false
     // 동료(에나) 이벤트 문 등장 반응.
-    if (companionWorldCanSpeak()) {
+    if (companionDirector.companionWorldCanSpeak()) {
       const bark = companion.reactSituation('event', gameState.getCurrentTurn())
-      if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: 'event' })
+      if (bark) companionDirector.sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: 'event' })
     }
   }
   return result
@@ -3104,7 +1346,7 @@ function firstSeenKeyOf(kind: BoardEncounterKind | SystemEncounterKind): string 
  * 영구 first-seen 기록(enaAutonomousLearner) 기반이라 죽어서 재시작해도 반복되지 않는다.
  */
 function maybeIntroduceFields(): void {
-  if (!companionWorldCanSpeak()) return
+  if (!companionDirector.companionWorldCanSpeak()) return
   // 현재 보드에 놓인 조우 종류를 모은다.
   const present = new Set<BoardEncounterKind>()
   for (const lane of gameState.lanes) {
@@ -3127,11 +1369,11 @@ function maybeIntroduceFields(): void {
     fresh.push(kind)
   }
   const line = companion.introduceFields(fresh)
-  if (line) sayEnaBark(line, { importance: BARK_IMPORTANCE.situation })
+  if (line) companionDirector.sayEnaBark(line, { importance: BARK_IMPORTANCE.situation })
   // 획득 경로(enqueueDrop)에서 조용히 합성된 첫 트리플도 이 스캔이 받아 소개한다.
   if (gameState.character.hand.some((card) => card.merged)) {
     const tripleIntro = encounterIntroLineOnce('triple')
-    if (tripleIntro) sayEnaBark(tripleIntro, { importance: BARK_IMPORTANCE.situation })
+    if (tripleIntro) companionDirector.sayEnaBark(tripleIntro, { importance: BARK_IMPORTANCE.situation })
   }
 }
 
@@ -3272,14 +1514,14 @@ function resetForNewRun(): void {
   companion.resetForRun()
   // 정산 육각형의 '이번 런 상승분' 기준점 — 런 시작 시점의 축 값을 캡처해 둔다.
   runStartAxisValues = experienceAxes(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth()).map((a) => a.value)
-  resetRunDramaSignals() // 성장 점프 게이트 입력(드라마 신호)도 런 단위로 비운다.
+  companionDirector.resetRunDramaSignals() // 성장 점프 게이트 입력(드라마 신호)도 런 단위로 비운다.
   lifetimeRecorded = false // 통산 기록은 런당 1회 — 새 런에서 다시 열어 준다.
   sessionFieldsIntroduced.clear() // 세션 내 필드 소개 중복 가드도 런마다 비운다(영구 기록은 유지).
-  pendingPrediction = null
+  companionDirector.pendingPrediction = null
   gameState.reset()
   // 헌혈팩 콜백: reset 이후 새 character 인스턴스에 설정해야 한다
   gameState.character.onHealGain = (amount) => {
-    if (gameState.character.hasRelic('blood-pack')) void applyBloodPackHit(amount)
+    if (gameState.character.hasRelic('blood-pack')) void relicEffects.applyBloodPackHit(amount)
   }
   // 넘치는 촛농: 오버힐을 방패로 전환하고, 그 전환량을 '회복'으로도 집계해 헌혈팩까지 발동한다.
   gameState.character.onHealOverflow = (overflow) => {
@@ -3287,17 +1529,17 @@ function resetForNewRun(): void {
     const shielded = gameState.character.addShield(overflow) // addShield가 가시 방패도 연쇄 발동
     recordRelicActivation('overflow-wax', `초과 회복 → 방패 +${shielded}`)
     boardRenderer.playHudCounterFeedback('shield', gameState.character.shield)
-    if (gameState.character.hasRelic('blood-pack')) void applyBloodPackHit(overflow)
+    if (gameState.character.hasRelic('blood-pack')) void relicEffects.applyBloodPackHit(overflow)
   }
   // 가시 방패: 방패를 얻을 때마다 획득량만큼 전방 랜덤 적을 1씩 찌른다.
   gameState.character.onShieldGain = (amount) => {
-    if (gameState.character.hasRelic('thorn-shield')) void applyThornShieldHits(amount)
+    if (gameState.character.hasRelic('thorn-shield')) void relicEffects.applyThornShieldHits(amount)
   }
   cardSpawner.resetRelicModifiers()
   cardSpawner.resetSpawnState()
   // 비게임플레이(BGM)만 제외하고 잔여 상태를 모두 비운다: 체인 UID, 팩 세션, 디버그 이벤트, 말풍선.
   chainEventCounter = 0
-  activePackSession = null
+  shopFlow.resetForNewRun()
   boardRenderer.closePackPicker()
   debugForcedEventId = null
   speechBubble.dismiss()
@@ -3334,9 +1576,6 @@ function resetForNewRun(): void {
   // 처치/사용 카운터는 makeDefaultEnhancements()로 enhancements 재생성 시 함께 초기화된다.
   nextActivityLogId = 1
   activityLogs = []
-  shopOpen = false
-  currentShopOffers = []
-  altarRelicPicked = false
   boardRenderer.closeShop()
   boardRenderer.resetShutter()
   syncSpawnerTier()
@@ -3376,7 +1615,7 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // resetForNewRun이 거점 미리보기 유물을 지우므로, 만찬에서 만든 실제 유물은 런 시작 직후 재지급한다.
   if (pendingDinnerRelicProfile) {
     gameState.character.customRelicProfiles['last-supper'] = pendingDinnerRelicProfile
-    if (gameState.character.addRelic('last-supper')) await applyRelicPurchaseEffect('last-supper')
+    if (gameState.character.addRelic('last-supper')) await relicEffects.applyRelicPurchaseEffect('last-supper')
   }
   pendingDinnerRelicProfile = null
   const poolSnapshot = runCardPool.snapshot()
@@ -3460,11 +1699,11 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
     // 회상은 인사의 최소 노출 시간이 지난 뒤 이어서 나온다(뜨자마자 교체되는 충돌 제거).
     window.setTimeout(() => {
       if (!gameActive) return
-      clearBarkQueue()
-      enaSpeaking = false // 직전 런의 잔여 바크 상태와 무관하게 새 런 인사를 확정 표시한다.
-      sayEnaBark(opening, { importance: BARK_IMPORTANCE.situation })
-      if (memoryLine && companionWorldCanSpeak()) {
-        sayEnaBark(memoryLine, { importance: BARK_IMPORTANCE.situation })
+      companionDirector.clearBarkQueue()
+      companionDirector.enaSpeaking = false // 직전 런의 잔여 바크 상태와 무관하게 새 런 인사를 확정 표시한다.
+      companionDirector.sayEnaBark(opening, { importance: BARK_IMPORTANCE.situation })
+      if (memoryLine && companionDirector.companionWorldCanSpeak()) {
+        companionDirector.sayEnaBark(memoryLine, { importance: BARK_IMPORTANCE.situation })
       }
       // 인사 뒤, 첫 보드에 놓인 온보딩 필드(바위/덤불/잡동사니)를 한 줄로 묶어 소개한다.
       maybeIntroduceFields()
@@ -3531,446 +1770,37 @@ function buildRailRefillPreviewCards(): (Card | null)[] {
 
 /** Register slash-command debug palette. Opens with the `/` key.
  *  모바일에서는 좌상단 버튼으로 트리거한다. */
-function setupDevCommandPalette(): void {
-  if (!ENABLE_DEV_COMMAND_PALETTE) return
-  const host = document.createElement('div')
-  host.className = 'dev-command-palette'
-  host.innerHTML = `
-    <div class="dev-command-shell">
-      <span class="dev-command-prefix">/</span>
-      <input class="dev-command-input" type="text" spellcheck="false" autocomplete="off" />
-      <button class="dev-command-close" aria-label="닫기">✕</button>
-      <div class="dev-command-hint">예시: /시작, /리셋, /부자, /상점, /제단, /시련, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비</div>
-    </div>
-    <button class="dev-command-run">실행</button>
-  `
-  document.body.appendChild(host)
+/** 디버그 악마 소환 가드 — 입력 잠금/보스전/게임오버 중엔 발동하지 않는다. */
+function demonSummonDebugBlocked(): boolean {
+  return inputLocked || Boolean(bossController.eventState) || gameState.isGameOver
+}
 
-  // 모바일 전용 트리거 버튼 (터치 기기에서만 표시)
-  const mobileBtn = document.createElement('button')
-  mobileBtn.className = 'dev-command-mobile-btn'
-  mobileBtn.textContent = '/'
-  mobileBtn.setAttribute('aria-label', '커멘드 팔레트 열기')
-  document.body.appendChild(mobileBtn)
-
-  // 모바일 전용 새로고침 버튼 (최하단). 아이콘은 작게, 터치 범위는 크게.
-  const refreshBtn = document.createElement('button')
-  refreshBtn.className = 'dev-refresh-mobile-btn'
-  refreshBtn.setAttribute('aria-label', '새로고침')
-  // 플랫 inline-SVG 원형 화살표(단색 stroke, currentColor) — Icons.ts 스타일 유지.
-  refreshBtn.innerHTML = `
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-         stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-      <path d="M21 3v6h-6" />
-    </svg>`
-  refreshBtn.addEventListener('click', () => window.location.reload())
-  document.body.appendChild(refreshBtn)
-
-  const style = document.createElement('style')
-  style.textContent = `
-    .dev-command-palette { position: fixed; inset: 0 auto auto 0; width: 100%; z-index: 140; pointer-events: none; opacity: 0; transform: translateY(-8px); transition: opacity .14s ease, transform .14s ease; }
-    .dev-command-palette.is-open { opacity: 1; transform: translateY(0); pointer-events: auto; }
-    .dev-command-shell { margin: 8px auto 0; width: min(760px, calc(100% - 24px)); border: 1px solid rgba(255,215,120,.4); border-radius: 12px; background: linear-gradient(180deg, rgba(38,26,48,.98), rgba(18,12,24,.98)); box-shadow: 0 14px 28px rgba(0,0,0,.55); padding: 10px 12px; display: grid; grid-template-columns: 18px 1fr auto; grid-template-areas: "prefix input close" "hint hint hint"; column-gap: 8px; row-gap: 6px; }
-    .dev-command-prefix { grid-area: prefix; color: rgba(255,215,120,.92); font-weight: 900; align-self: center; }
-    .dev-command-input { grid-area: input; border: 0; outline: none; background: transparent; color: rgba(255,245,220,.98); font: 900 15px/1.3 'OkDanDan', Georgia, serif; }
-    .dev-command-close { grid-area: close; background: none; border: none; color: rgba(255,215,120,.55); font-size: 14px; cursor: pointer; padding: 0 2px; align-self: center; line-height: 1; }
-    .dev-command-close:hover { color: rgba(255,215,120,.9); }
-    .dev-command-hint { grid-area: hint; color: rgba(232,214,180,.78); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 12px; max-height: 96px; overflow-y: auto; }
-    .dev-cmd-item { white-space: nowrap; color: rgba(226,210,182,.72); }
-    .dev-cmd-item b { color: rgba(255,215,120,.94); font-weight: 900; margin-right: 3px; }
-    .dev-command-run { display: none; margin: 6px auto 0; width: min(760px, calc(100% - 24px)); padding: 8px 0; border: 1px solid rgba(255,215,120,.35); border-radius: 10px; background: rgba(38,26,48,.92); color: rgba(255,215,120,.92); font: 900 14px/1 'OkDanDan', Georgia, serif; cursor: pointer; letter-spacing: .04em; }
-    .dev-command-mobile-btn { display: none; position: fixed; bottom: calc(8px + env(safe-area-inset-bottom)); left: max(4px, env(safe-area-inset-left)); width: 34px; height: 34px; border-radius: 9px; border: 1px solid rgba(255,215,120,.38); background: rgba(18,12,24,.88); color: rgba(255,215,120,.9); font: 900 17px/1 'OkDanDan', Georgia, serif; cursor: pointer; z-index: 141; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.5); }
-    .dev-refresh-mobile-btn { display: none; position: fixed; top: calc(8px + env(safe-area-inset-top)); left: max(4px, env(safe-area-inset-left)); width: 34px; height: 34px; border-radius: 9px; border: 1px solid rgba(255,215,120,.38); background: rgba(18,12,24,.88); color: rgba(255,215,120,.9); cursor: pointer; z-index: 141; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.5); padding: 0; }
-    /* 보이는 크기(34px)는 유지하되, 투명 ::before로 히트 영역만 크게 + 대칭으로 확장한다.
-       엄지로 버튼 근처 어디를 눌러도 들어가게 한다(iPhone 사이드 잘림 보완). */
-    .dev-command-mobile-btn::before,
-    .dev-refresh-mobile-btn::before { content: ''; position: absolute; inset: -46px; }
-    @media (hover: none) and (pointer: coarse) {
-      .dev-command-run { display: block; }
-      .dev-command-mobile-btn { display: flex; }
-      .dev-refresh-mobile-btn { display: flex; }
-    }
-  `
-  document.head.appendChild(style)
-  const input = host.querySelector<HTMLInputElement>('.dev-command-input')
-  const hint = host.querySelector<HTMLDivElement>('.dev-command-hint')
-  const runBtn = host.querySelector<HTMLButtonElement>('.dev-command-run')
-  const closeBtn = host.querySelector<HTMLButtonElement>('.dev-command-close')
-  if (!input || !hint || !runBtn || !closeBtn) return
-  let opened = false
-  const handNameMap = new Map<string, HandCardId>()
-  for (const id of HAND_CARD_IDS) {
-    handNameMap.set(id.toLowerCase(), id)
-    handNameMap.set(getHandCardDef(id).name.toLowerCase(), id)
-  }
-  const relicNameMap = new Map<string, RelicId>()
-  for (const id of RELIC_IDS) {
-    relicNameMap.set(id.toLowerCase(), id)
-    relicNameMap.set(getRelicDef(id).name.toLowerCase(), id)
-  }
-  const setHint = (msg: string): void => { hint.textContent = msg }
-  // 칠 수 있는 명령어 목록 — /를 치면 하단에 도움말로 뜨고, 입력 중엔 일치 항목만 좁혀 보여준다.
-  const DEV_COMMANDS: { name: string; desc: string }[] = [
-    { name: '시작', desc: '거점(로비) 진입' },
-    { name: '개방', desc: '거점 모든 칸 강제 개방' },
-    { name: '잠금', desc: '거점 개방 해제(모험/무역만)' },
-    { name: '리셋', desc: '에나 경험 초기화' },
-    { name: '부자', desc: '불빛/화폐 대량 지급' },
-    { name: '상점', desc: '상점 열기' },
-    { name: '제단', desc: '제단 열기' },
-    { name: '시련', desc: '강제 시련 열기' },
-    { name: '사망', desc: '즉시 사망(정산 화면 점검)' },
-    { name: '승리', desc: '즉시 100F 클리어(정산 화면 점검)' },
-    { name: '25turn', desc: 'N턴 이동(1~100)' },
-    { name: '공격력7', desc: '공격력 설정' },
-    { name: '체력40', desc: '체력 설정' },
-    { name: '1000불빛', desc: '불빛 N 지급' },
-    { name: '10$', desc: '화폐 N 지급' },
-    { name: '적', desc: '적 스폰' },
-    { name: '보물', desc: '보물 스폰' },
-    { name: '씨앗', desc: '씨앗 스폰' },
-    { name: '함정', desc: '함정 스폰' },
-    { name: '이벤트', desc: '이벤트 문 스폰' },
-    { name: '악마소환', desc: '악마 보스 소환' },
-    { name: '랜덤유물', desc: '랜덤 유물 지급' },
-    { name: '랜덤손패', desc: '랜덤 손패 지급' },
-  ]
-  const renderHelp = (raw: string): void => {
-    const q = raw.trim().replace(/^\/+/, '').toLowerCase()
-    // 숫자로 시작하면 수치형 명령(불빛/턴/$)이 후보이므로 전부 보여준다.
-    const matches = q && !/^\d/.test(q) ? DEV_COMMANDS.filter((c) => c.name.toLowerCase().includes(q)) : DEV_COMMANDS
-    const shown = matches.slice(0, 10)
-    hint.innerHTML = shown.length
-      ? shown.map((c) => `<span class="dev-cmd-item"><b>/${c.name}</b> ${c.desc}</span>`).join('')
-      : '일치하는 명령어가 없습니다.'
-  }
-  const close = (): void => { opened = false; host.classList.remove('is-open'); input.value = '' }
-  const open = (): void => {
-    opened = true
-    host.classList.add('is-open')
-    renderHelp('')
-    input.value = ''
-    window.setTimeout(() => input.focus(), 0)
-  }
-  const execute = async (rawValue: string): Promise<void> => {
-    const token = rawValue.trim().replace(/^\/+/, '')
-    if (!token) return
-    // Resource debug grants: allow concise numeric commands so designers can
-    // test shop pacing without spawning hand/relic side effects.
-    const scoreGrantMatch = token.match(/^(\d{1,7})\s*(불빛|점수|score|light)$/i)
-    if (scoreGrantMatch) {
-      const amount = Number(scoreGrantMatch[1])
-      if (!Number.isFinite(amount) || amount <= 0) { setHint('불빛 지급량은 1 이상이어야 합니다.'); return }
-      score += amount
-      render()
-      setHint(`디버그: 불빛 +${amount.toLocaleString()} (현재 ${score.toLocaleString()})`)
-      return
-    }
-    const coinGrantMatch = token.match(/^(\d{1,7})\s*(\$|화폐|코인|coin|coins)$/i)
-    if (coinGrantMatch) {
-      const amount = Number(coinGrantMatch[1])
-      if (!Number.isFinite(amount) || amount <= 0) { setHint('화폐 지급량은 1 이상이어야 합니다.'); return }
-      coins += amount
-      render()
-      setHint(`디버그: 화폐 +${amount.toLocaleString()}$ (현재 ${coins.toLocaleString()}$)`)
-      return
-    }
-    const turnMatch = token.match(/^(\d{1,3})\s*turn$/i)
-    if (turnMatch) {
-      const turn = Number(turnMatch[1])
-      if (!Number.isFinite(turn) || turn < 1 || turn > 100) { setHint('턴 이동은 1~100 범위만 가능합니다.'); return }
-      gameState.setCurrentTurnForDebug(turn)
-      syncSpawnerTier()
-      render()
-      setHint(`디버그: ${turn}턴으로 이동`)
-      return
-    }
-    const attackSetMatch = token.match(/^공격력\s*(\d{1,4})$/i)
-    if (attackSetMatch) {
-      const amount = Number(attackSetMatch[1])
-      if (!Number.isFinite(amount) || amount < 1) { setHint('공격력은 1 이상이어야 합니다.'); return }
-      // 디버그 명령은 누적 증가가 아니라 현재 공격력을 지정값으로 맞춘다.
-      gameState.character.setDamageForDebug(amount)
-      render()
-      boardRenderer.playHudCounterFeedback('attack', gameState.character.damage)
-      setHint(`디버그: 공격력 ${gameState.character.damage.toLocaleString()}으로 설정`)
-      return
-    }
-    const healthSetMatch = token.match(/^체력\s*(\d{1,4})$/i)
-    if (healthSetMatch) {
-      const amount = Number(healthSetMatch[1])
-      if (!Number.isFinite(amount) || amount < 1) { setHint('체력은 1 이상이어야 합니다.'); return }
-      // 체력 명령은 전투 테스트용으로 현재 HP와 최대 HP를 동시에 맞춘다.
-      gameState.character.setHealthForDebug(amount)
-      render()
-      boardRenderer.playHudCounterFeedback('health', gameState.character.health)
-      boardRenderer.playHudCounterFeedback('maxHealth', gameState.character.maxHealth)
-      setHint(`디버그: 체력/최대체력 ${gameState.character.health.toLocaleString()}으로 설정`)
-      return
-    }
-    // 이벤트N 커맨드: N번 이벤트가 고정 등장하는 문 칸을 스폰한다(테스트 전용).
-    const fixedEventMatch = token.match(/^이벤트([1-9]\d*)$/)
-    if (fixedEventMatch) {
-      const idx = Number(fixedEventMatch[1]) - 1
-      const id = EVENT_IDS[idx] as EventId | undefined
-      if (!id) { setHint(`이벤트${idx + 1}번은 없습니다. (현재 ${EVENT_IDS.length}종)`); return }
-      const topDistance = LANE_DISTANCE_COUNT - 1
-      const laneIndex = Math.floor(Math.random() * gameState.lanes.length)
-      gameState.lanes[laneIndex].setCardAtDistance(topDistance, cardSpawner.generateEventDoor())
-      gameState.regroupAllRows()
-      render()
-      debugForcedEventId = id
-      setHint(`디버그: 이벤트${idx + 1} (${id}) 칸을 ${laneIndex + 1}번 레인 맨 위에 스폰`)
-      return
-    }
-
-    // 칸 스폰 디버그: 지정 종류 카드를 맨 위 대기행(distance 2)의 랜덤 한 칸에 박는다.
-    // 이후 평소처럼 진행하면 그 칸이 하강·도착하는 과정을 그대로 검증할 수 있다.
-    const spawnKindByAlias: Record<string, 'enemy' | 'trap' | 'treasure' | 'seed' | 'event'> = {
-      '적': 'enemy', 'enemy': 'enemy',
-      '함정': 'trap', 'trap': 'trap',
-      '보물': 'treasure', 'treasure': 'treasure',
-      '씨앗': 'seed', '꽃': 'seed', 'seed': 'seed',
-      '이벤트': 'event', '문': 'event', 'event': 'event',
-    }
-    const spawnKind = spawnKindByAlias[token.toLowerCase()]
-    if (spawnKind) {
-      const topDistance = LANE_DISTANCE_COUNT - 1
-      const laneIndex = Math.floor(Math.random() * gameState.lanes.length)
-      gameState.lanes[laneIndex].setCardAtDistance(topDistance, cardSpawner.spawnDebugCard(spawnKind))
-      gameState.regroupAllRows()
-      render()
-      setHint(`디버그: ${token} 칸을 ${laneIndex + 1}번 레인 맨 위 대기칸에 스폰`)
-      return
-    }
-    const key = token.toLowerCase()
-    const relicId = relicNameMap.get(key)
-    if (relicId) {
-      const ok = gameState.character.addRelic(relicId)
-      if (ok) await applyRelicPurchaseEffect(relicId)
-      render()
-      setHint(ok ? `디버그: 유물 지급 (${getRelicDef(relicId).name})` : '이미 보유 중이거나 지급할 수 없습니다.')
-      return
-    }
-    const handId = handNameMap.get(key)
-    if (handId) {
-      const ok = gameState.character.addHandCard(DropSystem.makeCard(handId))
-      render()
-      setHint(ok ? `디버그: 손패 지급 (${getHandCardDef(handId).name})` : '손패가 가득 찼습니다.')
-      return
-    }
-    // 악마 소환 레시피 즉시 발동 — 전체 연출 포함 (불길함 → 배너 임팩트 → 커튼 → 보스).
-    if (key === '악마소환' || key === '악마 소환') {
-      if (inputLocked || bossController.eventState || gameState.isGameOver) {
-        setHint('현재 입력이 잠겨 있거나 보스 전투 중입니다.')
-        return
-      }
-      close()
-      inputLocked = true
-      HandSystem.resetChain(chain)
-      clearChainTimeline()
-      boardRenderer.refreshChainBanner(buildChainHints())
-      await wait(300)
-      boardRenderer.playOminousShimmer()
-      await playDialogueLine(speechBubble, null, '정말… 나타나는 건가…?', 2200, 280)
-      chainTimeline.push({
-        kind: 'recipe', recipeId: 'demon-summon',
-        name: '악마 소환', flavor: '거짓 속의 진실을 직시하라.',
-        uid: nextChainUid(),
-      })
-      boardRenderer.refreshChainBanner({
-        events: [...chainTimeline],
-        recipeReadyBySlot: {},
-        demonImpactMode: true,
-      })
-      await wait(1800)
-      await boardRenderer.playDemonBannerBurnFade()
-      clearChainTimeline()
-      boardRenderer.refreshChainBanner(buildChainHints())
-      await boardRenderer.closeDemonCurtain()
-      await bossController.runDemonSummon()
-      setTimeout(() => { inputLocked = false }, 320)
-      return
-    }
-    // 악마 소환 준비 — 레시피 해금 + 필요 손패 4장 지급.
-    if (key === '악마소환준비' || key === '악마 소환 준비') {
-      gameState.unlockedRecipeIds.add('demon-summon')
-      boardRenderer.setLockedRecipeIds(
-        RECIPES.filter((r) => r.runLocked && !gameState.unlockedRecipeIds.has(r.id)).map((r) => r.id)
-      )
-      const ingredients: HandCardId[] = ['sacrifice-candle', 'ritual-candle', 'candle', 'ember']
-      let added = 0
-      for (const id of ingredients) {
-        const ok = gameState.character.addHandCard(DropSystem.makeCard(id))
-        if (ok) added++
-      }
-      render()
-      setHint(`디버그: 악마 소환 레시피 해금 + 손패 ${added}장 지급 (${ingredients.map((id) => getHandCardDef(id).name).join('/')}`)
-      return
-    }
-    // 랜덤 유물 10장 지급 (미보유·비차단 풀에서 셔플 후 순서대로)
-    if (key === '랜덤유물' || key === '랜덤 유물') {
-      const pool = RELIC_IDS
-        .filter((id) => !gameState.character.hasRelic(id) && !relicPurchaseBlocked(id))
-        .sort(() => Math.random() - 0.5)
-      let added = 0
-      for (const id of pool.slice(0, 10)) {
-        if (gameState.character.addRelic(id)) {
-          await applyRelicPurchaseEffect(id)
-          added++
-        }
-      }
-      render()
-      setHint(`디버그: 랜덤 유물 ${added}장 지급`)
-      return
-    }
-    // 랜덤 손패 10장 지급 (boss 전용 드롭 제외)
-    if (key === '랜덤손패' || key === '랜덤 손패') {
-      const pool = HAND_CARD_IDS.filter((id) => HAND_CARD_DEFINITIONS[id].dropSource !== 'boss')
-      let added = 0
-      for (let i = 0; i < 10; i++) {
-        const id = pool[Math.floor(Math.random() * pool.length)]
-        const ok = gameState.character.addHandCard(DropSystem.makeCard(id))
-        if (ok) added++
-      }
-      render()
-      setHint(`디버그: 랜덤 손패 ${added}장 지급`)
-      return
-    }
-    // 거점(촛대) 진입. 빈 레일을 배경으로 거점 화면을 띄운다.
-    if (/^(시작|start)$/i.test(token)) {
-      close()
-      enterHearth()
-      return
-    }
-    // 개발용: 거점의 모든 칸을 강제 개방한다(로컬 저장). 거점 화면이 떠 있으면 즉시 재구성한다.
-    if (/^(개방|unlock)$/i.test(token)) {
-      localStorage.setItem(HEARTH_DEV_UNLOCK_KEY, '1')
-      close()
-      if (document.getElementById('hearth-overlay')) {
-        hearthScene.exit()
-        enterHearth()
-      }
-      setHint('디버그: 거점 모든 칸 개방')
-      return
-    }
-    // 개발용: 거점 강제 개방을 해제해 실제 해금 조건(모험/무역만)으로 되돌린다.
-    if (/^(잠금|lock)$/i.test(token)) {
-      localStorage.removeItem(HEARTH_DEV_UNLOCK_KEY)
-      close()
-      if (document.getElementById('hearth-overlay')) {
-        hearthScene.exit()
-        enterHearth()
-      }
-      setHint('디버그: 거점 개방 해제(모험/무역만)')
-      return
-    }
-    // 전체 진행 초기화: 에나 경험(성향/자기학습/정책망)뿐 아니라 통산 기록·메타 해금(무역)·
-    // 거점 기억(마지막 캐릭터/난이도·개발 개방)·첫 조우 기록까지 — 'unmelting.' 접두사 저장을
-    // 통째로 지워, 새 진행도 키가 추가돼도 리셋에서 빠지지 않게 한다(에나 성향 키만 구형
-    // 이름이라 별도 나열). 부팅 시점에 로드된 상태를 되돌리려면 재부팅이 필요하다.
-    if (/^(리셋|reset)$/i.test(token)) {
-      const doomed = new Set<string>([ENA_DISPOSITION_STORAGE_KEY, ENA_SELF_LEARNING_STORAGE_KEY, ENA_POLICY_STORAGE_KEY])
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key?.startsWith('unmelting.')) doomed.add(key)
-      }
-      for (const storageKey of doomed) localStorage.removeItem(storageKey)
-      setHint('모든 진행(에나 경험·해금·통산 기록·거점 상태)을 초기화했습니다. 새로 시작합니다…')
-      window.setTimeout(() => window.location.reload(), 700)
-      return
-    }
-    // 디버그: 즉시 부유 — 불빛/화폐를 대량 지급한다.
-    if (/^(부자|rich)$/i.test(token)) {
-      score += 100_000_000
-      coins += 1_000_000
-      render()
-      setHint('디버그: 불빛 +100,000,000 / 화폐 +1,000,000$')
-      return
-    }
-    // 디버그: 상점/제단을 셔터 연출과 함께 즉시 연다(일반 방문과 동일 흐름).
-    if (/^상점$/.test(token)) {
-      if (inputLocked || shopOpen || gameState.isGameOver) { setHint('지금은 상점을 열 수 없습니다.'); return }
-      close()
-      await openShopOverlay('shop')
-      return
-    }
-    if (/^제단$/.test(token)) {
-      if (inputLocked || shopOpen || gameState.isGameOver) { setHint('지금은 제단을 열 수 없습니다.'); return }
-      close()
-      await openShopOverlay('altar')
-      return
-    }
-    // 디버그: 즉시 사망/승리 — 정산 화면(모바일 포함) 점검용. 실제 종료 흐름과 같은 finishTurn을 탄다.
-    if (/^(사망|death)$/i.test(token)) {
-      if (gameState.isGameOver) { setHint('이미 게임이 끝났습니다.'); return }
-      close()
-      gameState.endGame('character_defeated')
-      finishTurn()
-      return
-    }
-    if (/^(승리|clear)$/i.test(token)) {
-      if (gameState.isGameOver) { setHint('이미 게임이 끝났습니다.'); return }
-      close()
-      gameState.endGame('run_clear_100_turns')
-      finishTurn()
-      return
-    }
-    // 디버그: 강제 시련을 셔터 연출과 함께 즉시 연다.
-    if (/^시련$/.test(token)) {
-      if (inputLocked || shopOpen || gameState.isGameOver) { setHint('지금은 시련을 열 수 없습니다.'); return }
-      close()
-      inputLocked = true
-      await boardRenderer.playShopTransition()
-      await openTrialOverlayForced()
-      inputLocked = false
-      render()
-      return
-    }
-    setHint('알 수 없는 명령어입니다. /시작, /리셋, /부자, /상점, /제단, /시련, /25turn, /공격력7, /체력40, /1000불빛, /10$, /악마소환')
-  }
-
-  // 닫기 버튼 (shell 우상단 ✕)
-  closeBtn.addEventListener('click', () => close())
-  // 모바일 트리거 버튼 — 터치 기기에서 팔레트를 여는 진입점
-  mobileBtn.addEventListener('click', () => open())
-  // 모바일 실행 버튼 — 가상 키보드의 Enter 대신 탭으로 실행
-  runBtn.addEventListener('click', () => { execute(input.value); input.select() })
-  // 외부 클릭/탭으로 닫기 — host 영역 바깥을 누르면 닫힌다
-  document.addEventListener('pointerdown', (e) => {
-    if (!opened) return
-    if (!host.contains(e.target as Node)) close()
+/** 디버그 악마 소환 전체 연출 — 실제 레시피 발동과 같은 순서(불길함→배너 임팩트→커튼→보스). */
+async function runDemonSummonDebug(): Promise<void> {
+  inputLocked = true
+  HandSystem.resetChain(chain)
+  clearChainTimeline()
+  boardRenderer.refreshChainBanner(buildChainHints())
+  await wait(300)
+  boardRenderer.playOminousShimmer()
+  await playDialogueLine(speechBubble, null, '정말… 나타나는 건가…?', 2200, 280)
+  chainTimeline.push({
+    kind: 'recipe', recipeId: 'demon-summon',
+    name: '악마 소환', flavor: '거짓 속의 진실을 직시하라.',
+    uid: nextChainUid(),
   })
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === '/' && !opened) {
-      const target = e.target as HTMLElement | null
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
-      e.preventDefault()
-      open()
-      return
-    }
-    if (!opened) return
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      close()
-    }
+  boardRenderer.refreshChainBanner({
+    events: [...chainTimeline],
+    recipeReadyBySlot: {},
+    demonImpactMode: true,
   })
-  // 입력 중 실시간으로 일치하는 명령어 도움말을 좁혀 보여준다.
-  input.addEventListener('input', () => renderHelp(input.value))
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      execute(input.value)
-      input.select()
-      return
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      close()
-    }
-  })
+  await wait(1800)
+  await boardRenderer.playDemonBannerBurnFade()
+  clearChainTimeline()
+  boardRenderer.refreshChainBanner(buildChainHints())
+  await boardRenderer.closeDemonCurtain()
+  await bossController.runDemonSummon()
+  setTimeout(() => { inputLocked = false }, 320)
 }
 
 function wait(ms: number): Promise<void> {
@@ -3996,7 +1826,7 @@ function recordNotice(_message: string, _kind: NoticeLogKind = 'info'): void {
  *  - 상점: 유물 구매·무료 카드 등은 전투 콤보가 아니라 체인이 뜰 자리가 아니다.
  *  - 보스 보상: 손패 사용 차단(postPhaseHandLocked)과 함께 체인도 끊는다. */
 function chainRecordingSuppressed(): boolean {
-  return shopOpen || bossController.postPhaseHandLocked
+  return shopFlow.isOpen() || bossController.postPhaseHandLocked
 }
 
 /** Record relic activation in the floating chain-area toast only. */
@@ -4078,7 +1908,7 @@ async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promi
     recordNotice(`${gauge.name}: ${gauge.message}`, 'gauge')
     // 태어나서 첫 게이지 만충 — 영구 성장/보상 선택 규칙을 그 자리에서 짧게 알려준다.
     const comboIntro = encounterIntroLineOnce('combo')
-    if (comboIntro) sayEnaBark(comboIntro, { importance: BARK_IMPORTANCE.situation })
+    if (comboIntro) companionDirector.sayEnaBark(comboIntro, { importance: BARK_IMPORTANCE.situation })
     // 상점/보스 보상 단계의 게이지 페이오프는 체인 로그에서 제외한다.
     if (!chainRecordingSuppressed()) {
       chainTimeline.push({
@@ -4130,23 +1960,8 @@ document.addEventListener('mousedown', (e) => {
     return
   }
   if (!speechBubble.isShowing || onProfile) return
-  // 버블이 fully-visible 된 후 최소 1초가 지나야 스킵 허용 — 연타로 대사를 넘기는 것 방지.
-  if (speechBubble.visibleSinceMs < SKIP_MIN_VISIBLE_MS) return
-  // 2단계: 카드가 아닌 곳을 눌러 스킵. 단, '안 읽고 빨리 따닥 넘긴' 경우만 학습 스킵으로 본다.
-  const skippedUnread = currentBarkSituation !== null && Date.now() - barkShownAt < COMPANION_READ_MS
-  if (skippedUnread) {
-    companion.recordSkip(currentBarkSituation!)
-    clearTimeout(companionHeardTimer)
-    companionHeardTimer = 0
-    const remark = companion.maybeQuietRemark()
-    currentBarkSituation = null
-    speechBubble.dismiss()
-    // 과묵 안내 대사는 스킵 직후 조용히 한 번(낮은 중요도).
-    if (remark && companionWorldCanSpeak()) sayEnaBark(remark, { importance: BARK_IMPORTANCE.touch })
-    return
-  }
-  currentBarkSituation = null
-  speechBubble.dismiss()
+  // 2단계: 카드가 아닌 곳을 눌러 스킵 — 학습 판정/닫기는 디렉터가 담당한다.
+  companionDirector.handleBubbleSkip()
 })
 
 document.addEventListener('chainReset', () => {
@@ -4158,14 +1973,14 @@ document.addEventListener('chainReset', () => {
 
 document.addEventListener('candleModeCycle', () => {
   // 상점/제단은 inputLocked 상태지만 콤보 게이지 모드 전환은 안전한 idle 동작이라 허용한다.
-  if (!gameActive || (inputLocked && !shopOpen)) return
+  if (!gameActive || (inputLocked && !shopFlow.isOpen())) return
   gameState.character.cycleCandleMode()
   render()
 })
 
 document.addEventListener('candleModeSelect', (e: Event) => {
   // 상점/제단은 inputLocked 상태지만 콤보 게이지 모드 전환은 안전한 idle 동작이라 허용한다.
-  if (!gameActive || (inputLocked && !shopOpen)) return
+  if (!gameActive || (inputLocked && !shopFlow.isOpen())) return
   const detail = (e as CustomEvent<{ mode: CandleMode }>).detail
   if (!detail?.mode) return
   gameState.character.setCandleMode(detail.mode)
@@ -4173,25 +1988,25 @@ document.addEventListener('candleModeSelect', (e: Event) => {
 })
 
 document.addEventListener('shopBuy', (e: Event) => {
-  void handleShopBuy((e as CustomEvent<ShopBuyDetail>).detail)
+  void shopFlow.handleShopBuy((e as CustomEvent<ShopBuyDetail>).detail)
 })
 
 document.addEventListener('shopPackPick', (e: Event) => {
-  void handleShopPackPick((e as CustomEvent<ShopPackPickDetail>).detail)
+  void shopFlow.handleShopPackPick((e as CustomEvent<ShopPackPickDetail>).detail)
 })
 
 document.addEventListener('shopPackReroll', (e: Event) => {
-  void handleShopPackReroll((e as CustomEvent<{ packKind: ShopPackKind }>).detail.packKind)
+  void shopFlow.handleShopPackReroll((e as CustomEvent<{ packKind: ShopPackKind }>).detail.packKind)
 })
 
 document.addEventListener('shopPackPass', () => {
-  activePackSession = null
+  shopFlow.resetPackSession()
   boardRenderer.closePackPicker()
-  boardRenderer.openShop(buildShopStateView(), score, gameState.character)
+  boardRenderer.openShop(shopFlow.buildShopStateView(), score, gameState.character)
 })
 
 document.addEventListener('shopClose', () => {
-  void closeShopAndResume()
+  void shopFlow.closeShopAndResume()
 })
 
 /** Click on a hand slot. Plain click = use single (or arm targeting). */
@@ -4244,7 +2059,7 @@ async function resolveDeferredHandMerges(): Promise<void> {
   if (merges.length === 0) return
   // 태어나서 첫 트리플 합성 — 같은 카드 셋이 합쳐지는 규칙을 그 자리에서 짧게 알려준다.
   const tripleIntro = encounterIntroLineOnce('triple')
-  if (tripleIntro) sayEnaBark(tripleIntro, { importance: BARK_IMPORTANCE.situation })
+  if (tripleIntro) companionDirector.sayEnaBark(tripleIntro, { importance: BARK_IMPORTANCE.situation })
   // 합성 카드가 is-merged.is-entering으로 새로 렌더되어 수렴+버스트 연출이 온전히 재생된다.
   render()
   // 합성 연출(낙하 대기 620ms + 젤리/버스트)이 다음 렌더에 끊기지 않도록 충분히 기다린다.
@@ -4281,30 +2096,30 @@ async function applyHandSingle(
     if (gameState.bossBattleActive) enaRuntimeObserver.recordBossDecision(gameState, `hand:${usedDef.id}:${result.message}`)
   }
   // 정직: 손패 1장 사용으로 집계(합체 카드도 슬롯 1장이므로 1로 센다).
-  applyHonestyHandUse(1)
+  relicEffects.applyHonestyHandUse(1)
   // 태그 반응형 유물: 사용한 손패의 시너지 태그에 반응하는 유물 효과를 데이터 주도로 발동한다.
-  if (usedDef) applyHandCardUseRelics(usedDef, usedCard?.merged === true)
+  if (usedDef) relicEffects.applyHandCardUseRelics(usedDef, usedCard?.merged === true)
   // 도서관: 마도서 태그 손패를 쓰면 다음 마도서까지의 카운트다운이 1 줄어든다(엔진 가속).
-  if (usedDef?.synergyTags?.includes('tome')) advanceLibrary(1)
+  if (usedDef?.synergyTags?.includes('tome')) relicEffects.advanceLibrary(1)
   // 동료(에나) 손패 사용 한줄평 — 가끔 그 카드의 능력에 대해 한마디.
-  if (usedDef && companionWorldCanSpeak()) {
+  if (usedDef && companionDirector.companionWorldCanSpeak()) {
     const bark = companion.onUseCard(usedDef.id, usedDef.category, gameState.getCurrentTurn())
-    if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.loot })
+    if (bark) companionDirector.sayEnaBark(bark, { importance: BARK_IMPORTANCE.loot })
   }
   // 예측 대비 RL: 에나가 건넨 손패가 '곧바로/위기 타이밍에' 실제 효과를 냈는지 점수화한다.
   if (
     usedDef &&
-    pendingPrediction &&
-    pendingPrediction.cardIds.includes(usedDef.id) &&
-    gameState.getCurrentTurn() <= pendingPrediction.deadlineTurn
+    companionDirector.pendingPrediction &&
+    companionDirector.pendingPrediction.cardIds.includes(usedDef.id) &&
+    gameState.getCurrentTurn() <= companionDirector.pendingPrediction.deadlineTurn
   ) {
-    const turnsHeld = Math.max(0, gameState.getCurrentTurn() - pendingPrediction.issuedTurn)
+    const turnsHeld = Math.max(0, gameState.getCurrentTurn() - companionDirector.pendingPrediction.issuedTurn)
     const removedHazards = result.removedFieldCards.filter((c) => c.type === CardType.TRAP).length
     const immediateTimingBonus = turnsHeld === 0 ? 0.35 : turnsHeld === 1 ? 0.2 : 0
     const cleanupImpactBonus = usedDef.id === 'sweep' || usedDef.id === 'chitin' ? Math.min(0.45, removedHazards * 0.15) : 0
-    const crisisTimingBonus = pendingPrediction.kind === 'cleanup' && removedHazards > 0 ? 0.25 : 0
+    const crisisTimingBonus = companionDirector.pendingPrediction.kind === 'cleanup' && removedHazards > 0 ? 0.25 : 0
     companion.recordPredictionOutcome(0.75 + immediateTimingBonus + cleanupImpactBonus + crisisTimingBonus)
-    pendingPrediction = null
+    companionDirector.pendingPrediction = null
   }
   // 보스도 밀랍 굳음을 적용받는다(즉사만 면역). 굳음 중에는 보스가 반격/특수행동을 못 한다.
   // Reveal the used hand card near screen center, then dissolve it with its
@@ -4363,7 +2178,7 @@ async function applyHandSingle(
   if (result.coinsGained && result.coinsGained > 0) {
     coins += result.coinsGained
     coinPulseKey++
-    applyBlindFaithCoins(result.coinsGained)
+    relicEffects.applyBlindFaithCoins(result.coinsGained)
     await playResourceTrail({ kind: 'center' }, 'coin', result.coinsGained)
     if (usedDef) recordCoinGain(usedDef.name, result.coinsGained)
   }
@@ -4378,11 +2193,11 @@ async function applyHandSingle(
     recordNotice(`${usedDef?.name ?? '카드'}의 대가 — 자신이 ${result.selfDamage} 피해를 입었다`, 'hurt')
     render()
     await boardRenderer.animatePlayerDamageImpact(result.selfDamage)
-    applyAnomalyHealthLoss()
-    applyDemonDollSelfDamage(result.selfDamage)
+    relicEffects.applyAnomalyHealthLoss()
+    relicEffects.applyDemonDollSelfDamage(result.selfDamage)
     if (!gameState.character.isAlive() && !gameState.character.authoritySurvivePending) {
       gameState.endGame('character_defeated')
-      if (!(await tryResolveSurvivalRelics())) finishTurn()
+      if (!(await relicEffects.tryResolveSurvivalRelics())) finishTurn()
       inputLocked = false
       return
     }
@@ -4414,7 +2229,7 @@ async function applyHandSingle(
     } else if (harvest.kind === 'marigold') {
       coins += harvest.amount
       coinPulseKey++
-      applyBlindFaithCoins(harvest.amount)
+      relicEffects.applyBlindFaithCoins(harvest.amount)
       recordCoinGain(`${harvest.name} 수확`, harvest.amount)
       await playResourceTrail({ kind: 'card', cardId: harvest.cardId }, 'coin', harvest.amount, theme)
     }
@@ -4438,10 +2253,10 @@ async function applyHandSingle(
     await boardRenderer.animateCardConsumeByIds(result.removedFieldCards, {
       suppressBurstIds: singleDamagedIds,
     })
-    await onEnemiesDefeated(
+    await relicEffects.onEnemiesDefeated(
       result.removedFieldCards.filter((removed) => removed.type === CardType.ENEMY).length
     )
-    await applyWaxCrowTreasureGains(
+    await relicEffects.applyWaxCrowTreasureGains(
       result.removedFieldCards.filter((removed) => removed.type === CardType.TREASURE).length
     )
   }
@@ -4488,7 +2303,7 @@ async function applyHandSingle(
         await boardRenderer.animateCardConsumeByIds(repeatResult.removedFieldCards, {
           suppressBurstIds: new Set(repeatLosses.map((l) => l.cardId)),
         })
-        await onEnemiesDefeated(
+        await relicEffects.onEnemiesDefeated(
           repeatResult.removedFieldCards.filter((r) => r.type === CardType.ENEMY).length
         )
       }
@@ -4539,7 +2354,7 @@ async function applyHandSingle(
       if (hitResult.targetKilled) break
     }
     // 루프 종료 후: 붉은 포션 등 처치 유물 일괄 처리 → 보스 HP 확정 갱신 → 레일 1회 정리
-    if (teapotEnemiesKilled > 0) await onEnemiesDefeated(teapotEnemiesKilled)
+    if (teapotEnemiesKilled > 0) await relicEffects.onEnemiesDefeated(teapotEnemiesKilled)
     if (bossController.eventState) {
       boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))
     }
@@ -4563,13 +2378,13 @@ async function applyHandSingle(
     companion.noteMoodShift(0.05 * recipeResult.firedRecipes.length)
     // 태어나서 첫 레시피 발동 — 조합식 규칙을 그 자리에서 짧게 알려준다.
     const recipeIntro = encounterIntroLineOnce('recipe')
-    if (recipeIntro) sayEnaBark(recipeIntro, { importance: BARK_IMPORTANCE.situation })
+    if (recipeIntro) companionDirector.sayEnaBark(recipeIntro, { importance: BARK_IMPORTANCE.situation })
     if ((recipeResult.coinsGained ?? 0) > 0) {
       // Recipe currency uses the same wallet/pulse language as single coin cards.
       const gainedCoins = recipeResult.coinsGained ?? 0
       coins += gainedCoins
       coinPulseKey++
-      applyBlindFaithCoins(gainedCoins)
+      relicEffects.applyBlindFaithCoins(gainedCoins)
       await playResourceTrail({ kind: 'chain' }, 'coin', gainedCoins)
       // Attribute the coin log row to the first fired recipe that produced it.
       const coinRecipe = recipeResult.firedRecipes[0]?.recipe
@@ -4632,10 +2447,10 @@ async function applyHandSingle(
       await boardRenderer.animateCardConsumeByIds(recipeResult.removedFieldCards, {
         suppressBurstIds: recipeDamagedIds,
       })
-      await onEnemiesDefeated(
+      await relicEffects.onEnemiesDefeated(
         recipeResult.removedFieldCards.filter((removed) => removed.type === CardType.ENEMY).length
       )
-      await applyWaxCrowTreasureGains(
+      await relicEffects.applyWaxCrowTreasureGains(
         recipeResult.removedFieldCards.filter((removed) => removed.type === CardType.TREASURE)
           .length
       )
@@ -4715,7 +2530,7 @@ async function applyHandSingle(
         await boardRenderer.animateCardConsumeByIds([{ cardId: targetId, type: target.card.type }], {
           suppressBurstIds: new Set([targetId]),
         })
-        await onEnemiesDefeated(1)
+        await relicEffects.onEnemiesDefeated(1)
         if (!gameState.isGameOver) await runPreparationRefreshAfterFieldEffects()
       }
     }
@@ -4769,7 +2584,7 @@ async function applyHandSingle(
 /** 레바테인 전용: 적 공격/폭탄/꽃/보물 처리를 1회 실행하되 실제 턴 카운터를 올리지 않는다. */
 async function runSimulatedEnemyPhase(): Promise<void> {
   const beforeTrapHealth = snapshotFieldHealthState()
-  const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => tryCompanionIncomingDodge(damage) })
+  const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => companionDirector.tryCompanionIncomingDodge(damage) })
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
   const bombExplosions = turnManager.applyBombExplosions()
   const flowerChanges = turnManager.applyFlowerGrowthAndWilt(cardSpawner)
@@ -4809,7 +2624,7 @@ async function runSimulatedEnemyPhase(): Promise<void> {
       totalDamage
     )
   }
-  applyAnomalyHealthLoss()
+  relicEffects.applyAnomalyHealthLoss()
 
   if (!gameState.character.isAlive() && !gameState.character.authoritySurvivePending) {
     gameState.endGame('character_defeated')
@@ -4847,7 +2662,7 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
       const ember = gameState.character.ember
       recordNotice(`불씨가 사그라들었다 (${ember}/${gameState.character.emberMax})`, 'hurt')
       // 불씨가 dim→flickering 경계(4) 직전에 플레이어에게 경고 대사를 띄운다
-      if (ember === 4) { enaSpeaking = false; speechBubble.show('불씨가 약해지고 있어. . .') }
+      if (ember === 4) { companionDirector.enaSpeaking = false; speechBubble.show('불씨가 약해지고 있어. . .') }
       // 고품격 뗄감: 불씨가 완전히 꺼지면 가득 채우고 유물 파괴.
       if (ember <= 0 && gameState.character.hasRelic('premium-firewood')) {
         const beforeResources = snapshotPlayerResources()
@@ -4864,15 +2679,15 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
       // 고품격 뗄감이 있으면 유물의 완전 회복이 우선이므로 개입하지 않는다.
       if (
         gameState.character.ember <= 0 &&
-        companionWorldCanSpeak() &&
+        companionDirector.companionWorldCanSpeak() &&
         companion.rollMinorClutch('ember', { adversity: true })
       ) {
         gameState.character.ember = 1
         syncSpawnerTier()
         recordNotice('에나의 의지 — 불씨 수호! 불씨 +1', 'info')
         void boardRenderer.animateClutchOnPlayer('ember-gain')
-        showClutchChain('ember-save', '꺼지려는 불씨 +1')
-        sayEnaBark(companion.minorClutchLine('ember'), { importance: BARK_IMPORTANCE.clutch })
+        companionDirector.showClutchChain('ember-save', '꺼지려는 불씨 +1')
+        companionDirector.sayEnaBark(companion.minorClutchLine('ember'), { importance: BARK_IMPORTANCE.clutch })
         render()
         // 불씨 수치 피드백을 다른 불씨 획득(변칙 등)과 같은 HUD 카운터 beat로 맞춘다.
         boardRenderer.playHudCounterFeedback('ember', gameState.character.ember)
@@ -4885,7 +2700,7 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
         await boardRenderer.animateEnemyEmberEmpower(empoweredIds)
       }
     }
-    await applyTurnStartRelics()
+    await relicEffects.applyTurnStartRelics()
   }
 
   // 이벤트 문 독립 PRD 롤: 실제 턴 전진 시에만, 보스·최종등반 중엔 중단.
@@ -4915,7 +2730,7 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
   await sweepFrontStarlights()
   await tickFrontEventDoors()
   // 보드 정비가 끝나 플레이어 차례 직전 — 위협을 미리 읽어 대비 카드를 건넨다.
-  if (advanceTurn) await tryCompanionPrediction()
+  if (advanceTurn) await companionDirector.tryCompanionPrediction()
 }
 
 /** 전방 이벤트 문의 2턴 카운트다운을 진행한다. 도달 즉시 뱃지 '슈룩' 등장,
@@ -4952,7 +2767,7 @@ async function sweepFrontStarlights(): Promise<void> {
   if (swept.length === 0) return
   // 별빛 수집 한마디 — 등반 내내 반복되는 이벤트라 낮은 확률 게이트로 스팸을 막는다.
   if (gameActive && !gameState.isGameOver && Math.random() < 0.35) {
-    sayEnaBark(companion.starlightLine(), { importance: BARK_IMPORTANCE.touch })
+    companionDirector.sayEnaBark(companion.starlightLine(), { importance: BARK_IMPORTANCE.touch })
   }
   // 모델에서 제거됐지만 아직 render() 전이라 DOM에는 별빛이 남아 있다.
   // 모든 출발 rect를 먼저 확보한 뒤 순차 연출해, 첫 render로 다음 별빛 노드가
@@ -5015,13 +2830,13 @@ async function resolvePostDropSporeSpread(): Promise<void> {
   // render, so the shutter/open-turn view cannot show separate matching spores.
   recordNotice(`포자 번식: ${spreadCount}칸 감염`, 'hurt')
   // 동료(에나) 포자 번식 반응.
-  if (spreadCount > 0 && companionWorldCanSpeak()) {
+  if (spreadCount > 0 && companionDirector.companionWorldCanSpeak()) {
     const bark = companion.reactSituation('spore', gameState.getCurrentTurn())
-    if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: 'spore' })
+    if (bark) companionDirector.sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: 'spore' })
   }
   render()
   // 소소한 클러치 — 정화: 전염이 2칸 이상 번진 순간, 방금 번진 포자 1장을 걷어낸다.
-  if (spreadCount >= 2 && companionWorldCanSpeak()) {
+  if (spreadCount >= 2 && companionDirector.companionWorldCanSpeak()) {
     // 병합 군집이 아닌 새 1칸 포자만 대상으로 골라 정확히 '1장'만 제거한다. 대상 확보 후에만
     // 확률을 굴려 '도왔다는 기억만 남고 아무 일도 없는' 헛발동을 막는다.
     const target = sporeSpreads
@@ -5030,8 +2845,8 @@ async function resolvePostDropSporeSpread(): Promise<void> {
       .find((entry) => entry.card?.type === CardType.TRAP && entry.card.trapKind === 'spore' && entry.card.groupCount === 1)
     if (target?.card && companion.rollMinorClutch('cleanse', { adversity: spreadCount >= 3 })) {
       recordNotice('에나의 의지 — 정화! 번진 포자 1장 제거', 'info')
-      showClutchChain('cleanse', '번진 포자 1장 제거')
-      sayEnaBark(companion.minorClutchLine('cleanse'), { importance: BARK_IMPORTANCE.clutch })
+      companionDirector.showClutchChain('cleanse', '번진 포자 1장 제거')
+      companionDirector.sayEnaBark(companion.minorClutchLine('cleanse'), { importance: BARK_IMPORTANCE.clutch })
       // 방금 render()로 DOM에 오른 포자를 소멸 연출 후 모델에서 제거한다.
       await boardRenderer.animateCardConsumeByIds([{ cardId: target.card.id, type: CardType.TRAP }])
       gameState.removeCardFromRow(target.card, target.pos.distance)
@@ -5053,7 +2868,7 @@ async function resolvePostDropSporeSpread(): Promise<void> {
 
 async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true): Promise<void> {
   const beforeTrapHealth = snapshotFieldHealthState()
-  const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => tryCompanionIncomingDodge(damage) })
+  const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => companionDirector.tryCompanionIncomingDodge(damage) })
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
   const bombExplosions = turnManager.applyBombExplosions()
   const flowerChanges = turnManager.applyFlowerGrowthAndWilt(cardSpawner)
@@ -5115,26 +2930,26 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   // 나오는 감정 모순을 막는다 — 반격이 뜨면 그 대사가 이 beat의 감정을 대표한다.
   const counterClutchFires =
     totalDamage > 0 &&
-    companionWorldCanSpeak() &&
+    companionDirector.companionWorldCanSpeak() &&
     companion.rollMinorClutch('counter', {
       adversity: totalDamage >= Math.max(3, gameState.character.maxHealth * 0.25),
     })
   // 동료(에나) 피격 반응 — 확률+쿨다운으로 강약 조절(위급하면 더 다급한 말투).
-  if (totalDamage > 0 && !counterClutchFires && companionWorldCanSpeak()) {
-    const danger = companionInDanger()
+  if (totalDamage > 0 && !counterClutchFires && companionDirector.companionWorldCanSpeak()) {
+    const danger = companionDirector.companionInDanger()
     // 적 이름은 대사 풀 선택이 아니라 최근 사건 기록(복수 콜백 재료)에만 쓰인다.
     const line = companion.reactSituation('hit', gameState.getCurrentTurn(), danger ? 'urgent' : undefined, danger, biggestHit?.cardName)
     if (line) {
-      sayEnaBark(line, {
+      companionDirector.sayEnaBark(line, {
         importance: danger ? BARK_IMPORTANCE.urgent : BARK_IMPORTANCE.situation,
         situation: 'hit',
       })
     }
   }
   // 폭탄 폭발 반응 바크.
-  if (bombExplosions.length > 0 && companionWorldCanSpeak()) {
+  if (bombExplosions.length > 0 && companionDirector.companionWorldCanSpeak()) {
     const bark = companion.reactSituation('bomb', gameState.getCurrentTurn())
-    if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: 'bomb' })
+    if (bark) companionDirector.sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: 'bomb' })
   }
   // 클러치 예산('에나의 의지') 충전: 이번 페이즈 역경(피해/불씨 고갈)에 비례.
   if (totalDamage > 0) companion.gainWill(totalDamage, gameState.character.maxHealth)
@@ -5145,9 +2960,9 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
       gameState.character.maxHealth > 0
         ? Math.max(0, gameState.character.health) / gameState.character.maxHealth
         : 0
-    if (hpRatio > 0 && hpRatio <= 0.3) runDramaSignals.lowHpMoments += 1
-    if (gameState.character.ember <= 1) runDramaSignals.emberCrises += 1
-    runDramaSignals.lowestHpRatio = Math.min(runDramaSignals.lowestHpRatio, hpRatio)
+    if (hpRatio > 0 && hpRatio <= 0.3) companionDirector.runDramaSignals.lowHpMoments += 1
+    if (gameState.character.ember <= 1) companionDirector.runDramaSignals.emberCrises += 1
+    companionDirector.runDramaSignals.lowestHpRatio = Math.min(companionDirector.runDramaSignals.lowestHpRatio, hpRatio)
   }
   // 회피 클러치는 TurnManager.runEnemyPhase의 공격 판정 순간에 처리된다.
 
@@ -5165,27 +2980,27 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
     }
     if (damaged.length > 0) {
       recordNotice(`에나의 의지 — 반격! 피해 ${counterDamage}`, 'info')
-      showClutchChain('counter', `반격 피해 ${counterDamage}`)
-      sayEnaBark(companion.minorClutchLine('counter'), { importance: BARK_IMPORTANCE.clutch })
+      companionDirector.showClutchChain('counter', `반격 피해 ${counterDamage}`)
+      companionDirector.sayEnaBark(companion.minorClutchLine('counter'), { importance: BARK_IMPORTANCE.clutch })
       await boardRenderer.animateDamageNumbersById(damaged)
       if (killedIds.length > 0) {
         await boardRenderer.animateCardConsumeByIds(killedIds.map((cardId) => ({ cardId, type: CardType.ENEMY })), { suppressBurstIds: new Set(killedIds) })
-        await onEnemiesDefeated(killedIds.length)
+        await relicEffects.onEnemiesDefeated(killedIds.length)
       }
       render()
     }
   }
   // 품격있는 대처: 피격 연출 뒤 나를 때린 적들에게 반격.
-  await applyDignifiedRetaliation(hits)
+  await relicEffects.applyDignifiedRetaliation(hits)
   // 변칙: 이 페이즈에서 잃은 체력 10마다 불씨 +1.
-  applyAnomalyHealthLoss()
+  relicEffects.applyAnomalyHealthLoss()
   // 소중한 머리: 체력이 절반 이하이면 전체 회복 후 파괴.
-  await applyPreciousHeadCheck()
+  await relicEffects.applyPreciousHeadCheck()
   // 동료(에나) 클러치: 위기에 의지가 가득 찼으면 실제 지원 + '에나의 의지' 체인.
-  tryCompanionClutch()
+  companionDirector.tryCompanionClutch()
   if (gameState.isGameOver || gameState.character.authoritySurvivePending) {
     const authorityFired = gameState.character.authoritySurvivePending
-    if (await tryResolveSurvivalRelics()) {
+    if (await relicEffects.tryResolveSurvivalRelics()) {
       // 권위: 필드를 유지하므로 레일 정리/리필이 필요하다. 희망은 자체 필드 리셋을 수행한다.
       if (authorityFired) await runCleanupPhase(advanceTurn)
       inputLocked = false
@@ -5207,247 +3022,34 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
 }
 
 /** 이벤트 대사 한 줄. DialoguePlayer 공통 클릭-스킵 로직 사용. */
-async function playEventDialogueLine(line: EventDialogueLine): Promise<void> {
-  const bubble = line.speaker === 'player' ? speechBubble : eventDemonBubble
-  const otherBubble = line.speaker === 'player' ? eventDemonBubble : speechBubble
-  await playDialogueLine(bubble, otherBubble, line.text)
-}
-
-/** 이벤트 문 클릭 → 불빛/행동 없이 이벤트 진입(대사 → 선택 → 효과). 진입 동안 손패/칸
- *  선택을 잠그고, 선택 효과를 적용한 뒤 버튼→HUD 획득 블라스트를 쏘고 커튼을 열어 마무리한다.
- *  이벤트 진입은 런 턴을 올리지 않는다(상점처럼 막간 상호작용). */
-async function handleEventDoorClick(lane: Lane, card: Card): Promise<void> {
-  inputLocked = true
-  // 이벤트 진입 시 진행 중인 체인을 즉시 끊는다.
-  if (chainTimeline.length > 0) {
+/** 이벤트 문 흐름 매니저 — 문 클릭부터 커튼 복귀까지를 담당한다. */
+const eventFlow = new EventFlowManager({
+  gameState, boardRenderer, companion, companionDirector, turnManager, cardSpawner,
+  speechBubble, eventDemonBubble,
+  resources: {
+    get score() { return score }, set score(v) { score = v },
+    get scorePulseKey() { return scorePulseKey }, set scorePulseKey(v) { scorePulseKey = v },
+  },
+  setInputLocked: (v) => { inputLocked = v },
+  render,
+  wait,
+  recordNotice,
+  resolveFullCandleGaugeEffects,
+  cutActiveChain: () => {
+    if (chainTimeline.length === 0) return
     HandSystem.resetChain(chain)
     clearChainTimeline()
     boardRenderer.refreshChainBanner(buildChainHints())
-  }
-  // 레일 안정화: 적 턴 없이 빈칸 낙하·전방 병합만 실행한다.
-  // 꽃 성장·포자 감소·적 공격·상자 소멸 등 적 처리 로직은 건드리지 않는다.
-  {
-    let anyMoved = false
-    let safety = LANE_DISTANCE_COUNT * 3 + 3
-    while (safety-- > 0) {
-      const moved = gameState.compactLanes()
-      if (!moved) break
-      anyMoved = true
-      gameState.regroupAllRows()
-      turnManager.armFrontBombs()
-      render()
-      await wait(200)
-    }
-    if (anyMoved) {
-      gameState.regroupAllRows()
-      render()
-      await wait(340)
-    }
-  }
-  // 디버그 커맨드로 고정 이벤트가 예약된 경우 그것을 사용하고, 아니면 랜덤 선택.
-  const def = debugForcedEventId ? getEventDef(debugForcedEventId) : pickEventForDoor()
-  debugForcedEventId = null
-  const emberAvailable = gameState.character.hand.some((h) => h.defId === 'ember')
-  // 대사는 게임의 말풍선 시스템으로 출력한다. NPC 말풍선은 하단 배치/상단 꼬리로,
-  // 클릭 시 타이핑 완료 또는 다음 줄 스킵이 가능하게 보스/플레이어 대사와 같은 촉감을 맞춘다.
-  const playDialogue = async (lines: readonly EventDialogueLine[] = def.dialogue): Promise<void> => {
-    for (const ln of lines) {
-      // SKIP이 대사 도중 눌리면 다음 줄부터 건너뛴다(현재 줄은 클릭으로 넘긴다).
-      if (boardRenderer.wasEventIntroSkipped()) break
-      await playEventDialogueLine(ln)
-    }
-    speechBubble.dismiss()
-    eventDemonBubble.dismiss()
-  }
-  const consumeDoor = (): void => {
-    // 문 소비: 레일에서 제거(불빛 미지급). 커튼 뒤에서 제거돼 빈칸 노출이 없다.
-    lane.setCardAtDistance(0, null)
-    render()
-  }
-  // 한번 본 이벤트는 연출/대사를 SKIP 버튼으로 건너뛸 수 있다(unmelting. 접두사라 /리셋 대상).
-  const seenKey = `unmelting.seen.event.${def.id}`
-  const seenBefore = window.localStorage.getItem(seenKey) === '1'
-  if (def.minigame) {
-    // 미니게임형(미니언 저울/백작 가위바위보): 자원 스냅샷(시작값/상한)을 넘기고, 진행 중 각 액션은
-    // 실시간 싱크로 실제 자원을 즉시 올리고 내린다(기존 HUD 트레일/카운터 피드백 재사용).
-    const c = gameState.character
-    const snap: EventResourceSnapshot = {
-      light: score, hand: c.hand.length, handMax: c.handMax,
-      candle: c.candle, candleMax: c.candleMax,
-      health: c.health, maxHealth: c.maxHealth, shield: c.shield,
-      floor: gameState.getCurrentTurn(),
-    }
-    const sink = makeEventResourceSink()
-    // 에나의 미니게임 반응 — 결과가 찍히는 정확한 순간에 발화한다.
-    // 잭팟/유물처럼 큰 순간은 확정, 잔잔한 승패는 절반 확률로 떠들지 않게 조절.
-    const onMinigameMoment = (m: EventMinigameMoment): void => {
-      const always = m === 'minion-jackpot' || m === 'rps-relic' || m === 'rps-streak'
-      if (!always && Math.random() > 0.5) return
-      sayEnaBark(companion.eventMinigameLine(m), { importance: BARK_IMPORTANCE.situation })
-    }
-    if (def.minigame.kind === 'minion-exchange') {
-      await boardRenderer.runMinionExchange(card.id, def, def.minigame, snap, sink, consumeDoor, playDialogue, onMinigameMoment, seenBefore)
-    } else {
-      await boardRenderer.runCountRps(card.id, def, def.minigame, snap, sink, consumeDoor, playDialogue, onMinigameMoment, seenBefore)
-    }
-    // 미니게임 UI가 접혀 사라진 뒤(렌더러가 처리), 이벤트1처럼 마무리 대사 → 커튼 열기.
-    // SKIP한 진입에서는 마무리 대사도 생략해 바로 레일로 복귀한다.
-    if (!boardRenderer.wasEventIntroSkipped()) await playDialogue(def.outro ?? [])
-    window.localStorage.setItem(seenKey, '1')
-    await boardRenderer.closeEventEntry()
-  } else {
-    const { index, buttonRect } = await boardRenderer.runEventEntry(card.id, def, emberAvailable, consumeDoor, playDialogue, seenBefore)
-    // 불태우기(combat) 선택 시: 소비될 손패 불씨를 model 제거 전에 소각 연출.
-    const choiceEffect = def.choices?.[index]?.effect
-    if (choiceEffect?.kind === 'combat') {
-      const burnIdx = gameState.character.hand.findIndex((h) => h.defId === choiceEffect.consumeHand)
-      if (burnIdx >= 0) await boardRenderer.animateHandCardBurn(burnIdx)
-    }
-    // 선택 효과 적용 → HUD 갱신 → 눌린 버튼에서 해당 HUD로 획득 블라스트.
-    const targets = applyEventChoice(def, index)
-    render()
-    await boardRenderer.playEventGainBlast(buttonRect, targets)
-    await boardRenderer.hideEventChoicesAfterSelection(index)
-    // SKIP한 진입에서는 선택 후 마무리 대사도 생략한다(효과/블라스트는 그대로).
-    if (!boardRenderer.wasEventIntroSkipped()) await playDialogue(def.choices?.[index]?.afterDialogue ?? [])
-    window.localStorage.setItem(seenKey, '1')
-    // combat + 레시피 해금: 마무리 대사 직후 해금 카드 연출 → 도감으로 블라스트.
-    if (choiceEffect?.kind === 'combat' && choiceEffect.unlocksRecipe) {
-      const recipe = RECIPES.find((r) => r.id === choiceEffect.unlocksRecipe)
-      if (recipe) {
-        const ingredientText = Object.keys(recipe.ingredients)
-          .map((id) => getHandCardDef(id as Parameters<typeof getHandCardDef>[0])?.name ?? id)
-          .join(' + ')
-        await boardRenderer.animateEventRecipeUnlock(recipe.id, recipe.name, recipe.flavor, ingredientText)
-      }
-    }
-    await boardRenderer.closeEventEntry()
-  }
-  // 종료: 소비된 칸을 메우고 일반 진행으로 복귀한다.
-  compactAndRefillAllLanes()
-  gameState.regroupAllRows()
-  trackFieldEnemyEncounters()
-  turnManager.armFrontBombs()
-  // 이벤트는 턴을 올리지 않으므로 포자·성장·시듦 틱은 건너뛴다.
-  // 씨앗 개화는 위치 기반 트리거(전방 도달)이므로 이벤트 후에도 처리한다.
-  const blooms = turnManager.bloomFrontSeeds(cardSpawner)
-  // 리필로 새 이벤트 문이 전방에 도달했다면 일반 턴과 동일하게 즉시 카운트다운 뱃지를 띄운다.
-  const startedEventDoors = turnManager.startFrontEventDoorArrivals()
-  render()
-  for (const t of startedEventDoors) boardRenderer.popEventBadge(t.cardId)
-  if (blooms.length > 0) await boardRenderer.animateFlowerBlooms(blooms)
-  // 90F 이전에 예약된 문(pendingEventDoor)은 최종 등반 레일에도 주입될 수 있어, 문 소비 후
-  // 별빛이 전방으로 내려올 수 있다. 문 닫힘(만료)·정화 클러치 정리와 동일하게 즉시 수집까지
-  // 마쳐야 별빛이 전방을 막은 채 다음 행동을 기다리는 교착을 막는다(별빛 없으면 no-op).
-  await sweepFrontStarlights()
-  inputLocked = false
-}
-
-/** 미니게임이 실시간으로 자원을 올리고 내릴 때 쓰는 싱크. 각 메서드는 실제 상태를 즉시 바꾸고
- *  기존 HUD 카운터 피드백 + 화면 갱신을 수행한다(버스트/트레일 연출은 렌더러가 쏜다). */
-function makeEventResourceSink(): EventResourceSink {
-  const c = gameState.character
-  return {
-    gainLight: (amount: number) => {
-      if (amount === 0) return
-      score = Math.max(0, score + amount)
-      scorePulseKey++
-      if (amount >= 0) boardRenderer.playScoreGainFeedback(score, scorePulseKey)
-      else boardRenderer.playScoreSpendFeedback(score, scorePulseKey)
-      render()
-    },
-    changeHealth: (amount: number) => {
-      if (amount === 0) return
-      // 방패/피해 유물 부수효과를 피하려 이벤트 거래 HP는 직접 클램프한다.
-      c.health = Math.max(1, Math.min(c.maxHealth, c.health + amount))
-      boardRenderer.playHudCounterFeedback('health', c.health)
-      render()
-    },
-    gainCandle: (amount: number) => {
-      if (amount === 0) return
-      if (amount > 0) c.gainCandle(amount)
-      else c.candle = Math.max(0, c.candle + amount)
-      boardRenderer.playHudCounterFeedback('candle', c.candle)
-      if (amount > 0 && c.isCandleFull()) void resolveFullCandleGaugeEffects({ kind: 'center' })
-      render()
-    },
-    gainShield: (amount: number) => {
-      if (amount <= 0) return
-      c.addShield(amount)
-      boardRenderer.playHudCounterFeedback('shield', c.shield)
-      render()
-    },
-    spendShield: (amount: number) => {
-      if (amount <= 0) return
-      c.shield = Math.max(0, c.shield - amount)
-      boardRenderer.playHudCounterFeedback('shield', c.shield)
-      render()
-    },
-    sellHand: (count: number) => {
-      // 판 손패는 오래된 것(앞쪽)부터 제거한다.
-      for (let i = 0; i < count && c.hand.length > 0; i += 1) c.removeHandCardAt(0)
-      render()
-    },
-    buyHand: (count: number) => {
-      for (let i = 0; i < count; i += 1) HandSystem.enqueueDrop(c, DropSystem.generateDrop())
-      render()
-    },
-    grantRelic: () => { grantRandomRelicReward(); render() },
-  }
-}
-
-/** 등급 가중치로 미보유 유물 1개를 지급한다(백작 완승 보상 등). 성공 시 true. */
-function grantRandomRelicReward(): boolean {
-  const c = gameState.character
-  const pool = RELIC_IDS.filter((id) => !c.hasRelic(id) && !c.bannedRelics.includes(id))
-  if (pool.length === 0) return false
-  const weighted = pool.flatMap((id) => Array.from({ length: relicDrawWeight(id) }, () => id))
-  const relicId = weighted[Math.floor(Math.random() * weighted.length)] ?? pool[0]
-  return c.addRelic(relicId)
-}
-
-/** 이벤트 선택 효과를 게임 상태에 적용하고, 획득 블라스트를 쏠 HUD 타깃 목록을 돌려준다. */
-function applyEventChoice(def: EventDefinition, index: number): string[] {
-  const character = gameState.character
-  const choice = def.choices?.[index]
-  if (!choice) return []
-  const effect = choice.effect
-  if (effect.kind === 'stat') {
-    const targets: string[] = []
-    if (effect.maxHealth) {
-      if (effect.maxHealth < 0) character.spendMaxHealth(-effect.maxHealth)
-      else character.increaseMaxHealth(effect.maxHealth)
-      targets.push('health')
-    }
-    if (effect.damage) {
-      character.applyDamageBoost(effect.damage)
-      targets.push('attack')
-    }
-    recordNotice(`이벤트: ${choice.label} 선택`, 'info')
-    return targets
-  }
-  if (effect.kind === 'randomHand') {
-    let added = 0
-    for (const drop of DropSystem.generateDrops(effect.count)) {
-      // enqueueDrop = 획득 공통 정리 — 이벤트 보상도 3장째면 즉시 트리플로 합성한다.
-      if (HandSystem.enqueueDrop(character, drop)) added++
-    }
-    recordNotice(`이벤트: ${choice.label} — 랜덤 손패 +${added}`, 'info')
-    return ['hand']
-  }
-  // combat: 손패 불씨를 소모하고 레시피를 해금한다.
-  const idx = character.hand.findIndex((h) => h.defId === effect.consumeHand)
-  if (idx >= 0) character.removeHandCardAt(idx)
-  if (effect.unlocksRecipe) {
-    gameState.unlockedRecipeIds.add(effect.unlocksRecipe)
-    // 도감 레시피 잠금 상태도 즉시 동기화한다.
-    boardRenderer.setLockedRecipeIds(
-      RECIPES.filter((r) => r.runLocked && !gameState.unlockedRecipeIds.has(r.id)).map((r) => r.id)
-    )
-  }
-  recordNotice(`이벤트: 불태우기 — ${effect.unlocksRecipe ? '레시피 해금됨' : '위험한 기운이 깨어난다'}`, 'hurt')
-  return []
-}
+  },
+  consumeDebugForcedEventId: () => {
+    const id = debugForcedEventId
+    debugForcedEventId = null
+    return id
+  },
+  compactAndRefillAllLanes,
+  trackFieldEnemyEncounters,
+  sweepFrontStarlights,
+})
 
 /**
  * Resolve one player click as a deliberate turn timeline. In flickering and
@@ -5496,7 +3098,7 @@ async function handleCardAction(e: Event): Promise<void> {
 
   // 이벤트 문 클릭: 불빛/행동 없이 이벤트 진입 연출로 분기한다(전방 도달 칸만 클릭 가능).
   if (card.type === CardType.EVENT) {
-    await handleEventDoorClick(lane, card)
+    await eventFlow.handleEventDoorClick(lane, card)
     return
   }
 
@@ -5506,7 +3108,7 @@ async function handleCardAction(e: Event): Promise<void> {
   inputLocked = true
 
   if (turnManager.isEnemyFirstStrike()) {
-    const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => tryCompanionIncomingDodge(damage) })
+    const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => companionDirector.tryCompanionIncomingDodge(damage) })
     if (hits.length > 0) {
       await boardRenderer.animateEnemyAttacks(hits)
       const dmg = hits.reduce((acc, h) => acc + h.damage, 0)
@@ -5519,13 +3121,13 @@ async function handleCardAction(e: Event): Promise<void> {
         )
       }
       // 품격있는 대처: 먼저 때린 적들에게 반격(플레이어가 살아남았을 때만 동작).
-      await applyDignifiedRetaliation(hits)
+      await relicEffects.applyDignifiedRetaliation(hits)
       // 변칙: 선공으로 잃은 체력 10마다 불씨 +1.
-      applyAnomalyHealthLoss()
+      relicEffects.applyAnomalyHealthLoss()
       // 소중한 머리: 선공 피해로 체력 절반 이하 시 전체 회복.
-      await applyPreciousHeadCheck()
+      await relicEffects.applyPreciousHeadCheck()
       if (!gameState.character.isAlive() || gameState.isGameOver || gameState.character.authoritySurvivePending) {
-        if (await tryResolveSurvivalRelics()) {
+        if (await relicEffects.tryResolveSurvivalRelics()) {
           // 치명적 선공을 권위/희망이 흡수하고 플레이어 턴으로 복귀한다.
           inputLocked = false
           return
@@ -5587,7 +3189,7 @@ async function handleCardAction(e: Event): Promise<void> {
     if (result.cardRemoved && card.type === CardType.TREASURE) {
       // Relic side-rewards still mutate through their owner, but their visible
       // trail now resolves on impact so they no longer add an extra late delay.
-      rewardFeedbacks.push(applyWaxCrowTreasureGains(1))
+      rewardFeedbacks.push(relicEffects.applyWaxCrowTreasureGains(1))
     }
     if (result.cardRemoved && card.type === CardType.FLOWER) {
       // Flower light/coin/stat rewards are kicked off together; the board render
@@ -5605,7 +3207,7 @@ async function handleCardAction(e: Event): Promise<void> {
       } else if (result.flowerReward?.kind === 'coin') {
         coins += result.flowerReward.amount
         coinPulseKey++
-        applyBlindFaithCoins(result.flowerReward.amount)
+        relicEffects.applyBlindFaithCoins(result.flowerReward.amount)
         recordCoinGain(`${card.name} 수확`, result.flowerReward.amount)
         rewardFeedbacks.push(
           playResourceTrail(
@@ -5639,7 +3241,7 @@ async function handleCardAction(e: Event): Promise<void> {
     result.damageTaken &&
     result.damageTaken > 0 &&
     !result.trapIgnored &&
-    companionWorldCanSpeak() &&
+    companionDirector.companionWorldCanSpeak() &&
     companion.rollMinorClutch('trap', { adversity: result.damageTaken >= Math.max(3, gameState.character.maxHealth * 0.25) })
   ) {
     gameState.character.health = Math.min(
@@ -5663,9 +3265,9 @@ async function handleCardAction(e: Event): Promise<void> {
       )
     )
     // 변칙: 함정으로 잃은 체력 10마다 불씨 +1.
-    applyAnomalyHealthLoss()
+    relicEffects.applyAnomalyHealthLoss()
     // 소중한 머리: 함정 피해로 체력 절반 이하 시 전체 회복.
-    await applyPreciousHeadCheck()
+    await relicEffects.applyPreciousHeadCheck()
   }
   // 함정 무시: 도적/함정의 대가(유물) 또는 에나의 클러치 → "무시" 텍스트 + 트랩 지터.
   if (result.trapIgnored || companionTrapIgnored) {
@@ -5677,14 +3279,14 @@ async function handleCardAction(e: Event): Promise<void> {
   if (companionTrapIgnored) {
     recordNotice('에나의 의지 — 함정 무시!', 'info')
     void boardRenderer.animateClutchOnPlayer('health-gain')
-    showClutchChain('trap', '함정 피해 무시')
-    sayEnaBark(companion.minorClutchLine('trap'), { importance: BARK_IMPORTANCE.clutch })
+    companionDirector.showClutchChain('trap', '함정 피해 무시')
+    companionDirector.sayEnaBark(companion.minorClutchLine('trap'), { importance: BARK_IMPORTANCE.clutch })
   }
   // 달콤한 유혹: 함정 제거 시 기본 불빛의 30% 추가 획득. 무효화 시 미발동.
   if (result.cardRemoved && card.type === CardType.TRAP && !result.trapIgnored && gameState.character.hasRelic('sweet-temptation')) {
     const baseLight = scoreForCardRemoval(card)
     const bonus = Math.max(1, Math.ceil(baseLight * 0.3))
-    const gained = gainFixedLight('달콤한 유혹', bonus)
+    const gained = relicEffects.gainFixedLight('달콤한 유혹', bonus)
     recordRelicActivation('sweet-temptation', `불빛 +${gained}`)
     void playResourceTrail({ kind: 'chain' }, 'score', 1)
     burstScoreGain()
@@ -5704,25 +3306,25 @@ async function handleCardAction(e: Event): Promise<void> {
   }
 
   // 훌륭한 대화수단: 적을 직접 공격할 때마다 2.5% 파괴 판정.
-  if (card.type === CardType.ENEMY) await applyGreatNegotiationOnAttack()
+  if (card.type === CardType.ENEMY) await relicEffects.applyGreatNegotiationOnAttack()
 
   if (result.cardRemoved && card.type === CardType.ENEMY) {
     // 자물쇠: 미믹 처치 시 불빛 +25% + 손패 +1.
-    if (card.isSpecialEnemy) await applyPadlockMimicBonus(card)
-    await onEnemiesDefeated(1)
+    if (card.isSpecialEnemy) await relicEffects.applyPadlockMimicBonus(card)
+    await relicEffects.onEnemiesDefeated(1)
   }
 
   // 찬스: 적이 살아있을 때만 15% 확률 추가 타격.
   if (!result.cardRemoved && card.type === CardType.ENEMY) {
-    await applyChanceExtraHit(card, distance)
+    await relicEffects.applyChanceExtraHit(card, distance)
     // 물양동이: 25% 확률로 1 추가 피해 (찬스로 처치된 경우 이미 제거되므로 health 확인).
-    await applyWaterBucketExtraDamage(card, distance)
+    await relicEffects.applyWaterBucketExtraDamage(card, distance)
     // 소소한 클러치 — 급소: 살아남은 적에게 가끔 추가 피해.
-    await applyCompanionCrit(card, distance)
+    await relicEffects.applyCompanionCrit(card, distance)
   }
 
   // 소소한 클러치 — 보물 추가 보상: 상자를 열 때 가끔 손패 1장을 덤으로.
-  if (result.cardRemoved && card.type === CardType.TREASURE && companionWorldCanSpeak()) {
+  if (result.cardRemoved && card.type === CardType.TREASURE && companionDirector.companionWorldCanSpeak()) {
     const treasureClutch = companion.rollMinorClutch('treasure', { adversity: !result.itemGainedIds?.length })
     if (treasureClutch) {
       // 덤 1장은 아래 '획득 후 지연 합성 스캔'(gainedHandCardCount 분기)이 함께 정리한다 —
@@ -5731,8 +3333,8 @@ async function handleCardAction(e: Event): Promise<void> {
       if (gameState.character.addHandCard(drop)) {
         recordNotice('에나의 의지 — 덤! 손패 +1', 'info')
         void boardRenderer.animateClutchOnPlayer('treasure-gain')
-        showClutchChain('treasure', '손패 +1')
-        sayEnaBark(companion.minorClutchLine('treasure'), { importance: BARK_IMPORTANCE.clutch })
+        companionDirector.showClutchChain('treasure', '손패 +1')
+        companionDirector.sayEnaBark(companion.minorClutchLine('treasure'), { importance: BARK_IMPORTANCE.clutch })
         render()
       }
     } else if (!result.itemGainedIds?.length && !result.overflow?.length) {
@@ -5740,13 +3342,13 @@ async function handleCardAction(e: Event): Promise<void> {
       // 단, 손패가 가득 차 보상을 잃은 경우는 탐색 실패가 아니므로(카드는 실제로 있었다)
       // 진짜 빈손일 때만 발화해 '가득 찬 손패에 미안해하는' 오발동을 막는다.
       const missed = companion.missedPotentialLine('treasure', gameState.getCurrentTurn())
-      if (missed) sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'treasure' })
+      if (missed) companionDirector.sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'treasure' })
     }
   }
 
   // 동료(에나) 행동 반응 — 손패 한줄평(획득 카드) 우선, 없으면 카드 종류별 상황 바크.
   // 확률+쿨다운으로 한 행동에 한 번만, 너무 수다스럽지 않게 강약을 준다.
-  if (companionWorldCanSpeak()) {
+  if (companionDirector.companionWorldCanSpeak()) {
     const turn = gameState.getCurrentTurn()
     // 손패 한줄평(획득 카드) 우선 — 학습 대상이 아니라 낮은 중요도.
     const gainedId = result.itemGainedIds?.[0]
@@ -5758,7 +3360,7 @@ async function handleCardAction(e: Event): Promise<void> {
       })
     }
     if (loot) {
-      sayEnaBark(loot, { importance: BARK_IMPORTANCE.loot })
+      companionDirector.sayEnaBark(loot, { importance: BARK_IMPORTANCE.loot })
     } else {
       // 카드 종류별 상황 바크 — 스킵/읽음 학습 대상이라 situation을 함께 넘긴다.
       let sit: SituationId | null = null
@@ -5770,7 +3372,7 @@ async function handleCardAction(e: Event): Promise<void> {
         // 적이면 이름을 넘겨, 핵심 키워드('양초 거미'→'거미') 전용 반응을 우선하게 한다.
         const enemyName = card.type === CardType.ENEMY ? card.name : undefined
         const bark = companion.reactSituation(sit, turn, undefined, false, enemyName)
-        if (bark) sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: sit })
+        if (bark) companionDirector.sayEnaBark(bark, { importance: BARK_IMPORTANCE.situation, situation: sit })
       }
     }
   }
@@ -5810,11 +3412,11 @@ async function handleCardAction(e: Event): Promise<void> {
 
   // 권위가 체력 1에서 막아냈다면(사망 아님) 연출만 처리하고 정상 흐름을 잇는다.
   if (gameState.character.authoritySurvivePending) {
-    await tryResolveSurvivalRelics()
+    await relicEffects.tryResolveSurvivalRelics()
   }
   if (!gameState.character.isAlive()) {
     gameState.endGame('character_defeated')
-    if (await tryResolveSurvivalRelics()) {
+    if (await relicEffects.tryResolveSurvivalRelics()) {
       // Trap/self-damage deaths should not fall through into the enemy phase
       // after the revive field reset. The next input is a normal player turn.
       inputLocked = false
@@ -5865,7 +3467,7 @@ async function handleCardAction(e: Event): Promise<void> {
     if (eventAnimations.length > 0) await Promise.all(eventAnimations)
     if (gameState.isGameOver || gameState.character.authoritySurvivePending) {
       const authorityFired = gameState.character.authoritySurvivePending
-      if (await tryResolveSurvivalRelics()) {
+      if (await relicEffects.tryResolveSurvivalRelics()) {
         if (authorityFired) await runCleanupPhase(shouldAdvanceTurnForAction())
         inputLocked = false
         return
@@ -5895,144 +3497,56 @@ function finishTurn(): void {
     const openOnce = (): void => {
       if (opened) return
       opened = true
-      window.setTimeout(showGameOver, 300)
+      window.setTimeout(() => settlement.showGameOver(), 300)
     }
     void speechBubble.waitForDismiss().then(openOnce)
     window.setTimeout(openOnce, 9000)
     return
   }
-  setTimeout(showGameOver, 300)
+  setTimeout(() => settlement.showGameOver(), 300)
 }
 
-/** 정산(클리어/사망) 오버레이 한 장의 재료 — 세 결말이 같은 골격을 공유한다. */
-interface SettlementOverlayOptions {
-  verdict: 'melting' | 'unmelting'
-  sub: string
-  /** 사망 전용 '다음에 주의' 한 줄 팁. */
-  tip?: string
-  statRows: { label: string; value: number }[]
-  enaLine: string
-  buttonLabel: string
-  onButton: () => void
-  /** 사망 톤 보정용 추가 카드 클래스. */
-  cardClass?: string
-}
-
-/** 정산 오버레이 매니저 — 판정 헤드라인/스탯/에나 육각형/시작 버튼 + 우측 하단 통산 기록을
- *  한 골격으로 렌더한다. 세 결말(온보딩 클리어/100F 클리어/사망)은 재료만 다르다. */
-function openSettlementOverlay(o: SettlementOverlayOptions): void {
-  const lifetime = lifetimeRecordStore.load()
-  const overlay = document.createElement('div')
-  overlay.className = 'game-over-overlay is-clear'
-  overlay.innerHTML = `
-    <div class="game-over-card settlement-card${o.cardClass ? ` ${o.cardClass}` : ''}">
-      <h1 class="verdict-word verdict-${o.verdict}">${o.verdict === 'unmelting' ? 'Unmelting' : 'Melting'}</h1>
-      <p class="verdict-sub">${o.sub}</p>
-      ${o.tip ? `<p class="death-tip">${o.tip}</p>` : ''}
-      <div class="settlement-body">
-        <div class="settlement-stats">
-          ${o.statRows.map((row) => `<p>${row.label} <strong>${row.value}</strong></p>`).join('')}
-        </div>
-        <div class="settlement-ena-panel">
-          <p class="settlement-ena">${o.enaLine}</p>
-          ${boardRenderer.renderSettlementHexagon(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth(), runStartAxisValues ?? undefined)}
-        </div>
-      </div>
-      <button class="primary-btn" id="settlement-continue-btn">${o.buttonLabel}</button>
-    </div>
-    <aside class="settlement-lifetime" aria-label="통산 기록">
-      <span class="settlement-lifetime-main">통산 ${lifetime.totalRuns}회 모험 · 클리어 ${lifetime.clears} · 최고 ${lifetime.bestFloor}층</span>
-      <span class="settlement-lifetime-sub">처치 ${lifetime.totalKills} · 함정 ${lifetime.totalTraps} · 보물 ${lifetime.totalTreasures} · 불빛 ${lifetime.totalLight}</span>
-    </aside>
-  `
-  document.body.appendChild(overlay)
-  document.getElementById('settlement-continue-btn')?.addEventListener('click', () => {
-    overlay.remove()
-    o.onButton()
-  })
-}
-
-function showGameOver(): void {
-  // 통산 기록에 이번 런을 1회 합산한다(클리어/사망 공통) — 정산 우측 하단 표기의 원천.
-  if (!lifetimeRecorded) {
+/** 정산 화면 매니저 — 결말 분기/통산 기록 합산은 SettlementScreen이 담당한다. */
+const settlement = new SettlementScreen({
+  gameState, boardRenderer, companion, lifetimeRecordStore,
+  getScore: () => score,
+  getRunStartAxisValues: () => runStartAxisValues,
+  wasRunEnteredFromLobby: () => runEnteredFromLobby,
+  tryMarkLifetimeRecorded: () => {
+    if (lifetimeRecorded) return false
     lifetimeRecorded = true
-    const cleared = gameState.gameOverReason === 'onboarding_clear_30' || gameState.gameOverReason === 'run_clear_100_turns'
-    lifetimeRecordStore.recordRun({
-      outcome: cleared ? 'clear' : 'death',
-      floor: gameState.getCurrentTurn(),
-      kills: gameState.runDefeatedEnemies,
-      traps: gameState.runClearedTraps,
-      treasures: gameState.runOpenedTreasures,
-      light: score,
-    })
-  }
-
-  const runStats = [
-    { label: '처치한 적', value: gameState.runDefeatedEnemies },
-    { label: '처리한 함정', value: gameState.runClearedTraps },
-    { label: '발견한 보물', value: gameState.runOpenedTreasures },
-    { label: '총 불빛', value: score },
-  ]
-  const fromLobby = runEnteredFromLobby
-  // 새로고침 대신 startGame()/거점으로 초기화한다. startGame이 카드/드롭/도감 잠금까지
-  // 메타 기준으로 되돌려 새로고침과 같은 완전 초기화를 만든다.
-  const continueRun = (): void => {
-    if (fromLobby) enterHearth()
-    else void startGame()
-  }
-
-  // 새싹 병아리 30F 클리어는 저택 복귀로만 닫는다.
-  if (gameState.gameOverReason === 'onboarding_clear_30') {
-    openSettlementOverlay({
-      verdict: 'unmelting',
-      sub: '새싹 병아리 클리어!',
-      statRows: runStats,
-      enaLine: '에나의 경험이 한 뼘 자랐다.',
-      buttonLabel: '저택으로',
-      onButton: () => enterHearth(),
-    })
-    return
-  }
-
-  // 100층 클리어(테스트 플레이/정규 공통). 셔터는 내려온 채 검은 블러가 조용히 덮는다.
-  if (gameState.gameOverReason === 'run_clear_100_turns') {
-    openSettlementOverlay({
-      verdict: 'unmelting',
-      sub: '잿빛 굴레를 풀었다 — 100층 클리어!',
-      statRows: runStats,
-      enaLine: '에나와 끝까지 함께 올랐다.',
-      buttonLabel: fromLobby ? '저택으로' : '다시 시작',
-      onButton: continueRun,
-    })
-    return
-  }
-
-  // 사망: 왜 죽었는지(부제) · '다음에 주의' 팁 · 도달 층 스탯 · 에나의 아쉬움 한마디.
-  const isTrap = gameState.gameOverReason === 'instant_death_trap'
-  openSettlementOverlay({
-    verdict: 'melting',
-    sub: gameState.gameOverReason === 'character_defeated'
-      ? '소녀의 심지가 꺼졌어요…'
-      : isTrap
-        ? '모든 길이 함정으로 막혔어요.'
-        : '게임 종료',
-    tip: isTrap
-      ? '3칸으로 합쳐진 거미줄·함정은 즉사. 키틴으로 미리 청소하거나 합쳐지기 전에 처리하자.'
-      : '체력이 0이 되면 끝. 촛농(회복)·양초(방패)로 피해를 미리 막고, 강적은 합체 전에 끊자.',
-    statRows: [{ label: '도달 층', value: gameState.getCurrentTurn() }, ...runStats],
-    enaLine: companion.deathLine(),
-    buttonLabel: fromLobby ? '저택으로' : '다시 시작',
-    onButton: continueRun,
-    cardClass: 'death-card',
-  })
-}
+    return true
+  },
+  enterHearth,
+  startGame: () => startGame(),
+})
 
 // 게임오버/정산 오버레이 + 메타 잠금 전역 스타일은 GameOverStyles 모듈에서 1회 주입한다.
 const globalStyle = document.createElement('style')
 globalStyle.textContent = GAME_OVER_GLOBAL_STYLES
 document.head.appendChild(globalStyle)
 
-setupDevCommandPalette()
+if (ENABLE_DEV_COMMAND_PALETTE) {
+  setupDevCommandPalette({
+    gameState, cardSpawner, boardRenderer, hearthScene,
+    render,
+    syncSpawnerTier,
+    addScore: (n) => (score += n),
+    addCoins: (n) => (coins += n),
+    setDebugForcedEventId: (id) => { debugForcedEventId = id },
+    applyRelicPurchaseEffect: (id) => relicEffects.applyRelicPurchaseEffect(id),
+    relicPurchaseBlocked: (id) => relicEffects.relicPurchaseBlocked(id),
+    demonSummonBlocked: demonSummonDebugBlocked,
+    runDemonSummonDebug,
+    enterHearth,
+    finishTurn,
+    openShopOverlay: (mode) => shopFlow.openShopOverlay(mode),
+    openTrialOverlayForced: () => shopFlow.openTrialOverlayForced(),
+    isInputLocked: () => inputLocked,
+    setInputLocked: (v) => { inputLocked = v },
+    isShopOpen: () => shopFlow.isOpen(),
+  })
+}
 // 게임 부팅 후 첫 사용자 입력에서 배경음 루프를 켠다(브라우저 자동재생 정책).
 bgm.armAutoplay()
 // 첫 입력에서 효과음 컨텍스트도 함께 연다.
