@@ -96,9 +96,10 @@ const ONBOARDING_RELIC_IDS: RelicId[] = [
   'wax-crow',      // 보물 획득 시 방패 +1(방패 개념 학습)
 ]
 
-/** 온보딩 커먼 풀에서도 제외(잠금)하는 손패 — 물뿌리개는 초반에 혼란을 줘 뺀다.
+/** 온보딩 커먼 풀에서도 제외(잠금)하는 손패 — 물뿌리개는 초반에 혼란을 줘 빼고,
+ *  동전은 새싹 단계 화폐($) 획득 전면 잠금 정책으로 뺀다(보물상자 보너스 드롭 차단).
  *  index의 온보딩 커먼 풀 구성도 이 목록을 공유한다. */
-export const ONBOARDING_BANNED_CARDS: HandCardId[] = ['watering-can']
+export const ONBOARDING_BANNED_CARDS: HandCardId[] = ['watering-can', 'coin']
 
 /** 상점 흐름이 런 상태·연출을 조작할 때 쓰는 주입 계약. 상태 소유는 index.ts에 남는다. */
 export interface ShopFlowDeps {
@@ -290,7 +291,11 @@ export class ShopFlowManager {
     // 제단 동전 한 닢도 방문 단위 무료 보상이므로 30/60/90턴마다 다시 활성화한다.
     this.freeCoinCardClaimed = false
     // 방문 시작 시 무료 카드의 효과를 현재 등록된 n종 중 하나로 확정한다.
-    this.freeGiftKind = SHOP_FREE_GIFT_KINDS[Math.floor(Math.random() * SHOP_FREE_GIFT_KINDS.length)]
+    // 새싹 병아리(온보딩)에서는 화폐($) 획득 요소를 전부 잠그므로 동전 결과를 풀에서 뺀다.
+    const giftPool = this.deps.isOnboardingActive()
+      ? SHOP_FREE_GIFT_KINDS.filter((kind) => kind !== 'coin-1')
+      : SHOP_FREE_GIFT_KINDS
+    this.freeGiftKind = giftPool[Math.floor(Math.random() * giftPool.length)]
     this.activePackSession = null
     // The shutter is a hard turn break: cut the chain before the shop overlay
     // appears so the floating chain text never hangs above the shop tab.
@@ -327,8 +332,12 @@ export class ShopFlowManager {
     const character = this.deps.gameState.character
     if (kind === 'basic-pack') {
       // 자원팩 — BasicPackPool.ts 에서 테이블 관리, 항목별 weight 사용.
+      // 새싹 병아리(온보딩)에서는 화폐($) 획득 요소를 잠그므로 동전 한 닢(basic_011)을 제외한다.
+      const basicPool = this.deps.isOnboardingActive()
+        ? BASIC_PACK_POOL.filter((entry) => entry.id !== 'basic_011')
+        : BASIC_PACK_POOL
       return sampleWeightedWithoutReplacement(
-        BASIC_PACK_POOL.map((entry) => ({
+        basicPool.map((entry) => ({
           ...entry,
           theme: 'resource' as const,
           spriteUrl: spriteForBasicPackItem(entry.illu),

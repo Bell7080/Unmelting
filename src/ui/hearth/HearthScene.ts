@@ -16,6 +16,8 @@ export interface HearthHandlers {
   getCurrentTurn?: () => number
   /** 쉬움(정규 100층) 난이도 개방 여부 — 새싹 병아리 첫 졸업으로 열린다. */
   isEasyUnlocked?: () => boolean
+  /** 무역 개방 팡! 순간에 함께 실행 — 화폐 패널 등 동반 해금 요소의 등장 연출용. */
+  onUnlockCelebration?: () => void
   /** 서고 모험일지에 표시할 통산 기록을 읽는다. */
   getLifetimeRecord?: () => LifetimeRecord
 }
@@ -39,6 +41,8 @@ const DINNER_INDEX = 8
 const HEARTH_LAST_CHARACTER_KEY = 'unmelting.hearth.lastCharacterIndex'
 /** 개발용 전체 개방 플래그 저장 키 — /개방 명령이 '1'로 세팅하면 모든 칸을 연다. */
 export const HEARTH_DEV_UNLOCK_KEY = 'unmelting.hearth.devUnlockAll'
+/** 무역/화폐 개방 축하 연출을 이미 재생했는지 — 졸업 후 첫 로비 도착에서만 1회 재생한다. */
+export const HEARTH_TRADE_CELEBRATED_KEY = 'unmelting.hearth.tradeUnlockCelebrated'
 const DINNER_DONE_LINE = '하하, 식사는 만족스러우셨나요? 다음 만찬도 기대해주세요.'
 
 type DinnerStatKey = 'maxHealth' | 'emberMax' | 'handMax' | 'scorePct' | 'damage' | 'shopDiscount' | 'startScore'
@@ -208,6 +212,9 @@ export class HearthScene {
   /** 현재 표시 중인 만찬 NPC 말풍선. raiseShutter/exit 시 파괴한다. */
   private dinnerBubble: SpeechBubble | null = null
 
+  /** 이번 로비 진입에서 무역 개방 축하 연출을 재생해야 하는지(졸업 후 최초 1회). */
+  private tradeCelebrationPending = false
+
   enter(handlers: HearthHandlers): void {
     this.injectStyles()
     this.handlers = handlers
@@ -216,6 +223,10 @@ export class HearthScene {
     this.interactive = false
     // /개방 개발 명령으로 세팅된 전체 개방 플래그를 복원한다(칸 게이팅에 반영).
     this.devUnlockAll = window.localStorage.getItem(HEARTH_DEV_UNLOCK_KEY) === '1'
+    // 졸업 직후 첫 로비 도착이면 무역 칸을 잠금 외형으로 렌더해 두고, 점등이 끝난 뒤 개방 연출을 튼다.
+    this.tradeCelebrationPending =
+      (this.handlers?.isEasyUnlocked?.() ?? false) &&
+      window.localStorage.getItem(HEARTH_TRADE_CELEBRATED_KEY) !== '1'
     // 난이도 선택 초기화(잠긴 난이도면 개방된 최고 난이도로 폴백) — 셔터 HTML 빌드 전에 확정한다.
     this.initDifficultySelection()
     this.dinnerConsumed = this.hasDinnerRelicInInventory()
@@ -448,10 +459,15 @@ export class HearthScene {
     // 페이드인이 끝난 뒤에야 커튼 로직 시작: 조금 더 닫혀 있다가 천천히 열린다 → 모험 점등.
     window.setTimeout(() => this.overlay?.classList.add('is-opening'), 1700)
     window.setTimeout(() => {
-      this.overlay?.querySelectorAll<HTMLElement>('.hearth-cell--open, .hearth-cell--locked, [data-hearth-station="adventure"]').forEach((cell, idx) => {
+      this.overlay?.querySelectorAll<HTMLElement>('.hearth-cell--open:not(.hearth-cell--unlock-pending), .hearth-cell--locked, [data-hearth-station="adventure"]').forEach((cell, idx) => {
         // 임시 전면 개방 상태에서도 모든 칸이 모험처럼 같은 beat로 점등되도록 순차 발화한다.
+        // 무역 개방 축하 대기 칸은 여기서 점등하지 않고 축하 연출의 팡! 순간에 켠다.
         window.setTimeout(() => cell.classList.add('is-ignited'), idx * 55)
       })
+      // 전 칸 점등(스태거+애니메이션)이 끝난 뒤에야 무역 개방 축하를 튼다.
+      if (this.tradeCelebrationPending) {
+        window.setTimeout(() => this.playTradeUnlockCelebration(), 9 * 55 + 720 + 380)
+      }
       // 대문이 다 열리고 모험이 점등된 뒤에야 hover 인스펙터를 허용한다(플레이어블 시작).
       this.interactive = true
       // 만찬 칸(DOM 순서 index 8) 점등(8×55=440ms) + 애니메이션(720ms) + 여운 후 Free 배지 드롭 인.
@@ -523,13 +539,31 @@ export class HearthScene {
     if (this.shuttered) return
     this.shuttered = true
     this.hideInspector()
-    this.selectedCharacterIndex = this.readLastCharacterIndex()
-    this.characterConfirmed = false
+    // 캐릭터는 에나(0번) 고정 — 추가 동행 해금 전까지 선택 캐러셀을 패스하고 난이도로 직행한다.
+    this.selectedCharacterIndex = 0
+    this.characterConfirmed = true
     this.overlay?.classList.remove('is-trade-mode', 'is-trade-leaving', 'is-dinner-mode', 'is-dinner-opened', 'is-library-mode', 'is-library-leaving')
     this.overlay?.classList.add('is-shuttering', 'is-adventure-mode')
     this.selectCharacter(this.selectedCharacterIndex)
-    // 셔터 하강이 끝난 뒤 배경→우측 카드/좌측 소개→하단 슬라이드/선택 버튼 순서로 띄운다.
-    window.setTimeout(() => this.overlay?.classList.add('is-shutter-rest'), 680)
+    // 셔터 하강이 끝나면 곧바로 확정 상태로 넘어간다: 에나 설치(플레이어 카드 아트+버스트) → 난이도 캐러셀.
+    window.setTimeout(() => {
+      if (!this.shuttered) return // 하강 중 뒤로가기로 이미 올라갔으면 중단
+      this.overlay?.classList.add('is-shutter-rest')
+      this.installFixedCharacter()
+      this.overlay?.classList.add('is-character-confirmed')
+      requestAnimationFrame(() => this.selectDifficulty(this.selectedDifficultyIndex))
+    }, 680)
+  }
+
+  /** 에나 고정 설치 — 선택 연출 없이 플레이어 카드 아트 갱신 + 짧은 획득 버스트만 남긴다. */
+  private installFixedCharacter(): void {
+    const character = HEARTH_CHARACTERS[this.selectedCharacterIndex]
+    const target = document.querySelector<HTMLElement>('.player-card')
+    if (!target || character.lockedArt) return
+    target.querySelector<HTMLElement>('.player-art')?.style.setProperty('background-image', `url('${character.art}')`)
+    SquareBurst.playOn(target, 'score', { count: 22, spread: 150, duration: 620, size: [10, 20] })
+    target.classList.add('hearth-character-installed')
+    window.setTimeout(() => target.classList.remove('hearth-character-installed'), 760)
   }
 
 
@@ -1038,6 +1072,22 @@ export class HearthScene {
 
 
   /** 뒤로가기 → 검은 셔터를 다시 올리고 로비 9칸 상호작용으로 돌아간다. */
+  /** 무역 개방 축하: 발광 램프업 → 자물쇠 흔들림 → 팡! 버스트와 함께 점등 개방.
+   *  팡 순간에 onUnlockCelebration을 불러 화폐 패널 같은 동반 해금 요소도 같이 등장시킨다. */
+  private playTradeUnlockCelebration(): void {
+    this.tradeCelebrationPending = false
+    const cell = this.overlay?.querySelector<HTMLElement>('[data-hearth-station="trade"]')
+    if (!cell) return
+    cell.classList.add('is-unlock-celebrating')
+    window.setTimeout(() => {
+      SquareBurst.playOn(cell, 'score', { count: 32, spread: 180, duration: 720, size: [10, 22] })
+      cell.classList.remove('hearth-cell--unlock-pending', 'is-unlock-celebrating')
+      cell.classList.add('is-unlock-opened', 'is-ignited')
+      window.localStorage.setItem(HEARTH_TRADE_CELEBRATED_KEY, '1')
+      this.handlers?.onUnlockCelebration?.()
+    }, 1150)
+  }
+
   private raiseShutter(): void {
     if (!this.shuttered || this.departing) return
     const root = this.overlay
@@ -1174,11 +1224,6 @@ export class HearthScene {
     } else {
       this.selectCharacter(this.selectedCharacterIndex + (delta < 0 ? 1 : -1), delta < 0 ? 'left' : 'right')
     }
-  }
-
-  private readLastCharacterIndex(): number {
-    const value = Number(window.localStorage.getItem(HEARTH_LAST_CHARACTER_KEY) ?? 0)
-    return Number.isFinite(value) ? Math.max(0, Math.min(HEARTH_CHARACTERS.length - 1, value)) : 0
   }
 
   private writeLastCharacterIndex(index: number): void {
@@ -1440,10 +1485,6 @@ export class HearthScene {
       const openIdx = HEARTH_DIFFICULTIES.map((d, i) => ({ d, i })).filter((x) => !this.isDifficultyLocked(x.d)).pop()
       index = openIdx ? openIdx.i : 0
     }
-    // 졸업 후에는 저장값이 새싹이어도 정규(쉬움)에 포커스해 다음 단계로 자연 유도한다.
-    if (HEARTH_DIFFICULTIES[index]?.key === 'sprout' && !this.isDifficultyLocked(HEARTH_DIFFICULTIES[1])) {
-      index = 1
-    }
     this.selectedDifficultyIndex = index
   }
 
@@ -1544,8 +1585,7 @@ export class HearthScene {
   private cellUnlocked(i: number): boolean {
     if (this.devUnlockAll) return true
     if (i === ADVENTURE_INDEX) return true
-    // 서고는 기록 열람 전용이라 항상 개방한다(영구 효과 상점은 추후).
-    if (i === LIBRARY_INDEX) return true
+    // 서고는 콘텐츠(기록 기반 영구 효과)가 붙기 전까지 잠가 둔다 — 모험/무역만 실제 개방.
     if (i === TRADE_INDEX) return this.handlers?.isEasyUnlocked?.() ?? false
     if (i === DINNER_INDEX) return isMetaUnlocked('dinner')
     return false
@@ -1576,8 +1616,10 @@ export class HearthScene {
       if (!unlocked) {
         const hint = this.cellLockHint(i)
         const lockInspect = ` data-inspect-title="${name}" data-inspect-tag="잠김" data-inspect-desc="${hint}"${artAttr}`
+        // 다음 해금 목표(무역)만 다른 잠금 칸보다 살짝 밝게 비춰 시선을 유도한다.
+        const goalClass = i === TRADE_INDEX ? ' hearth-cell--next-goal' : ''
         cells.push(
-          `<div class="hearth-cell hearth-cell--locked${artClass}" tabindex="0" aria-label="${name} (잠김)" aria-disabled="true"` +
+          `<div class="hearth-cell hearth-cell--locked${artClass}${goalClass}" tabindex="0" aria-label="${name} (잠김)" aria-disabled="true"` +
             `${lockInspect}${artStyle}>` +
             `<span class="hearth-cell__lock" aria-hidden="true">${lockIcon}</span>` +
             `<span class="hearth-cell__label">${name}</span>` +
@@ -1596,9 +1638,15 @@ export class HearthScene {
         )
       } else if (i === TRADE_INDEX) {
         // 무역 칸 — 메타 해금/계승 UI의 임시 셔터 화면으로 진입한다.
+        // 졸업 후 첫 도착이면 잠금 외형(unlock-pending)으로 두고 점등 종료 후 개방 연출로 켠다.
+        const pendingClass = this.tradeCelebrationPending ? ' hearth-cell--unlock-pending' : ''
+        const pendingLock = this.tradeCelebrationPending
+          ? `<span class="hearth-cell__lock" aria-hidden="true">${lockIcon}</span>`
+          : ''
         cells.push(
-          `<button class="hearth-cell hearth-cell--open${artClass}" data-hearth-station="trade" type="button" aria-label="무역"` +
+          `<button class="hearth-cell hearth-cell--open${artClass}${pendingClass}" data-hearth-station="trade" type="button" aria-label="무역"` +
             `${inspectAttr}${artStyle}>` +
+            pendingLock +
             `<span class="hearth-cell__label">${name}</span>` +
             `</button>`
         )

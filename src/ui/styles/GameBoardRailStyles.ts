@@ -113,17 +113,41 @@ export const GAME_BOARD_RAIL_STYLES = `
 }
 
 .rail-row.dist-2 {
-  opacity: 0.42;
+  /* 대기칸은 확실히 보이되 시선은 덜 가게 — 투명도에 밝기/채도 감쇠를 함께 얹는다. */
+  opacity: 0.3;
+  filter: brightness(0.78) saturate(0.8);
   transform: scale(0.92);
   transform-origin: center bottom;
 }
 .rail-row.dist-1 {
-  opacity: 0.7;
+  opacity: 0.52;
+  filter: brightness(0.86) saturate(0.88);
   transform: scale(0.96);
   transform-origin: center bottom;
 }
 .rail-row.dist-0 {
   opacity: 1;
+}
+
+/* ── 손패 타겟팅 중 대비 강화 ─────────────────────────────────────────
+   행 단위 감쇠(부모 opacity)는 자식을 끌어올릴 수 없으므로, 타겟팅 동안엔 행 감쇠를 풀고
+   유효/불가를 칸 단위로 갈라 대비를 준다: 유효 타깃은 어느 행이든 가장 밝고 크게,
+   불가 칸은 X 마크와 함께 한층 더 어둡게. */
+.rail.is-targeting .rail-row.dist-1,
+.rail.is-targeting .rail-row.dist-2 {
+  opacity: 1;
+  filter: none;
+}
+/* 유효 타깃이 아닌 카드/빈칸은 뒤 행 원래 톤보다 더 깊게 가라앉힌다. */
+.rail.is-targeting .rail-row.dist-1 .cell:not(.is-hand-target),
+.rail.is-targeting .rail-row.dist-2 .cell:not(.is-hand-target) {
+  opacity: 0.55;
+}
+.rail.is-targeting .cell.card.is-hand-target {
+  opacity: 1;
+  filter: brightness(1.12) saturate(1.05);
+  box-shadow: 0 0 18px rgba(255, 205, 110, 0.4);
+  z-index: 8;
 }
 
 /* ---------- Cell / Card ---------- */

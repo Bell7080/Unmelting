@@ -926,7 +926,8 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 }
 .cell.is-hand-target-blocked {
   cursor: not-allowed;
-  filter: grayscale(0.42) brightness(0.68) saturate(0.82);
+  /* 사용 불가 칸은 유효 타깃과 한눈에 갈리도록 더 깊게 어둡힌다(X 마크 동반). */
+  filter: grayscale(0.55) brightness(0.5) saturate(0.7);
 }
 .cell.is-hand-target-blocked::after {
   content: '';
@@ -943,6 +944,11 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
     repeating-linear-gradient(45deg, rgba(168, 58, 58, 0.08) 0 6px, transparent 6px 12px),
     rgba(16, 8, 16, 0.28);
 }
+
+/* 타겟팅 동안 칸 시야 확보: 안내 배너와 체인 토스트를 반투명으로 눌러 둔다. */
+body.is-hand-targeting .target-banner.is-on { opacity: 0.4; }
+body.is-hand-targeting .chain-banner { opacity: 0.3; transition: opacity 0.2s ease; }
+
 .target-block-mark {
   font-size: clamp(44px, 8vw, 104px);
   z-index: 32;
