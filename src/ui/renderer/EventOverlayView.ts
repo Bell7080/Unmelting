@@ -299,7 +299,8 @@ export class EventOverlayView {
   ): Promise<void> {
     this.ensureEventMinigameStyles()
     const content = await this.openEventScene(cardId, def.illu, onConsume, playDialogue, skippable)
-    void snap
+    // 불빛 수치는 층 인플레이션을 받는다 — 백작 판돈/아이템과 같은 1+층×0.02 식.
+    const lightScale = 1 + snap.floor * 0.02
 
     const RES_LABEL: Record<EventResourceKind, string> = {
       light: '불빛', hand: '손패', candle: '콤보 게이지', health: '체력', shield: '방패',
@@ -315,8 +316,11 @@ export class EventOverlayView {
     const fieldVal = (b: RiskOutcome, res: EventResourceKind): number =>
       res === 'light' ? (b.light ?? 0) : res === 'health' ? (b.health ?? 0)
         : res === 'candle' ? (b.candle ?? 0) : res === 'shield' ? (b.shield ?? 0) : (b.hand ?? 0)
-    const shownVal = (res: EventResourceKind, raw: number, isAimed: boolean): number =>
-      res === 'light' && raw > 0 && isAimed ? Math.round(raw * (1 + anxiety * cfg.riskPremium)) : raw
+    const shownVal = (res: EventResourceKind, raw: number, isAimed: boolean): number => {
+      if (res !== 'light') return raw
+      const scaled = raw * lightScale
+      return Math.round(raw > 0 && isAimed ? scaled * (1 + anxiety * cfg.riskPremium) : scaled)
+    }
     const outcomeText = (b: RiskOutcome, isAimed: boolean): string => {
       const parts = FIELDS.map((res) => {
         const raw = fieldVal(b, res)
@@ -657,10 +661,13 @@ export class EventOverlayView {
         : ''
       // 종합 확률 — 선언·차단·잔량이 합쳐진 이번 판 백작의 손 분포.
       // 글자 대신 손 엠블럼 이미지 + % 배지로, 던지기 타일과 같은 양식을 쓴다(차단은 붉은 ×).
+      // 칩 위에는 백작이 실제로 쥔 남은 장수를 함께 표기한다(카운팅 재료).
       const odds = throwOdds()
-      oddsEl.innerHTML = HANDS.map((h) =>
-        `<span class="odds-chip${h === blocked ? ' is-blocked' : ''}" title="${HAND_LABEL[h]}">${handArt(h)}<b>${h === blocked ? '×' : `${Math.round(odds[h] * 100)}%`}</b></span>`
-      ).join('')
+      oddsEl.innerHTML = HANDS.map((h) => {
+        const cnt = deckCount(h)
+        const cls = h === blocked ? ' is-blocked' : cnt === 0 ? ' is-empty' : ''
+        return `<span class="odds-chip${cls}" title="${HAND_LABEL[h]} · 남은 ${cnt}장">${handArt(h)}<i class="odds-cnt">${cnt}장</i><b>${h === blocked ? '×' : `${Math.round(odds[h] * 100)}%`}</b></span>`
+      }).join('')
       // 아이템 장전 상태는 별도 줄 대신 버튼 자체 발광(is-armed)으로 보여준다.
       itemEls.forEach((b) => {
         const it = itemById.get(b.dataset.item as RpsItemId)!
@@ -1258,10 +1265,19 @@ export class EventOverlayView {
    손 엠블럼 이미지 + % 배지(던지기 타일과 같은 양식). 차단은 흐린 엠블럼 + 붉은 × */
 .mini-rps-odds {
   position: relative; left: 50%; transform: translateX(-50%); width: max-content;
-  margin-top: 10px; display: flex; align-items: flex-start; gap: 48px;
+  margin-top: 18px; display: flex; align-items: flex-start; gap: 48px;
 }
 .odds-chip { position: relative; display: inline-flex; width: 60px; }
 .odds-chip .rps-hand-art, .odds-chip .rps-hand-text { width: 100%; }
+/* 백작이 실제로 쥔 남은 장수 — 칩 위 작은 라벨(카운팅 재료) */
+.odds-chip .odds-cnt {
+  position: absolute; left: 50%; top: -14px; transform: translateX(-50%);
+  font-style: normal; font-size: 13px; font-weight: 800; letter-spacing: 0.04em;
+  color: rgba(222, 208, 252, 0.88); text-shadow: 0 1px 5px rgba(0, 0, 0, 0.95); white-space: nowrap;
+}
+/* 소진된 패는 흐리게 — 더는 나올 수 없는 손 */
+.odds-chip.is-empty .rps-hand-art { filter: grayscale(0.8) brightness(0.45); }
+.odds-chip.is-empty b, .odds-chip.is-empty .odds-cnt { color: rgba(190, 180, 165, 0.55); }
 .odds-chip b {
   position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%);
   font-size: 20px; font-weight: 900; color: rgba(255, 232, 176, 0.99);
@@ -1389,9 +1405,10 @@ export class EventOverlayView {
    확보한다. 높은 화면에서는 큰 사이즈가 그대로 살아난다. */
 @media (max-height: 880px) {
   .mini-rps-cardslot { width: clamp(92px, 13%, 150px); }
-  .mini-rps-odds { margin-top: 8px; gap: 40px; }
+  .mini-rps-odds { margin-top: 14px; gap: 40px; }
   .odds-chip { width: 52px; }
   .odds-chip b { font-size: 17px; bottom: -5px; }
+  .odds-chip .odds-cnt { font-size: 11.5px; top: -12px; }
   .odds-chip.is-blocked b { font-size: 21px; }
   .mini-rps-decl { margin-top: 10px; font-size: 17px; }
   .mini-rps-throw { width: clamp(88px, 10vw, 118px); }

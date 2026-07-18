@@ -1164,9 +1164,9 @@ export class EnaTrainingSimulation {
       const success = this.rng.next() < chance
       const branch = success ? offer.onSuccess : offer.onFail
       const aimed = (success && offer.aim === 'success') || (!success && offer.aim === 'fail')
-      // 노린 결과의 불빛엔 불안 비례 리스크 프리미엄(실게임과 같은 식).
-      const lightRaw = branch.light ?? 0
-      const light = lightRaw > 0 && aimed ? Math.round(lightRaw * (1 + anxiety * cfg.riskPremium)) : lightRaw
+      // 불빛은 층 인플레이션(1+층×0.02), 노린 결과의 양수 불빛엔 불안 비례 리스크 프리미엄(실게임과 같은 식).
+      const lightRaw = (branch.light ?? 0) * (1 + this.turn * 0.02)
+      const light = Math.round(lightRaw > 0 && aimed ? lightRaw * (1 + anxiety * cfg.riskPremium) : lightRaw)
       this.light = Math.max(0, this.light + light)
       if (branch.health) this.hp = Math.max(1, Math.min(this.maxHp, this.hp + branch.health))
       if (branch.candle) this.combo = Math.max(0, this.combo + branch.candle)
@@ -1481,6 +1481,8 @@ export class EnaTrainingSimulation {
     // 3) 불씨 소모(3턴 주기). 최종 등반에선 일반 행동이 턴을 올리지 않는다.
     if (!this.finalAscent) {
       this.turn++
+      // 새싹 병아리 아크는 30층이 끝 — 이벤트 진행 등으로 보스 진입이 한 행동 늦어져도 층은 30에 고정한다.
+      if (this.difficulty === 'sprout' && this.turn > this.runTargetTurns) this.turn = this.runTargetTurns
       if (--this.emberDecayCountdown <= 0) {
         this.emberDecayCountdown = this.emberDecayTurns
         this.ember = Math.max(0, this.ember - 1)
