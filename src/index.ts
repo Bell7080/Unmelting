@@ -2143,7 +2143,8 @@ async function applyHandSingle(
     const turnsHeld = Math.max(0, gameState.getCurrentTurn() - companionDirector.pendingPrediction.issuedTurn)
     const removedHazards = result.removedFieldCards.filter((c) => c.type === CardType.TRAP).length
     const immediateTimingBonus = turnsHeld === 0 ? 0.35 : turnsHeld === 1 ? 0.2 : 0
-    const cleanupImpactBonus = usedDef.id === 'sweep' || usedDef.id === 'chitin' ? Math.min(0.45, removedHazards * 0.15) : 0
+    // 청소 임팩트 보너스는 카드 id가 아니라 clean 태그로 판정한다 — 성수 등 기존/미래 청소 손패도 자동 포함.
+    const cleanupImpactBonus = usedDef.synergyTags?.includes('clean') ? Math.min(0.45, removedHazards * 0.15) : 0
     const crisisTimingBonus = companionDirector.pendingPrediction.kind === 'cleanup' && removedHazards > 0 ? 0.25 : 0
     companion.recordPredictionOutcome(0.75 + immediateTimingBonus + cleanupImpactBonus + crisisTimingBonus)
     companionDirector.pendingPrediction = null
