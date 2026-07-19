@@ -40,7 +40,7 @@ import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandEffectTargeting } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
 import { EmberSystem } from '@systems/EmberSystem'
-import { getRelicDef, type RelicId } from '@data/Relics'
+import { getRelicDef, relicStackFeedback, type RelicId } from '@data/Relics'
 import { HAND_CARD_RARITY, RARITY_CLASS_BY_TIER } from '@data/ShopPools'
 import { RECIPES, type Recipe } from '@data/Recipes'
 import type { JobDef } from '@data/Jobs'
@@ -1214,10 +1214,11 @@ export class GameBoardRenderer {
     const spread = offset * spreadStep
     const lift   = center > 0 ? (Math.abs(offset) / center) * 8 : 0
     const pinnedClass = this.pinnedRelicId === def.id ? 'is-pinned' : ''
-    // 활성화형 유물(비장의 한발 등)이 발동 직전(다음 1회면 발사)이면 '충전됨'으로 발광·부상시켜
-    // 준비됐음을 바로 알린다. 카운터 유물이 늘면 여기에 조건만 추가한다.
+    // 활성화형 유물이 발동 직전(다음 1회면 발사)이면 '충전됨'으로 발광·부상시켜 준비됐음을 알린다.
+    // 판정 대상·카운터·문턱은 RELIC_STACK_FEEDBACK 레지스트리로 관리 — 새 유물은 거기 등록만 하면 자동.
     const enh = this.currentGameState?.enhancements
-    const chargedClass = enh && def.id === 'trump-shot' && enh.trumpShotShardCount >= 3 ? 'is-charged' : ''
+    const charge = relicStackFeedback(def.id)?.charge
+    const chargedClass = enh && charge && (enh[charge.counter] as number) >= charge.threshold - 1 ? 'is-charged' : ''
     return `
       <article class="relic-mini-card ${RARITY_CLASS_BY_TIER[def.rarity]} ${pinnedClass} ${chargedClass}"
                data-owned-relic="${def.id}"

@@ -7,6 +7,7 @@
 
 import type { CardRarity } from '@data/ShopPools'
 import type { SynergyTag } from './Tags'
+import type { RunEnhancements } from '@core/RunEnhancements'
 
 /** Stable id used for save/run state and shop offer generation. */
 export type RelicId =
@@ -662,6 +663,37 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     basePrice: 520,
     synergyTags: ['blade'],
   },
+}
+
+/**
+ * 누적형(스택) 유물 UI 피드백 레지스트리 — "이 유형의 유물"을 한 곳에서 관리한다.
+ * 여기 등록된 유물은 발동 시(recordRelicActivation) 보유 유물 팬에서 **스택 블라스트**로 부상하고,
+ * `charge`를 지정하면 발동 직전(카운터 ≥ threshold-1)에 **충전 발광**으로 준비됨을 알린다.
+ * 새 누적형 유물은 여기 한 줄만 추가하면 UI(GameBoardRenderer)가 코드 수정 없이 자동 연동된다.
+ */
+export interface RelicStackFeedback {
+  /** 활성화형(재카운팅) 유물의 발동 직전 판정. 이 카운터가 threshold-1 이상이면 '충전됨' 발광. */
+  charge?: { counter: keyof RunEnhancements; threshold: number }
+}
+
+export const RELIC_STACK_FEEDBACK: Partial<Record<RelicId, RelicStackFeedback>> = {
+  'trump-shot':   { charge: { counter: 'trumpShotShardCount', threshold: 4 } },
+  'blood-sigil':  { charge: { counter: 'bloodSigilUseCount', threshold: 5 } },
+  'blood-writ':   { charge: { counter: 'bloodWritSelfDamageAccum', threshold: 5 } },
+  'demon-doll':   { charge: { counter: 'demonDollSelfDamageAccum', threshold: 20 } },
+  'ambition':     { charge: { counter: 'ambitionKillCount', threshold: 8 } },
+  'honesty':      { charge: { counter: 'honestyHandUseCount', threshold: 5 } },
+  'ink-quill':    { charge: { counter: 'inkQuillKillCount', threshold: 5 } },
+  // 블라스트만(작은 주기라 충전 발광은 생략): 응고/재활용/사치품/밀랍 조각.
+  'coagulation':  {},
+  'wax-recycle':  {},
+  'luxury':       {},
+  'wax-fragment': {},
+}
+
+/** 누적형 유물이면 UI 피드백 메타를 돌려준다(스택 블라스트 대상 판정 겸용). */
+export function relicStackFeedback(id: RelicId): RelicStackFeedback | undefined {
+  return RELIC_STACK_FEEDBACK[id]
 }
 
 export const RELIC_IDS = Object.keys(RELIC_DEFINITIONS) as RelicId[]
