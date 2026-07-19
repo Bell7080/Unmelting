@@ -57,6 +57,8 @@ export type HandCardId =
   | 'black-candle'
   // 유물 생성 전용 파편 카드(시너지 씨앗). 일반 풀에는 없고 생성기 유물이 지급한다.
   | 'blade-shard'
+  // 검집: 칼날 파편을 손에 생성하는 손패(단검 투척 빌드의 손패 생성원).
+  | 'scabbard'
 
 export type HandEffectSelection = 'target' | 'random' | 'all' | 'none'
 

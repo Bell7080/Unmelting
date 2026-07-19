@@ -42,6 +42,7 @@ export const HAND_CARD_RARITY: Record<HandCardId, CardRarity> = {
   'black-candle': 'legendary',
   // 생성기 유물 전용 파편(상점/도감 풀 미노출).
   'blade-shard': 'common',
+  scabbard: 'rare',
 }
 
 /** Shop pack pool config moved to data so shop/free/pack roll tables are data-driven. */

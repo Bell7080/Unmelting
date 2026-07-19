@@ -619,6 +619,20 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: false,
   },
+  // 검집: 칼날 파편을 손에 생성하는 단검 투척 빌드의 손패 생성원. 단일 1~2장, 트리플 4장.
+  scabbard: {
+    id: 'scabbard',
+    name: '검집',
+    category: 'tool',
+    synergyTags: ['blade'],
+    description: '칼날 파편 1~2장 생성',
+    tripleDescription: '칼날 파편 4장 생성',
+    targeting: { base: selfOne, triple: selfOne },
+    dropWeight: 5,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: true, // 해금팩으로만 입수
+  },
 }
 
 export const HAND_CARD_IDS: HandCardId[] = Object.keys(HAND_CARD_DEFINITIONS) as HandCardId[]

@@ -748,8 +748,9 @@ export class ShopFlowManager {
     const def = getRelicDef(detail.relicId)
     this.res.score = Math.max(0, this.res.score - offer.price)
     this.res.scorePulseKey++
-    // 사치품: 불빛 소비 추적 (2000마다 공격력 +1).
-    this.deps.relicEffects.applyLuxuryScoreSpend(offer.price)
+    // 사치품: 불빛 소비 추적 (2000마다 공격력 +1). 단 사치품 자신의 구매 비용은 제외한다
+    // (구매 이후의 소비부터 누적 — addRelic이 먼저라 hasRelic이 참이 되는 걸 여기서 막는다).
+    if (detail.relicId !== 'luxury') this.deps.relicEffects.applyLuxuryScoreSpend(offer.price)
     this.deps.pushActivityLogsInDisplayOrder([
       {
         label: `유물 구매: ${def.name}`,

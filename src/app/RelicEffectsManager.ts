@@ -194,6 +194,19 @@ export class RelicEffectsManager {
     if (tags?.includes('sacrifice')) this.applyBloodSigilCardUse()
     // 재활용: 양초 손패를 쓸 때마다 세어 2마다 전방 랜덤 타이머 카드를 굳힌다.
     if (tags?.includes('wax')) this.applyRecycleWaxUse()
+    // 숨겨둔 파편: 칼날 손패 사용 시 25% 확률로 파편 1발을 덤으로 던진다.
+    if (tags?.includes('blade') && gameState.character.hasRelic('hidden-shard') && Math.random() < 0.25) {
+      void this.throwBladeShard('hidden-shard')
+    }
+    // 비장의 한발: 칼날 파편 4회 사용마다 파편 1발을 추가로 던진다(4번째 파편의 2번 사용).
+    if (def.id === 'blade-shard' && gameState.character.hasRelic('trump-shot')) {
+      const enh = gameState.enhancements
+      enh.trumpShotShardCount += 1
+      if (enh.trumpShotShardCount >= 4) {
+        enh.trumpShotShardCount = 0
+        void this.throwBladeShard('trump-shot')
+      }
+    }
     if (!tags || tags.length === 0) return
     const outcomes = runTagReactions('handCardUsed', {
       character: gameState.character,
@@ -823,6 +836,23 @@ export class RelicEffectsManager {
       if (!frozen) break // 굳힐 전방 타이머 카드 없음
       recordRelicActivation('wax-recycle', `${frozen.name} 1턴 굳음`)
       render()
+    }
+  }
+
+  /** 칼날 파편 1발을 즉시 던진다(전방 랜덤 적 피해, 연마의 파편 강화 반영). 숨겨둔 파편·비장의 한발 공용.
+   *  가시 방패/헌혈팩과 같은 전방 랜덤 타격 경로를 재사용한다. */
+  async throwBladeShard(relicId: RelicId): Promise<void> {
+    const { gameState, boardRenderer, recordRelicActivation } = this.deps
+    const bonus = gameState.enhancements.singleBonus['blade-shard'] ?? 0
+    const hit = gameState.damageRandomFrontEnemy(1 + bonus)
+    if (!hit) return // 전방 적 없음
+    recordRelicActivation(relicId, `칼날 파편 투척 ${hit.amount}`)
+    await boardRenderer.animateDamageNumbersById([{ cardId: hit.cardId, amount: hit.amount }])
+    if (hit.defeated) {
+      await boardRenderer.animateCardConsumeByIds([{ cardId: hit.cardId, type: CardType.ENEMY }], {
+        suppressBurstIds: new Set([hit.cardId]),
+      })
+      await this.onEnemiesDefeated(1)
     }
   }
 

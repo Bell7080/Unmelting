@@ -723,6 +723,17 @@ export class HandSystem {
       case 'blade-shard':
         // 랜덤 단일 적 1피해(+강화). distributeDamage(1)이 1점을 무작위 1체에 넣는다.
         return HandSystem.distributeDamageAmongEnemies(gs, 1 + bonus)
+      case 'scabbard': {
+        // 칼날 파편 1~2장(+강화)을 손에 생성한다. 손패가 가득 차면 거기까지만.
+        const count = 1 + Math.floor(Math.random() * 2) + bonus
+        let made = 0
+        for (let i = 0; i < count; i++) {
+          if (!c.hasHandRoom()) break
+          c.addHandCard(DropSystem.makeCard('blade-shard'))
+          made++
+        }
+        return made > 0 ? `칼날 파편 +${made}` : '손패 가득 참'
+      }
       case 'sacrifice-shield': {
         // 자해는 selfDamageFor에서 처리. 방패 획득만 여기서 적용.
         const shielded = c.addShield(2 + bonus)
@@ -864,6 +875,16 @@ export class HandSystem {
       case 'blade-shard':
         // 트리플: 3피해를 무작위로 분산.
         return HandSystem.distributeDamageAmongEnemies(gs, 3 + bonus)
+      case 'scabbard': {
+        // 트리플: 칼날 파편 4장(+강화)을 손에 생성한다.
+        let made = 0
+        for (let i = 0; i < 4 + bonus; i++) {
+          if (!c.hasHandRoom()) break
+          c.addHandCard(DropSystem.makeCard('blade-shard'))
+          made++
+        }
+        return made > 0 ? `칼날 파편 +${made}` : '손패 가득 참'
+      }
       case 'sacrifice-shield': {
         // 자해는 selfDamageFor에서 처리. 방패 획득만 여기서 적용.
         const shielded = c.addShield(7 + bonus)

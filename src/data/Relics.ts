@@ -68,6 +68,9 @@ export type RelicId =
   | 'hot-stone'
   | 'wax-fragment'
   | 'spread'
+  // 칼날(blade) 단검 투척 밀도 — 파편 증식/연격.
+  | 'hidden-shard'
+  | 'trump-shot'
 
 
 /** Runtime-customized relic face/effect. Hearth dinner uses this so one real relic id can
@@ -636,6 +639,28 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '한 번 붙은 불은 옆으로 옮겨붙는다 — 길을 막던 것들이 재로 스러진다.',
     basePrice: 1250,
     synergyTags: ['flame'],
+  },
+  // [칼날(blade) 시너지] 숨겨둔 파편(레어 증식): 칼날 손패를 쓸 때마다 낮은 확률로 파편 1발이
+  // 덤으로 날아간다. blade 태그 반응이라 미래 칼날 손패도 자동으로 덤 투척을 굴린다.
+  // 던지는 파편 피해는 연마 강화(칼날 파편 singleBonus)를 그대로 받는다.
+  'hidden-shard': {
+    id: 'hidden-shard',
+    name: '숨겨둔 파편',
+    rarity: 'rare',
+    effect: '칼날 손패 사용 시 25% 확률로 칼날 파편 1발 추가 투척',
+    flavor: '소매 안에 늘 한 조각을 숨겨 둔다 — 벨 때마다 덤으로 튀어나간다.',
+    basePrice: 780,
+    synergyTags: ['blade'],
+  },
+  // [칼날(blade) 시너지] 비장의 한발(커먼 연격): 칼날 파편 4회 사용마다 4번째 파편이 한 발 더 나간다.
+  'trump-shot': {
+    id: 'trump-shot',
+    name: '비장의 한발',
+    rarity: 'common',
+    effect: '칼날 파편 4회 사용 시 파편 1발 추가 투척',
+    flavor: '네 번을 세어 두었다가, 마지막 한 발을 두 번 던진다.',
+    basePrice: 520,
+    synergyTags: ['blade'],
   },
 }
 
