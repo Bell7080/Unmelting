@@ -878,13 +878,18 @@ export class RelicEffectsManager {
     await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
   }
 
-  /** 연료: 불씨(flame) 손패로 적을 처치할 때마다 불씨 게이지를 되채운다(처치 수만큼).
+  /** 라이터(id 'fuel'): 불씨(flame) 손패로 적을 3회 처치할 때마다 빛 게이지를 +1 되채운다.
    *  usedDef의 flame 태그로 판정하므로 미래 불씨 공격 손패도 코드 수정 없이 반영된다. */
   applyFuelOnFlameKill(usedDef: HandCardDefinition, kills: number): void {
     const { gameState, boardRenderer, recordRelicActivation } = this.deps
     const character = gameState.character
     if (kills <= 0 || !character.hasRelic('fuel') || !usedDef.synergyTags?.includes('flame')) return
-    const gained = character.gainEmber(kills)
+    const enh = gameState.enhancements
+    enh.fuelKillCount += kills
+    const points = Math.floor(enh.fuelKillCount / 3)
+    if (points <= 0) return
+    enh.fuelKillCount %= 3
+    const gained = character.gainEmber(points)
     if (gained <= 0) return
     recordRelicActivation('fuel', `불씨 게이지 +${gained}`)
     boardRenderer.playHudCounterFeedback('ember', character.ember)

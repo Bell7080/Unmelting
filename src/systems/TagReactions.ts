@@ -81,12 +81,15 @@ export const TAG_REACTIONS: readonly TagReaction[] = [
     },
   },
   {
-    // 연마(에픽 증폭 엔진): 칼날 손패를 쓸 때마다 이번 런 모든 칼날 손패의 피해를 영구 +1.
-    // 참격/검과방패/불화살은 물론 숫돌·망치가 흘리는 칼날 파편까지 함께 커지는 눈덩이.
+    // 연마(에픽 증폭 엔진): 칼날 손패를 3회 쓸 때마다 이번 런 모든 칼날 손패의 피해를 영구 +1.
+    // 트리플도 1회로 센다(handCardUsed가 카드 플레이당 1회 발동). 참격/검과방패/불화살·칼날 파편까지 커지는 눈덩이.
     relicId: 'sharpening',
     trigger: 'handCardUsed',
     anyTag: ['blade'],
     apply: (ctx) => {
+      ctx.enhancements.sharpeningUseCount += 1
+      if (ctx.enhancements.sharpeningUseCount < 3) return null
+      ctx.enhancements.sharpeningUseCount = 0
       for (const id of handCardIdsWithTag('blade')) {
         ctx.enhancements.singleBonus[id] = (ctx.enhancements.singleBonus[id] ?? 0) + 1
         ctx.enhancements.tripleBonus[id] = (ctx.enhancements.tripleBonus[id] ?? 0) + 1

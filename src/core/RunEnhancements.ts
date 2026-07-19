@@ -58,8 +58,12 @@ export interface RunEnhancements {
   bladeShardUseCount: number
   /** 투척 비술 유물: 현재까지 획득한 공격력 누적치(최대 5). */
   throwArtBonusAtk: number
+  /** 라이터(연료) 유물: 불씨 손패 처치 누적(3마다 빛 게이지 +1). */
+  fuelKillCount: number
+  /** 연마 유물: 칼날 손패 사용 누적(3마다 모든 칼날 피해 영구 +1). 트리플도 1회로 센다. */
+  sharpeningUseCount: number
 }
 
 export function makeDefaultEnhancements(): RunEnhancements {
-  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, blackCandleBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, tier1CardBoosts: {}, tier1JobPoolBoosts: {}, inkQuillKillCount: 0, honestyHandUseCount: 0, ambitionKillCount: 0, ambitionCurrentGain: 0, libraryCountdown: 4, bloodWritSelfDamageAccum: 0, coagulationSelfDamageAccum: 0, bloodSigilUseCount: 0, recycleWaxUseCount: 0, trumpShotShardCount: 0, bladeShardUseCount: 0, throwArtBonusAtk: 0 }
+  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, blackCandleBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, tier1CardBoosts: {}, tier1JobPoolBoosts: {}, inkQuillKillCount: 0, honestyHandUseCount: 0, ambitionKillCount: 0, ambitionCurrentGain: 0, libraryCountdown: 4, bloodWritSelfDamageAccum: 0, coagulationSelfDamageAccum: 0, bloodSigilUseCount: 0, recycleWaxUseCount: 0, trumpShotShardCount: 0, bladeShardUseCount: 0, throwArtBonusAtk: 0, fuelKillCount: 0, sharpeningUseCount: 0 }
 }

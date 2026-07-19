@@ -511,7 +511,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'sharpening',
     name: '연마',
     rarity: 'epic',
-    effect: '칼날 손패 사용 시 모든 칼날 손패 피해 영구 +1',
+    effect: '칼날 손패 3회 사용마다 모든 칼날 손패 피해 영구 +1',
     flavor: '벨수록 손에 붙는 날 — 한 번 벼릴 때마다 모든 칼이 더 깊이 파고든다.',
     basePrice: 1050,
     synergyTags: ['blade'],
@@ -589,15 +589,15 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     basePrice: 1250,
     synergyTags: ['sacrifice'],
   },
-  // [불씨(flame) 시너지] 연료(커먼 씨앗): 불씨 손패로 처치 시 불씨 게이지를 되채워
-  // 화염 빌드가 스폰 압박(불씨 소진) 속에서 자립하게 한다. flame 태그로 반응하므로
-  // 앞으로 추가되는 불씨 공격 손패도 코드 수정 없이 자동으로 연료를 굴린다.
+  // [불씨(flame) 시너지] 라이터(커먼 씨앗, id는 'fuel' 유지): 불씨 손패로 처치를 쌓아 빛 게이지를
+  // 되채워 화염 빌드가 스폰 압박 속에서 자립하게 한다. flame 태그로 반응하므로
+  // 앞으로 추가되는 불씨 공격 손패도 코드 수정 없이 자동으로 굴린다.
   fuel: {
     id: 'fuel',
-    name: '연료',
+    name: '라이터',
     rarity: 'common',
-    effect: '불씨 손패로 적 처치 시 불씨 게이지 +1',
-    flavor: '타오르는 것이 스스로를 되살린다 — 한 번 붙은 불은 쉬이 꺼지지 않는다.',
+    effect: '불씨 손패로 적 3회 처치마다 불씨 게이지 +1',
+    flavor: '몇 번을 그어야 붙지만, 한 번 붙으면 쉬이 꺼지지 않는다.',
     basePrice: 520,
     synergyTags: ['flame'],
   },
@@ -640,10 +640,10 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
   spread: {
     id: 'spread',
     name: '확산',
-    rarity: 'unique',
+    rarity: 'epic',
     effect: '불씨 손패로 적 처치 시 인접 레인 함정 1칸 제거',
     flavor: '한 번 붙은 불은 옆으로 옮겨붙는다 — 길을 막던 것들이 재로 스러진다.',
-    basePrice: 1250,
+    basePrice: 1080,
     synergyTags: ['flame'],
   },
   // [칼날(blade) 시너지] 숨겨둔 파편(레어 증식): 칼날 손패를 쓸 때마다 낮은 확률로 파편 1발이

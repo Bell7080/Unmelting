@@ -13,10 +13,15 @@ function ctx(c: Character, tags: SynergyTag[], enh = makeDefaultEnhancements()) 
 afterEach(() => { vi.restoreAllMocks() })
 
 describe('TagReactions(태그 반응 뼈대)', () => {
-  it('보유 유물 + 매칭 태그면 발동한다(연마)', () => {
+  it('보유 유물 + 매칭 태그면 3회째에 발동한다(연마)', () => {
     const c = new Character()
     c.addRelic('sharpening')
     const enh = makeDefaultEnhancements()
+    // 1~2회는 카운트만 오르고 발동/강화 없음.
+    expect(runTagReactions('handCardUsed', ctx(c, ['blade'], enh))).toHaveLength(0)
+    expect(runTagReactions('handCardUsed', ctx(c, ['blade'], enh))).toHaveLength(0)
+    expect(enh.singleBonus['slash'] ?? 0).toBe(0)
+    // 3회째에 발동 + 강화 +1.
     const out = runTagReactions('handCardUsed', ctx(c, ['blade'], enh))
     expect(out).toHaveLength(1)
     expect(out[0].relicId).toBe('sharpening')
@@ -47,15 +52,15 @@ describe('TagReactions(태그 반응 뼈대)', () => {
     expect(out).toHaveLength(0)
   })
 
-  it('연마: 칼날 손패 사용 시 모든 칼날 손패의 강화치가 영구 +1 누적된다', () => {
+  it('연마: 칼날 손패 3회 사용마다 모든 칼날 손패의 강화치가 영구 +1 누적된다', () => {
     const c = new Character()
     c.addRelic('sharpening')
     const enh = makeDefaultEnhancements()
     const bladeIds = handCardIdsWithTag('blade')
     expect(bladeIds.length).toBeGreaterThanOrEqual(5)
 
-    runTagReactions('handCardUsed', ctx(c, ['blade'], enh))
-    runTagReactions('handCardUsed', ctx(c, ['blade'], enh))
+    // 6회 사용 = +2 (3회마다 +1). 트리플도 카드 플레이당 1회로 센다.
+    for (let i = 0; i < 6; i++) runTagReactions('handCardUsed', ctx(c, ['blade'], enh))
 
     for (const id of bladeIds) {
       expect(enh.singleBonus[id], `${id} singleBonus`).toBe(2)
