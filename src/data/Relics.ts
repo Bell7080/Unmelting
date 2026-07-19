@@ -67,6 +67,7 @@ export type RelicId =
   | 'wax-recycle'
   | 'hot-stone'
   | 'wax-fragment'
+  | 'spread'
 
 
 /** Runtime-customized relic face/effect. Hearth dinner uses this so one real relic id can
@@ -624,6 +625,17 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '굳어 떨어진 밀랍 조각도 값지다 — 부수는 손에 온기와 방벽을 남긴다.',
     basePrice: 1050,
     synergyTags: ['wax'],
+  },
+  // [불씨(flame) 시너지] 확산(유니크 페이오프): 불씨 손패로 처치하면 불길이 옆 레인으로 번져
+  // 함정을 태운다. flame 태그로 판정하므로 미래 불씨 공격 손패도 자동으로 확산을 일으킨다.
+  spread: {
+    id: 'spread',
+    name: '확산',
+    rarity: 'unique',
+    effect: '불씨 손패로 적 처치 시 인접 레인 함정 1칸 제거',
+    flavor: '한 번 붙은 불은 옆으로 옮겨붙는다 — 길을 막던 것들이 재로 스러진다.',
+    basePrice: 1250,
+    synergyTags: ['flame'],
   },
 }
 

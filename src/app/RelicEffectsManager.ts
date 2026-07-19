@@ -850,6 +850,24 @@ export class RelicEffectsManager {
     boardRenderer.playHudCounterFeedback('ember', character.ember)
   }
 
+  /** 확산: 불씨 손패로 적을 처치한 각 레인에 대해 인접 레인(좌/우)의 함정 1칸을 제거한다.
+   *  killedLanes는 index.ts가 removedFieldCards의 laneIndex에서 뽑아 넘긴다(불씨 태그 판정 후). */
+  async applySpreadOnFlameKills(killedLanes: number[]): Promise<void> {
+    const { gameState, boardRenderer, recordRelicActivation } = this.deps
+    if (!gameState.character.hasRelic('spread') || killedLanes.length === 0) return
+    const removedTraps: { cardId: string; type: CardType }[] = []
+    for (const lane of killedLanes) {
+      // 좌 → 우 인접 레인 순으로 함정이 있는 첫 곳에서 1칸 제거(처치 1회당 최대 1칸).
+      for (const adj of [lane - 1, lane + 1]) {
+        const trap = gameState.removeFirstTrapInLane(adj)
+        if (trap) { removedTraps.push({ cardId: trap.id, type: CardType.TRAP }); break }
+      }
+    }
+    if (removedTraps.length === 0) return
+    recordRelicActivation('spread', `인접 함정 ${removedTraps.length}칸 제거`)
+    await boardRenderer.animateCardConsumeByIds(removedTraps)
+  }
+
   /** 사치품 유물: 불빛 소비량 누적 후 2000마다 공격력 +1 처리. 최대 누적 공격력 +3. */
   applyLuxuryScoreSpend(amount: number): void {
     const { gameState, recordRelicActivation } = this.deps

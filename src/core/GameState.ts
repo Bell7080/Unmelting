@@ -266,6 +266,20 @@ export class GameState {
     return cleared
   }
 
+  /** 확산 유물용: 지정 레인에서 앞쪽부터 첫 함정 카드 1장을 찾아 제거하고 반환한다(없으면 null). */
+  removeFirstTrapInLane(laneIndex: number): Card | null {
+    const lane = this.lanes[laneIndex]
+    if (!lane) return null
+    for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+      const c = lane.getCardAtDistance(d)
+      if (c && c.type === CardType.TRAP) {
+        this.removeCardFromRow(c, d)
+        return c
+      }
+    }
+    return null
+  }
+
   /**
    * Within one lane, drop the bottom slot and shift everything down one step.
    * The top slot becomes empty for the caller to fill.
