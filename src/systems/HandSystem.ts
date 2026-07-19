@@ -633,6 +633,16 @@ export class HandSystem {
     }
   }
 
+  /** 뜨거운 돌: 불씨 밝음(불씨 게이지 ≥7) 상태에서 불씨 공격 손패의 피해를 (floor(0.25공)+1)만큼 올린다.
+   *  flame 태그 + damageProfile(공격 카드)로 판정하므로 미래 불씨 공격 손패도 자동 적용된다
+   *  (match처럼 damageProfile 없는 flame 도구 카드는 제외). 표준 `+bonus` 피해식에 folding된다. */
+  static flameHotStoneBonus(gs: GameState, def: HandCardDefinition): number {
+    const c = gs.character
+    // '밝음' 티어 하한은 절대 ember 7(기획 고정 규칙). emberMax와 무관.
+    if (!c.hasRelic('hot-stone') || c.ember < 7 || !def.damageProfile || !def.synergyTags?.includes('flame')) return 0
+    return Math.floor(0.25 * c.damage) + 1
+  }
+
   /** Apply a hand card's single-use effect. coin/card 보너스는 use()에서 처리한다. */
   private static applySingleEffect(
     gs: GameState,
@@ -640,7 +650,7 @@ export class HandSystem {
     target?: HandTarget
   ): string {
     const c = gs.character
-    const bonus = gs.enhancements.singleBonus[def.id] ?? 0
+    const bonus = (gs.enhancements.singleBonus[def.id] ?? 0) + HandSystem.flameHotStoneBonus(gs, def)
     switch (def.id) {
       case 'wax-drop': {
         const healed = c.heal(1 + bonus)
@@ -774,7 +784,7 @@ export class HandSystem {
     target?: HandTarget
   ): string {
     const c = gs.character
-    const bonus = gs.enhancements.tripleBonus[def.id] ?? 0
+    const bonus = (gs.enhancements.tripleBonus[def.id] ?? 0) + HandSystem.flameHotStoneBonus(gs, def)
     switch (def.id) {
       case 'wax-drop': {
         const healed = c.heal(5 + bonus)

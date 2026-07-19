@@ -189,6 +189,10 @@ import pack006Url from '../assets/sprites/pack_006.webp'
 import pack007Url from '../assets/sprites/pack_007.webp'
 import type { RelicId } from '@data/Relics'
 
+/** 전용 아트가 아직 없는 유물의 임시 플레이스홀더 — 다른 유물 아트를 빌리면 헷갈리므로
+ *  순수 검은 카드면으로 통일한다(전용 아트 연동 시 개별 교체). */
+const BLACK_RELIC_ART = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"><rect width="4" height="4" fill="black"/></svg>'
+
 export const SpriteUrls = {
   background: backgroundUrl,
   /** Shop overlay full-area backdrop (replaces the dim-veil gradient). */
@@ -316,21 +320,20 @@ export const SpriteUrls = {
     'demon-doll': relic038Url,
     // 만찬은 별도 아트가 들어오기 전까지 음식/인형 톤이 가까운 038 유물 아트를 임시 사용한다.
     'last-supper': relic038Url,
-    // 태그 반응형 유물 — 전용 아트 전까지 테마가 가까운 기존 아트를 임시 사용한다.
-    whetstone: relic004Url,  // 조각칼(칼날) 톤 임시 재사용
-    hammer: relic019Url,     // 망치 전용 아트 전까지 임시 재사용
-    sharpening: relic021Url, // 도끼(칼날) 톤 임시 재사용
-    'overflow-wax': relic005Url, // 생명선(회복) 톤 임시 재사용
-    'thorn-shield': relic003Url, // 귀족의 품격(방패) 톤 임시 재사용
-    library: relic008Url,        // 잉크와 깃펜(서적) 톤 임시 재사용
-    // 제물 패밀리 — 전용 아트 전까지 붉은 피/제 살 깎기/문양 톤이 가까운 기존 아트 임시 재사용.
-    'blood-writ': relic006Url,   // 헌혈팩(붉은 피) 톤 임시 재사용
-    transfusion: relic016Url,    // 권위 톤 임시 재사용
-    coagulation: relic015Url,    // 패도(제 살 깎기) 톤 임시 재사용
-    'blood-sigil': relic038Url,  // 악마 인형(어두운 문양) 톤 임시 재사용
-    // 불씨/양초 시너지 — 전용 아트 전까지 불/밀랍 톤 근접 기존 아트 임시 재사용.
-    fuel: relic003Url,           // 불씨(불꽃) 톤 임시 재사용
-    'wax-recycle': relic005Url,  // 밀랍/촛농 톤 임시 재사용
+    // 전용 아트 미연동 유물 — 다른 유물 아트를 빌리면 헷갈리므로 검은 카드면으로 통일한다.
+    whetstone: BLACK_RELIC_ART,
+    hammer: BLACK_RELIC_ART,
+    sharpening: BLACK_RELIC_ART,
+    'overflow-wax': BLACK_RELIC_ART,
+    'thorn-shield': BLACK_RELIC_ART,
+    library: BLACK_RELIC_ART,
+    'blood-writ': BLACK_RELIC_ART,
+    transfusion: BLACK_RELIC_ART,
+    coagulation: BLACK_RELIC_ART,
+    'blood-sigil': BLACK_RELIC_ART,
+    fuel: BLACK_RELIC_ART,
+    'wax-recycle': BLACK_RELIC_ART,
+    'hot-stone': BLACK_RELIC_ART,
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,

@@ -65,6 +65,7 @@ export type RelicId =
   // 불씨(flame)·양초(wax) 시너지 — 태그 반응형이라 미래 불씨/양초 손패도 자동 적용.
   | 'fuel'
   | 'wax-recycle'
+  | 'hot-stone'
 
 
 /** Runtime-customized relic face/effect. Hearth dinner uses this so one real relic id can
@@ -599,6 +600,17 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '녹아내린 밀랍도 버리지 않는다 — 굳혀 다시 벽으로 세운다.',
     basePrice: 1050,
     synergyTags: ['wax'],
+  },
+  // [불씨(flame) 시너지] 뜨거운 돌(레어 페이오프): 불씨 밝음 상태에서 불씨 공격 손패 피해를 증폭.
+  // HandSystem.flameHotStoneBonus가 flame+damageProfile로 판정 → 미래 불씨 공격 손패도 자동 적용.
+  'hot-stone': {
+    id: 'hot-stone',
+    name: '뜨거운 돌',
+    rarity: 'rare',
+    effect: '불씨 밝음(불씨 7↑)일 때 불씨 손패 피해 +(0.25공+1)',
+    flavor: '오래 달군 돌은 쉽게 식지 않는다 — 불길이 왕성할 때 가장 뜨겁게 탄다.',
+    basePrice: 780,
+    synergyTags: ['flame'],
   },
 }
 
