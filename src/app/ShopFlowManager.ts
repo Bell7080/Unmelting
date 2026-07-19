@@ -169,6 +169,19 @@ export class ShopFlowManager {
   /** 상점/제단 오버레이가 열려 있는지 — 월드 바크 게이트/디버그 가드가 읽는다. */
   isOpen(): boolean { return this.shopOpen }
 
+  /** 상점/제단에서 동전 손패를 썼을 때 화폐를 지급한다. 턴·체인 로그 없이 조용히 $만 올리고
+   *  화폐/불빛(맹신) 표시를 즉시 갱신한다. 무료 동전 카드 획득 경로와 같은 피드백을 쓴다. */
+  gainCoinsFromCard(value: number): void {
+    if (value <= 0 || !this.shopOpen) return
+    this.res.coins += value
+    this.res.coinPulseKey++
+    this.deps.relicEffects.applyBlindFaithCoins(value) // 맹신: $1당 불빛
+    this.deps.boardRenderer.playScoreGainFeedback(this.res.score, this.res.scorePulseKey)
+    this.deps.boardRenderer.playCoinGainFeedback(this.res.coins, this.res.coinPulseKey)
+    this.deps.render()
+    this.deps.boardRenderer.openShop(this.buildShopStateView(), this.res.score, this.deps.gameState.character)
+  }
+
   /** 팩 피커 세션만 정리(넘기기/외부 취소). */
   resetPackSession(): void { this.activePackSession = null }
 

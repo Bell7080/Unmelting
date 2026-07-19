@@ -2042,13 +2042,27 @@ document.addEventListener('shopClose', () => {
 
 /** Click on a hand slot. Plain click = use single (or arm targeting). */
 async function handleHandSlotClick(slotIndex: number): Promise<void> {
-  if (!gameActive || inputLocked) return
-  // 보스 격파 후 보상·시련 단계 동안 손패 사용 차단(사용자 요청).
-  if (bossController.postPhaseHandLocked) return
-
+  if (!gameActive) return
   const character = gameState.character
   const card = character.hand[slotIndex]
   if (!card) return
+
+  // 상점/제단 중에는 동전 손패만 사용 허용 — 턴·체인 없이 화폐만 지급하고 상점 표시를 갱신한다.
+  const shopCoinUse = shopFlow.isOpen() && card.defId === 'coin'
+  if (inputLocked && !shopCoinUse) return
+  // 보스 격파 후 보상·시련 단계 동안 손패 사용 차단(사용자 요청). 상점 동전은 예외.
+  if (bossController.postPhaseHandLocked && !shopCoinUse) return
+
+  if (shopCoinUse) {
+    const merged = card.merged === true
+    const value = merged
+      ? 5 + (gameState.enhancements.tripleBonus['coin'] ?? 0)
+      : 1 + (gameState.enhancements.singleBonus['coin'] ?? 0)
+    gameState.character.removeHandCardAt(slotIndex)
+    shopFlow.gainCoinsFromCard(value)
+    return
+  }
+
   const def = getHandCardDef(card.defId)
 
   // Plain click on a targeted card arms it. The pending target stores
