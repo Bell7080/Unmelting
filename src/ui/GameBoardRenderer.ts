@@ -1218,7 +1218,8 @@ export class GameBoardRenderer {
     // 판정 대상·카운터·문턱은 RELIC_STACK_FEEDBACK 레지스트리로 관리 — 새 유물은 거기 등록만 하면 자동.
     const enh = this.currentGameState?.enhancements
     const charge = relicStackFeedback(def.id)?.charge
-    const chargedClass = enh && charge && (enh[charge.counter] as number) >= charge.threshold - 1 ? 'is-charged' : ''
+    // 리셋형(0..N-1 순환)·단조 증가형(20주기 등) 카운터 모두 modulo로 '발동 직전'을 판정한다.
+    const chargedClass = enh && charge && (enh[charge.counter] as number) % charge.threshold === charge.threshold - 1 ? 'is-charged' : ''
     return `
       <article class="relic-mini-card ${RARITY_CLASS_BY_TIER[def.rarity]} ${pinnedClass} ${chargedClass}"
                data-owned-relic="${def.id}"

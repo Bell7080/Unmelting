@@ -633,6 +633,40 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: true, // 해금팩으로만 입수
   },
+  // 칼날의 서: 통산 칼날 파편 사용 수에 비례해 파편을 여러 발 투척하는 마법사 램프 손패(화염의 서 칼날판).
+  'blade-tome': {
+    id: 'blade-tome',
+    name: '칼날의 서',
+    category: 'attack',
+    synergyTags: ['blade'],
+    // 피해 근사 — 파편 1발 기준(투척 수 스케일·연마는 보수적으로 제외).
+    damageProfile: { base: { atkMult: 0, flat: 1 }, triple: { atkMult: 0, flat: 2 }, deterministic: false },
+    description: '칼날 파편 투척 (파편 쓸수록 발수 증가)',
+    tripleDescription: '칼날 파편 투척 (발수 2배)',
+    targeting: { base: selfOne, triple: selfOne },
+    dropWeight: 4,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: true, // 해금팩으로만 입수
+    jobTags: ['mage'] satisfies ReadonlyArray<JobTag>,
+  },
+  // 함정 수집: 전방 함정을 제거하고 그 조각으로 칼날 파편을 얻는다(청소×칼날 크로스).
+  'trap-collect': {
+    id: 'trap-collect',
+    name: '함정 수집',
+    category: 'control',
+    synergyTags: ['blade', 'clean'],
+    description: '전방 선택 함정 1장 제거 · 칼날 파편 +1',
+    tripleDescription: '전방 모든 함정 제거 · 제거 수만큼 칼날 파편',
+    targeting: {
+      base: { selection: 'target', zone: 'front', filter: 'trap', countLimit: 1 },
+      triple: { selection: 'all', zone: 'front', filter: 'trap', countLimit: null },
+    },
+    dropWeight: 6,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: true, // 해금팩으로만 입수
+  },
 }
 
 export const HAND_CARD_IDS: HandCardId[] = Object.keys(HAND_CARD_DEFINITIONS) as HandCardId[]

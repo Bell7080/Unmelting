@@ -721,8 +721,24 @@ export class HandSystem {
         return HandSystem.damageTargetEnemy(gs, target, damage)
       }
       case 'blade-shard':
-        // 랜덤 단일 적 1피해(+강화). distributeDamage(1)이 1점을 무작위 1체에 넣는다.
-        return HandSystem.distributeDamageAmongEnemies(gs, 1 + bonus)
+        // 랜덤 적 1체에게 (1+연마) 풀피해 한 방(관통/도탄/폭풍 유물 반영).
+        HandSystem.throwBladeShardHit(gs, 1 + bonus)
+        return '칼날 파편 투척'
+      case 'blade-tome': {
+        // 통산 파편 사용 수에 비례해(5회당 +1발) 파편을 여러 발 투척. 각 발은 파편과 같은 규칙.
+        const throws = 1 + Math.floor((gs.enhancements.bladeShardUseCount ?? 0) / 5)
+        const dmg = 1 + (gs.enhancements.singleBonus['blade-shard'] ?? 0)
+        for (let i = 0; i < throws; i++) HandSystem.throwBladeShardHit(gs, dmg)
+        return `칼날 파편 ${throws}발 투척`
+      }
+      case 'trap-collect': {
+        // 전방 선택 함정 1장을 제거하고 그 조각으로 칼날 파편 1장을 얻는다.
+        if (!target || target.card.type !== CardType.TRAP) return '함정 대상 없음'
+        gs.removeCardFromRow(target.card, target.distance)
+        if (!c.hasHandRoom()) return '함정 제거 · 손패 가득'
+        c.addHandCard(DropSystem.makeCard('blade-shard'))
+        return '함정 제거 · 칼날 파편 +1'
+      }
       case 'scabbard': {
         // 칼날 파편 1~2장(+강화)을 손에 생성한다. 손패가 가득 차면 거기까지만.
         const count = 1 + Math.floor(Math.random() * 2) + bonus
@@ -873,8 +889,29 @@ export class HandSystem {
         return `방패 +3 · ${HandSystem.damageTargetEnemy(gs, target, damage)}`
       }
       case 'blade-shard':
-        // 트리플: 3피해를 무작위로 분산.
-        return HandSystem.distributeDamageAmongEnemies(gs, 3 + bonus)
+        // 트리플: 파편 3발 연속 투척(각 1+연마, 관통/도탄/폭풍 반영).
+        for (let i = 0; i < 3; i++) HandSystem.throwBladeShardHit(gs, 1 + bonus)
+        return '칼날 파편 3발 투척'
+      case 'blade-tome': {
+        // 트리플: 투척 발수 2배.
+        const throws = (1 + Math.floor((gs.enhancements.bladeShardUseCount ?? 0) / 5)) * 2
+        const dmg = 1 + (gs.enhancements.tripleBonus['blade-shard'] ?? 0)
+        for (let i = 0; i < throws; i++) HandSystem.throwBladeShardHit(gs, dmg)
+        return `칼날 파편 ${throws}발 투척`
+      }
+      case 'trap-collect': {
+        // 트리플: 전방 모든 함정 제거, 제거 수만큼 칼날 파편 획득.
+        let removed = 0
+        for (let lane = 0; lane < gs.lanes.length; lane++) {
+          const card = gs.lanes[lane].getCardAtDistance(0)
+          if (card && card.type === CardType.TRAP) {
+            gs.removeCardFromRow(card, 0)
+            removed++
+            if (c.hasHandRoom()) c.addHandCard(DropSystem.makeCard('blade-shard'))
+          }
+        }
+        return removed > 0 ? `함정 ${removed} 제거 · 칼날 파편 +${removed}` : '전방 함정 없음'
+      }
       case 'scabbard': {
         // 트리플: 칼날 파편 4장(+강화)을 손에 생성한다.
         let made = 0
@@ -1122,6 +1159,63 @@ export class HandSystem {
     }
     const scopeLabel = scope === 'front' ? '전방 적' : '필드 적'
     return `${scopeLabel} ${hit}체에 피해 ${amount}${defeated > 0 ? ` · ${defeated}체 처치` : ''}`
+  }
+
+  /** 칼날 파편 1발: 랜덤 살아있는 적 1체에게 dmg 풀피해 한 방. 처치 시 관통(세로열)·도탄(인접 레인,
+   *  넘친 피해)을 발동하고, 칼날 폭풍 보유 시 전체 적 대상으로 전환한다. 파편 카드·칼날의 서가 공유한다.
+   *  (제거/피해는 이 함수가 보드에 직접 반영하고, 애니메이션은 useSingle의 before/after diff가 잡는다.) */
+  static throwBladeShardHit(gs: GameState, dmg: number): void {
+    const c = gs.character
+    // 칼날 폭풍: 한 적이 아니라 필드 전체 적을 동시에 벤다(관통/도탄은 이미 전체라 생략).
+    if (c.hasRelic('blade-storm')) { HandSystem.damageEnemies(gs, 'field', dmg); return }
+    const targets: { card: Card; lane: number; d: number }[] = []
+    const seen = new Set<Card>()
+    for (let lane = 0; lane < gs.lanes.length; lane++) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = gs.lanes[lane].getCardAtDistance(d)
+        if (!card || seen.has(card)) continue
+        if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) continue
+        seen.add(card)
+        targets.push({ card, lane, d })
+      }
+    }
+    if (targets.length === 0) return
+    const t = targets[Math.floor(Math.random() * targets.length)]
+    const before = Math.max(0, t.card.getHealth())
+    t.card.takeDamage(dmg)
+    if (t.card.getHealth() > 0) return
+    if (t.card.type !== CardType.BOSS) gs.removeCardFromRow(t.card, t.d)
+    // 관통: 처치한 적의 세로열 나머지 적에게 dmg.
+    if (c.hasRelic('pierce-shard')) HandSystem.damageLaneEnemies(gs, t.lane, dmg, t.card)
+    // 도탄: 처치하고 넘친 피해를 인접 레인 적 1체에게 전이.
+    const overkill = dmg - before
+    if (c.hasRelic('ricochet') && overkill > 0) HandSystem.ricochetShard(gs, t.lane, overkill)
+  }
+
+  /** 관통: 지정 레인의 (exclude 제외) 모든 적/보스에게 dmg. */
+  private static damageLaneEnemies(gs: GameState, lane: number, dmg: number, exclude: Card): void {
+    for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+      const card = gs.lanes[lane].getCardAtDistance(d)
+      if (!card || card === exclude) continue
+      if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) continue
+      card.takeDamage(dmg)
+      if (card.getHealth() <= 0 && card.type !== CardType.BOSS) gs.removeCardFromRow(card, d)
+    }
+  }
+
+  /** 도탄: 인접 레인(좌/우) 중 먼저 만난 적 1체에게 넘친 피해를 전이한다. */
+  private static ricochetShard(gs: GameState, lane: number, dmg: number): void {
+    for (const adj of [lane - 1, lane + 1]) {
+      if (adj < 0 || adj >= gs.lanes.length) continue
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = gs.lanes[adj].getCardAtDistance(d)
+        if (!card) continue
+        if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) break
+        card.takeDamage(dmg)
+        if (card.getHealth() <= 0 && card.type !== CardType.BOSS) gs.removeCardFromRow(card, d)
+        return // 한 적에게만 전이
+      }
+    }
   }
 
   /** 폭죽: 총 피해를 필드 적/보스에게 1점씩 무작위로 쪼개 분배한다.

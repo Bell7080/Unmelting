@@ -198,13 +198,23 @@ export class RelicEffectsManager {
     if (tags?.includes('blade') && gameState.character.hasRelic('hidden-shard') && Math.random() < 0.25) {
       void this.throwBladeShard('hidden-shard')
     }
-    // 비장의 한발: 칼날 파편 4회 사용마다 파편 1발을 추가로 던진다(4번째 파편의 2번 사용).
-    if (def.id === 'blade-shard' && gameState.character.hasRelic('trump-shot')) {
+    // 칼날 파편 카드 사용 통산 카운트(칼날의 서 발수 스케일 · 투척 비술 · 비장의 한발 공용).
+    if (def.id === 'blade-shard') {
       const enh = gameState.enhancements
-      enh.trumpShotShardCount += 1
-      if (enh.trumpShotShardCount >= 4) {
-        enh.trumpShotShardCount = 0
-        void this.throwBladeShard('trump-shot')
+      enh.bladeShardUseCount += 1
+      // 투척 비술: 20회 사용마다 공격력 영구 +1(최대 +5).
+      if (gameState.character.hasRelic('throw-art') && enh.throwArtBonusAtk < 5 && enh.bladeShardUseCount % 20 === 0) {
+        enh.throwArtBonusAtk += 1
+        gameState.character.applyDamageBoost(1)
+        recordRelicActivation('throw-art', `공격력 +1 (누적 +${enh.throwArtBonusAtk})`)
+      }
+      // 비장의 한발: 4회 사용마다 파편 1발을 추가로 던진다(4번째 파편의 2번 사용).
+      if (gameState.character.hasRelic('trump-shot')) {
+        enh.trumpShotShardCount += 1
+        if (enh.trumpShotShardCount >= 4) {
+          enh.trumpShotShardCount = 0
+          void this.throwBladeShard('trump-shot')
+        }
       }
     }
     if (!tags || tags.length === 0) return

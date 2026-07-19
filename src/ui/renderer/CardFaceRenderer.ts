@@ -229,6 +229,8 @@ export class CardFaceRenderer {
       bonusChip = `<p class="shop-relic-bonus-chip">사용 <strong>${enh.recycleWaxUseCount}</strong>/2</p>`
     } else if (id === 'trump-shot' && enh) {
       bonusChip = `<p class="shop-relic-bonus-chip">파편 <strong>${enh.trumpShotShardCount}</strong>/4</p>`
+    } else if (id === 'throw-art' && enh) {
+      bonusChip = `<p class="shop-relic-bonus-chip">파편 <strong>${enh.bladeShardUseCount % 20}</strong>/20 · 공격력 +<strong>${enh.throwArtBonusAtk}</strong></p>`
     }
     // 커스텀 프로필의 art(만찬 유물 등)가 있으면 기본 스프라이트 대신 사용
     const artUrl = profile?.art ?? spriteForRelic(def.id)

@@ -59,6 +59,10 @@ export type HandCardId =
   | 'blade-shard'
   // 검집: 칼날 파편을 손에 생성하는 손패(단검 투척 빌드의 손패 생성원).
   | 'scabbard'
+  // 칼날의 서: 통산 파편 사용 수에 비례해 파편을 여러 발 투척하는 마법사 손패(램프형).
+  | 'blade-tome'
+  // 함정 수집: 전방 함정을 제거하고 그 조각으로 칼날 파편을 얻는다.
+  | 'trap-collect'
 
 export type HandEffectSelection = 'target' | 'random' | 'all' | 'none'
 

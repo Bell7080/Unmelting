@@ -72,6 +72,11 @@ export type RelicId =
   // 칼날(blade) 단검 투척 밀도 — 파편 증식/연격.
   | 'hidden-shard'
   | 'trump-shot'
+  // 칼날 파편 심화 — 관통/도탄/연격/광역.
+  | 'pierce-shard'
+  | 'ricochet'
+  | 'throw-art'
+  | 'blade-storm'
 
 
 /** Runtime-customized relic face/effect. Hearth dinner uses this so one real relic id can
@@ -663,6 +668,46 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     basePrice: 520,
     synergyTags: ['blade'],
   },
+  // 관통 파편(에픽): 파편으로 적을 처치하면 그 세로열 나머지 적까지 꿰뚫는다(베어 넘김).
+  'pierce-shard': {
+    id: 'pierce-shard',
+    name: '관통 파편',
+    rarity: 'epic',
+    effect: '칼날 파편으로 적 처치 시 그 세로열 모든 적에게 피해',
+    flavor: '멈추지 않는 날은 뒤에 선 것들까지 가른다.',
+    basePrice: 1080,
+    synergyTags: ['blade'],
+  },
+  // 도탄(레어): 파편으로 처치하고 남은 피해가 인접 레인 적에게 튕겨 전이한다.
+  ricochet: {
+    id: 'ricochet',
+    name: '도탄',
+    rarity: 'rare',
+    effect: '칼날 파편으로 적 처치 시 남은 피해가 인접 레인 적에게 전이',
+    flavor: '빗맞은 각도가 오히려 옆의 적을 노린다.',
+    basePrice: 780,
+    synergyTags: ['blade'],
+  },
+  // 투척 비술(유니크): 파편을 던질수록 팔이 익는다 — 20회마다 공격력 영구 +1(최대 +5).
+  'throw-art': {
+    id: 'throw-art',
+    name: '투척 비술',
+    rarity: 'unique',
+    effect: '칼날 파편 20회 사용마다 공격력 +1 (최대 +5)',
+    flavor: '천 번을 던진 손은 겨누지 않아도 꽂힌다.',
+    basePrice: 1200,
+    synergyTags: ['blade'],
+  },
+  // 칼날 폭풍(레전더리): 파편이 한 적이 아니라 필드 전체 적을 동시에 벤다.
+  'blade-storm': {
+    id: 'blade-storm',
+    name: '칼날 폭풍',
+    rarity: 'legendary',
+    effect: '칼날 파편이 필드 전체 적을 대상으로 바뀜',
+    flavor: '한 자루가 백 자루가 되어 사방을 채운다.',
+    basePrice: 1600,
+    synergyTags: ['blade'],
+  },
 }
 
 /**
@@ -678,6 +723,7 @@ export interface RelicStackFeedback {
 
 export const RELIC_STACK_FEEDBACK: Partial<Record<RelicId, RelicStackFeedback>> = {
   'trump-shot':   { charge: { counter: 'trumpShotShardCount', threshold: 4 } },
+  'throw-art':    { charge: { counter: 'bladeShardUseCount', threshold: 20 } },
   'blood-sigil':  { charge: { counter: 'bloodSigilUseCount', threshold: 5 } },
   'blood-writ':   { charge: { counter: 'bloodWritSelfDamageAccum', threshold: 5 } },
   'demon-doll':   { charge: { counter: 'demonDollSelfDamageAccum', threshold: 20 } },
