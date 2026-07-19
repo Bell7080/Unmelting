@@ -50,8 +50,10 @@ export interface RunEnhancements {
   coagulationSelfDamageAccum: number
   /** 혈마법진 유물: 제물 손패 사용 누적 카운트(5마다 최대 체력 +2 · 불빛 +5%). */
   bloodSigilUseCount: number
+  /** 재활용 유물: 양초 손패 사용 누적 카운트(2마다 전방 랜덤 타이머 카드 1턴 굳음). */
+  recycleWaxUseCount: number
 }
 
 export function makeDefaultEnhancements(): RunEnhancements {
-  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, blackCandleBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, tier1CardBoosts: {}, tier1JobPoolBoosts: {}, inkQuillKillCount: 0, honestyHandUseCount: 0, ambitionKillCount: 0, ambitionCurrentGain: 0, libraryCountdown: 4, bloodWritSelfDamageAccum: 0, coagulationSelfDamageAccum: 0, bloodSigilUseCount: 0 }
+  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, blackCandleBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, tier1CardBoosts: {}, tier1JobPoolBoosts: {}, inkQuillKillCount: 0, honestyHandUseCount: 0, ambitionKillCount: 0, ambitionCurrentGain: 0, libraryCountdown: 4, bloodWritSelfDamageAccum: 0, coagulationSelfDamageAccum: 0, bloodSigilUseCount: 0, recycleWaxUseCount: 0 }
 }

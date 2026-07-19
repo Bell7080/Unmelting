@@ -2284,9 +2284,10 @@ async function applyHandSingle(
     await boardRenderer.animateCardConsumeByIds(result.removedFieldCards, {
       suppressBurstIds: singleDamagedIds,
     })
-    await relicEffects.onEnemiesDefeated(
-      result.removedFieldCards.filter((removed) => removed.type === CardType.ENEMY).length
-    )
+    const singleEnemyKills = result.removedFieldCards.filter((removed) => removed.type === CardType.ENEMY).length
+    await relicEffects.onEnemiesDefeated(singleEnemyKills)
+    // 연료: 불씨 손패가 처치를 냈으면 불씨 게이지를 되채운다(flame 태그로 판정).
+    if (usedDef) relicEffects.applyFuelOnFlameKill(usedDef, singleEnemyKills)
     await relicEffects.applyWaxCrowTreasureGains(
       result.removedFieldCards.filter((removed) => removed.type === CardType.TREASURE).length
     )
@@ -2334,9 +2335,10 @@ async function applyHandSingle(
         await boardRenderer.animateCardConsumeByIds(repeatResult.removedFieldCards, {
           suppressBurstIds: new Set(repeatLosses.map((l) => l.cardId)),
         })
-        await relicEffects.onEnemiesDefeated(
-          repeatResult.removedFieldCards.filter((r) => r.type === CardType.ENEMY).length
-        )
+        const chandelierKills = repeatResult.removedFieldCards.filter((r) => r.type === CardType.ENEMY).length
+        await relicEffects.onEnemiesDefeated(chandelierKills)
+        // 연료: 샹들리에 반복 처치도 불씨로 되돌린다(flame 태그 판정).
+        if (usedDef) relicEffects.applyFuelOnFlameKill(usedDef, chandelierKills)
       }
       hadKills = repeatResult.removedFieldCards.some((r) => r.type === CardType.ENEMY)
     }

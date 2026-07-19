@@ -192,6 +192,8 @@ export class RelicEffectsManager {
     const tags = def.synergyTags
     // 혈마법진: 제물 손패를 쓸 때마다 사용 수를 세어 5마다 최대 체력·불빛을 영구 성장시킨다.
     if (tags?.includes('sacrifice')) this.applyBloodSigilCardUse()
+    // 재활용: 양초 손패를 쓸 때마다 세어 2마다 전방 랜덤 타이머 카드를 굳힌다.
+    if (tags?.includes('wax')) this.applyRecycleWaxUse()
     if (!tags || tags.length === 0) return
     const outcomes = runTagReactions('handCardUsed', {
       character: gameState.character,
@@ -806,6 +808,34 @@ export class RelicEffectsManager {
       recordRelicActivation('blood-sigil', '최대 체력 +2 · 불빛 +5%')
       void playPlayerGainTrails({ kind: 'chain' }, beforeResources)
     }
+  }
+
+  /** 재활용: 양초(wax) 손패 2회 사용마다 전방 랜덤 타이머 카드 1장을 1턴 굳힌다.
+   *  태그 반응이라 앞으로 추가되는 양초 손패도 자동으로 이 카운트를 올린다. */
+  applyRecycleWaxUse(): void {
+    const { gameState, recordRelicActivation, render } = this.deps
+    if (!gameState.character.hasRelic('wax-recycle')) return
+    const enhancements = gameState.enhancements
+    enhancements.recycleWaxUseCount += 1
+    while (enhancements.recycleWaxUseCount >= 2) {
+      enhancements.recycleWaxUseCount -= 2
+      const frozen = HandSystem.freezeRandomFrontTimerCard(gameState, 1)
+      if (!frozen) break // 굳힐 전방 타이머 카드 없음
+      recordRelicActivation('wax-recycle', `${frozen.name} 1턴 굳음`)
+      render()
+    }
+  }
+
+  /** 연료: 불씨(flame) 손패로 적을 처치할 때마다 불씨 게이지를 되채운다(처치 수만큼).
+   *  usedDef의 flame 태그로 판정하므로 미래 불씨 공격 손패도 코드 수정 없이 반영된다. */
+  applyFuelOnFlameKill(usedDef: HandCardDefinition, kills: number): void {
+    const { gameState, boardRenderer, recordRelicActivation } = this.deps
+    const character = gameState.character
+    if (kills <= 0 || !character.hasRelic('fuel') || !usedDef.synergyTags?.includes('flame')) return
+    const gained = character.gainEmber(kills)
+    if (gained <= 0) return
+    recordRelicActivation('fuel', `불씨 게이지 +${gained}`)
+    boardRenderer.playHudCounterFeedback('ember', character.ember)
   }
 
   /** 사치품 유물: 불빛 소비량 누적 후 2000마다 공격력 +1 처리. 최대 누적 공격력 +3. */

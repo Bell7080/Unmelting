@@ -1311,6 +1311,24 @@ export class HandSystem {
     return `${target.card.name} ${turns}턴 굳음`
   }
 
+  /** Freeze one random front card that has a turn timer. 재활용 유물이 태그 반응으로 호출한다.
+   *  대상이 없으면 null. 굳힌 카드를 돌려줘 호출부가 로그/FX에 쓴다. */
+  static freezeRandomFrontTimerCard(gs: GameState, turns: number): Card | null {
+    const candidates: Card[] = []
+    const seen = new Set<Card>()
+    for (const lane of gs.lanes) {
+      const card = lane.getCardAtDistance(0)
+      if (!card || seen.has(card)) continue
+      if (!HandSystem.isTurnTimerCard(card) || card.isFrozen()) continue
+      seen.add(card)
+      candidates.push(card)
+    }
+    if (candidates.length === 0) return null
+    const pick = candidates[Math.floor(Math.random() * candidates.length)]
+    pick.freeze(turns)
+    return pick
+  }
+
   /** Apply wax hardening to every front card with a turn timer(보스 포함). */
   private static freezeFrontCards(gs: GameState, turns: number): string {
     const seen = new Set<Card>()

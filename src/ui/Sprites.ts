@@ -328,6 +328,9 @@ export const SpriteUrls = {
     transfusion: relic016Url,    // 권위 톤 임시 재사용
     coagulation: relic015Url,    // 패도(제 살 깎기) 톤 임시 재사용
     'blood-sigil': relic038Url,  // 악마 인형(어두운 문양) 톤 임시 재사용
+    // 불씨/양초 시너지 — 전용 아트 전까지 불/밀랍 톤 근접 기존 아트 임시 재사용.
+    fuel: relic003Url,           // 불씨(불꽃) 톤 임시 재사용
+    'wax-recycle': relic005Url,  // 밀랍/촛농 톤 임시 재사용
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,

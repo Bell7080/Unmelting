@@ -62,6 +62,9 @@ export type RelicId =
   | 'transfusion'
   | 'coagulation'
   | 'blood-sigil'
+  // 불씨(flame)·양초(wax) 시너지 — 태그 반응형이라 미래 불씨/양초 손패도 자동 적용.
+  | 'fuel'
+  | 'wax-recycle'
 
 
 /** Runtime-customized relic face/effect. Hearth dinner uses this so one real relic id can
@@ -573,6 +576,29 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '제물을 바칠수록 진해지는 문양 — 태울 그릇도, 타오르는 빛도 함께 커진다.',
     basePrice: 1250,
     synergyTags: ['sacrifice'],
+  },
+  // [불씨(flame) 시너지] 연료(커먼 씨앗): 불씨 손패로 처치 시 불씨 게이지를 되채워
+  // 화염 빌드가 스폰 압박(불씨 소진) 속에서 자립하게 한다. flame 태그로 반응하므로
+  // 앞으로 추가되는 불씨 공격 손패도 코드 수정 없이 자동으로 연료를 굴린다.
+  fuel: {
+    id: 'fuel',
+    name: '연료',
+    rarity: 'common',
+    effect: '불씨 손패로 적 처치 시 불씨 게이지 +1',
+    flavor: '타오르는 것이 스스로를 되살린다 — 한 번 붙은 불은 쉬이 꺼지지 않는다.',
+    basePrice: 520,
+    synergyTags: ['flame'],
+  },
+  // [양초(wax) 시너지] 재활용(에픽): 양초 손패를 쓸 때마다 밀랍이 레일에 굳음을 흘려
+  // 정체를 만든다(생존 템포). wax 태그 반응이라 미래 양초 손패도 자동으로 굳음을 쌓는다.
+  'wax-recycle': {
+    id: 'wax-recycle',
+    name: '재활용',
+    rarity: 'epic',
+    effect: '양초 손패 2회 사용마다 전방 랜덤 타이머 카드 1턴 굳음',
+    flavor: '녹아내린 밀랍도 버리지 않는다 — 굳혀 다시 벽으로 세운다.',
+    basePrice: 1050,
+    synergyTags: ['wax'],
   },
 }
 
