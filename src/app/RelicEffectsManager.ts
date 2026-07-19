@@ -190,6 +190,8 @@ export class RelicEffectsManager {
   applyHandCardUseRelics(def: HandCardDefinition, merged: boolean): void {
     const { gameState, boardRenderer, recordRelicActivation, render } = this.deps
     const tags = def.synergyTags
+    // 혈마법진: 제물 손패를 쓸 때마다 사용 수를 세어 5마다 최대 체력·불빛을 영구 성장시킨다.
+    if (tags?.includes('sacrifice')) this.applyBloodSigilCardUse()
     if (!tags || tags.length === 0) return
     const outcomes = runTagReactions('handCardUsed', {
       character: gameState.character,
@@ -392,10 +394,15 @@ export class RelicEffectsManager {
       burstScoreGain()
     }
 
-    // 에나벨라의 반지: 최하단 손패 → 최상단 이동.
-    if (character.hasRelic('annabella-ring') && character.hand.length > 1) {
-      character.hand.push(character.hand.shift()!)
-      render()
+    // 에나벨라의 반지: 7턴마다 최하단(비합체) 손패 1장을 트리플로 승격. 이미 트리플이면 위 카드로.
+    if (character.hasRelic('annabella-ring') && turn !== 0 && turn % 7 === 0) {
+      const target = character.hand.find((c) => c.merged !== true)
+      if (target) {
+        target.merged = true // 게임 로직은 merged 플래그만 읽는다(mergeSourceUids는 렌더 연출 전용).
+        recordRelicActivation('annabella-ring', `${getHandCardDef(target.defId).name} 트리플 승격`)
+        render()
+        await playResourceTrail({ kind: 'chain' }, 'hand', 1)
+      }
     }
 
     // 기사도: 4턴마다 knight 태그 손패 중 dropWeight 기반 랜덤 1장 지급.
@@ -612,8 +619,8 @@ export class RelicEffectsManager {
     }
     if (id === 'hegemony') {
       const beforeResources = snapshotPlayerResources()
-      // 패도: 최대 체력 -15(제 살 깎기) + 공격력 +2. 구매 가능 여부는 relicPurchaseBlocked가 막는다.
-      gameState.character.spendMaxHealth(15)
+      // 패도: 최대 체력 -10(제 살 깎기) + 공격력 +2. 구매 가능 여부는 relicPurchaseBlocked가 막는다.
+      gameState.character.spendMaxHealth(10)
       gameState.character.applyDamageBoost(2)
       render()
       await playPlayerGainTrails({ kind: 'center' }, beforeResources)
@@ -655,8 +662,8 @@ export class RelicEffectsManager {
       cardSpawner.adjustRelicSpawn('enemy', -5)
     }
     if (id === 'golden-key') {
-      // 보물 스폰 중 10% 확률로 황금 상자로 대체한다.
-      cardSpawner.adjustGoldenChestWeight(0.1)
+      // 보물 스폰 중 30% 확률로 황금 상자로 대체한다.
+      cardSpawner.adjustGoldenChestWeight(0.3)
     }
     if (id === 'sweet-temptation') {
       // 함정 피해 +1 (ActionSystem이 character.trapDamageBonus를 읽는다).
@@ -675,8 +682,8 @@ export class RelicEffectsManager {
       cardSpawner.adjustRelicSpawn('flower', 2)
     }
     if (id === 'trap-master') {
-      // 함정 15% 무효화 확률 (ActionSystem이 character.trapIgnoreChance를 읽는다).
-      gameState.character.trapIgnoreChance += 0.15
+      // 함정 30% 무효화 확률 (ActionSystem이 character.trapIgnoreChance를 읽는다).
+      gameState.character.trapIgnoreChance += 0.30
     }
     if (id === 'last-supper') {
       const beforeResources = snapshotPlayerResources()
@@ -695,8 +702,8 @@ export class RelicEffectsManager {
   /** 일부 유물은 불빛 가격 외 추가 구매 조건이 있다(패도: 최대 체력 16 이상). 충족 못 하면 true. */
   relicPurchaseBlocked(id: RelicId): boolean {
     const { gameState } = this.deps
-    // spendMaxHealth는 최대 체력이 1 미만이 되지 않게 막으므로, -15 후 최소 1이 남는 16 이상이어야 한다.
-    if (id === 'hegemony') return gameState.character.maxHealth < 16
+    // spendMaxHealth는 최대 체력이 1 미만이 되지 않게 막으므로, -10 후 최소 1이 남는 11 이상이어야 한다.
+    if (id === 'hegemony') return gameState.character.maxHealth < 11
     return false
   }
 
@@ -715,6 +722,90 @@ export class RelicEffectsManager {
       gameState.character.applyDamageBoost(1)
     }
     recordRelicActivation('demon-doll', `자해 20 누적 → 불빛 +10%, 공격력 +${gained} (누적 +${enhancements.demonDollBonusAtk})`)
+  }
+
+  /** 혈서: 자해 5 누적마다 제물(sacrifice) 태그 손패 1장(비보스 풀 dropWeight 가중)을 손에 흘려 넣는다. */
+  applyBloodWritSelfDamage(amount: number): void {
+    const { gameState, recordRelicActivation, render } = this.deps
+    const character = gameState.character
+    if (!character.hasRelic('blood-writ') || amount <= 0) return
+    const enhancements = gameState.enhancements
+    enhancements.bloodWritSelfDamageAccum += amount
+    // 제물 손패 풀: sacrifice 태그 + 일반 획득 가능(보스/유물 전용 파편 제외).
+    const pool = HAND_CARD_IDS.filter((id) => {
+      const d = HAND_CARD_DEFINITIONS[id]
+      return d.synergyTags?.includes('sacrifice') && d.dropSource !== 'boss' && d.dropSource !== 'relic'
+    })
+    if (pool.length === 0) { enhancements.bloodWritSelfDamageAccum %= 5; return }
+    while (enhancements.bloodWritSelfDamageAccum >= 5) {
+      enhancements.bloodWritSelfDamageAccum -= 5
+      const total = pool.reduce((s, id) => s + (HAND_CARD_DEFINITIONS[id].dropWeight ?? 1), 0)
+      let roll = Math.random() * total
+      let picked = pool[0]
+      for (const id of pool) {
+        roll -= HAND_CARD_DEFINITIONS[id].dropWeight ?? 1
+        if (roll <= 0) { picked = id; break }
+      }
+      // enqueueDrop = 획득 공통 정리(손패 가득이면 중단). 3장째면 자동 트리플.
+      if (!HandSystem.enqueueDrop(character, DropSystem.makeCard(picked))) break
+      recordRelicActivation('blood-writ', `${getHandCardDef(picked).name} 획득`)
+      render()
+    }
+  }
+
+  /** 응고: 자해 2 누적마다 방패 +1. 절반 효율이 제물 순환의 폭주 방지 브레이크다. */
+  applyCoagulationSelfDamage(amount: number): void {
+    const { gameState, recordRelicActivation, snapshotPlayerResources, playPlayerGainTrails } = this.deps
+    if (!gameState.character.hasRelic('coagulation') || amount <= 0) return
+    const enhancements = gameState.enhancements
+    enhancements.coagulationSelfDamageAccum += amount
+    const gained = Math.floor(enhancements.coagulationSelfDamageAccum / 2)
+    if (gained <= 0) return
+    enhancements.coagulationSelfDamageAccum %= 2
+    const beforeResources = snapshotPlayerResources()
+    const shielded = gameState.character.addShield(gained)
+    if (shielded <= 0) return
+    recordRelicActivation('coagulation', `방패 +${shielded}`)
+    void playPlayerGainTrails({ kind: 'chain' }, beforeResources)
+  }
+
+  /** 수혈: 입은 자해 피해량만큼 필드 랜덤 적에게 1씩 분산 타격한다(가시 방패와 동일 경로). */
+  async applyTransfusionSelfDamage(amount: number): Promise<void> {
+    const { gameState, boardRenderer, recordRelicActivation } = this.deps
+    if (!gameState.character.hasRelic('transfusion') || amount <= 0) return
+    let hits = 0
+    let kills = 0
+    for (let i = 0; i < amount; i++) {
+      const hit = gameState.damageRandomFrontEnemy(1)
+      if (!hit) break // 전방 적 없음
+      hits++
+      await boardRenderer.animateDamageNumbersById([{ cardId: hit.cardId, amount: hit.amount }])
+      if (hit.defeated) {
+        await boardRenderer.animateCardConsumeByIds([{ cardId: hit.cardId, type: CardType.ENEMY }], {
+          suppressBurstIds: new Set([hit.cardId]),
+        })
+        kills++
+      }
+    }
+    if (hits === 0) return
+    recordRelicActivation('transfusion', kills > 0 ? `자해 분산 (처치 ${kills})` : `자해 분산 피해 ${hits}`)
+    if (kills > 0) await this.onEnemiesDefeated(kills)
+  }
+
+  /** 혈마법진: 제물 손패 5회 사용마다 최대 체력 +2 · 불빛 획득량 +5%(복리). 사용 수는 런 동안 누적. */
+  applyBloodSigilCardUse(): void {
+    const { gameState, recordRelicActivation, snapshotPlayerResources, playPlayerGainTrails } = this.deps
+    if (!gameState.character.hasRelic('blood-sigil')) return
+    const enhancements = gameState.enhancements
+    enhancements.bloodSigilUseCount += 1
+    while (enhancements.bloodSigilUseCount >= 5) {
+      enhancements.bloodSigilUseCount -= 5
+      const beforeResources = snapshotPlayerResources()
+      gameState.character.increaseMaxHealth(2)
+      enhancements.scoreMultiplier *= 1.05
+      recordRelicActivation('blood-sigil', '최대 체력 +2 · 불빛 +5%')
+      void playPlayerGainTrails({ kind: 'chain' }, beforeResources)
+    }
   }
 
   /** 사치품 유물: 불빛 소비량 누적 후 2000마다 공격력 +1 처리. 최대 누적 공격력 +3. */

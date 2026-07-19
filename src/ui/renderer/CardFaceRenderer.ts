@@ -152,11 +152,11 @@ export class CardFaceRenderer {
     // 함정의 대가: 함정 무시 확률 before→after
     if (id === 'trap-master' && char) {
       const before = isOwned
-        ? Math.round((char.trapIgnoreChance - 0.15) * 100)
+        ? Math.round((char.trapIgnoreChance - 0.30) * 100)
         : Math.round(char.trapIgnoreChance * 100)
       const after = isOwned
         ? Math.round(char.trapIgnoreChance * 100)
-        : Math.round((char.trapIgnoreChance + 0.15) * 100)
+        : Math.round((char.trapIgnoreChance + 0.30) * 100)
       return `${staticEffect}[shift: (${before}→${after}%)]`
     }
 
@@ -165,9 +165,9 @@ export class CardFaceRenderer {
       return `${staticEffect}[shift: (50→40%)]`
     }
 
-    // 황금 열쇠: 항상 0→10% (중복 획득 불가)
+    // 황금 열쇠: 항상 0→30% (중복 획득 불가)
     if (id === 'golden-key') {
-      return `${staticEffect}[shift: (0→10%)]`
+      return `${staticEffect}[shift: (0→30%)]`
     }
 
     // 달콤한 유혹: 함정 피해 보너스 + 불빛 before→after
@@ -219,6 +219,12 @@ export class CardFaceRenderer {
     } else if (id === 'ambition' && enh) {
       const nextGain = enh.ambitionCurrentGain + 25
       bonusChip = `<p class="shop-relic-bonus-chip">처치 <strong>${enh.ambitionKillCount}</strong>/8 · 다음 <strong>+${nextGain}</strong>✦</p>`
+    } else if (id === 'blood-writ' && enh) {
+      bonusChip = `<p class="shop-relic-bonus-chip">자해 <strong>${enh.bloodWritSelfDamageAccum}</strong>/5</p>`
+    } else if (id === 'coagulation' && enh) {
+      bonusChip = `<p class="shop-relic-bonus-chip">자해 <strong>${enh.coagulationSelfDamageAccum}</strong>/2</p>`
+    } else if (id === 'blood-sigil' && enh) {
+      bonusChip = `<p class="shop-relic-bonus-chip">사용 <strong>${enh.bloodSigilUseCount}</strong>/5</p>`
     }
     // 커스텀 프로필의 art(만찬 유물 등)가 있으면 기본 스프라이트 대신 사용
     const artUrl = profile?.art ?? spriteForRelic(def.id)

@@ -56,7 +56,7 @@ export class ShopOverlayView {
     if (offer.purchased) return 'is-purchased'
     // 패도는 최대 체력 16 이상에서만 구매 가능(index.ts relicPurchaseBlocked와 동일 조건).
     const maxHealth = this.host.getGameState()?.getCharacter().maxHealth ?? 0
-    if (offer.relicId === 'hegemony' && maxHealth < 16) return 'is-unaffordable'
+    if (offer.relicId === 'hegemony' && maxHealth < 11) return 'is-unaffordable'
     // 제단 유물은 무료 단일 픽이라 가격과 무관하게 항상 밝게(affordable) 표시한다.
     if (this.currentShopRenderMode === 'altar') return 'is-affordable'
     return score >= offer.price ? 'is-affordable' : 'is-unaffordable'

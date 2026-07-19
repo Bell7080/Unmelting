@@ -44,8 +44,14 @@ export interface RunEnhancements {
   ambitionCurrentGain: number
   /** 도서관 유물: 다음 마도서 카드 지급까지 남은 카운트(턴/마도서 사용마다 -1, 0에서 지급 후 +4). */
   libraryCountdown: number
+  /** 혈서 유물: 누적 자해량 추적(5마다 제물 손패 1장 지급). */
+  bloodWritSelfDamageAccum: number
+  /** 응고 유물: 누적 자해량 추적(2마다 방패 +1). */
+  coagulationSelfDamageAccum: number
+  /** 혈마법진 유물: 제물 손패 사용 누적 카운트(5마다 최대 체력 +2 · 불빛 +5%). */
+  bloodSigilUseCount: number
 }
 
 export function makeDefaultEnhancements(): RunEnhancements {
-  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, blackCandleBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, tier1CardBoosts: {}, tier1JobPoolBoosts: {}, inkQuillKillCount: 0, honestyHandUseCount: 0, ambitionKillCount: 0, ambitionCurrentGain: 0, libraryCountdown: 4 }
+  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, blackCandleBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, tier1CardBoosts: {}, tier1JobPoolBoosts: {}, inkQuillKillCount: 0, honestyHandUseCount: 0, ambitionKillCount: 0, ambitionCurrentGain: 0, libraryCountdown: 4, bloodWritSelfDamageAccum: 0, coagulationSelfDamageAccum: 0, bloodSigilUseCount: 0 }
 }

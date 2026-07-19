@@ -2222,6 +2222,10 @@ async function applyHandSingle(
     await boardRenderer.animatePlayerDamageImpact(result.selfDamage)
     relicEffects.applyAnomalyHealthLoss()
     relicEffects.applyDemonDollSelfDamage(result.selfDamage)
+    // 제물 패밀리: 자해를 카드(혈서)·방패(응고)·적 분산 피해(수혈)로 환급한다.
+    relicEffects.applyBloodWritSelfDamage(result.selfDamage)
+    relicEffects.applyCoagulationSelfDamage(result.selfDamage)
+    await relicEffects.applyTransfusionSelfDamage(result.selfDamage)
     if (!gameState.character.isAlive() && !gameState.character.authoritySurvivePending) {
       gameState.endGame('character_defeated')
       if (!(await relicEffects.tryResolveSurvivalRelics())) finishTurn()

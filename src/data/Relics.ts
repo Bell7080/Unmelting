@@ -57,6 +57,11 @@ export type RelicId =
   | 'overflow-wax'
   | 'thorn-shield'
   | 'library'
+  // 제물(sacrifice) 시너지 패밀리 — 자해를 자원으로 되돌리는 눈덩이 축.
+  | 'blood-writ'
+  | 'transfusion'
+  | 'coagulation'
+  | 'blood-sigil'
 
 
 /** Runtime-customized relic face/effect. Hearth dinner uses this so one real relic id can
@@ -248,7 +253,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'hegemony',
     name: '패도',
     rarity: 'legendary',
-    effect: '구매 즉시 최대 체력 -15 · 공격력 +2 (체력 16+ 필요)',
+    effect: '구매 즉시 최대 체력 -10 · 공격력 +2 (체력 11+ 필요)',
     flavor: '제 살을 깎아 칼끝을 세우는 패자의 길.',
     basePrice: 1250,
   },
@@ -309,8 +314,8 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'annabella-ring',
     name: '에나벨라의 반지',
     rarity: 'unique',
-    effect: '매 턴 최하단 손패 1장을 최상단으로 이동',
-    flavor: '에나벨라는 언제나 가장 낡은 것을 앞에 두었다.',
+    effect: '7턴마다 최하단 손패 1장을 트리플로 승격',
+    flavor: '에나벨라는 언제나 가장 낡은 것을 가장 벼려 두었다.',
     basePrice: 1000,
   },
   'annabella-pendant': {
@@ -378,7 +383,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     name: '황금 열쇠',
     rarity: 'unique',
     // 황금 상자는 일반 상자보다 카드와 불빛을 2배 주는 희귀 보물칸.
-    effect: '보물 스폰 중 10% 확률로 황금 상자 대체',
+    effect: '보물 스폰 중 30% 확률로 황금 상자 대체',
     flavor: '어떤 자물쇠도 이 열쇠를 거부하지 못한다.',
     basePrice: 1000,
   },
@@ -437,7 +442,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'trap-master',
     name: '함정의 대가',
     rarity: 'legendary',
-    effect: '함정 무시 확률 15% 증가',
+    effect: '함정 무시 확률 30% 증가',
     flavor: '모든 덫을 꿰뚫는 발걸음.',
     basePrice: 1400,
   },
@@ -526,6 +531,48 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '한 장을 읽어치울 때마다 다음 책장이 저절로 넘어간다.',
     basePrice: 1200,
     synergyTags: ['tome'],
+  },
+  // [제물(sacrifice) 시너지 패밀리] 자해를 3방향(카드·화력·방어)으로 환급하고,
+  // 유니크 혈마법진이 제물 사용을 영구 성장으로 복리화한다. 효과 로직은 자해 sink에서 직접 처리한다.
+  // 씨앗: 혈서(커먼) — 자해 5 누적마다 제물 손패를 흘려 넣어 제물 빌드를 굴린다.
+  'blood-writ': {
+    id: 'blood-writ',
+    name: '혈서',
+    rarity: 'common',
+    effect: '자해 5 누적마다 제물 손패 1장 획득',
+    flavor: '피로 적어 내려간 계약 — 아플수록 새 장이 손에 쥐어진다.',
+    basePrice: 520,
+    synergyTags: ['sacrifice'],
+  },
+  // 환급(화력): 수혈(레어) — 입은 자해 피해를 곧바로 필드 적에게 랜덤 분산한다.
+  transfusion: {
+    id: 'transfusion',
+    name: '수혈',
+    rarity: 'rare',
+    effect: '자해 피해만큼 필드 랜덤 적에게 피해 분산',
+    flavor: '흘린 피를 그대로 적에게 되돌려 붓는다.',
+    basePrice: 780,
+    synergyTags: ['sacrifice'],
+  },
+  // 환급(방어): 응고(에픽) — 자해 2 누적마다 방패 1로 굳는다(절반 효율이 폭주 방지 브레이크).
+  coagulation: {
+    id: 'coagulation',
+    name: '응고',
+    rarity: 'epic',
+    effect: '자해 2 누적마다 방패 +1',
+    flavor: '흘러나온 피가 굳어 또 하나의 벽이 된다.',
+    basePrice: 1050,
+    synergyTags: ['sacrifice'],
+  },
+  // 복리 페이오프: 혈마법진(유니크) — 제물 손패를 쓸수록 연료(최대 체력)와 불빛이 함께 자란다.
+  'blood-sigil': {
+    id: 'blood-sigil',
+    name: '혈마법진',
+    rarity: 'unique',
+    effect: '제물 손패 5회 사용마다 최대 체력 +2 · 불빛 획득량 +5%',
+    flavor: '제물을 바칠수록 진해지는 문양 — 태울 그릇도, 타오르는 빛도 함께 커진다.',
+    basePrice: 1250,
+    synergyTags: ['sacrifice'],
   },
 }
 
