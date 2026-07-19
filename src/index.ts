@@ -1861,9 +1861,17 @@ function chainRecordingSuppressed(): boolean {
 }
 
 /** Record relic activation in the floating chain-area toast only. */
+// 스택이 쌓여 발동하는(스탯 획득/강력한 한방) 누적형 유물 — 발동 순간 카드를 블라스트로 부상시킨다.
+const STACK_BLAST_RELICS = new Set<RelicId>([
+  'trump-shot', 'blood-sigil', 'coagulation', 'blood-writ', 'wax-recycle', 'wax-fragment',
+  'demon-doll', 'ink-quill', 'ambition', 'honesty', 'luxury',
+])
+
 function recordRelicActivation(relicId: RelicId, message: string): void {
   // 상점/보스 보상 단계에서 발동한 유물 효과는 체인 로그에 남기지 않는다.
   if (chainRecordingSuppressed()) return
+  // 누적형 유물이 조건을 채워 발동하면 보유 유물 팬에서 해당 카드를 부상시켜 확실히 알린다.
+  if (STACK_BLAST_RELICS.has(relicId)) boardRenderer.playRelicStackBlast(relicId)
   const relic = getRelicDef(relicId)
   chainTimeline.push({
     kind: 'relic',

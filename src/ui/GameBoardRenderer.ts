@@ -1230,6 +1230,34 @@ export class GameBoardRenderer {
     `
   }
 
+  /** 유물 스택 누적/발동 시 해당 유물 카드를 블라스트로 부상시켜 확실히 알린다:
+   *  z상단으로 올라와 확대(불빛 획득 톤) → 증가분 확인용 체류 → 스르륵 원위치로 하강.
+   *  같은 카드가 부상 중이면 재시작하지 않는다(연속 발동 시 깜빡임 방지). */
+  playRelicStackBlast(relicId: RelicId): void {
+    const card = this.boardElement.querySelector<HTMLElement>(`.relic-mini-card[data-owned-relic="${relicId}"]`)
+    if (!card || card.dataset.stackBlasting === '1') return
+    card.dataset.stackBlasting = '1'
+    const prevZ = card.style.zIndex
+    card.style.zIndex = '60' // 팬 상단으로 부상(충전 발광 42보다 위)
+    const baseX = 'translateX(calc(-50% + var(--relic-x, 0px)))'
+    const rest = `${baseX} translateY(var(--relic-y, 0px)) rotate(var(--relic-rot, 0deg)) scale(0.98)`
+    const anim = card.animate(
+      [
+        { offset: 0,    transform: rest, filter: 'brightness(1)' },
+        // 부상 + 확대 + 발광 블라스트
+        { offset: 0.2,  transform: `${baseX} translateY(-34px) rotate(0deg) scale(1.3)`,  filter: 'brightness(1.5) drop-shadow(0 0 14px rgba(255,206,120,0.95))' },
+        // 체류 — 커진 상태로 잠시 머물러 증가한 스택을 확실히 보여준다
+        { offset: 0.62, transform: `${baseX} translateY(-30px) rotate(0deg) scale(1.24)`, filter: 'brightness(1.3) drop-shadow(0 0 12px rgba(255,206,120,0.8))' },
+        // 스르륵 원위치로 하강
+        { offset: 1,    transform: rest, filter: 'brightness(1)' },
+      ],
+      { duration: 1400, easing: 'cubic-bezier(0.18, 0.86, 0.22, 1)' }
+    )
+    const restore = () => { card.style.zIndex = prevZ; delete card.dataset.stackBlasting }
+    anim.onfinish = restore
+    anim.oncancel = restore
+  }
+
   private renderPlayer(character: Character): string {
     const visualHealth = this.hudCounterVisibleStartValue('health', character.health)
     const visualMaxHealth = Math.max(
