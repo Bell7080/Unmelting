@@ -1548,6 +1548,10 @@ function resetForNewRun(): void {
     boardRenderer.playHudCounterFeedback('shield', gameState.character.shield)
     if (gameState.character.hasRelic('blood-pack')) void relicEffects.applyBloodPackHit(overflow)
   }
+  // 밀랍 조각: 굳은 카드가 필드에서 제거될 때(모든 처치 경로) 불빛·방패를 회수한다.
+  gameState.onCardRemoved = (card) => {
+    if (card.isFrozen() && gameState.character.hasRelic('wax-fragment')) void relicEffects.applyWaxFragmentOnFrozenClear()
+  }
   // 가시 방패: 방패를 얻을 때마다 획득량만큼 전방 랜덤 적을 1씩 찌른다.
   gameState.character.onShieldGain = (amount) => {
     if (gameState.character.hasRelic('thorn-shield')) void relicEffects.applyThornShieldHits(amount)

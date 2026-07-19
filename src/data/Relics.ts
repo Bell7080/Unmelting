@@ -66,6 +66,7 @@ export type RelicId =
   | 'fuel'
   | 'wax-recycle'
   | 'hot-stone'
+  | 'wax-fragment'
 
 
 /** Runtime-customized relic face/effect. Hearth dinner uses this so one real relic id can
@@ -611,6 +612,18 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '오래 달군 돌은 쉽게 식지 않는다 — 불길이 왕성할 때 가장 뜨겁게 탄다.',
     basePrice: 780,
     synergyTags: ['flame'],
+  },
+  // [양초(wax) 시너지] 밀랍 조각(에픽 페이오프): 굳은 카드를 처리(처치/클리어)할 때 불빛·방패를
+  // 회수한다. 재활용(굳음 씨앗)과 짝. GameState.onCardRemoved 훅으로 처치 경로(손패/직접타격)를
+  // 모두 잡으므로 굳히는 손패가 앞으로 늘어도 자동 반영된다.
+  'wax-fragment': {
+    id: 'wax-fragment',
+    name: '밀랍 조각',
+    rarity: 'epic',
+    effect: '굳은 카드 처리 시 불빛 획득 · 방패 +2',
+    flavor: '굳어 떨어진 밀랍 조각도 값지다 — 부수는 손에 온기와 방벽을 남긴다.',
+    basePrice: 1050,
+    synergyTags: ['wax'],
   },
 }
 

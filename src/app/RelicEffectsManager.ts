@@ -826,6 +826,18 @@ export class RelicEffectsManager {
     }
   }
 
+  /** 밀랍 조각: 굳은(frozen) 카드를 처리(처치/클리어)할 때 불빛과 방패 +2를 회수한다.
+   *  GameState.onCardRemoved 훅이 모든 처치 경로에서 호출하므로 굳히는 손패가 늘어도 자동 반영. */
+  async applyWaxFragmentOnFrozenClear(): Promise<void> {
+    const { gameState, recordRelicActivation, snapshotPlayerResources, playPlayerGainTrails } = this.deps
+    if (!gameState.character.hasRelic('wax-fragment')) return
+    const beforeResources = snapshotPlayerResources()
+    const gainedLight = this.gainFixedLight('밀랍 조각', 50)
+    const shielded = gameState.character.addShield(2)
+    recordRelicActivation('wax-fragment', `불빛 +${gainedLight} · 방패 +${shielded}`)
+    await playPlayerGainTrails({ kind: 'chain' }, beforeResources)
+  }
+
   /** 연료: 불씨(flame) 손패로 적을 처치할 때마다 불씨 게이지를 되채운다(처치 수만큼).
    *  usedDef의 flame 태그로 판정하므로 미래 불씨 공격 손패도 코드 수정 없이 반영된다. */
   applyFuelOnFlameKill(usedDef: HandCardDefinition, kills: number): void {

@@ -334,6 +334,7 @@ export const SpriteUrls = {
     fuel: BLACK_RELIC_ART,
     'wax-recycle': BLACK_RELIC_ART,
     'hot-stone': BLACK_RELIC_ART,
+    'wax-fragment': BLACK_RELIC_ART,
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,

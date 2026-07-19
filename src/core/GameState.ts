@@ -30,6 +30,9 @@ export class GameState {
   runOpenedTreasures = 0
   /** 해금팩으로 해금된 레시피 ID 집합. runLocked 레시피는 여기 있을 때만 발동한다. */
   unlockedRecipeIds = new Set<string>()
+  /** 카드가 필드에서 실제 제거될 때(처치/클리어) 1회 발동하는 훅. 처치 맥락(카드·레인)이 필요한
+   *  유물(밀랍 조각=굳은 카드 처리, 확산=불씨 처치 인접 반응)이 여기에 붙는다. reset과 무관하게 유지. */
+  onCardRemoved?: (card: Card, laneIndices: number[]) => void
 
   constructor() {
     this.character = new Character()
@@ -258,6 +261,8 @@ export class GameState {
         cleared.push(i)
       }
     }
+    // 처치 맥락 훅 — 제거된 카드 1장당 1회(굳음 상태·레인 정보는 아직 card에 남아 있다).
+    if (cleared.length > 0) this.onCardRemoved?.(card, cleared)
     return cleared
   }
 
