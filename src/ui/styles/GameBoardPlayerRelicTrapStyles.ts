@@ -267,6 +267,21 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
     transform 0.36s cubic-bezier(0.18, 0.86, 0.22, 1),
     filter 0.28s ease;
 }
+/* 활성화형 유물 충전 완료 — 발동 직전이면 발광·부상해 "준비됐다"를 바로 알린다.
+   포커스 추적 중이 아닐 때만 부상시켜 hover 리프트와 충돌하지 않게 한다. */
+.relic-stack:not(.is-focus-tracked) .relic-mini-card.is-charged {
+  --relic-extra-y: -14px;
+  --relic-extra-scale: 0.07;
+  z-index: 42;
+  animation: relic-charged-pulse 1.15s ease-in-out infinite;
+}
+.relic-mini-card.is-charged .relic-preview-card {
+  filter: drop-shadow(0 0 7px rgba(255, 209, 122, 0.9)) drop-shadow(0 0 16px rgba(255, 176, 82, 0.55));
+}
+@keyframes relic-charged-pulse {
+  0%, 100% { filter: brightness(1.06); }
+  50% { filter: brightness(1.24); }
+}
 /* 마우스 포커스 추적 중 transition을 짧게 줄여 빠른 마우스 움직임에 반응한다 */
 .relic-stack.is-focus-tracked .relic-mini-card {
   transition:
