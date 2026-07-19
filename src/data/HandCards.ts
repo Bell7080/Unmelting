@@ -609,7 +609,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     // 피해 = 랜덤 단일 적에게 1(+강화). 대상이 무작위라 확정 처치 계산엔 쓰지 않는다.
     damageProfile: { base: { atkMult: 0, flat: 1 }, triple: { atkMult: 0, flat: 3 }, deterministic: false },
     description: '필드 랜덤 적 1장 1피해',
-    tripleDescription: '필드 랜덤 적 3피해 분산',
+    tripleDescription: '필드 랜덤 적 1장 3피해 강타',
     targeting: {
       base: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: null },
