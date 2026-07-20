@@ -314,6 +314,7 @@ function filterKorean(filter: HandEffectTargeting['filter']): string {
     case 'spore': return '포자'
     case 'treasure': return '보물'
     case 'enemy-or-treasure': return '적/보물'
+    case 'trap-or-treasure': return '함정/보물'
     case 'turn-timer': return '턴 타이머 카드'
     case 'hazard': return '위험 카드'
     case 'flower': return '꽃'

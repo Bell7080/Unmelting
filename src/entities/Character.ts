@@ -27,7 +27,8 @@ export class Character {
   name: string
   health: number
   maxHealth: number
-  damage: number
+  /** 기본 공격력(영구 성장·소모의 실제 저장값). 외부는 get/set damage로 접근한다. */
+  baseDamage: number
   turn: number
 
   ember: number
@@ -52,6 +53,9 @@ export class Character {
   customRelicProfiles: Partial<Record<RelicId, CustomRelicProfile>>
   /** 변칙 유물용 누적 피해(10 잃을 때마다 발동). takeDamage가 더하고 외부가 소비한다. */
   relicDamageTaken: number = 0
+  /** 제물 축 HP손실 유물(주사기·피의 대가)용 누적 피해. takeDamage/takeDirectDamage가 더하고
+   *  applyAnomalyHealthLoss(모든 HP손실 지점에서 호출)가 소비한다 — 자해+받는 피해 모두 포함. */
+  pendingHpLoss: number = 0
   /** 권위: 치명타를 체력 1에서 막아냈음을 표시한다. 외부가 연출/파괴 후 false로 소비한다.
    *  (체력이 0으로 떨어졌다가 부활하는 대신, 처음부터 1에서 멈추게 한다.) */
   authoritySurvivePending: boolean = false
@@ -65,7 +69,7 @@ export class Character {
     this.name = name
     this.health = Character.STARTING_MAX_HEALTH
     this.maxHealth = Character.STARTING_MAX_HEALTH
-    this.damage = 1
+    this.baseDamage = 1
     this.turn = 0
 
     this.ember = Character.STARTING_EMBER
@@ -102,6 +106,7 @@ export class Character {
     }
     // 방패로 막지 못하고 실제 HP가 깎인 양만 변칙 유물 누적 피해로 적립한다.
     this.relicDamageTaken += actualDamage
+    this.pendingHpLoss += actualDamage
     return actualDamage
   }
 
@@ -120,6 +125,7 @@ export class Character {
       this.health = Math.max(0, this.health - actualDamage)
     }
     this.relicDamageTaken += actualDamage
+    this.pendingHpLoss += actualDamage
     return actualDamage
   }
 
@@ -157,9 +163,25 @@ export class Character {
     return actualIncrease
   }
 
+  /** 유효 공격력 = 기본 공격력 + 상태 조건부 보너스(말뚝 등). 읽기는 항상 이 값을 쓴다. */
+  get damage(): number {
+    return this.baseDamage + this.conditionalAttackBonus()
+  }
+  /** 외부 설정(테스트/디버그/공격 감쇠 유물)은 기본 공격력을 직접 바꾼다. */
+  set damage(value: number) {
+    this.baseDamage = value
+  }
+
+  /** 상태 조건부 공격 보너스. 말뚝(레전더리): 체력이 절반 이하일 때 +2. */
+  private conditionalAttackBonus(): number {
+    let bonus = 0
+    if (this.hasRelic('stake') && this.health * 2 <= this.maxHealth) bonus += 2
+    return bonus
+  }
+
   /** Permanently raise the player's attack stat. */
   applyDamageBoost(amount: number = 1): void {
-    this.damage += Math.max(0, amount)
+    this.baseDamage += Math.max(0, amount)
   }
 
   /** Permanently raise the ember ceiling (and top off the new headroom). */
@@ -196,7 +218,7 @@ export class Character {
 
   /** Debug command setter: keep attack in a safe positive integer range. */
   setDamageForDebug(value: number): void {
-    this.damage = Math.max(1, Math.floor(value))
+    this.baseDamage = Math.max(1, Math.floor(value))
   }
 
   /** Debug command setter: 체력 명령은 현재/최대 체력을 같은 값으로 맞춘다. */
@@ -219,8 +241,9 @@ export class Character {
   /** Spend attack as a shop currency without letting attack drop below 1. */
   spendAttack(amount: number): boolean {
     const cost = Math.max(0, amount)
-    if (this.damage - cost < 1) return false
-    this.damage -= cost
+    // 소모는 조건부 보너스가 아닌 기본 공격력을 기준으로 판정·차감한다.
+    if (this.baseDamage - cost < 1) return false
+    this.baseDamage -= cost
     return true
   }
 
@@ -326,7 +349,7 @@ export class Character {
   reset(): void {
     this.maxHealth = Character.STARTING_MAX_HEALTH
     this.health = this.maxHealth
-    this.damage = 1
+    this.baseDamage = 1
     this.turn = 0
     this.ember = Character.STARTING_EMBER
     this.emberMax = Character.EMBER_MAX
@@ -342,6 +365,7 @@ export class Character {
     this.customRelicProfiles = {}
     this.shield = 0
     this.relicDamageTaken = 0
+    this.pendingHpLoss = 0
     this.authoritySurvivePending = false
     this.trapDamageBonus = 0
     this.trapIgnoreChance = 0

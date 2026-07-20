@@ -93,6 +93,8 @@ export interface HandUseResult {
   teapotExtraHits?: { damage: number; totalCount: number }
   /** 모닥불: 처치가 일어났을 때 index.ts가 적용할 체력 회복량. */
   bonfireHealOnKill?: number
+  /** 바늘: 자해 딜로 처치가 일어났을 때 index.ts가 적용할 체력 회복량. */
+  needleHealOnKill?: number
   /** 검은 양초: 사용 시 악마 보스 피해 카운터를 증가시킬 양. 보스가 없을 때는 무시한다. */
   blackCandleCounterGain?: number
   /** 정원 가위: 실제로 수확된 꽃 목록. index.ts는 이 카드들을 removedFieldCards의
@@ -341,6 +343,12 @@ export class HandSystem {
             ? 5 + (gs.enhancements.tripleBonus['bonfire'] ?? 0)
             : 3 + (gs.enhancements.singleBonus['bonfire'] ?? 0))
         : undefined,
+      // 바늘: 자해 딜로 처치가 나면 단일 +3 / 트리플 +5 회복(index.ts가 removedFieldCards로 판정).
+      needleHealOnKill: card.defId === 'needle'
+        ? (card.merged
+            ? 5 + (gs.enhancements.tripleBonus['needle'] ?? 0)
+            : 3 + (gs.enhancements.singleBonus['needle'] ?? 0))
+        : undefined,
       // 검은 양초: 사용 시 악마 보스 카운터 증가량을 전달 (단일+2, 트리플+6).
       blackCandleCounterGain: card.defId === 'black-candle'
         ? (card.merged ? 6 : 2)
@@ -355,10 +363,16 @@ export class HandSystem {
     if (defId === 'greed-coin') return HandSystem.greedCoinSelfDamage()
     // 제물 양초: 단일 자해 2, 트리플 자해 5.
     if (defId === 'sacrifice-candle') return isMerged ? 5 : 2
-    // 의식 양초도 단일 자해 2, 트리플은 자해 없음.
-    if (defId === 'ritual-candle' && !isMerged) return 2
+    // 의식 양초: 단일 자해 2, 트리플 자해 1.
+    if (defId === 'ritual-candle') return isMerged ? 1 : 2
     // 희생 방패: 단일 자해 1, 트리플 자해 2.
     if (defId === 'sacrifice-shield') return isMerged ? 2 : 1
+    // 바늘: 단일 자해 1, 트리플 자해 2.
+    if (defId === 'needle') return isMerged ? 2 : 1
+    // 손해 부두 인형: 단일/트리플 모두 자해 2.
+    if (defId === 'voodoo-doll') return 2
+    // 단두대: 단일 자해 6, 트리플 자해 10(대량 자해 펌프).
+    if (defId === 'guillotine') return isMerged ? 10 : 6
     // 검은 양초: 단일 자해 2, 트리플 자해 4.
     if (defId === 'black-candle') return isMerged ? 4 : 2
     return 0
@@ -835,6 +849,15 @@ export class HandSystem {
         // 자해 2는 selfDamageFor, 카운터 +2는 HandUseResult.blackCandleCounterGain으로 처리.
         // 복귀(return-to-hand)는 use()에서 처리. 피해는 book-of-flames와 동일하게 누적.
         return HandSystem.applyBlackCandle(gs, target, 2, 2)
+      case 'needle':
+        // 자해 1은 selfDamageFor, 처치 회복은 needleHealOnKill로 처리. 무작위 단일 피해만 적용.
+        return HandSystem.damageRandomFieldEnemy(gs, Math.floor(0.5 * c.damage) + 1 + bonus)
+      case 'voodoo-doll':
+        // 자해 2는 selfDamageFor. 선택 1칸이 보물이면 수확, 함정이면 제거.
+        return HandSystem.applyVoodooDoll(gs, c, target)
+      case 'guillotine':
+        // 자해 6은 selfDamageFor. 필드 전체 적에게 (1.0공+3) 확정 피해.
+        return HandSystem.damageEnemies(gs, 'field', Math.floor(c.damage) + 3 + bonus)
     }
   }
 
@@ -994,19 +1017,34 @@ export class HandSystem {
       case 'garden-scissors':
         return HandSystem.applyGardenScissorsAll(gs)
       case 'ritual-candle': {
-        // 트리플은 자해 없이 손패 3장 드로우.
-        const count = 3 + bonus
+        // 트리플은 자해 1(selfDamageFor) 후 손패 2장 드로우.
+        const count = 2 + bonus
         let gained = 0
         for (let i = 0; i < count; i++) {
           if (!c.hasHandRoom()) break
           c.addHandCard(DropSystem.generateDrop())
           gained++
         }
-        return gained > 0 ? `트리플 랜덤 손패 +${gained}` : '트리플 손패 가득 참'
+        return gained > 0 ? `자해 1 · 랜덤 손패 +${gained}` : '자해 1 · 손패 가득 참'
       }
       case 'black-candle':
         // 트리플: 자해 4(selfDamageFor), 카운터 +6(HandUseResult), 복귀(use()). 피해 누적.
         return HandSystem.applyBlackCandle(gs, target, 6, 6)
+      case 'needle': {
+        // 자해 2는 selfDamageFor, 처치 회복은 needleHealOnKill. 무작위 대상에 3발 연속 타격.
+        const dmg = Math.floor(0.5 * c.damage) + 1 + bonus
+        for (let i = 0; i < 3; i++) HandSystem.damageRandomFieldEnemy(gs, dmg)
+        return `자해 2 · 바늘 3발 (0.5공+1)피해`
+      }
+      case 'voodoo-doll': {
+        // 자해 2는 selfDamageFor. 트리플은 필드 전체 보물 수확 + 함정 제거.
+        const harvested = HandSystem.collectAllTreasures(gs, c)
+        const cleared = HandSystem.clearAllOfTypes(gs, [CardType.TRAP])
+        return `자해 2 · ${harvested} · 함정 ${cleared}장 제거`
+      }
+      case 'guillotine':
+        // 자해 10은 selfDamageFor. 필드 전체 적에게 (3.0공+8) 확정 피해.
+        return HandSystem.damageEnemies(gs, 'field', Math.floor(3 * c.damage) + 8 + bonus)
     }
   }
 
@@ -1100,6 +1138,9 @@ export class HandSystem {
     if (rule.filter === 'enemy-or-treasure') {
       return target.card.type === CardType.ENEMY || target.card.type === CardType.BOSS || target.card.type === CardType.TREASURE
     }
+    // 손해 부두 인형: 보물(수확) 또는 함정(제거) 어느 쪽이든 선택 가능.
+    if (rule.filter === 'trap-or-treasure')
+      return target.card.type === CardType.TRAP || target.card.type === CardType.TREASURE
     if (rule.filter === 'turn-timer') return HandSystem.isTurnTimerCard(target.card)
     if (rule.filter === 'hazard')
       return target.card.type === CardType.TRAP || target.card.isFrozen()
@@ -1401,6 +1442,49 @@ export class HandSystem {
   }
 
   /** Open one random treasure chest and convert its width into item drops. */
+  /** 바늘: 필드의 살아있는 적/보스 중 무작위 1체에게 amount 피해. 처치 시 제거(회복은 needleHealOnKill). */
+  private static damageRandomFieldEnemy(gs: GameState, amount: number): string {
+    const living: { card: Card; distance: number }[] = []
+    const seen = new Set<Card>()
+    for (let lane = 0; lane < gs.lanes.length; lane++) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = gs.lanes[lane].getCardAtDistance(d)
+        if (!card || seen.has(card)) continue
+        if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) continue
+        seen.add(card)
+        living.push({ card, distance: d })
+      }
+    }
+    if (living.length === 0) return '대상 적 없음'
+    const pick = living[Math.floor(Math.random() * living.length)]
+    pick.card.takeDamage(amount)
+    // 보스는 별도 격파 시퀀스가 lanes 정리를 담당하므로 즉시 제거하지 않는다.
+    if (pick.card.getHealth() <= 0 && pick.card.type !== CardType.BOSS) {
+      gs.removeCardFromRow(pick.card, pick.distance)
+    }
+    return `랜덤 적에게 ${amount}피해`
+  }
+
+  /** 손해 부두 인형(단일): 선택 1칸의 보물을 수확하거나 함정을 제거한다(자해는 selfDamageFor). */
+  private static applyVoodooDoll(
+    gs: GameState,
+    character: Character,
+    target: HandTarget | undefined
+  ): string {
+    if (!target) return '자해 2 · 대상 없음'
+    if (target.card.type === CardType.TREASURE) {
+      const gained = HandSystem.awardTreasureDrops(character, target.card)
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) gs.removeCardFromRow(target.card, d)
+      HandSystem.runAutoMerges(character)
+      return `자해 2 · ${target.card.name} 수확: 손패 ${gained}장`
+    }
+    if (target.card.type === CardType.TRAP) {
+      gs.removeCardFromRow(target.card, target.distance)
+      return `자해 2 · ${target.card.name} 제거`
+    }
+    return '자해 2 · 대상 없음'
+  }
+
   private static collectRandomTreasure(gs: GameState, character: Character): string {
     const treasures = HandSystem.collectAllOfType(gs, CardType.TREASURE)
     if (treasures.length === 0) return '보물상자 없음'

@@ -331,6 +331,9 @@ export const SpriteUrls = {
     transfusion: BLACK_RELIC_ART,
     coagulation: BLACK_RELIC_ART,
     'blood-sigil': BLACK_RELIC_ART,
+    syringe: BLACK_RELIC_ART,
+    'blood-price': BLACK_RELIC_ART,
+    stake: BLACK_RELIC_ART,
     fuel: BLACK_RELIC_ART,
     'wax-recycle': BLACK_RELIC_ART,
     'hot-stone': BLACK_RELIC_ART,
@@ -390,6 +393,10 @@ export const SpriteUrls = {
     // 검집 — 전용 아트 전까지 검은 카드면(다른 손패 아트 차용 혼동 방지).
     scabbard: BLACK_RELIC_ART,
     'blade-tome': BLACK_RELIC_ART,
+    // 바늘·손해 부두 인형·단두대 — 전용 아트 전까지 검은 카드면.
+    needle: BLACK_RELIC_ART,
+    'voodoo-doll': BLACK_RELIC_ART,
+    guillotine: BLACK_RELIC_ART,
   } satisfies Record<HandCardId, string>,
   /** Shop card-pack illustrations. Index follows the pack pickers in the
    *  shop bottom row: basic (자원) / recipe (조합) / unlock (해금) / chance (확률). */

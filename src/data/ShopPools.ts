@@ -40,6 +40,7 @@ export const HAND_CARD_RARITY: Record<HandCardId, CardRarity> = {
   'candle-tome': 'epic', 'sword-and-shield': 'rare', 'watering-can': 'common', 'garden-scissors': 'rare',
   'ritual-candle': 'rare',
   'black-candle': 'legendary',
+  needle: 'common', 'voodoo-doll': 'rare', guillotine: 'epic',
   // 생성기 유물 전용 파편(상점/도감 풀 미노출).
   'blade-shard': 'common',
   scabbard: 'rare',

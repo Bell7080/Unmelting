@@ -26,10 +26,16 @@ export interface RunEnhancements {
   luxuryScoreSpent: number
   /** 사치품 유물: 현재까지 실제 획득한 공격력 누적치(최대 5). */
   luxuryBonusAtk: number
-  /** 악마 인형 유물: 누적 자해량 추적(20마다 불빛 +10%, 공격력 +1). */
+  /** 악마 인형 유물: 누적 자해량 추적(10마다 불빛 +10%, 공격력 +1). */
   demonDollSelfDamageAccum: number
   /** 악마 인형 유물: 현재까지 실제 획득한 공격력 누적치 (표기용). */
   demonDollBonusAtk: number
+  /** 주사기 유물: 누적 체력 손실 추적(자해+받는 피해, 5마다 바늘 손패 1장 지급). */
+  syringeHpLossAccum: number
+  /** 피의 대가 유물: 누적 체력 손실 추적(자해+받는 피해, 40마다 공격력 +1). */
+  bloodPriceHpLossAccum: number
+  /** 피의 대가 유물: 현재까지 실제 획득한 공격력 누적치 (표기용). */
+  bloodPriceBonusAtk: number
   /** 확률팩으로 1차 거름망에 추가된 개별 카드 가중치: 카드 id → 누적값. */
   tier1CardBoosts: Partial<Record<string, number>>
   /** 직업 선택으로 1차 거름망에 추가된 태그 그룹 가중치: 태그명 → 누적값. 당첨 시 태그 내 T2를 돌린다. */
@@ -71,5 +77,5 @@ export interface RunEnhancements {
 }
 
 export function makeDefaultEnhancements(): RunEnhancements {
-  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, blackCandleBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, tier1CardBoosts: {}, tier1JobPoolBoosts: {}, inkQuillKillCount: 0, honestyHandUseCount: 0, ambitionKillCount: 0, ambitionCurrentGain: 0, libraryCountdown: 4, bloodWritSelfDamageAccum: 0, coagulationSelfDamageAccum: 0, bloodSigilUseCount: 0, recycleWaxUseCount: 0, trumpShotShardCount: 0, bladeShardUseCount: 0, throwArtBonusAtk: 0, fuelKillCount: 0, sharpeningUseCount: 0, pyromaniacUseCount: 0, scarecrowNoKillCount: 0, oilBottleTurnUses: 0 }
+  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, blackCandleBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, syringeHpLossAccum: 0, bloodPriceHpLossAccum: 0, bloodPriceBonusAtk: 0, tier1CardBoosts: {}, tier1JobPoolBoosts: {}, inkQuillKillCount: 0, honestyHandUseCount: 0, ambitionKillCount: 0, ambitionCurrentGain: 0, libraryCountdown: 4, bloodWritSelfDamageAccum: 0, coagulationSelfDamageAccum: 0, bloodSigilUseCount: 0, recycleWaxUseCount: 0, trumpShotShardCount: 0, bladeShardUseCount: 0, throwArtBonusAtk: 0, fuelKillCount: 0, sharpeningUseCount: 0, pyromaniacUseCount: 0, scarecrowNoKillCount: 0, oilBottleTurnUses: 0 }
 }

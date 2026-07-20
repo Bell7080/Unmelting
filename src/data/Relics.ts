@@ -63,6 +63,9 @@ export type RelicId =
   | 'transfusion'
   | 'coagulation'
   | 'blood-sigil'
+  | 'syringe'
+  | 'blood-price'
+  | 'stake'
   // 불씨(flame)·양초(wax) 시너지 — 태그 반응형이라 미래 불씨/양초 손패도 자동 적용.
   | 'fuel'
   | 'wax-recycle'
@@ -485,7 +488,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'demon-doll',
     name: '악마 인형',
     rarity: 'legendary',
-    effect: '자해 20마다 불빛 +10% · 공격력 +1',
+    effect: '자해 10마다 불빛 +10% · 공격력 +1',
     flavor: '인형 안에는 뭔가 남아 있다 — 고통마다 조금씩 강해진다.',
     basePrice: 0,   // 상점 미등장 — 이벤트 보스 보상 전용
     weight: 0,
@@ -596,6 +599,36 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '제물 손패 5회 사용마다 최대 체력 +2 · 불빛 획득량 +5%',
     flavor: '제물을 바칠수록 진해지는 문양 — 태울 그릇도, 타오르는 빛도 함께 커진다.',
     basePrice: 1250,
+    synergyTags: ['sacrifice'],
+  },
+  // 씨앗(공급): 주사기(커먼) — 체력 5 잃을 때마다(자해+받는 피해) 바늘 손패를 흘려 넣어 제물 축을 굴린다.
+  syringe: {
+    id: 'syringe',
+    name: '주사기',
+    rarity: 'common',
+    effect: '체력 5 잃을 때마다 바늘 손패 1장 획득',
+    flavor: '한 방울씩 뽑아낼수록 손끝에 새 바늘이 쥐어진다.',
+    basePrice: 500,
+    synergyTags: ['sacrifice'],
+  },
+  // 복리 페이오프: 피의 대가(유니크) — 흘린 피가 쌓일수록 공격이 영구히 매서워진다(자해+받는 피해 스케일링 키스톤).
+  'blood-price': {
+    id: 'blood-price',
+    name: '피의 대가',
+    rarity: 'unique',
+    effect: '체력 40 잃을 때마다 공격력 +1',
+    flavor: '치른 대가는 사라지지 않고 칼끝에 새겨진다.',
+    basePrice: 1250,
+    synergyTags: ['sacrifice'],
+  },
+  // 벼랑끝 페이오프: 말뚝(레전더리) — 체력 절반 이하의 위기에서 공격력이 치솟는다(저체력 리스크/리워드).
+  stake: {
+    id: 'stake',
+    name: '말뚝',
+    rarity: 'legendary',
+    effect: '체력이 절반 이하일 때 공격력 +2',
+    flavor: '심장 가까이 박아 둔 말뚝 — 벼랑 끝에서만 그 무게가 힘이 된다.',
+    basePrice: 1500,
     synergyTags: ['sacrifice'],
   },
   // [불씨(flame) 시너지] 라이터(커먼 씨앗, id는 'fuel' 유지): 불씨 손패로 처치를 쌓아 빛 게이지를
@@ -816,7 +849,9 @@ export const RELIC_STACK_FEEDBACK: Partial<Record<RelicId, RelicStackFeedback>> 
   'throw-art':    { charge: { counter: 'bladeShardUseCount', threshold: 20 } },
   'blood-sigil':  { charge: { counter: 'bloodSigilUseCount', threshold: 5 } },
   'blood-writ':   { charge: { counter: 'bloodWritSelfDamageAccum', threshold: 5 } },
-  'demon-doll':   { charge: { counter: 'demonDollSelfDamageAccum', threshold: 20 } },
+  'demon-doll':   { charge: { counter: 'demonDollSelfDamageAccum', threshold: 10 } },
+  'syringe':      { charge: { counter: 'syringeHpLossAccum', threshold: 5 } },
+  'blood-price':  { charge: { counter: 'bloodPriceHpLossAccum', threshold: 40 } },
   'ambition':     { charge: { counter: 'ambitionKillCount', threshold: 8 } },
   'honesty':      { charge: { counter: 'honestyHandUseCount', threshold: 5 } },
   'ink-quill':    { charge: { counter: 'inkQuillKillCount', threshold: 5 } },

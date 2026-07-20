@@ -208,7 +208,7 @@ export class CardFaceRenderer {
       const atkLabel = enh.luxuryBonusAtk >= 3 ? `공격력 +${enh.luxuryBonusAtk} (MAX)` : `공격력 +${enh.luxuryBonusAtk}`
       bonusChip = `<p class="shop-relic-bonus-chip">불빛 소모치 <strong>${enh.luxuryScoreSpent}</strong></p><p class="shop-relic-bonus-chip">${atkLabel}</p>`
     } else if (id === 'demon-doll' && enh) {
-      bonusChip = `<p class="shop-relic-bonus-chip">자해 <strong>${enh.demonDollSelfDamageAccum}</strong>/20 · 공격력 +<strong>${enh.demonDollBonusAtk}</strong></p>`
+      bonusChip = `<p class="shop-relic-bonus-chip">자해 <strong>${enh.demonDollSelfDamageAccum}</strong>/10 · 공격력 +<strong>${enh.demonDollBonusAtk}</strong></p>`
     } else if (id === 'anomaly' && char) {
       // 변칙: 5 손실마다 발동, 현재 누적치 표시
       bonusChip = `<p class="shop-relic-bonus-chip">손실 누적 <strong>${char.relicDamageTaken}</strong>/5</p>`
@@ -221,6 +221,10 @@ export class CardFaceRenderer {
       bonusChip = `<p class="shop-relic-bonus-chip">처치 <strong>${enh.ambitionKillCount}</strong>/8 · 다음 <strong>+${nextGain}</strong>✦</p>`
     } else if (id === 'blood-writ' && enh) {
       bonusChip = `<p class="shop-relic-bonus-chip">자해 <strong>${enh.bloodWritSelfDamageAccum}</strong>/5</p>`
+    } else if (id === 'syringe' && enh) {
+      bonusChip = `<p class="shop-relic-bonus-chip">체력 손실 <strong>${enh.syringeHpLossAccum}</strong>/5</p>`
+    } else if (id === 'blood-price' && enh) {
+      bonusChip = `<p class="shop-relic-bonus-chip">체력 손실 <strong>${enh.bloodPriceHpLossAccum}</strong>/40 · 공격력 +<strong>${enh.bloodPriceBonusAtk}</strong></p>`
     } else if (id === 'coagulation' && enh) {
       bonusChip = `<p class="shop-relic-bonus-chip">자해 <strong>${enh.coagulationSelfDamageAccum}</strong>/2</p>`
     } else if (id === 'blood-sigil' && enh) {

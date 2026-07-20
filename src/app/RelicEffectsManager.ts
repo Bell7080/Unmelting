@@ -267,6 +267,14 @@ export class RelicEffectsManager {
   applyAnomalyHealthLoss(): void {
     const { gameState, boardRenderer, recordRelicActivation } = this.deps
     const character = gameState.character
+    // 모든 HP손실 지점에서 호출되는 공통 훅 — 제물 축 HP손실 유물(주사기·피의 대가)을 먼저 소비한다.
+    // 자해뿐 아니라 적/함정 등 받는 피해까지 pendingHpLoss로 들어오므로 여기서 한 번에 처리한다.
+    const hpLoss = character.pendingHpLoss
+    character.pendingHpLoss = 0
+    if (hpLoss > 0) {
+      this.applySyringeHpLoss(hpLoss)
+      this.applyBloodPriceHpLoss(hpLoss)
+    }
     if (!character.hasRelic('anomaly')) { character.relicDamageTaken = 0; return }
     while (character.relicDamageTaken >= 5) {
       character.relicDamageTaken -= 5
@@ -520,7 +528,8 @@ export class RelicEffectsManager {
     if (!character.hasRelic('great-negotiation') || Math.random() >= 0.025) return
     // 파괴 연출(강도 1: 정말 간단한 소각)을 유물이 부채에 남아 있는 동안 먼저 재생한다.
     await boardRenderer.animateRelicDestroy('great-negotiation', 1)
-    character.damage = Math.max(1, character.damage - 2)
+    // 기본 공격력에서 직접 되돌린다(말뚝 등 조건부 보너스가 계산에 섞이지 않도록).
+    character.baseDamage = Math.max(1, character.baseDamage - 2)
     character.removeRelic('great-negotiation', true)
     recordRelicActivation('great-negotiation', '파괴! 공격력 -2 환원')
     render()
@@ -753,21 +762,51 @@ export class RelicEffectsManager {
     return false
   }
 
-  /** 악마 인형 유물: 자해 20마다 불빛 획득량 +10% · 공격력 +1. */
+  /** 악마 인형 유물: 자해 10마다 불빛 획득량 +10% · 공격력 +1. */
   applyDemonDollSelfDamage(amount: number): void {
     const { gameState, recordRelicActivation } = this.deps
     if (!gameState.character.hasRelic('demon-doll') || amount <= 0) return
     const enhancements = gameState.enhancements
     enhancements.demonDollSelfDamageAccum += amount
-    const gained = Math.floor(enhancements.demonDollSelfDamageAccum / 20)
+    const gained = Math.floor(enhancements.demonDollSelfDamageAccum / 10)
     if (gained <= 0) return
-    enhancements.demonDollSelfDamageAccum %= 20
+    enhancements.demonDollSelfDamageAccum %= 10
     enhancements.demonDollBonusAtk += gained
     for (let i = 0; i < gained; i++) {
       enhancements.scoreMultiplier *= 1.10
       gameState.character.applyDamageBoost(1)
     }
-    recordRelicActivation('demon-doll', `자해 20 누적 → 불빛 +10%, 공격력 +${gained} (누적 +${enhancements.demonDollBonusAtk})`)
+    recordRelicActivation('demon-doll', `자해 10 누적 → 불빛 +10%, 공격력 +${gained} (누적 +${enhancements.demonDollBonusAtk})`)
+  }
+
+  /** 주사기: 체력 5 잃을 때마다 바늘(needle) 손패 1장 지급. 자해+받는 피해 모두 누적한다. */
+  applySyringeHpLoss(amount: number): void {
+    const { gameState, recordRelicActivation, render } = this.deps
+    const character = gameState.character
+    if (!character.hasRelic('syringe') || amount <= 0) return
+    const enhancements = gameState.enhancements
+    enhancements.syringeHpLossAccum += amount
+    while (enhancements.syringeHpLossAccum >= 5) {
+      enhancements.syringeHpLossAccum -= 5
+      // enqueueDrop = 획득 공통 정리(손패 가득이면 중단). 3장째면 자동 트리플.
+      if (!HandSystem.enqueueDrop(character, DropSystem.makeCard('needle'))) break
+      recordRelicActivation('syringe', '바늘 획득')
+      render()
+    }
+  }
+
+  /** 피의 대가: 체력 40 잃을 때마다 공격력 영구 +1. 자해+받는 피해 모두 누적하는 스케일링 키스톤. */
+  applyBloodPriceHpLoss(amount: number): void {
+    const { gameState, recordRelicActivation } = this.deps
+    if (!gameState.character.hasRelic('blood-price') || amount <= 0) return
+    const enhancements = gameState.enhancements
+    enhancements.bloodPriceHpLossAccum += amount
+    const gained = Math.floor(enhancements.bloodPriceHpLossAccum / 40)
+    if (gained <= 0) return
+    enhancements.bloodPriceHpLossAccum %= 40
+    enhancements.bloodPriceBonusAtk += gained
+    for (let i = 0; i < gained; i++) gameState.character.applyDamageBoost(1)
+    recordRelicActivation('blood-price', `체력 40 손실 → 공격력 +${gained} (누적 +${enhancements.bloodPriceBonusAtk})`)
   }
 
   /** 혈서: 자해 5 누적마다 제물(sacrifice) 태그 손패 1장(비보스 풀 dropWeight 가중)을 손에 흘려 넣는다. */

@@ -55,6 +55,11 @@ export type HandCardId =
   | 'garden-scissors'
   | 'ritual-candle'
   | 'black-candle'
+  // 제물(sacrifice) 축 손패 — 바늘: 자해 딜+처치 회복 씨앗 / 부두 인형: 자해로 보물·함정 조작
+  //                         / 단두대: 대량 자해 필드 전체 피해 펌프.
+  | 'needle'
+  | 'voodoo-doll'
+  | 'guillotine'
   // 유물 생성 전용 파편 카드(시너지 씨앗). 일반 풀에는 없고 생성기 유물이 지급한다.
   | 'blade-shard'
   // 검집: 칼날 파편을 손에 생성하는 손패(단검 투척 빌드의 손패 생성원).
@@ -72,6 +77,7 @@ export type HandEffectFilter =
   | 'spore'
   | 'treasure'
   | 'enemy-or-treasure'
+  | 'trap-or-treasure'
   | 'turn-timer'
   | 'hazard'
   | 'any'

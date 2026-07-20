@@ -194,7 +194,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
   'greed-coin': {
     id: 'greed-coin',
     name: '탐욕의 동전',
-    synergyTags: ['coin', 'sacrifice'],
+    // 태그 없음 — 제물 축 빌드 조각이 아니라, 보스가 뿌리는 순수 리스크 찌꺼기 카드다.
     category: 'tool',
     description: '소량의 불빛 · 자해 2~5',
     tripleDescription: '소량의 불빛 · 자해 2~5',
@@ -573,7 +573,7 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     synergyTags: ['wax', 'sacrifice', 'draw'],
     category: 'tool',
     description: '자해 2 · 랜덤 손패 +1',
-    tripleDescription: '랜덤 손패 +3',
+    tripleDescription: '자해 1 · 랜덤 손패 +2',
     targeting: { base: selfOne, triple: selfOne },
     dropWeight: 7,
     dropSource: 'any',
@@ -598,6 +598,62 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     dropSource: 'boss',
     metaRequired: false,
     runLocked: false,
+  },
+  // 바늘: 제물 축 씨앗 손패. 자해 1로 필드 랜덤 적을 찌르고, 그 피해로 처치 시 체력을 회복(모닥불 참고).
+  needle: {
+    id: 'needle',
+    name: '바늘',
+    category: 'attack',
+    synergyTags: ['sacrifice'],
+    // 피해 근사 — 무작위 대상이라 확정 처치 계산엔 쓰지 않는다(deterministic:false). 트리플은 3발 근사.
+    damageProfile: { base: { atkMult: 0.5, flat: 1 }, triple: { atkMult: 1.5, flat: 3 }, deterministic: false },
+    description: '자해 1 · 필드 랜덤 적 1장 (0.5공+1)피해 · 처치 시 체력 +3',
+    tripleDescription: '자해 2 · 필드 랜덤 적 3장 (0.5공+1)피해 · 처치 시 체력 +5',
+    targeting: {
+      base: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: 1 },
+      triple: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: 3 },
+    },
+    dropWeight: 9,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: false,
+  },
+  // 손해 부두 인형: 제물 축 보물/함정 조작 손패. 자해 2로 선택 1칸의 보물을 수확하거나 함정을 제거한다.
+  'voodoo-doll': {
+    id: 'voodoo-doll',
+    name: '손해 부두 인형',
+    synergyTags: ['sacrifice'],
+    category: 'tool',
+    description: '자해 2 · 필드 선택 1칸 보물 수확/함정 제거',
+    tripleDescription: '자해 2 · 필드 전체 보물 수확 · 함정 제거',
+    targeting: {
+      base: { selection: 'target', zone: 'field', filter: 'trap-or-treasure', countLimit: 1 },
+      triple: { selection: 'all', zone: 'field', filter: 'trap-or-treasure', countLimit: null },
+    },
+    dropWeight: 5,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: true, // 해금팩으로만 입수
+  },
+  // 단두대: 제물 축 대량 자해 펌프. 큰 자해로 축 카운터(피의 대가·주사기·응고·수혈)를 급속 충전하며
+  //         필드 전체를 쓸어버린다(Offering/Combust 역할). 자해가 커서 지원·방패 없이는 위험하다.
+  guillotine: {
+    id: 'guillotine',
+    name: '단두대',
+    category: 'attack',
+    synergyTags: ['sacrifice'],
+    // 피해 근사 — 단일 floor(1공)+3, 트리플 floor(3공)+8. 필드 전체 확정 피해.
+    damageProfile: { base: { atkMult: 1, flat: 3 }, triple: { atkMult: 3, flat: 8 }, deterministic: true },
+    description: '자해 6 · 필드 전체 적 (1.0공+3)피해',
+    tripleDescription: '자해 10 · 필드 전체 적 (3.0공+8)피해',
+    targeting: {
+      base: { selection: 'all', zone: 'field', filter: 'enemy', countLimit: null },
+      triple: { selection: 'all', zone: 'field', filter: 'enemy', countLimit: null },
+    },
+    dropWeight: 4,
+    dropSource: 'any',
+    metaRequired: false,
+    runLocked: true, // 해금팩으로만 입수
   },
   // 칼날 파편: 생성기 유물(숫돌)이 처치마다 지급하는 시너지 씨앗. 혼자선 미미하지만
   // 칼날 태그를 쌓아 칼날 빌드를 시작하게 한다. 일반 드롭/드로우 풀에는 절대 없다.

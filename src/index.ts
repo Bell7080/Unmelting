@@ -2249,7 +2249,8 @@ async function applyHandSingle(
     await boardRenderer.animatePlayerDamageImpact(result.selfDamage)
     relicEffects.applyAnomalyHealthLoss()
     relicEffects.applyDemonDollSelfDamage(result.selfDamage)
-    // 제물 패밀리: 자해를 카드(혈서)·방패(응고)·적 분산 피해(수혈)로 환급한다.
+    // 제물 패밀리(자해 전용): 카드(혈서)·방패(응고)·적 분산 피해(수혈)로 환급한다.
+    // 주사기·피의 대가는 자해+받는 피해를 모두 세므로 위 applyAnomalyHealthLoss에서 함께 처리된다.
     relicEffects.applyBloodWritSelfDamage(result.selfDamage)
     relicEffects.applyCoagulationSelfDamage(result.selfDamage)
     await relicEffects.applyTransfusionSelfDamage(result.selfDamage)
@@ -2344,6 +2345,15 @@ async function applyHandSingle(
       const beforeBonfireResources = snapshotPlayerResources()
       gameState.character.heal(result.bonfireHealOnKill)
       await playPlayerGainTrails({ kind: 'center' }, beforeBonfireResources)
+    }
+  }
+  // 바늘: 자해 딜로 적을 처치했을 때 체력을 회복한다(모닥불과 동일 경로).
+  if (result.needleHealOnKill && result.needleHealOnKill > 0) {
+    const enemiesKilled = result.removedFieldCards.filter((r) => r.type === CardType.ENEMY).length
+    if (enemiesKilled > 0) {
+      const beforeNeedleResources = snapshotPlayerResources()
+      gameState.character.heal(result.needleHealOnKill)
+      await playPlayerGainTrails({ kind: 'center' }, beforeNeedleResources)
     }
   }
 
