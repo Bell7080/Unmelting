@@ -369,7 +369,7 @@ export class HandSystem {
     if (defId === 'sacrifice-shield') return isMerged ? 2 : 1
     // 바늘: 단일 자해 1, 트리플 자해 2.
     if (defId === 'needle') return isMerged ? 2 : 1
-    // 손해 부두 인형: 단일/트리플 모두 자해 2.
+    // 부두 인형: 단일/트리플 모두 자해 2.
     if (defId === 'voodoo-doll') return 2
     // 단두대: 단일 자해 6, 트리플 자해 10(대량 자해 펌프).
     if (defId === 'guillotine') return isMerged ? 10 : 6
@@ -1138,7 +1138,7 @@ export class HandSystem {
     if (rule.filter === 'enemy-or-treasure') {
       return target.card.type === CardType.ENEMY || target.card.type === CardType.BOSS || target.card.type === CardType.TREASURE
     }
-    // 손해 부두 인형: 보물(수확) 또는 함정(제거) 어느 쪽이든 선택 가능.
+    // 부두 인형: 보물(수확) 또는 함정(제거) 어느 쪽이든 선택 가능.
     if (rule.filter === 'trap-or-treasure')
       return target.card.type === CardType.TRAP || target.card.type === CardType.TREASURE
     if (rule.filter === 'turn-timer') return HandSystem.isTurnTimerCard(target.card)
@@ -1465,7 +1465,7 @@ export class HandSystem {
     return `랜덤 적에게 ${amount}피해`
   }
 
-  /** 손해 부두 인형(단일): 선택 1칸의 보물을 수확하거나 함정을 제거한다(자해는 selfDamageFor). */
+  /** 부두 인형(단일): 선택 1칸의 보물을 수확하거나 함정을 제거한다(자해는 selfDamageFor). */
   private static applyVoodooDoll(
     gs: GameState,
     character: Character,

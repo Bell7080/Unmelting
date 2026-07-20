@@ -393,7 +393,7 @@ export const SpriteUrls = {
     // 검집 — 전용 아트 전까지 검은 카드면(다른 손패 아트 차용 혼동 방지).
     scabbard: BLACK_RELIC_ART,
     'blade-tome': BLACK_RELIC_ART,
-    // 바늘·손해 부두 인형·단두대 — 전용 아트 전까지 검은 카드면.
+    // 바늘·부두 인형·단두대 — 전용 아트 전까지 검은 카드면.
     needle: BLACK_RELIC_ART,
     'voodoo-doll': BLACK_RELIC_ART,
     guillotine: BLACK_RELIC_ART,

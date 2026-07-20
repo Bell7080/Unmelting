@@ -618,10 +618,10 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: false,
   },
-  // 손해 부두 인형: 제물 축 보물/함정 조작 손패. 자해 2로 선택 1칸의 보물을 수확하거나 함정을 제거한다.
+  // 부두 인형: 제물 축 보물/함정 조작 손패. 자해 2로 선택 1칸의 보물을 수확하거나 함정을 제거한다.
   'voodoo-doll': {
     id: 'voodoo-doll',
-    name: '손해 부두 인형',
+    name: '부두 인형',
     synergyTags: ['sacrifice'],
     category: 'tool',
     description: '자해 2 · 필드 선택 1칸 보물 수확/함정 제거',
