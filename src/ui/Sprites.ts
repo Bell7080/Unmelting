@@ -318,8 +318,9 @@ export const SpriteUrls = {
     'wax-harmony': relic036Url,
     'trap-master': relic037Url,
     'demon-doll': relic038Url,
-    // 만찬은 별도 아트가 들어오기 전까지 음식/인형 톤이 가까운 038 유물 아트를 임시 사용한다.
-    'last-supper': relic038Url,
+    // 만찬 폴백 — 실제 카드는 CustomRelicProfile.art(고른 음식 스프라이트)를 쓰므로 이 값은
+    // 커스텀 프로필이 없을 때만 노출되는 폴백이다. 전용 아트 전까지 검은 카드면으로 통일한다.
+    'last-supper': BLACK_RELIC_ART,
     // 전용 아트 미연동 유물 — 다른 유물 아트를 빌리면 헷갈리므로 검은 카드면으로 통일한다.
     whetstone: BLACK_RELIC_ART,
     hammer: BLACK_RELIC_ART,
