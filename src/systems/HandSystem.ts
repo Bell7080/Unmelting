@@ -731,14 +731,6 @@ export class HandSystem {
         for (let i = 0; i < throws; i++) HandSystem.throwBladeShardHit(gs, dmg)
         return `칼날 파편 ${throws}발 투척`
       }
-      case 'trap-collect': {
-        // 전방 선택 함정 1장을 제거하고 그 조각으로 칼날 파편 1장을 얻는다.
-        if (!target || target.card.type !== CardType.TRAP) return '함정 대상 없음'
-        gs.removeCardFromRow(target.card, target.distance)
-        if (!c.hasHandRoom()) return '함정 제거 · 손패 가득'
-        c.addHandCard(DropSystem.makeCard('blade-shard'))
-        return '함정 제거 · 칼날 파편 +1'
-      }
       case 'scabbard': {
         // 칼날 파편 1~2장(+강화)을 손에 생성한다. 손패가 가득 차면 거기까지만.
         const count = 1 + Math.floor(Math.random() * 2) + bonus
@@ -898,19 +890,6 @@ export class HandSystem {
         const dmg = 1 + (gs.enhancements.tripleBonus['blade-shard'] ?? 0)
         for (let i = 0; i < throws; i++) HandSystem.throwBladeShardHit(gs, dmg)
         return `칼날 파편 ${throws}발 투척`
-      }
-      case 'trap-collect': {
-        // 트리플: 전방 모든 함정 제거, 제거 수만큼 칼날 파편 획득.
-        let removed = 0
-        for (let lane = 0; lane < gs.lanes.length; lane++) {
-          const card = gs.lanes[lane].getCardAtDistance(0)
-          if (card && card.type === CardType.TRAP) {
-            gs.removeCardFromRow(card, 0)
-            removed++
-            if (c.hasHandRoom()) c.addHandCard(DropSystem.makeCard('blade-shard'))
-          }
-        }
-        return removed > 0 ? `함정 ${removed} 제거 · 칼날 파편 +${removed}` : '전방 함정 없음'
       }
       case 'scabbard': {
         // 트리플: 칼날 파편 4장(+강화)을 손에 생성한다.

@@ -44,7 +44,6 @@ export const HAND_CARD_RARITY: Record<HandCardId, CardRarity> = {
   'blade-shard': 'common',
   scabbard: 'rare',
   'blade-tome': 'epic',
-  'trap-collect': 'common',
 }
 
 /** Shop pack pool config moved to data so shop/free/pack roll tables are data-driven. */

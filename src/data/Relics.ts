@@ -77,6 +77,7 @@ export type RelicId =
   | 'ricochet'
   | 'throw-art'
   | 'blade-storm'
+  | 'trap-collect'
 
 
 /** Runtime-customized relic face/effect. Hearth dinner uses this so one real relic id can
@@ -706,6 +707,16 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '칼날 파편이 필드 전체 적을 대상으로 바뀜',
     flavor: '한 자루가 백 자루가 되어 사방을 채운다.',
     basePrice: 1600,
+    synergyTags: ['blade'],
+  },
+  // 함정 수집(커먼): 함정을 처리(제거)할 때마다 그 조각으로 칼날 파편을 얻는다(칼날 씨앗 겸 청소 보상).
+  'trap-collect': {
+    id: 'trap-collect',
+    name: '함정 수집',
+    rarity: 'common',
+    effect: '함정 처리 시 칼날 파편 1장 획득',
+    flavor: '부서진 덫의 날붙이도 훌륭한 무기가 된다.',
+    basePrice: 520,
     synergyTags: ['blade'],
   },
 }

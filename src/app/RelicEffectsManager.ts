@@ -866,6 +866,17 @@ export class RelicEffectsManager {
     }
   }
 
+  /** 함정 수집: 함정 카드가 처리(제거)될 때마다 그 조각으로 칼날 파편 1장을 손에 얻는다.
+   *  GameState.onCardRemoved 훅이 모든 함정 제거 경로에서 호출한다. */
+  applyTrapCollect(): void {
+    const { gameState, recordRelicActivation, render } = this.deps
+    const character = gameState.character
+    if (!character.hasRelic('trap-collect')) return
+    if (!HandSystem.enqueueDrop(character, DropSystem.makeCard('blade-shard'))) return // 손패 가득
+    recordRelicActivation('trap-collect', '칼날 파편 +1')
+    render()
+  }
+
   /** 밀랍 조각: 굳은(frozen) 카드를 처리(처치/클리어)할 때 불빛과 방패 +2를 회수한다.
    *  GameState.onCardRemoved 훅이 모든 처치 경로에서 호출하므로 굳히는 손패가 늘어도 자동 반영. */
   async applyWaxFragmentOnFrozenClear(): Promise<void> {

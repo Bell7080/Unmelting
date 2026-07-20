@@ -342,6 +342,7 @@ export const SpriteUrls = {
     ricochet: BLACK_RELIC_ART,
     'throw-art': BLACK_RELIC_ART,
     'blade-storm': BLACK_RELIC_ART,
+    'trap-collect': BLACK_RELIC_ART,
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,
@@ -382,7 +383,6 @@ export const SpriteUrls = {
     // 검집 — 전용 아트 전까지 검은 카드면(다른 손패 아트 차용 혼동 방지).
     scabbard: BLACK_RELIC_ART,
     'blade-tome': BLACK_RELIC_ART,
-    'trap-collect': BLACK_RELIC_ART,
   } satisfies Record<HandCardId, string>,
   /** Shop card-pack illustrations. Index follows the pack pickers in the
    *  shop bottom row: basic (자원) / recipe (조합) / unlock (해금) / chance (확률). */
