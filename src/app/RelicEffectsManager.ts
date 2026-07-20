@@ -970,6 +970,36 @@ export class RelicEffectsManager {
     }
   }
 
+  /** 폭탄: 불씨 손패로 처치한 각 칸의 상하좌우 인접 칸에 그 손패 피해의 0.5배를 터뜨린다.
+   *  removed는 index가 removedFieldCards(레인·거리 포함)에서 넘긴 처치 위치들. */
+  async applyBombOnFlameKills(usedDef: HandCardDefinition, removed: { type: CardType; laneIndex?: number; distance?: number }[]): Promise<void> {
+    const { gameState, boardRenderer, recordRelicActivation } = this.deps
+    if (!gameState.character.hasRelic('bomb')) return
+    const p = usedDef.damageProfile?.base
+    if (!p) return // 피해 없는 불씨 도구(성냥 등)는 폭탄 대상 아님
+    const bombDmg = Math.floor(0.5 * (Math.floor(p.atkMult * gameState.character.damage) + p.flat))
+    if (bombDmg <= 0) return
+    const spots = removed.filter((r) => r.type === CardType.ENEMY && r.laneIndex !== undefined && r.distance !== undefined)
+    const hitIds: string[] = []
+    const killedIds: string[] = []
+    for (const s of spots) {
+      // 상하좌우 인접 칸(거리 ±1 = 상/하, 레인 ±1 = 좌/우).
+      for (const [dl, dd] of [[0, 1], [0, -1], [-1, 0], [1, 0]] as const) {
+        const hit = gameState.damageEnemyAtCell(s.laneIndex! + dl, s.distance! + dd, bombDmg)
+        if (hit) { hitIds.push(hit.cardId); if (hit.defeated) killedIds.push(hit.cardId) }
+      }
+    }
+    if (hitIds.length === 0) return
+    recordRelicActivation('bomb', `인접 폭발 ${bombDmg}피해`)
+    await boardRenderer.animateDamageNumbersById(hitIds.map((cardId) => ({ cardId, amount: bombDmg })))
+    if (killedIds.length > 0) {
+      await boardRenderer.animateCardConsumeByIds(killedIds.map((cardId) => ({ cardId, type: CardType.ENEMY })), {
+        suppressBurstIds: new Set(killedIds),
+      })
+      await this.onEnemiesDefeated(killedIds.length)
+    }
+  }
+
   /** 불타는 허수아비: 불씨 손패를 쓰고도 처치를 못 낸 게 3번 쌓이면 불씨 손패를 보급한다(보스전 지속). */
   applyScarecrowFlameUse(usedDef: HandCardDefinition, kills: number): void {
     const { gameState } = this.deps

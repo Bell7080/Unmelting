@@ -44,8 +44,10 @@ export interface FiredRecipe {
 export interface RemovedFieldCard {
   cardId: string
   type: CardType
-  /** 확산 유물용: 제거 직전 카드가 있던 레인(첫 슬롯 기준). 단일 손패 사용 경로에서만 채워진다. */
+  /** 확산/폭탄 유물용: 제거 직전 카드가 있던 레인(첫 슬롯 기준). 단일 손패 사용 경로에서만 채워진다. */
   laneIndex?: number
+  /** 폭탄 유물용: 제거 직전 카드가 있던 거리(행). 단일 손패 사용 경로에서만 채워진다. */
+  distance?: number
 }
 
 /** 정원 가위로 실제 수확된 꽃 1장 — 체력/방패/게이지는 이미 캐릭터에 반영된 뒤의
@@ -202,12 +204,12 @@ export class HandSystem {
 
   /** 제거 diff에 레인 정보를 함께 담는 상세 스냅샷(확산 유물이 처치 레인을 알아야 한다).
    *  카드가 여러 레인에 걸치면 처음 만난 레인을 기록한다. */
-  private static snapshotFieldCardsDetailed(gs: GameState): Map<string, { type: CardType; laneIndex: number }> {
-    const m = new Map<string, { type: CardType; laneIndex: number }>()
+  private static snapshotFieldCardsDetailed(gs: GameState): Map<string, { type: CardType; laneIndex: number; distance: number }> {
+    const m = new Map<string, { type: CardType; laneIndex: number; distance: number }>()
     for (let li = 0; li < gs.lanes.length; li++) {
       for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
         const c = gs.lanes[li].getCardAtDistance(d)
-        if (c && !m.has(c.id)) m.set(c.id, { type: c.type, laneIndex: li })
+        if (c && !m.has(c.id)) m.set(c.id, { type: c.type, laneIndex: li, distance: d })
       }
     }
     return m
@@ -293,7 +295,7 @@ export class HandSystem {
     const afterField = HandSystem.snapshotFieldCards(gs)
     const removedFieldCards: RemovedFieldCard[] = []
     for (const [id, info] of beforeField.entries()) {
-      if (!afterField.has(id)) removedFieldCards.push({ cardId: id, type: info.type, laneIndex: info.laneIndex })
+      if (!afterField.has(id)) removedFieldCards.push({ cardId: id, type: info.type, laneIndex: info.laneIndex, distance: info.distance })
     }
 
     return {

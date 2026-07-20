@@ -2322,6 +2322,10 @@ async function applyHandSingle(
         .map((r) => r.laneIndex as number)
       if (killedLanes.length > 0) await relicEffects.applySpreadOnFlameKills(killedLanes)
     }
+    // 폭탄: 불씨 손패로 처치한 각 칸의 상하좌우에 그 손패 피해의 0.5배를 터뜨린다.
+    if (usedDef?.synergyTags?.includes('flame') && gameState.character.hasRelic('bomb')) {
+      await relicEffects.applyBombOnFlameKills(usedDef, result.removedFieldCards)
+    }
     await relicEffects.applyWaxCrowTreasureGains(
       result.removedFieldCards.filter((removed) => removed.type === CardType.TREASURE).length
     )

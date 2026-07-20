@@ -266,6 +266,18 @@ export class GameState {
     return cleared
   }
 
+  /** 폭탄 유물용: 지정 칸(레인·거리)의 적/보스에게 피해를 준다. 처치 시 제거하고 hit 정보를 반환. */
+  damageEnemyAtCell(laneIndex: number, distance: number, amount: number): { cardId: string; defeated: boolean } | null {
+    const lane = this.lanes[laneIndex]
+    if (!lane || distance < 0 || distance >= LANE_DISTANCE_COUNT) return null
+    const card = lane.getCardAtDistance(distance)
+    if (!card || (card.type !== CardType.ENEMY && card.type !== CardType.BOSS)) return null
+    card.takeDamage(amount)
+    const defeated = card.getHealth() <= 0
+    if (defeated && card.type !== CardType.BOSS) this.removeCardFromRow(card, distance)
+    return { cardId: card.id, defeated }
+  }
+
   /** 확산 유물용: 지정 레인에서 앞쪽부터 첫 함정 카드 1장을 찾아 제거하고 반환한다(없으면 null). */
   removeFirstTrapInLane(laneIndex: number): Card | null {
     const lane = this.lanes[laneIndex]
