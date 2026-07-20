@@ -381,7 +381,7 @@ export const SpriteUrls = {
     teacup: handCard024Url,
     'top-hat': handCard025Url,
     slash: handCard026Url,
-    'blade-shard': handCard026Url, // 전용 아트 전까지 참격(칼날) 아트 임시 재사용
+    'blade-shard': BLACK_RELIC_ART, // 전용 아트 전까지 검은 카드면(참격 아트 차용 혼동 방지)
     shackles: handCard027Url,
     // 신규 손패 — 전용 아트 연동 완료.
     'candle-tome': handCard028Url,
