@@ -1,7 +1,7 @@
 /**
  * 구역 전환 커튼 — 층이 바뀔 때(1F 시작, 30F/60F/90F 보스 시련 종료 후)
  * 상단에서 슬라이드 인/아웃하며 구역 이름을 짧게 노출한다.
- * 불씨 게이지 HUD(z-index 35) 위인 z-index 50에 배치한다.
+ * 빛 게이지 HUD(z-index 35) 위인 z-index 50에 배치한다.
  */
 
 import { SpriteUrls } from './Sprites'

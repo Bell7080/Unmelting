@@ -242,7 +242,7 @@ function analyzeShopKnowledge(): EnaShopKnowledge {
     coin: '1$',
     heal: '체력 +5',
     combo: '콤보 게이지 +3',
-    ember: '불씨 게이지 +3',
+    ember: '빛 게이지 +3',
     hand: '랜덤 손패 +2',
   }
   return {

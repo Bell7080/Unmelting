@@ -531,7 +531,7 @@ body.hearth-lobby .hp-column,
 body.hearth-lobby .atk-stat {
   opacity: 0;
 }
-/* 불씨 게이지: 상단 밖으로 올려 숨김 → 출발 시 위에서 내려온다(translateX(-50%) 유지). */
+/* 빛 게이지: 상단 밖으로 올려 숨김 → 출발 시 위에서 내려온다(translateX(-50%) 유지). */
 body.hearth-lobby .ember-hud {
   transform: translate(-50%, -180%);
   opacity: 0;

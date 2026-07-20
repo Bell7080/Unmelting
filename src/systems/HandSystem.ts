@@ -562,7 +562,7 @@ export class HandSystem {
         return { message: HandSystem.damageEnemies(gs, 'field', 5 + bonus) }
       case 'gain-ember-3': {
         const gained = c.gainEmber(3 + bonus)
-        return { message: `불씨 게이지 +${gained}` }
+        return { message: `빛 게이지 +${gained}` }
       }
       case 'heal-5': {
         const healed = c.heal(5 + bonus)
@@ -587,7 +587,7 @@ export class HandSystem {
       }
       case 'gain-ember-2': {
         const gained = c.gainEmber(2 + bonus)
-        return { message: `불씨 게이지 +${gained}` }
+        return { message: `빛 게이지 +${gained}` }
       }
       case 'shield-2-and-damage-field-1': {
         // 불꽃 사슬: 방패 고정 +2, 피해에만 bonus 적용.
@@ -649,7 +649,7 @@ export class HandSystem {
     }
   }
 
-  /** 뜨거운 돌: 불씨 밝음(불씨 게이지 ≥7) 상태에서 불씨 공격 손패의 피해를 (floor(0.25공)+1)만큼 올린다.
+  /** 뜨거운 돌: 불씨 밝음(빛 게이지 ≥7) 상태에서 불씨 공격 손패의 피해를 (floor(0.25공)+1)만큼 올린다.
    *  flame 태그 + damageProfile(공격 카드)로 판정하므로 미래 불씨 공격 손패도 자동 적용된다
    *  (match처럼 damageProfile 없는 flame 도구 카드는 제외). 표준 `+bonus` 피해식에 folding된다. */
   static flameHotStoneBonus(gs: GameState, def: HandCardDefinition): number {
@@ -685,7 +685,7 @@ export class HandSystem {
         return HandSystem.freezeTarget(target, 1)
       case 'match': {
         const gained = c.gainEmber(1 + bonus)
-        return `불씨 게이지 +${gained}`
+        return `빛 게이지 +${gained}`
       }
       case 'holy-water':
         return HandSystem.cleanseRandomSpores(gs, 2)
@@ -838,7 +838,7 @@ export class HandSystem {
         return HandSystem.freezeFrontCards(gs, 3 + bonus)
       case 'match': {
         const gained = c.gainEmber(5 + bonus)
-        return `트리플 불씨 게이지 +${gained}`
+        return `트리플 빛 게이지 +${gained}`
       }
       case 'holy-water':
         return HandSystem.cleanseAllSpores(gs)

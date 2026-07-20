@@ -111,13 +111,14 @@ npm run build
 ## 스폰 가중치 표기 메커니즘 (`{{spawn}}`)
 
 - 유물/시련 효과 문자열에서 `{{spawn}}` 토큰은 `GameBoardRenderer.relicEffectHtml()`이 실시간 ±% 수치로 치환한다.
-- 기준값은 **항상 bright 티어** 고정 (`CardSpawner.getEffectiveWeightsForDisplay()`) — 불씨 게이지 변동은 표기에 영향을 주지 않는다.
+- 기준값은 **항상 bright 티어** 고정 (`CardSpawner.getEffectiveWeightsForDisplay()`) — 빛 게이지 변동은 표기에 영향을 주지 않는다.
 - 영구 수정자(직업·유물·시련)만 반영: 유물 장착/시련 적용 시점에 % 표기가 갱신된다.
 - 구현 위치: `src/systems/CardSpawner.ts` → `getEffectiveWeightsForDisplay()` / `src/ui/GameBoardRenderer.ts` → `relicEffectHtml()`
 
 ## 불씨 티어별 스폰 압박
 
-- 티어는 절대 ember 수치 기준(bright ≥7, dim ≥4, flickering ≥1, extinguished =0)이며 emberMax와 무관하다.
+- **용어**: 유저 텍스트의 `빛 게이지` = 코드 식별자 `ember`/`emberMax`(같은 것). `불씨 태그`(flame 손패 시너지)와는 별개 개념이다. 게이지를 뜻할 땐 `빛 게이지`로 표기한다.
+- 티어는 절대 ember 수치 기준(bright ≥7, dim ≥4, flickering ≥1, extinguished =0)이며 emberMax와 무관하다. 선공(적 우선 공격)은 ember < 4(flickering 이하)에서 발동한다.
 - 티어 하강 시 **적·함정 가중치를 높이는** 방식으로 압박을 표현한다. 보물은 extinguished에서도 최소 5 유지.
 - `CardSpawner`에서 `Math.max(1, ...)` 하한 보장으로 보물이 0이 되는 상황을 추가 방지한다.
 
@@ -135,7 +136,7 @@ npm run build
 - 상점/제단 본문 UI(유물·무료·팩·EXIT)는 셔터 이후 일러스트 veil 연출이 끝난 뒤 카드팩 베일과 같은 텀으로 **한 번에** 열리도록 `shop-content-bundle` 레이어로 동기화했다.
 
 - 제단 화폐 무료카드 `동전 한 닢`은 `free_002` 일러스트를 사용하며, 사용 시 화폐 패널로 블라스트 후 1$가 1단위 롤링으로 증가한다.
-- 상점/제단 공용 `무료 카드`(`free_001`)는 방문마다 1개 랜덤 효과(✦300/1$/체력 +5/콤보 게이지 +3/불씨 게이지 +3/랜덤 손패 +2) 6종 중 하나로 고정되고, 사용 즉시 소모되어 슬롯에서 사라진다.
+- 상점/제단 공용 `무료 카드`(`free_001`)는 방문마다 1개 랜덤 효과(✦300/1$/체력 +5/콤보 게이지 +3/빛 게이지 +3/랜덤 손패 +2) 6종 중 하나로 고정되고, 사용 즉시 소모되어 슬롯에서 사라진다.
 - 무료카드 획득 블라스트는 보상 타입별 목적 HUD(화폐/불빛/체력/콤보 게이지/손패)로 분기하며, 2장 슬롯은 보유 유물 부채꼴과 같은 겹침 각도로 배치한다.
 - 제단 유물 오퍼는 상점과 동일하게 전체 유물 풀에서 등급 가중치(`relicDrawWeight`)로 3장 비중복 노출하며, 무료 단일 픽이다(가격 라벨 숨김, 1장 선택 시 나머지는 불씨처럼 사그라들어 사라짐).
 - 제단 무료카드 2장은 기본 부채꼴 겹침으로 노출되며 hover 시 기울기만 0도로 풀린 채 살짝 확대되고, 선택 시 상향 소실 애니메이션으로 정리된다.

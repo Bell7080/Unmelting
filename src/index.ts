@@ -2309,7 +2309,7 @@ async function applyHandSingle(
     })
     const singleEnemyKills = result.removedFieldCards.filter((removed) => removed.type === CardType.ENEMY).length
     await relicEffects.onEnemiesDefeated(singleEnemyKills)
-    // 연료: 불씨 손패가 처치를 냈으면 불씨 게이지를 되채운다(flame 태그로 판정).
+    // 연료: 불씨 손패가 처치를 냈으면 빛 게이지를 되채운다(flame 태그로 판정).
     if (usedDef) relicEffects.applyFuelOnFlameKill(usedDef, singleEnemyKills)
     // 확산: 불씨 손패로 처치한 레인마다 인접 레인 함정 1칸을 제거한다(처치 직후 안전 지점에서 board 변형).
     if (usedDef?.synergyTags?.includes('flame') && gameState.character.hasRelic('spread')) {

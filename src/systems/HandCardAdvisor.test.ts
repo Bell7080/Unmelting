@@ -31,7 +31,7 @@ describe('estimateHandCardDamage', () => {
 })
 
 describe('HandCardAdvisor 상황 적합', () => {
-  it('불씨 부족이면 불씨 게이지를 채우는 카드(성냥)를 고른다', () => {
+  it('불씨 부족이면 빛 게이지를 채우는 카드(성냥)를 고른다', () => {
     const pick = bestSupportCard({ ...base, emberLow: true }, ['match', 'ember', 'candle'] as HandCardId[])
     expect(pick?.cardId).toBe('match')
     expect(pick?.fit).toBe('ember')

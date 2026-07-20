@@ -505,7 +505,7 @@ export class CardFaceRenderer {
     switch (id) {
       case 'wax-drop': return merged ? `체력 +${5 + bonus}` : `체력 +${1 + bonus}`
       case 'candle':   return merged ? `방패 +${5 + bonus}` : `방패 +${1 + bonus}`
-      case 'match':    return merged ? `불씨 게이지 +${5 + bonus}` : `불씨 게이지 +${1 + bonus}`
+      case 'match':    return merged ? `빛 게이지 +${5 + bonus}` : `빛 게이지 +${1 + bonus}`
       case 'card':     return merged ? `콤보 게이지 +${7 + bonus}` : `콤보 게이지 +${1 + bonus}`
       case 'coin':     return merged ? `+${5 + bonus}$` : `+${1 + bonus}$`
       default:         return merged ? def.tripleDescription : def.description

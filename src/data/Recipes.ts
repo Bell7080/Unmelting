@@ -141,7 +141,7 @@ export const RECIPES: Recipe[] = [
   // --- 신규 레시피 (6개 — 해금팩으로 해금) ---
   recipe('backfire',      '역화',       { firework: 1, match: 1 },                     'backfire-atk',  '필드 모든 적에게 (1.0공)피해',   true),
   recipe('rage',          '분노',       { 'sacrifice-candle': 1, ember: 1 },           'rage-atk',      '전방 모든 적에게 (1.0공+3)피해',  true),
-  recipe('flame-infusion','불꽃 주입',  { 'book-of-flames': 1, match: 1 },             'gain-ember-3',  '불씨 게이지 +3',                   true),
+  recipe('flame-infusion','불꽃 주입',  { 'book-of-flames': 1, match: 1 },             'gain-ember-3',  '빛 게이지 +3',                   true),
   recipe('bond',          '결속',       { 'sacrifice-candle': 1, 'wax-drop': 1 },      'heal-3',        '체력 3 회복',                      true),
   recipe('smokescreen',   '연막',       { wax: 1, firework: 1 },                       'clear-front-cards', '전방 모든 칸 제거',              true),
   // --- 신규 카드(16~20) 레시피 ---
@@ -152,7 +152,7 @@ export const RECIPES: Recipe[] = [
   recipe('fireworks-show', '불꽃놀이',  { chandelier: 1, firework: 1 },                'fireworks-atk',      '필드 랜덤 적 전체 (3.0공+3)피해 분산', true),
   recipe('hospitality',    '대접',      { teacup: 1, 'wax-drop': 1 },                 'heal-3',             '체력 3 회복'),
   recipe('hot-water',      '뜨거운 물', { teapot: 1, ember: 1 },                      'hot-water-maxhp',    '전방 랜덤 적 1장 최대체력 (×0.2)피해', true),
-  recipe('bright-ceiling', '밝은 천장', { chandelier: 1, match: 1 },                  'gain-ember-2',       '불씨 게이지 +2'),
+  recipe('bright-ceiling', '밝은 천장', { chandelier: 1, match: 1 },                  'gain-ember-2',       '빛 게이지 +2'),
   recipe('flame-chain',    '불꽃 사슬', { chandelier: 1, shackles: 1 },               'flame-chain-atk',    '방패 +2 · 필드 적 전체 (1.0공)피해'),
   recipe('banquet',        '연회',      { teapot: 1, firework: 1 },                   'banquet-atk',        '필드 랜덤 적 (1.0공)피해 × 공격력 횟수', true),
   recipe('sweetness',      '달콤함',    { teacup: 1, 'sacrifice-shield': 1 },         'heal-by-player-attack',        '공격력만큼 체력 회복',            true),

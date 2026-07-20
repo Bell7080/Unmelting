@@ -561,7 +561,7 @@ export class CompendiumView {
       ${packSection('chance-pack', '제단', '확률 상승 — 특정 손패 카드의 드롭 가중치를 영구적으로 높인다.', [
         noteTile('chance-pack', '카드 등장률 상승', '현재 해금된 카드 중 1장 선택 — 해당 카드의 드롭 가중치를 기본값만큼 영구 추가', 'rare'),
       ])}
-      ${packSection('resource-pack', '제단', '최대치 증가 — 최대 체력·손패·불씨 게이지 등 영구 상한을 높인다.', resourceTiles)}
+      ${packSection('resource-pack', '제단', '최대치 증가 — 최대 체력·손패·빛 게이지 등 영구 상한을 높인다.', resourceTiles)}
       ${packSection('delete-pack', '제단', '삭제 — 드로우 풀에서 손패 카드를 제거해 덱 농도를 높인다.', [
         noteTile('delete-pack', '손패 카드 삭제', '현재 런 드로우 풀에서 특정 카드를 제거해 뽑힐 빈도를 낮춘다', 'rare'),
       ])}
@@ -655,7 +655,7 @@ export class CompendiumView {
         '밀랍으로 하얗게 굳은 정지 상태. 남은 턴 동안 적 공격/보물 변동 같은 전방 이벤트가 멈춘다.',
       ],
       [
-        '불씨 게이지',
+        '빛 게이지',
         '우측 상단 불씨 자원. 성냥이 회복하며, 낮아질수록 전투/스폰 위험도가 오른다.',
       ],
       [

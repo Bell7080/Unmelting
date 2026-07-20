@@ -63,7 +63,7 @@ const SHOP_FREE_GIFT_REWARDS: Record<ShopFreeGiftKind, { description: string; am
   'coin-1': { description: '1$', amount: 1 },
   'health-5': { description: '체력 +5', amount: 5 },
   'gauge-3': { description: '콤보 게이지 +3', amount: 3 },
-  'ember-3': { description: '불씨 게이지 +3', amount: 3 },
+  'ember-3': { description: '빛 게이지 +3', amount: 3 },
   'hand-2': { description: '랜덤 손패 +2', amount: 2 },
 }
 const SHOP_FREE_GIFT_KINDS = Object.keys(SHOP_FREE_GIFT_REWARDS) as ShopFreeGiftKind[]

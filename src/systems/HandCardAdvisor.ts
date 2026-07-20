@@ -201,9 +201,9 @@ function isFrontDefenseCard(def: HandCardDefinition): boolean {
   return base.filter === 'turn-timer' || shieldGain(def) > 0
 }
 
-/** 불씨 게이지를 채우는 카드(성냥류). */
+/** 빛 게이지를 채우는 카드(성냥류). */
 function refillsEmber(def: HandCardDefinition): boolean {
-  return def.description.includes('불씨 게이지 +')
+  return def.description.includes('빛 게이지 +')
 }
 
 /** 잠긴/방치된 보물을 여는 카드(열쇠류). */
@@ -314,7 +314,7 @@ function bestFitFor(def: HandCardDefinition, situation: SupportSituation, killAv
     plans.push({
       fit: 'ember',
       fitScore: EMBER_PRESSURE_VALUE,
-      reason: '불씨 게이지 보충',
+      reason: '빛 게이지 보충',
       detail: '불씨가 꺼지기 직전이라 게이지 보충 가치가 높음',
     })
   }

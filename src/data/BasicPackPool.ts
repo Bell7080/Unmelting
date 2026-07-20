@@ -21,15 +21,15 @@ export interface BasicPackItem {
 export const BASIC_PACK_POOL: BasicPackItem[] = [
   // Common — weight 20
   { id: 'basic_001', illu: 'basic_001', theme: 'resource', title: '지혈',      effect: '체력 +3',        rarity: 'common',    weight: 20 },
-  { id: 'basic_002', illu: 'basic_002', theme: 'resource', title: '발화',      effect: '불씨 게이지 +1', rarity: 'common',    weight: 20 },
+  { id: 'basic_002', illu: 'basic_002', theme: 'resource', title: '발화',      effect: '빛 게이지 +1', rarity: 'common',    weight: 20 },
   { id: 'basic_003', illu: 'basic_003', theme: 'resource', title: '하이 카드', effect: '콤보 게이지 +1', rarity: 'common',    weight: 20 },
   // Rare — weight 10
   { id: 'basic_004', illu: 'basic_004', theme: 'resource', title: '봉합',      effect: '체력 +5',        rarity: 'rare',      weight: 10 },
-  { id: 'basic_005', illu: 'basic_005', theme: 'resource', title: '화재',      effect: '불씨 게이지 +2', rarity: 'rare',      weight: 10 },
+  { id: 'basic_005', illu: 'basic_005', theme: 'resource', title: '화재',      effect: '빛 게이지 +2', rarity: 'rare',      weight: 10 },
   { id: 'basic_006', illu: 'basic_006', theme: 'resource', title: '투페어',    effect: '콤보 게이지 +2', rarity: 'rare',      weight: 10 },
   // Epic — weight 5
   { id: 'basic_007', illu: 'basic_007', theme: 'resource', title: '복원',      effect: '체력 +10',       rarity: 'epic',      weight: 5  },
-  { id: 'basic_008', illu: 'basic_008', theme: 'resource', title: '대화재',    effect: '불씨 게이지 +3', rarity: 'epic',      weight: 5  },
+  { id: 'basic_008', illu: 'basic_008', theme: 'resource', title: '대화재',    effect: '빛 게이지 +3', rarity: 'epic',      weight: 5  },
   { id: 'basic_009', illu: 'basic_009', theme: 'resource', title: '플러시',    effect: '콤보 게이지 +3', rarity: 'epic',      weight: 5  },
   // Legendary — weight 2
   { id: 'basic_010', illu: 'basic_010', theme: 'resource', title: '갑옷 장착', effect: '방패 +5',        rarity: 'legendary', weight: 2  },

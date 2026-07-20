@@ -205,7 +205,7 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
 
 /* ────────────────── 선공(적 우선 공격) 딱지 ──────────────────
    선공 활성 동안 적/특수적/보스 소환적 카드 우상단에 붙는 작은 불씨 라벨.
-   불씨 게이지가 차서 선공이 풀리면 다음 렌더에서 조건이 거짓이 되어 사라진다. */
+   빛 게이지가 차서 선공이 풀리면 다음 렌더에서 조건이 거짓이 되어 사라진다. */
 .first-strike-card-badge {
   position: absolute;
   top: 5px;
@@ -333,7 +333,7 @@ body.hearth-lobby .left-swap > .score-log-list { transform: translateX(-140%); o
   border-color: rgba(120, 116, 110, 0.4);
   background: linear-gradient(180deg, rgba(36, 34, 38, 0.5), rgba(22, 20, 24, 0.5));
 }
-/* 모험 칸과 같은 말랑한 촛불을 불씨 게이지 아이콘으로 사용한다.
+/* 모험 칸과 같은 말랑한 촛불을 빛 게이지 아이콘으로 사용한다.
    불씨 티어가 높을수록(잘 탈수록) 붉고 진하게, 낮을수록 노랗고 희미하게 변한다. */
 .ember-flame-body {
   display: block;

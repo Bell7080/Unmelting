@@ -1285,7 +1285,7 @@ export const GAME_BOARD_RAIL_STYLES = `
   box-shadow: inset 0 1px 0 rgba(255, 215, 120, 0.4);
   transition: width 0.28s cubic-bezier(0.2, 0.86, 0.28, 1);
 }
-/* 100F 보스 페이지 경계선 — 불씨 게이지의 작은 눈금처럼 HP바 위에 140/70 전환점을 표시한다. */
+/* 100F 보스 페이지 경계선 — 빛 게이지의 작은 눈금처럼 HP바 위에 140/70 전환점을 표시한다. */
 .boss-face-hpbar-page-marker {
   position: absolute;
   top: -2px;

@@ -241,7 +241,7 @@ export class RelicEffectsManager {
     }
   }
 
-  /** 변칙: 플레이어가 체력을 5 잃을 때마다 불씨 게이지 +1. 누적 피해는 Character가 보관한다.
+  /** 변칙: 플레이어가 체력을 5 잃을 때마다 빛 게이지 +1. 누적 피해는 Character가 보관한다.
    *  미보유 시 누적을 비워, 나중에 획득해도 이전 피해가 소급 발동하지 않게 한다. */
   applyAnomalyHealthLoss(): void {
     const { gameState, boardRenderer, recordRelicActivation } = this.deps
@@ -902,7 +902,7 @@ export class RelicEffectsManager {
     enh.fuelKillCount %= 3
     const gained = character.gainEmber(points)
     if (gained <= 0) return
-    recordRelicActivation('fuel', `불씨 게이지 +${gained}`)
+    recordRelicActivation('fuel', `빛 게이지 +${gained}`)
     boardRenderer.playHudCounterFeedback('ember', character.ember)
   }
 
