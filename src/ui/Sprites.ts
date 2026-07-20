@@ -126,6 +126,12 @@ import handCard030Url from '../assets/sprites/handcard_030.webp'
 import handCard031Url from '../assets/sprites/handcard_031.webp'
 import handCard032Url from '../assets/sprites/handcard_032.webp'
 import handCard033Url from '../assets/sprites/handcard_033.webp'
+import handCard034Url from '../assets/sprites/handcard_034.webp'
+import handCard035Url from '../assets/sprites/handcard_035.webp'
+import handCard036Url from '../assets/sprites/handcard_036.webp'
+import handCard037Url from '../assets/sprites/handcard_037.webp'
+import handCard038Url from '../assets/sprites/handcard_038.webp'
+import handCard039Url from '../assets/sprites/handcard_039.webp'
 import reward004Url from '../assets/sprites/reward_004.webp'
 import reward005Url from '../assets/sprites/reward_005.webp'
 import relic001Url from '../assets/sprites/relics_001.webp'
@@ -166,6 +172,32 @@ import relic035Url from '../assets/sprites/relics_035.webp'
 import relic036Url from '../assets/sprites/relics_036.webp'
 import relic037Url from '../assets/sprites/relics_037.webp'
 import relic038Url from '../assets/sprites/relics_038.webp'
+import relic039Url from '../assets/sprites/relics_039.webp'
+import relic040Url from '../assets/sprites/relics_040.webp'
+import relic041Url from '../assets/sprites/relics_041.webp'
+import relic042Url from '../assets/sprites/relics_042.webp'
+import relic043Url from '../assets/sprites/relics_043.webp'
+import relic044Url from '../assets/sprites/relics_044.webp'
+import relic045Url from '../assets/sprites/relics_045.webp'
+import relic046Url from '../assets/sprites/relics_046.webp'
+import relic047Url from '../assets/sprites/relics_047.webp'
+import relic048Url from '../assets/sprites/relics_048.webp'
+import relic049Url from '../assets/sprites/relics_049.webp'
+import relic050Url from '../assets/sprites/relics_050.webp'
+import relic051Url from '../assets/sprites/relics_051.webp'
+import relic052Url from '../assets/sprites/relics_052.webp'
+import relic053Url from '../assets/sprites/relics_053.webp'
+import relic054Url from '../assets/sprites/relics_054.webp'
+import relic055Url from '../assets/sprites/relics_055.webp'
+import relic056Url from '../assets/sprites/relics_056.webp'
+import relic057Url from '../assets/sprites/relics_057.webp'
+import relic058Url from '../assets/sprites/relics_058.webp'
+import relic059Url from '../assets/sprites/relics_059.webp'
+import relic060Url from '../assets/sprites/relics_060.webp'
+import relic061Url from '../assets/sprites/relics_061.webp'
+import relic062Url from '../assets/sprites/relics_062.webp'
+import relic063Url from '../assets/sprites/relics_063.webp'
+import relic065Url from '../assets/sprites/relics_065.webp'
 import pack001Url from '../assets/sprites/pack_001.webp'
 import pack002Url from '../assets/sprites/pack_002.webp'
 import pack003Url from '../assets/sprites/pack_003.webp'
@@ -321,39 +353,40 @@ export const SpriteUrls = {
     // 만찬 폴백 — 실제 카드는 CustomRelicProfile.art(고른 음식 스프라이트)를 쓰므로 이 값은
     // 커스텀 프로필이 없을 때만 노출되는 폴백이다. 전용 아트 전까지 검은 카드면으로 통일한다.
     'last-supper': BLACK_RELIC_ART,
-    // 전용 아트 미연동 유물 — 다른 유물 아트를 빌리면 헷갈리므로 검은 카드면으로 통일한다.
-    whetstone: BLACK_RELIC_ART,
-    hammer: BLACK_RELIC_ART,
-    sharpening: BLACK_RELIC_ART,
+    // 전용 아트 연동 완료 (relics_039~065).
+    whetstone: relic039Url,
+    hammer: relic040Url,
+    sharpening: relic041Url,
+    'hidden-shard': relic042Url,
+    'trump-shot': relic043Url,
+    'pierce-shard': relic044Url,
+    ricochet: relic045Url,
+    'throw-art': relic046Url,
+    'blade-storm': relic047Url,
+    'trap-collect': relic048Url,
+    fuel: relic049Url,
+    'hot-stone': relic050Url,
+    spread: relic051Url,
+    bomb: relic052Url,
+    embers: relic053Url,
+    pyromaniac: relic054Url,
+    'burning-scarecrow': relic055Url,
+    'little-sun': relic056Url,
+    'oil-bottle': relic057Url,
+    'live-coal': relic058Url,
+    'blood-writ': relic059Url,
+    transfusion: relic060Url,
+    coagulation: relic061Url,
+    'blood-sigil': relic062Url,
+    syringe: relic063Url,
+    stake: relic065Url,
+    // 전용 아트 미연동 — 검은 카드면(064·066~070 파일 대기 중).
+    'blood-price': BLACK_RELIC_ART,
+    'wax-recycle': BLACK_RELIC_ART,
+    'wax-fragment': BLACK_RELIC_ART,
     'overflow-wax': BLACK_RELIC_ART,
     'thorn-shield': BLACK_RELIC_ART,
     library: BLACK_RELIC_ART,
-    'blood-writ': BLACK_RELIC_ART,
-    transfusion: BLACK_RELIC_ART,
-    coagulation: BLACK_RELIC_ART,
-    'blood-sigil': BLACK_RELIC_ART,
-    syringe: BLACK_RELIC_ART,
-    'blood-price': BLACK_RELIC_ART,
-    stake: BLACK_RELIC_ART,
-    fuel: BLACK_RELIC_ART,
-    'wax-recycle': BLACK_RELIC_ART,
-    'hot-stone': BLACK_RELIC_ART,
-    'wax-fragment': BLACK_RELIC_ART,
-    spread: BLACK_RELIC_ART,
-    'hidden-shard': BLACK_RELIC_ART,
-    'trump-shot': BLACK_RELIC_ART,
-    'pierce-shard': BLACK_RELIC_ART,
-    ricochet: BLACK_RELIC_ART,
-    'throw-art': BLACK_RELIC_ART,
-    'blade-storm': BLACK_RELIC_ART,
-    'trap-collect': BLACK_RELIC_ART,
-    bomb: BLACK_RELIC_ART,
-    embers: BLACK_RELIC_ART,
-    pyromaniac: BLACK_RELIC_ART,
-    'burning-scarecrow': BLACK_RELIC_ART,
-    'little-sun': BLACK_RELIC_ART,
-    'oil-bottle': BLACK_RELIC_ART,
-    'live-coal': BLACK_RELIC_ART,
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,
@@ -382,7 +415,7 @@ export const SpriteUrls = {
     teacup: handCard024Url,
     'top-hat': handCard025Url,
     slash: handCard026Url,
-    'blade-shard': BLACK_RELIC_ART, // 전용 아트 전까지 검은 카드면(참격 아트 차용 혼동 방지)
+    'blade-shard': handCard036Url,
     shackles: handCard027Url,
     // 신규 손패 — 전용 아트 연동 완료.
     'candle-tome': handCard028Url,
@@ -391,13 +424,12 @@ export const SpriteUrls = {
     'garden-scissors': handCard031Url,
     'ritual-candle': handCard032Url,
     'black-candle': handCard033Url,
-    // 검집 — 전용 아트 전까지 검은 카드면(다른 손패 아트 차용 혼동 방지).
-    scabbard: BLACK_RELIC_ART,
-    'blade-tome': BLACK_RELIC_ART,
-    // 바늘·부두 인형·단두대 — 전용 아트 전까지 검은 카드면.
-    needle: BLACK_RELIC_ART,
-    'voodoo-doll': BLACK_RELIC_ART,
-    guillotine: BLACK_RELIC_ART,
+    // 검집·칼날의 서·바늘·부두 인형·단두대 — 전용 아트 연동 완료.
+    scabbard: handCard034Url,
+    'blade-tome': handCard035Url,
+    needle: handCard037Url,
+    'voodoo-doll': handCard038Url,
+    guillotine: handCard039Url,
   } satisfies Record<HandCardId, string>,
   /** Shop card-pack illustrations. Index follows the pack pickers in the
    *  shop bottom row: basic (자원) / recipe (조합) / unlock (해금) / chance (확률). */
