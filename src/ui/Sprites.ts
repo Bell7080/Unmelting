@@ -197,7 +197,13 @@ import relic060Url from '../assets/sprites/relics_060.webp'
 import relic061Url from '../assets/sprites/relics_061.webp'
 import relic062Url from '../assets/sprites/relics_062.webp'
 import relic063Url from '../assets/sprites/relics_063.webp'
+import relic064Url from '../assets/sprites/relics_064.webp'
 import relic065Url from '../assets/sprites/relics_065.webp'
+import relic066Url from '../assets/sprites/relics_066.webp'
+import relic067Url from '../assets/sprites/relics_067.webp'
+import relic068Url from '../assets/sprites/relics_068.webp'
+import relic069Url from '../assets/sprites/relics_069.webp'
+import relic070Url from '../assets/sprites/relics_070.webp'
 import pack001Url from '../assets/sprites/pack_001.webp'
 import pack002Url from '../assets/sprites/pack_002.webp'
 import pack003Url from '../assets/sprites/pack_003.webp'
@@ -380,13 +386,13 @@ export const SpriteUrls = {
     'blood-sigil': relic062Url,
     syringe: relic063Url,
     stake: relic065Url,
-    // 전용 아트 미연동 — 검은 카드면(064·066~070 파일 대기 중).
-    'blood-price': BLACK_RELIC_ART,
-    'wax-recycle': BLACK_RELIC_ART,
-    'wax-fragment': BLACK_RELIC_ART,
-    'overflow-wax': BLACK_RELIC_ART,
-    'thorn-shield': BLACK_RELIC_ART,
-    library: BLACK_RELIC_ART,
+    // 전용 아트 연동 완료 (relics_064·066~070).
+    'blood-price': relic064Url,
+    'wax-recycle': relic066Url,
+    'wax-fragment': relic067Url,
+    'overflow-wax': relic068Url,
+    'thorn-shield': relic069Url,
+    library: relic070Url,
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,
