@@ -680,7 +680,7 @@ export class HandSystem {
     return bonus
   }
 
-  /** 방화광용: 필드 전체 적/보스에게 amount 피해. 제거된 적 카드 목록을 돌려줘 호출부가 애니메이션한다. */
+  /** 벽걸이 횃불용: 필드 전체 적/보스에게 amount 피해. 제거된 적 카드 목록을 돌려줘 호출부가 애니메이션한다. */
   static damageAllEnemies(gs: GameState, amount: number): { cardId: string; defeated: boolean }[] {
     const hits: { cardId: string; defeated: boolean }[] = []
     const seen = new Set<Card>()

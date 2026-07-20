@@ -68,7 +68,7 @@ export interface RunEnhancements {
   fuelKillCount: number
   /** 연마 유물: 칼날 손패 사용 누적(3마다 모든 칼날 피해 영구 +1). 트리플도 1회로 센다. */
   sharpeningUseCount: number
-  /** 방화광 유물: 불씨 손패 사용 누적(5마다 필드 전체 피해). */
+  /** 벽걸이 횃불 유물: 불씨 손패 사용 누적(5마다 필드 전체 피해). */
   pyromaniacUseCount: number
   /** 불타는 허수아비 유물: 처치 없이 쓴 불씨 손패 누적(3마다 불씨 손패 지급). */
   scarecrowNoKillCount: number

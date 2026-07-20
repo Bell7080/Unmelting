@@ -780,10 +780,10 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     basePrice: 1200,
     synergyTags: ['flame'],
   },
-  // 방화광(레어): 불씨 손패 5회 사용마다 필드 전체를 태운다.
+  // 벽걸이 횃불(레어): 불씨 손패 5회 사용마다 필드 전체를 태운다.
   pyromaniac: {
     id: 'pyromaniac',
-    name: '방화광',
+    name: '벽걸이 횃불',
     rarity: 'rare',
     effect: '불씨 손패 5회 사용 시 필드 전체 적에게 (0.5공+1)피해',
     flavor: '태우는 손을 멈출 수가 없다.',

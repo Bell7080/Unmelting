@@ -217,7 +217,7 @@ export class RelicEffectsManager {
         }
       }
     }
-    // 불씨 손패 사용 반응 — 잔불(재획득)·기름병(연속 배율 카운트)·방화광(연격 광역).
+    // 불씨 손패 사용 반응 — 잔불(재획득)·기름병(연속 배율 카운트)·벽걸이 횃불(연격 광역).
     if (tags?.includes('flame')) {
       const enh = gameState.enhancements
       // 기름병: 이번 턴 불씨 손패 사용 수 누적(피해 폴딩은 HandSystem, 초기화는 finishTurn).
@@ -229,7 +229,7 @@ export class RelicEffectsManager {
           render()
         }
       }
-      // 방화광: 불씨 손패 5회 사용마다 필드 전체를 태운다.
+      // 벽걸이 횃불: 불씨 손패 5회 사용마다 필드 전체를 태운다.
       if (gameState.character.hasRelic('pyromaniac')) {
         enh.pyromaniacUseCount += 1
         if (enh.pyromaniacUseCount >= 5) {
@@ -991,7 +991,7 @@ export class RelicEffectsManager {
     if (granted > 0) { recordRelicActivation(relicId, `불씨 손패 +${granted}`); render() }
   }
 
-  /** 방화광: 필드 전체 적을 (floor(0.5공)+1)만큼 태운다(불씨 손패 5회마다). */
+  /** 벽걸이 횃불: 필드 전체 적을 (floor(0.5공)+1)만큼 태운다(불씨 손패 5회마다). */
   async applyPyromaniacBurn(): Promise<void> {
     const { gameState, boardRenderer, recordRelicActivation } = this.deps
     if (!gameState.character.hasRelic('pyromaniac')) return
