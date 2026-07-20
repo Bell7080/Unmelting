@@ -343,6 +343,13 @@ export const SpriteUrls = {
     'throw-art': BLACK_RELIC_ART,
     'blade-storm': BLACK_RELIC_ART,
     'trap-collect': BLACK_RELIC_ART,
+    bomb: BLACK_RELIC_ART,
+    embers: BLACK_RELIC_ART,
+    pyromaniac: BLACK_RELIC_ART,
+    'burning-scarecrow': BLACK_RELIC_ART,
+    'little-sun': BLACK_RELIC_ART,
+    'oil-bottle': BLACK_RELIC_ART,
+    'live-coal': BLACK_RELIC_ART,
   } satisfies Record<RelicId, string>,
   handCards: {
     'wax-drop': handCard001Url,

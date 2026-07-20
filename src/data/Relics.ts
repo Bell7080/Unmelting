@@ -69,6 +69,14 @@ export type RelicId =
   | 'hot-stone'
   | 'wax-fragment'
   | 'spread'
+  // 불씨 심화 — 폭발/재획득/연격/보급/게이지 경제.
+  | 'bomb'
+  | 'embers'
+  | 'pyromaniac'
+  | 'burning-scarecrow'
+  | 'little-sun'
+  | 'oil-bottle'
+  | 'live-coal'
   // 칼날(blade) 단검 투척 밀도 — 파편 증식/연격.
   | 'hidden-shard'
   | 'trump-shot'
@@ -304,7 +312,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'premium-firewood',
     name: '고품격 뗄감',
     rarity: 'rare',
-    effect: '빛 게이지 완전 소모 시 즉시 가득 채움. 이후 파괴.',
+    effect: '빛 게이지가 어두워지면(선공 시작) 즉시 가득 채움. 이후 파괴.',
     flavor: '한 번은 살릴 수 있다. 한 번만.',
     basePrice: 780,
     banWhenRemoved: true,
@@ -719,6 +727,77 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     basePrice: 520,
     synergyTags: ['blade'],
   },
+  // [불씨 심화] 폭탄(커먼): 불씨 손패로 처치 시 상하좌우 인접 칸에 그 손패 피해의 절반을 터뜨린다.
+  bomb: {
+    id: 'bomb',
+    name: '폭탄',
+    rarity: 'common',
+    effect: '불씨 손패로 적 처치 시 상하좌우 인접 칸에 그 손패 피해의 0.5배',
+    flavor: '한 발이 터지면 곁의 것들도 함께 튄다.',
+    basePrice: 520,
+    synergyTags: ['flame'],
+  },
+  // 잔불(유니크): 불씨 손패를 쓰면 낮은 확률로 그 손패가 손에 되살아난다.
+  embers: {
+    id: 'embers',
+    name: '잔불',
+    rarity: 'unique',
+    effect: '불씨 손패 사용 시 25% 확률로 그 손패 재획득',
+    flavor: '다 탄 줄 알았던 재 속에 아직 불씨가 남아 있다.',
+    basePrice: 1200,
+    synergyTags: ['flame'],
+  },
+  // 방화광(레어): 불씨 손패 5회 사용마다 필드 전체를 태운다.
+  pyromaniac: {
+    id: 'pyromaniac',
+    name: '방화광',
+    rarity: 'rare',
+    effect: '불씨 손패 5회 사용 시 필드 전체 적에게 (0.5공+1)피해',
+    flavor: '태우는 손을 멈출 수가 없다.',
+    basePrice: 820,
+    synergyTags: ['flame'],
+  },
+  // 불타는 허수아비(레어): 불씨 손패를 쓰고도 처치를 못 낸 게 3번 쌓이면 불씨 손패를 보급한다(보스전 지속).
+  'burning-scarecrow': {
+    id: 'burning-scarecrow',
+    name: '불타는 허수아비',
+    rarity: 'rare',
+    effect: '불씨 손패로 처치 못 함 3회마다 불씨 손패 1장 획득',
+    flavor: '태울 것이 안 죽으면, 태울 것을 더 쥐여 준다.',
+    basePrice: 820,
+    synergyTags: ['flame'],
+  },
+  // 작은 태양(유니크): 빛 게이지가 넘쳐 잘리는 초과분마다 불씨 손패를 준다(작은 태양이 빛을 흘린다).
+  'little-sun': {
+    id: 'little-sun',
+    name: '작은 태양',
+    rarity: 'unique',
+    effect: '빛 게이지 한계 초과분마다 불씨 손패 1장 획득',
+    flavor: '손안의 작은 태양은 담을 수 없는 빛을 흘려보낸다.',
+    basePrice: 1200,
+    synergyTags: ['flame'],
+  },
+  // 기름병(레어): 한 턴에 불씨 손패를 몰아 쓸수록 그 턴 불씨 피해가 오른다(턴 갱신 시 초기화).
+  'oil-bottle': {
+    id: 'oil-bottle',
+    name: '기름병',
+    rarity: 'rare',
+    effect: '이번 턴 사용한 불씨 손패 수만큼 불씨 손패 피해 +1 (턴마다 초기화)',
+    flavor: '기름을 부을수록 불길은 걷잡을 수 없이 커진다.',
+    basePrice: 820,
+    synergyTags: ['flame'],
+  },
+  // [레전더리 랜드마크] 잉걸불(감소→카드): 빛 게이지가 사그라들 때마다 그만큼 불씨 손패를 남긴다.
+  // 작은 태양(초과→카드)의 정반대 축 — 게이지가 차든 빠지든 불씨 손패가 흐른다. (이름 임시)
+  'live-coal': {
+    id: 'live-coal',
+    name: '잉걸불',
+    rarity: 'legendary',
+    effect: '빛 게이지 감소 1당 불씨 손패 1장 획득',
+    flavor: '빛이 스러지는 자리마다 붉은 잉걸이 남아 다시 타오를 준비를 한다.',
+    basePrice: 1600,
+    synergyTags: ['flame'],
+  },
 }
 
 /**
@@ -741,6 +820,7 @@ export const RELIC_STACK_FEEDBACK: Partial<Record<RelicId, RelicStackFeedback>> 
   'ambition':     { charge: { counter: 'ambitionKillCount', threshold: 8 } },
   'honesty':      { charge: { counter: 'honestyHandUseCount', threshold: 5 } },
   'ink-quill':    { charge: { counter: 'inkQuillKillCount', threshold: 5 } },
+  'pyromaniac':   { charge: { counter: 'pyromaniacUseCount', threshold: 5 } },
   // 블라스트만(작은 주기라 충전 발광은 생략): 응고/재활용/사치품/밀랍 조각.
   'coagulation':  {},
   'wax-recycle':  {},

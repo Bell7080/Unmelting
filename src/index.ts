@@ -1553,6 +1553,10 @@ function resetForNewRun(): void {
     if (card.isFrozen() && gameState.character.hasRelic('wax-fragment')) void relicEffects.applyWaxFragmentOnFrozenClear()
     if (card.type === CardType.TRAP && gameState.character.hasRelic('trap-collect')) relicEffects.applyTrapCollect()
   }
+  // 작은 태양: 빛 게이지가 한계를 넘겨 잘린 초과분만큼 불씨 손패를 지급한다.
+  gameState.character.onEmberOverflow = (overflow) => {
+    if (gameState.character.hasRelic('little-sun')) relicEffects.applyLittleSunOverflow(overflow)
+  }
   // 가시 방패: 방패를 얻을 때마다 획득량만큼 전방 랜덤 적을 1씩 찌른다.
   gameState.character.onShieldGain = (amount) => {
     if (gameState.character.hasRelic('thorn-shield')) void relicEffects.applyThornShieldHits(amount)
@@ -2323,6 +2327,12 @@ async function applyHandSingle(
     )
   }
 
+  // 불타는 허수아비: 불씨 손패로 이번에 처치를 냈는지(제거 없으면 0) 보고 보급 카운트를 굴린다.
+  if (usedDef) {
+    const flameKills = result.removedFieldCards.filter((r) => r.type === CardType.ENEMY).length
+    relicEffects.applyScarecrowFlameUse(usedDef, flameKills)
+  }
+
   // 모닥불: 첫 타격으로 적이 처치됐을 때 즉시 체력을 회복한다.
   if (result.bonfireHealOnKill && result.bonfireHealOnKill > 0) {
     const enemiesKilled = result.removedFieldCards.filter((r) => r.type === CardType.ENEMY).length
@@ -2703,6 +2713,8 @@ async function runSimulatedEnemyPhase(): Promise<void> {
 }
 
 async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
+  // 기름병: 새 턴이 시작되면 이번 턴 불씨 손패 사용 수를 초기화한다(턴 내 연속 사용 배율).
+  if (advanceTurn) gameState.enhancements.oilBottleTurnUses = 0
   const shouldTickEmber = advanceTurn
     || (!turnManager.isBossPhase() && finalAscentStarlightRuleActive)
   if (advanceTurn && !turnManager.isBossPhase()) {
@@ -2719,15 +2731,18 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
   // 별빛 규칙 중엔 실제 턴이 오르지 않으므로 가상 불씨 틱만 처리한다.
   if (shouldTickEmber && !turnManager.isBossPhase()) {
     // Tick the ember decay countdown; ember decreases every 3rd turn.
+    const emberBeforeDecay = gameState.character.ember
     const tickedDown = turnManager.tickEmberDecay()
     syncSpawnerTier()
     if (tickedDown) {
       const ember = gameState.character.ember
+      // 잉걸불: 빛 게이지가 사그라든 만큼(감소 1당 1장) 불씨 손패를 남긴다.
+      relicEffects.applyLiveCoalDecay(Math.max(0, emberBeforeDecay - ember))
       recordNotice(`불씨가 사그라들었다 (${ember}/${gameState.character.emberMax})`, 'hurt')
       // 불씨가 dim→flickering 경계(4) 직전에 플레이어에게 경고 대사를 띄운다
       if (ember === 4) { companionDirector.enaSpeaking = false; speechBubble.show('불씨가 약해지고 있어. . .') }
-      // 고품격 뗄감: 불씨가 완전히 꺼지면 가득 채우고 유물 파괴.
-      if (ember <= 0 && gameState.character.hasRelic('premium-firewood')) {
+      // 고품격 뗄감: 빛 게이지가 어두워지면(선공 시작 ember<4) 가득 채우고 유물 파괴.
+      if (ember < 4 && gameState.character.hasRelic('premium-firewood')) {
         const beforeResources = snapshotPlayerResources()
         // 파괴 연출(강도 2)을 먼저 보여 준 뒤 불씨를 채우고 파괴한다.
         await boardRenderer.animateRelicDestroy('premium-firewood', 2)

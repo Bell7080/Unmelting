@@ -217,6 +217,27 @@ export class RelicEffectsManager {
         }
       }
     }
+    // 불씨 손패 사용 반응 — 잔불(재획득)·기름병(연속 배율 카운트)·방화광(연격 광역).
+    if (tags?.includes('flame')) {
+      const enh = gameState.enhancements
+      // 기름병: 이번 턴 불씨 손패 사용 수 누적(피해 폴딩은 HandSystem, 초기화는 finishTurn).
+      if (gameState.character.hasRelic('oil-bottle')) enh.oilBottleTurnUses += 1
+      // 잔불: 25% 확률로 그 손패를 손에 되살린다.
+      if (gameState.character.hasRelic('embers') && Math.random() < 0.25) {
+        if (HandSystem.enqueueDrop(gameState.character, DropSystem.makeCard(def.id))) {
+          recordRelicActivation('embers', `${def.name} 재획득`)
+          render()
+        }
+      }
+      // 방화광: 불씨 손패 5회 사용마다 필드 전체를 태운다.
+      if (gameState.character.hasRelic('pyromaniac')) {
+        enh.pyromaniacUseCount += 1
+        if (enh.pyromaniacUseCount >= 5) {
+          enh.pyromaniacUseCount = 0
+          void this.applyPyromaniacBurn()
+        }
+      }
+    }
     if (!tags || tags.length === 0) return
     const outcomes = runTagReactions('handCardUsed', {
       character: gameState.character,
@@ -904,6 +925,74 @@ export class RelicEffectsManager {
     if (gained <= 0) return
     recordRelicActivation('fuel', `빛 게이지 +${gained}`)
     boardRenderer.playHudCounterFeedback('ember', character.ember)
+  }
+
+  /** 일반 획득 가능한 불씨(flame) 태그 손패 풀(보스/유물 전용 제외). 작은 태양·허수아비·잉걸불 공용. */
+  private flameCardPool() {
+    return HAND_CARD_IDS.filter((id) => {
+      const d = HAND_CARD_DEFINITIONS[id]
+      return d.synergyTags?.includes('flame') && d.dropSource !== 'boss' && d.dropSource !== 'relic'
+    })
+  }
+
+  /** 불씨 손패 n장을 손에 지급한다(dropWeight 가중 랜덤). 손패 가득이면 거기까지만. */
+  private grantFlameCards(n: number, relicId: RelicId): void {
+    const { gameState, recordRelicActivation, render } = this.deps
+    const pool = this.flameCardPool()
+    if (pool.length === 0 || n <= 0) return
+    const total = pool.reduce((s, id) => s + (HAND_CARD_DEFINITIONS[id].dropWeight ?? 1), 0)
+    let granted = 0
+    for (let i = 0; i < n; i++) {
+      let roll = Math.random() * total
+      let picked = pool[0]
+      for (const id of pool) { roll -= HAND_CARD_DEFINITIONS[id].dropWeight ?? 1; if (roll <= 0) { picked = id; break } }
+      if (!HandSystem.enqueueDrop(gameState.character, DropSystem.makeCard(picked))) break
+      granted++
+    }
+    if (granted > 0) { recordRelicActivation(relicId, `불씨 손패 +${granted}`); render() }
+  }
+
+  /** 방화광: 필드 전체 적을 (floor(0.5공)+1)만큼 태운다(불씨 손패 5회마다). */
+  async applyPyromaniacBurn(): Promise<void> {
+    const { gameState, boardRenderer, recordRelicActivation } = this.deps
+    if (!gameState.character.hasRelic('pyromaniac')) return
+    const amount = Math.floor(0.5 * gameState.character.damage) + 1
+    const hits = HandSystem.damageAllEnemies(gameState, amount)
+    if (hits.length === 0) return
+    recordRelicActivation('pyromaniac', `필드 전체 ${amount}피해`)
+    await boardRenderer.animateDamageNumbersById(hits.map((h) => ({ cardId: h.cardId, amount })))
+    const killed = hits.filter((h) => h.defeated)
+    if (killed.length > 0) {
+      await boardRenderer.animateCardConsumeByIds(killed.map((h) => ({ cardId: h.cardId, type: CardType.ENEMY })), {
+        suppressBurstIds: new Set(killed.map((h) => h.cardId)),
+      })
+      await this.onEnemiesDefeated(killed.length)
+    }
+  }
+
+  /** 불타는 허수아비: 불씨 손패를 쓰고도 처치를 못 낸 게 3번 쌓이면 불씨 손패를 보급한다(보스전 지속). */
+  applyScarecrowFlameUse(usedDef: HandCardDefinition, kills: number): void {
+    const { gameState } = this.deps
+    if (!gameState.character.hasRelic('burning-scarecrow') || !usedDef.synergyTags?.includes('flame')) return
+    if (kills > 0) return // 처치를 냈으면 카운트 안 함
+    const enh = gameState.enhancements
+    enh.scarecrowNoKillCount += 1
+    if (enh.scarecrowNoKillCount >= 3) {
+      enh.scarecrowNoKillCount = 0
+      this.grantFlameCards(1, 'burning-scarecrow')
+    }
+  }
+
+  /** 작은 태양: 빛 게이지 초과분(잘린 만큼)마다 불씨 손패를 준다. Character.onEmberOverflow에서 호출. */
+  applyLittleSunOverflow(overflow: number): void {
+    if (!this.deps.gameState.character.hasRelic('little-sun')) return
+    this.grantFlameCards(overflow, 'little-sun')
+  }
+
+  /** 잉걸불(레전더리): 빛 게이지가 사그라든 만큼(감소 1당 1장) 불씨 손패를 남긴다. */
+  applyLiveCoalDecay(amount: number): void {
+    if (amount <= 0 || !this.deps.gameState.character.hasRelic('live-coal')) return
+    this.grantFlameCards(amount, 'live-coal')
   }
 
   /** 확산: 불씨 손패로 적을 처치한 각 레인에 대해 인접 레인(좌/우)의 함정 1칸을 제거한다.

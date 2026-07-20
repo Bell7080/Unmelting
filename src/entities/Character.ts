@@ -129,6 +129,8 @@ export class Character {
   onHealOverflow?: (overflow: number) => void
   /** 가시 방패 유물용: addShield로 방패를 실제로 얻을 때마다 호출된다. */
   onShieldGain?: (amount: number) => void
+  /** 작은 태양 유물용: gainEmber가 빛 게이지 한계를 넘겨 잘려버린 초과분이 있을 때 호출된다. */
+  onEmberOverflow?: (overflow: number) => void
 
   heal(amount: number): number {
     const actualHeal = Math.max(0, amount)
@@ -243,7 +245,10 @@ export class Character {
   /** Recover ember up to emberMax. Returns the actual amount restored. */
   gainEmber(amount: number): number {
     const before = this.ember
-    this.ember = Math.min(this.emberMax, this.ember + Math.max(0, amount))
+    const want = before + Math.max(0, amount)
+    this.ember = Math.min(this.emberMax, want)
+    const overflow = want - this.ember // 한계를 넘겨 잘린 초과분(작은 태양)
+    if (overflow > 0) this.onEmberOverflow?.(overflow)
     return this.ember - before
   }
 

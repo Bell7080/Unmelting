@@ -649,14 +649,38 @@ export class HandSystem {
     }
   }
 
-  /** 뜨거운 돌: 불씨 밝음(빛 게이지 ≥7) 상태에서 불씨 공격 손패의 피해를 (floor(0.25공)+1)만큼 올린다.
-   *  flame 태그 + damageProfile(공격 카드)로 판정하므로 미래 불씨 공격 손패도 자동 적용된다
-   *  (match처럼 damageProfile 없는 flame 도구 카드는 제외). 표준 `+bonus` 피해식에 folding된다. */
-  static flameHotStoneBonus(gs: GameState, def: HandCardDefinition): number {
+  /** 불씨 공격 손패의 피해 보너스(뜨거운 돌 + 기름병). flame 태그 + damageProfile(공격 카드)로
+   *  판정하므로 미래 불씨 공격 손패도 자동 적용된다(match처럼 damageProfile 없는 도구는 제외).
+   *  표준 `+bonus` 피해식에 folding된다.
+   *  - 뜨거운 돌: 밝음(빛 게이지 ≥7)일 때 +(floor(0.25공)+1).
+   *  - 기름병: 이번 턴 앞서 쓴 불씨 손패 수만큼 +N(연속 사용 배율, 턴 갱신 시 초기화). */
+  static flameDamageBonus(gs: GameState, def: HandCardDefinition): number {
     const c = gs.character
+    if (!def.damageProfile || !def.synergyTags?.includes('flame')) return 0
+    let bonus = 0
     // '밝음' 티어 하한은 절대 ember 7(기획 고정 규칙). emberMax와 무관.
-    if (!c.hasRelic('hot-stone') || c.ember < 7 || !def.damageProfile || !def.synergyTags?.includes('flame')) return 0
-    return Math.floor(0.25 * c.damage) + 1
+    if (c.hasRelic('hot-stone') && c.ember >= 7) bonus += Math.floor(0.25 * c.damage) + 1
+    if (c.hasRelic('oil-bottle')) bonus += gs.enhancements.oilBottleTurnUses
+    return bonus
+  }
+
+  /** 방화광용: 필드 전체 적/보스에게 amount 피해. 제거된 적 카드 목록을 돌려줘 호출부가 애니메이션한다. */
+  static damageAllEnemies(gs: GameState, amount: number): { cardId: string; defeated: boolean }[] {
+    const hits: { cardId: string; defeated: boolean }[] = []
+    const seen = new Set<Card>()
+    for (let lane = 0; lane < gs.lanes.length; lane++) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = gs.lanes[lane].getCardAtDistance(d)
+        if (!card || seen.has(card)) continue
+        if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) continue
+        seen.add(card)
+        card.takeDamage(amount)
+        const defeated = card.getHealth() <= 0
+        if (defeated && card.type !== CardType.BOSS) gs.removeCardFromRow(card, d)
+        hits.push({ cardId: card.id, defeated })
+      }
+    }
+    return hits
   }
 
   /** Apply a hand card's single-use effect. coin/card 보너스는 use()에서 처리한다. */
@@ -666,7 +690,7 @@ export class HandSystem {
     target?: HandTarget
   ): string {
     const c = gs.character
-    const bonus = (gs.enhancements.singleBonus[def.id] ?? 0) + HandSystem.flameHotStoneBonus(gs, def)
+    const bonus = (gs.enhancements.singleBonus[def.id] ?? 0) + HandSystem.flameDamageBonus(gs, def)
     switch (def.id) {
       case 'wax-drop': {
         const healed = c.heal(1 + bonus)
@@ -819,7 +843,7 @@ export class HandSystem {
     target?: HandTarget
   ): string {
     const c = gs.character
-    const bonus = (gs.enhancements.tripleBonus[def.id] ?? 0) + HandSystem.flameHotStoneBonus(gs, def)
+    const bonus = (gs.enhancements.tripleBonus[def.id] ?? 0) + HandSystem.flameDamageBonus(gs, def)
     switch (def.id) {
       case 'wax-drop': {
         const healed = c.heal(5 + bonus)

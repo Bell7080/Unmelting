@@ -62,8 +62,14 @@ export interface RunEnhancements {
   fuelKillCount: number
   /** 연마 유물: 칼날 손패 사용 누적(3마다 모든 칼날 피해 영구 +1). 트리플도 1회로 센다. */
   sharpeningUseCount: number
+  /** 방화광 유물: 불씨 손패 사용 누적(5마다 필드 전체 피해). */
+  pyromaniacUseCount: number
+  /** 불타는 허수아비 유물: 처치 없이 쓴 불씨 손패 누적(3마다 불씨 손패 지급). */
+  scarecrowNoKillCount: number
+  /** 기름병 유물: 이번 턴 사용한 불씨 손패 수(불씨 피해 +N, 턴 갱신 시 0으로). */
+  oilBottleTurnUses: number
 }
 
 export function makeDefaultEnhancements(): RunEnhancements {
-  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, blackCandleBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, tier1CardBoosts: {}, tier1JobPoolBoosts: {}, inkQuillKillCount: 0, honestyHandUseCount: 0, ambitionKillCount: 0, ambitionCurrentGain: 0, libraryCountdown: 4, bloodWritSelfDamageAccum: 0, coagulationSelfDamageAccum: 0, bloodSigilUseCount: 0, recycleWaxUseCount: 0, trumpShotShardCount: 0, bladeShardUseCount: 0, throwArtBonusAtk: 0, fuelKillCount: 0, sharpeningUseCount: 0 }
+  return { tripleBonus: {}, singleBonus: {}, recipeBonus: {}, scoreMultiplier: 1, bookOfFlamesBonus: 0, blackCandleBonus: 0, shopDiscountPct: 0, luxuryScoreSpent: 0, luxuryBonusAtk: 0, demonDollSelfDamageAccum: 0, demonDollBonusAtk: 0, tier1CardBoosts: {}, tier1JobPoolBoosts: {}, inkQuillKillCount: 0, honestyHandUseCount: 0, ambitionKillCount: 0, ambitionCurrentGain: 0, libraryCountdown: 4, bloodWritSelfDamageAccum: 0, coagulationSelfDamageAccum: 0, bloodSigilUseCount: 0, recycleWaxUseCount: 0, trumpShotShardCount: 0, bladeShardUseCount: 0, throwArtBonusAtk: 0, fuelKillCount: 0, sharpeningUseCount: 0, pyromaniacUseCount: 0, scarecrowNoKillCount: 0, oilBottleTurnUses: 0 }
 }
