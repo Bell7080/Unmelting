@@ -6,6 +6,7 @@
 import type { Card } from '@entities/Card'
 import type { CandleMode } from '@entities/Character'
 import type { HandCardId, HandCategory } from '@entities/HandCard'
+import type { BossGimmickCellView } from '@systems/BossGimmickManager'
 import type { EmberTier, SpawnWeights } from '@systems/EmberSystem'
 import type { RelicId } from '@data/Relics'
 import type { CardRarity } from '@data/ShopPools'
@@ -14,6 +15,15 @@ export interface CardActionDetail {
   laneIndex: number
   distance: number
   card: Card
+  /** 보스 칸 기믹 격자에서 실제로 누른 하위 칸 번호. 격자가 없거나 키보드 조작이면 undefined. */
+  bossGimmickCellIndex?: number
+}
+
+/** 보스 타일 위에 겹치는 칸 기믹 격자의 렌더 뷰. BossEventController가 밀어 넣는다. */
+export interface BossGimmickGridView {
+  cols: number
+  rows: number
+  cells: readonly BossGimmickCellView[]
 }
 
 export interface ItemActionDetail {

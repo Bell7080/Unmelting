@@ -3171,7 +3171,8 @@ async function handleCardAction(e: Event): Promise<void> {
 
   // 보스 카드(5번째 카드 종류) 클릭은 일반 적 흐름이 아니라 별도 가상 턴 처리.
   if (card.type === CardType.BOSS && bossController.eventState && bossController.eventState.card === card) {
-    await bossController.handleClick(card)
+    // 보스 위 칸 기믹 격자에서 실제로 누른 칸을 그대로 넘긴다(없으면 컨트롤러가 중앙 칸으로 접는다).
+    await bossController.handleClick(card, detail.bossGimmickCellIndex)
     return
   }
 

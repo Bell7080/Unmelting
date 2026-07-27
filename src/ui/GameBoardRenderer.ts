@@ -72,7 +72,9 @@ import { sfx } from '@/audio/SfxManager'
 
 // 뷰 계약 타입은 renderer/RendererTypes.ts로 분리 — 기존 import 경로 호환을 위해 재수출한다.
 export * from '@ui/renderer/RendererTypes'
+import type { BossGimmickCellKind } from '@systems/BossGimmickManager'
 import type {
+  BossGimmickGridView,
   CardActionDetail,
   ChainHints,
   ForcedTrialCardView,
@@ -189,6 +191,17 @@ export class GameBoardRenderer {
   getSpawnWeightCtx(): SpawnWeightContext | undefined { return this.currentSpawnWeightCtx }
   getLockedCardIds(): ReadonlySet<HandCardId> { return this.lockedCardIds }
   getLockedRecipeIds(): ReadonlySet<string> { return this.lockedRecipeIds }
+  getBossGimmickGrid(): BossGimmickGridView | null { return this.bossGimmickGrid }
+
+  /** 보스 칸 기믹 격자 뷰. BossEventController가 굴린 격자를 그대로 밀어 넣는다. */
+  private bossGimmickGrid: BossGimmickGridView | null = null
+  setBossGimmickGrid(grid: BossGimmickGridView | null): void {
+    this.bossGimmickGrid = grid
+  }
+  /** 때린 칸 타격 피드백 — 연출은 BossFxView가 담당한다. */
+  playBossGimmickCellHit(cellIndex: number, kind: BossGimmickCellKind): void {
+    this.bossFx.playBossGimmickCellHit(cellIndex, kind)
+  }
 
   constructor(containerId: string = 'game-board') {
     const container = document.getElementById(containerId)
@@ -1075,6 +1088,7 @@ export class GameBoardRenderer {
           </div>
           <span class="boss-face-atk">${swordIcon()}<span class="boss-face-atk-value">${atk}</span></span>
         </div>
+        ${this.bossFx.bossGimmickGridHtml()}
       </article>
     `
   }
@@ -2016,7 +2030,12 @@ export class GameBoardRenderer {
         e.stopPropagation()
         const laneIndex = parseInt(el.dataset.lane || '0', 10)
         const distance = parseInt(el.dataset.distance || '0', 10)
-        this.handleCardClick(el, laneIndex, distance)
+        // 보스 칸 기믹 격자를 눌렀다면 그 하위 칸 번호를 함께 실어 보낸다.
+        // 키보드(Enter)로 타일을 직접 열면 target이 격자 밖이라 undefined가 되고,
+        // 모델이 중앙 칸으로 접어 처리한다.
+        const gimmickCell = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-boss-gimmick-cell]')
+        const cellIndex = gimmickCell ? Number(gimmickCell.dataset.bossGimmickCell) : undefined
+        this.handleCardClick(el, laneIndex, distance, cellIndex)
       })
     })
 
@@ -2199,17 +2218,22 @@ export class GameBoardRenderer {
       ?.classList.remove('is-preview-stable')
   }
 
-  private handleCardClick(_el: HTMLElement, laneIndex: number, distance: number): void {
-    this.dispatchAction(laneIndex, distance)
+  private handleCardClick(
+    _el: HTMLElement,
+    laneIndex: number,
+    distance: number,
+    bossGimmickCellIndex?: number
+  ): void {
+    this.dispatchAction(laneIndex, distance, bossGimmickCellIndex)
   }
 
-  private dispatchAction(laneIndex: number, distance: number): void {
+  private dispatchAction(laneIndex: number, distance: number, bossGimmickCellIndex?: number): void {
     const lane = this.currentGameState?.getLane(laneIndex)
     const card = lane?.getCardAtDistance(distance)
     if (!card) return
 
     const event = new CustomEvent<CardActionDetail>('cardAction', {
-      detail: { laneIndex, distance, card },
+      detail: { laneIndex, distance, card, bossGimmickCellIndex },
     })
     document.dispatchEvent(event)
   }

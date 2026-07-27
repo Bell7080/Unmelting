@@ -7,6 +7,7 @@ import type { GameBoardRenderer } from '@ui/GameBoardRenderer'
 import { spriteForHandCard, SpriteUrls } from '@ui/Sprites'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { escapeHtml } from '@ui/renderer/Html'
+import { BOSS_GIMMICK_KIND_META, type BossGimmickCellKind } from '@systems/BossGimmickManager'
 
 export class BossFxView {
   constructor(private readonly host: GameBoardRenderer) {}
@@ -228,6 +229,48 @@ export class BossFxView {
     const n = this.bossAttackCountdown == null ? 3 : this.bossAttackCountdown
     // 좌상단 배지는 카드의 다른 턴 표기와 맞춰 명령형 문구 없이 숫자만 읽히게 한다.
     return `${Math.max(0, n)}턴`
+  }
+
+  /** 보스 타일 위에 겹치는 칸 기믹 격자. 상태는 host가 들고 있고 여기선 마크업만 만든다.
+   *  칸 자체는 투명하며(일러스트를 가리지 않는다) 정체가 드러난 칸만 표식을 남긴다. */
+  bossGimmickGridHtml(): string {
+    const grid = this.host.getBossGimmickGrid()
+    if (!grid) return ''
+    const cells = grid.cells
+      .map((cell) => {
+        const meta = BOSS_GIMMICK_KIND_META[cell.kind]
+        // 드러나기 전에는 종류를 숨긴다 — 어디가 약점인지 때려 보며 찾는 게 기믹의 핵심.
+        const kindClass = cell.revealed ? `is-revealed is-kind-${cell.kind}` : ''
+        const label = cell.revealed && meta.label
+          ? `<span class="boss-gimmick-cell-label">${escapeHtml(meta.label)}</span>
+             <span class="boss-gimmick-cell-mult">×${meta.multiplier}</span>`
+          : ''
+        const aria = cell.revealed && meta.label ? `${meta.label} 부위` : '보스 부위'
+        return `<button class="boss-gimmick-cell ${kindClass}" type="button"
+                        data-boss-gimmick-cell="${cell.index}" aria-label="${aria}">${label}</button>`
+      })
+      .join('')
+    return `<div class="boss-gimmick-grid"
+                 style="--boss-gimmick-cols:${grid.cols};--boss-gimmick-rows:${grid.rows};">${cells}</div>`
+  }
+
+  /** 때린 칸에 짧은 타격 피드백. 약점은 강한 버스트, 경화는 둔탁한 억제 톤. */
+  playBossGimmickCellHit(cellIndex: number, kind: BossGimmickCellKind): void {
+    const cell = this.host.boardElement.querySelector<HTMLElement>(
+      `.boss-gimmick-cell[data-boss-gimmick-cell="${cellIndex}"]`
+    )
+    if (!cell) return
+    const theme: BurstTheme = kind === 'weak' ? 'damage' : 'shield-gain'
+    SquareBurst.playOn(cell, theme, {
+      count: kind === 'weak' ? 16 : 8,
+      spread: kind === 'weak' ? 120 : 70,
+      duration: 480,
+    })
+    cell.classList.remove('is-hit')
+    // 리플로우 1회로 같은 칸을 연타해도 애니메이션이 매번 처음부터 재생되게 한다.
+    void cell.offsetWidth
+    cell.classList.add('is-hit')
+    window.setTimeout(() => cell.classList.remove('is-hit'), 520)
   }
 
   /** 보스 보상 카드 클릭 시 일반 보물칸 처치 그라마를 그대로 재사용해 흔들+확대 사라짐.

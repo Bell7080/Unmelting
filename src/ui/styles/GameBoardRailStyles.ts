@@ -1331,6 +1331,94 @@ export const GAME_BOARD_RAIL_STYLES = `
   font-size: clamp(18px, 2.4vh, 22px);
   font-variant-numeric: tabular-nums;
 }
+/* ────────────────── 보스 칸 기믹 격자 ──────────────────
+   큰 칸 1개로 그려지는 보스 위에 겹치는 투명 격자. 평소에는 일러스트를 전혀
+   가리지 않고, hover로만 "여기는 나뉜 부위"라는 걸 알린다. 한 번 때려 정체가
+   드러난 칸만 약점/경화 표식을 남겨 다음 타격 위치를 고르게 한다.
+   z-index는 보스 face 내부 레이어(art 0 / overlay 1) 위, 칸 내부 대역(≤50)을 지킨다. */
+.boss-gimmick-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: repeat(var(--boss-gimmick-cols, 3), 1fr);
+  grid-template-rows: repeat(var(--boss-gimmick-rows, 3), 1fr);
+}
+.boss-gimmick-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.boss-gimmick-cell:hover {
+  border-color: rgba(244, 214, 160, 0.32);
+  background: rgba(244, 214, 160, 0.08);
+  box-shadow: inset 0 0 14px rgba(244, 164, 96, 0.16);
+}
+/* 손패 타겟팅 중에는 격자가 보스 전체 클릭을 가로채면 안 된다 — 칸 판정은 직접 타격 전용. */
+body.is-hand-targeting .boss-gimmick-cell {
+  pointer-events: none;
+}
+/* 드러난 칸: 종류별 색만 아주 옅게 남겨 일러스트 판독을 해치지 않는다. */
+.boss-gimmick-cell.is-revealed.is-kind-weak {
+  border-color: rgba(255, 168, 120, 0.5);
+  background: rgba(200, 60, 50, 0.14);
+}
+.boss-gimmick-cell.is-revealed.is-kind-hardened {
+  border-color: rgba(150, 170, 210, 0.42);
+  background: rgba(60, 70, 110, 0.2);
+}
+.boss-gimmick-cell.is-revealed.is-kind-plain {
+  border-color: rgba(220, 210, 190, 0.16);
+}
+.boss-gimmick-cell-label {
+  font-size: clamp(12px, 1.5vh, 15px);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+.boss-gimmick-cell-mult {
+  font-size: clamp(12px, 1.4vh, 14px);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.86;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+.boss-gimmick-cell.is-kind-weak .boss-gimmick-cell-label,
+.boss-gimmick-cell.is-kind-weak .boss-gimmick-cell-mult {
+  color: rgba(255, 186, 140, 0.96);
+}
+.boss-gimmick-cell.is-kind-hardened .boss-gimmick-cell-label,
+.boss-gimmick-cell.is-kind-hardened .boss-gimmick-cell-mult {
+  color: rgba(184, 200, 236, 0.94);
+}
+/* 타격 순간: 약점은 화르르 밝아지고, 경화는 둔탁하게 눌린다. */
+.boss-gimmick-cell.is-hit.is-kind-weak {
+  animation: boss-gimmick-hit-weak 0.5s cubic-bezier(0.2, 0.86, 0.28, 1);
+}
+.boss-gimmick-cell.is-hit.is-kind-hardened,
+.boss-gimmick-cell.is-hit.is-kind-plain {
+  animation: boss-gimmick-hit-dull 0.5s cubic-bezier(0.2, 0.86, 0.28, 1);
+}
+@keyframes boss-gimmick-hit-weak {
+  0%   { background: rgba(255, 190, 130, 0.5); box-shadow: inset 0 0 26px rgba(255, 140, 80, 0.6); }
+  100% { background: rgba(200, 60, 50, 0.14); box-shadow: inset 0 0 0 rgba(0, 0, 0, 0); }
+}
+@keyframes boss-gimmick-hit-dull {
+  0%   { background: rgba(150, 170, 210, 0.34); transform: scale(0.965); }
+  60%  { transform: scale(1.004); }
+  100% { background: rgba(60, 70, 110, 0.2); transform: scale(1); }
+}
+
 /* 보스 등장 시 셔터 진동을 한 비트 강화. 인트로 + 강하와 함께 묵직한 쿵 임팩트. */
 .rail.is-boss-quaking {
   animation: boss-rail-impact-quake 0.62s cubic-bezier(0.32, 0.04, 0.18, 0.96);

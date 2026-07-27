@@ -25,6 +25,7 @@ import { sampleWithoutReplacement } from '@core/Sampling'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
 import { EmberSystem } from '@systems/EmberSystem'
 import { BOSS_CORE_SPECS, ONBOARDING_CAT_SPEC, demonSummonSpec } from '@data/BossSpecs'
+import { BossGimmickManager, BOSS_GIMMICK_KIND_META } from '@systems/BossGimmickManager'
 
 type WaxKnightCardEffect = 'shield' | 'heal' | 'strike'
 type BossPage = 1 | 2 | 3
@@ -145,6 +146,8 @@ export class BossEventController {
   rewardState: BossRewardState | null = null
   /** 보상/시련 단계 중 손패 카드 사용 차단 플래그 */
   postPhaseHandLocked = false
+  /** 보스 타일 위에 겹치는 칸 기믹 격자(약점/경화). 프로필이 있는 보스에서만 켜진다. */
+  readonly gimmicks = new BossGimmickManager()
 
   constructor(
     private readonly gs: GameState,
@@ -163,6 +166,22 @@ export class BossEventController {
     this.eventState = null
     this.rewardState = null
     this.postPhaseHandLocked = false
+    this.clearGimmickGrid()
+  }
+
+  /** 격자를 비우고 렌더러의 오버레이도 함께 내린다(격파·런 리셋 공용). */
+  private clearGimmickGrid(): void {
+    this.gimmicks.reset()
+    this.br.setBossGimmickGrid(null)
+  }
+
+  /** 현재 격자 상태를 렌더러에 밀어 넣는다. 드러난 칸 표식이 다음 render에 반영된다. */
+  private syncGimmickGrid(): void {
+    this.br.setBossGimmickGrid(
+      this.gimmicks.isActive
+        ? { cols: this.gimmicks.cols, rows: this.gimmicks.rows, cells: this.gimmicks.getCells() }
+        : null
+    )
   }
 
   // ---- 공개 흐름 메서드 -------------------------------------------------------
@@ -341,7 +360,7 @@ export class BossEventController {
   }
 
   /** 보스 카드 클릭 처리. handleCardAction 내 BOSS 분기에서 호출한다. */
-  async handleClick(card: Card): Promise<void> {
+  async handleClick(card: Card, gimmickCellIndex?: number): Promise<void> {
     if (!this.eventState || this.eventState.card !== card) return
     const state = this.eventState
     const character = this.gs.character
@@ -357,7 +376,24 @@ export class BossEventController {
     const bossTile = this.br.findCardElement(card.id)
     if (bossTile) SquareBurst.playOn(bossTile, 'damage', { count: 22, spread: 180, duration: 560 })
     const beforeBossHp = card.getHealth()
-    const rawDamage = Math.min(character.damage, card.getHealth() + state.bossShield)
+    // 칸 기믹: 때린 격자 칸의 배율을 먼저 먹인 뒤 방패/페이지 상한을 계산한다.
+    const struck = this.gimmicks.strike({ cellIndex: gimmickCellIndex, baseDamage: character.damage })
+    const attackPower = struck ? struck.damage : character.damage
+    if (struck) {
+      this.syncGimmickGrid()
+      // 처음 드러난 칸은 표식이 새로 붙으므로 먼저 다시 그린다 —
+      // 그 다음에 타격 연출을 얹어야 render가 방금 재생한 연출을 지우지 않는다.
+      if (struck.firstReveal) this.inject.render()
+      this.br.playBossGimmickCellHit(struck.cell.index, struck.cell.kind)
+      if (struck.cell.kind !== 'plain') {
+        const meta = BOSS_GIMMICK_KIND_META[struck.cell.kind]
+        this.inject.recordNotice(
+          `${meta.label} 부위를 때렸다 — 피해 ×${meta.multiplier}`,
+          struck.cell.kind === 'weak' ? 'win' : 'info'
+        )
+      }
+    }
+    const rawDamage = Math.min(attackPower, card.getHealth() + state.bossShield)
     const blocked = Math.min(state.bossShield, rawDamage)
     state.bossShield -= blocked
     this.syncBossShieldToCard()
@@ -771,6 +807,9 @@ export class BossEventController {
         : 0,
     }
     this.syncBossShieldToCard()
+    // 칸 기믹 격자는 보스마다 새로 굴린다 — 약점 자리를 매 조우 다시 찾아내게 한다.
+    this.gimmicks.beginEncounter(def.specialEnemyKind)
+    this.syncGimmickGrid()
 
     this.tm.setTurnMode('boss_phase')
     this.gs.bossBattleActive = true
@@ -1634,6 +1673,7 @@ export class BossEventController {
     }
     this.gs.bossBattleActive = false
     this.br.setBossAttackCountdown(null)
+    this.clearGimmickGrid()
     this.inject.render()
     // 격파 연출·레일 정리가 끝난 시점 — 에나의 격파 한마디가 컷신 대사를 덮지 않는다.
     this.inject.onBossKill?.(state.def.name)
