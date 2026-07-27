@@ -854,15 +854,17 @@ export class RelicEffectsManager {
     void playPlayerGainTrails({ kind: 'chain' }, beforeResources)
   }
 
-  /** 수혈: 입은 자해 피해량만큼 필드 랜덤 적에게 1씩 분산 타격한다(가시 방패와 동일 경로). */
+  /** 수혈: 입은 자해 피해량만큼 필드 랜덤 적에게 1씩 분산 타격한다.
+   *  대상은 표기 그대로 '필드' 전체다 — 전방만 훑으면 바늘처럼 대기 행 적을 노리는
+   *  제물 손패를 쓸 때 환급이 통째로 헛돌아 발동 자체가 없던 일이 된다. */
   async applyTransfusionSelfDamage(amount: number): Promise<void> {
     const { gameState, boardRenderer, recordRelicActivation } = this.deps
     if (!gameState.character.hasRelic('transfusion') || amount <= 0) return
     let hits = 0
     let kills = 0
     for (let i = 0; i < amount; i++) {
-      const hit = gameState.damageRandomFrontEnemy(1)
-      if (!hit) break // 전방 적 없음
+      const hit = gameState.damageRandomFieldEnemy(1)
+      if (!hit) break // 필드에 적 없음
       hits++
       await boardRenderer.animateDamageNumbersById([{ cardId: hit.cardId, amount: hit.amount }])
       if (hit.defeated) {

@@ -229,6 +229,30 @@ export class GameState {
     return { cardId: pick.card.id, amount, defeated }
   }
 
+  /** Deal damage to one random enemy anywhere on the field (대기 행 포함).
+   *  전방이 비어도 뒤에 남은 적을 때리므로, '필드 랜덤 적' 표기 효과(수혈 등)가 헛돌지 않는다.
+   *  여러 레인에 걸친 카드는 처음 만난 레인/거리 기준으로 한 번만 후보에 올린다. */
+  damageRandomFieldEnemy(
+    amount: number
+  ): { cardId: string; amount: number; defeated: boolean } | null {
+    const candidates: { card: Card; distance: number }[] = []
+    const seen = new Set<Card>()
+    for (const lane of this.lanes) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = lane.getCardAtDistance(d)
+        if (!card || card.type !== CardType.ENEMY || seen.has(card)) continue
+        seen.add(card)
+        candidates.push({ card, distance: d })
+      }
+    }
+    if (candidates.length === 0) return null
+    const pick = candidates[Math.floor(Math.random() * candidates.length)]
+    pick.card.takeDamage(amount)
+    const defeated = pick.card.getHealth() <= 0
+    if (defeated) this.removeCardFromRow(pick.card, pick.distance)
+    return { cardId: pick.card.id, amount, defeated }
+  }
+
   /** Deal damage to a specific on-field enemy by id (품격있는 대처 유물용).
    *  Returns the hit summary, or null if the id is not an active enemy. */
   damageEnemyById(

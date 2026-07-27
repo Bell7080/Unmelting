@@ -56,3 +56,40 @@ describe('GameState rail maintenance', () => {
     expect(spore.sporeTurnsUntilSpread).toBe(1)
   })
 })
+
+describe('GameState.damageRandomFieldEnemy', () => {
+  /** 대기 행에만 적이 남은 판 — 전방 전용 조준이면 여기서 통째로 헛돈다. */
+  function makeEnemy(id: string, health: number): Card {
+    return new Card(id, CardType.ENEMY, id, 'test', health, 1)
+  }
+
+  it('대기 행에만 적이 있어도 때린다 — 수혈 등 "필드 랜덤 적" 환급이 헛돌지 않는다', () => {
+    const gameState = new GameState()
+    const waiting = makeEnemy('waiting-enemy', 3)
+    gameState.lanes[2].setCardAtDistance(2, waiting)
+
+    const hit = gameState.damageRandomFieldEnemy(1)
+
+    expect(hit).not.toBeNull()
+    expect(hit?.cardId).toBe('waiting-enemy')
+    expect(hit?.defeated).toBe(false)
+    expect(waiting.getHealth()).toBe(2)
+    // 전방 전용 조준은 같은 판에서 아무 대상도 찾지 못한다(회귀 방지 대조군).
+    expect(gameState.damageRandomFrontEnemy(1)).toBeNull()
+  })
+
+  it('처치한 적은 레일에서 즉시 치운다', () => {
+    const gameState = new GameState()
+    gameState.lanes[0].setCardAtDistance(1, makeEnemy('dying-enemy', 1))
+
+    const hit = gameState.damageRandomFieldEnemy(1)
+
+    expect(hit?.defeated).toBe(true)
+    expect(gameState.lanes[0].getCardAtDistance(1)).toBeNull()
+  })
+
+  it('필드에 적이 하나도 없으면 null을 돌려준다', () => {
+    const gameState = new GameState()
+    expect(gameState.damageRandomFieldEnemy(1)).toBeNull()
+  })
+})

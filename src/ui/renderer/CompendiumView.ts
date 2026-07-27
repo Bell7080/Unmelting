@@ -456,6 +456,7 @@ export class CompendiumView {
       const ATK_CARDS: ReadonlySet<HandCardId> = new Set([
         'ember', 'sacrifice-candle', 'levatein', 'firework', 'fire-arrow',
         'chandelier', 'bonfire', 'teapot', 'slash', 'candle-tome', 'sword-and-shield',
+        'needle', 'guillotine', // 제물 축 ATK 카드 — 자해 표기 뒤 피해가 desc-dyn 수식 전환을 쓴다
         'book-of-flames', // 피해/성장 줄 모두 desc-dyn 수식 전환을 쓰므로 span 보존 필요
       ])
       const toChip = ATK_CARDS.has(def.id) ? chipDescAtk : chipDesc

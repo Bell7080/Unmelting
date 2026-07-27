@@ -508,6 +508,21 @@ export class CardFaceRenderer {
       const dmg = merged ? atkDmgHtml(atk, 2, 3, b) : atkDmgHtml(atk, 0.5, 1, b)
       return `전방 선택 적 1장 ${dmg} · 방패 +${shieldVal}`
     }
+    // 바늘: 단일/트리플 모두 발당 (0.5공+1) — 트리플은 같은 피해를 3발 나눠 던진다(모닥불과 같은 회복 표기).
+    if (id === 'needle') {
+      const b = merged ? (enhancements?.tripleBonus['needle'] ?? 0) : (enhancements?.singleBonus['needle'] ?? 0)
+      const healVal = merged ? 5 + b : 3 + b
+      const dmg = atkDmgHtml(atk, 0.5, 1, b)
+      return merged
+        ? `자해 2 · 필드 랜덤 적 3장 ${dmg} · 처치 시 체력 +${healVal}`
+        : `자해 1 · 필드 랜덤 적 1장 ${dmg} · 처치 시 체력 +${healVal}`
+    }
+    // 단두대: 대량 자해 펌프 — 필드 전체 확정 피해라 다른 ATK 카드와 같은 합산/수식 전환을 쓴다.
+    if (id === 'guillotine') {
+      const b = merged ? (enhancements?.tripleBonus['guillotine'] ?? 0) : (enhancements?.singleBonus['guillotine'] ?? 0)
+      const dmg = merged ? atkDmgHtml(atk, 3, 8, b) : atkDmgHtml(atk, 1, 3, b)
+      return merged ? `자해 10 · 필드 전체 적 ${dmg}` : `자해 6 · 필드 전체 적 ${dmg}`
+    }
     const bonus = merged
       ? (enhancements?.tripleBonus[id] ?? 0)
       : (enhancements?.singleBonus[id] ?? 0)
