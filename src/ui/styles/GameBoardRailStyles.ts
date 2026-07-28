@@ -1415,16 +1415,16 @@ export const GAME_BOARD_RAIL_STYLES = `
   background: rgba(255, 219, 150, 0.12);
   box-shadow: inset 0 0 16px rgba(244, 164, 96, 0.22);
 }
-/* 드러난 칸: 종류별 색만 옅게 얹어 일러스트 판독을 해치지 않는다. */
-.boss-gimmick-cell.is-revealed.is-kind-weak {
+/* 칸 종류별 색만 옅게 얹어 일러스트 판독을 해치지 않는다. */
+.boss-gimmick-cell.is-kind-weak {
   border-color: rgba(255, 168, 120, 0.52);
   background: rgba(200, 60, 50, 0.16);
 }
-.boss-gimmick-cell.is-revealed.is-kind-hardened {
+.boss-gimmick-cell.is-kind-hardened {
   border-color: rgba(150, 170, 210, 0.46);
   background: rgba(60, 70, 110, 0.2);
 }
-.boss-gimmick-cell.is-revealed.is-kind-plain {
+.boss-gimmick-cell.is-kind-plain {
   border-style: solid;
   border-color: rgba(228, 214, 186, 0.22);
 }
@@ -1470,6 +1470,18 @@ export const GAME_BOARD_RAIL_STYLES = `
   0%, 100% { box-shadow: 0 0 14px rgba(255, 205, 110, 0.3), inset 0 0 10px rgba(255, 205, 110, 0.14); }
   50%      { box-shadow: 0 0 22px rgba(255, 205, 110, 0.52), inset 0 0 18px rgba(255, 205, 110, 0.24); }
 }
+/* 보스 페이지 진입 연출: 인트로·타이틀이 끝난 뒤 칸이 좌상단부터 순서대로 스르륵 떠오른다.
+   is-appearing은 격자가 처음 켜진 렌더에만 붙어(consumeBossGimmickEntering) 재렌더에서 반복되지 않는다. */
+.boss-gimmick-grid.is-appearing .boss-gimmick-cell {
+  animation: boss-gimmick-cell-appear 0.52s cubic-bezier(0.22, 0.84, 0.3, 1) both;
+  animation-delay: calc(var(--boss-gimmick-i, 0) * 55ms);
+}
+@keyframes boss-gimmick-cell-appear {
+  0%   { opacity: 0; transform: scale(0.86); filter: blur(3px); }
+  55%  { opacity: 1; transform: scale(1.03); filter: blur(0); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+
 /* 타격 순간: 약점은 화르르 밝아지고, 경화는 둔탁하게 눌린다. */
 .boss-gimmick-cell.is-hit.is-kind-weak {
   animation: boss-gimmick-hit-weak 0.5s cubic-bezier(0.2, 0.86, 0.28, 1);

@@ -24,7 +24,7 @@ export type BossGimmickCellKind = 'plain' | 'weak' | 'hardened'
 export type BossGimmickSpecialKind = Exclude<BossGimmickCellKind, 'plain'>
 
 export interface BossGimmickKindMeta {
-  /** 칸이 드러났을 때 표시할 짧은 이름. */
+  /** 칸에 표시할 짧은 이름. plain은 빈 문자열이라 아무것도 적지 않는다. */
   label: string
   /** 직접 공격 피해 배율. */
   multiplier: number
@@ -70,7 +70,7 @@ export interface BossGimmickExpectation {
   cells: number
   /** 칸 배율 평균 — 어느 칸에 꽂힐지 모르는 피해의 기대 배율. */
   averageMultiplier: number
-  /** 최고 배율 — 드러난 약점을 노려 때리는 조준 타격의 배율. */
+  /** 최고 배율 — 약점을 노려 때리는 조준 타격의 배율. */
   bestMultiplier: number
 }
 
@@ -103,8 +103,6 @@ export interface BossGimmickCellView {
   index: number
   kind: BossGimmickCellKind
   multiplier: number
-  /** 한 번이라도 때려 정체가 드러났는지 — 드러난 칸만 표식을 보여 준다. */
-  revealed: boolean
 }
 
 /**
@@ -124,13 +122,10 @@ export interface BossGimmickStrike {
   cell: BossGimmickCellView
   /** 배율을 적용한 최종 피해. */
   damage: number
-  /** 이번 타격으로 처음 정체가 드러났는지 — 안내 문구를 1회만 띄우기 위해 쓴다. */
-  firstReveal: boolean
 }
 
 interface BossGimmickCell {
   kind: BossGimmickCellKind
-  revealed: boolean
 }
 
 export class BossGimmickManager {
@@ -175,7 +170,6 @@ export class BossGimmickManager {
       index,
       kind: cell.kind,
       multiplier: BOSS_GIMMICK_KIND_META[cell.kind].multiplier,
-      revealed: cell.revealed,
     }))
   }
 
@@ -184,7 +178,7 @@ export class BossGimmickManager {
   }
 
   /**
-   * 격자 한 칸을 때린다. 배율을 적용한 피해를 돌려주고 그 칸을 영구히 드러낸다.
+   * 격자 한 칸을 때린다. 배율을 적용한 피해를 돌려준다.
    * 격자가 없으면 null — 호출부는 기존 피해를 그대로 쓰면 된다.
    */
   strike(ctx: BossGimmickStrikeContext): BossGimmickStrike | null {
@@ -211,16 +205,13 @@ export class BossGimmickManager {
     return this.cells.map((_, index) => this.strikeAt(index, { cellIndex: index, baseDamage }))
   }
 
-  /** 칸 인덱스 확정 후 공통 처리 — 드러냄 + 배율 + 피해 환산의 단일 경로. */
+  /** 칸 인덱스 확정 후 공통 처리 — 배율 + 피해 환산의 단일 경로. */
   private strikeAt(index: number, ctx: BossGimmickStrikeContext): BossGimmickStrike {
     const cell = this.cells[index]
-    const firstReveal = !cell.revealed
-    cell.revealed = true
     const multiplier = this.resolveMultiplier(cell, ctx)
     return {
-      cell: { index, kind: cell.kind, multiplier, revealed: true },
+      cell: { index, kind: cell.kind, multiplier },
       damage: this.applyMultiplier(ctx.baseDamage, multiplier),
-      firstReveal,
     }
   }
 
@@ -250,11 +241,11 @@ export class BossGimmickManager {
       for (let i = 0; i < slot.count && kinds.length < total; i++) kinds.push(slot.kind)
     }
     while (kinds.length < total) kinds.push('plain')
-    // Fisher-Yates — 매 조우마다 약점 자리가 달라져 매번 새로 찾아내야 한다.
+    // Fisher-Yates — 매 조우마다 약점 자리가 달라져 배치를 외워 쓸 수 없다.
     for (let i = kinds.length - 1; i > 0; i--) {
       const j = Math.floor(this.rng() * (i + 1))
       ;[kinds[i], kinds[j]] = [kinds[j], kinds[i]]
     }
-    return kinds.map((kind) => ({ kind, revealed: false }))
+    return kinds.map((kind) => ({ kind }))
   }
 }

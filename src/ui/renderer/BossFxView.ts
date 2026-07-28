@@ -239,22 +239,23 @@ export class BossFxView {
     // 손패 타겟팅 중에는 칸 하나하나가 일반 레일 칸처럼 개별 타깃으로 빛난다.
     // 이 보스가 그 손패의 유효 대상일 때만 — 아니면 보스 타일 전체가 차단 표시로 남는다.
     const targeting = this.host.getHandTargetingMode() !== null && isValidHandTarget
+    // 격자가 막 켜진 첫 렌더에서만 등장 연출을 태운다(재렌더마다 반복 재생 방지).
+    const entering = this.host.consumeBossGimmickEntering()
     const cells = grid.cells
       .map((cell) => {
         const meta = BOSS_GIMMICK_KIND_META[cell.kind]
-        // 드러나기 전에는 종류를 숨긴다 — 어디가 약점인지 때려 보며 찾는 게 기믹의 핵심.
-        const kindClass = cell.revealed ? `is-revealed is-kind-${cell.kind}` : ''
-        const label = cell.revealed && meta.label
+        const label = meta.label
           ? `<span class="boss-gimmick-cell-label">${escapeHtml(meta.label)}</span>
              <span class="boss-gimmick-cell-mult">×${meta.multiplier}</span>`
           : ''
-        const aria = cell.revealed && meta.label ? `${meta.label} 부위` : '보스 부위'
-        return `<button class="boss-gimmick-cell ${kindClass} ${targeting ? 'is-hand-target' : ''}"
-                        type="button"
+        const aria = meta.label ? `${meta.label} 부위 · 피해 ${meta.multiplier}배` : '보스 부위'
+        // --boss-gimmick-i는 등장 연출의 칸별 지연에 쓰인다(좌상단부터 순차 점등).
+        return `<button class="boss-gimmick-cell is-kind-${cell.kind} ${targeting ? 'is-hand-target' : ''}"
+                        type="button" style="--boss-gimmick-i:${cell.index};"
                         data-boss-gimmick-cell="${cell.index}" aria-label="${aria}">${label}</button>`
       })
       .join('')
-    return `<div class="boss-gimmick-grid ${targeting ? 'is-targeting' : ''}"
+    return `<div class="boss-gimmick-grid ${targeting ? 'is-targeting' : ''} ${entering ? 'is-appearing' : ''}"
                  style="--boss-gimmick-cols:${grid.cols};--boss-gimmick-rows:${grid.rows};">${cells}</div>`
   }
 

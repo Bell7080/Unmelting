@@ -176,7 +176,15 @@ export class BossEventController {
     this.br.setBossGimmickGrid(null)
   }
 
-  /** 현재 격자 상태를 렌더러에 밀어 넣는다. 드러난 칸 표식이 다음 render에 반영된다. */
+  /** 인트로가 끝난 뒤 격자를 실제로 켠다 — 손패 피해 판정(GameState)과 화면 노출을 함께 연다. */
+  private activateGimmickGrid(): void {
+    if (!this.gimmicks.isActive) return
+    this.gs.bossGimmicks = this.gimmicks
+    this.syncGimmickGrid()
+    this.inject.render()
+  }
+
+  /** 현재 격자 상태를 렌더러에 밀어 넣는다. */
   private syncGimmickGrid(): void {
     this.br.setBossGimmickGrid(
       this.gimmicks.isActive
@@ -381,10 +389,6 @@ export class BossEventController {
     const struck = this.gimmicks.strike({ cellIndex: gimmickCellIndex, baseDamage: character.damage })
     const attackPower = struck ? struck.damage : character.damage
     if (struck) {
-      this.syncGimmickGrid()
-      // 처음 드러난 칸은 표식이 새로 붙으므로 먼저 다시 그린다 —
-      // 그 다음에 타격 연출을 얹어야 render가 방금 재생한 연출을 지우지 않는다.
-      if (struck.firstReveal) this.inject.render()
       this.br.playBossGimmickCellHit(struck.cell.index, struck.cell.kind)
       if (struck.cell.kind !== 'plain') {
         const meta = BOSS_GIMMICK_KIND_META[struck.cell.kind]
@@ -522,8 +526,6 @@ export class BossEventController {
   /** 손패/조합식 데미지 후처리. checkBossDefeatedAfterHandEffect에서 위임. */
   async applyPostHandEffect(): Promise<void> {
     if (!this.eventState) return
-    // 손패 피해도 칸 배율을 타며 칸을 드러내므로, 그 결과를 화면 격자에 반영한다.
-    this.syncGimmickGrid()
     await this.consumeHandGiftThresholds(this.eventState.card.id)
     if (this.eventState.card.getHealth() <= 0) {
       await this.handleDefeated()
@@ -810,10 +812,9 @@ export class BossEventController {
         : 0,
     }
     this.syncBossShieldToCard()
-    // 칸 기믹 격자는 보스마다 새로 굴린다 — 약점 자리를 매 조우 다시 찾아내게 한다.
-    // 손패 피해도 같은 격자를 타야 하므로 GameState에 꽂아 HandSystem이 읽게 한다.
-    this.gs.bossGimmicks = this.gimmicks.beginEncounter(def.specialEnemyKind) ? this.gimmicks : null
-    this.syncGimmickGrid()
+    // 칸 기믹 격자는 보스마다 새로 굴린다 — 약점 자리가 매 조우 달라진다.
+    // 화면 노출과 판정 활성화는 인트로·타이틀이 끝난 뒤(activateGimmickGrid)로 미룬다.
+    this.gimmicks.beginEncounter(def.specialEnemyKind)
 
     this.tm.setTurnMode('boss_phase')
     this.gs.bossBattleActive = true
@@ -877,6 +878,10 @@ export class BossEventController {
       if (!introSkipRequested) await this.playIntroLine('boss', '고작… 실패작 주제에 내 걸작들의 상대가 되겠나?', 2800)
       await this.performSummonToBack()
     }
+
+    // 인트로·타이틀이 모두 끝나고 실제 보스 페이지에 들어서는 시점에 칸 기믹 격자를 켠다.
+    // 여기서 처음 화면에 올라가므로 렌더러가 칸을 스르륵 띄우는 등장 연출을 태운다.
+    this.activateGimmickGrid()
 
     // 인트로/타이틀이 모두 끝난 뒤 에나의 보스 등장 한마디(보스·플레이어 대사와 겹치지 않는 시점).
     this.inject.onBossIntro?.(def.name)

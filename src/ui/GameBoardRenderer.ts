@@ -196,8 +196,19 @@ export class GameBoardRenderer {
 
   /** 보스 칸 기믹 격자 뷰. BossEventController가 굴린 격자를 그대로 밀어 넣는다. */
   private bossGimmickGrid: BossGimmickGridView | null = null
+  /** 격자가 막 켜졌음을 표시하는 1회성 플래그 — 등장 연출을 첫 렌더에만 태운다. */
+  private bossGimmickEntering = false
   setBossGimmickGrid(grid: BossGimmickGridView | null): void {
+    // null → 격자로 바뀌는 순간(= 보스 페이지 진입)에만 등장 연출을 예약한다.
+    if (grid && !this.bossGimmickGrid) this.bossGimmickEntering = true
+    if (!grid) this.bossGimmickEntering = false
     this.bossGimmickGrid = grid
+  }
+  /** 등장 연출 플래그를 읽고 소비한다. 재렌더에서 애니메이션이 반복되지 않게 1회만 참이다. */
+  consumeBossGimmickEntering(): boolean {
+    if (!this.bossGimmickEntering) return false
+    this.bossGimmickEntering = false
+    return true
   }
   /** 때린 칸 타격 피드백 — 연출은 BossFxView가 담당한다. */
   playBossGimmickCellHit(cellIndex: number, kind: BossGimmickCellKind): void {

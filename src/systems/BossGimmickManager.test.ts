@@ -62,15 +62,17 @@ describe('BossGimmickManager', () => {
     expect(m.strike({ cellIndex: hardened?.index, baseDamage: 1 })?.damage).toBe(1)
   })
 
-  it('한 번 때린 칸은 드러난 채로 남고, 첫 타격에만 firstReveal이 선다', () => {
+  it('같은 칸을 여러 번 때려도 배율은 그대로다 — 칸이 닳거나 변하지 않는다', () => {
     const m = new BossGimmickManager(fixedRng())
     m.beginEncounter('waxArmy')
+    const weak = m.getCells().find((c) => c.kind === 'weak')
 
-    expect(m.getCells().every((c) => !c.revealed)).toBe(true)
-    expect(m.strike({ cellIndex: 0, baseDamage: 5 })?.firstReveal).toBe(true)
-    expect(m.strike({ cellIndex: 0, baseDamage: 5 })?.firstReveal).toBe(false)
-    expect(m.getCells()[0].revealed).toBe(true)
-    expect(m.getCells().filter((c) => c.revealed)).toHaveLength(1)
+    const first = m.strike({ cellIndex: weak?.index, baseDamage: 5 })
+    const second = m.strike({ cellIndex: weak?.index, baseDamage: 5 })
+
+    expect(first?.damage).toBe(10)
+    expect(second?.damage).toBe(10)
+    expect(second?.cell.kind).toBe('weak')
   })
 
   it('칸 번호가 없거나 범위 밖이면 중앙 칸으로 접는다(키보드 조작 대비)', () => {
@@ -120,11 +122,11 @@ describe('BossGimmickManager 광역/무작위 타격', () => {
     // 약점 2칸 ×2, 경화 2칸 ×0.5, 나머지 5칸 ×1 = 20+20+5+5+10×5 = 100.
     const total = strikes.reduce((sum, s) => sum + s.damage, 0)
     expect(total).toBe(2 * 20 + 2 * 5 + 5 * 10)
-    // 광역 한 방이면 격자 전체가 드러난다.
-    expect(m.getCells().every((c) => c.revealed)).toBe(true)
+    // 칸마다 정확히 한 번씩, 인덱스 중복 없이 들어간다.
+    expect(new Set(strikes.map((s) => s.cell.index)).size).toBe(9)
   })
 
-  it('strikeRandomCell은 격자 안의 칸만 고르고 그 칸을 드러낸다', () => {
+  it('strikeRandomCell은 격자 안의 칸만 고른다', () => {
     const m = new BossGimmickManager(fixedRng())
     m.beginEncounter('waxArmy')
 
@@ -133,7 +135,8 @@ describe('BossGimmickManager 광역/무작위 타격', () => {
     expect(struck).not.toBeNull()
     expect(struck?.cell.index).toBeGreaterThanOrEqual(0)
     expect(struck?.cell.index).toBeLessThan(9)
-    expect(m.getCells()[struck?.cell.index ?? 0].revealed).toBe(true)
+    // 고른 칸의 종류가 실제 격자 배치와 일치한다.
+    expect(struck?.cell.kind).toBe(m.getCells()[struck?.cell.index ?? 0].kind)
   })
 
   it('격자가 없으면 광역/무작위 타격도 아무 일도 하지 않는다', () => {
