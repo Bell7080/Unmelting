@@ -1,6 +1,6 @@
 # 버전 관리
 
-현재 버전: **v0.2.0**
+현재 버전: **v0.2.1**
 
 `VERSION.md`와 `package.json`의 `version`은 항상 같은 값을 쓴다.
 
@@ -25,6 +25,41 @@
   올리는 커밋은 `package.json`과 이 문서를 함께 갱신한다.
 
 ## 변경 이력
+
+### v0.2.1 — 2026-07-28
+
+문서·주석이 코드와 어긋난 곳을 바로잡고 죽은 코드를 걷어냈다. 게임 동작 변경은 없다.
+
+- **문서 수치 오류 2건 수정.** 둘 다 v0.2.0에서 `CLAUDE.md`를 압축할 때 원본의
+  오류를 검증 없이 옮긴 것이다.
+  - 100F 녹지 않는 마녀: `210/140/70 HP 페이지` → 실제는 `maxHp` 270에 페이지
+    바닥 180/90/0(한 페이지 90). 근거는 `BossSpecs.ts:29`, `BossEvent.ts`의
+    `waxWitchPageFloor()`.
+  - 60F 불씨 기사단장: `3턴마다 손패 2장` → 실제 `attackInterval: 2`, 인게임
+    특징 문구도 `'2턴마다 기사단장의 손패 2장 발동.'`이다.
+- **`EnaPolicyNetwork` 헤더 주석의 낡은 차원 표기 수정** — `250차원 관측 / 21개 행동`으로
+  남아 있었다(실제 336 / 27). 수치를 다시 적지 않고 `ENA_FEATURE_COUNT`·
+  `ENA_ACTION_SPACE`를 단일 출처로 가리키게 바꿨다. 이 주석 드리프트가 바로
+  `CLAUDE.md` 시스템 불변식이 경고하는 상황이다.
+- **`BossEvent.waxWitch` 죽은 상태 `nextWitchHandBurnAt` 제거.** 선언과 초기화만
+  있고 읽는 곳이 없었다. 소각이 누적·강화되는지 확인한 결과 **그런 동작은 없다**:
+  소각 호출부는 `handleClick`(일반 턴)과 `advanceBossTurnsForLevatein`(레바테인
+  가상 턴) 둘뿐이고, 양쪽 모두 `turn % attackInterval === 0` 게이트 안에 있어
+  주기당 정확히 1회 2장이며, `burnRandomHandCardsFromWitch`는
+  `Math.min(요청, 손패수)`로만 자를 뿐 카운터를 들고 있지 않다.
+- `burnRandomHandCardsFromWitch`의 낡은 주석 수정 — "2페이지 이상 손패 콤보 도중"에도
+  소각한다고 적혀 있었으나 `resolveWaxWitchPageTwoTurn`은 소각을 호출하지 않는다
+  (방패/회복/피해 손패만 쓴다).
+- **`src/ui/ActionUI.ts`(186줄) 삭제** — 완전 고아였다. `ActionUI` · `action-ui` ·
+  `action-ui-styles` 어느 것도 파일 밖에서 참조되지 않았고, 헤더에
+  `MVP: Shows action buttons for selected card`가 남아 있었다.
+- **`tsconfig.json` 죽은 옵션 정리** — `jsx: "react-jsx"`(React를 쓰지 않는다),
+  `declaration`·`declarationMap`·`sourceMap`(`noEmit: true`라 아무 효과가 없다),
+  `@utils/*`(`src/utils` 디렉터리가 없다). `paths`는 `vite.config.ts`의
+  `resolve.alias`와 짝을 맞춰야 한다는 주석을 남겼다.
+- **`package.json`의 `main: "dist/index.js"` 제거하고 `private: true` 추가** —
+  라이브러리가 아니라 앱이므로 진입점 필드가 의미가 없고, 실수로 publish 되는 것도 막는다.
+- `CardFaceRenderer` 정규식 이스케이프 수정은 v0.2.0에 포함돼 있다.
 
 ### v0.2.0 — 2026-07-28
 

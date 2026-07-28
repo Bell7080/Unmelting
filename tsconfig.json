@@ -14,26 +14,21 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx",
 
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
 
-    /* Path mapping */
+    /* Path mapping — vite.config.ts의 resolve.alias와 짝을 맞춘다. 한쪽만 늘리지 않는다. */
     "paths": {
       "@/*": ["./src/*"],
       "@core/*": ["./src/core/*"],
       "@systems/*": ["./src/systems/*"],
       "@entities/*": ["./src/entities/*"],
       "@ui/*": ["./src/ui/*"],
-      "@data/*": ["./src/data/*"],
-      "@utils/*": ["./src/utils/*"]
+      "@data/*": ["./src/data/*"]
     }
   },
   "include": ["src"],

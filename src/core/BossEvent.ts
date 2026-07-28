@@ -91,8 +91,6 @@ export interface BossEventState {
   bossShield: number
   /** waxWitch 전용: 현재 HP 페이지(270~181 / 180~91 / 90~0). */
   witchPage: BossPage
-  /** waxWitch 1페이지: (미사용 — 공격주기 소각으로 전환됨) */
-  nextWitchHandBurnAt: number
   /** waxDemon 현재 페이지 (1 → 2 전환은 HP 65% 이하 시). */
   demonPage: 1 | 2
   /** waxDemon 검은 양초 누적 피해 카운터 — 양초를 쓸 때마다 증가, 손패 black-candle 사용도 반영. */
@@ -804,7 +802,6 @@ export class BossEventController {
       summonedEnemyIds: new Set<string>(),
       bossShield: 0,
       witchPage: 1,
-      nextWitchHandBurnAt: 0, // 체력 임계 소각 로직 제거 — 공격주기마다 소각으로 전환
       demonPage: 1,
       demonCandleCounter: 0,
       nextDemonPageAt: def.specialEnemyKind === 'waxDemon'
@@ -1053,7 +1050,8 @@ export class BossEventController {
 
   // ---- waxWitch 전용 페이지 메커니즘 ----------------------------------------
 
-  /** 100F 1페이지: 공격주기마다(또는 2페이지 이상 손패 콤보 도중) 손패를 소각한다.
+  /** 100F 1페이지 능력: 공격주기(`turn % attackInterval === 0`)마다 손패를 소각한다.
+   *  2·3페이지에서도 그대로 유지되지만 주기당 1회이며 장수는 누적되지 않는다.
    *  카드는 흔들→회색→검게 타며 동시에 사라진다. */
   private async burnRandomHandCardsFromWitch(bossCardId: string, requestedCount: number): Promise<void> {
     const hand = this.gs.character.hand

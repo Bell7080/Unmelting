@@ -1,9 +1,9 @@
 {
   "name": "unmelting",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A card rain roguelike about an unmelting girl navigating advancing cards",
   "type": "module",
-  "main": "dist/index.js",
+  "private": true,
   "scripts": {
     "dev": "vite",
     "build": "npm run verify && vite build",

@@ -2,7 +2,8 @@
  * EnaPolicyNetwork - 에나 정책망(경량 MLP). 외부 ML 라이브러리 없이 순수 TS로 구현해
  * 브라우저/온디바이스에서 그대로 추론·학습할 수 있게 한다.
  *
- * 입력: EnaTrainingSimulation의 250차원 관측. 출력: 21개 행동 로짓.
+ * 입력/출력 차원은 EnaTrainingSimulation의 `ENA_FEATURE_COUNT`(336)·`ENA_ACTION_SPACE`(27)를
+ * 따른다. 여기에 수치를 새로 적지 말고 그 상수를 단일 출처로 쓴다.
  * 합법 행동 마스킹 소프트맥스 + 수동 역전파(Adam)로 행동 클로닝/REINFORCE를 모두 지원한다.
  * 가중치는 JSON 직렬화가 가능해 사전학습 결과를 게임에 동봉하거나 localStorage에 저장한다.
  */
