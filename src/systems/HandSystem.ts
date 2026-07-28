@@ -27,6 +27,8 @@ export interface HandTarget {
   laneIndex: number
   distance: number
   card: Card
+  /** 보스 칸 기믹 격자에서 고른 하위 칸. 보스를 겨눈 선택형 손패만 채운다. */
+  gimmickCellIndex?: number
 }
 
 export interface FiredRecipe {
@@ -680,6 +682,43 @@ export class HandSystem {
     return bonus
   }
 
+  // ---- 보스 칸 기믹 배율 -----------------------------------------------------
+  // 보스는 판을 통째로 차지하는 큰 칸 하나지만, 그 위에 깔린 격자가 켜져 있으면
+  // 피해가 '어느 칸에 꽂혔는지'에 따라 배율이 갈린다. 아래 세 함수가 손패 피해의
+  // 유일한 진입점이라, 새 공격 손패도 여기만 거치면 기믹을 자동으로 탄다.
+
+  /** 대상이 격자를 낀 보스면 지정(없으면 무작위) 칸 배율을 먹인 피해를 돌려준다. */
+  private static bossCellDamage(
+    gs: GameState,
+    card: Card,
+    amount: number,
+    cellIndex?: number
+  ): number {
+    if (card.type !== CardType.BOSS) return amount
+    const grid = gs.bossGimmicks
+    if (!grid?.isActive) return amount
+    const struck = cellIndex === undefined
+      ? grid.strikeRandomCell(amount)
+      : grid.strike({ cellIndex, baseDamage: amount })
+    return struck ? struck.damage : amount
+  }
+
+  /** 한 대 때린다 — 격자를 낀 보스면 칸 배율을 먹인다. 일반 적은 그대로 amount. */
+  private static hitCard(gs: GameState, card: Card, amount: number, cellIndex?: number): void {
+    card.takeDamage(HandSystem.bossCellDamage(gs, card, amount, cellIndex))
+  }
+
+  /** '필드/전방 전체' 피해를 먹인다. 격자를 낀 보스는 칸 수만큼 맞는다 —
+   *  보스가 판 전체를 차지하고 있으니 광역기가 그만큼 크게 들어가는 게 자연스럽다. */
+  private static hitCardAsAreaDamage(gs: GameState, card: Card, amount: number): void {
+    const grid = gs.bossGimmicks
+    if (card.type !== CardType.BOSS || !grid?.isActive) {
+      card.takeDamage(amount)
+      return
+    }
+    for (const struck of grid.strikeAllCells(amount)) card.takeDamage(struck.damage)
+  }
+
   /** 벽걸이 횃불용: 필드 전체 적/보스에게 amount 피해. 제거된 적 카드 목록을 돌려줘 호출부가 애니메이션한다. */
   static damageAllEnemies(gs: GameState, amount: number): { cardId: string; defeated: boolean }[] {
     const hits: { cardId: string; defeated: boolean }[] = []
@@ -690,7 +729,7 @@ export class HandSystem {
         if (!card || seen.has(card)) continue
         if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) continue
         seen.add(card)
-        card.takeDamage(amount)
+        HandSystem.hitCardAsAreaDamage(gs, card, amount)
         const defeated = card.getHealth() <= 0
         if (defeated && card.type !== CardType.BOSS) gs.removeCardFromRow(card, d)
         hits.push({ cardId: card.id, defeated })
@@ -1167,7 +1206,7 @@ export class HandSystem {
       (actualTarget.card.type !== CardType.ENEMY && actualTarget.card.type !== CardType.BOSS)
     )
       return '대상 적 없음'
-    actualTarget.card.takeDamage(amount)
+    HandSystem.hitCard(gs, actualTarget.card, amount, actualTarget.gimmickCellIndex)
     if (actualTarget.card.getHealth() <= 0) {
       // 보스는 lanes에 그대로 두고 격파 시퀀스(흔들→갈라짐→펑→흐릿 확대)가 element를
       // 그대로 잡아 시각화한 뒤 직접 정리한다. 일반 적은 즉시 제거.
@@ -1191,7 +1230,7 @@ export class HandSystem {
         if (!card || seen.has(card)) continue
         if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) continue
         seen.add(card)
-        card.takeDamage(amount)
+        HandSystem.hitCardAsAreaDamage(gs, card, amount)
         hit++
         if (card.getHealth() <= 0) {
           // 보스는 별도 격파 시퀀스가 lanes 정리를 담당한다(시퀀스 도중 element가
@@ -1228,7 +1267,7 @@ export class HandSystem {
     if (targets.length === 0) return
     const t = targets[Math.floor(Math.random() * targets.length)]
     const before = Math.max(0, t.card.getHealth())
-    t.card.takeDamage(dmg)
+    HandSystem.hitCard(gs, t.card, dmg)
     if (t.card.getHealth() > 0) return
     if (t.card.type !== CardType.BOSS) gs.removeCardFromRow(t.card, t.d)
     // 관통: 처치한 적의 세로열 나머지 적에게 dmg.
@@ -1244,7 +1283,7 @@ export class HandSystem {
       const card = gs.lanes[lane].getCardAtDistance(d)
       if (!card || card === exclude) continue
       if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) continue
-      card.takeDamage(dmg)
+      HandSystem.hitCardAsAreaDamage(gs, card, dmg)
       if (card.getHealth() <= 0 && card.type !== CardType.BOSS) gs.removeCardFromRow(card, d)
     }
   }
@@ -1257,7 +1296,7 @@ export class HandSystem {
         const card = gs.lanes[adj].getCardAtDistance(d)
         if (!card) continue
         if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) break
-        card.takeDamage(dmg)
+        HandSystem.hitCard(gs, card, dmg)
         if (card.getHealth() <= 0 && card.type !== CardType.BOSS) gs.removeCardFromRow(card, d)
         return // 한 적에게만 전이
       }
@@ -1285,7 +1324,7 @@ export class HandSystem {
     for (let i = 0; i < total && living.length > 0; i++) {
       const pickIndex = Math.floor(Math.random() * living.length)
       const entry = living[pickIndex]
-      entry.card.takeDamage(1)
+      HandSystem.hitCard(gs, entry.card, 1)
       if (entry.card.getHealth() <= 0) {
         // 보스는 lanes에 남겨 격파 시퀀스가 정리한다. 일반 적은 즉시 제거하고 후보에서 뺀다.
         if (entry.card.type !== CardType.BOSS) {
@@ -1457,7 +1496,7 @@ export class HandSystem {
     }
     if (living.length === 0) return '대상 적 없음'
     const pick = living[Math.floor(Math.random() * living.length)]
-    pick.card.takeDamage(amount)
+    HandSystem.hitCard(gs, pick.card, amount)
     // 보스는 별도 격파 시퀀스가 lanes 정리를 담당하므로 즉시 제거하지 않는다.
     if (pick.card.getHealth() <= 0 && pick.card.type !== CardType.BOSS) {
       gs.removeCardFromRow(pick.card, pick.distance)
@@ -1614,7 +1653,7 @@ export class HandSystem {
   private static findFirstOnField(
     gs: GameState,
     types: CardType[]
-  ): { card: Card; laneIndex: number; distance: number } | null {
+  ): HandTarget | null {
     for (let laneIndex = 0; laneIndex < gs.lanes.length; laneIndex++) {
       for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
         const card = gs.lanes[laneIndex].getCardAtDistance(distance)

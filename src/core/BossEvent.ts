@@ -172,6 +172,7 @@ export class BossEventController {
   /** 격자를 비우고 렌더러의 오버레이도 함께 내린다(격파·런 리셋 공용). */
   private clearGimmickGrid(): void {
     this.gimmicks.reset()
+    this.gs.bossGimmicks = null
     this.br.setBossGimmickGrid(null)
   }
 
@@ -521,6 +522,8 @@ export class BossEventController {
   /** 손패/조합식 데미지 후처리. checkBossDefeatedAfterHandEffect에서 위임. */
   async applyPostHandEffect(): Promise<void> {
     if (!this.eventState) return
+    // 손패 피해도 칸 배율을 타며 칸을 드러내므로, 그 결과를 화면 격자에 반영한다.
+    this.syncGimmickGrid()
     await this.consumeHandGiftThresholds(this.eventState.card.id)
     if (this.eventState.card.getHealth() <= 0) {
       await this.handleDefeated()
@@ -808,7 +811,8 @@ export class BossEventController {
     }
     this.syncBossShieldToCard()
     // 칸 기믹 격자는 보스마다 새로 굴린다 — 약점 자리를 매 조우 다시 찾아내게 한다.
-    this.gimmicks.beginEncounter(def.specialEnemyKind)
+    // 손패 피해도 같은 격자를 타야 하므로 GameState에 꽂아 HandSystem이 읽게 한다.
+    this.gs.bossGimmicks = this.gimmicks.beginEncounter(def.specialEnemyKind) ? this.gimmicks : null
     this.syncGimmickGrid()
 
     this.tm.setTurnMode('boss_phase')

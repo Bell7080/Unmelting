@@ -233,9 +233,12 @@ export class BossFxView {
 
   /** 보스 타일 위에 겹치는 칸 기믹 격자. 상태는 host가 들고 있고 여기선 마크업만 만든다.
    *  칸 자체는 투명하며(일러스트를 가리지 않는다) 정체가 드러난 칸만 표식을 남긴다. */
-  bossGimmickGridHtml(): string {
+  bossGimmickGridHtml(isValidHandTarget: boolean): string {
     const grid = this.host.getBossGimmickGrid()
     if (!grid) return ''
+    // 손패 타겟팅 중에는 칸 하나하나가 일반 레일 칸처럼 개별 타깃으로 빛난다.
+    // 이 보스가 그 손패의 유효 대상일 때만 — 아니면 보스 타일 전체가 차단 표시로 남는다.
+    const targeting = this.host.getHandTargetingMode() !== null && isValidHandTarget
     const cells = grid.cells
       .map((cell) => {
         const meta = BOSS_GIMMICK_KIND_META[cell.kind]
@@ -246,11 +249,12 @@ export class BossFxView {
              <span class="boss-gimmick-cell-mult">×${meta.multiplier}</span>`
           : ''
         const aria = cell.revealed && meta.label ? `${meta.label} 부위` : '보스 부위'
-        return `<button class="boss-gimmick-cell ${kindClass}" type="button"
+        return `<button class="boss-gimmick-cell ${kindClass} ${targeting ? 'is-hand-target' : ''}"
+                        type="button"
                         data-boss-gimmick-cell="${cell.index}" aria-label="${aria}">${label}</button>`
       })
       .join('')
-    return `<div class="boss-gimmick-grid"
+    return `<div class="boss-gimmick-grid ${targeting ? 'is-targeting' : ''}"
                  style="--boss-gimmick-cols:${grid.cols};--boss-gimmick-rows:${grid.rows};">${cells}</div>`
   }
 

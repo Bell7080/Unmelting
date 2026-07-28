@@ -192,6 +192,7 @@ export class GameBoardRenderer {
   getLockedCardIds(): ReadonlySet<HandCardId> { return this.lockedCardIds }
   getLockedRecipeIds(): ReadonlySet<string> { return this.lockedRecipeIds }
   getBossGimmickGrid(): BossGimmickGridView | null { return this.bossGimmickGrid }
+  getHandTargetingMode(): HandTargetingMode | null { return this.handTargetingMode }
 
   /** 보스 칸 기믹 격자 뷰. BossEventController가 굴린 격자를 그대로 밀어 넣는다. */
   private bossGimmickGrid: BossGimmickGridView | null = null
@@ -829,7 +830,7 @@ export class GameBoardRenderer {
            data-card-id="${card.id}"
            role="button"
            tabindex="${tabIndex}">
-        ${this.renderCardFace(card, span)}
+        ${this.renderCardFace(card, span, isValidHandTarget)}
         ${isBlockedHandTarget ? this.renderBlockedTargetMark() : ''}
       </div>
     `
@@ -918,17 +919,19 @@ export class GameBoardRenderer {
     `
   }
 
-  private renderCardFace(card: Card, span: number): string {
+  private renderCardFace(card: Card, span: number, isValidHandTarget = false): string {
     // 보스 face(BOSS 태그/이름/HP 바/ATK 칩/좌상단 N턴 뱃지)는 모든 보스 공통 그라마.
     // 3x3 확장 같은 "사이즈 유형"은 specialEnemyKind 마커로 CSS에서만 분기된다.
     if (card.type === CardType.BOSS) {
-      return this.renderBossFace(card)
+      return this.renderBossFace(card, isValidHandTarget)
     }
     // 위 분기에서 BOSS는 이미 renderBossFace로 우회 처리됐으므로 여기는 ENEMY만 검사.
     let stats = ''
     if (card.type === CardType.ENEMY) {
+      // 적 수치는 카드 하단 양 끝(체력 좌 / 공격력 우)에 크게 붙여, 일러스트를 가리지 않으면서
+      // 한눈에 읽히게 한다. 배치/크기는 .card-stats--corners가 담당한다.
       stats = `
-        <div class="card-stats">
+        <div class="card-stats card-stats--corners">
           <span class="stat hp">${heartIcon()}<span class="stat-value">${card.getHealth()}</span></span>
           <span class="stat atk">${swordIcon()}<span class="stat-value">${card.getDamage()}</span></span>
         </div>
@@ -1037,7 +1040,7 @@ export class GameBoardRenderer {
   /** 보스 공통 face. 풀-아트 + 하단 보스바(플레이어 hp-bar 톤) + 큰 ATK 칩 +
    *  좌상단 N턴 뱃지 layout. "3x3 거대" 같은 사이즈 유형은 specialEnemyKind 마커가
    *  걸리는 .boss-kind-* CSS에서 분기된다(face 마크업은 동일). */
-  private renderBossFace(card: Card): string {
+  private renderBossFace(card: Card, isValidHandTarget = false): string {
     const sprite = spriteForCard(card)
     const hp = card.getHealth()
     const maxHp = card.enemyHealthTotal || card.baseHealth || hp
@@ -1088,7 +1091,7 @@ export class GameBoardRenderer {
           </div>
           <span class="boss-face-atk">${swordIcon()}<span class="boss-face-atk-value">${atk}</span></span>
         </div>
-        ${this.bossFx.bossGimmickGridHtml()}
+        ${this.bossFx.bossGimmickGridHtml(isValidHandTarget)}
       </article>
     `
   }

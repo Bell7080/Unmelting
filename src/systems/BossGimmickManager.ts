@@ -64,6 +64,40 @@ export const BOSS_GIMMICK_PROFILES: Partial<Record<SpecialEnemyKind, BossGimmick
   },
 }
 
+/** 칸 단위 조준이 없는 호출부(학습 시뮬 등)가 격자의 기대값만 빌려 쓰기 위한 요약. */
+export interface BossGimmickExpectation {
+  /** 격자 칸 수 — '필드 전체' 피해가 보스에 들어가는 횟수. */
+  cells: number
+  /** 칸 배율 평균 — 어느 칸에 꽂힐지 모르는 피해의 기대 배율. */
+  averageMultiplier: number
+  /** 최고 배율 — 드러난 약점을 노려 때리는 조준 타격의 배율. */
+  bestMultiplier: number
+}
+
+/**
+ * 보스 격자의 기대값. 실게임은 칸을 직접 골라 때리지만, 칸 개념이 없는 호출부는
+ * 이 요약으로 같은 밸런스를 따라온다. 프로필이 없는 보스는 null(기믹 없음).
+ */
+export function bossGimmickExpectation(bossKind: SpecialEnemyKind): BossGimmickExpectation | null {
+  const profile = BOSS_GIMMICK_PROFILES[bossKind]
+  if (!profile) return null
+  const cells = profile.cols * profile.rows
+  let special = 0
+  let multiplierSum = 0
+  let bestMultiplier = BOSS_GIMMICK_KIND_META.plain.multiplier
+  for (const slot of profile.slots) {
+    const count = Math.min(slot.count, cells - special)
+    if (count <= 0) continue
+    const { multiplier } = BOSS_GIMMICK_KIND_META[slot.kind]
+    special += count
+    multiplierSum += count * multiplier
+    bestMultiplier = Math.max(bestMultiplier, multiplier)
+  }
+  // 남은 칸은 전부 plain(×1).
+  multiplierSum += (cells - special) * BOSS_GIMMICK_KIND_META.plain.multiplier
+  return { cells, averageMultiplier: multiplierSum / cells, bestMultiplier }
+}
+
 /** 렌더러가 읽는 셀 스냅샷. 모델 내부 배열을 그대로 넘기지 않기 위한 읽기 전용 뷰다. */
 export interface BossGimmickCellView {
   index: number
@@ -145,13 +179,40 @@ export class BossGimmickManager {
     }))
   }
 
+  get cellCount(): number {
+    return this.cells.length
+  }
+
   /**
    * 격자 한 칸을 때린다. 배율을 적용한 피해를 돌려주고 그 칸을 영구히 드러낸다.
    * 격자가 없으면 null — 호출부는 기존 피해를 그대로 쓰면 된다.
    */
   strike(ctx: BossGimmickStrikeContext): BossGimmickStrike | null {
     if (!this.profile || this.cells.length === 0) return null
-    const index = this.normalizeIndex(ctx.cellIndex)
+    return this.strikeAt(this.normalizeIndex(ctx.cellIndex), ctx)
+  }
+
+  /**
+   * 무작위 칸 하나를 때린다. 폭죽처럼 필드에 되는대로 꽂히는 효과가 쓴다 —
+   * 운 좋게 약점에 꽂히면 그만큼 이득이다.
+   */
+  strikeRandomCell(baseDamage: number): BossGimmickStrike | null {
+    if (!this.profile || this.cells.length === 0) return null
+    const index = Math.floor(this.rng() * this.cells.length)
+    return this.strikeAt(Math.min(index, this.cells.length - 1), { cellIndex: index, baseDamage })
+  }
+
+  /**
+   * 모든 칸을 한 번씩 때린다. 보스가 판을 통째로 차지하는 만큼,
+   * '필드 전체' 피해는 칸 수만큼 들어간다(칸별 배율은 각자 적용).
+   */
+  strikeAllCells(baseDamage: number): BossGimmickStrike[] {
+    if (!this.profile || this.cells.length === 0) return []
+    return this.cells.map((_, index) => this.strikeAt(index, { cellIndex: index, baseDamage }))
+  }
+
+  /** 칸 인덱스 확정 후 공통 처리 — 드러냄 + 배율 + 피해 환산의 단일 경로. */
+  private strikeAt(index: number, ctx: BossGimmickStrikeContext): BossGimmickStrike {
     const cell = this.cells[index]
     const firstReveal = !cell.revealed
     cell.revealed = true

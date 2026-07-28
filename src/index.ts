@@ -41,7 +41,7 @@ import { GAME_OVER_GLOBAL_STYLES } from '@ui/styles/GameOverStyles'
 import { CardSpawner } from '@systems/CardSpawner'
 import { ActionSystem, ActionType } from '@systems/ActionSystem'
 import { DropSystem } from '@systems/DropSystem'
-import { HandSystem, ChainState } from '@systems/HandSystem'
+import { HandSystem, ChainState, type HandTarget } from '@systems/HandSystem'
 import { EmberSystem } from '@systems/EmberSystem'
 import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
@@ -2122,7 +2122,7 @@ async function resolveDeferredHandMerges(): Promise<void> {
 /** Apply a single-use hand card (with optional target). */
 async function applyHandSingle(
   slotIndex: number,
-  target?: { laneIndex: number; distance: number; card: Card }
+  target?: HandTarget
 ): Promise<void> {
   inputLocked = true
   // Capture the card def BEFORE useSingle mutates the slot — we need the
@@ -3161,7 +3161,13 @@ async function handleCardAction(e: Event): Promise<void> {
     const armed = pendingHandTarget
     pendingHandTarget = null
     boardRenderer.setHandTargetingMode(null)
-    await applyHandSingle(armed.slotIndex, { laneIndex, distance, card })
+    // 보스 위 칸 기믹 격자를 겨눴다면 그 칸까지 넘겨 칸 배율이 손패 피해에도 걸리게 한다.
+    await applyHandSingle(armed.slotIndex, {
+      laneIndex,
+      distance,
+      card,
+      gimmickCellIndex: detail.bossGimmickCellIndex,
+    })
     // 손패 효과로 BOSS HP가 0이 됐다면 같은 격파 흐름으로 합류한다.
     await bossController.applyPostHandEffect()
     return

@@ -432,6 +432,43 @@ export const GAME_BOARD_RAIL_STYLES = `
 .card-stats .stat-value { font-variant-numeric: tabular-nums; }
 .card-stats .stat.hp { color: #ffb3a1; }
 .card-stats .stat.atk { color: #ffd58a; }
+/* 적 카드 수치: 체력은 좌하단, 공격력은 우하단에 크게 벌려 붙인다.
+   카드 이름 아래 가운데에 모여 작게 붙던 걸 양 끝으로 밀어 판독성을 올린 배치다.
+   .card-content가 이미 하단 정렬이라 여기서는 폭만 채우고 좌우로 벌리면 된다. */
+.card-stats--corners {
+  width: 100%;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 0 2px;
+  font-size: clamp(15px, 2vh, 19px);
+  font-weight: 900;
+}
+.card-stats--corners .stat {
+  gap: 4px;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.95),
+    0 0 8px rgba(0, 0, 0, 0.7);
+}
+.card-stats--corners .icon,
+.card-stats--corners svg {
+  width: clamp(15px, 2vh, 19px);
+  height: clamp(15px, 2vh, 19px);
+}
+/* 대기 행(dist-1/2)은 카드가 작아지므로 한 단계 줄여 넘치지 않게 한다. */
+.rail-row.dist-1 .card-stats--corners,
+.rail-row.dist-2 .card-stats--corners {
+  font-size: clamp(13px, 1.6vh, 16px);
+}
+.rail-row.dist-1 .card-stats--corners .icon,
+.rail-row.dist-1 .card-stats--corners svg,
+.rail-row.dist-2 .card-stats--corners .icon,
+.rail-row.dist-2 .card-stats--corners svg {
+  width: clamp(13px, 1.6vh, 16px);
+  height: clamp(13px, 1.6vh, 16px);
+}
+
 .card-stats.danger {
   color: #fff;
   background: var(--color-enemy);
@@ -1223,7 +1260,7 @@ export const GAME_BOARD_RAIL_STYLES = `
   top: 14px;
   left: 0;
   right: 0;
-  z-index: 2;
+  z-index: 4;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1252,7 +1289,7 @@ export const GAME_BOARD_RAIL_STYLES = `
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 2;
+  z-index: 4;
   padding: clamp(10px, 1.4vh, 14px) clamp(14px, 2vw, 22px);
   display: grid;
   grid-template-columns: 1fr auto;
@@ -1332,17 +1369,28 @@ export const GAME_BOARD_RAIL_STYLES = `
   font-variant-numeric: tabular-nums;
 }
 /* ────────────────── 보스 칸 기믹 격자 ──────────────────
-   큰 칸 1개로 그려지는 보스 위에 겹치는 투명 격자. 평소에는 일러스트를 전혀
-   가리지 않고, hover로만 "여기는 나뉜 부위"라는 걸 알린다. 한 번 때려 정체가
-   드러난 칸만 약점/경화 표식을 남겨 다음 타격 위치를 고르게 한다.
-   z-index는 보스 face 내부 레이어(art 0 / overlay 1) 위, 칸 내부 대역(≤50)을 지킨다. */
+   큰 칸 1개로 그려지는 보스 위에 겹치는 9칸 격자. 일반 레일 칸(.cell)의 둥근 모서리·
+   점선 테두리 양식을 그대로 빌려 와 "여긴 나뉜 칸"이라고 읽히게 하되, 배경은 거의
+   투명해 일러스트를 가리지 않는다.
+   레이어: 일러스트(0)·비네트(1) 위, 이름/HP바/ATK칩(4)·카운트 배지(7) 아래에 둔다.
+   보스 UI를 절대 가리지 않으면서 칸만 눈에 들어오게 하는 위치다. */
+/* 격자 위에 겹치는 보스 UI(이름/HP바/ATK칩/카운트 배지)는 표시 전용이다.
+   클릭을 먹으면 위·아래 줄 칸을 고를 수 없게 되므로 전부 통과시킨다. */
+.boss-face-title-row,
+.boss-face-stats,
+.boss-face-badge,
+.boss-frozen-center-badge {
+  pointer-events: none;
+}
 .boss-gimmick-grid {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 2;
   display: grid;
   grid-template-columns: repeat(var(--boss-gimmick-cols, 3), 1fr);
   grid-template-rows: repeat(var(--boss-gimmick-rows, 3), 1fr);
+  gap: clamp(3px, 0.6vh, 6px);
+  padding: clamp(3px, 0.6vh, 6px);
 }
 .boss-gimmick-cell {
   position: relative;
@@ -1350,56 +1398,77 @@ export const GAME_BOARD_RAIL_STYLES = `
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 1px;
   padding: 0;
   margin: 0;
   font: inherit;
   color: inherit;
   cursor: pointer;
-  background: transparent;
-  border: 1px solid transparent;
+  /* 일반 레일 칸과 같은 둥근 점선 테두리 + 아주 옅은 판. */
+  border-radius: 10px;
+  border: 1px dashed rgba(228, 214, 186, 0.28);
+  background: rgba(255, 246, 226, 0.045);
   transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
 .boss-gimmick-cell:hover {
-  border-color: rgba(244, 214, 160, 0.32);
-  background: rgba(244, 214, 160, 0.08);
-  box-shadow: inset 0 0 14px rgba(244, 164, 96, 0.16);
+  border-color: rgba(255, 219, 150, 0.6);
+  background: rgba(255, 219, 150, 0.12);
+  box-shadow: inset 0 0 16px rgba(244, 164, 96, 0.22);
 }
-/* 손패 타겟팅 중에는 격자가 보스 전체 클릭을 가로채면 안 된다 — 칸 판정은 직접 타격 전용. */
-body.is-hand-targeting .boss-gimmick-cell {
-  pointer-events: none;
-}
-/* 드러난 칸: 종류별 색만 아주 옅게 남겨 일러스트 판독을 해치지 않는다. */
+/* 드러난 칸: 종류별 색만 옅게 얹어 일러스트 판독을 해치지 않는다. */
 .boss-gimmick-cell.is-revealed.is-kind-weak {
-  border-color: rgba(255, 168, 120, 0.5);
-  background: rgba(200, 60, 50, 0.14);
+  border-color: rgba(255, 168, 120, 0.52);
+  background: rgba(200, 60, 50, 0.16);
 }
 .boss-gimmick-cell.is-revealed.is-kind-hardened {
-  border-color: rgba(150, 170, 210, 0.42);
+  border-color: rgba(150, 170, 210, 0.46);
   background: rgba(60, 70, 110, 0.2);
 }
 .boss-gimmick-cell.is-revealed.is-kind-plain {
-  border-color: rgba(220, 210, 190, 0.16);
+  border-style: solid;
+  border-color: rgba(228, 214, 186, 0.22);
 }
+/* 글자는 반투명하되 굵기·외곽 그림자로 어떤 일러스트 위에서도 읽히게 한다. */
 .boss-gimmick-cell-label {
-  font-size: clamp(12px, 1.5vh, 15px);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+  font-size: clamp(12px, 1.6vh, 16px);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  opacity: 0.78;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 9px rgba(0, 0, 0, 0.7);
 }
 .boss-gimmick-cell-mult {
   font-size: clamp(12px, 1.4vh, 14px);
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  opacity: 0.86;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+  opacity: 0.7;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 9px rgba(0, 0, 0, 0.7);
 }
 .boss-gimmick-cell.is-kind-weak .boss-gimmick-cell-label,
 .boss-gimmick-cell.is-kind-weak .boss-gimmick-cell-mult {
-  color: rgba(255, 186, 140, 0.96);
+  color: rgba(255, 186, 140, 0.98);
 }
 .boss-gimmick-cell.is-kind-hardened .boss-gimmick-cell-label,
 .boss-gimmick-cell.is-kind-hardened .boss-gimmick-cell-mult {
-  color: rgba(184, 200, 236, 0.94);
+  color: rgba(184, 200, 236, 0.96);
+}
+/* 손패 타겟팅: 보스 타일 하나가 아니라 칸 하나하나가 일반 레일 칸처럼 따로 빛난다.
+   .rail.is-targeting .cell.card.is-hand-target와 같은 금빛 발광 양식을 맞춘다. */
+.boss-gimmick-grid.is-targeting .boss-gimmick-cell.is-hand-target {
+  border-style: solid;
+  border-color: rgba(255, 205, 110, 0.75);
+  background: rgba(255, 205, 110, 0.14);
+  box-shadow: 0 0 18px rgba(255, 205, 110, 0.4), inset 0 0 14px rgba(255, 205, 110, 0.18);
+  animation: boss-gimmick-target-pulse 1.25s ease-in-out infinite;
+}
+.boss-gimmick-grid.is-targeting .boss-gimmick-cell.is-hand-target:hover {
+  border-color: rgba(255, 232, 170, 0.95);
+  background: rgba(255, 219, 150, 0.24);
+  box-shadow: 0 0 24px rgba(255, 215, 130, 0.6), inset 0 0 18px rgba(255, 215, 130, 0.3);
+  animation: none;
+}
+@keyframes boss-gimmick-target-pulse {
+  0%, 100% { box-shadow: 0 0 14px rgba(255, 205, 110, 0.3), inset 0 0 10px rgba(255, 205, 110, 0.14); }
+  50%      { box-shadow: 0 0 22px rgba(255, 205, 110, 0.52), inset 0 0 18px rgba(255, 205, 110, 0.24); }
 }
 /* 타격 순간: 약점은 화르르 밝아지고, 경화는 둔탁하게 눌린다. */
 .boss-gimmick-cell.is-hit.is-kind-weak {
@@ -1411,7 +1480,7 @@ body.is-hand-targeting .boss-gimmick-cell {
 }
 @keyframes boss-gimmick-hit-weak {
   0%   { background: rgba(255, 190, 130, 0.5); box-shadow: inset 0 0 26px rgba(255, 140, 80, 0.6); }
-  100% { background: rgba(200, 60, 50, 0.14); box-shadow: inset 0 0 0 rgba(0, 0, 0, 0); }
+  100% { background: rgba(200, 60, 50, 0.16); box-shadow: inset 0 0 0 rgba(0, 0, 0, 0); }
 }
 @keyframes boss-gimmick-hit-dull {
   0%   { background: rgba(150, 170, 210, 0.34); transform: scale(0.965); }

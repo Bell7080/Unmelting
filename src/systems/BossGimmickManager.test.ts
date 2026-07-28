@@ -108,3 +108,37 @@ describe('BossGimmickManager', () => {
     expect(first).not.toBe(second)
   })
 })
+
+describe('BossGimmickManager 광역/무작위 타격', () => {
+  it('strikeAllCells는 칸마다 한 번씩, 각자의 배율로 때린다', () => {
+    const m = new BossGimmickManager(fixedRng())
+    m.beginEncounter('waxArmy')
+
+    const strikes = m.strikeAllCells(10)
+
+    expect(strikes).toHaveLength(9)
+    // 약점 2칸 ×2, 경화 2칸 ×0.5, 나머지 5칸 ×1 = 20+20+5+5+10×5 = 100.
+    const total = strikes.reduce((sum, s) => sum + s.damage, 0)
+    expect(total).toBe(2 * 20 + 2 * 5 + 5 * 10)
+    // 광역 한 방이면 격자 전체가 드러난다.
+    expect(m.getCells().every((c) => c.revealed)).toBe(true)
+  })
+
+  it('strikeRandomCell은 격자 안의 칸만 고르고 그 칸을 드러낸다', () => {
+    const m = new BossGimmickManager(fixedRng())
+    m.beginEncounter('waxArmy')
+
+    const struck = m.strikeRandomCell(4)
+
+    expect(struck).not.toBeNull()
+    expect(struck?.cell.index).toBeGreaterThanOrEqual(0)
+    expect(struck?.cell.index).toBeLessThan(9)
+    expect(m.getCells()[struck?.cell.index ?? 0].revealed).toBe(true)
+  })
+
+  it('격자가 없으면 광역/무작위 타격도 아무 일도 하지 않는다', () => {
+    const m = new BossGimmickManager(fixedRng())
+    expect(m.strikeAllCells(10)).toHaveLength(0)
+    expect(m.strikeRandomCell(10)).toBeNull()
+  })
+})

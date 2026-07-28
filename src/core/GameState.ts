@@ -7,6 +7,7 @@ import { Character } from '@entities/Character'
 import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { Card, CardType } from '@entities/Card'
 import { RunEnhancements, makeDefaultEnhancements } from '@core/RunEnhancements'
+import type { BossGimmickManager } from '@systems/BossGimmickManager'
 
 export class GameState {
   character: Character
@@ -18,6 +19,9 @@ export class GameState {
   enhancements: RunEnhancements
   /** 보스 전투 활성 여부. HandSystem이 필드 수정 레시피를 차단하는 데 사용한다. */
   bossBattleActive = false
+  /** 보스 타일 위 칸 기믹 격자. BossEventController가 보스 등장/격파에 맞춰 꽂고 뺀다.
+   *  손패 피해가 보스에 닿을 때 HandSystem이 여기서 칸 배율을 받아 간다(격자 없으면 null). */
+  bossGimmicks: BossGimmickManager | null = null
   /** 한 번이라도 필드에 등장한 적/특수 카드의 이름 집합. 도감 적 탭의 발견 여부를 결정한다. */
   encounteredEnemyNames = new Set<string>()
   /** 필드에 등장한 함정/보물/꽃 카드 이름 집합. 도감 탭의 미식별 마스킹에 사용한다. */
@@ -342,6 +346,7 @@ export class GameState {
     this.gameOverReason = ''
     this.enhancements = makeDefaultEnhancements()
     this.bossBattleActive = false
+    this.bossGimmicks = null
     this.encounteredEnemyNames = new Set()
     this.encounteredCardNames = new Set()
     this.encounteredPackKinds = new Set()

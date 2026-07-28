@@ -19,7 +19,11 @@ export interface BossCoreSpec {
 
 /** 정규 등반 보스(30/60/90/100F). */
 export const BOSS_CORE_SPECS: Record<30 | 60 | 90 | 100, BossCoreSpec> = {
-  30: { name: '양초 백작', maxHp: 50, attack: 4, attackInterval: 2, handGiftStep: 15 },
+  // 30F는 3×3 칸 기믹 격자(BossGimmickManager)를 낀 보스라 HP 기준이 다르다.
+  // 약점 칸(×2)을 찾아 때리는 직접 타격이 격자 이전과 같은 타수(약 13회)로 끝나도록 50→100으로 올렸다.
+  // 광역 손패는 칸 수만큼 들어가 훨씬 세지는데, 그 강함이 보상으로 남도록 감안한 수치다.
+  // handGiftStep도 HP에 비례해 올려(15→30) 전투당 손패 지급 횟수를 종전과 같게 유지한다.
+  30: { name: '양초 백작', maxHp: 100, attack: 4, attackInterval: 2, handGiftStep: 30 },
   60: { name: '불씨 기사단장', maxHp: 80, attack: 7, attackInterval: 2, handGiftStep: 15 },
   90: { name: '밀랍 조각사', maxHp: 130, attack: 10, attackInterval: 3, handGiftStep: 15 },
   100: { name: '녹지 않는 마녀', maxHp: 270, attack: 15, attackInterval: 2, handGiftStep: 15 },

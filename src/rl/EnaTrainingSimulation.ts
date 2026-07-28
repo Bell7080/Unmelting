@@ -21,6 +21,8 @@ import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { TRIAL_DEFINITIONS } from '@data/Trials'
 import { HAND_CARD_RARITY, CHANCE_PACK_RARITY_BOOST } from '@data/ShopPools'
 import { BOSS_CORE_SPECS, ONBOARDING_CAT_SPEC, type BossCoreSpec } from '@data/BossSpecs'
+import { bossGimmickExpectation, type BossGimmickExpectation } from '@systems/BossGimmickManager'
+import type { SpecialEnemyKind } from '@entities/Card'
 import { EVENT_DEFINITIONS, EVENT_IDS, type EventId, type RiskOffer, type MinionExchangeConfig, type CountRpsConfig } from '@data/Events'
 import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
 import { EmberSystem, type EmberTier } from '@systems/EmberSystem'
@@ -199,14 +201,26 @@ interface BossProfile {
   behavior: 'greed' | 'knightHand' | 'summon' | 'witch' | 'catSteal'
   /** waxWitch 페이지 경계(이 HP에서 멈춰 다음 페이지로). */
   pages?: number[]
+  /** 보스 타일 위 칸 기믹 격자의 기대값(격자 없는 보스는 undefined).
+   *  시뮬은 칸을 직접 고르지 않으므로 조준 타격=최고 배율, 광역=칸 수×평균 배율로 근사한다. */
+  gimmick?: BossGimmickExpectation
 }
 
-function bossProfileFrom(spec: BossCoreSpec, behavior: BossProfile['behavior'], pages?: number[]): BossProfile {
-  return { name: spec.name, maxHp: spec.maxHp, attack: spec.attack, interval: spec.attackInterval, handGiftStep: spec.handGiftStep, behavior, pages }
+function bossProfileFrom(
+  spec: BossCoreSpec,
+  behavior: BossProfile['behavior'],
+  pages?: number[],
+  gimmickKind?: SpecialEnemyKind,
+): BossProfile {
+  return {
+    name: spec.name, maxHp: spec.maxHp, attack: spec.attack, interval: spec.attackInterval,
+    handGiftStep: spec.handGiftStep, behavior, pages,
+    gimmick: gimmickKind ? bossGimmickExpectation(gimmickKind) ?? undefined : undefined,
+  }
 }
 
 const BOSS_PROFILES: Record<number, BossProfile> = {
-  30: bossProfileFrom(BOSS_CORE_SPECS[30], 'greed'),
+  30: bossProfileFrom(BOSS_CORE_SPECS[30], 'greed', undefined, 'waxArmy'),
   60: bossProfileFrom(BOSS_CORE_SPECS[60], 'knightHand'),
   90: bossProfileFrom(BOSS_CORE_SPECS[90], 'summon'),
   // 마녀 페이지 경계: 실게임 270~181/180~91/90~0 → maxHp의 2/3·1/3·0으로 파생.
@@ -1226,7 +1240,9 @@ export class EnaTrainingSimulation {
       if (def.category === 'attack') {
         const dmg = this.attackCardDamage(def, held.merged)
         if (def.synergyTags?.includes('blade')) this.onBladeCardUsed()
-        const reward = this.damageBoss(dmg, 'ember')
+        // 필드 전체를 치는 손패는 격자 칸마다 들어간다 — 광역기가 기믹 보스에게 세지는 실게임 규칙.
+        const rule = held.merged ? def.targeting.triple : def.targeting.base
+        const reward = this.damageBoss(dmg, 'ember', rule.selection === 'all' ? 'area' : 'single')
         this.consumeHand(action.arg)
         return reward
       }
@@ -1279,7 +1295,19 @@ export class EnaTrainingSimulation {
     return source === 'ember' ? 0.2 : -0.5
   }
 
-  private damageBoss(amount: number, source: 'basic' | 'ember'): number {
+  /** 보스 칸 기믹 배율 근사. 시뮬은 칸을 직접 고르지 않으므로
+   *  조준 타격은 드러난 약점을 노린다고 보고 최고 배율, 광역은 칸마다 한 번씩 들어간다고 본다. */
+  private bossGimmickScaled(amount: number, scope: 'single' | 'area'): number {
+    const gimmick = this.bossProfileFor(this.bossFloor)?.gimmick
+    if (!gimmick || amount <= 0) return amount
+    const scaled = scope === 'area'
+      ? amount * gimmick.cells * gimmick.averageMultiplier
+      : amount * gimmick.bestMultiplier
+    return Math.max(1, Math.round(scaled))
+  }
+
+  private damageBoss(rawAmount: number, source: 'basic' | 'ember', scope: 'single' | 'area' = 'single'): number {
+    const amount = this.bossGimmickScaled(rawAmount, scope)
     // 밀랍 방패(기사단장/마녀)가 피해를 먼저 흡수한다 — 실게임 bossShield 규칙.
     const blocked = Math.min(this.bossShield, amount)
     this.bossShield -= blocked

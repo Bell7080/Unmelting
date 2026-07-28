@@ -3,6 +3,7 @@ import { GameState } from '@core/GameState'
 import { HandSystem } from './HandSystem'
 import { DropSystem } from './DropSystem'
 import { Card, CardType } from '@entities/Card'
+import { BossGimmickManager } from './BossGimmickManager'
 
 /** Count a specific hand-card id inside the active chain for behavior tests. */
 function countChainEntries(chain: ReturnType<typeof HandSystem.newChain>, defId: string): number {
@@ -330,5 +331,79 @@ describe('HandSystem broad hand effects', () => {
     expect(gameState.lanes[0].getCardAtDistance(0)).toBeNull()
     expect(gameState.lanes[1].getCardAtDistance(0)).toBeNull()
     expect(gameState.lanes[2].getCardAtDistance(0)).toBeNull()
+  })
+})
+
+describe('HandSystem 보스 칸 기믹 연동', () => {
+  /** 격자를 낀 보스 하나만 필드에 세운다(실제 30F 배치와 동일하게 3레인 dist-0 점유). */
+  function stageGriddedBoss(hp: number): { gameState: GameState; boss: Card; grid: BossGimmickManager } {
+    const gameState = new GameState()
+    const boss = new Card('boss-test', CardType.BOSS, '양초 백작', '보스', hp, 4, {
+      specialEnemyKind: 'waxArmy',
+    })
+    boss.enemyHealthTotal = hp
+    for (let i = 0; i < 3; i++) gameState.lanes[i].setCardAtDistance(0, boss)
+    // rng 고정으로 칸 배치를 재현 가능하게 만든다.
+    const grid = new BossGimmickManager(() => 0)
+    grid.beginEncounter('waxArmy')
+    gameState.bossGimmicks = grid
+    return { gameState, boss, grid }
+  }
+
+  it('겨눈 칸이 약점이면 선택형 손패 피해가 2배로 들어간다', () => {
+    const { gameState, boss, grid } = stageGriddedBoss(200)
+    const weak = grid.getCells().find((c) => c.kind === 'weak')
+    const plain = grid.getCells().find((c) => c.kind === 'plain')
+    gameState.character.addHandCard(DropSystem.makeCard('ember'))
+    gameState.character.addHandCard(DropSystem.makeCard('ember'))
+    const target = { laneIndex: 0, distance: 0, card: boss }
+
+    const before = boss.getHealth()
+    HandSystem.useSingle(gameState, HandSystem.newChain(), 0, { ...target, gimmickCellIndex: plain?.index })
+    const plainDealt = before - boss.getHealth()
+
+    const beforeWeak = boss.getHealth()
+    HandSystem.useSingle(gameState, HandSystem.newChain(), 0, { ...target, gimmickCellIndex: weak?.index })
+    const weakDealt = beforeWeak - boss.getHealth()
+
+    expect(plainDealt).toBeGreaterThan(0)
+    expect(weakDealt).toBe(plainDealt * 2)
+  })
+
+  it('필드 전체 피해는 보스를 칸 수만큼 때린다 — 광역기가 크게 들어간다', () => {
+    const { gameState, boss } = stageGriddedBoss(500)
+    // 단두대 단일: 자해 6 · 필드 전체 적 (1.0공+3). 공격력 1 → 칸당 4.
+    gameState.character.addHandCard(DropSystem.makeCard('guillotine'))
+
+    const before = boss.getHealth()
+    HandSystem.useSingle(gameState, HandSystem.newChain(), 0)
+    const dealt = before - boss.getHealth()
+
+    // 9칸 × 4피해에 칸 배율(약점 2칸 ×2, 경화 2칸 ×0.5)을 각각 먹인 값.
+    expect(dealt).toBe(2 * 8 + 2 * 2 + 5 * 4)
+  })
+
+  it('격자가 없는 보스는 필드 전체 피해를 한 번만 맞는다(기존 동작 보존)', () => {
+    const { gameState, boss } = stageGriddedBoss(500)
+    gameState.bossGimmicks = null
+    gameState.character.addHandCard(DropSystem.makeCard('guillotine'))
+
+    const before = boss.getHealth()
+    HandSystem.useSingle(gameState, HandSystem.newChain(), 0)
+
+    expect(before - boss.getHealth()).toBe(4)
+  })
+
+  it('폭죽 분사는 총량을 칸에 흩뿌리며 약점에 꽂힌 만큼만 이득이 난다', () => {
+    const { gameState, boss } = stageGriddedBoss(500)
+    gameState.character.addHandCard(DropSystem.makeCard('firework'))
+
+    const before = boss.getHealth()
+    HandSystem.useSingle(gameState, HandSystem.newChain(), 0)
+    const dealt = before - boss.getHealth()
+
+    // 공격력 1 → 총 3점 분배. 칸당 1점이 약점이면 2, 아니면 1이라 3~6 사이.
+    expect(dealt).toBeGreaterThanOrEqual(3)
+    expect(dealt).toBeLessThanOrEqual(6)
   })
 })
