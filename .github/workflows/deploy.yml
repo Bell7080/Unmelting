@@ -17,8 +17,11 @@ permissions:
   pages: write
   id-token: write
 
+# 그룹은 반드시 ref별로 나눈다. 예전처럼 전 브랜치가 'pages' 하나를 공유하면
+# 기능 브랜치 푸시가 진행 중인 main 실행(배포 포함)을 취소해 버린다.
+# 여기서 취소되는 건 "같은 브랜치의 낡은 실행"뿐이다.
 concurrency:
-  group: pages
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -59,6 +62,11 @@ jobs:
     needs: verify
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # 실제 Pages 배포만 전역 직렬화한다. cancel-in-progress를 끄는 게 핵심 —
+    # 배포는 취소하지 않고 줄을 세워야 마지막 커밋이 확실히 게시된다.
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
