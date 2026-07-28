@@ -82,7 +82,7 @@ export class CardFaceRenderer {
     t = t.replace(/\[atk\]/g, swordIcon())
 
     // [dyn:기본|수식] → 수식 부분만 desc-dyn으로 감싸기 (도감/손패 방식과 동일)
-    t = t.replace(/\[dyn:([^\|]+)\|([^\]]+)\]/g, (_, s, d) => {
+    t = t.replace(/\[dyn:([^|]+)\|([^\]]+)\]/g, (_, s, d) => {
       return `<span class="desc-dyn"><span class="desc-dyn__s">${s}</span><span class="desc-dyn__d">${d}</span></span>`
     })
 

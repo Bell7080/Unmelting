@@ -1,0 +1,19 @@
+# 소스·문서는 LF로 통일한다. 협업자 OS가 섞여도 diff에 줄바꿈 변경이 끼지 않는다.
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+
+# 바이너리 — 변환 금지.
+*.webp  binary
+*.png   binary
+*.jpg   binary
+*.mp3   binary
+*.ogg   binary
+*.woff2 binary

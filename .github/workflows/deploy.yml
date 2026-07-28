@@ -1,9 +1,15 @@
-name: Deploy to GitHub Pages
+name: Verify and Deploy
+
+# 검증(verify)과 배포(deploy)를 분리한다.
+# 기능 브랜치는 verify까지만 돌고, 배포는 main에서만 실행한다 —
+# Pages 환경 보호 규칙이 main만 게시를 허용하므로 그 외 브랜치는 거부 오류가 난다.
 
 on:
   push:
     branches:
       - main
+      - 'claude/**'
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -16,11 +22,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
+  verify:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -30,16 +33,37 @@ jobs:
           cache: 'npm'
 
       - name: Install
-        run: npm install
+        run: npm ci
 
+      - name: Type check
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Resource lifecycle check
+        run: npm run resources:check
+
+      # verify 항목을 위에서 개별로 돌았으므로 여기서는 번들만 만든다.
       - name: Build
-        run: npm run build
-
-      - uses: actions/configure-pages@v4
+        run: npx vite build
 
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v4
 
       - name: Deploy
         id: deployment
