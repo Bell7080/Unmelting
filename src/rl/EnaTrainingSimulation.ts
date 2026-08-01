@@ -1296,14 +1296,16 @@ export class EnaTrainingSimulation {
   }
 
   /** 보스 칸 기믹 배율 근사. 시뮬은 칸을 직접 고르지 않으므로
-   *  조준 타격은 드러난 약점을 노린다고 보고 최고 배율, 광역은 칸마다 한 번씩 들어간다고 본다. */
+   *  조준 타격은 드러난 약점을 노린다고 보고 최고 배율, 광역은 칸마다 한 번씩 들어간다고 본다.
+   *  부위 파괴 보너스는 칸 상태를 들고 있지 않으니 누적 배수(breakBonusFactor)로 녹여 둔다 —
+   *  칸이 깨져 광역 타격 면적이 줄어드는 손해와 상쇄되는 근사다. */
   private bossGimmickScaled(amount: number, scope: 'single' | 'area'): number {
     const gimmick = this.bossProfileFor(this.bossFloor)?.gimmick
     if (!gimmick || amount <= 0) return amount
     const scaled = scope === 'area'
       ? amount * gimmick.cells * gimmick.averageMultiplier
       : amount * gimmick.bestMultiplier
-    return Math.max(1, Math.round(scaled))
+    return Math.max(1, Math.round(scaled * gimmick.breakBonusFactor))
   }
 
   private damageBoss(rawAmount: number, source: 'basic' | 'ember', scope: 'single' | 'area' = 'single'): number {

@@ -716,7 +716,14 @@ export class HandSystem {
       card.takeDamage(amount)
       return
     }
-    for (const struck of grid.strikeAllCells(amount)) card.takeDamage(struck.damage)
+    const strikes = grid.strikeAllCells(amount)
+    // 성한 칸이 하나도 안 남았으면 격자가 없는 것처럼 한 번만 들어간다 —
+    // 부위를 다 깼다고 광역기가 통째로 사라지지는 않게.
+    if (strikes.length === 0) {
+      card.takeDamage(amount)
+      return
+    }
+    for (const struck of strikes) card.takeDamage(struck.damage)
   }
 
   /** 벽걸이 횃불용: 필드 전체 적/보스에게 amount 피해. 제거된 적 카드 목록을 돌려줘 호출부가 애니메이션한다. */

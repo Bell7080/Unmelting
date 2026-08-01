@@ -6,7 +6,7 @@
 import type { Card } from '@entities/Card'
 import type { CandleMode } from '@entities/Character'
 import type { HandCardId, HandCategory } from '@entities/HandCard'
-import type { BossGimmickCellView } from '@systems/BossGimmickManager'
+import type { BossGimmickCellKind, BossGimmickCellView } from '@systems/BossGimmickManager'
 import type { EmberTier, SpawnWeights } from '@systems/EmberSystem'
 import type { RelicId } from '@data/Relics'
 import type { CardRarity } from '@data/ShopPools'
@@ -24,6 +24,22 @@ export interface BossGimmickGridView {
   cols: number
   rows: number
   cells: readonly BossGimmickCellView[]
+}
+
+/**
+ * 보스 칸 타격 1건의 연출 입력. 모델의 `BossGimmickStrike`에서 표시에 필요한 것만 추린다 —
+ * 방패/페이지 경계에 잘린 실제 피해를 넣을 수 있어야 해서 수치는 호출부가 다시 채운다.
+ */
+export interface BossGimmickStrikeView {
+  cellIndex: number
+  kind: BossGimmickCellKind
+  /** 칸 위에 띄울 배율 피해 수치. */
+  damage: number
+  /** 부위 파괴 보너스 수치. 이번 타격에 깨지지 않았으면 0. */
+  breakDamage: number
+  /** 0~1 손상도 — 균열 단계를 고른다. */
+  wear: number
+  broke: boolean
 }
 
 export interface ItemActionDetail {

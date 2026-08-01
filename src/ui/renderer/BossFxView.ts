@@ -7,7 +7,22 @@ import type { GameBoardRenderer } from '@ui/GameBoardRenderer'
 import { spriteForHandCard, SpriteUrls } from '@ui/Sprites'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { escapeHtml } from '@ui/renderer/Html'
-import { BOSS_GIMMICK_KIND_META, type BossGimmickCellKind } from '@systems/BossGimmickManager'
+import type { BossGimmickStrikeView } from '@ui/renderer/RendererTypes'
+import { sfx } from '@/audio/SfxManager'
+import {
+  BOSS_GIMMICK_CRACK_STAGES,
+  BOSS_GIMMICK_KIND_META,
+  type BossGimmickCellKind,
+} from '@systems/BossGimmickManager'
+
+/** 부위 파괴 파편 개수. 칸이 작아 이 이상은 뭉쳐 보이기만 한다. */
+const BOSS_CELL_SHARD_COUNT = 12
+
+/** 손상도(0~1) → 균열 단계(0 = 멀쩡). 표기 단계의 단일 출처다. */
+function bossGimmickCrackStage(wear: number): number {
+  if (wear <= 0) return 0
+  return Math.min(BOSS_GIMMICK_CRACK_STAGES, Math.max(1, Math.ceil(wear * BOSS_GIMMICK_CRACK_STAGES)))
+}
 
 export class BossFxView {
   constructor(private readonly host: GameBoardRenderer) {}
@@ -248,22 +263,79 @@ export class BossFxView {
           ? `<span class="boss-gimmick-cell-label">${escapeHtml(meta.label)}</span>
              <span class="boss-gimmick-cell-mult">×${meta.multiplier}</span>`
           : ''
-        const aria = meta.label ? `${meta.label} 부위 · 피해 ${meta.multiplier}배` : '보스 부위'
+        // 균열은 손상도로만 결정되는 표시 레이어다. 깨진 칸은 금 대신 꺼진 판이 된다.
+        const crack = bossGimmickCrackStage(cell.wear)
+        const aria = cell.broken
+          ? `파괴된 ${meta.label || '보스'} 부위`
+          : meta.label
+            ? `${meta.label} 부위 · 피해 ${meta.multiplier}배`
+            : '보스 부위'
         // --boss-gimmick-i는 등장 연출의 칸별 지연에 쓰인다(좌상단부터 순차 점등).
-        return `<button class="boss-gimmick-cell is-kind-${cell.kind} ${targeting ? 'is-hand-target' : ''}"
+        return `<button class="boss-gimmick-cell is-kind-${cell.kind} ${cell.broken ? 'is-broken' : ''} ${targeting && !cell.broken ? 'is-hand-target' : ''}"
                         type="button" style="--boss-gimmick-i:${cell.index};"
-                        data-boss-gimmick-cell="${cell.index}" aria-label="${aria}">${label}</button>`
+                        data-boss-gimmick-cell="${cell.index}" data-crack="${cell.broken ? 0 : crack}"
+                        ${cell.broken ? 'disabled' : ''} aria-label="${aria}">
+                  <span class="boss-gimmick-cell-crack" aria-hidden="true"></span>${label}
+                </button>`
       })
       .join('')
     return `<div class="boss-gimmick-grid ${targeting ? 'is-targeting' : ''} ${entering ? 'is-appearing' : ''}"
                  style="--boss-gimmick-cols:${grid.cols};--boss-gimmick-rows:${grid.rows};">${cells}</div>`
   }
 
-  /** 때린 칸에 짧은 타격 피드백. 약점은 강한 버스트, 경화는 둔탁한 억제 톤. */
-  playBossGimmickCellHit(cellIndex: number, kind: BossGimmickCellKind): void {
-    const cell = this.host.boardElement.querySelector<HTMLElement>(
+  /** 격자 칸 DOM 조회 — 연출이 좌표를 잡는 유일한 경로. */
+  findBossGimmickCell(cellIndex: number): HTMLElement | null {
+    return this.host.boardElement.querySelector<HTMLElement>(
       `.boss-gimmick-cell[data-boss-gimmick-cell="${cellIndex}"]`
     )
+  }
+
+  /**
+   * 보스 칸 타격 연출의 단일 창구.
+   *
+   * 보스는 화면에서 큰 타일 하나라 "방금 어느 칸을 때렸는지"가 보이지 않는다. 그래서
+   * 출처(사용한 손패 중앙 / 플레이어 카드)에서 맞은 칸으로 블라스트를 먼저 쏘고,
+   * 같은 자리에서 피해 수치를 띄운 뒤 균열 한 겹을 얹는다. 그 타격에 칸이 깨졌으면
+   * 파편이 흩어지고 부위 파괴 추가 피해가 이어서 뜬다.
+   */
+  async playBossGimmickStrikes(
+    hits: readonly BossGimmickStrikeView[],
+    source: HTMLElement | DOMRect | null
+  ): Promise<void> {
+    if (hits.length === 0) return
+    if (hits.some((hit) => hit.damage > 0 || hit.breakDamage > 0)) sfx.playAttack()
+    await Promise.all(hits.map((hit) => this.playBossGimmickStrike(hit, source)))
+  }
+
+  private async playBossGimmickStrike(
+    hit: BossGimmickStrikeView,
+    source: HTMLElement | DOMRect | null
+  ): Promise<void> {
+    const cell = this.findBossGimmickCell(hit.cellIndex)
+    if (!cell) return
+    // 1) 출처 → 칸 블라스트. 어느 칸에 꽂혔는지를 눈으로 먼저 잇는다.
+    if (source) {
+      await this.host.trails.animateResourceTrail(source, cell, 1, this.gimmickHitTheme(hit.kind))
+    }
+    // 2) 타격 반동 + 칸 자체의 짧은 버스트.
+    this.playBossGimmickCellHit(hit.cellIndex, hit.kind)
+    // 3) 피해 수치도 보스 타일 중앙이 아니라 맞은 칸 위에서 뜬다.
+    const numbers: Promise<void>[] = []
+    if (hit.damage > 0) numbers.push(this.host.animateDamageNumberOnElement(cell, hit.damage))
+    if (hit.broke) numbers.push(this.playBossGimmickCellBreak(cell, hit.breakDamage))
+    await Promise.all(numbers)
+  }
+
+  /** 칸 종류별 블라스트 톤 — 약점은 뜨겁게, 경화는 차갑게, 평범은 밀랍빛. */
+  private gimmickHitTheme(kind: BossGimmickCellKind): BurstTheme {
+    if (kind === 'weak') return 'damage'
+    if (kind === 'hardened') return 'shield-gain'
+    return 'boss-wax-drip'
+  }
+
+  /** 때린 칸에 짧은 타격 피드백. 약점은 강한 버스트, 경화는 둔탁한 억제 톤. */
+  private playBossGimmickCellHit(cellIndex: number, kind: BossGimmickCellKind): void {
+    const cell = this.findBossGimmickCell(cellIndex)
     if (!cell) return
     const theme: BurstTheme = kind === 'weak' ? 'damage' : 'shield-gain'
     SquareBurst.playOn(cell, theme, {
@@ -276,6 +348,46 @@ export class BossFxView {
     void cell.offsetWidth
     cell.classList.add('is-hit')
     window.setTimeout(() => cell.classList.remove('is-hit'), 520)
+  }
+
+  /**
+   * 부위 파괴 — 밀랍이 팡 하고 터지는 한 비트.
+   *
+   * 연출을 칸 DOM이 아니라 body 오버레이에 올리는 이유: 파괴 직후 곧바로 재렌더가
+   * 일어나 칸 노드가 새로 그려져도(깨진 판으로 교체) 파편이 끊기지 않게 하기 위해서다.
+   */
+  private async playBossGimmickCellBreak(cell: HTMLElement, breakDamage: number): Promise<void> {
+    const rect = cell.getBoundingClientRect()
+    const host = document.createElement('div')
+    host.className = 'boss-cell-shatter'
+    host.setAttribute('aria-hidden', 'true')
+    host.style.cssText = `left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;`
+    const pane = document.createElement('div')
+    pane.className = 'boss-cell-shatter-pane'
+    host.appendChild(pane)
+    // 파편은 칸 중심에서 사방으로 — 각도/거리/회전만 흩어 놓고 나머지는 CSS가 굴린다.
+    for (let i = 0; i < BOSS_CELL_SHARD_COUNT; i++) {
+      const shard = document.createElement('i')
+      shard.className = 'boss-cell-shard'
+      const angle = (Math.PI * 2 * i) / BOSS_CELL_SHARD_COUNT + Math.random() * 0.5
+      const distance = 26 + Math.random() * 44
+      shard.style.cssText = [
+        `left:${20 + Math.random() * 60}%`,
+        `top:${20 + Math.random() * 60}%`,
+        `--shard-x:${Math.cos(angle) * distance}px`,
+        `--shard-y:${Math.sin(angle) * distance}px`,
+        `--shard-r:${Math.round(-160 + Math.random() * 320)}deg`,
+        `--shard-delay:${Math.round(Math.random() * 70)}ms`,
+      ].join(';')
+      host.appendChild(shard)
+    }
+    document.body.appendChild(host)
+    SquareBurst.playOn(rect, 'wax-freeze', { count: 20, spread: 150, duration: 620 })
+    window.setTimeout(() => host.remove(), 760)
+    // 부위 파괴 추가 피해는 배율 피해가 뜬 직후 한 박자 늦게 같은 자리에 얹는다.
+    if (breakDamage <= 0) return
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 180))
+    await this.host.animateDamageNumberOnElement(cell.isConnected ? cell : rect, breakDamage)
   }
 
   /** 보스 보상 카드 클릭 시 일반 보물칸 처치 그라마를 그대로 재사용해 흔들+확대 사라짐.

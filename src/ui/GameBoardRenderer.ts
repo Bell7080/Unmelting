@@ -72,9 +72,9 @@ import { sfx } from '@/audio/SfxManager'
 
 // 뷰 계약 타입은 renderer/RendererTypes.ts로 분리 — 기존 import 경로 호환을 위해 재수출한다.
 export * from '@ui/renderer/RendererTypes'
-import type { BossGimmickCellKind } from '@systems/BossGimmickManager'
 import type {
   BossGimmickGridView,
+  BossGimmickStrikeView,
   CardActionDetail,
   ChainHints,
   ForcedTrialCardView,
@@ -210,9 +210,16 @@ export class GameBoardRenderer {
     this.bossGimmickEntering = false
     return true
   }
-  /** 때린 칸 타격 피드백 — 연출은 BossFxView가 담당한다. */
-  playBossGimmickCellHit(cellIndex: number, kind: BossGimmickCellKind): void {
-    this.bossFx.playBossGimmickCellHit(cellIndex, kind)
+  /** 보스 칸 타격 한 beat(블라스트 → 균열/파괴 → 칸 위 피해 수치) — 연출은 BossFxView. */
+  playBossGimmickStrikes(
+    hits: readonly BossGimmickStrikeView[],
+    source: HTMLElement | DOMRect | null
+  ): Promise<void> {
+    return this.bossFx.playBossGimmickStrikes(hits, source)
+  }
+  /** 손패가 화면 중앙에서 터지는 지점 — 칸 블라스트의 출발 rect. */
+  handUseCenterRect(): DOMRect {
+    return new DOMRect(window.innerWidth / 2 - 8, window.innerHeight * 0.46 - 8, 16, 16)
   }
 
   constructor(containerId: string = 'game-board') {
@@ -2385,9 +2392,10 @@ export class GameBoardRenderer {
   }
 
   /** Float a glowing damage number above a specific element. */
-  animateDamageNumberOnElement(target: HTMLElement | null, amount: number): Promise<void> {
+  animateDamageNumberOnElement(target: HTMLElement | DOMRect | null, amount: number): Promise<void> {
     if (!target || amount <= 0) return Promise.resolve()
-    const rect = target.getBoundingClientRect()
+    // DOMRect도 받는다 — 파괴된 보스 칸처럼 연출 도중 노드가 교체되는 자리는 좌표만 남는다.
+    const rect = target instanceof HTMLElement ? target.getBoundingClientRect() : target
     return this.animateDamageNumberAt(
       rect.left + rect.width / 2,
       rect.top + rect.height * 0.34,

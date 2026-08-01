@@ -335,7 +335,8 @@ describe('HandSystem broad hand effects', () => {
 })
 
 describe('HandSystem 보스 칸 기믹 연동', () => {
-  /** 격자를 낀 보스 하나만 필드에 세운다(실제 30F 배치와 동일하게 3레인 dist-0 점유). */
+  /** 격자를 낀 보스 하나만 필드에 세운다(실제 30F 배치와 동일하게 3레인 dist-0 점유).
+   *  격자 내구도는 hp에서 파생되므로, 부위 파괴를 섞고 싶지 않은 테스트는 hp를 크게 잡는다. */
   function stageGriddedBoss(hp: number): { gameState: GameState; boss: Card; grid: BossGimmickManager } {
     const gameState = new GameState()
     const boss = new Card('boss-test', CardType.BOSS, '양초 백작', '보스', hp, 4, {
@@ -345,7 +346,7 @@ describe('HandSystem 보스 칸 기믹 연동', () => {
     for (let i = 0; i < 3; i++) gameState.lanes[i].setCardAtDistance(0, boss)
     // rng 고정으로 칸 배치를 재현 가능하게 만든다.
     const grid = new BossGimmickManager(() => 0)
-    grid.beginEncounter('waxArmy')
+    grid.beginEncounter('waxArmy', hp)
     gameState.bossGimmicks = grid
     return { gameState, boss, grid }
   }
@@ -392,6 +393,40 @@ describe('HandSystem 보스 칸 기믹 연동', () => {
     HandSystem.useSingle(gameState, HandSystem.newChain(), 0)
 
     expect(before - boss.getHealth()).toBe(4)
+  })
+
+  it('손패가 칸을 깨면 부위 파괴 보너스가 같은 타격에 함께 들어간다', () => {
+    // 30F 실수치(HP 100 · 9칸 → 내구도 12 · 파괴 보너스 10)로 세운다.
+    const { gameState, boss, grid } = stageGriddedBoss(100)
+    const weak = grid.getCells().find((c) => c.kind === 'weak')
+    // 약점을 미리 깨지기 직전까지 닳게 해 둔다(누적 10/12).
+    grid.strike({ cellIndex: weak?.index, baseDamage: 5 })
+    boss.takeDamage(10)
+    gameState.character.addHandCard(DropSystem.makeCard('ember'))
+
+    const before = boss.getHealth()
+    HandSystem.useSingle(gameState, HandSystem.newChain(), 0, {
+      laneIndex: 0, distance: 0, card: boss, gimmickCellIndex: weak?.index,
+    })
+
+    // 불씨 단일(공격력 1 → 2) × 약점 2배 = 4, 여기에 부위 파괴 보너스 10이 얹힌다.
+    expect(before - boss.getHealth()).toBe(4 + grid.breakDamage)
+    expect(grid.brokenCount).toBe(1)
+  })
+
+  it('부위가 깨질수록 광역기가 닿는 칸이 줄어든다', () => {
+    const { gameState, boss, grid } = stageGriddedBoss(500)
+    // 경화 2칸을 먼저 부숴 광역 대상에서 뺀다.
+    for (const cell of grid.getCells().filter((c) => c.kind === 'hardened')) {
+      grid.strike({ cellIndex: cell.index, baseDamage: 9999 })
+    }
+    gameState.character.addHandCard(DropSystem.makeCard('guillotine'))
+
+    const before = boss.getHealth()
+    HandSystem.useSingle(gameState, HandSystem.newChain(), 0)
+
+    // 남은 7칸(약점 2 ×2, 평범 5 ×1)에만 칸당 4가 들어간다.
+    expect(before - boss.getHealth()).toBe(2 * 8 + 5 * 4)
   })
 
   it('폭죽 분사는 총량을 칸에 흩뿌리며 약점에 꽂힌 만큼만 이득이 난다', () => {

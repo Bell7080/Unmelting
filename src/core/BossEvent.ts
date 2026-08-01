@@ -182,8 +182,9 @@ export class BossEventController {
     this.inject.render()
   }
 
-  /** 현재 격자 상태를 렌더러에 밀어 넣는다. */
-  private syncGimmickGrid(): void {
+  /** 현재 격자 상태를 렌더러에 밀어 넣는다. 칸 균열/파괴는 타격마다 바뀌므로
+   *  피해를 준 쪽(직접 타격·손패)이 렌더 직전에 이걸 한 번 불러 줘야 한다. */
+  syncGimmickGrid(): void {
     this.br.setBossGimmickGrid(
       this.gimmicks.isActive
         ? { cols: this.gimmicks.cols, rows: this.gimmicks.rows, cells: this.gimmicks.getCells() }
@@ -381,13 +382,17 @@ export class BossEventController {
 
     await this.br.animatePlayerAttack(card)
     const bossTile = this.br.findCardElement(card.id)
-    if (bossTile) SquareBurst.playOn(bossTile, 'damage', { count: 22, spread: 180, duration: 560 })
+    // 격자가 켜져 있으면 타일 전체 버스트를 생략한다 — 어느 칸을 때렸는지가 요점이라
+    // 칸 블라스트/버스트가 그 역할을 대신한다.
+    if (bossTile && !this.gimmicks.isActive) {
+      SquareBurst.playOn(bossTile, 'damage', { count: 22, spread: 180, duration: 560 })
+    }
     const beforeBossHp = card.getHealth()
-    // 칸 기믹: 때린 격자 칸의 배율을 먼저 먹인 뒤 방패/페이지 상한을 계산한다.
+    // 칸 기믹: 때린 격자 칸의 배율(+ 이번 타격에 깨졌다면 부위 파괴 보너스)을 먼저
+    // 먹인 뒤 방패/페이지 상한을 계산한다.
     const struck = this.gimmicks.strike({ cellIndex: gimmickCellIndex, baseDamage: character.damage })
     const attackPower = struck ? struck.damage : character.damage
     if (struck) {
-      this.br.playBossGimmickCellHit(struck.cell.index, struck.cell.kind)
       if (struck.cell.kind !== 'plain') {
         const meta = BOSS_GIMMICK_KIND_META[struck.cell.kind]
         this.inject.recordNotice(
@@ -395,7 +400,15 @@ export class BossEventController {
           struck.cell.kind === 'weak' ? 'win' : 'info'
         )
       }
+      if (struck.broke) {
+        this.inject.recordNotice(
+          `부위가 부서졌다 — 추가 피해 ${struck.breakDamage} (${this.gimmicks.brokenCount}/${this.gimmicks.cellCount})`,
+          'win'
+        )
+      }
     }
+    // 균열/파괴가 반영된 격자를 렌더러에 즉시 밀어 넣는다(이 beat의 render가 새 상태를 그린다).
+    if (struck) this.syncGimmickGrid()
     const rawDamage = Math.min(attackPower, card.getHealth() + state.bossShield)
     const blocked = Math.min(state.bossShield, rawDamage)
     state.bossShield -= blocked
@@ -421,7 +434,24 @@ export class BossEventController {
         await new Promise<void>((resolve) => window.setTimeout(resolve, 220))
       }
     }
-    await this.br.animateDamageNumbersById(dealt > 0 ? [{ cardId: card.id, amount: dealt }] : [])
+    if (struck) {
+      // 수치는 보스 타일 중앙이 아니라 '때린 칸' 위에서 뜬다. 방패/페이지 경계에 잘렸으면
+      // 배율 피해분을 먼저 채우고 남은 몫만 부위 파괴 보너스로 표기해 합이 실제 피해와 맞는다.
+      const cellShown = Math.min(dealt, struck.cellDamage)
+      await this.br.playBossGimmickStrikes(
+        [{
+          cellIndex: struck.cell.index,
+          kind: struck.cell.kind,
+          damage: cellShown,
+          breakDamage: dealt - cellShown,
+          wear: struck.cell.wear,
+          broke: struck.broke,
+        }],
+        this.br.boardElement.querySelector<HTMLElement>('.player-card')
+      )
+    } else {
+      await this.br.animateDamageNumbersById(dealt > 0 ? [{ cardId: card.id, amount: dealt }] : [])
+    }
     // 플레이어가 보스를 직접 공격했으므로 공격 시 발동 유물(훌륭한 대화수단)을 판정한다.
     await this.inject.applyPlayerAttackRelics()
 
@@ -811,7 +841,8 @@ export class BossEventController {
     this.syncBossShieldToCard()
     // 칸 기믹 격자는 보스마다 새로 굴린다 — 약점 자리가 매 조우 달라진다.
     // 화면 노출과 판정 활성화는 인트로·타이틀이 끝난 뒤(activateGimmickGrid)로 미룬다.
-    this.gimmicks.beginEncounter(def.specialEnemyKind)
+    // 칸 내구도/부위 파괴 보너스는 보스 최대 체력에서 파생한다(칸 절반이면 쓰러지는 기준).
+    this.gimmicks.beginEncounter(def.specialEnemyKind, def.maxHp)
 
     this.tm.setTurnMode('boss_phase')
     this.gs.bossBattleActive = true
