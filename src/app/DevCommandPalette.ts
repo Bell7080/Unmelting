@@ -463,15 +463,17 @@ export function setupDevCommandPalette(deps: DevCommandPaletteDeps): void {
   // 입력 중 실시간으로 일치하는 명령어 도움말을 좁혀 보여준다.
   input.addEventListener('input', () => renderHelp(input.value))
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      execute(input.value)
-      input.select()
+    if (e.key !== 'Enter' && e.key !== 'Escape') return
+    e.preventDefault()
+    // 팔레트가 삼킨 키는 여기서 끊는다. 명령이 그 자리에서 새 화면을 열면(예: /테스트 →
+    // 직업 선택) 그 화면이 등록한 window 키 핸들러가 지금 올라가는 중인 이 Enter를
+    // 그대로 받아 첫 항목을 선택해 버린다 — 실제로 직업이 즉시 확정되던 원인이다.
+    e.stopPropagation()
+    if (e.key === 'Escape') {
+      close()
       return
     }
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      close()
-    }
+    execute(input.value)
+    input.select()
   })
 }

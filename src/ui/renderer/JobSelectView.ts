@@ -245,6 +245,9 @@ export class JobSelectView {
       }
       const onKey = (e: KeyboardEvent) => {
         if (resolving) return
+        // 텍스트 입력 중인 키는 무시한다(디버그 팔레트 등) — 전역 단축키 공통 규칙.
+        const target = e.target as HTMLElement | null
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
         if (e.key === 'ArrowLeft') go(-1)
         else if (e.key === 'ArrowRight') go(1)
         else if (e.key === 'Enter') {
