@@ -1582,41 +1582,35 @@ export const GAME_BOARD_RAIL_STYLES = `
    흘러내린 밀랍이라 그림에 묻혀 아무것도 안 보였다. 밝은 밀랍 위에서 대비를 내는 건
    '녹는 밝음'이 아니라 '타 들어간 어둠'이다 — 불씨가 양초를 태우는 게 이 게임의 어휘다.
    가장자리부터 검게 번지고, 탄 자리 경계에 잉걸불이 남는다. */
-/* 단계마다 '탄 영역'이 안쪽으로 파고든다. 잉걸불은 탄 자리와 성한 자리의 경계선에만
-   얇게 남긴다 — 가운데까지 주홍으로 물들이면 타 들어가는 게 아니라 달아오르는 걸로
-   읽힌다. 남은 밝은 부분이 곧 남은 내구도다. */
-/* 1단계 — 테두리만 살짝 그을었다. */
+/* 단계는 잉걸불이 칸 전체로 번지는 '달아오름'으로 읽힌다. 탄 영역을 바깥에서 안으로
+   밀어 넣는 안(3단계에 가운데만 성하게 남기기)도 만들어 봤지만 아트 디렉션상 이쪽을
+   골랐다 — 잉걸불이 칸을 물들이는 편이 촛불 톤에 붙고, 남은 밝기로 내구도도 읽힌다. */
+/* 1단계 — 가장자리가 그을기 시작한다. */
 .boss-gimmick-cell[data-crack="1"] .boss-gimmick-cell-crack {
   opacity: 1;
-  background-image: radial-gradient(
-    124% 124% at 50% 48%,
-    transparent 62%,
-    rgba(255, 120, 40, 0.16) 70%,
-    rgba(12, 7, 4, 0.74) 84%,
-    rgba(7, 4, 3, 0.9) 100%
-  );
+  background-image: radial-gradient(118% 118% at 50% 46%, transparent 48%, rgba(16, 9, 5, 0.66) 100%);
 }
-/* 2단계 — 탄 자리가 절반까지 먹어 들어온다. */
+/* 2단계 — 그을음이 안쪽으로 번지고 탄 경계에 잉걸선이 비친다. */
 .boss-gimmick-cell[data-crack="2"] .boss-gimmick-cell-crack {
   opacity: 1;
   background-image: radial-gradient(
-    116% 116% at 50% 48%,
-    transparent 40%,
-    rgba(255, 128, 44, 0.26) 49%,
-    rgba(11, 6, 4, 0.82) 64%,
-    rgba(6, 4, 2, 0.94) 100%
+    112% 112% at 50% 47%,
+    transparent 30%,
+    rgba(255, 122, 44, 0.16) 44%,
+    rgba(13, 7, 4, 0.84) 86%
   );
 }
-/* 3단계 — 성한 곳은 가운데 한 줌뿐. 경계의 잉걸불이 가장 밝다(파괴 직전). */
+/* 3단계 — 거의 다 탔다. 검게 남은 판에 잉걸불만 벌겋게 살아 있다(파괴 직전). */
 .boss-gimmick-cell[data-crack="3"] .boss-gimmick-cell-crack {
   opacity: 1;
-  background-image: radial-gradient(
-    110% 110% at 50% 48%,
-    transparent 16%,
-    rgba(255, 142, 52, 0.42) 26%,
-    rgba(9, 5, 3, 0.9) 44%,
-    rgba(4, 3, 2, 0.97) 100%
-  );
+  background-image:
+    radial-gradient(50% 8px at 50% 100%, rgba(255, 130, 46, 0.3), transparent 80%),
+    radial-gradient(
+      106% 106% at 50% 48%,
+      transparent 10%,
+      rgba(255, 132, 48, 0.26) 30%,
+      rgba(9, 5, 3, 0.93) 76%
+    );
 }
 /* 파괴 직전 단계만 옅게 흔들려 "곧 무너진다"를 알린다(번쩍임 없이). */
 .boss-gimmick-cell[data-crack="3"]:not(.is-broken) {
