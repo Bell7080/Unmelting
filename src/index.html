@@ -49,6 +49,11 @@
         --color-border-soft: #4a3a2a;    /* burnt umber */
         --color-border-warm: #8b6f47;    /* aged brass */
 
+        /* 무대 비율 한계. 이 범위를 벗어난 창은 늘리지 않고 남는 쪽을 배경으로 남긴다.
+           max=1.85(21:9 등 초광폭 차단, 16:9·16:10은 그대로) · min=1.25(세로로 긴 창 차단). */
+        --stage-ratio-max: 1.85;
+        --stage-ratio-min: 1.25;
+
         /* Typography family (FontManager overrides this once OkDanDan loads) */
         --font-family-primary: 'OkDanDan', 'Georgia', 'Times New Roman', serif;
       }
@@ -78,6 +83,10 @@
         background-attachment: fixed;
         line-height: 1.5;
         min-height: 100vh;
+        /* 비율에 맞춰 잘린 무대를 화면 한가운데 세운다. */
+        display: flex;
+        align-items: center;
+        justify-content: center;
         /* 위 html과 동일 의도: 연출 중 일시적 오버플로로 페이지 스크롤바가 생기지 않게 한다. */
         overflow: hidden;
         /* 모바일에서 더블탭 zoom 지연(300ms tap delay) 제거 + 카드 클릭 즉시 반응.
@@ -94,15 +103,28 @@
         overscroll-behavior: contain;
       }
 
+      /* ───────── 무대 비율 고정 ─────────
+         창이 설계 비율을 벗어나도 UI를 늘리지 않는다. 한쪽 축을 비율에 맞춰 잘라 내고
+         남는 자리는 배경으로 둔다 — 초광폭 모니터에서 레일이 옆으로 퍼지거나, 세로로 긴
+         창에서 카드가 홀쭉해지는 것을 막는다.
+         모바일 가로(아래 미디어쿼리)는 예외 — 폰에서는 화면을 꽉 채우는 쪽이 맞다. */
       #app {
-        width: 100%;
-        min-height: 100vh;
+        width: min(100vw, calc(100vh * var(--stage-ratio-max)));
+        height: min(100vh, calc(100vw / var(--stage-ratio-min)));
         display: flex;
         flex-direction: column;
         position: relative;
+        overflow: hidden;
       }
 
-      #game-board { width: 100%; }
+      /* 무대의 남은 높이를 전부 받는다. #app이 비율로 잘린 확정 높이를 갖게 됐으므로
+         여기서 flex로 채워 줘야 .game-shell의 height:100%가 해석된다 — 안 그러면
+         레일이 콘텐츠 높이로 접혀 보드가 얇은 띠가 된다. */
+      #game-board {
+        width: 100%;
+        flex: 1 1 auto;
+        min-height: 0;
+      }
 
       canvas {
         display: block;
@@ -121,6 +143,8 @@
           overflow: hidden;
         }
         #app {
+          /* 폰은 비율 고정 예외 — 좁은 화면에서 레터박스까지 붙으면 남는 공간이 없다. */
+          width: 100vw;
           min-height: 100vh;
           height: 100vh;
           /* iOS 노치/홈바 안전영역. 데스크탑은 env() 값이 0이라 영향 없음. */

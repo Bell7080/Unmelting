@@ -729,6 +729,70 @@ export class HandSystem {
     for (const struck of strikes) card.takeDamage(struck.damage)
   }
 
+  /**
+   * 손패 밖 경로(유물)가 쓰는 '무작위 적 1체 타격'.
+   *
+   * 보스도 필드 위의 적이므로 후보에 넣는다 — 여기서 BOSS를 빼면 보스전 동안
+   * 가시 방패·수혈·헌혈팩·칼날 파편이 후보 0으로 조용히 죽는다. 격자를 낀 보스는
+   * `hitCard`를 지나 칸 배율/부위 파괴를 그대로 받고, 보스 격파 시퀀스는
+   * BossEventController가 소유하므로 보스 카드는 여기서 제거하지 않는다.
+   *
+   * 돌려주는 amount는 요청값이 아니라 **실제로 깎인 체력**이다(칸 배율이 걸리면 달라진다).
+   */
+  static strikeRandomEnemy(
+    gs: GameState,
+    amount: number,
+    scope: 'front' | 'field'
+  ): { cardId: string; amount: number; defeated: boolean } | null {
+    const candidates: { card: Card; distance: number }[] = []
+    const seen = new Set<Card>()
+    const maxDistance = scope === 'front' ? 1 : LANE_DISTANCE_COUNT
+    for (const lane of gs.lanes) {
+      for (let d = 0; d < maxDistance; d++) {
+        const card = lane.getCardAtDistance(d)
+        if (!card || seen.has(card)) continue
+        if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) continue
+        seen.add(card)
+        candidates.push({ card, distance: d })
+      }
+    }
+    if (candidates.length === 0) return null
+    const pick = candidates[Math.floor(Math.random() * candidates.length)]
+    return HandSystem.strikePickedEnemy(gs, pick.card, pick.distance, amount)
+  }
+
+  /** 지정한 적 1체 타격(품격있는 대처 등). 보스 포함 규칙은 strikeRandomEnemy와 같다. */
+  static strikeEnemyById(
+    gs: GameState,
+    cardId: string,
+    amount: number
+  ): { cardId: string; amount: number; defeated: boolean } | null {
+    for (const lane of gs.lanes) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = lane.getCardAtDistance(d)
+        if (!card || card.id !== cardId) continue
+        if (card.type !== CardType.ENEMY && card.type !== CardType.BOSS) return null
+        return HandSystem.strikePickedEnemy(gs, card, d, amount)
+      }
+    }
+    return null
+  }
+
+  /** 대상 확정 후 공통 처리 — 칸 배율 적용·실피해 측정·보스 제외 정리. */
+  private static strikePickedEnemy(
+    gs: GameState,
+    card: Card,
+    distance: number,
+    amount: number
+  ): { cardId: string; amount: number; defeated: boolean } {
+    const before = card.getHealth()
+    HandSystem.hitCard(gs, card, amount)
+    const dealt = before - card.getHealth()
+    const defeated = card.getHealth() <= 0
+    if (defeated && card.type !== CardType.BOSS) gs.removeCardFromRow(card, distance)
+    return { cardId: card.id, amount: dealt, defeated }
+  }
+
   /** 벽걸이 횃불용: 필드 전체 적/보스에게 amount 피해. 제거된 적 카드 목록을 돌려줘 호출부가 애니메이션한다. */
   static damageAllEnemies(gs: GameState, amount: number): { cardId: string; defeated: boolean }[] {
     // 유물이 스스로 내는 피해 — 손패 태그가 아니라 유물 출처로 판정된다.

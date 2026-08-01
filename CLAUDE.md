@@ -135,6 +135,13 @@ npm run build    # verify 포함
 - 손패 피해가 기믹 격자를 타는 진입점은 `HandSystem.hitCard`(단일/무작위 칸)와
   `hitCardAsAreaDamage`(필드 전체 = 칸마다 1회) 둘뿐이다. 새 공격 손패는 이 둘을
   거쳐야 자동 반영된다.
+- 유물의 '무작위/지정 적 1체' 타격은 `HandSystem.strikeRandomEnemy`/`strikeEnemyById`
+  한 경로다. **보스도 적이므로 후보에 넣는다** — 빼면 보스전 내내 가시 방패·수혈·
+  헌혈팩·칼날 파편이 후보 0으로 조용히 죽는다. 보스 카드는 여기서 제거하지 않는다
+  (격파 시퀀스는 `BossEventController` 소유).
+- 보스 칸 피해 표기는 `GameBoardRenderer.setBossCellStrikeSource()` **한 곳만 배선**하면
+  `animateDamageNumbersById`를 부르는 모든 경로가 칸 단위 표기를 탄다. 호출부마다
+  따로 분기하지 않는다.
 - `occupiedDistRows ≥ 2`인 보스(90F 조각사 등)는 레일이 행마다 별도 타일을 그린다.
   기믹 프로필을 켜기 전에 행별 오프셋을 먼저 정한다.
 - 칸 개념이 없는 학습 시뮬은 `bossGimmickExpectation()` 요약(조준 = 최고 배율,
@@ -245,6 +252,11 @@ npm run build    # verify 포함
 
 ## UI/UX 규칙
 
+- 무대는 `--stage-ratio-max`/`--stage-ratio-min`(`index.html`) 범위를 벗어나면 늘리지 않고
+  남는 쪽을 배경으로 남긴다. `#app`이 확정 높이를 갖게 되므로 그 아래는 `flex`로 채워야
+  `height: 100%`가 해석된다(안 그러면 레일이 콘텐츠 높이로 접힌다). 모바일 가로는 예외.
+- 화면에 보이는 버전 문자열의 단일 출처는 `package.json`이다(`VERSION.md`가 같은 값을 쓴다).
+  우측 하단 배지에 손으로 적어 두지 않는다.
 - z-index 레이어 대역을 지킨다: 보드 내부 ≤50(셔터 35 < 보스 타일 40) < 이펙트/오버레이 70~160(직업 선택·이벤트 씬 120~140, 보스 인트로 145, 유물 확대 160) < 정산·상위 오버레이 200~470 < 특수 최상단 9100~9999(클러치 배너 9998, 말풍선 9999) < 도감/경험 탭 10500. 새 오버레이는 기존 대역 사이에 끼워 넣고 극단값(99999 등)을 새로 만들지 않는다. `position: fixed` 오버레이는 전용 host 요소를 만들고 닫을 때 반드시 제거한다.
 - **이모지 신규 추가 금지.** `src/ui/Icons.ts`의 플랫 inline-SVG path 아이콘을 쓰거나 같은 방식(`currentColor`, 단색 fill/stroke, 작은 크기 가독성)으로 추가한다. 경험 아이콘은 불빛/재화에 쓰는 네 꼭짓점 반짝 다이아로 통일한다.
 - 촛불/밀랍/낡은 종이 테마 유지(색·테두리·그림자·스크롤바 일관성). 새 UI는 `GameBoardRenderer.ts`의 양식을 먼저 참고한다.

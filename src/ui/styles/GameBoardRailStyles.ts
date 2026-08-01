@@ -363,7 +363,8 @@ export const GAME_BOARD_RAIL_STYLES = `
   filter: saturate(1.05) contrast(1.02);
 }
 
-/* Bottom-anchored dark gradient so card-name + stats stay legible over art. */
+/* 위아래 양끝 어둠 — 이름(상단)과 스탯(하단)이 어떤 일러스트 위에서도 읽히게 한다.
+   가운데는 비워 둬야 카드 그림이 죽지 않는다. */
 .card-overlay {
   position: absolute;
   inset: 0;
@@ -372,9 +373,12 @@ export const GAME_BOARD_RAIL_STYLES = `
   background:
     linear-gradient(
       180deg,
-      rgba(20, 16, 28, 0.0) 38%,
-      rgba(20, 16, 28, 0.55) 70%,
-      rgba(10, 7, 18, 0.92) 100%
+      rgba(10, 7, 18, 0.86) 0%,
+      rgba(20, 16, 28, 0.42) 18%,
+      rgba(20, 16, 28, 0.0) 34%,
+      rgba(20, 16, 28, 0.0) 58%,
+      rgba(20, 16, 28, 0.5) 80%,
+      rgba(10, 7, 18, 0.9) 100%
     ),
     radial-gradient(
       120% 60% at 50% 0%,
@@ -389,12 +393,15 @@ export const GAME_BOARD_RAIL_STYLES = `
   z-index: 2;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  /* 이름은 상단, 스탯은 하단 — 카드 그림의 얼굴/실루엣이 가운데에서 가려지지 않는다. */
+  justify-content: space-between;
   align-items: center;
   text-align: center;
   padding: clamp(4px, 1vh, 8px) clamp(4px, 1vw, 8px);
   gap: 4px;
 }
+/* 스탯이 없는 카드(보물·이벤트 등)에서도 이름이 위에 붙어 있게 한다. */
+.card-content > .card-name:only-child { margin-bottom: auto; }
 
 .card-name {
   font-size: var(--font-size-sm);
@@ -430,8 +437,8 @@ export const GAME_BOARD_RAIL_STYLES = `
 }
 .card-stats .stat .icon { font-size: 13px; }
 .card-stats .stat-value { font-variant-numeric: tabular-nums; }
-.card-stats .stat.hp { color: #ffb3a1; }
-.card-stats .stat.atk { color: #ffd58a; }
+.card-stats .stat.hp { color: #ff6b5a; }
+.card-stats .stat.atk { color: #ff9b4a; }
 /* 적 카드 수치: 체력은 좌하단, 공격력은 우하단에 크게 벌려 붙인다.
    카드 이름 아래 가운데에 모여 작게 붙던 걸 양 끝으로 밀어 판독성을 올린 배치다.
    .card-content가 이미 하단 정렬이라 여기서는 폭만 채우고 좌우로 벌리면 된다. */
@@ -442,7 +449,7 @@ export const GAME_BOARD_RAIL_STYLES = `
   flex-wrap: nowrap;
   gap: 4px;
   padding: 0 2px;
-  font-size: clamp(15px, 2vh, 19px);
+  font-size: clamp(18px, 2.5vh, 24px);
   font-weight: 900;
 }
 .card-stats--corners .stat {
@@ -453,20 +460,20 @@ export const GAME_BOARD_RAIL_STYLES = `
 }
 .card-stats--corners .icon,
 .card-stats--corners svg {
-  width: clamp(15px, 2vh, 19px);
-  height: clamp(15px, 2vh, 19px);
+  width: clamp(18px, 2.5vh, 24px);
+  height: clamp(18px, 2.5vh, 24px);
 }
 /* 대기 행(dist-1/2)은 카드가 작아지므로 한 단계 줄여 넘치지 않게 한다. */
 .rail-row.dist-1 .card-stats--corners,
 .rail-row.dist-2 .card-stats--corners {
-  font-size: clamp(13px, 1.6vh, 16px);
+  font-size: clamp(15px, 2vh, 20px);
 }
 .rail-row.dist-1 .card-stats--corners .icon,
 .rail-row.dist-1 .card-stats--corners svg,
 .rail-row.dist-2 .card-stats--corners .icon,
 .rail-row.dist-2 .card-stats--corners svg {
-  width: clamp(13px, 1.6vh, 16px);
-  height: clamp(13px, 1.6vh, 16px);
+  width: clamp(15px, 2vh, 20px);
+  height: clamp(15px, 2vh, 20px);
 }
 
 .card-stats.danger {
@@ -681,10 +688,10 @@ export const GAME_BOARD_RAIL_STYLES = `
   animation: atk-empower-afterimage 0.76s cubic-bezier(0.2, 0.85, 0.3, 1) both;
 }
 @keyframes atk-empower-afterimage {
-  0%   { transform: scale(1); color: #ffd58a; text-shadow: none; }
+  0%   { transform: scale(1); color: #ff9b4a; text-shadow: none; }
   30%  { transform: scale(1.55); color: #ff7a3c; text-shadow: 0 0 12px rgba(255, 90, 40, 0.9), 0 0 4px rgba(255, 160, 90, 0.8); }
   60%  { transform: scale(1.2); color: #ffa85a; text-shadow: 0 0 8px rgba(255, 110, 50, 0.6); }
-  100% { transform: scale(1); color: #ffd58a; text-shadow: none; }
+  100% { transform: scale(1); color: #ff9b4a; text-shadow: none; }
 }
 
 .cell.card.is-flower-blooming .card-art {
@@ -1406,8 +1413,8 @@ export const GAME_BOARD_RAIL_STYLES = `
   cursor: pointer;
   /* 일반 레일 칸과 같은 둥근 점선 테두리 + 아주 옅은 판. */
   border-radius: 10px;
-  border: 1px dashed rgba(228, 214, 186, 0.28);
-  background: rgba(255, 246, 226, 0.045);
+  border: 1px dashed rgba(228, 214, 186, 0.24);
+  background: transparent;
   transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
 .boss-gimmick-cell:hover {
@@ -1418,20 +1425,42 @@ export const GAME_BOARD_RAIL_STYLES = `
 /* 칸 색은 종류가 아니라 '톤'으로 갈린다(BOSS_GIMMICK_KIND_META.tone).
    새 칸 종류를 표에 한 줄 추가하면 톤만 골라도 색·타격 연출이 따라온다.
    특정 종류에 전용 색을 주고 싶을 때만 .is-kind-* 규칙을 덧쓴다. */
+/* 색은 판 전체를 덮지 않는다 — 안쪽 테두리에서 스며드는 비네트로만 성격을 알린다.
+   보스 일러스트가 칸 색에 잠기면 '무엇을 때리는지'가 오히려 안 보인다.
+   --cell-tint / --cell-edge 두 변수만 톤마다 갈아 끼우고 형태는 공용 규칙이 쓴다. */
+.boss-gimmick-cell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  /* 가장자리에만 얹히는 발광 — 가운데는 완전히 비워 일러스트를 살린다. */
+  background: radial-gradient(120% 120% at 50% 50%, transparent 52%, var(--cell-tint, transparent) 100%);
+  box-shadow: inset 0 0 12px -2px var(--cell-edge, transparent);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
 .boss-gimmick-cell[data-tone="hot"] {
-  border-color: rgba(255, 168, 120, 0.52);
-  background: rgba(200, 60, 50, 0.16);
+  --cell-tint: rgba(214, 73, 47, 0.34);
+  --cell-edge: rgba(255, 150, 96, 0.5);
+  border-color: rgba(255, 168, 120, 0.34);
 }
 .boss-gimmick-cell[data-tone="cold"] {
-  border-color: rgba(150, 170, 210, 0.46);
-  background: rgba(60, 70, 110, 0.2);
+  --cell-tint: rgba(96, 124, 190, 0.3);
+  --cell-edge: rgba(158, 190, 240, 0.42);
+  border-color: rgba(150, 170, 210, 0.3);
 }
 .boss-gimmick-cell[data-tone="neutral"] {
+  --cell-tint: rgba(228, 214, 186, 0.14);
+  --cell-edge: rgba(228, 214, 186, 0.2);
   border-style: solid;
-  border-color: rgba(228, 214, 186, 0.22);
+  border-color: rgba(228, 214, 186, 0.18);
 }
+/* 손상될수록 테두리 발광이 짙어져 '닳고 있다'가 색 없이도 읽힌다. */
+.boss-gimmick-cell[data-crack="2"]::before { box-shadow: inset 0 0 16px -2px var(--cell-edge, transparent); }
+.boss-gimmick-cell[data-crack="3"]::before { box-shadow: inset 0 0 22px -1px var(--cell-edge, transparent); }
 /* 글자는 반투명하되 굵기·외곽 그림자로 어떤 일러스트 위에서도 읽히게 한다. */
 .boss-gimmick-cell-label {
+  position: relative;
   font-size: clamp(12px, 1.6vh, 16px);
   font-weight: 900;
   letter-spacing: 0.06em;
@@ -1439,6 +1468,7 @@ export const GAME_BOARD_RAIL_STYLES = `
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 9px rgba(0, 0, 0, 0.7);
 }
 .boss-gimmick-cell-mult {
+  position: relative;
   font-size: clamp(12px, 1.4vh, 14px);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -1493,13 +1523,12 @@ export const GAME_BOARD_RAIL_STYLES = `
   animation: boss-gimmick-hit-dull 0.5s cubic-bezier(0.2, 0.86, 0.28, 1);
 }
 @keyframes boss-gimmick-hit-hot {
-  0%   { background: rgba(255, 190, 130, 0.5); box-shadow: inset 0 0 26px rgba(255, 140, 80, 0.6); }
-  100% { background: rgba(200, 60, 50, 0.16); box-shadow: inset 0 0 0 rgba(0, 0, 0, 0); }
+  0%   { box-shadow: inset 0 0 30px -2px rgba(255, 170, 110, 0.95), 0 0 16px rgba(255, 140, 80, 0.4); }
+  100% { box-shadow: inset 0 0 0 rgba(0, 0, 0, 0), 0 0 0 rgba(0, 0, 0, 0); }
 }
 @keyframes boss-gimmick-hit-dull {
-  0%   { background: rgba(150, 170, 210, 0.34); transform: scale(0.965); }
-  60%  { transform: scale(1.004); }
-  100% { background: rgba(60, 70, 110, 0.2); transform: scale(1); }
+  0%   { box-shadow: inset 0 0 24px -2px rgba(186, 210, 255, 0.8); }
+  100% { box-shadow: inset 0 0 0 rgba(0, 0, 0, 0); }
 }
 
 /* ── 부위 파괴: 균열 → 파괴 → 꺼진 칸 ──────────────────────────────────────
@@ -1536,6 +1565,7 @@ export const GAME_BOARD_RAIL_STYLES = `
   50%      { box-shadow: inset 0 0 18px rgba(255, 236, 190, 0.24); }
 }
 /* 꺼진 칸 — 반투명 검은 판. 클릭도 발광도 받지 않는다. */
+.boss-gimmick-cell.is-broken::before { background: none; box-shadow: none; }
 .boss-gimmick-cell.is-broken {
   border-style: solid;
   border-color: rgba(14, 11, 18, 0.78);

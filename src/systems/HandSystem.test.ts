@@ -464,3 +464,71 @@ describe('HandSystem 보스 칸 기믹 연동', () => {
     expect(dealt).toBeLessThanOrEqual(6)
   })
 })
+
+describe('HandSystem.strikeRandomEnemy / strikeEnemyById — 유물 타격 경로', () => {
+  /** 보스 하나만 선 판(30F 배치와 동일하게 3레인 dist-0 점유). */
+  function stageBossOnly(hp = 100): { gameState: GameState; boss: Card } {
+    const gameState = new GameState()
+    const boss = new Card('boss-only', CardType.BOSS, '양초 백작', '보스', hp, 4, {
+      specialEnemyKind: 'waxArmy',
+    })
+    boss.enemyHealthTotal = hp
+    for (let i = 0; i < 3; i++) gameState.lanes[i].setCardAtDistance(0, boss)
+    return { gameState, boss }
+  }
+
+  it('보스도 후보에 넣는다 — 보스전에서 가시 방패·수혈이 죽지 않게', () => {
+    // 회귀 방지: 예전 GameState 헬퍼는 CardType.ENEMY만 골라 보스전에서 후보 0이 됐고,
+    // 가시 방패·수혈·헌혈팩·칼날 파편이 조용히 아무 일도 하지 않았다.
+    const { gameState, boss } = stageBossOnly()
+
+    const front = HandSystem.strikeRandomEnemy(gameState, 3, 'front')
+    expect(front?.cardId).toBe('boss-only')
+    expect(boss.getHealth()).toBe(97)
+
+    const field = HandSystem.strikeRandomEnemy(gameState, 2, 'field')
+    expect(field?.cardId).toBe('boss-only')
+    expect(boss.getHealth()).toBe(95)
+
+    expect(HandSystem.strikeEnemyById(gameState, 'boss-only', 5)?.amount).toBe(5)
+  })
+
+  it('격자를 낀 보스는 칸 배율을 먹은 실피해를 돌려준다', () => {
+    const { gameState, boss } = stageBossOnly(500)
+    const grid = new BossGimmickManager(() => 0)
+    grid.beginEncounter('waxArmy', 500)
+    gameState.bossGimmicks = grid
+    const weak = grid.getCells().find((c) => c.kind === 'weak')
+
+    const before = boss.getHealth()
+    const hit = HandSystem.strikeEnemyById(gameState, 'boss-only', 10)
+
+    // 요청값 10이 아니라 실제로 깎인 체력을 돌려줘야 수치 표기가 어긋나지 않는다.
+    expect(hit?.amount).toBe(before - boss.getHealth())
+    expect(grid.takeHits()).toHaveLength(1)
+    expect(weak).toBeTruthy()
+  })
+
+  it('보스를 쓰러뜨려도 레일에서 직접 치우지 않는다 — 격파 시퀀스는 보스 컨트롤러가 소유한다', () => {
+    const { gameState, boss } = stageBossOnly(3)
+
+    const hit = HandSystem.strikeEnemyById(gameState, 'boss-only', 99)
+
+    expect(hit?.defeated).toBe(true)
+    expect(gameState.lanes[0].getCardAtDistance(0)).toBe(boss)
+  })
+
+  it('일반 적은 처치 시 즉시 치우고, 전방 조준은 대기 행을 건드리지 않는다', () => {
+    const gameState = new GameState()
+    const waiting = new Card('waiting', CardType.ENEMY, '대기', 'test', 3, 1)
+    gameState.lanes[2].setCardAtDistance(2, waiting)
+
+    expect(HandSystem.strikeRandomEnemy(gameState, 1, 'front')).toBeNull()
+    expect(HandSystem.strikeRandomEnemy(gameState, 1, 'field')?.cardId).toBe('waiting')
+
+    const dying = new Card('dying', CardType.ENEMY, '죽는적', 'test', 1, 1)
+    gameState.lanes[0].setCardAtDistance(0, dying)
+    expect(HandSystem.strikeRandomEnemy(gameState, 5, 'front')?.defeated).toBe(true)
+    expect(gameState.lanes[0].getCardAtDistance(0)).toBeNull()
+  })
+})

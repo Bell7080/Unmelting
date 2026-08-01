@@ -350,11 +350,13 @@ export class BossFxView {
     if (!cell) return
     const fx = this.gimmickFx(kind)
     SquareBurst.playOn(cell, fx.theme, { count: fx.count, spread: fx.spread, duration: 480 })
-    cell.classList.remove('is-hit')
+    // is-enemy-hit은 일반 적 카드가 맞을 때와 같은 반동이다 — 직접 타격에만 있고
+    // 카드로 칠 때는 없어 '맞았다'가 안 읽히던 문제를 칸 단위로 맞춘다.
+    cell.classList.remove('is-hit', 'is-enemy-hit')
     // 리플로우 1회로 같은 칸을 연타해도 애니메이션이 매번 처음부터 재생되게 한다.
     void cell.offsetWidth
-    cell.classList.add('is-hit')
-    window.setTimeout(() => cell.classList.remove('is-hit'), 520)
+    cell.classList.add('is-hit', 'is-enemy-hit')
+    window.setTimeout(() => cell.classList.remove('is-hit', 'is-enemy-hit'), 520)
   }
 
   /**

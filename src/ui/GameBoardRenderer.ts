@@ -221,6 +221,17 @@ export class GameBoardRenderer {
   handUseCenterRect(): DOMRect {
     return new DOMRect(window.innerWidth / 2 - 8, window.innerHeight * 0.46 - 8, 16, 16)
   }
+  /**
+   * 보스 칸 타격 기록 공급자. index가 한 번만 배선하면 `animateDamageNumbersById`를
+   * 부르는 모든 경로(손패·조합·유물·반복 라운드)가 자동으로 칸 단위 표기로 갈린다 —
+   * 호출부 열 곳을 각각 고치지 않기 위한 단일 배선점이다.
+   */
+  private bossCellStrikeSource: ((cardId: string, observedLoss: number) => BossGimmickStrikeView[]) | null = null
+  setBossCellStrikeSource(
+    source: ((cardId: string, observedLoss: number) => BossGimmickStrikeView[]) | null
+  ): void {
+    this.bossCellStrikeSource = source
+  }
 
   constructor(containerId: string = 'game-board') {
     const container = document.getElementById(containerId)
@@ -2416,6 +2427,12 @@ export class GameBoardRenderer {
     if (damages.some(({ amount }) => amount > 0)) sfx.playAttack()
     return Promise.all(
       damages.map(({ cardId, amount }) => {
+        // 격자를 낀 보스면 타일 중앙이 아니라 '맞은 칸'마다 블라스트+수치를 낸다.
+        // 광역 손패가 9칸을 동시에 때려도 합계 하나가 아니라 칸마다 따로 뜬다.
+        const cellStrikes = this.bossCellStrikeSource?.(cardId, amount) ?? []
+        if (cellStrikes.length > 0) {
+          return this.playBossGimmickStrikes(cellStrikes, this.handUseCenterRect())
+        }
         const target = this.findCardElement(cardId)
         if (target && amount > 0) {
           SquareBurst.playOn(target, 'damage', { count: 14, spread: 110, duration: 620 })

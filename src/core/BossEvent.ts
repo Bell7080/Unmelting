@@ -26,6 +26,7 @@ import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
 import { EmberSystem } from '@systems/EmberSystem'
 import { BOSS_CORE_SPECS, ONBOARDING_CAT_SPEC, demonSummonSpec } from '@data/BossSpecs'
 import { BossGimmickManager, BOSS_GIMMICK_KIND_META } from '@systems/BossGimmickManager'
+import { discardBossCellStrikes } from '@/app/BossCellFeedback'
 
 type WaxKnightCardEffect = 'shield' | 'heal' | 'strike'
 type BossPage = 1 | 2 | 3
@@ -409,7 +410,12 @@ export class BossEventController {
       }
     }
     // 균열/파괴가 반영된 격자를 렌더러에 즉시 밀어 넣는다(이 beat의 render가 새 상태를 그린다).
-    if (struck) this.syncGimmickGrid()
+    // 직접 타격은 struck을 그대로 그리므로 기록은 여기서 비운다 — 남겨 두면 뒤따르는
+    // 피해 수치 호출이 같은 타격을 한 번 더 칸 연출로 재생한다.
+    if (struck) {
+      this.syncGimmickGrid()
+      discardBossCellStrikes(this.gs)
+    }
     const rawDamage = Math.min(attackPower, card.getHealth() + state.bossShield)
     const blocked = Math.min(state.bossShield, rawDamage)
     state.bossShield -= blocked

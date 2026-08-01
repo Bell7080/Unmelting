@@ -24,6 +24,7 @@ import { EventFlowManager } from '@/app/EventFlowManager'
 import { CompanionDirector, BARK_IMPORTANCE } from '@/app/CompanionDirector'
 import { RelicEffectsManager } from '@/app/RelicEffectsManager'
 import type { PlayerResourceSnapshot, ResourceTrailSource, TrailResourceKind } from '@/app/FeedbackTypes'
+import { discardBossCellStrikes, drainBossCellStrikes } from '@/app/BossCellFeedback'
 import { TurnManager } from '@core/TurnManager'
 import { BossEventController } from '@core/BossEvent'
 import {
@@ -34,7 +35,6 @@ import {
   ShopBuyDetail,
   ShopPackKind,
   ShopPackPickDetail,
-  type BossGimmickStrikeView,
   type ResourceTrailTarget,
 } from '@ui/GameBoardRenderer'
 import { experienceAxes } from '@ui/ExperienceAxes'
@@ -87,6 +87,8 @@ import bgm003Url from './assets/audio/bgm_003.mp3'
 import okDanDanBoldUrl from './assets/fonts/OkDanDanBold.woff2'
 
 console.log('🕯 Unmelting starting...')
+
+import packageInfo from '../package.json'
 
 const app = document.getElementById('app')!
 app.innerHTML = `
@@ -613,28 +615,6 @@ function diffFieldHealthLosses(
   return losses
 }
 
-/**
- * 이번 beat에 손패가 보스 격자의 어느 칸을 때렸는지 꺼내 연출 뷰로 바꾼다.
- *
- * 모델이 쌓아 둔 기록을 여기서 한 번에 비우므로(takeHits) 다음 beat로 새지 않는다.
- * 실제 HP 손실이 기록 합보다 작으면(방패 흡수·치명타 컷) 같은 비율로 줄여, 칸마다
- * 뜨는 수치의 합이 보스가 실제로 받은 피해와 어긋나지 않게 한다.
- */
-function drainBossCellStrikeViews(observedLoss: number): BossGimmickStrikeView[] {
-  const hits = gameState.bossGimmicks?.takeHits() ?? []
-  if (hits.length === 0) return []
-  const modelTotal = hits.reduce((sum, hit) => sum + hit.damage, 0)
-  const scale = modelTotal > 0 ? Math.min(1, observedLoss / modelTotal) : 0
-  return hits.map((hit) => ({
-    cellIndex: hit.cell.index,
-    kind: hit.cell.kind,
-    damage: Math.round(hit.cellDamage * scale),
-    breakDamage: Math.round(hit.breakDamage * scale),
-    wear: hit.cell.wear,
-    broke: hit.broke,
-  }))
-}
-
 /** Let boss-owned shields absorb damage from hand cards/recipes before UI diffs read HP loss. */
 function absorbBossShieldAfterFieldEffect(before: Map<string, FieldHealthSnapshotEntry>): void {
   const state = bossController.eventState
@@ -847,6 +827,27 @@ async function playPlayerGainTrails(
     )
   )
 }
+
+/**
+ * 보스 칸 타격 표기 배선. 피해 수치를 그리는 모든 경로가 이 공급자를 지나므로,
+ * 손패·조합·유물·샹들리에 반복 라운드가 각각 따로 손대지 않아도 '맞은 칸' 표기를 탄다.
+ * 부위 파괴 진행도 로그도 여기 한 곳에서 남긴다.
+ */
+boardRenderer.setBossCellStrikeSource((cardId, observedLoss) => {
+  if (!bossController.eventState || cardId !== bossController.eventState.card.id) return []
+  const strikes = drainBossCellStrikes(gameState, observedLoss)
+  if (strikes.length === 0) return []
+  bossController.syncGimmickGrid()
+  const broke = strikes.filter((strike) => strike.broke).length
+  if (broke > 0) {
+    const grid = gameState.bossGimmicks
+    recordNotice(`부위 ${broke}칸이 부서졌다${grid ? ` (${grid.brokenCount}/${grid.cellCount})` : ''}`, 'win')
+  }
+  // 균열/파괴는 이 beat 안에서 다시 그린다 — 다음 렌더까지 미루면 파편이 터진 칸이
+  // 잠깐 멀쩡한 상태로 남는다.
+  render()
+  return strikes
+})
 
 /** 유물 발동/처리 매니저 — 처치·생존·구매·턴 시작 유물 효과를 위임한다. 상태(score/gameActive)는 index가 소유. */
 const relicEffects = new RelicEffectsManager({
@@ -2161,7 +2162,7 @@ async function applyHandSingle(
   const beforeSingleCards = snapshotFieldCardsById()
   // 이전 beat(직접 타격·유물)가 남긴 칸 타격 기록을 버린다 — 이 카드가 실제로 때린
   // 칸만 연출되도록, 기록은 항상 "이번 beat에 쌓인 것"만 남긴다.
-  gameState.bossGimmicks?.takeHits()
+  discardBossCellStrikes(gameState)
   // 트리플 자동 합성은 미뤄 두고, 손패 이동/낙하 연출이 끝난 뒤 별도 비트로 재생한다
   // (이동 애니메이션과 합성 애니메이션이 한 렌더에서 충돌해 순간이동처럼 보이던 문제 방지).
   const result = HandSystem.useSingle(gameState, chain, slotIndex, target, true)
@@ -2219,22 +2220,6 @@ async function applyHandSingle(
   absorbBossShieldAfterFieldEffect(beforeSingleHealth)
   const singleDamageLosses = diffFieldHealthLosses(beforeSingleHealth)
   const singleDamagedIds = new Set(singleDamageLosses.map((loss) => loss.cardId))
-  // 보스 격자를 때린 손패는 타일 하나가 아니라 '맞은 칸'을 향해 연출한다 —
-  // 보스가 판 전체를 덮고 있어 어느 칸에 꽂혔는지 화면만으로는 알 수 없기 때문이다.
-  const bossCardId = bossController.eventState?.card.id ?? null
-  const bossLoss = bossCardId ? (singleDamageLosses.find((l) => l.cardId === bossCardId)?.amount ?? 0) : 0
-  const bossCellStrikes = drainBossCellStrikeViews(bossLoss)
-  if (bossCellStrikes.length > 0) {
-    bossController.syncGimmickGrid()
-    // 부위 파괴는 직접 타격과 같은 문구로 남긴다 — 손패로 깬 것도 진행도가 보여야 한다.
-    const brokeCount = bossCellStrikes.filter((strike) => strike.broke).length
-    if (brokeCount > 0) {
-      const grid = gameState.bossGimmicks
-      const progress = grid ? ` (${grid.brokenCount}/${grid.cellCount})` : ''
-      recordNotice(`부위 ${brokeCount}칸이 부서졌다${progress}`, 'win')
-    }
-  }
-  const cellRoutedBossId = bossCellStrikes.length > 0 ? bossCardId : null
   const newlyFrozenIds = diffNewlyFrozenCards(beforeSingleFreeze)
   const thawedIds = diffThawedCards(beforeSingleFreeze)
   const affectedCardIds = [
@@ -2243,15 +2228,12 @@ async function applyHandSingle(
     ...result.removedFieldCards.map((removed) => removed.cardId),
     ...newlyFrozenIds,
     ...thawedIds,
-  ].filter((cardId) => cardId !== cellRoutedBossId)
+  ]
   // The played-card preview dissolves at center; this square-card blast points
   // from that center beat to every field cell that was hit, removed, gained, or hardened.
   if (handUseTheme) await playHandTargetBlasts(affectedCardIds, handUseTheme)
   await Promise.all([
-    boardRenderer.animateDamageNumbersById(
-      singleDamageLosses.filter((loss) => loss.cardId !== cellRoutedBossId)
-    ),
-    boardRenderer.playBossGimmickStrikes(bossCellStrikes, boardRenderer.handUseCenterRect()),
+    boardRenderer.animateDamageNumbersById(singleDamageLosses),
     boardRenderer.animateWaxFreezeByIds(newlyFrozenIds),
     boardRenderer.animateWaxThawByIds(thawedIds),
   ])
@@ -2259,9 +2241,6 @@ async function applyHandSingle(
   if (bossController.eventState && singleDamagedIds.has(bossController.eventState.card.id)) {
     boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))
   }
-  // 균열/파괴가 늘어난 격자를 이 beat 안에서 다시 그린다 — 다음 렌더까지 미루면
-  // 파편이 터진 칸이 잠깐 멀쩡한 상태로 남는다.
-  if (bossCellStrikes.length > 0) render()
   // Append only the just-used card first. Recipes are resolved below after
   // a small delay so the previous card's effect visibly lands before the combo.
   if (usedDef) {
@@ -3113,7 +3092,7 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
     const damaged: { cardId: string; amount: number }[] = []
     const killedIds: string[] = []
     for (const id of attackerIds) {
-      const hit = gameState.damageEnemyById(id, counterDamage)
+      const hit = HandSystem.strikeEnemyById(gameState, id, counterDamage)
       if (!hit) continue
       damaged.push({ cardId: hit.cardId, amount: hit.amount })
       if (hit.defeated) killedIds.push(hit.cardId)
@@ -3917,4 +3896,17 @@ async function bootGame(): Promise<void> {
   }
   requestAnimationFrame(() => dismissGate())
 }
+/**
+ * 우측 하단 버전 배지. 버전 문자열의 단일 출처는 package.json이고 VERSION.md가
+ * 같은 값을 쓴다 — 화면에 손으로 적어 두면 릴리스마다 조용히 어긋난다.
+ */
+function mountVersionBadge(): void {
+  const badge = document.createElement('div')
+  badge.className = 'version-badge'
+  badge.textContent = `v${packageInfo.version}`
+  badge.setAttribute('aria-label', `게임 버전 ${packageInfo.version}`)
+  app.appendChild(badge)
+}
+mountVersionBadge()
+
 void bootGame()

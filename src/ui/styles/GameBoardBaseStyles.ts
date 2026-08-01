@@ -4,6 +4,27 @@
  */
 export const GAME_BOARD_BASE_STYLES = `
 
+/* 우측 하단 버전 배지 — 무대 안쪽 모서리에 조용히 붙어 어떤 빌드인지 알려 준다.
+   클릭을 먹지 않고, 오버레이(70~) 아래에 두어 연출을 가리지 않는다. */
+.version-badge {
+  position: absolute;
+  right: 10px;
+  bottom: 6px;
+  z-index: 60;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: rgba(10, 8, 14, 0.42);
+  border: 1px solid rgba(139, 111, 71, 0.28);
+  color: rgba(243, 227, 194, 0.42);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  user-select: none;
+}
+
 .icon {
   width: 1em;
   height: 1em;
@@ -14,9 +35,10 @@ export const GAME_BOARD_BASE_STYLES = `
 }
 
 .game-shell {
+  /* 높이는 뷰포트가 아니라 비율이 고정된 #app을 따른다 — 잘라 낸 무대 밖으로 새지 않게. */
   width: 100%;
-  height: 100vh;
-  max-height: 100vh;
+  height: 100%;
+  max-height: 100%;
   display: grid;
   grid-template-columns:
     minmax(240px, 300px)

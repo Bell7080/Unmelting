@@ -85,7 +85,7 @@ export class RelicEffectsManager {
   /** 헌혈팩: 회복량만큼 전방 랜덤 적 1장에게 피해. onHealGain 콜백에서 호출된다. */
   async applyBloodPackHit(amount: number): Promise<void> {
     const { gameState, boardRenderer, recordRelicActivation } = this.deps
-    const hit = gameState.damageRandomFrontEnemy(amount)
+    const hit = HandSystem.strikeRandomEnemy(gameState, amount, 'front')
     if (!hit) {
       recordRelicActivation('blood-pack', '전방 적 없음')
       return
@@ -106,7 +106,7 @@ export class RelicEffectsManager {
     let hits = 0
     let kills = 0
     for (let i = 0; i < shieldGained; i++) {
-      const hit = gameState.damageRandomFrontEnemy(1)
+      const hit = HandSystem.strikeRandomEnemy(gameState, 1, 'front')
       if (!hit) break // 전방 적 없음
       hits++
       await boardRenderer.animateDamageNumbersById([{ cardId: hit.cardId, amount: hit.amount }])
@@ -321,7 +321,7 @@ export class RelicEffectsManager {
     // 반격 피해: Math.floor(공격력 × 0.3) + 1 — atkDmgHtml과 동일한 공식
     const dmg = Math.max(1, Math.floor(gameState.character.damage * 0.3) + 1)
     for (const id of attackerIds) {
-      const hit = gameState.damageEnemyById(id, dmg)
+      const hit = HandSystem.strikeEnemyById(gameState, id, dmg)
       if (!hit) continue
       damaged.push({ cardId: hit.cardId, amount: hit.amount })
       if (hit.defeated) killedIds.push(hit.cardId)
@@ -863,7 +863,7 @@ export class RelicEffectsManager {
     let hits = 0
     let kills = 0
     for (let i = 0; i < amount; i++) {
-      const hit = gameState.damageRandomFieldEnemy(1)
+      const hit = HandSystem.strikeRandomEnemy(gameState, 1, 'field')
       if (!hit) break // 필드에 적 없음
       hits++
       await boardRenderer.animateDamageNumbersById([{ cardId: hit.cardId, amount: hit.amount }])
@@ -916,7 +916,7 @@ export class RelicEffectsManager {
   async throwBladeShard(relicId: RelicId): Promise<void> {
     const { gameState, boardRenderer, recordRelicActivation } = this.deps
     const bonus = gameState.enhancements.singleBonus['blade-shard'] ?? 0
-    const hit = gameState.damageRandomFrontEnemy(1 + bonus)
+    const hit = HandSystem.strikeRandomEnemy(gameState, 1 + bonus, 'front')
     if (!hit) return // 전방 적 없음
     recordRelicActivation(relicId, `칼날 파편 투척 ${hit.amount}`)
     await boardRenderer.animateDamageNumbersById([{ cardId: hit.cardId, amount: hit.amount }])

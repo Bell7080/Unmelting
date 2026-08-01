@@ -1,6 +1,6 @@
 {
   "name": "unmelting",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "A card rain roguelike about an unmelting girl navigating advancing cards",
   "type": "module",
   "private": true,
