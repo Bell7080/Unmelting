@@ -235,6 +235,9 @@ export class HandSystem {
       return { success: false, message: '비어 있는 슬롯', mergeMessages: [], removedFieldCards: [] }
     }
     const def = getHandCardDef(card.defId)
+    // 이 카드가 내는 모든 타격의 출처를 한 번 선언한다 — 아래 피해 헬퍼가 40군데라
+    // 인자로 실어 나르는 대신 행동 단위로 세워 두고 격자가 집어 가게 한다.
+    gs.bossGimmicks?.beginAction({ origin: 'hand', tags: def.synergyTags ?? [] })
     if (!HandSystem.isValidTarget(def, target, card.merged === true)) {
       return {
         success: false,
@@ -728,6 +731,8 @@ export class HandSystem {
 
   /** 벽걸이 횃불용: 필드 전체 적/보스에게 amount 피해. 제거된 적 카드 목록을 돌려줘 호출부가 애니메이션한다. */
   static damageAllEnemies(gs: GameState, amount: number): { cardId: string; defeated: boolean }[] {
+    // 유물이 스스로 내는 피해 — 손패 태그가 아니라 유물 출처로 판정된다.
+    gs.bossGimmicks?.beginAction({ origin: 'relic', tags: [] })
     const hits: { cardId: string; defeated: boolean }[] = []
     const seen = new Set<Card>()
     for (let lane = 0; lane < gs.lanes.length; lane++) {

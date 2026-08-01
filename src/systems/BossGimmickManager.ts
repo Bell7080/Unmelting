@@ -12,12 +12,25 @@
  * 이 파일은 순수 모델이다. DOM/연출은 렌더러가 셀 뷰를 읽어 그리고,
  * 전투 판정 호출은 BossEventController가 굴린다.
  *
- * 확장 지점: 칸 판정을 태그/시너지와 엮을 때는 resolveMultiplier() 하나만 늘린다.
- * 피해 소스의 정보는 전부 BossGimmickStrikeContext로 들어오므로, 손패 synergyTags나
- * 유물 반응을 붙여도 호출부 시그니처가 흔들리지 않는다. 배율 계산이 이 함수
- * 바깥으로 새면 그 순간 태그 반응이 닿지 않는 사각지대가 생기니 넣지 말 것.
+ * ── 확장 지점 ───────────────────────────────────────────────────────────────
+ * 칸 판정은 resolveMultiplier() **하나**를 지난다. 배율 계산이 이 함수 바깥으로 새면
+ * 그 순간 태그 반응이 닿지 않는 사각지대가 생기니 넣지 말 것.
+ *
+ * 판정에 필요한 정보는 이미 전부 들어와 있다 — 어디서 온 피해인지(origin), 단일인지
+ * 광역인지(scope), 어떤 시너지 태그를 달고 왔는지(tags). 그래서 아래 종류의 기믹은
+ * 호출부를 전혀 건드리지 않고 붙는다:
+ *
+ *   - 태그별 추가/반감 (`ctx.tags.includes('flame')` 등) → resolveMultiplier만 수정
+ *   - 직접 타격 전용 칸 (`ctx.origin === 'direct'`)       → 칸 종류 1줄 + CSS 1규칙
+ *   - 광역 감쇠      (`ctx.scope === 'area'`)            → resolveMultiplier만 수정
+ *
+ * 배율로 표현되지 않는 결과(광역기 반사 피해처럼 **플레이어가 맞는** 효과)는 배율
+ * 하나로 못 담는다. 그때는 BossGimmickStrike에 결과 필드를 하나 늘리고, 그 값을
+ * 실제로 적용할 두 호출부(BossEventController.handleClick / HandSystem)를 함께 고친다.
+ * 지금 쓰지 않는 필드를 미리 만들어 두지는 않았다.
  */
 
+import type { SynergyTag } from '@data/Tags'
 import type { SpecialEnemyKind } from '@entities/Card'
 
 /** 격자 한 칸의 성격. plain은 배율 없는 평범한 칸이다. */
@@ -26,18 +39,30 @@ export type BossGimmickCellKind = 'plain' | 'weak' | 'hardened'
 /** 특수 칸 종류(= plain을 뺀 나머지). 프로필 배치표가 쓴다. */
 export type BossGimmickSpecialKind = Exclude<BossGimmickCellKind, 'plain'>
 
+/**
+ * 칸 성격의 연출 톤. 렌더러가 이 값을 자기 팔레트(BurstTheme·버스트 세기)로 옮긴다 —
+ * 모델이 UI 타입을 알면 레이어가 뒤집히므로 중립 토큰으로 둔다.
+ * 새 칸 종류를 추가할 때 톤만 고르면 연출 분기를 따로 손댈 필요가 없다.
+ */
+export type BossGimmickTone = 'hot' | 'cold' | 'neutral'
+
 export interface BossGimmickKindMeta {
   /** 칸에 표시할 짧은 이름. plain은 빈 문자열이라 아무것도 적지 않는다. */
   label: string
   /** 직접 공격 피해 배율. */
   multiplier: number
+  /** 타격 연출 톤. */
+  tone: BossGimmickTone
 }
 
-/** 칸 성격별 수치/표기의 단일 출처 — 밸런싱은 여기만 고친다. */
+/**
+ * 칸 성격별 수치/표기의 단일 출처 — 밸런싱은 여기만 고친다.
+ * 칸 종류를 늘릴 때 필요한 건 이 표 한 줄과 `.is-kind-*` CSS 한 규칙이 전부다.
+ */
 export const BOSS_GIMMICK_KIND_META: Record<BossGimmickCellKind, BossGimmickKindMeta> = {
-  plain: { label: '', multiplier: 1 },
-  weak: { label: '약점', multiplier: 2 },
-  hardened: { label: '경화', multiplier: 0.5 },
+  plain: { label: '', multiplier: 1, tone: 'neutral' },
+  weak: { label: '약점', multiplier: 2, tone: 'hot' },
+  hardened: { label: '경화', multiplier: 0.5, tone: 'cold' },
 }
 
 /** 부위 파괴 보너스 = 보스 최대 체력의 이 비율. 칸 하나가 깨질 때 한 번 더 꽂힌다. */
@@ -163,16 +188,48 @@ export interface BossGimmickCellView {
   broken: boolean
 }
 
+/** 피해가 어디서 왔는가. '직접 타격 시에만' 류의 칸이 이 값을 본다. */
+export type BossGimmickOrigin = 'direct' | 'hand' | 'relic' | 'other'
+
+/** 한 번에 한 칸인가, 판 전체인가. 광역 보정/반사 기믹이 이 값을 본다. */
+export type BossGimmickScope = 'single' | 'area'
+
 /**
- * 한 대 때리는 맥락. 배율에 영향을 줄 수 있는 정보는 전부 여기로 모은다 —
- * 나중에 손패/유물 태그 반응을 붙일 때 이 객체에 필드를 더하면 되고,
- * 호출부 시그니처는 그대로 둘 수 있다.
+ * 한 번의 플레이어 행동이 격자에 남기는 출처 정보.
+ *
+ * 행동 **시작 시 1회** 세운다(`beginAction`). 피해 헬퍼가 40군데 넘게 흩어져 있어
+ * 인자로 실어 나르면 시그니처를 전부 고쳐야 하므로, 행동 단위로 한 번 세우고
+ * 타격이 알아서 집어 가는 방식을 골랐다. 세우지 않은 경로는 'other'로 남아
+ * 어떤 조건부 보정도 받지 않는다(빠뜨려도 조용히 이득이 생기지 않는다).
+ */
+export interface BossGimmickSourceContext {
+  origin: BossGimmickOrigin
+  /** 손패/유물의 시너지 태그. 태그 반응형 칸이 이 목록을 본다. */
+  tags: readonly SynergyTag[]
+}
+
+/** 출처를 선언하지 않은 경로의 기본값 — 조건부 보정을 아무것도 타지 않는다. */
+const NEUTRAL_SOURCE: BossGimmickSourceContext = { origin: 'other', tags: [] }
+
+/**
+ * 한 대 때리는 맥락. 배율에 영향을 줄 수 있는 정보는 전부 여기로 모인다 —
+ * 호출부가 채우는 것은 칸/피해/범위뿐이고, 출처·태그는 `beginAction`이 세워 둔
+ * 행동 컨텍스트에서 매니저가 합쳐 넣는다.
  */
 export interface BossGimmickStrikeContext {
   /** 때린 격자 칸. 없으면(키보드 조작 등) 중앙 칸으로 접는다. */
   cellIndex?: number
   /** 배율 적용 전 피해. */
   baseDamage: number
+  /** 단일/광역. 생략하면 단일로 본다. */
+  scope?: BossGimmickScope
+}
+
+/** resolveMultiplier가 실제로 보는 맥락 — 타격 정보 + 행동 출처를 합친 것. */
+export interface BossGimmickResolvedContext extends BossGimmickStrikeContext {
+  scope: BossGimmickScope
+  origin: BossGimmickOrigin
+  tags: readonly SynergyTag[]
 }
 
 /** 한 대 때린 결과. 배율 적용까지 끝난 최종 피해를 함께 돌려준다. */
@@ -192,7 +249,8 @@ export interface BossGimmickStrike {
   broke: boolean
 }
 
-interface BossGimmickCell {
+/** 격자 한 칸의 내부 상태. 파생 기믹이 resolveMultiplier에서 읽을 수 있게 내보낸다. */
+export interface BossGimmickCell {
   kind: BossGimmickCellKind
   /** 누적 부위 피해. durability에 닿으면 깨진다. */
   damage: number
@@ -212,9 +270,20 @@ export class BossGimmickManager {
    * "어느 칸을 때렸는지"를 화면에 그릴 수 있다.
    */
   private pendingHits: BossGimmickStrike[] = []
+  /** 지금 진행 중인 플레이어 행동의 출처. `beginAction`이 세우고 판정이 읽는다. */
+  private source: BossGimmickSourceContext = NEUTRAL_SOURCE
 
   /** rng는 테스트에서 배치를 고정하기 위해 주입한다. */
   constructor(private readonly rng: () => number = Math.random) {}
+
+  /**
+   * 플레이어 행동 시작 선언. 이 뒤의 타격은 전부 이 출처로 판정된다.
+   * 타격 기록(pendingHits)은 건드리지 않는다 — 한 행동 안에서 손패가 때리고
+   * 유물이 이어 때리는 경우 둘 다 같은 beat의 연출로 나가야 하기 때문이다.
+   */
+  beginAction(source: BossGimmickSourceContext): void {
+    this.source = source
+  }
 
   /** 보스 등장 시 1회. 프로필이 있는 보스만 격자를 굴리고, 켜졌는지 여부를 돌려준다. */
   beginEncounter(bossKind: SpecialEnemyKind, bossMaxHp: number): boolean {
@@ -228,6 +297,7 @@ export class BossGimmickManager {
     this.durability = bossGimmickCellDurability(bossMaxHp, this.cells.length)
     this.breakBonus = bossGimmickBreakDamage(bossMaxHp)
     this.pendingHits = []
+    this.source = NEUTRAL_SOURCE
     return true
   }
 
@@ -238,6 +308,7 @@ export class BossGimmickManager {
     this.durability = 0
     this.breakBonus = 0
     this.pendingHits = []
+    this.source = NEUTRAL_SOURCE
   }
 
   get isActive(): boolean {
@@ -311,13 +382,20 @@ export class BossGimmickManager {
    */
   strikeAllCells(baseDamage: number): BossGimmickStrike[] {
     if (!this.profile) return []
-    return this.livingIndexes().map((index) => this.strikeAt(index, { cellIndex: index, baseDamage }))
+    return this.livingIndexes().map((index) =>
+      this.strikeAt(index, { cellIndex: index, baseDamage, scope: 'area' })
+    )
   }
 
   /** 칸 인덱스 확정 후 공통 처리 — 배율 + 부위 누적 + 파괴 판정의 단일 경로. */
   private strikeAt(index: number, ctx: BossGimmickStrikeContext): BossGimmickStrike {
     const cell = this.cells[index]
-    const multiplier = this.resolveMultiplier(cell, ctx)
+    const multiplier = this.resolveMultiplier(cell, {
+      ...ctx,
+      scope: ctx.scope ?? 'single',
+      origin: this.source.origin,
+      tags: this.source.tags,
+    })
     const cellDamage = this.applyMultiplier(ctx.baseDamage, multiplier)
     // 부위 누적은 '배율을 먹인 뒤'의 피해로 쌓는다. 약점은 두 배로 빨리 깨져 한 칸만
     // 파먹을 수 없고, 경화는 같은 보너스를 얻는 데 두 배의 품이 든다.
@@ -363,8 +441,12 @@ export class BossGimmickManager {
     }
   }
 
-  /** 칸 배율 결정의 유일한 창구. 태그/시너지 보정은 전부 여기로 들어온다. */
-  private resolveMultiplier(cell: BossGimmickCell, _ctx: BossGimmickStrikeContext): number {
+  /**
+   * 칸 배율 결정의 유일한 창구. 태그/출처/범위 반응은 전부 여기로 들어온다.
+   * protected인 이유: 파생 기믹과 테스트가 이 한 지점만 갈아 끼우면 되도록 —
+   * 판정이 여러 곳으로 흩어지는 것을 막는 것이 이 클래스의 핵심 계약이다.
+   */
+  protected resolveMultiplier(cell: BossGimmickCell, _ctx: BossGimmickResolvedContext): number {
     return BOSS_GIMMICK_KIND_META[cell.kind].multiplier
   }
 

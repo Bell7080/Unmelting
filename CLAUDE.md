@@ -106,6 +106,16 @@ npm run build    # verify 포함
   반격 주기/공격 카운트다운이 줄지 않고 반격·특수행동을 건너뛴다.
 - 보스 칸 배율 결정은 `BossGimmickManager.resolveMultiplier()` **단일 창구**를 지난다.
   바깥에서 태그/시너지 보정을 계산하면 태그 반응 사각지대가 생긴다.
+- 판정에 필요한 맥락(`origin`·`scope`·`tags`)은 이미 그 창구까지 닿아 있다. 태그별
+  추가/반감, 직접 타격 전용 칸, 광역 감쇠는 **호출부를 건드리지 않고** 붙는다.
+- 배율로 표현 못 하는 결과(광역기 반사 피해 등)를 넣을 때만 `BossGimmickStrike`에
+  결과 필드를 늘리고, 그 값을 적용할 두 호출부(`handleClick`/`HandSystem`)를 함께 고친다.
+- 행동 출처는 `beginAction()`으로 **행동 시작 시 1회** 세운다(손패 = `useSingle`,
+  유물 = `damageAllEnemies`, 직접 타격 = `handleClick`). 선언을 빠뜨린 경로는 `other`로
+  남아 조건부 보정을 타지 않는다 — 빠뜨려도 조용히 이득이 생기지 않는 쪽이 기본값이다.
+- 칸 종류를 늘릴 때 필요한 것은 `BOSS_GIMMICK_KIND_META` **한 줄**이다(label·multiplier·
+  tone). 색·타격 애니메이션·버스트는 `tone`으로 갈리므로 CSS/렌더러 분기를 새로 쓰지
+  않는다. 전용 색이 필요할 때만 `.is-kind-*` 규칙을 덧쓴다.
 - 부위 파괴 수치(칸 내구도·파괴 보너스·시뮬 환산 배수)의 단일 출처는
   `BossGimmickManager`의 `bossGimmickCellDurability`/`bossGimmickBreakDamage`/
   `bossGimmickBreakBonusFactor`다. 셋은 같은 식에서 파생되므로 한쪽만 고치지 않는다.

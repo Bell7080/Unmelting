@@ -1415,16 +1415,18 @@ export const GAME_BOARD_RAIL_STYLES = `
   background: rgba(255, 219, 150, 0.12);
   box-shadow: inset 0 0 16px rgba(244, 164, 96, 0.22);
 }
-/* 칸 종류별 색만 옅게 얹어 일러스트 판독을 해치지 않는다. */
-.boss-gimmick-cell.is-kind-weak {
+/* 칸 색은 종류가 아니라 '톤'으로 갈린다(BOSS_GIMMICK_KIND_META.tone).
+   새 칸 종류를 표에 한 줄 추가하면 톤만 골라도 색·타격 연출이 따라온다.
+   특정 종류에 전용 색을 주고 싶을 때만 .is-kind-* 규칙을 덧쓴다. */
+.boss-gimmick-cell[data-tone="hot"] {
   border-color: rgba(255, 168, 120, 0.52);
   background: rgba(200, 60, 50, 0.16);
 }
-.boss-gimmick-cell.is-kind-hardened {
+.boss-gimmick-cell[data-tone="cold"] {
   border-color: rgba(150, 170, 210, 0.46);
   background: rgba(60, 70, 110, 0.2);
 }
-.boss-gimmick-cell.is-kind-plain {
+.boss-gimmick-cell[data-tone="neutral"] {
   border-style: solid;
   border-color: rgba(228, 214, 186, 0.22);
 }
@@ -1443,12 +1445,12 @@ export const GAME_BOARD_RAIL_STYLES = `
   opacity: 0.7;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 9px rgba(0, 0, 0, 0.7);
 }
-.boss-gimmick-cell.is-kind-weak .boss-gimmick-cell-label,
-.boss-gimmick-cell.is-kind-weak .boss-gimmick-cell-mult {
+.boss-gimmick-cell[data-tone="hot"] .boss-gimmick-cell-label,
+.boss-gimmick-cell[data-tone="hot"] .boss-gimmick-cell-mult {
   color: rgba(255, 186, 140, 0.98);
 }
-.boss-gimmick-cell.is-kind-hardened .boss-gimmick-cell-label,
-.boss-gimmick-cell.is-kind-hardened .boss-gimmick-cell-mult {
+.boss-gimmick-cell[data-tone="cold"] .boss-gimmick-cell-label,
+.boss-gimmick-cell[data-tone="cold"] .boss-gimmick-cell-mult {
   color: rgba(184, 200, 236, 0.96);
 }
 /* 손패 타겟팅: 보스 타일 하나가 아니라 칸 하나하나가 일반 레일 칸처럼 따로 빛난다.
@@ -1482,15 +1484,15 @@ export const GAME_BOARD_RAIL_STYLES = `
   100% { opacity: 1; transform: scale(1); filter: blur(0); }
 }
 
-/* 타격 순간: 약점은 화르르 밝아지고, 경화는 둔탁하게 눌린다. */
-.boss-gimmick-cell.is-hit.is-kind-weak {
-  animation: boss-gimmick-hit-weak 0.5s cubic-bezier(0.2, 0.86, 0.28, 1);
+/* 타격 순간: 뜨거운 칸은 화르르 밝아지고, 그 외는 둔탁하게 눌린다(톤 기준). */
+.boss-gimmick-cell.is-hit[data-tone="hot"] {
+  animation: boss-gimmick-hit-hot 0.5s cubic-bezier(0.2, 0.86, 0.28, 1);
 }
-.boss-gimmick-cell.is-hit.is-kind-hardened,
-.boss-gimmick-cell.is-hit.is-kind-plain {
+.boss-gimmick-cell.is-hit[data-tone="cold"],
+.boss-gimmick-cell.is-hit[data-tone="neutral"] {
   animation: boss-gimmick-hit-dull 0.5s cubic-bezier(0.2, 0.86, 0.28, 1);
 }
-@keyframes boss-gimmick-hit-weak {
+@keyframes boss-gimmick-hit-hot {
   0%   { background: rgba(255, 190, 130, 0.5); box-shadow: inset 0 0 26px rgba(255, 140, 80, 0.6); }
   100% { background: rgba(200, 60, 50, 0.16); box-shadow: inset 0 0 0 rgba(0, 0, 0, 0); }
 }

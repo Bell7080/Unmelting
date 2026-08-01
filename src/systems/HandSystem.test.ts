@@ -395,6 +395,28 @@ describe('HandSystem 보스 칸 기믹 연동', () => {
     expect(before - boss.getHealth()).toBe(4)
   })
 
+  it('손패 사용은 자기 시너지 태그를 칸 판정에 실어 보낸다', () => {
+    // 태그 반응형 칸(특정 태그에 추가/반감)을 붙일 때 이 경로가 끊겨 있으면
+    // 기믹이 조용히 발동하지 않는다. 배선 자체를 잠가 둔다.
+    const { gameState, boss, grid } = stageGriddedBoss(500)
+    const seen: { origin: string; tags: readonly string[] }[] = []
+    const spy = grid as unknown as { resolveMultiplier: (c: unknown, ctx: { origin: string; tags: readonly string[] }) => number }
+    const original = spy.resolveMultiplier.bind(grid)
+    spy.resolveMultiplier = (cell, ctx) => {
+      seen.push({ origin: ctx.origin, tags: ctx.tags })
+      return original(cell, ctx)
+    }
+    gameState.character.addHandCard(DropSystem.makeCard('ember'))
+
+    HandSystem.useSingle(gameState, HandSystem.newChain(), 0, {
+      laneIndex: 0, distance: 0, card: boss, gimmickCellIndex: 0,
+    })
+
+    expect(seen).toHaveLength(1)
+    expect(seen[0].origin).toBe('hand')
+    expect(seen[0].tags).toEqual(['flame'])
+  })
+
   it('손패가 칸을 깨면 부위 파괴 보너스가 같은 타격에 함께 들어간다', () => {
     // 30F 실수치(HP 100 · 9칸 → 내구도 12 · 파괴 보너스 10)로 세운다.
     const { gameState, boss, grid } = stageGriddedBoss(100)

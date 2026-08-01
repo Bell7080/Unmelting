@@ -13,10 +13,21 @@ import {
   BOSS_GIMMICK_CRACK_STAGES,
   BOSS_GIMMICK_KIND_META,
   type BossGimmickCellKind,
+  type BossGimmickTone,
 } from '@systems/BossGimmickManager'
 
 /** 부위 파괴 파편 개수. 칸이 작아 이 이상은 뭉쳐 보이기만 한다. */
 const BOSS_CELL_SHARD_COUNT = 12
+
+/**
+ * 칸 성격의 톤 → 이 렌더러의 팔레트/세기. 칸 종류가 아니라 톤으로 갈라 두면
+ * 새 칸 종류(직접 타격 전용 칸 등)를 추가해도 여기 분기가 늘지 않는다.
+ */
+const BOSS_GIMMICK_TONE_FX: Record<BossGimmickTone, { theme: BurstTheme; count: number; spread: number }> = {
+  hot: { theme: 'damage', count: 16, spread: 120 },
+  cold: { theme: 'shield-gain', count: 8, spread: 70 },
+  neutral: { theme: 'boss-wax-drip', count: 12, spread: 96 },
+}
 
 /** 손상도(0~1) → 균열 단계(0 = 멀쩡). 표기 단계의 단일 출처다. */
 function bossGimmickCrackStage(wear: number): number {
@@ -271,8 +282,10 @@ export class BossFxView {
             ? `${meta.label} 부위 · 피해 ${meta.multiplier}배`
             : '보스 부위'
         // --boss-gimmick-i는 등장 연출의 칸별 지연에 쓰인다(좌상단부터 순차 점등).
+        // data-tone: 칸 색/타격 애니메이션은 종류가 아니라 톤으로 갈린다 —
+        // 새 칸 종류가 META 표에 한 줄 늘어도 CSS를 새로 쓰지 않아도 된다.
         return `<button class="boss-gimmick-cell is-kind-${cell.kind} ${cell.broken ? 'is-broken' : ''} ${targeting && !cell.broken ? 'is-hand-target' : ''}"
-                        type="button" style="--boss-gimmick-i:${cell.index};"
+                        type="button" style="--boss-gimmick-i:${cell.index};" data-tone="${meta.tone}"
                         data-boss-gimmick-cell="${cell.index}" data-crack="${cell.broken ? 0 : crack}"
                         ${cell.broken ? 'disabled' : ''} aria-label="${aria}">
                   <span class="boss-gimmick-cell-crack" aria-hidden="true"></span>${label}
@@ -315,7 +328,7 @@ export class BossFxView {
     if (!cell) return
     // 1) 출처 → 칸 블라스트. 어느 칸에 꽂혔는지를 눈으로 먼저 잇는다.
     if (source) {
-      await this.host.trails.animateResourceTrail(source, cell, 1, this.gimmickHitTheme(hit.kind))
+      await this.host.trails.animateResourceTrail(source, cell, 1, this.gimmickFx(hit.kind).theme)
     }
     // 2) 타격 반동 + 칸 자체의 짧은 버스트.
     this.playBossGimmickCellHit(hit.cellIndex, hit.kind)
@@ -326,23 +339,17 @@ export class BossFxView {
     await Promise.all(numbers)
   }
 
-  /** 칸 종류별 블라스트 톤 — 약점은 뜨겁게, 경화는 차갑게, 평범은 밀랍빛. */
-  private gimmickHitTheme(kind: BossGimmickCellKind): BurstTheme {
-    if (kind === 'weak') return 'damage'
-    if (kind === 'hardened') return 'shield-gain'
-    return 'boss-wax-drip'
+  /** 칸 성격의 톤이 정하는 연출 값 — 종류가 아니라 톤으로 갈라 새 칸에 자동 대응한다. */
+  private gimmickFx(kind: BossGimmickCellKind): { theme: BurstTheme; count: number; spread: number } {
+    return BOSS_GIMMICK_TONE_FX[BOSS_GIMMICK_KIND_META[kind].tone]
   }
 
   /** 때린 칸에 짧은 타격 피드백. 약점은 강한 버스트, 경화는 둔탁한 억제 톤. */
   private playBossGimmickCellHit(cellIndex: number, kind: BossGimmickCellKind): void {
     const cell = this.findBossGimmickCell(cellIndex)
     if (!cell) return
-    const theme: BurstTheme = kind === 'weak' ? 'damage' : 'shield-gain'
-    SquareBurst.playOn(cell, theme, {
-      count: kind === 'weak' ? 16 : 8,
-      spread: kind === 'weak' ? 120 : 70,
-      duration: 480,
-    })
+    const fx = this.gimmickFx(kind)
+    SquareBurst.playOn(cell, fx.theme, { count: fx.count, spread: fx.spread, duration: 480 })
     cell.classList.remove('is-hit')
     // 리플로우 1회로 같은 칸을 연타해도 애니메이션이 매번 처음부터 재생되게 한다.
     void cell.offsetWidth

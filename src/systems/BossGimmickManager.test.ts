@@ -8,6 +8,8 @@ import {
   bossGimmickBreakDamage,
   bossGimmickCellDurability,
   bossGimmickExpectation,
+  type BossGimmickCell,
+  type BossGimmickResolvedContext,
 } from './BossGimmickManager'
 
 /** 셔플을 고정해 배치를 재현 가능하게 만든다(항상 0 → Fisher-Yates가 순서를 뒤집지 않음). */
@@ -240,6 +242,64 @@ describe('BossGimmickManager 광역/무작위 타격', () => {
     const m = new BossGimmickManager(fixedRng())
     expect(m.strikeAllCells(10)).toHaveLength(0)
     expect(m.strikeRandomCell(10)).toBeNull()
+  })
+})
+
+describe('BossGimmickManager 판정 컨텍스트 — 향후 기믹의 이음매', () => {
+  /** resolveMultiplier에 실제로 무엇이 들어오는지 기록하는 관찰용 파생 클래스. */
+  class SpyGrid extends BossGimmickManager {
+    readonly seen: BossGimmickResolvedContext[] = []
+    protected override resolveMultiplier(
+      cell: BossGimmickCell,
+      ctx: BossGimmickResolvedContext
+    ): number {
+      this.seen.push(ctx)
+      return super.resolveMultiplier(cell, ctx)
+    }
+  }
+
+  function spy(): SpyGrid {
+    const m = new SpyGrid(fixedRng())
+    m.beginEncounter('waxArmy', 10_000)
+    return m
+  }
+
+  it('출처·태그·범위가 배율 판정까지 그대로 닿는다', () => {
+    const m = spy()
+    m.beginAction({ origin: 'hand', tags: ['flame'] })
+
+    m.strike({ cellIndex: 0, baseDamage: 3 })
+    m.strikeAllCells(2)
+
+    expect(m.seen[0].origin).toBe('hand')
+    expect(m.seen[0].tags).toEqual(['flame'])
+    expect(m.seen[0].scope).toBe('single')
+    // 광역 타격은 칸마다 scope 'area'로 들어온다 — 광역 감쇠/반사 기믹의 판정 근거다.
+    expect(m.seen.slice(1).every((ctx) => ctx.scope === 'area')).toBe(true)
+  })
+
+  it('출처를 선언하지 않은 경로는 other로 남아 조건부 보정을 타지 않는다', () => {
+    const m = spy()
+    m.strike({ cellIndex: 0, baseDamage: 3 })
+
+    expect(m.seen[0].origin).toBe('other')
+    expect(m.seen[0].tags).toEqual([])
+  })
+
+  it('조우가 새로 시작되면 이전 행동의 출처가 남지 않는다', () => {
+    const m = spy()
+    m.beginAction({ origin: 'hand', tags: ['flame'] })
+    m.beginEncounter('waxArmy', 10_000)
+
+    m.strike({ cellIndex: 0, baseDamage: 3 })
+
+    expect(m.seen.at(-1)?.origin).toBe('other')
+  })
+
+  it('칸 종류마다 연출 톤이 정해져 있다 — 렌더러가 종류로 분기하지 않게', () => {
+    for (const meta of Object.values(BOSS_GIMMICK_KIND_META)) {
+      expect(['hot', 'cold', 'neutral']).toContain(meta.tone)
+    }
   })
 })
 

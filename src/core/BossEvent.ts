@@ -390,6 +390,7 @@ export class BossEventController {
     const beforeBossHp = card.getHealth()
     // 칸 기믹: 때린 격자 칸의 배율(+ 이번 타격에 깨졌다면 부위 파괴 보너스)을 먼저
     // 먹인 뒤 방패/페이지 상한을 계산한다.
+    this.gimmicks.beginAction({ origin: 'direct', tags: [] })
     const struck = this.gimmicks.strike({ cellIndex: gimmickCellIndex, baseDamage: character.damage })
     const attackPower = struck ? struck.damage : character.damage
     if (struck) {
