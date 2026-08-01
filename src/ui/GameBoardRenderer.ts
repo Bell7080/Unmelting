@@ -1096,8 +1096,11 @@ export class GameBoardRenderer {
     const frozenBadge = card.isFrozen()
       ? `<div class="frozen-center-badge boss-frozen-center-badge" aria-label="굳음 ${card.frozenTurns}턴"><span class="frozen-center-title">굳음</span><span class="frozen-center-turns">${card.frozenTurns}턴</span></div>`
       : ''
+    // 칸 타겟팅 중에는 보스 face 전체가 '고를 칸만 남기는' 모드로 바뀐다.
+    // 일러스트·이름·HP바·뱃지를 뒤로 밀고 성한 칸만 앞으로 끌어올린다.
+    const cellTargeting = this.handTargetingMode !== null && isValidHandTarget && this.bossGimmickGrid !== null
     return `
-      <article class="boss-face" style="--boss-art: url('${sprite}');">
+      <article class="boss-face ${cellTargeting ? 'is-cell-targeting' : ''}" style="--boss-art: url('${sprite}');">
         ${frozenBadge}
         <div class="boss-face-art" aria-hidden="true"></div>
         <div class="boss-face-overlay" aria-hidden="true"></div>

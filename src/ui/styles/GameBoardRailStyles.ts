@@ -1485,22 +1485,53 @@ export const GAME_BOARD_RAIL_STYLES = `
 }
 /* 손패 타겟팅: 보스 타일 하나가 아니라 칸 하나하나가 일반 레일 칸처럼 따로 빛난다.
    .rail.is-targeting .cell.card.is-hand-target와 같은 금빛 발광 양식을 맞춘다. */
+/* 고를 수 있는 칸: 발광을 얇게 눌러 '가리키는 선'에 가깝게 둔다. 화려하게 만들면
+   아홉 칸이 한꺼번에 빛나 오히려 어디를 고를지 안 보인다. 대비는 밝기가 아니라
+   '주변을 어둡게' 쪽에서 만든다(아래 .is-cell-targeting). */
 .boss-gimmick-grid.is-targeting .boss-gimmick-cell.is-hand-target {
   border-style: solid;
-  border-color: rgba(255, 205, 110, 0.75);
-  background: rgba(255, 205, 110, 0.14);
-  box-shadow: 0 0 18px rgba(255, 205, 110, 0.4), inset 0 0 14px rgba(255, 205, 110, 0.18);
-  animation: boss-gimmick-target-pulse 1.25s ease-in-out infinite;
+  border-color: rgba(255, 214, 140, 0.5);
+  background: rgba(255, 205, 110, 0.05);
+  box-shadow: inset 0 0 12px -3px rgba(255, 205, 110, 0.35);
+  animation: boss-gimmick-target-pulse 2.4s ease-in-out infinite;
 }
 .boss-gimmick-grid.is-targeting .boss-gimmick-cell.is-hand-target:hover {
-  border-color: rgba(255, 232, 170, 0.95);
-  background: rgba(255, 219, 150, 0.24);
-  box-shadow: 0 0 24px rgba(255, 215, 130, 0.6), inset 0 0 18px rgba(255, 215, 130, 0.3);
+  border-color: rgba(255, 236, 180, 0.92);
+  background: rgba(255, 219, 150, 0.14);
+  box-shadow: 0 0 18px rgba(255, 215, 130, 0.34), inset 0 0 14px -2px rgba(255, 215, 130, 0.34);
   animation: none;
 }
 @keyframes boss-gimmick-target-pulse {
-  0%, 100% { box-shadow: 0 0 14px rgba(255, 205, 110, 0.3), inset 0 0 10px rgba(255, 205, 110, 0.14); }
-  50%      { box-shadow: 0 0 22px rgba(255, 205, 110, 0.52), inset 0 0 18px rgba(255, 205, 110, 0.24); }
+  0%, 100% { border-color: rgba(255, 214, 140, 0.38); box-shadow: inset 0 0 10px -4px rgba(255, 205, 110, 0.26); }
+  50%      { border-color: rgba(255, 224, 160, 0.62); box-shadow: inset 0 0 14px -3px rgba(255, 205, 110, 0.42); }
+}
+
+/* ── 칸 타겟팅 중의 보스 타일: 고를 칸만 남기고 나머지를 전부 뒤로 민다 ──────
+   보스 일러스트가 밝으면 그 위의 얇은 칸 테두리는 절대 안 읽힌다. 칸을 더 밝히는
+   대신 배경·죽은 칸·보스 UI를 눌러 대비를 만든다. */
+.boss-face.is-cell-targeting .boss-face-art {
+  filter: brightness(0.34) saturate(0.55);
+  transition: filter 0.22s ease;
+}
+.boss-face.is-cell-targeting .boss-face-overlay {
+  opacity: 0.5;
+}
+/* 이름·HP바·ATK칩·턴 뱃지·굳음 표기는 지금 결정에 필요 없는 정보다. */
+.boss-face.is-cell-targeting .boss-face-title-row,
+.boss-face.is-cell-targeting .boss-face-stats,
+.boss-face.is-cell-targeting .boss-face-badge,
+.boss-face.is-cell-targeting .boss-frozen-center-badge {
+  opacity: 0.22;
+  filter: saturate(0.35);
+  transition: opacity 0.22s ease, filter 0.22s ease;
+}
+/* 이미 깨진 칸은 고를 수 없으니 더 깊이 가라앉힌다. */
+.boss-gimmick-grid.is-targeting .boss-gimmick-cell.is-broken {
+  opacity: 0.3;
+}
+/* 성한 칸의 종류 비네트는 타겟팅 중 살짝 눌러, 금빛 조준선이 먼저 읽히게 한다. */
+.boss-gimmick-grid.is-targeting .boss-gimmick-cell::before {
+  opacity: 0.45;
 }
 /* 보스 페이지 진입 연출: 인트로·타이틀이 끝난 뒤 칸이 좌상단부터 순서대로 스르륵 떠오른다.
    is-appearing은 격자가 처음 켜진 렌더에만 붙어(consumeBossGimmickEntering) 재렌더에서 반복되지 않는다. */
@@ -1531,58 +1562,76 @@ export const GAME_BOARD_RAIL_STYLES = `
   100% { box-shadow: inset 0 0 0 rgba(0, 0, 0, 0); }
 }
 
-/* ── 부위 파괴: 균열 → 파괴 → 꺼진 칸 ──────────────────────────────────────
-   금은 칸을 덮는 별도 레이어다(글자/배경과 분리). 단계는 data-crack이 정하고,
-   깨진 칸은 data-crack="0"으로 돌아가 금 대신 검은 판이 남는다. */
+/* ── 부위 파괴: 그을림 → 흘러내림 → 꺼진 칸 ──────────────────────────────
+   유리가 아니라 **양초가 타들어 가는** 어휘를 쓴다. 이 게임의 다섯 물질은
+   촛불·양초·밀랍·불씨·제물이고, 보스는 밀랍 덩어리다. 손상은 금이 가는 게 아니라
+   가장자리가 그을고 촛농이 흘러내리는 것으로 읽혀야 한다.
+   단계는 data-crack이 정하고, 깨진 칸은 0으로 돌아가 굳은 촛농 자국만 남는다. */
 .boss-gimmick-cell-crack {
   position: absolute;
   inset: 0;
   pointer-events: none;
   opacity: 0;
+  overflow: hidden;
+  border-radius: inherit;
   background-repeat: no-repeat;
-  background-size: 100% 100%;
-  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.85));
-  transition: opacity 0.22s ease;
+  background-position: top center;
+  transition: opacity 0.28s ease;
 }
+/* 흘러내림은 SVG 채움이 아니라 **길쭉한 radial-gradient**로 그린다. 면으로 채우면
+   끝이 잘린 회색 막대처럼 보이는데, 촛농은 가장자리가 흐리고 끝이 뭉툭해야 읽힌다. */
+/* 1단계 — 윗변에 그을음이 옅게 앉는다. 아직 흘러내리지는 않는다. */
 .boss-gimmick-cell[data-crack="1"] .boss-gimmick-cell-crack {
-  opacity: 0.5;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23fff3d6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M50 6 L44 34 L57 52 L48 78 L54 96'/%3E%3C/g%3E%3C/svg%3E");
+  opacity: 0.6;
+  background-image: linear-gradient(180deg, rgba(22, 14, 8, 0.62) 0%, rgba(22, 14, 8, 0.16) 24%, transparent 44%);
 }
+/* 2단계 — 촛농 두 줄기가 흐릿하게 흘러내리기 시작한다. */
 .boss-gimmick-cell[data-crack="2"] .boss-gimmick-cell-crack {
-  opacity: 0.7;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23fff3d6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M50 6 L44 34 L57 52 L48 78 L54 96'/%3E%3Cpath d='M44 34 L14 42'/%3E%3Cpath d='M57 52 L86 38'/%3E%3C/g%3E%3C/svg%3E");
+  opacity: 0.85;
+  background-image:
+    radial-gradient(5px 22px at 31% 26%, rgba(246, 229, 190, 0.5), transparent 72%),
+    radial-gradient(4px 30px at 64% 32%, rgba(246, 229, 190, 0.42), transparent 74%),
+    linear-gradient(180deg, rgba(22, 14, 8, 0.72) 0%, rgba(22, 14, 8, 0.2) 28%, transparent 50%);
 }
+/* 3단계 — 줄기가 늘고 아래에 촛농이 고인다(파괴 직전). */
 .boss-gimmick-cell[data-crack="3"] .boss-gimmick-cell-crack {
-  opacity: 0.9;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23fff3d6' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M50 6 L44 34 L57 52 L48 78 L54 96'/%3E%3Cpath d='M44 34 L14 42'/%3E%3Cpath d='M57 52 L86 38'/%3E%3Cpath d='M48 78 L18 90'/%3E%3Cpath d='M57 52 L78 78'/%3E%3Cpath d='M44 34 L30 10'/%3E%3C/g%3E%3C/svg%3E");
+  opacity: 1;
+  background-image:
+    radial-gradient(5px 30px at 22% 34%, rgba(246, 229, 190, 0.52), transparent 72%),
+    radial-gradient(6px 40px at 50% 44%, rgba(246, 229, 190, 0.58), transparent 74%),
+    radial-gradient(4px 24px at 78% 28%, rgba(246, 229, 190, 0.44), transparent 72%),
+    radial-gradient(120% 26px at 50% 100%, rgba(232, 210, 164, 0.34), transparent 78%),
+    linear-gradient(180deg, rgba(22, 14, 8, 0.8) 0%, rgba(22, 14, 8, 0.26) 32%, transparent 56%);
 }
-/* 파괴 직전 단계만 옅게 맥동해 "곧 깨진다"를 알린다. */
+/* 파괴 직전 단계만 옅게 흔들려 "곧 무너진다"를 알린다(번쩍임 없이). */
 .boss-gimmick-cell[data-crack="3"]:not(.is-broken) {
-  animation: boss-gimmick-strained 1.5s ease-in-out infinite;
+  animation: boss-gimmick-strained 2.1s ease-in-out infinite;
 }
 @keyframes boss-gimmick-strained {
   0%, 100% { box-shadow: inset 0 0 0 rgba(0, 0, 0, 0); }
-  50%      { box-shadow: inset 0 0 18px rgba(255, 236, 190, 0.24); }
+  50%      { box-shadow: inset 0 6px 16px -6px rgba(24, 16, 10, 0.7); }
 }
-/* 꺼진 칸 — 반투명 검은 판. 클릭도 발광도 받지 않는다. */
-.boss-gimmick-cell.is-broken::before { background: none; box-shadow: none; }
+/* 꺼진 칸 — 다 타 버린 자리. 반투명 검은 판에 굳은 촛농 바닥만 남는다. */
 .boss-gimmick-cell.is-broken {
   border-style: solid;
   border-color: rgba(14, 11, 18, 0.78);
-  background: rgba(6, 5, 10, 0.62);
+  background: rgba(6, 5, 10, 0.66);
   box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.78);
   cursor: default;
   pointer-events: none;
   filter: grayscale(1);
 }
-/* 깨진 칸에도 금은 남는다 — 잔금이 없으면 그냥 어두운 칸으로 보여 '부서졌다'가 읽히지 않는다.
-   색은 잿빛으로 죽여 살아 있는 칸의 촛불빛 금과 구분한다. */
+.boss-gimmick-cell.is-broken::before { background: none; box-shadow: none; }
+/* 잔해가 없으면 그냥 어두운 칸으로 보여 '부서졌다'가 읽히지 않는다. */
 .boss-gimmick-cell.is-broken .boss-gimmick-cell-crack {
-  opacity: 0.34;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23b9b2a6' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M50 6 L44 34 L57 52 L48 78 L54 96'/%3E%3Cpath d='M44 34 L14 42'/%3E%3Cpath d='M57 52 L86 38'/%3E%3Cpath d='M48 78 L18 90'/%3E%3Cpath d='M57 52 L78 78'/%3E%3Cpath d='M44 34 L30 10'/%3E%3C/g%3E%3C/svg%3E");
+  opacity: 0.5;
+  background-image:
+    radial-gradient(130% 30px at 50% 100%, rgba(178, 170, 156, 0.44), transparent 76%),
+    radial-gradient(5px 20px at 34% 40%, rgba(178, 170, 156, 0.24), transparent 74%),
+    radial-gradient(4px 16px at 68% 34%, rgba(178, 170, 156, 0.2), transparent 74%);
 }
 /* 깨진 칸에는 1회성 애니메이션을 걸지 않는다 — 격자는 매 렌더 새로 그려지므로
-   여기에 붙이면 재렌더마다 소멸 연출이 다시 재생된다. 파괴 순간의 섬광은
+   여기에 붙이면 재렌더마다 소멸 연출이 다시 재생된다. 무너지는 순간은
    body 오버레이(.boss-cell-shatter)가 한 번만 낸다. */
 .boss-gimmick-cell.is-broken .boss-gimmick-cell-label,
 .boss-gimmick-cell.is-broken .boss-gimmick-cell-mult {
@@ -1591,38 +1640,41 @@ export const GAME_BOARD_RAIL_STYLES = `
   text-decoration: line-through;
 }
 
-/* 파괴 순간의 파편 — 칸 노드가 재렌더로 교체돼도 끊기지 않게 body에 띄운다.
+/* 무너지는 순간 — 칸 노드가 재렌더로 교체돼도 끊기지 않게 body에 띄운다.
    z는 SquareBurst(220)와 자원 트레일(230) 사이에 끼운다. */
 .boss-cell-shatter {
   position: fixed;
   z-index: 225;
   pointer-events: none;
 }
+/* 유리처럼 쪼개지지 않는다. 달궈진 밀랍판이 아래로 처지며 흘러내린다. */
 .boss-cell-shatter-pane {
   position: absolute;
   inset: 0;
   border-radius: 10px;
-  background: rgba(255, 243, 214, 0.9);
-  animation: boss-cell-shatter-pane 0.36s ease-out forwards;
+  transform-origin: top center;
+  background: linear-gradient(180deg, rgba(255, 240, 208, 0.92), rgba(226, 176, 96, 0.72) 62%, rgba(120, 74, 26, 0.5));
+  animation: boss-cell-melt-pane 0.5s cubic-bezier(0.32, 0, 0.5, 1) forwards;
 }
-/* clip-path를 점점 더 들쭉날쭉한 다각형으로 밀어 유리판이 쪼개지는 실루엣을 만든다. */
-@keyframes boss-cell-shatter-pane {
-  0%   { opacity: 0.92; filter: brightness(2.4); transform: scale(1.02); clip-path: inset(0); }
-  55%  { opacity: 0.7;  clip-path: polygon(0 0, 18% 12%, 31% 0, 46% 28%, 63% 3%, 78% 20%, 100% 0, 92% 100%, 69% 77%, 51% 100%, 28% 70%, 0 100%); }
-  100% { opacity: 0;    filter: brightness(1.6); transform: scale(1.16); clip-path: polygon(8% 8%, 12% 18%, 30% 5%, 36% 26%, 68% 8%, 74% 28%, 96% 7%, 87% 84%, 65% 70%, 52% 94%, 34% 64%, 7% 90%); }
+@keyframes boss-cell-melt-pane {
+  0%   { opacity: 0.9; filter: brightness(1.7); transform: scaleY(1); border-radius: 10px; }
+  55%  { opacity: 0.62; transform: scaleY(0.62) translateY(14%); border-radius: 10px 10px 42% 38% / 10px 10px 60% 56%; }
+  100% { opacity: 0;    filter: brightness(1.1); transform: scaleY(0.16) translateY(52%); border-radius: 50% 50% 46% 44% / 80% 80% 60% 60%; }
 }
+/* 파편이 아니라 촛농 방울 — 끝이 둥글고, 사방이 아니라 아래로 떨어진다. */
 .boss-cell-shard {
   position: absolute;
-  width: 11px;
-  height: 16px;
-  clip-path: polygon(50% 0, 100% 28%, 70% 100%, 10% 74%, 0 25%);
-  background: linear-gradient(135deg, #fff6dc, #f0c977 48%, #a8742a);
-  box-shadow: 0 0 8px rgba(255, 226, 160, 0.8);
-  animation: boss-cell-shard-fly 0.62s cubic-bezier(0.15, 0.7, 0.28, 1) var(--shard-delay, 0ms) forwards;
+  width: 9px;
+  height: 13px;
+  border-radius: 52% 52% 46% 46% / 62% 62% 38% 38%;
+  background: linear-gradient(180deg, #fff3d6, #e8b96a 58%, #a26c28);
+  box-shadow: 0 0 7px rgba(255, 214, 150, 0.6);
+  animation: boss-cell-drip-fall 0.66s cubic-bezier(0.4, 0, 0.7, 1) var(--shard-delay, 0ms) forwards;
 }
-@keyframes boss-cell-shard-fly {
-  from { opacity: 1; transform: translate(0, 0) rotate(0) scale(1); }
-  to   { opacity: 0; transform: translate(var(--shard-x, 0), var(--shard-y, 0)) rotate(var(--shard-r, 0)) scale(0.35); }
+@keyframes boss-cell-drip-fall {
+  0%   { opacity: 1; transform: translate(0, 0) scale(0.7); }
+  25%  { opacity: 1; transform: translate(calc(var(--shard-x, 0) * 0.4), calc(var(--shard-y, 0) * 0.18)) scale(1); }
+  100% { opacity: 0; transform: translate(var(--shard-x, 0), var(--shard-y, 0)) scale(0.55); }
 }
 
 /* 보스 등장 시 셔터 진동을 한 비트 강화. 인트로 + 강하와 함께 묵직한 쿵 임팩트. */

@@ -968,7 +968,9 @@ body.is-hand-targeting .chain-banner { opacity: 0.3; transition: opacity 0.2s ea
   position: fixed;
   left: 50%;
   top: 20vh;
-  transform: translateX(-50%) translateY(-10px);
+  /* 위로 날아가지 않는다. 제자리에서 투명해질 뿐 — 레일 대기 행을 투명도로만
+     눌러 두는 것과 같은 어휘다. 이동을 섞으면 글자가 눈을 끌고 도망가 읽히지 않는다. */
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
@@ -985,11 +987,10 @@ body.is-hand-targeting .chain-banner { opacity: 0.3; transition: opacity 0.2s ea
   text-shadow:
     0 1px 2px rgba(0, 0, 0, 0.92),
     0 0 18px rgba(244, 164, 96, 0.36);
-  transition: opacity 0.32s ease, transform 0.32s cubic-bezier(0.18, 0.88, 0.22, 1);
+  transition: opacity 0.42s ease;
 }
 .chain-banner.is-on {
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
   /* 체인 배너 본체는 클릭을 아래 보드로 통과시킨다 */
   pointer-events: none;
 }

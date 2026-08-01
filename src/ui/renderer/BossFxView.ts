@@ -16,7 +16,7 @@ import {
   type BossGimmickTone,
 } from '@systems/BossGimmickManager'
 
-/** 부위 파괴 파편 개수. 칸이 작아 이 이상은 뭉쳐 보이기만 한다. */
+/** 부위 파괴 촛농 방울 개수. 칸이 작아 이 이상은 뭉쳐 보이기만 한다. */
 const BOSS_CELL_SHARD_COUNT = 12
 
 /**
@@ -360,7 +360,7 @@ export class BossFxView {
   }
 
   /**
-   * 부위 파괴 — 밀랍이 팡 하고 터지는 한 비트.
+   * 부위 파괴 — 달궈진 밀랍판이 처지며 흘러내리는 한 비트.
    *
    * 연출을 칸 DOM이 아니라 body 오버레이에 올리는 이유: 파괴 직후 곧바로 재렌더가
    * 일어나 칸 노드가 새로 그려져도(깨진 판으로 교체) 파편이 끊기지 않게 하기 위해서다.
@@ -374,24 +374,23 @@ export class BossFxView {
     const pane = document.createElement('div')
     pane.className = 'boss-cell-shatter-pane'
     host.appendChild(pane)
-    // 파편은 칸 중심에서 사방으로 — 각도/거리/회전만 흩어 놓고 나머지는 CSS가 굴린다.
+    // 촛농은 사방으로 튀지 않는다 — 칸 윗변 여기저기서 아래로 흘러 떨어진다.
     for (let i = 0; i < BOSS_CELL_SHARD_COUNT; i++) {
-      const shard = document.createElement('i')
-      shard.className = 'boss-cell-shard'
-      const angle = (Math.PI * 2 * i) / BOSS_CELL_SHARD_COUNT + Math.random() * 0.5
-      const distance = 26 + Math.random() * 44
-      shard.style.cssText = [
-        `left:${20 + Math.random() * 60}%`,
-        `top:${20 + Math.random() * 60}%`,
-        `--shard-x:${Math.cos(angle) * distance}px`,
-        `--shard-y:${Math.sin(angle) * distance}px`,
-        `--shard-r:${Math.round(-160 + Math.random() * 320)}deg`,
-        `--shard-delay:${Math.round(Math.random() * 70)}ms`,
+      const drip = document.createElement('i')
+      drip.className = 'boss-cell-shard'
+      drip.style.cssText = [
+        `left:${8 + (84 * i) / BOSS_CELL_SHARD_COUNT + Math.random() * 6}%`,
+        `top:${10 + Math.random() * 40}%`,
+        // 가로는 살짝만 번지고 세로로 확실히 떨어져 '중력'이 읽히게 한다.
+        `--shard-x:${Math.round(-14 + Math.random() * 28)}px`,
+        `--shard-y:${Math.round(38 + Math.random() * 46)}px`,
+        `--shard-delay:${Math.round(Math.random() * 110)}ms`,
       ].join(';')
-      host.appendChild(shard)
+      host.appendChild(drip)
     }
     document.body.appendChild(host)
-    SquareBurst.playOn(rect, 'wax-freeze', { count: 20, spread: 150, duration: 620 })
+    // 차가운 유리(wax-freeze)가 아니라 흘러내리는 촛농 톤으로.
+    SquareBurst.playOn(rect, 'boss-wax-drip', { count: 16, spread: 110, duration: 640 })
     window.setTimeout(() => host.remove(), 760)
     // 부위 파괴 추가 피해는 배율 피해가 뜬 직후 한 박자 늦게 같은 자리에 얹는다.
     if (breakDamage <= 0) return
