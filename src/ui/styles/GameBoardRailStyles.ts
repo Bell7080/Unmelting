@@ -1578,38 +1578,44 @@ export const GAME_BOARD_RAIL_STYLES = `
   background-position: top center;
   transition: opacity 0.28s ease;
 }
-/* 흘러내림은 SVG 채움이 아니라 **길쭉한 radial-gradient**로 그린다. 면으로 채우면
-   끝이 잘린 회색 막대처럼 보이는데, 촛농은 가장자리가 흐리고 끝이 뭉툭해야 읽힌다. */
-/* 1단계 — 윗변에 그을음이 옅게 앉는다. 아직 흘러내리지는 않는다. */
+/* 손상은 **그을림**으로 읽힌다. 촛농으로 그렸더니 보스 일러스트 자체가 온통
+   흘러내린 밀랍이라 그림에 묻혀 아무것도 안 보였다. 밝은 밀랍 위에서 대비를 내는 건
+   '녹는 밝음'이 아니라 '타 들어간 어둠'이다 — 불씨가 양초를 태우는 게 이 게임의 어휘다.
+   가장자리부터 검게 번지고, 탄 자리 경계에 잉걸불이 남는다. */
+/* 1단계 — 가장자리가 그을기 시작한다. */
 .boss-gimmick-cell[data-crack="1"] .boss-gimmick-cell-crack {
-  opacity: 0.6;
-  background-image: linear-gradient(180deg, rgba(22, 14, 8, 0.62) 0%, rgba(22, 14, 8, 0.16) 24%, transparent 44%);
+  opacity: 1;
+  background-image: radial-gradient(118% 118% at 50% 46%, transparent 48%, rgba(16, 9, 5, 0.66) 100%);
 }
-/* 2단계 — 촛농 두 줄기가 흐릿하게 흘러내리기 시작한다. */
+/* 2단계 — 그을음이 안쪽으로 번지고 탄 경계에 잉걸선이 비친다. */
 .boss-gimmick-cell[data-crack="2"] .boss-gimmick-cell-crack {
-  opacity: 0.85;
-  background-image:
-    radial-gradient(5px 22px at 31% 26%, rgba(246, 229, 190, 0.5), transparent 72%),
-    radial-gradient(4px 30px at 64% 32%, rgba(246, 229, 190, 0.42), transparent 74%),
-    linear-gradient(180deg, rgba(22, 14, 8, 0.72) 0%, rgba(22, 14, 8, 0.2) 28%, transparent 50%);
+  opacity: 1;
+  background-image: radial-gradient(
+    112% 112% at 50% 47%,
+    transparent 30%,
+    rgba(255, 122, 44, 0.16) 44%,
+    rgba(13, 7, 4, 0.84) 86%
+  );
 }
-/* 3단계 — 줄기가 늘고 아래에 촛농이 고인다(파괴 직전). */
+/* 3단계 — 거의 다 탔다. 검게 남은 판에 잉걸불만 벌겋게 살아 있다(파괴 직전). */
 .boss-gimmick-cell[data-crack="3"] .boss-gimmick-cell-crack {
   opacity: 1;
   background-image:
-    radial-gradient(5px 30px at 22% 34%, rgba(246, 229, 190, 0.52), transparent 72%),
-    radial-gradient(6px 40px at 50% 44%, rgba(246, 229, 190, 0.58), transparent 74%),
-    radial-gradient(4px 24px at 78% 28%, rgba(246, 229, 190, 0.44), transparent 72%),
-    radial-gradient(120% 26px at 50% 100%, rgba(232, 210, 164, 0.34), transparent 78%),
-    linear-gradient(180deg, rgba(22, 14, 8, 0.8) 0%, rgba(22, 14, 8, 0.26) 32%, transparent 56%);
+    radial-gradient(50% 8px at 50% 100%, rgba(255, 130, 46, 0.3), transparent 80%),
+    radial-gradient(
+      106% 106% at 50% 48%,
+      transparent 10%,
+      rgba(255, 132, 48, 0.26) 30%,
+      rgba(9, 5, 3, 0.93) 76%
+    );
 }
 /* 파괴 직전 단계만 옅게 흔들려 "곧 무너진다"를 알린다(번쩍임 없이). */
 .boss-gimmick-cell[data-crack="3"]:not(.is-broken) {
   animation: boss-gimmick-strained 2.1s ease-in-out infinite;
 }
 @keyframes boss-gimmick-strained {
-  0%, 100% { box-shadow: inset 0 0 0 rgba(0, 0, 0, 0); }
-  50%      { box-shadow: inset 0 6px 16px -6px rgba(24, 16, 10, 0.7); }
+  0%, 100% { box-shadow: inset 0 0 10px -4px rgba(255, 122, 44, 0.28); }
+  50%      { box-shadow: inset 0 0 20px -3px rgba(255, 132, 48, 0.55); }
 }
 /* 꺼진 칸 — 다 타 버린 자리. 반투명 검은 판에 굳은 촛농 바닥만 남는다. */
 .boss-gimmick-cell.is-broken {
@@ -1624,11 +1630,10 @@ export const GAME_BOARD_RAIL_STYLES = `
 .boss-gimmick-cell.is-broken::before { background: none; box-shadow: none; }
 /* 잔해가 없으면 그냥 어두운 칸으로 보여 '부서졌다'가 읽히지 않는다. */
 .boss-gimmick-cell.is-broken .boss-gimmick-cell-crack {
-  opacity: 0.5;
+  opacity: 1;
   background-image:
-    radial-gradient(130% 30px at 50% 100%, rgba(178, 170, 156, 0.44), transparent 76%),
-    radial-gradient(5px 20px at 34% 40%, rgba(178, 170, 156, 0.24), transparent 74%),
-    radial-gradient(4px 16px at 68% 34%, rgba(178, 170, 156, 0.2), transparent 74%);
+    radial-gradient(130% 26px at 50% 100%, rgba(150, 142, 130, 0.3), transparent 78%),
+    radial-gradient(120% 120% at 50% 46%, rgba(6, 4, 3, 0.5) 40%, rgba(4, 3, 2, 0.92) 100%);
 }
 /* 깨진 칸에는 1회성 애니메이션을 걸지 않는다 — 격자는 매 렌더 새로 그려지므로
    여기에 붙이면 재렌더마다 소멸 연출이 다시 재생된다. 무너지는 순간은
@@ -1653,22 +1658,31 @@ export const GAME_BOARD_RAIL_STYLES = `
   inset: 0;
   border-radius: 10px;
   transform-origin: top center;
-  background: linear-gradient(180deg, rgba(255, 240, 208, 0.92), rgba(226, 176, 96, 0.72) 62%, rgba(120, 74, 26, 0.5));
-  animation: boss-cell-melt-pane 0.5s cubic-bezier(0.32, 0, 0.5, 1) forwards;
+  /* screen 합성 — 칠하는 게 아니라 빛을 더한다. 불투명하게 채웠더니 칸이 통째로
+     노란 사각형이 돼 일러스트가 사라졌다. 가운데는 비우고 가장자리가 타오르게 둔다. */
+  mix-blend-mode: screen;
+  background: radial-gradient(
+    118% 118% at 50% 54%,
+    rgba(255, 226, 158, 0.42) 0%,
+    rgba(255, 128, 44, 0.5) 42%,
+    rgba(150, 48, 10, 0.24) 76%,
+    transparent 100%
+  );
+  animation: boss-cell-melt-pane 0.52s cubic-bezier(0.32, 0, 0.5, 1) forwards;
 }
 @keyframes boss-cell-melt-pane {
-  0%   { opacity: 0.9; filter: brightness(1.7); transform: scaleY(1); border-radius: 10px; }
-  55%  { opacity: 0.62; transform: scaleY(0.62) translateY(14%); border-radius: 10px 10px 42% 38% / 10px 10px 60% 56%; }
-  100% { opacity: 0;    filter: brightness(1.1); transform: scaleY(0.16) translateY(52%); border-radius: 50% 50% 46% 44% / 80% 80% 60% 60%; }
+  0%   { opacity: 1;   filter: brightness(1.5); transform: scaleY(1); border-radius: 10px; }
+  45%  { opacity: 0.6; filter: brightness(1.1); transform: scaleY(0.66) translateY(13%); border-radius: 10px 10px 42% 38% / 10px 10px 60% 56%; }
+  100% { opacity: 0;   filter: brightness(0.7); transform: scaleY(0.16) translateY(52%); border-radius: 50% 50% 46% 44% / 80% 80% 60% 60%; }
 }
 /* 파편이 아니라 촛농 방울 — 끝이 둥글고, 사방이 아니라 아래로 떨어진다. */
 .boss-cell-shard {
   position: absolute;
-  width: 9px;
-  height: 13px;
+  width: 8px;
+  height: 17px;
   border-radius: 52% 52% 46% 46% / 62% 62% 38% 38%;
-  background: linear-gradient(180deg, #fff3d6, #e8b96a 58%, #a26c28);
-  box-shadow: 0 0 7px rgba(255, 214, 150, 0.6);
+  background: linear-gradient(180deg, #ffe4a2, #ff8a2c 55%, #92330a);
+  box-shadow: 0 0 9px rgba(255, 138, 44, 0.85);
   animation: boss-cell-drip-fall 0.66s cubic-bezier(0.4, 0, 0.7, 1) var(--shard-delay, 0ms) forwards;
 }
 @keyframes boss-cell-drip-fall {
