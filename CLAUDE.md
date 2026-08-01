@@ -228,6 +228,9 @@ npm run build    # verify 포함
   탄 영역을 안쪽으로 밀어 넣는 안은 화면에서 주홍 링처럼 보여 되돌렸다.
 - 칸을 덮는 연출은 `mix-blend-mode: screen`으로 빛을 더한다. 불투명하게 채우면
   일러스트가 사라지고 색 사각형만 남는다.
+- 노이즈 텍스처(`feTurbulence`)를 쓸 때는 셋을 함께 챙긴다: 레이어별
+  `background-repeat`(안 적으면 한 장만 찍힌다) · `feColorMatrix saturate 0`(원본은
+  컬러 노이즈다) · `soft-light` 같은 약한 합성(진하게 깔면 대상이 오히려 밝아진다).
 - 무너지는 연출은 body 오버레이(`.boss-cell-shatter`)라 재렌더에 끊기지 않는다.
 - 칸 타겟팅 대비는 **칸을 밝히는 게 아니라 주변을 어둡게** 만들어 낸다
   (`.boss-face.is-cell-targeting`: 일러스트·이름·HP바·뱃지·깨진 칸을 누른다).
