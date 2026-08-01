@@ -1623,12 +1623,13 @@ export const GAME_BOARD_RAIL_STYLES = `
 /* 꺼진 칸 — 다 타 버린 자리. 반투명 검은 판에 굳은 촛농 바닥만 남는다. */
 .boss-gimmick-cell.is-broken {
   border-style: solid;
-  border-color: rgba(42, 34, 30, 0.66);
-  background: rgba(6, 4, 4, 0.5);
-  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.62);
+  border-color: rgba(60, 52, 46, 0.5);
+  background: rgba(10, 7, 6, 0.16);
+  box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.26);
   /* 클릭은 받되(아래 타일로 새지 않게) 아무 일도 하지 않는다 — 판정은 클릭 핸들러가 막는다. */
   cursor: not-allowed;
-  filter: grayscale(0.8);
+  /* 어둡게 덮지 않는다 — 채도를 빼는 것만으로 '꺼진 칸'이 읽히고 일러스트는 살아 있다. */
+  filter: grayscale(0.72) brightness(0.82);
 }
 /* 탄 자리의 몸통 — 숯. feTurbulence 노이즈를 곱해 농도를 들쭉날쭉하게 만든다.
    그라디언트만으로는 표면이 매끄러워 '칸이 어두워졌다'로만 보이고 탄 자국이 안 된다.
@@ -1639,7 +1640,7 @@ export const GAME_BOARD_RAIL_STYLES = `
   box-shadow: none;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.016' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.85'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23c)'/%3E%3C/svg%3E"),
-    radial-gradient(132% 132% at 50% 44%, rgba(8, 6, 5, 0.66) 22%, rgba(2, 2, 2, 0.96) 100%);
+    radial-gradient(132% 132% at 50% 44%, rgba(10, 8, 7, 0.1) 26%, rgba(4, 3, 3, 0.4) 100%);
   background-size: 220px 220px, 100% 100%;
   background-repeat: repeat, no-repeat;
   background-position: 0 0, 0 0;
@@ -1651,10 +1652,10 @@ export const GAME_BOARD_RAIL_STYLES = `
      알갱이는 soft-light로 아주 옅게 얹는다 — overlay로 진하게 깔면 중간 회색이
      끌어올려져 칸이 오히려 밝아지고 'TV 노이즈'로 보인다(실제로 그랬다). */
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Cfilter id='a'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='1' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='60' height='60' filter='url(%23a)' opacity='0.12'/%3E%3C/svg%3E"),
-    radial-gradient(34% 28% at 28% 66%, rgba(96, 40, 12, 0.26), transparent 74%),
-    radial-gradient(26% 22% at 74% 36%, rgba(78, 32, 12, 0.22), transparent 76%),
-    radial-gradient(130% 22px at 50% 100%, rgba(170, 158, 144, 0.2), transparent 82%);
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Cfilter id='a'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='1' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='60' height='60' filter='url(%23a)' opacity='0.08'/%3E%3C/svg%3E"),
+    radial-gradient(34% 28% at 28% 66%, rgba(96, 40, 12, 0.12), transparent 76%),
+    radial-gradient(26% 22% at 74% 36%, rgba(78, 32, 12, 0.1), transparent 78%),
+    radial-gradient(130% 20px at 50% 100%, rgba(170, 158, 144, 0.12), transparent 84%);
   background-size: 60px 60px, 100% 100%, 100% 100%, 100% 100%;
   background-repeat: repeat, no-repeat, no-repeat, no-repeat;
   background-position: 0 0, 0 0, 0 0, 0 0;
@@ -1665,8 +1666,8 @@ export const GAME_BOARD_RAIL_STYLES = `
    body 오버레이(.boss-cell-shatter)가 한 번만 낸다. */
 .boss-gimmick-cell.is-broken .boss-gimmick-cell-label,
 .boss-gimmick-cell.is-broken .boss-gimmick-cell-mult {
-  opacity: 0.34;
-  color: rgba(206, 200, 190, 0.9);
+  opacity: 0.42;
+  color: rgba(214, 208, 198, 0.92);
   text-decoration: line-through;
 }
 
