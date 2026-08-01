@@ -2069,6 +2069,9 @@ export class GameBoardRenderer {
         // 키보드(Enter)로 타일을 직접 열면 target이 격자 밖이라 undefined가 되고,
         // 모델이 중앙 칸으로 접어 처리한다.
         const gimmickCell = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-boss-gimmick-cell]')
+        // 부서진 칸은 클릭을 여기서 삼킨다. 칸을 pointer-events로 비워 두면 클릭이
+        // 보스 타일로 새어 엉뚱한(성한) 칸이 대신 맞는다.
+        if (gimmickCell?.dataset.broken === '1') return
         const cellIndex = gimmickCell ? Number(gimmickCell.dataset.bossGimmickCell) : undefined
         this.handleCardClick(el, laneIndex, distance, cellIndex)
       })

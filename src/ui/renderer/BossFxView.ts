@@ -287,7 +287,7 @@ export class BossFxView {
         return `<button class="boss-gimmick-cell is-kind-${cell.kind} ${cell.broken ? 'is-broken' : ''} ${targeting && !cell.broken ? 'is-hand-target' : ''}"
                         type="button" style="--boss-gimmick-i:${cell.index};" data-tone="${meta.tone}"
                         data-boss-gimmick-cell="${cell.index}" data-crack="${cell.broken ? 0 : crack}"
-                        ${cell.broken ? 'disabled' : ''} aria-label="${aria}">
+                        ${cell.broken ? 'data-broken="1" aria-disabled="true"' : ''} aria-label="${aria}">
                   <span class="boss-gimmick-cell-crack" aria-hidden="true"></span>${label}
                 </button>`
       })

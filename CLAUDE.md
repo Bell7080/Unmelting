@@ -125,6 +125,10 @@ npm run build    # verify 포함
   값만 쓰고, `cellDamage`/`breakDamage` 내역은 수치 표기를 나눌 때만 읽는다.
 - 깨진 칸은 조준·무작위·광역 대상에서 빠진다. 성한 칸이 없으면 격자는 null/빈 배열을
   돌려주고 호출부가 격자 없는 피해로 되돌아간다.
+- 깨진 칸은 클릭을 **받아서 버린다**(`data-broken` + 핸들러 조기 반환). `pointer-events`로
+  비우면 클릭이 보스 타일로 새어 성한 칸이 대신 맞는다.
+- 직접 타격은 블라스트를 쏘지 않는다 — 돌진(`animatePlayerAttack`)이 곧 타격 표현이다.
+  발사체는 손패(화면 중앙 → 칸) 전용이다.
 - 칸 타격 기록(`takeHits()`)은 **이번 beat 것만** 남아야 한다. 연출이 소비하는 경로
   (`index.ts` 손패 흐름)는 카드 사용 직전에 남은 기록을 먼저 버린다.
 - 칸 균열/파괴가 바뀌면 `BossEventController.syncGimmickGrid()`를 렌더 전에 불러야

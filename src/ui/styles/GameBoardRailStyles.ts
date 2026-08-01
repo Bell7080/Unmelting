@@ -1623,27 +1623,27 @@ export const GAME_BOARD_RAIL_STYLES = `
 /* 꺼진 칸 — 다 타 버린 자리. 반투명 검은 판에 굳은 촛농 바닥만 남는다. */
 .boss-gimmick-cell.is-broken {
   border-style: solid;
-  border-color: rgba(14, 11, 18, 0.78);
-  background: rgba(6, 5, 10, 0.66);
-  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.78);
-  cursor: default;
-  pointer-events: none;
-  filter: grayscale(1);
+  border-color: rgba(38, 32, 30, 0.7);
+  background: rgba(18, 14, 14, 0.42);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.48);
+  /* 클릭은 받되(아래 타일로 새지 않게) 아무 일도 하지 않는다 — 판정은 클릭 핸들러가 막는다. */
+  cursor: not-allowed;
+  filter: grayscale(0.8);
 }
 .boss-gimmick-cell.is-broken::before { background: none; box-shadow: none; }
 /* 잔해가 없으면 그냥 어두운 칸으로 보여 '부서졌다'가 읽히지 않는다. */
 .boss-gimmick-cell.is-broken .boss-gimmick-cell-crack {
   opacity: 1;
   background-image:
-    radial-gradient(130% 26px at 50% 100%, rgba(150, 142, 130, 0.3), transparent 78%),
-    radial-gradient(120% 120% at 50% 46%, rgba(6, 4, 3, 0.5) 40%, rgba(4, 3, 2, 0.92) 100%);
+    radial-gradient(130% 26px at 50% 100%, rgba(162, 152, 140, 0.26), transparent 78%),
+    radial-gradient(120% 120% at 50% 46%, rgba(14, 10, 8, 0.24) 44%, rgba(10, 7, 6, 0.6) 100%);
 }
 /* 깨진 칸에는 1회성 애니메이션을 걸지 않는다 — 격자는 매 렌더 새로 그려지므로
    여기에 붙이면 재렌더마다 소멸 연출이 다시 재생된다. 무너지는 순간은
    body 오버레이(.boss-cell-shatter)가 한 번만 낸다. */
 .boss-gimmick-cell.is-broken .boss-gimmick-cell-label,
 .boss-gimmick-cell.is-broken .boss-gimmick-cell-mult {
-  opacity: 0.2;
+  opacity: 0.34;
   color: rgba(206, 200, 190, 0.9);
   text-decoration: line-through;
 }

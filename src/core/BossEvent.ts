@@ -454,7 +454,10 @@ export class BossEventController {
           wear: struck.cell.wear,
           broke: struck.broke,
         }],
-        this.br.boardElement.querySelector<HTMLElement>('.player-card')
+        // 직접 타격은 블라스트를 쏘지 않는다 — animatePlayerAttack의 돌진(박치기)이
+        // 이미 '내가 가서 때렸다'를 말한다. 여기에 발사체를 얹으면 원거리 사격처럼 읽힌다.
+        // 손패는 반대로 화면 중앙에서 칸으로 날아가는 블라스트가 맞다.
+        null
       )
     } else {
       await this.br.animateDamageNumbersById(dealt > 0 ? [{ cardId: card.id, amount: dealt }] : [])
