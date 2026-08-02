@@ -123,7 +123,19 @@ describe('damageProfile 계약', () => {
 })
 ```
 
-**B. `npm run balance` — 분포 리포트 CLI**
+**B-1. `npm run balance:boss` — 보스전 화력 분포 리포트 (구현됨, v0.5.0)**
+
+`src/tools/boss-balance-report.ts`. 실제 데이터 테이블(HandCards의 dropWeight·targeting·
+damageProfile, BossGimmickManager의 칸 배율·부위 파괴)에서 **보스전 총 화력 분포**를
+몬테카를로로 뽑아, 보스마다 필요한 행동 수의 p10/중앙/p90을 찍는다. 위 "배울 점 1"대로
+체력 산출(`BossSpecs`)과 **같은 모델**(`BossDamageBudget`)을 부르므로 사본이 썩지 않는다.
+
+샹들리에 유무를 나눠 찍는 것이 핵심이다 — 광역 손패 한 장이 격자 9칸에 전부 꽂혀
+전투 길이를 통째로 바꾸므로, 중앙값만 보면 그 폭이 안 보인다.
+
+남은 것: 아래 B-2의 층 도달 분포·패턴 발동 횟수·이름 붙은 불변식(INV-*) 출력.
+
+**B-2. `npm run balance` — 런 전체 분포 리포트 CLI**
 
 `EnaTrainingSimulation`을 재사용해 N회 런을 돌리고 사람이 읽는 요약을 찍는다.
 
