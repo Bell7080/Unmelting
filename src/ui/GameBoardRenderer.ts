@@ -887,6 +887,8 @@ export class GameBoardRenderer {
       this.hasRendered && !this.previousCardIds.has(card.id) ? 'is-entering' : '',
       this.shouldAnimateGroup(card.id, span) ? 'is-newly-grouped' : '',
       card.isFrozen() ? 'is-frozen' : '',
+      // 비대화된 양초 조각 — 부푼 상태가 다음 턴에도 남아야 "판이 무거워졌다"가 보인다.
+      card.swollen ? 'is-swollen' : '',
       // 보스는 5번째 카드 종류. 보스마다 메커니즘/스타일이 다를 수 있으므로,
       // 공통은 type-boss(셔터 위 z-index) 하나만 적용하고, 이 보스(밀랍 군단)만의
       // 풀필드 확장·좌상단 3T 뱃지 등은 boss-kind-<id> 마커로 한정한다.
@@ -4200,6 +4202,29 @@ export class GameBoardRenderer {
       SquareBurst.playOn(el, 'damage', { count: 12, spread: 90, duration: 480 })
     }
     return this.animateElements(elements, 'is-ember-empowering', 760)
+  }
+
+  /**
+   * 비대화 — 90F 조각사가 양초 조각에 밀랍을 덧발라 부풀리는 순간.
+   * 광폭화(붉은 잔상 + 공격력 강조)와 **다른 어휘**로 읽혀야 하므로, 붉게 달구지 않고
+   * 몸집이 커지는 쪽으로만 친다: 체력 칩을 강조하고 밀랍 톤 버스트를 쓴다.
+   */
+  async animateEnemySwell(enemyIds: string[]): Promise<void> {
+    const elements: HTMLElement[] = []
+    for (const id of enemyIds) {
+      const el = this.findCardElement(id)
+      if (!el) continue
+      elements.push(el)
+      const hpChip = el.querySelector<HTMLElement>('.stat.hp')
+      if (hpChip) {
+        hpChip.classList.remove('is-swelling')
+        void hpChip.offsetWidth
+        hpChip.classList.add('is-swelling')
+        window.setTimeout(() => hpChip.classList.remove('is-swelling'), 760)
+      }
+      SquareBurst.playOn(el, 'boss-wax-drip', { count: 14, spread: 96, duration: 520 })
+    }
+    return this.animateElements(elements, 'is-swelling', 760)
   }
 
   /** Seed bloom beat: color-matched square burst and a quick growing flower pop. */

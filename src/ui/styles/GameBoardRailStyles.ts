@@ -1222,16 +1222,30 @@ export const GAME_BOARD_RAIL_STYLES = `
   --boss-phase-warm: rgba(158, 72, 232, 0.7);
   --boss-phase-cool: rgba(206, 130, 255, 0.32);
 }
-/* 90F 조각사 2페이지 '비대화' — 밀랍을 더 퍼먹어 몸집이 부푼다. 타일 크기는 레일이
-   정하므로 일러스트만 키우고, 느린 맥동으로 아직 부풀고 있다는 인상을 남긴다. */
-.boss-face[data-boss-kind="waxSculptor"][data-page="2"] .boss-face-art {
-  transform: scale(1.12);
+/* 비대화 — 90F 조각사 2페이지부터 소환되는 양초 조각이 밀랍을 덧발라 부푼다.
+   광폭화(붉은 잔상)와 다른 어휘여야 하므로 붉게 달구지 않고 **몸집**으로만 말한다:
+   카드 그림을 키우고 느리게 맥동시켜 아직 부풀고 있다는 인상을 남긴다.
+   레일 칸 크기는 격자가 정하므로 칸이 아니라 안쪽 그림만 키운다. */
+.cell.card.is-swollen .card-illust,
+.cell.card.is-swollen .card-art {
+  transform: scale(1.2);
   transform-origin: 50% 62%;
-  animation: boss-sculptor-swell 4.2s ease-in-out infinite;
+  /* 밀랍을 덧발라 부푼 몸 — 살짝 도톰하게(밝기·채도) 읽히도록 함께 민다. */
+  filter: brightness(1.06) saturate(1.08);
+  animation: enemy-swell-breathe 4.2s ease-in-out infinite;
 }
-@keyframes boss-sculptor-swell {
-  0%, 100% { transform: scale(1.1); }
-  50%      { transform: scale(1.16); }
+.cell.card.is-swollen { overflow: hidden; }
+@keyframes enemy-swell-breathe {
+  0%, 100% { transform: scale(1.17); }
+  50%      { transform: scale(1.24); }
+}
+/* 부푸는 순간 한 번 — 체력 칩이 커졌다 돌아온다(공격력이 아니라 체력이 오르는 강화다). */
+.cell.card.is-swelling { animation: enemy-swell-pop 0.76s cubic-bezier(0.22, 0.9, 0.28, 1); }
+.stat.hp.is-swelling { animation: enemy-swell-pop 0.76s cubic-bezier(0.22, 0.9, 0.28, 1); }
+@keyframes enemy-swell-pop {
+  0%   { transform: scale(1); filter: brightness(1); }
+  38%  { transform: scale(1.12); filter: brightness(1.35) saturate(1.15); }
+  100% { transform: scale(1); filter: brightness(1); }
 }
 
 @keyframes boss-phase-heat-breathe {

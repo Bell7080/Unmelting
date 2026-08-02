@@ -44,8 +44,12 @@ const PAGE_GATE_WARNING_TEXT = '칸을 파괴해야합니다.'
  */
 const HALF_PAGE_BOSSES = new Set<SpecialEnemyKind>(['waxArmy', 'waxCat', 'waxKnight', 'waxSculptor'])
 
-/** 90F 조각사 2페이지 광폭화 — 소환 종복이 얻는 체력 보너스. */
-const SCULPTOR_ENRAGE_HP = 5
+/**
+ * 90F 조각사 2페이지 '비대화' — 소환된 양초 조각이 부풀며 얻는 체력.
+ * 광폭화(공격력까지 오르는 마녀식 강화)와 구분되는 어휘다: 조각사는 재료를 더 퍼먹여
+ * 종복을 크게 만들 뿐, 사납게 만들지는 않는다.
+ */
+const SCULPTOR_SWELL_HP = 5
 /** 100F 마녀 3페이지 광폭화 — 소환 종복이 얻는 공격력/체력 보너스. */
 const WITCH_ENRAGE_ATK = 3
 const WITCH_ENRAGE_HP = 8
@@ -390,7 +394,7 @@ export class BossEventController {
       // 다른 보스 특징과 어미를 맞춘다(존댓말 하나만 튀어 있었다).
       trait: [
         '첫 번째 : 공격 주기마다 밀랍을 조각해 종복을 소환하고 몸을 숨김.',
-        '두 번째 : 스스로 부풀며 모든 종복을 광폭화시킴(체력 +5).',
+        '두 번째 : 소환하는 양초 조각이 비대화됨(체력 +5).',
       ].join('\n'),
       kicker: '광기의 예술가',
     }
@@ -602,11 +606,13 @@ export class BossEventController {
       } else if (state.def.specialEnemyKind === 'waxDemon') {
         // 1P: 검은 양초만 / 2P: 검은 양초 + 거짓/진실
         if (await this.resolveDemonCandleTurn(card.id)) return
+        await this.pauseBeat()
         if (state.demonPage >= 2) {
           if (await this.resolveDemonTruthLieTurn(card.id)) return
           if (!character.isAlive() || character.authoritySurvivePending) {
             await this.inject.handlePlayerDeath(); return
           }
+          await this.pauseBeat()
         }
         character.takeDamage(card.getDamage())
         await this.br.animateBossSlamAttack(card.id)
@@ -743,11 +749,13 @@ export class BossEventController {
           }
         } else if (state.def.specialEnemyKind === 'waxDemon') {
           if (await this.resolveDemonCandleTurn(state.card.id)) return
+          await this.pauseBeat()
           if (state.demonPage >= 2) {
             if (await this.resolveDemonTruthLieTurn(state.card.id)) return
             if (!character.isAlive() || character.authoritySurvivePending) {
               await this.inject.handlePlayerDeath(); return
             }
+            await this.pauseBeat()
           }
           const dmg = state.card.getDamage()
           character.takeDamage(dmg)
@@ -1483,22 +1491,25 @@ export class BossEventController {
     const state = this.eventState
     if (!state) return
     if (state.def.specialEnemyKind === 'waxSculptor') {
-      // 조각사는 스스로 비대해지고(연출), 자기 종복을 전부 광폭화시킨다.
-      const enraged = this.enrageFieldEnemies(0, SCULPTOR_ENRAGE_HP)
-      this.inject.recordNotice(
-        `밀랍 조각사가 부풀어 오르며 종복 ${enraged}체를 광폭화시켰다 — 체력 +${SCULPTOR_ENRAGE_HP}`,
-        'hurt'
-      )
-      this.inject.render()
-      if (enraged > 0) await this.br.animateEnemyEmberEmpower(this.getAliveSummonedCards().map((c) => c.id))
+      // 조각사 본체는 그대로다 — 부푸는 것은 **소환된 양초 조각들**이다.
+      const swollen = this.swellFieldEnemies(SCULPTOR_SWELL_HP)
+      if (swollen > 0) {
+        this.inject.recordNotice(
+          `밀랍 조각사가 종복 ${swollen}체에 밀랍을 덧발랐다 — 비대화(체력 +${SCULPTOR_SWELL_HP})`,
+          'hurt'
+        )
+        this.inject.render()
+        await this.br.animateEnemySwell(this.getAliveSummonedCards().map((c) => c.id))
+      }
     }
   }
 
   /**
-   * 필드의 일반 적 전체에 스탯 보너스를 소급 적용한다(시련 '광란'과 같은 경로라
-   * 합체 적·이미 입은 피해가 알아서 맞는다). 보스와 특수 적은 대상에서 빠진다.
+   * 필드의 일반 적 전체를 비대화시킨다 — 체력만 소급으로 붙이고 '부풀었다' 표시를 건다.
+   * 스탯 소급은 시련 '광란'과 같은 경로라 합체 적 배수·이미 입은 피해가 알아서 맞는다.
+   * 보스와 특수 적은 대상에서 빠진다.
    */
-  private enrageFieldEnemies(atkBonus: number, hpBonus: number): number {
+  private swellFieldEnemies(hpBonus: number): number {
     let count = 0
     const seen = new Set<Card>()
     for (const lane of this.gs.lanes) {
@@ -1506,7 +1517,8 @@ export class BossEventController {
         const card = lane.getCardAtDistance(d)
         if (!card || seen.has(card) || card.type !== CardType.ENEMY) continue
         seen.add(card)
-        card.applyTrialEnemyStatBonus(atkBonus, hpBonus)
+        card.applyTrialEnemyStatBonus(0, hpBonus)
+        card.swollen = true
         count++
       }
     }
@@ -1637,9 +1649,9 @@ export class BossEventController {
     const pool = ENEMY_DEFINITIONS.slice(12, 18)
     // 불씨 티어 공격력 보너스를 소환 적에게도 적용한다(필드 일반 적과 동일 — 불씨 부족 시 더 위협적).
     const emberAtk = EmberSystem.getEnemyStatBonus(this.tm.getEmberTier()).atk
-    // 2페이지부터는 새로 부르는 종복도 광폭화된 채로 나온다 — 전환 시점의 1회성 버프가
-    // 아니라 그 뒤 소환에도 계속 붙어야 "판이 무거워졌다"가 유지된다.
-    const enrageHp = state.halfPage >= 2 ? SCULPTOR_ENRAGE_HP : 0
+    // 2페이지부터는 새로 부르는 양초 조각도 처음부터 부푼 채로 나온다 — 전환 시점의
+    // 1회성 버프가 아니라 그 뒤 소환에도 계속 붙어야 "판이 무거워졌다"가 유지된다.
+    const swellHp = state.halfPage >= 2 ? SCULPTOR_SWELL_HP : 0
     for (let i = 0; i < 3; i++) {
       const enemyDef = pool[Math.floor(Math.random() * pool.length)]
       const enemy = new Card(
@@ -1647,26 +1659,27 @@ export class BossEventController {
         CardType.ENEMY,
         enemyDef.name,
         enemyDef.description,
-        (enemyDef.healthOrDamage ?? 1) + enrageHp,
+        (enemyDef.healthOrDamage ?? 1) + swellHp,
         enemyDef.attack ?? 1,
         { enemySpriteId: enemyDef.enemySpriteId, enemyPower: enemyDef.enemyPower },
       )
       enemy.emberAtkBonus = emberAtk
+      enemy.swollen = swellHp > 0
       this.gs.lanes[i].setCardAtDistance(0, enemy)
       state.summonedEnemyIds.add(enemy.id)
     }
 
     this.inject.render()
     this.inject.recordNotice(
-      enrageHp > 0
-        ? '부푼 밀랍 조각사가 광폭화된 종복들을 소환했다!'
+      swellHp > 0
+        ? '밀랍 조각사가 비대해진 양초 조각들을 소환했다!'
         : '밀랍 조각사가 후퇴하며 종복들을 소환했다!',
       'hurt'
     )
     // 좌→우 순서로 소환 연출 (enemyIds는 레인 0→1→2)
     const summonedIds = [...state.summonedEnemyIds]
     await this.br.animateSculptorSummonEnemies(summonedIds)
-    if (enrageHp > 0) await this.br.animateEnemyEmberEmpower(summonedIds)
+    if (swellHp > 0) await this.br.animateEnemySwell(summonedIds)
   }
 
 

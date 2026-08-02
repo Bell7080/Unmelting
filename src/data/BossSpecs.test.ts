@@ -62,14 +62,22 @@ describe('보스 체력 곡선', () => {
     expect(ONBOARDING_CAT_SPEC.attack).toBeLessThan(BOSS_CORE_SPECS[30].attack)
   })
 
-  it('격자가 없는 보스끼리는 체력도 층 순서를 지킨다', () => {
-    // 격자 보스는 같은 전투 길이를 위해 체력이 3배 이상 두꺼워지므로 이 비교에서 뺀다.
-    // (30F만 격자가 켜져 있어 화면 숫자가 60F보다 큰 상태다 — 알려진 간극이며,
-    //  60F 이후에도 격자를 켜면 자연히 풀린다.)
-    const flat = CLIMB.filter((floor) => BOSS_FIGHT_BUDGETS[floor].gimmickKind === null)
-    const hps = flat.map((floor) => BOSS_CORE_SPECS[floor].maxHp)
+  it('화면에 뜨는 체력도 층 순서를 지킨다', () => {
+    // 모든 보스에 격자가 깔린 뒤로는 표시 체력도 단조 증가해야 한다 — 층을 올라가는데
+    // 숫자가 내려가면 플레이어는 게임이 쉬워졌다고 읽는다.
+    const hps = CLIMB.map((floor) => BOSS_CORE_SPECS[floor].maxHp)
     for (let i = 1; i < hps.length; i++) {
-      expect(hps[i], `${flat[i]}F는 ${flat[i - 1]}F보다 두꺼워야 한다`).toBeGreaterThan(hps[i - 1])
+      expect(hps[i], `${CLIMB[i]}F는 ${CLIMB[i - 1]}F보다 두꺼워야 한다`).toBeGreaterThan(hps[i - 1])
+    }
+    expect(ONBOARDING_CAT_SPEC.maxHp).toBeLessThan(hps[0])
+  })
+
+  it('층과 층 사이 체력이 평평해지지 않는다', () => {
+    // 90F는 격자가 6칸이라 부위 파괴 배수가 낮아, 공격력 가정을 올리기 전에는
+    // 60F와 1타 피해가 붙어 체력 곡선에 평지가 생겼다(450 → 550, ×1.22).
+    const hps = CLIMB.map((floor) => BOSS_CORE_SPECS[floor].maxHp)
+    for (let i = 1; i < hps.length; i++) {
+      expect(hps[i] / hps[i - 1], `${CLIMB[i]}F 상승폭`).toBeGreaterThanOrEqual(1.3)
     }
   })
 
@@ -116,8 +124,18 @@ describe('보스 체력 곡선', () => {
     const late = demonSummonSpec(90)
     expect(late.maxHp).toBeGreaterThan(early.maxHp)
     expect(late.attack).toBeGreaterThan(early.attack)
-    // 선택 보스라 격자 없는 60F보다는 두껍고, 최종 보스보다는 얇다.
-    expect(early.maxHp).toBeGreaterThan(BOSS_CORE_SPECS[60].maxHp)
+    // 선택 보스라 **같은 시점에 막 지나온 등반 보스**보다 두껍고, 최종 보스보다는 얇다.
+    expect(early.maxHp).toBeGreaterThan(BOSS_CORE_SPECS[30].maxHp)
+    expect(late.maxHp).toBeGreaterThan(BOSS_CORE_SPECS[90].maxHp)
     expect(late.maxHp).toBeLessThan(BOSS_CORE_SPECS[100].maxHp)
+  })
+
+  it('중간에 끼어드는 악마가 최종 보스보다 긴 싸움이 되지 않는다', () => {
+    // 프리미엄을 크게 잡았다가 실제로 그랬다(악마 33행동 vs 마녀 28행동).
+    const finalActions = actionsToKill(BOSS_CORE_SPECS[100].maxHp, BOSS_FIGHT_BUDGETS[100])
+    for (const turn of [20, 45, 60, 90]) {
+      const actions = actionsToKill(demonSummonSpec(turn).maxHp, demonSummonBudget(turn))
+      expect(actions, `악마(${turn}턴) 전투 길이`).toBeLessThanOrEqual(finalActions)
+    }
   })
 })

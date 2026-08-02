@@ -150,6 +150,12 @@ export class Card {
    *  필드 진입/티어 변동 시 현재 티어 값으로 동기화되며, 불씨가 회복되면 다시 줄어든다.
    *  HP는 절대 건드리지 않아 1체력 적이 회복으로 즉사하는 문제를 피한다. */
   emberAtkBonus: number
+  /**
+   * 비대화 표시 — 90F 조각사 2페이지부터 소환되는 양초 조각에 붙는다.
+   * 수치(체력)는 이미 카드에 구워져 있고, 이 플래그는 **부풀어 있다는 표시**만 담당한다.
+   * 광폭화(붉은 잔상)와 다른 어휘라 렌더러가 다른 클래스를 건다.
+   */
+  swollen: boolean = false
   /** Treasure subtype separates normal chests from final-ascent starlight keys. */
   treasureKind: TreasureKind
   /** Flower growth state: seed in waiting row, then a random bloom on front row. */

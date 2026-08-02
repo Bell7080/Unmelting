@@ -75,8 +75,10 @@ function fightBudget(
 export const BOSS_FIGHT_BUDGETS: Record<30 | 60 | 90 | 100, BossFightBudget> = {
   30: fightBudget({ playerAttack: 4, targetActions: 13, gimmickKind: 'waxArmy' }),
   60: fightBudget({ playerAttack: 7, targetActions: 16, gimmickKind: 'waxKnight' }),
-  90: fightBudget({ playerAttack: 9, targetActions: 20, gimmickKind: 'waxSculptor' }),
-  100: fightBudget({ playerAttack: 11, targetActions: 26, gimmickKind: 'waxWitch' }),
+  // 90F는 격자가 6칸이라 부위 파괴 배수가 낮다(×1.43 vs 9칸 ×1.82). 공격력 가정을
+  // 9 → 10으로 올려 60F와 1타 피해가 붙어 버리는(=체력 곡선이 평평해지는) 것을 푼다.
+  90: fightBudget({ playerAttack: 10, targetActions: 20, gimmickKind: 'waxSculptor' }),
+  100: fightBudget({ playerAttack: 12, targetActions: 26, gimmickKind: 'waxWitch' }),
 }
 
 /** 새싹 온보딩 보스 — 격자는 켜져 있지만 레시피·유물이 아직 없어 지원 화력은 0이다. */
@@ -117,17 +119,21 @@ export const ONBOARDING_CAT_SPEC: BossCoreSpec = {
 }
 
 /**
- * 악마는 정규 곡선과 같은 식을 쓰되, 선택 보스라 전투가 3할쯤 길다.
+ * 악마는 정규 곡선과 같은 식을 쓰되, 선택 보스라 조금 더 길다.
  * 프리미엄을 체력이 아니라 **목표 행동 수**에 곱한다 — 체력에 곱하면 손패 피해가
  * 함께 커지지 않아 실제 전투 길이가 의도보다 더 늘어난다.
+ *
+ * 프리미엄이 과하면 **중간에 끼어드는 선택 보스가 최종 보스보다 긴 싸움**이 된다.
+ * 1.35에서는 실제로 그랬다(악마 33행동 vs 마녀 28행동). 최종 보스보다 항상 짧게
+ * 유지되도록 낮춰 잡는다.
  */
-const DEMON_PREMIUM = 1.35
+const DEMON_PREMIUM = 1.15
 
 /** 악마 소환 레시피 이벤트 보스의 전투 가정 — 발동 턴이 늦을수록 커진다. */
 export function demonSummonBudget(turn: number): BossFightBudget {
   return fightBudget({
     playerAttack: 4 + Math.floor(turn / 20),
-    targetActions: Math.round((18 + Math.floor(turn / 12)) * DEMON_PREMIUM),
+    targetActions: Math.round((14 + Math.floor(turn / 12)) * DEMON_PREMIUM),
     gimmickKind: 'waxDemon',
   })
 }
