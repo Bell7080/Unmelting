@@ -38,10 +38,10 @@ const BOSS_GREED_WAVE_STEP_MS = 110
 /** 탐욕의 값 징수 — 동전 한 장이 꽂히는 간격. */
 const BOSS_GREED_TOLL_STEP_MS = 90
 
-/** 페이지 게이트 경고 노출 시간. CSS 애니메이션 길이와 같은 값이어야 한다. */
-const BOSS_PAGE_GATE_WARNING_MS = 1200
+/** 페이지 게이트 경고 노출 시간. 피해 수치(980ms)보다 길다 — 읽어야 하는 문장이다. */
+const BOSS_PAGE_GATE_WARNING_MS = 1800
 /** 리미트 페이지에 막 닿은 1회는 더 오래 보여 준다. */
-const BOSS_PAGE_GATE_EMPHATIC_MS = 1900
+const BOSS_PAGE_GATE_EMPHATIC_MS = 2600
 
 /**
  * 칸 성격의 톤 → 이 렌더러의 팔레트/세기. 칸 종류가 아니라 톤으로 갈라 두면
@@ -364,23 +364,23 @@ export class BossFxView {
   }
 
   /**
-   * 페이지 게이트 경고 — "부위를 부숴야 한다". 피해가 하한에 막힌 beat에서 데미지 수치
-   * 자리에 대신 뜬다. 수치처럼 튀어 오르지 않고 은은하게 떠올랐다 사라진다(막힌 것은
-   * 사건이 아니라 상태다). 보스 타일 재렌더에 끊기지 않게 body 오버레이로 올린다.
+   * 페이지 게이트 경고 — 피해가 하한에 막힌 beat에서 **피해 수치가 뜰 자리에 대신** 뜬다.
+   * 그래서 양식도 피해 수치(`damage-float`)를 그대로 쓰고 색만 밀랍 톤으로 바꾼다.
+   * 다만 읽어야 하는 문장이므로 수치보다 오래 머문다.
    */
   async playBossPageGateWarning(cardId: string, text: string, emphatic: boolean): Promise<void> {
     const tile = this.host.findCardElement(cardId)
     if (!tile) return
     const rect = tile.getBoundingClientRect()
-    const el = document.createElement('div')
-    el.className = `boss-page-gate-warning ${emphatic ? 'is-emphatic' : ''}`
-    el.textContent = text
-    el.setAttribute('aria-hidden', 'true')
-    el.style.cssText = `left:${rect.left + rect.width / 2}px;top:${rect.top + rect.height * 0.42}px;`
-    document.body.appendChild(el)
-    const hold = emphatic ? BOSS_PAGE_GATE_EMPHATIC_MS : BOSS_PAGE_GATE_WARNING_MS
-    await new Promise<void>((resolve) => window.setTimeout(resolve, hold))
-    el.remove()
+    return this.host.animateFloatTextAt(
+      rect.left + rect.width / 2,
+      rect.top + rect.height * 0.34,
+      text,
+      {
+        className: `damage-float--gate ${emphatic ? 'is-emphatic' : ''}`,
+        durationMs: emphatic ? BOSS_PAGE_GATE_EMPHATIC_MS : BOSS_PAGE_GATE_WARNING_MS,
+      }
+    )
   }
 
   private async playBossGimmickStrike(

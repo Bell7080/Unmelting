@@ -253,7 +253,13 @@ export interface EnaSimStartBonus {
 const SPROUT_TARGET_TURNS = 30
 const SPROUT_BOSS_FLOORS: readonly number[] = [30]
 /** 30F 온보딩 보스 양초 고양이: 공격 시 손패 1장 강탈(촛농/양초/불씨면 자가 사용=회복). */
-const SPROUT_BOSS_PROFILE: BossProfile = bossProfileFrom(ONBOARDING_CAT_SPEC, 'catSteal')
+// 새싹 고양이도 격자·절반 리미트 페이지를 쓴다(실게임 BOSS_GIMMICK_PROFILES.waxCat).
+const SPROUT_BOSS_PROFILE: BossProfile = bossProfileFrom(
+  ONBOARDING_CAT_SPEC,
+  'catSteal',
+  [Math.ceil(ONBOARDING_CAT_SPEC.maxHp / 2), 0],
+  'waxCat',
+)
 
 /** 시뮬 상점이 다루는 실제 팩 종류(가격 반복 누적 추적용). */
 type EnaSimPackKind = 'basic-pack' | 'recipe-pack' | 'unlock-pack' | 'chance-pack' | 'delete-pack' | 'resource-pack'

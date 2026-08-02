@@ -1191,6 +1191,42 @@ export const GAME_BOARD_RAIL_STYLES = `
     linear-gradient(180deg, rgba(20, 16, 28, 0) 28%, rgba(20, 16, 28, 0.55) 62%, rgba(8, 5, 14, 0.95) 100%),
     radial-gradient(130% 60% at 50% 0%, rgba(244, 164, 96, 0.14), transparent 70%);
 }
+/* ── 페이지가 오른 보스: 카드에 열기가 돈다 ──────────────────────────────────
+   수치를 읽지 않아도 "강해졌다"가 보이게 하는 레이어다. 색은 tone(호박빛/보랏빛),
+   세기는 data-page(2 → 3)로 갈린다. 일러스트를 덮지 않도록 더하는 빛(screen)만 쓰고,
+   일렁임은 느리게 — 빠르면 연출이 아니라 깜빡임으로 읽힌다. */
+.boss-face[data-page] .boss-face-art {
+  filter: saturate(var(--boss-phase-sat, 1.12)) contrast(var(--boss-phase-con, 1.04));
+}
+.boss-face[data-page="3"] { --boss-phase-sat: 1.24; --boss-phase-con: 1.08; }
+.boss-face-phase-heat {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: var(--boss-phase-heat, 0.26);
+  background:
+    radial-gradient(120% 78% at 50% 108%, var(--boss-phase-warm), transparent 68%),
+    radial-gradient(90% 54% at 50% -8%, var(--boss-phase-cool), transparent 72%);
+  animation: boss-phase-heat-breathe 3.6s ease-in-out infinite;
+}
+.boss-face[data-page="3"] .boss-face-phase-heat { --boss-phase-heat: 0.44; }
+/* 호박빛 — 밀랍이 다시 달아오른 톤. */
+.boss-face[data-page-tone="ember"] {
+  --boss-phase-warm: rgba(255, 138, 46, 0.72);
+  --boss-phase-cool: rgba(255, 196, 104, 0.32);
+}
+/* 보랏빛 — 이벤트로 불려 나온 악마는 출신이 다르다. */
+.boss-face[data-page-tone="violet"] {
+  --boss-phase-warm: rgba(158, 72, 232, 0.7);
+  --boss-phase-cool: rgba(206, 130, 255, 0.32);
+}
+@keyframes boss-phase-heat-breathe {
+  0%, 100% { opacity: calc(var(--boss-phase-heat, 0.26) * 0.72); transform: translateY(0) scale(1); }
+  50%      { opacity: var(--boss-phase-heat, 0.26);              transform: translateY(-1.5%) scale(1.03); }
+}
+
 /* 좌상단 N턴 뱃지 — frozen-badge 위치/형태 양식은 유지하되, 보스의 임박한 반격
    카운트는 회색 톤이 아니라 붉은 위험 톤으로 표현(.type-enemy 띠 색과 통일).
    N이 적을수록 더 위험하다는 인상을 주기 위해 살짝 펄스 한다. */
@@ -1330,16 +1366,34 @@ export const GAME_BOARD_RAIL_STYLES = `
   transition: width 0.28s cubic-bezier(0.2, 0.86, 0.28, 1);
 }
 /* 100F 보스 페이지 경계선 — 빛 게이지의 작은 눈금처럼 HP바 위에 140/70 전환점을 표시한다. */
+/* 경계선은 위아래 짧은 눈금 한 쌍이다. 통짜 선으로 그으면 30F처럼 경계가 정확히
+   50%인 보스에서 가운데 HP 숫자(‘50 / 100’의 슬래시)와 겹쳐 아예 보이지 않는다.
+   막대는 overflow:hidden이라 밖으로 뺄 수도 없으므로, 글자가 지나는 가운데를 비운다. */
 .boss-face-hpbar-page-marker {
   position: absolute;
-  top: -2px;
-  bottom: -2px;
-  z-index: 1;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
   width: 2px;
   transform: translateX(-50%);
-  border-radius: 999px;
-  background: rgba(255, 246, 210, 0.95);
-  box-shadow: 0 0 0 1px rgba(60, 18, 12, 0.72), 0 0 8px rgba(255, 210, 120, 0.64);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 246, 210, 0.95) 0 26%,
+    rgba(255, 246, 210, 0) 26% 74%,
+    rgba(255, 246, 210, 0.95) 74% 100%
+  );
+  filter: drop-shadow(0 0 4px rgba(255, 210, 120, 0.7)) drop-shadow(0 0 1px rgba(60, 18, 12, 0.9));
+}
+/* 이미 뚫린 경계는 끊긴 눈금으로 남는다 — 막대만 보고도 "여기는 지났다"가 읽힌다.
+   지우지 않는 이유: 남은 경계가 몇 개인지가 이 보스의 남은 페이지 수다. */
+.boss-face-hpbar-page-marker.is-open {
+  background:
+    repeating-linear-gradient(180deg, rgba(255, 236, 190, 0.85) 0 2px, rgba(255, 236, 190, 0) 2px 4px)
+      no-repeat top / 100% 26%,
+    repeating-linear-gradient(180deg, rgba(255, 236, 190, 0.85) 0 2px, rgba(255, 236, 190, 0) 2px 4px)
+      no-repeat bottom / 100% 26%;
+  filter: none;
+  opacity: 0.72;
 }
 .boss-face-hpbar-text {
   position: relative;
@@ -1696,35 +1750,21 @@ export const GAME_BOARD_RAIL_STYLES = `
 /* 리미트 페이지 경고 — 피해가 하한에 막힌 beat에서 데미지 수치 자리에 대신 뜬다.
    수치처럼 튀어 오르지 않는다: 막힌 것은 사건이 아니라 상태라, 은은하게 떠올랐다 사라진다.
    z는 피해 수치(260) 바로 아래 — 같은 자리에 뜨지만 수치를 가리지는 않는다. */
-.boss-page-gate-warning {
-  position: fixed;
+.damage-float.damage-float--gate {
+  /* 피해 수치가 뜰 자리에 대신 뜨므로 양식은 그대로 두고 색·크기만 바꾼다.
+     문장이라 수치 크기 그대로면 화면을 덮는다. */
   z-index: 258;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
   white-space: nowrap;
-  font-size: clamp(14px, 2.1vh, 20px);
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  /* 보스 일러스트가 밝은 밀랍이라 글자만으로는 묻힌다 — 뒤를 눌러 자리를 만든다. */
-  padding: 0.42em 1.1em;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 196, 128, 0.28);
-  background: radial-gradient(ellipse at 50% 50%, rgba(18, 10, 6, 0.86), rgba(12, 7, 4, 0.66) 72%, rgba(10, 6, 3, 0) 100%);
-  color: rgba(255, 226, 178, 0.95);
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.95), 0 0 14px rgba(255, 168, 92, 0.45);
-  animation: boss-page-gate-warning 1.2s ease-in-out both;
+  font-size: clamp(17px, 2.1vw, 28px);
+  color: #ffd79a;
+  -webkit-text-stroke: 1px rgba(58, 30, 8, 0.86);
+  text-shadow:
+    0 2px 2px rgba(0, 0, 0, 0.96),
+    0 0 10px rgba(255, 176, 92, 0.9),
+    0 0 26px rgba(196, 104, 26, 0.7);
 }
-.boss-page-gate-warning.is-emphatic {
-  font-size: clamp(18px, 3vh, 30px);
-  color: rgba(255, 208, 150, 0.98);
-  text-shadow: 0 3px 10px rgba(0, 0, 0, 0.95), 0 0 22px rgba(255, 150, 70, 0.55);
-  animation-duration: 1.9s;
-}
-@keyframes boss-page-gate-warning {
-  0%   { opacity: 0; transform: translate(-50%, -42%) scale(0.96); }
-  22%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  68%  { opacity: 1; transform: translate(-50%, -54%) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -62%) scale(0.99); }
+.damage-float.damage-float--gate.is-emphatic {
+  font-size: clamp(22px, 2.9vw, 40px);
 }
 
 /* 보스 직접 타격의 착지 — 화면이 짧게 눌린다. 흔들림은 무게를 대신 말하는 유일한 단서라

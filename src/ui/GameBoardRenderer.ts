@@ -194,6 +194,21 @@ export class GameBoardRenderer {
   getBossGimmickGrid(): BossGimmickGridView | null { return this.bossGimmickGrid }
   getHandTargetingMode(): HandTargetingMode | null { return this.handTargetingMode }
 
+  /** 보스 HP바 페이지 경계선(임계값 + 이미 뚫렸는지). 규칙의 출처는 BossEventController다. */
+  private bossPageMarkers: ReadonlyArray<{ threshold: number; open: boolean }> = []
+  /**
+   * 보스가 몇 페이지인가 + 어떤 빛을 띠는가. 페이지가 오를수록 카드에 열기가 돌아
+   * 수치를 읽지 않아도 "강해졌다"가 보인다. 이벤트로 불려 나온 악마만 보랏빛이다.
+   */
+  private bossPagePhase: { page: number; tone: 'ember' | 'violet' } | null = null
+  setBossPageState(
+    markers: ReadonlyArray<{ threshold: number; open: boolean }>,
+    phase: { page: number; tone: 'ember' | 'violet' } | null
+  ): void {
+    this.bossPageMarkers = markers
+    this.bossPagePhase = phase
+  }
+
   /** 보스 칸 기믹 격자 뷰. BossEventController가 굴린 격자를 그대로 밀어 넣는다. */
   private bossGimmickGrid: BossGimmickGridView | null = null
   /** 격자가 막 켜졌음을 표시하는 1회성 플래그 — 등장 연출을 첫 렌더에만 태운다. */
@@ -1132,11 +1147,17 @@ export class GameBoardRenderer {
     // 칸 타겟팅 중에는 보스 face 전체가 '고를 칸만 남기는' 모드로 바뀐다.
     // 일러스트·이름·HP바·뱃지를 뒤로 밀고 성한 칸만 앞으로 끌어올린다.
     const cellTargeting = this.handTargetingMode !== null && isValidHandTarget && this.bossGimmickGrid !== null
+    // 페이지가 오를수록 카드에 열기가 오른다. 세기는 data-page(2·3)로, 색은 tone으로 갈린다.
+    const phase = this.bossPagePhase
+    const phaseAttrs = phase && phase.page >= 2
+      ? ` data-page="${Math.min(3, phase.page)}" data-page-tone="${phase.tone}"`
+      : ''
     return `
-      <article class="boss-face ${cellTargeting ? 'is-cell-targeting' : ''}" style="--boss-art: url('${sprite}');">
+      <article class="boss-face ${cellTargeting ? 'is-cell-targeting' : ''}"${phaseAttrs} style="--boss-art: url('${sprite}');">
         ${frozenBadge}
         <div class="boss-face-art" aria-hidden="true"></div>
         <div class="boss-face-overlay" aria-hidden="true"></div>
+        ${phaseAttrs ? '<div class="boss-face-phase-heat" aria-hidden="true"></div>' : ''}
         <div class="boss-face-badge" aria-label="다음 공격 카운트" data-boss-attack-countdown>${this.bossFx.getBossAttackCountdownText()}</div>
         <div class="boss-face-title-row">
           <span class="boss-face-tag">BOSS</span>
@@ -1161,19 +1182,18 @@ export class GameBoardRenderer {
     `
   }
 
-  /** 보스 HP바 페이지 경계선. 100F 마녀: 180/90, 악마: 65% 임계. */
-  private renderBossHpPhaseMarkers(card: Card, maxHp: number): string {
-    let thresholds: number[] = []
-    if (card.specialEnemyKind === 'waxWitch' && maxHp === 270) {
-      thresholds = [180, 90]
-    } else if (card.specialEnemyKind === 'waxDemon') {
-      thresholds = [Math.ceil(maxHp * 0.65)]
-    }
-    if (thresholds.length === 0) return ''
-    return thresholds
-      .map((threshold) => {
+  /**
+   * 보스 HP바 페이지 경계선. 어디에 몇 개 긋는지는 보스 컨트롤러가 정한다
+   * (`bossPageMarkers`) — 페이지 규칙의 단일 출처가 둘로 갈리지 않게 한다.
+   * 이미 뚫린 경계는 `is-open`으로 점선이 되어 "여기는 지났다"가 막대에 남는다.
+   */
+  private renderBossHpPhaseMarkers(_card: Card, maxHp: number): string {
+    return this.bossPageMarkers
+      .filter(({ threshold }) => threshold > 0 && threshold < maxHp)
+      .map(({ threshold, open }) => {
         const left = Math.max(0, Math.min(100, (threshold / maxHp) * 100))
-        return `<span class="boss-face-hpbar-page-marker" style="left:${left}%" aria-hidden="true"></span>`
+        return `<span class="boss-face-hpbar-page-marker ${open ? 'is-open' : ''}"
+                      style="left:${left}%" aria-hidden="true"></span>`
       })
       .join('')
   }
@@ -2492,9 +2512,24 @@ export class GameBoardRenderer {
 
   /** Create the red ember-glow numeric hit text at viewport coordinates. */
   private animateDamageNumberAt(x: number, y: number, amount: number): Promise<void> {
+    return this.animateFloatTextAt(x, y, `-${amount}`)
+  }
+
+  /**
+   * 피해 수치 부유 텍스트의 공용 구현. 수치가 아닌 문구(리미트 페이지 경고 등)도
+   * **같은 양식**으로 같은 자리에 떠야 "여기 원래 수치가 뜨는 자리"임이 읽히므로,
+   * 색·크기만 클래스로 갈고 움직임은 하나로 둔다.
+   */
+  animateFloatTextAt(
+    x: number,
+    y: number,
+    text: string,
+    opts: { className?: string; durationMs?: number } = {}
+  ): Promise<void> {
+    const duration = opts.durationMs ?? 980
     const el = document.createElement('div')
-    el.className = 'damage-float'
-    el.textContent = `-${amount}`
+    el.className = `damage-float ${opts.className ?? ''}`.trim()
+    el.textContent = text
     el.style.left = `${x}px`
     el.style.top = `${y}px`
     document.body.appendChild(el)
@@ -2515,7 +2550,7 @@ export class GameBoardRenderer {
         },
         { transform: 'translate(-50%, -160%) scale(1)', opacity: 0, filter: 'brightness(1)' },
       ],
-      { duration: 980, easing: 'cubic-bezier(0.16, 0.86, 0.28, 1)', fill: 'forwards' }
+      { duration, easing: 'cubic-bezier(0.16, 0.86, 0.28, 1)', fill: 'forwards' }
     )
     return new Promise((resolve) => {
       anim.onfinish = () => {
@@ -2525,7 +2560,7 @@ export class GameBoardRenderer {
       window.setTimeout(() => {
         el.remove()
         resolve()
-      }, 1120)
+      }, duration + 140)
     })
   }
 

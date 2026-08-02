@@ -9,7 +9,7 @@
 import { GameState } from '@core/GameState'
 import { TurnManager } from '@core/TurnManager'
 import type { GameBoardRenderer } from '@ui/GameBoardRenderer'
-import { Card, CardType } from '@entities/Card'
+import { Card, CardType, type SpecialEnemyKind } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { DropSystem } from '@systems/DropSystem'
 import type { RunCardPool } from '@core/RunCardPool'
@@ -33,6 +33,29 @@ type BossPage = 1 | 2 | 3
 
 /** 보스 행동 사이의 한 박자(ms). 살포·징수·타격이 각각 별개의 사건으로 읽히게 하는 간격. */
 const BOSS_TURN_BEAT_MS = 300
+
+/** 리미트 페이지가 피해를 막고 있을 때 피해 수치 자리에 대신 뜨는 문구. */
+const PAGE_GATE_WARNING_TEXT = '칸을 파괴해야합니다.'
+
+/**
+ * 격자 보스의 2페이지 전환 대사. 보스마다 한 묶음이며, 없는 보스는 대사 없이 넘어간다.
+ * 새싹 고양이는 2페이지 능력이 아직 비어 있어 전환 자체만 성립시킨다.
+ */
+const CELL_PAGE_TWO_LINES: Partial<Record<
+  SpecialEnemyKind,
+  ReadonlyArray<{ speaker: 'boss' | 'player'; text: string; holdMs: number }>
+>> = {
+  waxArmy: [
+    { speaker: 'boss',   text: '흠. . .',                        holdMs: 1800 },
+    { speaker: 'boss',   text: '자네는, 평범한 양초가 아닌가?',   holdMs: 2800 },
+    { speaker: 'player', text: '탐욕에 물든 주제에…',             holdMs: 2400 },
+  ],
+  waxCat: [
+    { speaker: 'boss',   text: '야옹. . .',                      holdMs: 1800 },
+    { speaker: 'boss',   text: '제법 아프잖아, 너.',              holdMs: 2600 },
+    { speaker: 'player', text: '아직 안 끝났어.',                 holdMs: 2200 },
+  ],
+}
 /** 30F 탐욕의 값이 참조하는 손패 defId. */
 const GREED_COIN_ID = 'greed-coin'
 /** 탐욕의 동전 1장이 요구하는 피해. */
@@ -105,13 +128,13 @@ export interface BossEventState {
   demonCandleCounter: number
   /** waxDemon 2페이지 전환 HP 임계값 (maxHp * 0.65 반올림). */
   nextDemonPageAt: number
-  /** waxArmy 현재 페이지 (1 → 2 전환은 절반 HP 리미트에서 부위를 하나 깰 때). */
-  armyPage: 1 | 2
+  /** 격자 보스(waxArmy·waxCat) 현재 페이지. 1 → 2 전환은 절반 HP에서 부위를 깰 때. */
+  cellPage: 1 | 2
   /**
-   * waxArmy 리미트 페이지에 처음 닿은 순간의 파괴 칸 수. 이 값을 넘겨야 페이지가 열린다.
+   * 리미트 페이지에 처음 닿은 순간의 파괴 칸 수. 이 값을 넘겨야 페이지가 열린다.
    * null이면 아직 리미트에 닿지 않았다는 뜻이다.
    */
-  armyLimitBrokenMark: number | null
+  cellLimitBrokenMark: number | null
 }
 
 export interface BossRewardState {
@@ -187,6 +210,7 @@ export class BossEventController {
     this.gimmicks.reset()
     this.gs.bossGimmicks = null
     this.br.setBossGimmickGrid(null)
+    this.br.setBossPageState([], null)
   }
 
   /** 인트로가 끝난 뒤 격자를 실제로 켠다 — 손패 피해 판정(GameState)과 화면 노출을 함께 연다. */
@@ -205,6 +229,12 @@ export class BossEventController {
         ? { cols: this.gimmicks.cols, rows: this.gimmicks.rows, cells: this.gimmicks.getCells() }
         : null
     )
+    this.syncPageState()
+  }
+
+  /** HP바 경계선·페이지 열기를 렌더러에 밀어 넣는다. 페이지 규칙의 출처는 이 컨트롤러다. */
+  syncPageState(): void {
+    this.br.setBossPageState(this.bossPageMarkers(), this.bossPagePhase())
   }
 
   /**
@@ -245,8 +275,9 @@ export class BossEventController {
       // 타자기(13자×70ms≈910ms) + 읽기(1800ms) + 퇴장(400ms)
       playerBubbleMs: 2800,
       trait: [
-        '호화로운 탐욕을 선물한다 — 공격 주기마다 손패에 카드 2~4장을 흩뿌린다.',
-        '그중 일부는 쓰면 자신을 다치게 하는 「탐욕의 동전」이다.',
+        '첫 번째 : 공격 주기마다 손패에 카드 2~4장을 흩뿌림. 일부는 「탐욕의 동전」.',
+        '두 번째 : 공격 주기마다 손에 쥔 「탐욕의 동전」 1장당 1피해.',
+        '체력 절반에서 칸을 파괴해야 다음 페이지로 넘어감.',
       ].join('\n'),
       kicker: '탐욕의 대가',
     }
@@ -269,8 +300,8 @@ export class BossEventController {
       introBubbleMs: 4000,
       playerBubbleMs: 2600,
       trait: [
-        '2턴마다 발톱을 휘둘러 손패 한 장을 빼앗는다.',
-        '빼앗은 게 촛농·양초·불씨라면 고양이가 직접 써 버린다.',
+        '첫 번째 : 공격 주기마다 손패 한 장을 빼앗음. 촛농·양초·불씨면 직접 사용.',
+        '체력 절반에서 칸을 파괴해야 다음 페이지로 넘어감.',
       ].join('\n'),
       kicker: '장난기 어린 발톱',
     }
@@ -324,7 +355,8 @@ export class BossEventController {
       introBubbleMs: 3010,
       // 타자기(16자×70ms≈1120ms) + 읽기(2000ms)
       playerBubbleMs: 3050,
-      trait: '3턴마다 밀랍을 조각해 양초를 소환하고 몸을 숨깁니다.',
+      // 다른 보스 특징과 어미를 맞춘다(존댓말 하나만 튀어 있었다).
+      trait: '3턴마다 밀랍을 조각해 양초를 소환하고 몸을 숨김.',
       kicker: '광기의 예술가',
     }
     await this.runBossEvent(def)
@@ -499,7 +531,7 @@ export class BossEventController {
     await this.consumeHandGiftThresholds(card.id)
     if (await this.resolveWaxWitchAfterDamage(beforeBossHp)) return
     if (await this.resolveDemonAfterDamage(beforeBossHp)) return
-    if (await this.resolveWaxArmyLimitPage()) return
+    if (await this.resolveCellLimitPage()) return
     this.inject.render()
 
     if (card.getHealth() <= 0) {
@@ -599,7 +631,7 @@ export class BossEventController {
     }
     if (await this.resolveWaxWitchAfterDamage(null)) return
     if (await this.resolveDemonAfterDamage(null)) return
-    if (await this.resolveWaxArmyLimitPage()) return
+    if (await this.resolveCellLimitPage()) return
     if (this.eventState.card.getHealth() <= 0) {
       await this.handleDefeated()
       return
@@ -876,10 +908,12 @@ export class BossEventController {
       nextDemonPageAt: def.specialEnemyKind === 'waxDemon'
         ? Math.ceil(def.maxHp * 0.65)  // HP 65% 이하에서 2페이지 전환
         : 0,
-      armyPage: 1,
-      armyLimitBrokenMark: null,
+      cellPage: 1,
+      cellLimitBrokenMark: null,
     }
     this.syncBossShieldToCard()
+    // HP바 경계선은 격자보다 먼저 보인다(격자는 인트로 뒤에 켜진다).
+    this.syncPageState()
     // 칸 기믹 격자는 보스마다 새로 굴린다 — 약점 자리가 매 조우 달라진다.
     // 화면 노출과 판정 활성화는 인트로·타이틀이 끝난 뒤(activateGimmickGrid)로 미룬다.
     // 칸 내구도/부위 파괴 보너스는 보스 최대 체력에서 파생한다(칸 절반이면 쓰러지는 기준).
@@ -1089,7 +1123,7 @@ export class BossEventController {
     if (!state) return false
     await this.scatterGreedCards(bossCardId)
     await this.pauseBeat()
-    if (state.armyPage >= 2) {
+    if (state.cellPage >= 2) {
       if (await this.collectGreedCoinToll()) return true
       await this.pauseBeat()
     }
@@ -1149,10 +1183,48 @@ export class BossEventController {
     if (state.def.specialEnemyKind === 'waxDemon' && state.demonPage === 1) {
       return { floor: state.nextDemonPageAt, requirement: 'none' }
     }
-    // 30F: 절반에서 한 번 멈추고, 부위를 깨야만 뚫린다 — 약점만 긁어 HP를 미는 진행을 끊는다.
-    if (state.def.specialEnemyKind === 'waxArmy' && state.armyPage === 1 && this.gimmicks.isActive) {
+    // 격자 보스(30F 백작 · 새싹 고양이): 절반에서 한 번 멈추고 부위를 깨야만 뚫린다 —
+    // 약점만 긁어 HP를 미는 진행을 끊는다. 격자가 켜진 보스면 종류를 가리지 않고 붙는다.
+    if (this.gimmicks.isActive && state.cellPage === 1) {
       return { floor: Math.ceil(state.def.maxHp / 2), requirement: 'cell-break' }
     }
+    return null
+  }
+
+  /**
+   * HP바에 그릴 페이지 경계선. 게이트와 같은 값에서 파생하되 **이미 지난 경계도** 남긴다 —
+   * 뚫린 경계는 열린 표시로 바뀌어 "여기는 부쉈다"가 막대 위에 남는다.
+   */
+  bossPageMarkers(): Array<{ threshold: number; open: boolean }> {
+    const state = this.eventState
+    if (!state) return []
+    const kind = state.def.specialEnemyKind
+    if (kind === 'waxWitch') {
+      return [
+        { threshold: 180, open: state.witchPage > 1 },
+        { threshold: 90, open: state.witchPage > 2 },
+      ]
+    }
+    if (kind === 'waxDemon') {
+      return [{ threshold: state.nextDemonPageAt, open: state.demonPage > 1 }]
+    }
+    if (this.gimmicks.isActive) {
+      return [{ threshold: Math.ceil(state.def.maxHp / 2), open: state.cellPage > 1 }]
+    }
+    return []
+  }
+
+  /**
+   * 보스가 지금 몇 페이지인가 + 어떤 빛을 띠는가. 페이지가 오를수록 카드에 열기가 돈다.
+   * 이벤트로 불려 나온 악마만 보랏빛이다 — 다른 보스와 출신이 다르다는 표시다.
+   */
+  bossPagePhase(): { page: number; tone: 'ember' | 'violet' } | null {
+    const state = this.eventState
+    if (!state) return null
+    const kind = state.def.specialEnemyKind
+    if (kind === 'waxWitch') return { page: state.witchPage, tone: 'ember' }
+    if (kind === 'waxDemon') return { page: state.demonPage, tone: 'violet' }
+    if (this.gimmicks.isActive) return { page: state.cellPage, tone: 'ember' }
     return null
   }
 
@@ -1170,7 +1242,7 @@ export class BossEventController {
     const gate = this.bossPageGate()
     if (!state || !gate || gate.requirement !== 'cell-break') return null
     if (state.card.getHealth() > gate.floor) return null
-    return { cardId: state.card.id, text: '부위를 부숴야 한다' }
+    return { cardId: state.card.id, text: PAGE_GATE_WARNING_TEXT }
   }
 
   /** 손패/조합 등 외부 피해가 페이지 경계를 넘어 보스 HP를 깎았을 때, UI diff가 읽기 전에 하한으로 되돌린다. */
@@ -1243,6 +1315,7 @@ export class BossEventController {
         if (state.card.health < 180) state.card.health = 180
         state.witchPage = 2
         state.turn = 0
+        this.syncPageState()
         this.br.setBossAttackCountdown(state.def.attackInterval)
         this.inject.render()
         await this.playIntroLine('boss',   '그래, 정말 이 세계는 이제 다 끝났네.', 3100)
@@ -1258,6 +1331,7 @@ export class BossEventController {
       if (state.card.health < 90) state.card.health = 90
       state.witchPage = 3
       state.turn = 0
+      this.syncPageState()
       this.br.setBossAttackCountdown(state.def.attackInterval)
       this.inject.render()
       await this.playIntroLine('boss',   '이제 너도 그만 사라져.', 2500)
@@ -1272,37 +1346,39 @@ export class BossEventController {
   }
 
   /**
-   * 30F 리미트 페이지. 절반 HP에 닿으면 HP가 더 내려가지 않고, 그 뒤 부위를 하나
-   * 깨야 열린다 — 약점만 골라 긁어 HP만 미는 진행을 한 번 끊어 세우는 관문이다.
+   * 격자 보스의 리미트 페이지. 절반 HP에 닿으면 HP가 더 내려가지 않고, 그 뒤 부위를
+   * 하나 깨야 열린다 — 약점만 골라 긁어 HP만 미는 진행을 한 번 끊어 세우는 관문이다.
    * 열리기 전까지는 매 타격이 피해 대신 경고 문구를 띄운다(pageGateWarning).
    */
-  private async resolveWaxArmyLimitPage(): Promise<boolean> {
+  private async resolveCellLimitPage(): Promise<boolean> {
     const state = this.eventState
-    if (!state || state.def.specialEnemyKind !== 'waxArmy' || state.armyPage !== 1) return false
+    if (!state || !this.gimmicks.isActive || state.cellPage !== 1) return false
     const gate = this.bossPageGate()
     if (!gate || state.card.getHealth() > gate.floor) return false
 
     // 깰 부위가 하나도 안 남았다면 요구 조건 자체가 성립하지 않는다 — 잠그지 않고 연다.
     const noCellsLeft = this.gimmicks.brokenCount >= this.gimmicks.cellCount
     // 리미트 도달 beat: 이 순간의 파괴 칸 수를 기준선으로 잡고 요구 조건을 알린다.
-    if (state.armyLimitBrokenMark === null && !noCellsLeft) {
-      state.armyLimitBrokenMark = this.gimmicks.brokenCount
+    if (state.cellLimitBrokenMark === null && !noCellsLeft) {
+      state.cellLimitBrokenMark = this.gimmicks.brokenCount
       if (state.card.health < gate.floor) state.card.health = gate.floor
-      this.inject.recordNotice('양초 백작이 밀랍으로 굳었다 — 부위를 부숴야 더 들어간다', 'info')
+      this.inject.recordNotice(`${state.card.name}이(가) 밀랍으로 굳었다 — 칸을 파괴해야 더 들어간다`, 'info')
       this.inject.render()
-      await this.br.playBossPageGateWarning(state.card.id, '부위를 부숴야 한다', true)
+      await this.br.playBossPageGateWarning(state.card.id, PAGE_GATE_WARNING_TEXT, true)
       return false
     }
     // 기준선을 넘겼다 = 리미트에서 부위를 하나 더 깼다 → 페이지가 열린다.
-    if (!noCellsLeft && this.gimmicks.brokenCount <= (state.armyLimitBrokenMark ?? 0)) return false
+    if (!noCellsLeft && this.gimmicks.brokenCount <= (state.cellLimitBrokenMark ?? 0)) return false
 
-    state.armyPage = 2
+    state.cellPage = 2
     state.turn = 0
+    this.syncPageState()
     this.br.setBossAttackCountdown(state.def.attackInterval)
     this.inject.render()
-    await this.playIntroLine('boss', '내 저택을. . . 내 몸을 부수다니.', 2400)
-    await this.playIntroLine('boss', '그렇다면 네 손의 탐욕부터 값을 치러라.', 2800)
-    this.inject.onBossPhase?.(state.def.name, 'army-page-2')
+    for (const line of CELL_PAGE_TWO_LINES[state.def.specialEnemyKind] ?? []) {
+      await this.playIntroLine(line.speaker, line.text, line.holdMs)
+    }
+    this.inject.onBossPhase?.(state.def.name, 'cell-page-2')
     this.inject.setInputLocked(false)
     return true
   }
@@ -1719,6 +1795,7 @@ export class BossEventController {
     if (state.card.health < state.nextDemonPageAt) state.card.health = state.nextDemonPageAt
     state.demonPage = 2
     state.turn = 0
+    this.syncPageState()
     this.br.setBossAttackCountdown(state.def.attackInterval)
     this.inject.render()
 

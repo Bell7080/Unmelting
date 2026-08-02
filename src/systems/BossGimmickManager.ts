@@ -130,6 +130,16 @@ export const BOSS_GIMMICK_PROFILES: Partial<Record<SpecialEnemyKind, BossGimmick
       { kind: 'hardened', count: 2 },
     ],
   },
+  // 새싹 병아리 30F 미니보스. 부위 파괴를 처음 배우는 자리라 경화를 한 칸만 두고
+  // 약점을 하나 더 준다 — 같은 구조를 더 관대한 배율로 먼저 겪게 한다.
+  waxCat: {
+    cols: 3,
+    rows: 3,
+    slots: [
+      { kind: 'weak', count: 3 },
+      { kind: 'hardened', count: 1 },
+    ],
+  },
 }
 
 /** 칸 단위 조준이 없는 호출부(학습 시뮬 등)가 격자의 기대값만 빌려 쓰기 위한 요약. */

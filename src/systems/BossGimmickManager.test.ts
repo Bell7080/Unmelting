@@ -11,6 +11,7 @@ import {
   type BossGimmickCell,
   type BossGimmickResolvedContext,
 } from './BossGimmickManager'
+import type { SpecialEnemyKind } from '@entities/Card'
 
 /** 셔플을 고정해 배치를 재현 가능하게 만든다(항상 0 → Fisher-Yates가 순서를 뒤집지 않음). */
 function fixedRng(): () => number {
@@ -89,6 +90,24 @@ describe('BossGimmickManager', () => {
     m.reset()
     expect(m.isActive).toBe(false)
     expect(m.strike({ cellIndex: 0, baseDamage: 7 })).toBeNull()
+  })
+
+  it('격자가 켜진 보스는 전부 학습 시뮬용 기대값을 낸다', () => {
+    // 프로필만 늘리고 시뮬 요약을 빠뜨리면 학습이 실게임과 다른 보스를 배운다.
+    for (const kind of Object.keys(BOSS_GIMMICK_PROFILES) as SpecialEnemyKind[]) {
+      const expectation = bossGimmickExpectation(kind)
+      expect(expectation, `${kind} 기대값`).not.toBeNull()
+      expect(expectation?.cells).toBeGreaterThan(0)
+      expect(expectation?.averageMultiplier).toBeGreaterThan(0)
+    }
+  })
+
+  it('새싹 고양이 격자도 최대 체력에서 내구도를 파생한다', () => {
+    const m = new BossGimmickManager(fixedRng())
+    expect(m.beginEncounter('waxCat', 30)).toBe(true)
+    expect(m.cellCount).toBe(9)
+    expect(m.cellDurability).toBe(bossGimmickCellDurability(30, 9))
+    expect(m.breakDamage).toBe(bossGimmickBreakDamage(30))
   })
 
   it('조우마다 배치를 다시 굴린다', () => {
