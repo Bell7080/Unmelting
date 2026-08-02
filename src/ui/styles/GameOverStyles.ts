@@ -202,7 +202,7 @@ export const GAME_OVER_GLOBAL_STYLES = `
     font-size: 13px;
   }
   /* 컴팩트 육각형 — 경험 모달보다 작게(정산 카드 폭에 맞춤). */
-  .settlement-constellation { width: min(196px, 54vw); margin-top: 2px; }
+  .settlement-constellation.experience-constellation { width: min(196px, 54vw); margin-top: 2px; }
   /* 통산 기록 — 정산 오버레이 우측 하단에 낮은 존재감으로 상주(카드 흐름과 분리). */
   .settlement-lifetime {
     position: absolute;
@@ -229,20 +229,51 @@ export const GAME_OVER_GLOBAL_STYLES = `
     text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
   }
   /* 모바일 세로 — 절대 배치 통산 기록이 카드 본문과 겹치므로 카드 아래로 흘려보내고,
-     vh 기반 헤드라인/버튼이 좁은 폭을 넘지 않게 vw 기준으로 줄인다. */
+     vh 기반 헤드라인/버튼이 좁은 폭을 넘지 않게 vw 기준으로 줄인다.
+     그 위에 **전체를 한 단계 축소**한다: 판정 화면은 한 화면에 다 들어와야 하고,
+     스크롤이 생기는 순간 마지막 요소(저택으로 버튼)가 잘린 것처럼 읽힌다. */
   @media (max-width: 700px) {
     /* column + justify-center는 내용이 넘칠 때 위쪽이 스크롤 불가로 잘린다 — flex-start로 두고
        카드 margin:auto가 짧은 내용일 때만 중앙 정렬을 되살린다. */
-    .game-over-overlay.is-clear { flex-direction: column; justify-content: flex-start; }
+    .game-over-overlay.is-clear {
+      flex-direction: column;
+      justify-content: flex-start;
+      /* 모바일 브라우저 하단 바가 fixed 오버레이 아래를 먹는다 — 마지막 요소가 그 밑으로
+         들어가지 않게 아래 여백을 안전 영역만큼 더 남긴다. */
+      padding: clamp(12px, 2.4vh, 26px) 12px calc(clamp(16px, 3vh, 30px) + env(safe-area-inset-bottom, 0px));
+    }
     .settlement-lifetime {
       position: static;
       align-items: center;
       text-align: center;
-      margin: 16px auto 4px;
+      margin: 12px auto 0;
     }
-    .game-over-overlay.is-clear .verdict-word { font-size: clamp(40px, 15vw, 64px); }
-    .game-over-overlay.is-clear .primary-btn { font-size: 24px; }
-    .settlement-constellation { width: min(164px, 46vw); }
+    .game-over-overlay.is-clear .game-over-card {
+      max-width: min(560px, 96vw);
+      gap: clamp(10px, 1.8vh, 20px);
+    }
+    .game-over-overlay.is-clear .verdict-word { font-size: clamp(34px, 12.5vw, 56px); }
+    .game-over-overlay.is-clear .verdict-sub { font-size: clamp(12px, 3.2vw, 15px); }
+    .game-over-overlay.is-clear .death-tip { font-size: 12px; line-height: 1.45; margin-bottom: 0; }
+    .game-over-overlay.is-clear .settlement-body { gap: clamp(14px, 4vw, 26px); }
+    .game-over-overlay.is-clear .settlement-stats p { margin-bottom: clamp(4px, 0.8vh, 8px); }
+    .settlement-card .settlement-stats p { font-size: 13px; }
+    .settlement-card .settlement-ena { font-size: 12px; }
+    .settlement-growth-note { font-size: 12px; margin-top: 6px; }
+    .game-over-overlay.is-clear .primary-btn {
+      font-size: 22px;
+      letter-spacing: 0.16em;
+      margin-top: clamp(8px, 2.2vh, 20px);
+    }
+    .settlement-constellation.experience-constellation { width: min(176px, 48vw); }
+  }
+  /* 낮은 화면(가로 모드·작은 폰)에서 한 번 더 줄인다 — 여기서도 넘치면 결국 버튼이 잘린다. */
+  @media (max-width: 700px) and (max-height: 640px) {
+    .game-over-overlay.is-clear .verdict-word { font-size: clamp(30px, 9.5vw, 44px); }
+    .game-over-overlay.is-clear .game-over-card { gap: 10px; }
+    .game-over-overlay.is-clear .primary-btn { font-size: 20px; margin-top: 10px; }
+    .settlement-constellation.experience-constellation { width: min(124px, 36vw); }
+    .settlement-lifetime { margin-top: 8px; }
   }
   /* 육각형 아래 '이번 런 상승분' 한 줄 요약 — 오른 축 이름과 +%p를 그대로 읽어 준다. */
   .settlement-growth-note {

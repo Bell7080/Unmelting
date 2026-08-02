@@ -43,7 +43,7 @@ import { CardSpawner } from '@systems/CardSpawner'
 import { ActionSystem, ActionType } from '@systems/ActionSystem'
 import { DropSystem } from '@systems/DropSystem'
 import { HandSystem, ChainState, type HandTarget } from '@systems/HandSystem'
-import { EmberSystem } from '@systems/EmberSystem'
+import { EmberSystem, SPROUT_SPAWN_ADJUST } from '@systems/EmberSystem'
 import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { type EventId } from '@data/Events'
@@ -1649,6 +1649,9 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // 선택한 난이도가 온보딩 여부를 결정한다: 새싹 병아리 = 온보딩(30F 아크 + 필드 3종 + 양초 고양이),
   // 쉬움/보통 = 정규 스폰. 기본 부팅(difficulty=null=쉬움 테스트 필드)도 온보딩을 끈다.
   onboardingRunActive = difficulty === 'sprout'
+  // 새싹 병아리는 판 자체도 한 단계 순하게 굴린다(적·함정 -7 / 보물·꽃 +5).
+  // 직업 보정과 별도 축이라 직업 선택이 이 값을 덮어쓰지 않는다.
+  cardSpawner.setDifficultySpawnAdjust(onboardingRunActive ? { ...SPROUT_SPAWN_ADJUST } : null)
   // 기본 부팅/게임오버 재시작(difficulty=null)은 '테스트 플레이'다 — /시작 로비를 거치지 않으므로
   // 메타 게이팅을 전부 우회해 직업·화폐·리롤을 모두 개방한다(개발용 플레이그라운드).
   // 로비(무역)를 거친 런(difficulty!=null)만 실제 개방 상태(isMetaUnlocked)를 따른다.

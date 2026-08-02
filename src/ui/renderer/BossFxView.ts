@@ -20,6 +20,13 @@ import {
 const BOSS_CELL_BREAK_MS = 620
 /** 부위 파괴가 흩는 큰 조각(= 깨진 판 덩어리)의 변 길이. 일반 타격보다 확실히 크다. */
 const BOSS_CELL_BREAK_CHUNK_SIZE: [number, number] = [18, 38]
+/**
+ * 배율 피해 수치가 뜨고 파괴 연출로 넘어가기까지의 간격. 수치와 파괴가 겹치면
+ * "몇 대 맞아 깨졌는지"가 한 덩어리로 뭉개진다 — 수치를 먼저 읽히고 넘긴다.
+ */
+const BOSS_CELL_BREAK_HANDOFF_MS = 420
+/** '칸 파괴' 표기가 머무는 시간. 수치가 아니라 읽어야 하는 말이라 조금 길다. */
+const BOSS_CELL_BREAK_LABEL_MS = 900
 
 /** 배율 표기가 사그라드는 시간. CSS `.is-relabel-out` 트랜지션과 같은 값이어야 한다. */
 const BOSS_GIMMICK_RELABEL_OUT_MS = 220
@@ -314,10 +321,14 @@ export class BossFxView {
     const cells = visible
       .map((cell) => {
         const meta = BOSS_GIMMICK_KIND_META[cell.kind]
-        const label = meta.label
-          ? `<span class="boss-gimmick-cell-label">${escapeHtml(meta.label)}</span>
+        // 깨진 칸은 배율을 잃었으므로 표기도 잃는다 — 자리에는 회색 '파괴' 한 마디만 남는다.
+        // 잔해 텍스처를 겹쳐 두면 작은 화면에서 칸 밖으로 잘려 정체 모를 얼룩이 된다.
+        const label = cell.broken
+          ? '<span class="boss-gimmick-cell-broken">파괴</span>'
+          : meta.label
+            ? `<span class="boss-gimmick-cell-label">${escapeHtml(meta.label)}</span>
              <span class="boss-gimmick-cell-mult">×${meta.multiplier}</span>`
-          : ''
+            : ''
         // 균열은 손상도로만 결정되는 표시 레이어다. 깨진 칸은 금 대신 꺼진 판이 된다.
         const crack = bossGimmickCrackStage(cell.wear)
         const aria = cell.broken
@@ -442,17 +453,24 @@ export class BossFxView {
   ): Promise<void> {
     const cell = this.findBossGimmickCell(hit.cellIndex)
     if (!cell) return
-    // 1) 출처 → 칸 블라스트. 어느 칸에 꽂혔는지를 눈으로 먼저 잇는다.
+    // 1) 출처 → 칸으로 조준 볼트 한 발. 곧게 날아가 꽂히는 한 발이라야 "저 칸을 때렸다"가
+    //    읽힌다(자원 트레일의 포물선 파편은 '흘러들었다'로 보인다).
     if (source) {
-      await this.host.trails.animateResourceTrail(source, cell, 1, this.gimmickFx(hit.kind).theme)
+      await this.host.trails.animateStrikeBolt(source, cell, this.gimmickFx(hit.kind).theme)
     }
     // 2) 타격 반동 + 칸 자체의 짧은 버스트.
     this.playBossGimmickCellHit(hit.cellIndex, hit.kind)
-    // 3) 피해 수치도 보스 타일 중앙이 아니라 맞은 칸 위에서 뜬다.
-    const numbers: Promise<void>[] = []
-    if (hit.damage > 0) numbers.push(this.host.animateDamageNumberOnElement(cell, hit.damage))
-    if (hit.broke) numbers.push(this.playBossGimmickCellBreak(cell, hit.breakDamage))
-    await Promise.all(numbers)
+    // 3) 피해 수치 → (깨졌으면) 파괴 연출 순으로 **차례로** 낸다. 배율 피해가 먼저 뜨고,
+    //    그 뒤에 파괴가 일어나고, 부위 파괴 추가 피해가 마지막에 얹힌다.
+    const damageNumber = hit.damage > 0 ? this.host.animateDamageNumberOnElement(cell, hit.damage) : null
+    if (!hit.broke) {
+      await damageNumber
+      return
+    }
+    // 수치가 다 사그라들 때까지 기다리면 파괴가 한 박자 늦게 붙어 늘어진다 —
+    // 읽히는 만큼만 기다렸다가 넘긴다(수치는 위로 빠지며 파괴와 자연히 갈린다).
+    if (damageNumber) await new Promise((r) => window.setTimeout(r, BOSS_CELL_BREAK_HANDOFF_MS))
+    await this.playBossGimmickCellBreak(cell, hit.breakDamage)
   }
 
   /** 칸 성격의 톤이 정하는 연출 값 — 종류가 아니라 톤으로 갈라 새 칸에 자동 대응한다. */
@@ -512,9 +530,16 @@ export class BossFxView {
       SquareBurst.playOn(rect, 'boss-ember-spark', { count: 20, spread: 168, duration: 560 })
     }, 120)
     window.setTimeout(() => host.remove(), BOSS_CELL_BREAK_MS + 140)
-    // 부위 파괴 추가 피해는 배율 피해가 뜬 직후 한 박자 늦게 같은 자리에 얹는다.
+    // 파괴는 수치가 아니라 사건이다 — 무너지는 동안 피해 수치가 뜰 자리에 '칸 파괴'를
+    // 대신 띄워, 방금 일어난 일이 무엇인지 먼저 읽히게 한다(양식은 수치와 같다).
+    await this.host.animateFloatTextAt(
+      rect.left + rect.width / 2,
+      rect.top + rect.height * 0.34,
+      '칸 파괴',
+      { className: 'damage-float--cell-break', durationMs: BOSS_CELL_BREAK_LABEL_MS }
+    )
+    // 추가 피해는 파괴가 읽힌 **뒤에** 같은 자리에 얹는다.
     if (breakDamage <= 0) return
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 180))
     await this.host.animateDamageNumberOnElement(cell.isConnected ? cell : rect, breakDamage)
   }
 

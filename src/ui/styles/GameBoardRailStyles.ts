@@ -1740,7 +1740,9 @@ export const GAME_BOARD_RAIL_STYLES = `
   0%, 100% { box-shadow: inset 0 0 10px -4px rgba(255, 122, 44, 0.28); }
   50%      { box-shadow: inset 0 0 20px -3px rgba(255, 132, 48, 0.55); }
 }
-/* 꺼진 칸 — 다 타 버린 자리. 반투명 검은 판에 굳은 촛농 바닥만 남는다. */
+/* 꺼진 칸 — 다 타 버린 자리. 채도를 빼고 회색 '파괴' 한 마디만 남긴다.
+   잔해 텍스처(노이즈·재·숯 얼룩)는 걷어 냈다: 작은 화면에서는 배경 타일이 칸보다 커
+   한 귀퉁이만 찍혀 잘린 얼룩처럼 보였고, 그게 무엇인지도 읽히지 않았다. */
 .boss-gimmick-cell.is-broken {
   border-style: solid;
   border-color: rgba(60, 52, 46, 0.5);
@@ -1751,44 +1753,26 @@ export const GAME_BOARD_RAIL_STYLES = `
   /* 어둡게 덮지 않는다 — 채도를 빼는 것만으로 '꺼진 칸'이 읽히고 일러스트는 살아 있다. */
   filter: grayscale(0.72) brightness(0.82);
 }
-/* 탄 자리의 몸통 — 숯. feTurbulence 노이즈를 곱해 농도를 들쭉날쭉하게 만든다.
-   그라디언트만으로는 표면이 매끄러워 '칸이 어두워졌다'로만 보이고 탄 자국이 안 된다.
-   노이즈는 gradient로 흉내 낼 수 없는 유일한 부분이라 여기서만 SVG를 쓴다.
-   background-repeat를 레이어별로 명시할 것 — 부모의 no-repeat를 물려받으면
-   노이즈가 한 장만 찍히고 나머지는 매끈하게 남는다(실제로 그랬다). */
+/* 탄 자리의 몸통 — 가장자리부터 가라앉는 옅은 그늘 하나. 글자가 앉을 바닥만 만든다. */
 .boss-gimmick-cell.is-broken::before {
   box-shadow: none;
-  background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.016' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.85'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23c)'/%3E%3C/svg%3E"),
-    radial-gradient(132% 132% at 50% 44%, rgba(10, 8, 7, 0.1) 26%, rgba(4, 3, 3, 0.4) 100%);
-  background-size: 220px 220px, 100% 100%;
-  background-repeat: repeat, no-repeat;
-  background-position: 0 0, 0 0;
-  background-blend-mode: multiply, normal;
+  background: radial-gradient(132% 132% at 50% 44%, rgba(10, 8, 7, 0.18) 26%, rgba(4, 3, 3, 0.46) 100%);
 }
-.boss-gimmick-cell.is-broken .boss-gimmick-cell-crack {
-  opacity: 1;
-  /* 고운 재 알갱이 + 아직 식지 않은 숯 얼룩 + 바닥에 가라앉은 재.
-     알갱이는 soft-light로 아주 옅게 얹는다 — overlay로 진하게 깔면 중간 회색이
-     끌어올려져 칸이 오히려 밝아지고 'TV 노이즈'로 보인다(실제로 그랬다). */
-  background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Cfilter id='a'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='1' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='60' height='60' filter='url(%23a)' opacity='0.08'/%3E%3C/svg%3E"),
-    radial-gradient(34% 28% at 28% 66%, rgba(96, 40, 12, 0.12), transparent 76%),
-    radial-gradient(26% 22% at 74% 36%, rgba(78, 32, 12, 0.1), transparent 78%),
-    radial-gradient(130% 20px at 50% 100%, rgba(170, 158, 144, 0.12), transparent 84%);
-  background-size: 60px 60px, 100% 100%, 100% 100%, 100% 100%;
-  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
-  background-position: 0 0, 0 0, 0 0, 0 0;
-  background-blend-mode: soft-light, normal, normal, normal;
-}
+/* 균열 레이어는 깨진 칸에서 완전히 꺼진다(잔해는 파괴 순간의 오버레이가 이미 냈다). */
+.boss-gimmick-cell.is-broken .boss-gimmick-cell-crack { opacity: 0; background-image: none; }
 /* 깨진 칸에는 1회성 애니메이션을 걸지 않는다 — 격자는 매 렌더 새로 그려지므로
    여기에 붙이면 재렌더마다 소멸 연출이 다시 재생된다. 무너지는 순간은
    body 오버레이(.boss-cell-shatter)가 한 번만 낸다. */
-.boss-gimmick-cell.is-broken .boss-gimmick-cell-label,
-.boss-gimmick-cell.is-broken .boss-gimmick-cell-mult {
-  opacity: 0.42;
-  color: rgba(214, 208, 198, 0.92);
-  text-decoration: line-through;
+/* 남는 표식은 이것 하나 — 회색 '파괴'. 칸을 넘지 않도록 폭 기준으로 크기를 잡고,
+   글자가 잘리기 전에 스스로 줄어들게 한다(3×3 격자의 칸은 화면에서 꽤 작다). */
+.boss-gimmick-cell-broken {
+  position: relative;
+  font-size: clamp(12px, 2.4vh, 22px);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: rgba(198, 192, 184, 0.86);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95), 0 0 12px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
 }
 
 /* 리미트 페이지 경고 — 피해가 하한에 막힌 beat에서 데미지 수치 자리에 대신 뜬다.
@@ -1809,6 +1793,20 @@ export const GAME_BOARD_RAIL_STYLES = `
 }
 .damage-float.damage-float--gate.is-emphatic {
   font-size: clamp(22px, 2.9vw, 40px);
+}
+
+/* 부위 파괴 표기 — 피해 수치가 뜰 자리에 수치 대신 뜬다(파괴는 수치가 아니라 사건이다).
+   양식은 수치 그대로 두고 색만 재/숯 톤으로 바꿔, 그 자리가 원래 수치 자리임을 남긴다. */
+.damage-float.damage-float--cell-break {
+  white-space: nowrap;
+  font-size: clamp(18px, 2.4vw, 32px);
+  letter-spacing: 0.08em;
+  color: #efe6da;
+  -webkit-text-stroke: 1px rgba(26, 18, 12, 0.9);
+  text-shadow:
+    0 2px 3px rgba(0, 0, 0, 0.96),
+    0 0 12px rgba(255, 150, 70, 0.7),
+    0 0 30px rgba(120, 62, 20, 0.6);
 }
 
 /* 보스 직접 타격의 착지 — 화면이 짧게 눌린다. 흔들림은 무게를 대신 말하는 유일한 단서라

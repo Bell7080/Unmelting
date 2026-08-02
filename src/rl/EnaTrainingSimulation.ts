@@ -57,7 +57,7 @@ import {
 import type { SpecialEnemyKind } from '@entities/Card'
 import { EVENT_DEFINITIONS, EVENT_IDS, type EventId, type RiskOffer, type MinionExchangeConfig, type CountRpsConfig } from '@data/Events'
 import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
-import { EmberSystem, type EmberTier } from '@systems/EmberSystem'
+import { EmberSystem, SPROUT_SPAWN_ADJUST, type EmberTier } from '@systems/EmberSystem'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
 import { DropSystem } from '@systems/DropSystem'
 import { SHARD_GENERATORS } from '@systems/TagReactions'
@@ -2221,13 +2221,20 @@ export class EnaTrainingSimulation {
     }
     const tier = EmberSystem.getTier(this.ember)
     const b = EmberSystem.getSpawnBuckets(tier)
-    const flowerWeight = zone === 'front' ? 0 : b.flower * 0.5
+    // 새싹 병아리는 실게임 CardSpawner와 같은 난이도 보정을 받는다(적·함정 -7 / 보물·꽃 +5).
+    // 여기 빠지면 에나는 실제보다 사나운 판을 학습한다.
+    const adj = this.difficulty === 'sprout'
+      ? SPROUT_SPAWN_ADJUST
+      : { enemy: 0, trap: 0, treasure: 0, flower: 0 }
+    const enemyWeight = Math.max(0, b.enemy + adj.enemy)
+    const webTrapWeight = Math.max(0, b.webTrap + adj.trap)
+    const flowerWeight = zone === 'front' ? 0 : Math.max(0, b.flower + adj.flower) * 0.5
     // 시련 '가난'은 보물 가중치를 배율로 깎되, 실게임 CardSpawner처럼 최소 1을 보장한다.
-    const treasureWeight = Math.max(1, b.treasure * this.trialTreasureScale)
-    const total = b.enemy + b.webTrap + b.bombTrap + b.sporeTrap + treasureWeight + flowerWeight
+    const treasureWeight = Math.max(1, b.treasure * this.trialTreasureScale + adj.treasure)
+    const total = enemyWeight + webTrapWeight + b.bombTrap + b.sporeTrap + treasureWeight + flowerWeight
     let roll = this.rng.next() * total
-    if ((roll -= b.enemy) < 0) return this.spawnEnemy(tier)
-    if ((roll -= b.webTrap) < 0) return this.spawnTrap('web')
+    if ((roll -= enemyWeight) < 0) return this.spawnEnemy(tier)
+    if ((roll -= webTrapWeight) < 0) return this.spawnTrap('web')
     if ((roll -= b.bombTrap) < 0) return this.spawnTrap('bomb')
     if ((roll -= b.sporeTrap) < 0) return this.spawnTrap('spore')
     if ((roll -= treasureWeight) < 0) return { type: CardType.TREASURE, hp: 0, atk: 0, group: 1, treasureKind: 'normal', value: 1 + this.rng.int(3), growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }

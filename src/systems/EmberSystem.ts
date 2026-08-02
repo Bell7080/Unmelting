@@ -49,6 +49,16 @@ const SPAWN_BUCKETS: Record<EmberTier, SpawnBuckets> = {
   extinguished:{ enemy: 92, webTrap: 35, bombTrap: 7, sporeTrap: 7, treasure: 22, flower: 9 },
 }
 
+/**
+ * 새싹 병아리(온보딩) 난이도의 스폰 보정 — 처음 배우는 자리라 판을 한 단계 순하게 만든다.
+ * 적·함정은 덜 나오고 보물·꽃(씨앗)은 더 나온다. 값은 티어 버킷에 그대로 더해지며
+ * 총합으로 정규화되므로 비율이 자동으로 재분배된다.
+ *
+ * 런타임(CardSpawner)과 학습 시뮬(EnaTrainingSimulation)이 **이 상수를 함께 import** 한다 —
+ * 한쪽에만 적으면 에나가 실제와 다른 판을 학습한다.
+ */
+export const SPROUT_SPAWN_ADJUST = { enemy: -7, trap: -7, treasure: 5, flower: 5 } as const
+
 // 불씨 티어는 더 이상 적 HP를 올리지 않는다(불씨 회복 시 1체력 적이 죽는 문제 방지).
 // 공격력만 티어에 따라 동적으로 가감되며, 이는 Card.getDamage가 현재 보너스를 즉시 읽어 반영한다.
 const ENEMY_BONUS: Record<EmberTier, EnemyStatBonus> = {

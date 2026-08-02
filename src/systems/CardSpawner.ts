@@ -248,6 +248,9 @@ export class CardSpawner {
   private relicSpawnAdjust: { enemy: number; treasure: number; spore: number; flower: number } = { enemy: 0, treasure: 0, spore: 0, flower: 0 }
   /** 직업 선택으로 적용된 스폰 가중치 보정 — 런 내내 고정되며 런 리셋 시 초기화된다. */
   private jobSpawnAdjust: { enemy: number; trap: number; treasure: number; flower: number } = { enemy: 0, trap: 0, treasure: 0, flower: 0 }
+  /** 난이도(새싹 병아리)로 적용된 스폰 가중치 보정. 직업 보정과 별도로 누적된다 —
+   *  직업 선택이 난이도 보정을 덮어쓰면 온보딩 판이 조용히 정규 난이도로 돌아간다. */
+  private difficultySpawnAdjust: { enemy: number; trap: number; treasure: number; flower: number } = { enemy: 0, trap: 0, treasure: 0, flower: 0 }
   /** 유물 에나벨라의 펜던트로 적용되는 적 스폰 시 HP 보너스(보스 미적용). */
   private relicEnemyHpBonus: number = 0
   /** 황금 열쇠 유물 장착 시 활성화되는 황금 상자 대체 가중치. */
@@ -329,6 +332,25 @@ export class CardSpawner {
     this.jobSpawnAdjust = { enemy, trap, treasure, flower }
   }
 
+  /**
+   * 난이도 스폰 보정을 세운다. 새싹 병아리는 `SPROUT_SPAWN_ADJUST`(단일 출처)를 그대로
+   * 넘기고, 정규 난이도는 인자 없이 불러 초기화한다.
+   */
+  setDifficultySpawnAdjust(
+    adjust: { enemy: number; trap: number; treasure: number; flower: number } | null
+  ): void {
+    const next = adjust ?? { enemy: 0, trap: 0, treasure: 0, flower: 0 }
+    if (
+      this.difficultySpawnAdjust.enemy !== next.enemy ||
+      this.difficultySpawnAdjust.trap !== next.trap ||
+      this.difficultySpawnAdjust.treasure !== next.treasure ||
+      this.difficultySpawnAdjust.flower !== next.flower
+    ) {
+      this.clearRefillPreviewQueue()
+    }
+    this.difficultySpawnAdjust = { ...next }
+  }
+
   /** 황금 열쇠 유물 장착 시 황금 상자 대체 가중치를 설정한다.
    *  goldenChestWeight / effectiveTreasureWeight 비율로 황금 상자가 등장한다. */
   adjustGoldenChestWeight(weight: number): void {
@@ -347,6 +369,7 @@ export class CardSpawner {
     this.clearRefillPreviewQueue()
     this.relicSpawnAdjust = { enemy: 0, treasure: 0, spore: 0, flower: 0 }
     this.jobSpawnAdjust = { enemy: 0, trap: 0, treasure: 0, flower: 0 }
+    this.difficultySpawnAdjust = { enemy: 0, trap: 0, treasure: 0, flower: 0 }
     this.relicEnemyHpBonus = 0
     this.goldenChestWeight = 0
   }
@@ -623,9 +646,11 @@ export class CardSpawner {
     }
 
     const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
+    // 직업·난이도 보정은 같은 축에 더해진다(둘 다 런 내내 고정되는 영속 보정).
+    const runAdjust = this.runSpawnAdjust()
     // 유물 보정(곡괭이 +5 보물 / 불 탄 종이 -5 적 / 자물쇠 -5 보물 / 펜던트 +5 적)을
     // 기본 가중치에 더해 총합으로 roll 하면 전체 비율이 자동 정규화된다.
-    const enemyWeight = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy + this.jobSpawnAdjust.enemy)
+    const enemyWeight = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy + runAdjust.enemy)
     // 직업 trap 보정은 webTrap에 반영한다(일반 함정 비중을 증감). openingBoard에는 적용하지 않는다.
     const isOpening = options.openingBoard || options.openingBoardWaiting
     // 포자는 20층 이후부터만 등장한다. 그 전에는 포자 가중치를 0으로 버리지 않고 거미줄로
@@ -634,7 +659,7 @@ export class CardSpawner {
     const sporeToWeb = sporeLocked && !isOpening ? buckets.sporeTrap : 0
     const webTrap = options.openingBoard
       ? buckets.webTrap + buckets.bombTrap + buckets.sporeTrap
-      : Math.max(0, buckets.webTrap + (isOpening ? 0 : this.jobSpawnAdjust.trap)) + sporeToWeb
+      : Math.max(0, buckets.webTrap + (isOpening ? 0 : runAdjust.trap)) + sporeToWeb
     const bombTrap = isOpening ? 0 : buckets.bombTrap
     // Spores on cooldown are treated as weight 0; the slot is silently folded into
     // the rest of the distribution so the total chance of non-spore cards increases.
@@ -644,11 +669,11 @@ export class CardSpawner {
     const flower = options.openingBoard
       ? 0
       : options.openingBoardWaiting
-        ? Math.max(0, buckets.flower + this.jobSpawnAdjust.flower) * 0.5
-        : Math.max(0, buckets.flower + this.jobSpawnAdjust.flower)
+        ? Math.max(0, buckets.flower + runAdjust.flower) * 0.5
+        : Math.max(0, buckets.flower + runAdjust.flower)
     // 시련 '가난'은 보물상자 가중치를 25% 깎는다. 유물/직업 보정도 여기서 합산한다.
     // 최소 1을 보장해 유물·시련 조합으로 보물이 완전히 사라지지 않도록 한다.
-    const treasure = Math.max(1, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + this.jobSpawnAdjust.treasure)
+    const treasure = Math.max(1, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + runAdjust.treasure)
     const total = enemyWeight + webTrap + bombTrap + sporeTrap + treasure + flower
     const roll = Math.random() * total
 
@@ -909,18 +934,29 @@ export class CardSpawner {
     return EmberSystem.getSpawnWeights(this.currentTier)
   }
 
+  /** 런 내내 고정되는 보정(직업 + 난이도)의 합. 확률 계산 세 곳이 같은 값을 쓰게 한다. */
+  private runSpawnAdjust(): { enemy: number; trap: number; treasure: number; flower: number } {
+    return {
+      enemy: this.jobSpawnAdjust.enemy + this.difficultySpawnAdjust.enemy,
+      trap: this.jobSpawnAdjust.trap + this.difficultySpawnAdjust.trap,
+      treasure: this.jobSpawnAdjust.treasure + this.difficultySpawnAdjust.treasure,
+      flower: this.jobSpawnAdjust.flower + this.difficultySpawnAdjust.flower,
+    }
+  }
+
   /** 유물·시련·티어 보정이 모두 반영된 실제 스폰 가중치 (현재 불씨 티어 기준).
    *  HUD 확률 패널과 getEffectiveSpawnPercents의 데이터 소스로 사용한다.
    *  포자 쿨다운은 순간 상태라 제외하고 항상 고정 베이스 값을 사용한다. */
   getEffectiveWeights(): { enemy: number; trap: number; treasure: number; flower: number; total: number } {
     const buckets = EmberSystem.getSpawnBuckets(this.currentTier)
-    const enemy = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy + this.jobSpawnAdjust.enemy)
+    const runAdjust = this.runSpawnAdjust()
+    const enemy = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy + runAdjust.enemy)
     // 살균제 유물: sporeTrap 가중치만 독립 감소. webTrap·bombTrap은 영향 없음.
     const sporeTrap = Math.max(0, buckets.sporeTrap + this.relicSpawnAdjust.spore)
-    const trap = Math.max(0, buckets.webTrap + this.jobSpawnAdjust.trap) + buckets.bombTrap + sporeTrap
-    const treasure = Math.max(1, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + this.jobSpawnAdjust.treasure)
+    const trap = Math.max(0, buckets.webTrap + runAdjust.trap) + buckets.bombTrap + sporeTrap
+    const treasure = Math.max(1, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + runAdjust.treasure)
     // 밀랍 조화 유물: flower 가중치 독립 증가.
-    const flower = Math.max(0, buckets.flower + this.jobSpawnAdjust.flower + this.relicSpawnAdjust.flower)
+    const flower = Math.max(0, buckets.flower + runAdjust.flower + this.relicSpawnAdjust.flower)
     const total = enemy + trap + treasure + flower
     return { enemy, trap, treasure, flower, total }
   }
@@ -938,11 +974,12 @@ export class CardSpawner {
    */
   getEffectiveWeightsForDisplay(): { enemy: number; trap: number; treasure: number; flower: number; total: number } {
     const buckets = EmberSystem.getSpawnBuckets('bright')
-    const enemy = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy + this.jobSpawnAdjust.enemy)
+    const runAdjust = this.runSpawnAdjust()
+    const enemy = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy + runAdjust.enemy)
     const sporeTrapDisplay = Math.max(0, buckets.sporeTrap + this.relicSpawnAdjust.spore)
-    const trap = Math.max(0, buckets.webTrap + this.jobSpawnAdjust.trap) + buckets.bombTrap + sporeTrapDisplay
-    const treasure = Math.max(1, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + this.jobSpawnAdjust.treasure)
-    const flower = Math.max(0, buckets.flower + this.jobSpawnAdjust.flower + this.relicSpawnAdjust.flower)
+    const trap = Math.max(0, buckets.webTrap + runAdjust.trap) + buckets.bombTrap + sporeTrapDisplay
+    const treasure = Math.max(1, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + runAdjust.treasure)
+    const flower = Math.max(0, buckets.flower + runAdjust.flower + this.relicSpawnAdjust.flower)
     const total = enemy + trap + treasure + flower
     return { enemy, trap, treasure, flower, total }
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CardType } from '@entities/Card'
-import { EmberSystem } from './EmberSystem'
+import { EmberSystem, SPROUT_SPAWN_ADJUST } from './EmberSystem'
 import { CardSpawner } from './CardSpawner'
 
 /** Opening-board safety should not depend on random trap subtype rolls. */
@@ -90,6 +90,33 @@ describe('CardSpawner refill preview queue', () => {
 
     expect(spawner.peekNextRefillCards(3)[0]).toBe(preview[0])
     vi.restoreAllMocks()
+  })
+})
+
+describe('새싹 병아리 난이도 스폰 보정', () => {
+  it('적·함정을 낮추고 보물·꽃을 올린다(직업 보정과 독립)', () => {
+    const spawner = new CardSpawner()
+    const base = spawner.getEffectiveWeights()
+
+    spawner.setDifficultySpawnAdjust({ ...SPROUT_SPAWN_ADJUST })
+    const sprout = spawner.getEffectiveWeights()
+
+    expect(sprout.enemy).toBe(base.enemy + SPROUT_SPAWN_ADJUST.enemy)
+    expect(sprout.trap).toBe(base.trap + SPROUT_SPAWN_ADJUST.trap)
+    expect(sprout.treasure).toBe(base.treasure + SPROUT_SPAWN_ADJUST.treasure)
+    expect(sprout.flower).toBe(base.flower + SPROUT_SPAWN_ADJUST.flower)
+  })
+
+  it('직업 보정과 합산되며 난이도 해제 시 직업 보정만 남는다', () => {
+    const spawner = new CardSpawner()
+    const base = spawner.getEffectiveWeights()
+    spawner.setDifficultySpawnAdjust({ ...SPROUT_SPAWN_ADJUST })
+    spawner.setJobSpawnAdjust(0, 0, 20, 0)
+
+    expect(spawner.getEffectiveWeights().treasure).toBe(base.treasure + SPROUT_SPAWN_ADJUST.treasure + 20)
+
+    spawner.setDifficultySpawnAdjust(null)
+    expect(spawner.getEffectiveWeights().treasure).toBe(base.treasure + 20)
   })
 })
 
