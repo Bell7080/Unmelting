@@ -44,6 +44,17 @@ export const GREED_COIN_TOLL_DAMAGE = 1
 export const GREED_SCATTER_MIN = 2
 export const GREED_SCATTER_MAX = 4
 
+/**
+ * 30F 새싹 양초 고양이가 매 공격 주기에 굴려 주는 손패 장수. **모든 페이지에서 유지된다** —
+ * 주는 것이 이 보스의 성격이고, 2페이지는 그 위에 뺏기가 얹히는 것이지 주기를 멈추지 않는다.
+ */
+export const CAT_GIFT_CARDS = 2
+/**
+ * 2페이지: 준 **뒤에** 도로 가져가는 장수. 방금 받은 두 장도, 원래 쥐고 있던 패도 후보다 —
+ * 순서가 주기→뺏기라야 "줬다 뺏는다"가 한 주기 안에서 읽힌다.
+ */
+export const CAT_PAGE_TWO_STEAL_CARDS = 1
+
 /** 60F 기사단장이 한 주기에 펼치는 손패 장수(1페이지) — 효과 3종 중 비복원 추출. */
 export const KNIGHT_BASE_CARDS = 2
 /** 기사단장 손패 한 장의 수치(방패/회복/타격 공통). */

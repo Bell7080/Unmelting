@@ -33,6 +33,8 @@ import {
   GREED_COIN_TOLL_DAMAGE,
   GREED_SCATTER_MIN,
   GREED_SCATTER_MAX,
+  CAT_GIFT_CARDS,
+  CAT_PAGE_TWO_STEAL_CARDS,
   KNIGHT_BASE_CARDS,
   KNIGHT_HAND_CARD_AMOUNT,
   KNIGHT_PAGE_TWO_EXTRA_CARDS,
@@ -72,7 +74,7 @@ const HALF_PAGE_TWO_LINES: Partial<Record<
   ],
   waxCat: [
     { speaker: 'boss',   text: '야옹. . .',                      holdMs: 1800 },
-    { speaker: 'boss',   text: '이제 안 나눠 줄 거야.',            holdMs: 2600 },
+    { speaker: 'boss',   text: '준 건, 도로 가져갈 거야.',          holdMs: 2600 },
     { speaker: 'player', text: '내 손패를…!',                     holdMs: 2200 },
   ],
   waxKnight: [
@@ -360,8 +362,8 @@ export class BossEventController {
       introBubbleMs: 4000,
       playerBubbleMs: 2600,
       trait: [
-        '첫 번째 : 공격 주기마다 손패 1장을 흘려 줌.',
-        '두 번째 : 반대로 손패 1장을 빼앗음. 촛농·양초·불씨면 직접 사용.',
+        `첫 번째 : 공격 주기마다 손패 ${CAT_GIFT_CARDS}장을 굴려 줌.`,
+        `두 번째 : 굴려 준 뒤 손패 ${CAT_PAGE_TWO_STEAL_CARDS}장을 도로 빼앗음. 촛농·양초·불씨면 직접 사용.`,
         '체력 절반에서 칸을 파괴해야 다음 페이지로 넘어감.',
       ].join('\n'),
       kicker: '장난기 어린 발톱',
@@ -1124,35 +1126,51 @@ export class BossEventController {
    *  2장=탐욕동전1+랜덤1, 3장=탐욕동전1~2+랜덤(합3), 4장=탐욕동전2+랜덤2.
    *  탐욕의 동전은 쓰면 자신을 다치게 하는 찌꺼기 카드라 손패를 갉아먹는다. */
   /**
-   * 양초 고양이의 공격 주기 능력 — 페이지로 성격이 뒤집힌다.
+   * 양초 고양이의 공격 주기 능력 — **주기는 그대로, 2페이지에 뺏기가 얹힌다**.
    *
-   *   1페이지: 손패를 **한 장 준다**. 온보딩 보스라 첫 보스전에서 손이 마르지 않게 하는
-   *            배려다. "장난치며 갖고 논다"는 성격에도 맞는다.
-   *   2페이지: 반대로 **한 장 가져간다**. 준 것을 도로 뺏는 전환이 페이지의 체감이 된다.
+   *   1페이지: 손패를 `CAT_GIFT_CARDS`장 굴려 준다. 온보딩 보스라 첫 보스전에서 손이
+   *            마르지 않게 하는 배려이고, "장난치며 갖고 논다"는 성격에도 맞는다.
+   *   2페이지: 그 뒤에 `CAT_PAGE_TWO_STEAL_CARDS`장을 도로 가져간다.
+   *
+   * 순서가 **주기 → 뺏기**여야 하는 이유: 뺏는 후보가 방금 받은 두 장이 될 수도, 원래
+   * 쥐고 있던 패가 될 수도 있어야 "줬다 뺏는다"가 한 주기 안에서 읽힌다. 두 박자 사이에
+   * `pauseBeat()`를 두어 준 것과 뺏은 것이 한 덩어리로 뭉개지지 않게 한다.
    */
   private async resolveWaxCatTurn(): Promise<void> {
     if (!this.eventState) return
-    if (this.eventState.halfPage >= 2) {
+    await this.giftHandCards(CAT_GIFT_CARDS)
+    if (this.eventState.halfPage < 2) return
+    for (let i = 0; i < CAT_PAGE_TWO_STEAL_CARDS; i++) {
+      await this.pauseBeat()
       await this.stealHandCard()
-      return
     }
-    await this.giftHandCard()
   }
 
-  /** 양초 고양이 1페이지: 랜덤 손패 1장을 흘려 준다(온보딩 배려). */
-  private async giftHandCard(): Promise<void> {
+  /**
+   * 양초 고양이: 랜덤 손패를 `count`장 흘려 준다.
+   * 슬롯 도착은 살포 연출이 한 장씩 시차를 두고 그리므로 여러 장도 순서대로 읽힌다.
+   */
+  private async giftHandCards(count: number): Promise<void> {
     const character = this.gs.character
     if (!this.eventState) return
-    const card = DropSystem.generateDrop('enemy-kill')
-    if (!character.addHandCard(card)) {
+    const added: HandCard[] = []
+    for (let i = 0; i < count; i++) {
+      const card = DropSystem.generateDrop('enemy-kill')
+      if (character.addHandCard(card)) added.push(card)
+    }
+    if (added.length === 0) {
       this.inject.recordNotice('양초 고양이가 손패를 흘렸지만 손이 가득 차 있었다', 'info')
       return
     }
     this.inject.render()
-    const slotIndex = character.hand.findIndex((h) => h?.uid === card.uid)
-    const name = getHandCardDef(card.defId).name
-    this.inject.recordNotice(`양초 고양이가 ${name}을(를) 굴려 보냈다 — 손패 +1`, 'info')
-    if (slotIndex >= 0) await this.br.animateBossScatterToHandSlots(this.eventState.card.id, [slotIndex])
+    const slotIndices = added
+      .map((card) => character.hand.findIndex((h) => h?.uid === card.uid))
+      .filter((idx) => idx >= 0)
+    const names = added.map((card) => getHandCardDef(card.defId).name).join(' · ')
+    this.inject.recordNotice(`양초 고양이가 ${names}을(를) 굴려 보냈다 — 손패 +${added.length}`, 'info')
+    if (slotIndices.length > 0) {
+      await this.br.animateBossScatterToHandSlots(this.eventState.card.id, slotIndices)
+    }
   }
 
   /** 양초 고양이 2페이지: 손패 1장을 강탈한다. 촛농/양초/불씨(밀랍·불)면 삼켜서 보스가 HP를 회복한다. */

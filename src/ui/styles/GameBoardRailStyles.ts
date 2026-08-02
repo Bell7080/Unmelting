@@ -1538,22 +1538,24 @@ export const GAME_BOARD_RAIL_STYLES = `
 /* 손상될수록 테두리 발광이 짙어져 '닳고 있다'가 색 없이도 읽힌다. */
 .boss-gimmick-cell[data-crack="2"]::before { box-shadow: inset 0 0 16px -2px var(--cell-edge, transparent); }
 .boss-gimmick-cell[data-crack="3"]::before { box-shadow: inset 0 0 22px -1px var(--cell-edge, transparent); }
-/* 글자는 반투명하되 굵기·외곽 그림자로 어떤 일러스트 위에서도 읽히게 한다. */
+/* 글자는 굵기·외곽 그림자로 어떤 일러스트 위에서도 읽히게 한다.
+   칸 성격(약점 ×2 / 경화 ×0.5)은 **매 타격마다 보고 고르는 정보**라 작게 두면 소용이 없다 —
+   칸을 채우지 않는 선에서 크게 잡고 불투명도도 거의 남기지 않는다. */
 .boss-gimmick-cell-label {
   position: relative;
-  font-size: clamp(12px, 1.6vh, 16px);
+  font-size: clamp(15px, 2.5vh, 26px);
   font-weight: 900;
   letter-spacing: 0.06em;
-  opacity: 0.78;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 9px rgba(0, 0, 0, 0.7);
+  opacity: 0.95;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.98), 0 0 10px rgba(0, 0, 0, 0.85), 0 0 20px rgba(0, 0, 0, 0.6);
 }
 .boss-gimmick-cell-mult {
   position: relative;
-  font-size: clamp(12px, 1.4vh, 14px);
+  font-size: clamp(14px, 2.1vh, 22px);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  opacity: 0.7;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 9px rgba(0, 0, 0, 0.7);
+  opacity: 0.9;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.98), 0 0 10px rgba(0, 0, 0, 0.85), 0 0 20px rgba(0, 0, 0, 0.6);
 }
 .boss-gimmick-cell[data-tone="hot"] .boss-gimmick-cell-label,
 .boss-gimmick-cell[data-tone="hot"] .boss-gimmick-cell-mult {
@@ -1796,17 +1798,20 @@ export const GAME_BOARD_RAIL_STYLES = `
 }
 
 /* 부위 파괴 표기 — 피해 수치가 뜰 자리에 수치 대신 뜬다(파괴는 수치가 아니라 사건이다).
-   양식은 수치 그대로 두고 색만 재/숯 톤으로 바꿔, 그 자리가 원래 수치 자리임을 남긴다. */
+   양식은 수치 그대로 두고 색만 재/숯 톤으로 바꿔, 그 자리가 원래 수치 자리임을 남긴다.
+   **선명함이 우선이다**: 넓은 발광은 글자 획을 흐리므로 좁게만 두고, 대비는 두꺼운
+   외곽선과 짙은 그림자로 만든다(이 게임에서 가장 큰 사건이라 한 번에 읽혀야 한다). */
 .damage-float.damage-float--cell-break {
   white-space: nowrap;
-  font-size: clamp(18px, 2.4vw, 32px);
-  letter-spacing: 0.08em;
-  color: #efe6da;
-  -webkit-text-stroke: 1px rgba(26, 18, 12, 0.9);
+  font-size: clamp(22px, 3.2vw, 42px);
+  letter-spacing: 0.06em;
+  color: #fffaf0;
+  -webkit-text-stroke: 2px rgba(22, 14, 8, 0.96);
+  paint-order: stroke fill;
   text-shadow:
-    0 2px 3px rgba(0, 0, 0, 0.96),
-    0 0 12px rgba(255, 150, 70, 0.7),
-    0 0 30px rgba(120, 62, 20, 0.6);
+    0 2px 4px rgba(0, 0, 0, 0.98),
+    0 0 8px rgba(255, 168, 88, 0.85),
+    0 0 18px rgba(158, 78, 22, 0.55);
 }
 
 /* 보스 직접 타격의 착지 — 화면이 짧게 눌린다. 흔들림은 무게를 대신 말하는 유일한 단서라

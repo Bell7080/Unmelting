@@ -34,6 +34,8 @@ import {
   GREED_COIN_TOLL_DAMAGE,
   GREED_SCATTER_MIN,
   GREED_SCATTER_MAX,
+  CAT_GIFT_CARDS,
+  CAT_PAGE_TWO_STEAL_CARDS,
   KNIGHT_BASE_CARDS,
   KNIGHT_HAND_CARD_AMOUNT,
   KNIGHT_PAGE_TWO_EXTRA_CARDS,
@@ -336,7 +338,7 @@ export interface EnaSimStartBonus {
 /** 새싹 병아리 아크: 30층에서 양초 고양이 격파 = 클리어(별빛/시련 없음). */
 const SPROUT_TARGET_TURNS = 30
 const SPROUT_BOSS_FLOORS: readonly number[] = [30]
-/** 30F 온보딩 보스 양초 고양이: 공격 시 손패 1장 강탈(촛농/양초/불씨면 자가 사용=회복). */
+/** 30F 온보딩 보스 양초 고양이: 주기마다 손패를 굴려 주고, 2페이지는 그 뒤 1장을 도로 뺏는다. */
 // 새싹 고양이도 격자·절반 리미트 페이지를 쓴다(실게임 BOSS_GIMMICK_PROFILES.waxCat).
 const SPROUT_BOSS_PROFILE: BossProfile = bossProfileFrom(
   ONBOARDING_CAT_SPEC,
@@ -2048,11 +2050,12 @@ export class EnaTrainingSimulation {
         return true
       }
       case 'catSteal':
-        // 양초 고양이는 페이지로 성격이 뒤집힌다 — 1페이지는 손패를 **주고**(온보딩 배려),
-        // 2페이지에 가서야 빼앗는다. 촛농/양초/불씨를 빼앗으면 본인이 써서 자가 회복.
-        if (this.bossPage < 1) {
-          this.drawCard()
-        } else if (this.hand.length > 0) {
+        // 양초 고양이는 **주기는 그대로 두고** 2페이지에 뺏기를 얹는다(실게임과 같은 순서:
+        // 굴려 주기 → 뺏기). 뺏는 후보에는 방금 받은 장도 들어간다 — 지급 뒤에 뽑아야
+        // 실게임과 같은 분포가 된다. 촛농/양초/불씨를 빼앗으면 본인이 써서 자가 회복.
+        for (let n = 0; n < CAT_GIFT_CARDS; n++) this.drawCard()
+        if (this.bossPage < 1) return false
+        for (let n = 0; n < CAT_PAGE_TWO_STEAL_CARDS && this.hand.length > 0; n++) {
           const idx = this.rng.int(this.hand.length)
           const stolen = this.hand[idx].id
           this.consumeHand(idx)

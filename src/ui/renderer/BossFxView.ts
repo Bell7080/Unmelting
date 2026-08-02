@@ -25,8 +25,18 @@ const BOSS_CELL_BREAK_CHUNK_SIZE: [number, number] = [18, 38]
  * "몇 대 맞아 깨졌는지"가 한 덩어리로 뭉개진다 — 수치를 먼저 읽히고 넘긴다.
  */
 const BOSS_CELL_BREAK_HANDOFF_MS = 420
-/** '칸 파괴' 표기가 머무는 시간. 수치가 아니라 읽어야 하는 말이라 조금 길다. */
-const BOSS_CELL_BREAK_LABEL_MS = 900
+/**
+ * '칸 파괴' 표기가 머무는 시간. 수치(980ms)나 페이지 게이트 경고(1800ms)보다도 길다 —
+ * 부위 파괴는 이 전투에서 가장 큰 사건이고(칸 절반을 깨면 보스가 쓰러진다), 스쳐 지나가면
+ * 방금 무엇이 일어났는지가 남지 않는다.
+ */
+const BOSS_CELL_BREAK_LABEL_MS = 2000
+/**
+ * '칸 파괴'가 읽히고 다음 박자(부위 파괴 추가 피해)로 넘어가기까지의 간격.
+ * 표기가 완전히 사그라들 때까지 기다리면 타격 하나가 4초에 가까워진다 — 글자는 화면에
+ * 남겨 둔 채 박자만 넘긴다. 그때쯤 표기는 이미 위로 빠져 수치 자리를 비운다.
+ */
+const BOSS_CELL_BREAK_LABEL_HOLD_MS = 1150
 
 /** 배율 표기가 사그라드는 시간. CSS `.is-relabel-out` 트랜지션과 같은 값이어야 한다. */
 const BOSS_GIMMICK_RELABEL_OUT_MS = 220
@@ -532,14 +542,18 @@ export class BossFxView {
     window.setTimeout(() => host.remove(), BOSS_CELL_BREAK_MS + 140)
     // 파괴는 수치가 아니라 사건이다 — 무너지는 동안 피해 수치가 뜰 자리에 '칸 파괴'를
     // 대신 띄워, 방금 일어난 일이 무엇인지 먼저 읽히게 한다(양식은 수치와 같다).
-    await this.host.animateFloatTextAt(
+    const label = this.host.animateFloatTextAt(
       rect.left + rect.width / 2,
       rect.top + rect.height * 0.34,
       '칸 파괴',
       { className: 'damage-float--cell-break', durationMs: BOSS_CELL_BREAK_LABEL_MS }
     )
     // 추가 피해는 파괴가 읽힌 **뒤에** 같은 자리에 얹는다.
-    if (breakDamage <= 0) return
+    if (breakDamage <= 0) {
+      await label
+      return
+    }
+    await new Promise<void>((resolve) => window.setTimeout(resolve, BOSS_CELL_BREAK_LABEL_HOLD_MS))
     await this.host.animateDamageNumberOnElement(cell.isConnected ? cell : rect, breakDamage)
   }
 
