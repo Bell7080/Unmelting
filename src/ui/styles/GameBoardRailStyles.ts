@@ -656,7 +656,28 @@ export const GAME_BOARD_RAIL_STYLES = `
     radial-gradient(circle at 50% 42%, rgba(190, 164, 96, 0.16), rgba(44, 34, 26, 0.42) 72%),
     linear-gradient(180deg, rgba(20, 16, 28, 0.0) 38%, rgba(20, 16, 28, 0.55) 70%, rgba(10, 7, 18, 0.92) 100%);
 }
-.flower-note { color: rgba(224, 255, 196, 0.96); }
+/* 꽃 수확 수치도 함정 피해와 같은 결로 키운다 — 둘 다 "이 칸에서 얼마가 오가는가"를
+   말하는 수치라, 한쪽만 작으면 꽃을 언제 딸지 어림잡기 어렵다. 다만 위협이 아니라
+   보상이라 함정보다 한 단계 낮게 둔다. */
+.flower-note {
+  color: rgba(224, 255, 196, 0.96);
+  font-size: clamp(15px, 2vh, 19px);
+}
+/* group-note·codex-coin-mark의 고정 13px보다 뒤에 와서 이겨야 한다 —
+   글자만 키우면 아이콘·$ 표식만 작게 남아 따로 논다. */
+.card-stats.group-note.flower-note .icon {
+  width: 1em;
+  height: 1em;
+}
+.card-stats.group-note.flower-note .codex-coin-mark {
+  width: 1em;
+  height: 1em;
+  font-size: inherit;
+}
+.rail-row.dist-1 .flower-note,
+.rail-row.dist-2 .flower-note {
+  font-size: clamp(13px, 1.7vh, 16px);
+}
 /* 이벤트 문 칸 — 검은 테두리와 섞이지 않도록 상단 라벨 띠는 흰색 그라데이션만 사용한다. */
 .cell.card.type-event { border-color: rgba(18, 18, 22, 0.9); }
 .cell.card.type-event::before {

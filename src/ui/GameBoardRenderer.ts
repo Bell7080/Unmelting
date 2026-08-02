@@ -1140,9 +1140,11 @@ export class GameBoardRenderer {
         : card.treasureKind === 'junk' ? JUNK_RANGES
         : CHEST_RANGES
       const [rMin, rMax] = rangeTable[safeSpan - 1]
+      // 앞의 카드 아이콘이 이미 '손패'를 말하므로 글자로 한 번 더 적지 않는다 — 좁은 카드에서
+      // 수치가 클수록 유리하다.
       const treasureNote = card.id.startsWith('boss-reward-')
         ? escapeHtml(card.description)
-        : `손패 ${rMin}~${rMax}장`
+        : `${rMin}~${rMax}장`
       // 상자가 주는 것은 손패다 — 보스 보상(효과 설명)만 ✦를 유지한다.
       const treasureIcon = card.id.startsWith('boss-reward-') ? sparkleIcon() : handCardIcon()
       stats = `<div class="card-stats group-note treasure-group-note">${treasureIcon}<span>${treasureNote}</span></div>`

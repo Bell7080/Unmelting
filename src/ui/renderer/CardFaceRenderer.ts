@@ -566,8 +566,10 @@ export class CardFaceRenderer {
         return { icon: shieldIcon(), label: '방패', tone: 'shield' }
       case 'lavender':
         return { icon: comboGaugeIcon(), label: '콤보 게이지', tone: 'flower' }
+      // 씨앗은 아직 **아무것도 주지 않는다** — 수확 아이콘을 달면 이미 자원이 나오는 칸으로
+      // 읽힌다. 아이콘 없이 '대기'라는 글자만 남긴다.
       case 'seed':
-        return { icon: sparkleIcon(), label: '개화 대기', tone: 'flower' }
+        return { icon: '', label: '개화 대기', tone: 'flower' }
     }
   }
 

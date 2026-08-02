@@ -15,6 +15,17 @@ const fill = (d: string) => `<path d="${d}" fill="currentColor"/>`
  *  배경색으로 덮으면 어떤 표면 위에서는 사각형 얼룩이 남으므로 단색 규칙과 함께 이 방식을 쓴다. */
 const punch = (d: string) => `<path d="${d}" fill="currentColor" fill-rule="evenodd"/>`
 
+/**
+ * 글리프마다 그려진 높이·위치가 달라, 같은 크기로 놓아도 글줄 위에서 미묘하게 어긋난다
+ * (하트는 아래로 처지고 불꽃·게이지는 위로 뜬다). 실제 상하 경계(y0..y1)를 24 박스
+ * 한가운데로 옮기고, 필요하면 목표 높이까지 키운다 — 정렬 보정은 CSS가 아니라 여기 한 곳이다.
+ */
+const fitBox = (content: string, y0: number, y1: number, targetHeight = y1 - y0): string => {
+  const scale = targetHeight / (y1 - y0)
+  const cy = (y0 + y1) / 2
+  return `<g transform="translate(12 12) scale(${scale.toFixed(3)}) translate(-12 ${(-cy).toFixed(2)})">${content}</g>`
+}
+
 function svg(content: string, viewBox = '0 0 24 24'): string {
   return `<svg class="icon" viewBox="${viewBox}" aria-hidden="true" focusable="false">${content}</svg>`
 }
@@ -22,8 +33,12 @@ function svg(content: string, viewBox = '0 0 24 24'): string {
 /** Heart — used for HP. Solid silhouette so it reads even at 12px. */
 export function heartIcon(): string {
   return svg(
-    fill(
-      'M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.7a4.3 4.3 0 0 1 7.5 2.6c0 5.6-7.5 10.2-7.5 10.2Z',
+    fitBox(
+      fill(
+        'M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.7a4.3 4.3 0 0 1 7.5 2.6c0 5.6-7.5 10.2-7.5 10.2Z',
+      ),
+      6,
+      20.5,
     ),
   )
 }
@@ -46,42 +61,54 @@ export function swordIcon(): string {
 /** Small candle flame — kept for the stage title and game-over card. */
 export function candleIcon(): string {
   return svg(
-    [
-      fill(
-        'M12 3.2c-.6 1.5-1.8 2.5-1.8 4.1a1.8 1.8 0 0 0 3.6 0c0-1.6-1.2-2.6-1.8-4.1Z',
-      ),
-      fill('M9 11h6v6H9z'),
-      stroke('M9 17.5h6', 1.4),
-    ].join(''),
+    fitBox(
+      [
+        fill(
+          'M12 3.2c-.6 1.5-1.8 2.5-1.8 4.1a1.8 1.8 0 0 0 3.6 0c0-1.6-1.2-2.6-1.8-4.1Z',
+        ),
+        fill('M9 11h6v6H9z'),
+        stroke('M9 17.5h6', 1.4),
+      ].join(''),
+      3.2,
+      18.2,
+    ),
   )
 }
 
 /** Pouch / hand shape — replaces the inventory emoji. */
 export function pouchIcon(): string {
   return svg(
-    [
-      stroke(
-        'M7.5 9c0-1.5 2-3 4.5-3s4.5 1.5 4.5 3v1H7.5V9Z',
-      ),
-      fill(
-        'M5.5 10h13l-1.4 8.4a2 2 0 0 1-2 1.6h-6.2a2 2 0 0 1-2-1.6L5.5 10Z',
-      ),
-      stroke('M10 13.5v3M14 13.5v3', 1.4),
-    ].join(''),
+    fitBox(
+      [
+        stroke(
+          'M7.5 9c0-1.5 2-3 4.5-3s4.5 1.5 4.5 3v1H7.5V9Z',
+        ),
+        fill(
+          'M5.5 10h13l-1.4 8.4a2 2 0 0 1-2 1.6h-6.2a2 2 0 0 1-2-1.6L5.5 10Z',
+        ),
+        stroke('M10 13.5v3M14 13.5v3', 1.4),
+      ].join(''),
+      5.2,
+      20,
+    ),
   )
 }
 
-/** Flame charm — damage boost item. */
+/**
+ * 불꽃 — 빛 게이지(불씨)를 말하는 자리에 쓴다.
+ * 두 겹으로 휘감던 이전 부적 실루엣은 작은 크기에서 뭉쳐 불꽃으로 읽히지 않았다.
+ * 아래가 통통하고 위로 좁아지며 끝이 갈라지는 한 덩어리 실루엣이라 14px에서도 살아남는다.
+ */
 export function flameIcon(): string {
   return svg(
-    [
+    fitBox(
       fill(
-        'M12 2.5c.4 2.6-2.6 3.7-2.6 6.7 0 1.4.7 2.4 1.7 2.7-.5-.7-.6-1.5-.2-2.5.5 1.6 2.1 2.2 2.1 4 0 1.1-.7 2-1.7 2.2 3.6.2 6.2-2.4 6.2-5.7 0-3.9-3.7-4.4-5.5-7.4Z',
+        'M12 2.4c1.9 3.4 5 5.6 5 9.2a5 5 0 0 1-10 0c0-1.6.7-2.7 1.6-3.8.3 1 .9 1.7 1.7 2 .1-3 .9-5.1 1.7-7.4Z',
       ),
-      fill(
-        'M9.4 13.4c-1.7 1-2.6 2.6-2.6 4.4 0 2.5 2 4.2 5 4.2 2.6 0 4.8-1.4 4.8-3.7 0-1.7-1-2.7-2.4-3.4.5 1 .4 2-.4 2.7-1 1-2.6.6-2.8-.6-.2-1.2.7-1.7-.6-2.7-.4-.3-.7-.6-1-.9Z',
-      ),
-    ].join(''),
+      2.4,
+      16.6,
+      17.4,
+    ),
   )
 }
 
@@ -177,20 +204,28 @@ export function handCardIcon(): string {
  * 눈금이 '차오르는 중'을, 반짝임이 '다 차면 보상'을 말한다.
  */
 export function comboGaugeIcon(): string {
-  // 6칸 중 4칸이 찬 상태. 찬 칸은 채우고 빈 칸은 얇은 테두리만 남겨 대비를 만든다.
-  const total = 6
-  const x0 = 1.8
-  const width = 20.4
-  const gap = 0.9
+  // 4칸 중 3칸이 찬 상태. 찬 칸은 채우고 빈 칸은 얇은 테두리만 남겨 대비를 만든다.
+  // 칸을 6개까지 늘렸더니 12px에서 눈금이 서로 뭉개져 얼룩으로 읽혔다 — 굵고 적게 간다.
+  const total = 4
+  const x0 = 2.4
+  const width = 19.2
+  const gap = 1.5
   const tick = (width - gap * (total - 1)) / total
   const ticks: string[] = []
   for (let i = 0; i < total; i++) {
     const x = (x0 + i * (tick + gap)).toFixed(2)
     ticks.push(
-      i < 4
-        ? fill(`M${x} 11.6h${tick.toFixed(2)}v6.6h-${tick.toFixed(2)}Z`)
-        : stroke(`M${(Number(x) + 0.5).toFixed(2)} 12.1h${(tick - 1).toFixed(2)}v5.6h-${(tick - 1).toFixed(2)}Z`, 1.05),
+      i < 3
+        ? fill(`M${x} 14h${tick.toFixed(2)}v7.2h-${tick.toFixed(2)}Z`)
+        : stroke(`M${(Number(x) + 0.6).toFixed(2)} 14.6h${(tick - 1.2).toFixed(2)}v6h-${(tick - 1.2).toFixed(2)}Z`, 1.2),
     )
   }
-  return svg([...ticks, fill('M12 1.2 13.6 5.9 18.3 7.5 13.6 9.1 12 13.8 10.4 9.1 5.7 7.5 10.4 5.9Z')].join(''))
+  // 반짝임은 눈금 위로 완전히 빼 둔다 — 겹치면 작은 크기에서 둘 다 뭉친다.
+  return svg(
+    fitBox(
+      [...ticks, fill('M12 2.6 13.35 5.65 16.4 7 13.35 8.35 12 11.4 10.65 8.35 7.6 7 10.65 5.65Z')].join(''),
+      2.6,
+      21.2,
+    ),
+  )
 }
