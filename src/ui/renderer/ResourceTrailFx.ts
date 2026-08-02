@@ -8,10 +8,14 @@ import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import type { ResourceTrailTarget } from '@ui/renderer/RendererTypes'
 
 /**
- * 조준 볼트가 출발점에서 목표에 닿기까지의 시간. 착탄 버스트/피해 수치가 이 값에
+ * 곡사 블라스트가 출발점에서 목표에 닿기까지의 시간. 착탄 버스트/피해 수치가 이 값에
  * 맞춰 이어지므로 비행과 착탄이 어긋나지 않게 한 곳에서 정한다.
+ * 눈으로 좇을 수 있어야 '어느 칸으로 갔는지'가 읽히므로 짧게 잡지 않는다.
  */
-export const STRIKE_BOLT_FLIGHT_MS = 300
+export const STRIKE_LOB_FLIGHT_MS = 620
+
+/** 여러 대상에 동시에 쏠 때 발사 간격 — 겹쳐 쏘면 몇 발인지가 뭉갠다. */
+export const STRIKE_LOB_STAGGER_MS = 70
 
 export class ResourceTrailFx {
   constructor(private readonly host: GameBoardRenderer) {}
@@ -54,8 +58,27 @@ export class ResourceTrailFx {
 
   /** Fly a square-card target blast from the played-card center toward an affected rail card. */
   animateTargetBlastFromCenterToCard(cardId: string, theme: BurstTheme): Promise<void> {
-    const center = new DOMRect(window.innerWidth / 2 - 8, window.innerHeight * 0.46 - 8, 16, 16)
-    return this.animateStrikeBolt(center, this.host.findCardElement(cardId), theme)
+    return this.animateStrikeLob(this.playedCardOrigin(), this.host.findCardElement(cardId), theme)
+  }
+
+  /**
+   * 레시피(조합)가 쏘는 블라스트. 손패는 화면 중앙에 펼쳐진 카드에서 나가지만 레시피는
+   * 체인 배너에서 발동하므로, 자원 트레일과 같은 출처를 써야 "무엇이 쐈는지"가 이어진다.
+   */
+  animateTargetBlastFromChainToCard(cardId: string, theme: BurstTheme): Promise<void> {
+    const chainSource =
+      document.querySelector<HTMLElement>('#chain-banner .chain-event:last-child') ??
+      document.querySelector<HTMLElement>('#chain-banner')
+    return this.animateStrikeLob(
+      chainSource ?? this.playedCardOrigin(),
+      this.host.findCardElement(cardId),
+      theme
+    )
+  }
+
+  /** 손패를 쓰면 카드가 화면 중앙에 크게 펼쳐진다 — 발사체는 그 카드에서 나가야 한다. */
+  private playedCardOrigin(): DOMRect {
+    return new DOMRect(window.innerWidth / 2 - 8, window.innerHeight * 0.46 - 8, 16, 16)
   }
 
   /** Fly a resource trail from the currently visible chain/combo banner. */
@@ -135,23 +158,15 @@ export class ResourceTrailFx {
   box-shadow: 0 0 14px var(--trail-glow, rgba(255, 218, 132, 0.28));
   will-change: transform, opacity, filter;
 }
-/* 조준 볼트 — 자원 트레일과 같은 사각 조각이지만 '읽히는 발사체'여야 한다.
-   색을 옅게 깔면 밝은 레일 위에서 사라지므로, 심지는 흰빛으로 세우고(안쪽 그라디언트)
-   테두리 발광을 두 겹으로 둘러 어떤 배경 위에서도 윤곽이 남게 한다. */
-.resource-trail-piece.is-bolt {
-  border-radius: 3px;
-  /* 꼬리는 테마 색, 머리만 흰빛 — 늘어난 몸이 전부 하얘지면 어느 칸(약점/경화)을 노린
-     발사체인지가 사라진다. 색이 몸을 채우고 흰 심지는 앞끝에만 남는다. */
-  background:
-    linear-gradient(90deg,
-      var(--trail-color, rgba(255, 232, 168, 0.9)) 0%,
-      var(--trail-color, rgba(255, 232, 168, 0.95)) 44%,
-      rgba(255, 250, 232, 0.98) 82%,
-      rgba(255, 255, 255, 0.98) 100%);
+/* 곡사 블라스트 — 자원 트레일과 같은 정사각 조각을 그대로 쓴다(전용 도형을 만들지 않는다).
+   다른 것은 발광의 세기뿐이다: 밝은 레일 위에서도 윤곽이 남아야 눈으로 좇을 수 있다.
+   색은 테마 색을 그대로 채운다 — 흰빛으로 덮으면 어느 계열의 공격인지가 사라진다. */
+.resource-trail-piece.is-lob {
+  border-radius: 4px;
   box-shadow:
-    0 0 10px rgba(255, 252, 240, 0.75),
-    0 0 26px var(--trail-glow, rgba(255, 218, 132, 0.5)),
-    0 0 46px var(--trail-glow, rgba(255, 218, 132, 0.3));
+    0 0 12px rgba(255, 252, 240, 0.5),
+    0 0 30px var(--trail-glow, rgba(255, 218, 132, 0.5)),
+    0 0 54px var(--trail-glow, rgba(255, 218, 132, 0.28));
 }
 `
     document.head.appendChild(style)
@@ -250,15 +265,17 @@ export class ResourceTrailFx {
   }
 
   /**
-   * 조준 볼트 — 손패를 쓴 화면 중앙에서 **맞을 칸/카드 한 곳으로 한 발**이 날아가 꽂힌다.
+   * 곡사 블라스트 — 손패/레시피가 **맞을 칸 한 곳으로 한 발**을 높이 띄워 내리꽂는다.
    *
-   * 자원 트레일(HUD로 흘러드는 파편 세 줄기)과 같은 사각 조각을 쓰되 세 가지만 다르다:
-   *   1) 진행 방향으로 눕혀 늘인다 — 정지 화면에서도 '날아가는 중'이 읽힌다
-   *   2) 궤적을 거의 편다 — 자원은 포물선으로 흘러들지만 타격은 곧게 꽂혀야 한다
-   *   3) 가속해서 도착점에 멈춘다 — '슈우웅 → 딱'의 두 박자를 속도로만 만든다
-   * 도착 순간의 버스트는 자원 트레일보다 촘촘하고 짧아, 퍼지는 대신 한 점에 박힌다.
+   * 이펙트 어휘는 사각 블라스트 하나이므로 전용 도형을 만들지 않는다. 자원 트레일과
+   * 같은 사각 조각을 쓰되 셋만 다르다:
+   *   1) 높이 뜬다 — 정점을 목표 쪽으로 치우쳐, 마지막 구간이 거의 수직으로 떨어진다
+   *   2) 느리다 — 눈으로 좇을 수 있어야 '어느 칸으로 갔는지'가 읽힌다
+   *   3) 착탄에서 납작하게 눌린다 — 이 한 프레임이 '딱'이다
+   * 자원 트레일의 얕은 포물선은 '흘러들었다'로 읽히지만, 목표 **위에서 수직으로**
+   * 떨어지면 어느 칸에 꽂혔는지가 남는다 — 곡사와 흘러듦을 가르는 것은 정점의 위치다.
    */
-  animateStrikeBolt(
+  animateStrikeLob(
     source: HTMLElement | DOMRect | null,
     target: HTMLElement | DOMRect | null,
     theme: BurstTheme
@@ -268,12 +285,12 @@ export class ResourceTrailFx {
     const from = this.rectCenter(source)
     const to = this.rectCenter(target)
     const colors = this.trailColors(theme)
-    // 앞선 심지 한 발 + 바로 뒤를 따르는 잔광 두 겹. 세 겹이 같은 선 위에 겹쳐
-    // 하나의 긴 발사체로 보이되, 뒤로 갈수록 옅어 꼬리가 생긴다.
+    // 앞선 포탄 한 발 + 뒤따르는 잔광 두 겹. 같은 궤적 위를 조금씩 늦게 따라가
+    // 하나의 꼬리로 읽히되, 뒤로 갈수록 작고 옅다.
     const specs = [
-      { size: 26, lag: 0, alpha: 0.98, bolt: true },
-      { size: 20, lag: 26, alpha: 0.66, bolt: true },
-      { size: 13, lag: 50, alpha: 0.4, bolt: true },
+      { size: 26, lag: 0, alpha: 0.96, lob: true },
+      { size: 18, lag: 70, alpha: 0.5, lob: true },
+      { size: 12, lag: 130, alpha: 0.3, lob: true },
     ]
     const flights = specs.map((spec) => this.spawnResourceTrailPiece(from, to, colors, spec))
     return new Promise((resolve) => {
@@ -286,88 +303,115 @@ export class ResourceTrailFx {
           size: [8, 20],
         })
         resolve()
-      }, STRIKE_BOLT_FLIGHT_MS)
+      }, STRIKE_LOB_FLIGHT_MS)
       void Promise.all(flights)
     })
+  }
+
+  /** 포탄이 목표보다 얼마나 더 높이 떠야 하는가. 이 높이만큼이 '내리꽂는' 구간이 된다. */
+  private static readonly LOB_PLUNGE_PX = 120
+
+  /**
+   * 곡사 궤적 위의 한 점. 2차 베지에이고 두 가지를 지킨다:
+   *   · 제어점을 **목표 쪽(0.62)으로 치우친다** — 정점이 목표 바로 위에 와 마지막 구간이
+   *     수직 낙하가 된다. 정중앙이면 좌우 대칭 포물선이라 '비스듬히 흘러들었다'로 읽힌다.
+   *   · 정점이 **목표보다 항상 LOB_PLUNGE_PX 위**가 되게 제어점 높이를 역산한다. 거리에
+   *     비례해서만 띄우면 가까운 목표에서는 내리꽂는 구간이 사라진다.
+   */
+  private lobPointAt(
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    t: number
+  ): { x: number; y: number } {
+    const cx = from.x + (to.x - from.x) * 0.62
+    // 화면 위로 새지 않게 정점을 상단 여백 안에 가둔다.
+    const apex = Math.max(48, Math.min(from.y, to.y) - ResourceTrailFx.LOB_PLUNGE_PX)
+    const cy = 2 * apex - (from.y + to.y) / 2
+    const inv = 1 - t
+    return {
+      x: inv * inv * from.x + 2 * inv * t * cx + t * t * to.x,
+      y: inv * inv * from.y + 2 * inv * t * cy + t * t * to.y,
+    }
   }
 
   spawnResourceTrailPiece(
     from: { x: number; y: number },
     to: { x: number; y: number },
     colors: { color: string; glow: string },
-    spec: { size: number; lag: number; alpha: number; bolt?: boolean }
+    spec: { size: number; lag: number; alpha: number; lob?: boolean }
   ): Promise<void> {
     return new Promise((resolve) => {
       window.setTimeout(() => {
         const piece = document.createElement('div')
-        piece.className = `resource-trail-piece${spec.bolt ? ' is-bolt' : ''}`
+        piece.className = `resource-trail-piece${spec.lob ? ' is-lob' : ''}`
         piece.style.width = `${spec.size}px`
-        piece.style.height = `${Math.round(spec.size * (spec.bolt ? 0.66 : 1.34))}px`
+        piece.style.height = `${Math.round(spec.size * (spec.lob ? 1 : 1.34))}px`
         piece.style.setProperty('--trail-color', colors.color)
         piece.style.setProperty('--trail-glow', colors.glow)
         piece.style.opacity = `${spec.alpha}`
         document.body.appendChild(piece)
         const dx = to.x - from.x
         const dy = to.y - from.y
-        // 눕힌 볼트는 세로 중심이 조각 높이의 절반이라야 궤적 선 위에 정확히 놓인다.
-        const halfY = spec.bolt ? Number(piece.style.height.replace('px', '')) / 2 : spec.size / 2
-        // 볼트는 진행 방향으로 눕혀야 늘인 조각이 궤적과 어긋나지 않는다.
-        const angle = spec.bolt ? (Math.atan2(dy, dx) * 180) / Math.PI : 0
-        const curve = spec.bolt
-          ? Math.min(22, Math.max(6, (Math.abs(dx) + Math.abs(dy)) * 0.016))
-          : Math.min(90, Math.max(34, Math.abs(dx) * 0.08 + Math.abs(dy) * 0.05))
+        const halfY = spec.lob ? spec.size / 2 : spec.size / 2
+        const curve = Math.min(90, Math.max(34, Math.abs(dx) * 0.08 + Math.abs(dy) * 0.05))
         const at = (px: number, py: number): string =>
           `translate(${px - spec.size / 2}px, ${py - halfY}px)`
-        const anim = spec.bolt
-          ? piece.animate(
-              [
-                {
-                  transform: `${at(from.x, from.y)} rotate(${angle}deg) scale(0.7, 1)`,
-                  opacity: 0,
-                },
-                {
-                  transform: `${at(from.x + dx * 0.2, from.y + dy * 0.2 - curve * 0.5)} rotate(${angle}deg) scale(2.1, 0.8)`,
-                  opacity: spec.alpha,
-                  offset: 0.3,
-                },
-                {
-                  transform: `${at(from.x + dx * 0.7, from.y + dy * 0.7 - curve)} rotate(${angle}deg) scale(2.9, 0.72)`,
-                  opacity: spec.alpha,
-                  offset: 0.72,
-                },
-                // 착탄 — 늘어난 몸이 앞뒤로 눌리며 멈춘다. 이 한 프레임이 '딱'이다.
-                {
-                  transform: `${at(to.x, to.y)} rotate(${angle}deg) scale(0.72, 1.5)`,
-                  opacity: spec.alpha,
-                  offset: 0.92,
-                },
-                { transform: `${at(to.x, to.y)} rotate(${angle}deg) scale(0.5, 1.1)`, opacity: 0 },
-              ],
-              // 착탄 프레임(offset 0.92)이 정확히 STRIKE_BOLT_FLIGHT_MS에 오게 길이를 역산한다 —
-              // 버스트가 먼저 터지면 볼트가 도착하기도 전에 '맞았다'가 나가 버린다.
-              { duration: Math.round(STRIKE_BOLT_FLIGHT_MS / 0.92), easing: 'cubic-bezier(0.5, 0, 0.3, 1)', fill: 'forwards' }
-            )
-          : piece.animate(
-              [
-                {
-                  transform: `${at(from.x, from.y)} rotate(-8deg) scale(0.82)`,
-                  opacity: 0,
-                  filter: 'blur(0.2px)',
-                },
-                {
-                  transform: `${at(from.x + dx * 0.58, from.y + dy * 0.58 - curve)} rotate(10deg) scale(1)`,
-                  opacity: spec.alpha,
-                  filter: 'blur(0px)',
-                  offset: 0.58,
-                },
-                {
-                  transform: `${at(to.x, to.y)} rotate(2deg) scale(0.54)`,
-                  opacity: 0,
-                  filter: 'blur(0.8px)',
-                },
-              ],
-              { duration: 330, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)', fill: 'forwards' }
-            )
+        let anim: Animation
+        if (spec.lob) {
+          // 궤적을 촘촘히 표본해 키프레임으로 편다 — 브라우저는 키프레임 사이를 직선으로
+          // 잇기 때문에, 표본이 성기면 포물선이 꺾인 선분으로 보인다.
+          const SAMPLES = 12
+          const IMPACT = 0.9
+          const frames: Keyframe[] = []
+          for (let i = 0; i <= SAMPLES; i += 1) {
+            const t = i / SAMPLES
+            const p = this.lobPointAt(from, to, t)
+            // 올라갈 땐 커지고 떨어질 땐 작아진다 — 높이를 크기로 말한다.
+            const lift = Math.sin(Math.PI * t)
+            frames.push({
+              transform: `${at(p.x, p.y)} rotate(${t * 160}deg) scale(${(0.72 + lift * 0.5).toFixed(3)})`,
+              opacity: i === 0 ? 0 : spec.alpha,
+              offset: Number((t * IMPACT).toFixed(4)),
+            })
+          }
+          // 착탄 — 수직으로 떨어진 몸이 납작하게 눌린다. 이 한 프레임이 '딱'이다.
+          frames.push({
+            transform: `${at(to.x, to.y)} rotate(160deg) scale(1.5, 0.5)`,
+            opacity: spec.alpha,
+            offset: Number((IMPACT + 0.05).toFixed(4)),
+          })
+          frames.push({ transform: `${at(to.x, to.y)} rotate(160deg) scale(0.7, 0.35)`, opacity: 0 })
+          anim = piece.animate(frames, {
+            // 착탄 프레임(offset IMPACT)이 정확히 STRIKE_LOB_FLIGHT_MS에 오게 길이를 역산한다 —
+            // 버스트가 먼저 터지면 포탄이 도착하기도 전에 '맞았다'가 나가 버린다.
+            duration: Math.round(STRIKE_LOB_FLIGHT_MS / IMPACT),
+            // 곡사는 등속에 가깝게 둔다 — 가속하면 눈이 좇을 수 있는 구간이 사라진다.
+            easing: 'linear',
+            fill: 'forwards',
+          })
+        } else {
+          anim = piece.animate(
+            [
+              {
+                transform: `${at(from.x, from.y)} rotate(-8deg) scale(0.82)`,
+                opacity: 0,
+                filter: 'blur(0.2px)',
+              },
+              {
+                transform: `${at(from.x + dx * 0.58, from.y + dy * 0.58 - curve)} rotate(10deg) scale(1)`,
+                opacity: spec.alpha,
+                filter: 'blur(0px)',
+                offset: 0.58,
+              },
+              {
+                transform: `${at(to.x, to.y)} rotate(2deg) scale(0.54)`,
+                opacity: 0,
+                filter: 'blur(0.8px)',
+              },
+            ],
+            { duration: 330, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)', fill: 'forwards' }
+          )
+        }
         anim.onfinish = () => {
           piece.remove()
           resolve()
@@ -375,7 +419,7 @@ export class ResourceTrailFx {
         window.setTimeout(() => {
           piece.remove()
           resolve()
-        }, (spec.bolt ? STRIKE_BOLT_FLIGHT_MS + 260 : 500))
+        }, spec.lob ? STRIKE_LOB_FLIGHT_MS + spec.lag + 320 : 500)
       }, spec.lag)
     })
   }

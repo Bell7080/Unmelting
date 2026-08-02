@@ -115,14 +115,21 @@ export const RECIPES: Recipe[] = [
     'convert-random-waiting-to-treasure',
     '대기라인의 보물상자가 아닌 1칸을 보물상자로 변환'
   ),
+  // ↓ 여기부터 기본 재료로 만들지만 **해금팩 전까지 잠긴** 레시피들.
+  //   조합팩은 '재료가 이미 해금된 잠긴 레시피'만 제시하므로, 잠금 대상이 전부 잠긴 손패를
+  //   요구하면 기본 손패풀 런에서는 제시할 것이 하나도 남지 않는다.
+  //   고르는 기준은 둘이다: (1) 판을 통째로 뒤집을 만큼 세거나 (2) 처음 배우는 사람이
+  //   당장 만날 필요가 없는 것. 기초 조합(따뜻함·점화·열쇠공 등)은 잠그지 않는다.
   recipe(
     'step-by-step',
     '한 걸음씩',
     { 'wax-drop': 1, candle: 1, ember: 1, wax: 1 },
     'clear-all-field-cards',
-    '필드의 모든 칸 제거'
+    '필드의 모든 칸 제거',
+    true
   ),
-  recipe('fuse', '도화선', { match: 2 }, 'fuse-atk', '전방 모든 적에게 (1.5공)피해'),
+  // 기본 재료 중 공격 배율이 가장 높다. 게다가 흔한 성냥 2장이라 초반부터 반복된다.
+  recipe('fuse', '도화선', { match: 2 }, 'fuse-atk', '전방 모든 적에게 (1.5공)피해', true),
   recipe(
     'holy-flame',
     '성화',
@@ -130,12 +137,14 @@ export const RECIPES: Recipe[] = [
     'clear-front-cards',
     '전방 모든 칸 제거'
   ),
+  // 대기칸 보물을 **전부** 쓸어 담아 상한이 없다 — 경제가 한 번에 뒤집힌다.
   recipe(
     'smuggling',
     '밀매',
     { wax: 1, coin: 1 },
     'collect-waiting-treasures',
-    '대기칸 모든 보물칸 획득'
+    '대기칸 모든 보물칸 획득',
+    true
   ),
   recipe('hot', '뜨거움', { ember: 2 }, 'hot-atk', '전방 모든 적에게 (0.5공+2)피해'),
   // --- 신규 레시피 (6개 — 해금팩으로 해금) ---
@@ -153,7 +162,8 @@ export const RECIPES: Recipe[] = [
   recipe('hospitality',    '대접',      { teacup: 1, 'wax-drop': 1 },                 'heal-3',             '체력 3 회복'),
   recipe('hot-water',      '뜨거운 물', { teapot: 1, ember: 1 },                      'hot-water-maxhp',    '전방 랜덤 적 1장 최대체력 (×0.2)피해', true),
   recipe('bright-ceiling', '밝은 천장', { chandelier: 1, match: 1 },                  'gain-ember-2',       '빛 게이지 +2'),
-  recipe('flame-chain',    '불꽃 사슬', { chandelier: 1, shackles: 1 },               'flame-chain-atk',    '방패 +2 · 필드 적 전체 (1.0공)피해'),
+  // 방어와 필드 전체 공격을 한 장에 묶는다 — 기본 조합 중 유일하게 두 축을 동시에 준다.
+  recipe('flame-chain',    '불꽃 사슬', { chandelier: 1, shackles: 1 },               'flame-chain-atk',    '방패 +2 · 필드 적 전체 (1.0공)피해', true),
   recipe('banquet',        '연회',      { teapot: 1, firework: 1 },                   'banquet-atk',        '필드 랜덤 적 (1.0공)피해 × 공격력 횟수', true),
   recipe('sweetness',      '달콤함',    { teacup: 1, 'sacrifice-shield': 1 },         'heal-by-player-attack',        '공격력만큼 체력 회복',            true),
   // event_001 불태우기 선택 시 해금되는 특수 이벤트 레시피 — 도감에 등록되고 런 내 발동 가능.

@@ -3716,6 +3716,10 @@ export class GameBoardRenderer {
     return this.trails.animateTargetBlastFromCenterToCard(cardId, theme)
   }
 
+  animateTargetBlastFromChainToCard(cardId: string, theme: BurstTheme): Promise<void> {
+    return this.trails.animateTargetBlastFromChainToCard(cardId, theme)
+  }
+
   animateResourceTrailFromChain(
     target: ResourceTrailTarget,
     count: number,

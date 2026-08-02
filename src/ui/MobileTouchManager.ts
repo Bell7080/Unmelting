@@ -40,6 +40,10 @@ export function initLongPressShiftDetail(): void {
   if (!isTouchDevice() || _longPressAttached) return
   _longPressAttached = true
 
+  // ★ 캡처 단계로 듣는다. 손패 카드의 touchend 핸들러가 stopPropagation을 부르기 때문에,
+  //   버블 단계로 들으면 카드 위에서 길게 눌렀다 뗀 순간 해제가 **영영 오지 않아**
+  //   is-shift-detail이 켜진 채로 남는다(= 모바일에서 기본이 수식 표기로 보이던 증상).
+  //   PC는 keyup으로 풀리므로 이 경로가 없어 멀쩡했다.
   document.addEventListener('touchstart', (e) => {
     // 이전 타이머·무브 핸들러 정리
     if (_shiftTimer !== null) { clearTimeout(_shiftTimer); _shiftTimer = null }
@@ -62,15 +66,18 @@ export function initLongPressShiftDetail(): void {
       _shiftTimer = null
       if (!moved) document.body.classList.add('is-shift-detail')
     }, LONG_PRESS_MS)
-  }, { passive: true })
+  }, { passive: true, capture: true })
 
   const release = () => {
     if (_shiftTimer !== null) { clearTimeout(_shiftTimer); _shiftTimer = null }
     if (_shiftMoveHandler) { document.removeEventListener('touchmove', _shiftMoveHandler); _shiftMoveHandler = null }
     document.body.classList.remove('is-shift-detail')
   }
-  document.addEventListener('touchend', release, { passive: true })
-  document.addEventListener('touchcancel', release, { passive: true })
+  document.addEventListener('touchend', release, { passive: true, capture: true })
+  document.addEventListener('touchcancel', release, { passive: true, capture: true })
+  // 터치가 브라우저 제스처(스크롤·전환)에 먹혀 touchend가 오지 않는 경우의 마지막 안전망.
+  window.addEventListener('blur', release)
+  document.addEventListener('visibilitychange', () => { if (document.hidden) release() })
 }
 
 

@@ -50,7 +50,7 @@ import { type EventId } from '@data/Events'
 import { CandleMode } from '@entities/Character'
 import { HandCardId, HandCategory } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS } from '@data/HandCards'
-import { RECIPES } from '@data/Recipes'
+import { RECIPES, type RecipeEffectKind } from '@data/Recipes'
 import { getRelicDef, relicStackFeedback, type CustomRelicProfile, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
 import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
@@ -59,6 +59,7 @@ import { HAND_CARD_RARITY } from '@data/ShopPools'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { JOBS } from '@data/Jobs'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
+import { STRIKE_LOB_STAGGER_MS } from '@ui/renderer/ResourceTrailFx'
 import { CursorFX } from '@ui/CursorFX'
 import { FontManager } from '@ui/FontManager'
 import { SpriteUrls, spriteForHearthStation } from '@ui/Sprites'
@@ -784,13 +785,49 @@ function tickHudCounterAfterTrail(resource: keyof typeof NUMERIC_RESOURCE_TRAILS
  *  Gauge consumption is intentionally ignored here; explicit spend beats such
  *  as shop purchases get their own source→target trail. */
 
-/** Send the center played-card blast to every rail card touched by a hand effect. */
-async function playHandTargetBlasts(cardIds: Iterable<string>, theme: BurstTheme): Promise<void> {
+/**
+ * 손패/레시피가 건드린 **모든** 칸으로 곡사 블라스트를 한 발씩 보낸다.
+ * 광역기·조합도 대상마다 한 발이 날아가야 무엇이 몇 칸을 때렸는지가 남는다.
+ * 동시에 쏘지 않고 조금씩 늦춰 쏜다 — 겹쳐 쏘면 몇 발인지가 뭉갠다.
+ */
+async function playHandTargetBlasts(
+  cardIds: Iterable<string>,
+  theme: BurstTheme,
+  origin: 'center' | 'chain' = 'center'
+): Promise<void> {
   const uniqueIds = [...new Set(cardIds)].filter(Boolean)
   if (uniqueIds.length === 0) return
-  await Promise.all(
-    uniqueIds.map((cardId) => boardRenderer.animateTargetBlastFromCenterToCard(cardId, theme))
+  // 대상이 많을수록 간격을 좁힌다 — 필드 전체(9칸)까지 같은 간격으로 쏘면 마지막 발이
+  // 반 박자 뒤에 떨어져 한 방의 광역기가 늘어진 연사로 읽힌다.
+  const stagger = Math.max(
+    26,
+    Math.min(STRIKE_LOB_STAGGER_MS, Math.round((STRIKE_LOB_STAGGER_MS * 4) / uniqueIds.length))
   )
+  await Promise.all(
+    uniqueIds.map(async (cardId, index) => {
+      if (index > 0) await wait(index * stagger)
+      return origin === 'chain'
+        ? boardRenderer.animateTargetBlastFromChainToCard(cardId, theme)
+        : boardRenderer.animateTargetBlastFromCenterToCard(cardId, theme)
+    })
+  )
+}
+
+/** 레시피는 손패 분류가 없으므로 효과가 하는 일로 블라스트 톤을 고른다. */
+function burstThemeForRecipeEffect(effect: RecipeEffectKind): BurstTheme {
+  if (effect.startsWith('heal') || effect.startsWith('shield') || effect.startsWith('gain-ember')) {
+    return 'hand-recovery'
+  }
+  if (
+    effect.includes('damage') ||
+    effect.includes('destroy') ||
+    effect.includes('clear') ||
+    effect.endsWith('-atk') ||
+    effect.endsWith('-maxhp')
+  ) {
+    return 'hand-attack'
+  }
+  return 'hand-control'
 }
 
 /** Collect currently rendered field cards once so grouped cards are only hit by
@@ -2537,6 +2574,30 @@ async function applyHandSingle(
       }
     }
     boardRenderer.refreshChainBanner(buildChainHints())
+
+    // Recipe effects get their own damage diff after the combo delay. As above,
+    // cards killed by that damage keep their damage burst and only suppress the
+    // later removal burst.
+    absorbBossShieldAfterFieldEffect(beforeRecipeHealth)
+    const recipeDamageLosses = diffFieldHealthLosses(beforeRecipeHealth)
+    const recipeDamagedIds = new Set(recipeDamageLosses.map((loss) => loss.cardId))
+    const recipeFrozenIds = diffNewlyFrozenCards(beforeRecipeFreeze)
+    const recipeThawedIds = diffThawedCards(beforeRecipeFreeze)
+    // 조합도 손패와 같이 대상마다 곡사 블라스트를 한 발씩 보낸다 — 도화선·성화처럼
+    // 전방 전체를 치는 레시피는 이게 없으면 "어디서 무엇이 몇 칸을 때렸는지"가 사라진다.
+    // ★ 아래 손패 지급 render()보다 **먼저** 쏜다 — 렌더가 돌면 제거된 카드가 DOM에서
+    //   사라져 그 칸으로 갈 발사체가 조용히 없어진다.
+    await playHandTargetBlasts(
+      [
+        ...recipeDamageLosses.map((loss) => loss.cardId),
+        ...recipeResult.removedFieldCards.map((removed) => removed.cardId),
+        ...recipeFrozenIds,
+        ...recipeThawedIds,
+      ],
+      burstThemeForRecipeEffect(recipeResult.firedRecipes[0].recipe.effect),
+      'chain'
+    )
+
     // Recipe-drawn hand cards (셔플 / 따뜻함 등) log one acquisition row each
     // so "손패를 뽑는 행위" 가 어디서 발생했든 일관되게 활동 로그에 표기된다.
     if (recipeResult.drawnHandCardDefIds && recipeResult.drawnHandCardDefIds.length > 0) {
@@ -2550,19 +2611,13 @@ async function applyHandSingle(
       await playResourceTrail({ kind: 'chain' }, 'hand', recipeResult.drawnHandCardDefIds.length)
     }
 
-    // Recipe effects get their own damage diff after the combo delay. As above,
-    // cards killed by that damage keep their damage burst and only suppress the
-    // later removal burst.
-    absorbBossShieldAfterFieldEffect(beforeRecipeHealth)
-    const recipeDamageLosses = diffFieldHealthLosses(beforeRecipeHealth)
-    const recipeDamagedIds = new Set(recipeDamageLosses.map((loss) => loss.cardId))
     await boardRenderer.animateDamageNumbersById(recipeDamageLosses)
     // 보스 피해 시 HP 바 카운터를 즉시 반영한다.
     if (bossController.eventState && recipeDamagedIds.has(bossController.eventState.card.id)) {
       boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))
     }
-    await boardRenderer.animateWaxFreezeByIds(diffNewlyFrozenCards(beforeRecipeFreeze))
-    await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeRecipeFreeze))
+    await boardRenderer.animateWaxFreezeByIds(recipeFrozenIds)
+    await boardRenderer.animateWaxThawByIds(recipeThawedIds)
 
     // Light for recipe-driven removals.
     await awardScoreForRemovedCards(recipeResult.removedFieldCards, beforeRecipeCards)

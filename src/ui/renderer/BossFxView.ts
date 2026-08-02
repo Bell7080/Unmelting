@@ -463,10 +463,10 @@ export class BossFxView {
   ): Promise<void> {
     const cell = this.findBossGimmickCell(hit.cellIndex)
     if (!cell) return
-    // 1) 출처 → 칸으로 조준 볼트 한 발. 곧게 날아가 꽂히는 한 발이라야 "저 칸을 때렸다"가
-    //    읽힌다(자원 트레일의 포물선 파편은 '흘러들었다'로 보인다).
+    // 1) 출처 → 칸으로 곡사 블라스트 한 발. 높이 떠올랐다 그 칸 **위에서 수직으로**
+    //    떨어져야 "저 칸을 때렸다"가 읽힌다.
     if (source) {
-      await this.host.trails.animateStrikeBolt(source, cell, this.gimmickFx(hit.kind).theme)
+      await this.host.trails.animateStrikeLob(source, cell, this.gimmickFx(hit.kind).theme)
     }
     // 2) 타격 반동 + 칸 자체의 짧은 버스트.
     this.playBossGimmickCellHit(hit.cellIndex, hit.kind)
