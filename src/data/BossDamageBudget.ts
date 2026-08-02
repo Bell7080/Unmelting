@@ -120,15 +120,30 @@ export function directHitDamage(playerAttack: number, grid: BossGridModel): numb
   return playerAttack * grid.bestMultiplier * grid.breakBonusFactor
 }
 
-/** 손패 한 장이 보스에게 넣는 피해. 광역은 칸 수만큼, 조준은 최고 배율로 들어간다. */
-export function handCardDamage(card: BossAttackCard, playerAttack: number, grid: BossGridModel): number {
+/**
+ * 손패 한 장을 **지금 한 번 썼을 때** 실제로 깎이는 체력.
+ *
+ * 부위 파괴 보너스를 곱하지 않는다 — 그 보너스는 칸이 실제로 깨질 때만 붙는데,
+ * 카드 한 장이 칸 내구도를 채우는 일은 거의 없기 때문이다(30F 기준 내구도 27,
+ * 샹들리에 한 칸당 3). 여기에 `breakBonusFactor`를 곱하면 카드 한 장이 실제보다
+ * 1.8배 세 보이고, "이 카드 한 장이 전투를 끝낸다" 같은 잘못된 결론이 나온다.
+ * 전투 전체에 걸친 부위 파괴 보너스는 `handCardDamage`/`bossHpForBudget`이 총합에 한 번 얹는다.
+ */
+export function handCardImpact(card: BossAttackCard, playerAttack: number, grid: BossGridModel): number {
   if (card.reach === 'unmodeled') return 0
   const perHit = card.atkMult * playerAttack + card.flat
   if (perHit <= 0) return 0
-  if (card.reach === 'area') {
-    return perHit * grid.cells * grid.averageMultiplier * grid.breakBonusFactor
-  }
-  return perHit * (card.aimed ? grid.bestMultiplier : grid.averageMultiplier) * grid.breakBonusFactor
+  if (card.reach === 'area') return perHit * grid.cells * grid.averageMultiplier
+  return perHit * (card.aimed ? grid.bestMultiplier : grid.averageMultiplier)
+}
+
+/**
+ * 손패 한 장의 **전투 기여분**. 1회 실효 피해에 부위 파괴 보너스를 상각해 얹은 값이라
+ * 체력 역산(`bossHpForBudget`)이 쓰는 쪽이다. 한 장이 화면에서 내는 수치가 아니다 —
+ * 그건 `handCardImpact`다.
+ */
+export function handCardDamage(card: BossAttackCard, playerAttack: number, grid: BossGridModel): number {
+  return handCardImpact(card, playerAttack, grid) * grid.breakBonusFactor
 }
 
 /** 가중치대로 한 장 뽑았을 때의 기대 피해. 체력 산출은 이 평균을 쓴다. */

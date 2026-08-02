@@ -11,7 +11,7 @@ import {
   actionsToKill,
   bossAttackCardPool,
   bossGridModel,
-  handCardDamage,
+  handCardImpact,
   type BossFightBudget,
 } from './BossDamageBudget'
 import {
@@ -92,10 +92,12 @@ describe('보스 체력 곡선', () => {
 
   it('광역 손패 한 장이 보스를 혼자 절반 넘게 지우지 않는다', () => {
     // 사용자가 짚은 지점: 샹들리에 유무로 난이도가 뒤집히면 곡선이 아니라 뽑기 게임이 된다.
+    // 판정은 **1회 실효 피해**(handCardImpact)로 한다 — 전투 전체에 상각된 부위 파괴
+    // 보너스를 한 장에 곱하면(handCardDamage) 카드가 실제보다 1.8배 세게 잡힌다.
     const chandelier = bossAttackCardPool().find((c) => c.id === 'chandelier')
     expect(chandelier).toBeTruthy()
     for (const { label, maxHp, fight } of ALL) {
-      const damage = handCardDamage(chandelier!, fight.playerAttack, bossGridModel(fight.gimmickKind))
+      const damage = handCardImpact(chandelier!, fight.playerAttack, bossGridModel(fight.gimmickKind))
       expect(damage / maxHp, `${label} 샹들리에 단독 비중`).toBeLessThan(0.5)
     }
   })

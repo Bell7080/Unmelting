@@ -27,6 +27,7 @@ import {
   bossGridModel,
   directHitDamage,
   handCardDamage,
+  handCardImpact,
   expectedHandCardDamage,
   type BossAttackCard,
   type BossFightBudget,
@@ -60,8 +61,10 @@ interface Scenario {
   label: string
   /** 이 시나리오에서 뽑힐 수 있는 카드. */
   pool: BossAttackCard[]
-  /** 손에 쥔 공격 손패 장수. */
+  /** 손에 쥔 공격 손패 장수(아래 forced 포함). */
   handSize: number
+  /** 반드시 손에 있다고 두는 카드. 이 카드의 피해도 손패피해에 **함께** 센다. */
+  forced?: BossAttackCard
 }
 
 interface Outcome {
@@ -84,7 +87,9 @@ function simulate(
   for (let i = 0; i < trials; i++) {
     let handDamage = 0
     let unmodeled = 0
-    for (let c = 0; c < scenario.handSize; c++) {
+    if (scenario.forced) handDamage += handCardDamage(scenario.forced, attack, grid)
+    const drawn = scenario.handSize - (scenario.forced ? 1 : 0)
+    for (let c = 0; c < drawn; c++) {
       const card = drawWeighted(scenario.pool, rng)
       if (card.reach === 'unmodeled') unmodeled++
       handDamage += handCardDamage(card, attack, grid)
@@ -149,7 +154,14 @@ function main(): void {
     const share = ((c.weight / totalWeight) * 100).toFixed(1)
     const kindLabel = c.reach === 'area' ? '광역' : c.reach === 'unmodeled' ? '미모델' : c.aimed ? '조준' : '무작위'
     const dmg = c.reach === 'unmodeled' ? '' : `  ${c.atkMult}공+${c.flat}`
-    console.log(`  ${c.name.padEnd(10)} w=${String(c.weight).padStart(2)} (${share.padStart(4)}%) ${kindLabel}${dmg}`)
+    // 3~4장 뽑았을 때 이 카드가 손에 **한 장이라도** 들어올 확률. 한 장의 위력만 보면
+    // "이 카드가 전투를 지배한다"로 읽히지만, 실제로는 대개 안 들어온다.
+    const p3 = (1 - (1 - c.weight / totalWeight) ** 3) * 100
+    const p4 = (1 - (1 - c.weight / totalWeight) ** 4) * 100
+    console.log(
+      `  ${c.name.padEnd(10)} w=${String(c.weight).padStart(2)} (${share.padStart(4)}%) ${kindLabel}${dmg}` +
+        `   손에 들어올 확률 3장 ${p3.toFixed(0).padStart(2)}% / 4장 ${p4.toFixed(0).padStart(2)}%`
+    )
   }
   console.log(`  (해금 전 잠긴 공격 손패 ${pool.length - unlocked.length}종 제외)`)
   console.log(`  광역 손패: ${areaCards.map((c) => `${c.name}${c.runLocked ? '(잠김)' : ''}`).join(', ')}\n`)
@@ -164,21 +176,25 @@ function main(): void {
         ` · 부위 파괴 ×${grid.breakBonusFactor.toFixed(2)} · 직접 1타 ${perHit.toFixed(1)}` +
         ` · 손패 1장 기대 ${expectedHandCardDamage(attack, grid, unlocked).toFixed(1)}`
     )
+    // 한 장을 지금 썼을 때 실제로 깎이는 체력(부위 파괴 보너스 없음). 전투 기여분과
+    // 구분해서 찍는다 — 이 둘을 섞으면 카드 한 장이 1.8배 세 보인다.
+    const oneShot = [...unlocked]
+      .filter((c) => c.reach !== 'unmodeled')
+      .sort((a, b) => handCardImpact(b, attack, grid) - handCardImpact(a, attack, grid))
+      .slice(0, 3)
+      .map((c) => {
+        const hit = handCardImpact(c, attack, grid)
+        return `${c.name} ${hit.toFixed(0)}(${((hit / row.spec.maxHp) * 100).toFixed(0)}%)`
+      })
+    console.log(`   1회 실효 피해 상위 — ${oneShot.join(' · ')}`)
     for (const handSize of HAND_SIZES) {
       report(`무작위 ${handSize}장`, unlocked, handSize, row, grid, attack)
       report('└ 샹들리에 없음', noChandelier, handSize, row, grid, attack)
       const chandelier = unlocked.find((c) => c.id === 'chandelier')
       if (chandelier) {
-        const forced = handCardDamage(chandelier, attack, grid)
-        report(
-          '└ 샹들리에 확정',
-          unlocked,
-          handSize - 1,
-          { ...row, spec: { ...row.spec, maxHp: Math.max(0, row.spec.maxHp - forced) } },
-          grid,
-          attack,
-          1
-        )
+        // 강제 카드를 체력에서 미리 빼면 그 피해가 표에서 사라져 '확정'이 오히려
+        // 약해 보인다(실제로 그렇게 읽혔다). 손에 쥐여 주고 피해도 함께 센다.
+        report('└ 샹들리에 확정', unlocked, handSize, row, grid, attack, 0, chandelier)
       }
     }
     console.log('')
@@ -188,6 +204,10 @@ function main(): void {
   console.log('  · "총 행동"이 목표 행동 근처면 곡선이 맞는 것이다.')
   console.log('  · p10과 p90의 폭이 목표의 절반을 넘으면 뽑기 운이 난이도를 지배하고 있다는 뜻이다.')
   console.log('  · 미모델(레바테인·방패 밀치기·손거울)은 0으로 세므로 실제는 이 값보다 조금 세다.')
+  console.log('  · "1회 실효 피해"는 지금 한 번 썼을 때 깎이는 체력이고, 표의 손패피해는')
+  console.log('    전투 전체에 상각된 부위 파괴 보너스까지 얹은 기여분이다 — 둘을 섞지 말 것.')
+  console.log('  · 광역 카드는 성한 칸에만 들어간다. 칸이 깨질수록 약해지는데 모델은 항상')
+  console.log('    전체 칸으로 계산하므로, 후반부 광역 피해는 표보다 낮다.')
 }
 
 function report(
@@ -197,9 +217,10 @@ function report(
   row: BossRow,
   grid: BossGridModel,
   attack: number,
-  extraActions = 0
+  extraActions = 0,
+  forced?: BossAttackCard
 ): void {
-  const outcomes = simulate({ label, pool, handSize }, row.spec, attack, grid, TRIALS, 12345 + handSize)
+  const outcomes = simulate({ label, pool, handSize, forced }, row.spec, attack, grid, TRIALS, 12345 + handSize)
   const hand = summarize(outcomes.map((o) => o.handDamage))
   const actions = summarize(outcomes.map((o) => o.directHits + handSize + extraActions))
   console.log(
