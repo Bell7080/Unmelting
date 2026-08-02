@@ -1152,8 +1152,11 @@ export class GameBoardRenderer {
     const phaseAttrs = phase && phase.page >= 2
       ? ` data-page="${Math.min(3, phase.page)}" data-page-tone="${phase.tone}"`
       : ''
+    // 보스 종류를 face에 실어 둔다 — 조각사 비대화처럼 '이 보스만' 붙는 연출을 CSS에서
+    // 고를 수 있게 하기 위해서다(렌더러에 보스별 분기를 늘리지 않는다).
+    const kindAttr = card.specialEnemyKind ? ` data-boss-kind="${card.specialEnemyKind}"` : ''
     return `
-      <article class="boss-face ${cellTargeting ? 'is-cell-targeting' : ''}"${phaseAttrs} style="--boss-art: url('${sprite}');">
+      <article class="boss-face ${cellTargeting ? 'is-cell-targeting' : ''}"${phaseAttrs}${kindAttr} style="--boss-art: url('${sprite}');">
         ${frozenBadge}
         <div class="boss-face-art" aria-hidden="true"></div>
         <div class="boss-face-overlay" aria-hidden="true"></div>

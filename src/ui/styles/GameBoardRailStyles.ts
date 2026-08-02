@@ -1222,6 +1222,18 @@ export const GAME_BOARD_RAIL_STYLES = `
   --boss-phase-warm: rgba(158, 72, 232, 0.7);
   --boss-phase-cool: rgba(206, 130, 255, 0.32);
 }
+/* 90F 조각사 2페이지 '비대화' — 밀랍을 더 퍼먹어 몸집이 부푼다. 타일 크기는 레일이
+   정하므로 일러스트만 키우고, 느린 맥동으로 아직 부풀고 있다는 인상을 남긴다. */
+.boss-face[data-boss-kind="waxSculptor"][data-page="2"] .boss-face-art {
+  transform: scale(1.12);
+  transform-origin: 50% 62%;
+  animation: boss-sculptor-swell 4.2s ease-in-out infinite;
+}
+@keyframes boss-sculptor-swell {
+  0%, 100% { transform: scale(1.1); }
+  50%      { transform: scale(1.16); }
+}
+
 @keyframes boss-phase-heat-breathe {
   0%, 100% { opacity: calc(var(--boss-phase-heat, 0.26) * 0.72); transform: translateY(0) scale(1); }
   50%      { opacity: var(--boss-phase-heat, 0.26);              transform: translateY(-1.5%) scale(1.03); }

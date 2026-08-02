@@ -38,10 +38,22 @@ const BOSS_TURN_BEAT_MS = 300
 const PAGE_GATE_WARNING_TEXT = '칸을 파괴해야합니다.'
 
 /**
- * 격자 보스의 2페이지 전환 대사. 보스마다 한 묶음이며, 없는 보스는 대사 없이 넘어간다.
- * 새싹 고양이는 2페이지 능력이 아직 비어 있어 전환 자체만 성립시킨다.
+ * 절반 HP에서 한 번 멈추고 2페이지로 넘어가는 보스들.
+ * 격자가 켜진 보스는 그 자리에서 부위를 하나 더 깨야 열리고(리미트 페이지),
+ * 격자가 없는 보스는 닿는 순간 열린다. 요구 조건은 `bossPageGate()`가 정한다.
  */
-const CELL_PAGE_TWO_LINES: Partial<Record<
+const HALF_PAGE_BOSSES = new Set<SpecialEnemyKind>(['waxArmy', 'waxCat', 'waxKnight', 'waxSculptor'])
+
+/** 90F 조각사 2페이지 광폭화 — 소환 종복이 얻는 체력 보너스. */
+const SCULPTOR_ENRAGE_HP = 5
+/** 100F 마녀 3페이지 광폭화 — 소환 종복이 얻는 공격력/체력 보너스. */
+const WITCH_ENRAGE_ATK = 3
+const WITCH_ENRAGE_HP = 8
+
+/**
+ * 절반 HP 2페이지 전환 대사. 보스마다 한 묶음이며, 없는 보스는 대사 없이 넘어간다.
+ */
+const HALF_PAGE_TWO_LINES: Partial<Record<
   SpecialEnemyKind,
   ReadonlyArray<{ speaker: 'boss' | 'player'; text: string; holdMs: number }>
 >> = {
@@ -52,8 +64,17 @@ const CELL_PAGE_TWO_LINES: Partial<Record<
   ],
   waxCat: [
     { speaker: 'boss',   text: '야옹. . .',                      holdMs: 1800 },
-    { speaker: 'boss',   text: '제법 아프잖아, 너.',              holdMs: 2600 },
-    { speaker: 'player', text: '아직 안 끝났어.',                 holdMs: 2200 },
+    { speaker: 'boss',   text: '이제 안 나눠 줄 거야.',            holdMs: 2600 },
+    { speaker: 'player', text: '내 손패를…!',                     holdMs: 2200 },
+  ],
+  waxKnight: [
+    { speaker: 'boss',   text: '아직. . . 쓰러질 수 없다.',        holdMs: 2600 },
+    { speaker: 'boss',   text: '한 장으로는 부족하겠군.',          holdMs: 2600 },
+    { speaker: 'player', text: '왜 그렇게까지 하는 거야.',         holdMs: 2400 },
+  ],
+  waxSculptor: [
+    { speaker: 'boss',   text: '. . .좋아. 재료가 더 필요해.',      holdMs: 2800 },
+    { speaker: 'player', text: '저 몸집이. . . 부풀고 있어.',       holdMs: 2400 },
   ],
 }
 /** 30F 탐욕의 값이 참조하는 손패 defId. */
@@ -128,13 +149,13 @@ export interface BossEventState {
   demonCandleCounter: number
   /** waxDemon 2페이지 전환 HP 임계값 (maxHp * 0.65 반올림). */
   nextDemonPageAt: number
-  /** 격자 보스(waxArmy·waxCat) 현재 페이지. 1 → 2 전환은 절반 HP에서 부위를 깰 때. */
-  cellPage: 1 | 2
+  /** 절반 HP 페이지를 쓰는 보스(HALF_PAGE_BOSSES)의 현재 페이지. */
+  halfPage: 1 | 2
   /**
    * 리미트 페이지에 처음 닿은 순간의 파괴 칸 수. 이 값을 넘겨야 페이지가 열린다.
-   * null이면 아직 리미트에 닿지 않았다는 뜻이다.
+   * 격자가 없어 부위 파괴를 요구하지 않는 보스는 쓰지 않는다(null 유지).
    */
-  cellLimitBrokenMark: number | null
+  halfPageBrokenMark: number | null
 }
 
 export interface BossRewardState {
@@ -300,7 +321,8 @@ export class BossEventController {
       introBubbleMs: 4000,
       playerBubbleMs: 2600,
       trait: [
-        '첫 번째 : 공격 주기마다 손패 한 장을 빼앗음. 촛농·양초·불씨면 직접 사용.',
+        '첫 번째 : 공격 주기마다 손패 1장을 흘려 줌.',
+        '두 번째 : 반대로 손패 1장을 빼앗음. 촛농·양초·불씨면 직접 사용.',
         '체력 절반에서 칸을 파괴해야 다음 페이지로 넘어감.',
       ].join('\n'),
       kicker: '장난기 어린 발톱',
@@ -329,7 +351,10 @@ export class BossEventController {
       introBubbleMs: 3220,
       // 타자기(15자×70ms≈1050ms) + 읽기(1900ms) + 퇴장(400ms)
       playerBubbleMs: 3350,
-      trait: '2턴마다 기사단장의 손패 2장 발동.',
+      trait: [
+        '첫 번째 : 공격 주기마다 기사단장의 손패 2장 발동.',
+        '두 번째 : 손패 3장으로 늘고 각 카드 수치 +1.',
+      ].join('\n'),
       kicker: '저택의 방패',
     }
     await this.runBossEvent(def)
@@ -356,7 +381,10 @@ export class BossEventController {
       // 타자기(16자×70ms≈1120ms) + 읽기(2000ms)
       playerBubbleMs: 3050,
       // 다른 보스 특징과 어미를 맞춘다(존댓말 하나만 튀어 있었다).
-      trait: '3턴마다 밀랍을 조각해 양초를 소환하고 몸을 숨김.',
+      trait: [
+        '첫 번째 : 공격 주기마다 밀랍을 조각해 종복을 소환하고 몸을 숨김.',
+        '두 번째 : 스스로 부풀며 모든 종복을 광폭화시킴(체력 +5).',
+      ].join('\n'),
       kicker: '광기의 예술가',
     }
     await this.runBossEvent(def)
@@ -382,9 +410,9 @@ export class BossEventController {
       introBubbleMs: 3600,
       playerBubbleMs: 2500,
       trait: [
-        '첫 번째 : 체력을 10 잃을 때마다 플레이어의 손패 2장을 불태움.',
-        '두 번째 : 공격 주기마다 손패 4장을 펼치고, 겹친 손패가 있다면 추가 카드를 사용함.',
-        '세 번째 : 광폭화된 양초 적들을 소환함.',
+        '첫 번째 : 공격 주기마다 플레이어의 손패 2장을 불태움.',
+        '두 번째 : 손패 4장을 펼치고, 겹친 손패가 있다면 추가 카드를 사용함.',
+        '세 번째 : 광폭화된 종복을 소환함(공격력 +3 · 체력 +8).',
       ].join('\n'),
       kicker: '잿빛 굴레의 주인',
     }
@@ -531,7 +559,7 @@ export class BossEventController {
     await this.consumeHandGiftThresholds(card.id)
     if (await this.resolveWaxWitchAfterDamage(beforeBossHp)) return
     if (await this.resolveDemonAfterDamage(beforeBossHp)) return
-    if (await this.resolveCellLimitPage()) return
+    if (await this.resolveHalfPage()) return
     this.inject.render()
 
     if (card.getHealth() <= 0) {
@@ -596,7 +624,8 @@ export class BossEventController {
         if (state.def.specialEnemyKind === 'waxArmy') {
           if (await this.resolveWaxArmyGreedTurn(card.id)) return
         } else if (state.def.specialEnemyKind === 'waxCat') {
-          await this.stealHandCard()
+          await this.resolveWaxCatTurn()
+          await this.pauseBeat()
         }
         character.takeDamage(card.getDamage())
         await this.br.animateBossSlamAttack(card.id)
@@ -631,7 +660,7 @@ export class BossEventController {
     }
     if (await this.resolveWaxWitchAfterDamage(null)) return
     if (await this.resolveDemonAfterDamage(null)) return
-    if (await this.resolveCellLimitPage()) return
+    if (await this.resolveHalfPage()) return
     if (this.eventState.card.getHealth() <= 0) {
       await this.handleDefeated()
       return
@@ -908,8 +937,8 @@ export class BossEventController {
       nextDemonPageAt: def.specialEnemyKind === 'waxDemon'
         ? Math.ceil(def.maxHp * 0.65)  // HP 65% 이하에서 2페이지 전환
         : 0,
-      cellPage: 1,
-      cellLimitBrokenMark: null,
+      halfPage: 1,
+      halfPageBrokenMark: null,
     }
     this.syncBossShieldToCard()
     // HP바 경계선은 격자보다 먼저 보인다(격자는 인트로 뒤에 켜진다).
@@ -1051,7 +1080,39 @@ export class BossEventController {
   /** 30F 양초 백작 특징: 공격 주기마다 손패에 카드 2~4장을 흩뿌린다.
    *  2장=탐욕동전1+랜덤1, 3장=탐욕동전1~2+랜덤(합3), 4장=탐욕동전2+랜덤2.
    *  탐욕의 동전은 쓰면 자신을 다치게 하는 찌꺼기 카드라 손패를 갉아먹는다. */
-  /** 양초 고양이: 손패 1장을 강탈한다. 촛농/양초/불씨(밀랍·불)면 삼켜서 보스가 HP를 회복한다. */
+  /**
+   * 양초 고양이의 공격 주기 능력 — 페이지로 성격이 뒤집힌다.
+   *
+   *   1페이지: 손패를 **한 장 준다**. 온보딩 보스라 첫 보스전에서 손이 마르지 않게 하는
+   *            배려다. "장난치며 갖고 논다"는 성격에도 맞는다.
+   *   2페이지: 반대로 **한 장 가져간다**. 준 것을 도로 뺏는 전환이 페이지의 체감이 된다.
+   */
+  private async resolveWaxCatTurn(): Promise<void> {
+    if (!this.eventState) return
+    if (this.eventState.halfPage >= 2) {
+      await this.stealHandCard()
+      return
+    }
+    await this.giftHandCard()
+  }
+
+  /** 양초 고양이 1페이지: 랜덤 손패 1장을 흘려 준다(온보딩 배려). */
+  private async giftHandCard(): Promise<void> {
+    const character = this.gs.character
+    if (!this.eventState) return
+    const card = DropSystem.generateDrop('enemy-kill')
+    if (!character.addHandCard(card)) {
+      this.inject.recordNotice('양초 고양이가 손패를 흘렸지만 손이 가득 차 있었다', 'info')
+      return
+    }
+    this.inject.render()
+    const slotIndex = character.hand.findIndex((h) => h?.uid === card.uid)
+    const name = getHandCardDef(card.defId).name
+    this.inject.recordNotice(`양초 고양이가 ${name}을(를) 굴려 보냈다 — 손패 +1`, 'info')
+    if (slotIndex >= 0) await this.br.animateBossScatterToHandSlots(this.eventState.card.id, [slotIndex])
+  }
+
+  /** 양초 고양이 2페이지: 손패 1장을 강탈한다. 촛농/양초/불씨(밀랍·불)면 삼켜서 보스가 HP를 회복한다. */
   private async stealHandCard(): Promise<void> {
     const character = this.gs.character
     if (character.hand.length === 0 || !this.eventState) return
@@ -1123,7 +1184,7 @@ export class BossEventController {
     if (!state) return false
     await this.scatterGreedCards(bossCardId)
     await this.pauseBeat()
-    if (state.cellPage >= 2) {
+    if (state.halfPage >= 2) {
       if (await this.collectGreedCoinToll()) return true
       await this.pauseBeat()
     }
@@ -1184,10 +1245,14 @@ export class BossEventController {
     if (state.def.specialEnemyKind === 'waxDemon' && state.demonPage === 1) {
       return { floor: state.nextDemonPageAt, requirement: 'none' }
     }
-    // 격자 보스(30F 백작 · 새싹 고양이): 절반에서 한 번 멈추고 부위를 깨야만 뚫린다 —
-    // 약점만 긁어 HP를 미는 진행을 끊는다. 격자가 켜진 보스면 종류를 가리지 않고 붙는다.
-    if (this.gimmicks.isActive && state.cellPage === 1) {
-      return { floor: Math.ceil(state.def.maxHp / 2), requirement: 'cell-break' }
+    // 절반 HP 페이지 보스: 반쯤 깎으면 한 번 멈춘다. 격자가 켜져 있으면 그 자리에서
+    // 부위를 하나 더 깨야 열리고(약점만 긁어 HP를 미는 진행을 끊는다), 격자가 없으면
+    // 닿는 순간 스스로 열린다.
+    if (HALF_PAGE_BOSSES.has(state.def.specialEnemyKind) && state.halfPage === 1) {
+      return {
+        floor: Math.ceil(state.def.maxHp / 2),
+        requirement: this.gimmicks.isActive ? 'cell-break' : 'none',
+      }
     }
     return null
   }
@@ -1210,8 +1275,8 @@ export class BossEventController {
     if (kind === 'waxDemon') {
       return [{ threshold: state.nextDemonPageAt, open: state.demonPage > 1 }]
     }
-    if (this.gimmicks.isActive) {
-      return [{ threshold: Math.ceil(state.def.maxHp / 2), open: state.cellPage > 1 }]
+    if (HALF_PAGE_BOSSES.has(kind)) {
+      return [{ threshold: Math.ceil(state.def.maxHp / 2), open: state.halfPage > 1 }]
     }
     return []
   }
@@ -1226,7 +1291,7 @@ export class BossEventController {
     const kind = state.def.specialEnemyKind
     if (kind === 'waxWitch') return { page: state.witchPage, tone: 'ember' }
     if (kind === 'waxDemon') return { page: state.demonPage, tone: 'violet' }
-    if (this.gimmicks.isActive) return { page: state.cellPage, tone: 'ember' }
+    if (HALF_PAGE_BOSSES.has(kind)) return { page: state.halfPage, tone: 'ember' }
     return null
   }
 
@@ -1359,41 +1424,86 @@ export class BossEventController {
   }
 
   /**
-   * 격자 보스의 리미트 페이지. 절반 HP에 닿으면 HP가 더 내려가지 않고, 그 뒤 부위를
-   * 하나 깨야 열린다 — 약점만 골라 긁어 HP만 미는 진행을 한 번 끊어 세우는 관문이다.
-   * 열리기 전까지는 매 타격이 피해 대신 경고 문구를 띄운다(pageGateWarning).
+   * 절반 HP 2페이지 전환. 격자가 켜진 보스는 그 자리에서 **부위를 하나 더 깨야** 열리는
+   * 리미트가 되고(약점만 긁어 HP만 미는 진행을 끊는다), 격자가 없는 보스는 닿는 순간
+   * 열린다. 리미트가 잠겨 있는 동안에는 매 타격이 피해 대신 경고 문구를 띄운다.
    */
-  private async resolveCellLimitPage(): Promise<boolean> {
+  private async resolveHalfPage(): Promise<boolean> {
     const state = this.eventState
-    if (!state || !this.gimmicks.isActive || state.cellPage !== 1) return false
+    if (!state || state.halfPage !== 1) return false
     const gate = this.bossPageGate()
     if (!gate || state.card.getHealth() > gate.floor) return false
 
-    // 깰 부위가 하나도 안 남았다면 요구 조건 자체가 성립하지 않는다 — 잠그지 않고 연다.
-    const noCellsLeft = this.gimmicks.brokenCount >= this.gimmicks.cellCount
-    // 리미트 도달 beat: 이 순간의 파괴 칸 수를 기준선으로 잡고 요구 조건을 알린다.
-    if (state.cellLimitBrokenMark === null && !noCellsLeft) {
-      state.cellLimitBrokenMark = this.gimmicks.brokenCount
-      if (state.card.health < gate.floor) state.card.health = gate.floor
-      this.inject.recordNotice(`${state.card.name}이(가) 밀랍으로 굳었다 — 칸을 파괴해야 더 들어간다`, 'info')
-      this.inject.render()
-      await this.br.playBossPageGateWarning(state.card.id, PAGE_GATE_WARNING_TEXT, true)
-      return false
+    if (gate.requirement === 'cell-break') {
+      // 깰 부위가 하나도 안 남았다면 요구 조건이 성립하지 않는다 — 잠그지 않고 연다.
+      const noCellsLeft = this.gimmicks.brokenCount >= this.gimmicks.cellCount
+      // 리미트 도달 beat: 이 순간의 파괴 칸 수를 기준선으로 잡고 요구 조건을 알린다.
+      if (state.halfPageBrokenMark === null && !noCellsLeft) {
+        state.halfPageBrokenMark = this.gimmicks.brokenCount
+        if (state.card.health < gate.floor) state.card.health = gate.floor
+        this.inject.recordNotice(`${state.card.name}이(가) 밀랍으로 굳었다 — 칸을 파괴해야 더 들어간다`, 'info')
+        this.inject.render()
+        await this.br.playBossPageGateWarning(state.card.id, PAGE_GATE_WARNING_TEXT, true)
+        return false
+      }
+      // 기준선을 넘겼다 = 리미트에서 부위를 하나 더 깼다 → 페이지가 열린다.
+      if (!noCellsLeft && this.gimmicks.brokenCount <= (state.halfPageBrokenMark ?? 0)) return false
+    } else if (state.card.health < gate.floor) {
+      // 경계 초과 피해는 버리고 정확히 경계에서 멈춘다(HP바가 아래로 깜빡이지 않게).
+      state.card.health = gate.floor
     }
-    // 기준선을 넘겼다 = 리미트에서 부위를 하나 더 깼다 → 페이지가 열린다.
-    if (!noCellsLeft && this.gimmicks.brokenCount <= (state.cellLimitBrokenMark ?? 0)) return false
 
-    state.cellPage = 2
+    state.halfPage = 2
     state.turn = 0
     this.syncPageState()
     this.br.setBossAttackCountdown(state.def.attackInterval)
     this.inject.render()
-    for (const line of CELL_PAGE_TWO_LINES[state.def.specialEnemyKind] ?? []) {
+    for (const line of HALF_PAGE_TWO_LINES[state.def.specialEnemyKind] ?? []) {
       await this.playIntroLine(line.speaker, line.text, line.holdMs)
     }
-    this.inject.onBossPhase?.(state.def.name, 'cell-page-2')
+    await this.applyHalfPageTwoEntry()
+    this.inject.onBossPhase?.(state.def.name, 'half-page-2')
     this.inject.setInputLocked(false)
     return true
+  }
+
+  /**
+   * 2페이지 진입 순간 1회 발동하는 보스별 능력.
+   * 매 턴 도는 능력(고양이 강탈·기사단장 추가 카드)은 각자의 턴 처리에 있고,
+   * 여기 있는 것은 **전환 시점에 판을 바꾸는 것**뿐이다.
+   */
+  private async applyHalfPageTwoEntry(): Promise<void> {
+    const state = this.eventState
+    if (!state) return
+    if (state.def.specialEnemyKind === 'waxSculptor') {
+      // 조각사는 스스로 비대해지고(연출), 자기 종복을 전부 광폭화시킨다.
+      const enraged = this.enrageFieldEnemies(0, SCULPTOR_ENRAGE_HP)
+      this.inject.recordNotice(
+        `밀랍 조각사가 부풀어 오르며 종복 ${enraged}체를 광폭화시켰다 — 체력 +${SCULPTOR_ENRAGE_HP}`,
+        'hurt'
+      )
+      this.inject.render()
+      if (enraged > 0) await this.br.animateEnemyEmberEmpower(this.getAliveSummonedCards().map((c) => c.id))
+    }
+  }
+
+  /**
+   * 필드의 일반 적 전체에 스탯 보너스를 소급 적용한다(시련 '광란'과 같은 경로라
+   * 합체 적·이미 입은 피해가 알아서 맞는다). 보스와 특수 적은 대상에서 빠진다.
+   */
+  private enrageFieldEnemies(atkBonus: number, hpBonus: number): number {
+    let count = 0
+    const seen = new Set<Card>()
+    for (const lane of this.gs.lanes) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = lane.getCardAtDistance(d)
+        if (!card || seen.has(card) || card.type !== CardType.ENEMY) continue
+        seen.add(card)
+        card.applyTrialEnemyStatBonus(atkBonus, hpBonus)
+        count++
+      }
+    }
+    return count
   }
 
   /** 100F 2페이지: 보스 손패 4장을 공격 전에 사용하고, 같은 효과 2장 이상이면 추가 1회 발동한다. */
@@ -1427,6 +1537,8 @@ export class BossEventController {
     await this.br.animateBossHandCombo(bossCardId, effects, bonusEffects, amount, applyWitchCardEffect)
     if (!character.isAlive() || character.authoritySurvivePending) return false
 
+    // 카드가 전부 발동된 뒤에 때린다(기사단장과 같은 박자).
+    await this.pauseBeat()
     character.takeDamage(state.def.attack)
     await this.br.animateBossSlamAttack(bossCardId)
     await this.br.animatePlayerDamageImpact(state.def.attack)
@@ -1445,9 +1557,13 @@ export class BossEventController {
     const state = this.eventState!
     const character = this.gs.character
 
-    // 1) 특징 연출: 손패 2장을 한 번에 펼쳐 빠르게 순차 발동한다(이펙트 목적지는 살아 있는 보스 셀 기준).
-    const cards = sampleWithoutReplacement<WaxKnightCardEffect>(['shield', 'heal', 'strike'], 2)
-    const amount = state.def.handCardAmount
+    // 1) 특징 연출: 손패를 한 번에 펼쳐 빠르게 순차 발동한다(이펙트 목적지는 살아 있는 보스 셀 기준).
+    //    2페이지는 카드가 한 장 늘고 각 카드의 수치도 1씩 오른다 — 같은 패턴이 무거워진다.
+    const page2 = state.halfPage >= 2
+    const cardCount = page2 ? 3 : 2
+    // 효과 3종뿐이라 3장이면 중복 없이 전부 나온다(sampleWithoutReplacement 상한).
+    const cards = sampleWithoutReplacement<WaxKnightCardEffect>(['shield', 'heal', 'strike'], cardCount)
+    const amount = state.def.handCardAmount + (page2 ? 1 : 0)
     const applyKnightCardEffect = async (effect: WaxKnightCardEffect): Promise<void> => {
       if (effect === 'shield') {
         state.bossShield += amount
@@ -1466,7 +1582,9 @@ export class BossEventController {
     await this.br.animateBossHandCombo(bossCardId, cards, [], amount, applyKnightCardEffect)
     if (!character.isAlive() || character.authoritySurvivePending) return false
 
-    // 2) 특징 연출이 끝난 뒤 보스가 플레이어를 타격한다.
+    // 2) 카드가 **전부 발동된 뒤** 한 박자 띄우고 타격한다. 붙여 두면 마지막 카드와
+    //    돌진이 동시에 일어난 일로 읽혀 무엇이 있었는지 남지 않는다.
+    await this.pauseBeat()
     character.takeDamage(state.def.attack)
     await this.br.animateBossSlamAttack(bossCardId)
     await this.br.animatePlayerDamageImpact(state.def.attack)
@@ -1512,6 +1630,9 @@ export class BossEventController {
     const pool = ENEMY_DEFINITIONS.slice(12, 18)
     // 불씨 티어 공격력 보너스를 소환 적에게도 적용한다(필드 일반 적과 동일 — 불씨 부족 시 더 위협적).
     const emberAtk = EmberSystem.getEnemyStatBonus(this.tm.getEmberTier()).atk
+    // 2페이지부터는 새로 부르는 종복도 광폭화된 채로 나온다 — 전환 시점의 1회성 버프가
+    // 아니라 그 뒤 소환에도 계속 붙어야 "판이 무거워졌다"가 유지된다.
+    const enrageHp = state.halfPage >= 2 ? SCULPTOR_ENRAGE_HP : 0
     for (let i = 0; i < 3; i++) {
       const enemyDef = pool[Math.floor(Math.random() * pool.length)]
       const enemy = new Card(
@@ -1519,7 +1640,7 @@ export class BossEventController {
         CardType.ENEMY,
         enemyDef.name,
         enemyDef.description,
-        enemyDef.healthOrDamage ?? 1,
+        (enemyDef.healthOrDamage ?? 1) + enrageHp,
         enemyDef.attack ?? 1,
         { enemySpriteId: enemyDef.enemySpriteId, enemyPower: enemyDef.enemyPower },
       )
@@ -1529,10 +1650,16 @@ export class BossEventController {
     }
 
     this.inject.render()
-    this.inject.recordNotice('밀랍 조각사가 후퇴하며 종복들을 소환했다!', 'hurt')
+    this.inject.recordNotice(
+      enrageHp > 0
+        ? '부푼 밀랍 조각사가 광폭화된 종복들을 소환했다!'
+        : '밀랍 조각사가 후퇴하며 종복들을 소환했다!',
+      'hurt'
+    )
     // 좌→우 순서로 소환 연출 (enemyIds는 레인 0→1→2)
     const summonedIds = [...state.summonedEnemyIds]
     await this.br.animateSculptorSummonEnemies(summonedIds)
+    if (enrageHp > 0) await this.br.animateEnemyEmberEmpower(summonedIds)
   }
 
 
@@ -1553,7 +1680,7 @@ export class BossEventController {
     state.sculptorStartRow = 1
     state.summonedEnemyIds.clear()
 
-    // 최종 보스 소환수는 90F 후기 적 풀을 기반으로 HP+10/ATK+3 버프를 받은 독립 개체다.
+    // 최종 보스 소환수는 90F 후기 적 풀을 기반으로 광폭화 버프를 받은 독립 개체다.
     const pool = ENEMY_DEFINITIONS.slice(12, 18)
     const emberAtk = EmberSystem.getEnemyStatBonus(this.tm.getEmberTier()).atk
     for (let i = 0; i < 3; i++) {
@@ -1563,8 +1690,8 @@ export class BossEventController {
         CardType.ENEMY,
         enemyDef.name,
         enemyDef.description,
-        (enemyDef.healthOrDamage ?? 1) + 10,
-        (enemyDef.attack ?? 1) + 3,
+        (enemyDef.healthOrDamage ?? 1) + WITCH_ENRAGE_HP,
+        (enemyDef.attack ?? 1) + WITCH_ENRAGE_ATK,
         { enemySpriteId: enemyDef.enemySpriteId, enemyPower: (enemyDef.enemyPower ?? 0) + 100 },
       )
       enemy.emberAtkBonus = emberAtk

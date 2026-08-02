@@ -224,8 +224,9 @@ const BOSS_PROFILES: Record<number, BossProfile> = {
   // 없으므로 경계만 옮겨 오고(부위 파괴는 gimmick.breakBonusFactor가 이미 누적 배수로 반영),
   // 경계에서 반격 주기가 초기화되는 리듬을 같게 맞춘다.
   30: bossProfileFrom(BOSS_CORE_SPECS[30], 'greed', [Math.ceil(BOSS_CORE_SPECS[30].maxHp / 2), 0], 'waxArmy'),
-  60: bossProfileFrom(BOSS_CORE_SPECS[60], 'knightHand'),
-  90: bossProfileFrom(BOSS_CORE_SPECS[90], 'summon'),
+  // 60F·90F도 절반 HP에서 2페이지로 넘어간다(격자가 없어 닿는 순간 자동으로 열린다).
+  60: bossProfileFrom(BOSS_CORE_SPECS[60], 'knightHand', [Math.ceil(BOSS_CORE_SPECS[60].maxHp / 2), 0]),
+  90: bossProfileFrom(BOSS_CORE_SPECS[90], 'summon', [Math.ceil(BOSS_CORE_SPECS[90].maxHp / 2), 0]),
   // 마녀 페이지 경계 — 실게임 waxWitchPageFloors()와 같은 비율(maxHp의 2/3·1/3·0).
   100: bossProfileFrom(BOSS_CORE_SPECS[100], 'witch', [
     Math.round(BOSS_CORE_SPECS[100].maxHp * (2 / 3)),
@@ -1760,14 +1761,18 @@ export class EnaTrainingSimulation {
         // 탐욕 살포: 손패에 동전/탐욕의 동전을 흩뿌린다(일부 자해).
         for (let n = 0; n < 2 + this.rng.int(3); n++) this.drawCard(this.rng.next() < 0.5 ? 'greed-coin' : 'coin')
         break
-      case 'knightHand':
-        // 기사단장 손패 2장(방패/회복/타격 혼합) 근사: 밀랍 방패를 두르고 추가 피해를 준다.
-        this.bossShield += 4
-        this.takeDamage(2)
+      case 'knightHand': {
+        // 기사단장 손패(방패/회복/타격 혼합) 근사: 밀랍 방패를 두르고 추가 피해를 준다.
+        // 2페이지는 카드가 3장으로 늘고 수치도 1씩 올라 같은 패턴이 그만큼 무거워진다.
+        const page2 = this.bossPage >= 1
+        this.bossShield += page2 ? 7 : 4
+        this.takeDamage(page2 ? 4 : 2)
         break
+      }
       case 'summon':
         // 조각사 소환 + 은신(방패). 직접 피해 대신 방어 강화로 장기전 유도.
-        this.bossHp = Math.min(this.bossMaxHp, this.bossHp + 4)
+        // 2페이지 광폭화(종복 체력 +5)는 소환 모델이 없어 보스 자가 회복량으로 환산한다.
+        this.bossHp = Math.min(this.bossMaxHp, this.bossHp + (this.bossPage >= 1 ? 7 : 4))
         break
       case 'witch':
         // 마녀: 손패 2장 소각(페이지와 무관하게 매 공격주기 유지) + 강화 소환 피해.
@@ -1775,8 +1780,11 @@ export class EnaTrainingSimulation {
         this.takeDamage(3)
         break
       case 'catSteal':
-        // 양초 고양이: 공격과 함께 손패 1장을 강탈한다. 촛농/양초/불씨였다면 본인이 사용해 자가 회복.
-        if (this.hand.length > 0) {
+        // 양초 고양이는 페이지로 성격이 뒤집힌다 — 1페이지는 손패를 **주고**(온보딩 배려),
+        // 2페이지에 가서야 빼앗는다. 촛농/양초/불씨를 빼앗으면 본인이 써서 자가 회복.
+        if (this.bossPage < 1) {
+          this.drawCard()
+        } else if (this.hand.length > 0) {
           const idx = this.rng.int(this.hand.length)
           const stolen = this.hand[idx].id
           this.consumeHand(idx)
