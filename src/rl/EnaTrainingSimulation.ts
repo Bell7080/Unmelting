@@ -226,7 +226,7 @@ const BOSS_PROFILES: Record<number, BossProfile> = {
   30: bossProfileFrom(BOSS_CORE_SPECS[30], 'greed', [Math.ceil(BOSS_CORE_SPECS[30].maxHp / 2), 0], 'waxArmy'),
   60: bossProfileFrom(BOSS_CORE_SPECS[60], 'knightHand'),
   90: bossProfileFrom(BOSS_CORE_SPECS[90], 'summon'),
-  // 마녀 페이지 경계: 실게임 270~181/180~91/90~0 → maxHp의 2/3·1/3·0으로 파생.
+  // 마녀 페이지 경계 — 실게임 waxWitchPageFloors()와 같은 비율(maxHp의 2/3·1/3·0).
   100: bossProfileFrom(BOSS_CORE_SPECS[100], 'witch', [
     Math.round(BOSS_CORE_SPECS[100].maxHp * (2 / 3)),
     Math.round(BOSS_CORE_SPECS[100].maxHp / 3),

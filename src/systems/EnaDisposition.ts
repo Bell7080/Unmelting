@@ -303,27 +303,33 @@ export function dispositionFromJSON(
 // 시뮬 플레이어를 '교사 + 딥 정책망' 두 종으로 둬 숙련도가 다른 플레이어에게 두루 좋은
 // (robust) 토대를 찾는다. 학습 구조가 의미 있음: 상시 관대함(강한 클러치/각성/빠른 의지
 // 충전)은 저효율이라 절제하고, 치명 피해를 직접 지우는 회피 클러치와 자원/회복 역할 가중을
-// 상향, 예측 재발동 간격은 길게. held-out 500시드×2정책 검증에서 원본 산출은 기존 토대보다
-// 평균 생존 턴이 유의하게 높았다(28.9 vs 27.2). 시뮬이 실게임보다 어려워(유물/직업 미모델)
-// 그대로 쓰면 성향이 극단화되므로 검증된 기본값으로 0.5 블렌드해 sim-to-real 갭을 보정한다.
+// 상향, 예측 재발동 간격은 길게. 시뮬이 실게임보다 어려워(유물/직업 미모델) 그대로 쓰면
+// 성향이 극단화되므로 검증된 기본값으로 0.5 블렌드해 sim-to-real 갭을 보정한다.
 // 시뮬이 굴린 노브만 반영(시뮬 미모델 trap/ember/cleanse 깜짝지원·현 피터가 탐색하지 않는
 // counter/adversityBoost/bondClimax·취향 노브는 기본 유지).
 // 학습 산출물 스냅샷(동봉 가중치)이며, 라이브 토대로 쓰이고 그 위에서 per-player가 개인화한다.
+//
+// ★ 이 값은 **보스 수치가 바뀌면 다시 뽑는다**(BossSpecs 곡선 개편 등). 세계가 달라졌는데
+//   토대가 옛 세계에서 맞춰진 값이면 에나는 없는 게임에 맞춰 돕는다.
+//   2026-08 보스 체력 곡선 재산정 후 재피팅한 스냅샷이며, 피팅에 쓰지 않은
+//   held-out 300시드×2정책에서 기본 26.4 / 이전 스냅샷 29.4 / 이 스냅샷 29.9로 검증했다.
+//   교체 뒤 방어·회복 가중이 오르고 자원·청소 가중이 내려간 것은 새 곡선에서 보스전이
+//   길어져(60F 80→110 등) 버티는 축의 값이 커졌기 때문이다.
 const SIM_FITTED = {
   clutchHpThreshold: 0.2,
-  clutchHealVsShield: 0.282,
-  clutchHealRatio: 0.444,
-  clutchShieldRatio: 0.45,
+  clutchHealVsShield: 0.114,
+  clutchHealRatio: 0.443,
+  clutchShieldRatio: 0.412,
   clutchStrength: 0.6,
   willGainPerDamage: 30,
-  willGainFlatBonus: 0.86,
-  awakenChance: 0.02,
-  predictBaseChance: 0.447,
-  predictCooldown: 19.9,
-  minorClutchCrit: 0.053,
-  minorClutchDodge: 0.46,
-  minorClutchTreasure: 0.117,
-  supportRoleWeights: { cleanup: 1.26, attack: 0.5, defense: 1.2, resource: 1.94, recovery: 2 },
+  willGainFlatBonus: 3.29,
+  awakenChance: 0.031,
+  predictBaseChance: 0.451,
+  predictCooldown: 18.5,
+  minorClutchCrit: 0.02,
+  minorClutchDodge: 0.496,
+  minorClutchTreasure: 0.02,
+  supportRoleWeights: { cleanup: 0.66, attack: 0.65, defense: 1.49, resource: 1.17, recovery: 1.65 },
 } as const
 
 const SIM_TO_REAL_BLEND = 0.5

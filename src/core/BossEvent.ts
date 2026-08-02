@@ -120,7 +120,7 @@ export interface BossEventState {
   summonedEnemyIds: Set<string>
   /** waxKnight/waxWitch 전용: 다음 피해를 먼저 흡수하는 밀랍 방패량 */
   bossShield: number
-  /** waxWitch 전용: 현재 HP 페이지(270~181 / 180~91 / 90~0). */
+  /** waxWitch 전용: 현재 HP 페이지. 경계는 최대 체력의 2/3·1/3(waxWitchPageFloors). */
   witchPage: BossPage
   /** waxDemon 현재 페이지 (1 → 2 전환은 HP 65% 이하 시). */
   demonPage: 1 | 2
@@ -1176,8 +1176,9 @@ export class BossEventController {
     const state = this.eventState
     if (!state) return null
     if (state.def.specialEnemyKind === 'waxWitch') {
-      if (state.witchPage === 1) return { floor: 180, requirement: 'none' }
-      if (state.witchPage === 2) return { floor: 90, requirement: 'none' }
+      const [firstFloor, secondFloor] = this.waxWitchPageFloors()
+      if (state.witchPage === 1) return { floor: firstFloor, requirement: 'none' }
+      if (state.witchPage === 2) return { floor: secondFloor, requirement: 'none' }
       return null
     }
     if (state.def.specialEnemyKind === 'waxDemon' && state.demonPage === 1) {
@@ -1200,9 +1201,10 @@ export class BossEventController {
     if (!state) return []
     const kind = state.def.specialEnemyKind
     if (kind === 'waxWitch') {
+      const [firstFloor, secondFloor] = this.waxWitchPageFloors()
       return [
-        { threshold: 180, open: state.witchPage > 1 },
-        { threshold: 90, open: state.witchPage > 2 },
+        { threshold: firstFloor, open: state.witchPage > 1 },
+        { threshold: secondFloor, open: state.witchPage > 2 },
       ]
     }
     if (kind === 'waxDemon') {
@@ -1303,16 +1305,27 @@ export class BossEventController {
     this.inject.render()
   }
 
+  /**
+   * 100F 마녀의 두 페이지 경계. 최대 체력을 셋으로 나눈 자리다(2/3 · 1/3) —
+   * HP를 밸런싱으로 옮겨도 경계가 따라오도록 상수로 박아 두지 않는다.
+   * 학습 시뮬의 `pages`도 같은 비율을 쓴다.
+   */
+  private waxWitchPageFloors(): [number, number] {
+    const maxHp = this.eventState?.def.maxHp ?? 0
+    return [Math.round(maxHp * (2 / 3)), Math.round(maxHp / 3)]
+  }
+
   /** 100F 피격 뒤 페이지 전환을 처리한다. 전환 연출이 끼면 true로 턴을 종료한다. */
   private async resolveWaxWitchAfterDamage(beforeHp: number | null): Promise<boolean> {
     const state = this.eventState
     if (!state || state.def.specialEnemyKind !== 'waxWitch') return false
     const hp = state.card.getHealth()
 
+    const [firstFloor, secondFloor] = this.waxWitchPageFloors()
     if (state.witchPage === 1) {
-      if (hp <= 180) {
-        // 페이지 경계는 초과 피해를 버리고 정확히 180에서 멈춘다.
-        if (state.card.health < 180) state.card.health = 180
+      if (hp <= firstFloor) {
+        // 페이지 경계는 초과 피해를 버리고 정확히 경계에서 멈춘다.
+        if (state.card.health < firstFloor) state.card.health = firstFloor
         state.witchPage = 2
         state.turn = 0
         this.syncPageState()
@@ -1326,9 +1339,9 @@ export class BossEventController {
       }
     }
 
-    if (state.witchPage === 2 && hp <= 90) {
-      // 페이지 경계는 초과 피해를 버리고 정확히 90에서 멈춘 뒤 즉시 3페이지 소환을 연다.
-      if (state.card.health < 90) state.card.health = 90
+    if (state.witchPage === 2 && hp <= secondFloor) {
+      // 경계에서 멈춘 뒤 즉시 3페이지 소환을 연다.
+      if (state.card.health < secondFloor) state.card.health = secondFloor
       state.witchPage = 3
       state.turn = 0
       this.syncPageState()

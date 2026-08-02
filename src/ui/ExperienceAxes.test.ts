@@ -36,13 +36,22 @@ describe('ExperienceAxes', () => {
   it('신규(ROOKIE, growth 0) 개입 축은 서로 다른 값으로 자연 비율 순서를 유지한다', () => {
     const disp = cloneDisposition(ROOKIE_DISPOSITION)
     const v = Object.fromEntries(INTERVENTION_AXES.map((k) => [k, axisValue(disp, k, 0)]))
-    // ROOKIE 원시 비율: 예지 > 수호 > (온정 ≈ 불굴) — 균일 클램프가 아니라 축별 고유값.
-    // 위기 배율 실효화(adversityBoost 1.2)로 온정·불굴은 서로 비슷한 대역에 놓인다.
+    // ROOKIE 원시 비율: 예지 > 수호 > 불굴 > 온정 — 균일 클램프가 아니라 축별 고유값.
+    // 2026-08 보스 곡선 재피팅으로 각성(불굴)이 올라 '가까운 한 쌍'이 온정·불굴에서
+    // 수호·불굴로 옮겨 갔다. 검사의 의도는 특정 쌍이 아니라 "축이 서로 붙지 않는다"이므로
+    // 쌍을 고정하지 않고 전체 축이 서로 다른 값인지로 본다.
     expect(v['예지']).toBeGreaterThan(v['수호'])
-    expect(v['수호']).toBeGreaterThan(v['온정'])
     expect(v['수호']).toBeGreaterThan(v['불굴'])
-    // 온정·불굴은 비슷하되 어느 쪽도 서로 붙어 있지(균일 클램프) 않다.
-    expect(Math.abs(v['온정'] - v['불굴'])).toBeLessThan(0.03)
+    expect(v['불굴']).toBeGreaterThan(v['온정'])
+    // 어느 두 축도 같은 값으로 뭉개지지 않는다(균일 클램프 감지).
+    const values = INTERVENTION_AXES.map((k) => v[k])
+    for (let i = 0; i < values.length; i++) {
+      for (let j = i + 1; j < values.length; j++) {
+        expect(Math.abs(values[i] - values[j]), `${INTERVENTION_AXES[i]}↔${INTERVENTION_AXES[j]}`).toBeGreaterThan(0)
+      }
+    }
+    // 가장 먼 두 축도 대역 안에 머문다 — 하나만 튀어 나가면 표기가 한 축짜리로 보인다.
+    expect(Math.max(...values) - Math.min(...values)).toBeLessThan(0.12)
     // 캘리브레이션 대역 — ROOKIE 재피팅으로 어긋나면 여기서 잡는다.
     expect(v['예지']).toBeGreaterThanOrEqual(0.15)
     expect(v['예지']).toBeLessThanOrEqual(0.2)
