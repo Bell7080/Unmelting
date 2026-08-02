@@ -1,0 +1,160 @@
+<!--
+  Unmelting gameplay icon proposal. This is a review-only concept sheet and is
+  deliberately not imported by the runtime until the visual direction is approved.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="820" viewBox="0 0 1200 820" role="img" aria-labelledby="title description">
+  <title id="title">Unmelting 게임플레이 아이콘 시안</title>
+  <desc id="description">손패, 공격력, 불씨, 손패 콤보, 함정 피해를 나타내는 플랫 SVG 아이콘과 HUD 조합 예시</desc>
+
+  <!-- The palette mirrors the game's ink-purple surfaces, parchment text, and candle accents. -->
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#1c1424"/>
+      <stop offset="1" stop-color="#09070e"/>
+    </linearGradient>
+    <radialGradient id="candle-glow">
+      <stop stop-color="#ffd778" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#ffd778" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000" flood-opacity=".45"/>
+    </filter>
+
+    <!-- Cards fan outward so the silhouette reads as a hand rather than one card. -->
+    <symbol id="icon-hand" viewBox="0 0 64 64">
+      <g fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round">
+        <rect x="10" y="16" width="29" height="39" rx="4" transform="rotate(-12 24.5 35.5)" opacity=".56"/>
+        <rect x="25" y="10" width="29" height="39" rx="4" transform="rotate(12 39.5 29.5)" opacity=".56"/>
+        <rect x="18" y="11" width="29" height="42" rx="4" fill="#1c1424"/>
+        <path d="M25 20h15M25 27h10" stroke-linecap="round" opacity=".78"/>
+      </g>
+    </symbol>
+
+    <!-- Broad blade and short guard remain distinguishable at the 16 px HUD size. -->
+    <symbol id="icon-attack" viewBox="0 0 64 64">
+      <path d="M49 7 55 9l2 6-29 29-8-8L49 7Z" fill="currentColor"/>
+      <path d="m15 35 14 14-4 4-14-14 4-4Z" fill="currentColor" opacity=".72"/>
+      <path d="m17 45 5 5-10 7-5-5 10-7Z" fill="currentColor"/>
+      <path d="M48 16 29 35" fill="none" stroke="#fff3d6" stroke-width="2.5" stroke-linecap="round" opacity=".72"/>
+    </symbol>
+
+    <!-- Ember uses a split inner flame to distinguish spendable fuel from generic fire. -->
+    <symbol id="icon-ember" viewBox="0 0 64 64">
+      <path d="M35 5c2 13-10 16-10 28 0 5 3 8 7 9-2-5 1-9 5-13-1 9 9 10 7 21 7-4 11-11 11-20 0-12-10-17-20-25ZM24 28C14 35 11 42 14 50c3 8 11 11 19 9-8-3-12-10-9-18 1-4 4-7 0-13Z" fill="currentColor"/>
+      <path d="M35 42c-5 5-5 11 0 16 6-2 9-6 8-11-1-3-4-5-4-9-1 2-2 3-4 4Z" fill="#fff3d6" opacity=".88"/>
+    </symbol>
+
+    <!-- Linked card corners and a central spark make 'combo' legible without text. -->
+    <symbol id="icon-combo" viewBox="0 0 64 64">
+      <g fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round">
+        <rect x="7" y="11" width="23" height="32" rx="4"/>
+        <rect x="34" y="21" width="23" height="32" rx="4"/>
+        <path d="M25 34c5 5 9 5 14 0" stroke-linecap="round"/>
+      </g>
+      <path d="m32 19 3 8 8 3-8 3-3 8-3-8-8-3 8-3 3-8Z" fill="currentColor"/>
+    </symbol>
+
+    <!-- A snapped jaw over a damage spark avoids confusing trap damage with armor. -->
+    <symbol id="icon-trap" viewBox="0 0 64 64">
+      <path d="M9 18h46L44 35H20L9 18Zm0 28h46L44 35H20L9 46Z" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="m17 19 5 9 5-9 5 9 5-9 5 9 5-9M17 45l5-9 5 9 5-9 5 9 5-9 5 9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="m32 4 3 8 8 3-8 3-3 8-3-8-8-3 8-3 3-8Z" fill="#ffb088"/>
+    </symbol>
+  </defs>
+
+  <!-- Concept-sheet background and restrained candle halo. -->
+  <rect width="1200" height="820" fill="url(#background)"/>
+  <circle cx="600" cy="120" r="420" fill="url(#candle-glow)"/>
+  <path d="M48 112H1152" stroke="#8b6f47" stroke-opacity=".28"/>
+
+  <!-- Header establishes that this is a proposal, not an applied runtime screen. -->
+  <text x="60" y="66" fill="#fff5dc" font-family="system-ui, sans-serif" font-size="30" font-weight="800">게임플레이 아이콘 시안</text>
+  <text x="60" y="98" fill="#d8c39a" font-family="system-ui, sans-serif" font-size="15" letter-spacing="2">FLAT · INK · CANDLELIGHT / 적용 전 검토용</text>
+
+  <!-- Five equal tiles compare silhouette, color role, and Korean terminology. -->
+  <g font-family="system-ui, sans-serif" filter="url(#shadow)">
+    <g transform="translate(60 150)">
+      <rect width="200" height="260" rx="24" fill="#18121f" stroke="#8b6f47" stroke-opacity=".52"/>
+      <circle cx="100" cy="92" r="58" fill="#ffd778" fill-opacity=".08"/>
+      <g transform="translate(68 60)" width="64" height="64" color="#ffe7a8"><use href="#icon-hand" width="64" height="64"/></g>
+      <text x="100" y="181" text-anchor="middle" fill="#fff5dc" font-size="22" font-weight="800">손패</text>
+      <text x="100" y="209" text-anchor="middle" fill="#d8c39a" font-size="13">겹친 카드 3장</text>
+      <text x="100" y="233" text-anchor="middle" fill="#8b6f47" font-size="11">HAND</text>
+    </g>
+    <g transform="translate(280 150)">
+      <rect width="200" height="260" rx="24" fill="#18121f" stroke="#8b6f47" stroke-opacity=".52"/>
+      <circle cx="100" cy="92" r="58" fill="#ff9b4a" fill-opacity=".08"/>
+      <g transform="translate(68 60)" color="#ff9b4a"><use href="#icon-attack" width="64" height="64"/></g>
+      <text x="100" y="181" text-anchor="middle" fill="#fff5dc" font-size="22" font-weight="800">공격력</text>
+      <text x="100" y="209" text-anchor="middle" fill="#d8c39a" font-size="13">앞으로 향한 검</text>
+      <text x="100" y="233" text-anchor="middle" fill="#8b6f47" font-size="11">ATTACK</text>
+    </g>
+    <g transform="translate(500 150)">
+      <rect width="200" height="260" rx="24" fill="#18121f" stroke="#8b6f47" stroke-opacity=".52"/>
+      <circle cx="100" cy="92" r="58" fill="#ffd778" fill-opacity=".08"/>
+      <g transform="translate(68 60)" color="#ffd778"><use href="#icon-ember" width="64" height="64"/></g>
+      <text x="100" y="181" text-anchor="middle" fill="#fff5dc" font-size="22" font-weight="800">불씨</text>
+      <text x="100" y="209" text-anchor="middle" fill="#d8c39a" font-size="13">쪼개진 속불꽃</text>
+      <text x="100" y="233" text-anchor="middle" fill="#8b6f47" font-size="11">EMBER</text>
+    </g>
+    <g transform="translate(720 150)">
+      <rect width="200" height="260" rx="24" fill="#18121f" stroke="#8b6f47" stroke-opacity=".52"/>
+      <circle cx="100" cy="92" r="58" fill="#ffe8a0" fill-opacity=".08"/>
+      <g transform="translate(68 60)" color="#ffe8a0"><use href="#icon-combo" width="64" height="64"/></g>
+      <text x="100" y="181" text-anchor="middle" fill="#fff5dc" font-size="22" font-weight="800">손패 콤보</text>
+      <text x="100" y="209" text-anchor="middle" fill="#d8c39a" font-size="13">연결된 카드 + 섬광</text>
+      <text x="100" y="233" text-anchor="middle" fill="#8b6f47" font-size="11">COMBO</text>
+    </g>
+    <g transform="translate(940 150)">
+      <rect width="200" height="260" rx="24" fill="#18121f" stroke="#8b6f47" stroke-opacity=".52"/>
+      <circle cx="100" cy="92" r="58" fill="#ffb088" fill-opacity=".08"/>
+      <g transform="translate(68 60)" color="#c9b6e0"><use href="#icon-trap" width="64" height="64"/></g>
+      <text x="100" y="181" text-anchor="middle" fill="#fff5dc" font-size="22" font-weight="800">함정 피해</text>
+      <text x="100" y="209" text-anchor="middle" fill="#d8c39a" font-size="13">덫의 이빨 + 충격</text>
+      <text x="100" y="233" text-anchor="middle" fill="#8b6f47" font-size="11">TRAP DAMAGE</text>
+    </g>
+  </g>
+
+  <!-- HUD chips demonstrate the actual icon-number relationship at a practical scale. -->
+  <text x="60" y="477" fill="#fff5dc" font-family="system-ui, sans-serif" font-size="19" font-weight="800">인게임 조합 예시</text>
+  <text x="60" y="502" fill="#d8c39a" font-family="system-ui, sans-serif" font-size="13">숫자 왼쪽에 고정하고 색은 의미만 보조합니다.</text>
+  <g transform="translate(60 530)" font-family="system-ui, sans-serif">
+    <rect width="1080" height="124" rx="22" fill="#100c16" stroke="#4a3a2a"/>
+    <g transform="translate(30 28)">
+      <rect width="185" height="68" rx="16" fill="#1c1424" stroke="#8b6f47"/>
+      <g transform="translate(18 18) scale(.5)" color="#ffe7a8"><use href="#icon-hand" width="64" height="64"/></g>
+      <text x="64" y="28" fill="#d8c39a" font-size="12">손패</text><text x="64" y="52" fill="#fff5dc" font-size="24" font-weight="900">7 / 10</text>
+    </g>
+    <g transform="translate(235 28)">
+      <rect width="185" height="68" rx="16" fill="#1c1424" stroke="#8b6f47"/>
+      <g transform="translate(18 18) scale(.5)" color="#ff9b4a"><use href="#icon-attack" width="64" height="64"/></g>
+      <text x="64" y="28" fill="#d8c39a" font-size="12">현재 공격력</text><text x="64" y="52" fill="#ff9b4a" font-size="24" font-weight="900">24</text>
+    </g>
+    <g transform="translate(440 28)">
+      <rect width="185" height="68" rx="16" fill="#1c1424" stroke="#8b6f47"/>
+      <g transform="translate(18 18) scale(.5)" color="#ffd778"><use href="#icon-ember" width="64" height="64"/></g>
+      <text x="64" y="28" fill="#d8c39a" font-size="12">불씨</text><text x="64" y="52" fill="#ffd778" font-size="24" font-weight="900">3 / 6</text>
+    </g>
+    <g transform="translate(645 28)">
+      <rect width="185" height="68" rx="16" fill="#1c1424" stroke="#8b6f47"/>
+      <g transform="translate(18 18) scale(.5)" color="#ffe8a0"><use href="#icon-combo" width="64" height="64"/></g>
+      <text x="64" y="28" fill="#d8c39a" font-size="12">손패 콤보</text><text x="64" y="52" fill="#ffe8a0" font-size="24" font-weight="900">×3</text>
+    </g>
+    <g transform="translate(850 28)">
+      <rect width="200" height="68" rx="16" fill="#1c1424" stroke="#7d526d"/>
+      <g transform="translate(18 18) scale(.5)" color="#c9b6e0"><use href="#icon-trap" width="64" height="64"/></g>
+      <text x="64" y="28" fill="#d8c39a" font-size="12">예상 함정 피해</text><text x="64" y="52" fill="#ffb088" font-size="24" font-weight="900">−8</text>
+    </g>
+  </g>
+
+  <!-- Small-size row checks that each silhouette survives compact HUD usage. -->
+  <text x="60" y="712" fill="#fff5dc" font-family="system-ui, sans-serif" font-size="16" font-weight="800">소형 가독성 확인</text>
+  <g transform="translate(60 738)" color="#ffe7a8">
+    <g transform="scale(.375)"><use href="#icon-hand" width="64" height="64"/></g>
+    <g transform="translate(54) scale(.375)" color="#ff9b4a"><use href="#icon-attack" width="64" height="64"/></g>
+    <g transform="translate(108) scale(.375)" color="#ffd778"><use href="#icon-ember" width="64" height="64"/></g>
+    <g transform="translate(162) scale(.375)" color="#ffe8a0"><use href="#icon-combo" width="64" height="64"/></g>
+    <g transform="translate(216) scale(.375)" color="#c9b6e0"><use href="#icon-trap" width="64" height="64"/></g>
+  </g>
+  <text x="360" y="758" fill="#8b6f47" font-family="system-ui, sans-serif" font-size="12">24px 기준 · 단색(currentColor) 전환 가능 · 둥근 모서리와 굵은 실루엣 통일</text>
+</svg>
