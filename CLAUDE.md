@@ -73,9 +73,14 @@ npm run build    # verify 포함
   같은 커밋에서 함께 고친다.** 런타임과 시뮬이 어긋나면 에나는 실제로 존재하지 않는
   게임을 학습하고, 테스트도 화면도 멀쩡해서 그 사실이 묻힌다. 상세는
   `Ena_Companion_AI_Design.md` §12-3.
-- 관측/행동 계약(`ENA_FEATURE_COUNT` 336 · `ENA_ACTION_SPACE` 27)은 시뮬과 트레이너가
+- 관측/행동 계약(`ENA_FEATURE_COUNT` 344 · `ENA_ACTION_SPACE` 27)은 시뮬과 트레이너가
   공유한다. 차원이 바뀌면 `EnaPolicyStore`가 구버전 정책을 거부하고 교사 정책으로
   폴백한다 — **재학습이 필요한 주(major) 버전급 변경**이다.
+- 보스 체력은 `BossFightBudget`(손패 3~4장 + `supportHits`)에서 역산한다. **시뮬도 그
+  화력을 실제로 넣어야 한다**(`supportStrikeChance`) — 빼면 체력을 뽑은 세계와 에나가
+  배우는 세계가 달라져 보스가 영영 안 죽고 보스전 학습 신호가 사라진다.
+- 화면에 보이는 보스 정보(격자 칸 수·약점 배율·페이지 게이트 잠금·종복)는 관측에도
+  넣는다. 빠지면 에나는 이미 막힌 경계를 계속 때리라고 조언한다.
 - 성장 앵커의 단일 출처는 `computeEnaGrowth()`(`EnaDisposition.ts`)다. 메타 상점
   해금형으로 바꿔도 이 함수만 교체한다.
 - 특화 0이면 기존 동작과 **완전히 동일해야** 한다. `saveDisposition`/`loadDisposition`
@@ -104,6 +109,9 @@ npm run build    # verify 포함
 
 - 보스도 밀랍 굳음 적용 대상이다. 굳은 보스는 직접 공격 피해와 행동 비용은 받지만
   반격 주기/공격 카운트다운이 줄지 않고 반격·특수행동을 건너뛴다.
+- 보스 페이지 능력 수치(절반 페이지 보스 목록·조각사 비대화·마녀 광폭화·탐욕의 값·
+  기사단장/마녀 손패 수치·페이지 경계식)의 단일 출처는 `src/data/BossPages.ts`다.
+  본편(`BossEvent`)과 학습 시뮬이 **같은 상수를 import** 한다 — 한쪽에만 적지 않는다.
 - 보스 칸 배율 결정은 `BossGimmickManager.resolveMultiplier()` **단일 창구**를 지난다.
   바깥에서 태그/시너지 보정을 계산하면 태그 반응 사각지대가 생긴다.
 - 판정에 필요한 맥락(`origin`·`scope`·`tags`)은 이미 그 창구까지 닿아 있다. 태그별

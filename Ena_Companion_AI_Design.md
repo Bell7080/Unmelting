@@ -224,7 +224,7 @@ Unmelting의 동료 캐릭터 **에나**에게 외부 API 없이 독자적 강�
 
 바꿀 때 함께 확인할 것:
 
-1. **관측 계약** — `ENA_FEATURE_COUNT`(336) / `ENA_ACTION_SPACE`(27)를 트레이너와 공유한다.
+1. **관측 계약** — `ENA_FEATURE_COUNT`(344) / `ENA_ACTION_SPACE`(27)를 트레이너와 공유한다.
    차원이 바뀌면 `EnaPolicyStore`가 구버전 저장 정책을 검증 불일치로 거부하고 교사
    정책으로 폴백한다(**재학습 필요**). 차원 변경은 주(major) 버전급 변경이다.
 2. **교사 휴리스틱** — 임계값은 `DEFAULT_ENA_HEURISTIC_POLICY_CONFIG`에서 조정한다.

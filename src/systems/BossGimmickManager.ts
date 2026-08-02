@@ -198,16 +198,26 @@ export interface BossGimmickExpectation {
 /**
  * 보스 격자의 기대값. 실게임은 칸을 직접 골라 때리지만, 칸 개념이 없는 호출부는
  * 이 요약으로 같은 밸런스를 따라온다. 프로필이 없는 보스는 null(기믹 없음).
+ *
+ * `cellsOverride`는 전투 중 몸집이 바뀐 격자(마녀 3페이지 9칸 → 6칸)를 위한 것이다.
+ * 특수 칸 밀도 환산은 `shuffledKinds`와 같은 식을 써서, 접힌 몸의 기대 배율이
+ * 실제로 다시 굴린 격자와 어긋나지 않게 한다.
  */
-export function bossGimmickExpectation(bossKind: SpecialEnemyKind): BossGimmickExpectation | null {
+export function bossGimmickExpectation(
+  bossKind: SpecialEnemyKind,
+  cellsOverride?: number
+): BossGimmickExpectation | null {
   const profile = BOSS_GIMMICK_PROFILES[bossKind]
   if (!profile) return null
-  const cells = profile.cols * profile.rows
+  const base = profile.cols * profile.rows
+  const cells = Math.max(1, cellsOverride ?? base)
   let special = 0
   let multiplierSum = 0
   let bestMultiplier = BOSS_GIMMICK_KIND_META.plain.multiplier
   for (const slot of profile.slots) {
-    const count = Math.min(slot.count, cells - special)
+    // 축소/확대된 격자는 특수 칸 수를 같은 밀도로 환산한다(shuffledKinds와 같은 식).
+    const scaled = cells === base ? slot.count : Math.max(1, Math.round((slot.count * cells) / base))
+    const count = Math.min(scaled, cells - special)
     if (count <= 0) continue
     const { multiplier } = BOSS_GIMMICK_KIND_META[slot.kind]
     special += count

@@ -25,6 +25,27 @@ import { sampleWithoutReplacement } from '@core/Sampling'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
 import { EmberSystem } from '@systems/EmberSystem'
 import { BOSS_CORE_SPECS, ONBOARDING_CAT_SPEC, demonSummonSpec } from '@data/BossSpecs'
+import {
+  HALF_PAGE_BOSSES,
+  halfPageFloor,
+  waxWitchPageFloors,
+  GREED_COIN_ID,
+  GREED_COIN_TOLL_DAMAGE,
+  GREED_SCATTER_MIN,
+  GREED_SCATTER_MAX,
+  KNIGHT_BASE_CARDS,
+  KNIGHT_HAND_CARD_AMOUNT,
+  KNIGHT_PAGE_TWO_EXTRA_CARDS,
+  KNIGHT_PAGE_TWO_AMOUNT_BONUS,
+  SCULPTOR_SUMMON_COUNT,
+  SCULPTOR_SWELL_HP,
+  WITCH_BURN_CARDS,
+  WITCH_HAND_CARD_AMOUNT,
+  WITCH_PAGE_TWO_CARDS,
+  WITCH_SUMMON_COUNT,
+  WITCH_ENRAGE_ATK,
+  WITCH_ENRAGE_HP,
+} from '@data/BossPages'
 import { BossGimmickManager, BOSS_GIMMICK_KIND_META } from '@systems/BossGimmickManager'
 import { discardBossCellStrikes } from '@/app/BossCellFeedback'
 
@@ -36,23 +57,6 @@ const BOSS_TURN_BEAT_MS = 300
 
 /** 리미트 페이지가 피해를 막고 있을 때 피해 수치 자리에 대신 뜨는 문구. */
 const PAGE_GATE_WARNING_TEXT = '칸을 파괴해야합니다.'
-
-/**
- * 절반 HP에서 한 번 멈추고 2페이지로 넘어가는 보스들.
- * 격자가 켜진 보스는 그 자리에서 부위를 하나 더 깨야 열리고(리미트 페이지),
- * 격자가 없는 보스는 닿는 순간 열린다. 요구 조건은 `bossPageGate()`가 정한다.
- */
-const HALF_PAGE_BOSSES = new Set<SpecialEnemyKind>(['waxArmy', 'waxCat', 'waxKnight', 'waxSculptor'])
-
-/**
- * 90F 조각사 2페이지 '비대화' — 소환된 양초 조각이 부풀며 얻는 체력.
- * 광폭화(공격력까지 오르는 마녀식 강화)와 구분되는 어휘다: 조각사는 재료를 더 퍼먹여
- * 종복을 크게 만들 뿐, 사납게 만들지는 않는다.
- */
-const SCULPTOR_SWELL_HP = 5
-/** 100F 마녀 3페이지 광폭화 — 소환 종복이 얻는 공격력/체력 보너스. */
-const WITCH_ENRAGE_ATK = 3
-const WITCH_ENRAGE_HP = 8
 
 /**
  * 절반 HP 2페이지 전환 대사. 보스마다 한 묶음이며, 없는 보스는 대사 없이 넘어간다.
@@ -81,11 +85,6 @@ const HALF_PAGE_TWO_LINES: Partial<Record<
     { speaker: 'player', text: '저 몸집이. . . 부풀고 있어.',       holdMs: 2400 },
   ],
 }
-/** 30F 탐욕의 값이 참조하는 손패 defId. */
-const GREED_COIN_ID = 'greed-coin'
-/** 탐욕의 동전 1장이 요구하는 피해. */
-const GREED_COIN_TOLL_DAMAGE = 1
-
 // ---- 보스별 스탯 정의 -------------------------------------------------------
 
 export interface BossDef {
@@ -378,7 +377,7 @@ export class BossEventController {
     const def: BossDef = {
       // 전투 핵심 수치는 BossSpecs 단일 출처(체력 15 손실마다 손패 1장 지급 공통 포함).
       ...BOSS_CORE_SPECS[60],
-      handCardAmount: 3,
+      handCardAmount: KNIGHT_HAND_CARD_AMOUNT,
       specialEnemyKind: 'waxKnight',
       groupCount: 3,
       occupiedDistRows: 1,   // 30F처럼 데이터는 dist-0 한 줄, CSS가 3×3 중앙 보스로 확장한다.
@@ -438,7 +437,7 @@ export class BossEventController {
     const def: BossDef = {
       // 전투 핵심 수치는 BossSpecs 단일 출처를 쓴다 — 시뮬과 공유.
       ...BOSS_CORE_SPECS[100],
-      handCardAmount: 5,
+      handCardAmount: WITCH_HAND_CARD_AMOUNT,
       specialEnemyKind: 'waxWitch',
       groupCount: 3,
       occupiedDistRows: 1,
@@ -616,7 +615,7 @@ export class BossEventController {
       if (state.def.specialEnemyKind === 'waxWitch') {
         // 100F 페이지 능력은 해금 뒤에도 유지된다 — 상위 페이지는 하위 페이지 능력을 함께 발동한다.
         // 1페이지 능력(공격주기마다 손패 2장 소각)은 2·3페이지에서도 계속 실행한다.
-        await this.burnRandomHandCardsFromWitch(card.id, 2)
+        await this.burnRandomHandCardsFromWitch(card.id, WITCH_BURN_CARDS)
         if (state.witchPage >= 2) {
           if (await this.resolveWaxWitchPageTwoTurn(card.id)) return
           if (!this.gs.character.isAlive() || this.gs.character.authoritySurvivePending) {
@@ -763,7 +762,7 @@ export class BossEventController {
           await this.performSummonToBack()
         } else if (state.def.specialEnemyKind === 'waxWitch') {
           // 1페이지 능력(손패 2장 소각)은 모든 페이지에서 매 공격주기마다 유지된다.
-          await this.burnRandomHandCardsFromWitch(state.card.id, 2)
+          await this.burnRandomHandCardsFromWitch(state.card.id, WITCH_BURN_CARDS)
           if (state.witchPage >= 2) {
             if (await this.resolveWaxWitchPageTwoTurn(state.card.id)) return
           } else {
@@ -1179,7 +1178,7 @@ export class BossEventController {
 
   private async scatterGreedCards(bossCardId: string): Promise<void> {
     const character = this.gs.character
-    const count = 2 + Math.floor(Math.random() * 3) // 2~4
+    const count = GREED_SCATTER_MIN + Math.floor(Math.random() * (GREED_SCATTER_MAX - GREED_SCATTER_MIN + 1))
     let greedCount: number
     if (count === 2) greedCount = 1
     else if (count === 4) greedCount = 2
@@ -1187,7 +1186,7 @@ export class BossEventController {
     const randomCount = count - greedCount
 
     const cards: HandCard[] = []
-    for (let i = 0; i < greedCount; i++) cards.push(DropSystem.makeCard('greed-coin'))
+    for (let i = 0; i < greedCount; i++) cards.push(DropSystem.makeCard(GREED_COIN_ID))
     for (let i = 0; i < randomCount; i++) cards.push(DropSystem.generateDrop('enemy-kill'))
     // 탐욕 동전이 항상 같은 자리에 몰리지 않도록 순서를 섞는다.
     for (let i = cards.length - 1; i > 0; i--) {
@@ -1281,7 +1280,7 @@ export class BossEventController {
     const state = this.eventState
     if (!state) return null
     if (state.def.specialEnemyKind === 'waxWitch') {
-      const [firstFloor, secondFloor] = this.waxWitchPageFloors()
+      const [firstFloor, secondFloor] = waxWitchPageFloors(this.eventState?.def.maxHp ?? 0)
       if (state.witchPage === 1) return { floor: firstFloor, requirement: 'none' }
       if (state.witchPage === 2) return { floor: secondFloor, requirement: 'none' }
       return null
@@ -1294,7 +1293,7 @@ export class BossEventController {
     // 닿는 순간 스스로 열린다.
     if (HALF_PAGE_BOSSES.has(state.def.specialEnemyKind) && state.halfPage === 1) {
       return {
-        floor: Math.ceil(state.def.maxHp / 2),
+        floor: halfPageFloor(state.def.maxHp),
         requirement: this.gimmicks.isActive ? 'cell-break' : 'none',
       }
     }
@@ -1310,7 +1309,7 @@ export class BossEventController {
     if (!state) return []
     const kind = state.def.specialEnemyKind
     if (kind === 'waxWitch') {
-      const [firstFloor, secondFloor] = this.waxWitchPageFloors()
+      const [firstFloor, secondFloor] = waxWitchPageFloors(this.eventState?.def.maxHp ?? 0)
       return [
         { threshold: firstFloor, open: state.witchPage > 1 },
         { threshold: secondFloor, open: state.witchPage > 2 },
@@ -1320,7 +1319,7 @@ export class BossEventController {
       return [{ threshold: state.nextDemonPageAt, open: state.demonPage > 1 }]
     }
     if (HALF_PAGE_BOSSES.has(kind)) {
-      return [{ threshold: Math.ceil(state.def.maxHp / 2), open: state.halfPage > 1 }]
+      return [{ threshold: halfPageFloor(state.def.maxHp), open: state.halfPage > 1 }]
     }
     return []
   }
@@ -1414,23 +1413,13 @@ export class BossEventController {
     this.inject.render()
   }
 
-  /**
-   * 100F 마녀의 두 페이지 경계. 최대 체력을 셋으로 나눈 자리다(2/3 · 1/3) —
-   * HP를 밸런싱으로 옮겨도 경계가 따라오도록 상수로 박아 두지 않는다.
-   * 학습 시뮬의 `pages`도 같은 비율을 쓴다.
-   */
-  private waxWitchPageFloors(): [number, number] {
-    const maxHp = this.eventState?.def.maxHp ?? 0
-    return [Math.round(maxHp * (2 / 3)), Math.round(maxHp / 3)]
-  }
-
   /** 100F 피격 뒤 페이지 전환을 처리한다. 전환 연출이 끼면 true로 턴을 종료한다. */
   private async resolveWaxWitchAfterDamage(beforeHp: number | null): Promise<boolean> {
     const state = this.eventState
     if (!state || state.def.specialEnemyKind !== 'waxWitch') return false
     const hp = state.card.getHealth()
 
-    const [firstFloor, secondFloor] = this.waxWitchPageFloors()
+    const [firstFloor, secondFloor] = waxWitchPageFloors(this.eventState?.def.maxHp ?? 0)
     if (state.witchPage === 1) {
       if (hp <= firstFloor) {
         // 페이지 경계는 초과 피해를 버리고 정확히 경계에서 멈춘다.
@@ -1559,7 +1548,7 @@ export class BossEventController {
     const state = this.eventState!
     const character = this.gs.character
     const amount = state.def.handCardAmount
-    const effects: WaxKnightCardEffect[] = Array.from({ length: 4 }, () => {
+    const effects: WaxKnightCardEffect[] = Array.from({ length: WITCH_PAGE_TWO_CARDS }, () => {
       const pool: WaxKnightCardEffect[] = ['shield', 'heal', 'strike']
       return pool[Math.floor(Math.random() * pool.length)]
     })
@@ -1608,10 +1597,10 @@ export class BossEventController {
     // 1) 특징 연출: 손패를 한 번에 펼쳐 빠르게 순차 발동한다(이펙트 목적지는 살아 있는 보스 셀 기준).
     //    2페이지는 카드가 한 장 늘고 각 카드의 수치도 1씩 오른다 — 같은 패턴이 무거워진다.
     const page2 = state.halfPage >= 2
-    const cardCount = page2 ? 3 : 2
+    const cardCount = KNIGHT_BASE_CARDS + (page2 ? KNIGHT_PAGE_TWO_EXTRA_CARDS : 0)
     // 효과 3종뿐이라 3장이면 중복 없이 전부 나온다(sampleWithoutReplacement 상한).
     const cards = sampleWithoutReplacement<WaxKnightCardEffect>(['shield', 'heal', 'strike'], cardCount)
-    const amount = state.def.handCardAmount + (page2 ? 1 : 0)
+    const amount = state.def.handCardAmount + (page2 ? KNIGHT_PAGE_TWO_AMOUNT_BONUS : 0)
     const applyKnightCardEffect = async (effect: WaxKnightCardEffect): Promise<void> => {
       if (effect === 'shield') {
         state.bossShield += amount
@@ -1681,7 +1670,7 @@ export class BossEventController {
     // 2페이지부터는 새로 부르는 양초 조각도 처음부터 부푼 채로 나온다 — 전환 시점의
     // 1회성 버프가 아니라 그 뒤 소환에도 계속 붙어야 "판이 무거워졌다"가 유지된다.
     const swellHp = state.halfPage >= 2 ? SCULPTOR_SWELL_HP : 0
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < SCULPTOR_SUMMON_COUNT; i++) {
       const enemyDef = pool[Math.floor(Math.random() * pool.length)]
       const enemy = new Card(
         `sculptor-summon-${i}-${Math.random()}`,
@@ -1735,7 +1724,7 @@ export class BossEventController {
     // 최종 보스 소환수는 90F 후기 적 풀을 기반으로 광폭화 버프를 받은 독립 개체다.
     const pool = ENEMY_DEFINITIONS.slice(12, 18)
     const emberAtk = EmberSystem.getEnemyStatBonus(this.tm.getEmberTier()).atk
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < WITCH_SUMMON_COUNT; i++) {
       const enemyDef = pool[Math.floor(Math.random() * pool.length)]
       const enemy = new Card(
         `witch-summon-${i}-${Math.random()}`,

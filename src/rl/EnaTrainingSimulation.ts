@@ -20,8 +20,40 @@ import type { HandCardId, HandCardDefinition, HandCardDropSource } from '@entiti
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { TRIAL_DEFINITIONS } from '@data/Trials'
 import { HAND_CARD_RARITY, CHANCE_PACK_RARITY_BOOST } from '@data/ShopPools'
-import { BOSS_CORE_SPECS, ONBOARDING_CAT_SPEC, type BossCoreSpec } from '@data/BossSpecs'
-import { bossGimmickExpectation, type BossGimmickExpectation } from '@systems/BossGimmickManager'
+import {
+  BOSS_CORE_SPECS,
+  BOSS_FIGHT_BUDGETS,
+  ONBOARDING_CAT_BUDGET,
+  ONBOARDING_CAT_SPEC,
+  type BossCoreSpec,
+} from '@data/BossSpecs'
+import {
+  halfPageFloor,
+  waxWitchPageFloors,
+  GREED_COIN_ID,
+  GREED_COIN_TOLL_DAMAGE,
+  GREED_SCATTER_MIN,
+  GREED_SCATTER_MAX,
+  KNIGHT_BASE_CARDS,
+  KNIGHT_HAND_CARD_AMOUNT,
+  KNIGHT_PAGE_TWO_EXTRA_CARDS,
+  KNIGHT_PAGE_TWO_AMOUNT_BONUS,
+  SCULPTOR_SUMMON_COUNT,
+  SCULPTOR_SWELL_HP,
+  WITCH_BURN_CARDS,
+  WITCH_HAND_CARD_AMOUNT,
+  WITCH_PAGE_TWO_CARDS,
+  WITCH_SUMMON_COUNT,
+  WITCH_ENRAGE_ATK,
+  WITCH_ENRAGE_HP,
+  WITCH_PAGE_THREE_GRID_ROWS,
+} from '@data/BossPages'
+import {
+  BOSS_GIMMICK_PROFILES,
+  bossGimmickCellDurability,
+  bossGimmickExpectation,
+  type BossGimmickExpectation,
+} from '@systems/BossGimmickManager'
 import type { SpecialEnemyKind } from '@entities/Card'
 import { EVENT_DEFINITIONS, EVENT_IDS, type EventId, type RiskOffer, type MinionExchangeConfig, type CountRpsConfig } from '@data/Events'
 import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
@@ -33,6 +65,7 @@ import { altarPackBaseCost, packCostWithRepeats, regularShopPackBaseCost } from 
 import { buildEnaKnowledgeBase, type EnaKnowledgeBase, type EnaHandCardTactic } from './EnaKnowledgeAdapter'
 import { estimateImminentWebMergeFromCells, type ImminentWebMergeEstimate } from '@systems/CompanionForesight'
 import { bestSupportCard } from '@systems/HandCardAdvisor'
+import type { BossFightBudget } from '@data/BossDamageBudget'
 import type { EnaDisposition } from '@systems/EnaDisposition'
 
 /** 시뮬레이터의 현재 국면. 전투 외 의사결정도 같은 정책망이 고르게 한다. */
@@ -161,6 +194,21 @@ interface EnaGameSnapshot {
   bossMaxHp: number
   bossAttackCountdown: number
   bossPage: number
+  /** 지금 페이지 경계가 피해를 막고 있는가 — 부위를 더 깨기 전에는 HP가 내려가지 않는다. */
+  bossPageGateLocked: boolean
+  /** 그 경계를 여는 데 남은 피해(잠겨 있지 않으면 0). */
+  bossPageGateRemaining: number
+  /** 지금 격자의 칸 수(격자 없는 보스는 0) — 광역 손패가 몇 번 꽂히는지. */
+  bossGridCells: number
+  /** 약점을 노릴 때의 배율 — 조준 타격의 값. */
+  bossGridBestMultiplier: number
+  /** 앞을 막은 종복 수와 그 합산 공격력. */
+  bossSummonCount: number
+  bossSummonThreat: number
+  /** 손에 쥔 탐욕의 동전이 요구할(또는 곧 요구할) 피해(30F). 0이면 값이 없다. */
+  bossGreedToll: number
+  /** 다음 페이지 경계까지 남은 거리(최대 체력 대비). 1이면 경계가 없거나 마지막 페이지. */
+  bossPageProximity: number
   eventRisk: number
   /** 현재 이벤트 국면의 이벤트 id — 정책이 이벤트별 safe/greedy/trick/bail을 가른다. */
   eventId: EventId
@@ -189,6 +237,22 @@ const STARTING_EMBER = 10
 const EMBER_MAX = 10
 const BOSS_FLOORS = [30, 60, 90, 100]
 
+/**
+ * 보스가 세운 종복. 실게임에서는 dist-0에 서서 보스를 가리고 매 주기 플레이어를 친다 —
+ * 조각사/마녀 후반 페이지의 무게는 보스 체력이 아니라 **이 종복을 치우는 비용**에서 나온다.
+ * 이걸 보스 자가 회복으로 뭉뚱그리면 에나는 "종복부터 치울까"라는 실제 선택을 배우지 못한다.
+ */
+interface EnaSimBossSummon {
+  hp: number
+  atk: number
+}
+
+/** 90F/100F 소환 풀 = 실게임과 같은 60~90층대 적(ENEMY_DEFINITIONS 12~17). */
+const BOSS_SUMMON_POOL = ENEMY_DEFINITIONS.slice(12, 18)
+
+/** 페이지 경계가 이만큼(최대 체력 대비) 가까우면 '곧 열린다'로 보고 미리 대비한다. */
+const GREED_TOLL_LOOKAHEAD = 0.15
+
 /** 시뮬 전용 보스 프로필 = BossSpecs 공유 스펙 + 행동 패턴. 수치는 단일 출처라 본편 밸런싱을 자동 추종한다. */
 interface BossProfile {
   name: string
@@ -204,33 +268,52 @@ interface BossProfile {
   /** 보스 타일 위 칸 기믹 격자의 기대값(격자 없는 보스는 undefined).
    *  시뮬은 칸을 직접 고르지 않으므로 조준 타격=최고 배율, 광역=칸 수×평균 배율로 근사한다. */
   gimmick?: BossGimmickExpectation
+  /** 격자 보스의 종류 — 전투 중 몸집이 바뀌면(마녀 3P) 여기서 기대값을 다시 뽑는다. */
+  gimmickKind?: SpecialEnemyKind
+  /** 페이지 경계를 여는 조건. 'cell-break'는 닿은 뒤 부위를 하나 더 깨야 열린다. */
+  pageGate: 'none' | 'cell-break'
+  /**
+   * 플레이어 행동 1회당 지원 화력(레시피·유물 시너지)이 터질 확률.
+   *
+   * 보스 체력은 `supportHits`(= 모델 밖 화력을 '추가 직접 타격'으로 환산한 값)를 **포함해서**
+   * 역산돼 있다. 시뮬이 그 화력을 빼놓고 같은 체력을 상대하면, 체력을 뽑을 때 쓴 세계와
+   * 에나가 학습하는 세계가 어긋난다 — 보스는 영영 안 죽고 보스전 학습 신호가 사라진다.
+   */
+  supportStrikeChance: number
 }
 
 function bossProfileFrom(
   spec: BossCoreSpec,
+  budget: BossFightBudget,
   behavior: BossProfile['behavior'],
   pages?: number[],
   gimmickKind?: SpecialEnemyKind,
+  pageGate: 'none' | 'cell-break' = 'none',
 ): BossProfile {
   return {
     name: spec.name, maxHp: spec.maxHp, attack: spec.attack, interval: spec.attackInterval,
     handGiftStep: spec.handGiftStep, behavior, pages,
     gimmick: gimmickKind ? bossGimmickExpectation(gimmickKind) ?? undefined : undefined,
+    gimmickKind,
+    pageGate,
+    supportStrikeChance: budget.targetActions > 0 ? budget.supportHits / budget.targetActions : 0,
   }
 }
 
+/** 절반 HP 페이지 보스의 경계 목록 — 실게임 halfPageFloor()와 같은 자리에서 한 번 멈춘다. */
+function halfPages(maxHp: number): number[] {
+  return [halfPageFloor(maxHp), 0]
+}
+
 const BOSS_PROFILES: Record<number, BossProfile> = {
-  // 30F 리미트 페이지: 실게임은 절반 HP에서 멈추고 부위를 하나 깨야 열린다. 시뮬에는 칸이
-  // 없으므로 경계만 옮겨 오고(부위 파괴는 gimmick.breakBonusFactor가 이미 누적 배수로 반영),
-  // 경계에서 반격 주기가 초기화되는 리듬을 같게 맞춘다.
-  30: bossProfileFrom(BOSS_CORE_SPECS[30], 'greed', [Math.ceil(BOSS_CORE_SPECS[30].maxHp / 2), 0], 'waxArmy'),
-  // 60F·90F도 절반 HP에서 2페이지로 넘어간다(격자가 없어 닿는 순간 자동으로 열린다).
-  60: bossProfileFrom(BOSS_CORE_SPECS[60], 'knightHand', [Math.ceil(BOSS_CORE_SPECS[60].maxHp / 2), 0], 'waxKnight'),
-  90: bossProfileFrom(BOSS_CORE_SPECS[90], 'summon', [Math.ceil(BOSS_CORE_SPECS[90].maxHp / 2), 0], 'waxSculptor'),
-  // 마녀 페이지 경계 — 실게임 waxWitchPageFloors()와 같은 비율(maxHp의 2/3·1/3·0).
-  100: bossProfileFrom(BOSS_CORE_SPECS[100], 'witch', [
-    Math.round(BOSS_CORE_SPECS[100].maxHp * (2 / 3)),
-    Math.round(BOSS_CORE_SPECS[100].maxHp / 3),
+  // 절반 HP 페이지 보스(30·60·90F)는 이제 전부 격자가 켜져 있어 **리미트 페이지**다 —
+  // 경계에 닿는 것만으로는 열리지 않고 부위를 하나 더 깨야 한다(pageGate 'cell-break').
+  30: bossProfileFrom(BOSS_CORE_SPECS[30], BOSS_FIGHT_BUDGETS[30], 'greed', halfPages(BOSS_CORE_SPECS[30].maxHp), 'waxArmy', 'cell-break'),
+  60: bossProfileFrom(BOSS_CORE_SPECS[60], BOSS_FIGHT_BUDGETS[60], 'knightHand', halfPages(BOSS_CORE_SPECS[60].maxHp), 'waxKnight', 'cell-break'),
+  90: bossProfileFrom(BOSS_CORE_SPECS[90], BOSS_FIGHT_BUDGETS[90], 'summon', halfPages(BOSS_CORE_SPECS[90].maxHp), 'waxSculptor', 'cell-break'),
+  // 마녀 페이지 경계 — 실게임과 같은 waxWitchPageFloors()(maxHp의 2/3·1/3). 닿는 순간 열린다.
+  100: bossProfileFrom(BOSS_CORE_SPECS[100], BOSS_FIGHT_BUDGETS[100], 'witch', [
+    ...waxWitchPageFloors(BOSS_CORE_SPECS[100].maxHp),
     0,
   ], 'waxWitch'),
 }
@@ -257,9 +340,11 @@ const SPROUT_BOSS_FLOORS: readonly number[] = [30]
 // 새싹 고양이도 격자·절반 리미트 페이지를 쓴다(실게임 BOSS_GIMMICK_PROFILES.waxCat).
 const SPROUT_BOSS_PROFILE: BossProfile = bossProfileFrom(
   ONBOARDING_CAT_SPEC,
+  ONBOARDING_CAT_BUDGET,
   'catSteal',
-  [Math.ceil(ONBOARDING_CAT_SPEC.maxHp / 2), 0],
+  halfPages(ONBOARDING_CAT_SPEC.maxHp),
   'waxCat',
+  'cell-break',
 )
 
 /** 시뮬 상점이 다루는 실제 팩 종류(가격 반복 누적 추적용). */
@@ -271,7 +356,7 @@ const MIN_POOL_AFTER_DELETE = 5
 /** 망치(칼날 손패 사용 시 파편) 발동 확률 — TagReactions의 hammer 규칙과 같은 값. */
 const BLADE_HAMMER_SHARD_CHANCE = 0.25
 
-const FEATURE_SCALARS = 62
+const FEATURE_SCALARS = 70
 const FEATURE_PER_INCOMING = 6
 const FEATURE_PER_CELL = 14
 const FEATURE_PER_HAND = 13
@@ -322,6 +407,14 @@ export interface EnaHeuristicPolicyConfig {
   eventGreedyBossWindow: number
   bossEmergencyCountdown: number
   bossEmergencyEffectiveHp: number
+  /** 보스가 몇 턴 앞이면 공격 손패를 아끼기 시작하는가. */
+  bossPrepWindow: number
+  /** 보스전에 들고 들어가려는 공격 손패 장수(BossSpecs의 handCards 가정과 같은 자리). */
+  bossPrepAttackCards: number
+  /** 탐욕의 값이 실효 체력의 이 비율을 넘으면 동전을 턴다(그 전에는 쥐고 있는 편이 싸다). */
+  bossGreedTollHpRatio: number
+  /** 보스전 회복 판단의 체력 비율 기준(최대 체력 대비). */
+  bossEmergencyHpRatio: number
 }
 
 /** 기본 교사 설정은 현재 밸런스 기준값이며, 테스트/오프라인 실험에서 부분 오버라이드한다. */
@@ -342,6 +435,10 @@ export const DEFAULT_ENA_HEURISTIC_POLICY_CONFIG: EnaHeuristicPolicyConfig = {
   eventGreedyBossWindow: 12,
   bossEmergencyCountdown: 1,
   bossEmergencyEffectiveHp: 12,
+  bossGreedTollHpRatio: 0.5,
+  bossEmergencyHpRatio: 0.5,
+  bossPrepWindow: 6,
+  bossPrepAttackCards: 3,
 }
 
 /** 재현 가능한 셀프플레이가 필요해서 Math.random 대신 작은 LCG를 사용한다. */
@@ -423,6 +520,12 @@ export class EnaTrainingSimulation {
   private bossFrozenTurns = 0
   /** 보스 밀랍 방패(기사단장/마녀) — 플레이어 피해를 먼저 흡수한다(실게임 bossShield). */
   private bossShield = 0
+  /** 보스가 세운 종복(조각사 양초 조각 · 마녀 잿빛 종복). 앞을 막고 매 주기 플레이어를 친다. */
+  private bossSummons: EnaSimBossSummon[] = []
+  /** 리미트 페이지 경계에 닿은 뒤 쌓은 피해. 부위 하나(칸 내구도)를 채우면 페이지가 열린다. */
+  private bossGateDamage = 0
+  /** 전투 중 몸집이 바뀐 격자의 기대값(마녀 3P 9칸 → 6칸). null이면 프로필 기본형. */
+  private bossGimmickOverride: BossGimmickExpectation | null = null
   private eventRisk = 0
   /** 이번 문에서 진행할 실제 이벤트(event_001~003). 문 진입 시 균등 랜덤으로 정한다. */
   private currentEventId: EventId = 'event_001'
@@ -520,6 +623,9 @@ export class EnaTrainingSimulation {
     this.bossesCleared = 0
     this.bossFrozenTurns = 0
     this.bossShield = 0
+    this.bossSummons = []
+    this.bossGateDamage = 0
+    this.bossGimmickOverride = null
     this.eventRisk = 0
     this.currentEventId = 'event_001'
     this.shieldRegen = 0
@@ -585,7 +691,7 @@ export class EnaTrainingSimulation {
     return { observation: this.observe(), reward, done: this.done }
   }
 
-  /** 고정 길이 숫자 입력: 스칼라 62 + 예고 3칸×6 + 9칸×14 + 손패 10×13 = ENA_FEATURE_COUNT(336). */
+  /** 고정 길이 숫자 입력: 스칼라 70 + 예고 3칸×6 + 9칸×14 + 손패 10×13 = ENA_FEATURE_COUNT(344). */
   observe(): EnaObservation {
     const legalActions = ENA_ACTION_SPACE.filter((action) => this.isLegal(action))
     const tier = EmberSystem.getTier(this.ember)
@@ -650,6 +756,17 @@ export class EnaTrainingSimulation {
       this.bossShield / 20, // 보스 밀랍 방패 잔량
       this.bossFrozenTurns / 3, // 보스 밀랍 굳음(반격 정지) 잔여
       this.bossesCleared / 4, // 런 진행(격파한 보스 수)
+      // ── 보스 판을 실제로 읽는 눈 ──────────────────────────────────────────
+      // 격자·페이지 게이트·종복은 화면에 그려져 있는 정보다. 관측에서 빼면 에나는
+      // 이미 막힌 경계를 계속 때리라고 하거나, 앞을 막은 종복을 없는 셈 치고 조언한다.
+      this.bossPageGateRemaining() > 0 ? 1 : 0, // 지금 경계가 피해를 막고 있는가
+      Math.min(1, this.bossPageGateRemaining() / 40), // 그 경계를 여는 데 남은 피해
+      (this.bossGimmick()?.cells ?? 0) / 9, // 격자 칸 수 = 광역 손패가 꽂히는 횟수
+      (this.bossGimmick()?.bestMultiplier ?? 1) / 2, // 약점 조준 배율
+      this.bossPageProximity(), // 다음 페이지 경계까지 남은 거리 — 국면 전환 대비
+      this.bossSummons.length / 3, // 앞을 막은 종복 수
+      Math.min(1, this.bossSummons.reduce((sum, e) => sum + e.atk, 0) / 20), // 종복 합산 위협
+      Math.min(1, this.pendingGreedToll() / 10), // 손에 쥔 탐욕의 동전이 다음 주기에 요구할 피해
       // 상점/제단 상태 — 무엇이 남았는지 보고 구매 순서를 계획한다.
       this.phase === 'shop' && this.shopMode === 'altar' ? 1 : 0,
       this.shopFreeUsesLeft / 2,
@@ -1242,7 +1359,12 @@ export class EnaTrainingSimulation {
   }
 
   private applyBossAction(action: EnaSimAction): number {
-    if (action.kind === 'clickLane') return this.damageBoss(this.attack, 'basic')
+    // 지원 화력이 먼저 꽂혀 보스가 그대로 쓰러지면 이번 행동은 대상이 사라진다.
+    if (this.rollBossSupportStrike()) return 2
+    // 레인 0 = 보스 직접 타격, 레인 1 = 앞을 막은 종복 타격(종복이 있을 때만 합법).
+    if (action.kind === 'clickLane') {
+      return action.arg === 1 ? this.strikeBossSummon(this.attack) : this.damageBoss(this.attack, 'basic')
+    }
     if (action.kind === 'useHand') {
       const held = this.hand[action.arg]
       if (!held) return -1
@@ -1252,7 +1374,10 @@ export class EnaTrainingSimulation {
         if (def.synergyTags?.includes('blade')) this.onBladeCardUsed()
         // 필드 전체를 치는 손패는 격자 칸마다 들어간다 — 광역기가 기믹 보스에게 세지는 실게임 규칙.
         const rule = held.merged ? def.targeting.triple : def.targeting.base
-        const reward = this.damageBoss(dmg, 'ember', rule.selection === 'all' ? 'area' : 'single')
+        const area = rule.selection === 'all'
+        // 광역기는 보스와 종복을 함께 쓸어 담는다(실게임 hitCardAsAreaDamage).
+        let reward = area ? this.sweepBossSummons(dmg) : 0
+        reward += this.damageBoss(dmg, 'ember', area ? 'area' : 'single')
         this.consumeHand(action.arg)
         return reward
       }
@@ -1305,12 +1430,102 @@ export class EnaTrainingSimulation {
     return source === 'ember' ? 0.2 : -0.5
   }
 
+  /**
+   * 레시피·유물 시너지가 보스전에 흘려 넣는 지원 화력(`BossFightBudget.supportHits`).
+   *
+   * 시뮬은 레시피 실행과 유물 발동을 개별로 모델링하지 않는다. 그렇다고 빼 두면 체력을
+   * 뽑을 때 쓴 가정보다 화력이 모자란 세계가 되어, 에나는 실제로는 잡히는 보스를 못 잡는
+   * 세계에서 배운다. 체력 산출과 **같은 환산치**로 되돌려 넣는다: 행동 1회당 확률적으로
+   * 직접 타격 1회분이 추가로 꽂힌다.
+   */
+  private rollBossSupportStrike(): boolean {
+    if (this.phase !== 'boss' || this.bossFloor <= 0 || this.bossHp <= 0) return false
+    const chance = this.bossProfileFor(this.bossFloor).supportStrikeChance
+    if (chance <= 0 || this.rng.next() >= chance) return false
+    this.damageBoss(this.attack, 'basic')
+    return this.phase !== 'boss' // 이 한 방으로 격파되면 국면이 넘어간다
+  }
+
+  /** 앞을 막은 종복 하나를 때린다. 격자 배율은 붙지 않는다 — 보스 몸이 아니다. */
+  private strikeBossSummon(amount: number): number {
+    const target = this.bossSummons[0]
+    if (!target) return -1
+    target.hp -= amount
+    this.gainCombo(2)
+    if (target.hp > 0) return 0.4
+    this.bossSummons.shift()
+    return 2.6
+  }
+
+  /** 광역 손패가 종복을 한꺼번에 쓸어 담는다. 정리된 수만큼 보상을 준다. */
+  private sweepBossSummons(amount: number): number {
+    if (this.bossSummons.length === 0) return 0
+    const before = this.bossSummons.length
+    for (const e of this.bossSummons) e.hp -= amount
+    this.bossSummons = this.bossSummons.filter((e) => e.hp > 0)
+    const killed = before - this.bossSummons.length
+    if (killed > 0) this.gainCombo(2 * killed)
+    return killed * 2.6
+  }
+
+  /**
+   * 페이지 경계를 여는 데 남은 피해. 0이면 지금 때리는 피해가 그대로 HP로 들어간다.
+   * 이걸 보지 못하면 정책은 이미 막힌 벽을 계속 때리며 "왜 안 줄지"를 배우지 못한다.
+   */
+  private bossPageGateRemaining(): number {
+    if (this.phase !== 'boss' || this.bossFloor <= 0) return 0
+    const profile = this.bossProfileFor(this.bossFloor)
+    if (profile.pageGate !== 'cell-break') return 0
+    if (!profile.pages || this.bossPage >= profile.pages.length - 1) return 0
+    if (this.bossHp > this.bossPageFloor()) return 0
+    return Math.max(0, this.pageGateBreakCost(profile) - this.bossGateDamage)
+  }
+
+  /**
+   * 손에 쥔 탐욕의 동전이 요구할 피해(30F '탐욕의 값').
+   *
+   * 2페이지가 이미 열렸을 때뿐 아니라 **경계가 코앞일 때도** 값이 잡힌다. 실게임에서
+   * 플레이어는 HP바의 페이지 경계선을 보고 미리 동전을 턴다 — 전환 순간에야 알아채면
+   * 4장을 쥔 채로 첫 값을 그대로 맞는다. 에나가 그걸 못 보면 "왜 갑자기 죽었지"가 된다.
+   */
+  private pendingGreedToll(): number {
+    if (this.phase !== 'boss' || this.bossFloor <= 0) return 0
+    if (this.bossProfileFor(this.bossFloor).behavior !== 'greed') return 0
+    if (this.bossPage < 1 && this.bossPageProximity() > GREED_TOLL_LOOKAHEAD) return 0
+    const held = this.hand.reduce((sum, c) => sum + (c.id === GREED_COIN_ID ? (c.merged ? 3 : 1) : 0), 0)
+    return held * GREED_COIN_TOLL_DAMAGE
+  }
+
+  /** 다음 페이지 경계까지 남은 거리(최대 체력 대비). 경계가 없거나 마지막 페이지면 1. */
+  private bossPageProximity(): number {
+    if (this.phase !== 'boss' || this.bossMaxHp <= 0) return 1
+    const profile = this.bossProfileFor(this.bossFloor)
+    if (!profile.pages || this.bossPage >= profile.pages.length - 1) return 1
+    return Math.max(0, Math.min(1, (this.bossHp - this.bossPageFloor()) / this.bossMaxHp))
+  }
+
+  /** 지금 격자의 기대값. 전투 중 몸집이 바뀐 보스는 다시 뽑은 값을 쓴다. */
+  private bossGimmick(): BossGimmickExpectation | undefined {
+    return this.bossGimmickOverride ?? this.bossProfileFor(this.bossFloor)?.gimmick
+  }
+
+  /**
+   * 리미트 페이지를 여는 데 드는 추가 피해 = 부위 한 칸의 내구도.
+   * 실게임은 "경계에 닿은 뒤 칸을 하나 더 깨라"고 요구한다 — 칸이 없는 시뮬은
+   * 같은 요구를 화력으로 환산해, 약점만 긁어 경계를 밀고 지나가는 진행을 똑같이 끊는다.
+   */
+  private pageGateBreakCost(profile: BossProfile): number {
+    const gimmick = this.bossGimmick()
+    if (!gimmick) return 0
+    return bossGimmickCellDurability(profile.maxHp, gimmick.cells)
+  }
+
   /** 보스 칸 기믹 배율 근사. 시뮬은 칸을 직접 고르지 않으므로
    *  조준 타격은 드러난 약점을 노린다고 보고 최고 배율, 광역은 칸마다 한 번씩 들어간다고 본다.
    *  부위 파괴 보너스는 칸 상태를 들고 있지 않으니 누적 배수(breakBonusFactor)로 녹여 둔다 —
    *  칸이 깨져 광역 타격 면적이 줄어드는 손해와 상쇄되는 근사다. */
   private bossGimmickScaled(amount: number, scope: 'single' | 'area'): number {
-    const gimmick = this.bossProfileFor(this.bossFloor)?.gimmick
+    const gimmick = this.bossGimmick()
     if (!gimmick || amount <= 0) return amount
     const scaled = scope === 'area'
       ? amount * gimmick.cells * gimmick.averageMultiplier
@@ -1319,6 +1534,8 @@ export class EnaTrainingSimulation {
   }
 
   private damageBoss(rawAmount: number, source: 'basic' | 'ember', scope: 'single' | 'area' = 'single'): number {
+    // 이미 격파돼 국면이 넘어갔으면 때릴 대상이 없다(같은 행동 안에서 두 번 꽂히는 경우).
+    if (this.bossFloor <= 0) return 0
     const amount = this.bossGimmickScaled(rawAmount, scope)
     // 밀랍 방패(기사단장/마녀)가 피해를 먼저 흡수한다 — 실게임 bossShield 규칙.
     const blocked = Math.min(this.bossShield, amount)
@@ -1330,6 +1547,8 @@ export class EnaTrainingSimulation {
     const dealt = before - this.bossHp
     this.bossDamageSinceGift += dealt
     const profile = this.bossProfileFor(this.bossFloor)
+    // 경계가 삼킨 몫은 버려지지 않는다 — 실게임에서 그 피해는 칸으로 들어가 부위를 깬다.
+    if (profile.pageGate === 'cell-break') this.bossGateDamage += Math.max(0, amount - blocked - dealt)
     // HP 10 손실마다 손패 1장 지급(실게임 공통).
     while (this.bossDamageSinceGift >= profile.handGiftStep) {
       this.bossDamageSinceGift -= profile.handGiftStep
@@ -1348,6 +1567,9 @@ export class EnaTrainingSimulation {
     if (this.bossHp > floor) return
     this.bossHp = floor
     if (profile.pages && this.bossPage < profile.pages.length - 1) {
+      // 리미트 페이지는 경계에 닿는 것만으로 열리지 않는다 — 부위 하나만큼 더 때려야 한다.
+      if (profile.pageGate === 'cell-break' && this.bossGateDamage < this.pageGateBreakCost(profile)) return
+      this.bossGateDamage = 0
       this.bossPage++ // 다음 페이지 — 경계 HP가 새 페이지의 천장이 된다.
       this.bossAttackCountdown = profile.interval
       return
@@ -1742,12 +1964,18 @@ export class EnaTrainingSimulation {
     } else {
       this.bossAttackCountdown--
       if (this.bossAttackCountdown <= 0 && this.bossHp > 0) {
-        const adversity = this.hp + this.shield - profile.attack <= Math.max(1, this.maxHp * 0.35)
-        if (!this.companionDodges(profile.attack, adversity)) this.takeDamage(profile.attack)
-        this.applyBossBehavior(profile)
+        // 특징 행동이 그 주기의 행동을 **대신하는** 보스가 있다(조각사 소환·마녀 2P 손패 전개).
+        // 실게임에서 그 주기에는 돌진이 오지 않으므로 시뮬도 직접 타격을 건너뛴다.
+        const replacesAttack = this.applyBossBehavior(profile)
+        if (!replacesAttack && this.bossHp > 0) {
+          const adversity = this.hp + this.shield - profile.attack <= Math.max(1, this.maxHp * 0.35)
+          if (!this.companionDodges(profile.attack, adversity)) this.takeDamage(profile.attack)
+        }
         this.bossAttackCountdown = profile.interval
       }
     }
+    // 세워 둔 종복은 보스 주기와 무관하게 매 턴 때린다(실게임 summonedEnemiesStrike).
+    this.strikeFromBossSummons()
     // 불씨는 보스전에도(굳음과 무관하게) 천천히 줄어 시간 압박을 유지한다.
     if (--this.emberDecayCountdown <= 0) {
       this.emberDecayCountdown = this.emberDecayTurns
@@ -1755,30 +1983,70 @@ export class EnaTrainingSimulation {
     }
   }
 
-  private applyBossBehavior(profile: BossProfile): void {
+  /** 살아 있는 종복이 한꺼번에 때린다. 회피 클러치는 합산 피해 한 번에 굴린다. */
+  private strikeFromBossSummons(): void {
+    if (this.bossSummons.length === 0 || this.done) return
+    const total = this.bossSummons.reduce((sum, e) => sum + e.atk, 0)
+    if (total <= 0) return
+    const adversity = this.hp + this.shield - total <= Math.max(1, this.maxHp * 0.35)
+    if (!this.companionDodges(total, adversity)) this.takeDamage(total)
+  }
+
+  /** 보스가 종복을 새로 세운다(기존 종복은 실게임처럼 새 소환으로 대체된다). */
+  private summonBossMinions(count: number, hpBonus: number, atkBonus: number): void {
+    this.bossSummons = Array.from({ length: count }, () => {
+      const def = BOSS_SUMMON_POOL[this.rng.int(BOSS_SUMMON_POOL.length)]
+      return {
+        hp: (def.healthOrDamage ?? 1) + hpBonus,
+        atk: (def.attack ?? 1) + atkBonus,
+      }
+    })
+  }
+
+  /**
+   * 보스의 주기 특징 행동. 반환값 true면 그 주기의 **직접 타격을 대신한다**.
+   * 페이지별 분기는 실게임 BossEvent와 같은 조건을 쓰고, 수치는 BossPages 단일 출처에서 온다.
+   */
+  private applyBossBehavior(profile: BossProfile): boolean {
     switch (profile.behavior) {
-      case 'greed':
-        // 탐욕 살포: 손패에 동전/탐욕의 동전을 흩뿌린다(일부 자해).
-        for (let n = 0; n < 2 + this.rng.int(3); n++) this.drawCard(this.rng.next() < 0.5 ? 'greed-coin' : 'coin')
-        break
+      case 'greed': {
+        // 탐욕 살포: 탐욕의 동전 1~2장 + 나머지는 일반 드롭(실게임 scatterGreedCards).
+        const count = GREED_SCATTER_MIN + this.rng.int(GREED_SCATTER_MAX - GREED_SCATTER_MIN + 1)
+        const greedCount = count >= 4 ? 2 : count === 2 ? 1 : 1 + this.rng.int(2)
+        for (let n = 0; n < greedCount; n++) this.drawCard(GREED_COIN_ID)
+        for (let n = 0; n < count - greedCount; n++) this.drawCard()
+        // 2페이지 '탐욕의 값': 손에 쥔 탐욕의 동전 1장당 1피해 — 쥐고만 있으면 매 주기 값을 치른다.
+        const toll = this.pendingGreedToll()
+        if (toll > 0) this.takeDamage(toll)
+        return false
+      }
       case 'knightHand': {
-        // 기사단장 손패(방패/회복/타격 혼합) 근사: 밀랍 방패를 두르고 추가 피해를 준다.
-        // 2페이지는 카드가 3장으로 늘고 수치도 1씩 올라 같은 패턴이 그만큼 무거워진다.
+        // 손패 3종(방패/회복/타격)에서 비복원 추출 — 1P는 2장, 2P는 3장 전부에 수치도 +1.
         const page2 = this.bossPage >= 1
-        this.bossShield += page2 ? 7 : 4
-        this.takeDamage(page2 ? 4 : 2)
-        break
+        const cardCount = KNIGHT_BASE_CARDS + (page2 ? KNIGHT_PAGE_TWO_EXTRA_CARDS : 0)
+        const amount = KNIGHT_HAND_CARD_AMOUNT + (page2 ? KNIGHT_PAGE_TWO_AMOUNT_BONUS : 0)
+        this.playBossHandCards(cardCount, amount, false)
+        // 카드가 전부 발동된 뒤 기본 돌진이 따로 들어간다 — 타격을 대신하지 않는다.
+        return false
       }
       case 'summon':
-        // 조각사 소환 + 은신(방패). 직접 피해 대신 방어 강화로 장기전 유도.
-        // 2페이지 광폭화(종복 체력 +5)는 소환 모델이 없어 보스 자가 회복량으로 환산한다.
-        this.bossHp = Math.min(this.bossMaxHp, this.bossHp + (this.bossPage >= 1 ? 7 : 4))
-        break
-      case 'witch':
-        // 마녀: 손패 2장 소각(페이지와 무관하게 매 공격주기 유지) + 강화 소환 피해.
-        for (let n = 0; n < 2 && this.hand.length > 0; n++) this.consumeHand(this.hand.length - 1)
-        this.takeDamage(3)
-        break
+        // 조각사는 주기마다 후퇴하며 양초 조각을 세운다. 그 주기에는 돌진이 오지 않는다.
+        // 2페이지부터는 새로 부르는 조각도 처음부터 부푼 채로 나온다(비대화 = 체력만).
+        this.summonBossMinions(SCULPTOR_SUMMON_COUNT, this.bossPage >= 1 ? SCULPTOR_SWELL_HP : 0, 0)
+        return true
+      case 'witch': {
+        // 1페이지 능력(손패 소각)은 모든 페이지에서 계속 돈다 — 상위 페이지가 하위를 포함한다.
+        for (let n = 0; n < WITCH_BURN_CARDS && this.hand.length > 0; n++) this.consumeHand(this.hand.length - 1)
+        if (this.bossPage < 1) return false // 1P는 소각 뒤 돌진
+        // 2P: 보스 손패 4장을 한 번에 전개(같은 효과 2장 이상이면 추가 발동). 돌진을 대신한다.
+        this.playBossHandCards(WITCH_PAGE_TWO_CARDS, WITCH_HAND_CARD_AMOUNT, true)
+        // 3P: 몸을 접어 강화된 종복을 세운다 — 격자도 함께 줄어 약점이 새로 노출된다.
+        if (this.bossPage >= 2) {
+          this.summonBossMinions(WITCH_SUMMON_COUNT, WITCH_ENRAGE_HP, WITCH_ENRAGE_ATK)
+          this.shrinkBossGimmick(profile, WITCH_PAGE_THREE_GRID_ROWS)
+        }
+        return true
+      }
       case 'catSteal':
         // 양초 고양이는 페이지로 성격이 뒤집힌다 — 1페이지는 손패를 **주고**(온보딩 배려),
         // 2페이지에 가서야 빼앗는다. 촛농/양초/불씨를 빼앗으면 본인이 써서 자가 회복.
@@ -1792,8 +2060,39 @@ export class EnaTrainingSimulation {
             this.bossHp = Math.min(this.bossMaxHp, this.bossHp + 4)
           }
         }
-        break
+        return false
     }
+  }
+
+  /** 보스 손패 전개(기사단장/마녀 공용) — 방패/회복/타격 중에서 뽑아 차례로 발동한다. */
+  private playBossHandCards(count: number, amount: number, withReplacement: boolean): void {
+    const pool: ('shield' | 'heal' | 'strike')[] = ['shield', 'heal', 'strike']
+    const drawn: ('shield' | 'heal' | 'strike')[] = []
+    if (withReplacement) {
+      for (let n = 0; n < count; n++) drawn.push(pool[this.rng.int(pool.length)])
+      // 같은 효과가 2장 이상이면 그 효과가 한 번 더 발동한다(실게임 bonusEffects).
+      for (const effect of pool) if (drawn.filter((v) => v === effect).length >= 2) drawn.push(effect)
+    } else {
+      const remaining = [...pool]
+      for (let n = 0; n < count && remaining.length > 0; n++) {
+        drawn.push(remaining.splice(this.rng.int(remaining.length), 1)[0])
+      }
+    }
+    for (const effect of drawn) {
+      if (effect === 'shield') this.bossShield += amount
+      else if (effect === 'heal') this.bossHp = Math.min(this.bossMaxHp, this.bossHp + amount)
+      else this.takeDamage(amount)
+    }
+  }
+
+  /** 몸이 접히며 격자가 줄어든다 — 줄어든 칸 수 기준으로 약점 기대값을 다시 뽑는다. */
+  private shrinkBossGimmick(profile: BossProfile, rows: number): void {
+    if (!profile.gimmickKind) return
+    const cols = BOSS_GIMMICK_PROFILES[profile.gimmickKind]?.cols
+    if (!cols) return
+    const cells = cols * rows
+    if (this.bossGimmickOverride?.cells === cells) return
+    this.bossGimmickOverride = bossGimmickExpectation(profile.gimmickKind, cells)
   }
 
   /** 보스 격파 — 보상 후 일반 등반 복귀(100F는 클리어로 종료). 페이지 전환은 checkBossProgress가 담당. */
@@ -1861,6 +2160,9 @@ export class EnaTrainingSimulation {
     this.bossDamageSinceGift = 0
     this.bossFrozenTurns = 0
     this.bossShield = 0
+    this.bossSummons = []
+    this.bossGateDamage = 0
+    this.bossGimmickOverride = null
     if (floor === 100) this.finalAscent = false
   }
 
@@ -2003,7 +2305,10 @@ export class EnaTrainingSimulation {
       return action.kind === 'eventTrick' && this.currentEventId !== 'event_001'
     }
     if (this.phase === 'boss') {
-      if (action.kind === 'clickLane') return action.arg === 0 // 보스 직접 공격(대표 1행동)
+      // 0 = 보스 직접 공격(대표 1행동), 1 = 앞을 막은 종복 정리(종복이 있을 때만).
+      if (action.kind === 'clickLane') {
+        return action.arg === 0 || (action.arg === 1 && this.bossSummons.length > 0)
+      }
       if (action.kind === 'useHand') return action.arg < this.hand.length
       return false
     }
@@ -2368,6 +2673,14 @@ export class EnaTrainingSimulation {
       bossMaxHp: this.bossMaxHp,
       bossAttackCountdown: this.bossAttackCountdown,
       bossPage: this.bossPage,
+      bossPageGateLocked: this.bossPageGateRemaining() > 0,
+      bossPageGateRemaining: this.bossPageGateRemaining(),
+      bossGridCells: this.bossGimmick()?.cells ?? 0,
+      bossGridBestMultiplier: this.bossGimmick()?.bestMultiplier ?? 1,
+      bossSummonCount: this.bossSummons.length,
+      bossSummonThreat: this.bossSummons.reduce((sum, e) => sum + e.atk, 0),
+      bossGreedToll: this.pendingGreedToll(),
+      bossPageProximity: this.bossPageProximity(),
       eventRisk: this.eventRisk,
       eventId: this.currentEventId,
       trapDamageBonus: this.trialTrapDamageBonus,
@@ -2402,7 +2715,9 @@ function fieldPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): 
     if (cleaner >= 0) return actionIndexOf('useHand', cleaner)
   }
   // 2) 위급하거나 보스 직전이면 회복/방패 손패로 미리 체력을 채운다.
-  if (snapshot.hp <= cfg.lowHpRecoveryThreshold || (snapshot.turnsToBoss <= 3 && snapshot.hp <= snapshot.maxHp - 4)) {
+  // 보스 준비 창(bossPrepWindow) 동안은 회복을 앞당긴다 — 체력 산출이 "거의 온전한 체력으로
+  // 들어온다"를 전제하므로, 반쯤 깎인 채 들어가면 시뮬만 홀로 이길 수 없는 싸움이 된다.
+  if (snapshot.hp <= cfg.lowHpRecoveryThreshold || (snapshot.turnsToBoss <= cfg.bossPrepWindow && snapshot.hp <= snapshot.maxHp - 4)) {
     const heal = findHand((id) => HAND_CARD_DEFINITIONS[id].category === 'recovery')
     if (heal >= 0) return actionIndexOf('useHand', heal)
   }
@@ -2417,9 +2732,13 @@ function fieldPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): 
     if (stabilizer >= 0) return actionIndexOf('useHand', stabilizer)
   }
   // 4) 강한 적(2칸+ 또는 공격력 초과)은 불씨 공격 손패로 처리.
+  //    단 보스가 가까우면 보스전 몫은 남긴다 — 체력 산출(BossSpecs)이 "공격 손패 3~4장을
+  //    들고 들어간다"를 전제하므로, 교사가 전부 필드에서 태우면 시뮬만 홀로 어려워진다.
+  const attackCardsHeld = snapshot.hand.filter((s) => HAND_CARD_DEFINITIONS[s.id].category === 'attack').length
+  const savingForBoss = snapshot.turnsToBoss <= cfg.bossPrepWindow && attackCardsHeld <= cfg.bossPrepAttackCards
   const dangerLane = front.findIndex((c) => c?.type === CardType.ENEMY && (c.group >= 2 || c.hp > snapshot.attack))
   if (dangerLane >= 0) {
-    const atk = findHand((id) => HAND_CARD_DEFINITIONS[id].category === 'attack')
+    const atk = savingForBoss ? -1 : findHand((id) => HAND_CARD_DEFINITIONS[id].category === 'attack')
     if (atk >= 0) return actionIndexOf('useHand', atk)
     // 공격 손패가 없으면 밀랍으로 굳혀 반격을 막는다(2턴 무력화).
     const wax = findHand((id) => id === 'wax')
@@ -2484,15 +2803,58 @@ function eventPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): 
 }
 
 function bossPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): number {
-  // 위급 + 회복 손패면 회복.
-  if (snapshot.bossAttackCountdown <= cfg.bossEmergencyCountdown && snapshot.hp + snapshot.shield <= cfg.bossEmergencyEffectiveHp) {
+  const effectiveHp = snapshot.hp + snapshot.shield
+  const attackImminent = snapshot.bossAttackCountdown <= cfg.bossEmergencyCountdown
+  // 위급하면 회복. 절대 수치만 보면 최대 체력이 자란 런에서 너무 늦게 회복하므로 비율도 함께 본다.
+  if (attackImminent && (effectiveHp <= cfg.bossEmergencyEffectiveHp || effectiveHp <= snapshot.maxHp * cfg.bossEmergencyHpRatio)) {
     const heal = snapshot.hand.findIndex((s) => HAND_CARD_DEFINITIONS[s.id].category === 'recovery')
     if (heal >= 0) return actionIndexOf('useHand', heal)
+    // 회복이 없으면 밀랍으로 굳혀 이번 주기를 통째로 넘긴다 — 보스도 굳음 대상이다.
+    const wax = snapshot.hand.findIndex((s) => s.id === 'wax')
+    if (wax >= 0) return actionIndexOf('useHand', wax)
   }
-  // 불씨 공격 손패로 큰 피해.
-  const atk = snapshot.hand.findIndex((s) => HAND_CARD_DEFINITIONS[s.id].category === 'attack')
+  // 탐욕의 값(30F 2P): 쥐고만 있으면 주기마다 값을 치른다 — 감당 못 할 만큼 쌓이면 먼저 턴다.
+  // 실게임 플레이어가 당연히 하는 대처라, 교사가 못 하면 시뮬만 홀로 어려워진다.
+  // 탐욕의 값은 **쥐고 있는 편이 대체로 낫다** — 동전 1장을 터는 데 행동 1회 + 자해 2가
+  // 드는데, 쥐고 있으면 주기당 1이다. 그래서 '값이 이번 주기를 못 버티게 할 때'만 턴다.
+  if (snapshot.bossGreedToll > 0 && snapshot.bossGreedToll >= effectiveHp * cfg.bossGreedTollHpRatio) {
+    const coin = snapshot.hand.findIndex((s) => s.id === GREED_COIN_ID)
+    if (coin >= 0) return actionIndexOf('useHand', coin)
+  }
+  // 앞을 막은 종복이 보스보다 급한 위협이면 먼저 치운다(조각사·마녀 3P).
+  if (snapshot.bossSummonCount > 0 && snapshot.bossSummonThreat >= snapshot.hp + snapshot.shield) {
+    return actionIndexOf('clickLane', 1)
+  }
+  // 공격 손패는 **가장 크게 들어가는 것부터** 쓴다. 격자 보스에서 광역 한 장은
+  // 칸 수만큼 꽂혀 단일 여러 장 몫을 한다 — 손에 든 순서대로 쓰면 그 차이를 통째로 버린다.
+  const atk = pickBestBossAttackCard(snapshot)
   if (atk >= 0) return actionIndexOf('useHand', atk)
+  if (snapshot.bossSummonCount > 0) return actionIndexOf('clickLane', 1)
   return actionIndexOf('clickLane', 0)
+}
+
+/**
+ * 보스전에서 지금 가장 크게 들어가는 공격 손패의 슬롯. 없으면 -1.
+ * 관측에 들어온 격자 정보(칸 수·약점 배율)를 그대로 써서 광역/조준 가치를 비교한다.
+ */
+function pickBestBossAttackCard(snapshot: EnaGameSnapshot): number {
+  let best = -1
+  let bestValue = 0
+  snapshot.hand.forEach((slot, index) => {
+    const def = HAND_CARD_DEFINITIONS[slot.id]
+    if (def.category !== 'attack') return
+    const profile = slot.merged ? def.damageProfile?.triple : def.damageProfile?.base
+    const rule = slot.merged ? def.targeting.triple : def.targeting.base
+    // damageProfile이 없는 카드는 순서상 뒤로 밀되 후보로는 남긴다(비교값 최소).
+    const perHit = profile ? profile.atkMult * snapshot.attack + profile.flat : 1
+    const cells = Math.max(1, snapshot.bossGridCells)
+    const value = rule.selection === 'all' ? perHit * cells : perHit * snapshot.bossGridBestMultiplier
+    if (value > bestValue) {
+      bestValue = value
+      best = index
+    }
+  })
+  return best
 }
 
 // ── 순수 유틸 ────────────────────────────────────────────────────────────────

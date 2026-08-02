@@ -1,7 +1,47 @@
 import { describe, expect, it } from 'vitest'
 import { CardType } from '@entities/Card'
 import { TRIAL_DEFINITIONS } from '@data/Trials'
-import { EnaTrainingSimulation, ENA_ACTION_SPACE, type EnaSimCard } from './EnaTrainingSimulation'
+import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
+import { BOSS_CORE_SPECS } from '@data/BossSpecs'
+import {
+  GREED_COIN_TOLL_DAMAGE,
+  SCULPTOR_SUMMON_COUNT,
+  SCULPTOR_SWELL_HP,
+  WITCH_ENRAGE_ATK,
+  WITCH_ENRAGE_HP,
+  WITCH_SUMMON_COUNT,
+  halfPageFloor,
+} from '@data/BossPages'
+import { EnaTrainingSimulation, ENA_ACTION_SPACE, ENA_FEATURE_COUNT, type EnaSimCard } from './EnaTrainingSimulation'
+
+/** 보스 국면 내부 상태 창구 — 실게임과 시뮬이 같은 규칙을 도는지 확인하기 위한 최소 접근. */
+interface BossProbe {
+  enterBoss: (floor: number) => void
+  advanceBossTurn: () => void
+  damageBoss: (raw: number, source: 'basic' | 'ember', scope?: 'single' | 'area') => number
+  phase: string
+  hp: number
+  hand: { id: string; merged: boolean }[]
+  bossFloor: number
+  bossHp: number
+  bossPage: number
+  bossAttackCountdown: number
+  bossSummons: { hp: number; atk: number }[]
+  bossGateDamage: number
+}
+
+function bossProbe(sim: EnaTrainingSimulation): BossProbe {
+  return sim as unknown as BossProbe
+}
+
+/** 보스 국면으로 밀어 넣고 첫 페이지 경계 바로 위까지 깎아 둔다. */
+function stagedBoss(seed: number, floor: number): BossProbe {
+  const sim = new EnaTrainingSimulation(seed)
+  sim.reset()
+  const p = bossProbe(sim)
+  p.enterBoss(floor)
+  return p
+}
 
 /** 테스트 전용 내부 상태 접근 — 강제 시련 누적치·보드를 검사하기 위한 최소 창구. */
 interface TrialProbe {
@@ -21,8 +61,10 @@ describe('EnaTrainingSimulation', () => {
   it('딥러닝 입력 벡터와 행동 공간 크기를 고정한다', () => {
     const sim = new EnaTrainingSimulation(7)
     const observation = sim.reset()
-    // 스칼라 62(이벤트/별빛/보스 정체/상점/시련/유물 엔진/카드 풀 포함) + 예고 3칸×6 + 9칸×14 + 손패 10×13 = 336.
-    expect(observation.features).toHaveLength(336)
+    // 스칼라 70(이벤트/별빛/보스 정체·격자·페이지 게이트·종복/상점/시련/유물 엔진/카드 풀 포함)
+    // + 예고 3칸×6 + 9칸×14 + 손패 10×13 = 344.
+    expect(observation.features).toHaveLength(ENA_FEATURE_COUNT)
+    expect(ENA_FEATURE_COUNT).toBe(344)
     // clickLane×3 + useHand×10 + wait + 상점×9(무료/유물/6종 팩/EXIT) + 이벤트×4(safe/greedy/trick/bail) = 27.
     expect(ENA_ACTION_SPACE).toHaveLength(27)
     expect(observation.legalActions.length).toBeGreaterThan(0)
@@ -31,7 +73,7 @@ describe('EnaTrainingSimulation', () => {
   it('교사 정책으로 100층 한 호의 국면/손패/보스 판단 학습 샘플을 생성한다', () => {
     const dataset = EnaTrainingSimulation.collectDataset(3, 11)
     expect(dataset.length).toBeGreaterThan(20)
-    expect(dataset.every((sample) => sample.state.length === 336 && sample.nextState.length === 336)).toBe(true)
+    expect(dataset.every((sample) => sample.state.length === ENA_FEATURE_COUNT && sample.nextState.length === ENA_FEATURE_COUNT)).toBe(true)
     expect(dataset.every((sample) => sample.actionIndex >= 0 && sample.actionIndex < ENA_ACTION_SPACE.length)).toBe(true)
   })
 
@@ -143,11 +185,93 @@ describe('EnaTrainingSimulation', () => {
     const observation = sim.observe()
     expect(observation.snapshot.trapDamageBonus).toBe(2)
     // 9칸 인코딩의 첫 칸(전방 0레인) 위협 축(atk/trap 피해)은 (1+2)/30이어야 한다.
-    const scalarCount = 62
+    // 스칼라 구간을 지나 예고 3칸(6축) 뒤부터가 9칸 인코딩이다.
+    const scalarCount = ENA_FEATURE_COUNT - 6 * 3 - 14 * 9 - 13 * 10
     const incomingCount = 6 * 3
     const cellFeatures = observation.features.slice(scalarCount + incomingCount, scalarCount + incomingCount + 14)
     expect(cellFeatures[1]).toBe(1) // TRAP one-hot
     expect(cellFeatures[6]).toBeCloseTo(3 / 30, 6)
+  })
+
+  it('30F 리미트 페이지는 경계에 닿는 것만으로 열리지 않는다(부위 하나만큼 더)', () => {
+    // 실게임 'cell-break' 요구를 화력으로 환산한 자리. 없으면 약점만 긁어 경계를 밀고 지나간다.
+    const p = stagedBoss(21, 30)
+    const floor = halfPageFloor(BOSS_CORE_SPECS[30].maxHp)
+    p.damageBoss(BOSS_CORE_SPECS[30].maxHp, 'basic') // 경계 초과 피해 한 방
+    expect(p.bossHp).toBe(floor)
+    expect(p.bossPage).toBe(1) // 초과분이 그대로 부위 파괴에 들어가 열린다
+    expect(p.bossGateDamage).toBe(0)
+
+    // 초과분이 없으면(경계에 딱 닿으면) 잠긴 채로 남는다.
+    const q = stagedBoss(22, 30)
+    q.bossHp = floor
+    q.damageBoss(0, 'basic')
+    expect(q.bossPage).toBe(0)
+  })
+
+  it('30F 2페이지는 손에 쥔 탐욕의 동전 1장당 값을 요구한다', () => {
+    const p = stagedBoss(23, 30)
+    p.bossPage = 1
+    p.bossAttackCountdown = 1
+    p.hand = [
+      { id: 'greed-coin', merged: false },
+      { id: 'greed-coin', merged: false },
+    ]
+    const before = p.hp
+    p.advanceBossTurn()
+    // 보스 기본 타격 + 동전 2장의 값. 살포로 동전이 더 들어올 수 있어 하한만 본다.
+    const minLoss = BOSS_CORE_SPECS[30].attack + 2 * GREED_COIN_TOLL_DAMAGE
+    expect(before - p.hp).toBeGreaterThanOrEqual(minLoss)
+  })
+
+  it('90F 조각사는 주기마다 종복을 세우고 2페이지부터 비대화시킨다', () => {
+    // 소환 풀은 실게임과 같은 60~90층대 적(ENEMY_DEFINITIONS 12~17)이라 개체차가 있다.
+    // 랜덤 표본끼리 비교하지 않고 풀의 하한/상한과 비교해 판정한다.
+    const pool = ENEMY_DEFINITIONS.slice(12, 18)
+    const poolHp = pool.map((d) => d.healthOrDamage ?? 1)
+    const poolAtk = pool.map((d) => d.attack ?? 1)
+
+    const p = stagedBoss(24, 90)
+    p.bossAttackCountdown = 1
+    p.advanceBossTurn()
+    expect(p.bossSummons).toHaveLength(SCULPTOR_SUMMON_COUNT)
+    expect(p.bossSummons.every((e) => e.hp <= Math.max(...poolHp))).toBe(true)
+
+    p.bossPage = 1
+    p.bossAttackCountdown = 1
+    p.advanceBossTurn()
+    expect(p.bossSummons).toHaveLength(SCULPTOR_SUMMON_COUNT)
+    // 비대화는 체력만 올린다 — 공격력은 건드리지 않는다(광폭화와 다른 어휘).
+    expect(p.bossSummons.every((e) => e.hp >= Math.min(...poolHp) + SCULPTOR_SWELL_HP)).toBe(true)
+    expect(p.bossSummons.every((e) => e.atk <= Math.max(...poolAtk))).toBe(true)
+  })
+
+  it('100F 마녀 3페이지는 광폭화 종복을 부르고 격자가 6칸으로 줄어든다', () => {
+    const p = stagedBoss(25, 100)
+    p.bossPage = 2
+    p.bossAttackCountdown = 1
+    p.advanceBossTurn()
+    expect(p.bossSummons).toHaveLength(WITCH_SUMMON_COUNT)
+    // 광폭화는 체력과 공격력을 함께 올린다.
+    expect(Math.min(...p.bossSummons.map((e) => e.atk))).toBeGreaterThan(WITCH_ENRAGE_ATK)
+    expect(Math.min(...p.bossSummons.map((e) => e.hp))).toBeGreaterThan(WITCH_ENRAGE_HP)
+    // 몸이 접혀 판정 칸이 9 → 6으로 줄고, 그 칸 수가 관측에도 그대로 나온다.
+    expect((p as unknown as EnaTrainingSimulation).observe().snapshot.bossGridCells).toBe(6)
+  })
+
+  it('보스 격자·페이지 게이트·종복이 관측에 그대로 실린다', () => {
+    const p = stagedBoss(26, 30)
+    const snap = (p as unknown as EnaTrainingSimulation).observe().snapshot
+    expect(snap.bossGridCells).toBe(9)
+    expect(snap.bossGridBestMultiplier).toBe(2)
+    expect(snap.bossPageGateLocked).toBe(false)
+    expect(snap.bossPageProximity).toBeGreaterThan(0)
+
+    p.bossHp = halfPageFloor(BOSS_CORE_SPECS[30].maxHp)
+    const gated = (p as unknown as EnaTrainingSimulation).observe().snapshot
+    expect(gated.bossPageGateLocked).toBe(true)
+    expect(gated.bossPageGateRemaining).toBeGreaterThan(0)
+    expect(gated.bossPageProximity).toBe(0)
   })
 
   it('현재 상황을 플레이어 체감 전략 문장으로 분석한다', () => {

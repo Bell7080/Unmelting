@@ -78,6 +78,20 @@ describe('BossGimmickManager', () => {
     expect(m.getCells().some((c) => c.kind === 'plain')).toBe(true)
   })
 
+  it('기대값 요약은 축소된 격자도 같은 밀도로 환산한다', () => {
+    // 마녀 3페이지처럼 몸이 접히면 칸 수가 준다. 시뮬은 칸을 직접 고르지 않으므로
+    // 이 요약이 실제 격자와 어긋나면 학습 세계만 다른 배율을 쓰게 된다.
+    const full = bossGimmickExpectation('waxWitch')!
+    const folded = bossGimmickExpectation('waxWitch', 6)!
+    expect(full.cells).toBe(9)
+    expect(folded.cells).toBe(6)
+    // 특수 칸 밀도가 유지되므로 평균 배율이 크게 흔들리지 않는다.
+    expect(Math.abs(folded.averageMultiplier - full.averageMultiplier)).toBeLessThan(0.25)
+    expect(folded.bestMultiplier).toBe(full.bestMultiplier)
+    // 칸이 줄면 부위 파괴 누적 배수는 낮아진다(깰 부위가 적다).
+    expect(folded.breakBonusFactor).toBeLessThan(full.breakBonusFactor)
+  })
+
   it('격자가 다시 늘어나도 같은 규칙으로 새로 굴린다', () => {
     // "늘어나도 마찬가지" — 줄이는 쪽만 처리하면 몸이 돌아왔을 때 칸이 모자란 채로 남는다.
     const m = new BossGimmickManager(fixedRng())
