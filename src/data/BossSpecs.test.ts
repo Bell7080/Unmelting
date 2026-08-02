@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   BOSS_CORE_SPECS,
+  ACTIONS_PER_HAND_GIFT,
+  HAND_BURN_RELIEF_FACTOR,
+  HAND_BURN_RELIEF_FLOORS,
   BOSS_FIGHT_BUDGETS,
   ONBOARDING_CAT_SPEC,
   ONBOARDING_CAT_BUDGET,
@@ -81,12 +84,20 @@ describe('보스 체력 곡선', () => {
     }
   })
 
-  it('보스전 손패 지급 횟수가 보스마다 비슷한 범위에 있다', () => {
+  it('보스전 손패 지급이 전투 길이에 비례한다(대략 N행동마다 1장)', () => {
+    // 지급 '횟수'를 절대값으로 묶어 두면 짧은 전투에서 무조건 깨진다 — 9행동 전투에
+    // 4장을 지급하면 그건 촘촘한 게 아니라 손이 남아도는 것이다. 규칙의 의도는
+    // "몇 행동마다 한 장이 들어오는가"가 일정한 것이므로 그 비율로 검사한다.
     for (const floor of CLIMB) {
       const spec = BOSS_CORE_SPECS[floor]
       const gifts = spec.maxHp / spec.handGiftStep
-      expect(gifts, `${floor}F 지급 횟수`).toBeGreaterThanOrEqual(3)
-      expect(gifts, `${floor}F 지급 횟수`).toBeLessThanOrEqual(16)
+      // 소각 보스(마녀)는 지급 간격을 의도적으로 절반으로 좁혔다 — 같은 길이에 두 배 들어온다.
+      const relief = HAND_BURN_RELIEF_FLOORS.has(floor) ? HAND_BURN_RELIEF_FACTOR : 1
+      const expected = (BOSS_FIGHT_BUDGETS[floor].targetActions / ACTIONS_PER_HAND_GIFT) * relief
+      expect(gifts / expected, `${floor}F 지급 간격 비`).toBeGreaterThanOrEqual(0.7)
+      expect(gifts / expected, `${floor}F 지급 간격 비`).toBeLessThanOrEqual(1.6)
+      // 아무리 짧은 전투라도 손패가 한 장은 돌아와야 한다.
+      expect(gifts, `${floor}F 지급 횟수`).toBeGreaterThanOrEqual(2)
     }
   })
 
