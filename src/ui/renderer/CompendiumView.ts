@@ -12,7 +12,18 @@ import { RELIC_DEFINITIONS } from '@data/Relics'
 import { HAND_CARD_RARITY, RARITY_CLASS_BY_TIER, SHOP_PACK_LABELS, SHOP_PACK_POOLS, type CardRarity } from '@data/ShopPools'
 import { RECIPES } from '@data/Recipes'
 import { spriteForHandCard, spriteForRelic, spriteForBasicPackItem, SpriteUrls } from '@ui/Sprites'
-import { bookIcon, flameIcon, heartIcon, swordIcon } from '@ui/Icons'
+import {
+  bookIcon,
+  candleIcon,
+  comboGaugeIcon,
+  flameIcon,
+  handCardIcon,
+  heartIcon,
+  shieldIcon,
+  sparkleIcon,
+  swordIcon,
+  trapIcon,
+} from '@ui/Icons'
 import type { ShopPackKind } from '@ui/renderer/RendererTypes'
 
 export class CompendiumView {
@@ -217,7 +228,8 @@ export class CompendiumView {
   }
 
   private renderCompendiumTraps(): string {
-    const sword = swordIcon()
+    // 함정 피해는 검이 아니라 함정(이빨) 아이콘이다 — 카드 face와 같은 어휘를 쓴다.
+    const sword = trapIcon()
     const seen = this.host.getGameState()?.encounteredCardNames ?? new Set<string>()
 
     const webNames: Record<1 | 2 | 3, string> = { 1: '양초 거미줄', 2: '촛농 거미집', 3: '밀랍 거미굴' }
@@ -394,17 +406,15 @@ export class CompendiumView {
   private renderCompendiumFlowers(): string {
     const seen = this.host.getGameState()?.encounteredCardNames ?? new Set<string>()
 
-    type Spec = {
-      kind: FlowerKind
-      harvest: { label: string; value: string; tone: 'hp' | 'atk' | 'gold' | 'shield' | 'flower' }
-      growth: string
-    }
+    type Spec = { kind: FlowerKind; growth: string }
+    // 수확물 표기(아이콘·이름·톤)는 CardFaceRenderer.flowerHarvestMeta 단일 출처를 쓴다 —
+    // 카드 face와 도감이 다른 것을 말하면 "이 꽃이 뭘 주는가"가 두 값으로 갈린다.
     const specs: Spec[] = [
-      { kind: 'chamomile', harvest: { label: '수확 ', value: '불빛',      tone: 'gold'   }, growth: '턴마다 +1'   },
-      { kind: 'redRose',   harvest: { label: '수확 ', value: '체력',      tone: 'hp'     }, growth: '턴마다 +1'   },
-      { kind: 'marigold',  harvest: { label: '수확 ', value: '화폐',      tone: 'gold'   }, growth: '2턴마다 +1'  },
-      { kind: 'oleander',  harvest: { label: '수확 ', value: '방패',      tone: 'shield' }, growth: '턴마다 +1'   },
-      { kind: 'lavender',  harvest: { label: '수확 ', value: '손패 게이지', tone: 'flower' }, growth: '턴마다 +1'  },
+      { kind: 'chamomile', growth: '턴마다 +1'  },
+      { kind: 'redRose',   growth: '턴마다 +1'  },
+      { kind: 'marigold',  growth: '2턴마다 +1' },
+      { kind: 'oleander',  growth: '턴마다 +1'  },
+      { kind: 'lavender',  growth: '턴마다 +1'  },
     ]
 
     const seedKnown = seen.has(flowerDisplayName('seed'))
@@ -427,7 +437,12 @@ export class CompendiumView {
           tag: '버프칸',
           chips: known
             ? [
-                { label: s.harvest.label, value: s.harvest.value, tone: s.harvest.tone },
+                {
+                  icon: this.host.faces.flowerHarvestMeta(s.kind).icon,
+                  label: '수확 ',
+                  value: this.host.faces.flowerHarvestMeta(s.kind).label,
+                  tone: this.host.faces.flowerHarvestMeta(s.kind).tone,
+                },
                 { label: '성장 ', value: s.growth, tone: 'plain' },
               ]
             : [],
@@ -634,48 +649,104 @@ export class CompendiumView {
     })
   }
 
-  /** Terms tab summarizing current field, resource, and status vocabulary. */
+  /**
+   * 용어 탭 — 화면에 나오는 자원/상태 어휘의 단일 설명처.
+   *
+   * 각 항목에는 **화면에서 실제로 쓰는 아이콘**을 그대로 붙인다. 여기서 본 아이콘이
+   * 카드·HUD·상점에서 같은 뜻으로 다시 나와야 도감이 사전 노릇을 한다.
+   * 수치가 코드에 있는 항목은 숫자를 적지 말고 규칙만 적는다(밸런싱 때 어긋난다).
+   */
   private renderCompendiumTerms(): string {
-    const terms: [string, string][] = [
-      ['필드', '플레이어 앞 3×3 그리드 레일 전체. 전방 3칸과 대기 6칸을 모두 포함한다.'],
-      [
-        '전방',
-        '플레이어 카드와 직접 대면 중인 최전방 라인(distance 0). 일반 보드 행동은 전방만 선택한다.',
-      ],
-      [
-        '대기',
-        '전방이 아닌 준비 중인 후방 2줄(distance 1~2), 총 6칸. 필드 지정 효과는 대기 칸도 대상으로 삼을 수 있다.',
-      ],
-      [
-        '트리플',
-        '같은 손패 카드 3장이 연속으로 쌓이면 기존 ★ 강화 카드 양식으로 자동 합성되는 효과. 기획서의 3- 표기는 이 효과 설명용이다.',
-      ],
-      ['방패', '체력 위에 표시되는 임시 체력. 피해를 먼저 흡수하고 소모된다.'],
-      [
-        '굳음',
-        '밀랍으로 하얗게 굳은 정지 상태. 남은 턴 동안 적 공격/보물 변동 같은 전방 이벤트가 멈춘다.',
-      ],
-      [
-        '빛 게이지',
-        '우측 상단 불씨 자원. 성냥이 회복하며, 낮아질수록 전투/스폰 위험도가 오른다.',
-      ],
-      [
-        '콤보 게이지',
-        '손패 10장 사용 시 선택한 게이지 보너스(최대 체력/공격력/불씨/손패)를 발동하는 진행도. 카드 아이템은 이 게이지를 추가로 채우며, 10칸 초과분은 다음 게이지에 남는다.',
-      ],
-      [
-        '동전($)',
-        '상점용 화폐. 현재는 점수 집계 아래 별도 지갑으로 표시되며, 추후 상점에서 사용한다.',
-      ],
-      ['정화', '성수는 기본 사용 시 랜덤 포자 2장, 트리플 사용 시 필드 전체 포자를 제거한다.'],
+    const coin = '<span class="codex-coin-mark" aria-hidden="true">$</span>'
+    const terms: { name: string; icon: string; desc: string }[] = [
+      {
+        name: '필드',
+        icon: bookIcon(),
+        desc: '플레이어 앞 3×3 그리드 레일 전체. 전방 3칸과 대기 6칸을 모두 포함한다.',
+      },
+      {
+        name: '전방',
+        icon: bookIcon(),
+        desc: '플레이어 카드와 직접 대면 중인 최전방 라인(distance 0). 일반 보드 행동은 전방만 선택한다.',
+      },
+      {
+        name: '대기',
+        icon: bookIcon(),
+        desc: '전방이 아닌 준비 중인 후방 2줄(distance 1~2), 총 6칸. 필드 지정 효과는 대기 칸도 대상으로 삼을 수 있다.',
+      },
+      {
+        name: '트리플',
+        icon: handCardIcon(),
+        desc: '같은 손패 카드 3장이 손패에서 나란히 놓이면 자동으로 합쳐지는 ★ 강화 카드. 사용하면 트리플 효과가 나가고 콤보 게이지도 3칸 오른다.',
+      },
+      {
+        name: '불빛',
+        icon: sparkleIcon(),
+        desc: '이 게임의 점수. 적 처치·보물·꽃 수확으로 모이고 상점 가격도 불빛으로 매겨진다.',
+      },
+      {
+        name: `화폐(${'$'})`,
+        icon: coin,
+        desc: '상점 화폐. 불빛과 별개의 지갑이며, 새싹 병아리를 졸업해야 열린다.',
+      },
+      {
+        name: '방패',
+        icon: shieldIcon(),
+        desc: '체력 위에 쌓이는 임시 체력. 피해를 먼저 흡수하고 소모되며, 방패가 다 막으면 체력은 줄지 않는다.',
+      },
+      {
+        name: '함정 피해',
+        icon: trapIcon(),
+        desc: '함정 칸을 밟았을 때 내가 받는 피해. 적의 공격력(검)과는 다른 수치라 아이콘도 따로 쓴다. 3칸으로 합쳐진 거미줄은 즉사다.',
+      },
+      {
+        name: '굳음',
+        icon: bookIcon(),
+        desc: '밀랍으로 하얗게 굳은 정지 상태. 남은 턴 동안 적 공격/보물 변동 같은 전방 이벤트가 멈춘다. 보스도 굳는다.',
+      },
+      {
+        name: '빛 게이지',
+        icon: flameIcon(),
+        desc: '상단의 불씨 자원. 턴이 지나면 줄고 성냥으로 회복한다. 낮아질수록 적·함정이 더 자주 나오고, 바닥에 가까우면 적이 먼저 공격한다.',
+      },
+      {
+        name: '콤보 게이지',
+        icon: comboGaugeIcon(),
+        desc: '손패를 쓸 때마다 차오르는 눈금(1장 1칸 · 트리플 3칸). 가득 차면 미리 고른 보상(공격력·최대 체력·불씨 한도·손패 한도)이 영구히 붙고, 넘친 칸은 다음 게이지로 이월된다.',
+      },
+      {
+        name: '손패',
+        icon: handCardIcon(),
+        desc: '아래에 쌓아 두고 골라 쓰는 카드. 보물 칸·적 처치로 들어오며 한도를 넘으면 더 받지 못한다.',
+      },
+      {
+        name: '보물 칸',
+        icon: handCardIcon(),
+        desc: '열면 손패를 주는 칸. 상자뿐 아니라 잡동사니·황금 상자도 여기 들어가고, 열쇠는 이 칸 전부를 대상으로 삼는다.',
+      },
+      {
+        name: '별빛',
+        icon: candleIcon(),
+        desc: '90층부터 나오는 특수 보물. 90~100층에서는 별빛을 얻어야만 턴이 오른다.',
+      },
+      {
+        name: '꽃',
+        icon: sparkleIcon(),
+        desc: '씨앗이 전방에 닿으면 피는 버프 칸. 종류마다 주는 것이 다르다 — 캐모마일 불빛, 레드로즈 체력, 메리골드 화폐, 올레안더 방패, 라벤더 콤보 게이지. 카드에 뜬 아이콘이 곧 수확물이다.',
+      },
+      {
+        name: '정화',
+        icon: flameIcon(),
+        desc: '성수는 기본 사용 시 랜덤 포자 2장, 트리플 사용 시 필드 전체 포자를 제거한다.',
+      },
     ]
     const cards = terms
-      .map(([name, description]) =>
+      .map((t) =>
         this.host.faces.codexTile({
-          art: { kind: 'icon', svg: bookIcon() },
-          name,
+          art: { kind: 'icon', svg: t.icon },
+          name: t.name,
           tag: '용어',
-          note: description,
+          note: t.desc,
           extraClass: 'codex-tile--term',
         })
       )

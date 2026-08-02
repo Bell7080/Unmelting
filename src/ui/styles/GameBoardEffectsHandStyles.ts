@@ -689,6 +689,15 @@ body.hearth-lobby .left-swap > .score-log-list { transform: translateX(-140%); o
   background: linear-gradient(180deg, rgba(255, 232, 168, 0.75), rgba(244, 164, 96, 0.58));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
+/* 게이지 아이콘은 라벨 줄에 앉는다 — 눈금이 무엇인지 글자 없이도 읽히게 하는 표식이라
+   블록 라벨 안에서 inline으로 두고 말줄임(ellipsis)에 걸리지 않게 앞머리에만 붙인다. */
+.candle-gauge-label-icon {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -0.16em;
+  margin-right: 4px;
+}
+.candle-gauge-label-icon .icon { width: 1.05em; height: 1.05em; }
 .candle-gauge-label {
   position: static;
   display: block;

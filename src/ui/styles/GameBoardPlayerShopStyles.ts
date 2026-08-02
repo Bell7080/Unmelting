@@ -1366,6 +1366,24 @@ body.is-shift-detail .shop-pack-pick-card-effect .desc-dyn__d { display: inline;
   letter-spacing: 0.02em;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
 }
+/* 보상 문구 앞의 자원 아이콘 — 글자를 밀어내지 않게 살짝 작게, 글줄에 앉게 정렬한다.
+   '무엇을 주는가'를 훑기만으로 읽히게 하는 표식이라 색은 문구 색을 그대로 따른다. */
+.resource-term-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: -0.16em;
+  margin-right: 5px;
+}
+.resource-term-icon .icon,
+.resource-term-icon .codex-coin-mark {
+  width: 1.05em;
+  height: 1.05em;
+}
+.resource-term-icon .codex-coin-mark {
+  font-weight: 900;
+  line-height: 1;
+}
 .shop-relic-effect {
   margin: 0;
   color: rgba(255, 244, 210, 0.94);

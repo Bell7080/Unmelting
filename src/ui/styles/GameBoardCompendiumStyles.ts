@@ -266,7 +266,21 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
 .codex-chip-body {
   min-width: 0;
 }
-.codex-stat-chip .icon {
+/* 화폐만 아이콘이 아니라 '$' 글자다(HUD 지갑과 같은 어휘). 아이콘 자리에 들어가므로
+   같은 크기·같은 정렬로 맞춰 다른 chip과 줄이 어긋나지 않게 한다. */
+.codex-coin-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  font-weight: 900;
+  font-size: 13px;
+  line-height: 1;
+}
+.codex-stat-chip .icon,
+.codex-stat-chip .codex-coin-mark {
   width: 13px;
   height: 13px;
   flex-shrink: 0;

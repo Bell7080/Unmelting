@@ -11,6 +11,10 @@ const stroke = (d: string, w = 1.6) =>
 
 const fill = (d: string) => `<path d="${d}" fill="currentColor"/>`
 
+/** 한 path 안에서 안쪽 서브패스를 **뚫어** 배경이 비치게 한다.
+ *  배경색으로 덮으면 어떤 표면 위에서는 사각형 얼룩이 남으므로 단색 규칙과 함께 이 방식을 쓴다. */
+const punch = (d: string) => `<path d="${d}" fill="currentColor" fill-rule="evenodd"/>`
+
 function svg(content: string, viewBox = '0 0 24 24'): string {
   return `<svg class="icon" viewBox="${viewBox}" aria-hidden="true" focusable="false">${content}</svg>`
 }
@@ -133,4 +137,60 @@ export function experienceIcon(): string {
       stroke('M8.1 8.1 15.9 15.9M15.9 8.1 8.1 15.9', 0.72),
     ].join(''),
   )
+}
+
+/**
+ * 함정 — 마주 문 이빨(턱). **함정 피해 전용**이며 공격력(검)과 구분하기 위해 만들었다.
+ * 검을 쓰면 "이 함정이 나를 공격한다"로 읽혀, 밟아서 받는 피해라는 게 사라진다.
+ */
+export function trapIcon(): string {
+  return svg(
+    [
+      // 위턱 — 가로 막대 + 아래로 향한 삼각 이빨 3개.
+      fill('M2.4 3.2h19.2v1.9H2.4ZM3.6 5.1 7.2 5.1 5.4 9.6ZM10.2 5.1 13.8 5.1 12 9.6ZM16.8 5.1 20.4 5.1 18.6 9.6Z'),
+      // 아래턱 — 위턱을 뒤집어 맞물린 모양. 이빨은 굵게 3개만 둔다(14px에서 뭉치지 않게).
+      fill('M2.4 18.9h19.2v1.9H2.4ZM3.6 18.9 7.2 18.9 5.4 14.4ZM10.2 18.9 13.8 18.9 12 14.4ZM16.8 18.9 20.4 18.9 18.6 14.4Z'),
+    ].join(''),
+  )
+}
+
+/**
+ * 손패 카드 — 세로 카드 1장에 반짝임을 음각으로 판 모양.
+ * '손패를 얻는다'를 말하는 자리에 쓴다(보물 보상·무료 카드·자원팩·손패 한도).
+ * 주머니(pouchIcon)는 '가방'이라 카드 자체를 뜻하지 못한다.
+ */
+export function handCardIcon(): string {
+  return svg(
+    [
+      // 카드 면의 반짝임은 배경색으로 덮지 않고 **뚫는다** — 도감/상점 등 표면 색이 달라도 얼룩이 남지 않는다.
+      punch(
+        'M7.2 2.9h9.6a1.7 1.7 0 0 1 1.7 1.7v14.8a1.7 1.7 0 0 1-1.7 1.7H7.2a1.7 1.7 0 0 1-1.7-1.7V4.6a1.7 1.7 0 0 1 1.7-1.7Z' +
+          'M12 6.6 13.2 10.6 17.2 11.8 13.2 13 12 17 10.8 13 6.8 11.8 10.8 10.6Z',
+      ),
+    ].join(''),
+  )
+}
+
+/**
+ * 콤보 게이지 — 차오르는 눈금 + 위쪽 반짝임.
+ * 게이지는 손패를 쓸 때마다 차고(1장 +1 · 트리플 +3), 가득 차면 영구 성장이 터진다.
+ * 눈금이 '차오르는 중'을, 반짝임이 '다 차면 보상'을 말한다.
+ */
+export function comboGaugeIcon(): string {
+  // 6칸 중 4칸이 찬 상태. 찬 칸은 채우고 빈 칸은 얇은 테두리만 남겨 대비를 만든다.
+  const total = 6
+  const x0 = 1.8
+  const width = 20.4
+  const gap = 0.9
+  const tick = (width - gap * (total - 1)) / total
+  const ticks: string[] = []
+  for (let i = 0; i < total; i++) {
+    const x = (x0 + i * (tick + gap)).toFixed(2)
+    ticks.push(
+      i < 4
+        ? fill(`M${x} 11.6h${tick.toFixed(2)}v6.6h-${tick.toFixed(2)}Z`)
+        : stroke(`M${(Number(x) + 0.5).toFixed(2)} 12.1h${(tick - 1).toFixed(2)}v5.6h-${(tick - 1).toFixed(2)}Z`, 1.05),
+    )
+  }
+  return svg([...ticks, fill('M12 1.2 13.6 5.9 18.3 7.5 13.6 9.1 12 13.8 10.4 9.1 5.7 7.5 10.4 5.9Z')].join(''))
 }

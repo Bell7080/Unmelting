@@ -3716,9 +3716,16 @@ function prepareFirstRunIntro(): void {
     body.first-run-intro .ember-hud { opacity: 0; transform: translateY(-18px); }
     body.first-run-intro .left-panel { transform: translateX(-115%); opacity: 0; }
     body.first-run-intro .hand-column { transform: translateX(115%); opacity: 0; }
+    /* 플레이어 카드 양옆의 유틸 레이어(좌: 도감/경험 · 우: 유물)도 같은 beat로 들어온다.
+       .left-panel/.hand-column만 숨기면 이 둘은 처음부터 떠 있어, 카드가 홀로 떠오르는
+       인트로 한가운데에 버튼이 이미 놓여 있는 그림이 된다. */
+    body.first-run-intro .utility-layer-left { transform: translateX(-140%); opacity: 0; }
+    body.first-run-intro .relic-layer { transform: translateX(140%); opacity: 0; }
     body.first-run-intro.first-run-ui-in .ember-hud,
     body.first-run-intro.first-run-ui-in .left-panel,
-    body.first-run-intro.first-run-ui-in .hand-column {
+    body.first-run-intro.first-run-ui-in .hand-column,
+    body.first-run-intro.first-run-ui-in .utility-layer-left,
+    body.first-run-intro.first-run-ui-in .relic-layer {
       opacity: 1; transform: none;
       transition: transform .62s cubic-bezier(.2,.84,.3,1), opacity .5s ease;
     }

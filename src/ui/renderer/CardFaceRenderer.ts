@@ -5,12 +5,22 @@
 
 import type { GameState } from '@core/GameState'
 import type { CandleMode } from '@entities/Character'
+import type { FlowerKind } from '@entities/Card'
 import type { HandCardId, HandCategory, JobTag } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
 import { getRelicDef, type RelicId } from '@data/Relics'
 import type { Recipe } from '@data/Recipes'
 import { spriteForHandCard, spriteForRelic, SpriteUrls } from '@ui/Sprites'
-import { flameIcon, heartIcon, pouchIcon, swordIcon } from '@ui/Icons'
+import {
+  comboGaugeIcon,
+  flameIcon,
+  handCardIcon,
+  heartIcon,
+  shieldIcon,
+  sparkleIcon,
+  swordIcon,
+  trapIcon,
+} from '@ui/Icons'
 import { atkDmgHtml, hpDmgHtml, rangeDmgHtml } from '@ui/DamageDisplay'
 import type { SpawnWeightContext } from '@ui/renderer/RendererTypes'
 import { escapeHtml } from './Html'
@@ -536,6 +546,73 @@ export class CardFaceRenderer {
       default:         return merged ? def.tripleDescription : def.description
     }
   }
+  /**
+   * 꽃 종류 → **실제로 수확되는 자원**의 표기 메타. 카드 face와 도감 꽃 탭이 함께 쓴다.
+   *
+   * 꽃마다 주는 것이 전부 다른데(불빛/체력/화폐/방패/콤보 게이지) 화면에는 오래도록
+   * ✦ 하나로만 표기돼 있었다 — 카드만 보고는 무슨 꽃인지 알 수 없었다.
+   * 새 꽃을 추가하면 여기 한 줄만 늘리면 카드·도감이 함께 따라온다.
+   */
+  flowerHarvestMeta(kind: FlowerKind): { icon: string; label: string; tone: 'gold' | 'hp' | 'shield' | 'flower' } {
+    switch (kind) {
+      case 'chamomile':
+        return { icon: sparkleIcon(), label: '불빛', tone: 'gold' }
+      case 'redRose':
+        return { icon: heartIcon(), label: '체력', tone: 'hp' }
+      // 화폐는 아이콘 대신 '$' 글자를 쓰는 것이 이 게임의 표기다(HUD 지갑과 같은 어휘).
+      case 'marigold':
+        return { icon: '<span class="codex-coin-mark" aria-hidden="true">$</span>', label: '화폐', tone: 'gold' }
+      case 'oleander':
+        return { icon: shieldIcon(), label: '방패', tone: 'shield' }
+      case 'lavender':
+        return { icon: comboGaugeIcon(), label: '콤보 게이지', tone: 'flower' }
+      case 'seed':
+        return { icon: sparkleIcon(), label: '개화 대기', tone: 'flower' }
+    }
+  }
+
+  /**
+   * 효과 문구 앞에 붙일 자원 아이콘. 무료 카드·자원팩처럼 **글자로 풀어 쓴 보상 표기**가
+   * 훑기만으로 무엇인지 읽히도록 앞머리에 한 개만 얹는다(글자는 그대로 둔다).
+   *
+   * 문구를 데이터로 되돌리는 대신 어휘로 판정하는 이유: 보상 문구는 `ShopPools` 같은
+   * 데이터 파일에 있고, 거기에 UI 아이콘을 심으면 데이터가 뷰를 알게 된다.
+   * 순서가 규칙이다 — 좁은 어휘('콤보 게이지')를 넓은 어휘('게이지')보다 먼저 본다.
+   */
+  resourceTermIcon(text: string): string | null {
+    if (text.includes('함정')) return trapIcon()
+    if (text.includes('콤보 게이지') || text.includes('콤보 한도')) return comboGaugeIcon()
+    if (text.includes('빛 게이지') || text.includes('불씨')) return flameIcon()
+    if (text.includes('손패')) return handCardIcon()
+    if (text.includes('체력')) return heartIcon()
+    if (text.includes('방패')) return shieldIcon()
+    if (text.includes('공격력')) return swordIcon()
+    if (text.includes('보물')) return handCardIcon()
+    if (text.includes('불빛') || text.includes('✦')) return sparkleIcon()
+    if (text.includes('$')) return '<span class="codex-coin-mark" aria-hidden="true">$</span>'
+    return null
+  }
+
+  /** 보상 문구 한 줄을 아이콘 + 원문으로 감싼다. 아이콘을 못 고르면 원문 그대로 둔다. */
+  resourceTextHtml(text: string): string {
+    const icon = this.resourceTermIcon(text)
+    return icon ? `<span class="resource-term-icon" aria-hidden="true">${icon}</span>${text}` : text
+  }
+
+  /**
+   * 손패 설명처럼 **여러 효과가 섞인 문장**에는 앞머리 아이콘을 함부로 붙이면 안 된다
+   * ("자해 2 · 방패 +7"에 방패를 붙이면 자해가 지워진다). 문장이 자원 어휘로 **시작하고**
+   * 구분자(·, 줄바꿈)가 없는 순수 자원 문구일 때만 붙인다.
+   */
+  resourceLeadTextHtml(text: string): string {
+    if (text.includes('·') || text.includes('<br>') || text.includes('<')) return text
+    const lead = ['콤보 게이지', '빛 게이지', '손패', '체력', '방패', '공격력', '불빛']
+      .find((term) => text.startsWith(term))
+    if (!lead) return text
+    const icon = this.resourceTermIcon(lead)
+    return icon ? `<span class="resource-term-icon" aria-hidden="true">${icon}</span>${text}` : text
+  }
+
   candleModeMeta(mode: CandleMode): { label: string; effect: string; icon: string } {
     switch (mode) {
       case 'max-health':
@@ -545,7 +622,8 @@ export class CardFaceRenderer {
       case 'ember':
         return { label: '불씨', effect: '불씨 한도 +2', icon: flameIcon() }
       case 'draw':
-        return { label: '손패', effect: '손패 최대 +2', icon: pouchIcon() }
+        // 주머니는 '가방'이라 손패(카드)를 뜻하지 못한다.
+        return { label: '손패', effect: '손패 최대 +2', icon: handCardIcon() }
     }
   }
 

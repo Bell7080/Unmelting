@@ -50,12 +50,14 @@ import { initTouchBody, attachHandCardTouch, initLongPressShiftDetail } from '@u
 import {
   bookIcon,
   candleIcon,
+  comboGaugeIcon,
   experienceIcon,
+  handCardIcon,
   heartIcon,
-  pouchIcon,
   shieldIcon,
   sparkleIcon,
   swordIcon,
+  trapIcon,
 } from '@ui/Icons'
 import type { EnaDisposition } from '@systems/EnaDisposition'
 import type { EnaLearningSnapshot } from '@systems/CompanionSystem'
@@ -1111,18 +1113,23 @@ export class GameBoardRenderer {
       // 를 합산해 실제 ActionSystem과 동일한 최종 수치를 표기한다.
       const charTrapBonus = this.currentGameState?.getCharacter().trapDamageBonus ?? 0
       const damage = card.effectiveTrapDamage() + charTrapBonus
+      // 아이콘은 검이 아니라 함정(이빨)이다 — 검을 쓰면 "이 함정이 공격한다"로 읽혀
+      // '밟아서 받는 피해'라는 성격이 사라진다.
       stats = `
         <div class="card-stats card-stats--trap">
-          <span class="stat atk">${swordIcon()}<span class="stat-value">${damage}</span></span>
+          <span class="stat atk">${trapIcon()}<span class="stat-value">${damage}</span></span>
         </div>
       `
     } else if (card.type === CardType.FLOWER) {
       // Seeds wait to bloom; all grown flowers show current harvest value.
       const label = card.flowerKind === 'seed' ? '대기' : `+${card.flowerValue}`
-      stats = `<div class="card-stats group-note flower-note">${sparkleIcon()}<span>${label}</span></div>`
+      // 꽃은 종류마다 **주는 자원이 다르다**. 전부 ✦로 표기하면 무슨 꽃을 키우는지
+      // 이름을 외우지 않고서는 알 수 없다 — 수확물 아이콘을 그대로 보여 준다.
+      stats = `<div class="card-stats group-note flower-note">${this.faces.flowerHarvestMeta(card.flowerKind).icon}<span>${label}</span></div>`
     } else if (card.type === CardType.TREASURE && card.treasureKind === 'starlight') {
       // 90~100층 별빛은 손패 보상이 아닌 턴 열쇠임을 카드 자체에서 즉시 읽히게 한다.
-      stats = `<div class="card-stats group-note treasure-group-note starlight-note">${sparkleIcon()}<span>턴 +1</span></div>`
+      // 별빛이 주는 것은 불빛이 아니라 **턴**이므로 턴 상징(촛불)을 쓴다.
+      stats = `<div class="card-stats group-note treasure-group-note starlight-note">${candleIcon()}<span>턴 +1</span></div>`
     } else if (card.type === CardType.TREASURE) {
       // 일반·황금 상자: 드롭 범위를 라벨로 표시한다(보스 보상은 효과 설명).
       const safeSpan = Math.min(3, Math.max(1, card.groupCount))
@@ -1136,7 +1143,9 @@ export class GameBoardRenderer {
       const treasureNote = card.id.startsWith('boss-reward-')
         ? escapeHtml(card.description)
         : `손패 ${rMin}~${rMax}장`
-      stats = `<div class="card-stats group-note treasure-group-note">${sparkleIcon()}<span>${treasureNote}</span></div>`
+      // 상자가 주는 것은 손패다 — 보스 보상(효과 설명)만 ✦를 유지한다.
+      const treasureIcon = card.id.startsWith('boss-reward-') ? sparkleIcon() : handCardIcon()
+      stats = `<div class="card-stats group-note treasure-group-note">${treasureIcon}<span>${treasureNote}</span></div>`
     }
 
     const groupBadge = span > 1 ? `<div class="group-badge">×${span}</div>` : ''
@@ -1380,7 +1389,7 @@ export class GameBoardRenderer {
           <div class="candle-gauge-meter" style="--candle-fill: ${candlePct}%; --candle-max: ${candleMax}">
             ${ticks}
           </div>
-          <div class="candle-gauge-label">${candleText}/${candleMaxText} · ${mode.effect}</div>
+          <div class="candle-gauge-label"><span class="candle-gauge-label-icon">${comboGaugeIcon()}</span>${candleText}/${candleMaxText} · ${mode.effect}</div>
         </div>
       </div>
     `
@@ -1593,7 +1602,9 @@ export class GameBoardRenderer {
         .filter(Boolean)
         .join(' ')
       // 강화팩 보너스를 반영한 동적 설명을 사용해 손패 미리보기에서 강화 수치가 즉시 보이도록 한다.
-      const description = this.faces.enhancedHandCardDescription(card.defId, card.merged === true)
+      const description = this.faces.resourceLeadTextHtml(
+        this.faces.enhancedHandCardDescription(card.defId, card.merged === true)
+      )
       // aria-label에는 HTML/SVG 태그 없이 텍스트만 삽입한다.
       const ariaDesc = description.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
       const handArt = spriteForHandCard(card.defId)
@@ -1647,7 +1658,7 @@ export class GameBoardRenderer {
         ${this.renderSpawnProbPanel(scorePanel)}
         <aside class="hand-panel" aria-label="Hand">
           <header class="hand-header">
-            <span class="hand-header-icon">${pouchIcon()}</span>
+            <span class="hand-header-icon">${handCardIcon()}</span>
             손패 (${character.hand.length}/${handMax})
           </header>
           ${this.renderCandleGauge(character)}

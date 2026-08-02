@@ -467,31 +467,38 @@ export const GAME_BOARD_RAIL_STYLES = `
    말하는 수치라, 한쪽만 작으면 함정 피해를 낮게 어림잡게 된다. 다만 함정은 수치가 하나뿐이라
    양 끝으로 벌리지 않고 가운데 그대로 둔다. */
 .card-stats--trap {
-  font-size: clamp(18px, 2.5vh, 24px);
+  font-size: clamp(16px, 2.15vh, 21px);
   font-weight: 900;
+}
+/* 함정 피해는 적 공격력(주홍)보다 **더 붉게** 간다 — 밟으면 내가 피를 보는 수치라
+   경고 쪽으로 한 단계 밀되, 피해 수치 부유 텍스트(#ff3f32)만큼 튀지는 않게 둔다.
+   발광은 검붉게 깔아 촛불 톤을 벗어나지 않는다. */
+.card-stats--trap .stat.atk {
+  color: #ff4a33;
 }
 .card-stats--trap .stat {
   gap: 4px;
   text-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.95),
-    0 0 8px rgba(0, 0, 0, 0.7);
+    0 1px 3px rgba(0, 0, 0, 0.96),
+    0 0 8px rgba(0, 0, 0, 0.72),
+    0 0 12px rgba(168, 26, 18, 0.6);
 }
 .card-stats--trap .icon,
 .card-stats--trap svg {
-  width: clamp(18px, 2.5vh, 24px);
-  height: clamp(18px, 2.5vh, 24px);
+  width: clamp(16px, 2.15vh, 21px);
+  height: clamp(16px, 2.15vh, 21px);
 }
 /* 대기 행(dist-1/2)은 카드가 작아지므로 한 단계 줄여 넘치지 않게 한다. */
 .rail-row.dist-1 .card-stats--trap,
 .rail-row.dist-2 .card-stats--trap {
-  font-size: clamp(15px, 2vh, 20px);
+  font-size: clamp(14px, 1.8vh, 18px);
 }
 .rail-row.dist-1 .card-stats--trap .icon,
 .rail-row.dist-1 .card-stats--trap svg,
 .rail-row.dist-2 .card-stats--trap .icon,
 .rail-row.dist-2 .card-stats--trap svg {
-  width: clamp(15px, 2vh, 20px);
-  height: clamp(15px, 2vh, 20px);
+  width: clamp(14px, 1.8vh, 18px);
+  height: clamp(14px, 1.8vh, 18px);
 }
 .rail-row.dist-1 .card-stats--corners,
 .rail-row.dist-2 .card-stats--corners {
