@@ -31,6 +31,13 @@ import { discardBossCellStrikes } from '@/app/BossCellFeedback'
 type WaxKnightCardEffect = 'shield' | 'heal' | 'strike'
 type BossPage = 1 | 2 | 3
 
+/** 보스 행동 사이의 한 박자(ms). 살포·징수·타격이 각각 별개의 사건으로 읽히게 하는 간격. */
+const BOSS_TURN_BEAT_MS = 300
+/** 30F 탐욕의 값이 참조하는 손패 defId. */
+const GREED_COIN_ID = 'greed-coin'
+/** 탐욕의 동전 1장이 요구하는 피해. */
+const GREED_COIN_TOLL_DAMAGE = 1
+
 // ---- 보스별 스탯 정의 -------------------------------------------------------
 
 export interface BossDef {
@@ -98,6 +105,13 @@ export interface BossEventState {
   demonCandleCounter: number
   /** waxDemon 2페이지 전환 HP 임계값 (maxHp * 0.65 반올림). */
   nextDemonPageAt: number
+  /** waxArmy 현재 페이지 (1 → 2 전환은 절반 HP 리미트에서 부위를 하나 깰 때). */
+  armyPage: 1 | 2
+  /**
+   * waxArmy 리미트 페이지에 처음 닿은 순간의 파괴 칸 수. 이 값을 넘겨야 페이지가 열린다.
+   * null이면 아직 리미트에 닿지 않았다는 뜻이다.
+   */
+  armyLimitBrokenMark: number | null
 }
 
 export interface BossRewardState {
@@ -191,6 +205,22 @@ export class BossEventController {
         ? { cols: this.gimmicks.cols, rows: this.gimmicks.rows, cells: this.gimmicks.getCells() }
         : null
     )
+  }
+
+  /**
+   * 칸 타격 연출이 끝난 beat의 후처리 — 성한 칸의 배율만 다시 굴린다.
+   * 누적 손상은 남으므로 "때려 둔 칸을 마저 깨서 부위 파괴 보너스를 받을지,
+   * 새로 뜬 약점을 노릴지"가 매 타격마다 선택으로 돌아온다.
+   * 보스가 이 beat에 쓰러졌으면 굴리지 않는다(격파 연출 위로 배율이 새로 뜬다).
+   */
+  async rerollGimmickCells(): Promise<void> {
+    if (!this.eventState || this.eventState.card.getHealth() <= 0) return
+    if (!this.gimmicks.canReroll()) return
+    await this.br.fadeBossGimmickLabels()
+    if (!this.gimmicks.rerollKinds()) return
+    this.br.markBossGimmickRelabel()
+    this.syncGimmickGrid()
+    this.inject.render()
   }
 
   // ---- 공개 흐름 메서드 -------------------------------------------------------
@@ -421,7 +451,7 @@ export class BossEventController {
     state.bossShield -= blocked
     this.syncBossShieldToCard()
     // 페이지 경계 초과 피해는 깎기 전에 버린다 — HP바가 경계 아래로 내려갔다 복구되며 깜빡이지 않게 한다.
-    const pageFloor = this.waxWitchPageFloor()
+    const pageFloor = this.bossPageFloor()
     const dealt = pageFloor > 0
       ? Math.min(rawDamage - blocked, Math.max(0, card.getHealth() - pageFloor))
       : Math.min(rawDamage - blocked, card.getHealth())
@@ -459,6 +489,7 @@ export class BossEventController {
         // 손패는 반대로 화면 중앙에서 칸으로 날아가는 블라스트가 맞다.
         null
       )
+      await this.rerollGimmickCells()
     } else {
       await this.br.animateDamageNumbersById(dealt > 0 ? [{ cardId: card.id, amount: dealt }] : [])
     }
@@ -468,6 +499,7 @@ export class BossEventController {
     await this.consumeHandGiftThresholds(card.id)
     if (await this.resolveWaxWitchAfterDamage(beforeBossHp)) return
     if (await this.resolveDemonAfterDamage(beforeBossHp)) return
+    if (await this.resolveWaxArmyLimitPage()) return
     this.inject.render()
 
     if (card.getHealth() <= 0) {
@@ -510,9 +542,7 @@ export class BossEventController {
           }
         }
         character.takeDamage(card.getDamage())
-        await this.br.animateEnemyAttacks([
-          { cardId: card.id, cardName: card.name, laneIndex: 0, damage: card.getDamage() },
-        ])
+        await this.br.animateBossSlamAttack(card.id)
         await this.br.animatePlayerDamageImpact(card.getDamage())
         this.inject.recordNotice(`검은 양초 악마의 강타! 플레이어가 ${card.getDamage()} 피해를 받았다`, 'hurt')
         this.inject.render()
@@ -530,16 +560,14 @@ export class BossEventController {
         // 불씨 기사단장은 특징(손패 2장) 연출 후 기본 타격 순으로 행동한다.
         if (await this.resolveWaxKnightCardTurn(card.id)) return
       } else {
-        // 30F 양초 백작: 특징 연출(탐욕의 손패 살포)을 먼저 보여준 뒤 보스가 타격한다.
+        // 30F 양초 백작: 특징 연출(탐욕 살포 → 탐욕의 값)을 먼저 보여준 뒤 보스가 타격한다.
         if (state.def.specialEnemyKind === 'waxArmy') {
-          await this.scatterGreedCards(card.id)
+          if (await this.resolveWaxArmyGreedTurn(card.id)) return
         } else if (state.def.specialEnemyKind === 'waxCat') {
           await this.stealHandCard()
         }
         character.takeDamage(card.getDamage())
-        await this.br.animateEnemyAttacks([
-          { cardId: card.id, cardName: card.name, laneIndex: 0, damage: card.getDamage() },
-        ])
+        await this.br.animateBossSlamAttack(card.id)
         await this.br.animatePlayerDamageImpact(card.getDamage())
         this.inject.recordNotice(`보스 반격! 플레이어가 ${card.getDamage()} 피해를 받았다`, 'hurt')
         this.inject.render()
@@ -571,6 +599,7 @@ export class BossEventController {
     }
     if (await this.resolveWaxWitchAfterDamage(null)) return
     if (await this.resolveDemonAfterDamage(null)) return
+    if (await this.resolveWaxArmyLimitPage()) return
     if (this.eventState.card.getHealth() <= 0) {
       await this.handleDefeated()
       return
@@ -614,11 +643,11 @@ export class BossEventController {
 
       if (lvTurnMod === 0) {
         if (state.def.specialEnemyKind === 'waxArmy') {
-          // 탐욕 살포 → 플레이어 타격
-          await this.scatterGreedCards(state.card.id)
+          // 탐욕 살포 → (2P) 탐욕의 값 → 플레이어 타격
+          if (await this.resolveWaxArmyGreedTurn(state.card.id)) return
           const dmg = state.card.getDamage()
           character.takeDamage(dmg)
-          await this.br.animateEnemyAttacks([{ cardId: state.card.id, cardName: state.card.name, laneIndex: 0, damage: dmg }])
+          await this.br.animateBossSlamAttack(state.card.id)
           await this.br.animatePlayerDamageImpact(dmg)
           this.inject.recordNotice(`레바테인: 보스 반격 — 피해 ${dmg}`, 'hurt')
           this.inject.render()
@@ -637,7 +666,7 @@ export class BossEventController {
           } else {
             const dmg = state.def.attack
             character.takeDamage(dmg)
-            await this.br.animateEnemyAttacks([{ cardId: state.card.id, cardName: state.card.name, laneIndex: 0, damage: dmg }])
+            await this.br.animateBossSlamAttack(state.card.id)
             await this.br.animatePlayerDamageImpact(dmg)
             this.inject.recordNotice(`레바테인: 보스 반격 — 피해 ${dmg}`, 'hurt')
             this.inject.render()
@@ -654,7 +683,7 @@ export class BossEventController {
           }
           const dmg = state.card.getDamage()
           character.takeDamage(dmg)
-          await this.br.animateEnemyAttacks([{ cardId: state.card.id, cardName: state.card.name, laneIndex: 0, damage: dmg }])
+          await this.br.animateBossSlamAttack(state.card.id)
           await this.br.animatePlayerDamageImpact(dmg)
           this.inject.recordNotice(`레바테인: 검은 양초 악마 반격 — 피해 ${dmg}`, 'hurt')
           this.inject.render()
@@ -847,6 +876,8 @@ export class BossEventController {
       nextDemonPageAt: def.specialEnemyKind === 'waxDemon'
         ? Math.ceil(def.maxHp * 0.65)  // HP 65% 이하에서 2페이지 전환
         : 0,
+      armyPage: 1,
+      armyLimitBrokenMark: null,
     }
     this.syncBossShieldToCard()
     // 칸 기믹 격자는 보스마다 새로 굴린다 — 약점 자리가 매 조우 달라진다.
@@ -1044,25 +1075,107 @@ export class BossEventController {
     )
     await this.br.animateBossScatterToHandSlots(bossCardId, slotIndices)
   }
-  /** 보스 페이지 HP 하한 — 경계를 넘는 피해를 깎기 전에 버려 HP바가 깜빡이지 않게 한다.
-   *  waxWitch: 1P→180, 2P→90, 3P→0. waxDemon: 1P→nextDemonPageAt, 2P→0. */
-  private waxWitchPageFloor(): number {
+
+  /**
+   * 30F 양초 백작의 공격 주기 전반부 — **순차적으로** 보이게 나눈 세 박자다.
+   *
+   *   탐욕 살포(화면에 흩뿌림 → 손패로 짤랑) → [2P] 탐욕의 값 → (호출부의 타격)
+   *
+   * 붙여 두면 뿌리면서 동시에 때리는 것처럼 읽혀 무슨 일이 있었는지 남지 않는다.
+   * 플레이어가 죽었으면 true — 호출부는 그대로 턴을 끝낸다.
+   */
+  private async resolveWaxArmyGreedTurn(bossCardId: string): Promise<boolean> {
     const state = this.eventState
-    if (!state) return 0
+    if (!state) return false
+    await this.scatterGreedCards(bossCardId)
+    await this.pauseBeat()
+    if (state.armyPage >= 2) {
+      if (await this.collectGreedCoinToll()) return true
+      await this.pauseBeat()
+    }
+    return false
+  }
+
+  /**
+   * 30F 2페이지 '탐욕의 값' — 손에 쥔 탐욕의 동전 1장당 1피해.
+   * 동전은 쓰면 이득이지만 쥐고 있으면 매 주기 값을 치른다(쓸까 말까의 이지선다).
+   */
+  private async collectGreedCoinToll(): Promise<boolean> {
+    const character = this.gs.character
+    const slots = character.hand
+      .map((card, index) => (card?.defId === GREED_COIN_ID ? index : -1))
+      .filter((index) => index >= 0)
+    if (slots.length === 0) return false
+
+    this.inject.recordNotice(`탐욕의 값 — 손에 쥔 탐욕의 동전 ${slots.length}장이 값을 요구한다`, 'hurt')
+    await this.br.animateGreedCoinToll(slots, () => {
+      character.takeDamage(GREED_COIN_TOLL_DAMAGE)
+      // 수치·버스트는 기다리지 않는다 — 한 장씩 파바박 꽂히는 리듬을 끊지 않기 위해서다.
+      void this.br.animatePlayerDamageImpact(GREED_COIN_TOLL_DAMAGE)
+      this.inject.render()
+    })
+    this.inject.recordNotice(`탐욕의 값! 플레이어가 ${slots.length * GREED_COIN_TOLL_DAMAGE} 피해를 받았다`, 'hurt')
+    this.inject.render()
+    if (!character.isAlive() || character.authoritySurvivePending) {
+      await this.inject.handlePlayerDeath()
+      return true
+    }
+    return false
+  }
+
+  /** 보스 행동 사이의 한 박자. 붙어 있으면 동시에 일어난 일로 읽힌다. */
+  private pauseBeat(): Promise<void> {
+    return new Promise<void>((resolve) => window.setTimeout(resolve, BOSS_TURN_BEAT_MS))
+  }
+  /**
+   * 지금 걸려 있는 페이지 게이트. 모든 보스의 페이지 경계가 이 한 창구를 지난다 —
+   * 하한(floor)은 경계를 넘는 피해를 깎기 전에 버려 HP바가 깜빡이지 않게 하고,
+   * 요구 조건(requirement)은 그 하한을 무엇으로 여는지를 정한다.
+   *
+   *  - 'none'       : HP가 하한에 닿는 순간 스스로 열린다(기존 waxWitch/waxDemon 전환).
+   *  - 'cell-break' : 닿은 뒤 부위를 하나 더 깨야 열린다. 격자가 있는 보스만 쓸 수 있다.
+   *
+   * 새 보스에 리미트 페이지를 붙이려면 여기 분기 하나와 전환 처리(resolve*AfterDamage)
+   * 하나면 된다.
+   */
+  private bossPageGate(): { floor: number; requirement: 'none' | 'cell-break' } | null {
+    const state = this.eventState
+    if (!state) return null
     if (state.def.specialEnemyKind === 'waxWitch') {
-      if (state.witchPage === 1) return 180
-      if (state.witchPage === 2) return 90
-      return 0
+      if (state.witchPage === 1) return { floor: 180, requirement: 'none' }
+      if (state.witchPage === 2) return { floor: 90, requirement: 'none' }
+      return null
     }
     if (state.def.specialEnemyKind === 'waxDemon' && state.demonPage === 1) {
-      return state.nextDemonPageAt
+      return { floor: state.nextDemonPageAt, requirement: 'none' }
     }
-    return 0
+    // 30F: 절반에서 한 번 멈추고, 부위를 깨야만 뚫린다 — 약점만 긁어 HP를 미는 진행을 끊는다.
+    if (state.def.specialEnemyKind === 'waxArmy' && state.armyPage === 1 && this.gimmicks.isActive) {
+      return { floor: Math.ceil(state.def.maxHp / 2), requirement: 'cell-break' }
+    }
+    return null
+  }
+
+  /** 페이지 게이트 HP 하한. 게이트가 없으면 0(제한 없음). */
+  private bossPageFloor(): number {
+    return this.bossPageGate()?.floor ?? 0
+  }
+
+  /**
+   * 지금 페이지 하한이 피해를 실제로 막고 있는가 — 막고 있으면 화면에 띄울 경고 문구.
+   * 스스로 열리는 게이트('none')는 다음 beat에 전환 연출이 나가므로 알릴 것이 없다.
+   */
+  pageGateWarning(): { cardId: string; text: string } | null {
+    const state = this.eventState
+    const gate = this.bossPageGate()
+    if (!state || !gate || gate.requirement !== 'cell-break') return null
+    if (state.card.getHealth() > gate.floor) return null
+    return { cardId: state.card.id, text: '부위를 부숴야 한다' }
   }
 
   /** 손패/조합 등 외부 피해가 페이지 경계를 넘어 보스 HP를 깎았을 때, UI diff가 읽기 전에 하한으로 되돌린다. */
-  clampWaxWitchExternalDamageToPageFloor(): void {
-    const floor = this.waxWitchPageFloor()
+  clampExternalDamageToPageFloor(): void {
+    const floor = this.bossPageFloor()
     if (floor > 0 && this.eventState && this.eventState.card.health < floor) {
       this.eventState.card.health = floor
     }
@@ -1158,6 +1271,42 @@ export class BossEventController {
     return beforeHp !== null && beforeHp !== hp && false
   }
 
+  /**
+   * 30F 리미트 페이지. 절반 HP에 닿으면 HP가 더 내려가지 않고, 그 뒤 부위를 하나
+   * 깨야 열린다 — 약점만 골라 긁어 HP만 미는 진행을 한 번 끊어 세우는 관문이다.
+   * 열리기 전까지는 매 타격이 피해 대신 경고 문구를 띄운다(pageGateWarning).
+   */
+  private async resolveWaxArmyLimitPage(): Promise<boolean> {
+    const state = this.eventState
+    if (!state || state.def.specialEnemyKind !== 'waxArmy' || state.armyPage !== 1) return false
+    const gate = this.bossPageGate()
+    if (!gate || state.card.getHealth() > gate.floor) return false
+
+    // 깰 부위가 하나도 안 남았다면 요구 조건 자체가 성립하지 않는다 — 잠그지 않고 연다.
+    const noCellsLeft = this.gimmicks.brokenCount >= this.gimmicks.cellCount
+    // 리미트 도달 beat: 이 순간의 파괴 칸 수를 기준선으로 잡고 요구 조건을 알린다.
+    if (state.armyLimitBrokenMark === null && !noCellsLeft) {
+      state.armyLimitBrokenMark = this.gimmicks.brokenCount
+      if (state.card.health < gate.floor) state.card.health = gate.floor
+      this.inject.recordNotice('양초 백작이 밀랍으로 굳었다 — 부위를 부숴야 더 들어간다', 'info')
+      this.inject.render()
+      await this.br.playBossPageGateWarning(state.card.id, '부위를 부숴야 한다', true)
+      return false
+    }
+    // 기준선을 넘겼다 = 리미트에서 부위를 하나 더 깼다 → 페이지가 열린다.
+    if (!noCellsLeft && this.gimmicks.brokenCount <= (state.armyLimitBrokenMark ?? 0)) return false
+
+    state.armyPage = 2
+    state.turn = 0
+    this.br.setBossAttackCountdown(state.def.attackInterval)
+    this.inject.render()
+    await this.playIntroLine('boss', '내 저택을. . . 내 몸을 부수다니.', 2400)
+    await this.playIntroLine('boss', '그렇다면 네 손의 탐욕부터 값을 치러라.', 2800)
+    this.inject.onBossPhase?.(state.def.name, 'army-page-2')
+    this.inject.setInputLocked(false)
+    return true
+  }
+
   /** 100F 2페이지: 보스 손패 4장을 공격 전에 사용하고, 같은 효과 2장 이상이면 추가 1회 발동한다. */
   private async resolveWaxWitchPageTwoTurn(bossCardId: string): Promise<boolean> {
     const state = this.eventState!
@@ -1190,9 +1339,7 @@ export class BossEventController {
     if (!character.isAlive() || character.authoritySurvivePending) return false
 
     character.takeDamage(state.def.attack)
-    await this.br.animateEnemyAttacks([
-      { cardId: bossCardId, cardName: state.card.name, laneIndex: 0, damage: state.def.attack },
-    ])
+    await this.br.animateBossSlamAttack(bossCardId)
     await this.br.animatePlayerDamageImpact(state.def.attack)
     this.inject.recordNotice(`녹지 않는 마녀의 반격! 플레이어가 ${state.def.attack} 피해를 받았다`, 'hurt')
     this.inject.render()
@@ -1232,9 +1379,7 @@ export class BossEventController {
 
     // 2) 특징 연출이 끝난 뒤 보스가 플레이어를 타격한다.
     character.takeDamage(state.def.attack)
-    await this.br.animateEnemyAttacks([
-      { cardId: bossCardId, cardName: state.card.name, laneIndex: 0, damage: state.def.attack },
-    ])
+    await this.br.animateBossSlamAttack(bossCardId)
     await this.br.animatePlayerDamageImpact(state.def.attack)
     this.inject.recordNotice(`불씨 기사단장의 돌진! 플레이어가 ${state.def.attack} 피해를 받았다`, 'hurt')
     if (!character.isAlive() || character.authoritySurvivePending) return false

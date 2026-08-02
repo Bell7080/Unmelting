@@ -612,6 +612,12 @@ function diffFieldHealthLosses(
     const amount = Math.max(0, health - current)
     if (amount > 0) losses.push({ cardId, amount })
   }
+  // 리미트 페이지에 막혀 HP가 한 톨도 안 줄어든 beat에도 보스만은 목록에 남긴다 —
+  // 칸 블라스트·균열과 "부위를 부숴야 한다" 경고가 이 경로로만 화면에 나가기 때문이다.
+  const bossId = bossController.eventState?.card.id
+  if (bossId && gameState.bossGimmicks?.hasPendingHits && !losses.some((l) => l.cardId === bossId)) {
+    losses.push({ cardId: bossId, amount: 0 })
+  }
   return losses
 }
 
@@ -623,7 +629,7 @@ function absorbBossShieldAfterFieldEffect(before: Map<string, FieldHealthSnapsho
   if (!snapshot) return
   bossController.absorbExternalBossDamageWithShield(snapshot.health)
   // 100F 마녀 페이지 경계: UI diff가 읽기 전에 HP를 하한으로 되돌려 경계 아래로 깜빡이지 않게 한다.
-  bossController.clampWaxWitchExternalDamageToPageFloor()
+  bossController.clampExternalDamageToPageFloor()
 }
 
 interface FieldFreezeSnapshotEntry {
@@ -847,7 +853,10 @@ boardRenderer.setBossCellStrikeSource((cardId, observedLoss) => {
   // 잠깐 멀쩡한 상태로 남는다.
   render()
   return strikes
-})
+}, () => bossController.rerollGimmickCells())
+
+/** 페이지 게이트 경고 배선 — 피해가 하한에 막힌 beat에서 수치 대신 무엇이 필요한지 알린다. */
+boardRenderer.setBossPageGateSource(() => bossController.pageGateWarning())
 
 /** 유물 발동/처리 매니저 — 처치·생존·구매·턴 시작 유물 효과를 위임한다. 상태(score/gameActive)는 index가 소유. */
 const relicEffects = new RelicEffectsManager({
@@ -2621,7 +2630,7 @@ async function applyHandSingle(
       // 보스 밀랍 방패/페이지 클램프(보스 HP 보정)를 먼저 반영해 최종 HP를 확정한다.
       if (bossController.eventState) {
         bossController.absorbExternalBossDamageWithShield(beforeBossHp)
-        bossController.clampWaxWitchExternalDamageToPageFloor()
+        bossController.clampExternalDamageToPageFloor()
       }
       const afterHp = target.card.getHealth()
       const killed = afterHp <= 0 && target.card.type !== CardType.BOSS

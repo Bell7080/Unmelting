@@ -59,7 +59,9 @@ const rules: Rule[] = [
     pattern: /\.cloneNode\s*\(/g,
     allowed: {
       'src/ui/GameBoardRenderer.ts': 5,
-      'src/ui/renderer/BossFxView.ts': 1,
+      // +1: 보스 직접 타격(animateBossSlamAttack). 레일 격자가 큰 보스 타일의 3D 변형을
+      // 잘라내므로 원본이 아니라 body에 올린 복제를 움직인다(일반 적 돌진과 같은 이유).
+      'src/ui/renderer/BossFxView.ts': 2,
       'src/ui/renderer/CompendiumView.ts': 1,
     },
   },

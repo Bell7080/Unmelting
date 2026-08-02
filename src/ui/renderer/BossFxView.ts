@@ -19,6 +19,30 @@ import {
 /** 부위 파괴 촛농 방울 개수. 칸이 작아 이 이상은 뭉쳐 보이기만 한다. */
 const BOSS_CELL_SHARD_COUNT = 12
 
+/** 배율 표기가 사그라드는 시간. CSS `.is-relabel-out` 트랜지션과 같은 값이어야 한다. */
+const BOSS_GIMMICK_RELABEL_OUT_MS = 200
+
+/** 보스 직접 타격(들어올림→당김→쾅) 전체 길이. */
+const BOSS_SLAM_DURATION_MS = 780
+/** 그 안에서 '쾅'이 터지는 지점. 피해 수치와 화면 흔들림이 이 프레임에 맞춰 나간다. */
+const BOSS_SLAM_IMPACT_OFFSET = 0.62
+/** 착지 흔들림 길이. CSS `.is-boss-slam-shake` 애니메이션과 같은 값이어야 한다. */
+const BOSS_SLAM_SHAKE_MS = 260
+
+/** 손패로 들어가지 못하고 흩어져 사라지는 여분 금화 수 — '살포'로 보이게 하는 최소치. */
+const BOSS_GREED_STRAY_COINS = 5
+/** 흩뿌린 동전이 화면에 머무는 시간. 손패 유입과 별개의 박자로 읽히게 한다. */
+const BOSS_GREED_SCATTER_HOLD_MS = 220
+/** 탐욕의 값 웨이브 — 동전 한 장이 떠오르는 간격. */
+const BOSS_GREED_WAVE_STEP_MS = 110
+/** 탐욕의 값 징수 — 동전 한 장이 꽂히는 간격. */
+const BOSS_GREED_TOLL_STEP_MS = 90
+
+/** 페이지 게이트 경고 노출 시간. CSS 애니메이션 길이와 같은 값이어야 한다. */
+const BOSS_PAGE_GATE_WARNING_MS = 1200
+/** 리미트 페이지에 막 닿은 1회는 더 오래 보여 준다. */
+const BOSS_PAGE_GATE_EMPHATIC_MS = 1900
+
 /**
  * 칸 성격의 톤 → 이 렌더러의 팔레트/세기. 칸 종류가 아니라 톤으로 갈라 두면
  * 새 칸 종류(직접 타격 전용 칸 등)를 추가해도 여기 분기가 늘지 않는다.
@@ -267,6 +291,8 @@ export class BossFxView {
     const targeting = this.host.getHandTargetingMode() !== null && isValidHandTarget
     // 격자가 막 켜진 첫 렌더에서만 등장 연출을 태운다(재렌더마다 반복 재생 방지).
     const entering = this.host.consumeBossGimmickEntering()
+    // 배율이 막 다시 굴려진 렌더에서만 새 표기가 떠오른다. 같은 이유로 1회 소비다.
+    const relabeling = this.host.consumeBossGimmickRelabel()
     const cells = grid.cells
       .map((cell) => {
         const meta = BOSS_GIMMICK_KIND_META[cell.kind]
@@ -292,8 +318,20 @@ export class BossFxView {
                 </button>`
       })
       .join('')
-    return `<div class="boss-gimmick-grid ${targeting ? 'is-targeting' : ''} ${entering ? 'is-appearing' : ''}"
+    return `<div class="boss-gimmick-grid ${targeting ? 'is-targeting' : ''} ${entering ? 'is-appearing' : ''} ${relabeling ? 'is-relabeling' : ''}"
                  style="--boss-gimmick-cols:${grid.cols};--boss-gimmick-rows:${grid.rows};">${cells}</div>`
+  }
+
+  /**
+   * 배율 리롤의 앞 절반 — 지금 화면에 붙어 있는 배율 표기를 사그라뜨린다.
+   * 뒤 절반(새 표기가 떠오르는 연출)은 다음 렌더의 `is-relabeling`이 맡는다.
+   * 모델을 먼저 굴리고 렌더하면 배율이 툭 바뀌어 무엇이 달라졌는지 읽히지 않는다.
+   */
+  async fadeBossGimmickLabels(): Promise<void> {
+    const grid = this.host.boardElement.querySelector<HTMLElement>('.boss-gimmick-grid')
+    if (!grid) return
+    grid.classList.add('is-relabel-out')
+    await new Promise<void>((resolve) => window.setTimeout(resolve, BOSS_GIMMICK_RELABEL_OUT_MS))
   }
 
   /** 격자 칸 DOM 조회 — 연출이 좌표를 잡는 유일한 경로. */
@@ -316,8 +354,33 @@ export class BossFxView {
     source: HTMLElement | DOMRect | null
   ): Promise<void> {
     if (hits.length === 0) return
-    if (hits.some((hit) => hit.damage > 0 || hit.breakDamage > 0)) sfx.playAttack()
+    sfx.playAttack()
     await Promise.all(hits.map((hit) => this.playBossGimmickStrike(hit, source)))
+    // 피해가 0으로 막힌 beat면 수치 대신 왜 안 들어갔는지를 알린다(리미트 페이지).
+    if (hits.every((hit) => hit.damage <= 0 && hit.breakDamage <= 0)) {
+      const gate = this.host.bossPageGateNotice()
+      if (gate) await this.playBossPageGateWarning(gate.cardId, gate.text, false)
+    }
+  }
+
+  /**
+   * 페이지 게이트 경고 — "부위를 부숴야 한다". 피해가 하한에 막힌 beat에서 데미지 수치
+   * 자리에 대신 뜬다. 수치처럼 튀어 오르지 않고 은은하게 떠올랐다 사라진다(막힌 것은
+   * 사건이 아니라 상태다). 보스 타일 재렌더에 끊기지 않게 body 오버레이로 올린다.
+   */
+  async playBossPageGateWarning(cardId: string, text: string, emphatic: boolean): Promise<void> {
+    const tile = this.host.findCardElement(cardId)
+    if (!tile) return
+    const rect = tile.getBoundingClientRect()
+    const el = document.createElement('div')
+    el.className = `boss-page-gate-warning ${emphatic ? 'is-emphatic' : ''}`
+    el.textContent = text
+    el.setAttribute('aria-hidden', 'true')
+    el.style.cssText = `left:${rect.left + rect.width / 2}px;top:${rect.top + rect.height * 0.42}px;`
+    document.body.appendChild(el)
+    const hold = emphatic ? BOSS_PAGE_GATE_EMPHATIC_MS : BOSS_PAGE_GATE_WARNING_MS
+    await new Promise<void>((resolve) => window.setTimeout(resolve, hold))
+    el.remove()
   }
 
   private async playBossGimmickStrike(
@@ -1143,30 +1206,227 @@ export class BossFxView {
     ).finished
   }
 
-  /** 30F 양초 백작: 보스에서 황금빛 분수 블라스트가 폭죽처럼 터진 뒤, 새로 생긴 손패
-   *  슬롯들로 트레일이 날아가며 카드가 톡 생성되는 연출. (소각 연출의 반대 방향) */
+  /**
+   * 30F 양초 백작의 탐욕 살포 — **두 박자**로 나눠 보여 준다.
+   *
+   *  1) 보스가 동전을 화면 가득 흩뿌리고, 동전이 흩어진 채로 잠깐 머문다.
+   *  2) 그 동전이 하나씩 짤랑이며 손패 슬롯으로 빨려 들어간다.
+   *
+   * 한 박자로 붙여 두면 "뿌리면서 동시에 때린다"로 읽혀 무슨 일이 일어났는지 안 남는다.
+   * 뒤이어 오는 타격은 호출부가 또 한 박자 띄우고 낸다(BossEvent.resolveWaxArmyGreedTurn).
+   */
   async animateBossScatterToHandSlots(cardId: string, slotIndices: number[]): Promise<void> {
     const boss = this.host.findCardElement(cardId)
     if (!boss || slotIndices.length === 0) return
+    const bossRect = boss.getBoundingClientRect()
+    const ox = bossRect.left + bossRect.width / 2
+    const oy = bossRect.top + bossRect.height * 0.62
     // 분수처럼 솟구치는 황금빛 폭죽 블라스트.
     SquareBurst.playOn(boss, 'treasure-gain', { count: 30, spread: 200, duration: 640, size: [8, 18] })
-    await new Promise((r) => window.setTimeout(r, 180))
-    // 각 슬롯으로 트레일을 순차 발사하고, 도착 시 슬롯이 톡 생성되도록 팝인.
-    await Promise.all(
-      slotIndices.map(async (slotIndex, i) => {
-        await new Promise((r) => window.setTimeout(r, i * 110))
-        const slot = this.host.findHandSlotElement(slotIndex)
-        if (!slot) return
-        await this.host.trails.animateResourceTrail(boss, slot, 3, 'treasure-gain')
-        await slot.animate(
-          [
-            { transform: 'scale(0.6)', opacity: 0.2 },
-            { transform: 'scale(1.12)', opacity: 1, offset: 0.6 },
-            { transform: 'scale(1)', opacity: 1 },
-          ],
-          { duration: 320, easing: 'cubic-bezier(0.34,1.56,0.64,1)', fill: 'forwards' }
-        ).finished
-      })
+
+    // 1) 흩뿌리기 — 손패로 갈 동전마다 하나씩, 여기에 굴러 사라질 여분을 섞어 '살포'로 만든다.
+    const stage = this.host.boardElement.getBoundingClientRect()
+    const coins = Array.from(
+      { length: slotIndices.length + BOSS_GREED_STRAY_COINS },
+      () => this.spawnGreedCoin(ox, oy)
     )
+    const spots = coins.map(() => ({
+      x: stage.left + stage.width * (0.12 + Math.random() * 0.76),
+      y: stage.top + stage.height * (0.3 + Math.random() * 0.44),
+    }))
+    await Promise.all(coins.map((coin, i) => coin.animate(
+      [
+        { transform: 'translate(-50%,-50%) translate(0,0) scale(0.25) rotate(0deg)', opacity: 0.25 },
+        {
+          // 중간에 한 번 솟구쳤다 떨어져 '뿌려졌다'는 포물선이 보이게 한다.
+          transform: `translate(-50%,-50%) translate(${((spots[i].x - ox) * 0.62).toFixed(1)}px, ${((spots[i].y - oy) * 0.62 - 72).toFixed(1)}px) scale(1.14) rotate(240deg)`,
+          opacity: 1,
+          offset: 0.55,
+        },
+        {
+          transform: `translate(-50%,-50%) translate(${(spots[i].x - ox).toFixed(1)}px, ${(spots[i].y - oy).toFixed(1)}px) scale(1) rotate(400deg)`,
+          opacity: 1,
+        },
+      ],
+      { duration: 520 + i * 26, easing: 'cubic-bezier(0.22, 0.9, 0.3, 1)', fill: 'forwards' }
+    ).finished))
+    await new Promise((r) => window.setTimeout(r, BOSS_GREED_SCATTER_HOLD_MS))
+
+    // 2) 손패로 짤랑 — 슬롯마다 하나씩 순서대로 빨려 들어가고, 도착한 슬롯이 톡 생긴다.
+    await Promise.all(slotIndices.map(async (slotIndex, i) => {
+      await new Promise((r) => window.setTimeout(r, i * 130))
+      const coin = coins[i]
+      const slot = this.host.findHandSlotElement(slotIndex)
+      if (!slot) { coin.remove(); return }
+      const target = slot.getBoundingClientRect()
+      await coin.animate(
+        [
+          { transform: `translate(-50%,-50%) translate(${(spots[i].x - ox).toFixed(1)}px, ${(spots[i].y - oy).toFixed(1)}px) scale(1) rotate(0deg)` },
+          {
+            transform: `translate(-50%,-50%) translate(${(target.left + target.width / 2 - ox).toFixed(1)}px, ${(target.top + target.height / 2 - oy).toFixed(1)}px) scale(0.4) rotate(300deg)`,
+            opacity: 0.85,
+          },
+        ],
+        { duration: 380, easing: 'cubic-bezier(0.5, 0, 0.2, 1)', fill: 'forwards' }
+      ).finished
+      coin.remove()
+      sfx.playCoin()
+      SquareBurst.playOn(slot, 'treasure-gain', { count: 8, spread: 60, duration: 360 })
+      await slot.animate(
+        [
+          { transform: 'scale(0.6)', opacity: 0.2 },
+          { transform: 'scale(1.12)', opacity: 1, offset: 0.6 },
+          { transform: 'scale(1)', opacity: 1 },
+        ],
+        { duration: 320, easing: 'cubic-bezier(0.34,1.56,0.64,1)', fill: 'forwards' }
+      ).finished
+    }))
+
+    // 3) 손패에 못 들어간 여분은 바닥으로 흘러 사라진다 — 기다리지 않는다.
+    for (const coin of coins.slice(slotIndices.length)) {
+      void coin.animate(
+        [{ opacity: 1 }, { transform: 'translate(-50%,-50%) translateY(46px) scale(0.7)', opacity: 0 }],
+        { duration: 520, easing: 'ease-in', fill: 'forwards', composite: 'add' }
+      ).finished.then(() => coin.remove())
+    }
+  }
+
+  /**
+   * 모든 보스의 직접 타격 — 들어올림 → 뒤로 당김 → 쾅.
+   *
+   * 일반 적의 돌진(animateEnemyAttacks)은 평면 위를 미끄러지는 움직임이라 거대한 보스
+   * 타일이 쓰면 무게가 없다. 여기서는 `perspective`로 깊이를 주고, 한 번 화면 안쪽으로
+   * 물러났다가(작아진다) 앞으로 튀어나오며(커진다) 박는다 — 물러남이 있어야 '쾅'이 산다.
+   *
+   * 레일 격자가 큰 타일을 잘라내므로 원본이 아니라 body에 올린 복제를 움직인다.
+   * Promise는 **착지 순간**에 풀린다 — 호출부의 피해 수치가 반동을 기다리지 않고
+   * 박히는 그 프레임에 뜨게 하기 위해서다.
+   */
+  async animateBossSlamAttack(cardId: string): Promise<void> {
+    const boss = this.host.findCardElement(cardId)
+    if (!boss) return
+    const rect = boss.getBoundingClientRect()
+    const player = this.host.findPlayerCardElement()
+    const playerRect = player?.getBoundingClientRect() ?? null
+    const dx = playerRect
+      ? (playerRect.left + playerRect.width / 2 - (rect.left + rect.width / 2)) * 0.16
+      : 0
+    const dy = playerRect
+      ? Math.min(200, Math.max(56, playerRect.top + playerRect.height * 0.1 - rect.bottom + 22))
+      : 84
+
+    const clone = boss.cloneNode(true) as HTMLElement
+    clone.classList.add('enemy-attack-clone', 'boss-slam-clone')
+    clone.style.cssText += `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;margin:0;z-index:245;pointer-events:none;transform-origin:50% 100%;`
+    boss.classList.add('is-enemy-slamming-source')
+    document.body.appendChild(clone)
+
+    const animation = clone.animate(
+      [
+        // 0) 자세 — 아직 바닥에 붙어 있다.
+        {
+          transform: 'perspective(900px) translate3d(0,0,0) rotateX(0deg) scale(1)',
+          filter: 'brightness(1)',
+          easing: 'cubic-bezier(0.3, 0, 0.4, 1)',
+        },
+        // 1) 들어올림 — 무게를 싣고 떠오른다.
+        {
+          transform: 'perspective(900px) translate3d(0,-30px,0) rotateX(7deg) scale(1.05)',
+          filter: 'brightness(1.14)',
+          offset: 0.22,
+          easing: 'ease-out',
+        },
+        // 2) 뒤로 당김 — 화면 안쪽으로 물러나며 작아진다(원근으로 거리감을 만든다).
+        {
+          transform: `perspective(900px) translate3d(${(-dx * 0.3).toFixed(1)}px,-50px,-170px) rotateX(14deg) scale(0.93)`,
+          filter: 'brightness(0.88)',
+          offset: 0.46,
+          easing: 'cubic-bezier(0.72, 0, 0.9, 0.24)',
+        },
+        // 3) 쾅 — 앞으로 튀어나오며 플레이어 쪽에 깊게 박힌다.
+        {
+          transform: `perspective(900px) translate3d(${dx.toFixed(1)}px,${dy.toFixed(1)}px,200px) rotateX(-13deg) scale(1.16)`,
+          filter: 'brightness(1.5) drop-shadow(0 26px 30px rgba(168, 58, 58, 0.8))',
+          offset: BOSS_SLAM_IMPACT_OFFSET,
+          easing: 'cubic-bezier(0.2, 0.9, 0.3, 1)',
+        },
+        // 4) 반동 — 눌렸다가 제자리로.
+        {
+          transform: `perspective(900px) translate3d(${(dx * 0.2).toFixed(1)}px,${(dy * 0.14).toFixed(1)}px,44px) rotateX(-4deg) scale(1.02)`,
+          filter: 'brightness(1.08)',
+          offset: 0.8,
+        },
+        {
+          transform: 'perspective(900px) translate3d(0,0,0) rotateX(0deg) scale(1)',
+          filter: 'brightness(1)',
+        },
+      ],
+      { duration: BOSS_SLAM_DURATION_MS, easing: 'linear', fill: 'forwards' }
+    )
+    const cleanup = (): void => {
+      clone.remove()
+      boss.classList.remove('is-enemy-slamming-source')
+    }
+    animation.finished.then(cleanup, cleanup)
+    window.setTimeout(cleanup, BOSS_SLAM_DURATION_MS + 220)
+
+    // 착지 프레임에 맞춰 화면을 한 번 흔들고, 그 순간 호출부에 제어를 돌려준다.
+    await new Promise<void>((r) =>
+      window.setTimeout(r, Math.round(BOSS_SLAM_DURATION_MS * BOSS_SLAM_IMPACT_OFFSET))
+    )
+    const board = this.host.boardElement
+    board.classList.remove('is-boss-slam-shake')
+    void board.offsetWidth
+    board.classList.add('is-boss-slam-shake')
+    window.setTimeout(() => board.classList.remove('is-boss-slam-shake'), BOSS_SLAM_SHAKE_MS)
+  }
+
+  /** 화면에 흩뿌려지는 금화 하나. 좌표는 fixed, 이동은 transform으로만 준다. */
+  private spawnGreedCoin(x: number, y: number): HTMLElement {
+    const coin = document.createElement('i')
+    coin.className = 'boss-greed-coin'
+    coin.setAttribute('aria-hidden', 'true')
+    coin.style.cssText = `left:${x}px;top:${y}px;`
+    document.body.appendChild(coin)
+    return coin
+  }
+
+  /**
+   * 30F 2페이지 '탐욕의 값' — 손에 쥔 탐욕의 동전이 하나씩 웨이브로 떠오른 뒤,
+   * 그 자리에서 플레이어에게 1씩 꽂힌다. 동전을 쥐고 있을수록 아프므로 "쓸까 말까"가
+   * 매 턴 선택으로 남는다. 실제 피해 적용은 콜백(호출부)이 한 장씩 처리한다.
+   */
+  async animateGreedCoinToll(
+    slotIndices: readonly number[],
+    onCoin: (slotIndex: number) => Promise<void> | void
+  ): Promise<void> {
+    // 1) 웨이브 — 쥐고 있는 동전이 순서대로 떠올라 "이만큼 있다"를 먼저 센다.
+    for (const slotIndex of slotIndices) {
+      const slot = this.host.findHandSlotElement(slotIndex)
+      if (slot) {
+        sfx.playCoin()
+        void slot.animate(
+          [
+            { transform: 'translateY(0) scale(1)', filter: 'brightness(1)' },
+            { transform: 'translateY(-12px) scale(1.08)', filter: 'brightness(1.45)', offset: 0.45 },
+            { transform: 'translateY(0) scale(1)', filter: 'brightness(1)' },
+          ],
+          { duration: 420, easing: 'cubic-bezier(0.34,1.4,0.64,1)' }
+        )
+      }
+      await new Promise((r) => window.setTimeout(r, BOSS_GREED_WAVE_STEP_MS))
+    }
+    await new Promise((r) => window.setTimeout(r, 220))
+
+    // 2) 파바박 — 동전 자리에서 플레이어로 한 발씩.
+    for (const slotIndex of slotIndices) {
+      const slot = this.host.findHandSlotElement(slotIndex)
+      const player = this.host.findPlayerCardElement()
+      if (slot && player) {
+        await this.host.trails.animateResourceTrail(slot, player, 1, 'damage')
+      }
+      await onCoin(slotIndex)
+      await new Promise((r) => window.setTimeout(r, BOSS_GREED_TOLL_STEP_MS))
+    }
   }
 }

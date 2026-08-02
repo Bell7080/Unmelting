@@ -1545,6 +1545,28 @@ export const GAME_BOARD_RAIL_STYLES = `
   100% { opacity: 1; transform: scale(1); filter: blur(0); }
 }
 
+/* 배율 리롤: 타격이 끝나면 지금 배율 표기가 스르륵 사그라들고(is-relabel-out, 연출이
+   직접 붙인다) 다음 렌더에서 새 배율이 다시 떠오른다(is-relabeling, 1회 소비 플래그).
+   칸의 누적 손상은 그대로 남으므로 "때려 둔 칸을 마저 깰지, 새로 뜬 약점을 노릴지"가
+   이 전환 한 번에 읽힌다. 깨진 칸은 이미 꺼져 있으니 흔들지 않는다. */
+.boss-gimmick-grid.is-relabel-out .boss-gimmick-cell:not(.is-broken)::before,
+.boss-gimmick-grid.is-relabel-out .boss-gimmick-cell-label,
+.boss-gimmick-grid.is-relabel-out .boss-gimmick-cell-mult {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.boss-gimmick-grid.is-relabeling .boss-gimmick-cell:not(.is-broken)::before,
+.boss-gimmick-grid.is-relabeling .boss-gimmick-cell-label,
+.boss-gimmick-grid.is-relabeling .boss-gimmick-cell-mult {
+  /* 끝 프레임에 opacity를 적지 않아 각자의 기본 불투명도(0.78/0.7/비네트)로 되돌아온다. */
+  animation: boss-gimmick-relabel-in 0.4s cubic-bezier(0.22, 0.84, 0.3, 1) both;
+  animation-delay: calc(var(--boss-gimmick-i, 0) * 26ms);
+}
+@keyframes boss-gimmick-relabel-in {
+  0%   { opacity: 0; transform: translateY(-3px); }
+  100% { transform: translateY(0); }
+}
+
 /* 타격 순간: 뜨거운 칸은 화르르 밝아지고, 그 외는 둔탁하게 눌린다(톤 기준). */
 .boss-gimmick-cell.is-hit[data-tone="hot"] {
   animation: boss-gimmick-hit-hot 0.5s cubic-bezier(0.2, 0.86, 0.28, 1);
@@ -1669,6 +1691,70 @@ export const GAME_BOARD_RAIL_STYLES = `
   opacity: 0.42;
   color: rgba(214, 208, 198, 0.92);
   text-decoration: line-through;
+}
+
+/* 리미트 페이지 경고 — 피해가 하한에 막힌 beat에서 데미지 수치 자리에 대신 뜬다.
+   수치처럼 튀어 오르지 않는다: 막힌 것은 사건이 아니라 상태라, 은은하게 떠올랐다 사라진다.
+   z는 피해 수치(260) 바로 아래 — 같은 자리에 뜨지만 수치를 가리지는 않는다. */
+.boss-page-gate-warning {
+  position: fixed;
+  z-index: 258;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: clamp(14px, 2.1vh, 20px);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  /* 보스 일러스트가 밝은 밀랍이라 글자만으로는 묻힌다 — 뒤를 눌러 자리를 만든다. */
+  padding: 0.42em 1.1em;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 196, 128, 0.28);
+  background: radial-gradient(ellipse at 50% 50%, rgba(18, 10, 6, 0.86), rgba(12, 7, 4, 0.66) 72%, rgba(10, 6, 3, 0) 100%);
+  color: rgba(255, 226, 178, 0.95);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.95), 0 0 14px rgba(255, 168, 92, 0.45);
+  animation: boss-page-gate-warning 1.2s ease-in-out both;
+}
+.boss-page-gate-warning.is-emphatic {
+  font-size: clamp(18px, 3vh, 30px);
+  color: rgba(255, 208, 150, 0.98);
+  text-shadow: 0 3px 10px rgba(0, 0, 0, 0.95), 0 0 22px rgba(255, 150, 70, 0.55);
+  animation-duration: 1.9s;
+}
+@keyframes boss-page-gate-warning {
+  0%   { opacity: 0; transform: translate(-50%, -42%) scale(0.96); }
+  22%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  68%  { opacity: 1; transform: translate(-50%, -54%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -62%) scale(0.99); }
+}
+
+/* 보스 직접 타격의 착지 — 화면이 짧게 눌린다. 흔들림은 무게를 대신 말하는 유일한 단서라
+   복제 타일이 '깊게 박히는' 프레임(BOSS_SLAM_IMPACT_OFFSET)에만 붙인다. */
+.is-boss-slam-shake {
+  animation: boss-slam-shake 0.26s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+@keyframes boss-slam-shake {
+  0%   { transform: translate(0, 0); }
+  18%  { transform: translate(-5px, 4px); }
+  38%  { transform: translate(4px, -3px); }
+  58%  { transform: translate(-3px, 2px); }
+  78%  { transform: translate(2px, -1px); }
+  100% { transform: translate(0, 0); }
+}
+/* 복제 타일은 3D 변형을 쓰므로 자식 레이어가 함께 눕도록 열어 둔다. */
+.boss-slam-clone { transform-style: preserve-3d; will-change: transform, filter; }
+
+/* 30F 탐욕 살포용 금화. 보드 재렌더에 끊기지 않게 body에 띄우고 transform으로만 움직인다. */
+.boss-greed-coin {
+  position: fixed;
+  z-index: 228;
+  width: clamp(12px, 1.9vh, 20px);
+  height: clamp(12px, 1.9vh, 20px);
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 246, 208, 0.98), rgba(240, 190, 82, 0.96) 46%, rgba(158, 108, 30, 0.98) 100%);
+  box-shadow: 0 0 10px rgba(255, 196, 96, 0.5), inset 0 -2px 3px rgba(120, 78, 16, 0.6);
 }
 
 /* 무너지는 순간 — 칸 노드가 재렌더로 교체돼도 끊기지 않게 body에 띄운다.

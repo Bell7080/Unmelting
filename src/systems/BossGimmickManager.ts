@@ -173,6 +173,11 @@ export function bossGimmickExpectation(bossKind: SpecialEnemyKind): BossGimmickE
   }
 }
 
+/**
+ * 배율 리롤에 필요한 최소 성한 칸 수. 한 칸만 남으면 섞을 것이 없다.
+ */
+const BOSS_GIMMICK_REROLL_MIN_CELLS = 2
+
 /** 렌더러가 읽는 셀 스냅샷. 모델 내부 배열을 그대로 넘기지 않기 위한 읽기 전용 뷰다. */
 export interface BossGimmickCellView {
   index: number
@@ -346,6 +351,35 @@ export class BossGimmickManager {
     return this.breakBonus
   }
 
+  /** 배율을 다시 굴릴 수 있는가. 성한 칸이 둘 미만이면 섞을 것이 없다. */
+  canReroll(): boolean {
+    return this.profile !== null && this.livingIndexes().length >= BOSS_GIMMICK_REROLL_MIN_CELLS
+  }
+
+  /**
+   * 성한 칸의 배율만 다시 굴린다. 누적 부위 피해와 파괴 상태는 그대로 남는다.
+   *
+   * 배율이 고정이면 약점 한 칸을 파먹는 게 최적해가 되고, 부위 파괴만으로는
+   * 그 유혹을 절반밖에 못 막는다. 타격마다 배율이 옮겨 다니면 "조금 때려 둔 칸을
+   * 마저 깨서 파괴 보너스를 받을지, 새로 뜬 약점을 노릴지"가 매번 선택으로 남는다.
+   *
+   * 깨진 칸은 후보에서 빠지므로 특수 칸 수는 성한 칸 수에 맞춰 자연히 줄어든다
+   * (9칸 프로필의 약점 2칸을 남은 7칸에 그대로 얹지 않는다).
+   */
+  rerollKinds(): boolean {
+    if (!this.profile || !this.canReroll()) return false
+    const kinds = this.shuffledKinds(this.profile)
+    this.livingIndexes().forEach((index, slot) => {
+      this.cells[index].kind = kinds[slot]
+    })
+    return true
+  }
+
+  /** 아직 연출로 소비되지 않은 칸 타격이 있는가. 피해 0으로 막힌 beat를 가려내는 데 쓴다. */
+  get hasPendingHits(): boolean {
+    return this.pendingHits.length > 0
+  }
+
   /** 이번 beat에 쌓인 타격 기록을 가져가며 비운다. 연출 쪽 유일한 소비 창구다. */
   takeHits(): BossGimmickStrike[] {
     const hits = this.pendingHits
@@ -473,6 +507,14 @@ export class BossGimmickManager {
 
   /** 배치표대로 특수 칸을 만들고 plain으로 채운 뒤 위치를 섞는다. */
   private rollCells(profile: BossGimmickProfile): BossGimmickCell[] {
+    return this.shuffledKinds(profile).map((kind) => ({ kind, damage: 0, broken: false }))
+  }
+
+  /**
+   * 배치표를 격자 칸 수만큼 펼쳐 섞은 목록. 조우 시작 배치와 타격 후 리롤이
+   * 같은 분포를 쓰도록 한 곳에 둔다.
+   */
+  private shuffledKinds(profile: BossGimmickProfile): BossGimmickCellKind[] {
     const total = profile.cols * profile.rows
     const kinds: BossGimmickCellKind[] = []
     for (const slot of profile.slots) {
@@ -484,6 +526,6 @@ export class BossGimmickManager {
       const j = Math.floor(this.rng() * (i + 1))
       ;[kinds[i], kinds[j]] = [kinds[j], kinds[i]]
     }
-    return kinds.map((kind) => ({ kind, damage: 0, broken: false }))
+    return kinds
   }
 }

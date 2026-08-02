@@ -201,6 +201,68 @@ describe('BossGimmickManager 부위 파괴', () => {
   })
 })
 
+describe('BossGimmickManager 배율 리롤', () => {
+  /** 주기가 없는 결정적 난수 — 리롤이 매번 같은 배치를 재생하지 않는지 볼 때 쓴다. */
+  function lcgGrid(maxHp = WAX_ARMY_HP): BossGimmickManager {
+    let seed = 987654321
+    const m = new BossGimmickManager(() => {
+      seed = (seed * 1103515245 + 12345) % 2147483648
+      return seed / 2147483648
+    })
+    m.beginEncounter('waxArmy', maxHp)
+    return m
+  }
+
+  it('리롤은 배율만 다시 굴리고 누적 손상·파괴 상태는 남긴다', () => {
+    const m = lcgGrid()
+    m.strike({ cellIndex: 0, baseDamage: 3 })
+    const wornBefore = m.getCells()[0].damage
+    expect(wornBefore).toBeGreaterThan(0)
+
+    expect(m.rerollKinds()).toBe(true)
+
+    // 손상은 그대로 남아 "마저 깨서 파괴 보너스를 받을지"라는 선택이 유지된다.
+    expect(m.getCells()[0].damage).toBe(wornBefore)
+    expect(m.brokenCount).toBe(0)
+  })
+
+  it('여러 번 굴리면 약점 자리가 실제로 옮겨 다닌다', () => {
+    const m = lcgGrid(10_000)
+    const first = m.getCells().map((c) => c.kind).join(',')
+    const layouts = new Set([first])
+    for (let i = 0; i < 5; i++) {
+      m.rerollKinds()
+      layouts.add(m.getCells().map((c) => c.kind).join(','))
+    }
+    expect(layouts.size).toBeGreaterThan(1)
+  })
+
+  it('깨진 칸은 후보에서 빠져 특수 칸 수가 성한 칸 수만큼으로 줄어든다', () => {
+    const m = lcgGrid()
+    // 여섯 칸을 깨서 성한 칸을 셋만 남긴다.
+    for (let i = 0; i < 6; i++) m.strike({ cellIndex: i, baseDamage: 999 })
+    expect(m.brokenCount).toBe(6)
+
+    m.rerollKinds()
+
+    const living = m.getCells().filter((c) => !c.broken)
+    expect(living).toHaveLength(3)
+    // 9칸 프로필의 특수 칸 4개를 남은 3칸에 그대로 얹지 않는다.
+    expect(living.filter((c) => c.kind !== 'plain').length).toBeLessThanOrEqual(3)
+  })
+
+  it('성한 칸이 하나뿐이거나 격자가 없으면 굴리지 않는다', () => {
+    const m = lcgGrid()
+    for (let i = 0; i < 8; i++) m.strike({ cellIndex: i, baseDamage: 999 })
+    expect(m.canReroll()).toBe(false)
+    expect(m.rerollKinds()).toBe(false)
+
+    const empty = new BossGimmickManager(fixedRng())
+    expect(empty.canReroll()).toBe(false)
+    expect(empty.rerollKinds()).toBe(false)
+  })
+})
+
 describe('BossGimmickManager 광역/무작위 타격', () => {
   it('strikeAllCells는 성한 칸마다 한 번씩, 각자의 배율로 때린다', () => {
     const m = stagedGrid(10_000) // 내구도를 크게 잡아 파괴 보너스가 총합에 섞이지 않게 한다.

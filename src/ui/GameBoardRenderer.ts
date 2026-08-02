@@ -210,6 +210,35 @@ export class GameBoardRenderer {
     this.bossGimmickEntering = false
     return true
   }
+  /** 배율이 막 다시 굴려졌음을 표시하는 1회성 플래그 — 새 배율 등장 연출용. */
+  private bossGimmickRelabel = false
+  markBossGimmickRelabel(): void {
+    this.bossGimmickRelabel = true
+  }
+  consumeBossGimmickRelabel(): boolean {
+    if (!this.bossGimmickRelabel) return false
+    this.bossGimmickRelabel = false
+    return true
+  }
+  /** 배율 리롤 직전 — 지금 붙어 있는 배율 표기를 먼저 사그라뜨린다(연출은 BossFxView). */
+  fadeBossGimmickLabels(): Promise<void> {
+    return this.bossFx.fadeBossGimmickLabels()
+  }
+  /**
+   * 페이지 게이트 경고 문구 공급자. 피해가 하한에 막힌 beat에서 데미지 수치 대신
+   * 무엇이 필요한지를 알린다 — 상태는 보스 컨트롤러가 알고 있으므로 연출 시점에 물어본다.
+   */
+  private bossPageGateSource: (() => { cardId: string; text: string } | null) | null = null
+  setBossPageGateSource(source: (() => { cardId: string; text: string } | null) | null): void {
+    this.bossPageGateSource = source
+  }
+  bossPageGateNotice(): { cardId: string; text: string } | null {
+    return this.bossPageGateSource?.() ?? null
+  }
+  /** 페이지 게이트 경고 문구를 띄운다 — 연출은 BossFxView. */
+  playBossPageGateWarning(cardId: string, text: string, emphatic = false): Promise<void> {
+    return this.bossFx.playBossPageGateWarning(cardId, text, emphatic)
+  }
   /** 보스 칸 타격 한 beat(블라스트 → 균열/파괴 → 칸 위 피해 수치) — 연출은 BossFxView. */
   playBossGimmickStrikes(
     hits: readonly BossGimmickStrikeView[],
@@ -227,10 +256,14 @@ export class GameBoardRenderer {
    * 호출부 열 곳을 각각 고치지 않기 위한 단일 배선점이다.
    */
   private bossCellStrikeSource: ((cardId: string, observedLoss: number) => BossGimmickStrikeView[]) | null = null
+  /** 칸 타격 연출이 끝난 뒤 격자 쪽에 알린다(배율 리롤 등 beat 후처리). */
+  private bossCellStrikeSettled: (() => Promise<void> | void) | null = null
   setBossCellStrikeSource(
-    source: ((cardId: string, observedLoss: number) => BossGimmickStrikeView[]) | null
+    source: ((cardId: string, observedLoss: number) => BossGimmickStrikeView[]) | null,
+    onSettled: (() => Promise<void> | void) | null = null
   ): void {
     this.bossCellStrikeSource = source
+    this.bossCellStrikeSettled = onSettled
   }
 
   constructor(containerId: string = 'game-board') {
@@ -2437,7 +2470,11 @@ export class GameBoardRenderer {
         // 광역 손패가 9칸을 동시에 때려도 합계 하나가 아니라 칸마다 따로 뜬다.
         const cellStrikes = this.bossCellStrikeSource?.(cardId, amount) ?? []
         if (cellStrikes.length > 0) {
+          // 연출이 끝난 뒤에 후처리를 알린다 — 배율 리롤이 수치보다 먼저 돌면
+          // 방금 어느 배율로 맞았는지가 화면에서 사라진다.
           return this.playBossGimmickStrikes(cellStrikes, this.handUseCenterRect())
+            .then(() => this.bossCellStrikeSettled?.())
+            .then(() => undefined)
         }
         const target = this.findCardElement(cardId)
         if (target && amount > 0) {
@@ -3249,6 +3286,24 @@ export class GameBoardRenderer {
     return this.boardElement.querySelector<HTMLElement>(
       `.hand-slot[data-slot-index="${slotIndex}"]`
     )
+  }
+
+  /** 플레이어 카드 DOM — 보스 쪽 연출이 '플레이어에게로' 향할 때의 목적지. */
+  findPlayerCardElement(): HTMLElement | null {
+    return this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
+  }
+
+  /** 보스 직접 타격(들어올림 → 뒤로 당김 → 쾅) 연출 위임. 착지 순간에 resolve된다. */
+  async animateBossSlamAttack(cardId: string): Promise<void> {
+    return this.bossFx.animateBossSlamAttack(cardId)
+  }
+
+  /** 30F 탐욕의 값(웨이브 카운트 → 동전마다 1피해) 연출 위임. */
+  async animateGreedCoinToll(
+    slotIndices: readonly number[],
+    onCoin: (slotIndex: number) => Promise<void> | void
+  ): Promise<void> {
+    return this.bossFx.animateGreedCoinToll(slotIndices, onCoin)
   }
 
   /** 보스↔손패 슬롯 연출 위임 — 본체는 renderer/BossFxView. */

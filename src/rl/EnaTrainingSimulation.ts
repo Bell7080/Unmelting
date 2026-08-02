@@ -220,7 +220,10 @@ function bossProfileFrom(
 }
 
 const BOSS_PROFILES: Record<number, BossProfile> = {
-  30: bossProfileFrom(BOSS_CORE_SPECS[30], 'greed', undefined, 'waxArmy'),
+  // 30F 리미트 페이지: 실게임은 절반 HP에서 멈추고 부위를 하나 깨야 열린다. 시뮬에는 칸이
+  // 없으므로 경계만 옮겨 오고(부위 파괴는 gimmick.breakBonusFactor가 이미 누적 배수로 반영),
+  // 경계에서 반격 주기가 초기화되는 리듬을 같게 맞춘다.
+  30: bossProfileFrom(BOSS_CORE_SPECS[30], 'greed', [Math.ceil(BOSS_CORE_SPECS[30].maxHp / 2), 0], 'waxArmy'),
   60: bossProfileFrom(BOSS_CORE_SPECS[60], 'knightHand'),
   90: bossProfileFrom(BOSS_CORE_SPECS[90], 'summon'),
   // 마녀 페이지 경계: 실게임 270~181/180~91/90~0 → maxHp의 2/3·1/3·0으로 파생.

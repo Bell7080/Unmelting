@@ -47,6 +47,11 @@ export class SfxManager {
     void this.play('attack', attackUrl)
   }
 
+  /** 동전이 손패로 들어올 때의 짤랑임 — 전용 소스가 없어 클릭음을 높은 음정으로 굴린다. */
+  playCoin(): void {
+    void this.play('click', clickUrl, { rateRange: [1.55, 1.95] })
+  }
+
   /** 적이 플레이어를 공격할 때 타격음 — 낮은 음정으로 피격감을 구분한다. */
   playPlayerHit(): void {
     void this.play('attack', attackUrl, { rateRange: [0.72, 0.84] })
