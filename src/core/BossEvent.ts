@@ -249,6 +249,7 @@ export class BossEventController {
   /** 현재 격자 상태를 렌더러에 밀어 넣는다. 칸 균열/파괴는 타격마다 바뀌므로
    *  피해를 준 쪽(직접 타격·손패)이 렌더 직전에 이걸 한 번 불러 줘야 한다. */
   syncGimmickGrid(): void {
+    this.syncGimmickShapeToBody()
     this.br.setBossGimmickGrid(
       this.gimmicks.isActive
         ? {
@@ -262,6 +263,34 @@ export class BossEventController {
         : null
     )
     this.syncPageState()
+  }
+
+  /**
+   * 보스 몸집이 바뀌면 격자도 같은 모양으로 **다시 짠다**.
+   *
+   * 마녀 3페이지는 3×3 몸을 2×3으로 접으며 하수인을 부른다 — 그때 판정 칸도 6칸으로
+   * 줄고, 그 6칸을 기준으로 **약점이 새로 노출된다**. 늘어나는 경우도 같은 규칙이다:
+   * 몸이 커지면 커진 칸 수 기준으로 다시 굴린다.
+   *
+   * 몸집 변화를 감지해 자동으로 도는 자리라, 새로 몸이 변하는 보스를 만들어도
+   * `occupiedDistRows`만 바꾸면 격자가 따라온다(전용 호출을 심을 필요가 없다).
+   */
+  private syncGimmickShapeToBody(): void {
+    const state = this.eventState
+    if (!state || !this.gimmicks.isActive) return
+    // 레일 1행을 CSS로 3행처럼 늘려 그리는 보스는 프로필 기본 행 수를 그대로 쓴다.
+    const desiredRows = state.def.occupiedDistRows > 1
+      ? state.def.occupiedDistRows
+      : this.gimmicks.profileRows
+    if (desiredRows <= 0 || desiredRows === this.gimmicks.rows) return
+    const before = this.gimmicks.cellCount
+    // 내구도는 남은 체력에서 다시 뽑는다 — 바뀐 몸이 그 페이지 안에서 깨져야 한다.
+    if (!this.gimmicks.resize(this.gimmicks.cols, desiredRows, state.card.getHealth())) return
+    this.br.markBossGimmickRelabel()
+    this.inject.recordNotice(
+      `${state.card.name}의 몸이 바뀌었다 — 부위 ${before}칸 → ${this.gimmicks.cellCount}칸, 약점 재배치`,
+      'info'
+    )
   }
 
   /** HP바 경계선·페이지 열기를 렌더러에 밀어 넣는다. 페이지 규칙의 출처는 이 컨트롤러다. */
@@ -1699,13 +1728,9 @@ export class BossEventController {
     state.sculptorPhase = 'back'
     state.sculptorStartRow = 1
     state.summonedEnemyIds.clear()
-    // 몸이 3×3에서 2×3으로 접혔으니 판정 격자도 함께 접는다 — 칸이 줄고 약점이 다시
-    // 배치된다. 내구도는 **남은 체력**에서 다시 파생해 마지막 페이지 안에서도
-    // "칸 절반을 깨면 쓰러진다"가 성립하게 한다.
-    if (this.gimmicks.isActive) {
-      this.gimmicks.resize(3, 2, state.card.getHealth())
-      this.syncGimmickGrid()
-    }
+    // 몸이 3×3에서 2×3으로 접혔다 — 격자 재배치는 syncGimmickShapeToBody가 몸집 변화를
+    // 보고 알아서 돈다(칸 6개로 줄고 약점이 새로 굴려진다).
+    this.syncGimmickGrid()
 
     // 최종 보스 소환수는 90F 후기 적 풀을 기반으로 광폭화 버프를 받은 독립 개체다.
     const pool = ENEMY_DEFINITIONS.slice(12, 18)

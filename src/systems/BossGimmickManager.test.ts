@@ -78,6 +78,22 @@ describe('BossGimmickManager', () => {
     expect(m.getCells().some((c) => c.kind === 'plain')).toBe(true)
   })
 
+  it('격자가 다시 늘어나도 같은 규칙으로 새로 굴린다', () => {
+    // "늘어나도 마찬가지" — 줄이는 쪽만 처리하면 몸이 돌아왔을 때 칸이 모자란 채로 남는다.
+    const m = new BossGimmickManager(fixedRng())
+    m.beginEncounter('waxWitch', 300)
+    m.resize(3, 2, 200)
+    expect(m.getCells()).toHaveLength(6)
+
+    expect(m.resize(3, 3, 150)).toBe(true)
+
+    expect(m.getCells()).toHaveLength(9)
+    expect(m.getCells().every((c) => c.damage === 0 && !c.broken)).toBe(true)
+    expect(m.cellDurability).toBe(bossGimmickCellDurability(150, 9))
+    // 늘어난 칸에도 약점이 다시 노출된다.
+    expect(m.getCells().some((c) => c.kind === 'weak')).toBe(true)
+  })
+
   it('배치표대로 특수 칸을 깔고 나머지는 평범한 칸으로 채운다', () => {
     const kinds = stagedGrid().getCells().map((c) => c.kind)
     const profile = BOSS_GIMMICK_PROFILES.waxArmy

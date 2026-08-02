@@ -409,6 +409,11 @@ export class BossGimmickManager {
     return this.shape.rows
   }
 
+  /** 프로필이 정한 기본 행 수. 몸집이 원래대로 돌아왔을 때 되돌릴 기준이다. */
+  get profileRows(): number {
+    return this.profile?.rows ?? 0
+  }
+
   getCells(): BossGimmickCellView[] {
     return this.cells.map((_, index) => this.viewAt(index))
   }
