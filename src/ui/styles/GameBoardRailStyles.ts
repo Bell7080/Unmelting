@@ -463,6 +463,27 @@ export const GAME_BOARD_RAIL_STYLES = `
   width: clamp(18px, 2.5vh, 24px);
   height: clamp(18px, 2.5vh, 24px);
 }
+/* 처치 전리품(0~N장) — 체력/공격력 사이 가운데 자리. 위협 수치보다 작고 옅게 둬야
+   "얼마나 아픈가"가 먼저 읽힌다. 좁은 칸에서는 줄바꿈 없이 눌러 담는다. */
+.card-stats--corners .stat.drop {
+  font-size: 0.62em;
+  font-weight: 800;
+  color: rgba(255, 232, 168, 0.78);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  gap: 2px;
+  padding-bottom: 0.14em;
+}
+.card-stats--corners .stat.drop .icon,
+.card-stats--corners .stat.drop svg {
+  width: 1em;
+  height: 1em;
+  opacity: 0.86;
+}
+.rail-row.dist-1 .card-stats--corners .stat.drop,
+.rail-row.dist-2 .card-stats--corners .stat.drop {
+  font-size: 0.58em;
+}
 /* 함정 피해 수치도 적 스탯과 같은 크기로 읽힌다 — 둘 다 "이 칸이 나를 얼마나 때리는가"를
    말하는 수치라, 한쪽만 작으면 함정 피해를 낮게 어림잡게 된다. 다만 함정은 수치가 하나뿐이라
    양 끝으로 벌리지 않고 가운데 그대로 둔다. */

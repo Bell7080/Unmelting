@@ -125,7 +125,8 @@ export class ShopOverlayView {
     cost: number,
     score: number,
     theme: 'resource' | 'upgrade' | 'unlock',
-    order: number
+    order: number,
+    exhausted = false
   ): string {
     const affordable = score >= cost ? 'is-affordable' : 'is-unaffordable'
     const artUrl = SpriteUrls.packs[kind]
@@ -140,21 +141,27 @@ export class ShopOverlayView {
       'delete-pack': 'legendary',
     }
     const rarityClass = RARITY_CLASS_BY_TIER[packRarityClassMap[kind]]
+    // 소진 = 더 줄 것이 남지 않은 팩. 가격을 지우고 판을 어둡게 깔아 살 수 없음을 먼저
+    // 말한 뒤, 그 위에 '소진'을 크게 박는다(비싸서 못 사는 것과 구분돼야 한다).
     return `
-      <article class="shop-pack-card pack-theme-${theme} ${affordable} ${rarityClass}"
+      <article class="shop-pack-card pack-theme-${theme} ${exhausted ? 'is-exhausted' : affordable} ${rarityClass}"
                data-shop-buy-kind="${kind}"
-               tabindex="0"
+               ${exhausted ? 'aria-disabled="true"' : 'tabindex="0"'}
                style="--cardback-url:url('${SpriteUrls.cardBack}'); --shop-pack-order:${order};"
-               aria-label="${title} — 불빛 ${cost}">
+               aria-label="${title} — ${exhausted ? '소진' : `불빛 ${cost}`}">
         <div class="shop-pack-illustration" style="background-image: url('${artUrl}')" aria-hidden="true"></div>
         <div class="shop-pack-overlay">
           <h3 class="shop-pack-title">${title}</h3>
           <p class="shop-pack-effect">${effect}</p>
         </div>
-        <span class="shop-price-label shop-pack-price" aria-hidden="true">
+        ${
+          exhausted
+            ? '<span class="shop-pack-exhausted-stamp" aria-hidden="true">소진</span>'
+            : `<span class="shop-price-label shop-pack-price" aria-hidden="true">
           <span class="shop-price-label-icon">${sparkleIcon()}</span>
           <span class="shop-price-label-text">${cost.toLocaleString()}</span>
-        </span>
+        </span>`
+        }
       </article>
     `
   }
@@ -239,9 +246,9 @@ export class ShopOverlayView {
       <div class="shop-pack-picker-shell" role="dialog" aria-label="${view.title}">
         <header class="shop-pack-picker-head">
           <h2>${view.title}</h2>
-          <p>3장 중 1장을 선택하시오.</p>
+          <p>${view.items.length}장 중 1장을 선택하시오.</p>
         </header>
-        <div class="shop-pack-picker-cards">${this.buildPackPickerCardsHtml(view)}</div>
+        <div class="shop-pack-picker-cards" style="--pick-count:${Math.max(1, view.items.length)};">${this.buildPackPickerCardsHtml(view)}</div>
         ${this.buildPackPickerFooterHtml(view)}
       </div>
     `
@@ -268,7 +275,11 @@ export class ShopOverlayView {
     const footerEl = host.querySelector<HTMLElement>('.shop-pack-picker-footer')
     if (!cardsEl) return
 
+    // 리롤 결과가 3장보다 적을 수 있으므로 열 수도 함께 갱신한다 — 안 그러면 빈 칸이 남는다.
+    cardsEl.style.setProperty('--pick-count', String(Math.max(1, view.items.length)))
     cardsEl.innerHTML = this.buildPackPickerCardsHtml(view)
+    const countEl = host.querySelector<HTMLElement>('.shop-pack-picker-head p')
+    if (countEl) countEl.textContent = `${view.items.length}장 중 1장을 선택하시오.`
 
     // 카드 즉시 풀사이즈 노출 후 카드당 SquareBurst.
     // CSS scale 팝 애니메이션을 제거했으므로 버스트 시 카드 위치가 정확하다.
@@ -461,7 +472,8 @@ export class ShopOverlayView {
         // The whole relic card is the buy target now (no separate buy
         // button) — click the hover-grown card to purchase.
         const buyTarget = t.closest<HTMLElement>('[data-shop-buy-kind]')
-        if (!buyTarget || buyTarget.classList.contains('is-purchased')) return
+        // 소진된 팩은 클릭을 받아서 버린다 — pointer-events로 비우면 뒤 레이어가 대신 먹는다.
+        if (!buyTarget || buyTarget.classList.contains('is-purchased') || buyTarget.classList.contains('is-exhausted')) return
         const kind = buyTarget.dataset.shopBuyKind as ShopBuyDetail['kind'] | undefined
         // 리롤 애니메이션 중에는 같은 버튼에서 추가 shopBuy 이벤트를 만들지 않는다.
         if (!kind || buyTarget.classList.contains('is-reroll-locked')) return
@@ -528,20 +540,21 @@ export class ShopOverlayView {
             </div>
             <div class="shop-layer shop-pack-layer">
               ${(() => {
+                const exhausted = new Set(shop.exhaustedPackKinds ?? [])
                 if (shop.mode === 'altar') {
                   const altarAll: Array<[ShopPackKind, string, string, number, 'resource' | 'upgrade' | 'unlock', number]> = [
                     ['resource-pack', '자원팩', '체력·손패·불씨 한도 영구 상향', shop.packCosts?.['resource-pack'] ?? 500, 'resource', 0],
                     ['chance-pack', '확률팩', '특정 카드 1차 드롭 우선도 부여', shop.packCosts?.['chance-pack'] ?? 500, 'upgrade', 1],
                     ['delete-pack', '삭제팩', '카드 제거 · 드롭 집중도 상향', shop.packCosts?.['delete-pack'] ?? 500, 'unlock', 2],
                   ]
-                  return altarAll.map(([k, t, d, c, th, n]) => this.renderShopPackCard(k, t, d, c, score, th, n)).join('')
+                  return altarAll.map(([k, t, d, c, th, n]) => this.renderShopPackCard(k, t, d, c, score, th, n, exhausted.has(k))).join('')
                 } else {
                   const shopAll: Array<[ShopPackKind, string, string, number, 'resource' | 'upgrade' | 'unlock', number]> = [
                     ['basic-pack', basicPackLabel.title, 'HP·불씨·게이지 즉시 보충', shop.packCosts?.['basic-pack'] ?? shop.basicPackCost, 'resource', 0],
                     ['recipe-pack', recipePackLabel.title, '조합식 해금 · 덱 심도 확장', shop.packCosts?.['recipe-pack'] ?? 400, 'upgrade', 1],
                     ['unlock-pack', unlockPackLabel.title, '잠긴 손패 해금 · 드롭 풀 확대', shop.packCosts?.['unlock-pack'] ?? 400, 'unlock', 2],
                   ]
-                  return shopAll.map(([k, t, d, c, th, n]) => this.renderShopPackCard(k, t, d, c, score, th, n)).join('')
+                  return shopAll.map(([k, t, d, c, th, n]) => this.renderShopPackCard(k, t, d, c, score, th, n, exhausted.has(k))).join('')
                 }
               })()}
             </div>
@@ -632,16 +645,35 @@ export class ShopOverlayView {
       'resource-pack': shop.packCosts?.['resource-pack'] ?? 500,
       'delete-pack': shop.packCosts?.['delete-pack'] ?? 500,
     }
+    // 마지막 후보를 뽑은 직후에도 같은 방문 안에서 소진 표기가 붙어야 한다 —
+    // 이 자리는 전체 재빌드가 아니라 제자리 갱신이라 클래스/라벨을 직접 갈아 끼운다.
+    const exhausted = new Set(shop.exhaustedPackKinds ?? [])
     for (const kind of Object.keys(packMap) as ShopPackKind[]) {
       const tile = shell.querySelector<HTMLElement>(
         `.shop-pack-card[data-shop-buy-kind="${kind}"]`
       )
       if (!tile) continue
       const cost = packMap[kind]
-      tile.classList.remove('is-affordable', 'is-unaffordable')
-      tile.classList.add(score >= cost ? 'is-affordable' : 'is-unaffordable')
-      const priceText = tile.querySelector<HTMLElement>('.shop-price-label-text')
-      if (priceText) priceText.textContent = `${cost.toLocaleString()}`
+      const isExhausted = exhausted.has(kind)
+      tile.classList.remove('is-affordable', 'is-unaffordable', 'is-exhausted')
+      tile.classList.add(isExhausted ? 'is-exhausted' : score >= cost ? 'is-affordable' : 'is-unaffordable')
+      const price = tile.querySelector<HTMLElement>('.shop-pack-price')
+      const stamp = tile.querySelector<HTMLElement>('.shop-pack-exhausted-stamp')
+      if (isExhausted) {
+        tile.removeAttribute('tabindex')
+        tile.setAttribute('aria-disabled', 'true')
+        price?.remove()
+        if (!stamp) {
+          const mark = document.createElement('span')
+          mark.className = 'shop-pack-exhausted-stamp'
+          mark.setAttribute('aria-hidden', 'true')
+          mark.textContent = '소진'
+          tile.appendChild(mark)
+        }
+      } else {
+        const priceText = tile.querySelector<HTMLElement>('.shop-price-label-text')
+        if (priceText) priceText.textContent = `${cost.toLocaleString()}`
+      }
     }
   }
 

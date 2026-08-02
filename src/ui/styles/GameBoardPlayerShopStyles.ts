@@ -679,6 +679,44 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 .shop-pack-card.is-unaffordable {
   filter: saturate(0.82) brightness(0.84);
 }
+/* 소진 — 더 줄 것이 남지 않은 팩. 비싸서 못 사는 것(is-unaffordable)과 달리 다시 열릴 일이
+   없으므로 훨씬 깊게 눌러 두고, 유영/hover 반응도 끊어 살아 있는 타일로 읽히지 않게 한다. */
+.shop-pack-card.is-exhausted {
+  filter: saturate(0.12) brightness(0.42);
+  cursor: default;
+  animation-play-state: running, paused;
+}
+.shop-pack-card.is-exhausted:hover,
+.shop-pack-card.is-exhausted:focus-visible {
+  scale: 1;
+  z-index: auto;
+}
+/* 어둡게 깐 판 위에 흰 글자를 크게 박는다 — 가격이 있던 자리가 아니라 판 한가운데다. */
+.shop-pack-card.is-exhausted::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(8, 6, 14, 0.62);
+  z-index: 2;
+  pointer-events: none;
+}
+.shop-pack-exhausted-stamp {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(26px, 3.4vw, 44px);
+  font-weight: 1000;
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.9),
+    0 0 18px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
 .shop-pack-illustration {
   position: absolute;
   inset: -2px 0 0;
@@ -825,10 +863,14 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   /* Pack choices read better when they share the same portrait bias as the
      cardback surface (3:4-ish). Keep them wider than before so text is not
      compressed into a short strip. (+15% from previous 154px/462px base) */
-  grid-template-columns: repeat(3, minmax(177px, 1fr));
+  /* 열 수는 실제로 제시된 장수를 따른다(--pick-count). 3열 고정으로 두면 2장일 때
+     빈 칸 하나가 남아 한쪽으로 쏠려 보인다. 폭도 장수에 비례해 줄여야 카드 크기가
+     3장일 때와 같게 유지되면서 가운데 정렬된다. */
+  grid-template-columns: repeat(var(--pick-count, 3), minmax(177px, 1fr));
   gap: clamp(8px, 1.2vw, 16px);
   width: 100%;
-  max-width: clamp(531px, 68vw, 810px);
+  max-width: calc(clamp(531px, 68vw, 810px) / 3 * var(--pick-count, 3));
+  margin-inline: auto;
 }
 .shop-pack-pick-card {
   position: relative;

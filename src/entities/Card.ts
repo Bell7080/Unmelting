@@ -128,7 +128,9 @@ export class Card {
   groupCount: number // How many lane cells this card currently occupies.
   health: number // Current effective enemy HP after any group/special rules are applied.
   isSpecialEnemy: boolean // Special enemies, such as mimics, never merge into wider normal groups.
-  defeatDropCount: number // Number of item drops awarded when this enemy is defeated.
+  /** 처치 시 줄 수 있는 손패의 **상한**. 실제 지급은 0~이 값 사이에서 굴린다
+   *  (`rollDefeatDrops`) — 카드 표기('0~N장')와 같은 값이 단일 출처다. */
+  defeatDropCount: number
   /** Wax status: turns remaining while this field card is '굳음' and cannot act. */
   frozenTurns: number
   /** Enemy group internals keep merged stats proportional to the actual members. */
@@ -211,6 +213,15 @@ export class Card {
   /** 온보딩 축약형 필드 카드(바위/덤불/잡동사니)인지 — 만료·합체 리셋 대상. */
   isOnboardingField(): boolean {
     return this.enemySpriteId === 'enemyRock' || this.trapKind === 'bush' || this.treasureKind === 'junk'
+  }
+
+  /**
+   * 처치 보상 손패 장수를 굴린다 — 0 ~ `defeatDropCount` 균등.
+   * 카드에 적힌 '0~N장'이 곧 이 분포다. 표기와 실지급이 갈리지 않게 한 곳에서 굴린다.
+   */
+  rollDefeatDrops(): number {
+    const max = Math.max(0, this.defeatDropCount)
+    return Math.floor(Math.random() * (max + 1))
   }
 
   /** 온보딩 필드 카드의 최대 만료 턴수 — 첫 접하는 유저 혼란 방지를 위해 종류 무관 균일 2턴. 비필드는 0. */
@@ -543,6 +554,9 @@ export class Card {
         this.enemySpriteId = other.enemySpriteId
         this.name = other.name
       }
+      // 합쳐진 적은 상한도 함께 더한다 — 1칸 0~1 / 2칸 0~2 / 3칸 0~3.
+      // 넓은 적을 그대로 두는 위험을 손패로 갚는 축이다.
+      this.defeatDropCount += other.defeatDropCount
       this.groupCount += other.groupCount
       this.applyNormalGroupPresentation(existingDamage + otherDamage)
       return

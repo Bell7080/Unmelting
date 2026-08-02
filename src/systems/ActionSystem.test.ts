@@ -14,31 +14,32 @@ describe('ActionSystem rewards', () => {
     vi.restoreAllMocks()
   })
 
-  it('drops five hand cards when a two-lane mimic is defeated', () => {
+  // 처치 보상은 0~defeatDropCount 균등 굴림이다(카드에 적힌 '0~N장'과 같은 분포).
+  const defeatMimic = (roll: number): ReturnType<typeof ActionSystem.executeAction> => {
     const character = new Character()
     const lane = new Lane('lane-0', 0)
-    const mimic = new Card(
-      'mimic-test',
-      CardType.ENEMY,
-      '미믹',
-      'Was a 2-lane treasure once',
-      10,
-      5,
-      {
-        isSpecialEnemy: true,
-        defeatDropCount: 5,
-      }
-    )
+    const mimic = new Card('mimic-test', CardType.ENEMY, '미믹', 'Was a 2-lane treasure once', 10, 5, {
+      isSpecialEnemy: true,
+      defeatDropCount: 5,
+    })
     // Give enough damage to defeat the wider mimic in one deterministic strike.
     character.damage = 10
     mimic.groupCount = 2
-    vi.spyOn(Math, 'random').mockReturnValue(0)
+    vi.spyOn(Math, 'random').mockReturnValue(roll)
+    return ActionSystem.executeAction(character, lane, mimic, ActionType.ATTACK_ENEMY)
+  }
 
-    const result = ActionSystem.executeAction(character, lane, mimic, ActionType.ATTACK_ENEMY)
+  it('drops the range minimum (0) from a two-lane mimic when the roll bottoms out', () => {
+    const result = defeatMimic(0)
+    expect(result.cardRemoved).toBe(true)
+    expect(result.itemGainedNames).toHaveLength(0)
+    expect(result.message).toContain('전리품 없음')
+  })
 
+  it('drops the range maximum (5) from a two-lane mimic when the roll tops out', () => {
+    const result = defeatMimic(0.999)
     expect(result.cardRemoved).toBe(true)
     expect(result.itemGainedNames).toHaveLength(5)
-    expect(character.hand).toHaveLength(5)
   })
 
   it('drops the span-3 range minimum from a three-lane treasure chest', () => {
@@ -79,7 +80,8 @@ describe('ActionSystem rewards', () => {
     const lane = new Lane('lane-0', 0)
     const enemy = new Card('enemy-test', CardType.ENEMY, '양초 생쥐', 'mouse', 1, 1)
     character.damage = 10
-    vi.spyOn(Math, 'random').mockReturnValue(0)
+    // 0~1 굴림에서 실제로 1장이 나와야 넘침이 성립한다 — 0이 나오면 줄 것 자체가 없다.
+    vi.spyOn(Math, 'random').mockReturnValue(0.999)
 
     const result = ActionSystem.executeAction(character, lane, enemy, ActionType.ATTACK_ENEMY)
 

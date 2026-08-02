@@ -536,6 +536,8 @@ export class EnaTrainingSimulation {
   // 칼날 빌드(태그 반응형 유물 근사): 숫돌=처치당 파편, 망치=사용 확률 파편, 연마=사용마다 칼날 피해 +1 누적.
   // 발동 규칙 원본은 src/systems/TagReactions.ts — 시뮬은 유물 버킷(grantRelic)의 한 축으로 압축한다.
   private shardPerKill = 0
+  /** 이번 손패 행동에서 처치 전리품으로 더 줄 수 있는 장수(실게임과 같은 행동당 1장 상한). */
+  private handKillDropBudget = 0
   private bladeUseShardChance = 0
   private bladeSharpening = false
   private bladeDamageBonus = 0
@@ -932,6 +934,9 @@ export class EnaTrainingSimulation {
     const tactic = this.knowledge.handCards[held.id]
     let reward = 0
     const merged = held.merged
+    // 손패 처치 전리품은 실게임과 같이 **행동당 1장**에서 끊는다. 광역기가 잡은 수만큼
+    // 돌려받으면 턴을 넘기지 않고 손패를 불릴 수 있어, 시뮬만 그 고리를 학습하게 된다.
+    this.handKillDropBudget = 1
 
     if (def.category === 'attack') {
       reward = this.resolveAttackCard(def, merged)
@@ -1421,7 +1426,14 @@ export class EnaTrainingSimulation {
       this.gainLight(card.group > 1 ? rankLight * card.group * GROUP_LIGHT_DISCOUNT : rankLight)
       // 파편 생성기(숫돌 — TagReactions.SHARD_GENERATORS): 처치마다 칼날 파편을 흘린다.
       for (let n = 0; n < this.shardPerKill; n++) this.drawCard('blade-shard')
-      if (this.rng.next() < 0.3) this.drawCard()
+      // 처치 전리품 — 실게임 Card.rollDefeatDrops()와 같은 0~폭 균등 굴림.
+      // 손패 처치는 행동당 1장 예산 안에서만 나온다(useHandCard가 예산을 세운다).
+      let drops = Math.floor(this.rng.next() * (card.group + 1))
+      if (source === 'ember') {
+        drops = Math.min(drops, this.handKillDropBudget)
+        this.handKillDropBudget -= drops
+      }
+      for (let n = 0; n < drops; n++) this.drawCard()
       // 동료 깜짝 지원(치명타): 가끔 보너스 손패 1장.
       if (this.companion && this.rng.next() < this.companion.minorClutchChance.crit) this.drawCard()
       return source === 'ember' ? 3.2 : 2.3

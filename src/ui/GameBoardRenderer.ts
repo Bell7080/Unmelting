@@ -1101,9 +1101,17 @@ export class GameBoardRenderer {
     if (card.type === CardType.ENEMY) {
       // 적 수치는 카드 하단 양 끝(체력 좌 / 공격력 우)에 크게 붙여, 일러스트를 가리지 않으면서
       // 한눈에 읽히게 한다. 배치/크기는 .card-stats--corners가 담당한다.
+      // 전리품 표기는 체력/공격력 사이 가운데 빈자리에 둔다. 위협 수치보다 한 단계 작게
+      // 눌러, 먼저 읽혀야 하는 것(얼마나 아픈가)을 가리지 않게 한다.
+      const dropMax = Math.max(0, card.defeatDropCount)
+      const dropNote =
+        dropMax > 0
+          ? `<span class="stat drop">${handCardIcon()}<span class="stat-value">0~${dropMax}장</span></span>`
+          : ''
       stats = `
         <div class="card-stats card-stats--corners">
           <span class="stat hp">${heartIcon()}<span class="stat-value">${card.getHealth()}</span></span>
+          ${dropNote}
           <span class="stat atk">${swordIcon()}<span class="stat-value">${card.getDamage()}</span></span>
         </div>
       `

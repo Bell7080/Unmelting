@@ -1306,6 +1306,32 @@ async function awardScoreForRemovedCards(
   )
 }
 
+/**
+ * 손패·조합으로 잡은 적의 전리품.
+ *
+ * ★ **한 행동당 최대 1장**이다. 손패는 턴을 넘기지 않으므로, 한 장으로 여러 적을 잡고
+ * 그만큼 손패를 돌려받으면 턴을 올리지 않은 채 손패·불빛을 무한히 불릴 수 있다
+ * (광역기 한 장 → 3장 회수 → 다시 광역기…). 상한 1이면 쓴 만큼보다 더 받을 수 없어
+ * 그 고리가 성립하지 않는다. 대신 직접 타격은 턴을 소모하므로 0~N을 그대로 받는다.
+ */
+async function awardHandKillDrops(
+  removed: { cardId: string; type: CardType }[],
+  snapshot: Map<string, Card>
+): Promise<void> {
+  const kills = removed
+    .map((r) => snapshot.get(r.cardId))
+    .filter((c): c is Card => !!c && c.type === CardType.ENEMY)
+  if (kills.length === 0) return
+  // 적마다 제 상한으로 굴리되 합계는 1장에서 끊는다.
+  const rolled = kills.reduce((sum, card) => sum + card.rollDefeatDrops(), 0)
+  if (rolled <= 0) return
+  const drop = DropSystem.generateDrop('enemy-kill')
+  if (!gameState.character.addHandCard(drop)) return
+  pushActivityLogsInDisplayOrder(createItemGainLogs([getHandCardDef(drop.defId).name]))
+  render()
+  await playResourceTrail({ kind: 'center' }, 'hand', 1)
+}
+
 /** Coin gain log row — kind: 'score' for consistent warm color, but the
  *  delta is rendered as "+N$" via the badge slot so the wallet event reads
  *  differently from a score row. */
@@ -2381,6 +2407,8 @@ async function applyHandSingle(
       beforeSingleCards
     )
   }
+  // 손패로 잡아도 전리품이 나온다(행동당 1장 상한).
+  await awardHandKillDrops(result.removedFieldCards, beforeSingleCards)
 
   // Animate removals caused by the single hand card while the old board DOM is
   // still present. This is the "previous effect" beat the combo waits for.
@@ -2621,6 +2649,8 @@ async function applyHandSingle(
 
     // Light for recipe-driven removals.
     await awardScoreForRemovedCards(recipeResult.removedFieldCards, beforeRecipeCards)
+    // 조합도 손패와 같은 규칙 — 발동 1회당 전리품 1장 상한.
+    await awardHandKillDrops(recipeResult.removedFieldCards, beforeRecipeCards)
 
     // Animate cards removed by delayed recipes separately so combo impact reads
     // as its own hit instead of merging with the hand-card effect animation.

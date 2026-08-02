@@ -125,6 +125,8 @@ export interface ShopStateView {
   basicPackCost: number
   /** 제단 4팩처럼 기본 3팩과 매핑이 다른 경우에도 각 팩 가격을 독립 갱신한다. */
   packCosts?: Partial<Record<ShopPackKind, number>>
+  /** 더 줄 것이 남지 않은 팩(조합·해금). 가격을 숨기고 '소진'을 찍는다. */
+  exhaustedPackKinds?: ShopPackKind[]
 }
 export interface ForcedTrialCardView {
   id: string

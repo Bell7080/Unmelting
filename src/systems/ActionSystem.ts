@@ -133,12 +133,16 @@ export class ActionSystem {
     const newHealth = card.takeDamage(playerDamage)
 
     if (newHealth <= 0) {
-      const dropCount = card.defeatDropCount
+      // 지급은 0~상한 굴림이다. 넓은 적일수록 상한이 커져 기댓값이 오른다.
+      const dropCount = card.rollDefeatDrops()
       const { gainedNames, gainedIds, overflow } = ActionSystem.awardDrops(
         character, dropCount, 'enemy-kill', card.isOnboardingField() ? BASIC_ONBOARDING_DROP_IDS : undefined)
+      // 0장 굴림과 '손패 가득'은 다른 사건이다 — 같은 문구로 뭉치면 왜 못 받았는지 알 수 없다.
       const summary =
         gainedNames.length === 0
-          ? '손패가 가득 차 잃음'
+          ? dropCount === 0
+            ? '전리품 없음'
+            : '손패가 가득 차 잃음'
           : gainedNames.length === 1
             ? gainedNames[0]
             : `${gainedNames.length}개 (${gainedNames.join(', ')})`

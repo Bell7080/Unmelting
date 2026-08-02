@@ -283,6 +283,7 @@ export class ShopFlowManager {
       packCosts: Object.fromEntries(
         SHOP_PACK_KINDS.map((kind) => [kind, this.currentShopPackCost(kind)])
       ) as Partial<Record<ShopPackKind, number>>,
+      exhaustedPackKinds: SHOP_PACK_KINDS.filter((kind) => this.isPackExhausted(kind)),
     }
     return base
   }
@@ -341,6 +342,35 @@ export class ShopFlowManager {
 
   /** Build the random "3-card" contents for a pack the player just bought.
    *  Each entry carries an `apply` closure so the pick handler stays small. */
+  /** 조합팩 후보 — 재료가 이미 해금된, 아직 잠긴 레시피. */
+  private lockedRecipePool(): typeof RECIPES {
+    const { unlocked } = this.deps.runCardPool.snapshot()
+    return RECIPES.filter(
+      (r) =>
+        r.runLocked &&
+        !r.eventOnly &&
+        !this.deps.gameState.unlockedRecipeIds.has(r.id) &&
+        Object.keys(r.ingredients).every((id) => unlocked.includes(id as HandCardId))
+    )
+  }
+
+  /** 해금팩 후보 — 런에서 잠긴 카드 + 삭제팩으로 밴된 카드(보스 전용 찌꺼기는 제외). */
+  private unlockCardPool(): HandCardId[] {
+    const { locked, banned } = this.deps.runCardPool.snapshot()
+    return [...locked, ...banned].filter((id) => getHandCardDef(id).dropSource !== 'boss')
+  }
+
+  /**
+   * 더 줄 것이 남지 않은 팩. 상점 타일의 '소진' 표기와 실제 후보 목록이 **같은 함수**를
+   * 봐야 한다 — 갈리면 살 수 있는데 소진으로 보이거나, 사고 나서 빈 피커가 열린다.
+   * 후보가 마르지 않는 팩(자원·확률·삭제)은 언제나 false다.
+   */
+  isPackExhausted(kind: ShopPackKind): boolean {
+    if (kind === 'recipe-pack') return this.lockedRecipePool().length === 0
+    if (kind === 'unlock-pack') return this.unlockCardPool().length === 0
+    return false
+  }
+
   rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {
     const character = this.deps.gameState.character
     if (kind === 'basic-pack') {
@@ -374,14 +404,7 @@ export class ShopFlowManager {
       )
     }
     if (kind === 'recipe-pack') {
-      // 조합팩 — runLocked 레시피 중 재료가 이미 해금된 항목만 제시한다.
-      const { unlocked } = this.deps.runCardPool.snapshot()
-      const lockedRecipes = RECIPES.filter((r) =>
-        r.runLocked &&
-        !r.eventOnly &&
-        !this.deps.gameState.unlockedRecipeIds.has(r.id) &&
-        Object.keys(r.ingredients).every((id) => unlocked.includes(id as HandCardId))
-      )
+      const lockedRecipes = this.lockedRecipePool()
       if (lockedRecipes.length === 0) return []
       return sampleWithoutReplacement(lockedRecipes, Math.min(3, lockedRecipes.length)).map((r) => ({
         id: `recipe-${r.id}`,
@@ -452,9 +475,8 @@ export class ShopFlowManager {
     }
     if (kind === 'unlock-pack') {
       // 해금팩 — 런에서 잠긴 카드(runLocked) + 삭제팩으로 밴된 카드를 해금한다.
-      // 보스 전용 찌꺼기 카드(탐욕의 동전 등)는 제외한다.
-      const { locked, banned } = this.deps.runCardPool.snapshot()
-      const cardPool = [...locked, ...banned].filter((id) => getHandCardDef(id).dropSource !== 'boss')
+      const { banned } = this.deps.runCardPool.snapshot()
+      const cardPool = this.unlockCardPool()
       if (cardPool.length === 0) return []
       return sampleWithoutReplacement(cardPool, Math.min(3, cardPool.length)).map((id) => {
         const def = getHandCardDef(id)
@@ -503,6 +525,8 @@ export class ShopFlowManager {
   async openPackPurchase(kind: ShopPackKind): Promise<void> {
     const cost = this.currentShopPackCost(kind)
     if (this.res.score < cost) return
+    // 소진된 팩은 사도 빈 피커가 열린다 — 불빛만 잃는다. 클릭 자체를 받지 않는다.
+    if (this.isPackExhausted(kind)) return
     this.res.score = Math.max(0, this.res.score - cost)
     this.res.scorePulseKey++
     // 사치품: 불빛 소비 추적 (2000마다 공격력 +1).
