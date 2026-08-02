@@ -1320,21 +1320,55 @@ body.is-hand-targeting .chain-banner { opacity: 0.3; transition: opacity 0.2s ea
    constraints are not needed; we only need to scale card heights to fit the
    full viewport height available to the hand column. */
 @media (max-width: 760px) and (orientation: landscape) {
-  /* Non-crowded (< 8 cards): each card claims a fair share of the panel height.
-     125px accounts for game-shell padding + panel header + combo gauge + gaps. */
-  .hand-slot.hand-card {
-    min-height: clamp(30px, calc((100vh - 125px) / var(--hand-count, 6)), 78px);
-  }
-  /* Crowded (8+ cards): compress further so all 10 cards stay inside the panel. */
-  .hand-stack.is-crowded .hand-slot.hand-card {
-    min-height: clamp(22px, calc((100vh - 125px) / var(--hand-count, 10)), 78px);
-  }
   .hand-card-preview {
     /* Narrower preview to match the narrower hand column. */
     width: clamp(108px, 19vw, 155px);
   }
   /* Recipe preview needs ~430px horizontal space — not available in landscape. */
   .hand-recipe-preview { display: none !important; }
+}
+
+/* ─── 가로로 눕힌 폰: 손패 열 높이 맞춤 ──────────────────────────────────
+   위 블록은 max-width: 760px이라 **실제 폰에서는 걸리지 않는다** — 폰을 눕히면
+   폭이 844~915px이고 짧아지는 건 높이(약 390px)다. 그래서 세로 길이로 가른다.
+   데스크탑은 세로가 600px을 넘으므로 여기 걸리지 않는다. */
+@media (orientation: landscape) and (max-height: 520px) {
+  /*
+   * 손패 열이 화면 밖으로 밀려나던 문제.
+   *
+   * min-height만 줄여 뒀는데 카드 **내용 높이**(약 58px)가 그보다 커서 아무 소용이
+   * 없었다. .hand-slot은 flex-shrink: 0이라 줄지도 않아, 10장이면 580px가 188px짜리
+   * 칸에 들어가려다 justify-content: flex-end 때문에 위로 넘쳐 콤보 게이지와
+   * 스폰 예고 띠를 덮고 화면 위로 잘려 나갔다.
+   *
+   * 세로가 짧은 기기에서는 높이를 **손패 장수로 나눠 못 박는다**. min-height가 아니라
+   * height여야 내용이 카드를 밀어 올리지 못한다.
+   */
+  /* 두 선택자를 함께 적는 이유: 기본 .hand-stack.is-crowded 규칙이 클래스 4개라
+     3개짜리 선택자로는 그쪽 min-height: 58px 하한을 못 이긴다(미디어 쿼리는
+     명시도를 올려 주지 않는다). 같은 명시도로 맞춰야 뒤에 온 이 규칙이 이긴다. */
+  .hand-stack .hand-slot.hand-card,
+  .hand-stack.is-crowded .hand-slot.hand-card {
+    height: clamp(20px, calc((100vh - 172px) / var(--hand-count, 6)), 72px);
+    min-height: 0;
+    flex-shrink: 1;
+  }
+  /* 장수가 많을수록 간격을 더 좁혀 마지막 한두 장이 삐져나오지 않게 한다. */
+  .hand-stack.is-crowded { gap: 1px; }
+  /* 카드가 얇아지면 안쪽 여백부터 줄여 이름 한 줄을 지킨다(최소 12px 원칙 유지). */
+  .hand-stack.is-crowded .hand-slot.hand-card { padding-block: 0; }
+  /*
+   * 짧은 화면에서 콤보 게이지가 60px(=화면의 15%)를 먹어 손패가 설 자리를 잃었다.
+   * 눈금 높이와 여백만 줄여 같은 정보를 절반 높이에 담는다.
+   */
+  .candle-gauge {
+    min-height: 34px;
+    padding: 3px;
+    gap: 5px;
+    grid-template-columns: 38px 1fr;
+  }
+  .candle-gauge-tick { min-height: 11px; }
+  .hand-header { padding-block: 2px; }
 }
 
 /* ─── Mobile touch: is-touch-previewing mirrors :hover / :focus-within ─── */
