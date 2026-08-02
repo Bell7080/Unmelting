@@ -1355,8 +1355,31 @@ body.is-hand-targeting .chain-banner { opacity: 0.3; transition: opacity 0.2s ea
   }
   /* 장수가 많을수록 간격을 더 좁혀 마지막 한두 장이 삐져나오지 않게 한다. */
   .hand-stack.is-crowded { gap: 1px; }
-  /* 카드가 얇아지면 안쪽 여백부터 줄여 이름 한 줄을 지킨다(최소 12px 원칙 유지). */
-  .hand-stack.is-crowded .hand-slot.hand-card { padding-block: 0; }
+  /*
+   * 카드를 19px로 눌러 놓고 글씨는 14px + 여백 8px(= 필요 높이 약 28px)이면
+   * 비율이 깨져 보인다. 짧은 화면에서는 이름을 **최소 12px 원칙의 하한**까지 내리고
+   * 알약 여백을 줄여 카드 높이와 글씨가 같이 맞게 한다.
+   */
+  .hand-stack.is-crowded .hand-slot.hand-card {
+    padding-block: 0;
+    /* 사용자 브라우저의 '최소 글꼴 크기' 설정처럼 CSS가 못 막는 확대가 걸려도
+       열이 다시 밀려나지 않게, 카드 안에서 잘라 낸다. */
+    overflow: hidden;
+  }
+  /* 버튼 세로 여백 8px×2 = 16px가 19px 카드를 통째로 먹고 있었다. 여백부터 걷어내고
+     이름을 가운데 정렬해야 글자가 위아래로 잘리지 않는다. */
+  .hand-stack.is-crowded .hand-slot.hand-card button {
+    padding: 0 6px;
+    align-items: center;
+  }
+  .hand-stack.is-crowded .hand-card .hand-card-name {
+    font-size: 12px;
+    /* line-height까지 내려야 12px 글자가 12px 높이를 차지한다 — 기본 줄높이로 두면
+       17px가 되어 얇은 카드에서 다시 잘린다. */
+    line-height: 1;
+    padding: 1px 5px;
+    letter-spacing: 0.01em;
+  }
   /*
    * 짧은 화면에서 콤보 게이지가 60px(=화면의 15%)를 먹어 손패가 설 자리를 잃었다.
    * 눈금 높이와 여백만 줄여 같은 정보를 절반 높이에 담는다.
