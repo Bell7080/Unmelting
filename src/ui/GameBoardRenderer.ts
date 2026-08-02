@@ -1112,7 +1112,7 @@ export class GameBoardRenderer {
       const charTrapBonus = this.currentGameState?.getCharacter().trapDamageBonus ?? 0
       const damage = card.effectiveTrapDamage() + charTrapBonus
       stats = `
-        <div class="card-stats">
+        <div class="card-stats card-stats--trap">
           <span class="stat atk">${swordIcon()}<span class="stat-value">${damage}</span></span>
         </div>
       `

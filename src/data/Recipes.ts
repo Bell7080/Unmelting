@@ -106,7 +106,7 @@ export const RECIPES: Recipe[] = [
     '열쇠공',
     { key: 2 },
     'collect-random-treasure',
-    '필드 랜덤 보물상자 1장 획득'
+    '필드 랜덤 보물칸 1장 획득'
   ),
   recipe(
     'greed',
@@ -135,7 +135,7 @@ export const RECIPES: Recipe[] = [
     '밀매',
     { wax: 1, coin: 1 },
     'collect-waiting-treasures',
-    '대기칸 모든 보물상자 획득'
+    '대기칸 모든 보물칸 획득'
   ),
   recipe('hot', '뜨거움', { ember: 2 }, 'hot-atk', '전방 모든 적에게 (0.5공+2)피해'),
   // --- 신규 레시피 (6개 — 해금팩으로 해금) ---

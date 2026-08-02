@@ -463,7 +463,36 @@ export const GAME_BOARD_RAIL_STYLES = `
   width: clamp(18px, 2.5vh, 24px);
   height: clamp(18px, 2.5vh, 24px);
 }
+/* 함정 피해 수치도 적 스탯과 같은 크기로 읽힌다 — 둘 다 "이 칸이 나를 얼마나 때리는가"를
+   말하는 수치라, 한쪽만 작으면 함정 피해를 낮게 어림잡게 된다. 다만 함정은 수치가 하나뿐이라
+   양 끝으로 벌리지 않고 가운데 그대로 둔다. */
+.card-stats--trap {
+  font-size: clamp(18px, 2.5vh, 24px);
+  font-weight: 900;
+}
+.card-stats--trap .stat {
+  gap: 4px;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.95),
+    0 0 8px rgba(0, 0, 0, 0.7);
+}
+.card-stats--trap .icon,
+.card-stats--trap svg {
+  width: clamp(18px, 2.5vh, 24px);
+  height: clamp(18px, 2.5vh, 24px);
+}
 /* 대기 행(dist-1/2)은 카드가 작아지므로 한 단계 줄여 넘치지 않게 한다. */
+.rail-row.dist-1 .card-stats--trap,
+.rail-row.dist-2 .card-stats--trap {
+  font-size: clamp(15px, 2vh, 20px);
+}
+.rail-row.dist-1 .card-stats--trap .icon,
+.rail-row.dist-1 .card-stats--trap svg,
+.rail-row.dist-2 .card-stats--trap .icon,
+.rail-row.dist-2 .card-stats--trap svg {
+  width: clamp(15px, 2vh, 20px);
+  height: clamp(15px, 2vh, 20px);
+}
 .rail-row.dist-1 .card-stats--corners,
 .rail-row.dist-2 .card-stats--corners {
   font-size: clamp(15px, 2vh, 20px);
@@ -789,9 +818,12 @@ export const GAME_BOARD_RAIL_STYLES = `
   backdrop-filter: blur(1.5px);
   transform-origin: left center;
 }
-.field-expiry-rock { color: rgba(232, 222, 206, 0.96); }  /* 바위 = 돌빛/밀랍 오프화이트 */
-.field-expiry-bush { color: rgba(185, 228, 138, 0.96); }  /* 덤불 = 잎빛(포자 연두보다 노란기) */
-.field-expiry-junk { color: rgba(238, 200, 118, 0.97); }  /* 잡동사니 = 잡동 금빛(꽃 호박색보다 짙게) */
+/* 뱃지 색은 **그 칸이 무엇인가**를 따라간다 — 카드 타입 액센트(.type-*)와 같은 계열로 두면
+   뱃지만 봐도 적/함정/보물이 갈린다. 타일 액센트 원색(--color-enemy/--color-trap)은 어두워
+   작은 글자로는 안 읽히므로, 같은 계열의 밝은 쪽(적 스탯 #ff6b5a 톤)을 쓴다. */
+.field-expiry-rock { color: rgba(255, 122, 104, 0.97); }  /* 바위 = 적 타일 붉은빛 */
+.field-expiry-bush { color: rgba(188, 156, 244, 0.97); }  /* 덤불 = 함정 타일 어스름 보랏빛 */
+.field-expiry-junk { color: rgba(238, 200, 118, 0.97); }  /* 잡동사니 = 보물 타일 금빛 */
 /* 대기칸(최전방 아님)에서는 아직 턴이 감소하지 않으므로 뱃지를 감춘다 — 최전방에서만 의미. */
 .rail-row:not(.dist-0) .field-expiry-badge { display: none; }
 /* 팝은 '숫자가 실제로 바뀐 렌더'에만 is-pop으로 1회 부여한다 — 매 렌더 DOM 재생성으로

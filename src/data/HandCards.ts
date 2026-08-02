@@ -89,8 +89,10 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     name: '열쇠',
     synergyTags: ['tool', 'treasure'],
     category: 'tool',
-    description: '필드 랜덤 보물상자 1장 획득',
-    tripleDescription: '필드 모든 보물상자 획득',
+    // 대상 필터가 CardType.TREASURE 전체라 상자뿐 아니라 잡동사니·황금 상자·별빛도 연다 —
+    // '보물상자'는 실제보다 좁게 적힌 표기였다.
+    description: '필드 랜덤 보물칸 1장 획득',
+    tripleDescription: '필드 모든 보물칸 획득',
     targeting: {
       base: { selection: 'random', zone: 'field', filter: 'treasure', countLimit: 1 },
       triple: { selection: 'all', zone: 'field', filter: 'treasure', countLimit: null },
