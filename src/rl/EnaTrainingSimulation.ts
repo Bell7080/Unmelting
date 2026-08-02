@@ -225,14 +225,14 @@ const BOSS_PROFILES: Record<number, BossProfile> = {
   // 경계에서 반격 주기가 초기화되는 리듬을 같게 맞춘다.
   30: bossProfileFrom(BOSS_CORE_SPECS[30], 'greed', [Math.ceil(BOSS_CORE_SPECS[30].maxHp / 2), 0], 'waxArmy'),
   // 60F·90F도 절반 HP에서 2페이지로 넘어간다(격자가 없어 닿는 순간 자동으로 열린다).
-  60: bossProfileFrom(BOSS_CORE_SPECS[60], 'knightHand', [Math.ceil(BOSS_CORE_SPECS[60].maxHp / 2), 0]),
-  90: bossProfileFrom(BOSS_CORE_SPECS[90], 'summon', [Math.ceil(BOSS_CORE_SPECS[90].maxHp / 2), 0]),
+  60: bossProfileFrom(BOSS_CORE_SPECS[60], 'knightHand', [Math.ceil(BOSS_CORE_SPECS[60].maxHp / 2), 0], 'waxKnight'),
+  90: bossProfileFrom(BOSS_CORE_SPECS[90], 'summon', [Math.ceil(BOSS_CORE_SPECS[90].maxHp / 2), 0], 'waxSculptor'),
   // 마녀 페이지 경계 — 실게임 waxWitchPageFloors()와 같은 비율(maxHp의 2/3·1/3·0).
   100: bossProfileFrom(BOSS_CORE_SPECS[100], 'witch', [
     Math.round(BOSS_CORE_SPECS[100].maxHp * (2 / 3)),
     Math.round(BOSS_CORE_SPECS[100].maxHp / 3),
     0,
-  ]),
+  ], 'waxWitch'),
 }
 // 검은 양초 악마(waxDemon)는 악마 소환 '레시피 발동' 이벤트 보스다 — 시뮬에는 레시피 실행
 // 모델이 없어(조합팩=트리플 위력 근사) 진입 경로 자체가 없으므로 의도적으로 모델링하지 않는다.

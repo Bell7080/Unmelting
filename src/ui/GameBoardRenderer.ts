@@ -225,6 +225,9 @@ export class GameBoardRenderer {
     this.bossGimmickEntering = false
     return true
   }
+  /** 렌더 호출 횟수. 여러 타일이 같은 render 안에서 같은 1회성 플래그를 보게 한다. */
+  private renderPass = 0
+  getRenderPass(): number { return this.renderPass }
   /** 배율이 막 다시 굴려졌음을 표시하는 1회성 플래그 — 새 배율 등장 연출용. */
   private bossGimmickRelabel = false
   markBossGimmickRelabel(): void {
@@ -432,6 +435,9 @@ export class GameBoardRenderer {
 
 
   render(gameState: GameState, scorePanel: ScorePanelState): void {
+    // 렌더 1회를 세는 토큰. 한 번의 render에서 보스 타일이 여러 개 그려질 때
+    // 1회성 연출 플래그(등장/리롤)를 타일마다 나눠 먹지 않게 하는 기준이다.
+    this.renderPass++
     const previousRects = this.captureCardRects()
     const previousHandRects = this.captureHandRects()
     this.currentGameState = gameState
@@ -907,7 +913,7 @@ export class GameBoardRenderer {
            data-card-id="${card.id}"
            role="button"
            tabindex="${tabIndex}">
-        ${this.renderCardFace(card, span, isValidHandTarget)}
+        ${this.renderCardFace(card, span, isValidHandTarget, distance)}
         ${isBlockedHandTarget ? this.renderBlockedTargetMark() : ''}
       </div>
     `
@@ -996,11 +1002,11 @@ export class GameBoardRenderer {
     `
   }
 
-  private renderCardFace(card: Card, span: number, isValidHandTarget = false): string {
+  private renderCardFace(card: Card, span: number, isValidHandTarget = false, distance = 0): string {
     // 보스 face(BOSS 태그/이름/HP 바/ATK 칩/좌상단 N턴 뱃지)는 모든 보스 공통 그라마.
     // 3x3 확장 같은 "사이즈 유형"은 specialEnemyKind 마커로 CSS에서만 분기된다.
     if (card.type === CardType.BOSS) {
-      return this.renderBossFace(card, isValidHandTarget)
+      return this.renderBossFace(card, isValidHandTarget, distance)
     }
     // 위 분기에서 BOSS는 이미 renderBossFace로 우회 처리됐으므로 여기는 ENEMY만 검사.
     let stats = ''
@@ -1117,7 +1123,7 @@ export class GameBoardRenderer {
   /** 보스 공통 face. 풀-아트 + 하단 보스바(플레이어 hp-bar 톤) + 큰 ATK 칩 +
    *  좌상단 N턴 뱃지 layout. "3x3 거대" 같은 사이즈 유형은 specialEnemyKind 마커가
    *  걸리는 .boss-kind-* CSS에서 분기된다(face 마크업은 동일). */
-  private renderBossFace(card: Card, isValidHandTarget = false): string {
+  private renderBossFace(card: Card, isValidHandTarget = false, distance = 0): string {
     const sprite = spriteForCard(card)
     const hp = card.getHealth()
     const maxHp = card.enemyHealthTotal || card.baseHealth || hp
@@ -1180,7 +1186,7 @@ export class GameBoardRenderer {
           </div>
           <span class="boss-face-atk">${swordIcon()}<span class="boss-face-atk-value">${atk}</span></span>
         </div>
-        ${this.bossFx.bossGimmickGridHtml(isValidHandTarget)}
+        ${this.bossFx.bossGimmickGridHtml(isValidHandTarget, distance)}
       </article>
     `
   }

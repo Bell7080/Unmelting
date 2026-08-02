@@ -247,7 +247,14 @@ export class BossEventController {
   syncGimmickGrid(): void {
     this.br.setBossGimmickGrid(
       this.gimmicks.isActive
-        ? { cols: this.gimmicks.cols, rows: this.gimmicks.rows, cells: this.gimmicks.getCells() }
+        ? {
+            cols: this.gimmicks.cols,
+            rows: this.gimmicks.rows,
+            cells: this.gimmicks.getCells(),
+            // 레일 행을 실제로 여러 개 차지하는 보스는 타일마다 격자 한 행씩 그린다.
+            tileRows: this.eventState?.def.occupiedDistRows ?? 1,
+            startDistance: this.eventState?.sculptorStartRow ?? 0,
+          }
         : null
     )
     this.syncPageState()
@@ -1679,6 +1686,13 @@ export class BossEventController {
     state.sculptorPhase = 'back'
     state.sculptorStartRow = 1
     state.summonedEnemyIds.clear()
+    // 몸이 3×3에서 2×3으로 접혔으니 판정 격자도 함께 접는다 — 칸이 줄고 약점이 다시
+    // 배치된다. 내구도는 **남은 체력**에서 다시 파생해 마지막 페이지 안에서도
+    // "칸 절반을 깨면 쓰러진다"가 성립하게 한다.
+    if (this.gimmicks.isActive) {
+      this.gimmicks.resize(3, 2, state.card.getHealth())
+      this.syncGimmickGrid()
+    }
 
     // 최종 보스 소환수는 90F 후기 적 풀을 기반으로 광폭화 버프를 받은 독립 개체다.
     const pool = ENEMY_DEFINITIONS.slice(12, 18)

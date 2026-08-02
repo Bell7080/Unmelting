@@ -283,17 +283,26 @@ export class BossFxView {
 
   /** 보스 타일 위에 겹치는 칸 기믹 격자. 상태는 host가 들고 있고 여기선 마크업만 만든다.
    *  칸 자체는 투명하며(일러스트를 가리지 않는다) 정체가 드러난 칸만 표식을 남긴다. */
-  bossGimmickGridHtml(isValidHandTarget: boolean): string {
+  bossGimmickGridHtml(isValidHandTarget: boolean, distance = 0): string {
     const grid = this.host.getBossGimmickGrid()
     if (!grid) return ''
+    // 레일 행을 여러 개 차지하는 보스는 타일마다 격자 **한 행씩** 그린다.
+    // 안 나누면 행마다 같은 9칸이 통째로 겹쳐 그려져 어디를 때리는지가 사라진다.
+    const splitRows = grid.tileRows > 1
+    const rowIndex = splitRows ? distance - grid.startDistance : 0
+    if (splitRows && (rowIndex < 0 || rowIndex >= grid.rows)) return ''
+    const visible = splitRows
+      ? grid.cells.slice(rowIndex * grid.cols, (rowIndex + 1) * grid.cols)
+      : grid.cells
     // 손패 타겟팅 중에는 칸 하나하나가 일반 레일 칸처럼 개별 타깃으로 빛난다.
     // 이 보스가 그 손패의 유효 대상일 때만 — 아니면 보스 타일 전체가 차단 표시로 남는다.
     const targeting = this.host.getHandTargetingMode() !== null && isValidHandTarget
-    // 격자가 막 켜진 첫 렌더에서만 등장 연출을 태운다(재렌더마다 반복 재생 방지).
-    const entering = this.host.consumeBossGimmickEntering()
-    // 배율이 막 다시 굴려진 렌더에서만 새 표기가 떠오른다. 같은 이유로 1회 소비다.
-    const relabeling = this.host.consumeBossGimmickRelabel()
-    const cells = grid.cells
+    // 1회성 연출 플래그는 **렌더 1회 단위**로 소비한다. 다행 보스는 한 render에서
+    // 타일이 여러 개 그려지므로, 타일마다 소비하면 첫 행만 연출을 먹고 나머지가 굳는다.
+    const flags = this.consumeGridFlags()
+    const entering = flags.entering
+    const relabeling = flags.relabeling
+    const cells = visible
       .map((cell) => {
         const meta = BOSS_GIMMICK_KIND_META[cell.kind]
         const label = meta.label
@@ -319,7 +328,7 @@ export class BossFxView {
       })
       .join('')
     return `<div class="boss-gimmick-grid ${targeting ? 'is-targeting' : ''} ${entering ? 'is-appearing' : ''} ${relabeling ? 'is-relabeling' : ''}"
-                 style="--boss-gimmick-cols:${grid.cols};--boss-gimmick-rows:${grid.rows};">${cells}</div>`
+                 style="--boss-gimmick-cols:${grid.cols};--boss-gimmick-rows:${splitRows ? 1 : grid.rows};">${cells}</div>`
   }
 
   /**
@@ -332,6 +341,21 @@ export class BossFxView {
     if (!grid) return
     grid.classList.add('is-relabel-out')
     await new Promise<void>((resolve) => window.setTimeout(resolve, BOSS_GIMMICK_RELABEL_OUT_MS))
+  }
+
+  /** 렌더 1회 안에서 공유되는 격자 연출 플래그(등장/리롤). */
+  private gridFlagPass = -1
+  private gridFlags = { entering: false, relabeling: false }
+  private consumeGridFlags(): { entering: boolean; relabeling: boolean } {
+    const pass = this.host.getRenderPass()
+    if (pass !== this.gridFlagPass) {
+      this.gridFlagPass = pass
+      this.gridFlags = {
+        entering: this.host.consumeBossGimmickEntering(),
+        relabeling: this.host.consumeBossGimmickRelabel(),
+      }
+    }
+    return this.gridFlags
   }
 
   /** 격자 칸 DOM 조회 — 연출이 좌표를 잡는 유일한 경로. */

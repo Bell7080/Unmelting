@@ -37,10 +37,45 @@ describe('BossGimmickManager', () => {
     expect(m.rows).toBe(3)
     expect(m.getCells()).toHaveLength(9)
 
-    // 프로필 없는 보스로 넘어가면 이전 격자를 물려받지 않고 꺼진다.
-    expect(m.beginEncounter('waxKnight', 80)).toBe(false)
+    // 프로필 없는 적(보스가 아닌 특수 적)으로 넘어가면 이전 격자를 물려받지 않고 꺼진다.
+    expect(m.beginEncounter('mimic', 80)).toBe(false)
     expect(m.isActive).toBe(false)
     expect(m.getCells()).toHaveLength(0)
+  })
+
+  it('모든 보스에 격자가 켜져 있고, 칸 수가 점유 행 수와 맞는다', () => {
+    // "다른 보스들도 모두 약점 칸" — 새 보스를 추가하고 프로필을 빠뜨리면 여기서 잡힌다.
+    const bosses: SpecialEnemyKind[] = ['waxArmy', 'waxCat', 'waxKnight', 'waxSculptor', 'waxWitch', 'waxDemon']
+    for (const kind of bosses) {
+      const profile = BOSS_GIMMICK_PROFILES[kind]
+      expect(profile, `${kind} 프로필`).toBeTruthy()
+      // 화면의 몸집과 판정 칸이 어긋나면 어디를 때리는지가 안 읽힌다 — 3×3 또는 2×3.
+      expect([6, 9], `${kind} 칸 수`).toContain((profile?.cols ?? 0) * (profile?.rows ?? 0))
+      // 특수 칸이 격자를 다 먹으면 평범한 칸이 사라져 선택이 없어진다.
+      const special = (profile?.slots ?? []).reduce((n, slot) => n + slot.count, 0)
+      expect(special, `${kind} 특수 칸 수`).toBeLessThan((profile?.cols ?? 0) * (profile?.rows ?? 0))
+    }
+  })
+
+  it('격자를 줄이면 칸이 다시 굴려지고 내구도는 남은 체력에서 파생된다', () => {
+    // 100F 마녀 3페이지: 3×3 몸이 2×3으로 접히면 판정 격자도 함께 접힌다.
+    const m = new BossGimmickManager(fixedRng())
+    m.beginEncounter('waxWitch', 300)
+    m.strike({ cellIndex: 0, baseDamage: 20 })
+    expect(m.getCells()[0].damage).toBeGreaterThan(0)
+
+    expect(m.resize(3, 2, 100)).toBe(true)
+
+    expect(m.cols).toBe(3)
+    expect(m.rows).toBe(2)
+    expect(m.getCells()).toHaveLength(6)
+    // 몸이 바뀌었으니 부위도 새로 난다 — 누적 손상·파괴를 물려받지 않는다.
+    expect(m.getCells().every((c) => c.damage === 0 && !c.broken)).toBe(true)
+    // 내구도는 남은 체력 기준 — 최대 체력 기준이면 마지막 페이지에서 못 깬다.
+    expect(m.cellDurability).toBe(bossGimmickCellDurability(100, 6))
+    expect(m.breakDamage).toBe(bossGimmickBreakDamage(100))
+    // 줄어든 격자에도 평범한 칸이 남아 선택이 성립한다.
+    expect(m.getCells().some((c) => c.kind === 'plain')).toBe(true)
   })
 
   it('배치표대로 특수 칸을 깔고 나머지는 평범한 칸으로 채운다', () => {

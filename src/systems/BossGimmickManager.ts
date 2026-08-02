@@ -114,14 +114,18 @@ export interface BossGimmickProfile {
 }
 
 /**
- * 보스별 기믹 격자 프로필. 여기 없는 보스는 기존처럼 큰 칸 1개 그대로 동작한다.
- * 30F 양초 백작만 임시 테스트로 3×3 격자를 켠다.
+ * 보스별 기믹 격자 프로필. 여기 없는 보스는 큰 칸 1개 그대로 동작한다.
  *
- * 주의: 격자는 보스 타일 1개 위에 깔린다. 90F 조각사처럼 occupiedDistRows가 2 이상인
- * 보스는 레일이 행마다 별도 타일을 그리므로, 프로필을 켜기 전에 렌더 쪽에서
- * 행별 오프셋(어느 타일이 격자의 몇 번째 행인지)을 먼저 정해야 한다.
+ * 격자 행 수는 **보스가 실제로 점유하는 레일 행 수와 같게** 맞춘다. 레일 1행을 CSS로
+ * 3행처럼 늘려 그리는 보스(백작·고양이·기사단장·마녀·악마)는 3×3, 레일 2행을 진짜로
+ * 차지하는 보스(조각사)는 2×3이다. 화면의 몸집과 판정 칸이 어긋나면 어디를 때리는지가
+ * 안 읽힌다.
+ *
+ * 전투 도중 몸집이 바뀌는 보스(마녀 3페이지: 3×3 → 2×3)는 `resize()`로 격자도 함께
+ * 줄인다 — 칸 수가 줄고 약점 자리가 다시 굴려진다.
  */
 export const BOSS_GIMMICK_PROFILES: Partial<Record<SpecialEnemyKind, BossGimmickProfile>> = {
+  // 30F 양초 백작 — 격자의 기준형. 약점과 경화가 반반이라 어디를 때릴지가 매번 선택이다.
   waxArmy: {
     cols: 3,
     rows: 3,
@@ -138,6 +142,43 @@ export const BOSS_GIMMICK_PROFILES: Partial<Record<SpecialEnemyKind, BossGimmick
     slots: [
       { kind: 'weak', count: 3 },
       { kind: 'hardened', count: 1 },
+    ],
+  },
+  // 60F 불씨 기사단장 — 방패를 두르는 보스답게 경화가 더 많다. 약점을 찾아야만 뚫린다.
+  waxKnight: {
+    cols: 3,
+    rows: 3,
+    slots: [
+      { kind: 'weak', count: 2 },
+      { kind: 'hardened', count: 3 },
+    ],
+  },
+  // 90F 밀랍 조각사 — 레일 2행을 실제로 점유하므로 격자도 2×3(6칸)이다.
+  // 칸이 적어 한 칸의 무게가 크다: 약점 2 / 경화 1.
+  waxSculptor: {
+    cols: 3,
+    rows: 2,
+    slots: [
+      { kind: 'weak', count: 2 },
+      { kind: 'hardened', count: 1 },
+    ],
+  },
+  // 100F 녹지 않는 마녀 — 3페이지에서 2×3으로 접히며 격자도 함께 줄어든다(resize).
+  waxWitch: {
+    cols: 3,
+    rows: 3,
+    slots: [
+      { kind: 'weak', count: 2 },
+      { kind: 'hardened', count: 3 },
+    ],
+  },
+  // 이벤트 보스 악마 — 등반 보스와 같은 3×3.
+  waxDemon: {
+    cols: 3,
+    rows: 3,
+    slots: [
+      { kind: 'weak', count: 2 },
+      { kind: 'hardened', count: 2 },
     ],
   },
 }
@@ -274,6 +315,8 @@ export interface BossGimmickCell {
 
 export class BossGimmickManager {
   private profile: BossGimmickProfile | null = null
+  /** 현재 격자 형태. 프로필 기본값에서 시작해 `resize()`로 바뀔 수 있다. */
+  private shape: { cols: number; rows: number } = { cols: 0, rows: 0 }
   private cells: BossGimmickCell[] = []
   /** 칸 하나를 깨는 데 필요한 누적 피해. 조우 시작 때 보스 최대 체력에서 정한다. */
   private durability = 0
@@ -308,17 +351,45 @@ export class BossGimmickManager {
       return false
     }
     this.profile = profile
-    this.cells = this.rollCells(profile)
-    this.durability = bossGimmickCellDurability(bossMaxHp, this.cells.length)
-    this.breakBonus = bossGimmickBreakDamage(bossMaxHp)
+    this.shape = { cols: profile.cols, rows: profile.rows }
+    this.cells = this.rollCells(profile, profile.cols * profile.rows)
+    this.setPool(bossMaxHp)
     this.pendingHits = []
     this.source = NEUTRAL_SOURCE
     return true
   }
 
+  /**
+   * 전투 도중 격자 형태를 바꾼다(마녀 3페이지: 3×3 → 2×3). 몸집이 접히면 판정 칸도
+   * 함께 접혀야 화면과 어긋나지 않는다.
+   *
+   * 칸은 **새로 굴린다** — 누적 손상·파괴를 물려받지 않는다. 몸이 바뀌었으니 부위도
+   * 새로 나는 것이고, 남은 칸 수에 맞춰 약점이 다시 배치돼야 "재세팅"이 읽힌다.
+   * 내구도는 **남은 체력**에서 다시 파생한다. 최대 체력 기준을 그대로 쓰면 후반
+   * 페이지에서 깰 수 없는 칸이 된다("칸 절반을 깨면 쓰러진다"가 그 페이지 안에서도
+   * 성립해야 한다).
+   */
+  resize(cols: number, rows: number, remainingHp: number): boolean {
+    if (!this.profile) return false
+    const cells = Math.max(1, cols * rows)
+    this.shape = { cols, rows }
+    this.cells = this.rollCells(this.profile, cells)
+    this.setPool(remainingHp)
+    this.pendingHits = []
+    return true
+  }
+
+  /** 내구도·파괴 보너스를 이 격자가 갉아야 할 체력에서 파생한다. */
+  private setPool(hpPool: number): void {
+    const pool = Math.max(1, Math.round(hpPool))
+    this.durability = bossGimmickCellDurability(pool, this.cells.length)
+    this.breakBonus = bossGimmickBreakDamage(pool)
+  }
+
   /** 격파/런 리셋 — 다음 보스가 이전 격자를 물려받지 않게 비운다. */
   reset(): void {
     this.profile = null
+    this.shape = { cols: 0, rows: 0 }
     this.cells = []
     this.durability = 0
     this.breakBonus = 0
@@ -331,11 +402,11 @@ export class BossGimmickManager {
   }
 
   get cols(): number {
-    return this.profile?.cols ?? 0
+    return this.shape.cols
   }
 
   get rows(): number {
-    return this.profile?.rows ?? 0
+    return this.shape.rows
   }
 
   getCells(): BossGimmickCellView[] {
@@ -378,7 +449,7 @@ export class BossGimmickManager {
    */
   rerollKinds(): boolean {
     if (!this.profile || !this.canReroll()) return false
-    const kinds = this.shuffledKinds(this.profile)
+    const kinds = this.shuffledKinds(this.profile, this.cells.length)
     this.livingIndexes().forEach((index, slot) => {
       this.cells[index].kind = kinds[slot]
     })
@@ -516,19 +587,24 @@ export class BossGimmickManager {
   }
 
   /** 배치표대로 특수 칸을 만들고 plain으로 채운 뒤 위치를 섞는다. */
-  private rollCells(profile: BossGimmickProfile): BossGimmickCell[] {
-    return this.shuffledKinds(profile).map((kind) => ({ kind, damage: 0, broken: false }))
+  private rollCells(profile: BossGimmickProfile, cells: number): BossGimmickCell[] {
+    return this.shuffledKinds(profile, cells).map((kind) => ({ kind, damage: 0, broken: false }))
   }
 
   /**
-   * 배치표를 격자 칸 수만큼 펼쳐 섞은 목록. 조우 시작 배치와 타격 후 리롤이
+   * 배치표를 주어진 칸 수만큼 펼쳐 섞은 목록. 조우 시작 배치·타격 후 리롤·격자 축소가
    * 같은 분포를 쓰도록 한 곳에 둔다.
+   *
+   * 칸 수가 프로필 기본형과 다르면(축소된 격자) 특수 칸 수를 **같은 밀도로 환산**한다 —
+   * 9칸의 약점 2를 6칸에 그대로 얹으면 접힌 몸이 오히려 물러진다.
    */
-  private shuffledKinds(profile: BossGimmickProfile): BossGimmickCellKind[] {
-    const total = profile.cols * profile.rows
+  private shuffledKinds(profile: BossGimmickProfile, cells: number): BossGimmickCellKind[] {
+    const total = Math.max(1, cells)
+    const base = Math.max(1, profile.cols * profile.rows)
     const kinds: BossGimmickCellKind[] = []
     for (const slot of profile.slots) {
-      for (let i = 0; i < slot.count && kinds.length < total; i++) kinds.push(slot.kind)
+      const scaled = total === base ? slot.count : Math.max(1, Math.round((slot.count * total) / base))
+      for (let i = 0; i < scaled && kinds.length < total; i++) kinds.push(slot.kind)
     }
     while (kinds.length < total) kinds.push('plain')
     // Fisher-Yates — 매 조우마다 약점 자리가 달라져 배치를 외워 쓸 수 없다.

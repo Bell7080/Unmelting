@@ -24,6 +24,16 @@ export interface BossGimmickGridView {
   cols: number
   rows: number
   cells: readonly BossGimmickCellView[]
+  /**
+   * 격자가 몇 개의 레일 타일에 나뉘어 그려지는가.
+   *
+   * 1이면 타일 하나가 격자 전체를 덮는다(레일 1행을 CSS로 3행처럼 늘린 보스).
+   * 2 이상이면 보스가 레일 행을 실제로 여러 개 차지하므로 **타일마다 격자 한 행씩**
+   * 그린다 — 안 그러면 행마다 같은 격자가 통째로 겹쳐 그려진다.
+   */
+  tileRows: number
+  /** 보스가 점유하는 첫 레일 행(distance). 타일이 격자의 몇 번째 행인지 계산한다. */
+  startDistance: number
 }
 
 /**

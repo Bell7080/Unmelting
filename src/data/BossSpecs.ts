@@ -74,9 +74,9 @@ function fightBudget(
  */
 export const BOSS_FIGHT_BUDGETS: Record<30 | 60 | 90 | 100, BossFightBudget> = {
   30: fightBudget({ playerAttack: 4, targetActions: 13, gimmickKind: 'waxArmy' }),
-  60: fightBudget({ playerAttack: 7, targetActions: 16, gimmickKind: null }),
-  90: fightBudget({ playerAttack: 9, targetActions: 20, gimmickKind: null }),
-  100: fightBudget({ playerAttack: 11, targetActions: 26, gimmickKind: null }),
+  60: fightBudget({ playerAttack: 7, targetActions: 16, gimmickKind: 'waxKnight' }),
+  90: fightBudget({ playerAttack: 9, targetActions: 20, gimmickKind: 'waxSculptor' }),
+  100: fightBudget({ playerAttack: 11, targetActions: 26, gimmickKind: 'waxWitch' }),
 }
 
 /** 새싹 온보딩 보스 — 격자는 켜져 있지만 레시피·유물이 아직 없어 지원 화력은 0이다. */
@@ -128,7 +128,7 @@ export function demonSummonBudget(turn: number): BossFightBudget {
   return fightBudget({
     playerAttack: 4 + Math.floor(turn / 20),
     targetActions: Math.round((18 + Math.floor(turn / 12)) * DEMON_PREMIUM),
-    gimmickKind: null,
+    gimmickKind: 'waxDemon',
   })
 }
 
