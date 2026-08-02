@@ -101,6 +101,9 @@ interface CounterAnimationState {
   popClass: boolean
 }
 
+/** 피격 체력 게이지 연출 길이. CSS `hp-damage-jolt`와 같은 값이어야 한다. */
+const HP_DAMAGE_PULSE_MS = 640
+
 export class GameBoardRenderer {
   /** 서브 렌더러 공유 — 보드 루트 요소. */
   readonly boardElement: HTMLElement
@@ -227,6 +230,8 @@ export class GameBoardRenderer {
   }
   /** 렌더 호출 횟수. 여러 타일이 같은 render 안에서 같은 1회성 플래그를 보게 한다. */
   private renderPass = 0
+  /** 피격 게이지 연출이 유지되는 시각. 이 사이의 render는 클래스를 다시 심는다. */
+  private hpDamagePulseUntil = 0
   getRenderPass(): number { return this.renderPass }
   /** 배율이 막 다시 굴려졌음을 표시하는 1회성 플래그 — 새 배율 등장 연출용. */
   private bossGimmickRelabel = false
@@ -440,6 +445,9 @@ export class GameBoardRenderer {
     this.renderPass++
     const previousRects = this.captureCardRects()
     const previousHandRects = this.captureHandRects()
+    // 보드는 innerHTML 통째 교체로 다시 그려진다 — 그대로 두면 진행 중이던 CSS 애니메이션이
+    // 전부 0프레임으로 되감겨 화면이 한 번 번쩍인다. 재생 위치를 먼저 걷어 둔다.
+    const previousAnimationPhases = this.captureBoardAnimationPhases()
     this.currentGameState = gameState
     this.currentSpawnWeightCtx = scorePanel.spawnWeightContext
     // Main state is authoritative for armed hand targeting; syncing here keeps
@@ -560,6 +568,8 @@ export class GameBoardRenderer {
     // When the shop is open, the shutter must keep matching the rail's real
     // perspective-scaled cells even after full re-renders (purchase refresh etc.).
     this.shopOverlay.syncShopShutterToRailCells()
+    // 되감긴 애니메이션들을 원래 재생 위치로 돌려놓는다(무한 루프는 공용 시계에 맞춘다).
+    this.restoreBoardAnimationPhases(previousAnimationPhases)
     this.animateRenderedResourceCounters()
     this.alignNewHandSlotsWithTrailSpawn()
     this.animateMovedCards(previousRects)
@@ -573,6 +583,80 @@ export class GameBoardRenderer {
   /** 적 선공 활성 여부. render() 시작에서 불씨 티어로 갱신하고, renderCardFace가 적 카드
    *  우상단에 '선공' 딱지를 붙일지 판단하는 데 쓴다. */
   private firstStrikeActive = false
+
+  /**
+   * 재생 위치를 이어 붙일 요소의 신원. 이 값이 있는 요소만 **유한 애니메이션**의 진행이
+   * 렌더를 넘어 살아남는다(무한 루프는 신원 없이도 공용 시계로 맞춘다).
+   *
+   * 새 요소가 이 대열에 끼려면 `data-fx-id`를 하나 달면 된다 — 렌더 코드를 고칠 필요 없다.
+   */
+  private animationIdentity(el: Element): string | null {
+    const d = (el as HTMLElement).dataset
+    if (!d) return null
+    if (d.fxId) return `fx:${d.fxId}`
+    if (d.cardId) return `card:${d.cardId}`
+    if (d.bossGimmickCell) return `cell:${d.bossGimmickCell}`
+    if (d.handUid) return `hand:${d.handUid}`
+    return null
+  }
+
+  /**
+   * 보드 전체가 innerHTML로 갈리기 직전, 돌고 있던 CSS 애니메이션의 재생 위치를 걷어 둔다.
+   *
+   * 이 게임의 render()는 보드를 통째로 다시 그린다. 아무것도 하지 않으면 그 순간
+   * **모든 CSS 애니메이션이 동시에 0프레임으로 되감긴다** — 촛불 발광·함정 경고 맥동·
+   * 보스 뱃지/열기 호흡·약점 칸 맥동이 한꺼번에 튀어 화면이 번쩍인 것처럼 보인다.
+   * 손패 하강, 유물 발동, 보스 칸 리롤처럼 렌더가 잦은 구간에서 특히 두드러진다.
+   */
+  private captureBoardAnimationPhases(): Map<string, number> {
+    const phases = new Map<string, number>()
+    // getAnimations 미지원 브라우저는 지금까지의 동작(되감김)으로 조용히 내려간다 —
+    // 연출 보정이 없다고 게임이 멈춰서는 안 된다.
+    if (!this.hasRendered || typeof this.boardElement.getAnimations !== 'function') return phases
+    for (const anim of this.boardElement.getAnimations({ subtree: true })) {
+      const name = (anim as CSSAnimation).animationName
+      const effect = anim.effect as KeyframeEffect | null
+      const target = effect?.target
+      const time = anim.currentTime
+      if (!name || !target || typeof time !== 'number') continue
+      // 무한 루프는 신원 없이 **이름 하나**로 걷는다. 같은 이름의 루프는 이미 같은 위상으로
+      // 숨쉬고 있으므로(같은 렌더에서 함께 태어난다) 이름만으로 되돌려도 어긋나지 않고,
+      // 신원을 못 다는 요소(촛불·예고선·보스 뱃지 …)까지 한 번에 구제된다.
+      if (effect?.getComputedTiming().iterations === Infinity) {
+        if (!phases.has(name)) phases.set(name, time)
+        continue
+      }
+      const identity = this.animationIdentity(target)
+      if (identity) phases.set(`${identity}|${name}`, time)
+    }
+    return phases
+  }
+
+  /**
+   * 새로 그려진 보드의 애니메이션을 원래 위치로 되돌린다.
+   *
+   *   - 무한 루프 → 이름이 같은 루프가 렌더 직전에 있던 위상으로 되돌린다. 그래서
+   *     되감김이 **한 프레임도** 없다. 이번에 처음 생긴 이름이면 손대지 않는다.
+   *   - 신원이 있는 요소(같은 카드·같은 칸)의 유한 애니메이션 → 걷어 둔 재생 위치로 이어 붙인다.
+   *     끊긴 자리에서 다시 시작하는 게 아니라 **끊긴 적이 없던 것처럼** 이어진다.
+   *
+   * 새로 생긴 요소(이전 신원이 없음)의 유한 애니메이션은 손대지 않는다 — 그건 실제로
+   * 지금 시작한 연출이므로 처음부터 재생돼야 한다.
+   */
+  private restoreBoardAnimationPhases(phases: Map<string, number>): void {
+    if (phases.size === 0 || typeof this.boardElement.getAnimations !== 'function') return
+    for (const anim of this.boardElement.getAnimations({ subtree: true })) {
+      const name = (anim as CSSAnimation).animationName
+      const effect = anim.effect as KeyframeEffect | null
+      const target = effect?.target
+      if (!name || !target) continue
+      const key = effect?.getComputedTiming().iterations === Infinity
+        ? name
+        : `${this.animationIdentity(target) ?? ''}|${name}`
+      const previous = phases.get(key)
+      if (previous !== undefined) anim.currentTime = previous
+    }
+  }
 
   clearSelection(): void {
     this.selected = null
@@ -1399,6 +1483,9 @@ export class GameBoardRenderer {
              </span>
            </span>`
       : ''
+    // 피격 게이지 연출이 도는 동안에는 render가 클래스를 다시 심는다 —
+    // 진행 위치는 restoreBoardAnimationPhases가 이어 붙이므로 되감기지 않는다.
+    const hpDamageClass = performance.now() < this.hpDamagePulseUntil ? 'is-hp-damaged' : ''
     return `
       <div class="player-row">
         <div class="player-card">
@@ -1406,11 +1493,11 @@ export class GameBoardRenderer {
           <div class="player-overlay" aria-hidden="true"></div>
           <div class="player-content">
             <div class="player-stats">
-              <div class="hp-column">
+              <div class="hp-column ${hpDamageClass}">
                 ${shieldChip}
-                <div class="hp-bar">
-                  <div class="hp-fill" style="width: ${hpPct}%"></div>
-                  <span class="hp-text">
+                <div class="hp-bar" data-fx-id="hp-bar">
+                  <div class="hp-fill" style="width: ${hpPct}%" data-fx-id="hp-fill"></div>
+                  <span class="hp-text" data-fx-id="hp-text">
                     <span class="hp-text-icon">${heartIcon()}</span>
                     ${hpText}/${maxHpText}
                   </span>
@@ -2455,7 +2542,33 @@ export class GameBoardRenderer {
     const playerCard = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
     if (!playerCard || amount <= 0) return this.animateDamageFlash()
     sfx.playPlayerHit()
+    this.playPlayerHealthDamageFeedback()
     return this.animateDamageImpactOnElement(playerCard, amount)
+  }
+
+  /**
+   * 피격 한 박자 — 체력 게이지가 확대되며 흔들리고 시뻘게졌다가 돌아온다.
+   * 수치도 같은 beat에서 굴러 내려가 "얼마나 깎였는지"가 게이지 위에서 읽힌다.
+   *
+   * 방패가 전부 막아 체력이 그대로면 아무것도 하지 않는다 — 안 깎였는데 게이지가
+   * 비명을 지르면 방패가 막아 준 사실이 지워진다.
+   *
+   * 클래스는 `hpDamagePulseUntil` 동안 renderPlayer가 다시 심어 주고, 진행 위치는
+   * `restoreBoardAnimationPhases`가 이어 붙인다 — 곧바로 render가 돌아도 끊기지 않는다.
+   */
+  playPlayerHealthDamageFeedback(): void {
+    const character = this.currentGameState?.getCharacter()
+    if (!character) return
+    const previous = this.displayedHudCounters.get('health')
+    if (previous === undefined || character.health >= previous) return
+    this.playHudCounterFeedback('health', character.health)
+    this.hpDamagePulseUntil = performance.now() + HP_DAMAGE_PULSE_MS
+    const column = this.boardElement.querySelector<HTMLElement>('.hp-column')
+    if (!column) return
+    column.classList.remove('is-hp-damaged')
+    // 리플로우 1회 — 연타로 맞아도 매번 처음부터 재생된다.
+    void column.offsetWidth
+    column.classList.add('is-hp-damaged')
   }
 
   animateDamageFlash(): Promise<void> {

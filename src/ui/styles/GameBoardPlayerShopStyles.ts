@@ -1726,6 +1726,48 @@ body.is-shift-detail .shop-relic-effect .shift-only { display: inline; }
   font-size: 12px;
 }
 
+/* ── 피격 한 박자 — 확대 → 흔들림 → 시뻘건 잔광 → 복귀 ──────────────────────
+   피해 수치는 화면 위로 떠올라 사라지지만 "내가 얼마나 남았는가"는 이 막대에 남는다.
+   막대가 스스로 맞았다고 말하지 않으면 수치와 게이지가 별개의 사건으로 흩어진다.
+   전용 도형을 새로 만들지 않는다 — 발광·확대·흔들림만 쓴다(이펙트 어휘 규칙).
+   길이는 GameBoardRenderer의 HP_DAMAGE_PULSE_MS와 같아야 한다.
+   바깥 그림자는 .player-card의 overflow:hidden에 잘리므로 붉은빛은 전부 inset으로 낸다. */
+.hp-column.is-hp-damaged .hp-bar {
+  animation: hp-damage-jolt 640ms cubic-bezier(0.2, 0.86, 0.26, 1);
+}
+@keyframes hp-damage-jolt {
+  0%   { transform: scale(1)    translateX(0);    border-color: var(--color-border-soft); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6); }
+  10%  { transform: scale(1.2)  translateX(-4px); border-color: rgba(255, 118, 92, 0.98); box-shadow: inset 0 0 16px rgba(255, 74, 46, 0.9); }
+  26%  { transform: scale(1.22) translateX(5px);  border-color: rgba(255, 132, 104, 1);   box-shadow: inset 0 0 20px rgba(255, 86, 54, 0.95); }
+  42%  { transform: scale(1.16) translateX(-4px); border-color: rgba(255, 110, 84, 0.9);  box-shadow: inset 0 0 16px rgba(236, 62, 38, 0.8); }
+  58%  { transform: scale(1.11) translateX(3px);  border-color: rgba(240, 96, 72, 0.76);  box-shadow: inset 0 0 13px rgba(212, 52, 32, 0.62); }
+  74%  { transform: scale(1.06) translateX(-2px); border-color: rgba(210, 84, 64, 0.58);  box-shadow: inset 0 0 9px rgba(180, 44, 28, 0.42); }
+  100% { transform: scale(1)    translateX(0);    border-color: var(--color-border-soft); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6); }
+}
+/* 남은 체력 자체가 시뻘겋게 달아올랐다 식는다 — 줄어드는 폭(transition: width)과 겹쳐
+   "여기까지 깎였다"가 한 동작으로 읽힌다.
+   밝기만 올리면 기본 그라디언트(주홍→살구)가 노랗게 타 버려 '뜨겁다'로만 읽힌다 —
+   붉은 피는 색을 실제로 붉은 쪽으로 갈아 끼워야 나온다. */
+.hp-column.is-hp-damaged .hp-fill {
+  animation: hp-fill-scorch 640ms ease-out;
+}
+@keyframes hp-fill-scorch {
+  0%   { background-image: linear-gradient(90deg, #c9472a, #f4a460); filter: none; }
+  14%  { background-image: linear-gradient(90deg, #8e0a06, #ff2a14); filter: brightness(1.35) saturate(1.5); }
+  46%  { background-image: linear-gradient(90deg, #a92413, #ff5a2a); filter: brightness(1.15) saturate(1.25); }
+  100% { background-image: linear-gradient(90deg, #c9472a, #f4a460); filter: none; }
+}
+/* 롤링 중인 수치도 함께 달아오른다 — 숫자가 굴러 내려가는 동안 붉은 기가 남아야
+   '깎이는 중'으로 읽힌다(다 굴러간 뒤에 색이 도는 건 늦다). */
+.hp-column.is-hp-damaged .hp-text {
+  animation: hp-text-scorch 640ms ease-out;
+}
+@keyframes hp-text-scorch {
+  0%   { color: #fff5dc; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85); }
+  16%  { color: #ffe4dc; text-shadow: 0 0 10px rgba(255, 92, 62, 0.95), 0 1px 2px rgba(0, 0, 0, 0.9); }
+  100% { color: #fff5dc; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85); }
+}
+
 .atk-stat {
   display: inline-flex;
   align-items: center;
