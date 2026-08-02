@@ -1835,12 +1835,14 @@ export const GAME_BOARD_RAIL_STYLES = `
   /* hue-rotate로 붉게 물들이려 했더니 빨강(0°)이 마젠타로 돌아가 형광 분홍 테두리가
      됐다. 색상환을 돌리지 말고 **어둡게 눌러** 불길함을 만든다 — 값을 치를 카드는
      밝아지는 게 아니라 그늘이 진다. */
-  filter: brightness(0.86) saturate(0.82) contrast(1.08);
+  filter: brightness(0.84) saturate(0.8) contrast(1.06);
   animation: greed-counted-dread 1.2s ease-in-out infinite;
 }
+/* 딱딱한 테두리를 두르지 않는다 — 선을 그으면 '선택된 카드' UI로 읽힌다.
+   안쪽으로 그늘이 차오르고 바깥으로 붉은 빛이 번지는 **발광**으로만 말한다. */
 @keyframes greed-counted-dread {
-  0%, 100% { box-shadow: 0 0 0 2px rgba(126, 26, 14, 0.75), inset 0 0 18px rgba(96, 14, 6, 0.5); }
-  50%      { box-shadow: 0 0 0 2px rgba(172, 40, 18, 0.95), inset 0 0 30px rgba(150, 26, 8, 0.75); }
+  0%, 100% { box-shadow: 0 0 10px rgba(150, 26, 10, 0.4),  inset 0 0 20px rgba(96, 14, 6, 0.55); }
+  50%      { box-shadow: 0 0 26px rgba(196, 44, 16, 0.72), inset 0 0 34px rgba(150, 26, 8, 0.82); }
 }
 /* 세는 숫자 — 피해 수치와 같은 양식이되 붉게 물들여 '값'으로 읽히게 한다.
    수치가 아니라 셈이므로 튀어 오르지 않고 그 자리에 눌러앉는다. */
@@ -1868,32 +1870,6 @@ export const GAME_BOARD_RAIL_STYLES = `
   box-shadow: 0 0 10px rgba(255, 196, 96, 0.5), inset 0 -2px 3px rgba(120, 78, 16, 0.6);
 }
 
-/* 손패 → 칸 일제 사격의 출발 섬광. 손패가 터진 자리에서 한 번 크게 열렸다 닫힌다 —
-   칸에 도착하는 블라스트만으로는 "어디선가 날아왔다"까지만 읽힌다. */
-.boss-cell-volley-launch {
-  position: fixed;
-  z-index: 226;
-  width: 26px;
-  height: 26px;
-  margin: -13px 0 0 -13px;
-  border-radius: 50%;
-  pointer-events: none;
-  mix-blend-mode: screen;
-  background: radial-gradient(
-    circle,
-    rgba(255, 244, 214, 0.95) 0%,
-    rgba(255, 168, 74, 0.72) 38%,
-    rgba(214, 82, 20, 0.28) 66%,
-    transparent 100%
-  );
-  animation: boss-cell-volley-launch 0.42s cubic-bezier(0.2, 0.9, 0.32, 1) forwards;
-}
-@keyframes boss-cell-volley-launch {
-  0%   { opacity: 0.4; transform: scale(0.4); }
-  28%  { opacity: 1;   transform: scale(2.6); }
-  100% { opacity: 0;   transform: scale(4.2); }
-}
-
 /* 무너지는 순간 — 칸 노드가 재렌더로 교체돼도 끊기지 않게 body에 띄운다.
    z는 SquareBurst(220)와 자원 트레일(230) 사이에 끼운다. */
 .boss-cell-shatter {
@@ -1901,8 +1877,9 @@ export const GAME_BOARD_RAIL_STYLES = `
   z-index: 225;
   pointer-events: none;
 }
-/* 팡! — 갈라지기 직전 한 프레임을 크게 벌린다. 이 예비 동작이 없으면 조각이
-   그냥 사라지는 것처럼 보이고, 부위 파괴가 배율 타격과 구분되지 않는다.
+/* 팡! — 사각 블라스트가 터지기 직전 칸을 한 번 발광시켜 부풀린다.
+   파괴의 '조각'은 SquareBurst가 맡고, 여기서는 **빛만** 쓴다 — 이 게임의 이펙트
+   어휘는 사각 블라스트 하나이므로 전용 파편 도형을 새로 만들지 않는다.
    screen 합성 — 칠하는 게 아니라 빛을 더한다. 불투명하게 채웠더니 칸이 통째로
    노란 사각형이 돼 일러스트가 사라졌다. */
 .boss-cell-shatter-pane {
@@ -1927,41 +1904,6 @@ export const GAME_BOARD_RAIL_STYLES = `
   30%  { opacity: 1;    transform: scale(1.1); }
   100% { opacity: 0;    transform: scale(1.16); }
 }
-/* 빠개짐 — 판이 네 조각으로 갈라져 회전하며 날아간다.
-   조각은 촛농(밝은 색)이 아니라 **타 버린 판**이다. 밝게 그리면 지워 달라던
-   '불씨 조각'으로 되돌아가므로, 숯빛 판에 갈라진 단면만 벌겋게 남긴다. */
-.boss-cell-piece {
-  position: absolute;
-  inset: 0;
-  border-radius: 8px;
-  /* 반투명 숯판 + 갈라진 **단면**만 벌겋게. 불투명하게 채우면 칸이 통째로 갈색
-     사각형이 돼 보스 일러스트가 사라진다(격자에 구멍이 뚫린 것처럼 보인다). */
-  background:
-    linear-gradient(150deg, rgba(96, 56, 28, 0.62), rgba(22, 12, 8, 0.78) 70%);
-  /* 조각 경계는 **잘린 단면의 발광**으로 읽힌다. drop-shadow는 clip-path로 잘린 실제
-     모양을 따라가므로(box-shadow는 사각형 그대로라 안 된다) 파편마다 윤곽이 산다.
-     몸통을 불투명하게 채워 대비를 내는 길도 있지만, 그러면 일러스트가 갈색 사각형에
-     통째로 가린다 — 채우지 말고 **테두리로** 말한다. */
-  filter:
-    drop-shadow(0 0 6px rgba(255, 148, 58, 0.9))
-    drop-shadow(0 0 15px rgba(216, 70, 16, 0.5));
-  /* 팡(pane 0.34s)이 **끝난 뒤**에 갈라진다. 겹치면 screen 합성 위에 조각이 얹혀
-     색이 뒤틀리고, 무엇보다 '부풀었다 → 빠개졌다'의 두 박자가 한 덩어리로 뭉개진다.
-     both여야 지연 구간에도 시작 프레임(아직 붙어 있는 판)이 보인다. */
-  animation: boss-cell-piece-split 0.42s cubic-bezier(0.24, 0.6, 0.36, 1) 0.3s both;
-  opacity: 0;
-}
-/* 갈라진 판이 한 프레임 붙어 있다가(0~14%) 회전하며 떨어져 나간다. 바로 흩어지면
-   '무엇이 갈라졌는지'를 볼 틈이 없어 그냥 반짝하고 만다. */
-@keyframes boss-cell-piece-split {
-  0%   { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
-  14%  { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
-  100% {
-    opacity: 0;
-    transform: translate(var(--piece-x, 0), var(--piece-y, 0)) rotate(var(--piece-rot, 0deg)) scale(0.82);
-  }
-}
-
 /* 보스 등장 시 셔터 진동을 한 비트 강화. 인트로 + 강하와 함께 묵직한 쿵 임팩트. */
 .rail.is-boss-quaking {
   animation: boss-rail-impact-quake 0.62s cubic-bezier(0.32, 0.04, 0.18, 0.96);

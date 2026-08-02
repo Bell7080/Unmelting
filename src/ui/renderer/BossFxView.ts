@@ -16,24 +16,16 @@ import {
   type BossGimmickTone,
 } from '@systems/BossGimmickManager'
 
-/**
- * 부위 파괴 시 판이 갈라지는 조각 수.
- *
- * 예전에는 발광하는 촛농 방울 12개가 아래로 떨어졌는데, 화면에서는 '불씨 조각이
- * 흩날린다'로 읽혀 무엇이 일어났는지 흐렸다. 지금은 **깨진 판 자체**가 몇 조각으로
- * 갈라져 날아간다 — 조각 수가 적어야 한 덩어리씩 쪼개진 게 보인다.
- */
-const BOSS_CELL_PIECE_COUNT = 4
-/** 팡 하고 부풀었다가 갈라지기까지의 길이. */
+/** 팡 하고 부풀었다가 사그라들기까지의 길이. */
 const BOSS_CELL_BREAK_MS = 620
+/** 부위 파괴가 흩는 큰 조각(= 깨진 판 덩어리)의 변 길이. 일반 타격보다 확실히 크다. */
+const BOSS_CELL_BREAK_CHUNK_SIZE: [number, number] = [18, 38]
 
 /** 배율 표기가 사그라드는 시간. CSS `.is-relabel-out` 트랜지션과 같은 값이어야 한다. */
 const BOSS_GIMMICK_RELABEL_OUT_MS = 220
 
 /** 칸마다 블라스트가 출발하는 간격. 동시에 쏘면 출발점(손패)이 화면에서 사라진다. */
 const BOSS_CELL_VOLLEY_STEP_MS = 70
-/** 출발 섬광이 머무는 시간. CSS `.boss-cell-volley-launch`와 같은 값이어야 한다. */
-const BOSS_CELL_VOLLEY_LAUNCH_MS = 420
 
 /** 보스 직접 타격(들어올림→당김→쾅) 전체 길이. */
 const BOSS_SLAM_DURATION_MS = 780
@@ -434,24 +426,14 @@ export class BossFxView {
   }
 
   /**
-   * 손패가 터진 자리에서 화살이 쏟아져 나가는 한 프레임.
+   * 손패가 터진 자리에서 일제 사격이 나가는 한 프레임.
    *
    * 칸에 도착하는 블라스트만 있으면 "어디선가 날아왔다"까지만 읽힌다. 출발점에도
-   * 섬광을 한 번 놓아야 **저 손패에서 나갔다**로 이어진다.
+   * 한 번 터뜨려야 **저 손패에서 나갔다**로 이어진다. 전용 연출을 새로 만들지 않고
+   * 같은 사각 블라스트를 넓고 짧게 써서 '출발'만 다르게 말한다.
    */
   private playBossCellVolleyLaunch(source: HTMLElement | DOMRect): void {
-    const rect = source instanceof HTMLElement ? source.getBoundingClientRect() : source
-    const flash = document.createElement('div')
-    flash.className = 'boss-cell-volley-launch'
-    flash.setAttribute('aria-hidden', 'true')
-    flash.style.cssText = `left:${rect.left + rect.width / 2}px;top:${rect.top + rect.height / 2}px;`
-    document.body.appendChild(flash)
-    window.setTimeout(() => flash.remove(), BOSS_CELL_VOLLEY_LAUNCH_MS)
-    SquareBurst.playAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 'damage', {
-      count: 18,
-      spread: 130,
-      duration: 480,
-    })
+    SquareBurst.playOn(source, 'damage', { count: 20, spread: 152, duration: 420, size: [8, 20] })
   }
 
   private async playBossGimmickStrike(
@@ -497,13 +479,15 @@ export class BossFxView {
    * 부위 파괴 — **팡 하고 부풀었다가 판이 갈라지는** 한 비트.
    *
    * 부위 파괴는 이 전투에서 가장 큰 사건이라(칸 절반을 깨면 보스가 쓰러진다) 배율
-   * 타격과 확실히 다른 어휘여야 한다. 그래서 순서를 셋으로 쪼갠다:
-   *   1) 칸이 한 번 크게 부푼다 — "터진다"의 예비 동작
-   *   2) 판이 조각으로 갈라져 회전하며 날아간다 — 되돌릴 수 없다는 표시
+   * 타격과 확실히 다른 어휘여야 한다. 다만 **새 이펙트 방식을 만들지는 않는다** —
+   * 이 게임의 이펙트는 사각 블라스트(SquareBurst) 하나로 통일돼 있고, 파괴도 그
+   * 어휘 안에서 '더 크게'로만 말한다:
+   *   1) 칸이 한 번 발광하며 부푼다 — "터진다"의 예비 동작(빛만 쓴다)
+   *   2) 큰 사각 덩어리가 흩어진다 — 깨진 판이다. 이어서 잔해가 넓게 퍼진다
    *   3) 자리에는 꺼진 판만 남는다(렌더가 그린다)
    *
    * 연출을 칸 DOM이 아니라 body 오버레이에 올리는 이유: 파괴 직후 곧바로 재렌더가
-   * 일어나 칸 노드가 새로 그려져도(깨진 판으로 교체) 조각이 끊기지 않게 하기 위해서다.
+   * 일어나 칸 노드가 새로 그려져도(깨진 판으로 교체) 연출이 끊기지 않게 하기 위해서다.
    */
   private async playBossGimmickCellBreak(cell: HTMLElement, breakDamage: number): Promise<void> {
     const rect = cell.getBoundingClientRect()
@@ -511,39 +495,22 @@ export class BossFxView {
     host.className = 'boss-cell-shatter'
     host.setAttribute('aria-hidden', 'true')
     host.style.cssText = `left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;`
-    // 부푸는 판 — 갈라지기 직전 한 프레임을 크게 벌려 '팡'을 만든다.
+    // 부푸는 빛 — 갈라지기 직전 한 프레임을 크게 벌려 '팡'을 만든다.
     const pane = document.createElement('div')
     pane.className = 'boss-cell-shatter-pane'
     host.appendChild(pane)
-    // 갈라진 조각 — 사분면을 하나씩 맡아 바깥으로 회전하며 날아간다.
-    // 불규칙한 clip-path로 잘라 '반듯하게 나뉜 사각형'이 아니라 깨진 파편으로 읽히게 한다.
-    const PIECE_CLIPS = [
-      'polygon(0% 0%, 58% 0%, 44% 52%, 0% 62%)',
-      'polygon(58% 0%, 100% 0%, 100% 46%, 44% 52%)',
-      'polygon(0% 62%, 44% 52%, 52% 100%, 0% 100%)',
-      'polygon(44% 52%, 100% 46%, 100% 100%, 52% 100%)',
-    ]
-    const PIECE_DRIFT = [
-      { x: -30, y: -22, r: -34 },
-      { x: 32, y: -18, r: 30 },
-      { x: -26, y: 30, r: 26 },
-      { x: 30, y: 34, r: -28 },
-    ]
-    for (let i = 0; i < BOSS_CELL_PIECE_COUNT; i++) {
-      const piece = document.createElement('i')
-      piece.className = 'boss-cell-piece'
-      const drift = PIECE_DRIFT[i % PIECE_DRIFT.length]
-      piece.style.cssText = [
-        `clip-path:${PIECE_CLIPS[i % PIECE_CLIPS.length]}`,
-        `--piece-x:${drift.x}px`,
-        `--piece-y:${drift.y}px`,
-        `--piece-rot:${drift.r}deg`,
-      ].join(';')
-      host.appendChild(piece)
-    }
     document.body.appendChild(host)
-    // 파괴는 타격보다 큰 사건이라 버스트도 한 급 크게 간다.
-    SquareBurst.playOn(rect, 'boss-wax-drip', { count: 22, spread: 150, duration: 620 })
+    // 깨진 판 덩어리 — 큰 사각이 가까이 흩어진다. 크기로 '판이 쪼개졌다'를 말한다.
+    SquareBurst.playOn(rect, 'boss-wax-drip', {
+      count: 10,
+      spread: 96,
+      duration: 560,
+      size: BOSS_CELL_BREAK_CHUNK_SIZE,
+    })
+    // 잔해 — 한 박자 늦게 더 잘고 넓게. 두 겹이라 '크게 깨졌다'가 한 번 더 읽힌다.
+    window.setTimeout(() => {
+      SquareBurst.playOn(rect, 'boss-ember-spark', { count: 20, spread: 168, duration: 560 })
+    }, 120)
     window.setTimeout(() => host.remove(), BOSS_CELL_BREAK_MS + 140)
     // 부위 파괴 추가 피해는 배율 피해가 뜬 직후 한 박자 늦게 같은 자리에 얹는다.
     if (breakDamage <= 0) return
