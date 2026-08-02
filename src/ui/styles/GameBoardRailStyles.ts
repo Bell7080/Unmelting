@@ -529,25 +529,46 @@ export const GAME_BOARD_RAIL_STYLES = `
   border: 1px solid rgba(255, 232, 168, 0.7);
   text-shadow: none;
 }
+/* 꽃·보물 수치는 함정 피해와 같은 결로 읽힌다 — 셋 다 "이 칸에서 얼마가 오가는가"라,
+   한쪽만 작으면 그 칸의 값어치를 낮게 어림잡게 된다. 함정보다 반 단계만 낮게 둔다.
+   ★ align-items를 빼면 안 된다: 글자 줄상자는 1.35em인데 아이콘은 1em이라, 정렬을
+   지정하지 않으면 아이콘이 줄상자 **위쪽에 붙어** 글자와 따로 논다. */
 .card-stats.group-note {
-  gap: 4px;
+  gap: 5px;
   padding: 0;
+  align-items: center;
+  line-height: 1;
   color: rgba(255, 232, 168, 0.96);
   background: transparent;
   border: 0;
   border-radius: 0;
-  font-size: 12px;
+  font-size: clamp(15px, 2.05vh, 20px);
   font-weight: 900;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-shadow:
     0 1px 3px rgba(0, 0, 0, 0.92),
     0 0 10px rgba(255, 215, 120, 0.58);
 }
+/* 아이콘·$ 표식은 고정 px이 아니라 글자를 따라간다 — 고정이면 글자만 커져 따로 논다. */
 .card-stats.group-note .icon {
-  width: 13px;
-  height: 13px;
+  width: 1.05em;
+  height: 1.05em;
   color: currentColor;
   filter: drop-shadow(0 0 7px rgba(255, 215, 120, 0.45));
+}
+.card-stats.group-note .codex-coin-mark {
+  width: 1.05em;
+  height: 1.05em;
+  font-size: inherit;
+}
+/* 수치가 아니라 문장인 표기(보스 보상)는 키우면 줄이 넘친다 — 원래 크기를 지킨다. */
+.card-stats.group-note.group-note--sentence {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.rail-row.dist-1 .card-stats.group-note,
+.rail-row.dist-2 .card-stats.group-note {
+  font-size: clamp(13px, 1.75vh, 17px);
 }
 
 .group-badge {
@@ -656,28 +677,7 @@ export const GAME_BOARD_RAIL_STYLES = `
     radial-gradient(circle at 50% 42%, rgba(190, 164, 96, 0.16), rgba(44, 34, 26, 0.42) 72%),
     linear-gradient(180deg, rgba(20, 16, 28, 0.0) 38%, rgba(20, 16, 28, 0.55) 70%, rgba(10, 7, 18, 0.92) 100%);
 }
-/* 꽃 수확 수치도 함정 피해와 같은 결로 키운다 — 둘 다 "이 칸에서 얼마가 오가는가"를
-   말하는 수치라, 한쪽만 작으면 꽃을 언제 딸지 어림잡기 어렵다. 다만 위협이 아니라
-   보상이라 함정보다 한 단계 낮게 둔다. */
-.flower-note {
-  color: rgba(224, 255, 196, 0.96);
-  font-size: clamp(15px, 2vh, 19px);
-}
-/* group-note·codex-coin-mark의 고정 13px보다 뒤에 와서 이겨야 한다 —
-   글자만 키우면 아이콘·$ 표식만 작게 남아 따로 논다. */
-.card-stats.group-note.flower-note .icon {
-  width: 1em;
-  height: 1em;
-}
-.card-stats.group-note.flower-note .codex-coin-mark {
-  width: 1em;
-  height: 1em;
-  font-size: inherit;
-}
-.rail-row.dist-1 .flower-note,
-.rail-row.dist-2 .flower-note {
-  font-size: clamp(13px, 1.7vh, 16px);
-}
+.flower-note { color: rgba(224, 255, 196, 0.96); }
 /* 이벤트 문 칸 — 검은 테두리와 섞이지 않도록 상단 라벨 띠는 흰색 그라데이션만 사용한다. */
 .cell.card.type-event { border-color: rgba(18, 18, 22, 0.9); }
 .cell.card.type-event::before {
