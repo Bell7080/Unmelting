@@ -109,16 +109,12 @@ interface CounterAnimationState {
 /** 피격 체력 게이지 연출 길이. CSS `hp-damage-jolt`와 같은 값이어야 한다. */
 const HP_DAMAGE_PULSE_MS = 640
 
-/* 에나 힌트 발광의 박자. CSS는 이 값을 커스텀 프로퍼티로 받아 쓰므로 단일 출처는 여기다. */
-/** 대사가 먼저 읽힐 짬 — 말과 빛이 겹치면 무엇을 가리키는 말인지 놓친다. */
-const ENA_HINT_LEAD_MS = 420
-/** 대상이 여럿일 때 하나씩 짚어 가는 간격. 동시에 켜면 어디를 보라는 건지 흩어진다. */
-const ENA_HINT_STAGGER_MS = 180
-/** 맥동 한 주기. */
-const ENA_HINT_CYCLE_MS = 760
-/** 반복 횟수 — 한 번은 눈이 따라가기 전에 끝난다. */
+/** 에나 강조 맥동 — 시작 지연 / 1회 길이 / 반복 횟수. CSS(.ena-hint-pulse)와 같은 값을 쓴다. */
+const ENA_HINT_START_DELAY_MS = 240
+const ENA_HINT_CYCLE_MS = 1350
 const ENA_HINT_REPEAT = 3
-const ENA_HINT_TOTAL_MS = ENA_HINT_CYCLE_MS * ENA_HINT_REPEAT
+/** 대상이 여럿일 때 하나씩 짚어 가는 간격 — 한꺼번에 켜면 어디를 보라는 건지 흩어진다. */
+const ENA_HINT_STAGGER_MS = 180
 
 export class GameBoardRenderer {
   /** 서브 렌더러 공유 — 보드 루트 요소. */
@@ -156,9 +152,6 @@ export class GameBoardRenderer {
    *  span at the current animated value instead of letting it snap to the
    *  final target. */
   private activeCounterAnimations = new Map<string, CounterAnimationState>()
-  /** 진행 중인 에나 힌트 발광. 라이브 DOM이 아니라 **시작 시각**을 상태로 들고 있어야
-   *  render()가 보드를 갈아 끼워도 남은 시간만큼 다시 심을 수 있다. */
-  private activeEnaHints: { selector: string; startAt: number }[] = []
   /** Immediate gain feedback can be followed by a full board re-render. Keep
    *  that pulse key alive for one CSS beat so the newly-rendered number still
    *  receives the ✦ sparkle class instead of only leaving the body SquareBurst. */
@@ -177,6 +170,12 @@ export class GameBoardRenderer {
   /** Same idea for the chain banner — track per-event uids so only newly
    *  appended chain entries play their pop-in animation. */
   private previousChainUids = new Set<string>()
+  /** 지금 화면에서 도는 에나 강조 레이어들 — 다음 설명이나 플레이어 행동에 한꺼번에 거둔다. */
+  private readonly activeEnaHintPulses = new Set<HTMLElement>()
+  /** 무엇을 언제부터 가리키는 중인지 — 렌더가 레이어를 지워 가도 남은 시간만큼 다시 심는다. */
+  private activeEnaHint:
+    | { targets: Required<EnaHintTargets>; startedAt: number; endsAt: number }
+    | null = null
   private handTargetingMode: HandTargetingMode | null = null
   /** Owned relic cards can be click-pinned for reading long text without
    *  requiring the mouse to stay perfectly over the fanned card. */
@@ -594,14 +593,15 @@ export class GameBoardRenderer {
     this.shopOverlay.syncShopShutterToRailCells()
     // 되감긴 애니메이션들을 원래 재생 위치로 돌려놓는다(무한 루프는 공용 시계에 맞춘다).
     this.restoreBoardAnimationPhases(previousAnimationPhases)
-    // 힌트 발광은 render가 만드는 HTML이 아니라 덧붙인 레이어라, 갈아 끼운 DOM에 다시 심는다.
-    this.syncEnaHintPulses()
     this.animateRenderedResourceCounters()
     this.alignNewHandSlotsWithTrailSpawn()
     this.animateMovedCards(previousRects)
     this.animateMovedHandSlots(previousHandRects)
     this.playNewHandMergeEffects(previousHandRects)
     this.rememberRenderedCards()
+    // 에나 강조는 카드 안에 심긴 레이어라 innerHTML 교체에 통째로 날아간다. 세 번 맥동이
+    // 4초를 쓰는 만큼 그 사이 렌더가 한 번은 돌기 마련이라, 남은 시간만큼 이어 심는다.
+    this.reattachEnaHintPulses()
     // Floating chain banner (body-mounted, above the player profile).
     this.updateChainBanner(scorePanel.chainHints)
   }
@@ -2465,64 +2465,95 @@ export class GameBoardRenderer {
   }
 
   /**
-   * 에나가 말하는 필드·손패·유물을 같은 황금빛 맥동으로 가리킨다.
-   *
-   * 대사와 발광이 **동시에** 터지면 무엇을 가리키는 말인지 읽히기 전에 빛이 끝난다.
-   * 그래서 대사를 먼저 읽을 짬(`ENA_HINT_LEAD_MS`)을 두고, 대상이 여럿이면 하나씩
-   * 짚어 가듯 어긋내(`ENA_HINT_STAGGER_MS`) 시작한다.
-   *
+   * 에나가 말하는 필드·손패·유물을 같은 황금빛 맥동으로 짧게 가리킨다.
    * 대상 내부에 독립 레이어를 넣어 카드 고유 transform/hover/피격 애니메이션과 충돌하지 않는다.
    */
-  pulseEnaHint(targets: EnaHintTargets): void {
-    // 선택자로 붙잡아 둔다 — 요소 참조는 render()가 보드를 갈아 끼우면 죽지만,
-    // 선택자는 새로 그려진 DOM에서 같은 대상을 다시 찾아낸다.
-    const selectors: string[] = []
-    for (const cardId of targets.fieldCardIds ?? []) selectors.push(`.cell.card[data-card-id="${cardId}"]`)
-    for (const defId of targets.handDefIds ?? []) selectors.push(`.hand-slot[data-hand-def="${defId}"]`)
-    for (const slotIndex of targets.handSlotIndices ?? []) selectors.push(`.hand-slot[data-slot-index="${slotIndex}"]`)
-    for (const relicId of targets.relicIds ?? []) selectors.push(`.relic-mini-card[data-owned-relic="${relicId}"]`)
-    if (selectors.length === 0) return
+  pulseEnaHint(targets: EnaHintTargets, deferIfMissing = true, startedAt = Date.now()): void {
+    // Iterable을 배열로 고정해, 같은 프레임 뒤 재시도해도 generator가 이미 소비된 문제가 없게 한다.
+    const stableTargets = {
+      fieldCardIds: [...(targets.fieldCardIds ?? [])],
+      handDefIds: [...(targets.handDefIds ?? [])],
+      handSlotIndices: [...(targets.handSlotIndices ?? [])],
+      relicIds: [...(targets.relicIds ?? [])],
+    }
+    const elements = new Set<HTMLElement>()
+    for (const cardId of stableTargets.fieldCardIds) {
+      this.boardElement.querySelectorAll<HTMLElement>(`.cell.card[data-card-id="${cardId}"]`).forEach((el) => elements.add(el))
+    }
+    for (const defId of stableTargets.handDefIds) {
+      this.boardElement.querySelectorAll<HTMLElement>(`.hand-slot[data-hand-def="${defId}"]`).forEach((el) => elements.add(el))
+    }
+    for (const slotIndex of stableTargets.handSlotIndices) {
+      const el = this.boardElement.querySelector<HTMLElement>(`.hand-slot[data-slot-index="${slotIndex}"]`)
+      if (el) elements.add(el)
+    }
+    for (const relicId of stableTargets.relicIds) {
+      const el = this.boardElement.querySelector<HTMLElement>(`.relic-mini-card[data-owned-relic="${relicId}"]`)
+      if (el) elements.add(el)
+    }
 
-    const now = performance.now()
-    // 새 설명이 오면 이전 지시는 접는다 — 두 곳이 동시에 빛나면 어느 쪽 이야기인지 갈린다.
-    this.activeEnaHints = selectors.map((selector, index) => ({
-      selector,
-      startAt: now + ENA_HINT_LEAD_MS + index * ENA_HINT_STAGGER_MS,
-    }))
-    this.boardElement
-      .querySelectorAll<HTMLElement>('.ena-hint-pulse')
-      .forEach((el) => el.remove())
-    this.syncEnaHintPulses()
+    // 획득 직후처럼 모델이 먼저 바뀌고 DOM render가 같은 task 뒤에 오는 경로는 다음 frame에 한 번 재탐색한다.
+    if (elements.size === 0 && deferIfMissing) {
+      requestAnimationFrame(() => this.pulseEnaHint(stableTargets, false, startedAt))
+      return
+    }
+
+    // 맥동은 세 번 되풀이되므로 다 끝나기 전에 다음 설명이 올 수 있다. 새 설명이 오면
+    // 이전 대상의 강조는 **그 자리에서 끊는다** — 겹쳐 두면 무엇을 가리키는지 흐려진다.
+    this.clearEnaHintPulses()
+    if (elements.size === 0) return
+    // 렌더를 넘어 이어 심을 수 있게 무엇을 가리키는 중인지와 시작·종료 시각을 남긴다.
+    // 종료는 대상 수에 따라 달라진다 — 어긋내 켠 만큼 마지막 대상이 늦게 끝난다.
+    this.activeEnaHint = {
+      targets: stableTargets,
+      startedAt,
+      endsAt:
+        startedAt +
+        ENA_HINT_START_DELAY_MS +
+        (elements.size - 1) * ENA_HINT_STAGGER_MS +
+        ENA_HINT_CYCLE_MS * ENA_HINT_REPEAT,
+    }
+
+    // 이미 흐른 시간만큼 시작 지연을 당겨(음수 delay) 렌더 뒤에도 같은 위상에서 이어진다.
+    const elapsed = Date.now() - startedAt
+    let order = 0
+    for (const element of elements) {
+      // 대상이 여럿이면 어긋내 켠다 — 순서는 필드 → 손패 → 유물(삽입 순서)이라 렌더를 다시
+      // 심어도 같은 대상이 같은 차례를 받는다.
+      const delay = ENA_HINT_START_DELAY_MS + order * ENA_HINT_STAGGER_MS - elapsed
+      order++
+      const pulse = document.createElement('span')
+      pulse.className = 'ena-hint-pulse'
+      pulse.setAttribute('aria-hidden', 'true')
+      pulse.style.setProperty('--ena-hint-delay', `${delay}ms`)
+      element.appendChild(pulse)
+      this.activeEnaHintPulses.add(pulse)
+      pulse.addEventListener('animationend', () => {
+        this.activeEnaHintPulses.delete(pulse)
+        pulse.remove()
+        if (this.activeEnaHintPulses.size === 0) this.activeEnaHint = null
+      }, { once: true })
+    }
   }
 
-  /**
-   * 진행 중인 힌트 발광을 현재 DOM에 심는다(render 직후·지시 직후 호출).
-   *
-   * render()가 보드를 innerHTML로 갈아 끼우면 라이브 DOM에 붙인 레이어는 사라진다.
-   * 그래서 발광은 "언제 시작했는가"만 상태로 들고, 다시 그려질 때마다 **남은 시간만큼**
-   * 음수 delay로 이어 붙인다 — 끊긴 적이 없던 것처럼 보인다.
-   * 아직 시작 전인 대상은 양수 delay로 미리 심어 둔다(`both` fill이라 그동안은 투명하다).
-   */
-  private syncEnaHintPulses(): void {
-    if (this.activeEnaHints.length === 0) return
-    const now = performance.now()
-    this.activeEnaHints = this.activeEnaHints.filter((hint) => hint.startAt + ENA_HINT_TOTAL_MS > now)
-    if (this.activeEnaHints.length === 0) return
-
-    for (const hint of this.activeEnaHints) {
-      for (const element of this.boardElement.querySelectorAll<HTMLElement>(hint.selector)) {
-        if (element.querySelector(':scope > .ena-hint-pulse')) continue
-        const pulse = document.createElement('span')
-        pulse.className = 'ena-hint-pulse'
-        pulse.setAttribute('aria-hidden', 'true')
-        // 한 주기 길이·반복 수의 단일 출처는 여기다(CSS는 변수만 읽는다).
-        pulse.style.setProperty('--ena-hint-cycle', `${ENA_HINT_CYCLE_MS}ms`)
-        pulse.style.setProperty('--ena-hint-repeat', `${ENA_HINT_REPEAT}`)
-        pulse.style.animationDelay = `${hint.startAt - now}ms`
-        element.appendChild(pulse)
-        pulse.addEventListener('animationend', () => pulse.remove(), { once: true })
-      }
+  /** 렌더가 지워 간 강조를 남은 시간만큼 다시 심는다(대상이 사라졌으면 그대로 끝난다). */
+  private reattachEnaHintPulses(): void {
+    const active = this.activeEnaHint
+    if (!active) return
+    if (Date.now() >= active.endsAt) {
+      this.activeEnaHint = null
+      return
     }
+    if (this.boardElement.querySelector('.ena-hint-pulse')) return // 살아남았으면 그대로 둔다.
+    this.activeEnaHintPulses.clear()
+    this.pulseEnaHint(active.targets, false, active.startedAt)
+  }
+
+  /** 진행 중인 에나 강조를 즉시 거둔다(플레이어가 먼저 움직이거나 다음 설명이 올 때). */
+  clearEnaHintPulses(): void {
+    this.activeEnaHint = null
+    this.activeEnaHintPulses.clear()
+    this.boardElement.querySelectorAll('.ena-hint-pulse').forEach((el) => el.remove())
   }
 
   /** 다음 줄 카드 주변 40px 안에 포인터가 들어온 첫 순간만 소개 이벤트를 보낸다. */

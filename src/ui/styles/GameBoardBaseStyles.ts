@@ -445,8 +445,7 @@ body.game-run-active .score-panel .left-swap > .quest-list {
 
 
 /* 에나의 설명 대상 공용 포커스 — 필드·손패·유물 모두 같은 촛불빛 어휘를 쓴다.
-   별도 자식 레이어가 바깥으로 커지며 사라져 기존 카드 transform 애니메이션을 덮지 않는다.
-   주기 길이·반복 수·시작 지연은 GameBoardRenderer가 인라인 변수로 넣는다(단일 출처는 TS). */
+   별도 자식 레이어가 바깥으로 커지며 사라져 기존 카드 transform 애니메이션을 덮지 않는다. */
 .ena-hint-pulse {
   position: absolute;
   inset: -4px;
@@ -458,21 +457,23 @@ body.game-run-active .score-panel .left-swap > .quest-list {
     0 0 8px rgba(255, 213, 112, 0.92),
     0 0 22px rgba(244, 164, 96, 0.68),
     inset 0 0 10px rgba(255, 238, 184, 0.28);
-  animation: ena-hint-focus-pulse var(--ena-hint-cycle, 760ms) cubic-bezier(0.2, 0.72, 0.25, 1)
-    var(--ena-hint-repeat, 3) both;
+  /* 한 번만 번쩍이고 끝나면 대사를 읽는 사이에 놓친다 — 세 번 되풀이한다.
+     끝 구간을 투명하게 쉬어 가야 '세 번 맥동'으로 세어진다(쉼 없이 이으면 한 번의
+     긴 번쩍임으로 뭉친다). 시작 지연은 말풍선이 뜬 **뒤에** 가리키게 하는 몫이다. */
+  animation: ena-hint-focus-pulse 1.35s cubic-bezier(0.2, 0.72, 0.25, 1)
+    var(--ena-hint-delay, 0.24s) var(--ena-hint-repeat, 3) both;
 }
 
-/* 한 주기가 완전히 꺼진 뒤 다음 주기가 켜져야 '몇 번 깜빡였는지'가 세어진다 —
-   여운을 길게 끌면 세 번이 한 번의 긴 발광으로 뭉친다. */
 @keyframes ena-hint-focus-pulse {
   0% { opacity: 0; transform: scale(0.96); filter: brightness(1.6); }
-  16% { opacity: 1; transform: scale(1); filter: brightness(1.3); }
-  52% { opacity: 0.72; transform: scale(1.03); filter: brightness(1.08); }
-  78% { opacity: 0; transform: scale(1.075); filter: brightness(1); }
+  13% { opacity: 1; transform: scale(1); filter: brightness(1.25); }
+  43% { opacity: 0.78; transform: scale(1.035); filter: brightness(1.08); }
+  70% { opacity: 0; transform: scale(1.09); filter: brightness(1); }
+  /* 쉼 — 투명한 채로 시작 상태로 되돌아가 다음 맥동이 처음부터 읽힌다. */
   100% { opacity: 0; transform: scale(0.96); filter: brightness(1.6); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ena-hint-pulse { animation-duration: 0.01ms; animation-iteration-count: 1; }
+  .ena-hint-pulse { animation-duration: 0.01ms; }
 }
 `
