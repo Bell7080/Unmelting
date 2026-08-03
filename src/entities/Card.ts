@@ -22,6 +22,17 @@ export type SpecialEnemyKind = 'mimic' | 'monsterFlower' | 'waxArmy' | 'waxKnigh
 // 'junk'(잡동사니)는 온보딩 축약형 보물 — 까면 손패 1장을 주는 무해한 필러.
 export type TreasureKind = 'chest' | 'goldenChest' | 'starlight' | 'junk'
 
+/** 꽃 종류와 생존 턴으로 이번 턴의 가치 성장을 판정한다. 런타임과 에나 시뮬이 공유한다. */
+export function flowerGrowsAtAge(kind: FlowerKind, turnsAlive: number): boolean {
+  return kind !== 'seed' && (kind !== 'marigold' || turnsAlive % 2 === 0)
+}
+
+/** 현재 꽃 가치로 시듦 확률을 계산한다. 성장 뒤 판정하는 런타임 순서를 시뮬도 공유한다. */
+export function flowerWiltChance(value: number): number {
+  const maturity = Math.max(0, value - 1)
+  return Math.min(0.85, 0.1 + maturity * maturity * 0.08)
+}
+
 export type EnemySpriteId =
   | 'enemyBee'
   | 'enemyMantis'
@@ -378,7 +389,7 @@ export class Card {
   growFlowerOneTurn(): boolean {
     if (this.type !== CardType.FLOWER || this.flowerKind === 'seed') return false
     this.flowerTurnsAlive += 1
-    const shouldGrow = this.flowerKind === 'marigold' ? this.flowerTurnsAlive % 2 === 0 : true
+    const shouldGrow = flowerGrowsAtAge(this.flowerKind, this.flowerTurnsAlive)
     if (shouldGrow) this.flowerValue += 1
     return shouldGrow
   }
@@ -394,8 +405,22 @@ export class Card {
   /** Wilting starts at 10% and accelerates sharply as flower value rises. */
   getFlowerWiltChance(): number {
     if (this.type !== CardType.FLOWER || this.flowerKind === 'seed') return 0
-    const maturity = Math.max(0, this.flowerValue - 1)
-    return Math.min(0.85, 0.1 + maturity * maturity * 0.08)
+    return flowerWiltChance(this.flowerValue)
+  }
+
+  /** 괴물꽃의 시든 성장 시계를 한 턴 진행한다. 2→1→0이면 즉시 티어만큼 성장 후 2로 돌아간다. */
+  tickMonsterFlowerGrowth(): boolean {
+    if (this.type !== CardType.ENEMY || this.specialEnemyKind !== 'monsterFlower') return false
+    this.monsterFlowerGrowthTurns = Math.max(0, this.monsterFlowerGrowthTurns - 1)
+    if (this.monsterFlowerGrowthTurns > 0) return false
+
+    this.monsterFlowerGrowthTurns = 2
+    this.baseHealth += this.monsterFlowerGrowthAmount
+    this.health += this.monsterFlowerGrowthAmount
+    this.baseDamage += this.monsterFlowerGrowthAmount
+    this.enemyHealthTotal = this.baseHealth
+    this.enemyDamageTotal = this.baseDamage
+    return true
   }
 
   /** 괴물꽃의 시든 성장 시계를 한 턴 진행한다. 2→1→0이면 즉시 티어만큼 성장 후 2로 돌아간다. */

@@ -15,7 +15,7 @@
  * 콘텐츠가 바뀌어도 시뮬과 실게임이 함께 움직이게 한다.
  */
 
-import { CardType, type FlowerKind, type TrapKind } from '@entities/Card'
+import { CardType, flowerGrowsAtAge, flowerWiltChance, type FlowerKind, type TrapKind } from '@entities/Card'
 import type { HandCardId, HandCardDefinition, HandCardDropSource } from '@entities/HandCard'
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { TRIAL_DEFINITIONS } from '@data/Trials'
@@ -60,7 +60,7 @@ import type { SpecialEnemyKind } from '@entities/Card'
 import { EVENT_DEFINITIONS, EVENT_IDS, type EventId, type RiskOffer, type MinionExchangeConfig, type CountRpsConfig } from '@data/Events'
 import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
 import { EmberSystem, SPROUT_SPAWN_ADJUST, type EmberTier } from '@systems/EmberSystem'
-import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
+import { ENEMY_DEFINITIONS, specialEnemyTierForTurn } from '@systems/CardSpawner'
 import { DropSystem } from '@systems/DropSystem'
 import { SHARD_GENERATORS } from '@systems/TagReactions'
 import { altarPackBaseCost, packCostWithRepeats, regularShopPackBaseCost } from '@core/ShopPricing'
@@ -83,7 +83,11 @@ export interface EnaSimCard {
   flowerKind?: FlowerKind
   treasureKind?: 'normal' | 'starlight'
   value: number
-  /** 꽃 성장 누적 턴(시듦 확률 상승에 사용). */
+  /** 적 처치 불빛 랭크. 생략 시 일반 적의 기존 value 랭크를 사용한다. */
+  enemyPower?: number
+  /** 적 처치 시 손패 드롭 상한. 생략 시 일반 적의 group 폭을 사용한다. */
+  defeatDropCount?: number
+  /** 꽃 생존/성장 누적 턴. 금잔화의 격턴 성장 판정에 사용한다. */
   growth: number
   /** 괴물꽃이면 2→1→0 뒤 성장한다. 일반 적은 이 선택 필드를 갖지 않는다. */
   monsterGrowthTimer?: number
@@ -364,7 +368,8 @@ const BLADE_HAMMER_SHARD_CHANCE = 0.25
 
 const FEATURE_SCALARS = 70
 const FEATURE_PER_INCOMING = 6
-const FEATURE_PER_CELL = 14
+// 괴물꽃 여부·성장 시계·주기 성장량까지 관측해 화면에 보이는 위협과 학습 입력을 맞춘다.
+const FEATURE_PER_CELL = 17
 const FEATURE_PER_HAND = 13
 export const ENA_FEATURE_COUNT = FEATURE_SCALARS + FEATURE_PER_INCOMING * LANES + FEATURE_PER_CELL * ROWS * LANES + FEATURE_PER_HAND * HAND_MAX
 
@@ -699,7 +704,7 @@ export class EnaTrainingSimulation {
     return { observation: this.observe(), reward, done: this.done }
   }
 
-  /** 고정 길이 숫자 입력: 스칼라 70 + 예고 3칸×6 + 9칸×14 + 손패 10×13 = ENA_FEATURE_COUNT(344). */
+  /** 고정 길이 숫자 입력: 스칼라 70 + 예고 3칸×6 + 9칸×17 + 손패 10×13 = ENA_FEATURE_COUNT(371). */
   observe(): EnaObservation {
     const legalActions = ENA_ACTION_SPACE.filter((action) => this.isLegal(action))
     const tier = EmberSystem.getTier(this.ember)
@@ -1426,13 +1431,14 @@ export class EnaTrainingSimulation {
       // 처치 콤보(촛불): 폭이 큰 무리를 잡을수록 더 채운다 → 공격력 성장 동력.
       this.gainCombo((source === 'ember' ? 4 : 2) + (card.group - 1))
       // 처치 불빛: 실게임 scoreForCardRemoval와 같은 LightEconomy 공유식(랭크 1차식 + 그룹 감산 배수).
-      const rankLight = ENEMY_LIGHT_BASE + Math.max(1, card.value) * ENEMY_LIGHT_PER_RANK
+      const rankLight = ENEMY_LIGHT_BASE + Math.max(1, card.enemyPower ?? card.value) * ENEMY_LIGHT_PER_RANK
       this.gainLight(card.group > 1 ? rankLight * card.group * GROUP_LIGHT_DISCOUNT : rankLight)
       // 파편 생성기(숫돌 — TagReactions.SHARD_GENERATORS): 처치마다 칼날 파편을 흘린다.
       for (let n = 0; n < this.shardPerKill; n++) this.drawCard('blade-shard')
       // 처치 전리품 — 실게임 Card.rollDefeatDrops()와 같은 0~폭 굴림.
       // 손패 처치는 실게임처럼 두 겹으로 눌린다: 두 번 굴려 낮은 쪽 + 행동당 1장 예산.
-      const roll = (): number => Math.floor(this.rng.next() * (card.group + 1))
+      const dropCap = card.defeatDropCount ?? card.group
+      const roll = (): number => Math.floor(this.rng.next() * (dropCap + 1))
       let drops = source === 'ember' ? Math.min(roll(), roll()) : roll()
       if (source === 'ember') {
         drops = Math.min(drops, this.handKillDropBudget)
@@ -1657,12 +1663,13 @@ export class EnaTrainingSimulation {
 
   private applyFlower(card: EnaSimCard): void {
     const v = card.value
-    // 수확 불빛(실게임 24 + 가치×12) + 꽃 종류별 즉시 효과.
+    // 모든 꽃의 공통 수확 불빛(24 + 가치×12) 뒤 종류별 실제 보상을 같은 단위로 지급한다.
     this.gainLight(24 + v * 12)
-    if (card.flowerKind === 'redRose') this.hp = Math.min(this.maxHp, this.hp + v)
+    if (card.flowerKind === 'chamomile') this.gainLight(30 * specialEnemyTierForTurn(this.turn))
+    else if (card.flowerKind === 'redRose') this.hp = Math.min(this.maxHp, this.hp + v)
     else if (card.flowerKind === 'oleander') this.shield += v
     else if (card.flowerKind === 'lavender') this.gainCombo(v)
-    else if (card.flowerKind === 'marigold') this.gainLight(24 + v * 12) // 금잔화: 불빛 보너스 꽃
+    else if (card.flowerKind === 'marigold') this.coins += v
   }
 
   // ── 손패 관리(트리플 합성 포함) ────────────────────────────────────────────
@@ -1900,12 +1907,15 @@ export class EnaTrainingSimulation {
           continue
         }
         if (card.type !== CardType.FLOWER || card.flowerKind === 'seed') continue
+        // 위 가드 뒤에도 선택 필드 타입은 남으므로 지역 변수로 개화 종류를 확정한다.
+        const flowerKind = card.flowerKind
+        if (!flowerKind) continue
         card.growth++
-        const wiltChance = Math.min(0.6, 0.08 * card.growth)
-        if (this.rng.next() < wiltChance) {
-          // 몬스터꽃: 꽃 가치에 비례한 적으로 바뀐다.
-          const specialEnemyTier = Math.floor(this.turn / 20) + 1
-          this.board[row][lane] = { type: CardType.ENEMY, hp: 3 + card.value, atk: 1 + Math.floor(card.value / 2), group: 1, value: card.value, growth: 0, monsterGrowthTimer: 2, monsterGrowthAmount: specialEnemyTier, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+        if (flowerGrowsAtAge(flowerKind, card.growth)) card.value++
+        if (this.rng.next() < flowerWiltChance(card.value)) {
+          // 실게임 spawnMonsterFlower처럼 꽃 가치×20턴 티어에 시련 보너스를 더해 변이한다.
+          const specialEnemyTier = specialEnemyTierForTurn(this.turn)
+          this.board[row][lane] = { type: CardType.ENEMY, hp: card.value * specialEnemyTier + this.trialEnemyHpBonus, atk: card.value * specialEnemyTier + this.trialEnemyAtkBonus, group: 1, value: card.value, enemyPower: specialEnemyTier * 3, defeatDropCount: Math.max(1, Math.min(3, Math.ceil(card.value / 2))), growth: 0, monsterGrowthTimer: 2, monsterGrowthAmount: specialEnemyTier, sporeTimer: 0, eventTimer: -1, frozen: 0 }
         }
       }
     }
@@ -1925,8 +1935,9 @@ export class EnaTrainingSimulation {
     for (let lane = 0; lane < LANES; lane++) {
       const card = this.board[0][lane]
       if (card?.type === CardType.FLOWER && card.flowerKind === 'seed') {
-        card.flowerKind = this.rng.pick(['redRose', 'marigold', 'oleander', 'lavender'] as const)
-        card.value = 1 + this.rng.int(4)
+        // 실게임 randomBloomKind/bloom과 같은 5종 균등 선택 및 시작 가치 1을 사용한다.
+        card.flowerKind = this.rng.pick(['chamomile', 'redRose', 'marigold', 'oleander', 'lavender'] as const)
+        card.value = 1
         card.growth = 0
       }
     }
@@ -2272,7 +2283,8 @@ export class EnaTrainingSimulation {
     if ((roll -= b.sporeTrap) < 0) return this.spawnTrap('spore')
     if ((roll -= treasureWeight) < 0) return { type: CardType.TREASURE, hp: 0, atk: 0, group: 1, treasureKind: 'normal', value: 1 + this.rng.int(3), growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
     // 꽃은 씨앗으로 등장해 전방 도달 시 개화한다.
-    return { type: CardType.FLOWER, hp: 0, atk: 0, group: 1, flowerKind: 'seed', value: 1 + this.rng.int(4), growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+    // 씨앗은 런타임 Card와 똑같이 가치 0으로 태어나며 전방 개화 순간에만 가치 1이 된다.
+    return { type: CardType.FLOWER, hp: 0, atk: 0, group: 1, flowerKind: 'seed', value: 0, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
   }
 
   /** 진행 턴 밴드에 따른 실제 적 풀에서 HP/ATK를 가져오고, 티어·시련(광란) 보너스를 더한다. */
@@ -2303,12 +2315,17 @@ export class EnaTrainingSimulation {
       const left = this.board[0][lane]
       const right = this.board[0][lane + 1]
       if (!left || !right || left === right) continue
-      const sameEnemy = left.type === CardType.ENEMY && right.type === CardType.ENEMY
+      const leftMonsterFlower = left.monsterGrowthTimer !== undefined
+      const rightMonsterFlower = right.monsterGrowthTimer !== undefined
+      // 괴물꽃은 괴물꽃끼리만 합쳐지고 일반 적과는 합쳐지지 않는 런타임 특수 적 계약을 따른다.
+      const sameEnemy = left.type === CardType.ENEMY && right.type === CardType.ENEMY && leftMonsterFlower === rightMonsterFlower
       const sameTrap = left.type === CardType.TRAP && right.type === CardType.TRAP && left.trapKind === right.trapKind && left.trapKind !== 'bomb'
       if (sameEnemy) {
         left.group += right.group
         left.hp += right.hp + (left.group >= 3 ? 3 : 2)
         left.atk += right.atk + (left.group >= 3 ? 3 : 2)
+        // 괴물꽃 군락은 각 꽃의 처치 드롭 상한을 합산하는 런타임 merge 규칙을 따른다.
+        if (leftMonsterFlower) left.defeatDropCount = (left.defeatDropCount ?? 1) + (right.defeatDropCount ?? 1)
         this.board[0][lane + 1] = left
       } else if (sameTrap) {
         // 거미줄/포자 병합: 폭이 커지면 피해가 1→5→즉사(거미줄)/1→3→5(포자)로 급증한다.
@@ -2565,7 +2582,7 @@ export class EnaTrainingSimulation {
   }
 
   private encodeCard(card: EnaSimCard | null, row: number): number[] {
-    if (!card) return [0, 0, 0, 0, 0, 0, 0, row / (ROWS - 1), 0, 0, 0, 0, 0, 0]
+    if (!card) return [0, 0, 0, 0, 0, 0, 0, row / (ROWS - 1), 0, 0, 0, 0, 0, 0, 0, 0, 0]
     return [
       card.type === CardType.ENEMY ? 1 : 0,
       card.type === CardType.TRAP ? 1 : 0,
@@ -2582,6 +2599,9 @@ export class EnaTrainingSimulation {
       card.flowerKind === 'seed' ? 1 : 0,
       card.treasureKind === 'starlight' ? 1 : 0,
       card.frozen > 0 ? 1 : 0,
+      card.monsterGrowthTimer !== undefined ? 1 : 0,
+      (card.monsterGrowthTimer ?? 0) / 2,
+      (card.monsterGrowthAmount ?? 0) / 5,
     ]
   }
 

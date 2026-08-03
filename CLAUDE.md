@@ -73,7 +73,7 @@ npm run build    # verify 포함
   같은 커밋에서 함께 고친다.** 런타임과 시뮬이 어긋나면 에나는 실제로 존재하지 않는
   게임을 학습하고, 테스트도 화면도 멀쩡해서 그 사실이 묻힌다. 상세는
   `Ena_Companion_AI_Design.md` §12-3.
-- 관측/행동 계약(`ENA_FEATURE_COUNT` 344 · `ENA_ACTION_SPACE` 27)은 시뮬과 트레이너가
+- 관측/행동 계약(`ENA_FEATURE_COUNT` 371 · `ENA_ACTION_SPACE` 27)은 시뮬과 트레이너가
   공유한다. 차원이 바뀌면 `EnaPolicyStore`가 구버전 정책을 거부하고 교사 정책으로
   폴백한다 — **재학습이 필요한 주(major) 버전급 변경**이다.
 - 보스 체력은 `BossFightBudget`(손패 3~4장 + `supportHits`)에서 역산한다. **시뮬도 그
