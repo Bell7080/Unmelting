@@ -265,10 +265,8 @@ function bestFitFor(def: HandCardDefinition, situation: SupportSituation, killAv
   // 청소: 전방 넓은 병합 거미줄은 직접 제거, 인접 병합 예정 1칸들은 일괄 청소.
   // 이미 완성된 3칸 거미줄은 단일 지급 카드(키틴 단일 폭 2)로 못 치우므로 wideSpan=2일 때만 지원각이다.
   if (wideSpan === 2 && canRemoveWideFrontTrap(def, wideSpan) && !holds((d) => canRemoveWideFrontTrap(d, wideSpan))) {
-    // 2칸이 1칸과 합쳐져 즉사급 3칸이 될 각이면 최상위 고정, 아니면 서 있는 2칸의 실효 피해 절약.
-    let value = mergeLethal ? LETHAL_PREVENT_VALUE : effectiveWebDamage(wideSpan, trapBonus) * 0.6
-    // 예고 큐에 거미줄이 더 오면 1장 제거의 상대 가치는 소폭 낮아진다(광역 청소를 한 턴 미루는 쪽이 이득).
-    if (!mergeLethal && (incoming?.webs ?? 0) > 0) value *= 0.9
+    // 2칸이 3칸 즉사각이면 최상위, 고립 상태면 현재 5피해 절약만큼 키틴 지급 기회를 연다.
+    const value = mergeLethal ? LETHAL_PREVENT_VALUE : effectiveWebDamage(wideSpan, trapBonus) * 0.6
     plans.push({
       fit: 'cleanup',
       fitScore: value,
@@ -415,18 +413,53 @@ function withJosaWaGwa(word: string): string {
   return (code - 0xac00) % 28 === 0 ? `${word}와` : `${word}과`
 }
 
-type RecipeAxis = 'ember' | 'recovery' | 'attack' | 'cleanup' | 'generic'
+export type RecipeAxis = 'ember' | 'recovery' | 'attack' | 'cleanup' | 'generic'
 
-/** 레시피 효과 id → 기존 환산 축 보수 매핑. 실제 효과 구현은 HandSystem 소유 — 여기서는
- *  '어느 필요를 채우는가'만 근사하며, 매핑에 없는 새 효과는 generic 소량 가산으로 떨어진다. */
-function recipeEffectAxis(effect: RecipeEffectKind): RecipeAxis {
-  if (effect.startsWith('gain-ember')) return 'ember'
-  if (effect.startsWith('heal-')) return 'recovery'
-  // clear-* 는 함정을 포함한 광역 제거라 청소 축으로 본다(적 제거 겸용은 보수적으로 청소만 계상).
-  if (effect === 'clear-all-field-traps' || effect === 'convert-random-hazard-to-treasure') return 'cleanup'
-  if (effect === 'clear-front-cards' || effect === 'clear-all-field-cards') return 'cleanup'
-  if (effect.startsWith('damage-') || effect.startsWith('destroy-') || effect.endsWith('-atk') || effect === 'hot-water-maxhp') return 'attack'
-  return 'generic'
+/** 모든 레시피 효과의 필요 축을 명시한다. `satisfies Record`가 새 RecipeEffectKind 추가 시
+ *  컴파일 오류를 내므로, 신규 효과가 조용히 generic 지원으로 누락되는 일을 막는다. */
+const RECIPE_EFFECT_AXES = {
+  'gain-wax-drop': 'generic',
+  'damage-all-field-enemies-1': 'attack',
+  'damage-all-field-enemies-2': 'attack',
+  'damage-all-field-enemies-5': 'attack',
+  'gain-coin-1': 'generic',
+  'draw-random-hand-1': 'generic',
+  'destroy-random-front-enemy': 'attack',
+  'convert-random-hazard-to-treasure': 'cleanup',
+  'collect-random-treasure': 'generic',
+  'convert-random-waiting-to-treasure': 'generic',
+  'clear-all-field-cards': 'cleanup',
+  'damage-front-enemies-2': 'attack',
+  'damage-front-enemies-3': 'attack',
+  'damage-front-enemies-5': 'attack',
+  'clear-front-cards': 'cleanup',
+  'collect-waiting-treasures': 'generic',
+  'gain-ember-3': 'ember',
+  'heal-5': 'recovery',
+  'heal-3': 'recovery',
+  'damage-split-field-4': 'attack',
+  'clear-all-field-traps': 'cleanup',
+  'damage-split-field-5': 'attack',
+  'destroy-all-front-enemies': 'attack',
+  'gain-ember-2': 'ember',
+  'shield-2-and-damage-field-1': 'attack',
+  'damage-split-field-2x2': 'attack',
+  'heal-by-player-attack': 'recovery',
+  'ignite-atk': 'attack',
+  'hot-atk': 'attack',
+  'fuse-atk': 'attack',
+  'backfire-atk': 'attack',
+  'rage-atk': 'attack',
+  'flame-chain-atk': 'attack',
+  'glass-shards-atk': 'attack',
+  'fireworks-atk': 'attack',
+  'banquet-atk': 'attack',
+  'hot-water-maxhp': 'attack',
+} satisfies Record<RecipeEffectKind, RecipeAxis>
+
+/** 레시피 효과가 현재 어떤 필요 축을 채우는지 반환한다. */
+export function recipeEffectAxis(effect: RecipeEffectKind): RecipeAxis {
+  return RECIPE_EFFECT_AXES[effect]
 }
 
 interface RecipeAxisValue {

@@ -12,7 +12,6 @@ import type { Card } from '@entities/Card'
 import type { Character } from '@entities/Character'
 import type { HandCard, HandCardId } from '@entities/HandCard'
 import { HAND_CARD_DEFINITIONS } from '@data/HandCards'
-import { RECIPES } from '@data/Recipes'
 import { RELIC_DEFINITIONS } from '@data/Relics'
 import { bestSupportCard, type IncomingRefillSummary, type SupportFit, type SupportRoleWeights } from './HandCardAdvisor'
 
@@ -30,7 +29,7 @@ export interface ThreatReport {
   /** 함정 제거를 넘어 공격/포자/레시피/트리플까지 본 최종 추천 손패. */
   recommendedCardId: HandCardId | null
   /** 대사/로그가 추천 성격을 구분하도록 남기는 큰 분류(위협 지원은 HandCardAdvisor fit 공유). */
-  recommendationKind: SupportFit | 'triple' | 'recipe' | null
+  recommendationKind: SupportFit | 'triple' | null
   /** 추천을 택한 이유. 로그/학습 trace에서 사람이 읽기 쉽게 남긴다. */
   recommendationReason: string
   /** 대사 슬롯에 섞는 짧은 명사구('왜 이 카드인지'). 위협 지원 추천에서만 채워진다. */
@@ -39,6 +38,10 @@ export interface ThreatReport {
   playableInCards?: number
   /** 빗자루 오지급 방지를 위해 실제 전방 진입 가능성이 있는지 별도로 드러낸다. */
   hasImminentWebDrop: boolean
+  /** 전방 2칸 거미줄에 1칸 거미줄이 실제 합류할 수 있는 다음 턴 즉사 후보. */
+  webEscalationImminent: boolean
+  /** 같은 판에서 확률 게이트를 재굴림하지 않기 위한 보드·손패 기반 기회 서명. */
+  recommendationSignature: string | null
 }
 
 export interface ForesightOptions {
@@ -46,10 +49,6 @@ export interface ForesightOptions {
   unlockedCardIds?: readonly HandCardId[]
   /** 런에서 발동 가능한 레시피 ID. 없으면 기본 해금 레시피만 본다. */
   unlockedRecipeIds?: ReadonlySet<string>
-  /** 지금 유지 중인 체인. 없으면 빈 체인으로 보고, 손패 순서만 계산한다. */
-  chainSequence?: readonly HandCardId[]
-  /** 이미 이번 체인에서 발동한 레시피는 다시 추천하지 않는다. */
-  firedRecipeIds?: ReadonlySet<string>
   /** 보조각으로 인정할 최대 손패 진행 수. 너무 먼 조합은 자연스럽지 않아 제외한다. */
   lookaheadCards?: number
   /** 레일 예고선이 보여 주는 다음 리필 카드(CardSpawner.peekNextRefillCards). 시간 축 보정에 쓴다. */
@@ -58,6 +57,11 @@ export interface ForesightOptions {
   handSingleBonus?: Readonly<Partial<Record<HandCardId, number>>>
   /** RL 피팅 역할 가중(EnaDisposition.supportRoleWeights). */
   supportRoleWeights?: SupportRoleWeights
+}
+
+/** 같은 기회에서 한 번 개입하지 않았다면 보드가 바뀔 때까지 확률을 다시 굴리지 않는다. */
+export function isRepeatedPredictionOpportunity(previous: string | null, current: string | null): boolean {
+  return previous !== null && current !== null && previous === current
 }
 
 /** 예고 카드 배열 → 위협 종류 요약. 런타임 Card와 시뮬 카드가 같은 형태로 환산된다. */
@@ -165,31 +169,9 @@ function canUse(id: HandCardId, unlocked: Set<HandCardId>): boolean {
   return unlocked.has(id) && !!HAND_CARD_DEFINITIONS[id]
 }
 
-function hasHand(character: Character, ids: readonly HandCardId[]): boolean {
-  return character.hand.some((card) => ids.includes(card.defId))
-}
-
 /** 보유 유물의 synergyTags를 평탄화한다 — 태그가 달린 유물이 데이터에 들어오면 자동 가점된다. */
 function ownedRelicTags(character: Character): string[] {
   return character.relics.flatMap((id) => [...(RELIC_DEFINITIONS[id]?.synergyTags ?? [])])
-}
-
-/** 현재 체인과 앞으로 누를 손패 순서를 합쳐 레시피 충족까지 필요한 장수를 계산한다. */
-function cardsUntilRecipe(recipe: (typeof RECIPES)[number], chain: readonly HandCardId[], orderedHand: readonly HandCard[], candidate: HandCardId, lookahead: number): number | null {
-  const counts = new Map<HandCardId, number>()
-  for (const id of chain) counts.set(id, (counts.get(id) ?? 0) + 1)
-  const satisfies = () => Object.entries(recipe.ingredients).every(([id, need]) => (counts.get(id as HandCardId) ?? 0) >= (need ?? 0))
-  if (satisfies()) return 0
-
-  const future = [...orderedHand.map((card) => card.defId), candidate]
-  let candidateSeen = false
-  for (let i = 0; i < Math.min(lookahead, future.length); i++) {
-    const id = future[i]
-    if (id === candidate && i === future.length - 1) candidateSeen = true
-    counts.set(id, (counts.get(id) ?? 0) + 1)
-    if (candidateSeen && satisfies()) return i + 1
-  }
-  return null
 }
 
 /** 같은 카드 2장이 이미 손에 있을 때, 보조 카드가 실제로 몇 번째 위치에서 트리플이 되는지 본다. */
@@ -215,6 +197,7 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
   const webMerge = estimateImminentWebMerge(lanes)
   const potentialWebDamage = mergedWebDamage(webMerge.mergedSize)
   const webLethal = potentialWebDamage >= character.health
+  const webEscalationImminent = frontTwoWeb && webMerge.mergedSize >= 3
   const sporeReady = cells.some(({ card, distance }) => card.type === CardType.TRAP && card.trapKind === 'spore' && (distance === 0 || card.sporeTurnsUntilSpread <= 1))
   const strongEnemy = cells.find(({ card, distance }) => card.type === CardType.ENEMY && distance <= 1 && (card.groupCount >= 2 || card.health > character.damage + 1))
   // 위협 지원 카드는 전 손패 범용 스코어러(HandCardAdvisor)가 데이터 주도로 고른다.
@@ -255,20 +238,6 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
     [...unlocked]
   )
   const lookahead = options.lookaheadCards ?? 4
-  const chainSequence = options.chainSequence ?? []
-  const firedRecipeIds = options.firedRecipeIds ?? new Set<string>()
-  const activeRecipes = RECIPES.filter((recipe) => (!recipe.runLocked || options.unlockedRecipeIds?.has(recipe.id)) && !firedRecipeIds.has(recipe.id))
-  const hasTacticalRecipeBoard = cells.some(({ card, distance }) =>
-    distance <= 1 && (card.type === CardType.ENEMY || card.type === CardType.TRAP || card.type === CardType.TREASURE)
-  )
-  const recipeNeed = hasTacticalRecipeBoard
-    ? activeRecipes
-        .flatMap((recipe) => Object.keys(recipe.ingredients)
-          .filter((id) => canUse(id as HandCardId, unlocked) && !hasHand(character, [id as HandCardId]))
-          .map((id) => ({ recipe, ingredient: id as HandCardId, turns: cardsUntilRecipe(recipe, chainSequence, character.hand, id as HandCardId, lookahead) })))
-        .filter((plan): plan is { recipe: (typeof RECIPES)[number]; ingredient: HandCardId; turns: number } => plan.turns !== null)
-        .sort((a, b) => a.turns - b.turns || a.recipe.totalCount - b.recipe.totalCount)[0]
-    : undefined
   const tripleNeed = character.hand
     .filter((held, _index, hand) => !held.merged && canUse(held.defId, unlocked) && hand.filter((c) => c.defId === held.defId && !c.merged).length === 2)
     .map((held) => ({ id: held.defId, turns: cardsUntilTriple(character.hand.filter((c) => !c.merged), held.defId, lookahead) }))
@@ -291,12 +260,18 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
     playableInCards = tripleNeed.turns
     recommendationKind = 'triple'
     recommendationReason = `현재 손패 순서대로 ${tripleNeed.turns}장 안에 트리플 완성 가능`
-  } else if (recipeNeed) {
-    recommendedCardId = recipeNeed.ingredient
-    playableInCards = recipeNeed.turns
-    recommendationKind = 'recipe'
-    recommendationReason = `${recipeNeed.recipe.name} 레시피가 현재 체인/손패 순서에서 ${recipeNeed.turns}장 안에 발동 가능`
   }
+  const relevantBoard = cells
+    .filter(({ distance }) => distance <= 1)
+    .map(({ card, lane, distance }) => `${card.id}@${lane}:${distance}:${card.groupCount}`)
+    .sort()
+    .join('|')
+  const webOpportunity = webCells.map(({ card }) => `${card.id}:${card.groupCount}`).sort().join('|')
+  const recommendationSignature = recommendationKind === 'cleanup' || webEscalationImminent
+    ? `web:${webOpportunity}`
+    : recommendedCardId
+      ? `${recommendationKind}:${recommendedCardId}:${relevantBoard}:hand=${character.hand.map((card) => card.defId).join(',')}`
+      : null
 
-  return { webCount, potentialWebDamage, webLethal, recommendCleanup: support?.fit === 'cleanup', strongEnemyIncoming: !!strongEnemy, recommendedCardId, recommendationKind, recommendationReason, recommendationShortReason, hasImminentWebDrop, playableInCards }
+  return { webCount, potentialWebDamage, webLethal, recommendCleanup: support?.fit === 'cleanup', strongEnemyIncoming: !!strongEnemy, recommendedCardId, recommendationKind, recommendationReason, recommendationShortReason, hasImminentWebDrop, playableInCards, webEscalationImminent, recommendationSignature }
 }

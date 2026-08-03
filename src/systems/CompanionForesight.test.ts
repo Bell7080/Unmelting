@@ -3,7 +3,7 @@ import { GameState } from '@core/GameState'
 import { Card, CardType } from '@entities/Card'
 import type { HandCardId } from '@entities/HandCard'
 import { DropSystem } from './DropSystem'
-import { assessThreats, estimateImminentWebMergeFromCells } from './CompanionForesight'
+import { assessThreats, estimateImminentWebMergeFromCells, isRepeatedPredictionOpportunity } from './CompanionForesight'
 
 /** 작은 보드 세팅 도우미: 예지 테스트가 위협 배치만 드러내게 한다. */
 function web(id: string, group = 1): Card {
@@ -37,6 +37,11 @@ describe('estimateImminentWebMergeFromCells (런타임·시뮬 공유 병합 판
 })
 
 describe('CompanionForesight', () => {
+  it('suppresses a declined prediction until its board opportunity signature changes', () => {
+    expect(isRepeatedPredictionOpportunity('web:a', 'web:a')).toBe(true)
+    expect(isRepeatedPredictionOpportunity('web:a', 'web:b')).toBe(false)
+    expect(isRepeatedPredictionOpportunity(null, 'web:a')).toBe(false)
+  })
   it('does not recommend broom for distant single webs that cannot drop immediately', () => {
     const gs = new GameState()
     gs.lanes[0].setCardAtDistance(2, web('far-a'))
@@ -85,31 +90,35 @@ describe('CompanionForesight', () => {
     const report = assessThreats(gs.lanes, gs.character, { unlockedCardIds: ['sweep', 'chitin'] as HandCardId[] })
 
     expect(report.webLethal).toBe(true)
+    expect(report.webEscalationImminent).toBe(true)
     expect(report.recommendedCardId).toBe('chitin')
+    expect(report.recommendationSignature).toContain('web:')
   })
 
-  it('recommends recipe support only when current chain and hand order can fire it soon', () => {
+  it('opens one chitin opportunity for an isolated 2-web and gives it a stable web signature', () => {
+    const gs = new GameState()
+    const merged = web('front-safe-2', 2)
+    gs.lanes[0].setCardAtDistance(0, merged)
+    gs.lanes[1].setCardAtDistance(0, merged)
+
+    const report = assessThreats(gs.lanes, gs.character, { unlockedCardIds: ['chitin'] as HandCardId[] })
+
+    expect(report.webEscalationImminent).toBe(false)
+    expect(report.recommendedCardId).toBe('chitin')
+    expect(report.recommendationSignature).toBe('web:front-safe-2:2')
+  })
+
+  it('does not hand out a generic recipe ingredient without an effect-matched need', () => {
     const gs = new GameState()
     gs.lanes[1].setCardAtDistance(0, new Card('enemy', CardType.ENEMY, '적', 'test', 5, 1))
     gs.character.addHandCard(DropSystem.makeCard('ember'))
 
-    const ready = assessThreats(gs.lanes, gs.character, {
+    const report = assessThreats(gs.lanes, gs.character, {
       unlockedCardIds: ['candle'] as HandCardId[],
-      chainSequence: [],
       lookaheadCards: 2,
     })
 
-    expect(ready.recommendedCardId).toBe('candle')
-    expect(ready.playableInCards).toBe(2)
-    expect(ready.recommendationReason).toContain('2장 안에 발동 가능')
-
-    const tooFar = assessThreats(gs.lanes, gs.character, {
-      unlockedCardIds: ['candle'] as HandCardId[],
-      chainSequence: [],
-      lookaheadCards: 1,
-    })
-
-    expect(tooFar.recommendedCardId).toBeNull()
+    expect(report.recommendedCardId).toBeNull()
   })
 
   it('reports how many ordered hand cards are needed before triple support pays off', () => {
