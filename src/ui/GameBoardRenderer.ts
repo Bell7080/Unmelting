@@ -1625,6 +1625,10 @@ export class GameBoardRenderer {
       const tripleMergeCopies = card.merged
         ? '<span class="triple-merge-copy copy-a" aria-hidden="true"></span><span class="triple-merge-copy copy-b" aria-hidden="true"></span>'
         : ''
+      // 트리플 전용 호일 레이어(little_token .card-foil 기법). 전용 요소로 두는 이유는
+      // 반짝임과 광택 스윕이 각각 자기 의사 요소를 필요로 하기 때문이다 — 버튼의
+      // ::before/::after는 이미 황금빛 색 오버레이가 쓰고 있다.
+      const tripleFoil = card.merged ? '<span class="triple-foil" aria-hidden="true"></span>' : ''
       // Persist source ids into data attributes for exactly the render where a
       // merge appears; playNewHandMergeEffects reads the previous rects and
       // converts them into CSS offsets for the copy layers.
@@ -1638,9 +1642,9 @@ export class GameBoardRenderer {
                   style="--hand-card-art: url('${handArt}');"
                   aria-label="${def.name}: ${ariaDesc}${recipeReadyTitle ? ` · ${recipeReadyTitle}` : ''}">
             ${tripleMergeCopies}
+            ${tripleFoil}
             ${demonReady ? `<span class="recipe-ready-mark recipe-ready-mark--demon" aria-hidden="true">✦</span>` : ''}
             ${hasOtherRecipes ? `<span class="recipe-ready-mark${demonReady ? ' is-has-demon' : ''}" aria-hidden="true">✦</span>` : ''}
-            ${card.merged ? '<span class="merged-mark" aria-hidden="true">✦</span>' : ''}
             <span class="hand-card-thumb" aria-hidden="true">
               <img src="${handArt}" alt="" loading="lazy" />
             </span>

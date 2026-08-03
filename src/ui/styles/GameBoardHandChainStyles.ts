@@ -92,9 +92,15 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   /* 상자가 줄어도 글자는 안 줄어든다 — 넘치는 부분은 카드 안에서 잘라 낸다. */
   overflow: hidden;
 }
-/* 줄어든 카드에서는 이름을 아래가 아니라 가운데에 두고 세로 여백을 걷는다.
-   8px×2 여백이 얇아진 카드 높이를 통째로 먹어 이름이 위아래로 잘렸다. */
-.hand-stack.is-crowded .hand-slot.hand-card > button {
+/*
+ * 이름은 **장수와 무관하게 늘 같은 자리**에 있어야 한다.
+ *
+ * 예전에는 7장까지 아래 정렬(align-items: end + 세로 여백 8px), 8장부터 가운데 정렬로
+ * 갈렸다. 그래서 한 장을 더 얻어 8장이 되는 순간 모든 이름이 **18px 위로 튀었다** —
+ * 손패가 쌓일수록 이름이 밀리는 것처럼 보이던 정체가 이 경계다.
+ * 가운데 정렬은 카드가 줄어도 이름이 제자리에 남으므로 어느 높이에서나 안전하다.
+ */
+.hand-stack .hand-slot.hand-card > button {
   padding-block: 0;
   align-items: center;
 }
@@ -549,20 +555,144 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 .hand-cat-tool { box-shadow: inset 4px 0 0 rgba(255, 215, 120, 0.9); }
 .hand-cat-control { box-shadow: inset 4px 0 0 rgba(145, 174, 210, 0.9); }
 .hand-cat-attack { box-shadow: inset 4px 0 0 rgba(168, 58, 58, 0.9); }
-.hand-slot.is-merged {
-  background: rgba(255, 215, 120, 0.13);
-  border-color: rgba(255, 215, 120, 0.55);
-  box-shadow:
-    0 0 12px rgba(255, 215, 120, 0.35),
-    inset 4px 0 0 rgba(255, 215, 120, 1);
-}
-.hand-slot.is-merged .merged-mark {
+/*
+ * ── 트리플(합성) 손패 — 카드 그림에 황금빛을 '입히는' 오버레이 + 호일 ──────
+ *
+ * 예전에는 테두리를 금색으로 바꾸고 바깥 발광을 둘렀는데, 그러면 **등급 발광과
+ * 겹쳐** 레어인지 유니크인지가 안 읽혔다(등급 테두리·글로우도 box-shadow다).
+ * 우상단 아이콘도 레시피 힌트와 자리를 다퉜다.
+ *
+ * 그래서 테두리를 건드리지 않고 **그림 위에만** 색을 얹는다(little_token 기법):
+ *   ① color + overlay 두 겹을 background-blend-mode로 섞어 **황금빛**을 만든다.
+ *      color 한 겹만 쓰면 색조가 통째로 갈려 샛노래진다 — overlay를 섞어야
+ *      원래 그림의 명암이 살아 금속처럼 깊어진다.
+ *   ② 호일(.triple-foil) — 반짝이는 점이 흐르고 광택 띠가 비스듬히 지나간다.
+ * 등급 표시는 테두리가 온전히 맡고, 트리플은 그림 색과 이름 글자로 말한다.
+ */
+.hand-slot.is-merged > button::before {
+  content: '';
   position: absolute;
-  top: 4px;
-  right: 6px;
-  font-size: 12px;
-  color: rgba(255, 232, 168, 0.95);
-  text-shadow: 0 0 4px rgba(255, 215, 120, 0.85);
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  /* 레몬빛(#ffd479 계열)은 너무 밝고 샛노랬다. 호박~청동으로 낮춰 잡고 위에
+     밝은 겹을 overlay로 섞어 '광택 있는 금'을 만든다. */
+  background:
+    linear-gradient(152deg, #e0a94e 0%, #b9772a 48%, #7d4d15 100%),
+    linear-gradient(28deg, rgba(255, 238, 196, 0.55), rgba(120, 74, 22, 0.3) 62%, rgba(255, 226, 160, 0.4));
+  background-blend-mode: overlay;
+  mix-blend-mode: color;
+  opacity: 0.82;
+}
+/* 밝기를 조금 올려 금이 '빛나는' 쪽으로 간다 — color 합성은 밝기를 안 건드리므로
+   이 한 겹이 없으면 금색이지만 어둡게 가라앉는다. */
+.hand-slot.is-merged > button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  mix-blend-mode: soft-light;
+  opacity: 0.7;
+  background: radial-gradient(120% 100% at 30% 20%, rgba(255, 240, 200, 0.85), rgba(255, 190, 96, 0.24) 55%, transparent 82%);
+}
+
+/* ── 호일 — little_token .card-foil에서 가져온 어휘 ─────────────────────
+   화면에 빛을 더하는 screen 합성이라 어두운 부분은 거의 건드리지 않는다.
+   반짝임(::before)은 타일링된 작은 점이 천천히 흐르고, 광택(::after)은 좁은 띠가
+   비스듬히 지나간다. 둘을 나눠야 '가만히 반짝임'과 '쓸고 지나감'이 겹쳐 호일이 된다. */
+.triple-foil {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0.72;
+  background: linear-gradient(
+    112deg,
+    transparent 18%,
+    rgba(255, 226, 154, 0.1) 36%,
+    rgba(255, 246, 214, 0.5) 48%,
+    rgba(226, 168, 74, 0.16) 60%,
+    transparent 78%
+  );
+  background-size: 240% 100%;
+  animation: triple-foil-idle 5s ease-in-out infinite alternate;
+}
+.triple-foil::before,
+.triple-foil::after {
+  content: '';
+  position: absolute;
+  inset: -12%;
+  pointer-events: none;
+}
+/* 반짝이는 점 — 크기가 다른 세 겹을 서로 다른 타일 간격으로 깔아 규칙성을 지운다.
+   타일을 촘촘히 깔면(47~91px) 손패처럼 작은 카드에서는 호일이 아니라 **얼룩**으로
+   읽힌다 — 실제로 그랬다. 간격을 넓혀 카드당 서너 점만 남긴다. */
+.triple-foil::before {
+  opacity: 0.62;
+  background:
+    radial-gradient(circle at 22% 30%, rgba(255, 252, 226, 0.95) 0 1px, transparent 2.2px),
+    radial-gradient(circle at 68% 22%, rgba(255, 238, 180, 0.85) 0 1.3px, transparent 2.8px),
+    radial-gradient(circle at 44% 78%, rgba(255, 244, 206, 0.8) 0 1px, transparent 2.2px);
+  background-size: 118px 96px, 157px 121px, 193px 143px;
+  animation: triple-foil-sparkle 3.8s ease-in-out infinite alternate;
+}
+/* 광택 스윕 — 좁고 밝은 띠 하나가 카드를 가로지른다. */
+.triple-foil::after {
+  opacity: 0.4;
+  background: linear-gradient(118deg, transparent 38%, rgba(255, 255, 246, 0.9) 48%, rgba(255, 214, 130, 0.6) 53%, transparent 64%);
+  transform: translateX(-58%);
+  animation: triple-foil-glint 4.4s ease-in-out infinite;
+}
+@keyframes triple-foil-idle {
+  from { background-position: 110% 0; }
+  to   { background-position: -10% 0; }
+}
+@keyframes triple-foil-sparkle {
+  from { transform: translate3d(0, 0, 0); opacity: 0.34; }
+  to   { transform: translate3d(-9px, 6px, 0); opacity: 0.78; }
+}
+@keyframes triple-foil-glint {
+  0%   { transform: translateX(-58%); }
+  55%  { transform: translateX(62%); }
+  100% { transform: translateX(62%); }
+}
+
+/* 이름·썸네일은 오버레이와 호일 위에 남아야 글자가 물들지 않는다. */
+.hand-slot.is-merged .hand-card-name,
+.hand-slot.is-merged .hand-card-thumb { z-index: 3; }
+/*
+ * 트리플임을 알리는 것은 이제 **이름의 ★와 글자 자체의 빛**뿐이다.
+ * 알약 테두리를 두르면 '선택된 UI'로 읽히고 등급 테두리와도 선이 겹친다 —
+ * 배경판은 글자를 읽히게 할 최소한만 남기고, 강조는 글자의 발광과 그림자로만 낸다.
+ */
+.hand-slot.is-merged .hand-card-name {
+  color: #fff3cf;
+  background: none;
+  box-shadow: none;
+  text-shadow:
+    0 1px 2px rgba(28, 12, 2, 0.95),
+    0 2px 6px rgba(0, 0, 0, 0.85),
+    0 0 10px rgba(255, 208, 122, 0.9),
+    0 0 22px rgba(226, 150, 44, 0.55);
+  animation: triple-name-pulse 2.6s ease-in-out infinite;
+}
+@keyframes triple-name-pulse {
+  0%, 100% {
+    text-shadow:
+      0 1px 2px rgba(28, 12, 2, 0.95), 0 2px 6px rgba(0, 0, 0, 0.85),
+      0 0 8px rgba(255, 208, 122, 0.72), 0 0 18px rgba(226, 150, 44, 0.4);
+  }
+  50% {
+    text-shadow:
+      0 1px 2px rgba(28, 12, 2, 0.95), 0 2px 6px rgba(0, 0, 0, 0.85),
+      0 0 16px rgba(255, 230, 168, 1), 0 0 30px rgba(240, 168, 60, 0.7);
+  }
 }
 
 /* Recipe-ready hand cards glow from the left edge toward the adjacent plus/chain
