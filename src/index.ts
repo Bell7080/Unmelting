@@ -30,6 +30,7 @@ import { BossEventController } from '@core/BossEvent'
 import {
   GameBoardRenderer,
   CardActionDetail,
+  CardProximityDetail,
   ItemActionDetail,
   ActivityLogEntry,
   ShopBuyDetail,
@@ -65,7 +66,7 @@ import { FontManager } from '@ui/FontManager'
 import { SpriteUrls, spriteForHearthStation } from '@ui/Sprites'
 import { sparkleIcon } from '@ui/Icons'
 import { SpeechBubble } from '@ui/SpeechBubble'
-import { CompanionSystem, type SituationId, type BoardEncounterKind, type SystemEncounterKind } from '@systems/CompanionSystem'
+import { CompanionSystem, isBoardIntroductionAutomaticDistance, type SituationId, type BoardEncounterKind, type SystemEncounterKind } from '@systems/CompanionSystem'
 import {
   loadDisposition,
   computeEnaGrowth,
@@ -300,7 +301,6 @@ const companionDirector: CompanionDirector = new CompanionDirector({
   gameState, companion, speechBubble, boardRenderer, cardSpawner,
   enaAutonomousLearner,
   getRunCardPool: () => runCardPool,
-  getChain: () => chain,
   isGameActive: () => gameActive,
   isInputLocked: () => inputLocked,
   isShopOpen: () => shopFlow.isOpen(),
@@ -412,6 +412,9 @@ function enterHearth(): void {
   gameActive = false
   // 아직 캐릭터를 고르지 않았으므로 플레이어 존을 숨긴다(레이어는 유지, visibility만 off).
   document.body.classList.add('hearth-lobby')
+  // 실행 중임을 나타내는 명시적 게이트를 내린다. 로비/런 교차 애니메이션용
+  // hearth-lobby 클래스가 비동기로 정리되더라도 로그 노출 판정과 섞이지 않게 한다.
+  document.body.classList.remove('game-run-active')
   // 거점(로비)에서도 미개방 메타 패널(화폐/의뢰)을 숨긴다 — 무역 개방 상태(isMetaUnlocked)에 따른다.
   document.body.classList.remove('onboarding-run')
   // 졸업 후 첫 로비 도착이면 화폐가 해금됐어도 무역 개방 팡! 순간까지 패널을 숨겨 함께 등장시킨다.
@@ -1448,8 +1451,14 @@ function boardIntroKindOf(card: Card): BoardEncounterKind | null {
   if (card.treasureKind === 'junk') return 'junk'
   if (card.treasureKind === 'starlight') return 'starlight'
   if (card.type === CardType.EVENT) return 'event-door'
-  // 씨앗만 소개 대상 — 핀 꽃은 일반 상황 반응(flower 풀)이 담당한다.
-  if (card.type === CardType.FLOWER && card.flowerKind === 'seed') return 'seed'
+  if (card.specialEnemyKind === 'mimic') return 'mimic'
+  if (card.specialEnemyKind === 'monsterFlower') return 'monster-flower'
+  // 꽃은 종류마다 보상이 달라 첫 개화 때 에나가 꽃과 쓰임을 함께 짚어 준다.
+  if (card.type === CardType.FLOWER) {
+    if (card.flowerKind === 'seed') return 'seed'
+    if (card.flowerKind === 'redRose') return 'red-rose'
+    return card.flowerKind
+  }
   return null
 }
 
@@ -1460,7 +1469,8 @@ function firstSeenKeyOf(kind: BoardEncounterKind | SystemEncounterKind): string 
 
 /** 여러 종류가 한꺼번에 깔렸을 때 무엇부터 짚을지 — 위협이 큰 쪽을 먼저 알려 준다. */
 const FIELD_INTRO_ORDER: BoardEncounterKind[] = [
-  'bomb', 'spore', 'web', 'bush', 'rock', 'junk', 'event-door', 'starlight', 'seed',
+  'bomb', 'spore', 'web', 'mimic', 'monster-flower', 'bush', 'rock', 'junk',
+  'event-door', 'starlight', 'seed', 'red-rose', 'oleander', 'lavender', 'marigold', 'chamomile',
 ]
 
 /** 이미 소개한 종류인가(영구·세션 이중 가드, 읽기 전용). */
@@ -1474,12 +1484,17 @@ function isFieldKindIntroduced(kind: BoardEncounterKind): boolean {
 }
 
 /** 한 종류를 지금 소개하고 영구·세션 기록을 남긴다. */
-function sayFieldIntro(kind: BoardEncounterKind): void {
+function sayFieldIntro(kind: BoardEncounterKind, fieldCardIds: Iterable<string>): void {
   const line = companion.introduceFields([kind])
   if (!line) return
   enaAutonomousLearner.recordFirstSeen(firstSeenKeyOf(kind))
   sessionFieldsIntroduced.add(kind)
-  companionDirector.sayEnaBark(line, { importance: BARK_IMPORTANCE.situation })
+  const stableCardIds = [...fieldCardIds]
+  companionDirector.sayEnaBark(line, {
+    importance: BARK_IMPORTANCE.situation,
+    // 큐를 기다린 경우에도 실제 대사가 뜨는 순간 같은 칸을 촛불빛으로 짚는다.
+    onDisplay: () => boardRenderer.pulseEnaHint({ fieldCardIds: stableCardIds }),
+  })
 }
 
 /**
@@ -1490,23 +1505,30 @@ function introduceFieldKindOnce(card: Card): void {
   if (!companionDirector.companionWorldCanSpeak()) return
   const kind = boardIntroKindOf(card)
   if (!kind || isFieldKindIntroduced(kind)) return
-  sayFieldIntro(kind)
+  sayFieldIntro(kind, [card.id])
 }
 
 /**
- * 보드에 새로 나타난 첫 조우 대상(필드 3종 + 거미줄/폭탄/포자/이벤트 문/별빛)을 태어나서 처음
- * 겪는 순간 에나가 한 번 소개하게 한다. 여러 종류가 한꺼번에 나와도 한 줄로 묶어 스팸을 막는다.
+ * 전방까지 다가온 첫 조우 대상(필드 3종 + 거미줄/폭탄/포자/이벤트 문/별빛)을
+ * 태어나서 처음 겪는 순간 에나가 한 번 소개하게 한다. 여러 종류가 한꺼번에 나와도 한 줄로 묶어 스팸을 막는다.
  * 영구 first-seen 기록(enaAutonomousLearner) 기반이라 죽어서 재시작해도 반복되지 않는다.
  */
 function maybeIntroduceFields(): void {
   if (!companionDirector.companionWorldCanSpeak()) return
-  // 현재 보드에 놓인 조우 종류를 모은다.
-  const present = new Set<BoardEncounterKind>()
+  // 전방은 놓치지 않도록 자동 소개하고, 다음 줄은 포인터 근접 이벤트에 맡긴다.
+  const present = new Map<BoardEncounterKind, Set<string>>()
   for (const lane of gameState.lanes) {
     for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+      // 자동 스캔은 전방만 본다. 다음 줄은 플레이어가 포인터를 가까이 가져간 순간 설명하고,
+      // 가장 먼 줄은 대상이 아직 시야의 초점이 아니므로 어느 경로에서도 설명하지 않는다.
+      if (!isBoardIntroductionAutomaticDistance(d)) continue
       const card = lane.getCardAtDistance(d)
       const kind = card ? boardIntroKindOf(card) : null
-      if (kind) present.add(kind)
+      if (kind && card) {
+        const ids = present.get(kind) ?? new Set<string>()
+        ids.add(card.id)
+        present.set(kind, ids)
+      }
     }
   }
   if (present.size === 0) return
@@ -1514,7 +1536,7 @@ function maybeIntroduceFields(): void {
   //   묶어 말하면 시작하자마자 긴 설명이 우다다 쏟아졌다. 나머지는 표시하지 않고 남겨
   //   다음 턴 스캔이나 그 칸을 실제로 만졌을 때(introduceFieldKindOnce) 짚어 준다.
   const nextKind = FIELD_INTRO_ORDER.find((kind) => present.has(kind) && !isFieldKindIntroduced(kind))
-  if (nextKind) sayFieldIntro(nextKind)
+  if (nextKind) sayFieldIntro(nextKind, present.get(nextKind) ?? [])
   // 획득 경로(enqueueDrop)에서 조용히 합성된 첫 트리플도 이 스캔이 받아 소개한다.
   if (gameState.character.hand.some((card) => card.merged)) {
     const tripleIntro = encounterIntroLineOnce('triple')
@@ -1746,6 +1768,9 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // 선택한 난이도가 온보딩 여부를 결정한다: 새싹 병아리 = 온보딩(30F 아크 + 필드 3종 + 양초 고양이),
   // 쉬움/보통 = 정규 스폰. 기본 부팅(difficulty=null=쉬움 테스트 필드)도 온보딩을 끈다.
   onboardingRunActive = difficulty === 'sprout'
+  // 새싹 직행을 포함한 모든 실제 런에서 좌측 행동 기록을 보장한다. 최초 부팅은
+  // enterHearth를 거치지 않으므로 난이도 대신 이 런 수명주기 클래스를 단일 게이트로 쓴다.
+  document.body.classList.add('game-run-active')
   // 새싹 병아리는 판 자체도 한 단계 순하게 굴린다(적·함정 -7 / 보물·꽃 +5).
   // 직업 보정과 별도 축이라 직업 선택이 이 값을 덮어쓰지 않는다.
   cardSpawner.setDifficultySpawnAdjust(onboardingRunActive ? { ...SPROUT_SPAWN_ADJUST } : null)
@@ -2111,6 +2136,15 @@ document.addEventListener('cardAction', (e: Event) => {
   // inputLocked 중엔 대사가 출력 중일 수 있으므로 강제 dismiss하지 않는다
   if (!inputLocked) speechBubble.dismiss()
   void handleCardAction(e)
+})
+
+document.addEventListener('cardProximity', (e: Event) => {
+  const detail = (e as CustomEvent<CardProximityDetail>).detail
+  if (!gameActive || detail.distance !== 1) return
+  // 재렌더 사이 오래된 DOM이 보낸 신호는 버린다. 현재 다음 줄의 같은 카드일 때만 설명한다.
+  const currentCard = gameState.getLane(detail.laneIndex)?.getCardAtDistance(detail.distance)
+  if (currentCard !== detail.card) return
+  introduceFieldKindOnce(detail.card)
 })
 
 document.addEventListener('itemAction', (e: Event) => {
@@ -2970,13 +3004,14 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
 
   gameState.regroupAllRows()
   trackFieldEnemyEncounters()
-  // 새로 내려온 온보딩 필드(바위/덤불/잡동사니)를 처음 겪는 순간 에나가 한 번 소개한다.
-  maybeIntroduceFields()
   const blooms = turnManager.bloomFrontSeeds(cardSpawner)
   turnManager.armFrontBombs()
   boardRenderer.clearSelection()
   render()
   if (blooms.length > 0) await boardRenderer.animateFlowerBlooms(blooms)
+  // 개화가 끝난 화면을 기준으로 첫 조우를 소개한다. 그래야 씨앗이 있던 자리가 아니라
+  // 방금 핀 꽃 종류를 정확히 발광시켜 대사와 눈앞의 카드가 일치한다.
+  maybeIntroduceFields()
   await sweepFrontStarlights()
   await tickFrontEventDoors()
   // 보드 정비가 끝나 플레이어 차례 직전 — 위협을 미리 읽어 대비 카드를 건넨다.
@@ -3621,7 +3656,11 @@ async function handleCardAction(e: Event): Promise<void> {
       })
     }
     if (loot) {
-      companionDirector.sayEnaBark(loot, { importance: BARK_IMPORTANCE.loot })
+      companionDirector.sayEnaBark(loot, {
+        importance: BARK_IMPORTANCE.loot,
+        // 획득 감상과 새 손패를 실제 표시 순간 연결한다. DOM 갱신 전이면 렌더러가 다음 frame에 재탐색한다.
+        onDisplay: gainedId ? () => boardRenderer.pulseEnaHint({ handDefIds: [gainedId as HandCardId] }) : undefined,
+      })
     } else {
       // 카드 종류별 상황 바크 — 스킵/읽음 학습 대상이라 situation을 함께 넘긴다.
       let sit: SituationId | null = null

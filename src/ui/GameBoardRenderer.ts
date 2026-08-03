@@ -71,6 +71,7 @@ import { EventOverlayView } from '@ui/renderer/EventOverlayView'
 import { BossFxView } from '@ui/renderer/BossFxView'
 import { ShopOverlayView } from '@ui/renderer/ShopOverlayView'
 import { sfx } from '@/audio/SfxManager'
+import { pointerDistanceToRect } from '@ui/PointerProximity'
 
 // 뷰 계약 타입은 renderer/RendererTypes.ts로 분리 — 기존 import 경로 호환을 위해 재수출한다.
 export * from '@ui/renderer/RendererTypes'
@@ -78,8 +79,10 @@ import type {
   BossGimmickGridView,
   BossGimmickStrikeView,
   CardActionDetail,
+  CardProximityDetail,
   ChainHints,
   ForcedTrialCardView,
+  EnaHintTargets,
   HandTargetingMode,
   ItemActionDetail,
   ResourceTrailTarget,
@@ -167,6 +170,8 @@ export class GameBoardRenderer {
   /** Index of the hand slot currently under the cursor; null when no slot is hovered.
    *  Tracked via delegation so renders can restore the preview without relying on CSS :hover. */
   private hoveredHandSlotIndex: number | null = null
+  /** 포인터가 가까이 있는 다음 줄 카드. 같은 카드 위에서 mousemove가 반복돼도 소개 신호는 한 번만 보낸다. */
+  private nearbyIntroCardId: string | null = null
   /** 유물 효과 텍스트 {{spawn}} 치환에 쓰는 현재 실효 스폰 가중치. render() 마다 갱신. */
   private currentSpawnWeightCtx: SpawnWeightContext | undefined = undefined
 
@@ -335,6 +340,9 @@ export class GameBoardRenderer {
     })
     this.boardElement.addEventListener('mousemove', (e: MouseEvent) => {
       if (!e.shiftKey) document.body.classList.remove('is-shift-detail')
+      // 다음 줄은 자동으로 설명하지 않는다. 플레이어가 포인터를 가까이 가져가 관심을 보일 때만
+      // 에나에게 신호를 보내, 대사와 플레이어가 보고 있는 대상을 같은 순간에 맞춘다.
+      this.dispatchNearbyCardIntroduction(e)
     }, { passive: true })
 
     // 모바일 전용: 화면 꾹 누름으로 Shift 자세히보기 활성
@@ -810,7 +818,16 @@ export class GameBoardRenderer {
         </section>
         <div class="left-swap">
           <section class="score-log-list" aria-label="Action history">
-            ${logs}
+            <!-- 제목은 스크롤 밖에 고정되어 새싹의 빈 기록도 패널 용도를 즉시 설명한다. -->
+            <header class="score-log-head">
+              <span class="score-log-head-mark" aria-hidden="true">✦</span>
+              <span class="score-log-head-copy">
+                <strong>여정의 기록</strong>
+                <small>불빛에 새겨진 흔적</small>
+              </span>
+              <span class="score-log-head-count" aria-label="기록 ${scorePanel.logs.length}개">${scorePanel.logs.length}</span>
+            </header>
+            <div class="score-log-scroll">${logs}</div>
           </section>
           ${this.renderLobbyQuests()}
         </div>
@@ -1188,6 +1205,10 @@ export class GameBoardRenderer {
     const flowerGrowthBadge = card.type === CardType.FLOWER && card.flowerKind !== 'seed'
       ? `<div class="frozen-badge flower-growth-badge">성장 ${card.flowerKind === 'marigold' && card.flowerTurnsAlive % 2 === 1 ? 1 : card.flowerKind === 'marigold' ? 2 : 1}턴</div>`
       : ''
+    // 괴물꽃은 원래 꽃의 성장 표기를 시든 회녹색으로 계승해, 작아도 커질 위협을 예고한다.
+    const monsterFlowerGrowthBadge = card.type === CardType.ENEMY && card.specialEnemyKind === 'monsterFlower'
+      ? `<div class="frozen-badge monster-flower-growth-badge">성장 ${card.monsterFlowerGrowthTurns}턴</div>`
+      : ''
     // 이벤트 문 카운트다운 뱃지: 전방 도달(-1→2) 후에만 표시(대기행에서는 미부착). 흑백 톤.
     const eventBadge = card.type === CardType.EVENT && card.eventTurnsUntilClose >= 0
       ? `<div class="event-badge">${card.eventTurnsUntilClose}턴</div>`
@@ -1213,6 +1234,7 @@ export class GameBoardRenderer {
       ${frozenBadge}
       ${trapBadge}
       ${flowerGrowthBadge}
+      ${monsterFlowerGrowthBadge}
       ${fieldExpiryBadge}
       ${eventBadge}
       <div class="card-face">
@@ -1634,7 +1656,7 @@ export class GameBoardRenderer {
       // converts them into CSS offsets for the copy layers.
       const mergeSourceUids = card.mergeSourceUids?.join('|') ?? ''
       slots.push(`
-        <li class="${classes}" data-slot-index="${i}" data-hand-uid="${card.uid}"
+        <li class="${classes}" data-slot-index="${i}" data-hand-uid="${card.uid}" data-hand-def="${card.defId}"
             ${mergeSourceUids ? `data-merge-source-uids="${mergeSourceUids}"` : ''}
             style="--slot-index: ${i}; --hand-enter-order: ${enterOrder};"
             ${recipeReadyTitle ? `title="${recipeReadyTitle}"` : ''}>
@@ -2432,6 +2454,81 @@ export class GameBoardRenderer {
       ?.classList.remove('is-preview-stable')
     slot.querySelector<HTMLElement>(':scope > .hand-recipe-preview')
       ?.classList.remove('is-preview-stable')
+  }
+
+  /**
+   * 에나가 말하는 필드·손패·유물을 같은 황금빛 맥동으로 짧게 가리킨다.
+   * 대상 내부에 독립 레이어를 넣어 카드 고유 transform/hover/피격 애니메이션과 충돌하지 않는다.
+   */
+  pulseEnaHint(targets: EnaHintTargets, deferIfMissing = true): void {
+    // Iterable을 배열로 고정해, 같은 프레임 뒤 재시도해도 generator가 이미 소비된 문제가 없게 한다.
+    const stableTargets = {
+      fieldCardIds: [...(targets.fieldCardIds ?? [])],
+      handDefIds: [...(targets.handDefIds ?? [])],
+      handSlotIndices: [...(targets.handSlotIndices ?? [])],
+      relicIds: [...(targets.relicIds ?? [])],
+    }
+    const elements = new Set<HTMLElement>()
+    for (const cardId of stableTargets.fieldCardIds) {
+      this.boardElement.querySelectorAll<HTMLElement>(`.cell.card[data-card-id="${cardId}"]`).forEach((el) => elements.add(el))
+    }
+    for (const defId of stableTargets.handDefIds) {
+      this.boardElement.querySelectorAll<HTMLElement>(`.hand-slot[data-hand-def="${defId}"]`).forEach((el) => elements.add(el))
+    }
+    for (const slotIndex of stableTargets.handSlotIndices) {
+      const el = this.boardElement.querySelector<HTMLElement>(`.hand-slot[data-slot-index="${slotIndex}"]`)
+      if (el) elements.add(el)
+    }
+    for (const relicId of stableTargets.relicIds) {
+      const el = this.boardElement.querySelector<HTMLElement>(`.relic-mini-card[data-owned-relic="${relicId}"]`)
+      if (el) elements.add(el)
+    }
+
+    // 획득 직후처럼 모델이 먼저 바뀌고 DOM render가 같은 task 뒤에 오는 경로는 다음 frame에 한 번 재탐색한다.
+    if (elements.size === 0 && deferIfMissing) {
+      requestAnimationFrame(() => this.pulseEnaHint(stableTargets, false))
+      return
+    }
+
+    for (const element of elements) {
+      // 같은 대상에 새 설명이 오면 이전 레이어를 교체해 애니메이션을 처음부터 다시 읽힌다.
+      element.querySelector(':scope > .ena-hint-pulse')?.remove()
+      const pulse = document.createElement('span')
+      pulse.className = 'ena-hint-pulse'
+      pulse.setAttribute('aria-hidden', 'true')
+      element.appendChild(pulse)
+      pulse.addEventListener('animationend', () => pulse.remove(), { once: true })
+    }
+  }
+
+  /** 다음 줄 카드 주변 40px 안에 포인터가 들어온 첫 순간만 소개 이벤트를 보낸다. */
+  private dispatchNearbyCardIntroduction(e: MouseEvent): void {
+    const proximityMargin = 40
+    const candidates = this.boardElement
+      .querySelectorAll<HTMLElement>('.cell.card[data-distance="1"][data-card-id]')
+    let nearby: HTMLElement | null = null
+    let nearestDistance = Number.POSITIVE_INFINITY
+    for (const candidate of candidates) {
+      const distance = pointerDistanceToRect(e.clientX, e.clientY, candidate.getBoundingClientRect())
+      // 카드 주변 여백이 겹치면 DOM 순서가 아니라 실제 포인터에 더 가까운 카드를 가리킨다.
+      if (distance <= proximityMargin && distance < nearestDistance) {
+        nearby = candidate
+        nearestDistance = distance
+      }
+    }
+
+    const cardId = nearby?.dataset.cardId ?? null
+    if (cardId === this.nearbyIntroCardId) return
+    this.nearbyIntroCardId = cardId
+    if (!nearby) return
+
+    const laneIndex = Number(nearby.dataset.lane)
+    const distance = Number(nearby.dataset.distance)
+    const card = this.currentGameState?.getLane(laneIndex)?.getCardAtDistance(distance)
+    if (!card || card.id !== cardId) return
+    document.dispatchEvent(new CustomEvent<CardProximityDetail>('cardProximity', {
+      detail: { laneIndex, distance, card },
+    }))
   }
 
   private handleCardClick(

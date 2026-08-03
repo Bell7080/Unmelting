@@ -21,14 +21,14 @@ export enum ActionType {
 }
 
 // [min, max] inclusive range — actual drop count is randomised each open.
-const TREASURE_DROPS_BY_SPAN: Record<number, [number, number]> = {
+export const TREASURE_DROPS_BY_SPAN: Readonly<Record<number, readonly [number, number]>> = {
   1: [1, 2],
   2: [2, 4],
   3: [3, 6],
 }
 
 // 온보딩 잡동사니: 축약형 보물 — 1칸 0~1, 2칸 1~2, 3칸 2~3장(가끔 빈다 = 보물 변동성 학습).
-const JUNK_TREASURE_DROPS_BY_SPAN: Record<number, [number, number]> = {
+export const JUNK_TREASURE_DROPS_BY_SPAN: Readonly<Record<number, readonly [number, number]>> = {
   1: [0, 1],
   2: [1, 2],
   3: [2, 3],
@@ -37,7 +37,7 @@ const JUNK_TREASURE_DROPS_BY_SPAN: Record<number, [number, number]> = {
 // 온보딩 필드(바위/잡동사니) 드랍은 기본 손패로 한정한다(희귀/해금 카드 배제 → 초반 혼란 방지).
 const BASIC_ONBOARDING_DROP_IDS: readonly HandCardId[] = ['candle', 'wax-drop', 'ember', 'key', 'wax', 'chitin', 'match']
 
-const GOLDEN_TREASURE_DROPS_BY_SPAN: Record<number, [number, number]> = {
+export const GOLDEN_TREASURE_DROPS_BY_SPAN: Readonly<Record<number, readonly [number, number]>> = {
   1: [2, 3],
   2: [4, 6],
   3: [6, 9],

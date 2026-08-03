@@ -282,34 +282,106 @@ export const GAME_BOARD_BASE_STYLES = `
 }
 
 .score-log-list {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(201, 161, 92, 0.24);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 16% 0%, rgba(255, 215, 120, 0.09), transparent 42%),
+    linear-gradient(155deg, rgba(30, 21, 31, 0.84), rgba(10, 7, 16, 0.9));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 239, 190, 0.07),
+    inset 0 0 28px rgba(79, 42, 25, 0.13),
+    0 12px 30px rgba(0, 0, 0, 0.22);
+}
+/* 런 수명주기 게이트가 로비 교차 애니메이션의 잔류 클래스보다 우선한다.
+   덕분에 첫 부팅 새싹 직행에서도 기록 패널이 화면 밖에 머물지 않는다. */
+body.game-run-active .score-panel .left-swap > .score-log-list {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+/* 같은 슬롯의 로비 의뢰는 런 게이트가 열린 즉시 퇴장시켜 두 패널이 겹치지 않게 한다. */
+body.game-run-active .score-panel .left-swap > .quest-list {
+  transform: translateX(-140%);
+  opacity: 0;
+  pointer-events: none;
+}
+.score-log-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 48px;
+  padding: 9px 11px;
+  border-bottom: 1px solid rgba(201, 161, 92, 0.19);
+  background: linear-gradient(90deg, rgba(112, 63, 35, 0.17), rgba(53, 35, 59, 0.1));
+}
+.score-log-head-mark {
+  color: #ffd778;
+  font-size: 14px;
+  text-shadow: 0 0 10px rgba(255, 190, 92, 0.72);
+}
+.score-log-head-copy {
+  display: grid;
+  min-width: 0;
+  line-height: 1.1;
+}
+.score-log-head-copy strong {
+  color: rgba(255, 231, 168, 0.94);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.score-log-head-copy small {
+  margin-top: 4px;
+  color: rgba(190, 170, 157, 0.66);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+.score-log-head-count {
+  min-width: 22px;
+  margin-left: auto;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 215, 120, 0.22);
+  border-radius: 999px;
+  background: rgba(8, 5, 14, 0.38);
+  color: rgba(255, 215, 120, 0.76);
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.score-log-scroll {
   display: flex;
   flex-direction: column;
   gap: 7px;
   min-height: 0;
   overflow-y: auto;
-  /* Move scrollbar to the LEFT side via direction trick. */
+  /* 스크롤 손잡이를 패널 바깥쪽(왼쪽)에 두되 행의 읽기 방향은 아래에서 복구한다. */
   direction: rtl;
-  padding-left: 2px;
+  padding: 9px 8px 10px 10px;
   scrollbar-width: thin;
   scrollbar-color: rgba(244, 164, 96, 0.7) rgba(20, 16, 28, 0.45);
 }
-.score-log-list > * {
+.score-log-scroll > * {
   /* Reset content direction so log rows still flow left-to-right. */
   direction: ltr;
 }
-.score-log-list::-webkit-scrollbar {
+.score-log-scroll::-webkit-scrollbar {
   width: 4px;
 }
-.score-log-list::-webkit-scrollbar-track {
+.score-log-scroll::-webkit-scrollbar-track {
   background: rgba(20, 16, 28, 0.4);
   border-radius: 999px;
 }
-.score-log-list::-webkit-scrollbar-thumb {
+.score-log-scroll::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, var(--color-flame), var(--color-flame-deep));
   border-radius: 999px;
   box-shadow: 0 0 6px rgba(244, 164, 96, 0.4);
 }
-.score-log-list::-webkit-scrollbar-thumb:hover {
+.score-log-scroll::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, var(--color-flame), var(--color-flame-warm));
 }
 
@@ -382,6 +454,9 @@ export const GAME_BOARD_BASE_STYLES = `
   color: var(--color-flame);
   font-size: 12px;
   font-weight: 800;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(7, 5, 12, 0.38);
 }
 
 /* 종류별 좌측 광원 색 — 값 하나만 갈아 끼운다. */
@@ -401,7 +476,8 @@ export const GAME_BOARD_BASE_STYLES = `
 
 /* 빈 상태도 테두리 없이 — 점선 상자는 로그 줄보다 눈에 띄어 '없음'이 강조돼 보였다. */
 .score-log-empty {
-  padding: 14px 10px;
+  margin: auto 0;
+  padding: 20px 10px;
   color: var(--color-text-muted);
   border: 0;
   border-radius: 10px;
@@ -413,4 +489,32 @@ export const GAME_BOARD_BASE_STYLES = `
 /* (legacy stage-header / stage-main rules removed — title now lives in
    .brand inside .left-panel and Turn is rendered as a fixed top overlay) */
 
+
+
+/* 에나의 설명 대상 공용 포커스 — 필드·손패·유물 모두 같은 촛불빛 어휘를 쓴다.
+   별도 자식 레이어가 바깥으로 커지며 사라져 기존 카드 transform 애니메이션을 덮지 않는다. */
+.ena-hint-pulse {
+  position: absolute;
+  inset: -4px;
+  z-index: 95;
+  pointer-events: none;
+  border: 2px solid rgba(255, 221, 132, 0.96);
+  border-radius: inherit;
+  box-shadow:
+    0 0 8px rgba(255, 213, 112, 0.92),
+    0 0 22px rgba(244, 164, 96, 0.68),
+    inset 0 0 10px rgba(255, 238, 184, 0.28);
+  animation: ena-hint-focus-pulse 1.15s cubic-bezier(0.2, 0.72, 0.25, 1) both;
+}
+
+@keyframes ena-hint-focus-pulse {
+  0% { opacity: 0; transform: scale(0.96); filter: brightness(1.6); }
+  18% { opacity: 1; transform: scale(1); filter: brightness(1.25); }
+  58% { opacity: 0.78; transform: scale(1.035); filter: brightness(1.08); }
+  100% { opacity: 0; transform: scale(1.09); filter: brightness(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ena-hint-pulse { animation-duration: 0.01ms; }
+}
 `

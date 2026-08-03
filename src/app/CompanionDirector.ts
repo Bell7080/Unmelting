@@ -8,10 +8,10 @@
 import { GameState } from '@core/GameState'
 import { CardSpawner } from '@systems/CardSpawner'
 import { CompanionSystem, type SituationId, type ClutchPlan } from '@systems/CompanionSystem'
-import { assessThreats, type ForesightOptions } from '@systems/CompanionForesight'
+import { assessThreats, isRepeatedPredictionOpportunity, type ForesightOptions } from '@systems/CompanionForesight'
 import { saveDisposition, computeEnaGrowth, type EnaRunDramaSignals } from '@systems/EnaDisposition'
 import { DropSystem } from '@systems/DropSystem'
-import { HandSystem, type ChainState } from '@systems/HandSystem'
+import { HandSystem } from '@systems/HandSystem'
 import { getHandCardDef } from '@data/HandCards'
 import { GameBoardRenderer } from '@ui/GameBoardRenderer'
 import { SpeechBubble } from '@ui/SpeechBubble'
@@ -62,7 +62,6 @@ export interface CompanionDirectorDeps {
   cardSpawner: CardSpawner
   enaAutonomousLearner: EnaAutonomousLearner
   getRunCardPool(): RunCardPool
-  getChain(): ChainState
   isGameActive(): boolean
   isInputLocked(): boolean
   isShopOpen(): boolean
@@ -96,6 +95,8 @@ export class CompanionDirector {
     deadlineTurn: number
     kind: string
   } | null = null
+  /** 같은 보드 기회에서 확률 게이트를 재굴림해 뒤늦게 카드를 주는 어색함을 막는 서명. */
+  private declinedPredictionSignature: string | null = null
 
   /** 런 단위 드라마(모험의 질) 신호 — 성장 점프 게이트 입력. 피격/위협 beat에서 채우고 새 런에 비운다. */
   readonly runDramaSignals = {
@@ -184,7 +185,7 @@ export class CompanionDirector {
       }
       const next = this.barkSequencer.shift()
       if (!next) return
-      this.displayEnaBarkNow(next.line, next.importance, next.situation)
+      this.displayEnaBarkNow(next.line, next.importance, next.situation, next.onDisplay)
       if (this.barkSequencer.pending > 0) this.scheduleBarkQueueDrain()
     }, this.barkSequencer.nextDelayMs())
   }
@@ -197,7 +198,7 @@ export class CompanionDirector {
   }
 
   /** 바크를 지금 즉시 말풍선에 띄우고 학습/노출 추적 상태를 갱신한다(큐 판단은 sayEnaBark가 담당). */
-  private displayEnaBarkNow(line: string, importance: number, situation: SituationId | null): void {
+  private displayEnaBarkNow(line: string, importance: number, situation: SituationId | null, onDisplay?: () => void): void {
     const { companion, speechBubble } = this.deps
     clearTimeout(this.companionHeardTimer)
     this.companionHeardTimer = 0
@@ -207,6 +208,8 @@ export class CompanionDirector {
     this.barkShownAt = Date.now()
     this.barkSequencer.noteDisplayed(line)
     speechBubble.show(line)
+    // 큐에서 기다린 대사도 실제 표시 순간에 대상 발광이 맞물리게 한다.
+    onDisplay?.()
     if (situation) {
       this.companionHeardTimer = window.setTimeout(() => {
         companion.recordHeard(situation)
@@ -225,22 +228,22 @@ export class CompanionDirector {
    */
   sayEnaBark(
     line: string,
-    opts: { importance?: number; situation?: SituationId | null } = {}
+    opts: { importance?: number; situation?: SituationId | null; onDisplay?: () => void } = {}
   ): void {
     const { speechBubble } = this.deps
     const importance = opts.importance ?? BARK_IMPORTANCE.touch
     const situation = opts.situation ?? null
     if (importance >= BARK_IMPORTANCE.urgent) {
       if (this.enaSpeaking && speechBubble.isTyping && importance <= this.currentBarkImportance) return
-      this.displayEnaBarkNow(line, importance, situation)
+      this.displayEnaBarkNow(line, importance, situation, opts.onDisplay)
       return
     }
     if (this.barkSequencer.busy(this.enaSpeaking && speechBubble.isShowing)) {
-      this.barkSequencer.enqueue({ line, importance, situation })
+      this.barkSequencer.enqueue({ line, importance, situation, onDisplay: opts.onDisplay })
       this.scheduleBarkQueueDrain()
       return
     }
-    this.displayEnaBarkNow(line, importance, situation)
+    this.displayEnaBarkNow(line, importance, situation, opts.onDisplay)
   }
 
   /** 체력/불씨가 위태로운 위급 상황인지 — 위급할 때 만지면 에나가 "지금 장난칠 때야?" 한다. */
@@ -318,12 +321,9 @@ export class CompanionDirector {
   /** 예지/클러치가 공유하는 위협 추정 입력 — 레일 예고 큐·강화팩 실효값·역할 가중을 함께 전달한다. */
   private companionForesightOptions(): ForesightOptions {
     const { gameState, companion, cardSpawner } = this.deps
-    const chain = this.deps.getChain()
     return {
       unlockedCardIds: this.deps.getRunCardPool().snapshot().unlocked,
       unlockedRecipeIds: gameState.unlockedRecipeIds,
-      chainSequence: chain.sequence,
-      firedRecipeIds: chain.firedRecipeIds,
       // 예고선과 같은 실제 다음 리필 큐(peek은 소비하지 않음) — 시간 축 보정 입력.
       incomingRefill: cardSpawner.peekNextRefillCards(gameState.lanes.length),
       handSingleBonus: gameState.enhancements.singleBonus,
@@ -345,6 +345,9 @@ export class CompanionDirector {
     // 드라마 '위기감' 신호: 즉사 후보 병합 위협을 실제로 마주한 턴을 센다(계열 캡이 과대 계상을 막는다).
     if (report.webLethal) this.runDramaSignals.lethalThreatsFaced += 1
     const suggested = report.recommendedCardId
+    const signature = report.recommendationSignature
+    // 같은 거미줄/손패 기회에서 이미 개입하지 않기로 판정했다면 다음 턴에 다시 확률을 굴리지 않는다.
+    if (isRepeatedPredictionOpportunity(this.declinedPredictionSignature, signature)) return
     // HandCardAdvisor가 보유 손패의 같은 역할(청소류 포함)까지 보고 추천을 접으므로,
     // 여기서는 같은 카드 중복 지급만 추가로 막으면 된다. 단, 비합체 2장 보유 카드는
     // 3장째가 즉시 트리플로 완성되므로(트리플 보조 추천 경로) 지급을 허용한다.
@@ -352,13 +355,18 @@ export class CompanionDirector {
       ? gameState.character.hand.filter((c) => c.defId === suggested && !c.merged).length
       : 0
     const needsPrediction = !!suggested && (heldNonMerged === 0 || heldNonMerged === 2)
-    if (!suggested) return
+    if (!suggested) {
+      if (report.webEscalationImminent && signature) {
+        this.declinedPredictionSignature = signature
+        this.sayEnaBark(companion.predictLine('web-warning'), { importance: BARK_IMPORTANCE.urgent, situation: 'web' })
+      }
+      return
+    }
     if (!companion.evaluateWebPrediction(needsPrediction, false, turn)) {
-      // 후반부 고점 에나라면 터졌을 예측 지원을 지금은 말로만 비춰, 초반 미숙함을 드러낸다.
-      // 실패 회고 대사는 '눈앞에 보였다' 수준이 아니라 실제 피해/즉사 후보를 놓쳤을 때만 낸다.
-      if (needsPrediction && this.shouldSayMissedWebPrediction(report, gameState.character.health)) {
-        const missed = companion.missedPotentialLine('web', turn)
-        if (missed) this.sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'web' })
+      if (needsPrediction && signature) this.declinedPredictionSignature = signature
+      // 개입하지 않는 메타도 존중하되, 3칸 합류가 눈앞이면 사과 대신 다음 턴 위험을 명료하게 알린다.
+      if (needsPrediction && report.webEscalationImminent) {
+        this.sayEnaBark(companion.predictLine('web-warning'), { importance: BARK_IMPORTANCE.urgent, situation: 'web' })
       }
       return
     }
@@ -373,17 +381,13 @@ export class CompanionDirector {
     this.showClutchChain('predict', report.webLethal ? `${getHandCardDef(suggested).name} 지원 (위험!)` : `${getHandCardDef(suggested).name} 지원`)
     const predictLineKind = report.recommendationKind === 'cleanup' ? 'web' : report.recommendationKind ?? 'support'
     // '왜 이 카드인지' 짧은 구(HandCardAdvisor reason)를 대사 {이유} 슬롯에 섞는다.
-    this.sayEnaBark(companion.predictLine(predictLineKind, report.recommendationShortReason), { importance: BARK_IMPORTANCE.clutch })
+    this.sayEnaBark(companion.predictLine(predictLineKind, report.recommendationShortReason), {
+      importance: BARK_IMPORTANCE.clutch,
+      // 에나가 권한 카드(레시피 완성 재료 포함)를 손패에서 바로 찾을 수 있도록 표시 순간 가리킨다.
+      onDisplay: () => boardRenderer.pulseEnaHint({ handDefIds: [suggested] }),
+    })
     // 지원 카드는 이미 손패에 들어갔으므로 트레일 실패가 입력 잠금 해제를 막지 않게 연출만 분리한다.
     void this.deps.playResourceTrail({ kind: 'chain' }, 'hand', 1)
-  }
-
-  /** 거미줄 예측 실패 회고는 임박 피해가 큰 경우로 좁혀, 단순 함정 발견 대사처럼 보이지 않게 한다. */
-  private shouldSayMissedWebPrediction(report: ReturnType<typeof assessThreats>, currentHealth: number): boolean {
-    if (!report.recommendCleanup || !report.hasImminentWebDrop) return false
-    if (report.webLethal) return true
-    // 현재 체력의 절반 이상을 잃을 병합 위협일 때만 '고점이면 막았을' 아쉬움으로 취급한다.
-    return report.potentialWebDamage > 0 && report.potentialWebDamage >= Math.max(2, Math.ceil(currentHealth * 0.5))
   }
 
   /** 클러치 발동 시 플레이어 카드 위에 『 제목 』 + 효과 배너를 띄운다(소소한 클러치 연출도 공유). */

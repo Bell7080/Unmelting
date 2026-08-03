@@ -345,6 +345,28 @@ describe('TurnManager treasure volatility', () => {
     expect(second.growths[0]).toMatchObject({ phase: 'growth', value: 2 })
   })
 
+  it('grows a monster flower after displaying the full 2→1→0 countdown', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const monster = new Card('monster-flower-growth', CardType.ENEMY, '괴물꽃', 'test', 2, 2, {
+      isSpecialEnemy: true,
+      specialEnemyKind: 'monsterFlower',
+      monsterFlowerGrowthAmount: 2,
+    })
+    gameState.lanes[0].setCardAtDistance(0, monster)
+    const spawner = new CardSpawner()
+
+    expect(monster.monsterFlowerGrowthTurns).toBe(2)
+    expect(turnManager.applyFlowerGrowthAndWilt(spawner).monsterGrowths).toHaveLength(0)
+    expect(monster.monsterFlowerGrowthTurns).toBe(1)
+    expect(turnManager.applyFlowerGrowthAndWilt(spawner).monsterGrowths[0]).toMatchObject({
+      cardId: monster.id,
+      amount: 2,
+    })
+    expect(monster.monsterFlowerGrowthTurns).toBe(2)
+    expect({ hp: monster.getHealth(), atk: monster.getDamage() }).toEqual({ hp: 4, atk: 4 })
+  })
+
   it('does not end the game just because three traps occupy the active row', () => {
     const gameState = new GameState()
     const turnManager = new TurnManager(gameState)

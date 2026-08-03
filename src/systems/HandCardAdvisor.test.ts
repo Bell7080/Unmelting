@@ -9,6 +9,7 @@ import {
   bestSupportCard,
   estimateHandCardDamage,
   rankSupportCards,
+  recipeEffectAxis,
   RECIPE_SUPPORT_DISCOUNT,
   WEB_FIELD_CLUTTER_THRESHOLD,
   type SupportSituation,
@@ -67,6 +68,12 @@ describe('HandCardAdvisor 상황 적합', () => {
     const pick = bestSupportCard(wide, ['sweep', 'chitin'] as HandCardId[])
     expect(pick?.cardId).toBe('chitin')
     expect(pick?.fit).toBe('cleanup')
+  })
+
+  it('고립된 전방 2칸 거미줄도 기존처럼 키틴 지급 후보로 본다', () => {
+    const isolated: SupportSituation = { ...base, frontWideWebSpan: 2, webMerge: { mergedSize: 2, mergingOneWebs: 0 } }
+
+    expect(bestSupportCard(isolated, ['chitin'] as HandCardId[])?.cardId).toBe('chitin')
   })
 
   it('잠긴(미해금) 카드는 절대 추천하지 않는다', () => {
@@ -157,7 +164,7 @@ describe('HandCardAdvisor 기대 HP 환산', () => {
 })
 
 describe('HandCardAdvisor 시간 축(레일 예고 큐)', () => {
-  it('예고 큐에 거미줄이 더 오면 광역 청소는 가점, 전방 단일 제거는 감점된다', () => {
+  it('예고 큐 거미줄은 광역 청소를 가점하고 고립 2칸 키틴 기회는 유지한다', () => {
     const ones: SupportSituation = { ...base, webMerge: { mergedSize: 2, mergingOneWebs: 2 } }
     const now = rankSupportCards(ones, ['sweep'] as HandCardId[])[0]
     const soonMore = rankSupportCards(
@@ -167,12 +174,13 @@ describe('HandCardAdvisor 시간 축(레일 예고 큐)', () => {
     expect(soonMore.score).toBeGreaterThan(now.score)
 
     const wide: SupportSituation = { ...base, frontWideWebSpan: 2 }
-    const single = rankSupportCards(wide, ['chitin'] as HandCardId[])[0]
+    const single = rankSupportCards(wide, ['chitin'] as HandCardId[])
     const singleSoonMore = rankSupportCards(
       { ...wide, incomingRefill: { webs: 1, spores: 0, enemies: 0 } },
       ['chitin'] as HandCardId[]
-    )[0]
-    expect(singleSoonMore.score).toBeLessThan(single.score)
+    )
+    expect(single[0]?.cardId).toBe('chitin')
+    expect(singleSoonMore[0]?.cardId).toBe('chitin')
   })
 })
 
@@ -316,5 +324,17 @@ describe('HandCardAdvisor 태그 가점', () => {
     const emberTagged = withHeal.find((r) => r.cardId === 'ember')!
     expect(bonfireTagged.score).toBeGreaterThan(bonfireBase.score)
     expect(emberTagged.score).toBe(emberBase.score)
+  })
+})
+
+
+describe('HandCardAdvisor 레시피 효과 축 계약', () => {
+  it('직접 자원·회복·공격·청소 효과를 명시한 필요 축으로 분류한다', () => {
+    // 대표 효과를 고정하고, 전체 RecipeEffectKind 누락은 RECIPE_EFFECT_AXES의 Record 타입이 컴파일에서 차단한다.
+    expect(recipeEffectAxis('gain-ember-3')).toBe('ember')
+    expect(recipeEffectAxis('heal-by-player-attack')).toBe('recovery')
+    expect(recipeEffectAxis('fireworks-atk')).toBe('attack')
+    expect(recipeEffectAxis('clear-all-field-traps')).toBe('cleanup')
+    expect(recipeEffectAxis('gain-coin-1')).toBe('generic')
   })
 })

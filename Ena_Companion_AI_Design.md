@@ -224,7 +224,7 @@ Unmelting의 동료 캐릭터 **에나**에게 외부 API 없이 독자적 강�
 
 바꿀 때 함께 확인할 것:
 
-1. **관측 계약** — `ENA_FEATURE_COUNT`(344) / `ENA_ACTION_SPACE`(27)를 트레이너와 공유한다.
+1. **관측 계약** — `ENA_FEATURE_COUNT`(371) / `ENA_ACTION_SPACE`(27)를 트레이너와 공유한다.
    차원이 바뀌면 `EnaPolicyStore`가 구버전 저장 정책을 검증 불일치로 거부하고 교사
    정책으로 폴백한다(**재학습 필요**). 차원 변경은 주(major) 버전급 변경이다.
 2. **교사 휴리스틱** — 임계값은 `DEFAULT_ENA_HEURISTIC_POLICY_CONFIG`에서 조정한다.
@@ -236,6 +236,27 @@ Unmelting의 동료 캐릭터 **에나**에게 외부 API 없이 독자적 강�
    (`damageProfile`, `bossGimmickExpectation()`, 확률 풀 근사 등)은 원본 공식이
    바뀌면 근사도 함께 갱신한다.
 5. 검증은 `npm run verify`. `EnaDispositionFitter` / `EnaTrainer` 테스트가 이 계약을 지킨다.
+
+### 12-4. 371차원 사전학습 산출물
+
+- 재학습 단일 명령은 `npm run ena:pretrain`이다. 고정 seed/config로
+  `src/data/ena-pretrained-policy.json`과 `Ena_Pretraining_Report.md`를 함께 갱신한다.
+- 리포트는 전체 371 관측과 괴물꽃 3축을 가린 구 관측 한계를 같은 평가 시드에서 비교한다.
+- 런타임 저장 정책이 없을 때 `EnaPolicyStore.loadPretrained()`가 동봉 정책을 검증·복원한다.
+
+### 12-5. 예측 지원의 시간 일관성
+
+- 고립된 전방 2칸 거미줄도 기존처럼 키틴 지급 확률을 한 번 평가한다. 다만 첫 판정에서
+  미지급이면 같은 거미줄 ID/폭에는 다시 굴리지 않아 다음 턴의 뒤늦은 지급을 막는다.
+- 전방 2칸에 1칸 거미줄이 합류해 3칸 즉사각이면 카드 지급 여부와 별개로 위험 경고를 연다.
+- 한 기회에서 확률 게이트가 개입하지 않기로 했으면 같은 거미줄 ID 집합에는 다시 굴리지 않는다.
+  카드를 뒤늦게 주는 대신 "다음 턴 위험" 경고만 1회 말한다.
+- 레시피 재료는 가까운 체인이라는 이유만으로 지급하지 않는다. `HandCardAdvisor`가 레시피 효과를
+  현재 필요 축(불씨·회복·공격·청소)에 연결하고 마지막 재료인 경우에만 지원 후보로 올린다.
+- `RECIPE_EFFECT_AXES`는 모든 `RecipeEffectKind`를 `Record`로 열거한다. 새 효과의 필요 축을 함께
+  등록하지 않으면 타입 검사가 실패하므로 조용히 generic 지원으로 빠질 수 없다.
+- 디렉터 회귀 테스트는 같은 2칸 ID 유지 시 재굴림 금지, 새 ID 조합 시 새 기회 허용,
+  3칸 합류 위험 시 미지급과 독립된 경고를 각각 고정한다.
 
 ---
 
