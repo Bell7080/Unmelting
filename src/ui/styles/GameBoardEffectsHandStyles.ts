@@ -608,11 +608,18 @@ body.hearth-lobby .left-swap > .score-log-list { transform: translateX(-140%); o
   padding-bottom: 6px;
   border-bottom: 1px solid var(--color-border-soft);
 }
+/* 낱말('손패')을 지운 자리를 아이콘이 대신 맡는다 — 그러려면 글자만 한 크기로는 부족하다.
+   헤더 글자(12px)보다 확실히 크게 세워 이 줄이 무엇을 세는 줄인지 아이콘만으로 읽히게 한다. */
 .hand-header-icon {
   display: inline-flex;
   align-items: center;
   color: var(--color-flame);
   font-size: 14px;
+}
+.hand-header-icon .icon {
+  width: 20px;
+  height: 20px;
+  filter: drop-shadow(0 0 6px rgba(255, 215, 120, 0.4));
 }
 /* Linear combo gauge at the top of the hand panel. Mode wheel sits on the
    left, 10-tick meter expands to the right. The mode picker fan opens as
@@ -697,7 +704,9 @@ body.hearth-lobby .left-swap > .score-log-list { transform: translateX(-140%); o
   vertical-align: -0.16em;
   margin-right: 4px;
 }
-.candle-gauge-label-icon .icon { width: 1.05em; height: 1.05em; }
+/* 12px 글자에 맞춰 1.05em으로 두니 눈금이 뭉개져 무슨 아이콘인지 안 읽혔다.
+   글자를 따라가지 말고 못 박은 크기로 세운다 — 이 아이콘이 게이지의 이름표다. */
+.candle-gauge-label-icon .icon { width: 17px; height: 17px; }
 .candle-gauge-label {
   position: static;
   display: block;

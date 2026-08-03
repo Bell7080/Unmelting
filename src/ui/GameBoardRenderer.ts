@@ -65,7 +65,7 @@ import { escapeHtml } from '@ui/renderer/Html'
 import { CardFaceRenderer } from '@ui/renderer/CardFaceRenderer'
 import { CompendiumView } from '@ui/renderer/CompendiumView'
 import { ExperienceView } from '@ui/renderer/ExperienceView'
-import { ResourceTrailFx } from '@ui/renderer/ResourceTrailFx'
+import { ResourceTrailFx, HAND_TOKEN_LAND_MS, handTokenStaggerMs } from '@ui/renderer/ResourceTrailFx'
 import { JobSelectView } from '@ui/renderer/JobSelectView'
 import { EventOverlayView } from '@ui/renderer/EventOverlayView'
 import { BossFxView } from '@ui/renderer/BossFxView'
@@ -1668,9 +1668,10 @@ export class GameBoardRenderer {
       <div class="hand-column">
         ${this.renderSpawnProbPanel(scorePanel)}
         <aside class="hand-panel" aria-label="Hand">
-          <header class="hand-header">
+          <header class="hand-header" aria-label="손패 ${character.hand.length}/${handMax}">
+            <!-- 카드 아이콘이 '손패'를 말하므로 낱말을 겹쳐 적지 않는다(아이콘 = 낱말 규칙). -->
             <span class="hand-header-icon">${handCardIcon()}</span>
-            손패 (${character.hand.length}/${handMax})
+            ${character.hand.length}/${handMax}
           </header>
           ${this.renderCandleGauge(character)}
           <ul class="hand-stack ${character.hand.length >= 8 ? 'is-crowded' : ''}" style="--hand-count: ${character.hand.length}">${reversed}</ul>
@@ -4491,14 +4492,16 @@ export class GameBoardRenderer {
     // Match the spawn Y used by findResourceTrailTarget('hand'): a tiny nudge
     // below the combo gauge so the first visible card peeks out at the top.
     const spawnY = stackRect.top + 22
-    // Matches the impact beat of one resource-trail piece in
-    // animateResourceTrail (window.setTimeout at 330ms).
-    const trailLandMs = 330
+    // ★ 슬롯이 뜨는 시각은 **카드 토큰이 손패에 닿는 시각**과 같아야 한다. 예전 자원 트레일의
+    //   330ms를 그대로 두고 있어, 토큰이 아직 날아오는 중에 카드가 먼저 자리에 앉았다.
+    //   등장 간격도 토큰 발사 간격과 같은 값을 써야 장마다 짝이 맞는다.
+    const step = handTokenStaggerMs(enteringSlots.length)
     enteringSlots.forEach((el) => {
       const slotRect = el.getBoundingClientRect()
       const offsetY = spawnY - slotRect.top
       el.style.setProperty('--hand-drop-start-y', `${offsetY}px`)
-      el.style.setProperty('--hand-drop-delay-ms', String(trailLandMs))
+      el.style.setProperty('--hand-drop-delay-ms', String(HAND_TOKEN_LAND_MS))
+      el.style.setProperty('--hand-enter-step', String(step))
     })
   }
 

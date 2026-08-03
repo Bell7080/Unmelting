@@ -26,6 +26,17 @@ const HAND_TOKEN_DEPART = 0.5
 /** 손패에 닿는 프레임 — 블라스트가 이 박자에 터진다. */
 const HAND_TOKEN_ARRIVE = 0.92
 
+/**
+ * 토큰 한 장이 손패에 **닿는 시각**(발사 시점 기준). 손패 슬롯은 이 시각에 맞춰 나타나야
+ * "블라스트되며 카드가 들어온다"가 된다 — 슬롯이 먼저 뜨면 토큰이 빈 자리로 날아간다.
+ */
+export const HAND_TOKEN_LAND_MS = Math.round(HAND_TOKEN_FLIGHT_MS * HAND_TOKEN_ARRIVE)
+
+/** 장수에 따른 발사 간격. 슬롯 등장 간격도 같은 값을 써야 장마다 짝이 맞는다. */
+export function handTokenStaggerMs(count: number): number {
+  return Math.max(45, Math.min(110, Math.round(460 / Math.max(1, count))))
+}
+
 /** 착지 흩어짐 — 줄 맞춰 서면 '진열'로 보인다. 바닥에 떨어뜨린 것처럼 장마다 어긋낸다.
  *  난수가 아니라 고정 표라 같은 장수는 늘 같은 모양으로 떨어진다(재현 가능). */
 const SCATTER_Y = [0, 9, -5, 13, 3, -8, 11, -2, 7, -11]
@@ -274,7 +285,7 @@ export class ResourceTrailFx {
     const to = this.rectCenter(target)
     const colors = this.trailColors('treasure-gain')
     // 장수가 많아도 늘어지지 않게 간격만 좁힌다 — 발수는 줄이지 않는다.
-    const stagger = Math.max(45, Math.min(110, Math.round(460 / count)))
+    const stagger = handTokenStaggerMs(count)
     // 손패 아이콘(카드)과 같은 비율·비슷한 크기. 정사각에 가까우면 그냥 파편이 되고,
     // 너무 작으면 무엇이 떨어졌는지 읽히지 않는다.
     const width = 26

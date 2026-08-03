@@ -49,6 +49,12 @@ export interface SpeechBubbleConfig {
 const STYLE_ID = 'speech-bubble-styles'
 let styleInjected = false
 
+/** 타이핑 목표 총 길이 — 대사가 길든 짧든 대략 이 시간 안에 다 찍히게 글자당 속도를 맞춘다. */
+const TYPE_TARGET_TOTAL_MS = 1500
+/** 글자당 하한/상한. 짧은 말이 순간에 튀어나오거나 긴 말이 늘어지지 않게 가둔다. */
+const TYPE_MS_MIN = 26
+const TYPE_MS_MAX = 70
+
 function injectStyles(): void {
   if (styleInjected || document.getElementById(STYLE_ID)) { styleInjected = true; return }
   const el = document.createElement('style')
@@ -414,6 +420,13 @@ export class SpeechBubble {
     this.pendingText = text
     this.typeCursor = 0
     const chars = [...text]
+    // 긴 말일수록 빠르게 친다. 글자당 시간을 고정해 두면 긴 대사가 짧은 대사의 몇 배로
+    // 늘어져 읽기 전에 지친다 — 전체 길이를 목표 시간에 맞추되, 짧은 말이 순간에
+    // 튀어나오지 않게 글자당 시간에 상·하한을 둔다.
+    const perChar = Math.max(
+      TYPE_MS_MIN,
+      Math.min(TYPE_MS_MAX, Math.round(TYPE_TARGET_TOTAL_MS / Math.max(1, chars.length)))
+    )
     const next = () => {
       if (this.state !== 'visible') return
       if (this.typeCursor >= chars.length) {
@@ -424,7 +437,7 @@ export class SpeechBubble {
         return
       }
       this._appendChar(chars[this.typeCursor++])
-      this.typewriterTimer = window.setTimeout(next, 70)
+      this.typewriterTimer = window.setTimeout(next, perChar)
     }
     next()
   }

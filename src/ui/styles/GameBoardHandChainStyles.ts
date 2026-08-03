@@ -143,8 +143,11 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
      --hand-drop-delay-ms is the trail flight time before the slot becomes
      visible, so the slot materializes exactly when the trail lands. */
   animation: hand-card-drop 0.62s cubic-bezier(0.16, 0.92, 0.14, 1.04) both;
+  /* 등장 간격(--hand-enter-step)은 카드 토큰의 발사 간격과 같은 값을 JS가 심는다.
+     둘이 다르면 세 번째 장쯤부터 토큰과 슬롯이 어긋난다. */
   animation-delay: calc(
-    var(--hand-enter-order, 0) * 135ms + var(--hand-drop-delay-ms, 0) * 1ms
+    var(--hand-enter-order, 0) * var(--hand-enter-step, 135) * 1ms +
+      var(--hand-drop-delay-ms, 0) * 1ms
   );
 }
 @keyframes hand-card-drop {
