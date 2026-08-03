@@ -97,6 +97,21 @@ describe('CompanionLines 데이터 품질(전 풀 전수 렌더)', () => {
     expect(pools.every((p) => p.lines.length > 0)).toBe(true)
   })
 
+  it('에나는 규칙을 시스템 용어 대신 세계 안의 말로 설명한다', () => {
+    // 플레이어용 축약어와 개발 용어가 에나의 입말로 새어 나오지 않도록 전 풀을 지킨다.
+    const forbiddenTerms = ['트리플', '굳음', '게이지', '카운트다운', '랜덤', '만충', '조합각', '빌드']
+    const failures: string[] = []
+    for (const { pool, lines } of pools) {
+      lines.forEach((line, index) => {
+        for (const rendered of enumerateLineRenders(line, 'normal')) {
+          const found = forbiddenTerms.filter((term) => rendered.includes(term))
+          if (found.length > 0) failures.push(`[${pool}#${index}] "${rendered}" ← ${found.join(', ')}`)
+        }
+      })
+    }
+    expect(failures, failures.join('\n')).toEqual([])
+  })
+
   it('모든 줄이 모든 강도/슬롯 조합에서 깨끗한 문장으로 렌더된다', () => {
     const failures: string[] = []
     for (const { pool, lines } of pools) {
