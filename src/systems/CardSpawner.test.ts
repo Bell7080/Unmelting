@@ -66,6 +66,19 @@ describe('CardSpawner final ascent starlight', () => {
   })
 })
 
+describe('CardSpawner monster flower scaling', () => {
+  it('uses the 20-turn special-enemy tier for both initial stats and periodic growth', () => {
+    const spawner = new CardSpawner()
+    // 20턴부터 특수 적 티어 2이므로 가치 1 괴물꽃은 2/2로 태어나고 주기당 +2/+2 성장한다.
+    spawner.setProgressionTurn(20)
+
+    const monster = spawner.spawnMonsterFlower(1)
+
+    expect({ hp: monster.getHealth(), atk: monster.getDamage() }).toEqual({ hp: 2, atk: 2 })
+    expect(monster.monsterFlowerGrowthAmount).toBe(2)
+  })
+})
+
 describe('CardSpawner refill preview queue', () => {
   it('uses the previewed lane card as the next real refill', () => {
     const spawner = new CardSpawner()
