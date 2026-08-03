@@ -18,13 +18,18 @@ export const STRIKE_LOB_FLIGHT_MS = 620
 export const STRIKE_LOB_STAGGER_MS = 70
 
 /** 손패 획득 토큰이 튀어나와 떨어지고 → 살짝 표류하다 → 손패로 빨려 들어가기까지. */
-const HAND_TOKEN_FLIGHT_MS = 1250
+const HAND_TOKEN_FLIGHT_MS = 950
 /** 착지(곡사로 튀어나와 떨어짐)가 끝나는 지점. 이후 표류 구간이 이어진다. */
-const HAND_TOKEN_LAND = 0.36
-/** 표류가 끝나고 손패로 출발하는 지점. */
-const HAND_TOKEN_DEPART = 0.62
+const HAND_TOKEN_LAND = 0.34
+/** 표류가 끝나고 손패로 출발하는 지점 — 바닥에 오래 머물면 남아 있는 것처럼 보인다. */
+const HAND_TOKEN_DEPART = 0.5
 /** 손패에 닿는 프레임 — 블라스트가 이 박자에 터진다. */
-const HAND_TOKEN_ARRIVE = 0.93
+const HAND_TOKEN_ARRIVE = 0.92
+
+/** 착지 흩어짐 — 줄 맞춰 서면 '진열'로 보인다. 바닥에 떨어뜨린 것처럼 장마다 어긋낸다.
+ *  난수가 아니라 고정 표라 같은 장수는 늘 같은 모양으로 떨어진다(재현 가능). */
+const SCATTER_Y = [0, 9, -5, 13, 3, -8, 11, -2, 7, -11]
+const SCATTER_TILT = [-12, 8, -19, 14, -6, 21, -15, 5, -9, 17]
 
 export class ResourceTrailFx {
   constructor(private readonly host: GameBoardRenderer) {}
@@ -286,12 +291,15 @@ export class ResourceTrailFx {
           piece.style.setProperty('--trail-color', colors.color)
           piece.style.setProperty('--trail-glow', colors.glow)
           document.body.appendChild(piece)
-          // 착지점은 출처 아래로 부채꼴로 벌린다 — 겹쳐 떨어지면 장수가 안 세어진다.
-          // 카드 폭보다 넓게 벌려야 여러 장이 겹쳐 한 장으로 보이지 않는다.
+          // 착지점은 **출처 칸 자리**다. 아래로 크게 내리면 잡은 칸이 아니라 엉뚱한 데서
+          // 나온 것처럼 보인다. 카드 폭보다 넓게 벌려 겹쳐 한 장으로 보이지 않게만 한다.
           const spread = Math.max(width + 6, Math.min(48, 200 / Math.max(1, count)))
+          // 바닥에 '톡' 떨어진 느낌 — 줄 세우지 않고 장마다 조금씩 어긋나게 눕힌다.
+          const scatterY = SCATTER_Y[i % SCATTER_Y.length]
+          const tilt = SCATTER_TILT[i % SCATTER_TILT.length]
           const land = {
             x: from.x + (i - (count - 1) / 2) * spread,
-            y: Math.min(window.innerHeight - 40, from.y + 54),
+            y: Math.min(window.innerHeight - 40, from.y + 16 + scatterY),
           }
           const at = (px: number, py: number): string =>
             `translate(${px - width / 2}px, ${py - height / 2}px)`
@@ -315,23 +323,25 @@ export class ResourceTrailFx {
           }
           // 착지 이후의 모든 프레임은 회전을 **끝난 각도에서 이어 쓴다**. 0deg로 적으면
           // WAAPI가 720°를 되감아 카드가 거꾸로 한 바퀴 더 돈다.
-          const rest = spinDir * SPIN
-          // 2) 착지 반동 — 납작해졌다 바로 선다. 여기서 카드가 똑바로 놓인다.
+          // 착지 각도는 정직한 0°가 아니라 **비스듬히 눕는다** — 세로로 줄 서면 진열대가
+          // 되고, 기울어야 '툭 떨어뜨린 것'으로 읽힌다.
+          const rest = spinDir * SPIN + tilt
+          // 2) 착지 반동 — 바닥에 부딪혀 납작해졌다 튄다. 이 한 프레임이 '톡'이다.
           frames.push({
-            transform: `${at(land.x, land.y)} rotate(${rest}deg) scale(1.24, 0.72)`,
+            transform: `${at(land.x, land.y + 3)} rotate(${rest * 1}deg) scale(1.3, 0.66)`,
             opacity: 1,
-            offset: HAND_TOKEN_LAND + 0.03,
+            offset: HAND_TOKEN_LAND + 0.025,
           })
-          // 3) 표류 — 착지한 자리에서 살짝 떠올라 흔들린다. 멈춰 세우면 화면이 굳어
+          // 3) 표류 — 튕겨 올랐다 자리를 잡는다. 멈춰 세우면 화면이 굳어
           //    '몇 장이 나왔나'를 세는 구간이 정지 화면이 된다.
-          const driftX = (i % 2 === 0 ? 1 : -1) * 5
+          const driftX = (i % 2 === 0 ? 1 : -1) * 4
           frames.push({
-            transform: `${at(land.x + driftX, land.y - 7)} rotate(${(rest + driftX * 0.9).toFixed(1)}deg) scale(1.02)`,
+            transform: `${at(land.x + driftX, land.y - 9)} rotate(${(rest + driftX * 1.1).toFixed(1)}deg) scale(1.04)`,
             opacity: 1,
-            offset: HAND_TOKEN_LAND + (HAND_TOKEN_DEPART - HAND_TOKEN_LAND) * 0.55,
+            offset: HAND_TOKEN_LAND + (HAND_TOKEN_DEPART - HAND_TOKEN_LAND) * 0.5,
           })
           frames.push({
-            transform: `${at(land.x - driftX * 0.5, land.y - 2)} rotate(${(rest - driftX * 0.5).toFixed(1)}deg) scale(1)`,
+            transform: `${at(land.x, land.y)} rotate(${rest.toFixed(1)}deg) scale(1)`,
             opacity: 1,
             offset: HAND_TOKEN_DEPART,
           })

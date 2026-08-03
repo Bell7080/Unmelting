@@ -1329,8 +1329,14 @@ async function awardHandKillDrops(
   const drop = DropSystem.generateDrop('enemy-kill')
   if (!gameState.character.addHandCard(drop)) return
   pushActivityLogsInDisplayOrder(createItemGainLogs([getHandCardDef(drop.defId).name]))
+  // ★ 전리품은 **잡은 칸 자리**에서 나와야 한다. 화면 중앙에서 내면 대기열 적을 잡았을 때
+  //   엉뚱한 데서 떨어진다. 아래 render()가 그 칸을 DOM에서 지우므로 rect를 **먼저** 잡는다.
+  const originId = removed.find((r) => r.type === CardType.ENEMY)?.cardId
+  const originRect = originId ? boardRenderer.findCardElement(originId)?.getBoundingClientRect() : null
   render()
-  await playResourceTrail({ kind: 'center' }, 'hand', 1)
+  await (originRect
+    ? boardRenderer.animateResourceTrailFromRect(originRect, 'hand', 1, 'hand-tool')
+    : playResourceTrail({ kind: 'center' }, 'hand', 1))
 }
 
 /** Coin gain log row — kind: 'score' for consistent warm color, but the
