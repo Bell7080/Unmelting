@@ -17,12 +17,13 @@ export const STRIKE_LOB_FLIGHT_MS = 620
 /** 여러 대상에 동시에 쏠 때 발사 간격 — 겹쳐 쏘면 몇 발인지가 뭉갠다. */
 export const STRIKE_LOB_STAGGER_MS = 70
 
-/** 손패 획득 토큰이 튀어나와 떨어지고 → 잠깐 머물다 → 손패로 빨려 들어가기까지. */
-const HAND_TOKEN_FLIGHT_MS = 1150
-/** 착지(튀어나와 떨어짐)가 끝나는 지점. 이후 잠깐 머물렀다가 손패로 향한다. */
-const HAND_TOKEN_LAND = 0.4
-const HAND_TOKEN_DEPART = 0.54
-/** 손패에 닿는 프레임 — 버스트가 이 박자에 터진다. */
+/** 손패 획득 토큰이 튀어나와 떨어지고 → 살짝 표류하다 → 손패로 빨려 들어가기까지. */
+const HAND_TOKEN_FLIGHT_MS = 1250
+/** 착지(곡사로 튀어나와 떨어짐)가 끝나는 지점. 이후 표류 구간이 이어진다. */
+const HAND_TOKEN_LAND = 0.36
+/** 표류가 끝나고 손패로 출발하는 지점. */
+const HAND_TOKEN_DEPART = 0.62
+/** 손패에 닿는 프레임 — 블라스트가 이 박자에 터진다. */
 const HAND_TOKEN_ARRIVE = 0.93
 
 export class ResourceTrailFx {
@@ -266,8 +267,9 @@ export class ResourceTrailFx {
     const colors = this.trailColors('treasure-gain')
     // 장수가 많아도 늘어지지 않게 간격만 좁힌다 — 발수는 줄이지 않는다.
     const stagger = Math.max(45, Math.min(110, Math.round(460 / count)))
-    const width = 17
-    const height = 25
+    // 길쭉해야 '카드'로 읽힌다 — 정사각에 가까우면 그냥 파편이 된다.
+    const width = 15
+    const height = 33
     const launches = Array.from({ length: count }, (_, i) =>
       new Promise<void>((resolve) => {
         window.setTimeout(() => {
@@ -305,12 +307,20 @@ export class ResourceTrailFx {
             opacity: 1,
             offset: HAND_TOKEN_LAND + 0.03,
           })
+          // 3) 표류 — 착지한 자리에서 살짝 떠올라 흔들린다. 멈춰 세우면 화면이 굳어
+          //    '몇 장이 나왔나'를 세는 구간이 정지 화면이 된다.
+          const driftX = (i % 2 === 0 ? 1 : -1) * 5
           frames.push({
-            transform: `${at(land.x, land.y)} rotate(0deg) scale(1)`,
+            transform: `${at(land.x + driftX, land.y - 7)} rotate(${(driftX * 0.9).toFixed(1)}deg) scale(1.02)`,
+            opacity: 1,
+            offset: HAND_TOKEN_LAND + (HAND_TOKEN_DEPART - HAND_TOKEN_LAND) * 0.55,
+          })
+          frames.push({
+            transform: `${at(land.x - driftX * 0.5, land.y - 2)} rotate(${(-driftX * 0.5).toFixed(1)}deg) scale(1)`,
             opacity: 1,
             offset: HAND_TOKEN_DEPART,
           })
-          // 3) 손패로 빨려 들어간다 — 가속해서 도착점에서 멈춘다.
+          // 4) 손패로 빨려 들어간다 — 가속해서 도착점에서 멈춘다.
           frames.push({
             transform: `${at(land.x + (to.x - land.x) * 0.45, land.y + (to.y - land.y) * 0.45)} rotate(-8deg) scale(0.94)`,
             opacity: 1,
