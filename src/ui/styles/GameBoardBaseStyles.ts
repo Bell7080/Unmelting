@@ -273,34 +273,106 @@ export const GAME_BOARD_BASE_STYLES = `
 }
 
 .score-log-list {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(201, 161, 92, 0.24);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 16% 0%, rgba(255, 215, 120, 0.09), transparent 42%),
+    linear-gradient(155deg, rgba(30, 21, 31, 0.84), rgba(10, 7, 16, 0.9));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 239, 190, 0.07),
+    inset 0 0 28px rgba(79, 42, 25, 0.13),
+    0 12px 30px rgba(0, 0, 0, 0.22);
+}
+/* 런 수명주기 게이트가 로비 교차 애니메이션의 잔류 클래스보다 우선한다.
+   덕분에 첫 부팅 새싹 직행에서도 기록 패널이 화면 밖에 머물지 않는다. */
+body.game-run-active .score-panel .left-swap > .score-log-list {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+/* 같은 슬롯의 로비 의뢰는 런 게이트가 열린 즉시 퇴장시켜 두 패널이 겹치지 않게 한다. */
+body.game-run-active .score-panel .left-swap > .quest-list {
+  transform: translateX(-140%);
+  opacity: 0;
+  pointer-events: none;
+}
+.score-log-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 48px;
+  padding: 9px 11px;
+  border-bottom: 1px solid rgba(201, 161, 92, 0.19);
+  background: linear-gradient(90deg, rgba(112, 63, 35, 0.17), rgba(53, 35, 59, 0.1));
+}
+.score-log-head-mark {
+  color: #ffd778;
+  font-size: 14px;
+  text-shadow: 0 0 10px rgba(255, 190, 92, 0.72);
+}
+.score-log-head-copy {
+  display: grid;
+  min-width: 0;
+  line-height: 1.1;
+}
+.score-log-head-copy strong {
+  color: rgba(255, 231, 168, 0.94);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.score-log-head-copy small {
+  margin-top: 4px;
+  color: rgba(190, 170, 157, 0.66);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+.score-log-head-count {
+  min-width: 22px;
+  margin-left: auto;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 215, 120, 0.22);
+  border-radius: 999px;
+  background: rgba(8, 5, 14, 0.38);
+  color: rgba(255, 215, 120, 0.76);
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.score-log-scroll {
   display: flex;
   flex-direction: column;
   gap: 7px;
   min-height: 0;
   overflow-y: auto;
-  /* Move scrollbar to the LEFT side via direction trick. */
+  /* 스크롤 손잡이를 패널 바깥쪽(왼쪽)에 두되 행의 읽기 방향은 아래에서 복구한다. */
   direction: rtl;
-  padding-left: 2px;
+  padding: 9px 8px 10px 10px;
   scrollbar-width: thin;
   scrollbar-color: rgba(244, 164, 96, 0.7) rgba(20, 16, 28, 0.45);
 }
-.score-log-list > * {
+.score-log-scroll > * {
   /* Reset content direction so log rows still flow left-to-right. */
   direction: ltr;
 }
-.score-log-list::-webkit-scrollbar {
+.score-log-scroll::-webkit-scrollbar {
   width: 4px;
 }
-.score-log-list::-webkit-scrollbar-track {
+.score-log-scroll::-webkit-scrollbar-track {
   background: rgba(20, 16, 28, 0.4);
   border-radius: 999px;
 }
-.score-log-list::-webkit-scrollbar-thumb {
+.score-log-scroll::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, var(--color-flame), var(--color-flame-deep));
   border-radius: 999px;
   box-shadow: 0 0 6px rgba(244, 164, 96, 0.4);
 }
-.score-log-list::-webkit-scrollbar-thumb:hover {
+.score-log-scroll::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, var(--color-flame), var(--color-flame-warm));
 }
 
@@ -309,12 +381,12 @@ export const GAME_BOARD_BASE_STYLES = `
   grid-template-columns: 1fr auto;
   gap: 8px;
   align-items: center;
-  min-height: 36px;
-  padding: 8px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.045);
-  box-shadow: inset 3px 0 0 rgba(244, 164, 96, 0.36);
+  min-height: 38px;
+  padding: 8px 9px 8px 12px;
+  border: 1px solid rgba(231, 203, 157, 0.09);
+  border-radius: 9px;
+  background: linear-gradient(100deg, rgba(255, 246, 219, 0.055), rgba(255, 255, 255, 0.018));
+  box-shadow: inset 3px 0 0 rgba(244, 164, 96, 0.36), 0 4px 11px rgba(0, 0, 0, 0.14);
 }
 
 .score-log-label {
@@ -330,6 +402,9 @@ export const GAME_BOARD_BASE_STYLES = `
   color: var(--color-flame);
   font-size: 12px;
   font-weight: 800;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(7, 5, 12, 0.38);
 }
 
 .score-log-enemy { box-shadow: inset 3px 0 0 rgba(168, 58, 58, 0.72); }
@@ -347,10 +422,12 @@ export const GAME_BOARD_BASE_STYLES = `
 .score-log-hurt .score-log-delta { color: #ffd5c5; }
 
 .score-log-empty {
-  padding: 14px 10px;
+  margin: auto 0;
+  padding: 20px 10px;
   color: var(--color-text-muted);
-  border: 1px dashed var(--color-border-soft);
+  border: 1px dashed rgba(201, 161, 92, 0.22);
   border-radius: 10px;
+  background: rgba(255, 232, 168, 0.018);
   text-align: center;
   font-size: 12px;
 }
