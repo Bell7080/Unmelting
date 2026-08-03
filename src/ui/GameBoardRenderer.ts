@@ -1205,6 +1205,10 @@ export class GameBoardRenderer {
     const flowerGrowthBadge = card.type === CardType.FLOWER && card.flowerKind !== 'seed'
       ? `<div class="frozen-badge flower-growth-badge">성장 ${card.flowerKind === 'marigold' && card.flowerTurnsAlive % 2 === 1 ? 1 : card.flowerKind === 'marigold' ? 2 : 1}턴</div>`
       : ''
+    // 괴물꽃은 원래 꽃의 성장 표기를 시든 회녹색으로 계승해, 작아도 커질 위협을 예고한다.
+    const monsterFlowerGrowthBadge = card.type === CardType.ENEMY && card.specialEnemyKind === 'monsterFlower'
+      ? `<div class="frozen-badge monster-flower-growth-badge">성장 ${card.monsterFlowerGrowthTurns}턴</div>`
+      : ''
     // 이벤트 문 카운트다운 뱃지: 전방 도달(-1→2) 후에만 표시(대기행에서는 미부착). 흑백 톤.
     const eventBadge = card.type === CardType.EVENT && card.eventTurnsUntilClose >= 0
       ? `<div class="event-badge">${card.eventTurnsUntilClose}턴</div>`
@@ -1230,6 +1234,7 @@ export class GameBoardRenderer {
       ${frozenBadge}
       ${trapBadge}
       ${flowerGrowthBadge}
+      ${monsterFlowerGrowthBadge}
       ${fieldExpiryBadge}
       ${eventBadge}
       <div class="card-face">
