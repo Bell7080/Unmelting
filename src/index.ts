@@ -301,7 +301,6 @@ const companionDirector: CompanionDirector = new CompanionDirector({
   gameState, companion, speechBubble, boardRenderer, cardSpawner,
   enaAutonomousLearner,
   getRunCardPool: () => runCardPool,
-  getChain: () => chain,
   isGameActive: () => gameActive,
   isInputLocked: () => inputLocked,
   isShopOpen: () => shopFlow.isOpen(),

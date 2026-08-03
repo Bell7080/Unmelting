@@ -57,21 +57,136 @@ function probe(sim: EnaTrainingSimulation): TrialProbe {
   return sim as unknown as TrialProbe
 }
 
+/** 꽃/괴물꽃 정합성 검사 창구 — 공개 학습 API를 늘리지 않고 내부 턴 규칙만 고정한다. */
+interface FlowerProbe extends TrialProbe {
+  growAndWiltFlowers: () => void
+  bloomFrontSeeds: () => void
+  regroupFrontRow: () => void
+  applyFlower: (card: EnaSimCard) => void
+  applyTreasure: (card: EnaSimCard) => void
+  applyTreasureVolatility: () => void
+  encodeCard: (card: EnaSimCard | null, row: number) => number[]
+  rng: { next: () => number; int: (max: number) => number; pick: <T>(items: readonly T[]) => T }
+  turn: number
+  light: number
+  coins: number
+  shield: number
+  ember: number
+  hp: number
+  attack: number
+}
+
+function flowerProbe(sim: EnaTrainingSimulation): FlowerProbe {
+  return sim as unknown as FlowerProbe
+}
+
 describe('EnaTrainingSimulation', () => {
   it('딥러닝 입력 벡터와 행동 공간 크기를 고정한다', () => {
     const sim = new EnaTrainingSimulation(7)
     const observation = sim.reset()
     // 스칼라 70(이벤트/별빛/보스 정체·격자·페이지 게이트·종복/상점/시련/유물 엔진/카드 풀 포함)
-    // + 예고 3칸×6 + 9칸×14 + 손패 10×13 = 344.
+    // + 예고 3칸×6 + 9칸×17(괴물꽃 성장 위협 포함) + 손패 10×13 = 371.
     expect(observation.features).toHaveLength(ENA_FEATURE_COUNT)
-    expect(ENA_FEATURE_COUNT).toBe(344)
+    expect(ENA_FEATURE_COUNT).toBe(371)
     // clickLane×3 + useHand×10 + wait + 상점×9(무료/유물/6종 팩/EXIT) + 이벤트×4(safe/greedy/trick/bail) = 27.
     expect(ENA_ACTION_SPACE).toHaveLength(27)
     expect(observation.legalActions.length).toBeGreaterThan(0)
   })
 
+  it('꽃 개화·성장·시듦·보상과 괴물꽃 관측을 실게임 규칙으로 함께 계산한다', () => {
+    const sim = new EnaTrainingSimulation(17)
+    sim.reset()
+    const p = flowerProbe(sim)
+    // 개화는 캐모마일을 포함한 5종 중 하나이며 씨앗 가치 0을 정확히 1로 바꾼다.
+    const seed: EnaSimCard = { type: CardType.FLOWER, hp: 0, atk: 0, group: 1, flowerKind: 'seed', value: 0, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+    p.board[0][0] = seed
+    p.rng.pick = (items) => items[0]
+    p.bloomFrontSeeds()
+    expect({ kind: seed.flowerKind, value: seed.value }).toEqual({ kind: 'chamomile', value: 1 })
+
+    // 일반 꽃은 매 턴 가치 +1, 금잔화는 두 번째 턴에만 +1 한다. 높은 난수로 시듦은 막는다.
+    p.rng.next = () => 0.99
+    p.growAndWiltFlowers()
+    expect(seed.value).toBe(2)
+    const marigold: EnaSimCard = { ...seed, flowerKind: 'marigold', value: 1, growth: 0 }
+    p.board[0][0] = marigold
+    p.growAndWiltFlowers()
+    expect(marigold.value).toBe(1)
+    p.growAndWiltFlowers()
+    expect(marigold.value).toBe(2)
+
+    // 20턴 티어 2와 시련 보너스를 변이 초기 공/체 및 이후 성장량에 모두 반영한다.
+    p.turn = 20
+    p.trialEnemyHpBonus = 2
+    p.trialEnemyAtkBonus = 1
+    const rose: EnaSimCard = { ...seed, flowerKind: 'redRose', value: 1, growth: 0 }
+    p.board[0][0] = rose
+    p.rng.next = () => 0
+    p.growAndWiltFlowers()
+    const monster = p.board[0][0]
+    expect(monster).toMatchObject({
+      type: CardType.ENEMY,
+      hp: 6,
+      atk: 5,
+      enemyPower: 6,
+      defeatDropCount: 1,
+      monsterGrowthTimer: 2,
+      monsterGrowthAmount: 2,
+    })
+    // 관측 마지막 3축은 괴물꽃 여부·남은 성장 시계·주기 성장량이다.
+    expect(p.encodeCard(monster, 0).slice(-3)).toEqual([1, 1, 0.4])
+
+    // 일반 적과 괴물꽃은 인접해도 합쳐지지 않는다.
+    const normal: EnaSimCard = { type: CardType.ENEMY, hp: 3, atk: 1, group: 1, value: 0, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+    p.board[0][1] = normal
+    p.regroupFrontRow()
+    expect(p.board[0][0]).toBe(monster)
+    expect(p.board[0][1]).toBe(normal)
+
+    // 캐모마일은 공통 불빛+티어 불빛, 금잔화는 공통 불빛+꽃 가치만큼 화폐를 준다.
+    p.light = 0
+    p.coins = 0
+    p.applyFlower({ ...seed, flowerKind: 'chamomile', value: 2 })
+    const chamomileLight = p.light
+    p.light = 0
+    p.applyFlower({ ...seed, flowerKind: 'marigold', value: 3 })
+    // 양쪽 모두 gainLight의 턴/직업 배율을 타므로 원시 상수 대신 캐모마일 추가분의 우위를 검증한다.
+    expect(chamomileLight).toBeGreaterThan(p.light)
+    expect(p.coins).toBe(3)
+  })
+
+  it('선공 순서와 보물 드롭·변동성을 런타임 순서와 수치로 처리한다', () => {
+    const sim = new EnaTrainingSimulation(29)
+    sim.reset()
+    const p = flowerProbe(sim)
+    // 불씨 0 선공에서 1HP 적을 클릭해도 적이 먼저 2피해를 주고 난 뒤 처치된다.
+    p.ember = 0
+    p.hp = 10
+    p.attack = 2
+    p.board[0][0] = { type: CardType.ENEMY, hp: 1, atk: 2, group: 1, value: 1, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+    p.board[0][1] = null
+    p.board[0][2] = null
+    sim.step(0)
+    expect(p.hp).toBe(8)
+
+    // 2칸 일반 상자는 최소 2장 드롭하며 예전 가짜 화폐/방패 보상을 만들지 않는다.
+    p.coins = 0
+    p.shield = 0
+    p.rng.int = () => 0
+    p.applyTreasure({ type: CardType.TREASURE, hp: 0, atk: 0, group: 2, treasureKind: 'normal', value: 0, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 })
+    expect({ coins: p.coins, shield: p.shield }).toEqual({ coins: 0, shield: 0 })
+
+    // 일반 상자의 50~60% 구간은 같은 폭·티어의 미믹으로 바뀐다.
+    const chest: EnaSimCard = { type: CardType.TREASURE, hp: 0, atk: 0, group: 1, treasureKind: 'normal', value: 0, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+    p.board[0][0] = chest
+    p.rng.next = () => 0.55
+    p.applyTreasureVolatility()
+    expect(p.board[0][0]).toMatchObject({ type: CardType.ENEMY, specialEnemyKind: 'mimic' })
+  })
+
   it('교사 정책으로 100층 한 호의 국면/손패/보스 판단 학습 샘플을 생성한다', () => {
-    const dataset = EnaTrainingSimulation.collectDataset(3, 11)
+    // 정확한 선공 순서로 짧게 끝나는 시드도 있으므로 5호를 모아 학습 배치 최소량을 보장한다.
+    const dataset = EnaTrainingSimulation.collectDataset(5, 11)
     expect(dataset.length).toBeGreaterThan(20)
     expect(dataset.every((sample) => sample.state.length === ENA_FEATURE_COUNT && sample.nextState.length === ENA_FEATURE_COUNT)).toBe(true)
     expect(dataset.every((sample) => sample.actionIndex >= 0 && sample.actionIndex < ENA_ACTION_SPACE.length)).toBe(true)
@@ -186,7 +301,7 @@ describe('EnaTrainingSimulation', () => {
     expect(observation.snapshot.trapDamageBonus).toBe(2)
     // 9칸 인코딩의 첫 칸(전방 0레인) 위협 축(atk/trap 피해)은 (1+2)/30이어야 한다.
     // 스칼라 구간을 지나 예고 3칸(6축) 뒤부터가 9칸 인코딩이다.
-    const scalarCount = ENA_FEATURE_COUNT - 6 * 3 - 14 * 9 - 13 * 10
+    const scalarCount = ENA_FEATURE_COUNT - 6 * 3 - 17 * 9 - 13 * 10
     const incomingCount = 6 * 3
     const cellFeatures = observation.features.slice(scalarCount + incomingCount, scalarCount + incomingCount + 14)
     expect(cellFeatures[1]).toBe(1) // TRAP one-hot

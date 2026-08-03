@@ -485,6 +485,8 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
 .spore-badge { border-color: rgba(147, 209, 118, 0.7); color: rgba(220, 255, 190, 0.95); }
 .bomb-badge { border-color: rgba(255, 92, 72, 0.72); color: rgba(255, 214, 190, 0.98); }
 .flower-growth-badge { border-color: transparent; background: transparent; box-shadow: none; color: rgba(255, 220, 160, 0.95); text-shadow: 0 1px 3px rgba(0,0,0,0.92), 0 0 9px currentColor; animation: trap-turn-label-glimmer 1.9s ease-in-out infinite; }
+/* 꽃 뱃지의 위치·호흡은 유지하되 생기를 뺀 회녹색으로 변이 이후의 성장임을 구분한다. */
+.monster-flower-growth-badge { border-color: transparent; background: transparent; box-shadow: none; color: rgba(174, 184, 151, 0.96); text-shadow: 0 1px 3px rgba(0,0,0,0.96), 0 0 9px rgba(91, 111, 78, 0.88); animation: trap-turn-label-glimmer 2.2s ease-in-out infinite; }
 
 /* Spore traps get a quiet moss-tinted overlay so their breeding state reads
    at a glance, similar to how 굳음 marks waxed cards but without competing

@@ -231,6 +231,11 @@ export const MIMIC_BY_SPAN: Record<number, { health: number; attack: number; dro
   3: { health: 15, attack: 9, drops: 10 }, // 4*3+3 / 2*3+3
 }
 
+/** 특수 적 공통 인플레이션 티어. 런타임 스폰과 에나 시뮬이 같은 20턴 경계를 사용한다. */
+export function specialEnemyTierForTurn(turn: number): number {
+  return Math.floor(Math.max(1, turn) / 20) + 1
+}
+
 export class CardSpawner {
   private spawnSerial: number = 0
   private currentTier: EmberTier = 'bright'
@@ -899,7 +904,7 @@ export class CardSpawner {
 
   /** 특수 적 강도 단계 — 20층마다 1씩 오른다(1-19층 1, 20-39층 2 ...). */
   private getSpecialEnemyTier(): number {
-    return Math.floor(this.progressionTurn / 20) + 1
+    return specialEnemyTierForTurn(this.progressionTurn)
   }
 
   /** 특수 적 강함수치(enemyPower) — 단계마다 3씩 상승(3/6/9/12 ...)시켜 불빛 성장 곡선을
@@ -923,6 +928,8 @@ export class CardSpawner {
       {
         isSpecialEnemy: true,
         specialEnemyKind: 'monsterFlower',
+        // 초기 스탯과 같은 20턴 티어를 주기 성장에도 적용한다(20~39턴이면 공/체 +2).
+        monsterFlowerGrowthAmount: this.getSpecialEnemyTier(),
         defeatDropCount: Math.max(1, Math.min(3, Math.ceil(safePower / 2))),
         enemyPower: this.getSpecialEnemyPower(),
       }
