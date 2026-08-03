@@ -2218,6 +2218,7 @@ document.addEventListener('shopClose', () => {
 /** Click on a hand slot. Plain click = use single (or arm targeting). */
 async function handleHandSlotClick(slotIndex: number): Promise<void> {
   if (!gameActive) return
+  boardRenderer.clearEnaHintPulses()
   const character = gameState.character
   const card = character.hand[slotIndex]
   if (!card) return
@@ -3342,6 +3343,9 @@ const eventFlow = new EventFlowManager({
  */
 async function handleCardAction(e: Event): Promise<void> {
   if (!gameActive || inputLocked) return
+  // 에나가 가리키던 강조는 플레이어가 먼저 움직이면 그 자리에서 끊는다 — 이미 고른 뒤에도
+  // 계속 맥동하면 "아직 여길 봐"로 읽혀 방금 한 선택과 어긋난다.
+  boardRenderer.clearEnaHintPulses()
   const detail = (e as CustomEvent<CardActionDetail>).detail
   const { laneIndex, distance, card } = detail
 

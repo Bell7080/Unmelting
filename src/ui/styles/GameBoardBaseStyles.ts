@@ -504,14 +504,20 @@ body.game-run-active .score-panel .left-swap > .quest-list {
     0 0 8px rgba(255, 213, 112, 0.92),
     0 0 22px rgba(244, 164, 96, 0.68),
     inset 0 0 10px rgba(255, 238, 184, 0.28);
-  animation: ena-hint-focus-pulse 1.15s cubic-bezier(0.2, 0.72, 0.25, 1) both;
+  /* 한 번만 번쩍이고 끝나면 대사를 읽는 사이에 놓친다 — 세 번 되풀이한다.
+     끝 구간을 투명하게 쉬어 가야 '세 번 맥동'으로 세어진다(쉼 없이 이으면 한 번의
+     긴 번쩍임으로 뭉친다). 시작 지연은 말풍선이 뜬 **뒤에** 가리키게 하는 몫이다. */
+  animation: ena-hint-focus-pulse 1.35s cubic-bezier(0.2, 0.72, 0.25, 1)
+    var(--ena-hint-delay, 0.24s) var(--ena-hint-repeat, 3) both;
 }
 
 @keyframes ena-hint-focus-pulse {
   0% { opacity: 0; transform: scale(0.96); filter: brightness(1.6); }
-  18% { opacity: 1; transform: scale(1); filter: brightness(1.25); }
-  58% { opacity: 0.78; transform: scale(1.035); filter: brightness(1.08); }
-  100% { opacity: 0; transform: scale(1.09); filter: brightness(1); }
+  13% { opacity: 1; transform: scale(1); filter: brightness(1.25); }
+  43% { opacity: 0.78; transform: scale(1.035); filter: brightness(1.08); }
+  70% { opacity: 0; transform: scale(1.09); filter: brightness(1); }
+  /* 쉼 — 투명한 채로 시작 상태로 되돌아가 다음 맥동이 처음부터 읽힌다. */
+  100% { opacity: 0; transform: scale(0.96); filter: brightness(1.6); }
 }
 
 @media (prefers-reduced-motion: reduce) {
