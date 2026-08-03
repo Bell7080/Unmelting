@@ -412,6 +412,9 @@ function enterHearth(): void {
   gameActive = false
   // 아직 캐릭터를 고르지 않았으므로 플레이어 존을 숨긴다(레이어는 유지, visibility만 off).
   document.body.classList.add('hearth-lobby')
+  // 실행 중임을 나타내는 명시적 게이트를 내린다. 로비/런 교차 애니메이션용
+  // hearth-lobby 클래스가 비동기로 정리되더라도 로그 노출 판정과 섞이지 않게 한다.
+  document.body.classList.remove('game-run-active')
   // 거점(로비)에서도 미개방 메타 패널(화폐/의뢰)을 숨긴다 — 무역 개방 상태(isMetaUnlocked)에 따른다.
   document.body.classList.remove('onboarding-run')
   // 졸업 후 첫 로비 도착이면 화폐가 해금됐어도 무역 개방 팡! 순간까지 패널을 숨겨 함께 등장시킨다.
@@ -1746,6 +1749,9 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // 선택한 난이도가 온보딩 여부를 결정한다: 새싹 병아리 = 온보딩(30F 아크 + 필드 3종 + 양초 고양이),
   // 쉬움/보통 = 정규 스폰. 기본 부팅(difficulty=null=쉬움 테스트 필드)도 온보딩을 끈다.
   onboardingRunActive = difficulty === 'sprout'
+  // 새싹 직행을 포함한 모든 실제 런에서 좌측 행동 기록을 보장한다. 최초 부팅은
+  // enterHearth를 거치지 않으므로 난이도 대신 이 런 수명주기 클래스를 단일 게이트로 쓴다.
+  document.body.classList.add('game-run-active')
   // 새싹 병아리는 판 자체도 한 단계 순하게 굴린다(적·함정 -7 / 보물·꽃 +5).
   // 직업 보정과 별도 축이라 직업 선택이 이 값을 덮어쓰지 않는다.
   cardSpawner.setDifficultySpawnAdjust(onboardingRunActive ? { ...SPROUT_SPAWN_ADJUST } : null)

@@ -810,7 +810,16 @@ export class GameBoardRenderer {
         </section>
         <div class="left-swap">
           <section class="score-log-list" aria-label="Action history">
-            ${logs}
+            <!-- 제목은 스크롤 밖에 고정되어 새싹의 빈 기록도 패널 용도를 즉시 설명한다. -->
+            <header class="score-log-head">
+              <span class="score-log-head-mark" aria-hidden="true">✦</span>
+              <span class="score-log-head-copy">
+                <strong>여정의 기록</strong>
+                <small>불빛에 새겨진 흔적</small>
+              </span>
+              <span class="score-log-head-count" aria-label="기록 ${scorePanel.logs.length}개">${scorePanel.logs.length}</span>
+            </header>
+            <div class="score-log-scroll">${logs}</div>
           </section>
           ${this.renderLobbyQuests()}
         </div>
