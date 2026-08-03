@@ -638,13 +638,17 @@ export class RelicEffectsManager {
 
   /** Immediate stat effects for relics whose benefit is granted on purchase. */
   async applyRelicPurchaseEffect(id: RelicId): Promise<void> {
-    const { gameState, cardSpawner, companion, companionDirector, isGameActive, render, snapshotPlayerResources, playPlayerGainTrails, encounterIntroLineOnce } = this.deps
+    const { gameState, boardRenderer, cardSpawner, companion, companionDirector, isGameActive, render, snapshotPlayerResources, playPlayerGainTrails, encounterIntroLineOnce } = this.deps
     // 동료(에나) 구매 감상평 — 상점/제단에서도 한마디(사치품엔 짓궂게, 가문 물건엔 반갑게).
     // companionWorldCanSpeak는 상점을 막으므로 여기선 가볍게 게이팅한다(.player-card HUD에 표시).
     // 태어나서 첫 유물이라면 감상 대신 '지니면 계속 효과'라는 교육형 소개를 우선한다.
     if (isGameActive() && !gameState.isGameOver) {
       const relicIntro = encounterIntroLineOnce('relic')
-      companionDirector.sayEnaBark(relicIntro ?? companion.onBuyRelic(id, getRelicDef(id).rarity), { importance: BARK_IMPORTANCE.situation })
+      companionDirector.sayEnaBark(relicIntro ?? companion.onBuyRelic(id, getRelicDef(id).rarity), {
+        importance: BARK_IMPORTANCE.situation,
+        // 감상평이 실제 표시될 때 방금 얻은 유물을 부채꼴 스택에서 같은 공용 맥동으로 짚는다.
+        onDisplay: () => boardRenderer.pulseEnaHint({ relicIds: [id] }),
+      })
     }
     // 구매 즉시 스탯만 올리고 체인 로그에는 남기지 않는다. 트레일은 상점에서
     // 숨겨진 체인 배너 대신 화면 중앙에서 HUD로 날린다.

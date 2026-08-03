@@ -11,6 +11,21 @@ import type { EmberTier, SpawnWeights } from '@systems/EmberSystem'
 import type { RelicId } from '@data/Relics'
 import type { CardRarity } from '@data/ShopPools'
 
+/** 다음 줄 카드 가까이 포인터가 왔을 때 에나 소개 흐름으로 넘기는 화면 신호. */
+/** 에나의 대사와 화면 대상을 연결하는 공용 힌트 발광 대상. */
+export interface EnaHintTargets {
+  fieldCardIds?: Iterable<string>
+  handDefIds?: Iterable<HandCardId>
+  handSlotIndices?: Iterable<number>
+  relicIds?: Iterable<RelicId>
+}
+
+export interface CardProximityDetail {
+  laneIndex: number
+  distance: number
+  card: Card
+}
+
 export interface CardActionDetail {
   laneIndex: number
   distance: number

@@ -1716,6 +1716,7 @@ export const STARLIGHT_LINES: Line[] = [
 export type FieldIntroKind = 'rock' | 'bush' | 'junk'
 /** 보드에 등장해 눈으로 처음 보게 되는 조우 종류(필드 3종 + 위협/특수 카드). */
 export type BoardEncounterKind = FieldIntroKind | 'web' | 'bomb' | 'spore' | 'event-door' | 'starlight' | 'seed'
+  | 'mimic' | 'monster-flower' | 'chamomile' | 'red-rose' | 'marigold' | 'oleander' | 'lavender'
 /** 보드 밖 시스템 흐름/플레이어 행동의 첫 경험 종류. */
 export type SystemEncounterKind = 'boss' | 'trial' | 'shop' | 'altar' | 'triple' | 'combo' | 'recipe' | 'relic'
 export type EncounterIntroKind = BoardEncounterKind | SystemEncounterKind
@@ -1779,6 +1780,36 @@ export const ENCOUNTER_INTRO_LINES: Record<Exclude<EncounterIntroKind, FieldIntr
     '작은 씨앗이야. 두면 꽃으로 피어나. 물뿌리개면 더 빨리 커.',
     '씨앗을 처음 봤네. 서두르지 않아도 돼. 저건 우리 편이 될 준비를 하는 중이야.',
   ],
+  mimic: [
+    '보물상자가 이를 드러냈어. 미믹이야! 상자처럼 보여도 먼저 살펴보자.',
+    '저 상자는 숨을 쉬어. 미믹이니 보물을 열 듯 손대면 안 돼.',
+    '가짜 상자야. 미믹을 쓰러뜨리면 숨겨 둔 빛을 되찾을 수 있어.',
+  ],
+  'monster-flower': [
+    '꽃이 어둠에 시들어 괴물이 됐어. 더 자라기 전에 잘라내자.',
+    '저건 이제 꽃이 아니야. 괴물꽃의 가시가 길을 덮기 전에 정리하자.',
+    '향기 대신 이빨이 났네. 괴물꽃은 망설이지 말고 베어야 해.',
+  ],
+  chamomile: [
+    '캐모마일이 피었어. 잘 키운 만큼 우리 여정에 작은 결실을 남겨줘.',
+    '하얀 캐모마일이네. 오래 돌본 꽃일수록 더 값진 흔적을 남겨.',
+  ],
+  'red-rose': [
+    '붉은 장미야. 꽃잎의 온기가 상처를 달래줄 거야.',
+    '레드로즈가 피었네. 아픈 곳이 있다면 지금 향기를 빌리자.',
+  ],
+  marigold: [
+    '메리골드가 피었어. 기다려 준 시간만큼 반짝이는 동전을 품어.',
+    '금빛 꽃이네. 조금 더 돌보면 우리 주머니도 함께 묵직해질 거야.',
+  ],
+  oleander: [
+    '올레안더야. 단단한 꽃잎이 우리 몸을 지킬 벽이 되어줘.',
+    '고운 꽃이지만 제법 강해. 꺾으면 꽃잎이 방패처럼 둘러질 거야.',
+  ],
+  lavender: [
+    '라벤더가 피었어. 이 향기는 이어온 촛불을 더 밝게 해줘.',
+    '보랏빛 향기가 흐름을 이어줘. 다음 손길까지 차분히 가져가자.',
+  ],
   triple: [
     '봤어? 같은 카드 셋이 합쳐지면 훨씬 강한 한 장이 돼.',
     '같은 손패 셋이 모였어! 저절로 한 장이 되면서 힘도 훨씬 커져.',
@@ -1833,6 +1864,13 @@ export const BOARD_INTRO_LINES: Record<BoardEncounterKind, Line[]> = {
   'event-door': ENCOUNTER_INTRO_LINES['event-door'],
   starlight: ENCOUNTER_INTRO_LINES.starlight,
   seed: ENCOUNTER_INTRO_LINES.seed,
+  mimic: ENCOUNTER_INTRO_LINES.mimic,
+  'monster-flower': ENCOUNTER_INTRO_LINES['monster-flower'],
+  chamomile: ENCOUNTER_INTRO_LINES.chamomile,
+  'red-rose': ENCOUNTER_INTRO_LINES['red-rose'],
+  marigold: ENCOUNTER_INTRO_LINES.marigold,
+  oleander: ENCOUNTER_INTRO_LINES.oleander,
+  lavender: ENCOUNTER_INTRO_LINES.lavender,
 }
 
 /** 카드팩 종류별 감상 풀 키 — GameBoardRenderer의 ShopPackKind와 같은 문자열을 쓴다. */

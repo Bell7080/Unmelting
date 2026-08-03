@@ -80,6 +80,14 @@ describe('BarkSequencer (바크 순차 출력 큐)', () => {
     expect(dropped2?.line).toBe('터치 반응')
   })
 
+  it('대기 바크의 화면 포커스는 항목과 함께 보존된다', () => {
+    const seq = new BarkSequencer<string>(() => 0)
+    const onDisplay = () => undefined
+    // 대사와 발광 콜백이 같은 큐 항목으로 이동해야 실제 표시 beat에서 함께 실행할 수 있다.
+    seq.enqueue({ line: '저 꽃을 봐.', importance: IMPORTANCE.situation, situation: null, onDisplay })
+    expect(seq.shift()?.onDisplay).toBe(onDisplay)
+  })
+
   it('clear는 대기열을 비워 새 런 시작 시 잔여 바크가 새지 않게 한다', () => {
     const seq = new BarkSequencer<string>(() => 0)
     seq.noteDisplayed('표시 중')
