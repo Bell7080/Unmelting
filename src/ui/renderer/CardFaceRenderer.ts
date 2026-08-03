@@ -582,23 +582,49 @@ export class CardFaceRenderer {
    * 순서가 규칙이다 — 좁은 어휘('콤보 게이지')를 넓은 어휘('게이지')보다 먼저 본다.
    */
   resourceTermIcon(text: string): string | null {
-    if (text.includes('함정')) return trapIcon()
-    if (text.includes('콤보 게이지') || text.includes('콤보 한도')) return comboGaugeIcon()
-    if (text.includes('빛 게이지') || text.includes('불씨')) return flameIcon()
-    if (text.includes('손패')) return handCardIcon()
-    if (text.includes('체력')) return heartIcon()
-    if (text.includes('방패')) return shieldIcon()
-    if (text.includes('공격력')) return swordIcon()
-    if (text.includes('보물')) return handCardIcon()
-    if (text.includes('불빛') || text.includes('✦')) return sparkleIcon()
-    if (text.includes('$')) return '<span class="codex-coin-mark" aria-hidden="true">$</span>'
+    return this.resourceTerm(text)?.icon ?? null
+  }
+
+  /** 문구가 어느 자원을 말하는지 — 아이콘과 **그 아이콘이 대신하는 낱말**을 함께 돌려준다. */
+  private resourceTerm(text: string): { term: string; icon: string } | null {
+    const pick = (term: string, icon: string) => ({ term, icon })
+    if (text.includes('함정')) return pick('함정', trapIcon())
+    if (text.includes('콤보 게이지')) return pick('콤보 게이지', comboGaugeIcon())
+    if (text.includes('콤보 한도')) return pick('콤보 한도', comboGaugeIcon())
+    if (text.includes('빛 게이지')) return pick('빛 게이지', flameIcon())
+    if (text.includes('불씨')) return pick('불씨', flameIcon())
+    if (text.includes('손패')) return pick('손패', handCardIcon())
+    if (text.includes('체력')) return pick('체력', heartIcon())
+    if (text.includes('방패')) return pick('방패', shieldIcon())
+    if (text.includes('공격력')) return pick('공격력', swordIcon())
+    if (text.includes('보물')) return pick('보물', handCardIcon())
+    if (text.includes('불빛')) return pick('불빛', sparkleIcon())
+    if (text.includes('✦')) return pick('✦', sparkleIcon())
+    // '$'는 앞머리 아이콘을 붙이지 않는다 — 글자 자체가 이 게임의 화폐 표식이고,
+    // 수치 **뒤**에 붙는 단위라(1$) 앞에 하나 더 세우면 `$1$`가 된다.
     return null
   }
 
-  /** 보상 문구 한 줄을 아이콘 + 원문으로 감싼다. 아이콘을 못 고르면 원문 그대로 둔다. */
+  /**
+   * 아이콘이 이미 말하는 낱말을 글자에서 지운다 — `(하트) 체력 +5`가 아니라 `(하트) +5`.
+   *
+   * 문장 **맨 앞**에 있고 **바로 뒤가 수치**일 때만 지운다. 두 조건이 다 필요하다:
+   *  · 앞이 아니면 아이콘은 앞머리에 붙는데 지워진 낱말은 문장 중간이라 뜻이 어긋난다
+   *    ("체력 5 손실마다 빛 게이지 +1"에서 '빛 게이지'만 빠지면 무엇이 +1인지 사라진다)
+   *  · 뒤가 수치가 아니면 문장이 무너진다("공격력만큼 체력 회복" → "만큼 체력 회복")
+   * `1$`처럼 표식이 수치 **뒤**에 오는 표기는 자연히 걸리지 않는다.
+   */
+  private stripIconTerm(text: string, term: string): string {
+    if (!text.startsWith(term)) return text
+    const rest = text.slice(term.length).replace(/^\s+/, '')
+    return /^[+-]?\d/.test(rest) ? rest : text
+  }
+
+  /** 보상 문구 한 줄을 아이콘 + 글자로 감싼다. 아이콘을 못 고르면 원문 그대로 둔다. */
   resourceTextHtml(text: string): string {
-    const icon = this.resourceTermIcon(text)
-    return icon ? `<span class="resource-term-icon" aria-hidden="true">${icon}</span>${text}` : text
+    const found = this.resourceTerm(text)
+    if (!found) return text
+    return `<span class="resource-term-icon" aria-hidden="true">${found.icon}</span>${this.stripIconTerm(text, found.term)}`
   }
 
   /**
@@ -612,7 +638,9 @@ export class CardFaceRenderer {
       .find((term) => text.startsWith(term))
     if (!lead) return text
     const icon = this.resourceTermIcon(lead)
-    return icon ? `<span class="resource-term-icon" aria-hidden="true">${icon}</span>${text}` : text
+    return icon
+      ? `<span class="resource-term-icon" aria-hidden="true">${icon}</span>${this.stripIconTerm(text, lead)}`
+      : text
   }
 
   candleModeMeta(mode: CandleMode): { label: string; effect: string; icon: string } {

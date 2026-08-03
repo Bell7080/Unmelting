@@ -64,7 +64,8 @@ const SHOP_FREE_GIFT_REWARDS: Record<ShopFreeGiftKind, { description: string; am
   'health-5': { description: '체력 +5', amount: 5 },
   'gauge-3': { description: '콤보 게이지 +3', amount: 3 },
   'ember-3': { description: '빛 게이지 +3', amount: 3 },
-  'hand-2': { description: '랜덤 손패 +2', amount: 2 },
+  // 카드 아이콘이 '손패'를 대신 말하므로 낱말을 겹쳐 적지 않는다(무작위 지급은 손패의 기본).
+  'hand-2': { description: '손패 +2', amount: 2 },
 }
 const SHOP_FREE_GIFT_KINDS = Object.keys(SHOP_FREE_GIFT_REWARDS) as ShopFreeGiftKind[]
 

@@ -1426,9 +1426,10 @@ export class EnaTrainingSimulation {
       this.gainLight(card.group > 1 ? rankLight * card.group * GROUP_LIGHT_DISCOUNT : rankLight)
       // 파편 생성기(숫돌 — TagReactions.SHARD_GENERATORS): 처치마다 칼날 파편을 흘린다.
       for (let n = 0; n < this.shardPerKill; n++) this.drawCard('blade-shard')
-      // 처치 전리품 — 실게임 Card.rollDefeatDrops()와 같은 0~폭 균등 굴림.
-      // 손패 처치는 행동당 1장 예산 안에서만 나온다(useHandCard가 예산을 세운다).
-      let drops = Math.floor(this.rng.next() * (card.group + 1))
+      // 처치 전리품 — 실게임 Card.rollDefeatDrops()와 같은 0~폭 굴림.
+      // 손패 처치는 실게임처럼 두 겹으로 눌린다: 두 번 굴려 낮은 쪽 + 행동당 1장 예산.
+      const roll = (): number => Math.floor(this.rng.next() * (card.group + 1))
+      let drops = source === 'ember' ? Math.min(roll(), roll()) : roll()
       if (source === 'ember') {
         drops = Math.min(drops, this.handKillDropBudget)
         this.handKillDropBudget -= drops

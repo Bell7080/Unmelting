@@ -1309,10 +1309,12 @@ async function awardScoreForRemovedCards(
 /**
  * 손패·조합으로 잡은 적의 전리품.
  *
- * ★ **한 행동당 최대 1장**이다. 손패는 턴을 넘기지 않으므로, 한 장으로 여러 적을 잡고
- * 그만큼 손패를 돌려받으면 턴을 올리지 않은 채 손패·불빛을 무한히 불릴 수 있다
- * (광역기 한 장 → 3장 회수 → 다시 광역기…). 상한 1이면 쓴 만큼보다 더 받을 수 없어
- * 그 고리가 성립하지 않는다. 대신 직접 타격은 턴을 소모하므로 0~N을 그대로 받는다.
+ * 두 겹의 제약이 걸린다. 손패는 **턴을 넘기지 않기 때문**이다 — 잡은 수만큼 그대로
+ * 돌려받으면 턴을 올리지 않은 채 손패·불빛을 무한히 불릴 수 있다(광역기 한 장 →
+ * 3장 회수 → 다시 광역기…).
+ *   1) 적마다 `stingy` 굴림(두 번 굴려 낮은 쪽) — 화면 표기는 그대로 두고 확률만 눌린다
+ *   2) 행동 1회당 합계 1장 상한 — 광역기가 몇을 잡든 쓴 것보다 더 받을 수 없다
+ * 직접 타격은 턴을 소모하므로 이 둘 다 없이 0~N을 그대로 받는다.
  */
 async function awardHandKillDrops(
   removed: { cardId: string; type: CardType }[],
@@ -1322,8 +1324,7 @@ async function awardHandKillDrops(
     .map((r) => snapshot.get(r.cardId))
     .filter((c): c is Card => !!c && c.type === CardType.ENEMY)
   if (kills.length === 0) return
-  // 적마다 제 상한으로 굴리되 합계는 1장에서 끊는다.
-  const rolled = kills.reduce((sum, card) => sum + card.rollDefeatDrops(), 0)
+  const rolled = kills.reduce((sum, card) => sum + card.rollDefeatDrops(true), 0)
   if (rolled <= 0) return
   const drop = DropSystem.generateDrop('enemy-kill')
   if (!gameState.character.addHandCard(drop)) return

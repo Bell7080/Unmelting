@@ -17,6 +17,14 @@ export const STRIKE_LOB_FLIGHT_MS = 620
 /** 여러 대상에 동시에 쏠 때 발사 간격 — 겹쳐 쏘면 몇 발인지가 뭉갠다. */
 export const STRIKE_LOB_STAGGER_MS = 70
 
+/** 손패 획득 토큰이 튀어나와 떨어지고 → 잠깐 머물다 → 손패로 빨려 들어가기까지. */
+const HAND_TOKEN_FLIGHT_MS = 1150
+/** 착지(튀어나와 떨어짐)가 끝나는 지점. 이후 잠깐 머물렀다가 손패로 향한다. */
+const HAND_TOKEN_LAND = 0.4
+const HAND_TOKEN_DEPART = 0.54
+/** 손패에 닿는 프레임 — 버스트가 이 박자에 터진다. */
+const HAND_TOKEN_ARRIVE = 0.93
+
 export class ResourceTrailFx {
   constructor(private readonly host: GameBoardRenderer) {}
 
@@ -33,7 +41,24 @@ export class ResourceTrailFx {
     theme: BurstTheme
   ): Promise<void> {
     const source = this.host.findCardElement(cardId)
-    return this.animateResourceTrail(source, this.findResourceTrailTarget(target), count, theme)
+    return this.routeResourceTrail(source, target, count, theme)
+  }
+
+  /**
+   * 손패 획득만 파편 트레일이 아니라 **카드 토큰**으로 낸다 — 나머지 자원은 수치가
+   * HUD에서 굴러 오르지만 손패는 '카드가 손에 들어오는' 사건이라 도형이 곧 설명이다.
+   * 출처가 어디든(레일 칸·화면 중앙·체인 배너) 같은 어휘를 쓰게 한 창구로 모은다.
+   */
+  private routeResourceTrail(
+    source: HTMLElement | DOMRect | null,
+    target: ResourceTrailTarget,
+    count: number,
+    theme: BurstTheme
+  ): Promise<void> {
+    const destination = this.findResourceTrailTarget(target)
+    return target === 'hand'
+      ? this.animateHandCardTokens(source, destination, count)
+      : this.animateResourceTrail(source, destination, count, theme)
   }
 
   /** Fly a resource trail from a captured card rect after the model was already cleaned up. */
@@ -43,7 +68,7 @@ export class ResourceTrailFx {
     count: number,
     theme: BurstTheme
   ): Promise<void> {
-    return this.animateResourceTrail(source, this.findResourceTrailTarget(target), count, theme)
+    return this.routeResourceTrail(source, target, count, theme)
   }
 
   /** Fly a resource trail from the center-screen played-card impact point. */
@@ -52,8 +77,7 @@ export class ResourceTrailFx {
     count: number,
     theme: BurstTheme
   ): Promise<void> {
-    const center = new DOMRect(window.innerWidth / 2 - 8, window.innerHeight * 0.46 - 8, 16, 16)
-    return this.animateResourceTrail(center, this.findResourceTrailTarget(target), count, theme)
+    return this.routeResourceTrail(this.playedCardOrigin(), target, count, theme)
   }
 
   /** Fly a square-card target blast from the played-card center toward an affected rail card. */
@@ -90,12 +114,7 @@ export class ResourceTrailFx {
     const chainSource =
       document.querySelector<HTMLElement>('#chain-banner .chain-event:last-child') ??
       document.querySelector<HTMLElement>('#chain-banner')
-    return this.animateResourceTrail(
-      chainSource,
-      this.findResourceTrailTarget(target),
-      count,
-      theme
-    )
+    return this.routeResourceTrail(chainSource, target, count, theme)
   }
 
   findResourceTrailTarget(target: ResourceTrailTarget): HTMLElement | DOMRect | null {
@@ -168,6 +187,17 @@ export class ResourceTrailFx {
     0 0 30px var(--trail-glow, rgba(255, 218, 132, 0.5)),
     0 0 54px var(--trail-glow, rgba(255, 218, 132, 0.28));
 }
+/* 손패 획득 토큰 — 같은 사각 조각이되 **비율만** 세로로 긴 카드다. 전용 도형이 아니라
+   비율 변주라, 이펙트 어휘를 늘리지 않고도 '카드가 나왔다'가 읽힌다. */
+.resource-trail-piece.is-card-token {
+  border-radius: 3px;
+  background: linear-gradient(155deg, #ffeec0 0%, #ffcf72 42%, #e0a03c 100%);
+  border: 1px solid rgba(90, 56, 18, 0.55);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.55),
+    0 0 16px rgba(255, 214, 130, 0.7),
+    0 0 34px var(--trail-glow, rgba(255, 218, 132, 0.4));
+}
 `
     document.head.appendChild(style)
   }
@@ -214,6 +244,107 @@ export class ResourceTrailFx {
   rectCenter(target: HTMLElement | DOMRect): { x: number; y: number } {
     const rect = target instanceof HTMLElement ? target.getBoundingClientRect() : target
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  }
+
+  /**
+   * 손패 획득 — 레일 칸(보물·꽃·적)에서 **카드 모양 황금 토큰**이 장수만큼 튀어나온다.
+   *
+   * 자원 트레일(HUD로 흘러드는 파편)과 다른 것은 도형의 **비율 하나**다: 세로로 긴
+   * 직사각형이라야 '카드가 나왔다'로 읽힌다(같은 사각 블라스트 어휘 안에 있다).
+   * 박자는 셋이다 — 곡사로 튀어나와 떨어지고(푱), 잠깐 머물고, 손패로 빨려 들어간다.
+   * 머무는 한 박자가 없으면 몇 장이 나왔는지 셀 틈이 사라진다.
+   */
+  animateHandCardTokens(
+    source: HTMLElement | DOMRect | null,
+    target: HTMLElement | DOMRect | null,
+    count: number
+  ): Promise<void> {
+    if (!source || !target || count <= 0) return Promise.resolve()
+    this.ensureResourceTrailStyles()
+    const from = this.rectCenter(source)
+    const to = this.rectCenter(target)
+    const colors = this.trailColors('treasure-gain')
+    // 장수가 많아도 늘어지지 않게 간격만 좁힌다 — 발수는 줄이지 않는다.
+    const stagger = Math.max(45, Math.min(110, Math.round(460 / count)))
+    const width = 17
+    const height = 25
+    const launches = Array.from({ length: count }, (_, i) =>
+      new Promise<void>((resolve) => {
+        window.setTimeout(() => {
+          const piece = document.createElement('div')
+          piece.className = 'resource-trail-piece is-card-token'
+          piece.style.width = `${width}px`
+          piece.style.height = `${height}px`
+          piece.style.setProperty('--trail-color', colors.color)
+          piece.style.setProperty('--trail-glow', colors.glow)
+          document.body.appendChild(piece)
+          // 착지점은 출처 아래로 부채꼴로 벌린다 — 겹쳐 떨어지면 장수가 안 세어진다.
+          const spread = Math.min(40, 150 / Math.max(1, count))
+          const land = {
+            x: from.x + (i - (count - 1) / 2) * spread,
+            y: Math.min(window.innerHeight - 40, from.y + 54),
+          }
+          const at = (px: number, py: number): string =>
+            `translate(${px - width / 2}px, ${py - height / 2}px)`
+          const frames: Keyframe[] = []
+          // 1) 곡사로 튀어나와 내리꽂힌다.
+          const SAMPLES = 8
+          for (let s = 0; s <= SAMPLES; s += 1) {
+            const t = s / SAMPLES
+            const p = this.lobPointAt(from, land, t)
+            const lift = Math.sin(Math.PI * t)
+            frames.push({
+              transform: `${at(p.x, p.y)} rotate(${(t * 220 - 20).toFixed(0)}deg) scale(${(0.6 + lift * 0.55).toFixed(3)})`,
+              opacity: s === 0 ? 0 : 1,
+              offset: Number((t * HAND_TOKEN_LAND).toFixed(4)),
+            })
+          }
+          // 2) 착지 반동 — 납작해졌다 바로 선다. 여기서 카드가 똑바로 놓인다.
+          frames.push({
+            transform: `${at(land.x, land.y)} rotate(0deg) scale(1.24, 0.72)`,
+            opacity: 1,
+            offset: HAND_TOKEN_LAND + 0.03,
+          })
+          frames.push({
+            transform: `${at(land.x, land.y)} rotate(0deg) scale(1)`,
+            opacity: 1,
+            offset: HAND_TOKEN_DEPART,
+          })
+          // 3) 손패로 빨려 들어간다 — 가속해서 도착점에서 멈춘다.
+          frames.push({
+            transform: `${at(land.x + (to.x - land.x) * 0.45, land.y + (to.y - land.y) * 0.45)} rotate(-8deg) scale(0.94)`,
+            opacity: 1,
+            offset: HAND_TOKEN_DEPART + (HAND_TOKEN_ARRIVE - HAND_TOKEN_DEPART) * 0.55,
+          })
+          frames.push({
+            transform: `${at(to.x, to.y)} rotate(0deg) scale(0.7)`,
+            opacity: 1,
+            offset: HAND_TOKEN_ARRIVE,
+          })
+          frames.push({ transform: `${at(to.x, to.y)} rotate(0deg) scale(0.4)`, opacity: 0 })
+          const anim = piece.animate(frames, {
+            duration: HAND_TOKEN_FLIGHT_MS,
+            easing: 'linear',
+            fill: 'forwards',
+          })
+          window.setTimeout(() => {
+            SquareBurst.playAt(to.x, to.y, 'treasure-gain', {
+              count: 10,
+              spread: 58,
+              duration: 320,
+              size: [6, 14],
+            })
+          }, HAND_TOKEN_FLIGHT_MS * HAND_TOKEN_ARRIVE)
+          const done = (): void => {
+            piece.remove()
+            resolve()
+          }
+          anim.onfinish = done
+          window.setTimeout(done, HAND_TOKEN_FLIGHT_MS + 200)
+        }, i * stagger)
+      })
+    )
+    return Promise.all(launches).then(() => undefined)
   }
 
   animateResourceTrail(

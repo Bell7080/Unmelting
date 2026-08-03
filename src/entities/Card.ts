@@ -216,12 +216,18 @@ export class Card {
   }
 
   /**
-   * 처치 보상 손패 장수를 굴린다 — 0 ~ `defeatDropCount` 균등.
-   * 카드에 적힌 '0~N장'이 곧 이 분포다. 표기와 실지급이 갈리지 않게 한 곳에서 굴린다.
+   * 처치 보상 손패 장수를 굴린다 — 0 ~ `defeatDropCount`.
+   * 카드에 적힌 '0~N장'이 곧 이 범위다. 표기와 실지급이 갈리지 않게 한 곳에서 굴린다.
+   *
+   * `stingy`(손패·조합으로 잡았을 때)는 **두 번 굴려 낮은 쪽**을 쓴다. 범위는 그대로라
+   * 카드 표기를 바꾸지 않으면서 적은 쪽으로 크게 쏠린다 — 0~1이면 50:50이 25:75가 된다.
+   * 화면에 적지 않는 제약이라, 표기를 믿고 잡았다가 손해 보는 느낌이 나지 않게
+   * **범위 자체는 건드리지 않는다**.
    */
-  rollDefeatDrops(): number {
+  rollDefeatDrops(stingy = false): number {
     const max = Math.max(0, this.defeatDropCount)
-    return Math.floor(Math.random() * (max + 1))
+    const roll = (): number => Math.floor(Math.random() * (max + 1))
+    return stingy ? Math.min(roll(), roll()) : roll()
   }
 
   /** 온보딩 필드 카드의 최대 만료 턴수 — 첫 접하는 유저 혼란 방지를 위해 종류 무관 균일 2턴. 비필드는 0. */
