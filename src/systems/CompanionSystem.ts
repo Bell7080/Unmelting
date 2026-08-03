@@ -42,8 +42,6 @@ import {
   CALLBACK_LINES,
   BOARD_INTRO_LINES,
   ENCOUNTER_INTRO_LINES,
-  FIELD_INTRO_COMBINED_LEAD,
-  FIELD_INTRO_BRIEF,
 } from '@data/CompanionLines'
 import type { CardRarity } from '@data/ShopPools'
 import type {
@@ -792,15 +790,11 @@ export class CompanionSystem {
    * 한 줄로 합쳐 스팸 없이 한 번에 알려준다.
    */
   introduceFields(kinds: BoardEncounterKind[]): string | null {
-    // 안정적인 순서로 정렬해 합친 문장이 조우 순서에 흔들리지 않게 한다.
+    // 안정적인 순서로 정렬해 조우 순서에 문장이 흔들리지 않게 한다.
     const order: BoardEncounterKind[] = ['rock', 'bush', 'junk', 'web', 'bomb', 'spore', 'event-door', 'starlight', 'seed']
-    const fresh = order.filter((k) => kinds.includes(k))
-    if (fresh.length === 0) return null
-    if (fresh.length === 1) return this.pickFrom(`field-intro:${fresh[0]}`, BOARD_INTRO_LINES[fresh[0]], 'normal')
-    // 여러 종류: 앞머리(변주) + 종류별 짧은 절을 이어 붙이고 마무리로 닫는다.
-    const lead = this.pickFrom('field-intro:lead', FIELD_INTRO_COMBINED_LEAD, 'normal')
-    const briefs = fresh.map((k) => FIELD_INTRO_BRIEF[k]).join(', ')
-    return `${lead} ${briefs}. 천천히 살펴보자.`
+    const kind = order.find((k) => kinds.includes(k)) ?? kinds[0]
+    if (!kind) return null
+    return this.pickFrom(`field-intro:${kind}`, BOARD_INTRO_LINES[kind], 'normal')
   }
 
   /** 보드 밖 시스템 흐름(보스/시련/상점/제단) 첫 조우 소개 — 확률 게이트 없이 반드시 한 번 말한다.

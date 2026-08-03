@@ -38,7 +38,6 @@ import {
   CALLBACK_LINES,
   FIELD_INTRO_LINES,
   ENCOUNTER_INTRO_LINES,
-  FIELD_INTRO_COMBINED_LEAD,
   type Line,
 } from './CompanionLines'
 import { enumerateLineRenders, type Intensity } from '@systems/CompanionSystem'
@@ -80,7 +79,6 @@ function collectAllPools(): { pool: string; lines: Line[] }[] {
   addRecord('callback', CALLBACK_LINES)
   addRecord('field-intro', FIELD_INTRO_LINES)
   addRecord('encounter-intro', ENCOUNTER_INTRO_LINES)
-  out.push({ pool: 'field-intro:lead', lines: FIELD_INTRO_COMBINED_LEAD })
   return out
 }
 

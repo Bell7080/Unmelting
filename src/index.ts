@@ -1458,6 +1458,41 @@ function firstSeenKeyOf(kind: BoardEncounterKind | SystemEncounterKind): string 
   return kind === 'rock' || kind === 'bush' || kind === 'junk' ? `field:${kind}` : `encounter:${kind}`
 }
 
+/** 여러 종류가 한꺼번에 깔렸을 때 무엇부터 짚을지 — 위협이 큰 쪽을 먼저 알려 준다. */
+const FIELD_INTRO_ORDER: BoardEncounterKind[] = [
+  'bomb', 'spore', 'web', 'bush', 'rock', 'junk', 'event-door', 'starlight', 'seed',
+]
+
+/** 이미 소개한 종류인가(영구·세션 이중 가드, 읽기 전용). */
+function isFieldKindIntroduced(kind: BoardEncounterKind): boolean {
+  if (sessionFieldsIntroduced.has(kind)) return true
+  if (enaAutonomousLearner.hasFirstSeen(firstSeenKeyOf(kind))) {
+    sessionFieldsIntroduced.add(kind) // 이전 세션에서 이미 소개됨 — 세션 가드에도 반영.
+    return true
+  }
+  return false
+}
+
+/** 한 종류를 지금 소개하고 영구·세션 기록을 남긴다. */
+function sayFieldIntro(kind: BoardEncounterKind): void {
+  const line = companion.introduceFields([kind])
+  if (!line) return
+  enaAutonomousLearner.recordFirstSeen(firstSeenKeyOf(kind))
+  sessionFieldsIntroduced.add(kind)
+  companionDirector.sayEnaBark(line, { importance: BARK_IMPORTANCE.situation })
+}
+
+/**
+ * 아직 소개하지 않은 칸을 **실제로 만졌을 때** 그 자리에서 짚어 준다.
+ * 처음 깔릴 때 전부 설명하지 않고 미뤄 둔 몫이라, 효과를 받는 순간과 설명이 붙는다.
+ */
+function introduceFieldKindOnce(card: Card): void {
+  if (!companionDirector.companionWorldCanSpeak()) return
+  const kind = boardIntroKindOf(card)
+  if (!kind || isFieldKindIntroduced(kind)) return
+  sayFieldIntro(kind)
+}
+
 /**
  * 보드에 새로 나타난 첫 조우 대상(필드 3종 + 거미줄/폭탄/포자/이벤트 문/별빛)을 태어나서 처음
  * 겪는 순간 에나가 한 번 소개하게 한다. 여러 종류가 한꺼번에 나와도 한 줄로 묶어 스팸을 막는다.
@@ -1475,19 +1510,11 @@ function maybeIntroduceFields(): void {
     }
   }
   if (present.size === 0) return
-  // 영구·세션 이중 가드로 '처음 본 종류'만 남긴다. 영구 기록은 조우 시점에 즉시 남겨 재시작 반복을 막는다.
-  const fresh: BoardEncounterKind[] = []
-  for (const kind of present) {
-    if (sessionFieldsIntroduced.has(kind)) continue
-    if (!enaAutonomousLearner.recordFirstSeen(firstSeenKeyOf(kind))) {
-      sessionFieldsIntroduced.add(kind) // 이전 세션에서 이미 소개됨 — 세션 가드에도 반영.
-      continue
-    }
-    sessionFieldsIntroduced.add(kind)
-    fresh.push(kind)
-  }
-  const line = companion.introduceFields(fresh)
-  if (line) companionDirector.sayEnaBark(line, { importance: BARK_IMPORTANCE.situation })
+  // ★ 한 beat에 **한 종류만** 소개한다. 첫 판은 바위·덤불·잡동사니가 한꺼번에 깔려서,
+  //   묶어 말하면 시작하자마자 긴 설명이 우다다 쏟아졌다. 나머지는 표시하지 않고 남겨
+  //   다음 턴 스캔이나 그 칸을 실제로 만졌을 때(introduceFieldKindOnce) 짚어 준다.
+  const nextKind = FIELD_INTRO_ORDER.find((kind) => present.has(kind) && !isFieldKindIntroduced(kind))
+  if (nextKind) sayFieldIntro(nextKind)
   // 획득 경로(enqueueDrop)에서 조용히 합성된 첫 트리플도 이 스캔이 받아 소개한다.
   if (gameState.character.hand.some((card) => card.merged)) {
     const tripleIntro = encounterIntroLineOnce('triple')
@@ -3334,6 +3361,10 @@ async function handleCardAction(e: Event): Promise<void> {
 
   const actionType = actionTypeFor(card.type)
   if (!actionType) return
+
+  // 아직 소개하지 않은 칸이면 **누른 그 자리에서** 짧게 짚어 준다. 처음 깔릴 때 전부
+  // 설명하지 않고 미뤄 둔 몫이라, 효과를 받는 순간과 설명이 한 박자에 붙는다.
+  introduceFieldKindOnce(card)
 
   inputLocked = true
 
