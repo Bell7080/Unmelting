@@ -104,6 +104,15 @@ export interface FlowerWilt {
   flowerKind: FlowerKind
 }
 
+/** 한 성장 주기를 마친 괴물꽃을 렌더/로그 계층에 알리는 안정 ID 기반 결과. */
+export interface MonsterFlowerGrowth {
+  laneIndex: number
+  distance: number
+  cardId: string
+  /** 이번 주기에 실제로 오른 공격력/체력 수치. */
+  amount: number
+}
+
 export class TurnManager {
   gameState: GameState
   /** 보스전 전용 단계는 일반 턴 카운트에서 제외하기 위해 분리한다. */
@@ -491,12 +500,29 @@ export class TurnManager {
     return ticks
   }
 
-  /** Grow bloomed flowers, then roll their escalating wilt chance into monster flowers. */
-  applyFlowerGrowthAndWilt(spawner: CardSpawner): { growths: FlowerGrowth[]; wilts: FlowerWilt[] } {
+  /** 꽃의 성장/시듦과 이미 시든 괴물꽃의 2턴 주기 성장을 한 필드 시계에서 처리한다. */
+  applyFlowerGrowthAndWilt(spawner: CardSpawner): {
+    growths: FlowerGrowth[]
+    wilts: FlowerWilt[]
+    monsterGrowths: MonsterFlowerGrowth[]
+  } {
     const growths: FlowerGrowth[] = []
     const wilts: FlowerWilt[] = []
+    const monsterGrowths: MonsterFlowerGrowth[] = []
     const flowersAtTurnStart: { card: Card; laneIndex: number; distance: number }[] = []
     const seen = new Set<Card>()
+
+    // 변이된 바로 그 턴에는 괴물꽃 시계를 줄이지 않는다. 스캔 전에 있던 괴물꽃만 틱한다.
+    for (let laneIndex = 0; laneIndex < this.gameState.lanes.length; laneIndex++) {
+      for (let distance = 0; distance < LANE_DISTANCE_COUNT; distance++) {
+        const card = this.gameState.lanes[laneIndex].getCardAtDistance(distance)
+        if (!card || seen.has(card) || card.specialEnemyKind !== 'monsterFlower') continue
+        seen.add(card)
+        if (card.isFrozen() || !card.tickMonsterFlowerGrowth()) continue
+        monsterGrowths.push({ laneIndex, distance, cardId: card.id, amount: card.monsterFlowerGrowthAmount })
+      }
+    }
+    seen.clear()
 
     // Snapshot first so a replaced monster flower cannot be processed again in
     // the same scan, and shared future groups never double-tick.
@@ -546,7 +572,7 @@ export class TurnManager {
       })
     }
 
-    return { growths, wilts }
+    return { growths, wilts, monsterGrowths }
   }
 
   /**

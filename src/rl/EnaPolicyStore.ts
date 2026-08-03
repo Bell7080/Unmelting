@@ -7,6 +7,7 @@
 
 import { ENA_ACTION_SPACE, ENA_FEATURE_COUNT } from './EnaTrainingSimulation'
 import { EnaPolicyNetwork, type EnaPolicyWeights } from './EnaPolicyNetwork'
+import pretrainedPolicyJson from '@data/ena-pretrained-policy.json'
 
 export const ENA_POLICY_STORAGE_KEY = 'unmelting.ena.policy.v1'
 
@@ -86,6 +87,13 @@ export class EnaPolicyStore {
       // 손상된 저장값은 런타임 에나를 멈추지 않고 기본 정책 fallback으로 넘긴다.
       return undefined
     }
+    if (!validatePolicyArtifact(artifact)) return undefined
+    return EnaPolicyNetwork.fromWeights(artifact.weights)
+  }
+
+  /** 저장 정책이 없을 때 사용할 371차원 동봉 사전학습망을 검증 후 복원한다. */
+  loadPretrained(): EnaPolicyNetwork | undefined {
+    const artifact = pretrainedPolicyJson as EnaStoredPolicyArtifact
     if (!validatePolicyArtifact(artifact)) return undefined
     return EnaPolicyNetwork.fromWeights(artifact.weights)
   }

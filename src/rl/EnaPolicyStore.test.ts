@@ -48,4 +48,12 @@ describe('EnaPolicyStore', () => {
     expect(store.save(net)).toBe(false)
     expect(store.load()).toBeUndefined()
   })
+
+  it('371차원 동봉 사전학습 정책을 현재 계약으로 복원한다', () => {
+    const pretrained = new EnaPolicyStore(undefined).loadPretrained()
+
+    expect(pretrained).toBeDefined()
+    expect(pretrained?.inDim).toBe(ENA_FEATURE_COUNT)
+    expect(pretrained?.outDim).toBe(ENA_ACTION_SPACE.length)
+  })
 })

@@ -59,6 +59,15 @@ export interface EnaTrainResult {
   trained: EnaEvalMetrics
 }
 
+/** 괴물꽃 대응 품질 비교 지표. priorityRate는 기회 중 괴물꽃을 직접 조준한 비율이다. */
+export interface EnaMonsterEvalMetrics extends EnaEvalMetrics {
+  monsterSpawned: number
+  monsterDefeated: number
+  monsterPriorityRate: number
+  monsterSurvivalP50: number
+  monsterSurvivalP90: number
+}
+
 interface Step {
   x: number[]
   mask: boolean[]
@@ -165,20 +174,68 @@ export class EnaTrainer {
     return { averageReturn: ret / n, averageTurns: turns / n, averageBosses: bosses / n, winRate: wins / n }
   }
 
+  /** 동일 시드에서 괴물꽃 제거 우선순위와 생존 턴 분포까지 모아 정책 회귀를 비교한다. */
+  static evaluateMonsterFlowers(policy: EnaPolicy, seeds: number[], difficulty: EnaSimDifficulty = 'standard'): EnaMonsterEvalMetrics {
+    let ret = 0
+    let turns = 0
+    let bosses = 0
+    let wins = 0
+    let spawned = 0
+    let defeated = 0
+    let opportunities = 0
+    let prioritized = 0
+    const survivalTurns: number[] = []
+    for (const seed of seeds) {
+      const result = new EnaTrainingSimulation(seed, undefined, difficulty).runEpisode(policy)
+      ret += result.totalReward
+      turns += result.survivedTurns
+      bosses += result.bossesCleared
+      if (result.won) wins++
+      spawned += result.monsterFlowerMetrics.spawned
+      defeated += result.monsterFlowerMetrics.defeated
+      opportunities += result.monsterFlowerMetrics.decisionOpportunities
+      prioritized += result.monsterFlowerMetrics.prioritizedDecisions
+      survivalTurns.push(...result.monsterFlowerMetrics.survivalTurns)
+    }
+    survivalTurns.sort((a, b) => a - b)
+    const percentile = (ratio: number): number => survivalTurns.length === 0
+      ? 0
+      : survivalTurns[Math.min(survivalTurns.length - 1, Math.floor((survivalTurns.length - 1) * ratio))]
+    const n = Math.max(1, seeds.length)
+    return {
+      averageReturn: ret / n,
+      averageTurns: turns / n,
+      averageBosses: bosses / n,
+      winRate: wins / n,
+      monsterSpawned: spawned,
+      monsterDefeated: defeated,
+      monsterPriorityRate: opportunities > 0 ? prioritized / opportunities : 0,
+      monsterSurvivalP50: percentile(0.5),
+      monsterSurvivalP90: percentile(0.9),
+    }
+  }
+
   /** 전체 파이프라인: 무작위 baseline 평가 → BC 워밍업 → REINFORCE → 학습 후 평가. */
   static train(config: Partial<EnaTrainConfig> = {}): EnaTrainResult {
     const cfg = { ...DEFAULT_TRAIN_CONFIG, ...config }
     const rng = new EnaRandom(cfg.seed)
-    const net = new EnaPolicyNetwork(ENA_FEATURE_COUNT, cfg.hidden, ACTION_DIM, new EnaRandom(cfg.seed + 1))
+    let net = new EnaPolicyNetwork(ENA_FEATURE_COUNT, cfg.hidden, ACTION_DIM, new EnaRandom(cfg.seed + 1))
     const evalSeeds = Array.from({ length: 40 }, (_, i) => 5000 + i * 7)
 
     const random = EnaTrainer.evaluate(policyFromNetwork(net, true), evalSeeds, cfg.difficulty)
 
     const teacherData = EnaTrainer.collectTeacherData(cfg.bcEpisodes, cfg.seed * 31 + 3, rng, cfg.difficulty)
     EnaTrainer.behaviorClone(net, teacherData, cfg.bcEpochs, cfg.bcLr, rng)
+    // RL이 작은 표본에서 BC 정책을 무너뜨릴 수 있으므로 생존 턴 기준 BC 체크포인트를 보존한다.
+    const bcWeights = net.toWeights()
+    const bcMetrics = EnaTrainer.evaluate(policyFromNetwork(net, true), evalSeeds, cfg.difficulty)
     EnaTrainer.reinforce(net, cfg.rlEpisodes, cfg.seed * 53 + 11, cfg.rlLr, cfg.gamma, rng, cfg.difficulty)
 
-    const trained = EnaTrainer.evaluate(policyFromNetwork(net, true), evalSeeds, cfg.difficulty)
+    let trained = EnaTrainer.evaluate(policyFromNetwork(net, true), evalSeeds, cfg.difficulty)
+    if (bcMetrics.averageTurns > trained.averageTurns) {
+      net = EnaPolicyNetwork.fromWeights(bcWeights)
+      trained = bcMetrics
+    }
     return { network: net, random, trained }
   }
 }
