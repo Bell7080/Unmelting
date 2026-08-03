@@ -60,13 +60,14 @@ import type { SpecialEnemyKind } from '@entities/Card'
 import { EVENT_DEFINITIONS, EVENT_IDS, type EventId, type RiskOffer, type MinionExchangeConfig, type CountRpsConfig } from '@data/Events'
 import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
 import { EmberSystem, SPROUT_SPAWN_ADJUST, type EmberTier } from '@systems/EmberSystem'
-import { ENEMY_DEFINITIONS, specialEnemyTierForTurn } from '@systems/CardSpawner'
+import { ENEMY_DEFINITIONS, MIMIC_BY_SPAN, specialEnemyTierForTurn } from '@systems/CardSpawner'
 import { DropSystem } from '@systems/DropSystem'
 import { SHARD_GENERATORS } from '@systems/TagReactions'
 import { altarPackBaseCost, packCostWithRepeats, regularShopPackBaseCost } from '@core/ShopPricing'
 import { buildEnaKnowledgeBase, type EnaKnowledgeBase, type EnaHandCardTactic } from './EnaKnowledgeAdapter'
 import { estimateImminentWebMergeFromCells, type ImminentWebMergeEstimate } from '@systems/CompanionForesight'
 import { bestSupportCard } from '@systems/HandCardAdvisor'
+import { GOLDEN_TREASURE_DROPS_BY_SPAN, JUNK_TREASURE_DROPS_BY_SPAN, TREASURE_DROPS_BY_SPAN } from '@systems/ActionSystem'
 import type { BossFightBudget } from '@data/BossDamageBudget'
 import type { EnaDisposition } from '@systems/EnaDisposition'
 
@@ -81,18 +82,22 @@ export interface EnaSimCard {
   group: number
   trapKind?: TrapKind
   flowerKind?: FlowerKind
-  treasureKind?: 'normal' | 'starlight'
+  treasureKind?: 'normal' | 'golden' | 'junk' | 'starlight'
   value: number
   /** 적 처치 불빛 랭크. 생략 시 일반 적의 기존 value 랭크를 사용한다. */
   enemyPower?: number
   /** 적 처치 시 손패 드롭 상한. 생략 시 일반 적의 group 폭을 사용한다. */
   defeatDropCount?: number
+  /** 일반 적과 병합되지 않는 특수 적 계열. 같은 계열끼리만 병합 가능하다. */
+  specialEnemyKind?: 'monsterFlower' | 'mimic'
   /** 꽃 생존/성장 누적 턴. 금잔화의 격턴 성장 판정에 사용한다. */
   growth: number
   /** 괴물꽃이면 2→1→0 뒤 성장한다. 일반 적은 이 선택 필드를 갖지 않는다. */
   monsterGrowthTimer?: number
   /** 생성 턴의 20턴 단위 특수 적 티어로 고정되는 괴물꽃 주기당 공/체 성장량. */
   monsterGrowthAmount?: number
+  /** 괴물꽃으로 변이한 뒤 필드에서 생존한 턴 수. 사전학습 비교 지표에만 사용한다. */
+  monsterAge?: number
   /** 포자 전염 카운트다운(2→0에서 인접 전염). */
   sporeTimer: number
   /** 이벤트 문 닫힘 카운트다운(-1=대기, 2→0 닫힘). */
@@ -162,6 +167,16 @@ export interface EnaEpisodeResult {
   bossesCleared: number
   samples: EnaTrainingSample[]
   trace: string[]
+  /** 괴물꽃 직접 제거 우선순위와 생존 턴 분포를 사전학습 전후로 비교하는 텔레메트리. */
+  monsterFlowerMetrics: EnaMonsterFlowerMetrics
+}
+
+export interface EnaMonsterFlowerMetrics {
+  spawned: number
+  defeated: number
+  decisionOpportunities: number
+  prioritizedDecisions: number
+  survivalTurns: number[]
 }
 
 /** 현재 상태를 사람이 읽는 전략 문장으로 뽑아 에나 대사/설명 학습에도 재사용한다. */
@@ -373,6 +388,19 @@ const FEATURE_PER_CELL = 17
 const FEATURE_PER_HAND = 13
 export const ENA_FEATURE_COUNT = FEATURE_SCALARS + FEATURE_PER_INCOMING * LANES + FEATURE_PER_CELL * ROWS * LANES + FEATURE_PER_HAND * HAND_MAX
 
+/** 344차원 구 정책의 정보 한계를 재현하도록 괴물꽃 전용 3축만 0으로 가리는 비교용 어댑터. */
+export function maskMonsterFlowerObservation(features: readonly number[]): number[] {
+  const masked = [...features]
+  const cellsStart = FEATURE_SCALARS + FEATURE_PER_INCOMING * LANES
+  for (let cell = 0; cell < ROWS * LANES; cell++) {
+    const monsterStart = cellsStart + cell * FEATURE_PER_CELL + 14
+    masked[monsterStart] = 0
+    masked[monsterStart + 1] = 0
+    masked[monsterStart + 2] = 0
+  }
+  return masked
+}
+
 /** 모든 행동 인덱스를 고정해 신경망 출력 차원을 안정화한다.
  *  = 레인 3 + 손패 10 + 대기 1 + 상점 9 + 이벤트 4 = 27. */
 export const ENA_ACTION_SPACE: EnaSimAction[] = [
@@ -558,6 +586,11 @@ export class EnaTrainingSimulation {
   /** 시련 '가난' 보물상자 스폰 가중치 배율(누적 곱). */
   private trialTreasureScale = 1
   private done = false
+  private monsterFlowersSpawned = 0
+  private monsterFlowersDefeated = 0
+  private monsterDecisionOpportunities = 0
+  private monsterPrioritizedDecisions = 0
+  private monsterSurvivalTurns: number[] = []
 
   // 동료(에나) 개입 — 성향(disposition)이 주어졌을 때만 활성. 미지정 시 순수 플레이어 시뮬(기존 동작 유지).
   private readonly companion?: EnaDisposition
@@ -650,6 +683,11 @@ export class EnaTrainingSimulation {
     this.trialEnemyAtkBonus = 0
     this.trialTrapDamageBonus = 0
     this.trialTreasureScale = 1
+    this.monsterFlowersSpawned = 0
+    this.monsterFlowersDefeated = 0
+    this.monsterDecisionOpportunities = 0
+    this.monsterPrioritizedDecisions = 0
+    this.monsterSurvivalTurns = []
     this.will = 0
     this.companionAwakened = false
     this.done = false
@@ -691,11 +729,19 @@ export class EnaTrainingSimulation {
     const beforeBosses = this.bossesCleared
     const phaseBefore = this.phase
     const action = ENA_ACTION_SPACE[actionIndex] ?? ENA_ACTION_SPACE[actionIndexOf('wait', -1)]
-    let reward = this.applyAction(action)
+    if (phaseBefore === 'field' && this.board[0].some((card) => card?.specialEnemyKind === 'monsterFlower')) {
+      this.monsterDecisionOpportunities++
+      if (this.actionTargetsMonsterFlower(action)) this.monsterPrioritizedDecisions++
+    }
+    // 꺼져감/꺼짐 티어는 런타임처럼 플레이어 행동 전에 적 페이즈를 정확히 한 번 처리한다.
+    const enemyFirst = phaseBefore === 'field' && EmberSystem.isEnemyFirstStrike(EmberSystem.getTier(this.ember))
+    if (enemyFirst) this.resolveFrontHazards()
+    let reward = this.hp > 0 ? this.applyAction(action) : 0
 
     // 국면별 시간 진행. 행동 적용 전 국면 기준으로 결정해, 상점 EXIT가 즉시 한 턴을 더
     // 진행시키는 이중 처리를 막는다. 상점/이벤트는 전투 턴을 소모하지 않는 의사결정 샘플이다.
-    if (phaseBefore === 'field') this.advanceFieldTurn()
+    // 선공이나 함정으로 이미 쓰러졌다면 런타임처럼 남은 턴 이벤트를 더 진행하지 않는다.
+    if (phaseBefore === 'field' && this.hp > 0) this.advanceFieldTurn(enemyFirst)
     else if (phaseBefore === 'boss') this.advanceBossTurn()
 
     reward += this.shapeReward(beforeHp, beforeBossHp, beforeBosses)
@@ -842,6 +888,13 @@ export class EnaTrainingSimulation {
       bossesCleared: this.bossesCleared,
       samples,
       trace,
+      monsterFlowerMetrics: {
+        spawned: this.monsterFlowersSpawned,
+        defeated: this.monsterFlowersDefeated,
+        decisionOpportunities: this.monsterDecisionOpportunities,
+        prioritizedDecisions: this.monsterPrioritizedDecisions,
+        survivalTurns: [...this.monsterSurvivalTurns],
+      },
     }
   }
 
@@ -933,6 +986,20 @@ export class EnaTrainingSimulation {
       }
     }
     return -1
+  }
+
+  /** 비교 리포트용: 이번 행동이 전방 괴물꽃을 직접 조준하거나 광역 공격하는지 판정한다. */
+  private actionTargetsMonsterFlower(action: EnaSimAction): boolean {
+    if (action.kind === 'clickLane') return this.board[0][action.arg]?.specialEnemyKind === 'monsterFlower'
+    if (action.kind !== 'useHand') return false
+    const slot = this.hand[action.arg]
+    if (!slot) return false
+    const def = HAND_CARD_DEFINITIONS[slot.id]
+    if (def.category !== 'attack') return false
+    const targeting = slot.merged ? def.targeting.triple : def.targeting.base
+    if (targeting.selection === 'all') return this.board[0].some((card) => card?.specialEnemyKind === 'monsterFlower')
+    const lane = this.toughestEnemyLane()
+    return lane >= 0 && this.board[0][lane]?.specialEnemyKind === 'monsterFlower'
   }
 
   /** 손패 1장을 카테고리/타겟팅 기준으로 자동 대상에 사용한다(가장 합리적인 레인 선택). */
@@ -1427,7 +1494,7 @@ export class EnaTrainingSimulation {
     if (!card || card.type !== CardType.ENEMY) return -1
     card.hp -= amount
     if (card.hp <= 0) {
-      this.board[0][lane] = null
+      this.removeCardReference(card, true)
       // 처치 콤보(촛불): 폭이 큰 무리를 잡을수록 더 채운다 → 공격력 성장 동력.
       this.gainCombo((source === 'ember' ? 4 : 2) + (card.group - 1))
       // 처치 불빛: 실게임 scoreForCardRemoval와 같은 LightEconomy 공유식(랭크 1차식 + 그룹 감산 배수).
@@ -1650,13 +1717,20 @@ export class EnaTrainingSimulation {
   }
 
   private applyTreasure(card: EnaSimCard): void {
-    // 보물 불빛: 일반 상자 기본 36 + 턴 보너스(실게임 근사, 시뮬 보물은 1칸 고정).
-    this.gainLight(36 + this.turn + card.value * 4)
-    // 보물상자 전용 손패 풀(동전 포함 실제 dropSource 'treasure') 보너스 드롭.
-    if (this.rng.next() < 0.35) this.drawCard(undefined, 'treasure')
-    // 화폐는 보물 동전에서만 낮은 확률로 나온다(실게임 희소 재화 유지).
-    if (this.rng.next() < 0.15) this.coins += 1
-    if (this.rng.next() < 0.2) this.shield += 3
+    const span = Math.max(1, Math.min(3, card.group))
+    const golden = card.treasureKind === 'golden'
+    const lightBySpan = golden ? [72, 160, 300] : [36, 80, 150]
+    // 런타임 scoreForCardRemoval과 같은 폭별 불빛 + 현재 턴 보정을 쓴다.
+    this.gainLight(lightBySpan[span - 1] + this.turn)
+    const ranges = golden
+      ? GOLDEN_TREASURE_DROPS_BY_SPAN
+      : card.treasureKind === 'junk'
+        ? JUNK_TREASURE_DROPS_BY_SPAN
+        : TREASURE_DROPS_BY_SPAN
+    const [minDrops, maxDrops] = ranges[span]
+    const drops = minDrops + this.rng.int(maxDrops - minDrops + 1)
+    // 실제 ActionSystem처럼 보물 전용 풀에서 정해진 장수만큼 뽑고, 가득 찬 손패는 drawCard가 버린다.
+    for (let n = 0; n < drops; n++) this.drawCard(undefined, 'treasure')
     // 동료 깜짝 지원(보물): 가끔 보너스 손패 1장.
     if (this.companion && this.rng.next() < this.companion.minorClutchChance.treasure) this.drawCard()
   }
@@ -1756,14 +1830,15 @@ export class EnaTrainingSimulation {
 
   // ── 턴 진행 ──────────────────────────────────────────────────────────────
 
-  private advanceFieldTurn(): void {
+  private advanceFieldTurn(enemyPhaseAlreadyRan: boolean = false): void {
     // 0) 유물 방패 재생(턴당) — 영구 성장이 생존을 받쳐 준다.
     if (this.shieldRegen > 0) this.shield += this.shieldRegen
     // 1) 전방에 남은 위험이 턴 종료 피해를 준다(낮은 티어는 반격감 강화).
-    this.resolveFrontHazards()
+    if (!enemyPhaseAlreadyRan) this.resolveFrontHazards()
     // 1.5) 동료 개입 — 이번 턴 피해로 쌓인 의지로 위기 클러치, 거미줄 예측 대비를 시도한다.
     this.companionInterventions()
     // 2) 포자 전염 / 꽃 성장·시듦.
+    this.applyTreasureVolatility()
     this.spreadSpores()
     this.growAndWiltFlowers()
     // 3) 불씨 소모(3턴 주기). 최종 등반에선 일반 행동이 턴을 올리지 않는다.
@@ -1838,24 +1913,21 @@ export class EnaTrainingSimulation {
   /** 턴 종료 시 전방의 적만 능동 공격한다. 함정(거미줄/포자/폭탄)은 '밟았을 때'(클릭) 피해라
    *  여기서 수동 피해를 주지 않는다 — 처리하지 않은 전방행은 다음 레일 하강에서 내려가 사라진다. */
   private resolveFrontHazards(): void {
-    const tier = EmberSystem.getTier(this.ember)
-    const firstStrike = EmberSystem.isEnemyFirstStrike(tier)
     for (const card of this.uniqueFrontCards()) {
       if (card.frozen > 0) {
         card.frozen--
         continue
       }
       if (card.type === CardType.ENEMY) {
-        // 선공 티어는 실게임에서 '적 페이즈가 플레이어 행동보다 먼저'인 순서 역전이다.
-        // 시뮬은 행동 후 일괄 처리 구조라 순서를 뒤집는 대신 +1 피해로 그 압박을 근사한다.
-        const incoming = card.atk + (firstStrike ? 1 : 0)
+        // 선공은 순서만 바꾸며 피해 보너스는 없다. step이 적 페이즈의 선/후행을 결정한다.
+        const incoming = card.atk
         const adversity = this.hp + this.shield - incoming <= Math.max(1, this.maxHp * 0.35)
         if (this.companionDodges(incoming, adversity)) continue
         this.takeDamage(incoming)
         // 에나 반격은 회피와 달리 피해를 받은 뒤 현재 공격력만큼 되친다.
         if (this.companion && this.rng.next() < this.companion.minorClutchChance.counter) {
           card.hp -= this.attack
-          if (card.hp <= 0) this.removeCardReference(card)
+          if (card.hp <= 0) this.removeCardReference(card, true)
         }
       }
       else if (card.type === CardType.FLOWER && card.flowerKind === 'oleander') this.shield += card.value
@@ -1889,6 +1961,43 @@ export class EnaTrainingSimulation {
     }
   }
 
+  /** 전방 일반 상자는 런타임처럼 50% 소멸·10% 미믹화·40% 유지된다. */
+  private applyTreasureVolatility(): void {
+    const visited = new Set<EnaSimCard>()
+    for (let lane = 0; lane < LANES; lane++) {
+      const card = this.board[0][lane]
+      if (!card || visited.has(card) || card.type !== CardType.TREASURE || card.treasureKind === 'starlight' || card.treasureKind === 'junk' || card.frozen > 0) continue
+      visited.add(card)
+      const roll = this.rng.next()
+      const disappear = card.treasureKind === 'golden' ? 0.5 : 0.5
+      if (roll < disappear) {
+        this.removeCardReference(card)
+        continue
+      }
+      if (card.treasureKind === 'golden' || roll >= disappear + 0.1) continue
+      const span = Math.max(1, Math.min(3, card.group))
+      const base = MIMIC_BY_SPAN[span]
+      const specialTier = specialEnemyTierForTurn(this.turn)
+      const mimic: EnaSimCard = {
+        type: CardType.ENEMY,
+        hp: base.health * specialTier + this.trialEnemyHpBonus,
+        atk: base.attack * specialTier + this.trialEnemyAtkBonus,
+        group: span,
+        value: 0,
+        enemyPower: specialTier * 3,
+        defeatDropCount: base.drops,
+        specialEnemyKind: 'mimic',
+        growth: 0,
+        sporeTimer: 0,
+        eventTimer: -1,
+        frozen: 0,
+      }
+      for (let targetLane = 0; targetLane < LANES; targetLane++) {
+        if (this.board[0][targetLane] === card) this.board[0][targetLane] = mimic
+      }
+    }
+  }
+
   /** 꽃 성장 후 누적 성장에 비례한 확률로 몬스터꽃(적)으로 시든다. */
   private growAndWiltFlowers(): void {
     for (let row = 0; row < ROWS; row++) {
@@ -1897,6 +2006,7 @@ export class EnaTrainingSimulation {
         if (!card || card.frozen > 0) continue
         // 실게임처럼 변이 다음 턴부터 2→1→0을 거친 뒤 생성 시점의 특수 적 티어만큼 성장한다.
         if (card.type === CardType.ENEMY && card.monsterGrowthTimer !== undefined) {
+          card.monsterAge = (card.monsterAge ?? 0) + 1
           card.monsterGrowthTimer = Math.max(0, card.monsterGrowthTimer - 1)
           if (card.monsterGrowthTimer === 0) {
             card.monsterGrowthTimer = 2
@@ -1915,15 +2025,16 @@ export class EnaTrainingSimulation {
         if (this.rng.next() < flowerWiltChance(card.value)) {
           // 실게임 spawnMonsterFlower처럼 꽃 가치×20턴 티어에 시련 보너스를 더해 변이한다.
           const specialEnemyTier = specialEnemyTierForTurn(this.turn)
-          this.board[row][lane] = { type: CardType.ENEMY, hp: card.value * specialEnemyTier + this.trialEnemyHpBonus, atk: card.value * specialEnemyTier + this.trialEnemyAtkBonus, group: 1, value: card.value, enemyPower: specialEnemyTier * 3, defeatDropCount: Math.max(1, Math.min(3, Math.ceil(card.value / 2))), growth: 0, monsterGrowthTimer: 2, monsterGrowthAmount: specialEnemyTier, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+          this.board[row][lane] = { type: CardType.ENEMY, hp: card.value * specialEnemyTier + this.trialEnemyHpBonus, atk: card.value * specialEnemyTier + this.trialEnemyAtkBonus, group: 1, value: card.value, enemyPower: specialEnemyTier * 3, defeatDropCount: Math.max(1, Math.min(3, Math.ceil(card.value / 2))), specialEnemyKind: 'monsterFlower', growth: 0, monsterGrowthTimer: 2, monsterGrowthAmount: specialEnemyTier, monsterAge: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+          this.monsterFlowersSpawned++
         }
       }
     }
   }
 
   private dropAndRefill(): void {
-    for (let row = 0; row < ROWS - 1; row++) this.board[row] = this.board[row + 1]
-    this.board[ROWS - 1] = Array.from({ length: LANES }, () => this.spawnCard('waiting'))
+    // 런타임은 전역 하강하지 않고 해결되어 생긴 빈칸만 아래로 당긴다. 채워진 전방 위협은 그대로 남는다.
+    this.compactColumns()
     this.regroupFrontRow()
     this.bloomFrontSeeds()
     this.tickFrontEventDoors()
@@ -2315,20 +2426,26 @@ export class EnaTrainingSimulation {
       const left = this.board[0][lane]
       const right = this.board[0][lane + 1]
       if (!left || !right || left === right) continue
-      const leftMonsterFlower = left.monsterGrowthTimer !== undefined
-      const rightMonsterFlower = right.monsterGrowthTimer !== undefined
       // 괴물꽃은 괴물꽃끼리만 합쳐지고 일반 적과는 합쳐지지 않는 런타임 특수 적 계약을 따른다.
-      const sameEnemy = left.type === CardType.ENEMY && right.type === CardType.ENEMY && leftMonsterFlower === rightMonsterFlower
+      const sameEnemy = left.type === CardType.ENEMY && right.type === CardType.ENEMY && (
+        (!left.specialEnemyKind && !right.specialEnemyKind) ||
+        (left.specialEnemyKind !== undefined && left.specialEnemyKind === right.specialEnemyKind)
+      )
       const sameTrap = left.type === CardType.TRAP && right.type === CardType.TRAP && left.trapKind === right.trapKind && left.trapKind !== 'bomb'
+      const sameTreasure = left.type === CardType.TREASURE && right.type === CardType.TREASURE && left.treasureKind === right.treasureKind && left.treasureKind !== 'starlight'
       if (sameEnemy) {
         left.group += right.group
         left.hp += right.hp + (left.group >= 3 ? 3 : 2)
         left.atk += right.atk + (left.group >= 3 ? 3 : 2)
         // 괴물꽃 군락은 각 꽃의 처치 드롭 상한을 합산하는 런타임 merge 규칙을 따른다.
-        if (leftMonsterFlower) left.defeatDropCount = (left.defeatDropCount ?? 1) + (right.defeatDropCount ?? 1)
+        if (left.specialEnemyKind) left.defeatDropCount = (left.defeatDropCount ?? 1) + (right.defeatDropCount ?? 1)
         this.board[0][lane + 1] = left
       } else if (sameTrap) {
         // 거미줄/포자 병합: 폭이 커지면 피해가 1→5→즉사(거미줄)/1→3→5(포자)로 급증한다.
+        left.group += right.group
+        this.board[0][lane + 1] = left
+      } else if (sameTreasure) {
+        // 런타임 레일 병합처럼 같은 보물 두 칸을 하나의 폭 2/3 상자로 묶는다.
         left.group += right.group
         this.board[0][lane + 1] = left
       }
@@ -2561,7 +2678,11 @@ export class EnaTrainingSimulation {
     return best
   }
 
-  private removeCardReference(target: EnaSimCard): void {
+  private removeCardReference(target: EnaSimCard, defeated: boolean = false): void {
+    if (target.specialEnemyKind === 'monsterFlower') {
+      this.monsterSurvivalTurns.push(target.monsterAge ?? 0)
+      if (defeated) this.monsterFlowersDefeated++
+    }
     for (let row = 0; row < ROWS; row++) {
       for (let lane = 0; lane < LANES; lane++) {
         if (this.board[row][lane] === target) this.board[row][lane] = null
@@ -2796,6 +2917,9 @@ function fieldPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): 
   //    들고 들어간다"를 전제하므로, 교사가 전부 필드에서 태우면 시뮬만 홀로 어려워진다.
   const attackCardsHeld = snapshot.hand.filter((s) => HAND_CARD_DEFINITIONS[s.id].category === 'attack').length
   const savingForBoss = snapshot.turnsToBoss <= cfg.bossPrepWindow && attackCardsHeld <= cfg.bossPrepAttackCards
+  // 처치 가능한 괴물꽃은 카운트가 2여도 일반 적보다 먼저 제거해 반복 성장 자체를 차단한다.
+  const killableMonsterLane = front.findIndex((c) => c?.specialEnemyKind === 'monsterFlower' && c.hp <= snapshot.attack)
+  if (killableMonsterLane >= 0) return actionIndexOf('clickLane', killableMonsterLane)
   const dangerLane = front.findIndex((c) => c?.type === CardType.ENEMY && (c.group >= 2 || c.hp > snapshot.attack))
   if (dangerLane >= 0) {
     const atk = savingForBoss ? -1 : findHand((id) => HAND_CARD_DEFINITIONS[id].category === 'attack')

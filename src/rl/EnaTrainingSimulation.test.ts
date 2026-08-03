@@ -63,11 +63,17 @@ interface FlowerProbe extends TrialProbe {
   bloomFrontSeeds: () => void
   regroupFrontRow: () => void
   applyFlower: (card: EnaSimCard) => void
+  applyTreasure: (card: EnaSimCard) => void
+  applyTreasureVolatility: () => void
   encodeCard: (card: EnaSimCard | null, row: number) => number[]
-  rng: { next: () => number; pick: <T>(items: readonly T[]) => T }
+  rng: { next: () => number; int: (max: number) => number; pick: <T>(items: readonly T[]) => T }
   turn: number
   light: number
   coins: number
+  shield: number
+  ember: number
+  hp: number
+  attack: number
 }
 
 function flowerProbe(sim: EnaTrainingSimulation): FlowerProbe {
@@ -149,8 +155,38 @@ describe('EnaTrainingSimulation', () => {
     expect(p.coins).toBe(3)
   })
 
+  it('선공 순서와 보물 드롭·변동성을 런타임 순서와 수치로 처리한다', () => {
+    const sim = new EnaTrainingSimulation(29)
+    sim.reset()
+    const p = flowerProbe(sim)
+    // 불씨 0 선공에서 1HP 적을 클릭해도 적이 먼저 2피해를 주고 난 뒤 처치된다.
+    p.ember = 0
+    p.hp = 10
+    p.attack = 2
+    p.board[0][0] = { type: CardType.ENEMY, hp: 1, atk: 2, group: 1, value: 1, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+    p.board[0][1] = null
+    p.board[0][2] = null
+    sim.step(0)
+    expect(p.hp).toBe(8)
+
+    // 2칸 일반 상자는 최소 2장 드롭하며 예전 가짜 화폐/방패 보상을 만들지 않는다.
+    p.coins = 0
+    p.shield = 0
+    p.rng.int = () => 0
+    p.applyTreasure({ type: CardType.TREASURE, hp: 0, atk: 0, group: 2, treasureKind: 'normal', value: 0, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 })
+    expect({ coins: p.coins, shield: p.shield }).toEqual({ coins: 0, shield: 0 })
+
+    // 일반 상자의 50~60% 구간은 같은 폭·티어의 미믹으로 바뀐다.
+    const chest: EnaSimCard = { type: CardType.TREASURE, hp: 0, atk: 0, group: 1, treasureKind: 'normal', value: 0, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+    p.board[0][0] = chest
+    p.rng.next = () => 0.55
+    p.applyTreasureVolatility()
+    expect(p.board[0][0]).toMatchObject({ type: CardType.ENEMY, specialEnemyKind: 'mimic' })
+  })
+
   it('교사 정책으로 100층 한 호의 국면/손패/보스 판단 학습 샘플을 생성한다', () => {
-    const dataset = EnaTrainingSimulation.collectDataset(3, 11)
+    // 정확한 선공 순서로 짧게 끝나는 시드도 있으므로 5호를 모아 학습 배치 최소량을 보장한다.
+    const dataset = EnaTrainingSimulation.collectDataset(5, 11)
     expect(dataset.length).toBeGreaterThan(20)
     expect(dataset.every((sample) => sample.state.length === ENA_FEATURE_COUNT && sample.nextState.length === ENA_FEATURE_COUNT)).toBe(true)
     expect(dataset.every((sample) => sample.actionIndex >= 0 && sample.actionIndex < ENA_ACTION_SPACE.length)).toBe(true)

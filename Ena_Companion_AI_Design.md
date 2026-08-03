@@ -237,6 +237,13 @@ Unmelting의 동료 캐릭터 **에나**에게 외부 API 없이 독자적 강�
    바뀌면 근사도 함께 갱신한다.
 5. 검증은 `npm run verify`. `EnaDispositionFitter` / `EnaTrainer` 테스트가 이 계약을 지킨다.
 
+### 12-4. 371차원 사전학습 산출물
+
+- 재학습 단일 명령은 `npm run ena:pretrain`이다. 고정 seed/config로
+  `src/data/ena-pretrained-policy.json`과 `Ena_Pretraining_Report.md`를 함께 갱신한다.
+- 리포트는 전체 371 관측과 괴물꽃 3축을 가린 구 관측 한계를 같은 평가 시드에서 비교한다.
+- 런타임 저장 정책이 없을 때 `EnaPolicyStore.loadPretrained()`가 동봉 정책을 검증·복원한다.
+
 ---
 
 ## 13. 미정 / 결정 필요

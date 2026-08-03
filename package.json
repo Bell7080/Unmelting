@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "resources:check": "tsx src/tools/resource-lifecycle-check.ts",
     "verify": "npm run type-check && npm run lint && npm run test && npm run resources:check",
-    "balance:boss": "tsx src/tools/boss-balance-report.ts"
+    "balance:boss": "tsx src/tools/boss-balance-report.ts",
+    "ena:pretrain": "tsx src/tools/ena-pretrain-report.ts"
   },
   "dependencies": {
     "howler": "^2.2.4"

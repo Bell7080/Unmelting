@@ -423,21 +423,6 @@ export class Card {
     return true
   }
 
-  /** 괴물꽃의 시든 성장 시계를 한 턴 진행한다. 2→1→0이면 즉시 티어만큼 성장 후 2로 돌아간다. */
-  tickMonsterFlowerGrowth(): boolean {
-    if (this.type !== CardType.ENEMY || this.specialEnemyKind !== 'monsterFlower') return false
-    this.monsterFlowerGrowthTurns = Math.max(0, this.monsterFlowerGrowthTurns - 1)
-    if (this.monsterFlowerGrowthTurns > 0) return false
-
-    this.monsterFlowerGrowthTurns = 2
-    this.baseHealth += this.monsterFlowerGrowthAmount
-    this.health += this.monsterFlowerGrowthAmount
-    this.baseDamage += this.monsterFlowerGrowthAmount
-    this.enemyHealthTotal = this.baseHealth
-    this.enemyDamageTotal = this.baseDamage
-    return true
-  }
-
   /** Return BASE trap damage for the current trap width and subtype.
    *  런 단위 함정 피해 보너스(시련 '역경'·유물)는 여기 더하지 않는다 — 모든 함정이
    *  동일하게 받도록 character.trapDamageBonus로 일원화해 피해를 적용/표기하는

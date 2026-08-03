@@ -76,6 +76,8 @@ npm run build    # verify 포함
 - 관측/행동 계약(`ENA_FEATURE_COUNT` 371 · `ENA_ACTION_SPACE` 27)은 시뮬과 트레이너가
   공유한다. 차원이 바뀌면 `EnaPolicyStore`가 구버전 정책을 거부하고 교사 정책으로
   폴백한다 — **재학습이 필요한 주(major) 버전급 변경**이다.
+- 371차원 동봉 정책은 `npm run ena:pretrain`으로만 재생성한다. 이 명령은 정책 JSON과
+  `Ena_Pretraining_Report.md` 비교/감사 결과를 같은 고정 시드에서 함께 갱신한다.
 - 보스 체력은 `BossFightBudget`(손패 3~4장 + `supportHits`)에서 역산한다. **시뮬도 그
   화력을 실제로 넣어야 한다**(`supportStrikeChance`) — 빼면 체력을 뽑은 세계와 에나가
   배우는 세계가 달라져 보스가 영영 안 죽고 보스전 학습 신호가 사라진다.
