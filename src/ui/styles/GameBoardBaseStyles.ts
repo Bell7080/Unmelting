@@ -281,21 +281,17 @@ export const GAME_BOARD_BASE_STYLES = `
   z-index: 3;
 }
 
+/* 기록 패널은 **판이 아니라 빈 자리**다 — 테두리·배경·그림자 없이 로그 줄만 쌓인다.
+   행 자체가 좌측 광원으로 범위를 말하므로 감싸는 상자가 있으면 톤이 두 번 겹친다. */
 .score-log-list {
   position: relative;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
-  border: 1px solid rgba(201, 161, 92, 0.24);
-  border-radius: 14px;
-  background:
-    radial-gradient(circle at 16% 0%, rgba(255, 215, 120, 0.09), transparent 42%),
-    linear-gradient(155deg, rgba(30, 21, 31, 0.84), rgba(10, 7, 16, 0.9));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 239, 190, 0.07),
-    inset 0 0 28px rgba(79, 42, 25, 0.13),
-    0 12px 30px rgba(0, 0, 0, 0.22);
+  border: 0;
+  background: none;
+  box-shadow: none;
 }
 /* 런 수명주기 게이트가 로비 교차 애니메이션의 잔류 클래스보다 우선한다.
    덕분에 첫 부팅 새싹 직행에서도 기록 패널이 화면 밖에 머물지 않는다. */
@@ -310,49 +306,6 @@ body.game-run-active .score-panel .left-swap > .quest-list {
   opacity: 0;
   pointer-events: none;
 }
-.score-log-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-height: 48px;
-  padding: 9px 11px;
-  border-bottom: 1px solid rgba(201, 161, 92, 0.19);
-  background: linear-gradient(90deg, rgba(112, 63, 35, 0.17), rgba(53, 35, 59, 0.1));
-}
-.score-log-head-mark {
-  color: #ffd778;
-  font-size: 14px;
-  text-shadow: 0 0 10px rgba(255, 190, 92, 0.72);
-}
-.score-log-head-copy {
-  display: grid;
-  min-width: 0;
-  line-height: 1.1;
-}
-.score-log-head-copy strong {
-  color: rgba(255, 231, 168, 0.94);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-}
-.score-log-head-copy small {
-  margin-top: 4px;
-  color: rgba(190, 170, 157, 0.66);
-  font-size: 9px;
-  letter-spacing: 0.04em;
-}
-.score-log-head-count {
-  min-width: 22px;
-  margin-left: auto;
-  padding: 3px 6px;
-  border: 1px solid rgba(255, 215, 120, 0.22);
-  border-radius: 999px;
-  background: rgba(8, 5, 14, 0.38);
-  color: rgba(255, 215, 120, 0.76);
-  font-size: 10px;
-  font-weight: 800;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
 .score-log-scroll {
   display: flex;
   flex-direction: column;
@@ -361,9 +314,10 @@ body.game-run-active .score-panel .left-swap > .quest-list {
   overflow-y: auto;
   /* 스크롤 손잡이를 패널 바깥쪽(왼쪽)에 두되 행의 읽기 방향은 아래에서 복구한다. */
   direction: rtl;
-  padding: 9px 8px 10px 10px;
+  padding: 2px 8px 10px 10px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(244, 164, 96, 0.7) rgba(20, 16, 28, 0.45);
+  /* 트랙도 비운다 — 세로 막대가 남으면 걷어 낸 패널 테두리가 그 자리에 다시 생긴다. */
+  scrollbar-color: rgba(244, 164, 96, 0.7) transparent;
 }
 .score-log-scroll > * {
   /* Reset content direction so log rows still flow left-to-right. */
@@ -373,8 +327,7 @@ body.game-run-active .score-panel .left-swap > .quest-list {
   width: 4px;
 }
 .score-log-scroll::-webkit-scrollbar-track {
-  background: rgba(20, 16, 28, 0.4);
-  border-radius: 999px;
+  background: transparent;
 }
 .score-log-scroll::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, var(--color-flame), var(--color-flame-deep));
@@ -492,7 +445,8 @@ body.game-run-active .score-panel .left-swap > .quest-list {
 
 
 /* 에나의 설명 대상 공용 포커스 — 필드·손패·유물 모두 같은 촛불빛 어휘를 쓴다.
-   별도 자식 레이어가 바깥으로 커지며 사라져 기존 카드 transform 애니메이션을 덮지 않는다. */
+   별도 자식 레이어가 바깥으로 커지며 사라져 기존 카드 transform 애니메이션을 덮지 않는다.
+   주기 길이·반복 수·시작 지연은 GameBoardRenderer가 인라인 변수로 넣는다(단일 출처는 TS). */
 .ena-hint-pulse {
   position: absolute;
   inset: -4px;
@@ -504,17 +458,21 @@ body.game-run-active .score-panel .left-swap > .quest-list {
     0 0 8px rgba(255, 213, 112, 0.92),
     0 0 22px rgba(244, 164, 96, 0.68),
     inset 0 0 10px rgba(255, 238, 184, 0.28);
-  animation: ena-hint-focus-pulse 1.15s cubic-bezier(0.2, 0.72, 0.25, 1) both;
+  animation: ena-hint-focus-pulse var(--ena-hint-cycle, 760ms) cubic-bezier(0.2, 0.72, 0.25, 1)
+    var(--ena-hint-repeat, 3) both;
 }
 
+/* 한 주기가 완전히 꺼진 뒤 다음 주기가 켜져야 '몇 번 깜빡였는지'가 세어진다 —
+   여운을 길게 끌면 세 번이 한 번의 긴 발광으로 뭉친다. */
 @keyframes ena-hint-focus-pulse {
   0% { opacity: 0; transform: scale(0.96); filter: brightness(1.6); }
-  18% { opacity: 1; transform: scale(1); filter: brightness(1.25); }
-  58% { opacity: 0.78; transform: scale(1.035); filter: brightness(1.08); }
-  100% { opacity: 0; transform: scale(1.09); filter: brightness(1); }
+  16% { opacity: 1; transform: scale(1); filter: brightness(1.3); }
+  52% { opacity: 0.72; transform: scale(1.03); filter: brightness(1.08); }
+  78% { opacity: 0; transform: scale(1.075); filter: brightness(1); }
+  100% { opacity: 0; transform: scale(0.96); filter: brightness(1.6); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ena-hint-pulse { animation-duration: 0.01ms; }
+  .ena-hint-pulse { animation-duration: 0.01ms; animation-iteration-count: 1; }
 }
 `

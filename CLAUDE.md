@@ -385,6 +385,8 @@ npm run build    # verify 포함
 - 침묵 구간 대사(보스 등장/국면 전환/격파, 게임오버/클리어, 강제 시련 선택, 팩 구매, 별빛 수집)는 `companionWorldCanSpeak` 게이트를 의도적으로 우회해 각 지점에서 직접 발화한다.
 - 비긴급 바크는 `BarkSequencer`(ui) 순차 큐(최소 노출 1.5~3초, 상한 3, 낮은 중요도부터 드롭)로 출력되고 urgent/클러치는 즉시 교체를 유지한다.
 - 새 런 회상은 `EnaAutonomousLearner`의 구조화 기억(도달 층/사망 원인, 최근 12개, 직전 회상 키로 연속 반복 금지)으로 사실 기반 문장을 만든다.
+- 대상 지시 발광(`pulseEnaHint`)은 대사 **뒤에** 온다 — 도입 지연 → 대상별 어긋난 시작 → 3회 반복. 박자 상수의 단일 출처는 `GameBoardRenderer`이고 CSS는 커스텀 프로퍼티로 받아 쓴다.
+- 힌트 발광은 라이브 DOM이 아니라 **시작 시각**을 상태로 든다(`activeEnaHints`). render마다 `syncEnaHintPulses()`가 남은 시간을 음수 `animation-delay`로 이어 붙인다.
 
 ## UI/UX 규칙
 
