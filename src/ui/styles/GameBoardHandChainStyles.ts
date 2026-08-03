@@ -70,8 +70,33 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 .hand-stack.is-crowded .hand-slot.hand-card {
   /* Crowded hands should still read as separate cards. Prefer shorter cards
      over negative margins; only very small viewports will visually touch. */
-  min-height: clamp(58px, calc((100vh - 210px) / var(--hand-count, 10)), 78px);
+  max-height: 78px;
   margin-top: 0;
+}
+/*
+ * ★ 손패 카드는 열 높이를 넘으면 **줄어든다**. 안 그러면 위로 삐져나가 콤보 게이지를
+ * 덮는다 — 스택이 justify-content: flex-end라 넘치는 방향이 위쪽이기 때문이다.
+ * 전에는 세로 짧은 가로 화면(max-height: 520px)에서만 눌러 뒀는데, 1024×600 같은
+ * '긴 가로'는 그 조건에 걸리지 않아 7장부터 게이지를 침범했다. 화면 크기로 가르지 말고
+ * **넘칠 때만 줄어들게** 둔다: 여유가 있으면 flex는 아무것도 줄이지 않는다.
+ */
+.hand-stack .hand-slot.hand-card {
+  flex-shrink: 1;
+  /* 기본 높이는 그대로 78px다 — min-height를 0으로 푸는 대신 flex-basis로 옮겨 적는다.
+     min-height만 풀면 여유가 있는 화면에서도 카드가 내용 높이까지 주저앉는다. */
+  flex-basis: 78px;
+  min-height: 0;
+}
+.hand-stack .hand-slot.hand-card > button {
+  min-height: 0;
+  /* 상자가 줄어도 글자는 안 줄어든다 — 넘치는 부분은 카드 안에서 잘라 낸다. */
+  overflow: hidden;
+}
+/* 줄어든 카드에서는 이름을 아래가 아니라 가운데에 두고 세로 여백을 걷는다.
+   8px×2 여백이 얇아진 카드 높이를 통째로 먹어 이름이 위아래로 잘렸다. */
+.hand-stack.is-crowded .hand-slot.hand-card > button {
+  padding-block: 0;
+  align-items: center;
 }
 .hand-slot {
   border-radius: 8px;
