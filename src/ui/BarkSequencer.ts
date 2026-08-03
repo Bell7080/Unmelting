@@ -15,6 +15,8 @@ export interface QueuedBark<S = unknown> {
   line: string
   importance: number
   situation: S | null
+  /** 실제 말풍선에 표시되는 순간 함께 실행할 화면 포커스(큐에서 드롭되면 실행하지 않는다). */
+  onDisplay?: () => void
 }
 
 /** 큐 상한 — 초과분은 중요도가 낮은 것부터(동률이면 오래된 것) 버린다. */

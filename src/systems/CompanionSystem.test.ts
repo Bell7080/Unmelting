@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { CompanionSystem, resolveKoreanParticles } from './CompanionSystem'
+import { CompanionSystem, isBoardIntroductionAutomaticDistance, resolveKoreanParticles } from './CompanionSystem'
 
 describe('resolveKoreanParticles', () => {
   it('받침 유무로 은/는·이/가·을/를을 고른다', () => {
@@ -35,6 +35,16 @@ describe('resolveKoreanParticles', () => {
     expect(resolveKoreanParticles('보내[으니/니]')).toBe('보내니') // 받침 없음
     // ㄹ 받침은 뒤항을 따른다(어간 ㄹ 탈락 표기는 작성 단계 책임).
     expect(resolveKoreanParticles('가[으니/니]')).toBe('가니')
+  })
+})
+
+describe('보드 첫 조우 설명 거리', () => {
+  it('전방만 자동 설명하고 다음 줄부터는 포인터 신호를 기다린다', () => {
+    // 전방은 놓치지 않고 설명하되, 다음 줄은 플레이어가 가까이 가리킬 때까지 자동 설명하지 않는다.
+    expect(isBoardIntroductionAutomaticDistance(0)).toBe(true)
+    expect(isBoardIntroductionAutomaticDistance(1)).toBe(false)
+    expect(isBoardIntroductionAutomaticDistance(2)).toBe(false)
+    expect(isBoardIntroductionAutomaticDistance(-1)).toBe(false)
   })
 })
 

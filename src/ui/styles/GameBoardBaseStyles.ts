@@ -435,4 +435,32 @@ body.game-run-active .score-panel .left-swap > .quest-list {
 /* (legacy stage-header / stage-main rules removed — title now lives in
    .brand inside .left-panel and Turn is rendered as a fixed top overlay) */
 
+
+
+/* 에나의 설명 대상 공용 포커스 — 필드·손패·유물 모두 같은 촛불빛 어휘를 쓴다.
+   별도 자식 레이어가 바깥으로 커지며 사라져 기존 카드 transform 애니메이션을 덮지 않는다. */
+.ena-hint-pulse {
+  position: absolute;
+  inset: -4px;
+  z-index: 95;
+  pointer-events: none;
+  border: 2px solid rgba(255, 221, 132, 0.96);
+  border-radius: inherit;
+  box-shadow:
+    0 0 8px rgba(255, 213, 112, 0.92),
+    0 0 22px rgba(244, 164, 96, 0.68),
+    inset 0 0 10px rgba(255, 238, 184, 0.28);
+  animation: ena-hint-focus-pulse 1.15s cubic-bezier(0.2, 0.72, 0.25, 1) both;
+}
+
+@keyframes ena-hint-focus-pulse {
+  0% { opacity: 0; transform: scale(0.96); filter: brightness(1.6); }
+  18% { opacity: 1; transform: scale(1); filter: brightness(1.25); }
+  58% { opacity: 0.78; transform: scale(1.035); filter: brightness(1.08); }
+  100% { opacity: 0; transform: scale(1.09); filter: brightness(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ena-hint-pulse { animation-duration: 0.01ms; }
+}
 `

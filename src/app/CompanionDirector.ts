@@ -184,7 +184,7 @@ export class CompanionDirector {
       }
       const next = this.barkSequencer.shift()
       if (!next) return
-      this.displayEnaBarkNow(next.line, next.importance, next.situation)
+      this.displayEnaBarkNow(next.line, next.importance, next.situation, next.onDisplay)
       if (this.barkSequencer.pending > 0) this.scheduleBarkQueueDrain()
     }, this.barkSequencer.nextDelayMs())
   }
@@ -197,7 +197,7 @@ export class CompanionDirector {
   }
 
   /** 바크를 지금 즉시 말풍선에 띄우고 학습/노출 추적 상태를 갱신한다(큐 판단은 sayEnaBark가 담당). */
-  private displayEnaBarkNow(line: string, importance: number, situation: SituationId | null): void {
+  private displayEnaBarkNow(line: string, importance: number, situation: SituationId | null, onDisplay?: () => void): void {
     const { companion, speechBubble } = this.deps
     clearTimeout(this.companionHeardTimer)
     this.companionHeardTimer = 0
@@ -207,6 +207,8 @@ export class CompanionDirector {
     this.barkShownAt = Date.now()
     this.barkSequencer.noteDisplayed(line)
     speechBubble.show(line)
+    // 큐에서 기다린 대사도 실제 표시 순간에 대상 발광이 맞물리게 한다.
+    onDisplay?.()
     if (situation) {
       this.companionHeardTimer = window.setTimeout(() => {
         companion.recordHeard(situation)
@@ -225,22 +227,22 @@ export class CompanionDirector {
    */
   sayEnaBark(
     line: string,
-    opts: { importance?: number; situation?: SituationId | null } = {}
+    opts: { importance?: number; situation?: SituationId | null; onDisplay?: () => void } = {}
   ): void {
     const { speechBubble } = this.deps
     const importance = opts.importance ?? BARK_IMPORTANCE.touch
     const situation = opts.situation ?? null
     if (importance >= BARK_IMPORTANCE.urgent) {
       if (this.enaSpeaking && speechBubble.isTyping && importance <= this.currentBarkImportance) return
-      this.displayEnaBarkNow(line, importance, situation)
+      this.displayEnaBarkNow(line, importance, situation, opts.onDisplay)
       return
     }
     if (this.barkSequencer.busy(this.enaSpeaking && speechBubble.isShowing)) {
-      this.barkSequencer.enqueue({ line, importance, situation })
+      this.barkSequencer.enqueue({ line, importance, situation, onDisplay: opts.onDisplay })
       this.scheduleBarkQueueDrain()
       return
     }
-    this.displayEnaBarkNow(line, importance, situation)
+    this.displayEnaBarkNow(line, importance, situation, opts.onDisplay)
   }
 
   /** 체력/불씨가 위태로운 위급 상황인지 — 위급할 때 만지면 에나가 "지금 장난칠 때야?" 한다. */
@@ -373,7 +375,11 @@ export class CompanionDirector {
     this.showClutchChain('predict', report.webLethal ? `${getHandCardDef(suggested).name} 지원 (위험!)` : `${getHandCardDef(suggested).name} 지원`)
     const predictLineKind = report.recommendationKind === 'cleanup' ? 'web' : report.recommendationKind ?? 'support'
     // '왜 이 카드인지' 짧은 구(HandCardAdvisor reason)를 대사 {이유} 슬롯에 섞는다.
-    this.sayEnaBark(companion.predictLine(predictLineKind, report.recommendationShortReason), { importance: BARK_IMPORTANCE.clutch })
+    this.sayEnaBark(companion.predictLine(predictLineKind, report.recommendationShortReason), {
+      importance: BARK_IMPORTANCE.clutch,
+      // 에나가 권한 카드(레시피 완성 재료 포함)를 손패에서 바로 찾을 수 있도록 표시 순간 가리킨다.
+      onDisplay: () => boardRenderer.pulseEnaHint({ handDefIds: [suggested] }),
+    })
     // 지원 카드는 이미 손패에 들어갔으므로 트레일 실패가 입력 잠금 해제를 막지 않게 연출만 분리한다.
     void this.deps.playResourceTrail({ kind: 'chain' }, 'hand', 1)
   }

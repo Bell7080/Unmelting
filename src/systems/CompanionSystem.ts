@@ -91,6 +91,14 @@ export interface CompanionContext {
 /** 말투 강도 — 같은 내용도 종결부호/강조어를 달리해 톤을 바꾼다. */
 export type Intensity = 'soft' | 'normal' | 'urgent'
 
+/**
+ * 첫 조우 설명이 시야의 초점과 연결되는 레일 거리인가.
+ * distance 0인 전방만 자동 설명한다. 다음 줄은 포인터가 가까워졌을 때 별도 신호로 설명한다.
+ */
+export function isBoardIntroductionAutomaticDistance(distance: number): boolean {
+  return distance === 0
+}
+
 /** 클러치 1회 계획: 효과 종류/수치 + 거의 확정 대사 + 체인 배너 설명. */
 export interface ClutchPlan {
   kind: ClutchKind
