@@ -188,16 +188,19 @@ export class ResourceTrailFx {
     0 0 30px var(--trail-glow, rgba(255, 218, 132, 0.5)),
     0 0 54px var(--trail-glow, rgba(255, 218, 132, 0.28));
 }
-/* 손패 획득 토큰 — 같은 사각 조각이되 **비율만** 세로로 긴 카드다. 전용 도형이 아니라
-   비율 변주라, 이펙트 어휘를 늘리지 않고도 '카드가 나왔다'가 읽힌다. */
+/* 손패 획득 토큰 — 같은 사각 조각이되 **비율만** 손패 아이콘(카드)과 같다. 전용 도형이
+   아니라 비율 변주라, 이펙트 어휘를 늘리지 않고도 '카드가 나왔다'가 읽힌다.
+   호박빛 발광을 두 겹 둘러 어두운 레일 위에서도 금붙이로 읽히게 한다. */
 .resource-trail-piece.is-card-token {
-  border-radius: 3px;
-  background: linear-gradient(155deg, #ffeec0 0%, #ffcf72 42%, #e0a03c 100%);
-  border: 1px solid rgba(90, 56, 18, 0.55);
+  border-radius: 4px;
+  background: linear-gradient(152deg, #fff4d0 0%, #ffd97e 38%, #f0a93a 72%, #c9781f 100%);
+  border: 1px solid rgba(120, 74, 22, 0.6);
   box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.55),
-    0 0 16px rgba(255, 214, 130, 0.7),
-    0 0 34px var(--trail-glow, rgba(255, 218, 132, 0.4));
+    0 3px 9px rgba(0, 0, 0, 0.6),
+    0 0 14px rgba(255, 226, 150, 0.95),
+    0 0 32px rgba(255, 178, 62, 0.72),
+    0 0 60px rgba(255, 150, 40, 0.36),
+    inset 0 1px 0 rgba(255, 250, 226, 0.8);
 }
 `
     document.head.appendChild(style)
@@ -267,9 +270,12 @@ export class ResourceTrailFx {
     const colors = this.trailColors('treasure-gain')
     // 장수가 많아도 늘어지지 않게 간격만 좁힌다 — 발수는 줄이지 않는다.
     const stagger = Math.max(45, Math.min(110, Math.round(460 / count)))
-    // 길쭉해야 '카드'로 읽힌다 — 정사각에 가까우면 그냥 파편이 된다.
-    const width = 15
-    const height = 33
+    // 손패 아이콘(카드)과 같은 비율·비슷한 크기. 정사각에 가까우면 그냥 파편이 되고,
+    // 너무 작으면 무엇이 떨어졌는지 읽히지 않는다.
+    const width = 26
+    const height = 38
+    // 낙하 중 회전량 — 두 바퀴. 착지 프레임이 720°(= 0°와 같은 자리)라 되감기지 않는다.
+    const SPIN = 720
     const launches = Array.from({ length: count }, (_, i) =>
       new Promise<void>((resolve) => {
         window.setTimeout(() => {
@@ -281,7 +287,8 @@ export class ResourceTrailFx {
           piece.style.setProperty('--trail-glow', colors.glow)
           document.body.appendChild(piece)
           // 착지점은 출처 아래로 부채꼴로 벌린다 — 겹쳐 떨어지면 장수가 안 세어진다.
-          const spread = Math.min(40, 150 / Math.max(1, count))
+          // 카드 폭보다 넓게 벌려야 여러 장이 겹쳐 한 장으로 보이지 않는다.
+          const spread = Math.max(width + 6, Math.min(48, 200 / Math.max(1, count)))
           const land = {
             x: from.x + (i - (count - 1) / 2) * spread,
             y: Math.min(window.innerHeight - 40, from.y + 54),
@@ -290,20 +297,28 @@ export class ResourceTrailFx {
             `translate(${px - width / 2}px, ${py - height / 2}px)`
           const frames: Keyframe[] = []
           // 1) 곡사로 튀어나와 내리꽂힌다.
-          const SAMPLES = 8
+          // 회전은 짝수 바퀴로 끝나야 착지 프레임(0°)으로 되감기지 않는다. 방향은 카드마다
+          // 번갈아 줘 여러 장이 한 덩어리처럼 같이 도는 것을 막는다.
+          const spinDir = i % 2 === 0 ? 1 : -1
+          const SAMPLES = 10
           for (let s = 0; s <= SAMPLES; s += 1) {
             const t = s / SAMPLES
             const p = this.lobPointAt(from, land, t)
             const lift = Math.sin(Math.PI * t)
+            // 뒤로 갈수록 빨리 돈다(t²) — 떨어지면서 회리릭 감기는 느낌.
+            const spin = spinDir * SPIN * (t * 0.35 + t * t * 0.65)
             frames.push({
-              transform: `${at(p.x, p.y)} rotate(${(t * 220 - 20).toFixed(0)}deg) scale(${(0.6 + lift * 0.55).toFixed(3)})`,
+              transform: `${at(p.x, p.y)} rotate(${spin.toFixed(0)}deg) scale(${(0.6 + lift * 0.55).toFixed(3)})`,
               opacity: s === 0 ? 0 : 1,
               offset: Number((t * HAND_TOKEN_LAND).toFixed(4)),
             })
           }
+          // 착지 이후의 모든 프레임은 회전을 **끝난 각도에서 이어 쓴다**. 0deg로 적으면
+          // WAAPI가 720°를 되감아 카드가 거꾸로 한 바퀴 더 돈다.
+          const rest = spinDir * SPIN
           // 2) 착지 반동 — 납작해졌다 바로 선다. 여기서 카드가 똑바로 놓인다.
           frames.push({
-            transform: `${at(land.x, land.y)} rotate(0deg) scale(1.24, 0.72)`,
+            transform: `${at(land.x, land.y)} rotate(${rest}deg) scale(1.24, 0.72)`,
             opacity: 1,
             offset: HAND_TOKEN_LAND + 0.03,
           })
@@ -311,27 +326,27 @@ export class ResourceTrailFx {
           //    '몇 장이 나왔나'를 세는 구간이 정지 화면이 된다.
           const driftX = (i % 2 === 0 ? 1 : -1) * 5
           frames.push({
-            transform: `${at(land.x + driftX, land.y - 7)} rotate(${(driftX * 0.9).toFixed(1)}deg) scale(1.02)`,
+            transform: `${at(land.x + driftX, land.y - 7)} rotate(${(rest + driftX * 0.9).toFixed(1)}deg) scale(1.02)`,
             opacity: 1,
             offset: HAND_TOKEN_LAND + (HAND_TOKEN_DEPART - HAND_TOKEN_LAND) * 0.55,
           })
           frames.push({
-            transform: `${at(land.x - driftX * 0.5, land.y - 2)} rotate(${(-driftX * 0.5).toFixed(1)}deg) scale(1)`,
+            transform: `${at(land.x - driftX * 0.5, land.y - 2)} rotate(${(rest - driftX * 0.5).toFixed(1)}deg) scale(1)`,
             opacity: 1,
             offset: HAND_TOKEN_DEPART,
           })
           // 4) 손패로 빨려 들어간다 — 가속해서 도착점에서 멈춘다.
           frames.push({
-            transform: `${at(land.x + (to.x - land.x) * 0.45, land.y + (to.y - land.y) * 0.45)} rotate(-8deg) scale(0.94)`,
+            transform: `${at(land.x + (to.x - land.x) * 0.45, land.y + (to.y - land.y) * 0.45)} rotate(${rest - 8}deg) scale(0.94)`,
             opacity: 1,
             offset: HAND_TOKEN_DEPART + (HAND_TOKEN_ARRIVE - HAND_TOKEN_DEPART) * 0.55,
           })
           frames.push({
-            transform: `${at(to.x, to.y)} rotate(0deg) scale(0.7)`,
+            transform: `${at(to.x, to.y)} rotate(${rest}deg) scale(0.7)`,
             opacity: 1,
             offset: HAND_TOKEN_ARRIVE,
           })
-          frames.push({ transform: `${at(to.x, to.y)} rotate(0deg) scale(0.4)`, opacity: 0 })
+          frames.push({ transform: `${at(to.x, to.y)} rotate(${rest}deg) scale(0.4)`, opacity: 0 })
           const anim = piece.animate(frames, {
             duration: HAND_TOKEN_FLIGHT_MS,
             easing: 'linear',
