@@ -255,7 +255,8 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
 /* 로그↔퀘스트는 같은 슬롯(.left-swap)에서 좌측으로 밀고 당기며 교차 슬라이드한다(묶음 관리).
    기본(런)은 로그가 들어와 있고 퀘스트는 좌측 밖. 거점(body.hearth-lobby)에서 서로 바뀐다.
    둘 다 절대배치로 같은 자리를 공유해 '사라짐'이 아니라 '밀려 들어가고 나오는' 느낌을 준다. */
-.left-swap { position: relative; min-height: 0; }
+/* 남는 높이는 전부 이 슬롯이 가져간다 — 자식이 절대배치라 스스로는 높이를 못 만든다. */
+.left-swap { position: relative; flex: 1 1 0; min-height: 0; }
 .left-swap > .score-log-list,
 .left-swap > .quest-list {
   position: absolute;

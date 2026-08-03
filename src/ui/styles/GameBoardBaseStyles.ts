@@ -144,9 +144,16 @@ export const GAME_BOARD_BASE_STYLES = `
    actors here, so the back plate is intentionally close to invisible:
    no hard border, only a whisper of dark wash so the area still reads as
    a region without separating it from the rest of the candlelit room. */
+/*
+ * ★ 열 배치는 grid가 아니라 flex다. 'grid-template-rows: auto auto 1fr'이던 시절,
+ * 새싹 병아리처럼 화폐 패널이 숨겨지는 런('meta-currency-locked' → display: none)에서는
+ * 남은 두 칸이 auto·auto 행으로 밀려 **1fr 행이 비었다**. 로그 목록은 자식이 절대배치라
+ * auto 높이가 곧 0 — 로그창이 통째로 안 보였다. flex면 형제가 몇이든 남는 높이가
+ * 로그로 간다.
+ */
 .score-panel {
-  display: grid;
-  grid-template-rows: auto auto 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   min-height: 0;
   padding: 12px;
@@ -160,6 +167,8 @@ export const GAME_BOARD_BASE_STYLES = `
 .coin-panel-total,
 .score-panel-total {
   position: relative;
+  /* 수치 칸은 내용 높이를 지킨다 — 줄어들면 큰 숫자가 잘린다. */
+  flex: 0 0 auto;
   padding: 12px;
   border: 0;
   border-radius: 14px;
@@ -304,17 +313,60 @@ export const GAME_BOARD_BASE_STYLES = `
   background: linear-gradient(180deg, var(--color-flame), var(--color-flame-warm));
 }
 
+/*
+ * 로그 한 줄 — **테두리 없는 투명 레이어**다. 판을 그리지 않고 좌측 광원이 오른쪽으로
+ * 사그라들며 행의 범위를 알린다. 딱딱한 테두리·막대는 '선택된 UI'로 읽혀 배경의
+ * 촛불 톤을 끊는다(UI 규칙: 강조는 발광으로 낸다).
+ * 종류별 색은 --log-hue 하나로 갈린다 — 새 종류는 그 변수 한 줄만 더하면 된다.
+ */
 .score-log {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
   align-items: center;
   min-height: 36px;
-  padding: 8px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 8px 10px 8px 14px;
+  border: 0;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.045);
-  box-shadow: inset 3px 0 0 rgba(244, 164, 96, 0.36);
+  /* 좌 → 우로 사그라드는 호박빛 반투명 판. 오른쪽 끝은 완전히 투명하다. */
+  background: linear-gradient(
+    90deg,
+    rgba(255, 206, 128, 0.115) 0%,
+    rgba(255, 194, 110, 0.062) 38%,
+    rgba(255, 186, 96, 0.016) 74%,
+    rgba(255, 186, 96, 0) 100%
+  );
+  box-shadow: none;
+  --log-hue: rgba(255, 196, 110, 1);
+}
+/* 좌측 색 라벨 — 막대가 아니라 **번지는 광원**이다. blur로 경계를 지워 빛으로만 남긴다. */
+.score-log::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 5px;
+  bottom: 5px;
+  width: 44%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--log-hue) 0%, transparent 100%);
+  filter: blur(6px);
+  opacity: 0.34;
+  pointer-events: none;
+}
+/* 광원의 심지 — 왼쪽 끝의 가는 빛줄기. 테두리가 아니라 빛이라 번져서 끝난다. */
+.score-log::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--log-hue);
+  opacity: 0.82;
+  filter: blur(0.4px) drop-shadow(0 0 5px var(--log-hue)) drop-shadow(0 0 11px var(--log-hue));
+  pointer-events: none;
 }
 
 .score-log-label {
@@ -332,25 +384,28 @@ export const GAME_BOARD_BASE_STYLES = `
   font-weight: 800;
 }
 
-.score-log-enemy { box-shadow: inset 3px 0 0 rgba(168, 58, 58, 0.72); }
-.score-log-treasure { box-shadow: inset 3px 0 0 rgba(201, 161, 58, 0.8); }
-.score-log-trap { box-shadow: inset 3px 0 0 rgba(112, 76, 150, 0.8); }
-.score-log-item { box-shadow: inset 3px 0 0 rgba(244, 164, 96, 0.72); }
-.score-log-item-gain { box-shadow: inset 3px 0 0 rgba(103, 196, 152, 0.82); }
+/* 종류별 좌측 광원 색 — 값 하나만 갈아 끼운다. */
+.score-log-enemy { --log-hue: rgba(226, 96, 84, 1); }
+.score-log-treasure { --log-hue: rgba(240, 197, 96, 1); }
+.score-log-trap { --log-hue: rgba(162, 118, 220, 1); }
+.score-log-item { --log-hue: rgba(255, 186, 110, 1); }
+.score-log-item-gain { --log-hue: rgba(122, 224, 174, 1); }
+.score-log-score { --log-hue: rgba(255, 219, 132, 1); }
+.score-log-notice { --log-hue: rgba(160, 192, 232, 1); }
+.score-log-win { --log-hue: rgba(122, 224, 174, 1); }
+.score-log-hurt { --log-hue: rgba(232, 98, 90, 1); }
 .score-log-item-gain .score-log-delta { color: #bff6d9; }
-.score-log-score { box-shadow: inset 3px 0 0 rgba(255, 215, 120, 0.8); }
-.score-log-notice { box-shadow: inset 3px 0 0 rgba(145, 174, 210, 0.75); }
-.score-log-win { box-shadow: inset 3px 0 0 rgba(103, 196, 152, 0.82); }
-.score-log-hurt { box-shadow: inset 3px 0 0 rgba(168, 58, 58, 0.82); }
 .score-log-notice .score-log-delta { color: #cbdaf0; }
 .score-log-win .score-log-delta { color: #bff6d9; }
 .score-log-hurt .score-log-delta { color: #ffd5c5; }
 
+/* 빈 상태도 테두리 없이 — 점선 상자는 로그 줄보다 눈에 띄어 '없음'이 강조돼 보였다. */
 .score-log-empty {
   padding: 14px 10px;
   color: var(--color-text-muted);
-  border: 1px dashed var(--color-border-soft);
+  border: 0;
   border-radius: 10px;
+  background: linear-gradient(90deg, rgba(255, 206, 128, 0.05) 0%, rgba(255, 186, 96, 0) 82%);
   text-align: center;
   font-size: 12px;
 }
