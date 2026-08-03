@@ -923,6 +923,8 @@ export class CardSpawner {
       {
         isSpecialEnemy: true,
         specialEnemyKind: 'monsterFlower',
+        // 초기 스탯과 같은 20턴 티어를 주기 성장에도 적용한다(20~39턴이면 공/체 +2).
+        monsterFlowerGrowthAmount: this.getSpecialEnemyTier(),
         defeatDropCount: Math.max(1, Math.min(3, Math.ceil(safePower / 2))),
         enemyPower: this.getSpecialEnemyPower(),
       }

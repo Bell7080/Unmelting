@@ -85,6 +85,10 @@ export interface EnaSimCard {
   value: number
   /** 꽃 성장 누적 턴(시듦 확률 상승에 사용). */
   growth: number
+  /** 괴물꽃이면 2→1→0 뒤 성장한다. 일반 적은 이 선택 필드를 갖지 않는다. */
+  monsterGrowthTimer?: number
+  /** 생성 턴의 20턴 단위 특수 적 티어로 고정되는 괴물꽃 주기당 공/체 성장량. */
+  monsterGrowthAmount?: number
   /** 포자 전염 카운트다운(2→0에서 인접 전염). */
   sporeTimer: number
   /** 이벤트 문 닫힘 카운트다운(-1=대기, 2→0 닫힘). */
@@ -1883,12 +1887,25 @@ export class EnaTrainingSimulation {
     for (let row = 0; row < ROWS; row++) {
       for (let lane = 0; lane < LANES; lane++) {
         const card = this.board[row][lane]
-        if (!card || card.type !== CardType.FLOWER || card.flowerKind === 'seed' || card.frozen > 0) continue
+        if (!card || card.frozen > 0) continue
+        // 실게임처럼 변이 다음 턴부터 2→1→0을 거친 뒤 생성 시점의 특수 적 티어만큼 성장한다.
+        if (card.type === CardType.ENEMY && card.monsterGrowthTimer !== undefined) {
+          card.monsterGrowthTimer = Math.max(0, card.monsterGrowthTimer - 1)
+          if (card.monsterGrowthTimer === 0) {
+            card.monsterGrowthTimer = 2
+            const amount = Math.max(1, card.monsterGrowthAmount ?? 1)
+            card.hp += amount
+            card.atk += amount
+          }
+          continue
+        }
+        if (card.type !== CardType.FLOWER || card.flowerKind === 'seed') continue
         card.growth++
         const wiltChance = Math.min(0.6, 0.08 * card.growth)
         if (this.rng.next() < wiltChance) {
           // 몬스터꽃: 꽃 가치에 비례한 적으로 바뀐다.
-          this.board[row][lane] = { type: CardType.ENEMY, hp: 3 + card.value, atk: 1 + Math.floor(card.value / 2), group: 1, value: card.value, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+          const specialEnemyTier = Math.floor(this.turn / 20) + 1
+          this.board[row][lane] = { type: CardType.ENEMY, hp: 3 + card.value, atk: 1 + Math.floor(card.value / 2), group: 1, value: card.value, growth: 0, monsterGrowthTimer: 2, monsterGrowthAmount: specialEnemyTier, sporeTimer: 0, eventTimer: -1, frozen: 0 }
         }
       }
     }
