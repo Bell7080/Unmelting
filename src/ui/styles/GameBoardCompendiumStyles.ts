@@ -369,24 +369,7 @@ export const GAME_BOARD_COMPENDIUM_STYLES = `
   word-break: keep-all;
   line-height: 1.45;
 }
-/* 도감 chip 안 desc-dyn: display 토글 방식으로 __d가 레이아웃 너비를 차지하지 않게 한다. */
-.codex-stat-chip .desc-dyn { display: inline; }
-.codex-stat-chip .desc-dyn__d { display: none; }
-body.is-shift-detail .codex-stat-chip .desc-dyn__s { display: none; }
-/* inline-block + nowrap: 공식 전체를 하나의 단위로 취급.
-   줄이 부족하면 괄호 전체가 다음 줄로 내려가고, 공식 중간에서 끊기지 않는다. */
-body.is-shift-detail .codex-stat-chip .desc-dyn__d { display: inline-block; white-space: nowrap; }
-/* 수식 안 검 아이콘은 0.8em 폰트에 맞게 더 작게 */
-.codex-stat-chip .desc-dyn__d .icon { width: 10px; height: 10px; }
-/* [shift:텍스트] 토큰: 도감 칩 안에서도 Shift 시에만 표시 */
-.codex-stat-chip .shift-only { display: none; }
-body.is-shift-detail .codex-stat-chip .shift-only { display: inline; }
-/* 조합 도감 레시피 효과 칸 desc-dyn: 동일한 display 토글 방식 적용 */
-.compendium-card-value .desc-dyn { display: inline; }
-.compendium-card-value .desc-dyn__d { display: none; }
-body.is-shift-detail .compendium-card-value .desc-dyn__s { display: none; }
-body.is-shift-detail .compendium-card-value .desc-dyn__d { display: inline-block; white-space: nowrap; }
-.compendium-card-value .desc-dyn__d .icon { width: 10px; height: 10px; }
+/* desc-dyn / shift-only 토글 규칙은 GameBoardHandChainStyles의 공용 규칙 하나를 쓴다. */
 .codex-tile-grid--terms {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }

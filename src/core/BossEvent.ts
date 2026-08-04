@@ -557,7 +557,11 @@ export class BossEventController {
       ? Math.min(rawDamage - blocked, Math.max(0, card.getHealth() - pageFloor))
       : Math.min(rawDamage - blocked, card.getHealth())
     if (dealt > 0) card.takeDamage(dealt)
-    if (blocked > 0) this.inject.recordNotice(`밀랍 방패가 피해 ${blocked}를 막았다`, 'info')
+    if (blocked > 0) {
+      this.inject.recordNotice(`밀랍 방패가 피해 ${blocked}를 막았다`, 'info')
+      // 보스도 막아 낸 사실을 화면에 남긴다 — 플레이어 쪽과 같은 회색 수치·흔들림이다.
+      void this.br.playShieldBlockFeedback(this.br.findCardElement(card.id), blocked)
+    }
     // 굳은 보스에게도 직접 공격 행동 비용은 적용한다.
     // 다만 밀랍 로직처럼 보스 반격 주기(state.turn)만 멈춰 카운트다운이 줄지 않게 한다.
     let turnMod = state.turn % state.def.attackInterval
@@ -1398,6 +1402,7 @@ export class BossEventController {
     this.syncBossShieldToCard()
     state.card.healEnemyLike(blocked)
     this.inject.recordNotice(`밀랍 방패가 손패 피해 ${blocked}를 막았다`, 'info')
+    void this.br.playShieldBlockFeedback(this.br.findCardElement(state.card.id), blocked)
     return blocked
   }
 

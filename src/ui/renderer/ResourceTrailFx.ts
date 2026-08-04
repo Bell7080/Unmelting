@@ -51,9 +51,27 @@ export function handTokenStaggerMs(count: number): number {
 const SCATTER_Y = [0, 9, -5, 13, 3, -8, 11, -2, 7, -11]
 const SCATTER_TILT = [-12, 8, -19, 14, -6, 21, -15, 5, -9, 17]
 
-/** 자원 아이콘 토큰이 튀어나와 떨어지고 → 잠깐 머물다 → HUD로 빨려 들어가기까지.
- *  손패 토큰(950ms)보다 짧다 — 자원 획득은 턴마다 반복되는 사건이라 늘어지면 지친다. */
-const RESOURCE_TOKEN_FLIGHT_MS = 780
+/**
+ * 자원 아이콘 토큰이 튀어나와 떨어지고 → 잠깐 머물다 → HUD로 빨려 들어가기까지.
+ * 손패 토큰(950ms)보다 짧다 — 자원 획득은 턴마다 반복되는 사건이라 늘어지면 지친다.
+ *
+ * ★ 자원마다 **속도가 다르다.** 전부 같은 속도로 떨어져 같은 박자에 꽂히면 한 턴에
+ * 여러 자원이 들어올 때 어디를 봐야 할지가 뭉갠다. **가장 흔한 것을 가장 빨리** 보내
+ * 먼저 치우고, 드문 것이 그 뒤에 남아 눈에 들어오게 한다.
+ *
+ *   불빛(재화) — 매 행동 들어오는 기본 자원이라 제일 빠르다. 먼저 꽂히고 사라진다.
+ *   콤보 게이지 — 그다음.
+ *   빛 게이지 — 그다음.
+ *   나머지(체력·방패·공격력·유물) — 드물게 들어오므로 넉넉히 보여 준다.
+ */
+const RESOURCE_TOKEN_FLIGHT_MS_BY_TARGET: Partial<Record<ResourceTrailTarget, number>> = {
+  score: 460,
+  coin: 460,
+  gauge: 600,
+  ember: 700,
+}
+/** 드물게 들어오는 자원의 기본 속도 — 체력·방패·공격력·유물이 여기 해당한다. */
+const RESOURCE_TOKEN_FLIGHT_MS = 820
 const RESOURCE_TOKEN_LAND = 0.3
 const RESOURCE_TOKEN_DEPART = 0.46
 /** HUD에 닿는 프레임 — 수치 롤링을 여는 착탄 블라스트가 이 박자에 터진다. */
@@ -175,10 +193,13 @@ export class ResourceTrailFx {
     const to = this.rectCenter(target)
     const face = this.resourceTokenIcon(resource)
     const colors = this.resourceTokenColors(resource)
+    const flightMs = RESOURCE_TOKEN_FLIGHT_MS_BY_TARGET[resource] ?? RESOURCE_TOKEN_FLIGHT_MS
     // 수치가 큰 획득(불빛 등)까지 개수만큼 띄우면 화면이 덮인다. 토큰은 '무엇이
     // 왔는지'를 말하는 역할이라 몇 개까지만 내고 수치는 HUD 카운터가 말한다.
     const tokens = Math.max(1, Math.min(3, count))
-    const stagger = tokens > 1 ? 90 : 0
+    // 발사 간격도 비행 속도를 따라간다 — 빠른 자원에 느린 간격을 쓰면 앞 토큰이 이미
+    // 꽂힌 뒤에 뒷 토큰이 출발해 한 묶음으로 안 읽힌다.
+    const stagger = tokens > 1 ? Math.round(flightMs * 0.115) : 0
     const size = 30
     const at = (px: number, py: number): string =>
       `translate(${px - size / 2}px, ${py - size / 2}px)`
@@ -233,7 +254,7 @@ export class ResourceTrailFx {
           frames.push({ transform: `${at(to.x, to.y)} rotate(0deg) scale(0.72)`, opacity: 1, offset: RESOURCE_TOKEN_ARRIVE })
           frames.push({ transform: `${at(to.x, to.y)} rotate(0deg) scale(0.36)`, opacity: 0 })
           const anim = piece.animate(frames, {
-            duration: RESOURCE_TOKEN_FLIGHT_MS,
+            duration: flightMs,
             easing: 'linear',
             fill: 'forwards',
           })
@@ -241,10 +262,10 @@ export class ResourceTrailFx {
           window.setTimeout(() => {
             SquareBurst.playAt(to.x, to.y, theme, { count: 12, spread: 72, duration: 400, size: [6, 14] })
             resolve()
-          }, RESOURCE_TOKEN_FLIGHT_MS * RESOURCE_TOKEN_ARRIVE)
+          }, flightMs * RESOURCE_TOKEN_ARRIVE)
           const done = (): void => piece.remove()
           anim.onfinish = done
-          window.setTimeout(done, RESOURCE_TOKEN_FLIGHT_MS + 200)
+          window.setTimeout(done, flightMs + 200)
         }, i * stagger)
       })
     )

@@ -53,9 +53,11 @@ export class Character {
   customRelicProfiles: Partial<Record<RelicId, CustomRelicProfile>>
   /** 변칙 유물용 누적 피해(10 잃을 때마다 발동). takeDamage가 더하고 외부가 소비한다. */
   relicDamageTaken: number = 0
-  /** 제물 축 HP손실 유물(주사기·피의 대가)용 누적 피해. takeDamage/takeDirectDamage가 더하고
-   *  applyAnomalyHealthLoss(모든 HP손실 지점에서 호출)가 소비한다 — 자해+받는 피해 모두 포함. */
-  pendingHpLoss: number = 0
+  /** ★ 제물(자해) 축 전용 누적. **자해로 잃은 HP만** 쌓인다 — 적/함정에게 맞은 피해는
+   *  절대 들어오지 않는다. "자해 시/자해마다"와 "피해를 받을 때"는 다른 키워드다. */
+  pendingSelfHarm: number = 0
+  /** 직전 피격에서 방패가 흡수한 양. 연출이 "막았다"를 표시하는 데만 쓰고 곧바로 소비한다. */
+  lastBlockedByShield: number = 0
   /** 권위: 치명타를 체력 1에서 막아냈음을 표시한다. 외부가 연출/파괴 후 false로 소비한다.
    *  (체력이 0으로 떨어졌다가 부활하는 대신, 처음부터 1에서 멈추게 한다.) */
   authoritySurvivePending: boolean = false
@@ -91,6 +93,9 @@ export class Character {
     const blocked = Math.min(this.shield, actualDamage)
     this.shield -= blocked
     actualDamage -= blocked
+    // 방패가 먹은 양은 반환값(실 HP 피해)에 안 남는다 — 연출이 "막았다"를 말하려면
+    // 이 값이 필요하므로 마지막 판정만 남겨 둔다(호출부가 곧바로 읽어 간다).
+    this.lastBlockedByShield = blocked
     // 권위: 이 피해가 치명적이면 체력 0으로 내려가지 않고 1에서 멈춘다. 한 번만 흡수하며
     // (authoritySurvivePending), 실제 연출/유물 파괴는 외부 생존 처리에서 마무리한다.
     if (
@@ -106,7 +111,6 @@ export class Character {
     }
     // 방패로 막지 못하고 실제 HP가 깎인 양만 변칙 유물 누적 피해로 적립한다.
     this.relicDamageTaken += actualDamage
-    this.pendingHpLoss += actualDamage
     return actualDamage
   }
 
@@ -125,7 +129,8 @@ export class Character {
       this.health = Math.max(0, this.health - actualDamage)
     }
     this.relicDamageTaken += actualDamage
-    this.pendingHpLoss += actualDamage
+    // 자해 축은 여기서만 쌓인다 — 적/함정 피해가 섞이면 제물 카드를 안 써도 축이 굴러간다.
+    this.pendingSelfHarm += actualDamage
     return actualDamage
   }
 
@@ -365,7 +370,8 @@ export class Character {
     this.customRelicProfiles = {}
     this.shield = 0
     this.relicDamageTaken = 0
-    this.pendingHpLoss = 0
+    this.pendingSelfHarm = 0
+    this.lastBlockedByShield = 0
     this.authoritySurvivePending = false
     this.trapDamageBonus = 0
     this.trapIgnoreChance = 0

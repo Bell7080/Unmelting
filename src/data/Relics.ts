@@ -601,22 +601,25 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     basePrice: 1250,
     synergyTags: ['sacrifice'],
   },
-  // 씨앗(공급): 주사기(커먼) — 체력 5 잃을 때마다(자해+받는 피해) 바늘 손패를 흘려 넣어 제물 축을 굴린다.
+  // 씨앗(공급): 주사기(커먼) — 자해 5마다 바늘 손패를 흘려 넣어 제물 축을 굴린다.
+  // ★ 적/함정에게 맞은 피해로는 쌓이지 않는다 — 제물 카드를 쓰는 선택이 곧 축이어야 한다.
   syringe: {
     id: 'syringe',
     name: '주사기',
     rarity: 'common',
-    effect: '체력 5 잃을 때마다 바늘 손패 1장 획득',
+    effect: '자해 5 누적마다 바늘 손패 1장 획득',
     flavor: '한 방울씩 뽑아낼수록 손끝에 새 바늘이 쥐어진다.',
     basePrice: 500,
     synergyTags: ['sacrifice'],
   },
-  // 복리 페이오프: 피의 대가(유니크) — 흘린 피가 쌓일수록 공격이 영구히 매서워진다(자해+받는 피해 스케일링 키스톤).
+  // 복리 페이오프: 피의 대가(유니크) — 스스로 흘린 피가 쌓일수록 공격이 영구히 매서워진다.
+  // 문턱 40 → 20: 받는 피해가 빠지면서 도달량이 절반 이하로 줄어, 같은 페이오프를 유지하려면
+  // 문턱도 함께 내려야 한다(안 내리면 런당 1~2회 발동하는 죽은 유니크가 된다).
   'blood-price': {
     id: 'blood-price',
     name: '피의 대가',
     rarity: 'unique',
-    effect: '체력 40 잃을 때마다 공격력 +1',
+    effect: '자해 20 누적마다 공격력 +1',
     flavor: '치른 대가는 사라지지 않고 칼끝에 새겨진다.',
     basePrice: 1250,
     synergyTags: ['sacrifice'],

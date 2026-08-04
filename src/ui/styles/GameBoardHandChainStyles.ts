@@ -1592,37 +1592,33 @@ body.is-hand-targeting .chain-banner { opacity: 0.3; transition: opacity 0.2s ea
 .hand-slot.hand-card.rarity-unique   { border-color: rgba(242, 212, 92, 0.46); box-shadow: 0 0 14px rgba(242, 212, 92, 0.22), inset 0 0 9px rgba(242, 212, 92, 0.1); }
 .hand-slot.hand-card.rarity-legendary { border-color: rgba(220, 78, 78, 0.46); box-shadow: 0 0 14px rgba(220, 78, 78, 0.22), inset 0 0 9px rgba(220, 78, 78, 0.1); }
 
-/* 공격력 비례 설명 이중 레이어: 기본은 합산 수치, Shift 누름 시 수식으로 스르륵 전환. */
-.desc-dyn {
-  display: inline-grid;
-}
-.desc-dyn__s,
-.desc-dyn__d {
-  grid-area: 1/1;
-  transition: opacity 0.18s ease;
-}
-/* __s(합산 수치)는 명시적 1로 첫 렌더부터 보이게 고정. */
-.desc-dyn__s { opacity: 1; }
-/* __d(공식)는 기본 숨김. 폰트 소형화+nowrap으로 overflow 방지. */
-.desc-dyn__d { opacity: 0; font-size: 0.8em; white-space: nowrap; }
-body.is-shift-detail .desc-dyn__s { opacity: 0; }
-body.is-shift-detail .desc-dyn__d { opacity: 1; }
-
-/* 손패 미리보기 desc-dyn: 도감 chip과 동일하게 display 토글로 __d 팬텀 너비/높이 제거 */
-.hand-card-preview .desc-dyn { display: inline; }
-.hand-card-preview .desc-dyn__s,
-.hand-card-preview .desc-dyn__d { transition: none; }
-.hand-card-preview .desc-dyn__d { display: none; opacity: 1; }
-body.is-shift-detail .hand-card-preview .desc-dyn__s { display: none; opacity: 1; }
-body.is-shift-detail .hand-card-preview .desc-dyn__d { display: inline; white-space: nowrap; }
-
-/* 체인 로그 flavor desc-dyn: 손패 미리보기와 동일한 display 토글 방식 */
-.chain-event-flavor .desc-dyn { display: inline; }
-.chain-event-flavor .desc-dyn__s,
-.chain-event-flavor .desc-dyn__d { transition: none; }
-.chain-event-flavor .desc-dyn__d { display: none; opacity: 1; }
-body.is-shift-detail .chain-event-flavor .desc-dyn__s { display: none; opacity: 1; }
-body.is-shift-detail .chain-event-flavor .desc-dyn__d { display: inline; white-space: nowrap; }
+/*
+ * 공격력 비례 설명 이중 레이어: 기본은 합산 수치, Shift 누름 시 수식으로 전환.
+ *
+ * ★ 두 겹을 **겹쳐 두지 않는다**(예전 inline-grid + grid-area 1/1 + opacity 토글).
+ * 겹치면 칸 너비가 항상 **둘 중 넓은 쪽**(nowrap 수식)으로 잡혀, Shift를 누르지 않아
+ * 수치만 보이는 상태에서도 그만큼 여백이 남고 뒤 텍스트가 밀린다. 레시피 미리보기처럼
+ * 전용 override가 없던 자리에서 그대로 드러났다.
+ *
+ * 그래서 **표시 토글이 기본**이다 — 안 보이는 쪽은 자리도 차지하지 않는다. 자리마다
+ * override를 새로 쓰지 말고 이 규칙을 그대로 쓴다(도형이 달라야 할 때만 display 종류를
+ * 바꾼다). 대가로 페이드 전환은 없다 — 레이아웃이 밀리는 것보다 낫다.
+ */
+.desc-dyn { display: inline; }
+.desc-dyn__s { display: inline; }
+.desc-dyn__d { display: none; font-size: 0.8em; white-space: nowrap; }
+body.is-shift-detail .desc-dyn__s { display: none; }
+body.is-shift-detail .desc-dyn__d { display: inline; }
+/* 공식이 길어 줄이 부족한 자리(도감 칩·유물 카드)는 괄호 전체가 한 덩어리로 내려가야
+   중간에서 끊기지 않는다. 그 자리들만 inline-block으로 덧쓴다. */
+body.is-shift-detail .codex-stat-chip .desc-dyn__d,
+body.is-shift-detail .compendium-card-value .desc-dyn__d,
+body.is-shift-detail .shop-relic-effect .desc-dyn__d { display: inline-block; }
+/* 수식 안 검 아이콘은 0.8em 폰트에 맞춰 더 작게. */
+.desc-dyn__d .icon { width: 10px; height: 10px; }
+/* [shift:텍스트] 토큰 — Shift 중에만 보이는 부가 맥락. 자리마다 다시 쓰지 않는다. */
+.shift-only { display: none; }
+body.is-shift-detail .shift-only { display: inline; }
 
 /* Shift 자세히 보기 힌트 — 카드 미리보기 하단에 은은하게 깜빡임 */
 .hand-shift-hint {

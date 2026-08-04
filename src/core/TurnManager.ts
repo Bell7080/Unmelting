@@ -26,6 +26,9 @@ export interface EnemyHit {
   cardId: string
   cardName: string
   damage: number
+  /** 방패가 흡수한 양. `damage`가 0이어도 이 값이 있으면 "막았다"는 연출이 나가야 한다 —
+   *  없으면 방패가 다 막았을 때 화면에 아무 일도 안 일어난 것처럼 보인다. */
+  blocked?: number
   /** 에나 회피 등으로 공격 순간 무효화되면 피해 적용 없이 공격 연출만 남긴다. */
   dodged?: boolean
 }
@@ -154,7 +157,13 @@ export class TurnManager {
 
       // Record actual damage so the UI and death check match state.
       const damage = character.takeDamage(incomingDamage)
-      hits.push({ laneIndex: i, cardId: card.id, cardName: card.name, damage })
+      hits.push({
+        laneIndex: i,
+        cardId: card.id,
+        cardName: card.name,
+        damage,
+        blocked: character.lastBlockedByShield,
+      })
 
       if (!character.isAlive()) {
         this.gameState.endGame('character_defeated')

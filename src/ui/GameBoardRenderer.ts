@@ -109,6 +109,11 @@ interface CounterAnimationState {
 /** 피격 체력 게이지 연출 길이. CSS `hp-damage-jolt`와 같은 값이어야 한다. */
 const HP_DAMAGE_PULSE_MS = 640
 
+/** 방패로 막아 냈을 때의 흔들림 길이. CSS `shield-block-shake`와 같은 값이어야 한다. */
+const SHIELD_BLOCK_SHAKE_MS = 380
+/** 적 돌진이 플레이어에 닿는 순간(돌진 560ms의 0.58 지점). 막아 낸 표시가 이 박자에 나간다. */
+const ENEMY_SLAM_IMPACT_MS = 325
+
 /** 에나 강조 맥동 — 시작 지연 / 1회 길이 / 반복 횟수. CSS(.ena-hint-pulse)와 같은 값을 쓴다. */
 const ENA_HINT_START_DELAY_MS = 240
 const ENA_HINT_CYCLE_MS = 1350
@@ -2650,6 +2655,13 @@ export class GameBoardRenderer {
     const playerCenterX = playerRect.left + playerRect.width / 2
     const playerTop = playerRect.top + playerRect.height * 0.08
 
+    // 방패가 먹은 양 — 돌진이 플레이어에 닿는 박자에 맞춰 "막았다"를 띄운다.
+    // 이 한 줄이 없으면 방패가 전부 막은 턴은 화면에서 아무 일도 없던 것으로 지나간다.
+    const blockedTotal = hits.reduce((sum, hit) => sum + (hit.dodged ? 0 : (hit.blocked ?? 0)), 0)
+    if (blockedTotal > 0) {
+      window.setTimeout(() => void this.playShieldBlockFeedback(player, blockedTotal), ENEMY_SLAM_IMPACT_MS)
+    }
+
     return Promise.all(
       attackers.map((element) => {
         const rect = element.getBoundingClientRect()
@@ -2816,6 +2828,35 @@ export class GameBoardRenderer {
   /** Create the red ember-glow numeric hit text at viewport coordinates. */
   private animateDamageNumberAt(x: number, y: number, amount: number): Promise<void> {
     return this.animateFloatTextAt(x, y, `-${amount}`)
+  }
+
+  /**
+   * 방패가 막아 낸 피격 — 체력이 안 깎여도 **맞았다는 사실**은 남아야 한다.
+   *
+   * 방패 수치만 조용히 줄면 화면에서는 아무 일도 안 일어난 것으로 읽힌다. 그래서
+   * 같은 자리에 같은 양식으로 **회색빛 `-N`** 을 띄우고(붉은 피해와 색만 다르다),
+   * 대상은 관통당한 게 아니라 **버텨 낸 흔들림**으로 반응한다 — 짧고 단단한 좌우 진동에
+   * 은빛 잔광이다. 피격 반동(`is-enemy-hit`)처럼 밝아지며 튀지 않는다.
+   *
+   * 체력이 실제로 깎인 경우에도 방패가 일부를 먹었으면 함께 호출한다 — 두 수치가
+   * 나란히 떠야 "몇 대 맞고 몇을 막았는지"가 읽힌다.
+   */
+  playShieldBlockFeedback(target: HTMLElement | null, blocked: number): Promise<void> {
+    if (!target || blocked <= 0) return Promise.resolve()
+    target.classList.remove('is-shield-blocked')
+    // 리플로우 1회 — 연타로 막아도 매번 처음부터 재생된다.
+    void target.offsetWidth
+    target.classList.add('is-shield-blocked')
+    window.setTimeout(() => target.classList.remove('is-shield-blocked'), SHIELD_BLOCK_SHAKE_MS)
+    SquareBurst.playOn(target, 'shield-gain', { count: 9, spread: 78, duration: 380, size: [5, 12] })
+    const rect = target.getBoundingClientRect()
+    // 실 피해 수치와 겹치지 않게 살짝 위에서 뜬다(둘 다 나올 수 있다).
+    return this.animateFloatTextAt(
+      rect.left + rect.width / 2,
+      rect.top + rect.height * 0.22,
+      `-${blocked}`,
+      { className: 'damage-float--blocked' }
+    )
   }
 
   /**

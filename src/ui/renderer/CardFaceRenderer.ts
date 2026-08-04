@@ -9,6 +9,7 @@ import type { FlowerKind } from '@entities/Card'
 import type { HandCardId, HandCategory, JobTag } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
 import { getRelicDef, type RelicId } from '@data/Relics'
+import { SYNERGY_TAGS } from '@data/Tags'
 import type { Recipe } from '@data/Recipes'
 import { spriteForHandCard, spriteForRelic, SpriteUrls } from '@ui/Sprites'
 import {
@@ -279,10 +280,22 @@ export class CardFaceRenderer {
     return tag === 'knight' ? '기사' : '마법사'
   }
 
-  /** 손패 카드 1장의 상단 태그 목록(카테고리 + 직업 태그) — 도감/미리보기/상점 팩 카드가 공유한다. */
+  /**
+   * 손패 카드 1장의 상단 태그 목록 — **모든 표기의 단일 창구**다.
+   * 도감·손패 미리보기·상점 팩 카드가 전부 이 함수를 지나므로, 태그를 늘리거나 순서를
+   * 바꿀 때 여기 한 곳만 고친다. 자리마다 따로 조립하면 화면끼리 어긋난다.
+   *
+   * 순서는 **분류 → 시너지 → 직업**이다. 빌드를 고르는 눈은 시너지 태그(불씨·양초·제물…)를
+   * 먼저 찾으므로, 그것이 카테고리 바로 뒤에 온다. 시너지 태그는 `Tags.ts`의 라벨을
+   * 그대로 쓴다 — 여기서 한글을 다시 적으면 두 곳이 갈린다.
+   */
   handCardTagLabels(id: HandCardId): string[] {
     const def = getHandCardDef(id)
-    return [this.categoryLabel(def.category), ...(def.jobTags ?? []).map((t) => this.jobTagLabel(t))]
+    return [
+      this.categoryLabel(def.category),
+      ...(def.synergyTags ?? []).map((t) => SYNERGY_TAGS[t].label),
+      ...(def.jobTags ?? []).map((t) => this.jobTagLabel(t)),
+    ]
   }
 
   /** 카드 아트 좌상단에 겹쳐 보이는 태그 뱃지 오버레이. codex-tile-tag* 스타일을 공유한다. */
@@ -621,16 +634,17 @@ export class CardFaceRenderer {
   }
 
   /** 보상 문구 한 줄을 아이콘 + 글자로 감싼다. 아이콘을 못 고르면 원문 그대로 둔다. */
-  resourceTextHtml(text: string): string {
-    const found = this.resourceTerm(text)
-    if (!found) return text
-    return `<span class="resource-term-icon" aria-hidden="true">${found.icon}</span>${this.stripIconTerm(text, found.term)}`
-  }
 
   /**
-   * 손패 설명처럼 **여러 효과가 섞인 문장**에는 앞머리 아이콘을 함부로 붙이면 안 된다
-   * ("자해 2 · 방패 +7"에 방패를 붙이면 자해가 지워진다). 문장이 자원 어휘로 **시작하고**
-   * 구분자(·, 줄바꿈)가 없는 순수 자원 문구일 때만 붙인다.
+   * ★ 카드/유물 **효과 설명문에 앞머리 아이콘을 붙이는 단일 창구**다. 새 자리를 만들 때도
+   * 이 함수를 쓴다 — 문장 어디서든 낱말을 찾아 앞에 아이콘을 세우고 그 낱말을 지우는
+   * 방식(예전 resourceTextHtml)은 문장을 무너뜨렸다. 손거울
+   * "전방 선택 적 1장: 그 적의 공격력만큼 피해"가 "(검) 전방 선택 적 1장: 그 적의 만큼 피해"가
+   * 됐다 — 실제 설명문과 다른 글이 카드에 찍혔다.
+   *
+   * 그래서 조건이 셋이다: 문장이 자원 어휘로 **시작하고**, 구분자(·, 줄바꿈)가 없고,
+   * HTML(desc-dyn 등)이 섞이지 않은 **순수 자원 문구**일 때만 붙인다.
+   * 그 밖에는 설명문을 **그대로** 내보낸다 — 표기는 데이터의 description을 따라간다.
    */
   resourceLeadTextHtml(text: string): string {
     if (text.includes('·') || text.includes('<br>') || text.includes('<')) return text

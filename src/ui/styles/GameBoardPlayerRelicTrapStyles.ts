@@ -170,6 +170,36 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
   -webkit-text-stroke: 1px rgba(86, 38, 6, 0.8);
 }
 
+/* 방패가 막아 낸 수치 — 붉은 피해와 **같은 양식·같은 자리**이고 색만 다르다.
+   피가 아니라 금속이 막은 것이므로 회색빛(은백)이고, 발광도 한 겹 낮춰 실제 피해보다
+   덜 아프게 읽힌다. 이 표기가 없으면 방패가 다 막은 턴은 화면에서 아무 일도 없다. */
+.damage-float--blocked {
+  color: #cfd6e2;
+  text-shadow:
+    0 3px 4px rgba(0, 0, 0, 0.92),
+    0 0 12px rgba(206, 216, 232, 0.72),
+    0 0 26px rgba(150, 166, 196, 0.5);
+  -webkit-text-stroke: 1px rgba(38, 44, 58, 0.7);
+}
+
+/* 막아 낸 반응 — 관통당한 게 아니라 **버텨 낸** 흔들림이다. 피격 반동(is-enemy-hit)처럼
+   밝아지며 튀지 않고, 짧고 단단한 좌우 진동에 은빛 잔광만 남는다.
+   길이는 GameBoardRenderer의 SHIELD_BLOCK_SHAKE_MS와 같은 값이어야 한다. */
+.is-shield-blocked {
+  animation: shield-block-shake 0.38s cubic-bezier(0.28, 0.9, 0.3, 1);
+}
+@keyframes shield-block-shake {
+  0%   { transform: translateX(0);     filter: brightness(1); }
+  12%  { transform: translateX(-5px);  filter: brightness(1.16) drop-shadow(0 0 12px rgba(198, 214, 240, 0.9)); }
+  28%  { transform: translateX(4px);   filter: brightness(1.1)  drop-shadow(0 0 9px rgba(198, 214, 240, 0.7)); }
+  46%  { transform: translateX(-3px);  filter: brightness(1.06); }
+  66%  { transform: translateX(2px);   filter: brightness(1.03); }
+  100% { transform: translateX(0);     filter: brightness(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .is-shield-blocked { animation-duration: 0.01ms; }
+}
+
 /* HP 롤링 틱: 깎이는 동안 붉게 달아오르고, 한 칸 줄 때마다 톡 튄다. */
 .stat.hp .stat-value.is-hp-draining {
   color: #ff6a4a;

@@ -105,7 +105,7 @@ export class ShopOverlayView {
             <div class="shop-relic-art shop-free-art" aria-hidden="true"></div>
             <div class="shop-relic-body">
               <h3 class="shop-relic-title">${label}</h3>
-              <p class="shop-relic-effect">${this.host.faces.resourceTextHtml(description)}</p>
+              <p class="shop-relic-effect">${this.host.faces.resourceLeadTextHtml(description)}</p>
               <p class="shop-relic-flavor">촛불이 남긴 작은 호의</p>
             </div>
           </div>
@@ -339,7 +339,7 @@ export class ShopOverlayView {
                   ${typeBadge}
                   <span class="shop-pack-pick-card-name">${cleanTitle}</span>
                 </header>
-                <p class="shop-pack-pick-card-effect">${this.host.faces.resourceTextHtml(item.effect)}</p>
+                <p class="shop-pack-pick-card-effect">${this.host.faces.resourceLeadTextHtml(item.effect)}</p>
                 ${recipeNoteLine}
               </div>
             </div>
@@ -812,7 +812,7 @@ export class ShopOverlayView {
                       <div class="shop-relic-art shop-trial-art" style="background-image: url('${card.spriteUrl}')" aria-hidden="true"></div>
                       <div class="shop-relic-body shop-trial-body">
                         <h3 class="shop-relic-title shop-trial-title">${card.title}</h3>
-                        <p class="shop-relic-effect shop-trial-effect">${this.host.faces.resourceTextHtml(card.effect)}</p>
+                        <p class="shop-relic-effect shop-trial-effect">${this.host.faces.resourceLeadTextHtml(card.effect)}</p>
                       </div>
                     </div>
                   </div>

@@ -21,6 +21,9 @@ import type { HandCardDefinition } from '@entities/HandCard'
 import type { BurstTheme } from '@ui/SquareBurst'
 import type { PlayerResourceSnapshot, ResourceTrailSource, TrailResourceKind } from '@/app/FeedbackTypes'
 
+/** 피의 대가 문턱 — 자해 누적 이 값마다 공격력 영구 +1. Relics.ts 효과 문구와 같은 값이어야 한다. */
+const BLOOD_PRICE_THRESHOLD = 20
+
 /** 활동 로그 초안 — index.ts의 로그 스탬프(id 부여) 전 단계와 동일한 형태. */
 type ActivityLogDraft = Omit<ActivityLogEntry, 'id'>
 
@@ -262,18 +265,24 @@ export class RelicEffectsManager {
     }
   }
 
-  /** 변칙: 플레이어가 체력을 5 잃을 때마다 빛 게이지 +1. 누적 피해는 Character가 보관한다.
-   *  미보유 시 누적을 비워, 나중에 획득해도 이전 피해가 소급 발동하지 않게 한다. */
+  /**
+   * 모든 HP 손실 지점에서 불리는 공통 훅. 두 종류의 유물이 **서로 다른 누적**을 소비한다:
+   *
+   *   - '자해 시/자해마다' 유물(제물 축: 주사기·피의 대가) → `pendingSelfHarm`
+   *     = 제물 손패의 희생 효과로 잃은 HP만. 적/함정에게 맞은 피해는 절대 안 들어온다.
+   *   - '피해를 받을 때' 유물(변칙) → `relicDamageTaken` = 자해 포함 모든 HP 손실.
+   *
+   * 두 키워드는 완전히 다른 것이다. 섞으면 제물 카드를 한 장도 안 쓰고 맞기만 해도
+   * 제물 축이 굴러가, 덱을 깎아도 축의 농도가 오르지 않는다.
+   */
   applyAnomalyHealthLoss(): void {
     const { gameState, boardRenderer, recordRelicActivation } = this.deps
     const character = gameState.character
-    // 모든 HP손실 지점에서 호출되는 공통 훅 — 제물 축 HP손실 유물(주사기·피의 대가)을 먼저 소비한다.
-    // 자해뿐 아니라 적/함정 등 받는 피해까지 pendingHpLoss로 들어오므로 여기서 한 번에 처리한다.
-    const hpLoss = character.pendingHpLoss
-    character.pendingHpLoss = 0
-    if (hpLoss > 0) {
-      this.applySyringeHpLoss(hpLoss)
-      this.applyBloodPriceHpLoss(hpLoss)
+    const selfHarm = character.pendingSelfHarm
+    character.pendingSelfHarm = 0
+    if (selfHarm > 0) {
+      this.applySyringeSelfHarm(selfHarm)
+      this.applyBloodPriceSelfHarm(selfHarm)
     }
     if (!character.hasRelic('anomaly')) { character.relicDamageTaken = 0; return }
     while (character.relicDamageTaken >= 5) {
@@ -783,8 +792,8 @@ export class RelicEffectsManager {
     recordRelicActivation('demon-doll', `자해 10 누적 → 불빛 +10%, 공격력 +${gained} (누적 +${enhancements.demonDollBonusAtk})`)
   }
 
-  /** 주사기: 체력 5 잃을 때마다 바늘(needle) 손패 1장 지급. 자해+받는 피해 모두 누적한다. */
-  applySyringeHpLoss(amount: number): void {
+  /** 주사기: **자해** 5 누적마다 바늘(needle) 손패 1장 지급. 받는 피해로는 쌓이지 않는다. */
+  applySyringeSelfHarm(amount: number): void {
     const { gameState, recordRelicActivation, render } = this.deps
     const character = gameState.character
     if (!character.hasRelic('syringe') || amount <= 0) return
@@ -799,18 +808,19 @@ export class RelicEffectsManager {
     }
   }
 
-  /** 피의 대가: 체력 40 잃을 때마다 공격력 영구 +1. 자해+받는 피해 모두 누적하는 스케일링 키스톤. */
-  applyBloodPriceHpLoss(amount: number): void {
+  /** 피의 대가: **자해** 20 누적마다 공격력 영구 +1. 받는 피해로는 쌓이지 않는 스케일링 키스톤.
+   *  문턱 40 → 20은 받는 피해가 빠진 만큼을 되돌린 값이다(Relics.ts 주석 참고). */
+  applyBloodPriceSelfHarm(amount: number): void {
     const { gameState, recordRelicActivation } = this.deps
     if (!gameState.character.hasRelic('blood-price') || amount <= 0) return
     const enhancements = gameState.enhancements
     enhancements.bloodPriceHpLossAccum += amount
-    const gained = Math.floor(enhancements.bloodPriceHpLossAccum / 40)
+    const gained = Math.floor(enhancements.bloodPriceHpLossAccum / BLOOD_PRICE_THRESHOLD)
     if (gained <= 0) return
-    enhancements.bloodPriceHpLossAccum %= 40
+    enhancements.bloodPriceHpLossAccum %= BLOOD_PRICE_THRESHOLD
     enhancements.bloodPriceBonusAtk += gained
     for (let i = 0; i < gained; i++) gameState.character.applyDamageBoost(1)
-    recordRelicActivation('blood-price', `체력 40 손실 → 공격력 +${gained} (누적 +${enhancements.bloodPriceBonusAtk})`)
+    recordRelicActivation('blood-price', `자해 ${BLOOD_PRICE_THRESHOLD} 누적 → 공격력 +${gained} (누적 +${enhancements.bloodPriceBonusAtk})`)
   }
 
   /** 혈서: 자해 5 누적마다 제물(sacrifice) 태그 손패 1장(비보스 풀 dropWeight 가중)을 손에 흘려 넣는다. */
