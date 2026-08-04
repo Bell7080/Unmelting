@@ -42,6 +42,17 @@ export function handTokenStaggerMs(count: number): number {
 const SCATTER_Y = [0, 9, -5, 13, 3, -8, 11, -2, 7, -11]
 const SCATTER_TILT = [-12, 8, -19, 14, -6, 21, -15, 5, -9, 17]
 
+/** 별빛 토큰이 떠올라 → 두둥실 표류하다 → 턴 카운터로 꽂히기까지. */
+const STARLIGHT_TOKEN_FLIGHT_MS = 1240
+/** 떠오름이 끝나는 지점 — 카드가 풀린 빛이 화면으로 솟아오르는 구간. */
+const STARLIGHT_TOKEN_RISE = 0.28
+/** 표류가 끝나고 턴을 향해 출발하는 지점. 이 구간이 '두둥실'이다. */
+const STARLIGHT_TOKEN_DEPART = 0.58
+/** 턴 카운터에 꽂히는 프레임 — 착탄 블라스트가 이 박자에 터진다. */
+const STARLIGHT_TOKEN_ARRIVE = 0.93
+/** 꽂히기 직전 들르는 높이. 위에서 수직으로 내리꽂아야 '흘러들었다'가 아니라 '꽂혔다'가 된다. */
+const STARLIGHT_PLUNGE_PX = 92
+
 export class ResourceTrailFx {
   constructor(private readonly host: GameBoardRenderer) {}
 
@@ -218,6 +229,30 @@ export class ResourceTrailFx {
     0 0 60px rgba(255, 150, 40, 0.36),
     inset 0 1px 0 rgba(255, 250, 226, 0.8);
 }
+/* 별빛 토큰 — 같은 사각 조각을 45° 세운 것(전용 도형이 아니다). 모서리를 살짝 깎아
+   HUD의 네 꼭짓점 반짝 다이아와 같은 실루엣으로 읽히게 한다.
+   ★ 발광을 흰빛으로 쌓으면 조각이 통째로 날아가 **정체 모를 흰 공**이 된다. 심지만
+   은백으로 두고 몸통·발광은 남보라로 내려, 빛 속에서도 다이아 윤곽이 남게 한다. */
+.resource-trail-piece.is-starlight-token {
+  /* 모서리를 거의 세워 둔다 — 둥글릴수록 다이아가 아니라 알약으로 읽힌다. */
+  border-radius: 3px;
+  background: linear-gradient(140deg, #f4f3ff 0%, #cfcaff 26%, #8f88e6 62%, #4038a0 100%);
+  box-shadow:
+    0 0 6px rgba(233, 230, 255, 0.7),
+    0 0 18px rgba(139, 131, 232, 0.78),
+    0 0 40px rgba(96, 88, 199, 0.6),
+    0 0 76px rgba(51, 48, 122, 0.4);
+  /* 떠 있는 동안 스스로 숨쉬어야 '반짝이'다. 위치 애니메이션(transform)과 겹치지 않게
+     밝기만 흔든다 — 여기서도 과하게 올리면 다시 흰 공이 된다. */
+  animation: starlight-token-twinkle 0.62s ease-in-out infinite;
+}
+@keyframes starlight-token-twinkle {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.28); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .resource-trail-piece.is-starlight-token { animation: none; }
+}
 `
     document.head.appendChild(style)
   }
@@ -391,6 +426,109 @@ export class ResourceTrailFx {
       })
     )
     return Promise.all(launches).then(() => undefined)
+  }
+
+  /**
+   * 별빛 수집 — 90~100층에서 턴을 여는 유일한 열쇠라, 파편이 흘러드는 자원 트레일과
+   * 다른 무게를 준다. 손패 토큰과 같은 세 박자를 쓰되 **떠오름 → 두둥실 → 꽂힘**이다.
+   *
+   *   1) 카드가 빛으로 풀려 화면으로 **떠오른다**(곡사로 튀어나오지 않는다 — 별빛은
+   *      떨어지는 것이 아니라 올라가는 것이다).
+   *   2) 두둥실 표류하며 반짝인다. 이 한 박자가 없으면 '무엇을 얻었나'를 볼 틈이 없다.
+   *   3) 턴 카운터 **위에서 수직으로 내리꽂힌다**. 옆에서 흘러들면 그냥 자원이 된다.
+   *
+   * 토큰은 전용 도형이 아니라 같은 사각 조각을 45° 돌린 것이다 — HUD의 반짝 다이아와
+   * 같은 실루엣이라 이펙트 어휘를 늘리지 않고도 '별빛'으로 읽힌다.
+   */
+  animateStarlightToken(
+    source: HTMLElement | DOMRect | null,
+    target: HTMLElement | DOMRect | null
+  ): Promise<void> {
+    if (!source || !target) return Promise.resolve()
+    this.ensureResourceTrailStyles()
+    const from = this.rectCenter(source)
+    const to = this.rectCenter(target)
+    const colors = this.trailColors('starlight')
+    // 다이아 실루엣이 읽히려면 파편보다 커야 한다(대각 ~37px).
+    const size = 26
+    const at = (px: number, py: number): string =>
+      `translate(${px - size / 2}px, ${py - size / 2}px)`
+    // 45°가 기본 자세다 — 다이아로 **서 있어야** 반짝이로 읽힌다. 그래서 회전은 흔들림
+    // 수준으로만 얹는다. 손패 토큰처럼 두 바퀴 돌리면 굴러가는 보석이 되고, 다이아
+    // 실루엣이 사라져 무엇이 날아가는지 알 수 없다.
+    const pose = (px: number, py: number, tilt: number, scale: number): string =>
+      `${at(px, py)} rotate(${(45 + tilt).toFixed(1)}deg) scale(${scale.toFixed(3)})`
+
+    const piece = document.createElement('div')
+    piece.className = 'resource-trail-piece is-starlight-token'
+    piece.style.width = `${size}px`
+    piece.style.height = `${size}px`
+    piece.style.setProperty('--trail-color', colors.color)
+    piece.style.setProperty('--trail-glow', colors.glow)
+    document.body.appendChild(piece)
+
+    // 떠오르는 높이는 화면 밖으로 새지 않게 가둔다(위쪽 레일에서 먹어도 보이는 곳에 머문다).
+    const float = {
+      x: from.x + (to.x - from.x) * 0.18,
+      y: Math.max(120, from.y - 104),
+    }
+    // 꽂히기 직전 들르는 지점 — 턴 바로 위. 여기서부터는 수직 낙하다.
+    // 턴 카운터는 화면 최상단에 가까워 위쪽 여유가 적다. 상한을 8px까지 열어 내리꽂을
+    // 거리를 최대한 확보한다 — 여유가 없으면 '옆에서 흘러든 것'으로 읽힌다.
+    const above = { x: to.x, y: Math.max(8, to.y - STARLIGHT_PLUNGE_PX) }
+
+    const frames: Keyframe[] = [
+      // 1) 카드 자리에서 빛으로 풀려 솟는다.
+      { transform: pose(from.x, from.y, -14, 0.35), opacity: 0, offset: 0 },
+      { transform: pose(from.x + (float.x - from.x) * 0.4, from.y - (from.y - float.y) * 0.55, -7, 1.16), opacity: 1, offset: STARLIGHT_TOKEN_RISE * 0.55 },
+      { transform: pose(float.x, float.y, 0, 1), opacity: 1, offset: STARLIGHT_TOKEN_RISE },
+      // 2) 두둥실 — 위로 한 번 더 떠올랐다 가라앉으며 머문다. 진폭이 작으면 화면에서는
+      //    그냥 멈춰 선 것으로 보이므로 눈에 보일 만큼 흔든다.
+      { transform: pose(float.x + 16, float.y - 22, 9, 1.1), opacity: 1, offset: STARLIGHT_TOKEN_RISE + (STARLIGHT_TOKEN_DEPART - STARLIGHT_TOKEN_RISE) * 0.4 },
+      { transform: pose(float.x - 11, float.y + 12, -6, 0.96), opacity: 1, offset: STARLIGHT_TOKEN_DEPART },
+      // 3) 턴 카운터 위로 건너간 뒤 수직으로 내리꽂힌다. 도착 직전 살짝 뜸을 들여
+      //    'ㅅ자로 꺾여 떨어진다'가 읽히게 한다.
+      { transform: pose(above.x, above.y, 5, 1.18), opacity: 1, offset: STARLIGHT_TOKEN_DEPART + (STARLIGHT_TOKEN_ARRIVE - STARLIGHT_TOKEN_DEPART) * 0.58 },
+      // 4) 꽂힘 — 세로로 늘어난 채 박혔다가 납작해진다. 이 두 프레임이 '탕'이다.
+      //    45° 자세를 유지한 채 늘였다 눌러야 다이아가 박히는 것으로 읽힌다.
+      { transform: `${at(to.x, to.y)} rotate(45deg) scale(0.62, 1.24)`, opacity: 1, offset: STARLIGHT_TOKEN_ARRIVE },
+      { transform: `${at(to.x, to.y)} rotate(45deg) scale(1.24, 0.6)`, opacity: 1, offset: STARLIGHT_TOKEN_ARRIVE + 0.03 },
+      // 5) 꽂힌 자리에서 빛으로 사그라든다.
+      { transform: pose(to.x, to.y, 0, 0.34), opacity: 0, offset: 1 },
+    ]
+    const anim = piece.animate(frames, {
+      duration: STARLIGHT_TOKEN_FLIGHT_MS,
+      easing: 'linear',
+      fill: 'forwards',
+    })
+
+    // 표류하는 동안 한 번 반짝인다 — '반짝이'라는 말이 화면에서 사실이 되는 지점이다.
+    window.setTimeout(() => {
+      SquareBurst.playAt(float.x, float.y, 'starlight', {
+        count: 7,
+        spread: 46,
+        duration: 420,
+        size: [4, 10],
+      })
+    }, STARLIGHT_TOKEN_FLIGHT_MS * (STARLIGHT_TOKEN_RISE + 0.06))
+
+    return new Promise<void>((resolve) => {
+      // 꽂히는 박자에 턴 쪽 블라스트를 터뜨리고, 호출부는 그 뒤에 턴을 올린다.
+      window.setTimeout(() => {
+        SquareBurst.playAt(to.x, to.y, 'starlight', {
+          count: 14,
+          spread: 74,
+          duration: 380,
+          size: [5, 13],
+        })
+      }, STARLIGHT_TOKEN_FLIGHT_MS * STARLIGHT_TOKEN_ARRIVE)
+      const done = (): void => {
+        piece.remove()
+        resolve()
+      }
+      anim.onfinish = done
+      window.setTimeout(done, STARLIGHT_TOKEN_FLIGHT_MS + 200)
+    })
   }
 
   animateResourceTrail(

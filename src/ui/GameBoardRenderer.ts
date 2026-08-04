@@ -3598,16 +3598,19 @@ export class GameBoardRenderer {
     return el ? el.getBoundingClientRect() : null
   }
 
-  /** 별빛 자동 소비 연출: 원점에서 별빛이 흩어지며 턴 브랜드로 사각 블라스트를
-   *  쏘고, 착탄(onImpact)에서 호출부가 턴을 +1 시킨다("탕" 맞으며 턴 상승). */
+  /**
+   * 별빛 자동 소비 연출: 카드가 빛으로 풀려 **떠오르고 → 두둥실 표류하다 → 턴 카운터에
+   * 꽂힌다**. 이 함수가 끝난 뒤 호출부가 턴을 +1 시킨다 — 꽂힘과 턴 상승이 한 박자로
+   * 이어져야 "별빛이 턴을 열었다"가 읽힌다.
+   */
   async fireStarlightToTurn(sourceRect: DOMRect): Promise<void> {
-    const turnBrand = this.boardElement.querySelector<HTMLElement>('.turn-brand')
+    const turnBrand = this.boardElement.querySelector<HTMLElement>('.turn-brand-number')
+      ?? this.boardElement.querySelector<HTMLElement>('.turn-brand')
     const cx = sourceRect.left + sourceRect.width / 2
     const cy = sourceRect.top + sourceRect.height / 2
     // 원점 별빛 흩뿌림 — 카드가 빛으로 풀리는 출발 블라스트.
     SquareBurst.playAt(cx, cy, 'starlight', { count: 14, spread: 80, duration: 420 })
-    // 트레일이 턴 브랜드에 닿으면 animateResourceTrail이 도착 버스트를 같은 beat에 찍는다.
-    await this.trails.animateResourceTrail(sourceRect, turnBrand, 1, 'starlight')
+    await this.trails.animateStarlightToken(sourceRect, turnBrand)
   }
 
   /** 100턴 초과분 별빛 소멸 연출: 수집(턴 +1)하지 않고 그 자리에서 빛으로 흩어져 사라진다.
