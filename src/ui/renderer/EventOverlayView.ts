@@ -241,7 +241,7 @@ export class EventOverlayView {
     }
     await Promise.all(
       targets.map((t) =>
-        this.host.trails.animateResourceTrail(buttonRect, this.host.trails.findResourceTrailTarget(t as ResourceTrailTarget), 3, themeByTarget[t] ?? 'score')
+        this.host.trails.animateResourceGain(buttonRect, t as ResourceTrailTarget, 3, themeByTarget[t] ?? 'score')
       )
     )
   }
@@ -275,7 +275,7 @@ export class EventOverlayView {
       hand: { target: 'hand', theme: 'hand-tool' },
     }
     const m = map[res]
-    void this.host.trails.animateResourceTrail(from, this.host.trails.findResourceTrailTarget(m.target), count, m.theme)
+    void this.host.trails.animateResourceGain(from, m.target, count, m.theme)
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -754,7 +754,7 @@ export class EventOverlayView {
       const finish = (): void => {
         if (deckEmpty() && net >= cfg.relicWinMultiple * stakeUnit) {
           sink.grantRelic()
-          void this.host.trails.animateResourceTrail(slotEl.getBoundingClientRect(), this.host.trails.findResourceTrailTarget('relic'), 4, 'treasure-gain')
+          void this.host.trails.animateResourceGain(slotEl.getBoundingClientRect(), 'relic', 4, 'treasure-gain')
           onMoment?.('rps-relic')
         }
         panel.classList.add('is-closing')

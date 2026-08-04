@@ -300,8 +300,8 @@ export class JobSelectView {
       const panel = this.host.boardElement.querySelector<HTMLElement>('.spawn-prob-panel')
       if (panel) tasks.push(this.host.trails.animateResourceTrail(origin, panel, 1, spawnTheme))
     }
-    if (job.healthBonus > 0) tasks.push(this.host.trails.animateResourceTrail(origin, this.host.trails.findResourceTrailTarget('health'), 1, 'health-gain'))
-    if (job.damageBonus > 0) tasks.push(this.host.trails.animateResourceTrail(origin, this.host.trails.findResourceTrailTarget('attack'), 1, 'attack-gain'))
+    if (job.healthBonus > 0) tasks.push(this.host.trails.animateResourceGain(origin, 'health', 1, 'health-gain'))
+    if (job.damageBonus > 0) tasks.push(this.host.trails.animateResourceGain(origin, 'attack', 1, 'attack-gain'))
 
     if (tasks.length > 0) {
       ghost.classList.add('is-emitting')

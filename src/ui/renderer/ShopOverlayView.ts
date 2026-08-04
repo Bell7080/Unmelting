@@ -1168,7 +1168,7 @@ export class ShopOverlayView {
     const card = document.querySelector<HTMLElement>(`#shop-overlay .shop-free-card[data-shop-buy-kind="${kind}"]`)
     if (!card) return
     await this.playShopPurchaseImpact(card, 'score')
-    await this.host.trails.animateResourceTrail(card, this.host.trails.findResourceTrailTarget(target), this.freeRewardTrailCount(target, amount), theme)
+    await this.host.trails.animateResourceGain(card, target, this.freeRewardTrailCount(target, amount), theme)
     // 무료 카드 소모는 선택 순간 "사라짐"이 읽히도록 약간 긴 퇴장 타이밍을 사용한다.
     card.classList.add('is-consumed')
     window.setTimeout(() => card.remove(), 420)

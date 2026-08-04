@@ -5,6 +5,15 @@
 
 import type { GameBoardRenderer } from '@ui/GameBoardRenderer'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
+import {
+  bookIcon,
+  comboGaugeIcon,
+  flameIcon,
+  heartIcon,
+  shieldIcon,
+  sparkleIcon,
+  swordIcon,
+} from '@ui/Icons'
 import type { ResourceTrailTarget } from '@ui/renderer/RendererTypes'
 
 /**
@@ -42,6 +51,14 @@ export function handTokenStaggerMs(count: number): number {
 const SCATTER_Y = [0, 9, -5, 13, 3, -8, 11, -2, 7, -11]
 const SCATTER_TILT = [-12, 8, -19, 14, -6, 21, -15, 5, -9, 17]
 
+/** 자원 아이콘 토큰이 튀어나와 떨어지고 → 잠깐 머물다 → HUD로 빨려 들어가기까지.
+ *  손패 토큰(950ms)보다 짧다 — 자원 획득은 턴마다 반복되는 사건이라 늘어지면 지친다. */
+const RESOURCE_TOKEN_FLIGHT_MS = 780
+const RESOURCE_TOKEN_LAND = 0.3
+const RESOURCE_TOKEN_DEPART = 0.46
+/** HUD에 닿는 프레임 — 수치 롤링을 여는 착탄 블라스트가 이 박자에 터진다. */
+const RESOURCE_TOKEN_ARRIVE = 0.9
+
 /** 별빛 토큰이 떠올라 → 두둥실 표류하다 → 턴 카운터로 꽂히기까지. */
 const STARLIGHT_TOKEN_FLIGHT_MS = 1240
 /** 떠오름이 끝나는 지점 — 카드가 풀린 빛이 화면으로 솟아오르는 구간. */
@@ -73,9 +90,9 @@ export class ResourceTrailFx {
   }
 
   /**
-   * 손패 획득만 파편 트레일이 아니라 **카드 토큰**으로 낸다 — 나머지 자원은 수치가
-   * HUD에서 굴러 오르지만 손패는 '카드가 손에 들어오는' 사건이라 도형이 곧 설명이다.
-   * 출처가 어디든(레일 칸·화면 중앙·체인 배너) 같은 어휘를 쓰게 한 창구로 모은다.
+   * 모든 자원 획득은 **무엇을 얻었는지 도형이 말하는 토큰**으로 낸다. 파편이 HUD로
+   * 곧장 흘러들면 어디서 무엇이 왔는지가 남지 않아 "허공에서 게이지가 찼다"로 읽힌다.
+   * 출처가 어디든(레일 칸·화면 중앙의 펼친 손패·체인 배너) 같은 창구로 모은다.
    */
   private routeResourceTrail(
     source: HTMLElement | DOMRect | null,
@@ -84,9 +101,168 @@ export class ResourceTrailFx {
     theme: BurstTheme
   ): Promise<void> {
     const destination = this.findResourceTrailTarget(target)
-    return target === 'hand'
-      ? this.animateHandCardTokens(source, destination, count)
-      : this.animateResourceTrail(source, destination, count, theme)
+    if (target === 'hand') return this.animateHandCardTokens(source, destination, count)
+    return this.animateResourceIconTokens(source, destination, count, theme, target)
+  }
+
+  /**
+   * 자원별 토큰 글리프. 전용 도형을 새로 그리지 않고 **HUD가 이미 쓰는 아이콘**을
+   * 그대로 띄운다 — 떨어진 것과 채워지는 곳이 같은 그림이라야 눈이 이어 붙인다.
+   */
+  private resourceTokenIcon(target: ResourceTrailTarget): string | null {
+    switch (target) {
+      case 'health': return heartIcon()
+      case 'shield': return shieldIcon()
+      case 'ember': return flameIcon()
+      case 'gauge': return comboGaugeIcon()
+      case 'attack': return swordIcon()
+      case 'relic': return bookIcon()
+      case 'score': return sparkleIcon()
+      // 화폐는 글리프가 아니라 `$` 글자가 HUD의 얼굴이다(Icons에 대응 아이콘이 없다).
+      case 'coin': return null
+      default: return null
+    }
+  }
+
+  /** 자원별 토큰 발광색 — 심지/속발광/바깥 빛무리 세 겹. HUD 색과 같은 계열을 쓴다. */
+  private resourceTokenColors(target: ResourceTrailTarget): { ink: string; core: string; glow: string; halo: string } {
+    switch (target) {
+      case 'health':
+        return { ink: '#ff8f93', core: 'rgba(255, 226, 222, 0.95)', glow: 'rgba(240, 96, 104, 0.95)', halo: 'rgba(176, 34, 46, 0.6)' }
+      case 'shield':
+        return { ink: '#ffe4a6', core: 'rgba(255, 244, 214, 0.92)', glow: 'rgba(227, 184, 78, 0.9)', halo: 'rgba(150, 105, 26, 0.55)' }
+      case 'ember':
+        return { ink: '#ffb066', core: 'rgba(255, 238, 196, 0.95)', glow: 'rgba(255, 122, 44, 0.95)', halo: 'rgba(190, 68, 12, 0.6)' }
+      case 'gauge':
+        return { ink: '#c9bcff', core: 'rgba(238, 230, 255, 0.92)', glow: 'rgba(169, 150, 238, 0.9)', halo: 'rgba(88, 68, 176, 0.55)' }
+      case 'attack':
+        return { ink: '#ff9a72', core: 'rgba(255, 226, 196, 0.92)', glow: 'rgba(214, 73, 47, 0.92)', halo: 'rgba(146, 34, 14, 0.55)' }
+      case 'relic':
+        return { ink: '#ffd98a', core: 'rgba(255, 243, 206, 0.92)', glow: 'rgba(226, 160, 60, 0.9)', halo: 'rgba(140, 82, 20, 0.55)' }
+      default:
+        return { ink: '#ffe6a8', core: 'rgba(255, 245, 214, 0.95)', glow: 'rgba(255, 196, 96, 0.9)', halo: 'rgba(244, 150, 52, 0.6)' }
+    }
+  }
+
+  /** 아이콘 토큰 한 개를 만들어 body에 붙인다(글리프 없이는 `$` 같은 글자를 넣는다). */
+  private createIconToken(variant: string, size: number, face: string): HTMLElement {
+    const piece = document.createElement('div')
+    piece.className = `resource-trail-piece is-icon-token ${variant}`
+    piece.style.width = `${size}px`
+    piece.style.height = `${size}px`
+    piece.innerHTML = face
+    document.body.appendChild(piece)
+    return piece
+  }
+
+  /**
+   * 자원 획득 — 출처에서 **아이콘이 곡사로 튀어나와 떨어지고**, 잠깐 머물다, HUD로
+   * 빨려 들며 블라스트한다. 손패 토큰과 같은 세 박자이고 다른 것은 글리프와 빛 색이다.
+   *
+   * 머무는 한 박자를 빼면 몇 개를 얻었는지 셀 틈이 사라지고, 곡사를 빼면 '떨어진 것'이
+   * 아니라 '흘러든 것'이 된다 — 두 박자 모두 어디서 왔는지를 남기기 위한 것이다.
+   */
+  animateResourceIconTokens(
+    source: HTMLElement | DOMRect | null,
+    target: HTMLElement | DOMRect | null,
+    count: number,
+    theme: BurstTheme,
+    resource: ResourceTrailTarget
+  ): Promise<void> {
+    if (!source || !target || count <= 0) return Promise.resolve()
+    this.ensureResourceTrailStyles()
+    const from = this.rectCenter(source)
+    const to = this.rectCenter(target)
+    const face = this.resourceTokenIcon(resource)
+    const colors = this.resourceTokenColors(resource)
+    // 수치가 큰 획득(불빛 등)까지 개수만큼 띄우면 화면이 덮인다. 토큰은 '무엇이
+    // 왔는지'를 말하는 역할이라 몇 개까지만 내고 수치는 HUD 카운터가 말한다.
+    const tokens = Math.max(1, Math.min(3, count))
+    const stagger = tokens > 1 ? 90 : 0
+    const size = 30
+    const at = (px: number, py: number): string =>
+      `translate(${px - size / 2}px, ${py - size / 2}px)`
+
+    const launches = Array.from({ length: tokens }, (_, i) =>
+      new Promise<void>((resolve) => {
+        window.setTimeout(() => {
+          const piece = this.createIconToken(`is-resource-token is-token-${resource}`, size, face ?? '<span class="token-glyph">$</span>')
+          piece.style.setProperty('--token-ink', colors.ink)
+          piece.style.setProperty('--token-core', colors.core)
+          piece.style.setProperty('--token-glow', colors.glow)
+          piece.style.setProperty('--token-halo', colors.halo)
+          // 착지점은 **출처 자리**다. 멀리 떨어뜨리면 어디서 나온 것인지가 끊긴다.
+          const spread = Math.max(size + 4, Math.min(46, 150 / tokens))
+          const scatterY = SCATTER_Y[i % SCATTER_Y.length]
+          const tilt = SCATTER_TILT[i % SCATTER_TILT.length]
+          const land = {
+            x: from.x + (i - (tokens - 1) / 2) * spread,
+            y: Math.min(window.innerHeight - 40, from.y + 14 + scatterY * 0.6),
+          }
+          const frames: Keyframe[] = []
+          // 1) 곡사로 튀어나와 내리꽂힌다.
+          const SAMPLES = 9
+          for (let s = 0; s <= SAMPLES; s += 1) {
+            const t = s / SAMPLES
+            const p = this.lobPointAt(from, land, t)
+            const lift = Math.sin(Math.PI * t)
+            frames.push({
+              transform: `${at(p.x, p.y)} rotate(${(tilt * t * 0.5).toFixed(1)}deg) scale(${(0.55 + lift * 0.6).toFixed(3)})`,
+              opacity: s === 0 ? 0 : 1,
+              offset: Number((t * RESOURCE_TOKEN_LAND).toFixed(4)),
+            })
+          }
+          // 2) 착지 반동 — 바닥에 부딪혀 납작해졌다 튄다. 이 한 프레임이 '톡'이다.
+          frames.push({
+            transform: `${at(land.x, land.y + 3)} rotate(${(tilt * 0.5).toFixed(1)}deg) scale(1.28, 0.7)`,
+            opacity: 1,
+            offset: RESOURCE_TOKEN_LAND + 0.025,
+          })
+          // 3) 잠깐 머문다 — 무엇이 떨어졌는지 읽을 틈.
+          frames.push({
+            transform: `${at(land.x, land.y - 7)} rotate(${(tilt * 0.5).toFixed(1)}deg) scale(1.04)`,
+            opacity: 1,
+            offset: RESOURCE_TOKEN_DEPART,
+          })
+          // 4) HUD로 빨려 들어간다 — 가속해서 도착점에서 멈춘다.
+          frames.push({
+            transform: `${at(land.x + (to.x - land.x) * 0.45, land.y + (to.y - land.y) * 0.45)} rotate(0deg) scale(0.92)`,
+            opacity: 1,
+            offset: RESOURCE_TOKEN_DEPART + (RESOURCE_TOKEN_ARRIVE - RESOURCE_TOKEN_DEPART) * 0.55,
+          })
+          frames.push({ transform: `${at(to.x, to.y)} rotate(0deg) scale(0.72)`, opacity: 1, offset: RESOURCE_TOKEN_ARRIVE })
+          frames.push({ transform: `${at(to.x, to.y)} rotate(0deg) scale(0.36)`, opacity: 0 })
+          const anim = piece.animate(frames, {
+            duration: RESOURCE_TOKEN_FLIGHT_MS,
+            easing: 'linear',
+            fill: 'forwards',
+          })
+          // 착탄 블라스트 — 호출부의 수치 롤링이 이 박자에 맞물린다.
+          window.setTimeout(() => {
+            SquareBurst.playAt(to.x, to.y, theme, { count: 12, spread: 72, duration: 400, size: [6, 14] })
+            resolve()
+          }, RESOURCE_TOKEN_FLIGHT_MS * RESOURCE_TOKEN_ARRIVE)
+          const done = (): void => piece.remove()
+          anim.onfinish = done
+          window.setTimeout(done, RESOURCE_TOKEN_FLIGHT_MS + 200)
+        }, i * stagger)
+      })
+    )
+    return Promise.all(launches).then(() => undefined)
+  }
+
+  /**
+   * 임의의 출처(오버레이 버튼·무료 카드·이벤트 씬)에서 HUD 자원으로 가는 **획득** 트레일.
+   * 소모(불빛/화폐 → 버튼)는 여기로 보내지 않는다 — 나가는 값에 획득 아이콘이 뜨면
+   * 무엇이 늘고 무엇이 줄었는지가 뒤집힌다.
+   */
+  animateResourceGain(
+    source: HTMLElement | DOMRect | null,
+    target: ResourceTrailTarget,
+    count: number,
+    theme: BurstTheme
+  ): Promise<void> {
+    return this.routeResourceTrail(source, target, count, theme)
   }
 
   /** Fly a resource trail from a captured card rect after the model was already cleaned up. */
@@ -229,26 +405,63 @@ export class ResourceTrailFx {
     0 0 60px rgba(255, 150, 40, 0.36),
     inset 0 1px 0 rgba(255, 250, 226, 0.8);
 }
-/* 별빛 토큰 — 같은 사각 조각을 45° 세운 것(전용 도형이 아니다). 모서리를 살짝 깎아
-   HUD의 네 꼭짓점 반짝 다이아와 같은 실루엣으로 읽히게 한다.
-   ★ 발광을 흰빛으로 쌓으면 조각이 통째로 날아가 **정체 모를 흰 공**이 된다. 심지만
-   은백으로 두고 몸통·발광은 남보라로 내려, 빛 속에서도 다이아 윤곽이 남게 한다. */
+/* 아이콘 토큰 — 자원이 **무엇인지**를 도형이 말한다(체력=하트, 별빛=반짝 …).
+   전용 도형을 새로 그린 것이 아니라 HUD가 이미 쓰는 Icons.ts 글리프를 그대로 띄운다.
+   판(배경)은 없다 — 글리프 자체가 발광해야 '허공에서 튀어나온 조각'이 아니라
+   '그 자원이 떨어졌다'로 읽힌다. */
+.resource-trail-piece.is-icon-token {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  color: var(--token-ink, #ffe6a8);
+  display: grid;
+  place-items: center;
+}
+/* 발광은 **글리프 자식**에 건다. 부모의 filter로 두면 반짝임(brightness) 애니메이션이
+   같은 속성을 덮어써 빛무리가 통째로 사라진다. */
+.resource-trail-piece.is-icon-token svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter:
+    drop-shadow(0 0 5px var(--token-core, rgba(255, 245, 214, 0.95)))
+    drop-shadow(0 0 14px var(--token-glow, rgba(255, 196, 96, 0.9)))
+    drop-shadow(0 0 34px var(--token-halo, rgba(244, 150, 52, 0.6)));
+}
+/* 별빛 토큰 — 불빛(✦)과 같은 네 꼭짓점 반짝 글리프다. 90~100층의 별빛은 밤하늘 소재라
+   황금빛 심지에 **푸른빛을 섞은** 발광으로 일반 불빛과 구분한다(형태가 아니라 빛의 색).
+   빛무리 반경을 따로 키운다 — 기본 반경으로는 푸른빛이 금빛 심지에 먹혀 안 보인다. */
 .resource-trail-piece.is-starlight-token {
-  /* 모서리를 거의 세워 둔다 — 둥글릴수록 다이아가 아니라 알약으로 읽힌다. */
-  border-radius: 3px;
-  background: linear-gradient(140deg, #f4f3ff 0%, #cfcaff 26%, #8f88e6 62%, #4038a0 100%);
-  box-shadow:
-    0 0 6px rgba(233, 230, 255, 0.7),
-    0 0 18px rgba(139, 131, 232, 0.78),
-    0 0 40px rgba(96, 88, 199, 0.6),
-    0 0 76px rgba(51, 48, 122, 0.4);
+  --token-ink: #fff3cf;
+  --token-core: rgba(255, 244, 210, 0.98);
+  --token-glow: rgba(150, 176, 255, 0.95);
+  --token-halo: rgba(92, 108, 224, 0.66);
   /* 떠 있는 동안 스스로 숨쉬어야 '반짝이'다. 위치 애니메이션(transform)과 겹치지 않게
-     밝기만 흔든다 — 여기서도 과하게 올리면 다시 흰 공이 된다. */
+     밝기만 흔든다 — 과하게 올리면 글리프가 날아가 흰 얼룩이 된다. */
   animation: starlight-token-twinkle 0.62s ease-in-out infinite;
+}
+.resource-trail-piece.is-starlight-token svg {
+  filter:
+    drop-shadow(0 0 6px rgba(255, 236, 178, 0.95))
+    drop-shadow(0 0 16px rgba(255, 198, 96, 0.85))
+    drop-shadow(0 0 30px rgba(126, 158, 255, 0.95))
+    drop-shadow(0 0 58px rgba(74, 96, 224, 0.8))
+    drop-shadow(0 0 96px rgba(46, 58, 168, 0.5));
 }
 @keyframes starlight-token-twinkle {
   0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.28); }
+  50% { filter: brightness(1.3); }
+}
+/* 화폐만 아이콘이 아니라 $ 글자가 HUD의 얼굴이라 글자를 그대로 띄운다. */
+.resource-trail-piece.is-icon-token .token-glyph {
+  font-weight: 900;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--token-ink, #ffe6a8);
+  text-shadow:
+    0 0 6px var(--token-core, rgba(255, 245, 214, 0.95)),
+    0 0 16px var(--token-glow, rgba(255, 196, 96, 0.9)),
+    0 0 34px var(--token-halo, rgba(244, 150, 52, 0.6));
 }
 @media (prefers-reduced-motion: reduce) {
   .resource-trail-piece.is-starlight-token { animation: none; }
@@ -437,8 +650,8 @@ export class ResourceTrailFx {
    *   2) 두둥실 표류하며 반짝인다. 이 한 박자가 없으면 '무엇을 얻었나'를 볼 틈이 없다.
    *   3) 턴 카운터 **위에서 수직으로 내리꽂힌다**. 옆에서 흘러들면 그냥 자원이 된다.
    *
-   * 토큰은 전용 도형이 아니라 같은 사각 조각을 45° 돌린 것이다 — HUD의 반짝 다이아와
-   * 같은 실루엣이라 이펙트 어휘를 늘리지 않고도 '별빛'으로 읽힌다.
+   * 토큰은 HUD가 불빛에 쓰는 **네 꼭짓점 반짝(✦) 글리프 그대로**다. 별빛과 불빛을
+   * 가르는 것은 형태가 아니라 빛의 색 — 황금빛 심지에 푸른빛을 섞은 발광이다.
    */
   animateStarlightToken(
     source: HTMLElement | DOMRect | null,
@@ -448,24 +661,16 @@ export class ResourceTrailFx {
     this.ensureResourceTrailStyles()
     const from = this.rectCenter(source)
     const to = this.rectCenter(target)
-    const colors = this.trailColors('starlight')
-    // 다이아 실루엣이 읽히려면 파편보다 커야 한다(대각 ~37px).
-    const size = 26
+    // 반짝 글리프가 읽히려면 파편보다 커야 한다.
+    const size = 40
     const at = (px: number, py: number): string =>
       `translate(${px - size / 2}px, ${py - size / 2}px)`
-    // 45°가 기본 자세다 — 다이아로 **서 있어야** 반짝이로 읽힌다. 그래서 회전은 흔들림
-    // 수준으로만 얹는다. 손패 토큰처럼 두 바퀴 돌리면 굴러가는 보석이 되고, 다이아
-    // 실루엣이 사라져 무엇이 날아가는지 알 수 없다.
+    // 반짝은 **똑바로 서 있어야** 별로 읽힌다. 회전은 흔들림 수준으로만 얹는다 —
+    // 손패 토큰처럼 두 바퀴 돌리면 굴러가는 조각이 되고 네 꼭짓점이 뭉갠다.
     const pose = (px: number, py: number, tilt: number, scale: number): string =>
-      `${at(px, py)} rotate(${(45 + tilt).toFixed(1)}deg) scale(${scale.toFixed(3)})`
+      `${at(px, py)} rotate(${tilt.toFixed(1)}deg) scale(${scale.toFixed(3)})`
 
-    const piece = document.createElement('div')
-    piece.className = 'resource-trail-piece is-starlight-token'
-    piece.style.width = `${size}px`
-    piece.style.height = `${size}px`
-    piece.style.setProperty('--trail-color', colors.color)
-    piece.style.setProperty('--trail-glow', colors.glow)
-    document.body.appendChild(piece)
+    const piece = this.createIconToken('is-starlight-token', size, sparkleIcon())
 
     // 떠오르는 높이는 화면 밖으로 새지 않게 가둔다(위쪽 레일에서 먹어도 보이는 곳에 머문다).
     const float = {
@@ -490,9 +695,8 @@ export class ResourceTrailFx {
       //    'ㅅ자로 꺾여 떨어진다'가 읽히게 한다.
       { transform: pose(above.x, above.y, 5, 1.18), opacity: 1, offset: STARLIGHT_TOKEN_DEPART + (STARLIGHT_TOKEN_ARRIVE - STARLIGHT_TOKEN_DEPART) * 0.58 },
       // 4) 꽂힘 — 세로로 늘어난 채 박혔다가 납작해진다. 이 두 프레임이 '탕'이다.
-      //    45° 자세를 유지한 채 늘였다 눌러야 다이아가 박히는 것으로 읽힌다.
-      { transform: `${at(to.x, to.y)} rotate(45deg) scale(0.62, 1.24)`, opacity: 1, offset: STARLIGHT_TOKEN_ARRIVE },
-      { transform: `${at(to.x, to.y)} rotate(45deg) scale(1.24, 0.6)`, opacity: 1, offset: STARLIGHT_TOKEN_ARRIVE + 0.03 },
+      { transform: `${at(to.x, to.y)} rotate(0deg) scale(0.62, 1.24)`, opacity: 1, offset: STARLIGHT_TOKEN_ARRIVE },
+      { transform: `${at(to.x, to.y)} rotate(0deg) scale(1.24, 0.6)`, opacity: 1, offset: STARLIGHT_TOKEN_ARRIVE + 0.03 },
       // 5) 꽂힌 자리에서 빛으로 사그라든다.
       { transform: pose(to.x, to.y, 0, 0.34), opacity: 0, offset: 1 },
     ]
