@@ -338,11 +338,11 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     runLocked: true, // 해금팩으로만 입수
     jobTags: ['knight'] satisfies ReadonlyArray<JobTag>,
   },
-  // 청소: 필드의 1칸 거미줄만 대상으로 제거한다. 2·3칸 거미줄에는 효과 없음.
+  // 빗자루: 필드의 1칸 거미줄만 대상으로 제거한다. 2·3칸 거미줄에는 효과 없음.
   // 단일 사용 시 불빛 없이 제거, 트리플은 제거한 거미줄 수만큼 불빛을 획득한다.
   'sweep': {
     id: 'sweep',
-    name: '청소',
+    name: '빗자루',
     synergyTags: ['clean', 'tool'],
     category: 'control',
     description: '필드 1칸 거미줄 전체 제거 · 불빛 없음',

@@ -1085,7 +1085,7 @@ export class EnaTrainingSimulation {
       card.frozen = 2
       return 1.2
     }
-    // 키틴/청소/성수 등 함정 제거: maxSpan 폭 제한을 존중한다.
+    // 키틴/빗자루/성수 등 함정 제거: maxSpan 폭 제한을 존중한다.
     const maxSpan = targeting.maxSpan ?? (id === 'sweep' ? 1 : 3)
     const lane = this.worstTrapLane(maxSpan, id === 'sweep')
     if (lane < 0) return -0.6
@@ -1094,7 +1094,7 @@ export class EnaTrainingSimulation {
     this.gainLight(this.trapClearLightBase(card)) // 함정 처리도 불빛을 지급(실게임 근사)
     this.board[0][lane] = null
     if (id === 'sweep' && !merged) {
-      // 청소 단일은 1칸 거미줄 전체만 치우는 무점수 정리. 같은 행의 다른 1칸 web도 정리한다.
+      // 빗자루 단일은 1칸 거미줄 전체만 치우는 무점수 정리. 같은 행의 다른 1칸 web도 정리한다.
       for (let l = 0; l < LANES; l++) {
         const c = this.board[0][l]
         if (c?.type === CardType.TRAP && c.trapKind === 'web' && c.group === 1) this.board[0][l] = null
@@ -2889,7 +2889,7 @@ function fieldPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): 
     if (match >= 0) return actionIndexOf('useHand', match)
   }
 
-  // 1) 치명적 함정은 키틴/청소로 먼저 치운다(시련 보너스 포함 실효 피해 기준).
+  // 1) 치명적 함정은 키틴/빗자루로 먼저 치운다(시련 보너스 포함 실효 피해 기준).
   const lethalTrapLane = front.findIndex((c) => c?.type === CardType.TRAP && trapDamage(c, snapshot.trapDamageBonus) > snapshot.hp + snapshot.shield)
   if (lethalTrapLane >= 0) {
     const cleaner = findHand((id) => id === 'chitin' || id === 'sweep' || id === 'holy-water')
@@ -2902,7 +2902,7 @@ function fieldPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): 
     const heal = findHand((id) => HAND_CARD_DEFINITIONS[id].category === 'recovery')
     if (heal >= 0) return actionIndexOf('useHand', heal)
   }
-  // 3) 거미줄 2개+면 청소로 합체 차단.
+  // 3) 거미줄 2개+면 빗자루로 합체 차단.
   if (snapshot.webThreat >= cfg.webCleanupThreshold) {
     const sweep = findHand((id) => id === 'sweep' || id === 'chitin')
     if (sweep >= 0) return actionIndexOf('useHand', sweep)

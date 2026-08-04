@@ -82,7 +82,7 @@ export interface HandUseResult {
   simulatedBattlePhases?: number
   /** 레바테인: 시뮬레이션 이후 대상 카드에 입힐 피해량. index.ts가 takeDamage로 적용한다. */
   levateainDamage?: number
-  /** 청소(단일): true이면 제거된 필드 카드의 불빛 점수를 부여하지 않는다. */
+  /** 빗자루(단일): true이면 제거된 필드 카드의 불빛 점수를 부여하지 않는다. */
   suppressScoreForRemovedCards?: boolean
   /** 손거울(트리플): 복제된 손패 ID. index.ts가 획득 로그를 남긴다. */
   mirrorCopiedDefId?: HandCardId
@@ -329,7 +329,7 @@ export class HandSystem {
           ? Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.45) + 15
           : Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.30) + 10)
         : undefined,
-      // 청소 단일: 제거된 거미줄의 불빛을 주지 않는다(트리플만 불빛 획득).
+      // 빗자루 단일: 제거된 거미줄의 불빛을 주지 않는다(트리플만 불빛 획득).
       suppressScoreForRemovedCards: card.defId === 'sweep' && !card.merged,
       mirrorCopiedDefId,
       chandelierRepeat: card.defId === 'chandelier' ? { isMerged: card.merged === true } : undefined,
@@ -1755,7 +1755,7 @@ export class HandSystem {
     return out
   }
 
-  /** 청소: groupCount === 1인 거미줄(web) 함정만 필드에서 제거한다.
+  /** 빗자루: groupCount === 1인 거미줄(web) 함정만 필드에서 제거한다.
    *  2·3칸 거미줄은 플레이어에게 치명적이라 의도적으로 제외한다. */
   private static clearSingleCellWebTraps(gs: GameState): string {
     const seen = new Set<Card>()

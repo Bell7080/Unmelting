@@ -428,22 +428,25 @@ export class ResourceTrailFx {
     drop-shadow(0 0 14px var(--token-glow, rgba(255, 196, 96, 0.9)))
     drop-shadow(0 0 34px var(--token-halo, rgba(244, 150, 52, 0.6)));
 }
-/* 별빛 토큰 — 불빛(✦)과 같은 네 꼭짓점 반짝 글리프다. 90~100층의 별빛은 밤하늘 소재라
-   황금빛 심지에 **푸른빛을 섞은** 발광으로 일반 불빛과 구분한다(형태가 아니라 빛의 색).
-   빛무리 반경을 따로 키운다 — 기본 반경으로는 푸른빛이 금빛 심지에 먹혀 안 보인다. */
+/* 별빛 토큰 — 불빛(✦)과 같은 네 꼭짓점 반짝 글리프다. 다른 것은 형태가 아니라 색이다:
+   **글리프 자체는 백금색**(차가운 은백)이고, 그 둘레의 발광만 황금빛에 푸른빛을 섞는다.
+   글리프까지 금빛으로 물들이면 일반 불빛 반짝과 구분이 사라진다.
+   빛무리 반경은 따로 키운다 — 기본 반경으로는 푸른빛이 금빛에 먹혀 안 보인다. */
 .resource-trail-piece.is-starlight-token {
-  --token-ink: #fff3cf;
-  --token-core: rgba(255, 244, 210, 0.98);
+  --token-ink: #e5e4e2;
+  --token-core: rgba(240, 241, 244, 0.98);
   --token-glow: rgba(150, 176, 255, 0.95);
   --token-halo: rgba(92, 108, 224, 0.66);
   /* 떠 있는 동안 스스로 숨쉬어야 '반짝이'다. 위치 애니메이션(transform)과 겹치지 않게
      밝기만 흔든다 — 과하게 올리면 글리프가 날아가 흰 얼룩이 된다. */
   animation: starlight-token-twinkle 0.62s ease-in-out infinite;
 }
+/* 백금 글리프에 바로 붙는 첫 겹은 은백으로 둔다 — 여기부터 금빛이면 글리프가 금색으로
+   물들어 보인다. 금빛은 한 겹 바깥, 푸른빛은 그 바깥에 둘러 '백금 별 + 금/푸른 후광'이 된다. */
 .resource-trail-piece.is-starlight-token svg {
   filter:
-    drop-shadow(0 0 6px rgba(255, 236, 178, 0.95))
-    drop-shadow(0 0 16px rgba(255, 198, 96, 0.85))
+    drop-shadow(0 0 5px rgba(238, 240, 246, 0.98))
+    drop-shadow(0 0 14px rgba(255, 212, 132, 0.8))
     drop-shadow(0 0 30px rgba(126, 158, 255, 0.95))
     drop-shadow(0 0 58px rgba(74, 96, 224, 0.8))
     drop-shadow(0 0 96px rgba(46, 58, 168, 0.5));

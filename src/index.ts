@@ -2468,7 +2468,7 @@ async function applyHandSingle(
   // Light for any field cards the hand-card effect just removed (kill / clear
   // / grab). Same strength formula as direct clicks, so 손패 사용 도 "직접
   // 타격" 과 동일한 점수 룰을 따른다.
-  // 청소(단일)는 불빛 없음 규칙으로 점수를 부여하지 않는다.
+  // 빗자루(단일)는 불빛 없음 규칙으로 점수를 부여하지 않는다.
   // 정원 가위로 수확된 꽃은 위에서 이미 종류별 보상을 지급했으므로 일반 불빛 계산에서 제외한다.
   if (!result.suppressScoreForRemovedCards) {
     await awardScoreForRemovedCards(
