@@ -81,8 +81,6 @@ export interface EnaSimCard {
   atk: number
   group: number
   trapKind?: TrapKind
-  /** 덤불 개체의 0/1 기질(실게임 Card.bushDamageRoll). 1칸 0~1 · 2칸 2~3을 만든다. */
-  bushDamageRoll?: number
   flowerKind?: FlowerKind
   treasureKind?: 'normal' | 'golden' | 'junk' | 'starlight'
   value: number
@@ -920,7 +918,7 @@ export class EnaTrainingSimulation {
     if (snapshot.phase === 'shop') return shopPolicy(snapshot, legal, DEFAULT_ENA_HEURISTIC_POLICY_CONFIG)
     if (snapshot.phase === 'event') return eventPolicy(snapshot, DEFAULT_ENA_HEURISTIC_POLICY_CONFIG)
     if (snapshot.phase === 'boss') return bossPolicy(snapshot, DEFAULT_ENA_HEURISTIC_POLICY_CONFIG)
-    return fieldPolicy(snapshot, DEFAULT_ENA_HEURISTIC_POLICY_CONFIG)
+    return fieldPolicy(snapshot, DEFAULT_ENA_HEURISTIC_POLICY_CONFIG, rng)
   }
 
   /** 기본 휴리스틱에서 일부 임계값만 바꾼 교사 정책을 만든다. 실험은 이 경로로 하드코딩 없이 분기한다. */
@@ -937,7 +935,7 @@ export class EnaTrainingSimulation {
       if (snapshot.phase === 'shop') return shopPolicy(snapshot, legal, cfg)
       if (snapshot.phase === 'event') return eventPolicy(snapshot, cfg)
       if (snapshot.phase === 'boss') return bossPolicy(snapshot, cfg)
-      return fieldPolicy(snapshot, cfg)
+      return fieldPolicy(snapshot, cfg, rng)
     }
   }
 
@@ -981,7 +979,7 @@ export class EnaTrainingSimulation {
       }
       if (card.type === CardType.TRAP) {
         // 맨손으로 함정을 밟아 치움 — 피해를 그대로 받되 처리 불빛은 지급(실게임 규칙).
-        this.takeDamage(trapDamage(card, this.trialTrapDamageBonus))
+        this.takeDamage(trapDamage(card, this.rng, this.trialTrapDamageBonus))
         this.gainLight(this.trapClearLightBase(card))
         this.board[0][action.arg] = null
         return -0.6
@@ -1071,7 +1069,7 @@ export class EnaTrainingSimulation {
       const lane = this.bestPostponeLane()
       if (lane < 0) return -0.6
       const card = this.board[0][lane]!
-      const delayed = card.type === CardType.ENEMY ? card.atk : trapDamage(card, this.trialTrapDamageBonus)
+      const delayed = card.type === CardType.ENEMY ? card.atk : trapDamage(card, this.rng, this.trialTrapDamageBonus)
       this.board[0][lane] = null
       // 트리플은 보물상자로 바꾼 뒤 맨 뒤로 보낸다(실게임 tripleDescription).
       this.incomingRefillQueue[lane] = merged
@@ -1092,7 +1090,7 @@ export class EnaTrainingSimulation {
     const lane = this.worstTrapLane(maxSpan, id === 'sweep')
     if (lane < 0) return -0.6
     const card = this.board[0][lane]!
-    const removedDamage = trapDamage(card, this.trialTrapDamageBonus)
+    const removedDamage = trapDamage(card, this.rng, this.trialTrapDamageBonus)
     this.gainLight(this.trapClearLightBase(card)) // 함정 처리도 불빛을 지급(실게임 근사)
     this.board[0][lane] = null
     if (id === 'sweep' && !merged) {
@@ -2361,7 +2359,7 @@ export class EnaTrainingSimulation {
     const roll = this.rng.int(3)
     // 바위는 1/1 — 반격이 있어야 "최소한의 피격"이 학습에도 들어온다.
     if (roll === 0) return { type: CardType.ENEMY, hp: 1, atk: 1, group: 1, value: 1, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
-    if (roll === 1) return { type: CardType.TRAP, hp: 0, atk: 0, group: 1, trapKind: 'bush', bushDamageRoll: this.rng.int(2), value: 0, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+    if (roll === 1) return { type: CardType.TRAP, hp: 0, atk: 0, group: 1, trapKind: 'bush', value: 0, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
     return { type: CardType.TREASURE, hp: 0, atk: 0, group: 1, treasureKind: 'normal', value: 1 + this.rng.int(2), growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
   }
 
@@ -2522,7 +2520,7 @@ export class EnaTrainingSimulation {
   }
 
   private estimateFrontThreat(): number {
-    return this.uniqueFrontCards().reduce((sum, card) => sum + (card.type === CardType.ENEMY ? card.atk : card.type === CardType.TRAP ? trapDamage(card, this.trialTrapDamageBonus) : 0), 0)
+    return this.uniqueFrontCards().reduce((sum, card) => sum + (card.type === CardType.ENEMY ? card.atk : card.type === CardType.TRAP ? trapDamage(card, this.rng, this.trialTrapDamageBonus) : 0), 0)
   }
 
   private webThreatCount(): number {
@@ -2642,7 +2640,7 @@ export class EnaTrainingSimulation {
       const card = this.board[0][lane]
       if (!card || card.group > 1) continue
       if (card.type !== CardType.ENEMY && card.type !== CardType.TRAP) continue
-      const threat = card.type === CardType.ENEMY ? card.atk + card.hp * 0.2 : trapDamage(card, this.trialTrapDamageBonus)
+      const threat = card.type === CardType.ENEMY ? card.atk + card.hp * 0.2 : trapDamage(card, this.rng, this.trialTrapDamageBonus)
       if (threat > bestThreat) {
         best = lane
         bestThreat = threat
@@ -2672,7 +2670,7 @@ export class EnaTrainingSimulation {
       if (card?.type !== CardType.TRAP) continue
       if (card.group > maxSpan) continue
       if (webOnly && card.trapKind !== 'web') continue
-      const dmg = trapDamage(card, this.trialTrapDamageBonus)
+      const dmg = trapDamage(card, this.rng, this.trialTrapDamageBonus)
       if (dmg > bestDmg) {
         best = lane
         bestDmg = dmg
@@ -2715,7 +2713,7 @@ export class EnaTrainingSimulation {
       card.type === CardType.EVENT ? 1 : 0,
       card.hp / 30,
       // 함정 칸의 위협 축은 시련 보너스가 붙은 실효 피해로 관측한다(적은 atk 그대로).
-      (card.atk || trapDamage(card, this.trialTrapDamageBonus)) / 30,
+      (card.atk || trapDamage(card, this.rng, this.trialTrapDamageBonus)) / 30,
       card.group / 3,
       row / (ROWS - 1),
       card.value / 5,
@@ -2880,7 +2878,7 @@ export class EnaTrainingSimulation {
 
 // ── 휴리스틱 교사 정책(국면별) ───────────────────────────────────────────────
 
-function fieldPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): number {
+function fieldPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig, rng: EnaRandom): number {
   const front = snapshot.board[0]
   const incomingThreatCount = snapshot.incomingRefill.filter((c) => c?.type === CardType.ENEMY || c?.type === CardType.TRAP).length
   const incomingSpecialLane = snapshot.incomingRefill.findIndex((c) => c?.type === CardType.EVENT || c?.treasureKind === 'starlight')
@@ -2893,7 +2891,7 @@ function fieldPolicy(snapshot: EnaGameSnapshot, cfg: EnaHeuristicPolicyConfig): 
   }
 
   // 1) 치명적 함정은 키틴/빗자루로 먼저 치운다(시련 보너스 포함 실효 피해 기준).
-  const lethalTrapLane = front.findIndex((c) => c?.type === CardType.TRAP && trapDamage(c, snapshot.trapDamageBonus) > snapshot.hp + snapshot.shield)
+  const lethalTrapLane = front.findIndex((c) => c?.type === CardType.TRAP && trapDamage(c, rng, snapshot.trapDamageBonus) > snapshot.hp + snapshot.shield)
   if (lethalTrapLane >= 0) {
     const cleaner = findHand((id) => id === 'chitin' || id === 'sweep' || id === 'holy-water')
     if (cleaner >= 0) return actionIndexOf('useHand', cleaner)
@@ -3059,15 +3057,17 @@ function emberDamage(attack: number, merged: boolean): number {
   return merged ? attack * 3 + 5 : attack * 1 + 1
 }
 
-/** 함정 실효 피해. bonus는 시련 '역경' 등 전역 함정 피해 보너스(실게임 character.trapDamageBonus). */
-function trapDamage(card: EnaSimCard, bonus: number = 0): number {
+/** 함정 실효 피해. bonus는 시련 '역경' 등 전역 함정 피해 보너스(실게임 character.trapDamageBonus).
+ *  덤불은 밟는 순간(호출 시점)에 굴린다 — 실게임 Card.getTrapDamagePenalty와 같은 패턴이다.
+ *  카드에 값을 구워 두지 않으므로 rng를 넘긴다(재현 가능한 셀프플레이를 위해 Math.random 대신 EnaRandom). */
+function trapDamage(card: EnaSimCard, rng: EnaRandom, bonus: number = 0): number {
   if (card.type !== CardType.TRAP) return 0
   if (card.trapKind === 'bomb') return 5 + bonus
   if (card.trapKind === 'spore') return (card.group >= 3 ? 5 : card.group === 2 ? 3 : 1) + bonus
   // 온보딩 덤불(bush): 1칸 0~1 · 2칸 2~3 · 3칸 5(즉사 없음) — 실게임 getTrapDamagePenalty와 동일.
   if (card.trapKind === 'bush') {
     if (card.group >= 3) return 5 + bonus
-    return (card.group === 2 ? 2 : 0) + (card.bushDamageRoll ?? 0) + bonus
+    return (card.group === 2 ? 2 : 0) + rng.int(2) + bonus
   }
   // web: 1칸=1, 2칸=5, 3칸=즉사(학습용 큰 수 — 보너스와 무관하게 이미 최상위 위협).
   return card.group >= 3 ? 999 : (card.group === 2 ? 5 : 1) + bonus

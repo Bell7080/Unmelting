@@ -106,7 +106,9 @@ describe('ActionSystem 덤불 함정', () => {
     character.trapDamageBonus = trapDamageBonus
     const lane = new Lane('lane-0', 0)
     const bush = new Card('bush-test', CardType.TRAP, '덤불', 'bush', 0, 1, { trapKind: 'bush' })
-    bush.bushDamageRoll = roll
+    // 덤불은 잡동사니(보물)처럼 밟는 순간(getTrapDamagePenalty 호출 시점)에 굴린다 —
+    // roll을 카드에 미리 굽지 않으므로 Math.random을 고정해 재현한다(0~1 균등 → floor(x*2)).
+    vi.spyOn(Math, 'random').mockReturnValue(roll === 1 ? 0.99 : 0)
     return ActionSystem.executeAction(character, lane, bush, ActionType.EVADE_TRAP)
   }
 

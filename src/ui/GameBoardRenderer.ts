@@ -1150,12 +1150,25 @@ export class GameBoardRenderer {
       // 표기한다. effectiveTrapDamage(card 자체 보너스=시련) + character.trapDamageBonus(유물)
       // 를 합산해 실제 ActionSystem과 동일한 최종 수치를 표기한다.
       const charTrapBonus = this.currentGameState?.getCharacter().trapDamageBonus ?? 0
-      const damage = card.effectiveTrapDamage() + charTrapBonus
       // 아이콘은 검이 아니라 함정(이빨)이다 — 검을 쓰면 "이 함정이 공격한다"로 읽혀
       // '밟아서 받는 피해'라는 성격이 사라진다.
+      let damageLabel: string
+      if (card.trapKind === 'bush') {
+        // 덤불은 잡동사니(보물)와 같은 패턴이다 — 실제 피해는 밟는 순간에 굴리므로,
+        // 카드 얼굴은 확정 수치가 아니라 범위를 보여 준다. effectiveTrapDamage()를
+        // 매 렌더마다 부르면 그때그때 새로 굴려 화면에서 수치가 깜빡인다.
+        const span = Math.min(3, Math.max(1, card.groupCount))
+        const BUSH_RANGES: [number, number][] = [[0, 1], [2, 3], [5, 5]]
+        const [lo, hi] = BUSH_RANGES[span - 1]
+        const min = lo + charTrapBonus
+        const max = hi + charTrapBonus
+        damageLabel = min === max ? `${min}` : `${min}~${max}`
+      } else {
+        damageLabel = `${card.effectiveTrapDamage() + charTrapBonus}`
+      }
       stats = `
         <div class="card-stats card-stats--trap">
-          <span class="stat atk">${trapIcon()}<span class="stat-value">${damage}</span></span>
+          <span class="stat atk">${trapIcon()}<span class="stat-value">${damageLabel}</span></span>
         </div>
       `
     } else if (card.type === CardType.FLOWER) {

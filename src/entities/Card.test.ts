@@ -205,24 +205,28 @@ describe('Card grouped traps and treasures', () => {
     expect(sporeA.getTrapDamagePenalty()).toBe(3)
   })
 
-  it('온보딩 덤불은 1칸 0~1 · 2칸 2~3 · 3칸 5로 오른다', () => {
+  it('온보딩 덤불은 1칸 0~1 · 2칸 2~3 · 3칸 5로 오른다 — 값은 밟는 순간(호출 시점)에 굴린다', () => {
     const makeBush = (id: string) =>
       new Card(id, CardType.TRAP, '덤불', 'bush', 0, 1, { trapKind: 'bush' })
     const bush = makeBush('bush-1')
-    // 기질(0/1)은 개체마다 한 번만 굴린다 — 폭별 하한에 그 값을 더한 결과를 확인한다.
-    const roll = bush.bushDamageRoll
-    expect([0, 1]).toContain(roll)
-    expect(bush.getTrapDamagePenalty()).toBe(roll)
+    // 잡동사니(보물)와 같은 패턴 — 카드에 값을 굽지 않고 호출마다 새로 굴린다.
+    // 여러 번 불러 범위 안에서만 나오는지 확인한다(고정값이 아님을 함께 증명).
+    const rolls1 = Array.from({ length: 40 }, () => bush.getTrapDamagePenalty())
+    expect(rolls1.every((v) => v === 0 || v === 1)).toBe(true)
+    expect(new Set(rolls1).size).toBeGreaterThan(1)
 
     bush.merge(makeBush('bush-2'))
     expect(bush.name).toBe('적당한 덤불')
-    expect(bush.getTrapDamagePenalty()).toBe(2 + roll)
-    // 표기 문구는 굴린 값을 그대로 읽어야 실제 피해와 갈리지 않는다.
-    expect(bush.description).toBe(`Deals ${2 + roll} damage brush`)
+    const rolls2 = Array.from({ length: 40 }, () => bush.getTrapDamagePenalty())
+    expect(rolls2.every((v) => v === 2 || v === 3)).toBe(true)
+    expect(new Set(rolls2).size).toBeGreaterThan(1)
+    // 표기 문구는 확정 수치가 아니라 범위다 — 여기서 굳히면 실제 피해와 갈린다.
+    expect(bush.description).toBe('Deals 2~3 damage brush')
 
     bush.merge(makeBush('bush-3'))
     expect(bush.name).toBe('큰 덤불')
     expect(bush.getTrapDamagePenalty()).toBe(5)
+    expect(bush.description).toBe('Deals 5 damage brush')
   })
 })
 

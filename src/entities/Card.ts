@@ -153,9 +153,6 @@ export class Card {
   enemyPower: number
   /** Trap subtype and behavior state for web/bomb/spore rules. */
   trapKind: TrapKind
-  /** 덤불 개체가 가진 0/1 기질. 폭별 하한에 더해 0~1 · 2~3을 만든다.
-   *  카드마다 한 번만 굴려 들고 다닌다 — 매번 굴리면 표기 수치와 실제 피해가 어긋난다. */
-  bushDamageRoll: number
   isBombArmed: boolean
   sporeTurnsUntilSpread: number
   /** 온보딩 필드 카드(바위/덤불/잡동사니) 만료 카운트다운. 0이면 제거. 비필드는 0. */
@@ -215,7 +212,6 @@ export class Card {
     this.enemySpriteId = options.enemySpriteId ?? null
     this.enemyPower = options.enemyPower ?? 0
     this.trapKind = options.trapKind ?? 'web'
-    this.bushDamageRoll = this.trapKind === 'bush' ? Math.floor(Math.random() * 2) : 0
     this.isBombArmed = false
     this.sporeTurnsUntilSpread = this.trapKind === 'spore' ? 2 : 0
     this.specialEnemyKind = options.specialEnemyKind ?? null
@@ -444,8 +440,11 @@ export class Card {
     if (this.trapKind === 'bush') {
       // 온보딩 덤불: 1칸 0~1 · 2칸 2~3 · 3칸 5. 거미줄 즉사(999) 규칙 미적용.
       // 폭이 늘 때 값이 뛰는 것이 곧 "합쳐지면 아프다"는 첫 수업이다.
+      // 잡동사니(보물)와 같은 패턴 — 범위만 카드에 미리 굽고, 실제 값은 밟는
+      // 순간(호출 시점)에 굴린다. 카드 얼굴은 이 값을 부르지 않고 별도 범위
+      // 표기를 쓴다(GameBoardRenderer) — 안 그러면 렌더마다 다시 굴려 깜빡인다.
       if (this.groupCount >= 3) return 5
-      return (this.groupCount === 2 ? 2 : 0) + this.bushDamageRoll
+      return (this.groupCount === 2 ? 2 : 0) + Math.floor(Math.random() * 2)
     }
     if (this.groupCount >= 3) return 999
     if (this.groupCount === 2) return 5
@@ -523,9 +522,10 @@ export class Card {
             : 'Deals 5 damage and spreads three times'
       } else if (this.trapKind === 'bush') {
         // 온보딩 덤불: 거미줄 이름('촛농 거미집')이 새지 않게 폭별 전용 이름을 쓴다.
-        // 설명 수치는 굴린 값을 그대로 읽어 표기와 실제 피해가 갈리지 않게 한다.
+        // 실제 피해는 밟는 순간에 굴리므로(getTrapDamagePenalty), 설명문은 확정 수치가
+        // 아니라 범위로 남긴다 — 여기서 한 번 굴려 굳히면 그 값이 실제 피해와 갈린다.
         this.name = this.groupCount === 2 ? '적당한 덤불' : '큰 덤불'
-        this.description = `Deals ${this.getTrapDamagePenalty()} damage brush`
+        this.description = this.groupCount === 2 ? 'Deals 2~3 damage brush' : 'Deals 5 damage brush'
       } else {
         this.name = this.groupCount === 2 ? '촛농 거미집' : '밀랍 거미굴'
         this.description = this.groupCount === 2 ? 'Deals 5 damage' : 'Deals lethal damage'
