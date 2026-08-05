@@ -90,17 +90,20 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
     enemyPower: 6,
   },
   {
+    // 벌과 사마귀는 같은 5/3이라 이름과 그림만 다른 같은 적이었다. 초반 키틴↔거미처럼
+    // 축을 갈라, 벌은 이 구간 최고 딜러(공격 4 — 위 두 티어보다 높은 의도된 예외)로,
+    // 사마귀는 체력 계단(두더지5 → 사마귀6 → 박쥐7 → 고슴도치8)의 한 칸으로 둔다.
     name: '양초 벌',
     description: 'Wax stinger bee',
     healthOrDamage: 5,
-    attack: 3,
+    attack: 4,
     enemySpriteId: 'enemyBee',
     enemyPower: 7,
   },
   {
     name: '양초 사마귀',
     description: 'Candle mantis',
-    healthOrDamage: 5,
+    healthOrDamage: 6,
     attack: 3,
     enemySpriteId: 'enemyMantis',
     enemyPower: 8,
