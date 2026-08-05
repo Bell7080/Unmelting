@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CardType } from '@entities/Card'
 import { EmberSystem, SPROUT_SPAWN_ADJUST } from './EmberSystem'
-import { CardSpawner } from './CardSpawner'
+import { CardSpawner, pickWeightedEnemyDefinition, enemyPowerBiasExponent, type CardDefinition } from './CardSpawner'
 
 /** Opening-board safety should not depend on random trap subtype rolls. */
 describe('CardSpawner opening board', () => {
@@ -143,5 +143,64 @@ describe('EmberSystem spawn weights', () => {
     expect(brightBuckets.sporeTrap).toBe(4)
     expect(brightBuckets.flower).toBe(9)
     expect(brightWeights).toEqual({ enemy: 44, trap: 25, treasure: 22, flower: 9 })
+  })
+})
+
+describe('층 깊이에 따른 적 풀 편향(pickWeightedEnemyDefinition)', () => {
+  const pool: CardDefinition[] = [
+    { name: '약함', description: 'weak', healthOrDamage: 1, attack: 1, enemyPower: 1 },
+    { name: '강함', description: 'strong', healthOrDamage: 5, attack: 5, enemyPower: 5 },
+  ]
+
+  it('턴 1에서는 편향이 없어 균등에 가깝다', () => {
+    expect(enemyPowerBiasExponent(1)).toBe(0)
+    let strongCount = 0
+    const N = 5000
+    for (let i = 0; i < N; i++) {
+      const roll = i / N // 결정적 시퀀스로 반반을 확인한다
+      if (pickWeightedEnemyDefinition(pool, 1, () => roll).name === '강함') strongCount++
+    }
+    expect(strongCount / N).toBeCloseTo(0.5, 1)
+  })
+
+  it('턴이 깊어질수록 강한 쪽 가중치가 커지지만 약한 쪽이 0으로 죽지 않는다', () => {
+    // 결정적 rng(0.99)로 "그 턴의 최댓값 근처"를 뽑아, 최댓값이 강함 쪽 가중치를 넘지
+    // 못하면 fallback으로 마지막 원소가 나온다 — 강함 쪽 비중이 늘수록 이 상황이 잦아진다.
+    const weightOf = (name: string, turn: number): number => {
+      const exponent = enemyPowerBiasExponent(turn)
+      const def = pool.find((d) => d.name === name)!
+      const min = Math.min(...pool.map((d) => d.enemyPower ?? 0))
+      const max = Math.max(...pool.map((d) => d.enemyPower ?? 0))
+      const rank = ((def.enemyPower ?? 0) - min) / (max - min)
+      return Math.pow(0.3 + rank, exponent)
+    }
+    const shareAt = (turn: number): number => {
+      const w = pool.map((d) => weightOf(d.name, turn))
+      const total = w[0] + w[1]
+      return w[1] / total // 강함 쪽 비중
+    }
+    const early = shareAt(21) // k=0.5
+    const late = shareAt(99) // k=2(상한)
+    expect(late).toBeGreaterThan(early)
+    expect(early).toBeGreaterThan(0.5) // 이미 살짝 강함 쪽으로 기울어 있다
+    expect(late).toBeLessThan(1) // 약한 쪽도 완전히 0은 아니다
+
+    // 실제 뽑기로도 약한 쪽이 turn 99에서 여전히 관측 가능한 확률로 나온다.
+    let weakCount = 0
+    const N = 20000
+    for (let i = 0; i < N; i++) {
+      if (pickWeightedEnemyDefinition(pool, 99, Math.random).name === '약함') weakCount++
+    }
+    expect(weakCount / N).toBeGreaterThan(0.01)
+    expect(weakCount / N).toBeLessThan(0.15)
+  })
+
+  it('편향 지수는 2에서 상한이 걸린다', () => {
+    expect(enemyPowerBiasExponent(1000)).toBe(2)
+  })
+
+  it('풀이 1장뿐이면 그대로 반환한다', () => {
+    const single: CardDefinition[] = [pool[0]]
+    expect(pickWeightedEnemyDefinition(single, 99, Math.random)).toBe(single[0])
   })
 })

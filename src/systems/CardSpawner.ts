@@ -19,7 +19,7 @@ import {
 } from '@entities/Card'
 import { EmberSystem, EmberTier, SpawnWeights } from './EmberSystem'
 
-interface CardDefinition {
+export interface CardDefinition {
   /** Korean display name shown on the card face. */
   name: string
   /** Short English description used internally and in debug-friendly text. */
@@ -241,6 +241,46 @@ export const MIMIC_BY_SPAN: Record<number, { health: number; attack: number; dro
 /** 특수 적 공통 인플레이션 티어. 런타임 스폰과 에나 시뮬이 같은 20턴 경계를 사용한다. */
 export function specialEnemyTierForTurn(turn: number): number {
   return Math.floor(Math.max(1, turn) / 20) + 1
+}
+
+/** 층이 깊어질수록 현재 풀 안에서 강한(=최근 해금) 적 쪽으로 쏠리게 하는 지수.
+ *  0 = 완전 균등(런 시작 직후), ENEMY_POWER_BIAS_MAX_EXPONENT에서 상한이 걸린다.
+ *  약한 쪽도 ENEMY_POWER_BIAS_FLOOR 덕분에 가중치가 0으로 죽지 않는다 —
+ *  "안 나온다"가 아니라 "드물어진다"로 남겨야 이전 층 적이 완전히 사라지지 않는다. */
+export const ENEMY_POWER_BIAS_RATE = 0.025
+export const ENEMY_POWER_BIAS_MAX_EXPONENT = 2
+export const ENEMY_POWER_BIAS_FLOOR = 0.3
+
+/** 진행 턴에서 위 지수를 뽑는다. 런타임 CardSpawner와 학습 시뮬이 공유한다. */
+export function enemyPowerBiasExponent(turn: number): number {
+  return Math.min(ENEMY_POWER_BIAS_MAX_EXPONENT, Math.max(0, turn - 1) * ENEMY_POWER_BIAS_RATE)
+}
+
+/** 풀 안에서 enemyPower가 높은 쪽에 가중치를 준다(턴이 깊을수록 편향이 강해진다).
+ *  rng는 [0,1) 난수 소스 — 런타임은 Math.random, 학습 시뮬은 시드 RNG를 넘긴다.
+ *  런타임과 시뮬이 이 함수 하나를 공유해야 에나가 실제와 같은 스폰 분포를 학습한다. */
+export function pickWeightedEnemyDefinition(
+  pool: CardDefinition[],
+  turn: number,
+  rng: () => number
+): CardDefinition {
+  if (pool.length <= 1) return pool[0]
+  const exponent = enemyPowerBiasExponent(turn)
+  const powers = pool.map((d) => d.enemyPower ?? 0)
+  const min = Math.min(...powers)
+  const max = Math.max(...powers)
+  if (exponent <= 0 || max === min) return pool[Math.floor(rng() * pool.length)]
+  const weights = pool.map((d) => {
+    const rank = ((d.enemyPower ?? 0) - min) / (max - min)
+    return Math.pow(ENEMY_POWER_BIAS_FLOOR + rank, exponent)
+  })
+  const total = weights.reduce((sum, w) => sum + w, 0)
+  let roll = rng() * total
+  for (let i = 0; i < pool.length; i++) {
+    roll -= weights[i]
+    if (roll <= 0) return pool[i]
+  }
+  return pool[pool.length - 1]
 }
 
 export class CardSpawner {
@@ -751,7 +791,7 @@ export class CardSpawner {
    *  시련 '광란'이 누적될 경우 trialEnemyHp/AtkBonus가 정수 단위로 추가된다. */
   private generateEnemy(): Card {
     const pool = this.getActiveEnemyDefinitions()
-    const definition = pool[Math.floor(Math.random() * pool.length)]
+    const definition = pickWeightedEnemyDefinition(pool, this.progressionTurn, Math.random)
     // 불씨 티어 공격력 보너스는 정적으로 굽지 않고 emberAtkBonus로 동적 반영한다.
     // HP는 더 이상 티어로 올리지 않으므로 trial 보너스만 baseHealth에 더한다.
     const bonus = EmberSystem.getEnemyStatBonus(this.currentTier)

@@ -60,7 +60,7 @@ import type { SpecialEnemyKind } from '@entities/Card'
 import { EVENT_DEFINITIONS, EVENT_IDS, type EventId, type RiskOffer, type MinionExchangeConfig, type CountRpsConfig } from '@data/Events'
 import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
 import { EmberSystem, SPROUT_SPAWN_ADJUST, type EmberTier } from '@systems/EmberSystem'
-import { ENEMY_DEFINITIONS, MIMIC_BY_SPAN, specialEnemyTierForTurn } from '@systems/CardSpawner'
+import { ENEMY_DEFINITIONS, MIMIC_BY_SPAN, specialEnemyTierForTurn, pickWeightedEnemyDefinition } from '@systems/CardSpawner'
 import { DropSystem } from '@systems/DropSystem'
 import { SHARD_GENERATORS } from '@systems/TagReactions'
 import { altarPackBaseCost, packCostWithRepeats, regularShopPackBaseCost } from '@core/ShopPricing'
@@ -2404,7 +2404,7 @@ export class EnaTrainingSimulation {
   /** 진행 턴 밴드에 따른 실제 적 풀에서 HP/ATK를 가져오고, 티어·시련(광란) 보너스를 더한다. */
   private spawnEnemy(tier: EmberTier): EnaSimCard {
     const pool = activeEnemyBand(this.turn)
-    const def = this.rng.pick(pool)
+    const def = pickWeightedEnemyDefinition(pool, this.turn, () => this.rng.next())
     const bonus = EmberSystem.getEnemyStatBonus(tier)
     return {
       type: CardType.ENEMY,
