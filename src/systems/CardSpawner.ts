@@ -40,17 +40,19 @@ interface CardDefinition {
 
 export const ENEMY_DEFINITIONS: CardDefinition[] = [
   {
+    // 초반 4종은 바위(1/1) 다음 단계다. 체력과 공격력을 서로 다른 축으로 올려
+    // "무엇이 아픈 적인지"를 스탯 모양으로 가르친다(키틴=유리대포 ↔ 거미=맷집).
     name: '양초 키틴벌레',
     description: 'Wax-chitin crawler',
     healthOrDamage: 1,
-    attack: 1,
+    attack: 2,
     enemySpriteId: 'enemyChitin',
     enemyPower: 1,
   },
   {
     name: '양초 거미',
     description: 'Tiny candle spider',
-    healthOrDamage: 1,
+    healthOrDamage: 2,
     attack: 1,
     enemySpriteId: 'enemyMoth',
     enemyPower: 2,
@@ -58,16 +60,16 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
   {
     name: '양초 생쥐',
     description: 'Small candle mouse',
-    healthOrDamage: 2,
-    attack: 1,
+    healthOrDamage: 3,
+    attack: 2,
     enemySpriteId: 'enemyMouse',
     enemyPower: 3,
   },
   {
     name: '양초 개구리',
     description: 'Leaping candle frog',
-    healthOrDamage: 1,
-    attack: 2,
+    healthOrDamage: 2,
+    attack: 3,
     enemySpriteId: 'enemyFrog',
     enemyPower: 4,
   },
@@ -184,12 +186,13 @@ export const ENEMY_DEFINITIONS: CardDefinition[] = [
     enemyPower: 18,
   },
   {
-    // 온보딩 축약형 적: 반격(attack 0) 없이 때려서 부수는 최약체. HP는 칸수 선형(1칸1·2칸2·3칸3),
-    // 일반 적 합체 보너스는 미적용(별도 배선). enemyPower 0으로 항상 최약.
+    // 온보딩 축약형 적: 최소한의 피격을 가르치는 최약체. HP·반격 모두 칸수 선형이라
+    // 1칸 1/1 · 2칸 2/2 · 3칸 3/3이 된다(일반 적 합체 보너스는 미적용 — 별도 배선).
+    // enemyPower 0으로 항상 최약.
     name: '바위',
     description: 'Inert wax boulder — break it to clear',
     healthOrDamage: 1,
-    attack: 0,
+    attack: 1,
     enemySpriteId: 'enemyRock',
     enemyPower: 0,
   },
@@ -210,9 +213,10 @@ export const TRAP_DEFINITIONS: CardDefinition[] = [
     trapKind: 'spore',
   },
   {
-    // 온보딩 축약형 함정: 닿으면 소량 피해만 주는 소프트 함정(1/2/3칸 = 1/2/3 피해).
+    // 온보딩 축약형 함정: 닿아도 소량 피해만 주는 소프트 함정(1칸 0~1 · 2칸 2~3 · 3칸 5).
+    // 폭이 늘 때 값이 뛰는 것은 의도다 — 합쳐지면 아프다는 것을 여기서 먼저 배운다.
     name: '덤불',
-    description: 'Soft bramble — 1 damage on contact',
+    description: 'Soft bramble — 0~1 damage on contact',
     healthOrDamage: 1,
     trapKind: 'bush',
   },

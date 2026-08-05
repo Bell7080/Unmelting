@@ -81,6 +81,8 @@ export interface EnaSimCard {
   atk: number
   group: number
   trapKind?: TrapKind
+  /** 덤불 개체의 0/1 기질(실게임 Card.bushDamageRoll). 1칸 0~1 · 2칸 2~3을 만든다. */
+  bushDamageRoll?: number
   flowerKind?: FlowerKind
   treasureKind?: 'normal' | 'golden' | 'junk' | 'starlight'
   value: number
@@ -2357,8 +2359,9 @@ export class EnaTrainingSimulation {
   /** 온보딩 축약형 필드 카드 — 바위(약한 적)·덤불(약한 함정)·잡동사니(소량 보물). 실게임 필드와 같은 결. */
   private spawnFieldCard(): EnaSimCard {
     const roll = this.rng.int(3)
-    if (roll === 0) return { type: CardType.ENEMY, hp: 1, atk: 0, group: 1, value: 1, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
-    if (roll === 1) return { type: CardType.TRAP, hp: 0, atk: 0, group: 1, trapKind: 'bush', value: 0, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+    // 바위는 1/1 — 반격이 있어야 "최소한의 피격"이 학습에도 들어온다.
+    if (roll === 0) return { type: CardType.ENEMY, hp: 1, atk: 1, group: 1, value: 1, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
+    if (roll === 1) return { type: CardType.TRAP, hp: 0, atk: 0, group: 1, trapKind: 'bush', bushDamageRoll: this.rng.int(2), value: 0, growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
     return { type: CardType.TREASURE, hp: 0, atk: 0, group: 1, treasureKind: 'normal', value: 1 + this.rng.int(2), growth: 0, sporeTimer: 0, eventTimer: -1, frozen: 0 }
   }
 
@@ -3061,8 +3064,11 @@ function trapDamage(card: EnaSimCard, bonus: number = 0): number {
   if (card.type !== CardType.TRAP) return 0
   if (card.trapKind === 'bomb') return 5 + bonus
   if (card.trapKind === 'spore') return (card.group >= 3 ? 5 : card.group === 2 ? 3 : 1) + bonus
-  // 온보딩 덤불(bush): 폭만큼 완만하게 1/2/3(즉사 없음) — 실게임 getTrapDamagePenalty와 동일.
-  if (card.trapKind === 'bush') return Math.min(3, Math.max(1, card.group)) + bonus
+  // 온보딩 덤불(bush): 1칸 0~1 · 2칸 2~3 · 3칸 5(즉사 없음) — 실게임 getTrapDamagePenalty와 동일.
+  if (card.trapKind === 'bush') {
+    if (card.group >= 3) return 5 + bonus
+    return (card.group === 2 ? 2 : 0) + (card.bushDamageRoll ?? 0) + bonus
+  }
   // web: 1칸=1, 2칸=5, 3칸=즉사(학습용 큰 수 — 보너스와 무관하게 이미 최상위 위협).
   return card.group >= 3 ? 999 : (card.group === 2 ? 5 : 1) + bonus
 }
