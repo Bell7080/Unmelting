@@ -1045,9 +1045,9 @@ export class HandSystem {
         return `방패 +3 · ${HandSystem.damageTargetEnemy(gs, target, damage)}`
       }
       case 'blade-shard':
-        // 트리플: 3발로 쪼개지 않고 한 적에게 (3+연마) 강타 한 방(단일). 넘침이 커 도탄과 궁합.
+        // 트리플: 3발로 쪼개지 않고 한 적에게 (3+연마) 한 방(단일). 넘침이 커 도탄과 궁합.
         HandSystem.throwBladeShardHit(gs, 3 + bonus)
-        return '칼날 파편 강타'
+        return '칼날 파편'
       case 'blade-tome': {
         // 트리플: 투척 발수 2배.
         const throws = (1 + Math.floor((gs.enhancements.bladeShardUseCount ?? 0) / 5)) * 2
