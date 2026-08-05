@@ -1,6 +1,6 @@
 # 버전 관리
 
-현재 버전: **v1.0.44**
+현재 버전: **v1.0.45**
 
 `VERSION.md`와 `package.json`의 `version`은 항상 같은 값을 쓴다.
 
@@ -25,6 +25,26 @@
   올리는 커밋은 `package.json`과 이 문서를 함께 갱신한다.
 
 ## 변경 이력
+
+### v1.0.45 — 2026-08-05
+
+**보스전에서 사각 블라스트 어휘를 벗어난 둥근 이펙트 두 곳을 정리했다.**
+
+**부위 파괴(칸 깨짐)** — 조각이 튀기 직전 칸을 부풀리던 예비 동작이
+`radial-gradient` 발광 판(`.boss-cell-shatter-pane`)이라 혼자 둥글게 읽혔다.
+이 판(과 body 오버레이 `.boss-cell-shatter`, `@keyframes boss-cell-burst-pane`)을
+지우고, 같은 자리에 좁은 스프레드(spread 20)의 사각 블라스트를 짧게 터뜨리는
+것으로 바꿨다 — 이어지는 파편 블라스트 두 겹과 같은 어휘다.
+
+**새싹 30F 양초 고양이의 손패 지급** — `giftHandCards()`가 30F 양초 백작의
+탐욕의 동전 살포용 연출(`animateBossScatterToHandSlots` → 둥근 금화
+`spawnGreedCoin`)을 그대로 재사용하고 있었다. 백작에게는 "탐욕의 동전"이라는
+실제 동전 카드가 있어 금화 모양이 맞지만, 고양이가 주는 건 일반 손패라 카드
+모양이어야 한다. 이미 있는 손패 획득 창구(`animateResourceTrailFromCard(...,
+'hand', ...)` → `animateHandCardTokens`, 세로로 긴 사각 카드 토큰)로 바꿨다 —
+보스 피해 보상 지급(`BossEvent.ts:1126`)이 이미 같은 패턴을 쓴다.
+백작의 동전 살포(`animateBossScatterToHandSlots`)는 그대로 남는다 — 그건 실제로
+동전이 맞다.
 
 ### v1.0.44 — 2026-08-05
 

@@ -1845,7 +1845,7 @@ export const GAME_BOARD_RAIL_STYLES = `
 .boss-gimmick-cell.is-broken .boss-gimmick-cell-crack { opacity: 0; background-image: none; }
 /* 깨진 칸에는 1회성 애니메이션을 걸지 않는다 — 격자는 매 렌더 새로 그려지므로
    여기에 붙이면 재렌더마다 소멸 연출이 다시 재생된다. 무너지는 순간은
-   body 오버레이(.boss-cell-shatter)가 한 번만 낸다. */
+   SquareBurst(BossFxView.playBossGimmickCellBreak)가 한 번만 낸다. */
 /* 남는 표식은 이것 하나 — 회색 '파괴'. 칸을 넘지 않도록 폭 기준으로 크기를 잡고,
    글자가 잘리기 전에 스스로 줄어들게 한다(3×3 격자의 칸은 화면에서 꽤 작다). */
 .boss-gimmick-cell-broken {
@@ -1954,40 +1954,6 @@ export const GAME_BOARD_RAIL_STYLES = `
   box-shadow: 0 0 10px rgba(255, 196, 96, 0.5), inset 0 -2px 3px rgba(120, 78, 16, 0.6);
 }
 
-/* 무너지는 순간 — 칸 노드가 재렌더로 교체돼도 끊기지 않게 body에 띄운다.
-   z는 SquareBurst(220)와 자원 트레일(230) 사이에 끼운다. */
-.boss-cell-shatter {
-  position: fixed;
-  z-index: 225;
-  pointer-events: none;
-}
-/* 팡! — 사각 블라스트가 터지기 직전 칸을 한 번 발광시켜 부풀린다.
-   파괴의 '조각'은 SquareBurst가 맡고, 여기서는 **빛만** 쓴다 — 이 게임의 이펙트
-   어휘는 사각 블라스트 하나이므로 전용 파편 도형을 새로 만들지 않는다.
-   screen 합성 — 칠하는 게 아니라 빛을 더한다. 불투명하게 채웠더니 칸이 통째로
-   노란 사각형이 돼 일러스트가 사라졌다. */
-.boss-cell-shatter-pane {
-  position: absolute;
-  inset: 0;
-  border-radius: 10px;
-  mix-blend-mode: screen;
-  /* 중심을 흰빛으로 두면 screen 합성이 R·G를 함께 밀어 올려 **형광 연둣빛**이 된다
-     (실제로 그랬다). 촛불 톤을 지키려면 핵을 주홍에 두고 흰빛은 아주 좁게만 쓴다. */
-  background: radial-gradient(
-    112% 112% at 50% 50%,
-    rgba(255, 214, 150, 0.5) 0%,
-    rgba(255, 122, 38, 0.52) 34%,
-    rgba(168, 46, 8, 0.26) 72%,
-    transparent 100%
-  );
-  animation: boss-cell-burst-pane 0.34s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
-}
-/* 부풀기는 칸 안에서 끝낸다 — 1.26배로 키웠더니 이웃 칸까지 덮어 '큰 노란 사각형'이 됐다. */
-@keyframes boss-cell-burst-pane {
-  0%   { opacity: 0.55; transform: scale(0.94); }
-  30%  { opacity: 1;    transform: scale(1.1); }
-  100% { opacity: 0;    transform: scale(1.16); }
-}
 /* 보스 등장 시 셔터 진동을 한 비트 강화. 인트로 + 강하와 함께 묵직한 쿵 임팩트. */
 .rail.is-boss-quaking {
   animation: boss-rail-impact-quake 0.62s cubic-bezier(0.32, 0.04, 0.18, 0.96);

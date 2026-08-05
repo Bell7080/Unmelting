@@ -16,8 +16,6 @@ import {
   type BossGimmickTone,
 } from '@systems/BossGimmickManager'
 
-/** 팡 하고 부풀었다가 사그라들기까지의 길이. */
-const BOSS_CELL_BREAK_MS = 620
 /** 부위 파괴가 흩는 큰 조각(= 깨진 판 덩어리)의 변 길이. 일반 타격보다 확실히 크다. */
 const BOSS_CELL_BREAK_CHUNK_SIZE: [number, number] = [18, 38]
 /**
@@ -510,24 +508,18 @@ export class BossFxView {
    * 타격과 확실히 다른 어휘여야 한다. 다만 **새 이펙트 방식을 만들지는 않는다** —
    * 이 게임의 이펙트는 사각 블라스트(SquareBurst) 하나로 통일돼 있고, 파괴도 그
    * 어휘 안에서 '더 크게'로만 말한다:
-   *   1) 칸이 한 번 발광하며 부푼다 — "터진다"의 예비 동작(빛만 쓴다)
+   *   1) 좁은 스프레드의 사각 조각이 한 번 짧게 튄다 — "터진다"의 예비 동작(팡)
    *   2) 큰 사각 덩어리가 흩어진다 — 깨진 판이다. 이어서 잔해가 넓게 퍼진다
    *   3) 자리에는 꺼진 판만 남는다(렌더가 그린다)
    *
-   * 연출을 칸 DOM이 아니라 body 오버레이에 올리는 이유: 파괴 직후 곧바로 재렌더가
-   * 일어나 칸 노드가 새로 그려져도(깨진 판으로 교체) 연출이 끊기지 않게 하기 위해서다.
+   * 예비 동작을 원형 발광(radial-gradient 부풀림)으로 냈던 적이 있는데, 사각
+   * 블라스트뿐인 이 게임의 이펙트 어휘에서 혼자 둥글어 눈에 띄었다 — 같은 어휘 안의
+   * 좁은 스프레드 블라스트로 바꿨다.
    */
   private async playBossGimmickCellBreak(cell: HTMLElement, breakDamage: number): Promise<void> {
     const rect = cell.getBoundingClientRect()
-    const host = document.createElement('div')
-    host.className = 'boss-cell-shatter'
-    host.setAttribute('aria-hidden', 'true')
-    host.style.cssText = `left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;`
-    // 부푸는 빛 — 갈라지기 직전 한 프레임을 크게 벌려 '팡'을 만든다.
-    const pane = document.createElement('div')
-    pane.className = 'boss-cell-shatter-pane'
-    host.appendChild(pane)
-    document.body.appendChild(host)
+    // 팡 — 좁은 스프레드로 짧게 튀어 '터지기 직전'을 알린다(사각 블라스트 어휘 그대로).
+    SquareBurst.playOn(rect, 'boss-wax-drip', { count: 8, spread: 20, duration: 220 })
     // 깨진 판 덩어리 — 큰 사각이 가까이 흩어진다. 크기로 '판이 쪼개졌다'를 말한다.
     SquareBurst.playOn(rect, 'boss-wax-drip', {
       count: 10,
@@ -539,7 +531,6 @@ export class BossFxView {
     window.setTimeout(() => {
       SquareBurst.playOn(rect, 'boss-ember-spark', { count: 20, spread: 168, duration: 560 })
     }, 120)
-    window.setTimeout(() => host.remove(), BOSS_CELL_BREAK_MS + 140)
     // 파괴는 수치가 아니라 사건이다 — 무너지는 동안 피해 수치가 뜰 자리에 '칸 파괴'를
     // 대신 띄워, 방금 일어난 일이 무엇인지 먼저 읽히게 한다(양식은 수치와 같다).
     const label = this.host.animateFloatTextAt(

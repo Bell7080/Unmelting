@@ -1167,14 +1167,13 @@ export class BossEventController {
       return
     }
     this.inject.render()
-    const slotIndices = added
-      .map((card) => character.hand.findIndex((h) => h?.uid === card.uid))
-      .filter((idx) => idx >= 0)
     const names = added.map((card) => getHandCardDef(card.defId).name).join(' · ')
     this.inject.recordNotice(`양초 고양이가 ${names}을(를) 굴려 보냈다 — 손패 +${added.length}`, 'info')
-    if (slotIndices.length > 0) {
-      await this.br.animateBossScatterToHandSlots(this.eventState.card.id, slotIndices)
-    }
+    // 동전 살포(animateBossScatterToHandSlots)는 양초 백작의 탐욕의 동전 전용 연출이다
+    // (둥근 금화 = 그 유물의 정체성). 고양이가 주는 건 일반 손패라 카드 토큰
+    // (animateResourceTrailFromCard → 'hand')을 쓴다 — 세로로 긴 사각 조각이라
+    // 이 게임의 손패 획득 어휘와 일치한다.
+    await this.br.animateResourceTrailFromCard(this.eventState.card.id, 'hand', added.length, 'hand-recovery')
   }
 
   /** 양초 고양이 2페이지: 손패 1장을 강탈한다. 촛농/양초/불씨(밀랍·불)면 삼켜서 보스가 HP를 회복한다. */
