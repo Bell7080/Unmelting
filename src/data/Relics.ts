@@ -252,6 +252,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '한 칸씩 전진할 때마다 더 멀리 내다보는 야심.',
     basePrice: 620,
   },
+  // ★ 제물 축 넓은 폭('체력 N 잃을 때마다' = 자해+피격 모두) — 주사기·피의 대가와 같은 계약.
   anomaly: {
     id: 'anomaly',
     name: '변칙',
@@ -259,6 +260,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '체력 5 손실마다 빛 게이지 +1',
     flavor: '정석을 벗어난 한 수가 판을 뒤집는다.',
     basePrice: 600,
+    synergyTags: ['sacrifice'],
   },
   'blind-faith': {
     id: 'blind-faith',
@@ -484,6 +486,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     weight: 0,
   },
   // 악마 이벤트 보스 전용 보상 유물. 자해 20마다 불빛 배율 +10%, 공격력 +1.
+  // ★ 제물 축 좁은 폭('자해 N마다' = 자해만) — 혈서·응고·수혈과 같은 계약.
   'demon-doll': {
     id: 'demon-doll',
     name: '악마 인형',
@@ -492,6 +495,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '인형 안에는 뭔가 남아 있다 — 고통마다 조금씩 강해진다.',
     basePrice: 0,   // 상점 미등장 — 이벤트 보스 보상 전용
     weight: 0,
+    synergyTags: ['sacrifice'],
   },
   // --- 태그 반응형 유물(TagReactions 프레임워크) ---
   // 효과 로직은 index.ts 하드코딩이 아니라 src/systems/TagReactions.ts 데이터로만 정의된다.
