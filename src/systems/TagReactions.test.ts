@@ -106,8 +106,8 @@ describe('TagReactions(태그 반응 뼈대)', () => {
       expect(relic, `${gen.relicId} 유물`).toBeDefined()
       const shard = HAND_CARD_DEFINITIONS[gen.shard]
       expect(shard, `${gen.shard} 카드`).toBeDefined()
-      // 파편은 일반 풀에 새면 안 되고(전용 dropSource), 생성 유물과 태그를 공유해야 빌드 축이 선다.
-      expect(shard.dropSource).toBe('relic')
+      // 파편은 생성 유물과 태그를 공유해야 빌드 축이 선다(유물이 지급하는 것이 곧 그 축의 씨앗).
+      // 드로우 풀 노출 여부는 카드마다 다르므로 여기서 묶지 않는다 — 태그 공유만이 계약이다.
       const relicTags = relic.synergyTags ?? []
       const shardTags = shard.synergyTags ?? []
       expect(shardTags.some((t) => relicTags.includes(t)), `${gen.shard}↔${gen.relicId} 태그 공유`).toBe(true)

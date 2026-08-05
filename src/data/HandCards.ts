@@ -657,8 +657,10 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: true, // 해금팩으로만 입수
   },
-  // 칼날 파편: 생성기 유물(숫돌)이 처치마다 지급하는 시너지 씨앗. 혼자선 미미하지만
-  // 칼날 태그를 쌓아 칼날 빌드를 시작하게 한다. 일반 드롭/드로우 풀에는 절대 없다.
+  // 칼날 파편: 칼날 축의 씨앗 손패. 혼자선 미미하지만 칼날 태그를 쌓아 빌드를 시작하게 한다.
+  // 제물 축의 바늘과 같은 자리라 기본 드로우 풀에 둔다 — 생성기 유물(숫돌)이 없어도
+  // 칼날 축이 스스로 시작될 수 있어야 검집·칼날의 서·연마가 뽑힐 이유가 생긴다.
+  // 대신 화력이 거의 없어 뽑기 풀을 묽게 만든다(보스 체력 역산이 그만큼 내려간다).
   'blade-shard': {
     id: 'blade-shard',
     name: '칼날 파편',
@@ -672,8 +674,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
       base: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: null },
     },
-    dropWeight: 0,      // 일반 드롭/드로우 풀 제외
-    dropSource: 'relic', // 생성기 유물 전용
+    // 씨앗 카드라 바늘(9)보다 낮게 둔다 — 축은 시작되되 풀을 크게 묽히지 않는 자리.
+    dropWeight: 6,
+    dropSource: 'any',
     metaRequired: false,
     runLocked: false,
   },

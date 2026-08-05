@@ -188,10 +188,13 @@ export class ActionSystem {
     }
     const penalty = card.getTrapDamagePenalty() + character.trapDamageBonus
     const actualDamage = character.takeDamage(penalty)
+    // 덤불 1칸은 0을 굴릴 수 있다 — 그때 '(-0)'을 찍으면 고장으로 읽히므로 문구로 말한다.
     const message =
       card.trapKind === 'bomb'
         ? `${card.name} 해체`
-        : `${card.name}을(를) 밟았다 (-${actualDamage})`
+        : actualDamage <= 0
+          ? `${card.name}을(를) 밟았다 (피해 없음)`
+          : `${card.name}을(를) 밟았다 (-${actualDamage})`
     return {
       success: true,
       message,

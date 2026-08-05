@@ -90,7 +90,10 @@ export const ONBOARDING_CAT_BUDGET: BossFightBudget = fightBudget({
   playerAttack: 3,
   // 광역 손패 한 장이 전투의 절반을 지우면 부위 파괴를 배우기 전에 끝난다 —
   // 격자를 처음 가르치는 자리라 한 장으로 무너지지 않을 만큼만 길게 잡는다.
-  targetActions: 11,
+  // 11에서 10으로 내렸다: 온보딩이 30F보다 짧다는 불변식이 체력 반올림(둘 다 10 단위)에
+  // 기대 겨우 서 있었다. 드로우 풀이 조금만 바뀌어도 30F 쪽만 한 칸 내려가 순서가 뒤집힌다.
+  // 지금은 실제 행동 수로도 30F보다 확실히 짧다(약 10.0 대 10.7).
+  targetActions: 10,
   handCards: 2,        // 온보딩 손은 얇다 — 3~4장을 들고 들어가지 못한다.
   supportHits: 0,
   gimmickKind: 'waxCat',

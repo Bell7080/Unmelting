@@ -91,3 +91,33 @@ describe('ActionSystem rewards', () => {
     expect(result.overflow!.length).toBeGreaterThan(0)
   })
 })
+
+/**
+ * 덤불 1칸은 0을 굴릴 수 있다. 0이 곱셈이 아니라 덧셈의 밑값이어야 시련 '역경'·유물
+ * (character.trapDamageBonus)의 상승이 그대로 얹힌다 — 0에 갇히면 축이 통째로 죽는다.
+ */
+describe('ActionSystem 덤불 함정', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  const stepBush = (roll: 0 | 1, trapDamageBonus: number) => {
+    const character = new Character()
+    character.trapDamageBonus = trapDamageBonus
+    const lane = new Lane('lane-0', 0)
+    const bush = new Card('bush-test', CardType.TRAP, '덤불', 'bush', 0, 1, { trapKind: 'bush' })
+    bush.bushDamageRoll = roll
+    return ActionSystem.executeAction(character, lane, bush, ActionType.EVADE_TRAP)
+  }
+
+  it('0을 굴려도 시련·유물의 함정 피해 보너스는 그대로 더해진다', () => {
+    expect(stepBush(0, 0).damageTaken).toBe(0)
+    expect(stepBush(0, 2).damageTaken).toBe(2)
+    expect(stepBush(1, 2).damageTaken).toBe(3)
+  })
+
+  it('피해가 0이면 (-0) 대신 문구로 말한다', () => {
+    expect(stepBush(0, 0).message).toContain('피해 없음')
+    expect(stepBush(1, 0).message).toContain('-1')
+  })
+})
