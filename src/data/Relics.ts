@@ -176,6 +176,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '보물 획득 시 방패 1 획득',
     flavor: '전리품마저 품위 있게 두르는 옛 귀족의 몸가짐.',
     basePrice: 950,
+    synergyTags: ['shield'],
   },
   'carving-knife': {
     id: 'carving-knife',
@@ -208,6 +209,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '전방 랜덤 적 1장에게 체력 회복 수치만큼 피해',
     flavor: '누군가의 온기가 아직 식지 않은 붉은 주머니.',
     basePrice: 1020,
+    synergyTags: ['heal'],
   },
   hope: {
     id: 'hope',
@@ -330,6 +332,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '암반을 깨면 반드시 무언가 나온다.',
     basePrice: 500,
     spawnEffect: { type: 'treasure', delta: 8 },
+    synergyTags: ['treasure'],
   },
   axe: {
     id: 'axe',
@@ -380,6 +383,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '보물 상자 생존 확률 +10%',
     flavor: '뚜껑을 열기 전까지는 사라지지 않는다.',
     basePrice: 450,
+    synergyTags: ['treasure'],
   },
   padlock: {
     id: 'padlock',
@@ -415,6 +419,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '보물 스폰 중 30% 확률로 황금 상자 대체',
     flavor: '어떤 자물쇠도 이 열쇠를 거부하지 못한다.',
     basePrice: 1000,
+    synergyTags: ['treasure'],
   },
   // --- 신규 유물(031~037) ---
   chivalry: {

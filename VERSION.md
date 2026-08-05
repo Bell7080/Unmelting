@@ -1,6 +1,6 @@
 # 버전 관리
 
-현재 버전: **v1.0.42**
+현재 버전: **v1.0.43**
 
 `VERSION.md`와 `package.json`의 `version`은 항상 같은 값을 쓴다.
 
@@ -25,6 +25,22 @@
   올리는 커밋은 `package.json`과 이 문서를 함께 갱신한다.
 
 ## 변경 이력
+
+### v1.0.43 — 2026-08-05
+
+**보물/방패/회복 축에 실제로 반응하는 유물 5개에 태그가 안 달려 있었다.**
+
+`곡괭이`·`개봉식`·`황금 열쇠`는 전부 보물 스폰/생존/상위 전환을 조작하는데
+`treasure` 태그(라벨 '보물')가 0개였다. `귀족의 품격`은 보물 획득 시 방패를 주는데
+`shield` 태그가 없었고(당시 방패 축 유물은 가시 방패 1개뿐이었다), `헌혈팩`은 회복량을
+피해로 되돌리는 관계상 `넘치는 촛농`·`붉은 포션`과 이미 3중 연계라고 주석에 적혀
+있었는데 `heal` 태그가 없었다. 앞선 변칙·악마 인형(v1.0.42)과 같은 종류의 등록 누락.
+
+- 유물 태그는 화면에 노출되지 않는다(손패만 `CardFaceRenderer.handCardTagLabels`로
+  표기) — `CompanionForesight.ownedRelicTags` → `HandCardAdvisor` 지원 점수,
+  `EnaKnowledgeAdapter` 유물 시너지 겹침 판단에만 쓰이는 에나 내부 참고용이다.
+- `pickaxe`·`opening-ceremony`·`golden-key` → `treasure`. `wax-crow` → `shield`.
+  `blood-pack` → `heal`.
 
 ### v1.0.42 — 2026-08-05
 
