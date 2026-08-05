@@ -286,12 +286,18 @@ export const GAME_OVER_GLOBAL_STYLES = `
   /* 사망 정산 카드 — 클리어와 같은 레이아웃이되 차분한 남보라 톤 + '다음에 주의' 팁. */
   .death-card h1 { color: rgba(198, 186, 230, 0.95); }
   .death-card .game-over-icon { color: rgba(176, 166, 214, 0.9); filter: drop-shadow(0 0 12px rgba(150, 140, 200, 0.4)); }
+  /* 사망 팁 — 한 줄로 읽히는 조언이다. 상자를 카드보다 훨씬 좁게(30em=390px) 묶어 뒀더니
+     기본 사망 문구가 딱 390px라 넘쳐서 마지막 낱말("끊자.")만 다음 줄로 떨어졌다.
+     카드 폭(772px) 안에서 넉넉히 잡아 한 줄로 앉히고, 좁은 화면에서 어쩔 수 없이 접힐 때는
+     낱말 단위로(keep-all) 고르게(balance) 나눠 고아 줄이 생기지 않게 한다. */
   .death-card .death-tip {
     margin: 0 auto 16px;
-    max-width: 30em;
+    max-width: min(46em, 100%);
     font-size: 13px;
     line-height: 1.5;
     color: rgba(226, 204, 168, 0.82);
+    word-break: keep-all;
+    text-wrap: balance;
   }
   /* ── 메타 시스템 잠금: 온보딩 또는 무역 미개방 시 숨긴다(로비·인게임 공통) ──
      화폐 패널·상점 리롤(유물/카드팩)·의뢰 시설은 무역 1번 탭에서 개방된다(isMetaUnlocked). */
