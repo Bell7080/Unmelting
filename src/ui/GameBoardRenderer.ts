@@ -1648,7 +1648,7 @@ export class GameBoardRenderer {
         .filter(Boolean)
         .join(' ')
       // 강화팩 보너스를 반영한 동적 설명을 사용해 손패 미리보기에서 강화 수치가 즉시 보이도록 한다.
-      const description = this.faces.resourceLeadTextHtml(
+      const description = this.faces.resourceIconTextHtml(
         this.faces.enhancedHandCardDescription(card.defId, card.merged === true)
       )
       // aria-label에는 HTML/SVG 태그 없이 텍스트만 삽입한다.

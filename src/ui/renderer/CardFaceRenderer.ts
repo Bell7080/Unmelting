@@ -587,74 +587,67 @@ export class CardFaceRenderer {
   }
 
   /**
-   * 효과 문구 앞에 붙일 자원 아이콘. 무료 카드·자원팩처럼 **글자로 풀어 쓴 보상 표기**가
-   * 훑기만으로 무엇인지 읽히도록 앞머리에 한 개만 얹는다(글자는 그대로 둔다).
+   * 아이콘으로 갈아 끼울 자원 어휘 표. **긴 어휘가 먼저** 온다 — '콤보 게이지'를 '게이지'
+   * 보다 늦게 보면 짧은 쪽이 먼저 먹어 버린다.
    *
    * 문구를 데이터로 되돌리는 대신 어휘로 판정하는 이유: 보상 문구는 `ShopPools` 같은
    * 데이터 파일에 있고, 거기에 UI 아이콘을 심으면 데이터가 뷰를 알게 된다.
-   * 순서가 규칙이다 — 좁은 어휘('콤보 게이지')를 넓은 어휘('게이지')보다 먼저 본다.
    */
-  resourceTermIcon(text: string): string | null {
-    return this.resourceTerm(text)?.icon ?? null
-  }
-
-  /** 문구가 어느 자원을 말하는지 — 아이콘과 **그 아이콘이 대신하는 낱말**을 함께 돌려준다. */
-  private resourceTerm(text: string): { term: string; icon: string } | null {
-    const pick = (term: string, icon: string) => ({ term, icon })
-    if (text.includes('함정')) return pick('함정', trapIcon())
-    if (text.includes('콤보 게이지')) return pick('콤보 게이지', comboGaugeIcon())
-    if (text.includes('콤보 한도')) return pick('콤보 한도', comboGaugeIcon())
-    if (text.includes('빛 게이지')) return pick('빛 게이지', flameIcon())
-    if (text.includes('불씨')) return pick('불씨', flameIcon())
-    if (text.includes('손패')) return pick('손패', handCardIcon())
-    if (text.includes('체력')) return pick('체력', heartIcon())
-    if (text.includes('방패')) return pick('방패', shieldIcon())
-    if (text.includes('공격력')) return pick('공격력', swordIcon())
-    if (text.includes('보물')) return pick('보물', handCardIcon())
-    if (text.includes('불빛')) return pick('불빛', sparkleIcon())
-    if (text.includes('✦')) return pick('✦', sparkleIcon())
-    // '$'는 앞머리 아이콘을 붙이지 않는다 — 글자 자체가 이 게임의 화폐 표식이고,
-    // 수치 **뒤**에 붙는 단위라(1$) 앞에 하나 더 세우면 `$1$`가 된다.
-    return null
+  private resourceIconTerms(): { term: string; icon: string }[] {
+    return [
+      { term: '콤보 게이지', icon: comboGaugeIcon() },
+      { term: '콤보 한도', icon: comboGaugeIcon() },
+      { term: '빛 게이지', icon: flameIcon() },
+      { term: '최대 체력', icon: heartIcon() },
+      { term: '체력', icon: heartIcon() },
+      { term: '방패', icon: shieldIcon() },
+      { term: '손패', icon: handCardIcon() },
+      { term: '불빛', icon: sparkleIcon() },
+      { term: '불씨', icon: flameIcon() },
+      { term: '함정', icon: trapIcon() },
+      { term: '보물', icon: handCardIcon() },
+      // ★ 공격력·피해는 **글자 그대로 둔다.** 손패 피해 수식이 이미 검 아이콘을 쓰고
+      // 있어서(atkDmgHtml) 같은 아이콘이 "공격력 스탯"과 "가하는 피해" 두 뜻을 오간다.
+      // "피해"라고 적힌 글자가 훨씬 직관적이다.
+    ]
   }
 
   /**
-   * 아이콘이 이미 말하는 낱말을 글자에서 지운다 — `(하트) 체력 +5`가 아니라 `(하트) +5`.
+   * ★ 카드/유물 효과문에서 자원 낱말을 아이콘으로 바꾸는 **단일 창구**다. 손패 미리보기·
+   * 도감·상점 팩 카드가 전부 이 함수를 지나므로 세 화면의 글이 언제나 같다.
    *
-   * 문장 **맨 앞**에 있고 **바로 뒤가 수치**일 때만 지운다. 두 조건이 다 필요하다:
-   *  · 앞이 아니면 아이콘은 앞머리에 붙는데 지워진 낱말은 문장 중간이라 뜻이 어긋난다
-   *    ("체력 5 손실마다 빛 게이지 +1"에서 '빛 게이지'만 빠지면 무엇이 +1인지 사라진다)
-   *  · 뒤가 수치가 아니면 문장이 무너진다("공격력만큼 체력 회복" → "만큼 체력 회복")
-   * `1$`처럼 표식이 수치 **뒤**에 오는 표기는 자연히 걸리지 않는다.
-   */
-  private stripIconTerm(text: string, term: string): string {
-    if (!text.startsWith(term)) return text
-    const rest = text.slice(term.length).replace(/^\s+/, '')
-    return /^[+-]?\d/.test(rest) ? rest : text
-  }
-
-  /** 보상 문구 한 줄을 아이콘 + 글자로 감싼다. 아이콘을 못 고르면 원문 그대로 둔다. */
-
-  /**
-   * ★ 카드/유물 **효과 설명문에 앞머리 아이콘을 붙이는 단일 창구**다. 새 자리를 만들 때도
-   * 이 함수를 쓴다 — 문장 어디서든 낱말을 찾아 앞에 아이콘을 세우고 그 낱말을 지우는
-   * 방식(예전 resourceTextHtml)은 문장을 무너뜨렸다. 손거울
-   * "전방 선택 적 1장: 그 적의 공격력만큼 피해"가 "(검) 전방 선택 적 1장: 그 적의 만큼 피해"가
-   * 됐다 — 실제 설명문과 다른 글이 카드에 찍혔다.
+   * 규칙은 하나뿐이다: **낱말 바로 뒤가 수치면 그 낱말을 제자리에서 아이콘으로 바꾼다.**
    *
-   * 그래서 조건이 셋이다: 문장이 자원 어휘로 **시작하고**, 구분자(·, 줄바꿈)가 없고,
-   * HTML(desc-dyn 등)이 섞이지 않은 **순수 자원 문구**일 때만 붙인다.
-   * 그 밖에는 설명문을 **그대로** 내보낸다 — 표기는 데이터의 description을 따라간다.
+   *  · **제자리**여야 한다. 앞머리로 빼던 예전 방식은 문장을 무너뜨렸다 — 손거울
+   *    "전방 선택 적 1장: 그 적의 공격력만큼 피해"가 "(검) 전방 선택 적 1장: 그 적의 만큼
+   *    피해"가 됐다. 제자리 치환은 어순을 건드리지 않아 어떤 문장에도 안전하다.
+   *  · **뒤가 수치일 때만** 바꾼다. 아니면 아이콘이 낱말을 대신할 수 없다
+   *    ("공격력만큼 피해" → "(검)만큼 피해"는 뜻이 사라진다).
+   *  · 그래서 `·`가 섞인 여러 효과 문장도 **전부** 걸린다. 예전에는 구분자만 있으면
+   *    통째로 건너뛰어, 양초("방패 +1")는 아이콘이 붙고 족쇄("방패 +4 · 즉시 1턴 흐름")는
+   *    안 붙는 들쭉날쭉이 생겼다.
+   *  · `1$`처럼 표식이 수치 **뒤**에 오는 표기는 자연히 걸리지 않는다.
+   *
+   * HTML(desc-dyn·수식 아이콘)이 섞인 문장도 안전하다 — 태그 바깥 텍스트만 치환한다.
    */
-  resourceLeadTextHtml(text: string): string {
-    if (text.includes('·') || text.includes('<br>') || text.includes('<')) return text
-    const lead = ['콤보 게이지', '빛 게이지', '손패', '체력', '방패', '공격력', '불빛']
-      .find((term) => text.startsWith(term))
-    if (!lead) return text
-    const icon = this.resourceTermIcon(lead)
-    return icon
-      ? `<span class="resource-term-icon" aria-hidden="true">${icon}</span>${this.stripIconTerm(text, lead)}`
-      : text
+  resourceIconTextHtml(text: string): string {
+    if (!text) return text
+    const terms = this.resourceIconTerms()
+    // 태그와 텍스트를 번갈아 쪼개, 태그 속성값이 치환에 휘말리지 않게 한다.
+    return text
+      .split(/(<[^>]*>)/)
+      .map((chunk) => {
+        if (chunk.startsWith('<')) return chunk
+        let out = chunk
+        for (const { term, icon } of terms) {
+          // 낱말 + 공백 + 수치(부호 포함)일 때만 낱말 자리를 아이콘으로 바꾼다.
+          out = out.split(new RegExp(`${term}\\s*(?=[+-]?\\d)`, 'g')).join(
+            `<span class="resource-term-icon" aria-hidden="true">${icon}</span>`
+          )
+        }
+        return out
+      })
+      .join('')
   }
 
   candleModeMeta(mode: CandleMode): { label: string; effect: string; icon: string } {

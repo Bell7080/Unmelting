@@ -464,17 +464,11 @@ export class CompendiumView {
     const tiles = HAND_CARD_IDS.filter((id) => HAND_CARD_DEFINITIONS[id].dropSource !== 'boss').map((id) => {
       const def = HAND_CARD_DEFINITIONS[id]
       const locked = this.host.getLockedCardIds().has(id)
-      // ATK 연동 카드: <br>만 · 로 치환, desc-dyn span은 유지해 Shift 토글이 도감에서도 동작.
-      // 나머지 카드: <br>→· 후 HTML 태그 전부 제거한 평문 사용.
-      const chipDesc = (desc: string) => desc.replace(/<br>/g, ' · ').replace(/<[^>]*>/g, '')
-      const chipDescAtk = (desc: string) => desc.replace(/<br>/g, ' · ')
-      const ATK_CARDS: ReadonlySet<HandCardId> = new Set([
-        'ember', 'sacrifice-candle', 'levatein', 'firework', 'fire-arrow',
-        'chandelier', 'bonfire', 'teapot', 'slash', 'candle-tome', 'sword-and-shield',
-        'needle', 'guillotine', // 제물 축 ATK 카드 — 자해 표기 뒤 피해가 desc-dyn 수식 전환을 쓴다
-        'book-of-flames', // 피해/성장 줄 모두 desc-dyn 수식 전환을 쓰므로 span 보존 필요
-      ])
-      const toChip = ATK_CARDS.has(def.id) ? chipDescAtk : chipDesc
+      // 도감·손패 미리보기·상점 팩 카드는 **같은 글**을 보여야 한다. 그래서 설명문 생성과
+      // 자원 아이콘 치환을 똑같은 두 함수로 지나게 하고, 여기서는 줄바꿈만 · 로 바꾼다.
+      // (예전에는 도감만 HTML 태그를 전부 지워 아이콘·수식 전환이 사라졌다.)
+      const toChip = (desc: string) =>
+        this.host.faces.resourceIconTextHtml(desc.replace(/<br>/g, ' · '))
       const singleDesc = toChip(this.host.faces.enhancedHandCardDescription(def.id, false))
       const tripleDesc = toChip(this.host.faces.enhancedHandCardDescription(def.id, true))
       return this.host.faces.codexTile({
