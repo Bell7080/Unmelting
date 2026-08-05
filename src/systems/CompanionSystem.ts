@@ -138,6 +138,8 @@ export interface EnaLearningSnapshot {
   predictiveWeight: number
   /** 상황별 단기 수다 가중치 복사본. */
   situationWeight: Record<SituationId, number>
+  /** 지금의 말수 단계 — chattiness에서 파생된 **길이 축**(빈도와 같은 수치에서 나온다). */
+  verbosity: Verbosity
 }
 
 export interface RunOutcome {
@@ -191,6 +193,41 @@ const TONE: Record<Intensity, Record<'강조' | '종결' | '재촉', readonly st
 }
 const TONE_TOKENS = new Set(['강조', '종결', '재촉'])
 
+/**
+ * 말수 — 플레이어가 얼마나 들어 줬는가로 움직이는 **길이 축**. 긴급도(intensity)와 직교한다.
+ *
+ * 스킵이 쌓이면 에나는 빈도만 줄이는 게 아니라 **말 자체를 짧게** 한다(핵심만). 반대로
+ * 끝까지 들어 주면 군더더기를 붙여 수다스러워진다. `chattiness()`에서 파생하므로 별도
+ * 학습 상태가 없다 — 이미 있는 스킵/열람 학습 하나가 빈도와 길이를 함께 움직인다.
+ */
+export type Verbosity = 'terse' | 'plain' | 'talkative'
+
+/** 말수 경계(수다 수치 기준). weightFloor 0.2 ~ weightMax 1.8 범위 안에서 나눈다. */
+const TERSE_BELOW = 0.75
+const TALKATIVE_ABOVE = 1.3
+
+/** 길이 편향 선택의 추가 굴림 수. 크게 잡으면 늘 같은 최단/최장 줄만 나와 풀이 죽는다. */
+const LENGTH_BIAS_ROLLS = 3
+
+/**
+ * 말수별 톤 덮어쓰기. 위급(urgent)은 **건드리지 않는다** — 과묵해졌다고 위험 경고까지
+ * 밋밋해지면 정작 필요한 순간에 안 들린다(기분 보정이 urgent를 비켜 가는 것과 같은 이유).
+ *
+ * terse는 꾸밈 토큰(강조·재촉)을 비우고 종결도 담백하게 만든다. 데이터를 고치지 않고도
+ * 기존 모든 줄이 짧아지는 게 이 층의 몫이다.
+ */
+const VERBOSITY_TONE: Partial<Record<Verbosity, Partial<Record<'강조' | '종결' | '재촉', readonly string[]>>>> = {
+  terse: { 강조: [''], 종결: ['.'], 재촉: [''] },
+}
+
+/** 말수를 반영한 최종 톤 표. */
+function toneFor(intensity: Intensity, verbosity: Verbosity): Record<'강조' | '종결' | '재촉', readonly string[]> {
+  const base = TONE[intensity]
+  if (intensity === 'urgent') return base
+  const overlay = VERBOSITY_TONE[verbosity]
+  return overlay ? { ...base, ...overlay } : base
+}
+
 function randOf(arr: readonly string[]): string {
   return arr[Math.floor(Math.random() * arr.length)]
 }
@@ -210,10 +247,21 @@ function matchEnemyKeyword(name: string): { key: string; lines: Line[] } | null 
 /** 한 줄(문자열/템플릿)을 긴급도에 맞춰 렌더한다: 변조/슬롯 치환 → 조사 보정.
  *  데이터 품질 테스트가 같은 경로를 검사할 수 있게 export한다.
  *  extraSlots는 데이터의 기본 슬롯 풀을 런타임 값(예: 지원 이유 구)으로 덮는다. */
-export function renderLine(line: Line, intensity: Intensity, extraSlots?: Record<string, readonly string[]>): string {
-  const template = typeof line === 'string' ? line : line.template
-  const slots: Record<string, readonly string[]> = { ...(typeof line === 'string' ? {} : line.slots), ...(extraSlots ?? {}) }
-  const tone = TONE[intensity]
+export function renderLine(
+  line: Line,
+  intensity: Intensity,
+  extraSlots?: Record<string, readonly string[]>,
+  verbosity: Verbosity = 'plain'
+): string {
+  // 과묵할 때 데이터가 핵심만 남긴 변형을 선언해 뒀으면 그것을 쓴다(선언은 선택이다).
+  const template =
+    typeof line === 'string'
+      ? line
+      : verbosity === 'terse' && line.short
+        ? line.short
+        : line.template
+  const slots: Record<string, readonly string[]> = { ...(typeof line === 'string' ? {} : line.slots ?? {}), ...(extraSlots ?? {}) }
+  const tone = toneFor(intensity, verbosity)
   const filled = template.replace(/\{([^}]+)\}/g, (_m, name: string) => {
     if (TONE_TOKENS.has(name)) return randOf(tone[name as '강조' | '종결' | '재촉'])
     const pool = slots[name]
@@ -228,8 +276,17 @@ export function renderLine(line: Line, intensity: Intensity, extraSlots?: Record
  * 조합 폭발은 cap으로 제한한다(현재 대사 데이터는 cap 안에 전부 들어온다).
  */
 export function enumerateLineRenders(line: Line, intensity: Intensity, cap = 4000): string[] {
-  const template = typeof line === 'string' ? line : line.template
-  const slots: Record<string, readonly string[]> = typeof line === 'string' ? {} : line.slots
+  // 과묵 변형(short)도 같은 품질 규칙을 지나야 한다 — 짧게 쓰다 문장이 깨지면 더 눈에 띈다.
+  const variants = typeof line === 'string' ? [line] : [line.template, ...(line.short ? [line.short] : [])]
+  return variants.flatMap((t) => enumerateTemplateRenders(t, typeof line === 'string' ? {} : line.slots ?? {}, intensity, cap))
+}
+
+function enumerateTemplateRenders(
+  template: string,
+  slots: Record<string, readonly string[]>,
+  intensity: Intensity,
+  cap: number
+): string[] {
   const tone = TONE[intensity]
   const tokenPattern = /\{([^}]+)\}/g
   const choicesPerToken: readonly string[][] = []
@@ -367,6 +424,7 @@ export class CompanionSystem {
       chattiness: this.chattiness(),
       predictiveWeight: this.predictiveWeight,
       situationWeight: { ...this.situationWeight },
+      verbosity: this.verbosity(),
     }
   }
 
@@ -845,7 +903,7 @@ export class CompanionSystem {
 
   /** {이유} 슬롯이 있는 줄이 풀에 있고 이유 구가 준비됐으면 그 줄에 이유를 주입한다. */
   private pickWithReason(key: string, lines: Line[], intensity: Intensity, reason?: string | null): string {
-    const reasonLines = reason ? lines.filter((line) => typeof line !== 'string' && '이유' in line.slots) : []
+    const reasonLines = reason ? lines.filter((line) => typeof line !== 'string' && '이유' in (line.slots ?? {})) : []
     if (reason && reasonLines.length > 0) {
       return this.pickFrom(`${key}:reason`, reasonLines, intensity, { 이유: [reason] })
     }
@@ -962,6 +1020,19 @@ export class CompanionSystem {
   }
 
   /**
+   * 지금 에나의 말수. 스킵이 쌓여 수다 수치가 내려가면 `terse`, 잘 들어 주면 `talkative`.
+   *
+   * 빈도(minTurnGap)와 **같은 수치 하나**에서 나온다 — 과묵해지는 에나는 덜 말하면서
+   * 말할 때도 짧아진다. 두 축이 따로 놀면 "가끔 말하는데 길다"가 되어 더 성가시다.
+   */
+  verbosity(): Verbosity {
+    const c = this.chattiness()
+    if (c < TERSE_BELOW) return 'terse'
+    if (c > TALKATIVE_ABOVE) return 'talkative'
+    return 'plain'
+  }
+
+  /**
    * 월드 바크 사이 최소 턴 간격. 수다 수치가 높을수록 짧아진다(자주 말함).
    * 기본 수치(1.0)에서 8턴, 수다(1.8)면 ~4턴, 과묵(0.2)이면 최대 16턴까지 벌어진다.
    */
@@ -988,17 +1059,31 @@ export class CompanionSystem {
   /** 주어진 줄 목록에서 최근에 나오지 않은 항목과 완성 문장을 골라 긴급도에 맞춰 렌더한다. */
   private pickFrom(key: string, lines: Line[], baseIntensity: Intensity, extraSlots?: Record<string, readonly string[]>): string {
     const intensity = this.moodAdjustedIntensity(baseIntensity)
-    if (lines.length <= 1) return this.rememberRendered(key, renderLine(lines[0], intensity, extraSlots))
+    const verbosity = this.verbosity()
+    if (lines.length <= 1) return this.rememberRendered(key, renderLine(lines[0], intensity, extraSlots, verbosity))
     const recent = this.recentPickHistory.get(key) ?? []
     const avoid = new Set(recent)
     const candidates = lines.map((_, i) => i).filter((i) => !avoid.has(i))
-    let idx = candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : Math.floor(Math.random() * lines.length)
-    let rendered = renderLine(lines[idx], intensity, extraSlots)
+    const roll = (): number =>
+      candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : Math.floor(Math.random() * lines.length)
+    let idx = roll()
+    let rendered = renderLine(lines[idx], intensity, extraSlots, verbosity)
     const recentRendered = this.recentRenderedHistory.get(key) ?? []
     // 템플릿 슬롯 조합까지 포함해 직전 완성 문장과 겹치면 몇 번 더 굴려 체감 반복을 줄인다.
     for (let attempt = 0; attempt < 6 && recentRendered.includes(rendered); attempt++) {
-      idx = candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : Math.floor(Math.random() * lines.length)
-      rendered = renderLine(lines[idx], intensity, extraSlots)
+      idx = roll()
+      rendered = renderLine(lines[idx], intensity, extraSlots, verbosity)
+    }
+    // ★ 말수에 따른 **길이 편향 선택**. 문장을 잘라 내지 않고 *같은 풀에서 더 짧은(긴) 줄을
+    //   고른다* — 절삭은 뜻을 부수지만 선택은 안 부순다. 풀이 다양할수록 잘 듣는다.
+    if (verbosity !== 'plain') {
+      const better = (a: string, b: string) => (verbosity === 'terse' ? a.length < b.length : a.length > b.length)
+      for (let attempt = 0; attempt < LENGTH_BIAS_ROLLS; attempt++) {
+        const altIdx = roll()
+        const alt = renderLine(lines[altIdx], intensity, extraSlots, verbosity)
+        if (recentRendered.includes(alt)) continue
+        if (better(alt, rendered)) { idx = altIdx; rendered = alt }
+      }
     }
     this.lastPick.set(key, idx)
     const windowSize = Math.min(3, Math.max(1, lines.length - 1), Math.floor(lines.length / 2))

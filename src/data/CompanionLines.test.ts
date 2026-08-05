@@ -40,7 +40,7 @@ import {
   ENCOUNTER_INTRO_LINES,
   type Line,
 } from './CompanionLines'
-import { enumerateLineRenders, type Intensity } from '@systems/CompanionSystem'
+import { enumerateLineRenders, renderLine, type Intensity } from '@systems/CompanionSystem'
 
 /** 풀 이름 → 줄 목록으로 평탄화해 실패 메시지가 어느 데이터인지 바로 가리키게 한다. */
 function collectAllPools(): { pool: string; lines: Line[] }[] {
@@ -145,5 +145,36 @@ describe('CompanionLines 데이터 품질(전 풀 전수 렌더)', () => {
     // 실패 시 어떤 풀의 몇 번째 줄이 어떤 문장으로 깨졌는지(줄당 1회) 보여준다.
     const unique = [...new Map(failures.map((f) => [f.slice(0, f.indexOf(']')), f])).values()]
     expect(unique, unique.join('\n')).toEqual([])
+  })
+
+  it('과묵할 때(terse) 같은 줄이 더 짧아진다 — 꾸밈 토큰이 빠지고 short 변형이 쓰인다', () => {
+    // 말수는 스킵/열람 학습에서 파생되는 길이 축이다. 데이터가 short를 선언했으면 그것을,
+    // 아니면 최소한 꾸밈 토큰(강조/재촉)이 빠져 plain보다 길어지지는 않아야 한다.
+    const failures: string[] = []
+    for (const { pool, lines } of pools) {
+      lines.forEach((line, index) => {
+        // 슬롯 난수를 지우기 위해 각 조합을 결정적으로 비교할 수 없으므로, 길이 상한으로 본다.
+        const plainMax = Math.max(...enumerateLineRenders(line, 'normal').map((r) => r.length))
+        const terseSamples = Array.from({ length: 24 }, () => renderLine(line, 'normal', undefined, 'terse').length)
+        const terseMax = Math.max(...terseSamples)
+        if (terseMax > plainMax) failures.push(`[${pool}#${index}] terse ${terseMax} > plain ${plainMax}`)
+      })
+    }
+    expect(failures, failures.join('\n')).toEqual([])
+  })
+
+  it('short 변형도 같은 품질 규칙을 지난다', () => {
+    // enumerateLineRenders가 short까지 훑으므로, 위 전수 검사가 곧 short 검사다.
+    // 여기서는 short를 선언한 줄이 실제로 더 짧은지(선언의 의미)를 확인한다.
+    const failures: string[] = []
+    for (const { pool, lines } of pools) {
+      lines.forEach((line, index) => {
+        if (typeof line === 'string' || !line.short) return
+        const long = Math.max(...enumerateLineRenders({ ...line, short: undefined }, 'normal').map((r) => r.length))
+        const short = Math.max(...Array.from({ length: 24 }, () => renderLine(line, 'normal', undefined, 'terse').length))
+        if (short >= long) failures.push(`[${pool}#${index}] short ${short} >= 원문 ${long}`)
+      })
+    }
+    expect(failures, failures.join('\n')).toEqual([])
   })
 })
