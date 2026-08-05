@@ -436,10 +436,11 @@ npm run build    # verify 포함
 - ★ **방패가 막아 낸 피격도 화면에 남긴다**(`playShieldBlockFeedback`): 같은 자리·같은 양식의
   **회색 `-N`** + 대상의 짧은 흔들림. 방패 수치만 조용히 줄면 아무 일도 없던 것으로 읽힌다.
   흡수량은 `Character.lastBlockedByShield` → `EnemyHit.blocked`로 넘어온다.
-- ★ **"자해 시/자해마다"와 "피해를 받을 때"는 다른 키워드다.** 제물 축 유물은 자해 전용
-  누적(`pendingSelfHarm`, `takeDirectDamage`에서만 증가)을 읽고, 피격 보상 유물(변칙)은
-  `relicDamageTaken`(자해 포함 전체)을 읽는다. 섞으면 제물 카드를 안 써도 축이 굴러가
-  덱을 깎아도 농도가 오르지 않는다.
+- ★ **제물 축 유물은 문구가 곧 계약이다** — 두 폭이 의도적으로 공존한다.
+  `자해 N마다`(혈서·응고·수혈·악마 인형) = **좁은 축**, 자해만 센다(`takeDirectDamage`
+  호출부가 자해량을 직접 넘긴다). `체력 N 잃을 때마다`(주사기·피의 대가·변칙) = **넓은 축**,
+  자해+받는 피해를 모두 센다(`pendingHpLoss`/`relicDamageTaken`).
+  한쪽으로 통일하지 않는다 — 넓은 유물과 좁은 유물이 서로를 보완하는 구조다.
 - 손패 카드의 태그 표기는 `CardFaceRenderer.handCardTagLabels()` **단일 창구**다(도감·미리보기·
   상점 팩 카드 공용). 순서는 분류 → 시너지 → 직업이고, 시너지 라벨은 `Tags.ts`를 그대로 쓴다.
 - 효과문의 자원 낱말을 아이콘으로 바꾸는 창구는 `resourceIconTextHtml()` 하나다. 규칙은

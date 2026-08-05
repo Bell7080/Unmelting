@@ -53,9 +53,11 @@ export class Character {
   customRelicProfiles: Partial<Record<RelicId, CustomRelicProfile>>
   /** 변칙 유물용 누적 피해(10 잃을 때마다 발동). takeDamage가 더하고 외부가 소비한다. */
   relicDamageTaken: number = 0
-  /** ★ 제물(자해) 축 전용 누적. **자해로 잃은 HP만** 쌓인다 — 적/함정에게 맞은 피해는
-   *  절대 들어오지 않는다. "자해 시/자해마다"와 "피해를 받을 때"는 다른 키워드다. */
-  pendingSelfHarm: number = 0
+  /** '체력 N 잃을 때마다' 유물(주사기·피의 대가)용 누적 HP 손실.
+   *  ★ **자해 + 받는 피해를 모두** 포함하는 넓은 축이다. 좁은 축('자해 N마다' — 혈서·응고·
+   *  수혈·악마 인형)은 이 누적을 쓰지 않고 takeDirectDamage 호출부에서 자해량을 직접 받는다.
+   *  applyAnomalyHealthLoss(모든 HP손실 지점에서 호출)가 소비한다. */
+  pendingHpLoss: number = 0
   /** 직전 피격에서 방패가 흡수한 양. 연출이 "막았다"를 표시하는 데만 쓰고 곧바로 소비한다. */
   lastBlockedByShield: number = 0
   /** 권위: 치명타를 체력 1에서 막아냈음을 표시한다. 외부가 연출/파괴 후 false로 소비한다.
@@ -111,6 +113,7 @@ export class Character {
     }
     // 방패로 막지 못하고 실제 HP가 깎인 양만 변칙 유물 누적 피해로 적립한다.
     this.relicDamageTaken += actualDamage
+    this.pendingHpLoss += actualDamage
     return actualDamage
   }
 
@@ -129,8 +132,7 @@ export class Character {
       this.health = Math.max(0, this.health - actualDamage)
     }
     this.relicDamageTaken += actualDamage
-    // 자해 축은 여기서만 쌓인다 — 적/함정 피해가 섞이면 제물 카드를 안 써도 축이 굴러간다.
-    this.pendingSelfHarm += actualDamage
+    this.pendingHpLoss += actualDamage
     return actualDamage
   }
 
@@ -370,7 +372,7 @@ export class Character {
     this.customRelicProfiles = {}
     this.shield = 0
     this.relicDamageTaken = 0
-    this.pendingSelfHarm = 0
+    this.pendingHpLoss = 0
     this.lastBlockedByShield = 0
     this.authoritySurvivePending = false
     this.trapDamageBonus = 0
