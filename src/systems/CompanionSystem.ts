@@ -138,8 +138,8 @@ export interface EnaLearningSnapshot {
   predictiveWeight: number
   /** 상황별 단기 수다 가중치 복사본. */
   situationWeight: Record<SituationId, number>
-  /** 지금의 말수 단계 — chattiness에서 파생된 **길이 축**(빈도와 같은 수치에서 나온다). */
-  verbosity: Verbosity
+  // 말수(Verbosity)는 여기 싣지 않는다 — `chattiness`에서 그대로 파생되는 값이라
+  // 스냅샷에 두면 같은 사실이 두 곳에 적힌다. 필요하면 `verbosity()`로 읽는다.
 }
 
 export interface RunOutcome {
@@ -424,7 +424,6 @@ export class CompanionSystem {
       chattiness: this.chattiness(),
       predictiveWeight: this.predictiveWeight,
       situationWeight: { ...this.situationWeight },
-      verbosity: this.verbosity(),
     }
   }
 
