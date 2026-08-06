@@ -412,6 +412,11 @@ export class ResourceTrailFx {
     0 0 30px var(--trail-glow, rgba(255, 218, 132, 0.5)),
     0 0 54px var(--trail-glow, rgba(255, 218, 132, 0.28));
 }
+/* 공격 태그별 변주는 기존 사각 파편을 늘이거나 모서리만 다듬는다. 새 입자 문법 대신
+   같은 곡사포 실루엣 안에서 강철 검기/피 방울/백랍 조각의 물성만 구분한다. */
+.resource-trail-piece.is-lob-blade { border-radius: 2px 70% 2px 70%; }
+.resource-trail-piece.is-lob-sacrifice { border-radius: 55% 55% 68% 20%; }
+.resource-trail-piece.is-lob-wax { border-radius: 7px 3px 8px 4px; }
 /* 손패 획득 토큰 — 같은 사각 조각이되 **비율만** 손패 아이콘(카드)과 같다. 전용 도형이
    아니라 비율 변주라, 이펙트 어휘를 늘리지 않고도 '카드가 나왔다'가 읽힌다.
    호박빛 발광을 두 겹 둘러 어두운 레일 위에서도 금붙이로 읽히게 한다. */
@@ -828,12 +833,17 @@ export class ResourceTrailFx {
     const from = this.rectCenter(source)
     const to = this.rectCenter(target)
     const colors = this.trailColors(theme)
+    // 테마는 팔레트뿐 아니라 투사체의 작은 비율 변주에도 쓰인다. 기본 불씨는 정사각형이다.
+    const lobStyle: 'blade' | 'sacrifice' | 'wax' | undefined = theme === 'hand-attack-blade' ? 'blade'
+      : theme === 'hand-attack-sacrifice' ? 'sacrifice'
+      : theme === 'hand-attack-wax' ? 'wax'
+      : undefined
     // 앞선 포탄 한 발 + 뒤따르는 잔광 두 겹. 같은 궤적 위를 조금씩 늦게 따라가
     // 하나의 꼬리로 읽히되, 뒤로 갈수록 작고 옅다.
     const specs = [
-      { size: 26, lag: 0, alpha: 0.96, lob: true },
-      { size: 18, lag: 70, alpha: 0.5, lob: true },
-      { size: 12, lag: 130, alpha: 0.3, lob: true },
+      { size: 26, lag: 0, alpha: 0.96, lob: true, lobStyle },
+      { size: 18, lag: 70, alpha: 0.5, lob: true, lobStyle },
+      { size: 12, lag: 130, alpha: 0.3, lob: true, lobStyle },
     ]
     const flights = specs.map((spec) => this.spawnResourceTrailPiece(from, to, colors, spec))
     return new Promise((resolve) => {
@@ -881,14 +891,16 @@ export class ResourceTrailFx {
     from: { x: number; y: number },
     to: { x: number; y: number },
     colors: { color: string; glow: string },
-    spec: { size: number; lag: number; alpha: number; lob?: boolean }
+    spec: { size: number; lag: number; alpha: number; lob?: boolean; lobStyle?: 'blade' | 'sacrifice' | 'wax' }
   ): Promise<void> {
     return new Promise((resolve) => {
       window.setTimeout(() => {
         const piece = document.createElement('div')
-        piece.className = `resource-trail-piece${spec.lob ? ' is-lob' : ''}`
+        piece.className = `resource-trail-piece${spec.lob ? ' is-lob' : ''}${spec.lobStyle ? ` is-lob-${spec.lobStyle}` : ''}`
         piece.style.width = `${spec.size}px`
-        piece.style.height = `${Math.round(spec.size * (spec.lob ? 1 : 1.34))}px`
+        // 칼날은 가늘고 긴 검기, 제물은 세로로 맺힌 방울, 밀랍은 무른 백색 조각이다.
+        const lobRatio = spec.lobStyle === 'blade' ? 0.38 : spec.lobStyle === 'sacrifice' ? 1.28 : 1
+        piece.style.height = `${Math.round(spec.size * (spec.lob ? lobRatio : 1.34))}px`
         piece.style.setProperty('--trail-color', colors.color)
         piece.style.setProperty('--trail-glow', colors.glow)
         piece.style.opacity = `${spec.alpha}`

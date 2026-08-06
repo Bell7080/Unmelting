@@ -540,6 +540,23 @@ export class CardFaceRenderer {
       const dmg = merged ? atkDmgHtml(atk, 2, 3, b) : atkDmgHtml(atk, 0.5, 1, b)
       return `전방 선택 적 1장 ${dmg} · 방패 +${shieldVal}`
     }
+    // 칼날 파편도 다른 공격력 연동 카드와 같은 Shift 계약을 쓴다. 예전 정적 수식은
+    // 기본/Shift 어느 쪽에서도 바뀌지 않아, 자세히 보기 토글이 고장 난 것처럼 보였다.
+    if (id === 'blade-shard') {
+      const b = merged ? (enhancements?.tripleBonus[id] ?? 0) : (enhancements?.singleBonus[id] ?? 0)
+      const dmg = merged ? atkDmgHtml(atk, 1.5, 3, b) : atkDmgHtml(atk, 0.5, 1, b)
+      return `필드 랜덤 적 1장 ${dmg}`
+    }
+    // 칼날의 서는 현재 누적 파편 수로 실제 발수를 계산해 카드 면에 명시한다.
+    // 발당 피해 역시 Shift에서 공식을 확인할 수 있어 실행 결과와 설명이 한 자리에서 맞는다.
+    if (id === 'blade-tome') {
+      const baseThrows = 1 + Math.floor((enhancements?.bladeShardUseCount ?? 0) / 5)
+      const throws = merged ? baseThrows * 2 : baseThrows
+      const b = merged
+        ? (enhancements?.tripleBonus['blade-shard'] ?? 0)
+        : (enhancements?.singleBonus['blade-shard'] ?? 0)
+      return `칼날 파편 ${throws}발 투척 · 발당 ${atkDmgHtml(atk, 0.5, 1, b)}`
+    }
     // 바늘: 단일/트리플 모두 발당 (0.5공+1) — 트리플은 같은 피해를 3발 나눠 던진다(모닥불과 같은 회복 표기).
     if (id === 'needle') {
       const b = merged ? (enhancements?.tripleBonus['needle'] ?? 0) : (enhancements?.singleBonus['needle'] ?? 0)

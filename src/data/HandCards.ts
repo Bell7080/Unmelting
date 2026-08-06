@@ -703,8 +703,9 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     synergyTags: ['blade'],
     // 피해 근사 — 파편 1발 기준(투척 수 스케일·연마는 보수적으로 제외).
     damageProfile: { base: { atkMult: 0, flat: 1 }, triple: { atkMult: 0, flat: 2 }, deterministic: false },
-    description: '칼날 파편 투척 (파편 쓸수록 발수 증가)',
-    tripleDescription: '칼날 파편 투척 (발수 2배)',
+    // 상태 없는 데이터 화면에서도 최소 발수를 숨기지 않는다. 런타임 카드 면은 현재 누적치로 덮어쓴다.
+    description: '칼날 파편 1발 투척 (파편 5회 사용마다 +1발)',
+    tripleDescription: '칼날 파편 2발 투척 (파편 5회 사용마다 +2발)',
     targeting: { base: selfOne, triple: selfOne },
     dropWeight: 4,
     dropSource: 'any',
