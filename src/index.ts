@@ -828,6 +828,18 @@ async function playHandTargetBlasts(
   )
 }
 
+/** 다발 투척은 대상 ID를 고유화하지 않는다. 같은 적을 연속으로 맞혀도 실제 발수만큼
+ * 청회색 곡사가 하나씩 보여야 칼날의 서 설명과 전투 피드백이 일치한다. */
+async function playRepeatedHandProjectiles(cardIds: readonly string[], theme: BurstTheme): Promise<void> {
+  if (cardIds.length === 0) return
+  // 기존 광역 대상 스태거보다 조금 짧게 잡아 한 카드의 빠른 연속 투척으로 묶어 읽히게 한다.
+  const interval = Math.max(58, Math.min(92, Math.round(360 / cardIds.length)))
+  await Promise.all(cardIds.map(async (cardId, index) => {
+    if (index > 0) await wait(index * interval)
+    return boardRenderer.animateTargetBlastFromCenterToCard(cardId, theme)
+  }))
+}
+
 /** 레시피는 손패 분류가 없으므로 효과가 하는 일로 블라스트 톤을 고른다. */
 function burstThemeForRecipeEffect(effect: RecipeEffectKind): BurstTheme {
   if (effect.startsWith('heal') || effect.startsWith('shield') || effect.startsWith('gain-ember')) {
@@ -2411,7 +2423,15 @@ async function applyHandSingle(
   ]
   // The played-card preview dissolves at center; this square-card blast points
   // from that center beat to every field cell that was hit, removed, gained, or hardened.
-  if (handUseTheme) await playHandTargetBlasts(affectedCardIds, handUseTheme)
+  if (handUseTheme) {
+    // 칼날의 서는 모델이 기록한 실제 무작위 표적 순서를 보존한다. 일반 대상 효과는 기존처럼
+    // 카드 ID를 고유화해 광역 한 방이 같은 대상을 중복 발사하는 일을 막는다.
+    if (usedDef?.id === 'blade-tome' && result.projectileTargetCardIds?.length) {
+      await playRepeatedHandProjectiles(result.projectileTargetCardIds, handUseTheme)
+    } else {
+      await playHandTargetBlasts(affectedCardIds, handUseTheme)
+    }
+  }
   await Promise.all([
     boardRenderer.animateDamageNumbersById(singleDamageLosses),
     boardRenderer.animateWaxFreezeByIds(newlyFrozenIds),

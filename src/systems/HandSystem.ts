@@ -102,6 +102,9 @@ export interface HandUseResult {
   /** 정원 가위: 실제로 수확된 꽃 목록. index.ts는 이 카드들을 removedFieldCards의
    *  일반 불빛 계산에서 제외하고, 캐모마일/금잔화만 따로 불빛/코인을 지급한다. */
   flowerHarvests?: FlowerHarvestRecord[]
+  /** 칼날의 서처럼 실제로 여러 발을 던지는 카드의 발사 순서. 같은 적 ID가 반복될 수 있으며,
+   *  UI는 배열을 고유화하지 않고 이 순서 그대로 짧은 간격의 곡사 투사체를 재생한다. */
+  projectileTargetCardIds?: string[]
 }
 
 export interface RecipeFireResult {
@@ -146,6 +149,10 @@ export class HandSystem {
   /** 정원 가위 수확 기록 임시 버퍼 — applyGardenScissors*가 채우고, useSingle()이
    *  같은 동기 호출 안에서 즉시 비워 HandUseResult.flowerHarvests로 전달한다. */
   private static pendingFlowerHarvests: FlowerHarvestRecord[] = []
+
+  /** applySingle/TripleEffect 깊숙한 파편 타격이 고른 대상을 useSingle 결과로 넘기는 동기 버퍼.
+   *  매 카드 사용 시작에 비우고 같은 호출 안에서 drain하므로 런 사이에 상태가 남지 않는다. */
+  private static pendingProjectileTargetCardIds: string[] = []
 
   /** ActionSystem.takeFlower와 동일한 종류별 보상을 캐릭터에 직접 반영한다.
    *  캐모마일(불빛)/금잔화(코인)는 캐릭터 상태가 아니므로 여기서 반영할 수 없어
@@ -250,6 +257,8 @@ export class HandSystem {
     // Snapshot the field BEFORE any mutation so we can diff removals after.
     // 상세 스냅샷으로 제거 카드의 레인까지 담아 확산 유물이 처치 레인을 알 수 있게 한다.
     const beforeField = HandSystem.snapshotFieldCardsDetailed(gs)
+    // 이전 직접 헬퍼 호출이나 실패한 개발 호출이 남긴 발사 기록은 새 카드에 섞지 않는다.
+    HandSystem.pendingProjectileTargetCardIds = []
 
     // 주전자: 효과 실행 전에 필드 적 수를 캡처해 총 타격 횟수를 결정한다(효과 후 적 수가 변할 수 있음).
     const preEffectEnemyCount = card.defId === 'teapot' ? HandSystem.countFieldEnemies(gs) : 0
@@ -258,6 +267,9 @@ export class HandSystem {
     const message = card.merged
       ? HandSystem.applyTripleEffect(gs, def, target)
       : HandSystem.applySingleEffect(gs, def, target)
+    // 효과가 동기 실행되는 동안 기록된 실제 무작위 표적을 순서대로 떼어 결과에 싣는다.
+    const projectileTargetCardIds = HandSystem.pendingProjectileTargetCardIds
+    HandSystem.pendingProjectileTargetCardIds = []
 
     character.removeHandCardAt(slotIndex)
 
@@ -310,6 +322,7 @@ export class HandSystem {
       message,
       mergeMessages,
       removedFieldCards,
+      projectileTargetCardIds: projectileTargetCardIds.length > 0 ? projectileTargetCardIds : undefined,
       coinsGained: card.defId === 'coin'
         ? (card.merged
             ? 5 + (gs.enhancements.tripleBonus['coin'] ?? 0)
@@ -1328,7 +1341,13 @@ export class HandSystem {
   static throwBladeShardHit(gs: GameState, dmg: number): void {
     const c = gs.character
     // 칼날 폭풍: 한 적이 아니라 필드 전체 적을 동시에 벤다(관통/도탄은 이미 전체라 생략).
-    if (c.hasRelic('blade-storm')) { HandSystem.damageEnemies(gs, 'field', dmg); return }
+    if (c.hasRelic('blade-storm')) {
+      // 폭풍도 실제 한 발이므로 대표 표적 하나만 궤적에 기록하고, 착탄 피해는 기존 전체 판정을 쓴다.
+      const representative = HandSystem.firstLivingEnemyId(gs)
+      if (representative) HandSystem.pendingProjectileTargetCardIds.push(representative)
+      HandSystem.damageEnemies(gs, 'field', dmg)
+      return
+    }
     const targets: { card: Card; lane: number; d: number }[] = []
     const seen = new Set<Card>()
     for (let lane = 0; lane < gs.lanes.length; lane++) {
@@ -1342,6 +1361,8 @@ export class HandSystem {
     }
     if (targets.length === 0) return
     const t = targets[Math.floor(Math.random() * targets.length)]
+    // 피해 적용 전에 ID를 기록해야 처치되어 레일에서 제거돼도 기존 DOM을 향해 날릴 수 있다.
+    HandSystem.pendingProjectileTargetCardIds.push(t.card.id)
     const before = Math.max(0, t.card.getHealth())
     HandSystem.hitCard(gs, t.card, dmg)
     if (t.card.getHealth() > 0) return
@@ -1351,6 +1372,20 @@ export class HandSystem {
     // 도탄: 처치하고 넘친 피해를 인접 레인 적 1체에게 전이.
     const overkill = dmg - before
     if (c.hasRelic('ricochet') && overkill > 0) HandSystem.ricochetShard(gs, t.lane, overkill)
+  }
+
+  /** 칼날 폭풍의 시각적 대표 표적을 보드 순서대로 하나 고른다. 피해 대상 판정은 damageEnemies가 맡는다. */
+  private static firstLivingEnemyId(gs: GameState): string | null {
+    const seen = new Set<Card>()
+    for (const lane of gs.lanes) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = lane.getCardAtDistance(d)
+        if (!card || seen.has(card)) continue
+        seen.add(card)
+        if (card.type === CardType.ENEMY || card.type === CardType.BOSS) return card.id
+      }
+    }
+    return null
   }
 
   /** 관통: 지정 레인의 (exclude 제외) 모든 적/보스에게 dmg. */

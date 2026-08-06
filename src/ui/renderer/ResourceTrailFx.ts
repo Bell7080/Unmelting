@@ -412,11 +412,11 @@ export class ResourceTrailFx {
     0 0 30px var(--trail-glow, rgba(255, 218, 132, 0.5)),
     0 0 54px var(--trail-glow, rgba(255, 218, 132, 0.28));
 }
-/* 공격 태그별 변주는 기존 사각 파편을 늘이거나 모서리만 다듬는다. 새 입자 문법 대신
-   같은 곡사포 실루엣 안에서 강철 검기/피 방울/백랍 조각의 물성만 구분한다. */
-.resource-trail-piece.is-lob-blade { border-radius: 2px 70% 2px 70%; }
-.resource-trail-piece.is-lob-sacrifice { border-radius: 55% 55% 68% 20%; }
-.resource-trail-piece.is-lob-wax { border-radius: 7px 3px 8px 4px; }
+/* 공격 태그별 변주도 불씨의 뭉툭하고 밝은 사각 파편 문법 안에 둔다. 타원/물방울로
+   바꾸지 않고, 칼날만 세로 직사각형 축을 세워 꽂히는 방향성을 더한다. */
+.resource-trail-piece.is-lob-blade { border-radius: 4px; }
+.resource-trail-piece.is-lob-sacrifice { border-radius: 5px; }
+.resource-trail-piece.is-lob-wax { border-radius: 5px; }
 /* 손패 획득 토큰 — 같은 사각 조각이되 **비율만** 손패 아이콘(카드)과 같다. 전용 도형이
    아니라 비율 변주라, 이펙트 어휘를 늘리지 않고도 '카드가 나왔다'가 읽힌다.
    호박빛 발광을 두 겹 둘러 어두운 레일 위에서도 금붙이로 읽히게 한다. */
@@ -520,6 +520,14 @@ export class ResourceTrailFx {
       case 'attack-gain':
       case 'hand-attack':
         return { color: 'rgba(214, 73, 47, 0.78)', glow: 'rgba(244, 195, 74, 0.28)' }
+      // 공격 태그 전용 색은 SquareBurst 팔레트의 밝은 중간색과 맞춘다. 이 분기가 없으면
+      // default 황금색으로 떨어져 칼날 파편이 주황 불씨처럼 보인다.
+      case 'hand-attack-blade':
+        return { color: 'rgba(140, 167, 184, 0.9)', glow: 'rgba(205, 229, 239, 0.42)' }
+      case 'hand-attack-sacrifice':
+        return { color: 'rgba(169, 39, 53, 0.88)', glow: 'rgba(237, 113, 128, 0.36)' }
+      case 'hand-attack-wax':
+        return { color: 'rgba(232, 233, 228, 0.9)', glow: 'rgba(255, 253, 242, 0.4)' }
       case 'hand-control':
         return { color: 'rgba(95, 166, 216, 0.74)', glow: 'rgba(220, 238, 252, 0.26)' }
       case 'hand-recovery':
@@ -897,20 +905,21 @@ export class ResourceTrailFx {
       window.setTimeout(() => {
         const piece = document.createElement('div')
         piece.className = `resource-trail-piece${spec.lob ? ' is-lob' : ''}${spec.lobStyle ? ` is-lob-${spec.lobStyle}` : ''}`
-        piece.style.width = `${spec.size}px`
-        // 칼날은 가늘고 긴 검기, 제물은 세로로 맺힌 방울, 밀랍은 무른 백색 조각이다.
-        const lobRatio = spec.lobStyle === 'blade' ? 0.38 : spec.lobStyle === 'sacrifice' ? 1.28 : 1
-        piece.style.height = `${Math.round(spec.size * (spec.lob ? lobRatio : 1.34))}px`
+        // 기본 불씨와 같은 뭉툭한 크기를 유지하되, 칼날만 세로로 긴 직사각형을 쓴다.
+        // 제물/밀랍을 타원이나 물방울로 만들지 않아 기존 사각 발광 스타일을 보존한다.
+        const pieceWidth = Math.round(spec.size * (spec.lobStyle === 'blade' ? 0.58 : 1))
+        const pieceHeight = Math.round(spec.size * (spec.lobStyle === 'blade' ? 1.18 : spec.lob ? 1 : 1.34))
+        piece.style.width = `${pieceWidth}px`
+        piece.style.height = `${pieceHeight}px`
         piece.style.setProperty('--trail-color', colors.color)
         piece.style.setProperty('--trail-glow', colors.glow)
         piece.style.opacity = `${spec.alpha}`
         document.body.appendChild(piece)
         const dx = to.x - from.x
         const dy = to.y - from.y
-        const halfY = spec.lob ? spec.size / 2 : spec.size / 2
         const curve = Math.min(90, Math.max(34, Math.abs(dx) * 0.08 + Math.abs(dy) * 0.05))
         const at = (px: number, py: number): string =>
-          `translate(${px - spec.size / 2}px, ${py - halfY}px)`
+          `translate(${px - pieceWidth / 2}px, ${py - pieceHeight / 2}px)`
         let anim: Animation
         if (spec.lob) {
           // 궤적을 촘촘히 표본해 키프레임으로 편다 — 브라우저는 키프레임 사이를 직선으로
@@ -923,19 +932,26 @@ export class ResourceTrailFx {
             const p = this.lobPointAt(from, to, t)
             // 올라갈 땐 커지고 떨어질 땐 작아진다 — 높이를 크기로 말한다.
             const lift = Math.sin(Math.PI * t)
+            // 칼날은 비행 중 기울어진 직사각형 축을 차츰 세워, 착탄 직전에 세로로 꽂힌다.
+            // 나머지는 기존 불씨처럼 부드럽게 회전해 같은 이펙트 가족으로 남는다.
+            const rotation = spec.lobStyle === 'blade' ? -68 * (1 - t) : t * 160
             frames.push({
-              transform: `${at(p.x, p.y)} rotate(${t * 160}deg) scale(${(0.72 + lift * 0.5).toFixed(3)})`,
+              transform: `${at(p.x, p.y)} rotate(${rotation}deg) scale(${(0.72 + lift * 0.5).toFixed(3)})`,
               opacity: i === 0 ? 0 : spec.alpha,
               offset: Number((t * IMPACT).toFixed(4)),
             })
           }
           // 착탄 — 수직으로 떨어진 몸이 납작하게 눌린다. 이 한 프레임이 '딱'이다.
+          const impactRotation = spec.lobStyle === 'blade' ? 0 : 160
           frames.push({
-            transform: `${at(to.x, to.y)} rotate(160deg) scale(1.5, 0.5)`,
+            transform: `${at(to.x, to.y)} rotate(${impactRotation}deg) scale(${spec.lobStyle === 'blade' ? '0.72, 1.55' : '1.5, 0.5'})`,
             opacity: spec.alpha,
             offset: Number((IMPACT + 0.05).toFixed(4)),
           })
-          frames.push({ transform: `${at(to.x, to.y)} rotate(160deg) scale(0.7, 0.35)`, opacity: 0 })
+          frames.push({
+            transform: `${at(to.x, to.y)} rotate(${impactRotation}deg) scale(${spec.lobStyle === 'blade' ? '0.42, 0.72' : '0.7, 0.35'})`,
+            opacity: 0,
+          })
           anim = piece.animate(frames, {
             // 착탄 프레임(offset IMPACT)이 정확히 STRIKE_LOB_FLIGHT_MS에 오게 길이를 역산한다 —
             // 버스트가 먼저 터지면 포탄이 도착하기도 전에 '맞았다'가 나가 버린다.
