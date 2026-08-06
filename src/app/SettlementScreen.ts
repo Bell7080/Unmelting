@@ -29,6 +29,10 @@ export interface SettlementScreenDeps {
   companion: CompanionSystem
   lifetimeRecordStore: LifetimeRecordStore
   getScore(): number
+  /** 런이 쓰고 남긴 화폐($) — 정산에서 메타 지갑으로 넘어간다. */
+  getCoins(): number
+  /** 남은 화폐를 메타 지갑에 저축한다. 통산 기록과 같은 '런당 1회' 가드 안에서 호출된다. */
+  depositRunCurrency(amount: number): void
   /** 런 시작 시점 경험 축 값 — 정산 육각형의 이전 위치 표시용. */
   getRunStartAxisValues(): number[] | null
   wasRunEnteredFromLobby(): boolean
@@ -78,7 +82,9 @@ export class SettlementScreen {
   /** 게임오버 사유별 정산 분기 — 통산 기록 합산은 런당 1회만. */
   showGameOver(): void {
     const { gameState, lifetimeRecordStore, companion } = this.deps
+    const leftoverCoins = this.deps.getCoins()
     // 통산 기록에 이번 런을 1회 합산한다(클리어/사망 공통) — 정산 우측 하단 표기의 원천.
+    // 남은 화폐 저축도 같은 가드 안에서 한다. 정산이 두 번 열려도 두 번 입금되면 안 된다.
     if (this.deps.tryMarkLifetimeRecorded()) {
       const cleared = gameState.gameOverReason === 'onboarding_clear_30' || gameState.gameOverReason === 'run_clear_100_turns'
       lifetimeRecordStore.recordRun({
@@ -89,6 +95,7 @@ export class SettlementScreen {
         treasures: gameState.runOpenedTreasures,
         light: this.deps.getScore(),
       })
+      this.deps.depositRunCurrency(leftoverCoins)
     }
 
     const runStats = [
@@ -96,6 +103,8 @@ export class SettlementScreen {
       { label: '처리한 함정', value: gameState.runClearedTraps },
       { label: '발견한 보물', value: gameState.runOpenedTreasures },
       { label: '총 불빛', value: this.deps.getScore() },
+      // 화폐를 한 푼도 못 벌었으면(새싹 병아리 등 화폐 잠금 런) 줄을 만들지 않는다.
+      ...(leftoverCoins > 0 ? [{ label: '저축한 화폐', value: leftoverCoins }] : []),
     ]
     const fromLobby = this.deps.wasRunEnteredFromLobby()
     // 새로고침 대신 startGame()/거점으로 초기화한다. startGame이 카드/드롭/도감 잠금까지

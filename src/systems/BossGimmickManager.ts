@@ -485,7 +485,12 @@ export class BossGimmickManager {
 
   /** 아직 연출로 소비되지 않은 칸 타격이 있는가. 피해 0으로 막힌 beat를 가려내는 데 쓴다. */
   get hasPendingHits(): boolean {
-    return this.pendingHits.length > 0
+    return this.pendingHitCount > 0
+  }
+
+  /** 이번 beat가 칸을 몇 개 때렸는가. 연출이 단일 타격과 광역을 가르는 데 쓴다. */
+  get pendingHitCount(): number {
+    return this.pendingHits.length
   }
 
   /** 이번 beat에 쌓인 타격 기록을 가져가며 비운다. 연출 쪽 유일한 소비 창구다. */

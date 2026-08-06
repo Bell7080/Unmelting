@@ -1426,7 +1426,8 @@ body.hearth-lobby #ingame-backdrop.is-out {
 .hearth-trade-pack small { color: rgba(214, 200, 178, 0.72); font-size: clamp(12px, 1.7vh, 15px); }
 @keyframes hearth-trade-pack-rise { to { opacity: 1; transform: translateY(0); } }
 
-/* 무역 1번 탭 임시 개방 카드 — 클릭 토글. 잠김=어둡게, 개방=따뜻한 금빛 테두리+발광. */
+/* 무역 1번 탭 개방 카드 — 클릭 구매. 잠김=어둡게, 개방=따뜻한 금빛 테두리+발광.
+   잔액이 모자라면 카드를 눌러 두되 가격표는 남긴다(무엇이 모자란지가 카드에 남아야 한다). */
 .hearth-unlock-card { cursor: pointer; transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.14s ease; }
 .hearth-unlock-card:hover { transform: translateY(-3px); border-color: rgba(220, 172, 80, 0.7); }
 .hearth-unlock-card .hearth-unlock-art {
@@ -1455,6 +1456,9 @@ body.hearth-lobby #ingame-backdrop.is-out {
   border-color: rgba(255, 228, 160, 0.6);
 }
 .hearth-unlock-card.is-unlocked .hearth-unlock-art { border-color: rgba(255, 222, 140, 0.5); }
+/* 아직 못 사는 카드 — 채도를 빼서 알린다(가격표는 그대로 읽힌다). */
+.hearth-unlock-card.is-unaffordable { filter: grayscale(0.5) brightness(0.72); }
+.hearth-unlock-card.is-unaffordable:hover { transform: none; border-color: rgba(255, 222, 140, 0.2); }
 @keyframes hearth-trade-pack-leave { to { opacity: 0; transform: translateY(-48px); } }
 
 /* ── 서고 셔터 화면 ──────────────────────────────────────────────────

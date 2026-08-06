@@ -414,7 +414,9 @@ export class BossFxView {
     }
     // 출처에서 한 번 터뜨린다 — 광역 손패가 9칸을 동시에 때리면 "그냥 모든 칸에 딜이
     // 꽂혔다"로만 보여서, 그게 **내가 쓴 손패에서 나갔다**는 게 읽히지 않는다.
-    if (source) this.playBossCellVolleyLaunch(source)
+    // 단발은 그럴 필요가 없다. 한 발뿐인데 출발 버스트를 먼저 터뜨리면 "중앙에서 한 번
+    // 튀고 다시 칸으로 튄다"로 읽혀, 곧바로 날아가야 할 타격이 두 사건으로 갈린다.
+    if (source && hits.length > 1) this.playBossCellVolleyLaunch(source)
     // 칸마다 시차를 둬 한 발씩 날아가는 게 보이게 한다. 동시에 쏘면 출발점이 사라진다.
     await Promise.all(
       hits.map(async (hit, index) => {

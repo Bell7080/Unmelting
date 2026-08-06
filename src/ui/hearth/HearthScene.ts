@@ -5,7 +5,11 @@ import { SquareBurst } from '../SquareBurst'
 import { SpeechBubble } from '../SpeechBubble'
 import type { CustomRelicProfile } from '@data/Relics'
 import type { LifetimeRecord } from '@core/LifetimeRecord'
-import { META_UNLOCKS, isMetaUnlocked, toggleMetaUnlock } from '@core/MetaUnlocks'
+import { META_UNLOCKS, isMetaUnlocked, setMetaUnlocked } from '@core/MetaUnlocks'
+import { spendMetaCurrency } from '@core/MetaWallet'
+
+/** 무역 상품 임시 단가($). 품목별 가격표가 붙기 전까지 모든 요소가 같은 값을 쓴다. */
+const TRADE_ITEM_PRICE = 3
 
 export interface HearthHandlers {
   /** 출발 버튼 클릭 — 직업 선택/런 시작으로 연결한다. */
@@ -20,6 +24,10 @@ export interface HearthHandlers {
   onUnlockCelebration?: () => void
   /** 서고 모험일지에 표시할 통산 기록을 읽는다. */
   getLifetimeRecord?: () => LifetimeRecord
+  /** 무역 결제에 쓸 현재 메타 화폐($) 잔액. */
+  getMetaCurrency?: () => number
+  /** 결제가 성사된 뒤 — 거점 화폐 패널을 새 잔액으로 갱신하라는 신호. */
+  onMetaCurrencySpent?: () => void
 }
 
 /**
@@ -436,7 +444,7 @@ export class HearthScene {
       }
       const unlockCard = t.closest<HTMLElement>('[data-hearth-unlock]')
       if (unlockCard) {
-        this.toggleUnlockCard(unlockCard)
+        this.purchaseUnlockCard(unlockCard)
         return
       }
       if (t.closest('[data-hearth-depart]')) {
@@ -1345,36 +1353,64 @@ export class HearthScene {
     `).join('')
   }
 
-  /** 무역 1번 탭 임시 개방 카드 — 클릭으로 각 메타 시스템 개방/해제를 토글한다. */
+  /** 무역 1번 탭 개방 카드 — 잔액이 되면 클릭 한 번으로 산다(품목당 TRADE_ITEM_PRICE$). */
   private renderUnlockCards(): string {
+    const balance = this.handlers?.getMetaCurrency?.() ?? 0
     return META_UNLOCKS.map((u, index) => {
       const on = isMetaUnlocked(u.id)
+      // 이미 산 것은 값을 지우고, 못 사는 것은 값을 남긴 채 흐려 둔다 — 무엇이 모자란지가
+      // 카드에 그대로 남아야 "왜 안 눌리지"가 되지 않는다.
+      const affordable = balance >= TRADE_ITEM_PRICE
       return `
-      <article class="hearth-trade-pack hearth-unlock-card${on ? ' is-unlocked' : ''}" style="--pack-order:${index}"
+      <article class="hearth-trade-pack hearth-unlock-card${on ? ' is-unlocked' : ''}${!on && !affordable ? ' is-unaffordable' : ''}" style="--pack-order:${index}"
                role="button" tabindex="0" data-hearth-unlock="${u.id}" aria-pressed="${on ? 'true' : 'false'}">
         <div class="hearth-trade-pack-art hearth-unlock-art" aria-hidden="true"></div>
         <strong>${u.label}</strong>
         <small>${u.desc}</small>
-        <span class="hearth-unlock-state">${on ? '개방됨' : '잠김'}</span>
+        <span class="hearth-unlock-state">${on ? '개방됨' : `${TRADE_ITEM_PRICE} $`}</span>
       </article>`
     }).join('')
   }
 
-  /** 임시 개방 카드 토글 — 메타 잠금 플래그를 뒤집고 카드 상태를 즉시 반영한다. */
-  private toggleUnlockCard(card: HTMLElement): void {
+  /**
+   * 개방 카드 구매 — 잔액에서 단가를 빼고 메타 플래그를 켠다.
+   * 결제가 성사된 것만 켠다(되팔기는 없다). 잔액이 모자라면 카드를 흔들어 거절만 알린다.
+   */
+  private purchaseUnlockCard(card: HTMLElement): void {
     const id = card.dataset.hearthUnlock as (typeof META_UNLOCKS)[number]['id'] | undefined
-    if (!id) return
-    const on = toggleMetaUnlock(id)
-    card.classList.toggle('is-unlocked', on)
-    card.setAttribute('aria-pressed', on ? 'true' : 'false')
+    if (!id || isMetaUnlocked(id)) return
+    if (!spendMetaCurrency(TRADE_ITEM_PRICE)) {
+      card.animate(
+        [{ transform: 'translateX(0)' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(0)' }],
+        { duration: 260, easing: 'ease-out' }
+      )
+      return
+    }
+    setMetaUnlocked(id, true)
+    card.classList.remove('is-unaffordable')
+    card.classList.add('is-unlocked')
+    card.setAttribute('aria-pressed', 'true')
     const state = card.querySelector<HTMLElement>('.hearth-unlock-state')
-    if (state) state.textContent = on ? '개방됨' : '잠김'
+    if (state) state.textContent = '개방됨'
+    SquareBurst.playOn(card, 'treasure-gain', { count: 18, spread: 128, duration: 560 })
     // 만찬 개방 상태가 바뀌면 뒤의 9칸(만찬 칸 잠금)도 즉시 동기화한다.
     if (id === 'dinner') this.refreshCellLocks()
-    // 거점에서도 보이는 패널(화폐/의뢰)은 body 잠금 클래스를 즉시 반영해 로비에서 바로 숨기고 켠다.
-    if (id === 'currency') document.body.classList.toggle('meta-currency-locked', !on)
-    if (id === 'quests') document.body.classList.toggle('meta-quests-locked', !on)
+    // 거점에서도 보이는 패널(화폐/의뢰)은 body 잠금 클래스를 즉시 반영해 로비에서 바로 켠다.
+    if (id === 'currency') document.body.classList.remove('meta-currency-locked')
+    if (id === 'quests') document.body.classList.remove('meta-quests-locked')
     card.animate([{ transform: 'scale(0.96)' }, { transform: 'scale(1)' }], { duration: 180, easing: 'ease-out' })
+    // 잔액이 줄었으므로 화폐 패널과 남은 카드들의 구매 가능 표기를 함께 갱신한다.
+    this.handlers?.onMetaCurrencySpent?.()
+    this.refreshUnlockCardAffordability()
+  }
+
+  /** 결제 후 남은 카드의 '못 삼' 표기를 새 잔액으로 다시 칠한다(카드 DOM은 그대로 둔다). */
+  private refreshUnlockCardAffordability(): void {
+    const balance = this.handlers?.getMetaCurrency?.() ?? 0
+    this.overlay?.querySelectorAll<HTMLElement>('.hearth-unlock-card').forEach((card) => {
+      if (card.classList.contains('is-unlocked')) return
+      card.classList.toggle('is-unaffordable', balance < TRADE_ITEM_PRICE)
+    })
   }
 
   /** 개방 상태 변화 시 9칸 그리드를 다시 그려 잠금/개방을 반영한다(무역 화면 뒤 배경). */

@@ -44,12 +44,21 @@ export class BgmManager {
 
   constructor(private readonly urls: string[]) {}
 
+  /**
+   * 첫 곡의 메타데이터를 미리 받아 둔다 — 재생은 시작하지 않는다.
+   * 시작 지점을 화면 연출(부팅 게이트의 Click to Start)에 맞추고 싶을 때, 호출부가
+   * 그 순간 `start()`만 부르면 곧바로 소리가 나게 하려는 준비 단계다.
+   */
+  preload(): void {
+    if (!this.urls.length || this.pending || this.started) return
+    this.pending = this.createHowl(this.randomIndex())
+    void this.whenLoaded(this.pending)
+  }
+
   /** 첫 사용자 입력에서 재생을 시작한다(자동재생 정책 우회). */
   armAutoplay(): void {
     if (!this.urls.length) return
-    // 첫 곡의 메타데이터를 미리 받아 두면 첫 클릭에서 바로 시작된다.
-    this.pending = this.createHowl(this.randomIndex())
-    void this.whenLoaded(this.pending)
+    this.preload()
     // 캡처 단계로 등록해야 게임 카드 핸들러가 stopPropagation 해도 첫 입력을 잡는다.
     // 시작이 실제로 성공할 때까지 리스너를 유지해 한 번 막혀도 다음 입력에 재시도한다.
     this.kickHandler = () => {

@@ -358,7 +358,12 @@ export class ShopFlowManager {
   /** 해금팩 후보 — 런에서 잠긴 카드 + 삭제팩으로 밴된 카드(보스 전용 찌꺼기는 제외). */
   private unlockCardPool(): HandCardId[] {
     const { locked, banned } = this.deps.runCardPool.snapshot()
-    return [...locked, ...banned].filter((id) => getHandCardDef(id).dropSource !== 'boss')
+    // 새싹 병아리(온보딩)는 화폐($) 획득 요소를 전부 잠근다 — 온보딩 금지 카드(동전 등)는
+    // 잠겨 있다는 이유로 해금팩 후보가 되면 안 된다. 해금해 봐야 쓸 데가 없는 값이다.
+    const forbidden = this.deps.isOnboardingActive() ? ONBOARDING_BANNED_CARDS : []
+    return [...locked, ...banned].filter(
+      (id) => getHandCardDef(id).dropSource !== 'boss' && !forbidden.includes(id)
+    )
   }
 
   /**

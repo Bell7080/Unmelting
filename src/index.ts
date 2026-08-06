@@ -73,6 +73,7 @@ import {
 } from '@systems/EnaDisposition'
 import { HearthScene, HEARTH_DEV_UNLOCK_KEY, HEARTH_TRADE_CELEBRATED_KEY, type HearthDifficulty } from '@ui/hearth/HearthScene'
 import { isMetaUnlocked, setMetaUnlocked, META_UNLOCKS } from '@core/MetaUnlocks'
+import { loadMetaCurrency, depositMetaCurrency } from '@core/MetaWallet'
 import { ZoneCurtain, ZONE_LIST } from '@ui/ZoneCurtain'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
@@ -425,6 +426,9 @@ function enterHearth(): void {
   document.body.classList.toggle('meta-reroll-locked', !isMetaUnlocked('shopReroll'))
   document.body.classList.toggle('meta-quests-locked', !isMetaUnlocked('quests'))
   document.body.classList.toggle('meta-freecard-locked', !isMetaUnlocked('freeCard'))
+  // 거점의 화폐 패널은 런 소지금이 아니라 저축된 메타 잔액을 보여 준다(같은 패널을 공유하므로
+  // 진입할 때마다 지갑 값으로 덮는다). 런이 시작되면 resetForNewRun이 다시 0으로 되돌린다.
+  syncLobbyWalletDisplay()
   render()
   hearthScene.enter({
     // 출발 버튼 → startGame이 다시 초기화 + 직업 선택 + 보드 채움을 수행한다.
@@ -440,6 +444,9 @@ function enterHearth(): void {
     },
     // 서고 모험일지 — 통산 기록을 그대로 읽어 보여 준다.
     getLifetimeRecord: () => lifetimeRecordStore.load(),
+    // 무역 상품은 메타 지갑에서 결제한다 — 잔액 읽기와 결제 후 패널 갱신만 넘긴다.
+    getMetaCurrency: () => loadMetaCurrency(),
+    onMetaCurrencySpent: () => { syncLobbyWalletDisplay(); render() },
     // 만찬 완료 즉시 Character.relics에 실제 RelicId를 넣고 렌더러의 유물 팬으로 보여 준다.
     onDinnerRelicCreate: async (profile) => {
       pendingDinnerRelicProfile = profile
@@ -450,6 +457,14 @@ function enterHearth(): void {
     },
   })
 }
+/** 거점 화폐 패널을 저축 잔액에 맞춘다. 펄스 키를 올려 카운터가 새 값으로 굴러가게 한다. */
+function syncLobbyWalletDisplay(): void {
+  const wallet = loadMetaCurrency()
+  if (wallet === coins) return
+  coins = wallet
+  coinPulseKey++
+}
+
 /** effectKind 서술자를 런타임 apply()로 변환. runModifiers는 여기에 스코프돼 있으므로 index에서 해석한다. */
 function applyTrialEffect(kind: TrialEffectKind): void {
   switch (kind.type) {
@@ -801,6 +816,19 @@ function tickHudCounterAfterTrail(resource: keyof typeof NUMERIC_RESOURCE_TRAILS
  *  as shop purchases get their own source→target trail. */
 
 /**
+ * 보스 타일로 가는 블라스트를 접어 두는가 — 겨냥한 칸 하나만 맞은 beat에서 참이다.
+ *
+ * 손패가 보스를 때리면 블라스트가 두 번 난다: 먼저 보스 타일로 한 발(여기),
+ * 그다음 맞은 칸으로 한 발(`playBossGimmickStrikes`). 광역은 타일 한 발이 "이 손패가
+ * 보스 전체를 덮었다"를 말해 주지만, 단일 조준은 물방울이 타일에서 한 번 튕겨 칸으로
+ * 다시 튀는 것처럼 보인다. 겨냥한 칸이 하나면 타일 발을 접고 칸으로 곧장 보낸다.
+ */
+function skipsTileBlastForBossCell(cardId: string): boolean {
+  if (!bossController.eventState || cardId !== bossController.eventState.card.id) return false
+  return (gameState.bossGimmicks?.pendingHitCount ?? 0) === 1
+}
+
+/**
  * 손패/레시피가 건드린 **모든** 칸으로 곡사 블라스트를 한 발씩 보낸다.
  * 광역기·조합도 대상마다 한 발이 날아가야 무엇이 몇 칸을 때렸는지가 남는다.
  * 동시에 쏘지 않고 조금씩 늦춰 쏜다 — 겹쳐 쏘면 몇 발인지가 뭉갠다.
@@ -810,7 +838,7 @@ async function playHandTargetBlasts(
   theme: BurstTheme,
   origin: 'center' | 'chain' = 'center'
 ): Promise<void> {
-  const uniqueIds = [...new Set(cardIds)].filter(Boolean)
+  const uniqueIds = [...new Set(cardIds)].filter(Boolean).filter((id) => !skipsTileBlastForBossCell(id))
   if (uniqueIds.length === 0) return
   // 대상이 많을수록 간격을 좁힌다 — 필드 전체(9칸)까지 같은 간격으로 쏘면 마지막 발이
   // 반 박자 뒤에 떨어져 한 방의 광역기가 늘어진 연사로 읽힌다.
@@ -3861,6 +3889,8 @@ function finishTurn(): void {
 const settlement = new SettlementScreen({
   gameState, boardRenderer, companion, lifetimeRecordStore,
   getScore: () => score,
+  getCoins: () => coins,
+  depositRunCurrency: (amount) => { depositMetaCurrency(amount) },
   getRunStartAxisValues: () => runStartAxisValues,
   wasRunEnteredFromLobby: () => runEnteredFromLobby,
   tryMarkLifetimeRecorded: () => {
@@ -3899,11 +3929,16 @@ if (ENABLE_DEV_COMMAND_PALETTE) {
     startTestRun,
   })
 }
-// 게임 부팅 후 첫 사용자 입력에서 배경음 루프를 켠다(브라우저 자동재생 정책).
-bgm.armAutoplay()
-// 첫 입력에서 효과음 컨텍스트도 함께 연다.
-const unlockSfx = () => { void sfx.unlock(); window.removeEventListener('pointerdown', unlockSfx, true) }
-window.addEventListener('pointerdown', unlockSfx, true)
+// 오디오는 사용자 입력이 있어야 열린다(브라우저 자동재생 정책). 그 입력은 부팅 게이트의
+// 'Click to Start' 클릭으로 정한다 — 로딩 중 아무 클릭에나 음악이 켜지면 노래가 시작되는
+// 지점이 화면과 어긋나 어디서부터 게임이 시작된 건지 읽히지 않는다. 여기서는 준비만 한다.
+bgm.preload()
+
+/** 오디오 개시 — 부팅 게이트의 Click to Start 클릭이 부른다(음악 + 효과음 컨텍스트). */
+function beginAudio(): void {
+  void bgm.start()
+  void sfx.unlock()
+}
 
 /** 첫 실행(새싹 병아리 직행)을 이미 소비했는지 — unmelting. 접두사라 /리셋 시 첫 실행 상태로 돌아간다. */
 const BOOT_FIRST_RUN_KEY = 'unmelting.boot.firstRunStarted'
@@ -4099,6 +4134,8 @@ function showBootTitleGate(): Promise<() => void> {
       if (hint) hint.textContent = 'Click to Start'
       overlay.classList.add('is-ready')
       overlay.addEventListener('pointerdown', () => {
+        // 이 클릭이 오디오 언락을 흡수한다 — 화면이 넘어가는 그 순간에 음악이 켜진다.
+        beginAudio()
         // 오버레이는 남긴 채 resolve — 호출부가 장면을 구성한 뒤 해제한다.
         resolve(() => {
           overlay.classList.add('is-leaving')
@@ -4112,6 +4149,10 @@ function showBootTitleGate(): Promise<() => void> {
 /** 부팅 분기: ?test=1 → 테스트 직행 / 첫 실행 → 새싹 병아리 직행 / 이후 → 거점 로비. */
 async function bootGame(): Promise<void> {
   if (new URLSearchParams(window.location.search).get('test') === '1') {
+    // 테스트 부팅은 게이트를 건너뛰므로 오디오를 열어 줄 클릭이 없다 — 예전처럼
+    // 첫 입력을 기다렸다 켠다.
+    bgm.armAutoplay()
+    window.addEventListener('pointerdown', () => void sfx.unlock(), { once: true, capture: true })
     startTestRun()
     return
   }
