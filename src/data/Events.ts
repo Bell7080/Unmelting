@@ -322,7 +322,9 @@ const EVENT_003: EventDefinition = {
   ],
   minigame: {
     kind: 'count-rps',
-    deck: { rock: 3, paper: 3, scissors: 3 },
+    // 3장 = 3판. 9판짜리 덱은 한 이벤트에서 불빛을 너무 많이 뽑아 경제가 무너졌다.
+    // 짧아진 대신 카운팅이 또렷해진다 — 2판이면 남은 한 장이 확정된다.
+    deck: { rock: 1, paper: 1, scissors: 1 },
     baseStake: 60,
     tieLossFraction: 0.5,
     relicWinMultiple: 6,

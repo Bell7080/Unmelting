@@ -876,13 +876,13 @@ export class HandSystem {
         return HandSystem.damageTargetEnemy(gs, target, damage)
       }
       case 'blade-shard':
-        // 랜덤 적 1체에게 (1+연마) 풀피해 한 방(관통/도탄/폭풍 유물 반영).
-        HandSystem.throwBladeShardHit(gs, 1 + bonus)
+        // 랜덤 적 1체에게 (0.5공+1+연마) 풀피해 한 방(관통/도탄/폭풍 유물 반영).
+        HandSystem.throwBladeShardHit(gs, Math.floor(0.5 * c.damage) + 1 + bonus)
         return '칼날 파편 투척'
       case 'blade-tome': {
         // 통산 파편 사용 수에 비례해(5회당 +1발) 파편을 여러 발 투척. 각 발은 파편과 같은 규칙.
         const throws = 1 + Math.floor((gs.enhancements.bladeShardUseCount ?? 0) / 5)
-        const dmg = 1 + (gs.enhancements.singleBonus['blade-shard'] ?? 0)
+        const dmg = Math.floor(0.5 * c.damage) + 1 + (gs.enhancements.singleBonus['blade-shard'] ?? 0)
         for (let i = 0; i < throws; i++) HandSystem.throwBladeShardHit(gs, dmg)
         return `칼날 파편 ${throws}발 투척`
       }
@@ -1045,13 +1045,13 @@ export class HandSystem {
         return `방패 +3 · ${HandSystem.damageTargetEnemy(gs, target, damage)}`
       }
       case 'blade-shard':
-        // 트리플: 3발로 쪼개지 않고 한 적에게 (3+연마) 한 방(단일). 넘침이 커 도탄과 궁합.
-        HandSystem.throwBladeShardHit(gs, 3 + bonus)
+        // 트리플: 3발로 쪼개지 않고 한 적에게 (1.5공+3+연마) 한 방(단일). 넘침이 커 도탄과 궁합.
+        HandSystem.throwBladeShardHit(gs, Math.floor(1.5 * c.damage) + 3 + bonus)
         return '칼날 파편'
       case 'blade-tome': {
         // 트리플: 투척 발수 2배.
         const throws = (1 + Math.floor((gs.enhancements.bladeShardUseCount ?? 0) / 5)) * 2
-        const dmg = 1 + (gs.enhancements.tripleBonus['blade-shard'] ?? 0)
+        const dmg = Math.floor(0.5 * c.damage) + 1 + (gs.enhancements.tripleBonus['blade-shard'] ?? 0)
         for (let i = 0; i < throws; i++) HandSystem.throwBladeShardHit(gs, dmg)
         return `칼날 파편 ${throws}발 투척`
       }

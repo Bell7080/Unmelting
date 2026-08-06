@@ -197,6 +197,15 @@ export class CardFaceRenderer {
     if (id === 'water-bucket' && char) {
       return '\x00직접 타격한 적 25% 확률 추가 ' + atkDmgHtml(char.damage, 0.5, 1)
     }
+    // 벽걸이 횃불 / 뜨거운 돌: 효과문에 공격력 수식이 그대로 적혀 있던 자리.
+    // 수식만 적어 두면 지금 몇이 들어가는지 알 수 없어, 다른 공격력 연동 유물과 같은
+    // 합산 수치 + Shift 수식 전환으로 맞춘다(RelicEffectsManager/HandSystem과 같은 floor 공식).
+    if (id === 'pyromaniac' && char) {
+      return '\x00불씨 손패 5회 사용 시 필드 전체 적에게 ' + atkDmgHtml(char.damage, 0.5, 1)
+    }
+    if (id === 'hot-stone' && char) {
+      return '\x00불씨 밝음(불씨 7↑)일 때 불씨 손패 피해 +' + atkDmgHtml(char.damage, 0.25, 1)
+    }
 
     return staticEffect
   }

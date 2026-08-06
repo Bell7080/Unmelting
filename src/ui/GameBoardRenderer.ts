@@ -108,6 +108,12 @@ interface CounterAnimationState {
 }
 
 /** 피격 체력 게이지 연출 길이. CSS `hp-damage-jolt`와 같은 값이어야 한다. */
+/** 카드 낙하(card-enter-soft) 길이. CSS와 같은 값이어야 연출이 정확히 그만큼만 유지된다. */
+const CARD_ENTER_MS = 340
+/** 보스 격자 등장·배율 리롤 연출 길이(칸별 시차 30ms × 8 + 본 애니메이션). CSS와 같은 값. */
+const BOSS_GIMMICK_ENTER_MS = 900
+const BOSS_GIMMICK_RELABEL_MS = 760
+
 const HP_DAMAGE_PULSE_MS = 640
 
 /** 방패로 막아 냈을 때의 흔들림 길이. CSS `shield-block-shake`와 같은 값이어야 한다. */
@@ -133,6 +139,15 @@ export class GameBoardRenderer {
   private lockedRecipeIds = new Set<string>()
   private hasRendered = false
   private previousCardIds = new Set<string>()
+  /** 카드 등장(낙하) 연출이 끝나는 시각(카드 id → epoch ms).
+   *
+   *  `is-entering`을 "이번 렌더에 처음 보이는 카드"에만 붙이면, 낙하 도중 다른 이유로
+   *  render가 한 번 더 돌 때 그 클래스가 사라져 애니메이션이 통째로 끊긴다(카드가 뚝
+   *  제자리로 스냅한다). 빗자루로 거미줄을 여러 장 치우는 것처럼 한 행동에서 렌더가
+   *  몇 번씩 도는 구간에서 이게 화면이 버벅이는 것처럼 보였다.
+   *  CLAUDE.md 규칙대로 **만료 시각을 상태로 두고 render가 다시 심어**, 남은 시간 동안
+   *  클래스가 유지되고 restoreBoardAnimationPhases가 재생 위치를 그대로 이어 붙인다. */
+  private cardEnterUntil = new Map<string, number>()
   /** 온보딩 필드 만료 뱃지의 카드별 직전 표시 턴수. 값이 바뀐 렌더에만 팝(is-pop)을 1회 부여해
       매 렌더 DOM 재생성으로 인한 연속 깜빡임을 막는다(갱신 턴에만 딱 한 번). */
   private fieldExpiryLastShown = new Map<string, number>()
@@ -243,34 +258,33 @@ export class GameBoardRenderer {
 
   /** 보스 칸 기믹 격자 뷰. BossEventController가 굴린 격자를 그대로 밀어 넣는다. */
   private bossGimmickGrid: BossGimmickGridView | null = null
-  /** 격자가 막 켜졌음을 표시하는 1회성 플래그 — 등장 연출을 첫 렌더에만 태운다. */
-  private bossGimmickEntering = false
+  /** 격자 등장 연출이 끝나는 시각. 1회 소비가 아니라 **만료 시각**인 이유는 카드 낙하와
+   *  같다 — 연출이 도는 동안 다른 이유로 render가 한 번 더 돌면 클래스가 사라져
+   *  애니메이션이 통째로 끊긴다(화면이 버벅이는 것처럼 보인다). */
+  private bossGimmickEnteringUntil = 0
   setBossGimmickGrid(grid: BossGimmickGridView | null): void {
     // null → 격자로 바뀌는 순간(= 보스 페이지 진입)에만 등장 연출을 예약한다.
-    if (grid && !this.bossGimmickGrid) this.bossGimmickEntering = true
-    if (!grid) this.bossGimmickEntering = false
+    if (grid && !this.bossGimmickGrid) this.bossGimmickEnteringUntil = Date.now() + BOSS_GIMMICK_ENTER_MS
+    if (!grid) this.bossGimmickEnteringUntil = 0
     this.bossGimmickGrid = grid
   }
-  /** 등장 연출 플래그를 읽고 소비한다. 재렌더에서 애니메이션이 반복되지 않게 1회만 참이다. */
+  /** 등장 연출이 아직 도는 중인가. 만료 전까지 참이라 렌더가 몇 번 돌아도 이어진다
+   *  (재생 위치는 restoreBoardAnimationPhases가 신원으로 인계한다). */
   consumeBossGimmickEntering(): boolean {
-    if (!this.bossGimmickEntering) return false
-    this.bossGimmickEntering = false
-    return true
+    return this.bossGimmickEnteringUntil > Date.now()
   }
   /** 렌더 호출 횟수. 여러 타일이 같은 render 안에서 같은 1회성 플래그를 보게 한다. */
   private renderPass = 0
   /** 피격 게이지 연출이 유지되는 시각. 이 사이의 render는 클래스를 다시 심는다. */
   private hpDamagePulseUntil = 0
   getRenderPass(): number { return this.renderPass }
-  /** 배율이 막 다시 굴려졌음을 표시하는 1회성 플래그 — 새 배율 등장 연출용. */
-  private bossGimmickRelabel = false
+  /** 새 배율 등장 연출이 끝나는 시각(등장 플래그와 같은 이유로 만료식이다). */
+  private bossGimmickRelabelUntil = 0
   markBossGimmickRelabel(): void {
-    this.bossGimmickRelabel = true
+    this.bossGimmickRelabelUntil = Date.now() + BOSS_GIMMICK_RELABEL_MS
   }
   consumeBossGimmickRelabel(): boolean {
-    if (!this.bossGimmickRelabel) return false
-    this.bossGimmickRelabel = false
-    return true
+    return this.bossGimmickRelabelUntil > Date.now()
   }
   /** 배율 리롤 직전 — 지금 붙어 있는 배율 표기를 먼저 사그라뜨린다(연출은 BossFxView). */
   fadeBossGimmickLabels(): Promise<void> {
@@ -1005,7 +1019,7 @@ export class GameBoardRenderer {
       isValidHandTarget ? 'is-hand-target' : '',
       isBlockedHandTarget ? 'is-hand-target-blocked' : '',
       span > 1 ? 'is-grouped' : '',
-      this.hasRendered && !this.previousCardIds.has(card.id) ? 'is-entering' : '',
+      this.isCardEntering(card.id) ? 'is-entering' : '',
       this.shouldAnimateGroup(card.id, span) ? 'is-newly-grouped' : '',
       card.isFrozen() ? 'is-frozen' : '',
       // 비대화된 양초 조각 — 부푼 상태가 다음 턴에도 남아야 "판이 무거워졌다"가 보인다.
@@ -4987,6 +5001,17 @@ export class GameBoardRenderer {
     })
   }
 
+  /** 이 카드가 아직 낙하 연출 중인가 — 처음 보이면 만료 시각을 새로 찍고, 그 뒤로는
+   *  남은 시간 동안 계속 true다(렌더가 여러 번 돌아도 연출이 끊기지 않는다). */
+  private isCardEntering(cardId: string): boolean {
+    if (!this.hasRendered) return false
+    if (!this.previousCardIds.has(cardId)) {
+      this.cardEnterUntil.set(cardId, Date.now() + CARD_ENTER_MS)
+      return true
+    }
+    return (this.cardEnterUntil.get(cardId) ?? 0) > Date.now()
+  }
+
   /** Remember ids and spans after each render for enter/merge animations. */
   private rememberRenderedCards(): void {
     const ids = new Set<string>()
@@ -5002,6 +5027,11 @@ export class GameBoardRenderer {
     // 사라진 필드 카드의 만료-표시 캐시를 정리해 맵이 무한정 커지지 않게 한다.
     for (const cachedId of this.fieldExpiryLastShown.keys()) {
       if (!ids.has(cachedId)) this.fieldExpiryLastShown.delete(cachedId)
+    }
+    // 낙하 연출 만료표도 같이 턴다(사라진 카드 + 이미 끝난 연출).
+    const now = Date.now()
+    for (const [cachedId, until] of this.cardEnterUntil) {
+      if (!ids.has(cachedId) || until <= now) this.cardEnterUntil.delete(cachedId)
     }
     // Mirror the same snapshot pattern for hand cards.
     const handUids = new Set<string>()

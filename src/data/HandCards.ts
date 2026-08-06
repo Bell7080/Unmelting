@@ -666,10 +666,11 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     name: '칼날 파편',
     category: 'attack',
     synergyTags: ['blade'],
-    // 피해 = 랜덤 단일 적에게 1(+강화). 대상이 무작위라 확정 처치 계산엔 쓰지 않는다.
-    damageProfile: { base: { atkMult: 0, flat: 1 }, triple: { atkMult: 0, flat: 3 }, deterministic: false },
-    description: '필드 랜덤 적 1장 1피해',
-    tripleDescription: '필드 랜덤 적 1장 3피해',
+    // 피해 = 랜덤 단일 적에게 (0.5공+1)(+강화). 대상이 무작위라 확정 처치 계산엔 쓰지 않는다.
+    // 공격력 축이 붙어야 씨앗 카드가 후반까지 죽지 않는다(칼날의 서·검집이 같은 값을 쓴다).
+    damageProfile: { base: { atkMult: 0.5, flat: 1 }, triple: { atkMult: 1.5, flat: 3 }, deterministic: false },
+    description: '필드 랜덤 적 1장 (0.5공+1)피해',
+    tripleDescription: '필드 랜덤 적 1장 (1.5공+3)피해',
     targeting: {
       base: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: null },
