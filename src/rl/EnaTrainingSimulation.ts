@@ -1409,7 +1409,9 @@ export class EnaTrainingSimulation {
   private playCountRpsEvent(mode: EnaEventPlayMode, cfg: CountRpsConfig): number {
     const stakeUnit = Math.max(1, Math.round(cfg.baseStake * (1 + this.turn * 0.02)))
     const stake = stakeUnit * (mode === 'safe' ? 1 : 2)
-    const totalRounds = Object.values(cfg.deck).reduce((s, n) => s + n, 0)
+    // 실게임은 덱을 다 소진하지 않고 maxRounds에서 끊는다(runCountRps.playFinished).
+    const deckSize = Object.values(cfg.deck).reduce((s, n) => s + n, 0)
+    const totalRounds = Math.max(1, Math.min(deckSize, cfg.maxRounds ?? deckSize))
     const rounds = mode === 'safe' ? Math.min(4, totalRounds) : totalRounds
     // 차단(불빛 비용, 층 인플레) — 역발상 플레이는 매 판 차단으로 후보를 좁힌다.
     const blockItem = cfg.items.find((it) => it.id === 'block')

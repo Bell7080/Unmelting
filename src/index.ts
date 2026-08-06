@@ -735,6 +735,8 @@ async function playResourceTrail(
   const theme = themeOverride ?? rule.theme
   if (source.kind === 'card') {
     await boardRenderer.animateResourceTrailFromCard(source.cardId, rule.target, count, theme)
+  } else if (source.kind === 'rect') {
+    await boardRenderer.trails.animateResourceGain(source.rect, rule.target, count, theme)
   } else if (source.kind === 'center') {
     await boardRenderer.animateResourceTrailFromCenter(rule.target, count, theme)
   } else {
@@ -2417,7 +2419,10 @@ async function applyHandSingle(
     gameState.character.takeDirectDamage(result.selfDamage)
     recordNotice(`${usedDef?.name ?? '카드'}의 대가 — 자신이 ${result.selfDamage} 피해를 입었다`, 'hurt')
     render()
-    await boardRenderer.animatePlayerDamageImpact(result.selfDamage)
+    // 자해는 카드가 나가는 **그 박자에** 함께 보여야 한다 — 기다리면 "적을 때린 뒤
+    // 따로 한 대 맞는" 두 사건이 되어 턴이 늘어지고 인과가 끊긴다. 모델은 이미 깎였고
+    // 사망 판정도 모델을 보므로, 연출만 겹쳐 흘려보낸다.
+    void boardRenderer.animatePlayerDamageImpact(result.selfDamage)
     relicEffects.applyAnomalyHealthLoss()
     relicEffects.applyDemonDollSelfDamage(result.selfDamage)
     // 제물 패밀리(자해 전용): 카드(혈서)·방패(응고)·적 분산 피해(수혈)로 환급한다.
@@ -2481,6 +2486,14 @@ async function applyHandSingle(
 
   // Animate removals caused by the single hand card while the old board DOM is
   // still present. This is the "previous effect" beat the combo waits for.
+  // 처치 회복(모닥불·바늘)의 하트는 **잡은 적 자리**에서 떨어져야 한다. 화면 중앙에서
+  // 나오면 "허공에서 체력이 찼다"로 읽힌다. 카드가 지워지기 전에 rect를 먼저 잡아 둔다.
+  const killedEnemyRect: DOMRect | null = result.removedFieldCards
+    .filter((r) => r.type === CardType.ENEMY)
+    .map((r) => boardRenderer.findCardElement(r.cardId)?.getBoundingClientRect() ?? null)
+    .find((rect): rect is DOMRect => rect !== null) ?? null
+  const killedEnemySource: ResourceTrailSource =
+    killedEnemyRect ? { kind: 'rect', rect: killedEnemyRect } : { kind: 'center' }
   if (result.removedFieldCards.length > 0) {
     await boardRenderer.animateCardConsumeByIds(result.removedFieldCards, {
       suppressBurstIds: singleDamagedIds,
@@ -2517,7 +2530,7 @@ async function applyHandSingle(
     if (enemiesKilled > 0) {
       const beforeBonfireResources = snapshotPlayerResources()
       gameState.character.heal(result.bonfireHealOnKill)
-      await playPlayerGainTrails({ kind: 'center' }, beforeBonfireResources)
+      await playPlayerGainTrails(killedEnemySource, beforeBonfireResources)
     }
   }
   // 바늘: 자해 딜로 적을 처치했을 때 체력을 회복한다(모닥불과 동일 경로).
@@ -2526,7 +2539,7 @@ async function applyHandSingle(
     if (enemiesKilled > 0) {
       const beforeNeedleResources = snapshotPlayerResources()
       gameState.character.heal(result.needleHealOnKill)
-      await playPlayerGainTrails({ kind: 'center' }, beforeNeedleResources)
+      await playPlayerGainTrails(killedEnemySource, beforeNeedleResources)
     }
   }
 

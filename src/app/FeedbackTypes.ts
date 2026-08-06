@@ -14,7 +14,12 @@ export interface PlayerResourceSnapshot {
 }
 
 /** 트레일 출발점 — 카드/화면 중앙/체인 배너. */
-export type ResourceTrailSource = { kind: 'card'; cardId: string } | { kind: 'center' } | { kind: 'chain' }
+export type ResourceTrailSource =
+  | { kind: 'card'; cardId: string }
+  | { kind: 'center' }
+  | { kind: 'chain' }
+  /** 이미 사라진 카드 자리에서 떨어뜨릴 때 — render가 칸을 지우기 전에 잡아 둔 rect. */
+  | { kind: 'rect'; rect: DOMRect }
 
 /** 수치형 트레일이 다루는 자원 종류(NUMERIC_RESOURCE_TRAILS 키와 동일). */
 export type TrailResourceKind = 'health' | 'shield' | 'ember' | 'gauge' | 'attack' | 'score' | 'coin' | 'hand'

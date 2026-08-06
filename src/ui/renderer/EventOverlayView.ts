@@ -465,7 +465,8 @@ export class EventOverlayView {
       ;[deckQueue[i], deckQueue[j]] = [deckQueue[j], deckQueue[i]]
     }
     // 판별 결과 기록 — 상단 별(노랑=승/빨강=패/회색=비김)로 도전 이력을 보여준다.
-    const totalRounds = deckQueue.length
+    // 던질 수 있는 판 수. 덱보다 작으면 남은 패를 확정하지 못한 채 끝난다(확률 읽기 유지).
+    const totalRounds = Math.max(1, Math.min(deckQueue.length, cfg.maxRounds ?? deckQueue.length))
     const roundResults: ('win' | 'lose' | 'tie')[] = []
     let net = 0
     let streak = 0
@@ -494,6 +495,8 @@ export class EventOverlayView {
 
     const deckCount = (h: RpsHand): number => deckQueue.filter((x) => x === h).length
     const deckEmpty = (): boolean => deckQueue.length === 0
+    /** 더 던질 수 있는가 — 덱 소진 또는 판 수 소진. 진행/종료 판정은 전부 이 창구를 쓴다. */
+    const playFinished = (): boolean => deckEmpty() || roundResults.length >= totalRounds
     const avail = (): number => snap.light + net
     const resLeft = (res: EventResourceKind): number => (res === 'light' ? avail() : mirror[res])
     const streakMult = (s: number): number => Math.min(3, 1 + Math.max(0, s) * 0.5)
@@ -503,7 +506,7 @@ export class EventOverlayView {
       it.costRes === 'light' ? Math.max(1, Math.round(it.costAmount * (1 + snap.floor * 0.02))) : it.costAmount
 
     const itemAffordable = (it: RpsItemDef): boolean => {
-      if (busy || deckEmpty() || usedItems.has(it.id)) return false
+      if (busy || playFinished() || usedItems.has(it.id)) return false
       if (resLeft(it.costRes) < itemCost(it)) return false
       // 체력 지불은 5 아래로 못 내려간다(자살 방지).
       if (it.costRes === 'health' && mirror.health - itemCost(it) < 5) return false
@@ -689,7 +692,7 @@ export class EventOverlayView {
         selectedMult = best ?? 0
         stakeEls.forEach((b) => b.classList.toggle('is-selected', Number(b.dataset.mult) === selectedMult))
       }
-      const canThrow = !busy && !deckEmpty() && selectedMult > 0 && avail() > 0
+      const canThrow = !busy && !playFinished() && selectedMult > 0 && avail() > 0
       throwEls.forEach((b) => b.classList.toggle('is-disabled', !canThrow))
     }
 
@@ -752,7 +755,7 @@ export class EventOverlayView {
     await new Promise<void>((resolve) => {
       // 종료: 완승 유물 판정 후 패널을 접고 resolve → 호출부가 마무리 대사를 UI가 사라진 뒤 출력.
       const finish = (): void => {
-        if (deckEmpty() && net >= cfg.relicWinMultiple * stakeUnit) {
+        if (playFinished() && net >= cfg.relicWinMultiple * stakeUnit) {
           sink.grantRelic()
           void this.host.trails.animateResourceGain(slotEl.getBoundingClientRect(), 'relic', 4, 'treasure-gain')
           onMoment?.('rps-relic')
@@ -806,7 +809,7 @@ export class EventOverlayView {
           if (b.classList.contains('is-disabled')) return
           const mine = b.dataset.throw as RpsHand
           const stake = stakeUnit * selectedMult
-          if (busy || spinning || deckEmpty() || stake > avail() || stake <= 0) return
+          if (busy || spinning || playFinished() || stake > avail() || stake <= 0) return
           busy = true
           const mult = doubleNext ? 2 : 1
           const ward = wardNext
@@ -861,7 +864,7 @@ export class EventOverlayView {
               pushToast('tie', ward ? `${vs} · 보호가 백작 몫을 막았다` : `${vs} · 백작 몫 -${rake.toLocaleString()}`)
             }
             update()
-            if (deckEmpty()) window.setTimeout(finish, 950)
+            if (playFinished()) window.setTimeout(finish, 950)
             else window.setTimeout(beginRound, 850)
           })
         })

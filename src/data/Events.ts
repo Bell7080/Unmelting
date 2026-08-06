@@ -172,6 +172,12 @@ export interface CountRpsConfig {
    * (벅샷 룰렛의 탄창처럼). 카운팅으로 확률을 읽고, 아이템으로 순서를 들춘다.
    */
   deck: Record<RpsHand, number>
+  /**
+   * 실제로 던질 수 있는 판 수. 덱보다 작으면 **덱을 다 보지 못한 채** 끝난다 —
+   * 조성은 공개돼도 남은 패를 확정할 수 없어 카운팅이 확률 읽기로 남는다.
+   * 생략하면 덱을 소진할 때까지 던진다.
+   */
+  maxRounds?: number
   /** 기본 판돈(층 보정은 런타임에서 곱한다). */
   baseStake: number
   /**
@@ -322,9 +328,11 @@ const EVENT_003: EventDefinition = {
   ],
   minigame: {
     kind: 'count-rps',
-    // 3장 = 3판. 9판짜리 덱은 한 이벤트에서 불빛을 너무 많이 뽑아 경제가 무너졌다.
-    // 짧아진 대신 카운팅이 또렷해진다 — 2판이면 남은 한 장이 확정된다.
-    deck: { rock: 1, paper: 1, scissors: 1 },
+    // 조성은 9장을 그대로 공개하되 던지는 것은 3판뿐이다. 9판을 다 던지면 한 이벤트에서
+    // 불빛을 너무 많이 뽑아 경제가 무너지고, 덱을 3장으로 줄이면 2판 만에 남은 패가
+    // 확정돼 예측이 너무 쉬워진다 — 판만 잘라 확률 읽기를 남긴다.
+    deck: { rock: 3, paper: 3, scissors: 3 },
+    maxRounds: 3,
     baseStake: 60,
     tieLossFraction: 0.5,
     relicWinMultiple: 6,
