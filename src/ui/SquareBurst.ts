@@ -39,6 +39,10 @@ export type BurstTheme =
   | 'hand-tool'
   | 'hand-control'
   | 'hand-attack'
+  // 공격 손패의 큰 시너지 축 — 사각 파편 문법은 유지하고 색/비율만 달리한다.
+  | 'hand-attack-blade'
+  | 'hand-attack-sacrifice'
+  | 'hand-attack-wax'
   // 60F 불씨 기사단장 전용 카드 발동 톤 — 촛농/양초/불씨.
   | 'boss-wax-drip'
   | 'boss-candle-flame'
@@ -90,6 +94,10 @@ const PALETTES: Record<BurstTheme, Palette> = {
   'hand-tool': { shades: ['#1c1304', '#6b4910', '#dca233', '#ffe9a4'] },
   'hand-control': { shades: ['#06121e', '#1f4a72', '#5fa6d8', '#dceefc'] },
   'hand-attack': { shades: ['#1c0608', '#7a1f22', '#d6492f', '#f4c34a'] },
+  // 칼날은 차가운 강철 검기, 제물은 응고된 피, 밀랍은 식은 백랍으로 읽히게 한다.
+  'hand-attack-blade': { shades: ['#101923', '#344b61', '#8ca7b8', '#e0edf2'] },
+  'hand-attack-sacrifice': { shades: ['#180307', '#59101a', '#a92735', '#ed7180'] },
+  'hand-attack-wax': { shades: ['#59616a', '#aab3b9', '#e8e9e4', '#fffdf2'] },
   // 불씨 기사단장 방패 카드 — 흘러내리는 황금 촛농(꿀빛 호박색).
   'boss-wax-drip': { shades: ['#241405', '#7a4e12', '#d99a3a', '#ffe6ad'] },
   // 불씨 기사단장 회복 카드 — 밝은 양초 불빛(따뜻한 크림빛).

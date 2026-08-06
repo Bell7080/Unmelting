@@ -49,7 +49,7 @@ import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { type EventId } from '@data/Events'
 import { CandleMode } from '@entities/Character'
-import { HandCardId, HandCategory } from '@entities/HandCard'
+import { HandCardId, HandCategory, type HandCardDefinition } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS } from '@data/HandCards'
 import { RECIPES, type RecipeEffectKind } from '@data/Recipes'
 import { getRelicDef, relicStackFeedback, type CustomRelicProfile, type RelicId } from '@data/Relics'
@@ -574,6 +574,16 @@ function burstThemeForCategory(cat: HandCategory): BurstTheme {
   }
 }
 
+/** 공격 카드는 태그의 물성을 먼저 보여 주고, 나머지는 기존 분류 팔레트를 유지한다.
+ * 우선순위는 자해 대가가 있는 제물 → 칼날 → 밀랍 → 불씨(기본 공격) 순서다. */
+function burstThemeForHandCard(def: HandCardDefinition): BurstTheme {
+  if (def.category !== 'attack') return burstThemeForCategory(def.category)
+  if (def.synergyTags?.includes('sacrifice')) return 'hand-attack-sacrifice'
+  if (def.synergyTags?.includes('blade')) return 'hand-attack-blade'
+  if (def.synergyTags?.includes('wax')) return 'hand-attack-wax'
+  return 'hand-attack'
+}
+
 /** Score gain pulse — number tick, sparkle, and square burst all start on the
  *  currently visible panel so the reward value rises during the impact beat. */
 function burstScoreGain(): void {
@@ -816,6 +826,18 @@ async function playHandTargetBlasts(
         : boardRenderer.animateTargetBlastFromCenterToCard(cardId, theme)
     })
   )
+}
+
+/** 다발 투척은 대상 ID를 고유화하지 않는다. 같은 적을 연속으로 맞혀도 실제 발수만큼
+ * 청회색 곡사가 하나씩 보여야 칼날의 서 설명과 전투 피드백이 일치한다. */
+async function playRepeatedHandProjectiles(cardIds: readonly string[], theme: BurstTheme): Promise<void> {
+  if (cardIds.length === 0) return
+  // 기존 광역 대상 스태거보다 조금 짧게 잡아 한 카드의 빠른 연속 투척으로 묶어 읽히게 한다.
+  const interval = Math.max(58, Math.min(92, Math.round(360 / cardIds.length)))
+  await Promise.all(cardIds.map(async (cardId, index) => {
+    if (index > 0) await wait(index * interval)
+    return boardRenderer.animateTargetBlastFromCenterToCard(cardId, theme)
+  }))
 }
 
 /** 레시피는 손패 분류가 없으므로 효과가 하는 일로 블라스트 톤을 고른다. */
@@ -2352,7 +2374,7 @@ async function applyHandSingle(
   // Reveal the used hand card near screen center, then dissolve it with its
   // category burst. This makes the hand action read like a card being played
   // instead of a slot-local pop.
-  const handUseTheme = usedDef ? burstThemeForCategory(usedDef.category) : null
+  const handUseTheme = usedDef ? burstThemeForHandCard(usedDef) : null
   if (handUseTheme) {
     // Start the flight clone, then continue immediately. The model hand card is
     // already consumed, so the compact slot can disappear on the next render
@@ -2401,7 +2423,15 @@ async function applyHandSingle(
   ]
   // The played-card preview dissolves at center; this square-card blast points
   // from that center beat to every field cell that was hit, removed, gained, or hardened.
-  if (handUseTheme) await playHandTargetBlasts(affectedCardIds, handUseTheme)
+  if (handUseTheme) {
+    // 칼날의 서는 모델이 기록한 실제 무작위 표적 순서를 보존한다. 일반 대상 효과는 기존처럼
+    // 카드 ID를 고유화해 광역 한 방이 같은 대상을 중복 발사하는 일을 막는다.
+    if (usedDef?.id === 'blade-tome' && result.projectileTargetCardIds?.length) {
+      await playRepeatedHandProjectiles(result.projectileTargetCardIds, handUseTheme)
+    } else {
+      await playHandTargetBlasts(affectedCardIds, handUseTheme)
+    }
+  }
   await Promise.all([
     boardRenderer.animateDamageNumbersById(singleDamageLosses),
     boardRenderer.animateWaxFreezeByIds(newlyFrozenIds),

@@ -147,6 +147,21 @@ describe('HandSystem broad hand effects', () => {
     expect(enemy.getHealth()).toBe(2) // 1 + 2 = 3 피해
   })
 
+  it('칼날의 서는 실제 발수만큼 무작위 표적 순서를 UI 결과에 보존한다', () => {
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+    const enemy = new Card('tome-target', CardType.ENEMY, '연습 표적', 'test', 20, 1, {})
+    gameState.lanes[0].setCardAtDistance(0, enemy)
+    // 누적 10회면 기본 1발에 2발이 더해져 총 3발이다.
+    gameState.enhancements.bladeShardUseCount = 10
+    gameState.character.addHandCard(DropSystem.makeCard('blade-tome'))
+
+    const result = HandSystem.useSingle(gameState, chain, 0)
+
+    expect(result.success).toBe(true)
+    expect(result.projectileTargetCardIds).toEqual(['tome-target', 'tome-target', 'tome-target'])
+  })
+
   it('makes triple 밀랍 freeze every front-row turn timer card', () => {
     const gameState = new GameState()
     const chain = HandSystem.newChain()
