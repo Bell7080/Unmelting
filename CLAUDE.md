@@ -73,10 +73,10 @@ npm run build    # verify 포함
   같은 커밋에서 함께 고친다.** 런타임과 시뮬이 어긋나면 에나는 실제로 존재하지 않는
   게임을 학습하고, 테스트도 화면도 멀쩡해서 그 사실이 묻힌다. 상세는
   `Ena_Companion_AI_Design.md` §12-3.
-- 관측/행동 계약(`ENA_FEATURE_COUNT` 371 · `ENA_ACTION_SPACE` 27)은 시뮬과 트레이너가
+- 관측/행동 계약(`ENA_FEATURE_COUNT` 373 · `ENA_ACTION_SPACE` 27)은 시뮬과 트레이너가
   공유한다. 차원이 바뀌면 `EnaPolicyStore`가 구버전 정책을 거부하고 교사 정책으로
   폴백한다 — **재학습이 필요한 주(major) 버전급 변경**이다.
-- 371차원 동봉 정책은 `npm run ena:pretrain`으로만 재생성한다. 이 명령은 정책 JSON과
+- 373차원 동봉 정책은 `npm run ena:pretrain`으로만 재생성한다. 이 명령은 정책 JSON과
   `Ena_Pretraining_Report.md` 비교/감사 결과를 같은 고정 시드에서 함께 갱신한다.
 - 보스 체력은 `BossFightBudget`(손패 3~4장 + `supportHits`)에서 역산한다. **시뮬도 그
   화력을 실제로 넣어야 한다**(`supportStrikeChance`) — 빼면 체력을 뽑은 세계와 에나가
@@ -136,6 +136,25 @@ npm run build    # verify 포함
 - 칸 종류를 늘릴 때 필요한 것은 `BOSS_GIMMICK_KIND_META` **한 줄**이다(label·multiplier·
   tone). 색·타격 애니메이션·버스트는 `tone`으로 갈리므로 CSS/렌더러 분기를 새로 쓰지
   않는다. 전용 색이 필요할 때만 `.is-kind-*` 규칙을 덧쓴다.
+- 칸에는 **두 축**이 있다. 배율 축(`kind` = 약점·경화·앞으로 늘 감경/증폭)과 부가물 축
+  (`fixture` = 함정·보물)은 독립이라 같은 칸에 함께 얹힌다 — "약점인데 함정"이 성립해야
+  때리고 싶은 칸이 곧 아픈 칸이 되는 갈등이 생긴다.
+- 부가물은 배율을 건드리지 않는다. **때린 사람에게** 무언가를 한다(함정=피해, 보물=손패).
+  새 부가물은 `BOSS_GIMMICK_FIXTURE_META` 한 줄 + `.is-fixture-*` CSS 한 규칙이다.
+- ★ **칸 함정은 필드 함정과 같은 것으로 취급한다.** 거미줄·폭탄·포자를 지우는 손패라면
+  전부 닿고(`bossFixtureMatchesFilter`), 무시 확률·피해 보너스·함정 처리 유물도 같이
+  걸린다. 새 함정/보물 손패·유물·시련을 만들 때 **필드 경로만 보고 끝내지 않는다** —
+  화면에 같은 '함정'인데 한쪽만 반응하면 규칙이 아니라 고장으로 읽힌다.
+- 함정 처리 신호의 단일 출처는 `GameState.onTrapResolved`다(필드 카드 · 보스 칸 공용).
+  함정 처리에 반응하는 유물은 여기 한 곳에만 붙인다.
+- 부가물 효과 정산은 `resolveBossCellFixtures()` **한 창구**다. 모델은 "떨어졌다"까지만
+  기록하고(`takeFixtureEvents`), 피해·손패 지급은 직접 타격과 손패가 같은 이 함수를 쓴다.
+- 부가물 재생성은 **보스가 때리는 beat에만** 돈다(`replenishFixtures`). 타격마다 채우면
+  키틴으로 지우는 의미가 사라지고 보물이 무한 보급이 된다. 굳은 보스는 이 beat를 건너뛴다.
+- 배율 리롤(`rerollKinds`)은 부가물 자리를 옮기지 않는다. 같이 굴러다니면 "이 함정을
+  지우고 때린다"는 계획이 매 타격마다 무효가 되고 지우는 손패가 도박이 된다.
+- 함정 부위 피해는 보스 공격력에서 파생한다(`bossGimmickTrapDamage`) — 고정 수치로 두면
+  30F에서 아프고 100F에서는 없는 것과 같아진다.
 - 부위 파괴 수치(칸 내구도·파괴 보너스·시뮬 환산 배수)의 단일 출처는
   `BossGimmickManager`의 `bossGimmickCellDurability`/`bossGimmickBreakDamage`/
   `bossGimmickBreakBonusFactor`다. 셋은 같은 식에서 파생되므로 한쪽만 고치지 않는다.
@@ -182,7 +201,7 @@ npm run build    # verify 포함
   타일마다 소비하면 다행 보스의 첫 행만 연출을 먹는다.
 - 칸 개념이 없는 학습 시뮬은 `bossGimmickExpectation()` 요약(조준 = 최고 배율,
   광역 = 칸 수 × 평균 배율, 부위 파괴 = `breakBonusFactor` 누적 배수)으로 같은
-  밸런스를 따라온다.
+  밸런스를 따라온다. 부가물도 같은 요약에 실린다(조준 = 칸 확률로 굴림, 광역 = 전부).
 - 보스전은 별도 게임 화면이 아니라 **일반 레일 톤 이벤트**다. 거대 1칸 보스 타일 →
   레일형 3보상 드롭 → 상점 톤 시련 탭(EXIT 후 셔터 상승) 순서를 유지한다.
 - 보스 이벤트의 1/2/3턴은 **가상 턴**이다. 실제 런 턴 카운터는 전투/시련이 끝날

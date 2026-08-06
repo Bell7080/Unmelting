@@ -48,7 +48,8 @@ import {
   WITCH_ENRAGE_ATK,
   WITCH_ENRAGE_HP,
 } from '@data/BossPages'
-import { BossGimmickManager, BOSS_GIMMICK_KIND_META } from '@systems/BossGimmickManager'
+import { BossGimmickManager, BOSS_GIMMICK_KIND_META, BOSS_GIMMICK_FIXTURE_META } from '@systems/BossGimmickManager'
+import { resolveBossCellFixtures } from '@systems/BossCellFixtures'
 import { discardBossCellStrikes } from '@/app/BossCellFeedback'
 
 type WaxKnightCardEffect = 'shield' | 'heal' | 'strike'
@@ -602,6 +603,8 @@ export class BossEventController {
     } else {
       await this.br.animateDamageNumbersById(dealt > 0 ? [{ cardId: card.id, amount: dealt }] : [])
     }
+    // 때린 칸에 함정/보물이 얹혀 있었다면 지금 정산한다 — 손패 경로와 같은 창구다.
+    if (await this.resolveCellFixtures()) return
     // 플레이어가 보스를 직접 공격했으므로 공격 시 발동 유물(훌륭한 대화수단)을 판정한다.
     await this.inject.applyPlayerAttackRelics()
 
@@ -622,6 +625,9 @@ export class BossEventController {
       card.tickFrozen()
       this.inject.render()
     } else if (turnMod === 0) {
+      // 보스가 움직이는 beat에 부가물이 다시 돋는다. 타격마다 채우면 지우는 의미가 사라지고
+      // 보물이 무한 보급이 되므로, 재생성은 반격 주기에만 묶는다(굳은 보스는 이 beat를 건너뛴다).
+      await this.regrowCellFixtures()
       if (state.def.specialEnemyKind === 'waxWitch') {
         // 100F 페이지 능력은 해금 뒤에도 유지된다 — 상위 페이지는 하위 페이지 능력을 함께 발동한다.
         // 1페이지 능력(공격주기마다 손패 2장 소각)은 2·3페이지에서도 계속 실행한다.
@@ -701,9 +707,72 @@ export class BossEventController {
     this.inject.setInputLocked(false)
   }
 
+  /**
+   * 보스 반격 beat: 비어 있는 칸에 부가물이 다시 돋는다. 새 자리를 한 박자 보여 준 뒤
+   * 나머지 반격 연출로 넘어가야 "언제 다시 생겼는지"가 읽힌다.
+   */
+  private async regrowCellFixtures(): Promise<void> {
+    if (!this.gimmicks.isActive) return
+    const placed = this.gimmicks.replenishFixtures()
+    if (placed.length === 0) return
+    this.syncGimmickGrid()
+    this.inject.render()
+    const traps = placed.filter((p) => p.fixture === 'trap').length
+    const treasures = placed.length - traps
+    const parts: string[] = []
+    if (traps > 0) parts.push(`${BOSS_GIMMICK_FIXTURE_META.trap.label} ${traps}칸`)
+    if (treasures > 0) parts.push(`${BOSS_GIMMICK_FIXTURE_META.treasure.label} ${treasures}칸`)
+    this.inject.recordNotice(`보스의 몸에 ${parts.join(' · ')}이(가) 다시 돋았다`, 'info')
+    await this.pauseBeat()
+  }
+
+  /**
+   * 이번 행동이 건드린 칸 부가물(함정/보물)을 정산한다 — 직접 타격과 손패가 **같은 창구**를 쓴다.
+   * 함정 피해로 플레이어가 쓰러지면 true를 돌려주고, 호출부는 그 자리에서 흐름을 끊는다.
+   */
+  private async resolveCellFixtures(): Promise<boolean> {
+    if (!this.eventState || !this.gimmicks.hasPendingFixtures) return false
+    const bossCardId = this.eventState.card.id
+    const result = resolveBossCellFixtures(this.gs)
+    // 칸에서 부가물이 떨어졌으니 격자 뷰를 먼저 맞춘다(격자는 푸시형 스냅샷이다).
+    this.syncGimmickGrid()
+    if (result.treasureCardNames.length > 0) {
+      this.inject.recordNotice(
+        `보물 부위에서 ${result.treasureCardNames.join(' · ')}이(가) 굴러 나왔다 — 손패 +${result.treasureCardNames.length}`,
+        'win'
+      )
+      this.inject.render()
+      // 손패 획득 공용 창구(카드 토큰)를 그대로 지난다 — 보스라고 다른 어휘를 쓰지 않는다.
+      await this.br.animateResourceTrailFromCard(bossCardId, 'hand', result.treasureCardNames.length, 'hand-recovery')
+    }
+    if (result.trapsIgnored > 0) {
+      this.inject.recordNotice(`${BOSS_GIMMICK_FIXTURE_META.trap.label} 부위를 무시했다 (함정의 대가)`, 'win')
+    }
+    if (result.trapDamageTaken > 0) {
+      this.inject.recordNotice(
+        `${BOSS_GIMMICK_FIXTURE_META.trap.label} 부위를 밟았다 — ${result.trapDamageTaken} 피해`,
+        'hurt'
+      )
+      await this.br.animatePlayerDamageImpact(result.trapDamageTaken)
+      this.inject.render()
+      // 함정도 받는 피해다 — 넓은 축 제물 유물(주사기·피의 대가)이 필드 함정과 같이 걸린다.
+      this.inject.applyAnomalyHealthLoss()
+    }
+    if (result.trapsCleared > 0) {
+      this.inject.recordNotice(`${BOSS_GIMMICK_FIXTURE_META.trap.label} 부위 ${result.trapsCleared}칸을 치웠다`, 'info')
+    }
+    if (!this.gs.character.isAlive() && !this.gs.character.authoritySurvivePending) {
+      await this.inject.handlePlayerDeath()
+      return true
+    }
+    return false
+  }
+
   /** 손패/조합식 데미지 후처리. checkBossDefeatedAfterHandEffect에서 위임. */
   async applyPostHandEffect(): Promise<void> {
     if (!this.eventState) return
+    // 부가물 정산이 먼저다 — 보스가 쓰러졌더라도 밟은 함정과 연 보물은 이미 일어난 일이다.
+    if (await this.resolveCellFixtures()) return
     await this.consumeHandGiftThresholds(this.eventState.card.id)
     if (this.eventState.card.getHealth() <= 0) {
       await this.handleDefeated()
@@ -998,8 +1067,9 @@ export class BossEventController {
     this.syncPageState()
     // 칸 기믹 격자는 보스마다 새로 굴린다 — 약점 자리가 매 조우 달라진다.
     // 화면 노출과 판정 활성화는 인트로·타이틀이 끝난 뒤(activateGimmickGrid)로 미룬다.
-    // 칸 내구도/부위 파괴 보너스는 보스 최대 체력에서 파생한다(칸 절반이면 쓰러지는 기준).
-    this.gimmicks.beginEncounter(def.specialEnemyKind, def.maxHp)
+    // 칸 내구도/부위 파괴 보너스는 보스 최대 체력에서, 함정 부위 피해는 보스 공격력에서
+    // 파생한다 — 보스 수치만 고치면 격자도 따라온다.
+    this.gimmicks.beginEncounter(def.specialEnemyKind, def.maxHp, def.attack)
 
     this.tm.setTurnMode('boss_phase')
     this.gs.bossBattleActive = true

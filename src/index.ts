@@ -1752,10 +1752,15 @@ function resetForNewRun(): void {
     boardRenderer.playHudCounterFeedback('shield', gameState.character.shield)
     if (gameState.character.hasRelic('blood-pack')) void relicEffects.applyBloodPackHit(overflow)
   }
+  // 함정 처리 훅: 필드 함정 카드와 보스 칸 함정 부가물이 **같은 이 함수**를 지난다.
+  // 함정 처리에 반응하는 유물은 여기 한 곳에만 적는다.
+  gameState.onTrapResolved = () => {
+    if (gameState.character.hasRelic('trap-collect')) relicEffects.applyTrapCollect()
+  }
   // 카드 제거 훅: 굳은 카드(밀랍 조각) / 함정 처리(함정 수집) 유물을 발동한다.
   gameState.onCardRemoved = (card) => {
     if (card.isFrozen() && gameState.character.hasRelic('wax-fragment')) void relicEffects.applyWaxFragmentOnFrozenClear()
-    if (card.type === CardType.TRAP && gameState.character.hasRelic('trap-collect')) relicEffects.applyTrapCollect()
+    if (card.type === CardType.TRAP) gameState.onTrapResolved?.()
   }
   // 작은 태양: 빛 게이지가 한계를 넘겨 잘린 초과분만큼 불씨 손패를 지급한다.
   gameState.character.onEmberOverflow = (overflow) => {

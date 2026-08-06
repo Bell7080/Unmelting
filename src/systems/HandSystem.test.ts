@@ -386,6 +386,63 @@ describe('HandSystem 보스 칸 기믹 연동', () => {
     expect(weakDealt).toBe(plainDealt * 2)
   })
 
+  it('키틴이 보스 칸의 함정 부가물을 겨눠 지운다 — 보스는 때리지 않는다', () => {
+    // 키틴은 TRAP만 겨누는 손패라 보스 카드에는 닿지 않는다. 칸에 얹힌 함정은
+    // 칸 하나짜리 대상이므로 겨눌 수 있어야 한다 — 아니면 지울 방법이 없다.
+    const { gameState, boss, grid } = stageGriddedBoss(500)
+    const trapCell = grid.fixtureCells('trap')[0]
+    gameState.character.addHandCard(DropSystem.makeCard('chitin'))
+    const bossHpBefore = boss.getHealth()
+
+    const result = HandSystem.useSingle(gameState, HandSystem.newChain(), 0, {
+      laneIndex: 0,
+      distance: 0,
+      card: boss,
+      gimmickCellIndex: trapCell,
+    })
+
+    expect(result.success).toBe(true)
+    expect(grid.fixtureAt(trapCell)).toBeNull()
+    // 걷어낸 것이지 때린 것이 아니다.
+    expect(boss.getHealth()).toBe(bossHpBefore)
+    expect(grid.takeFixtureEvents()).toEqual([
+      { cellIndex: trapCell, fixture: 'trap', cause: 'cleared' },
+    ])
+  })
+
+  it('부가물이 없는 칸을 키틴으로 겨누면 거절된다', () => {
+    const { gameState, boss, grid } = stageGriddedBoss(500)
+    const bare = grid.getCells().find((c) => c.fixture === null)!
+    gameState.character.addHandCard(DropSystem.makeCard('chitin'))
+
+    const result = HandSystem.useSingle(gameState, HandSystem.newChain(), 0, {
+      laneIndex: 0,
+      distance: 0,
+      card: boss,
+      gimmickCellIndex: bare.index,
+    })
+
+    expect(result.success).toBe(false)
+    expect(gameState.character.hand).toHaveLength(1)
+  })
+
+  it('때린 칸의 부가물은 정산 대기열에 오른다 — 배율 피해와 같은 타격에서', () => {
+    const { gameState, boss, grid } = stageGriddedBoss(500)
+    const trapCell = grid.fixtureCells('trap')[0]
+    gameState.character.addHandCard(DropSystem.makeCard('ember'))
+    const before = boss.getHealth()
+
+    HandSystem.useSingle(gameState, HandSystem.newChain(), 0, {
+      laneIndex: 0,
+      distance: 0,
+      card: boss,
+      gimmickCellIndex: trapCell,
+    })
+
+    expect(boss.getHealth()).toBeLessThan(before)
+    expect(grid.takeFixtureEvents().map((e) => e.cause)).toEqual(['triggered'])
+  })
+
   it('필드 전체 피해는 보스를 칸 수만큼 때린다 — 광역기가 크게 들어간다', () => {
     const { gameState, boss } = stageGriddedBoss(500)
     // 단두대 단일: 자해 6 · 필드 전체 적 (1.0공+3). 공격력 1 → 칸당 4.

@@ -11,6 +11,7 @@ import type { BossGimmickStrikeView, BossHpRollStart } from '@ui/renderer/Render
 import { sfx } from '@/audio/SfxManager'
 import {
   BOSS_GIMMICK_CRACK_STAGES,
+  BOSS_GIMMICK_FIXTURE_META,
   BOSS_GIMMICK_KIND_META,
   type BossGimmickCellKind,
   type BossGimmickTone,
@@ -303,7 +304,7 @@ export class BossFxView {
 
   /** 보스 타일 위에 겹치는 칸 기믹 격자. 상태는 host가 들고 있고 여기선 마크업만 만든다.
    *  칸 자체는 투명하며(일러스트를 가리지 않는다) 정체가 드러난 칸만 표식을 남긴다. */
-  bossGimmickGridHtml(isValidHandTarget: boolean, distance = 0): string {
+  bossGimmickGridHtml(isValidHandTarget: boolean, distance = 0, cardLevelTarget = true): string {
     const grid = this.host.getBossGimmickGrid()
     if (!grid) return ''
     // 레일 행을 여러 개 차지하는 보스는 타일마다 격자 **한 행씩** 그린다.
@@ -335,19 +336,33 @@ export class BossFxView {
             : ''
         // 균열은 손상도로만 결정되는 표시 레이어다. 깨진 칸은 금 대신 꺼진 판이 된다.
         const crack = bossGimmickCrackStage(cell.wear)
+        // 부가물은 배율 표기 **아래 줄**에 따로 붙는다. 배율과 같은 줄에 섞으면
+        // "약점인데 함정"이 하나의 칸 종류처럼 읽혀 두 축이라는 게 사라진다.
+        const fixtureMeta = cell.fixture && !cell.broken ? BOSS_GIMMICK_FIXTURE_META[cell.fixture] : null
+        const fixtureText = cell.fixture === 'trap' ? `함정 ${cell.trapDamage}` : fixtureMeta?.label ?? ''
+        const fixture = fixtureMeta
+          ? `<span class="boss-gimmick-cell-fixture is-fixture-${cell.fixture}" data-fixture-tone="${fixtureMeta.tone}">${escapeHtml(fixtureText)}</span>`
+          : ''
         const aria = cell.broken
           ? `파괴된 ${meta.label || '보스'} 부위`
-          : meta.label
-            ? `${meta.label} 부위 · 피해 ${meta.multiplier}배`
-            : '보스 부위'
+          : [
+              meta.label ? `${meta.label} 부위 · 피해 ${meta.multiplier}배` : '보스 부위',
+              cell.fixture === 'trap' ? `함정 · 밟으면 ${cell.trapDamage} 피해` : '',
+              cell.fixture === 'treasure' ? '보물 · 때리면 손패 획득' : '',
+            ]
+              .filter(Boolean)
+              .join(' · ')
         // --boss-gimmick-i는 등장 연출의 칸별 지연에 쓰인다(좌상단부터 순차 점등).
         // data-tone: 칸 색/타격 애니메이션은 종류가 아니라 톤으로 갈린다 —
         // 새 칸 종류가 META 표에 한 줄 늘어도 CSS를 새로 쓰지 않아도 된다.
-        return `<button class="boss-gimmick-cell is-kind-${cell.kind} ${cell.broken ? 'is-broken' : ''} ${targeting && !cell.broken ? 'is-hand-target' : ''}"
+        // 카드 자체가 대상이면 모든 성한 칸이, 부가물만 대상이면 그 칸만 빛난다.
+        const cellTargetable = cardLevelTarget || this.host.isValidHandTargetCell(cell.index)
+        return `<button class="boss-gimmick-cell is-kind-${cell.kind} ${cell.broken ? 'is-broken' : ''} ${targeting && !cell.broken && cellTargetable ? 'is-hand-target' : ''} ${cell.fixture && !cell.broken ? `has-fixture is-fixture-${cell.fixture}` : ''}"
                         type="button" style="--boss-gimmick-i:${cell.index};" data-tone="${meta.tone}"
                         data-boss-gimmick-cell="${cell.index}" data-crack="${cell.broken ? 0 : crack}"
+                        ${cell.fixture && !cell.broken ? `data-fixture="${cell.fixture}"` : ''}
                         ${cell.broken ? 'data-broken="1" aria-disabled="true"' : ''} aria-label="${aria}">
-                  <span class="boss-gimmick-cell-crack" aria-hidden="true"></span>${label}
+                  <span class="boss-gimmick-cell-crack" aria-hidden="true"></span>${label}${fixture}
                 </button>`
       })
       .join('')

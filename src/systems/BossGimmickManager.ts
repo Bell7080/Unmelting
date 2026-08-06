@@ -40,6 +40,45 @@ export type BossGimmickCellKind = 'plain' | 'weak' | 'hardened'
 export type BossGimmickSpecialKind = Exclude<BossGimmickCellKind, 'plain'>
 
 /**
+ * 칸에 얹히는 **부가물**. `kind`(배율 축)와 다른 축이라 같은 칸에 함께 놓인다 —
+ * "약점인데 함정"이 성립해야 '때리고 싶은데 아프다'는 갈등이 생긴다.
+ *
+ * 배율 축에 새 종류(경감·증폭 등)가 몇 개 늘어도 이 축은 그대로다. 부가물은 피해를
+ * 키우거나 줄이지 않고, **때린 사람에게 무언가를 한다**:
+ *   - trap: 밟은 사람이 피해를 받는다(필드 함정과 같은 규칙 — 무시 확률·피해 보너스 포함)
+ *   - treasure: 손패를 준다
+ */
+export type BossGimmickFixture = 'trap' | 'treasure'
+
+export interface BossGimmickFixtureMeta {
+  /** 칸에 덧붙는 짧은 이름. */
+  label: string
+  /** 연출 톤 — 부가물도 종류가 아니라 톤으로 갈려 CSS 분기를 새로 쓰지 않는다. */
+  tone: BossGimmickTone
+}
+
+/** 부가물 표기/톤의 단일 출처. 새 부가물은 이 표 한 줄 + `.is-fixture-*` CSS 한 규칙이다. */
+export const BOSS_GIMMICK_FIXTURE_META: Record<BossGimmickFixture, BossGimmickFixtureMeta> = {
+  trap: { label: '함정', tone: 'cold' },
+  treasure: { label: '보물', tone: 'hot' },
+}
+
+/**
+ * 손패 대상 필터가 이 칸 부가물에 닿는가 — 판정과 화면 표시의 **공용 순수함수**다.
+ * (`HandSystem`의 실판정과 `GameBoardRenderer`의 하이라이트가 같은 답을 내야 한다.)
+ *
+ * ★ 칸 함정은 **필드 함정과 같은 것으로 취급한다**. 거미줄·폭탄·포자를 지울 수 있는
+ * 손패라면 전부 이 함정에도 닿아야 한다 — 화면에 같은 '함정'으로 보이는데 어떤 카드는
+ * 통하고 어떤 카드는 안 통하면 규칙이 아니라 고장으로 읽힌다. 그래서 포자 전용 필터도
+ * 여기서는 받아 준다.
+ */
+export function bossFixtureMatchesFilter(fixture: BossGimmickFixture, filter: string): boolean {
+  if (filter === 'any') return true
+  if (fixture === 'trap') return filter === 'trap' || filter === 'spore' || filter === 'hazard' || filter === 'trap-or-treasure'
+  return filter === 'treasure' || filter === 'enemy-or-treasure' || filter === 'trap-or-treasure'
+}
+
+/**
  * 칸 성격의 연출 톤. 렌더러가 이 값을 자기 팔레트(BurstTheme·버스트 세기)로 옮긴다 —
  * 모델이 UI 타입을 알면 레이어가 뒤집히므로 중립 토큰으로 둔다.
  * 새 칸 종류를 추가할 때 톤만 고르면 연출 분기를 따로 손댈 필요가 없다.
@@ -67,6 +106,21 @@ export const BOSS_GIMMICK_KIND_META: Record<BossGimmickCellKind, BossGimmickKind
 
 /** 부위 파괴 보너스 = 보스 최대 체력의 이 비율. 칸 하나가 깨질 때 한 번 더 꽂힌다. */
 export const BOSS_GIMMICK_BREAK_DAMAGE_RATIO = 0.1
+
+/**
+ * 함정 칸이 물리는 피해 = 보스 공격력의 이 비율. 고정 수치로 두면 30F에서 아프고
+ * 100F에서는 없는 것과 같아진다 — 보스가 세질수록 함정도 같이 세야 "때릴까 지울까"가
+ * 끝까지 선택으로 남는다. 한 대 맞는 것보다는 확실히 싸다(반격 대신 감수할 만한 값).
+ */
+export const BOSS_GIMMICK_TRAP_DAMAGE_RATIO = 0.4
+
+/** 보물 칸 하나가 주는 손패 수. 타격마다 재생성되므로 1장이 상한이다. */
+export const BOSS_GIMMICK_TREASURE_CARDS = 1
+
+/** 함정 칸의 피해. 보스 공격력에서 파생하므로 보스 수치만 고치면 따라온다. */
+export function bossGimmickTrapDamage(bossDamage: number): number {
+  return Math.max(1, Math.round(bossDamage * BOSS_GIMMICK_TRAP_DAMAGE_RATIO))
+}
 
 /** 균열 표기 단계 수. 0 = 멀쩡, 이 값 = 파괴 직전. 렌더러가 금 개수를 고르는 기준이다. */
 export const BOSS_GIMMICK_CRACK_STAGES = 3
@@ -111,6 +165,12 @@ export interface BossGimmickProfile {
   rows: number
   /** 특수 칸 배치 수. 나머지 칸은 전부 plain으로 채운다. */
   slots: ReadonlyArray<{ kind: BossGimmickSpecialKind; count: number }>
+  /**
+   * 부가물 배치 수. 배율 축(`slots`)과 **독립**이라 약점 위에도 경화 위에도 얹힌다.
+   * 보스가 때릴 때마다 이 수까지 다시 채워진다 — 한 번 지우면 영영 없어지는 게 아니라,
+   * 지운 만큼의 여유를 다음 반격까지 버는 것이다.
+   */
+  fixtures?: ReadonlyArray<{ kind: BossGimmickFixture; count: number }>
 }
 
 /**
@@ -133,15 +193,24 @@ export const BOSS_GIMMICK_PROFILES: Partial<Record<SpecialEnemyKind, BossGimmick
       { kind: 'weak', count: 2 },
       { kind: 'hardened', count: 2 },
     ],
+    fixtures: [
+      { kind: 'trap', count: 2 },
+      { kind: 'treasure', count: 1 },
+    ],
   },
   // 새싹 병아리 30F 미니보스. 부위 파괴를 처음 배우는 자리라 경화를 한 칸만 두고
   // 약점을 하나 더 준다 — 같은 구조를 더 관대한 배율로 먼저 겪게 한다.
+  // 부가물도 한 칸씩만 둬 "지우고 때린다"를 가장 단순한 형태로 겪게 한다.
   waxCat: {
     cols: 3,
     rows: 3,
     slots: [
       { kind: 'weak', count: 3 },
       { kind: 'hardened', count: 1 },
+    ],
+    fixtures: [
+      { kind: 'trap', count: 1 },
+      { kind: 'treasure', count: 1 },
     ],
   },
   // 60F 불씨 기사단장 — 방패를 두르는 보스답게 경화가 더 많다. 약점을 찾아야만 뚫린다.
@@ -151,6 +220,10 @@ export const BOSS_GIMMICK_PROFILES: Partial<Record<SpecialEnemyKind, BossGimmick
     slots: [
       { kind: 'weak', count: 2 },
       { kind: 'hardened', count: 3 },
+    ],
+    fixtures: [
+      { kind: 'trap', count: 3 },
+      { kind: 'treasure', count: 1 },
     ],
   },
   // 90F 밀랍 조각사 — 레일 2행을 실제로 점유하므로 격자도 2×3(6칸)이다.
@@ -162,6 +235,10 @@ export const BOSS_GIMMICK_PROFILES: Partial<Record<SpecialEnemyKind, BossGimmick
       { kind: 'weak', count: 2 },
       { kind: 'hardened', count: 1 },
     ],
+    fixtures: [
+      { kind: 'trap', count: 2 },
+      { kind: 'treasure', count: 1 },
+    ],
   },
   // 100F 녹지 않는 마녀 — 3페이지에서 2×3으로 접히며 격자도 함께 줄어든다(resize).
   waxWitch: {
@@ -171,6 +248,11 @@ export const BOSS_GIMMICK_PROFILES: Partial<Record<SpecialEnemyKind, BossGimmick
       { kind: 'weak', count: 2 },
       { kind: 'hardened', count: 3 },
     ],
+    // 손패를 태우는 보스라 보물 칸이 유일한 보급선이 된다 — 함정을 뚫고 가져갈지가 선택이다.
+    fixtures: [
+      { kind: 'trap', count: 3 },
+      { kind: 'treasure', count: 2 },
+    ],
   },
   // 이벤트 보스 악마 — 등반 보스와 같은 3×3.
   waxDemon: {
@@ -179,6 +261,10 @@ export const BOSS_GIMMICK_PROFILES: Partial<Record<SpecialEnemyKind, BossGimmick
     slots: [
       { kind: 'weak', count: 2 },
       { kind: 'hardened', count: 2 },
+    ],
+    fixtures: [
+      { kind: 'trap', count: 2 },
+      { kind: 'treasure', count: 1 },
     ],
   },
 }
@@ -193,6 +279,12 @@ export interface BossGimmickExpectation {
   bestMultiplier: number
   /** 부위 파괴 보너스를 누적 피해에 녹인 배수(`bossGimmickBreakBonusFactor`). */
   breakBonusFactor: number
+  /** 함정 부가물을 이고 있는 칸 수(정원). 보스 반격마다 이 수까지 다시 찬다. */
+  trapCells: number
+  /** 보물 부가물을 이고 있는 칸 수(정원). */
+  treasureCells: number
+  /** 보물 칸 하나가 주는 손패 수. */
+  treasureCards: number
 }
 
 /**
@@ -226,11 +318,21 @@ export function bossGimmickExpectation(
   }
   // 남은 칸은 전부 plain(×1).
   multiplierSum += (cells - special) * BOSS_GIMMICK_KIND_META.plain.multiplier
+  // 부가물은 배율 축이 아니라 별도 정원이다 — 특수 칸과 자리를 다투지 않는다.
+  const fixtureCount = (kind: BossGimmickFixture): number => {
+    const slot = profile.fixtures?.find((f) => f.kind === kind)
+    if (!slot) return 0
+    const scaled = cells === base ? slot.count : Math.max(1, Math.round((slot.count * cells) / base))
+    return Math.min(scaled, cells)
+  }
   return {
     cells,
     averageMultiplier: multiplierSum / cells,
     bestMultiplier,
     breakBonusFactor: bossGimmickBreakBonusFactor(cells),
+    trapCells: fixtureCount('trap'),
+    treasureCells: fixtureCount('treasure'),
+    treasureCards: BOSS_GIMMICK_TREASURE_CARDS,
   }
 }
 
@@ -252,6 +354,10 @@ export interface BossGimmickCellView {
   wear: number
   /** 파괴 여부. 깨진 칸은 조준·광역 대상에서 빠지고 화면에서도 꺼진다. */
   broken: boolean
+  /** 이 칸에 얹힌 부가물(함정/보물). 없으면 null. */
+  fixture: BossGimmickFixture | null
+  /** 함정 칸이 물릴 피해(런 보너스 제외). 표기와 판정이 같은 값을 본다. */
+  trapDamage: number
 }
 
 /** 피해가 어디서 왔는가. '직접 타격 시에만' 류의 칸이 이 값을 본다. */
@@ -313,6 +419,28 @@ export interface BossGimmickStrike {
   breakDamage: number
   /** 이번 타격으로 칸이 깨졌는가. */
   broke: boolean
+  /**
+   * 이 타격이 건드린 부가물. 때린 순간 칸에서 떨어져 나오고, 실제 효과(플레이어 피해 ·
+   * 손패 지급)는 모델 밖에서 정산한다 — 그쪽은 배율로 표현할 수 없는 결과이기 때문이다.
+   */
+  fixture: BossGimmickFixture | null
+}
+
+/** 새로 돋아난 부가물 한 자리. 보스 반격 beat의 연출이 읽는다(정산 대상이 아니다). */
+export interface BossGimmickFixturePlacement {
+  cellIndex: number
+  fixture: BossGimmickFixture
+}
+
+/** 부가물이 칸에서 떨어져 나온 한 건. 정산과 연출이 같은 목록을 읽는다. */
+export interface BossGimmickFixtureEvent {
+  cellIndex: number
+  fixture: BossGimmickFixture
+  /**
+   * 어떻게 떨어졌는가. `triggered` = 때려서 발동(함정은 아프고 보물은 열린다),
+   * `cleared` = 키틴·열쇠 등으로 걷어냈다(함정은 아프지 않다).
+   */
+  cause: 'triggered' | 'cleared'
 }
 
 /** 격자 한 칸의 내부 상태. 파생 기믹이 resolveMultiplier에서 읽을 수 있게 내보낸다. */
@@ -321,6 +449,8 @@ export interface BossGimmickCell {
   /** 누적 부위 피해. durability에 닿으면 깨진다. */
   damage: number
   broken: boolean
+  /** 얹힌 부가물. 배율 축과 독립이라 리롤에도 자리를 지킨다. */
+  fixture: BossGimmickFixture | null
 }
 
 export class BossGimmickManager {
@@ -332,6 +462,14 @@ export class BossGimmickManager {
   private durability = 0
   /** 칸 하나가 깨질 때 얹는 추가 피해. */
   private breakBonus = 0
+  /** 함정 칸이 물리는 피해. 조우 시작 때 보스 공격력에서 정한다. */
+  private trapBite = 0
+  /**
+   * 아직 정산되지 않은 부가물 사건(발동/제거). `pendingHits`와 따로 두는 이유는
+   * 소비 시점이 다르기 때문이다 — 타격 기록은 **연출**이 먹고 버리지만(때로는 그냥
+   * 버려진다), 부가물은 **효과**라 한 건도 잃으면 안 된다.
+   */
+  private pendingFixtures: BossGimmickFixtureEvent[] = []
   /**
    * 이번 beat에 어느 칸이 어떻게 맞았는지. 모델은 쌓기만 하고 소비는 `takeHits()`
    * 한 곳이다 — 연출(블라스트 목적지·피해 수치 위치·균열)이 이 기록을 읽어야
@@ -366,7 +504,7 @@ export class BossGimmickManager {
   }
 
   /** 보스 등장 시 1회. 프로필이 있는 보스만 격자를 굴리고, 켜졌는지 여부를 돌려준다. */
-  beginEncounter(bossKind: SpecialEnemyKind, bossMaxHp: number): boolean {
+  beginEncounter(bossKind: SpecialEnemyKind, bossMaxHp: number, bossDamage = 0): boolean {
     const profile = BOSS_GIMMICK_PROFILES[bossKind]
     if (!profile) {
       this.reset()
@@ -376,8 +514,12 @@ export class BossGimmickManager {
     this.shape = { cols: profile.cols, rows: profile.rows }
     this.cells = this.rollCells(profile, profile.cols * profile.rows)
     this.setPool(bossMaxHp)
+    this.trapBite = bossGimmickTrapDamage(bossDamage)
     this.pendingHits = []
+    this.pendingFixtures = []
     this.source = NEUTRAL_SOURCE
+    // 등장 시점에 부가물을 채워 둔다 — 첫 타격부터 "때릴까 지울까"가 판에 올라와야 한다.
+    this.replenishFixtures()
     return true
   }
 
@@ -398,6 +540,8 @@ export class BossGimmickManager {
     this.cells = this.rollCells(this.profile, cells)
     this.setPool(remainingHp)
     this.pendingHits = []
+    // 몸이 바뀌었으니 부가물도 새 칸 위에 다시 난다(정산 대기 중인 건은 남긴다).
+    this.replenishFixtures()
     return true
   }
 
@@ -415,7 +559,9 @@ export class BossGimmickManager {
     this.cells = []
     this.durability = 0
     this.breakBonus = 0
+    this.trapBite = 0
     this.pendingHits = []
+    this.pendingFixtures = []
     this.source = NEUTRAL_SOURCE
   }
 
@@ -473,6 +619,9 @@ export class BossGimmickManager {
    *
    * 깨진 칸은 후보에서 빠지므로 특수 칸 수는 성한 칸 수에 맞춰 자연히 줄어든다
    * (9칸 프로필의 약점 2칸을 남은 7칸에 그대로 얹지 않는다).
+   *
+   * **부가물(함정/보물)은 자리를 지킨다.** 배율과 함께 굴러다니면 "이 함정을 지우고
+   * 때린다"는 계획이 매 타격마다 무효가 되고, 지우는 손패가 도박이 된다.
    */
   rerollKinds(): boolean {
     if (!this.profile || !this.canReroll()) return false
@@ -498,6 +647,96 @@ export class BossGimmickManager {
     const hits = this.pendingHits
     this.pendingHits = []
     return hits
+  }
+
+  /** 함정 칸이 물리는 피해(런 보너스 제외). 표기와 판정의 단일 출처다. */
+  get trapDamage(): number {
+    return this.trapBite
+  }
+
+  /** 정산 대기 중인 부가물 사건이 있는가. */
+  get hasPendingFixtures(): boolean {
+    return this.pendingFixtures.length > 0
+  }
+
+  /**
+   * 떨어져 나온 부가물을 가져가며 비운다. **효과 정산의 유일한 소비 창구**다 —
+   * 연출용 `takeHits()`와 달리 그냥 버리는 경로를 만들지 않는다.
+   */
+  takeFixtureEvents(): BossGimmickFixtureEvent[] {
+    const events = this.pendingFixtures
+    this.pendingFixtures = []
+    return events
+  }
+
+  /** 지금 이 칸에 얹힌 부가물. 손패 타겟팅이 "여기 함정이 있나"를 물을 때 쓴다. */
+  fixtureAt(cellIndex: number): BossGimmickFixture | null {
+    const cell = this.cells[cellIndex]
+    return cell && !cell.broken ? cell.fixture : null
+  }
+
+  /** 해당 부가물을 이고 있는 성한 칸의 인덱스 목록. */
+  fixtureCells(fixture: BossGimmickFixture): number[] {
+    const out: number[] = []
+    this.cells.forEach((cell, index) => {
+      if (!cell.broken && cell.fixture === fixture) out.push(index)
+    })
+    return out
+  }
+
+  /**
+   * 부가물을 **때리지 않고** 걷어낸다(키틴으로 함정 제거 · 열쇠로 보물 수거).
+   * 이 경로로 걷힌 함정은 아프지 않다 — 그게 지우는 값어치다.
+   * 기대한 종류와 다르면 아무것도 하지 않는다(엉뚱한 카드가 보물을 지우지 않게).
+   */
+  clearFixtureAt(cellIndex: number, expect?: BossGimmickFixture): BossGimmickFixture | null {
+    const cell = this.cells[cellIndex]
+    if (!cell || cell.broken || !cell.fixture) return null
+    if (expect && cell.fixture !== expect) return null
+    const fixture = cell.fixture
+    cell.fixture = null
+    this.pendingFixtures.push({ cellIndex, fixture, cause: 'cleared' })
+    return fixture
+  }
+
+  /** 격자 전체에서 해당 부가물을 걷어낸다(광역 청소·트리플 열쇠). 걷힌 칸 수를 돌려준다. */
+  clearFixtures(fixture: BossGimmickFixture, limit = Infinity): number {
+    let cleared = 0
+    for (const index of this.fixtureCells(fixture)) {
+      if (cleared >= limit) break
+      if (this.clearFixtureAt(index, fixture)) cleared++
+    }
+    return cleared
+  }
+
+  /**
+   * 부가물을 프로필 정원까지 다시 채운다 — **보스가 때리는 beat에 한 번**만 부른다.
+   *
+   * 타격마다 채우면 키틴으로 지우는 의미가 사라지고 보물도 무한 보급이 된다.
+   * 반격 주기에 묶어 두면 "이번 주기 동안은 지운 만큼 편하다"가 성립한다.
+   * 새 부가물은 **비어 있는 성한 칸**에만 나므로, 이미 얹힌 칸을 덮어쓰지 않는다.
+   */
+  replenishFixtures(): BossGimmickFixturePlacement[] {
+    if (!this.profile?.fixtures) return []
+    const placed: BossGimmickFixturePlacement[] = []
+    // 빈 칸을 섞어 두고 앞에서부터 꺼낸다 — 같은 자리에 계속 나면 배치를 외워 쓰게 된다.
+    const free = this.shuffle(
+      this.cells.reduce<number[]>((out, cell, index) => {
+        if (!cell.broken && !cell.fixture) out.push(index)
+        return out
+      }, [])
+    )
+    for (const slot of this.profile.fixtures) {
+      const want = this.scaledCount(slot.count)
+      const have = this.fixtureCells(slot.kind).length
+      for (let i = have; i < want; i++) {
+        const index = free.pop()
+        if (index === undefined) return placed
+        this.cells[index].fixture = slot.kind
+        placed.push({ cellIndex: index, fixture: slot.kind })
+      }
+    }
+    return placed
   }
 
   /**
@@ -554,12 +793,21 @@ export class BossGimmickManager {
         breakDamage = this.breakBonus
       }
     }
+    // 부가물은 **때린 그 자리에서** 떨어져 나온다. 피해가 0으로 막힌 beat(리미트 페이지)에도
+    // 밟은 것은 밟은 것이라 그대로 발동한다 — 안 그러면 함정 칸이 안전지대가 된다.
+    const fixture = cell.fixture
+    if (fixture) {
+      cell.fixture = null
+      this.pendingFixtures.push({ cellIndex: index, fixture, cause: 'triggered' })
+    }
     const strike: BossGimmickStrike = {
+      // 뷰는 부가물을 떼어 낸 뒤 찍는다 — 연출은 '이제 비어 있는 칸'을 그려야 한다.
       cell: this.viewAt(index),
       damage: cellDamage + breakDamage,
       cellDamage,
       breakDamage,
       broke: breakDamage > 0,
+      fixture,
     }
     this.pendingHits.push(strike)
     return strike
@@ -585,6 +833,9 @@ export class BossGimmickManager {
       durability: this.durability,
       wear: this.durability > 0 ? Math.min(1, cell.damage / this.durability) : 0,
       broken: cell.broken,
+      // 깨진 칸은 부가물도 함께 사라진다 — 판이 타 버렸는데 함정만 남을 수는 없다.
+      fixture: cell.broken ? null : cell.fixture,
+      trapDamage: this.trapBite,
     }
   }
 
@@ -618,9 +869,34 @@ export class BossGimmickManager {
     return living.reduce((best, i) => (Math.abs(i - center) < Math.abs(best - center) ? i : best), living[0])
   }
 
-  /** 배치표대로 특수 칸을 만들고 plain으로 채운 뒤 위치를 섞는다. */
+  /** 배치표대로 특수 칸을 만들고 plain으로 채운 뒤 위치를 섞는다. 부가물은 비운 채 시작해
+   *  `replenishFixtures()`가 얹는다 — 배치 규칙을 두 곳에 적지 않기 위함이다. */
   private rollCells(profile: BossGimmickProfile, cells: number): BossGimmickCell[] {
-    return this.shuffledKinds(profile, cells).map((kind) => ({ kind, damage: 0, broken: false }))
+    return this.shuffledKinds(profile, cells).map((kind) => ({
+      kind,
+      damage: 0,
+      broken: false,
+      fixture: null,
+    }))
+  }
+
+  /**
+   * 배치 수를 현재 칸 수에 맞게 환산한다(축소된 격자에서 밀도를 유지).
+   * `shuffledKinds`가 특수 칸에 쓰는 식과 같은 것을 부가물도 쓴다.
+   */
+  private scaledCount(count: number): number {
+    const base = Math.max(1, (this.profile?.cols ?? 1) * (this.profile?.rows ?? 1))
+    const total = Math.max(1, this.cells.length)
+    return total === base ? count : Math.max(1, Math.round((count * total) / base))
+  }
+
+  /** Fisher-Yates. 배치가 매번 달라져 자리를 외워 쓸 수 없게 한다. */
+  private shuffle<T>(items: T[]): T[] {
+    for (let i = items.length - 1; i > 0; i--) {
+      const j = Math.floor(this.rng() * (i + 1))
+      ;[items[i], items[j]] = [items[j], items[i]]
+    }
+    return items
   }
 
   /**
@@ -639,11 +915,7 @@ export class BossGimmickManager {
       for (let i = 0; i < scaled && kinds.length < total; i++) kinds.push(slot.kind)
     }
     while (kinds.length < total) kinds.push('plain')
-    // Fisher-Yates — 매 조우마다 약점 자리가 달라져 배치를 외워 쓸 수 없다.
-    for (let i = kinds.length - 1; i > 0; i--) {
-      const j = Math.floor(this.rng() * (i + 1))
-      ;[kinds[i], kinds[j]] = [kinds[j], kinds[i]]
-    }
-    return kinds
+    // 매 조우마다 약점 자리가 달라져 배치를 외워 쓸 수 없다.
+    return this.shuffle(kinds)
   }
 }

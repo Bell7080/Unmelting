@@ -22,6 +22,7 @@ import { HandCard, HandCardId, HandCardDefinition, HandEffectTargeting } from '@
 import { getHandCardDef } from '@data/HandCards'
 import { Recipe, RECIPES } from '@data/Recipes'
 import { DropSystem } from './DropSystem'
+import { bossFixtureMatchesFilter } from './BossGimmickManager'
 
 export interface HandTarget {
   laneIndex: number
@@ -245,7 +246,7 @@ export class HandSystem {
     // 이 카드가 내는 모든 타격의 출처를 한 번 선언한다 — 아래 피해 헬퍼가 40군데라
     // 인자로 실어 나르는 대신 행동 단위로 세워 두고 격자가 집어 가게 한다.
     gs.bossGimmicks?.beginAction({ origin: 'hand', tags: def.synergyTags ?? [] })
-    if (!HandSystem.isValidTarget(def, target, card.merged === true)) {
+    if (!HandSystem.isValidTarget(def, target, card.merged === true, gs)) {
       return {
         success: false,
         message: `${def.name}은(는) 조건에 맞는 대상을 골라야 해`,
@@ -1236,21 +1237,29 @@ export class HandSystem {
   private static isValidTarget(
     def: HandCardDefinition,
     target: HandTarget | undefined,
-    isMerged: boolean
+    isMerged: boolean,
+    gs?: GameState
   ): boolean {
     // Some triple effects become broad field effects and no longer need the
     // single-card target used by the base effect.
     const rule = isMerged ? def.targeting.triple : def.targeting.base
     if (rule.selection !== 'target') return true
     if (!target) return false
-    return HandSystem.targetMatchesRule(rule, target)
+    return HandSystem.targetMatchesRule(rule, target, gs)
   }
 
   /** Check a selected board card against the shared hand-card targeting table. */
-  private static targetMatchesRule(rule: HandEffectTargeting, target: HandTarget): boolean {
+  private static targetMatchesRule(rule: HandEffectTargeting, target: HandTarget, gs?: GameState): boolean {
     if (rule.zone === 'front' && target.distance !== 0) return false
     if (rule.zone === 'waiting' && target.distance === 0) return false
     if (rule.zone !== 'front' && rule.zone !== 'waiting' && rule.zone !== 'field') return false
+
+    // 보스 칸에 얹힌 부가물(함정/보물)은 **그 칸 하나짜리 대상**이다. 보스 카드 자체의 폭이나
+    // 종류(BOSS)로 재면 키틴·열쇠가 영원히 닿지 못한다 — 칸을 겨눴으면 칸으로 판정한다.
+    const fixture = gs && target.gimmickCellIndex !== undefined && target.card.type === CardType.BOSS
+      ? gs.bossGimmicks?.fixtureAt(target.gimmickCellIndex) ?? null
+      : null
+    if (fixture && bossFixtureMatchesFilter(fixture, rule.filter)) return true
 
     // 폭 제한: 지정된 maxSpan(칸=groupCount)을 넘는 카드는 대상에서 제외한다(키틴 2칸/3칸 분기).
     if (rule.maxSpan != null && target.card.groupCount > rule.maxSpan) return false
@@ -1622,6 +1631,13 @@ export class HandSystem {
     target: HandTarget | undefined
   ): string {
     if (!target) return '자해 2 · 대상 없음'
+    // 보스 칸의 보물/함정도 필드의 그것과 같이 다룬다(수확 또는 제거).
+    if (target.card.type === CardType.BOSS && target.gimmickCellIndex !== undefined) {
+      const cleared = gs.bossGimmicks?.clearFixtureAt(target.gimmickCellIndex)
+      if (cleared === 'treasure') return '자해 2 · 보스 보물 부위 수확'
+      if (cleared === 'trap') return '자해 2 · 보스 함정 부위 제거'
+      return '자해 2 · 대상 없음'
+    }
     if (target.card.type === CardType.TREASURE) {
       const gained = HandSystem.awardTreasureDrops(character, target.card)
       for (let d = 0; d < LANE_DISTANCE_COUNT; d++) gs.removeCardFromRow(target.card, d)
@@ -1637,7 +1653,10 @@ export class HandSystem {
 
   private static collectRandomTreasure(gs: GameState, character: Character): string {
     const treasures = HandSystem.collectAllOfType(gs, CardType.TREASURE)
-    if (treasures.length === 0) return '보물상자 없음'
+    // 필드에 상자가 없으면 보스 몸의 보물 부위를 연다 — 보스전에서 열쇠가 죽지 않게.
+    if (treasures.length === 0) {
+      return HandSystem.collectBossCellTreasures(gs, 1) > 0 ? '보스 보물 부위 수확' : '보물상자 없음'
+    }
     const pick = treasures[Math.floor(Math.random() * treasures.length)]
     const gained = HandSystem.awardTreasureDrops(character, pick)
     for (let d = 0; d < LANE_DISTANCE_COUNT; d++) gs.removeCardFromRow(pick, d)
@@ -1653,7 +1672,10 @@ export class HandSystem {
       for (let d = 0; d < LANE_DISTANCE_COUNT; d++) gs.removeCardFromRow(treasure, d)
     }
     HandSystem.runAutoMerges(character)
-    return `트리플 보물 ${treasures.length}개 획득: 손패 ${gained}장`
+    // 트리플은 '필드 전체'라 보스 몸의 보물 부위도 전부 연다.
+    const bossCells = HandSystem.collectBossCellTreasures(gs)
+    const bossNote = bossCells > 0 ? ` · 보스 보물 부위 ${bossCells}칸` : ''
+    return `트리플 보물 ${treasures.length}개 획득: 손패 ${gained}장${bossNote}`
   }
 
   /** Award item drops based on chest width and kind, matching ActionSystem. */
@@ -1729,6 +1751,11 @@ export class HandSystem {
     const candidates = HandSystem.collectAllOfType(gs, CardType.TRAP).filter(
       (card) => card.trapKind === 'spore'
     )
+    // 필드에 포자가 없으면 보스 칸 함정을 대신 걷는다 — 보스전에서 성수가 죽지 않게.
+    if (candidates.length === 0) {
+      const bossCells = HandSystem.clearBossCellTraps(gs, count)
+      if (bossCells > 0) return `${prefix}보스 함정 부위 ${bossCells}칸 제거`
+    }
     let cleansed = 0
     while (candidates.length > 0 && cleansed < count) {
       const pickIndex = Math.floor(Math.random() * candidates.length)
@@ -1750,12 +1777,35 @@ export class HandSystem {
       // Grouped spores share one Card instance, so this clears the whole group.
       for (let d = 0; d < LANE_DISTANCE_COUNT; d++) gs.removeCardFromRow(card, d)
     }
-    return `트리플 전체 포자 ${spores.length}장 제거`
+    // 보스 칸 함정은 종류를 가리지 않는 공용 함정이라 포자 청소에도 걷힌다.
+    const bossCells = HandSystem.clearBossCellTraps(gs)
+    return `트리플 전체 포자 ${spores.length}장 제거${bossCells > 0 ? ` · 보스 함정 부위 ${bossCells}칸` : ''}`
+  }
+
+  /**
+   * 보스 칸에 얹힌 함정 부가물도 **필드 함정과 같이** 지운다.
+   * 함정을 지우는 손패는 전부 이 헬퍼를 지나야 한다 — 어떤 카드는 통하고 어떤 카드는
+   * 안 통하면 화면에 같은 '함정'으로 보이는 것이 규칙 없이 갈린다.
+   * 실제 정산(함정 처리 유물 발동 등)은 `resolveBossCellFixtures`가 뒤에서 한 번에 한다.
+   */
+  private static clearBossCellTraps(gs: GameState, limit = Infinity): number {
+    return gs.bossGimmicks?.clearFixtures('trap', limit) ?? 0
+  }
+
+  /** 보스 칸 보물 부가물을 수거한다(열쇠 계열). 손패 지급은 정산이 맡는다. */
+  private static collectBossCellTreasures(gs: GameState, limit = Infinity): number {
+    return gs.bossGimmicks?.clearFixtures('treasure', limit) ?? 0
   }
 
   /** Remove the selected front trap. */
   private static removeTargetTrap(gs: GameState, target: HandTarget | undefined): string {
-    if (!target || target.card.type !== CardType.TRAP) return '제거할 전방 함정 없음'
+    if (!target) return '제거할 전방 함정 없음'
+    // 보스 칸을 겨눴다면 그 칸의 함정만 걷어낸다 — 보스는 때리지 않으므로 배율도 반격도 없다.
+    if (target.card.type === CardType.BOSS && target.gimmickCellIndex !== undefined) {
+      const cleared = gs.bossGimmicks?.clearFixtureAt(target.gimmickCellIndex, 'trap')
+      return cleared ? '보스 함정 부위 제거' : '제거할 전방 함정 없음'
+    }
+    if (target.card.type !== CardType.TRAP) return '제거할 전방 함정 없음'
     gs.removeCardFromRow(target.card, target.distance)
     return `${target.card.name} 제거`
   }
@@ -1805,7 +1855,11 @@ export class HandSystem {
         cleared++
       }
     }
-    return cleared > 0 ? `1칸 거미줄 ${cleared}장 제거` : '제거할 1칸 거미줄 없음'
+    // 보스 칸 함정도 1칸짜리라 빗자루가 닿는다(2·3칸 거미줄만 의도적으로 제외된다).
+    const bossCells = HandSystem.clearBossCellTraps(gs)
+    const total = cleared + bossCells
+    if (total === 0) return '제거할 1칸 거미줄 없음'
+    return `1칸 거미줄 ${cleared}장 제거${bossCells > 0 ? ` · 보스 함정 부위 ${bossCells}칸` : ''}`
   }
 
   /** 손거울: 대상 적의 현재 공격력만큼 피해를 입힌다. */
@@ -1823,7 +1877,8 @@ export class HandSystem {
 
   private static clearAllOfTypes(gs: GameState, types: CardType[]): number {
     const seen = new Set<Card>()
-    let count = 0
+    // '필드 함정을 전부'라고 적힌 효과는 보스 몸에 얹힌 함정 부위도 함께 걷는다.
+    let count = types.includes(CardType.TRAP) ? HandSystem.clearBossCellTraps(gs) : 0
     for (const lane of gs.lanes) {
       for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
         const card = lane.getCardAtDistance(d)

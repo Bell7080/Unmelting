@@ -1,5 +1,5 @@
 /**
- * 371차원 에나 정책을 재학습하고, 괴물꽃 3축을 가린 구 관측 한계와 동일 망을 비교한다.
+ * 373차원 에나 정책을 재학습하고, 괴물꽃 3축을 가린 구 관측 한계와 동일 망을 비교한다.
  * 결과 JSON은 재현 가능한 사전학습 산출물이며 Markdown은 밸런스/근사 감사 기록이다.
  */
 import { writeFileSync } from 'node:fs'
@@ -32,11 +32,11 @@ const artifact = createPolicyArtifact(trained.network, '2026-08-03T00:00:00.000Z
 writeFileSync(resolve(root, 'src/data/ena-pretrained-policy.json'), `${JSON.stringify(artifact)}\n`)
 
 const pct = (value: number): string => `${(value * 100).toFixed(1)}%`
-const report = `# Ena 371 사전학습 및 시뮬레이션 근사 감사
+const report = `# Ena 373 사전학습 및 시뮬레이션 근사 감사
 
 ## 재현 설정
 
-- 관측: 371 / 행동: 27 / hidden: ${TRAIN_CONFIG.hidden}
+- 관측: 373 / 행동: 27 / hidden: ${TRAIN_CONFIG.hidden}
 - BC: ${TRAIN_CONFIG.bcEpisodes} episodes × ${TRAIN_CONFIG.bcEpochs} epochs
 - RL: ${TRAIN_CONFIG.rlEpisodes} episodes
 - seed: ${TRAIN_CONFIG.seed} / evaluation seeds: ${EVAL_SEEDS.length}
@@ -45,7 +45,7 @@ const report = `# Ena 371 사전학습 및 시뮬레이션 근사 감사
 
 | 정책 | 평균 생존 턴 | 괴물꽃 제거 우선순위 | 괴물꽃 처치/생성 | 생존 P50 | 생존 P90 |
 |---|---:|---:|---:|---:|---:|
-| 371 전체 관측 | ${full.averageTurns.toFixed(2)} | ${pct(full.monsterPriorityRate)} | ${full.monsterDefeated}/${full.monsterSpawned} | ${full.monsterSurvivalP50} | ${full.monsterSurvivalP90} |
+| 373 전체 관측 | ${full.averageTurns.toFixed(2)} | ${pct(full.monsterPriorityRate)} | ${full.monsterDefeated}/${full.monsterSpawned} | ${full.monsterSurvivalP50} | ${full.monsterSurvivalP90} |
 | 괴물꽃 3축 차단(구 관측 한계) | ${blind.averageTurns.toFixed(2)} | ${pct(blind.monsterPriorityRate)} | ${blind.monsterDefeated}/${blind.monsterSpawned} | ${blind.monsterSurvivalP50} | ${blind.monsterSurvivalP90} |
 
 ## 근사 감사 결과

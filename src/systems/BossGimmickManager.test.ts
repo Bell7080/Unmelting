@@ -8,6 +8,7 @@ import {
   bossGimmickBreakDamage,
   bossGimmickCellDurability,
   bossGimmickExpectation,
+  bossFixtureMatchesFilter,
   type BossGimmickCell,
   type BossGimmickResolvedContext,
 } from './BossGimmickManager'
@@ -20,6 +21,10 @@ function fixedRng(): () => number {
 
 /** 30F 양초 백작 기준 격자. 내구도/파괴 보너스가 최대 체력에서 파생되므로 함께 넘긴다. */
 const WAX_ARMY_HP = 100
+
+/** 30F 부가물 정원 — 프로필이 단일 출처이므로 표에서 읽어 온다. */
+const PROFILE_TRAP_COUNT = BOSS_GIMMICK_PROFILES.waxArmy!.fixtures!.find((f) => f.kind === 'trap')!.count
+const PROFILE_TREASURE_COUNT = BOSS_GIMMICK_PROFILES.waxArmy!.fixtures!.find((f) => f.kind === 'treasure')!.count
 
 function stagedGrid(maxHp = WAX_ARMY_HP): BossGimmickManager {
   const m = new BossGimmickManager(fixedRng())
@@ -496,5 +501,135 @@ describe('행동 단위 부위 파괴 추적(brokeCellThisAction)', () => {
     // 다음 행동이 시작되면 기준선이 갱신돼 이전 파괴는 더 이상 세지 않는다.
     m.beginAction({ origin: 'direct', tags: [] })
     expect(m.brokeCellThisAction).toBe(false)
+  })
+})
+
+describe('칸 부가물(함정/보물) — 배율과 독립인 두 번째 축', () => {
+  /** 부가물 정원까지 채워진 30F 격자. 함정 피해는 보스 공격력에서 파생된다. */
+  function fixtureGrid(attack = 10): BossGimmickManager {
+    const m = new BossGimmickManager(fixedRng())
+    m.beginEncounter('waxArmy', 160, attack)
+    return m
+  }
+
+  it('조우 시작에 프로필 정원만큼 부가물이 얹힌다', () => {
+    const m = fixtureGrid()
+    const profile = BOSS_GIMMICK_PROFILES.waxArmy!
+
+    for (const slot of profile.fixtures ?? []) {
+      expect(m.fixtureCells(slot.kind), `${slot.kind} 정원`).toHaveLength(slot.count)
+    }
+    // 배율 축과 자리를 다투지 않는다 — 약점 위에도 경화 위에도 얹힐 수 있다.
+    expect(m.getCells().filter((c) => c.fixture !== null).length).toBeGreaterThan(0)
+  })
+
+  it('함정 피해는 보스 공격력에서 파생된다', () => {
+    expect(fixtureGrid(10).trapDamage).toBe(4)
+    expect(fixtureGrid(20).trapDamage).toBe(8)
+    // 공격력이 작아도 0으로 내려가지 않는다 — 밟았는데 아무 일도 없으면 함정이 아니다.
+    expect(fixtureGrid(1).trapDamage).toBe(1)
+  })
+
+  it('때리면 부가물이 떨어져 나오고 정산 대기열에 오른다', () => {
+    const m = fixtureGrid()
+    const trapCell = m.fixtureCells('trap')[0]
+
+    const struck = m.strike({ cellIndex: trapCell, baseDamage: 1 })
+
+    expect(struck?.fixture).toBe('trap')
+    expect(m.fixtureAt(trapCell)).toBeNull()
+    expect(m.takeFixtureEvents()).toEqual([
+      { cellIndex: trapCell, fixture: 'trap', cause: 'triggered' },
+    ])
+  })
+
+  it('피해가 0으로 막힌 타격에도 밟은 함정은 발동한다', () => {
+    const m = fixtureGrid()
+    const trapCell = m.fixtureCells('trap')[0]
+
+    m.strike({ cellIndex: trapCell, baseDamage: 0 })
+
+    // 함정 칸이 안전지대가 되면 "때릴까 지울까"가 사라진다.
+    expect(m.takeFixtureEvents().map((e) => e.cause)).toEqual(['triggered'])
+  })
+
+  it('걷어낸 부가물은 밟은 것과 다른 사건으로 남는다(피해 없음)', () => {
+    const m = fixtureGrid()
+    const trapCell = m.fixtureCells('trap')[0]
+
+    expect(m.clearFixtureAt(trapCell, 'trap')).toBe('trap')
+    expect(m.takeFixtureEvents().map((e) => e.cause)).toEqual(['cleared'])
+    // 기대한 종류가 아니면 아무것도 하지 않는다 — 함정 지우는 카드가 보물을 없애지 않게.
+    const treasureCell = m.fixtureCells('treasure')[0]
+    expect(m.clearFixtureAt(treasureCell, 'trap')).toBeNull()
+    expect(m.fixtureAt(treasureCell)).toBe('treasure')
+  })
+
+  it('배율 리롤은 부가물 자리를 옮기지 않는다', () => {
+    const m = fixtureGrid()
+    const before = m.getCells().map((c) => c.fixture)
+
+    m.rerollKinds()
+
+    // 배율과 함께 굴러다니면 "이 함정을 지우고 때린다"는 계획이 매 타격마다 무효가 된다.
+    expect(m.getCells().map((c) => c.fixture)).toEqual(before)
+  })
+
+  it('재생성은 부를 때만 돌고, 빈 성한 칸에만 채운다', () => {
+    const m = fixtureGrid()
+    const trapCell = m.fixtureCells('trap')[0]
+    m.clearFixtureAt(trapCell, 'trap')
+    m.takeFixtureEvents()
+    const shortHanded = m.fixtureCells('trap').length
+
+    // 때린다고 다시 나지 않는다 — 그러면 지우는 의미가 사라진다.
+    m.strike({ cellIndex: trapCell, baseDamage: 1 })
+    expect(m.fixtureCells('trap')).toHaveLength(shortHanded)
+
+    const placed = m.replenishFixtures()
+    expect(placed).toHaveLength(1)
+    expect(m.fixtureCells('trap')).toHaveLength(PROFILE_TRAP_COUNT)
+    // 이미 얹힌 칸을 덮어쓰지 않는다.
+    expect(m.fixtureCells('treasure')).toHaveLength(PROFILE_TREASURE_COUNT)
+  })
+
+  it('깨진 칸은 부가물도 함께 잃고 재생성 후보에서 빠진다', () => {
+    const m = fixtureGrid()
+    const trapCell = m.fixtureCells('trap')[0]
+
+    m.strike({ cellIndex: trapCell, baseDamage: m.cellDurability * 4 })
+    m.takeFixtureEvents()
+
+    expect(m.getCells()[trapCell].broken).toBe(true)
+    expect(m.getCells()[trapCell].fixture).toBeNull()
+    expect(m.fixtureCells('trap')).not.toContain(trapCell)
+  })
+
+  it('학습 시뮬 요약이 부가물 정원을 함께 넘긴다', () => {
+    const expectation = bossGimmickExpectation('waxArmy')
+
+    expect(expectation?.trapCells).toBe(PROFILE_TRAP_COUNT)
+    expect(expectation?.treasureCells).toBe(PROFILE_TREASURE_COUNT)
+    expect(expectation?.treasureCards).toBeGreaterThan(0)
+  })
+})
+
+describe('bossFixtureMatchesFilter — 칸 함정은 필드 함정과 같은 것으로 취급한다', () => {
+  it('함정을 지울 수 있는 손패 필터는 전부 칸 함정에 닿는다', () => {
+    // 거미줄·폭탄·포자를 지우는 카드가 화면에 같은 '함정'으로 보이는 것에 안 통하면
+    // 규칙이 아니라 고장으로 읽힌다.
+    for (const filter of ['trap', 'spore', 'hazard', 'trap-or-treasure', 'any']) {
+      expect(bossFixtureMatchesFilter('trap', filter), filter).toBe(true)
+    }
+    expect(bossFixtureMatchesFilter('trap', 'treasure')).toBe(false)
+    expect(bossFixtureMatchesFilter('trap', 'enemy')).toBe(false)
+  })
+
+  it('보물 부가물은 보물을 여는 필터에만 닿는다', () => {
+    for (const filter of ['treasure', 'enemy-or-treasure', 'trap-or-treasure', 'any']) {
+      expect(bossFixtureMatchesFilter('treasure', filter), filter).toBe(true)
+    }
+    expect(bossFixtureMatchesFilter('treasure', 'trap')).toBe(false)
+    expect(bossFixtureMatchesFilter('treasure', 'spore')).toBe(false)
   })
 })

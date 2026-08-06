@@ -1646,6 +1646,29 @@ export const GAME_BOARD_RAIL_STYLES = `
 .boss-gimmick-cell[data-tone="cold"] .boss-gimmick-cell-mult {
   color: rgba(184, 200, 236, 0.96);
 }
+/* 부가물(함정/보물)은 배율 축과 **다른 축**이라 표기도 따로 선다: 배율 글자 아래
+   한 줄, 판을 깐 작은 띠. 배율과 같은 양식으로 쓰면 "약점인데 함정"이 하나의 칸
+   종류로 읽혀 두 축이라는 게 사라진다. 색은 톤으로만 갈린다(새 부가물 = 표 한 줄). */
+.boss-gimmick-cell-fixture {
+  position: relative;
+  margin-top: 2px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: clamp(12px, 1.7vh, 16px);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  background: rgba(10, 6, 14, 0.72);
+  border: 1px solid currentColor;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
+}
+.boss-gimmick-cell-fixture[data-fixture-tone="cold"] { color: rgba(198, 214, 250, 0.96); }
+.boss-gimmick-cell-fixture[data-fixture-tone="hot"] { color: rgba(255, 214, 140, 0.98); }
+/* 부가물이 얹힌 칸은 테두리가 점선으로 끊긴다 — 배율 색을 덮지 않으면서
+   "여기 뭔가 더 얹혀 있다"만 알린다. */
+.boss-gimmick-cell.has-fixture { border-style: dashed; }
+.boss-gimmick-cell.is-fixture-treasure { border-color: rgba(255, 214, 140, 0.5); }
+.boss-gimmick-cell.is-fixture-trap { border-color: rgba(198, 214, 250, 0.5); }
 /* 손패 타겟팅: 보스 타일 하나가 아니라 칸 하나하나가 일반 레일 칸처럼 따로 빛난다.
    .rail.is-targeting .cell.card.is-hand-target와 같은 금빛 발광 양식을 맞춘다. */
 /* 고를 수 있는 칸: 발광을 얇게 눌러 '가리키는 선'에 가깝게 둔다. 화려하게 만들면

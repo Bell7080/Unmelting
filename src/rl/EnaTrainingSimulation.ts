@@ -54,6 +54,7 @@ import {
   BOSS_GIMMICK_PROFILES,
   bossGimmickCellDurability,
   bossGimmickExpectation,
+  bossGimmickTrapDamage,
   type BossGimmickExpectation,
 } from '@systems/BossGimmickManager'
 import type { SpecialEnemyKind } from '@entities/Card'
@@ -381,7 +382,7 @@ const MIN_POOL_AFTER_DELETE = 5
 /** 망치(칼날 손패 사용 시 파편) 발동 확률 — TagReactions의 hammer 규칙과 같은 값. */
 const BLADE_HAMMER_SHARD_CHANCE = 0.25
 
-const FEATURE_SCALARS = 70
+const FEATURE_SCALARS = 72
 const FEATURE_PER_INCOMING = 6
 // 괴물꽃 여부·성장 시계·주기 성장량까지 관측해 화면에 보이는 위협과 학습 입력을 맞춘다.
 const FEATURE_PER_CELL = 17
@@ -565,6 +566,13 @@ export class EnaTrainingSimulation {
   private bossGateDamage = 0
   /** 전투 중 몸집이 바뀐 격자의 기대값(마녀 3P 9칸 → 6칸). null이면 프로필 기본형. */
   private bossGimmickOverride: BossGimmickExpectation | null = null
+  /**
+   * 보스 몸에 남은 부가물 칸 수(함정/보물). 칸 개념이 없는 시뮬은 개수만 들고,
+   * 조준 타격은 "맞은 칸이 부가물 칸일 확률"로, 광역은 "전부 건드린다"로 환산한다.
+   * 이걸 빼면 에나는 보스전 피해를 실제보다 싸게 보고, 보물 보급도 없는 세계를 배운다.
+   */
+  private bossTrapCells = 0
+  private bossTreasureCells = 0
   private eventRisk = 0
   /** 이번 문에서 진행할 실제 이벤트(event_001~003). 문 진입 시 균등 랜덤으로 정한다. */
   private currentEventId: EventId = 'event_001'
@@ -750,7 +758,7 @@ export class EnaTrainingSimulation {
     return { observation: this.observe(), reward, done: this.done }
   }
 
-  /** 고정 길이 숫자 입력: 스칼라 70 + 예고 3칸×6 + 9칸×17 + 손패 10×13 = ENA_FEATURE_COUNT(371). */
+  /** 고정 길이 숫자 입력: 스칼라 72 + 예고 3칸×6 + 9칸×17 + 손패 10×13 = ENA_FEATURE_COUNT(373). */
   observe(): EnaObservation {
     const legalActions = ENA_ACTION_SPACE.filter((action) => this.isLegal(action))
     const tier = EmberSystem.getTier(this.ember)
@@ -822,6 +830,10 @@ export class EnaTrainingSimulation {
       Math.min(1, this.bossPageGateRemaining() / 40), // 그 경계를 여는 데 남은 피해
       (this.bossGimmick()?.cells ?? 0) / 9, // 격자 칸 수 = 광역 손패가 꽂히는 횟수
       (this.bossGimmick()?.bestMultiplier ?? 1) / 2, // 약점 조준 배율
+      // 칸에 얹힌 부가물도 화면에 그려져 있다. 빼면 에나는 함정 칸을 없는 셈 치고
+      // "약점을 때려"라고만 말하고, 지울 손패를 아껴 두라는 판단을 배우지 못한다.
+      this.bossTrapCells / 3, // 남은 함정 부위 — 때릴 때 감수할 피해
+      this.bossTreasureCells / 3, // 남은 보물 부위 — 손패 보급선
       this.bossPageProximity(), // 다음 페이지 경계까지 남은 거리 — 국면 전환 대비
       this.bossSummons.length / 3, // 앞을 막은 종복 수
       Math.min(1, this.bossSummons.reduce((sum, e) => sum + e.atk, 0) / 20), // 종복 합산 위협
@@ -1627,10 +1639,44 @@ export class EnaTrainingSimulation {
     return Math.max(1, Math.round(scaled * gimmick.breakBonusFactor))
   }
 
+  /**
+   * 때린 칸에 얹혀 있던 부가물을 정산한다(실게임 `resolveBossCellFixtures`의 시뮬 환산).
+   *
+   * 조준 타격은 칸 하나를 고르므로 "그 칸이 부가물 칸일 확률"로 굴리고, 광역은 성한 칸을
+   * 전부 훑으므로 남은 부가물을 통째로 건드린다 — 보물을 싹 쓸어 담는 대신 함정도 전부
+   * 밟는다는 실게임의 맞바꿈이 그대로 남는다.
+   */
+  private resolveBossFixtures(scope: 'single' | 'area'): void {
+    const gimmick = this.bossGimmick()
+    if (!gimmick) return
+    const cells = Math.max(1, gimmick.cells)
+    const takeTrap = (n: number): void => {
+      if (n <= 0) return
+      this.bossTrapCells -= n
+      const bite = Math.max(0, bossGimmickTrapDamage(this.bossProfileFor(this.bossFloor).attack) + this.trialTrapDamageBonus)
+      this.takeDamage(bite * n)
+    }
+    const takeTreasure = (n: number): void => {
+      if (n <= 0) return
+      this.bossTreasureCells -= n
+      for (let i = 0; i < n * gimmick.treasureCards; i++) this.drawCard()
+    }
+    if (scope === 'area') {
+      takeTrap(this.bossTrapCells)
+      takeTreasure(this.bossTreasureCells)
+      return
+    }
+    if (this.rng.next() < this.bossTrapCells / cells) takeTrap(1)
+    if (this.rng.next() < this.bossTreasureCells / cells) takeTreasure(1)
+  }
+
   private damageBoss(rawAmount: number, source: 'basic' | 'ember', scope: 'single' | 'area' = 'single'): number {
     // 이미 격파돼 국면이 넘어갔으면 때릴 대상이 없다(같은 행동 안에서 두 번 꽂히는 경우).
     if (this.bossFloor <= 0) return 0
     const amount = this.bossGimmickScaled(rawAmount, scope)
+    // 부가물은 피해 정산과 **같은 타격**에서 떨어진다. 보스가 이 타격에 쓰러져도
+    // 밟은 함정과 연 보물은 이미 일어난 일이다(실게임도 격파 판정보다 먼저 정산한다).
+    this.resolveBossFixtures(scope)
     // 밀랍 방패(기사단장/마녀)가 피해를 먼저 흡수한다 — 실게임 bossShield 규칙.
     const blocked = Math.min(this.bossShield, amount)
     this.bossShield -= blocked
@@ -2150,6 +2196,8 @@ export class EnaTrainingSimulation {
           const adversity = this.hp + this.shield - profile.attack <= Math.max(1, this.maxHp * 0.35)
           if (!this.companionDodges(profile.attack, adversity)) this.takeDamage(profile.attack)
         }
+        // 보스가 움직이는 beat에 부가물이 정원까지 다시 돋는다(실게임 replenishFixtures).
+        this.replenishBossFixtures()
         this.bossAttackCountdown = profile.interval
       }
     }
@@ -2343,7 +2391,18 @@ export class EnaTrainingSimulation {
     this.bossSummons = []
     this.bossGateDamage = 0
     this.bossGimmickOverride = null
+    this.bossTrapCells = 0
+    this.bossTreasureCells = 0
+    this.replenishBossFixtures()
     if (floor === 100) this.finalAscent = false
+  }
+
+  /** 부가물을 정원까지 채운다 — 조우 시작과 보스 반격 beat에만 부른다(실게임과 같은 주기). */
+  private replenishBossFixtures(): void {
+    const gimmick = this.bossGimmick()
+    if (!gimmick) return
+    this.bossTrapCells = Math.max(this.bossTrapCells, gimmick.trapCells)
+    this.bossTreasureCells = Math.max(this.bossTreasureCells, gimmick.treasureCells)
   }
 
   private bossPageFloor(): number {

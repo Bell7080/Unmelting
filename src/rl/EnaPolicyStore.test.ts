@@ -49,7 +49,7 @@ describe('EnaPolicyStore', () => {
     expect(store.load()).toBeUndefined()
   })
 
-  it('371차원 동봉 사전학습 정책을 현재 계약으로 복원한다', () => {
+  it('373차원 동봉 사전학습 정책을 현재 계약으로 복원한다', () => {
     const pretrained = new EnaPolicyStore(undefined).loadPretrained()
 
     expect(pretrained).toBeDefined()

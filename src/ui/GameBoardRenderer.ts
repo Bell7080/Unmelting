@@ -40,6 +40,7 @@ import { CandleMode, Character } from '@entities/Character'
 import { HandCardId, HandEffectTargeting } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
 import { EmberSystem } from '@systems/EmberSystem'
+import { bossFixtureMatchesFilter } from '@systems/BossGimmickManager'
 import { getRelicDef, relicStackFeedback, type RelicId } from '@data/Relics'
 import { HAND_CARD_RARITY, RARITY_CLASS_BY_TIER } from '@data/ShopPools'
 import { RECIPES, type Recipe } from '@data/Recipes'
@@ -1077,7 +1078,31 @@ export class GameBoardRenderer {
     if (!this.handTargetingMode) return false
     const def = getHandCardDef(this.handTargetingMode.defId)
     const rule = this.handTargetingMode.merged ? def.targeting.triple : def.targeting.base
-    return this.isValidTargetRule(rule, card, distance)
+    if (this.isValidTargetRule(rule, card, distance)) return true
+    // 보스 타일은 칸에 얹힌 부가물만으로도 대상이 된다 — 아니면 키틴을 들었을 때
+    // 보스 전체가 차단 표시로 덮여 그 아래 함정 칸을 고를 수 없다.
+    return card.type === CardType.BOSS && this.hasTargetableFixtureCell()
+  }
+
+  /** 지금 든 손패가 닿는 부가물 칸이 하나라도 있는가. */
+  private hasTargetableFixtureCell(): boolean {
+    const cells = this.bossGimmickGrid?.cells
+    if (!cells) return false
+    return cells.some((cell) => !cell.broken && this.isValidHandTargetCell(cell.index))
+  }
+
+  /**
+   * 보스 격자의 이 칸이 지금 든 손패의 유효 대상인가.
+   * 카드 자체가 대상이 아니어도(키틴은 BOSS를 못 겨눈다) 그 칸에 함정이 얹혀 있으면
+   * 칸 하나가 대상이 된다 — 판정은 `bossFixtureMatchesFilter`가 HandSystem과 공유한다.
+   */
+  isValidHandTargetCell(cellIndex: number): boolean {
+    if (!this.handTargetingMode) return false
+    const fixture = this.bossGimmickGrid?.cells[cellIndex]?.fixture
+    if (!fixture) return false
+    const def = getHandCardDef(this.handTargetingMode.defId)
+    const rule = this.handTargetingMode.merged ? def.targeting.triple : def.targeting.base
+    return rule.selection === 'target' && bossFixtureMatchesFilter(fixture, rule.filter)
   }
 
   /** Check a hand target rule without mutating game state. */
@@ -1327,6 +1352,15 @@ export class GameBoardRenderer {
     // 칸 타겟팅 중에는 보스 face 전체가 '고를 칸만 남기는' 모드로 바뀐다.
     // 일러스트·이름·HP바·뱃지를 뒤로 밀고 성한 칸만 앞으로 끌어올린다.
     const cellTargeting = this.handTargetingMode !== null && isValidHandTarget && this.bossGimmickGrid !== null
+    // 보스 카드 자체가 대상인가(불씨 등) — 아니면 부가물 칸만 대상인 손패(키틴·열쇠)다.
+    // 후자는 함정/보물 칸만 빛나야 하므로 격자가 칸별로 갈라 그린다.
+    const cardLevelTarget = this.handTargetingMode !== null && this.isValidTargetRule(
+      this.handTargetingMode.merged
+        ? getHandCardDef(this.handTargetingMode.defId).targeting.triple
+        : getHandCardDef(this.handTargetingMode.defId).targeting.base,
+      card,
+      distance
+    )
     // 페이지가 오를수록 카드에 열기가 오른다. 세기는 data-page(2·3)로, 색은 tone으로 갈린다.
     const phase = this.bossPagePhase
     const phaseAttrs = phase && phase.page >= 2
@@ -1360,7 +1394,7 @@ export class GameBoardRenderer {
           </div>
           <span class="boss-face-atk">${swordIcon()}<span class="boss-face-atk-value">${atk}</span></span>
         </div>
-        ${this.bossFx.bossGimmickGridHtml(isValidHandTarget, distance)}
+        ${this.bossFx.bossGimmickGridHtml(isValidHandTarget, distance, cardLevelTarget)}
       </article>
     `
   }

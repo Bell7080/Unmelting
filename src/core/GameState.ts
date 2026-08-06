@@ -37,6 +37,12 @@ export class GameState {
   /** 카드가 필드에서 실제 제거될 때(처치/클리어) 1회 발동하는 훅. 처치 맥락(카드·레인)이 필요한
    *  유물(밀랍 조각=굳은 카드 처리, 확산=불씨 처치 인접 반응)이 여기에 붙는다. reset과 무관하게 유지. */
   onCardRemoved?: (card: Card, laneIndices: number[]) => void
+  /**
+   * 함정 하나가 **처리됐다**는 신호(밟아서 터뜨렸든 손패로 지웠든). 필드의 함정 카드와
+   * 보스 칸의 함정 부가물이 같은 이 훅을 지난다 — 함정 처리에 반응하는 유물(함정 수집 등)을
+   * 두 경로에 따로 적지 않기 위해서다. 새 함정 반응 유물은 여기 붙이면 양쪽 다 걸린다.
+   */
+  onTrapResolved?: () => void
 
   constructor() {
     this.character = new Character()
