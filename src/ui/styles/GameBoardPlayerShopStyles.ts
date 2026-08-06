@@ -99,19 +99,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   animation-delay: calc(var(--shutter-i) * 36ms);
   overflow: hidden;
 }
-/* Size/position now comes from measured rail cell bounds, so no manual taper. */
-.rail-shutter span::before {
-  content: '';
-  position: absolute;
-  top: 4px;
-  left: 50%;
-  width: 8px;
-  height: 8px;
-  margin-left: -4px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #ffd778, #c44a1c 70%, #58140c 100%);
-  box-shadow: 0 0 6px rgba(255, 188, 96, 0.55);
-}
+/* Size/position comes from measured rail cell bounds; panels stay unadorned so
+   the shutter reads as worn wax/parchment rather than buttoned upholstery. */
 .rail-shutter span::after {
   content: '';
   position: absolute;

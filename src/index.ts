@@ -3436,6 +3436,13 @@ async function handleCardAction(e: Event): Promise<void> {
     return
   }
 
+  // A board action ends the previous hand-card combo, but relics triggered by
+  // this action must be appended after that reset so their chain-banner rows
+  // survive the action (for example, 함정 수집 granting a blade shard).
+  HandSystem.resetChain(chain)
+  clearChainTimeline()
+  boardRenderer.refreshChainBanner(buildChainHints())
+
   // 이벤트 문 클릭: 불빛/행동 없이 이벤트 진입 연출로 분기한다(전방 도달 칸만 클릭 가능).
   if (card.type === CardType.EVENT) {
     await eventFlow.handleEventDoorClick(lane, card)
@@ -3724,10 +3731,6 @@ async function handleCardAction(e: Event): Promise<void> {
       }
     }
   }
-
-  // Board action resets the chain so combos do not bleed across turns.
-  HandSystem.resetChain(chain)
-  clearChainTimeline()
 
   if (result.cardRemoved) {
     // Keep the clicked rail hole open through the enemy/event beat. Rails are
