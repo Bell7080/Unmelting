@@ -15,7 +15,7 @@
  * 콘텐츠가 바뀌어도 시뮬과 실게임이 함께 움직이게 한다.
  */
 
-import { CardType, flowerGrowsAtAge, flowerWiltChance, type FlowerKind, type TrapKind } from '@entities/Card'
+import { CardType, enemyGroupBonus, flowerGrowsAtAge, flowerWiltChance, type FlowerKind, type TrapKind } from '@entities/Card'
 import type { HandCardId, HandCardDefinition, HandCardDropSource } from '@entities/HandCard'
 import { HAND_CARD_DEFINITIONS, HAND_CARD_IDS } from '@data/HandCards'
 import { TRIAL_DEFINITIONS } from '@data/Trials'
@@ -2460,9 +2460,12 @@ export class EnaTrainingSimulation {
       const sameTrap = left.type === CardType.TRAP && right.type === CardType.TRAP && left.trapKind === right.trapKind && left.trapKind !== 'bomb'
       const sameTreasure = left.type === CardType.TREASURE && right.type === CardType.TREASURE && left.treasureKind === right.treasureKind && left.treasureKind !== 'starlight'
       if (sameEnemy) {
+        // 런타임과 같은 표를 사용하고 기존 폭 보너스를 교체해 순차 합체의 중복 가산을 막는다.
+        const previousBonus = enemyGroupBonus(left.group, this.turn)
         left.group += right.group
-        left.hp += right.hp + (left.group >= 3 ? 3 : 2)
-        left.atk += right.atk + (left.group >= 3 ? 3 : 2)
+        const nextBonus = enemyGroupBonus(left.group, this.turn)
+        left.hp += right.hp + nextBonus.hp - previousBonus.hp
+        left.atk += right.atk + nextBonus.damage - previousBonus.damage
         // 괴물꽃 군락은 각 꽃의 처치 드롭 상한을 합산하는 런타임 merge 규칙을 따른다.
         if (left.specialEnemyKind) left.defeatDropCount = (left.defeatDropCount ?? 1) + (right.defeatDropCount ?? 1)
         this.board[0][lane + 1] = left

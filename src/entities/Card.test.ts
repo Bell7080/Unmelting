@@ -34,12 +34,12 @@ describe('Card enemy grouping health', () => {
     left.merge(right)
     expect(left.name).toBe('양초 무리')
     expect(left.groupCount).toBe(2)
-    expect(left.getHealth()).toBe(5)
-    expect(left.getDamage()).toBe(5)
+    expect(left.getHealth()).toBe(4)
+    expect(left.getDamage()).toBe(4)
 
     left.takeDamage(1)
-    expect(left.getHealth()).toBe(4)
-    expect(left.getHealth()).toBe(4)
+    expect(left.getHealth()).toBe(3)
+    expect(left.getHealth()).toBe(3)
   })
 
   it('turns three normal enemies into a member-scaled 3-lane group', () => {
@@ -51,12 +51,12 @@ describe('Card enemy grouping health', () => {
     first.merge(third)
     expect(first.name).toBe('양초 군단')
     expect(first.groupCount).toBe(3)
-    expect(first.getHealth()).toBe(8)
-    expect(first.getDamage()).toBe(7)
+    expect(first.getHealth()).toBe(7)
+    expect(first.getDamage()).toBe(6)
 
     first.takeDamage(1)
-    expect(first.getHealth()).toBe(7)
-    expect(first.getHealth()).toBe(7)
+    expect(first.getHealth()).toBe(6)
+    expect(first.getHealth()).toBe(6)
   })
 
   it('preserves damage already dealt when enemies merge later', () => {
@@ -67,7 +67,7 @@ describe('Card enemy grouping health', () => {
     wounded.merge(fresh)
 
     expect(wounded.groupCount).toBe(2)
-    expect(wounded.getHealth()).toBe(4)
+    expect(wounded.getHealth()).toBe(3)
   })
 
   it('keeps flowers single-cell while monster flowers merge only with each other', () => {
@@ -94,7 +94,20 @@ describe('Card enemy grouping health', () => {
     monsterA.merge(monsterB)
     expect(monsterA.groupCount).toBe(2)
     expect(monsterA.getHealth()).toBe(5)
-    expect(monsterA.getDamage()).toBe(7) // merge adds group damage bonus (+2)
+    expect(monsterA.getDamage()).toBe(6) // 30층 전 2칸 합체 보너스는 +1이다.
+  })
+
+  it('doubles 2/3-lane merge bonuses after each 30-floor boss milestone', () => {
+    // 멤버 합계가 2/2인 동일 적으로 폭 보너스만 분리해 0/30/60/90층 표를 고정한다.
+    const mergeAt = (turn: number, width: 2 | 3): Card => {
+      const cards = Array.from({ length: width }, (_, index) =>
+        new Card(`milestone-${turn}-${index}`, CardType.ENEMY, '양초 생쥐', 'test', 1, 1))
+      cards.slice(1).forEach((card) => cards[0].merge(card, turn))
+      return cards[0]
+    }
+
+    expect([0, 30, 60, 90].map((turn) => mergeAt(turn, 2).getHealth())).toEqual([3, 4, 6, 10])
+    expect([0, 30, 60, 90].map((turn) => mergeAt(turn, 3).getDamage())).toEqual([5, 7, 11, 19])
   })
 
 
@@ -150,12 +163,12 @@ describe('Card trial enemy stat bonus (retroactive)', () => {
   it('scales the bonus by group size so a merged colony matches per-member spawns', () => {
     const left = new Card('left', CardType.ENEMY, '양초 생쥐', 'normal', 2, 1)
     const right = new Card('right', CardType.ENEMY, '양초 개구리', 'normal', 1, 2)
-    left.merge(right) // 2-group: HP 5 / DMG 5
+    left.merge(right) // 2-group: HP 4 / DMG 4
 
     left.applyTrialEnemyStatBonus(1, 1) // ×groupCount(2) → +2/+2
 
-    expect(left.getHealth()).toBe(7)
-    expect(left.getDamage()).toBe(7)
+    expect(left.getHealth()).toBe(6)
+    expect(left.getDamage()).toBe(6)
   })
 
   it('ignores special enemies and bosses', () => {
