@@ -85,10 +85,15 @@ interface EnemyGroupStats {
   damage: number
 }
 
-/** Extra stats added to a same-row enemy formation after member stats are summed. */
-function enemyGroupBonus(groupCount: number): { hp: number; damage: number } {
-  if (groupCount >= 3) return { hp: 3, damage: 3 }
-  if (groupCount === 2) return { hp: 2, damage: 2 }
+/**
+ * 같은 행 적 합체 보너스의 단일 출처. 기본값은 2칸 +1/+1, 3칸 +2/+2이며
+ * 30/60/90층 보스를 지난 구간마다 두 배가 된다(90층 이후 ×8 상한).
+ */
+export function enemyGroupBonus(groupCount: number, turn: number = 0): { hp: number; damage: number } {
+  const milestoneTier = Math.min(3, Math.max(0, Math.floor(turn / 30)))
+  const multiplier = 2 ** milestoneTier
+  const bonus = groupCount >= 3 ? 2 * multiplier : groupCount === 2 ? multiplier : 0
+  if (bonus > 0) return { hp: bonus, damage: bonus }
   return { hp: 0, damage: 0 }
 }
 
@@ -151,6 +156,8 @@ export class Card {
   enemyDamageTotal: number
   enemySpriteId: EnemySpriteId | null
   enemyPower: number
+  /** 합체가 일어난 층 구간. 이후 HP 상한/공격력 재계산에도 같은 보너스 배율을 유지한다. */
+  enemyGroupBonusTurn: number
   /** Trap subtype and behavior state for web/bomb/spore rules. */
   trapKind: TrapKind
   isBombArmed: boolean
@@ -211,6 +218,7 @@ export class Card {
     this.enemyDamageTotal = enemyLike ? baseDamage : 0
     this.enemySpriteId = options.enemySpriteId ?? null
     this.enemyPower = options.enemyPower ?? 0
+    this.enemyGroupBonusTurn = 0
     this.trapKind = options.trapKind ?? 'web'
     this.isBombArmed = false
     this.sporeTurnsUntilSpread = this.trapKind === 'spore' ? 2 : 0
@@ -272,10 +280,10 @@ export class Card {
   /** Return proportional stats for a merged enemy group based on real members. */
   private getNormalEnemyGroupStats(groupCount: number): EnemyGroupStats | null {
     if (groupCount <= 1) return null
-    // 온보딩 바위는 선형 합체: 칸수만큼 합산만 하고 일반 합체 보너스(+2/+3)는 미적용.
+    // 온보딩 바위는 선형 합체: 칸수만큼 합산만 하고 일반 합체 보너스(폭·구간별)는 미적용.
     // 1/1짜리가 모이므로 2칸 2/2 · 3칸 3/3이 된다 — 합쳐질수록 아프지만 감당 가능한 폭.
     const isRock = this.enemySpriteId === 'enemyRock'
-    const bonus = isRock ? { hp: 0, damage: 0 } : enemyGroupBonus(groupCount)
+    const bonus = isRock ? { hp: 0, damage: 0 } : enemyGroupBonus(groupCount, this.enemyGroupBonusTurn)
     return {
       // 온보딩 바위는 폭별 전용 이름(1칸 '바위'는 스폰 이름 그대로).
       name: isRock ? (groupCount >= 3 ? '큰 바위' : '적당한 바위') : groupCount >= 3 ? '양초 군단' : '양초 무리',
@@ -556,7 +564,7 @@ export class Card {
    * Normal enemies transform into the exact requested 2-lane/3-lane enemies,
    * while damage already dealt before a later merge is still preserved.
    */
-  merge(other: Card): void {
+  merge(other: Card, turn: number = 0): void {
     if (!this.canMergeWith(other)) return
     // 온보딩 필드 카드는 합체 시 만료를 최대 턴수로 리셋한다(합체 턴 미카운트 → 박힌 칸).
     this.resetFieldExpiry()
@@ -564,11 +572,14 @@ export class Card {
     if (this.type === CardType.ENEMY && this.specialEnemyKind === 'mimic') {
       // Merged mimics sum their stats and gain the same width bonus as normal enemies.
       const newGroupCount = this.groupCount + other.groupCount
-      const bonus = enemyGroupBonus(newGroupCount)
+      const previousBonus = enemyGroupBonus(this.groupCount, this.enemyGroupBonusTurn)
+      const bonus = enemyGroupBonus(newGroupCount, turn)
       this.groupCount = newGroupCount
-      this.baseHealth += other.baseHealth + bonus.hp
-      this.baseDamage += other.baseDamage + bonus.damage
+      // 기존 폭 보너스를 새 폭/층 보너스로 교체해 2→3칸 순차 합체에서도 중복 가산하지 않는다.
+      this.baseHealth += other.baseHealth + bonus.hp - previousBonus.hp
+      this.baseDamage += other.baseDamage + bonus.damage - previousBonus.damage
       this.health += other.health
+      this.enemyGroupBonusTurn = turn
       this.enemyHealthTotal = this.baseHealth
       this.enemyDamageTotal = this.baseDamage
       this.defeatDropCount += other.defeatDropCount
@@ -580,11 +591,14 @@ export class Card {
     if (this.type === CardType.ENEMY && this.specialEnemyKind === 'monsterFlower') {
       // Corrupted flowers add their stats with the same width bonus as normal enemies.
       const newGroupCount = this.groupCount + other.groupCount
-      const bonus = enemyGroupBonus(newGroupCount)
+      const previousBonus = enemyGroupBonus(this.groupCount, this.enemyGroupBonusTurn)
+      const bonus = enemyGroupBonus(newGroupCount, turn)
       this.groupCount = newGroupCount
-      this.baseHealth += other.baseHealth + bonus.hp
-      this.baseDamage += other.baseDamage + bonus.damage
+      // 괴물꽃도 일반 합체 적과 동일한 폭/보스 구간 보너스 표를 사용한다.
+      this.baseHealth += other.baseHealth + bonus.hp - previousBonus.hp
+      this.baseDamage += other.baseDamage + bonus.damage - previousBonus.damage
       this.health += other.health
+      this.enemyGroupBonusTurn = turn
       this.enemyHealthTotal = this.baseHealth
       this.enemyDamageTotal = this.baseDamage
       this.name = this.groupCount >= 3 ? '괴물꽃 군락' : '괴물꽃 무리'
@@ -606,6 +620,7 @@ export class Card {
       // 넓은 적을 그대로 두는 위험을 손패로 갚는 축이다.
       this.defeatDropCount += other.defeatDropCount
       this.groupCount += other.groupCount
+      this.enemyGroupBonusTurn = turn
       this.applyNormalGroupPresentation(existingDamage + otherDamage)
       return
     }

@@ -132,7 +132,8 @@ export class GameState {
         continue
       }
       if (left.canMergeWith(right)) {
-        left.merge(right)
+        // 현재 층을 넘겨 30/60/90층 보스 이후 합체 보너스 배율을 카드 모델 한 곳에서 계산한다.
+        left.merge(right, this.currentTurn)
         // Update ALL lanes still referencing 'right' to prevent a second
         // spurious merge when 'right' is already a multi-lane card (gc ≥ 2).
         for (let j = i + 1; j < this.lanes.length; j++) {
