@@ -1169,10 +1169,7 @@ export class BossEventController {
     this.inject.render()
     const names = added.map((card) => getHandCardDef(card.defId).name).join(' · ')
     this.inject.recordNotice(`양초 고양이가 ${names}을(를) 굴려 보냈다 — 손패 +${added.length}`, 'info')
-    // 동전 살포(animateBossScatterToHandSlots)는 양초 백작의 탐욕의 동전 전용 연출이다
-    // (둥근 금화 = 그 유물의 정체성). 고양이가 주는 건 일반 손패라 카드 토큰
-    // (animateResourceTrailFromCard → 'hand')을 쓴다 — 세로로 긴 사각 조각이라
-    // 이 게임의 손패 획득 어휘와 일치한다.
+    // 손패 지급은 보스 종류와 무관하게 손패 획득 공용 창구(카드 토큰)를 지난다.
     await this.br.animateResourceTrailFromCard(this.eventState.card.id, 'hand', added.length, 'hand-recovery')
   }
 
@@ -1224,15 +1221,15 @@ export class BossEventController {
       return
     }
     this.inject.render()
-    const slotIndices = addedUids
-      .map((uid) => character.hand.findIndex((h) => h?.uid === uid))
-      .filter((idx) => idx >= 0)
     const greedAdded = addedUids.filter((uid) => uid.startsWith('greed-coin')).length
     this.inject.recordNotice(
       `양초 백작이 호화로운 탐욕을 뿌렸다 — 손패 ${addedUids.length}장(탐욕의 동전 ${greedAdded})`,
       'hurt'
     )
-    await this.br.animateBossScatterToHandSlots(bossCardId, slotIndices)
+    // 살포도 결국 '손패가 들어온다'라서 손패 획득 공용 창구(카드 토큰)를 쓴다.
+    // 예전엔 둥근 금화를 화면에 흩뿌렸는데, 이 게임의 이펙트 어휘는 사각 블라스트
+    // 하나뿐이라 그 동전만 혼자 둥글게 떠 있었다.
+    await this.br.animateResourceTrailFromCard(bossCardId, 'hand', addedUids.length, 'treasure-gain')
   }
 
   /**

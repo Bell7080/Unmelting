@@ -1940,20 +1940,6 @@ export const GAME_BOARD_RAIL_STYLES = `
     0 0 12px rgba(255, 96, 40, 0.85);
 }
 
-/* 30F 탐욕 살포용 금화. 보드 재렌더에 끊기지 않게 body에 띄우고 transform으로만 움직인다. */
-.boss-greed-coin {
-  position: fixed;
-  z-index: 228;
-  width: clamp(12px, 1.9vh, 20px);
-  height: clamp(12px, 1.9vh, 20px);
-  border-radius: 50%;
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-  background:
-    radial-gradient(circle at 34% 30%, rgba(255, 246, 208, 0.98), rgba(240, 190, 82, 0.96) 46%, rgba(158, 108, 30, 0.98) 100%);
-  box-shadow: 0 0 10px rgba(255, 196, 96, 0.5), inset 0 -2px 3px rgba(120, 78, 16, 0.6);
-}
-
 /* 보스 등장 시 셔터 진동을 한 비트 강화. 인트로 + 강하와 함께 묵직한 쿵 임팩트. */
 .rail.is-boss-quaking {
   animation: boss-rail-impact-quake 0.62s cubic-bezier(0.32, 0.04, 0.18, 0.96);

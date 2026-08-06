@@ -3879,11 +3879,6 @@ export class GameBoardRenderer {
     overlay.remove()
   }
 
-  /** 보스 → 손패 슬롯 산개 지급 연출 위임 — 본체는 renderer/BossFxView. */
-  async animateBossScatterToHandSlots(cardId: string, slotIndices: number[]): Promise<void> {
-    return this.bossFx.animateBossScatterToHandSlots(cardId, slotIndices)
-  }
-
   /** Flower-specific SquareBurst palettes keep red rose, marigold, lavender,
    *  oleander, and chamomile rewards visually distinct while still using the
    *  same square language as the rest of the board. */

@@ -184,4 +184,36 @@ describe('CompanionForesight', () => {
     expect(report.recommendationReason).toContain('반격 타이밍')
   })
 
+
+  it('굳은 강적은 다가오는 위협으로 세지 않는다 — 때리지 못하는 적에게 사과하지 않게', () => {
+    // 굳은 적은 TurnManager.runEnemyPhase가 통째로 건너뛰어 그동안 아무도 맞지 않는다.
+    // 이 플래그가 켜지면 에나가 "막아야 하는데 못 막아" 미숙 대사를 낸다(CompanionDirector).
+    const build = (frozenTurns: number) => {
+      const gs = new GameState()
+      gs.character.damage = 2
+      const brute = new Card('brute', CardType.ENEMY, '큰 적', 'test', 12, 5)
+      brute.groupCount = 2
+      if (frozenTurns > 0) brute.freeze(frozenTurns)
+      gs.lanes[1].setCardAtDistance(0, brute)
+      return assessThreats(gs.lanes, gs.character, { unlockedCardIds: ['ember', 'wax'] as HandCardId[] })
+    }
+
+    expect(build(0).strongEnemyIncoming).toBe(true)   // 안 굳었으면 이번 턴에 때린다
+    expect(build(1).strongEnemyIncoming).toBe(true)   // 1턴만 남았으면 다음 턴에 풀려 때린다
+    expect(build(2).strongEnemyIncoming).toBe(false)  // 2턴 이상이면 당장은 못 때린다
+    expect(build(5).strongEnemyIncoming).toBe(false)
+  })
+
+  it('대기 행 강적은 한 턴 뒤 닿으므로 다가오는 위협으로 센다', () => {
+    const gs = new GameState()
+    gs.character.damage = 2
+    const brute = new Card('brute', CardType.ENEMY, '큰 적', 'test', 12, 5)
+    brute.groupCount = 2
+    gs.lanes[1].setCardAtDistance(1, brute)
+
+    const report = assessThreats(gs.lanes, gs.character, { unlockedCardIds: ['ember', 'wax'] as HandCardId[] })
+
+    expect(report.strongEnemyIncoming).toBe(true)
+  })
+
 })

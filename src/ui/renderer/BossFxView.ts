@@ -49,10 +49,6 @@ const BOSS_SLAM_IMPACT_OFFSET = 0.62
 /** 착지 흔들림 길이. CSS `.is-boss-slam-shake` 애니메이션과 같은 값이어야 한다. */
 const BOSS_SLAM_SHAKE_MS = 260
 
-/** 손패로 들어가지 못하고 흩어져 사라지는 여분 금화 수 — '살포'로 보이게 하는 최소치. */
-const BOSS_GREED_STRAY_COINS = 5
-/** 흩뿌린 동전이 화면에 머무는 시간. 손패 유입과 별개의 박자로 읽히게 한다. */
-const BOSS_GREED_SCATTER_HOLD_MS = 220
 /** 탐욕의 값 셈 — 동전 한 장을 짚는 간격. 빠르면 몇 장인지 못 세고 지나간다. */
 const BOSS_GREED_WAVE_STEP_MS = 260
 /** 셈이 끝나고 청구가 시작되기까지의 정적. 값이 확정된 순간을 만든다. */
@@ -1294,91 +1290,6 @@ export class BossFxView {
   }
 
   /**
-   * 30F 양초 백작의 탐욕 살포 — **두 박자**로 나눠 보여 준다.
-   *
-   *  1) 보스가 동전을 화면 가득 흩뿌리고, 동전이 흩어진 채로 잠깐 머문다.
-   *  2) 그 동전이 하나씩 짤랑이며 손패 슬롯으로 빨려 들어간다.
-   *
-   * 한 박자로 붙여 두면 "뿌리면서 동시에 때린다"로 읽혀 무슨 일이 일어났는지 안 남는다.
-   * 뒤이어 오는 타격은 호출부가 또 한 박자 띄우고 낸다(BossEvent.resolveWaxArmyGreedTurn).
-   */
-  async animateBossScatterToHandSlots(cardId: string, slotIndices: number[]): Promise<void> {
-    const boss = this.host.findCardElement(cardId)
-    if (!boss || slotIndices.length === 0) return
-    const bossRect = boss.getBoundingClientRect()
-    const ox = bossRect.left + bossRect.width / 2
-    const oy = bossRect.top + bossRect.height * 0.62
-    // 분수처럼 솟구치는 황금빛 폭죽 블라스트.
-    SquareBurst.playOn(boss, 'treasure-gain', { count: 30, spread: 200, duration: 640, size: [8, 18] })
-
-    // 1) 흩뿌리기 — 손패로 갈 동전마다 하나씩, 여기에 굴러 사라질 여분을 섞어 '살포'로 만든다.
-    const stage = this.host.boardElement.getBoundingClientRect()
-    const coins = Array.from(
-      { length: slotIndices.length + BOSS_GREED_STRAY_COINS },
-      () => this.spawnGreedCoin(ox, oy)
-    )
-    const spots = coins.map(() => ({
-      x: stage.left + stage.width * (0.12 + Math.random() * 0.76),
-      y: stage.top + stage.height * (0.3 + Math.random() * 0.44),
-    }))
-    await Promise.all(coins.map((coin, i) => coin.animate(
-      [
-        { transform: 'translate(-50%,-50%) translate(0,0) scale(0.25) rotate(0deg)', opacity: 0.25 },
-        {
-          // 중간에 한 번 솟구쳤다 떨어져 '뿌려졌다'는 포물선이 보이게 한다.
-          transform: `translate(-50%,-50%) translate(${((spots[i].x - ox) * 0.62).toFixed(1)}px, ${((spots[i].y - oy) * 0.62 - 72).toFixed(1)}px) scale(1.14) rotate(240deg)`,
-          opacity: 1,
-          offset: 0.55,
-        },
-        {
-          transform: `translate(-50%,-50%) translate(${(spots[i].x - ox).toFixed(1)}px, ${(spots[i].y - oy).toFixed(1)}px) scale(1) rotate(400deg)`,
-          opacity: 1,
-        },
-      ],
-      { duration: 520 + i * 26, easing: 'cubic-bezier(0.22, 0.9, 0.3, 1)', fill: 'forwards' }
-    ).finished))
-    await new Promise((r) => window.setTimeout(r, BOSS_GREED_SCATTER_HOLD_MS))
-
-    // 2) 손패로 짤랑 — 슬롯마다 하나씩 순서대로 빨려 들어가고, 도착한 슬롯이 톡 생긴다.
-    await Promise.all(slotIndices.map(async (slotIndex, i) => {
-      await new Promise((r) => window.setTimeout(r, i * 130))
-      const coin = coins[i]
-      const slot = this.host.findHandSlotElement(slotIndex)
-      if (!slot) { coin.remove(); return }
-      const target = slot.getBoundingClientRect()
-      await coin.animate(
-        [
-          { transform: `translate(-50%,-50%) translate(${(spots[i].x - ox).toFixed(1)}px, ${(spots[i].y - oy).toFixed(1)}px) scale(1) rotate(0deg)` },
-          {
-            transform: `translate(-50%,-50%) translate(${(target.left + target.width / 2 - ox).toFixed(1)}px, ${(target.top + target.height / 2 - oy).toFixed(1)}px) scale(0.4) rotate(300deg)`,
-            opacity: 0.85,
-          },
-        ],
-        { duration: 380, easing: 'cubic-bezier(0.5, 0, 0.2, 1)', fill: 'forwards' }
-      ).finished
-      coin.remove()
-      sfx.playCoin()
-      SquareBurst.playOn(slot, 'treasure-gain', { count: 8, spread: 60, duration: 360 })
-      await slot.animate(
-        [
-          { transform: 'scale(0.6)', opacity: 0.2 },
-          { transform: 'scale(1.12)', opacity: 1, offset: 0.6 },
-          { transform: 'scale(1)', opacity: 1 },
-        ],
-        { duration: 320, easing: 'cubic-bezier(0.34,1.56,0.64,1)', fill: 'forwards' }
-      ).finished
-    }))
-
-    // 3) 손패에 못 들어간 여분은 바닥으로 흘러 사라진다 — 기다리지 않는다.
-    for (const coin of coins.slice(slotIndices.length)) {
-      void coin.animate(
-        [{ opacity: 1 }, { transform: 'translate(-50%,-50%) translateY(46px) scale(0.7)', opacity: 0 }],
-        { duration: 520, easing: 'ease-in', fill: 'forwards', composite: 'add' }
-      ).finished.then(() => coin.remove())
-    }
-  }
-
-  /**
    * 모든 보스의 직접 타격 — 들어올림 → 뒤로 당김 → 쾅.
    *
    * 일반 적의 돌진(animateEnemyAttacks)은 평면 위를 미끄러지는 움직임이라 거대한 보스
@@ -1466,16 +1377,6 @@ export class BossFxView {
     void board.offsetWidth
     board.classList.add('is-boss-slam-shake')
     window.setTimeout(() => board.classList.remove('is-boss-slam-shake'), BOSS_SLAM_SHAKE_MS)
-  }
-
-  /** 화면에 흩뿌려지는 금화 하나. 좌표는 fixed, 이동은 transform으로만 준다. */
-  private spawnGreedCoin(x: number, y: number): HTMLElement {
-    const coin = document.createElement('i')
-    coin.className = 'boss-greed-coin'
-    coin.setAttribute('aria-hidden', 'true')
-    coin.style.cssText = `left:${x}px;top:${y}px;`
-    document.body.appendChild(coin)
-    return coin
   }
 
   /**

@@ -24,7 +24,8 @@ export interface ThreatReport {
   webLethal: boolean
   /** 합쳐지기 전에 청소/키틴으로 미리 치우는 게 이로운가. */
   recommendCleanup: boolean
-  /** 전방/대기 1칸 안의 강적 존재. 에나 미숙 대사와 방어 대비 판단에 쓴다. */
+  /** 전방/대기 1칸 안의 강적이 **다음 턴 안에 실제로 때릴 수 있는가**. 굳은 적은 제외된다
+   *  (때리지 못하는 적에게 에나가 못 막아 미안하다고 하지 않게 하는 게이트). */
   strongEnemyIncoming: boolean
   /** 함정 제거를 넘어 공격/포자/레시피/트리플까지 본 최종 추천 손패. */
   recommendedCardId: HandCardId | null
@@ -169,6 +170,18 @@ function canUse(id: HandCardId, unlocked: Set<HandCardId>): boolean {
   return unlocked.has(id) && !!HAND_CARD_DEFINITIONS[id]
 }
 
+/**
+ * 강적의 공격이 닿기까지 남은 턴 — 전방 비굳음 0 · 전방 굳음 = 남은 굳음 턴 · 대기 행 1.
+ *
+ * 굳은 적은 `TurnManager.runEnemyPhase`가 통째로 건너뛰므로 그동안은 아무도 맞지 않는다.
+ * 방어 대비 점수와 '다가오는 위협' 판정이 같은 이 값을 봐야, 때리지도 못하는 적을 두고
+ * 에나가 못 막아 미안하다고 사과하는 일이 생기지 않는다.
+ */
+function strongEnemyAttackInTurns(card: Card, distance: number): number {
+  if (distance !== 0) return 1
+  return card.isFrozen() ? card.frozenTurns : 0
+}
+
 /** 보유 유물의 synergyTags를 평탄화한다 — 태그가 달린 유물이 데이터에 들어오면 자동 가점된다. */
 function ownedRelicTags(character: Character): string[] {
   return character.relics.flatMap((id) => [...(RELIC_DEFINITIONS[id]?.synergyTags ?? [])])
@@ -200,6 +213,11 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
   const webEscalationImminent = frontTwoWeb && webMerge.mergedSize >= 3
   const sporeReady = cells.some(({ card, distance }) => card.type === CardType.TRAP && card.trapKind === 'spore' && (distance === 0 || card.sporeTurnsUntilSpread <= 1))
   const strongEnemy = cells.find(({ card, distance }) => card.type === CardType.ENEMY && distance <= 1 && (card.groupCount >= 2 || card.health > character.damage + 1))
+  // 강적이 실제로 때릴 수 있기까지 남은 턴. 굳은 적은 아예 공격을 건너뛰므로
+  // (TurnManager.runEnemyPhase) '다가오는 위협'으로 세면 안 된다 — 없으면 무한대.
+  const strongEnemyAttackIn = strongEnemy
+    ? strongEnemyAttackInTurns(strongEnemy.card, strongEnemy.distance)
+    : Number.POSITIVE_INFINITY
   // 위협 지원 카드는 전 손패 범용 스코어러(HandCardAdvisor)가 데이터 주도로 고른다.
   const frontWideWebSpan = Math.max(0, ...webCells.filter(({ distance }) => distance === 0).map(({ card }) => card.groupCount))
   const support = bestSupportCard(
@@ -223,7 +241,7 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
             atFront: strongEnemy.distance === 0,
             // 실효 공격력(불씨 티어 보너스 포함) + 반격 임박 턴(전방 비굳음=0, 굳음=잔여 턴, 대기=1).
             attack: strongEnemy.card.getDamage(),
-            attackInTurns: strongEnemy.distance === 0 ? (strongEnemy.card.isFrozen() ? strongEnemy.card.frozenTurns : 0) : 1,
+            attackInTurns: strongEnemyAttackIn,
           }
         : undefined,
       heldCardIds: character.hand.map((card) => card.defId),
@@ -273,5 +291,5 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
       ? `${recommendationKind}:${recommendedCardId}:${relevantBoard}:hand=${character.hand.map((card) => card.defId).join(',')}`
       : null
 
-  return { webCount, potentialWebDamage, webLethal, recommendCleanup: support?.fit === 'cleanup', strongEnemyIncoming: !!strongEnemy, recommendedCardId, recommendationKind, recommendationReason, recommendationShortReason, hasImminentWebDrop, playableInCards, webEscalationImminent, recommendationSignature }
+  return { webCount, potentialWebDamage, webLethal, recommendCleanup: support?.fit === 'cleanup', strongEnemyIncoming: strongEnemyAttackIn <= 1, recommendedCardId, recommendationKind, recommendationReason, recommendationShortReason, hasImminentWebDrop, playableInCards, webEscalationImminent, recommendationSignature }
 }

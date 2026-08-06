@@ -421,12 +421,14 @@ export class CompanionDirector {
     // 강적 미숙 대사는 '마주침'만으로는 내지 않는다 — 고점 에나라면 실제로 건넸을
     // 공격/방어 지원각(해금 카드·플레이어 미보유)이 있는데 의지 예산이 모자라 클러치가
     // 못 뜬 경우에만 낮은 빈도로 아쉬움을 표현한다(단순 조우 오발동 방지).
-    // 여기에 '실제로 싸우는 중' 게이트를 더한다: 최근 2턴 안에 맞았거나 처치한 적이 없으면
-    // 아직 아무 일도 안 일어난 것이므로 "이 정도밖에 못 해…" 류의 사과가 나가지 않는다.
+    // 여기에 '실제로 맞고 있는 중' 게이트를 더한다. 이 대사는 **막아주지 못해서** 미안하다는
+    // 말이라, 방패가 필요한 상황 = 피해가 실제로 들어오는 상황에서만 성립한다.
+    // 처치는 근거가 되지 못한다 — 적을 잡은 것은 보호가 필요했다는 뜻이 아니라서,
+    // 처치까지 세면 아직 때리지도 않은 대기 행 적(괴물꽃 등)에 대고 사과가 나갔다.
     const hadInterventionAngle =
       report.recommendationKind === 'attack' || report.recommendationKind === 'defense'
-    const engagedRecently = companion.hasRecentEvent('hit', turn) || companion.hasRecentEvent('kill', turn)
-    if (report.strongEnemyIncoming && hadInterventionAngle && engagedRecently) {
+    const hurtRecently = companion.hasRecentEvent('hit', turn)
+    if (report.strongEnemyIncoming && hadInterventionAngle && hurtRecently) {
       const missed = companion.missedPotentialLine('shield', turn)
       if (missed) this.sayEnaBark(missed, { importance: BARK_IMPORTANCE.situation, situation: 'hit' })
     }
