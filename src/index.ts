@@ -2359,6 +2359,30 @@ async function applyHandSingle(
     // while the larger played-card ghost lingers over the field.
     void boardRenderer.animateHandCardUse(slotIndex, handUseTheme)
   }
+  // 자해는 공격 결과를 보여 주기 전에 결제한다. 카드 비행과 체력 감소를 같은 박자에
+  // 시작해야 "적을 때린 뒤 받는 반격"이 아니라 "체력을 내고 카드를 쓴다"로 읽힌다.
+  if (result.selfDamage && result.selfDamage > 0) {
+    // 자해는 방패를 무시하고 HP에 직접 닳는다(takeDirectDamage).
+    gameState.character.takeDirectDamage(result.selfDamage)
+    recordNotice(`${usedDef?.name ?? '카드'}의 대가 — 자신이 ${result.selfDamage} 피해를 입었다`, 'hurt')
+    // 전체 render는 이미 피해를 입은 적 DOM까지 지우므로 여기서 하지 않는다. 피격 메서드가
+    // 현재 모델을 읽어 HP 카운터만 굴리고, 보드 전체는 적 처치 연출 뒤 정상 흐름에서 갱신한다.
+    // 아래 적 타격 연출은 이 Promise를 기다리지 않아 대가와 공격 결과가 한 행동으로 묶인다.
+    void boardRenderer.animatePlayerDamageImpact(result.selfDamage)
+    relicEffects.applyAnomalyHealthLoss()
+    relicEffects.applyDemonDollSelfDamage(result.selfDamage)
+    // 제물 패밀리(자해 전용): 카드(혈서)·방패(응고)·적 분산 피해(수혈)로 환급한다.
+    // 주사기·피의 대가는 자해+받는 피해를 모두 세므로 위 applyAnomalyHealthLoss에서 함께 처리된다.
+    relicEffects.applyBloodWritSelfDamage(result.selfDamage)
+    relicEffects.applyCoagulationSelfDamage(result.selfDamage)
+    await relicEffects.applyTransfusionSelfDamage(result.selfDamage)
+    if (!gameState.character.isAlive() && !gameState.character.authoritySurvivePending) {
+      gameState.endGame('character_defeated')
+      if (!(await relicEffects.tryResolveSurvivalRelics())) finishTurn()
+      inputLocked = false
+      return
+    }
+  }
   // If this card damaged or hardened/thawed a target, add the one-shot
   // feedback before the next render changes the persistent field state. The
   // damaged id set is reused below so a lethal hit does not also fire a second
@@ -2413,29 +2437,6 @@ async function applyHandSingle(
   if (result.lightGained && result.lightGained > 0) {
     pushActivityLogsInDisplayOrder([createScoreLog('탐욕의 동전', result.lightGained, 'score')])
     await playResourceTrail({ kind: 'center' }, 'score', 1)
-  }
-  if (result.selfDamage && result.selfDamage > 0) {
-    // 자해는 방패를 무시하고 HP에 직접 닳는다(takeDirectDamage).
-    gameState.character.takeDirectDamage(result.selfDamage)
-    recordNotice(`${usedDef?.name ?? '카드'}의 대가 — 자신이 ${result.selfDamage} 피해를 입었다`, 'hurt')
-    render()
-    // 자해는 카드가 나가는 **그 박자에** 함께 보여야 한다 — 기다리면 "적을 때린 뒤
-    // 따로 한 대 맞는" 두 사건이 되어 턴이 늘어지고 인과가 끊긴다. 모델은 이미 깎였고
-    // 사망 판정도 모델을 보므로, 연출만 겹쳐 흘려보낸다.
-    void boardRenderer.animatePlayerDamageImpact(result.selfDamage)
-    relicEffects.applyAnomalyHealthLoss()
-    relicEffects.applyDemonDollSelfDamage(result.selfDamage)
-    // 제물 패밀리(자해 전용): 카드(혈서)·방패(응고)·적 분산 피해(수혈)로 환급한다.
-    // 주사기·피의 대가는 자해+받는 피해를 모두 세므로 위 applyAnomalyHealthLoss에서 함께 처리된다.
-    relicEffects.applyBloodWritSelfDamage(result.selfDamage)
-    relicEffects.applyCoagulationSelfDamage(result.selfDamage)
-    await relicEffects.applyTransfusionSelfDamage(result.selfDamage)
-    if (!gameState.character.isAlive() && !gameState.character.authoritySurvivePending) {
-      gameState.endGame('character_defeated')
-      if (!(await relicEffects.tryResolveSurvivalRelics())) finishTurn()
-      inputLocked = false
-      return
-    }
   }
   // 검은 양초 사용 시 이벤트 보스 누적 카운터 동기화
   if (result.blackCandleCounterGain && bossController.eventState) {
