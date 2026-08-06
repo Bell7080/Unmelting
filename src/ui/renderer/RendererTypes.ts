@@ -67,6 +67,16 @@ export interface BossGimmickStrikeView {
   broke: boolean
 }
 
+/**
+ * 칸 타격 beat 동안 보스 HP를 **단계별로** 굴리기 위한 시작값.
+ * 모델은 이미 최종 HP까지 깎여 있으므로, 연출은 이 값에서 시작해 수치가 뜰 때마다
+ * 그만큼씩 굴려 내린다 — 배율 피해에 한 번, 부위 파괴 보너스에 한 번.
+ */
+export interface BossHpRollStart {
+  /** 이번 beat가 시작될 때의 보스 HP(피해가 들어가기 전). */
+  hpBefore: number
+}
+
 export interface ItemActionDetail {
   itemIndex: number
   shiftKey?: boolean

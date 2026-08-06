@@ -192,6 +192,14 @@ npm run build    # verify 포함
 - 하한이 피해를 막고 있는 beat는 피해 수치 **자리에** 경고 문구를 띄운다
   (`pageGateWarning()` → `playBossPageGateWarning`). 양식도 `damage-float` 그대로 쓰고
   색·노출 시간만 바꾼다 — 수치가 뜰 자리임이 읽혀야 한다.
+- ★ **`cell-break` 리미트는 부위를 깨는 그 타격에 함께 뚫린다**(`bossPageFloor()`가
+  `gimmicks.brokeCellThisAction`을 보고 하한을 푼다). 막아 두면 조건을 만족시킨 타격만
+  손해를 보는 판이 된다 — 배율 피해와 부위 파괴 보너스가 그대로 들어간다.
+- 그때 하한은 0이 아니라 **1**이다. 0으로 풀면 큰 한 방이 다음 페이지를 통째로 건너뛰고
+  격파한다 — 뚫되 끝내지는 않는다.
+- '이번 행동이 부위를 깼는가'의 단일 출처는 `BossGimmickManager.brokeCellThisAction`이다
+  (`beginAction`이 기준선을 세운다). 손패·유물·직접 타격이 한 행동 안에서 이어 때려도
+  경로마다 따로 세지 않는다.
 - 절반 HP 페이지를 쓰는 보스는 `HALF_PAGE_BOSSES` 한 줄로 정한다(`halfPage`). 격자가
   켜져 있으면 리미트(부위 파괴 요구), 없으면 닿는 순간 자동으로 열린다.
 - 페이지 **전환 순간 1회성** 능력은 `applyHalfPageTwoEntry()`에, **매 턴 도는** 능력은
@@ -337,9 +345,12 @@ npm run build    # verify 포함
 - **깨진 칸에는 회색 `파괴` 글자 하나만 남긴다**(`.boss-gimmick-cell-broken`). 잔해
   텍스처를 깔지 않는다 — 배경 타일이 칸보다 커서 작은 화면에서는 한 귀퉁이만 찍혀
   잘린 얼룩이 되고, 그게 무엇인지도 읽히지 않는다.
-- 무너지는 연출은 body 오버레이(`.boss-cell-shatter`)라 재렌더에 끊기지 않는다.
+- 무너지는 연출은 body에 뜨는 `SquareBurst`라 재렌더에 끊기지 않는다.
 - 부위 파괴 beat는 **순차**다: 배율 피해 수치 → (한 박자) 파괴 연출 + 수치 자리의
   `칸 파괴` 표기 → 부위 파괴 추가 피해 수치. 겹쳐 내면 몇 대 맞아 깨졌는지가 뭉개진다.
+- 보스 HP도 그 박자로 **나눠 굴린다**(`BossHpRollStart.hpBefore` → `playHudCounterFeedback`).
+  수치 하나에 롤링 하나가 붙어야 "이 수치 때문에 저만큼 줄었다"가 이어진다 — 한 번에
+  깎아 두면 어느 수치 때문인지 안 읽힌다. 모델은 이미 최종값이라 연출이 표시만 따라간다.
 - 손패·레시피가 칸/카드로 쏘는 것은 **곡사 블라스트**다(`ResourceTrailFx.animateStrikeLob`) —
   자원 트레일과 같은 정사각 조각이 높이 떠올랐다 목표 **위에서 수직으로** 내리꽂힌다.
 - 곡사와 '흘러듦'을 가르는 것은 정점의 위치다. 정점은 항상 목표보다 `LOB_PLUNGE_PX` 위에

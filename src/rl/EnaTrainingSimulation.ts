@@ -1635,12 +1635,29 @@ export class EnaTrainingSimulation {
     const before = this.bossHp
     this.bossHp -= amount - blocked
     const floor = this.bossPageFloor()
-    if (this.bossHp < floor) this.bossHp = floor // 페이지 경계 초과 피해 컷
+    const profile = this.bossProfileFor(this.bossFloor)
+    if (this.bossHp < floor) {
+      const overflow = floor - this.bossHp
+      if (profile.pageGate === 'cell-break') {
+        // 경계가 삼킨 몫은 칸으로 들어가 부위를 깬다. 그 몫이 칸 하나를 채우는 타격은
+        // **리미트를 함께 뚫으므로 하한에 막히지 않는다**(실게임 bossPageFloor와 같은 규칙) —
+        // 막아 두면 조건을 만족시킨 타격만 손해를 보는 판이 된다.
+        const cost = this.pageGateBreakCost(profile)
+        if (this.bossGateDamage + overflow >= cost) {
+          this.bossGateDamage = cost
+          // 뚫되 끝내지는 않는다 — 하한이 0으로 풀리면 큰 한 방이 다음 페이지를 통째로
+          // 건너뛰고 격파한다(실게임 bossPageFloor가 1을 돌려주는 것과 같은 이유).
+          this.bossHp = Math.max(1, this.bossHp)
+        } else {
+          this.bossGateDamage += overflow
+          this.bossHp = floor
+        }
+      } else {
+        this.bossHp = floor // 페이지 경계 초과 피해 컷
+      }
+    }
     const dealt = before - this.bossHp
     this.bossDamageSinceGift += dealt
-    const profile = this.bossProfileFor(this.bossFloor)
-    // 경계가 삼킨 몫은 버려지지 않는다 — 실게임에서 그 피해는 칸으로 들어가 부위를 깬다.
-    if (profile.pageGate === 'cell-break') this.bossGateDamage += Math.max(0, amount - blocked - dealt)
     // HP 10 손실마다 손패 1장 지급(실게임 공통).
     while (this.bossDamageSinceGift >= profile.handGiftStep) {
       this.bossDamageSinceGift -= profile.handGiftStep
@@ -1657,15 +1674,21 @@ export class EnaTrainingSimulation {
     const profile = this.bossProfileFor(this.bossFloor)
     const floor = this.bossPageFloor()
     if (this.bossHp > floor) return
-    this.bossHp = floor
     if (profile.pages && this.bossPage < profile.pages.length - 1) {
       // 리미트 페이지는 경계에 닿는 것만으로 열리지 않는다 — 부위 하나만큼 더 때려야 한다.
-      if (profile.pageGate === 'cell-break' && this.bossGateDamage < this.pageGateBreakCost(profile)) return
+      if (profile.pageGate === 'cell-break' && this.bossGateDamage < this.pageGateBreakCost(profile)) {
+        this.bossHp = floor
+        return
+      }
+      // 리미트를 뚫은 타격의 피해는 경계 아래로 그대로 남는다(damageBoss가 이미 통과시켰다).
+      // 스스로 열리는 경계('none')만 정확히 경계에서 멈춘다.
+      if (profile.pageGate !== 'cell-break') this.bossHp = floor
       this.bossGateDamage = 0
       this.bossPage++ // 다음 페이지 — 경계 HP가 새 페이지의 천장이 된다.
       this.bossAttackCountdown = profile.interval
       return
     }
+    this.bossHp = floor
     this.defeatBoss()
   }
 

@@ -78,6 +78,7 @@ export * from '@ui/renderer/RendererTypes'
 import type {
   BossGimmickGridView,
   BossGimmickStrikeView,
+  BossHpRollStart,
   CardActionDetail,
   CardProximityDetail,
   ChainHints,
@@ -150,6 +151,9 @@ export class GameBoardRenderer {
   private displayedHudCounters = new Map<string, number>()
   /** 현재 렌더된 보스의 최대 HP. boss-hp 카운터 롤링 중 막대 폭을 다시 계산할 때 쓴다. */
   private bossHpMax = 1
+  /** 마지막으로 렌더된 보스 모델 HP(= 피해가 이미 반영된 값). 칸 타격 연출이
+   *  "이 beat 시작 전 HP"를 되짚어 단계별 롤링을 시작하는 기준이다. */
+  private bossHpCurrent = 0
   /** In-flight counter rolls keyed by stable element identity ('score',
    *  'coin', `hud:<key>`). The roll lifetime can span re-renders: each
    *  render's innerHTML wipe orphans the previous span, and this map is what
@@ -290,9 +294,10 @@ export class GameBoardRenderer {
   /** 보스 칸 타격 한 beat(블라스트 → 균열/파괴 → 칸 위 피해 수치) — 연출은 BossFxView. */
   playBossGimmickStrikes(
     hits: readonly BossGimmickStrikeView[],
-    source: HTMLElement | DOMRect | null
+    source: HTMLElement | DOMRect | null,
+    hpRoll?: BossHpRollStart
   ): Promise<void> {
-    return this.bossFx.playBossGimmickStrikes(hits, source)
+    return this.bossFx.playBossGimmickStrikes(hits, source, hpRoll)
   }
   /** 손패가 화면 중앙에서 터지는 지점 — 칸 블라스트의 출발 rect. */
   handUseCenterRect(): DOMRect {
@@ -1285,6 +1290,7 @@ export class GameBoardRenderer {
     // 띠리링 깎이는 동안 막대가 한 번에 스냅하지 않도록 한다. maxHp는
     // syncHudCounterLinkedVisuals가 매 프레임 막대 폭을 다시 계산할 때 쓰므로 저장한다.
     this.bossHpMax = Math.max(1, maxHp)
+    this.bossHpCurrent = hp
     const visualHp = this.hudCounterVisibleStartValue('boss-hp', hp)
     const hpPct = Math.max(0, Math.min(100, (visualHp / this.bossHpMax) * 100))
     const atk = card.getDamage()
@@ -2820,7 +2826,11 @@ export class GameBoardRenderer {
         if (cellStrikes.length > 0) {
           // 연출이 끝난 뒤에 후처리를 알린다 — 배율 리롤이 수치보다 먼저 돌면
           // 방금 어느 배율로 맞았는지가 화면에서 사라진다.
-          return this.playBossGimmickStrikes(cellStrikes, this.handUseCenterRect())
+          // 모델은 이미 깎인 뒤라 이 beat 시작 전 HP는 '지금 HP + 관측된 손실'이다.
+          // 그 값에서 시작해 배율 피해·부위 파괴 보너스가 뜰 때마다 나눠 굴린다.
+          return this.playBossGimmickStrikes(cellStrikes, this.handUseCenterRect(), {
+            hpBefore: this.bossHpCurrent + Math.max(0, amount),
+          })
             .then(() => this.bossCellStrikeSettled?.())
             .then(() => undefined)
         }

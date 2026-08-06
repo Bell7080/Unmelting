@@ -7,7 +7,7 @@ import type { GameBoardRenderer } from '@ui/GameBoardRenderer'
 import { spriteForHandCard, SpriteUrls } from '@ui/Sprites'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { escapeHtml } from '@ui/renderer/Html'
-import type { BossGimmickStrikeView } from '@ui/renderer/RendererTypes'
+import type { BossGimmickStrikeView, BossHpRollStart } from '@ui/renderer/RendererTypes'
 import { sfx } from '@/audio/SfxManager'
 import {
   BOSS_GIMMICK_CRACK_STAGES,
@@ -399,10 +399,19 @@ export class BossFxView {
    */
   async playBossGimmickStrikes(
     hits: readonly BossGimmickStrikeView[],
-    source: HTMLElement | DOMRect | null
+    source: HTMLElement | DOMRect | null,
+    hpRoll?: BossHpRollStart
   ): Promise<void> {
     if (hits.length === 0) return
     sfx.playAttack()
+    // 수치가 뜰 때마다 그만큼 HP를 굴려 내린다 — 한 번에 깎아 두면 "왜 줄었는지"가
+    // 어느 수치 때문인지 안 읽힌다. 모델은 이미 최종값이라 여기서는 표시만 따라간다.
+    let rollingHp = hpRoll?.hpBefore ?? null
+    const rollHpDown = (amount: number): void => {
+      if (rollingHp === null || amount <= 0) return
+      rollingHp = Math.max(0, rollingHp - amount)
+      this.host.playHudCounterFeedback('boss-hp', rollingHp)
+    }
     // 출처에서 한 번 터뜨린다 — 광역 손패가 9칸을 동시에 때리면 "그냥 모든 칸에 딜이
     // 꽂혔다"로만 보여서, 그게 **내가 쓴 손패에서 나갔다**는 게 읽히지 않는다.
     if (source) this.playBossCellVolleyLaunch(source)
@@ -410,7 +419,7 @@ export class BossFxView {
     await Promise.all(
       hits.map(async (hit, index) => {
         if (index > 0) await new Promise((r) => window.setTimeout(r, index * BOSS_CELL_VOLLEY_STEP_MS))
-        return this.playBossGimmickStrike(hit, source)
+        return this.playBossGimmickStrike(hit, source, rollHpDown)
       })
     )
     // 피해가 0으로 막힌 beat면 수치 대신 왜 안 들어갔는지를 알린다(리미트 페이지).
@@ -453,7 +462,8 @@ export class BossFxView {
 
   private async playBossGimmickStrike(
     hit: BossGimmickStrikeView,
-    source: HTMLElement | DOMRect | null
+    source: HTMLElement | DOMRect | null,
+    rollHpDown: (amount: number) => void = () => {}
   ): Promise<void> {
     const cell = this.findBossGimmickCell(hit.cellIndex)
     if (!cell) return
@@ -466,7 +476,10 @@ export class BossFxView {
     this.playBossGimmickCellHit(hit.cellIndex, hit.kind)
     // 3) 피해 수치 → (깨졌으면) 파괴 연출 순으로 **차례로** 낸다. 배율 피해가 먼저 뜨고,
     //    그 뒤에 파괴가 일어나고, 부위 파괴 추가 피해가 마지막에 얹힌다.
+    //    HP도 같은 박자로 두 번 나눠 굴린다 — 수치 하나에 롤링 하나가 붙어야
+    //    "이 수치 때문에 저만큼 줄었다"가 눈으로 이어진다.
     const damageNumber = hit.damage > 0 ? this.host.animateDamageNumberOnElement(cell, hit.damage) : null
+    rollHpDown(hit.damage)
     if (!hit.broke) {
       await damageNumber
       return
@@ -474,7 +487,7 @@ export class BossFxView {
     // 수치가 다 사그라들 때까지 기다리면 파괴가 한 박자 늦게 붙어 늘어진다 —
     // 읽히는 만큼만 기다렸다가 넘긴다(수치는 위로 빠지며 파괴와 자연히 갈린다).
     if (damageNumber) await new Promise((r) => window.setTimeout(r, BOSS_CELL_BREAK_HANDOFF_MS))
-    await this.playBossGimmickCellBreak(cell, hit.breakDamage)
+    await this.playBossGimmickCellBreak(cell, hit.breakDamage, rollHpDown)
   }
 
   /** 칸 성격의 톤이 정하는 연출 값 — 종류가 아니라 톤으로 갈라 새 칸에 자동 대응한다. */
@@ -512,7 +525,11 @@ export class BossFxView {
    * 블라스트뿐인 이 게임의 이펙트 어휘에서 혼자 둥글어 눈에 띄었다 — 같은 어휘 안의
    * 좁은 스프레드 블라스트로 바꿨다.
    */
-  private async playBossGimmickCellBreak(cell: HTMLElement, breakDamage: number): Promise<void> {
+  private async playBossGimmickCellBreak(
+    cell: HTMLElement,
+    breakDamage: number,
+    rollHpDown: (amount: number) => void = () => {}
+  ): Promise<void> {
     const rect = cell.getBoundingClientRect()
     // 팡 — 좁은 스프레드로 짧게 튀어 '터지기 직전'을 알린다(사각 블라스트 어휘 그대로).
     SquareBurst.playOn(rect, 'boss-wax-drip', { count: 8, spread: 20, duration: 220 })
@@ -541,6 +558,8 @@ export class BossFxView {
       return
     }
     await new Promise<void>((resolve) => window.setTimeout(resolve, BOSS_CELL_BREAK_LABEL_HOLD_MS))
+    // 파괴 피해도 자기 수치가 뜨는 그 순간에 HP를 굴린다(배율 피해분은 이미 굴렀다).
+    rollHpDown(breakDamage)
     await this.host.animateDamageNumberOnElement(cell.isConnected ? cell : rect, breakDamage)
   }
 

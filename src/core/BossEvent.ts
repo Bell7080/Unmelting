@@ -59,6 +59,8 @@ const BOSS_TURN_BEAT_MS = 300
 
 /** 리미트 페이지가 피해를 막고 있을 때 피해 수치 자리에 대신 뜨는 문구. */
 const PAGE_GATE_WARNING_TEXT = '칸을 파괴해야합니다.'
+/** 부위를 깨서 그 리미트를 뚫은 순간의 문구. 막혔다는 말의 정반대라 크게 낸다. */
+const PAGE_GATE_BROKEN_TEXT = '리미트 돌파!'
 
 /**
  * 절반 HP 2페이지 전환 대사. 보스마다 한 묶음이며, 없는 보스는 대사 없이 넘어간다.
@@ -592,7 +594,9 @@ export class BossEventController {
         // 직접 타격은 블라스트를 쏘지 않는다 — animatePlayerAttack의 돌진(박치기)이
         // 이미 '내가 가서 때렸다'를 말한다. 여기에 발사체를 얹으면 원거리 사격처럼 읽힌다.
         // 손패는 반대로 화면 중앙에서 칸으로 날아가는 블라스트가 맞다.
-        null
+        null,
+        // HP는 배율 피해·부위 파괴 보너스가 각각 뜰 때 나눠 굴린다(모델은 이미 최종값).
+        { hpBefore: beforeBossHp }
       )
       await this.rerollGimmickCells()
     } else {
@@ -1356,9 +1360,21 @@ export class BossEventController {
     return null
   }
 
-  /** 페이지 게이트 HP 하한. 게이트가 없으면 0(제한 없음). */
+  /**
+   * 페이지 게이트 HP 하한. 게이트가 없으면 0(제한 없음).
+   *
+   * ★ 'cell-break' 리미트는 **부위를 깨는 그 타격에 함께 뚫린다** — 이번 행동이 부위를
+   * 깼다면 하한이 더 이상 피해를 막지 않는다. 막아 두면 "부쉈는데 아무 일도 없었다"가
+   * 되어, 리미트를 여는 조건을 만족시킨 타격만 손해를 보는 이상한 판이 된다.
+   * 배율 피해와 부위 파괴 보너스가 그대로 들어가고, 그 뒤 페이지가 열린다.
+   */
   private bossPageFloor(): number {
-    return this.bossPageGate()?.floor ?? 0
+    const gate = this.bossPageGate()
+    if (!gate) return 0
+    // 다만 하한이 0으로 완전히 풀리면 큰 한 방이 2페이지를 통째로 건너뛰고 격파해 버린다.
+    // 페이지가 아직 남아 있으므로 1에서 멈춘다 — 뚫되 끝내지는 않는다.
+    if (gate.requirement === 'cell-break' && this.gimmicks.brokeCellThisAction) return 1
+    return gate.floor
   }
 
   /**
@@ -1489,17 +1505,27 @@ export class BossEventController {
     if (gate.requirement === 'cell-break') {
       // 깰 부위가 하나도 안 남았다면 요구 조건이 성립하지 않는다 — 잠그지 않고 연다.
       const noCellsLeft = this.gimmicks.brokenCount >= this.gimmicks.cellCount
-      // 리미트 도달 beat: 이 순간의 파괴 칸 수를 기준선으로 잡고 요구 조건을 알린다.
-      if (state.halfPageBrokenMark === null && !noCellsLeft) {
-        state.halfPageBrokenMark = this.gimmicks.brokenCount
-        if (state.card.health < gate.floor) state.card.health = gate.floor
-        this.inject.recordNotice(`${state.card.name}이(가) 밀랍으로 굳었다 — 칸을 파괴해야 더 들어간다`, 'info')
-        this.inject.render()
-        await this.br.playBossPageGateWarning(state.card.id, PAGE_GATE_WARNING_TEXT, true)
-        return false
+      // 이번 행동이 부위를 깼다면 리미트는 **그 타격에 함께** 뚫린다(bossPageFloor가 이미
+      // 피해를 통과시켰다). 기준선을 세우거나 한 턴 더 기다리게 하지 않는다.
+      const brokeThisAction = this.gimmicks.brokeCellThisAction
+      if (!brokeThisAction && !noCellsLeft) {
+        // 리미트 도달 beat: 이 순간의 파괴 칸 수를 기준선으로 잡고 요구 조건을 알린다.
+        if (state.halfPageBrokenMark === null) {
+          state.halfPageBrokenMark = this.gimmicks.brokenCount
+          if (state.card.health < gate.floor) state.card.health = gate.floor
+          this.inject.recordNotice(`${state.card.name}이(가) 밀랍으로 굳었다 — 칸을 파괴해야 더 들어간다`, 'info')
+          this.inject.render()
+          await this.br.playBossPageGateWarning(state.card.id, PAGE_GATE_WARNING_TEXT, true)
+          return false
+        }
+        // 기준선을 넘겼다 = 리미트에서 부위를 하나 더 깼다 → 페이지가 열린다.
+        if (this.gimmicks.brokenCount <= state.halfPageBrokenMark) return false
       }
-      // 기준선을 넘겼다 = 리미트에서 부위를 하나 더 깼다 → 페이지가 열린다.
-      if (!noCellsLeft && this.gimmicks.brokenCount <= (state.halfPageBrokenMark ?? 0)) return false
+      // 막고 있던 리미트를 실제로 뚫은 순간은 크게 알린다 — 막혔다는 말의 정반대다.
+      if (state.halfPageBrokenMark !== null || brokeThisAction) {
+        this.inject.recordNotice(`부위가 부서지며 ${state.card.name}의 리미트가 뚫렸다`, 'win')
+        await this.br.playBossPageGateWarning(state.card.id, PAGE_GATE_BROKEN_TEXT, true)
+      }
     } else if (state.card.health < gate.floor) {
       // 경계 초과 피해는 버리고 정확히 경계에서 멈춘다(HP바가 아래로 깜빡이지 않게).
       state.card.health = gate.floor
