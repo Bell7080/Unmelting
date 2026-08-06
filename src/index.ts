@@ -49,7 +49,7 @@ import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { type EventId } from '@data/Events'
 import { CandleMode } from '@entities/Character'
-import { HandCardId, HandCategory } from '@entities/HandCard'
+import { HandCardId, HandCategory, type HandCardDefinition } from '@entities/HandCard'
 import { getHandCardDef, HAND_CARD_IDS } from '@data/HandCards'
 import { RECIPES, type RecipeEffectKind } from '@data/Recipes'
 import { getRelicDef, relicStackFeedback, type CustomRelicProfile, type RelicId } from '@data/Relics'
@@ -572,6 +572,16 @@ function burstThemeForCategory(cat: HandCategory): BurstTheme {
     case 'attack':
       return 'hand-attack'
   }
+}
+
+/** 공격 카드는 태그의 물성을 먼저 보여 주고, 나머지는 기존 분류 팔레트를 유지한다.
+ * 우선순위는 자해 대가가 있는 제물 → 칼날 → 밀랍 → 불씨(기본 공격) 순서다. */
+function burstThemeForHandCard(def: HandCardDefinition): BurstTheme {
+  if (def.category !== 'attack') return burstThemeForCategory(def.category)
+  if (def.synergyTags?.includes('sacrifice')) return 'hand-attack-sacrifice'
+  if (def.synergyTags?.includes('blade')) return 'hand-attack-blade'
+  if (def.synergyTags?.includes('wax')) return 'hand-attack-wax'
+  return 'hand-attack'
 }
 
 /** Score gain pulse — number tick, sparkle, and square burst all start on the
@@ -2352,7 +2362,7 @@ async function applyHandSingle(
   // Reveal the used hand card near screen center, then dissolve it with its
   // category burst. This makes the hand action read like a card being played
   // instead of a slot-local pop.
-  const handUseTheme = usedDef ? burstThemeForCategory(usedDef.category) : null
+  const handUseTheme = usedDef ? burstThemeForHandCard(usedDef) : null
   if (handUseTheme) {
     // Start the flight clone, then continue immediately. The model hand card is
     // already consumed, so the compact slot can disappear on the next render
