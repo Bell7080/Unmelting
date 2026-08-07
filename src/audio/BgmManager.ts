@@ -26,6 +26,9 @@ interface Segment {
 }
 
 export class BgmManager {
+  /** Howler가 html5 언락에 쓰는 이벤트와 같은 목록 — 언락이 먼저 돌았음을 보장한다. */
+  private static readonly UNLOCK_EVENTS = ['click', 'touchend', 'keydown'] as const
+
   private current: Segment | null = null
   /** 다음 구간용으로 미리 만들어 메타데이터를 받아 두는 인스턴스. */
   private pending: Howl | null = null
@@ -45,28 +48,30 @@ export class BgmManager {
   constructor(private readonly urls: string[]) {}
 
   /**
-   * 첫 곡의 메타데이터를 미리 받아 둔다 — 재생은 시작하지 않는다.
-   * 시작 지점을 화면 연출(부팅 게이트의 Click to Start)에 맞추고 싶을 때, 호출부가
-   * 그 순간 `start()`만 부르면 곧바로 소리가 나게 하려는 준비 단계다.
+   * 첫 사용자 입력에서 재생을 시작한다(자동재생 정책 우회).
+   *
+   * ★ **Howl 인스턴스를 사용자 입력 전에 만들면 안 된다.** Howler는 html5 오디오 노드를
+   * 풀에 담아 두는데, 그 풀은 자신의 언락 핸들러가 도는 **첫 사용자 입력에** 채워진다.
+   * 그 전에 Howl을 만들면 빈 풀에서 "잠긴 오디오 객체"를 받고(콘솔에 'HTML5 Audio pool
+   * exhausted' 경고가 뜬다), 그 노드는 나중에 `play()`를 불러도 조용히 아무 일도 하지
+   * 않는다 — 에러도 안 나고 화면도 멀쩡해서 원인이 어디에도 안 보인다.
+   *
+   * ★ **그래서 캡처 단계로 등록하지 않는다.** Howler는 언락을 `document` 캡처에 걸어 두는데
+   * `window` 캡처는 그보다 **먼저** 돈다. 캡처로 잡으면 우리가 언락 전에 Howl을 만들어
+   * 같은 함정에 빠진다. 버블 단계로 미뤄 Howler가 풀을 채운 뒤에 시작한다.
+   *
+   * 듣는 이벤트도 Howler가 언락에 쓰는 것과 맞춘다(click/touchend/keydown) — 그래야
+   * "언락이 이미 돌았다"가 보장된다. 성공할 때까지 리스너를 유지해 한 번 막혀도
+   * 다음 입력에 재시도한다.
    */
-  preload(): void {
-    if (!this.urls.length || this.pending || this.started) return
-    this.pending = this.createHowl(this.randomIndex())
-    void this.whenLoaded(this.pending)
-  }
-
-  /** 첫 사용자 입력에서 재생을 시작한다(자동재생 정책 우회). */
   armAutoplay(): void {
-    if (!this.urls.length) return
-    this.preload()
-    // 캡처 단계로 등록해야 게임 카드 핸들러가 stopPropagation 해도 첫 입력을 잡는다.
-    // 시작이 실제로 성공할 때까지 리스너를 유지해 한 번 막혀도 다음 입력에 재시도한다.
+    if (!this.urls.length || this.kickHandler) return
     this.kickHandler = () => {
       void this.start()
     }
-    window.addEventListener('pointerdown', this.kickHandler, true)
-    window.addEventListener('keydown', this.kickHandler, true)
-    window.addEventListener('touchstart', this.kickHandler, true)
+    for (const type of BgmManager.UNLOCK_EVENTS) {
+      window.addEventListener(type, this.kickHandler)
+    }
   }
 
   /** 무작위 트랙으로 재생을 시작한다. 이미 재생 중이면 무시. */
@@ -112,9 +117,9 @@ export class BgmManager {
   /** 재생이 시작되면 자동재생 언락 리스너를 떼어낸다. */
   private removeUnlockListeners(): void {
     if (!this.kickHandler) return
-    window.removeEventListener('pointerdown', this.kickHandler, true)
-    window.removeEventListener('keydown', this.kickHandler, true)
-    window.removeEventListener('touchstart', this.kickHandler, true)
+    for (const type of BgmManager.UNLOCK_EVENTS) {
+      window.removeEventListener(type, this.kickHandler)
+    }
     this.kickHandler = null
   }
 
@@ -162,8 +167,12 @@ export class BgmManager {
   /** 실제 재생 시작 — 로드가 끝난 스트림에만 부른다. 동기라 사용자 입력 자격을 잃지 않는다. */
   private launch(howl: Howl, fadeInMs: number): boolean {
     const id = howl.play()
-    howl.volume(0, id)
-    howl.fade(0, this.volume, fadeInMs, id)
+    // ★ 페이드는 **재생이 실제로 시작된 뒤에** 건다. html5 스트림의 play()는 비동기라
+    //   그 사이(Howler 내부 playLock) 걸린 fade/volume은 큐에 갇혀 영영 실행되지 않는다.
+    //   그러면 스트림은 도는데 음량이 0에 머문다 — 에러도 없고 재생 위치는 흘러가서
+    //   "소리만 안 난다"는 것 말고는 화면 어디에도 단서가 남지 않는다.
+    //   Howl은 volume: 0으로 만들어 두므로 이 사이에 큰 소리가 새지 않는다.
+    howl.once('play', () => howl.fade(0, this.volume, fadeInMs, id), id)
     this.current = { howl, id }
 
     // 다음 구간 인스턴스를 지금 만들어 메타데이터를 미리 받아 둔다.
