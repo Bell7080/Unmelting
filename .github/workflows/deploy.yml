@@ -1,13 +1,19 @@
 name: Verify and Deploy
 
-# 검증(verify)과 배포(deploy)를 분리한다.
-# 기능 브랜치는 verify까지만 돌고, 배포는 main에서만 실행한다 —
-# Pages 환경 보호 규칙이 main만 게시를 허용하므로 그 외 브랜치는 거부 오류가 난다.
+# 두 갈래로 나눠 둔다.
+#
+#   main  — 프로덕션. 여기 올라온 것만 GitHub Pages로 배포된다.
+#   test  — 개발. Vercel이 이 브랜치를 받아 빠르게 빌드하고 플레이 가능한 URL을 준다.
+#           Actions는 여기서 배포하지 않고 "깨졌는지"만 본다.
+#
+# 그래서 아티팩트(Pages 번들)는 **배포할 수 있는 실행에서만** 만든다. 기능 브랜치까지
+# 번들을 만들어 올리면 배포도 안 할 것을 매번 굽느라 브랜치 CI가 느려진다.
 
 on:
   push:
     branches:
       - main
+      - test
       - 'claude/**'
   pull_request:
   workflow_dispatch:
@@ -51,10 +57,13 @@ jobs:
         run: npm run resources:check
 
       # verify 항목을 위에서 개별로 돌았으므로 여기서는 번들만 만든다.
+      # 배포하는 브랜치에서만 굽는다 — 나머지 브랜치의 빌드 검증은 Vercel이 대신한다.
       - name: Build
+        if: github.ref == 'refs/heads/main'
         run: npx vite build
 
       - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main'
         with:
           path: dist
 
