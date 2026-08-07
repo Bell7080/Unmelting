@@ -7,11 +7,13 @@ import type { GameBoardRenderer } from '@ui/GameBoardRenderer'
 import { spriteForHandCard, SpriteUrls } from '@ui/Sprites'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { escapeHtml } from '@ui/renderer/Html'
+import { trapIcon, handCardIcon } from '@ui/Icons'
 import type { BossGimmickStrikeView, BossHpRollStart } from '@ui/renderer/RendererTypes'
 import { sfx } from '@/audio/SfxManager'
 import {
   BOSS_GIMMICK_CRACK_STAGES,
   BOSS_GIMMICK_FIXTURE_META,
+  BOSS_GIMMICK_TREASURE_CARDS,
   BOSS_GIMMICK_KIND_META,
   type BossGimmickCellKind,
   type BossGimmickTone,
@@ -338,10 +340,15 @@ export class BossFxView {
         const crack = bossGimmickCrackStage(cell.wear)
         // 부가물은 배율 표기 **아래 줄**에 따로 붙는다. 배율과 같은 줄에 섞으면
         // "약점인데 함정"이 하나의 칸 종류처럼 읽혀 두 축이라는 게 사라진다.
+        //
+        // 표기는 아이콘 + 수치다(`(함정) 3` · `(카드) 1장`). 낱말을 아이콘이 대신하므로
+        // 글자에서는 지운다 — 아이콘이 맨 앞이고 바로 뒤가 수치인 자리라 어순이 무너지지 않는다.
         const fixtureMeta = cell.fixture && !cell.broken ? BOSS_GIMMICK_FIXTURE_META[cell.fixture] : null
-        const fixtureText = cell.fixture === 'trap' ? `함정 ${cell.trapDamage}` : fixtureMeta?.label ?? ''
         const fixture = fixtureMeta
-          ? `<span class="boss-gimmick-cell-fixture is-fixture-${cell.fixture}" data-fixture-tone="${fixtureMeta.tone}">${escapeHtml(fixtureText)}</span>`
+          ? `<span class="boss-gimmick-cell-fixture ${cell.fixtureSpent ? 'is-spent' : ''}" data-fixture-tone="${fixtureMeta.tone}">
+               <span class="boss-gimmick-cell-fixture-icon" aria-hidden="true">${cell.fixture === 'trap' ? trapIcon() : handCardIcon()}</span>
+               ${cell.fixture === 'trap' ? cell.trapDamage : `${BOSS_GIMMICK_TREASURE_CARDS}장`}
+             </span>`
           : ''
         const aria = cell.broken
           ? `파괴된 ${meta.label || '보스'} 부위`

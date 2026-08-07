@@ -356,6 +356,12 @@ export interface BossGimmickCellView {
   broken: boolean
   /** 이 칸에 얹힌 부가물(함정/보물). 없으면 null. */
   fixture: BossGimmickFixture | null
+  /**
+   * 이미 처리된 부가물인가(밟았거나 걷어냈다). **판정상으로는 없는 것**이지만 화면에는
+   * 남아 있다 — 처리한 순간 표기가 툭 사라지면 방금 무엇을 처리했는지가 지워진다.
+   * 칸이 새로 고쳐질 때(`purgeSpentFixtures`) 배율과 함께 정리된다.
+   */
+  fixtureSpent: boolean
   /** 함정 칸이 물릴 피해(런 보너스 제외). 표기와 판정이 같은 값을 본다. */
   trapDamage: number
 }
@@ -451,6 +457,8 @@ export interface BossGimmickCell {
   broken: boolean
   /** 얹힌 부가물. 배율 축과 독립이라 리롤에도 자리를 지킨다. */
   fixture: BossGimmickFixture | null
+  /** 처리됐지만 아직 화면에서 지우지 않은 상태. 판정에서는 없는 것으로 본다. */
+  fixtureSpent: boolean
 }
 
 export class BossGimmickManager {
@@ -669,19 +677,37 @@ export class BossGimmickManager {
     return events
   }
 
-  /** 지금 이 칸에 얹힌 부가물. 손패 타겟팅이 "여기 함정이 있나"를 물을 때 쓴다. */
+  /** 지금 이 칸에 **살아 있는** 부가물. 처리된 것은 화면에만 남아 있으므로 null이다. */
   fixtureAt(cellIndex: number): BossGimmickFixture | null {
     const cell = this.cells[cellIndex]
-    return cell && !cell.broken ? cell.fixture : null
+    return cell && !cell.broken && !cell.fixtureSpent ? cell.fixture : null
   }
 
-  /** 해당 부가물을 이고 있는 성한 칸의 인덱스 목록. */
+  /** 해당 부가물을 이고 있는 성한 칸의 인덱스 목록(처리된 것은 빠진다). */
   fixtureCells(fixture: BossGimmickFixture): number[] {
     const out: number[] = []
     this.cells.forEach((cell, index) => {
-      if (!cell.broken && cell.fixture === fixture) out.push(index)
+      if (!cell.broken && !cell.fixtureSpent && cell.fixture === fixture) out.push(index)
     })
     return out
+  }
+
+  /**
+   * 처리된 부가물 표기를 걷어낸다 — **칸이 새로 고쳐지는 beat에** 부른다.
+   *
+   * 처리하는 순간 표기를 지우면 방금 무엇을 밟았는지·주웠는지가 화면에서 사라진다.
+   * 효과 연출이 끝난 뒤 배율 리롤과 같은 박자에 정리해야 "이 칸을 처리했다"가 읽힌다.
+   * 처리하지 않은 부가물은 그대로 남는다 — 규칙이 아니라 **사라지는 시점**만 맞추는 것이다.
+   */
+  purgeSpentFixtures(): number {
+    let purged = 0
+    for (const cell of this.cells) {
+      if (!cell.fixtureSpent) continue
+      cell.fixture = null
+      cell.fixtureSpent = false
+      purged++
+    }
+    return purged
   }
 
   /**
@@ -691,10 +717,11 @@ export class BossGimmickManager {
    */
   clearFixtureAt(cellIndex: number, expect?: BossGimmickFixture): BossGimmickFixture | null {
     const cell = this.cells[cellIndex]
-    if (!cell || cell.broken || !cell.fixture) return null
+    if (!cell || cell.broken || !cell.fixture || cell.fixtureSpent) return null
     if (expect && cell.fixture !== expect) return null
     const fixture = cell.fixture
-    cell.fixture = null
+    // 표기는 남기고 판정에서만 뺀다 — 화면에서 지우는 것은 칸 새로고침 beat의 일이다.
+    cell.fixtureSpent = true
     this.pendingFixtures.push({ cellIndex, fixture, cause: 'cleared' })
     return fixture
   }
@@ -718,6 +745,8 @@ export class BossGimmickManager {
    */
   replenishFixtures(): BossGimmickFixturePlacement[] {
     if (!this.profile?.fixtures) return []
+    // 처리된 표기가 남아 있으면 먼저 정리한다 — 그 자리도 새 부가물이 돋을 빈 칸이다.
+    this.purgeSpentFixtures()
     const placed: BossGimmickFixturePlacement[] = []
     // 빈 칸을 섞어 두고 앞에서부터 꺼낸다 — 같은 자리에 계속 나면 배치를 외워 쓰게 된다.
     const free = this.shuffle(
@@ -795,9 +824,10 @@ export class BossGimmickManager {
     }
     // 부가물은 **때린 그 자리에서** 떨어져 나온다. 피해가 0으로 막힌 beat(리미트 페이지)에도
     // 밟은 것은 밟은 것이라 그대로 발동한다 — 안 그러면 함정 칸이 안전지대가 된다.
-    const fixture = cell.fixture
+    const fixture = cell.fixtureSpent ? null : cell.fixture
     if (fixture) {
-      cell.fixture = null
+      // 표기는 남긴다 — 때린 칸에 무엇이 얹혀 있었는지가 연출이 끝날 때까지 보여야 한다.
+      cell.fixtureSpent = true
       this.pendingFixtures.push({ cellIndex: index, fixture, cause: 'triggered' })
     }
     const strike: BossGimmickStrike = {
@@ -835,6 +865,7 @@ export class BossGimmickManager {
       broken: cell.broken,
       // 깨진 칸은 부가물도 함께 사라진다 — 판이 타 버렸는데 함정만 남을 수는 없다.
       fixture: cell.broken ? null : cell.fixture,
+      fixtureSpent: cell.fixtureSpent,
       trapDamage: this.trapBite,
     }
   }
@@ -877,6 +908,7 @@ export class BossGimmickManager {
       damage: 0,
       broken: false,
       fixture: null,
+      fixtureSpent: false,
     }))
   }
 

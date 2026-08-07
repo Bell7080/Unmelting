@@ -593,6 +593,59 @@ describe('칸 부가물(함정/보물) — 배율과 독립인 두 번째 축', 
     expect(m.fixtureCells('treasure')).toHaveLength(PROFILE_TREASURE_COUNT)
   })
 
+  it('★ 처리한 부가물은 판정에서 즉시 빠지되 표기는 남는다', () => {
+    // 처리하는 순간 표기가 툭 사라지면 방금 무엇을 밟았는지·주웠는지가 화면에서 지워진다.
+    const m = fixtureGrid()
+    const trapCell = m.fixtureCells('trap')[0]
+
+    m.strike({ cellIndex: trapCell, baseDamage: 1 })
+
+    // 판정: 없는 것으로 본다(다시 밟히지도, 다시 지워지지도 않는다).
+    expect(m.fixtureAt(trapCell)).toBeNull()
+    expect(m.fixtureCells('trap')).not.toContain(trapCell)
+    expect(m.clearFixtureAt(trapCell, 'trap')).toBeNull()
+    // 표기: 남아 있고 '처리됨'으로 표시된다.
+    expect(m.getCells()[trapCell].fixture).toBe('trap')
+    expect(m.getCells()[trapCell].fixtureSpent).toBe(true)
+  })
+
+  it('★ 표기는 칸이 새로 고쳐질 때 걷힌다 — 처리하지 않은 것은 남는다', () => {
+    const m = fixtureGrid()
+    const usedTrap = m.fixtureCells('trap')[0]
+    const keptTrap = m.fixtureCells('trap')[1]
+    m.strike({ cellIndex: usedTrap, baseDamage: 1 })
+    m.takeFixtureEvents()
+
+    expect(m.purgeSpentFixtures()).toBe(1)
+
+    expect(m.getCells()[usedTrap].fixture).toBeNull()
+    // 안 건드린 함정은 그대로다 — 사라지는 시점만 맞추는 것이지 규칙은 그대로다.
+    expect(m.getCells()[keptTrap].fixture).toBe('trap')
+    expect(m.fixtureAt(keptTrap)).toBe('trap')
+  })
+
+  it('배율 리롤은 처리된 표기를 걷지 않는다 — 걷는 것은 새로고침 창구 하나다', () => {
+    const m = fixtureGrid()
+    const trapCell = m.fixtureCells('trap')[0]
+    m.strike({ cellIndex: trapCell, baseDamage: 1 })
+
+    m.rerollKinds()
+
+    expect(m.getCells()[trapCell].fixtureSpent).toBe(true)
+  })
+
+  it('재생성은 처리된 표기를 먼저 걷고 그 자리도 후보로 쓴다', () => {
+    const m = fixtureGrid()
+    const trapCell = m.fixtureCells('trap')[0]
+    m.strike({ cellIndex: trapCell, baseDamage: 1 })
+    m.takeFixtureEvents()
+
+    m.replenishFixtures()
+
+    expect(m.getCells().every((c) => !c.fixtureSpent)).toBe(true)
+    expect(m.fixtureCells('trap')).toHaveLength(PROFILE_TRAP_COUNT)
+  })
+
   it('깨진 칸은 부가물도 함께 잃고 재생성 후보에서 빠진다', () => {
     const m = fixtureGrid()
     const trapCell = m.fixtureCells('trap')[0]

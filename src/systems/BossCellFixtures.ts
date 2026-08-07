@@ -33,6 +33,11 @@ export interface BossFixtureResolution {
   treasureCardNames: string[]
   /** 보물 칸을 몇 개 열었는가(때려서든 열쇠로든). */
   treasuresOpened: number
+  /**
+   * 손패가 실제로 나온 칸 인덱스. 카드 토큰이 **얻은 자리에서** 나오게 하려고 남긴다 —
+   * 보스 타일 중앙에서 나오면 아홉 칸 중 어디였는지가 사라진다.
+   */
+  treasureCells: number[]
 }
 
 function emptyResolution(): BossFixtureResolution {
@@ -43,6 +48,7 @@ function emptyResolution(): BossFixtureResolution {
     trapsCleared: 0,
     treasureCardNames: [],
     treasuresOpened: 0,
+    treasureCells: [],
   }
 }
 
@@ -95,13 +101,18 @@ function applyTrap(
 }
 
 /** 보물 한 칸 — 손패를 준다. 손이 가득 차면 그만큼만 들어간다. */
-function applyTreasure(gs: GameState, _event: BossGimmickFixtureEvent, out: BossFixtureResolution): void {
+function applyTreasure(gs: GameState, event: BossGimmickFixtureEvent, out: BossFixtureResolution): void {
   const character = gs.character
   out.treasuresOpened++
+  let gained = 0
   for (let i = 0; i < BOSS_GIMMICK_TREASURE_CARDS; i++) {
     if (!character.hasHandRoom()) break
     const card = DropSystem.generateDrop('treasure')
     if (!character.addHandCard(card)) break
     out.treasureCardNames.push(getHandCardDef(card.defId).name)
+    gained++
   }
+  // 카드가 실제로 들어온 칸만 남긴다 — 손이 가득 차 못 받은 자리에서 토큰이 나오면
+  // 얻지도 않은 것을 얻은 것처럼 보인다.
+  if (gained > 0) out.treasureCells.push(event.cellIndex)
 }

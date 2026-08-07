@@ -48,7 +48,7 @@ import {
   WITCH_ENRAGE_ATK,
   WITCH_ENRAGE_HP,
 } from '@data/BossPages'
-import { BossGimmickManager, BOSS_GIMMICK_KIND_META, BOSS_GIMMICK_FIXTURE_META } from '@systems/BossGimmickManager'
+import { BossGimmickManager, BOSS_GIMMICK_KIND_META, BOSS_GIMMICK_FIXTURE_META, BOSS_GIMMICK_TREASURE_CARDS } from '@systems/BossGimmickManager'
 import { resolveBossCellFixtures } from '@systems/BossCellFixtures'
 import { discardBossCellStrikes } from '@/app/BossCellFeedback'
 
@@ -732,18 +732,27 @@ export class BossEventController {
    */
   private async resolveCellFixtures(): Promise<boolean> {
     if (!this.eventState || !this.gimmicks.hasPendingFixtures) return false
-    const bossCardId = this.eventState.card.id
     const result = resolveBossCellFixtures(this.gs)
-    // 칸에서 부가물이 떨어졌으니 격자 뷰를 먼저 맞춘다(격자는 푸시형 스냅샷이다).
+    // 표기는 아직 지우지 않는다(처리 표시로 남는다). 격자 뷰만 먼저 맞춘다 —
+    // 격자는 푸시형 스냅샷이라 저절로 갱신되지 않는다.
     this.syncGimmickGrid()
+    this.inject.render()
     if (result.treasureCardNames.length > 0) {
       this.inject.recordNotice(
         `보물 부위에서 ${result.treasureCardNames.join(' · ')}이(가) 굴러 나왔다 — 손패 +${result.treasureCardNames.length}`,
         'win'
       )
-      this.inject.render()
       // 손패 획득 공용 창구(카드 토큰)를 그대로 지난다 — 보스라고 다른 어휘를 쓰지 않는다.
-      await this.br.animateResourceTrailFromCard(bossCardId, 'hand', result.treasureCardNames.length, 'hand-recovery')
+      // 토큰은 **얻은 칸 자리**에서 나온다. 보스 타일 중앙에서 나오면 아홉 칸 중
+      // 어디서 나왔는지가 사라진다.
+      await Promise.all(
+        result.treasureCells.map((cellIndex) => {
+          const rect = this.br.bossGimmickCellRect(cellIndex)
+          return rect
+            ? this.br.animateResourceTrailFromRect(rect, 'hand', BOSS_GIMMICK_TREASURE_CARDS, 'hand-recovery')
+            : Promise.resolve()
+        })
+      )
     }
     if (result.trapsIgnored > 0) {
       this.inject.recordNotice(`${BOSS_GIMMICK_FIXTURE_META.trap.label} 부위를 무시했다 (함정의 대가)`, 'win')
@@ -761,11 +770,21 @@ export class BossEventController {
     if (result.trapsCleared > 0) {
       this.inject.recordNotice(`${BOSS_GIMMICK_FIXTURE_META.trap.label} 부위 ${result.trapsCleared}칸을 치웠다`, 'info')
     }
+    // 연출이 끝났으니 이제 처리한 표기를 걷는다 — 칸이 새로 고쳐지는 beat다.
+    // 처리하지 않은 부가물은 그대로 남는다(사라지는 시점만 맞추는 것이지 규칙은 그대로).
+    this.refreshSpentFixtures()
     if (!this.gs.character.isAlive() && !this.gs.character.authoritySurvivePending) {
       await this.inject.handlePlayerDeath()
       return true
     }
     return false
+  }
+
+  /** 처리된 부가물 표기를 걷고 화면에 반영한다. 걷을 것이 없으면 아무 일도 하지 않는다. */
+  private refreshSpentFixtures(): void {
+    if (this.gimmicks.purgeSpentFixtures() === 0) return
+    this.syncGimmickGrid()
+    this.inject.render()
   }
 
   /** 손패/조합식 데미지 후처리. checkBossDefeatedAfterHandEffect에서 위임. */

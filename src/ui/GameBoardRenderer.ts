@@ -306,6 +306,13 @@ export class GameBoardRenderer {
   playBossPageGateWarning(cardId: string, text: string, emphatic = false): Promise<void> {
     return this.bossFx.playBossPageGateWarning(cardId, text, emphatic)
   }
+  /**
+   * 보스 격자 칸 하나의 화면 자리. 그 칸에서 얻은 것(보물 부위의 손패)이 **얻은 자리에서**
+   * 나오게 하려고 연다 — 보스 타일 중앙에서 나오면 아홉 칸 중 어디였는지가 사라진다.
+   */
+  bossGimmickCellRect(cellIndex: number): DOMRect | null {
+    return this.bossFx.findBossGimmickCell(cellIndex)?.getBoundingClientRect() ?? null
+  }
   /** 보스 칸 타격 한 beat(블라스트 → 균열/파괴 → 칸 위 피해 수치) — 연출은 BossFxView. */
   playBossGimmickStrikes(
     hits: readonly BossGimmickStrikeView[],

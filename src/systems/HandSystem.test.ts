@@ -410,6 +410,33 @@ describe('HandSystem 보스 칸 기믹 연동', () => {
     ])
   })
 
+  it('빗자루가 보스 칸 함정을 지운다 — 함정 지우는 손패는 전부 닿는다', () => {
+    // 빗자루는 대상을 고르지 않는 광역 청소(selection: all)라 보스전에서도 쓸 수 있다.
+    // 필드 거미줄이 하나도 없어도 보스 몸의 함정 부위는 걷어야 한다.
+    const { gameState, boss, grid } = stageGriddedBoss(500)
+    const before = grid.fixtureCells('trap').length
+    gameState.character.addHandCard(DropSystem.makeCard('sweep'))
+    const bossHpBefore = boss.getHealth()
+
+    const result = HandSystem.useSingle(gameState, HandSystem.newChain(), 0, undefined)
+
+    expect(before).toBeGreaterThan(0)
+    expect(result.success).toBe(true)
+    expect(grid.fixtureCells('trap')).toHaveLength(0)
+    // 청소지 공격이 아니다.
+    expect(boss.getHealth()).toBe(bossHpBefore)
+    expect(grid.takeFixtureEvents().every((e) => e.cause === 'cleared')).toBe(true)
+  })
+
+  it('성수 트리플도 보스 칸 함정에 닿는다 — 포자 전용 필터도 공용 함정으로 본다', () => {
+    const { gameState, grid } = stageGriddedBoss(500)
+    for (let i = 0; i < 3; i++) gameState.character.addHandCard(DropSystem.makeCard('holy-water'))
+
+    HandSystem.useSingle(gameState, HandSystem.newChain(), 0, undefined)
+
+    expect(grid.fixtureCells('trap')).toHaveLength(0)
+  })
+
   it('부가물이 없는 칸을 키틴으로 겨누면 거절된다', () => {
     const { gameState, boss, grid } = stageGriddedBoss(500)
     const bare = grid.getCells().find((c) => c.fixture === null)!

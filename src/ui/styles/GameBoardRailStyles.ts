@@ -1647,23 +1647,38 @@ export const GAME_BOARD_RAIL_STYLES = `
   color: rgba(184, 200, 236, 0.96);
 }
 /* 부가물(함정/보물)은 배율 축과 **다른 축**이라 표기도 따로 선다: 배율 글자 아래
-   한 줄, 판을 깐 작은 띠. 배율과 같은 양식으로 쓰면 "약점인데 함정"이 하나의 칸
-   종류로 읽혀 두 축이라는 게 사라진다. 색은 톤으로만 갈린다(새 부가물 = 표 한 줄). */
+   한 줄. 배율과 같은 양식으로 쓰면 "약점인데 함정"이 하나의 칸 종류로 읽혀 두 축이라는
+   게 사라진다.
+
+   낱말 대신 **아이콘 + 수치**다((함정)3 · (카드)1장). 뱃지 판을 깔지 않는다 — 칸이
+   작아 판까지 얹으면 배율 글자와 자리를 다투고, 판이 먼저 읽혀 정작 수치가 묻힌다.
+   색은 톤으로만 갈린다(새 부가물 = 표 한 줄). */
 .boss-gimmick-cell-fixture {
   position: relative;
-  margin-top: 2px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-size: clamp(12px, 1.7vh, 16px);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 1px;
+  font-size: clamp(12px, 1.8vh, 17px);
   font-weight: 900;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
-  background: rgba(10, 6, 14, 0.72);
-  border: 1px solid currentColor;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.98), 0 0 10px rgba(0, 0, 0, 0.85);
+  transition: opacity 0.24s ease, filter 0.24s ease;
 }
+/* 아이콘은 글자 크기를 따라간다 — 칸 크기가 뷰포트로 변해도 둘이 같이 줄고 늘어난다. */
+.boss-gimmick-cell-fixture-icon {
+  display: inline-flex;
+  width: 1.15em;
+  height: 1.15em;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.95));
+}
+.boss-gimmick-cell-fixture-icon svg { width: 100%; height: 100%; display: block; }
 .boss-gimmick-cell-fixture[data-fixture-tone="cold"] { color: rgba(198, 214, 250, 0.96); }
 .boss-gimmick-cell-fixture[data-fixture-tone="hot"] { color: rgba(255, 214, 140, 0.98); }
+/* 이미 처리한 부가물 — 칸이 새로 고쳐질 때까지 자리에 남되 다 쓴 것으로 읽히게 죽인다.
+   지우지 않고 남기는 이유는 방금 무엇을 처리했는지가 화면에 남아야 하기 때문이다. */
+.boss-gimmick-cell-fixture.is-spent { opacity: 0.34; filter: grayscale(0.85); }
 /* 부가물이 얹힌 칸은 테두리가 점선으로 끊긴다 — 배율 색을 덮지 않으면서
    "여기 뭔가 더 얹혀 있다"만 알린다. */
 .boss-gimmick-cell.has-fixture { border-style: dashed; }
