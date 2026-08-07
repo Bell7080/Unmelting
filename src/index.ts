@@ -45,6 +45,7 @@ import { ActionSystem, ActionType } from '@systems/ActionSystem'
 import { DropSystem } from '@systems/DropSystem'
 import { HandSystem, ChainState, type HandTarget } from '@systems/HandSystem'
 import { EmberSystem, SPROUT_SPAWN_ADJUST } from '@systems/EmberSystem'
+import { boardIntroKindOf } from '@systems/BoardIntroKind'
 import { Card, CardType } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { type EventId } from '@data/Events'
@@ -1493,26 +1494,6 @@ function trackFieldEnemyEncounters(): void {
   }
 }
 
-/** 카드가 첫 조우 소개 대상 보드 종류 중 무엇인지 판별한다(아니면 null). */
-function boardIntroKindOf(card: Card): BoardEncounterKind | null {
-  if (card.enemySpriteId === 'enemyRock') return 'rock'
-  if (card.trapKind === 'bush') return 'bush'
-  if (card.trapKind === 'web') return 'web'
-  if (card.trapKind === 'bomb') return 'bomb'
-  if (card.trapKind === 'spore') return 'spore'
-  if (card.treasureKind === 'junk') return 'junk'
-  if (card.treasureKind === 'starlight') return 'starlight'
-  if (card.type === CardType.EVENT) return 'event-door'
-  if (card.specialEnemyKind === 'mimic') return 'mimic'
-  if (card.specialEnemyKind === 'monsterFlower') return 'monster-flower'
-  // 꽃은 종류마다 보상이 달라 첫 개화 때 에나가 꽃과 쓰임을 함께 짚어 준다.
-  if (card.type === CardType.FLOWER) {
-    if (card.flowerKind === 'seed') return 'seed'
-    if (card.flowerKind === 'redRose') return 'red-rose'
-    return card.flowerKind
-  }
-  return null
-}
 
 /** 첫 조우 영구 기록 키 — 필드 3종은 기존 저장본('field:*')과의 호환을 위해 접두사를 유지한다. */
 function firstSeenKeyOf(kind: BoardEncounterKind | SystemEncounterKind): string {
