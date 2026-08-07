@@ -4,6 +4,7 @@ import { HandSystem } from './HandSystem'
 import { DropSystem } from './DropSystem'
 import { Card, CardType } from '@entities/Card'
 import { BossGimmickManager } from './BossGimmickManager'
+import { resolveBossCellFixtures } from './BossCellFixtures'
 
 /** Count a specific hand-card id inside the active chain for behavior tests. */
 function countChainEntries(chain: ReturnType<typeof HandSystem.newChain>, defId: string): number {
@@ -481,6 +482,60 @@ describe('HandSystem 보스 칸 기믹 연동', () => {
 
     // 9칸 × 4피해에 칸 배율(약점 2칸 ×2, 경화 2칸 ×0.5)을 각각 먹인 값.
     expect(dealt).toBe(2 * 8 + 2 * 2 + 5 * 4)
+  })
+
+  it('★ 전체공격은 함정·보물을 하나도 남기지 않고 전부 건드린다', () => {
+    // 광역은 성한 칸을 한 번씩 훑으므로 보물을 싹 쓸어 담는 대신 함정도 전부 밟는다 —
+    // 그 맞바꿈이 "지우고 때릴까, 그냥 쓸어버릴까"를 선택으로 만든다.
+    const { gameState, grid } = stageGriddedBoss(5000)
+    gameState.character.trapIgnoreChance = 0
+    gameState.character.trapDamageBonus = 0
+    const traps = grid.fixtureCells('trap').length
+    const treasures = grid.fixtureCells('treasure').length
+    const hpBefore = gameState.character.health
+
+    gameState.character.addHandCard(DropSystem.makeCard('guillotine'))
+    HandSystem.useSingle(gameState, HandSystem.newChain(), 0, undefined)
+    const result = resolveBossCellFixtures(gameState)
+
+    expect(traps).toBeGreaterThan(0)
+    expect(treasures).toBeGreaterThan(0)
+    expect(result.trapsTriggered).toBe(traps)
+    expect(result.treasuresOpened).toBe(treasures)
+    // 함정은 칸마다 물린다 — 한 번만 아프면 광역이 공짜가 된다.
+    expect(result.trapDamageTaken).toBe(grid.trapDamage * traps)
+    expect(gameState.character.health).toBe(hpBefore - result.trapDamageTaken)
+    expect(grid.fixtureCells('trap')).toHaveLength(0)
+    expect(grid.fixtureCells('treasure')).toHaveLength(0)
+  })
+
+  it('깨진 칸의 부가물은 전체공격에서 빠진다 — 광역도 성한 칸만 훑는다', () => {
+    const { gameState, grid } = stageGriddedBoss(60)
+    const doomed = grid.fixtureCells('trap')[0]
+    // 칸 하나를 확실히 깨 둔다(그 칸의 함정은 이때 이미 발동해 사라진다).
+    grid.strike({ cellIndex: doomed, baseDamage: grid.cellDurability * 4 })
+    grid.takeFixtureEvents()
+    grid.purgeSpentFixtures()
+    const remaining = grid.fixtureCells('trap').length
+
+    gameState.character.addHandCard(DropSystem.makeCard('guillotine'))
+    HandSystem.useSingle(gameState, HandSystem.newChain(), 0, undefined)
+
+    expect(resolveBossCellFixtures(gameState).trapsTriggered).toBe(remaining)
+  })
+
+  it('유물의 무작위 타격도 칸 부가물을 건드린다 — 손패만의 규칙이 아니다', () => {
+    const { gameState, grid } = stageGriddedBoss(5000)
+    // 성한 칸이 부가물 칸뿐이 되도록 나머지를 비우지 않고, 여러 번 때려 확률적으로 맞춘다.
+    let triggered = 0
+    for (let i = 0; i < 30 && triggered === 0; i++) {
+      HandSystem.strikeRandomEnemy(gameState, 1, 'front')
+      triggered = resolveBossCellFixtures(gameState).trapsTriggered
+        + resolveBossCellFixtures(gameState).treasuresOpened
+      if (grid.fixtureCells('trap').length + grid.fixtureCells('treasure').length === 0) break
+    }
+    // 유물 경로가 격자를 아예 안 지나면 30번을 때려도 0이다.
+    expect(triggered).toBeGreaterThan(0)
   })
 
   it('격자가 없는 보스는 필드 전체 피해를 한 번만 맞는다(기존 동작 보존)', () => {

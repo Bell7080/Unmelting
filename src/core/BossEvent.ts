@@ -607,6 +607,11 @@ export class BossEventController {
     if (await this.resolveCellFixtures()) return
     // 플레이어가 보스를 직접 공격했으므로 공격 시 발동 유물(훌륭한 대화수단)을 판정한다.
     await this.inject.applyPlayerAttackRelics()
+    // 그 유물이 격자를 때렸다면(무작위/지정/광역 타격 유물) 부가물이 또 떨어졌을 수 있다.
+    // 위 정산은 이 유물들보다 **먼저** 돌았으므로 여기서 한 번 더 훑는다 — 안 그러면
+    // 함정 피해와 보물이 다음 행동까지 밀려 무엇 때문에 아팠는지가 어긋난다.
+    // 떨어진 것이 없으면 즉시 빠져나오므로 이 호출은 공짜다.
+    if (await this.resolveCellFixtures()) return
 
     await this.consumeHandGiftThresholds(card.id)
     if (await this.resolveWaxWitchAfterDamage(beforeBossHp)) return
