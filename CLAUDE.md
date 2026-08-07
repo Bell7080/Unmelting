@@ -53,15 +53,11 @@ npm run build    # verify 포함
 
 ## 브랜치와 배포
 
-- `main` = **프로덕션**. 여기 올라온 것만 GitHub Actions가 GitHub Pages로 배포한다.
-- `test` = **개발**. Vercel이 이 브랜치를 받아 플레이 가능한 URL을 준다. 개발은 여기서
-  이어 가고, 다 된 지점만 `main`에 올려 배포한다.
-- 에셋 기준 경로(`vite.config.ts`의 `base`)는 **올리는 곳으로 갈린다** — Pages는
-  `/Unmelting/`, Vercel은 `/`. 한쪽을 하드코딩하면 다른 쪽이 하얀 화면이 된다.
-- Vercel 빌드는 `vite build`만 돈다(`vercel.json`). 빠르게 켜 보는 것이 목적이라
-  `npm run build`의 verify를 태우지 않는다 — 정합성은 Actions가 본다.
-- Pages 번들은 **배포하는 브랜치에서만** 굽는다. 기능 브랜치까지 구우면 배포도 안 할
-  것을 매번 만드느라 CI가 느려진다.
+- 배포처는 **GitHub Pages 하나**다. 작업은 임시 브랜치에서 하고 `main`에 합치면
+  Actions가 verify → 빌드 → 배포까지 돈다.
+- 에셋 기준 경로(`vite.config.ts`의 `base`)는 `/Unmelting/` 고정이다 — Pages가 저장소
+  하위 경로로 서빙하기 때문이다. **다른 호스트에 올리려면 이 값부터 갈라야 한다**
+  (루트 서빙 호스트에 그대로 올리면 에셋이 전부 404가 되고 화면이 하얗게만 뜬다).
 
 ## 코드 구조(매니저 맵)
 
