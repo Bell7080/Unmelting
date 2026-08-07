@@ -9,7 +9,7 @@ import type { TurnManager } from '@core/TurnManager'
 import type { BossEventController } from '@core/BossEvent'
 import type { RunCardPool } from '@core/RunCardPool'
 import type { CardSpawner } from '@systems/CardSpawner'
-import { altarPackBaseCost, regularShopPackBaseCost, packCostWithRepeats } from '@core/ShopPricing'
+import { altarPackBaseCost, regularShopPackBaseCost, packCostWithRepeats, difficultyPriceScale } from '@core/ShopPricing'
 import { sampleWeightedWithoutReplacement, sampleWithoutReplacement } from '@core/Sampling'
 import type {
   GameBoardRenderer,
@@ -208,7 +208,10 @@ export class ShopFlowManager {
     const jitter = Math.floor((Math.random() - 0.42) * 180)
     const raw = Math.max(120, Math.round((base + jitter) * this.getShopPriceMultiplier()))
     const discountFactor = 1 - Math.min(0.8, this.deps.gameState.enhancements.shopDiscountPct / 100)
-    return Math.max(120, Math.round(raw * discountFactor))
+    // 난이도 물가는 할인과 별도 축이라 곱해서 함께 건다. 하한도 같은 배수로 내려야
+    // 새싹에서 싼 유물이 전부 120에 붙어 "절반값"이 무의미해지지 않는다.
+    const scale = difficultyPriceScale(this.deps.isOnboardingActive())
+    return Math.max(Math.round(120 * scale), Math.round(raw * discountFactor * scale))
   }
 
   /** Generate up to three unowned, unbanned relics + per-spawn this.res.score price. */
@@ -265,7 +268,8 @@ export class ShopFlowManager {
     // 각 팩은 구매할 때마다 자기 초기 가격만큼 증가한다(예: 1500→3000→4500).
     const raw = packCostWithRepeats(base, this.shopPackBuys[kind] ?? 0)
     const discountFactor = 1 - Math.min(0.8, this.deps.gameState.enhancements.shopDiscountPct / 100)
-    return Math.max(1, Math.round(raw * discountFactor))
+    const scale = difficultyPriceScale(this.deps.isOnboardingActive())
+    return Math.max(1, Math.round(raw * discountFactor * scale))
   }
 
   /** Build the renderer-facing split-shop state with visit-local pack costs.

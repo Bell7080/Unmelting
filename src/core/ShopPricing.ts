@@ -21,3 +21,18 @@ export function altarPackBaseCost(turn: number): number {
 export function packCostWithRepeats(base: number, priorBuys: number): number {
   return base * (Math.max(0, priorBuys) + 1)
 }
+
+/**
+ * 새싹 병아리(온보딩) 물가 배수 — 모든 것이 절반값이다. 상점을 많이 열어 보라고 만든
+ * 자리라, 한 번 살 것을 두 번 사게 하는 쪽이 배우기에 좋다.
+ *
+ * ★ 이 값은 `enhancements.shopDiscountPct`(직업·만찬 할인)와 **별도 축**이다.
+ * 직업 선택이 그 필드를 대입(`=`)으로 덮으므로 거기 얹으면 조용히 사라진다.
+ * 두 축은 곱해져 함께 걸린다.
+ */
+export const SPROUT_SHOP_PRICE_SCALE = 0.5
+
+/** 난이도 물가 배수. 정규 런은 1(변화 없음). */
+export function difficultyPriceScale(onboarding: boolean): number {
+  return onboarding ? SPROUT_SHOP_PRICE_SCALE : 1
+}

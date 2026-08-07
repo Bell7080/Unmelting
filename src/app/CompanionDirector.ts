@@ -208,6 +208,11 @@ export class CompanionDirector {
     this.barkShownAt = Date.now()
     this.barkSequencer.noteDisplayed(line)
     speechBubble.show(line)
+    // ★ 강조는 **그 대사와 함께 산다.** 맥동은 4초 넘게 이어지는데 대사 최소 노출은
+    //   1.5~3초라, 강조를 안 들고 오는 다음 대사(시작 인사·회상·트리플 소개 등)가 뜨면
+    //   이전 칸이 계속 빛난 채로 엉뚱한 설명이 붙는다 — "잡동사니가 빛나는데 거미줄 설명".
+    //   그래서 대사가 바뀌는 순간 먼저 거두고, 새 대사가 가리킬 것이 있으면 그때 다시 켠다.
+    this.deps.boardRenderer.clearEnaHintPulses()
     // 큐에서 기다린 대사도 실제 표시 순간에 대상 발광이 맞물리게 한다.
     onDisplay?.()
     if (situation) {

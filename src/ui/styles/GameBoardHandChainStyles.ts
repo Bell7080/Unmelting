@@ -1076,10 +1076,12 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   animation: none !important;
 }
 
-/* ---------- Hand-target highlighting on the rail ---------- */
+/* ---------- Hand-target highlighting on the rail ----------
+   유효 타깃은 **발광으로만** 말한다(맥동 글로우 + 밝기·채도). 예전에는 여기에 금빛
+   점선 테두리를 덧그렸는데, 딱딱한 선은 '선택된 UI'로 읽혀 상태 표시와 성격이 어긋나고,
+   카드 종류마다 이미 다른 테두리 색이 있어 칸마다 선이 겹쳐 보이거나 묻혔다.
+   색과 빛만으로 충분히 갈리므로 선은 걷었다. */
 .cell.card.is-hand-target {
-  outline: 2px dashed rgba(255, 215, 120, 0.7);
-  outline-offset: -3px;
   animation: hand-target-pulse 1.1s ease-in-out infinite;
 }
 .cell.is-hand-target-blocked {

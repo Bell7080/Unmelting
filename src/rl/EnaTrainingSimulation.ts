@@ -64,7 +64,7 @@ import { EmberSystem, SPROUT_SPAWN_ADJUST, type EmberTier } from '@systems/Ember
 import { ENEMY_DEFINITIONS, MIMIC_BY_SPAN, specialEnemyTierForTurn, pickWeightedEnemyDefinition } from '@systems/CardSpawner'
 import { DropSystem } from '@systems/DropSystem'
 import { SHARD_GENERATORS } from '@systems/TagReactions'
-import { altarPackBaseCost, packCostWithRepeats, regularShopPackBaseCost } from '@core/ShopPricing'
+import { altarPackBaseCost, packCostWithRepeats, regularShopPackBaseCost, difficultyPriceScale } from '@core/ShopPricing'
 import { buildEnaKnowledgeBase, type EnaKnowledgeBase, type EnaHandCardTactic } from './EnaKnowledgeAdapter'
 import { estimateImminentWebMergeFromCells, type ImminentWebMergeEstimate } from '@systems/CompanionForesight'
 import { bestSupportCard } from '@systems/HandCardAdvisor'
@@ -1198,13 +1198,16 @@ export class EnaTrainingSimulation {
   /** 방문 내 반복 구매 누적을 반영한 현재 팩 가격(ShopPricing 공유 공식). */
   private packCost(kind: EnaSimPackKind): number {
     const base = this.shopMode === 'altar' ? altarPackBaseCost(this.turn) : regularShopPackBaseCost(this.turn)
-    return packCostWithRepeats(base, this.shopPackBuysThisVisit[kind] ?? 0)
+    // 새싹 물가(절반)는 실게임과 같은 공유 함수로 건다 — 한쪽에만 두면 에나가 없는 물가를 배운다.
+    const scale = difficultyPriceScale(this.difficulty === 'sprout')
+    return Math.round(packCostWithRepeats(base, this.shopPackBuysThisVisit[kind] ?? 0) * scale)
   }
 
   /** 상점 유물 가격 근사: 실제 오퍼는 3장 개별가라 플레이어는 보통 저가 카드를 고를 수 있다.
    *  평균 basePrice의 0.75배로 "3장 중 살 만한 것" 기대가를 압축한다. */
   private relicCost(): number {
-    return Math.round(this.knowledge.economy.averageRelicBasePrice * 0.75)
+    const scale = difficultyPriceScale(this.difficulty === 'sprout')
+    return Math.round(this.knowledge.economy.averageRelicBasePrice * 0.75 * scale)
   }
 
   private payPack(kind: EnaSimPackKind): void {
