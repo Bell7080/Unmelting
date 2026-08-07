@@ -347,14 +347,14 @@ export class BossFxView {
         const fixture = fixtureMeta
           ? `<span class="boss-gimmick-cell-fixture ${cell.fixtureSpent ? 'is-spent' : ''}" data-fixture-tone="${fixtureMeta.tone}">
                <span class="boss-gimmick-cell-fixture-icon" aria-hidden="true">${cell.fixture === 'trap' ? trapIcon() : handCardIcon()}</span>
-               ${cell.fixture === 'trap' ? cell.trapDamage : `${BOSS_GIMMICK_TREASURE_CARDS}장`}
+               ${cell.fixture === 'trap' ? this.shownTrapDamage(cell.trapDamage) : `${BOSS_GIMMICK_TREASURE_CARDS}장`}
              </span>`
           : ''
         const aria = cell.broken
           ? `파괴된 ${meta.label || '보스'} 부위`
           : [
               meta.label ? `${meta.label} 부위 · 피해 ${meta.multiplier}배` : '보스 부위',
-              cell.fixture === 'trap' ? `함정 · 밟으면 ${cell.trapDamage} 피해` : '',
+              cell.fixture === 'trap' ? `함정 · 밟으면 ${this.shownTrapDamage(cell.trapDamage)} 피해` : '',
               cell.fixture === 'treasure' ? '보물 · 때리면 손패 획득' : '',
             ]
               .filter(Boolean)
@@ -375,6 +375,17 @@ export class BossFxView {
       .join('')
     return `<div class="boss-gimmick-grid ${targeting ? 'is-targeting' : ''} ${entering ? 'is-appearing' : ''} ${relabeling ? 'is-relabeling' : ''}"
                  style="--boss-gimmick-cols:${grid.cols};--boss-gimmick-rows:${splitRows ? 1 : grid.rows};">${cells}</div>`
+  }
+
+  /**
+   * 칸에 적을 함정 피해 — 런 보너스(역경 시련·유물)를 **합산한 최종 수치**다.
+   *
+   * 모델은 보스 공격력에서 뽑은 기본값만 들고 있다(캐릭터를 몰라야 순수 모델로 남는다).
+   * 필드 함정 카드도 같은 규칙으로 `character.trapDamageBonus`를 렌더 시점에 더해
+   * 실제로 물릴 값을 적는다 — 여기서 빼면 `6`이라 적힌 칸이 11을 물려 표기가 거짓말을 한다.
+   */
+  private shownTrapDamage(base: number): number {
+    return base + (this.host.getGameState()?.getCharacter().trapDamageBonus ?? 0)
   }
 
   /**

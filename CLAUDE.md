@@ -170,6 +170,9 @@ npm run build    # verify 포함
   지우고 때린다"는 계획이 매 타격마다 무효가 되고 지우는 손패가 도박이 된다.
 - 함정 부위 피해는 보스 공격력에서 파생한다(`bossGimmickTrapDamage`) — 고정 수치로 두면
   30F에서 아프고 100F에서는 없는 것과 같아진다.
+- 런 보너스(역경 시련·유물)는 **칸마다** 더해지고, 칸에 적는 수치도 그 합산값이다
+  (필드 함정 카드와 같은 규칙). 모델은 기본값만 들고 렌더가 더한다 — 빼면 표기가
+  거짓말을 한다. 광역은 칸을 전부 훑으므로 그만큼 곱해 맞는 것이 의도다.
 - 부위 파괴 수치(칸 내구도·파괴 보너스·시뮬 환산 배수)의 단일 출처는
   `BossGimmickManager`의 `bossGimmickCellDurability`/`bossGimmickBreakDamage`/
   `bossGimmickBreakBonusFactor`다. 셋은 같은 식에서 파생되므로 한쪽만 고치지 않는다.
