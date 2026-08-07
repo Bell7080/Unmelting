@@ -3939,8 +3939,16 @@ if (ENABLE_DEV_COMMAND_PALETTE) {
 // 지점이 화면과 어긋나 어디서부터 게임이 시작된 건지 읽히지 않는다. 여기서는 준비만 한다.
 bgm.preload()
 
-/** 오디오 개시 — 부팅 게이트의 Click to Start 클릭이 부른다(음악 + 효과음 컨텍스트). */
+/**
+ * 오디오 개시 — 부팅 게이트의 Click to Start 클릭이 부른다(음악 + 효과음 컨텍스트).
+ *
+ * 그 클릭 하나로 켜지는 것이 목표지만, 브라우저·기기에 따라 첫 시도가 막힐 수 있다.
+ * 그래서 `armAutoplay()`로 재시도 그물을 먼저 깔고 시작한다 — 성공하면 리스너는
+ * 스스로 떨어져 나가고, 막히면 다음 입력에서 다시 시도한다. 그물을 걷어 두면
+ * 한 번 막혔을 때 그 판 내내 무음이 된다.
+ */
 function beginAudio(): void {
+  bgm.armAutoplay()
   void bgm.start()
   void sfx.unlock()
 }

@@ -138,6 +138,14 @@ export class BgmManager {
    * 로드에 실패하면 다른 트랙으로 몇 번 갈아타 본다(무음 고착 방지).
    */
   private async playSegment(howl: Howl, fadeInMs: number, attempt = 1): Promise<boolean> {
+    // ★ 이미 로드된 스트림은 **await 없이 그 자리에서** 재생한다.
+    //
+    // async 함수는 첫 `await`까지 동기로 흐른다. 그래서 여기서 기다리지 않으면
+    // `play()`가 클릭 핸들러와 같은 실행 안에서 불리고, 브라우저는 그것을
+    // "사용자가 눌러서 난 소리"로 인정한다. 한 번이라도 await를 지나면 그 자격을
+    // 잃어 자동재생 정책에 막힌다 — 게이트에서 미리 받아 두는 이유가 이것이다.
+    if (howl.state() === 'loaded') return this.launch(howl, fadeInMs)
+
     const loaded = await this.whenLoaded(howl)
     if (!this.started) {
       howl.unload()
@@ -148,7 +156,11 @@ export class BgmManager {
       if (attempt >= this.maxLoadAttempts) return false
       return this.playSegment(this.createHowl(this.randomIndex()), fadeInMs, attempt + 1)
     }
+    return this.launch(howl, fadeInMs)
+  }
 
+  /** 실제 재생 시작 — 로드가 끝난 스트림에만 부른다. 동기라 사용자 입력 자격을 잃지 않는다. */
+  private launch(howl: Howl, fadeInMs: number): boolean {
     const id = howl.play()
     howl.volume(0, id)
     howl.fade(0, this.volume, fadeInMs, id)
