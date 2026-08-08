@@ -487,9 +487,10 @@ export class CardFaceRenderer {
     const atk = this.host.getGameState()?.getCharacter().damage ?? 1
     if (id === 'sacrifice-candle') {
       const b = merged ? (enhancements?.tripleBonus['sacrifice-candle'] ?? 0) : (enhancements?.singleBonus['sacrifice-candle'] ?? 0)
-      const selfTag = merged ? '자해 5 · ' : '자해 2 · '
-      const dmg = merged ? atkDmgHtml(atk, 5, 10, b) : atkDmgHtml(atk, 1.5, 3, b)
-      return `${selfTag}필드 선택 적 1장 ${dmg}`
+      const selfTag = merged ? '자해 3 · ' : '자해 1 · '
+      const dmg = merged ? atkDmgHtml(atk, 3, 6, b) : atkDmgHtml(atk, 1, 2, b)
+      const shieldTag = merged ? ' · 처치 시 방패 +6' : ' · 처치 시 방패 +3'
+      return `${selfTag}필드 선택 적 1장 ${dmg}${shieldTag}`
     }
     if (id === 'levatein') {
       const b = merged ? (enhancements?.tripleBonus['levatein'] ?? 0) : (enhancements?.singleBonus['levatein'] ?? 0)

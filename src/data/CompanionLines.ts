@@ -713,7 +713,7 @@ const CARD_COMMENT_EXTRAS: Record<string, Line[]> = {
   'ritual-candle': [
     '제 몸을 조금 내주고 손패를 부르는 의식이야.',
     '조금 아픈 대신 무엇이 올지 모를 한 장을 불러. 각오하고 쓰자.',
-    '의식 양초 셋이 하나가 되면 다치지 않고 세 장을 불러줘.',
+    '의식 양초 셋이 하나가 되면 아픔은 그대로에 세 장을 불러줘.',
     '무엇이 올지 모르는 게 의식의 묘미지.',
   ],
   'sword-and-shield': [
@@ -984,7 +984,7 @@ const USE_CARD_COMMENT_EXTRAS: Record<string, Line[]> = {
   ],
   'sacrifice-candle': [
     '아픈 값만큼 확실하게 태웠어.',
-    '몸은 2 아팠지만 상대는 더 아팠을 거야.',
+    '몸은 1 아팠지만 상대는 더 아팠을 거야.',
   ],
   levatein: [
     '크게 벴어. 대신 시간이 두 턴 성큼 갔어.',

@@ -96,6 +96,8 @@ export interface HandUseResult {
   teapotExtraHits?: { damage: number; totalCount: number }
   /** 모닥불: 처치가 일어났을 때 index.ts가 적용할 체력 회복량. */
   bonfireHealOnKill?: number
+  /** 제물 양초: 자해 대신 처치 시 방패로 갚는다. index.ts가 적용할 방패 획득량. */
+  sacrificeCandleShieldOnKill?: number
   /** 검은 양초: 사용 시 악마 보스 피해 카운터를 증가시킬 양. 보스가 없을 때는 무시한다. */
   blackCandleCounterGain?: number
   /** 정원 가위: 실제로 수확된 꽃 목록. index.ts는 이 카드들을 removedFieldCards의
@@ -360,6 +362,12 @@ export class HandSystem {
             ? 5 + (gs.enhancements.tripleBonus['bonfire'] ?? 0)
             : 3 + (gs.enhancements.singleBonus['bonfire'] ?? 0))
         : undefined,
+      // 제물 양초: 처치 시 단일 방패+3 / 트리플 방패+6(index.ts가 removedFieldCards로 판정).
+      sacrificeCandleShieldOnKill: card.defId === 'sacrifice-candle'
+        ? (card.merged
+            ? 6 + (gs.enhancements.tripleBonus['sacrifice-candle'] ?? 0)
+            : 3 + (gs.enhancements.singleBonus['sacrifice-candle'] ?? 0))
+        : undefined,
       // 검은 양초: 사용 시 악마 보스 카운터 증가량을 전달 (단일+2, 트리플+6).
       blackCandleCounterGain: card.defId === 'black-candle'
         ? (card.merged ? 6 : 2)
@@ -372,16 +380,16 @@ export class HandSystem {
   /** 카드별 자해 피해(UI가 애니메이션과 함께 적용). 탐욕의 동전·제물 양초·희생 방패가 사용한다. */
   private static selfDamageFor(defId: HandCardId, isMerged: boolean): number {
     if (defId === 'greed-coin') return HandSystem.greedCoinSelfDamage()
-    // 제물 양초: 단일 자해 2, 트리플 자해 5.
-    if (defId === 'sacrifice-candle') return isMerged ? 5 : 2
-    // 의식 양초: 단일 자해 2, 트리플 자해 1.
-    if (defId === 'ritual-candle') return isMerged ? 1 : 2
+    // 제물 양초: 단일 자해 1, 트리플 자해 3(처치 시 방패로 갚는 구조라 자해 자체는 가볍다).
+    if (defId === 'sacrifice-candle') return isMerged ? 3 : 1
+    // 의식 양초: 단일 자해 1, 트리플 자해 1(자해를 늘리지 않고 드로우만 늘린다).
+    if (defId === 'ritual-candle') return 1
     // 희생 방패: 단일 자해 1, 트리플 자해 2.
     if (defId === 'sacrifice-shield') return isMerged ? 2 : 1
     // 바늘: 단일 자해 1, 트리플 자해 2.
     if (defId === 'needle') return isMerged ? 2 : 1
-    // 부두 인형: 단일/트리플 모두 자해 2.
-    if (defId === 'voodoo-doll') return 2
+    // 부두 인형: 단일 자해 2, 트리플 자해 4(필드 전체 처리라 그만큼 비용을 더 낸다).
+    if (defId === 'voodoo-doll') return isMerged ? 4 : 2
     // 단두대: 단일 자해 6, 트리플 자해 10(대량 자해 펌프).
     if (defId === 'guillotine') return isMerged ? 10 : 6
     // 검은 양초: 단일 자해 2, 트리플 자해 4.
@@ -862,8 +870,8 @@ export class HandSystem {
         // 자해 피해/불빛은 use()의 selfDamage·lightGained로 보고되어 UI에서 처리한다.
         return '소량의 불빛 · 자해 2~5'
       case 'sacrifice-candle':
-        // 자해 2는 use()의 selfDamage로 처리. 여기서는 선택 적 피해만 적용한다.
-        return HandSystem.damageTargetEnemy(gs, target, Math.floor(1.5 * c.damage) + 3 + bonus)
+        // 자해 1은 use()의 selfDamage로 처리. 처치 시 방패 획득은 sacrificeCandleShieldOnKill.
+        return HandSystem.damageTargetEnemy(gs, target, Math.floor(1 * c.damage) + 2 + bonus)
       case 'levatein':
         // 적 행동 시뮬레이션(2회)과 ♥피해는 levateainDamage로 index.ts에 위임한다.
         return '레바테인: 즉시 2턴 흐름 후 (0.3♥+10)피해'
@@ -956,7 +964,7 @@ export class HandSystem {
       case 'garden-scissors':
         return HandSystem.applyGardenScissorsSingle(gs, target)
       case 'ritual-candle': {
-        // 자해 2는 selfDamageFor에서 처리. 랜덤 손패 드로우만 여기서 실행.
+        // 자해 1은 selfDamageFor에서 처리. 랜덤 손패 드로우만 여기서 실행.
         const count = 1 + bonus
         let gained = 0
         for (let i = 0; i < count; i++) {
@@ -964,7 +972,7 @@ export class HandSystem {
           c.addHandCard(DropSystem.generateDrop())
           gained++
         }
-        return gained > 0 ? `자해 2 · 랜덤 손패 +${gained}` : '자해 2 · 손패 가득 참'
+        return gained > 0 ? `자해 1 · 랜덤 손패 +${gained}` : '자해 1 · 손패 가득 참'
       }
       case 'black-candle':
         // 자해 2는 selfDamageFor, 카운터 +2는 HandUseResult.blackCandleCounterGain으로 처리.
@@ -1028,8 +1036,8 @@ export class HandSystem {
         // 탐욕의 동전은 트리플 합성되지 않으므로 이 분기는 실제로 도달하지 않는다.
         return '소량의 불빛 · 자해 2~5'
       case 'sacrifice-candle':
-        // 자해 5는 selfDamageFor에서 처리. 여기서는 피해만 적용한다.
-        return HandSystem.damageTargetEnemy(gs, target, Math.floor(5 * c.damage) + 10 + bonus)
+        // 자해 3은 selfDamageFor에서 처리. 처치 시 방패 획득은 sacrificeCandleShieldOnKill.
+        return HandSystem.damageTargetEnemy(gs, target, Math.floor(3 * c.damage) + 6 + bonus)
       case 'levatein':
         // 적 행동 시뮬레이션(1회)과 ♥피해는 levateainDamage로 index.ts에 위임한다.
         return '레바테인: 즉시 1턴 흐름 후 (0.45♥+15)피해'
@@ -1138,8 +1146,8 @@ export class HandSystem {
       case 'garden-scissors':
         return HandSystem.applyGardenScissorsAll(gs)
       case 'ritual-candle': {
-        // 트리플은 자해 1(selfDamageFor) 후 손패 2장 드로우.
-        const count = 2 + bonus
+        // 트리플도 자해 1(selfDamageFor, 단일과 동일) — 자해를 늘리는 대신 드로우만 3장으로 늘린다.
+        const count = 3 + bonus
         let gained = 0
         for (let i = 0; i < count; i++) {
           if (!c.hasHandRoom()) break
@@ -1159,10 +1167,11 @@ export class HandSystem {
         return `자해 2 · 바늘 3발 (1.0공+1)피해`
       }
       case 'voodoo-doll': {
-        // 자해 2는 selfDamageFor. 트리플은 필드 전체 보물 수확 + 함정 제거.
+        // 자해 4는 selfDamageFor(단일의 2배) — 필드 전체가 아니라 '모든 보물/함정'만 처리하되,
+        // 그만큼 자해 비용을 올려 트리플 자체가 과하게 싸지 않게 한다.
         const harvested = HandSystem.collectAllTreasures(gs, c)
         const cleared = HandSystem.clearAllOfTypes(gs, [CardType.TRAP])
-        return `자해 2 · ${harvested} · 함정 ${cleared}장 제거`
+        return `자해 4 · ${harvested} · 함정 ${cleared}장 제거`
       }
       case 'guillotine':
         // 자해 10은 selfDamageFor. 필드 전체 적에게 (3.0공+8) 확정 피해.

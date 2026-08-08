@@ -2584,6 +2584,15 @@ async function applyHandSingle(
       await playPlayerGainTrails(killedEnemySource, beforeBonfireResources)
     }
   }
+  // 제물 양초: 자해 대신 처치 시 방패로 갚는다(모닥불과 동일 경로, 자원만 방패).
+  if (result.sacrificeCandleShieldOnKill && result.sacrificeCandleShieldOnKill > 0) {
+    const enemiesKilled = result.removedFieldCards.filter((r) => r.type === CardType.ENEMY).length
+    if (enemiesKilled > 0) {
+      const beforeSacrificeCandleResources = snapshotPlayerResources()
+      gameState.character.addShield(result.sacrificeCandleShieldOnKill)
+      await playPlayerGainTrails(killedEnemySource, beforeSacrificeCandleResources)
+    }
+  }
   // Prepare the rail immediately after the single card effect. Recipes should
   // resolve against a compacted/refilled/front-regrouped board, preventing holes
   // after effects such as 한 걸음씩 or 밀매 remove cards from the field.

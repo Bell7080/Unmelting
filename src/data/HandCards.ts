@@ -205,16 +205,17 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: true,
   },
-  // 제물 양초: 자신을 제물로 바쳐 강하게 내리치는 단일 공격. 트리플도 자해 후 대규모 피해.
+  // 제물 양초: 가볍게 자해하고 적을 친 뒤, 처치하면 방패로 갚는다 — 양초 계열의 골격이
+  // 방패에서 나온다는 것을 잇는 공격기(밀랍/방패 축 양초 덱의 축이 되도록 설계).
   'sacrifice-candle': {
     id: 'sacrifice-candle',
     name: '제물 양초',
     category: 'attack',
-    synergyTags: ['flame', 'wax', 'sacrifice'],
-    // 피해 근사 — HandSystem: 단일 floor(1.5공)+3, 트리플 floor(5공)+10(자해는 liability로 별도 감점).
-    damageProfile: { base: { atkMult: 1.5, flat: 3 }, triple: { atkMult: 5, flat: 10 }, deterministic: true },
-    description: '자해 2 · 필드 선택 적 1장 (1.5공+3)피해',
-    tripleDescription: '자해 5 · 필드 선택 적 1장 (5.0공+10)피해',
+    synergyTags: ['wax', 'shield', 'sacrifice'],
+    // 피해 근사 — HandSystem: 단일 floor(1공)+2, 트리플 floor(3공)+6(자해는 liability로 별도 감점).
+    damageProfile: { base: { atkMult: 1, flat: 2 }, triple: { atkMult: 3, flat: 6 }, deterministic: true },
+    description: '자해 1 · 필드 선택 적 1장 (1.0공+2)피해 · 처치 시 방패 +3',
+    tripleDescription: '자해 3 · 필드 선택 적 1장 (3.0공+6)피해 · 처치 시 방패 +6',
     targeting: {
       base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
@@ -568,14 +569,14 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: true,
   },
-  // 의식 양초: 자해를 대가로 손패를 채운다. 트리플은 자해 없이 대량 드로우.
+  // 의식 양초: 가벼운 자해로 손패를 채운다. 트리플도 자해를 늘리지 않고 드로우만 늘어난다.
   'ritual-candle': {
     id: 'ritual-candle',
     name: '의식 양초',
     synergyTags: ['wax', 'sacrifice', 'draw'],
     category: 'tool',
-    description: '자해 2 · 랜덤 손패 +1',
-    tripleDescription: '자해 1 · 랜덤 손패 +2',
+    description: '자해 1 · 랜덤 손패 +1',
+    tripleDescription: '자해 1 · 랜덤 손패 +3',
     targeting: { base: selfOne, triple: selfOne },
     dropWeight: 7,
     dropSource: 'any',
@@ -621,13 +622,14 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     runLocked: false,
   },
   // 부두 인형: 제물 축 보물/함정 조작 손패. 자해 2로 선택 1칸의 보물을 수확하거나 함정을 제거한다.
+  // 트리플은 필드 전체가 아니라 '모든 보물/함정'만 처리하되, 그만큼 자해를 배로 낸다.
   'voodoo-doll': {
     id: 'voodoo-doll',
     name: '부두 인형',
     synergyTags: ['sacrifice'],
     category: 'tool',
     description: '자해 2 · 필드 선택 1칸 보물 수확/함정 제거',
-    tripleDescription: '자해 2 · 필드 전체 보물 수확 · 함정 제거',
+    tripleDescription: '자해 4 · 모든 보물 수확 · 모든 함정 제거',
     targeting: {
       base: { selection: 'target', zone: 'field', filter: 'trap-or-treasure', countLimit: 1 },
       triple: { selection: 'all', zone: 'field', filter: 'trap-or-treasure', countLimit: null },
