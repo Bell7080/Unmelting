@@ -1793,7 +1793,6 @@ export class GameBoardRenderer {
             ${queuedOrder ? `<span class="hand-queue-order" aria-label="대기 순번 ${queuedOrder}">${queuedOrder}</span>` : ''}
             ${demonReady ? `<span class="recipe-ready-mark recipe-ready-mark--demon" aria-hidden="true">✦</span>` : ''}
             ${hasOtherRecipes ? `<span class="recipe-ready-mark${demonReady ? ' is-has-demon' : ''}" aria-hidden="true">✦</span>` : ''}
-            ${queueMarker ? `<span class="hand-queue-order" aria-label="대기 순번 ${queueMarker.order}">${queueMarker.order}</span>` : ''}
             <span class="hand-card-thumb" aria-hidden="true">
               <img src="${handArt}" alt="" loading="lazy" />
             </span>
