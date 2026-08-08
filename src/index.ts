@@ -57,8 +57,7 @@ import { RECIPES, type RecipeEffectKind } from '@data/Recipes'
 import { getRelicDef, relicStackFeedback, type CustomRelicProfile, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
 import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
-import { GAUGE_TRIGGER_DELAY_MS, HAND_RECIPE_EMPHASIS_DELAY_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
-import { HandActionTimeline, type HandActionSnapshot } from '@/app/HandActionTimeline'
+import { CHAIN_EFFECT_STAGGER_MS, CHAIN_SETTLEMENT_GRACE_MS, GAUGE_SETTLEMENT_ANCHOR_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
 import { HAND_CARD_RARITY } from '@data/ShopPools'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { JOBS } from '@data/Jobs'
@@ -336,6 +335,8 @@ type ChainTimelineEvent =
   | { kind: 'gauge'; mode: CandleMode; name: string; flavor: string; uid: string }
   | { kind: 'relic'; relicId: RelicId; name: string; flavor: string; uid: string }
 let chainTimeline: ChainTimelineEvent[] = []
+/** 마지막 카드 모델 커밋 기준 정산 마감. 배너 표시는 기다리지 않고 즉시 갱신한다. */
+let chainSettlementDeadline: number | null = null
 let chainEventCounter = 0
 function nextChainUid(): string {
   chainEventCounter += 1
@@ -343,6 +344,7 @@ function nextChainUid(): string {
 }
 function clearChainTimeline(): void {
   chainTimeline = []
+  chainSettlementDeadline = null
 }
 /** Currently armed targeted hand card: waits for a board click to consume.
  *  Keep `merged` here as well as in GameBoardRenderer so re-renders never
@@ -1987,7 +1989,7 @@ function buildChainHints() {
     }))
   })
   // demon-summon은 chainTimeline에 추가되지 않으므로 별도 필터 불필요.
-  return { events: chainTimeline, recipeReadyBySlot }
+  return { events: chainTimeline, recipeReadyBySlot, chainSettlementDeadline }
 }
 
 function render(): void {
@@ -2165,7 +2167,7 @@ function fireCandleGaugeEffect(): {
  *  supplied the final point. */
 async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promise<void> {
   while (gameState.character.isCandleFull()) {
-    await wait(GAUGE_TRIGGER_DELAY_MS)
+    await wait(GAUGE_SETTLEMENT_ANCHOR_MS)
     const beforeGaugeResources = snapshotPlayerResources()
     const gauge = fireCandleGaugeEffect()
     if (!gauge) break
@@ -2385,6 +2387,15 @@ async function applyHandSingle(
     render()
     return
   }
+  // 판정 커밋 직후 사용 카드를 먼저 공개한다. 뒤 연출이 길어도 체인 입력 순서는 모델 순서와 같다.
+  if (usedDef) {
+    chainTimeline.push({
+      kind: 'card', defId: usedDef.id, name: usedDef.name,
+      category: usedDef.category, uid: nextChainUid(),
+    })
+    chainSettlementDeadline = performance.now() + CHAIN_SETTLEMENT_GRACE_MS
+    boardRenderer.refreshChainBanner(buildChainHints())
+  }
   if (usedDef) {
     enaRuntimeObserver.recordHandDecision(gameState, usedDef.id, result.message)
     if (gameState.bossBattleActive) enaRuntimeObserver.recordBossDecision(gameState, `hand:${usedDef.id}:${result.message}`)
@@ -2483,20 +2494,6 @@ async function applyHandSingle(
   // 손패 피해가 보스에게 닿았다면 HP 바 카운터를 즉시 반영한다.
   if (bossController.eventState && singleDamagedIds.has(bossController.eventState.card.id)) {
     boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))
-  }
-  // Append only the just-used card first. Recipes are resolved below after
-  // a small delay so the previous card's effect visibly lands before the combo.
-  if (usedDef) {
-    chainTimeline.push({
-      kind: 'card',
-      defId: usedDef.id,
-      name: usedDef.name,
-      category: usedDef.category,
-      uid: nextChainUid(),
-    })
-    // Combo-count bonuses stay in the use result/log message only; adding
-    // duplicate banner entries would read as extra physical cards consumed.
-    boardRenderer.refreshChainBanner(buildChainHints())
   }
   await playPlayerGainTrails({ kind: 'center' }, beforeSingleResources)
   if (result.coinsGained && result.coinsGained > 0) {
@@ -2713,10 +2710,17 @@ async function applyHandSingle(
   // gaps and active-row cards can merge before the next recipe checks the board.
   let demonBossPending = false
   let recipeSafety = 32
+  let recipeBatchStarted = false
   while (HandSystem.hasPendingRecipe(chain, gameState) && recipeSafety-- > 0) {
-    // 레시피 루프는 강조가 필요한 별도 판정 커밋이며, 각 결과 뒤에 보드 안정화를 순서대로 둔다.
-    // 기존 440ms는 모든 손패가 아니라 실제 레시피 강조 조건에서만 유지한다.
-    await wait(HAND_RECIPE_EMPHASIS_DELAY_MS)
+    // 첫 효과만 마지막 입력의 규칙 유예까지 정박한다. 같은 묶음의 나머지는 짧은 타격 간격만 둔다.
+    if (!recipeBatchStarted) {
+      const remainingGrace = Math.max(0, (chainSettlementDeadline ?? performance.now()) - performance.now())
+      if (!HandSystem.hasPendingModelRecipe(chain, gameState)) await wait(remainingGrace)
+      recipeBatchStarted = true
+      boardRenderer.playChainSettlementBatchImpact()
+    } else {
+      await wait(CHAIN_EFFECT_STAGGER_MS)
+    }
     const beforeRecipeFreeze = snapshotFieldFreezeState()
     const beforeRecipeHealth = snapshotFieldHealthState()
     // Capture pre-recipe field so we can score whatever the recipe removes.

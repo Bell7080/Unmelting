@@ -3,8 +3,14 @@
  * 같은 beat 안의 연출이 겹치지 않도록 시스템 전반에서 동일 값을 참조한다.
  */
 
-// 손패 게이지는 카드/레시피 비트 다음 차례로 분리해 동시 폭발을 피한다.
-export const GAUGE_TRIGGER_DELAY_MS = 440
+// 규칙 지연: 마지막 카드 모델 커밋 뒤 추가 입력을 같은 체인으로 받을 유예다.
+export const CHAIN_SETTLEMENT_GRACE_MS = 220
+
+// 시각 지연: 한 정산 묶음 안에서 효과별 타격을 읽히게 떼는 간격이다.
+export const CHAIN_EFFECT_STAGGER_MS = 110
+
+// 시각 지연: 레시피 정산 뒤 게이지 보상이 겹쳐 보이지 않게 정박시키는 beat다.
+export const GAUGE_SETTLEMENT_ANCHOR_MS = 440
 
 /** 일반 손패의 핵심 타격이 읽힌 뒤 입력을 다시 여는 목표 시간(모델은 이미 커밋됨). */
 export const HAND_ACTION_INPUT_RESUME_MS = 320

@@ -105,6 +105,32 @@ describe('HandSystem combo-count cards', () => {
 
     expect(gameState.character.candle).toBe(1)
   })
+
+  it('빠른 10회 입력에서도 데이터 순서의 레시피를 한 번만 발동하고 게이지 오버플로를 보존한다', () => {
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+    // 실제 입력 큐처럼 한 장씩 공급/소비해 손패 최대치가 테스트 의미를 가리지 않게 한다.
+    for (let i = 0; i < 10; i++) {
+      gameState.character.addHandCard(DropSystem.makeCard('coin'))
+      HandSystem.useSingle(gameState, chain, 0)
+    }
+    const firedIds: string[] = []
+    while (HandSystem.hasPendingRecipe(chain, gameState)) {
+      firedIds.push(...HandSystem.fireNextPendingRecipe(gameState, chain).firedRecipes.map((fired) => fired.recipe.id))
+    }
+
+    expect(chain.sequence).toEqual(Array(10).fill('coin'))
+    expect(firedIds).toEqual(['dividend'])
+    // 모델은 기존처럼 10칸씩 소비할 수 있어, 20 이상 보너스도 여러 번 정산 가능하다.
+    gameState.character.gainCandle(25)
+    let settlements = 0
+    while (gameState.character.isCandleFull()) {
+      gameState.character.consumeFullCandleGauge()
+      settlements++
+    }
+    expect(settlements).toBe(2)
+    expect(gameState.character.candle).toBe(5)
+  })
 })
 
 describe('HandSystem broad hand effects', () => {
