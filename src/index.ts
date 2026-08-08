@@ -25,6 +25,7 @@ import { CompanionDirector, BARK_IMPORTANCE } from '@/app/CompanionDirector'
 import { RelicEffectsManager } from '@/app/RelicEffectsManager'
 import type { PlayerResourceSnapshot, ResourceTrailSource, TrailResourceKind } from '@/app/FeedbackTypes'
 import { discardBossCellStrikes, drainBossCellStrikes } from '@/app/BossCellFeedback'
+import { HandActionTimeline, type HandIntentTarget } from '@/app/HandActionTimeline'
 import { TurnManager } from '@core/TurnManager'
 import { BossEventController } from '@core/BossEvent'
 import {
@@ -269,7 +270,11 @@ const eventDemonBubble = new SpeechBubble({
   maxWidth: 520,
 })
 let gameActive = true
-let inputLocked = false
+// Locks are split by responsibility: animation never doubles as a game-rule gate.
+let boardActionLocked = false
+let handCommitLocked = false
+let modalLocked = false
+let postBossLocked = false
 
 // ── 동료(에나) 반응 레이어 씨앗 ──────────────────────────────
 // 학습 전 규칙 기반 스캐폴딩. 플레이어 프로필(.player-card) 터치에 횟수·시간·현재 상황으로
@@ -307,7 +312,7 @@ const companionDirector: CompanionDirector = new CompanionDirector({
   enaAutonomousLearner,
   getRunCardPool: () => runCardPool,
   isGameActive: () => gameActive,
-  isInputLocked: () => inputLocked,
+  isInputLocked: () => boardActionLocked,
   isShopOpen: () => shopFlow.isOpen(),
   recordNotice,
   render,
@@ -349,7 +354,11 @@ function clearChainTimeline(): void {
 /** Currently armed targeted hand card: waits for a board click to consume.
  *  Keep `merged` here as well as in GameBoardRenderer so re-renders never
  *  fall back to the base targeting rule while a triple card is armed. */
-let pendingHandTarget: { slotIndex: number; defId: HandCardId; merged?: boolean } | null = null
+let pendingHandTarget: { uid: string; defId: HandCardId; merged?: boolean } | null = null
+// The cap follows the maximum number of visible hand slots.
+const handTimeline = new HandActionTimeline(10)
+let handSettlementCount = 0
+const cancelledHandUids = new Set<string>()
 
 let score = 0
 let coins = 0
@@ -416,7 +425,7 @@ function enterHearth(): void {
   // 거점 로비 동안엔 플레이어 말풍선을 음소거한다. 보류 중인 지연 대사(시작 대사 등)도
   // 함께 취소돼 대문 열림 중에 인게임 대사가 새는 것을 막는다. startGame 시작 시 해제된다.
   speechBubble.setMuted(true)
-  inputLocked = true // 거점 동안 뒤쪽 보드 입력 잠금(입력은 거점 오버레이가 가짐)
+  boardActionLocked = true // 거점 동안 뒤쪽 보드 입력 잠금(입력은 거점 오버레이가 가짐)
   gameActive = false
   // 아직 캐릭터를 고르지 않았으므로 플레이어 존을 숨긴다(레이어는 유지, visibility만 off).
   document.body.classList.add('hearth-lobby')
@@ -531,7 +540,7 @@ const announcedBossPhases = new Set<string>()
 const bossController: BossEventController = new BossEventController(
   gameState, turnManager, boardRenderer, bossBubble, speechBubble, runCardPool, SpriteUrls,
   {
-    setInputLocked: (v) => { inputLocked = v },
+    setInputLocked: (v) => { boardActionLocked = v },
     addOneCoin: () => { coins += 1; coinPulseKey++; boardRenderer.playCoinGainFeedback(coins, coinPulseKey); relicEffects.applyBlindFaithCoins(1) },
     render: () => render(),
     clearChainTimeline: () => { HandSystem.resetChain(chain); clearChainTimeline(); boardRenderer.refreshChainBanner(buildChainHints()) },
@@ -544,7 +553,7 @@ const bossController: BossEventController = new BossEventController(
     handlePlayerDeath: async () => {
       if (await relicEffects.tryResolveSurvivalRelics()) {
         // 권위/희망이 보스전 도중 살려냈다면 입력을 풀어 전투를 계속 잇게 한다.
-        inputLocked = false
+        boardActionLocked = false
         return true
       }
       gameState.endGame('character_defeated')
@@ -1021,7 +1030,8 @@ const shopFlow: ShopFlowManager = new ShopFlowManager({
   forcedTrialCards: FORCED_TRIAL_CARDS,
   getChain: () => chain,
   clearChainTimeline,
-  setInputLocked: (v) => { inputLocked = v },
+  // Shop/trial overlays own modal input; keep this distinct from board animation state.
+  setInputLocked: (v) => { boardActionLocked = v; modalLocked = v },
   render,
   recordNotice,
   wait,
@@ -1740,7 +1750,11 @@ async function fillOnboardingField(): Promise<void> {
  */
 function resetForNewRun(): void {
   gameActive = true
-  inputLocked = false
+  boardActionLocked = false
+  handCommitLocked = false
+  modalLocked = false
+  postBossLocked = false
+  handTimeline.clear()
   chain = HandSystem.newChain()
   pendingHandTarget = null
   // 동료(에나)의 런 한정 상태(의지/각성/턴 흐름) 초기화. 학습 가중치는 런 간 유지.
@@ -2012,7 +2026,15 @@ function render(): void {
     emberDecayCountdown: gameState.character.emberDecayCountdown,
     vignetteIntensity: EmberSystem.getVignetteIntensity(tier),
     chainHints: buildChainHints(),
-    pendingHandTarget,
+    // UID remains authoritative; only this render boundary projects it to a mutable slot.
+    pendingHandTarget: pendingHandTarget ? (() => {
+      const slotIndex = gameState.character.hand.findIndex((card) => card.uid === pendingHandTarget?.uid)
+      return slotIndex < 0 ? null : { slotIndex, defId: pendingHandTarget.defId, merged: pendingHandTarget.merged }
+    })() : null,
+    handQueue: gameState.character.hand.flatMap((card, slotIndex) => {
+      const order = handTimeline.orderOf(card.uid)
+      return order === null ? [] : [{ slotIndex, order, cancelling: cancelledHandUids.has(card.uid) }]
+    }),
     // 레일 상단 예고선은 화면 밖에서 다음에 실제로 들어올 리필 카드를 미리 보여준다.
     refillPreviewCards: buildRailRefillPreviewCards(),
   })
@@ -2035,12 +2057,12 @@ function buildRailRefillPreviewCards(): (Card | null)[] {
  *  모바일에서는 좌상단 버튼으로 트리거한다. */
 /** 디버그 악마 소환 가드 — 입력 잠금/보스전/게임오버 중엔 발동하지 않는다. */
 function demonSummonDebugBlocked(): boolean {
-  return inputLocked || Boolean(bossController.eventState) || gameState.isGameOver
+  return boardActionLocked || Boolean(bossController.eventState) || gameState.isGameOver
 }
 
 /** 디버그 악마 소환 전체 연출 — 실제 레시피 발동과 같은 순서(불길함→배너 임팩트→커튼→보스). */
 async function runDemonSummonDebug(): Promise<void> {
-  inputLocked = true
+  boardActionLocked = true
   HandSystem.resetChain(chain)
   clearChainTimeline()
   boardRenderer.refreshChainBanner(buildChainHints())
@@ -2063,7 +2085,7 @@ async function runDemonSummonDebug(): Promise<void> {
   boardRenderer.refreshChainBanner(buildChainHints())
   await boardRenderer.closeDemonCurtain()
   await bossController.runDemonSummon()
-  setTimeout(() => { inputLocked = false }, 320)
+  setTimeout(() => { boardActionLocked = false }, 320)
 }
 
 function wait(ms: number): Promise<void> {
@@ -2202,8 +2224,8 @@ async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promi
 }
 
 document.addEventListener('cardAction', (e: Event) => {
-  // inputLocked 중엔 대사가 출력 중일 수 있으므로 강제 dismiss하지 않는다
-  if (!inputLocked) speechBubble.dismiss()
+  // boardActionLocked 중엔 대사가 출력 중일 수 있으므로 강제 dismiss하지 않는다
+  if (!boardActionLocked) speechBubble.dismiss()
   void handleCardAction(e)
 })
 
@@ -2217,9 +2239,9 @@ document.addEventListener('cardProximity', (e: Event) => {
 })
 
 document.addEventListener('itemAction', (e: Event) => {
-  if (!inputLocked) speechBubble.dismiss()
+  if (!boardActionLocked) speechBubble.dismiss()
   const detail = (e as CustomEvent<ItemActionDetail>).detail
-  void handleHandSlotClick(detail.itemIndex)
+  void handleHandSlotClick(detail.itemIndex, detail.handUid)
 })
 
 // 대사 빨리감기/스킵 2단계: 1번째 클릭=빨리감기(읽기), 그 다음 클릭=스킵(닫기).
@@ -2247,15 +2269,15 @@ document.addEventListener('chainReset', () => {
 })
 
 document.addEventListener('candleModeCycle', () => {
-  // 상점/제단은 inputLocked 상태지만 콤보 게이지 모드 전환은 안전한 idle 동작이라 허용한다.
-  if (!gameActive || (inputLocked && !shopFlow.isOpen())) return
+  // 상점/제단은 boardActionLocked 상태지만 콤보 게이지 모드 전환은 안전한 idle 동작이라 허용한다.
+  if (!gameActive || (boardActionLocked && !shopFlow.isOpen())) return
   gameState.character.cycleCandleMode()
   render()
 })
 
 document.addEventListener('candleModeSelect', (e: Event) => {
-  // 상점/제단은 inputLocked 상태지만 콤보 게이지 모드 전환은 안전한 idle 동작이라 허용한다.
-  if (!gameActive || (inputLocked && !shopFlow.isOpen())) return
+  // 상점/제단은 boardActionLocked 상태지만 콤보 게이지 모드 전환은 안전한 idle 동작이라 허용한다.
+  if (!gameActive || (boardActionLocked && !shopFlow.isOpen())) return
   const detail = (e as CustomEvent<{ mode: CandleMode }>).detail
   if (!detail?.mode) return
   gameState.character.setCandleMode(detail.mode)
@@ -2284,18 +2306,83 @@ document.addEventListener('shopClose', () => {
   void shopFlow.closeShopAndResume()
 })
 
+/** Resolve a stable target id back to the live rail object at commit time. */
+function resolveIntentTarget(target: HandIntentTarget): HandTarget | null {
+  const lane = gameState.getLane(target.laneIndex)
+  const card = lane?.getCardAtDistance(target.distance)
+  if (!card || card.id !== target.cardId || card.getHealth() <= 0) return null
+  return { laneIndex: target.laneIndex, distance: target.distance, card, gimmickCellIndex: target.gimmickCellIndex }
+}
+
+/** Show a quiet wax-coloured cancellation beat without redirecting the request. */
+function showHandIntentCancellation(uid: string): void {
+  cancelledHandUids.add(uid)
+  render()
+  setTimeout(() => { cancelledHandUids.delete(uid); render() }, 380)
+}
+
+/** Commit queued hand requests FIFO; each request revalidates UID, card shape, target, and phase. */
+async function drainHandTimeline(): Promise<void> {
+  if (handCommitLocked) return
+  handCommitLocked = true
+  try {
+    while (handTimeline.length > 0) {
+      const intent = handTimeline.shift()
+      if (!intent) break
+      const phaseAllowsHand = gameActive && !modalLocked && !postBossLocked
+        && !shopFlow.isOpen() && !bossController.postPhaseHandLocked && !gameState.isGameOver
+      const validated = handTimeline.validate(intent, gameState.character.hand, phaseAllowsHand, (target) => resolveIntentTarget(target) !== null)
+      if (typeof validated === 'string') {
+        showHandIntentCancellation(intent.uid)
+        continue
+      }
+      const target = intent.target ? resolveIntentTarget(intent.target) ?? undefined : undefined
+      handSettlementCount++
+      try {
+        await applyHandSingle(validated.slotIndex, target)
+        await bossController.applyPostHandEffect()
+      } finally {
+        handSettlementCount--
+      }
+      // A boss reward/game-over transition invalidates every remaining request, never redirects it.
+      if (bossController.postPhaseHandLocked || gameState.isGameOver) {
+        postBossLocked = true
+        handTimeline.clear().forEach((queued) => showHandIntentCancellation(queued.uid))
+      }
+    }
+  } finally {
+    handCommitLocked = false
+    render()
+  }
+}
+
+/** Store an immutable request snapshot; duplicate touch/clicks share this single gate. */
+function enqueueHandIntent(card: typeof gameState.character.hand[number], target?: HandIntentTarget): void {
+  const queued = handTimeline.enqueue({
+    uid: card.uid,
+    defId: card.defId,
+    merged: card.merged === true,
+    requestedAt: performance.now(),
+    target,
+  })
+  if (!queued) return
+  render()
+  void drainHandTimeline()
+}
+
 /** Click on a hand slot. Plain click = use single (or arm targeting). */
-async function handleHandSlotClick(slotIndex: number): Promise<void> {
-  // 판정 커밋 진입점: 타깃 선택이 끝난 카드만 applyHandSingle의 동기 판정 구간으로 보낸다.
+async function handleHandSlotClick(slotIndex: number, requestedUid?: string): Promise<void> {
   if (!gameActive) return
   boardRenderer.clearEnaHintPulses()
   const character = gameState.character
   const card = character.hand[slotIndex]
   if (!card) return
+  // A stale mobile/click event belongs to the old DOM card, never its replacement.
+  if (requestedUid && card.uid !== requestedUid) { showHandIntentCancellation(requestedUid); return }
 
   // 상점/제단 중에는 동전 손패만 사용 허용 — 턴·체인 없이 화폐만 지급하고 상점 표시를 갱신한다.
   const shopCoinUse = shopFlow.isOpen() && card.defId === 'coin'
-  if (inputLocked && !shopCoinUse) return
+  if ((modalLocked || postBossLocked) && !shopCoinUse) return
   // 보스 격파 후 보상·시련 단계 동안 손패 사용 차단(사용자 요청). 상점 동전은 예외.
   if (bossController.postPhaseHandLocked && !shopCoinUse) return
 
@@ -2315,21 +2402,19 @@ async function handleHandSlotClick(slotIndex: number): Promise<void> {
   // merged=true so UI target hints use the triple maxSpan/filter after render.
   const activeTargeting = card.merged === true ? def.targeting.triple : def.targeting.base
   if (activeTargeting.selection === 'target') {
-    if (pendingHandTarget && pendingHandTarget.slotIndex === slotIndex) {
+    if (pendingHandTarget && pendingHandTarget.uid === card.uid) {
       pendingHandTarget = null
       boardRenderer.setHandTargetingMode(null)
       render()
       return
     }
-    pendingHandTarget = { slotIndex, defId: def.id, merged: card.merged === true }
-    boardRenderer.setHandTargetingMode(pendingHandTarget)
+    pendingHandTarget = { uid: card.uid, defId: def.id, merged: card.merged === true }
+    boardRenderer.setHandTargetingMode({ slotIndex, defId: def.id, merged: card.merged === true })
     render()
     return
   }
 
-  await applyHandSingle(slotIndex)
-  // 대상 미지정 손패(폭죽 등)가 보스 HP를 0으로 만들었을 수 있으니 같은 격파 흐름으로 합류한다.
-  await bossController.applyPostHandEffect()
+  enqueueHandIntent(card)
 }
 
 /** Broad clears get the opening-board mercy rule: the freshly rebuilt front
@@ -2363,8 +2448,7 @@ async function applyHandSingle(
   slotIndex: number,
   target?: HandTarget
 ): Promise<void> {
-  // 판정 커밋 단계: useSingle이 카드 효과·소비·규칙 체인을 동기로 확정한 뒤 연출 스냅샷을 만든다.
-  inputLocked = true
+  boardActionLocked = true
   // Capture the card def BEFORE useSingle mutates the slot — we need the
   // category to pick a burst theme, and the slot is empty after consumption.
   const usedCard = gameState.character.hand[slotIndex]
@@ -2383,7 +2467,7 @@ async function applyHandSingle(
   // (이동 애니메이션과 합성 애니메이션이 한 렌더에서 충돌해 순간이동처럼 보이던 문제 방지).
   const result = HandSystem.useSingle(gameState, chain, slotIndex, target, true)
   if (!result.success) {
-    inputLocked = false
+    boardActionLocked = false
     render()
     return
   }
@@ -2452,7 +2536,7 @@ async function applyHandSingle(
     if (!gameState.character.isAlive() && !gameState.character.authoritySurvivePending) {
       gameState.endGame('character_defeated')
       if (!(await relicEffects.tryResolveSurvivalRelics())) finishTurn()
-      inputLocked = false
+      boardActionLocked = false
       return
     }
   }
@@ -2940,7 +3024,7 @@ async function applyHandSingle(
     await boardRenderer.closeDemonCurtain()
     await bossController.runDemonSummon()
     // 보스 전투·보상·시련 완료 후 입력 복귀.
-    setTimeout(() => { inputLocked = false }, 320)
+    setTimeout(() => { boardActionLocked = false }, 320)
     return
   }
 
@@ -2950,7 +3034,7 @@ async function applyHandSingle(
   // 보스전 체인은 손패 사용으론 끊지 않는다 — 직접 타격(applyBoardAction) 시에만 리셋.
   // 콤보 배너는 applyPostHandEffect 내 조합식 발동 후 buildChainHints로 갱신이 오므로 별도 갱신 불필요.
   setTimeout(() => {
-    inputLocked = false
+    boardActionLocked = false
   }, 320)
 }
 
@@ -3380,7 +3464,7 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
     if (await relicEffects.tryResolveSurvivalRelics()) {
       // 권위: 필드를 유지하므로 레일 정리/리필이 필요하다. 희망은 자체 필드 리셋을 수행한다.
       if (authorityFired) await runCleanupPhase(advanceTurn)
-      inputLocked = false
+      boardActionLocked = false
       return
     }
     finishTurn()
@@ -3394,7 +3478,7 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   if (await maybeOpenShopAfterTurn()) return
 
   setTimeout(() => {
-    inputLocked = false
+    boardActionLocked = false
   }, 220)
 }
 
@@ -3407,7 +3491,8 @@ const eventFlow = new EventFlowManager({
     get score() { return score }, set score(v) { score = v },
     get scorePulseKey() { return scorePulseKey }, set scorePulseKey(v) { scorePulseKey = v },
   },
-  setInputLocked: (v) => { inputLocked = v },
+  // Event curtains are modal and invalidate hand interaction until fully closed.
+  setInputLocked: (v) => { boardActionLocked = v; modalLocked = v },
   render,
   wait,
   recordNotice,
@@ -3433,7 +3518,7 @@ const eventFlow = new EventFlowManager({
  * extinguished tiers the enemy phase fires before the player phase.
  */
 async function handleCardAction(e: Event): Promise<void> {
-  if (!gameActive || inputLocked) return
+  if (!gameActive || boardActionLocked || modalLocked || postBossLocked || handTimeline.length > 0 || handSettlementCount > 0) return
   // 에나가 가리키던 강조는 플레이어가 먼저 움직이면 그 자리에서 끊는다 — 이미 고른 뒤에도
   // 계속 맥동하면 "아직 여길 봐"로 읽혀 방금 한 선택과 어긋난다.
   boardRenderer.clearEnaHintPulses()
@@ -3450,14 +3535,14 @@ async function handleCardAction(e: Event): Promise<void> {
     pendingHandTarget = null
     boardRenderer.setHandTargetingMode(null)
     // 보스 위 칸 기믹 격자를 겨눴다면 그 칸까지 넘겨 칸 배율이 손패 피해에도 걸리게 한다.
-    await applyHandSingle(armed.slotIndex, {
+    const armedCard = gameState.character.hand.find((handCard) => handCard.uid === armed.uid)
+    if (!armedCard) { showHandIntentCancellation(armed.uid); return }
+    enqueueHandIntent(armedCard, {
+      cardId: card.id,
       laneIndex,
       distance,
-      card,
       gimmickCellIndex: detail.bossGimmickCellIndex,
     })
-    // 손패 효과로 BOSS HP가 0이 됐다면 같은 격파 흐름으로 합류한다.
-    await bossController.applyPostHandEffect()
     return
   }
 
@@ -3503,7 +3588,7 @@ async function handleCardAction(e: Event): Promise<void> {
   // 설명하지 않고 미뤄 둔 몫이라, 효과를 받는 순간과 설명이 한 박자에 붙는다.
   introduceFieldKindOnce(card)
 
-  inputLocked = true
+  boardActionLocked = true
 
   if (turnManager.isEnemyFirstStrike()) {
     const healthBeforeFirstStrike = gameState.character.health
@@ -3525,7 +3610,7 @@ async function handleCardAction(e: Event): Promise<void> {
       if (!gameState.character.isAlive() || gameState.isGameOver || gameState.character.authoritySurvivePending) {
         if (await relicEffects.tryResolveSurvivalRelics()) {
           // 치명적 선공을 권위/희망이 흡수하고 플레이어 턴으로 복귀한다.
-          inputLocked = false
+          boardActionLocked = false
           return
         }
         finishTurn()
@@ -3815,7 +3900,7 @@ async function handleCardAction(e: Event): Promise<void> {
     if (await relicEffects.tryResolveSurvivalRelics()) {
       // Trap/self-damage deaths should not fall through into the enemy phase
       // after the revive field reset. The next input is a normal player turn.
-      inputLocked = false
+      boardActionLocked = false
       return
     }
     finishTurn()
@@ -3865,7 +3950,7 @@ async function handleCardAction(e: Event): Promise<void> {
       const authorityFired = gameState.character.authoritySurvivePending
       if (await relicEffects.tryResolveSurvivalRelics()) {
         if (authorityFired) await runCleanupPhase(shouldAdvanceTurnForAction())
-        inputLocked = false
+        boardActionLocked = false
         return
       }
       finishTurn()
@@ -3876,7 +3961,7 @@ async function handleCardAction(e: Event): Promise<void> {
     if (await maybeRunMilestoneEventsAfterTurn()) return
     if (await maybeOpenShopAfterTurn()) return
     setTimeout(() => {
-      inputLocked = false
+      boardActionLocked = false
     }, 340)
   } else {
     await resolveEventPhaseAndPrepareNextTurn(shouldAdvanceTurnForAction())
@@ -3940,8 +4025,8 @@ if (ENABLE_DEV_COMMAND_PALETTE) {
     finishTurn,
     openShopOverlay: (mode) => shopFlow.openShopOverlay(mode),
     openTrialOverlayForced: () => shopFlow.openTrialOverlayForced(),
-    isInputLocked: () => inputLocked,
-    setInputLocked: (v) => { inputLocked = v },
+    isInputLocked: () => boardActionLocked,
+    setInputLocked: (v) => { boardActionLocked = v },
     isShopOpen: () => shopFlow.isOpen(),
     startTestRun,
   })

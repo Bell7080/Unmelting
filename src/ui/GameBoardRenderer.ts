@@ -424,8 +424,9 @@ export class GameBoardRenderer {
       if (!btn) return
       e.stopPropagation()
       const itemIndex = parseInt(btn.dataset.itemIndex ?? '-1', 10)
+      const handUid = btn.closest<HTMLElement>('.hand-slot')?.dataset.handUid
       document.dispatchEvent(new CustomEvent<ItemActionDetail>('itemAction', {
-        detail: { itemIndex, shiftKey: e.shiftKey, clientX: e.clientX, clientY: e.clientY },
+        detail: { itemIndex, handUid, shiftKey: e.shiftKey, clientX: e.clientX, clientY: e.clientY },
       }))
     })
 
@@ -1695,6 +1696,7 @@ export class GameBoardRenderer {
       }
       const def = getHandCardDef(card.defId)
       const isArming = targeting && targeting.slotIndex === i
+      const queueMarker = scorePanel.handQueue?.find((marker) => marker.slotIndex === i)
       const readyRecipes = scorePanel.chainHints?.recipeReadyBySlot?.[i] ?? []
       const recipeReady = readyRecipes.length > 0
       const demonReady = readyRecipes.some((r) => r.id === 'demon-summon')
@@ -1738,6 +1740,8 @@ export class GameBoardRenderer {
         RARITY_CLASS_BY_TIER[HAND_CARD_RARITY[card.defId] ?? 'common'],
         merged,
         isArming ? 'is-arming-target' : '',
+        queueMarker ? 'is-hand-queued' : '',
+        queueMarker?.cancelling ? 'is-hand-cancelled' : '',
         recipeReady ? 'is-recipe-ready' : '',
         // Lower hand slots sit close to the viewport bottom, so their hover
         // previews are anchored upward to keep the full card readable.
@@ -1779,6 +1783,7 @@ export class GameBoardRenderer {
             ${tripleFoil}
             ${demonReady ? `<span class="recipe-ready-mark recipe-ready-mark--demon" aria-hidden="true">✦</span>` : ''}
             ${hasOtherRecipes ? `<span class="recipe-ready-mark${demonReady ? ' is-has-demon' : ''}" aria-hidden="true">✦</span>` : ''}
+            ${queueMarker ? `<span class="hand-queue-order" aria-label="대기 순번 ${queueMarker.order}">${queueMarker.order}</span>` : ''}
             <span class="hand-card-thumb" aria-hidden="true">
               <img src="${handArt}" alt="" loading="lazy" />
             </span>
@@ -2406,9 +2411,10 @@ export class GameBoardRenderer {
     // The touchend handler calls e.preventDefault() to suppress the ghost click
     // so the click listener above does not double-fire on touch devices.
     attachHandCardTouch(this.boardElement, (itemIndex) => {
+      const handUid = this.boardElement.querySelector<HTMLElement>(`.hand-slot[data-slot-index="${itemIndex}"]`)?.dataset.handUid
       document.dispatchEvent(
         new CustomEvent<ItemActionDetail>('itemAction', {
-          detail: { itemIndex, shiftKey: false },
+          detail: { itemIndex, handUid, shiftKey: false },
         })
       )
     })

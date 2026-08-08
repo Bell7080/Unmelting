@@ -81,6 +81,8 @@ export interface BossHpRollStart {
 
 export interface ItemActionDetail {
   itemIndex: number
+  /** Stable identity prevents a delayed double-tap from selecting the card that slid into this slot. */
+  handUid?: string
   shiftKey?: boolean
   /** 클릭 좌표 — 튜토리얼 잠금 메시지 위치에 사용. */
   clientX?: number
@@ -191,6 +193,13 @@ export interface HandTargetingMode {
   merged?: boolean
 }
 
+/** Presentation-only queue marker; gameplay keeps UID as its source of truth. */
+export interface HandQueueMarker {
+  slotIndex: number
+  order: number
+  cancelling?: boolean
+}
+
 export interface ChainEventBase {
   /** Stable per-event id so the renderer can detect new entries and pop-in
    *  the right one without re-firing the animation on every render. */
@@ -270,6 +279,8 @@ export interface ScorePanelState {
   vignetteIntensity?: number
   chainHints?: ChainHints
   pendingHandTarget?: HandTargetingMode | null
+  /** Current-slot projections of UID-based queued intents. */
+  handQueue?: readonly HandQueueMarker[]
   /** 실제 다음 리필 카드 예고용. index가 laneIndex와 일치한다. */
   refillPreviewCards?: readonly (Card | null)[]
 }
