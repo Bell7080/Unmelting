@@ -424,8 +424,9 @@ export class GameBoardRenderer {
       if (!btn) return
       e.stopPropagation()
       const itemIndex = parseInt(btn.dataset.itemIndex ?? '-1', 10)
+      const handUid = btn.closest<HTMLElement>('.hand-slot')?.dataset.handUid
       document.dispatchEvent(new CustomEvent<ItemActionDetail>('itemAction', {
-        detail: { itemIndex, shiftKey: e.shiftKey, clientX: e.clientX, clientY: e.clientY },
+        detail: { itemIndex, handUid, shiftKey: e.shiftKey, clientX: e.clientX, clientY: e.clientY },
       }))
     })
 
@@ -1792,6 +1793,7 @@ export class GameBoardRenderer {
             ${queuedOrder ? `<span class="hand-queue-order" aria-label="대기 순번 ${queuedOrder}">${queuedOrder}</span>` : ''}
             ${demonReady ? `<span class="recipe-ready-mark recipe-ready-mark--demon" aria-hidden="true">✦</span>` : ''}
             ${hasOtherRecipes ? `<span class="recipe-ready-mark${demonReady ? ' is-has-demon' : ''}" aria-hidden="true">✦</span>` : ''}
+            ${queueMarker ? `<span class="hand-queue-order" aria-label="대기 순번 ${queueMarker.order}">${queueMarker.order}</span>` : ''}
             <span class="hand-card-thumb" aria-hidden="true">
               <img src="${handArt}" alt="" loading="lazy" />
             </span>
@@ -2419,9 +2421,10 @@ export class GameBoardRenderer {
     // The touchend handler calls e.preventDefault() to suppress the ghost click
     // so the click listener above does not double-fire on touch devices.
     attachHandCardTouch(this.boardElement, (itemIndex) => {
+      const handUid = this.boardElement.querySelector<HTMLElement>(`.hand-slot[data-slot-index="${itemIndex}"]`)?.dataset.handUid
       document.dispatchEvent(
         new CustomEvent<ItemActionDetail>('itemAction', {
-          detail: { itemIndex, shiftKey: false },
+          detail: { itemIndex, handUid, shiftKey: false },
         })
       )
     })

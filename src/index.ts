@@ -26,6 +26,7 @@ import { RelicEffectsManager } from '@/app/RelicEffectsManager'
 import { HandUseIntentQueue, type HandUseIntent } from '@/app/HandUseIntentQueue'
 import type { PlayerResourceSnapshot, ResourceTrailSource, TrailResourceKind } from '@/app/FeedbackTypes'
 import { discardBossCellStrikes, drainBossCellStrikes } from '@/app/BossCellFeedback'
+import { HandActionTimeline, type HandIntentTarget } from '@/app/HandActionTimeline'
 import { TurnManager } from '@core/TurnManager'
 import { BossEventController } from '@core/BossEvent'
 import {
@@ -2285,7 +2286,7 @@ document.addEventListener('cardProximity', (e: Event) => {
 document.addEventListener('itemAction', (e: Event) => {
   if (!boardActionLocked) speechBubble.dismiss()
   const detail = (e as CustomEvent<ItemActionDetail>).detail
-  void handleHandSlotClick(detail.itemIndex)
+  void handleHandSlotClick(detail.itemIndex, detail.handUid)
 })
 
 // 대사 빨리감기/스킵 2단계: 1번째 클릭=빨리감기(읽기), 그 다음 클릭=스킵(닫기).
@@ -2350,14 +2351,79 @@ document.addEventListener('shopClose', () => {
   void shopFlow.closeShopAndResume()
 })
 
+/** Resolve a stable target id back to the live rail object at commit time. */
+function resolveIntentTarget(target: HandIntentTarget): HandTarget | null {
+  const lane = gameState.getLane(target.laneIndex)
+  const card = lane?.getCardAtDistance(target.distance)
+  if (!card || card.id !== target.cardId || card.getHealth() <= 0) return null
+  return { laneIndex: target.laneIndex, distance: target.distance, card, gimmickCellIndex: target.gimmickCellIndex }
+}
+
+/** Show a quiet wax-coloured cancellation beat without redirecting the request. */
+function showHandIntentCancellation(uid: string): void {
+  cancelledHandUids.add(uid)
+  render()
+  setTimeout(() => { cancelledHandUids.delete(uid); render() }, 380)
+}
+
+/** Commit queued hand requests FIFO; each request revalidates UID, card shape, target, and phase. */
+async function drainHandTimeline(): Promise<void> {
+  if (handCommitLocked) return
+  handCommitLocked = true
+  try {
+    while (handTimeline.length > 0) {
+      const intent = handTimeline.shift()
+      if (!intent) break
+      const phaseAllowsHand = gameActive && !modalLocked && !postBossLocked
+        && !shopFlow.isOpen() && !bossController.postPhaseHandLocked && !gameState.isGameOver
+      const validated = handTimeline.validate(intent, gameState.character.hand, phaseAllowsHand, (target) => resolveIntentTarget(target) !== null)
+      if (typeof validated === 'string') {
+        showHandIntentCancellation(intent.uid)
+        continue
+      }
+      const target = intent.target ? resolveIntentTarget(intent.target) ?? undefined : undefined
+      handSettlementCount++
+      try {
+        await applyHandSingle(validated.slotIndex, target)
+        await bossController.applyPostHandEffect()
+      } finally {
+        handSettlementCount--
+      }
+      // A boss reward/game-over transition invalidates every remaining request, never redirects it.
+      if (bossController.postPhaseHandLocked || gameState.isGameOver) {
+        postBossLocked = true
+        handTimeline.clear().forEach((queued) => showHandIntentCancellation(queued.uid))
+      }
+    }
+  } finally {
+    handCommitLocked = false
+    render()
+  }
+}
+
+/** Store an immutable request snapshot; duplicate touch/clicks share this single gate. */
+function enqueueHandIntent(card: typeof gameState.character.hand[number], target?: HandIntentTarget): void {
+  const queued = handTimeline.enqueue({
+    uid: card.uid,
+    defId: card.defId,
+    merged: card.merged === true,
+    requestedAt: performance.now(),
+    target,
+  })
+  if (!queued) return
+  render()
+  void drainHandTimeline()
+}
+
 /** Click on a hand slot. Plain click = use single (or arm targeting). */
-async function handleHandSlotClick(slotIndex: number): Promise<void> {
-  // 판정 커밋 진입점: 타깃 선택이 끝난 카드만 applyHandSingle의 동기 판정 구간으로 보낸다.
+async function handleHandSlotClick(slotIndex: number, requestedUid?: string): Promise<void> {
   if (!gameActive) return
   boardRenderer.clearEnaHintPulses()
   const character = gameState.character
   const card = character.hand[slotIndex]
   if (!card) return
+  // A stale mobile/click event belongs to the old DOM card, never its replacement.
+  if (requestedUid && card.uid !== requestedUid) { showHandIntentCancellation(requestedUid); return }
 
   // 상점/제단 중에는 동전 손패만 사용 허용 — 턴·체인 없이 화폐만 지급하고 상점 표시를 갱신한다.
   const shopCoinUse = shopFlow.isOpen() && card.defId === 'coin'
