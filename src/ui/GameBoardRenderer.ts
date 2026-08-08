@@ -155,6 +155,16 @@ const ENA_HINT_REPEAT = 3
 const ENA_HINT_STAGGER_MS = 180
 
 export class GameBoardRenderer {
+  /**
+   * 손패 판정 묶음 동안 현재 손패 DOM을 고정한다. 모델은 즉시 커밋하되 마지막 예약까지
+   * 끝난 뒤 한 번만 새 배열을 보여 줘, 연속 입력 중 카드가 손가락 아래에서 움직이지 않는다.
+   */
+  private handLayoutDeferred = false
+
+  /** 판정 큐가 비워질 때까지 손패 열의 시각적 재배치를 미룬다. */
+  setHandLayoutDeferred(deferred: boolean): void {
+    this.handLayoutDeferred = deferred
+  }
   /** 서브 렌더러 공유 — 보드 루트 요소. */
   readonly boardElement: HTMLElement
   private selected: { laneIndex: number; distance: number } | null = null
@@ -626,7 +636,9 @@ export class GameBoardRenderer {
       const freshHandEl = this.boardElement.querySelector<HTMLElement>('.hand-column')
       if (freshHandEl) {
         const freshHandPanelEl = freshHandEl.querySelector<HTMLElement>('.hand-panel')
-        if (freshHandPanelEl && freshHandPanelEl.outerHTML === prevHandPanelHtml) {
+        // 판정 묶음에서는 모델 손패가 이미 줄었어도 기존 열을 유지한다. 마지막 예약 뒤의
+        // 단 한 번의 렌더에서만 카드를 내려 연타 좌표와 보이는 카드가 계속 일치하게 한다.
+        if (this.handLayoutDeferred || (freshHandPanelEl && freshHandPanelEl.outerHTML === prevHandPanelHtml)) {
           freshHandEl.replaceWith(prevHandEl)
           // spawn-prob-panel만 새 수치로 교체 (불씨 티어 변경 반영)
           const freshSpawnPanel = freshHandEl.querySelector<HTMLElement>('.spawn-prob-panel')
