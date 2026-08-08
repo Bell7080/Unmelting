@@ -22,6 +22,7 @@ export function drainBossCellStrikes(gs: GameState, observedLoss: number): BossG
   const modelTotal = hits.reduce((sum, hit) => sum + hit.damage, 0)
   const scale = modelTotal > 0 ? Math.min(1, observedLoss / modelTotal) : 0
   return hits.map((hit) => ({
+    actionId: hit.actionId,
     cellIndex: hit.cell.index,
     kind: hit.cell.kind,
     damage: Math.round(hit.cellDamage * scale),

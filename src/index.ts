@@ -44,7 +44,8 @@ import { GAME_OVER_GLOBAL_STYLES } from '@ui/styles/GameOverStyles'
 import { CardSpawner } from '@systems/CardSpawner'
 import { ActionSystem, ActionType } from '@systems/ActionSystem'
 import { DropSystem } from '@systems/DropSystem'
-import { HandSystem, ChainState, type HandTarget } from '@systems/HandSystem'
+import { HandSystem, ChainState, type HandTarget, type HandUseResult } from '@systems/HandSystem'
+import { handVolleyIntervalMs, handVolleyReleaseDelayMs } from '@ui/renderer/VolleyTiming'
 import { EmberSystem, SPROUT_SPAWN_ADJUST } from '@systems/EmberSystem'
 import { boardIntroKindOf } from '@systems/BoardIntroKind'
 import { Card, CardType } from '@entities/Card'
@@ -57,7 +58,7 @@ import { RECIPES, type RecipeEffectKind } from '@data/Recipes'
 import { getRelicDef, relicStackFeedback, type CustomRelicProfile, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
 import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
-import { COMBO_TRIGGER_DELAY_MS, GAUGE_TRIGGER_DELAY_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
+import { CHAIN_EFFECT_STAGGER_MS, CHAIN_SETTLEMENT_GRACE_MS, GAUGE_SETTLEMENT_ANCHOR_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
 import { HAND_CARD_RARITY } from '@data/ShopPools'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { JOBS } from '@data/Jobs'
@@ -206,6 +207,8 @@ const pendingEventDoorPreviewCard = new Card('event-door-preview', CardType.EVEN
 // 디버그 전용: 이벤트N 커맨드로 스폰된 칸이 클릭될 때 강제 사용할 이벤트 ID.
 let debugForcedEventId: EventId | null = null
 const boardRenderer = new GameBoardRenderer('game-board')
+// 손패 판정과 DOM 연출 채널의 수명을 한 곳에서 추적한다.
+const handActionTimeline = new HandActionTimeline()
 // 거점(촛대) 화면. 기본 부팅은 여전히 직행 인게임이며, `/시작` 명령에서만 깨어난다.
 const hearthScene = new HearthScene()
 // 구역 전환 커튼 — 1F 시작과 30/60/90F 보스 시련 종료 후 상단에서 슬라이드 인/아웃.
@@ -337,6 +340,8 @@ type ChainTimelineEvent =
   | { kind: 'gauge'; mode: CandleMode; name: string; flavor: string; uid: string }
   | { kind: 'relic'; relicId: RelicId; name: string; flavor: string; uid: string }
 let chainTimeline: ChainTimelineEvent[] = []
+/** 마지막 카드 모델 커밋 기준 정산 마감. 배너 표시는 기다리지 않고 즉시 갱신한다. */
+let chainSettlementDeadline: number | null = null
 let chainEventCounter = 0
 function nextChainUid(): string {
   chainEventCounter += 1
@@ -344,6 +349,7 @@ function nextChainUid(): string {
 }
 function clearChainTimeline(): void {
   chainTimeline = []
+  chainSettlementDeadline = null
 }
 /** Currently armed targeted hand card: waits for a board click to consume.
  *  Keep `merged` here as well as in GameBoardRenderer so re-renders never
@@ -850,6 +856,8 @@ async function playHandTargetBlasts(
 ): Promise<void> {
   const uniqueIds = [...new Set(cardIds)].filter(Boolean).filter((id) => !skipsTileBlastForBossCell(id))
   if (uniqueIds.length === 0) return
+  // 판정 직후의 좌표를 불변 값으로 잡는다. 뒤 카드 render가 노드를 교체해도 이 beat는 흔들리지 않는다.
+  const targetRects = new Map(uniqueIds.map((id) => [id, boardRenderer.findCardElement(id)?.getBoundingClientRect()]))
   // 대상이 많을수록 간격을 좁힌다 — 필드 전체(9칸)까지 같은 간격으로 쏘면 마지막 발이
   // 반 박자 뒤에 떨어져 한 방의 광역기가 늘어진 연사로 읽힌다.
   const stagger = Math.max(
@@ -860,22 +868,45 @@ async function playHandTargetBlasts(
     uniqueIds.map(async (cardId, index) => {
       if (index > 0) await wait(index * stagger)
       return origin === 'chain'
-        ? boardRenderer.animateTargetBlastFromChainToCard(cardId, theme)
-        : boardRenderer.animateTargetBlastFromCenterToCard(cardId, theme)
+        ? boardRenderer.animateTargetBlastFromChainToCard(cardId, theme, targetRects.get(cardId))
+        : boardRenderer.animateTargetBlastFromCenterToCard(cardId, theme, targetRects.get(cardId))
     })
   )
 }
 
-/** 다발 투척은 대상 ID를 고유화하지 않는다. 같은 적을 연속으로 맞혀도 실제 발수만큼
- * 청회색 곡사가 하나씩 보여야 칼날의 서 설명과 전투 피드백이 일치한다. */
-async function playRepeatedHandProjectiles(cardIds: readonly string[], theme: BurstTheme): Promise<void> {
-  if (cardIds.length === 0) return
-  // 기존 광역 대상 스태거보다 조금 짧게 잡아 한 카드의 빠른 연속 투척으로 묶어 읽히게 한다.
-  const interval = Math.max(58, Math.min(92, Math.round(360 / cardIds.length)))
-  await Promise.all(cardIds.map(async (cardId, index) => {
-    if (index > 0) await wait(index * interval)
-    return boardRenderer.animateTargetBlastFromCenterToCard(cardId, theme)
-  }))
+/** 공용 연사는 발수를 보존하되 긴 잔광 Promise까지 입력 잠금을 끌고 가지 않는다.
+ * 첫 발은 즉시 읽히고, 뒤 발은 발수가 많을수록 75→45ms로 완만하게 압축된다. */
+async function playRepeatedHandProjectiles(
+  hits: readonly NonNullable<HandUseResult['hitSequence']>[number][],
+  theme: BurstTheme
+): Promise<void> {
+  if (hits.length === 0) return
+  const interval = handVolleyIntervalMs(hits.length)
+  hits.forEach((hit, index) => {
+    window.setTimeout(() => {
+      // 잔광은 계속 재생하되 마지막 발을 발사한 시점부터 다음 입력을 받을 수 있다.
+      void boardRenderer.animateTargetBlastFromCenterToCard(hit.targetCardId, theme)
+    }, index * interval)
+  })
+  await wait(handVolleyReleaseDelayMs(hits.length))
+}
+
+/** 같은 대상의 연속 피해는 최대 3발씩만 합쳐 숫자 겹침을 줄인다. 궤적은 위에서 매 발
+ * 남기므로 합계 한 번으로 오해되지 않고, 숫자만 읽을 수 있는 작은 묶음이 된다. */
+function groupVolleyDamageNumbers(
+  hits: readonly NonNullable<HandUseResult['hitSequence']>[number][]
+): Array<{ cardId: string; amount: number }> {
+  const groups: Array<{ cardId: string; amount: number; count: number }> = []
+  for (const hit of hits) {
+    const last = groups[groups.length - 1]
+    if (last?.cardId === hit.targetCardId && last.count < 3) {
+      last.amount += hit.actualDamage
+      last.count++
+    } else {
+      groups.push({ cardId: hit.targetCardId, amount: hit.actualDamage, count: 1 })
+    }
+  }
+  return groups.map(({ cardId, amount }) => ({ cardId, amount }))
 }
 
 /** 레시피는 손패 분류가 없으므로 효과가 하는 일로 블라스트 톤을 고른다. */
@@ -955,7 +986,7 @@ boardRenderer.setBossCellStrikeSource((cardId, observedLoss) => {
   // 잠깐 멀쩡한 상태로 남는다.
   render()
   return strikes
-}, () => bossController.rerollGimmickCells())
+}, (_actionId) => bossController.rerollGimmickCells())
 
 /** 페이지 게이트 경고 배선 — 피해가 하한에 막힌 beat에서 수치 대신 무엇이 필요한지 알린다. */
 boardRenderer.setBossPageGateSource(() => bossController.pageGateWarning())
@@ -1972,7 +2003,7 @@ function buildChainHints() {
     }))
   })
   // demon-summon은 chainTimeline에 추가되지 않으므로 별도 필터 불필요.
-  return { events: chainTimeline, recipeReadyBySlot }
+  return { events: chainTimeline, recipeReadyBySlot, chainSettlementDeadline }
 }
 
 function render(): void {
@@ -2158,7 +2189,7 @@ function fireCandleGaugeEffect(): {
  *  supplied the final point. */
 async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promise<void> {
   while (gameState.character.isCandleFull()) {
-    await wait(GAUGE_TRIGGER_DELAY_MS)
+    await wait(GAUGE_SETTLEMENT_ANCHOR_MS)
     const beforeGaugeResources = snapshotPlayerResources()
     const gauge = fireCandleGaugeEffect()
     if (!gauge) break
@@ -2397,6 +2428,7 @@ function shouldSuppressRegroupAfterClear(removedCount: number): boolean {
  *  이동 애니메이션과 합성(is-entering) 애니메이션이 같은 렌더에서 충돌해 순간이동처럼 보이던
  *  문제를 막는다. 합성 대기 카드가 없으면 즉시 반환해 일반 사용 템포를 늦추지 않는다. */
 async function resolveDeferredHandMerges(): Promise<void> {
+  // 보드 안정화 단계: 모델 합성은 이동 DOM beat가 끝난 뒤 실제 규칙 순서대로 한 번만 수행한다.
   if (!HandSystem.hasPendingAutoMerge(gameState.character)) return
   // 빈 슬롯을 메우는 이동/낙하 연출(animateMovedHandSlots ~460ms)이 끝나길 기다린다.
   await wait(500)
@@ -2439,6 +2471,15 @@ async function applyHandSingle(
     render()
     return
   }
+  // 판정 커밋 직후 사용 카드를 먼저 공개한다. 뒤 연출이 길어도 체인 입력 순서는 모델 순서와 같다.
+  if (usedDef) {
+    chainTimeline.push({
+      kind: 'card', defId: usedDef.id, name: usedDef.name,
+      category: usedDef.category, uid: nextChainUid(),
+    })
+    chainSettlementDeadline = performance.now() + CHAIN_SETTLEMENT_GRACE_MS
+    boardRenderer.refreshChainBanner(buildChainHints())
+  }
   if (usedDef) {
     enaRuntimeObserver.recordHandDecision(gameState, usedDef.id, result.message)
     if (gameState.bossBattleActive) enaRuntimeObserver.recordBossDecision(gameState, `hand:${usedDef.id}:${result.message}`)
@@ -2475,12 +2516,6 @@ async function applyHandSingle(
   // category burst. This makes the hand action read like a card being played
   // instead of a slot-local pop.
   const handUseTheme = usedDef ? burstThemeForHandCard(usedDef) : null
-  if (handUseTheme) {
-    // Start the flight clone, then continue immediately. The model hand card is
-    // already consumed, so the compact slot can disappear on the next render
-    // while the larger played-card ghost lingers over the field.
-    void boardRenderer.animateHandCardUse(slotIndex, handUseTheme)
-  }
   // 자해는 공격 결과를 보여 주기 전에 결제한다. 카드 비행과 체력 감소를 같은 박자에
   // 시작해야 "적을 때린 뒤 받는 반격"이 아니라 "체력을 내고 카드를 쓴다"로 읽힌다.
   if (result.selfDamage && result.selfDamage > 0) {
@@ -2524,36 +2559,25 @@ async function applyHandSingle(
   // The played-card preview dissolves at center; this square-card blast points
   // from that center beat to every field cell that was hit, removed, gained, or hardened.
   if (handUseTheme) {
-    // 칼날의 서는 모델이 기록한 실제 무작위 표적 순서를 보존한다. 일반 대상 효과는 기존처럼
-    // 카드 ID를 고유화해 광역 한 방이 같은 대상을 중복 발사하는 일을 막는다.
-    if (usedDef?.id === 'blade-tome' && result.projectileTargetCardIds?.length) {
-      await playRepeatedHandProjectiles(result.projectileTargetCardIds, handUseTheme)
+    // 공용 hitSequence가 있으면 카드 이름을 보지 않고 실제 발사 순서를 그대로 재생한다.
+    if (result.hitSequence?.length) {
+      await playRepeatedHandProjectiles(result.hitSequence, handUseTheme)
     } else {
       await playHandTargetBlasts(affectedCardIds, handUseTheme)
     }
   }
+  // 보스 칸은 모델의 개별 strike 큐가 이미 발마다 숫자를 내므로 한 번만 drain한다.
+  const volleyDamageNumbers = result.hitSequence?.length && !result.hitSequence.some((hit) => hit.bossCellHit)
+    ? groupVolleyDamageNumbers(result.hitSequence)
+    : singleDamageLosses
   await Promise.all([
-    boardRenderer.animateDamageNumbersById(singleDamageLosses),
+    boardRenderer.animateDamageNumbersById(volleyDamageNumbers),
     boardRenderer.animateWaxFreezeByIds(newlyFrozenIds),
     boardRenderer.animateWaxThawByIds(thawedIds),
   ])
   // 손패 피해가 보스에게 닿았다면 HP 바 카운터를 즉시 반영한다.
   if (bossController.eventState && singleDamagedIds.has(bossController.eventState.card.id)) {
     boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))
-  }
-  // Append only the just-used card first. Recipes are resolved below after
-  // a small delay so the previous card's effect visibly lands before the combo.
-  if (usedDef) {
-    chainTimeline.push({
-      kind: 'card',
-      defId: usedDef.id,
-      name: usedDef.name,
-      category: usedDef.category,
-      uid: nextChainUid(),
-    })
-    // Combo-count bonuses stay in the use result/log message only; adding
-    // duplicate banner entries would read as extra physical cards consumed.
-    boardRenderer.refreshChainBanner(buildChainHints())
   }
   await playPlayerGainTrails({ kind: 'center' }, beforeSingleResources)
   if (result.coinsGained && result.coinsGained > 0) {
@@ -2770,8 +2794,17 @@ async function applyHandSingle(
   // gaps and active-row cards can merge before the next recipe checks the board.
   let demonBossPending = false
   let recipeSafety = 32
+  let recipeBatchStarted = false
   while (HandSystem.hasPendingRecipe(chain, gameState) && recipeSafety-- > 0) {
-    await wait(COMBO_TRIGGER_DELAY_MS)
+    // 첫 효과만 마지막 입력의 규칙 유예까지 정박한다. 같은 묶음의 나머지는 짧은 타격 간격만 둔다.
+    if (!recipeBatchStarted) {
+      const remainingGrace = Math.max(0, (chainSettlementDeadline ?? performance.now()) - performance.now())
+      if (!HandSystem.hasPendingModelRecipe(chain, gameState)) await wait(remainingGrace)
+      recipeBatchStarted = true
+      boardRenderer.playChainSettlementBatchImpact()
+    } else {
+      await wait(CHAIN_EFFECT_STAGGER_MS)
+    }
     const beforeRecipeFreeze = snapshotFieldFreezeState()
     const beforeRecipeHealth = snapshotFieldHealthState()
     // Capture pre-recipe field so we can score whatever the recipe removes.

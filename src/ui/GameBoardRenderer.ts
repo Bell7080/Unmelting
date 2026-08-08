@@ -357,10 +357,10 @@ export class GameBoardRenderer {
    */
   private bossCellStrikeSource: ((cardId: string, observedLoss: number) => BossGimmickStrikeView[]) | null = null
   /** 칸 타격 연출이 끝난 뒤 격자 쪽에 알린다(배율 리롤 등 beat 후처리). */
-  private bossCellStrikeSettled: (() => Promise<void> | void) | null = null
+  private bossCellStrikeSettled: ((actionId: string) => Promise<void> | void) | null = null
   setBossCellStrikeSource(
     source: ((cardId: string, observedLoss: number) => BossGimmickStrikeView[]) | null,
-    onSettled: (() => Promise<void> | void) | null = null
+    onSettled: ((actionId: string) => Promise<void> | void) | null = null
   ): void {
     this.bossCellStrikeSource = source
     this.bossCellStrikeSettled = onSettled
@@ -2282,6 +2282,17 @@ export class GameBoardRenderer {
     this.updateChainBanner(hints)
   }
 
+  /** 레시피 묶음마다 한 번만 촛불 점화와 종이 팽창을 재생한다. 개별 효과는 기존 is-new 타격을 쓴다. */
+  playChainSettlementBatchImpact(): void {
+    const banner = document.getElementById('chain-banner')
+    if (!banner) return
+    banner.classList.remove('is-settlement-impact')
+    // 같은 프레임의 이전 묶음 클래스를 지운 뒤 다시 붙여 새 정산만 한 번 재생한다.
+    void banner.getBoundingClientRect()
+    banner.classList.add('is-settlement-impact')
+    window.setTimeout(() => banner.classList.remove('is-settlement-impact'), 260)
+  }
+
   private updateChainBanner(hints?: ChainHints): void {
     let banner = document.getElementById('chain-banner') as HTMLElement | null
     if (!banner) {
@@ -2938,7 +2949,8 @@ export class GameBoardRenderer {
           return this.playBossGimmickStrikes(cellStrikes, this.handUseCenterRect(), {
             hpBefore: this.bossHpCurrent + Math.max(0, amount),
           })
-            .then(() => this.bossCellStrikeSettled?.())
+            // 한 drain은 한 action의 volley다. 마지막 수치 뒤 actionId로 한 번만 정산한다.
+            .then(() => this.bossCellStrikeSettled?.(cellStrikes[0].actionId))
             .then(() => undefined)
         }
         const target = this.findCardElement(cardId)
@@ -4091,9 +4103,11 @@ export class GameBoardRenderer {
     source: DOMRect,
     target: ResourceTrailTarget,
     count: number,
-    theme: BurstTheme
+    theme: BurstTheme,
+    destinationRect?: DOMRectReadOnly
   ): Promise<void> {
-    return this.trails.animateResourceTrailFromRect(source, target, count, theme)
+    // 출발/도착 rect를 모두 받으면 연출 중 현재 DOM을 한 번도 다시 조회하지 않는다.
+    return this.trails.animateResourceTrailFromRect(source, target, count, theme, destinationRect)
   }
 
   animateResourceTrailFromCenter(
@@ -4104,12 +4118,14 @@ export class GameBoardRenderer {
     return this.trails.animateResourceTrailFromCenter(target, count, theme)
   }
 
-  animateTargetBlastFromCenterToCard(cardId: string, theme: BurstTheme): Promise<void> {
-    return this.trails.animateTargetBlastFromCenterToCard(cardId, theme)
+  /** DOM 전용 연출. 판정 때 저장한 rect를 주면 이후 렌더의 노드 교체와 무관하게 끝난다. */
+  animateTargetBlastFromCenterToCard(cardId: string, theme: BurstTheme, targetRect?: DOMRectReadOnly): Promise<void> {
+    return this.trails.animateTargetBlastFromCenterToCard(cardId, theme, targetRect)
   }
 
-  animateTargetBlastFromChainToCard(cardId: string, theme: BurstTheme): Promise<void> {
-    return this.trails.animateTargetBlastFromChainToCard(cardId, theme)
+  /** DOM 전용 레시피 연출. 저장 rect가 있으면 현재 보드를 다시 조회하지 않는다. */
+  animateTargetBlastFromChainToCard(cardId: string, theme: BurstTheme, targetRect?: DOMRectReadOnly): Promise<void> {
+    return this.trails.animateTargetBlastFromChainToCard(cardId, theme, targetRect)
   }
 
   animateResourceTrailFromChain(

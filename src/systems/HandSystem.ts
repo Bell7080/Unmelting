@@ -62,6 +62,18 @@ export interface FlowerHarvestRecord {
   amount: number
 }
 
+/** 한 장의 손패가 실제로 발사한 한 발의 공용 결과다. 카드별 UI 필드를 늘리지 않도록
+ *  무작위 연사 카드들은 대상/실피해/처치/보스 칸을 모두 이 계약으로 보고한다. */
+export interface HandHitSequenceEntry {
+  targetCardId: string
+  actualDamage: number
+  killed: boolean
+  bossCellHit?: { cellIndex: number; damage: number; broke: boolean }
+  /** 같은 손패 사용에서 나온 발들을 묶어 재생하고 한 번만 정산하는 식별자다. */
+  actionId: string
+  volleyId: string
+}
+
 export interface HandUseResult {
   success: boolean
   /** Single-card effect message. */
@@ -103,9 +115,8 @@ export interface HandUseResult {
   /** 정원 가위: 실제로 수확된 꽃 목록. index.ts는 이 카드들을 removedFieldCards의
    *  일반 불빛 계산에서 제외하고, 캐모마일/금잔화만 따로 불빛/코인을 지급한다. */
   flowerHarvests?: FlowerHarvestRecord[]
-  /** 칼날의 서처럼 실제로 여러 발을 던지는 카드의 발사 순서. 같은 적 ID가 반복될 수 있으며,
-   *  UI는 배열을 고유화하지 않고 이 순서 그대로 짧은 간격의 곡사 투사체를 재생한다. */
-  projectileTargetCardIds?: string[]
+  /** 카드 종류와 무관한 실제 발사 순서. 같은 대상도 발수만큼 중복해 보존한다. */
+  hitSequence?: HandHitSequenceEntry[]
 }
 
 export interface RecipeFireResult {
@@ -153,7 +164,9 @@ export class HandSystem {
 
   /** applySingle/TripleEffect 깊숙한 파편 타격이 고른 대상을 useSingle 결과로 넘기는 동기 버퍼.
    *  매 카드 사용 시작에 비우고 같은 호출 안에서 drain하므로 런 사이에 상태가 남지 않는다. */
-  private static pendingProjectileTargetCardIds: string[] = []
+  private static pendingHitSequence: HandHitSequenceEntry[] = []
+  private static nextActionId = 1
+  private static currentActionId = ''
 
   /** ActionSystem.takeFlower와 동일한 종류별 보상을 캐릭터에 직접 반영한다.
    *  캐모마일(불빛)/금잔화(코인)는 캐릭터 상태가 아니므로 여기서 반영할 수 없어
@@ -243,9 +256,13 @@ export class HandSystem {
       return { success: false, message: '비어 있는 슬롯', mergeMessages: [], removedFieldCards: [] }
     }
     const def = getHandCardDef(card.defId)
+    // 검증/타격 전에 행동 ID를 세워 보스 칸과 공용 hitSequence가 같은 volley를 가리킨다.
+    HandSystem.currentActionId = `hand-${HandSystem.nextActionId++}`
     // 이 카드가 내는 모든 타격의 출처를 한 번 선언한다 — 아래 피해 헬퍼가 40군데라
     // 인자로 실어 나르는 대신 행동 단위로 세워 두고 격자가 집어 가게 한다.
-    gs.bossGimmicks?.beginAction({ origin: 'hand', tags: def.synergyTags ?? [] })
+    gs.bossGimmicks?.beginAction({
+      origin: 'hand', tags: def.synergyTags ?? [], actionId: HandSystem.currentActionId,
+    })
     if (!HandSystem.isValidTarget(def, target, card.merged === true, gs)) {
       return {
         success: false,
@@ -259,7 +276,8 @@ export class HandSystem {
     // 상세 스냅샷으로 제거 카드의 레인까지 담아 확산 유물이 처치 레인을 알 수 있게 한다.
     const beforeField = HandSystem.snapshotFieldCardsDetailed(gs)
     // 이전 직접 헬퍼 호출이나 실패한 개발 호출이 남긴 발사 기록은 새 카드에 섞지 않는다.
-    HandSystem.pendingProjectileTargetCardIds = []
+    HandSystem.pendingHitSequence = []
+    // 한 카드의 모든 발과 후속 정산이 공유하는 안정적인 ID를 동기 모델에서 만든다.
 
     // 주전자: 효과 실행 전에 필드 적 수를 캡처해 총 타격 횟수를 결정한다(효과 후 적 수가 변할 수 있음).
     const preEffectEnemyCount = card.defId === 'teapot' ? HandSystem.countFieldEnemies(gs) : 0
@@ -269,8 +287,8 @@ export class HandSystem {
       ? HandSystem.applyTripleEffect(gs, def, target)
       : HandSystem.applySingleEffect(gs, def, target)
     // 효과가 동기 실행되는 동안 기록된 실제 무작위 표적을 순서대로 떼어 결과에 싣는다.
-    const projectileTargetCardIds = HandSystem.pendingProjectileTargetCardIds
-    HandSystem.pendingProjectileTargetCardIds = []
+    const hitSequence = HandSystem.pendingHitSequence
+    HandSystem.pendingHitSequence = []
 
     character.removeHandCardAt(slotIndex)
 
@@ -323,7 +341,7 @@ export class HandSystem {
       message,
       mergeMessages,
       removedFieldCards,
-      projectileTargetCardIds: projectileTargetCardIds.length > 0 ? projectileTargetCardIds : undefined,
+      hitSequence: hitSequence.length > 0 ? hitSequence : undefined,
       coinsGained: card.defId === 'coin'
         ? (card.merged
             ? 5 + (gs.enhancements.tripleBonus['coin'] ?? 0)
@@ -457,6 +475,31 @@ export class HandSystem {
     for (const recipe of HandSystem.activeRecipes(gs)) {
       if (chain.firedRecipeIds.has(recipe.id)) continue
       if (HandSystem.recipeMatches(recipe, chain)) return true
+    }
+    return false
+  }
+
+  /**
+   * 다음 카드의 판정 전에 모델 정산이 필요한 레시피가 대기하는지 확인한다.
+   * 필드/손패/보스 피해는 다음 입력의 유효 대상이나 슬롯을 바꾸므로 시각 연출과 겹치지 않는다.
+   */
+  static hasPendingModelRecipe(chain: ChainState, gs?: GameState): boolean {
+    const modelEffects: ReadonlySet<Recipe['effect']> = new Set([
+      'gain-wax-drop', 'draw-random-hand-1', 'destroy-random-front-enemy',
+      'convert-random-hazard-to-treasure', 'collect-random-treasure',
+      'convert-random-waiting-to-treasure', 'clear-all-field-cards',
+      'clear-front-cards', 'collect-waiting-treasures', 'clear-all-field-traps',
+      'destroy-all-front-enemies', 'damage-all-field-enemies-1',
+      'damage-all-field-enemies-2', 'damage-all-field-enemies-5',
+      'damage-front-enemies-2', 'damage-front-enemies-3', 'damage-front-enemies-5',
+      'damage-split-field-4', 'damage-split-field-5', 'damage-split-field-2x2',
+      'shield-2-and-damage-field-1', 'ignite-atk', 'hot-atk', 'fuse-atk',
+      'backfire-atk', 'rage-atk', 'flame-chain-atk', 'glass-shards-atk',
+      'fireworks-atk', 'banquet-atk', 'hot-water-maxhp',
+    ])
+    for (const recipe of HandSystem.activeRecipes(gs)) {
+      if (chain.firedRecipeIds.has(recipe.id)) continue
+      if (modelEffects.has(recipe.effect) && HandSystem.recipeMatches(recipe, chain)) return true
     }
     return false
   }
@@ -1353,8 +1396,9 @@ export class HandSystem {
     if (c.hasRelic('blade-storm')) {
       // 폭풍도 실제 한 발이므로 대표 표적 하나만 궤적에 기록하고, 착탄 피해는 기존 전체 판정을 쓴다.
       const representative = HandSystem.firstLivingEnemyId(gs)
-      if (representative) HandSystem.pendingProjectileTargetCardIds.push(representative)
+      const before = representative ? HandSystem.findCardById(gs, representative)?.getHealth() ?? 0 : 0
       HandSystem.damageEnemies(gs, 'field', dmg)
+      if (representative) HandSystem.recordProjectileHit(gs, representative, before)
       return
     }
     const targets: { card: Card; lane: number; d: number }[] = []
@@ -1371,9 +1415,9 @@ export class HandSystem {
     if (targets.length === 0) return
     const t = targets[Math.floor(Math.random() * targets.length)]
     // 피해 적용 전에 ID를 기록해야 처치되어 레일에서 제거돼도 기존 DOM을 향해 날릴 수 있다.
-    HandSystem.pendingProjectileTargetCardIds.push(t.card.id)
     const before = Math.max(0, t.card.getHealth())
     HandSystem.hitCard(gs, t.card, dmg)
+    HandSystem.recordProjectileHit(gs, t.card.id, before, t.card)
     if (t.card.getHealth() > 0) return
     if (t.card.type !== CardType.BOSS) gs.removeCardFromRow(t.card, t.d)
     // 관통: 처치한 적의 세로열 나머지 적에게 dmg.
@@ -1381,6 +1425,36 @@ export class HandSystem {
     // 도탄: 처치하고 넘친 피해를 인접 레인 적 1체에게 전이.
     const overkill = dmg - before
     if (c.hasRelic('ricochet') && overkill > 0) HandSystem.ricochetShard(gs, t.lane, overkill)
+  }
+
+  /** 실제 한 발의 결과를 즉시 스냅샷한다. 처치로 레일에서 지워지기 전에 호출해야 한다. */
+  private static recordProjectileHit(gs: GameState, cardId: string, beforeHp: number, card?: Card): void {
+    const target = card ?? HandSystem.findCardById(gs, cardId)
+    const afterHp = Math.max(0, target?.getHealth() ?? 0)
+    const bossHit = target?.type === CardType.BOSS ? gs.bossGimmicks?.latestPendingHit : undefined
+    HandSystem.pendingHitSequence.push({
+      targetCardId: cardId,
+      actualDamage: Math.max(0, beforeHp - afterHp),
+      killed: beforeHp > 0 && afterHp <= 0,
+      bossCellHit: bossHit ? {
+        cellIndex: bossHit.cell.index,
+        damage: bossHit.damage,
+        broke: bossHit.broke,
+      } : undefined,
+      actionId: HandSystem.currentActionId,
+      volleyId: HandSystem.currentActionId,
+    })
+  }
+
+  /** 대표 표적을 다시 찾을 때만 쓰는 읽기 전용 보드 검색이다. */
+  private static findCardById(gs: GameState, cardId: string): Card | undefined {
+    for (const lane of gs.lanes) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = lane.getCardAtDistance(d)
+        if (card?.id === cardId) return card
+      }
+    }
+    return undefined
   }
 
   /** 칼날 폭풍의 시각적 대표 표적을 보드 순서대로 하나 고른다. 피해 대상 판정은 damageEnemies가 맡는다. */
@@ -1616,7 +1690,9 @@ export class HandSystem {
     }
     if (living.length === 0) return '대상 적 없음'
     const pick = living[Math.floor(Math.random() * living.length)]
+    const before = Math.max(0, pick.card.getHealth())
     HandSystem.hitCard(gs, pick.card, amount)
+    HandSystem.recordProjectileHit(gs, pick.card.id, before, pick.card)
     // 보스는 별도 격파 시퀀스가 lanes 정리를 담당하므로 즉시 제거하지 않는다.
     if (pick.card.getHealth() <= 0 && pick.card.type !== CardType.BOSS) {
       gs.removeCardFromRow(pick.card, pick.distance)

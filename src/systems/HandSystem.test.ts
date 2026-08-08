@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { GameState } from '@core/GameState'
 import { HandSystem } from './HandSystem'
 import { DropSystem } from './DropSystem'
@@ -25,6 +25,31 @@ describe('HandSystem.enqueueDrop (획득 공통 정리 경로)', () => {
 })
 
 describe('HandSystem combo-count cards', () => {
+  it('연속 판정을 먼저 커밋해도 기존 한 장씩 순차 사용한 최종 모델과 같다', () => {
+    /** 같은 입력 덱을 만드는 헬퍼로 두 실행의 난수/보드 차이를 제거한다. */
+    const prepare = (): { gameState: GameState; chain: ReturnType<typeof HandSystem.newChain> } => {
+      const gameState = new GameState()
+      gameState.character.addHandCard(DropSystem.makeCard('coin'))
+      gameState.character.addHandCard(DropSystem.makeCard('ember'))
+      return { gameState, chain: HandSystem.newChain() }
+    }
+    const sequential = prepare()
+    HandSystem.useSingle(sequential.gameState, sequential.chain, 0)
+    // 기존 UI 정산 beat가 사이에 있어도 모델에는 추가 변경이 없다는 기준 실행이다.
+    HandSystem.useSingle(sequential.gameState, sequential.chain, 0)
+
+    const committed = prepare()
+    // 새 타임라인은 연출을 기다리지 않고 두 판정을 같은 호출 흐름에서 확정한다.
+    HandSystem.useSingle(committed.gameState, committed.chain, 0)
+    HandSystem.useSingle(committed.gameState, committed.chain, 0)
+
+    // uid는 전역 생성 순서라 두 fixture 사이에 달라진다. 규칙 상태인 정의/합성 여부만 비교한다.
+    expect(committed.gameState.character.hand.map(({ defId, merged }) => ({ defId, merged })))
+      .toEqual(sequential.gameState.character.hand.map(({ defId, merged }) => ({ defId, merged })))
+    expect(committed.gameState.character.candle).toBe(sequential.gameState.character.candle)
+    expect(committed.chain.sequence).toEqual(sequential.chain.sequence)
+  })
+
   it('records a normal 카드 as one played card plus one explicit gauge count', () => {
     const gameState = new GameState()
     const chain = HandSystem.newChain()
@@ -79,6 +104,32 @@ describe('HandSystem combo-count cards', () => {
     HandSystem.useSingle(gameState, chain, 0)
 
     expect(gameState.character.candle).toBe(1)
+  })
+
+  it('빠른 10회 입력에서도 데이터 순서의 레시피를 한 번만 발동하고 게이지 오버플로를 보존한다', () => {
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+    // 실제 입력 큐처럼 한 장씩 공급/소비해 손패 최대치가 테스트 의미를 가리지 않게 한다.
+    for (let i = 0; i < 10; i++) {
+      gameState.character.addHandCard(DropSystem.makeCard('coin'))
+      HandSystem.useSingle(gameState, chain, 0)
+    }
+    const firedIds: string[] = []
+    while (HandSystem.hasPendingRecipe(chain, gameState)) {
+      firedIds.push(...HandSystem.fireNextPendingRecipe(gameState, chain).firedRecipes.map((fired) => fired.recipe.id))
+    }
+
+    expect(chain.sequence).toEqual(Array(10).fill('coin'))
+    expect(firedIds).toEqual(['dividend'])
+    // 모델은 기존처럼 10칸씩 소비할 수 있어, 20 이상 보너스도 여러 번 정산 가능하다.
+    gameState.character.gainCandle(25)
+    let settlements = 0
+    while (gameState.character.isCandleFull()) {
+      gameState.character.consumeFullCandleGauge()
+      settlements++
+    }
+    expect(settlements).toBe(2)
+    expect(gameState.character.candle).toBe(5)
   })
 })
 
@@ -160,7 +211,34 @@ describe('HandSystem broad hand effects', () => {
     const result = HandSystem.useSingle(gameState, chain, 0)
 
     expect(result.success).toBe(true)
-    expect(result.projectileTargetCardIds).toEqual(['tome-target', 'tome-target', 'tome-target'])
+    expect(result.hitSequence?.map((hit) => hit.targetCardId)).toEqual([
+      'tome-target', 'tome-target', 'tome-target',
+    ])
+    expect(result.hitSequence?.map((hit) => hit.actualDamage)).toEqual([1, 1, 1])
+    expect(result.hitSequence?.reduce((sum, hit) => sum + hit.actualDamage, 0)).toBe(3)
+  })
+
+  it('트리플 바늘은 세 발의 대상 순서·총피해·마지막 처치를 공용 결과로 보존한다', () => {
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+    const first = new Card('needle-a', CardType.ENEMY, '첫 표적', 'test', 1, 1, {})
+    const second = new Card('needle-b', CardType.ENEMY, '둘째 표적', 'test', 2, 1, {})
+    gameState.lanes[0].setCardAtDistance(0, first)
+    gameState.lanes[1].setCardAtDistance(0, second)
+    gameState.character.addHandCard({ ...DropSystem.makeCard('needle'), merged: true })
+    // 첫 발은 첫 적을 처치하고, 남은 두 발은 살아 있는 둘째 적을 이어 친다.
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0)
+
+    const result = HandSystem.useSingle(gameState, chain, 0)
+    random.mockRestore()
+
+    expect(result.hitSequence?.map((hit) => hit.targetCardId)).toEqual([
+      'needle-a', 'needle-b', 'needle-b',
+    ])
+    expect(result.hitSequence?.reduce((sum, hit) => sum + hit.actualDamage, 0)).toBe(3)
+    expect(result.hitSequence?.map((hit) => hit.killed)).toEqual([true, false, true])
+    // 회복량은 UI가 처치 확인 뒤 적용하는 기존 계약을 그대로 유지한다.
+    expect(result.needleHealOnKill).toBe(5)
   })
 
   it('makes triple 밀랍 freeze every front-row turn timer card', () => {

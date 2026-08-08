@@ -384,6 +384,8 @@ export interface BossGimmickSourceContext {
   origin: BossGimmickOrigin
   /** 손패/유물의 시너지 태그. 태그 반응형 칸이 이 목록을 본다. */
   tags: readonly SynergyTag[]
+  /** 여러 타격을 한 번만 정산할 행동 식별자. 생략한 호출부는 매니저가 발급한다. */
+  actionId?: string
 }
 
 /** 출처를 선언하지 않은 경로의 기본값 — 조건부 보정을 아무것도 타지 않는다. */
@@ -412,6 +414,7 @@ export interface BossGimmickResolvedContext extends BossGimmickStrikeContext {
 
 /** 한 대 때린 결과. 배율 적용까지 끝난 최종 피해를 함께 돌려준다. */
 export interface BossGimmickStrike {
+  actionId: string
   /** 때린 직후의 칸 상태. 균열/파괴 표기는 이 스냅샷을 그대로 읽는다. */
   cell: BossGimmickCellView
   /**
@@ -486,6 +489,7 @@ export class BossGimmickManager {
   private pendingHits: BossGimmickStrike[] = []
   /** 지금 진행 중인 플레이어 행동의 출처. `beginAction`이 세우고 판정이 읽는다. */
   private source: BossGimmickSourceContext = NEUTRAL_SOURCE
+  private actionSerial = 0
   /** 행동 시작 시점의 파괴 칸 수. "이번 행동이 부위를 깼는가"의 기준선이다. */
   private brokenAtActionStart = 0
 
@@ -498,7 +502,7 @@ export class BossGimmickManager {
    * 유물이 이어 때리는 경우 둘 다 같은 beat의 연출로 나가야 하기 때문이다.
    */
   beginAction(source: BossGimmickSourceContext): void {
-    this.source = source
+    this.source = { ...source, actionId: source.actionId ?? `boss-action-${++this.actionSerial}` }
     this.brokenAtActionStart = this.brokenCount
   }
 
@@ -648,6 +652,11 @@ export class BossGimmickManager {
   /** 이번 beat가 칸을 몇 개 때렸는가. 연출이 단일 타격과 광역을 가르는 데 쓴다. */
   get pendingHitCount(): number {
     return this.pendingHits.length
+  }
+
+  /** 공용 발사 결과가 방금 보스 칸 판정을 복사하되 연출 큐는 소비하지 않게 한다. */
+  get latestPendingHit(): BossGimmickStrike | undefined {
+    return this.pendingHits[this.pendingHits.length - 1]
   }
 
   /** 이번 beat에 쌓인 타격 기록을 가져가며 비운다. 연출 쪽 유일한 소비 창구다. */
@@ -831,6 +840,7 @@ export class BossGimmickManager {
       this.pendingFixtures.push({ cellIndex: index, fixture, cause: 'triggered' })
     }
     const strike: BossGimmickStrike = {
+      actionId: this.source.actionId ?? `boss-action-${++this.actionSerial}`,
       // 뷰는 부가물을 떼어 낸 뒤 찍는다 — 연출은 '이제 비어 있는 칸'을 그려야 한다.
       cell: this.viewAt(index),
       damage: cellDamage + breakDamage,
