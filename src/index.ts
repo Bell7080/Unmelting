@@ -2922,13 +2922,15 @@ async function applyHandSingle(
 /** 레바테인 전용: 적 공격/폭탄/꽃/보물 처리를 1회 실행하되 실제 턴 카운터를 올리지 않는다. */
 async function runSimulatedEnemyPhase(): Promise<void> {
   const beforeTrapHealth = snapshotFieldHealthState()
+  // 파도 공격의 체력 롤링 시작점 — 모델은 곧 최종값이 되므로 때리기 전 값을 먼저 잡는다.
+  const healthBeforeEnemies = gameState.character.health
   const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => companionDirector.tryCompanionIncomingDodge(damage) })
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
   const bombExplosions = turnManager.applyBombExplosions()
   const flowerChanges = turnManager.applyFlowerGrowthAndWilt(cardSpawner)
 
   const eventAnimations: Promise<void>[] = []
-  if (hits.length > 0) eventAnimations.push(boardRenderer.animateEnemyAttacks(hits))
+  if (hits.length > 0) eventAnimations.push(boardRenderer.animateEnemyAttacks(hits, healthBeforeEnemies))
   if (treasureChanges.length > 0) eventAnimations.push(boardRenderer.animateTreasureChanges(treasureChanges))
   if (bombExplosions.length > 0) {
     const playerDamageTotal = bombExplosions.reduce((s, e) => s + e.playerDamage, 0)
@@ -2956,11 +2958,8 @@ async function runSimulatedEnemyPhase(): Promise<void> {
   const totalDamage = hits.reduce((acc, h) => acc + h.damage, 0)
   if (totalDamage > 0) {
     recordNotice(`레바테인: 적 행동 (피해 ${totalDamage})`, 'hurt')
+    // 수치는 파도 공격이 적마다 이미 띄웠다 — 합산을 겹쳐 띄우지 않는다.
     render()
-    await boardRenderer.animateDamageImpactOnElement(
-      boardRenderer.findCardElement('__player__') ?? document.querySelector<HTMLElement>('.player-card'),
-      totalDamage
-    )
   }
   relicEffects.applyAnomalyHealthLoss()
 
@@ -3212,12 +3211,14 @@ async function resolvePostDropSporeSpread(): Promise<void> {
 
 async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true): Promise<void> {
   const beforeTrapHealth = snapshotFieldHealthState()
+  // 파도 공격의 체력 롤링 시작점 — 모델은 곧 최종값이 되므로 때리기 전 값을 먼저 잡는다.
+  const healthBeforeEnemies = gameState.character.health
   const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => companionDirector.tryCompanionIncomingDodge(damage) })
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
   const bombExplosions = turnManager.applyBombExplosions()
   const flowerChanges = turnManager.applyFlowerGrowthAndWilt(cardSpawner)
   const eventAnimations: Promise<void>[] = []
-  if (hits.length > 0) eventAnimations.push(boardRenderer.animateEnemyAttacks(hits))
+  if (hits.length > 0) eventAnimations.push(boardRenderer.animateEnemyAttacks(hits, healthBeforeEnemies))
   if (treasureChanges.length > 0) {
     eventAnimations.push(boardRenderer.animateTreasureChanges(treasureChanges))
   }
@@ -3263,12 +3264,9 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   if (totalDamage > 0) {
     if (biggestHit) enaRuntimeObserver.noteDamageSource(biggestHit.cardName)
     recordNotice(`적 공격! -${totalDamage}`, 'hurt')
+    // 피해 수치는 적마다 그 적이 때리는 순간 이미 떴다(animateEnemyAttacks의 파도).
+    // 여기서 합산을 한 번 더 띄우면 같은 피해가 두 번 들어온 것처럼 보인다.
     render()
-    await boardRenderer.animateDamageImpactOnElement(
-      boardRenderer.findCardElement('__player__') ??
-        document.querySelector<HTMLElement>('.player-card'),
-      totalDamage
-    )
   }
   // 반격 클러치 판정을 먼저 굴려 같은 피격 beat에서 '아픔' 바크와 '반격' 대사가 동시에
   // 나오는 감정 모순을 막는다 — 반격이 뜨면 그 대사가 이 beat의 감정을 대표한다.
@@ -3473,17 +3471,15 @@ async function handleCardAction(e: Event): Promise<void> {
   inputLocked = true
 
   if (turnManager.isEnemyFirstStrike()) {
+    const healthBeforeFirstStrike = gameState.character.health
     const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => companionDirector.tryCompanionIncomingDodge(damage) })
     if (hits.length > 0) {
-      await boardRenderer.animateEnemyAttacks(hits)
+      await boardRenderer.animateEnemyAttacks(hits, healthBeforeFirstStrike)
       const dmg = hits.reduce((acc, h) => acc + h.damage, 0)
       if (dmg > 0) {
+        // 수치는 파도 공격이 적마다 이미 띄웠다 — 여기서는 로그만 남긴다.
         recordNotice(`불씨가 흔들려 적이 먼저 공격! -${dmg}`, 'hurt')
         render()
-        await boardRenderer.animateDamageImpactOnElement(
-          document.querySelector<HTMLElement>('.player-card'),
-          dmg
-        )
       }
       // 품격있는 대처: 먼저 때린 적들에게 반격(플레이어가 살아남았을 때만 동작).
       await relicEffects.applyDignifiedRetaliation(hits)

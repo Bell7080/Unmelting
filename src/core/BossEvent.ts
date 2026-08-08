@@ -1908,10 +1908,12 @@ export class BossEventController {
       return false
     }
     const hits = attackers.map((e, idx) => ({ cardId: e.id, cardName: e.name, laneIndex: idx, damage: e.getDamage() }))
+    // 파도 롤링의 시작점 — 때리기 전 체력을 먼저 잡는다.
+    const healthBeforeSummons = character.health
     for (const e of attackers) character.takeDamage(e.getDamage())
     const totalDmg = attackers.reduce((s, e) => s + e.getDamage(), 0)
-    await this.br.animateEnemyAttacks(hits)
-    await this.br.animatePlayerDamageImpact(totalDmg)
+    // 수치는 종복마다 그 종복이 때리는 순간 뜬다(합산을 겹쳐 띄우지 않는다).
+    await this.br.animateEnemyAttacks(hits, healthBeforeSummons)
     this.inject.recordNotice(`소환 적들의 ${label}! -${totalDmg}`, 'hurt')
     this.inject.render()
     if (!character.isAlive() || character.authoritySurvivePending) {

@@ -119,8 +119,30 @@ const HP_DAMAGE_PULSE_MS = 640
 
 /** 방패로 막아 냈을 때의 흔들림 길이. CSS `shield-block-shake`와 같은 값이어야 한다. */
 const SHIELD_BLOCK_SHAKE_MS = 380
-/** 적 돌진이 플레이어에 닿는 순간(돌진 560ms의 0.58 지점). 막아 낸 표시가 이 박자에 나간다. */
-const ENEMY_SLAM_IMPACT_MS = 325
+/** 적 슬램이 플레이어에 닿는 순간(슬램 전체 길이의 0.62 지점). 피해·막음 표시가 이 박자에 나간다. */
+const ENEMY_SLAM_IMPACT_MS = 430
+/** 적 슬램 한 번의 전체 길이 — 들어올림 → 뒤로 당김 → 쾅 → 복귀. */
+const ENEMY_SLAM_MS = 700
+/**
+ * 적이 연달아 때릴 때 다음 적이 움직이기 시작하는 간격.
+ *
+ * ★ 적 페이즈는 **한 번에 합산하지 않고 파도처럼 하나씩** 때린다. 합산해 버리면
+ * "3피해 회피"가 떠도 누구 공격을 피한 건지 알 수 없다 — 때린 적과 그 결과가 한 박자
+ * 안에서 짝지어져야 회피·방패가 무엇을 막았는지 읽힌다.
+ */
+const ENEMY_WAVE_GAP_MS = 260
+/** 적이 덤비기 직전 공격력 수치가 부풀며 번쩍이는 예비 동작 길이. */
+const ENEMY_TELL_MS = 260
+
+/** 피해 수치가 화면에 머무는 시간. 여러 대 맞은 턴에도 하나씩 세어질 만큼 남긴다. */
+const DAMAGE_FLOAT_MS = 1500
+
+/** 적이 재가 되어 흩어지는 길이. CSS `enemy-defeat-ash`와 같은 값이어야 한다. */
+const ENEMY_DEFEAT_ASH_MS = 620
+
+/** 적 체력 수치 롤링 — 전체 길이와 최대 단계 수(많이 깎여도 늘어지지 않게 나눠 센다). */
+const ENEMY_HP_ROLL_MS = 360
+const ENEMY_HP_ROLL_MAX_STEPS = 6
 
 /** 에나 강조 맥동 — 시작 지연 / 1회 길이 / 반복 횟수. CSS(.ena-hint-pulse)와 같은 값을 쓴다. */
 const ENA_HINT_START_DELAY_MS = 240
@@ -2704,94 +2726,107 @@ export class GameBoardRenderer {
    * attacker's motion; `animateDamageFlash` follows up with the burst anchored
    * to the player card.
    */
-  animateEnemyAttacks(hits: EnemyHit[]): Promise<void> {
-    const elements = new Set<HTMLElement>()
-    for (const hit of hits) {
-      // Grouped enemies render once at the group's leftmost lane, so cardId is
-      // authoritative; lane fallback keeps older hit payloads harmless.
-      const element =
-        this.findCardElement(hit.cardId) ??
-        this.boardElement.querySelector<HTMLElement>(
-          `.cell.card.is-active[data-lane="${hit.laneIndex}"]`
-        )
-      if (element) elements.add(element)
-    }
-
-    const attackers = [...elements]
+  async animateEnemyAttacks(hits: EnemyHit[], hpBefore?: number): Promise<void> {
     const player = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
-    if (!player || attackers.length === 0) return Promise.resolve()
+    if (!player || hits.length === 0) return
 
-    // Enemy cells live inside the rail grid, whose boundaries can visually clip
-    // a full-width front-row group. Clone each attacker into a fixed overlay and
-    // lunge the clone toward the player so 3-lane wax armies always read as a
-    // real charge rather than a cut-off in-rail nudge.
-    const playerRect = player.getBoundingClientRect()
-    const playerCenterX = playerRect.left + playerRect.width / 2
-    const playerTop = playerRect.top + playerRect.height * 0.08
-
-    // 방패가 먹은 양 — 돌진이 플레이어에 닿는 박자에 맞춰 "막았다"를 띄운다.
-    // 이 한 줄이 없으면 방패가 전부 막은 턴은 화면에서 아무 일도 없던 것으로 지나간다.
-    const blockedTotal = hits.reduce((sum, hit) => sum + (hit.dodged ? 0 : (hit.blocked ?? 0)), 0)
-    if (blockedTotal > 0) {
-      window.setTimeout(() => void this.playShieldBlockFeedback(player, blockedTotal), ENEMY_SLAM_IMPACT_MS)
-    }
-
-    return Promise.all(
-      attackers.map((element) => {
-        const rect = element.getBoundingClientRect()
-        const clone = element.cloneNode(true) as HTMLElement
-        const dx = (playerCenterX - (rect.left + rect.width / 2)) * 0.22
-        const dy = Math.min(210, Math.max(58, playerTop - rect.bottom + 18))
-        element.classList.add('is-enemy-slamming-source')
-        clone.classList.add('enemy-attack-clone')
-        clone.style.position = 'fixed'
-        clone.style.left = `${rect.left}px`
-        clone.style.top = `${rect.top}px`
-        clone.style.width = `${rect.width}px`
-        clone.style.height = `${rect.height}px`
-        clone.style.margin = '0'
-        clone.style.zIndex = '245'
-        clone.style.pointerEvents = 'none'
-        clone.style.transformOrigin = '50% 100%'
-        document.body.appendChild(clone)
-
-        const animation = clone.animate(
-          [
-            { transform: 'translate(0, 0) scale(1)', filter: 'brightness(1)' },
-            {
-              transform: `translate(${dx * 0.35}px, ${dy * 0.22}px) scale(1.03, 0.98)`,
-              filter: 'brightness(1.18)',
-              offset: 0.28,
-            },
-            {
-              transform: `translate(${dx}px, ${dy}px) scale(1.08, 0.92)`,
-              filter: 'brightness(1.35) drop-shadow(0 22px 26px rgba(168, 58, 58, 0.74))',
-              offset: 0.58,
-            },
-            {
-              transform: `translate(${dx * 0.2}px, ${dy * 0.08}px) scale(0.99, 1.02)`,
-              filter: 'brightness(1.05)',
-              offset: 0.78,
-            },
-            { transform: 'translate(0, 0) scale(1)', filter: 'brightness(1)' },
-          ],
-          { duration: 560, easing: 'cubic-bezier(0.2, 0.9, 0.24, 1)', fill: 'forwards' }
-        )
-
-        return new Promise<void>((resolve) => {
-          animation.onfinish = () => {
-            clone.remove()
-            element.classList.remove('is-enemy-slamming-source')
-            resolve()
-          }
-          window.setTimeout(() => {
-            clone.remove()
-            element.classList.remove('is-enemy-slamming-source')
-            resolve()
-          }, 760)
-        })
+    // ★ **파도처럼 하나씩** 때린다. 예전에는 모든 적이 동시에 돌진하고 피해도 합산으로
+    //   한 번에 처리돼, "3피해 회피"가 떠도 **누구 공격을 피한 건지** 알 수 없었다.
+    //   때린 적 → 그 결과(피해/막음/회피)가 한 박자 안에 짝지어져야 읽힌다.
+    //   모델은 이미 최종 체력이라 연출이 표시만 따라간다(보스 HP 롤링과 같은 방식).
+    let rollingHp = hpBefore ?? null
+    for (const [index, hit] of hits.entries()) {
+      if (index > 0) await this.wait(ENEMY_WAVE_GAP_MS)
+      // 그룹 적은 가장 왼쪽 칸에 한 번만 그려지므로 cardId가 기준이다(레인은 폴백).
+      const attacker =
+        this.findCardElement(hit.cardId) ??
+        this.boardElement.querySelector<HTMLElement>(`.cell.card.is-active[data-lane="${hit.laneIndex}"]`)
+      await this.playEnemySlam(attacker, player, () => {
+        if (hit.dodged) {
+          // 회피는 **그 적의 타격 순간**에 뜬다 — 어느 공격이 빗나갔는지가 여기서 정해진다.
+          void this.animateFloatTextAt(
+            player.getBoundingClientRect().left + player.getBoundingClientRect().width / 2,
+            player.getBoundingClientRect().top + player.getBoundingClientRect().height * 0.16,
+            '회피!',
+            { className: 'damage-float--dodge' }
+          )
+          return
+        }
+        if (hit.blocked && hit.blocked > 0) void this.playShieldBlockFeedback(player, hit.blocked)
+        if (hit.damage > 0) {
+          // 수치 하나에 롤링 하나 — 한 번에 깎아 두면 어느 공격이 얼마를 가져갔는지 안 읽힌다.
+          if (rollingHp !== null) rollingHp = Math.max(0, rollingHp - hit.damage)
+          void this.animatePlayerDamageImpact(hit.damage, rollingHp ?? undefined)
+        }
       })
-    ).then(() => undefined)
+    }
+  }
+
+  /** 짧은 대기 — 파도 공격의 박자를 세는 데만 쓴다. */
+  private wait(ms: number): Promise<void> {
+    return new Promise((resolve) => window.setTimeout(resolve, ms))
+  }
+
+  /**
+   * 적 한 마리의 내리찍기 — 보스 슬램과 **같은 어휘**다(들어올림 → 뒤로 당김 → 쾅).
+   *
+   * 레일 격자는 전폭 그룹 적을 잘라 내므로 body에 고정 복제를 띄워 움직인다.
+   * 때리기 직전 공격력 수치가 부풀며 번쩍이는 예비 동작을 둬, 무엇이 얼마로 오는지
+   * 맞기 전에 눈이 먼저 읽게 한다.
+   */
+  private async playEnemySlam(
+    attacker: HTMLElement | null,
+    player: HTMLElement,
+    onImpact: () => void
+  ): Promise<void> {
+    if (!attacker) {
+      onImpact()
+      return
+    }
+    // 예비 동작: 공격력 칩이 커지며 삥! 하고 빛난다.
+    const atkChip = attacker.querySelector<HTMLElement>('.stat.atk')
+    atkChip?.classList.add('is-enemy-telegraph')
+    attacker.classList.add('is-enemy-winding')
+    await this.wait(ENEMY_TELL_MS)
+    atkChip?.classList.remove('is-enemy-telegraph')
+    attacker.classList.remove('is-enemy-winding')
+
+    const rect = attacker.getBoundingClientRect()
+    const playerRect = player.getBoundingClientRect()
+    const dx = (playerRect.left + playerRect.width / 2 - (rect.left + rect.width / 2)) * 0.2
+    const dy = Math.min(210, Math.max(58, playerRect.top + playerRect.height * 0.08 - rect.bottom + 18))
+
+    const clone = attacker.cloneNode(true) as HTMLElement
+    clone.classList.add('enemy-attack-clone')
+    clone.style.cssText += `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;margin:0;z-index:245;pointer-events:none;transform-origin:50% 100%;`
+    attacker.classList.add('is-enemy-slamming-source')
+    document.body.appendChild(clone)
+
+    const animation = clone.animate(
+      [
+        { transform: 'perspective(900px) translate3d(0,0,0) rotateX(0deg) scale(1)', filter: 'brightness(1)', easing: 'cubic-bezier(0.3, 0, 0.4, 1)' },
+        // 들어올림 — 무게를 싣고 떠오른다.
+        { transform: 'perspective(900px) translate3d(0,-22px,0) rotateX(8deg) scale(1.06)', filter: 'brightness(1.16)', offset: 0.22, easing: 'ease-out' },
+        // 뒤로 당김 — 안쪽으로 물러나며 작아진다(원근으로 거리감을 만든다).
+        { transform: `perspective(900px) translate3d(${(-dx * 0.3).toFixed(1)}px,-38px,-150px) rotateX(15deg) scale(0.94)`, filter: 'brightness(0.9)', offset: 0.44, easing: 'cubic-bezier(0.72, 0, 0.9, 0.24)' },
+        // 쾅 — 앞으로 튀어나오며 깊게 박힌다.
+        { transform: `perspective(900px) translate3d(${dx.toFixed(1)}px,${dy.toFixed(1)}px,190px) rotateX(-14deg) scale(1.18)`, filter: 'brightness(1.5) drop-shadow(0 24px 28px rgba(168, 58, 58, 0.8))', offset: 0.62, easing: 'cubic-bezier(0.16, 0.9, 0.3, 1)' },
+        { transform: `perspective(900px) translate3d(${(dx * 0.18).toFixed(1)}px,${(dy * 0.1).toFixed(1)}px,40px) rotateX(-4deg) scale(1.02)`, filter: 'brightness(1.06)', offset: 0.8 },
+        { transform: 'perspective(900px) translate3d(0,0,0) rotateX(0deg) scale(1)', filter: 'brightness(1)' },
+      ],
+      { duration: ENEMY_SLAM_MS, easing: 'cubic-bezier(0.2, 0.9, 0.24, 1)', fill: 'forwards' }
+    )
+
+    window.setTimeout(onImpact, ENEMY_SLAM_IMPACT_MS)
+    await new Promise<void>((resolve) => {
+      const finish = (): void => {
+        clone.remove()
+        attacker.classList.remove('is-enemy-slamming-source')
+        resolve()
+      }
+      animation.onfinish = finish
+      window.setTimeout(finish, ENEMY_SLAM_MS + 180)
+    })
   }
 
   /**
@@ -2803,11 +2838,11 @@ export class GameBoardRenderer {
    */
   /** 보스전 플레이어 피격 피드백: 일반 적 피격과 같은 붉은 피해 수치 + 버스트를 player-card에 띄운다.
    *  기존 animateDamageFlash(버스트만)를 대체해 보스전에서도 수치 애니메이션이 보이게 통일한다. */
-  animatePlayerDamageImpact(amount: number): Promise<void> {
+  animatePlayerDamageImpact(amount: number, shownHealth?: number): Promise<void> {
     const playerCard = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
     if (!playerCard || amount <= 0) return this.animateDamageFlash()
     sfx.playPlayerHit()
-    this.playPlayerHealthDamageFeedback()
+    this.playPlayerHealthDamageFeedback(shownHealth)
     return this.animateDamageImpactOnElement(playerCard, amount)
   }
 
@@ -2821,12 +2856,15 @@ export class GameBoardRenderer {
    * 클래스는 `hpDamagePulseUntil` 동안 renderPlayer가 다시 심어 주고, 진행 위치는
    * `restoreBoardAnimationPhases`가 이어 붙인다 — 곧바로 render가 돌아도 끊기지 않는다.
    */
-  playPlayerHealthDamageFeedback(): void {
+  playPlayerHealthDamageFeedback(shownHealth?: number): void {
     const character = this.currentGameState?.getCharacter()
     if (!character) return
+    // 파도 공격은 한 대씩 굴려 내려야 한다 — 모델은 이미 최종값이라, 표시값을 받으면
+    // 그 값까지만 굴린다(안 받으면 예전처럼 최종값으로 간다).
+    const target = shownHealth ?? character.health
     const previous = this.displayedHudCounters.get('health')
-    if (previous === undefined || character.health >= previous) return
-    this.playHudCounterFeedback('health', character.health)
+    if (previous === undefined || target >= previous) return
+    this.playHudCounterFeedback('health', target)
     this.hpDamagePulseUntil = performance.now() + HP_DAMAGE_PULSE_MS
     const column = this.boardElement.querySelector<HTMLElement>('.hp-column')
     if (!column) return
@@ -2892,15 +2930,48 @@ export class GameBoardRenderer {
         const target = this.findCardElement(cardId)
         if (target && amount > 0) {
           SquareBurst.playOn(target, 'damage', { count: 14, spread: 110, duration: 620 })
-          // 피격 반동 애니메이션: 밝아지며 좌우 흔들림으로 타격감을 전달한다.
+          // 피격 반동 애니메이션: 밝아지며 좌우 흔들림 + 붉은 잔광으로 타격감을 전달한다.
           target.classList.remove('is-enemy-hit')
           void target.offsetWidth
           target.classList.add('is-enemy-hit')
           window.setTimeout(() => target.classList.remove('is-enemy-hit'), 420)
+          // 체력 수치가 확 커지며 굴러 내려간다(4→3→2→1→0) — 카드 위에서 바로 읽힌다.
+          this.rollEnemyHealthNumber(target, amount)
         }
         return this.animateDamageNumberOnElement(target, amount)
       })
     ).then(() => undefined)
+  }
+
+  /**
+   * 맞은 적 카드의 체력 수치를 **한 칸씩 굴려 내린다**(4→3→2→1→0).
+   *
+   * 카드에 적힌 체력은 render가 최종값으로 이미 바꿔 놓는다. 그래서 맞기 전 값에서
+   * 되짚어 한 칸씩 내려 보여 준다 — 수치가 툭 바뀌면 몇 대 맞아 몇이 깎였는지가
+   * 카드 위에서 사라진다. 굴리는 동안 수치를 크게 키워 시선을 붙든다.
+   */
+  private rollEnemyHealthNumber(target: HTMLElement, amount: number): void {
+    const valueEl = target.querySelector<HTMLElement>('.stat.hp .stat-value')
+    if (!valueEl) return
+    const finalHp = Number(valueEl.textContent)
+    if (!Number.isFinite(finalHp)) return
+    const from = finalHp + amount
+    // 많이 깎였을 때 한 칸씩 다 세면 늘어진다 — 총 길이를 정해 두고 그 안에서 나눈다.
+    const steps = Math.min(amount, ENEMY_HP_ROLL_MAX_STEPS)
+    const stepMs = Math.max(40, Math.round(ENEMY_HP_ROLL_MS / Math.max(1, steps)))
+    valueEl.classList.remove('is-hp-rolling')
+    void valueEl.offsetWidth
+    valueEl.classList.add('is-hp-rolling')
+    for (let i = 0; i < steps; i++) {
+      const shown = Math.round(from - ((from - finalHp) * (i + 1)) / steps)
+      window.setTimeout(() => {
+        // 그 사이 카드가 다시 그려졌으면(처치·리필) 손대지 않는다.
+        if (!valueEl.isConnected) return
+        valueEl.textContent = String(shown)
+      }, stepMs * (i + 1))
+    }
+    window.setTimeout(() => valueEl.classList.remove('is-hp-rolling'), stepMs * steps + 260)
+    valueEl.textContent = String(from)
   }
 
   /** Create the red ember-glow numeric hit text at viewport coordinates. */
@@ -2948,7 +3019,9 @@ export class GameBoardRenderer {
     text: string,
     opts: { className?: string; durationMs?: number } = {}
   ): Promise<void> {
-    const duration = opts.durationMs ?? 980
+    // 피해 수치는 전투에서 가장 자주 읽는 정보다 — 뜨자마자 사라지면 여러 대 맞은 턴에
+    // 몇이 들어왔는지 세어지지 않는다. 솟아오른 뒤 **머무는 구간**을 두고 천천히 지운다.
+    const duration = opts.durationMs ?? DAMAGE_FLOAT_MS
     const el = document.createElement('div')
     el.className = `damage-float ${opts.className ?? ''}`.trim()
     el.textContent = text
@@ -2957,20 +3030,28 @@ export class GameBoardRenderer {
     document.body.appendChild(el)
     const anim = el.animate(
       [
-        { transform: 'translate(-50%, -20%) scale(0.78)', opacity: 0, filter: 'brightness(1.2)' },
+        { transform: 'translate(-50%, -14%) scale(0.7)', opacity: 0, filter: 'brightness(1.2)' },
+        // 튀어오르며 크게 — 이 순간이 "맞았다"를 말한다.
         {
-          transform: 'translate(-50%, -68%) scale(1.2)',
+          transform: 'translate(-50%, -76%) scale(1.34)',
           opacity: 1,
-          filter: 'brightness(1.65)',
-          offset: 0.22,
+          filter: 'brightness(1.85)',
+          offset: 0.16,
+        },
+        // 머무는 구간 — 거의 제자리에서 읽히도록 붙들어 둔다.
+        {
+          transform: 'translate(-50%, -104%) scale(1.14)',
+          opacity: 1,
+          filter: 'brightness(1.45)',
+          offset: 0.34,
         },
         {
-          transform: 'translate(-50%, -110%) scale(1.08)',
+          transform: 'translate(-50%, -126%) scale(1.1)',
           opacity: 1,
-          filter: 'brightness(1.32)',
-          offset: 0.65,
+          filter: 'brightness(1.3)',
+          offset: 0.76,
         },
-        { transform: 'translate(-50%, -160%) scale(1)', opacity: 0, filter: 'brightness(1)' },
+        { transform: 'translate(-50%, -172%) scale(0.98)', opacity: 0, filter: 'brightness(1)' },
       ],
       { duration, easing: 'cubic-bezier(0.16, 0.86, 0.28, 1)', fill: 'forwards' }
     )
@@ -4465,7 +4546,8 @@ export class GameBoardRenderer {
     return this.animateElements(
       elements,
       card.type === CardType.ENEMY ? 'is-enemy-defeated-consuming' : 'is-consuming',
-      card.type === CardType.ENEMY ? 560 : 480,
+      // 적은 '재가 되어 흩어지는' 연출이라 조금 더 길다(CSS enemy-defeat-ash와 같은 값).
+      card.type === CardType.ENEMY ? ENEMY_DEFEAT_ASH_MS : 480,
       { persist: true }
     )
   }
@@ -4510,7 +4592,7 @@ export class GameBoardRenderer {
         this.animateElements(
           elements,
           type === CardType.ENEMY ? 'is-enemy-defeated-consuming' : 'is-consuming',
-          type === CardType.ENEMY ? 560 : 480,
+          type === CardType.ENEMY ? ENEMY_DEFEAT_ASH_MS : 480,
           { persist: true }
         )
       )

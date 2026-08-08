@@ -75,18 +75,21 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
   /* Damage numbers use the same oxblood/ember family as SquareBurst damage,
      but bias the fill toward readable crimson so floating hits feel dangerous
      instead of looking like pale healing or treasure feedback. */
-  color: #ff3f32;
-  font-size: clamp(30px, 4.2vw, 58px);
+  color: #ff5a44;
+  font-size: clamp(38px, 5.4vw, 74px);
   font-weight: 950;
   line-height: 1;
   letter-spacing: 0.02em;
   font-family: var(--font-family-display);
+  /* 앞쪽 두 겹은 **뒤에 지는 그림자**(아래로 밀어 글자를 판에서 띄운다),
+     뒤쪽 세 겹은 **발광**이다. 어떤 일러스트 위에 떠도 읽히게 둘을 함께 쓴다. */
   text-shadow:
-    0 2px 2px rgba(0, 0, 0, 0.96),
-    0 0 8px rgba(255, 63, 50, 0.96),
-    0 0 20px rgba(176, 28, 34, 0.9),
-    0 0 34px rgba(244, 83, 49, 0.5);
-  -webkit-text-stroke: 1px rgba(74, 8, 13, 0.86);
+    0 3px 0 rgba(38, 4, 8, 0.92),
+    0 6px 14px rgba(0, 0, 0, 0.92),
+    0 0 12px rgba(255, 122, 90, 0.98),
+    0 0 28px rgba(244, 83, 49, 0.85),
+    0 0 52px rgba(255, 63, 50, 0.55);
+  -webkit-text-stroke: 1.5px rgba(74, 8, 13, 0.9);
 }
 
 /* ---------- 레바테인 연출 ----------
@@ -173,6 +176,20 @@ export const GAME_BOARD_PLAYER_RELIC_TRAP_STYLES = `
 /* 방패가 막아 낸 수치 — 붉은 피해와 **같은 양식·같은 자리**이고 색만 다르다.
    피가 아니라 금속이 막은 것이므로 회색빛(은백)이고, 발광도 한 겹 낮춰 실제 피해보다
    덜 아프게 읽힌다. 이 표기가 없으면 방패가 다 막은 턴은 화면에서 아무 일도 없다. */
+/* 회피 — 피해가 **안 들어온** 결과라 붉은 계열을 쓰지 않는다. 에나의 개입이므로
+   말풍선과 같은 촛불빛 계열로 띄워 "누가 막아 줬는지"가 색으로도 이어진다.
+   파도 공격에서 그 적이 때리는 순간에 떠야 어느 공격을 피한 건지가 정해진다. */
+.damage-float--dodge {
+  color: #ffe6a8;
+  font-size: clamp(30px, 4.2vw, 56px);
+  text-shadow:
+    0 3px 0 rgba(48, 30, 6, 0.9),
+    0 6px 14px rgba(0, 0, 0, 0.9),
+    0 0 14px rgba(255, 214, 140, 0.98),
+    0 0 34px rgba(255, 180, 80, 0.7);
+  -webkit-text-stroke: 1.4px rgba(70, 44, 8, 0.9);
+}
+
 .damage-float--blocked {
   color: #cfd6e2;
   text-shadow:

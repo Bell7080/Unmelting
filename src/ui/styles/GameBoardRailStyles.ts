@@ -2374,6 +2374,35 @@ export const GAME_BOARD_RAIL_STYLES = `
 .is-enemy-hit {
   animation: enemy-hit-recoil 0.38s cubic-bezier(0.22, 0.86, 0.26, 1) both;
 }
+/* 맞은 카드는 **붉게 달아오른다** — 반동만으로는 "닿았다"까지고, 아팠다는 건 색이 말한다.
+   카드가 overflow: hidden이라 붉은빛은 안쪽(inset)으로 얹는다. */
+.is-enemy-hit::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 3;
+  background: radial-gradient(120% 120% at 50% 45%, rgba(255, 72, 52, 0.42), rgba(150, 18, 24, 0.22) 62%, transparent 100%);
+  animation: enemy-hit-flush 0.38s ease-out both;
+}
+@keyframes enemy-hit-flush {
+  0%   { opacity: 0; }
+  22%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+/* 체력 수치가 굴러 내려가는 동안 크게 부풀며 붉게 빛난다 — 어디를 보라는 표시다. */
+.stat.hp .stat-value.is-hp-rolling {
+  display: inline-block;
+  animation: enemy-hp-roll-pop 0.62s cubic-bezier(0.2, 0.9, 0.25, 1);
+  color: #ffd0c2;
+}
+@keyframes enemy-hp-roll-pop {
+  0%   { transform: scale(1); text-shadow: none; }
+  18%  { transform: scale(1.85); text-shadow: 0 0 12px rgba(255, 108, 76, 0.95), 0 2px 3px rgba(0, 0, 0, 0.9); }
+  70%  { transform: scale(1.5);  text-shadow: 0 0 10px rgba(255, 108, 76, 0.7), 0 2px 3px rgba(0, 0, 0, 0.9); }
+  100% { transform: scale(1); text-shadow: none; }
+}
 
 /* 보스 등장 시 셔터 진동을 한 비트 더 강화. (위쪽 정의의 중복 — 한 번만 유지) */
 
