@@ -39,25 +39,31 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   }
 }
 
-/* 플레이어의 타격 — **들어올렸다 꽂는다**. 보스/적 슬램과 같은 어휘를 쓰되 짧고 날카롭다:
-   힘을 모으며 뒤로 젖히고(원근으로 물러남) → 앞으로 깊게 박히고 → 여운으로 돌아온다.
-   예전에는 위로 한 번 뛰었다 내려오는 pop이라 '부딪혔다'까지만 읽혔다. */
+/* 플레이어의 타격 — **후웅, 팍.** 이 애니메이션은 *맞는 적 카드*에 걸린다.
+   그래서 카드를 크게 부풀리면 안 된다 — 레일에서 그 칸만 불쑥 커져 판이 산만해진다.
+   크기가 아니라 **박자**로 때린다: 뒤로 길게 물러났다가(후웅) 짧고 세게 꽂힌다(팍). */
 @keyframes player-strike-pop {
-  0%, 100% {
-    transform: perspective(800px) translate3d(0, 0, 0) rotateX(0deg) scale(1);
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
     filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
   }
-  26% {
-    transform: perspective(800px) translate3d(0, 10px, -90px) rotateX(-9deg) scale(0.95);
-    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.6)) brightness(0.92);
+  /* 후웅 — 힘을 모으며 천천히 뒤로. 여기가 길어야 다음 한 방이 무겁게 읽힌다. */
+  40% {
+    transform: translate3d(0, 7px, 0) scale(0.975);
+    filter: drop-shadow(0 3px 9px rgba(0, 0, 0, 0.62)) brightness(0.94);
   }
-  52% {
-    transform: perspective(800px) translate3d(0, -30px, 170px) rotateX(11deg) scale(1.14);
-    filter: drop-shadow(0 16px 24px rgba(255, 215, 120, 0.6)) brightness(1.32);
+  /* 팍 — 짧고 깊게 꽂힌다. 확대는 최소로 두고 이동과 그림자로 무게를 낸다. */
+  58% {
+    transform: translate3d(0, -13px, 0) scale(1.035);
+    filter: drop-shadow(0 14px 20px rgba(255, 215, 120, 0.5)) brightness(1.2);
   }
-  74% {
-    transform: perspective(800px) translate3d(0, -6px, 30px) rotateX(3deg) scale(1.02);
-    filter: drop-shadow(0 8px 14px rgba(255, 215, 120, 0.32));
+  78% {
+    transform: translate3d(0, 2px, 0) scale(0.995);
+    filter: drop-shadow(0 6px 12px rgba(255, 215, 120, 0.22));
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
   }
 }
 
@@ -107,7 +113,7 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
 }
 
 .cell.card.is-player-striking {
-  animation: player-strike-pop 0.36s cubic-bezier(0.2, 0.9, 0.25, 1);
+  animation: player-strike-pop 0.46s cubic-bezier(0.34, 0, 0.2, 1);
   z-index: 5;
 }
 
@@ -134,24 +140,16 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   100% { transform: translateY(0) scale(1); }
 }
 
-/* 공격력 수치가 부풀며 삥! 하고 빛난다 — 무엇이 얼마로 오는지 눈이 먼저 읽는다. */
+/* 공격력 수치를 잠깐 키워 "이 녀석이 이만큼으로 온다"만 알린다.
+   발광을 겹치면 카드마다 번쩍여 판이 시끄러워진다 — 눈에 띄는 정도면 충분하다. */
 .stat.atk.is-enemy-telegraph {
   animation: enemy-atk-tell 0.26s cubic-bezier(0.2, 0.9, 0.25, 1);
   z-index: 2;
 }
 @keyframes enemy-atk-tell {
-  0% {
-    transform: scale(1);
-    filter: none;
-  }
-  45% {
-    transform: scale(1.75);
-    filter: drop-shadow(0 0 10px rgba(255, 138, 96, 0.95)) drop-shadow(0 0 22px rgba(255, 80, 60, 0.75)) brightness(1.6);
-  }
-  100% {
-    transform: scale(1);
-    filter: none;
-  }
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.3); filter: brightness(1.25); }
+  100% { transform: scale(1); }
 }
 
 .enemy-attack-clone {
@@ -162,6 +160,20 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   pointer-events: none;
   animation: treasure-dust-fade 0.52s ease-out forwards;
   z-index: 6;
+}
+
+/* 맞은 대상의 반동 — 폭탄처럼 적 페이즈를 안 타는 피해도 이 흔들림을 쓴다.
+   길이는 GameBoardRenderer의 STRUCK_RECOIL_MS와 같은 값이어야 한다. */
+.is-struck-recoil {
+  animation: struck-recoil 0.38s cubic-bezier(0.22, 0.86, 0.26, 1);
+}
+@keyframes struck-recoil {
+  0%   { transform: translate(0, 0); }
+  16%  { transform: translate(-6px, 2px); }
+  36%  { transform: translate(5px, -1px); }
+  56%  { transform: translate(-3px, 1px); }
+  76%  { transform: translate(2px, 0); }
+  100% { transform: translate(0, 0); }
 }
 
 /* Treasure vanish keeps only the card fade here; the actual particulate
@@ -180,55 +192,32 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   z-index: 7;
 }
 
-/* 처치된 적은 **재가 되어 흩어진다** — 안으로 오므라들며 뽀용 사라지던 것을 바꿨다.
-   양초로 만들어진 것들이라, 꺼지는 게 아니라 밑에서부터 타올라 재만 남는 쪽이 맞다.
-   세 겹으로 쌓는다: 카드가 달아오르고(brightness/saturate) → 위로 흩날리며 흐려지고
-   (translate + blur) → 잿빛으로 채도를 잃는다. */
+/* 처치된 적은 **회색으로 질리며 사라진다.** 안으로 오므라들며 뽀용 튀던 것도, 불타오르는
+   것도 아니다 — 색이 빠지고 힘이 풀리며 조용히 스러진다. 처치는 자주 일어나는 일이라
+   연출이 요란하면 판 전체가 시끄러워진다. */
 .cell.card.is-enemy-defeated-consuming {
   pointer-events: none;
-  animation: enemy-defeat-ash 0.62s cubic-bezier(0.22, 0.72, 0.3, 1) forwards;
+  animation: enemy-defeat-ash 0.5s cubic-bezier(0.3, 0.6, 0.4, 1) forwards;
   transform-origin: center bottom;
   z-index: 8;
-}
-/* 아래에서 위로 타 들어가는 마스크 — 재가 되는 순서를 만든다(밑동부터 사라진다). */
-.cell.card.is-enemy-defeated-consuming::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(0deg, rgba(255, 176, 92, 0.85) 0%, rgba(255, 96, 48, 0.5) 22%, transparent 46%);
-  mix-blend-mode: screen;
-  animation: enemy-defeat-ember-sweep 0.62s ease-out forwards;
 }
 @keyframes enemy-defeat-ash {
   0% {
     transform: translateY(0) scale(1);
     opacity: 1;
-    filter: brightness(1) saturate(1);
+    filter: grayscale(0) brightness(1);
   }
-  22% {
-    /* 달아오름 — 마지막으로 한 번 환하게 탄다. */
-    transform: translateY(-2px) scale(1.03);
-    opacity: 1;
-    filter: brightness(1.7) saturate(1.5);
-  }
-  58% {
-    transform: translateY(-12px) scale(0.99, 1.01);
-    opacity: 0.55;
-    filter: brightness(1.15) saturate(0.7) blur(1.4px);
+  40% {
+    /* 색이 먼저 빠진다 — 여기서 이미 "끝났다"가 읽힌다. */
+    transform: translateY(2px) scale(0.99);
+    opacity: 0.82;
+    filter: grayscale(0.75) brightness(0.86);
   }
   100% {
-    /* 재 — 위로 흩날리며 채도를 잃고 사라진다. */
-    transform: translateY(-34px) scale(0.96, 1.04);
+    transform: translateY(7px) scale(0.97);
     opacity: 0;
-    filter: brightness(0.72) saturate(0.15) blur(4px);
+    filter: grayscale(1) brightness(0.6);
   }
-}
-@keyframes enemy-defeat-ember-sweep {
-  0%   { opacity: 0; transform: translateY(12%); }
-  26%  { opacity: 1; transform: translateY(0); }
-  100% { opacity: 0; transform: translateY(-72%); }
 }
 @keyframes card-consume {
   0% {

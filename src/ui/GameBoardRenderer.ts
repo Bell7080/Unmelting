@@ -119,10 +119,10 @@ const HP_DAMAGE_PULSE_MS = 640
 
 /** 방패로 막아 냈을 때의 흔들림 길이. CSS `shield-block-shake`와 같은 값이어야 한다. */
 const SHIELD_BLOCK_SHAKE_MS = 380
-/** 적 슬램이 플레이어에 닿는 순간(슬램 전체 길이의 0.62 지점). 피해·막음 표시가 이 박자에 나간다. */
-const ENEMY_SLAM_IMPACT_MS = 430
-/** 적 슬램 한 번의 전체 길이 — 들어올림 → 뒤로 당김 → 쾅 → 복귀. */
-const ENEMY_SLAM_MS = 700
+/** 적 슬램이 플레이어에 닿는 순간(슬램 전체 길이의 0.68 지점). 피해·막음 표시가 이 박자에 나간다. */
+const ENEMY_SLAM_IMPACT_MS = 530
+/** 적 슬램 한 번의 전체 길이 — 후웅(들어올림·뒤로) → 팍(꽂기) → 복귀. */
+const ENEMY_SLAM_MS = 780
 /**
  * 적이 연달아 때릴 때 다음 적이 움직이기 시작하는 간격.
  *
@@ -139,6 +139,9 @@ const DAMAGE_FLOAT_MS = 1500
 
 /** 적이 재가 되어 흩어지는 길이. CSS `enemy-defeat-ash`와 같은 값이어야 한다. */
 const ENEMY_DEFEAT_ASH_MS = 620
+
+/** 맞은 대상이 흔들리는 길이. CSS `struck-recoil`과 같은 값이어야 한다. */
+const STRUCK_RECOIL_MS = 380
 
 /** 적 체력 수치 롤링 — 전체 길이와 최대 단계 수(많이 깎여도 늘어지지 않게 나눠 센다). */
 const ENEMY_HP_ROLL_MS = 360
@@ -2804,17 +2807,16 @@ export class GameBoardRenderer {
 
     const animation = clone.animate(
       [
-        { transform: 'perspective(900px) translate3d(0,0,0) rotateX(0deg) scale(1)', filter: 'brightness(1)', easing: 'cubic-bezier(0.3, 0, 0.4, 1)' },
-        // 들어올림 — 무게를 싣고 떠오른다.
-        { transform: 'perspective(900px) translate3d(0,-22px,0) rotateX(8deg) scale(1.06)', filter: 'brightness(1.16)', offset: 0.22, easing: 'ease-out' },
-        // 뒤로 당김 — 안쪽으로 물러나며 작아진다(원근으로 거리감을 만든다).
-        { transform: `perspective(900px) translate3d(${(-dx * 0.3).toFixed(1)}px,-38px,-150px) rotateX(15deg) scale(0.94)`, filter: 'brightness(0.9)', offset: 0.44, easing: 'cubic-bezier(0.72, 0, 0.9, 0.24)' },
-        // 쾅 — 앞으로 튀어나오며 깊게 박힌다.
-        { transform: `perspective(900px) translate3d(${dx.toFixed(1)}px,${dy.toFixed(1)}px,190px) rotateX(-14deg) scale(1.18)`, filter: 'brightness(1.5) drop-shadow(0 24px 28px rgba(168, 58, 58, 0.8))', offset: 0.62, easing: 'cubic-bezier(0.16, 0.9, 0.3, 1)' },
-        { transform: `perspective(900px) translate3d(${(dx * 0.18).toFixed(1)}px,${(dy * 0.1).toFixed(1)}px,40px) rotateX(-4deg) scale(1.02)`, filter: 'brightness(1.06)', offset: 0.8 },
+        { transform: 'perspective(900px) translate3d(0,0,0) rotateX(0deg) scale(1)', filter: 'brightness(1)', easing: 'cubic-bezier(0.35, 0, 0.5, 1)' },
+        // 후웅 — 들어올리며 뒤로 길게 물러난다. 이 구간이 길어야 다음 한 방이 무겁다.
+        { transform: 'perspective(900px) translate3d(0,-20px,-60px) rotateX(8deg) scale(0.99)', filter: 'brightness(1.08)', offset: 0.3, easing: 'ease-in-out' },
+        { transform: `perspective(900px) translate3d(${(-dx * 0.28).toFixed(1)}px,-32px,-140px) rotateX(14deg) scale(0.95)`, filter: 'brightness(0.9)', offset: 0.5, easing: 'cubic-bezier(0.8, 0, 0.95, 0.2)' },
+        // 팍 — 짧고 깊게 꽂힌다. 확대는 최소로, 무게는 이동과 그림자로 낸다.
+        { transform: `perspective(900px) translate3d(${dx.toFixed(1)}px,${dy.toFixed(1)}px,120px) rotateX(-12deg) scale(1.07)`, filter: 'brightness(1.34) drop-shadow(0 20px 24px rgba(168, 58, 58, 0.72))', offset: 0.68, easing: 'cubic-bezier(0.16, 0.9, 0.3, 1)' },
+        { transform: `perspective(900px) translate3d(${(dx * 0.16).toFixed(1)}px,${(dy * 0.08).toFixed(1)}px,24px) rotateX(-3deg) scale(1.01)`, filter: 'brightness(1.04)', offset: 0.84 },
         { transform: 'perspective(900px) translate3d(0,0,0) rotateX(0deg) scale(1)', filter: 'brightness(1)' },
       ],
-      { duration: ENEMY_SLAM_MS, easing: 'cubic-bezier(0.2, 0.9, 0.24, 1)', fill: 'forwards' }
+      { duration: ENEMY_SLAM_MS, easing: 'linear', fill: 'forwards' }
     )
 
     window.setTimeout(onImpact, ENEMY_SLAM_IMPACT_MS)
@@ -2904,6 +2906,12 @@ export class GameBoardRenderer {
   animateDamageImpactOnElement(target: HTMLElement | null, amount: number): Promise<void> {
     if (!target || amount <= 0) return Promise.resolve()
     SquareBurst.playOn(target, 'damage', { count: 20, spread: 150, duration: 660 })
+    // 맞은 대상은 흔들린다 — 수치와 파편만 뜨고 카드가 가만히 있으면 "누가 맞았는지"가
+    // 안 읽힌다. 폭탄처럼 적 페이즈를 안 타는 피해도 이 창구를 지나므로 함께 걸린다.
+    target.classList.remove('is-struck-recoil')
+    void target.offsetWidth
+    target.classList.add('is-struck-recoil')
+    window.setTimeout(() => target.classList.remove('is-struck-recoil'), STRUCK_RECOIL_MS)
     return this.animateDamageNumberOnElement(target, amount)
   }
 
@@ -2935,12 +2943,29 @@ export class GameBoardRenderer {
           void target.offsetWidth
           target.classList.add('is-enemy-hit')
           window.setTimeout(() => target.classList.remove('is-enemy-hit'), 420)
-          // 체력 수치가 확 커지며 굴러 내려간다(4→3→2→1→0) — 카드 위에서 바로 읽힌다.
-          this.rollEnemyHealthNumber(target, amount)
+          // 체력 수치가 한 칸씩 굴러 내려간다(4→3→2→1→0) — 카드 위에서 바로 읽힌다.
+          // ★ 기준은 **모델의 현재 체력**이다. 카드에 적힌 글자를 읽으면 안 된다 —
+          //   이 시점의 DOM은 아직 다시 그려지지 않아 **맞기 전 값**일 수 있고,
+          //   거기에 피해를 더하면 실제보다 한 칸 높은 수(3인 적이 4부터)에서 시작한다.
+          const modelHp = this.findCardById(cardId)?.getHealth()
+          if (modelHp !== undefined) this.rollEnemyHealthNumber(target, amount, modelHp)
         }
         return this.animateDamageNumberOnElement(target, amount)
       })
     ).then(() => undefined)
+  }
+
+  /** 카드 id로 모델의 카드를 찾는다 — 연출이 화면 글자가 아니라 실제 수치를 읽게 한다. */
+  private findCardById(cardId: string): Card | null {
+    const lanes = this.currentGameState?.lanes
+    if (!lanes) return null
+    for (const lane of lanes) {
+      for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
+        const card = lane.getCardAtDistance(d)
+        if (card?.id === cardId) return card
+      }
+    }
+    return null
   }
 
   /**
@@ -2950,11 +2975,9 @@ export class GameBoardRenderer {
    * 되짚어 한 칸씩 내려 보여 준다 — 수치가 툭 바뀌면 몇 대 맞아 몇이 깎였는지가
    * 카드 위에서 사라진다. 굴리는 동안 수치를 크게 키워 시선을 붙든다.
    */
-  private rollEnemyHealthNumber(target: HTMLElement, amount: number): void {
+  private rollEnemyHealthNumber(target: HTMLElement, amount: number, finalHp: number): void {
     const valueEl = target.querySelector<HTMLElement>('.stat.hp .stat-value')
     if (!valueEl) return
-    const finalHp = Number(valueEl.textContent)
-    if (!Number.isFinite(finalHp)) return
     const from = finalHp + amount
     // 많이 깎였을 때 한 칸씩 다 세면 늘어진다 — 총 길이를 정해 두고 그 안에서 나눈다.
     const steps = Math.min(amount, ENEMY_HP_ROLL_MAX_STEPS)
