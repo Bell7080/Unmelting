@@ -393,9 +393,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   color: rgba(200, 185, 170, 0.82) !important;
 }
 /* 시련 카드 등장 타이밍 — 순차 진입 */
-.shop-shell--trial .shop-trial-layer > .shop-trial-card:nth-child(1) { animation-delay: 380ms, 1.0s; }
-.shop-shell--trial .shop-trial-layer > .shop-trial-card:nth-child(2) { animation-delay: 520ms, 2.1s; }
-.shop-shell--trial .shop-trial-layer > .shop-trial-card:nth-child(3) { animation-delay: 660ms, 3.0s; }
+.shop-shell--trial .shop-trial-layer > .shop-trial-card:nth-child(1) { animation-delay: 380ms; }
+.shop-shell--trial .shop-trial-layer > .shop-trial-card:nth-child(2) { animation-delay: 520ms; }
+.shop-shell--trial .shop-trial-layer > .shop-trial-card:nth-child(3) { animation-delay: 660ms; }
 .shop-pack-layer {
   justify-content: center;
   gap: clamp(6px, 0.72vw, 10px);
@@ -433,8 +433,6 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
 /* 무료카드 hover는 부채꼴 배치를 유지하되 기울기만 풀고 살짝 확대한다. */
 .shop-free-layer > .shop-relic-card:hover,
 .shop-free-layer > .shop-relic-card:focus-visible {
-  /* 진입은 계속 돌리고 유영만 멈춘다(커서 위 등장 시 투명 고착 방지). */
-  animation-play-state: running, paused;
   /* hover 시에는 부채꼴 각도만 펴고 살짝 확대해 선택 가능 상태를 강조한다. */
   scale: 1.06;
   z-index: 7;
@@ -625,14 +623,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   scale: 1;
   box-shadow: none;
   transform-origin: center bottom;
-  /* Hover scale uses the individual scale property so it composes with the
-     translate/rotate channels used by the float keyframes (transform-based
-     animations can not be overridden by static :hover transforms, which is
-     why scale lives on its own track here). */
+  /* 상시 유영은 제거하고, 선택 가능 여부는 정지 상태의 hover 확대만으로 전달한다. */
   transition: scale 0.18s ease, box-shadow 0.22s ease, filter 0.16s ease;
-  animation:
-    shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both,
-    shop-pack-drift 6.6s ease-in-out 0.55s infinite alternate;
+  animation: shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both;
 }
 .shop-relic-flipper {
   position: relative;
@@ -651,16 +644,13 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   animation: shop-reroll-card-whole-spin var(--shop-reroll-flip-ms, 0.56s) cubic-bezier(0.36, 0.12, 0.58, 0.96) var(--shop-reroll-stagger, 0ms) both;
 }
 /* pack 슬롯 개수(상점 3 / 제단 4)가 바뀌어도 nth-child 하드코딩 없이
-   동일한 등장/유영 스태거를 유지하도록 각 카드가 넘긴 order 변수를 사용한다. */
+   동일한 등장 스태거를 유지하도록 각 카드가 넘긴 order 변수를 사용한다. */
 .shop-pack-layer > .shop-pack-card {
   --shop-pack-enter-delay: calc(500ms + var(--shop-pack-order, 0) * 100ms);
-  --shop-pack-float-delay: calc(1.3s + var(--shop-pack-order, 0) * 0.8s);
-  animation-delay: var(--shop-pack-enter-delay), var(--shop-pack-float-delay);
+  animation-delay: var(--shop-pack-enter-delay);
 }
 .shop-pack-card:hover,
 .shop-pack-card:focus-visible {
-  /* 진입(shop-card-enter)은 계속, 유영(shop-pack-drift)만 멈춘다. 커서 위 등장 시 투명 고착 방지. */
-  animation-play-state: running, paused;
   scale: 1.06;
   box-shadow: none;
   z-index: 6;
@@ -669,11 +659,10 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   filter: saturate(0.82) brightness(0.84);
 }
 /* 소진 — 더 줄 것이 남지 않은 팩. 비싸서 못 사는 것(is-unaffordable)과 달리 다시 열릴 일이
-   없으므로 훨씬 깊게 눌러 두고, 유영/hover 반응도 끊어 살아 있는 타일로 읽히지 않게 한다. */
+   없으므로 훨씬 깊게 눌러 두고 hover 반응도 끊어 살아 있는 타일로 읽히지 않게 한다. */
 .shop-pack-card.is-exhausted {
   filter: saturate(0.12) brightness(0.42);
   cursor: default;
-  animation-play-state: running, paused;
 }
 .shop-pack-card.is-exhausted:hover,
 .shop-pack-card.is-exhausted:focus-visible {
@@ -1240,22 +1229,16 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   min-height: 0;
   cursor: pointer;
   scale: 1;
-  /* Hover lift uses individual scale so it composes with the float
-     animation's translate/rotate channels (transforms set via keyframes
-     can not be overridden by a static :hover transform). */
+  /* 상시 유영은 제거하고, 선택 가능 여부는 정지 상태의 hover 확대만으로 전달한다. */
   transition: scale 0.18s ease, box-shadow 0.22s ease, filter 0.16s ease;
-  animation:
-    shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both,
-    shop-card-float 6.6s ease-in-out 0.55s infinite alternate;
+  animation: shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both;
 }
-/* Cards land AFTER the dim veil settles (~420ms). Per-card enter delays
-   keep the cascade; float delays are staggered so the row doesn't sway in
-   lock-step. */
+/* Cards land AFTER the dim veil settles (~420ms); per-card delays keep the entrance cascade. */
 /* 리롤 앵커가 nth-child(1)이므로 유물 카드는 2·3·4번째 자식에 위치한다. */
-.shop-artifact-layer > .shop-relic-card:nth-child(2) { animation-delay: 460ms, 1.1s; }
-.shop-artifact-layer > .shop-relic-card:nth-child(3) { animation-delay: 560ms, 2.0s; }
-.shop-artifact-layer > .shop-relic-card:nth-child(4) { animation-delay: 660ms, 2.9s; }
-.shop-free-layer > .shop-relic-card { animation-delay: 520ms, 1.6s; }
+.shop-artifact-layer > .shop-relic-card:nth-child(2) { animation-delay: 460ms; }
+.shop-artifact-layer > .shop-relic-card:nth-child(3) { animation-delay: 560ms; }
+.shop-artifact-layer > .shop-relic-card:nth-child(4) { animation-delay: 660ms; }
+.shop-free-layer > .shop-relic-card { animation-delay: 520ms; }
 /* Reroll button now lives inside the artifact card layer, so it uses the same
    card-enter timing beat and no longer pops ahead of relic cards. */
 .shop-reroll-btn {
@@ -1288,19 +1271,6 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   0%   { transform: scale(0.985); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
 }
-/* Idle drift — toned WAY down per feedback ("너무 떠다니는 느낌"). Uses the
-   individual translate/rotate channels so :hover's scale can lift the
-   card without colliding with the animation. */
-@keyframes shop-card-float {
-  0%   { translate: -1px 0; rotate: -0.4deg; }
-  50%  { translate: 1px -1px; rotate: 0.3deg; }
-  100% { translate: -1px 1px; rotate: -0.15deg; }
-}
-@keyframes shop-pack-drift {
-  0%   { translate: 0 0; rotate: -0.25deg; }
-  50%  { translate: 0 -1px; rotate: 0.2deg; }
-  100% { translate: 0 0; rotate: -0.1deg; }
-}
 /* Dim veil — semi-transparent black sheet that descends top-down on top
    of the wax shutter, AFTER the shutter has finished closing.  This is the
    "extra layer" the player asked for: a clean monotone darkening pass that
@@ -1314,13 +1284,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   100% { transform: scaleY(0); opacity: 0; }
 }
 
-/* Hover: pause float + slight scale via the individual scale property so
-   the lift sticks even while the float animation owns the transform track. */
+/* Hover는 상시 움직임 없이 의도적인 선택 피드백만 짧게 보여 준다. */
 .shop-relic-card:hover,
 .shop-relic-card:focus-visible {
-  /* 진입(shop-card-enter)은 계속 돌리고 유영(shop-card-float)만 멈춘다. paused로 둘 다
-     멈추면 카드가 커서 위에서 등장할 때 진입이 opacity:0에서 얼어 투명하게 남았다. */
-  animation-play-state: running, paused;
   scale: 1.06;
   box-shadow: none;
   z-index: 6;
