@@ -116,9 +116,11 @@ export class ResourceTrailFx {
     source: HTMLElement | DOMRect | null,
     target: ResourceTrailTarget,
     count: number,
-    theme: BurstTheme
+    theme: BurstTheme,
+    destinationRect?: DOMRectReadOnly
   ): Promise<void> {
-    const destination = this.findResourceTrailTarget(target)
+    // 판정 시 저장한 목적 좌표가 있으면 현재 HUD DOM을 다시 찾지 않는다.
+    const destination = destinationRect ?? this.findResourceTrailTarget(target)
     if (target === 'hand') return this.animateHandCardTokens(source, destination, count)
     return this.animateResourceIconTokens(source, destination, count, theme, target)
   }
@@ -291,9 +293,10 @@ export class ResourceTrailFx {
     source: DOMRect,
     target: ResourceTrailTarget,
     count: number,
-    theme: BurstTheme
+    theme: BurstTheme,
+    destinationRect?: DOMRectReadOnly
   ): Promise<void> {
-    return this.routeResourceTrail(source, target, count, theme)
+    return this.routeResourceTrail(source, target, count, theme, destinationRect)
   }
 
   /** Fly a resource trail from the center-screen played-card impact point. */
@@ -306,21 +309,22 @@ export class ResourceTrailFx {
   }
 
   /** Fly a square-card target blast from the played-card center toward an affected rail card. */
-  animateTargetBlastFromCenterToCard(cardId: string, theme: BurstTheme): Promise<void> {
-    return this.animateStrikeLob(this.playedCardOrigin(), this.host.findCardElement(cardId), theme)
+  animateTargetBlastFromCenterToCard(cardId: string, theme: BurstTheme, targetRect?: DOMRectReadOnly): Promise<void> {
+    // 호출부가 판정 beat에 저장한 rect를 우선한다. 없을 때만 호환 경로로 현재 DOM을 조회한다.
+    return this.animateStrikeLob(this.playedCardOrigin(), targetRect ?? this.host.findCardElement(cardId), theme)
   }
 
   /**
    * 레시피(조합)가 쏘는 블라스트. 손패는 화면 중앙에 펼쳐진 카드에서 나가지만 레시피는
    * 체인 배너에서 발동하므로, 자원 트레일과 같은 출처를 써야 "무엇이 쐈는지"가 이어진다.
    */
-  animateTargetBlastFromChainToCard(cardId: string, theme: BurstTheme): Promise<void> {
+  animateTargetBlastFromChainToCard(cardId: string, theme: BurstTheme, targetRect?: DOMRectReadOnly): Promise<void> {
     const chainSource =
       document.querySelector<HTMLElement>('#chain-banner .chain-event:last-child') ??
       document.querySelector<HTMLElement>('#chain-banner')
     return this.animateStrikeLob(
       chainSource ?? this.playedCardOrigin(),
-      this.host.findCardElement(cardId),
+      targetRect ?? this.host.findCardElement(cardId),
       theme
     )
   }

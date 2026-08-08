@@ -454,7 +454,9 @@ export class BossFxView {
     await Promise.all(
       hits.map(async (hit, index) => {
         if (index > 0) await new Promise((r) => window.setTimeout(r, index * BOSS_CELL_VOLLEY_STEP_MS))
-        return this.playBossGimmickStrike(hit, source, rollHpDown)
+        // 한 volley에서 첫 발만 장거리 곡사를 완주한다. 후속 발은 같은 출발을 반복하지
+        // 않고 칸 충격으로 이어져, 많은 발도 하나의 빠른 사격으로 읽힌다.
+        return this.playBossGimmickStrike(hit, index === 0 ? source : null, rollHpDown)
       })
     )
     // 피해가 0으로 막힌 beat면 수치 대신 왜 안 들어갔는지를 알린다(리미트 페이지).
