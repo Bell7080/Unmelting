@@ -36,6 +36,25 @@ describe('HandUseIntentQueue', () => {
     expect(cancelled).toEqual(['merged-away:card-missing', 'alive-card:target-missing'])
   })
 
+  it('무효 선두 의도를 걷어 낸 같은 drain에서 다음 유효 의도를 커밋한다', () => {
+    const run = vi.fn()
+    const cancel = vi.fn()
+    const queue = new HandUseIntentQueue(10, {
+      resolveSlot: (uid) => uid === 'gone' ? -1 : 3,
+      isPhaseValid: () => true, isTargetValid: () => true,
+      run, cancel,
+    })
+    queue.enqueue(intent('gone'))
+    queue.enqueue(intent('still-here'))
+
+    expect(queue.drainOne()).toBe(true)
+    expect(cancel).toHaveBeenCalledWith(expect.objectContaining({ uid: 'gone' }), 'card-missing')
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({
+      intent: expect.objectContaining({ uid: 'still-here' }), slotIndex: 3,
+    }))
+    expect(queue.length).toBe(0)
+  })
+
   it('보스 격파 시 남은 큐를 폐기하고 모바일 중복 탭·용량 초과를 막는다', () => {
     const cancel = vi.fn()
     const queue = new HandUseIntentQueue(2, {

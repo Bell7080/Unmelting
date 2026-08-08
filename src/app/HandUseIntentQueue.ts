@@ -52,19 +52,29 @@ export class HandUseIntentQueue {
     return true
   }
 
-  /** 모델 변경: UID·대상·게임 단계를 재검증한 뒤 유효한 맨 앞 의도 하나만 커밋한다. */
+  /**
+   * 모델 변경: UID·대상·게임 단계를 FIFO로 재검증하고 유효한 의도 하나만 커밋한다.
+   * 무효 의도는 같은 호출에서 계속 걷어 내어, 합성으로 사라진 선두 카드가 뒤 큐를 막지 않는다.
+   */
   drainOne(): boolean {
-    const intent = this.items.shift()
-    if (!intent) return false
-    const slotIndex = this.hooks.resolveSlot(intent.uid)
-    let reason: HandIntentCancelReason | null = null
-    if (slotIndex < 0) reason = 'card-missing'
-    else if (!this.hooks.isPhaseValid(intent)) reason = 'phase-changed'
-    else if (!this.hooks.isTargetValid(intent)) reason = 'target-missing'
-    if (reason) this.hooks.cancel(intent, reason)
-    else this.hooks.run({ intent, slotIndex })
-    this.notify()
-    return true
+    let consumed = false
+    while (this.items.length > 0) {
+      const intent = this.items.shift()!
+      consumed = true
+      const slotIndex = this.hooks.resolveSlot(intent.uid)
+      let reason: HandIntentCancelReason | null = null
+      if (slotIndex < 0) reason = 'card-missing'
+      else if (!this.hooks.isPhaseValid(intent)) reason = 'phase-changed'
+      else if (!this.hooks.isTargetValid(intent)) reason = 'target-missing'
+      if (reason) {
+        this.hooks.cancel(intent, reason)
+        continue
+      }
+      this.hooks.run({ intent, slotIndex })
+      break
+    }
+    if (consumed) this.notify()
+    return consumed
   }
 
   /** 모델 변경 없음: 대기 의도를 폐기하고 각 슬롯의 취소 DOM 피드백을 요청한다. */
