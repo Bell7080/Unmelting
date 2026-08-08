@@ -57,7 +57,8 @@ import { RECIPES, type RecipeEffectKind } from '@data/Recipes'
 import { getRelicDef, relicStackFeedback, type CustomRelicProfile, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
 import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
-import { COMBO_TRIGGER_DELAY_MS, GAUGE_TRIGGER_DELAY_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
+import { GAUGE_TRIGGER_DELAY_MS, HAND_RECIPE_EMPHASIS_DELAY_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
+import { HandActionTimeline, type HandActionSnapshot } from '@/app/HandActionTimeline'
 import { HAND_CARD_RARITY } from '@data/ShopPools'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { JOBS } from '@data/Jobs'
@@ -206,6 +207,8 @@ const pendingEventDoorPreviewCard = new Card('event-door-preview', CardType.EVEN
 // 디버그 전용: 이벤트N 커맨드로 스폰된 칸이 클릭될 때 강제 사용할 이벤트 ID.
 let debugForcedEventId: EventId | null = null
 const boardRenderer = new GameBoardRenderer('game-board')
+// 손패 판정과 DOM 연출 채널의 수명을 한 곳에서 추적한다.
+const handActionTimeline = new HandActionTimeline()
 // 거점(촛대) 화면. 기본 부팅은 여전히 직행 인게임이며, `/시작` 명령에서만 깨어난다.
 const hearthScene = new HearthScene()
 // 구역 전환 커튼 — 1F 시작과 30/60/90F 보스 시련 종료 후 상단에서 슬라이드 인/아웃.
@@ -842,6 +845,8 @@ async function playHandTargetBlasts(
 ): Promise<void> {
   const uniqueIds = [...new Set(cardIds)].filter(Boolean).filter((id) => !skipsTileBlastForBossCell(id))
   if (uniqueIds.length === 0) return
+  // 판정 직후의 좌표를 불변 값으로 잡는다. 뒤 카드 render가 노드를 교체해도 이 beat는 흔들리지 않는다.
+  const targetRects = new Map(uniqueIds.map((id) => [id, boardRenderer.findCardElement(id)?.getBoundingClientRect()]))
   // 대상이 많을수록 간격을 좁힌다 — 필드 전체(9칸)까지 같은 간격으로 쏘면 마지막 발이
   // 반 박자 뒤에 떨어져 한 방의 광역기가 늘어진 연사로 읽힌다.
   const stagger = Math.max(
@@ -852,8 +857,8 @@ async function playHandTargetBlasts(
     uniqueIds.map(async (cardId, index) => {
       if (index > 0) await wait(index * stagger)
       return origin === 'chain'
-        ? boardRenderer.animateTargetBlastFromChainToCard(cardId, theme)
-        : boardRenderer.animateTargetBlastFromCenterToCard(cardId, theme)
+        ? boardRenderer.animateTargetBlastFromChainToCard(cardId, theme, targetRects.get(cardId))
+        : boardRenderer.animateTargetBlastFromCenterToCard(cardId, theme, targetRects.get(cardId))
     })
   )
 }
@@ -2279,6 +2284,7 @@ document.addEventListener('shopClose', () => {
 
 /** Click on a hand slot. Plain click = use single (or arm targeting). */
 async function handleHandSlotClick(slotIndex: number): Promise<void> {
+  // 판정 커밋 진입점: 타깃 선택이 끝난 카드만 applyHandSingle의 동기 판정 구간으로 보낸다.
   if (!gameActive) return
   boardRenderer.clearEnaHintPulses()
   const character = gameState.character
@@ -2335,6 +2341,7 @@ function shouldSuppressRegroupAfterClear(removedCount: number): boolean {
  *  이동 애니메이션과 합성(is-entering) 애니메이션이 같은 렌더에서 충돌해 순간이동처럼 보이던
  *  문제를 막는다. 합성 대기 카드가 없으면 즉시 반환해 일반 사용 템포를 늦추지 않는다. */
 async function resolveDeferredHandMerges(): Promise<void> {
+  // 보드 안정화 단계: 모델 합성은 이동 DOM beat가 끝난 뒤 실제 규칙 순서대로 한 번만 수행한다.
   if (!HandSystem.hasPendingAutoMerge(gameState.character)) return
   // 빈 슬롯을 메우는 이동/낙하 연출(animateMovedHandSlots ~460ms)이 끝나길 기다린다.
   await wait(500)
@@ -2354,6 +2361,7 @@ async function applyHandSingle(
   slotIndex: number,
   target?: HandTarget
 ): Promise<void> {
+  // 판정 커밋 단계: useSingle이 카드 효과·소비·규칙 체인을 동기로 확정한 뒤 연출 스냅샷을 만든다.
   inputLocked = true
   // Capture the card def BEFORE useSingle mutates the slot — we need the
   // category to pick a burst theme, and the slot is empty after consumption.
@@ -2413,12 +2421,6 @@ async function applyHandSingle(
   // category burst. This makes the hand action read like a card being played
   // instead of a slot-local pop.
   const handUseTheme = usedDef ? burstThemeForHandCard(usedDef) : null
-  if (handUseTheme) {
-    // Start the flight clone, then continue immediately. The model hand card is
-    // already consumed, so the compact slot can disappear on the next render
-    // while the larger played-card ghost lingers over the field.
-    void boardRenderer.animateHandCardUse(slotIndex, handUseTheme)
-  }
   // 자해는 공격 결과를 보여 주기 전에 결제한다. 카드 비행과 체력 감소를 같은 박자에
   // 시작해야 "적을 때린 뒤 받는 반격"이 아니라 "체력을 내고 카드를 쓴다"로 읽힌다.
   if (result.selfDamage && result.selfDamage > 0) {
@@ -2712,7 +2714,9 @@ async function applyHandSingle(
   let demonBossPending = false
   let recipeSafety = 32
   while (HandSystem.hasPendingRecipe(chain, gameState) && recipeSafety-- > 0) {
-    await wait(COMBO_TRIGGER_DELAY_MS)
+    // 레시피 루프는 강조가 필요한 별도 판정 커밋이며, 각 결과 뒤에 보드 안정화를 순서대로 둔다.
+    // 기존 440ms는 모든 손패가 아니라 실제 레시피 강조 조건에서만 유지한다.
+    await wait(HAND_RECIPE_EMPHASIS_DELAY_MS)
     const beforeRecipeFreeze = snapshotFieldFreezeState()
     const beforeRecipeHealth = snapshotFieldHealthState()
     // Capture pre-recipe field so we can score whatever the recipe removes.

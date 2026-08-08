@@ -25,6 +25,31 @@ describe('HandSystem.enqueueDrop (획득 공통 정리 경로)', () => {
 })
 
 describe('HandSystem combo-count cards', () => {
+  it('연속 판정을 먼저 커밋해도 기존 한 장씩 순차 사용한 최종 모델과 같다', () => {
+    /** 같은 입력 덱을 만드는 헬퍼로 두 실행의 난수/보드 차이를 제거한다. */
+    const prepare = (): { gameState: GameState; chain: ReturnType<typeof HandSystem.newChain> } => {
+      const gameState = new GameState()
+      gameState.character.addHandCard(DropSystem.makeCard('coin'))
+      gameState.character.addHandCard(DropSystem.makeCard('ember'))
+      return { gameState, chain: HandSystem.newChain() }
+    }
+    const sequential = prepare()
+    HandSystem.useSingle(sequential.gameState, sequential.chain, 0)
+    // 기존 UI 정산 beat가 사이에 있어도 모델에는 추가 변경이 없다는 기준 실행이다.
+    HandSystem.useSingle(sequential.gameState, sequential.chain, 0)
+
+    const committed = prepare()
+    // 새 타임라인은 연출을 기다리지 않고 두 판정을 같은 호출 흐름에서 확정한다.
+    HandSystem.useSingle(committed.gameState, committed.chain, 0)
+    HandSystem.useSingle(committed.gameState, committed.chain, 0)
+
+    // uid는 전역 생성 순서라 두 fixture 사이에 달라진다. 규칙 상태인 정의/합성 여부만 비교한다.
+    expect(committed.gameState.character.hand.map(({ defId, merged }) => ({ defId, merged })))
+      .toEqual(sequential.gameState.character.hand.map(({ defId, merged }) => ({ defId, merged })))
+    expect(committed.gameState.character.candle).toBe(sequential.gameState.character.candle)
+    expect(committed.chain.sequence).toEqual(sequential.chain.sequence)
+  })
+
   it('records a normal 카드 as one played card plus one explicit gauge count', () => {
     const gameState = new GameState()
     const chain = HandSystem.newChain()
