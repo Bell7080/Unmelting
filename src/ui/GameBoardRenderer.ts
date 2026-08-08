@@ -519,6 +519,16 @@ export class GameBoardRenderer {
     this.clearSelection()
   }
 
+  /** DOM 전용: 무효화된 예약 카드가 아직 손패에 있으면 짧은 밀랍색 취소 beat를 재생한다. */
+  playHandIntentCancelled(uid: string): void {
+    const slot = this.boardElement.querySelector<HTMLElement>(`.hand-slot[data-hand-uid="${CSS.escape(uid)}"]`)
+    if (!slot) return
+    slot.classList.remove('is-hand-intent-cancelled')
+    void slot.offsetWidth
+    slot.classList.add('is-hand-intent-cancelled')
+    window.setTimeout(() => slot.classList.remove('is-hand-intent-cancelled'), 240)
+  }
+
 
   render(gameState: GameState, scorePanel: ScorePanelState): void {
     // 렌더 1회를 세는 토큰. 한 번의 render에서 보스 타일이 여러 개 그려질 때
@@ -1696,7 +1706,7 @@ export class GameBoardRenderer {
       }
       const def = getHandCardDef(card.defId)
       const isArming = targeting && targeting.slotIndex === i
-      const queueMarker = scorePanel.handQueue?.find((marker) => marker.slotIndex === i)
+      const queuedOrder = scorePanel.queuedHandOrder?.[card.uid]
       const readyRecipes = scorePanel.chainHints?.recipeReadyBySlot?.[i] ?? []
       const recipeReady = readyRecipes.length > 0
       const demonReady = readyRecipes.some((r) => r.id === 'demon-summon')
@@ -1740,8 +1750,7 @@ export class GameBoardRenderer {
         RARITY_CLASS_BY_TIER[HAND_CARD_RARITY[card.defId] ?? 'common'],
         merged,
         isArming ? 'is-arming-target' : '',
-        queueMarker ? 'is-hand-queued' : '',
-        queueMarker?.cancelling ? 'is-hand-cancelled' : '',
+        queuedOrder ? 'is-hand-queued' : '',
         recipeReady ? 'is-recipe-ready' : '',
         // Lower hand slots sit close to the viewport bottom, so their hover
         // previews are anchored upward to keep the full card readable.
@@ -1781,6 +1790,7 @@ export class GameBoardRenderer {
                   aria-label="${def.name}: ${ariaDesc}${recipeReadyTitle ? ` · ${recipeReadyTitle}` : ''}">
             ${tripleMergeCopies}
             ${tripleFoil}
+            ${queuedOrder ? `<span class="hand-queue-order" aria-label="대기 순번 ${queuedOrder}">${queuedOrder}</span>` : ''}
             ${demonReady ? `<span class="recipe-ready-mark recipe-ready-mark--demon" aria-hidden="true">✦</span>` : ''}
             ${hasOtherRecipes ? `<span class="recipe-ready-mark${demonReady ? ' is-has-demon' : ''}" aria-hidden="true">✦</span>` : ''}
             ${queueMarker ? `<span class="hand-queue-order" aria-label="대기 순번 ${queueMarker.order}">${queueMarker.order}</span>` : ''}

@@ -23,6 +23,7 @@ import { ShopFlowManager, ONBOARDING_BANNED_CARDS } from '@/app/ShopFlowManager'
 import { EventFlowManager } from '@/app/EventFlowManager'
 import { CompanionDirector, BARK_IMPORTANCE } from '@/app/CompanionDirector'
 import { RelicEffectsManager } from '@/app/RelicEffectsManager'
+import { HandUseIntentQueue, type HandUseIntent } from '@/app/HandUseIntentQueue'
 import type { PlayerResourceSnapshot, ResourceTrailSource, TrailResourceKind } from '@/app/FeedbackTypes'
 import { discardBossCellStrikes, drainBossCellStrikes } from '@/app/BossCellFeedback'
 import { HandActionTimeline, type HandIntentTarget } from '@/app/HandActionTimeline'
@@ -207,8 +208,6 @@ const pendingEventDoorPreviewCard = new Card('event-door-preview', CardType.EVEN
 // 디버그 전용: 이벤트N 커맨드로 스폰된 칸이 클릭될 때 강제 사용할 이벤트 ID.
 let debugForcedEventId: EventId | null = null
 const boardRenderer = new GameBoardRenderer('game-board')
-// 손패 판정과 DOM 연출 채널의 수명을 한 곳에서 추적한다.
-const handActionTimeline = new HandActionTimeline()
 // 거점(촛대) 화면. 기본 부팅은 여전히 직행 인게임이며, `/시작` 명령에서만 깨어난다.
 const hearthScene = new HearthScene()
 // 구역 전환 커튼 — 1F 시작과 30/60/90F 보스 시련 종료 후 상단에서 슬라이드 인/아웃.
@@ -270,7 +269,7 @@ const eventDemonBubble = new SpeechBubble({
   maxWidth: 520,
 })
 let gameActive = true
-// Locks are split by responsibility: animation never doubles as a game-rule gate.
+// 규칙 잠금은 용도별로 분리한다. 손패 연출 재생 여부는 어느 플래그에도 포함하지 않는다.
 let boardActionLocked = false
 let handCommitLocked = false
 let modalLocked = false
@@ -354,11 +353,60 @@ function clearChainTimeline(): void {
 /** Currently armed targeted hand card: waits for a board click to consume.
  *  Keep `merged` here as well as in GameBoardRenderer so re-renders never
  *  fall back to the base targeting rule while a triple card is armed. */
-let pendingHandTarget: { uid: string; defId: HandCardId; merged?: boolean } | null = null
-// The cap follows the maximum number of visible hand slots.
-const handTimeline = new HandActionTimeline(10)
-let handSettlementCount = 0
-const cancelledHandUids = new Set<string>()
+let pendingHandTarget: { uid: string; slotIndex: number; defId: HandCardId; merged?: boolean } | null = null
+let queuedHandIntents: readonly HandUseIntent[] = []
+
+/** 현재 필드에서 ID를 다시 찾아, 예약 당시 객체 참조가 렌더/정리 뒤 엇갈리지 않게 한다. */
+function findCurrentHandTarget(intent: HandUseIntent): HandTarget | undefined {
+  if (!intent.target) return undefined
+  const lane = gameState.getLane(intent.target.laneIndex)
+  const card = lane?.getCardAtDistance(intent.target.distance)
+  if (!card || card.id !== intent.target.cardId) return undefined
+  return {
+    laneIndex: intent.target.laneIndex,
+    distance: intent.target.distance,
+    card,
+    gimmickCellIndex: intent.target.bossGimmickCellIndex,
+  }
+}
+
+/** 판정 하나가 끝날 때마다 다음 UID를 재검증한다. 비동기 연출은 큐의 유효성 근거가 아니다. */
+async function runQueuedHandIntent(intent: HandUseIntent, slotIndex: number): Promise<void> {
+  handCommitLocked = true
+  try {
+    await applyHandSingle(slotIndex, findCurrentHandTarget(intent))
+  } finally {
+    handCommitLocked = false
+    if (gameState.isGameOver || bossController.postPhaseHandLocked) handIntentQueue.clear()
+    else handIntentQueue.drainOne()
+  }
+}
+
+const handIntentQueue = new HandUseIntentQueue(gameState.character.handMax, {
+  resolveSlot: (uid) => gameState.character.hand.findIndex((card) => card.uid === uid),
+  isPhaseValid: () => {
+    modalLocked = shopFlow.isOpen()
+    postBossLocked = bossController.postPhaseHandLocked
+    return gameActive && !gameState.isGameOver && !modalLocked && !postBossLocked
+  },
+  isTargetValid: (intent) => !intent.target || findCurrentHandTarget(intent) !== undefined,
+  run: ({ intent, slotIndex }) => { void runQueuedHandIntent(intent, slotIndex) },
+  cancel: (intent) => boardRenderer.playHandIntentCancelled(intent.uid),
+  changed: (queued) => {
+    queuedHandIntents = queued
+    // 큐 순번은 렌더 상태이므로 모델 판정과 별도로 즉시 갱신한다.
+    if (gameActive) render()
+  },
+})
+
+/** 모델 변경 없음: 중복 탭을 거부하고, idle이면 즉시 첫 판정을 시작한다. */
+function enqueueHandIntent(intent: HandUseIntent): void {
+  if (!handIntentQueue.enqueue(intent)) {
+    boardRenderer.playHandIntentCancelled(intent.uid)
+    return
+  }
+  if (!handCommitLocked) handIntentQueue.drainOne()
+}
 
 let score = 0
 let coins = 0
@@ -1030,8 +1078,7 @@ const shopFlow: ShopFlowManager = new ShopFlowManager({
   forcedTrialCards: FORCED_TRIAL_CARDS,
   getChain: () => chain,
   clearChainTimeline,
-  // Shop/trial overlays own modal input; keep this distinct from board animation state.
-  setInputLocked: (v) => { boardActionLocked = v; modalLocked = v },
+  setInputLocked: (v) => { boardActionLocked = v },
   render,
   recordNotice,
   wait,
@@ -1754,7 +1801,6 @@ function resetForNewRun(): void {
   handCommitLocked = false
   modalLocked = false
   postBossLocked = false
-  handTimeline.clear()
   chain = HandSystem.newChain()
   pendingHandTarget = null
   // 동료(에나)의 런 한정 상태(의지/각성/턴 흐름) 초기화. 학습 가중치는 런 간 유지.
@@ -2007,6 +2053,12 @@ function buildChainHints() {
 }
 
 function render(): void {
+  // 무장 상태의 단일 출처는 UID다. 슬롯은 DOM 표시 직전에만 현재 손패에서 다시 계산한다.
+  if (pendingHandTarget) {
+    const currentSlot = gameState.character.hand.findIndex((card) => card.uid === pendingHandTarget!.uid)
+    if (currentSlot < 0) pendingHandTarget = null
+    else pendingHandTarget = { ...pendingHandTarget, slotIndex: currentSlot }
+  }
   const tier = turnManager.getEmberTier()
   // 불씨가 회복되면 적 공격력 보너스가 줄어들어야 하므로 매 렌더마다 필드 적을 동기화한다.
   // (HP는 불변이라 회복으로 적이 죽지 않는다. 증가 연출은 감소 턴 경로에서만 별도 처리.)
@@ -2026,15 +2078,8 @@ function render(): void {
     emberDecayCountdown: gameState.character.emberDecayCountdown,
     vignetteIntensity: EmberSystem.getVignetteIntensity(tier),
     chainHints: buildChainHints(),
-    // UID remains authoritative; only this render boundary projects it to a mutable slot.
-    pendingHandTarget: pendingHandTarget ? (() => {
-      const slotIndex = gameState.character.hand.findIndex((card) => card.uid === pendingHandTarget?.uid)
-      return slotIndex < 0 ? null : { slotIndex, defId: pendingHandTarget.defId, merged: pendingHandTarget.merged }
-    })() : null,
-    handQueue: gameState.character.hand.flatMap((card, slotIndex) => {
-      const order = handTimeline.orderOf(card.uid)
-      return order === null ? [] : [{ slotIndex, order, cancelling: cancelledHandUids.has(card.uid) }]
-    }),
+    pendingHandTarget,
+    queuedHandOrder: Object.fromEntries(queuedHandIntents.map((intent, index) => [intent.uid, index + 1])),
     // 레일 상단 예고선은 화면 밖에서 다음에 실제로 들어올 리필 카드를 미리 보여준다.
     refillPreviewCards: buildRailRefillPreviewCards(),
   })
@@ -2382,7 +2427,8 @@ async function handleHandSlotClick(slotIndex: number, requestedUid?: string): Pr
 
   // 상점/제단 중에는 동전 손패만 사용 허용 — 턴·체인 없이 화폐만 지급하고 상점 표시를 갱신한다.
   const shopCoinUse = shopFlow.isOpen() && card.defId === 'coin'
-  if ((modalLocked || postBossLocked) && !shopCoinUse) return
+  // 진행 중 손패 판정만 다음 손패 예약을 허용한다. 보드/모달/턴 경계 잠금은 그대로 닫힌다.
+  if (boardActionLocked && !handCommitLocked && !shopCoinUse) return
   // 보스 격파 후 보상·시련 단계 동안 손패 사용 차단(사용자 요청). 상점 동전은 예외.
   if (bossController.postPhaseHandLocked && !shopCoinUse) return
 
@@ -2408,13 +2454,15 @@ async function handleHandSlotClick(slotIndex: number, requestedUid?: string): Pr
       render()
       return
     }
-    pendingHandTarget = { uid: card.uid, defId: def.id, merged: card.merged === true }
-    boardRenderer.setHandTargetingMode({ slotIndex, defId: def.id, merged: card.merged === true })
+    pendingHandTarget = { uid: card.uid, slotIndex, defId: def.id, merged: card.merged === true }
+    boardRenderer.setHandTargetingMode(pendingHandTarget)
     render()
     return
   }
 
-  enqueueHandIntent(card)
+  enqueueHandIntent({
+    uid: card.uid, defId: card.defId, merged: card.merged === true, requestedAt: performance.now(),
+  })
 }
 
 /** Broad clears get the opening-board mercy rule: the freshly rebuilt front
@@ -2448,6 +2496,7 @@ async function applyHandSingle(
   slotIndex: number,
   target?: HandTarget
 ): Promise<void> {
+  // 판정 커밋 단계: useSingle이 카드 효과·소비·규칙 체인을 동기로 확정한 뒤 연출 스냅샷을 만든다.
   boardActionLocked = true
   // Capture the card def BEFORE useSingle mutates the slot — we need the
   // category to pick a burst theme, and the slot is empty after consumption.
@@ -2596,8 +2645,11 @@ async function applyHandSingle(
   if (result.blackCandleCounterGain && bossController.eventState) {
     bossController.eventState.demonCandleCounter += result.blackCandleCounterGain
   }
-  pendingHandTarget = null
-  boardRenderer.setHandTargetingMode(null)
+  // 앞 카드 연출 중 사용자가 뒤 카드를 무장했다면 그 UID의 선택 상태는 지우지 않는다.
+  if (!pendingHandTarget || pendingHandTarget.uid === usedCard?.uid) {
+    pendingHandTarget = null
+    boardRenderer.setHandTargetingMode(null)
+  }
 
   // 손거울 트리플: 이전 손패 복제 로그를 남긴다.
   if (result.mirrorCopiedDefId) {
@@ -3024,7 +3076,7 @@ async function applyHandSingle(
     await boardRenderer.closeDemonCurtain()
     await bossController.runDemonSummon()
     // 보스 전투·보상·시련 완료 후 입력 복귀.
-    setTimeout(() => { boardActionLocked = false }, 320)
+    setTimeout(() => { if (!handCommitLocked) boardActionLocked = false }, 320)
     return
   }
 
@@ -3034,7 +3086,7 @@ async function applyHandSingle(
   // 보스전 체인은 손패 사용으론 끊지 않는다 — 직접 타격(applyBoardAction) 시에만 리셋.
   // 콤보 배너는 applyPostHandEffect 내 조합식 발동 후 buildChainHints로 갱신이 오므로 별도 갱신 불필요.
   setTimeout(() => {
-    boardActionLocked = false
+    if (!handCommitLocked) boardActionLocked = false
   }, 320)
 }
 
@@ -3491,8 +3543,7 @@ const eventFlow = new EventFlowManager({
     get score() { return score }, set score(v) { score = v },
     get scorePulseKey() { return scorePulseKey }, set scorePulseKey(v) { scorePulseKey = v },
   },
-  // Event curtains are modal and invalidate hand interaction until fully closed.
-  setInputLocked: (v) => { boardActionLocked = v; modalLocked = v },
+  setInputLocked: (v) => { boardActionLocked = v },
   render,
   wait,
   recordNotice,
@@ -3518,7 +3569,7 @@ const eventFlow = new EventFlowManager({
  * extinguished tiers the enemy phase fires before the player phase.
  */
 async function handleCardAction(e: Event): Promise<void> {
-  if (!gameActive || boardActionLocked || modalLocked || postBossLocked || handTimeline.length > 0 || handSettlementCount > 0) return
+  if (!gameActive || (boardActionLocked && !(handCommitLocked && pendingHandTarget))) return
   // 에나가 가리키던 강조는 플레이어가 먼저 움직이면 그 자리에서 끊는다 — 이미 고른 뒤에도
   // 계속 맥동하면 "아직 여길 봐"로 읽혀 방금 한 선택과 어긋난다.
   boardRenderer.clearEnaHintPulses()
@@ -3535,13 +3586,15 @@ async function handleCardAction(e: Event): Promise<void> {
     pendingHandTarget = null
     boardRenderer.setHandTargetingMode(null)
     // 보스 위 칸 기믹 격자를 겨눴다면 그 칸까지 넘겨 칸 배율이 손패 피해에도 걸리게 한다.
-    const armedCard = gameState.character.hand.find((handCard) => handCard.uid === armed.uid)
-    if (!armedCard) { showHandIntentCancellation(armed.uid); return }
-    enqueueHandIntent(armedCard, {
-      cardId: card.id,
-      laneIndex,
-      distance,
-      gimmickCellIndex: detail.bossGimmickCellIndex,
+    enqueueHandIntent({
+      uid: armed.uid,
+      defId: armed.defId,
+      merged: armed.merged === true,
+      requestedAt: performance.now(),
+      target: {
+        cardId: card.id, laneIndex, distance,
+        bossGimmickCellIndex: detail.bossGimmickCellIndex,
+      },
     })
     return
   }

@@ -915,6 +915,35 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   outline-offset: -2px;
   animation: hand-arm-pulse 1.1s ease-in-out infinite;
 }
+
+/* 예약 표시는 기존 촛불 팔레트의 가는 잔광만 쓴다. 현대적인 진행 막대/네온은 피한다. */
+.hand-slot.is-hand-queued > button {
+  box-shadow: 0 0 0 1px rgba(239, 183, 103, 0.72), 0 0 8px rgba(183, 112, 49, 0.3);
+}
+
+.hand-queue-order {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  min-width: 16px;
+  color: #f1c27d;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+  text-shadow: 0 1px 2px #24130d;
+  pointer-events: none;
+}
+
+/* 무효 예약은 밀랍이 식듯 짧게 흔들리고 테두리가 꺼진다. */
+.hand-slot.is-hand-intent-cancelled > button {
+  animation: hand-intent-cancel 220ms ease-out both;
+}
+
+@keyframes hand-intent-cancel {
+  25% { transform: translateX(-3px); box-shadow: 0 0 0 1px rgba(213, 164, 92, 0.7); }
+  55% { transform: translateX(3px); }
+  100% { transform: translateX(0); box-shadow: 0 0 0 1px transparent; }
+}
 @keyframes hand-arm-pulse {
   0%, 100% { box-shadow: 0 0 0 rgba(255, 215, 120, 0); }
   50% { box-shadow: 0 0 14px rgba(255, 215, 120, 0.55); }
