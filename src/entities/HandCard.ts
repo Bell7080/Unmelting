@@ -55,7 +55,7 @@ export type HandCardId =
   | 'garden-scissors'
   | 'ritual-candle'
   | 'black-candle'
-  // 제물(sacrifice) 축 손패 — 바늘: 자해 딜+처치 회복 씨앗 / 부두 인형: 자해로 보물·함정 조작
+  // 제물(sacrifice) 축 손패 — 바늘: 자해+피해 씨앗 / 부두 인형: 자해로 보물·함정 조작
   //                         / 단두대: 대량 자해 필드 전체 피해 펌프.
   | 'needle'
   | 'voodoo-doll'

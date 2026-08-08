@@ -557,14 +557,13 @@ export class CardFaceRenderer {
         : (enhancements?.singleBonus['blade-shard'] ?? 0)
       return `칼날 파편 ${throws}발 투척 · 발당 ${atkDmgHtml(atk, 0.5, 1, b)}`
     }
-    // 바늘: 단일/트리플 모두 발당 (0.5공+1) — 트리플은 같은 피해를 3발 나눠 던진다(모닥불과 같은 회복 표기).
+    // 바늘: 단일/트리플 모두 발당 (1.0공+1) — 트리플은 같은 피해를 3발 나눠 던진다(회복 없음).
     if (id === 'needle') {
       const b = merged ? (enhancements?.tripleBonus['needle'] ?? 0) : (enhancements?.singleBonus['needle'] ?? 0)
-      const healVal = merged ? 5 + b : 3 + b
-      const dmg = atkDmgHtml(atk, 0.5, 1, b)
+      const dmg = atkDmgHtml(atk, 1, 1, b)
       return merged
-        ? `자해 2 · 필드 랜덤 적 3장 ${dmg} · 처치 시 체력 +${healVal}`
-        : `자해 1 · 필드 랜덤 적 1장 ${dmg} · 처치 시 체력 +${healVal}`
+        ? `자해 2 · 필드 랜덤 적 3장 ${dmg}`
+        : `자해 1 · 필드 랜덤 적 1장 ${dmg}`
     }
     // 단두대: 대량 자해 펌프 — 필드 전체 확정 피해라 다른 ATK 카드와 같은 합산/수식 전환을 쓴다.
     if (id === 'guillotine') {

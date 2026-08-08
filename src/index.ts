@@ -2584,16 +2584,6 @@ async function applyHandSingle(
       await playPlayerGainTrails(killedEnemySource, beforeBonfireResources)
     }
   }
-  // 바늘: 자해 딜로 적을 처치했을 때 체력을 회복한다(모닥불과 동일 경로).
-  if (result.needleHealOnKill && result.needleHealOnKill > 0) {
-    const enemiesKilled = result.removedFieldCards.filter((r) => r.type === CardType.ENEMY).length
-    if (enemiesKilled > 0) {
-      const beforeNeedleResources = snapshotPlayerResources()
-      gameState.character.heal(result.needleHealOnKill)
-      await playPlayerGainTrails(killedEnemySource, beforeNeedleResources)
-    }
-  }
-
   // Prepare the rail immediately after the single card effect. Recipes should
   // resolve against a compacted/refilled/front-regrouped board, preventing holes
   // after effects such as 한 걸음씩 or 밀매 remove cards from the field.

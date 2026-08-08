@@ -96,8 +96,6 @@ export interface HandUseResult {
   teapotExtraHits?: { damage: number; totalCount: number }
   /** 모닥불: 처치가 일어났을 때 index.ts가 적용할 체력 회복량. */
   bonfireHealOnKill?: number
-  /** 바늘: 자해 딜로 처치가 일어났을 때 index.ts가 적용할 체력 회복량. */
-  needleHealOnKill?: number
   /** 검은 양초: 사용 시 악마 보스 피해 카운터를 증가시킬 양. 보스가 없을 때는 무시한다. */
   blackCandleCounterGain?: number
   /** 정원 가위: 실제로 수확된 꽃 목록. index.ts는 이 카드들을 removedFieldCards의
@@ -361,12 +359,6 @@ export class HandSystem {
         ? (card.merged
             ? 5 + (gs.enhancements.tripleBonus['bonfire'] ?? 0)
             : 3 + (gs.enhancements.singleBonus['bonfire'] ?? 0))
-        : undefined,
-      // 바늘: 자해 딜로 처치가 나면 단일 +3 / 트리플 +5 회복(index.ts가 removedFieldCards로 판정).
-      needleHealOnKill: card.defId === 'needle'
-        ? (card.merged
-            ? 5 + (gs.enhancements.tripleBonus['needle'] ?? 0)
-            : 3 + (gs.enhancements.singleBonus['needle'] ?? 0))
         : undefined,
       // 검은 양초: 사용 시 악마 보스 카운터 증가량을 전달 (단일+2, 트리플+6).
       blackCandleCounterGain: card.defId === 'black-candle'
@@ -979,8 +971,8 @@ export class HandSystem {
         // 복귀(return-to-hand)는 use()에서 처리. 피해는 book-of-flames와 동일하게 누적.
         return HandSystem.applyBlackCandle(gs, target, 2, 2)
       case 'needle':
-        // 자해 1은 selfDamageFor, 처치 회복은 needleHealOnKill로 처리. 무작위 단일 피해만 적용.
-        return HandSystem.damageRandomFieldEnemy(gs, Math.floor(0.5 * c.damage) + 1 + bonus)
+        // 자해 1은 selfDamageFor. 자해를 대가로 적을 잡는 카드라 자해+피해만 남긴다(회복 없음).
+        return HandSystem.damageRandomFieldEnemy(gs, Math.floor(1 * c.damage) + 1 + bonus)
       case 'voodoo-doll':
         // 자해 2는 selfDamageFor. 선택 1칸이 보물이면 수확, 함정이면 제거.
         return HandSystem.applyVoodooDoll(gs, c, target)
@@ -1160,10 +1152,11 @@ export class HandSystem {
         // 트리플: 자해 4(selfDamageFor), 카운터 +6(HandUseResult), 복귀(use()). 피해 누적.
         return HandSystem.applyBlackCandle(gs, target, 6, 6)
       case 'needle': {
-        // 자해 2는 selfDamageFor, 처치 회복은 needleHealOnKill. 무작위 대상에 3발 연속 타격.
-        const dmg = Math.floor(0.5 * c.damage) + 1 + bonus
+        // 자해 2는 selfDamageFor. 단일과 같은 위력으로 무작위 3발(회복 없음) — 트리플 보너스는
+        // 배율이 아니라 '3발'이다.
+        const dmg = Math.floor(1 * c.damage) + 1 + bonus
         for (let i = 0; i < 3; i++) HandSystem.damageRandomFieldEnemy(gs, dmg)
-        return `자해 2 · 바늘 3발 (0.5공+1)피해`
+        return `자해 2 · 바늘 3발 (1.0공+1)피해`
       }
       case 'voodoo-doll': {
         // 자해 2는 selfDamageFor. 트리플은 필드 전체 보물 수확 + 함정 제거.
@@ -1601,7 +1594,7 @@ export class HandSystem {
   }
 
   /** Open one random treasure chest and convert its width into item drops. */
-  /** 바늘: 필드의 살아있는 적/보스 중 무작위 1체에게 amount 피해. 처치 시 제거(회복은 needleHealOnKill). */
+  /** 바늘: 필드의 살아있는 적/보스 중 무작위 1체에게 amount 피해. 처치 시 제거. */
   private static damageRandomFieldEnemy(gs: GameState, amount: number): string {
     const living: { card: Card; distance: number }[] = []
     const seen = new Set<Card>()

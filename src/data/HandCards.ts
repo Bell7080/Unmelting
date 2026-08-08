@@ -601,16 +601,16 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     metaRequired: false,
     runLocked: false,
   },
-  // 바늘: 제물 축 씨앗 손패. 자해 1로 필드 랜덤 적을 찌르고, 그 피해로 처치 시 체력을 회복(모닥불 참고).
+  // 바늘: 제물 축 씨앗 손패. 자해를 대가로 적을 잡는 것이 전부라 자해+피해만 남긴다(회복 없음).
   needle: {
     id: 'needle',
     name: '바늘',
     category: 'attack',
     synergyTags: ['sacrifice'],
     // 피해 근사 — 무작위 대상이라 확정 처치 계산엔 쓰지 않는다(deterministic:false). 트리플은 3발 근사.
-    damageProfile: { base: { atkMult: 0.5, flat: 1 }, triple: { atkMult: 1.5, flat: 3 }, deterministic: false },
-    description: '자해 1 · 필드 랜덤 적 1장 (0.5공+1)피해 · 처치 시 체력 +3',
-    tripleDescription: '자해 2 · 필드 랜덤 적 3장 (0.5공+1)피해 · 처치 시 체력 +5',
+    damageProfile: { base: { atkMult: 1, flat: 1 }, triple: { atkMult: 3, flat: 3 }, deterministic: false },
+    description: '자해 1 · 필드 랜덤 적 1장 (1.0공+1)피해',
+    tripleDescription: '자해 2 · 필드 랜덤 적 3장 (1.0공+1)피해',
     targeting: {
       base: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'random', zone: 'field', filter: 'enemy', countLimit: 3 },
