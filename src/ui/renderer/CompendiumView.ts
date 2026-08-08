@@ -292,7 +292,7 @@ export class CompendiumView {
           name: known ? '덤불' : '???',
           tag: `${span}칸`,
           chips: known ? [{ icon: sword, value: bushDamage[span], tone: 'atk' }] : [],
-          note: known && span === 1 ? '닿으면 소량 피해만 주는 소프트 함정. 온보딩 축약형.' : undefined,
+          note: known && span === 1 ? '닿으면 소량 피해만 주는 소프트 함정. 모험 초반의 축약형.' : undefined,
           extraClass: known ? undefined : 'codex-tile--unknown',
         })
       })
@@ -386,7 +386,7 @@ export class CompendiumView {
           name: known ? '잡동사니' : '???',
           tag: `${span}칸`,
           chips: known ? [{ label: '드롭 ', value: `손패 ${junkRanges[span]}장`, tone: 'gold' }] : [],
-          note: known && span === 1 ? '까면 손패를 주는 무해한 필러. 온보딩 축약형.' : undefined,
+          note: known && span === 1 ? '까면 손패를 주는 무해한 필러. 모험 초반의 축약형.' : undefined,
           extraClass: known ? undefined : 'codex-tile--unknown',
         })
       })

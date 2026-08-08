@@ -147,7 +147,7 @@ interface DifficultyDef {
 }
 /** 캐릭터 확정 후 출발 버튼 위에서 넘겨 고르는 난이도 목록(캐러셀 순서 = 배열 순서). */
 const HEARTH_DIFFICULTIES: readonly DifficultyDef[] = [
-  { key: 'sprout', name: '새싹 병아리', tagline: '온보딩 · 30층', desc: '짧은 첫 모험. 바위·덤불·잡동사니로 적·함정·보물의 기본기를 익힌다.', art: SpriteUrls.difficultySprout },
+  { key: 'sprout', name: '새싹 병아리', tagline: '모험의 시작 · 30층', desc: '짧은 첫 모험. 바위·덤불·잡동사니와 함께 첫걸음을 뗀다.', art: SpriteUrls.difficultySprout },
   { key: 'easy', name: '쉬움', tagline: '정규 · 100층', desc: '진짜 등반이 시작된다. 새싹 병아리를 클리어하면 열린다.', art: '' },
   { key: 'normal', name: '보통', tagline: '개발 중', desc: '더 매서운 굴레가 기다린다. 아직 준비되지 않았다.', art: '', devLocked: true },
 ] as const
