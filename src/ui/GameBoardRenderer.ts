@@ -137,8 +137,14 @@ const ENEMY_TELL_MS = 260
 /** 피해 수치가 화면에 머무는 시간. 여러 대 맞은 턴에도 하나씩 세어질 만큼 남긴다. */
 const DAMAGE_FLOAT_MS = 1500
 
-/** 적이 재가 되어 흩어지는 길이. CSS `enemy-defeat-ash`와 같은 값이어야 한다. */
+/** 적 처치 연출 길이. 셋 중 가장 긴 CSS 애니메이션(`enemy-defeat-ash`/`-drift`)과 같은 값이어야 한다. */
 const ENEMY_DEFEAT_ASH_MS = 620
+
+/** 매번 같은 처치 연출이면 단조로워 무작위로 하나를 고른다 — 질려 스러짐 · 스르륵 흩어짐 · 뽀용 줄어듦. */
+const ENEMY_DEFEAT_CLASSES = ['is-enemy-defeated-ash', 'is-enemy-defeated-drift', 'is-enemy-defeated-pop'] as const
+function pickEnemyDefeatClass(): string {
+  return ENEMY_DEFEAT_CLASSES[Math.floor(Math.random() * ENEMY_DEFEAT_CLASSES.length)]
+}
 
 /** 맞은 대상이 흔들리는 길이. CSS `struck-recoil`과 같은 값이어야 한다. */
 const STRUCK_RECOIL_MS = 380
@@ -2746,13 +2752,7 @@ export class GameBoardRenderer {
         this.boardElement.querySelector<HTMLElement>(`.cell.card.is-active[data-lane="${hit.laneIndex}"]`)
       await this.playEnemySlam(attacker, player, () => {
         if (hit.dodged) {
-          // 회피는 **그 적의 타격 순간**에 뜬다 — 어느 공격이 빗나갔는지가 여기서 정해진다.
-          void this.animateFloatTextAt(
-            player.getBoundingClientRect().left + player.getBoundingClientRect().width / 2,
-            player.getBoundingClientRect().top + player.getBoundingClientRect().height * 0.16,
-            '회피!',
-            { className: 'damage-float--dodge' }
-          )
+          // 회피는 에나의 "날렵한 몸놀림" 클러치 대사가 이미 알린다 — 플로팅 텍스트는 중복.
           return
         }
         if (hit.blocked && hit.blocked > 0) void this.playShieldBlockFeedback(player, hit.blocked)
@@ -2947,8 +2947,16 @@ export class GameBoardRenderer {
           // ★ 기준은 **모델의 현재 체력**이다. 카드에 적힌 글자를 읽으면 안 된다 —
           //   이 시점의 DOM은 아직 다시 그려지지 않아 **맞기 전 값**일 수 있고,
           //   거기에 피해를 더하면 실제보다 한 칸 높은 수(3인 적이 4부터)에서 시작한다.
-          const modelHp = this.findCardById(cardId)?.getHealth()
-          if (modelHp !== undefined) this.rollEnemyHealthNumber(target, amount, modelHp)
+          // 즉사(레시피/즉사 손패)는 이 시점에 모델에서 이미 제거돼 있다 — 못 찾으면
+          // 카드가 살아남은 게 아니라 죽어서 사라진 것이므로 0으로 굴러 내려가야 한다.
+          const modelHp = this.findCardById(cardId)?.getHealth() ?? 0
+          this.rollEnemyHealthNumber(target, amount, modelHp)
+          // 피해 수치는 오래 떠 있어야 읽히지만(DAMAGE_FLOAT_MS) body에 독립적으로
+          // 떠 있는 요소라 카드가 지워져도 계속 보인다 — 그 긴 잔류를 이 beat가
+          // 기다리면 처치 하나마다 다음 행동이 1초 넘게 막힌다. 버스트·흔들림·
+          // 롤링까지만 이 beat의 몫이고, 숫자는 화면에서 알아서 마저 떠 있는다.
+          void this.animateDamageNumberOnElement(target, amount)
+          return Promise.resolve()
         }
         return this.animateDamageNumberOnElement(target, amount)
       })
@@ -3088,6 +3096,34 @@ export class GameBoardRenderer {
         resolve()
       }, duration + 140)
     })
+  }
+
+  /**
+   * 즉사(레시피/즉사 손패)는 체력을 깎지 않고 바로 제거하므로 일반 피해 롤링이
+   * 뜨지 않는다 — 이 콜아웃이 유일한 사망 신호라 화려한 버스트 + 불길한 전용
+   * 문구로 낸다. 카드가 지워지기 전(consume 애니메이션 이전)에 불러야 rect를 잡는다.
+   */
+  playInstantKillCallouts(cardIds: string[]): Promise<void> {
+    const targets = cardIds
+      .map((id) => this.findCardElement(id))
+      .filter((el): el is HTMLElement => el !== null)
+    if (targets.length === 0) return Promise.resolve()
+    return Promise.all(
+      targets.map((target) => {
+        const rect = target.getBoundingClientRect()
+        SquareBurst.playOn(target, 'damage', { count: 32, spread: 200, duration: 780 })
+        target.classList.remove('is-struck-recoil')
+        void target.offsetWidth
+        target.classList.add('is-struck-recoil')
+        window.setTimeout(() => target.classList.remove('is-struck-recoil'), STRUCK_RECOIL_MS)
+        return this.animateFloatTextAt(
+          rect.left + rect.width / 2,
+          rect.top + rect.height * 0.34,
+          '즉사',
+          { className: 'damage-float--instant-kill', durationMs: 1700 }
+        )
+      })
+    ).then(() => undefined)
   }
 
   /** 레바테인 턴 흐름 표시: 플레이어 카드 위에 황금빛 숫자(1,2…)를 흔들리며 띄운다.
@@ -4568,8 +4604,8 @@ export class GameBoardRenderer {
     // for a frame — that's the "blink" the player sees on slow machines.
     return this.animateElements(
       elements,
-      card.type === CardType.ENEMY ? 'is-enemy-defeated-consuming' : 'is-consuming',
-      // 적은 '재가 되어 흩어지는' 연출이라 조금 더 길다(CSS enemy-defeat-ash와 같은 값).
+      card.type === CardType.ENEMY ? pickEnemyDefeatClass() : 'is-consuming',
+      // 적은 처치 연출이라 조금 더 길다(CSS enemy-defeat-* 중 가장 긴 값과 같아야 한다).
       card.type === CardType.ENEMY ? ENEMY_DEFEAT_ASH_MS : 480,
       { persist: true }
     )
@@ -4614,7 +4650,7 @@ export class GameBoardRenderer {
       animations.push(
         this.animateElements(
           elements,
-          type === CardType.ENEMY ? 'is-enemy-defeated-consuming' : 'is-consuming',
+          type === CardType.ENEMY ? pickEnemyDefeatClass() : 'is-consuming',
           type === CardType.ENEMY ? ENEMY_DEFEAT_ASH_MS : 480,
           { persist: true }
         )
@@ -4672,10 +4708,9 @@ export class GameBoardRenderer {
         const fade = new Promise<void>((resolve) => {
           window.setTimeout(() => {
             bombEl.classList.remove('is-bomb-detonating')
-            // After the initial rattle, fade the bomb cell out so the next
-            // render doesn't snap it away — `is-consuming` reuses the unified
-            // card-consume fade.
-            bombEl.classList.add('is-consuming')
+            // 폭탄은 펑 터지는 것이라 다른 소모 카드의 잔잔한 fade 대신 확대 후
+            // 잔상처럼 번지며 사라진다 — 다음 render가 카드를 지우기 전까지 유지.
+            bombEl.classList.add('is-bomb-exploding-away')
             resolve()
           }, 360)
         })

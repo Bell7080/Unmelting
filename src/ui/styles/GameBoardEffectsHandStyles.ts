@@ -123,9 +123,9 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
 }
 
 .cell.card.is-enemy-slamming-source {
-  /* The body-mounted clone performs the unclipped lunge; dim the in-rail
-     source slightly so the player follows the charging copy. */
-  opacity: 0.38;
+  /* 몸통 복제가 돌진을 대신 연기하는 동안 원본은 완전히 숨긴다 — 반투명으로
+     남기면 두 장이 겹쳐 보인다(복제가 위, 흐린 원본이 아래). */
+  visibility: hidden;
 }
 
 /* 덤비기 직전 예비 동작 — 카드가 살짝 웅크리며 힘을 모은다. 맞기 전에
@@ -192,12 +192,25 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   z-index: 7;
 }
 
-/* 처치된 적은 **회색으로 질리며 사라진다.** 안으로 오므라들며 뽀용 튀던 것도, 불타오르는
-   것도 아니다 — 색이 빠지고 힘이 풀리며 조용히 스러진다. 처치는 자주 일어나는 일이라
-   연출이 요란하면 판 전체가 시끄러워진다. */
-.cell.card.is-enemy-defeated-consuming {
+/* 폭탄은 펑 터지는 것이라 다른 소모 카드와 다르게 확대 → 잔상처럼 번지며 사라진다. */
+.cell.card.is-bomb-exploding-away {
   pointer-events: none;
-  animation: enemy-defeat-ash 0.5s cubic-bezier(0.3, 0.6, 0.4, 1) forwards;
+  animation: bomb-explode-away 0.42s cubic-bezier(0.16, 0.9, 0.3, 1) forwards;
+  transform-origin: center center;
+  z-index: 9;
+}
+@keyframes bomb-explode-away {
+  0%   { transform: scale(1); opacity: 1; filter: brightness(1) blur(0); }
+  35%  { transform: scale(1.4); opacity: 1; filter: brightness(1.6) blur(0); }
+  100% { transform: scale(1.7); opacity: 0; filter: brightness(1.3) blur(6px); }
+}
+
+/* 처치 연출은 매번 같으면 단조로워 셋 중 하나가 무작위로 걸린다(pickEnemyDefeatClass) —
+   회색으로 질려 스러짐 · 위로 스르륵 흩어짐 · 뽀용 줄어듦. 무엇이 걸리든 파티클을 새로
+   만들지 않고 카드 자체의 transform/filter로만 낸다(불타는 연출은 넣지 않는다). */
+.cell.card.is-enemy-defeated-ash {
+  pointer-events: none;
+  animation: enemy-defeat-ash 0.62s cubic-bezier(0.3, 0.6, 0.4, 1) forwards;
   transform-origin: center bottom;
   z-index: 8;
 }
@@ -209,16 +222,41 @@ export const GAME_BOARD_EFFECTS_HAND_STYLES = `
   }
   40% {
     /* 색이 먼저 빠진다 — 여기서 이미 "끝났다"가 읽힌다. */
-    transform: translateY(2px) scale(0.99);
-    opacity: 0.82;
-    filter: grayscale(0.75) brightness(0.86);
+    transform: translateY(3px) scale(0.98);
+    opacity: 0.8;
+    filter: grayscale(0.8) brightness(0.84);
   }
   100% {
-    transform: translateY(7px) scale(0.97);
+    transform: translateY(10px) scale(0.93);
     opacity: 0;
-    filter: grayscale(1) brightness(0.6);
+    filter: grayscale(1) brightness(0.55);
   }
 }
+
+.cell.card.is-enemy-defeated-drift {
+  pointer-events: none;
+  animation: enemy-defeat-drift 0.62s ease-out forwards;
+  transform-origin: center center;
+  z-index: 8;
+}
+@keyframes enemy-defeat-drift {
+  0% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0) brightness(1); }
+  45% { transform: translateY(-10px) scale(1.04); opacity: 0.68; filter: blur(1px) brightness(1.1); }
+  100% { transform: translateY(-26px) scale(1.08); opacity: 0; filter: blur(4px) brightness(1.2); }
+}
+
+.cell.card.is-enemy-defeated-pop {
+  pointer-events: none;
+  animation: enemy-defeat-pop 0.5s cubic-bezier(0.34, 1.4, 0.4, 1) forwards;
+  transform-origin: center center;
+  z-index: 8;
+}
+@keyframes enemy-defeat-pop {
+  0%   { transform: scale(1); opacity: 1; }
+  35%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(0); opacity: 0; }
+}
+
 @keyframes card-consume {
   0% {
     transform: scale(1);

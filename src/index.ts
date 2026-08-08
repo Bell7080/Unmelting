@@ -2540,6 +2540,12 @@ async function applyHandSingle(
   const killedEnemySource: ResourceTrailSource =
     killedEnemyRect ? { kind: 'rect', rect: killedEnemyRect } : { kind: 'center' }
   if (result.removedFieldCards.length > 0) {
+    // 즉사(참격 등): 체력을 깎지 않고 바로 제거하므로 damaged 목록에 없다 —
+    // 그 차이가 곧 "이번 제거는 즉사"라는 신호다. consume이 지우기 전에 먼저 알린다.
+    const instantKillIds = result.removedFieldCards
+      .filter((r) => r.type === CardType.ENEMY && !singleDamagedIds.has(r.cardId))
+      .map((r) => r.cardId)
+    if (instantKillIds.length > 0) await boardRenderer.playInstantKillCallouts(instantKillIds)
     await boardRenderer.animateCardConsumeByIds(result.removedFieldCards, {
       suppressBurstIds: singleDamagedIds,
     })
@@ -2782,6 +2788,12 @@ async function applyHandSingle(
     // Animate cards removed by delayed recipes separately so combo impact reads
     // as its own hit instead of merging with the hand-card effect animation.
     if (recipeResult.removedFieldCards.length > 0) {
+      // 즉사 레시피(양초 스매쉬 등)는 체력을 깎지 않고 바로 제거한다 — damaged
+      // 목록에 없는 제거가 곧 즉사다. consume이 지우기 전에 먼저 알린다.
+      const recipeInstantKillIds = recipeResult.removedFieldCards
+        .filter((r) => r.type === CardType.ENEMY && !recipeDamagedIds.has(r.cardId))
+        .map((r) => r.cardId)
+      if (recipeInstantKillIds.length > 0) await boardRenderer.playInstantKillCallouts(recipeInstantKillIds)
       await boardRenderer.animateCardConsumeByIds(recipeResult.removedFieldCards, {
         suppressBurstIds: recipeDamagedIds,
       })
