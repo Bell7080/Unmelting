@@ -643,7 +643,9 @@ export class GameBoardRenderer {
       const freshHandEl = this.boardElement.querySelector<HTMLElement>('.hand-column')
       if (freshHandEl) {
         const freshHandPanelEl = freshHandEl.querySelector<HTMLElement>('.hand-panel')
-        if (freshHandPanelEl && freshHandPanelEl.outerHTML === prevHandPanelHtml) {
+        // 판정 묶음에서는 모델 손패가 이미 줄었어도 기존 열을 유지한다. 마지막 예약 뒤의
+        // 단 한 번의 렌더에서만 카드를 내려 연타 좌표와 보이는 카드가 계속 일치하게 한다.
+        if (this.handLayoutDeferred || (freshHandPanelEl && freshHandPanelEl.outerHTML === prevHandPanelHtml)) {
           freshHandEl.replaceWith(prevHandEl)
           // spawn-prob-panel만 새 수치로 교체 (불씨 티어 변경 반영)
           const freshSpawnPanel = freshHandEl.querySelector<HTMLElement>('.spawn-prob-panel')

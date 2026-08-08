@@ -391,6 +391,11 @@ async function runQueuedHandIntent(intent: HandUseIntent, slotIndex: number): Pr
 
 const handIntentQueue = new HandUseIntentQueue(gameState.character.handMax, {
   resolveSlot: (uid) => gameState.character.hand.findIndex((card) => card.uid === uid),
+  // UID뿐 아니라 예약 당시의 정의와 합성 상태도 맞아야 같은 카드 효과로 안전하게 커밋한다.
+  isCardValid: (intent, slotIndex) => {
+    const card = gameState.character.hand[slotIndex]
+    return card?.defId === intent.defId && (card.merged === true) === intent.merged
+  },
   isPhaseValid: () => {
     modalLocked = shopFlow.isOpen()
     postBossLocked = bossController.postPhaseHandLocked
