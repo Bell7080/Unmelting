@@ -186,6 +186,8 @@ export interface ActivityLogEntry {
 
 export interface HandTargetingMode {
   slotIndex: number
+  /** 카드 인스턴스 단일 출처. slotIndex는 렌더 직전에 환산한 표시용 값이다. */
+  uid?: string
   defId: HandCardId
   /** 합체(트리플) 카드 여부 — 타겟 하이라이트가 base/triple 규칙을 올바로 고르게 한다. */
   merged?: boolean
@@ -270,6 +272,8 @@ export interface ScorePanelState {
   vignetteIntensity?: number
   chainHints?: ChainHints
   pendingHandTarget?: HandTargetingMode | null
+  /** UID별 FIFO 순번. 모델 변경 없이 얇은 촛불색 예약 표시에만 사용한다. */
+  queuedHandOrder?: Readonly<Record<string, number>>
   /** 실제 다음 리필 카드 예고용. index가 laneIndex와 일치한다. */
   refillPreviewCards?: readonly (Card | null)[]
 }
