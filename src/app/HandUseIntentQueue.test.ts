@@ -12,6 +12,7 @@ describe('HandUseIntentQueue', () => {
     const slots = new Map([['a', 2], ['b', 0]])
     const queue = new HandUseIntentQueue(10, {
       resolveSlot: (uid) => slots.get(uid) ?? -1,
+      isCardValid: () => true,
       isPhaseValid: () => true, isTargetValid: () => true,
       run: ({ intent: item, slotIndex }) => order.push(`${item.uid}:${slotIndex}`), cancel: vi.fn(),
     })
@@ -26,6 +27,7 @@ describe('HandUseIntentQueue', () => {
     const run = vi.fn()
     const queue = new HandUseIntentQueue(10, {
       resolveSlot: (uid) => uid === 'merged-away' ? -1 : 0,
+      isCardValid: () => true,
       isPhaseValid: () => true,
       isTargetValid: (item) => item.target?.cardId !== 'dead',
       run, cancel: (item, reason) => cancelled.push(`${item.uid}:${reason}`),
@@ -41,6 +43,7 @@ describe('HandUseIntentQueue', () => {
     const cancel = vi.fn()
     const queue = new HandUseIntentQueue(10, {
       resolveSlot: (uid) => uid === 'gone' ? -1 : 3,
+      isCardValid: () => true,
       isPhaseValid: () => true, isTargetValid: () => true,
       run, cancel,
     })
@@ -59,7 +62,7 @@ describe('HandUseIntentQueue', () => {
     const cancel = vi.fn()
     const queue = new HandUseIntentQueue(2, {
       resolveSlot: () => 0, isPhaseValid: () => true, isTargetValid: () => true,
-      run: vi.fn(), cancel,
+      isCardValid: () => true, run: vi.fn(), cancel,
     })
     expect(queue.enqueue(intent('tap'))).toBe(true)
     expect(queue.enqueue(intent('tap'))).toBe(false)
@@ -68,5 +71,23 @@ describe('HandUseIntentQueue', () => {
     queue.clear()
     expect(cancel).toHaveBeenCalledTimes(2)
     expect(queue.length).toBe(0)
+  })
+
+  it('같은 UID의 카드 정의나 합성 상태가 바뀌면 기존 의도를 취소한다', () => {
+    const cancel = vi.fn()
+    const queue = new HandUseIntentQueue(2, {
+      resolveSlot: () => 0,
+      // 실행 직전 모델 카드가 예약 스냅샷과 다르다는 상황을 재현한다.
+      isCardValid: () => false,
+      isPhaseValid: () => true,
+      isTargetValid: () => true,
+      run: vi.fn(),
+      cancel,
+    })
+    queue.enqueue(intent('changed'))
+
+    queue.drainOne()
+
+    expect(cancel).toHaveBeenCalledWith(expect.objectContaining({ uid: 'changed' }), 'card-changed')
   })
 })
