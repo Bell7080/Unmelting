@@ -372,12 +372,20 @@ function findCurrentHandTarget(intent: HandUseIntent): HandTarget | undefined {
 /** 판정 하나가 끝날 때마다 다음 UID를 재검증한다. 비동기 연출은 큐의 유효성 근거가 아니다. */
 async function runQueuedHandIntent(intent: HandUseIntent, slotIndex: number): Promise<void> {
   handCommitLocked = true
+  // 첫 커밋부터 마지막 예약 정산까지 기존 카드의 화면 슬롯만 고정해 다음 클릭이 빗나가지 않게 한다.
+  boardRenderer.setHandLayoutDeferred(true)
   try {
     await applyHandSingle(slotIndex, findCurrentHandTarget(intent))
   } finally {
     handCommitLocked = false
     if (gameState.isGameOver || bossController.postPhaseHandLocked) handIntentQueue.clear()
     else handIntentQueue.drainOne()
+    // drainOne은 다음 유효 판정을 동기로 시작해 잠금을 다시 세운다. 다시 잠기지 않았을 때만
+    // 묶음이 끝난 것이므로, 그제야 화면 슬롯 고정을 풀고 최신 손패를 아래로 정리한다.
+    if (!handCommitLocked) {
+      boardRenderer.setHandLayoutDeferred(false)
+      if (gameActive) render()
+    }
   }
 }
 
@@ -2355,12 +2363,15 @@ async function handleHandSlotClick(slotIndex: number, requestedUid?: string): Pr
   if (!gameActive) return
   boardRenderer.clearEnaHintPulses()
   const character = gameState.character
-  const card = character.hand[slotIndex]
-  if (!card) return
-  // A stale mobile/click event belongs to the old DOM card, never its replacement.
-  if (requestedUid && card.uid !== requestedUid) {
-    // 재렌더 전 DOM에서 늦게 도착한 입력은 새 슬롯 카드로 넘기지 않고 기존 취소 연출만 남긴다.
-    boardRenderer.playHandIntentCancelled(requestedUid)
+  // 판정 중에는 시각 손패가 의도적으로 고정되어 모델 슬롯과 다를 수 있다. 이때도 사용자가
+  // 실제로 누른 카드 UID를 현재 모델에서 찾아, 같은 화면 좌표로 빠르게 예약할 수 있게 한다.
+  const resolvedSlotIndex = requestedUid
+    ? character.hand.findIndex((candidate) => candidate.uid === requestedUid)
+    : slotIndex
+  const card = character.hand[resolvedSlotIndex]
+  if (!card) {
+    // 합성 등으로 이미 사라진 고정 DOM 카드는 다른 카드에 입력을 넘기지 않고 취소 피드백만 낸다.
+    if (requestedUid) boardRenderer.playHandIntentCancelled(requestedUid)
     return
   }
 
@@ -2376,7 +2387,7 @@ async function handleHandSlotClick(slotIndex: number, requestedUid?: string): Pr
     const value = merged
       ? 5 + (gameState.enhancements.tripleBonus['coin'] ?? 0)
       : 1 + (gameState.enhancements.singleBonus['coin'] ?? 0)
-    gameState.character.removeHandCardAt(slotIndex)
+    gameState.character.removeHandCardAt(resolvedSlotIndex)
     shopFlow.gainCoinsFromCard(value)
     return
   }
@@ -2393,7 +2404,7 @@ async function handleHandSlotClick(slotIndex: number, requestedUid?: string): Pr
       render()
       return
     }
-    pendingHandTarget = { uid: card.uid, slotIndex, defId: def.id, merged: card.merged === true }
+    pendingHandTarget = { uid: card.uid, slotIndex: resolvedSlotIndex, defId: def.id, merged: card.merged === true }
     boardRenderer.setHandTargetingMode(pendingHandTarget)
     render()
     return

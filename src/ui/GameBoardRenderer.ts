@@ -155,6 +155,23 @@ const ENA_HINT_REPEAT = 3
 const ENA_HINT_STAGGER_MS = 180
 
 export class GameBoardRenderer {
+  /** 판정 시작 시 UID별 화면 슬롯을 잡아 두며, 카드 내용 자체는 매 렌더 최신 상태로 그린다. */
+  private handLayoutDeferred = false
+  private readonly deferredHandSlots = new Map<string, number>()
+
+  /** 판정 큐 동안 기존 카드의 좌표만 고정하고, 사용 공백·예약 번호·신규 카드는 계속 갱신한다. */
+  setHandLayoutDeferred(deferred: boolean): void {
+    if (deferred && !this.handLayoutDeferred) {
+      // 모델이 소비되기 전 라이브 DOM의 화면 슬롯을 캡처해야 사용된 자리를 빈칸으로 남길 수 있다.
+      this.boardElement.querySelectorAll<HTMLElement>('.hand-slot[data-hand-uid]').forEach((slot) => {
+        const uid = slot.dataset.handUid
+        const index = Number(slot.dataset.visualSlotIndex ?? slot.dataset.slotIndex)
+        if (uid && Number.isFinite(index)) this.deferredHandSlots.set(uid, index)
+      })
+    }
+    if (!deferred) this.deferredHandSlots.clear()
+    this.handLayoutDeferred = deferred
+  }
   /** 서브 렌더러 공유 — 보드 루트 요소. */
   readonly boardElement: HTMLElement
   private selected: { laneIndex: number; distance: number } | null = null
@@ -1692,22 +1709,49 @@ export class GameBoardRenderer {
     const slots: string[] = []
     const handMax = character.handMax || 10
     const targeting = scorePanel.pendingHandTarget ?? this.handTargetingMode
+    type PresentedCard = { card: (typeof character.hand)[number]; modelIndex: number }
+    const presentedCards: Array<PresentedCard | undefined> = []
 
-    // Build each slot bottom-up in MODEL order (slot 0 first), then we render
+    if (this.handLayoutDeferred) {
+      // 기존 UID는 판정 시작 좌표에 그대로 둔다. 새로 얻은 카드는 남은 낮은 빈 슬롯부터 배치해
+      // 화면은 계속 갱신하되, 이미 보이던 카드가 입력 도중 마우스 아래로 이동하지 않게 한다.
+      const unanchored: PresentedCard[] = []
+      character.hand.forEach((card, modelIndex) => {
+        const visualIndex = this.deferredHandSlots.get(card.uid)
+        if (visualIndex === undefined || presentedCards[visualIndex]) unanchored.push({ card, modelIndex })
+        else presentedCards[visualIndex] = { card, modelIndex }
+      })
+      for (const entry of unanchored) {
+        const freeIndex = Array.from({ length: handMax }, (_, index) => index)
+          .find((index) => presentedCards[index] === undefined)
+        if (freeIndex === undefined) break
+        presentedCards[freeIndex] = entry
+        this.deferredHandSlots.set(entry.card.uid, freeIndex)
+      }
+    } else {
+      character.hand.forEach((card, modelIndex) => { presentedCards[modelIndex] = { card, modelIndex } })
+    }
+
+    // Build each slot bottom-up in VISUAL order (slot 0 first), then we render
     // the column reversed so slot 0 displays at the bottom. New cards receive
     // a compact acquisition ordinal so multi-card rewards fall one-by-one
     // starting from the first newly stacked card, not from their absolute slot.
     let enteringOrdinal = 0
     for (let i = 0; i < handMax; i++) {
-      const card = character.hand[i]
-      if (!card) {
-        slots.push(`<li class="hand-slot is-empty" data-slot-index="${i}" aria-hidden="true"></li>`)
+      const presented = presentedCards[i]
+      if (!presented) {
+        // 최초 손패가 차 있던 범위의 구멍만 높이를 유지한다. 그보다 위의 미사용 슬롯까지
+        // 펼치면 손패 전체가 압축되므로, 캡처된 가장 높은 화면 슬롯 위는 기존처럼 접는다.
+        const deferredTop = Math.max(-1, ...this.deferredHandSlots.values())
+        const gapClass = this.handLayoutDeferred && i <= deferredTop ? 'is-hand-deferred-gap' : 'is-empty'
+        slots.push(`<li class="hand-slot ${gapClass}" data-visual-slot-index="${i}" aria-hidden="true"></li>`)
         continue
       }
+      const { card, modelIndex } = presented
       const def = getHandCardDef(card.defId)
-      const isArming = targeting && targeting.slotIndex === i
+      const isArming = targeting?.uid === card.uid
       const queuedOrder = scorePanel.queuedHandOrder?.[card.uid]
-      const readyRecipes = scorePanel.chainHints?.recipeReadyBySlot?.[i] ?? []
+      const readyRecipes = scorePanel.chainHints?.recipeReadyBySlot?.[modelIndex] ?? []
       const recipeReady = readyRecipes.length > 0
       const demonReady = readyRecipes.some((r) => r.id === 'demon-summon')
       // demon-summon을 제외한 다른 레시피가 준비된 경우에만 일반 금빛 다이아를 표시한다.
@@ -1781,11 +1825,11 @@ export class GameBoardRenderer {
       // converts them into CSS offsets for the copy layers.
       const mergeSourceUids = card.mergeSourceUids?.join('|') ?? ''
       slots.push(`
-        <li class="${classes}" data-slot-index="${i}" data-hand-uid="${card.uid}" data-hand-def="${card.defId}"
+        <li class="${classes}" data-slot-index="${modelIndex}" data-visual-slot-index="${i}" data-hand-uid="${card.uid}" data-hand-def="${card.defId}"
             ${mergeSourceUids ? `data-merge-source-uids="${mergeSourceUids}"` : ''}
             style="--slot-index: ${i}; --hand-enter-order: ${enterOrder};"
             ${recipeReadyTitle ? `title="${recipeReadyTitle}"` : ''}>
-          <button type="button" data-item-index="${i}"
+          <button type="button" data-item-index="${modelIndex}"
                   style="--hand-card-art: url('${handArt}');"
                   aria-label="${def.name}: ${ariaDesc}${recipeReadyTitle ? ` · ${recipeReadyTitle}` : ''}">
             ${tripleMergeCopies}

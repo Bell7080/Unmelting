@@ -119,6 +119,16 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   margin: 0;
   padding: 0;
 }
+/* 예약 묶음에서 사용된 카드 자리는 투명한 실물 높이로 남긴다. 카드와 번호는 계속
+   다시 그리지만 이 스페이서가 아래 카드의 좌표 이동만 막아 빠른 연속 클릭을 돕는다. */
+.hand-slot.is-hand-deferred-gap {
+  flex: 0 1 78px;
+  min-height: 0;
+  border: 1px dashed rgba(255, 215, 120, 0.14);
+  background: rgba(255, 255, 255, 0.018);
+  opacity: 0.55;
+  pointer-events: none;
+}
 .hand-slot.hand-card {
   padding: 0;
   border: 2px solid rgba(255, 232, 168, 0.3);
