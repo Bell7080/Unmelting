@@ -647,6 +647,20 @@ body.hearth-lobby .left-swap > .score-log-list { transform: translateX(-140%); o
   align-self: stretch;
   overflow: visible;
 }
+/* 큐 표시는 기존 촛불 팔레트의 얇은 선만 더해 카드 자체의 희귀도/테마를 가리지 않는다. */
+.hand-slot.is-hand-queued { outline: 1px solid rgba(255, 215, 120, 0.72); outline-offset: -2px; }
+.hand-queue-order {
+  position: absolute; right: 4px; top: 4px; z-index: 8; min-width: 15px; height: 15px;
+  border: 1px solid rgba(255, 215, 120, 0.62); border-radius: 50%; color: #ffe8a8;
+  background: rgba(30, 20, 28, 0.82); font: 700 10px/13px inherit; text-align: center;
+}
+/* 유효하지 않은 예약은 밀랍이 식듯 짧게 흔들리고 테두리가 사라진다. */
+.hand-slot.is-hand-cancelled { animation: hand-intent-cancel 360ms ease-out both; }
+@keyframes hand-intent-cancel {
+  20% { transform: translateX(-3px); outline-color: rgba(214, 166, 104, 0.9); }
+  45% { transform: translateX(3px); }
+  100% { transform: translateX(0); outline-color: transparent; opacity: 0.72; }
+}
 .hand-header {
   display: flex;
   align-items: center;

@@ -1,63 +1,41 @@
-import { describe, expect, it, vi } from 'vitest'
-import { HandActionTimeline, type HandActionSnapshot } from './HandActionTimeline'
+import { describe, expect, it } from 'vitest'
+import type { HandCard } from '@entities/HandCard'
+import { HandActionTimeline, type HandUseIntent } from './HandActionTimeline'
 
-/** 테스트용 빈 판정도 실제 공개 스냅샷 계약을 그대로 지킨다. */
-const snapshot = (): HandActionSnapshot => ({
-  targetRects: Object.freeze({}), damage: Object.freeze([]), removedCardIds: Object.freeze([]),
-  resourceChanges: Object.freeze({}), bossCellHits: Object.freeze([]),
+const card = (uid: string, defId: HandCard['defId'] = 'wax-drop'): HandCard => ({ uid, defId })
+const intent = (uid: string, overrides: Partial<HandUseIntent> = {}): HandUseIntent => ({
+  uid, defId: 'wax-drop', merged: false, requestedAt: 1, ...overrides,
 })
 
 describe('HandActionTimeline', () => {
-  it('판정은 동기 순서, 핵심은 직렬, 후속은 다음 핵심과 병렬로 허용한다', async () => {
-    const events: string[] = []
-    let releaseFollowUp!: () => void
-    const followUpGate = new Promise<void>((resolve) => { releaseFollowUp = resolve })
-    const timeline = new HandActionTimeline(() => 1000, async () => undefined, 0)
-    const first = timeline.register({
-      commit: () => { events.push('commit-1'); return snapshot() },
-      playCoreImpact: async () => { events.push('core-1') },
-      playFollowUp: async () => { events.push('follow-1'); await followUpGate },
-    })
-    const second = timeline.register({
-      commit: () => { events.push('commit-2'); return snapshot() },
-      playCoreImpact: async () => { events.push('core-2') },
-    })
-    await second.coreDone
-    expect(events).toEqual(['commit-1', 'commit-2', 'core-1', 'follow-1', 'core-2'])
-    releaseFollowUp()
-    await Promise.all([first.settled, second.settled])
+  it('re-finds a moved card by UID instead of retaining its old slot', () => {
+    const timeline = new HandActionTimeline(3)
+    expect(timeline.validate(intent('b'), [card('b')], true, () => true)).toMatchObject({ slotIndex: 0 })
   })
 
-  it('취소하면 대기 DOM 단계를 건너뛰고 정리를 수행한다', async () => {
-    const core = vi.fn(async () => undefined)
-    const cleanup = vi.fn()
-    const timeline = new HandActionTimeline(() => 0, async () => undefined, 0)
-    const handle = timeline.register({ commit: snapshot, playCoreImpact: core, cleanup })
-    handle.cancel()
-    await handle.settled
-    expect(core).not.toHaveBeenCalled()
-    expect(cleanup).toHaveBeenCalledOnce()
-    expect(cleanup).toHaveBeenCalledWith(handle.actionId)
+  it('cancels a reservation consumed by automatic synthesis', () => {
+    const timeline = new HandActionTimeline(3)
+    expect(timeline.validate(intent('consumed'), [card('merged')], true, () => true)).toBe('card-missing')
   })
 
-  it('핵심 시작 간격을 지키고 안정화는 실제 규칙 순서로 직렬화한다', async () => {
-    let clock = 0
-    const sleeps: number[] = []
-    const stable: string[] = []
-    const timeline = new HandActionTimeline(
-      () => clock,
-      async (ms) => { sleeps.push(ms); clock += ms },
-      150
-    )
-    const makeWork = (label: string) => ({
-      commit: snapshot,
-      playCoreImpact: async () => undefined,
-      stabilize: async () => { stable.push(label) },
-    })
-    const first = timeline.register(makeWork('first'))
-    const second = timeline.register(makeWork('second'))
-    await Promise.all([first.settled, second.settled])
-    expect(sleeps).toEqual([150])
-    expect(stable).toEqual(['first', 'second'])
+  it('revalidates a dead target immediately before commit', () => {
+    const timeline = new HandActionTimeline(3)
+    const requested = intent('a', { target: { cardId: 'enemy', laneIndex: 0, distance: 0 } })
+    expect(timeline.validate(requested, [card('a')], true, () => false)).toBe('target-dead')
+  })
+
+  it('discards the remaining FIFO when a boss defeat changes phase', () => {
+    const timeline = new HandActionTimeline(3)
+    timeline.enqueue(intent('a')); timeline.enqueue(intent('b'))
+    expect(timeline.clear().map((entry) => entry.uid)).toEqual(['a', 'b'])
+    expect(timeline.length).toBe(0)
+  })
+
+  it('blocks duplicate mobile taps and enforces the visible-hand cap', () => {
+    const timeline = new HandActionTimeline(2)
+    expect(timeline.enqueue(intent('a'))).toBe(true)
+    expect(timeline.enqueue(intent('a'))).toBe(false)
+    expect(timeline.enqueue(intent('b'))).toBe(true)
+    expect(timeline.enqueue(intent('c'))).toBe(false)
   })
 })
