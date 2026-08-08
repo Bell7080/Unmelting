@@ -585,6 +585,7 @@ export class BossEventController {
       const cellShown = Math.min(dealt, struck.cellDamage)
       await this.br.playBossGimmickStrikes(
         [{
+          actionId: struck.actionId,
           cellIndex: struck.cell.index,
           kind: struck.cell.kind,
           damage: cellShown,

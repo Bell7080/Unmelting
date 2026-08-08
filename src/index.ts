@@ -43,7 +43,8 @@ import { GAME_OVER_GLOBAL_STYLES } from '@ui/styles/GameOverStyles'
 import { CardSpawner } from '@systems/CardSpawner'
 import { ActionSystem, ActionType } from '@systems/ActionSystem'
 import { DropSystem } from '@systems/DropSystem'
-import { HandSystem, ChainState, type HandTarget } from '@systems/HandSystem'
+import { HandSystem, ChainState, type HandTarget, type HandUseResult } from '@systems/HandSystem'
+import { handVolleyIntervalMs, handVolleyReleaseDelayMs } from '@ui/renderer/VolleyTiming'
 import { EmberSystem, SPROUT_SPAWN_ADJUST } from '@systems/EmberSystem'
 import { boardIntroKindOf } from '@systems/BoardIntroKind'
 import { Card, CardType } from '@entities/Card'
@@ -862,18 +863,39 @@ async function playHandTargetBlasts(
   )
 }
 
-/** 다발 투척은 대상 ID를 고유화하지 않는다. 같은 적을 연속으로 맞혀도 실제 발수만큼
- * 청회색 곡사가 하나씩 보여야 칼날의 서 설명과 전투 피드백이 일치한다. */
-async function playRepeatedHandProjectiles(cardIds: readonly string[], theme: BurstTheme): Promise<void> {
-  if (cardIds.length === 0) return
-  // 중복 발사도 최초 판정 좌표 하나를 공유해, 중간 렌더 뒤 현재 DOM을 재조회하지 않는다.
-  const targetRects = new Map([...new Set(cardIds)].map((id) => [id, boardRenderer.findCardElement(id)?.getBoundingClientRect()]))
-  // 기존 광역 대상 스태거보다 조금 짧게 잡아 한 카드의 빠른 연속 투척으로 묶어 읽히게 한다.
-  const interval = Math.max(58, Math.min(92, Math.round(360 / cardIds.length)))
-  await Promise.all(cardIds.map(async (cardId, index) => {
-    if (index > 0) await wait(index * interval)
-    return boardRenderer.animateTargetBlastFromCenterToCard(cardId, theme, targetRects.get(cardId))
-  }))
+/** 공용 연사는 발수를 보존하되 긴 잔광 Promise까지 입력 잠금을 끌고 가지 않는다.
+ * 첫 발은 즉시 읽히고, 뒤 발은 발수가 많을수록 75→45ms로 완만하게 압축된다. */
+async function playRepeatedHandProjectiles(
+  hits: readonly NonNullable<HandUseResult['hitSequence']>[number][],
+  theme: BurstTheme
+): Promise<void> {
+  if (hits.length === 0) return
+  const interval = handVolleyIntervalMs(hits.length)
+  hits.forEach((hit, index) => {
+    window.setTimeout(() => {
+      // 잔광은 계속 재생하되 마지막 발을 발사한 시점부터 다음 입력을 받을 수 있다.
+      void boardRenderer.animateTargetBlastFromCenterToCard(hit.targetCardId, theme)
+    }, index * interval)
+  })
+  await wait(handVolleyReleaseDelayMs(hits.length))
+}
+
+/** 같은 대상의 연속 피해는 최대 3발씩만 합쳐 숫자 겹침을 줄인다. 궤적은 위에서 매 발
+ * 남기므로 합계 한 번으로 오해되지 않고, 숫자만 읽을 수 있는 작은 묶음이 된다. */
+function groupVolleyDamageNumbers(
+  hits: readonly NonNullable<HandUseResult['hitSequence']>[number][]
+): Array<{ cardId: string; amount: number }> {
+  const groups: Array<{ cardId: string; amount: number; count: number }> = []
+  for (const hit of hits) {
+    const last = groups[groups.length - 1]
+    if (last?.cardId === hit.targetCardId && last.count < 3) {
+      last.amount += hit.actualDamage
+      last.count++
+    } else {
+      groups.push({ cardId: hit.targetCardId, amount: hit.actualDamage, count: 1 })
+    }
+  }
+  return groups.map(({ cardId, amount }) => ({ cardId, amount }))
 }
 
 /** 레시피는 손패 분류가 없으므로 효과가 하는 일로 블라스트 톤을 고른다. */
@@ -953,7 +975,7 @@ boardRenderer.setBossCellStrikeSource((cardId, observedLoss) => {
   // 잠깐 멀쩡한 상태로 남는다.
   render()
   return strikes
-}, () => bossController.rerollGimmickCells())
+}, (_actionId) => bossController.rerollGimmickCells())
 
 /** 페이지 게이트 경고 배선 — 피해가 하한에 막힌 beat에서 수치 대신 무엇이 필요한지 알린다. */
 boardRenderer.setBossPageGateSource(() => bossController.pageGateWarning())
@@ -2439,41 +2461,25 @@ async function applyHandSingle(
     ...newlyFrozenIds,
     ...thawedIds,
   ]
-  // 판정 커밋 직후 좌표·피해·제거·자원 변화를 값으로 동결한다. 뒤 렌더는 이 자료를 바꾸지 못한다.
-  const targetRects = Object.freeze(Object.fromEntries(affectedCardIds.flatMap((cardId) => {
-    const rect = boardRenderer.findCardElement(cardId)?.getBoundingClientRect()
-    return rect ? [[cardId, DOMRectReadOnly.fromRect(rect)]] : []
-  })))
-  const actionSnapshot: HandActionSnapshot = Object.freeze({
-    targetRects,
-    damage: Object.freeze(singleDamageLosses.map((loss) => Object.freeze({ cardId: loss.cardId, amount: loss.amount }))),
-    removedCardIds: Object.freeze(result.removedFieldCards.map((card) => card.cardId)),
-    resourceChanges: Object.freeze({ coin: result.coinsGained ?? 0, light: result.lightGained ?? 0 }),
-    // 상세 보스 칸 기록은 기존 단일 소비 창구가 소유한다. 일반 카드 피해 스냅샷과 중복 소비하지 않는다.
-    bossCellHits: Object.freeze([]),
-  })
-  const action = handActionTimeline.register({
-    // 모델 변경은 위 useSingle/유물/체인 구간에서 동기로 끝났으며 여기서는 불변 판정을 등록한다.
-    commit: () => actionSnapshot,
-    // DOM 전용 핵심 beat: 중앙 비행과 독립 표적 발사를 함께 시작하고, 착탄 피드백끼리 병렬 재생한다.
-    playCoreImpact: async () => {
-      const projectile = handUseTheme
-        ? usedDef?.id === 'blade-tome' && result.projectileTargetCardIds?.length
-          ? playRepeatedHandProjectiles(result.projectileTargetCardIds, handUseTheme)
-          : playHandTargetBlasts(affectedCardIds, handUseTheme)
-        : Promise.resolve()
-      await Promise.all([
-        handUseTheme ? boardRenderer.animateHandCardUse(slotIndex, handUseTheme) : Promise.resolve(),
-        projectile,
-      ])
-      await Promise.all([
-        boardRenderer.animateDamageNumbersById(singleDamageLosses),
-        boardRenderer.animateWaxFreezeByIds(newlyFrozenIds),
-        boardRenderer.animateWaxThawByIds(thawedIds),
-      ])
-    },
-  })
-  await action.coreDone
+  // The played-card preview dissolves at center; this square-card blast points
+  // from that center beat to every field cell that was hit, removed, gained, or hardened.
+  if (handUseTheme) {
+    // 공용 hitSequence가 있으면 카드 이름을 보지 않고 실제 발사 순서를 그대로 재생한다.
+    if (result.hitSequence?.length) {
+      await playRepeatedHandProjectiles(result.hitSequence, handUseTheme)
+    } else {
+      await playHandTargetBlasts(affectedCardIds, handUseTheme)
+    }
+  }
+  // 보스 칸은 모델의 개별 strike 큐가 이미 발마다 숫자를 내므로 한 번만 drain한다.
+  const volleyDamageNumbers = result.hitSequence?.length && !result.hitSequence.some((hit) => hit.bossCellHit)
+    ? groupVolleyDamageNumbers(result.hitSequence)
+    : singleDamageLosses
+  await Promise.all([
+    boardRenderer.animateDamageNumbersById(volleyDamageNumbers),
+    boardRenderer.animateWaxFreezeByIds(newlyFrozenIds),
+    boardRenderer.animateWaxThawByIds(thawedIds),
+  ])
   // 손패 피해가 보스에게 닿았다면 HP 바 카운터를 즉시 반영한다.
   if (bossController.eventState && singleDamagedIds.has(bossController.eventState.card.id)) {
     boardRenderer.playHudCounterFeedback('boss-hp', Math.max(0, bossController.eventState.card.getHealth()))

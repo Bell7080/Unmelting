@@ -56,6 +56,8 @@ export interface BossGimmickGridView {
  * 방패/페이지 경계에 잘린 실제 피해를 넣을 수 있어야 해서 수치는 호출부가 다시 채운다.
  */
 export interface BossGimmickStrikeView {
+  /** 같은 volley의 리롤/후처리를 한 번만 실행하기 위한 행동 식별자다. */
+  actionId: string
   cellIndex: number
   kind: BossGimmickCellKind
   /** 칸 위에 띄울 배율 피해 수치. */
