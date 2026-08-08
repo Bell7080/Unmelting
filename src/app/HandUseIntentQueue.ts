@@ -23,11 +23,17 @@ export interface ResolvedHandUseIntent {
   readonly slotIndex: number
 }
 
-export type HandIntentCancelReason = 'card-missing' | 'target-missing' | 'phase-changed' | 'queue-cleared'
+export type HandIntentCancelReason =
+  | 'card-missing'
+  | 'card-changed'
+  | 'target-missing'
+  | 'phase-changed'
+  | 'queue-cleared'
 
 /** FIFO 판정 결과. `run`만 호출자가 제공한 동기 모델 커밋을 수행한다. */
 export interface HandIntentQueueHooks {
   resolveSlot(uid: string): number
+  isCardValid(intent: HandUseIntent, slotIndex: number): boolean
   isPhaseValid(intent: HandUseIntent): boolean
   isTargetValid(intent: HandUseIntent): boolean
   run(resolved: ResolvedHandUseIntent): void
@@ -64,6 +70,8 @@ export class HandUseIntentQueue {
       const slotIndex = this.hooks.resolveSlot(intent.uid)
       let reason: HandIntentCancelReason | null = null
       if (slotIndex < 0) reason = 'card-missing'
+      // UID가 재사용되거나 카드 정의/합성 상태가 예상 밖에서 바뀌어도 다른 효과를 대신 실행하지 않는다.
+      else if (!this.hooks.isCardValid(intent, slotIndex)) reason = 'card-changed'
       else if (!this.hooks.isPhaseValid(intent)) reason = 'phase-changed'
       else if (!this.hooks.isTargetValid(intent)) reason = 'target-missing'
       if (reason) {
