@@ -706,6 +706,15 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
     inset 4px 0 0 rgba(255, 215, 120, 0.95);
   animation: recipe-ready-side-glow 1.8s ease-in-out infinite;
 }
+/* 정산 묶음의 도입은 한 번만 종이처럼 짧게 부풀고 촛불색으로 점화한다. */
+.chain-banner.is-settlement-impact {
+  animation: chain-settlement-impact 240ms ease-out both;
+}
+@keyframes chain-settlement-impact {
+  0% { transform: scale(1); filter: brightness(1); }
+  42% { transform: scale(1.035, 1.07); filter: brightness(1.35) sepia(0.16); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
 .hand-slot.is-recipe-ready::before {
   content: '';
   position: absolute;

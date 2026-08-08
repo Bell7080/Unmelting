@@ -2277,6 +2277,17 @@ export class GameBoardRenderer {
     this.updateChainBanner(hints)
   }
 
+  /** 레시피 묶음마다 한 번만 촛불 점화와 종이 팽창을 재생한다. 개별 효과는 기존 is-new 타격을 쓴다. */
+  playChainSettlementBatchImpact(): void {
+    const banner = document.getElementById('chain-banner')
+    if (!banner) return
+    banner.classList.remove('is-settlement-impact')
+    // 같은 프레임의 이전 묶음 클래스를 지운 뒤 다시 붙여 새 정산만 한 번 재생한다.
+    void banner.getBoundingClientRect()
+    banner.classList.add('is-settlement-impact')
+    window.setTimeout(() => banner.classList.remove('is-settlement-impact'), 260)
+  }
+
   private updateChainBanner(hints?: ChainHints): void {
     let banner = document.getElementById('chain-banner') as HTMLElement | null
     if (!banner) {

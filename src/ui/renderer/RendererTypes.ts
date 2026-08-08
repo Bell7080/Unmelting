@@ -222,6 +222,8 @@ export type ChainEvent = ChainEventCard | ChainEventRecipe | ChainEventGauge | C
 
 export interface ChainHints {
   events: ChainEvent[]
+  /** 마지막 카드 커밋 뒤 레시피 정산이 시작될 절대 시각(performance.now 기준). */
+  chainSettlementDeadline?: number | null
   /** Slots whose next click would immediately satisfy at least one recipe. */
   recipeReadyBySlot?: Record<number, { id: string; name: string; flavor: string }[]>
   /** 악마 소환 레시피가 체인에 포함됨 — 배너 최좌측 대형 붉은 다이아몬드로 이벤트 체인을 별도 표시. */

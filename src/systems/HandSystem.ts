@@ -461,6 +461,31 @@ export class HandSystem {
     return false
   }
 
+  /**
+   * 다음 카드의 판정 전에 모델 정산이 필요한 레시피가 대기하는지 확인한다.
+   * 필드/손패/보스 피해는 다음 입력의 유효 대상이나 슬롯을 바꾸므로 시각 연출과 겹치지 않는다.
+   */
+  static hasPendingModelRecipe(chain: ChainState, gs?: GameState): boolean {
+    const modelEffects: ReadonlySet<Recipe['effect']> = new Set([
+      'gain-wax-drop', 'draw-random-hand-1', 'destroy-random-front-enemy',
+      'convert-random-hazard-to-treasure', 'collect-random-treasure',
+      'convert-random-waiting-to-treasure', 'clear-all-field-cards',
+      'clear-front-cards', 'collect-waiting-treasures', 'clear-all-field-traps',
+      'destroy-all-front-enemies', 'damage-all-field-enemies-1',
+      'damage-all-field-enemies-2', 'damage-all-field-enemies-5',
+      'damage-front-enemies-2', 'damage-front-enemies-3', 'damage-front-enemies-5',
+      'damage-split-field-4', 'damage-split-field-5', 'damage-split-field-2x2',
+      'shield-2-and-damage-field-1', 'ignite-atk', 'hot-atk', 'fuse-atk',
+      'backfire-atk', 'rage-atk', 'flame-chain-atk', 'glass-shards-atk',
+      'fireworks-atk', 'banquet-atk', 'hot-water-maxhp',
+    ])
+    for (const recipe of HandSystem.activeRecipes(gs)) {
+      if (chain.firedRecipeIds.has(recipe.id)) continue
+      if (modelEffects.has(recipe.effect) && HandSystem.recipeMatches(recipe, chain)) return true
+    }
+    return false
+  }
+
   /** Fire exactly one pending recipe so the UI can compact/refill between combo beats. */
   static fireNextPendingRecipe(gs: GameState, chain: ChainState): RecipeFireResult {
     const beforeField = HandSystem.snapshotFieldCards(gs)
