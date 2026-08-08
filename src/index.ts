@@ -43,7 +43,8 @@ import { GAME_OVER_GLOBAL_STYLES } from '@ui/styles/GameOverStyles'
 import { CardSpawner } from '@systems/CardSpawner'
 import { ActionSystem, ActionType } from '@systems/ActionSystem'
 import { DropSystem } from '@systems/DropSystem'
-import { HandSystem, ChainState, type HandTarget } from '@systems/HandSystem'
+import { HandSystem, ChainState, type HandTarget, type HandUseResult } from '@systems/HandSystem'
+import { handVolleyIntervalMs, handVolleyReleaseDelayMs } from '@ui/renderer/VolleyTiming'
 import { EmberSystem, SPROUT_SPAWN_ADJUST } from '@systems/EmberSystem'
 import { boardIntroKindOf } from '@systems/BoardIntroKind'
 import { Card, CardType } from '@entities/Card'
@@ -857,16 +858,39 @@ async function playHandTargetBlasts(
   )
 }
 
-/** 다발 투척은 대상 ID를 고유화하지 않는다. 같은 적을 연속으로 맞혀도 실제 발수만큼
- * 청회색 곡사가 하나씩 보여야 칼날의 서 설명과 전투 피드백이 일치한다. */
-async function playRepeatedHandProjectiles(cardIds: readonly string[], theme: BurstTheme): Promise<void> {
-  if (cardIds.length === 0) return
-  // 기존 광역 대상 스태거보다 조금 짧게 잡아 한 카드의 빠른 연속 투척으로 묶어 읽히게 한다.
-  const interval = Math.max(58, Math.min(92, Math.round(360 / cardIds.length)))
-  await Promise.all(cardIds.map(async (cardId, index) => {
-    if (index > 0) await wait(index * interval)
-    return boardRenderer.animateTargetBlastFromCenterToCard(cardId, theme)
-  }))
+/** 공용 연사는 발수를 보존하되 긴 잔광 Promise까지 입력 잠금을 끌고 가지 않는다.
+ * 첫 발은 즉시 읽히고, 뒤 발은 발수가 많을수록 75→45ms로 완만하게 압축된다. */
+async function playRepeatedHandProjectiles(
+  hits: readonly NonNullable<HandUseResult['hitSequence']>[number][],
+  theme: BurstTheme
+): Promise<void> {
+  if (hits.length === 0) return
+  const interval = handVolleyIntervalMs(hits.length)
+  hits.forEach((hit, index) => {
+    window.setTimeout(() => {
+      // 잔광은 계속 재생하되 마지막 발을 발사한 시점부터 다음 입력을 받을 수 있다.
+      void boardRenderer.animateTargetBlastFromCenterToCard(hit.targetCardId, theme)
+    }, index * interval)
+  })
+  await wait(handVolleyReleaseDelayMs(hits.length))
+}
+
+/** 같은 대상의 연속 피해는 최대 3발씩만 합쳐 숫자 겹침을 줄인다. 궤적은 위에서 매 발
+ * 남기므로 합계 한 번으로 오해되지 않고, 숫자만 읽을 수 있는 작은 묶음이 된다. */
+function groupVolleyDamageNumbers(
+  hits: readonly NonNullable<HandUseResult['hitSequence']>[number][]
+): Array<{ cardId: string; amount: number }> {
+  const groups: Array<{ cardId: string; amount: number; count: number }> = []
+  for (const hit of hits) {
+    const last = groups[groups.length - 1]
+    if (last?.cardId === hit.targetCardId && last.count < 3) {
+      last.amount += hit.actualDamage
+      last.count++
+    } else {
+      groups.push({ cardId: hit.targetCardId, amount: hit.actualDamage, count: 1 })
+    }
+  }
+  return groups.map(({ cardId, amount }) => ({ cardId, amount }))
 }
 
 /** 레시피는 손패 분류가 없으므로 효과가 하는 일로 블라스트 톤을 고른다. */
@@ -946,7 +970,7 @@ boardRenderer.setBossCellStrikeSource((cardId, observedLoss) => {
   // 잠깐 멀쩡한 상태로 남는다.
   render()
   return strikes
-}, () => bossController.rerollGimmickCells())
+}, (_actionId) => bossController.rerollGimmickCells())
 
 /** 페이지 게이트 경고 배선 — 피해가 하한에 막힌 beat에서 수치 대신 무엇이 필요한지 알린다. */
 boardRenderer.setBossPageGateSource(() => bossController.pageGateWarning())
@@ -2438,16 +2462,19 @@ async function applyHandSingle(
   // The played-card preview dissolves at center; this square-card blast points
   // from that center beat to every field cell that was hit, removed, gained, or hardened.
   if (handUseTheme) {
-    // 칼날의 서는 모델이 기록한 실제 무작위 표적 순서를 보존한다. 일반 대상 효과는 기존처럼
-    // 카드 ID를 고유화해 광역 한 방이 같은 대상을 중복 발사하는 일을 막는다.
-    if (usedDef?.id === 'blade-tome' && result.projectileTargetCardIds?.length) {
-      await playRepeatedHandProjectiles(result.projectileTargetCardIds, handUseTheme)
+    // 공용 hitSequence가 있으면 카드 이름을 보지 않고 실제 발사 순서를 그대로 재생한다.
+    if (result.hitSequence?.length) {
+      await playRepeatedHandProjectiles(result.hitSequence, handUseTheme)
     } else {
       await playHandTargetBlasts(affectedCardIds, handUseTheme)
     }
   }
+  // 보스 칸은 모델의 개별 strike 큐가 이미 발마다 숫자를 내므로 한 번만 drain한다.
+  const volleyDamageNumbers = result.hitSequence?.length && !result.hitSequence.some((hit) => hit.bossCellHit)
+    ? groupVolleyDamageNumbers(result.hitSequence)
+    : singleDamageLosses
   await Promise.all([
-    boardRenderer.animateDamageNumbersById(singleDamageLosses),
+    boardRenderer.animateDamageNumbersById(volleyDamageNumbers),
     boardRenderer.animateWaxFreezeByIds(newlyFrozenIds),
     boardRenderer.animateWaxThawByIds(thawedIds),
   ])

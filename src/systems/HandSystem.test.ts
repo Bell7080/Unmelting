@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { GameState } from '@core/GameState'
 import { HandSystem } from './HandSystem'
 import { DropSystem } from './DropSystem'
@@ -160,7 +160,34 @@ describe('HandSystem broad hand effects', () => {
     const result = HandSystem.useSingle(gameState, chain, 0)
 
     expect(result.success).toBe(true)
-    expect(result.projectileTargetCardIds).toEqual(['tome-target', 'tome-target', 'tome-target'])
+    expect(result.hitSequence?.map((hit) => hit.targetCardId)).toEqual([
+      'tome-target', 'tome-target', 'tome-target',
+    ])
+    expect(result.hitSequence?.map((hit) => hit.actualDamage)).toEqual([1, 1, 1])
+    expect(result.hitSequence?.reduce((sum, hit) => sum + hit.actualDamage, 0)).toBe(3)
+  })
+
+  it('트리플 바늘은 세 발의 대상 순서·총피해·마지막 처치를 공용 결과로 보존한다', () => {
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+    const first = new Card('needle-a', CardType.ENEMY, '첫 표적', 'test', 1, 1, {})
+    const second = new Card('needle-b', CardType.ENEMY, '둘째 표적', 'test', 2, 1, {})
+    gameState.lanes[0].setCardAtDistance(0, first)
+    gameState.lanes[1].setCardAtDistance(0, second)
+    gameState.character.addHandCard({ ...DropSystem.makeCard('needle'), merged: true })
+    // 첫 발은 첫 적을 처치하고, 남은 두 발은 살아 있는 둘째 적을 이어 친다.
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0)
+
+    const result = HandSystem.useSingle(gameState, chain, 0)
+    random.mockRestore()
+
+    expect(result.hitSequence?.map((hit) => hit.targetCardId)).toEqual([
+      'needle-a', 'needle-b', 'needle-b',
+    ])
+    expect(result.hitSequence?.reduce((sum, hit) => sum + hit.actualDamage, 0)).toBe(3)
+    expect(result.hitSequence?.map((hit) => hit.killed)).toEqual([true, false, true])
+    // 회복량은 UI가 처치 확인 뒤 적용하는 기존 계약을 그대로 유지한다.
+    expect(result.needleHealOnKill).toBe(5)
   })
 
   it('makes triple 밀랍 freeze every front-row turn timer card', () => {

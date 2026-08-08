@@ -357,10 +357,10 @@ export class GameBoardRenderer {
    */
   private bossCellStrikeSource: ((cardId: string, observedLoss: number) => BossGimmickStrikeView[]) | null = null
   /** 칸 타격 연출이 끝난 뒤 격자 쪽에 알린다(배율 리롤 등 beat 후처리). */
-  private bossCellStrikeSettled: (() => Promise<void> | void) | null = null
+  private bossCellStrikeSettled: ((actionId: string) => Promise<void> | void) | null = null
   setBossCellStrikeSource(
     source: ((cardId: string, observedLoss: number) => BossGimmickStrikeView[]) | null,
-    onSettled: (() => Promise<void> | void) | null = null
+    onSettled: ((actionId: string) => Promise<void> | void) | null = null
   ): void {
     this.bossCellStrikeSource = source
     this.bossCellStrikeSettled = onSettled
@@ -2932,7 +2932,8 @@ export class GameBoardRenderer {
           return this.playBossGimmickStrikes(cellStrikes, this.handUseCenterRect(), {
             hpBefore: this.bossHpCurrent + Math.max(0, amount),
           })
-            .then(() => this.bossCellStrikeSettled?.())
+            // 한 drain은 한 action의 volley다. 마지막 수치 뒤 actionId로 한 번만 정산한다.
+            .then(() => this.bossCellStrikeSettled?.(cellStrikes[0].actionId))
             .then(() => undefined)
         }
         const target = this.findCardElement(cardId)
