@@ -23,17 +23,18 @@ const RELIC_PREFIX = 'unmelting.meta.relicUnlock.'
 const CARD_POOL_DISABLED_PREFIX = 'unmelting.meta.cardPoolOff.'
 const RELIC_POOL_DISABLED_PREFIX = 'unmelting.meta.relicPoolOff.'
 
-/** 곧바로 필요 없되 좋은 손패 6종 — 전부 `runLocked: true`(HandCards.ts)라 원래는 데이터만으론
+/** 곧바로 필요 없되 좋은 손패 10종 — 전부 `runLocked: true`(HandCards.ts)라 원래는 데이터만으론
  *  기존 해금팩과 구분이 없다. 이 목록에 있는 동안은 해금 전까지 그 해금팩 후보에서도 아예
  *  빠진다(getRunEligibleCardIds) — 해금해야 비로소 "다른 runLocked 카드처럼" 만날 수 있다. */
 export const BASIC_UNLOCK_PACK_CARDS: HandCardId[] = [
   'candle-tome', 'bonfire', 'top-hat', 'blade-tome', 'scabbard', 'teapot',
+  'teacup', 'watering-can', 'garden-scissors', 'hand-mirror',
 ]
 
-/** 곧바로 필요 없되 좋은 유물 4종 — `metaLocked: true`(Relics.ts)라 기본 유물 풀(상점/
+/** 곧바로 필요 없되 좋은 유물 6종 — `metaLocked: true`(Relics.ts)라 기본 유물 풀(상점/
  *  제단/이벤트/보스 보상)에 아예 등장하지 않는다. 여기서 해금해야 그 풀에 합류한다. */
 export const BASIC_UNLOCK_PACK_RELICS: RelicId[] = [
-  'annabella-ring', 'annabella-pendant', 'precious-head', 'golden-key',
+  'annabella-ring', 'annabella-pendant', 'precious-head', 'golden-key', 'chivalry', 'great-negotiation',
 ]
 
 /** 팩을 열 때마다 보여줄 선택지 수. 남은 풀이 이보다 적으면 남은 만큼만 보여준다. */

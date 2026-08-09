@@ -1478,18 +1478,30 @@ body.hearth-lobby #ingame-backdrop.is-out {
 /* 기초 해금팩으로 산 항목의 온오프 타일 — 기본 해금 항목은 여기 없다(이 팩으로 산 것만 토글). */
 .hearth-basic-unlock-owned { cursor: pointer; transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.14s ease, filter 0.18s ease; }
 .hearth-basic-unlock-owned:hover { transform: translateY(-3px); border-color: rgba(220, 172, 80, 0.7); }
-.hearth-basic-unlock-owned .hearth-trade-pack-art { background-size: cover; background-position: center; }
+.hearth-basic-unlock-owned .hearth-trade-pack-art { position: relative; background-size: cover; background-position: center; }
 .hearth-basic-unlock-toggle {
   color: #1c1424;
   background: linear-gradient(180deg, #ffe08a, #d69a3a);
   border-color: rgba(255, 228, 160, 0.6);
 }
-.hearth-basic-unlock-owned.is-off { filter: grayscale(0.65) brightness(0.6); }
 .hearth-basic-unlock-owned.is-off .hearth-basic-unlock-toggle {
   color: rgba(214, 200, 178, 0.6);
   background: rgba(0, 0, 0, 0.35);
   border-color: rgba(200, 152, 60, 0.28);
 }
+/* 꺼진 항목은 아트 위를 검게 덮고 X로 금지를 알린다 — 채도만 빼면 '꺼짐'과 '흐림'이 헷갈린다. */
+.hearth-basic-unlock-off-mark {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 4, 8, 0.72);
+  border-radius: inherit;
+  color: rgba(232, 80, 80, 0.9);
+}
+.hearth-basic-unlock-off-mark .icon { width: 38%; height: 38%; }
+.hearth-basic-unlock-owned.is-off .hearth-basic-unlock-off-mark { display: flex; }
 .hearth-basic-unlock-picker {
   position: absolute;
   inset: 0;

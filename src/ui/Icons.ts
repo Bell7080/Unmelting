@@ -181,6 +181,11 @@ export function trapIcon(): string {
   )
 }
 
+/** 금지 표기 X — 대각선 두 획. 무언가를 껐다/막았다는 뜻으로 쓴다(온오프 꺼짐 등). */
+export function closeIcon(): string {
+  return svg([stroke('M6 6 L18 18', 2.2), stroke('M18 6 L6 18', 2.2)].join(''))
+}
+
 /**
  * 손패 카드 — 세로 카드 1장에 반짝임을 음각으로 판 모양.
  * '손패를 얻는다'를 말하는 자리에 쓴다(보물 보상·무료 카드·자원팩·손패 한도).

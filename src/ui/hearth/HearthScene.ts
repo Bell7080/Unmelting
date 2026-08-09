@@ -1,4 +1,5 @@
 import { HEARTH_STYLES } from './HearthStyles'
+import { closeIcon } from '../Icons'
 import { SpriteUrls, spriteForHearthStation, spriteForDinner, spriteForDinnerPack, spriteForHandCard, spriteForRelic } from '../Sprites'
 import { isTouchDevice } from '../MobileTouchManager'
 import { SquareBurst } from '../SquareBurst'
@@ -1647,7 +1648,9 @@ export class HearthScene {
       return `
       <article class="hearth-trade-pack hearth-basic-unlock-owned${on ? '' : ' is-off'}" style="--pack-order:${index + 1}"
                data-hearth-basic-toggle="${item.kind}:${item.id}">
-        <div class="hearth-trade-pack-art" aria-hidden="true" ${sprite ? `style="background-image:url('${sprite}')"` : ''}></div>
+        <div class="hearth-trade-pack-art" aria-hidden="true" ${sprite ? `style="background-image:url('${sprite}')"` : ''}>
+          <span class="hearth-basic-unlock-off-mark" aria-hidden="true">${closeIcon()}</span>
+        </div>
         <strong>${name}</strong>
         <small>${item.kind === 'card' ? '손패' : '유물'}</small>
         <span class="hearth-unlock-state hearth-basic-unlock-toggle">${toggleLabel}</span>

@@ -323,6 +323,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '날이 서있는 동안만 통하는 설득이다.',
     basePrice: 1600,
     banWhenRemoved: true,
+    metaLocked: true,
   },
   'premium-firewood': {
     id: 'premium-firewood',
@@ -442,6 +443,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '4턴마다 기사 카드 획득',
     flavor: '기사도를 지키는 자만이 이 힘을 쓸 수 있다.',
     basePrice: 1000,
+    metaLocked: true,
   },
   'sweet-temptation': {
     id: 'sweet-temptation',
