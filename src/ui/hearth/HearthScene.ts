@@ -1088,6 +1088,9 @@ export class HearthScene {
     await this.wait(380)
 
     this.dinnerConsumed = this.hasDinnerRelicInInventory()
+    // 9칸 그리드는 셔터 뒤에 그대로 남아 있으므로, 지금 다시 그려 둬야 뒤로가기 즉시
+    // Free 배지가 사라진 채로 보인다 — 그리드 재진입 시점까지 미루면 갱신되지 않는다.
+    this.refreshCellLocks()
     await this.showDinnerAfterScene()
   }
 
