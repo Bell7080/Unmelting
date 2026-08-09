@@ -406,6 +406,9 @@ function syncRunModifiersToSpawner(): void {
 function enterHearth(): void {
   // 갓 게임을 켠 상태: 적·직업·유물 잔여 0. 빈 레일을 배경으로 거점 오버레이를 띄운다.
   pendingDinnerRelicProfile = null
+  // 로비 진입마다 예상 시작 불빛 미리보기를 0으로 되돌린다 — 아직 이번 방문에서
+  // 만찬을 만들지 않았으므로.
+  boardRenderer.setLobbyLightPreview(0)
   resetForNewRun()
   // 거점 로비 동안엔 플레이어 말풍선을 음소거한다. 보류 중인 지연 대사(시작 대사 등)도
   // 함께 취소돼 대문 열림 중에 인게임 대사가 새는 것을 막는다. startGame 시작 시 해제된다.
@@ -454,6 +457,8 @@ function enterHearth(): void {
       gameState.character.customRelicProfiles['last-supper'] = profile
       // 로비에서는 카드만 실제 인벤토리에 꽂고, 스탯 효과는 startGame 재지급 때 한 번 발동한다.
       gameState.character.addRelic('last-supper')
+      // 좌측 불빛 칸을 이번 만찬의 시작 불빛 버프로 갱신한다(없으면 0).
+      boardRenderer.setLobbyLightPreview(profile.stats.startScore ?? 0)
       render()
     },
   })
@@ -1802,6 +1807,8 @@ function resetForNewRun(): void {
 async function startGame(characterIndex = -1, difficulty: HearthDifficulty | null = null): Promise<void> {
   void characterIndex // 현재 캐릭터는 에나 단일이라 런 분기엔 미사용(추후 동행 해금 시 활용).
   const dinnerRelicProfile = pendingDinnerRelicProfile
+  // 실제 런에 들어가면 좌측 불빛 칸은 다시 인게임 실제 불빛을 보여준다.
+  boardRenderer.setLobbyLightPreview(null)
   resetForNewRun()
   // 선택한 난이도가 온보딩 여부를 결정한다: 새싹 병아리 = 온보딩(30F 아크 + 필드 3종 + 양초 고양이),
   // 쉬움/보통 = 정규 스폰. 기본 부팅(difficulty=null=쉬움 테스트 필드)도 온보딩을 끈다.

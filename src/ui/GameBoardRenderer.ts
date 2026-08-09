@@ -192,6 +192,9 @@ export class GameBoardRenderer {
    *  while the sparkle/burst effect is playing. */
   private displayedScoreValue = 0
   private displayedCoinValue = 0
+  /** 거점(로비) 전용 "예상 시작 불빛" 미리보기 — null이면 인게임처럼 실제 불빛을 보여준다.
+   *  숫자면(0 포함) 로비 모드로 그 값을 "예상 시작 불빛"으로 보여준다. */
+  private lobbyLightPreview: number | null = null
   /** Generic HUD counters (HP, shield, ember, candle gauge, attack) keep
    *  their own last rendered value so full re-renders can still count from
    *  the previous visible number instead of jumping straight to the model. */
@@ -874,16 +877,23 @@ export class GameBoardRenderer {
     this.displayedScoreValue = scorePanel.score
     this.displayedCoinValue = scorePanel.coins
 
+    // 거점(로비)에서는 실제 불빛이 매 런 0으로 초기화돼 의미가 없다 — 대신 다음 런의
+    // 시작 불빛 버프(만찬 등)를 미리 보여준다. 버프가 없으면 0으로, 있으면 그 값으로.
+    const lobbyPreview = this.lobbyLightPreview
+    const scoreKickerLabel = lobbyPreview !== null ? '예상 시작 불빛' : '불빛'
+    const scoreDisplayValue = lobbyPreview !== null ? lobbyPreview : renderedScore
+    const scoreCountEnd = lobbyPreview !== null ? lobbyPreview : scorePanel.score
+
     return `
       <aside class="score-panel" aria-label="Action score panel">
         <section class="score-panel-total">
           <div class="score-kicker">
             <span class="score-kicker-icon">${sparkleIcon()}</span>
-            불빛
+            ${scoreKickerLabel}
           </div>
           <div class="score-value-row">
             <span class="score-value-icon" aria-hidden="true">${sparkleIcon()}</span>
-            <span class="score-number ${scorePulseClass}" data-score-pulse="${scorePanel.scorePulseKey}" data-count-start="${renderedScore}" data-count-end="${scorePanel.score}" data-count-suffix="">${renderedScore.toLocaleString()}</span>
+            <span class="score-number ${scorePulseClass}" data-score-pulse="${scorePanel.scorePulseKey}" data-count-start="${scoreDisplayValue}" data-count-end="${scoreCountEnd}" data-count-suffix="">${scoreDisplayValue.toLocaleString()}</span>
           </div>
         </section>
         <section class="coin-panel-total" aria-label="Shop currency">
@@ -2169,6 +2179,12 @@ export class GameBoardRenderer {
   /** 해금팩 선택 후 호출해 도감 조합 탭의 레시피 잠금 표시를 갱신한다. */
   setLockedRecipeIds(ids: readonly string[]): void {
     this.lockedRecipeIds = new Set(ids)
+  }
+
+  /** 거점(로비) 좌측 불빛 칸을 "예상 시작 불빛" 미리보기로 바꾼다.
+   *  null이면 인게임처럼 실제 불빛을 보여준다(런 진입 시 호출부가 다시 null로 되돌린다). */
+  setLobbyLightPreview(amount: number | null): void {
+    this.lobbyLightPreview = amount
   }
 
   // ── 도감/경험 탭 본체는 renderer/CompendiumView·ExperienceView로 이동 ──

@@ -537,9 +537,10 @@ body.hearth-lobby .ember-hud {
   opacity: 0;
   pointer-events: none;
 }
-/* 좌측 런 UI(턴/불빛)는 왼쪽 밖으로, 화폐만 남긴다. */
-body.hearth-lobby .left-panel .turn-brand,
-body.hearth-lobby .left-panel .score-panel-total {
+/* 좌측 런 UI 중 턴 표시는 왼쪽 밖으로 숨긴다. 불빛 칸은 화폐처럼 남겨 두고
+   "예상 시작 불빛"(만찬 시작 불빛 버프 미리보기)으로 내용만 바꿔 보여준다
+   (GameBoardRenderer.setLobbyLightPreview). */
+body.hearth-lobby .left-panel .turn-brand {
   transform: translateX(-135%);
   opacity: 0;
   pointer-events: none;
