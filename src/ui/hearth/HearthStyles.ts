@@ -1469,6 +1469,97 @@ body.hearth-lobby #ingame-backdrop.is-out {
 .hearth-unlock-card.is-unaffordable:hover { transform: none; border-color: rgba(255, 222, 140, 0.2); }
 @keyframes hearth-trade-pack-leave { to { opacity: 0; transform: translateY(-48px); } }
 
+/* 무역 2번 탭 기초 해금팩 — 카드 1장을 열면 5택 1 피커가 뜬다. 도넛 대신 잠금 팔레트를 그대로 쓴다. */
+.hearth-basic-unlock-pack .hearth-basic-unlock-art {
+  background:
+    radial-gradient(circle at 50% 40%, rgba(180, 150, 255, 0.18), transparent 56%),
+    linear-gradient(160deg, rgba(58, 42, 78, 0.5), rgba(16, 10, 22, 0.92));
+}
+/* 기초 해금팩으로 산 항목의 온오프 타일 — 기본 해금 항목은 여기 없다(이 팩으로 산 것만 토글). */
+.hearth-basic-unlock-owned { cursor: pointer; transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.14s ease, filter 0.18s ease; }
+.hearth-basic-unlock-owned:hover { transform: translateY(-3px); border-color: rgba(220, 172, 80, 0.7); }
+.hearth-basic-unlock-owned .hearth-trade-pack-art { background-size: cover; background-position: center; }
+.hearth-basic-unlock-toggle {
+  color: #1c1424;
+  background: linear-gradient(180deg, #ffe08a, #d69a3a);
+  border-color: rgba(255, 228, 160, 0.6);
+}
+.hearth-basic-unlock-owned.is-off { filter: grayscale(0.65) brightness(0.6); }
+.hearth-basic-unlock-owned.is-off .hearth-basic-unlock-toggle {
+  color: rgba(214, 200, 178, 0.6);
+  background: rgba(0, 0, 0, 0.35);
+  border-color: rgba(200, 152, 60, 0.28);
+}
+.hearth-basic-unlock-picker {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: clamp(10px, 1.6vh, 18px);
+  padding: clamp(12px, 2vh, 20px) 20px;
+  overflow-y: auto;
+  background: rgba(10, 6, 14, 0.86);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.24s ease;
+}
+#hearth-overlay.is-basic-unlock-open .hearth-basic-unlock-picker { opacity: 1; pointer-events: auto; }
+.hearth-basic-unlock-picker-header { text-align: center; color: rgba(255, 236, 188, 0.92); font-family: 'OkDanDan', Georgia, serif; }
+.hearth-basic-unlock-picker-header h2 { font-size: clamp(20px, 3.2vh, 30px); letter-spacing: 0.08em; margin: 0 0 4px; }
+.hearth-basic-unlock-picker-header p { margin: 0; font-size: clamp(12px, 1.7vh, 15px); color: rgba(214, 200, 178, 0.72); }
+.hearth-basic-unlock-picker-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(10px, 1.6vw, 18px);
+  max-width: 1100px;
+}
+.hearth-basic-unlock-choice {
+  flex: 0 0 clamp(126px, 14vw, 168px);
+  min-height: clamp(150px, 24vh, 210px);
+  border-radius: 14px;
+  border: 1px solid rgba(200, 152, 60, 0.42);
+  background: linear-gradient(180deg, rgba(36, 24, 38, 0.72), rgba(14, 9, 18, 0.86));
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.16), inset 0 -14px 24px rgba(0, 0, 0, 0.42), 0 18px 28px rgba(0, 0, 0, 0.38);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  color: rgba(255, 236, 188, 0.9);
+  font-family: 'OkDanDan', Georgia, serif;
+  text-align: left;
+  transition: transform 0.14s ease, border-color 0.18s ease;
+}
+.hearth-basic-unlock-choice:hover { transform: translateY(-3px); border-color: rgba(220, 172, 80, 0.7); }
+.hearth-basic-unlock-choice-art {
+  flex: 1;
+  min-height: 90px;
+  border-radius: 10px;
+  background:
+    var(--basic-unlock-art, none) center/cover no-repeat,
+    radial-gradient(circle at 50% 38%, rgba(255, 232, 168, 0.14), transparent 54%),
+    linear-gradient(160deg, rgba(74, 56, 78, 0.48), rgba(24, 16, 30, 0.92));
+  border: 1px dashed rgba(255, 222, 140, 0.2);
+}
+.hearth-basic-unlock-choice-footer { display: flex; flex-direction: column; gap: 2px; }
+.hearth-basic-unlock-choice-kind {
+  align-self: flex-start;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: rgba(214, 200, 178, 0.7);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(200, 152, 60, 0.28);
+}
+.hearth-basic-unlock-choice strong { font-size: clamp(15px, 2.1vh, 19px); letter-spacing: 0.04em; }
+.hearth-basic-unlock-choice small { color: rgba(214, 200, 178, 0.72); font-size: clamp(11px, 1.5vh, 13px); line-height: 1.35; }
+
 /* ── 서고 셔터 화면 ──────────────────────────────────────────────────
    도서관 배경(서고 칸 아트 재사용)이 어둡게 깔린 뒤, 상단 '모험일지' 분류 탭과
    낡은 장부풍 점선 원장 행이 순차 진입한다. 기록 열람 전용이라 상호작용은 뒤로가기뿐. */

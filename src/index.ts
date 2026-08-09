@@ -64,7 +64,7 @@ import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { STRIKE_LOB_STAGGER_MS } from '@ui/renderer/ResourceTrailFx'
 import { CursorFX } from '@ui/CursorFX'
 import { FontManager } from '@ui/FontManager'
-import { SpriteUrls, spriteForHearthStation } from '@ui/Sprites'
+import { SpriteUrls, spriteForHearthStation, spriteForHandCard } from '@ui/Sprites'
 import { sparkleIcon } from '@ui/Icons'
 import { SpeechBubble } from '@ui/SpeechBubble'
 import { CompanionSystem, isBoardIntroductionAutomaticDistance, type SituationId, type BoardEncounterKind, type SystemEncounterKind } from '@systems/CompanionSystem'
@@ -74,6 +74,12 @@ import {
 } from '@systems/EnaDisposition'
 import { HearthScene, HEARTH_DEV_UNLOCK_KEY, HEARTH_TRADE_CELEBRATED_KEY, type HearthDifficulty } from '@ui/hearth/HearthScene'
 import { isMetaUnlocked, setMetaUnlocked, META_UNLOCKS } from '@core/MetaUnlocks'
+import {
+  unlockAllBasicUnlockPack,
+  isBasicUnlockCardOwned,
+  BASIC_UNLOCK_PACK_CARDS,
+  getStartingUnlockDraftCandidates,
+} from '@core/MetaContentUnlocks'
 import { loadMetaCurrency, depositMetaCurrency } from '@core/MetaWallet'
 import { ZoneCurtain, ZONE_LIST } from '@ui/ZoneCurtain'
 import { playDialogueLine } from '@ui/DialoguePlayer'
@@ -510,10 +516,20 @@ const FORCED_TRIAL_CARDS = TRIAL_DEFINITIONS.map((def) => ({
   spriteUrl: SpriteUrls.trials[def.spriteKey],
   apply: () => applyTrialEffect(def.effectKind),
 }))
-/** 메타 사당 해금(추후 저장소 연동) + 런 내 카드풀 분리를 위한 토대. */
-// runLocked 카드는 런 시작 시 잠긴 상태로 출발해 해금팩으로만 획득 가능.
-const metaUnlockedCardIds = HAND_CARD_IDS.filter((id) => !getHandCardDef(id).runLocked)
-const runCardPool = new RunCardPool(HAND_CARD_IDS, metaUnlockedCardIds)
+/** 메타 사당 해금(추후 저장소 연동) + 런 내 카드풀 분리를 위한 토대.
+ *  runLocked 카드는 런 시작 시 잠긴 상태로 출발해 해금팩으로만 획득 가능(재계산이 필요해
+ *  const가 아니라 함수다). "기초 해금팩"으로 산 카드는 여기 넣지 않는다 — 그 카드는 이걸로
+ *  곧장 손에 들어오지 않고, 다른 runLocked 카드처럼 매 런 해금팩을 열어야 만날 수 있다. */
+function getMetaUnlockedCardIds(): HandCardId[] {
+  return HAND_CARD_IDS.filter((id) => !getHandCardDef(id).runLocked)
+}
+/** 이번 런에 아예 존재할 수 있는 카드 전체(해금팩 후보 포함). 기초 해금팩 대상인데 아직
+ *  안 산 카드는 여기서도 빠져 해금팩에도 절대 나오지 않는다 — 사야 비로소 "다른 runLocked
+ *  카드와 동급"이 된다. */
+function getRunEligibleCardIds(): HandCardId[] {
+  return HAND_CARD_IDS.filter((id) => !BASIC_UNLOCK_PACK_CARDS.includes(id) || isBasicUnlockCardOwned(id))
+}
+const runCardPool = new RunCardPool(getRunEligibleCardIds(), getMetaUnlockedCardIds())
 // 잠긴 카드가 드롭되지 않도록 초기 허용 풀을 동기화한다.
 DropSystem.setAllowedPool(runCardPool.snapshot().unlocked)
 // 확률팩·직업 태그 가중치도 초기화 시점에 동기화한다(저장된 런 재개 대비).
@@ -1780,7 +1796,7 @@ function resetForNewRun(): void {
   clearChainTimeline()
   // 런 카드 풀(해금팩/삭제팩으로 바뀐 단일 해금·밴)과 확률팩 tier 보정을 메타 기준으로 되돌려,
   // 새로고침과 동일하게 언락 카드/드롭 풀까지 완전 초기화한다.
-  runCardPool.reset(HAND_CARD_IDS, metaUnlockedCardIds)
+  runCardPool.reset(getRunEligibleCardIds(), getMetaUnlockedCardIds())
   DropSystem.setAllowedPool(runCardPool.snapshot().unlocked)
   DropSystem.setTier1CardBoosts(gameState.enhancements.tier1CardBoosts)
   DropSystem.setTier1JobPoolBoosts(gameState.enhancements.tier1JobPoolBoosts)
@@ -1802,6 +1818,64 @@ function resetForNewRun(): void {
   syncSpawnerTier()
   boardRenderer.setHandTargetingMode(null)
   boardRenderer.clearSelection()
+}
+
+/** "시작부터 해금" 드래프트 — 기초 해금팩으로 산 손패 중 해금팩 등장이 켜진 것들에서
+ *  최대 STARTING_UNLOCK_DRAFT_CAP장을 이번 런 한정으로 턴 1부터 바로 쓰게 고른다.
+ *  건너뛰기도 허용한다(카드팩과 달리 강제 획득이 아니다). 후보가 없으면 아예 호출하지 않는다. */
+function openStartingUnlockDraft(candidates: HandCardId[]): Promise<HandCardId | null> {
+  const style = document.createElement('style')
+  style.textContent = `
+    .start-unlock-draft { position: fixed; inset: 0; z-index: 10550; background: rgba(8,5,10,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 24px; opacity: 0; transition: opacity 0.28s ease; }
+    .start-unlock-draft.is-in { opacity: 1; }
+    .start-unlock-draft-header { text-align: center; color: rgba(255,236,188,0.92); font-family: 'OkDanDan', Georgia, serif; }
+    .start-unlock-draft-header h2 { font-size: clamp(20px, 3vh, 28px); letter-spacing: 0.08em; margin: 0 0 4px; }
+    .start-unlock-draft-header p { margin: 0; font-size: clamp(12px, 1.6vh, 15px); color: rgba(214,200,178,0.72); }
+    .start-unlock-draft-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; max-width: 900px; }
+    .start-unlock-choice { flex: 0 0 clamp(140px, 16vw, 190px); min-height: clamp(176px, 30vh, 236px); border-radius: 14px; border: 1px solid rgba(200,152,60,0.42); background: linear-gradient(180deg, rgba(36,24,38,0.72), rgba(14,9,18,0.86)); box-shadow: inset 0 1px 0 rgba(255,232,168,0.16), inset 0 -14px 24px rgba(0,0,0,0.42), 0 18px 28px rgba(0,0,0,0.38); padding: 10px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; color: rgba(255,236,188,0.9); font-family: 'OkDanDan', Georgia, serif; text-align: left; transition: transform 0.14s ease, border-color 0.18s ease; }
+    .start-unlock-choice:hover { transform: translateY(-3px); border-color: rgba(220,172,80,0.7); }
+    .start-unlock-choice-art { flex: 1; min-height: 90px; border-radius: 10px; background: var(--start-unlock-art, none) center/cover no-repeat, radial-gradient(circle at 50% 38%, rgba(255,232,168,0.14), transparent 54%), linear-gradient(160deg, rgba(74,56,78,0.48), rgba(24,16,30,0.92)); border: 1px dashed rgba(255,222,140,0.2); }
+    .start-unlock-choice strong { font-size: clamp(15px, 2.1vh, 19px); letter-spacing: 0.04em; }
+    .start-unlock-choice small { color: rgba(214,200,178,0.72); font-size: clamp(11px, 1.5vh, 13px); line-height: 1.35; }
+    .start-unlock-skip { background: none; border: 1px solid rgba(214,200,178,0.4); color: rgba(214,200,178,0.82); font-family: 'OkDanDan', Georgia, serif; font-size: 14px; letter-spacing: 0.06em; padding: 8px 22px; border-radius: 999px; cursor: pointer; transition: border-color 0.18s ease, color 0.18s ease; }
+    .start-unlock-skip:hover { border-color: rgba(255,222,140,0.7); color: rgba(255,236,188,0.95); }
+  `
+  document.head.appendChild(style)
+  const overlay = document.createElement('div')
+  overlay.className = 'start-unlock-draft'
+  const cardsHtml = candidates.map((id) => {
+    const def = getHandCardDef(id)
+    const sprite = spriteForHandCard(id)
+    return `
+      <button class="start-unlock-choice" type="button" data-pick="${id}" style="${sprite ? `--start-unlock-art:url('${sprite}')` : ''}">
+        <span class="start-unlock-choice-art" aria-hidden="true"></span>
+        <strong>${def.name}</strong>
+        <small>${def.description}</small>
+      </button>`
+  }).join('')
+  overlay.innerHTML = `
+    <div class="start-unlock-draft-header">
+      <h2>시작부터 해금</h2>
+      <p>1장을 골라 해금팩 없이 턴 1부터 바로 씁니다.</p>
+    </div>
+    <div class="start-unlock-draft-row">${cardsHtml}</div>
+    <button class="start-unlock-skip" type="button" data-skip>건너뛰기</button>
+  `
+  document.body.appendChild(overlay)
+  requestAnimationFrame(() => overlay.classList.add('is-in'))
+  return new Promise((resolve) => {
+    const finish = (picked: HandCardId | null): void => {
+      overlay.classList.remove('is-in')
+      window.setTimeout(() => { overlay.remove(); style.remove() }, 300)
+      resolve(picked)
+    }
+    overlay.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement
+      const pick = target.closest<HTMLElement>('[data-pick]')
+      if (pick) { finish(pick.dataset.pick as HandCardId); return }
+      if (target.closest('[data-skip]')) finish(null)
+    })
+  })
 }
 
 async function startGame(characterIndex = -1, difficulty: HearthDifficulty | null = null): Promise<void> {
@@ -1831,10 +1905,10 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // 새싹 병아리: 런 카드 풀을 커먼 등급만 남겨 재구성한다(레어 이상 손패 잠금 — 검과 방패 등).
   // resetForNewRun이 전체 풀로 세팅한 뒤이므로 여기서 커먼 부분집합으로 덮어 드롭·팩·레시피에 일괄 반영한다.
   if (onboardingRunActive) {
-    const commonUnlocked = metaUnlockedCardIds.filter(
+    const commonUnlocked = getMetaUnlockedCardIds().filter(
       (id) => (HAND_CARD_RARITY[id] ?? 'common') === 'common' && !ONBOARDING_BANNED_CARDS.includes(id)
     )
-    runCardPool.reset(HAND_CARD_IDS, commonUnlocked)
+    runCardPool.reset(getRunEligibleCardIds(), commonUnlocked)
     DropSystem.setAllowedPool(runCardPool.snapshot().unlocked)
     boardRenderer.setLockedCardIds([...runCardPool.snapshot().locked, ...runCardPool.snapshot().banned])
   }
@@ -1899,6 +1973,18 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
     }
     // 도적: 함정 무시 확률 적용.
     if (chosenJob.trapIgnoreChance) c.trapIgnoreChance += chosenJob.trapIgnoreChance
+  }
+
+  // 시작부터 해금 드래프트 — 기초 해금팩으로 산 손패 중 온오프가 켜진 것만 후보로 삼는다.
+  // 몇 장을 보여주든 실제로 손에 넣는 건 클릭 1회(=1장)뿐이라 STARTING_UNLOCK_DRAFT_CAP은
+  // UI가 아니라 이 구조 자체로 지켜진다. 새싹 병아리는 이 이점을 주지 않는다(온보딩 카드 폭이
+  // 커먼 한정으로 이미 좁혀져 있다).
+  if (!onboardingRunActive) {
+    const draftCandidates = getStartingUnlockDraftCandidates()
+    if (draftCandidates.length > 0) {
+      const picked = await openStartingUnlockDraft(draftCandidates)
+      if (picked) runCardPool.unlockForRun(picked)
+    }
   }
   // 보드 채움은 직업 유무와 무관하게 항상 실행한다(온보딩은 직업 선택을 건너뛰므로 밖으로 뺐다).
   // 온보딩(첫 경험)이면 잡동사니 필드로, 아니면 정상 오프닝으로 첫 보드를 채운다.
@@ -4064,6 +4150,7 @@ function finishFirstRunIntro(): void {
 /** 메타 전부 해금 + 거점 강제 개방 후 테스트 런 직행 — /테스트 명령과 ?test=1 부팅이 공유한다. */
 function startTestRun(): void {
   for (const { id } of META_UNLOCKS) setMetaUnlocked(id, true)
+  unlockAllBasicUnlockPack()
   localStorage.setItem(HEARTH_DEV_UNLOCK_KEY, '1')
   if (document.getElementById('hearth-overlay')) hearthScene.exit()
   void startGame()

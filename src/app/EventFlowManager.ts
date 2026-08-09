@@ -20,7 +20,8 @@ import { pickEventForDoor, getEventDef, type EventId, type EventDefinition, type
 import type { EventMinigameMoment } from '@data/CompanionLines'
 import { getHandCardDef } from '@data/HandCards'
 import { RECIPES } from '@data/Recipes'
-import { RELIC_IDS, relicDrawWeight } from '@data/Relics'
+import { RELIC_IDS, relicDrawWeight, getRelicDef } from '@data/Relics'
+import { isRelicMetaAvailable } from '@core/MetaContentUnlocks'
 import type { ResourceTrailSource } from '@/app/FeedbackTypes'
 
 /** 이벤트 흐름이 런 상태·연출을 조작할 때 쓰는 주입 계약. */
@@ -243,7 +244,7 @@ export class EventFlowManager {
   /** 등급 가중치로 미보유 유물 1개를 지급한다(백작 완승 보상 등). 성공 시 true. */
   grantRandomRelicReward(): boolean {
     const c = this.deps.gameState.character
-    const pool = RELIC_IDS.filter((id) => !c.hasRelic(id) && !c.bannedRelics.includes(id))
+    const pool = RELIC_IDS.filter((id) => !c.hasRelic(id) && !c.bannedRelics.includes(id) && isRelicMetaAvailable(id, getRelicDef))
     if (pool.length === 0) return false
     const weighted = pool.flatMap((id) => Array.from({ length: relicDrawWeight(id) }, () => id))
     const relicId = weighted[Math.floor(Math.random() * weighted.length)] ?? pool[0]

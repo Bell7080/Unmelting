@@ -129,6 +129,10 @@ export interface RelicDefinition {
    *  TagReactions 반응형 유물의 발동 조건(anyTag)이 된다. 값은 Tags.ts SYNERGY_TAGS 등록분만.
    *  (예: 'flame' 태그 유물이 데이터에 들어오면 화염 손패 평가가 코드 수정 없이 올라간다.) */
   synergyTags?: readonly SynergyTag[]
+  /** true면 기본 유물 풀(상점/제단/이벤트/보스 보상)에서 제외된다 — 거점 무역 2번 탭
+   *  "기초 해금팩"으로 영구 해금해야 등장한다. 단일 출처는 `MetaContentUnlocks.ts`.
+   *  손패의 `runLocked`와 같은 역할이지만 유물은 데이터가 아니라 여기 플래그로 잠근다. */
+  metaLocked?: boolean
 }
 
 /** 유물 상점 등장 가중치의 등급별 기본값. 개별 유물의 weight가 우선한다.
@@ -354,6 +358,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     effect: '7턴마다 최하단 손패 1장을 트리플로 승격',
     flavor: '에나벨라는 언제나 가장 낡은 것을 가장 벼려 두었다.',
     basePrice: 1000,
+    metaLocked: true,
   },
   'annabella-pendant': {
     id: 'annabella-pendant',
@@ -363,6 +368,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '강해질수록 맞서는 것도 강해진다.',
     basePrice: 1200,
     spawnEffect: { type: 'enemy', delta: 15 },
+    metaLocked: true,
   },
   'precious-head': {
     id: 'precious-head',
@@ -372,6 +378,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '머리가 붙어있는 한 다시 일어설 수 있다.',
     basePrice: 1100,
     banWhenRemoved: true,
+    metaLocked: true,
   },
   chance: {
     id: 'chance',
@@ -425,6 +432,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     flavor: '어떤 자물쇠도 이 열쇠를 거부하지 못한다.',
     basePrice: 1000,
     synergyTags: ['treasure'],
+    metaLocked: true,
   },
   // --- 신규 유물(031~037) ---
   chivalry: {

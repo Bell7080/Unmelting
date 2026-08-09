@@ -32,6 +32,7 @@ import { DropSystem } from '@systems/DropSystem'
 import { getHandCardDef, HAND_CARD_DEFINITIONS } from '@data/HandCards'
 import type { HandCardId } from '@entities/HandCard'
 import { getRelicDef, RELIC_IDS, relicDrawWeight, type RelicId } from '@data/Relics'
+import { isRelicMetaAvailable, isCardEligibleForUnlockPack } from '@core/MetaContentUnlocks'
 import { HAND_CARD_RARITY, CHANCE_PACK_RARITY_BOOST, SHOP_PACK_POOLS, SHOP_PACK_LABELS } from '@data/ShopPools'
 import { RECIPES } from '@data/Recipes'
 import { TRIAL_DEFINITIONS } from '@data/Trials'
@@ -225,7 +226,7 @@ export class ShopFlowManager {
     // 제단도 상점과 동일하게 전체 유물 풀에서 3장을 뽑는다(상위 등급 제한 없음).
     // 단, 온보딩은 초반 기본 유물만 노출한다(레어 이상 잠금).
     let sourcePool = RELIC_IDS.filter(
-      (id) => !character.hasRelic(id) && !character.bannedRelics.includes(id)
+      (id) => !character.hasRelic(id) && !character.bannedRelics.includes(id) && isRelicMetaAvailable(id, getRelicDef)
     )
     if (this.deps.isOnboardingActive()) sourcePool = sourcePool.filter((id) => ONBOARDING_RELIC_IDS.includes(id))
     // 리롤 시 현재 배치된 유물은 제외한다. 풀이 부족하면 제외 없이 폴백한다.
@@ -371,7 +372,7 @@ export class ShopFlowManager {
     // 잠겨 있다는 이유로 해금팩 후보가 되면 안 된다. 해금해 봐야 쓸 데가 없는 값이다.
     const forbidden = this.deps.isOnboardingActive() ? ONBOARDING_BANNED_CARDS : []
     return [...locked, ...banned].filter(
-      (id) => getHandCardDef(id).dropSource !== 'boss' && !forbidden.includes(id)
+      (id) => getHandCardDef(id).dropSource !== 'boss' && !forbidden.includes(id) && isCardEligibleForUnlockPack(id)
     )
   }
 

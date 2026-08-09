@@ -21,6 +21,7 @@ import { playDialogueLine } from '@ui/DialoguePlayer'
 import { getHandCardDef } from '@data/HandCards'
 import type { HandCard } from '@entities/HandCard'
 import { getRelicDef, relicDrawWeight, RELIC_IDS, type RelicId } from '@data/Relics'
+import { isRelicMetaAvailable } from '@core/MetaContentUnlocks'
 import { sampleWithoutReplacement } from '@core/Sampling'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
 import { EmberSystem } from '@systems/EmberSystem'
@@ -958,7 +959,7 @@ export class BossEventController {
       this.inject.recordNotice(`현상금: +$${amount}`, 'info')
     } else if (card.id === 'boss-reward-chest') {
       const unownedRelics = RELIC_IDS.filter(
-        (id) => !character.hasRelic(id) && !character.bannedRelics.includes(id)
+        (id) => !character.hasRelic(id) && !character.bannedRelics.includes(id) && isRelicMetaAvailable(id, getRelicDef)
       ) as RelicId[]
       // 상점/제단과 동일하게 등급별 relicDrawWeight 가중치로 뽑는다.
       let relicId: RelicId | null = null
