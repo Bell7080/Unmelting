@@ -1267,10 +1267,10 @@ body.hearth-lobby #ingame-backdrop.is-out {
   border: 0;
   background: transparent;
   color: rgba(255, 238, 196, 0.82);
-  font: 900 clamp(21px, 3.4vh, 34px)/1 'OkDanDan', Georgia, serif;
-  letter-spacing: 0.18em;
+  font: 900 clamp(15px, 2.4vh, 22px)/1.2 'OkDanDan', Georgia, serif;
+  letter-spacing: 0.06em;
   text-align: center;
-  padding: 0 clamp(10px, 1.5vw, 18px);
+  padding: 6px clamp(10px, 1.5vw, 18px) 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1329,9 +1329,10 @@ body.hearth-lobby #ingame-backdrop.is-out {
   display: flex;
   align-items: center;
   gap: clamp(8px, 1vw, 14px);
-  padding: clamp(24px, 5vh, 72px) clamp(8px, 1vw, 12px) clamp(46px, 8vh, 92px);
+  padding: clamp(40px, 8vh, 96px) clamp(8px, 1vw, 12px) clamp(30px, 6vh, 72px);
 }
-/* 팩 목록은 뷰포트 안에서 스크롤, 스크롤바는 숨김 */
+/* 팩 목록은 뷰포트 안에서 스크롤, 스크롤바는 숨김. 드래그로도 좌우로 밀 수 있다(직업
+   선택 캐러셀과 같은 grab-scroll 손맛) — 카드 수가 뷰포트보다 적을 때는 가운데로 모은다. */
 .hearth-trade-pack-viewport {
   flex: 1;
   min-height: 0;
@@ -1341,7 +1342,10 @@ body.hearth-lobby #ingame-backdrop.is-out {
   scrollbar-width: none;
   display: flex;
   align-items: center;
+  justify-content: center;
+  cursor: grab;
 }
+.hearth-trade-pack-viewport.is-dragging { cursor: grabbing; scroll-snap-type: none; }
 .hearth-trade-pack-viewport::-webkit-scrollbar { display: none; }
 .hearth-trade-pack-grid {
   display: flex;
@@ -1349,8 +1353,11 @@ body.hearth-lobby #ingame-backdrop.is-out {
   gap: clamp(16px, 2.4vw, 30px);
   align-items: center;
   min-width: max-content;
+  margin: 0 auto;
   padding: clamp(18px, 3vh, 30px) clamp(10px, 1.5vw, 20px) clamp(28px, 5vh, 50px);
+  scroll-snap-type: x proximity;
 }
+.hearth-trade-pack-grid > * { scroll-snap-align: center; }
 /* 무역 팩 영역 전용 화살표 — 팩 뷰포트 양옆에 고정 */
 .hearth-trade-nav {
   flex: 0 0 auto;

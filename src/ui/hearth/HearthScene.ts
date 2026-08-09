@@ -244,6 +244,12 @@ export class HearthScene {
   /** /개방 개발 명령으로 모든 칸을 강제 개방하는 플래그(로컬 저장 복원). */
   private devUnlockAll = false
   /** 커버플로우 드래그 시작 X 좌표. 좌우 한 바퀴 순환 입력을 판정한다. */
+  /** 무역 팩 뷰포트 grab-scroll 상태 — 캐릭터/난이도 캐러셀과 별도로 라이브 추적한다. */
+  private tradeDragActive = false
+  private tradeDragStartX = 0
+  private tradeDragStartScroll = 0
+  /** 드래그가 실제로 카드를 밀었으면(6px 이상) 그 직후의 click을 카드 클릭으로 오인하지 않는다. */
+  private tradeDragMoved = false
   private dragStartX: number | null = null
   /** 드래그 대상 구분: 캐릭터 스트립 vs 난이도 스트립(같은 pointer 핸들러 공유). */
   private dragKind: 'character' | 'difficulty' | null = null
@@ -423,8 +429,10 @@ export class HearthScene {
       document.addEventListener('pointerout', this.onPointerOut)
     }
 
-    overlay.addEventListener('pointerdown', (e) => this.beginCharacterDrag(e))
-    overlay.addEventListener('pointerup', (e) => this.endCharacterDrag(e))
+    overlay.addEventListener('pointerdown', (e) => { this.beginCharacterDrag(e); this.beginTradeDrag(e) })
+    overlay.addEventListener('pointermove', (e) => this.onTradeDragMove(e))
+    overlay.addEventListener('pointerup', (e) => { this.endCharacterDrag(e); this.endTradeDrag() })
+    overlay.addEventListener('pointercancel', () => this.endTradeDrag())
 
     overlay.addEventListener('click', (e) => {
       const t = e.target as HTMLElement
@@ -491,6 +499,8 @@ export class HearthScene {
       }
       const unlockCard = t.closest<HTMLElement>('[data-hearth-unlock]')
       if (unlockCard) {
+        // 카드를 밀어 스크롤한 직후의 click은 구매 시도로 잡지 않는다(드래그 손맛 vs 오클릭).
+        if (this.tradeDragMoved) { this.tradeDragMoved = false; return }
         this.purchaseUnlockCard(unlockCard)
         return
       }
@@ -1334,6 +1344,33 @@ export class HearthScene {
     ], { duration: 340, easing: 'cubic-bezier(0.2, 0.84, 0.3, 1)' })
   }
 
+  /** 무역 팩을 손으로 잡아 옆으로 미는 grab-scroll 시작 — 직업 선택 캐러셀과 같은 손맛을
+   *  scrollLeft 기반으로 낸다(3D 코버플로우 없이 평범한 카드 그리드라 이 편이 더 어울린다). */
+  private beginTradeDrag(e: PointerEvent): void {
+    const viewport = (e.target as HTMLElement | null)?.closest<HTMLElement>('.hearth-trade-pack-viewport')
+    if (!viewport) return
+    this.tradeDragActive = true
+    this.tradeDragMoved = false
+    this.tradeDragStartX = e.clientX
+    this.tradeDragStartScroll = viewport.scrollLeft
+    viewport.classList.add('is-dragging')
+  }
+
+  private onTradeDragMove(e: PointerEvent): void {
+    if (!this.tradeDragActive) return
+    const viewport = this.overlay?.querySelector<HTMLElement>('.hearth-trade-pack-viewport')
+    if (!viewport) return
+    const dx = e.clientX - this.tradeDragStartX
+    if (Math.abs(dx) > 6) this.tradeDragMoved = true
+    viewport.scrollLeft = this.tradeDragStartScroll - dx
+  }
+
+  private endTradeDrag(): void {
+    if (!this.tradeDragActive) return
+    this.tradeDragActive = false
+    this.overlay?.querySelector<HTMLElement>('.hearth-trade-pack-viewport')?.classList.remove('is-dragging')
+  }
+
   private beginCharacterDrag(e: PointerEvent): void {
     const target = e.target as HTMLElement | null
     if (target?.closest('.hearth-diff-strip')) { this.dragKind = 'difficulty'; this.dragStartX = e.clientX; return }
@@ -1450,14 +1487,17 @@ export class HearthScene {
   }
 
 
-  /** 무역 좌측 탭 라벨은 실제 데이터 연결 전까지 1번~6번 임시 문구를 쓴다. */
+  /** 무역 좌측 탭 라벨. 1번(개방 카드)만 실제 기능이 붙어 있어 "기본기능", 나머지는 "미개발". */
   private renderTradeTabs(): string {
     // 하단 뒤로가기와 겹치던 7·8번 임시 탭은 실제 데이터가 붙기 전까지 숨긴다.
-    return Array.from({ length: 6 }, (_, index) => `
+    return Array.from({ length: 6 }, (_, index) => {
+      const label = index === 0 ? '기본기능' : '미개발'
+      return `
       <button class="hearth-trade-tab ${index === 0 ? 'is-active' : ''}" type="button" role="tab" aria-selected="${index === 0 ? 'true' : 'false'}" data-hearth-trade-tab="${index}">
-        <span data-shadow-text="${index + 1}번">${index + 1}번</span>
+        <span data-shadow-text="${label}">${label}</span>
       </button>
-    `).join('')
+    `
+    }).join('')
   }
 
   /** 각 무역 탭은 비어 있는 임시 카드팩 5개를 가진다. */
