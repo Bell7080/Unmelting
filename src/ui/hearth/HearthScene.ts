@@ -1,5 +1,4 @@
 import { HEARTH_STYLES } from './HearthStyles'
-import { closeIcon } from '../Icons'
 import { SpriteUrls, spriteForHearthStation, spriteForDinner, spriteForDinnerPack, spriteForHandCard, spriteForRelic } from '../Sprites'
 import { isTouchDevice } from '../MobileTouchManager'
 import { SquareBurst } from '../SquareBurst'
@@ -14,13 +13,8 @@ import {
   BASIC_UNLOCK_PACK_PRICE,
   BASIC_UNLOCK_PACK_CHOICE_COUNT,
   getBasicUnlockRemainingPool,
-  getBasicUnlockOwnedPool,
   setBasicUnlockCardOwned,
   setBasicUnlockRelicOwned,
-  isCardUnlockPackEnabled,
-  setCardUnlockPackEnabled,
-  isRelicPoolEnabled,
-  setRelicPoolEnabled,
   type BasicUnlockPoolItem,
 } from '@core/MetaContentUnlocks'
 import { sampleWithoutReplacement } from '@core/Sampling'
@@ -533,12 +527,6 @@ export class HearthScene {
       const basicUnlockPick = t.closest<HTMLElement>('[data-hearth-basic-pick]')
       if (basicUnlockPick) {
         this.pickBasicUnlockChoice(Number(basicUnlockPick.dataset.hearthBasicPick ?? -1), basicUnlockPick)
-        return
-      }
-      const basicUnlockToggle = t.closest<HTMLElement>('[data-hearth-basic-toggle]')
-      if (basicUnlockToggle) {
-        if (this.tradeDragMoved) { this.tradeDragMoved = false; return }
-        this.toggleBasicUnlockOwned(basicUnlockToggle)
         return
       }
       if (t.closest('[data-hearth-depart]')) {
@@ -1617,15 +1605,15 @@ export class HearthScene {
   }
 
   /** 무역 2번 탭: 기초 해금팩. 남은 풀이 있으면 열 수 있는 카드팩 1장, 다 해금했으면 완료 표기.
-   *  이어서 이미 해금한 항목들을 온오프 토글 타일로 나열한다(기본 해금 항목은 여기 없다 —
-   *  이 팩으로 산 것만 껐다 켤 수 있다). 유물은 풀 등장을, 손패는 해금팩 등장을 껐다 켠다. */
+   *  이미 해금한 항목의 온오프는 여기가 아니라 런 시작(직업 선택 뒤) 화면에서 고른다
+   *  (`openUnlockLoadoutScreen`, `src/index.ts`). */
   private renderBasicUnlockPack(): string {
     const remaining = getBasicUnlockRemainingPool()
     const balance = this.handlers?.getMetaCurrency?.() ?? 0
     const affordable = balance >= BASIC_UNLOCK_PACK_PRICE
     const soldOut = remaining.length === 0
     const stateLabel = soldOut ? '모두 해금됨' : `${BASIC_UNLOCK_PACK_PRICE} $`
-    const packTile = `
+    return `
       <article class="hearth-trade-pack hearth-unlock-card hearth-basic-unlock-pack${soldOut ? ' is-unlocked' : ''}${!soldOut && !affordable ? ' is-unaffordable' : ''}" style="--pack-order:0"
                role="button" tabindex="0" data-hearth-basic-pack aria-disabled="${soldOut ? 'true' : 'false'}">
         <div class="hearth-trade-pack-art hearth-basic-unlock-art" aria-hidden="true"></div>
@@ -1633,30 +1621,6 @@ export class HearthScene {
         <small>${soldOut ? '풀에 남은 카드 없음' : `무작위 ${Math.min(BASIC_UNLOCK_PACK_CHOICE_COUNT, remaining.length)}종 중 1개 영구 해금`}</small>
         <span class="hearth-unlock-state">${stateLabel}</span>
       </article>`
-    const owned = getBasicUnlockOwnedPool()
-    const ownedTiles = owned.map((item, index) => {
-      const on = item.kind === 'card'
-        ? isCardUnlockPackEnabled(item.id as Parameters<typeof isCardUnlockPackEnabled>[0])
-        : isRelicPoolEnabled(item.id as Parameters<typeof isRelicPoolEnabled>[0])
-      const name = item.kind === 'card'
-        ? getHandCardDef(item.id as Parameters<typeof getHandCardDef>[0]).name
-        : getRelicDef(item.id as Parameters<typeof getRelicDef>[0]).name
-      const sprite = item.kind === 'card'
-        ? spriteForHandCard(item.id as Parameters<typeof spriteForHandCard>[0])
-        : spriteForRelic(item.id as Parameters<typeof spriteForRelic>[0])
-      const toggleLabel = item.kind === 'card' ? (on ? '해금팩 등장' : '해금팩 숨김') : (on ? '풀 등장' : '풀 숨김')
-      return `
-      <article class="hearth-trade-pack hearth-basic-unlock-owned${on ? '' : ' is-off'}" style="--pack-order:${index + 1}"
-               data-hearth-basic-toggle="${item.kind}:${item.id}">
-        <div class="hearth-trade-pack-art" aria-hidden="true" ${sprite ? `style="background-image:url('${sprite}')"` : ''}>
-          <span class="hearth-basic-unlock-off-mark" aria-hidden="true">${closeIcon()}</span>
-        </div>
-        <strong>${name}</strong>
-        <small>${item.kind === 'card' ? '손패' : '유물'}</small>
-        <span class="hearth-unlock-state hearth-basic-unlock-toggle">${toggleLabel}</span>
-      </article>`
-    }).join('')
-    return packTile + ownedTiles
   }
 
   /** 기초 해금팩 개봉 — 잔액 확인 후 남은 풀에서 무작위 선택지를 뽑아 피커를 띄운다. */
@@ -1734,25 +1698,6 @@ export class HearthScene {
         if (grid) grid.innerHTML = this.renderTradePacks(1)
       }
     }, 420)
-  }
-
-  /** 이미 해금한 항목의 온오프를 뒤집는다 — 소유는 그대로 두고 노출만 잠깐 멈춘다.
-   *  유물은 기본 유물 풀 등장을, 손패는 (런 한정 임시)해금팩 등장을 토글한다. */
-  private toggleBasicUnlockOwned(tile: HTMLElement): void {
-    const raw = tile.dataset.hearthBasicToggle ?? ''
-    const [kind, id] = raw.split(':') as ['card' | 'relic', string]
-    if (!kind || !id) return
-    let nowOn: boolean
-    if (kind === 'card') {
-      nowOn = !isCardUnlockPackEnabled(id as Parameters<typeof isCardUnlockPackEnabled>[0])
-      setCardUnlockPackEnabled(id as Parameters<typeof setCardUnlockPackEnabled>[0], nowOn)
-    } else {
-      nowOn = !isRelicPoolEnabled(id as Parameters<typeof isRelicPoolEnabled>[0])
-      setRelicPoolEnabled(id as Parameters<typeof setRelicPoolEnabled>[0], nowOn)
-    }
-    tile.classList.toggle('is-off', !nowOn)
-    const state = tile.querySelector<HTMLElement>('.hearth-basic-unlock-toggle')
-    if (state) state.textContent = kind === 'card' ? (nowOn ? '해금팩 등장' : '해금팩 숨김') : (nowOn ? '풀 등장' : '풀 숨김')
   }
 
   /** 개방 상태 변화 시 9칸 그리드를 다시 그려 잠금/개방을 반영한다(무역 화면 뒤 배경). */

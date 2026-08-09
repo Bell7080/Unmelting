@@ -64,8 +64,8 @@ import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { STRIKE_LOB_STAGGER_MS } from '@ui/renderer/ResourceTrailFx'
 import { CursorFX } from '@ui/CursorFX'
 import { FontManager } from '@ui/FontManager'
-import { SpriteUrls, spriteForHearthStation, spriteForHandCard } from '@ui/Sprites'
-import { sparkleIcon } from '@ui/Icons'
+import { SpriteUrls, spriteForHearthStation, spriteForHandCard, spriteForRelic } from '@ui/Sprites'
+import { sparkleIcon, closeIcon } from '@ui/Icons'
 import { SpeechBubble } from '@ui/SpeechBubble'
 import { CompanionSystem, isBoardIntroductionAutomaticDistance, type SituationId, type BoardEncounterKind, type SystemEncounterKind } from '@systems/CompanionSystem'
 import {
@@ -79,6 +79,12 @@ import {
   isBasicUnlockCardOwned,
   BASIC_UNLOCK_PACK_CARDS,
   getStartingUnlockDraftCandidates,
+  getBasicUnlockOwnedPool,
+  isCardUnlockPackEnabled,
+  setCardUnlockPackEnabled,
+  isRelicPoolEnabled,
+  setRelicPoolEnabled,
+  type BasicUnlockPoolItem,
 } from '@core/MetaContentUnlocks'
 import { loadMetaCurrency, depositMetaCurrency } from '@core/MetaWallet'
 import { ZoneCurtain, ZONE_LIST } from '@ui/ZoneCurtain'
@@ -1820,6 +1826,97 @@ function resetForNewRun(): void {
   boardRenderer.clearSelection()
 }
 
+/** 해금 목록 온오프 — 무역 2번 탭에 상시 놓아두는 대신, 런 시작(직업 선택 뒤)에 한 번
+ *  지나가는 창으로 보여준다. 기초 해금팩으로 산 항목만 대상이다(기본 해금 항목은 여기 없다).
+ *  꺼도 소유는 유지되고, 여기서 끈 손패는 바로 이어지는 "시작부터 해금" 드래프트 후보에서도 빠진다.
+ *  보유 항목이 없으면 아예 호출하지 않는다. */
+function openUnlockLoadoutScreen(items: BasicUnlockPoolItem[]): Promise<void> {
+  const style = document.createElement('style')
+  style.textContent = `
+    .unlock-loadout-screen { position: fixed; inset: 0; z-index: 10550; background: rgba(8,5,10,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 24px; opacity: 0; transition: opacity 0.28s ease; }
+    .unlock-loadout-screen.is-in { opacity: 1; }
+    .unlock-loadout-header { text-align: center; color: rgba(255,236,188,0.92); font-family: 'OkDanDan', Georgia, serif; }
+    .unlock-loadout-header h2 { font-size: clamp(20px, 3vh, 28px); letter-spacing: 0.08em; margin: 0 0 4px; }
+    .unlock-loadout-header p { margin: 0; font-size: clamp(12px, 1.6vh, 15px); color: rgba(214,200,178,0.72); }
+    .unlock-loadout-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; max-width: 900px; }
+    .unlock-loadout-tile { flex: 0 0 clamp(140px, 16vw, 190px); min-height: clamp(176px, 30vh, 236px); border-radius: 14px; border: 1px solid rgba(200,152,60,0.42); background: linear-gradient(180deg, rgba(36,24,38,0.72), rgba(14,9,18,0.86)); box-shadow: inset 0 1px 0 rgba(255,232,168,0.16), inset 0 -14px 24px rgba(0,0,0,0.42), 0 18px 28px rgba(0,0,0,0.38); padding: 10px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; color: rgba(255,236,188,0.9); font-family: 'OkDanDan', Georgia, serif; text-align: left; transition: transform 0.14s ease, border-color 0.18s ease, filter 0.18s ease; }
+    .unlock-loadout-tile:hover { transform: translateY(-3px); border-color: rgba(220,172,80,0.7); }
+    .unlock-loadout-tile-art { position: relative; flex: 1; min-height: 90px; border-radius: 10px; background: var(--unlock-loadout-art, none) center/cover no-repeat, radial-gradient(circle at 50% 38%, rgba(255,232,168,0.14), transparent 54%), linear-gradient(160deg, rgba(74,56,78,0.48), rgba(24,16,30,0.92)); border: 1px dashed rgba(255,222,140,0.2); }
+    .unlock-loadout-tile strong { font-size: clamp(15px, 2.1vh, 19px); letter-spacing: 0.04em; }
+    .unlock-loadout-tile small { color: rgba(214,200,178,0.72); font-size: clamp(11px, 1.5vh, 13px); }
+    .unlock-loadout-state { align-self: flex-start; padding: 3px 10px; border-radius: 999px; font-size: 12px; letter-spacing: 0.04em; border: 1px solid rgba(255,228,160,0.6); color: #1c1424; background: linear-gradient(180deg, #ffe08a, #d69a3a); }
+    .unlock-loadout-tile.is-off .unlock-loadout-state { color: rgba(214,200,178,0.6); background: rgba(0,0,0,0.35); border-color: rgba(200,152,60,0.28); }
+    .unlock-loadout-off-mark { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(6,4,8,0.72); border-radius: inherit; color: rgba(232,80,80,0.9); }
+    .unlock-loadout-off-mark .icon { width: 38%; height: 38%; }
+    .unlock-loadout-tile.is-off .unlock-loadout-off-mark { display: flex; }
+    .unlock-loadout-continue { background: none; border: 1px solid rgba(214,200,178,0.4); color: rgba(214,200,178,0.82); font-family: 'OkDanDan', Georgia, serif; font-size: 14px; letter-spacing: 0.06em; padding: 8px 22px; border-radius: 999px; cursor: pointer; transition: border-color 0.18s ease, color 0.18s ease; }
+    .unlock-loadout-continue:hover { border-color: rgba(255,222,140,0.7); color: rgba(255,236,188,0.95); }
+  `
+  document.head.appendChild(style)
+  const overlay = document.createElement('div')
+  overlay.className = 'unlock-loadout-screen'
+  const renderTile = (item: BasicUnlockPoolItem): string => {
+    const on = item.kind === 'card'
+      ? isCardUnlockPackEnabled(item.id as HandCardId)
+      : isRelicPoolEnabled(item.id as RelicId)
+    const name = item.kind === 'card'
+      ? getHandCardDef(item.id as HandCardId).name
+      : getRelicDef(item.id as RelicId).name
+    const sprite = item.kind === 'card'
+      ? spriteForHandCard(item.id as HandCardId)
+      : spriteForRelic(item.id as RelicId)
+    const label = item.kind === 'card' ? (on ? '해금팩 등장' : '해금팩 숨김') : (on ? '풀 등장' : '풀 숨김')
+    return `
+      <button class="unlock-loadout-tile${on ? '' : ' is-off'}" type="button" data-toggle="${item.kind}:${item.id}"
+        style="${sprite ? `--unlock-loadout-art:url('${sprite}')` : ''}">
+        <span class="unlock-loadout-tile-art" aria-hidden="true">
+          <span class="unlock-loadout-off-mark" aria-hidden="true">${closeIcon()}</span>
+        </span>
+        <strong>${name}</strong>
+        <small>${item.kind === 'card' ? '손패' : '유물'}</small>
+        <span class="unlock-loadout-state">${label}</span>
+      </button>`
+  }
+  overlay.innerHTML = `
+    <div class="unlock-loadout-header">
+      <h2>해금 목록</h2>
+      <p>기초 해금팩으로 얻은 항목의 등장 여부를 고릅니다. 꺼도 소유는 유지됩니다.</p>
+    </div>
+    <div class="unlock-loadout-row">${items.map(renderTile).join('')}</div>
+    <button class="unlock-loadout-continue" type="button" data-continue>계속</button>
+  `
+  document.body.appendChild(overlay)
+  requestAnimationFrame(() => overlay.classList.add('is-in'))
+  return new Promise((resolve) => {
+    const finish = (): void => {
+      overlay.classList.remove('is-in')
+      window.setTimeout(() => { overlay.remove(); style.remove() }, 300)
+      resolve()
+    }
+    overlay.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement
+      const toggle = target.closest<HTMLElement>('[data-toggle]')
+      if (toggle) {
+        const [kind, id] = (toggle.dataset.toggle ?? '').split(':') as ['card' | 'relic', string]
+        if (!kind || !id) return
+        let nowOn: boolean
+        if (kind === 'card') {
+          nowOn = !isCardUnlockPackEnabled(id as HandCardId)
+          setCardUnlockPackEnabled(id as HandCardId, nowOn)
+        } else {
+          nowOn = !isRelicPoolEnabled(id as RelicId)
+          setRelicPoolEnabled(id as RelicId, nowOn)
+        }
+        toggle.classList.toggle('is-off', !nowOn)
+        const state = toggle.querySelector<HTMLElement>('.unlock-loadout-state')
+        if (state) state.textContent = kind === 'card' ? (nowOn ? '해금팩 등장' : '해금팩 숨김') : (nowOn ? '풀 등장' : '풀 숨김')
+        return
+      }
+      if (target.closest('[data-continue]')) finish()
+    })
+  })
+}
+
 /** "시작부터 해금" 드래프트 — 기초 해금팩으로 산 손패 중 해금팩 등장이 켜진 것들에서
  *  최대 STARTING_UNLOCK_DRAFT_CAP장을 이번 런 한정으로 턴 1부터 바로 쓰게 고른다.
  *  건너뛰기도 허용한다(카드팩과 달리 강제 획득이 아니다). 후보가 없으면 아예 호출하지 않는다. */
@@ -1973,6 +2070,13 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
     }
     // 도적: 함정 무시 확률 적용.
     if (chosenJob.trapIgnoreChance) c.trapIgnoreChance += chosenJob.trapIgnoreChance
+  }
+
+  // 해금 목록 온오프 — 무역 탭 상시 토글 대신 여기서 한 번 지나가며 고른다. 여기서 끈 항목은
+  // 바로 이어지는 시작부터 해금 드래프트 후보에서도 즉시 빠진다(같은 저장값을 읽으므로).
+  if (!onboardingRunActive) {
+    const ownedItems = getBasicUnlockOwnedPool()
+    if (ownedItems.length > 0) await openUnlockLoadoutScreen(ownedItems)
   }
 
   // 시작부터 해금 드래프트 — 기초 해금팩으로 산 손패 중 온오프가 켜진 것만 후보로 삼는다.

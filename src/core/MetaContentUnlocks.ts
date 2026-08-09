@@ -12,6 +12,8 @@
  * 추가로 두 가지 사용자 제어가 있다:
  * - 온오프: 기본 해금(항상 켜진) 항목 제외, 이 팩으로 해금한 항목만 개별로 껐다 켤 수 있다.
  *   꺼도 소유(owned)는 유지된다 — 유물은 풀 등장을, 손패는 해금팩 등장을 잠시 멈출 뿐이다.
+ *   무역 탭에 상시 두지 않고, 런 시작(직업 선택 뒤) 화면에서 한 번 지나가며 고른다
+ *   (`openUnlockLoadoutScreen`, `src/index.ts`).
  * - 시작부터 해금: 소유한 손패 중 이번 런에 한해 해금팩 없이 턴 1부터 바로 쓸 카드를
  *   런 시작 드래프트(카드팩 1장 선택)로 고른다. 상한은 STARTING_UNLOCK_DRAFT_CAP다.
  */
@@ -114,7 +116,8 @@ export function getBasicUnlockRemainingPool(): BasicUnlockPoolItem[] {
   return [...cards, ...relics]
 }
 
-/** 이미 해금한 항목(카드+유물) 전체 — 무역 2번 탭 "보유 목록" 온오프 리스트가 쓴다. */
+/** 이미 해금한 항목(카드+유물) 전체 — 런 시작 해금 목록 온오프 화면(`openUnlockLoadoutScreen`,
+ *  `src/index.ts`)이 쓴다. */
 export function getBasicUnlockOwnedPool(): BasicUnlockPoolItem[] {
   const cards: BasicUnlockPoolItem[] = BASIC_UNLOCK_PACK_CARDS
     .filter((id) => isBasicUnlockCardOwned(id))
