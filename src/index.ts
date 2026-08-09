@@ -1878,9 +1878,10 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
       c.emberMax = Math.max(1, c.emberMax + chosenJob.emberLimitBonus)
       c.ember = Math.min(c.ember, c.emberMax)
     }
-    // 상점 할인율 저장 (상점 가격 계산 시 참조)
+    // 상점 할인율 저장 (상점 가격 계산 시 참조) — 대입이 아니라 덧셈이어야 한다.
+    // 만찬(last-supper)이 직업 선택보다 먼저 이 값을 쌓아 두므로, 대입하면 그 몫이 지워진다.
     if (chosenJob.shopDiscountPct !== 0) {
-      gameState.enhancements.shopDiscountPct = chosenJob.shopDiscountPct
+      gameState.enhancements.shopDiscountPct += chosenJob.shopDiscountPct
     }
     cardSpawner.setJobSpawnAdjust(chosenJob.spawnEnemy, chosenJob.spawnTrap, chosenJob.spawnTreasure, chosenJob.spawnFlower)
     // 기사/마법사: 직업 태그 그룹을 1차 거름망에 단일 항목(가중치 10)으로 추가한다.

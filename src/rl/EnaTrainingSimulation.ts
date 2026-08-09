@@ -350,7 +350,9 @@ const BOSS_PROFILES: Record<number, BossProfile> = {
 /** 시뮬 난이도. standard=정규 100층 아크, sprout=새싹 병아리 온보딩(30층 + 양초 고양이 보스). */
 export type EnaSimDifficulty = 'standard' | 'sprout'
 
-/** 런 시작 1회 스탯 주입(만찬 last-supper 유물) — 실게임 customRelicProfiles['last-supper'].stats와 같은 키. */
+/** 런 시작 1회 스탯 주입(만찬 last-supper 유물) — 실게임 customRelicProfiles['last-supper'].stats와 같은 키.
+ *  shopDiscount·spawn*Adjust는 곡괭이/살균제 같은 다른 스폰·상점 보정형 유물들과 함께 시뮬이 원래
+ *  개별 모델링하지 않는 축이라(시작 공격력 prior로 압축) 여기 타입에도 일부러 넣지 않는다. */
 export interface EnaSimStartBonus {
   maxHealth?: number
   damage?: number

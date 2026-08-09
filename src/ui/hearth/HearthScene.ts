@@ -53,7 +53,10 @@ export const HEARTH_DEV_UNLOCK_KEY = 'unmelting.hearth.devUnlockAll'
 export const HEARTH_TRADE_CELEBRATED_KEY = 'unmelting.hearth.tradeUnlockCelebrated'
 const DINNER_DONE_LINE = '하하, 식사는 만족스러우셨나요? 다음 만찬도 기대해주세요.'
 
-type DinnerStatKey = 'maxHealth' | 'emberMax' | 'handMax' | 'scorePct' | 'damage' | 'shopDiscount' | 'startScore'
+type DinnerStatKey =
+  | 'maxHealth' | 'emberMax' | 'handMax' | 'scorePct' | 'damage' | 'shopDiscount' | 'startScore'
+  // 가벼운 한끼($5) 전용 3종 — 스폰 가중치 보정(음수=감소, 양수=증가). CardSpawner.adjustRelicSpawn과 같은 축.
+  | 'spawnEnemyAdjust' | 'spawnTrapAdjust' | 'spawnTreasureAdjust'
 type DinnerRarity = 'common' | 'rare' | 'epic'
 
 interface DinnerChoice {
@@ -89,9 +92,14 @@ const DINNER_STAT_LABELS: Record<DinnerStatKey, string> = {
   damage: '공격력',
   shopDiscount: '상점 할인',
   startScore: '시작 불빛',
+  spawnEnemyAdjust: '적 확률',
+  spawnTrapAdjust: '함정 확률',
+  spawnTreasureAdjust: '보물 확률',
 }
 /** % 접미사를 붙이는 스탯 키 */
 const DINNER_STAT_PCT = new Set<DinnerStatKey>(['scorePct', 'shopDiscount'])
+/** 가벼운 한끼($5) 구매 단가. */
+const DINNER_PREMIUM_PRICE = 5
 
 /** 풀 선출 가중치: 커먼 10 / 레어 5 / 에픽 1 */
 const DINNER_RARITY_WEIGHTS: Record<DinnerRarity, number> = { common: 10, rare: 5, epic: 1 }
@@ -123,6 +131,38 @@ const DINNER_TOPPINGS: DinnerBaseItem[] = [
   { title: '양파',    color: '#d4c8a0', kind: 'topping', sprite: spriteForDinner('topping','004'), stat: 'startScore',   values: { common:100, rare:200, epic:300 }, weightBonus:0 },
   { title: '허브',    color: '#5a7050', kind: 'topping', sprite: spriteForDinner('topping','005'), stat: 'handMax',      values: { rare:1, epic:2 }, weightBonus:0 },
   { title: '마른 버섯', color: '#8a7060', kind: 'topping', sprite: spriteForDinner('topping','006'), stat: 'emberMax',     values: { rare:1, epic:2 }, weightBonus:0 },
+]
+
+// ── 가벼운 한끼($5) 식재료 풀 ────────────────────────────────────────────
+// 무료 만찬(001~006)보다 조금 더 높은 성능이 나오도록 수치를 올렸고, 손패/불씨 한도는
+// 커먼 등급도 열어 뒀다(무료는 레어부터). 007~012는 기존 6종 스탯의 상위 버전이고,
+// 013 셋(소시지/계란/꿀)은 이 등급에서만 나오는 스폰 확률 보정 — 슬롯이 하나씩만 있다.
+const DINNER_MAINS_PREMIUM: DinnerBaseItem[] = [
+  { title: '미트파이', color: '#a5623a', kind: 'food', sprite: spriteForDinner('main','007'), stat: 'maxHealth',    values: { common:2, rare:3, epic:5 }, weightBonus:0 },
+  { title: '파스타',   color: '#d4a838', kind: 'food', sprite: spriteForDinner('main','008'), stat: 'scorePct',     values: { common:3, rare:5, epic:8 }, weightBonus:0 },
+  { title: '토끼고기', color: '#c8a888', kind: 'food', sprite: spriteForDinner('main','009'), stat: 'shopDiscount', values: { common:2, rare:3, epic:5 }, weightBonus:0 },
+  { title: '베이컨',   color: '#b85a48', kind: 'food', sprite: spriteForDinner('main','010'), stat: 'startScore',   values: { common:150, rare:250, epic:400 }, weightBonus:0 },
+  { title: '오믈렛',   color: '#e8c860', kind: 'food', sprite: spriteForDinner('main','011'), stat: 'handMax',      values: { common:1, rare:2, epic:3 }, weightBonus:0 },
+  { title: '스튜',     color: '#8a6040', kind: 'food', sprite: spriteForDinner('main','012'), stat: 'emberMax',     values: { common:1, rare:2, epic:3 }, weightBonus:0 },
+  { title: '소시지',   color: '#a04838', kind: 'food', sprite: spriteForDinner('main','013'), stat: 'spawnEnemyAdjust', values: { common:-5, rare:-8, epic:-12 }, weightBonus:0 },
+]
+const DINNER_SAUCES_PREMIUM: DinnerBaseItem[] = [
+  { title: '마늘 소스',   color: '#e0d8a0', kind: 'sauce', namePart: '마늘',   sprite: spriteForDinner('sauce','007'), stat: 'maxHealth',    values: { common:2, rare:3, epic:5 }, weightBonus:0 },
+  { title: '새우 소스',   color: '#e08858', kind: 'sauce', namePart: '새우',   sprite: spriteForDinner('sauce','008'), stat: 'scorePct',     values: { common:3, rare:5, epic:8 }, weightBonus:0 },
+  { title: '시금치 소스', color: '#4a7040', kind: 'sauce', namePart: '시금치', sprite: spriteForDinner('sauce','009'), stat: 'shopDiscount', values: { common:2, rare:3, epic:5 }, weightBonus:0 },
+  { title: '브로콜리 소스', color: '#3a6040', kind: 'sauce', namePart: '브로콜리', sprite: spriteForDinner('sauce','010'), stat: 'startScore', values: { common:150, rare:250, epic:400 }, weightBonus:0 },
+  { title: '조개 소스',   color: '#b0a888', kind: 'sauce', namePart: '조개',   sprite: spriteForDinner('sauce','011'), stat: 'handMax',      values: { common:1, rare:2, epic:3 }, weightBonus:0 },
+  { title: '크림 소스',   color: '#f0e8d0', kind: 'sauce', namePart: '크림',   sprite: spriteForDinner('sauce','012'), stat: 'emberMax',     values: { common:1, rare:2, epic:3 }, weightBonus:0 },
+  { title: '꿀 소스',     color: '#e8b020', kind: 'sauce', namePart: '꿀',     sprite: spriteForDinner('sauce','013'), stat: 'spawnTreasureAdjust', values: { common:5, rare:8, epic:12 }, weightBonus:0 },
+]
+const DINNER_TOPPINGS_PREMIUM: DinnerBaseItem[] = [
+  { title: '매콤 가루', color: '#c03828', kind: 'topping', sprite: spriteForDinner('topping','007'), stat: 'maxHealth',    values: { common:2, rare:3, epic:5 }, weightBonus:0 },
+  { title: '오일',     color: '#d8c060', kind: 'topping', sprite: spriteForDinner('topping','008'), stat: 'scorePct',     values: { common:3, rare:5, epic:8 }, weightBonus:0 },
+  { title: '칠리',     color: '#b02818', kind: 'topping', sprite: spriteForDinner('topping','009'), stat: 'shopDiscount', values: { common:2, rare:3, epic:5 }, weightBonus:0 },
+  { title: '버터',     color: '#f0d878', kind: 'topping', sprite: spriteForDinner('topping','010'), stat: 'startScore',   values: { common:150, rare:250, epic:400 }, weightBonus:0 },
+  { title: '커리',     color: '#c88820', kind: 'topping', sprite: spriteForDinner('topping','011'), stat: 'handMax',      values: { common:1, rare:2, epic:3 }, weightBonus:0 },
+  { title: '야채모둠', color: '#78a048', kind: 'topping', sprite: spriteForDinner('topping','012'), stat: 'emberMax',     values: { common:1, rare:2, epic:3 }, weightBonus:0 },
+  { title: '계란',     color: '#f0d090', kind: 'topping', sprite: spriteForDinner('topping','013'), stat: 'spawnTrapAdjust', values: { common:-5, rare:-8, epic:-12 }, weightBonus:0 },
 ]
 
 /** 모험 셔터 안에서 고를 수 있는 동행 목록. 3~4번은 잠금 회색 빈 슬롯. */
@@ -211,6 +251,8 @@ export class HearthScene {
   private selectedTradeTab = 0
   /** 만찬 선택 흐름 단계: 0=팩 레일, 1=메인 음식, 2~3=추가 스탯, 4=완성 연출. */
   private dinnerStep = 0
+  /** 이번 방문에서 고른 만찬 등급 — 어느 재료 풀(무료/가벼운 한끼)을 뽑을지 결정한다. */
+  private dinnerTier: 'free' | 'premium' = 'free'
   /** 무료 만찬에서 고른 음식/스탯을 임시로 보관해 완성 유물 프로필을 만든다. */
   private dinnerChoices: DinnerChoice[] = []
   /** 만찬 완료 후에는 런이 시작될 때까지 닫힌 일러스트/대사 화면으로 재입장한다. */
@@ -639,6 +681,7 @@ export class HearthScene {
     this.shuttered = true
     this.hideInspector()
     this.dinnerStep = this.dinnerConsumed ? 5 : 0
+    this.dinnerTier = 'free'
     this.dinnerChoices = []
     this.overlay?.classList.remove('is-adventure-mode', 'is-trade-mode', 'is-trade-leaving', 'is-library-mode', 'is-library-leaving')
     this.overlay?.classList.add('is-shuttering', 'is-dinner-mode')
@@ -673,9 +716,20 @@ export class HearthScene {
     if (afterCaption) { afterCaption.textContent = ''; afterCaption.classList.remove('is-visible') }
   }
 
-  /** 무료 팩 클릭 → 블라스트 후 코스 카드 역순 퇴장 → 검은 오버레이 → 1단계 선택지 등장. */
+  /** 팩 클릭 → 블라스트 후 코스 카드 역순 퇴장 → 검은 오버레이 → 1단계 선택지 등장.
+   *  가벼운 한끼($5)는 결제가 성사돼야 진행한다 — 잔액 부족은 흔들림만 주고 멈춘다. */
   private async openDinnerPack(packEl: HTMLElement): Promise<void> {
     if (this.dinnerConsumed || this.dinnerStep !== 0) return
+    const tier = (packEl.dataset.hearthDinnerTier as 'free' | 'premium' | undefined) ?? 'free'
+    if (tier === 'premium' && !spendMetaCurrency(DINNER_PREMIUM_PRICE)) {
+      packEl.animate(
+        [{ transform: 'translateX(0)' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(0)' }],
+        { duration: 260, easing: 'ease-out' }
+      )
+      return
+    }
+    this.dinnerTier = tier
+    if (tier === 'premium') this.handlers?.onMetaCurrencySpent?.()
     // 중복 클릭 방지 — 아직 step=0인 상태에서 step=1로 즉시 잠금
     this.dinnerStep = 1
 
@@ -775,18 +829,22 @@ export class HearthScene {
     setTimeout(() => orb.remove(), 750)
   }
 
-  /** 만찬 레일: 이름(상단) → 정사각 일러스트(dinner_NNN) → 가격(하단) 구조의 4종 팩. */
+  /** 만찬 레일: 이름(상단) → 정사각 일러스트(dinner_NNN) → 가격(하단) 구조의 4종 팩.
+   *  무료 간식/가벼운 한끼는 구매 가능, 나머지 둘은 아직 미구현 잠금 카드다. */
   private renderDinnerPacks(): string {
-    const packs = [
-      { name: '무료 간식',      price: '무료',  free: true,  sprite: spriteForDinnerPack('001') },
-      { name: '가벼운 한끼',    price: '$5',    free: false, sprite: spriteForDinnerPack('002') },
-      { name: '만족스러운 식사', price: '$10',  free: false, sprite: spriteForDinnerPack('003') },
-      { name: '호화로운 만찬',  price: '$30',   free: false, sprite: spriteForDinnerPack('004') },
+    const balance = this.handlers?.getMetaCurrency?.() ?? 0
+    const packs: { name: string; price: string; tier: 'free' | 'premium' | null; sprite?: string }[] = [
+      { name: '무료 간식',      price: '무료', tier: 'free',    sprite: spriteForDinnerPack('001') },
+      { name: '가벼운 한끼',    price: '$5',   tier: 'premium', sprite: spriteForDinnerPack('002') },
+      { name: '만족스러운 식사', price: '$10', tier: null,      sprite: spriteForDinnerPack('003') },
+      { name: '호화로운 만찬',  price: '$30',  tier: null,      sprite: spriteForDinnerPack('004') },
     ]
     return packs.map((pack) => {
-      const tag = pack.free ? 'button' : 'article'
-      const attrs = pack.free
-        ? `class="hearth-dinner-pack" type="button" data-hearth-dinner-pack`
+      const affordable = pack.tier === 'premium' ? balance >= DINNER_PREMIUM_PRICE : true
+      const buyable = pack.tier !== null
+      const tag = buyable ? 'button' : 'article'
+      const attrs = buyable
+        ? `class="hearth-dinner-pack${affordable ? '' : ' is-unaffordable'}" type="button" data-hearth-dinner-pack data-hearth-dinner-tier="${pack.tier}"`
         : `class="hearth-dinner-pack is-locked"`
       const artStyle = pack.sprite ? `style="--pack-art:url('${pack.sprite}')"` : ''
       return `<${tag} ${attrs}>
@@ -820,12 +878,14 @@ export class HearthScene {
     return allowed[allowed.length - 1]
   }
 
-  /** stats 맵을 "불씨 한도 +1\n시작 불빛 +200" 형태로 변환한다. 공개 카드에서 줄 분리 표기. */
+  /** stats 맵을 "불씨 한도 +1\n시작 불빛 +200" 형태로 변환한다. 공개 카드에서 줄 분리 표기.
+   *  적/함정 확률처럼 음수로도 나오는 스탯은 부호를 그대로 살린다("-8" ↔ "+8"). */
   private buildStatString(stats: Partial<Record<DinnerStatKey, number>>): string {
     return (Object.entries(stats) as [DinnerStatKey, number][])
       .map(([key, val]) => {
         const label = DINNER_STAT_LABELS[key]
-        return DINNER_STAT_PCT.has(key) ? `${label} +${val}%` : `${label} +${val}`
+        const signed = val >= 0 ? `+${val}` : `${val}`
+        return DINNER_STAT_PCT.has(key) ? `${label} ${signed}%` : `${label} ${signed}`
       })
       .join('\n')
   }
@@ -845,11 +905,13 @@ export class HearthScene {
     return selected
   }
 
-  /** 현재 단계에 맞는 만찬 선택지 3장을 가중치 추출 후 등급 추첨해 반환한다. */
+  /** 현재 단계에 맞는 만찬 선택지 3장을 가중치 추출 후 등급 추첨해 반환한다.
+   *  가벼운 한끼(premium)를 골랐으면 상위 재료 풀(007~013)에서 뽑는다. */
   private getDinnerOptions(): DinnerChoice[] {
-    const pool = this.dinnerStep === 1 ? DINNER_MAINS
-      : this.dinnerStep === 2 ? DINNER_SAUCES
-      : DINNER_TOPPINGS
+    const premium = this.dinnerTier === 'premium'
+    const pool = this.dinnerStep === 1 ? (premium ? DINNER_MAINS_PREMIUM : DINNER_MAINS)
+      : this.dinnerStep === 2 ? (premium ? DINNER_SAUCES_PREMIUM : DINNER_SAUCES)
+      : (premium ? DINNER_TOPPINGS_PREMIUM : DINNER_TOPPINGS)
     return this.pickDinnerPool(pool, 3).map(item => {
       const allowedRarities = Object.keys(item.values) as DinnerRarity[]
       const rarity = allowedRarities.length === (Object.keys(DINNER_RARITY_WEIGHTS) as DinnerRarity[]).length
@@ -910,9 +972,10 @@ export class HearthScene {
       window.setTimeout(() => { row.style.opacity = '' }, 60 + 300 + 16)
     } else {
       // 첫 렌더 — 전체 구조 초기화
+      const packName = this.dinnerTier === 'premium' ? '가벼운 한끼' : '무료 간식'
       choices.innerHTML = `
         <header class="hearth-dinner-choices-header">
-          <h2 class="hearth-dinner-choices-pack">무료 간식</h2>
+          <h2 class="hearth-dinner-choices-pack">${packName}</h2>
           <p class="hearth-dinner-choices-step">${stepLabel} ${this.dinnerStep} / 3</p>
         </header>
         <div class="hearth-dinner-choices-row">${cardHtml}</div>`
@@ -1127,6 +1190,7 @@ export class HearthScene {
       this.dinnerBubble = null
       root.classList.remove('is-shuttering', 'is-shutter-rest', 'is-dinner-mode', 'is-dinner-opened', 'is-dinner-finalizing', 'is-dinner-closing', 'is-dinner-after')
       this.dinnerStep = this.dinnerConsumed ? 5 : 0
+      this.dinnerTier = 'free'
       this.dinnerChoices = []
       this.dinnerCurrentOptions = []
       root.querySelector<HTMLElement>('.hearth-dinner-picks')?.replaceChildren()

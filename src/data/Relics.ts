@@ -99,7 +99,12 @@ export interface CustomRelicProfile {
   flavor: string
   /** 커스텀 일러스트 URL — 설정 시 기본 스프라이트를 대체한다(만찬 유물에서 메인 음식 아트 사용). */
   art?: string
-  stats: Partial<{ maxHealth: number; emberMax: number; handMax: number; scorePct: number; damage: number; shopDiscount: number; startScore: number }>
+  stats: Partial<{
+    maxHealth: number; emberMax: number; handMax: number; scorePct: number; damage: number
+    shopDiscount: number; startScore: number
+    // 가벼운 한끼($5) 전용 3종 — 스폰 가중치 보정(음수=감소, 양수=증가).
+    spawnEnemyAdjust: number; spawnTrapAdjust: number; spawnTreasureAdjust: number
+  }>
 }
 
 /** Immutable relic rules used by gameplay and presentation. */

@@ -764,6 +764,15 @@ export class RelicEffectsManager {
       if (stats.handMax) gameState.character.increaseHandMax(stats.handMax)
       if (stats.damage) gameState.character.applyDamageBoost(stats.damage)
       if (stats.scorePct) gameState.enhancements.scoreMultiplier *= (1 + stats.scorePct / 100)
+      // 상점 할인은 직업(귀족)과 같은 축을 더한다 — 직업 선택이 이 값을 대입(+=)해도
+      // 만찬이 먼저 쌓은 할인이 지워지지 않게 인덱스 쪽도 덧셈으로 맞춰 둔다.
+      if (stats.shopDiscount) gameState.enhancements.shopDiscountPct += stats.shopDiscount
+      // 시작 불빛은 고정 획득이라 턴 배율 없이 gainFixedLight로 지급한다(별빛 랜턴과 같은 경로).
+      if (stats.startScore) this.gainFixedLight('최후의 만찬', stats.startScore)
+      // 가벼운 한끼(소시지/꿀/계란) 전용 3종 — 곡괭이/자물쇠 같은 스폰 유물과 같은 축(누적).
+      if (stats.spawnEnemyAdjust) cardSpawner.adjustRelicSpawn('enemy', stats.spawnEnemyAdjust)
+      if (stats.spawnTrapAdjust) cardSpawner.adjustRelicSpawn('trap', stats.spawnTrapAdjust)
+      if (stats.spawnTreasureAdjust) cardSpawner.adjustRelicSpawn('treasure', stats.spawnTreasureAdjust)
       await playPlayerGainTrails({ kind: 'center' }, beforeResources)
     }
     // chivalry, luxury: 구매 즉발 효과 없음 — 각각 매 3턴 트리거 / 불빛 소비 시 트리거.

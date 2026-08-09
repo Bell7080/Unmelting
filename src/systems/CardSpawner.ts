@@ -299,8 +299,9 @@ export class CardSpawner {
   private trialTreasureSpawnScale: number = 1
   /** 90F boss+trial 이후에는 별빛만 턴을 올리는 최종 등반 규칙을 켠다. */
   private finalAscentActive: boolean = false
-  /** 유물 구매로 누적된 스폰 가중치 보정. 양수=증가, 음수=감소. 정규화는 roll 총합으로 자동 처리. */
-  private relicSpawnAdjust: { enemy: number; treasure: number; spore: number; flower: number } = { enemy: 0, treasure: 0, spore: 0, flower: 0 }
+  /** 유물 구매로 누적된 스폰 가중치 보정. 양수=증가, 음수=감소. 정규화는 roll 총합으로 자동 처리.
+   *  trap은 spore(포자 전용 감소)와 별도로 일반 함정(webTrap) 비중에 더해진다. */
+  private relicSpawnAdjust: { enemy: number; treasure: number; spore: number; flower: number; trap: number } = { enemy: 0, treasure: 0, spore: 0, flower: 0, trap: 0 }
   /** 직업 선택으로 적용된 스폰 가중치 보정 — 런 내내 고정되며 런 리셋 시 초기화된다. */
   private jobSpawnAdjust: { enemy: number; trap: number; treasure: number; flower: number } = { enemy: 0, trap: 0, treasure: 0, flower: 0 }
   /** 난이도(새싹 병아리)로 적용된 스폰 가중치 보정. 직업 보정과 별도로 누적된다 —
@@ -369,7 +370,7 @@ export class CardSpawner {
   }
 
   /** 유물 구매/런 리셋 시 스폰 가중치 보정을 delta 값만큼 누적한다. */
-  adjustRelicSpawn(type: 'enemy' | 'treasure' | 'spore' | 'flower', delta: number): void {
+  adjustRelicSpawn(type: 'enemy' | 'treasure' | 'spore' | 'flower' | 'trap', delta: number): void {
     if (delta !== 0) this.clearRefillPreviewQueue()
     this.relicSpawnAdjust[type] += delta
   }
@@ -422,7 +423,7 @@ export class CardSpawner {
   /** 런 시작 시 유물/직업 modifiers를 초기화한다. */
   resetRelicModifiers(): void {
     this.clearRefillPreviewQueue()
-    this.relicSpawnAdjust = { enemy: 0, treasure: 0, spore: 0, flower: 0 }
+    this.relicSpawnAdjust = { enemy: 0, treasure: 0, spore: 0, flower: 0, trap: 0 }
     this.jobSpawnAdjust = { enemy: 0, trap: 0, treasure: 0, flower: 0 }
     this.difficultySpawnAdjust = { enemy: 0, trap: 0, treasure: 0, flower: 0 }
     this.relicEnemyHpBonus = 0
@@ -714,7 +715,7 @@ export class CardSpawner {
     const sporeToWeb = sporeLocked && !isOpening ? buckets.sporeTrap : 0
     const webTrap = options.openingBoard
       ? buckets.webTrap + buckets.bombTrap + buckets.sporeTrap
-      : Math.max(0, buckets.webTrap + (isOpening ? 0 : runAdjust.trap)) + sporeToWeb
+      : Math.max(0, buckets.webTrap + (isOpening ? 0 : runAdjust.trap + this.relicSpawnAdjust.trap)) + sporeToWeb
     const bombTrap = isOpening ? 0 : buckets.bombTrap
     // Spores on cooldown are treated as weight 0; the slot is silently folded into
     // the rest of the distribution so the total chance of non-spore cards increases.
@@ -1010,7 +1011,7 @@ export class CardSpawner {
     const enemy = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy + runAdjust.enemy)
     // 살균제 유물: sporeTrap 가중치만 독립 감소. webTrap·bombTrap은 영향 없음.
     const sporeTrap = Math.max(0, buckets.sporeTrap + this.relicSpawnAdjust.spore)
-    const trap = Math.max(0, buckets.webTrap + runAdjust.trap) + buckets.bombTrap + sporeTrap
+    const trap = Math.max(0, buckets.webTrap + runAdjust.trap + this.relicSpawnAdjust.trap) + buckets.bombTrap + sporeTrap
     const treasure = Math.max(1, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + runAdjust.treasure)
     // 밀랍 조화 유물: flower 가중치 독립 증가.
     const flower = Math.max(0, buckets.flower + runAdjust.flower + this.relicSpawnAdjust.flower)
@@ -1034,7 +1035,7 @@ export class CardSpawner {
     const runAdjust = this.runSpawnAdjust()
     const enemy = Math.max(0, buckets.enemy + this.relicSpawnAdjust.enemy + runAdjust.enemy)
     const sporeTrapDisplay = Math.max(0, buckets.sporeTrap + this.relicSpawnAdjust.spore)
-    const trap = Math.max(0, buckets.webTrap + runAdjust.trap) + buckets.bombTrap + sporeTrapDisplay
+    const trap = Math.max(0, buckets.webTrap + runAdjust.trap + this.relicSpawnAdjust.trap) + buckets.bombTrap + sporeTrapDisplay
     const treasure = Math.max(1, buckets.treasure * this.trialTreasureSpawnScale + this.relicSpawnAdjust.treasure + runAdjust.treasure)
     const flower = Math.max(0, buckets.flower + runAdjust.flower + this.relicSpawnAdjust.flower)
     const total = enemy + trap + treasure + flower

@@ -1683,6 +1683,9 @@ body.hearth-lobby #ingame-backdrop.is-out {
   transform: translateY(-9px) scale(1.05);
 }
 .hearth-dinner-pack.is-locked { opacity: 0.42; cursor: default; filter: saturate(0.7); }
+/* 가벼운 한끼처럼 구매 가능한 팩인데 잔액이 모자란 경우 — 잠금과 달리 눌러서 거절 흔들림을 볼 수 있다. */
+.hearth-dinner-pack.is-unaffordable { filter: grayscale(0.5) brightness(0.75); }
+.hearth-dinner-pack.is-unaffordable:hover { transform: none; }
 .hearth-dinner-pack-name {
   font-size: clamp(11px,1.5vh,15px);
   font-weight: 900;
