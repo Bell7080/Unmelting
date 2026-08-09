@@ -89,6 +89,7 @@ export class SettlementScreen {
       const cleared = gameState.gameOverReason === 'onboarding_clear_30' || gameState.gameOverReason === 'run_clear_100_turns'
       lifetimeRecordStore.recordRun({
         outcome: cleared ? 'clear' : 'death',
+        reason: gameState.gameOverReason,
         floor: gameState.getCurrentTurn(),
         kills: gameState.runDefeatedEnemies,
         traps: gameState.runClearedTraps,

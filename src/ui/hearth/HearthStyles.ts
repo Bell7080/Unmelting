@@ -1544,9 +1544,15 @@ body.hearth-lobby #ingame-backdrop.is-out {
   scrollbar-width: thin;
   scrollbar-color: rgba(244, 164, 96, 0.72) rgba(20, 16, 28, 0.18);
 }
-.hearth-library-ledger {
+.hearth-library-journal-inner {
   width: 100%;
   margin: auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(14px, 2.4vh, 24px);
+}
+.hearth-library-ledger {
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: clamp(6px, 1.2vh, 12px);
@@ -1558,6 +1564,83 @@ body.hearth-lobby #ingame-backdrop.is-out {
     linear-gradient(165deg, rgba(38, 28, 22, 0.88), rgba(16, 10, 12, 0.94));
   box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.12), inset 0 -16px 26px rgba(0, 0, 0, 0.38), 0 22px 40px rgba(0, 0, 0, 0.5);
 }
+/* 최근 여정 — 책등처럼 가로로 긴 행 하나가 런 1건. 누르면 정산 스탯 요약이 펼쳐진다. */
+.hearth-library-entries-heading {
+  margin: 0 0 -4px 4px;
+  font: 700 clamp(13px, 1.8vh, 16px)/1.3 'OkDanDan', Georgia, serif;
+  color: rgba(222, 206, 180, 0.75);
+  letter-spacing: 0.1em;
+}
+.hearth-library-entries {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(6px, 1vh, 10px);
+}
+.hearth-library-entry {
+  opacity: 0;
+  transform: translateY(10px);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(200, 152, 60, 0.22);
+  background: linear-gradient(165deg, rgba(38, 28, 22, 0.78), rgba(16, 10, 12, 0.84));
+}
+#hearth-overlay.is-library-mode.is-shutter-rest .hearth-library-entry {
+  animation: hearth-library-row-in 0.38s cubic-bezier(0.2, 0.84, 0.3, 1) forwards;
+  animation-delay: calc(0.36s + var(--row-index, 0) * 0.05s);
+}
+/* 결과별 책등 색 — 클리어는 따뜻한 금빛, 사망은 가라앉은 붉은빛 왼쪽 띠로만 구분한다. */
+.hearth-library-entry[data-outcome="clear"] { border-left: 3px solid rgba(255, 205, 112, 0.75); }
+.hearth-library-entry[data-outcome="death"] { border-left: 3px solid rgba(200, 90, 90, 0.6); }
+.hearth-library-entry-spine {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: clamp(8px, 1.4vw, 16px);
+  padding: clamp(8px, 1.4vh, 12px) clamp(12px, 2vw, 18px);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: 'OkDanDan', Georgia, serif;
+}
+.hearth-library-entry-spine:hover { background: rgba(255, 224, 158, 0.06); }
+.hearth-library-entry-title {
+  flex: 1;
+  font-weight: 700;
+  font-size: clamp(13px, 1.8vh, 16px);
+  color: rgba(232, 220, 198, 0.92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hearth-library-entry-floor {
+  font-weight: 900;
+  font-size: clamp(13px, 1.8vh, 16px);
+  color: rgba(255, 224, 158, 0.9);
+  white-space: nowrap;
+}
+.hearth-library-entry-date {
+  font-size: clamp(11px, 1.4vh, 13px);
+  color: rgba(214, 200, 178, 0.55);
+  white-space: nowrap;
+}
+.hearth-library-entry-detail {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.2, 0.84, 0.3, 1);
+}
+.hearth-library-entry.is-expanded .hearth-library-entry-detail { max-height: 160px; }
+.hearth-library-entry-detail p {
+  margin: 0;
+  padding: 4px clamp(12px, 2vw, 18px);
+  font-size: clamp(12px, 1.6vh, 14px);
+  color: rgba(222, 206, 180, 0.85);
+  display: flex;
+  justify-content: space-between;
+}
+.hearth-library-entry-detail p:first-child { padding-top: 2px; }
+.hearth-library-entry-detail p:last-child { padding-bottom: 10px; }
+.hearth-library-entry-detail strong { color: rgba(255, 224, 158, 0.94); }
 .hearth-library-row {
   display: flex;
   align-items: baseline;

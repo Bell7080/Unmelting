@@ -79,4 +79,46 @@ describe('LifetimeRecordStore', () => {
     store.clear()
     expect(store.load()).toEqual(emptyLifetimeRecord())
   })
+
+  it('서고 일지(history)는 최신 런이 맨 앞에 쌓인다', () => {
+    const store = new LifetimeRecordStore(makeMemoryStorage())
+    store.recordRun({ outcome: 'death', reason: 'character_defeated', floor: 17, kills: 1, traps: 0, treasures: 0, light: 10 })
+    const rec = store.recordRun({ outcome: 'clear', reason: 'run_clear_100_turns', floor: 100, kills: 2, traps: 0, treasures: 0, light: 20 })
+    expect(rec.history).toHaveLength(2)
+    expect(rec.history[0].outcome).toBe('clear')
+    expect(rec.history[0].reason).toBe('run_clear_100_turns')
+    expect(rec.history[0].floor).toBe(100)
+    expect(rec.history[1].reason).toBe('character_defeated')
+  })
+
+  it('reason 생략 시 빈 문자열로 기록된다', () => {
+    const store = new LifetimeRecordStore(makeMemoryStorage())
+    const rec = store.recordRun({ outcome: 'death', floor: 5, kills: 0, traps: 0, treasures: 0, light: 0 })
+    expect(rec.history[0].reason).toBe('')
+  })
+
+  it('history는 상한(30건)을 넘으면 오래된 기록부터 버린다', () => {
+    const store = new LifetimeRecordStore(makeMemoryStorage())
+    for (let i = 0; i < 35; i++) {
+      store.recordRun({ outcome: 'death', floor: i, kills: 0, traps: 0, treasures: 0, light: 0 })
+    }
+    const rec = store.load()
+    expect(rec.history).toHaveLength(30)
+    expect(rec.history[0].floor).toBe(34)
+    expect(rec.totalRuns).toBe(35)
+  })
+
+  it('손상된 history 원소는 걸러내고 나머지는 살린다', () => {
+    const storage = makeMemoryStorage()
+    storage.setItem('unmelting.lifetime.v1', JSON.stringify({
+      totalRuns: 2,
+      history: [
+        { outcome: 'clear', reason: 'run_clear_100_turns', floor: 100, kills: 1, traps: 0, treasures: 0, light: 5, at: 123 },
+        { outcome: 'bogus', floor: 'nope' },
+      ],
+    }))
+    const rec = new LifetimeRecordStore(storage).load()
+    expect(rec.history).toHaveLength(1)
+    expect(rec.history[0].floor).toBe(100)
+  })
 })

@@ -14,7 +14,11 @@ export interface LifetimeStorage {
   removeItem(key: string): void
 }
 
-/** 한 런의 결과 요약 — recordRun 입력. floor는 도달 층(=런 턴), light는 총 불빛. */
+/** 서고 일지에 보관할 개별 런 기록 최대 개수 — 무한히 쌓이면 저장본이 계속 불어난다. */
+const LIFETIME_HISTORY_CAP = 30
+
+/** 한 런의 결과 요약 — recordRun 입력. floor는 도달 층(=런 턴), light는 총 불빛.
+ *  reason은 gameState.gameOverReason 문자열(서고 일지 제목 매핑용, 생략 시 빈 문자열). */
 export interface LifetimeRunResult {
   outcome: 'clear' | 'death'
   floor: number
@@ -22,9 +26,23 @@ export interface LifetimeRunResult {
   traps: number
   treasures: number
   light: number
+  reason?: string
 }
 
-/** 통산 누적값. 모든 필드는 음수가 될 수 없고, best/총합은 단조 증가한다. */
+/** 서고 일지 한 줄 — 개별 런 1건. at은 Date.now() 저장 시각(정렬/표시용). */
+export interface LifetimeRunEntry {
+  outcome: 'clear' | 'death'
+  reason: string
+  floor: number
+  kills: number
+  traps: number
+  treasures: number
+  light: number
+  at: number
+}
+
+/** 통산 누적값. 모든 필드는 음수가 될 수 없고, best/총합은 단조 증가한다.
+ *  history는 최근 LIFETIME_HISTORY_CAP건만 보관한다(집계값은 전체 통산, 일지는 최근분만). */
 export interface LifetimeRecord {
   version: 1
   totalRuns: number
@@ -35,6 +53,7 @@ export interface LifetimeRecord {
   totalTraps: number
   totalTreasures: number
   totalLight: number
+  history: LifetimeRunEntry[]
 }
 
 /** 결측/손상 저장본을 안전한 0 기록으로 병합한다. */
@@ -49,12 +68,35 @@ export function emptyLifetimeRecord(): LifetimeRecord {
     totalTraps: 0,
     totalTreasures: 0,
     totalLight: 0,
+    history: [],
   }
 }
 
 /** 저장본 숫자 필드를 계약대로 정규화한다(NaN/음수/비정수는 0으로). */
 function coerceCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0
+}
+
+/** history 배열 원소를 하나씩 검증한다 — 손상된 원소 하나가 전체 일지를 지우지 않게 걸러낸다. */
+function coerceHistory(value: unknown): LifetimeRunEntry[] {
+  if (!Array.isArray(value)) return []
+  const entries: LifetimeRunEntry[] = []
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue
+    const e = item as Record<string, unknown>
+    if (e.outcome !== 'clear' && e.outcome !== 'death') continue
+    entries.push({
+      outcome: e.outcome,
+      reason: typeof e.reason === 'string' ? e.reason : '',
+      floor: coerceCount(e.floor),
+      kills: coerceCount(e.kills),
+      traps: coerceCount(e.traps),
+      treasures: coerceCount(e.treasures),
+      light: coerceCount(e.light),
+      at: typeof e.at === 'number' && Number.isFinite(e.at) ? e.at : 0,
+    })
+  }
+  return entries.slice(0, LIFETIME_HISTORY_CAP)
 }
 
 function parseRecord(raw: string | null): LifetimeRecord {
@@ -78,6 +120,7 @@ function parseRecord(raw: string | null): LifetimeRecord {
     totalTraps: coerceCount(p.totalTraps),
     totalTreasures: coerceCount(p.totalTreasures),
     totalLight: coerceCount(p.totalLight),
+    history: coerceHistory(p.history),
   }
 }
 
@@ -93,9 +136,20 @@ export class LifetimeRecordStore {
     return parseRecord(this.storage.getItem(LIFETIME_STORAGE_KEY))
   }
 
-  /** 런 결과 1건을 통산값에 합산하고 저장한 뒤, 갱신된 기록을 돌려준다. */
+  /** 런 결과 1건을 통산값에 합산하고 저장한 뒤, 갱신된 기록을 돌려준다.
+   *  서고 일지(history)는 최신 건이 맨 앞에 오도록 unshift하고 상한을 넘는 옛 기록은 버린다. */
   recordRun(result: LifetimeRunResult): LifetimeRecord {
     const prev = this.load()
+    const entry: LifetimeRunEntry = {
+      outcome: result.outcome,
+      reason: result.reason ?? '',
+      floor: coerceCount(result.floor),
+      kills: coerceCount(result.kills),
+      traps: coerceCount(result.traps),
+      treasures: coerceCount(result.treasures),
+      light: coerceCount(result.light),
+      at: Date.now(),
+    }
     const next: LifetimeRecord = {
       version: 1,
       totalRuns: prev.totalRuns + 1,
@@ -106,6 +160,7 @@ export class LifetimeRecordStore {
       totalTraps: prev.totalTraps + coerceCount(result.traps),
       totalTreasures: prev.totalTreasures + coerceCount(result.treasures),
       totalLight: prev.totalLight + coerceCount(result.light),
+      history: [entry, ...prev.history].slice(0, LIFETIME_HISTORY_CAP),
     }
     this.memory = next
     if (this.storage) this.storage.setItem(LIFETIME_STORAGE_KEY, JSON.stringify(next))

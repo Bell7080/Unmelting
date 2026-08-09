@@ -201,7 +201,7 @@ const STATION_DESC: Record<string, string> = {
   타로: '운명을 점친다. 어두운 거점에 드는 한 줄기 다른 빛.',
   도박장: '메타 코인을 걸어 유희를, 혹은 한탕을 노린다.',
   길드: '업적을 관리하고, 업적으로 새 동행 등을 해금한다.',
-  '잿빛 굴레': '엔드리스 모드. 200층 진엔딩을 클리어하면 열린다.',
+  '잿빛 굴레': '엔드리스 모드. 쉬움 난이도를 클리어하면 열린다.',
   서고: '전적과 기록을 보관하고, 그 기록을 바탕으로 영구 효과를 얻는다.',
   무역: '손패·유물 잠금·다음 판 계승 등을 메타 화폐로 영구 해금한다.',
   모험: '어둠으로 떠난다. 동행과 난이도를 정한 뒤 출발한다.',
@@ -479,6 +479,11 @@ export class HearthScene {
         void this.pickDinnerChoice(Number(dinnerChoice.dataset.hearthDinnerChoice ?? 0))
         return
       }
+      const libraryEntry = t.closest<HTMLElement>('[data-hearth-library-entry]')
+      if (libraryEntry) {
+        this.toggleLibraryEntry(libraryEntry)
+        return
+      }
       const tradeTab = t.closest<HTMLElement>('[data-hearth-trade-tab]')
       if (tradeTab) {
         this.selectTradeTab(Number(tradeTab.dataset.hearthTradeTab ?? 0))
@@ -642,7 +647,7 @@ export class HearthScene {
     window.setTimeout(() => this.overlay?.classList.add('is-shutter-rest'), 680)
   }
 
-  /** 모험일지 본문 — 통산 기록을 낡은 장부의 점선 원장 행으로 그린다. */
+  /** 모험일지 본문 — 통산 원장(집계) + 최근 여정 목록(개별 런)을 함께 그린다. */
   private renderLibraryJournal(): void {
     const journal = this.overlay?.querySelector<HTMLElement>('.hearth-library-journal')
     if (!journal) return
@@ -660,7 +665,7 @@ export class HearthScene {
       { label: '거둔 보물', value: `${rec.totalTreasures}` },
       { label: '모은 불빛', value: `${rec.totalLight.toLocaleString()}` },
     ]
-    journal.innerHTML =
+    const ledgerHtml =
       `<div class="hearth-library-ledger">` +
       rows
         .map(
@@ -673,6 +678,54 @@ export class HearthScene {
         )
         .join('') +
       `</div>`
+    journal.innerHTML = `<div class="hearth-library-journal-inner">${ledgerHtml}${this.renderLibraryEntries(rec.history)}</div>`
+  }
+
+  /** 여정 종료 사유 → 정산 화면과 같은 제목 문구(사망/클리어 헤드라인 재사용). */
+  private libraryEntryTitle(entry: { outcome: 'clear' | 'death'; reason: string }): string {
+    switch (entry.reason) {
+      case 'onboarding_clear_30': return '새싹 병아리 클리어'
+      case 'run_clear_100_turns': return '잿빛 굴레를 풀었다 — 100층 클리어!'
+      case 'character_defeated': return '소녀의 심지가 꺼졌어요…'
+      case 'instant_death_trap': return '모든 길이 함정으로 막혔어요.'
+      default: return entry.outcome === 'clear' ? '모험 클리어' : '모험 종료'
+    }
+  }
+
+  /** 여정 하나하나를 책등처럼 가로로 긴 한 줄로 나열한다. 누르면 정산 화면과 같은
+   *  스탯 요약이 아래로 펼쳐진다(아코디언, 여러 줄 동시에 열어 둘 수 있다). */
+  private renderLibraryEntries(history: LifetimeRecord['history']): string {
+    if (history.length === 0) return ''
+    const rowsHtml = history
+      .map((entry, i) => {
+        const title = this.libraryEntryTitle(entry)
+        const date = entry.at > 0
+          ? new Date(entry.at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
+          : ''
+        return `<div class="hearth-library-entry" data-outcome="${entry.outcome}" style="--row-index:${i}">
+          <button class="hearth-library-entry-spine" type="button" data-hearth-library-entry="${i}" aria-expanded="false">
+            <span class="hearth-library-entry-title">${title}</span>
+            <span class="hearth-library-entry-floor">${entry.floor}층</span>
+            <span class="hearth-library-entry-date">${date}</span>
+          </button>
+          <div class="hearth-library-entry-detail">
+            <p>처치한 적 <strong>${entry.kills}</strong></p>
+            <p>처리한 함정 <strong>${entry.traps}</strong></p>
+            <p>발견한 보물 <strong>${entry.treasures}</strong></p>
+            <p>총 불빛 <strong>${entry.light.toLocaleString()}</strong></p>
+          </div>
+        </div>`
+      })
+      .join('')
+    return `<h3 class="hearth-library-entries-heading">최근 여정</h3><div class="hearth-library-entries">${rowsHtml}</div>`
+  }
+
+  /** 여정 행 클릭 — 펼침/접힘을 토글한다(다른 행에 영향 없음). */
+  private toggleLibraryEntry(button: HTMLElement): void {
+    const row = button.closest<HTMLElement>('.hearth-library-entry')
+    if (!row) return
+    const expanded = row.classList.toggle('is-expanded')
+    button.setAttribute('aria-expanded', expanded ? 'true' : 'false')
   }
 
   /** 만찬 선택 → 검붉은 커튼을 친 뒤 hearth_bg_005 만찬 배경과 무료 팩 레일을 보여 준다. */
@@ -1688,7 +1741,8 @@ export class HearthScene {
   private cellUnlocked(i: number): boolean {
     if (this.devUnlockAll) return true
     if (i === ADVENTURE_INDEX) return true
-    // 서고는 콘텐츠(기록 기반 영구 효과)가 붙기 전까지 잠가 둔다 — 모험/무역만 실제 개방.
+    // 서고는 통산 기록(LifetimeRecord)을 그대로 원장처럼 보여 주는 칸이라 처음부터 열려 있다.
+    if (i === LIBRARY_INDEX) return true
     if (i === TRADE_INDEX) return this.handlers?.isEasyUnlocked?.() ?? false
     if (i === DINNER_INDEX) return isMetaUnlocked('dinner')
     return false
