@@ -144,7 +144,7 @@ const DINNER_MAINS_PREMIUM: DinnerBaseItem[] = [
   { title: '베이컨',   color: '#b85a48', kind: 'food', sprite: spriteForDinner('main','010'), stat: 'startScore',   values: { common:150, rare:250, epic:400 }, weightBonus:0 },
   { title: '오믈렛',   color: '#e8c860', kind: 'food', sprite: spriteForDinner('main','011'), stat: 'handMax',      values: { common:1, rare:2, epic:3 }, weightBonus:0 },
   { title: '스튜',     color: '#8a6040', kind: 'food', sprite: spriteForDinner('main','012'), stat: 'emberMax',     values: { common:1, rare:2, epic:3 }, weightBonus:0 },
-  { title: '소시지',   color: '#a04838', kind: 'food', sprite: spriteForDinner('main','013'), stat: 'spawnEnemyAdjust', values: { common:-5, rare:-8, epic:-12 }, weightBonus:0 },
+  { title: '소시지',   color: '#a04838', kind: 'food', sprite: spriteForDinner('main','013'), stat: 'spawnEnemyAdjust', values: { common:-3, rare:-5, epic:-10 }, weightBonus:0 },
 ]
 const DINNER_SAUCES_PREMIUM: DinnerBaseItem[] = [
   { title: '마늘 소스',   color: '#e0d8a0', kind: 'sauce', namePart: '마늘',   sprite: spriteForDinner('sauce','007'), stat: 'maxHealth',    values: { common:2, rare:3, epic:5 }, weightBonus:0 },
@@ -153,7 +153,7 @@ const DINNER_SAUCES_PREMIUM: DinnerBaseItem[] = [
   { title: '브로콜리 소스', color: '#3a6040', kind: 'sauce', namePart: '브로콜리', sprite: spriteForDinner('sauce','010'), stat: 'startScore', values: { common:150, rare:250, epic:400 }, weightBonus:0 },
   { title: '조개 소스',   color: '#b0a888', kind: 'sauce', namePart: '조개',   sprite: spriteForDinner('sauce','011'), stat: 'handMax',      values: { common:1, rare:2, epic:3 }, weightBonus:0 },
   { title: '크림 소스',   color: '#f0e8d0', kind: 'sauce', namePart: '크림',   sprite: spriteForDinner('sauce','012'), stat: 'emberMax',     values: { common:1, rare:2, epic:3 }, weightBonus:0 },
-  { title: '꿀 소스',     color: '#e8b020', kind: 'sauce', namePart: '꿀',     sprite: spriteForDinner('sauce','013'), stat: 'spawnTreasureAdjust', values: { common:5, rare:8, epic:12 }, weightBonus:0 },
+  { title: '꿀 소스',     color: '#e8b020', kind: 'sauce', namePart: '꿀',     sprite: spriteForDinner('sauce','013'), stat: 'spawnTreasureAdjust', values: { common:3, rare:5, epic:10 }, weightBonus:0 },
 ]
 const DINNER_TOPPINGS_PREMIUM: DinnerBaseItem[] = [
   { title: '매콤 가루', color: '#c03828', kind: 'topping', sprite: spriteForDinner('topping','007'), stat: 'maxHealth',    values: { common:2, rare:3, epic:5 }, weightBonus:0 },
@@ -162,7 +162,7 @@ const DINNER_TOPPINGS_PREMIUM: DinnerBaseItem[] = [
   { title: '버터',     color: '#f0d878', kind: 'topping', sprite: spriteForDinner('topping','010'), stat: 'startScore',   values: { common:150, rare:250, epic:400 }, weightBonus:0 },
   { title: '커리',     color: '#c88820', kind: 'topping', sprite: spriteForDinner('topping','011'), stat: 'handMax',      values: { common:1, rare:2, epic:3 }, weightBonus:0 },
   { title: '야채모둠', color: '#78a048', kind: 'topping', sprite: spriteForDinner('topping','012'), stat: 'emberMax',     values: { common:1, rare:2, epic:3 }, weightBonus:0 },
-  { title: '계란',     color: '#f0d090', kind: 'topping', sprite: spriteForDinner('topping','013'), stat: 'spawnTrapAdjust', values: { common:-5, rare:-8, epic:-12 }, weightBonus:0 },
+  { title: '계란',     color: '#f0d090', kind: 'topping', sprite: spriteForDinner('topping','013'), stat: 'spawnTrapAdjust', values: { common:-3, rare:-5, epic:-10 }, weightBonus:0 },
 ]
 
 /** 모험 셔터 안에서 고를 수 있는 동행 목록. 3~4번은 잠금 회색 빈 슬롯. */
