@@ -700,29 +700,14 @@ export class HearthScene {
       return
     }
     this.libraryHistory = rec.history
-    const rows: { label: string; value: string }[] = [
-      { label: '통산 모험', value: `${rec.totalRuns}회` },
-      { label: '클리어 · 사망', value: `${rec.clears} · ${rec.deaths}` },
-      { label: '최고 도달', value: `${rec.bestFloor}층` },
-      { label: '처치한 적', value: `${rec.totalKills}` },
-      { label: '해체한 함정', value: `${rec.totalTraps}` },
-      { label: '거둔 보물', value: `${rec.totalTreasures}` },
-      { label: '모은 불빛', value: `${rec.totalLight.toLocaleString()}` },
-    ]
-    const ledgerHtml =
-      `<div class="hearth-library-ledger">` +
-      rows
-        .map(
-          (r, i) =>
-            `<div class="hearth-library-row" style="--row-index:${i}">` +
-            `<span class="hearth-library-row-label">${r.label}</span>` +
-            `<span class="hearth-library-row-leader" aria-hidden="true"></span>` +
-            `<span class="hearth-library-row-value">${r.value}</span>` +
-            `</div>`
-        )
-        .join('') +
-      `</div>`
-    journal.innerHTML = `<div class="hearth-library-journal-inner">${ledgerHtml}${this.renderLibraryEntries(rec.history)}</div>`
+    // 종합 일지 — 예전엔 통계 7개를 각자 행으로 늘어놓아 두꺼웠다. 정산 화면 우측 하단과
+    // 같은 두 줄 요약으로 얇게 모아 위에 걸고, 그 아래는 개별 여정 목차에 내준다.
+    const summaryHtml = `
+      <div class="hearth-library-summary">
+        <p class="hearth-library-summary-main">통산 ${rec.totalRuns}회 모험 · 클리어 ${rec.clears} · 사망 ${rec.deaths} · 최고 ${rec.bestFloor}층</p>
+        <p class="hearth-library-summary-sub">처치 ${rec.totalKills} · 함정 ${rec.totalTraps} · 보물 ${rec.totalTreasures} · 불빛 ${rec.totalLight.toLocaleString()}</p>
+      </div>`
+    journal.innerHTML = `<div class="hearth-library-journal-inner">${summaryHtml}${this.renderLibraryEntries(rec.history)}</div>`
   }
 
   /** 여정 종료 사유 → 정산 화면과 같은 제목 문구(사망/클리어 헤드라인 재사용). */
@@ -736,9 +721,9 @@ export class HearthScene {
     }
   }
 
-  /** 여정 하나하나를 책등처럼 가로로 긴 한 줄로 나열한다. 누르면 유리 카드 팝업으로
-   *  상세(처치·MVP 손패·위험한 적·에나 성좌)가 뜬다 — 서고 패널 안에서 펼치면 하단이
-   *  잘려 나가므로(구 아코디언 버그) 화면에 별도로 띄운다. */
+  /** 여정 하나하나를 책 목차처럼 얇은 한 줄로 차곡차곡 쌓는다 — 점 표식(결과) · 제목 ·
+   *  점선 리더 · 층/날짜만 있는 홑줄이라 상자 여러 개보다 책장에 가깝게 읽힌다.
+   *  누르면 유리 카드 팝업으로 상세(처치·MVP 손패·위험한 적·에나 성좌)가 뜬다. */
   private renderLibraryEntries(history: LifetimeRecord['history']): string {
     if (history.length === 0) return ''
     const rowsHtml = history
@@ -747,16 +732,15 @@ export class HearthScene {
         const date = entry.at > 0
           ? new Date(entry.at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
           : ''
-        return `<div class="hearth-library-entry" data-outcome="${entry.outcome}" style="--row-index:${i}">
-          <button class="hearth-library-entry-spine" type="button" data-hearth-library-entry="${i}">
-            <span class="hearth-library-entry-title">${title}</span>
-            <span class="hearth-library-entry-floor">${entry.floor}층</span>
-            <span class="hearth-library-entry-date">${date}</span>
-          </button>
-        </div>`
+        return `<button class="hearth-library-toc-row" type="button" data-outcome="${entry.outcome}" data-hearth-library-entry="${i}" style="--row-index:${i}">
+          <span class="hearth-library-toc-mark" aria-hidden="true"></span>
+          <span class="hearth-library-toc-title">${title}</span>
+          <span class="hearth-library-toc-leader" aria-hidden="true"></span>
+          <span class="hearth-library-toc-meta">${entry.floor}층 · ${date}</span>
+        </button>`
       })
       .join('')
-    return `<h3 class="hearth-library-entries-heading">최근 여정</h3><div class="hearth-library-entries">${rowsHtml}</div>`
+    return `<h3 class="hearth-library-entries-heading">최근 여정</h3><div class="hearth-library-toc">${rowsHtml}</div>`
   }
 
   /** 여정 행 클릭 — 유리 카드 팝업을 연다(document.body 전용 host, 서고 패널 밖). */

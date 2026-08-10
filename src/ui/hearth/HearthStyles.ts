@@ -1635,76 +1635,97 @@ body.hearth-lobby #ingame-backdrop.is-out {
   flex-direction: column;
   gap: clamp(14px, 2.4vh, 24px);
 }
-.hearth-library-ledger {
+/* 종합 일지 — 정산 화면 우측 하단과 같은 두 줄 요약. 예전엔 통계 7개가 각자 행이라
+   두꺼웠다(구버전 .hearth-library-ledger) — 책 앞머리에 다는 얇은 개요로 줄였다. */
+.hearth-library-summary {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: clamp(6px, 1.2vh, 12px);
-  padding: clamp(12px, 2.2vh, 22px) clamp(18px, 3vw, 34px);
-  border-radius: 14px;
-  border: 1px solid rgba(200, 152, 60, 0.28);
-  background:
-    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.014) 0 2px, transparent 2px 9px),
-    linear-gradient(165deg, rgba(38, 28, 22, 0.88), rgba(16, 10, 12, 0.94));
-  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.12), inset 0 -16px 26px rgba(0, 0, 0, 0.38), 0 22px 40px rgba(0, 0, 0, 0.5);
-}
-/* 최근 여정 — 책등처럼 가로로 긴 행 하나가 런 1건. 누르면 정산 스탯 요약이 펼쳐진다. */
-.hearth-library-entries-heading {
-  margin: 0 0 -4px 4px;
-  font: 700 clamp(13px, 1.8vh, 16px)/1.3 'OkDanDan', Georgia, serif;
-  color: rgba(222, 206, 180, 0.75);
-  letter-spacing: 0.1em;
-}
-.hearth-library-entries {
-  display: flex;
-  flex-direction: column;
-  gap: clamp(6px, 1vh, 10px);
-}
-.hearth-library-entry {
+  gap: 4px;
+  padding: 0 4px clamp(10px, 1.8vh, 16px);
+  border-bottom: 1px solid rgba(200, 152, 60, 0.22);
   opacity: 0;
-  transform: translateY(10px);
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid rgba(200, 152, 60, 0.22);
-  background: linear-gradient(165deg, rgba(38, 28, 22, 0.78), rgba(16, 10, 12, 0.84));
+  transform: translateY(8px);
 }
-#hearth-overlay.is-library-mode.is-shutter-rest .hearth-library-entry {
-  animation: hearth-library-row-in 0.38s cubic-bezier(0.2, 0.84, 0.3, 1) forwards;
-  animation-delay: calc(0.36s + var(--row-index, 0) * 0.05s);
+#hearth-overlay.is-library-mode.is-shutter-rest .hearth-library-summary {
+  animation: hearth-library-row-in 0.4s cubic-bezier(0.2, 0.84, 0.3, 1) 0.3s forwards;
 }
-/* 결과별 책등 색 — 클리어는 따뜻한 금빛, 사망은 가라앉은 붉은빛 왼쪽 띠로만 구분한다. */
-.hearth-library-entry[data-outcome="clear"] { border-left: 3px solid rgba(255, 205, 112, 0.75); }
-.hearth-library-entry[data-outcome="death"] { border-left: 3px solid rgba(200, 90, 90, 0.6); }
-.hearth-library-entry-spine {
-  width: 100%;
+.hearth-library-summary-main {
+  margin: 0;
+  font: 700 clamp(14px, 2vh, 17px)/1.4 'OkDanDan', Georgia, serif;
+  color: rgba(255, 224, 158, 0.92);
+  letter-spacing: 0.03em;
+}
+.hearth-library-summary-sub {
+  margin: 0;
+  font-size: clamp(11.5px, 1.5vh, 13px);
+  color: rgba(214, 200, 178, 0.6);
+  letter-spacing: 0.02em;
+}
+/* 최근 여정 — 책 목차처럼 얇은 홑줄이 차곡차곡 쌓인다(구버전 상자형 .hearth-library-entry
+   대신). 점 표식이 결과를, 점선 리더가 제목과 층/날짜를 잇는다. */
+.hearth-library-entries-heading {
+  margin: 2px 0 -2px 4px;
+  font: 700 clamp(12px, 1.6vh, 14px)/1.3 'OkDanDan', Georgia, serif;
+  color: rgba(214, 200, 178, 0.55);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.hearth-library-toc {
+  display: flex;
+  flex-direction: column;
+}
+.hearth-library-toc-row {
   display: flex;
   align-items: baseline;
-  gap: clamp(8px, 1.4vw, 16px);
-  padding: clamp(8px, 1.4vh, 12px) clamp(12px, 2vw, 18px);
+  gap: 10px;
+  width: 100%;
+  padding: clamp(7px, 1.3vh, 11px) 4px;
   background: none;
   border: none;
+  border-bottom: 1px solid rgba(200, 152, 60, 0.14);
   cursor: pointer;
   text-align: left;
   font-family: 'OkDanDan', Georgia, serif;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: background 0.16s ease;
 }
-.hearth-library-entry-spine:hover { background: rgba(255, 224, 158, 0.06); }
-.hearth-library-entry-title {
-  flex: 1;
+.hearth-library-toc-row:last-child { border-bottom: none; }
+.hearth-library-toc-row:hover { background: rgba(255, 224, 158, 0.05); }
+#hearth-overlay.is-library-mode.is-shutter-rest .hearth-library-toc-row {
+  animation: hearth-library-row-in 0.34s cubic-bezier(0.2, 0.84, 0.3, 1) forwards;
+  animation-delay: calc(0.4s + var(--row-index, 0) * 0.045s);
+}
+.hearth-library-toc-mark {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  align-self: center;
+  background: rgba(255, 205, 112, 0.85);
+  box-shadow: 0 0 6px rgba(255, 205, 112, 0.4);
+}
+.hearth-library-toc-row[data-outcome="death"] .hearth-library-toc-mark {
+  background: rgba(210, 110, 110, 0.8);
+  box-shadow: 0 0 6px rgba(210, 110, 110, 0.35);
+}
+.hearth-library-toc-title {
   font-weight: 700;
-  font-size: clamp(13px, 1.8vh, 16px);
+  font-size: clamp(13px, 1.75vh, 15.5px);
   color: rgba(232, 220, 198, 0.92);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.hearth-library-entry-floor {
-  font-weight: 900;
-  font-size: clamp(13px, 1.8vh, 16px);
-  color: rgba(255, 224, 158, 0.9);
-  white-space: nowrap;
+.hearth-library-toc-leader {
+  flex: 1;
+  min-width: 12px;
+  border-bottom: 1px dotted rgba(200, 152, 60, 0.28);
+  transform: translateY(-4px);
 }
-.hearth-library-entry-date {
-  font-size: clamp(11px, 1.4vh, 13px);
+.hearth-library-toc-meta {
+  font-size: clamp(11px, 1.4vh, 12.5px);
   color: rgba(214, 200, 178, 0.55);
   white-space: nowrap;
 }
@@ -1899,35 +1920,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
   .hearth-library-detail-highlights { grid-template-columns: 1fr; }
   .hearth-library-detail-stats { grid-template-columns: repeat(2, 1fr); }
 }
-.hearth-library-row {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  opacity: 0;
-  transform: translateY(10px);
-}
-#hearth-overlay.is-library-mode.is-shutter-rest .hearth-library-row {
-  animation: hearth-library-row-in 0.38s cubic-bezier(0.2, 0.84, 0.3, 1) forwards;
-  animation-delay: calc(0.3s + var(--row-index, 0) * 0.07s);
-}
 @keyframes hearth-library-row-in { to { opacity: 1; transform: translateY(0); } }
-.hearth-library-row-label {
-  font: 700 clamp(14px, 2vh, 18px)/1.3 'OkDanDan', Georgia, serif;
-  color: rgba(222, 206, 180, 0.85);
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-}
-.hearth-library-row-leader {
-  flex: 1;
-  border-bottom: 2px dotted rgba(200, 152, 60, 0.3);
-  transform: translateY(-4px);
-}
-.hearth-library-row-value {
-  font: 900 clamp(16px, 2.4vh, 22px)/1.3 'OkDanDan', Georgia, serif;
-  color: rgba(255, 224, 158, 0.94);
-  text-shadow: 0 0 12px rgba(255, 205, 112, 0.3), 0 1px 6px rgba(0, 0, 0, 0.8);
-  white-space: nowrap;
-}
 .hearth-library-empty {
   margin: auto;
   text-align: center;
@@ -1935,14 +1928,13 @@ body.hearth-lobby #ingame-backdrop.is-out {
   color: rgba(214, 200, 178, 0.7);
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
 }
-/* 모바일 세로 — 셔터가 얕아 vh 기반 크기가 넘친다. 원장을 위에서부터 촘촘히 쌓아 7행이 보이게 한다. */
+/* 모바일 세로 — 셔터가 얕아 vh 기반 크기가 넘친다. 종합 일지·목차를 위에서부터 촘촘히 쌓는다. */
 @media (max-width: 700px) {
   .hearth-library-stage { padding: 10px 12px 14px; }
   .hearth-library-tab { font-size: 16px; letter-spacing: 0.14em; padding: 4px 10px 6px; }
   .hearth-library-journal { margin-top: 6px; align-items: flex-start; }
-  .hearth-library-ledger { margin: 0; gap: 5px; padding: 10px 14px; }
-  .hearth-library-row-label { font-size: 12px; }
-  .hearth-library-row-value { font-size: 13px; }
+  .hearth-library-summary-main { font-size: 13px; }
+  .hearth-library-summary-sub { font-size: 11px; }
   .hearth-library-empty { font-size: 13px; }
 }
 
