@@ -1330,7 +1330,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
   display: flex;
   align-items: center;
   gap: clamp(8px, 1vw, 14px);
-  padding: clamp(40px, 8vh, 96px) clamp(8px, 1vw, 12px) clamp(30px, 6vh, 72px);
+  padding: clamp(40px, 8vh, 96px) clamp(20px, 3.2vw, 44px) clamp(30px, 6vh, 72px);
 }
 /* 팩 목록은 뷰포트 안에서 스크롤, 스크롤바는 숨김. 드래그로도 좌우로 밀 수 있다(직업
    선택 캐러셀과 같은 grab-scroll 손맛) — 카드 수가 뷰포트보다 적을 때는 가운데로 모은다. */
@@ -1351,11 +1351,11 @@ body.hearth-lobby #ingame-backdrop.is-out {
 .hearth-trade-pack-grid {
   display: flex;
   flex-wrap: nowrap;
-  gap: clamp(16px, 2.4vw, 30px);
+  gap: clamp(14px, 2vw, 26px);
   align-items: center;
   min-width: max-content;
   margin: 0 auto;
-  padding: clamp(18px, 3vh, 30px) clamp(10px, 1.5vw, 20px) clamp(28px, 5vh, 50px);
+  padding: clamp(18px, 3vh, 30px) clamp(20px, 3vw, 40px) clamp(28px, 5vh, 50px);
   scroll-snap-type: x proximity;
 }
 .hearth-trade-pack-grid > * { scroll-snap-align: center; }
@@ -1384,8 +1384,8 @@ body.hearth-lobby #ingame-backdrop.is-out {
   transform: scale(1.1);
 }
 .hearth-trade-pack {
-  flex: 0 0 clamp(142px, 17vw, 210px);
-  min-height: clamp(184px, 32vh, 276px);
+  flex: 0 0 clamp(118px, 14vw, 176px);
+  min-height: clamp(156px, 27vh, 232px);
   border-radius: 16px;
   border: 1px solid rgba(200, 152, 60, 0.42);
   background: linear-gradient(180deg, rgba(36, 24, 38, 0.72), rgba(14, 9, 18, 0.86));
@@ -1422,7 +1422,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
 }
 .hearth-trade-pack-art {
   flex: 1;
-  min-height: 110px;
+  min-height: 84px;
   border-radius: 12px;
   background:
     radial-gradient(circle at 50% 38%, rgba(255, 232, 168, 0.14), transparent 54%),
@@ -1430,8 +1430,8 @@ body.hearth-lobby #ingame-backdrop.is-out {
     linear-gradient(160deg, rgba(74, 56, 78, 0.48), rgba(24, 16, 30, 0.92));
   border: 1px dashed rgba(255, 222, 140, 0.2);
 }
-.hearth-trade-pack strong { font-size: clamp(18px, 2.5vh, 25px); letter-spacing: 0.08em; }
-.hearth-trade-pack small { color: rgba(214, 200, 178, 0.72); font-size: clamp(12px, 1.7vh, 15px); }
+.hearth-trade-pack strong { font-size: clamp(20px, 2.9vh, 29px); letter-spacing: 0.08em; }
+.hearth-trade-pack small { color: rgba(214, 200, 178, 0.72); font-size: clamp(13px, 1.9vh, 17px); }
 @keyframes hearth-trade-pack-rise { to { opacity: 1; transform: translateY(0); } }
 
 /* 무역 1번 탭 개방 카드 — 클릭 구매. 잠김=어둡게, 개방=따뜻한 금빛 테두리+발광.
@@ -1447,7 +1447,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
   align-self: flex-start;
   padding: 2px 10px;
   border-radius: 999px;
-  font-size: clamp(11px, 1.5vh, 13px);
+  font-size: clamp(12px, 1.7vh, 15px);
   font-weight: 900;
   letter-spacing: 0.05em;
   color: rgba(214, 200, 178, 0.6);
