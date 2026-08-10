@@ -36,6 +36,8 @@ export interface SettlementScreenDeps {
   depositRunCurrency(amount: number): void
   /** 런 시작 시점 경험 축 값 — 정산 육각형의 이전 위치 표시용. */
   getRunStartAxisValues(): number[] | null
+  /** 이번 런 난이도 키('sprout'/'easy'/'normal'/'test') — 서고 일지 표기용. */
+  getRunDifficulty(): string | undefined
   wasRunEnteredFromLobby(): boolean
   /** 통산 기록 런당 1회 합산 가드 — 처음 호출이면 마킹 후 true, 이미 합산했으면 false. */
   tryMarkLifetimeRecorded(): boolean
@@ -119,6 +121,8 @@ export class SettlementScreen {
         traps: gameState.runClearedTraps,
         treasures: gameState.runOpenedTreasures,
         light: this.deps.getScore(),
+        flowers: gameState.runFlowersHarvested,
+        difficulty: this.deps.getRunDifficulty(),
         mvpCardId: mvp?.id,
         mvpCardCount: mvp?.value,
         dangerEnemyName: danger?.id,

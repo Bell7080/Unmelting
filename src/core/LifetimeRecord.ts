@@ -28,6 +28,10 @@ export interface LifetimeRunResult {
   treasures: number
   light: number
   reason?: string
+  /** 이번 런 수확한 꽃 수. 여정의 유산(PlayerLegacy) 집계 축 중 하나. */
+  flowers?: number
+  /** 이번 런 난이도 키('sprout'/'easy'/'normal'/'test'). 서고 일지 표기용. */
+  difficulty?: string
   /** 이번 런 가장 많이 쓴 손패(defId)와 사용 횟수. */
   mvpCardId?: string
   mvpCardCount?: number
@@ -52,6 +56,8 @@ export interface LifetimeRunEntry {
   treasures: number
   light: number
   at: number
+  flowers?: number
+  difficulty?: string
   mvpCardId?: string
   mvpCardCount?: number
   dangerEnemyName?: string
@@ -73,6 +79,8 @@ export interface LifetimeRecord {
   totalTraps: number
   totalTreasures: number
   totalLight: number
+  /** 여정의 유산(PlayerLegacy) 집계 축 — 손패/직접타격으로 수확한 꽃 누적. */
+  totalFlowers: number
   history: LifetimeRunEntry[]
 }
 
@@ -88,6 +96,7 @@ export function emptyLifetimeRecord(): LifetimeRecord {
     totalTraps: 0,
     totalTreasures: 0,
     totalLight: 0,
+    totalFlowers: 0,
     history: [],
   }
 }
@@ -121,6 +130,8 @@ function coerceHistory(value: unknown): LifetimeRunEntry[] {
       treasures: coerceCount(e.treasures),
       light: coerceCount(e.light),
       at: typeof e.at === 'number' && Number.isFinite(e.at) ? e.at : 0,
+      flowers: typeof e.flowers === 'number' && e.flowers > 0 ? Math.floor(e.flowers) : undefined,
+      difficulty: typeof e.difficulty === 'string' ? e.difficulty : undefined,
       mvpCardId: typeof e.mvpCardId === 'string' ? e.mvpCardId : undefined,
       mvpCardCount: typeof e.mvpCardCount === 'number' && e.mvpCardCount > 0 ? Math.floor(e.mvpCardCount) : undefined,
       dangerEnemyName: typeof e.dangerEnemyName === 'string' ? e.dangerEnemyName : undefined,
@@ -154,6 +165,7 @@ function parseRecord(raw: string | null): LifetimeRecord {
     totalTraps: coerceCount(p.totalTraps),
     totalTreasures: coerceCount(p.totalTreasures),
     totalLight: coerceCount(p.totalLight),
+    totalFlowers: coerceCount(p.totalFlowers),
     history: coerceHistory(p.history),
   }
 }
@@ -183,6 +195,8 @@ export class LifetimeRecordStore {
       treasures: coerceCount(result.treasures),
       light: coerceCount(result.light),
       at: Date.now(),
+      flowers: result.flowers,
+      difficulty: result.difficulty,
       mvpCardId: result.mvpCardId,
       mvpCardCount: result.mvpCardCount,
       dangerEnemyName: result.dangerEnemyName,
@@ -201,6 +215,7 @@ export class LifetimeRecordStore {
       totalTraps: prev.totalTraps + coerceCount(result.traps),
       totalTreasures: prev.totalTreasures + coerceCount(result.treasures),
       totalLight: prev.totalLight + coerceCount(result.light),
+      totalFlowers: prev.totalFlowers + coerceCount(result.flowers),
       history: [entry, ...prev.history].slice(0, LIFETIME_HISTORY_CAP),
     }
     this.memory = next

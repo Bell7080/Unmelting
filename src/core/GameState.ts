@@ -32,6 +32,8 @@ export class GameState {
   runDefeatedEnemies = 0
   runClearedTraps = 0
   runOpenedTreasures = 0
+  /** 이번 런 수확한 꽃 수 — 여정의 유산(PlayerLegacy) 집계 축. reset()에서 0으로. */
+  runFlowersHarvested = 0
   /** 이번 런 손패 사용 횟수(defId별). 서고 일지의 "활약한 손패" 산출에 쓴다. reset()에서 비운다. */
   runCardUsageCount: Record<string, number> = {}
   /** 이번 런 적이 준 누적 피해(적 표시 이름별). 서고 일지의 "위험했던 적" 산출에 쓴다. reset()에서 비운다. */
@@ -301,6 +303,7 @@ export class GameState {
     this.runDefeatedEnemies = 0
     this.runClearedTraps = 0
     this.runOpenedTreasures = 0
+    this.runFlowersHarvested = 0
     this.runCardUsageCount = {}
     this.runEnemyDamageByName = {}
   }

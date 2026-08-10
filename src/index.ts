@@ -97,6 +97,7 @@ import {
   createBrowserEnaAutonomousLearner,
 } from '@/rl/EnaAutonomousLearner'
 import { createBrowserLifetimeRecordStore } from '@core/LifetimeRecord'
+import { computePlayerLegacyBonus } from '@core/PlayerLegacy'
 import bgm001Url from './assets/audio/bgm_001.mp3'
 import bgm002Url from './assets/audio/bgm_002.mp3'
 import bgm003Url from './assets/audio/bgm_003.mp3'
@@ -1656,6 +1657,8 @@ let lifetimeRecorded = false
 const sessionFieldsIntroduced = new Set<string>()
 /** 런 시작 시점의 경험 축 값 — 정산 육각형이 '이번 런 상승분'을 계산하는 기준점. */
 let runStartAxisValues: number[] | null = null
+/** 이번 런 난이도 — 서고 일지 표기용. 테스트 플레이(difficulty=null)는 'test'로 남긴다. */
+let currentRunDifficulty: HearthDifficulty | 'test' | undefined = undefined
 function isOnboardingActive(): boolean {
   return onboardingRunActive
 }
@@ -1997,6 +2000,7 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // 로비(무역)를 거친 런(difficulty!=null)만 실제 개방 상태(isMetaUnlocked)를 따른다.
   const testPlay = difficulty === null
   runEnteredFromLobby = !testPlay
+  currentRunDifficulty = difficulty ?? 'test'
   document.body.classList.toggle('onboarding-run', onboardingRunActive)
   document.body.classList.toggle('meta-currency-locked', !testPlay && (onboardingRunActive || !isMetaUnlocked('currency')))
   document.body.classList.toggle('meta-reroll-locked', !testPlay && (onboardingRunActive || !isMetaUnlocked('shopReroll')))
@@ -2072,6 +2076,21 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
     }
     // 도적: 함정 무시 확률 적용.
     if (chosenJob.trapIgnoreChance) c.trapIgnoreChance += chosenJob.trapIgnoreChance
+  }
+
+  // 여정의 유산 — 통산 기록(수십 판 단위)에서 파생하는 아주 작은 영구 보너스. 다른 메타
+  // 보너스와 같은 게이트로 새싹 병아리에는 주지 않는다(온보딩 난이도 곡선 보존).
+  // 시작 불빛은 현재 배율로 먼저 지급한 뒤 이번 유산의 불빛% 가산을 곱해, 방금 받은
+  // 시작 불빛이 자기 자신에게 다시 곱해지는 이중 가산을 피한다.
+  if (!onboardingRunActive) {
+    const legacyBonus = computePlayerLegacyBonus(lifetimeRecordStore.load())
+    const legacyCharacter = gameState.character
+    if (legacyBonus.maxHealth > 0) legacyCharacter.increaseMaxHealth(legacyBonus.maxHealth)
+    if (legacyBonus.emberMax > 0) legacyCharacter.increaseEmberMax(legacyBonus.emberMax)
+    if (legacyBonus.handMax > 0) legacyCharacter.increaseHandMax(legacyBonus.handMax)
+    if (legacyBonus.damage > 0) legacyCharacter.applyDamageBoost(legacyBonus.damage)
+    if (legacyBonus.startingLight > 0) relicEffects.gainFixedLight('여정의 유산', legacyBonus.startingLight)
+    if (legacyBonus.lightPct > 0) gameState.enhancements.scoreMultiplier *= (1 + legacyBonus.lightPct)
   }
 
   // 해금 목록 온오프 — 무역 탭 상시 토글 대신 여기서 한 번 지나가며 고른다. 여기서 끈 항목은
@@ -3722,6 +3741,7 @@ async function handleCardAction(e: Event): Promise<void> {
     if (card.type === CardType.ENEMY) gameState.runDefeatedEnemies++
     else if (card.type === CardType.TRAP) gameState.runClearedTraps++
     else if (card.type === CardType.TREASURE) gameState.runOpenedTreasures++
+    else if (card.type === CardType.FLOWER) gameState.runFlowersHarvested++
   }
 
   // Hand-card rewards are staged visually: first the freshly gained cards
@@ -4085,6 +4105,7 @@ const settlement = new SettlementScreen({
   getCoins: () => coins,
   depositRunCurrency: (amount) => { depositMetaCurrency(amount) },
   getRunStartAxisValues: () => runStartAxisValues,
+  getRunDifficulty: () => currentRunDifficulty,
   wasRunEnteredFromLobby: () => runEnteredFromLobby,
   tryMarkLifetimeRecorded: () => {
     if (lifetimeRecorded) return false

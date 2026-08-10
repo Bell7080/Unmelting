@@ -8,6 +8,7 @@ import type { CustomRelicProfile } from '@data/Relics'
 import { getRelicDef } from '@data/Relics'
 import { getHandCardDef } from '@data/HandCards'
 import type { LifetimeRecord } from '@core/LifetimeRecord'
+import { computePlayerLegacyBonus, playerLegacyStyleLabel } from '@core/PlayerLegacy'
 import { META_UNLOCKS, isMetaUnlocked, setMetaUnlocked } from '@core/MetaUnlocks'
 import { spendMetaCurrency } from '@core/MetaWallet'
 import {
@@ -689,25 +690,59 @@ export class HearthScene {
     window.setTimeout(() => this.overlay?.classList.add('is-shutter-rest'), 680)
   }
 
-  /** 모험일지 본문 — 통산 원장(집계) + 최근 여정 목록(개별 런)을 함께 그린다. */
+  /** 서고 목차/상세 팝업 공용 — 난이도 키를 짧은 한글 표기로 바꾼다. */
+  private libraryDifficultyLabel(key?: string): string {
+    if (!key) return ''
+    if (key === 'test') return '테스트'
+    return HEARTH_DIFFICULTIES.find((d) => d.key === key)?.name ?? ''
+  }
+
+  /** 책이 쌓이는 느낌 — 통산 판 수를 0~4단 두께로 나눠 stage에 실어 CSS가 겹 그림자로
+   *  표현하게 한다. 값 자체가 아니라 "얼마나 오래 이 서고를 채워왔는지"만 어림잡아 보여준다. */
+  private applyLibraryStackTier(totalRuns: number): void {
+    const tier = totalRuns <= 0 ? 0 : totalRuns < 5 ? 1 : totalRuns < 15 ? 2 : totalRuns < 40 ? 3 : 4
+    const stage = this.overlay?.querySelector<HTMLElement>('.hearth-library-stage')
+    if (stage) stage.dataset.stackTier = String(tier)
+  }
+
+  /** 모험일지 본문 — 통산 원장(집계) + 여정의 유산 + 최근 여정 목록(개별 런)을 함께 그린다. */
   private renderLibraryJournal(): void {
     const journal = this.overlay?.querySelector<HTMLElement>('.hearth-library-journal')
     if (!journal) return
     const rec = this.handlers?.getLifetimeRecord?.()
     if (!rec || rec.totalRuns === 0) {
       this.libraryHistory = []
+      this.applyLibraryStackTier(0)
       journal.innerHTML = `<p class="hearth-library-empty">아직 기록된 모험이 없다.<br>첫 모험을 마치면 이곳에 일지가 쌓인다.</p>`
       return
     }
     this.libraryHistory = rec.history
+    this.applyLibraryStackTier(rec.totalRuns)
     // 종합 일지 — 예전엔 통계 7개를 각자 행으로 늘어놓아 두꺼웠다. 정산 화면 우측 하단과
     // 같은 두 줄 요약으로 얇게 모아 위에 걸고, 그 아래는 개별 여정 목차에 내준다.
     const summaryHtml = `
       <div class="hearth-library-summary">
         <p class="hearth-library-summary-main">통산 ${rec.totalRuns}회 모험 · 클리어 ${rec.clears} · 사망 ${rec.deaths} · 최고 ${rec.bestFloor}층</p>
         <p class="hearth-library-summary-sub">처치 ${rec.totalKills} · 함정 ${rec.totalTraps} · 보물 ${rec.totalTreasures} · 불빛 ${rec.totalLight.toLocaleString()}</p>
+        ${this.renderLibraryLegacyLine(rec)}
       </div>`
     journal.innerHTML = `<div class="hearth-library-journal-inner">${summaryHtml}${this.renderLibraryEntries(rec.history)}</div>`
+  }
+
+  /** 여정의 유산 한 줄 — 통산 기록이 다음 런에 미세하게 얹어 줄 영구 보너스를 미리 보여준다.
+   *  보너스가 전혀 없으면(런 0회) 줄 자체를 그리지 않는다. */
+  private renderLibraryLegacyLine(rec: LifetimeRecord): string {
+    const bonus = computePlayerLegacyBonus(rec)
+    if (bonus.progress <= 0) return ''
+    const parts: string[] = []
+    if (bonus.lightPct > 0) parts.push(`불빛 +${(bonus.lightPct * 100).toFixed(1)}%`)
+    if (bonus.startingLight > 0) parts.push(`시작 불빛 +${bonus.startingLight}`)
+    if (bonus.maxHealth > 0) parts.push(`최대 체력 +${bonus.maxHealth}`)
+    if (bonus.emberMax > 0) parts.push('빛 게이지 상한 +1')
+    if (bonus.handMax > 0) parts.push('손패 한도 +1')
+    if (bonus.damage > 0) parts.push('공격력 +1')
+    if (parts.length === 0) return ''
+    return `<p class="hearth-library-legacy-line">여정의 유산 · ${playerLegacyStyleLabel(bonus.dominant)} · ${parts.join(' · ')}</p>`
   }
 
   /** 여정 종료 사유 → 정산 화면과 같은 제목 문구(사망/클리어 헤드라인 재사용). */
@@ -721,19 +756,21 @@ export class HearthScene {
     }
   }
 
-  /** 여정 하나하나를 책 목차처럼 얇은 한 줄로 차곡차곡 쌓는다 — 점 표식(결과) · 제목 ·
-   *  점선 리더 · 층/날짜만 있는 홑줄이라 상자 여러 개보다 책장에 가깝게 읽힌다.
+  /** 여정 하나하나를 책 목차처럼 얇은 한 줄로 차곡차곡 쌓는다 — 점 표식(결과) · 난이도 ·
+   *  제목 · 점선 리더 · 층/날짜만 있는 홑줄이라 상자 여러 개보다 책장에 가깝게 읽힌다.
    *  누르면 유리 카드 팝업으로 상세(처치·MVP 손패·위험한 적·에나 성좌)가 뜬다. */
   private renderLibraryEntries(history: LifetimeRecord['history']): string {
     if (history.length === 0) return ''
     const rowsHtml = history
       .map((entry, i) => {
         const title = this.libraryEntryTitle(entry)
+        const diff = this.libraryDifficultyLabel(entry.difficulty)
         const date = entry.at > 0
           ? new Date(entry.at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
           : ''
         return `<button class="hearth-library-toc-row" type="button" data-outcome="${entry.outcome}" data-hearth-library-entry="${i}" style="--row-index:${i}">
           <span class="hearth-library-toc-mark" aria-hidden="true"></span>
+          ${diff ? `<span class="hearth-library-toc-diff">${diff}</span>` : ''}
           <span class="hearth-library-toc-title">${title}</span>
           <span class="hearth-library-toc-leader" aria-hidden="true"></span>
           <span class="hearth-library-toc-meta">${entry.floor}층 · ${date}</span>
@@ -749,6 +786,7 @@ export class HearthScene {
     if (!entry) return
     this.closeLibraryEntryDetail()
     const title = this.libraryEntryTitle(entry)
+    const diff = this.libraryDifficultyLabel(entry.difficulty)
     const date = entry.at > 0
       ? new Date(entry.at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
       : ''
@@ -791,7 +829,7 @@ export class HearthScene {
       <article class="hearth-library-detail-card" data-outcome="${entry.outcome}" role="dialog" aria-label="여정 상세">
         <button class="hearth-library-detail-close" type="button" data-hearth-library-close aria-label="닫기">${closeIcon()}</button>
         <header class="hearth-library-detail-head">
-          <span class="hearth-library-detail-eyebrow">${entry.floor}층 · ${date}</span>
+          <span class="hearth-library-detail-eyebrow">${diff ? `${diff} · ` : ''}${entry.floor}층 · ${date}</span>
           <h2 class="hearth-library-detail-title">${title}</h2>
           ${entry.enaLine ? `<p class="hearth-library-detail-hook">${entry.enaLine}</p>` : ''}
         </header>
