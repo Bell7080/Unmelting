@@ -160,6 +160,12 @@ const ENA_HINT_REPEAT = 3
 /** 대상이 여럿일 때 하나씩 짚어 가는 간격 — 한꺼번에 켜면 어디를 보라는 건지 흩어진다. */
 const ENA_HINT_STAGGER_MS = 180
 
+/** 거점 "예상 시작 불빛" 미리보기 한 항목 — label(출처)+amount(그만큼)의 쌍. */
+export interface LobbyLightPreviewSource {
+  label: string
+  amount: number
+}
+
 export class GameBoardRenderer {
   /** 서브 렌더러 공유 — 보드 루트 요소. */
   readonly boardElement: HTMLElement
@@ -195,6 +201,8 @@ export class GameBoardRenderer {
   /** 거점(로비) 전용 "예상 시작 불빛" 미리보기 — null이면 인게임처럼 실제 불빛을 보여준다.
    *  숫자면(0 포함) 로비 모드로 그 값을 "예상 시작 불빛"으로 보여준다. */
   private lobbyLightPreview: number | null = null
+  /** 위 미리보기 값의 출처 목록(서고/만찬 등) — 호버 툴팁이 "어디서 얼마나"를 보여준다. */
+  private lobbyLightPreviewSources: LobbyLightPreviewSource[] = []
   /** Generic HUD counters (HP, shield, ember, candle gauge, attack) keep
    *  their own last rendered value so full re-renders can still count from
    *  the previous visible number instead of jumping straight to the model. */
@@ -883,10 +891,18 @@ export class GameBoardRenderer {
     const scoreKickerLabel = lobbyPreview !== null ? '예상 시작 불빛' : '불빛'
     const scoreDisplayValue = lobbyPreview !== null ? lobbyPreview : renderedScore
     const scoreCountEnd = lobbyPreview !== null ? lobbyPreview : scorePanel.score
+    // 출처 목록을 "라벨 +값." 문장들로 묶는다 — 툴팁이 마침표 경계에서 한 줄씩 나눠 보여준다.
+    const previewSources = lobbyPreview !== null
+      ? this.lobbyLightPreviewSources.filter((s) => s.amount !== 0)
+      : []
+    const previewTooltip = previewSources.length > 0
+      ? previewSources.map((s) => `${s.label} +${s.amount}.`).join(' ')
+      : ''
+    const previewTooltipAttr = previewTooltip ? ` data-tooltip="${previewTooltip}"` : ''
 
     return `
       <aside class="score-panel" aria-label="Action score panel">
-        <section class="score-panel-total">
+        <section class="score-panel-total"${previewTooltipAttr}>
           <div class="score-kicker">
             <span class="score-kicker-icon">${sparkleIcon()}</span>
             ${scoreKickerLabel}
@@ -2182,9 +2198,11 @@ export class GameBoardRenderer {
   }
 
   /** 거점(로비) 좌측 불빛 칸을 "예상 시작 불빛" 미리보기로 바꾼다.
-   *  null이면 인게임처럼 실제 불빛을 보여준다(런 진입 시 호출부가 다시 null로 되돌린다). */
-  setLobbyLightPreview(amount: number | null): void {
+   *  null이면 인게임처럼 실제 불빛을 보여준다(런 진입 시 호출부가 다시 null로 되돌린다).
+   *  sources는 호버 툴팁이 보여줄 출처 목록(서고/만찬 등) — 앞으로 더 늘어날 수 있다. */
+  setLobbyLightPreview(amount: number | null, sources: LobbyLightPreviewSource[] = []): void {
     this.lobbyLightPreview = amount
+    this.lobbyLightPreviewSources = sources
   }
 
   // ── 도감/경험 탭 본체는 renderer/CompendiumView·ExperienceView로 이동 ──

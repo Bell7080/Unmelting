@@ -363,7 +363,7 @@ export class EventOverlayView {
           <div class="mini-ex-gauge">
             <span class="mini-meter-key">성공 확률</span>
             <b class="mini-ex-chance-val">–</b>
-            <span class="mini-anx-pips" title="불안">${anxPipsHtml}</span>
+            <span class="mini-anx-pips" data-tooltip="불안">${anxPipsHtml}</span>
           </div>
           <div class="mini-ex-tries">
             <span class="mini-meter-key">남은 기회</span>
@@ -583,10 +583,10 @@ export class EventOverlayView {
     const itemHtml = cfg.items.map((it, i) => {
       const angle = (i - (n - 1) / 2) * 6
       const picker = it.id === 'block'
-        ? `<span class="rps-block-picker" hidden>${HANDS.map((h) => `<button class="rps-block-opt" type="button" data-hand="${h}" title="${HAND_LABEL[h]}">${handArt(h)}</button>`).join('')}</span>`
+        ? `<span class="rps-block-picker" hidden>${HANDS.map((h) => `<button class="rps-block-opt" type="button" data-hand="${h}" data-tooltip="${HAND_LABEL[h]}">${handArt(h)}</button>`).join('')}</span>`
         : ''
       return `<span class="rps-item-slot" style="transform:rotate(${angle}deg)">
-        <button class="mini-rps-item" type="button" data-item="${it.id}" title="${escapeHtml(it.desc)}">
+        <button class="mini-rps-item" type="button" data-item="${it.id}" data-tooltip="${escapeHtml(it.desc)}">
           <span class="it-label">${escapeHtml(it.label)}</span>
           <span class="it-cost">${RES_LABEL[it.costRes]} ${itemCost(it).toLocaleString()}</span>
         </button>
@@ -669,7 +669,7 @@ export class EventOverlayView {
       oddsEl.innerHTML = HANDS.map((h) => {
         const cnt = deckCount(h)
         const cls = h === blocked ? ' is-blocked' : cnt === 0 ? ' is-empty' : ''
-        return `<span class="odds-chip${cls}" title="${HAND_LABEL[h]} · 남은 ${cnt}장">${handArt(h)}<i class="odds-cnt">${cnt}장</i><b>${h === blocked ? '×' : `${Math.round(odds[h] * 100)}%`}</b></span>`
+        return `<span class="odds-chip${cls}" data-tooltip="${HAND_LABEL[h]} · 남은 ${cnt}장">${handArt(h)}<i class="odds-cnt">${cnt}장</i><b>${h === blocked ? '×' : `${Math.round(odds[h] * 100)}%`}</b></span>`
       }).join('')
       // 아이템 장전 상태는 별도 줄 대신 버튼 자체 발광(is-armed)으로 보여준다.
       itemEls.forEach((b) => {

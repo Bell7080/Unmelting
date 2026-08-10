@@ -37,6 +37,7 @@ import {
   ShopPackKind,
   ShopPackPickDetail,
   type ResourceTrailTarget,
+  type LobbyLightPreviewSource,
 } from '@ui/GameBoardRenderer'
 import { experienceAxes } from '@ui/ExperienceAxes'
 import { GAME_OVER_GLOBAL_STYLES } from '@ui/styles/GameOverStyles'
@@ -63,6 +64,7 @@ import { JOBS } from '@data/Jobs'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { STRIKE_LOB_STAGGER_MS } from '@ui/renderer/ResourceTrailFx'
 import { CursorFX } from '@ui/CursorFX'
+import { initGlobalTooltips } from '@ui/Tooltip'
 import { FontManager } from '@ui/FontManager'
 import { SpriteUrls, spriteForHearthStation, spriteForHandCard, spriteForRelic } from '@ui/Sprites'
 import { sparkleIcon, closeIcon } from '@ui/Icons'
@@ -113,6 +115,7 @@ app.innerHTML = `
 `
 
 CursorFX.init()
+initGlobalTooltips()
 
 // 모바일(터치) 주소창 숨김 best-effort: 첫 사용자 제스처에서 전체화면을 시도한다.
 // - Android 크롬: 즉시 브라우저 주소창이 사라진다(전체화면 진입).
@@ -411,11 +414,13 @@ function syncRunModifiersToSpawner(): void {
     treasureSpawnScale: runModifiers.treasureSpawnScale,
   })
 }
-/** 거점 "예상 시작 불빛" 미리보기의 기본값 — 통산 기록에서 나오는 여정의 유산 시작
- *  불빛만 우선 반영한다(만찬 선택분은 onDinnerRelicCreate가 이 값에 더해 갱신한다).
- *  새싹 병아리는 이 보너스를 받지 못하지만, 난이도 선택 전 미리보기라 근사치로 둔다. */
-function lobbyLightPreviewBase(): number {
-  return computePlayerLegacyBonus(lifetimeRecordStore.load()).startingLight
+/** 거점 "예상 시작 불빛" 미리보기의 출처 목록 — 지금은 서고(여정의 유산) 하나뿐이지만
+ *  앞으로 늘어날 것을 감안해 배열로 둔다. 만찬 선택분은 onDinnerRelicCreate가 이
+ *  배열에 항목을 하나 더 얹어 갱신한다. 새싹 병아리는 여정의 유산을 받지 못하지만,
+ *  난이도 선택 전 미리보기라 근사치로 둔다. */
+function lobbyLightPreviewSources(): LobbyLightPreviewSource[] {
+  const legacyStartingLight = computePlayerLegacyBonus(lifetimeRecordStore.load()).startingLight
+  return legacyStartingLight > 0 ? [{ label: '서고', amount: legacyStartingLight }] : []
 }
 
 /**
@@ -427,8 +432,9 @@ function enterHearth(): void {
   // 갓 게임을 켠 상태: 적·직업·유물 잔여 0. 빈 레일을 배경으로 거점 오버레이를 띄운다.
   pendingDinnerRelicProfile = null
   // 로비 진입마다 예상 시작 불빛 미리보기를 다시 굴린다 — 통산 기록에서 나오는
-  // 여정의 유산 시작 불빛만 우선 반영한다(만찬 전이므로 그쪽은 아직 0).
-  boardRenderer.setLobbyLightPreview(lobbyLightPreviewBase())
+  // 여정의 유산 시작 불빛만 우선 반영한다(만찬 전이므로 그쪽은 아직 없다).
+  const baseSources = lobbyLightPreviewSources()
+  boardRenderer.setLobbyLightPreview(baseSources.reduce((sum, s) => sum + s.amount, 0), baseSources)
   resetForNewRun()
   // 거점 로비 동안엔 플레이어 말풍선을 음소거한다. 보류 중인 지연 대사(시작 대사 등)도
   // 함께 취소돼 대문 열림 중에 인게임 대사가 새는 것을 막는다. startGame 시작 시 해제된다.
@@ -480,7 +486,12 @@ function enterHearth(): void {
       // 로비에서는 카드만 실제 인벤토리에 꽂고, 스탯 효과는 startGame 재지급 때 한 번 발동한다.
       gameState.character.addRelic('last-supper')
       // 좌측 불빛 칸을 여정의 유산 + 이번 만찬 시작 불빛 버프 합으로 갱신한다.
-      boardRenderer.setLobbyLightPreview(lobbyLightPreviewBase() + (profile.stats.startScore ?? 0))
+      const dinnerStartScore = profile.stats.startScore ?? 0
+      const sourcesWithDinner = [
+        ...lobbyLightPreviewSources(),
+        ...(dinnerStartScore > 0 ? [{ label: '만찬', amount: dinnerStartScore }] : []),
+      ]
+      boardRenderer.setLobbyLightPreview(sourcesWithDinner.reduce((sum, s) => sum + s.amount, 0), sourcesWithDinner)
       render()
     },
   })
