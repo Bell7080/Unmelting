@@ -1629,46 +1629,12 @@ body.hearth-lobby #ingame-backdrop.is-out {
   scrollbar-width: thin;
   scrollbar-color: rgba(244, 164, 96, 0.72) rgba(20, 16, 28, 0.18);
 }
-/* 종합 일지 + 목차를 감싸는 반투명 유리판 — 배경 위에 텍스트만 떠 있지 않고 책 페이지
-   한 장처럼 표면이 생긴다. 테두리는 선 대신 은은한 안쪽 하이라이트로만 낸다. */
 .hearth-library-journal-inner {
-  position: relative;
   width: 100%;
   margin: auto 0;
   display: flex;
   flex-direction: column;
   gap: clamp(14px, 2.4vh, 24px);
-  padding: clamp(20px, 3.4vh, 32px) clamp(24px, 4.2vw, 46px);
-  border-radius: 18px;
-  background: rgba(14, 9, 12, 0.4);
-  backdrop-filter: blur(12px) saturate(1.08);
-  -webkit-backdrop-filter: blur(12px) saturate(1.08);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 24px 50px rgba(0, 0, 0, 0.36);
-  transition: box-shadow 0.4s ease;
-}
-/* 책이 쌓이는 느낌 — 통산 판 수 구간(applyLibraryStackTier)마다 뒤로 책등이 한 겹씩
-   늘어난다. 새 요소를 그리지 않고 box-shadow만 겹쳐 쌓는다(가벼움 + 클립 걱정 없음). */
-.hearth-library-stage[data-stack-tier="1"] .hearth-library-journal-inner {
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 24px 50px rgba(0, 0, 0, 0.36),
-    6px 10px 0 -2px rgba(58, 42, 30, 0.55), 6px 12px 16px -6px rgba(0, 0, 0, 0.4);
-}
-.hearth-library-stage[data-stack-tier="2"] .hearth-library-journal-inner {
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 24px 50px rgba(0, 0, 0, 0.36),
-    6px 10px 0 -2px rgba(58, 42, 30, 0.55), 6px 12px 16px -6px rgba(0, 0, 0, 0.4),
-    13px 20px 0 -3px rgba(48, 34, 24, 0.5), 13px 22px 20px -8px rgba(0, 0, 0, 0.36);
-}
-.hearth-library-stage[data-stack-tier="3"] .hearth-library-journal-inner {
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 24px 50px rgba(0, 0, 0, 0.36),
-    6px 10px 0 -2px rgba(58, 42, 30, 0.55), 6px 12px 16px -6px rgba(0, 0, 0, 0.4),
-    13px 20px 0 -3px rgba(48, 34, 24, 0.5), 13px 22px 20px -8px rgba(0, 0, 0, 0.36),
-    20px 30px 0 -4px rgba(40, 28, 20, 0.46), 20px 32px 24px -10px rgba(0, 0, 0, 0.32);
-}
-.hearth-library-stage[data-stack-tier="4"] .hearth-library-journal-inner {
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 24px 50px rgba(0, 0, 0, 0.36),
-    6px 10px 0 -2px rgba(58, 42, 30, 0.55), 6px 12px 16px -6px rgba(0, 0, 0, 0.4),
-    13px 20px 0 -3px rgba(48, 34, 24, 0.5), 13px 22px 20px -8px rgba(0, 0, 0, 0.36),
-    20px 30px 0 -4px rgba(40, 28, 20, 0.46), 20px 32px 24px -10px rgba(0, 0, 0, 0.32),
-    27px 40px 0 -5px rgba(32, 22, 16, 0.42), 27px 42px 28px -12px rgba(0, 0, 0, 0.28);
 }
 /* 종합 일지 — 정산 화면 우측 하단과 같은 두 줄 요약. 예전엔 통계 7개가 각자 행이라
    두꺼웠다(구버전 .hearth-library-ledger) — 책 앞머리에 다는 얇은 개요로 줄였다. */
@@ -1740,19 +1706,6 @@ body.hearth-lobby #ingame-backdrop.is-out {
 #hearth-overlay.is-library-mode.is-shutter-rest .hearth-library-toc-row {
   animation: hearth-library-row-in 0.34s cubic-bezier(0.2, 0.84, 0.3, 1) forwards;
   animation-delay: calc(0.4s + var(--row-index, 0) * 0.045s);
-}
-.hearth-library-toc-mark {
-  flex: 0 0 6px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  align-self: center;
-  background: rgba(255, 205, 112, 0.85);
-  box-shadow: 0 0 6px rgba(255, 205, 112, 0.4);
-}
-.hearth-library-toc-row[data-outcome="death"] .hearth-library-toc-mark {
-  background: rgba(210, 110, 110, 0.8);
-  box-shadow: 0 0 6px rgba(210, 110, 110, 0.35);
 }
 /* 난이도 표기 — 목차 줄에 끼워 넣는 아주 작은 라벨. 본문 정보(제목/층/날짜)보다
    낮은 대비로 눌러 시선을 가로채지 않는다. */
@@ -1989,14 +1942,11 @@ body.hearth-lobby #ingame-backdrop.is-out {
   .hearth-library-stage { padding: 10px 12px 14px; }
   .hearth-library-tab { font-size: 16px; letter-spacing: 0.14em; padding: 4px 10px 6px; }
   .hearth-library-journal { margin-top: 6px; align-items: flex-start; }
-  .hearth-library-journal-inner { padding: 14px 16px; }
   .hearth-library-summary-main { font-size: 13px; }
   .hearth-library-summary-sub { font-size: 11px; }
   .hearth-library-legacy-line { font-size: 10.5px; }
   .hearth-library-toc-diff { font-size: 9.5px; padding: 1px 5px; }
   .hearth-library-empty { font-size: 13px; }
-  /* 책이 쌓이는 겹 그림자는 좁은 화면에서 안쪽 콘텐츠를 침범하니 접는다. */
-  .hearth-library-stage[data-stack-tier] .hearth-library-journal-inner { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 16px 30px rgba(0, 0, 0, 0.32); }
 }
 
 /* ── 만찬 셔터 임시 화면 ──────────────────────────────────────────────
