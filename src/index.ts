@@ -411,6 +411,13 @@ function syncRunModifiersToSpawner(): void {
     treasureSpawnScale: runModifiers.treasureSpawnScale,
   })
 }
+/** 거점 "예상 시작 불빛" 미리보기의 기본값 — 통산 기록에서 나오는 여정의 유산 시작
+ *  불빛만 우선 반영한다(만찬 선택분은 onDinnerRelicCreate가 이 값에 더해 갱신한다).
+ *  새싹 병아리는 이 보너스를 받지 못하지만, 난이도 선택 전 미리보기라 근사치로 둔다. */
+function lobbyLightPreviewBase(): number {
+  return computePlayerLegacyBonus(lifetimeRecordStore.load()).startingLight
+}
+
 /**
  * 거점(촛대) 진입: 빈 레일을 배경으로 거점 화면을 띄운다.
  * 현재 테스트 런 상태를 깨끗이 비우고 빈 보드를 렌더한 뒤 거점 오버레이를 마운트한다.
@@ -419,9 +426,9 @@ function syncRunModifiersToSpawner(): void {
 function enterHearth(): void {
   // 갓 게임을 켠 상태: 적·직업·유물 잔여 0. 빈 레일을 배경으로 거점 오버레이를 띄운다.
   pendingDinnerRelicProfile = null
-  // 로비 진입마다 예상 시작 불빛 미리보기를 0으로 되돌린다 — 아직 이번 방문에서
-  // 만찬을 만들지 않았으므로.
-  boardRenderer.setLobbyLightPreview(0)
+  // 로비 진입마다 예상 시작 불빛 미리보기를 다시 굴린다 — 통산 기록에서 나오는
+  // 여정의 유산 시작 불빛만 우선 반영한다(만찬 전이므로 그쪽은 아직 0).
+  boardRenderer.setLobbyLightPreview(lobbyLightPreviewBase())
   resetForNewRun()
   // 거점 로비 동안엔 플레이어 말풍선을 음소거한다. 보류 중인 지연 대사(시작 대사 등)도
   // 함께 취소돼 대문 열림 중에 인게임 대사가 새는 것을 막는다. startGame 시작 시 해제된다.
@@ -472,8 +479,8 @@ function enterHearth(): void {
       gameState.character.customRelicProfiles['last-supper'] = profile
       // 로비에서는 카드만 실제 인벤토리에 꽂고, 스탯 효과는 startGame 재지급 때 한 번 발동한다.
       gameState.character.addRelic('last-supper')
-      // 좌측 불빛 칸을 이번 만찬의 시작 불빛 버프로 갱신한다(없으면 0).
-      boardRenderer.setLobbyLightPreview(profile.stats.startScore ?? 0)
+      // 좌측 불빛 칸을 여정의 유산 + 이번 만찬 시작 불빛 버프 합으로 갱신한다.
+      boardRenderer.setLobbyLightPreview(lobbyLightPreviewBase() + (profile.stats.startScore ?? 0))
       render()
     },
   })

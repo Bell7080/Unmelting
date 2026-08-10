@@ -1663,14 +1663,23 @@ body.hearth-lobby #ingame-backdrop.is-out {
   color: rgba(214, 200, 178, 0.6);
   letter-spacing: 0.02em;
 }
-/* 여정의 유산 — 통산 기록이 다음 런에 얹어 줄 영구 보너스 미리보기. 수치 자체가 작으므로
-   화려하게 강조하지 않고 은은한 발광 한 줄로만 알린다. */
+/* 여정의 유산 — 통산 기록이 다음 런에 얹어 줄 영구 보너스 미리보기. 줄 자체(접두사·
+   " · " 구분자)는 차분하게 두고, 실제 효과만 푸른 발광 칩으로 튀게 해 둘을 가른다. */
 .hearth-library-legacy-line {
   margin: 4px 0 0;
   font-size: clamp(11px, 1.4vh, 12.5px);
-  color: rgba(190, 214, 255, 0.68);
+  color: rgba(214, 200, 178, 0.55);
   letter-spacing: 0.02em;
-  text-shadow: 0 0 10px rgba(150, 190, 255, 0.18);
+}
+.hearth-library-legacy-chip {
+  color: rgba(160, 205, 255, 0.98);
+  font-weight: 700;
+  text-shadow: 0 0 6px rgba(110, 175, 255, 0.85), 0 0 15px rgba(90, 155, 255, 0.5);
+}
+/* text-shadow는 글자에만 붙는다 — 칩 안의 인라인 SVG 아이콘은 같은 발광을
+   filter: drop-shadow로 따로 줘야 글자와 아이콘이 같이 빛난다. */
+.hearth-library-legacy-chip .icon {
+  filter: drop-shadow(0 0 4px rgba(110, 175, 255, 0.85)) drop-shadow(0 0 9px rgba(90, 155, 255, 0.5));
 }
 /* 최근 여정 — 책 목차처럼 얇은 홑줄이 차곡차곡 쌓인다(구버전 상자형 .hearth-library-entry
    대신). 점 표식이 결과를, 점선 리더가 제목과 층/날짜를 잇는다. */

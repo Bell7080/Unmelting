@@ -720,20 +720,22 @@ export class HearthScene {
   }
 
   /** 여정의 유산 한 줄 — 통산 기록이 다음 런에 미세하게 얹어 줄 영구 보너스를 미리 보여준다.
-   *  보너스가 전혀 없으면(런 0회) 줄 자체를 그리지 않는다. */
+   *  보너스가 전혀 없으면(런 0회) 줄 자체를 그리지 않는다. 각 효과는 푸른 발광 칩으로
+   *  감싸 사이를 잇는 " · " 구분자와 또렷이 갈린다. */
   private renderLibraryLegacyLine(rec: LifetimeRecord): string {
     const bonus = computePlayerLegacyBonus(rec)
     if (bonus.progress <= 0) return ''
     const parts: string[] = []
     const lightIcon = `<span class="resource-term-icon" aria-hidden="true">${sparkleIcon()}</span>`
-    if (bonus.lightPct > 0) parts.push(`획득량 ${lightIcon}+${(bonus.lightPct * 100).toFixed(1)}%`)
-    if (bonus.startingLight > 0) parts.push(`시작 ${lightIcon}+${bonus.startingLight}`)
+    if (bonus.lightPct > 0) parts.push(`불빛 획득량 ${lightIcon}+${(bonus.lightPct * 100).toFixed(1)}%`)
+    if (bonus.startingLight > 0) parts.push(`시작 불빛 ${lightIcon}+${bonus.startingLight}`)
     if (bonus.maxHealth > 0) parts.push(`최대 체력 +${bonus.maxHealth}`)
     if (bonus.emberMax > 0) parts.push('빛 게이지 상한 +1')
     if (bonus.handMax > 0) parts.push('손패 한도 +1')
     if (bonus.damage > 0) parts.push('공격력 +1')
     if (parts.length === 0) return ''
-    return `<p class="hearth-library-legacy-line">여정의 유산 · ${playerLegacyStyleLabel(bonus.dominant)} · ${parts.join(' · ')}</p>`
+    const chips = parts.map((p) => `<span class="hearth-library-legacy-chip">${p}</span>`).join(' · ')
+    return `<p class="hearth-library-legacy-line">여정의 유산 · ${playerLegacyStyleLabel(bonus.dominant)} · ${chips}</p>`
   }
 
   /** 여정 종료 사유 → 정산 화면과 같은 제목 문구(사망/클리어 헤드라인 재사용). */
