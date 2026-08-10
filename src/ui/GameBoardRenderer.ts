@@ -2705,6 +2705,67 @@ export class GameBoardRenderer {
     this.boardElement.querySelectorAll('.ena-hint-pulse').forEach((el) => el.remove())
   }
 
+  /**
+   * (실험적) 에나가 레시피 완성각으로 손패를 지원했을 때, 관여한 슬롯들을 ㄷ(⊏)자
+   * 브래킷 한 줄로 묶어 보여주고 그 레시피의 미리보기 카드를 함께 띄운다.
+   *
+   * 기존 `.hand-recipe-preview`(호버 시 뜨는 "발동 조합")는 **체인 시퀀스** 기준이라
+   * (previewTriggeredRecipes가 chain.sequence로 판정) 손에 재료를 쥐고만 있는 지금
+   * 시점엔 아직 존재하지 않는다 — 그래서 여기선 같은 시각 언어(같은 CSS 클래스)를 쓰는
+   * 전용 aside를 새로 그려 붙인다. "이번 체인에 발동"이 아니라 "완성 재료를 들고 있다"는
+   * 다른 사실을 말하므로 kicker 문구도 구분한다.
+   *
+   * 단발성 연출이라 렌더가 손패를 다시 그리면(카드 사용/재배치 등) 함께 사라진다 —
+   * 프로토타입 단계라 activeEnaHint 같은 render-survival 장치는 아직 붙이지 않았다.
+   */
+  showRecipeBracketHint(slotIndices: readonly number[], recipeId: string, previewSlotIndex?: number, durationMs = 4200): void {
+    const recipeDef = RECIPES.find((r) => r.id === recipeId)
+    if (!recipeDef) return
+    const stack = this.boardElement.querySelector<HTMLElement>('.hand-stack')
+    if (!stack) return
+    stack.querySelectorAll('.ena-recipe-bracket, .ena-recipe-bracket-preview').forEach((el) => el.remove())
+    stack.querySelectorAll('.is-recipe-bracket-target').forEach((el) => el.classList.remove('is-recipe-bracket-target'))
+
+    const slots = slotIndices
+      .map((i) => stack.querySelector<HTMLElement>(`:scope > .hand-slot[data-slot-index="${i}"]`))
+      .filter((el): el is HTMLElement => !!el)
+    if (slots.length < 2) return
+    slots.forEach((el) => el.classList.add('is-recipe-bracket-target'))
+
+    // 미리보기는 지정된 슬롯(보통 방금 받은 카드)에 붙인다 — 없으면 마지막 슬롯.
+    const previewSlot = (previewSlotIndex !== undefined && slots.find((el) => el.dataset.slotIndex === String(previewSlotIndex)))
+      || slots[slots.length - 1]
+    const preview = document.createElement('aside')
+    preview.className = 'hand-recipe-preview ena-recipe-bracket-preview'
+    preview.setAttribute('aria-hidden', 'true')
+    preview.innerHTML = `
+      <span class="hand-recipe-preview-kicker">에나의 완성각</span>
+      <span class="hand-recipe-preview-row">
+        <strong>${recipeDef.name}</strong>
+        <em>${this.faces.recipeFlavorHtml(recipeDef)}</em>
+      </span>`
+    previewSlot.appendChild(preview)
+
+    const centers = slots.map((el) => el.offsetTop + el.offsetHeight / 2)
+    const minY = Math.min(...centers)
+    const maxY = Math.max(...centers)
+    const bracket = document.createElement('div')
+    bracket.className = 'ena-recipe-bracket'
+    bracket.dataset.recipeId = recipeId
+    bracket.style.top = `${minY}px`
+    bracket.style.height = `${Math.max(1, maxY - minY)}px`
+    bracket.innerHTML = centers
+      .map((y) => `<span class="ena-recipe-bracket-tick" style="top:${y - minY}px"></span>`)
+      .join('')
+    stack.appendChild(bracket)
+
+    window.setTimeout(() => {
+      bracket.remove()
+      preview.remove()
+      slots.forEach((el) => el.classList.remove('is-recipe-bracket-target'))
+    }, durationMs)
+  }
+
   /** 다음 줄 카드 주변 40px 안에 포인터가 들어온 첫 순간만 소개 이벤트를 보낸다. */
   private dispatchNearbyCardIntroduction(e: MouseEvent): void {
     const proximityMargin = 40

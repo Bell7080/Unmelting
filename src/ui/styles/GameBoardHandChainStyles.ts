@@ -53,6 +53,7 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   }
 }
 .hand-stack {
+  position: relative;
   list-style: none;
   margin: 0;
   padding: 4px 0;
@@ -65,6 +66,30 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   gap: clamp(1px, calc(8px - max(0, var(--hand-count, 0) - 6) * 1.2px), 6px);
   min-height: 0;
   overflow: visible;
+}
+/* (실험적) 에나 레시피 완성각 브래킷 — 관여한 손패 슬롯들의 세로 중심을 ㄷ(⊏)자로 잇는다.
+   손패 칸 왼쪽(보드 쪽) 여백에 세로선 + 슬롯마다 짧은 가지를 그린다. */
+.ena-recipe-bracket {
+  position: absolute;
+  left: -13px;
+  width: 9px;
+  border-left: 2px solid rgba(255, 205, 112, 0.85);
+  filter: drop-shadow(0 0 6px rgba(255, 205, 112, 0.55));
+  pointer-events: none;
+  opacity: 0;
+  animation: ena-recipe-bracket-in 0.32s ease forwards;
+}
+.ena-recipe-bracket-tick {
+  position: absolute;
+  left: 0;
+  width: 9px;
+  height: 2px;
+  background: rgba(255, 205, 112, 0.85);
+  box-shadow: 0 0 6px rgba(255, 205, 112, 0.55);
+}
+@keyframes ena-recipe-bracket-in { to { opacity: 1; } }
+.hand-slot.hand-card.is-recipe-bracket-target {
+  box-shadow: 0 0 0 1px rgba(255, 205, 112, 0.55), 0 0 14px rgba(255, 205, 112, 0.4);
 }
 
 .hand-stack.is-crowded .hand-slot.hand-card {
@@ -509,6 +534,16 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   animation: none;
   opacity: 1;
   transform: translateY(-50%) translateX(0);
+}
+/* (실험적) 에나 레시피 완성각 미리보기 — 체인 상태와 무관하게 강제로 띄우는 전용 aside.
+   같은 시각 언어를 쓰되 조건 없이 보이므로 hover/is-recipe-ready 게이트를 타지 않는다. */
+.hand-recipe-preview.ena-recipe-bracket-preview {
+  display: grid;
+  gap: 7px;
+  animation: recipe-preview-slide 0.28s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
+}
+.hand-slot.is-low-preview .hand-recipe-preview.ena-recipe-bracket-preview {
+  animation-name: recipe-preview-low-slide;
 }
 .hand-recipe-preview-kicker {
   font-size: 12px;

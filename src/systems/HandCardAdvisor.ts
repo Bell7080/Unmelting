@@ -113,6 +113,8 @@ export interface SupportRanking {
   reason: string
   /** 로그/학습 trace용 자세한 근거 문장. */
   detail: string
+  /** 레시피 완성각으로 뽑힌 추천이면 그 레시피 ID(연출 훅용 — 예: 손패 브래킷 힌트). */
+  recipeId?: string
 }
 
 // ── 기대 HP 환산 상수 ──────────────────────────────────────────────────────
@@ -513,6 +515,8 @@ interface RecipeSupportBonus {
   reason: string
   detail: string
   standalone: boolean
+  /** 이 완성각을 낸 레시피 ID — 연출 훅(손패 브래킷 힌트)이 재료 슬롯을 다시 찾을 때 쓴다. */
+  recipeId: string
 }
 
 /** 후보 카드가 '마지막 재료'가 되어 보유 손패와 함께 해금 레시피를 완성하는 경우의 가산.
@@ -543,6 +547,7 @@ function recipeCompletionBonus(def: HandCardDefinition, situation: SupportSituat
       standalone: axis.standalone,
       reason: `${lead}${recipe.name} 완성각`,
       detail: `${recipe.name} 레시피(${recipe.flavor})가 이 손패로 완성 가능`,
+      recipeId: recipe.id,
     }
   }
   return best
@@ -581,7 +586,8 @@ export function rankSupportCards(situation: SupportSituation, unlockedCardIds: r
     // 기회비용: 플레이어가 이미 2장 든 카드는 3장째가 즉시 트리플로 완성되므로 대기 가치를 가점.
     const tripleBonus = heldCountOf(situation, heldSet, id) === 2 ? tactic.tripleValue * 0.8 : 0
     const score = (plan?.fitScore ?? 0) + (recipeBonus?.score ?? 0) + tactic.fieldValue * 0.15 + tactic.synergyValue * 0.05 + tagBonus + tripleBonus - tactic.liability * 1.5
-    rankings.push({ cardId: id, score, fit: primary.fit, reason: primary.reason, detail: primary.detail })
+    const recipeId = recipeBonus && primary === recipeBonus ? recipeBonus.recipeId : undefined
+    rankings.push({ cardId: id, score, fit: primary.fit, reason: primary.reason, detail: primary.detail, recipeId })
   }
   return rankings.sort((a, b) => b.score - a.score)
 }

@@ -1,6 +1,6 @@
 # 버전 관리
 
-현재 버전: **v2.8.1**
+현재 버전: **v2.9.0**
 
 `VERSION.md`와 `package.json`의 `version`은 항상 같은 값을 쓴다.
 
@@ -25,6 +25,25 @@
   올리는 커밋은 `package.json`과 이 문서를 함께 갱신한다.
 
 ## 변경 이력
+
+### v2.9.0 — 2026-08-10 (실험적)
+
+**에나의 레시피 완성각 지원에 ㄷ(⊏)자 손패 브래킷 + 완성각 미리보기를 추가했다.**
+
+- HandCardAdvisor가 이미 갖고 있던 "이 카드가 마지막 재료면 완성 효과를 지원 근거로
+  가산한다"(`recipeCompletionBonus`, 예: 강적 앞에서 양초 스매쉬용 촛농/양초 지원)는
+  로직 자체는 그대로 두고, 그 판단이 실제로 어떤 레시피였는지(`recipeId`)를
+  `SupportRanking` → `ThreatReport.recommendationRecipeId`까지 끝까지 들고 오게 배선했다.
+- `CompanionDirector.tryCompanionPrediction()`이 지원 카드를 지급한 직후, 해당
+  레시피의 재료 슬롯들을 손패에서 다시 찾아 `GameBoardRenderer.showRecipeBracketHint()`를
+  부른다: 관여한 슬롯들을 금빛 ㄷ자 브래킷 한 줄로 묶고, "에나의 완성각 / 레시피명 /
+  효과" 미리보기를 함께 띄운다.
+- 이 미리보기는 기존 `.hand-recipe-preview`(호버 시 뜨는 "발동 조합")와 같은 시각
+  언어를 쓰지만 다른 조건이다 — 기존 것은 **체인 시퀀스** 기준(`previewTriggeredRecipes`가
+  `chain.sequence`로 판정)이라 재료를 손에 쥐고만 있는 이 시점엔 아직 존재하지 않는다.
+  그래서 조건 없이 뜨는 전용 aside(`.ena-recipe-bracket-preview`)를 따로 만들었다.
+- **실험적 표시**: render-survival 장치(`activeEnaHint`류)를 아직 붙이지 않아 손패가
+  다시 그려지면(카드 사용 등) 함께 사라진다. 프로토타입 단계로 남겨 둔다.
 
 ### v2.8.1 — 2026-08-10
 

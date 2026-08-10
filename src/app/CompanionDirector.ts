@@ -13,6 +13,7 @@ import { saveDisposition, computeEnaGrowth, type EnaRunDramaSignals } from '@sys
 import { DropSystem } from '@systems/DropSystem'
 import { HandSystem } from '@systems/HandSystem'
 import { getHandCardDef } from '@data/HandCards'
+import { RECIPES } from '@data/Recipes'
 import { GameBoardRenderer } from '@ui/GameBoardRenderer'
 import { SpeechBubble } from '@ui/SpeechBubble'
 import { BarkSequencer } from '@ui/BarkSequencer'
@@ -381,6 +382,25 @@ export class CompanionDirector {
     if (!HandSystem.enqueueDrop(gameState.character, drop)) return // 손패 가득 — 다음 기회에
     this.pendingPrediction = { cardIds: [suggested], issuedTurn: turn, deadlineTurn: turn + 3, kind: report.recommendationKind ?? 'support' }
     this.deps.recordNotice(`에나의 의지 — ${getHandCardDef(suggested).name} 지원: ${report.recommendationReason}`, 'info')
+    // (실험적) 레시피 완성각으로 지원했으면, 이 지급 직후 손패에서 재료 슬롯들을 다시 찾는다.
+    // enqueueDrop 뒤라 방금 받은 카드도 이미 hand 배열에 있어 같은 스캔 한 번으로 잡힌다.
+    const recipeDef = report.recommendationRecipeId ? RECIPES.find((r) => r.id === report.recommendationRecipeId) : undefined
+    let recipeBracketSlots: number[] = []
+    // 방금 지급된 카드 자신의 슬롯 — uid로 정확히 찾는다(같은 defId를 이미 들고 있었어도 헷갈리지 않게).
+    const newCardSlotIndex = gameState.character.hand.findIndex((c) => c.uid === drop.uid)
+    if (recipeDef) {
+      const hand = gameState.character.hand
+      const used = new Set<number>()
+      for (const [ingId, need] of Object.entries(recipeDef.ingredients)) {
+        let remaining = need ?? 0
+        for (let i = 0; i < hand.length && remaining > 0; i++) {
+          if (used.has(i)) continue
+          const c = hand[i]
+          if (c && c.defId === ingId && !c.merged) { used.add(i); remaining-- }
+        }
+      }
+      recipeBracketSlots = [...used].sort((a, b) => a - b)
+    }
     this.deps.render()
     void boardRenderer.animateClutchOnPlayer('hand-control')
     this.showClutchChain('predict', report.webLethal ? `${getHandCardDef(suggested).name} 지원 (위험!)` : `${getHandCardDef(suggested).name} 지원`)
@@ -389,7 +409,12 @@ export class CompanionDirector {
     this.sayEnaBark(companion.predictLine(predictLineKind, report.recommendationShortReason), {
       importance: BARK_IMPORTANCE.clutch,
       // 에나가 권한 카드(레시피 완성 재료 포함)를 손패에서 바로 찾을 수 있도록 표시 순간 가리킨다.
-      onDisplay: () => boardRenderer.pulseEnaHint({ handDefIds: [suggested] }),
+      onDisplay: () => {
+        boardRenderer.pulseEnaHint({ handDefIds: [suggested] })
+        if (recipeDef && recipeBracketSlots.length > 1) {
+          boardRenderer.showRecipeBracketHint(recipeBracketSlots, recipeDef.id, newCardSlotIndex >= 0 ? newCardSlotIndex : undefined)
+        }
+      },
     })
     // 지원 카드는 이미 손패에 들어갔으므로 트레일 실패가 입력 잠금 해제를 막지 않게 연출만 분리한다.
     void this.deps.playResourceTrail({ kind: 'chain' }, 'hand', 1)

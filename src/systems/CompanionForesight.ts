@@ -43,6 +43,8 @@ export interface ThreatReport {
   webEscalationImminent: boolean
   /** 같은 판에서 확률 게이트를 재굴림하지 않기 위한 보드·손패 기반 기회 서명. */
   recommendationSignature: string | null
+  /** 레시피 완성각으로 뽑힌 추천이면 그 레시피 ID(손패 브래킷 힌트 연출용). */
+  recommendationRecipeId?: string
 }
 
 export interface ForesightOptions {
@@ -267,12 +269,14 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
   let recommendationShortReason: string | undefined
   let recommendationKind: ThreatReport['recommendationKind'] = null
   let playableInCards: number | undefined
+  let recommendationRecipeId: string | undefined
   if (support) {
     // 청소/포자/처치/방어/불씨/회복 지원은 전부 범용 스코어러 결과를 그대로 쓴다.
     recommendedCardId = support.cardId
     recommendationKind = support.fit
     recommendationReason = support.detail
     recommendationShortReason = support.reason
+    recommendationRecipeId = support.recipeId
   } else if (tripleNeed) {
     recommendedCardId = tripleNeed.id
     playableInCards = tripleNeed.turns
@@ -291,5 +295,5 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
       ? `${recommendationKind}:${recommendedCardId}:${relevantBoard}:hand=${character.hand.map((card) => card.defId).join(',')}`
       : null
 
-  return { webCount, potentialWebDamage, webLethal, recommendCleanup: support?.fit === 'cleanup', strongEnemyIncoming: strongEnemyAttackIn <= 1, recommendedCardId, recommendationKind, recommendationReason, recommendationShortReason, hasImminentWebDrop, playableInCards, webEscalationImminent, recommendationSignature }
+  return { webCount, potentialWebDamage, webLethal, recommendCleanup: support?.fit === 'cleanup', strongEnemyIncoming: strongEnemyAttackIn <= 1, recommendedCardId, recommendationKind, recommendationReason, recommendationShortReason, hasImminentWebDrop, playableInCards, webEscalationImminent, recommendationSignature, recommendationRecipeId }
 }
