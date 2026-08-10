@@ -68,7 +68,10 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   overflow: visible;
 }
 /* (실험적) 에나 레시피 완성각 브래킷 — 관여한 손패 슬롯들의 세로 중심을 ㄷ(⊏)자로 잇는다.
-   손패 칸 왼쪽(보드 쪽) 여백에 세로선 + 슬롯마다 짧은 가지를 그린다. */
+   손패 칸 왼쪽(보드 쪽) 여백에 세로선 + 슬롯마다 짧은 가지를 그린다. 브래킷·미리보기 둘 다
+   .hand-stack의 직속 자식이라 슬롯 정렬/애니메이션과 무관하게 절대좌표로 붙는다.
+   .is-in/.is-out은 트랜지션이라 자연 소멸(fade-out)까지 같은 경로로 낸다 — 등장만
+   1회성 keyframe으로 끝내면 사라질 때 뚝 끊긴다. */
 .ena-recipe-bracket {
   position: absolute;
   left: -13px;
@@ -77,7 +80,15 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   filter: drop-shadow(0 0 6px rgba(255, 205, 112, 0.55));
   pointer-events: none;
   opacity: 0;
-  animation: ena-recipe-bracket-in 0.32s ease forwards;
+  transition: opacity 0.32s ease, filter 0.32s ease;
+}
+.ena-recipe-bracket.is-in {
+  opacity: 1;
+  animation: ena-recipe-bracket-glow 1.6s ease-in-out 0.32s infinite;
+}
+.ena-recipe-bracket.is-out {
+  opacity: 0;
+  animation: none;
 }
 .ena-recipe-bracket-tick {
   position: absolute;
@@ -87,9 +98,13 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   background: rgba(255, 205, 112, 0.85);
   box-shadow: 0 0 6px rgba(255, 205, 112, 0.55);
 }
-@keyframes ena-recipe-bracket-in { to { opacity: 1; } }
+@keyframes ena-recipe-bracket-glow {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(255, 205, 112, 0.5)); }
+  50% { filter: drop-shadow(0 0 12px rgba(255, 205, 112, 0.9)); }
+}
 .hand-slot.hand-card.is-recipe-bracket-target {
   box-shadow: 0 0 0 1px rgba(255, 205, 112, 0.55), 0 0 14px rgba(255, 205, 112, 0.4);
+  transition: box-shadow 0.32s ease;
 }
 
 .hand-stack.is-crowded .hand-slot.hand-card {
@@ -536,14 +551,30 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   transform: translateY(-50%) translateX(0);
 }
 /* (실험적) 에나 레시피 완성각 미리보기 — 체인 상태와 무관하게 강제로 띄우는 전용 aside.
-   같은 시각 언어를 쓰되 조건 없이 보이므로 hover/is-recipe-ready 게이트를 타지 않는다. */
+   .hand-stack의 직속 자식이라(브래킷과 같은 좌표계) top은 JS가 인라인으로 잡고, 여기서는
+   등장/소멸만 .is-in/.is-out 트랜지션으로 낸다 — 슬롯에 얹으면 슬롯 위치·flip 애니메이션에
+   딸려 다녀 "위치가 이상해" 보였다. */
 .hand-recipe-preview.ena-recipe-bracket-preview {
   display: grid;
   gap: 7px;
-  animation: recipe-preview-slide 0.28s cubic-bezier(0.16, 0.84, 0.2, 1) forwards;
+  top: 50%;
+  opacity: 0;
+  transform: translateY(-50%) translateX(16px);
+  transition: opacity 0.32s cubic-bezier(0.16, 0.84, 0.2, 1), transform 0.32s cubic-bezier(0.16, 0.84, 0.2, 1), box-shadow 0.32s ease;
 }
-.hand-slot.is-low-preview .hand-recipe-preview.ena-recipe-bracket-preview {
-  animation-name: recipe-preview-low-slide;
+.hand-recipe-preview.ena-recipe-bracket-preview.is-in {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+  animation: ena-recipe-preview-glow 1.6s ease-in-out 0.32s infinite;
+}
+.hand-recipe-preview.ena-recipe-bracket-preview.is-out {
+  opacity: 0;
+  transform: translateY(-50%) translateX(10px);
+  animation: none;
+}
+@keyframes ena-recipe-preview-glow {
+  0%, 100% { box-shadow: 0 16px 30px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 245, 220, 0.1), 0 0 22px rgba(244, 164, 96, 0.16); }
+  50% { box-shadow: 0 16px 30px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 245, 220, 0.1), 0 0 34px rgba(244, 164, 96, 0.4); }
 }
 .hand-recipe-preview-kicker {
   font-size: 12px;
