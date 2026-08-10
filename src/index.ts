@@ -460,6 +460,8 @@ function enterHearth(): void {
     },
     // 서고 모험일지 — 통산 기록을 그대로 읽어 보여 준다.
     getLifetimeRecord: () => lifetimeRecordStore.load(),
+    // 서고 여정 상세 카드의 에나 성좌 — 저장된 축 값만으로 정산 화면과 같은 그림을 그린다.
+    renderRunConstellation: (axisValues, axisDeltas) => boardRenderer.renderHistoricalConstellation(axisValues, axisDeltas),
     // 무역 상품은 메타 지갑에서 결제한다 — 잔액 읽기와 결제 후 패널 갱신만 넘긴다.
     getMetaCurrency: () => loadMetaCurrency(),
     onMetaCurrencySpent: () => { syncLobbyWalletDisplay(); render() },

@@ -1708,23 +1708,197 @@ body.hearth-lobby #ingame-backdrop.is-out {
   color: rgba(214, 200, 178, 0.55);
   white-space: nowrap;
 }
-.hearth-library-entry-detail {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s cubic-bezier(0.2, 0.84, 0.3, 1);
-}
-.hearth-library-entry.is-expanded .hearth-library-entry-detail { max-height: 160px; }
-.hearth-library-entry-detail p {
-  margin: 0;
-  padding: 4px clamp(12px, 2vw, 18px);
-  font-size: clamp(12px, 1.6vh, 14px);
-  color: rgba(222, 206, 180, 0.85);
+/* 여정 상세 팝업 — 서고 패널 안에서 펼치면 하단이 잘리므로(구 아코디언) document.body에
+   따로 띄운다. 검은 유리판 느낌: 선 없이 배경만 짙게 깔고 블러로 깊이를 낸다. */
+.hearth-library-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10560;
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(4, 3, 6, 0.6);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 0.22s ease;
 }
-.hearth-library-entry-detail p:first-child { padding-top: 2px; }
-.hearth-library-entry-detail p:last-child { padding-bottom: 10px; }
-.hearth-library-entry-detail strong { color: rgba(255, 224, 158, 0.94); }
+.hearth-library-detail-backdrop.is-in { opacity: 1; }
+.hearth-library-detail-card {
+  position: relative;
+  width: min(560px, 92vw);
+  max-height: min(84vh, 780px);
+  overflow-y: auto;
+  border-radius: 22px;
+  border: none;
+  background: rgba(10, 7, 13, 0.82);
+  backdrop-filter: blur(22px) saturate(1.1);
+  -webkit-backdrop-filter: blur(22px) saturate(1.1);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 30px 70px rgba(0, 0, 0, 0.55);
+  padding: clamp(22px, 4vh, 34px) clamp(20px, 4vw, 32px) clamp(26px, 4vh, 36px);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  transform: translateY(14px) scale(0.98);
+  transition: transform 0.24s cubic-bezier(0.2, 0.84, 0.3, 1);
+}
+.hearth-library-detail-backdrop.is-in .hearth-library-detail-card { transform: translateY(0) scale(1); }
+/* 결과별 색은 딱딱한 테두리 대신 상단 은은한 발광 한 줄로만 표시한다. */
+.hearth-library-detail-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 120px;
+  border-radius: 22px 22px 0 0;
+  pointer-events: none;
+}
+.hearth-library-detail-card[data-outcome="clear"]::before { background: radial-gradient(ellipse at 50% 0%, rgba(255, 205, 112, 0.14), transparent 72%); }
+.hearth-library-detail-card[data-outcome="death"]::before { background: radial-gradient(ellipse at 50% 0%, rgba(200, 90, 90, 0.12), transparent 72%); }
+.hearth-library-detail-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(232, 220, 198, 0.78);
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+.hearth-library-detail-close:hover { background: rgba(255, 255, 255, 0.12); color: rgba(255, 236, 188, 0.96); }
+.hearth-library-detail-close .icon { width: 46%; height: 46%; }
+/* 글씨를 타이틀처럼 한데 모은다 — 표제-훅이 한 덩이로 읽히게 중앙 정렬 + 좁은 줄간격. */
+.hearth-library-detail-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  font-family: 'OkDanDan', Georgia, serif;
+  padding-top: 4px;
+}
+.hearth-library-detail-eyebrow {
+  font-size: clamp(11px, 1.4vh, 13px);
+  letter-spacing: 0.16em;
+  color: rgba(214, 200, 178, 0.58);
+  text-transform: uppercase;
+}
+.hearth-library-detail-title {
+  margin: 0;
+  font-size: clamp(20px, 3vh, 27px);
+  letter-spacing: 0.04em;
+  color: rgba(255, 236, 188, 0.95);
+  line-height: 1.28;
+}
+.hearth-library-detail-hook {
+  margin: 2px 0 0;
+  max-width: 44ch;
+  font-size: clamp(12.5px, 1.6vh, 14.5px);
+  color: rgba(222, 206, 180, 0.72);
+  font-style: italic;
+  line-height: 1.5;
+}
+.hearth-library-detail-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.hearth-library-detail-stats > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 4px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.hearth-library-detail-stats span {
+  font-size: clamp(10.5px, 1.3vh, 12px);
+  color: rgba(214, 200, 178, 0.62);
+}
+.hearth-library-detail-stats strong {
+  font-size: clamp(16px, 2.1vh, 20px);
+  color: rgba(255, 224, 158, 0.94);
+  font-family: 'OkDanDan', Georgia, serif;
+}
+.hearth-library-detail-highlights {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.hearth-library-highlight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.hearth-library-highlight-art {
+  flex: 0 0 52px;
+  width: 52px;
+  height: 68px;
+  border-radius: 8px;
+  background-size: cover;
+  background-position: center;
+  background-color: rgba(0, 0, 0, 0.3);
+}
+.hearth-library-highlight-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+}
+.hearth-library-highlight.is-danger .hearth-library-highlight-icon { color: rgba(232, 120, 96, 0.9); }
+.hearth-library-highlight.is-danger .hearth-library-highlight-icon .icon { width: 46%; height: 46%; }
+.hearth-library-highlight-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.hearth-library-highlight-tag {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: rgba(214, 200, 178, 0.55);
+}
+.hearth-library-highlight-body strong {
+  font-size: clamp(13px, 1.7vh, 15px);
+  color: rgba(255, 236, 188, 0.92);
+  font-family: 'OkDanDan', Georgia, serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hearth-library-highlight-body small {
+  font-size: 11.5px;
+  color: rgba(222, 206, 180, 0.62);
+}
+.hearth-library-detail-constellation {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-top: 4px;
+}
+.hearth-library-detail-constellation h3 {
+  margin: 0 0 6px;
+  font-size: clamp(12px, 1.5vh, 14px);
+  letter-spacing: 0.06em;
+  color: rgba(214, 200, 178, 0.6);
+  font-family: 'OkDanDan', Georgia, serif;
+  font-weight: 400;
+}
+.hearth-library-detail-constellation .experience-constellation { width: min(240px, 58vw); }
+@media (max-width: 520px) {
+  .hearth-library-detail-highlights { grid-template-columns: 1fr; }
+  .hearth-library-detail-stats { grid-template-columns: repeat(2, 1fr); }
+}
 .hearth-library-row {
   display: flex;
   align-items: baseline;

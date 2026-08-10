@@ -164,6 +164,10 @@ export class TurnManager {
         damage,
         blocked: character.lastBlockedByShield,
       })
+      // 서고 일지의 "위험했던 적" 산출용 — 표시 이름별 누적 피해(방패로 완전히 막았으면 0이라 제외).
+      if (damage > 0) {
+        this.gameState.runEnemyDamageByName[card.name] = (this.gameState.runEnemyDamageByName[card.name] ?? 0) + damage
+      }
 
       if (!character.isAlive()) {
         this.gameState.endGame('character_defeated')

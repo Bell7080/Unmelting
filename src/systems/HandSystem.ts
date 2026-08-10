@@ -255,6 +255,9 @@ export class HandSystem {
       }
     }
 
+    // 서고 일지의 "활약한 손패" 산출용 — 실제로 나가는 사용만 센다(유효성 검사 통과 후).
+    gs.runCardUsageCount[card.defId] = (gs.runCardUsageCount[card.defId] ?? 0) + 1
+
     // Snapshot the field BEFORE any mutation so we can diff removals after.
     // 상세 스냅샷으로 제거 카드의 레인까지 담아 확산 유물이 처치 레인을 알 수 있게 한다.
     const beforeField = HandSystem.snapshotFieldCardsDetailed(gs)

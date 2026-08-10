@@ -32,6 +32,10 @@ export class GameState {
   runDefeatedEnemies = 0
   runClearedTraps = 0
   runOpenedTreasures = 0
+  /** 이번 런 손패 사용 횟수(defId별). 서고 일지의 "활약한 손패" 산출에 쓴다. reset()에서 비운다. */
+  runCardUsageCount: Record<string, number> = {}
+  /** 이번 런 적이 준 누적 피해(적 표시 이름별). 서고 일지의 "위험했던 적" 산출에 쓴다. reset()에서 비운다. */
+  runEnemyDamageByName: Record<string, number> = {}
   /** 해금팩으로 해금된 레시피 ID 집합. runLocked 레시피는 여기 있을 때만 발동한다. */
   unlockedRecipeIds = new Set<string>()
   /** 카드가 필드에서 실제 제거될 때(처치/클리어) 1회 발동하는 훅. 처치 맥락(카드·레인)이 필요한
@@ -297,5 +301,7 @@ export class GameState {
     this.runDefeatedEnemies = 0
     this.runClearedTraps = 0
     this.runOpenedTreasures = 0
+    this.runCardUsageCount = {}
+    this.runEnemyDamageByName = {}
   }
 }

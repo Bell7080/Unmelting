@@ -1,4 +1,5 @@
 import { HEARTH_STYLES } from './HearthStyles'
+import { closeIcon, swordIcon } from '../Icons'
 import { SpriteUrls, spriteForHearthStation, spriteForDinner, spriteForDinnerPack, spriteForHandCard, spriteForRelic } from '../Sprites'
 import { isTouchDevice } from '../MobileTouchManager'
 import { SquareBurst } from '../SquareBurst'
@@ -35,6 +36,8 @@ export interface HearthHandlers {
   onUnlockCelebration?: () => void
   /** 서고 모험일지에 표시할 통산 기록을 읽는다. */
   getLifetimeRecord?: () => LifetimeRecord
+  /** 서고 여정 상세 카드의 에나 성좌(레이더) — 저장된 축 원시값만으로 그린다. */
+  renderRunConstellation?: (axisValues: number[], axisDeltas?: number[]) => string
   /** 무역 결제에 쓸 현재 메타 화폐($) 잔액. */
   getMetaCurrency?: () => number
   /** 결제가 성사된 뒤 — 거점 화폐 패널을 새 잔액으로 갱신하라는 신호. */
@@ -280,6 +283,10 @@ export class HearthScene {
   private dinnerBubble: SpeechBubble | null = null
   /** openBasicUnlockPicker()가 뽑아 표시한 기초 해금팩 선택지 — pickBasicUnlockChoice()가 재사용한다. */
   private basicUnlockCurrentOptions: BasicUnlockPoolItem[] = []
+  /** renderLibraryJournal()이 마지막으로 그린 여정 목록 — 상세 카드 팝업이 인덱스로 다시 찾는다. */
+  private libraryHistory: LifetimeRecord['history'] = []
+  /** 서고 여정 상세 카드 팝업 host. 열려 있지 않으면 null. */
+  private libraryDetailHost: HTMLElement | null = null
 
   /** 이번 로비 진입에서 무역 개방 축하 연출을 재생해야 하는지(졸업 후 최초 1회). */
   private tradeCelebrationPending = false
@@ -503,7 +510,7 @@ export class HearthScene {
       }
       const libraryEntry = t.closest<HTMLElement>('[data-hearth-library-entry]')
       if (libraryEntry) {
-        this.toggleLibraryEntry(libraryEntry)
+        this.openLibraryEntryDetail(Number(libraryEntry.dataset.hearthLibraryEntry ?? -1))
         return
       }
       const tradeTab = t.closest<HTMLElement>('[data-hearth-trade-tab]')
@@ -688,9 +695,11 @@ export class HearthScene {
     if (!journal) return
     const rec = this.handlers?.getLifetimeRecord?.()
     if (!rec || rec.totalRuns === 0) {
+      this.libraryHistory = []
       journal.innerHTML = `<p class="hearth-library-empty">아직 기록된 모험이 없다.<br>첫 모험을 마치면 이곳에 일지가 쌓인다.</p>`
       return
     }
+    this.libraryHistory = rec.history
     const rows: { label: string; value: string }[] = [
       { label: '통산 모험', value: `${rec.totalRuns}회` },
       { label: '클리어 · 사망', value: `${rec.clears} · ${rec.deaths}` },
@@ -727,8 +736,9 @@ export class HearthScene {
     }
   }
 
-  /** 여정 하나하나를 책등처럼 가로로 긴 한 줄로 나열한다. 누르면 정산 화면과 같은
-   *  스탯 요약이 아래로 펼쳐진다(아코디언, 여러 줄 동시에 열어 둘 수 있다). */
+  /** 여정 하나하나를 책등처럼 가로로 긴 한 줄로 나열한다. 누르면 유리 카드 팝업으로
+   *  상세(처치·MVP 손패·위험한 적·에나 성좌)가 뜬다 — 서고 패널 안에서 펼치면 하단이
+   *  잘려 나가므로(구 아코디언 버그) 화면에 별도로 띄운다. */
   private renderLibraryEntries(history: LifetimeRecord['history']): string {
     if (history.length === 0) return ''
     const rowsHtml = history
@@ -738,29 +748,94 @@ export class HearthScene {
           ? new Date(entry.at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
           : ''
         return `<div class="hearth-library-entry" data-outcome="${entry.outcome}" style="--row-index:${i}">
-          <button class="hearth-library-entry-spine" type="button" data-hearth-library-entry="${i}" aria-expanded="false">
+          <button class="hearth-library-entry-spine" type="button" data-hearth-library-entry="${i}">
             <span class="hearth-library-entry-title">${title}</span>
             <span class="hearth-library-entry-floor">${entry.floor}층</span>
             <span class="hearth-library-entry-date">${date}</span>
           </button>
-          <div class="hearth-library-entry-detail">
-            <p>처치한 적 <strong>${entry.kills}</strong></p>
-            <p>처리한 함정 <strong>${entry.traps}</strong></p>
-            <p>발견한 보물 <strong>${entry.treasures}</strong></p>
-            <p>총 불빛 <strong>${entry.light.toLocaleString()}</strong></p>
-          </div>
         </div>`
       })
       .join('')
     return `<h3 class="hearth-library-entries-heading">최근 여정</h3><div class="hearth-library-entries">${rowsHtml}</div>`
   }
 
-  /** 여정 행 클릭 — 펼침/접힘을 토글한다(다른 행에 영향 없음). */
-  private toggleLibraryEntry(button: HTMLElement): void {
-    const row = button.closest<HTMLElement>('.hearth-library-entry')
-    if (!row) return
-    const expanded = row.classList.toggle('is-expanded')
-    button.setAttribute('aria-expanded', expanded ? 'true' : 'false')
+  /** 여정 행 클릭 — 유리 카드 팝업을 연다(document.body 전용 host, 서고 패널 밖). */
+  private openLibraryEntryDetail(index: number): void {
+    const entry = this.libraryHistory[index]
+    if (!entry) return
+    this.closeLibraryEntryDetail()
+    const title = this.libraryEntryTitle(entry)
+    const date = entry.at > 0
+      ? new Date(entry.at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
+      : ''
+
+    const mvpDef = entry.mvpCardId ? getHandCardDef(entry.mvpCardId as Parameters<typeof getHandCardDef>[0]) : null
+    const mvpSprite = entry.mvpCardId ? spriteForHandCard(entry.mvpCardId as Parameters<typeof spriteForHandCard>[0]) : ''
+    const mvpHtml = mvpDef
+      ? `<div class="hearth-library-highlight is-mvp">
+          <div class="hearth-library-highlight-art" style="${mvpSprite ? `background-image:url('${mvpSprite}')` : ''}"></div>
+          <div class="hearth-library-highlight-body">
+            <span class="hearth-library-highlight-tag">활약한 손패</span>
+            <strong>${mvpDef.name}</strong>
+            <small>${entry.mvpCardCount ?? 0}회 사용</small>
+          </div>
+        </div>`
+      : ''
+    const dangerHtml = entry.dangerEnemyName
+      ? `<div class="hearth-library-highlight is-danger">
+          <div class="hearth-library-highlight-art hearth-library-highlight-icon" aria-hidden="true">${swordIcon()}</div>
+          <div class="hearth-library-highlight-body">
+            <span class="hearth-library-highlight-tag">위험했던 적</span>
+            <strong>${entry.dangerEnemyName}</strong>
+            <small>누적 ${(entry.dangerEnemyDamage ?? 0).toLocaleString()} 피해</small>
+          </div>
+        </div>`
+      : ''
+    const highlightsHtml = mvpHtml || dangerHtml
+      ? `<div class="hearth-library-detail-highlights">${mvpHtml}${dangerHtml}</div>`
+      : ''
+    const constellationHtml = entry.enaAxisValues
+      ? `<div class="hearth-library-detail-constellation">
+          <h3>에나의 성장</h3>
+          ${this.handlers?.renderRunConstellation?.(entry.enaAxisValues, entry.enaAxisDeltas) ?? ''}
+        </div>`
+      : ''
+
+    const host = document.createElement('div')
+    host.className = 'hearth-library-detail-backdrop'
+    host.innerHTML = `
+      <article class="hearth-library-detail-card" data-outcome="${entry.outcome}" role="dialog" aria-label="여정 상세">
+        <button class="hearth-library-detail-close" type="button" data-hearth-library-close aria-label="닫기">${closeIcon()}</button>
+        <header class="hearth-library-detail-head">
+          <span class="hearth-library-detail-eyebrow">${entry.floor}층 · ${date}</span>
+          <h2 class="hearth-library-detail-title">${title}</h2>
+          ${entry.enaLine ? `<p class="hearth-library-detail-hook">${entry.enaLine}</p>` : ''}
+        </header>
+        <div class="hearth-library-detail-stats">
+          <div><span>처치한 적</span><strong>${entry.kills}</strong></div>
+          <div><span>처리한 함정</span><strong>${entry.traps}</strong></div>
+          <div><span>발견한 보물</span><strong>${entry.treasures}</strong></div>
+          <div><span>총 불빛</span><strong>${entry.light.toLocaleString()}</strong></div>
+        </div>
+        ${highlightsHtml}
+        ${constellationHtml}
+      </article>`
+    document.body.appendChild(host)
+    this.libraryDetailHost = host
+    requestAnimationFrame(() => host.classList.add('is-in'))
+    host.addEventListener('click', (e) => {
+      const t = e.target as HTMLElement
+      if (t.closest('[data-hearth-library-close]') || t === host) this.closeLibraryEntryDetail()
+    })
+  }
+
+  /** 서고 여정 상세 팝업을 닫고 전용 host를 제거한다. */
+  private closeLibraryEntryDetail(): void {
+    const host = this.libraryDetailHost
+    if (!host) return
+    this.libraryDetailHost = null
+    host.classList.remove('is-in')
+    window.setTimeout(() => host.remove(), 220)
   }
 
   /** 만찬 선택 → 검붉은 커튼을 친 뒤 hearth_bg_005 만찬 배경과 무료 팩 레일을 보여 준다. */

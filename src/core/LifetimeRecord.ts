@@ -18,7 +18,8 @@ export interface LifetimeStorage {
 const LIFETIME_HISTORY_CAP = 30
 
 /** 한 런의 결과 요약 — recordRun 입력. floor는 도달 층(=런 턴), light는 총 불빛.
- *  reason은 gameState.gameOverReason 문자열(서고 일지 제목 매핑용, 생략 시 빈 문자열). */
+ *  reason은 gameState.gameOverReason 문자열(서고 일지 제목 매핑용, 생략 시 빈 문자열).
+ *  아래 5개는 서고 일지 상세 카드용 스냅샷(모두 선택) — 없으면 그 항목만 카드에서 빠진다. */
 export interface LifetimeRunResult {
   outcome: 'clear' | 'death'
   floor: number
@@ -27,6 +28,18 @@ export interface LifetimeRunResult {
   treasures: number
   light: number
   reason?: string
+  /** 이번 런 가장 많이 쓴 손패(defId)와 사용 횟수. */
+  mvpCardId?: string
+  mvpCardCount?: number
+  /** 이번 런 누적 피해가 가장 큰 적의 표시 이름과 그 피해량. */
+  dangerEnemyName?: string
+  dangerEnemyDamage?: number
+  /** 런 종료 시점 에나 성좌 축 원시값(0~1, experienceAxes 순서 고정 5개). */
+  enaAxisValues?: number[]
+  /** 이번 런으로 오른 축별 %p(음수/0 포함, enaAxisValues와 같은 순서). */
+  enaAxisDeltas?: number[]
+  /** 정산 화면에 쓴 것과 같은 에나의 한마디. */
+  enaLine?: string
 }
 
 /** 서고 일지 한 줄 — 개별 런 1건. at은 Date.now() 저장 시각(정렬/표시용). */
@@ -39,6 +52,13 @@ export interface LifetimeRunEntry {
   treasures: number
   light: number
   at: number
+  mvpCardId?: string
+  mvpCardCount?: number
+  dangerEnemyName?: string
+  dangerEnemyDamage?: number
+  enaAxisValues?: number[]
+  enaAxisDeltas?: number[]
+  enaLine?: string
 }
 
 /** 통산 누적값. 모든 필드는 음수가 될 수 없고, best/총합은 단조 증가한다.
@@ -77,6 +97,13 @@ function coerceCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0
 }
 
+/** 유한 숫자 배열만 통과시킨다(길이 무관, 원소 하나라도 깨지면 배열 전체를 버린다). */
+function coerceNumberArray(value: unknown): number[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined
+  if (!value.every((v) => typeof v === 'number' && Number.isFinite(v))) return undefined
+  return value as number[]
+}
+
 /** history 배열 원소를 하나씩 검증한다 — 손상된 원소 하나가 전체 일지를 지우지 않게 걸러낸다. */
 function coerceHistory(value: unknown): LifetimeRunEntry[] {
   if (!Array.isArray(value)) return []
@@ -94,6 +121,13 @@ function coerceHistory(value: unknown): LifetimeRunEntry[] {
       treasures: coerceCount(e.treasures),
       light: coerceCount(e.light),
       at: typeof e.at === 'number' && Number.isFinite(e.at) ? e.at : 0,
+      mvpCardId: typeof e.mvpCardId === 'string' ? e.mvpCardId : undefined,
+      mvpCardCount: typeof e.mvpCardCount === 'number' && e.mvpCardCount > 0 ? Math.floor(e.mvpCardCount) : undefined,
+      dangerEnemyName: typeof e.dangerEnemyName === 'string' ? e.dangerEnemyName : undefined,
+      dangerEnemyDamage: typeof e.dangerEnemyDamage === 'number' && e.dangerEnemyDamage > 0 ? Math.floor(e.dangerEnemyDamage) : undefined,
+      enaAxisValues: coerceNumberArray(e.enaAxisValues),
+      enaAxisDeltas: coerceNumberArray(e.enaAxisDeltas),
+      enaLine: typeof e.enaLine === 'string' ? e.enaLine : undefined,
     })
   }
   return entries.slice(0, LIFETIME_HISTORY_CAP)
@@ -149,6 +183,13 @@ export class LifetimeRecordStore {
       treasures: coerceCount(result.treasures),
       light: coerceCount(result.light),
       at: Date.now(),
+      mvpCardId: result.mvpCardId,
+      mvpCardCount: result.mvpCardCount,
+      dangerEnemyName: result.dangerEnemyName,
+      dangerEnemyDamage: result.dangerEnemyDamage,
+      enaAxisValues: result.enaAxisValues,
+      enaAxisDeltas: result.enaAxisDeltas,
+      enaLine: result.enaLine,
     }
     const next: LifetimeRecord = {
       version: 1,

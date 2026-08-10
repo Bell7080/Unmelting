@@ -8,6 +8,7 @@ import { GameState } from '@core/GameState'
 import { GameBoardRenderer } from '@ui/GameBoardRenderer'
 import { CompanionSystem } from '@systems/CompanionSystem'
 import type { LifetimeRecordStore } from '@core/LifetimeRecord'
+import { experienceAxes } from '@ui/ExperienceAxes'
 
 /** 정산 오버레이 한 장의 재료 — 세 결말이 같은 골격을 공유한다. */
 export interface SettlementOverlayOptions {
@@ -79,14 +80,37 @@ export class SettlementScreen {
     })
   }
 
+  /** 카운터 맵(defId/이름 → 누적값)에서 가장 큰 값을 하나 뽑는다. 비어 있으면 null. */
+  private topEntry(counts: Record<string, number>): { id: string; value: number } | null {
+    let best: { id: string; value: number } | null = null
+    for (const [id, value] of Object.entries(counts)) {
+      if (!best || value > best.value) best = { id, value }
+    }
+    return best
+  }
+
   /** 게임오버 사유별 정산 분기 — 통산 기록 합산은 런당 1회만. */
   showGameOver(): void {
     const { gameState, lifetimeRecordStore, companion } = this.deps
     const leftoverCoins = this.deps.getCoins()
+    // 정산 결말별 에나 한마디 — 서고 일지 상세 카드가 나중에 같은 문장을 읽을 수 있게
+    // 통산 기록에도 그대로 싣는다(브랜치마다 따로 짓지 않고 여기 한 곳이 출처).
+    const enaLine = gameState.gameOverReason === 'onboarding_clear_30'
+      ? '에나의 경험이 한 뼘 자랐다.'
+      : gameState.gameOverReason === 'run_clear_100_turns'
+        ? '에나와 끝까지 함께 올랐다.'
+        : companion.deathLine()
     // 통산 기록에 이번 런을 1회 합산한다(클리어/사망 공통) — 정산 우측 하단 표기의 원천.
     // 남은 화폐 저축도 같은 가드 안에서 한다. 정산이 두 번 열려도 두 번 입금되면 안 된다.
     if (this.deps.tryMarkLifetimeRecorded()) {
       const cleared = gameState.gameOverReason === 'onboarding_clear_30' || gameState.gameOverReason === 'run_clear_100_turns'
+      const mvp = this.topEntry(gameState.runCardUsageCount)
+      const danger = this.topEntry(gameState.runEnemyDamageByName)
+      const axes = experienceAxes(companion.getDisposition(), companion.getLearningSnapshot(), companion.getGrowth())
+      const prevAxis = this.deps.getRunStartAxisValues()
+      const axisDeltas = prevAxis && prevAxis.length === axes.length
+        ? axes.map((a, i) => (a.value - prevAxis[i]) * 100)
+        : undefined
       lifetimeRecordStore.recordRun({
         outcome: cleared ? 'clear' : 'death',
         reason: gameState.gameOverReason,
@@ -95,6 +119,13 @@ export class SettlementScreen {
         traps: gameState.runClearedTraps,
         treasures: gameState.runOpenedTreasures,
         light: this.deps.getScore(),
+        mvpCardId: mvp?.id,
+        mvpCardCount: mvp?.value,
+        dangerEnemyName: danger?.id,
+        dangerEnemyDamage: danger?.value,
+        enaAxisValues: axes.map((a) => a.value),
+        enaAxisDeltas: axisDeltas,
+        enaLine,
       })
       this.deps.depositRunCurrency(leftoverCoins)
     }
@@ -121,7 +152,7 @@ export class SettlementScreen {
         verdict: 'unmelting',
         sub: '새싹 병아리 클리어!',
         statRows: runStats,
-        enaLine: '에나의 경험이 한 뼘 자랐다.',
+        enaLine,
         buttonLabel: '저택으로',
         onButton: () => this.deps.enterHearth(),
       })
@@ -134,7 +165,7 @@ export class SettlementScreen {
         verdict: 'unmelting',
         sub: '잿빛 굴레를 풀었다 — 100층 클리어!',
         statRows: runStats,
-        enaLine: '에나와 끝까지 함께 올랐다.',
+        enaLine,
         buttonLabel: fromLobby ? '저택으로' : '다시 시작',
         onButton: continueRun,
       })
@@ -154,7 +185,7 @@ export class SettlementScreen {
         ? '3칸으로 합쳐진 거미줄·함정은 즉사. 키틴으로 미리 청소하거나 합쳐지기 전에 처리하자.'
         : '체력이 0이 되면 끝. 촛농(회복)·양초(방패)로 피해를 미리 막고, 강적은 합체 전에 끊자.',
       statRows: [{ label: '도달 층', value: gameState.getCurrentTurn() }, ...runStats],
-      enaLine: companion.deathLine(),
+      enaLine,
       buttonLabel: fromLobby ? '저택으로' : '다시 시작',
       onButton: continueRun,
       cardClass: 'death-card',

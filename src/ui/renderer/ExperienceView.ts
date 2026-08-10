@@ -134,6 +134,22 @@ export class ExperienceView {
       </div>${growthNote}`
   }
 
+  /**
+   * 서고 일지 상세 카드용 — 저장된 원시 축 값만으로 같은 성좌를 그린다(EnaDisposition 불필요).
+   * 축 이름·순서는 baselineConstellationAxes()를 단일 출처로 삼아 experienceAxes()와 항상 맞춘다.
+   */
+  renderHistoricalConstellation(axisValues: number[], axisDeltas?: number[]): string {
+    const baseAxes = baselineConstellationAxes()
+    const axes = baseAxes.map((base, i) => ({ ...base, value: Math.max(0, Math.min(1, axisValues[i] ?? base.value)) }))
+    const { svg, labels } = this.buildConstellation(axes, baseAxes, axisDeltas)
+    return `
+      <div class="settlement-constellation experience-constellation">
+        ${svg}
+        ${labels}
+        <div class="experience-core" aria-hidden="true"><span class="experience-core-icon">${experienceIcon()}</span><span class="experience-core-name">에나</span></div>
+      </div>`
+  }
+
   private renderExperience(disp: EnaDisposition, learning?: EnaLearningSnapshot, growth?: number): string {
     const axes = this.experienceAxes(disp, learning, growth)
     // 기준 점선은 초보 에나 시작 모양(ROOKIE, growth 0) 고정 — 신규/리셋 직후엔 실선과 겹치고,

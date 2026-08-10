@@ -2198,6 +2198,11 @@ export class GameBoardRenderer {
     return this.experience.renderSettlementHexagon(disp, learning, growth, prevAxisValues)
   }
 
+  // 서고 일지 상세 카드용 — 저장된 원시 축 값만으로 성좌를 그린다(거점 모듈이 호출).
+  renderHistoricalConstellation(axisValues: number[], axisDeltas?: number[]): string {
+    return this.experience.renderHistoricalConstellation(axisValues, axisDeltas)
+  }
+
   /** Body-mounted center banner showing "대상 카드를 선택해" while a
    *  targeted hand card is armed. Pulses softly. */
   private updateTargetBanner(targeting: HandTargetingMode | null): void {

@@ -1,6 +1,6 @@
 # 버전 관리
 
-현재 버전: **v2.5.3**
+현재 버전: **v2.6.0**
 
 `VERSION.md`와 `package.json`의 `version`은 항상 같은 값을 쓴다.
 
@@ -25,6 +25,23 @@
   올리는 커밋은 `package.json`과 이 문서를 함께 갱신한다.
 
 ## 변경 이력
+
+### v2.6.0 — 2026-08-10
+
+**서고 "여정 상세" 카드를 다시 지었다 — 잘리던 아코디언 대신 유리판 팝업 + 활약 손패/위험한 적/에나 성좌.**
+
+- 서고 패널 안에서 펼치던 아코디언(`.hearth-library-entry-detail`)은 패널 높이에 막혀
+  통계 뒷부분이 잘렸다(전 버전 리포트). document.body 전용 host에 뜨는 팝업
+  (`.hearth-library-detail-backdrop`)으로 바꿔 구조적으로 해결했다 — 테두리 없는 검은
+  반투명 유리판(`backdrop-filter: blur`)에 표제·부제를 타이틀처럼 모아 앉혔다.
+- 새 데이터를 이번 런에서 뽑아 통산 기록에 함께 싣는다: **활약한 손패**(가장 많이 쓴
+  손패, `GameState.runCardUsageCount` → `HandSystem.useSingle`에서 집계) · **위험했던
+  적**(누적 피해가 가장 큰 적, `runEnemyDamageByName` → `TurnManager.runEnemyPhase`에서
+  집계) · **에나의 성장**(정산 화면과 같은 성좌 위젯을 저장된 축 원시값만으로 다시 그리는
+  `ExperienceView.renderHistoricalConstellation`) · 정산의 에나 한마디(제목 아래 훅으로).
+- `LifetimeRunResult`/`LifetimeRunEntry`(`LifetimeRecord.ts`)에 위 필드를 전부 선택
+  값으로 추가했다 — 구버전 저장본(필드 없음)도 그대로 파싱되고, 팝업은 없는 항목만
+  조용히 생략한다(빈 박스 없음).
 
 ### v2.5.3 — 2026-08-10
 
