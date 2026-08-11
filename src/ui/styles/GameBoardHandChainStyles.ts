@@ -553,11 +553,15 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
 /* (실험적) 에나 레시피 완성각 미리보기 — 체인 상태와 무관하게 강제로 띄우는 전용 aside.
    .hand-stack의 직속 자식이라(브래킷과 같은 좌표계) top은 JS가 인라인으로 잡고, 여기서는
    등장/소멸만 .is-in/.is-out 트랜지션으로 낸다 — 슬롯에 얹으면 슬롯 위치·flip 애니메이션에
-   딸려 다녀 "위치가 이상해" 보였다. */
+   딸려 다녀 "위치가 이상해" 보였다. base .hand-recipe-preview의 right: calc(100% + 222px)는
+   단일 슬롯 LI 기준(호버 시 뒤에 깔린 flip 카드 폭만큼 띄우는 값)이라 그대로 두면 스택 전체
+   폭 기준으로 계산돼 브래킷에서 한참 멀리(플레이어 초상화 쪽) 떨어져 보인다. 브래킷(left:-13px,
+   width 9px)에 바로 이어 붙게 여기서 right를 다시 짧게 잡는다. */
 .hand-recipe-preview.ena-recipe-bracket-preview {
   display: grid;
   gap: 7px;
   top: 50%;
+  right: calc(100% + 26px);
   opacity: 0;
   transform: translateY(-50%) translateX(16px);
   transition: opacity 0.32s cubic-bezier(0.16, 0.84, 0.2, 1), transform 0.32s cubic-bezier(0.16, 0.84, 0.2, 1), box-shadow 0.32s ease;
@@ -571,6 +575,19 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   opacity: 0;
   transform: translateY(-50%) translateX(10px);
   animation: none;
+}
+/* 브래킷 쪽으로 짧게 뻗는 이음선 — 미리보기가 브래킷에서 툭 끊겨 떠 보이지 않고
+   "바로 이어지듯" 붙어 보이게 한다. 미리보기 우측 중앙에서 브래킷까지의 26px 간격을 잇는다. */
+.hand-recipe-preview.ena-recipe-bracket-preview::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -26px;
+  width: 26px;
+  height: 2px;
+  background: rgba(255, 205, 112, 0.85);
+  box-shadow: 0 0 6px rgba(255, 205, 112, 0.55);
+  transform: translateY(-50%);
 }
 @keyframes ena-recipe-preview-glow {
   0%, 100% { box-shadow: 0 16px 30px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 245, 220, 0.1), 0 0 22px rgba(244, 164, 96, 0.16); }
