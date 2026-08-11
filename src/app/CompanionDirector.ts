@@ -386,8 +386,6 @@ export class CompanionDirector {
     // enqueueDrop 뒤라 방금 받은 카드도 이미 hand 배열에 있어 같은 스캔 한 번으로 잡힌다.
     const recipeDef = report.recommendationRecipeId ? RECIPES.find((r) => r.id === report.recommendationRecipeId) : undefined
     let recipeBracketSlots: number[] = []
-    // 방금 지급된 카드 자신의 슬롯 — uid로 정확히 찾는다(같은 defId를 이미 들고 있었어도 헷갈리지 않게).
-    const newCardSlotIndex = gameState.character.hand.findIndex((c) => c.uid === drop.uid)
     if (recipeDef) {
       const hand = gameState.character.hand
       const used = new Set<number>()
@@ -412,7 +410,7 @@ export class CompanionDirector {
       onDisplay: () => {
         boardRenderer.pulseEnaHint({ handDefIds: [suggested] })
         if (recipeDef && recipeBracketSlots.length > 1) {
-          boardRenderer.showRecipeBracketHint(recipeBracketSlots, recipeDef.id, newCardSlotIndex >= 0 ? newCardSlotIndex : undefined)
+          boardRenderer.showRecipeBracketHint(recipeBracketSlots, recipeDef.id)
         }
       },
     })

@@ -246,7 +246,7 @@ export class GameBoardRenderer {
   /** (실험적) 레시피 완성각 ㄷ자 브래킷 힌트 상태 — 렌더가 지워도 남은 시간만큼 다시 그린다.
    *  잠깐(몇 초) 뜨고 스스로 사라지는 힌트라 activeEnaHint와 같은 형태를 그대로 따른다. */
   private activeRecipeBracketHint:
-    | { slotIndices: number[]; recipeId: string; previewSlotIndex?: number; startedAt: number; endsAt: number }
+    | { slotIndices: number[]; recipeId: string; startedAt: number; endsAt: number }
     | null = null
   private static readonly RECIPE_BRACKET_HOLD_MS = 4200
   private static readonly RECIPE_BRACKET_FADE_MS = 450
@@ -2727,13 +2727,12 @@ export class GameBoardRenderer {
    * 몇 초 뒤 스스로 옅어지며 사라지는 잠깐의 힌트지만, 그 몇 초 사이 렌더가 한 번은
    * 돌기 마련이라 activeEnaHint와 같은 형태로 남은 시간만큼 다시 그린다(reattach).
    */
-  showRecipeBracketHint(slotIndices: readonly number[], recipeId: string, previewSlotIndex?: number, startedAt = Date.now()): void {
+  showRecipeBracketHint(slotIndices: readonly number[], recipeId: string, startedAt = Date.now()): void {
     if (!RECIPES.some((r) => r.id === recipeId) || slotIndices.length < 2) return
     this.clearRecipeBracketHint()
     this.activeRecipeBracketHint = {
       slotIndices: [...slotIndices],
       recipeId,
-      previewSlotIndex,
       startedAt,
       endsAt: startedAt + GameBoardRenderer.RECIPE_BRACKET_HOLD_MS + GameBoardRenderer.RECIPE_BRACKET_FADE_MS,
     }
@@ -2775,12 +2774,12 @@ export class GameBoardRenderer {
       .join('')
     stack.appendChild(bracket)
 
-    const previewSlot = (active.previewSlotIndex !== undefined && slots.find((el) => el.dataset.slotIndex === String(active.previewSlotIndex)))
-      || slots[slots.length - 1]
+    // 특정 슬롯이 아니라 브래킷이 잇는 구간의 세로 중앙에 띄운다 — "묶은 결과"라는
+    // 뜻이라 재료 중 하나에 붙는 것보다 브래킷 중간이 더 자연스럽게 읽힌다.
     const preview = document.createElement('aside')
     preview.className = 'hand-recipe-preview ena-recipe-bracket-preview'
     preview.setAttribute('aria-hidden', 'true')
-    preview.style.top = `${centerOf(previewSlot)}px`
+    preview.style.top = `${(minY + maxY) / 2}px`
     preview.innerHTML = `
       <span class="hand-recipe-preview-kicker">에나의 완성각</span>
       <span class="hand-recipe-preview-row">

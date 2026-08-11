@@ -565,6 +565,13 @@ export const GAME_BOARD_HAND_CHAIN_STYLES = `
   opacity: 0;
   transform: translateY(-50%) translateX(16px);
   transition: opacity 0.32s cubic-bezier(0.16, 0.84, 0.2, 1), transform 0.32s cubic-bezier(0.16, 0.84, 0.2, 1), box-shadow 0.32s ease;
+  /* 판을 반투명하게 낮추되(호버용 base보다 옅게) 글자는 그대로 읽혀야 하니 뒤를 blur로
+     흐려 대비를 지킨다 — 얇게 비치기만 하면 손패 그림이 글자와 겹쳐 읽기 어려워진다. */
+  background:
+    linear-gradient(180deg, rgba(48, 33, 55, 0.62), rgba(15, 10, 22, 0.68)),
+    radial-gradient(circle at 20% 10%, rgba(255, 215, 120, 0.16), transparent 56%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 .hand-recipe-preview.ena-recipe-bracket-preview.is-in {
   opacity: 1;
