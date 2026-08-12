@@ -18,6 +18,7 @@ import type { HandCardId } from '@entities/HandCard'
 import { ENA_DISPOSITION_STORAGE_KEY } from '@systems/EnaDisposition'
 import { ENA_SELF_LEARNING_STORAGE_KEY } from '@/rl/EnaAutonomousLearner'
 import { ENA_POLICY_STORAGE_KEY } from '@/rl/EnaPolicyStore'
+import { captureWaxFigure } from '@core/WaxFigureCollection'
 
 /** 팔레트가 런 상태를 조작할 때 쓰는 주입 계약 — 상태 소유는 index.ts에 남긴다. */
 export interface DevCommandPaletteDeps {
@@ -58,7 +59,7 @@ export function setupDevCommandPalette(deps: DevCommandPaletteDeps): void {
       <span class="dev-command-prefix">/</span>
       <input class="dev-command-input" type="text" spellcheck="false" autocomplete="off" />
       <button class="dev-command-close" aria-label="닫기">✕</button>
-      <div class="dev-command-hint">예시: /시작, /테스트, /리셋, /부자, /상점, /제단, /시련, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비</div>
+      <div class="dev-command-hint">예시: /시작, /테스트, /리셋, /부자, /상점, /제단, /시련, /25turn, /공격력7, /체력40, /희망, /양초, /1000불빛, /10$, /적, /보물, /씨앗, /함정, /이벤트, /이벤트1, /악마소환, /악마소환준비, /밀랍상 양초 거미</div>
     </div>
     <button class="dev-command-run">실행</button>
   `
@@ -303,6 +304,19 @@ export function setupDevCommandPalette(deps: DevCommandPaletteDeps): void {
       }
       deps.render()
       setHint(`디버그: 악마 소환 레시피 해금 + 손패 ${added}장 지급 (${ingredients.map((id) => getHandCardDef(id).name).join('/')}`)
+      return
+    }
+    // 밀랍상 강제 봉인 — "/밀랍상 양초 거미". 확률 굴림만 생략하고, 등록/용량 검사·저장은
+    // captureWaxFigure() 그대로 태운다(탭에 값을 직접 꽂지 않고 실제 획득 로직을 재사용).
+    const waxFigureMatch = token.match(/^밀랍상\s+(.+)$/)
+    if (waxFigureMatch) {
+      const enemyName = waxFigureMatch[1].trim()
+      const result = captureWaxFigure(enemyName, { forceVariant: 'normal' })
+      if (!result) {
+        setHint(`디버그: 봉인 실패 — "${enemyName}"이(가) 미등록 종이거나 밀랍상함이 가득 찼습니다.`)
+        return
+      }
+      setHint(`디버그: 밀랍상 봉인 — ${result.enemyName} (${result.effect.label})`)
       return
     }
     // 랜덤 유물 10장 지급 (미보유·비차단 풀에서 셔플 후 순서대로)

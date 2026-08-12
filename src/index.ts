@@ -57,6 +57,7 @@ import { RECIPES, type RecipeEffectKind } from '@data/Recipes'
 import { getRelicDef, relicStackFeedback, type CustomRelicProfile, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
 import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
+import { captureWaxFigure, WAX_FIGURE_CAPTURE_CHANCE } from '@core/WaxFigureCollection'
 import { COMBO_TRIGGER_DELAY_MS, GAUGE_TRIGGER_DELAY_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
 import { HAND_CARD_RARITY } from '@data/ShopPools'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
@@ -1414,6 +1415,20 @@ async function awardScoreForRemovedCards(
 }
 
 /**
+ * 처치한 적의 밀랍상 봉인을 시도한다(호출부는 처치 경로마다 이 한 함수만 부른다).
+ * 잿빛 굴레(엔드리스)와 같은 마일스톤(쉬움 100층 클리어)으로 열리므로, 그 전엔 조용히
+ * 아무 일도 하지 않는다 — 밀랍상함이 없는 사람에게 "봉인 실패" 알림을 낼 이유가 없다.
+ */
+function tryCaptureWaxFigureOnKill(enemyName: string): void {
+  if (!enaAutonomousLearner.hasFirstSeen('gray-shackle-unlocked')) return
+  if (Math.random() >= WAX_FIGURE_CAPTURE_CHANCE) return
+  const result = captureWaxFigure(enemyName)
+  if (!result) return // 미등록 종이거나 밀랍상함이 가득 참 — 조용히 넘어간다.
+  const variantLabel = result.variant === 'shiny' ? ' (변종)' : ''
+  recordNotice(`밀랍상 완성 — ${result.enemyName}${variantLabel}: ${result.effect.label}`, 'win')
+}
+
+/**
  * 손패·조합으로 잡은 적의 전리품.
  *
  * 두 겹의 제약이 걸린다. 손패는 **턴을 넘기지 않기 때문**이다 — 잡은 수만큼 그대로
@@ -1431,6 +1446,9 @@ async function awardHandKillDrops(
     .map((r) => snapshot.get(r.cardId))
     .filter((c): c is Card => !!c && c.type === CardType.ENEMY)
   if (kills.length === 0) return
+  // 밀랍상은 손패 전리품과 무관한 별도 자원이라, 카드 드롭의 stingy/1장 상한(무한 루프 방지)을
+  // 그대로 적용할 이유가 없다 — 잡은 적마다 독립적으로 굴린다.
+  for (const card of kills) tryCaptureWaxFigureOnKill(card.name)
   const rolled = kills.reduce((sum, card) => sum + card.rollDefeatDrops(true), 0)
   if (rolled <= 0) return
   const drop = DropSystem.generateDrop('enemy-kill')
@@ -3929,6 +3947,7 @@ async function handleCardAction(e: Event): Promise<void> {
     // 자물쇠: 미믹 처치 시 불빛 +25% + 손패 +1.
     if (card.isSpecialEnemy) await relicEffects.applyPadlockMimicBonus(card)
     await relicEffects.onEnemiesDefeated(1)
+    tryCaptureWaxFigureOnKill(card.name)
   }
 
   // 찬스: 적이 살아있을 때만 15% 확률 추가 타격.
@@ -4307,6 +4326,9 @@ function startTestRun(): void {
   for (const { id } of META_UNLOCKS) setMetaUnlocked(id, true)
   unlockAllBasicUnlockPack()
   localStorage.setItem(HEARTH_DEV_UNLOCK_KEY, '1')
+  // 잿빛 굴레/밀랍상은 HEARTH_DEV_UNLOCK_KEY(거점 칸 전용 우회)가 아니라 이 first-seen
+  // 플래그를 직접 읽으므로, 테스트 부팅에서도 열리려면 여기서 따로 마킹해야 한다.
+  enaAutonomousLearner.recordFirstSeen('gray-shackle-unlocked')
   if (document.getElementById('hearth-overlay')) hearthScene.exit()
   void startGame()
 }
