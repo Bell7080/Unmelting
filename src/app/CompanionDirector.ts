@@ -309,19 +309,32 @@ export class CompanionDirector {
     return this.deps.isGameActive() && !this.deps.isShopOpen() && !gameState.bossBattleActive && !gameState.isGameOver
   }
 
-  /** 적 공격 판정 직전에 회피 클러치를 굴린다. 체력 되돌림이 아니라 피해 적용 전 무효화라 타이밍이 자연스럽다. */
-  tryCompanionIncomingDodge(incomingDamage: number): boolean {
-    const { gameState, companion, boardRenderer } = this.deps
+  /**
+   * 적 공격 판정 직전에 회피 클러치를 굴린다 — 피해 적용 자체를 건너뛸지 결정하는 판정이라
+   * runEnemyPhase의 동기 루프 안에서 즉시 확정돼야 한다(체력 되돌림이 아니라 적용 전 무효화).
+   *
+   * ★ 판정과 알림은 분리한다. 여기서는 결과(성공 여부)만 정하고 대사/배너/토스트는 절대
+   *   띄우지 않는다 — 적 페이즈는 파도라 그 적이 실제로 때리는 beat에 결과가 붙어야 하는데,
+   *   판정 시점(모든 적 결과가 한 번에 계산되는 루프 도입부)에 바로 알리면 아직 애니메이션도
+   *   시작 안 한 다른 적의 회피가 먼저 터진 것처럼 보인다("살짝 일찍" 문제의 원인이었다).
+   *   알림은 announceDodge()가 animateEnemyAttacks의 해당 beat에서 대신 낸다.
+   */
+  shouldDodgeIncoming(incomingDamage: number): boolean {
+    const { gameState, companion } = this.deps
     if (incomingDamage <= 0 || !this.companionWorldCanSpeak()) return false
     const projectedHealth = gameState.character.health - incomingDamage
     const adversity = projectedHealth <= Math.max(1, gameState.character.maxHealth * 0.35)
     // bond는 하드코딩하지 않는다 — CompanionSystem이 누적 유대(bond >= 0.35)에서 파생한다.
-    if (!companion.rollMinorClutch('dodge', { adversity })) return false
+    return companion.rollMinorClutch('dodge', { adversity })
+  }
+
+  /** shouldDodgeIncoming()이 성공한 회피를, 그 적이 실제로 때리는 파도 beat에서 알린다. */
+  announceDodge(incomingDamage: number): void {
+    const { companion, boardRenderer } = this.deps
     this.deps.recordNotice(`에나의 의지 — 회피! 피해 ${incomingDamage} 무효`, 'info')
     void boardRenderer.animateClutchOnPlayer('health-gain')
     this.showClutchChain('dodge', `피해 ${incomingDamage} 무효`)
     this.sayEnaBark(companion.minorClutchLine('dodge'), { importance: BARK_IMPORTANCE.clutch })
-    return true
   }
 
   /** 예지/클러치가 공유하는 위협 추정 입력 — 레일 예고 큐·강화팩 실효값·역할 가중을 함께 전달한다. */

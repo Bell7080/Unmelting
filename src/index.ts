@@ -3172,13 +3172,15 @@ async function runSimulatedEnemyPhase(): Promise<void> {
   const beforeTrapHealth = snapshotFieldHealthState()
   // 파도 공격의 체력 롤링 시작점 — 모델은 곧 최종값이 되므로 때리기 전 값을 먼저 잡는다.
   const healthBeforeEnemies = gameState.character.health
-  const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => companionDirector.tryCompanionIncomingDodge(damage) })
+  const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => companionDirector.shouldDodgeIncoming(damage) })
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
   const bombExplosions = turnManager.applyBombExplosions()
   const flowerChanges = turnManager.applyFlowerGrowthAndWilt(cardSpawner)
 
   const eventAnimations: Promise<void>[] = []
-  if (hits.length > 0) eventAnimations.push(boardRenderer.animateEnemyAttacks(hits, healthBeforeEnemies))
+  if (hits.length > 0) {
+    eventAnimations.push(boardRenderer.animateEnemyAttacks(hits, healthBeforeEnemies, (dodgedDamage) => companionDirector.announceDodge(dodgedDamage)))
+  }
   if (treasureChanges.length > 0) eventAnimations.push(boardRenderer.animateTreasureChanges(treasureChanges))
   if (bombExplosions.length > 0) {
     const playerDamageTotal = bombExplosions.reduce((s, e) => s + e.playerDamage, 0)
@@ -3461,12 +3463,14 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   const beforeTrapHealth = snapshotFieldHealthState()
   // 파도 공격의 체력 롤링 시작점 — 모델은 곧 최종값이 되므로 때리기 전 값을 먼저 잡는다.
   const healthBeforeEnemies = gameState.character.health
-  const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => companionDirector.tryCompanionIncomingDodge(damage) })
+  const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => companionDirector.shouldDodgeIncoming(damage) })
   const treasureChanges = turnManager.applyTreasureVolatility(cardSpawner)
   const bombExplosions = turnManager.applyBombExplosions()
   const flowerChanges = turnManager.applyFlowerGrowthAndWilt(cardSpawner)
   const eventAnimations: Promise<void>[] = []
-  if (hits.length > 0) eventAnimations.push(boardRenderer.animateEnemyAttacks(hits, healthBeforeEnemies))
+  if (hits.length > 0) {
+    eventAnimations.push(boardRenderer.animateEnemyAttacks(hits, healthBeforeEnemies, (dodgedDamage) => companionDirector.announceDodge(dodgedDamage)))
+  }
   if (treasureChanges.length > 0) {
     eventAnimations.push(boardRenderer.animateTreasureChanges(treasureChanges))
   }
@@ -3720,9 +3724,9 @@ async function handleCardAction(e: Event): Promise<void> {
 
   if (turnManager.isEnemyFirstStrike()) {
     const healthBeforeFirstStrike = gameState.character.health
-    const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => companionDirector.tryCompanionIncomingDodge(damage) })
+    const hits = turnManager.runEnemyPhase({ shouldDodge: ({ damage }) => companionDirector.shouldDodgeIncoming(damage) })
     if (hits.length > 0) {
-      await boardRenderer.animateEnemyAttacks(hits, healthBeforeFirstStrike)
+      await boardRenderer.animateEnemyAttacks(hits, healthBeforeFirstStrike, (dodgedDamage) => companionDirector.announceDodge(dodgedDamage))
       const dmg = hits.reduce((acc, h) => acc + h.damage, 0)
       if (dmg > 0) {
         // 수치는 파도 공격이 적마다 이미 띄웠다 — 여기서는 로그만 남긴다.

@@ -1,6 +1,6 @@
 # 버전 관리
 
-현재 버전: **v2.9.3**
+현재 버전: **v2.9.4**
 
 `VERSION.md`와 `package.json`의 `version`은 항상 같은 값을 쓴다.
 
@@ -25,6 +25,25 @@
   올리는 커밋은 `package.json`과 이 문서를 함께 갱신한다.
 
 ## 변경 이력
+
+### v2.9.4 — 2026-08-11
+
+**에나 회피 클러치가 "살짝 일찍" 터지던 타이밍을 방패 막기와 같은 파도 beat로 맞췄다.**
+
+- 원인: `TurnManager.runEnemyPhase()`는 모든 적의 공격 결과를 **한 번에 동기 계산**하고,
+  그 뒤 `GameBoardRenderer.animateEnemyAttacks()`가 적 하나씩 파도처럼 슬램 연출을 낸다
+  (`CLAUDE.md` "적 페이즈는 파도다" 불변식). 방패 막기(`hit.blocked`)는 이 파도의 각 beat
+  (`playEnemySlam`의 `onImpact`)에서 피드백을 내는데, 회피는 `rollMinorClutch` 판정과
+  함께 대사·클러치 배너·토스트를 **판정 즉시**(파도 애니메이션이 시작하기도 전) 띄우고
+  있었다 — 그래서 실제 슬램/충돌 타이밍보다 화면상 먼저 터지는 것처럼 보였다.
+- `CompanionDirector.tryCompanionIncomingDodge()`를 판정과 알림으로 쪼갰다:
+  `shouldDodgeIncoming()`(피해 적용을 건너뛸지 결정하는 순수 판정, `runEnemyPhase`가 여전히
+  동기로 호출)과 `announceDodge()`(대사/배너/토스트, 방패처럼 파도 beat에서만 호출)로 분리.
+  `EnemyHit`에 `dodgedDamage`(무효화된 피해량)를 추가해 알림 시점에도 문구를 그대로 낼 수
+  있게 했고, `animateEnemyAttacks()`에 `onDodge` 콜백을 받아 `playEnemySlam`의 `onImpact`
+  안에서 `announceDodge()`를 부르도록 배선했다(호출부 3곳 모두).
+- 방패 막기 로직은 이미 같은 beat에서 정확히 돌고 있어 별도 수정이 필요 없었다 — 이번
+  회피 수정은 방패가 쓰던 것과 같은 경로에 맞춘 것이다.
 
 ### v2.9.3 — 2026-08-11 (실험적)
 

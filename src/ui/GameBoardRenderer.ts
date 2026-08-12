@@ -2898,7 +2898,7 @@ export class GameBoardRenderer {
    * attacker's motion; `animateDamageFlash` follows up with the burst anchored
    * to the player card.
    */
-  async animateEnemyAttacks(hits: EnemyHit[], hpBefore?: number): Promise<void> {
+  async animateEnemyAttacks(hits: EnemyHit[], hpBefore?: number, onDodge?: (dodgedDamage: number) => void): Promise<void> {
     const player = this.boardElement.querySelector<HTMLElement>('.player-card, .player-row')
     if (!player || hits.length === 0) return
 
@@ -2915,7 +2915,10 @@ export class GameBoardRenderer {
         this.boardElement.querySelector<HTMLElement>(`.cell.card.is-active[data-lane="${hit.laneIndex}"]`)
       await this.playEnemySlam(attacker, player, () => {
         if (hit.dodged) {
-          // 회피는 에나의 "날렵한 몸놀림" 클러치 대사가 이미 알린다 — 플로팅 텍스트는 중복.
+          // 회피는 그 적이 실제로 때리는 이 beat에서 알려야 한다 — 판정(runEnemyPhase)
+          // 시점에 바로 알리면 아직 애니메이션도 안 시작한 다른 적의 회피가 먼저 뜬 것처럼
+          // 보인다("살짝 일찍" 문제). onDodge는 CompanionDirector.announceDodge를 배선한다.
+          onDodge?.(hit.dodgedDamage ?? 0)
           return
         }
         if (hit.blocked && hit.blocked > 0) void this.playShieldBlockFeedback(player, hit.blocked)

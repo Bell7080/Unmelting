@@ -324,7 +324,7 @@ describe('TurnManager treasure volatility', () => {
     // 에나 회피처럼 공격 판정 순간에 true를 돌려주면 체력 차감 자체를 건너뛴다.
     const hits = turnManager.runEnemyPhase({ shouldDodge: () => true })
 
-    expect(hits).toEqual([{ laneIndex: 0, cardId: enemy.id, cardName: enemy.name, damage: 0, dodged: true }])
+    expect(hits).toEqual([{ laneIndex: 0, cardId: enemy.id, cardName: enemy.name, damage: 0, dodged: true, dodgedDamage: enemy.getDamage() }])
     expect(gameState.character.health).toBe(beforeHp)
   })
 

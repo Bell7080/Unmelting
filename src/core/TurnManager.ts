@@ -31,6 +31,8 @@ export interface EnemyHit {
   blocked?: number
   /** 에나 회피 등으로 공격 순간 무효화되면 피해 적용 없이 공격 연출만 남긴다. */
   dodged?: boolean
+  /** dodged일 때 무효화된 원래 피해량 — 회피 대사/배너를 파도 타격 순간에 알릴 때 쓴다. */
+  dodgedDamage?: number
 }
 
 export interface TreasureChange {
@@ -151,7 +153,7 @@ export class TurnManager {
       const incomingDamage = card.getDamage()
       // 회피 클러치는 체력을 되돌리지 않고 공격 판정 순간에 피해 적용 자체를 건너뛴다.
       if (options.shouldDodge?.({ laneIndex: i, card, damage: incomingDamage })) {
-        hits.push({ laneIndex: i, cardId: card.id, cardName: card.name, damage: 0, dodged: true })
+        hits.push({ laneIndex: i, cardId: card.id, cardName: card.name, damage: 0, dodged: true, dodgedDamage: incomingDamage })
         continue
       }
 
