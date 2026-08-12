@@ -154,14 +154,23 @@ export class WaxFigureView {
     const hint = this.lastActionHint
     this.lastActionHint = null
 
+    // 자리가 있으면 봉인은 곧장 밀랍상함으로 들어간다 — 이 목록은 한도를 넘겨 밀려난
+    // "넘친 몫"만 담기므로 평소에는 비어 있는 것이 정상이다.
     const runSection = runHold.length > 0
       ? `<ul class="wax-hold-list">${runHold.map((c) => this.renderRunHoldRow(c)).join('')}</ul>
          <button type="button" class="wax-btn wax-btn-stow-all" data-wax-stow-all>전부 정리</button>`
-      : `<p class="wax-empty">이번 모험에서 아직 봉인한 게 없습니다.</p>`
+      : ''
 
     const permSection = tiles.length > 0
       ? `<ul class="wax-tile-grid">${tiles.map((t) => this.renderPermanentTile(t)).join('')}</ul>`
       : `<p class="wax-empty">밀랍상함이 비어 있습니다.</p>`
+
+    const overflowSection = runHold.length > 0
+      ? `<div class="wax-section">
+           <h3 class="wax-section-title">넘친 봉인 <span class="wax-section-note">밀랍상함이 가득 차 정리하지 않으면 모험이 끝날 때 사라집니다</span></h3>
+           ${runSection}
+         </div>`
+      : ''
 
     host.innerHTML = `
       <div class="wax-figure-modal" role="dialog" aria-label="밀랍상">
@@ -171,10 +180,7 @@ export class WaxFigureView {
         </header>
         ${hint ? `<p class="wax-action-hint">${hint}</p>` : ''}
         <section class="wax-figure-body">
-          <div class="wax-section">
-            <h3 class="wax-section-title">이번 모험 <span class="wax-section-note">정리하지 않으면 모험이 끝날 때 사라집니다</span></h3>
-            ${runSection}
-          </div>
+          ${overflowSection}
           <div class="wax-section">
             <h3 class="wax-section-title">밀랍상함 <span class="wax-capacity">${used}/${capacity}</span></h3>
             ${permSection}

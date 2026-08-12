@@ -36,14 +36,15 @@ describe('WaxFigureCollection', () => {
     vi.restoreAllMocks()
   })
 
-  it('등록된 종은 봉인에 성공해 임시보관함에 들어간다(영구함은 아직 그대로)', () => {
+  it('자리가 있으면 봉인은 곧장 영구 밀랍상함에 들어간다', () => {
     const result = captureWaxFigure('양초 거미', { forceVariant: 'normal' })
 
     expect(result).not.toBeNull()
     expect(result?.enemyName).toBe('양초 거미')
     expect(result?.variant).toBe('normal')
-    expect(getWaxFigureRunHold()).toHaveLength(1)
-    expect(totalWaxFigureCount()).toBe(0)
+    expect(result?.stowed).toBe(true)
+    expect(getWaxFigureRunHold()).toHaveLength(0)
+    expect(totalWaxFigureCount()).toBe(1)
   })
 
   it('미등록 종은 봉인에 실패한다(콘텐츠 미비 — 조용히 null)', () => {
@@ -51,50 +52,52 @@ describe('WaxFigureCollection', () => {
     expect(getWaxFigureRunHold()).toHaveLength(0)
   })
 
-  it('런 중에는 보관 한도를 넘어도 임시보관함에 계속 쌓인다', () => {
-    for (let i = 0; i < WAX_FIGURE_BASE_CAPACITY + 5; i++) {
-      expect(captureWaxFigure('양초 거미', { forceVariant: 'normal' })).not.toBeNull()
-    }
-
-    expect(getWaxFigureRunHold()).toHaveLength(WAX_FIGURE_BASE_CAPACITY + 5)
-  })
-
-  it('정리(stow)해야 영구 밀랍상함에 실제로 담긴다', () => {
-    const result = captureWaxFigure('양초 거미', { forceVariant: 'normal' })!
-
-    expect(stowWaxFigureCatch(result.id)).toBe(true)
-    expect(totalWaxFigureCount()).toBe(1)
-    expect(getWaxFigureRunHold()).toHaveLength(0)
-  })
-
-  it('영구 밀랍상함이 가득 차면 정리가 거절되고 임시보관함에 남는다', () => {
+  it('영구 밀랍상함이 가득 차면 그 뒤 봉인만 임시보관함으로 넘친다', () => {
     for (let i = 0; i < WAX_FIGURE_BASE_CAPACITY; i++) {
       const r = captureWaxFigure('양초 거미', { forceVariant: 'normal' })!
-      expect(stowWaxFigureCatch(r.id)).toBe(true)
+      expect(r.stowed).toBe(true)
     }
+    expect(totalWaxFigureCount()).toBe(WAX_FIGURE_BASE_CAPACITY)
+    expect(getWaxFigureRunHold()).toHaveLength(0)
+
     const overflow = captureWaxFigure('양초 거미', { forceVariant: 'normal' })!
 
-    expect(stowWaxFigureCatch(overflow.id)).toBe(false)
+    expect(overflow.stowed).toBe(false)
     expect(totalWaxFigureCount()).toBe(WAX_FIGURE_BASE_CAPACITY)
     expect(getWaxFigureRunHold()).toHaveLength(1)
   })
 
-  it('런 종료(리셋)를 부르면 정리하지 않은 임시보관함은 전부 사라진다', () => {
+  it('정리(stow)하면 임시보관함의 넘친 몫이 영구 밀랍상함으로 옮겨간다', () => {
+    for (let i = 0; i < WAX_FIGURE_BASE_CAPACITY; i++) captureWaxFigure('양초 거미', { forceVariant: 'normal' })
+    // 여기서 하나를 버려 자리를 만들어야 다음 정리가 성공한다.
+    const overflow = captureWaxFigure('양초 거미', { forceVariant: 'normal' })!
+    expect(overflow.stowed).toBe(false)
+    discardWaxFigureCatch(overflow.id)
+    const overflow2 = captureWaxFigure('양초 거미', { forceVariant: 'shiny' })!
+
+    // 영구함이 여전히 가득 차 있으므로 정리는 거절된다.
+    expect(stowWaxFigureCatch(overflow2.id)).toBe(false)
+    expect(getWaxFigureRunHold()).toHaveLength(1)
+  })
+
+  it('런 종료(리셋)를 부르면 정리하지 않은 임시보관함(넘친 몫)은 전부 사라진다', () => {
+    for (let i = 0; i < WAX_FIGURE_BASE_CAPACITY; i++) captureWaxFigure('양초 거미', { forceVariant: 'normal' })
     captureWaxFigure('양초 거미', { forceVariant: 'shiny' })
     expect(getWaxFigureRunHold()).toHaveLength(1)
 
     resetWaxFigureRunHold()
 
     expect(getWaxFigureRunHold()).toHaveLength(0)
-    expect(totalWaxFigureCount()).toBe(0)
+    expect(totalWaxFigureCount()).toBe(WAX_FIGURE_BASE_CAPACITY)
   })
 
-  it('임시보관함 항목을 직접 버릴 수도 있다', () => {
-    const result = captureWaxFigure('양초 거미', { forceVariant: 'normal' })!
+  it('임시보관함(넘친 몫) 항목을 직접 버릴 수도 있다', () => {
+    for (let i = 0; i < WAX_FIGURE_BASE_CAPACITY; i++) captureWaxFigure('양초 거미', { forceVariant: 'normal' })
+    const overflow = captureWaxFigure('양초 거미', { forceVariant: 'normal' })!
 
-    expect(discardWaxFigureCatch(result.id)).toBe(true)
+    expect(discardWaxFigureCatch(overflow.id)).toBe(true)
     expect(getWaxFigureRunHold()).toHaveLength(0)
-    expect(discardWaxFigureCatch(result.id)).toBe(false)
+    expect(discardWaxFigureCatch(overflow.id)).toBe(false)
   })
 
   it('무역에서 산 확장분만큼 한도가 늘어난다', () => {
@@ -106,10 +109,7 @@ describe('WaxFigureCollection', () => {
   })
 
   it(`같은 종+색 ${WAX_FIGURE_MERGE_COUNT}개를 모으면 다음 성급으로 합칠 수 있다`, () => {
-    for (let i = 0; i < WAX_FIGURE_MERGE_COUNT; i++) {
-      const r = captureWaxFigure('양초 거미', { forceVariant: 'normal' })!
-      stowWaxFigureCatch(r.id)
-    }
+    for (let i = 0; i < WAX_FIGURE_MERGE_COUNT; i++) captureWaxFigure('양초 거미', { forceVariant: 'normal' })
 
     expect(mergeWaxFigures('양초 거미', 'normal', 1)).toBe(true)
 
@@ -119,18 +119,14 @@ describe('WaxFigureCollection', () => {
   })
 
   it('합성 재료가 모자라면 실패하고 아무것도 바뀌지 않는다', () => {
-    const r = captureWaxFigure('양초 거미', { forceVariant: 'normal' })!
-    stowWaxFigureCatch(r.id)
+    captureWaxFigure('양초 거미', { forceVariant: 'normal' })
 
     expect(mergeWaxFigures('양초 거미', 'normal', 1)).toBe(false)
     expect(totalWaxFigureCount()).toBe(1)
   })
 
   it('합성은 보관 수를 줄이지 늘리지 않는다(3개 → 1개, 순감소 2)', () => {
-    for (let i = 0; i < WAX_FIGURE_MERGE_COUNT; i++) {
-      const r = captureWaxFigure('양초 거미', { forceVariant: 'normal' })!
-      stowWaxFigureCatch(r.id)
-    }
+    for (let i = 0; i < WAX_FIGURE_MERGE_COUNT; i++) captureWaxFigure('양초 거미', { forceVariant: 'normal' })
     expect(totalWaxFigureCount()).toBe(WAX_FIGURE_MERGE_COUNT)
 
     mergeWaxFigures('양초 거미', 'normal', 1)
@@ -139,10 +135,8 @@ describe('WaxFigureCollection', () => {
   })
 
   it('변종(이로치) 강제 지정도 정상 등록되고 정상 색과 별개로 쌓인다', () => {
-    const shiny = captureWaxFigure('양초 거미', { forceVariant: 'shiny' })!
-    const normal = captureWaxFigure('양초 거미', { forceVariant: 'normal' })!
-    stowWaxFigureCatch(shiny.id)
-    stowWaxFigureCatch(normal.id)
+    captureWaxFigure('양초 거미', { forceVariant: 'shiny' })
+    captureWaxFigure('양초 거미', { forceVariant: 'normal' })
 
     const state = loadWaxFigureCollection()
     expect(state.counts['양초 거미::shiny::1']).toBe(1)
@@ -166,8 +160,7 @@ describe('WaxFigureCollection', () => {
   })
 
   it('/리셋이 지울 수 있게 unmelting. 접두사 키에 저장한다', () => {
-    const r = captureWaxFigure('양초 거미', { forceVariant: 'normal' })!
-    stowWaxFigureCatch(r.id)
+    captureWaxFigure('양초 거미', { forceVariant: 'normal' })
     grantWaxFigureCapacityBonus(1)
 
     expect(store.getItem('unmelting.waxfigures.v1')).not.toBeNull()

@@ -74,6 +74,9 @@ export interface CardOptions {
   monsterFlowerGrowthAmount?: number
   /** Treasure subtype lets final-ascent starlight opt out of chest rules. */
   treasureKind?: TreasureKind
+  /** 밀랍상 이로치(변종) 후보로 미리 굴려 필드에 색이 다르게 보이는 개체. 처치 시
+   *  확정 이로치 포획으로 이어진다(`WaxFigureCollection.captureWaxFigure`). */
+  waxFigureShiny?: boolean
 }
 
 interface EnemyGroupStats {
@@ -191,6 +194,8 @@ export class Card {
   /** 이벤트 문 닫힘 카운트다운. 미리보기 행에서는 -1(미시작)이고, 전방(활성 행)에
    *  도달하면 2로 시작해 매 턴 줄어든다. 0에 닿으면 문이 닫히며 보물처럼 사라진다. */
   eventTurnsUntilClose: number
+  /** 밀랍상 이로치 후보 표시 — 렌더러가 필드에서 색을 다르게 그린다. */
+  waxFigureShiny: boolean
 
   constructor(
     id: string,
@@ -237,6 +242,7 @@ export class Card {
       : 0
     // 문은 전방 도달 전까지 카운트다운을 시작하지 않는다(-1 = 미시작).
     this.eventTurnsUntilClose = -1
+    this.waxFigureShiny = options.waxFigureShiny ?? false
   }
 
   /** 온보딩 축약형 필드 카드(바위/덤불/잡동사니)인지 — 만료·합체 리셋 대상. */

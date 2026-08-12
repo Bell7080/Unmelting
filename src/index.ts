@@ -1417,16 +1417,19 @@ async function awardScoreForRemovedCards(
 /**
  * 처치한 적의 밀랍상 봉인을 시도한다(호출부는 처치 경로마다 이 한 함수만 부른다).
  * 새싹 병아리부터 처음부터 열려 있다(별도 마일스톤 게이트 없음) — 확률 판정 자체는
- * `captureWaxFigure()` 내부에서 한다(이로치 우선 굴림 → 실패 시 일반 포획 굴림).
+ * `captureWaxFigure()` 내부에서 한다. 필드에서 이미 이로치로 표시돼 있던 개체
+ * (`card.waxFigureShiny`)는 확률을 다시 굴리지 않고 확정 이로치 포획으로 보낸다 —
+ * "어 떴다"를 보여준 뒤 잡았는데 다시 굴려 놓치면 예고가 거짓말이 된다.
  *
- * 봉인은 런 중 한도가 없다 — 임시보관함에만 쌓이고, 영구 밀랍상함으로 옮기는 "정리"는
- * 플레이어가 밀랍상 탭에서 직접 한다. 정리 안 하고 런이 끝나면 임시보관함은 비워진다.
+ * 봉인은 **자리가 있으면 곧장 영구 밀랍상함에 들어간다.** 한도를 넘겼을 때만 임시보관함
+ * (메모리 전용, 정리 안 하고 런이 끝나면 비워짐)으로 넘친다.
  */
-function tryCaptureWaxFigureOnKill(enemyName: string): void {
-  const result = captureWaxFigure(enemyName)
+function tryCaptureWaxFigureOnKill(card: Card): void {
+  const result = captureWaxFigure(card.name, card.waxFigureShiny ? { forceVariant: 'shiny' } : {})
   if (!result) return // 미등록 종이거나 확률에 안 걸렸다 — 조용히 넘어간다.
   const variantLabel = result.variant === 'shiny' ? ' (변종)' : ''
-  recordNotice(`밀랍상 봉인 — ${result.enemyName}${variantLabel}: ${result.effect.label}`, 'win')
+  const holdNote = result.stowed ? '' : ' — 밀랍상함이 가득 차 임시보관함으로'
+  recordNotice(`밀랍상 봉인 — ${result.enemyName}${variantLabel}: ${result.effect.label}${holdNote}`, 'win')
 }
 
 /**
@@ -1449,7 +1452,7 @@ async function awardHandKillDrops(
   if (kills.length === 0) return
   // 밀랍상은 손패 전리품과 무관한 별도 자원이라, 카드 드롭의 stingy/1장 상한(무한 루프 방지)을
   // 그대로 적용할 이유가 없다 — 잡은 적마다 독립적으로 굴린다.
-  for (const card of kills) tryCaptureWaxFigureOnKill(card.name)
+  for (const card of kills) tryCaptureWaxFigureOnKill(card)
   const rolled = kills.reduce((sum, card) => sum + card.rollDefeatDrops(true), 0)
   if (rolled <= 0) return
   const drop = DropSystem.generateDrop('enemy-kill')
@@ -3950,7 +3953,7 @@ async function handleCardAction(e: Event): Promise<void> {
     // 자물쇠: 미믹 처치 시 불빛 +25% + 손패 +1.
     if (card.isSpecialEnemy) await relicEffects.applyPadlockMimicBonus(card)
     await relicEffects.onEnemiesDefeated(1)
-    tryCaptureWaxFigureOnKill(card.name)
+    tryCaptureWaxFigureOnKill(card)
   }
 
   // 찬스: 적이 살아있을 때만 15% 확률 추가 타격.

@@ -225,4 +225,29 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 .wax-tile-effect { grid-area: effect; font-size: 10.5px; color: rgba(255, 233, 196, 0.7); line-height: 1.35; }
 .wax-tile-effect b { color: #ffe6a6; font-variant-numeric: tabular-nums; }
 .wax-tile .wax-btn-merge { grid-area: merge; width: 100%; text-align: center; }
+
+/* 필드에서부터 보이는 이로치 후보 — 밀랍상 탭과 같은 옥빛으로 "어 떴다"를 예고한다.
+   깨우기 전부터 다르게 보여야 스쳐 지나가지 않고 붙잡고 싶어진다. */
+.cell.card.is-wax-figure-shiny .card-illust,
+.cell.card.is-wax-figure-shiny .card-art {
+  filter: drop-shadow(0 0 8px rgba(123, 240, 174, 0.55)) saturate(1.15) hue-rotate(-14deg);
+  animation: wax-figure-shiny-glint 2.4s ease-in-out infinite;
+}
+.cell.card.is-wax-figure-shiny::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 0 14px rgba(123, 240, 174, 0.35);
+  animation: wax-figure-shiny-pulse 2.4s ease-in-out infinite;
+}
+@keyframes wax-figure-shiny-glint {
+  0%, 100% { filter: drop-shadow(0 0 8px rgba(123, 240, 174, 0.55)) saturate(1.15) hue-rotate(-14deg); }
+  50%      { filter: drop-shadow(0 0 13px rgba(123, 240, 174, 0.8)) saturate(1.3) hue-rotate(-14deg); }
+}
+@keyframes wax-figure-shiny-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
 `

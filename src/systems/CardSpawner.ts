@@ -18,6 +18,7 @@ import {
   type TreasureKind,
 } from '@entities/Card'
 import { EmberSystem, EmberTier, SpawnWeights } from './EmberSystem'
+import { findWaxFigureSpecies, WAX_FIGURE_SHINY_CHANCE } from '@core/WaxFigureCollection'
 
 export interface CardDefinition {
   /** Korean display name shown on the card face. */
@@ -800,6 +801,9 @@ export class CardSpawner {
     // HP는 더 이상 티어로 올리지 않으므로 trial 보너스만 baseHealth에 더한다.
     const bonus = EmberSystem.getEnemyStatBonus(this.currentTier)
     this.spawnSerial++
+    // 밀랍상 등록 종이면 스폰 순간 이로치 여부를 미리 굴려 필드에서부터 색이 다르게 보이게 한다.
+    const waxFigureShiny =
+      findWaxFigureSpecies(definition.name) !== undefined && Math.random() < WAX_FIGURE_SHINY_CHANCE
     const card = new Card(
       `enemy-${this.spawnSerial}-${Math.random()}`,
       CardType.ENEMY,
@@ -810,6 +814,7 @@ export class CardSpawner {
       {
         enemySpriteId: definition.enemySpriteId,
         enemyPower: definition.enemyPower,
+        waxFigureShiny,
       }
     )
     // 레일 진입 직후 동기화 흐름과 동일하게 현재 티어 공격력 보너스를 즉시 적용한다.

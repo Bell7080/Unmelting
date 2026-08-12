@@ -1102,6 +1102,8 @@ export class GameBoardRenderer {
       card.isFrozen() ? 'is-frozen' : '',
       // 비대화된 양초 조각 — 부푼 상태가 다음 턴에도 남아야 "판이 무거워졌다"가 보인다.
       card.swollen ? 'is-swollen' : '',
+      // 밀랍상 이로치 후보 — 필드에서부터 색이 다르게 보여야 "어 떴다"가 성립한다.
+      card.waxFigureShiny ? 'is-wax-figure-shiny' : '',
       // 보스는 5번째 카드 종류. 보스마다 메커니즘/스타일이 다를 수 있으므로,
       // 공통은 type-boss(셔터 위 z-index) 하나만 적용하고, 이 보스(밀랍 군단)만의
       // 풀필드 확장·좌상단 3T 뱃지 등은 boss-kind-<id> 마커로 한정한다.

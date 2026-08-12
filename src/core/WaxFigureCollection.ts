@@ -7,10 +7,11 @@
  * 주지 않는다(밸런스 파괴). 확률은 방어구 감쇠 공식과 같은 수렴형이라 아무리 모아도
  * 상한을 넘지 않는다.
  *
- * ★ 봉인은 **런 중엔 한도가 없다.** 처치마다 임시보관함(run hold, 메모리 전용·저장 안 함)에
- * 그대로 쌓이고, 플레이어가 직접 "정리"해서 영구 밀랍상함(한도 있음)에 옮겨 담아야 살아남는다.
- * 정리하지 않고 런이 끝나면 임시보관함 내용은 전부 사라진다 — 한도 초과로 이로치가 그
- * 자리에서 소멸하는 억울한 상황을 막기 위한 설계다("담아갈지는 네가 정해라").
+ * ★ 봉인은 **자리가 있으면 곧장 영구 밀랍상함에 들어간다.** 한도를 넘겼을 때만 임시보관함
+ * (run hold, 메모리 전용·저장 안 함)으로 흘러 들어간다 — 정상적으로는 신경 쓸 일이 없고,
+ * 밀랍상함이 가득 찬 순간에만 "넘친 몫"이 생긴다. 정리(합성/버리기로 자리를 만든 뒤 옮기기)
+ * 하지 않고 런이 끝나면 임시보관함 내용은 전부 사라진다 — 한도 초과로 이로치가 그 자리에서
+ * 소멸하는 억울한 상황을 막기 위한 안전판이다.
  *
  * 게이팅(가입 게이트)은 이 모듈이 하지 않는다 — `hasFirstSeen('gray-shackle-unlocked')`
  * 확인은 호출부(index.ts) 책임이고, 이 모듈은 순수 저장/판정 로직만 담당한다.
@@ -154,6 +155,9 @@ export interface WaxFigureCaptureResult {
   enemyName: string
   variant: WaxFigureVariant
   effect: WaxFigureEffect
+  /** true = 자리가 있어 영구 밀랍상함에 곧장 들어갔다. false = 한도 초과로 임시보관함에
+   *  들어갔다 — 정리하지 않으면 이번 런이 끝날 때 사라진다. */
+  stowed: boolean
 }
 
 /**
@@ -163,11 +167,13 @@ export interface WaxFigureCaptureResult {
  * 확정 포획(0.01%로 워낙 희박하니 그 순간을 놓치지 않게 한다). 못 걸리면 그제서야
  * 일반 포획 확률(1%)을 굴려 정상 색으로 포획을 시도한다. 어느 쪽도 안 걸리면 null.
  *
- * 성공하면 **한도와 무관하게 항상** 임시보관함에 들어간다. 영구 밀랍상함으로 옮기려면
- * `stowWaxFigureCatch()`를 따로 불러야 한다(플레이어가 직접 정리).
+ * 성공하면 **자리가 있는 한** 곧장 영구 밀랍상함에 들어간다(`stowed: true`). 한도를
+ * 넘겼을 때만 임시보관함으로 흘러 들어간다(`stowed: false`) — 그때만 플레이어가
+ * `stowWaxFigureCatch()`/`discardWaxFigureCatch()`로 직접 정리해야 한다.
  *
- * `forceVariant`는 디버그 커맨드 전용 — 확률 굴림을 전부 생략하고 등록 검사·적재만
- * 그대로 통과한다(실제 획득 로직을 그대로 타야 한다는 게 이 함수를 둔 이유다).
+ * `forceVariant`는 디버그 커맨드·필드 이로치 확정 포획 전용 — 확률 굴림을 전부 생략하고
+ * 등록 검사·적재만 그대로 통과한다(실제 획득 로직을 그대로 타야 한다는 게 이 함수를 둔
+ * 이유다).
  */
 export function captureWaxFigure(
   enemyName: string,
@@ -185,14 +191,18 @@ export function captureWaxFigure(
   } else {
     return null
   }
-  const catchEntry: WaxFigureCatch = {
-    id: `wf-${nextCatchSeq++}`,
-    enemyName,
-    variant,
-    effect: species.effects[variant],
+  const effect = species.effects[variant]
+  const id = `wf-${nextCatchSeq++}`
+  const state = loadWaxFigureCollection()
+  if (totalWaxFigureCount(state) < waxFigureCapacity()) {
+    const key = makeKey(enemyName, variant, 1)
+    state.counts[key] = (state.counts[key] ?? 0) + 1
+    saveWaxFigureCollection(state)
+    return { id, enemyName, variant, effect, stowed: true }
   }
+  const catchEntry: WaxFigureCatch = { id, enemyName, variant, effect }
   runHold.push(catchEntry)
-  return catchEntry
+  return { ...catchEntry, stowed: false }
 }
 
 /**
