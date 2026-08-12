@@ -643,25 +643,15 @@ export class HearthScene {
     this.overlay?.classList.remove('is-trade-mode', 'is-trade-leaving', 'is-dinner-mode', 'is-dinner-opened', 'is-library-mode', 'is-library-leaving')
     this.overlay?.classList.add('is-shuttering', 'is-adventure-mode')
     this.selectCharacter(this.selectedCharacterIndex)
-    // 셔터 하강이 끝나면 곧바로 확정 상태로 넘어간다: 에나 설치(플레이어 카드 아트+버스트) → 난이도 캐러셀.
+    // 셔터 하강이 끝나면 곧바로 확정 상태로 넘어간다 → 난이도 캐러셀.
+    // 캐릭터가 하나뿐인 지금은 설치 연출(버스트)도 넣지 않는다 — 고를 게 없는데 뭔가
+    // "골라졌다"는 느낌을 주는 연출이 오히려 어색하다. 플레이어 카드 아트는 기본값이
+    // 이미 같은 스프라이트(SpriteUrls.player)라 따로 갱신할 것도 없다.
     window.setTimeout(() => {
       if (!this.shuttered) return // 하강 중 뒤로가기로 이미 올라갔으면 중단
-      this.overlay?.classList.add('is-shutter-rest')
-      this.installFixedCharacter()
-      this.overlay?.classList.add('is-character-confirmed')
+      this.overlay?.classList.add('is-shutter-rest', 'is-character-confirmed')
       requestAnimationFrame(() => this.selectDifficulty(this.selectedDifficultyIndex))
     }, 680)
-  }
-
-  /** 에나 고정 설치 — 선택 연출 없이 플레이어 카드 아트 갱신 + 짧은 획득 버스트만 남긴다. */
-  private installFixedCharacter(): void {
-    const character = HEARTH_CHARACTERS[this.selectedCharacterIndex]
-    const target = document.querySelector<HTMLElement>('.player-card')
-    if (!target || character.lockedArt) return
-    target.querySelector<HTMLElement>('.player-art')?.style.setProperty('background-image', `url('${character.art}')`)
-    SquareBurst.playOn(target, 'score', { count: 22, spread: 150, duration: 620, size: [10, 20] })
-    target.classList.add('hearth-character-installed')
-    window.setTimeout(() => target.classList.remove('hearth-character-installed'), 760)
   }
 
 
@@ -1343,24 +1333,14 @@ export class HearthScene {
     if (!this.shuttered || this.departing) return
     const root = this.overlay
 
-    // 캐릭터 확정(진행 중인 흡수 연출 포함) 후 뒤로가기: 선택 화면으로 복귀 (셔터는 그대로 유지).
-    // 연출 도중 뒤로가기도 여기서 받는다 — 시퀀스를 무효화하지 않으면 fill:forwards로
-    // 투명해진 쇼케이스 카드가 '증발'한 채 남는다.
+    // 캐릭터 확정(진행 중인 흡수 연출 포함) 상태에서 뒤로가기: 캐릭터는 에나 고정이라
+    // 선택 화면으로 되돌아갈 이유가 없다 — 곧장 로비로 나간다(아래 공통 종료 경로를 탄다).
+    // 예전엔 여기서 캐러셀을 되살렸는데, 그러면 꺼 둔 다중 캐릭터 선택 UI가 뒤로가기
+    // 경로로만 다시 열리는 구멍이 됐다. 진행 중이던 확정 연출(WAAPI/빛 구슬)만 정리한다.
     if (root?.classList.contains('is-character-confirmed') || root?.classList.contains('is-character-confirming')) {
       this.confirmSeq++ // 진행 중인 확정 연출(각 await 뒤 토큰 검사)을 즉시 중단시킨다.
-      this.characterConfirmed = false
-      // 날아가던 빛 구슬이 남아 있으면 제거한다.
       document.querySelector('.hearth-character-orb')?.remove()
-      // WAAPI 취소 → showcase가 CSS 제어(is-shutter-rest)로 즉시 복원
-      const showcase = root.querySelector<HTMLElement>('.hearth-showcase-card')
-      showcase?.getAnimations().forEach((a) => a.cancel())
-      // 캐러셀 재진입 딜레이(1.02s)를 건너뛰고 즉시 표시
-      const carousel = root.querySelector<HTMLElement>('.hearth-character-carousel')
-      if (carousel) carousel.style.transition = 'none'
-      root.classList.remove('is-character-confirmed', 'is-character-confirming')
-      requestAnimationFrame(() => carousel?.style.removeProperty('transition'))
-      this.selectCharacter(this.selectedCharacterIndex)
-      return
+      root.querySelector<HTMLElement>('.hearth-showcase-card')?.getAnimations().forEach((a) => a.cancel())
     }
 
     this.shuttered = false
@@ -1388,7 +1368,7 @@ export class HearthScene {
       window.setTimeout(() => root.classList.remove('is-shuttering', 'is-shutter-rest', 'is-library-mode', 'is-library-leaving'), 420)
       return
     }
-    root?.classList.remove('is-shuttering', 'is-shutter-rest', 'is-character-confirmed', 'is-adventure-mode')
+    root?.classList.remove('is-shuttering', 'is-shutter-rest', 'is-character-confirmed', 'is-character-confirming', 'is-adventure-mode')
   }
 
   /** 직업 선택 coverflow와 같은 방식으로 모든 카드에 직접 인라인 transform을 적용한다. */
