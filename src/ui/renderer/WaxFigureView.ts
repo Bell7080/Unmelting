@@ -4,6 +4,10 @@
  * 표시가 아니라 상태를 직접 바꾸는 액션(정리/합성/버리기)을 가진다 — 그래서 host 참조
  * 없이 `@core/WaxFigureCollection`의 순수 함수를 곧바로 불러 쓰고, 액션 뒤에는 항상
  * 자기 자신을 다시 그린다(re-render). 렌더 상태의 단일 출처는 그 모듈이다.
+ *
+ * 레이아웃은 "전시관"이다 — 좌: 선택 정보창, 중앙: 실제 필드 칸과 같은 풀 일러스트
+ * 갤러리, 우: 조합(합성) 패널. 갤러리 카드는 도감처럼 새 아이콘을 그리지 않고
+ * `spriteForCard()`(필드 카드와 같은 함수)로 실제 인게임 일러스트를 그대로 띄운다.
  */
 
 import {
@@ -21,8 +25,12 @@ import {
   type WaxFigureCatch,
 } from '@core/WaxFigureCollection'
 import { waxFigureIcon, closeIcon } from '@ui/Icons'
+import { spriteForCard } from '@ui/Sprites'
+import { Card, CardType } from '@entities/Card'
+import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
 
 interface PermanentTile {
+  key: string
   enemyName: string
   variant: WaxFigureVariant
   star: number
@@ -32,9 +40,30 @@ interface PermanentTile {
   mergeable: boolean
 }
 
+/** 필드 카드와 같은 함수로 아트를 뽑는다 — 전시관 전용 아트를 새로 정의하지 않는다. */
+const spriteCache = new Map<string, string>()
+function spriteForSpeciesName(enemyName: string): string {
+  const cached = spriteCache.get(enemyName)
+  if (cached) return cached
+  const def = ENEMY_DEFINITIONS.find((d) => d.name === enemyName)
+  const dummy = new Card('wax-figure-preview', CardType.ENEMY, enemyName, def?.description ?? '', 1, 1, {
+    enemySpriteId: def?.enemySpriteId,
+    enemyPower: def?.enemyPower,
+  })
+  const url = spriteForCard(dummy)
+  spriteCache.set(enemyName, url)
+  return url
+}
+
+function tileKey(enemyName: string, variant: WaxFigureVariant, star: number): string {
+  return `${enemyName}::${variant}::${star}`
+}
+
 export class WaxFigureView {
   /** 처치 시 호출부(index.ts)가 알려 줄 짧은 안내 — 다음에 열릴 때 한 번 보여주고 지운다. */
   private lastActionHint: string | null = null
+  /** 좌측 정보창/우측 조합 패널이 지금 가리키는 밀랍상함 항목. */
+  private selectedKey: string | null = null
 
   open(): void {
     let host = document.getElementById('wax-figure-overlay') as HTMLElement | null
@@ -76,7 +105,10 @@ export class WaxFigureView {
     const mergeBtn = t.closest<HTMLElement>('[data-wax-merge]')
     if (mergeBtn) {
       const [enemyName, variant, starRaw] = mergeBtn.dataset.waxMerge!.split('::')
-      mergeWaxFigures(enemyName, variant as WaxFigureVariant, Number(starRaw))
+      const star = Number(starRaw)
+      if (mergeWaxFigures(enemyName, variant as WaxFigureVariant, star)) {
+        this.selectedKey = tileKey(enemyName, variant as WaxFigureVariant, star + 1)
+      }
       this.render(host)
       return
     }
@@ -88,6 +120,12 @@ export class WaxFigureView {
       this.lastActionHint = left > 0
         ? `${stowed}개 정리, ${left}개는 밀랍상함이 가득 차 못 옮겼습니다.`
         : stowed > 0 ? `${stowed}개 전부 정리했습니다.` : null
+      this.render(host)
+      return
+    }
+    const selectCard = t.closest<HTMLElement>('[data-wax-select]')
+    if (selectCard) {
+      this.selectedKey = selectCard.dataset.waxSelect!
       this.render(host)
     }
   }
@@ -101,6 +139,7 @@ export class WaxFigureView {
       const species = findWaxFigureSpecies(enemyName)
       if (!species) continue
       tiles.push({
+        key,
         enemyName,
         variant,
         star,
@@ -114,36 +153,89 @@ export class WaxFigureView {
     return tiles
   }
 
-  private renderRunHoldRow(c: WaxFigureCatch): string {
+  private renderOverflowCard(c: WaxFigureCatch): string {
     const shinyClass = c.variant === 'shiny' ? ' is-shiny' : ''
+    const sprite = spriteForSpeciesName(c.enemyName)
     return `
-      <li class="wax-hold-row${shinyClass}">
-        <span class="wax-hold-glyph" aria-hidden="true">${waxFigureIcon()}</span>
-        <span class="wax-hold-body">
-          <span class="wax-hold-name">${c.enemyName}${c.variant === 'shiny' ? ' <em class="wax-shiny-tag">이로치</em>' : ''}</span>
-          <span class="wax-hold-effect">${c.effect.label}</span>
-        </span>
-        <span class="wax-hold-actions">
-          <button type="button" class="wax-btn wax-btn-stow" data-wax-stow="${c.id}">담기</button>
-          <button type="button" class="wax-btn wax-btn-discard" data-wax-discard="${c.id}" aria-label="버리기">✕</button>
-        </span>
+      <li class="wax-exhibit-card wax-exhibit-card-overflow${shinyClass}">
+        <div class="wax-exhibit-art" style="background-image:url('${sprite}')" aria-hidden="true"></div>
+        <div class="wax-exhibit-frame">
+          <span class="wax-exhibit-name">${c.enemyName}${c.variant === 'shiny' ? ' <em class="wax-shiny-tag">이로치</em>' : ''}</span>
+          <span class="wax-exhibit-effect">${c.effect.label}</span>
+          <span class="wax-exhibit-overflow-actions">
+            <button type="button" class="wax-btn wax-btn-stow" data-wax-stow="${c.id}">담기</button>
+            <button type="button" class="wax-btn wax-btn-discard" data-wax-discard="${c.id}" aria-label="버리기">✕</button>
+          </span>
+        </div>
       </li>`
   }
 
-  private renderPermanentTile(tile: PermanentTile): string {
+  private renderExhibitCard(tile: PermanentTile, selected: boolean): string {
     const shinyClass = tile.variant === 'shiny' ? ' is-shiny' : ''
-    const mergeBtn = tile.mergeable
-      ? `<button type="button" class="wax-btn wax-btn-merge" data-wax-merge="${tile.enemyName}::${tile.variant}::${tile.star}">합성 →★${tile.star + 1}</button>`
-      : ''
+    const selectedClass = selected ? ' is-selected' : ''
+    const sprite = spriteForSpeciesName(tile.enemyName)
     return `
-      <li class="wax-tile${shinyClass}">
-        <span class="wax-tile-glyph" aria-hidden="true">${waxFigureIcon()}</span>
-        <span class="wax-tile-star">★${tile.star}</span>
-        <span class="wax-tile-name">${tile.enemyName}${tile.variant === 'shiny' ? ' <em class="wax-shiny-tag">이로치</em>' : ''}</span>
-        <span class="wax-tile-count">×${tile.count}</span>
-        <span class="wax-tile-effect">${tile.effectLabel} <b>${tile.chancePct.toFixed(1)}%</b></span>
-        ${mergeBtn}
+      <li class="wax-exhibit-card${shinyClass}${selectedClass}" data-wax-select="${tile.key}">
+        <div class="wax-exhibit-art" style="background-image:url('${sprite}')" aria-hidden="true"></div>
+        <span class="wax-exhibit-star">★${tile.star}</span>
+        <span class="wax-exhibit-count">×${tile.count}</span>
+        <div class="wax-exhibit-frame">
+          <span class="wax-exhibit-name">${tile.enemyName}${tile.variant === 'shiny' ? ' <em class="wax-shiny-tag">이로치</em>' : ''}</span>
+        </div>
       </li>`
+  }
+
+  /** 좌측 정보창 — 선택된 전시물의 아트/효과/수치를 크게 보여준다. */
+  private renderInfoPanel(tile: PermanentTile | undefined): string {
+    if (!tile) {
+      return `
+        <div class="wax-info-empty">
+          <span class="wax-info-empty-glyph">${waxFigureIcon()}</span>
+          <p>전시물을 골라 보세요.</p>
+        </div>`
+    }
+    const sprite = spriteForSpeciesName(tile.enemyName)
+    const shinyClass = tile.variant === 'shiny' ? ' is-shiny' : ''
+    return `
+      <div class="wax-info-portrait${shinyClass}" style="background-image:url('${sprite}')" aria-hidden="true"></div>
+      <div class="wax-info-body">
+        <h3 class="wax-info-name">${tile.enemyName}${tile.variant === 'shiny' ? ' <em class="wax-shiny-tag">이로치</em>' : ''}</h3>
+        <div class="wax-info-stars">${'★'.repeat(tile.star)}<span class="wax-info-star-num">${tile.star}성</span></div>
+        <dl class="wax-info-stats">
+          <div><dt>보유</dt><dd>×${tile.count}</dd></div>
+          <div><dt>효과</dt><dd>${tile.effectLabel}</dd></div>
+          <div><dt>발동 확률</dt><dd><b>${tile.chancePct.toFixed(1)}%</b></dd></div>
+        </dl>
+      </div>`
+  }
+
+  /** 우측 조합 패널 — 재료 3개 → 다음 성급 결과를 미리 보여준다. */
+  private renderComposePanel(tile: PermanentTile | undefined): string {
+    if (!tile) {
+      return `<p class="wax-compose-empty">전시물을 고르면 합성 재료를 볼 수 있습니다.</p>`
+    }
+    const sprite = spriteForSpeciesName(tile.enemyName)
+    const shinyClass = tile.variant === 'shiny' ? ' is-shiny' : ''
+    const filled = Math.min(tile.count, WAX_FIGURE_MERGE_COUNT)
+    const slots = Array.from({ length: WAX_FIGURE_MERGE_COUNT }, (_, i) => {
+      const has = i < filled
+      return `<span class="wax-compose-slot${has ? ' is-filled' : ''}${shinyClass}" style="${has ? `background-image:url('${sprite}')` : ''}"></span>`
+    }).join('')
+    const nextStar = tile.star + 1
+    const nextChance = waxFigureEffectChance(nextStar) * 100
+    const action = tile.mergeable
+      ? `<button type="button" class="wax-btn wax-btn-merge-big" data-wax-merge="${tile.enemyName}::${tile.variant}::${tile.star}">합성하기</button>`
+      : `<p class="wax-compose-need">합성에 ${WAX_FIGURE_MERGE_COUNT}개 필요 (현재 ${tile.count}개)</p>`
+    return `
+      <div class="wax-compose-recipe">
+        <div class="wax-compose-slots">${slots}</div>
+        <span class="wax-compose-arrow" aria-hidden="true">→</span>
+        <div class="wax-compose-result${shinyClass}" style="background-image:url('${sprite}')">
+          <span class="wax-compose-result-star">★${nextStar}</span>
+        </div>
+      </div>
+      <p class="wax-compose-result-label">${tile.enemyName}${tile.variant === 'shiny' ? ' 이로치' : ''} ★${nextStar} — ${tile.effectLabel} <b>${nextChance.toFixed(1)}%</b></p>
+      ${action}`
   }
 
   private render(host: HTMLElement): void {
@@ -154,37 +246,45 @@ export class WaxFigureView {
     const hint = this.lastActionHint
     this.lastActionHint = null
 
+    // 선택이 없거나 합성/버리기로 사라졌으면 첫 전시물로 되돌아간다 — 패널이 빈 채로
+    // 남으면 "지금 뭘 보고 있는지"가 끊긴다.
+    if (!this.selectedKey || !tiles.some((t) => t.key === this.selectedKey)) {
+      this.selectedKey = tiles[0]?.key ?? null
+    }
+    const selectedTile = tiles.find((t) => t.key === this.selectedKey)
+
     // 자리가 있으면 봉인은 곧장 밀랍상함으로 들어간다 — 이 목록은 한도를 넘겨 밀려난
     // "넘친 몫"만 담기므로 평소에는 비어 있는 것이 정상이다.
-    const runSection = runHold.length > 0
-      ? `<ul class="wax-hold-list">${runHold.map((c) => this.renderRunHoldRow(c)).join('')}</ul>
-         <button type="button" class="wax-btn wax-btn-stow-all" data-wax-stow-all>전부 정리</button>`
-      : ''
-
-    const permSection = tiles.length > 0
-      ? `<ul class="wax-tile-grid">${tiles.map((t) => this.renderPermanentTile(t)).join('')}</ul>`
-      : `<p class="wax-empty">밀랍상함이 비어 있습니다.</p>`
-
     const overflowSection = runHold.length > 0
-      ? `<div class="wax-section">
+      ? `<div class="wax-overflow-strip">
            <h3 class="wax-section-title">넘친 봉인 <span class="wax-section-note">밀랍상함이 가득 차 정리하지 않으면 모험이 끝날 때 사라집니다</span></h3>
-           ${runSection}
+           <ul class="wax-exhibit-row">${runHold.map((c) => this.renderOverflowCard(c)).join('')}</ul>
+           <button type="button" class="wax-btn wax-btn-stow-all" data-wax-stow-all>전부 정리</button>
          </div>`
       : ''
+
+    const galleryContent = tiles.length > 0
+      ? `<ul class="wax-exhibit-grid">${tiles.map((t) => this.renderExhibitCard(t, t.key === this.selectedKey)).join('')}</ul>`
+      : `<p class="wax-empty">밀랍상함이 비어 있습니다. 적을 처치해 봉인해 보세요.</p>`
 
     host.innerHTML = `
       <div class="wax-figure-modal" role="dialog" aria-label="밀랍상">
         <header class="wax-figure-header">
-          <h2 class="wax-figure-title"><span class="wax-figure-title-icon">${waxFigureIcon()}</span>밀랍상</h2>
+          <h2 class="wax-figure-title"><span class="wax-figure-title-icon">${waxFigureIcon()}</span>밀랍상 전시관</h2>
+          <span class="wax-figure-capacity">${used}/${capacity}</span>
           <button class="wax-figure-close" data-wax-close type="button" aria-label="닫기">${closeIcon()}</button>
         </header>
         ${hint ? `<p class="wax-action-hint">${hint}</p>` : ''}
-        <section class="wax-figure-body">
-          ${overflowSection}
-          <div class="wax-section">
-            <h3 class="wax-section-title">밀랍상함 <span class="wax-capacity">${used}/${capacity}</span></h3>
-            ${permSection}
+        <section class="wax-figure-hall">
+          <aside class="wax-info-panel">${this.renderInfoPanel(selectedTile)}</aside>
+          <div class="wax-gallery-column">
+            ${overflowSection}
+            <div class="wax-gallery-scroll">${galleryContent}</div>
           </div>
+          <aside class="wax-compose-panel">
+            <h3 class="wax-section-title">조합</h3>
+            ${this.renderComposePanel(selectedTile)}
+          </aside>
         </section>
       </div>`
   }
