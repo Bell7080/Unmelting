@@ -33,6 +33,8 @@ export interface HearthHandlers {
   getCurrentTurn?: () => number
   /** 쉬움(정규 100층) 난이도 개방 여부 — 새싹 병아리 첫 졸업으로 열린다. */
   isEasyUnlocked?: () => boolean
+  /** 잿빛 굴레(엔드리스) 개방 여부 — 쉬움 난이도로 100층을 클리어하면 영구히 열린다. */
+  isGrayShackleUnlocked?: () => boolean
   /** 무역 개방 팡! 순간에 함께 실행 — 화폐 패널 등 동반 해금 요소의 등장 연출용. */
   onUnlockCelebration?: () => void
   /** 서고 모험일지에 표시할 통산 기록을 읽는다. */
@@ -59,6 +61,8 @@ const LIBRARY_INDEX = 5
 const TRADE_INDEX = 6
 const ADVENTURE_INDEX = 7
 const DINNER_INDEX = 8
+/** 잿빛 굴레(엔드리스, 중앙) — 쉬움 난이도로 100층을 클리어하면 열린다. */
+const GRAY_SHACKLE_INDEX = 4
 
 /** 마지막으로 본 모험 동행을 다음 거점 진입에도 복원하기 위한 로컬 저장 키. */
 const HEARTH_LAST_CHARACTER_KEY = 'unmelting.hearth.lastCharacterIndex'
@@ -216,7 +220,7 @@ const STATION_DESC: Record<string, string> = {
   타로: '운명을 점친다. 어두운 거점에 드는 한 줄기 다른 빛.',
   도박장: '메타 코인을 걸어 유희를, 혹은 한탕을 노린다.',
   길드: '업적을 관리하고, 업적으로 새 동행 등을 해금한다.',
-  '잿빛 굴레': '엔드리스 모드. 쉬움 난이도를 클리어하면 열린다.',
+  '잿빛 굴레': '엔드리스 모드. 쉬움 난이도로 100층을 클리어하면 열린다.',
   서고: '전적과 기록을 보관하고, 그 기록을 바탕으로 영구 효과를 얻는다.',
   무역: '손패·유물 잠금·다음 판 계승 등을 메타 화폐로 영구 해금한다.',
   모험: '어둠으로 떠난다. 동행과 난이도를 정한 뒤 출발한다.',
@@ -739,10 +743,11 @@ export class HearthScene {
   }
 
   /** 여정 종료 사유 → 정산 화면과 같은 제목 문구(사망/클리어 헤드라인 재사용). */
-  private libraryEntryTitle(entry: { outcome: 'clear' | 'death'; reason: string }): string {
+  private libraryEntryTitle(entry: { outcome: 'clear' | 'death'; reason: string; difficulty?: string }): string {
     switch (entry.reason) {
       case 'onboarding_clear_30': return '새싹 병아리 클리어'
-      case 'run_clear_100_turns': return '잿빛 굴레를 풀었다 — 100층 클리어!'
+      // 잿빛 굴레는 쉬움 난이도 클리어에만 열리므로, 정산과 같은 조건에서만 그 문구를 붙인다.
+      case 'run_clear_100_turns': return entry.difficulty === 'easy' ? '잿빛 굴레를 풀었다 — 100층 클리어!' : '100층 클리어!'
       case 'character_defeated': return '소녀의 심지가 꺼졌어요…'
       case 'instant_death_trap': return '모든 길이 함정으로 막혔어요.'
       default: return entry.outcome === 'clear' ? '모험 클리어' : '모험 종료'
@@ -2001,6 +2006,7 @@ export class HearthScene {
     if (i === LIBRARY_INDEX) return true
     if (i === TRADE_INDEX) return this.handlers?.isEasyUnlocked?.() ?? false
     if (i === DINNER_INDEX) return isMetaUnlocked('dinner')
+    if (i === GRAY_SHACKLE_INDEX) return this.handlers?.isGrayShackleUnlocked?.() ?? false
     return false
   }
 
@@ -2008,6 +2014,7 @@ export class HearthScene {
   private cellLockHint(i: number): string {
     if (i === TRADE_INDEX) return '새싹 병아리 클리어 시 개방'
     if (i === DINNER_INDEX) return '무역에서 만찬 개방'
+    if (i === GRAY_SHACKLE_INDEX) return '쉬움 난이도 100층 클리어 시 개방'
     return '추후 무역에서 개방'
   }
 

@@ -145,6 +145,8 @@ export interface ShopFlowDeps {
   finishTurn(): void
   /** 100층 도달 목표 턴 수(index 상수). */
   runTargetTurns: number
+  /** 이번 런 난이도 키('sprout'/'easy'/'normal'/'test') — 잿빛 굴레 해금 조건(쉬움) 판정용. */
+  getRunDifficulty(): string | undefined
   /** 보스 격파 후 구역 전환 커튼(index의 zoneCurtain/ZONE_LIST 래퍼). */
   showZoneCurtain(zoneIndex: number): Promise<void>
   formatTrialSummary(prefix: string): string
@@ -876,7 +878,12 @@ export class ShopFlowManager {
         this.deps.recordNotice('100층 최종 보스가 잿빛 굴레를 드리운다', 'hurt')
         await this.deps.bossController.run100F()
         this.deps.gameState.endGame('run_clear_100_turns')
-        this.deps.recordNotice('100층 보스 격파 — 잿빛 굴레가 풀렸다', 'win')
+        // 잿빛 굴레(엔드리스)는 쉬움 난이도 100층 클리어에만 열린다 — 다른 난이도/테스트 플레이는
+        // 클리어 자체는 인정하되 이 문구를 붙이지 않는다(실제 해금은 SettlementScreen이 1회 마킹).
+        this.deps.recordNotice(
+          this.deps.getRunDifficulty() === 'easy' ? '100층 보스 격파 — 잿빛 굴레가 풀렸다' : '100층 보스 격파!',
+          'win'
+        )
         // 클리어 타이틀(Unmelting 정산 창)은 사망과 같은 finishTurn 경로로 연다 — endGame만으로는
         // 아무도 showGameOver를 부르지 않아 격파 후 화면이 그대로 멈춰 있었다.
         this.deps.finishTurn()

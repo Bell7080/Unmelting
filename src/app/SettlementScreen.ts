@@ -38,6 +38,9 @@ export interface SettlementScreenDeps {
   getRunStartAxisValues(): number[] | null
   /** 이번 런 난이도 키('sprout'/'easy'/'normal'/'test') — 서고 일지 표기용. */
   getRunDifficulty(): string | undefined
+  /** 이번 런이 쉬움 난이도 100층 클리어면 잿빛 굴레(엔드리스) 해금을 1회 영구 마킹한다.
+   *  조건이 아니면 아무 일도 하지 않는다 — 호출부가 매번 조건 없이 불러도 안전하다. */
+  markGrayShackleUnlockedIfEasy(): void
   wasRunEnteredFromLobby(): boolean
   /** 통산 기록 런당 1회 합산 가드 — 처음 호출이면 마킹 후 true, 이미 합산했으면 false. */
   tryMarkLifetimeRecorded(): boolean
@@ -132,6 +135,7 @@ export class SettlementScreen {
         enaLine,
       })
       this.deps.depositRunCurrency(leftoverCoins)
+      if (gameState.gameOverReason === 'run_clear_100_turns') this.deps.markGrayShackleUnlockedIfEasy()
     }
 
     const runStats = [
@@ -164,10 +168,12 @@ export class SettlementScreen {
     }
 
     // 100층 클리어(테스트 플레이/정규 공통). 셔터는 내려온 채 검은 블러가 조용히 덮는다.
+    // 잿빛 굴레(엔드리스)는 쉬움 난이도 클리어에만 열리므로, 그 문구도 그때만 붙인다.
     if (gameState.gameOverReason === 'run_clear_100_turns') {
+      const unlockedGrayShackle = this.deps.getRunDifficulty() === 'easy'
       this.openSettlementOverlay({
         verdict: 'unmelting',
-        sub: '잿빛 굴레를 풀었다 — 100층 클리어!',
+        sub: unlockedGrayShackle ? '잿빛 굴레를 풀었다 — 100층 클리어!' : '100층 클리어!',
         statRows: runStats,
         enaLine,
         buttonLabel: fromLobby ? '저택으로' : '다시 시작',

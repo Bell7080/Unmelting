@@ -466,6 +466,8 @@ function enterHearth(): void {
     onStart: () => { void startGame(hearthScene.getSelectedCharacterIndex(), hearthScene.getSelectedDifficulty()) },
     // 쉬움(정규 100층)은 새싹 병아리를 한 번 졸업해야 열린다.
     isEasyUnlocked: () => enaAutonomousLearner.hasFirstSeen('onboarding-graduated'),
+    // 잿빛 굴레(엔드리스)는 쉬움 난이도로 100층을 클리어하면 영구히 열린다.
+    isGrayShackleUnlocked: () => enaAutonomousLearner.hasFirstSeen('gray-shackle-unlocked'),
     // 무역 개방 팡! 순간: 함께 해금된 화폐 패널을 버스트와 같이 등장시킨다.
     onUnlockCelebration: () => {
       document.body.classList.toggle('meta-currency-locked', !isMetaUnlocked('currency'))
@@ -1057,6 +1059,7 @@ const shopFlow: ShopFlowManager = new ShopFlowManager({
   runTargetTurns: RUN_TARGET_TURNS,
   showZoneCurtain: (zoneIndex) => zoneCurtain.show(ZONE_LIST[zoneIndex], () => setZoneBackground(ZONE_LIST[zoneIndex].bgUrl)),
   cardSpawner,
+  getRunDifficulty: () => currentRunDifficulty,
 })
 
 
@@ -4133,6 +4136,9 @@ const settlement = new SettlementScreen({
     if (lifetimeRecorded) return false
     lifetimeRecorded = true
     return true
+  },
+  markGrayShackleUnlockedIfEasy: () => {
+    if (currentRunDifficulty === 'easy') enaAutonomousLearner.recordFirstSeen('gray-shackle-unlocked')
   },
   enterHearth,
   startGame: () => startGame(),
