@@ -57,7 +57,7 @@ import { RECIPES, type RecipeEffectKind } from '@data/Recipes'
 import { getRelicDef, relicStackFeedback, type CustomRelicProfile, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
 import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
-import { captureWaxFigure, WAX_FIGURE_CAPTURE_CHANCE } from '@core/WaxFigureCollection'
+import { captureWaxFigure, resetWaxFigureRunHold } from '@core/WaxFigureCollection'
 import { COMBO_TRIGGER_DELAY_MS, GAUGE_TRIGGER_DELAY_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
 import { HAND_CARD_RARITY } from '@data/ShopPools'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
@@ -1416,16 +1416,17 @@ async function awardScoreForRemovedCards(
 
 /**
  * 처치한 적의 밀랍상 봉인을 시도한다(호출부는 처치 경로마다 이 한 함수만 부른다).
- * 잿빛 굴레(엔드리스)와 같은 마일스톤(쉬움 100층 클리어)으로 열리므로, 그 전엔 조용히
- * 아무 일도 하지 않는다 — 밀랍상함이 없는 사람에게 "봉인 실패" 알림을 낼 이유가 없다.
+ * 새싹 병아리부터 처음부터 열려 있다(별도 마일스톤 게이트 없음) — 확률 판정 자체는
+ * `captureWaxFigure()` 내부에서 한다(이로치 우선 굴림 → 실패 시 일반 포획 굴림).
+ *
+ * 봉인은 런 중 한도가 없다 — 임시보관함에만 쌓이고, 영구 밀랍상함으로 옮기는 "정리"는
+ * 플레이어가 밀랍상 탭에서 직접 한다. 정리 안 하고 런이 끝나면 임시보관함은 비워진다.
  */
 function tryCaptureWaxFigureOnKill(enemyName: string): void {
-  if (!enaAutonomousLearner.hasFirstSeen('gray-shackle-unlocked')) return
-  if (Math.random() >= WAX_FIGURE_CAPTURE_CHANCE) return
   const result = captureWaxFigure(enemyName)
-  if (!result) return // 미등록 종이거나 밀랍상함이 가득 참 — 조용히 넘어간다.
+  if (!result) return // 미등록 종이거나 확률에 안 걸렸다 — 조용히 넘어간다.
   const variantLabel = result.variant === 'shiny' ? ' (변종)' : ''
-  recordNotice(`밀랍상 완성 — ${result.enemyName}${variantLabel}: ${result.effect.label}`, 'win')
+  recordNotice(`밀랍상 봉인 — ${result.enemyName}${variantLabel}: ${result.effect.label}`, 'win')
 }
 
 /**
@@ -1783,6 +1784,8 @@ function resetForNewRun(): void {
   inputLocked = false
   chain = HandSystem.newChain()
   pendingHandTarget = null
+  // 밀랍상 임시보관함은 런을 넘기지 않는다 — 정리 안 한 지난 런의 봉인은 여기서 사라진다.
+  resetWaxFigureRunHold()
   // 동료(에나)의 런 한정 상태(의지/각성/턴 흐름) 초기화. 학습 가중치는 런 간 유지.
   companion.resetForRun()
   // 정산 육각형의 '이번 런 상승분' 기준점 — 런 시작 시점의 축 값을 캡처해 둔다.
@@ -4326,8 +4329,9 @@ function startTestRun(): void {
   for (const { id } of META_UNLOCKS) setMetaUnlocked(id, true)
   unlockAllBasicUnlockPack()
   localStorage.setItem(HEARTH_DEV_UNLOCK_KEY, '1')
-  // 잿빛 굴레/밀랍상은 HEARTH_DEV_UNLOCK_KEY(거점 칸 전용 우회)가 아니라 이 first-seen
-  // 플래그를 직접 읽으므로, 테스트 부팅에서도 열리려면 여기서 따로 마킹해야 한다.
+  // 잿빛 굴레는 HEARTH_DEV_UNLOCK_KEY(거점 칸 전용 우회)가 아니라 이 first-seen 플래그를
+  // 직접 읽으므로, 테스트 부팅에서도 열리려면 여기서 따로 마킹해야 한다(밀랍상은 처음부터
+  // 열려 있어 이 플래그가 필요 없다).
   enaAutonomousLearner.recordFirstSeen('gray-shackle-unlocked')
   if (document.getElementById('hearth-overlay')) hearthScene.exit()
   void startGame()

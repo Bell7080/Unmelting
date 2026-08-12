@@ -59,6 +59,7 @@ import {
   sparkleIcon,
   swordIcon,
   trapIcon,
+  waxFigureIcon,
 } from '@ui/Icons'
 import type { EnaDisposition } from '@systems/EnaDisposition'
 import type { EnaLearningSnapshot } from '@systems/CompanionSystem'
@@ -66,6 +67,7 @@ import { escapeHtml } from '@ui/renderer/Html'
 import { CardFaceRenderer } from '@ui/renderer/CardFaceRenderer'
 import { CompendiumView } from '@ui/renderer/CompendiumView'
 import { ExperienceView } from '@ui/renderer/ExperienceView'
+import { WaxFigureView } from '@ui/renderer/WaxFigureView'
 import { ResourceTrailFx, HAND_TOKEN_LAND_MS, handTokenStaggerMs } from '@ui/renderer/ResourceTrailFx'
 import { JobSelectView } from '@ui/renderer/JobSelectView'
 import { EventOverlayView } from '@ui/renderer/EventOverlayView'
@@ -272,6 +274,8 @@ export class GameBoardRenderer {
   readonly experience = new ExperienceView()
   /** 도감 오버레이 뷰. */
   readonly compendium = new CompendiumView(this)
+  /** 밀랍상(수집) 탭 뷰. */
+  readonly waxFigures = new WaxFigureView()
   /** 자원 트레일/버스트 연출 엔진 — 서브 렌더러들과 공유한다. */
   readonly trails = new ResourceTrailFx(this)
   /** 시작 직업 선택 오버레이 뷰. */
@@ -1513,6 +1517,10 @@ export class GameBoardRenderer {
             <span class="compendium-btn-icon" aria-hidden="true">${bookIcon()}</span>
             <span class="compendium-btn-label">도감</span>
           </button>
+          <button class="compendium-btn compendium-btn-floating" type="button" data-open-wax-figures aria-label="밀랍상 열기">
+            <span class="compendium-btn-icon" aria-hidden="true">${waxFigureIcon()}</span>
+            <span class="compendium-btn-label">밀랍상</span>
+          </button>
         </div>
         ${this.renderPlayer(character)}
         ${relicLayer}
@@ -2526,6 +2534,14 @@ export class GameBoardRenderer {
       ?.addEventListener('click', (e) => {
         e.stopPropagation()
         this.experience.openFromProvider()
+      })
+
+    // 밀랍상(수집) 탭 — 처음부터 열려 있다(별도 해금 게이트 없음).
+    this.boardElement
+      .querySelector<HTMLElement>('[data-open-wax-figures]')
+      ?.addEventListener('click', (e) => {
+        e.stopPropagation()
+        this.waxFigures.open()
       })
   }
 

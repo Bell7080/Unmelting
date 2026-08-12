@@ -7,6 +7,11 @@
  * 주지 않는다(밸런스 파괴). 확률은 방어구 감쇠 공식과 같은 수렴형이라 아무리 모아도
  * 상한을 넘지 않는다.
  *
+ * ★ 봉인은 **런 중엔 한도가 없다.** 처치마다 임시보관함(run hold, 메모리 전용·저장 안 함)에
+ * 그대로 쌓이고, 플레이어가 직접 "정리"해서 영구 밀랍상함(한도 있음)에 옮겨 담아야 살아남는다.
+ * 정리하지 않고 런이 끝나면 임시보관함 내용은 전부 사라진다 — 한도 초과로 이로치가 그
+ * 자리에서 소멸하는 억울한 상황을 막기 위한 설계다("담아갈지는 네가 정해라").
+ *
  * 게이팅(가입 게이트)은 이 모듈이 하지 않는다 — `hasFirstSeen('gray-shackle-unlocked')`
  * 확인은 호출부(index.ts) 책임이고, 이 모듈은 순수 저장/판정 로직만 담당한다.
  */
@@ -59,10 +64,10 @@ function storage(): WaxFigureStorage | undefined {
 
 /** 기본 보관 한도(포켓몬 파티 6마리 참고) — 무역에서 화폐로 확장 구매한다. */
 export const WAX_FIGURE_BASE_CAPACITY = 6
-/** 처치 시 봉인 성공 확률 — 밸런스 패스 전 placeholder. */
-export const WAX_FIGURE_CAPTURE_CHANCE = 0.03
-/** 봉인 성공 시 변종(이로치)일 확률. */
-export const WAX_FIGURE_SHINY_CHANCE = 0.02
+/** 처치 시 봉인 성공 확률. */
+export const WAX_FIGURE_CAPTURE_CHANCE = 0.01
+/** 이로치(변종) 확률 — 포획 확률 게이트와 무관하게 **먼저** 굴리고, 걸리면 확정 포획된다. */
+export const WAX_FIGURE_SHINY_CHANCE = 0.0001
 /** 같은 종+색+성급을 몇 개 모아야 다음 성급으로 합성할 수 있는지. */
 export const WAX_FIGURE_MERGE_COUNT = 3
 
@@ -122,19 +127,47 @@ export function totalWaxFigureCount(state: WaxFigureCollectionState = loadWaxFig
   return Object.values(state.counts).reduce((sum, n) => sum + n, 0)
 }
 
+export interface WaxFigureCatch {
+  /** 임시보관함 안에서만 의미 있는 식별자(런 종료·리셋마다 새로 매겨진다). */
+  id: string
+  enemyName: string
+  variant: WaxFigureVariant
+  effect: WaxFigureEffect
+}
+
+// 임시보관함은 의도적으로 localStorage를 쓰지 않는다 — 런이 끝나면 통째로 사라져야 하는
+// 값이라, 영속시키면 "정리 안 한 건 날아간다"는 규칙과 저장 계층이 어긋난다.
+let runHold: WaxFigureCatch[] = []
+let nextCatchSeq = 1
+
+/** 새 런 시작·게임오버 시 호출 — 정리하지 않은 임시보관함 내용을 전부 비운다. */
+export function resetWaxFigureRunHold(): void {
+  runHold = []
+}
+
+export function getWaxFigureRunHold(): readonly WaxFigureCatch[] {
+  return runHold
+}
+
 export interface WaxFigureCaptureResult {
+  id: string
   enemyName: string
   variant: WaxFigureVariant
   effect: WaxFigureEffect
 }
 
 /**
- * 처치한 적의 봉인을 시도한다. 종이 등록돼 있지 않거나(콘텐츠 미비) 밀랍상함이 가득 차면
- * null — 성공하면 항상 1성으로 들어간다. 합성은 자동으로 일어나지 않는다(플레이어가
- * `mergeWaxFigures()`로 직접 정리해야 한다).
+ * 처치한 적의 봉인을 시도한다. 종이 등록돼 있지 않으면(콘텐츠 미비) null.
  *
- * `forceVariant`는 디버그 커맨드 전용 — 확률 굴림만 생략하고 등록/용량 검사는 그대로
- * 통과한다(실제 획득 로직을 그대로 타야 한다는 게 이 함수를 둔 이유다).
+ * 확률은 두 단계다 — **이로치를 먼저 굴린다.** 이로치에 걸리면 포획 확률 게이트 없이
+ * 확정 포획(0.01%로 워낙 희박하니 그 순간을 놓치지 않게 한다). 못 걸리면 그제서야
+ * 일반 포획 확률(1%)을 굴려 정상 색으로 포획을 시도한다. 어느 쪽도 안 걸리면 null.
+ *
+ * 성공하면 **한도와 무관하게 항상** 임시보관함에 들어간다. 영구 밀랍상함으로 옮기려면
+ * `stowWaxFigureCatch()`를 따로 불러야 한다(플레이어가 직접 정리).
+ *
+ * `forceVariant`는 디버그 커맨드 전용 — 확률 굴림을 전부 생략하고 등록 검사·적재만
+ * 그대로 통과한다(실제 획득 로직을 그대로 타야 한다는 게 이 함수를 둔 이유다).
  */
 export function captureWaxFigure(
   enemyName: string,
@@ -142,13 +175,49 @@ export function captureWaxFigure(
 ): WaxFigureCaptureResult | null {
   const species = findWaxFigureSpecies(enemyName)
   if (!species) return null
+  let variant: WaxFigureVariant
+  if (opts.forceVariant) {
+    variant = opts.forceVariant
+  } else if (Math.random() < WAX_FIGURE_SHINY_CHANCE) {
+    variant = 'shiny'
+  } else if (Math.random() < WAX_FIGURE_CAPTURE_CHANCE) {
+    variant = 'normal'
+  } else {
+    return null
+  }
+  const catchEntry: WaxFigureCatch = {
+    id: `wf-${nextCatchSeq++}`,
+    enemyName,
+    variant,
+    effect: species.effects[variant],
+  }
+  runHold.push(catchEntry)
+  return catchEntry
+}
+
+/**
+ * 임시보관함의 봉인 하나를 영구 밀랍상함으로 옮긴다. 밀랍상함이 가득 찼으면 false(임시
+ * 보관함에 그대로 남는다 — 자리를 비우거나 다른 걸 먼저 정리한 뒤 다시 시도할 수 있다).
+ */
+export function stowWaxFigureCatch(catchId: string): boolean {
+  const idx = runHold.findIndex((c) => c.id === catchId)
+  if (idx === -1) return false
   const state = loadWaxFigureCollection()
-  if (totalWaxFigureCount(state) >= waxFigureCapacity()) return null
-  const variant: WaxFigureVariant = opts.forceVariant ?? (Math.random() < WAX_FIGURE_SHINY_CHANCE ? 'shiny' : 'normal')
-  const key = makeKey(enemyName, variant, 1)
+  if (totalWaxFigureCount(state) >= waxFigureCapacity()) return false
+  const entry = runHold[idx]
+  const key = makeKey(entry.enemyName, entry.variant, 1)
   state.counts[key] = (state.counts[key] ?? 0) + 1
   saveWaxFigureCollection(state)
-  return { enemyName, variant, effect: species.effects[variant] }
+  runHold.splice(idx, 1)
+  return true
+}
+
+/** 임시보관함에서 하나를 그냥 버린다(정리 대상에서 직접 제외하고 싶을 때). */
+export function discardWaxFigureCatch(catchId: string): boolean {
+  const idx = runHold.findIndex((c) => c.id === catchId)
+  if (idx === -1) return false
+  runHold.splice(idx, 1)
+  return true
 }
 
 /** 같은 종+색+성급 `WAX_FIGURE_MERGE_COUNT`개를 다음 성급 1개로 합친다. 부족하면 false. */
