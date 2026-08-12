@@ -12,6 +12,7 @@ import { Lane } from '@entities/Lane'
 import { HandCard, type HandCardId } from '@entities/HandCard'
 import { DropSystem } from './DropSystem'
 import { getHandCardDef } from '@data/HandCards'
+import { rollWaxFigureEffect } from '@core/WaxFigureCollection'
 
 export enum ActionType {
   ATTACK_ENEMY = 'attack',
@@ -61,6 +62,8 @@ export interface ActionResult {
   trapIgnored?: boolean
   /** 달콤한 유혹 불빛 계산용: 방패 흡수 전 실제 함정 피해 기준값. */
   trapPenalty?: number
+  /** 이번 행동에서 발동한 밀랍상 효과 id — 발동 시 UI가 탭 아이콘에서 체인 배너를 띄운다. */
+  waxFigureEffectId?: string
 }
 
 export class ActionSystem {
@@ -129,7 +132,10 @@ export class ActionSystem {
       return { success: false, message: 'Not an enemy', cardRemoved: false }
     }
 
-    const playerDamage = character.damage
+    // 밀랍상 이로치(양초 키틴벌레): 직접 타격에 낮은 확률로 +1 추가 피해.
+    const waxHitBonus = rollWaxFigureEffect('direct-hit-bonus')
+    const playerDamage = character.damage + (waxHitBonus ? 1 : 0)
+    const waxFigureEffectId = waxHitBonus ? 'direct-hit-bonus' : undefined
     const newHealth = card.takeDamage(playerDamage)
 
     if (newHealth <= 0) {
@@ -154,6 +160,7 @@ export class ActionSystem {
         itemGainedIds: gainedIds,
         overflow,
         cardRemoved: true,
+        waxFigureEffectId,
       }
     }
 
@@ -164,6 +171,7 @@ export class ActionSystem {
       message: `${card.name}에게 ${playerDamage} 피해`,
       damageDealt: playerDamage,
       cardRemoved: false,
+      waxFigureEffectId,
     }
   }
 
@@ -186,7 +194,31 @@ export class ActionSystem {
         trapPenalty: 0,
       }
     }
+    // 밀랍상(양초 거미 정상): 거미줄 함정을 낮은 확률로 완전히 무시한다.
+    if (card.trapKind === 'web' && rollWaxFigureEffect('web-trap-ignore')) {
+      return {
+        success: true,
+        message: `${card.name} 무효 (밀랍상)`,
+        damageTaken: 0,
+        cardRemoved: true,
+        trapIgnored: true,
+        trapPenalty: 0,
+        waxFigureEffectId: 'web-trap-ignore',
+      }
+    }
     const penalty = card.getTrapDamagePenalty() + character.trapDamageBonus
+    // 밀랍상(양초 거미 이로치): 포자 피해가 낮은 확률로 회복으로 뒤집힌다.
+    if (card.trapKind === 'spore' && penalty > 0 && rollWaxFigureEffect('spore-heal')) {
+      character.health = Math.min(character.maxHealth, character.health + penalty)
+      return {
+        success: true,
+        message: `${card.name} 피해가 회복으로 바뀌었다 (+${penalty}, 밀랍상)`,
+        damageTaken: 0,
+        cardRemoved: true,
+        trapPenalty: penalty,
+        waxFigureEffectId: 'spore-heal',
+      }
+    }
     const actualDamage = character.takeDamage(penalty)
     // 덤불 1칸은 0을 굴릴 수 있다 — 그때 '(-0)'을 찍으면 고장으로 읽히므로 문구로 말한다.
     const message =

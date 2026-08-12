@@ -18,6 +18,7 @@ import { Card, CardType, type FlowerKind } from '@entities/Card'
 import { LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { CardSpawner } from '@systems/CardSpawner'
 import { EmberSystem } from '@systems/EmberSystem'
+import { rollWaxFigureEffect } from '@core/WaxFigureCollection'
 
 export interface EnemyHit {
   laneIndex: number
@@ -51,6 +52,8 @@ export interface BombExplosion {
   bombCardId: string
   /** Enemy cards that took splash damage (still in the lane until next render). */
   adjacentCardIds: string[]
+  /** 밀랍상(양초 키틴벌레 정상)이 발동해 플레이어 몫만 무시됐으면 그 효과 id. */
+  waxFigureEffectId?: string
 }
 
 export interface SporeSpread {
@@ -292,7 +295,10 @@ export class TurnManager {
       for (const dead of defeatedNeighbors) {
         this.gameState.removeCardFromRow(dead, 0)
       }
-      const playerDamage = this.gameState.character.takeDamage(bombDamage)
+      // 밀랍상(양초 키틴벌레 정상): 낮은 확률로 폭탄 피해를 무시한다 — 스스로만이라
+      // 옆 칸 스플래시는 그대로 들어간다.
+      const waxIgnored = rollWaxFigureEffect('bomb-trap-ignore')
+      const playerDamage = waxIgnored ? 0 : this.gameState.character.takeDamage(bombDamage)
       const bombCardId = card.id
       this.gameState.removeCardFromRow(card, 0)
       explosions.push({
@@ -300,6 +306,7 @@ export class TurnManager {
         cardName: card.name,
         playerDamage,
         bombCardId,
+        waxFigureEffectId: waxIgnored ? 'bomb-trap-ignore' : undefined,
         adjacentCardIds,
       })
       if (!this.gameState.character.isAlive()) {

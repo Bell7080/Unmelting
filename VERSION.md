@@ -1,6 +1,6 @@
 # 버전 관리
 
-현재 버전: **v2.12.0**
+현재 버전: **v2.13.0**
 
 `VERSION.md`와 `package.json`의 `version`은 항상 같은 값을 쓴다.
 
@@ -25,6 +25,34 @@
   올리는 커밋은 `package.json`과 이 문서를 함께 갱신한다.
 
 ## 변경 이력
+
+### v2.13.0 — 2026-08-12
+
+**밀랍상 미룬 항목 마저 배선: 튜토리얼 확정 드랍 + 봉인 비행 연출 + 효과 발동 배너 + 효과 4종 실전 배선.**
+
+- **30F 새싹 병아리 튜토리얼 확정 드랍**: 이번 런에서 처음 잡은 양초 키틴벌레는 확률
+  없이 확정 봉인된다(`WAX_FIGURE_TUTORIAL_SPECIES`, `onboardingWaxFigureTutorialDropDone`
+  — `resetForNewRun()`에서 매 런 초기화). 종 목록에 양초 키틴벌레를 추가했다
+  (정상 = 폭탄 피해 무시, 이로치 = 직접 타격 +1).
+- **봉인 비행 연출**: 처치한 시체 자리에서 별이 튀어나와 표류하다 "칭!" 밀랍상으로
+  변신해 탭 아이콘으로 빨려 들어간다(`ResourceTrailFx.animateWaxFigureCaptureToken` →
+  `GameBoardRenderer.fireWaxFigureCapture`). `SquareBurst`에 `wax-figure`(금빛)/
+  `wax-figure-shiny`(옥빛) 테마를 추가했다. rect는 카드가 DOM에서 지워지기 전에
+  미리 캡처한다(직접 클릭 경로는 행동 시작 시점, 손패 처치 경로는 처치 직후).
+- **효과 발동 체인 배너**: 보유한 밀랍상 효과가 실제로 발동하면 탭 아이콘에서 작게
+  카드가 뿅 튀어나와 2초짜리 배너로 알리고 사그라든다
+  (`GameBoardRenderer.showWaxFigureEffectChain`) — 클러치 배너보다 작고 짧다(잦은
+  사건이라 그만큼 조용해야 소음이 안 된다).
+- **효과 4종을 실제 게임 로직에 배선**: `WaxFigureCollection.rollWaxFigureEffect(effectId)`
+  단일 판정 창구(보유 성급 조회 → `waxFigureEffectChance()` 굴림)를 만들고
+  `web-trap-ignore`/`spore-heal`은 `ActionSystem.evadeTrap`에,
+  `bomb-trap-ignore`(자기 피해만 무시, 스플래시는 그대로)는
+  `TurnManager.applyBombExplosions`에, `direct-hit-bonus`(+1)는
+  `ActionSystem.attackEnemy`에 배선했다. 이전까지는 데이터/라벨만 있고 실제 판정에
+  안 걸리는 상태였다.
+- 디버그 명령 `/밀랍상 <종> 이로치`로 변종을 강제 봉인할 수 있게 했다(정상은 기존과
+  동일하게 `/밀랍상 <종>`).
+- `Unmelting_Game_Concept.md` §12-6을 이번 배선 내용으로 갱신.
 
 ### v2.12.0 — 2026-08-12
 

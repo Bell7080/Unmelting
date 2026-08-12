@@ -51,6 +51,9 @@ export type BurstTheme =
   | 'starlight'
   // 악마 소용돌이 — 심연 보라에서 균열 자주빛으로.
   | 'demon-vortex'
+  // 밀랍상 봉인 — 정상은 촛불 금빛, 이로치는 밀랍상 탭과 같은 옥빛.
+  | 'wax-figure'
+  | 'wax-figure-shiny'
 
 interface Palette {
   shades: [string, string, string, string]
@@ -108,6 +111,10 @@ const PALETTES: Record<BurstTheme, Palette> = {
   starlight: { shades: ['#0a0e2a', '#33307a', '#7b73d8', '#eef0ff'] },
   // 악마 소용돌이 — 심연의 보라에서 균열 자주빛으로.
   'demon-vortex': { shades: ['#0a0514', '#3c1270', '#8b38d8', '#d4a8ff'] },
+  // 밀랍상 봉인(정상) — 밀랍상 탭 정상 색과 같은 촛불 금빛.
+  'wax-figure': { shades: ['#2a1808', '#8a5a18', '#e6b542', '#fff0bd'] },
+  // 밀랍상 봉인(이로치) — 밀랍상 탭 이로치 색과 같은 옥빛.
+  'wax-figure-shiny': { shades: ['#052a1c', '#0f6b46', '#3fd996', '#c8ffe6'] },
 }
 
 export interface BurstOptions {

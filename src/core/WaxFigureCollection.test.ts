@@ -11,6 +11,8 @@ import {
   resetWaxFigureRunHold,
   stowWaxFigureCatch,
   discardWaxFigureCatch,
+  waxFigureEffectStar,
+  rollWaxFigureEffect,
   WAX_FIGURE_BASE_CAPACITY,
   WAX_FIGURE_MERGE_COUNT,
 } from './WaxFigureCollection'
@@ -165,5 +167,25 @@ describe('WaxFigureCollection', () => {
 
     expect(store.getItem('unmelting.waxfigures.v1')).not.toBeNull()
     expect(store.getItem('unmelting.waxfigures.capacityBonus')).not.toBeNull()
+  })
+
+  it('보유하지 않은 효과는 성급 0, 확률 0으로 절대 발동하지 않는다', () => {
+    expect(waxFigureEffectStar('web-trap-ignore')).toBe(0)
+    expect(rollWaxFigureEffect('web-trap-ignore')).toBe(false)
+  })
+
+  it('밀랍상함에 담긴 종+색의 성급을 실제 효과 판정 창구가 그대로 읽는다', () => {
+    captureWaxFigure('양초 거미', { forceVariant: 'normal' })
+
+    expect(waxFigureEffectStar('web-trap-ignore')).toBe(1)
+    vi.spyOn(Math, 'random').mockReturnValue(0) // 항상 확률 안에 들게 강제
+    expect(rollWaxFigureEffect('web-trap-ignore')).toBe(true)
+  })
+
+  it('합성으로 성급이 오르면 판정 확률도 함께 커진다', () => {
+    for (let i = 0; i < WAX_FIGURE_MERGE_COUNT; i++) captureWaxFigure('양초 거미', { forceVariant: 'normal' })
+    mergeWaxFigures('양초 거미', 'normal', 1)
+
+    expect(waxFigureEffectStar('web-trap-ignore')).toBe(2)
   })
 })

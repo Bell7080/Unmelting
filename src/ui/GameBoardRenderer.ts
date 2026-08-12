@@ -3911,6 +3911,52 @@ export class GameBoardRenderer {
     anim.onfinish = () => host.remove()
   }
 
+  private ensureWaxFigureChainStyles(): void {
+    if (document.getElementById('wax-figure-chain-styles')) return
+    const el = document.createElement('style')
+    el.id = 'wax-figure-chain-styles'
+    el.textContent = `
+.wax-figure-chain { position: fixed; z-index: 9998; pointer-events: none; text-align: center; will-change: transform, opacity; }
+.wax-figure-chain-glyph { width: 22px; height: 22px; margin: 0 auto 2px; color: var(--wax-chain-ink, #ffd178); filter: drop-shadow(0 0 8px var(--wax-chain-glow, rgba(255, 196, 96, 0.75))); }
+.wax-figure-chain-glyph .icon { width: 22px; height: 22px; }
+.wax-figure-chain-desc { font-size: 12px; font-weight: 800; color: rgba(255, 240, 220, 0.98); white-space: nowrap; text-shadow: 0 0 8px var(--wax-chain-glow, rgba(255, 196, 96, 0.75)), 0 2px 4px rgba(0, 0, 0, 0.85); }
+.wax-figure-chain.is-shiny { --wax-chain-ink: #7bf0ae; --wax-chain-glow: rgba(123, 240, 174, 0.75); }
+`
+    document.head.appendChild(el)
+  }
+
+  /**
+   * 밀랍상 효과 발동 체인 — 탭 아이콘에서 작게 뿅 튀어나와 무슨 효과를 봤는지 알리고
+   * 스르륵 사라진다. 클러치 배너보다 작고 짧다("작게"라는 요청 그대로) — 이건 매 발동마다
+   * 뜰 수 있는 잦은 사건이라 클러치만큼 화면을 오래 차지하면 소음이 된다.
+   */
+  showWaxFigureEffectChain(description: string, shiny: boolean): void {
+    this.ensureWaxFigureChainStyles()
+    const anchor = this.boardElement.querySelector<HTMLElement>('[data-open-wax-figures]')
+    if (!anchor) return
+    const rect = anchor.getBoundingClientRect()
+    const host = document.createElement('div')
+    host.className = `wax-figure-chain${shiny ? ' is-shiny' : ''}`
+    host.setAttribute('aria-hidden', 'true')
+    host.innerHTML =
+      `<div class="wax-figure-chain-glyph">${waxFigureIcon()}</div>` +
+      `<div class="wax-figure-chain-desc">${description}</div>`
+    host.style.left = `${rect.left + rect.width / 2}px`
+    host.style.top = `${rect.top}px`
+    document.body.appendChild(host)
+    const anim = host.animate(
+      [
+        { opacity: 0, transform: 'translate(-50%, 10px) scale(0.7)' },
+        { opacity: 1, transform: 'translate(-50%, -6px) scale(1.08)', offset: 0.14 },
+        { opacity: 1, transform: 'translate(-50%, -10px) scale(1.0)', offset: 0.24 },
+        { opacity: 1, transform: 'translate(-50%, -14px) scale(1.0)', offset: 0.7 },
+        { opacity: 0, transform: 'translate(-50%, -30px) scale(0.94)', offset: 1 },
+      ],
+      { duration: 2000, easing: 'cubic-bezier(0.2, 0.8, 0.25, 1)', fill: 'forwards' }
+    )
+    anim.onfinish = () => host.remove()
+  }
+
   /** 유물 파괴 공통 연출(희망/권위와 같은 톤이되 더 가볍다). 강도로 규모를 나눈다:
    *  1 = 제자리에서 짧게 흔들다 회색으로 타들어가며 사라짐(정말 간단한 파괴),
    *  2 = 유물을 살짝 중앙으로 띄워 떨다 터지는 간결 연출(생사엔 큰 지장 없는 효과).
@@ -4063,6 +4109,21 @@ export class GameBoardRenderer {
     const cy = sourceRect.top + sourceRect.height / 2
     SquareBurst.playAt(cx, cy, 'starlight', { count: 20, spread: 130, duration: 520 })
     await new Promise((r) => window.setTimeout(r, 320))
+  }
+
+  /**
+   * 밀랍상 봉인 연출: 처치한 시체 자리에서 별이 반짝이며 튀어나와 표류하다 밀랍상으로
+   * 변신해 밀랍상 탭 아이콘으로 빨려 들어간다. 탭 버튼이 아직 그려지지 않은 화면
+   * (모바일 축소 등)에서는 조용히 원점 반짝임만 남긴다.
+   */
+  async fireWaxFigureCapture(sourceRect: DOMRect, shiny: boolean): Promise<void> {
+    const tabBtn = this.boardElement.querySelector<HTMLElement>('[data-open-wax-figures]')
+    const cx = sourceRect.left + sourceRect.width / 2
+    const cy = sourceRect.top + sourceRect.height / 2
+    const theme = shiny ? 'wax-figure-shiny' : 'wax-figure'
+    SquareBurst.playAt(cx, cy, theme, { count: 12, spread: 60, duration: 380 })
+    if (!tabBtn) return
+    await this.trails.animateWaxFigureCaptureToken(sourceRect, tabBtn, shiny)
   }
 
   /** Find a hand slot element by index for burst placement. */

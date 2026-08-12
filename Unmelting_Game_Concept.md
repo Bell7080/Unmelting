@@ -167,7 +167,7 @@
 
 ### 12-6. 밀랍상(蠟像) — 수집 시스템
 
-> 구현: `src/core/WaxFigureCollection.ts`(순수 저장/판정 로직) + `src/systems/CardSpawner.ts`(스폰 시 이로치 사전 굴림) + `src/index.ts`(처치 훅) + `src/ui/renderer/WaxFigureView.ts`(탭 UI) + `src/ui/styles/GameBoardWaxFigureStyles.ts`(탭 + 필드 이로치 발광). 디버그: `/밀랍상 <종 이름>`(`src/app/DevCommandPalette.ts`).
+> 구현: `src/core/WaxFigureCollection.ts`(순수 저장/판정 로직 + 효과 발동 판정 창구) + `src/systems/CardSpawner.ts`(스폰 시 이로치 사전 굴림) + `src/systems/ActionSystem.ts`/`src/core/TurnManager.ts`(효과 실제 배선: 함정 무시·포자 회복·폭탄 무시·직접 타격 보너스) + `src/index.ts`(처치 훅 + 비행 연출 + 발동 배너) + `src/ui/renderer/WaxFigureView.ts`(탭 UI) + `src/ui/renderer/ResourceTrailFx.ts`(봉인 비행 연출) + `src/ui/styles/GameBoardWaxFigureStyles.ts`(탭 + 필드 이로치 발광). 디버그: `/밀랍상 <종 이름>`(`src/app/DevCommandPalette.ts`).
 
 **목적**: 잿빛 굴레(엔드리스)를 "그냥 오래 버티기"가 아니라 포켓로그(PokéRogue)식 사냥 동기 — 매번 무엇이 나올지, 얼마나 좋은 게 나올지, 혹시 변종일지 — 로 만드는 축. 도감/경험 탭 옆에 아이콘으로 놓이는 **계정 전체(런을 넘는) 진열장**이며, 이 게임의 제물/굳음 테마에 맞춰 "포획"이 아니라 **봉인**이라 부른다.
 
@@ -179,9 +179,11 @@
 - **효과 수치**: ★ **절대 체력+5·공격력+1 같은 직접 스탯을 주지 않는다** — 밸런스가 깨진다. 오직 **작은 확률형 페시브**만 준다. 성급이 오를수록 확률이 커지되, 방어구 감쇠 공식과 같은 **수렴형 곡선**(`waxFigureEffectChance()`)을 써서 상한 아래로만 다가간다. 정확한 상한/기울기는 밸런스 패스 대상.
 - **보관 한도**: 기본 6칸(`WAX_FIGURE_BASE_CAPACITY`, 포켓몬 파티 6마리 참고), 무역에서 화폐로 확장 구매(`grantWaxFigureCapacityBonus`). 봉인 확률 자체를 올리는 구매 항목도 무역에 추가 예정.
 - **엔드리스 재방문 곡선**: 정산/캐시아웃 같은 강제 메커니즘은 **넣지 않는다.** 그냥 "죽으면 그 판이 끝난다"는 기존 규칙만으로 충분하다 — 300층까지 무한정 미는 것보다 적당한 지점에서 죽고 무역에서 재정비하는 편이 자연스러운 재방문 곡선을 만들 거라는 게 설계 예측이지, 별도로 구현할 기능은 아니다.
-- **종 목록(콘텐츠)**: `WAX_FIGURE_SPECIES`에 종을 늘리는 게 이 시스템의 실질 병목이다. 지금은 엔진 검증용 1종(양초 거미)만 있다.
+- **종 목록(콘텐츠)**: `WAX_FIGURE_SPECIES`에 종을 늘리는 게 이 시스템의 실질 병목이다. 지금은 2종(양초 거미, 양초 키틴벌레)만 있다.
+- **30F 새싹 병아리 튜토리얼 확정 드랍**: 이번 런에서 처음 잡은 양초 키틴벌레는 확률 없이 확정 봉인된다(`WAX_FIGURE_TUTORIAL_SPECIES`, `onboardingWaxFigureTutorialDropDone`). 밀랍상 탭을 처음 만져 보게 하는 순차적 도입 — 이벤트 문처럼 "언젠가 반드시 온다"가 목적이라 확률로 놓치지 않는다.
+- **봉인 순간 연출**: 처치한 시체 자리에서 별이 반짝이며 튀어나와 표류하다 "칭!" 밀랍상으로 변신해 탭 아이콘으로 빨려 들어간다(`ResourceTrailFx.animateWaxFigureCaptureToken` → `GameBoardRenderer.fireWaxFigureCapture`). 정상은 촛불 금빛, 이로치는 옥빛(`SquareBurst` 신규 테마 `wax-figure`/`wax-figure-shiny`).
+- **효과 발동 배너**: 보유한 밀랍상 효과가 실제로 발동하면 밀랍상 탭 아이콘에서 작게 카드가 뿅 튀어나와 무슨 효과를 봤는지 2초짜리 배너로 알리고 사그라든다(`GameBoardRenderer.showWaxFigureEffectChain`).
+- **효과 실제 배선**: `web-trap-ignore`(거미줄 함정 완전 무시)·`spore-heal`(포자 피해 → 회복 전환)은 `ActionSystem.evadeTrap`에, `bomb-trap-ignore`(폭탄 자기 피해만 무시)는 `TurnManager.applyBombExplosions`에, `direct-hit-bonus`(직접 타격 +1)는 `ActionSystem.attackEnemy`에 배선했다. 판정 창구는 `WaxFigureCollection.rollWaxFigureEffect(effectId)` 하나 — 보유 성급을 찾아 `waxFigureEffectChance()`로 굴린다.
 - **뒤로 미룬 것(명시만, 아직 구현 안 됨)**:
-  - 30F 새싹 병아리 클리어 과정에서 양초 키틴벌레 1장을 이벤트 문처럼 순차 스케줄로 확정 드랍 — 밀랍상 탭 튜토리얼 역할.
-  - 봉인 순간 연출(적 시체에서 별이 반짝이며 튀어나와 날아다니다 밀랍상으로 변해 아이콘으로 빨려 들어감).
-  - 소유한 밀랍상 효과가 실제로 발동했을 때(예: 거미줄 함정을 실제로 무시) 밀랍상 아이콘에서 작게 카드가 튀어나와 무슨 효과를 봤는지 알려주는 체인 배너 — 이건 효과 자체가 아직 게임 로직에 배선돼 있지 않아(엔진만 있고 실제 트랩/포자 판정에 안 걸림) 그 배선이 선행돼야 한다.
   - 난이도별 종 다양화(예: 그냥 말벌이 아니라 호박벌처럼 같은 자리에 다른 종을 놓는 것)는 쉬움 난이도와 무관한 **엔드리스 전용 혹은 미래 난이도(보통/어려움/현실) 이후 콘텐츠**다. 기본 종 풀조차 아직 못 채웠으니 지금 손대지 않는다.
+  - 밀랍상 효과를 늘리는/확률을 올리는 무역 구매 항목.

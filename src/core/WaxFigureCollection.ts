@@ -1,7 +1,7 @@
 /**
  * 밀랍상(蠟像) — 적을 봉인해 모으는 계정 전체(런을 넘는) 수집 시스템.
- * 쉬움 100층 클리어(잿빛 굴레와 같은 마일스톤, `gray-shackle-unlocked` first-seen)로
- * 열리고, 처치 시 낮은 확률로 종별 밀랍상을 얻는다. 같은 종+색을 3개 모으면 다음
+ * 새싹 병아리부터 처음부터 열려 있다(별도 마일스톤 게이트 없음). 처치 시 낮은 확률로
+ * 종별 밀랍상을 얻는다. 같은 종+색을 3개 모으면 다음
  * 성급으로 합성할 수 있고(플레이어가 직접 하는 동작 — 자동 합성 없음), 성급이 오를수록
  * 그 종의 **확률형 페시브 효과**가 강해진다 — 체력+5·공격력+1 같은 직접 스탯은 절대
  * 주지 않는다(밸런스 파괴). 확률은 방어구 감쇠 공식과 같은 수렴형이라 아무리 모아도
@@ -43,10 +43,35 @@ export const WAX_FIGURE_SPECIES: readonly WaxFigureSpeciesDef[] = [
       shiny: { id: 'spore-heal', label: '포자 피해가 회복으로 바뀜' },
     },
   },
+  {
+    // 새싹 병아리 30F 튜토리얼 확정 드랍 종 — `WAX_FIGURE_TUTORIAL_SPECIES` 참고.
+    enemyName: '양초 키틴벌레',
+    effects: {
+      normal: { id: 'bomb-trap-ignore', label: '폭탄 피해 무시(스스로만)' },
+      shiny: { id: 'direct-hit-bonus', label: '직접 타격 추가 피해 +1' },
+    },
+  },
 ]
+
+/** 새싹 병아리 30F 클리어 과정에서 확정 튜토리얼 드랍으로 쓰는 종. */
+export const WAX_FIGURE_TUTORIAL_SPECIES = '양초 키틴벌레'
 
 export function findWaxFigureSpecies(enemyName: string): WaxFigureSpeciesDef | undefined {
   return WAX_FIGURE_SPECIES.find((s) => s.enemyName === enemyName)
+}
+
+/** 효과 id → 사람이 읽는 라벨 + 이로치 여부. 발동 체인 배너가 이걸로 문구/색을 정한다. */
+export function findWaxFigureEffectMeta(
+  effectId: string
+): { label: string; shiny: boolean; enemyName: string } | undefined {
+  for (const species of WAX_FIGURE_SPECIES) {
+    for (const variant of ['normal', 'shiny'] as const) {
+      if (species.effects[variant].id === effectId) {
+        return { label: species.effects[variant].label, shiny: variant === 'shiny', enemyName: species.enemyName }
+      }
+    }
+  }
+  return undefined
 }
 
 const STORAGE_KEY = 'unmelting.waxfigures.v1'
@@ -253,4 +278,33 @@ export function mergeWaxFigures(enemyName: string, variant: WaxFigureVariant, st
 export function waxFigureEffectChance(star: number, cap = 0.5, rate = 0.7): number {
   if (star <= 0) return 0
   return cap * (1 - Math.pow(rate, star))
+}
+
+/**
+ * 이 효과 id를 보유 중인 가장 높은 성급 — 같은 종+변종을 여러 성급으로 동시에 들고
+ * 있을 순 없으므로(합성이 낮은 성급을 지운다) 존재하는 키를 훑어 하나만 찾으면 된다.
+ * 보유하지 않았으면 0(=미보유, `waxFigureEffectChance`가 그대로 0을 돌려준다).
+ */
+export function waxFigureEffectStar(effectId: string): number {
+  for (const species of WAX_FIGURE_SPECIES) {
+    for (const variant of ['normal', 'shiny'] as const) {
+      if (species.effects[variant].id !== effectId) continue
+      const prefix = `${species.enemyName}::${variant}::`
+      const state = loadWaxFigureCollection()
+      for (const [key, count] of Object.entries(state.counts)) {
+        if (count > 0 && key.startsWith(prefix)) return Number(key.slice(prefix.length))
+      }
+      return 0
+    }
+  }
+  return 0
+}
+
+/**
+ * 실제 게임 로직이 부르는 판정 창구 — 이 효과 id를 보유하고 있으면 성급에 맞는 확률로
+ * 굴려 발동 여부를 돌려준다. 미보유(성급 0)면 항상 false다.
+ */
+export function rollWaxFigureEffect(effectId: string): boolean {
+  const chance = waxFigureEffectChance(waxFigureEffectStar(effectId))
+  return chance > 0 && Math.random() < chance
 }

@@ -57,7 +57,12 @@ import { RECIPES, type RecipeEffectKind } from '@data/Recipes'
 import { getRelicDef, relicStackFeedback, type CustomRelicProfile, type RelicId } from '@data/Relics'
 import { RunCardPool } from '@core/RunCardPool'
 import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
-import { captureWaxFigure, resetWaxFigureRunHold } from '@core/WaxFigureCollection'
+import {
+  captureWaxFigure,
+  resetWaxFigureRunHold,
+  WAX_FIGURE_TUTORIAL_SPECIES,
+  findWaxFigureEffectMeta,
+} from '@core/WaxFigureCollection'
 import { COMBO_TRIGGER_DELAY_MS, GAUGE_TRIGGER_DELAY_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
 import { HAND_CARD_RARITY } from '@data/ShopPools'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
@@ -1424,12 +1429,36 @@ async function awardScoreForRemovedCards(
  * 봉인은 **자리가 있으면 곧장 영구 밀랍상함에 들어간다.** 한도를 넘겼을 때만 임시보관함
  * (메모리 전용, 정리 안 하고 런이 끝나면 비워짐)으로 넘친다.
  */
-function tryCaptureWaxFigureOnKill(card: Card): void {
-  const result = captureWaxFigure(card.name, card.waxFigureShiny ? { forceVariant: 'shiny' } : {})
-  if (!result) return // 미등록 종이거나 확률에 안 걸렸다 — 조용히 넘어간다.
+/** 보유한 밀랍상 효과가 실제로 발동했을 때 탭 아이콘에서 작은 체인 배너로 알린다. */
+function announceWaxFigureEffect(effectId: string | undefined): void {
+  if (!effectId) return
+  const meta = findWaxFigureEffectMeta(effectId)
+  if (!meta) return
+  boardRenderer.showWaxFigureEffectChain(`${meta.enemyName} — ${meta.label}`, meta.shiny)
+}
+
+/**
+ * 봉인 성공 시 시체 자리에서 별빛이 튀어나와 밀랍상 탭으로 날아가는 연출을 시작하고
+ * 그 Promise를 돌려준다(호출부가 다른 애니메이션과 같은 beat에 묶어 await할 수 있게).
+ * rect는 **호출 시점에 즉시 캡처**한다 — render()가 곧 그 칸을 DOM에서 지우기 때문이다.
+ */
+function tryCaptureWaxFigureOnKill(card: Card, precapturedRect?: DOMRect | null): Promise<void> | null {
+  // 새싹 병아리 30F 튜토리얼: 이번 런에서 처음 잡은 양초 키틴벌레는 확률 없이 확정
+  // 봉인된다 — 밀랍상 탭을 처음 만져 보게 하는 순차적 도입이라, 이벤트 문처럼
+  // "언젠가 반드시 온다"가 목적이지 확률로 놓칠 수 있으면 튜토리얼이 안 된다.
+  const isTutorialDrop =
+    onboardingRunActive && !onboardingWaxFigureTutorialDropDone && card.name === WAX_FIGURE_TUTORIAL_SPECIES
+  if (isTutorialDrop) onboardingWaxFigureTutorialDropDone = true
+  const result = captureWaxFigure(
+    card.name,
+    card.waxFigureShiny ? { forceVariant: 'shiny' } : isTutorialDrop ? { forceVariant: 'normal' } : {}
+  )
+  if (!result) return null // 미등록 종이거나 확률에 안 걸렸다 — 조용히 넘어간다.
   const variantLabel = result.variant === 'shiny' ? ' (변종)' : ''
   const holdNote = result.stowed ? '' : ' — 밀랍상함이 가득 차 임시보관함으로'
   recordNotice(`밀랍상 봉인 — ${result.enemyName}${variantLabel}: ${result.effect.label}${holdNote}`, 'win')
+  const sourceRect = precapturedRect ?? boardRenderer.getCardRect(card.id)
+  return sourceRect ? boardRenderer.fireWaxFigureCapture(sourceRect, result.variant === 'shiny') : null
 }
 
 /**
@@ -1452,20 +1481,31 @@ async function awardHandKillDrops(
   if (kills.length === 0) return
   // 밀랍상은 손패 전리품과 무관한 별도 자원이라, 카드 드롭의 stingy/1장 상한(무한 루프 방지)을
   // 그대로 적용할 이유가 없다 — 잡은 적마다 독립적으로 굴린다.
-  for (const card of kills) tryCaptureWaxFigureOnKill(card)
+  const waxFigureFlights = kills
+    .map((card) => tryCaptureWaxFigureOnKill(card))
+    .filter((p): p is Promise<void> => p !== null)
   const rolled = kills.reduce((sum, card) => sum + card.rollDefeatDrops(true), 0)
-  if (rolled <= 0) return
+  if (rolled <= 0) {
+    await Promise.all(waxFigureFlights)
+    return
+  }
   const drop = DropSystem.generateDrop('enemy-kill')
-  if (!gameState.character.addHandCard(drop)) return
+  if (!gameState.character.addHandCard(drop)) {
+    await Promise.all(waxFigureFlights)
+    return
+  }
   pushActivityLogsInDisplayOrder(createItemGainLogs([getHandCardDef(drop.defId).name]))
   // ★ 전리품은 **잡은 칸 자리**에서 나와야 한다. 화면 중앙에서 내면 대기열 적을 잡았을 때
   //   엉뚱한 데서 떨어진다. 아래 render()가 그 칸을 DOM에서 지우므로 rect를 **먼저** 잡는다.
   const originId = removed.find((r) => r.type === CardType.ENEMY)?.cardId
   const originRect = originId ? boardRenderer.findCardElement(originId)?.getBoundingClientRect() : null
   render()
-  await (originRect
-    ? boardRenderer.animateResourceTrailFromRect(originRect, 'hand', 1, 'hand-tool')
-    : playResourceTrail({ kind: 'center' }, 'hand', 1))
+  await Promise.all([
+    originRect
+      ? boardRenderer.animateResourceTrailFromRect(originRect, 'hand', 1, 'hand-tool')
+      : playResourceTrail({ kind: 'center' }, 'hand', 1),
+    ...waxFigureFlights,
+  ])
 }
 
 /** Coin gain log row — kind: 'score' for consistent warm color, but the
@@ -1705,6 +1745,8 @@ let currentRunDifficulty: HearthDifficulty | 'test' | undefined = undefined
 function isOnboardingActive(): boolean {
   return onboardingRunActive
 }
+/** 새싹 병아리 30F 밀랍상 튜토리얼 드랍이 이번 런에서 이미 나갔는지 — 첫 마리에서만 확정 지급한다. */
+let onboardingWaxFigureTutorialDropDone = false
 
 /** 온보딩 필드 카드 사라짐 블라스트 테마 — 종류별 팔레트. */
 function fieldBurstTheme(card: Card): BurstTheme {
@@ -1789,6 +1831,7 @@ function resetForNewRun(): void {
   pendingHandTarget = null
   // 밀랍상 임시보관함은 런을 넘기지 않는다 — 정리 안 한 지난 런의 봉인은 여기서 사라진다.
   resetWaxFigureRunHold()
+  onboardingWaxFigureTutorialDropDone = false
   // 동료(에나)의 런 한정 상태(의지/각성/턴 흐름) 초기화. 학습 가중치는 런 간 유지.
   companion.resetForRun()
   // 정산 육각형의 '이번 런 상승분' 기준점 — 런 시작 시점의 축 값을 캡처해 둔다.
@@ -3212,7 +3255,10 @@ async function runSimulatedEnemyPhase(): Promise<void> {
   if (bombExplosions.length > 0) {
     const playerDamageTotal = bombExplosions.reduce((s, e) => s + e.playerDamage, 0)
     const damageLosses = diffFieldHealthLosses(beforeTrapHealth)
-    for (const exp of bombExplosions) recordNotice(`${exp.cardName} 폭발! -${exp.playerDamage}`, 'hurt')
+    for (const exp of bombExplosions) {
+      recordNotice(`${exp.cardName} 폭발! -${exp.playerDamage}`, 'hurt')
+      announceWaxFigureEffect(exp.waxFigureEffectId)
+    }
     eventAnimations.push(
       (async () => {
         await boardRenderer.animateBombExplosion(bombExplosions)
@@ -3505,6 +3551,7 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
     for (const explosion of bombExplosions) {
       recordNotice(`${explosion.cardName} 폭발! -${explosion.playerDamage}`, 'hurt')
       if (explosion.playerDamage > 0) enaRuntimeObserver.noteDamageSource(explosion.cardName)
+      announceWaxFigureEffect(explosion.waxFigureEffectId)
     }
     // Sequenced beat so the shake + bomb-blast burst is fully visible before
     // the floating damage numbers and player impact land on top of it.
@@ -3686,6 +3733,9 @@ async function handleCardAction(e: Event): Promise<void> {
 
   const lane = gameState.getLane(laneIndex)
   if (!lane) return
+  // 밀랍상 봉인 연출은 시체 자리에서 출발해야 한다. 처치 시퀀스가 진행되는 동안
+  // render()/animateCardConsume()이 이 카드의 DOM을 지우므로 행동 시작 시점에 미리 잡아 둔다.
+  const waxFigureSourceRect = boardRenderer.getCardRect(card.id)
 
   // Targeted hand card armed → any valid 3×3 field click can feed its target.
   // 보스 카드도 BOSS 타입으로 enemy 필터에 매칭되므로 동일한 흐름으로 처리.
@@ -3784,6 +3834,7 @@ async function handleCardAction(e: Event): Promise<void> {
   const beforeActionHealth = snapshotFieldHealthState()
   const beforeActionResources = snapshotPlayerResources()
   const result = ActionSystem.executeAction(gameState.getCharacter(), lane, card, actionType)
+  announceWaxFigureEffect(result.waxFigureEffectId)
 
   // 정산용 런 카운터 — 플레이어 행동으로 제거된 적/함정/보물만 센다(만료 제거는 이 경로를 안 탄다).
   if (result.cardRemoved) {
@@ -3953,7 +4004,8 @@ async function handleCardAction(e: Event): Promise<void> {
     // 자물쇠: 미믹 처치 시 불빛 +25% + 손패 +1.
     if (card.isSpecialEnemy) await relicEffects.applyPadlockMimicBonus(card)
     await relicEffects.onEnemiesDefeated(1)
-    tryCaptureWaxFigureOnKill(card)
+    // 밀랍상 비행 연출은 별도 오버레이라 이후 흐름을 막을 필요가 없다 — fire-and-forget.
+    void tryCaptureWaxFigureOnKill(card, waxFigureSourceRect)
   }
 
   // 찬스: 적이 살아있을 때만 15% 확률 추가 타격.
@@ -4077,8 +4129,10 @@ async function handleCardAction(e: Event): Promise<void> {
     if (treasureChanges.length > 0)
       eventAnimations.push(boardRenderer.animateTreasureChanges(treasureChanges))
     if (bombExplosions.length > 0) {
-      for (const explosion of bombExplosions)
+      for (const explosion of bombExplosions) {
         recordNotice(`${explosion.cardName} 폭발! -${explosion.playerDamage}`, 'hurt')
+        announceWaxFigureEffect(explosion.waxFigureEffectId)
+      }
       const playerDamageTotal = bombExplosions.reduce(
         (sum, explosion) => sum + explosion.playerDamage,
         0
