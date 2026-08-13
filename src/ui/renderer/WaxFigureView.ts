@@ -273,15 +273,17 @@ export class WaxFigureView {
          <button type="button" class="wax-btn wax-btn-stow-all" data-wax-stow-all>전부 정리</button>`
       : `<p class="wax-hold-empty">비어 있습니다.</p>`
 
-    const galleryContent = tiles.length > 0
-      ? `<ul class="wax-exhibit-grid">${tiles.map((t) => this.renderExhibitCard(t, t.key === this.selectedKey)).join('')}</ul>`
-      : `<p class="wax-empty">밀랍상함이 비어 있습니다. 적을 처치해 봉인해 보세요.</p>`
+    // 남은 자리도 투명 칸으로 채운다 — "몇 마리 더 들어가는지"가 빈 문구 한 줄보다
+    // 격자 자체에서 바로 읽혀야 한다(무역탭이 비어도 레일 크기를 그대로 차지하는 것과 같은 원리).
+    const emptySlots = Math.max(0, capacity - used)
+    const emptyCells = Array.from({ length: emptySlots }, () => '<li class="wax-exhibit-card wax-exhibit-card-empty" aria-hidden="true"></li>').join('')
+    const galleryContent = `<ul class="wax-exhibit-grid">${tiles.map((t) => this.renderExhibitCard(t, t.key === this.selectedKey)).join('')}${emptyCells}</ul>`
 
     host.innerHTML = `
       <div class="wax-figure-modal" role="dialog" aria-label="밀랍상">
         <header class="wax-figure-header">
           <h2 class="wax-figure-title"><span class="wax-figure-title-icon">${waxFigureIcon()}</span>밀랍상 전시관</h2>
-          <span class="wax-figure-capacity">${used}/${capacity}</span>
+          <span class="wax-figure-capacity">보관 <b>${used}</b> / 최대 <b>${capacity}</b></span>
           <button class="wax-figure-close" data-wax-close type="button" aria-label="닫기">${closeIcon()}</button>
         </header>
         ${hint ? `<p class="wax-action-hint">${hint}</p>` : ''}

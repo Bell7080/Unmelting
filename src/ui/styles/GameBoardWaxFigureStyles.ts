@@ -67,11 +67,15 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 .wax-figure-title-icon .icon { width: 23px; height: 23px; filter: drop-shadow(0 0 8px rgba(255, 210, 130, 0.7)); }
 .wax-figure-capacity {
   margin-left: auto;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: rgba(255, 233, 196, 0.7);
+  letter-spacing: 0.02em;
+}
+.wax-figure-capacity b {
+  font-weight: 900;
   color: var(--color-flame, #ffd778);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
 }
 .wax-figure-close {
   display: inline-flex;
@@ -135,15 +139,6 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   color: #ffdf9e;
 }
 .wax-section-note { font-size: 10.5px; font-weight: 600; color: rgba(255, 233, 196, 0.48); letter-spacing: 0.02em; }
-.wax-empty {
-  margin: 0;
-  padding: 20px 14px;
-  text-align: center;
-  font-size: 12px;
-  color: rgba(255, 233, 196, 0.42);
-  border: 1px dashed rgba(255, 215, 120, 0.18);
-  border-radius: 12px;
-}
 
 /* ── 좌측 정보창 ────────────────────────────────────────── */
 .wax-info-panel {
@@ -248,6 +243,15 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   border-color: rgba(123, 240, 174, 0.9);
   box-shadow: 0 0 0 2px rgba(123, 240, 174, 0.38), 0 12px 22px rgba(0, 0, 0, 0.5), 0 0 20px rgba(123, 240, 174, 0.25);
 }
+/* 남은 자리 — 채워지지 않은 밀랍상함 용량을 투명 칸으로 보여준다. 클릭할 것이 없으니
+   커서/호버 반응도 끈다. */
+.wax-exhibit-card-empty {
+  border-style: dashed;
+  border-color: rgba(255, 215, 120, 0.16);
+  background: transparent;
+  cursor: default;
+}
+.wax-exhibit-card-empty:hover { transform: none; box-shadow: none; }
 .wax-exhibit-art {
   position: absolute;
   inset: 0;
