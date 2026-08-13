@@ -1782,6 +1782,14 @@ async function tickOnboardingFieldsBeforeDrop(): Promise<void> {
 async function runOnboardingClear(): Promise<void> {
   // 첫 30F 클리어 → 온보딩 졸업(다음 런부터 정상 스폰) + 쉬움 난이도 개방.
   enaAutonomousLearner.recordFirstSeen('onboarding-graduated')
+  // 확정 튜토리얼 드랍 안전판: 11층부터 스폰 풀이 넓어지며 양초 키틴벌레 비중이
+  // 옅어져 처치 자체를 못 하고 클리어할 수 있다 — 그때는 클리어 시점에 한 번 더
+  // 확정 지급해 첫 판에서 반드시 밀랍상 탭을 만져 보게 한다.
+  if (!onboardingWaxFigureTutorialDropDone) {
+    onboardingWaxFigureTutorialDropDone = true
+    const pityResult = captureWaxFigure(WAX_FIGURE_TUTORIAL_SPECIES, { forceVariant: 'normal' })
+    if (pityResult) recordNotice(`밀랍상 봉인 — ${pityResult.enemyName}: ${pityResult.effect.label}`, 'win')
+  }
   // 졸업 보상: 화폐($) 시스템도 함께 열린다 — 로비 도착 시 무역 개방 연출과 같은 beat에 등장.
   setMetaUnlocked('currency', true)
   recordNotice('새싹 병아리 클리어! 쉬움 난이도가 개방되었다', 'win')

@@ -1,6 +1,13 @@
 import { HEARTH_STYLES } from './HearthStyles'
-import { closeIcon, swordIcon, sparkleIcon } from '../Icons'
-import { SpriteUrls, spriteForHearthStation, spriteForDinner, spriteForDinnerPack, spriteForHandCard, spriteForRelic } from '../Sprites'
+import { closeIcon, swordIcon, sparkleIcon, waxFigureIcon } from '../Icons'
+import { SpriteUrls, spriteForHearthStation, spriteForDinner, spriteForDinnerPack, spriteForHandCard, spriteForRelic, spriteForEnemyName } from '../Sprites'
+import {
+  getWaxFigureArchive,
+  restoreWaxFigureArchiveEntry,
+  waxFigureEffectChance,
+  findWaxFigureSpecies,
+  type WaxFigureArchiveEntry,
+} from '@core/WaxFigureCollection'
 import { isTouchDevice } from '../MobileTouchManager'
 import { SquareBurst } from '../SquareBurst'
 import { SpeechBubble } from '../SpeechBubble'
@@ -292,6 +299,10 @@ export class HearthScene {
   private libraryHistory: LifetimeRecord['history'] = []
   /** 서고 여정 상세 카드 팝업 host. 열려 있지 않으면 null. */
   private libraryDetailHost: HTMLElement | null = null
+  /** 서고 상단 분류 — 모험일지(통산 기록) / 밀랍 회고록(버려진 밀랍상 복구). */
+  private libraryTab: 'journal' | 'memoir' = 'journal'
+  /** 복구 실패("자리 없음") 등 회고록 액션 안내 — 다음 렌더에 한 번 보여주고 지운다. */
+  private libraryMemoirHint: string | null = null
 
   /** 이번 로비 진입에서 무역 개방 축하 연출을 재생해야 하는지(졸업 후 최초 1회). */
   private tradeCelebrationPending = false
@@ -344,7 +355,8 @@ export class HearthScene {
           <div class="hearth-library-stage" aria-label="서고">
             <div class="hearth-library-bg" aria-hidden="true"></div>
             <header class="hearth-library-tabs" role="tablist" aria-label="서고 분류">
-              <button class="hearth-library-tab is-active" type="button" role="tab" aria-selected="true">모험일지</button>
+              <button class="hearth-library-tab is-active" type="button" role="tab" aria-selected="true" data-hearth-library-tab="journal">모험일지</button>
+              <button class="hearth-library-tab" type="button" role="tab" aria-selected="false" data-hearth-library-tab="memoir"><span class="hearth-library-tab-icon" aria-hidden="true">${waxFigureIcon()}</span>밀랍 회고록</button>
             </header>
             <section class="hearth-library-journal" aria-live="polite"></section>
           </div>
@@ -516,6 +528,16 @@ export class HearthScene {
       const libraryEntry = t.closest<HTMLElement>('[data-hearth-library-entry]')
       if (libraryEntry) {
         this.openLibraryEntryDetail(Number(libraryEntry.dataset.hearthLibraryEntry ?? -1))
+        return
+      }
+      const libraryTabBtn = t.closest<HTMLElement>('[data-hearth-library-tab]')
+      if (libraryTabBtn) {
+        this.selectLibraryTab(libraryTabBtn.dataset.hearthLibraryTab as 'journal' | 'memoir')
+        return
+      }
+      const waxRestoreBtn = t.closest<HTMLElement>('[data-hearth-wax-restore]')
+      if (waxRestoreBtn) {
+        this.handleWaxFigureRestore(waxRestoreBtn.dataset.hearthWaxRestore!)
         return
       }
       const tradeTab = t.closest<HTMLElement>('[data-hearth-trade-tab]')
@@ -701,10 +723,26 @@ export class HearthScene {
     return HEARTH_DIFFICULTIES.find((d) => d.key === key)?.name ?? ''
   }
 
-  /** 모험일지 본문 — 통산 원장(집계) + 여정의 유산 + 최근 여정 목록(개별 런)을 함께 그린다. */
+  /** 서고 상단 탭 전환 — 활성 탭 클래스만 갈아 끼우고 본문을 다시 그린다. */
+  private selectLibraryTab(tab: 'journal' | 'memoir'): void {
+    if (tab === this.libraryTab) return
+    this.libraryTab = tab
+    this.overlay?.querySelectorAll<HTMLElement>('[data-hearth-library-tab]').forEach((btn) => {
+      const active = btn.dataset.hearthLibraryTab === tab
+      btn.classList.toggle('is-active', active)
+      btn.setAttribute('aria-selected', String(active))
+    })
+    this.renderLibraryJournal()
+  }
+
+  /** 서고 본문 — 상단 탭에 따라 모험일지 또는 밀랍 회고록을 그린다. */
   private renderLibraryJournal(): void {
     const journal = this.overlay?.querySelector<HTMLElement>('.hearth-library-journal')
     if (!journal) return
+    if (this.libraryTab === 'memoir') {
+      this.renderWaxFigureMemoir(journal)
+      return
+    }
     const rec = this.handlers?.getLifetimeRecord?.()
     if (!rec || rec.totalRuns === 0) {
       this.libraryHistory = []
@@ -721,6 +759,62 @@ export class HearthScene {
         ${this.renderLibraryLegacyLine(rec)}
       </div>`
     journal.innerHTML = `<div class="hearth-library-journal-inner">${summaryHtml}${this.renderLibraryEntries(rec.history)}</div>`
+  }
+
+  /**
+   * 밀랍 회고록 — 버려지거나 사라진 밀랍상을 최신순으로 보여주고 복구할 수 있게 한다.
+   * 레이어 1(밀랍상함에서 직접 ✕로 버림)과 레이어 2(임시보관함에서 사라짐)를 나눠
+   * 보여준다 — 정리 안 한 몫과 일부러 버린 몫은 사정이 다르다는 걸 구분해 알려준다.
+   */
+  private renderWaxFigureMemoir(journal: HTMLElement): void {
+    const archive = getWaxFigureArchive()
+    const hint = this.libraryMemoirHint
+    this.libraryMemoirHint = null
+    if (archive.length === 0) {
+      journal.innerHTML = `<p class="hearth-library-empty">아직 회고록에 기록된 밀랍상이 없다.<br>버리거나 정리하지 못한 밀랍상이 여기 남는다.</p>`
+      return
+    }
+    const layer1 = archive.filter((e) => e.layer === 1)
+    const layer2 = archive.filter((e) => e.layer === 2)
+    const section = (title: string, note: string, entries: WaxFigureArchiveEntry[]): string => {
+      if (entries.length === 0) return ''
+      return `
+        <h3 class="hearth-memoir-heading">${title} <span class="hearth-memoir-heading-note">${note}</span></h3>
+        <ul class="hearth-memoir-grid">${entries.map((e) => this.renderMemoirCard(e)).join('')}</ul>`
+    }
+    journal.innerHTML = `<div class="hearth-library-journal-inner hearth-memoir">
+      ${hint ? `<p class="hearth-memoir-hint">${hint}</p>` : ''}
+      ${section('밀랍상함에서 버림', '직접 ✕로 버린 항목', layer1)}
+      ${section('임시보관함에서 사라짐', '정리 못 했거나 버린 항목', layer2)}
+    </div>`
+  }
+
+  private renderMemoirCard(entry: WaxFigureArchiveEntry): string {
+    const species = findWaxFigureSpecies(entry.enemyName)
+    const effectLabel = species?.effects[entry.variant].label ?? ''
+    const chancePct = (waxFigureEffectChance(entry.star) * 100).toFixed(1)
+    const sprite = spriteForEnemyName(entry.enemyName)
+    const shinyClass = entry.variant === 'shiny' ? ' is-shiny' : ''
+    const date = entry.discardedAt > 0
+      ? new Date(entry.discardedAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
+      : ''
+    return `
+      <li class="hearth-memoir-card${shinyClass}">
+        <div class="hearth-memoir-art" style="background-image:url('${sprite}')" aria-hidden="true"></div>
+        <div class="hearth-memoir-body">
+          <span class="hearth-memoir-name">${entry.enemyName}${entry.variant === 'shiny' ? ' <em class="hearth-memoir-shiny-tag">이로치</em>' : ''} <b>★${entry.star}</b></span>
+          <span class="hearth-memoir-effect">${effectLabel} ${chancePct}%</span>
+          <span class="hearth-memoir-date">${date}</span>
+        </div>
+        <button type="button" class="hearth-memoir-restore" data-hearth-wax-restore="${entry.id}">복구</button>
+      </li>`
+  }
+
+  /** 회고록 항목 복구 클릭 — 밀랍상함에 자리가 있으면 되돌리고, 없으면 안내만 띄운다. */
+  private handleWaxFigureRestore(entryId: string): void {
+    const ok = restoreWaxFigureArchiveEntry(entryId)
+    this.libraryMemoirHint = ok ? null : '밀랍상함이 가득 찼습니다 — 자리를 비우고 다시 시도하세요.'
+    this.renderLibraryJournal()
   }
 
   /** 여정의 유산 한 줄 — 통산 기록이 다음 런에 미세하게 얹어 줄 영구 보너스를 미리 보여준다.

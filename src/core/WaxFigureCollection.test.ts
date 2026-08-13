@@ -14,6 +14,8 @@ import {
   discardWaxFigurePermanent,
   waxFigureEffectStar,
   rollWaxFigureEffect,
+  getWaxFigureArchive,
+  restoreWaxFigureArchiveEntry,
   WAX_FIGURE_BASE_CAPACITY,
   WAX_FIGURE_MERGE_COUNT,
 } from './WaxFigureCollection'
@@ -202,5 +204,75 @@ describe('WaxFigureCollection', () => {
     mergeWaxFigures('양초 거미', 'normal', 1)
 
     expect(waxFigureEffectStar('web-trap-ignore')).toBe(2)
+  })
+
+  describe('밀랍 회고록', () => {
+    it('밀랍상함에서 버린 항목은 레이어 1로, 성급 그대로 기록된다', () => {
+      for (let i = 0; i < WAX_FIGURE_MERGE_COUNT; i++) captureWaxFigure('양초 거미', { forceVariant: 'normal' })
+      mergeWaxFigures('양초 거미', 'normal', 1)
+      discardWaxFigurePermanent('양초 거미', 'normal', 2)
+
+      const archive = getWaxFigureArchive()
+      expect(archive).toHaveLength(1)
+      expect(archive[0]).toMatchObject({ enemyName: '양초 거미', variant: 'normal', star: 2, layer: 1 })
+    })
+
+    it('임시보관함에서 직접 버린 항목은 레이어 2로, 항상 ★1로 기록된다', () => {
+      for (let i = 0; i < WAX_FIGURE_BASE_CAPACITY; i++) captureWaxFigure('양초 거미', { forceVariant: 'normal' })
+      const overflow = captureWaxFigure('양초 거미', { forceVariant: 'shiny' })!
+
+      discardWaxFigureCatch(overflow.id)
+
+      const archive = getWaxFigureArchive()
+      expect(archive).toHaveLength(1)
+      expect(archive[0]).toMatchObject({ enemyName: '양초 거미', variant: 'shiny', star: 1, layer: 2 })
+    })
+
+    it('정리 안 하고 런이 끝나 임시보관함이 비워지면 그 항목도 레이어 2로 남는다', () => {
+      for (let i = 0; i < WAX_FIGURE_BASE_CAPACITY; i++) captureWaxFigure('양초 거미', { forceVariant: 'normal' })
+      captureWaxFigure('양초 키틴벌레', { forceVariant: 'normal' })
+
+      resetWaxFigureRunHold()
+
+      const archive = getWaxFigureArchive()
+      expect(archive).toHaveLength(1)
+      expect(archive[0]).toMatchObject({ enemyName: '양초 키틴벌레', variant: 'normal', star: 1, layer: 2 })
+      expect(getWaxFigureRunHold()).toHaveLength(0)
+    })
+
+    it('최신 항목이 맨 앞에 온다', () => {
+      discardWaxFigurePermanent('양초 거미', 'normal', 1) // 존재하지 않아 실패 — 기록 없음
+      captureWaxFigure('양초 거미', { forceVariant: 'normal' })
+      captureWaxFigure('양초 키틴벌레', { forceVariant: 'normal' })
+      discardWaxFigurePermanent('양초 거미', 'normal', 1)
+      discardWaxFigurePermanent('양초 키틴벌레', 'normal', 1)
+
+      const archive = getWaxFigureArchive()
+      expect(archive.map((e) => e.enemyName)).toEqual(['양초 키틴벌레', '양초 거미'])
+    })
+
+    it('자리가 있으면 회고록 항목을 밀랍상함으로 되돌릴 수 있다', () => {
+      captureWaxFigure('양초 거미', { forceVariant: 'normal' })
+      discardWaxFigurePermanent('양초 거미', 'normal', 1)
+      const entryId = getWaxFigureArchive()[0].id
+
+      expect(restoreWaxFigureArchiveEntry(entryId)).toBe(true)
+      expect(totalWaxFigureCount()).toBe(1)
+      expect(getWaxFigureArchive()).toHaveLength(0)
+    })
+
+    it('밀랍상함이 가득 차 있으면 복구가 실패하고 회고록에 그대로 남는다', () => {
+      captureWaxFigure('양초 거미', { forceVariant: 'normal' })
+      discardWaxFigurePermanent('양초 거미', 'normal', 1)
+      const entryId = getWaxFigureArchive()[0].id
+      for (let i = 0; i < WAX_FIGURE_BASE_CAPACITY; i++) captureWaxFigure('양초 키틴벌레', { forceVariant: 'normal' })
+
+      expect(restoreWaxFigureArchiveEntry(entryId)).toBe(false)
+      expect(getWaxFigureArchive()).toHaveLength(1)
+    })
+
+    it('존재하지 않는 항목 복구는 조용히 실패한다', () => {
+      expect(restoreWaxFigureArchiveEntry('arc-없음')).toBe(false)
+    })
   })
 })

@@ -322,6 +322,23 @@ npm run build    # verify 포함
   선택 이후에만 허용한다.
 - 독립 팝업을 만들지 않고 상점과 같은 shell/content-bundle 레이어를 재사용한다.
 
+### 밀랍상(수집)
+
+- 저장/판정 로직의 단일 출처는 `src/core/WaxFigureCollection.ts`다. 자리가 있으면
+  곧장 영구 밀랍상함에 들어가고, 한도를 넘겼을 때만 임시보관함(메모리 전용)으로
+  흘러 들어간다.
+- 버려지거나(밀랍상함 ✕, 레이어 1) 정리 못 하고 사라진(임시보관함, 레이어 2) 항목은
+  전부 **회고록**(`WaxFigureArchiveEntry`, `unmelting.waxfigures.archive.v1`)에 최신순
+  으로 남는다 — 아무것도 완전히 소멸하지 않는다. 서고 `밀랍 회고록` 탭
+  (`HearthScene.renderWaxFigureMemoir`)에서 최신순으로 보고 `restoreWaxFigureArchiveEntry()`
+  로 되돌릴 수 있다(자리가 없으면 실패하고 회고록에 그대로 남는다).
+- 종 이름 → 일러스트 해석은 `spriteForEnemyName()`(`src/ui/Sprites.ts`) 한 곳이다.
+  전시관 갤러리와 서고 회고록 둘 다 이 함수를 쓴다 — 아트 해석 규칙을 두 번 베끼지 않는다.
+- 새싹 병아리 30F 튜토리얼 확정 드랍(`WAX_FIGURE_TUTORIAL_SPECIES`)은 처치 시점뿐
+  아니라 **온보딩 클리어 시점에도 안전판**을 하나 더 둔다(`runOnboardingClear()`) —
+  후반 턴일수록 스폰 풀이 넓어져 그 종을 못 잡고 클리어할 수 있어, 첫 판에서 반드시
+  한 번은 밀랍상 탭을 만져 보게 한다.
+
 ## 구현 사실 (현재 코드 기준)
 
 규칙이 아니라 "지금 이렇게 되어 있다"는 사실이다. 코드가 바뀌면 여기도 바꾼다.

@@ -76,6 +76,10 @@ export function findWaxFigureEffectMeta(
 
 const STORAGE_KEY = 'unmelting.waxfigures.v1'
 const CAPACITY_BONUS_KEY = 'unmelting.waxfigures.capacityBonus'
+const ARCHIVE_KEY = 'unmelting.waxfigures.archive.v1'
+/** 회고록에 쌓아 두는 상한 — 무한정 늘면 저장소도, 목록도 감당이 안 된다. 오래된
+ *  것부터 밀려난다(최신순 유지가 우선이라 자른다). */
+const WAX_FIGURE_ARCHIVE_MAX = 200
 
 /** localStorage 최소 계약 — 테스트에서 메모리 저장소로 갈아 끼울 수 있게 좁게 잡는다. */
 interface WaxFigureStorage {
@@ -153,6 +157,93 @@ export function totalWaxFigureCount(state: WaxFigureCollectionState = loadWaxFig
   return Object.values(state.counts).reduce((sum, n) => sum + n, 0)
 }
 
+/**
+ * 밀랍 회고록 — 버려지거나 사라진 밀랍상을 계정 전체(런을 넘는) 기록으로 남긴다.
+ * "정리 안 하면 사라진다"는 규칙은 그대로 두되, 그 사라짐이 되돌릴 수 없는 소멸이
+ * 되지 않게 하는 안전판이다. 서고 탭에서 최신순으로 보여주고 복구할 수 있다.
+ *
+ * 레이어 1 = 밀랍상함에서 플레이어가 직접 ✕로 버린 것(성급이 남아 있을 수 있다).
+ * 레이어 2 = 임시보관함에서 사라진 것(직접 버렸거나, 정리 못 하고 런이 끝나 자동으로
+ * 사라진 것 — 둘 다 항상 ★1이다. 임시보관함은 합성이 불가능한 자리라서 성급이 오를
+ * 일이 없다).
+ */
+export type WaxFigureArchiveLayer = 1 | 2
+
+export interface WaxFigureArchiveEntry {
+  id: string
+  enemyName: string
+  variant: WaxFigureVariant
+  star: number
+  layer: WaxFigureArchiveLayer
+  /** Date.now() — 최신순 정렬 기준. */
+  discardedAt: number
+}
+
+function loadArchive(): WaxFigureArchiveEntry[] {
+  try {
+    const raw = storage()?.getItem(ARCHIVE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((e): e is WaxFigureArchiveEntry =>
+      !!e && typeof e === 'object'
+      && typeof (e as WaxFigureArchiveEntry).id === 'string'
+      && typeof (e as WaxFigureArchiveEntry).enemyName === 'string'
+      && ((e as WaxFigureArchiveEntry).variant === 'normal' || (e as WaxFigureArchiveEntry).variant === 'shiny')
+      && typeof (e as WaxFigureArchiveEntry).star === 'number'
+      && ((e as WaxFigureArchiveEntry).layer === 1 || (e as WaxFigureArchiveEntry).layer === 2)
+      && typeof (e as WaxFigureArchiveEntry).discardedAt === 'number'
+    )
+  } catch {
+    return []
+  }
+}
+
+function saveArchive(list: WaxFigureArchiveEntry[]): void {
+  storage()?.setItem(ARCHIVE_KEY, JSON.stringify(list.slice(0, WAX_FIGURE_ARCHIVE_MAX)))
+}
+
+let nextArchiveSeq = 1
+
+function pushArchiveEntry(enemyName: string, variant: WaxFigureVariant, star: number, layer: WaxFigureArchiveLayer): void {
+  const list = loadArchive()
+  list.unshift({
+    id: `arc-${Date.now()}-${nextArchiveSeq++}`,
+    enemyName,
+    variant,
+    star,
+    layer,
+    discardedAt: Date.now(),
+  })
+  saveArchive(list)
+}
+
+/** 최신순(이미 그 순서로 저장돼 있다) 회고록 전체. */
+export function getWaxFigureArchive(): readonly WaxFigureArchiveEntry[] {
+  return loadArchive()
+}
+
+/**
+ * 회고록 항목을 밀랍상함으로 되돌린다. 자리가 없으면 실패(false)하고 회고록에
+ * 그대로 남는다 — 임시보관함처럼 어중간하게 걸치지 않는다(복구는 "완전히 되돌리기"
+ * 아니면 "그대로 두기" 둘 중 하나여야 다시 자리가 날 때 재시도 여부가 분명하다).
+ */
+export function restoreWaxFigureArchiveEntry(entryId: string): boolean {
+  const list = loadArchive()
+  const idx = list.findIndex((e) => e.id === entryId)
+  if (idx === -1) return false
+  const entry = list[idx]
+  if (!findWaxFigureSpecies(entry.enemyName)) return false
+  const state = loadWaxFigureCollection()
+  if (totalWaxFigureCount(state) >= waxFigureCapacity()) return false
+  const key = makeKey(entry.enemyName, entry.variant, entry.star)
+  state.counts[key] = (state.counts[key] ?? 0) + 1
+  saveWaxFigureCollection(state)
+  list.splice(idx, 1)
+  saveArchive(list)
+  return true
+}
+
 export interface WaxFigureCatch {
   /** 임시보관함 안에서만 의미 있는 식별자(런 종료·리셋마다 새로 매겨진다). */
   id: string
@@ -166,8 +257,10 @@ export interface WaxFigureCatch {
 let runHold: WaxFigureCatch[] = []
 let nextCatchSeq = 1
 
-/** 새 런 시작·게임오버 시 호출 — 정리하지 않은 임시보관함 내용을 전부 비운다. */
+/** 새 런 시작·게임오버 시 호출 — 정리하지 않은 임시보관함 내용을 전부 비운다.
+ *  사라지는 항목은 회고록(레이어 2)에 남아 나중에 서고에서 되돌릴 수 있다. */
 export function resetWaxFigureRunHold(): void {
+  for (const c of runHold) pushArchiveEntry(c.enemyName, c.variant, 1, 2)
   runHold = []
 }
 
@@ -247,16 +340,20 @@ export function stowWaxFigureCatch(catchId: string): boolean {
   return true
 }
 
-/** 임시보관함에서 하나를 그냥 버린다(정리 대상에서 직접 제외하고 싶을 때). */
+/** 임시보관함에서 하나를 그냥 버린다(정리 대상에서 직접 제외하고 싶을 때).
+ *  회고록(레이어 2)에 남아 나중에 서고에서 되돌릴 수 있다. */
 export function discardWaxFigureCatch(catchId: string): boolean {
   const idx = runHold.findIndex((c) => c.id === catchId)
   if (idx === -1) return false
+  const entry = runHold[idx]
+  pushArchiveEntry(entry.enemyName, entry.variant, 1, 2)
   runHold.splice(idx, 1)
   return true
 }
 
 /** 밀랍상함에 있는 항목을 하나 버려 자리를 비운다. 남은 수가 있으면 1만 줄고, 마지막
- *  하나였으면 항목 자체가 사라진다. 존재하지 않으면 false. */
+ *  하나였으면 항목 자체가 사라진다. 존재하지 않으면 false. 회고록(레이어 1)에 남아
+ *  나중에 서고에서 되돌릴 수 있다. */
 export function discardWaxFigurePermanent(enemyName: string, variant: WaxFigureVariant, star: number): boolean {
   const state = loadWaxFigureCollection()
   const key = makeKey(enemyName, variant, star)
@@ -265,6 +362,7 @@ export function discardWaxFigurePermanent(enemyName: string, variant: WaxFigureV
   if (have <= 1) delete state.counts[key]
   else state.counts[key] = have - 1
   saveWaxFigureCollection(state)
+  pushArchiveEntry(enemyName, variant, star, 1)
   return true
 }
 

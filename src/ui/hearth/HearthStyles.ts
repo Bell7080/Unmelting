@@ -1606,14 +1606,19 @@ body.hearth-lobby #ingame-backdrop.is-out {
   font: 900 clamp(19px, 3vh, 30px)/1.2 'OkDanDan', Georgia, serif;
   letter-spacing: 0.22em;
   padding: clamp(6px, 1.2vh, 12px) clamp(12px, 2vw, 22px) clamp(8px, 1.4vh, 14px);
-  cursor: default;
+  cursor: pointer;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 .hearth-library-tab.is-active {
   color: var(--color-flame, #ffd778);
   text-shadow: 0 0 18px rgba(255, 205, 112, 0.5), 0 2px 12px rgba(0, 0, 0, 0.9);
   border-bottom: 2px solid rgba(255, 215, 120, 0.55);
 }
+.hearth-library-tab-icon { display: inline-flex; width: 0.62em; height: 0.62em; color: currentColor; opacity: 0.85; }
+.hearth-library-tab-icon .icon { width: 100%; height: 100%; }
 .hearth-library-journal {
   position: relative;
   z-index: 2;
@@ -1946,6 +1951,85 @@ body.hearth-lobby #ingame-backdrop.is-out {
   color: rgba(214, 200, 178, 0.7);
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
 }
+/* ── 밀랍 회고록 — 버려지거나 사라진 밀랍상을 최신순으로 보여주고 복구한다.
+   밀랍상 전시관 갤러리와 같은 카드 어휘(풀 일러스트 + 작은 칸)를 쓰되, 서고의
+   OkDanDan 금빛 톤에 맞춘다. */
+.hearth-memoir-hint {
+  margin: 0;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: rgba(255, 210, 130, 0.1);
+  border: 1px solid rgba(255, 210, 130, 0.28);
+  color: rgba(255, 233, 196, 0.92);
+  font: 600 clamp(11.5px, 1.5vh, 13px)/1.4 'OkDanDan', Georgia, serif;
+  text-align: center;
+}
+.hearth-memoir-heading {
+  margin: 2px 0 -2px 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font: 700 clamp(12px, 1.6vh, 14px)/1.3 'OkDanDan', Georgia, serif;
+  color: rgba(214, 200, 178, 0.7);
+  letter-spacing: 0.1em;
+}
+.hearth-memoir-heading-note { font-size: 0.78em; font-weight: 500; color: rgba(214, 200, 178, 0.42); letter-spacing: 0.02em; }
+.hearth-memoir-grid {
+  list-style: none;
+  margin: 0;
+  padding: 2px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+.hearth-memoir-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 11px;
+  border: 1px solid rgba(200, 152, 60, 0.28);
+  background: linear-gradient(180deg, rgba(58, 42, 24, 0.4), rgba(16, 12, 10, 0.55));
+}
+.hearth-memoir-card.is-shiny { border-color: rgba(120, 235, 175, 0.4); }
+.hearth-memoir-art {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 215, 120, 0.4);
+  background-size: cover;
+  background-position: center 32%;
+  filter: saturate(1.05) contrast(1.02);
+}
+.hearth-memoir-card.is-shiny .hearth-memoir-art { border-color: rgba(123, 240, 174, 0.55); filter: saturate(1.2) hue-rotate(-14deg) contrast(1.02); }
+.hearth-memoir-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hearth-memoir-name {
+  font: 800 clamp(12px, 1.6vh, 13px)/1.25 'OkDanDan', Georgia, serif;
+  color: rgba(255, 238, 214, 0.94);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hearth-memoir-name b { color: var(--color-flame, #ffd778); font-weight: 900; margin-left: 2px; }
+.hearth-memoir-shiny-tag { font-style: normal; font-size: 0.82em; font-weight: 800; color: #7bf0ae; margin-left: 3px; }
+.hearth-memoir-effect { font-size: clamp(10.5px, 1.3vh, 11.5px); color: rgba(214, 200, 178, 0.62); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hearth-memoir-date { font-size: 10px; color: rgba(214, 200, 178, 0.4); }
+.hearth-memoir-restore {
+  grid-column: 1 / -1;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 215, 120, 0.4);
+  background: rgba(255, 210, 130, 0.08);
+  color: rgba(255, 223, 158, 0.95);
+  font: 700 11.5px/1 'OkDanDan', Georgia, serif;
+  letter-spacing: 0.04em;
+  padding: 5px 0;
+  cursor: pointer;
+  transition: background 0.14s ease, box-shadow 0.14s ease;
+}
+.hearth-memoir-restore:hover { background: rgba(255, 210, 130, 0.2); box-shadow: 0 0 10px rgba(244, 178, 86, 0.35); }
+
 /* 모바일 세로 — 셔터가 얕아 vh 기반 크기가 넘친다. 종합 일지·목차를 위에서부터 촘촘히 쌓는다. */
 @media (max-width: 700px) {
   .hearth-library-stage { padding: 10px 12px 14px; }
@@ -1956,6 +2040,7 @@ body.hearth-lobby #ingame-backdrop.is-out {
   .hearth-library-legacy-line { font-size: 10.5px; }
   .hearth-library-toc-diff { font-size: 9.5px; padding: 1px 5px; }
   .hearth-library-empty { font-size: 13px; }
+  .hearth-memoir-grid { grid-template-columns: 1fr; }
 }
 
 /* ── 만찬 셔터 임시 화면 ──────────────────────────────────────────────

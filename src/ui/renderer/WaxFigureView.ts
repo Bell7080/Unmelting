@@ -27,9 +27,7 @@ import {
   type WaxFigureCatch,
 } from '@core/WaxFigureCollection'
 import { waxFigureIcon, closeIcon } from '@ui/Icons'
-import { spriteForCard } from '@ui/Sprites'
-import { Card, CardType } from '@entities/Card'
-import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
+import { spriteForEnemyName } from '@ui/Sprites'
 import { SquareBurst } from '@ui/SquareBurst'
 
 interface PermanentTile {
@@ -41,21 +39,6 @@ interface PermanentTile {
   effectLabel: string
   chancePct: number
   mergeable: boolean
-}
-
-/** 필드 카드와 같은 함수로 아트를 뽑는다 — 전시관 전용 아트를 새로 정의하지 않는다. */
-const spriteCache = new Map<string, string>()
-function spriteForSpeciesName(enemyName: string): string {
-  const cached = spriteCache.get(enemyName)
-  if (cached) return cached
-  const def = ENEMY_DEFINITIONS.find((d) => d.name === enemyName)
-  const dummy = new Card('wax-figure-preview', CardType.ENEMY, enemyName, def?.description ?? '', 1, 1, {
-    enemySpriteId: def?.enemySpriteId,
-    enemyPower: def?.enemyPower,
-  })
-  const url = spriteForCard(dummy)
-  spriteCache.set(enemyName, url)
-  return url
 }
 
 function tileKey(enemyName: string, variant: WaxFigureVariant, star: number): string {
@@ -147,7 +130,7 @@ export class WaxFigureView {
     const circle = host.querySelector<HTMLElement>('.wax-compose-circle')
     const core = circle?.querySelector<HTMLElement>('.wax-compose-core')
     const sourceRect = core?.getBoundingClientRect() ?? null
-    const sprite = spriteForSpeciesName(enemyName)
+    const sprite = spriteForEnemyName(enemyName)
     circle?.classList.add('is-merging')
     await new Promise<void>((resolve) => window.setTimeout(resolve, 600))
 
@@ -236,7 +219,7 @@ export class WaxFigureView {
   private renderHoldCard(c: WaxFigureCatch, selected: boolean): string {
     const shinyClass = c.variant === 'shiny' ? ' is-shiny' : ''
     const selectedClass = selected ? ' is-selected' : ''
-    const sprite = spriteForSpeciesName(c.enemyName)
+    const sprite = spriteForEnemyName(c.enemyName)
     return `
       <li class="wax-exhibit-card wax-hold-card${shinyClass}${selectedClass}" data-wax-select="${c.id}">
         <div class="wax-exhibit-art" style="background-image:url('${sprite}')" aria-hidden="true"></div>
@@ -246,7 +229,7 @@ export class WaxFigureView {
   private renderExhibitCard(tile: PermanentTile, selected: boolean): string {
     const shinyClass = tile.variant === 'shiny' ? ' is-shiny' : ''
     const selectedClass = selected ? ' is-selected' : ''
-    const sprite = spriteForSpeciesName(tile.enemyName)
+    const sprite = spriteForEnemyName(tile.enemyName)
     return `
       <li class="wax-exhibit-card${shinyClass}${selectedClass}" data-wax-select="${tile.key}">
         <div class="wax-exhibit-art" style="background-image:url('${sprite}')" aria-hidden="true"></div>
@@ -274,7 +257,7 @@ export class WaxFigureView {
     }
     if ('tile' in selection) {
       const tile = selection.tile
-      const sprite = spriteForSpeciesName(tile.enemyName)
+      const sprite = spriteForEnemyName(tile.enemyName)
       const shinyClass = tile.variant === 'shiny' ? ' is-shiny' : ''
       return `
         <div class="wax-info-portrait${shinyClass}" style="background-image:url('${sprite}')" aria-hidden="true"></div>
@@ -290,7 +273,7 @@ export class WaxFigureView {
         <button type="button" class="wax-info-discard" data-wax-discard-permanent="${tile.enemyName}::${tile.variant}::${tile.star}" aria-label="이 밀랍상 버리기" data-tooltip="1개 버리기.">✕</button>`
     }
     const c = selection.catch
-    const sprite = spriteForSpeciesName(c.enemyName)
+    const sprite = spriteForEnemyName(c.enemyName)
     const shinyClass = c.variant === 'shiny' ? ' is-shiny' : ''
     return `
       <div class="wax-info-portrait${shinyClass}" style="background-image:url('${sprite}')" aria-hidden="true"></div>
@@ -314,7 +297,7 @@ export class WaxFigureView {
     }
     return `<ul class="wax-compose-list">${mergeable
       .map((t) => {
-        const sprite = spriteForSpeciesName(t.enemyName)
+        const sprite = spriteForEnemyName(t.enemyName)
         return `
         <li>
           <button type="button" class="wax-compose-list-btn${t.key === activeKey ? ' is-active' : ''}" data-wax-compose-select="${t.key}">
@@ -336,7 +319,7 @@ export class WaxFigureView {
     if (!tile) {
       return `<p class="wax-compose-empty">좌측에서 합성할 조합을 골라 보세요.</p>`
     }
-    const sprite = spriteForSpeciesName(tile.enemyName)
+    const sprite = spriteForEnemyName(tile.enemyName)
     const shinyClass = tile.variant === 'shiny' ? ' is-shiny' : ''
     const nodes = Array.from(
       { length: WAX_FIGURE_MERGE_COUNT },

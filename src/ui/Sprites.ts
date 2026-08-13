@@ -21,6 +21,7 @@
 
 import { Card, CardType, type EnemySpriteId, type FlowerKind, type TrapKind } from '@entities/Card'
 import type { HandCardId } from '@entities/HandCard'
+import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
 
 import backgroundUrl from '../assets/sprites/background_001.webp'
 import shopVeilBgUrl from '../assets/sprites/background_002.webp'
@@ -723,5 +724,25 @@ const eventBossGlob = import.meta.glob<{ default: string }>(
 /** 이벤트 보스 일러스트. name 예: 'eventboss_001'. 파일 없으면 undefined. */
 export function spriteForEventBoss(name: string): string | undefined {
   return eventBossGlob[`../assets/sprites/${name}.webp`]?.default
+}
+
+/**
+ * 적 표시 이름만으로 필드 카드와 같은 일러스트를 뽑는다(밀랍상 전시관/서고 회고록처럼
+ * 실제 필드 Card 인스턴스가 없는 화면에서 쓴다). `ENEMY_DEFINITIONS`에서 이름으로
+ * 정의를 찾아 `spriteForCard()`가 받는 최소 모양의 더미 Card를 만들어 그대로 태운다 —
+ * 아트 해석 규칙(spriteForNormalEnemy 등)을 여기 따로 베끼지 않는다.
+ */
+const enemySpriteCache = new Map<string, string>()
+export function spriteForEnemyName(enemyName: string): string {
+  const cached = enemySpriteCache.get(enemyName)
+  if (cached) return cached
+  const def = ENEMY_DEFINITIONS.find((d) => d.name === enemyName)
+  const dummy = new Card('sprite-lookup-preview', CardType.ENEMY, enemyName, def?.description ?? '', 1, 1, {
+    enemySpriteId: def?.enemySpriteId,
+    enemyPower: def?.enemyPower,
+  })
+  const url = spriteForCard(dummy)
+  enemySpriteCache.set(enemyName, url)
+  return url
 }
 
