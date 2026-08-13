@@ -1217,7 +1217,8 @@ body.is-hand-targeting .chain-banner { opacity: 0.3; transition: opacity 0.2s ea
 .chain-banner {
   position: fixed;
   left: 50%;
-  top: 20vh;
+  /* 레일 상단과 조금 더 떨어뜨려 체인 글자가 보드 위에 걸치지 않게 한다. */
+  top: 15vh;
   /* 위로 날아가지 않는다. 제자리에서 투명해질 뿐 — 레일 대기 행을 투명도로만
      눌러 두는 것과 같은 어휘다. 이동을 섞으면 글자가 눈을 끌고 도망가 읽히지 않는다. */
   transform: translateX(-50%);

@@ -48,7 +48,7 @@ export class GameState {
    * 보스 칸의 함정 부가물이 같은 이 훅을 지난다 — 함정 처리에 반응하는 유물(함정 수집 등)을
    * 두 경로에 따로 적지 않기 위해서다. 새 함정 반응 유물은 여기 붙이면 양쪽 다 걸린다.
    */
-  onTrapResolved?: () => void
+  onTrapResolved?: (trapKind?: string) => void
 
   constructor() {
     this.character = new Character()

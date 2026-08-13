@@ -840,6 +840,12 @@ async function playResourceTrail(
   // same landing hook instead of waiting for slower consume/cleanup animations,
   // while hand-card drops intentionally keep their non-numeric card materialize beat.
   tickHudCounterAfterTrail(resource)
+  // 불빛·화폐가 실제로 들어오는 그 박자(트레일 착탄 = 수치 롤링 = 버스트)에 상자 여는
+  // 소리를 얹는다. 여기 한 곳이라 상자·잡동사니·꽃·이벤트 어디서 온 재화든 같이 울린다.
+  if (resource === 'score' || resource === 'coin') {
+    // 화폐는 불빛보다 귀한 값이라 조금 더 높고 길게 울린다.
+    sfx.playChestOpen(resource === 'coin' ? { semitones: 5, ring: 0.45 } : { semitones: 0, ring: 0.25 })
+  }
 }
 
 /** Map a trail resource onto the matching HUD counter keys and roll them to
@@ -1885,13 +1891,16 @@ function resetForNewRun(): void {
   }
   // 함정 처리 훅: 필드 함정 카드와 보스 칸 함정 부가물이 **같은 이 함수**를 지난다.
   // 함정 처리에 반응하는 유물은 여기 한 곳에만 적는다.
-  gameState.onTrapResolved = () => {
+  gameState.onTrapResolved = (trapKind) => {
     if (gameState.character.hasRelic('trap-collect')) relicEffects.applyTrapCollect()
+    // 함정 처리음 — 종류(거미줄/폭탄/포자/덤불)로 음색이 갈리고, 등록된 두 장 중
+    // 하나를 무작위로 고른다. 보스 칸 함정은 종류가 없어 기본 음색으로 떨어진다.
+    sfx.playTrapClear(trapKind)
   }
   // 카드 제거 훅: 굳은 카드(밀랍 조각) / 함정 처리(함정 수집) 유물을 발동한다.
   gameState.onCardRemoved = (card) => {
     if (card.isFrozen() && gameState.character.hasRelic('wax-fragment')) void relicEffects.applyWaxFragmentOnFrozenClear()
-    if (card.type === CardType.TRAP) gameState.onTrapResolved?.()
+    if (card.type === CardType.TRAP) gameState.onTrapResolved?.(card.trapKind)
   }
   // 작은 태양: 빛 게이지가 한계를 넘겨 잘린 초과분만큼 불씨 손패를 지급한다.
   gameState.character.onEmberOverflow = (overflow) => {
@@ -2746,6 +2755,11 @@ async function applyHandSingle(
   }
   // 카드가 실제로 피해를 입혔으면 그 카드의 태그(칼날/불씨/제물…)로 타격음을 변주한다.
   if (singleDamageLosses.length > 0) sfx.playHandHit(usedDef?.synergyTags ?? [])
+  // 효과가 손패를 늘렸으면(열쇠로 연 보물칸 등) 필드 드롭과 같은 카드 토큰을 띄운다 —
+  // 없으면 손패가 소리 없이 늘어 어디서 왔는지가 화면에서 사라진다.
+  if (result.gainedHandCards && result.gainedHandCards > 0) {
+    void playResourceTrail({ kind: 'chain' }, 'hand', result.gainedHandCards)
+  }
   await Promise.all([
     boardRenderer.animateDamageNumbersById(singleDamageLosses),
     boardRenderer.animateWaxFreezeByIds(newlyFrozenIds),
@@ -3636,6 +3650,8 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   if (counterClutchFires) {
     const attackerIds = [...new Set(hits.filter((h) => h.damage > 0).map((h) => h.cardId))]
     const counterDamage = Math.max(1, gameState.character.damage)
+    // 처치 전 카드를 잡아 둔다 — 전리품/밀랍상 굴림이 죽은 카드의 정보를 필요로 한다.
+    const beforeCounterField = snapshotFieldCardsById()
     const damaged: { cardId: string; amount: number }[] = []
     const killedIds: string[] = []
     for (const id of attackerIds) {
@@ -3650,8 +3666,13 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
       companionDirector.sayEnaBark(companion.minorClutchLine('counter'), { importance: BARK_IMPORTANCE.clutch })
       await boardRenderer.animateDamageNumbersById(damaged)
       if (killedIds.length > 0) {
-        await boardRenderer.animateCardConsumeByIds(killedIds.map((cardId) => ({ cardId, type: CardType.ENEMY })), { suppressBurstIds: new Set(killedIds) })
+        const killedPayloads = killedIds.map((cardId) => ({ cardId, type: CardType.ENEMY }))
+        await boardRenderer.animateCardConsumeByIds(killedPayloads, { suppressBurstIds: new Set(killedIds) })
         await relicEffects.onEnemiesDefeated(killedIds.length)
+        // ★ 에나의 반격으로 잡아도 전리품은 나온다 — 처치는 처치다. 손패 처치와 같은
+        //   보수 굴림/행동당 1장 상한을 쓴다(플레이어가 턴을 더 쓰지 않고 얻는 처치라
+        //   직접 타격의 0~N을 그대로 주지는 않는다). 밀랍상 봉인도 함께 굴린다.
+        await awardHandKillDrops(killedPayloads, beforeCounterField)
       }
       render()
     }

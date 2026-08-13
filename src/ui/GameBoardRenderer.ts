@@ -5119,6 +5119,8 @@ export class GameBoardRenderer {
       elements.push(element)
       SquareBurst.playOn(element, 'flower-wilt', { count: 24, spread: 135 })
     }
+    // 꽃이 시들어 괴물꽃이 되는 순간 — 미믹과 같은 '변환' 음색을 조금 높여 쓴다.
+    if (elements.length > 0) sfx.playTransform({ semitones: 2, ring: 0.55 })
     return this.animateElements(elements, 'is-flower-wilting', 620)
   }
 
@@ -5143,6 +5145,8 @@ export class GameBoardRenderer {
         SquareBurst.playOn(element, 'vanish-smoke', { count: 18, spread: 110 })
       } else if (change.outcome === 'mimic') {
         SquareBurst.playOn(element, 'mimic-shift', { count: 20, spread: 130 })
+        // 상자가 정체를 드러내는 순간 — 무언가가 다른 것이 되는 소리. 낮게 깔아 불길하게.
+        sfx.playTransform({ semitones: -4, ring: 0.6 })
       }
     }
     return this.animateElements([...elements], 'is-treasure-vanishing', 520, { persist: true })

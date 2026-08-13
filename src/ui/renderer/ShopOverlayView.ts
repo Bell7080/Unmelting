@@ -12,6 +12,7 @@ import { spriteForRelic, SpriteUrls } from '@ui/Sprites'
 import { SquareBurst, type BurstTheme } from '@ui/SquareBurst'
 import { sparkleIcon } from '@ui/Icons'
 import { attachShopTouchHighlight } from '@ui/MobileTouchManager'
+import { sfx } from '@/audio/SfxManager'
 import type {
   ForcedTrialCardView,
   ResourceTrailTarget,
@@ -199,6 +200,8 @@ export class ShopOverlayView {
   /** Shared shop purchase impact: brief shake + palette square burst so every
    *  shop element uses one common buy beat before its own follow-up event. */
   async playShopPurchaseImpact(target: HTMLElement, theme: Parameters<typeof SquareBurst.playOn>[1] = 'score'): Promise<void> {
+    // 상점·제단 구매의 공통 임팩트 beat에 값을 치른 소리를 얹는다(상자 음색을 높인 것).
+    sfx.playPurchase()
     target.classList.remove('is-shop-purchase-impact')
     void target.offsetWidth
     target.classList.add('is-shop-purchase-impact')

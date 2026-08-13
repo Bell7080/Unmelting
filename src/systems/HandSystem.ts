@@ -75,6 +75,8 @@ export interface HandUseResult {
   coinsGained?: number
   /** Extra hand-gauge progress granted by the card's explicit effect. */
   gaugeCountBonus?: number
+  /** 이 카드의 효과가 손에 **더해 준** 장수(열쇠로 연 보물칸 등). 연출이 손패 토큰을 띄운다. */
+  gainedHandCards?: number
   /** 탐욕의 동전: 사용자가 즉시 받는 피해. UI가 애니메이션과 함께 적용한다. */
   selfDamage?: number
   /** 탐욕의 동전: 획득 불빛 base값. UI(index.ts)가 인플레이션을 적용해 합산한다. */
@@ -268,9 +270,14 @@ export class HandSystem {
     const preEffectEnemyCount = card.defId === 'teapot' ? HandSystem.countFieldEnemies(gs) : 0
 
     // Apply the card effect (merged cards use the enhanced version).
+    // 효과가 손패를 **늘리는** 카드(열쇠로 보물칸을 여는 등)는 그 장수를 여기서 잰다 —
+    // 효과 직후·카드 소모 전 구간이라 소모 1장이 섞이지 않고, 자동 합성도 아직 안 돌았다.
+    // 이 값이 없으면 열쇠로 연 보물의 손패가 이펙트 없이 조용히 손에 들어온다.
+    const handBeforeEffect = character.hand.length
     const message = card.merged
       ? HandSystem.applyTripleEffect(gs, def, target)
       : HandSystem.applySingleEffect(gs, def, target)
+    const gainedHandCards = Math.max(0, character.hand.length - handBeforeEffect)
     // 효과가 동기 실행되는 동안 기록된 실제 무작위 표적을 순서대로 떼어 결과에 싣는다.
     const projectileTargetCardIds = HandSystem.pendingProjectileTargetCardIds
     HandSystem.pendingProjectileTargetCardIds = []
@@ -327,6 +334,7 @@ export class HandSystem {
       mergeMessages,
       removedFieldCards,
       projectileTargetCardIds: projectileTargetCardIds.length > 0 ? projectileTargetCardIds : undefined,
+      gainedHandCards: gainedHandCards > 0 ? gainedHandCards : undefined,
       coinsGained: card.defId === 'coin'
         ? (card.merged
             ? 5 + (gs.enhancements.tripleBonus['coin'] ?? 0)

@@ -16,6 +16,10 @@ import {
   CHAIN_SFX_BY_KIND,
   HIT_TONE_BY_TAG,
   HIT_TONE_PRIORITY,
+  SFX_VARIANTS,
+  TRAP_TONE_BY_KIND,
+  type SfxVariantGroup,
+  type HitToneSpec,
   FADE_OUT_S,
   type SfxKey,
   type ChainSfxKind,
@@ -132,6 +136,37 @@ export class SfxManager {
         delayMs: (tone.repeat?.gapMs ?? 0) * i,
       })
     }
+  }
+
+  /**
+   * 상자·잡동사니를 여는 소리. 자원(불빛/화폐)이 롤링하며 터지는 그 박자에 맞춰 부른다.
+   * 같은 사건에 여러 장이 등록돼 있으면 매번 무작위로 골라 단조로움을 던다.
+   */
+  playChestOpen(opts: { semitones?: number; gain?: number; ring?: number } = {}): void {
+    this.playVariant('chest', { semitones: opts.semitones ?? 0, gain: opts.gain ?? 1, ring: opts.ring ?? 0.25 })
+  }
+
+  /** 상점·제단에서 물건을 샀을 때 — 상자와 같은 음색을 조금 높여 '값을 치렀다'로 쓴다. */
+  playPurchase(): void {
+    this.playVariant('chest', { semitones: 3, gain: 0.95, ring: 0.35 })
+  }
+
+  /** 함정을 처리했을 때. 함정 종류(거미줄/폭탄/포자/덤불)로 음색이 갈린다. */
+  playTrapClear(trapKind?: string): void {
+    const tone = (trapKind && TRAP_TONE_BY_KIND[trapKind]) || { semitones: 0, gain: 1, ring: 0.2 }
+    this.playVariant('trap', tone)
+  }
+
+  /** 미믹이 정체를 드러내거나 씨앗이 괴물꽃이 될 때 — 무언가가 다른 것이 되는 순간. */
+  playTransform(opts: { semitones?: number; ring?: number } = {}): void {
+    void this.play('transform', { semitones: opts.semitones ?? 0, ring: opts.ring ?? 0.5 })
+  }
+
+  /** 여러 장 중 하나를 무작위로 골라 같은 변주 규칙으로 재생한다. */
+  private playVariant(group: SfxVariantGroup, tone: Pick<HitToneSpec, 'semitones' | 'gain' | 'ring'>): void {
+    const keys = SFX_VARIANTS[group]
+    const key = keys[Math.min(Math.floor(Math.random() * keys.length), keys.length - 1)]!
+    void this.play(key, { semitones: tone.semitones, gainScale: tone.gain, ring: tone.ring })
   }
 
   /** 에나가 판을 뒤집는 순간(클러치) — 체인 음색을 낮고 길게 울려 무게를 준다. */

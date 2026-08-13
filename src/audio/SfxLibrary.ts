@@ -15,6 +15,11 @@ import attackUrl from '../assets/audio/sfx_attack.mp3'
 import chain001Url from '../assets/audio/chain_001.mp3'
 import chain002Url from '../assets/audio/chain_002.mp3'
 import chain003Url from '../assets/audio/chain_003.mp3'
+import chest001Url from '../assets/audio/chest_001.mp3'
+import chest002Url from '../assets/audio/chest_002.mp3'
+import trap001Url from '../assets/audio/trap_001.mp3'
+import trap002Url from '../assets/audio/trap_002.mp3'
+import transform001Url from '../assets/audio/transform_001.mp3'
 
 /**
  * 무음 판정 임계값 — **최대 진폭 대비 dB**다. 절대값으로 재면 파일마다 녹음 레벨이 달라
@@ -60,7 +65,41 @@ export const SFX_LIBRARY = {
   chainRecipe: { url: chain002Url, rateRange: [0.99, 1.01], gain: 0.78 },
   /** 체인 3 — 유물이 발동했을 때. */
   chainRelic: { url: chain003Url, rateRange: [0.99, 1.01], gain: 0.74 },
+  /** 상자·잡동사니를 여는 소리 2종(같은 사건에 번갈아 나 단조로움을 던다). */
+  chestA: { url: chest001Url, rateRange: [0.97, 1.03], gain: 0.85 },
+  chestB: { url: chest002Url, rateRange: [0.97, 1.03], gain: 0.85 },
+  /** 함정을 처리하는 소리 2종. */
+  trapA: { url: trap001Url, rateRange: [0.97, 1.03], gain: 0.85 },
+  trapB: { url: trap002Url, rateRange: [0.97, 1.03], gain: 0.85 },
+  /** 변신/변환(미믹이 정체를 드러내거나 씨앗이 괴물꽃이 될 때). */
+  transform: { url: transform001Url, rateRange: [0.98, 1.02], gain: 0.9 },
 } as const satisfies Record<string, SfxDef>
+
+/**
+ * 같은 사건에 쓰는 **여러 장의 소리**. 매번 무작위로 하나를 골라 반복 청각 피로를 던다 —
+ * 사용자가 종류별로 여러 개를 넣어 준 이유가 이것이다.
+ */
+export const SFX_VARIANTS = {
+  chest: ['chestA', 'chestB'],
+  trap: ['trapA', 'trapB'],
+} as const satisfies Record<string, readonly SfxKey[]>
+
+export type SfxVariantGroup = keyof typeof SFX_VARIANTS
+
+/**
+ * 함정 종류별 변주. 같은 두 장을 쓰되 음정·잔향·역재생으로 갈라, 무엇을 치웠는지가
+ * 소리로 읽히게 한다(체인·타격음과 같은 방식).
+ */
+export const TRAP_TONE_BY_KIND: Record<string, HitToneSpec> = {
+  // 거미줄 — 끈적한 것이 뜯기는 느낌. 조금 낮고 짧게.
+  web: { semitones: -2, gain: 0.95, ring: 0.15 },
+  // 폭탄 — 낮고 묵직하게 길게 울린다.
+  bomb: { semitones: -6, gain: 1.05, ring: 0.6 },
+  // 포자 — 높고 가볍게, 흩어지는 잔향.
+  spore: { semitones: 5, gain: 0.85, ring: 0.45 },
+  // 덤불(온보딩) — 바스락. 잔향 없이 마른 소리.
+  bush: { semitones: 3, gain: 0.8, ring: 0.05 },
+}
 
 export type SfxKey = keyof typeof SFX_LIBRARY
 
