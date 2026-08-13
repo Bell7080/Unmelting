@@ -127,17 +127,6 @@ export class WaxFigureView {
       void this.performMerge(host, mergeBtn.dataset.waxMerge!)
       return
     }
-    const stowAllBtn = t.closest<HTMLElement>('[data-wax-stow-all]')
-    if (stowAllBtn) {
-      let stowed = 0
-      for (const c of [...getWaxFigureRunHold()]) { if (stowWaxFigureCatch(c.id)) stowed++ }
-      const left = getWaxFigureRunHold().length
-      this.lastActionHint = left > 0
-        ? `${stowed}개 정리, ${left}개는 밀랍상함이 가득 차 못 옮겼습니다.`
-        : stowed > 0 ? `${stowed}개 전부 정리했습니다.` : null
-      this.render(host)
-      return
-    }
     const selectCard = t.closest<HTMLElement>('[data-wax-select]')
     if (selectCard) {
       this.selectedKey = selectCard.dataset.waxSelect!
@@ -242,18 +231,15 @@ export class WaxFigureView {
     return tiles
   }
 
-  /** 우측 임시보관칸 한 줄 — 넘친 몫이라 작게, 담기/버리기만 즉시 가능하면 된다. */
-  private renderHoldSlot(c: WaxFigureCatch): string {
+  /** 우측 임시보관칸 — 갤러리 카드와 같은 어휘의 더 작은 칸이다. 이름/효과 문구는
+   *  안 붙인다 — 눌러서 좌측 정보창을 보면 되므로 칸 자체는 작게 유지한다. */
+  private renderHoldCard(c: WaxFigureCatch, selected: boolean): string {
     const shinyClass = c.variant === 'shiny' ? ' is-shiny' : ''
+    const selectedClass = selected ? ' is-selected' : ''
     const sprite = spriteForSpeciesName(c.enemyName)
     return `
-      <li class="wax-hold-slot${shinyClass}">
-        <div class="wax-hold-slot-art" style="background-image:url('${sprite}')" aria-hidden="true"></div>
-        <span class="wax-hold-slot-name">${c.enemyName}${c.variant === 'shiny' ? ' <em class="wax-shiny-tag">이로치</em>' : ''}</span>
-        <span class="wax-hold-slot-actions">
-          <button type="button" class="wax-btn wax-btn-stow" data-wax-stow="${c.id}">담기</button>
-          <button type="button" class="wax-btn wax-btn-discard" data-wax-discard="${c.id}" aria-label="버리기">✕</button>
-        </span>
+      <li class="wax-exhibit-card wax-hold-card${shinyClass}${selectedClass}" data-wax-select="${c.id}">
+        <div class="wax-exhibit-art" style="background-image:url('${sprite}')" aria-hidden="true"></div>
       </li>`
   }
 
@@ -272,29 +258,53 @@ export class WaxFigureView {
       </li>`
   }
 
-  /** 좌측 정보창 — 선택된 전시물의 아트/효과/수치를 크게 보여준다. */
-  private renderInfoPanel(tile: PermanentTile | undefined): string {
-    if (!tile) {
+  /**
+   * 좌측 정보창 — 선택된 전시물의 아트/효과/수치를 크게 보여준다. 밀랍상함 항목과
+   * 임시보관함(넘친 몫) 항목을 같은 자리에서 보여주되, 후자는 "정리 안 하면 사라짐"
+   * 안내와 담기/버리기 두 버튼을 더 갖는다 — 둘 다 결국 같은 밀랍상이라 표시 칸만
+   * 작을 뿐, 정보는 이 패널 하나로 통일한다.
+   */
+  private renderInfoPanel(selection: { tile: PermanentTile } | { catch: WaxFigureCatch } | null): string {
+    if (!selection) {
       return `
         <div class="wax-info-empty">
           <span class="wax-info-empty-glyph">${waxFigureIcon()}</span>
           <p>전시물을 골라 보세요.</p>
         </div>`
     }
-    const sprite = spriteForSpeciesName(tile.enemyName)
-    const shinyClass = tile.variant === 'shiny' ? ' is-shiny' : ''
+    if ('tile' in selection) {
+      const tile = selection.tile
+      const sprite = spriteForSpeciesName(tile.enemyName)
+      const shinyClass = tile.variant === 'shiny' ? ' is-shiny' : ''
+      return `
+        <div class="wax-info-portrait${shinyClass}" style="background-image:url('${sprite}')" aria-hidden="true"></div>
+        <div class="wax-info-body">
+          <h3 class="wax-info-name">${tile.enemyName}${tile.variant === 'shiny' ? ' <em class="wax-shiny-tag">이로치</em>' : ''}</h3>
+          <div class="wax-info-stars">${'★'.repeat(tile.star)}<span class="wax-info-star-num">${tile.star}성</span></div>
+          <dl class="wax-info-stats">
+            <div><dt>보유</dt><dd>×${tile.count}</dd></div>
+            <div><dt>효과</dt><dd>${tile.effectLabel}</dd></div>
+            <div><dt>발동 확률</dt><dd><b>${tile.chancePct.toFixed(1)}%</b></dd></div>
+          </dl>
+        </div>
+        <button type="button" class="wax-info-discard" data-wax-discard-permanent="${tile.enemyName}::${tile.variant}::${tile.star}" aria-label="이 밀랍상 버리기" data-tooltip="1개 버리기.">✕</button>`
+    }
+    const c = selection.catch
+    const sprite = spriteForSpeciesName(c.enemyName)
+    const shinyClass = c.variant === 'shiny' ? ' is-shiny' : ''
     return `
       <div class="wax-info-portrait${shinyClass}" style="background-image:url('${sprite}')" aria-hidden="true"></div>
       <div class="wax-info-body">
-        <h3 class="wax-info-name">${tile.enemyName}${tile.variant === 'shiny' ? ' <em class="wax-shiny-tag">이로치</em>' : ''}</h3>
-        <div class="wax-info-stars">${'★'.repeat(tile.star)}<span class="wax-info-star-num">${tile.star}성</span></div>
+        <h3 class="wax-info-name">${c.enemyName}${c.variant === 'shiny' ? ' <em class="wax-shiny-tag">이로치</em>' : ''}</h3>
+        <p class="wax-info-hold-note">임시보관함 — 정리하지 않으면 모험이 끝날 때 사라집니다.</p>
         <dl class="wax-info-stats">
-          <div><dt>보유</dt><dd>×${tile.count}</dd></div>
-          <div><dt>효과</dt><dd>${tile.effectLabel}</dd></div>
-          <div><dt>발동 확률</dt><dd><b>${tile.chancePct.toFixed(1)}%</b></dd></div>
+          <div><dt>효과</dt><dd>${c.effect.label}</dd></div>
         </dl>
       </div>
-      <button type="button" class="wax-info-discard" data-wax-discard-permanent="${tile.enemyName}::${tile.variant}::${tile.star}" aria-label="이 밀랍상 버리기" data-tooltip="1개 버리기.">✕</button>`
+      <div class="wax-info-hold-actions">
+        <button type="button" class="wax-btn wax-btn-stow" data-wax-stow="${c.id}">담기</button>
+        <button type="button" class="wax-info-discard" data-wax-discard="${c.id}" aria-label="버리기" data-tooltip="버리기.">✕</button>
+      </div>`
   }
 
   /** 좌측 "합성 가능 리스트" — 재료가 다 찬 조합만 버튼으로 나열한다. */
@@ -355,11 +365,17 @@ export class WaxFigureView {
     this.lastActionHint = null
 
     // 선택이 없거나 합성/버리기로 사라졌으면 첫 전시물로 되돌아간다 — 패널이 빈 채로
-    // 남으면 "지금 뭘 보고 있는지"가 끊긴다.
-    if (!this.selectedKey || !tiles.some((t) => t.key === this.selectedKey)) {
-      this.selectedKey = tiles[0]?.key ?? null
+    // 남으면 "지금 뭘 보고 있는지"가 끊긴다. 밀랍상함 항목과 임시보관함 항목을 같은
+    // selectedKey 하나로 다룬다(둘의 id 체계가 겹치지 않는다 — 전자는 종::색::성급,
+    // 후자는 wf-N).
+    const selectable = this.selectedKey !== null
+      && (tiles.some((t) => t.key === this.selectedKey) || runHold.some((c) => c.id === this.selectedKey))
+    if (!selectable) {
+      this.selectedKey = tiles[0]?.key ?? runHold[0]?.id ?? null
     }
     const selectedTile = tiles.find((t) => t.key === this.selectedKey)
+    const selectedCatch = runHold.find((c) => c.id === this.selectedKey)
+    const infoSelection = selectedTile ? { tile: selectedTile } : selectedCatch ? { catch: selectedCatch } : null
 
     // 마법진은 합성 가능 리스트(재료가 다 찬 조합)에서만 고른다 — 리스트에서 사라졌으면
     // (합성해 버렸거나 버려서 재료가 줄었으면) 다음 후보로 넘어간다.
@@ -372,8 +388,7 @@ export class WaxFigureView {
     // 자리가 있으면 봉인은 곧장 밀랍상함으로 들어간다 — 우측 임시보관칸은 한도를 넘겨
     // 밀려난 "넘친 몫"만 담으므로 평소에는 비어 있는 것이 정상이다.
     const holdContent = runHold.length > 0
-      ? `<ul class="wax-hold-slots">${runHold.map((c) => this.renderHoldSlot(c)).join('')}</ul>
-         <button type="button" class="wax-btn wax-btn-stow-all" data-wax-stow-all>전부 정리</button>`
+      ? `<ul class="wax-exhibit-grid wax-hold-grid">${runHold.map((c) => this.renderHoldCard(c, c.id === this.selectedKey)).join('')}</ul>`
       : `<p class="wax-hold-empty">비어 있습니다.</p>`
 
     // 남은 자리도 투명 칸으로 채운다 — "몇 마리 더 들어가는지"가 빈 문구 한 줄보다
@@ -391,7 +406,7 @@ export class WaxFigureView {
         </header>
         ${hint ? `<p class="wax-action-hint">${hint}</p>` : ''}
         <section class="wax-figure-hall">
-          <aside class="wax-info-panel">${this.renderInfoPanel(selectedTile)}</aside>
+          <aside class="wax-info-panel">${this.renderInfoPanel(infoSelection)}</aside>
           <div class="wax-gallery-scroll">${galleryContent}</div>
           <aside class="wax-hold-panel">
             <h3 class="wax-section-title">임시보관함 <span class="wax-section-note">가득 찼을 때만 여기로</span></h3>

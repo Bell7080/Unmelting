@@ -205,6 +205,10 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   transition: background 0.14s ease, box-shadow 0.14s ease;
 }
 .wax-info-discard:hover { background: rgba(255, 90, 90, 0.18); box-shadow: 0 0 10px rgba(255, 110, 110, 0.3); }
+/* 임시보관함 항목을 골랐을 때 — 안내 문구 + 담기/버리기 두 버튼이 나란히 하단에 붙는다. */
+.wax-info-hold-note { margin: 0; font-size: 12px; line-height: 1.4; color: rgba(255, 233, 196, 0.5); }
+.wax-info-hold-actions { margin-top: auto; align-self: flex-end; display: flex; gap: 6px; }
+.wax-info-hold-actions .wax-info-discard { margin-top: 0; align-self: auto; }
 
 /* ── 중앙 갤러리 ────────────────────────────────────────── */
 .wax-gallery-scroll { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(244, 178, 86, 0.7) transparent; }
@@ -317,9 +321,8 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   padding: 4px 7px;
 }
 .wax-btn-discard:hover { background: rgba(255, 90, 90, 0.18); box-shadow: 0 0 10px rgba(255, 110, 110, 0.3); }
-.wax-btn-stow-all { width: 100%; text-align: center; margin-top: 8px; }
 
-/* ── 우측 임시보관칸 ────────────────────────────────────── */
+/* ── 우측 임시보관칸: 갤러리와 같은 카드 어휘, 더 작은 칸일 뿐이다 ─────── */
 .wax-hold-panel {
   border-radius: 14px;
   border: 1px dashed rgba(255, 215, 120, 0.28);
@@ -331,32 +334,9 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   overflow-y: auto;
 }
 .wax-hold-empty { margin: auto 0; text-align: center; font-size: 12px; color: rgba(255, 233, 196, 0.4); }
-.wax-hold-slots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-/* 넘친 몫이라 갤러리 카드보다 훨씬 작다 — 정리하기 전까지만 잠깐 머무는 자리다. */
-.wax-hold-slot {
-  display: grid;
-  grid-template-columns: 34px 1fr;
-  grid-template-rows: auto auto;
-  grid-template-areas: 'art name' 'art actions';
-  gap: 2px 8px;
-  padding: 6px;
-  border-radius: 9px;
-  background: linear-gradient(180deg, rgba(255, 210, 130, 0.06), rgba(8, 6, 12, 0.3));
-  border: 1px solid rgba(255, 215, 120, 0.16);
-}
-.wax-hold-slot.is-shiny { border-color: rgba(120, 235, 175, 0.4); background: linear-gradient(180deg, rgba(120, 235, 175, 0.08), rgba(8, 6, 12, 0.3)); }
-.wax-hold-slot-art {
-  grid-area: art;
-  width: 34px;
-  height: 34px;
-  border-radius: 7px;
-  background-size: cover;
-  background-position: center 32%;
-  border: 1px solid rgba(255, 215, 120, 0.3);
-}
-.wax-hold-slot.is-shiny .wax-hold-slot-art { border-color: rgba(123, 240, 174, 0.5); filter: saturate(1.2) hue-rotate(-14deg); }
-.wax-hold-slot-name { grid-area: name; align-self: end; font-size: 12px; font-weight: 800; color: #fff5dc; line-height: 1.2; }
-.wax-hold-slot-actions { grid-area: actions; display: flex; gap: 5px; }
+.wax-hold-grid { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; }
+.wax-hold-card { border-color: rgba(255, 215, 120, 0.2); }
+.wax-hold-card.is-shiny { border-color: rgba(120, 235, 175, 0.35); }
 
 /* ── 하단 조합 바: 좌(합성 가능 리스트) + 우(큰 마법진) ──────────────── */
 .wax-compose-bar {
