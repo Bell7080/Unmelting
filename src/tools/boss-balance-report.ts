@@ -208,6 +208,9 @@ function main(): void {
   console.log('    전투 전체에 상각된 부위 파괴 보너스까지 얹은 기여분이다 — 둘을 섞지 말 것.')
   console.log('  · 광역 카드는 성한 칸에만 들어간다. 칸이 깨질수록 약해지는데 모델은 항상')
   console.log('    전체 칸으로 계산하므로, 후반부 광역 피해는 표보다 낮다.')
+  console.log('  · 광역 한 방이 깨는 칸 수에는 상한이 있다(BOSS_GIMMICK_MAX_BREAKS_PER_SWEEP).')
+  console.log('    표의 부위 파괴 보너스는 전투 전체에 상각한 값이라, 단두대 같은 단발 광역의')
+  console.log('    실제 순간 피해는 표보다 낮다 — 한 방 격파를 막는 장치다.')
 }
 
 function report(

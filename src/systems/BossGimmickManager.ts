@@ -137,6 +137,19 @@ export const BOSS_GIMMICK_TOUGHNESS_MAX = 1.5
  * 무거워져, 격자가 한 번에 무너지지 않고 점점 버틴다.
  */
 export const BOSS_GIMMICK_DURABILITY_ESCALATION = 0.22
+/**
+ * ★ **광역 한 방이 깰 수 있는 칸 수 상한.** 단두대 같은 필드 전체 확정 피해는 칸마다 한 번씩
+ * 꽂혀서, 상한이 없으면 첫 타격에 아홉 칸을 전부 부수고 부위 파괴 보너스까지 아홉 번
+ * 챙긴다(= 보스가 그 자리에서 죽는다). 단단한 칸은 버티게 해 **두어 칸만 깨지도록** 막는다 —
+ * 광역기의 값어치(칸마다 들어가는 배율 피해)는 남기되 한 방에 판을 끝내지는 못하게 하는 선이다.
+ *
+ * 상한을 `strikeAllCells`(광역의 유일한 입구)에만 두는 이유: 행동 단위로 두면
+ * `beginAction` 선언을 빠뜨린 경로에서 칸이 **영영 안 깨지는** 잠금이 된다.
+ * 단일/무작위 타격은 어차피 한 번에 한 칸이라 상한이 필요 없다.
+ */
+export const BOSS_GIMMICK_MAX_BREAKS_PER_SWEEP = 2
+/** 광역 한 방 뒤에도 최소한 이만큼의 칸은 성하게 남는다 — 때릴 자리가 사라지지 않게. */
+export const BOSS_GIMMICK_MIN_CELLS_AFTER_SWEEP = 3
 
 /**
  * 칸 내구도 비율. "칸의 절반쯤 깨면 보스가 쓰러진다"는 목표를 그대로 식으로 옮긴 값이다:
@@ -514,8 +527,6 @@ export class BossGimmickManager {
   private pendingHits: BossGimmickStrike[] = []
   /** 지금 진행 중인 플레이어 행동의 출처. `beginAction`이 세우고 판정이 읽는다. */
   private source: BossGimmickSourceContext = NEUTRAL_SOURCE
-  /** 행동 시작 시점의 파괴 칸 수. 한 행동이 마지막 칸까지 깨는 것을 막는 데 쓴다. */
-  private brokenAtActionStart = 0
 
   /** rng는 테스트에서 배치를 고정하기 위해 주입한다. */
   constructor(private readonly rng: () => number = Math.random) {}
@@ -527,8 +538,6 @@ export class BossGimmickManager {
    */
   beginAction(source: BossGimmickSourceContext): void {
     this.source = source
-    // 이번 행동이 시작될 때의 파괴 칸 수 — "한 행동이 전부 쓸어 가지 못한다" 판정의 기준선이다.
-    this.brokenAtActionStart = this.brokenCount
   }
 
   /** 보스 등장 시 1회. 프로필이 있는 보스만 격자를 굴리고, 켜졌는지 여부를 돌려준다. */
@@ -585,7 +594,6 @@ export class BossGimmickManager {
     this.profile = null
     this.shape = { cols: 0, rows: 0 }
     this.cells = []
-    this.brokenAtActionStart = 0
     this.durability = 0
     this.breakBonus = 0
     this.trapBite = 0
@@ -833,13 +841,23 @@ export class BossGimmickManager {
    */
   strikeAllCells(baseDamage: number): BossGimmickStrike[] {
     if (!this.profile) return []
-    return this.livingIndexes().map((index) =>
-      this.strikeAt(index, { cellIndex: index, baseDamage, scope: 'area' })
-    )
+    const living = this.livingIndexes()
+    let broke = 0
+    return living.map((index) => {
+      // ★ 한 스윕이 격자를 통째로 쓸지 못하게 한다. 파괴 상한을 넘겼거나 이 칸까지 깨면
+      //   성한 칸이 최소치 아래로 떨어지는 경우, 그 칸은 단단하게 버틴다.
+      const remainingIfBroken = living.length - (broke + 1)
+      const allowBreak =
+        broke < BOSS_GIMMICK_MAX_BREAKS_PER_SWEEP &&
+        remainingIfBroken >= BOSS_GIMMICK_MIN_CELLS_AFTER_SWEEP
+      const strike = this.strikeAt(index, { cellIndex: index, baseDamage, scope: 'area' }, allowBreak)
+      if (strike.broke) broke += 1
+      return strike
+    })
   }
 
   /** 칸 인덱스 확정 후 공통 처리 — 배율 + 부위 누적 + 파괴 판정의 단일 경로. */
-  private strikeAt(index: number, ctx: BossGimmickStrikeContext): BossGimmickStrike {
+  private strikeAt(index: number, ctx: BossGimmickStrikeContext, allowBreak = true): BossGimmickStrike {
     const cell = this.cells[index]
     const multiplier = this.resolveMultiplier(cell, {
       ...ctx,
@@ -855,16 +873,12 @@ export class BossGimmickManager {
       const limit = this.durabilityOf(cell)
       cell.damage = Math.min(limit, cell.damage + cellDamage)
       if (cell.damage >= limit) {
-        // ★ **한 행동이 격자를 통째로 쓸어 가지 못한다.** 이미 이번 행동에서 다른 칸을
-        //   깼는데 이게 마지막 성한 칸이면, 파괴 직전에서 버틴다 — 광역 한 방에 때릴
-        //   자리가 사라지는 일이 없어야 한다. 다음 행동에서 단독으로 때리면 깨지므로
-        //   '부위를 하나 더 깨야 열리는' 페이지 리미트가 막히지도 않는다.
-        const lastStanding = this.livingIndexes().length <= 1
-        if (lastStanding && this.brokenCount > this.brokenAtActionStart) {
-          cell.damage = Math.max(0, limit - 1)
-        } else {
+        if (allowBreak) {
           cell.broken = true
           breakDamage = this.breakBonus
+        } else {
+          // 이번 광역 스윕의 파괴 상한을 넘겼다 — 단단하게 버텨 파괴 직전에서 멈춘다.
+          cell.damage = Math.max(0, limit - 1)
         }
       }
     }

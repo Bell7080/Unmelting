@@ -9,6 +9,8 @@ import {
   bossGimmickCellDurability,
   bossGimmickExpectation,
   bossFixtureMatchesFilter,
+  BOSS_GIMMICK_MAX_BREAKS_PER_SWEEP,
+  BOSS_GIMMICK_MIN_CELLS_AFTER_SWEEP,
   type BossGimmickCell,
   type BossGimmickResolvedContext,
 } from './BossGimmickManager'
@@ -321,23 +323,28 @@ describe('BossGimmickManager 부위 파괴', () => {
     expect(durabilities.size).toBeGreaterThan(1)
   })
 
-  it('★ 한 행동은 마지막 성한 칸까지 깨지 못한다 — 때릴 자리가 사라지지 않는다', () => {
+  it('★ 광역 한 방(단두대)은 격자를 통째로 쓸지 못한다 — 두 칸만 깨고 나머지는 버틴다', () => {
     const m = stagedGrid()
-    m.beginAction({ origin: 'direct', tags: [] })
-    // 광역 한 방으로 전 칸을 쓸어도 한 칸은 파괴 직전에서 버틴다.
-    for (const cell of m.getCells()) m.strike({ cellIndex: cell.index, baseDamage: 999 })
-    expect(m.brokenCount).toBe(8)
-    expect(m.strikeAllCells(5)).toHaveLength(1)
+    // 내구도를 아득히 넘는 확정 피해를 전 칸에 꽂아도 상한만큼만 깨진다.
+    const strikes = m.strikeAllCells(9999)
+    expect(strikes).toHaveLength(9) // 피해 자체는 모든 성한 칸에 들어간다
+    expect(m.brokenCount).toBe(BOSS_GIMMICK_MAX_BREAKS_PER_SWEEP)
+    // 남은 칸이 최소치 이상 성하게 남아 계속 때릴 자리가 있다.
+    expect(9 - m.brokenCount).toBeGreaterThanOrEqual(BOSS_GIMMICK_MIN_CELLS_AFTER_SWEEP)
   })
 
-  it('다음 행동에서 단독으로 때리면 마지막 칸도 깨진다 — 페이지 리미트가 막히지 않는다', () => {
+  it('광역을 거듭해도 성한 칸이 최소치 아래로 내려가지 않는다', () => {
     const m = stagedGrid()
-    m.beginAction({ origin: 'direct', tags: [] })
-    for (const cell of m.getCells()) m.strike({ cellIndex: cell.index, baseDamage: 999 })
-    // 행동이 바뀌면 기준선이 새로 서므로 남은 한 칸도 깰 수 있다.
-    m.beginAction({ origin: 'direct', tags: [] })
-    const last = m.getCells().find((c) => !c.broken)!
-    m.strike({ cellIndex: last.index, baseDamage: 999 })
+    for (let i = 0; i < 10; i++) m.strikeAllCells(9999)
+    expect(9 - m.brokenCount).toBeGreaterThanOrEqual(BOSS_GIMMICK_MIN_CELLS_AFTER_SWEEP)
+  })
+
+  it('단일 타격에는 상한이 없다 — 한 칸씩 노리면 끝까지 깰 수 있다(페이지 리미트 보존)', () => {
+    const m = stagedGrid()
+    for (const cell of m.getCells()) {
+      // 단일 타격은 한 번에 한 칸이라 상한 대상이 아니다.
+      while (!m.getCells()[cell.index].broken) m.strike({ cellIndex: cell.index, baseDamage: 999 })
+    }
     expect(m.brokenCount).toBe(9)
 
     expect(m.strike({ cellIndex: 0, baseDamage: 5 })).toBeNull()

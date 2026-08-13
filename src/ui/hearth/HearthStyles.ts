@@ -1001,6 +1001,159 @@ body.hearth-lobby #ingame-backdrop.is-out {
    동일한 문법). 버튼 요소는 depart()의 거부 흔들림 앵커로만 남기고 화면에서 숨긴다. */
 #hearth-overlay.is-character-confirmed .hearth-depart { display: none; }
 
+/* ── 출발 준비 화면(해금 온오프 · 시작부터 해금) ──────────────────────────
+   난이도 선택과 **같은 셔터 레이어**를 돌려 쓴다. 전면 오버레이로 띄우면 로비 위에
+   딴 화면이 얹힌 것으로 읽혀, 셔터 안에서 이어지는 한 흐름이 끊긴다.
+
+   ★ 잘림 방지가 이 블록의 핵심이다. 셔터 안쪽은 높이가 정해져 있으므로
+     - 바깥 틀은 max-height로 셔터 안에 가두고,
+     - 목록만 overflow-y: auto로 흘리며(min-height: 0이 없으면 flex 자식이 안 줄어든다),
+     - 카드 크기는 vh를 섞어 낮은 화면에서 함께 작아지게 한다. */
+.hearth-prep { display: none; }
+#hearth-overlay.is-prep-mode .hearth-prep {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(6px, 1.1vh, 12px);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  /* 셔터 패널 폭을 따라간다(난이도 블록과 같은 기준). vw로 잡으면 좁은 셔터에서
+     패널 밖으로 삐져나가 좌우가 잘린다. */
+  width: min(96%, 780px);
+  /* 셔터 패널 안쪽 헤드룸(상단 킥커 자리)을 빼고 남는 만큼만 차지한다. */
+  max-height: calc(100% - clamp(52px, 9vh, 96px));
+  transform: translate(-50%, -50%);
+  z-index: 12;
+  opacity: 0;
+  animation: hearth-diff-rise 0.42s cubic-bezier(0.2, 0.84, 0.3, 1) 0.08s forwards;
+  pointer-events: auto;
+}
+/* 준비 화면이 떠 있는 동안에는 난이도 블록/킥커를 접는다 — 같은 자리를 쓴다.
+   난이도 쪽 규칙(#hearth-overlay.is-character-confirmed …)이 아래에 있어 같은 특이도로는
+   밀린다. 두 클래스를 함께 걸어 특이도를 한 단계 올려 확실히 이긴다. */
+#hearth-overlay.is-prep-mode.is-character-confirmed .hearth-difficulty,
+#hearth-overlay.is-prep-mode.is-character-confirmed .hearth-diff-kicker,
+#hearth-overlay.is-prep-mode .hearth-difficulty,
+#hearth-overlay.is-prep-mode .hearth-diff-kicker { display: none; }
+
+.hearth-prep-header { text-align: center; color: rgba(255, 236, 188, 0.92); flex: 0 0 auto; }
+.hearth-prep-header h2 {
+  margin: 0 0 2px;
+  font-size: clamp(15px, 2.3vh, 21px);
+  letter-spacing: 0.2em;
+  color: rgba(248, 206, 120, 0.94);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+}
+.hearth-prep-header p {
+  margin: 0;
+  font-size: clamp(12px, 1.5vh, 14px);
+  color: rgba(214, 200, 178, 0.74);
+}
+/* 목록만 흐른다. min-height:0이 없으면 flex 자식이 안 줄어들어 아래 버튼이 잘려 나간다. */
+.hearth-prep-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: flex-start;
+  gap: clamp(8px, 1.2vh, 14px);
+  width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(200, 152, 60, 0.5) transparent;
+}
+.hearth-prep-row::-webkit-scrollbar { width: 8px; }
+.hearth-prep-row::-webkit-scrollbar-thumb { background: rgba(200, 152, 60, 0.45); border-radius: 999px; }
+/* 카드 — 셔터 안에 여러 장이 들어가도록 난이도 카드보다 작게 압축한다. */
+.hearth-prep-tile {
+  flex: 0 0 clamp(84px, 8.5vw, 116px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px;
+  border-radius: 11px;
+  border: 1px solid rgba(200, 152, 60, 0.42);
+  background: linear-gradient(180deg, rgba(36, 24, 38, 0.72), rgba(14, 9, 18, 0.86));
+  box-shadow: inset 0 1px 0 rgba(255, 232, 168, 0.16), 0 10px 18px rgba(0, 0, 0, 0.38);
+  color: rgba(255, 236, 188, 0.9);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.18s ease;
+}
+.hearth-prep-tile:hover { transform: translateY(-3px); border-color: rgba(220, 172, 80, 0.72); }
+.hearth-prep-art {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  border-radius: 8px;
+  background: var(--prep-art, none) center/cover no-repeat,
+    linear-gradient(160deg, rgba(74, 56, 78, 0.48), rgba(24, 16, 30, 0.92));
+  border: 1px dashed rgba(255, 222, 140, 0.2);
+}
+.hearth-prep-tile strong {
+  font-size: clamp(12px, 1.6vh, 14px);
+  letter-spacing: 0.03em;
+  /* 긴 이름이 카드를 밀어 넓히지 않게 한 줄로 자른다(툴팁 대신 카드 폭을 지킨다). */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hearth-prep-tile small {
+  font-size: 12px;
+  color: rgba(214, 200, 178, 0.7);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hearth-prep-state {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(255, 228, 160, 0.6);
+  color: #1c1424;
+  background: linear-gradient(180deg, #ffe08a, #d69a3a);
+}
+.hearth-prep-tile.is-off .hearth-prep-state {
+  color: rgba(214, 200, 178, 0.6);
+  background: rgba(0, 0, 0, 0.35);
+  border-color: rgba(200, 152, 60, 0.28);
+}
+.hearth-prep-off-mark {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  background: rgba(6, 4, 8, 0.72);
+  color: rgba(232, 80, 80, 0.9);
+}
+.hearth-prep-off-mark .icon { width: 38%; height: 38%; }
+.hearth-prep-tile.is-off .hearth-prep-off-mark { display: flex; }
+.hearth-prep-actions { flex: 0 0 auto; }
+.hearth-prep-btn {
+  background: none;
+  border: 1px solid rgba(214, 200, 178, 0.4);
+  color: rgba(214, 200, 178, 0.82);
+  font-family: inherit;
+  font-size: clamp(12px, 1.5vh, 14px);
+  letter-spacing: 0.06em;
+  padding: 6px 20px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.18s ease, color 0.18s ease;
+}
+.hearth-prep-btn:hover { border-color: rgba(255, 222, 140, 0.7); color: rgba(255, 236, 188, 0.95); }
+@media (max-width: 700px) {
+  .hearth-prep-tile { flex-basis: clamp(76px, 22vw, 100px); }
+}
+
 /* ── 난이도 선택(확정 상태 전용) ──────────────────────────────────────
    출발 버튼 위, 캐릭터 커버플로우와 같은 결의 일러스트 카드 3장을 넣어 넘겨 고른다. */
 .hearth-difficulty { display: none; }

@@ -1968,33 +1968,12 @@ async function prepareRunLoadout(difficulty: HearthDifficulty): Promise<void> {
   if (ownedItems.length > 0) await openUnlockLoadoutScreen(ownedItems)
   const draftCandidates = getStartingUnlockDraftCandidates()
   if (draftCandidates.length > 0) pendingStartingUnlock = await openStartingUnlockDraft(draftCandidates)
+  hearthScene.closePrepLayer()
 }
 
 function openUnlockLoadoutScreen(items: BasicUnlockPoolItem[]): Promise<void> {
-  const style = document.createElement('style')
-  style.textContent = `
-    .unlock-loadout-screen { position: fixed; inset: 0; z-index: 10550; background: rgba(8,5,10,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 24px; opacity: 0; transition: opacity 0.28s ease; }
-    .unlock-loadout-screen.is-in { opacity: 1; }
-    .unlock-loadout-header { text-align: center; color: rgba(255,236,188,0.92); font-family: 'OkDanDan', Georgia, serif; }
-    .unlock-loadout-header h2 { font-size: clamp(20px, 3vh, 28px); letter-spacing: 0.08em; margin: 0 0 4px; }
-    .unlock-loadout-header p { margin: 0; font-size: clamp(12px, 1.6vh, 15px); color: rgba(214,200,178,0.72); }
-    .unlock-loadout-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; max-width: 900px; }
-    .unlock-loadout-tile { flex: 0 0 clamp(140px, 16vw, 190px); min-height: clamp(176px, 30vh, 236px); border-radius: 14px; border: 1px solid rgba(200,152,60,0.42); background: linear-gradient(180deg, rgba(36,24,38,0.72), rgba(14,9,18,0.86)); box-shadow: inset 0 1px 0 rgba(255,232,168,0.16), inset 0 -14px 24px rgba(0,0,0,0.42), 0 18px 28px rgba(0,0,0,0.38); padding: 10px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; color: rgba(255,236,188,0.9); font-family: 'OkDanDan', Georgia, serif; text-align: left; transition: transform 0.14s ease, border-color 0.18s ease, filter 0.18s ease; }
-    .unlock-loadout-tile:hover { transform: translateY(-3px); border-color: rgba(220,172,80,0.7); }
-    .unlock-loadout-tile-art { position: relative; flex: 1; min-height: 90px; border-radius: 10px; background: var(--unlock-loadout-art, none) center/cover no-repeat, radial-gradient(circle at 50% 38%, rgba(255,232,168,0.14), transparent 54%), linear-gradient(160deg, rgba(74,56,78,0.48), rgba(24,16,30,0.92)); border: 1px dashed rgba(255,222,140,0.2); }
-    .unlock-loadout-tile strong { font-size: clamp(15px, 2.1vh, 19px); letter-spacing: 0.04em; }
-    .unlock-loadout-tile small { color: rgba(214,200,178,0.72); font-size: clamp(11px, 1.5vh, 13px); }
-    .unlock-loadout-state { align-self: flex-start; padding: 3px 10px; border-radius: 999px; font-size: 12px; letter-spacing: 0.04em; border: 1px solid rgba(255,228,160,0.6); color: #1c1424; background: linear-gradient(180deg, #ffe08a, #d69a3a); }
-    .unlock-loadout-tile.is-off .unlock-loadout-state { color: rgba(214,200,178,0.6); background: rgba(0,0,0,0.35); border-color: rgba(200,152,60,0.28); }
-    .unlock-loadout-off-mark { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(6,4,8,0.72); border-radius: inherit; color: rgba(232,80,80,0.9); }
-    .unlock-loadout-off-mark .icon { width: 38%; height: 38%; }
-    .unlock-loadout-tile.is-off .unlock-loadout-off-mark { display: flex; }
-    .unlock-loadout-continue { background: none; border: 1px solid rgba(214,200,178,0.4); color: rgba(214,200,178,0.82); font-family: 'OkDanDan', Georgia, serif; font-size: 14px; letter-spacing: 0.06em; padding: 8px 22px; border-radius: 999px; cursor: pointer; transition: border-color 0.18s ease, color 0.18s ease; }
-    .unlock-loadout-continue:hover { border-color: rgba(255,222,140,0.7); color: rgba(255,236,188,0.95); }
-  `
-  document.head.appendChild(style)
-  const overlay = document.createElement('div')
-  overlay.className = 'unlock-loadout-screen'
+  const host = hearthScene.openPrepLayer()
+  if (!host) return Promise.resolve()
   const renderTile = (item: BasicUnlockPoolItem): string => {
     const on = item.kind === 'card'
       ? isCardUnlockPackEnabled(item.id as HandCardId)
@@ -2007,33 +1986,27 @@ function openUnlockLoadoutScreen(items: BasicUnlockPoolItem[]): Promise<void> {
       : spriteForRelic(item.id as RelicId)
     const label = item.kind === 'card' ? (on ? '해금팩 등장' : '해금팩 숨김') : (on ? '풀 등장' : '풀 숨김')
     return `
-      <button class="unlock-loadout-tile${on ? '' : ' is-off'}" type="button" data-toggle="${item.kind}:${item.id}"
-        style="${sprite ? `--unlock-loadout-art:url('${sprite}')` : ''}">
-        <span class="unlock-loadout-tile-art" aria-hidden="true">
-          <span class="unlock-loadout-off-mark" aria-hidden="true">${closeIcon()}</span>
+      <button class="hearth-prep-tile${on ? '' : ' is-off'}" type="button" data-toggle="${item.kind}:${item.id}"
+        data-tooltip="${name}. ${item.kind === 'card' ? '손패' : '유물'}."
+        style="${sprite ? `--prep-art:url('${sprite}')` : ''}">
+        <span class="hearth-prep-art" aria-hidden="true">
+          <span class="hearth-prep-off-mark" aria-hidden="true">${closeIcon()}</span>
         </span>
         <strong>${name}</strong>
         <small>${item.kind === 'card' ? '손패' : '유물'}</small>
-        <span class="unlock-loadout-state">${label}</span>
+        <span class="hearth-prep-state">${label}</span>
       </button>`
   }
-  overlay.innerHTML = `
-    <div class="unlock-loadout-header">
+  host.innerHTML = `
+    <div class="hearth-prep-header">
       <h2>해금 목록</h2>
       <p>기초 해금팩으로 얻은 항목의 등장 여부를 고릅니다. 꺼도 소유는 유지됩니다.</p>
     </div>
-    <div class="unlock-loadout-row">${items.map(renderTile).join('')}</div>
-    <button class="unlock-loadout-continue" type="button" data-continue>계속</button>
+    <div class="hearth-prep-row">${items.map(renderTile).join('')}</div>
+    <div class="hearth-prep-actions"><button class="hearth-prep-btn" type="button" data-continue>계속</button></div>
   `
-  document.body.appendChild(overlay)
-  requestAnimationFrame(() => overlay.classList.add('is-in'))
   return new Promise((resolve) => {
-    const finish = (): void => {
-      overlay.classList.remove('is-in')
-      window.setTimeout(() => { overlay.remove(); style.remove() }, 300)
-      resolve()
-    }
-    overlay.addEventListener('click', (e) => {
+    const onClick = (e: Event): void => {
       const target = e.target as HTMLElement
       const toggle = target.closest<HTMLElement>('[data-toggle]')
       if (toggle) {
@@ -2048,12 +2021,16 @@ function openUnlockLoadoutScreen(items: BasicUnlockPoolItem[]): Promise<void> {
           setRelicPoolEnabled(id as RelicId, nowOn)
         }
         toggle.classList.toggle('is-off', !nowOn)
-        const state = toggle.querySelector<HTMLElement>('.unlock-loadout-state')
+        const state = toggle.querySelector<HTMLElement>('.hearth-prep-state')
         if (state) state.textContent = kind === 'card' ? (nowOn ? '해금팩 등장' : '해금팩 숨김') : (nowOn ? '풀 등장' : '풀 숨김')
         return
       }
-      if (target.closest('[data-continue]')) finish()
-    })
+      if (target.closest('[data-continue]')) {
+        host.removeEventListener('click', onClick)
+        resolve()
+      }
+    }
+    host.addEventListener('click', onClick)
   })
 }
 
@@ -2061,57 +2038,36 @@ function openUnlockLoadoutScreen(items: BasicUnlockPoolItem[]): Promise<void> {
  *  최대 STARTING_UNLOCK_DRAFT_CAP장을 이번 런 한정으로 턴 1부터 바로 쓰게 고른다.
  *  건너뛰기도 허용한다(카드팩과 달리 강제 획득이 아니다). 후보가 없으면 아예 호출하지 않는다. */
 function openStartingUnlockDraft(candidates: HandCardId[]): Promise<HandCardId | null> {
-  const style = document.createElement('style')
-  style.textContent = `
-    .start-unlock-draft { position: fixed; inset: 0; z-index: 10550; background: rgba(8,5,10,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 24px; opacity: 0; transition: opacity 0.28s ease; }
-    .start-unlock-draft.is-in { opacity: 1; }
-    .start-unlock-draft-header { text-align: center; color: rgba(255,236,188,0.92); font-family: 'OkDanDan', Georgia, serif; }
-    .start-unlock-draft-header h2 { font-size: clamp(20px, 3vh, 28px); letter-spacing: 0.08em; margin: 0 0 4px; }
-    .start-unlock-draft-header p { margin: 0; font-size: clamp(12px, 1.6vh, 15px); color: rgba(214,200,178,0.72); }
-    .start-unlock-draft-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; max-width: 900px; }
-    .start-unlock-choice { flex: 0 0 clamp(140px, 16vw, 190px); min-height: clamp(176px, 30vh, 236px); border-radius: 14px; border: 1px solid rgba(200,152,60,0.42); background: linear-gradient(180deg, rgba(36,24,38,0.72), rgba(14,9,18,0.86)); box-shadow: inset 0 1px 0 rgba(255,232,168,0.16), inset 0 -14px 24px rgba(0,0,0,0.42), 0 18px 28px rgba(0,0,0,0.38); padding: 10px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; color: rgba(255,236,188,0.9); font-family: 'OkDanDan', Georgia, serif; text-align: left; transition: transform 0.14s ease, border-color 0.18s ease; }
-    .start-unlock-choice:hover { transform: translateY(-3px); border-color: rgba(220,172,80,0.7); }
-    .start-unlock-choice-art { flex: 1; min-height: 90px; border-radius: 10px; background: var(--start-unlock-art, none) center/cover no-repeat, radial-gradient(circle at 50% 38%, rgba(255,232,168,0.14), transparent 54%), linear-gradient(160deg, rgba(74,56,78,0.48), rgba(24,16,30,0.92)); border: 1px dashed rgba(255,222,140,0.2); }
-    .start-unlock-choice strong { font-size: clamp(15px, 2.1vh, 19px); letter-spacing: 0.04em; }
-    .start-unlock-choice small { color: rgba(214,200,178,0.72); font-size: clamp(11px, 1.5vh, 13px); line-height: 1.35; }
-    .start-unlock-skip { background: none; border: 1px solid rgba(214,200,178,0.4); color: rgba(214,200,178,0.82); font-family: 'OkDanDan', Georgia, serif; font-size: 14px; letter-spacing: 0.06em; padding: 8px 22px; border-radius: 999px; cursor: pointer; transition: border-color 0.18s ease, color 0.18s ease; }
-    .start-unlock-skip:hover { border-color: rgba(255,222,140,0.7); color: rgba(255,236,188,0.95); }
-  `
-  document.head.appendChild(style)
-  const overlay = document.createElement('div')
-  overlay.className = 'start-unlock-draft'
+  const host = hearthScene.openPrepLayer()
+  if (!host) return Promise.resolve(null)
   const cardsHtml = candidates.map((id) => {
     const def = getHandCardDef(id)
     const sprite = spriteForHandCard(id)
     return `
-      <button class="start-unlock-choice" type="button" data-pick="${id}" style="${sprite ? `--start-unlock-art:url('${sprite}')` : ''}">
-        <span class="start-unlock-choice-art" aria-hidden="true"></span>
+      <button class="hearth-prep-tile" type="button" data-pick="${id}"
+        data-tooltip="${def.name}. ${def.description}."
+        style="${sprite ? `--prep-art:url('${sprite}')` : ''}">
+        <span class="hearth-prep-art" aria-hidden="true"></span>
         <strong>${def.name}</strong>
         <small>${def.description}</small>
       </button>`
   }).join('')
-  overlay.innerHTML = `
-    <div class="start-unlock-draft-header">
+  host.innerHTML = `
+    <div class="hearth-prep-header">
       <h2>시작부터 해금</h2>
       <p>1장을 골라 해금팩 없이 턴 1부터 바로 씁니다.</p>
     </div>
-    <div class="start-unlock-draft-row">${cardsHtml}</div>
-    <button class="start-unlock-skip" type="button" data-skip>건너뛰기</button>
+    <div class="hearth-prep-row">${cardsHtml}</div>
+    <div class="hearth-prep-actions"><button class="hearth-prep-btn" type="button" data-skip>건너뛰기</button></div>
   `
-  document.body.appendChild(overlay)
-  requestAnimationFrame(() => overlay.classList.add('is-in'))
   return new Promise((resolve) => {
-    const finish = (picked: HandCardId | null): void => {
-      overlay.classList.remove('is-in')
-      window.setTimeout(() => { overlay.remove(); style.remove() }, 300)
-      resolve(picked)
-    }
-    overlay.addEventListener('click', (e) => {
+    const onClick = (e: Event): void => {
       const target = e.target as HTMLElement
       const pick = target.closest<HTMLElement>('[data-pick]')
-      if (pick) { finish(pick.dataset.pick as HandCardId); return }
-      if (target.closest('[data-skip]')) finish(null)
-    })
+      if (pick) { host.removeEventListener('click', onClick); resolve(pick.dataset.pick as HandCardId); return }
+      if (target.closest('[data-skip]')) { host.removeEventListener('click', onClick); resolve(null) }
+    }
+    host.addEventListener('click', onClick)
   })
 }
 

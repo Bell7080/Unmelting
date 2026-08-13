@@ -398,6 +398,9 @@ export class HearthScene {
           <!-- 킥커는 transform이 걸린 .hearth-difficulty 밖(셔터 직속)에 둔다 — 부모 transform이
                fixed/absolute 기준을 바꿔 확대된 카드 뒤로 숨는 문제를 피해 화면 상단에 고정한다. -->
           <span class="hearth-diff-kicker" aria-hidden="true">난이도</span>
+          <!-- 출발 준비 화면(해금 온오프 · 시작부터 해금)이 들어오는 자리. 난이도 선택과 같은
+               셔터 레이어를 돌려 쓴다 — 내용만 index가 채우고 틀·크기는 여기 CSS가 정한다. -->
+          <div class="hearth-prep" role="dialog" aria-label="출발 준비" aria-hidden="true"></div>
           <div class="hearth-difficulty" aria-label="난이도 선택" aria-hidden="true">
             <div class="hearth-diff-carousel">
               <button class="hearth-diff-nav hearth-diff-nav--left" type="button" data-hearth-diff-nav="left" aria-label="이전 난이도" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 L8 12 L15 19"/></svg></button>
@@ -2047,6 +2050,28 @@ export class HearthScene {
   }
 
   /** 마지막으로 고른 시작 난이도 키(런 시작 시 온보딩/정규 분기를 결정한다). */
+  /**
+   * 준비 화면(해금 온오프 · 시작부터 해금)을 셔터 레이어 안에서 연다. 호스트를 돌려주고
+   * 난이도 블록을 잠시 감춘다 — 같은 자리를 돌려 쓰므로 두 개가 겹치지 않게 한다.
+   */
+  openPrepLayer(): HTMLElement | null {
+    const host = this.overlay?.querySelector<HTMLElement>('.hearth-prep') ?? null
+    if (!host) return null
+    this.overlay?.classList.add('is-prep-mode')
+    host.removeAttribute('aria-hidden')
+    return host
+  }
+
+  /** 준비 화면을 걷고 난이도 블록을 되돌린다. */
+  closePrepLayer(): void {
+    const host = this.overlay?.querySelector<HTMLElement>('.hearth-prep')
+    this.overlay?.classList.remove('is-prep-mode')
+    if (host) {
+      host.setAttribute('aria-hidden', 'true')
+      host.replaceChildren()
+    }
+  }
+
   getSelectedDifficulty(): HearthDifficulty {
     return HEARTH_DIFFICULTIES[this.selectedDifficultyIndex].key
   }
