@@ -343,33 +343,35 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   border-radius: 14px;
   border: 1px solid rgba(255, 215, 120, 0.2);
   background: linear-gradient(180deg, rgba(40, 28, 20, 0.5), rgba(12, 9, 16, 0.55));
-  padding: 14px 18px;
+  padding: 20px 26px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 .wax-compose-bar .wax-section-title { margin: 0; }
-.wax-compose-layout { display: flex; align-items: center; gap: 20px; min-height: 180px; }
+/* 여백만 남기지 않도록 이 구역의 실제 높이(260px)를 여기서 확정한다 — 자식들이
+   그 높이를 나눠 쓴다(리스트는 스크롤, 마법진은 가운데 정렬). */
+.wax-compose-layout { display: flex; align-items: stretch; gap: 32px; height: 260px; }
 .wax-compose-empty { margin: 0; font-size: 12px; color: rgba(255, 233, 196, 0.42); }
 
 /* 좌측 — 지금 합성할 수 있는 조합만 골라 버튼으로 나열한다(재료가 덜 찬 조합은 여기 안 뜬다). */
 .wax-compose-list-col {
-  flex: 0 0 190px;
+  flex: 0 0 240px;
   align-self: stretch;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(244, 178, 86, 0.7) transparent;
 }
-.wax-compose-list-empty { margin: 0; font-size: 12px; line-height: 1.5; color: rgba(255, 233, 196, 0.42); }
-.wax-compose-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.wax-compose-list-empty { margin: 0; font-size: 13px; line-height: 1.6; color: rgba(255, 233, 196, 0.42); }
+.wax-compose-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .wax-compose-list-btn {
   width: 100%;
   display: grid;
-  grid-template-columns: 26px 1fr auto;
+  grid-template-columns: 40px 1fr auto;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 9px;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 11px;
   border: 1px solid rgba(255, 215, 120, 0.22);
   background: rgba(255, 210, 130, 0.05);
   cursor: pointer;
@@ -379,25 +381,26 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 .wax-compose-list-btn:hover { background: rgba(255, 210, 130, 0.14); }
 .wax-compose-list-btn.is-active { border-color: rgba(255, 215, 120, 0.75); background: rgba(255, 210, 130, 0.2); box-shadow: 0 0 10px rgba(244, 178, 86, 0.3); }
 .wax-compose-list-glyph {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
   background-size: cover;
   background-position: center 32%;
   border: 1px solid rgba(255, 215, 120, 0.3);
 }
-.wax-compose-list-name { font-size: 12px; font-weight: 800; color: #fff5dc; line-height: 1.25; }
-.wax-compose-list-star { font-size: 12px; font-weight: 900; color: var(--color-flame, #ffd778); }
+.wax-compose-list-name { font-size: 13px; font-weight: 800; color: #fff5dc; line-height: 1.3; }
+.wax-compose-list-star { font-size: 13px; font-weight: 900; color: var(--color-flame, #ffd778); }
 
-/* 우측 — 마법진 무대. 크게 잡아 "누르고 싶게" 만드는 게 목적이다. */
-.wax-compose-stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-width: 0; }
+/* 우측 — 마법진 무대. 구역 높이를 그대로 채워 크게 잡는다("누르고 싶게"가 목적이라
+   작게 떠 있으면 안 된다). */
+.wax-compose-stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-width: 0; }
 
 /* 밀랍 조각진 — 재료 3개가 원 둘레에 놓이고 그 힘이 가운데 결과로 모이는 의식 도형.
    한 줄 슬롯 나열 대신 이 시스템의 봉인/제물 테마에 맞춘 원형 구성이다. */
 .wax-compose-circle {
   position: relative;
-  width: 150px;
-  height: 150px;
+  width: 220px;
+  height: 220px;
   flex: 0 0 auto;
 }
 .wax-compose-ring {
@@ -407,7 +410,7 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   border: 1px dashed rgba(255, 215, 120, 0.55);
   animation: wax-compose-ring-spin 26s linear infinite;
 }
-.wax-compose-ring-inner { inset: 18px; border-color: rgba(255, 215, 120, 0.38); animation-duration: 18s; animation-direction: reverse; }
+.wax-compose-ring-inner { inset: 26px; border-color: rgba(255, 215, 120, 0.38); animation-duration: 18s; animation-direction: reverse; }
 @keyframes wax-compose-ring-spin { to { transform: rotate(360deg); } }
 /* 클릭 순간의 "위잉" — 링이 빠르게 가속하며 밝아진다. JS가 짧게 붙였다 뗀다. */
 .wax-compose-circle.is-merging .wax-compose-ring { animation: wax-compose-ring-spin 0.6s linear infinite; border-color: rgba(255, 225, 160, 0.95); }
@@ -423,29 +426,29 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 /* 재료 노드 3개 — 정삼각형 배치(위 / 좌하 / 우하). */
 .wax-compose-node {
   position: absolute;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
   border: 1px solid rgba(255, 215, 120, 0.6);
   background-size: cover;
   background-position: center 32%;
-  box-shadow: 0 0 8px rgba(244, 178, 86, 0.4);
+  box-shadow: 0 0 10px rgba(244, 178, 86, 0.4);
   z-index: 1;
 }
-.wax-compose-node.is-shiny { border-color: rgba(123, 240, 174, 0.65); box-shadow: 0 0 8px rgba(123, 240, 174, 0.4); }
-.wax-compose-node-1 { top: -6px; left: 50%; transform: translateX(-50%); }
-.wax-compose-node-2 { bottom: 6px; left: -2px; }
-.wax-compose-node-3 { bottom: 6px; right: -2px; }
+.wax-compose-node.is-shiny { border-color: rgba(123, 240, 174, 0.65); box-shadow: 0 0 10px rgba(123, 240, 174, 0.4); }
+.wax-compose-node-1 { top: -10px; left: 50%; transform: translateX(-50%); }
+.wax-compose-node-2 { bottom: 8px; left: -8px; }
+.wax-compose-node-3 { bottom: 8px; right: -8px; }
 /* 가운데 결과 — 재료보다 크게, 노드보다 위 레이어에 둬 조각진의 중심임을 읽게 한다.
    숨쉬듯 맥동시켜(is-pulse) 눌러 보고 싶게 만든다 — 이게 곧 합성 버튼이다. */
 .wax-compose-core {
   position: absolute;
-  inset: 44px;
+  inset: 64px;
   border-radius: 50%;
   border: 2px solid rgba(255, 215, 120, 0.7);
   background-size: cover;
   background-position: center 32%;
-  box-shadow: 0 0 18px rgba(244, 178, 86, 0.35);
+  box-shadow: 0 0 22px rgba(244, 178, 86, 0.35);
   z-index: 2;
   padding: 0;
   cursor: pointer;
@@ -469,18 +472,18 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 }
 .wax-compose-core-star {
   position: absolute;
-  bottom: -8px;
+  bottom: -10px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 900;
   color: #140d08;
   background: var(--color-flame, #ffd778);
   border-radius: 999px;
-  padding: 2px 8px;
+  padding: 3px 10px;
   white-space: nowrap;
 }
-.wax-compose-result-label { margin: 0; font-size: 12px; line-height: 1.4; color: rgba(255, 233, 196, 0.75); text-align: center; }
+.wax-compose-result-label { margin: 0; font-size: 13px; line-height: 1.4; color: rgba(255, 233, 196, 0.75); text-align: center; }
 .wax-compose-result-label b { color: var(--color-flame, #ffd778); font-variant-numeric: tabular-nums; }
 
 /* 합성 결과가 마법진에서 튀어나와 갤러리의 새 칸으로 날아가 꽂히는 토큰. */
