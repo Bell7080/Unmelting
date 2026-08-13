@@ -126,6 +126,19 @@ export function bossGimmickTrapDamage(bossDamage: number): number {
 export const BOSS_GIMMICK_CRACK_STAGES = 3
 
 /**
+ * 칸마다 흩어 굴리는 **단단함 배수**. 모든 칸이 같은 내구도면 광역 한 방이 격자를
+ * 통째로 같은 박자에 쓸어 간다 — 칸마다 다르면 운 좋게 단단한 칸이 살아남아
+ * 계속 때릴 자리가 남는다.
+ */
+export const BOSS_GIMMICK_TOUGHNESS_MIN = 0.7
+export const BOSS_GIMMICK_TOUGHNESS_MAX = 1.5
+/**
+ * 칸이 하나 깨질 때마다 **남은 칸이 단단해지는** 비율. 뒤로 갈수록 한 칸을 깨는 품이
+ * 무거워져, 격자가 한 번에 무너지지 않고 점점 버틴다.
+ */
+export const BOSS_GIMMICK_DURABILITY_ESCALATION = 0.22
+
+/**
  * 칸 내구도 비율. "칸의 절반쯤 깨면 보스가 쓰러진다"는 목표를 그대로 식으로 옮긴 값이다:
  *
  *   (칸수 / 2) × (내구도 + 부위 파괴 보너스) = 보스 최대 체력
@@ -136,6 +149,19 @@ export const BOSS_GIMMICK_CRACK_STAGES = 3
 function cellDurabilityRatio(cells: number): number {
   const raw = 2 / Math.max(1, cells) - BOSS_GIMMICK_BREAK_DAMAGE_RATIO
   return Math.max(BOSS_GIMMICK_BREAK_DAMAGE_RATIO / 2, raw)
+}
+
+/**
+ * 칸별 단단함/고조가 격자 **절반을 깨는 동안** 평균적으로 더 들게 하는 배수.
+ * 매니저는 칸 실효 내구도를 낼 때 이 값으로 나눠, 흩어짐이 '어느 칸이 먼저 깨지는가'만
+ * 바꾸고 '몇 대 때리면 보스가 죽는가'는 건드리지 않게 한다 — 그래서 위 관계식과
+ * `bossGimmickBreakBonusFactor`(학습 시뮬 요약)는 그대로 성립한다.
+ */
+export function bossGimmickCellSpreadFactor(cells: number): number {
+  const meanToughness = (BOSS_GIMMICK_TOUGHNESS_MIN + BOSS_GIMMICK_TOUGHNESS_MAX) / 2
+  const halfway = Math.max(1, cells / 2)
+  const meanEscalation = 1 + (BOSS_GIMMICK_DURABILITY_ESCALATION * (halfway - 1)) / 2
+  return meanToughness * meanEscalation
 }
 
 /** 칸 하나가 깨질 때의 추가 피해. */
@@ -451,6 +477,8 @@ export interface BossGimmickFixtureEvent {
 
 /** 격자 한 칸의 내부 상태. 파생 기믹이 resolveMultiplier에서 읽을 수 있게 내보낸다. */
 export interface BossGimmickCell {
+  /** 이 칸만의 단단함 배수(생성 시 흩어 굴린다). 실효 내구도 = 기준 × 고조 × 이 값. */
+  toughness: number
   kind: BossGimmickCellKind
   /** 누적 부위 피해. durability에 닿으면 깨진다. */
   damage: number
@@ -486,6 +514,8 @@ export class BossGimmickManager {
   private pendingHits: BossGimmickStrike[] = []
   /** 지금 진행 중인 플레이어 행동의 출처. `beginAction`이 세우고 판정이 읽는다. */
   private source: BossGimmickSourceContext = NEUTRAL_SOURCE
+  /** 행동 시작 시점의 파괴 칸 수. 한 행동이 마지막 칸까지 깨는 것을 막는 데 쓴다. */
+  private brokenAtActionStart = 0
 
   /** rng는 테스트에서 배치를 고정하기 위해 주입한다. */
   constructor(private readonly rng: () => number = Math.random) {}
@@ -497,6 +527,8 @@ export class BossGimmickManager {
    */
   beginAction(source: BossGimmickSourceContext): void {
     this.source = source
+    // 이번 행동이 시작될 때의 파괴 칸 수 — "한 행동이 전부 쓸어 가지 못한다" 판정의 기준선이다.
+    this.brokenAtActionStart = this.brokenCount
   }
 
   /** 보스 등장 시 1회. 프로필이 있는 보스만 격자를 굴리고, 켜졌는지 여부를 돌려준다. */
@@ -553,6 +585,7 @@ export class BossGimmickManager {
     this.profile = null
     this.shape = { cols: 0, rows: 0 }
     this.cells = []
+    this.brokenAtActionStart = 0
     this.durability = 0
     this.breakBonus = 0
     this.trapBite = 0
@@ -591,7 +624,22 @@ export class BossGimmickManager {
     return this.cells.reduce((n, cell) => n + (cell.broken ? 1 : 0), 0)
   }
 
-  /** 칸 하나를 깨는 데 필요한 누적 피해. */
+  /** 칸마다 흩어 굴리는 단단함 배수. */
+  private rollToughness(): number {
+    return BOSS_GIMMICK_TOUGHNESS_MIN + this.rng() * (BOSS_GIMMICK_TOUGHNESS_MAX - BOSS_GIMMICK_TOUGHNESS_MIN)
+  }
+
+  /**
+   * 이 칸을 깨는 데 실제로 필요한 누적 피해. 기준 내구도에 **칸 고유의 단단함**과
+   * **지금까지 깬 칸 수만큼의 고조**를 곱한다 — 깨질수록 남은 칸이 버틴다.
+   */
+  private durabilityOf(cell: BossGimmickCell): number {
+    const escalation = 1 + this.brokenCount * BOSS_GIMMICK_DURABILITY_ESCALATION
+    const spread = bossGimmickCellSpreadFactor(this.cells.length)
+    return Math.max(1, Math.round((this.durability * escalation * cell.toughness) / spread))
+  }
+
+  /** 칸 하나를 깨는 데 필요한 누적 피해(기준값 — 칸별 단단함/고조 적용 전). */
   get cellDurability(): number {
     return this.durability
   }
@@ -804,10 +852,20 @@ export class BossGimmickManager {
     // 파먹을 수 없고, 경화는 같은 보너스를 얻는 데 두 배의 품이 든다.
     let breakDamage = 0
     if (cellDamage > 0 && !cell.broken) {
-      cell.damage = Math.min(this.durability, cell.damage + cellDamage)
-      if (cell.damage >= this.durability) {
-        cell.broken = true
-        breakDamage = this.breakBonus
+      const limit = this.durabilityOf(cell)
+      cell.damage = Math.min(limit, cell.damage + cellDamage)
+      if (cell.damage >= limit) {
+        // ★ **한 행동이 격자를 통째로 쓸어 가지 못한다.** 이미 이번 행동에서 다른 칸을
+        //   깼는데 이게 마지막 성한 칸이면, 파괴 직전에서 버틴다 — 광역 한 방에 때릴
+        //   자리가 사라지는 일이 없어야 한다. 다음 행동에서 단독으로 때리면 깨지므로
+        //   '부위를 하나 더 깨야 열리는' 페이지 리미트가 막히지도 않는다.
+        const lastStanding = this.livingIndexes().length <= 1
+        if (lastStanding && this.brokenCount > this.brokenAtActionStart) {
+          cell.damage = Math.max(0, limit - 1)
+        } else {
+          cell.broken = true
+          breakDamage = this.breakBonus
+        }
       }
     }
     // 부가물은 **때린 그 자리에서** 떨어져 나온다. 피해가 0으로 막힌 beat(리미트 페이지)에도
@@ -848,8 +906,8 @@ export class BossGimmickManager {
       kind: cell.kind,
       multiplier: BOSS_GIMMICK_KIND_META[cell.kind].multiplier,
       damage: cell.damage,
-      durability: this.durability,
-      wear: this.durability > 0 ? Math.min(1, cell.damage / this.durability) : 0,
+      durability: this.durabilityOf(cell),
+      wear: (() => { const d = this.durabilityOf(cell); return d > 0 ? Math.min(1, cell.damage / d) : 0 })(),
       broken: cell.broken,
       // 깨진 칸은 부가물도 함께 사라진다 — 판이 타 버렸는데 함정만 남을 수는 없다.
       fixture: cell.broken ? null : cell.fixture,
@@ -893,6 +951,7 @@ export class BossGimmickManager {
   private rollCells(profile: BossGimmickProfile, cells: number): BossGimmickCell[] {
     return this.shuffledKinds(profile, cells).map((kind) => ({
       kind,
+      toughness: this.rollToughness(),
       damage: 0,
       broken: false,
       fixture: null,

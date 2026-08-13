@@ -252,6 +252,8 @@ export class GameBoardRenderer {
     | { slotIndices: number[]; recipeId: string; startedAt: number; endsAt: number }
     | null = null
   private static readonly RECIPE_BRACKET_HOLD_MS = 4200
+  /** 손패 정렬을 기다리는 상한 — 애니메이션이 끊겨도 힌트가 영영 안 뜨지 않게 한다. */
+  private static readonly RECIPE_BRACKET_SETTLE_MAX_MS = 1200
   private static readonly RECIPE_BRACKET_FADE_MS = 450
   private handTargetingMode: HandTargetingMode | null = null
   /** Owned relic cards can be click-pinned for reading long text without
@@ -2750,16 +2752,45 @@ export class GameBoardRenderer {
    * 몇 초 뒤 스스로 옅어지며 사라지는 잠깐의 힌트지만, 그 몇 초 사이 렌더가 한 번은
    * 돌기 마련이라 activeEnaHint와 같은 형태로 남은 시간만큼 다시 그린다(reattach).
    */
-  showRecipeBracketHint(slotIndices: readonly number[], recipeId: string, startedAt = Date.now()): void {
+  showRecipeBracketHint(slotIndices: readonly number[], recipeId: string): void {
     if (!RECIPES.some((r) => r.id === recipeId) || slotIndices.length < 2) return
     this.clearRecipeBracketHint()
+    // ★ 방금 받은 지원 카드는 아직 손패 자리를 찾아 **내려오는 중**이다. 그 순간 좌표를
+    //   재면 브래킷이 카드가 들어온 자리에 그려져, 정렬이 끝난 뒤의 카드와 어긋난다.
+    //   손패 칸의 유한 애니메이션이 끝나기를 기다렸다가 그린다.
+    void this.showRecipeBracketWhenSettled([...slotIndices], recipeId)
+  }
+
+  /** 손패 정렬이 끝난 뒤 브래킷을 세운다. 표시 시각도 그때부터 세야 노출 시간이 온전하다. */
+  private async showRecipeBracketWhenSettled(slotIndices: number[], recipeId: string): Promise<void> {
+    await this.waitForHandSlotsSettled(slotIndices)
+    const begin = Date.now()
     this.activeRecipeBracketHint = {
-      slotIndices: [...slotIndices],
+      slotIndices,
       recipeId,
-      startedAt,
-      endsAt: startedAt + GameBoardRenderer.RECIPE_BRACKET_HOLD_MS + GameBoardRenderer.RECIPE_BRACKET_FADE_MS,
+      startedAt: begin,
+      endsAt: begin + GameBoardRenderer.RECIPE_BRACKET_HOLD_MS + GameBoardRenderer.RECIPE_BRACKET_FADE_MS,
     }
     this.drawRecipeBracketHint()
+  }
+
+  /**
+   * 대상 손패 칸이 자리를 잡을 때까지 기다린다. 무한 루프 애니메이션(발광·맥동)은 영영
+   * 끝나지 않으므로 제외하고, 혹시 걸리더라도 상한을 두어 힌트가 영영 안 뜨는 일은 없게 한다.
+   */
+  private async waitForHandSlotsSettled(slotIndices: readonly number[]): Promise<void> {
+    const stack = this.boardElement.querySelector<HTMLElement>('.hand-stack')
+    if (!stack) return
+    const running = slotIndices
+      .map((i) => stack.querySelector<HTMLElement>(`:scope > .hand-slot[data-slot-index="${i}"]`))
+      .filter((el): el is HTMLElement => !!el)
+      .flatMap((el) => el.getAnimations({ subtree: true }))
+      .filter((anim) => anim.effect?.getTiming().iterations !== Infinity)
+    if (running.length === 0) return
+    await Promise.race([
+      Promise.allSettled(running.map((anim) => anim.finished)),
+      new Promise((resolve) => window.setTimeout(resolve, GameBoardRenderer.RECIPE_BRACKET_SETTLE_MAX_MS)),
+    ])
   }
 
   /** 실제 DOM을 그린다 — 최초 표시와 렌더 후 재부착(reattach)이 이 한 곳을 공유한다. */

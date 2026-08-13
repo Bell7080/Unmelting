@@ -3,7 +3,7 @@ import { GameState } from '@core/GameState'
 import { HandSystem } from './HandSystem'
 import { DropSystem } from './DropSystem'
 import { Card, CardType } from '@entities/Card'
-import { BossGimmickManager } from './BossGimmickManager'
+import { BossGimmickManager, BOSS_GIMMICK_KIND_META } from './BossGimmickManager'
 import { resolveBossCellFixtures } from './BossCellFixtures'
 
 /** Count a specific hand-card id inside the active chain for behavior tests. */
@@ -572,17 +572,19 @@ describe('HandSystem 보스 칸 기믹 연동', () => {
   })
 
   it('손패가 칸을 깨면 부위 파괴 보너스가 같은 타격에 함께 들어간다', () => {
-    // 30F 실수치(HP 100 · 9칸 → 내구도 12 · 파괴 보너스 10)로 세운다.
+    // 30F 실수치(HP 100 · 9칸)로 세운다. 칸 내구도는 칸마다 흩어지므로 뷰에서 읽는다.
     const { gameState, boss, grid } = stageGriddedBoss(100)
-    const weak = grid.getCells().find((c) => c.kind === 'weak')
-    // 약점을 미리 깨지기 직전까지 닳게 해 둔다(누적 10/12).
-    grid.strike({ cellIndex: weak?.index, baseDamage: 5 })
+    const weak = grid.getCells().find((c) => c.kind === 'weak')!
+    // 약점(배율 2)을 깨지기 직전까지 닳게 해 둔다 — 한 대에 2씩 쌓인다.
+    const preHits = Math.floor((weak.durability - 1) / BOSS_GIMMICK_KIND_META.weak.multiplier)
+    for (let i = 0; i < preHits; i++) grid.strike({ cellIndex: weak.index, baseDamage: 1 })
+    expect(grid.getCells()[weak.index].broken).toBe(false)
     boss.takeDamage(10)
     gameState.character.addHandCard(DropSystem.makeCard('ember'))
 
     const before = boss.getHealth()
     HandSystem.useSingle(gameState, HandSystem.newChain(), 0, {
-      laneIndex: 0, distance: 0, card: boss, gimmickCellIndex: weak?.index,
+      laneIndex: 0, distance: 0, card: boss, gimmickCellIndex: weak.index,
     })
 
     // 불씨 단일(공격력 1 → 2) × 약점 2배 = 4, 여기에 부위 파괴 보너스 10이 얹힌다.

@@ -105,10 +105,9 @@ const ONBOARDING_RELIC_IDS: RelicId[] = [
 
 /** 온보딩 커먼 풀에서도 제외(잠금)하는 손패 — 물뿌리개는 초반에 혼란을 줘 빼고,
  *  동전은 새싹 단계 화폐($) 획득 전면 잠금 정책으로 뺀다(보물상자 보너스 드롭 차단).
- *  단두대는 필드 전체 확정 피해라 30F 보스 격자를 한 번에 쓸어 리미트를 무의미하게
- *  만든다 — 새싹 구간의 밸런스를 부수므로 졸업 후 정규 런에서만 나온다.
- *  index의 온보딩 커먼 풀 구성도 이 목록을 공유한다. */
-export const ONBOARDING_BANNED_CARDS: HandCardId[] = ['watering-can', 'coin', 'guillotine']
+ *  index의 온보딩 커먼 풀 구성도 이 목록을 공유한다.
+ *  (단두대는 난이도가 아니라 메타로 가른다 — `BASIC_UNLOCK_PACK_CARDS` 참고.) */
+export const ONBOARDING_BANNED_CARDS: HandCardId[] = ['watering-can', 'coin']
 
 /** 팩 타일 호버 시 부채꼴로 펼쳐 보여 줄 예시 카드 수. */
 const PACK_PREVIEW_COUNT = 3

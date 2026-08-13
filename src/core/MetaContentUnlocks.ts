@@ -31,6 +31,9 @@ const RELIC_POOL_DISABLED_PREFIX = 'unmelting.meta.relicPoolOff.'
 export const BASIC_UNLOCK_PACK_CARDS: HandCardId[] = [
   'candle-tome', 'bonfire', 'top-hat', 'blade-tome', 'scabbard', 'teapot',
   'teacup', 'watering-can', 'garden-scissors', 'hand-mirror',
+  // 단두대: 필드 전체 확정 피해라 초반 판을 통째로 뒤집는다. 난이도로 가르지 않고
+  // 여기 둬서 무역에서 해금해야 비로소 해금팩 후보가 되게 한다.
+  'guillotine',
 ]
 
 /** 곧바로 필요 없되 좋은 유물 6종 — `metaLocked: true`(Relics.ts)라 기본 유물 풀(상점/

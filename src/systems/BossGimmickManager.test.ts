@@ -32,6 +32,13 @@ function stagedGrid(maxHp = WAX_ARMY_HP): BossGimmickManager {
   return m
 }
 
+/** 칸별 단단함이 **평균값**으로 굴려진 격자 — 밸런스 관계식이 기대하는 '평균 칸'을 잰다. */
+function averageToughnessGrid(maxHp = WAX_ARMY_HP): BossGimmickManager {
+  const m = new BossGimmickManager(() => 0.5)
+  m.beginEncounter('waxArmy', maxHp)
+  return m
+}
+
 describe('BossGimmickManager', () => {
   it('프로필이 있는 보스에서만 격자를 켠다', () => {
     const m = new BossGimmickManager(fixedRng())
@@ -209,36 +216,55 @@ describe('BossGimmickManager 부위 파괴', () => {
 
   it('같은 칸을 계속 때리면 닳다가 깨지고, 깨진 타격에만 파괴 보너스가 붙는다', () => {
     const m = stagedGrid()
-    const plain = m.getCells().find((c) => c.kind === 'plain')
+    const plain = m.getCells().find((c) => c.kind === 'plain')!
+    // 내구도는 칸마다 흩어지므로 뷰가 알려 주는 그 칸의 실효값을 기준으로 잰다.
+    const limit = plain.durability
+    const half = Math.floor(limit / 2)
 
-    // 내구도 12 — 6+6으로 정확히 두 대 만에 깨진다.
-    const first = m.strike({ cellIndex: plain?.index, baseDamage: 6 })
+    const first = m.strike({ cellIndex: plain.index, baseDamage: half })
     expect(first?.broke).toBe(false)
     expect(first?.breakDamage).toBe(0)
-    expect(first?.damage).toBe(6)
-    expect(first?.cell.wear).toBeCloseTo(0.5, 5)
+    expect(first?.damage).toBe(half)
+    expect(first?.cell.wear).toBeCloseTo(half / limit, 5)
 
-    const second = m.strike({ cellIndex: plain?.index, baseDamage: 6 })
+    const second = m.strike({ cellIndex: plain.index, baseDamage: limit })
     expect(second?.broke).toBe(true)
     expect(second?.breakDamage).toBe(10)
     // 호출부가 쓰는 damage는 배율 피해 + 파괴 보너스의 합이다.
-    expect(second?.damage).toBe(16)
+    expect(second?.damage).toBe((second?.cellDamage ?? 0) + 10)
     expect(second?.cell.broken).toBe(true)
     expect(m.brokenCount).toBe(1)
   })
 
   it('약점 칸은 두 배로 빨리 깨진다 — 한 칸만 파먹지 못하게 하는 장치', () => {
     const m = stagedGrid()
-    const weak = m.getCells().find((c) => c.kind === 'weak')
-    const hardened = m.getCells().find((c) => c.kind === 'hardened')
+    const weak = m.getCells().find((c) => c.kind === 'weak')!
+    const hardened = m.getCells().find((c) => c.kind === 'hardened')!
+    // 내구도는 칸마다 흩어지므로 각 칸의 실효값에서 필요한 타수를 역산한다.
+    const hitsToBreak = (durability: number, multiplier: number, baseDamage: number): number =>
+      Math.ceil(durability / (baseDamage * multiplier))
 
-    // 약점: 기본 6 → 12 누적으로 한 대에 파괴.
-    expect(m.strike({ cellIndex: weak?.index, baseDamage: 6 })?.broke).toBe(true)
-    // 경화: 같은 기본 6이 3만 쌓이므로 네 대가 필요하다.
-    for (let i = 0; i < 3; i++) {
-      expect(m.strike({ cellIndex: hardened?.index, baseDamage: 6 })?.broke).toBe(false)
+    const base = 6
+    const weakHits = hitsToBreak(weak.durability, BOSS_GIMMICK_KIND_META.weak.multiplier, base)
+    const hardenedHits = hitsToBreak(hardened.durability, BOSS_GIMMICK_KIND_META.hardened.multiplier, base)
+    // 칸별 단단함이 흩어져도 "약점이 경화보다 먼저 깨진다"는 관계는 유지된다.
+    // (배율이 누적 피해에 실제로 곱해지는지는 '약점 칸은 피해를 키우고…' 테스트가 본다.)
+    expect(weakHits).toBeLessThan(hardenedHits)
+
+    // 역산한 타수가 실제 파괴 시점과 맞는지 — 약점 칸으로 확인한다.
+    for (let i = 0; i < weakHits - 1; i++) {
+      expect(m.strike({ cellIndex: weak.index, baseDamage: base })?.broke).toBe(false)
     }
-    expect(m.strike({ cellIndex: hardened?.index, baseDamage: 6 })?.broke).toBe(true)
+    expect(m.strike({ cellIndex: weak.index, baseDamage: base })?.broke).toBe(true)
+
+    // 경화 칸은 같은 기본 피해로 더 오래 버틴다 — 방금 깬 칸의 고조가 섞이지 않도록
+    // 새 격자에서 잰다(칸이 깨질수록 남은 칸이 단단해지기 때문이다).
+    const fresh = stagedGrid()
+    const freshHardened = fresh.getCells().find((c) => c.kind === 'hardened')!
+    for (let i = 0; i < hardenedHits - 1; i++) {
+      expect(fresh.strike({ cellIndex: freshHardened.index, baseDamage: base })?.broke).toBe(false)
+    }
+    expect(fresh.strike({ cellIndex: freshHardened.index, baseDamage: base })?.broke).toBe(true)
   })
 
   it('깨진 칸은 다시 때려지지 않고 성한 칸으로 흘러간다', () => {
@@ -270,9 +296,48 @@ describe('BossGimmickManager 부위 파괴', () => {
     expect(total).toBeLessThanOrEqual(WAX_ARMY_HP * 1.35)
   })
 
-  it('모든 칸이 깨지면 격자는 null/빈 배열을 돌려줘 기존 피해로 되돌아간다', () => {
+  it('칸이 깨질수록 남은 칸이 단단해진다 — 격자가 한 번에 무너지지 않게', () => {
+    const m = averageToughnessGrid()
+    const before = m.getCells().find((c) => c.kind === 'plain')!.durability
+    // 다른 칸 하나를 깬다(행동을 새로 열어 마지막 칸 가드와 무관하게).
+    m.beginAction({ origin: 'direct', tags: [] })
+    const victim = m.getCells().find((c) => c.kind === 'plain')!
+    m.strike({ cellIndex: victim.index, baseDamage: 9999 })
+    expect(m.brokenCount).toBe(1)
+
+    const after = m.getCells().find((c) => c.kind === 'plain' && !c.broken)!.durability
+    expect(after).toBeGreaterThan(before)
+  })
+
+  it('칸마다 단단함이 흩어져 광역 한 방에 같은 박자로 깨지지 않는다', () => {
+    // rng를 흩어 굴리면 칸 실효 내구도가 서로 달라진다 — 같으면 광역기가 전부를 쓸어 간다.
+    let seed = 7
+    const m = new BossGimmickManager(() => {
+      seed = (seed * 1103515245 + 12345) % 2147483648
+      return seed / 2147483648
+    })
+    m.beginEncounter('waxArmy', WAX_ARMY_HP)
+    const durabilities = new Set(m.getCells().map((c) => c.durability))
+    expect(durabilities.size).toBeGreaterThan(1)
+  })
+
+  it('★ 한 행동은 마지막 성한 칸까지 깨지 못한다 — 때릴 자리가 사라지지 않는다', () => {
     const m = stagedGrid()
+    m.beginAction({ origin: 'direct', tags: [] })
+    // 광역 한 방으로 전 칸을 쓸어도 한 칸은 파괴 직전에서 버틴다.
     for (const cell of m.getCells()) m.strike({ cellIndex: cell.index, baseDamage: 999 })
+    expect(m.brokenCount).toBe(8)
+    expect(m.strikeAllCells(5)).toHaveLength(1)
+  })
+
+  it('다음 행동에서 단독으로 때리면 마지막 칸도 깨진다 — 페이지 리미트가 막히지 않는다', () => {
+    const m = stagedGrid()
+    m.beginAction({ origin: 'direct', tags: [] })
+    for (const cell of m.getCells()) m.strike({ cellIndex: cell.index, baseDamage: 999 })
+    // 행동이 바뀌면 기준선이 새로 서므로 남은 한 칸도 깰 수 있다.
+    m.beginAction({ origin: 'direct', tags: [] })
+    const last = m.getCells().find((c) => !c.broken)!
+    m.strike({ cellIndex: last.index, baseDamage: 999 })
     expect(m.brokenCount).toBe(9)
 
     expect(m.strike({ cellIndex: 0, baseDamage: 5 })).toBeNull()
@@ -462,17 +527,23 @@ describe('bossGimmickExpectation — 칸 개념이 없는 학습 시뮬용 요�
 
   it('환산 배수가 실제 모델의 누적 피해와 어긋나지 않는다', () => {
     // 근사가 불가피한 자리라 정합 테스트를 함께 둔다(CLAUDE.md 경제·스폰 규칙).
-    const m = stagedGrid()
-    const plain = m.getCells().find((c) => c.kind === 'plain')
+    // 요약 배수는 "격자 **절반**을 깨는 동안의 평균"이라 그 구간 전체를 재야 한다 —
+    // 칸별 단단함/고조가 섞이므로 한 칸만 재면 구간 평균과 어긋난다.
+    const m = averageToughnessGrid()
     let cellDamageTotal = 0
     let bossDamageTotal = 0
-    while (!m.getCells()[plain?.index ?? 0].broken) {
-      const struck = m.strike({ cellIndex: plain?.index, baseDamage: 1 })
+    const half = Math.round(9 / 2) // 관계식이 기준으로 삼는 '절반'과 같은 지점
+    while (m.brokenCount < half) {
+      // 행동을 새로 열어 '한 행동이 전부 쓸어 가지 못한다' 가드에 걸리지 않게 한다.
+      m.beginAction({ origin: 'direct', tags: [] })
+      const target = m.getCells().find((c) => !c.broken && c.kind === 'plain')
+      if (!target) break
+      const struck = m.strike({ cellIndex: target.index, baseDamage: 1 })
       cellDamageTotal += struck?.cellDamage ?? 0
       bossDamageTotal += struck?.damage ?? 0
     }
     const actual = bossDamageTotal / cellDamageTotal
-    // 내구도 반올림(12.22 → 12) 만큼의 오차만 허용한다.
+    // 내구도 반올림 만큼의 오차만 허용한다.
     expect(actual).toBeCloseTo(bossGimmickBreakBonusFactor(9), 1)
   })
 
