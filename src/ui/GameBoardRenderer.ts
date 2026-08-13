@@ -92,6 +92,7 @@ import type {
   ResourceTrailTarget,
   ScorePanelState,
   ShopOfferView,
+  ShopPackKind,
   ShopPackPickerView,
   ShopStateView,
   SpawnWeightContext,
@@ -1561,7 +1562,7 @@ export class GameBoardRenderer {
           <button class="candle-mode-list-item ${isCurrent}"
                   type="button"
                   data-candle-mode="${m}"
-                  title="${meta.label}: ${meta.effect}"
+                  data-tooltip="${meta.label}: ${meta.effect}"
                   aria-label="${meta.label}: ${meta.effect}">
             <span class="candle-mode-list-icon">${meta.icon}</span>
             <span class="candle-mode-list-label">${meta.label}</span>
@@ -1575,7 +1576,7 @@ export class GameBoardRenderer {
         <div class="candle-mode-wheel" data-candle-wheel>
           <button class="candle-mode-btn" type="button" data-toggle-candle-fan
                   aria-label="게이지 모드: ${mode.label}. ${mode.effect}"
-                  title="${mode.label}: ${mode.effect}">
+                  data-tooltip="${mode.label}: ${mode.effect}">
             <span class="candle-mode-icon">${mode.icon}</span>
             <span class="candle-mode-label">${mode.label}</span>
           </button>
@@ -1627,7 +1628,7 @@ export class GameBoardRenderer {
                data-owned-relic="${def.id}"
                style="--relic-i:${index}; --relic-x:${spread}px; --relic-rot:${rotate}deg; --relic-y:${lift}px;"
                tabindex="0"
-               title="${title}: ${effect}"
+               data-tooltip="${title}: ${effect}"
                aria-label="${title}: ${effect}">
         ${this.faces.relicPreviewFace(def.id)}
       </article>
@@ -1821,8 +1822,7 @@ export class GameBoardRenderer {
       slots.push(`
         <li class="${classes}" data-slot-index="${i}" data-hand-uid="${card.uid}" data-hand-def="${card.defId}"
             ${mergeSourceUids ? `data-merge-source-uids="${mergeSourceUids}"` : ''}
-            style="--slot-index: ${i}; --hand-enter-order: ${enterOrder};"
-            ${recipeReadyTitle ? `title="${recipeReadyTitle}"` : ''}>
+            style="--slot-index: ${i}; --hand-enter-order: ${enterOrder};">
           <button type="button" data-item-index="${i}"
                   style="--hand-card-art: url('${handArt}');"
                   aria-label="${def.name}: ${ariaDesc}${recipeReadyTitle ? ` · ${recipeReadyTitle}` : ''}">
@@ -1979,6 +1979,11 @@ export class GameBoardRenderer {
   /** 상점/제단 오버레이 위임 — 본체는 renderer/ShopOverlayView. */
   openShop(shop: ShopStateView, score: number, character: Character): void {
     this.shopOverlay.openShop(shop, score, character)
+  }
+
+  /** 에나가 권한 팩 강조 위임. */
+  emphasizeShopPack(kind: ShopPackKind): void {
+    this.shopOverlay.emphasizeShopPack(kind)
   }
 
   /** 상점 닫기 위임. */
@@ -2292,11 +2297,11 @@ export class GameBoardRenderer {
             <span class="ember-icon ember-flame ember-flame--${tier}" aria-hidden="true"><i class="ember-flame-body"></i></span>
             <div class="ember-bar">
               <div class="ember-bar-fill ember-tier-${tier}" style="width: ${pct}%"></div>
-              <div class="ember-atk1-line" style="left: ${atk1LinePct.toFixed(1)}%" title="이 아래로 내려가면 적 공격력 +1, 적이 먼저 공격합니다" aria-hidden="true"></div>
-              <div class="ember-atk2-line" style="left: ${atk2LinePct.toFixed(1)}%" title="이 아래로 내려가면 적 공격력 +2" aria-hidden="true"></div>
+              <div class="ember-atk1-line" style="left: ${atk1LinePct.toFixed(1)}%" data-tooltip="이 아래로 내려가면 적 공격력 +1. 적이 먼저 공격합니다." aria-hidden="true"></div>
+              <div class="ember-atk2-line" style="left: ${atk2LinePct.toFixed(1)}%" data-tooltip="이 아래로 내려가면 적 공격력 +2." aria-hidden="true"></div>
               <span class="ember-bar-label">불씨 ${emberText}/${emberMaxText} · ${EmberSystem.tierLabel(tier)}</span>
             </div>
-            <span class="ember-countdown" title="다음 불씨 감소까지 남은 턴">
+            <span class="ember-countdown" data-tooltip="다음 불씨 감소까지 남은 턴.">
               ${countdown}턴 뒤 -1
             </span>
           </div>
@@ -2376,7 +2381,7 @@ export class GameBoardRenderer {
     const parts: string[] = ['<span class="chain-banner-label">체인</span>']
     // 악마 소환 이벤트 체인은 배너 가장 좌측에 대형 붉은 다이아몬드로 별도 표시한다.
     if (demonPending) {
-      parts.push(`<span class="chain-banner-demon-diamond" aria-label="악마 소환" title="악마 소환">✦</span>`)
+      parts.push(`<span class="chain-banner-demon-diamond" aria-label="악마 소환" data-tooltip="악마 소환.">✦</span>`)
       if (events.length > 0) {
         parts.push('<span class="chain-banner-demon-sep">|</span>')
       }
@@ -2397,21 +2402,21 @@ export class GameBoardRenderer {
         const recipeDef = RECIPES.find((r) => r.id === ev.recipeId)
         const flavorHtml = recipeDef ? this.faces.recipeFlavorHtml(recipeDef) : ev.flavor
         parts.push(`
-          <span class="chain-event chain-event-recipe ${demonClass} ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
+          <span class="chain-event chain-event-recipe ${demonClass} ${isNew}" data-chain-uid="${ev.uid}" data-tooltip="${ev.flavor}">
             <span class="chain-event-mark">✦</span>
             <span class="chain-event-copy"><span class="chain-event-name">${ev.name}</span><span class="chain-event-flavor">${flavorHtml}</span></span>
           </span>
         `)
       } else if (ev.kind === 'gauge') {
         parts.push(`
-          <span class="chain-event chain-event-gauge ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
+          <span class="chain-event chain-event-gauge ${isNew}" data-chain-uid="${ev.uid}" data-tooltip="${ev.flavor}">
             <span class="chain-event-mark chain-event-mark--sparkle">${sparkleIcon()}</span>
             <span class="chain-event-name">${ev.name}</span>
           </span>
         `)
       } else {
         parts.push(`
-          <span class="chain-event chain-event-relic ${isNew}" data-chain-uid="${ev.uid}" title="${ev.flavor}">
+          <span class="chain-event chain-event-relic ${isNew}" data-chain-uid="${ev.uid}" data-tooltip="${ev.flavor}">
             <span class="chain-event-mark">✧</span>
             <span class="chain-event-copy"><span class="chain-event-name">${ev.name}</span><span class="chain-event-flavor">${ev.flavor}</span></span>
           </span>
@@ -2423,7 +2428,7 @@ export class GameBoardRenderer {
     }
     if (!demonImpactMode) {
       parts.push(
-        '<button class="chain-banner-reset" type="button" data-chain-reset title="체인 초기화">×</button>'
+        '<button class="chain-banner-reset" type="button" data-chain-reset data-tooltip="체인 초기화.">×</button>'
       )
     }
     banner.innerHTML = parts.join('')

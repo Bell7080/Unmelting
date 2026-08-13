@@ -152,6 +152,9 @@ export interface ShopStateView {
   packCosts?: Partial<Record<ShopPackKind, number>>
   /** 더 줄 것이 남지 않은 팩(조합·해금). 가격을 숨기고 '소진'을 찍는다. */
   exhaustedPackKinds?: ShopPackKind[]
+  /** 팩 타일에 커서를 올렸을 때 부채꼴로 펼칠 예시 아트(팩별 최대 3장). 실제 뽑기와
+   *  무관한 표본이라 미리보기가 결과를 스포일러하지 않는다. */
+  packPreviewArts?: Partial<Record<ShopPackKind, string[]>>
 }
 export interface ForcedTrialCardView {
   id: string

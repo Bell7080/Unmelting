@@ -1692,19 +1692,12 @@ export class EnaTrainingSimulation {
     if (this.bossHp < floor) {
       const overflow = floor - this.bossHp
       if (profile.pageGate === 'cell-break') {
-        // 경계가 삼킨 몫은 칸으로 들어가 부위를 깬다. 그 몫이 칸 하나를 채우는 타격은
-        // **리미트를 함께 뚫으므로 하한에 막히지 않는다**(실게임 bossPageFloor와 같은 규칙) —
-        // 막아 두면 조건을 만족시킨 타격만 손해를 보는 판이 된다.
+        // 경계가 삼킨 몫은 칸으로 들어가 부위를 깬다. ★ 다만 그 몫이 조건을 채우더라도
+        // HP는 **경계에서 멈춘다**(실게임 bossPageFloor와 같은 규칙) — 리미트를 뚫는
+        // 타격이 경계 아래로 내려가면 광역 한 방이 페이지를 통째로 건너뛴다.
         const cost = this.pageGateBreakCost(profile)
-        if (this.bossGateDamage + overflow >= cost) {
-          this.bossGateDamage = cost
-          // 뚫되 끝내지는 않는다 — 하한이 0으로 풀리면 큰 한 방이 다음 페이지를 통째로
-          // 건너뛰고 격파한다(실게임 bossPageFloor가 1을 돌려주는 것과 같은 이유).
-          this.bossHp = Math.max(1, this.bossHp)
-        } else {
-          this.bossGateDamage += overflow
-          this.bossHp = floor
-        }
+        this.bossGateDamage = Math.min(cost, this.bossGateDamage + overflow)
+        this.bossHp = floor
       } else {
         this.bossHp = floor // 페이지 경계 초과 피해 컷
       }
@@ -1733,9 +1726,9 @@ export class EnaTrainingSimulation {
         this.bossHp = floor
         return
       }
-      // 리미트를 뚫은 타격의 피해는 경계 아래로 그대로 남는다(damageBoss가 이미 통과시켰다).
-      // 스스로 열리는 경계('none')만 정확히 경계에서 멈춘다.
-      if (profile.pageGate !== 'cell-break') this.bossHp = floor
+      // 리미트를 뚫었든 스스로 열렸든 페이지는 **경계에서** 열린다 — 초과 피해가 다음
+      // 페이지로 넘어가면 큰 한 방이 페이지 하나를 통째로 건너뛴다.
+      this.bossHp = floor
       this.bossGateDamage = 0
       this.bossPage++ // 다음 페이지 — 경계 HP가 새 페이지의 천장이 된다.
       this.bossAttackCountdown = profile.interval

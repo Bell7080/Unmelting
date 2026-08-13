@@ -485,25 +485,6 @@ describe('bossGimmickExpectation — 칸 개념이 없는 학습 시뮬용 요�
   })
 })
 
-describe('행동 단위 부위 파괴 추적(brokeCellThisAction)', () => {
-  it('beginAction이 기준선을 세우고, 그 행동이 칸을 깨야만 true가 된다', () => {
-    const m = new BossGimmickManager(() => 0)
-    m.beginEncounter('waxArmy', 160)
-    m.beginAction({ origin: 'direct', tags: [] })
-    expect(m.brokeCellThisAction).toBe(false)
-
-    // 칸 하나를 확실히 깰 만큼 때린다(내구도 이상).
-    const durability = m.cellDurability
-    m.strike({ cellIndex: 0, baseDamage: durability * 4 })
-    expect(m.brokenCount).toBe(1)
-    expect(m.brokeCellThisAction).toBe(true)
-
-    // 다음 행동이 시작되면 기준선이 갱신돼 이전 파괴는 더 이상 세지 않는다.
-    m.beginAction({ origin: 'direct', tags: [] })
-    expect(m.brokeCellThisAction).toBe(false)
-  })
-})
-
 describe('칸 부가물(함정/보물) — 배율과 독립인 두 번째 축', () => {
   /** 부가물 정원까지 채워진 30F 격자. 함정 피해는 보스 공격력에서 파생된다. */
   function fixtureGrid(attack = 10): BossGimmickManager {

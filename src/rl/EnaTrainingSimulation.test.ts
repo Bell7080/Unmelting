@@ -313,10 +313,9 @@ describe('EnaTrainingSimulation', () => {
     const p = stagedBoss(21, 30)
     const floor = halfPageFloor(BOSS_CORE_SPECS[30].maxHp)
     p.damageBoss(BOSS_CORE_SPECS[30].maxHp, 'basic') // 경계 초과 피해 한 방
-    // 부위를 깬 타격은 리미트를 함께 뚫으므로 경계 아래로 들어간다(실게임 bossPageFloor).
-    // 다만 페이지가 남아 있어 격파까지는 가지 않는다 — 1에서 멈춘다.
-    expect(p.bossHp).toBeLessThan(floor)
-    expect(p.bossHp).toBeGreaterThanOrEqual(1)
+    // ★ 리미트를 뚫는 타격이라도 HP는 경계에서 멈춘다(실게임 bossPageFloor와 같은 규칙) —
+    // 한 방에 페이지를 통째로 건너뛰고 격파하는 일이 없어야 한다.
+    expect(p.bossHp).toBe(floor)
     expect(p.bossPage).toBe(1) // 초과분이 그대로 부위 파괴에 들어가 열린다
     expect(p.bossGateDamage).toBe(0)
 

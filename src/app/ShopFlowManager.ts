@@ -105,8 +105,22 @@ const ONBOARDING_RELIC_IDS: RelicId[] = [
 
 /** 온보딩 커먼 풀에서도 제외(잠금)하는 손패 — 물뿌리개는 초반에 혼란을 줘 빼고,
  *  동전은 새싹 단계 화폐($) 획득 전면 잠금 정책으로 뺀다(보물상자 보너스 드롭 차단).
+ *  단두대는 필드 전체 확정 피해라 30F 보스 격자를 한 번에 쓸어 리미트를 무의미하게
+ *  만든다 — 새싹 구간의 밸런스를 부수므로 졸업 후 정규 런에서만 나온다.
  *  index의 온보딩 커먼 풀 구성도 이 목록을 공유한다. */
-export const ONBOARDING_BANNED_CARDS: HandCardId[] = ['watering-can', 'coin']
+export const ONBOARDING_BANNED_CARDS: HandCardId[] = ['watering-can', 'coin', 'guillotine']
+
+/** 팩 타일 호버 시 부채꼴로 펼쳐 보여 줄 예시 카드 수. */
+const PACK_PREVIEW_COUNT = 3
+
+/** 에나 팩 권유 기준 — "모자라다/넉넉하다/조합을 쓴다"의 경계값. */
+const PACK_ADVICE_LOW_HP_RATIO = 0.5
+/** 불씨 4 미만 = 적 선공이 시작되는 티어. 여기부터 '부족'으로 본다. */
+const PACK_ADVICE_LOW_EMBER = 4
+/** 자원팩 값의 몇 배를 들고 있어야 '넉넉하다'로 보는가. */
+const PACK_ADVICE_RICH_MULT = 2
+/** 이번 런에 레시피를 몇 번 터뜨려야 '조합을 쓰는 사람'으로 보는가. */
+const PACK_ADVICE_RECIPE_USES = 2
 
 /** 상점 흐름이 런 상태·연출을 조작할 때 쓰는 주입 계약. 상태 소유는 index.ts에 남는다. */
 export interface ShopFlowDeps {
@@ -297,6 +311,9 @@ export class ShopFlowManager {
         SHOP_PACK_KINDS.map((kind) => [kind, this.currentShopPackCost(kind)])
       ) as Partial<Record<ShopPackKind, number>>,
       exhaustedPackKinds: SHOP_PACK_KINDS.filter((kind) => this.isPackExhausted(kind)),
+      packPreviewArts: Object.fromEntries(
+        SHOP_PACK_KINDS.map((kind) => [kind, this.packPreviewArts(kind)])
+      ) as Partial<Record<ShopPackKind, string[]>>,
     }
     return base
   }
@@ -342,6 +359,41 @@ export class ShopFlowManager {
     // 침묵 구간 게이트를 의도적으로 우회해 직접 발화).
     const shopIntro = this.deps.encounterIntroLineOnce(mode === 'altar' ? 'altar' : 'shop')
     if (shopIntro) this.deps.companionDirector.sayEnaBark(shopIntro, { importance: BARK_IMPORTANCE.situation })
+    if (mode === 'shop') this.maybeRecommendPack()
+  }
+
+  /**
+   * 지금 판을 보고 팩 하나를 짚어 준다 — 모자라면 자원팩, 넉넉하면 해금팩, 조합을
+   * 실제로 굴리고 있으면 조합팩. 튜토리얼 성격이라 **종류마다 태어나서 한 번씩만**
+   * 나가고(`encounterIntroLineOnce`), 한 방문에 하나만 짚는다.
+   *
+   * 순서가 곧 우선순위다: 당장 버틸 힘이 없는데 새 카드를 권하면 조언이 아니라 소음이다.
+   */
+  private maybeRecommendPack(): void {
+    const c = this.deps.gameState.character
+    const exhausted = new Set(SHOP_PACK_KINDS.filter((kind) => this.isPackExhausted(kind)))
+    const hpLow = c.maxHealth > 0 && c.health / c.maxHealth <= PACK_ADVICE_LOW_HP_RATIO
+    // 불씨 4 미만은 적이 먼저 때리기 시작하는 경계다 — "부족하다"의 실제 기준으로 쓴다.
+    const emberLow = c.ember < PACK_ADVICE_LOW_EMBER
+    const basicCost = this.currentShopPackCost('basic-pack')
+
+    const candidates: Array<{ kind: ShopPackKind; intro: SystemEncounterKind; when: boolean }> = [
+      { kind: 'basic-pack', intro: 'pack-basic', when: hpLow || emberLow },
+      // 조합을 굴려 본 사람에게만 조합팩을 권한다 — 안 쓰는 사람에게는 빈 권유다.
+      { kind: 'recipe-pack', intro: 'pack-recipe', when: this.deps.companionDirector.runDramaSignals.recipesFired >= PACK_ADVICE_RECIPE_USES },
+      // 넉넉함의 기준은 "자원팩을 안 사도 되고, 팩 하나를 사고도 남는다"이다.
+      { kind: 'unlock-pack', intro: 'pack-unlock', when: !hpLow && !emberLow && this.res.score >= basicCost * PACK_ADVICE_RICH_MULT },
+    ]
+    for (const cand of candidates) {
+      if (!cand.when || exhausted.has(cand.kind)) continue
+      const line = this.deps.encounterIntroLineOnce(cand.intro)
+      if (!line) continue // 이미 한 번 해 준 안내 — 다음 후보로 넘기지 않고 조용히 넘어간다.
+      this.deps.companionDirector.sayEnaBark(line, {
+        importance: BARK_IMPORTANCE.situation,
+        onDisplay: () => this.deps.boardRenderer.emphasizeShopPack(cand.kind),
+      })
+      return
+    }
   }
   /** 레시피 재료를 "양초 + 불씨" / "성냥 ×2" 형식의 한 줄 문자열로 변환한다. */
   buildRecipeNote(ingredients: Partial<Record<HandCardId, number>>): string {
@@ -387,6 +439,50 @@ export class ShopFlowManager {
     if (kind === 'recipe-pack') return this.lockedRecipePool().length === 0
     if (kind === 'unlock-pack') return this.unlockCardPool().length === 0
     return false
+  }
+
+  /**
+   * 팩 타일 호버 미리보기용 예시 아트. 실제 뽑기(`rollPackItems`)와 **다른 경로**다 —
+   * 여기서 RNG를 굴리면 커서를 올릴 때마다 내용이 바뀌고, 진짜 뽑기 결과를 미리
+   * 보여 주는 스포일러가 된다. 풀을 고르게 훑어 "이런 것들이 들어 있다"만 말한다.
+   */
+  packPreviewArts(kind: ShopPackKind): string[] {
+    const spread = <T>(pool: readonly T[], toArt: (v: T) => string | undefined): string[] => {
+      const arts: string[] = []
+      if (pool.length === 0) return arts
+      // 앞에서 세 개를 자르면 늘 같은 얼굴만 나온다 — 풀 전체에 고르게 걸친 표본을 뽑는다.
+      const step = Math.max(1, Math.floor(pool.length / PACK_PREVIEW_COUNT))
+      for (let i = 0; i < pool.length && arts.length < PACK_PREVIEW_COUNT; i += step) {
+        const art = toArt(pool[i]!)
+        if (art && !arts.includes(art)) arts.push(art)
+      }
+      return arts
+    }
+    switch (kind) {
+      case 'basic-pack': {
+        const pool = this.deps.isOnboardingActive()
+          ? BASIC_PACK_POOL.filter((entry) => entry.id !== 'basic_011')
+          : BASIC_PACK_POOL
+        return spread(pool, (entry) => spriteForBasicPackItem(entry.illu))
+      }
+      case 'resource-pack':
+        return spread(SHOP_PACK_POOLS['resource-pack'], (e) => (e.illu ? spriteForBasicPackItem(e.illu) : undefined))
+      case 'recipe-pack':
+        // 레시피 일러스트는 전부 같은 장이라 그걸 세 번 겹쳐 봐야 아무것도 안 읽힌다.
+        // 대신 각 레시피의 첫 재료 손패를 보여 준다 — "이 카드들로 만든다"가 미리보기다.
+        return spread(this.lockedRecipePool(), (r) => {
+          const first = Object.keys(r.ingredients)[0] as HandCardId | undefined
+          return first ? spriteForHandCard(first) : undefined
+        })
+      case 'unlock-pack':
+        return spread(this.unlockCardPool(), (id) => spriteForHandCard(id))
+      case 'chance-pack':
+      case 'delete-pack': {
+        const { unlocked } = this.deps.runCardPool.snapshot()
+        const pool = unlocked.filter((id) => getHandCardDef(id).dropSource !== 'boss')
+        return spread(pool, (id) => spriteForHandCard(id))
+      }
+    }
   }
 
   rollPackItems(kind: ShopPackKind): ShopPackPickItem[] {

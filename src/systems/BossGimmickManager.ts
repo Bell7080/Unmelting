@@ -486,8 +486,6 @@ export class BossGimmickManager {
   private pendingHits: BossGimmickStrike[] = []
   /** 지금 진행 중인 플레이어 행동의 출처. `beginAction`이 세우고 판정이 읽는다. */
   private source: BossGimmickSourceContext = NEUTRAL_SOURCE
-  /** 행동 시작 시점의 파괴 칸 수. "이번 행동이 부위를 깼는가"의 기준선이다. */
-  private brokenAtActionStart = 0
 
   /** rng는 테스트에서 배치를 고정하기 위해 주입한다. */
   constructor(private readonly rng: () => number = Math.random) {}
@@ -499,16 +497,6 @@ export class BossGimmickManager {
    */
   beginAction(source: BossGimmickSourceContext): void {
     this.source = source
-    this.brokenAtActionStart = this.brokenCount
-  }
-
-  /**
-   * 이번 행동이 부위를 하나라도 깼는가. 손패·유물·직접 타격이 한 행동 안에서 이어 때려도
-   * `beginAction`이 세운 기준선 하나로 판정되므로, 경로마다 따로 세지 않아도 된다.
-   * 페이지 리미트('cell-break')가 이 값을 보고 그 자리에서 함께 뚫린다.
-   */
-  get brokeCellThisAction(): boolean {
-    return this.brokenCount > this.brokenAtActionStart
   }
 
   /** 보스 등장 시 1회. 프로필이 있는 보스만 격자를 굴리고, 켜졌는지 여부를 돌려준다. */

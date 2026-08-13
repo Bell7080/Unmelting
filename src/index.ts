@@ -3025,6 +3025,8 @@ async function applyHandSingle(
     if (recipeResult.firedRecipes.length === 0) break
     // 레시피 발동은 에나 기분을 살짝 끌어올린다(대사 없이 상태만).
     companion.noteMoodShift(0.05 * recipeResult.firedRecipes.length)
+    // 조합을 실제로 쓰는 플레이어인지의 신호 — 상점에서 조합팩을 권할지 여기서 쌓인다.
+    companionDirector.runDramaSignals.recipesFired += recipeResult.firedRecipes.length
     // 태어나서 첫 레시피 발동 — 조합식 규칙을 그 자리에서 짧게 알려준다.
     const recipeIntro = encounterIntroLineOnce('recipe')
     if (recipeIntro) companionDirector.sayEnaBark(recipeIntro, { importance: BARK_IMPORTANCE.situation })

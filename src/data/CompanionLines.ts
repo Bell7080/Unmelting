@@ -1740,6 +1740,7 @@ export type BoardEncounterKind = FieldIntroKind | 'web' | 'bomb' | 'spore' | 'ev
   | 'mimic' | 'monster-flower' | 'chamomile' | 'red-rose' | 'marigold' | 'oleander' | 'lavender'
 /** 보드 밖 시스템 흐름/플레이어 행동의 첫 경험 종류. */
 export type SystemEncounterKind = 'boss' | 'trial' | 'shop' | 'altar' | 'triple' | 'combo' | 'recipe' | 'relic'
+  | 'pack-basic' | 'pack-unlock' | 'pack-recipe'
 export type EncounterIntroKind = BoardEncounterKind | SystemEncounterKind
 
 /** 한 종류만 처음 나왔을 때의 소개(전체 문장). */
@@ -1873,6 +1874,23 @@ export const ENCOUNTER_INTRO_LINES: Record<Exclude<EncounterIntroKind, FieldIntr
     '서른 턴마다 열리는 제단이야. 유물 한 점은 공짜야. 눈 크게 뜨자.',
     '조용한 곳이지? 제단의 팩은 값이 세지만 그만큼 깊어. 지갑과 상의하면서 고르자.',
     '제단을 나서면 이 층의 보스가 기다려. 여기서의 준비가 그 싸움을 정해.',
+  ],
+  // 아래 셋은 상황을 보고 한 팩을 짚어 주는 권유다. 태어나서 한 번씩만 나가는 안내라
+  // "이번엔 저걸 봐"가 아니라 "저 팩은 이런 곳이야"로 읽히게 쓴다.
+  'pack-basic': [
+    '지금은 몸이 먼저야. 자원팩엔 체력이랑 불씨가 들었어. 저것부터 보자.',
+    '버틸 힘이 모자라 보여. 자원팩을 열면 당장 필요한 걸 채울 수 있어.',
+    '무리하지 말자. 저 자원팩이 체력과 불씨를 바로 메워 줄 거야.',
+  ],
+  'pack-unlock': [
+    '여유가 있네! 해금팩을 열어 보자. 아직 못 만난 손패가 기다리고 있어.',
+    '이만큼 모았으면 새 걸 만나 볼 때야. 해금팩엔 처음 보는 카드가 들었어.',
+    '지금은 넉넉하니까 해금팩 어때? 새 손패가 늘면 만들 수 있는 것도 늘어.',
+  ],
+  'pack-recipe': [
+    '조합을 잘 쓰네! 조합팩을 열면 새 조합식이 늘어. 손에 맞을 거야.',
+    '순서를 맞춰 터뜨리는 게 몸에 뱄구나. 조합팩에 새 레시피가 들었어.',
+    '조합이 손에 붙었네. 저 조합팩이 쓸 수 있는 수를 더 늘려 줄 거야.',
   ],
 }
 

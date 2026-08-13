@@ -703,6 +703,74 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   background-size: cover;
   pointer-events: none;
 }
+/* ── 팩 호버 미리보기: 봉투 뒤에서 예시 카드가 부채꼴로 솟는다 ──────────────
+   DOM에서 일러스트보다 **앞에** 두어 자연히 뒤에 깔린다(z-index를 새로 만들지 않는다).
+   애니메이션이 아니라 **트랜지션**으로 낸다 — 사라지는 도중에 다시 커서를 올리면
+   남은 자리에서 그대로 되살아나야 하기 때문이다. 애니메이션은 매번 0프레임으로
+   되감겨 올렸다 뗐다 할 때 산만해진다. */
+.shop-pack-fan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.shop-pack-fan-card {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  width: 46%;
+  aspect-ratio: 3 / 4;
+  margin-left: -23%;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 214, 140, 0.5);
+  background-position: center;
+  background-size: cover;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.55), 0 0 10px rgba(244, 178, 86, 0.22);
+  transform-origin: 50% 120%;
+  opacity: 0;
+  /* 접힌 자리 = 봉투 속. 부채가 접히면 카드가 팩 뒤에 완전히 숨는다. */
+  transform: translateY(6%) rotate(0deg) scale(0.7);
+  /* 뗄 때: 한 박자로 천천히 접힌다(스태거 없음). */
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  transition-delay: 0ms;
+}
+/* 펼침 각도/거리는 장수와 무관하게 가운데를 축으로 대칭이 되도록 --fan-mid에서 역산한다. */
+.shop-pack-card:hover .shop-pack-fan-card,
+.shop-pack-card:focus-visible .shop-pack-fan-card,
+.shop-pack-card.is-touch-active .shop-pack-fan-card {
+  opacity: 1;
+  transform:
+    translateX(calc((var(--fan-i) - var(--fan-mid)) * 62%))
+    translateY(-46%)
+    rotate(calc((var(--fan-i) - var(--fan-mid)) * 13deg))
+    scale(0.94);
+  /* 올릴 때: 슈슉 하고 한 장씩 어긋나 펼쳐진다. */
+  transition: opacity 0.16s ease, transform 0.26s cubic-bezier(0.22, 0.9, 0.28, 1.06);
+  transition-delay: calc(var(--fan-i) * 55ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .shop-pack-fan-card { transition: opacity 0.2s ease; transform: none; }
+  .shop-pack-card:hover .shop-pack-fan-card,
+  .shop-pack-card:focus-visible .shop-pack-fan-card,
+  .shop-pack-card.is-touch-active .shop-pack-fan-card { transform: none; transition-delay: 0ms; }
+}
+/* 에나가 권한 팩 — 딱딱한 테두리 선은 '선택된 UI'로 읽히므로 발광으로만 짚는다. */
+.shop-pack-card.is-ena-pick {
+  animation:
+    shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both,
+    shop-pack-ena-pick 1.9s ease-in-out infinite;
+  animation-delay: var(--shop-pack-enter-delay, 0ms), var(--shop-pack-enter-delay, 0ms);
+}
+@keyframes shop-pack-ena-pick {
+  0%, 100% { filter: brightness(1); box-shadow: 0 0 0 rgba(255, 205, 112, 0); }
+  50% { filter: brightness(1.16); box-shadow: 0 0 26px rgba(255, 205, 112, 0.55); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shop-pack-card.is-ena-pick {
+    animation: shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both;
+    filter: brightness(1.12);
+    box-shadow: 0 0 22px rgba(255, 205, 112, 0.5);
+  }
+}
 .shop-pack-overlay {
   position: absolute;
   inset: 0;

@@ -126,7 +126,8 @@ export class ShopOverlayView {
     score: number,
     theme: 'resource' | 'upgrade' | 'unlock',
     order: number,
-    exhausted = false
+    exhausted = false,
+    previewArts: string[] = []
   ): string {
     const affordable = score >= cost ? 'is-affordable' : 'is-unaffordable'
     const artUrl = SpriteUrls.packs[kind]
@@ -143,12 +144,24 @@ export class ShopOverlayView {
     const rarityClass = RARITY_CLASS_BY_TIER[packRarityClassMap[kind]]
     // 소진 = 더 줄 것이 남지 않은 팩. 가격을 지우고 판을 어둡게 깔아 살 수 없음을 먼저
     // 말한 뒤, 그 위에 '소진'을 크게 박는다(비싸서 못 사는 것과 구분돼야 한다).
+    // 호버 미리보기 — 봉투 뒤에서 예시 카드가 부채꼴로 솟는다. 소진된 팩은 줄 것이
+    // 없으므로 펼치지 않는다(빈 부채를 보여 주면 아직 살 수 있는 것처럼 읽힌다).
+    const fanHtml =
+      exhausted || previewArts.length === 0
+        ? ''
+        : `<div class="shop-pack-fan" aria-hidden="true">${previewArts
+            .map(
+              (art, i) =>
+                `<span class="shop-pack-fan-card" style="--fan-i:${i}; --fan-mid:${(previewArts.length - 1) / 2}; background-image:url('${art}');"></span>`
+            )
+            .join('')}</div>`
     return `
       <article class="shop-pack-card pack-theme-${theme} ${exhausted ? 'is-exhausted' : affordable} ${rarityClass}"
                data-shop-buy-kind="${kind}"
                ${exhausted ? 'aria-disabled="true"' : 'tabindex="0"'}
                style="--cardback-url:url('${SpriteUrls.cardBack}'); --shop-pack-order:${order};"
                aria-label="${title} — ${exhausted ? '소진' : `불빛 ${cost}`}">
+        ${fanHtml}
         <div class="shop-pack-illustration" style="background-image: url('${artUrl}')" aria-hidden="true"></div>
         <div class="shop-pack-overlay">
           <h3 class="shop-pack-title">${title}</h3>
@@ -164,6 +177,20 @@ export class ShopOverlayView {
         }
       </article>
     `
+  }
+
+  /**
+   * 에나가 권한 팩 하나를 촛불빛으로 짚어 둔다. 필드 강조(`pulseEnaHint`)는 보드
+   * 안쪽만 훑으므로 상점 오버레이에는 닿지 않아 여기 별도 창구를 둔다.
+   * 클래스 하나만 얹는다 — 방문 중 제자리 갱신(`refreshOpenShopInPlace`)은 지정된
+   * 상태 클래스만 갈아 끼우므로 이 강조는 그대로 남는다.
+   */
+  emphasizeShopPack(kind: ShopPackKind): void {
+    const shell = this.shopOverlayElement?.querySelector<HTMLElement>('.shop-shell')
+    shell?.querySelectorAll<HTMLElement>('.shop-pack-card.is-ena-pick')
+      .forEach((el) => el.classList.remove('is-ena-pick'))
+    shell?.querySelector<HTMLElement>(`.shop-pack-card[data-shop-buy-kind="${kind}"]`)
+      ?.classList.add('is-ena-pick')
   }
 
   /** Shared shop purchase impact: brief shake + palette square burst so every
@@ -547,14 +574,14 @@ export class ShopOverlayView {
                     ['chance-pack', '확률팩', '특정 카드 1차 드롭 우선도 부여', shop.packCosts?.['chance-pack'] ?? 500, 'upgrade', 1],
                     ['delete-pack', '삭제팩', '카드 제거 · 드롭 집중도 상향', shop.packCosts?.['delete-pack'] ?? 500, 'unlock', 2],
                   ]
-                  return altarAll.map(([k, t, d, c, th, n]) => this.renderShopPackCard(k, t, d, c, score, th, n, exhausted.has(k))).join('')
+                  return altarAll.map(([k, t, d, c, th, n]) => this.renderShopPackCard(k, t, d, c, score, th, n, exhausted.has(k), shop.packPreviewArts?.[k] ?? [])).join('')
                 } else {
                   const shopAll: Array<[ShopPackKind, string, string, number, 'resource' | 'upgrade' | 'unlock', number]> = [
                     ['basic-pack', basicPackLabel.title, 'HP·불씨·게이지 즉시 보충', shop.packCosts?.['basic-pack'] ?? shop.basicPackCost, 'resource', 0],
                     ['recipe-pack', recipePackLabel.title, '조합식 해금 · 덱 심도 확장', shop.packCosts?.['recipe-pack'] ?? 400, 'upgrade', 1],
                     ['unlock-pack', unlockPackLabel.title, '잠긴 손패 해금 · 드롭 풀 확대', shop.packCosts?.['unlock-pack'] ?? 400, 'unlock', 2],
                   ]
-                  return shopAll.map(([k, t, d, c, th, n]) => this.renderShopPackCard(k, t, d, c, score, th, n, exhausted.has(k))).join('')
+                  return shopAll.map(([k, t, d, c, th, n]) => this.renderShopPackCard(k, t, d, c, score, th, n, exhausted.has(k), shop.packPreviewArts?.[k] ?? [])).join('')
                 }
               })()}
             </div>

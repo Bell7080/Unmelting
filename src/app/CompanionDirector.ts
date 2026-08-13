@@ -106,6 +106,8 @@ export class CompanionDirector {
     lethalThreatsFaced: 0,
     /** 이번 런 최저 체력 비율 — 컴백 폭(최저→최종) 계산용. */
     lowestHpRatio: 1,
+    /** 이번 런에 실제로 터뜨린 레시피 수 — 상점에서 조합팩을 권할지 판단하는 신호다. */
+    recipesFired: 0,
   }
 
   constructor(private readonly deps: CompanionDirectorDeps) {}
@@ -115,6 +117,7 @@ export class CompanionDirector {
     this.runDramaSignals.emberCrises = 0
     this.runDramaSignals.lethalThreatsFaced = 0
     this.runDramaSignals.lowestHpRatio = 1
+    this.runDramaSignals.recipesFired = 0
   }
 
   /** 런 종료 결과로 모험 xp를 적립하고 성장 앵커를 옮긴 뒤, 에나 성향을 온라인 적응시키고 저장한다. */
