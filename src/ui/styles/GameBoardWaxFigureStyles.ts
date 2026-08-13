@@ -358,97 +358,166 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 .wax-hold-slot-name { grid-area: name; align-self: end; font-size: 12px; font-weight: 800; color: #fff5dc; line-height: 1.2; }
 .wax-hold-slot-actions { grid-area: actions; display: flex; gap: 5px; }
 
-/* ── 하단 조합 바 ──────────────────────────────────────── */
+/* ── 하단 조합 바: 좌(합성 가능 리스트) + 우(큰 마법진) ──────────────── */
 .wax-compose-bar {
   border-radius: 14px;
   border: 1px solid rgba(255, 215, 120, 0.2);
   background: linear-gradient(180deg, rgba(40, 28, 20, 0.5), rgba(12, 9, 16, 0.55));
-  padding: 12px 18px;
+  padding: 14px 18px;
   display: flex;
-  align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 10px;
 }
-.wax-compose-bar .wax-section-title { margin: 0; flex: 0 0 auto; }
+.wax-compose-bar .wax-section-title { margin: 0; }
+.wax-compose-layout { display: flex; align-items: center; gap: 20px; min-height: 180px; }
 .wax-compose-empty { margin: 0; font-size: 12px; color: rgba(255, 233, 196, 0.42); }
+
+/* 좌측 — 지금 합성할 수 있는 조합만 골라 버튼으로 나열한다(재료가 덜 찬 조합은 여기 안 뜬다). */
+.wax-compose-list-col {
+  flex: 0 0 190px;
+  align-self: stretch;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 178, 86, 0.7) transparent;
+}
+.wax-compose-list-empty { margin: 0; font-size: 12px; line-height: 1.5; color: rgba(255, 233, 196, 0.42); }
+.wax-compose-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.wax-compose-list-btn {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 215, 120, 0.22);
+  background: rgba(255, 210, 130, 0.05);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+.wax-compose-list-btn:hover { background: rgba(255, 210, 130, 0.14); }
+.wax-compose-list-btn.is-active { border-color: rgba(255, 215, 120, 0.75); background: rgba(255, 210, 130, 0.2); box-shadow: 0 0 10px rgba(244, 178, 86, 0.3); }
+.wax-compose-list-glyph {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background-size: cover;
+  background-position: center 32%;
+  border: 1px solid rgba(255, 215, 120, 0.3);
+}
+.wax-compose-list-name { font-size: 12px; font-weight: 800; color: #fff5dc; line-height: 1.25; }
+.wax-compose-list-star { font-size: 12px; font-weight: 900; color: var(--color-flame, #ffd778); }
+
+/* 우측 — 마법진 무대. 크게 잡아 "누르고 싶게" 만드는 게 목적이다. */
+.wax-compose-stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-width: 0; }
 
 /* 밀랍 조각진 — 재료 3개가 원 둘레에 놓이고 그 힘이 가운데 결과로 모이는 의식 도형.
    한 줄 슬롯 나열 대신 이 시스템의 봉인/제물 테마에 맞춘 원형 구성이다. */
 .wax-compose-circle {
   position: relative;
-  width: 84px;
-  height: 84px;
+  width: 150px;
+  height: 150px;
   flex: 0 0 auto;
 }
 .wax-compose-ring {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 1px dashed rgba(255, 215, 120, 0.32);
+  border: 1px dashed rgba(255, 215, 120, 0.55);
   animation: wax-compose-ring-spin 26s linear infinite;
 }
-.wax-compose-ring-inner { inset: 10px; border-color: rgba(255, 215, 120, 0.2); animation-duration: 18s; animation-direction: reverse; }
-.wax-compose-circle.is-ready .wax-compose-ring { border-color: rgba(255, 215, 120, 0.55); }
-.wax-compose-circle.is-ready .wax-compose-ring-inner { border-color: rgba(255, 215, 120, 0.38); }
+.wax-compose-ring-inner { inset: 18px; border-color: rgba(255, 215, 120, 0.38); animation-duration: 18s; animation-direction: reverse; }
 @keyframes wax-compose-ring-spin { to { transform: rotate(360deg); } }
+/* 클릭 순간의 "위잉" — 링이 빠르게 가속하며 밝아진다. JS가 짧게 붙였다 뗀다. */
+.wax-compose-circle.is-merging .wax-compose-ring { animation: wax-compose-ring-spin 0.6s linear infinite; border-color: rgba(255, 225, 160, 0.95); }
+.wax-compose-circle.is-merging .wax-compose-ring-inner { animation-duration: 0.42s; }
+.wax-compose-circle.is-merging .wax-compose-core { animation: wax-compose-core-flash 0.6s ease-in-out; }
+@keyframes wax-compose-core-flash {
+  0%, 100% { filter: brightness(1); transform: scale(1); }
+  50% { filter: brightness(1.7); transform: scale(1.08); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .wax-compose-ring { animation: none; }
+  .wax-compose-ring, .wax-compose-circle.is-merging .wax-compose-core { animation: none; }
 }
 /* 재료 노드 3개 — 정삼각형 배치(위 / 좌하 / 우하). */
 .wax-compose-node {
   position: absolute;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  border: 1px dashed rgba(255, 215, 120, 0.35);
-  background-color: rgba(255, 210, 130, 0.05);
-  background-size: cover;
-  background-position: center 32%;
-  opacity: 0.35;
-  z-index: 1;
-}
-.wax-compose-node.is-filled { opacity: 1; border-style: solid; border-color: rgba(255, 215, 120, 0.6); box-shadow: 0 0 8px rgba(244, 178, 86, 0.4); }
-.wax-compose-node.is-shiny.is-filled { border-color: rgba(123, 240, 174, 0.65); box-shadow: 0 0 8px rgba(123, 240, 174, 0.4); }
-.wax-compose-node-1 { top: -3px; left: 50%; transform: translateX(-50%); }
-.wax-compose-node-2 { bottom: 4px; left: 2px; }
-.wax-compose-node-3 { bottom: 4px; right: 2px; }
-/* 가운데 결과 — 재료보다 크게, 노드보다 위 레이어에 둬 조각진의 중심임을 읽게 한다. */
-.wax-compose-core {
-  position: absolute;
-  inset: 22px;
-  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 215, 120, 0.6);
   background-size: cover;
   background-position: center 32%;
-  box-shadow: 0 0 16px rgba(244, 178, 86, 0.3);
-  z-index: 2;
+  box-shadow: 0 0 8px rgba(244, 178, 86, 0.4);
+  z-index: 1;
 }
-.wax-compose-core.is-shiny { border-color: rgba(123, 240, 174, 0.65); box-shadow: 0 0 16px rgba(123, 240, 174, 0.35); }
+.wax-compose-node.is-shiny { border-color: rgba(123, 240, 174, 0.65); box-shadow: 0 0 8px rgba(123, 240, 174, 0.4); }
+.wax-compose-node-1 { top: -6px; left: 50%; transform: translateX(-50%); }
+.wax-compose-node-2 { bottom: 6px; left: -2px; }
+.wax-compose-node-3 { bottom: 6px; right: -2px; }
+/* 가운데 결과 — 재료보다 크게, 노드보다 위 레이어에 둬 조각진의 중심임을 읽게 한다.
+   숨쉬듯 맥동시켜(is-pulse) 눌러 보고 싶게 만든다 — 이게 곧 합성 버튼이다. */
+.wax-compose-core {
+  position: absolute;
+  inset: 44px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 215, 120, 0.7);
+  background-size: cover;
+  background-position: center 32%;
+  box-shadow: 0 0 18px rgba(244, 178, 86, 0.35);
+  z-index: 2;
+  padding: 0;
+  cursor: pointer;
+  transition: box-shadow 0.16s ease;
+}
+.wax-compose-core.is-pulse { animation: wax-compose-core-pulse 2.2s ease-in-out infinite; }
+@keyframes wax-compose-core-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 16px rgba(244, 178, 86, 0.32); }
+  50% { transform: scale(1.06); box-shadow: 0 0 28px rgba(244, 178, 86, 0.55); }
+}
+.wax-compose-core.is-shiny { border-color: rgba(123, 240, 174, 0.75); box-shadow: 0 0 18px rgba(123, 240, 174, 0.4); }
+.wax-compose-core.is-shiny.is-pulse { animation-name: wax-compose-core-pulse-shiny; }
+@keyframes wax-compose-core-pulse-shiny {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 16px rgba(123, 240, 174, 0.35); }
+  50% { transform: scale(1.06); box-shadow: 0 0 28px rgba(123, 240, 174, 0.6); }
+}
+.wax-compose-core:hover { box-shadow: 0 0 24px rgba(244, 178, 86, 0.55); }
+.wax-compose-core.is-shiny:hover { box-shadow: 0 0 24px rgba(123, 240, 174, 0.55); }
+@media (prefers-reduced-motion: reduce) {
+  .wax-compose-core.is-pulse { animation: none; }
+}
 .wax-compose-core-star {
   position: absolute;
-  bottom: -6px;
+  bottom: -8px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   color: #140d08;
   background: var(--color-flame, #ffd778);
   border-radius: 999px;
-  padding: 1px 6px;
+  padding: 2px 8px;
   white-space: nowrap;
 }
-.wax-compose-result-label { margin: 0; font-size: 12px; line-height: 1.4; color: rgba(255, 233, 196, 0.75); }
+.wax-compose-result-label { margin: 0; font-size: 12px; line-height: 1.4; color: rgba(255, 233, 196, 0.75); text-align: center; }
 .wax-compose-result-label b { color: var(--color-flame, #ffd778); font-variant-numeric: tabular-nums; }
-.wax-compose-need { margin: 0; font-size: 12px; color: rgba(255, 233, 196, 0.45); }
-.wax-btn-merge-big {
-  margin-left: auto;
-  padding: 8px 20px;
-  text-align: center;
-  font-size: 12px;
+
+/* 합성 결과가 마법진에서 튀어나와 갤러리의 새 칸으로 날아가 꽂히는 토큰. */
+.wax-compose-flight {
+  position: fixed;
+  top: 0;
+  left: 0;
   border-radius: 10px;
-  background: linear-gradient(180deg, rgba(255, 210, 130, 0.22), rgba(255, 210, 130, 0.08));
+  border: 1px solid rgba(255, 215, 120, 0.7);
+  background-size: cover;
+  background-position: center 32%;
+  box-shadow: 0 0 20px rgba(244, 178, 86, 0.5);
+  z-index: 10600;
+  pointer-events: none;
+  will-change: transform, opacity;
 }
-.wax-btn-merge-big:hover { box-shadow: 0 0 14px rgba(244, 178, 86, 0.45); }
+.wax-compose-flight.is-shiny { border-color: rgba(123, 240, 174, 0.75); box-shadow: 0 0 20px rgba(123, 240, 174, 0.5); }
 
 /* 필드에서부터 보이는 이로치 후보 — 밀랍상 탭과 같은 옥빛으로 "어 떴다"를 예고한다.
    깨우기 전부터 다르게 보여야 스쳐 지나가지 않고 붙잡고 싶어진다. */

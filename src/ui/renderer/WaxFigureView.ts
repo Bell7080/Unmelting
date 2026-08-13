@@ -30,6 +30,7 @@ import { waxFigureIcon, closeIcon } from '@ui/Icons'
 import { spriteForCard } from '@ui/Sprites'
 import { Card, CardType } from '@entities/Card'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
+import { SquareBurst } from '@ui/SquareBurst'
 
 interface PermanentTile {
   key: string
@@ -64,8 +65,12 @@ function tileKey(enemyName: string, variant: WaxFigureVariant, star: number): st
 export class WaxFigureView {
   /** 처치 시 호출부(index.ts)가 알려 줄 짧은 안내 — 다음에 열릴 때 한 번 보여주고 지운다. */
   private lastActionHint: string | null = null
-  /** 좌측 정보창/우측 조합 패널이 지금 가리키는 밀랍상함 항목. */
+  /** 좌측 정보창이 지금 가리키는 밀랍상함 항목. */
   private selectedKey: string | null = null
+  /** 하단 마법진이 지금 보여주는 합성 후보 — 합성 가능 리스트에서만 고른다. */
+  private composeKey: string | null = null
+  /** 합성 애니메이션이 도는 동안 같은 클릭이 두 번 들어가지 않게 막는다. */
+  private merging = false
 
   open(): void {
     let host = document.getElementById('wax-figure-overlay') as HTMLElement | null
@@ -111,14 +116,15 @@ export class WaxFigureView {
       this.render(host)
       return
     }
-    const mergeBtn = t.closest<HTMLElement>('[data-wax-merge]')
-    if (mergeBtn) {
-      const [enemyName, variant, starRaw] = mergeBtn.dataset.waxMerge!.split('::')
-      const star = Number(starRaw)
-      if (mergeWaxFigures(enemyName, variant as WaxFigureVariant, star)) {
-        this.selectedKey = tileKey(enemyName, variant as WaxFigureVariant, star + 1)
-      }
+    const composeSelectBtn = t.closest<HTMLElement>('[data-wax-compose-select]')
+    if (composeSelectBtn) {
+      this.composeKey = composeSelectBtn.dataset.waxComposeSelect!
       this.render(host)
+      return
+    }
+    const mergeBtn = t.closest<HTMLElement>('[data-wax-merge]')
+    if (mergeBtn && !this.merging) {
+      void this.performMerge(host, mergeBtn.dataset.waxMerge!)
       return
     }
     const stowAllBtn = t.closest<HTMLElement>('[data-wax-stow-all]')
@@ -137,6 +143,80 @@ export class WaxFigureView {
       this.selectedKey = selectCard.dataset.waxSelect!
       this.render(host)
     }
+  }
+
+  /**
+   * 마법진 가운데를 눌렀을 때의 전체 시퀀스 — ① 링이 빠르게 도는 "위잉" 가속(0.6초)
+   * ② 실제 합성(재료 소모 + 결과 생성) ③ 재렌더(재료 카드는 수량이 줄거나 사라지고
+   * 결과 카드가 갤러리에 나타난다) ④ 결과가 마법진 자리에서 튀어나와 그 갤러리 칸으로
+   * 날아가 꽂히는 비행 연출. 이 함수가 끝나기 전까지는 중복 클릭을 막는다.
+   */
+  private async performMerge(host: HTMLElement, recipeKey: string): Promise<void> {
+    const [enemyName, variant, starRaw] = recipeKey.split('::')
+    const star = Number(starRaw)
+    this.merging = true
+    const circle = host.querySelector<HTMLElement>('.wax-compose-circle')
+    const core = circle?.querySelector<HTMLElement>('.wax-compose-core')
+    const sourceRect = core?.getBoundingClientRect() ?? null
+    const sprite = spriteForSpeciesName(enemyName)
+    circle?.classList.add('is-merging')
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 600))
+
+    const ok = mergeWaxFigures(enemyName, variant as WaxFigureVariant, star)
+    if (!ok) {
+      circle?.classList.remove('is-merging')
+      this.merging = false
+      this.render(host)
+      return
+    }
+    const resultKey = tileKey(enemyName, variant as WaxFigureVariant, star + 1)
+    this.selectedKey = resultKey
+    this.render(host)
+
+    const destEl = host.querySelector<HTMLElement>(`[data-wax-select="${resultKey}"]`)
+    if (sourceRect && destEl) {
+      await this.playComposeFlight(sourceRect, destEl.getBoundingClientRect(), variant === 'shiny', sprite)
+    }
+    this.merging = false
+  }
+
+  /** 마법진 자리에서 튀어나온 결과가 갤러리의 새 칸으로 날아가 꽂히는 토큰. */
+  private playComposeFlight(source: DOMRect, dest: DOMRect, shiny: boolean, spriteUrl: string): Promise<void> {
+    const size = 46
+    const el = document.createElement('div')
+    el.className = `wax-compose-flight${shiny ? ' is-shiny' : ''}`
+    el.style.backgroundImage = `url('${spriteUrl}')`
+    el.style.width = `${size}px`
+    el.style.height = `${size}px`
+    document.body.appendChild(el)
+    const sx = source.left + source.width / 2 - size / 2
+    const sy = source.top + source.height / 2 - size / 2
+    const dx = dest.left + dest.width / 2 - size / 2
+    const dy = dest.top + dest.height / 2 - size / 2
+    const midX = (sx + dx) / 2
+    const midY = Math.min(sy, dy) - 46
+    const anim = el.animate(
+      [
+        { transform: `translate(${sx}px, ${sy}px) scale(1.35)`, opacity: 1, offset: 0 },
+        { transform: `translate(${midX}px, ${midY}px) scale(1.05)`, opacity: 1, offset: 0.5 },
+        { transform: `translate(${dx}px, ${dy}px) scale(0.9)`, opacity: 1, offset: 0.9 },
+        { transform: `translate(${dx}px, ${dy}px) scale(0.55)`, opacity: 0, offset: 1 },
+      ],
+      { duration: 620, easing: 'cubic-bezier(0.3, 0.7, 0.25, 1)', fill: 'forwards' }
+    )
+    return new Promise<void>((resolve) => {
+      const done = (): void => {
+        SquareBurst.playAt(dest.left + dest.width / 2, dest.top + dest.height / 2, shiny ? 'wax-figure-shiny' : 'wax-figure', {
+          count: 14,
+          spread: 46,
+          duration: 380,
+        })
+        el.remove()
+        resolve()
+      }
+      anim.onfinish = done
+      window.setTimeout(done, 700)
+    })
   }
 
   private permanentTiles(): PermanentTile[] {
@@ -217,38 +297,53 @@ export class WaxFigureView {
       <button type="button" class="wax-info-discard" data-wax-discard-permanent="${tile.enemyName}::${tile.variant}::${tile.star}" aria-label="이 밀랍상 버리기" data-tooltip="1개 버리기.">✕</button>`
   }
 
+  /** 좌측 "합성 가능 리스트" — 재료가 다 찬 조합만 버튼으로 나열한다. */
+  private renderComposeList(mergeable: PermanentTile[], activeKey: string | null): string {
+    if (mergeable.length === 0) {
+      return `<p class="wax-compose-list-empty">합성 가능한 조합이 없습니다.<br>같은 종+색을 ${WAX_FIGURE_MERGE_COUNT}개 모아 보세요.</p>`
+    }
+    return `<ul class="wax-compose-list">${mergeable
+      .map((t) => {
+        const sprite = spriteForSpeciesName(t.enemyName)
+        return `
+        <li>
+          <button type="button" class="wax-compose-list-btn${t.key === activeKey ? ' is-active' : ''}" data-wax-compose-select="${t.key}">
+            <span class="wax-compose-list-glyph" style="background-image:url('${sprite}')" aria-hidden="true"></span>
+            <span class="wax-compose-list-name">${t.enemyName}${t.variant === 'shiny' ? ' <em class="wax-shiny-tag">이로치</em>' : ''}</span>
+            <span class="wax-compose-list-star">★${t.star}</span>
+          </button>
+        </li>`
+      })
+      .join('')}</ul>`
+  }
+
   /**
-   * 하단 조합 바 — 밀랍 조각진(연성진) 형태로 그린다. 재료 3개가 원 둘레 세 점에
+   * 우측 마법진 무대 — 밀랍 조각진(연성진) 형태로 그린다. 재료 3개가 원 둘레 세 점에
    * 놓이고, 그 힘이 가운데 결과로 모이는 그림이라 "합성 = 의식"이라는 느낌을 낸다.
-   * 슬롯을 한 줄로 나열하던 이전 표기보다 이 시스템의 제물/연성 테마에 맞는다.
+   * 가운데 결과가 곧 합성 버튼이다 — 숨쉬듯 맥동시켜(is-pulse) 누르고 싶게 만든다.
    */
-  private renderComposePanel(tile: PermanentTile | undefined): string {
+  private renderComposeCircle(tile: PermanentTile | undefined): string {
     if (!tile) {
-      return `<p class="wax-compose-empty">전시물을 고르면 조각진을 볼 수 있습니다.</p>`
+      return `<p class="wax-compose-empty">좌측에서 합성할 조합을 골라 보세요.</p>`
     }
     const sprite = spriteForSpeciesName(tile.enemyName)
     const shinyClass = tile.variant === 'shiny' ? ' is-shiny' : ''
-    const filled = Math.min(tile.count, WAX_FIGURE_MERGE_COUNT)
-    const nodes = Array.from({ length: WAX_FIGURE_MERGE_COUNT }, (_, i) => {
-      const has = i < filled
-      return `<span class="wax-compose-node wax-compose-node-${i + 1}${has ? ' is-filled' : ''}${shinyClass}" style="${has ? `background-image:url('${sprite}')` : ''}"></span>`
-    }).join('')
+    const nodes = Array.from(
+      { length: WAX_FIGURE_MERGE_COUNT },
+      (_, i) => `<span class="wax-compose-node wax-compose-node-${i + 1}${shinyClass}" style="background-image:url('${sprite}')" aria-hidden="true"></span>`
+    ).join('')
     const nextStar = tile.star + 1
     const nextChance = waxFigureEffectChance(nextStar) * 100
-    const action = tile.mergeable
-      ? `<button type="button" class="wax-btn wax-btn-merge-big" data-wax-merge="${tile.enemyName}::${tile.variant}::${tile.star}">합성하기</button>`
-      : `<p class="wax-compose-need">합성에 ${WAX_FIGURE_MERGE_COUNT}개 필요 (현재 ${tile.count}개)</p>`
     return `
-      <div class="wax-compose-circle${tile.mergeable ? ' is-ready' : ''}">
+      <div class="wax-compose-circle">
         <span class="wax-compose-ring wax-compose-ring-outer" aria-hidden="true"></span>
         <span class="wax-compose-ring wax-compose-ring-inner" aria-hidden="true"></span>
         ${nodes}
-        <div class="wax-compose-core${shinyClass}" style="background-image:url('${sprite}')">
+        <button type="button" class="wax-compose-core is-pulse${shinyClass}" style="background-image:url('${sprite}')" data-wax-merge="${tile.enemyName}::${tile.variant}::${tile.star}" data-tooltip="눌러서 합성." aria-label="${tile.enemyName} 합성하기">
           <span class="wax-compose-core-star">★${nextStar}</span>
-        </div>
+        </button>
       </div>
-      <p class="wax-compose-result-label">${tile.enemyName}${tile.variant === 'shiny' ? ' 이로치' : ''} ★${nextStar} — ${tile.effectLabel} <b>${nextChance.toFixed(1)}%</b></p>
-      ${action}`
+      <p class="wax-compose-result-label">${tile.enemyName}${tile.variant === 'shiny' ? ' 이로치' : ''} ★${nextStar} — ${tile.effectLabel} <b>${nextChance.toFixed(1)}%</b></p>`
   }
 
   private render(host: HTMLElement): void {
@@ -265,6 +360,14 @@ export class WaxFigureView {
       this.selectedKey = tiles[0]?.key ?? null
     }
     const selectedTile = tiles.find((t) => t.key === this.selectedKey)
+
+    // 마법진은 합성 가능 리스트(재료가 다 찬 조합)에서만 고른다 — 리스트에서 사라졌으면
+    // (합성해 버렸거나 버려서 재료가 줄었으면) 다음 후보로 넘어간다.
+    const mergeableTiles = tiles.filter((t) => t.mergeable)
+    if (!this.composeKey || !mergeableTiles.some((t) => t.key === this.composeKey)) {
+      this.composeKey = mergeableTiles[0]?.key ?? null
+    }
+    const composeTile = mergeableTiles.find((t) => t.key === this.composeKey)
 
     // 자리가 있으면 봉인은 곧장 밀랍상함으로 들어간다 — 우측 임시보관칸은 한도를 넘겨
     // 밀려난 "넘친 몫"만 담으므로 평소에는 비어 있는 것이 정상이다.
@@ -296,7 +399,10 @@ export class WaxFigureView {
           </aside>
           <section class="wax-compose-bar">
             <h3 class="wax-section-title">조합</h3>
-            ${this.renderComposePanel(selectedTile)}
+            <div class="wax-compose-layout">
+              <div class="wax-compose-list-col">${this.renderComposeList(mergeableTiles, this.composeKey)}</div>
+              <div class="wax-compose-stage">${this.renderComposeCircle(composeTile)}</div>
+            </div>
           </section>
         </section>
       </div>`
