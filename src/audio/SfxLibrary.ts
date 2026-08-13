@@ -74,3 +74,51 @@ export const CHAIN_SFX_BY_KIND = {
 } as const satisfies Record<string, SfxKey>
 
 export type ChainSfxKind = keyof typeof CHAIN_SFX_BY_KIND
+
+/**
+ * 카드가 적을 때렸을 때의 **테마별 타격음**. 전용 파일을 종류마다 만들지 않고, 하나의
+ * 타격음을 음정·잔향·반복·역재생으로 변주해 "무엇으로 때렸는지"를 소리로 가른다.
+ *
+ *  - `reverse`: 파형을 뒤집어 재생한다 — 소리가 부풀어 오르다 터져 불길이 이는 느낌이 난다.
+ *  - `repeat`: 짧은 간격으로 여러 번 — 칼날이 연달아 그어지는 소리.
+ *  - `ring`: 되먹임 잔향 — 무거운 것일수록 길게 남는다.
+ */
+export interface HitToneSpec {
+  /** 반음 이조. 높을수록 날카롭고 낮을수록 둔중하다. */
+  semitones: number
+  gain: number
+  ring: number
+  repeat?: { times: number; gapMs: number; semitoneStep: number }
+  reverse?: boolean
+}
+
+/**
+ * 태그 → 타격음. 여기 없는 태그는 기본 타격음으로 떨어진다.
+ * 새 태그에 소리를 주고 싶으면 이 표 한 줄이면 된다.
+ */
+export const HIT_TONE_BY_TAG: Record<string, HitToneSpec> = {
+  // 칼날 — 얇고 빠르게 두 번 그어진다. 잔향은 거의 없다.
+  blade: { semitones: 7, gain: 0.9, ring: 0.05, repeat: { times: 2, gapMs: 70, semitoneStep: 2 } },
+  // 불씨 — 역재생으로 소리가 빨려 들었다 터진다(불이 확 이는 어휘).
+  flame: { semitones: 2, gain: 1, ring: 0.4, reverse: true },
+  // 제물 — 낮고 무겁게, 길게 울린다. 자해의 대가가 소리에 남는다.
+  sacrifice: { semitones: -7, gain: 1.05, ring: 0.85 },
+  // 방패 — 둔탁한 한 방. 울림은 짧게 끊는다.
+  shield: { semitones: -3, gain: 1, ring: 0.2 },
+  // 양초 — 눌린 소리. 밀랍에 파묻히는 둔함.
+  wax: { semitones: -1, gain: 0.8, ring: 0.15 },
+  // 성물/정화 — 높고 맑게 길게 남는다.
+  holy: { semitones: 10, gain: 0.85, ring: 0.8 },
+  clean: { semitones: 8, gain: 0.8, ring: 0.6 },
+  // 동전/보물 — 짤랑이는 잔울림.
+  coin: { semitones: 12, gain: 0.7, ring: 0.5, repeat: { times: 2, gapMs: 55, semitoneStep: 3 } },
+  treasure: { semitones: 9, gain: 0.75, ring: 0.45 },
+}
+
+/**
+ * 한 카드가 여러 태그를 가질 때 어느 소리를 낼지의 서열. 앞에 있을수록 정체성이 강한
+ * 태그다 — 제물이 붙었으면 그 대가가 가장 먼저 들려야 한다.
+ */
+export const HIT_TONE_PRIORITY: readonly string[] = [
+  'sacrifice', 'blade', 'flame', 'holy', 'clean', 'shield', 'coin', 'treasure', 'wax',
+]

@@ -753,23 +753,63 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   .shop-pack-card:focus-visible .shop-pack-fan-card,
   .shop-pack-card.is-touch-active .shop-pack-fan-card { transform: none; transition-delay: 0ms; }
 }
-/* 에나가 권한 팩 — 딱딱한 테두리 선은 '선택된 UI'로 읽히므로 발광으로만 짚는다. */
-.shop-pack-card.is-ena-pick {
-  animation:
-    shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both,
-    shop-pack-ena-pick 1.9s ease-in-out infinite;
-  animation-delay: var(--shop-pack-enter-delay, 0ms), var(--shop-pack-enter-delay, 0ms);
+/* ── 에나가 권한 팩 강조 ────────────────────────────────────────────────────
+   팩 일러스트는 **투명 배경 PNG**라 box-shadow로 발광을 주면 그림이 없는 사각 경계가
+   빛나 어색하다. 두 가지로 낸다.
+     1) 알파를 따라가는 발광: drop-shadow는 그림의 실루엣을 타므로 사각 후광이 안 생긴다.
+     2) 유리 반짝임: 대각선 빛 띠를 **팩 아트의 알파로 오려**(mask-image) 훑어 지나가게 한다.
+   딱딱한 테두리 선은 '선택된 UI'로 읽히므로 쓰지 않는다. */
+.shop-pack-card.is-ena-pick .shop-pack-illustration {
+  animation: shop-pack-ena-glow 1.9s ease-in-out infinite;
 }
-@keyframes shop-pack-ena-pick {
-  0%, 100% { filter: brightness(1); box-shadow: 0 0 0 rgba(255, 205, 112, 0); }
-  50% { filter: brightness(1.16); box-shadow: 0 0 26px rgba(255, 205, 112, 0.55); }
+@keyframes shop-pack-ena-glow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(255, 205, 112, 0.25)) brightness(1); }
+  50% { filter: drop-shadow(0 0 14px rgba(255, 205, 112, 0.8)) brightness(1.1); }
+}
+.shop-pack-shine {
+  position: absolute;
+  inset: -2px 0 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  /* 좁은 대각선 하이라이트 — 유리에 스치는 반사처럼 읽히게 가장자리를 흐린다. */
+  background: linear-gradient(
+    104deg,
+    transparent 40%,
+    rgba(255, 236, 190, 0.18) 46%,
+    rgba(255, 250, 226, 0.46) 50%,
+    rgba(255, 236, 190, 0.18) 54%,
+    transparent 60%
+  );
+  background-size: 260% 100%;
+  background-position: 125% 0;
+  background-repeat: no-repeat;
+  /* ★ 팩 그림 모양으로 오려 낸다 — 이게 없으면 빛이 빈 사각형까지 훑는다. */
+  -webkit-mask-image: var(--pack-art);
+  mask-image: var(--pack-art);
+  -webkit-mask-size: cover;
+  mask-size: cover;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  mix-blend-mode: screen;
+}
+.shop-pack-card.is-ena-pick .shop-pack-shine {
+  animation: shop-pack-shine-sweep 2.8s ease-in-out infinite;
+}
+@keyframes shop-pack-shine-sweep {
+  0% { background-position: 125% 0; opacity: 0; }
+  12% { opacity: 1; }
+  48% { background-position: -45% 0; opacity: 1; }
+  60%, 100% { background-position: -45% 0; opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .shop-pack-card.is-ena-pick {
-    animation: shop-card-enter 0.5s cubic-bezier(0.18, 0.86, 0.22, 1) both;
-    filter: brightness(1.12);
-    box-shadow: 0 0 22px rgba(255, 205, 112, 0.5);
+  .shop-pack-card.is-ena-pick .shop-pack-illustration {
+    animation: none;
+    filter: drop-shadow(0 0 12px rgba(255, 205, 112, 0.7)) brightness(1.08);
   }
+  .shop-pack-card.is-ena-pick .shop-pack-shine { animation: none; opacity: 0; }
 }
 .shop-pack-overlay {
   position: absolute;

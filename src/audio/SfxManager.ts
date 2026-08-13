@@ -14,6 +14,8 @@
 import {
   SFX_LIBRARY,
   CHAIN_SFX_BY_KIND,
+  HIT_TONE_BY_TAG,
+  HIT_TONE_PRIORITY,
   FADE_OUT_S,
   type SfxKey,
   type ChainSfxKind,
@@ -31,6 +33,8 @@ interface PlayOptions {
   gainScale?: number
   /** 잔향 강도 0~1. 0이면 딜레이 계통을 아예 만들지 않는다. */
   ring?: number
+  /** 파형을 뒤집어 재생한다 — 소리가 부풀어 오르다 터진다. */
+  reverse?: boolean
 }
 
 /** 체인 한 단계마다 올릴 반음 수. */
@@ -45,6 +49,8 @@ const RING_FEEDBACK_MAX = 0.42
 export class SfxManager {
   private ctx: AudioContext | null = null
   private readonly buffers = new Map<SfxKey, AudioBuffer>()
+  /** 역재생용 뒤집은 사본. 뒤집는 비용은 키마다 한 번만 치른다. */
+  private readonly reversed = new Map<SfxKey, AudioBuffer>()
   private readonly trims = new Map<SfxKey, TrimWindow>()
   private readonly loads = new Map<SfxKey, Promise<AudioBuffer | null>>()
   private volume = 0.7
@@ -103,9 +109,50 @@ export class SfxManager {
     })
   }
 
+  /**
+   * 카드가 적을 때린 소리. 카드의 시너지 태그에서 테마를 골라 같은 타격음을
+   * 음정·잔향·반복·역재생으로 변주한다 — 무엇으로 때렸는지가 소리로 갈린다.
+   * 태그가 없거나 표에 없는 태그뿐이면 기본 타격음으로 떨어진다.
+   */
+  playHandHit(tags: readonly string[] = []): void {
+    const tag = HIT_TONE_PRIORITY.find((candidate) => tags.includes(candidate))
+    const tone = tag ? HIT_TONE_BY_TAG[tag] : undefined
+    if (!tone) {
+      this.playAttack()
+      return
+    }
+    const shots = tone.repeat?.times ?? 1
+    for (let i = 0; i < shots; i++) {
+      void this.play('attack', {
+        semitones: tone.semitones + (tone.repeat?.semitoneStep ?? 0) * i,
+        // 뒤따르는 타격은 조금씩 여리게 — 같은 세기로 겹치면 한 덩어리로 뭉친다.
+        gainScale: tone.gain * (i === 0 ? 1 : 0.78),
+        ring: tone.ring,
+        reverse: tone.reverse,
+        delayMs: (tone.repeat?.gapMs ?? 0) * i,
+      })
+    }
+  }
+
   /** 에나가 판을 뒤집는 순간(클러치) — 체인 음색을 낮고 길게 울려 무게를 준다. */
   playCompanionClutch(): void {
     void this.play('chainRecipe', { semitones: -5, gainScale: 0.9, ring: 0.75 })
+  }
+
+  /** 다듬은 구간만 잘라 뒤집은 버퍼. 키마다 한 번 만들어 캐시한다. */
+  private reversedBufferOf(key: SfxKey, source: AudioBuffer, trim: TrimWindow, ctx: AudioContext): AudioBuffer {
+    const cached = this.reversed.get(key)
+    if (cached) return cached
+    const start = Math.floor(trim.offset * source.sampleRate)
+    const length = Math.max(1, Math.floor(trim.duration * source.sampleRate))
+    const out = ctx.createBuffer(source.numberOfChannels, length, source.sampleRate)
+    for (let ch = 0; ch < source.numberOfChannels; ch++) {
+      const from = source.getChannelData(ch)
+      const to = out.getChannelData(ch)
+      for (let i = 0; i < length; i++) to[i] = from[start + length - 1 - i] ?? 0
+    }
+    this.reversed.set(key, out)
+    return out
   }
 
   private async load(key: SfxKey): Promise<AudioBuffer | null> {
@@ -136,16 +183,20 @@ export class SfxManager {
 
   private async play(key: SfxKey, opts: PlayOptions = {}): Promise<void> {
     const def = SFX_LIBRARY[key]
-    const { rateRange = def.rateRange, delayMs = 0, semitones = 0, gainScale = 1, ring = 0 } = opts
+    const { rateRange = def.rateRange, delayMs = 0, semitones = 0, gainScale = 1, ring = 0, reverse = false } = opts
     if (delayMs > 0) await new Promise<void>((r) => window.setTimeout(r, delayMs))
     if (!this.ctx) return
     if (this.ctx.state === 'suspended') {
       try { await this.ctx.resume() } catch { return }
     }
-    const buf = await this.load(key)
+    const loaded = await this.load(key)
     const ctx = this.ctx
-    if (!buf || !ctx) return
-    const trim = this.trims.get(key) ?? { offset: 0, duration: buf.duration }
+    if (!loaded || !ctx) return
+    const trim = this.trims.get(key) ?? { offset: 0, duration: loaded.duration }
+    // 역재생은 **다듬은 구간을 뒤집은** 사본을 쓴다 — 원본을 통째로 뒤집으면 앞쪽
+    // 무음이 뒤로 가 소리가 늦게 시작한다.
+    const buf = reverse ? this.reversedBufferOf(key, loaded, trim, ctx) : loaded
+    const playOffset = reverse ? 0 : trim.offset
 
     const level = this.volume * def.gain * gainScale
     const out = ctx.createGain()
@@ -198,7 +249,7 @@ export class SfxManager {
       }, tailMs)
     }
     // 소리가 실제로 나는 구간만 재생한다 — 파일 앞 무음을 건너뛰어 즉발로 들린다.
-    src.start(0, trim.offset, trim.duration)
+    src.start(0, playOffset, trim.duration)
   }
 }
 

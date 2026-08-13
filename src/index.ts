@@ -2788,6 +2788,8 @@ async function applyHandSingle(
       await playHandTargetBlasts(affectedCardIds, handUseTheme)
     }
   }
+  // 카드가 실제로 피해를 입혔으면 그 카드의 태그(칼날/불씨/제물…)로 타격음을 변주한다.
+  if (singleDamageLosses.length > 0) sfx.playHandHit(usedDef?.synergyTags ?? [])
   await Promise.all([
     boardRenderer.animateDamageNumbersById(singleDamageLosses),
     boardRenderer.animateWaxFreezeByIds(newlyFrozenIds),

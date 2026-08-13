@@ -159,10 +159,13 @@ export class ShopOverlayView {
       <article class="shop-pack-card pack-theme-${theme} ${exhausted ? 'is-exhausted' : affordable} ${rarityClass}"
                data-shop-buy-kind="${kind}"
                ${exhausted ? 'aria-disabled="true"' : 'tabindex="0"'}
-               style="--cardback-url:url('${SpriteUrls.cardBack}'); --shop-pack-order:${order};"
+               style="--cardback-url:url('${SpriteUrls.cardBack}'); --shop-pack-order:${order}; --pack-art:url('${artUrl}');"
                aria-label="${title} — ${exhausted ? '소진' : `불빛 ${cost}`}">
         ${fanHtml}
         <div class="shop-pack-illustration" style="background-image: url('${artUrl}')" aria-hidden="true"></div>
+        <!-- 에나 추천 강조용 유리 반짝임. 팩 일러스트의 알파로 오려 내므로 투명 PNG
+             바깥으로 빛이 새지 않는다(사각 테두리 발광이 어색했던 자리). -->
+        <div class="shop-pack-shine" aria-hidden="true"></div>
         <div class="shop-pack-overlay">
           <h3 class="shop-pack-title">${title}</h3>
           <p class="shop-pack-effect">${effect}</p>
