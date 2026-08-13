@@ -25,7 +25,8 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 .wax-figure-modal {
   position: relative;
   width: min(1180px, 97vw);
-  max-height: 92vh;
+  height: min(840px, 90vh);
+  max-height: 90vh;
   display: grid;
   grid-template-rows: auto auto 1fr;
   background:
@@ -103,7 +104,7 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   min-height: 0;
   padding: 16px 20px 20px;
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 240px;
+  grid-template-columns: 250px minmax(0, 1fr) 270px;
   gap: 16px;
   align-items: stretch;
 }
@@ -204,11 +205,14 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   margin: 0;
   padding: 2px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  grid-auto-rows: max-content;
+  gap: 16px;
+  align-content: start;
 }
 
-/* 전시 카드 — 필드 칸과 같은 비율(4:3.2)에 풀 일러스트, 도감식 아이콘 배지를 쓰지 않는다. */
+/* 전시 카드 — 필드 칸과 같은 비율(4:3.2)에 풀 일러스트, 도감식 아이콘 배지를 쓰지 않는다.
+   전시관 규모에 맞춰 필드 칸보다 한 단계 크게 키운다(작은 타일이 아니라 전시물답게). */
 .wax-exhibit-card {
   position: relative;
   aspect-ratio: 4 / 3.2;
