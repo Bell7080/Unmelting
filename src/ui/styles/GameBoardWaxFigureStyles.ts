@@ -1,9 +1,10 @@
 /**
  * 밀랍상(蠟像) 탭 — 경험 패널과 같은 어두운 반투명 레이어 + 유리질 모달 톤을 쓰되,
- * "전시관"답게 좌(정보창) · 중(풀 일러스트 갤러리) · 우(조합) 3단으로 구성한다.
- * 갤러리 카드는 필드 칸과 같은 비율·풀 일러스트를 쓴다(`spriteForCard()` 재사용,
- * 전용 아이콘을 새로 그리지 않는다). 정상 색은 촛불 금빛, 이로치(변종)는 이
- * 게임에서 안 쓰던 옥빛(초록)으로 갈라 한눈에 "이건 다르다"가 읽히게 한다.
+ * "전시관"답게 좌(정보창) · 중(풀 일러스트 갤러리) · 우(임시보관칸) · 하단(조합)으로
+ * 구성한다. 갤러리 카드는 더 많은 전시물이 한눈에 들어오도록 작게 잡고, 필드 칸과
+ * 같은 비율·풀 일러스트를 쓴다(`spriteForCard()` 재사용, 전용 아이콘을 새로 그리지
+ * 않는다). 정상 색은 촛불 금빛, 이로치(변종)는 이 게임에서 안 쓰던 옥빛(초록)으로
+ * 갈라 한눈에 "이건 다르다"가 읽히게 한다.
  */
 export const GAME_BOARD_WAX_FIGURE_STYLES = `
 .wax-figure-overlay {
@@ -99,17 +100,28 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   text-align: center;
 }
 
-/* ── 전시관 3단 골격 ─────────────────────────────────────── */
+/* ── 전시관 골격: 좌(정보) · 중(갤러리) · 우(임시보관) 위, 조합은 하단 통짜 바 ── */
 .wax-figure-hall {
   min-height: 0;
   padding: 16px 20px 20px;
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr) 270px;
-  gap: 16px;
-  align-items: stretch;
+  grid-template-columns: 230px minmax(0, 1fr) 190px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'info gallery hold'
+    'compose compose compose';
+  gap: 14px;
 }
+.wax-info-panel { grid-area: info; }
+.wax-gallery-scroll { grid-area: gallery; }
+.wax-hold-panel { grid-area: hold; }
+.wax-compose-bar { grid-area: compose; }
 @media (max-width: 900px) {
-  .wax-figure-hall { grid-template-columns: 1fr; grid-template-rows: auto auto auto; }
+  .wax-figure-hall {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas: 'info' 'gallery' 'hold' 'compose';
+  }
 }
 
 .wax-section-title {
@@ -181,23 +193,8 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 .wax-info-stats dd { margin: 0; color: #ffe9c4; font-weight: 700; text-align: right; }
 .wax-info-stats dd b { color: var(--color-flame, #ffd778); font-variant-numeric: tabular-nums; }
 
-/* ── 중앙 갤러리 열 ─────────────────────────────────────── */
-.wax-gallery-column { display: flex; flex-direction: column; min-height: 0; gap: 14px; }
-.wax-overflow-strip {
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px dashed rgba(255, 215, 120, 0.25);
-  background: rgba(255, 210, 130, 0.04);
-}
-.wax-exhibit-row {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0 0 4px;
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-}
-.wax-gallery-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(244, 178, 86, 0.7) transparent; }
+/* ── 중앙 갤러리 ────────────────────────────────────────── */
+.wax-gallery-scroll { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(244, 178, 86, 0.7) transparent; }
 .wax-gallery-scroll::-webkit-scrollbar { width: 4px; }
 .wax-gallery-scroll::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #ffd178, #c8842e); border-radius: 999px; }
 .wax-exhibit-grid {
@@ -205,18 +202,18 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   margin: 0;
   padding: 2px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
   grid-auto-rows: max-content;
-  gap: 16px;
+  gap: 10px;
   align-content: start;
 }
 
 /* 전시 카드 — 필드 칸과 같은 비율(4:3.2)에 풀 일러스트, 도감식 아이콘 배지를 쓰지 않는다.
-   전시관 규모에 맞춰 필드 칸보다 한 단계 크게 키운다(작은 타일이 아니라 전시물답게). */
+   더 많은 전시물을 한눈에 담아야 하므로 작게 잡는다(전시관 규모는 모달 자체가 낸다). */
 .wax-exhibit-card {
   position: relative;
   aspect-ratio: 4 / 3.2;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid rgba(255, 215, 120, 0.3);
   background: #1c1424;
   overflow: hidden;
@@ -243,9 +240,9 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 .wax-exhibit-card.is-shiny .wax-exhibit-art { filter: saturate(1.2) hue-rotate(-14deg) contrast(1.02); }
 .wax-exhibit-star {
   position: absolute;
-  top: 6px;
-  left: 8px;
-  font-size: 11px;
+  top: 5px;
+  left: 6px;
+  font-size: 12px;
   font-weight: 900;
   color: var(--color-flame, #ffd778);
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
@@ -253,9 +250,9 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 }
 .wax-exhibit-count {
   position: absolute;
-  top: 6px;
-  right: 8px;
-  font-size: 11px;
+  top: 5px;
+  right: 6px;
+  font-size: 12px;
   font-weight: 800;
   color: #fff5dc;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
@@ -264,24 +261,19 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 .wax-exhibit-frame {
   position: absolute;
   left: 0; right: 0; bottom: 0;
-  padding: 6px 8px 7px;
-  background: linear-gradient(0deg, rgba(6, 4, 8, 0.92), rgba(6, 4, 8, 0));
+  padding: 5px 7px 6px;
+  background: linear-gradient(0deg, rgba(6, 4, 8, 0.94), rgba(6, 4, 8, 0));
   z-index: 1;
 }
-.wax-exhibit-name { font-size: 11.5px; font-weight: 800; color: #fff5dc; line-height: 1.25; }
-.wax-exhibit-effect { display: block; margin-top: 2px; font-size: 10px; color: rgba(255, 233, 196, 0.65); line-height: 1.3; }
+.wax-exhibit-name { font-size: 12px; font-weight: 800; color: #fff5dc; line-height: 1.2; }
 .wax-shiny-tag {
   font-style: normal;
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 800;
   color: #7bf0ae;
   text-shadow: 0 0 6px rgba(123, 240, 174, 0.6);
   margin-left: 3px;
 }
-
-/* 넘친 봉인 카드는 갤러리 카드보다 살짝 작고, 정리/버리기 버튼을 얹는다. */
-.wax-exhibit-card-overflow { flex: 0 0 148px; width: 148px; aspect-ratio: 4 / 3.4; cursor: default; }
-.wax-exhibit-overflow-actions { display: flex; gap: 5px; margin-top: 5px; }
 
 .wax-btn {
   border-radius: 8px;
@@ -305,22 +297,63 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 .wax-btn-discard:hover { background: rgba(255, 90, 90, 0.18); box-shadow: 0 0 10px rgba(255, 110, 110, 0.3); }
 .wax-btn-stow-all { width: 100%; text-align: center; margin-top: 8px; }
 
-/* ── 우측 조합 패널 ─────────────────────────────────────── */
-.wax-compose-panel {
+/* ── 우측 임시보관칸 ────────────────────────────────────── */
+.wax-hold-panel {
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 215, 120, 0.28);
+  background: rgba(255, 210, 130, 0.03);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+.wax-hold-empty { margin: auto 0; text-align: center; font-size: 12px; color: rgba(255, 233, 196, 0.4); }
+.wax-hold-slots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+/* 넘친 몫이라 갤러리 카드보다 훨씬 작다 — 정리하기 전까지만 잠깐 머무는 자리다. */
+.wax-hold-slot {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  grid-template-rows: auto auto;
+  grid-template-areas: 'art name' 'art actions';
+  gap: 2px 8px;
+  padding: 6px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgba(255, 210, 130, 0.06), rgba(8, 6, 12, 0.3));
+  border: 1px solid rgba(255, 215, 120, 0.16);
+}
+.wax-hold-slot.is-shiny { border-color: rgba(120, 235, 175, 0.4); background: linear-gradient(180deg, rgba(120, 235, 175, 0.08), rgba(8, 6, 12, 0.3)); }
+.wax-hold-slot-art {
+  grid-area: art;
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  background-size: cover;
+  background-position: center 32%;
+  border: 1px solid rgba(255, 215, 120, 0.3);
+}
+.wax-hold-slot.is-shiny .wax-hold-slot-art { border-color: rgba(123, 240, 174, 0.5); filter: saturate(1.2) hue-rotate(-14deg); }
+.wax-hold-slot-name { grid-area: name; align-self: end; font-size: 12px; font-weight: 800; color: #fff5dc; line-height: 1.2; }
+.wax-hold-slot-actions { grid-area: actions; display: flex; gap: 5px; }
+
+/* ── 하단 조합 바 ──────────────────────────────────────── */
+.wax-compose-bar {
   border-radius: 14px;
   border: 1px solid rgba(255, 215, 120, 0.2);
   background: linear-gradient(180deg, rgba(40, 28, 20, 0.5), rgba(12, 9, 16, 0.55));
-  padding: 14px;
+  padding: 12px 18px;
   display: flex;
-  flex-direction: column;
-  overflow-y: auto;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
 }
-.wax-compose-empty { margin: auto 0; text-align: center; font-size: 11.5px; color: rgba(255, 233, 196, 0.42); }
-.wax-compose-recipe { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 6px 0 10px; }
-.wax-compose-slots { display: flex; flex-direction: column; gap: 5px; }
+.wax-compose-bar .wax-section-title { margin: 0; flex: 0 0 auto; }
+.wax-compose-empty { margin: 0; font-size: 12px; color: rgba(255, 233, 196, 0.42); }
+.wax-compose-recipe { display: flex; align-items: center; gap: 8px; }
+.wax-compose-slots { display: flex; flex-direction: row; gap: 5px; }
 .wax-compose-slot {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 7px;
   border: 1px dashed rgba(255, 215, 120, 0.35);
   background-color: rgba(255, 210, 130, 0.05);
@@ -330,11 +363,11 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 }
 .wax-compose-slot.is-filled { opacity: 1; border-style: solid; border-color: rgba(255, 215, 120, 0.55); }
 .wax-compose-slot.is-shiny.is-filled { border-color: rgba(123, 240, 174, 0.6); }
-.wax-compose-arrow { font-size: 18px; color: rgba(255, 215, 120, 0.7); }
+.wax-compose-arrow { font-size: 16px; color: rgba(255, 215, 120, 0.7); }
 .wax-compose-result {
-  width: 56px;
-  height: 56px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
   border: 1px solid rgba(255, 215, 120, 0.55);
   background-size: cover;
   background-position: center 32%;
@@ -344,8 +377,8 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 .wax-compose-result.is-shiny { border-color: rgba(123, 240, 174, 0.6); box-shadow: 0 0 14px rgba(123, 240, 174, 0.3); }
 .wax-compose-result-star {
   position: absolute;
-  bottom: -4px;
-  right: -4px;
+  bottom: -5px;
+  right: -5px;
   font-size: 10px;
   font-weight: 900;
   color: #140d08;
@@ -353,12 +386,12 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   border-radius: 999px;
   padding: 1px 5px;
 }
-.wax-compose-result-label { margin: 0 0 10px; font-size: 11px; line-height: 1.4; color: rgba(255, 233, 196, 0.75); text-align: center; }
+.wax-compose-result-label { margin: 0; font-size: 12px; line-height: 1.4; color: rgba(255, 233, 196, 0.75); }
 .wax-compose-result-label b { color: var(--color-flame, #ffd778); font-variant-numeric: tabular-nums; }
-.wax-compose-need { margin: 0; font-size: 11px; text-align: center; color: rgba(255, 233, 196, 0.45); }
+.wax-compose-need { margin: 0; font-size: 12px; color: rgba(255, 233, 196, 0.45); }
 .wax-btn-merge-big {
-  width: 100%;
-  padding: 9px 0;
+  margin-left: auto;
+  padding: 8px 20px;
   text-align: center;
   font-size: 12px;
   border-radius: 10px;

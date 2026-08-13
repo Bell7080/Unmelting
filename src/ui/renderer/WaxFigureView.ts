@@ -6,7 +6,8 @@
  * 자기 자신을 다시 그린다(re-render). 렌더 상태의 단일 출처는 그 모듈이다.
  *
  * 레이아웃은 "전시관"이다 — 좌: 선택 정보창, 중앙: 실제 필드 칸과 같은 풀 일러스트
- * 갤러리, 우: 조합(합성) 패널. 갤러리 카드는 도감처럼 새 아이콘을 그리지 않고
+ * 갤러리(더 많은 전시물이 들어가도록 카드는 작게), 우: 넘친 몫이 쌓이는 작은
+ * 임시보관칸, 하단: 조합(합성) 바. 갤러리 카드는 도감처럼 새 아이콘을 그리지 않고
  * `spriteForCard()`(필드 카드와 같은 함수)로 실제 인게임 일러스트를 그대로 띄운다.
  */
 
@@ -153,20 +154,18 @@ export class WaxFigureView {
     return tiles
   }
 
-  private renderOverflowCard(c: WaxFigureCatch): string {
+  /** 우측 임시보관칸 한 줄 — 넘친 몫이라 작게, 담기/버리기만 즉시 가능하면 된다. */
+  private renderHoldSlot(c: WaxFigureCatch): string {
     const shinyClass = c.variant === 'shiny' ? ' is-shiny' : ''
     const sprite = spriteForSpeciesName(c.enemyName)
     return `
-      <li class="wax-exhibit-card wax-exhibit-card-overflow${shinyClass}">
-        <div class="wax-exhibit-art" style="background-image:url('${sprite}')" aria-hidden="true"></div>
-        <div class="wax-exhibit-frame">
-          <span class="wax-exhibit-name">${c.enemyName}${c.variant === 'shiny' ? ' <em class="wax-shiny-tag">이로치</em>' : ''}</span>
-          <span class="wax-exhibit-effect">${c.effect.label}</span>
-          <span class="wax-exhibit-overflow-actions">
-            <button type="button" class="wax-btn wax-btn-stow" data-wax-stow="${c.id}">담기</button>
-            <button type="button" class="wax-btn wax-btn-discard" data-wax-discard="${c.id}" aria-label="버리기">✕</button>
-          </span>
-        </div>
+      <li class="wax-hold-slot${shinyClass}">
+        <div class="wax-hold-slot-art" style="background-image:url('${sprite}')" aria-hidden="true"></div>
+        <span class="wax-hold-slot-name">${c.enemyName}${c.variant === 'shiny' ? ' <em class="wax-shiny-tag">이로치</em>' : ''}</span>
+        <span class="wax-hold-slot-actions">
+          <button type="button" class="wax-btn wax-btn-stow" data-wax-stow="${c.id}">담기</button>
+          <button type="button" class="wax-btn wax-btn-discard" data-wax-discard="${c.id}" aria-label="버리기">✕</button>
+        </span>
       </li>`
   }
 
@@ -253,15 +252,12 @@ export class WaxFigureView {
     }
     const selectedTile = tiles.find((t) => t.key === this.selectedKey)
 
-    // 자리가 있으면 봉인은 곧장 밀랍상함으로 들어간다 — 이 목록은 한도를 넘겨 밀려난
-    // "넘친 몫"만 담기므로 평소에는 비어 있는 것이 정상이다.
-    const overflowSection = runHold.length > 0
-      ? `<div class="wax-overflow-strip">
-           <h3 class="wax-section-title">넘친 봉인 <span class="wax-section-note">밀랍상함이 가득 차 정리하지 않으면 모험이 끝날 때 사라집니다</span></h3>
-           <ul class="wax-exhibit-row">${runHold.map((c) => this.renderOverflowCard(c)).join('')}</ul>
-           <button type="button" class="wax-btn wax-btn-stow-all" data-wax-stow-all>전부 정리</button>
-         </div>`
-      : ''
+    // 자리가 있으면 봉인은 곧장 밀랍상함으로 들어간다 — 우측 임시보관칸은 한도를 넘겨
+    // 밀려난 "넘친 몫"만 담으므로 평소에는 비어 있는 것이 정상이다.
+    const holdContent = runHold.length > 0
+      ? `<ul class="wax-hold-slots">${runHold.map((c) => this.renderHoldSlot(c)).join('')}</ul>
+         <button type="button" class="wax-btn wax-btn-stow-all" data-wax-stow-all>전부 정리</button>`
+      : `<p class="wax-hold-empty">비어 있습니다.</p>`
 
     const galleryContent = tiles.length > 0
       ? `<ul class="wax-exhibit-grid">${tiles.map((t) => this.renderExhibitCard(t, t.key === this.selectedKey)).join('')}</ul>`
@@ -277,14 +273,15 @@ export class WaxFigureView {
         ${hint ? `<p class="wax-action-hint">${hint}</p>` : ''}
         <section class="wax-figure-hall">
           <aside class="wax-info-panel">${this.renderInfoPanel(selectedTile)}</aside>
-          <div class="wax-gallery-column">
-            ${overflowSection}
-            <div class="wax-gallery-scroll">${galleryContent}</div>
-          </div>
-          <aside class="wax-compose-panel">
+          <div class="wax-gallery-scroll">${galleryContent}</div>
+          <aside class="wax-hold-panel">
+            <h3 class="wax-section-title">임시보관함 <span class="wax-section-note">가득 찼을 때만 여기로</span></h3>
+            ${holdContent}
+          </aside>
+          <section class="wax-compose-bar">
             <h3 class="wax-section-title">조합</h3>
             ${this.renderComposePanel(selectedTile)}
-          </aside>
+          </section>
         </section>
       </div>`
   }
