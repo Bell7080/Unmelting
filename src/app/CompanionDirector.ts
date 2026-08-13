@@ -19,6 +19,7 @@ import { SpeechBubble } from '@ui/SpeechBubble'
 import { BarkSequencer } from '@ui/BarkSequencer'
 import { RunCardPool } from '@core/RunCardPool'
 import { enaRuntimeObserver } from '@/rl/EnaRuntimeObserver'
+import { sfx } from '@/audio/SfxManager'
 import {
   EnaAutonomousLearner,
   deriveRunExperienceKeys,
@@ -437,6 +438,8 @@ export class CompanionDirector {
   /** 클러치 발동 시 플레이어 카드 위에 『 제목 』 + 효과 배너를 띄운다(소소한 클러치 연출도 공유). */
   showClutchChain(kind: string, desc: string): void {
     this.deps.boardRenderer.showClutchBanner(CLUTCH_TITLES[kind] ?? '에나의 의지', desc)
+    // 에나의 개입은 체인과 같은 음색을 낮고 길게 울려, 판이 뒤집히는 무게를 소리로 준다.
+    sfx.playCompanionClutch()
   }
 
   /**

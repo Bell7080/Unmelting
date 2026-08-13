@@ -362,6 +362,15 @@ function nextChainUid(): string {
 function clearChainTimeline(): void {
   chainTimeline = []
 }
+/**
+ * 체인 이벤트를 쌓는 **단일 창구**. 배너에 한 줄이 붙는 순간이 곧 체인음이 울리는
+ * 순간이라, 기록과 소리를 여기 하나로 묶는다 — 호출부마다 따로 울리면 어느 한 곳이
+ * 빠져도 조용히 어긋난다. 깊이(= 쌓인 개수)가 그대로 음정·울림으로 간다.
+ */
+function pushChainEvent(event: ChainTimelineEvent): void {
+  chainTimeline.push(event)
+  sfx.playChain(event.kind, chainTimeline.length)
+}
 /** Currently armed targeted hand card: waits for a board click to consume.
  *  Keep `merged` here as well as in GameBoardRenderer so re-renders never
  *  fall back to the base targeting rule while a triple card is armed. */
@@ -2342,7 +2351,7 @@ async function runDemonSummonDebug(): Promise<void> {
   await wait(300)
   boardRenderer.playOminousShimmer()
   await playDialogueLine(speechBubble, null, '정말… 나타나는 건가…?', 2200, 280)
-  chainTimeline.push({
+  pushChainEvent({
     kind: 'recipe', recipeId: 'demon-summon',
     name: '악마 소환', flavor: '거짓 속의 진실을 직시하라.',
     uid: nextChainUid(),
@@ -2395,7 +2404,7 @@ function recordRelicActivation(relicId: RelicId, message: string): void {
   // 대상은 RELIC_STACK_FEEDBACK 레지스트리로 관리 — 새 누적형 유물은 거기 한 줄만 추가하면 자동 연동.
   if (relicStackFeedback(relicId)) boardRenderer.playRelicStackBlast(relicId)
   const relic = getRelicDef(relicId)
-  chainTimeline.push({
+  pushChainEvent({
     kind: 'relic',
     relicId,
     name: relic.name,
@@ -2472,7 +2481,7 @@ async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promi
     if (comboIntro) companionDirector.sayEnaBark(comboIntro, { importance: BARK_IMPORTANCE.situation })
     // 상점/보스 보상 단계의 게이지 페이오프는 체인 로그에서 제외한다.
     if (!chainRecordingSuppressed()) {
-      chainTimeline.push({
+      pushChainEvent({
         kind: 'gauge',
         mode: gauge.mode,
         name: gauge.name,
@@ -2784,7 +2793,7 @@ async function applyHandSingle(
   // Append only the just-used card first. Recipes are resolved below after
   // a small delay so the previous card's effect visibly lands before the combo.
   if (usedDef) {
-    chainTimeline.push({
+    pushChainEvent({
       kind: 'card',
       defId: usedDef.id,
       name: usedDef.name,
@@ -3052,7 +3061,7 @@ async function applyHandSingle(
       }
       // demon-summon은 demonBossPending으로 별도 처리 — 체인 배너엔 표시하지 않는다.
       if (fired.recipe.id !== 'demon-summon') {
-        chainTimeline.push({
+        pushChainEvent({
           kind: 'recipe',
           recipeId: fired.recipe.id,
           name: fired.recipe.name,
@@ -3225,7 +3234,7 @@ async function applyHandSingle(
     boardRenderer.playOminousShimmer()
     await playDialogueLine(speechBubble, null, '정말… 나타나는 건가…?', 2200, 280)
     // 3. 악마 소환 체인 배너 임팩트 모드 (전체 레시피 항목, 더 크고 중앙, X 없음, 불타듯)
-    chainTimeline.push({
+    pushChainEvent({
       kind: 'recipe', recipeId: 'demon-summon',
       name: '악마 소환', flavor: '거짓 속의 진실을 직시하라.',
       uid: nextChainUid(),
