@@ -419,3 +419,17 @@ export function rollWaxFigureEffect(effectId: string): boolean {
   const chance = waxFigureEffectChance(waxFigureEffectStar(effectId))
   return chance > 0 && Math.random() < chance
 }
+
+/**
+ * 지금 보유 중인 밀랍상이 만드는 **발동 확률** 묶음. 굴리지 않고 확률만 돌려준다 —
+ * 에나가 위협의 기대 피해를 깎아 볼 때 쓴다(`HandCardAdvisor.waxMitigation`).
+ * 판정 자체는 `rollWaxFigureEffect` 한 곳이고 여기는 같은 값을 읽기만 한다.
+ */
+export function waxMitigationChances(): { webIgnore: number; bombIgnore: number; sporeHeal: number } {
+  const chanceOf = (effectId: string): number => waxFigureEffectChance(waxFigureEffectStar(effectId))
+  return {
+    webIgnore: chanceOf('web-trap-ignore'),
+    bombIgnore: chanceOf('bomb-trap-ignore'),
+    sporeHeal: chanceOf('spore-heal'),
+  }
+}

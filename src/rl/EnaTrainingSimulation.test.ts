@@ -84,10 +84,11 @@ describe('EnaTrainingSimulation', () => {
   it('딥러닝 입력 벡터와 행동 공간 크기를 고정한다', () => {
     const sim = new EnaTrainingSimulation(7)
     const observation = sim.reset()
-    // 스칼라 72(이벤트/별빛/보스 정체·격자·부가물 칸·페이지 게이트·종복/상점/시련/유물 엔진/카드 풀 포함)
-    // + 예고 3칸×6 + 9칸×17(괴물꽃 성장 위협 포함) + 손패 10×13 = 373.
+    // 스칼라 79(이벤트/별빛/보스 정체·격자·부가물 칸·페이지 게이트·종복/상점/시련/유물 엔진/카드 풀
+    //          + 밀랍상 4종 확률 + 손패 한도·여유·낭비율 포함)
+    // + 예고 3칸×6 + 9칸×17(괴물꽃 성장 위협 포함) + 손패 10×13 = 380.
     expect(observation.features).toHaveLength(ENA_FEATURE_COUNT)
-    expect(ENA_FEATURE_COUNT).toBe(373)
+    expect(ENA_FEATURE_COUNT).toBe(380)
     // clickLane×3 + useHand×10 + wait + 상점×9(무료/유물/6종 팩/EXIT) + 이벤트×4(safe/greedy/trick/bail) = 27.
     expect(ENA_ACTION_SPACE).toHaveLength(27)
     expect(observation.legalActions.length).toBeGreaterThan(0)

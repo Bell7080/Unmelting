@@ -361,6 +361,18 @@ export interface EnaSimStartBonus {
   scorePct?: number
 }
 
+/**
+ * 밀랍상 상시 효과의 발동 확률(0~1). 실게임은 저장된 수집품에서 나오는 런을 넘는 성장이라
+ * 시뮬은 바깥에서 주입받는다(`waxMitigationChances()`가 런타임 원본).
+ * 학습에서는 에피소드마다 흩어 굴려, 에나가 "이 함정은 내가 막아 준다"를 조건부로 배우게 한다.
+ */
+export interface EnaSimWaxEffects {
+  webIgnore?: number
+  bombIgnore?: number
+  sporeHeal?: number
+  directHitBonus?: number
+}
+
 /** 새싹 병아리 아크: 30층에서 양초 고양이 격파 = 클리어(별빛/시련 없음). */
 const SPROUT_TARGET_TURNS = 30
 const SPROUT_BOSS_FLOORS: readonly number[] = [30]
@@ -384,7 +396,10 @@ const MIN_POOL_AFTER_DELETE = 5
 /** 망치(칼날 손패 사용 시 파편) 발동 확률 — TagReactions의 hammer 규칙과 같은 값. */
 const BLADE_HAMMER_SHARD_CHANCE = 0.25
 
-const FEATURE_SCALARS = 72
+/** 학습에서 흩어 굴리는 밀랍상 확률의 상한 — 실게임 성급별 확률의 현실적인 최대치 근처. */
+const WAX_TRAIN_MAX_CHANCE = 0.35
+
+const FEATURE_SCALARS = 79
 const FEATURE_PER_INCOMING = 6
 // 괴물꽃 여부·성장 시계·주기 성장량까지 관측해 화면에 보이는 위협과 학습 입력을 맞춘다.
 const FEATURE_PER_CELL = 17
@@ -585,6 +600,19 @@ export class EnaTrainingSimulation {
   private shardPerKill = 0
   /** 이번 손패 행동에서 처치 전리품으로 더 줄 수 있는 장수(실게임과 같은 행동당 1장 상한). */
   private handKillDropBudget = 0
+  /**
+   * 밀랍상 상시 효과의 발동 확률(0~1). 실게임은 저장된 수집품에서 나오는 **런을 넘는 성장**이라
+   * 시뮬은 생성자로 주입받는다(`startBonus`와 같은 축). 학습 때 여러 값을 섞어 굴려야
+   * 에나가 "이 함정은 내가 막아 준다"를 조건부로 배운다 — 0으로 고정하면 영영 못 배운다.
+   */
+  private waxWebIgnore = 0
+  private waxBombIgnore = 0
+  private waxSporeHeal = 0
+  private waxDirectHitBonus = 0
+  /** 손패가 가득 차 **버려진** 드랍 수(런 누적). 실게임에서 타 버리는 그 장들이다. */
+  private wastedDrops = 0
+  /** 드랍 시도 총수 — 낭비율(버려진 비율)을 관측에 싣기 위한 분모. */
+  private drawAttempts = 0
   private bladeUseShardChance = 0
   private bladeSharpening = false
   private bladeDamageBonus = 0
@@ -616,13 +644,22 @@ export class EnaTrainingSimulation {
 
   /** 런 시작 1회 스탯 주입(만찬 last-supper 유물 축) — 실게임 customRelicProfiles.stats와 같은 키. */
   private readonly startBonus?: EnaSimStartBonus
+  /** 밀랍상 발동 확률 주입값. 미지정이면 학습이 에피소드마다 흩어 굴린다. */
+  private readonly waxEffects?: EnaSimWaxEffects
 
-  constructor(seed: number = 1, disposition?: EnaDisposition, difficulty: EnaSimDifficulty = 'standard', startBonus?: EnaSimStartBonus) {
+  constructor(
+    seed: number = 1,
+    disposition?: EnaDisposition,
+    difficulty: EnaSimDifficulty = 'standard',
+    startBonus?: EnaSimStartBonus,
+    waxEffects?: EnaSimWaxEffects,
+  ) {
     this.rng = new EnaRandom(seed)
     this.knowledge = buildEnaKnowledgeBase()
     this.companion = disposition
     this.difficulty = difficulty
     this.startBonus = startBonus
+    this.waxEffects = waxEffects
     this.runTargetTurns = difficulty === 'sprout' ? SPROUT_TARGET_TURNS : RUN_TARGET_TURNS
     this.bossFloors = difficulty === 'sprout' ? SPROUT_BOSS_FLOORS : BOSS_FLOORS
     this.reset()
@@ -652,6 +689,17 @@ export class EnaTrainingSimulation {
     this.handMax = HAND_MAX
     this.hand = []
     this.recipeTripleBonus = 0
+    this.wastedDrops = 0
+    this.drawAttempts = 0
+    // 주입값이 있으면 그대로 쓰고, 없으면 에피소드마다 0~상한에서 흩어 굴린다 —
+    // 고정하면 정책이 밀랍상이 있는 세계/없는 세계 중 하나만 배운다.
+    const wax = this.waxEffects
+    const rollWax = (given: number | undefined): number =>
+      given !== undefined ? Math.max(0, Math.min(1, given)) : this.rng.next() * WAX_TRAIN_MAX_CHANCE
+    this.waxWebIgnore = rollWax(wax?.webIgnore)
+    this.waxBombIgnore = rollWax(wax?.bombIgnore)
+    this.waxSporeHeal = rollWax(wax?.sporeHeal)
+    this.waxDirectHitBonus = rollWax(wax?.directHitBonus)
     // 런 카드 풀 초기화: 실게임 메타 해금과 같은 기준(runLocked=false ∩ 일반 드롭 'any').
     this.unlockedPool = new Set(HAND_CARD_IDS.filter((id) => {
       const def = HAND_CARD_DEFINITIONS[id]
@@ -760,7 +808,7 @@ export class EnaTrainingSimulation {
     return { observation: this.observe(), reward, done: this.done }
   }
 
-  /** 고정 길이 숫자 입력: 스칼라 72 + 예고 3칸×6 + 9칸×17 + 손패 10×13 = ENA_FEATURE_COUNT(373). */
+  /** 고정 길이 숫자 입력: 스칼라 79 + 예고 3칸×6 + 9칸×17 + 손패 10×13 = ENA_FEATURE_COUNT(380). */
   observe(): EnaObservation {
     const legalActions = ENA_ACTION_SPACE.filter((action) => this.isLegal(action))
     const tier = EmberSystem.getTier(this.ember)
@@ -855,6 +903,20 @@ export class EnaTrainingSimulation {
       // 런 카드 풀 — 해금(드랍에 섞이는 카드 폭)과 밴(삭제팩으로 정리한 폭).
       this.unlockedPool.size / 30,
       this.bannedPool.size / 10,
+      // ── 밀랍상(런을 넘는 수집 성장) ────────────────────────────────────────
+      // 같은 함정이라도 이 확률만큼 안 아프다. 관측에서 빼면 에나는 이미 막아 내는
+      // 위협을 계속 최우선으로 치우라고 조언한다.
+      this.waxWebIgnore,
+      this.waxBombIgnore,
+      this.waxSporeHeal,
+      this.waxDirectHitBonus,
+      // ── 손패 한도와 낭비 ───────────────────────────────────────────────────
+      // 손패가 가득 차면 들어오는 드랍은 **그대로 타 버린다**. 한도 자체(큰 배낭으로
+      // 늘어난다)와 남은 자리, 그리고 지금까지 버린 비율을 함께 봐야 "지금 한 장을
+      // 더 받는 것이 의미가 있는가"를 판단할 수 있다.
+      this.handMax / (HAND_MAX + 2),
+      Math.max(0, this.handMax - this.hand.length) / this.handMax,
+      this.drawAttempts > 0 ? this.wastedDrops / this.drawAttempts : 0,
     ]
     for (let lane = 0; lane < LANES; lane++) features.push(...this.encodeIncomingCard(this.peekIncomingRefillCard(lane)))
     for (let row = 0; row < ROWS; row++) {
@@ -969,7 +1031,11 @@ export class EnaTrainingSimulation {
     if (action.kind === 'clickLane') {
       const card = this.board[0][action.arg]
       if (!card) return -1
-      if (card.type === CardType.ENEMY) return this.damageFrontEnemy(action.arg, this.attack, 'basic')
+      // 밀랍상 '직접 타격 추가 피해 +1'(이로치 키틴벌레) — 실게임 ActionSystem과 같은 굴림.
+      if (card.type === CardType.ENEMY) {
+        const bonus = this.rng.next() < this.waxDirectHitBonus ? 1 : 0
+        return this.damageFrontEnemy(action.arg, this.attack + bonus, 'basic')
+      }
       if (card.type === CardType.TREASURE) {
         if (card.treasureKind === 'starlight') return -1 // 별빛은 클릭이 아니라 전방 자동 수집
         this.applyTreasure(card)
@@ -993,7 +1059,7 @@ export class EnaTrainingSimulation {
       }
       if (card.type === CardType.TRAP) {
         // 맨손으로 함정을 밟아 치움 — 피해를 그대로 받되 처리 불빛은 지급(실게임 규칙).
-        this.takeDamage(trapDamage(card, this.rng, this.trialTrapDamageBonus))
+        this.takeTrapDamage(card)
         this.gainLight(this.trapClearLightBase(card))
         this.board[0][action.arg] = null
         return -0.6
@@ -1766,6 +1832,33 @@ export class EnaTrainingSimulation {
     this.light = Math.max(0, this.light - amount)
   }
 
+  /**
+   * 함정을 실제로 밟아 피해를 받는 자리. 밀랍상 상시 효과를 여기서 굴린다 —
+   * 실게임의 `ActionSystem`(거미줄/포자)·`TurnManager`(폭탄)와 같은 규칙이다.
+   * 굴리지 않으면 에나는 밀랍상이 없는 세계를 배우고, 실제로는 막아 내는 함정을
+   * 계속 최우선으로 치우라고 조언한다.
+   */
+  private takeTrapDamage(card: EnaSimCard): void {
+    const raw = trapDamage(card, this.rng, this.trialTrapDamageBonus)
+    if (raw <= 0) return
+    if (card.trapKind === 'web' && this.rng.next() < this.waxWebIgnore) return
+    if (card.trapKind === 'bomb' && this.rng.next() < this.waxBombIgnore) return
+    if (card.trapKind === 'spore' && this.rng.next() < this.waxSporeHeal) {
+      this.hp = Math.min(this.maxHp, this.hp + raw) // 피해가 회복으로 뒤집힌다
+      return
+    }
+    this.takeDamage(raw)
+  }
+
+  /** 위협을 **읽을 때** 쓰는 기대 피해 — 밀랍상 확률만큼 깎아 본다(굴리지 않는다). */
+  private expectedTrapDamage(card: EnaSimCard): number {
+    const raw = trapDamage(card, this.rng, this.trialTrapDamageBonus)
+    if (card.trapKind === 'web') return raw * (1 - this.waxWebIgnore)
+    if (card.trapKind === 'bomb') return raw * (1 - this.waxBombIgnore)
+    if (card.trapKind === 'spore') return raw * (1 - this.waxSporeHeal)
+    return raw
+  }
+
   /** 함정 처리 불빛(실게임: 거미줄 20/50/80, 포자 10/20/30, 폭탄 50 + 턴 보너스). */
   private trapClearLightBase(card: EnaSimCard): number {
     const span = Math.min(3, Math.max(1, card.group))
@@ -1819,7 +1912,10 @@ export class EnaTrainingSimulation {
 
   /** 손패에 카드를 더한다. 지정 id가 없으면 런 카드 풀에서 실제 2단계 추첨. 손패가 가득 차면 실패. */
   private drawCard(id?: HandCardId, source: HandCardDropSource = 'enemy-kill'): boolean {
-    if (this.hand.length >= this.handMax) return false
+    this.drawAttempts++
+    // 손패가 가득 차면 그 장은 그냥 사라진다(실게임 addHandCard와 같다). 몇 장을
+    // 그렇게 버렸는지는 "큰 배낭을 살까"를 판단하는 실제 근거라 세어 둔다.
+    if (this.hand.length >= this.handMax) { this.wastedDrops++; return false }
     const drawn = id ?? this.drawPoolId(source)
     this.hand.push({ id: drawn, merged: false })
     this.autoMergeHand()
@@ -2605,7 +2701,7 @@ export class EnaTrainingSimulation {
   }
 
   private estimateFrontThreat(): number {
-    return this.uniqueFrontCards().reduce((sum, card) => sum + (card.type === CardType.ENEMY ? card.atk : card.type === CardType.TRAP ? trapDamage(card, this.rng, this.trialTrapDamageBonus) : 0), 0)
+    return this.uniqueFrontCards().reduce((sum, card) => sum + (card.type === CardType.ENEMY ? card.atk : card.type === CardType.TRAP ? this.expectedTrapDamage(card) : 0), 0)
   }
 
   private webThreatCount(): number {
@@ -2682,6 +2778,12 @@ export class EnaTrainingSimulation {
         // handSingleBonus는 전달하지 않는다: 실게임 강화팩이 제거되어(enhancements.singleBonus
         // 작성자 없음) 런타임 입력도 항상 빈 값이라, 생략이 실효값 0으로 동일하다.
         trapDamageBonus: this.trialTrapDamageBonus,
+        // 런타임 CompanionForesight와 같은 축 — 밀랍상이 깎아 주는 만큼 청소 가치가 낮다.
+        waxMitigation: {
+          webIgnore: this.waxWebIgnore,
+          bombIgnore: this.waxBombIgnore,
+          sporeHeal: this.waxSporeHeal,
+        },
         sporeReady: this.readySporeThreatCount() > 0,
         // 실효값: 시뮬 카드의 실제 공격력과 굳음 잔여 턴으로 반격 임박도를 채운다.
         // attackInTurns는 런타임 예지와 동일 규칙(전방 비굳음=0 즉시, 굳음=잔여 턴, 대기=1).
@@ -2725,7 +2827,7 @@ export class EnaTrainingSimulation {
       const card = this.board[0][lane]
       if (!card || card.group > 1) continue
       if (card.type !== CardType.ENEMY && card.type !== CardType.TRAP) continue
-      const threat = card.type === CardType.ENEMY ? card.atk + card.hp * 0.2 : trapDamage(card, this.rng, this.trialTrapDamageBonus)
+      const threat = card.type === CardType.ENEMY ? card.atk + card.hp * 0.2 : this.expectedTrapDamage(card)
       if (threat > bestThreat) {
         best = lane
         bestThreat = threat

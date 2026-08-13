@@ -91,7 +91,7 @@ export class EnaPolicyStore {
     return EnaPolicyNetwork.fromWeights(artifact.weights)
   }
 
-  /** 저장 정책이 없을 때 사용할 373차원 동봉 사전학습망을 검증 후 복원한다. */
+  /** 저장 정책이 없을 때 사용할 380차원 동봉 사전학습망을 검증 후 복원한다. */
   loadPretrained(): EnaPolicyNetwork | undefined {
     const artifact = pretrainedPolicyJson as EnaStoredPolicyArtifact
     if (!validatePolicyArtifact(artifact)) return undefined

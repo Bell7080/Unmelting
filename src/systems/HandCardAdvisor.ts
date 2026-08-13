@@ -56,6 +56,19 @@ const FIT_ROLE: Record<SupportFit, keyof SupportRoleWeights> = {
   recovery: 'recovery',
 }
 
+/**
+ * 밀랍상 상시 효과의 발동 확률(0~1). 판정 원본은 `WaxFigureCollection.rollWaxFigureEffect`이고,
+ * 여기서는 **기대 피해를 깎는 계수**로만 쓴다 — 확률을 두 곳에서 다시 정의하지 않는다.
+ */
+export interface WaxMitigationChances {
+  /** 거미줄 함정 피해 무시. */
+  webIgnore?: number
+  /** 폭탄 피해 무시(스스로만). */
+  bombIgnore?: number
+  /** 포자 피해가 회복으로 바뀜. */
+  sporeHeal?: number
+}
+
 /** 레일 예고 큐(다음 리필 카드) 요약 — 같은 위협이 더 오면 역할 가치를 보정한다. */
 export interface IncomingRefillSummary {
   webs: number
@@ -79,6 +92,12 @@ export interface SupportSituation {
   fieldOneWebCount?: number
   /** 런 단위 함정 피해 보너스(시련 '역경' 등) — 거미줄/포자 실효 피해 환산에 더한다. */
   trapDamageBonus?: number
+  /**
+   * 밀랍상 상시 효과의 발동 확률(0~1). 거미줄/폭탄 피해를 확률적으로 **무시**하고 포자
+   * 피해를 회복으로 바꾸므로, 같은 함정이라도 기대 피해가 그만큼 낮다. 빼면 에나는
+   * 이미 막아 내고 있는 함정을 계속 치우라고 조른다 — 화면과 조언이 어긋나는 자리다.
+   */
+  waxMitigation?: WaxMitigationChances
   /** 전염 카운트가 임박한 포자 존재. */
   sporeReady?: boolean
   /** 전방/대기 1칸의 강적(합체 또는 고체력). attack/attackInTurns는 실효 공격력·반격 임박 턴. */
@@ -238,10 +257,18 @@ function enemyImminence(enemy: NonNullable<SupportSituation['strongEnemy']>): nu
   return Math.max(0.4, 1 - 0.3 * Math.max(0, turns))
 }
 
-/** 거미줄 실효 피해: 2칸 5(+런 보너스), 1칸 1(+런 보너스). 3칸 이상은 즉사급이라 별도 고정값을 쓴다. */
-function effectiveWebDamage(span: number, trapDamageBonus: number): number {
-  if (span >= 2) return 5 + trapDamageBonus
-  return 1 + trapDamageBonus
+/**
+ * 거미줄 실효 피해: 2칸 5(+런 보너스), 1칸 1(+런 보너스). 3칸 이상은 즉사급이라 별도 고정값을 쓴다.
+ * 밀랍상 '거미줄 함정 무시'가 있으면 그 확률만큼 기대 피해가 깎인다.
+ */
+function effectiveWebDamage(span: number, trapDamageBonus: number, wax?: WaxMitigationChances): number {
+  const raw = span >= 2 ? 5 + trapDamageBonus : 1 + trapDamageBonus
+  return raw * (1 - clampChance(wax?.webIgnore))
+}
+
+/** 확률 입력은 바깥(저장본·시뮬 주입)에서 오므로 0~1로 잘라 쓴다. */
+function clampChance(value: number | undefined): number {
+  return Math.max(0, Math.min(1, value ?? 0))
 }
 
 function tagOverlapCount(a: readonly string[] | undefined, b: readonly string[] | undefined): number {
@@ -261,6 +288,7 @@ function bestFitFor(def: HandCardDefinition, situation: SupportSituation, killAv
   const plans: FitPlan[] = []
   const wideSpan = situation.frontWideWebSpan ?? 0
   const trapBonus = Math.max(0, situation.trapDamageBonus ?? 0)
+  const wax = situation.waxMitigation
   const incoming = situation.incomingRefill
   const mergeLethal = (situation.webMerge?.mergedSize ?? 0) >= 3
 
@@ -268,7 +296,7 @@ function bestFitFor(def: HandCardDefinition, situation: SupportSituation, killAv
   // 이미 완성된 3칸 거미줄은 단일 지급 카드(키틴 단일 폭 2)로 못 치우므로 wideSpan=2일 때만 지원각이다.
   if (wideSpan === 2 && canRemoveWideFrontTrap(def, wideSpan) && !holds((d) => canRemoveWideFrontTrap(d, wideSpan))) {
     // 2칸이 3칸 즉사각이면 최상위, 고립 상태면 현재 5피해 절약만큼 키틴 지급 기회를 연다.
-    const value = mergeLethal ? LETHAL_PREVENT_VALUE : effectiveWebDamage(wideSpan, trapBonus) * 0.6
+    const value = mergeLethal ? LETHAL_PREVENT_VALUE : effectiveWebDamage(wideSpan, trapBonus, wax) * 0.6
     plans.push({
       fit: 'cleanup',
       fitScore: value,
@@ -282,15 +310,15 @@ function bestFitFor(def: HandCardDefinition, situation: SupportSituation, killAv
     const merge = situation.webMerge
     const clutter = situation.fieldOneWebCount ?? 0
     // 광역 청소 가치 = max(임박 병합 저지, 필드 오염 청소). 예고 큐 거미줄은 광역 청소에만 가점.
-    const incomingBonus = (incoming?.webs ?? 0) * effectiveWebDamage(1, trapBonus) * 0.5
+    const incomingBonus = (incoming?.webs ?? 0) * effectiveWebDamage(1, trapBonus, wax) * 0.5
     let value = 0
     let detail = ''
     if ((merge?.mergingOneWebs ?? 0) >= 2) {
-      value = mergeLethal ? LETHAL_PREVENT_VALUE : effectiveWebDamage(merge!.mergedSize, trapBonus) * WEB_MERGE_CHANCE
+      value = mergeLethal ? LETHAL_PREVENT_VALUE : effectiveWebDamage(merge!.mergedSize, trapBonus, wax) * WEB_MERGE_CHANCE
       detail = '1칸 거미줄들이 다음 전방에서 병합될 가능성이 높음'
     }
     if (clutter >= WEB_FIELD_CLUTTER_THRESHOLD) {
-      const clutterValue = clutter * effectiveWebDamage(1, trapBonus) * 0.8
+      const clutterValue = clutter * effectiveWebDamage(1, trapBonus, wax) * 0.8
       if (clutterValue > value) {
         value = clutterValue
         detail = `필드에 1칸 거미줄이 ${clutter}장 널려 광역 청소 가치가 높음`
@@ -302,7 +330,9 @@ function bestFitFor(def: HandCardDefinition, situation: SupportSituation, killAv
   }
   if (situation.sporeReady && canCleanseSpores(def) && !holds(canCleanseSpores)) {
     // 전염 임박 포자: 기대 감염 ~2칸 × 실효 밟음 피해 + 보드 오염 비용. 예고 포자는 정화 가치 가점.
-    const value = effectiveWebDamage(1, trapBonus) * 2 + 1 + (incoming?.spores ?? 0) * 0.5
+    // 밀랍상 '포자 피해가 회복으로'가 있으면 밟는 것이 오히려 이득이라 정화를 서두를 이유가 준다.
+    const sporeRelief = 1 - clampChance(wax?.sporeHeal)
+    const value = (effectiveWebDamage(1, trapBonus, wax) * 2 + 1) * sporeRelief + (incoming?.spores ?? 0) * 0.5
     plans.push({
       fit: 'spore',
       fitScore: value,
@@ -493,14 +523,15 @@ function recipeAxisValue(axis: RecipeAxis, situation: SupportSituation): RecipeA
     }
     case 'cleanup': {
       const trapBonus = Math.max(0, situation.trapDamageBonus ?? 0)
+      const wax = situation.waxMitigation
       const merge = situation.webMerge
       if ((merge?.mergingOneWebs ?? 0) >= 2 || (situation.frontWideWebSpan ?? 0) >= 2) {
-        const value = (merge?.mergedSize ?? 0) >= 3 ? LETHAL_PREVENT_VALUE : effectiveWebDamage(2, trapBonus) * WEB_MERGE_CHANCE
+        const value = (merge?.mergedSize ?? 0) >= 3 ? LETHAL_PREVENT_VALUE : effectiveWebDamage(2, trapBonus, wax) * WEB_MERGE_CHANCE
         return { fit: 'cleanup', value, standalone: true }
       }
       const clutter = situation.fieldOneWebCount ?? 0
       if (clutter >= WEB_FIELD_CLUTTER_THRESHOLD) {
-        return { fit: 'cleanup', value: clutter * effectiveWebDamage(1, trapBonus) * 0.8, standalone: true }
+        return { fit: 'cleanup', value: clutter * effectiveWebDamage(1, trapBonus, wax) * 0.8, standalone: true }
       }
       break
     }

@@ -81,10 +81,10 @@ npm run build    # verify 포함
   같은 커밋에서 함께 고친다.** 런타임과 시뮬이 어긋나면 에나는 실제로 존재하지 않는
   게임을 학습하고, 테스트도 화면도 멀쩡해서 그 사실이 묻힌다. 상세는
   `Ena_Companion_AI_Design.md` §12-3.
-- 관측/행동 계약(`ENA_FEATURE_COUNT` 373 · `ENA_ACTION_SPACE` 27)은 시뮬과 트레이너가
+- 관측/행동 계약(`ENA_FEATURE_COUNT` 380 · `ENA_ACTION_SPACE` 27)은 시뮬과 트레이너가
   공유한다. 차원이 바뀌면 `EnaPolicyStore`가 구버전 정책을 거부하고 교사 정책으로
   폴백한다 — **재학습이 필요한 주(major) 버전급 변경**이다.
-- 373차원 동봉 정책은 `npm run ena:pretrain`으로만 재생성한다. 이 명령은 정책 JSON과
+- 380차원 동봉 정책은 `npm run ena:pretrain`으로만 재생성한다. 이 명령은 정책 JSON과
   `Ena_Pretraining_Report.md` 비교/감사 결과를 같은 고정 시드에서 함께 갱신한다.
 - 보스 체력은 `BossFightBudget`(손패 3~4장 + `supportHits`)에서 역산한다. **시뮬도 그
   화력을 실제로 넣어야 한다**(`supportStrikeChance`) — 빼면 체력을 뽑은 세계와 에나가
@@ -121,6 +121,12 @@ npm run build    # verify 포함
 - 강적 미숙 대사(miss-shield)는 개입각에 더해 '최근 2턴 내 **피격**'이 있어야만 나간다.
   막아주지 못해 미안하다는 말이라 피해가 실제로 들어올 때만 성립한다 — 처치는 근거가
   아니다(적을 잡은 건 보호가 필요했다는 뜻이 아니다).
+- ★ **런을 넘는 성장(밀랍상)도 관측·시뮬에 싣는다.** 밀랍상 상시 효과는 같은 함정의
+  기대 피해를 확률만큼 깎는다 — 빼면 에나는 이미 막아 내는 함정을 계속 치우라고 조른다.
+  확률의 단일 출처는 `waxMitigationChances()`이고, 조언은 `HandCardAdvisor.waxMitigation`,
+  학습은 `EnaSimWaxEffects` 주입으로 같은 값을 쓴다(학습은 미지정 시 흩어 굴린다).
+- 손패가 가득 차 **타 버린 드랍**도 관측에 싣는다(한도·남은 자리·낭비율). 안 실으면
+  "지금 한 장 더 받는 것이 의미가 있는가"를 판단할 근거가 없다.
 - `strongEnemyIncoming`은 **다음 턴 안에 실제로 때릴 수 있는** 강적만 센다
   (`strongEnemyAttackInTurns`). 굳은 적은 공격 자체를 건너뛰므로 제외된다 — 때리지도
   못하는 적을 두고 에나가 못 막아 사과하면 안 된다.

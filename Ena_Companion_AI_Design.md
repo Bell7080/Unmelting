@@ -224,7 +224,7 @@ Unmelting의 동료 캐릭터 **에나**에게 외부 API 없이 독자적 강�
 
 바꿀 때 함께 확인할 것:
 
-1. **관측 계약** — `ENA_FEATURE_COUNT`(373) / `ENA_ACTION_SPACE`(27)를 트레이너와 공유한다.
+1. **관측 계약** — `ENA_FEATURE_COUNT`(380) / `ENA_ACTION_SPACE`(27)를 트레이너와 공유한다.
    차원이 바뀌면 `EnaPolicyStore`가 구버전 저장 정책을 검증 불일치로 거부하고 교사
    정책으로 폴백한다(**재학습 필요**). 차원 변경은 주(major) 버전급 변경이다.
 2. **교사 휴리스틱** — 임계값은 `DEFAULT_ENA_HEURISTIC_POLICY_CONFIG`에서 조정한다.
@@ -237,11 +237,11 @@ Unmelting의 동료 캐릭터 **에나**에게 외부 API 없이 독자적 강�
    바뀌면 근사도 함께 갱신한다.
 5. 검증은 `npm run verify`. `EnaDispositionFitter` / `EnaTrainer` 테스트가 이 계약을 지킨다.
 
-### 12-4. 373차원 사전학습 산출물
+### 12-4. 380차원 사전학습 산출물
 
 - 재학습 단일 명령은 `npm run ena:pretrain`이다. 고정 seed/config로
   `src/data/ena-pretrained-policy.json`과 `Ena_Pretraining_Report.md`를 함께 갱신한다.
-- 리포트는 전체 373 관측과 괴물꽃 3축을 가린 구 관측 한계를 같은 평가 시드에서 비교한다.
+- 리포트는 전체 380 관측과 괴물꽃 3축을 가린 구 관측 한계를 같은 평가 시드에서 비교한다.
 - 런타임 저장 정책이 없을 때 `EnaPolicyStore.loadPretrained()`가 동봉 정책을 검증·복원한다.
 
 ### 12-5. 예측 지원의 시간 일관성

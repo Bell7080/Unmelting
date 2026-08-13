@@ -139,7 +139,7 @@ export class EnaAutonomousLearner {
 
   /** 실제 런 종료 후 호출된다. 저장 정책을 확인하고, 런 로그 자기반성과 구조화 기억을 조용히 누적한다. */
   learnAfterRun(memory: EnaPlayLogMemory, events: readonly EnaRuntimeEvent[], now: string = new Date().toISOString()): EnaSelfReflection {
-    // 플레이어별 저장망이 없으면 373차원 동봉 사전학습망을 사용 가능한 학습 기반으로 인정한다.
+    // 플레이어별 저장망이 없으면 380차원 동봉 사전학습망을 사용 가능한 학습 기반으로 인정한다.
     const hasStoredPolicy = (this.policyStore.load() ?? this.policyStore.loadPretrained()) !== undefined
     const reflection = summarizeSelfReflection(memory, events, hasStoredPolicy)
     this.saveReflection(reflection, now, buildRunMemory(memory))

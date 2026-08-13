@@ -14,6 +14,7 @@ import type { HandCard, HandCardId } from '@entities/HandCard'
 import { HAND_CARD_DEFINITIONS } from '@data/HandCards'
 import { RELIC_DEFINITIONS } from '@data/Relics'
 import { bestSupportCard, type IncomingRefillSummary, type SupportFit, type SupportRoleWeights } from './HandCardAdvisor'
+import { waxMitigationChances } from '@core/WaxFigureCollection'
 
 export interface ThreatReport {
   /** 합쳐지기 전 청소 가능한 1칸 거미줄 수. */
@@ -236,6 +237,9 @@ export function assessThreats(lanes: readonly Lane[], character: Character, opti
       fieldOneWebCount: webCount,
       // 실효값 원칙: 시련/유물의 런 단위 함정 피해 보너스를 환산에 반영한다.
       trapDamageBonus: character.trapDamageBonus,
+      // 밀랍상 상시 효과(거미줄/폭탄 무시·포자 회복)는 같은 함정의 기대 피해를 낮춘다 —
+      // 넣지 않으면 이미 막아 내는 함정을 계속 치우라고 조른다.
+      waxMitigation: waxMitigationChances(),
       sporeReady,
       strongEnemy: strongEnemy
         ? {
