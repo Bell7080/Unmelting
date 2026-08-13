@@ -34,6 +34,12 @@ const TRADE_ITEM_PRICE = 3
 export interface HearthHandlers {
   /** 출발 버튼 클릭 — 직업 선택/런 시작으로 연결한다. */
   onStart: () => void | Promise<void>
+  /**
+   * 출발 직전(로비에서) 치르는 준비 화면 — 해금 목록 온오프 + 시작부터 해금 드래프트.
+   * 인게임이 아니라 여기서 도는 이유: 둘 다 "이번 모험에 무엇을 들고 갈까"를 정하는
+   * 일이라, 이미 레일이 깔린 뒤에 뜨면 모험 중에 짐을 싸는 그림이 된다.
+   */
+  onPrepareLoadout?: (difficulty: HearthDifficulty) => Promise<void>
   /** 만찬 완성 카드가 실제 런 유물 인벤토리에 꽂히도록 호스트 게임 상태에 지급한다. */
   onDinnerRelicCreate?: (profile: CustomRelicProfile) => void | Promise<void>
   /** 현재 런 턴을 반환 — 재방문 메시지에서 N턴 표기에 사용한다. */
@@ -1442,25 +1448,13 @@ export class HearthScene {
     if (!this.shuttered || this.departing) return
     const root = this.overlay
 
-    // 캐릭터 확정(진행 중인 흡수 연출 포함) 후 뒤로가기: 선택 화면으로 복귀 (셔터는 그대로 유지).
-    // 연출 도중 뒤로가기도 여기서 받는다 — 시퀀스를 무효화하지 않으면 fill:forwards로
-    // 투명해진 쇼케이스 카드가 '증발'한 채 남는다.
-    if (root?.classList.contains('is-character-confirmed') || root?.classList.contains('is-character-confirming')) {
-      this.confirmSeq++ // 진행 중인 확정 연출(각 await 뒤 토큰 검사)을 즉시 중단시킨다.
-      this.characterConfirmed = false
-      // 날아가던 빛 구슬이 남아 있으면 제거한다.
-      document.querySelector('.hearth-character-orb')?.remove()
-      // WAAPI 취소 → showcase가 CSS 제어(is-shutter-rest)로 즉시 복원
-      const showcase = root.querySelector<HTMLElement>('.hearth-showcase-card')
-      showcase?.getAnimations().forEach((a) => a.cancel())
-      // 캐러셀 재진입 딜레이(1.02s)를 건너뛰고 즉시 표시
-      const carousel = root.querySelector<HTMLElement>('.hearth-character-carousel')
-      if (carousel) carousel.style.transition = 'none'
-      root.classList.remove('is-character-confirmed', 'is-character-confirming')
-      requestAnimationFrame(() => carousel?.style.removeProperty('transition'))
-      this.selectCharacter(this.selectedCharacterIndex)
-      return
-    }
+    // ★ 난이도 화면에서 뒤로가기 = **로비로** 나간다. 예전에는 캐릭터 선택 캐러셀로
+    //   되돌렸는데, 그 선택은 지금 의도적으로 꺼져 있어(`installFixedCharacter`) 뒤로가기가
+    //   숨겨 둔 화면을 되살리는 꼴이었다. 캐릭터 선택을 다시 켜는 날 이 분기를 되살린다.
+    this.confirmSeq++ // 진행 중이던 확정 연출이 있으면 조용히 중단시킨다.
+    document.querySelector('.hearth-character-orb')?.remove()
+    root?.querySelector<HTMLElement>('.hearth-showcase-card')?.getAnimations().forEach((a) => a.cancel())
+    root?.classList.remove('is-character-confirming')
 
     this.shuttered = false
     this.characterConfirmed = false
@@ -2071,6 +2065,9 @@ export class HearthScene {
       })
       return
     }
+    // 준비 화면(해금 온오프 · 시작부터 해금)은 **로비에서** 치른다. 배경을 걷기 전에
+    // 띄워야 화면이 검게 넘어간 뒤 뒤늦게 떠오르지 않는다.
+    await this.handlers?.onPrepareLoadout?.(this.getSelectedDifficulty())
     this.departing = true
     this.overlay?.querySelector<HTMLElement>('[data-hearth-depart]')?.classList.add('is-pressed')
     // 로비 배경(hearth_bg_001)을 페이드아웃해 검은 화면을 만든 뒤, 런이 시작되며

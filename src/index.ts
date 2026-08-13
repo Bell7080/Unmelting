@@ -479,6 +479,8 @@ function enterHearth(): void {
     // 출발 버튼 → startGame이 다시 초기화 + 직업 선택 + 보드 채움을 수행한다.
     // 선택한 난이도(새싹=온보딩/쉬움=정규)가 온보딩 여부를 결정한다.
     onStart: () => { void startGame(hearthScene.getSelectedCharacterIndex(), hearthScene.getSelectedDifficulty()) },
+    // 해금 온오프 · 시작부터 해금은 모험을 떠나기 전 로비에서 고른다.
+    onPrepareLoadout: (difficulty) => prepareRunLoadout(difficulty),
     // 쉬움(정규 100층)은 새싹 병아리를 한 번 졸업해야 열린다.
     isEasyUnlocked: () => enaAutonomousLearner.hasFirstSeen('onboarding-graduated'),
     // 잿빛 굴레(엔드리스)는 쉬움 난이도로 100층을 클리어하면 영구히 열린다.
@@ -1951,6 +1953,23 @@ function resetForNewRun(): void {
  *  지나가는 창으로 보여준다. 기초 해금팩으로 산 항목만 대상이다(기본 해금 항목은 여기 없다).
  *  꺼도 소유는 유지되고, 여기서 끈 손패는 바로 이어지는 "시작부터 해금" 드래프트 후보에서도 빠진다.
  *  보유 항목이 없으면 아예 호출하지 않는다. */
+/** 로비에서 고른 '시작부터 해금' 카드 — 런 시작 시 런 풀에 넣는다(런당 1장). */
+let pendingStartingUnlock: HandCardId | null = null
+
+/**
+ * 출발 직전 로비에서 치르는 준비 화면. 해금 목록 온오프를 먼저 지나가고, 거기서 켠 것만
+ * 시작부터 해금 드래프트 후보가 된다(같은 저장값을 읽는다).
+ * 새싹 병아리는 둘 다 건너뛴다 — 온보딩 카드 폭이 이미 커먼 한정으로 좁혀져 있다.
+ */
+async function prepareRunLoadout(difficulty: HearthDifficulty): Promise<void> {
+  pendingStartingUnlock = null
+  if (difficulty === 'sprout') return
+  const ownedItems = getBasicUnlockOwnedPool()
+  if (ownedItems.length > 0) await openUnlockLoadoutScreen(ownedItems)
+  const draftCandidates = getStartingUnlockDraftCandidates()
+  if (draftCandidates.length > 0) pendingStartingUnlock = await openStartingUnlockDraft(draftCandidates)
+}
+
 function openUnlockLoadoutScreen(items: BasicUnlockPoolItem[]): Promise<void> {
   const style = document.createElement('style')
   style.textContent = `
@@ -2209,23 +2228,11 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
     if (legacyBonus.lightPct > 0) gameState.enhancements.scoreMultiplier *= (1 + legacyBonus.lightPct)
   }
 
-  // 해금 목록 온오프 — 무역 탭 상시 토글 대신 여기서 한 번 지나가며 고른다. 여기서 끈 항목은
-  // 바로 이어지는 시작부터 해금 드래프트 후보에서도 즉시 빠진다(같은 저장값을 읽으므로).
-  if (!onboardingRunActive) {
-    const ownedItems = getBasicUnlockOwnedPool()
-    if (ownedItems.length > 0) await openUnlockLoadoutScreen(ownedItems)
-  }
-
-  // 시작부터 해금 드래프트 — 기초 해금팩으로 산 손패 중 온오프가 켜진 것만 후보로 삼는다.
-  // 몇 장을 보여주든 실제로 손에 넣는 건 클릭 1회(=1장)뿐이라 STARTING_UNLOCK_DRAFT_CAP은
-  // UI가 아니라 이 구조 자체로 지켜진다. 새싹 병아리는 이 이점을 주지 않는다(온보딩 카드 폭이
-  // 커먼 한정으로 이미 좁혀져 있다).
-  if (!onboardingRunActive) {
-    const draftCandidates = getStartingUnlockDraftCandidates()
-    if (draftCandidates.length > 0) {
-      const picked = await openStartingUnlockDraft(draftCandidates)
-      if (picked) runCardPool.unlockForRun(picked)
-    }
+  // 해금 온오프 · 시작부터 해금 드래프트는 **로비에서** 치른다(prepareRunLoadout).
+  // 여기서 고른 '시작부터 해금' 카드는 런 풀에 이미 반영돼 있다.
+  if (pendingStartingUnlock) {
+    runCardPool.unlockForRun(pendingStartingUnlock)
+    pendingStartingUnlock = null
   }
   // 보드 채움은 직업 유무와 무관하게 항상 실행한다(온보딩은 직업 선택을 건너뛰므로 밖으로 뺐다).
   // 온보딩(첫 경험)이면 잡동사니 필드로, 아니면 정상 오프닝으로 첫 보드를 채운다.
