@@ -1677,17 +1677,28 @@ function maybeIntroduceFields(): void {
       }
     }
   }
-  if (present.size === 0) return
   // ★ 한 beat에 **한 종류만** 소개한다. 첫 판은 바위·덤불·잡동사니가 한꺼번에 깔려서,
   //   묶어 말하면 시작하자마자 긴 설명이 우다다 쏟아졌다. 나머지는 표시하지 않고 남겨
   //   다음 턴 스캔이나 그 칸을 실제로 만졌을 때(introduceFieldKindOnce) 짚어 준다.
-  const nextKind = FIELD_INTRO_ORDER.find((kind) => present.has(kind) && !isFieldKindIntroduced(kind))
-  if (nextKind) sayFieldIntro(nextKind, present.get(nextKind) ?? [])
-  // 획득 경로(enqueueDrop)에서 조용히 합성된 첫 트리플도 이 스캔이 받아 소개한다.
-  if (gameState.character.hand.some((card) => card.merged)) {
-    const tripleIntro = encounterIntroLineOnce('triple')
-    if (tripleIntro) companionDirector.sayEnaBark(tripleIntro, { importance: BARK_IMPORTANCE.situation })
+  if (present.size > 0) {
+    const nextKind = FIELD_INTRO_ORDER.find((kind) => present.has(kind) && !isFieldKindIntroduced(kind))
+    if (nextKind) sayFieldIntro(nextKind, present.get(nextKind) ?? [])
   }
+  // 필드에 소개할 대상이 없어도(present.size === 0) 아래 트리플 확인은 항상 돈다 —
+  // 예전엔 여기서 조기 반환해 필드 대상이 하나도 안 보이는 턴엔 막 조용히 합성된
+  // 트리플도 함께 묻혀 다음 기회까지 밀렸다.
+  maybeIntroduceFormedTriple()
+}
+
+/** 방금 조용히 합성된(enqueueDrop 경로) 트리플이 있으면 태어나서 처음 한 번만 소개한다.
+ *  `maybeIntroduceFields()`의 매 턴 스캔뿐 아니라, 그 스캔 뒤에 도는 에나 지원 지급
+ *  (`tryCompanionPrediction`)이 만든 트리플도 같은 beat에서 바로 잡도록 별도 호출된다 —
+ *  안 그러면 스캔 순서상 한 턴 늦게(다음 턴 스캔에서야) 소개돼 지원 직후인데 뒤늦게 설명하는 것으로 보인다. */
+function maybeIntroduceFormedTriple(): void {
+  if (!companionDirector.companionWorldCanSpeak()) return
+  if (!gameState.character.hand.some((card) => card.merged)) return
+  const tripleIntro = encounterIntroLineOnce('triple')
+  if (tripleIntro) companionDirector.sayEnaBark(tripleIntro, { importance: BARK_IMPORTANCE.situation })
 }
 
 /**
@@ -3405,6 +3416,9 @@ async function runCleanupPhase(advanceTurn: boolean): Promise<void> {
   await tickFrontEventDoors()
   // 보드 정비가 끝나 플레이어 차례 직전 — 위협을 미리 읽어 대비 카드를 건넨다.
   if (advanceTurn) await companionDirector.tryCompanionPrediction()
+  // 방금 지원(prediction)이 3장째를 채워 조용히 트리플을 완성했을 수 있다 — 위 스캔보다
+  // 늦게 일어난 일이라 한 번 더 확인해야 지원 직후 같은 beat에서 소개된다.
+  maybeIntroduceFormedTriple()
 }
 
 /** 전방 이벤트 문의 2턴 카운트다운을 진행한다. 도달 즉시 뱃지 '슈룩' 등장,
