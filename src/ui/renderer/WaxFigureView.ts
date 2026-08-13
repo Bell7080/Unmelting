@@ -16,6 +16,7 @@ import {
   loadWaxFigureCollection,
   stowWaxFigureCatch,
   discardWaxFigureCatch,
+  discardWaxFigurePermanent,
   mergeWaxFigures,
   totalWaxFigureCount,
   waxFigureCapacity,
@@ -100,6 +101,13 @@ export class WaxFigureView {
     const discardBtn = t.closest<HTMLElement>('[data-wax-discard]')
     if (discardBtn) {
       discardWaxFigureCatch(discardBtn.dataset.waxDiscard!)
+      this.render(host)
+      return
+    }
+    const discardPermanentBtn = t.closest<HTMLElement>('[data-wax-discard-permanent]')
+    if (discardPermanentBtn) {
+      const [enemyName, variant, starRaw] = discardPermanentBtn.dataset.waxDiscardPermanent!.split('::')
+      discardWaxFigurePermanent(enemyName, variant as WaxFigureVariant, Number(starRaw))
       this.render(host)
       return
     }
@@ -205,20 +213,25 @@ export class WaxFigureView {
           <div><dt>효과</dt><dd>${tile.effectLabel}</dd></div>
           <div><dt>발동 확률</dt><dd><b>${tile.chancePct.toFixed(1)}%</b></dd></div>
         </dl>
-      </div>`
+      </div>
+      <button type="button" class="wax-info-discard" data-wax-discard-permanent="${tile.enemyName}::${tile.variant}::${tile.star}" aria-label="이 밀랍상 버리기" data-tooltip="1개 버리기.">✕</button>`
   }
 
-  /** 우측 조합 패널 — 재료 3개 → 다음 성급 결과를 미리 보여준다. */
+  /**
+   * 하단 조합 바 — 밀랍 조각진(연성진) 형태로 그린다. 재료 3개가 원 둘레 세 점에
+   * 놓이고, 그 힘이 가운데 결과로 모이는 그림이라 "합성 = 의식"이라는 느낌을 낸다.
+   * 슬롯을 한 줄로 나열하던 이전 표기보다 이 시스템의 제물/연성 테마에 맞는다.
+   */
   private renderComposePanel(tile: PermanentTile | undefined): string {
     if (!tile) {
-      return `<p class="wax-compose-empty">전시물을 고르면 합성 재료를 볼 수 있습니다.</p>`
+      return `<p class="wax-compose-empty">전시물을 고르면 조각진을 볼 수 있습니다.</p>`
     }
     const sprite = spriteForSpeciesName(tile.enemyName)
     const shinyClass = tile.variant === 'shiny' ? ' is-shiny' : ''
     const filled = Math.min(tile.count, WAX_FIGURE_MERGE_COUNT)
-    const slots = Array.from({ length: WAX_FIGURE_MERGE_COUNT }, (_, i) => {
+    const nodes = Array.from({ length: WAX_FIGURE_MERGE_COUNT }, (_, i) => {
       const has = i < filled
-      return `<span class="wax-compose-slot${has ? ' is-filled' : ''}${shinyClass}" style="${has ? `background-image:url('${sprite}')` : ''}"></span>`
+      return `<span class="wax-compose-node wax-compose-node-${i + 1}${has ? ' is-filled' : ''}${shinyClass}" style="${has ? `background-image:url('${sprite}')` : ''}"></span>`
     }).join('')
     const nextStar = tile.star + 1
     const nextChance = waxFigureEffectChance(nextStar) * 100
@@ -226,11 +239,12 @@ export class WaxFigureView {
       ? `<button type="button" class="wax-btn wax-btn-merge-big" data-wax-merge="${tile.enemyName}::${tile.variant}::${tile.star}">합성하기</button>`
       : `<p class="wax-compose-need">합성에 ${WAX_FIGURE_MERGE_COUNT}개 필요 (현재 ${tile.count}개)</p>`
     return `
-      <div class="wax-compose-recipe">
-        <div class="wax-compose-slots">${slots}</div>
-        <span class="wax-compose-arrow" aria-hidden="true">→</span>
-        <div class="wax-compose-result${shinyClass}" style="background-image:url('${sprite}')">
-          <span class="wax-compose-result-star">★${nextStar}</span>
+      <div class="wax-compose-circle${tile.mergeable ? ' is-ready' : ''}">
+        <span class="wax-compose-ring wax-compose-ring-outer" aria-hidden="true"></span>
+        <span class="wax-compose-ring wax-compose-ring-inner" aria-hidden="true"></span>
+        ${nodes}
+        <div class="wax-compose-core${shinyClass}" style="background-image:url('${sprite}')">
+          <span class="wax-compose-core-star">★${nextStar}</span>
         </div>
       </div>
       <p class="wax-compose-result-label">${tile.enemyName}${tile.variant === 'shiny' ? ' 이로치' : ''} ★${nextStar} — ${tile.effectLabel} <b>${nextChance.toFixed(1)}%</b></p>

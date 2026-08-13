@@ -186,12 +186,30 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 .wax-info-body { display: flex; flex-direction: column; gap: 8px; }
 .wax-info-name { margin: 0; font-size: 15px; font-weight: 800; color: #fff5dc; line-height: 1.3; }
 .wax-info-stars { font-size: 13px; color: var(--color-flame, #ffd778); text-shadow: 0 0 6px rgba(255, 215, 120, 0.5); display: flex; align-items: baseline; gap: 6px; }
-.wax-info-star-num { font-size: 10.5px; font-weight: 700; color: rgba(255, 233, 196, 0.55); }
+.wax-info-star-num { font-size: 12px; font-weight: 700; color: rgba(255, 233, 196, 0.55); }
 .wax-info-stats { margin: 4px 0 0; display: flex; flex-direction: column; gap: 6px; }
-.wax-info-stats > div { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; }
+.wax-info-stats > div { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
 .wax-info-stats dt { margin: 0; color: rgba(255, 233, 196, 0.55); font-weight: 700; }
 .wax-info-stats dd { margin: 0; color: #ffe9c4; font-weight: 700; text-align: right; }
 .wax-info-stats dd b { color: var(--color-flame, #ffd778); font-variant-numeric: tabular-nums; }
+/* 좌측 정보창 하단의 작은 버리기 — 이미 가진 밀랍상도 여기서 1개씩 정리할 수 있다. */
+.wax-info-discard {
+  margin-top: auto;
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 130, 130, 0.32);
+  background: rgba(255, 90, 90, 0.07);
+  color: rgba(255, 190, 190, 0.8);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.14s ease, box-shadow 0.14s ease;
+}
+.wax-info-discard:hover { background: rgba(255, 90, 90, 0.18); box-shadow: 0 0 10px rgba(255, 110, 110, 0.3); }
 
 /* ── 중앙 갤러리 ────────────────────────────────────────── */
 .wax-gallery-scroll { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(244, 178, 86, 0.7) transparent; }
@@ -349,42 +367,71 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 }
 .wax-compose-bar .wax-section-title { margin: 0; flex: 0 0 auto; }
 .wax-compose-empty { margin: 0; font-size: 12px; color: rgba(255, 233, 196, 0.42); }
-.wax-compose-recipe { display: flex; align-items: center; gap: 8px; }
-.wax-compose-slots { display: flex; flex-direction: row; gap: 5px; }
-.wax-compose-slot {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
+
+/* 밀랍 조각진 — 재료 3개가 원 둘레에 놓이고 그 힘이 가운데 결과로 모이는 의식 도형.
+   한 줄 슬롯 나열 대신 이 시스템의 봉인/제물 테마에 맞춘 원형 구성이다. */
+.wax-compose-circle {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  flex: 0 0 auto;
+}
+.wax-compose-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 215, 120, 0.32);
+  animation: wax-compose-ring-spin 26s linear infinite;
+}
+.wax-compose-ring-inner { inset: 10px; border-color: rgba(255, 215, 120, 0.2); animation-duration: 18s; animation-direction: reverse; }
+.wax-compose-circle.is-ready .wax-compose-ring { border-color: rgba(255, 215, 120, 0.55); }
+.wax-compose-circle.is-ready .wax-compose-ring-inner { border-color: rgba(255, 215, 120, 0.38); }
+@keyframes wax-compose-ring-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .wax-compose-ring { animation: none; }
+}
+/* 재료 노드 3개 — 정삼각형 배치(위 / 좌하 / 우하). */
+.wax-compose-node {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
   border: 1px dashed rgba(255, 215, 120, 0.35);
   background-color: rgba(255, 210, 130, 0.05);
   background-size: cover;
   background-position: center 32%;
   opacity: 0.35;
+  z-index: 1;
 }
-.wax-compose-slot.is-filled { opacity: 1; border-style: solid; border-color: rgba(255, 215, 120, 0.55); }
-.wax-compose-slot.is-shiny.is-filled { border-color: rgba(123, 240, 174, 0.6); }
-.wax-compose-arrow { font-size: 16px; color: rgba(255, 215, 120, 0.7); }
-.wax-compose-result {
-  width: 40px;
-  height: 40px;
-  border-radius: 9px;
-  border: 1px solid rgba(255, 215, 120, 0.55);
+.wax-compose-node.is-filled { opacity: 1; border-style: solid; border-color: rgba(255, 215, 120, 0.6); box-shadow: 0 0 8px rgba(244, 178, 86, 0.4); }
+.wax-compose-node.is-shiny.is-filled { border-color: rgba(123, 240, 174, 0.65); box-shadow: 0 0 8px rgba(123, 240, 174, 0.4); }
+.wax-compose-node-1 { top: -3px; left: 50%; transform: translateX(-50%); }
+.wax-compose-node-2 { bottom: 4px; left: 2px; }
+.wax-compose-node-3 { bottom: 4px; right: 2px; }
+/* 가운데 결과 — 재료보다 크게, 노드보다 위 레이어에 둬 조각진의 중심임을 읽게 한다. */
+.wax-compose-core {
+  position: absolute;
+  inset: 22px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 215, 120, 0.6);
   background-size: cover;
   background-position: center 32%;
-  position: relative;
-  box-shadow: 0 0 14px rgba(244, 178, 86, 0.25);
+  box-shadow: 0 0 16px rgba(244, 178, 86, 0.3);
+  z-index: 2;
 }
-.wax-compose-result.is-shiny { border-color: rgba(123, 240, 174, 0.6); box-shadow: 0 0 14px rgba(123, 240, 174, 0.3); }
-.wax-compose-result-star {
+.wax-compose-core.is-shiny { border-color: rgba(123, 240, 174, 0.65); box-shadow: 0 0 16px rgba(123, 240, 174, 0.35); }
+.wax-compose-core-star {
   position: absolute;
-  bottom: -5px;
-  right: -5px;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
   font-size: 10px;
   font-weight: 900;
   color: #140d08;
   background: var(--color-flame, #ffd778);
   border-radius: 999px;
-  padding: 1px 5px;
+  padding: 1px 6px;
+  white-space: nowrap;
 }
 .wax-compose-result-label { margin: 0; font-size: 12px; line-height: 1.4; color: rgba(255, 233, 196, 0.75); }
 .wax-compose-result-label b { color: var(--color-flame, #ffd778); font-variant-numeric: tabular-nums; }

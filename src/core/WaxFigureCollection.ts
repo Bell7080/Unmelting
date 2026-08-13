@@ -255,6 +255,19 @@ export function discardWaxFigureCatch(catchId: string): boolean {
   return true
 }
 
+/** 밀랍상함에 있는 항목을 하나 버려 자리를 비운다. 남은 수가 있으면 1만 줄고, 마지막
+ *  하나였으면 항목 자체가 사라진다. 존재하지 않으면 false. */
+export function discardWaxFigurePermanent(enemyName: string, variant: WaxFigureVariant, star: number): boolean {
+  const state = loadWaxFigureCollection()
+  const key = makeKey(enemyName, variant, star)
+  const have = state.counts[key] ?? 0
+  if (have <= 0) return false
+  if (have <= 1) delete state.counts[key]
+  else state.counts[key] = have - 1
+  saveWaxFigureCollection(state)
+  return true
+}
+
 /** 같은 종+색+성급 `WAX_FIGURE_MERGE_COUNT`개를 다음 성급 1개로 합친다. 부족하면 false. */
 export function mergeWaxFigures(enemyName: string, variant: WaxFigureVariant, star: number): boolean {
   const state = loadWaxFigureCollection()

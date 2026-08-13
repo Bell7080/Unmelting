@@ -11,6 +11,7 @@ import {
   resetWaxFigureRunHold,
   stowWaxFigureCatch,
   discardWaxFigureCatch,
+  discardWaxFigurePermanent,
   waxFigureEffectStar,
   rollWaxFigureEffect,
   WAX_FIGURE_BASE_CAPACITY,
@@ -100,6 +101,20 @@ describe('WaxFigureCollection', () => {
     expect(discardWaxFigureCatch(overflow.id)).toBe(true)
     expect(getWaxFigureRunHold()).toHaveLength(0)
     expect(discardWaxFigureCatch(overflow.id)).toBe(false)
+  })
+
+  it('밀랍상함에 담긴 항목도 하나씩 버릴 수 있다(마지막 하나면 항목이 사라진다)', () => {
+    captureWaxFigure('양초 거미', { forceVariant: 'normal' })
+    captureWaxFigure('양초 거미', { forceVariant: 'normal' })
+
+    expect(discardWaxFigurePermanent('양초 거미', 'normal', 1)).toBe(true)
+    expect(totalWaxFigureCount()).toBe(1)
+
+    expect(discardWaxFigurePermanent('양초 거미', 'normal', 1)).toBe(true)
+    expect(totalWaxFigureCount()).toBe(0)
+    expect(loadWaxFigureCollection().counts['양초 거미::normal::1']).toBeUndefined()
+
+    expect(discardWaxFigurePermanent('양초 거미', 'normal', 1)).toBe(false)
   })
 
   it('무역에서 산 확장분만큼 한도가 늘어난다', () => {
