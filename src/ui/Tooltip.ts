@@ -73,6 +73,19 @@ function positionBox(box: HTMLElement, anchor: DOMRect): void {
   box.style.top = `${top}px`
 }
 
+/** 지금 툴팁이 붙어 있는 요소. 이 요소가 DOM에서 사라지면 mouseout이 영영 오지 않으므로
+ *  (재렌더로 통째 교체되는 오버레이가 그렇다) 아래 감시자가 대신 툴팁을 걷는다. */
+let anchor: HTMLElement | null = null
+let anchorObserver: MutationObserver | null = null
+
+/** 앵커가 DOM에서 빠지는 순간을 잡는다 — 툴팁이 떠 있는 동안에만 돌고 끝나면 끊는다. */
+function watchAnchorRemoval(): void {
+  anchorObserver ??= new MutationObserver(() => {
+    if (anchor && !anchor.isConnected) hideTooltip()
+  })
+  anchorObserver.observe(document.body, { childList: true, subtree: true })
+}
+
 function showTooltip(target: HTMLElement, text: string): void {
   const html = formatTooltipHtml(text)
   if (!html) return
@@ -81,11 +94,24 @@ function showTooltip(target: HTMLElement, text: string): void {
   const box = host.firstElementChild as HTMLElement
   positionBox(box, target.getBoundingClientRect())
   requestAnimationFrame(() => box.classList.add('is-in'))
+  anchor = target
+  watchAnchorRemoval()
 }
 
 function hideTooltip(): void {
   const host = document.getElementById(HOST_ID)
   if (host) host.innerHTML = ''
+  anchor = null
+  anchorObserver?.disconnect()
+}
+
+/**
+ * 툴팁을 지금 즉시 접는다. 앵커가 **DOM에는 남아 있는데 화면에서만 사라지는** 경우
+ * (오버레이가 is-open 클래스만 떼고 닫힐 때)는 mouseout도 제거 감시도 오지 않으므로,
+ * 그런 닫기 경로가 직접 불러 준다.
+ */
+export function hideGlobalTooltip(): void {
+  hideTooltip()
 }
 
 /** 부팅 시 1회 호출 — document 위임으로 [data-tooltip] 엘리먼트 전체를 커버한다. */

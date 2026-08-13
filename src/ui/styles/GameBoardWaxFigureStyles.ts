@@ -7,6 +7,9 @@
  * 갈라 한눈에 "이건 다르다"가 읽히게 한다.
  */
 export const GAME_BOARD_WAX_FIGURE_STYLES = `
+/* 브라우저 기본 폼 요소는 font-family를 상속하지 않는다 — 이 한 줄이 없으면
+   조합 리스트/마법진 코어/담기 같은 button 글자만 UA 산세리프로 튄다. */
+.wax-figure-overlay button { font-family: inherit; }
 .wax-figure-overlay {
   position: fixed;
   inset: 0;

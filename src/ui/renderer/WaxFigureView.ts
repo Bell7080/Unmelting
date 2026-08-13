@@ -29,6 +29,7 @@ import {
 import { waxFigureIcon, closeIcon } from '@ui/Icons'
 import { spriteForEnemyName } from '@ui/Sprites'
 import { SquareBurst } from '@ui/SquareBurst'
+import { hideGlobalTooltip } from '@ui/Tooltip'
 
 interface PermanentTile {
   key: string
@@ -73,6 +74,9 @@ export class WaxFigureView {
 
   private close(): void {
     document.getElementById('wax-figure-overlay')?.classList.remove('is-open')
+    // 모달은 DOM에 남은 채 is-open만 떼고 닫히므로, 마법진 위에 커서를 둔 채 닫으면
+    // '눌러서 합성' 툴팁에 mouseout이 오지 않아 화면에 남는다 — 닫을 때 직접 걷는다.
+    hideGlobalTooltip()
   }
 
   private handleClick(e: MouseEvent): void {
@@ -102,7 +106,7 @@ export class WaxFigureView {
     const composeSelectBtn = t.closest<HTMLElement>('[data-wax-compose-select]')
     if (composeSelectBtn) {
       this.composeKey = composeSelectBtn.dataset.waxComposeSelect!
-      this.render(host)
+      this.updateComposeSelection(host)
       return
     }
     const mergeBtn = t.closest<HTMLElement>('[data-wax-merge]')
@@ -113,8 +117,37 @@ export class WaxFigureView {
     const selectCard = t.closest<HTMLElement>('[data-wax-select]')
     if (selectCard) {
       this.selectedKey = selectCard.dataset.waxSelect!
-      this.render(host)
+      this.updateSelection(host)
     }
+  }
+
+  /**
+   * 선택만 바뀌었을 때의 부분 갱신. 소장품은 하나도 안 변했는데 모달을 통째로 다시
+   * 그리면 마법진 회전·코어 맥동이 0프레임으로 되감기고 화면이 한 번 번쩍인다 —
+   * 실제로 달라지는 것(선택 표시 + 좌측 정보창)만 제자리에서 고친다.
+   */
+  private updateSelection(host: HTMLElement): void {
+    const tiles = this.permanentTiles()
+    const runHold = getWaxFigureRunHold()
+    const selectedTile = tiles.find((t) => t.key === this.selectedKey)
+    const selectedCatch = runHold.find((c) => c.id === this.selectedKey)
+    const infoSelection = selectedTile ? { tile: selectedTile } : selectedCatch ? { catch: selectedCatch } : null
+    for (const el of host.querySelectorAll<HTMLElement>('[data-wax-select]')) {
+      el.classList.toggle('is-selected', el.dataset.waxSelect === this.selectedKey)
+    }
+    const panel = host.querySelector<HTMLElement>('.wax-info-panel')
+    if (panel) panel.innerHTML = this.renderInfoPanel(infoSelection)
+  }
+
+  /** 합성 후보만 바뀌었을 때의 부분 갱신 — 갤러리·정보창은 그대로 두고 조합 열만 고친다. */
+  private updateComposeSelection(host: HTMLElement): void {
+    const mergeable = this.permanentTiles().filter((t) => t.mergeable)
+    const composeTile = mergeable.find((t) => t.key === this.composeKey)
+    for (const el of host.querySelectorAll<HTMLElement>('[data-wax-compose-select]')) {
+      el.classList.toggle('is-active', el.dataset.waxComposeSelect === this.composeKey)
+    }
+    const stage = host.querySelector<HTMLElement>('.wax-compose-stage')
+    if (stage) stage.innerHTML = this.renderComposeCircle(composeTile)
   }
 
   /**
