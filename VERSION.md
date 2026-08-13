@@ -1,6 +1,6 @@
 # 버전 관리
 
-현재 버전: **v2.17.0**
+현재 버전: **v2.17.1**
 
 `VERSION.md`와 `package.json`의 `version`은 항상 같은 값을 쓴다.
 
@@ -25,6 +25,15 @@
   올리는 커밋은 `package.json`과 이 문서를 함께 갱신한다.
 
 ## 변경 이력
+
+### v2.17.1 — 2026-08-13
+
+**밀랍 회고록 탭 아이콘 제거.**
+
+- `밀랍 회고록` 탭 앞에 붙었던 아이콘을 뺐다. 옆 `모험일지` 탭이 아이콘 없이 텍스트만
+  쓰는데 회고록 탭만 아이콘을 달아 톤이 어긋났다 — 이제 두 탭 모두 텍스트만 남긴다.
+  `HearthScene.ts`에서 미사용이 된 `waxFigureIcon` import와, `HearthStyles.ts`의
+  `.hearth-library-tab-icon`/`.hearth-library-tab-icon .icon` 죽은 CSS도 함께 지웠다.
 
 ### v2.17.0 — 2026-08-12
 

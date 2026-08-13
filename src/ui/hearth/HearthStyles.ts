@@ -1617,8 +1617,6 @@ body.hearth-lobby #ingame-backdrop.is-out {
   text-shadow: 0 0 18px rgba(255, 205, 112, 0.5), 0 2px 12px rgba(0, 0, 0, 0.9);
   border-bottom: 2px solid rgba(255, 215, 120, 0.55);
 }
-.hearth-library-tab-icon { display: inline-flex; width: 0.62em; height: 0.62em; color: currentColor; opacity: 0.85; }
-.hearth-library-tab-icon .icon { width: 100%; height: 100%; }
 .hearth-library-journal {
   position: relative;
   z-index: 2;

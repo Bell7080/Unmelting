@@ -1,5 +1,5 @@
 import { HEARTH_STYLES } from './HearthStyles'
-import { closeIcon, swordIcon, sparkleIcon, waxFigureIcon } from '../Icons'
+import { closeIcon, swordIcon, sparkleIcon } from '../Icons'
 import { SpriteUrls, spriteForHearthStation, spriteForDinner, spriteForDinnerPack, spriteForHandCard, spriteForRelic, spriteForEnemyName } from '../Sprites'
 import {
   getWaxFigureArchive,
@@ -356,7 +356,7 @@ export class HearthScene {
             <div class="hearth-library-bg" aria-hidden="true"></div>
             <header class="hearth-library-tabs" role="tablist" aria-label="서고 분류">
               <button class="hearth-library-tab is-active" type="button" role="tab" aria-selected="true" data-hearth-library-tab="journal">모험일지</button>
-              <button class="hearth-library-tab" type="button" role="tab" aria-selected="false" data-hearth-library-tab="memoir"><span class="hearth-library-tab-icon" aria-hidden="true">${waxFigureIcon()}</span>밀랍 회고록</button>
+              <button class="hearth-library-tab" type="button" role="tab" aria-selected="false" data-hearth-library-tab="memoir">밀랍 회고록</button>
             </header>
             <section class="hearth-library-journal" aria-live="polite"></section>
           </div>
