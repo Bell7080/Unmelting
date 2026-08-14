@@ -3962,11 +3962,52 @@ export class GameBoardRenderer {
     const el = document.createElement('style')
     el.id = 'wax-figure-chain-styles'
     el.textContent = `
-.wax-figure-chain { position: fixed; z-index: 9998; pointer-events: none; text-align: center; will-change: transform, opacity; }
-.wax-figure-chain-glyph { width: 22px; height: 22px; margin: 0 auto 2px; color: var(--wax-chain-ink, #ffd178); filter: drop-shadow(0 0 8px var(--wax-chain-glow, rgba(255, 196, 96, 0.75))); }
-.wax-figure-chain-glyph .icon { width: 22px; height: 22px; }
-.wax-figure-chain-desc { font-size: 12px; font-weight: 800; color: rgba(255, 240, 220, 0.98); white-space: nowrap; text-shadow: 0 0 8px var(--wax-chain-glow, rgba(255, 196, 96, 0.75)), 0 2px 4px rgba(0, 0, 0, 0.85); }
-.wax-figure-chain.is-shiny { --wax-chain-ink: #7bf0ae; --wax-chain-glow: rgba(123, 240, 174, 0.75); }
+/* 밀랍상 효과 발동 — 체인 배너와 같은 양식이다: 아이콘 + 굵은 제목(종 이름) 위에
+   작고 옅은 효과문. 한 줄 텍스트로 흘리면 무엇이 발동했는지가 배경에 묻힌다. */
+.wax-figure-chain {
+  position: fixed;
+  z-index: 9998;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 13px 7px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--wax-chain-edge, rgba(255, 196, 96, 0.42));
+  background: linear-gradient(180deg, rgba(30, 21, 14, 0.86), rgba(10, 8, 14, 0.9));
+  box-shadow: 0 0 18px var(--wax-chain-glow, rgba(255, 196, 96, 0.28)), 0 8px 20px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  white-space: nowrap;
+  will-change: transform, opacity;
+}
+.wax-figure-chain-glyph {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  color: var(--wax-chain-ink, #ffd178);
+  filter: drop-shadow(0 0 8px var(--wax-chain-glow, rgba(255, 196, 96, 0.75)));
+}
+.wax-figure-chain-glyph .icon { width: 26px; height: 26px; }
+.wax-figure-chain-body { display: flex; flex-direction: column; gap: 1px; text-align: left; }
+/* 제목 = 어느 밀랍상이 움직였는가. 효과문보다 확실히 크고 밝다. */
+.wax-figure-chain-name {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: var(--wax-chain-ink, #ffd178);
+  text-shadow: 0 0 9px var(--wax-chain-glow, rgba(255, 196, 96, 0.6)), 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+.wax-figure-chain-effect {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 244, 224, 0.86);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.85);
+}
+.wax-figure-chain.is-shiny {
+  --wax-chain-ink: #7bf0ae;
+  --wax-chain-glow: rgba(123, 240, 174, 0.5);
+  --wax-chain-edge: rgba(123, 240, 174, 0.5);
+}
 `
     document.head.appendChild(el)
   }
@@ -3976,7 +4017,7 @@ export class GameBoardRenderer {
    * 스르륵 사라진다. 클러치 배너보다 작고 짧다("작게"라는 요청 그대로) — 이건 매 발동마다
    * 뜰 수 있는 잦은 사건이라 클러치만큼 화면을 오래 차지하면 소음이 된다.
    */
-  showWaxFigureEffectChain(description: string, shiny: boolean): void {
+  showWaxFigureEffectChain(enemyName: string, effectLabel: string, shiny: boolean): void {
     this.ensureWaxFigureChainStyles()
     const anchor = this.boardElement.querySelector<HTMLElement>('[data-open-wax-figures]')
     if (!anchor) return
@@ -3986,9 +4027,13 @@ export class GameBoardRenderer {
     host.setAttribute('aria-hidden', 'true')
     host.innerHTML =
       `<div class="wax-figure-chain-glyph">${waxFigureIcon()}</div>` +
-      `<div class="wax-figure-chain-desc">${description}</div>`
+      `<div class="wax-figure-chain-body">` +
+      `<span class="wax-figure-chain-name">${escapeHtml(enemyName)}</span>` +
+      `<span class="wax-figure-chain-effect">${escapeHtml(effectLabel)}</span>` +
+      `</div>`
+    // 탭 아이콘 **위쪽**에 띄운다. 아이콘 줄에 겹치면 글자가 아이콘을 가로질러 안 읽힌다.
     host.style.left = `${rect.left + rect.width / 2}px`
-    host.style.top = `${rect.top}px`
+    host.style.top = `${rect.top - 12}px`
     document.body.appendChild(host)
     const anim = host.animate(
       [

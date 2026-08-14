@@ -26,7 +26,7 @@ import {
   type WaxFigureVariant,
   type WaxFigureCatch,
 } from '@core/WaxFigureCollection'
-import { waxFigureIcon, closeIcon } from '@ui/Icons'
+import { waxFigureIcon, closeIcon, sparkleIcon } from '@ui/Icons'
 import { spriteForEnemyName } from '@ui/Sprites'
 import { SquareBurst } from '@ui/SquareBurst'
 import { hideGlobalTooltip } from '@ui/Tooltip'
@@ -269,7 +269,7 @@ export class WaxFigureView {
         <span class="wax-exhibit-star">★${tile.star}</span>
         <span class="wax-exhibit-count">×${tile.count}</span>
         <div class="wax-exhibit-frame">
-          <span class="wax-exhibit-name">${tile.enemyName}${tile.variant === 'shiny' ? ' <em class="wax-shiny-tag">이로치</em>' : ''}</span>
+          <span class="wax-exhibit-name">${tile.enemyName}${tile.variant === 'shiny' ? ` <span class="wax-shiny-tag" aria-label="이로치" data-tooltip="이로치(변종) 개체입니다.">${sparkleIcon()}</span>` : ''}</span>
         </div>
       </li>`
   }
@@ -295,7 +295,7 @@ export class WaxFigureView {
       return `
         <div class="wax-info-portrait${shinyClass}" style="background-image:url('${sprite}')" aria-hidden="true"></div>
         <div class="wax-info-body">
-          <h3 class="wax-info-name">${tile.enemyName}${tile.variant === 'shiny' ? ' <em class="wax-shiny-tag">이로치</em>' : ''}</h3>
+          <h3 class="wax-info-name">${tile.enemyName}${tile.variant === 'shiny' ? ` <span class="wax-shiny-tag" aria-label="이로치" data-tooltip="이로치(변종) 개체입니다.">${sparkleIcon()}</span>` : ''}</h3>
           <div class="wax-info-stars">${'★'.repeat(tile.star)}<span class="wax-info-star-num">${tile.star}성</span></div>
           <dl class="wax-info-stats">
             <div><dt>보유</dt><dd>×${tile.count}</dd></div>
@@ -311,7 +311,7 @@ export class WaxFigureView {
     return `
       <div class="wax-info-portrait${shinyClass}" style="background-image:url('${sprite}')" aria-hidden="true"></div>
       <div class="wax-info-body">
-        <h3 class="wax-info-name">${c.enemyName}${c.variant === 'shiny' ? ' <em class="wax-shiny-tag">이로치</em>' : ''}</h3>
+        <h3 class="wax-info-name">${c.enemyName}${c.variant === 'shiny' ? ` <span class="wax-shiny-tag" aria-label="이로치" data-tooltip="이로치(변종) 개체입니다.">${sparkleIcon()}</span>` : ''}</h3>
         <p class="wax-info-hold-note">임시보관함 — 정리하지 않으면 모험이 끝날 때 사라집니다.</p>
         <dl class="wax-info-stats">
           <div><dt>효과</dt><dd>${c.effect.label}</dd></div>
@@ -335,7 +335,7 @@ export class WaxFigureView {
         <li>
           <button type="button" class="wax-compose-list-btn${t.key === activeKey ? ' is-active' : ''}" data-wax-compose-select="${t.key}">
             <span class="wax-compose-list-glyph" style="background-image:url('${sprite}')" aria-hidden="true"></span>
-            <span class="wax-compose-list-name">${t.enemyName}${t.variant === 'shiny' ? ' <em class="wax-shiny-tag">이로치</em>' : ''}</span>
+            <span class="wax-compose-list-name">${t.enemyName}${t.variant === 'shiny' ? ` <span class="wax-shiny-tag" aria-label="이로치" data-tooltip="이로치(변종) 개체입니다.">${sparkleIcon()}</span>` : ''}</span>
             <span class="wax-compose-list-star">★${t.star}</span>
           </button>
         </li>`

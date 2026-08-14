@@ -182,7 +182,7 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   border-color: rgba(120, 235, 175, 0.5);
   /* 큰 초상도 같은 색조 규칙을 타되 밝기 보정은 뺀다 — 전시관 판이 필드보다 밝아
      필드와 같은 값을 주면 밀랍이 아니라 네온으로 튄다. */
-  filter: saturate(1.35) contrast(1.04);
+  filter: saturate(1.15) contrast(1.02);
   box-shadow: inset 0 1px 0 rgba(190, 255, 220, 0.18), 0 10px 22px rgba(0, 0, 0, 0.5), 0 0 20px rgba(123, 240, 174, 0.22);
 }
 .wax-info-portrait.is-shiny::after {
@@ -190,7 +190,7 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: rgba(74, 226, 158, 0.72);
+  background: rgba(74, 226, 158, 0.5);
   mix-blend-mode: color;
 }
 .wax-info-body { display: flex; flex-direction: column; gap: 8px; }
@@ -280,13 +280,13 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 }
 /* 이로치 썸네일 — 필드 카드와 **같은 방식**으로 색조를 간다(색만 옥빛, 명암은 원본).
    여기만 hue-rotate를 쓰면 전시관과 필드에서 같은 개체가 다른 색으로 보인다. */
-.wax-exhibit-card.is-shiny .wax-exhibit-art { filter: saturate(1.35) contrast(1.04); }
+.wax-exhibit-card.is-shiny .wax-exhibit-art { filter: saturate(1.15) contrast(1.02); }
 .wax-exhibit-card.is-shiny { isolation: isolate; }
 .wax-exhibit-card.is-shiny .wax-exhibit-art::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(74, 226, 158, 0.72);
+  background: rgba(74, 226, 158, 0.5);
   mix-blend-mode: color;
 }
 .wax-exhibit-star {
@@ -317,14 +317,19 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   z-index: 1;
 }
 .wax-exhibit-name { font-size: 12px; font-weight: 800; color: #fff5dc; line-height: 1.2; }
+/* 이로치 표식 — 글자('이로치')가 아니라 반짝이 아이콘 하나다. 이름 옆에 붙는 짧은
+   표식이라 글자로 두면 종 이름이 밀리고, 색이 이미 이로치를 말하고 있어 글자는 중복이다. */
 .wax-shiny-tag {
-  font-style: normal;
-  font-size: 10px;
-  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -1px;
+  width: 12px;
+  height: 12px;
+  margin-left: 4px;
   color: #7bf0ae;
-  text-shadow: 0 0 6px rgba(123, 240, 174, 0.6);
-  margin-left: 3px;
+  filter: drop-shadow(0 0 5px rgba(123, 240, 174, 0.6));
 }
+.wax-shiny-tag .icon { width: 12px; height: 12px; }
 
 .wax-btn {
   border-radius: 8px;
@@ -539,7 +544,7 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   /* 색조를 갈기 전에 채도를 올려 둔다 — 원본이 무채색에 가까우면 color 블렌드가 먹지 않는다.
      밝기도 함께 올린다: color 블렌드는 명도를 원본에서 그대로 가져오므로, 어두운 밀랍
      일러스트에 그냥 얹으면 옥빛이 아니라 탁한 이끼색으로 가라앉는다. */
-  filter: saturate(1.5) brightness(1.22) contrast(1.06);
+  filter: saturate(1.25) brightness(1.1) contrast(1.03);
 }
 /* 색조 판은 자기 엘리먼트를 갖는다 — .card-face 의사요소는 굳음 연출이 이미 쓴다.
    isolation: isolate 로 블렌드를 카드 안에 가둔다(밖으로 새면 레일 배경까지 물든다). */
@@ -550,7 +555,7 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   z-index: 1;
   pointer-events: none;
   border-radius: inherit;
-  background: rgba(74, 226, 158, 0.9);
+  background: rgba(74, 226, 158, 0.55);
   mix-blend-mode: color;
   animation: wax-figure-shiny-tint 2.4s ease-in-out infinite;
 }
@@ -583,8 +588,8 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 }
 .card-shiny-mark svg { width: 100%; height: 100%; }
 @keyframes wax-figure-shiny-tint {
-  0%, 100% { opacity: 0.82; }
-  50%      { opacity: 1; }
+  0%, 100% { opacity: 0.72; }
+  50%      { opacity: 0.92; }
 }
 @keyframes wax-figure-shiny-pulse {
   0%, 100% { opacity: 0.6; }

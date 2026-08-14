@@ -1471,7 +1471,10 @@ function announceWaxFigureEffect(effectId: string | undefined): void {
   if (!effectId) return
   const meta = findWaxFigureEffectMeta(effectId)
   if (!meta) return
-  boardRenderer.showWaxFigureEffectChain(`${meta.enemyName} — ${meta.label}`, meta.shiny)
+  boardRenderer.showWaxFigureEffectChain(meta.enemyName, meta.label, meta.shiny)
+  // 소리도 함께 — 밀랍상이 '깨어나 대신 움직인' 사건이라 변환/변신 음색을 쓴다.
+  // 이로치는 반음 올려 같은 사건의 다른 개체임을 귀로도 가른다.
+  sfx.playTransform({ semitones: meta.shiny ? 4 : 0, ring: 0.3 })
 }
 
 /**
