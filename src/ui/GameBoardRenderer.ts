@@ -3962,10 +3962,11 @@ export class GameBoardRenderer {
     const el = document.createElement('style')
     el.id = 'wax-figure-chain-styles'
     el.textContent = `
-/* 밀랍상 효과 발동 — **클러치 배너(에나의 자아)와 같은 양식**이다:
-   흐린 원형 암막 위에 『 제목 』을 크게, 그 아래 효과문을 한 단 작게. 판을 두른 카드
-   양식은 UI 조각처럼 읽혀 "지금 무언가 발동했다"가 안 산다.
-   클러치보다 한 단 작다 — 매 발동마다 뜰 수 있는 잦은 사건이라 같은 크기면 소음이 된다. */
+/* 밀랍상 효과 발동 — 생김새는 **체인 배너의 유물 항목을 그대로 쓴다**
+   (.chain-event .chain-event-relic + .chain-event-mark + .chain-event-copy).
+   여기서 전용 양식을 새로 그리면 같은 종류의 사건이 화면마다 다른 틀로 보인다 —
+   이 파일이 정하는 것은 '어디에 어떻게 떠 있다 사라지는가'(부유 + 암막)뿐이다.
+   암막은 클러치 배너(에나의 자아)의 것을 그대로 따른다. */
 .wax-figure-chain {
   position: fixed;
   z-index: 9998;
@@ -3979,38 +3980,22 @@ export class GameBoardRenderer {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 165%;
-  height: 240%;
+  width: 170%;
+  height: 250%;
   z-index: -1;
   filter: blur(4px);
   background: radial-gradient(ellipse at center, rgba(8, 5, 14, 0.8) 0%, rgba(8, 5, 14, 0.48) 42%, rgba(8, 5, 14, 0) 72%);
 }
-.wax-figure-chain-glyph {
-  width: 20px;
-  height: 20px;
-  margin: 0 auto 1px;
-  color: var(--wax-chain-ink, #ffd178);
-  filter: drop-shadow(0 0 8px var(--wax-chain-glow, rgba(255, 196, 96, 0.7)));
+/* 이로치만 옥빛으로 갈린다 — 체인 항목의 금빛 규칙을 색만 덮어쓴다. */
+.wax-figure-chain.is-shiny .chain-event-relic {
+  color: rgba(157, 247, 198, 1);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 8px rgba(123, 240, 174, 0.45), 0 0 16px rgba(74, 226, 158, 0.22);
 }
-.wax-figure-chain-glyph .icon { width: 20px; height: 20px; }
-.wax-figure-chain-name {
-  font-weight: 800;
-  font-size: 20px;
-  letter-spacing: 1.2px;
-  color: var(--wax-chain-ink, #ffe9b8);
-  text-shadow: 0 0 16px var(--wax-chain-glow, rgba(255, 200, 90, 0.6)), 0 3px 8px rgba(0, 0, 0, 0.85);
+.wax-figure-chain.is-shiny .chain-event-mark {
+  color: rgba(157, 247, 198, 1);
+  filter: drop-shadow(0 0 6px rgba(123, 240, 174, 0.9));
 }
-.wax-figure-chain-effect {
-  margin-top: 3px;
-  font-size: 14px;
-  font-weight: 700;
-  color: rgba(255, 232, 194, 0.94);
-  text-shadow: 0 0 10px var(--wax-chain-glow, rgba(255, 190, 80, 0.35)), 0 2px 5px rgba(0, 0, 0, 0.88);
-}
-.wax-figure-chain.is-shiny {
-  --wax-chain-ink: #9df7c6;
-  --wax-chain-glow: rgba(123, 240, 174, 0.5);
-}
+.wax-figure-chain.is-shiny .chain-event-flavor { color: rgba(226, 255, 240, 0.82); }
 `
     document.head.appendChild(el)
   }
@@ -4028,11 +4013,16 @@ export class GameBoardRenderer {
     const host = document.createElement('div')
     host.className = `wax-figure-chain${shiny ? ' is-shiny' : ''}`
     host.setAttribute('aria-hidden', 'true')
+    // 체인 배너의 유물 항목과 **같은 마크업**을 쓴다 — 클래스를 베끼지 않고 그대로 재사용해야
+    // 폰트·발광·간격이 갈리지 않는다.
     host.innerHTML =
       `<div class="wax-figure-chain-backdrop"></div>` +
-      `<div class="wax-figure-chain-glyph">${waxFigureIcon()}</div>` +
-      `<div class="wax-figure-chain-name">『 ${escapeHtml(enemyName)} 』</div>` +
-      `<div class="wax-figure-chain-effect">${escapeHtml(effectLabel)}</div>`
+      `<span class="chain-event chain-event-relic">` +
+      `<span class="chain-event-mark">✧</span>` +
+      `<span class="chain-event-copy">` +
+      `<span class="chain-event-name">${escapeHtml(enemyName)}</span>` +
+      `<span class="chain-event-flavor">${escapeHtml(effectLabel)}</span>` +
+      `</span></span>`
     // 탭 아이콘에서 **충분히 위로** 띄운다. 아이콘 줄에 걸치면 글자가 아이콘을 가로질러
     // 안 읽히고, 암막도 아이콘을 덮어 버린다.
     host.style.left = `${rect.left + rect.width / 2}px`

@@ -275,4 +275,41 @@ describe('WaxFigureCollection', () => {
       expect(restoreWaxFigureArchiveEntry('arc-없음')).toBe(false)
     })
   })
+
+  describe('임시보관함은 효과를 발동하지 않는다', () => {
+    it('한도를 넘겨 임시보관함으로 흘러간 밀랍상은 효과 성급이 0이다', () => {
+      // 밀랍상함을 다른 종으로 가득 채운 뒤 거미를 잡으면 거미는 임시보관함으로 간다.
+      for (let i = 0; i < WAX_FIGURE_BASE_CAPACITY; i++) captureWaxFigure('양초 키틴벌레', { forceVariant: 'normal' })
+      const spilled = captureWaxFigure('양초 거미', { forceVariant: 'normal' })
+
+      expect(spilled?.stowed).toBe(false)
+      expect(getWaxFigureRunHold()).toHaveLength(1)
+      // 임시보관함은 "아직 내 것이 아닌" 자리다 — 정리해 넣기 전에는 효과가 붙지 않는다.
+      expect(waxFigureEffectStar('web-trap-ignore')).toBe(0)
+      expect(rollWaxFigureEffect('web-trap-ignore')).toBe(false)
+    })
+
+    it('임시보관함에서 밀랍상함으로 옮기면 그때부터 효과가 붙는다', () => {
+      for (let i = 0; i < WAX_FIGURE_BASE_CAPACITY; i++) captureWaxFigure('양초 키틴벌레', { forceVariant: 'normal' })
+      captureWaxFigure('양초 거미', { forceVariant: 'normal' })
+      expect(waxFigureEffectStar('web-trap-ignore')).toBe(0)
+
+      // 자리를 하나 비우고 옮기면 영구 보유가 되어 효과가 산다.
+      discardWaxFigurePermanent('양초 키틴벌레', 'normal', 1)
+      expect(stowWaxFigureCatch(getWaxFigureRunHold()[0].id)).toBe(true)
+
+      expect(waxFigureEffectStar('web-trap-ignore')).toBe(1)
+    })
+
+    it('런이 끝나 임시보관함이 비워져도 영구 보유분의 효과는 그대로다', () => {
+      captureWaxFigure('양초 거미', { forceVariant: 'normal' })
+      for (let i = 0; i < WAX_FIGURE_BASE_CAPACITY; i++) captureWaxFigure('양초 키틴벌레', { forceVariant: 'normal' })
+      expect(getWaxFigureRunHold().length).toBeGreaterThan(0)
+
+      resetWaxFigureRunHold()
+
+      expect(getWaxFigureRunHold()).toHaveLength(0)
+      expect(waxFigureEffectStar('web-trap-ignore')).toBe(1)
+    })
+  })
 })
