@@ -58,6 +58,8 @@ export class SfxManager {
   private readonly trims = new Map<SfxKey, TrimWindow>()
   private readonly loads = new Map<SfxKey, Promise<AudioBuffer | null>>()
   private volume = 0.7
+  /** 마지막 상자음 재생 시각 — 불빛처럼 잦은 획득의 연속 재생을 묶는 데 쓴다. */
+  private lastChestAt = 0
 
   /** 첫 사용자 입력 시 컨텍스트를 열고 버퍼를 미리 디코딩한다. */
   async unlock(): Promise<void> {
@@ -142,7 +144,15 @@ export class SfxManager {
    * 상자·잡동사니를 여는 소리. 자원(불빛/화폐)이 롤링하며 터지는 그 박자에 맞춰 부른다.
    * 같은 사건에 여러 장이 등록돼 있으면 매번 무작위로 골라 단조로움을 던다.
    */
-  playChestOpen(opts: { semitones?: number; gain?: number; ring?: number } = {}): void {
+  playChestOpen(opts: { semitones?: number; gain?: number; ring?: number; throttleMs?: number } = {}): void {
+    // 불빛은 한 턴에도 여러 번 들어와 소리가 겹치면 금세 거슬린다 — 짧은 간격 안의
+    // 연속 요청은 한 번으로 묶는다(상자를 직접 열 때는 throttle 없이 그대로 울린다).
+    const throttle = opts.throttleMs ?? 0
+    if (throttle > 0) {
+      const now = Date.now()
+      if (now - this.lastChestAt < throttle) return
+      this.lastChestAt = now
+    }
     this.playVariant('chest', { semitones: opts.semitones ?? 0, gain: opts.gain ?? 1, ring: opts.ring ?? 0.25 })
   }
 

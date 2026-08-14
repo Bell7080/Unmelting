@@ -353,6 +353,10 @@ type ChainTimelineEvent =
   | { kind: 'recipe'; recipeId: string; name: string; flavor: string; uid: string }
   | { kind: 'gauge'; mode: CandleMode; name: string; flavor: string; uid: string }
   | { kind: 'relic'; relicId: RelicId; name: string; flavor: string; uid: string }
+/** 함정 처리음을 이미 낸 구간에서 onTrapResolved의 중복 재생을 막는 가드.
+ *  직접 클릭 경로는 소멸 연출이 **시작되는** 박자에 미리 울리고, 모델 제거는 그 뒤라
+ *  같은 함정에 소리가 두 번 나기 때문이다. */
+let suppressTrapClearSfx = false
 let chainTimeline: ChainTimelineEvent[] = []
 let chainEventCounter = 0
 function nextChainUid(): string {
@@ -843,8 +847,14 @@ async function playResourceTrail(
   // 불빛·화폐가 실제로 들어오는 그 박자(트레일 착탄 = 수치 롤링 = 버스트)에 상자 여는
   // 소리를 얹는다. 여기 한 곳이라 상자·잡동사니·꽃·이벤트 어디서 온 재화든 같이 울린다.
   if (resource === 'score' || resource === 'coin') {
-    // 화폐는 불빛보다 귀한 값이라 조금 더 높고 길게 울린다.
-    sfx.playChestOpen(resource === 'coin' ? { semitones: 5, ring: 0.45 } : { semitones: 0, ring: 0.25 })
+    // 화폐는 드물게 들어오는 귀한 값이라 또렷하게, 불빛은 매 턴 여러 번 들어오므로
+    // **작고 짧게** 울린다(볼륨·잔향을 낮추고 연속 재생을 묶는다) — 배경 짤랑임 정도로
+    // 남아야 계속 들어도 거슬리지 않는다.
+    sfx.playChestOpen(
+      resource === 'coin'
+        ? { semitones: 5, gain: 0.9, ring: 0.45 }
+        : { semitones: 2, gain: 0.34, ring: 0.08, throttleMs: 260 }
+    )
   }
 }
 
@@ -1893,9 +1903,10 @@ function resetForNewRun(): void {
   // 함정 처리에 반응하는 유물은 여기 한 곳에만 적는다.
   gameState.onTrapResolved = (trapKind) => {
     if (gameState.character.hasRelic('trap-collect')) relicEffects.applyTrapCollect()
-    // 함정 처리음 — 종류(거미줄/폭탄/포자/덤불)로 음색이 갈리고, 등록된 두 장 중
-    // 하나를 무작위로 고른다. 보스 칸 함정은 종류가 없어 기본 음색으로 떨어진다.
-    sfx.playTrapClear(trapKind)
+    // 함정 처리음은 **연출이 시작되는 박자**에 나야 한다. 직접 클릭 경로는 그 자리에서
+    // 미리 울리므로(handleCardAction) 여기서는 중복으로 내지 않고, 연출 훅이 없는
+    // 경로(손패 광역 제거·보스 칸 함정)만 이 창구가 맡는다.
+    if (!suppressTrapClearSfx) sfx.playTrapClear(trapKind)
   }
   // 카드 제거 훅: 굳은 카드(밀랍 조각) / 함정 처리(함정 수집) 유물을 발동한다.
   gameState.onCardRemoved = (card) => {
@@ -4012,12 +4023,19 @@ async function handleCardAction(e: Event): Promise<void> {
     // now start together so the player never sees calculation, hurt, and death
     // as separate delayed steps.
     sameBeatAnimations.push(boardRenderer.animateCardConsume(card))
+    // ★ 함정 처리음은 **연출이 시작되는 이 박자**에 낸다. 모델의 제거(removeCardFromRow)는
+    //   위 연출이 전부 끝난 뒤라, 거기에 걸어 두면 소리가 한 박자 늦게 따라온다.
+    if (card.type === CardType.TRAP) {
+      sfx.playTrapClear(card.trapKind)
+      suppressTrapClearSfx = true
+    }
   }
   if (rewardFeedbacks.length > 0)
     sameBeatAnimations.push(Promise.all(rewardFeedbacks).then(() => undefined))
   if (sameBeatAnimations.length > 0) await Promise.all(sameBeatAnimations)
   if (result.cardRemoved) {
     gameState.removeCardFromRow(card, distance)
+    suppressTrapClearSfx = false
     boardRenderer.clearSelection()
   }
 
