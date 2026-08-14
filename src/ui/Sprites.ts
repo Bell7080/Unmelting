@@ -512,7 +512,7 @@ const ENEMY_SPRITES: Record<EnemySpriteId, string> = {
   enemyBadger: SpriteUrls.enemyBadger,
   enemySloth: SpriteUrls.enemySloth,
   enemyJackal: SpriteUrls.enemyJackal,
-  // TODO(art): 바위 전용 일러스트(enemy_019 등 + 1/2/3칸)로 교체. 현재는 임시 폴백.
+  // 바위는 이 표(1칸 기본값)와 별개로 rockGroups[1/2/3] 전용 아트를 쓴다 — spriteForCard 참조.
   enemyRock: SpriteUrls.enemyRock,
 }
 
