@@ -33,13 +33,17 @@ import zoneBg1Url from '../assets/sprites/background_006.webp'
 import zoneBg2Url from '../assets/sprites/background_007.webp'
 import zoneBg3Url from '../assets/sprites/background_008.webp'
 import zoneBg4Url from '../assets/sprites/background_009.webp'
+// 새싹 병아리(온보딩) 전용 구역 배경 — 정규 런의 1구역(오래된 저택)과 갈라 쓴다.
+import sproutZoneBgUrl from '../assets/sprites/background_010.webp'
 import boss001Url from '../assets/sprites/boss_001.webp'
 import boss002Url from '../assets/sprites/boss_002.webp'
 import boss003Url from '../assets/sprites/boss_003.webp'
 import boss004Url from '../assets/sprites/boss_004.webp'
 import boss005Url from '../assets/sprites/boss_005.webp'
 import playerUrl from '../assets/sprites/player_001.webp'
-import sproutDifficultyUrl from '../assets/sprites/player_000.webp'
+import level001Url from '../assets/sprites/level_001.webp'
+import level002Url from '../assets/sprites/level_002.webp'
+import level003Url from '../assets/sprites/level_003.webp'
 import enemy001Url from '../assets/sprites/enemy_001.webp'
 import enemy002Url from '../assets/sprites/enemy_002.webp'
 import enemy003Url from '../assets/sprites/enemy_003.webp'
@@ -244,6 +248,8 @@ export const SpriteUrls = {
   trialVeilBg: trialVeilBgUrl,
   /** 구역 배경 1~4 (background_006~009). 구역 전환 커튼 및 인게임 배경으로 사용. */
   zoneBg: [zoneBg1Url, zoneBg2Url, zoneBg3Url, zoneBg4Url] as readonly string[],
+  /** 새싹 병아리 런의 구역 배경(새싹 온실, background_010). 온보딩은 30층 한 구역뿐이다. */
+  sproutZoneBg: sproutZoneBgUrl,
   /** 30층 보스(양초 백작) 일러스트. */
   boss: boss001Url,
   /** 60층 보스(불씨 기사단장) 일러스트. */
@@ -255,8 +261,9 @@ export const SpriteUrls = {
   /** 새싹 병아리 30F 보스(양초 고양이) 일러스트. */
   bossCat: boss005Url,
   player: playerUrl,
-  /** 새싹 병아리(온보딩) 난이도 카드 배경 일러스트. 쉬움/보통은 추후 전용 일러스트로 채운다. */
-  difficultySprout: sproutDifficultyUrl,
+  /** 난이도 카드 일러스트 — level_001~003이 새싹 병아리 / 쉬움 / 보통에 순서대로 대응한다.
+   *  순서가 곧 매핑이라 HEARTH_DIFFICULTIES 배열 순서와 어긋나면 카드 그림이 바뀐다. */
+  difficultyLevels: [level001Url, level002Url, level003Url] as readonly string[],
   // 사용자 지정 매핑: enemy_001~018을 타입 안전한 EnemySpriteId 키와 1:1로 연결한다.
   enemyChitin: enemy001Url,
   enemyMoth: enemy002Url,

@@ -20,6 +20,12 @@ export const ZONE_LIST: readonly ZoneInfo[] = [
   { bgUrl: SpriteUrls.zoneBg[3], title: '더욱 깊은 숲' },
 ]
 
+/**
+ * 새싹 병아리(온보딩) 런의 구역. 30층 한 구역뿐이라 목록이 아니라 상수 하나다 —
+ * 정규 런의 1구역(오래된 저택)과 배경·이름을 갈라, 첫 모험이 다른 곳임을 화면이 말한다.
+ */
+export const SPROUT_ZONE: ZoneInfo = { bgUrl: SpriteUrls.sproutZoneBg, title: '새싹 온실' }
+
 const CURTAIN_CSS = `
 #zone-curtain {
   position: fixed;

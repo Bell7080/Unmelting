@@ -95,7 +95,7 @@ import {
   type BasicUnlockPoolItem,
 } from '@core/MetaContentUnlocks'
 import { loadMetaCurrency, depositMetaCurrency } from '@core/MetaWallet'
-import { ZoneCurtain, ZONE_LIST } from '@ui/ZoneCurtain'
+import { ZoneCurtain, ZONE_LIST, SPROUT_ZONE } from '@ui/ZoneCurtain'
 import { playDialogueLine } from '@ui/DialoguePlayer'
 import { EventSpawnController } from '@systems/EventSpawn'
 import { BgmManager } from '@/audio/BgmManager'
@@ -2233,7 +2233,9 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
   // 1구역 커튼: 직업 선택 직후 항상 표시한다.
   // enterHearth()는 startGame()을 직접 호출하지 않으므로 로비 진입 자체에는 이 커튼이 나오지 않는다.
   // 첫 실행 인트로에서는 상단 커튼이 거슬리므로 생략한다(배경은 인트로가 이미 노출).
-  if (!firstRunIntroActive) void zoneCurtain.show(ZONE_LIST[0], () => setZoneBackground(ZONE_LIST[0].bgUrl))
+  // 새싹 병아리는 30층 한 구역(새싹 온실)이라 정규 1구역과 다른 배경/이름으로 연다.
+  const openingZone = isOnboardingActive() ? SPROUT_ZONE : ZONE_LIST[0]
+  if (!firstRunIntroActive) void zoneCurtain.show(openingZone, () => setZoneBackground(openingZone.bgUrl))
 
   // 1턴 시작 대사: 암막이 완전히 걷힌 뒤 살짝 딜레이 후 등장.
   {
@@ -4373,7 +4375,8 @@ function animateVeilReveal(veil: HTMLElement, duration: number): Promise<void> {
 async function playFirstRunIntroBeats(): Promise<void> {
   const veil = document.getElementById('first-run-veil')
   // 상단 구역 커튼 없이 배경만 즉시 세팅(크로스페이드 없음) — 방사 밝힘이 완성된 배경을 드러낸다.
-  setZoneBackground(ZONE_LIST[0].bgUrl, true)
+  // 첫 실행 인트로는 언제나 새싹 병아리 런이다 — 온실 배경을 그대로 드러낸다.
+  setZoneBackground(SPROUT_ZONE.bgUrl, true)
   await wait(300)
   if (veil) await animateVeilReveal(veil, 1150)
   const card = document.querySelector<HTMLElement>('.player-card')
@@ -4476,9 +4479,9 @@ function showBootTitleGate(): Promise<() => void> {
   const spriteUrls = [
     SpriteUrls.player,
     SpriteUrls.cardBack,
-    // 첫 실행 인트로가 곧바로 드러내는 1구역 배경까지 게이트에서 미리 받는다.
-    ZONE_LIST[0].bgUrl,
-    SpriteUrls.difficultySprout,
+    // 첫 실행 인트로가 곧바로 드러내는 새싹 온실 배경까지 게이트에서 미리 받는다.
+    SPROUT_ZONE.bgUrl,
+    SpriteUrls.difficultyLevels[0],
     ...Array.from({ length: 9 }, (_, i) => spriteForHearthStation(`hearth_00${i + 1}`)),
   ].filter((u): u is string => Boolean(u))
   const tasks: Promise<unknown>[] = [document.fonts.ready, ...spriteUrls.map(preloadImage)]
