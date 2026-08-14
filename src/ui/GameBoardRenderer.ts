@@ -3963,7 +3963,7 @@ export class GameBoardRenderer {
     el.id = 'wax-figure-chain-styles'
     el.textContent = `
 /* 밀랍상 효과 발동 — 생김새는 **체인 배너의 유물 항목을 그대로 쓴다**
-   (.chain-event .chain-event-relic + .chain-event-mark + .chain-event-copy).
+   (.chain-event .chain-event-relic + .chain-event-copy 안의 이름/효과문).
    여기서 전용 양식을 새로 그리면 같은 종류의 사건이 화면마다 다른 틀로 보인다 —
    이 파일이 정하는 것은 '어디에 어떻게 떠 있다 사라지는가'(부유 + 암막)뿐이다.
    암막은 클러치 배너(에나의 자아)의 것을 그대로 따른다. */
@@ -3991,10 +3991,6 @@ export class GameBoardRenderer {
   color: rgba(157, 247, 198, 1);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 8px rgba(123, 240, 174, 0.45), 0 0 16px rgba(74, 226, 158, 0.22);
 }
-.wax-figure-chain.is-shiny .chain-event-mark {
-  color: rgba(157, 247, 198, 1);
-  filter: drop-shadow(0 0 6px rgba(123, 240, 174, 0.9));
-}
 .wax-figure-chain.is-shiny .chain-event-flavor { color: rgba(226, 255, 240, 0.82); }
 `
     document.head.appendChild(el)
@@ -4018,7 +4014,6 @@ export class GameBoardRenderer {
     host.innerHTML =
       `<div class="wax-figure-chain-backdrop"></div>` +
       `<span class="chain-event chain-event-relic">` +
-      `<span class="chain-event-mark">✧</span>` +
       `<span class="chain-event-copy">` +
       `<span class="chain-event-name">${escapeHtml(enemyName)}</span>` +
       `<span class="chain-event-flavor">${escapeHtml(effectLabel)}</span>` +
