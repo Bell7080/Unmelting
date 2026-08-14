@@ -541,8 +541,9 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   background: radial-gradient(120% 80% at 50% 18%, rgba(163, 255, 214, 0.34), transparent 62%);
   mix-blend-mode: screen;
 }
-/* 카드 글자/수치는 색조 판 위에 남아야 읽힌다. */
-.cell.card.is-wax-figure-shiny .card-content { position: relative; z-index: 3; }
+/* 글자/수치는 색조 판(z-index 1) 위에 이미 있다(.card-content 는 z-index 2).
+   여기서 position 을 건드리면 안 된다 — .card-content 는 absolute + space-between 으로
+   이름을 위, 수치를 아래에 붙이고 있어서 relative 로 바꾸면 수치가 이름 밑으로 딸려 올라간다. */
 .cell.card.is-wax-figure-shiny {
   border-color: rgba(123, 240, 174, 0.7);
   box-shadow: 0 0 14px rgba(123, 240, 174, 0.4);

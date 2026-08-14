@@ -304,21 +304,6 @@ export class EventFlowManager {
       this.deps.recordNotice(`이벤트: ${choice.label} 선택`, 'info')
       return targets
     }
-    if (effect.kind === 'relic') {
-      // 대가 손패를 먼저 걷는다 — 유물을 못 받는 경우(풀 소진)에도 대가만 치르는 일이
-      // 없도록, 지급에 실패하면 걷지 않는다.
-      const granted = this.grantRandomRelicReward()
-      if (!granted) {
-        this.deps.recordNotice(`이벤트: ${choice.label} — 더 받을 유물이 없다`, 'info')
-        return []
-      }
-      for (let i = 0; i < (effect.consumeHandCount ?? 0); i++) {
-        if (character.hand.length === 0) break
-        character.removeHandCardAt(0)
-      }
-      this.deps.recordNotice(`이벤트: ${choice.label} — 유물 획득`, 'info')
-      return ['relic']
-    }
     // combat: 손패 불씨를 소모하고 레시피를 해금한다.
     const idx = character.hand.findIndex((h) => h.defId === effect.consumeHand)
     if (idx >= 0) character.removeHandCardAt(idx)

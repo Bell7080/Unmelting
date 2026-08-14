@@ -1454,7 +1454,6 @@ export class EnaTrainingSimulation {
 
   /** 선택지 하나의 대략적 가치 — 고르기 위한 비교용 점수(실제 적용은 applyChoiceEffect). */
   private choiceValue(effect: EventChoice['effect']): number {
-    if (effect.kind === 'relic') return 3 - (effect.consumeHandCount ?? 0) * 0.4
     if (effect.kind !== 'resource') return 0
     // 저체력일수록 영구 최대 체력 대가가 무겁다 — 같은 선택도 상황에 따라 값이 달라야 한다.
     const hpPressure = this.hp <= 10 ? 2.2 : 1
@@ -1472,11 +1471,6 @@ export class EnaTrainingSimulation {
 
   /** 고른 선택지를 시뮬 상태에 실제로 적용한다(콤보 게이지는 시뮬 미모델이라 건너뛴다). */
   private applyChoiceEffect(effect: EventChoice['effect']): number {
-    if (effect.kind === 'relic') {
-      this.grantRelic(false)
-      for (let i = 0; i < (effect.consumeHandCount ?? 0); i++) this.hand.shift()
-      return 2.5
-    }
     if (effect.kind !== 'resource') return 0
     if (effect.maxHealth) {
       this.maxHp = Math.max(1, this.maxHp + effect.maxHealth)
