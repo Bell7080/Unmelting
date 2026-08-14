@@ -58,7 +58,7 @@ import {
   type BossGimmickExpectation,
 } from '@systems/BossGimmickManager'
 import type { SpecialEnemyKind } from '@entities/Card'
-import { EVENT_DEFINITIONS, EVENT_IDS, type EventId, type RiskOffer, type MinionExchangeConfig, type CountRpsConfig } from '@data/Events'
+import { EVENT_DEFINITIONS, EVENT_IDS, type EventId, type EventChoice, type RiskOffer, type MinionExchangeConfig, type CountRpsConfig } from '@data/Events'
 import { ENEMY_LIGHT_BASE, ENEMY_LIGHT_PER_RANK, GROUP_LIGHT_DISCOUNT, BASE_LIGHT_GAIN_MULTIPLIER, lightTurnMultiplier } from '@core/LightEconomy'
 import { EmberSystem, SPROUT_SPAWN_ADJUST, type EmberTier } from '@systems/EmberSystem'
 import { ENEMY_DEFINITIONS, MIMIC_BY_SPAN, specialEnemyTierForTurn, pickWeightedEnemyDefinition } from '@systems/CardSpawner'
@@ -1391,10 +1391,11 @@ export class EnaTrainingSimulation {
 
   /** 이벤트별 공격적(greedy) 플레이의 기대 체력 위험 — 교사 정책이 safe/greedy를 가를 재료. */
   private estimateEventRisk(id: EventId): number {
-    if (id === 'event_001') {
-      // 붉은 양초의 최대체력 감소를 위험으로 본다(선택지 데이터에서 직접 읽음).
-      const red = EVENT_DEFINITIONS.event_001.choices?.find((c) => c.effect.kind === 'stat')
-      return red?.effect.kind === 'stat' ? Math.max(0, -(red.effect.maxHealth ?? 0)) : 5
+    const choices = EVENT_DEFINITIONS[id].choices
+    if (choices && choices.length > 0) {
+      // choice형: 선택지 중 가장 큰 영구 최대 체력 대가를 위험으로 본다(데이터에서 직접 읽음).
+      return Math.max(0, ...choices.map((c) =>
+        c.effect.kind === 'resource' ? Math.max(0, -(c.effect.maxHealth ?? 0)) : 0))
     }
     const mg = EVENT_DEFINITIONS[id].minigame
     if (mg?.kind === 'minion-exchange') {
@@ -1423,31 +1424,72 @@ export class EnaTrainingSimulation {
     let reward: number
     if (mg?.kind === 'minion-exchange') reward = this.playMinionExchangeEvent(mode, mg)
     else if (mg?.kind === 'count-rps') reward = this.playCountRpsEvent(mode, mg)
-    else reward = this.playCandleDollEvent(mode !== 'safe')
+    else reward = this.playChoiceEvent(id, mode !== 'safe')
     this.phase = 'field'
     return this.hp > 0 ? reward : -12
   }
 
-  /** event_001 양초 악마 인형 — safe=푸른 양초(랜덤 손패), greedy=붉은 양초(최대체력↓/공격력↑).
-   *  불태우기(악마 소환)는 waxDemon 미모델 정책에 따라 시뮬에서 제외한다. */
-  private playCandleDollEvent(greedy: boolean): number {
-    const choices = EVENT_DEFINITIONS.event_001.choices ?? []
-    if (greedy) {
-      const red = choices.find((c) => c.effect.kind === 'stat')
-      if (red?.effect.kind === 'stat') {
-        const hpLoss = Math.max(0, -(red.effect.maxHealth ?? 0))
-        this.maxHp = Math.max(1, this.maxHp - hpLoss)
-        this.hp = Math.min(this.hp, this.maxHp)
-        this.attack += Math.max(0, red.effect.damage ?? 0)
-      }
-      // 공격력 영구 성장은 후반 가치가 크지만 저체력일수록 부담.
-      return this.hp <= 10 ? 0.5 : 2.5
+  /**
+   * choice형 이벤트 공용 진행 — **선택지 데이터에서 직접** 대가와 이득을 읽어 고른다.
+   *
+   * 이벤트마다 전용 함수를 두지 않는 이유: 새 choice형 이벤트를 데이터로 추가하면 에나가
+   * 자동으로 그 선택지를 놓고 배우게 하기 위해서다(손패/유물 테이블과 같은 규칙).
+   * 전용 함수로 두면 새 이벤트가 늘 때마다 시뮬이 event_001만 겪는 세계에 머문다.
+   *
+   * 'combat'(악마 소환)은 waxDemon 미모델 정책에 따라 후보에서 뺀다.
+   */
+  private playChoiceEvent(id: EventId, greedy: boolean): number {
+    const choices = (EVENT_DEFINITIONS[id].choices ?? []).filter((c) => c.effect.kind !== 'combat')
+    if (choices.length === 0) return 0
+    // 영구 최대 체력 감소만 '대가'로 센다 — 되돌릴 수 없어 저체력에서 치명적이기 때문이다.
+    const costOf = (c: (typeof choices)[number]): number =>
+      c.effect.kind === 'resource' ? Math.max(0, -(c.effect.maxHealth ?? 0)) : 0
+    // 보수 플레이는 영구 대가가 없는 선택만 본다. 전부 대가가 있으면 가장 싼 것을 고른다.
+    const pool = greedy ? choices : (choices.filter((c) => costOf(c) === 0).length > 0
+      ? choices.filter((c) => costOf(c) === 0)
+      : [choices.reduce((a, b) => (costOf(a) <= costOf(b) ? a : b))])
+    const picked = pool.reduce((a, b) => (this.choiceValue(a.effect) >= this.choiceValue(b.effect) ? a : b))
+    return this.applyChoiceEffect(picked.effect)
+  }
+
+  /** 선택지 하나의 대략적 가치 — 고르기 위한 비교용 점수(실제 적용은 applyChoiceEffect). */
+  private choiceValue(effect: EventChoice['effect']): number {
+    if (effect.kind === 'relic') return 3 - (effect.consumeHandCount ?? 0) * 0.4
+    if (effect.kind !== 'resource') return 0
+    // 저체력일수록 영구 최대 체력 대가가 무겁다 — 같은 선택도 상황에 따라 값이 달라야 한다.
+    const hpPressure = this.hp <= 10 ? 2.2 : 1
+    return (
+      (effect.damage ?? 0) * 2.5 +
+      (effect.hand ?? 0) * 0.35 +
+      (effect.ember ?? 0) * 0.25 +
+      (effect.shield ?? 0) * 0.15 +
+      (effect.health ?? 0) * 0.1 +
+      (effect.light ?? 0) * 0.004 +
+      Math.min(0, effect.maxHealth ?? 0) * 0.35 * hpPressure +
+      Math.max(0, effect.maxHealth ?? 0) * 0.2
+    )
+  }
+
+  /** 고른 선택지를 시뮬 상태에 실제로 적용한다(콤보 게이지는 시뮬 미모델이라 건너뛴다). */
+  private applyChoiceEffect(effect: EventChoice['effect']): number {
+    if (effect.kind === 'relic') {
+      this.grantRelic(false)
+      for (let i = 0; i < (effect.consumeHandCount ?? 0); i++) this.hand.shift()
+      return 2.5
     }
-    const blue = choices.find((c) => c.effect.kind === 'randomHand')
-    const count = blue?.effect.kind === 'randomHand' ? blue.effect.count : 4
+    if (effect.kind !== 'resource') return 0
+    if (effect.maxHealth) {
+      this.maxHp = Math.max(1, this.maxHp + effect.maxHealth)
+      this.hp = Math.min(this.hp, this.maxHp)
+    }
+    if (effect.damage) this.attack = Math.max(1, this.attack + effect.damage)
+    if (effect.health) this.hp = Math.max(0, Math.min(this.maxHp, this.hp + effect.health))
+    if (effect.shield) this.shield = Math.max(0, this.shield + effect.shield)
+    if (effect.ember) this.ember = Math.max(0, this.ember + effect.ember)
+    if (effect.light) this.light = Math.max(0, this.light + effect.light)
     let added = 0
-    for (let i = 0; i < count; i++) if (this.drawCard()) added++
-    return 0.8 + added * 0.3
+    for (let i = 0; i < (effect.hand ?? 0); i++) if (this.drawCard()) added++
+    return this.choiceValue(effect) * 0.6 + added * 0.2
   }
 
   /** event_002 겁쟁이 미니언 — 돌깎기식 위험 흥정을 실제 config 수치로 굴린다.

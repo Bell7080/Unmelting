@@ -16,7 +16,7 @@
 import type { HandCardId } from '@entities/HandCard'
 
 /** 추가될 때마다 확장하는 이벤트 식별자. 파일명 event_XXX 와 동일하게 유지한다. */
-export type EventId = 'event_001' | 'event_002' | 'event_003'
+export type EventId = 'event_001' | 'event_002' | 'event_003' | 'event_004' | 'event_005' | 'event_006'
 
 /** 대사 한 줄. 화자에 따라 이름표/정렬을 다르게 렌더한다. */
 export interface EventDialogueLine {
@@ -26,15 +26,39 @@ export interface EventDialogueLine {
 }
 
 /**
- * 선택지 효과. index.ts applyEventChoice 가 kind 로 분기해 실제 게임 상태에 적용한다.
- *  - 'stat'       : 최대 체력/공격력 영구 가감(음수 가능).
- *  - 'randomHand' : 랜덤 손패 n장 지급.
- *  - 'combat'     : 위험한 이벤트 전투(보스전과 같은 흐름). 손패 불씨를 소모해 끌어낸다.
+ * 선택지 효과. `EventFlowManager.applyEventChoice` 가 kind 로 분기해 실제 상태에 적용한다.
+ *  - 'resource' : 수치로 끝나는 효과 전부(영구 스탯 · 자원 · 랜덤 손패). 음수 = 대가.
+ *  - 'relic'    : 유물 1개 지급(손패를 대가로 걷을 수 있다).
+ *  - 'combat'   : 위험한 이벤트 전투(보스전과 같은 흐름). 손패 불씨를 소모해 끌어낸다.
  */
 export type EventEffect =
-  | { kind: 'stat'; maxHealth?: number; damage?: number }
-  | { kind: 'randomHand'; count: number }
+  /**
+   * 수치로 끝나는 효과 전부를 담는 **하나의** 종류다. 지정한 항목마다 버튼 → 해당 HUD로
+   * 획득 블라스트가 나가므로, 한 선택이 "무엇을 내주고 무엇을 얻는가"를 함께 말할 수 있다.
+   * 음수 = 대가. 종류를 축(영구 스탯/자원/손패)마다 쪼개 두면 "방패 +4 · 공격력 +1"처럼
+   * 축을 걸치는 선택을 못 적고, 결국 문구와 실제 효과가 어긋난다.
+   */
+  | {
+      kind: 'resource'
+      /** 영구 최대 체력 증감. */
+      maxHealth?: number
+      /** 영구 공격력 증감. */
+      damage?: number
+      /** 불빛(score). */
+      light?: number
+      /** 현재 체력(회복/피해). */
+      health?: number
+      shield?: number
+      /** 콤보 게이지. */
+      candle?: number
+      /** 빛 게이지. */
+      ember?: number
+      /** 랜덤 손패 지급 장수. */
+      hand?: number
+    }
   | { kind: 'combat'; consumeHand: HandCardId; unlocksRecipe?: string }
+  /** 유물 1개 지급(상점과 같은 등급 가중치). 대가로 손패를 걷을 수 있다. */
+  | { kind: 'relic'; consumeHandCount?: number }
 
 export interface EventChoice {
   /** 버튼 제목. */
@@ -227,7 +251,7 @@ const EVENT_001: EventDefinition = {
     {
       label: '붉은 양초',
       effectLines: ['최대체력 -5 · 공격력+1'],
-      effect: { kind: 'stat', maxHealth: -5, damage: 1 },
+      effect: { kind: 'resource', maxHealth: -5, damage: 1 },
       themeClass: 'candle-red',
       afterDialogue: [
         { speaker: 'npc', text: '음. . .' },
@@ -237,7 +261,7 @@ const EVENT_001: EventDefinition = {
     {
       label: '푸른 양초',
       effectLines: ['랜덤 손패 + 4'],
-      effect: { kind: 'randomHand', count: 4 },
+      effect: { kind: 'resource', hand: 4 },
       themeClass: 'candle-blue',
       afterDialogue: [
         { speaker: 'npc', text: '하하하!' },
@@ -351,11 +375,164 @@ const EVENT_003: EventDefinition = {
   ],
 }
 
+/**
+ * event_004 — "밀랍 우체부".
+ * 배달을 마치지 못한 채 굳어 가는 우체부. 읽지 못한 편지 꾸러미를 안고 있다.
+ * 축은 **지식에의 탐욕**이다 — 남의 편지를 읽어 얻는 것과, 태워 얻는 것과, 대신 배달해 얻는 것.
+ */
+const EVENT_004: EventDefinition = {
+  id: 'event_004',
+  illu: 'event_004',
+  title: '밀랍 우체부',
+  dialogue: [
+    { speaker: 'npc', text: '. . .늦었습니다. 너무 늦었어요.' },
+    { speaker: 'npc', text: '이 꾸러미를. . . 아직 한 통도 전하지 못했는데.' },
+    { speaker: 'player', text: '손이 굳어 있어. 언제부터 걷고 있었지.' },
+    { speaker: 'npc', text: '모르겠습니다. 다리가 멈춘 뒤로는 세지 않았거든요.' },
+    { speaker: 'npc', text: '가져가세요. 어떻게 쓰든. . . 여기서 썩는 것보다는 나을 테니.' },
+  ],
+  choices: [
+    {
+      label: '봉인을 뜯는다',
+      effectLines: ['불빛 +260', '최대체력 -4'],
+      // 남의 비밀을 읽어 얻는 큰 불빛. 탐욕이 파멸의 방아쇠라는 세계관 축을 대가로 표현한다.
+      effect: { kind: 'resource', light: 260, health: -4 },
+      themeClass: 'candle-red',
+      afterDialogue: [
+        { speaker: 'npc', text: '. . .읽으셨군요.' },
+        { speaker: 'npc', text: '그 이름들, 이제 당신 것입니다. 무겁지요.' },
+      ],
+    },
+    {
+      label: '불쏘시개로 쓴다',
+      effectLines: ['빛 게이지 +4 · 랜덤 손패 +2'],
+      effect: { kind: 'resource', ember: 4, hand: 2 },
+      themeClass: 'candle-blue',
+      afterDialogue: [
+        { speaker: 'npc', text: '아아. . . 따뜻하네요.' },
+        { speaker: 'npc', text: '이럴 거였다면 진작 태울 걸 그랬습니다.' },
+      ],
+    },
+    {
+      label: '대신 배달한다',
+      effectLines: ['[ 유물 ] 1개 획득 · 손패 2장 소모'],
+      // 대가가 손패라 "지금 쓸 것을 내주고 계속 남을 것을 얻는" 교환이 된다.
+      effect: { kind: 'relic', consumeHandCount: 2 },
+      afterDialogue: [
+        { speaker: 'npc', text: '. . .고맙습니다.' },
+        { speaker: 'npc', text: '가방은 두고 가세요. 저는 이제 가벼워도 됩니다.' },
+      ],
+    },
+  ],
+}
+
+/**
+ * event_005 — "굳어 가는 악사".
+ * 밀랍에 잠긴 채 마지막 곡을 켜는 악사. 축은 **머무는 값**이다 —
+ * 끝까지 들어 주면 회복과 온기를, 끊어 주면 그 몫이 곧장 힘으로 돌아온다.
+ */
+const EVENT_005: EventDefinition = {
+  id: 'event_005',
+  illu: 'event_005',
+  title: '굳어 가는 악사',
+  dialogue: [
+    { speaker: 'npc', text: '아, 손님이군요. 오랜만입니다.' },
+    { speaker: 'npc', text: '손가락은 벌써 셋이 굳었지만. . . 아직 넷이 남았지요.' },
+    { speaker: 'player', text: '멈추면 편해질 텐데.' },
+    { speaker: 'npc', text: '멈추는 쪽이 굳는 겁니다. 켜는 동안은 아직 녹아 있어요.' },
+    { speaker: 'npc', text: '들어 주시겠습니까. 아니면. . . 끝내 주시겠습니까.' },
+  ],
+  choices: [
+    {
+      label: '끝까지 듣는다',
+      effectLines: ['체력 +8 · 콤보 게이지 +3'],
+      effect: { kind: 'resource', health: 8, candle: 3 },
+      themeClass: 'candle-blue',
+      afterDialogue: [
+        { speaker: 'npc', text: '. . .끝났습니다.' },
+        { speaker: 'npc', text: '들어 줄 사람이 있으면 곡이 됩니다. 없으면 그냥 소리지요.' },
+      ],
+    },
+    {
+      label: '활을 거둔다',
+      effectLines: ['공격력 +1 · 방패 +4'],
+      // 연주를 끊어 주는 자비. 남은 온기가 곧장 무기와 방패로 돌아온다.
+      effect: { kind: 'resource', shield: 4, damage: 1 },
+      afterDialogue: [
+        { speaker: 'npc', text: '. . .아.' },
+        { speaker: 'npc', text: '이렇게 조용한 건. . . 처음이군요.' },
+      ],
+    },
+    {
+      label: '악기를 받아 든다',
+      effectLines: ['랜덤 손패 +3'],
+      effect: { kind: 'resource', hand: 3 },
+      afterDialogue: [
+        { speaker: 'npc', text: '줄이 아직 살아 있습니다.' },
+        { speaker: 'npc', text: '당신 손에서는 다른 소리가 나겠지요.' },
+      ],
+    },
+  ],
+}
+
+/**
+ * event_006 — "제 몫의 심지".
+ * 말 없는 제단 하나. 축은 **자기연소**다 — 스스로를 태워 어둠을 이기는 코어 정서를
+ * 가장 벌거벗은 형태로 낸다. 내주는 것이 클수록 돌아오는 것도 크다.
+ */
+const EVENT_006: EventDefinition = {
+  id: 'event_006',
+  illu: 'event_006',
+  title: '제 몫의 심지',
+  dialogue: [
+    { speaker: 'npc', text: '. . .' },
+    { speaker: 'player', text: '아무도 없네. 촛대만 셋.' },
+    { speaker: 'player', text: '. . .심지가 전부 새것이야.' },
+    { speaker: 'npc', text: '태울 것을 가져오면, 태운 만큼 돌려주마.' },
+    { speaker: 'player', text: '누구지.' },
+    { speaker: 'npc', text: '고르기나 해라. 값은 네가 정하는 것이 아니다.' },
+  ],
+  choices: [
+    {
+      label: '살을 올린다',
+      effectLines: ['최대체력 -6 · 공격력 +2'],
+      effect: { kind: 'resource', maxHealth: -6, damage: 2 },
+      themeClass: 'candle-red',
+      afterDialogue: [
+        { speaker: 'npc', text: '. . .잘 탄다.' },
+      ],
+    },
+    {
+      label: '빛을 올린다',
+      effectLines: ['불빛 -200 · 최대체력 +10'],
+      effect: { kind: 'resource', light: -200, health: 10 },
+      themeClass: 'candle-blue',
+      afterDialogue: [
+        { speaker: 'npc', text: '금은 재가 되어도 금이지.' },
+        { speaker: 'npc', text: '살은 재가 되면 재다. 알고 고른 것이냐.' },
+      ],
+    },
+    {
+      label: '아무것도 올리지 않는다',
+      effectLines: ['빛 게이지 +2'],
+      // 빈손으로 물러나는 길도 남긴다 — 자원이 바닥난 판에서 이 문이 벌점이 되면 안 된다.
+      effect: { kind: 'resource', ember: 2 },
+      afterDialogue: [
+        { speaker: 'npc', text: '. . .' },
+        { speaker: 'npc', text: '언젠가 올 것이다. 가진 것이 더 적을 때.' },
+      ],
+    },
+  ],
+}
+
 /** 전체 이벤트 테이블. 새 이벤트는 여기에 추가한다. */
 export const EVENT_DEFINITIONS: Record<EventId, EventDefinition> = {
   event_001: EVENT_001,
   event_002: EVENT_002,
   event_003: EVENT_003,
+  event_004: EVENT_004,
+  event_005: EVENT_005,
+  event_006: EVENT_006,
 }
 
 /** 등록된 이벤트 id 목록(랜덤 선택/순회용). */

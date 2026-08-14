@@ -257,7 +257,9 @@ export class EventFlowManager {
     const choice = def.choices?.[index]
     if (!choice) return []
     const effect = choice.effect
-    if (effect.kind === 'stat') {
+    if (effect.kind === 'resource') {
+      // 지정된 항목만 건드리고, 건드린 항목마다 블라스트 타깃을 남긴다 —
+      // 타깃 이름은 playEventGainBlast의 테마 표 키와 같아야 한다.
       const targets: string[] = []
       if (effect.maxHealth) {
         if (effect.maxHealth < 0) character.spendMaxHealth(-effect.maxHealth)
@@ -268,17 +270,54 @@ export class EventFlowManager {
         character.applyDamageBoost(effect.damage)
         targets.push('attack')
       }
+      if (effect.light) {
+        // 불빛은 index가 소유하는 값이라 브리지로 올린다(0 아래로는 내려가지 않는다).
+        this.res.score = Math.max(0, this.res.score + effect.light)
+        this.res.scorePulseKey++
+        targets.push('score')
+      }
+      if (effect.health) {
+        if (effect.health > 0) character.heal(effect.health)
+        else character.takeDirectDamage(-effect.health)
+        if (!targets.includes('health')) targets.push('health')
+      }
+      if (effect.shield) {
+        character.addShield(effect.shield)
+        targets.push('shield')
+      }
+      if (effect.candle) {
+        character.gainCandle(effect.candle)
+        targets.push('gauge')
+      }
+      if (effect.ember) {
+        character.gainEmber(effect.ember)
+        targets.push('ember')
+      }
+      if (effect.hand) {
+        let added = 0
+        for (const drop of DropSystem.generateDrops(effect.hand)) {
+          // enqueueDrop = 획득 공통 정리 — 이벤트 보상도 3장째면 즉시 트리플로 합성한다.
+          if (HandSystem.enqueueDrop(character, drop)) added++
+        }
+        if (added > 0) targets.push('hand')
+      }
       this.deps.recordNotice(`이벤트: ${choice.label} 선택`, 'info')
       return targets
     }
-    if (effect.kind === 'randomHand') {
-      let added = 0
-      for (const drop of DropSystem.generateDrops(effect.count)) {
-        // enqueueDrop = 획득 공통 정리 — 이벤트 보상도 3장째면 즉시 트리플로 합성한다.
-        if (HandSystem.enqueueDrop(character, drop)) added++
+    if (effect.kind === 'relic') {
+      // 대가 손패를 먼저 걷는다 — 유물을 못 받는 경우(풀 소진)에도 대가만 치르는 일이
+      // 없도록, 지급에 실패하면 걷지 않는다.
+      const granted = this.grantRandomRelicReward()
+      if (!granted) {
+        this.deps.recordNotice(`이벤트: ${choice.label} — 더 받을 유물이 없다`, 'info')
+        return []
       }
-      this.deps.recordNotice(`이벤트: ${choice.label} — 랜덤 손패 +${added}`, 'info')
-      return ['hand']
+      for (let i = 0; i < (effect.consumeHandCount ?? 0); i++) {
+        if (character.hand.length === 0) break
+        character.removeHandCardAt(0)
+      }
+      this.deps.recordNotice(`이벤트: ${choice.label} — 유물 획득`, 'info')
+      return ['relic']
     }
     // combat: 손패 불씨를 소모하고 레시피를 해금한다.
     const idx = character.hand.findIndex((h) => h.defId === effect.consumeHand)
