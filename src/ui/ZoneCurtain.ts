@@ -44,10 +44,10 @@ const CURTAIN_CSS = `
      아래 보드가 비쳐야 '내려온 천'으로 읽힌다. 뒤를 흐려 그 반투명을 거들어 준다. */
   background: linear-gradient(
     to bottom,
-    rgba(4, 2, 8, 0.88) 0%,
-    rgba(4, 2, 8, 0.84) 45%,
-    rgba(4, 2, 8, 0.60) 68%,
-    rgba(4, 2, 8, 0.24) 85%,
+    rgba(4, 2, 8, 0.70) 0%,
+    rgba(4, 2, 8, 0.66) 45%,
+    rgba(4, 2, 8, 0.46) 68%,
+    rgba(4, 2, 8, 0.18) 85%,
     transparent 100%
   );
   backdrop-filter: blur(2.5px) saturate(0.9);
@@ -70,6 +70,20 @@ const CURTAIN_CSS = `
   background-size: 160px 160px;
   -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 45%, rgba(0,0,0,0.62) 68%, rgba(0,0,0,0.24) 85%, transparent 100%);
   mask-image: linear-gradient(to bottom, #000 0%, #000 45%, rgba(0,0,0,0.62) 68%, rgba(0,0,0,0.24) 85%, transparent 100%);
+}
+/* 제목 뒤 국소 암막 — 커튼 자체는 옅어도 글자는 선명해야 한다. 커튼 전체를 더 어둡게
+   하는 대신 **글자가 앉는 자리만** 눌러, 보드는 계속 비치면서 제목만 또렷하게 남는다. */
+.zone-curtain-inner::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, 66vw);
+  height: 190%;
+  z-index: -1;
+  filter: blur(6px);
+  background: radial-gradient(ellipse at center, rgba(3, 2, 7, 0.82) 0%, rgba(3, 2, 7, 0.52) 46%, rgba(3, 2, 7, 0) 74%);
 }
 .zone-curtain-inner {
   position: absolute;
@@ -103,8 +117,9 @@ const CURTAIN_CSS = `
   color: rgba(248, 222, 124, 0.97);
   letter-spacing: 0.28em;
   text-shadow:
-    0 2px 12px rgba(210, 168, 55, 0.50),
-    0 0 30px rgba(210, 168, 55, 0.18);
+    0 2px 5px rgba(0, 0, 0, 0.92),
+    0 2px 14px rgba(210, 168, 55, 0.55),
+    0 0 30px rgba(210, 168, 55, 0.20);
   white-space: nowrap;
   user-select: none;
 }

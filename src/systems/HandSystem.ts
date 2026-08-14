@@ -345,14 +345,17 @@ export class HandSystem {
       selfDamage: HandSystem.selfDamageFor(card.defId, card.merged === true),
       lightGained: card.defId === 'greed-coin' ? HandSystem.GREED_COIN_LIGHT_BASE : 0,
       // 레바테인/족쇄: 시뮬레이션 페이즈 수를 index.ts에 전달해 적 행동을 먼저 실행하게 한다.
-      simulatedBattlePhases: card.defId === 'levatein' ? (card.merged ? 1 : 2)
+      // 레바테인의 대가는 '적이 먼저 움직인다'는 것이다. 단일 2턴은 그 대가가 너무 커
+      // 잘 안 쓰였다 — 1턴으로 낮추고, 트리플은 아예 대가 없이(0턴) 터지게 해 세 장을
+      // 모을 이유를 만든다. 0/undefined면 index가 적 행동 시뮬을 건너뛴다.
+      simulatedBattlePhases: card.defId === 'levatein' ? (card.merged ? 0 : 1)
         : card.defId === 'shackles' ? 1
         : undefined,
       // 레바테인 피해: floor(배율 × 최대체력) + 기본값. Max 대신 addend 방식.
       levateainDamage: card.defId === 'levatein'
         ? (card.merged
-          ? Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.45) + 15
-          : Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.30) + 10)
+          ? Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.60) + 20
+          : Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.35) + 12)
         : undefined,
       // 빗자루 단일: 제거된 거미줄의 불빛을 주지 않는다(트리플만 불빛 획득).
       suppressScoreForRemovedCards: card.defId === 'sweep' && !card.merged,
@@ -884,8 +887,8 @@ export class HandSystem {
         // 자해 1은 use()의 selfDamage로 처리. 처치 시 방패 획득은 sacrificeCandleShieldOnKill.
         return HandSystem.damageTargetEnemy(gs, target, Math.floor(1 * c.damage) + 2 + bonus)
       case 'levatein':
-        // 적 행동 시뮬레이션(2회)과 ♥피해는 levateainDamage로 index.ts에 위임한다.
-        return '레바테인: 즉시 2턴 흐름 후 (0.3♥+10)피해'
+        // 적 행동 시뮬레이션(1회)과 ♥피해는 levateainDamage로 index.ts에 위임한다.
+        return '레바테인: 즉시 1턴 흐름 후 (0.35♥+12)피해'
       case 'firework':
         return HandSystem.distributeDamageAmongEnemies(gs, Math.floor(c.damage) + 2 + bonus)
       case 'book-of-flames':
@@ -1051,7 +1054,7 @@ export class HandSystem {
         return HandSystem.damageTargetEnemy(gs, target, Math.floor(3 * c.damage) + 6 + bonus)
       case 'levatein':
         // 적 행동 시뮬레이션(1회)과 ♥피해는 levateainDamage로 index.ts에 위임한다.
-        return '레바테인: 즉시 1턴 흐름 후 (0.45♥+15)피해'
+        return '레바테인: 대가 없이 즉시 (0.6♥+20)피해'
       case 'firework':
         return HandSystem.distributeDamageAmongEnemies(gs, Math.floor(3 * c.damage) + 10 + bonus)
       case 'book-of-flames':

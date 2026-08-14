@@ -232,8 +232,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     name: '레바테인',
     synergyTags: ['blade', 'flame'],
     category: 'attack',
-    description: '즉시 2턴 흐름<br>필드 선택 적 1장 적HP30%+10피해',
-    tripleDescription: '즉시 1턴 흐름<br>필드 선택 적 1장 적HP45%+15피해',
+    description: '즉시 1턴 흐름<br>필드 선택 적 1장 적HP35%+12피해',
+    tripleDescription: '대가 없이 즉시<br>필드 선택 적 1장 적HP60%+20피해',
     targeting: {
       base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
