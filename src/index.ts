@@ -357,6 +357,14 @@ type ChainTimelineEvent =
  *  직접 클릭 경로는 소멸 연출이 **시작되는** 박자에 미리 울리고, 모델 제거는 그 뒤라
  *  같은 함정에 소리가 두 번 나기 때문이다. */
 let suppressTrapClearSfx = false
+/**
+ * 수명이 다해 **저절로 사라지는** 함정(온보딩 덤불 등)을 걷는 구간 표시.
+ *
+ * `onTrapResolved`는 "플레이어가 함정을 처리했다"는 신호다 — 가만히 기다려서 사라진 것은
+ * 처리가 아니다. 이 구간에서는 신호를 아예 내지 않는다(소리도, 함정 처리 반응 유물도).
+ * 소리만 막으면 '함정 수집' 유물이 기다리기만 해도 보상하는 문제가 남는다.
+ */
+let fieldExpiryInProgress = false
 let chainTimeline: ChainTimelineEvent[] = []
 let chainEventCounter = 0
 function nextChainUid(): string {
@@ -853,7 +861,9 @@ async function playResourceTrail(
     sfx.playChestOpen(
       resource === 'coin'
         ? { semitones: 5, gain: 0.9, ring: 0.45 }
-        : { semitones: 2, gain: 0.34, ring: 0.08, throttleMs: 260 }
+        // throttle 창은 트레일 비행 시간(~330ms)보다 넉넉히 길어야 한다 — 짧으면 상자를 여는
+        // 또렷한 한 방과 그 트레일의 잔짤랑임이 0.5초 간격으로 같은 소리를 두 번 낸 것처럼 들린다.
+        : { semitones: 2, gain: 0.34, ring: 0.08, throttleMs: 700 }
     )
   }
 }
@@ -1811,7 +1821,13 @@ async function tickOnboardingFieldsBeforeDrop(): Promise<void> {
   }
   await wait(300)
   // 합체 카드는 tickFieldExpiries의 seen으로 이미 1회 취급됨 — 각 카드를 한 번씩 제거한다.
-  for (const { card } of expired) gameState.removeCardFromRow(card, 0)
+  // 만료 제거는 '함정 처리'가 아니므로 그 신호를 내지 않는다(위 fieldExpiryInProgress 주석).
+  fieldExpiryInProgress = true
+  try {
+    for (const { card } of expired) gameState.removeCardFromRow(card, 0)
+  } finally {
+    fieldExpiryInProgress = false
+  }
   render()
   // 리필은 여기서 하지 않는다 — 호출부의 레일 하강이 빈칸을 메운다.
 }
@@ -1911,7 +1927,8 @@ function resetForNewRun(): void {
   // 카드 제거 훅: 굳은 카드(밀랍 조각) / 함정 처리(함정 수집) 유물을 발동한다.
   gameState.onCardRemoved = (card) => {
     if (card.isFrozen() && gameState.character.hasRelic('wax-fragment')) void relicEffects.applyWaxFragmentOnFrozenClear()
-    if (card.type === CardType.TRAP) gameState.onTrapResolved?.(card.trapKind)
+    // 수명이 다해 저절로 사라진 함정은 '처리'가 아니다 — 신호 자체를 내지 않는다.
+    if (card.type === CardType.TRAP && !fieldExpiryInProgress) gameState.onTrapResolved?.(card.trapKind)
   }
   // 작은 태양: 빛 게이지가 한계를 넘겨 잘린 초과분만큼 불씨 손패를 지급한다.
   gameState.character.onEmberOverflow = (overflow) => {
@@ -4031,6 +4048,10 @@ async function handleCardAction(e: Event): Promise<void> {
       sfx.playTrapClear(card.trapKind)
       suppressTrapClearSfx = true
     }
+    // ★ 상자를 여는 소리는 **여는 순간**에 낸다. 뒤이어 트레일 착탄에서 울리는 것은 자원이
+    //   들어오는 잔짤랑임(볼륨 0.34)이라 상자를 열었다는 사건 자체를 대신하지 못한다 —
+    //   또렷한 한 방이 먼저 있어야 "열었다 → 들어온다"로 읽힌다.
+    if (card.type === CardType.TREASURE) sfx.playChestOpen({ gain: 1, ring: 0.35 })
   }
   if (rewardFeedbacks.length > 0)
     sameBeatAnimations.push(Promise.all(rewardFeedbacks).then(() => undefined))

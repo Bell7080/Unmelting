@@ -148,11 +148,11 @@ export class SfxManager {
     // 불빛은 한 턴에도 여러 번 들어와 소리가 겹치면 금세 거슬린다 — 짧은 간격 안의
     // 연속 요청은 한 번으로 묶는다(상자를 직접 열 때는 throttle 없이 그대로 울린다).
     const throttle = opts.throttleMs ?? 0
-    if (throttle > 0) {
-      const now = Date.now()
-      if (now - this.lastChestAt < throttle) return
-      this.lastChestAt = now
-    }
+    const now = Date.now()
+    if (throttle > 0 && now - this.lastChestAt < throttle) return
+    // throttle을 안 건 재생(상자를 직접 여는 또렷한 한 방)도 시각을 남긴다 — 그래야 바로 뒤에
+    // 따라오는 자원 트레일의 잔짤랑임이 묶여 사라진다. 남기지 않으면 상자 하나에 소리가 두 번 난다.
+    this.lastChestAt = now
     this.playVariant('chest', { semitones: opts.semitones ?? 0, gain: opts.gain ?? 1, ring: opts.ring ?? 0.25 })
   }
 
