@@ -26,6 +26,9 @@ export const ZONE_LIST: readonly ZoneInfo[] = [
  */
 export const SPROUT_ZONE: ZoneInfo = { bgUrl: SpriteUrls.sproutZoneBg, title: '새싹 온실' }
 
+/** 제목이 화면에 머무는 시간. 커튼 강하·상승(약 1.1초)과 별개다. */
+export const ZONE_CURTAIN_HOLD_MS = 3400
+
 const CURTAIN_CSS = `
 #zone-curtain {
   position: fixed;
@@ -36,18 +39,37 @@ const CURTAIN_CSS = `
   height: 200px;
   z-index: 50;
   pointer-events: none;
-  /* 하단으로 갈수록 투명해지는 그라데이션 커튼 */
+  /* 하단으로 갈수록 투명해지는 그라데이션 커튼.
+     색은 더 어둡게(먹빛), 불투명도는 더 낮게 잡는다 — 판을 완전히 덮으면 '가림막'이지만
+     아래 보드가 비쳐야 '내려온 천'으로 읽힌다. 뒤를 흐려 그 반투명을 거들어 준다. */
   background: linear-gradient(
     to bottom,
-    rgba(8, 5, 14, 0.97) 0%,
-    rgba(8, 5, 14, 0.95) 45%,
-    rgba(8, 5, 14, 0.72) 68%,
-    rgba(8, 5, 14, 0.30) 85%,
+    rgba(4, 2, 8, 0.88) 0%,
+    rgba(4, 2, 8, 0.84) 45%,
+    rgba(4, 2, 8, 0.60) 68%,
+    rgba(4, 2, 8, 0.24) 85%,
     transparent 100%
   );
+  backdrop-filter: blur(2.5px) saturate(0.9);
   will-change: transform;
   /* 초기 위치: 화면 위로 완전히 숨김 */
   transform: translateY(-100%);
+}
+/* 낡은 종이 결 — 커튼이 매끈한 색판이 아니라 천/종이로 읽히게 하는 미세 그레인.
+   전용 이미지 에셋 없이 SVG 프랙탈 노이즈를 데이터 URI로 깐다(자기완결·네트워크 없음).
+   같은 세로 그라데이션으로 마스크해 하단에서 질감도 함께 사라지게 한다 —
+   안 하면 커튼은 흐려지는데 결만 사각형으로 남아 경계가 드러난다. */
+#zone-curtain::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.22;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 45%, rgba(0,0,0,0.62) 68%, rgba(0,0,0,0.24) 85%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 45%, rgba(0,0,0,0.62) 68%, rgba(0,0,0,0.24) 85%, transparent 100%);
 }
 .zone-curtain-inner {
   position: absolute;
@@ -141,7 +163,8 @@ export class ZoneCurtain {
     ).finished
 
     // ── 2. 제목 노출 홀드 ─────────────────────────────────────────────────
-    await new Promise<void>((r) => setTimeout(r, 1400))
+    // 구역 이름은 한 런에 네 번뿐인 드문 알림이라 충분히 읽히도록 오래 머문다.
+    await new Promise<void>((r) => setTimeout(r, ZONE_CURTAIN_HOLD_MS))
 
     // ── 3. 슬라이드 업 (스르륵 올라감) ───────────────────────────────────
     await this.el.animate(
