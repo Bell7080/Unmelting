@@ -96,6 +96,13 @@ function storage(): WaxFigureStorage | undefined {
 export const WAX_FIGURE_BASE_CAPACITY = 6
 /** 처치 시 봉인 성공 확률. */
 export const WAX_FIGURE_CAPTURE_CHANCE = 0.01
+/**
+ * 이로치 개체의 스탯 배수. 이로치는 합체가 막혀 항상 1칸으로 남으므로(`Card.canMergeWith`),
+ * 그 자리를 값지게 만들려면 한 마리가 그만큼 세야 한다. 합체 배수와 곱해지지 않으니
+ * 난이도가 튀지도 않는다.
+ */
+export const WAX_FIGURE_SHINY_STAT_SCALE = 2
+
 /** 이로치(변종) 확률 — 포획 확률 게이트와 무관하게 **먼저** 굴리고, 걸리면 확정 포획된다. */
 export const WAX_FIGURE_SHINY_CHANCE = 0.0001
 /** 같은 종+색+성급을 몇 개 모아야 다음 성급으로 합성할 수 있는지. */

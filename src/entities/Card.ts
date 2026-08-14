@@ -488,6 +488,9 @@ export class Card {
     }
     // Blooming flowers and seeds are deliberate single-cell opportunities.
     if (this.type === CardType.FLOWER) return false
+    // 이로치는 **한 마리로 남는다**. 합쳐지면 색과 스탯 두 배가 여럿분과 뭉개져 무엇이 특별한
+    // 개체였는지 화면에서 사라지고, 합체 스탯 배수까지 겹쳐 난이도가 튄다.
+    if (this.waxFigureShiny || other.waxFigureShiny) return false
     // 이벤트 문은 항상 단일 칸으로 등장한다(병합 금지).
     if (this.type === CardType.EVENT) return false
     // Special enemies: mimic↔mimic and monsterFlower↔monsterFlower each form

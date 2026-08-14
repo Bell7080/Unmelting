@@ -18,7 +18,7 @@ import {
   type TreasureKind,
 } from '@entities/Card'
 import { EmberSystem, EmberTier, SpawnWeights } from './EmberSystem'
-import { findWaxFigureSpecies, WAX_FIGURE_SHINY_CHANCE } from '@core/WaxFigureCollection'
+import { findWaxFigureSpecies, WAX_FIGURE_SHINY_CHANCE, WAX_FIGURE_SHINY_STAT_SCALE } from '@core/WaxFigureCollection'
 
 export interface CardDefinition {
   /** Korean display name shown on the card face. */
@@ -804,13 +804,17 @@ export class CardSpawner {
     // 밀랍상 등록 종이면 스폰 순간 이로치 여부를 미리 굴려 필드에서부터 색이 다르게 보이게 한다.
     const waxFigureShiny =
       findWaxFigureSpecies(definition.name) !== undefined && Math.random() < WAX_FIGURE_SHINY_CHANCE
+    // 이로치는 합체가 막혀 항상 1칸으로 남는다 — 그 대신 스탯을 두 배로 얹어 "한 마리인데
+    // 만만치 않다"를 만든다. 시련/유물 보정까지 포함한 **최종 수치**에 곱해, 층이 올라가도
+    // 같은 비율로 세진다.
+    const shinyScale = waxFigureShiny ? WAX_FIGURE_SHINY_STAT_SCALE : 1
     const card = new Card(
       `enemy-${this.spawnSerial}-${Math.random()}`,
       CardType.ENEMY,
       definition.name,
       definition.description,
-      (definition.healthOrDamage ?? 1) + this.trialEnemyHpBonus + this.relicEnemyHpBonus,
-      (definition.attack ?? 1) + this.trialEnemyAtkBonus,
+      ((definition.healthOrDamage ?? 1) + this.trialEnemyHpBonus + this.relicEnemyHpBonus) * shinyScale,
+      ((definition.attack ?? 1) + this.trialEnemyAtkBonus) * shinyScale,
       {
         enemySpriteId: definition.enemySpriteId,
         enemyPower: definition.enemyPower,

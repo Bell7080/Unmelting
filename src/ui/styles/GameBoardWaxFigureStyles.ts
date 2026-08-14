@@ -177,9 +177,21 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   filter: saturate(1.05) contrast(1.02);
 }
 .wax-info-portrait.is-shiny {
+  position: relative;
+  isolation: isolate;
   border-color: rgba(120, 235, 175, 0.5);
-  filter: saturate(1.2) hue-rotate(-14deg) contrast(1.02);
+  /* 큰 초상도 같은 색조 규칙을 타되 밝기 보정은 뺀다 — 전시관 판이 필드보다 밝아
+     필드와 같은 값을 주면 밀랍이 아니라 네온으로 튄다. */
+  filter: saturate(1.35) contrast(1.04);
   box-shadow: inset 0 1px 0 rgba(190, 255, 220, 0.18), 0 10px 22px rgba(0, 0, 0, 0.5), 0 0 20px rgba(123, 240, 174, 0.22);
+}
+.wax-info-portrait.is-shiny::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(74, 226, 158, 0.72);
+  mix-blend-mode: color;
 }
 .wax-info-body { display: flex; flex-direction: column; gap: 8px; }
 .wax-info-name { margin: 0; font-size: 15px; font-weight: 800; color: #fff5dc; line-height: 1.3; }
@@ -266,7 +278,17 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   background-position: center 32%;
   filter: saturate(1.05) contrast(1.02);
 }
-.wax-exhibit-card.is-shiny .wax-exhibit-art { filter: saturate(1.2) hue-rotate(-14deg) contrast(1.02); }
+/* 이로치 썸네일 — 필드 카드와 **같은 방식**으로 색조를 간다(색만 옥빛, 명암은 원본).
+   여기만 hue-rotate를 쓰면 전시관과 필드에서 같은 개체가 다른 색으로 보인다. */
+.wax-exhibit-card.is-shiny .wax-exhibit-art { filter: saturate(1.35) contrast(1.04); }
+.wax-exhibit-card.is-shiny { isolation: isolate; }
+.wax-exhibit-card.is-shiny .wax-exhibit-art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(74, 226, 158, 0.72);
+  mix-blend-mode: color;
+}
 .wax-exhibit-star {
   position: absolute;
   top: 5px;
