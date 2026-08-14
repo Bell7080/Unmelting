@@ -3460,10 +3460,17 @@ export class GameBoardRenderer {
     ])
   }
 
-  /** 급소(클러치) 전용: 대상 카드 위에 레바테인 스타일 대형 황금 피해 수치를 띄운다. */
+  /** 급소(클러치) 전용: 대상 카드 위에 레바테인 스타일 대형 황금 피해 수치를 띄운다.
+   *  ★ 수치 하나에는 롤링 하나가 붙는다 — 급소는 일반 타격에 **덧붙는 두 번째 피해**라,
+   *  체력이 굴러 내려가지 않으면 "-N은 떴는데 체력은 그대로"로 읽힌다.
+   *  일반 타격과 같은 창구(rollEnemyHealthNumber)를 써서 굴리는 모양도 같게 맞춘다. */
   animateCritDamageOnCard(cardId: string, amount: number): Promise<void> {
     const el = this.findCardElement(cardId)
     if (!el || amount <= 0) return Promise.resolve()
+    // 기준은 모델의 현재 체력이다(호출 시점에 이미 깎여 있다) — 카드에 적힌 글자를 읽으면
+    // 아직 다시 그려지지 않은 '맞기 전' 값이라 한 칸 높은 수에서 시작한다.
+    // 급소로 죽었으면 모델에서 사라지므로 0으로 굴러 내려간다.
+    this.rollEnemyHealthNumber(el, amount, this.findCardById(cardId)?.getHealth() ?? 0)
     const rect = el.getBoundingClientRect()
     return this.animateBigDamageNumberAt(rect.left + rect.width / 2, rect.top + rect.height / 2, amount)
   }

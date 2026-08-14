@@ -2793,7 +2793,19 @@ async function applyHandSingle(
   // 효과가 손패를 늘렸으면(열쇠로 연 보물칸 등) 필드 드롭과 같은 카드 토큰을 띄운다 —
   // 없으면 손패가 소리 없이 늘어 어디서 왔는지가 화면에서 사라진다.
   if (result.gainedHandCards && result.gainedHandCards > 0) {
-    void playResourceTrail({ kind: 'chain' }, 'hand', result.gainedHandCards)
+    // ★ 손패는 **얻은 칸 자리**에서 나와야 한다. 열쇠·열쇠공이 연 보물칸이 그 자리다 —
+    //   체인 위치(화면 상단 중앙)에서 나오면 어느 칸에서 얻었는지가 사라진다.
+    //   소멸 연출(animateCardConsumeByIds)은 아래에서 도므로 여기선 DOM에 그 칸이 아직 남아 있다.
+    //   판에 근거가 없는 생성형 손패(의식 양초·칼집)는 잡을 칸이 없으니 체인 자리로 남긴다.
+    const openedTreasureRect: DOMRect | null = result.removedFieldCards
+      .filter((r) => r.type === CardType.TREASURE)
+      .map((r) => boardRenderer.findCardElement(r.cardId)?.getBoundingClientRect() ?? null)
+      .find((rect): rect is DOMRect => rect !== null) ?? null
+    void playResourceTrail(
+      openedTreasureRect ? { kind: 'rect', rect: openedTreasureRect } : { kind: 'chain' },
+      'hand',
+      result.gainedHandCards
+    )
   }
   await Promise.all([
     boardRenderer.animateDamageNumbersById(singleDamageLosses),
