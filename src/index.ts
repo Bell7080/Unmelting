@@ -3457,8 +3457,13 @@ async function sweepFrontStarlights(): Promise<void> {
     // 고정한다. 100턴 도달 = 최종 보스 진입 트리거이므로 초과 진행을 만들지 않는다.
     if (gameState.getCurrentTurn() < RUN_TARGET_TURNS) {
       if (shot.rect) await boardRenderer.fireStarlightToTurn(shot.rect)
+      // ★ 별빛 수집은 잿빛 굴레(90~100F)의 **유일한 턴 진행 수단**이다. 그래서 굳음도
+      //   여기서 줄어드는데(nextTurn → tickFieldStatuses), 일반 턴 경로와 달리 해동
+      //   연출이 빠져 있어 굳은 카드가 소리 없이 풀렸다 — 같은 스냅샷/연출을 태운다.
+      const beforeStarlightFreeze = snapshotFieldFreezeState()
       gameState.nextTurn()
       render()
+      await boardRenderer.animateWaxThawByIds(diffThawedCards(beforeStarlightFreeze))
       await wait(140)
     } else {
       if (shot.rect) await boardRenderer.dissolveStarlight(shot.rect)
