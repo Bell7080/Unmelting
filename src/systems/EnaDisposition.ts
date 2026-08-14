@@ -337,7 +337,40 @@ export function dispositionFromJSON(
 //   스냅샷이 앞선다(절대값이 예전 21.32/19.20보다 낮은 것이 함정 피해가 실제로 들어간
 //   증거다). 위에 적은 재피팅 블로커(`predictBaseChance`가 탐색 하한으로 밀린다)가
 //   그대로라 후보를 뽑아도 채택할 수 없다 — 그 문제를 먼저 고친 뒤 돌린다.
-const SIM_FITTED = {
+//
+// ☒ **재피팅을 돌렸고 또 채택하지 않았다(2026-08, `npm run ena:fit` 신설 후 첫 실행).**
+//   이번엔 실행 수단이 생겨서 **말이 아니라 숫자로** 확인했다. 세 가지를 알게 됐다.
+//   - 위에 적은 블로커(`predictBaseChance`가 하한으로 밀린다)는 **풀렸다**. 밀랍상 경감·
+//     보스 칸 부가물·관측 380차 확장이 들어가며 시뮬이 예지의 값을 실제로 돌려주게 됐고,
+//     제약 없이 돌리면 후보가 예지를 0.738까지 **올린다**.
+//   - 그런데 그 후보는 **경험 탭 성좌 대역을 부순다**(각성이 상한 0.4까지 밀려 불굴 축이
+//     혼자 튀고, 신규 축 순서가 뒤집힌다). 생존 점수는 +1.50인데 화면이 무너지는 후보였다.
+//     그래서 피터에 배송 가능성 제약을 넣었다(`isShippable` → `EXPERIENCE_CALIBRATION`).
+//   - 제약을 걸고 다시 돌리면 후보가 **이 스냅샷을 못 이긴다**: held-out 300시드에서
+//     탐색 시드 1·7·13 전부 −0.86·−0.88·−0.74. 즉 지금 값이 "대역 안에서 도달 가능한
+//     최선" 근처에 있다. 이전의 우세는 대역 밖에서만 얻어지는 것이었다.
+//   다음 재피팅에서 볼 것: 경계에 눌러붙은 노브(clutchHpThreshold·clutchStrength·
+//   willGainPerDamage 하한, predictCooldown 상한)는 CLI가 매번 경고로 찍는다 — 값이
+//   아니라 목적함수(helpCost 항 구성)를 의심할 자리다.
+/** 시뮬 피팅이 내놓는 스냅샷의 모양. 재피팅 CLI가 후보를 같은 모양으로 찍어 낸다. */
+export interface EnaSimFittedSnapshot {
+  clutchHpThreshold: number
+  clutchHealVsShield: number
+  clutchHealRatio: number
+  clutchShieldRatio: number
+  clutchStrength: number
+  willGainPerDamage: number
+  willGainFlatBonus: number
+  awakenChance: number
+  predictBaseChance: number
+  predictCooldown: number
+  minorClutchCrit: number
+  minorClutchDodge: number
+  minorClutchTreasure: number
+  supportRoleWeights: SupportRoleWeights
+}
+
+const SIM_FITTED: EnaSimFittedSnapshot = {
   clutchHpThreshold: 0.2,
   clutchHealVsShield: 0.114,
   clutchHealRatio: 0.443,
@@ -352,36 +385,87 @@ const SIM_FITTED = {
   minorClutchDodge: 0.496,
   minorClutchTreasure: 0.02,
   supportRoleWeights: { cleanup: 0.66, attack: 0.65, defense: 1.49, resource: 1.17, recovery: 1.65 },
-} as const
+}
+
+/** 현재 동봉된 스냅샷 — 재피팅 CLI가 '지금 배송 중인 값'과 후보를 비교할 때 읽는다. */
+export const CURRENT_SIM_FITTED: Readonly<EnaSimFittedSnapshot> = SIM_FITTED
 
 const SIM_TO_REAL_BLEND = 0.5
 
 /** 학습된 기본 토대 성향. 기본값→시뮬 산출값으로 0.5 블렌드(시뮬 미반영 노브는 기본 유지) 후 클램프. */
-export const BASE_DISPOSITION: EnaDisposition = buildBaseDisposition()
+export const BASE_DISPOSITION: EnaDisposition = blendSimFitted(SIM_FITTED)
 
-function buildBaseDisposition(): EnaDisposition {
+/**
+ * 시뮬 스냅샷을 실제 배송 성향으로 옮기는 **단일 변환**. 재피팅 CLI도 이 함수를 불러
+ * 후보를 평가한다 — 비교를 다른 식으로 하면 채택 판단이 배송되는 값과 어긋난다.
+ */
+export function blendSimFitted(snapshot: EnaSimFittedSnapshot): EnaDisposition {
   const d = defaultDisposition()
   const a = SIM_TO_REAL_BLEND
   const lerp = (from: number, to: number) => from + (to - from) * a
-  d.clutchHpThreshold = lerp(d.clutchHpThreshold, SIM_FITTED.clutchHpThreshold)
-  d.clutchHealVsShield = lerp(d.clutchHealVsShield, SIM_FITTED.clutchHealVsShield)
-  d.clutchHealRatio = lerp(d.clutchHealRatio, SIM_FITTED.clutchHealRatio)
-  d.clutchShieldRatio = lerp(d.clutchShieldRatio, SIM_FITTED.clutchShieldRatio)
-  d.clutchStrength = lerp(d.clutchStrength, SIM_FITTED.clutchStrength)
-  d.willGainPerDamage = lerp(d.willGainPerDamage, SIM_FITTED.willGainPerDamage)
-  d.willGainFlatBonus = lerp(d.willGainFlatBonus, SIM_FITTED.willGainFlatBonus)
-  d.awakenChance = lerp(d.awakenChance, SIM_FITTED.awakenChance)
-  d.predictBaseChance = lerp(d.predictBaseChance, SIM_FITTED.predictBaseChance)
-  d.predictCooldown = lerp(d.predictCooldown, SIM_FITTED.predictCooldown)
-  d.minorClutchChance.crit = lerp(d.minorClutchChance.crit, SIM_FITTED.minorClutchCrit)
-  d.minorClutchChance.dodge = lerp(d.minorClutchChance.dodge, SIM_FITTED.minorClutchDodge)
-  d.minorClutchChance.treasure = lerp(d.minorClutchChance.treasure, SIM_FITTED.minorClutchTreasure)
+  d.clutchHpThreshold = lerp(d.clutchHpThreshold, snapshot.clutchHpThreshold)
+  d.clutchHealVsShield = lerp(d.clutchHealVsShield, snapshot.clutchHealVsShield)
+  d.clutchHealRatio = lerp(d.clutchHealRatio, snapshot.clutchHealRatio)
+  d.clutchShieldRatio = lerp(d.clutchShieldRatio, snapshot.clutchShieldRatio)
+  d.clutchStrength = lerp(d.clutchStrength, snapshot.clutchStrength)
+  d.willGainPerDamage = lerp(d.willGainPerDamage, snapshot.willGainPerDamage)
+  d.willGainFlatBonus = lerp(d.willGainFlatBonus, snapshot.willGainFlatBonus)
+  d.awakenChance = lerp(d.awakenChance, snapshot.awakenChance)
+  d.predictBaseChance = lerp(d.predictBaseChance, snapshot.predictBaseChance)
+  d.predictCooldown = lerp(d.predictCooldown, snapshot.predictCooldown)
+  d.minorClutchChance.crit = lerp(d.minorClutchChance.crit, snapshot.minorClutchCrit)
+  d.minorClutchChance.dodge = lerp(d.minorClutchChance.dodge, snapshot.minorClutchDodge)
+  d.minorClutchChance.treasure = lerp(d.minorClutchChance.treasure, snapshot.minorClutchTreasure)
   // 지원 역할 가중도 같은 규칙으로 블렌드 — advisor 기대 HP 환산에 곱해진다.
   const w = d.supportRoleWeights!
-  for (const k of Object.keys(SIM_FITTED.supportRoleWeights) as (keyof SupportRoleWeights)[]) {
-    w[k] = lerp(w[k], SIM_FITTED.supportRoleWeights[k])
+  for (const k of Object.keys(snapshot.supportRoleWeights) as (keyof SupportRoleWeights)[]) {
+    w[k] = lerp(w[k], snapshot.supportRoleWeights[k])
   }
   return clampDisposition(d)
+}
+
+/**
+ * 스냅샷을 **블렌드 없이** 성향으로 되돌린다 — 피팅이 도는 원시 공간이다.
+ * 재피팅 warm start(동봉 스냅샷에서 다시 오르기)가 이 값을 출발점으로 쓴다.
+ */
+export function fromSimFittedSnapshot(snapshot: EnaSimFittedSnapshot): EnaDisposition {
+  const d = defaultDisposition()
+  d.clutchHpThreshold = snapshot.clutchHpThreshold
+  d.clutchHealVsShield = snapshot.clutchHealVsShield
+  d.clutchHealRatio = snapshot.clutchHealRatio
+  d.clutchShieldRatio = snapshot.clutchShieldRatio
+  d.clutchStrength = snapshot.clutchStrength
+  d.willGainPerDamage = snapshot.willGainPerDamage
+  d.willGainFlatBonus = snapshot.willGainFlatBonus
+  d.awakenChance = snapshot.awakenChance
+  d.predictBaseChance = snapshot.predictBaseChance
+  d.predictCooldown = snapshot.predictCooldown
+  d.minorClutchChance.crit = snapshot.minorClutchCrit
+  d.minorClutchChance.dodge = snapshot.minorClutchDodge
+  d.minorClutchChance.treasure = snapshot.minorClutchTreasure
+  d.supportRoleWeights = { ...snapshot.supportRoleWeights }
+  return clampDisposition(d)
+}
+
+/** 성향에서 시뮬 스냅샷 모양만 뽑아낸다(피팅 결과 → 붙여 넣을 SIM_FITTED). */
+export function toSimFittedSnapshot(d: EnaDisposition): EnaSimFittedSnapshot {
+  const w = d.supportRoleWeights ?? { cleanup: 1, attack: 1, defense: 1, resource: 1, recovery: 1 }
+  return {
+    clutchHpThreshold: d.clutchHpThreshold,
+    clutchHealVsShield: d.clutchHealVsShield,
+    clutchHealRatio: d.clutchHealRatio,
+    clutchShieldRatio: d.clutchShieldRatio,
+    clutchStrength: d.clutchStrength,
+    willGainPerDamage: d.willGainPerDamage,
+    willGainFlatBonus: d.willGainFlatBonus,
+    awakenChance: d.awakenChance,
+    predictBaseChance: d.predictBaseChance,
+    predictCooldown: d.predictCooldown,
+    minorClutchCrit: d.minorClutchChance.crit,
+    minorClutchDodge: d.minorClutchChance.dodge,
+    minorClutchTreasure: d.minorClutchChance.treasure,
+    supportRoleWeights: { ...w },
+  }
 }
 
 // ── 성장 곡선(초보 동반자 → 베테랑) ──────────────────────────────────────
@@ -397,10 +481,14 @@ const ROOKIE_INTERVENTION_FACTOR = 0.55
 const ROOKIE_PREDICT_CHANCE = 0.18
 
 /** 초보 에나 성향 — 개입 노브만 낮추고(가끔은 발동), 대사 노브는 BASE와 동일. */
-export const ROOKIE_DISPOSITION: EnaDisposition = buildRookieDisposition()
+export const ROOKIE_DISPOSITION: EnaDisposition = buildRookieFrom(BASE_DISPOSITION)
 
-function buildRookieDisposition(): EnaDisposition {
-  const d = cloneDisposition(BASE_DISPOSITION)
+/**
+ * 임의의 토대에서 초보 성향을 만든다. 재피팅 CLI가 **후보의** 초보 모양까지 검사해야 해서
+ * BASE 고정이 아니라 인자를 받는다 — 배송되는 변환과 같은 함수를 써야 판단이 어긋나지 않는다.
+ */
+export function buildRookieFrom(base: EnaDisposition): EnaDisposition {
+  const d = cloneDisposition(base)
   // 소소한 클러치 전종 — BASE의 40%. 초반 커리큘럼을 앞지르지 않는 선에서 '가끔' 터진다.
   for (const k of Object.keys(d.minorClutchChance) as MinorClutchKind[]) {
     d.minorClutchChance[k] = d.minorClutchChance[k] * ROOKIE_INTERVENTION_FACTOR
@@ -420,7 +508,7 @@ function buildRookieDisposition(): EnaDisposition {
   d.clutchHealRatio = 0.24
   d.clutchShieldRatio = 0.18
   d.clutchStrength = 0.75
-  d.willGainPerDamage = BASE_DISPOSITION.willGainPerDamage * 0.85
+  d.willGainPerDamage = base.willGainPerDamage * 0.85
   d.willGainFlatBonus = 1.4
   // 지원 카드 판단 가중은 소극적이되 발동 시 무의미하지 않을 중간값(다른 축과 같은 비율로 상향).
   d.supportRoleWeights = { cleanup: 0.78, attack: 0.78, defense: 0.78, resource: 0.78, recovery: 0.78 }

@@ -1,6 +1,6 @@
 {
   "name": "unmelting",
-  "version": "3.5.4",
+  "version": "3.6.0",
   "description": "A card rain roguelike about an unmelting girl navigating advancing cards",
   "type": "module",
   "private": true,
@@ -15,7 +15,8 @@
     "resources:check": "tsx src/tools/resource-lifecycle-check.ts",
     "verify": "npm run type-check && npm run lint && npm run test && npm run resources:check",
     "balance:boss": "tsx src/tools/boss-balance-report.ts",
-    "ena:pretrain": "tsx src/tools/ena-pretrain-report.ts"
+    "ena:pretrain": "tsx src/tools/ena-pretrain-report.ts",
+    "ena:fit": "tsx src/tools/ena-fit-report.ts"
   },
   "dependencies": {
     "howler": "^2.2.4"

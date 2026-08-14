@@ -14,13 +14,18 @@
 import { EnaTrainingSimulation, EnaRandom, type EnaPolicy } from './EnaTrainingSimulation'
 import { EnaTrainer, policyFromNetwork, type EnaTrainConfig } from './EnaTrainer'
 import {
-  defaultDisposition,
   cloneDisposition,
   clampDisposition,
+  blendSimFitted,
+  buildRookieFrom,
+  toSimFittedSnapshot,
+  fromSimFittedSnapshot,
+  CURRENT_SIM_FITTED,
   SUPPORT_ROLE_WEIGHT_BOUND,
   type EnaDisposition,
   type SupportRoleWeights,
 } from '@systems/EnaDisposition'
+import { experienceCalibrationViolations } from '@ui/ExperienceAxes'
 
 /** 기본 시뮬 플레이어 = 교사 휴리스틱 정책. 피팅은 이 위에 학습된 정책망을 더해 다양화한다. */
 const TEACHER_PLAYER: EnaPolicy = EnaTrainingSimulation.teacherPolicy
@@ -56,6 +61,15 @@ export interface FitConfig {
   seed: number
   /** 시뮬 플레이어 정책 풀. 여러 개면 모두에게 두루 좋은(robust) 성향을 찾는다. 기본=교사. */
   playerPolicies: EnaPolicy[]
+  /**
+   * 언덕 오르기 출발점. 생략하면 **현재 동봉 스냅샷**에서 시작한다.
+   *
+   * 손-튜닝 기본값에서 시작하지 않는 이유가 둘이다. ① 재피팅의 목적은 "지금 배송 중인
+   * 값보다 나은가"이므로 그 값이 출발점이어야 비교가 성립한다. ② 기본값은 경험 탭 성좌
+   * 대역(isShippable) 밖이라, 거기서 출발하면 무작위 섭동이 대역 안으로 들어올 때까지
+   * 후보가 전부 −∞로 탈락해 탐색이 헛돈다.
+   */
+  start?: EnaDisposition
 }
 
 export const DEFAULT_FIT_CONFIG: FitConfig = {
@@ -65,6 +79,7 @@ export const DEFAULT_FIT_CONFIG: FitConfig = {
   stepScale: 0.18,
   seed: 1,
   playerPolicies: [TEACHER_PLAYER],
+  start: fromSimFittedSnapshot(CURRENT_SIM_FITTED),
 }
 
 export interface FitResult {
@@ -106,13 +121,28 @@ export function helpCost(disp: EnaDisposition): number {
   return cost
 }
 
-/** 정규화 목적함수: 생존 점수 − λ·과보호 비용. 효율적 도움 배분을 찾게 한다. */
+/**
+ * 후보가 **배송 가능한가** — 경험 탭 성좌 대역을 지키는지 본다.
+ *
+ * 시뮬은 생존만 본다. 생존에 좋다는 이유로 각성을 상한까지 밀면 불굴 축만 튀어 육각형이
+ * 한 축짜리로 보이는 식으로, 점수는 오르는데 화면이 무너지는 후보가 나온다. 그런 후보는
+ * 사람이 나중에 걸러야 하고 그러면 피팅이 헛돈다 — 탐색 단계에서 잘라 낸다.
+ * 판정은 **배송되는 형태**(0.5 블렌드 + 그 토대에서 파생한 초보 성향)에서 한다.
+ */
+export function isShippable(disp: EnaDisposition): boolean {
+  const base = blendSimFitted(toSimFittedSnapshot(disp))
+  return experienceCalibrationViolations(base, buildRookieFrom(base)).length === 0
+}
+
+/** 정규화 목적함수: 생존 점수 − λ·과보호 비용. 효율적 도움 배분을 찾게 한다.
+ *  표기 대역을 어긴 후보는 점수와 무관하게 탈락시킨다(−∞). */
 export function dispositionFitness(
   disp: EnaDisposition,
   seeds: number[],
   lambda: number,
   policies: EnaPolicy[] = [TEACHER_PLAYER]
 ): number {
+  if (!isShippable(disp)) return Number.NEGATIVE_INFINITY
   return survivalScore(disp, seeds, policies) - lambda * helpCost(disp)
 }
 
@@ -145,9 +175,10 @@ export class EnaDispositionFitter {
     const seeds = Array.from({ length: cfg.evalSeeds }, (_, i) => 3000 + i * 7)
     const policies = cfg.playerPolicies
 
-    let best = clampDisposition(defaultDisposition())
+    let best = clampDisposition(cloneDisposition(cfg.start ?? fromSimFittedSnapshot(CURRENT_SIM_FITTED)))
     const baselineScore = survivalScore(best, seeds, policies)
-    let bestFit = baselineScore - cfg.lambda * helpCost(best)
+    // 출발점이 이미 표기 대역을 어기면 −∞로 시작해, 처음 나온 배송 가능한 후보가 곧장 이긴다.
+    let bestFit = dispositionFitness(best, seeds, cfg.lambda, policies)
     const baselineFitness = bestFit
 
     for (let i = 0; i < cfg.iterations; i++) {

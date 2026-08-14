@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { EXPERIENCE_AXIS_DISPLAY_BOOST, baselineConstellationAxes, experienceAxes } from '@ui/ExperienceAxes'
+import {
+  EXPERIENCE_AXIS_DISPLAY_BOOST,
+  EXPERIENCE_CALIBRATION,
+  baselineConstellationAxes,
+  experienceAxes,
+} from '@ui/ExperienceAxes'
 import {
   BASE_DISPOSITION,
   ROOKIE_DISPOSITION,
@@ -51,24 +56,24 @@ describe('ExperienceAxes', () => {
       }
     }
     // 가장 먼 두 축도 대역 안에 머문다 — 하나만 튀어 나가면 표기가 한 축짜리로 보인다.
-    expect(Math.max(...values) - Math.min(...values)).toBeLessThan(0.12)
-    // 캘리브레이션 대역 — ROOKIE 재피팅으로 어긋나면 여기서 잡는다.
-    expect(v['예지']).toBeGreaterThanOrEqual(0.15)
-    expect(v['예지']).toBeLessThanOrEqual(0.2)
-    expect(v['불굴']).toBeGreaterThanOrEqual(0.09)
-    expect(v['불굴']).toBeLessThanOrEqual(0.14)
+    expect(Math.max(...values) - Math.min(...values)).toBeLessThan(EXPERIENCE_CALIBRATION.rookieSpreadMax)
+    // 캘리브레이션 대역 — 재피팅(EnaDispositionFitter)이 후보를 거를 때 읽는 것과 **같은 표**다.
+    expect(v['예지']).toBeGreaterThanOrEqual(EXPERIENCE_CALIBRATION.rookiePredict.lo)
+    expect(v['예지']).toBeLessThanOrEqual(EXPERIENCE_CALIBRATION.rookiePredict.hi)
+    expect(v['불굴']).toBeGreaterThanOrEqual(EXPERIENCE_CALIBRATION.rookieGrit.lo)
+    expect(v['불굴']).toBeLessThanOrEqual(EXPERIENCE_CALIBRATION.rookieGrit.hi)
   })
 
   it('성장 완료(BASE, growth 1) 개입 축은 원시값×end 배율로 상한 대역에 안착한다', () => {
     const disp = cloneDisposition(BASE_DISPOSITION)
     const predict = axisValue(disp, '예지', 1)
     // BASE 예지 √압축 원시값(√0.24 ≈ 0.49) × end(1.0) ≈ 49% — 기존 표기 상한 감각(~45~55%) 대역.
-    expect(predict).toBeGreaterThanOrEqual(0.45)
-    expect(predict).toBeLessThanOrEqual(0.55)
+    expect(predict).toBeGreaterThanOrEqual(EXPERIENCE_CALIBRATION.basePredict.lo)
+    expect(predict).toBeLessThanOrEqual(EXPERIENCE_CALIBRATION.basePredict.hi)
     // 성장 완료에도 축별 고유 비율은 유지된다(예지가 가장 길다).
     for (const key of ['수호', '온정', '불굴'] as const) {
       expect(axisValue(disp, key, 1), key).toBeLessThan(predict)
-      expect(axisValue(disp, key, 1), key).toBeGreaterThan(0.15)
+      expect(axisValue(disp, key, 1), key).toBeGreaterThan(EXPERIENCE_CALIBRATION.baseOtherMin)
     }
   })
 

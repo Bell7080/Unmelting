@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { EnaTrainingSimulation } from './EnaTrainingSimulation'
-import { EnaDispositionFitter, survivalScore, helpCost } from './EnaDispositionFitter'
-import { defaultDisposition, clampDisposition, BASE_DISPOSITION } from '@systems/EnaDisposition'
+import { EnaDispositionFitter, survivalScore, helpCost, isShippable } from './EnaDispositionFitter'
+import {
+  defaultDisposition,
+  clampDisposition,
+  fromSimFittedSnapshot,
+  BASE_DISPOSITION,
+  ROOKIE_DISPOSITION,
+  CURRENT_SIM_FITTED,
+} from '@systems/EnaDisposition'
+import { experienceCalibrationViolations } from '@ui/ExperienceAxes'
 
 const SEEDS = Array.from({ length: 60 }, (_, i) => 3000 + i * 7)
 
@@ -48,6 +56,13 @@ describe('BASE_DISPOSITION (동봉된 학습 토대)', () => {
     expect(roles.resource).toBeGreaterThan(1)
     expect(roles.recovery).toBeGreaterThan(1)
     expect(roles.attack).toBeLessThan(1)
+  })
+
+  it('동봉 토대는 재피팅이 후보에 요구하는 경험 탭 대역을 스스로도 지킨다', () => {
+    // 피터가 후보를 이 대역으로 거른다(isShippable). 정작 배송 중인 값이 대역 밖이면
+    // 재피팅은 '지금보다 나쁜 것만 통과하는' 검사가 된다 — 기준선부터 맞아야 한다.
+    expect(isShippable(fromSimFittedSnapshot(CURRENT_SIM_FITTED))).toBe(true)
+    expect(experienceCalibrationViolations(BASE_DISPOSITION, ROOKIE_DISPOSITION)).toEqual([])
   })
 
   it('학습 토대는 시뮬에서 손-튜닝 기본값 이상으로 플레이어를 살린다', () => {

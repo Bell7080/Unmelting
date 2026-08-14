@@ -111,6 +111,68 @@ export function experienceAxes(
 }
 
 /**
+ * 경험 탭 성좌가 "읽히는 모양"으로 남기 위한 캘리브레이션 대역 — **재피팅의 제약 조건**이다.
+ *
+ * 시뮬 피팅은 생존만 본다. 생존에 좋은 성향이 표기를 무너뜨릴 수 있어(예: 각성만 상한까지
+ * 밀면 불굴 축이 혼자 튀어 육각형이 한 축짜리로 보인다) 재피팅 후보를 이 대역으로 거른다.
+ * `ExperienceAxes.test.ts`와 `EnaDispositionFitter`가 **같은 이 표**를 읽는다 — 대역을 두 번
+ * 적으면 한쪽만 고쳐져 제약이 조용히 풀린다.
+ */
+export const EXPERIENCE_CALIBRATION = {
+  /** 성장 완료(BASE, growth 1) 예지 축이 앉아야 하는 자리. */
+  basePredict: { lo: 0.45, hi: 0.55 },
+  /** 성장 완료에서 예지 외 개입 축의 하한 — 이보다 낮으면 축이 사라져 보인다. */
+  baseOtherMin: 0.15,
+  /** 신규(ROOKIE, growth 0) 축 대역. */
+  rookiePredict: { lo: 0.15, hi: 0.2 },
+  rookieGrit: { lo: 0.09, hi: 0.14 },
+  /** 신규에서 가장 먼 두 축의 간격 상한 — 넘으면 한 축만 튀어 보인다. */
+  rookieSpreadMax: 0.12,
+  /** 신규 축 순서 — 이 순서가 무너지면 성장 서사가 표기와 어긋난다. */
+  rookieOrder: ['예지', '수호', '불굴', '온정'] as const,
+} as const
+
+/**
+ * 후보 성향이 위 대역을 어기는 지점을 사람이 읽는 문장으로 돌려준다(빈 배열 = 통과).
+ * 재피팅 CLI는 이걸 찍고, 피터는 이게 비어 있지 않은 후보를 아예 채택하지 않는다.
+ */
+export function experienceCalibrationViolations(base: EnaDisposition, rookie: EnaDisposition): string[] {
+  const C = EXPERIENCE_CALIBRATION
+  const out: string[] = []
+  const at = (disp: EnaDisposition, key: string, growth: number) =>
+    experienceAxes(disp, undefined, growth).find((a) => a.key === key)!.value
+
+  const basePredict = at(base, '예지', 1)
+  if (basePredict < C.basePredict.lo || basePredict > C.basePredict.hi) {
+    out.push(`BASE 예지 ${basePredict.toFixed(3)} ∉ [${C.basePredict.lo}, ${C.basePredict.hi}]`)
+  }
+  for (const key of ['수호', '온정', '불굴'] as const) {
+    const v = at(base, key, 1)
+    if (v >= basePredict) out.push(`BASE ${key} ${v.toFixed(3)} ≥ 예지 ${basePredict.toFixed(3)} (예지가 가장 길어야 한다)`)
+    if (v <= C.baseOtherMin) out.push(`BASE ${key} ${v.toFixed(3)} ≤ 하한 ${C.baseOtherMin}`)
+  }
+
+  const rookieValues = C.rookieOrder.map((key) => at(rookie, key, 0))
+  for (let i = 1; i < rookieValues.length; i++) {
+    if (!(rookieValues[i - 1] > rookieValues[i])) {
+      out.push(`ROOKIE 축 순서 깨짐: ${C.rookieOrder[i - 1]} ${rookieValues[i - 1].toFixed(3)} ≤ ${C.rookieOrder[i]} ${rookieValues[i].toFixed(3)}`)
+    }
+  }
+  const spread = Math.max(...rookieValues) - Math.min(...rookieValues)
+  if (spread >= C.rookieSpreadMax) out.push(`ROOKIE 축 간격 ${spread.toFixed(3)} ≥ 상한 ${C.rookieSpreadMax}`)
+
+  const rookiePredict = at(rookie, '예지', 0)
+  if (rookiePredict < C.rookiePredict.lo || rookiePredict > C.rookiePredict.hi) {
+    out.push(`ROOKIE 예지 ${rookiePredict.toFixed(3)} ∉ [${C.rookiePredict.lo}, ${C.rookiePredict.hi}]`)
+  }
+  const rookieGrit = at(rookie, '불굴', 0)
+  if (rookieGrit < C.rookieGrit.lo || rookieGrit > C.rookieGrit.hi) {
+    out.push(`ROOKIE 불굴 ${rookieGrit.toFixed(3)} ∉ [${C.rookieGrit.lo}, ${C.rookieGrit.hi}]`)
+  }
+  return out
+}
+
+/**
  * 경험 탭 점선 '기준 별자리' — 초보 에나의 시작 모양(ROOKIE_DISPOSITION, growth 0, 특화 0).
  * BASE(성장 완료) 앵커로 그리면 신규/리셋 직후 실측이 기준선보다 낮아 "감소"로 읽히므로,
  * 시작점에 앵커해 신규는 실선≈점선으로 겹치고 성장하면 실선이 점선을 넘어 자라게 한다.
