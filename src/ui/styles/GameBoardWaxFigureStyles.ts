@@ -505,25 +505,63 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 }
 .wax-compose-flight.is-shiny { border-color: rgba(123, 240, 174, 0.75); box-shadow: 0 0 20px rgba(123, 240, 174, 0.5); }
 
-/* 필드에서부터 보이는 이로치 후보 — 밀랍상 탭과 같은 옥빛으로 "어 떴다"를 예고한다.
-   깨우기 전부터 다르게 보여야 스쳐 지나가지 않고 붙잡고 싶어진다. */
-.cell.card.is-wax-figure-shiny .card-illust,
+/* 필드에서부터 보이는 이로치 후보 — 밀랍상 탭과 같은 옥빛 **개체**로 보여야 한다.
+   "빛난다"가 아니라 "색이 다르다"가 이로치의 말이다.
+
+   색을 바꾸는 방법으로 hue-rotate를 쓰지 않는다: 결과가 원본 색에 따라 제각각이라
+   키틴은 청록, 거미는 보라 하는 식으로 적마다 다른 색이 나와 '이로치'라는 규칙이 안 읽힌다.
+   대신 옥빛 판을 mix-blend-mode: color 로 얹어 **명암은 원본 그대로 두고 색조만** 갈아끼운다 —
+   어떤 적이든 같은 옥빛 개체가 되고, 밀랍 질감도 살아 있다(불투명하게 채우면 일러스트가
+   사라진다는 규칙과 같은 이유로 블렌드를 쓴다). */
 .cell.card.is-wax-figure-shiny .card-art {
-  filter: drop-shadow(0 0 8px rgba(123, 240, 174, 0.55)) saturate(1.15) hue-rotate(-14deg);
-  animation: wax-figure-shiny-glint 2.4s ease-in-out infinite;
+  /* 색조를 갈기 전에 채도를 올려 둔다 — 원본이 무채색에 가까우면 color 블렌드가 먹지 않는다.
+     밝기도 함께 올린다: color 블렌드는 명도를 원본에서 그대로 가져오므로, 어두운 밀랍
+     일러스트에 그냥 얹으면 옥빛이 아니라 탁한 이끼색으로 가라앉는다. */
+  filter: saturate(1.5) brightness(1.22) contrast(1.06);
 }
-.cell.card.is-wax-figure-shiny::after {
+/* 색조 판은 자기 엘리먼트를 갖는다 — .card-face 의사요소는 굳음 연출이 이미 쓴다.
+   isolation: isolate 로 블렌드를 카드 안에 가둔다(밖으로 새면 레일 배경까지 물든다). */
+.cell.card.is-wax-figure-shiny .card-face { isolation: isolate; }
+.card-shiny-tint {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  background: rgba(74, 226, 158, 0.9);
+  mix-blend-mode: color;
+  animation: wax-figure-shiny-tint 2.4s ease-in-out infinite;
+}
+/* 색조만으로는 평평해 보여서 얕은 광택을 하나 얹어 입체를 돌려준다. */
+.card-shiny-tint::after {
   content: '';
   position: absolute;
   inset: 0;
-  pointer-events: none;
   border-radius: inherit;
-  box-shadow: inset 0 0 14px rgba(123, 240, 174, 0.35);
+  background: radial-gradient(120% 80% at 50% 18%, rgba(163, 255, 214, 0.34), transparent 62%);
+  mix-blend-mode: screen;
+}
+/* 카드 글자/수치는 색조 판 위에 남아야 읽힌다. */
+.cell.card.is-wax-figure-shiny .card-content { position: relative; z-index: 3; }
+.cell.card.is-wax-figure-shiny {
+  border-color: rgba(123, 240, 174, 0.7);
+  box-shadow: 0 0 14px rgba(123, 240, 174, 0.4);
+}
+/* 이름 옆 반짝이 — 색맹/저채도 화면에서도 변종임이 글자 층에서 확정된다. */
+.card-shiny-mark {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 3px;
+  width: 0.82em;
+  height: 0.82em;
+  color: #a3ffd6;
+  filter: drop-shadow(0 0 4px rgba(123, 240, 174, 0.9));
   animation: wax-figure-shiny-pulse 2.4s ease-in-out infinite;
 }
-@keyframes wax-figure-shiny-glint {
-  0%, 100% { filter: drop-shadow(0 0 8px rgba(123, 240, 174, 0.55)) saturate(1.15) hue-rotate(-14deg); }
-  50%      { filter: drop-shadow(0 0 13px rgba(123, 240, 174, 0.8)) saturate(1.3) hue-rotate(-14deg); }
+.card-shiny-mark svg { width: 100%; height: 100%; }
+@keyframes wax-figure-shiny-tint {
+  0%, 100% { opacity: 0.82; }
+  50%      { opacity: 1; }
 }
 @keyframes wax-figure-shiny-pulse {
   0%, 100% { opacity: 0.6; }

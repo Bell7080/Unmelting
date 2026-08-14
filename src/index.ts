@@ -2247,12 +2247,14 @@ async function startGame(characterIndex = -1, difficulty: HearthDifficulty | nul
     await boardRenderer.playJobCurtainOpen()
   }
 
-  // 1구역 커튼: 직업 선택 직후 항상 표시한다.
+  // 구역 커튼: 직업 선택 직후 항상 표시한다.
   // enterHearth()는 startGame()을 직접 호출하지 않으므로 로비 진입 자체에는 이 커튼이 나오지 않는다.
-  // 첫 실행 인트로에서는 상단 커튼이 거슬리므로 생략한다(배경은 인트로가 이미 노출).
+  // 첫 실행 인트로도 **같은 자리에서** 커튼을 탄다 — 기본 무대에서 시작해 레일과 칸이 자리를
+  // 잡은 뒤 커튼이 내려오며 배경이 바뀌어야 "여기에 도착했다"가 읽힌다. 처음부터 구역 배경을
+  // 깔아 두면 그 비트가 없는 것과 같다.
   // 새싹 병아리는 30층 한 구역(새싹 온실)이라 정규 1구역과 다른 배경/이름으로 연다.
   const openingZone = isOnboardingActive() ? SPROUT_ZONE : ZONE_LIST[0]
-  if (!firstRunIntroActive) void zoneCurtain.show(openingZone, () => setZoneBackground(openingZone.bgUrl))
+  void zoneCurtain.show(openingZone, () => setZoneBackground(openingZone.bgUrl))
 
   // 1턴 시작 대사: 암막이 완전히 걷힌 뒤 살짝 딜레이 후 등장.
   {
@@ -4395,9 +4397,9 @@ function animateVeilReveal(veil: HTMLElement, duration: number): Promise<void> {
  *  하단 정위치 하강 → 레일 하강+좌우 확장. 이후 칸 드롭은 fillOnboardingField가 잇는다. */
 async function playFirstRunIntroBeats(): Promise<void> {
   const veil = document.getElementById('first-run-veil')
-  // 상단 구역 커튼 없이 배경만 즉시 세팅(크로스페이드 없음) — 방사 밝힘이 완성된 배경을 드러낸다.
-  // 첫 실행 인트로는 언제나 새싹 병아리 런이다 — 온실 배경을 그대로 드러낸다.
-  setZoneBackground(SPROUT_ZONE.bgUrl, true)
+  // 여기서는 구역 배경을 깔지 않는다 — 방사 밝힘이 드러내는 것은 **기본 무대 배경**이고,
+  // 새싹 온실로의 전환은 칸이 다 내려온 뒤 구역 커튼이 맡는다(정규 런과 같은 순서).
+  // 처음부터 온실을 깔면 "어디에 도착했다"는 커튼 비트가 통째로 사라진다.
   await wait(300)
   if (veil) await animateVeilReveal(veil, 1150)
   const card = document.querySelector<HTMLElement>('.player-card')

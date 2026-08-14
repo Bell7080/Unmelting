@@ -1392,8 +1392,18 @@ export class GameBoardRenderer {
       <div class="card-face">
         <div class="card-art" ${artStyle} aria-hidden="true"></div>
         <div class="card-overlay" aria-hidden="true"></div>
+        ${
+          // 이로치 색조 판. 의사요소가 아니라 실제 엘리먼트인 이유: `.card-face::before/::after`는
+          // 굳음(is-frozen/is-freeze-triggering) 연출이 이미 쓰고 있어, 굳은 이로치에서 둘이
+          // 서로를 덮는다. 색조는 자기 층을 갖는다.
+          card.waxFigureShiny ? '<div class="card-shiny-tint" aria-hidden="true"></div>' : ''
+        }
         <div class="card-content">
-          <div class="card-name">${groupName}</div>
+          <div class="card-name">${groupName}${
+            // 이로치 표식 — 색만으로는 "저 색이 원래 색인가"를 가릴 수 없다. 이름 옆 반짝이
+            // 하나가 "이건 변종이다"를 글자 층에서 확정해 준다(트리플 손패의 ★과 같은 자리).
+            card.waxFigureShiny ? `<span class="card-shiny-mark" aria-hidden="true">${sparkleIcon()}</span>` : ''
+          }</div>
           ${stats}
         </div>
       </div>
