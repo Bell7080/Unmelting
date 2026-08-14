@@ -293,7 +293,10 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     category: 'attack',
     synergyTags: ['flame', 'blade'],
     // 무작위 피해(최소 1) — 확정 처치 계산에는 쓰지 않는다.
-    damageProfile: { base: { atkMult: 1, flat: 3 }, triple: { atkMult: 3, flat: 0 }, deterministic: false },
+    // 값은 **기댓값 아래**로 잡는다. 실제 분포는 단일 1~(공+3), 트리플 5~(3공)의 균등이라
+    // 평균이 각각 약 0.5공+2 · 1.5공+2.5다 — 예전처럼 상한(공+3 / 3공)을 적어 두면 에나가
+    // 못 잡을 적을 잡는다고 판단해 손패를 버린다.
+    damageProfile: { base: { atkMult: 0.5, flat: 1 }, triple: { atkMult: 1.5, flat: 1 }, deterministic: false },
     description: '전방 선택 적 1장 1~(1.0공+3)피해',
     tripleDescription: '전방 선택 적 1장 5~(3.0공)피해',
     targeting: {
@@ -472,8 +475,14 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     name: '참격',
     category: 'attack',
     synergyTags: ['blade'],
-    // 피해 근사 — 단일 floor(2공)+2. 트리플 즉사는 수치화하지 않고 단일식으로 보수 유지.
-    damageProfile: { base: { atkMult: 2, flat: 2 }, triple: { atkMult: 2, flat: 2 }, deterministic: true },
+    // 피해 근사 — 단일 floor(2공)+2. 트리플 즉사는 수치화하지 않고 단일식으로 보수 유지하되,
+    // '실제로는 그 이상'이라는 사실은 tripleExecutes로 싣는다(정합 검사가 이 표기를 읽는다).
+    damageProfile: {
+      base: { atkMult: 2, flat: 2 },
+      triple: { atkMult: 2, flat: 2 },
+      deterministic: true,
+      tripleExecutes: true,
+    },
     description: '전방 선택 적 1장 (2.0공+2)피해',
     tripleDescription: '전방 선택 적 1장 즉사 (보스 면역)',
     targeting: {

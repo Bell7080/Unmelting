@@ -113,6 +113,12 @@ export interface HandDamageProfile {
   triple: { atkMult: number; flat: number }
   /** false면 무작위/조건부 피해라 확정 처치 계산에 쓰지 않는다. */
   deterministic: boolean
+  /**
+   * 트리플이 피해가 아니라 **즉사**(보스 면역)인 카드 표기. 즉사는 수치로 옮길 수 없어
+   * `triple` 값에는 보수적인 하한(단일식)을 남겨 두고, "실제로는 그 이상"이라는 사실만
+   * 이 플래그로 싣는다 — 소비처는 하한만 써도 과대평가하지 않는다.
+   */
+  tripleExecutes?: boolean
 }
 
 export interface HandCardDefinition {
