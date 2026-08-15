@@ -17,93 +17,128 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(90% 70% at 50% 36%, rgba(255, 198, 104, 0.08), transparent 52%),
-    radial-gradient(120% 90% at 50% 35%, rgba(16, 13, 28, 0.58), rgba(2, 2, 6, 0.76));
-  backdrop-filter: blur(5px);
+    radial-gradient(90% 70% at 50% 36%, rgba(96, 214, 200, 0.06), transparent 52%),
+    radial-gradient(120% 90% at 50% 35%, rgba(10, 14, 28, 0.6), rgba(2, 3, 8, 0.8));
+  backdrop-filter: blur(6px);
   z-index: 10500;
-  padding: 24px;
+  /* 화면을 거의 다 쓴다 — 전시관은 훑어보는 곳이라 여백이 넓을수록 한 번에 덜 보인다. */
+  padding: clamp(8px, 1.4vh, 18px);
 }
 .wax-figure-overlay.is-open { display: flex; animation: codex-overlay-fade 0.3s ease; }
 .wax-figure-overlay.is-open .wax-figure-modal { animation: experience-modal-rise 0.5s cubic-bezier(0.18, 0.9, 0.28, 1.08); }
 
 .wax-figure-modal {
   position: relative;
-  width: min(1180px, 97vw);
-  height: min(840px, 90vh);
-  max-height: 90vh;
+  width: min(1560px, 99vw);
+  height: min(1020px, 96vh);
+  max-height: 96vh;
   display: grid;
   grid-template-rows: auto auto 1fr;
+  /* 차가운 오로라 유리 — 밀랍상은 '얼어붙어 보관된 것'이라 상점의 촛불 호박빛과 갈린다.
+     반투명 판(0.34~0.5) + 강한 블러로 뒤가 비치는 유리로 읽히게 하고, 색은 청록↔남보라
+     사이에서만 논다(호박빛 금지). 일렁임은 아래 ::before가 맡는다. */
   background:
-    radial-gradient(115% 58% at 50% -6%, rgba(255, 206, 126, 0.16), transparent 64%),
-    radial-gradient(90% 75% at 50% 44%, rgba(73, 58, 118, 0.12), transparent 66%),
-    linear-gradient(180deg, rgba(24, 17, 12, 0.7), rgba(8, 7, 14, 0.8));
-  backdrop-filter: blur(10px);
-  border: 0;
-  border-radius: 24px;
+    radial-gradient(120% 60% at 50% -8%, rgba(96, 214, 200, 0.14), transparent 62%),
+    radial-gradient(90% 75% at 50% 46%, rgba(78, 96, 176, 0.1), transparent 68%),
+    linear-gradient(180deg, rgba(14, 24, 34, 0.5), rgba(6, 9, 18, 0.62));
+  backdrop-filter: blur(18px) saturate(1.15);
+  border: 1px solid rgba(150, 226, 214, 0.16);
+  border-radius: 22px;
   box-shadow:
-    0 30px 70px rgba(0, 0, 0, 0.6),
-    0 0 46px rgba(244, 178, 86, 0.2),
-    inset 0 1px 0 rgba(255, 236, 188, 0.08),
-    inset 0 0 70px rgba(244, 164, 96, 0.04);
+    0 30px 80px rgba(0, 0, 0, 0.62),
+    0 0 60px rgba(88, 200, 190, 0.14),
+    inset 0 1px 0 rgba(198, 246, 238, 0.14),
+    inset 0 0 90px rgba(70, 150, 170, 0.06);
   overflow: hidden;
-  color: #fde6c4;
+  color: #e6f4f2;
 }
+/* 오로라 — 색 띠 두 겹이 서로 다른 속도로 아주 느리게 흐른다. 판을 덮지 않고 빛만 더하도록
+   screen 블렌드에 낮은 불투명도로 얹는다(불투명하게 채우면 안이 안 보인다). */
+.wax-figure-modal::before {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: screen;
+  filter: blur(42px);
+  background:
+    radial-gradient(38% 26% at 22% 18%, rgba(86, 226, 208, 0.5), transparent 70%),
+    radial-gradient(34% 24% at 74% 26%, rgba(122, 148, 240, 0.42), transparent 72%),
+    radial-gradient(42% 28% at 58% 82%, rgba(74, 186, 214, 0.36), transparent 74%),
+    radial-gradient(30% 22% at 14% 78%, rgba(150, 122, 226, 0.3), transparent 74%);
+  animation: wax-aurora-drift 26s ease-in-out infinite alternate;
+}
+@keyframes wax-aurora-drift {
+  0%   { transform: translate3d(-4%, -2%, 0) scale(1.02); opacity: 0.42; }
+  35%  { transform: translate3d(3%, 2%, 0) scale(1.08); opacity: 0.56; }
+  70%  { transform: translate3d(-2%, 4%, 0) scale(1.04); opacity: 0.46; }
+  100% { transform: translate3d(4%, -3%, 0) scale(1.1); opacity: 0.58; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wax-figure-modal::before { animation: none; }
+}
+/* 오로라 위에 내용이 오게 — ::before가 z-index 0이라 자식들을 띄워 준다. */
+.wax-figure-header,
+.wax-action-hint,
+.wax-figure-hall { position: relative; z-index: 1; }
 .wax-figure-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 15px 22px;
-  border-bottom: 1px solid rgba(255, 215, 120, 0.14);
+  padding: clamp(14px, 1.6vh, 20px) clamp(18px, 1.6vw, 28px);
+  border-bottom: 1px solid rgba(150, 226, 214, 0.16);
 }
 .wax-figure-title {
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 18px;
+  font-size: clamp(20px, 1.7vw, 26px);
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   margin: 0;
-  color: #ffdf9e;
-  text-shadow: 0 0 14px rgba(244, 178, 86, 0.45);
+  color: #d8fbf4;
+  text-shadow: 0 0 16px rgba(110, 226, 212, 0.5);
 }
-.wax-figure-title-icon { display: inline-flex; width: 23px; height: 23px; color: #ffd178; }
-.wax-figure-title-icon .icon { width: 23px; height: 23px; filter: drop-shadow(0 0 8px rgba(255, 210, 130, 0.7)); }
+.wax-figure-title-icon { display: inline-flex; width: 26px; height: 26px; color: #8fe8dc; }
+.wax-figure-title-icon .icon { width: 26px; height: 26px; filter: drop-shadow(0 0 9px rgba(110, 226, 212, 0.75)); }
 .wax-figure-capacity {
   margin-left: auto;
   font-size: 12.5px;
   font-weight: 700;
-  color: rgba(255, 233, 196, 0.7);
+  color: rgba(206, 236, 232, 0.72);
   letter-spacing: 0.02em;
 }
 .wax-figure-capacity b {
   font-weight: 900;
-  color: var(--color-flame, #ffd778);
+  color: #8fe8dc;
   font-variant-numeric: tabular-nums;
 }
 .wax-figure-close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 210, 130, 0.06);
-  border: 1px solid rgba(255, 210, 130, 0.28);
+  background: rgba(140, 226, 214, 0.07);
+  border: 1px solid rgba(150, 226, 214, 0.3);
   border-radius: 9px;
-  color: #ffdf9e;
+  color: #cdf3ec;
   width: 32px;
   height: 32px;
   cursor: pointer;
   transition: background 0.16s ease, box-shadow 0.16s ease;
 }
 .wax-figure-close .icon { width: 15px; height: 15px; }
-.wax-figure-close:hover { background: rgba(255, 196, 110, 0.18); box-shadow: 0 0 14px rgba(244, 178, 86, 0.4); }
+.wax-figure-close:hover { background: rgba(120, 220, 208, 0.2); box-shadow: 0 0 14px rgba(110, 226, 212, 0.42); }
 
 .wax-action-hint {
   margin: 0 22px 6px;
   padding: 7px 12px;
   border-radius: 10px;
-  background: rgba(255, 210, 130, 0.1);
-  border: 1px solid rgba(255, 210, 130, 0.28);
-  color: #ffe9c4;
-  font-size: 12px;
+  background: rgba(120, 220, 208, 0.1);
+  border: 1px solid rgba(150, 226, 214, 0.3);
+  color: #d5f4ee;
+  font-size: 12.5px;
   text-align: center;
 }
 
@@ -112,7 +147,7 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   min-height: 0;
   padding: 16px 20px 20px;
   display: grid;
-  grid-template-columns: 230px minmax(0, 1fr) 190px;
+  grid-template-columns: clamp(230px, 17vw, 300px) minmax(0, 1fr) clamp(190px, 14vw, 250px);
   grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas:
     'info gallery hold'
@@ -139,15 +174,15 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   font-size: 12.5px;
   font-weight: 800;
   letter-spacing: 0.1em;
-  color: #ffdf9e;
+  color: #b9ece2;
 }
-.wax-section-note { font-size: 10.5px; font-weight: 600; color: rgba(255, 233, 196, 0.48); letter-spacing: 0.02em; }
+.wax-section-note { font-size: 10.5px; font-weight: 600; color: rgba(200, 232, 228, 0.5); letter-spacing: 0.02em; }
 
 /* ── 좌측 정보창 ────────────────────────────────────────── */
 .wax-info-panel {
   border-radius: 14px;
-  border: 1px solid rgba(255, 215, 120, 0.2);
-  background: linear-gradient(180deg, rgba(40, 28, 20, 0.5), rgba(12, 9, 16, 0.55));
+  border: 1px solid rgba(150, 226, 214, 0.18);
+  background: linear-gradient(180deg, rgba(18, 32, 42, 0.42), rgba(8, 12, 22, 0.5));
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -226,17 +261,17 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 .wax-info-hold-actions .wax-info-discard { margin-top: 0; align-self: auto; }
 
 /* ── 중앙 갤러리 ────────────────────────────────────────── */
-.wax-gallery-scroll { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(244, 178, 86, 0.7) transparent; }
+.wax-gallery-scroll { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(120, 220, 208, 0.7) transparent; }
 .wax-gallery-scroll::-webkit-scrollbar { width: 4px; }
-.wax-gallery-scroll::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #ffd178, #c8842e); border-radius: 999px; }
+.wax-gallery-scroll::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #8fe8dc, #2f8b86); border-radius: 999px; }
 .wax-exhibit-grid {
   list-style: none;
   margin: 0;
   padding: 2px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(clamp(128px, 11vw, 176px), 1fr));
   grid-auto-rows: max-content;
-  gap: 10px;
+  gap: clamp(10px, 0.9vw, 14px);
   align-content: start;
 }
 
@@ -246,8 +281,8 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   position: relative;
   aspect-ratio: 4 / 3.2;
   border-radius: 10px;
-  border: 1px solid rgba(255, 215, 120, 0.3);
-  background: #1c1424;
+  border: 1px solid rgba(150, 226, 214, 0.26);
+  background: rgba(12, 20, 30, 0.68);
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
@@ -371,18 +406,20 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 /* ── 하단 조합 바: 좌(합성 가능 리스트) + 우(큰 마법진) ──────────────── */
 .wax-compose-bar {
   border-radius: 14px;
-  border: 1px solid rgba(255, 215, 120, 0.2);
-  background: linear-gradient(180deg, rgba(40, 28, 20, 0.5), rgba(12, 9, 16, 0.55));
-  padding: 20px 26px;
+  border: 1px solid rgba(150, 226, 214, 0.18);
+  background: linear-gradient(180deg, rgba(18, 32, 42, 0.42), rgba(8, 12, 22, 0.5));
+  padding: clamp(14px, 1.6vh, 20px) clamp(18px, 1.6vw, 26px);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 .wax-compose-bar .wax-section-title { margin: 0; }
 /* 여백만 남기지 않도록 이 구역의 실제 높이(260px)를 여기서 확정한다 — 자식들이
    그 높이를 나눠 쓴다(리스트는 스크롤, 마법진은 가운데 정렬). */
-.wax-compose-layout { display: flex; align-items: stretch; gap: 32px; height: 260px; }
-.wax-compose-empty { margin: 0; font-size: 12px; color: rgba(255, 233, 196, 0.42); }
+/* 조합 구역의 실제 높이. 화면이 커져도 이 판이 갤러리를 밀어내지 않도록 뷰포트에
+   비례해 잡되 상한을 둔다 — 전시관에서 가장 넓어야 하는 곳은 갤러리다. */
+.wax-compose-layout { display: flex; align-items: stretch; gap: 32px; height: clamp(190px, 24vh, 260px); }
+.wax-compose-empty { margin: 0; font-size: 12px; color: rgba(200, 232, 228, 0.45); }
 
 /* 좌측 — 지금 합성할 수 있는 조합만 골라 버튼으로 나열한다(재료가 덜 찬 조합은 여기 안 뜬다). */
 .wax-compose-list-col {

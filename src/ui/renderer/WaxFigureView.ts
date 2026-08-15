@@ -416,7 +416,7 @@ export class WaxFigureView {
     host.innerHTML = `
       <div class="wax-figure-modal" role="dialog" aria-label="밀랍상">
         <header class="wax-figure-header">
-          <h2 class="wax-figure-title"><span class="wax-figure-title-icon">${waxFigureIcon()}</span>밀랍상 전시관</h2>
+          <h2 class="wax-figure-title"><span class="wax-figure-title-icon">${waxFigureIcon()}</span>밀랍상</h2>
           <span class="wax-figure-capacity">보관 <b>${used}</b> / 최대 <b>${capacity}</b></span>
           <button class="wax-figure-close" data-wax-close type="button" aria-label="닫기">${closeIcon()}</button>
         </header>
