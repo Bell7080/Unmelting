@@ -38,10 +38,10 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
      반투명 판(0.34~0.5) + 강한 블러로 뒤가 비치는 유리로 읽히게 하고, 색은 청록↔남보라
      사이에서만 논다(호박빛 금지). 일렁임은 아래 ::before가 맡는다. */
   background:
-    radial-gradient(120% 60% at 50% -8%, rgba(96, 214, 200, 0.14), transparent 62%),
-    radial-gradient(90% 75% at 50% 46%, rgba(78, 96, 176, 0.1), transparent 68%),
-    linear-gradient(180deg, rgba(14, 24, 34, 0.5), rgba(6, 9, 18, 0.62));
-  backdrop-filter: blur(18px) saturate(1.15);
+    radial-gradient(120% 60% at 50% -8%, rgba(70, 178, 172, 0.12), transparent 62%),
+    radial-gradient(90% 75% at 50% 46%, rgba(52, 68, 138, 0.1), transparent 68%),
+    linear-gradient(180deg, rgba(6, 14, 24, 0.4), rgba(2, 5, 12, 0.52));
+  backdrop-filter: blur(22px) saturate(1.2);
   border: 1px solid rgba(150, 226, 214, 0.16);
   border-radius: 22px;
   box-shadow:
@@ -143,7 +143,11 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 }
 
 /* ── 전시관 골격: 좌(정보) · 중(갤러리) · 우(임시보관) 위, 조합은 하단 통짜 바 ── */
+/* ★ 항상 **마지막 행**을 차지한다. 모달은 3행(머리 / 힌트 / 본문)인데 힌트 문단은 없을 때가
+   많아, 자동 배치로 두면 본문이 2행(auto)에 앉고 3행(1fr)이 통째로 비어 화면 최하단에
+   빈 띠가 남는다. */
 .wax-figure-hall {
+  grid-row: 3;
   min-height: 0;
   padding: 16px 20px 20px;
   display: grid;
@@ -182,7 +186,7 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 .wax-info-panel {
   border-radius: 14px;
   border: 1px solid rgba(150, 226, 214, 0.18);
-  background: linear-gradient(180deg, rgba(18, 32, 42, 0.42), rgba(8, 12, 22, 0.5));
+  background: linear-gradient(180deg, rgba(10, 22, 32, 0.3), rgba(4, 8, 16, 0.38));
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -282,7 +286,7 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
   aspect-ratio: 4 / 3.2;
   border-radius: 10px;
   border: 1px solid rgba(150, 226, 214, 0.26);
-  background: rgba(12, 20, 30, 0.68);
+  background: rgba(6, 14, 24, 0.52);
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
@@ -407,7 +411,7 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 .wax-compose-bar {
   border-radius: 14px;
   border: 1px solid rgba(150, 226, 214, 0.18);
-  background: linear-gradient(180deg, rgba(18, 32, 42, 0.42), rgba(8, 12, 22, 0.5));
+  background: linear-gradient(180deg, rgba(10, 22, 32, 0.3), rgba(4, 8, 16, 0.38));
   padding: clamp(14px, 1.6vh, 20px) clamp(18px, 1.6vw, 26px);
   display: flex;
   flex-direction: column;
@@ -422,13 +426,53 @@ export const GAME_BOARD_WAX_FIGURE_STYLES = `
 .wax-compose-empty { margin: 0; font-size: 12px; color: rgba(200, 232, 228, 0.45); }
 
 /* 좌측 — 지금 합성할 수 있는 조합만 골라 버튼으로 나열한다(재료가 덜 찬 조합은 여기 안 뜬다). */
+/* 조합 바는 세 열이다: 받고 있는 효과(좌) · 마법진(중) · 합성 목록(우).
+   효과 요약을 좌측에 두는 이유는 '지금 내가 뭘 받고 있나'가 합성보다 먼저 읽혀야 해서다. */
 .wax-compose-list-col {
-  flex: 0 0 240px;
+  flex: 0 0 clamp(200px, 16vw, 260px);
   align-self: stretch;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(244, 178, 86, 0.7) transparent;
+  scrollbar-color: rgba(120, 220, 208, 0.7) transparent;
 }
+.wax-effect-col {
+  flex: 0 0 clamp(230px, 19vw, 320px);
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+.wax-effect-col .wax-section-title { margin: 0; }
+.wax-effect-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 4px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  overflow-y: auto;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 220, 208, 0.7) transparent;
+}
+.wax-effect-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(150, 226, 214, 0.18);
+  background: rgba(8, 18, 28, 0.42);
+}
+.wax-effect-row-head { display: flex; align-items: center; gap: 6px; }
+.wax-effect-row-name { font-size: 12.5px; font-weight: 800; color: #dff6f1; }
+.wax-effect-row-star { margin-left: auto; font-size: 11.5px; font-weight: 800; color: #8fe8dc; }
+.wax-effect-row-label { font-size: 12px; color: rgba(216, 240, 236, 0.86); line-height: 1.35; }
+.wax-effect-row-foot { display: flex; align-items: baseline; gap: 8px; }
+.wax-effect-row-chance { font-size: 13px; font-weight: 900; color: #8fe8dc; font-variant-numeric: tabular-nums; }
+.wax-effect-row-note { margin-left: auto; font-size: 10.5px; font-weight: 700; color: rgba(200, 232, 228, 0.5); }
+.wax-effect-row-note.is-ready { color: rgba(160, 240, 200, 0.9); }
 .wax-compose-list-empty { margin: 0; font-size: 13px; line-height: 1.6; color: rgba(255, 233, 196, 0.42); }
 .wax-compose-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .wax-compose-list-btn {

@@ -232,16 +232,22 @@ export class WaxFigureView {
       const star = Number(starRaw)
       const species = findWaxFigureSpecies(enemyName)
       if (!species) continue
-      tiles.push({
-        key,
-        enemyName,
-        variant,
-        star,
-        count,
-        effectLabel: species.effects[variant].label,
-        chancePct: waxFigureEffectChance(star) * 100,
-        mergeable: count >= WAX_FIGURE_MERGE_COUNT,
-      })
+      // ★ 갤러리 칸은 **개체 하나에 한 칸**이다. 용량(`totalWaxFigureCount`)이 개체 단위로
+      //   세므로, 같은 종을 ×N으로 한 칸에 묶으면 격자 칸 수와 용량이 어긋난다
+      //   (2장을 가졌는데 칸은 하나만 차고 빈 칸이 하나 더 그려졌다).
+      //   합성 판정은 낱장이 아니라 그룹 수로 봐야 하므로 count를 따로 들고 다닌다.
+      for (let i = 0; i < count; i++) {
+        tiles.push({
+          key,
+          enemyName,
+          variant,
+          star,
+          count,
+          effectLabel: species.effects[variant].label,
+          chancePct: waxFigureEffectChance(star) * 100,
+          mergeable: count >= WAX_FIGURE_MERGE_COUNT,
+        })
+      }
     }
     tiles.sort((a, b) => a.enemyName.localeCompare(b.enemyName) || a.variant.localeCompare(b.variant) || a.star - b.star)
     return tiles
@@ -267,7 +273,6 @@ export class WaxFigureView {
       <li class="wax-exhibit-card${shinyClass}${selectedClass}" data-wax-select="${tile.key}">
         <div class="wax-exhibit-art" style="background-image:url('${sprite}')" aria-hidden="true"></div>
         <span class="wax-exhibit-star">★${tile.star}</span>
-        <span class="wax-exhibit-count">×${tile.count}</span>
         <div class="wax-exhibit-frame">
           <span class="wax-exhibit-name">${tile.enemyName}${tile.variant === 'shiny' ? ` <span class="wax-shiny-tag" aria-label="이로치" data-tooltip="이로치(변종) 개체입니다.">${sparkleIcon()}</span>` : ''}</span>
         </div>
@@ -298,7 +303,6 @@ export class WaxFigureView {
           <h3 class="wax-info-name">${tile.enemyName}${tile.variant === 'shiny' ? ` <span class="wax-shiny-tag" aria-label="이로치" data-tooltip="이로치(변종) 개체입니다.">${sparkleIcon()}</span>` : ''}</h3>
           <div class="wax-info-stars">${'★'.repeat(tile.star)}<span class="wax-info-star-num">${tile.star}성</span></div>
           <dl class="wax-info-stats">
-            <div><dt>보유</dt><dd>×${tile.count}</dd></div>
             <div><dt>효과</dt><dd>${tile.effectLabel}</dd></div>
             <div><dt>발동 확률</dt><dd><b>${tile.chancePct.toFixed(1)}%</b></dd></div>
           </dl>
@@ -344,13 +348,59 @@ export class WaxFigureView {
   }
 
   /**
+   * 좌측 '지금 받고 있는 효과' 요약 — 밀랍상을 하나하나 눌러 보지 않고도 이번 런에서
+   * 실제로 걸려 있는 효과를 한눈에 본다.
+   *
+   * ★ 수치는 **판정과 같은 창구**에서 읽는다(`waxFigureEffectStar` → `waxFigureEffectChance`).
+   *   여기서 따로 계산하면 화면과 실제 발동 확률이 갈린다. 그래서 이 목록은
+   *   "몇 장 모았나"가 아니라 **성급**을 따른다 — 같은 종을 여러 장 들고 있어도 확률은
+   *   오르지 않고, 3장을 합성해 성급을 올려야 오른다(그 사실이 목록에서 그대로 읽힌다).
+   */
+  private renderActiveEffects(tiles: PermanentTile[]): string {
+    // 같은 종+변종은 성급이 하나뿐이라(합성이 낮은 성급을 지운다) key 앞부분으로 묶으면 된다.
+    const seen = new Set<string>()
+    const rows: string[] = []
+    for (const t of tiles) {
+      const groupKey = `${t.enemyName}::${t.variant}`
+      if (seen.has(groupKey)) continue
+      seen.add(groupKey)
+      const shinyTag = t.variant === 'shiny'
+        ? ` <span class="wax-shiny-tag" aria-label="이로치" data-tooltip="이로치(변종) 개체입니다.">${sparkleIcon()}</span>`
+        : ''
+      // 같은 종을 몇 장 들고 있는지는 '합성까지 몇 장 남았나'로만 의미가 있다.
+      const toMerge = Math.max(0, WAX_FIGURE_MERGE_COUNT - t.count)
+      const mergeNote = toMerge > 0
+        ? `<span class="wax-effect-row-note">합성까지 ${toMerge}장</span>`
+        : '<span class="wax-effect-row-note is-ready">합성 가능</span>'
+      rows.push(`
+        <li class="wax-effect-row">
+          <span class="wax-effect-row-head">
+            <span class="wax-effect-row-name">${t.enemyName}${shinyTag}</span>
+            <span class="wax-effect-row-star">★${t.star}</span>
+          </span>
+          <span class="wax-effect-row-label">${t.effectLabel}</span>
+          <span class="wax-effect-row-foot">
+            <b class="wax-effect-row-chance">${t.chancePct.toFixed(1)}%</b>
+            ${mergeNote}
+          </span>
+        </li>`)
+    }
+    if (rows.length === 0) {
+      return `<h3 class="wax-section-title">받고 있는 효과</h3>
+        <p class="wax-compose-empty">아직 봉인한 밀랍상이 없습니다.</p>`
+    }
+    return `<h3 class="wax-section-title">받고 있는 효과 <span class="wax-section-note">성급이 오르면 확률이 오른다</span></h3>
+      <ul class="wax-effect-list">${rows.join('')}</ul>`
+  }
+
+  /**
    * 우측 마법진 무대 — 밀랍 조각진(연성진) 형태로 그린다. 재료 3개가 원 둘레 세 점에
    * 놓이고, 그 힘이 가운데 결과로 모이는 그림이라 "합성 = 의식"이라는 느낌을 낸다.
    * 가운데 결과가 곧 합성 버튼이다 — 숨쉬듯 맥동시켜(is-pulse) 누르고 싶게 만든다.
    */
   private renderComposeCircle(tile: PermanentTile | undefined): string {
     if (!tile) {
-      return `<p class="wax-compose-empty">좌측에서 합성할 조합을 골라 보세요.</p>`
+      return `<p class="wax-compose-empty">우측에서 합성할 조합을 골라 보세요.</p>`
     }
     const sprite = spriteForEnemyName(tile.enemyName)
     const shinyClass = tile.variant === 'shiny' ? ' is-shiny' : ''
@@ -431,8 +481,9 @@ export class WaxFigureView {
           <section class="wax-compose-bar">
             <h3 class="wax-section-title">조합</h3>
             <div class="wax-compose-layout">
-              <div class="wax-compose-list-col">${this.renderComposeList(mergeableTiles, this.composeKey)}</div>
+              <div class="wax-effect-col">${this.renderActiveEffects(tiles)}</div>
               <div class="wax-compose-stage">${this.renderComposeCircle(composeTile)}</div>
+              <div class="wax-compose-list-col">${this.renderComposeList(mergeableTiles, this.composeKey)}</div>
             </div>
           </section>
         </section>
