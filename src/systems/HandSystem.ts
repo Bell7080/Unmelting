@@ -351,11 +351,14 @@ export class HandSystem {
       simulatedBattlePhases: card.defId === 'levatein' ? (card.merged ? 0 : 1)
         : card.defId === 'shackles' ? 1
         : undefined,
-      // 레바테인 피해: floor(배율 × 최대체력) + 기본값. Max 대신 addend 방식.
+      // 레바테인 피해: floor(배율 × 플레이어 공격력) + 기본값.
+      // 대상 최대체력 비례를 버린 이유: 체력이 두꺼운 보스에게만 폭발적으로 세져
+      // 곡선이 대상마다 갈렸고, `damageProfile` 양식 밖이라 보스 화력 모델·에나 판단·
+      // 학습 시뮬 어디에도 잡히지 않는 사각지대였다. 공격력 비례로 옮겨 그 셋에 다 잡힌다.
       levateainDamage: card.defId === 'levatein'
         ? (card.merged
-          ? Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.60) + 20
-          : Math.floor((target?.card.enemyHealthTotal ?? 0) * 0.35) + 12)
+          ? Math.floor(6 * character.damage) + 12
+          : Math.floor(3 * character.damage) + 6)
         : undefined,
       // 빗자루 단일: 제거된 거미줄의 불빛을 주지 않는다(트리플만 불빛 획득).
       suppressScoreForRemovedCards: card.defId === 'sweep' && !card.merged,
@@ -888,7 +891,7 @@ export class HandSystem {
         return HandSystem.damageTargetEnemy(gs, target, Math.floor(1 * c.damage) + 2 + bonus)
       case 'levatein':
         // 적 행동 시뮬레이션(1회)과 ♥피해는 levateainDamage로 index.ts에 위임한다.
-        return '레바테인: 즉시 1턴 흐름 후 (0.35♥+12)피해'
+        return '레바테인: 즉시 1턴 흐름 후 (3.0공+6)피해'
       case 'firework':
         return HandSystem.distributeDamageAmongEnemies(gs, Math.floor(c.damage) + 2 + bonus)
       case 'book-of-flames':
@@ -1054,7 +1057,7 @@ export class HandSystem {
         return HandSystem.damageTargetEnemy(gs, target, Math.floor(3 * c.damage) + 6 + bonus)
       case 'levatein':
         // 적 행동 시뮬레이션(1회)과 ♥피해는 levateainDamage로 index.ts에 위임한다.
-        return '레바테인: 대가 없이 즉시 (0.6♥+20)피해'
+        return '레바테인: 대가 없이 즉시 (6.0공+12)피해'
       case 'firework':
         return HandSystem.distributeDamageAmongEnemies(gs, Math.floor(3 * c.damage) + 10 + bonus)
       case 'book-of-flames':

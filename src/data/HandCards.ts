@@ -232,8 +232,11 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     name: '레바테인',
     synergyTags: ['blade', 'flame'],
     category: 'attack',
-    description: '즉시 1턴 흐름<br>필드 선택 적 1장 적HP35%+12피해',
-    tripleDescription: '대가 없이 즉시<br>필드 선택 적 1장 적HP60%+20피해',
+    // 피해 근사 — HandSystem이 levateainDamage로 계산하고 index.ts가 적용한다(적 행동
+    // 시뮬을 먼저 돌려야 해서 적용 지점만 밖에 있다). 수치 자체는 여기 표와 같다.
+    damageProfile: { base: { atkMult: 3, flat: 6 }, triple: { atkMult: 6, flat: 12 }, deterministic: true },
+    description: '즉시 1턴 흐름<br>필드 선택 적 1장 (3.0공+6)피해',
+    tripleDescription: '대가 없이 즉시<br>필드 선택 적 1장 (6.0공+12)피해',
     targeting: {
       base: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },
       triple: { selection: 'target', zone: 'field', filter: 'enemy', countLimit: 1 },

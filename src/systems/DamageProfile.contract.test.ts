@@ -34,8 +34,16 @@ const PROFILE_EXEMPT: Partial<Record<HandCardId, string>> = {
   'shield-bash': '피해원이 방패 수치라 공격력 기반 근사로 옮길 수 없다',
   // 피해가 **맞는 적의 공격력**이라 플레이어 공격력의 함수가 아니다.
   'hand-mirror': '피해원이 대상 적의 공격력이라 플레이어 공격력 기반 근사로 옮길 수 없다',
-  // 실제 피해 계산이 index.ts(적 행동 2턴 시뮬 + ♥ 비례)에 있어 HandSystem 단독으로 안 끝난다.
-  levatein: '피해 계산이 index.ts에 있고 최대 체력 비례라 이 양식 밖이다',
+}
+
+/**
+ * 프로필은 **있지만** 실행 대조에서 빼는 카드와 그 이유.
+ * 수치는 표와 같은데 적용 지점만 `HandSystem` 밖이라, 표적 체력으로는 재지 못한다.
+ * 프로필 자체는 있어야 한다 — 에나 판단·학습 시뮬·보스 화력 모델이 그걸 읽는다.
+ */
+const DELEGATED_DAMAGE: Partial<Record<HandCardId, string>> = {
+  // 적 행동 시뮬을 먼저 돌려야 해서 index.ts가 levateainDamage를 받아 적용한다.
+  levatein: '적 행동 시뮬 이후에 적용돼야 해서 index.ts가 피해를 넣는다',
 }
 
 /** 근사값 — HandCardAdvisor·시뮬·보스 예산이 모두 쓰는 바로 그 식이다. */
@@ -85,6 +93,10 @@ describe('damageProfile 계약 — 데이터 테이블 ↔ HandSystem 실제 공
       // 프로필이 생겼는데 면제로 남아 있으면 검사에서 조용히 빠진다.
       expect(def.damageProfile, `${id}에 damageProfile이 생겼으니 면제 목록에서 빼야 한다`).toBeUndefined()
     }
+    for (const id of Object.keys(DELEGATED_DAMAGE) as HandCardId[]) {
+      // 위임 목록은 '프로필은 있는데 적용만 밖'이라는 뜻이다 — 프로필이 없으면 목록이 거짓말이다.
+      expect(HAND_CARD_DEFINITIONS[id]?.damageProfile, `${id}는 위임 목록인데 damageProfile이 없다`).toBeDefined()
+    }
   })
 
   it('확정 피해(deterministic) 카드의 근사가 실제 피해와 정확히 일치한다', () => {
@@ -94,6 +106,8 @@ describe('damageProfile 계약 — 데이터 테이블 ↔ HandSystem 실제 공
       const def = getHandCardDef(id)
       const profile = def.damageProfile
       if (!profile || !profile.deterministic) continue
+      // 적용 지점이 HandSystem 밖이면 표적 체력으로는 잴 수 없다(위 DELEGATED_DAMAGE 참조).
+      if (DELEGATED_DAMAGE[id]) continue
 
       for (const [merged, formula] of [
         [false, profile.base],
