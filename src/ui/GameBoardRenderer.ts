@@ -4210,7 +4210,8 @@ export class GameBoardRenderer {
     const theme = shiny ? 'wax-figure-shiny' : 'wax-figure'
     SquareBurst.playAt(cx, cy, theme, { count: 12, spread: 60, duration: 380 })
     if (!tabBtn) return
-    await this.trails.animateWaxFigureCaptureToken(sourceRect, tabBtn, shiny)
+    // 봉인은 플레이어 곁을 한 바퀴 돌다 탭에 꽂힌다 — 공전 중심으로 플레이어 카드를 넘긴다.
+    await this.trails.animateWaxFigureCaptureToken(sourceRect, tabBtn, shiny, this.findPlayerCardElement())
   }
 
   /** Find a hand slot element by index for burst placement. */

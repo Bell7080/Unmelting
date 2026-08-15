@@ -89,14 +89,25 @@ const STARLIGHT_TOKEN_ARRIVE = 0.93
 /** 꽂히기 직전 들르는 높이. 위에서 수직으로 내리꽂아야 '흘러들었다'가 아니라 '꽂혔다'가 된다. */
 const STARLIGHT_PLUNGE_PX = 92
 
-/** 밀랍상 봉인 — 별이 튀어나와 표류하다 "칭!" 변신한 뒤 탭 아이콘으로 빨려 들기까지. */
-const WAX_CAPTURE_FLIGHT_MS = 1400
-/** 시체에서 별빛으로 풀려 솟는 구간이 끝나는 지점. */
-const WAX_CAPTURE_RISE = 0.24
-/** 표류가 끝나고 "칭!" 변신이 일어나는 지점 — 별 → 밀랍상 글리프로 바뀐다. */
-const WAX_CAPTURE_TRANSFORM = 0.56
-/** 변신 후 탭 아이콘으로 날아가 닿는 프레임 — 착탄 블라스트가 이 박자에 터진다. */
+/**
+ * 밀랍상 봉인 — 시체에서 풀려 솟아 **플레이어 곁을 한 바퀴 돌다** 밀랍상 탭에 꽂히기까지.
+ * 잡은 자리에서 탭으로 곧장 쏘면 자원 트레일과 구분이 안 된다. 봉인은 한 런에 몇 번 없는
+ * 사건이라, 화면에 잠깐 머무르며 "무언가 따라붙었다"가 읽혀야 한다.
+ */
+const WAX_CAPTURE_FLIGHT_MS = 2600
+/** 시체에서 풀려 솟는 구간이 끝나는 지점. */
+const WAX_CAPTURE_RISE = 0.14
+/** 플레이어 곁에 도착해 공전을 시작하는 지점. */
+const WAX_CAPTURE_ORBIT_IN = 0.28
+/** 공전이 끝나고 탭을 향해 몸을 트는 지점. */
+const WAX_CAPTURE_ORBIT_OUT = 0.78
+/** 탭 아이콘에 꽂히는 프레임 — 착탄 블라스트가 이 박자에 터진다. */
 const WAX_CAPTURE_ARRIVE = 0.94
+/** 플레이어 카드 둘레를 도는 반지름(px)과 바퀴 수. */
+const WAX_ORBIT_RADIUS_PX = 104
+const WAX_ORBIT_TURNS = 1.25
+/** 공전 궤도를 몇 개의 키프레임으로 쪼갤지 — 적으면 원이 각져 보인다. */
+const WAX_ORBIT_STEPS = 14
 
 export class ResourceTrailFx {
   constructor(private readonly host: GameBoardRenderer) {}
@@ -508,20 +519,36 @@ export class ResourceTrailFx {
 /* 밀랍상 봉인 토큰 — 정상은 촛불 금빛, 이로치는 밀랍상 탭과 같은 옥빛으로 갈라
    "이건 다르다"가 비행 중에도 읽히게 한다. */
 .resource-trail-piece.is-wax-capture-token {
-  --token-ink: #ffe6a8;
-  --token-core: rgba(255, 245, 214, 0.95);
-  --token-glow: rgba(255, 196, 96, 0.9);
+  --token-ink: #fff3d2;
+  --token-core: rgba(255, 250, 234, 0.98);
+  --token-glow: rgba(255, 210, 130, 0.95);
   --token-halo: rgba(244, 150, 52, 0.6);
   animation: starlight-token-twinkle 0.62s ease-in-out infinite;
 }
 .resource-trail-piece.is-wax-capture-token.is-shiny {
-  --token-ink: #c8ffe6;
-  --token-core: rgba(200, 255, 230, 0.95);
-  --token-glow: rgba(63, 217, 150, 0.9);
+  --token-ink: #dcffee;
+  --token-core: rgba(216, 255, 238, 0.98);
+  --token-glow: rgba(96, 234, 172, 0.95);
   --token-halo: rgba(15, 107, 70, 0.6);
 }
+/* 다이아 반짝임 — 봉인은 한 런에 몇 번 없는 사건이라 자원 토큰과 같은 빛으로는 부족하다.
+   색을 통째로 갈아 끼우는 대신 **색상환을 돌려** 무지갯빛이 스치게 한다(기본 잉크·후광은
+   그대로라 금빛/옥빛 정체성은 남는다). 광채는 drop-shadow 두 겹으로 겹쳐 각을 만든다. */
+.resource-trail-piece.is-wax-capture-token.is-prismatic {
+  animation:
+    starlight-token-twinkle 0.62s ease-in-out infinite,
+    wax-capture-prism 1.15s linear infinite;
+}
+@keyframes wax-capture-prism {
+  0%   { filter: hue-rotate(0deg) saturate(1.25) drop-shadow(0 0 7px var(--token-glow)) drop-shadow(0 0 16px rgba(255, 255, 255, 0.45)); }
+  25%  { filter: hue-rotate(70deg) saturate(1.6) drop-shadow(0 0 10px var(--token-glow)) drop-shadow(0 0 22px rgba(180, 235, 255, 0.6)); }
+  50%  { filter: hue-rotate(160deg) saturate(1.45) drop-shadow(0 0 8px var(--token-glow)) drop-shadow(0 0 18px rgba(226, 190, 255, 0.55)); }
+  75%  { filter: hue-rotate(255deg) saturate(1.6) drop-shadow(0 0 11px var(--token-glow)) drop-shadow(0 0 24px rgba(255, 214, 190, 0.6)); }
+  100% { filter: hue-rotate(360deg) saturate(1.25) drop-shadow(0 0 7px var(--token-glow)) drop-shadow(0 0 16px rgba(255, 255, 255, 0.45)); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .resource-trail-piece.is-wax-capture-token { animation: none; }
+  .resource-trail-piece.is-wax-capture-token,
+  .resource-trail-piece.is-wax-capture-token.is-prismatic { animation: none; }
 }
 `
     document.head.appendChild(style)
@@ -810,61 +837,87 @@ export class ResourceTrailFx {
   animateWaxFigureCaptureToken(
     source: HTMLElement | DOMRect | null,
     target: HTMLElement | DOMRect | null,
-    shiny: boolean
+    shiny: boolean,
+    orbitAround: HTMLElement | DOMRect | null = null
   ): Promise<void> {
     if (!source || !target) return Promise.resolve()
     this.ensureResourceTrailStyles()
     const from = this.rectCenter(source)
     const to = this.rectCenter(target)
+    // 공전 중심은 플레이어 카드다. 없으면(연출 대상이 화면에 없을 때) 출발점과 탭 사이의
+    // 허공을 돌게 두어, 궤도가 사라지는 대신 자리만 옮겨 간다.
+    const hub = orbitAround
+      ? this.rectCenter(orbitAround)
+      : { x: (from.x + to.x) / 2, y: Math.max(140, Math.min(from.y, to.y) - 80) }
     const theme: BurstTheme = shiny ? 'wax-figure-shiny' : 'wax-figure'
-    const size = 36
+    const size = 40
     const at = (px: number, py: number): string => `translate(${px - size / 2}px, ${py - size / 2}px)`
     const pose = (px: number, py: number, tilt: number, scale: number): string =>
       `${at(px, py)} rotate(${tilt.toFixed(1)}deg) scale(${scale.toFixed(3)})`
 
-    const star = this.createIconToken(`is-wax-capture-token${shiny ? ' is-shiny' : ''}`, size, sparkleIcon())
+    // 글리프는 처음부터 **밀랍상**이다 — 무엇이 봉인됐는지가 비행 내내 읽혀야 한다.
+    const star = this.createIconToken(`is-wax-capture-token is-prismatic${shiny ? ' is-shiny' : ''}`, size, waxFigureIcon())
 
-    const float = {
-      x: from.x + (to.x - from.x) * 0.3,
-      y: Math.max(120, from.y - 90),
+    // 공전 시작 각도는 출발점 쪽에서 잡아, 솟아오른 뒤 자연스럽게 궤도에 얹힌다.
+    const entryAngle = Math.atan2(from.y - hub.y, from.x - hub.x)
+    const orbitAt = (t: number): { x: number; y: number } => {
+      const a = entryAngle + t * WAX_ORBIT_TURNS * Math.PI * 2
+      return {
+        // 가로로 살짝 납작한 타원 — 정원으로 돌면 화면 위아래를 크게 먹는다.
+        x: hub.x + Math.cos(a) * WAX_ORBIT_RADIUS_PX,
+        y: hub.y + Math.sin(a) * WAX_ORBIT_RADIUS_PX * 0.62,
+      }
     }
+    const orbitStart = orbitAt(0)
+    const orbitEnd = orbitAt(1)
 
     const frames: Keyframe[] = [
-      // 1) 시체 자리에서 별로 풀려 솟는다.
-      { transform: pose(from.x, from.y, -10, 0.3), opacity: 0, offset: 0 },
-      { transform: pose(float.x, float.y, -3, 1.1), opacity: 1, offset: WAX_CAPTURE_RISE },
-      // 2) 표류 — 두둥실 떠 있다가 변신 순간 잠깐 부풀며 "칭!"을 준비한다.
-      { transform: pose(float.x - 14, float.y - 16, 6, 1.02), opacity: 1, offset: WAX_CAPTURE_RISE + (WAX_CAPTURE_TRANSFORM - WAX_CAPTURE_RISE) * 0.6 },
-      { transform: pose(float.x, float.y, 0, 1.4), opacity: 1, offset: WAX_CAPTURE_TRANSFORM },
-      // 3) 변신 직후 — 밀랍상 탭을 향해 날아가 닿는다.
-      { transform: pose(float.x + (to.x - float.x) * 0.5, float.y + (to.y - float.y) * 0.5, 4, 0.9), opacity: 1, offset: WAX_CAPTURE_TRANSFORM + (WAX_CAPTURE_ARRIVE - WAX_CAPTURE_TRANSFORM) * 0.6 },
-      { transform: pose(to.x, to.y, 0, 0.7), opacity: 1, offset: WAX_CAPTURE_ARRIVE },
-      { transform: pose(to.x, to.y, 0, 0.2), opacity: 0, offset: 1 },
+      // 1) 시체 자리에서 풀려 솟는다.
+      { transform: pose(from.x, from.y, -12, 0.3), opacity: 0, offset: 0 },
+      { transform: pose(from.x + (orbitStart.x - from.x) * 0.35, from.y - 70, -4, 1.15), opacity: 1, offset: WAX_CAPTURE_RISE },
+      // 2) 플레이어 곁 궤도에 얹힌다.
+      { transform: pose(orbitStart.x, orbitStart.y, 0, 1), opacity: 1, offset: WAX_CAPTURE_ORBIT_IN },
     ]
+    // 3) 공전 — 스텝마다 각도를 잘라 원을 그린다(기울기도 진행 방향을 따라 흔든다).
+    for (let i = 1; i <= WAX_ORBIT_STEPS; i++) {
+      const t = i / WAX_ORBIT_STEPS
+      const pt = orbitAt(t)
+      const offset = WAX_CAPTURE_ORBIT_IN + (WAX_CAPTURE_ORBIT_OUT - WAX_CAPTURE_ORBIT_IN) * t
+      frames.push({
+        transform: pose(pt.x, pt.y, Math.sin(t * Math.PI * 4) * 14, 0.94 + Math.sin(t * Math.PI * 2) * 0.1),
+        opacity: 1,
+        offset,
+      })
+    }
+    frames.push(
+      // 4) 탭을 향해 몸을 틀고 — 꽂히기 직전 살짝 부풀며 겨눈다.
+      { transform: pose(orbitEnd.x + (to.x - orbitEnd.x) * 0.55, orbitEnd.y + (to.y - orbitEnd.y) * 0.45, 8, 1.22), opacity: 1, offset: WAX_CAPTURE_ORBIT_OUT + (WAX_CAPTURE_ARRIVE - WAX_CAPTURE_ORBIT_OUT) * 0.55 },
+      { transform: pose(to.x, to.y, 0, 0.66), opacity: 1, offset: WAX_CAPTURE_ARRIVE },
+      { transform: pose(to.x, to.y, 0, 0.2), opacity: 0, offset: 1 },
+    )
     const anim = star.animate(frames, {
       duration: WAX_CAPTURE_FLIGHT_MS,
       easing: 'linear',
       fill: 'forwards',
     })
 
-    // 변신 순간 — 글리프를 별에서 밀랍상으로 바꾸고 작은 반짝임을 함께 터뜨린다.
-    window.setTimeout(() => {
-      star.innerHTML = waxFigureIcon()
-      SquareBurst.playAt(float.x, float.y, theme, {
-        count: 10,
-        spread: 50,
-        duration: 460,
-        size: [4, 11],
-      })
-    }, WAX_CAPTURE_FLIGHT_MS * WAX_CAPTURE_TRANSFORM)
+    // 공전하는 동안 자취를 남긴다 — 몇 번 흩뿌려야 '날아다닌다'가 되고, 매 프레임 터뜨리면
+    // 궤도가 아니라 연기가 된다.
+    const trailAt: number[] = [0.2, 0.45, 0.7]
+    for (const t of trailAt) {
+      window.setTimeout(() => {
+        const pt = orbitAt(t)
+        SquareBurst.playAt(pt.x, pt.y, theme, { count: 6, spread: 34, duration: 420, size: [3, 8] })
+      }, WAX_CAPTURE_FLIGHT_MS * (WAX_CAPTURE_ORBIT_IN + (WAX_CAPTURE_ORBIT_OUT - WAX_CAPTURE_ORBIT_IN) * t))
+    }
 
     return new Promise<void>((resolve) => {
       window.setTimeout(() => {
         SquareBurst.playAt(to.x, to.y, theme, {
-          count: 16,
-          spread: 70,
-          duration: 420,
-          size: [5, 13],
+          count: 18,
+          spread: 76,
+          duration: 440,
+          size: [5, 14],
         })
       }, WAX_CAPTURE_FLIGHT_MS * WAX_CAPTURE_ARRIVE)
       const done = (): void => {
