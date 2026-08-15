@@ -655,9 +655,27 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   box-shadow: none;
   z-index: 6;
 }
-.shop-pack-card.is-unaffordable {
-  filter: saturate(0.82) brightness(0.84);
+/* 살 수 없는 팩 — 유물 카드(.shop-relic-card.is-unaffordable)와 **같은 어휘**로 말한다:
+   채도를 빼 회색으로 눕히고 가격표를 붉게 바꾼다. 팩만 다른 규칙을 쓰면 같은 화면에서
+   '못 사는 것'이 두 가지 모양으로 보인다. 유물보다 한 단 더 짙게 눌러 눈에 띄게 한다. */
+/* 회색은 **봉투와 글자에만** 건다. 카드 뿌리에 걸면 가격표까지 같이 탈색돼
+   아래에서 붉게 칠해도 회색으로 눕는다(필터는 자식 전체에 걸린다). */
+.shop-pack-card.is-unaffordable .shop-pack-illustration,
+.shop-pack-card.is-unaffordable .shop-pack-overlay {
+  filter: saturate(0.28) brightness(0.62);
 }
+.shop-pack-card.is-unaffordable .shop-pack-title,
+.shop-pack-card.is-unaffordable .shop-pack-effect {
+  color: rgba(206, 180, 166, 0.86);
+}
+/* 가격표는 그 회색을 피해 붉게 남는다 — 얼마가 모자란지는 또렷해야 한다. */
+.shop-pack-card.is-unaffordable .shop-pack-price {
+  border-color: rgba(214, 84, 76, 0.72);
+  background: linear-gradient(180deg, rgba(58, 22, 24, 0.97), rgba(28, 10, 14, 0.98));
+  color: rgba(255, 174, 164, 0.98);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 12px rgba(214, 84, 76, 0.28);
+}
+.shop-pack-card.is-unaffordable .shop-pack-price .shop-price-label-icon { color: rgba(255, 150, 140, 0.95); }
 /* 소진 — 더 줄 것이 남지 않은 팩. 비싸서 못 사는 것(is-unaffordable)과 달리 다시 열릴 일이
    없으므로 훨씬 깊게 눌러 두고 hover 반응도 끊어 살아 있는 타일로 읽히지 않게 한다. */
 .shop-pack-card.is-exhausted {
@@ -712,6 +730,9 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* 미리보기는 봉투 **앞**으로 나온다. 뒤에 깔리면 무엇을 주는지가 팩 그림에 가려
+     '뒤에 뭔가 있다'로만 읽힌다(일러스트 z-index 0, 오버레이 1보다 위). */
+  z-index: 4;
 }
 .shop-pack-fan-card {
   position: absolute;
@@ -740,7 +761,7 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   opacity: 1;
   transform:
     translateX(calc((var(--fan-i) - var(--fan-mid)) * 62%))
-    translateY(-46%)
+    translateY(-72%)
     rotate(calc((var(--fan-i) - var(--fan-mid)) * 13deg))
     scale(0.94);
   /* 올릴 때: 슈슉 하고 한 장씩 어긋나 펼쳐진다. */
@@ -811,6 +832,8 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   }
   .shop-pack-card.is-ena-pick .shop-pack-shine { animation: none; opacity: 0; }
 }
+/* 제목/설명은 봉투 **한가운데**에 박는다. 하단에 붙여 두면 그림에 묻히고, 가격표와도
+   붙어 읽는 순서가 엉킨다. 팩에서 가장 먼저 읽혀야 하는 것은 '무엇을 주는 팩인가'다. */
 .shop-pack-overlay {
   position: absolute;
   inset: 0;
@@ -818,18 +841,21 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
-  padding: clamp(8px, 1vw, 14px);
+  justify-content: center;
+  gap: 2px;
+  padding: clamp(6px, 0.8vw, 10px);
   text-align: center;
   border-radius: inherit;
   pointer-events: none;
 }
 .shop-pack-title {
   margin: 0;
-  color: rgba(255, 244, 210, 0.98);
-  font-size: var(--font-size-base);
+  color: rgba(255, 246, 216, 0.99);
+  /* 팩 이름은 멀리서도 한 번에 읽혀야 한다 — 카드 폭을 따라 크게 잡는다. */
+  font-size: clamp(19px, 1.85vw, 27px);
+  line-height: 1.15;
   font-weight: 900;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   text-shadow:
     0 1px 3px rgba(0, 0, 0, 0.98),
     0 2px 6px rgba(0, 0, 0, 0.94),
@@ -837,9 +863,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
     0 0 28px rgba(0, 0, 0, 0.72);
 }
 .shop-pack-effect {
-  margin: 4px 0 0;
-  color: rgba(255, 244, 210, 0.86);
-  font-size: var(--font-size-sm);
+  margin: 3px 0 0;
+  color: rgba(255, 240, 206, 0.94);
+  /* 한 마디로 줄인 설명이라 작게 둘 이유가 없다 — 제목 바로 아래에서 같이 읽힌다. */
+  font-size: clamp(14px, 1.25vw, 19px);
+  font-weight: 800;
+  letter-spacing: 0.01em;
   text-shadow:
     0 1px 3px rgba(0, 0, 0, 0.96),
     0 2px 5px rgba(0, 0, 0, 0.9),
@@ -1403,13 +1432,18 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   border-color: rgba(122, 202, 113, 0.62);
   box-shadow: none;
 }
+/* 살 수 없는 유물 — 팩(.shop-pack-card.is-unaffordable)과 **같은 깊이**로 눕힌다.
+   둘이 갈리면 같은 화면에서 '못 사는 것'이 두 가지 모양으로 보인다.
+   회색은 앞면 내용에만 걸고 가격표는 피해 간다 — 얼마가 모자란지는 또렷해야 한다. */
 .shop-relic-card.is-unaffordable {
-  border-color: rgba(166, 62, 58, 0.58);
-  filter: saturate(0.82) brightness(0.86);
+  border-color: rgba(214, 84, 76, 0.72);
+}
+.shop-relic-card.is-unaffordable .shop-relic-front {
+  filter: saturate(0.28) brightness(0.62);
 }
 .shop-relic-card.is-unaffordable .shop-relic-title,
 .shop-relic-card.is-unaffordable .shop-relic-effect {
-  color: rgba(202, 174, 158, 0.76);
+  color: rgba(206, 180, 166, 0.86);
 }
 .shop-relic-card.is-purchased {
   filter: saturate(0.55) brightness(0.72);
@@ -1569,10 +1603,12 @@ export const GAME_BOARD_PLAYER_SHOP_STYLES = `
   color: rgba(224, 255, 190, 0.96);
 }
 .shop-relic-card.is-unaffordable .shop-price-label {
-  border-color: rgba(166, 62, 58, 0.5);
-  background: linear-gradient(180deg, rgba(88, 42, 42, 0.92), rgba(42, 20, 26, 0.96));
-  color: rgba(255, 197, 181, 0.82);
+  border-color: rgba(214, 84, 76, 0.72);
+  background: linear-gradient(180deg, rgba(58, 22, 24, 0.97), rgba(28, 10, 14, 0.98));
+  color: rgba(255, 174, 164, 0.98);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5), 0 0 12px rgba(214, 84, 76, 0.28);
 }
+.shop-relic-card.is-unaffordable .shop-price-label-icon { color: rgba(255, 150, 140, 0.95); }
 .shop-relic-card.is-purchased .shop-price-label {
   border-color: rgba(154, 188, 132, 0.46);
   background: linear-gradient(180deg, rgba(53, 74, 48, 0.9), rgba(28, 42, 30, 0.94));

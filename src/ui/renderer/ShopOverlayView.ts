@@ -576,16 +576,16 @@ export class ShopOverlayView {
                 const exhausted = new Set(shop.exhaustedPackKinds ?? [])
                 if (shop.mode === 'altar') {
                   const altarAll: Array<[ShopPackKind, string, string, number, 'resource' | 'upgrade' | 'unlock', number]> = [
-                    ['resource-pack', '자원팩', '체력·손패·불씨 한도 영구 상향', shop.packCosts?.['resource-pack'] ?? 500, 'resource', 0],
-                    ['chance-pack', '확률팩', '특정 카드 1차 드롭 우선도 부여', shop.packCosts?.['chance-pack'] ?? 500, 'upgrade', 1],
-                    ['delete-pack', '삭제팩', '카드 제거 · 드롭 집중도 상향', shop.packCosts?.['delete-pack'] ?? 500, 'unlock', 2],
+                    ['resource-pack', '자원팩', '한도 상향', shop.packCosts?.['resource-pack'] ?? 500, 'resource', 0],
+                    ['chance-pack', '확률팩', '드롭 우선', shop.packCosts?.['chance-pack'] ?? 500, 'upgrade', 1],
+                    ['delete-pack', '삭제팩', '카드 제거', shop.packCosts?.['delete-pack'] ?? 500, 'unlock', 2],
                   ]
                   return altarAll.map(([k, t, d, c, th, n]) => this.renderShopPackCard(k, t, d, c, score, th, n, exhausted.has(k), shop.packPreviewArts?.[k] ?? [])).join('')
                 } else {
                   const shopAll: Array<[ShopPackKind, string, string, number, 'resource' | 'upgrade' | 'unlock', number]> = [
-                    ['basic-pack', basicPackLabel.title, 'HP·불씨·게이지 즉시 보충', shop.packCosts?.['basic-pack'] ?? shop.basicPackCost, 'resource', 0],
-                    ['recipe-pack', recipePackLabel.title, '조합식 해금 · 덱 심도 확장', shop.packCosts?.['recipe-pack'] ?? 400, 'upgrade', 1],
-                    ['unlock-pack', unlockPackLabel.title, '잠긴 손패 해금 · 드롭 풀 확대', shop.packCosts?.['unlock-pack'] ?? 400, 'unlock', 2],
+                    ['basic-pack', basicPackLabel.title, '체력 보충', shop.packCosts?.['basic-pack'] ?? shop.basicPackCost, 'resource', 0],
+                    ['recipe-pack', recipePackLabel.title, '새로운 조합', shop.packCosts?.['recipe-pack'] ?? 400, 'upgrade', 1],
+                    ['unlock-pack', unlockPackLabel.title, '손패 해금', shop.packCosts?.['unlock-pack'] ?? 400, 'unlock', 2],
                   ]
                   return shopAll.map(([k, t, d, c, th, n]) => this.renderShopPackCard(k, t, d, c, score, th, n, exhausted.has(k), shop.packPreviewArts?.[k] ?? [])).join('')
                 }
