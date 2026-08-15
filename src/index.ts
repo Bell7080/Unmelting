@@ -1486,12 +1486,21 @@ function announceWaxFigureEffect(effectId: string | undefined): void {
  * rect는 **호출 시점에 즉시 캡처**한다 — render()가 곧 그 칸을 DOM에서 지우기 때문이다.
  */
 function tryCaptureWaxFigureOnKill(card: Card, precapturedRect?: DOMRect | null): Promise<void> | null {
-  // 새싹 병아리 30F 튜토리얼: 이번 런에서 처음 잡은 양초 키틴벌레는 확률 없이 확정
-  // 봉인된다 — 밀랍상 탭을 처음 만져 보게 하는 순차적 도입이라, 이벤트 문처럼
-  // "언젠가 반드시 온다"가 목적이지 확률로 놓칠 수 있으면 튜토리얼이 안 된다.
-  const isTutorialDrop =
-    onboardingRunActive && !onboardingWaxFigureTutorialDropDone && card.name === WAX_FIGURE_TUTORIAL_SPECIES
-  if (isTutorialDrop) onboardingWaxFigureTutorialDropDone = true
+  // 새싹 병아리 30F 튜토리얼: 양초 키틴벌레를 잡을 때마다 확률이 올라(33/66/99%) 2~3마리째에
+  // 거의 확실히 봉인된다. 밀랍상 탭을 처음 만져 보게 하는 도입이라 "언젠가 반드시 온다"가
+  // 목적이지만, 첫 마리에서 확정으로 주면 봉인이 귀한 사건으로 안 읽힌다.
+  // 계정당 1회다 — 런 단위로 두면 새싹을 다시 시작할 때마다 복사된다.
+  // 튜토리얼 드랍: 확정이 아니라 **잡을수록 오르는 확률**이다(33% → 66% → 99%).
+  // 첫 마리에서 바로 주면 "잡자마자 나온다"로 읽혀 봉인이 귀한 사건이 아니게 된다.
+  let isTutorialDrop = false
+  if (waxFigureTutorialAvailable() && card.name === WAX_FIGURE_TUTORIAL_SPECIES) {
+    const step = Math.min(onboardingWaxFigureTutorialKills, WAX_FIGURE_TUTORIAL_CHANCES.length - 1)
+    onboardingWaxFigureTutorialKills++
+    if (Math.random() < WAX_FIGURE_TUTORIAL_CHANCES[step]) {
+      isTutorialDrop = true
+      enaAutonomousLearner.recordFirstSeen(WAX_FIGURE_TUTORIAL_KEY)
+    }
+  }
   const result = captureWaxFigure(
     card.name,
     card.waxFigureShiny ? { forceVariant: 'shiny' } : isTutorialDrop ? { forceVariant: 'normal' } : {}
@@ -1801,8 +1810,28 @@ let currentRunDifficulty: HearthDifficulty | 'test' | undefined = undefined
 function isOnboardingActive(): boolean {
   return onboardingRunActive
 }
-/** 새싹 병아리 30F 밀랍상 튜토리얼 드랍이 이번 런에서 이미 나갔는지 — 첫 마리에서만 확정 지급한다. */
-let onboardingWaxFigureTutorialDropDone = false
+/**
+ * 밀랍상 튜토리얼 드랍의 **영구** 게이트 키. 이 드랍은 밀랍상 탭을 처음 만져 보게 하는
+ * 도입용이라 계정당 한 번이면 된다 — 런 단위 플래그만 두면 새싹 난이도를 다시 시작할
+ * 때마다 다시 나와 키틴벌레가 무한히 복사된다.
+ * `unmelting.` 접두사 저장소(`EnaAutonomousLearner` first-seen)를 쓰므로 `/리셋` 대상이다.
+ */
+const WAX_FIGURE_TUTORIAL_KEY = 'waxfigure-tutorial'
+
+/**
+ * 튜토리얼 드랍 확률 — 몇 마리째냐에 따라 올라간다. 첫 마리에서 바로 주면 "잡자마자 나온다"로
+ * 읽혀 봉인이 귀한 사건이 아니게 되고, 확률이 낮기만 하면 튜토리얼이 안 온다.
+ * 2~3마리째에 거의 확실히 오도록 계단을 잡는다.
+ */
+const WAX_FIGURE_TUTORIAL_CHANCES = [0.33, 0.66, 0.99] as const
+
+/** 이번 런에서 튜토리얼 대상 종을 몇 마리 잡았는지 — 위 확률 계단의 인덱스. */
+let onboardingWaxFigureTutorialKills = 0
+
+/** 튜토리얼 드랍을 아직 받을 수 있는가(계정당 1회, 새싹 런 한정). */
+function waxFigureTutorialAvailable(): boolean {
+  return onboardingRunActive && !enaAutonomousLearner.hasFirstSeen(WAX_FIGURE_TUTORIAL_KEY)
+}
 
 /** 온보딩 필드 카드 사라짐 블라스트 테마 — 종류별 팔레트. */
 function fieldBurstTheme(card: Card): BurstTheme {
@@ -1844,11 +1873,11 @@ async function tickOnboardingFieldsBeforeDrop(): Promise<void> {
 async function runOnboardingClear(): Promise<void> {
   // 첫 30F 클리어 → 온보딩 졸업(다음 런부터 정상 스폰) + 쉬움 난이도 개방.
   enaAutonomousLearner.recordFirstSeen('onboarding-graduated')
-  // 확정 튜토리얼 드랍 안전판: 11층부터 스폰 풀이 넓어지며 양초 키틴벌레 비중이
-  // 옅어져 처치 자체를 못 하고 클리어할 수 있다 — 그때는 클리어 시점에 한 번 더
-  // 확정 지급해 첫 판에서 반드시 밀랍상 탭을 만져 보게 한다.
-  if (!onboardingWaxFigureTutorialDropDone) {
-    onboardingWaxFigureTutorialDropDone = true
+  // 튜토리얼 드랍 안전판: 확률 계단(33/66/99%)을 다 비켜 갔거나, 11층부터 스폰 풀이 넓어져
+  // 양초 키틴벌레를 아예 못 잡고 클리어할 수도 있다 — 그때는 클리어 시점에 확정 지급해
+  // 첫 판에서 반드시 밀랍상 탭을 만져 보게 한다(이것도 계정당 1회 게이트를 지난다).
+  if (waxFigureTutorialAvailable()) {
+    enaAutonomousLearner.recordFirstSeen(WAX_FIGURE_TUTORIAL_KEY)
     const pityResult = captureWaxFigure(WAX_FIGURE_TUTORIAL_SPECIES, { forceVariant: 'normal' })
     if (pityResult) recordNotice(`밀랍상 봉인 — ${pityResult.enemyName}: ${pityResult.effect.label}`, 'win')
   }
@@ -1901,7 +1930,7 @@ function resetForNewRun(): void {
   pendingHandTarget = null
   // 밀랍상 임시보관함은 런을 넘기지 않는다 — 정리 안 한 지난 런의 봉인은 여기서 사라진다.
   resetWaxFigureRunHold()
-  onboardingWaxFigureTutorialDropDone = false
+  onboardingWaxFigureTutorialKills = 0
   // 동료(에나)의 런 한정 상태(의지/각성/턴 흐름) 초기화. 학습 가중치는 런 간 유지.
   companion.resetForRun()
   // 정산 육각형의 '이번 런 상승분' 기준점 — 런 시작 시점의 축 값을 캡처해 둔다.
