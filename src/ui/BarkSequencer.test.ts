@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { BarkSequencer, barkMinExposureMs, BARK_QUEUE_MAX } from './BarkSequencer'
+import {
+  BarkSequencer,
+  barkMinExposureMs,
+  BARK_QUEUE_MAX,
+  TEACH_HOLD_FLOOR_MS,
+  TEACH_HOLD_MAX_MS,
+} from './BarkSequencer'
 
 /** index.ts BARK_IMPORTANCE와 같은 눈금(테스트 가독용). */
 const IMPORTANCE = { loot: 0, touch: 1, situation: 2 } as const
@@ -95,5 +101,65 @@ describe('BarkSequencer (바크 순차 출력 큐)', () => {
     seq.clear()
     expect(seq.pending).toBe(0)
     expect(seq.shift()).toBeUndefined()
+  })
+})
+
+describe('설명(교육) 바크 홀드 — 넘겨야 지나간다', () => {
+  const makeHolding = () => {
+    let t = 0
+    const seq = new BarkSequencer<string>(() => t)
+    seq.noteDisplayed('꽃이 피어나면 수확할 수 있어.', true)
+    seq.enqueue({ line: '트리플이 만들어졌어!', importance: 2, situation: null })
+    return { seq, tick: (ms: number) => { t += ms } }
+  }
+
+  it('최소 노출이 지나도 설명은 저절로 넘어가지 않는다', () => {
+    const { seq, tick } = makeHolding()
+    // 일반 바크였다면 이미 다음으로 넘어갔을 시간.
+    tick(barkMinExposureMs('꽃이 피어나면 수확할 수 있어.') + 500)
+    expect(seq.isHolding()).toBe(true)
+    expect(seq.nextDelayMs()).toBeGreaterThan(0)
+  })
+
+  it('설명을 띄운 그 행동의 입력은 넘기지 못한다(바닥 시간)', () => {
+    const { seq, tick } = makeHolding()
+    tick(TEACH_HOLD_FLOOR_MS - 1)
+    expect(seq.release()).toBe(false)
+    expect(seq.isHolding()).toBe(true)
+  })
+
+  it('바닥 시간을 넘긴 뒤의 입력은 설명을 넘기고 다음 대사를 즉시 잇는다', () => {
+    const { seq, tick } = makeHolding()
+    tick(TEACH_HOLD_FLOOR_MS)
+    expect(seq.release()).toBe(true)
+    expect(seq.isHolding()).toBe(false)
+    expect(seq.nextDelayMs()).toBe(0)
+    expect(seq.shift()?.line).toBe('트리플이 만들어졌어!')
+  })
+
+  it('아무 입력이 없어도 상한 시간에는 스스로 풀린다(모달이 되지 않는다)', () => {
+    const { seq, tick } = makeHolding()
+    tick(TEACH_HOLD_MAX_MS)
+    expect(seq.isHolding()).toBe(false)
+    expect(seq.nextDelayMs()).toBe(0)
+  })
+
+  it('설명이 붙잡고 있는 동안 도착한 대사는 교체하지 않고 전부 큐로 간다', () => {
+    const { seq, tick } = makeHolding()
+    tick(barkMinExposureMs('꽃이 피어나면 수확할 수 있어.') + 2000)
+    expect(seq.busy(true)).toBe(true)
+  })
+
+  it('큐가 넘치면 설명보다 잡담이 먼저 버려진다', () => {
+    const seq = new BarkSequencer<string>(() => 0)
+    // teach(3)는 situation(2)/touch(1)보다 높은 눈금이다.
+    seq.enqueue({ line: '설명', importance: 3, situation: null })
+    for (let i = 0; i < BARK_QUEUE_MAX; i++) {
+      seq.enqueue({ line: `잡담${i}`, importance: 1, situation: null })
+    }
+    const remaining: string[] = []
+    let next = seq.shift()
+    while (next) { remaining.push(next.line); next = seq.shift() }
+    expect(remaining).toContain('설명')
   })
 })

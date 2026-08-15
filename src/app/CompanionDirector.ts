@@ -36,7 +36,12 @@ const SKIP_MIN_VISIBLE_MS = 1000
 const COMPANION_READ_MS = 1500
 
 /** 바크 중요도: 손패 한줄평<일반 반응<상황<위급/항의. 읽는 중엔 더 높은 것만 끼어든다. */
-export const BARK_IMPORTANCE = { loot: 0, touch: 1, situation: 2, urgent: 3, clutch: 4 } as const
+/**
+ * 바크 중요도. `teach`(첫 조우 설명)는 일반 상황 바크보다 높다 —
+ * 설명은 **플레이어가 넘길 때까지** 화면을 붙잡고, 큐가 넘칠 때도 잡담보다 늦게 버려진다.
+ * 위급(urgent)·클러치는 여전히 설명을 뚫고 들어온다(위험 경고가 설명에 막히면 안 된다).
+ */
+export const BARK_IMPORTANCE = { loot: 0, touch: 1, situation: 2, teach: 3, urgent: 4, clutch: 5 } as const
 
 /** 클러치 종류별 전용 체인 제목(플레이어 카드 위 배너). */
 const CLUTCH_TITLES: Record<string, string> = {
@@ -195,6 +200,21 @@ export class CompanionDirector {
     }, this.barkSequencer.nextDelayMs())
   }
 
+  /**
+   * 플레이어가 설명을 넘겼다고 알린다(행동 입력 지점에서 부른다).
+   * 실제로 풀렸으면 대기 중인 다음 대사를 곧바로 잇는다 — "넘기면 그 다음을 강조해 준다".
+   * 설명을 띄운 바로 그 행동이 넘겨 버리지 않도록 바닥 시간은 시퀀서가 지킨다.
+   */
+  releaseHeldBark(): void {
+    if (!this.barkSequencer.release()) return
+    if (this.barkSequencer.pending === 0) return
+    // 예약된 드레인은 홀드 상한(TEACH_HOLD_MAX_MS)을 보고 잡혀 있다 — 그대로 두면
+    // 넘겼는데도 그 긴 시간을 마저 기다린다. 타이머를 걷고 지금 기준으로 다시 잡는다.
+    clearTimeout(this.barkQueueTimer)
+    this.barkQueueTimer = 0
+    this.scheduleBarkQueueDrain()
+  }
+
   /** 바크 큐/드레인 타이머 정리 — 새 런 시작 등 흐름이 끊기는 지점에서 잔여 대사가 새지 않게 한다. */
   clearBarkQueue(): void {
     this.barkSequencer.clear()
@@ -211,7 +231,8 @@ export class CompanionDirector {
     this.currentBarkImportance = importance
     this.currentBarkSituation = situation
     this.barkShownAt = Date.now()
-    this.barkSequencer.noteDisplayed(line)
+    // 설명 등급은 '넘겨야 지나가는' 홀드로 띄운다 — 다음 설명이 덮어써서 둘 다 못 읽는 것을 막는다.
+    this.barkSequencer.noteDisplayed(line, importance === BARK_IMPORTANCE.teach)
     speechBubble.show(line)
     // ★ 강조는 **그 대사와 함께 산다.** 맥동은 4초 넘게 이어지는데 대사 최소 노출은
     //   1.5~3초라, 강조를 안 들고 오는 다음 대사(시작 인사·회상·트리플 소개 등)가 뜨면

@@ -629,7 +629,10 @@ const bossController: BossEventController = new BossEventController(
     onBossIntro: (name) => {
       announcedBossPhases.clear()
       // 태어나서 첫 보스라면 분위기 대사 대신 교육형 소개를 한 번 우선한다.
-      companionDirector.sayEnaBark(encounterIntroLineOnce('boss') ?? companion.bossIntroLine(name), { importance: BARK_IMPORTANCE.situation })
+      const bossIntro = encounterIntroLineOnce('boss')
+      companionDirector.sayEnaBark(bossIntro ?? companion.bossIntroLine(name), {
+        importance: bossIntro ? BARK_IMPORTANCE.teach : BARK_IMPORTANCE.situation,
+      })
     },
     onBossPhase: (_name, phaseKey) => {
       if (announcedBossPhases.has(phaseKey)) return
@@ -1677,7 +1680,9 @@ function sayFieldIntro(kind: BoardEncounterKind, fieldCardIds: Iterable<string>)
   sessionFieldsIntroduced.add(kind)
   const stableCardIds = [...fieldCardIds]
   companionDirector.sayEnaBark(line, {
-    importance: BARK_IMPORTANCE.situation,
+    // 첫 조우 설명은 '넘겨야 지나가는' 교육 등급이다 — 다음 설명이 덮어써서 둘 다 못 읽는
+    // 상황(꽃 설명 → 트리플 설명이 바로 덮음)을 막는다.
+    importance: BARK_IMPORTANCE.teach,
     // 큐를 기다린 경우에도 실제 대사가 뜨는 순간 같은 칸을 촛불빛으로 짚는다.
     onDisplay: () => boardRenderer.pulseEnaHint({ fieldCardIds: stableCardIds }),
   })
@@ -1738,7 +1743,7 @@ function maybeIntroduceFormedTriple(): void {
   if (!companionDirector.companionWorldCanSpeak()) return
   if (!gameState.character.hand.some((card) => card.merged)) return
   const tripleIntro = encounterIntroLineOnce('triple')
-  if (tripleIntro) companionDirector.sayEnaBark(tripleIntro, { importance: BARK_IMPORTANCE.situation })
+  if (tripleIntro) companionDirector.sayEnaBark(tripleIntro, { importance: BARK_IMPORTANCE.teach })
 }
 
 /**
@@ -2485,7 +2490,7 @@ async function resolveFullCandleGaugeEffects(source: ResourceTrailSource): Promi
     recordNotice(`${gauge.name}: ${gauge.message}`, 'gauge')
     // 태어나서 첫 게이지 만충 — 영구 성장/보상 선택 규칙을 그 자리에서 짧게 알려준다.
     const comboIntro = encounterIntroLineOnce('combo')
-    if (comboIntro) companionDirector.sayEnaBark(comboIntro, { importance: BARK_IMPORTANCE.situation })
+    if (comboIntro) companionDirector.sayEnaBark(comboIntro, { importance: BARK_IMPORTANCE.teach })
     // 상점/보스 보상 단계의 게이지 페이오프는 체인 로그에서 제외한다.
     if (!chainRecordingSuppressed()) {
       pushChainEvent({
@@ -2660,7 +2665,7 @@ async function resolveDeferredHandMerges(): Promise<void> {
   if (merges.length === 0) return
   // 태어나서 첫 트리플 합성 — 같은 카드 셋이 합쳐지는 규칙을 그 자리에서 짧게 알려준다.
   const tripleIntro = encounterIntroLineOnce('triple')
-  if (tripleIntro) companionDirector.sayEnaBark(tripleIntro, { importance: BARK_IMPORTANCE.situation })
+  if (tripleIntro) companionDirector.sayEnaBark(tripleIntro, { importance: BARK_IMPORTANCE.teach })
   // 합성 카드가 is-merged.is-entering으로 새로 렌더되어 수렴+버스트 연출이 온전히 재생된다.
   render()
   // 합성 연출(낙하 대기 620ms + 젤리/버스트)이 다음 렌더에 끊기지 않도록 충분히 기다린다.
@@ -3064,7 +3069,7 @@ async function applyHandSingle(
     companionDirector.runDramaSignals.recipesFired += recipeResult.firedRecipes.length
     // 태어나서 첫 레시피 발동 — 조합식 규칙을 그 자리에서 짧게 알려준다.
     const recipeIntro = encounterIntroLineOnce('recipe')
-    if (recipeIntro) companionDirector.sayEnaBark(recipeIntro, { importance: BARK_IMPORTANCE.situation })
+    if (recipeIntro) companionDirector.sayEnaBark(recipeIntro, { importance: BARK_IMPORTANCE.teach })
     if ((recipeResult.coinsGained ?? 0) > 0) {
       // Recipe currency uses the same wallet/pulse language as single coin cards.
       const gainedCoins = recipeResult.coinsGained ?? 0
@@ -3796,6 +3801,9 @@ const eventFlow = new EventFlowManager({
  */
 async function handleCardAction(e: Event): Promise<void> {
   if (!gameActive || inputLocked) return
+  // ★ 설명(교육 바크)은 **플레이어가 넘겨야** 다음으로 간다. 다음 행동이 곧 "넘김"이다 —
+  //   설명을 띄운 그 행동이 곧바로 넘겨 버리지 않도록 바닥 시간은 시퀀서가 지킨다.
+  companionDirector.releaseHeldBark()
   // 에나가 가리키던 강조는 플레이어가 먼저 움직이면 그 자리에서 끊는다 — 이미 고른 뒤에도
   // 계속 맥동하면 "아직 여길 봐"로 읽혀 방금 한 선택과 어긋난다.
   boardRenderer.clearEnaHintPulses()
