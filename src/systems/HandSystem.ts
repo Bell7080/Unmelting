@@ -195,10 +195,12 @@ export class HandSystem {
     chain.firedRecipeIds = new Set()
   }
 
-  /** Insert a freshly drawn drop into the hand at the bottom-most empty slot. */
-  static enqueueDrop(character: Character, card: HandCard): boolean {
+  /** Insert a freshly drawn drop into the hand at the bottom-most empty slot.
+   *  `deferAutoMerge` is for visible reward flows: render the new single first,
+   *  wait for its landing animation, then call `runAutoMerges` and render again. */
+  static enqueueDrop(character: Character, card: HandCard, deferAutoMerge: boolean = false): boolean {
     const ok = character.addHandCard(card)
-    if (ok) HandSystem.runAutoMerges(character)
+    if (ok && !deferAutoMerge) HandSystem.runAutoMerges(character)
     return ok
   }
 
