@@ -107,8 +107,8 @@ export const HAND_CARD_DEFINITIONS: Record<HandCardId, HandCardDefinition> = {
     name: '밀랍',
     synergyTags: ['wax'],
     category: 'control',
-    description: '전방 선택 턴 타이머 카드 1장 1턴 굳음',
-    tripleDescription: '전방 모든 턴 타이머 카드 3턴 굳음',
+    description: '전방 선택 1장 1턴 굳음',
+    tripleDescription: '전방 모든 카드 3턴 굳음',
     targeting: {
       base: { selection: 'target', zone: 'front', filter: 'turn-timer', countLimit: 1 },
       triple: { selection: 'all', zone: 'front', filter: 'turn-timer', countLimit: null },

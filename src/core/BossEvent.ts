@@ -25,6 +25,7 @@ import { isRelicMetaAvailable } from '@core/MetaContentUnlocks'
 import { sampleWithoutReplacement } from '@core/Sampling'
 import { ENEMY_DEFINITIONS } from '@systems/CardSpawner'
 import { EmberSystem } from '@systems/EmberSystem'
+import { CardStatusManager } from '@systems/CardStatusManager'
 import { BOSS_CORE_SPECS, ONBOARDING_CAT_SPEC, demonSummonSpec } from '@data/BossSpecs'
 import {
   HALF_PAGE_BOSSES,
@@ -628,7 +629,7 @@ export class BossEventController {
     if (bossFrozen) {
       // 굳음 중 — 행동 비용은 냈지만 보스 반격 주기는 줄이지 않고 밀랍 지속시간만 1턴 소모한다.
       this.inject.recordNotice('보스가 굳어 반격 주기가 멈췄다', 'info')
-      card.tickFrozen()
+      CardStatusManager.tickActionBeat(card)
       this.inject.render()
     } else if (turnMod === 0) {
       // 보스가 움직이는 beat에 부가물이 다시 돋는다. 타격마다 채우면 지우는 의미가 사라지고
@@ -842,7 +843,7 @@ export class BossEventController {
       // 굳어 있으면 이 가상 턴의 보스 반격/특수행동을 건너뛰고 굳음을 1턴 소모한다.
       if (state.card.isFrozen()) {
         if (lvTurnMod === 0) this.inject.recordNotice('보스가 굳어 반격하지 못한다', 'info')
-        state.card.tickFrozen()
+        CardStatusManager.tickActionBeat(state.card)
         this.inject.render()
         continue
       }
@@ -1902,7 +1903,7 @@ export class BossEventController {
     const character = this.gs.character
     const alive = this.getAliveSummonedCards()
     // 굳은 적은 공격하지 못하고 굳음만 1턴 줄어든다(밀랍이 실제로 효과를 낸다).
-    for (const e of alive) if (e.isFrozen()) e.tickFrozen()
+    for (const e of alive) if (e.isFrozen()) CardStatusManager.tickActionBeat(e)
     const attackers = alive.filter((e) => !e.isFrozen())
     if (attackers.length === 0) {
       this.inject.render()

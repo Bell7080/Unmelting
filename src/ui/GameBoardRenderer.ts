@@ -28,6 +28,7 @@ import type {
   TreasureChange,
 } from '@core/TurnManager'
 import { spriteForCard, spriteForHandCard, SpriteUrls, recipeSprite001 } from '@ui/Sprites'
+import { CardStatusManager } from '@systems/CardStatusManager'
 import type {
   EventDefinition,
   MinionExchangeConfig,
@@ -1219,15 +1220,9 @@ export class GameBoardRenderer {
     return false
   }
 
-  /** UI mirror of HandSystem's wax target family, kept local so hover hints
-   *  highlight every front-row card whose own turn beat can be paused. */
+  /** Hover hints use the same manager as effect resolution, so valid targets cannot visually disagree. */
   private isTurnTimerHandTarget(card: Card): boolean {
-    if (card.type === CardType.ENEMY) return true
-    if (card.type === CardType.BOSS) return true
-    if (card.type === CardType.TREASURE) return true
-    if (card.type === CardType.TRAP) return card.trapKind === 'bomb' || card.trapKind === 'spore'
-    if (card.type === CardType.FLOWER) return card.flowerKind !== 'seed'
-    return false
+    return CardStatusManager.canApplyWax(card)
   }
 
   /** Hand-drawn X used when a card/cell cannot accept the armed hand effect.

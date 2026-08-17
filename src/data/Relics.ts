@@ -675,7 +675,7 @@ export const RELIC_DEFINITIONS: Record<RelicId, RelicDefinition> = {
     id: 'wax-recycle',
     name: '재활용',
     rarity: 'epic',
-    effect: '양초 손패 2회 사용마다 전방 랜덤 타이머 카드 1턴 굳음',
+    effect: '양초 손패 2회 사용마다 전방 무작위 1장 1턴 굳음',
     flavor: '녹아내린 밀랍도 버리지 않는다 — 굳혀 다시 벽으로 세운다.',
     basePrice: 1050,
     synergyTags: ['wax'],

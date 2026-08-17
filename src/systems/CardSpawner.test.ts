@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CardType } from '@entities/Card'
 import { EmberSystem, SPROUT_SPAWN_ADJUST } from './EmberSystem'
-import { CardSpawner, pickWeightedEnemyDefinition, enemyPowerBiasExponent, type CardDefinition } from './CardSpawner'
+import {
+  CardSpawner,
+  pickWeightedEnemyDefinition,
+  enemyPowerBiasExponent,
+  onboardingFieldSpawnMultiplier,
+  type CardDefinition,
+} from './CardSpawner'
 
 /** Opening-board safety should not depend on random trap subtype rolls. */
 describe('CardSpawner opening board', () => {
@@ -107,6 +113,14 @@ describe('CardSpawner refill preview queue', () => {
 })
 
 describe('새싹 병아리 난이도 스폰 보정', () => {
+  it('필드 3종 가중치가 초반 절벽 없이 최약체 적 곡선으로 감소한다', () => {
+    expect(onboardingFieldSpawnMultiplier(1)).toBe(1)
+    expect(onboardingFieldSpawnMultiplier(10)).toBeLessThan(1)
+    expect(onboardingFieldSpawnMultiplier(11)).toBeLessThan(onboardingFieldSpawnMultiplier(10))
+    expect(onboardingFieldSpawnMultiplier(30)).toBeLessThan(onboardingFieldSpawnMultiplier(11))
+    expect(onboardingFieldSpawnMultiplier(30)).toBeGreaterThan(0)
+  })
+
   it('적·함정을 낮추고 보물은 올리며 꽃은 기본 가중치를 유지한다(직업 보정과 독립)', () => {
     const spawner = new CardSpawner()
     const base = spawner.getEffectiveWeights()

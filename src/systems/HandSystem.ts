@@ -23,6 +23,7 @@ import { getHandCardDef } from '@data/HandCards'
 import { Recipe, RECIPES } from '@data/Recipes'
 import { DropSystem } from './DropSystem'
 import { bossFixtureMatchesFilter } from './BossGimmickManager'
+import { CardStatusManager } from './CardStatusManager'
 
 export interface HandTarget {
   laneIndex: number
@@ -1716,21 +1717,15 @@ export class HandSystem {
     return gained
   }
 
-  /** Cards with per-turn behavior can be stopped by wax: active enemies, volatile
-   *  treasures, bombs/spores, and bloomed flowers all own a timer-like beat. */
+  /** 밀랍 대상 판정은 향후 턴제 디버프와 함께 확장할 수 있도록 상태 매니저에 위임한다. */
   private static isTurnTimerCard(card: Card): boolean {
-    if (card.type === CardType.ENEMY) return true
-    if (card.type === CardType.BOSS) return true
-    if (card.type === CardType.TREASURE) return true
-    if (card.type === CardType.TRAP) return card.trapKind === 'bomb' || card.trapKind === 'spore'
-    if (card.type === CardType.FLOWER) return card.flowerKind !== 'seed'
-    return false
+    return CardStatusManager.canApplyWax(card)
   }
 
   /** Apply wax hardening to a selected front card. 보스도 굳힐 수 있다(즉사는 면역이나 굳음은 적용). */
   private static freezeTarget(target: HandTarget | undefined, turns: number): string {
     if (!target) return '굳힐 대상 없음'
-    target.card.freeze(turns)
+    if (!CardStatusManager.applyWax(target.card, turns)) return '굳힐 대상 없음'
     return `${target.card.name} ${turns}턴 굳음`
   }
 
@@ -1748,7 +1743,7 @@ export class HandSystem {
     }
     if (candidates.length === 0) return null
     const pick = candidates[Math.floor(Math.random() * candidates.length)]
-    pick.freeze(turns)
+    CardStatusManager.applyWax(pick, turns)
     return pick
   }
 
@@ -1761,7 +1756,7 @@ export class HandSystem {
       if (!card || seen.has(card)) continue
       if (!HandSystem.isTurnTimerCard(card)) continue
       seen.add(card)
-      card.freeze(turns)
+      CardStatusManager.applyWax(card, turns)
       count++
     }
     return `전방 ${count}장 ${turns}턴 굳음`

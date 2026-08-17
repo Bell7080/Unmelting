@@ -466,3 +466,17 @@ describe('TurnManager event door countdown', () => {
     expect(door.eventTurnsUntilClose).toBe(-1)
   })
 })
+
+describe('TurnManager onboarding field expiry', () => {
+  it('does not reduce a frozen field card expiry timer', () => {
+    const gameState = new GameState()
+    const turnManager = new TurnManager(gameState)
+    const bush = new Card('bush', CardType.TRAP, '덤불', 'test', 0, 1, { trapKind: 'bush' })
+    gameState.lanes[0].setCardAtDistance(0, bush)
+    const expiryBefore = bush.fieldExpiryTurns
+    bush.freeze(1)
+
+    expect(turnManager.tickFieldExpiries()).toEqual([])
+    expect(bush.fieldExpiryTurns).toBe(expiryBefore)
+  })
+})
