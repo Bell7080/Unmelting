@@ -12,6 +12,7 @@ import { assessThreats, isRepeatedPredictionOpportunity, type ForesightOptions }
 import { saveDisposition, computeEnaGrowth, type EnaRunDramaSignals } from '@systems/EnaDisposition'
 import { DropSystem } from '@systems/DropSystem'
 import { HandSystem } from '@systems/HandSystem'
+import type { HandCardId } from '@entities/HandCard'
 import { getHandCardDef } from '@data/HandCards'
 import { RECIPES } from '@data/Recipes'
 import { GameBoardRenderer } from '@ui/GameBoardRenderer'
@@ -34,6 +35,10 @@ const COMPANION_IDLE_MS = 2600
 const SKIP_MIN_VISIBLE_MS = 1000
 // 이 시간 넘게 떠 있었으면 "읽었다"로 본다(이후 스킵은 학습 신호로 치지 않음).
 const COMPANION_READ_MS = 1500
+// 손패 획득 CSS의 낙하(기본 740ms)가 끝난 뒤에만 트리플 합성을 시작한다.
+const COMPANION_HAND_LAND_MS = 740
+// 합성 수렴·버스트가 다음 보드 갱신에 잘리지 않도록 확보하는 마무리 beat다.
+const COMPANION_HAND_MERGE_MS = 980
 
 /** 바크 중요도: 손패 한줄평<일반 반응<상황<위급/항의. 읽는 중엔 더 높은 것만 끼어든다. */
 /**
@@ -104,6 +109,30 @@ export class CompanionDirector {
   } | null = null
   /** 같은 보드 기회에서 확률 게이트를 재굴림해 뒤늦게 카드를 주는 어색함을 막는 서명. */
   private declinedPredictionSignature: string | null = null
+
+  /** 에나가 건네는 카드를 `단일 카드 낙하 → 트리플 합성` 두 렌더로 지급한다.
+   *  일반 enqueueDrop처럼 모델에서 즉시 합치면 세 번째 카드 DOM이 한 번도 생기지 않아
+   *  기존 두 장이 갑자기 트리플로 바뀌므로, 에나의 모든 손패 지급은 이 창구를 공유한다. */
+  private async grantAnimatedHandCard(cardId: HandCardId): Promise<boolean> {
+    const { gameState } = this.deps
+    const added = HandSystem.enqueueDrop(gameState.character, DropSystem.makeCard(cardId), true)
+    if (!added) return false
+
+    // 먼저 세 번째 단일 카드를 실제 손패에 렌더하고, 트레일과 낙하가 끝날 때까지 기다린다.
+    this.deps.render()
+    await Promise.all([
+      this.deps.playResourceTrail({ kind: 'chain' }, 'hand', 1),
+      new Promise<void>((resolve) => window.setTimeout(resolve, COMPANION_HAND_LAND_MS)),
+    ])
+
+    const merges = HandSystem.runAutoMerges(gameState.character)
+    if (merges.length === 0) return true
+    for (const message of merges) this.deps.recordNotice(message, 'info')
+    this.deps.render()
+    // 렌더러는 직전 세 단일 카드의 rect를 사용해 정확한 합성 수렴을 재생한다.
+    await new Promise<void>((resolve) => window.setTimeout(resolve, COMPANION_HAND_MERGE_MS))
+    return true
+  }
 
   /** 런 단위 드라마(모험의 질) 신호 — 성장 점프 게이트 입력. 피격/위협 beat에서 채우고 새 런에 비운다. */
   readonly runDramaSignals = {
@@ -414,10 +443,8 @@ export class CompanionDirector {
       }
       return
     }
-    // 판 분석 결과가 고른 해금 손패를 건넨다. 함정 외 공격/포자/레시피/트리플 보조도 이 경로를 공유한다.
-    // enqueueDrop = 일반 획득과 같은 정리(addHandCard 후 트리플 자동 합성 검사) — 3장째 지급도 즉시 합성된다.
-    const drop = DropSystem.makeCard(suggested)
-    if (!HandSystem.enqueueDrop(gameState.character, drop)) return // 손패 가득 — 다음 기회에
+    // 판 분석 결과가 고른 해금 손패를 건넨다. 세 번째 카드도 먼저 낙하한 뒤 합성한다.
+    if (!await this.grantAnimatedHandCard(suggested)) return // 손패 가득 — 다음 기회에
     this.pendingPrediction = { cardIds: [suggested], issuedTurn: turn, deadlineTurn: turn + 3, kind: report.recommendationKind ?? 'support' }
     this.deps.recordNotice(`에나의 의지 — ${getHandCardDef(suggested).name} 지원: ${report.recommendationReason}`, 'info')
     // (실험적) 레시피 완성각으로 지원했으면, 이 지급 직후 손패에서 재료 슬롯들을 다시 찾는다.
@@ -437,7 +464,6 @@ export class CompanionDirector {
       }
       recipeBracketSlots = [...used].sort((a, b) => a - b)
     }
-    this.deps.render()
     void boardRenderer.animateClutchOnPlayer('hand-control')
     this.showClutchChain('predict', report.webLethal ? `${getHandCardDef(suggested).name} 지원 (위험!)` : `${getHandCardDef(suggested).name} 지원`)
     const predictLineKind = report.recommendationKind === 'cleanup' ? 'web' : report.recommendationKind ?? 'support'
@@ -452,8 +478,7 @@ export class CompanionDirector {
         }
       },
     })
-    // 지원 카드는 이미 손패에 들어갔으므로 트레일 실패가 입력 잠금 해제를 막지 않게 연출만 분리한다.
-    void this.deps.playResourceTrail({ kind: 'chain' }, 'hand', 1)
+    // 손패 트레일은 grantAnimatedHandCard에서 낙하 beat와 함께 완료했다.
   }
 
   /** 클러치 발동 시 플레이어 카드 위에 『 제목 』 + 효과 배너를 띄운다(소소한 클러치 연출도 공유). */
@@ -467,7 +492,7 @@ export class CompanionDirector {
    * 클러치(에나의 의지) 평가 + 실행. 위기에 '의지'가 가득 차면 보통 강도의 실제 지원을 하고,
    * 클러치 전용 체인을 플레이어 카드 위에 띄우며 거의 확정으로 대사를 친다.
    */
-  tryCompanionClutch(): void {
+  async tryCompanionClutch(): Promise<void> {
     const { gameState, companion } = this.deps
     if (!this.companionWorldCanSpeak()) return
     const c = gameState.character
@@ -483,7 +508,7 @@ export class CompanionDirector {
       supportShortReason: report.recommendationShortReason,
     })
     if (plan) {
-      this.applyClutch(plan)
+      await this.applyClutch(plan)
       return
     }
     // 강적 미숙 대사는 '마주침'만으로는 내지 않는다 — 고점 에나라면 실제로 건넸을
@@ -503,7 +528,7 @@ export class CompanionDirector {
   }
 
   /** 클러치 효과를 실제로 적용하고 연출(체인 배너·대사·트레일·로그)을 함께 낸다. */
-  private applyClutch(plan: ClutchPlan): void {
+  private async applyClutch(plan: ClutchPlan): Promise<void> {
     const { gameState, boardRenderer } = this.deps
     const c = gameState.character
     const before = this.deps.snapshotPlayerResources()
@@ -515,14 +540,13 @@ export class CompanionDirector {
       const shielded = c.addShield(plan.amount)
       detail = `방패 +${shielded}`
     } else if (plan.kind === 'ember' || plan.kind === 'hand') {
-      // 에나가 직접 손패를 건네는 클러치. 불씨 위기면 성냥, 예지 위기면 추천 손패를 준다.
-      // enqueueDrop = 일반 획득과 같은 정리 경로 — 같은 카드 3장째 보급도 즉시 트리플로 합성된다.
+      // 에나가 직접 손패를 건네는 클러치도 예측 지원과 같은 순차 지급 창구를 쓴다.
       const cardId = plan.cardId ?? 'match'
-      const drop = DropSystem.makeCard(cardId)
-      detail = HandSystem.enqueueDrop(c, drop) ? `${getHandCardDef(cardId).name} +1` : '손패가 가득 참'
+      detail = await this.grantAnimatedHandCard(cardId) ? `${getHandCardDef(cardId).name} +1` : '손패가 가득 참'
     }
     this.deps.recordNotice(`에나의 의지 — ${detail}`, 'info')
-    this.deps.render()
+    // 손패 지급은 이미 두 단계 렌더를 마쳤고, 자원 지급만 여기서 최초 렌더한다.
+    if (plan.kind !== 'ember' && plan.kind !== 'hand') this.deps.render()
     // 플레이어 카드 들썩 + 블라스트(종류별 팔레트) + 전용 체인 배너.
     const clutchTheme = plan.kind === 'shield' ? 'shield-gain' : (plan.kind === 'ember' || plan.kind === 'hand') ? 'ember-gain' : 'health-gain'
     void boardRenderer.animateClutchOnPlayer(clutchTheme)

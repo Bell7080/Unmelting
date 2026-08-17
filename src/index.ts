@@ -3770,7 +3770,7 @@ async function resolveEventPhaseAndPrepareNextTurn(advanceTurn: boolean = true):
   // 소중한 머리: 체력이 절반 이하이면 전체 회복 후 파괴.
   await relicEffects.applyPreciousHeadCheck()
   // 동료(에나) 클러치: 위기에 의지가 가득 찼으면 실제 지원 + '에나의 의지' 체인.
-  companionDirector.tryCompanionClutch()
+  await companionDirector.tryCompanionClutch()
   if (gameState.isGameOver || gameState.character.authoritySurvivePending) {
     const authorityFired = gameState.character.authoritySurvivePending
     if (await relicEffects.tryResolveSurvivalRelics()) {

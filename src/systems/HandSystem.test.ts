@@ -22,6 +22,20 @@ describe('HandSystem.enqueueDrop (획득 공통 정리 경로)', () => {
     expect(gameState.character.hand).toHaveLength(1)
     expect(gameState.character.hand[0]).toMatchObject({ defId: 'ember', merged: true })
   })
+
+  it('visible reward flows can defer a triple until the newly granted single has landed', () => {
+    const gameState = new GameState()
+    gameState.character.addHandCard(DropSystem.makeCard('ember'))
+    gameState.character.addHandCard(DropSystem.makeCard('ember'))
+
+    expect(HandSystem.enqueueDrop(gameState.character, DropSystem.makeCard('ember'), true)).toBe(true)
+    // 연출용 첫 렌더에서는 세 번째 단일 카드가 실제 DOM 모델에 남아 있어야 한다.
+    expect(gameState.character.hand).toHaveLength(3)
+    expect(gameState.character.hand.every((card) => card.merged !== true)).toBe(true)
+
+    expect(HandSystem.runAutoMerges(gameState.character)).toEqual(['불씨 ×3 자동 합성'])
+    expect(gameState.character.hand[0]).toMatchObject({ defId: 'ember', merged: true })
+  })
 })
 
 describe('HandSystem combo-count cards', () => {
