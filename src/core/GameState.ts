@@ -8,6 +8,7 @@ import { Lane, LANE_DISTANCE_COUNT } from '@entities/Lane'
 import { Card, CardType } from '@entities/Card'
 import { RunEnhancements, makeDefaultEnhancements } from '@core/RunEnhancements'
 import type { BossGimmickManager } from '@systems/BossGimmickManager'
+import { CardStatusManager } from '@systems/CardStatusManager'
 
 export class GameState {
   character: Character
@@ -94,15 +95,15 @@ export class GameState {
 
   /** Tick per-card field statuses once at the turn boundary. */
   private tickFieldStatuses(): void {
-    const seen = new Set<Card>()
+    const cards: Card[] = []
     for (const lane of this.lanes) {
       for (let d = 0; d < LANE_DISTANCE_COUNT; d++) {
         const card = lane.getCardAtDistance(d)
-        if (!card || seen.has(card)) continue
-        seen.add(card)
-        card.tickFrozen()
+        if (card) cards.push(card)
       }
     }
+    // 상태 감소의 중복 제거와 순서는 CardStatusManager 한 곳에서 관리한다.
+    CardStatusManager.tickTurnBoundary(cards)
   }
 
   /**

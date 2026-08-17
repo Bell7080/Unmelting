@@ -116,6 +116,22 @@ describe('HandSystem broad hand effects', () => {
     expect(spore.isFrozen()).toBe(true)
   })
 
+  it.each([
+    ['바위', new Card('rock-front', CardType.ENEMY, '바위', 'test', 1, 0, { enemySpriteId: 'enemyRock' })],
+    ['덤불', new Card('bush-front', CardType.TRAP, '덤불', 'test', 0, 1, { trapKind: 'bush' })],
+    ['잡동사니', new Card('junk-front', CardType.TREASURE, '잡동사니', 'test', 0, 0, { treasureKind: 'junk' })],
+  ])('lets 밀랍 freeze onboarding field card %s', (_name, fieldCard) => {
+    const gameState = new GameState()
+    const chain = HandSystem.newChain()
+    gameState.lanes[0].setCardAtDistance(0, fieldCard)
+    gameState.character.addHandCard(DropSystem.makeCard('wax'))
+
+    const result = HandSystem.useSingle(gameState, chain, 0, { laneIndex: 0, distance: 0, card: fieldCard })
+
+    expect(result.success).toBe(true)
+    expect(fieldCard.frozenTurns).toBe(1)
+  })
+
   it('lets 밀랍 target and freeze a front-row boss card', () => {
     const gameState = new GameState()
     const chain = HandSystem.newChain()

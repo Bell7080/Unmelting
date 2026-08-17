@@ -347,7 +347,7 @@ export class TurnManager {
     // 제거·페이드·테마 블라스트·라인 정리는 호출부가 한다.
     for (let laneIndex = 0; laneIndex < this.gameState.lanes.length; laneIndex++) {
       const card = this.gameState.lanes[laneIndex].getCardAtDistance(0)
-      if (!card || seen.has(card) || !card.isOnboardingField()) continue
+      if (!card || seen.has(card) || !card.isOnboardingField() || card.isFrozen()) continue
       seen.add(card)
       if (card.tickFieldExpiry()) expired.push({ laneIndex, card })
     }

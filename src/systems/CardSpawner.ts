@@ -260,6 +260,14 @@ export function enemyPowerBiasExponent(turn: number): number {
   return Math.min(ENEMY_POWER_BIAS_MAX_EXPONENT, Math.max(0, turn - 1) * ENEMY_POWER_BIAS_RATE)
 }
 
+/**
+ * 새싹 필드 3종은 가장 약한 적과 같은 상대 가중치를 받는다.
+ * 초반에는 설정 확률을 온전히 유지하고, 층이 깊어질수록 절벽 없이 자연스럽게 희귀해진다.
+ */
+export function onboardingFieldSpawnMultiplier(turn: number): number {
+  return Math.pow(ENEMY_POWER_BIAS_FLOOR, enemyPowerBiasExponent(turn))
+}
+
 /** 풀 안에서 enemyPower가 높은 쪽에 가중치를 준다(턴이 깊을수록 편향이 강해진다).
  *  rng는 [0,1) 난수 소스 — 런타임은 Math.random, 학습 시뮬은 시드 RNG를 넘긴다.
  *  런타임과 시뮬이 이 함수 하나를 공유해야 에나가 실제와 같은 스폰 분포를 학습한다. */
@@ -291,7 +299,7 @@ export class CardSpawner {
   private spawnSerial: number = 0
   private currentTier: EmberTier = 'bright'
   private progressionTurn: number = 1
-  /** 온보딩 1~10층에서 필드 타입(바위/덤불/잡동사니)을 저확률로 섞는 확률(0=꺼짐). */
+  /** 온보딩에서 필드 타입(바위/덤불/잡동사니)을 섞는 초반 기준 확률(0=꺼짐). */
   private onboardingFieldSpawnChance = 0
   /** 시련(보스 클리어 후 강제 선택) 효과로 누적되는 영속 modifier들.
    *  spawn/적 스탯/함정 피해 모두 다음 스폰부터 즉시 반영된다. */
@@ -603,7 +611,7 @@ export class CardSpawner {
     return new Card(id, CardType.TREASURE, def.name, def.description, 0, 0, { treasureKind: 'junk' })
   }
 
-  /** 온보딩 필드 저확률 스폰을 켠다/끈다(1~10층에만 실제 적용). 0이면 정상 스폰만. */
+  /** 온보딩 필드 저확률 스폰을 켠다/끈다. 실제 확률은 진행에 따라 완만히 감소한다. */
   setOnboardingFieldSpawnChance(chance: number): void {
     this.onboardingFieldSpawnChance = Math.max(0, chance)
   }
@@ -694,10 +702,10 @@ export class CardSpawner {
       this.starlightMissStreak++
     }
 
-    // 온보딩 1~10층: 낮은 확률로 필드 타입을 섞어 정상 적 과도 합체를 완화한다(일석이조).
+    // 가장 약한 적의 가중치 곡선을 그대로 써 초반 필드는 보이되 진행할수록 자연스럽게 밀려난다.
     if (!options.openingBoard && !options.openingBoardWaiting &&
-        this.onboardingFieldSpawnChance > 0 && this.progressionTurn <= 10 &&
-        Math.random() < this.onboardingFieldSpawnChance) {
+        this.onboardingFieldSpawnChance > 0 &&
+        Math.random() < this.onboardingFieldSpawnChance * onboardingFieldSpawnMultiplier(this.progressionTurn)) {
       const fieldKinds = ['rock', 'bush', 'junk'] as const
       return this.makeOnboardingFieldCard(fieldKinds[Math.floor(Math.random() * fieldKinds.length)])
     }
