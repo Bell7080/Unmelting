@@ -63,7 +63,7 @@ import {
   WAX_FIGURE_TUTORIAL_SPECIES,
   findWaxFigureEffectMeta,
 } from '@core/WaxFigureCollection'
-import { COMBO_TRIGGER_DELAY_MS, GAUGE_TRIGGER_DELAY_MS, MAX_ACTIVITY_LOGS } from '@core/Timing'
+import { COMBO_TRIGGER_DELAY_MS, GAUGE_TRIGGER_DELAY_MS, MAX_ACTIVITY_LOGS, handAnimationMs } from '@core/Timing'
 import { HAND_CARD_RARITY } from '@data/ShopPools'
 import { TRIAL_DEFINITIONS, type TrialEffectKind } from '@data/Trials'
 import { JOBS } from '@data/Jobs'
@@ -958,7 +958,7 @@ async function playHandTargetBlasts(
 async function playRepeatedHandProjectiles(cardIds: readonly string[], theme: BurstTheme): Promise<void> {
   if (cardIds.length === 0) return
   // 기존 광역 대상 스태거보다 조금 짧게 잡아 한 카드의 빠른 연속 투척으로 묶어 읽히게 한다.
-  const interval = Math.max(58, Math.min(92, Math.round(360 / cardIds.length)))
+  const interval = handAnimationMs(Math.max(58, Math.min(92, Math.round(360 / cardIds.length))))
   await Promise.all(cardIds.map(async (cardId, index) => {
     if (index > 0) await wait(index * interval)
     return boardRenderer.animateTargetBlastFromCenterToCard(cardId, theme)
@@ -2689,7 +2689,7 @@ function shouldSuppressRegroupAfterClear(removedCount: number): boolean {
 async function resolveDeferredHandMerges(): Promise<void> {
   if (!HandSystem.hasPendingAutoMerge(gameState.character)) return
   // 빈 슬롯을 메우는 이동/낙하 연출(animateMovedHandSlots ~460ms)이 끝나길 기다린다.
-  await wait(500)
+  await wait(handAnimationMs(500))
   const merges = HandSystem.runAutoMerges(gameState.character)
   if (merges.length === 0) return
   // 태어나서 첫 트리플 합성 — 같은 카드 셋이 합쳐지는 규칙을 그 자리에서 짧게 알려준다.
@@ -2698,7 +2698,7 @@ async function resolveDeferredHandMerges(): Promise<void> {
   // 합성 카드가 is-merged.is-entering으로 새로 렌더되어 수렴+버스트 연출이 온전히 재생된다.
   render()
   // 합성 연출(낙하 대기 620ms + 젤리/버스트)이 다음 렌더에 끊기지 않도록 충분히 기다린다.
-  await wait(1180)
+  await wait(handAnimationMs(1180))
 }
 
 /** Apply a single-use hand card (with optional target). */
@@ -3008,7 +3008,7 @@ async function applyHandSingle(
     const chandelierDamage = result.chandelierRepeat.isMerged ? 2 : 1
     let hadKills = result.removedFieldCards.some((r) => r.type === CardType.ENEMY)
     while (hadKills && !gameState.isGameOver) {
-      await wait(80)
+      await wait(handAnimationMs(80))
       if (gameState.isGameOver) break
       const beforeRepeatHealth = snapshotFieldHealthState()
       const beforeRepeatCards = snapshotFieldCardsById()
@@ -3045,7 +3045,7 @@ async function applyHandSingle(
     for (let i = 1; i < totalCount; i++) {
       if (gameState.isGameOver) break
       if (target.card.getHealth() <= 0) break
-      await wait(40)
+      await wait(handAnimationMs(40))
       const beforeHitHealth = snapshotFieldHealthState()
       const beforeHitCards = snapshotFieldCardsById()
       const hitResult = HandSystem.applyTeapotHit(gameState, target, teapotDamage)
@@ -3228,14 +3228,14 @@ async function applyHandSingle(
       for (let phase = 0; phase < phases; phase++) {
         if (gameState.isGameOver || !bossController.eventState) break
         boardRenderer.showLevateinChargeMark(phase + 1)
-        await wait(340)
+        await wait(handAnimationMs(340))
         await bossController.advanceBossTurnsForLevatein(1)
       }
     } else if (!gameState.bossBattleActive) {
       for (let phase = 0; phase < phases; phase++) {
         if (gameState.isGameOver) break
         boardRenderer.showLevateinChargeMark(phase + 1)
-        await wait(340)
+        await wait(handAnimationMs(340))
         await runSimulatedEnemyPhase()
       }
     }
@@ -3324,7 +3324,7 @@ async function applyHandSingle(
   // 콤보 배너는 applyPostHandEffect 내 조합식 발동 후 buildChainHints로 갱신이 오므로 별도 갱신 불필요.
   setTimeout(() => {
     inputLocked = false
-  }, 320)
+  }, handAnimationMs(320))
 }
 
 /** 레바테인 전용: 적 공격/폭탄/꽃/보물 처리를 1회 실행하되 실제 턴 카운터를 올리지 않는다. */

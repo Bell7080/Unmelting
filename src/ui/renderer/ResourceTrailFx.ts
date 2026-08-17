@@ -16,16 +16,17 @@ import {
   waxFigureIcon,
 } from '@ui/Icons'
 import type { ResourceTrailTarget } from '@ui/renderer/RendererTypes'
+import { handAnimationMs } from '@core/Timing'
 
 /**
  * 곡사 블라스트가 출발점에서 목표에 닿기까지의 시간. 착탄 버스트/피해 수치가 이 값에
  * 맞춰 이어지므로 비행과 착탄이 어긋나지 않게 한 곳에서 정한다.
  * 눈으로 좇을 수 있어야 '어느 칸으로 갔는지'가 읽히므로 짧게 잡지 않는다.
  */
-export const STRIKE_LOB_FLIGHT_MS = 620
+export const STRIKE_LOB_FLIGHT_MS = handAnimationMs(620)
 
 /** 여러 대상에 동시에 쏠 때 발사 간격 — 겹쳐 쏘면 몇 발인지가 뭉갠다. */
-export const STRIKE_LOB_STAGGER_MS = 70
+export const STRIKE_LOB_STAGGER_MS = handAnimationMs(70)
 
 /** 손패 획득 토큰이 튀어나와 떨어지고 → 살짝 표류하다 → 손패로 빨려 들어가기까지. */
 const HAND_TOKEN_FLIGHT_MS = 950

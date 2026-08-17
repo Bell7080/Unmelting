@@ -107,7 +107,7 @@ describe('CardSpawner refill preview queue', () => {
 })
 
 describe('새싹 병아리 난이도 스폰 보정', () => {
-  it('적·함정을 낮추고 보물·꽃을 올린다(직업 보정과 독립)', () => {
+  it('적·함정을 낮추고 보물은 올리며 꽃은 기본 가중치를 유지한다(직업 보정과 독립)', () => {
     const spawner = new CardSpawner()
     const base = spawner.getEffectiveWeights()
 
