@@ -75,6 +75,7 @@ import { BossFxView } from '@ui/renderer/BossFxView'
 import { ShopOverlayView } from '@ui/renderer/ShopOverlayView'
 import { sfx } from '@/audio/SfxManager'
 import { pointerDistanceToRect } from '@ui/PointerProximity'
+import { handAnimationMs } from '@core/Timing'
 
 // 뷰 계약 타입은 renderer/RendererTypes.ts로 분리 — 기존 import 경로 호환을 위해 재수출한다.
 export * from '@ui/renderer/RendererTypes'
@@ -4827,7 +4828,7 @@ export class GameBoardRenderer {
           filter: 'brightness(1.46)',
         },
       ],
-      { duration: 900, easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)', fill: 'forwards' }
+      { duration: handAnimationMs(900), easing: 'cubic-bezier(0.18, 0.88, 0.22, 1)', fill: 'forwards' }
     )
 
     return new Promise((resolve) => {
@@ -4856,7 +4857,7 @@ export class GameBoardRenderer {
           duration: 600,
           size: [6, 13],
         })
-      }, 640)
+      }, handAnimationMs(640))
       // Intentionally do NOT remove `is-hand-use-source` when the ghost is
       // done. The hand is already mutated; the slot DOM is stale and will
       // be rebuilt on the next render(). If we restored the slot's opacity
@@ -4871,7 +4872,7 @@ export class GameBoardRenderer {
       window.setTimeout(() => {
         ghost.remove()
         resolve()
-      }, 1080)
+      }, handAnimationMs(1080))
     })
   }
 
